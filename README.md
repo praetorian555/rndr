@@ -1,4 +1,4 @@
-# Example C++ Project with CMake #
+# Renderer in C++ #
 
 ## Requirements ##
 
@@ -38,33 +38,3 @@ The clang-format target will apply formatting to all files under apps, include a
 If you are using MSVC compiler you can use address sanitizer tool by setting the ADDRESS_SANITIZER flag when invoking the cmake command:
 
 	cmake -S <root_project_dir> -B <build_dir> -DADDRESS_SANITIZER=ON 
-
-## Cloning the Project ##
-
-**Remove this segment once the new project is setup.**
-
-If you want to start a new project using this one as a base here are the steps to do:
-
-1. Clone this project:
-
-		git clone <project_url> <project_path>
-
-2. Delete the .git folder.
-
-3. Run following command to setup a new git repository:
-
-		git init
-
-4. Add spdlog as submodule:
-
-		git submodule add https://github.com/gabime/spdlog.git extern/spdlog
-
-5. Modify project and file names in the project and CMake files.
-
-6. Submit all of the files.
-
-7. Push the repo to the desired online service using the following commands:
-
-		git remote add origin <repo_url>
-		git push -u origin <branch_name>
-
