@@ -22,5 +22,9 @@ if (CLANG_FORMAT)
         ${FILES_TO_FORMAT}
     )
 
+else()
+
+    message(WARNING "clang-format not found, clang-format target will not work!")
+
 endif()
 

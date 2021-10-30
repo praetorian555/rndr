@@ -25,4 +25,8 @@ if (CPPCHECK)
         --suppress=unmatchedSuppression
     )
 
+else()
+
+    message(WARNING "cppcheck not found, cppcheck target will not work!")
+
 endif()
