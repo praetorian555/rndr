@@ -97,3 +97,23 @@ void rndr::Surface::ClearColorBuffer(uint32_t Color)
         }
     }
 }
+
+void rndr::Surface::RenderBlock(const Vector2i& BottomLeft, const Vector2i& Size, uint32_t Color)
+{
+    assert(BottomLeft.X >= 0 && BottomLeft.X < m_Width);
+    assert(BottomLeft.Y >= 0 && BottomLeft.Y < m_Height);
+    assert(Size.X > 0);
+    assert(Size.Y > 0);
+
+    Vector2i TopRight = BottomLeft + Size;
+    assert(TopRight.X >= 0 && TopRight.X < m_Width);
+    assert(TopRight.Y >= 0 && TopRight.Y < m_Height);
+
+    for (int Y = BottomLeft.Y; Y < TopRight.Y; Y++)
+    {
+        for (int X = BottomLeft.X; X < TopRight.X; X++)
+        {
+            SetPixel(X, Y, Color);
+        }
+    }
+}

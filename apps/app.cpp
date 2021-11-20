@@ -28,6 +28,8 @@ int main()
         Surface.RenderLine(A, D, 0x0000FF00);
         Surface.RenderLine(A, E, 0x00FFFFFF);
 
+        Surface.RenderBlock({100, 100}, {200, 50}, 0x00FFFF00);
+
         Window.RenderToWindow();
     }
 

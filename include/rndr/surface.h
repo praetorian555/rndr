@@ -79,6 +79,11 @@ public:
     void RenderLine(const Vector2i& Start, const Vector2i& End, uint32_t Color);
 
     /**
+     * Color a block that starts at BottomLeft of size Size with Color.
+     */
+    void RenderBlock(const Vector2i& BottomLeft, const Vector2i& Size, uint32_t Color);
+
+    /**
      * Clear the color buffer with specified color.
      *
      * @param Color The new color of the color buffer.
