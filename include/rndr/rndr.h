@@ -8,7 +8,9 @@
  */
 using NativeWindowHandle = uintptr_t;
 
-/**
- * Opaque type that represents an OS device context;
- */
-using NativeDeviceContext = uintptr_t;
+// Defines precision for floating-point type.
+#if !defined(RNDR_REAL_AS_DOUBLE)
+using real = float;
+#else
+using real = double;
+#endif  // !defined(RNDR_REAL_AS_DOUBLE)
