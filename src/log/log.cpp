@@ -22,12 +22,12 @@ void Log::ShutDown() {}
 void Log::Log(Log::Level logLevel, const char* format, ...)
 {
     const int MESSAGE_SIZE = 4096;
-    char message[MESSAGE_SIZE];
+    char message[MESSAGE_SIZE] = {};
 
-    va_list ap;
-    va_start(ap, format);
-    sprintf_s(message, MESSAGE_SIZE, format, ap);
-    va_end(ap);
+    va_list args;
+    va_start(args, format);
+    vsprintf_s(message, MESSAGE_SIZE, format, args);
+    va_end(args);
 
     switch (logLevel)
     {
