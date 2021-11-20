@@ -2,9 +2,16 @@
 
 #include <string>
 
+#include "delegate.h"
+#include "rndr.h"
+#include "surface.h"
+
 namespace rndr
 {
 
+/**
+ * Configuration of the window.
+ */
 struct WindowOptions
 {
     std::string Name = "Default Window";
@@ -35,9 +42,43 @@ public:
      */
     void Close();
 
+    /**
+     * Get OS window handle.
+     */
+    NativeWindowHandle GetNativeWindowHandle() const { return m_NativeWindowHandle; }
+
+    /**
+     * Get window surface to which user can render.
+     */
+    Surface& GetSurface() { return m_Surface; }
+
+    /**
+     * Copies window's surface buffer to window internal buffer that is displayed on screen.
+     */
+    void RenderToWindow();
+
+private:
+    void Resize(int Width, int Height);
+
 private:
     WindowOptions m_Options;
-    void* m_NativeWindowHandle;
+    NativeWindowHandle m_NativeWindowHandle;
+    Surface m_Surface;
+
+    uint32_t m_CurrentWidth = 0, m_CurrentHeight = 0;
+};
+
+/**
+ * Collection of delegates related to window events.
+ */
+struct WindowDelegates
+{
+    using ResizeDelegate = MultiDelegate<Window*, int, int>;
+
+    /**
+     * This delegate is executed when the size of the window's client area is changed.
+     */
+    static ResizeDelegate OnResize;
 };
 
 }  // namespace rndr
