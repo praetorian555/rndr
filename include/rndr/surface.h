@@ -78,6 +78,13 @@ public:
      */
     void RenderLine(const Vector2i& Start, const Vector2i& End, uint32_t Color);
 
+    /**
+     * Clear the color buffer with specified color.
+     *
+     * @param Color The new color of the color buffer.
+     */
+    void ClearColorBuffer(uint32_t Color);
+
 private:
     uint32_t m_Width = 0, m_Height = 0;
     uint32_t m_PixelSize = 4;

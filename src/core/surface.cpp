@@ -86,3 +86,14 @@ void rndr::Surface::RenderLine(const Vector2i& A, const Vector2i& B, uint32_t Co
         }
     }
 }
+
+void rndr::Surface::ClearColorBuffer(uint32_t Color)
+{
+    for (uint32_t Y = 0; Y < m_Height; Y++)
+    {
+        for (uint32_t X = 0; X < m_Width; X++)
+        {
+            SetPixel(X, Y, Color);
+        }
+    }
+}

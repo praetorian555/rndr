@@ -15,15 +15,7 @@ int main()
         uint32_t Width = Surface.GetWidth();
         uint32_t Height = Surface.GetHeight();
 
-        // Clear background
-        uint32_t Color = 0x00000000; // Black
-        for (uint32_t Y = 0; Y < Height; Y++)
-        {
-            for (uint32_t X = 0; X < Width; X++)
-            {
-                Surface.SetPixel(X, Y, Color);
-            }
-        }
+        Surface.ClearColorBuffer(0x00000000);
 
         rndr::Vector2i A(400, 400);
         rndr::Vector2i B(600, 600);
