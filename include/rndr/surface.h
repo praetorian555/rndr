@@ -1,6 +1,7 @@
 #pragma once
 
-#include "rndr.h"
+#include "rndr/rndr.h"
+#include "rndr/math/math.h"
 
 namespace rndr
 {
@@ -51,8 +52,16 @@ public:
     /**
      * Colors a pixel at (X, Y) location.
      *
-     * @param X
-     * @param Y
+     * @param Location Pixel coordinates.
+     * @param Color The format of color needs to be 0xXXRRGGBB.
+     */
+    void SetPixel(const Vector2i& Location, uint32_t Color);
+
+    /**
+     * Colors a pixel at (X, Y) location.
+     *
+     * @param X Coordinate along the X axis.
+     * @param Y Coordinate along the Y axis.
      * @param Color The format of color needs to be 0xXXRRGGBB.
      */
     void SetPixel(int X, int Y, uint32_t Color);

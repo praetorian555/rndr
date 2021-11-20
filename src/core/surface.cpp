@@ -20,12 +20,17 @@ void rndr::Surface::UpdateSize(int Width, int Height)
     m_ColorBuffer = new uint8_t[m_Width * m_Height * m_PixelSize];
 }
 
-void rndr::Surface::SetPixel(int X, int Y, uint32_t Color)
+void rndr::Surface::SetPixel(const Vector2i& Location, uint32_t Color)
 {
-    assert(X >= 0 && X < m_Width);
-    assert(Y >= 0 && Y < m_Height);
+    assert(Location.X >= 0 && Location.X < m_Width);
+    assert(Location.Y >= 0 && Location.Y < m_Height);
     assert(m_ColorBuffer);
 
     uint32_t* Pixels = (uint32_t*)m_ColorBuffer;
-    Pixels[X + Y * m_Width] = Color;
+    Pixels[Location.X + Location.Y * m_Width] = Color;
+}
+
+void rndr::Surface::SetPixel(int X, int Y, uint32_t Color)
+{
+    SetPixel(Vector2i{X, Y}, Color);
 }
