@@ -22,7 +22,7 @@ public:
 
     /**
      * Get color buffer.
-     * 
+     *
      * @return Returns a pointer to the color buffer.
      */
     uint8_t* GetColorBuffer() { return m_ColorBuffer; }
@@ -50,7 +50,7 @@ public:
 
     /**
      * Colors a pixel at (X, Y) location.
-     * 
+     *
      * @param X
      * @param Y
      * @param Color The format of color needs to be 0xXXRRGGBB.

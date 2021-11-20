@@ -16,7 +16,7 @@ int main()
         uint32_t Height = Surface.GetHeight();
 
         uint32_t Color = 0x0000FF00;
-        for (uint32_t Y =0; Y < Height; Y++)
+        for (uint32_t Y = 0; Y < Height; Y++)
         {
             for (uint32_t X = 0; X < Width; X++)
             {
