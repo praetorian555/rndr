@@ -59,4 +59,4 @@ private:
     uint64_t state, inc;
 };
 
-}  // namespace pbr
+}  // namespace rndr

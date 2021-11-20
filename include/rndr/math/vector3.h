@@ -225,4 +225,4 @@ inline void CoordinateSystem(const Vector3<T>& v1, Vector3<T>* v2, Vector3<T>* v
     *v3 = Cross(v1, *v2);
 }
 
-}  // namespace pbr
+}  // namespace rndr

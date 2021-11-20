@@ -74,4 +74,4 @@ real RNG::UniformReal()
     return std::min(OneMinusEpsilon, UniformUInt32() * 0x1p-32f);
 }
 
-}  // namespace pbr
+}  // namespace rndr

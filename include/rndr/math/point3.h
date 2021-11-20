@@ -203,4 +203,4 @@ Point3<T> Permute(const Point3<T>& v, int x, int y, int z)
     return Point3<T>(v[x], v[y], v[z]);
 }
 
-}  // namespace pbr
+}  // namespace rndr

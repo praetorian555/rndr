@@ -136,4 +136,4 @@ inline bool IsPowerOf2(T v)
     return v && !(v & (v - 1));
 }
 
-}  // namespace pbr
+}  // namespace rndr

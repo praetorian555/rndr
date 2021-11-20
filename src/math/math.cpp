@@ -92,4 +92,4 @@ int32_t CountTrailingZeros(uint32_t v)
 #endif
 }
 
-}  // namespace pbr
+}  // namespace rndr

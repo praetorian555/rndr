@@ -227,4 +227,4 @@ inline Normal3<T> Faceforward(const Normal3<T>& n, const Vector3<T>& v)
     return (Dot(n, v) < 0.f) ? -n : n;
 }
 
-}  // namespace pbr
+}  // namespace rndr

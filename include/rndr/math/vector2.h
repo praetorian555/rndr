@@ -183,4 +183,4 @@ Vector2<T> Permute(const Vector2<T>& v, int X, int Y)
     return Vector2<T>(v[X], v[Y]);
 }
 
-}  // namespace pbr
+}  // namespace rndr
