@@ -90,7 +90,7 @@ void rndr::Window::RenderToWindow()
     BitmapInfo.bmiHeader.biWidth = m_Surface.GetWidth();
     BitmapInfo.bmiHeader.biHeight = m_Surface.GetHeight();
     BitmapInfo.bmiHeader.biPlanes = 1;
-    BitmapInfo.bmiHeader.biBitCount = m_Surface.GetPixelSize() * 4;
+    BitmapInfo.bmiHeader.biBitCount = m_Surface.GetPixelSize() * 8;
     BitmapInfo.bmiHeader.biCompression = BI_RGB;
 
     HDC DC = GetDC(WindowHandle);
