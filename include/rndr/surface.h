@@ -1,7 +1,7 @@
 #pragma once
 
-#include "rndr/rndr.h"
 #include "rndr/math/math.h"
+#include "rndr/rndr.h"
 
 namespace rndr
 {
@@ -10,6 +10,9 @@ class Window;
 
 /**
  * Represents a memory buffer to which user can render.
+ *
+ * Surface uses coordinate system where origin is at the bottom-left point of the screen, X grows to
+ * the right and Y grows upward.
  */
 class Surface
 {
@@ -65,6 +68,15 @@ public:
      * @param Color The format of color needs to be 0xXXRRGGBB.
      */
     void SetPixel(int X, int Y, uint32_t Color);
+
+    /**
+     * Render a line between Start and End pixel locations.
+     *
+     * @param Start Location of a starting pixel.
+     * @param End Location of a end pixel.
+     * @param Color The format of color needs to be 0xXXRRGGBB.
+     */
+    void RenderLine(const Vector2i& Start, const Vector2i& End, uint32_t Color);
 
 private:
     uint32_t m_Width = 0, m_Height = 0;
