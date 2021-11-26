@@ -2,6 +2,8 @@
 
 #include <Windows.h>
 
+#include "rndr/color.h"
+
 void rndr::Surface::UpdateSize(int Width, int Height)
 {
     if (m_Width == Width && m_Height == Height)
@@ -27,6 +29,7 @@ void rndr::Surface::SetPixel(const Vector2i& Location, uint32_t Color)
     assert(m_ColorBuffer);
 
     uint32_t* Pixels = (uint32_t*)m_ColorBuffer;
+    Color = rndr::Color(Color).ToGammaCorrectSpace().ToUInt();
     Pixels[Location.X + Location.Y * m_Width] = Color;
 }
 
