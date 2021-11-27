@@ -1,26 +1,4 @@
-﻿// MIT License
-//
-// Copyright (c) 2021 Marko Kostić
-//
-// Permission is hereby granted, free of charge, to any person obtaining a copy
-// of this software and associated documentation files (the "Software"), to deal
-// in the Software without restriction, including without limitation the rights
-// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-// copies of the Software, and to permit persons to whom the Software is
-// furnished to do so, subject to the following conditions:
-//
-// The above copyright notice and this permission notice shall be included in
-// all copies or substantial portions of the Software.
-//
-// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-// AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-// SOFTWARE.
-
-#pragma once
+﻿#pragma once
 
 #include <cmath>
 
@@ -37,15 +15,15 @@ template <typename T>
 class Point2
 {
 public:
-    T x, y;
+    T X, Y;
 
 public:
-    Point2() { x = y = 0; }
-    Point2(T x, T y) : x(x), y(y) { assert(!HasNaNs()); }
-    Point2(const Point2<T>& p3) : x(p3.x), y(p3.y) { assert(!HasNaNs()); }
+    Point2() { X = T = 0; }
+    Point2(T X, T Y) : X(X), Y(Y) { assert(!HasNaNs()); }
+    Point2(const Point2<T>& p3) : X(p3.X), Y(p3.Y) { assert(!HasNaNs()); }
 
     template <typename U>
-    explicit Point2(const Point2<U>& p) : x((T)p.x), y((T)p.y)
+    explicit Point2(const Point2<U>& p) : X((T)p.X), Y((T)p.Y)
     {
         assert(!HasNaNs());
     }
@@ -54,61 +32,61 @@ public:
     {
         assert(i >= 0 && i < 2);
         if (i == 0)
-            x = val;
+            X = val;
         if (i == 1)
-            y = val;
+            Y = val;
     }
 
     T operator[](int i) const
     {
         assert(i >= 0 && i < 2);
         if (i == 0)
-            return x;
+            return X;
         if (i == 1)
-            return y;
+            return Y;
     }
 
-    bool HasNaNs() const { return IsNaN(x) || IsNaN(y); }
+    bool HasNaNs() const { return IsNaN(X) || IsNaN(Y); }
 
-    bool operator==(const Point2<T>& other) const { return x == other.x && y == other.y; }
+    bool operator==(const Point2<T>& other) const { return X == other.X && Y == other.Y; }
 
     bool operator!=(const Point2<T>& other) const { return !(*this == other); }
 
-    Point2<T> operator+(const Vector2<T>& v) const { return Point2(x + v.x, y + v.y); }
+    Point2<T> operator+(const Vector2<T>& v) const { return Point2(X + v.X, Y + v.Y); }
 
     Point2<T>& operator+=(const Vector2<T>& v)
     {
-        x += v.x;
-        y += v.y;
+        X += v.X;
+        Y += v.Y;
         return *this;
     }
 
-    Point2<T> operator+(const Point2<T>& other) const { return Point2(x + other.x, y + other.y); }
+    Point2<T> operator+(const Point2<T>& other) const { return Point2(X + other.X, Y + other.Y); }
 
     Point2<T>& operator+=(const Point2<T>& other)
     {
-        x += other.x;
-        y += other.y;
+        X += other.X;
+        Y += other.Y;
         return *this;
     }
 
-    Point2<T> operator-(const Vector2<T>& v) const { return Point2(x - v.x, y - v.y); }
+    Point2<T> operator-(const Vector2<T>& v) const { return Point2(X - v.X, Y - v.Y); }
 
-    Vector2<T> operator-(const Point2<T>& other) const { return Vector2(x - other.x, y - other.y); }
+    Vector2<T> operator-(const Point2<T>& other) const { return Vector2(X - other.X, Y - other.Y); }
 
     Point2<T>& operator-=(const Vector2<T>& v)
     {
-        x -= v.x;
-        y -= v.y;
+        X -= v.X;
+        Y -= v.Y;
         return *this;
     }
 
-    Point2<T> operator*(T scalar) const { return Point2(x * scalar, y * scalar); }
+    Point2<T> operator*(T scalar) const { return Point2(X * scalar, Y * scalar); }
 
     Point2<T>& operator*=(T scalar)
     {
-        x *= scalar;
-        y *= scalar;
+        X *= scalar;
+        Y *= scalar;
         return *this;
     }
 
@@ -117,7 +95,7 @@ public:
     {
         assert(scalar != 0);
         float rec = (float)1 / scalar;
-        return Point2(x * rec, y * rec);
+        return Point2(X * rec, Y * rec);
     }
 
     template <typename S>
@@ -125,14 +103,14 @@ public:
     {
         assert(scalar != 0);
         float rec = (float)1 / scalar;
-        x *= rec;
-        y *= rec;
+        X *= rec;
+        Y *= rec;
         return *this;
     }
 
-    Point2<T> operator-() const { return Point2(-x, -y); }
+    Point2<T> operator-() const { return Point2(-X, -Y); }
 
-    Point2<T> Abs() const { return Point2(std::abs(x), std::abs(y)); }
+    Point2<T> Abs() const { return Point2(std::abs(X), std::abs(Y)); }
 };
 
 template <typename T>
@@ -161,24 +139,24 @@ Point2<T> Lerp(float t, const Point2<T>& p0, const Point2<T>& p1)
 template <typename T>
 Point2<T> Floor(const Point2<T>& p)
 {
-    return Point2<T>(std::floor(p.x), std::floor(p.y));
+    return Point2<T>(std::floor(p.X), std::floor(p.Y));
 }
 template <typename T>
 Point2<T> Ceil(const Point2<T>& p)
 {
-    return Point2<T>(std::ceil(p.x), std::ceil(p.y));
+    return Point2<T>(std::ceil(p.X), std::ceil(p.Y));
 }
 
 template <typename T>
 Point2<T> Min(const Point2<T>& v1, const Point2<T>& v2)
 {
-    return Point2<T>(std::min(v1.x, v2.x), std::min(v1.y, v2.y));
+    return Point2<T>(std::min(v1.X, v2.X), std::min(v1.Y, v2.Y));
 }
 
 template <typename T>
 Point2<T> Max(const Point2<T>& v1, const Point2<T>& v2)
 {
-    return Point2<T>(std::max(v1.x, v2.x), std::max(v1.y, v2.y));
+    return Point2<T>(std::max(v1.X, v2.X), std::max(v1.Y, v2.Y));
 }
 
 template <typename T>
