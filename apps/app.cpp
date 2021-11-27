@@ -1,5 +1,6 @@
 #include <iostream>
 
+#include "rndr/color.h"
 #include "rndr/window.h"
 
 int main()
@@ -29,6 +30,11 @@ int main()
         Surface.RenderLine(A, E, 0x00FFFFFF);
 
         Surface.RenderBlock({100, 100}, {200, 50}, 0x00FFFF00);
+
+        rndr::Point2r TrianglePoints[3] = {{100, 300}, {300, 400}, {150, 600}};
+
+        Surface.RenderTriangle(TrianglePoints, [](const rndr::PixelShaderInfo& Info)
+                               { return rndr::Color(0x00FF0000); });
 
         Window.RenderToWindow();
     }

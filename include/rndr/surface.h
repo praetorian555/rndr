@@ -1,5 +1,7 @@
 #pragma once
 
+#include <functional>
+
 #include "rndr/math/math.h"
 #include "rndr/rndr.h"
 
@@ -7,6 +9,15 @@ namespace rndr
 {
 
 class Window;
+struct Color;
+
+struct PixelShaderInfo
+{
+    Point2r Position;
+    real Barycentric[3];
+};
+
+using PixelShaderCallback = std::function<Color(const PixelShaderInfo&)>;
 
 /**
  * Represents a memory buffer to which user can render.
@@ -56,16 +67,24 @@ public:
      * Colors a pixel at (X, Y) location.
      *
      * @param Location Pixel coordinates.
-     * @param Color The format of color needs to be 0xXXRRGGBB.
+     * @param Color The format of color needs to be 0xXXRRGGBB. Color needs to be in linear space.
      */
-    void SetPixel(const Vector2i& Location, uint32_t Color);
+    void SetPixel(const Point2i& Location, uint32_t Color);
+
+    /**
+     * Colors a pixel at specified location.
+     *
+     * @param Location Location of a pixel in screen space.
+     * @param Color Color object in linear space.
+     */
+    void SetPixel(const Point2i& Location, rndr::Color Color);
 
     /**
      * Colors a pixel at (X, Y) location.
      *
      * @param X Coordinate along the X axis.
      * @param Y Coordinate along the Y axis.
-     * @param Color The format of color needs to be 0xXXRRGGBB.
+     * @param Color The format of color needs to be 0xXXRRGGBB. Color needs to be in linear space.
      */
     void SetPixel(int X, int Y, uint32_t Color);
 
@@ -82,6 +101,16 @@ public:
      * Color a block that starts at BottomLeft of size Size with Color.
      */
     void RenderBlock(const Vector2i& BottomLeft, const Vector2i& Size, uint32_t Color);
+
+    /**
+     * Render triangle defined by Points. Note that points should be specified in counter-clockwise
+     * direction.
+     *
+     * @param Points Array of three points in the surface's coordinate space.
+     * @param Callback Function that is invoked for every pixel that is inside the triangle.
+     * Function should return the calculated color of a pixel.
+     */
+    void RenderTriangle(const Point2r (&Points)[3], PixelShaderCallback Callback);
 
     /**
      * Clear the color buffer with specified color.
