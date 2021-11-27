@@ -31,10 +31,22 @@ int main()
 
         Surface.RenderBlock({100, 100}, {200, 50}, 0x00FFFF00);
 
-        rndr::Point2r TrianglePoints[3] = {{100, 300}, {300, 400}, {150, 600}};
+        rndr::Point2r Triangle1[3] = {{100, 300}, {300, 300}, {200, 500}};
+        rndr::Point2r Triangle2[3] = {{300, 300}, {300, 500}, {100, 500}};
 
-        Surface.RenderTriangle(TrianglePoints, [](const rndr::PixelShaderInfo& Info)
-                               { return rndr::Color(0x00FF0000); });
+        Surface.RenderTriangle(Triangle1,
+                               [](const rndr::PixelShaderInfo& Info)
+                               {
+                                   rndr::Vector3r Red(1, 0, 0);
+                                   rndr::Vector3r Green(0, 1, 0);
+                                   rndr::Vector3r Blue(0, 0, 1);
+                                   rndr::Vector3r Result;
+
+                                   Result = Red * Info.Barycentric[0] +
+                                            Green * Info.Barycentric[1] +
+                                            Blue * Info.Barycentric[2];
+                                   return rndr::Color(Result.X, Result.Y, Result.Z, 1);
+                               });
 
         Window.RenderToWindow();
     }
