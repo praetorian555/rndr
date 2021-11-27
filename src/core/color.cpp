@@ -20,10 +20,10 @@ uint32_t rndr::Color::ToUInt() const
 
 rndr::Color rndr::Color::ToGammaCorrectSpace() const
 {
-    return Color(std::sqrt(R), std::sqrt(G), std::sqrt(B), std::sqrt(A));
+    return Color(std::sqrt(R), std::sqrt(G), std::sqrt(B), A);
 }
 
 rndr::Color rndr::Color::ToLinearSpace() const
 {
-    return Color(R * R, G * G, B * B, A * A);
+    return Color(R * R, G * G, B * B, A);
 }
