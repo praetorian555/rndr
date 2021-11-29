@@ -53,6 +53,16 @@ public:
     Surface& GetSurface() { return m_Surface; }
 
     /**
+     * Check if window size is 0 along any of the x axis.
+     *
+     * @return Returns true if we shouldn't render to this window.
+     */
+    bool IsWindowMinimized() const
+    {
+        return m_Surface.GetHeight() == 0 || m_Surface.GetWidth() == 0;
+    }
+
+    /**
      * Copies window's surface buffer to window internal buffer that is displayed on screen.
      */
     void RenderToWindow();
