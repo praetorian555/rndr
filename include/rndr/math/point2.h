@@ -18,7 +18,7 @@ public:
     T X, Y;
 
 public:
-    Point2() { X = T = 0; }
+    Point2() { X = Y = 0; }
     Point2(T X, T Y) : X(X), Y(Y) { assert(!HasNaNs()); }
     Point2(const Point2<T>& p3) : X(p3.X), Y(p3.Y) { assert(!HasNaNs()); }
 
