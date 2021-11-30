@@ -1,5 +1,7 @@
 #include "rndr/render/softrenderer.h"
 
+#include "rndr/core/bounds3.h"
+
 #include "rndr/surface.h"
 
 rndr::SoftwareRenderer::SoftwareRenderer(rndr::Surface* Surface) : m_Surface(Surface) {}
@@ -23,7 +25,6 @@ void rndr::SoftwareRenderer::DrawTriangles(const std::vector<Point3r>& Positions
             VertexInfo.VertexIndex = j;
             VertexInfo.Position = Positions[Indices[i + j]];
             Points[j] = m_Pipeline->VertexShader->Callback(VertexInfo);
-            
         }
 
         DrawTriangle(Points);
@@ -55,8 +56,26 @@ void rndr::SoftwareRenderer::DrawTriangle(const Point3r (&PositionsWithDepth)[3]
     Min += PixelCenter;
     Max -= PixelCenter;
 
-    const real OneOverTwoTriangleArea = 1 / GetTriangleArea(Points) / 2;
+    Bounds2i TriangleBounds;
+    TriangleBounds.pMin = Point2i(Min.X, Min.Y);
+    TriangleBounds.pMax = Point2i(Max.X, Max.Y);
 
+    // Early exit if triangle is outside the screen
+    if (!rndr::Overlaps(TriangleBounds, m_Surface->GetScreenBounds()))
+    {
+        return;
+    }
+
+    // TODO(mkostic): Check winding order of the triangle and discard it based on that
+
+    Bounds2i TriangleInsideScreen = rndr::Intersect(TriangleBounds, m_Surface->GetScreenBounds());
+    Min.X = TriangleInsideScreen.pMin.X;
+    Min.Y = TriangleInsideScreen.pMin.Y;
+    Max.X = TriangleInsideScreen.pMax.X;
+    Max.Y = TriangleInsideScreen.pMax.Y;
+
+    // Stuff unique for triangle
+    const real OneOverTwoTriangleArea = 1 / GetTriangleArea(Points) / 2;
     const rndr::Vector3r Edges[3] = {Points[1] - Points[0], Points[2] - Points[1],
                                      Points[0] - Points[2]};
     const rndr::Vector3r N = rndr::Cross(Edges[0], -Edges[2]);
