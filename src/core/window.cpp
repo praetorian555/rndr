@@ -1,4 +1,4 @@
-#include "rndr/window.h"
+#include "rndr/core/window.h"
 
 #include <cassert>
 

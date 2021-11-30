@@ -1,4 +1,4 @@
-#include "rndr/color.h"
+#include "rndr/core/color.h"
 
 #include "rndr/core/math.h"
 

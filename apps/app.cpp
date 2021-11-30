@@ -1,9 +1,10 @@
 #include <iostream>
 
-#include "rndr/color.h"
+#include "rndr/core/color.h"
+#include "rndr/core/window.h"
+
 #include "rndr/render/pipeline.h"
 #include "rndr/render/softrenderer.h"
-#include "rndr/window.h"
 
 int main()
 {

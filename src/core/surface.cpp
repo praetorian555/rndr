@@ -1,8 +1,6 @@
-#include "rndr/surface.h"
+#include "rndr/core/surface.h"
 
-#include <Windows.h>
-
-#include "rndr/color.h"
+#include "rndr/core/color.h"
 #include "rndr/core/math.h"
 
 void rndr::Surface::UpdateSize(int Width, int Height)

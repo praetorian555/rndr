@@ -1,8 +1,7 @@
 #include "rndr/render/softrenderer.h"
 
 #include "rndr/core/bounds3.h"
-
-#include "rndr/surface.h"
+#include "rndr/core/surface.h"
 
 rndr::SoftwareRenderer::SoftwareRenderer(rndr::Surface* Surface) : m_Surface(Surface) {}
 
