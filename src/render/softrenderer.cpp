@@ -30,12 +30,17 @@ void rndr::SoftwareRenderer::DrawTriangles(const std::vector<Point3r>& Positions
     }
 }
 
+struct TriangleConstants
+{
+    rndr::Vector3r Edges[3];
+    rndr::Vector3r Normal;
+    real OneOverTwoTriangleArea;
+};
+
 static real GetTriangleArea(const rndr::Point3r* Points);
 static bool GetBarycentricCoordinates(const rndr::Point3r& Point,
                                       const rndr::Point3r (&Points)[3],
-                                      const real OneOverTwoTriangleArea,
-                                      const rndr::Vector3r (&Edges)[3],
-                                      const rndr::Vector3r& Normal,
+                                      const TriangleConstants& Constants,
                                       real (&BarycentricCoordinates)[3]);
 
 void rndr::SoftwareRenderer::DrawTriangle(const Point3r (&PositionsWithDepth)[3])
@@ -74,10 +79,12 @@ void rndr::SoftwareRenderer::DrawTriangle(const Point3r (&PositionsWithDepth)[3]
     Max.Y = TriangleInsideScreen.pMax.Y;
 
     // Stuff unique for triangle
-    const real OneOverTwoTriangleArea = 1 / GetTriangleArea(Points) / 2;
-    const rndr::Vector3r Edges[3] = {Points[1] - Points[0], Points[2] - Points[1],
-                                     Points[0] - Points[2]};
-    const rndr::Vector3r N = rndr::Cross(Edges[0], -Edges[2]);
+    TriangleConstants Constants;
+    Constants.OneOverTwoTriangleArea = 1 / GetTriangleArea(Points) / 2;
+    Constants.Edges[0] = Points[1] - Points[0];
+    Constants.Edges[1] = Points[2] - Points[1];
+    Constants.Edges[2] = Points[0] - Points[2];
+    Constants.Normal = rndr::Cross(Constants.Edges[0], -Constants.Edges[2]);
 
     for (real Y = Min.X; Y <= Max.Y; Y += 1)
     {
@@ -86,8 +93,8 @@ void rndr::SoftwareRenderer::DrawTriangle(const Point3r (&PositionsWithDepth)[3]
             Point2r Position2D{X, Y};
             Point3r Position{X, Y, 0};
             PerPixelInfo PixelInfo{{(int)X, (int)Y}};
-            bool IsInsideTriangle = GetBarycentricCoordinates(
-                Position, Points, OneOverTwoTriangleArea, Edges, N, PixelInfo.Barycentric);
+            bool IsInsideTriangle =
+                GetBarycentricCoordinates(Position, Points, Constants, PixelInfo.Barycentric);
             if (IsInsideTriangle)
             {
                 rndr::Color Color = m_Pipeline->PixelShader->Callback(PixelInfo);
@@ -106,34 +113,35 @@ void rndr::SoftwareRenderer::DrawTriangle(const Point3r (&PositionsWithDepth)[3]
 
 static bool GetBarycentricCoordinates(const rndr::Point3r& Point,
                                       const rndr::Point3r (&Points)[3],
-                                      const real OneOverTwoTriangleArea,
-                                      const rndr::Vector3r (&Edges)[3],
-                                      const rndr::Vector3r& Normal,
+                                      const TriangleConstants& Constants,
                                       real (&BarycentricCoordinates)[3])
 {
     rndr::Vector3r Vec0 = Point - Points[0];
     rndr::Vector3r Vec1 = Point - Points[1];
     rndr::Vector3r Vec2 = Point - Points[2];
 
-    rndr::Vector3r BarVec0 = rndr::Cross(Edges[0], Vec0);
-    rndr::Vector3r BarVec1 = rndr::Cross(Edges[1], Vec1);
-    rndr::Vector3r BarVec2 = rndr::Cross(Edges[2], Vec2);
+    rndr::Vector3r BarVec0 = rndr::Cross(Constants.Edges[0], Vec0);
+    rndr::Vector3r BarVec1 = rndr::Cross(Constants.Edges[1], Vec1);
+    rndr::Vector3r BarVec2 = rndr::Cross(Constants.Edges[2], Vec2);
 
-    BarycentricCoordinates[0] = rndr::Cross(Edges[0], Vec0).Length() * OneOverTwoTriangleArea;
-    BarycentricCoordinates[1] = rndr::Cross(Edges[1], Vec1).Length() * OneOverTwoTriangleArea;
-    BarycentricCoordinates[2] = rndr::Cross(Edges[2], Vec2).Length() * OneOverTwoTriangleArea;
+    BarycentricCoordinates[0] =
+        rndr::Cross(Constants.Edges[0], Vec0).Length() * Constants.OneOverTwoTriangleArea;
+    BarycentricCoordinates[1] =
+        rndr::Cross(Constants.Edges[1], Vec1).Length() * Constants.OneOverTwoTriangleArea;
+    BarycentricCoordinates[2] =
+        rndr::Cross(Constants.Edges[2], Vec2).Length() * Constants.OneOverTwoTriangleArea;
 
-    if (rndr::Dot(Normal, BarVec0) < 0)
+    if (rndr::Dot(Constants.Normal, BarVec0) < 0)
     {
         return false;
     }
 
-    if (rndr::Dot(Normal, BarVec1) < 0)
+    if (rndr::Dot(Constants.Normal, BarVec1) < 0)
     {
         return false;
     }
 
-    if (rndr::Dot(Normal, BarVec2) < 0)
+    if (rndr::Dot(Constants.Normal, BarVec2) < 0)
     {
         return false;
     }
