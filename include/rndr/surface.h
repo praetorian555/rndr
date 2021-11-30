@@ -3,7 +3,7 @@
 #include <functional>
 
 #include "rndr/math/math.h"
-#include "rndr/rndr.h"
+#include "rndr/core/bounds2.h"
 
 namespace rndr
 {
@@ -47,6 +47,8 @@ public:
      * @return Returns height.
      */
     uint32_t GetHeight() const { return m_Height; }
+
+    const Bounds2i& GetScreenBounds() const { return m_ScreenBounds; }
 
     /**
      * Get the size of a pixel.
@@ -97,6 +99,7 @@ private:
     uint32_t m_Width = 0, m_Height = 0;
     uint32_t m_PixelSize = 4;
     uint8_t* m_ColorBuffer = nullptr;
+    Bounds2i m_ScreenBounds;
 };
 
 }  // namespace rndr

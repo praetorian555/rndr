@@ -3,6 +3,7 @@
 #include <Windows.h>
 
 #include "rndr/color.h"
+#include "rndr/math/math.h"
 
 void rndr::Surface::UpdateSize(int Width, int Height)
 {
@@ -13,6 +14,9 @@ void rndr::Surface::UpdateSize(int Width, int Height)
 
     m_Width = Width;
     m_Height = Height;
+
+    m_ScreenBounds.pMin = Point2i(0, 0);
+    m_ScreenBounds.pMax = Point2i(m_Width, m_Height);
 
     if (m_ColorBuffer)
     {
