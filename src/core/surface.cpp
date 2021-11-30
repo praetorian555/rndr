@@ -3,7 +3,7 @@
 #include <Windows.h>
 
 #include "rndr/color.h"
-#include "rndr/math/math.h"
+#include "rndr/core/math.h"
 
 void rndr::Surface::UpdateSize(int Width, int Height)
 {

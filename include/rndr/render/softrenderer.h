@@ -2,7 +2,7 @@
 
 #include <vector>
 
-#include "rndr/math/math.h"
+#include "rndr/core/math.h"
 #include "rndr/render/pipeline.h"
 
 namespace rndr

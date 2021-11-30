@@ -2,8 +2,8 @@
 
 #include <functional>
 
-#include "rndr/math/math.h"
 #include "rndr/core/bounds2.h"
+#include "rndr/core/math.h"
 
 namespace rndr
 {

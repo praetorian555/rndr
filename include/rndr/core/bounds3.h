@@ -1,6 +1,6 @@
 #pragma once
 
-#include "rndr/math/math.h"
+#include "rndr/core/math.h"
 
 namespace rndr
 {

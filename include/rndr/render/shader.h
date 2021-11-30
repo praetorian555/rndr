@@ -3,7 +3,7 @@
 #include <functional>
 
 #include "rndr/color.h"
-#include "rndr/math/math.h"
+#include "rndr/core/math.h"
 
 namespace rndr
 {
