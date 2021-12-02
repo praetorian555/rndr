@@ -2,6 +2,7 @@
 
 #include <functional>
 
+#include "rndr/core/rndr.h"
 #include "rndr/core/bounds2.h"
 #include "rndr/core/math.h"
 
@@ -10,6 +11,16 @@ namespace rndr
 
 class Window;
 struct Color;
+
+struct SurfaceOptions
+{
+    int Width = 1024;
+    int Height = 768;
+
+    rndr::PixelLayout PixelLayout = rndr::PixelLayout::A8R8G8B8;
+
+    bool bUseDepthBuffer = false;
+};
 
 /**
  * Represents a memory buffer to which user can render.
@@ -20,7 +31,7 @@ struct Color;
 class Surface
 {
 public:
-    Surface() = default;
+    Surface(const SurfaceOptions& Options = SurfaceOptions{});
 
     /**
      * Will recreate internal memory buffer if Width or Height are different from existing ones.
@@ -39,15 +50,18 @@ public:
      *
      * @return Returns width.
      */
-    uint32_t GetWidth() const { return m_Width; }
+    uint32_t GetWidth() const { return m_Options.Width; }
 
     /**
      * Get the height of the surface.
      *
      * @return Returns height.
      */
-    uint32_t GetHeight() const { return m_Height; }
+    uint32_t GetHeight() const { return m_Options.Height; }
 
+    /**
+     * Get Bounds2 object consisting of (0, 0) and (Width, Height) points.
+     */
     const Bounds2i& GetScreenBounds() const { return m_ScreenBounds; }
 
     /**
@@ -55,7 +69,19 @@ public:
      *
      * @return Returns the size of a pixel in bytes.
      */
-    uint32_t GetPixelSize() const { return m_PixelSize; }
+    uint32_t GetPixelSize() const;
+
+    /**
+     * Get color of specified pixel.
+     */
+    rndr::Color GetPixelColor(const Point2i& Location) const;
+    rndr::Color GetPixelColor(int X, int Y) const;
+
+    /**
+     * Get depth of a specified pixel.
+     */
+    real GetPixelDepth(const Point2i& Location) const;
+    real GetPixelDepth(int X, int Y) const;
 
     /**
      * Colors a pixel at specified location.
@@ -73,6 +99,12 @@ public:
      * @param Color New pixel color.
      */
     void SetPixel(int X, int Y, rndr::Color Color);
+
+    /**
+     * Set pixel depth to the specified value.
+     */
+    void SetPixelDepth(const Point2i& Location, real Depth);
+    void SetPixelDepth(int X, int Y, real Depth);
 
     /**
      * Render a line between Start and End pixel locations.
@@ -95,11 +127,16 @@ public:
      */
     void ClearColorBuffer(rndr::Color Color);
 
+    /**
+     * Clear the depth buffer with specified value.
+     */
+    void ClearDepthBuffer(real ClearValue);
+
 private:
-    uint32_t m_Width = 0, m_Height = 0;
-    uint32_t m_PixelSize = 4;
-    uint8_t* m_ColorBuffer = nullptr;
+    SurfaceOptions m_Options;
     Bounds2i m_ScreenBounds;
+    uint8_t* m_ColorBuffer = nullptr;
+    uint8_t* m_DepthBuffer = nullptr;
 };
 
 }  // namespace rndr

@@ -3,18 +3,54 @@
 #include "rndr/core/color.h"
 #include "rndr/core/math.h"
 
+rndr::Surface::Surface(const SurfaceOptions& Options) : m_Options(Options)
+{
+    UpdateSize(Options.Width, Options.Height);
+}
+
+uint32_t rndr::Surface::GetPixelSize() const
+{
+    return rndr::GetPixelSize(m_Options.PixelLayout);
+}
+
+rndr::Color rndr::Surface::GetPixelColor(const Point2i& Location) const
+{
+    assert(Location.X >= 0 && Location.X < m_Options.Width);
+    assert(Location.Y >= 0 && Location.Y < m_Options.Height);
+    assert(m_ColorBuffer);
+
+    const uint32_t* Pixels = (uint32_t*)m_ColorBuffer;
+    const uint32_t Value = Pixels[Location.X + Location.Y * m_Options.Width];
+    return rndr::Color(Value);
+}
+
+rndr::Color rndr::Surface::GetPixelColor(int X, int Y) const
+{
+    return GetPixelColor(Point2i{X, Y});
+}
+
+real rndr::Surface::GetPixelDepth(const Point2i& Location) const
+{
+    assert(Location.X >= 0 && Location.X < m_Options.Width);
+    assert(Location.Y >= 0 && Location.Y < m_Options.Height);
+    assert(m_DepthBuffer);
+
+    const real* Depths = (real*)m_DepthBuffer;
+    return Depths[Location.X + Location.Y * m_Options.Width];
+}
+
+real rndr::Surface::GetPixelDepth(int X, int Y) const
+{
+    return GetPixelDepth(Point2i{X, Y});
+}
+
 void rndr::Surface::UpdateSize(int Width, int Height)
 {
-    if (m_Width == Width && m_Height == Height)
-    {
-        return;
-    }
-
-    m_Width = Width;
-    m_Height = Height;
+    m_Options.Width = Width;
+    m_Options.Height = Height;
 
     m_ScreenBounds.pMin = Point2i(0, 0);
-    m_ScreenBounds.pMax = Point2i(m_Width, m_Height);
+    m_ScreenBounds.pMax = Point2i(m_Options.Width, m_Options.Height);
 
     if (m_ColorBuffer)
     {
@@ -22,27 +58,56 @@ void rndr::Surface::UpdateSize(int Width, int Height)
         m_ColorBuffer = nullptr;
     }
 
-    if (m_Width == 0 || m_Height == 0)
+    if (m_DepthBuffer)
+    {
+        delete[] m_DepthBuffer;
+        m_DepthBuffer = nullptr;
+    }
+
+    if (m_Options.Width == 0 || m_Options.Height == 0)
     {
         return;
     }
 
-    m_ColorBuffer = new uint8_t[m_Width * m_Height * m_PixelSize];
+    uint32_t ByteCount =
+        m_Options.Width * m_Options.Height * rndr::GetPixelSize(m_Options.PixelLayout);
+    m_ColorBuffer = new uint8_t[ByteCount];
+
+    if (m_Options.bUseDepthBuffer)
+    {
+        uint32_t ByteCount = m_Options.Width * m_Options.Height * sizeof(real);
+        m_DepthBuffer = new uint8_t[ByteCount];
+    }
 }
 
 void rndr::Surface::SetPixel(const Point2i& Location, rndr::Color Color)
 {
-    assert(Location.X >= 0 && Location.X < m_Width);
-    assert(Location.Y >= 0 && Location.Y < m_Height);
+    assert(Location.X >= 0 && Location.X < m_Options.Width);
+    assert(Location.Y >= 0 && Location.Y < m_Options.Height);
     assert(m_ColorBuffer);
 
     uint32_t* Pixels = (uint32_t*)m_ColorBuffer;
-    Pixels[Location.X + Location.Y * m_Width] = Color.ToUInt();
+    Pixels[Location.X + Location.Y * m_Options.Width] = Color.ToUInt();
 }
 
 void rndr::Surface::SetPixel(int X, int Y, rndr::Color Color)
 {
     SetPixel(Point2i{X, Y}, Color);
+}
+
+void rndr::Surface::SetPixelDepth(const Point2i& Location, real Depth)
+{
+    assert(Location.X >= 0 && Location.X < m_Options.Width);
+    assert(Location.Y >= 0 && Location.Y < m_Options.Height);
+    assert(m_DepthBuffer);
+
+    real* Depths = (real*)m_DepthBuffer;
+    Depths[Location.X + Location.Y * m_Options.Width] = Depth;
+}
+
+void rndr::Surface::SetPixelDepth(int X, int Y, real Depth)
+{
+    SetPixelDepth(Point2i{X, Y}, Depth);
 }
 
 // Bresenhams line-drawing algorithm
@@ -99,25 +164,36 @@ void rndr::Surface::RenderLine(const Point2i& A, const Point2i& B, rndr::Color C
 
 void rndr::Surface::ClearColorBuffer(rndr::Color Color)
 {
-    for (uint32_t Y = 0; Y < m_Height; Y++)
+    for (uint32_t Y = 0; Y < m_Options.Height; Y++)
     {
-        for (uint32_t X = 0; X < m_Width; X++)
+        for (uint32_t X = 0; X < m_Options.Width; X++)
         {
             SetPixel(X, Y, Color);
         }
     }
 }
 
+void rndr::Surface::ClearDepthBuffer(real ClearValue)
+{
+    for (uint32_t Y = 0; Y < m_Options.Height; Y++)
+    {
+        for (uint32_t X = 0; X < m_Options.Width; X++)
+        {
+            SetPixelDepth(X, Y, ClearValue);
+        }
+    }
+}
+
 void rndr::Surface::RenderBlock(const Point2i& BottomLeft, const Point2i& Size, rndr::Color Color)
 {
-    assert(BottomLeft.X >= 0 && BottomLeft.X < m_Width);
-    assert(BottomLeft.Y >= 0 && BottomLeft.Y < m_Height);
+    assert(BottomLeft.X >= 0 && BottomLeft.X < m_Options.Width);
+    assert(BottomLeft.Y >= 0 && BottomLeft.Y < m_Options.Height);
     assert(Size.X > 0);
     assert(Size.Y > 0);
 
     Point2i TopRight = BottomLeft + Size;
-    assert(TopRight.X >= 0 && TopRight.X < m_Width);
-    assert(TopRight.Y >= 0 && TopRight.Y < m_Height);
+    assert(TopRight.X >= 0 && TopRight.X < m_Options.Width);
+    assert(TopRight.Y >= 0 && TopRight.Y < m_Options.Height);
 
     for (int Y = BottomLeft.Y; Y < TopRight.Y; Y++)
     {
