@@ -31,3 +31,20 @@ real rndr::ToLinearSpace(real Value, real Gamma)
     return std::pow(Tmp, Gamma);
 #endif
 }
+
+int rndr::GetPixelSize(PixelLayout Layout)
+{
+    switch (Layout)
+    {
+        case PixelLayout::A8R8G8B8:
+        {
+            return 4;
+        }
+        default:
+        {
+            assert(false);
+        }
+    }
+
+    return 0;
+}
