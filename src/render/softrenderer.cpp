@@ -3,30 +3,67 @@
 #include "rndr/core/bounds3.h"
 #include "rndr/core/surface.h"
 
+#include "rndr/render/model.h"
+
 rndr::SoftwareRenderer::SoftwareRenderer(rndr::Surface* Surface) : m_Surface(Surface) {}
 
-void rndr::SoftwareRenderer::DrawTriangles(const std::vector<Point3r>& Positions,
-                                           const std::vector<int>& Indices)
+void rndr::SoftwareRenderer::Draw(rndr::Model* Model, int InstanceCount)
+{
+    if (!Model->GetPipeline())
+    {
+        // TODO(mkostic): Add log
+        return;
+    }
+
+    m_Pipeline = Model->GetPipeline();
+
+    const std::vector<uint8_t>& VertexData = Model->GetVertexData();
+    const int VertexDataStride = Model->GetVertexDataStride();
+    const std::vector<uint8_t>& InstanceData = Model->GetInstanceData();
+    const int InstanceDataStride = Model->GetInstanceDataStride();
+    const std::vector<int> Indices = Model->GetIndices();
+
+    for (int InstanceIndex = 0; InstanceIndex < InstanceCount; InstanceIndex++)
+    {
+        void* InstanceDataPtr = nullptr;
+        if (!InstanceData.empty())
+        {
+            int Offset = InstanceIndex * InstanceDataStride;
+            InstanceDataPtr = (void*)&InstanceData[Offset];
+        }
+        DrawTriangles(VertexData, VertexDataStride, Indices, InstanceDataPtr);
+    }
+}
+
+void rndr::SoftwareRenderer::DrawTriangles(const std::vector<uint8_t>& VertexData,
+                                           int VertexDataStride,
+                                           const std::vector<int>& Indices,
+                                           void* InstanceData)
 {
     assert(m_Surface);
     assert(m_Pipeline);
     assert(Indices.size() != 0);
     assert(Indices.size() % 3 == 0);
 
+
     for (int i = 0; i < Indices.size(); i += 3)
     {
-        Point3r Points[3];
+        // For now these positions need to be in the real screen space.
+        Point3r Positions[3];
+        void* Data[3];
 
         for (int j = 0; j < 3; j++)
         {
             PerVertexInfo VertexInfo;
             VertexInfo.PrimitiveIndex = i / 3;
             VertexInfo.VertexIndex = j;
-            VertexInfo.Position = Positions[Indices[i + j]];
-            Points[j] = m_Pipeline->VertexShader->Callback(VertexInfo);
+            VertexInfo.VertexData = (void*)&VertexData.data()[Indices[i + j] * VertexDataStride];
+            VertexInfo.InstanceData = InstanceData;
+            Positions[j] = m_Pipeline->VertexShader->Callback(VertexInfo);
+            Data[j] = VertexInfo.VertexData;
         }
 
-        DrawTriangle(Points);
+        DrawTriangle(Positions, Data);
     }
 }
 
@@ -47,7 +84,7 @@ static real CalcPixelDepth(const real (&Barycentric)[3], const real (&OneOverDep
 static bool RunDepthTest(rndr::DepthTest DepthTest, real SrcDepth, real DestDepth);
 
 // Expecting that PositionsWithDepth are in the real screen space.
-void rndr::SoftwareRenderer::DrawTriangle(const Point3r (&PositionsWithDepth)[3])
+void rndr::SoftwareRenderer::DrawTriangle(const Point3r (&PositionsWithDepth)[3], void** VertexData)
 {
     // Don't use z coordinate for calculation of barycentric coordinate
     Point3r Points[3] = {{PositionsWithDepth[0].X, PositionsWithDepth[0].Y, 0},
@@ -100,6 +137,7 @@ void rndr::SoftwareRenderer::DrawTriangle(const Point3r (&PositionsWithDepth)[3]
             Point2r Position2D{X, Y};
             Point3r Position{X, Y, 0};
             PerPixelInfo PixelInfo{{(int)X, (int)Y}};
+            memcpy(PixelInfo.VertexData, VertexData, sizeof(void*) * 3);
             bool IsInsideTriangle =
                 GetBarycentricCoordinates(Position, Points, Constants, PixelInfo.Barycentric);
             if (IsInsideTriangle)
@@ -160,11 +198,11 @@ static bool GetBarycentricCoordinates(const rndr::Point3r& Point,
     rndr::Vector3r BarVec2 = rndr::Cross(Constants.Edges[2], Vec2);
 
     BarycentricCoordinates[0] =
-        rndr::Cross(Constants.Edges[0], Vec0).Length() * Constants.OneOverTwoTriangleArea;
-    BarycentricCoordinates[1] =
         rndr::Cross(Constants.Edges[1], Vec1).Length() * Constants.OneOverTwoTriangleArea;
-    BarycentricCoordinates[2] =
+    BarycentricCoordinates[1] =
         rndr::Cross(Constants.Edges[2], Vec2).Length() * Constants.OneOverTwoTriangleArea;
+    BarycentricCoordinates[2] =
+        rndr::Cross(Constants.Edges[0], Vec0).Length() * Constants.OneOverTwoTriangleArea;
 
     if (rndr::Dot(Constants.Normal, BarVec0) < 0)
     {
