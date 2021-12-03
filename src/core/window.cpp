@@ -16,6 +16,13 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam);
 
 rndr::Window::Window(const rndr::WindowOptions& Options) : m_Options(Options)
 {
+    rndr::SurfaceOptions SurfaceOptions;
+    SurfaceOptions.bUseDepthBuffer = true;
+    SurfaceOptions.Width = Options.Width;
+    SurfaceOptions.Height = Options.Height;
+
+    m_Surface = new Surface(SurfaceOptions);
+
     rndr::WindowDelegates::OnResize.Add(
         [this](Window* Wind, int Width, int Height)
         {
@@ -78,7 +85,7 @@ void rndr::Window::Resize(int Width, int Height)
 {
     m_CurrentWidth = Width;
     m_CurrentHeight = Height;
-    m_Surface.UpdateSize(Width, Height);
+    m_Surface->UpdateSize(Width, Height);
 }
 
 void rndr::Window::RenderToWindow()
@@ -87,16 +94,16 @@ void rndr::Window::RenderToWindow()
 
     BITMAPINFO BitmapInfo = {};
     BitmapInfo.bmiHeader.biSize = sizeof(BitmapInfo.bmiHeader);
-    BitmapInfo.bmiHeader.biWidth = m_Surface.GetWidth();
-    BitmapInfo.bmiHeader.biHeight = m_Surface.GetHeight();
+    BitmapInfo.bmiHeader.biWidth = m_Surface->GetWidth();
+    BitmapInfo.bmiHeader.biHeight = m_Surface->GetHeight();
     BitmapInfo.bmiHeader.biPlanes = 1;
-    BitmapInfo.bmiHeader.biBitCount = m_Surface.GetPixelSize() * 8;
+    BitmapInfo.bmiHeader.biBitCount = m_Surface->GetPixelSize() * 8;
     BitmapInfo.bmiHeader.biCompression = BI_RGB;
 
     HDC DC = GetDC(WindowHandle);
 
-    StretchDIBits(DC, 0, 0, m_CurrentWidth, m_CurrentHeight, 0, 0, m_Surface.GetWidth(),
-                  m_Surface.GetHeight(), m_Surface.GetColorBuffer(), &BitmapInfo, DIB_RGB_COLORS,
+    StretchDIBits(DC, 0, 0, m_CurrentWidth, m_CurrentHeight, 0, 0, m_Surface->GetWidth(),
+                  m_Surface->GetHeight(), m_Surface->GetColorBuffer(), &BitmapInfo, DIB_RGB_COLORS,
                   SRCCOPY);
 }
 

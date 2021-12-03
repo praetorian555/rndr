@@ -15,6 +15,7 @@ namespace rndr
 struct WindowOptions
 {
     std::string Name = "Default Window";
+
     int Width = 1024;
     int Height = 768;
 };
@@ -50,7 +51,7 @@ public:
     /**
      * Get window surface to which user can render.
      */
-    Surface& GetSurface() { return m_Surface; }
+    Surface& GetSurface() { return *m_Surface; }
 
     /**
      * Check if window size is 0 along any of the x axis.
@@ -59,7 +60,7 @@ public:
      */
     bool IsWindowMinimized() const
     {
-        return m_Surface.GetHeight() == 0 || m_Surface.GetWidth() == 0;
+        return m_Surface->GetHeight() == 0 || m_Surface->GetWidth() == 0;
     }
 
     /**
@@ -73,7 +74,8 @@ private:
 private:
     WindowOptions m_Options;
     NativeWindowHandle m_NativeWindowHandle;
-    Surface m_Surface;
+    
+    Surface* m_Surface = nullptr;
 
     uint32_t m_CurrentWidth = 0, m_CurrentHeight = 0;
 };
