@@ -12,6 +12,7 @@ struct PerPixelInfo
 {
     Point2i Position;
     real Barycentric[3];
+    void* VertexData[3];
 };
 
 using PixelShaderCallback = std::function<Color(const PerPixelInfo&)>;
@@ -23,9 +24,10 @@ struct PixelShader
 
 struct PerVertexInfo
 {
-    Point3r Position;
     int PrimitiveIndex;
     int VertexIndex;
+    void* VertexData;
+    void* InstanceData;
 };
 
 using VertexShaderCallback = std::function<Point3r(const PerVertexInfo&)>;
