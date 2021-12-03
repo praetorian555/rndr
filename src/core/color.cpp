@@ -43,7 +43,7 @@ rndr::Color rndr::Color::ToLinearSpace(real Gamma) const
 
 rndr::Color rndr::Color::operator*(real Value) const
 {
-    return Color{R * Value, G * Value, B * Value, A};
+    return Color{R * Value, G * Value, B * Value, A * Value};
 }
 
 rndr::Color& rndr::Color::operator*=(real Value)
@@ -51,6 +51,7 @@ rndr::Color& rndr::Color::operator*=(real Value)
     R *= Value;
     G *= Value;
     B *= Value;
+    A *= Value;
 
     return *this;
 }

@@ -124,6 +124,14 @@ void rndr::SoftwareRenderer::DrawTriangle(const Point3r (&PositionsWithDepth)[3]
                 // Run Pixel shader
                 rndr::Color Color = m_Pipeline->PixelShader->Callback(PixelInfo);
 
+                // Apply alpha
+                rndr::Color CurrentColor = m_Surface->GetPixelColor(X, Y);
+                real InvColorA = 1 - Color.A;
+                Color.R = Color.A * Color.R + CurrentColor.R * CurrentColor.A * InvColorA;
+                Color.G = Color.A * Color.G + CurrentColor.G * CurrentColor.A * InvColorA;
+                Color.B = Color.A * Color.B + CurrentColor.B * CurrentColor.A * InvColorA;
+                Color.A = Color.A + CurrentColor.A * InvColorA;
+
                 if (m_Pipeline->bApplyGammaCorrection)
                 {
                     Color = Color.ToGammaCorrectSpace(m_Pipeline->Gamma);
