@@ -5,17 +5,14 @@
 namespace rndr
 {
 
-extern VertexShader g_DefaultVertexShader;
-extern PixelShader g_DefaultPixelShader;
-
 enum class DepthTest {
     None, GreaterThan, LesserThen
 };
 
 struct Pipeline
 {
-    rndr::VertexShader* VertexShader = &g_DefaultVertexShader;
-    rndr::PixelShader* PixelShader = &g_DefaultPixelShader;
+    rndr::VertexShader* VertexShader = nullptr;
+    rndr::PixelShader* PixelShader = nullptr;
 
     rndr::DepthTest DepthTest = rndr::DepthTest::None;
 
