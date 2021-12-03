@@ -45,7 +45,6 @@ void rndr::SoftwareRenderer::DrawTriangles(const std::vector<uint8_t>& VertexDat
     assert(Indices.size() != 0);
     assert(Indices.size() % 3 == 0);
 
-
     for (int i = 0; i < Indices.size(); i += 3)
     {
         // For now these positions need to be in the real screen space.
@@ -72,11 +71,12 @@ struct TriangleConstants
     rndr::Vector3r Edges[3];
     rndr::Vector3r Normal;
     real OneOverPointDepth[3];
-    real OneOverTwoTriangleArea;
+    real OneOverTriangleArea;
 };
 
-static real GetTriangleArea(const rndr::Point3r* Points);
-static bool GetBarycentricCoordinates(const rndr::Point3r& Point,
+static real Edge(const rndr::Vector3r& Edge, const rndr::Vector3r& Vec);
+static bool GetBarycentricCoordinates(rndr::WindingOrder WindingOrder,
+                                      const rndr::Point3r& Point,
                                       const rndr::Point3r (&Points)[3],
                                       const TriangleConstants& Constants,
                                       real (&BarycentricCoordinates)[3]);
@@ -111,7 +111,16 @@ void rndr::SoftwareRenderer::DrawTriangle(const Point3r (&PositionsWithDepth)[3]
         return;
     }
 
-    // TODO(mkostic): Check winding order of the triangle and discard it based on that
+    real HalfTriangleArea = Edge(Points[1] - Points[0], Points[2] - Points[0]);
+
+    // Check winding order of the triangle and discard it based on that
+    {
+        HalfTriangleArea *= (int)m_Pipeline->WindingOrder;
+        if (HalfTriangleArea < 0)
+        {
+            return;
+        }
+    }
 
     Bounds2i TriangleInsideScreen = rndr::Intersect(TriangleBounds, m_Surface->GetScreenBounds());
     Min.X = TriangleInsideScreen.pMin.X;
@@ -121,10 +130,10 @@ void rndr::SoftwareRenderer::DrawTriangle(const Point3r (&PositionsWithDepth)[3]
 
     // Stuff unique for triangle
     TriangleConstants Constants;
-    Constants.OneOverTwoTriangleArea = 1 / GetTriangleArea(Points) / 2;
-    Constants.Edges[0] = Points[1] - Points[0];
-    Constants.Edges[1] = Points[2] - Points[1];
-    Constants.Edges[2] = Points[0] - Points[2];
+    Constants.OneOverTriangleArea = 1 / HalfTriangleArea;
+    Constants.Edges[0] = Points[2] - Points[1];
+    Constants.Edges[1] = Points[0] - Points[2];
+    Constants.Edges[2] = Points[1] - Points[0];
     Constants.OneOverPointDepth[0] = 1 / PositionsWithDepth[0].Z;
     Constants.OneOverPointDepth[1] = 1 / PositionsWithDepth[1].Z;
     Constants.OneOverPointDepth[2] = 1 / PositionsWithDepth[2].Z;
@@ -138,8 +147,8 @@ void rndr::SoftwareRenderer::DrawTriangle(const Point3r (&PositionsWithDepth)[3]
             Point3r Position{X, Y, 0};
             PerPixelInfo PixelInfo{{(int)X, (int)Y}};
             memcpy(PixelInfo.VertexData, VertexData, sizeof(void*) * 3);
-            bool IsInsideTriangle =
-                GetBarycentricCoordinates(Position, Points, Constants, PixelInfo.Barycentric);
+            bool IsInsideTriangle = GetBarycentricCoordinates(
+                m_Pipeline->WindingOrder, Position, Points, Constants, PixelInfo.Barycentric);
             if (IsInsideTriangle)
             {
                 Point2i PixelScreen{(int)(Position2D.X - 0.5), (int)(Position2D.Y - 0.5)};
@@ -184,50 +193,49 @@ void rndr::SoftwareRenderer::DrawTriangle(const Point3r (&PositionsWithDepth)[3]
     }
 }
 
-static bool GetBarycentricCoordinates(const rndr::Point3r& Point,
+// Cross product of two vectors but ignoring Z coordinate
+static real Edge(const rndr::Vector3r& Edge, const rndr::Vector3r& Vec)
+{
+    return Edge.X * Vec.Y - Edge.Y * Vec.X;
+}
+
+static bool GetBarycentricCoordinates(rndr::WindingOrder WindingOrder,
+                                      const rndr::Point3r& Point,
                                       const rndr::Point3r (&Points)[3],
                                       const TriangleConstants& Constants,
-                                      real (&BarycentricCoordinates)[3])
+                                      real (&Barycentric)[3])
 {
     rndr::Vector3r Vec0 = Point - Points[0];
     rndr::Vector3r Vec1 = Point - Points[1];
     rndr::Vector3r Vec2 = Point - Points[2];
 
-    rndr::Vector3r BarVec0 = rndr::Cross(Constants.Edges[0], Vec0);
-    rndr::Vector3r BarVec1 = rndr::Cross(Constants.Edges[1], Vec1);
-    rndr::Vector3r BarVec2 = rndr::Cross(Constants.Edges[2], Vec2);
+    Barycentric[0] =
+        Edge(Constants.Edges[0], Vec1) * Constants.OneOverTriangleArea * (int)WindingOrder;
+    Barycentric[1] =
+        Edge(Constants.Edges[1], Vec2) * Constants.OneOverTriangleArea * (int)WindingOrder;
+    Barycentric[2] =
+        Edge(Constants.Edges[2], Vec0) * Constants.OneOverTriangleArea * (int)WindingOrder;
 
-    BarycentricCoordinates[0] =
-        rndr::Cross(Constants.Edges[1], Vec1).Length() * Constants.OneOverTwoTriangleArea;
-    BarycentricCoordinates[1] =
-        rndr::Cross(Constants.Edges[2], Vec2).Length() * Constants.OneOverTwoTriangleArea;
-    BarycentricCoordinates[2] =
-        rndr::Cross(Constants.Edges[0], Vec0).Length() * Constants.OneOverTwoTriangleArea;
-
-    if (rndr::Dot(Constants.Normal, BarVec0) < 0)
+    if (Barycentric[0] < 0 || Barycentric[1] < 0 || Barycentric[2] < 0)
     {
         return false;
     }
 
-    if (rndr::Dot(Constants.Normal, BarVec1) < 0)
-    {
-        return false;
-    }
+    bool Return = true;
+    Return &= Barycentric[0] == 0
+                  ? ((Constants.Edges[0].Y == 0 && (int)WindingOrder * Constants.Edges[0].X < 0) ||
+                     ((int)WindingOrder * Constants.Edges[0].Y < 0))
+                  : true;
+    Return &= Barycentric[1] == 0
+                  ? ((Constants.Edges[1].Y == 0 && (int)WindingOrder * Constants.Edges[1].X < 0) ||
+                     ((int)WindingOrder * Constants.Edges[1].Y < 0))
+                  : true;
+    Return &= Barycentric[2] == 0
+                  ? ((Constants.Edges[2].Y == 0 && (int)WindingOrder * Constants.Edges[2].X < 0) ||
+                     ((int)WindingOrder * Constants.Edges[2].Y < 0))
+                  : true;
 
-    if (rndr::Dot(Constants.Normal, BarVec2) < 0)
-    {
-        return false;
-    }
-
-    return true;
-}
-
-static real GetTriangleArea(const rndr::Point3r* Points)
-{
-    rndr::Vector3r Edge01 = Points[1] - Points[0];
-    rndr::Vector3r Edge02 = Points[2] - Points[0];
-
-    return rndr::Cross(Edge01, Edge02).Length() / 2;
+    return Return;
 }
 
 real CalcPixelDepth(const real (&Barycentric)[3], const real (&OneOverDepth)[3])

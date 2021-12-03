@@ -41,6 +41,7 @@ rndr::Model* CreateModel()
     };
 
     rndr::Pipeline* Pipeline = new rndr::Pipeline();
+    Pipeline->WindingOrder = rndr::WindingOrder::CCW;
     Pipeline->VertexShader = VertexShader;
     Pipeline->PixelShader = PixelShader;
     Pipeline->DepthTest = rndr::DepthTest::GreaterThan;
