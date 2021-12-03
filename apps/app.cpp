@@ -21,8 +21,9 @@ int main()
     };
 
     rndr::Pipeline Pipeline;
-    Pipeline.bApplyGammaCorrection = true;
     Pipeline.PixelShader = &Shader;
+    Pipeline.DepthTest = rndr::DepthTest::GreaterThan;
+    Pipeline.bApplyGammaCorrection = true;
 
     Renderer.SetPipeline(&Pipeline);
 
@@ -41,9 +42,10 @@ int main()
         uint32_t Height = Surface.GetHeight();
 
         Surface.ClearColorBuffer(rndr::Color::Black);
+        Surface.ClearDepthBuffer(-std::numeric_limits<real>::infinity());
 
         std::vector<rndr::Point3r> Positions = {
-            {300, 300, 0}, {500, 300, 0}, {300, 500, 0}, {500, 500, 0}};
+            {300, 300, -500}, {500, 300, -1000}, {300, 500, -750}, {500, 500, -2000}};
         std::vector<int> Indices = {0, 1, 2, 1, 2, 3};
 
         Renderer.DrawTriangles(Positions, Indices);

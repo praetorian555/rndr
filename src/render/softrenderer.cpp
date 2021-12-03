@@ -34,6 +34,7 @@ struct TriangleConstants
 {
     rndr::Vector3r Edges[3];
     rndr::Vector3r Normal;
+    real OneOverPointDepth[3];
     real OneOverTwoTriangleArea;
 };
 
@@ -42,7 +43,10 @@ static bool GetBarycentricCoordinates(const rndr::Point3r& Point,
                                       const rndr::Point3r (&Points)[3],
                                       const TriangleConstants& Constants,
                                       real (&BarycentricCoordinates)[3]);
+static real CalcPixelDepth(const real (&Barycentric)[3], const real (&OneOverDepth)[3]);
+static bool RunDepthTest(rndr::DepthTest DepthTest, real SrcDepth, real DestDepth);
 
+// Expecting that PositionsWithDepth are in the real screen space.
 void rndr::SoftwareRenderer::DrawTriangle(const Point3r (&PositionsWithDepth)[3])
 {
     // Don't use z coordinate for calculation of barycentric coordinate
@@ -84,6 +88,9 @@ void rndr::SoftwareRenderer::DrawTriangle(const Point3r (&PositionsWithDepth)[3]
     Constants.Edges[0] = Points[1] - Points[0];
     Constants.Edges[1] = Points[2] - Points[1];
     Constants.Edges[2] = Points[0] - Points[2];
+    Constants.OneOverPointDepth[0] = 1 / PositionsWithDepth[0].Z;
+    Constants.OneOverPointDepth[1] = 1 / PositionsWithDepth[1].Z;
+    Constants.OneOverPointDepth[2] = 1 / PositionsWithDepth[2].Z;
     Constants.Normal = rndr::Cross(Constants.Edges[0], -Constants.Edges[2]);
 
     for (real Y = Min.X; Y <= Max.Y; Y += 1)
@@ -97,14 +104,34 @@ void rndr::SoftwareRenderer::DrawTriangle(const Point3r (&PositionsWithDepth)[3]
                 GetBarycentricCoordinates(Position, Points, Constants, PixelInfo.Barycentric);
             if (IsInsideTriangle)
             {
-                rndr::Color Color = m_Pipeline->PixelShader->Callback(PixelInfo);
                 Point2i PixelScreen{(int)(Position2D.X - 0.5), (int)(Position2D.Y - 0.5)};
+
+                // Early depth test
+                real CandidatePixelDepth =
+                    CalcPixelDepth(PixelInfo.Barycentric, Constants.OneOverPointDepth);
+                real CurrentPixelDepth = m_Surface->GetPixelDepth(PixelScreen);
+                bool DepthTestResult =
+                    RunDepthTest(m_Pipeline->DepthTest, CandidatePixelDepth, CurrentPixelDepth);
+
+                if (!DepthTestResult)
+                {
+                    continue;
+                }
+
+                // Depth test success
+                m_Surface->SetPixelDepth(PixelScreen, CurrentPixelDepth);
+
+                // Run Pixel shader
+                rndr::Color Color = m_Pipeline->PixelShader->Callback(PixelInfo);
 
                 if (m_Pipeline->bApplyGammaCorrection)
                 {
                     Color = Color.ToGammaCorrectSpace(m_Pipeline->Gamma);
                 }
 
+                // TODO(mkostic): Run standard depth test if user modifies depth in the pixel shader
+
+                // Write color into color buffer
                 m_Surface->SetPixel(PixelScreen, Color);
             }
         }
@@ -155,4 +182,29 @@ static real GetTriangleArea(const rndr::Point3r* Points)
     rndr::Vector3r Edge02 = Points[2] - Points[0];
 
     return rndr::Cross(Edge01, Edge02).Length() / 2;
+}
+
+real CalcPixelDepth(const real (&Barycentric)[3], const real (&OneOverDepth)[3])
+{
+    real Result = OneOverDepth[0] * Barycentric[0] + OneOverDepth[1] * Barycentric[1] +
+                  OneOverDepth[2] * Barycentric[2];
+
+    return 1 / Result;
+}
+
+bool RunDepthTest(rndr::DepthTest DepthTest, real SrcDepth, real DestDepth)
+{
+    switch (DepthTest)
+    {
+        case rndr::DepthTest::GreaterThan:
+            return SrcDepth > DestDepth;
+        case rndr::DepthTest::LesserThen:
+            return SrcDepth < DestDepth;
+        case rndr::DepthTest::None:
+            return true;
+        default:
+            assert(false);
+    }
+
+    return true;
 }
