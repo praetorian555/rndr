@@ -1,5 +1,6 @@
 #pragma once
 
+#include <memory>
 #include <vector>
 
 #include "rndr/core/rndr.h"
@@ -16,6 +17,7 @@ class Model
 {
 public:
     Model() = default;
+    ~Model() { delete m_Constants; }
 
     void SetPipeline(const Pipeline* PipelineConfig) { m_PipelineConfig = PipelineConfig; }
 
@@ -37,8 +39,15 @@ public:
         memcpy(m_InstanceData.data(), InstanceData.data(), m_InstanceData.capacity());
     }
 
+    template <typename T>
+    void SetConstants(const T& Constants)
+    {
+        T* Tmp = new T(Constants);
+        m_Constants.reset((void*)Tmp);
+    }
+
     const Pipeline* GetPipeline() const { return m_PipelineConfig; }
-    
+
     std::vector<uint8_t>& GetVertexData() { return m_VertexData; }
     const std::vector<uint8_t>& GetVertexData() const { return m_VertexData; }
     int GetVertexDataStride() const { return m_VertexDataStride; }
@@ -50,8 +59,11 @@ public:
     const std::vector<uint8_t>& GetInstanceData() const { return m_InstanceData; }
     int GetInstanceDataStride() const { return m_InstanceDataStride; }
 
+    void* GetConstants() { return m_Constants; }
+    const void* GetConstants() const { return m_Constants; }
+
 private:
-    const Pipeline* m_PipelineConfig; // Just a reference, we don't own this object
+    const Pipeline* m_PipelineConfig;  // Just a reference, we don't own this object
 
     std::vector<uint8_t> m_VertexData;
     int m_VertexDataStride = 0;
@@ -60,6 +72,8 @@ private:
 
     std::vector<uint8_t> m_InstanceData;
     int m_InstanceDataStride = 0;
+
+    void* m_Constants = nullptr;
 };
 
 }  // namespace rndr
