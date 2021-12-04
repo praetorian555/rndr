@@ -164,23 +164,22 @@ void rndr::Surface::RenderLine(const Point2i& A, const Point2i& B, rndr::Color C
 
 void rndr::Surface::ClearColorBuffer(rndr::Color Color)
 {
-    for (uint32_t Y = 0; Y < m_Options.Height; Y++)
+    const uint32_t C = Color.ToUInt();
+    uint32_t* Pixels = (uint32_t*)m_ColorBuffer;
+    const uint32_t Size = m_Options.Width * m_Options.Height;
+    for (int i = 0; i < Size; i++)
     {
-        for (uint32_t X = 0; X < m_Options.Width; X++)
-        {
-            SetPixel(X, Y, Color);
-        }
+        *Pixels++ = C;
     }
 }
 
 void rndr::Surface::ClearDepthBuffer(real ClearValue)
 {
-    for (uint32_t Y = 0; Y < m_Options.Height; Y++)
+    real* Pixels = (real*)m_DepthBuffer;
+    const uint32_t Size = m_Options.Width * m_Options.Height;
+    for (int i = 0; i < Size; i++)
     {
-        for (uint32_t X = 0; X < m_Options.Width; X++)
-        {
-            SetPixelDepth(X, Y, ClearValue);
-        }
+        *Pixels++ = ClearValue;
     }
 }
 
