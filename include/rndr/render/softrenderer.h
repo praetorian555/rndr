@@ -18,14 +18,17 @@ public:
 
     void SetPipeline(const rndr::Pipeline* Pipeline) { m_Pipeline = Pipeline; }
 
-    void DrawTriangles(const std::vector<uint8_t>& VertexData,
-                       int VertexDataStride,
-                       const std::vector<int>& Indices,
-                       void* InstanceData);
     void Draw(rndr::Model* Model, int InstanceCount = 1);
 
 private:
-    void DrawTriangle(const Point3r (&PositionsWithDepth)[3], void** VertexData);
+    void DrawTriangles(void* Constants,
+                       const std::vector<uint8_t>& VertexData,
+                       int VertexDataStride,
+                       const std::vector<int>& Indices,
+                       void* InstanceData);
+    void DrawTriangle(void* Constants, const Point3r (&PositionsWithDepth)[3], void** VertexData);
+    bool RunDepthTest(real NewDepthValue, const Point2i& PixelPosition);
+    Color ApplyAlphaCompositing(Color NewValue, const Point2i& PixelPosition);
 
 private:
     Surface* m_Surface = nullptr;
