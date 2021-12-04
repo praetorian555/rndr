@@ -118,7 +118,7 @@ public:
         *radius = Inside(*center, *this) ? Distance(*center, pMax) : 0;
     }
 
-    //bool IntersectP(const RaY& raY, PBR_OUT real* hitt0, PBR_OUT real* hitt1) const
+    // bool IntersectP(const RaY& raY, PBR_OUT real* hitt0, PBR_OUT real* hitt1) const
     //{
     //    real t0 = 0, t1 = raY.tMaX;
 
@@ -160,7 +160,7 @@ public:
     //    return true;
     //}
 
-    //bool IntersectP(const RaY& raY, const Vector3f& invDir, const int dirIsNeg[3]) const
+    // bool IntersectP(const RaY& raY, const Vector3f& invDir, const int dirIsNeg[3]) const
     //{
     //    const Bounds3f& bounds = *this;
 

@@ -74,7 +74,7 @@ private:
 private:
     WindowOptions m_Options;
     NativeWindowHandle m_NativeWindowHandle;
-    
+
     Surface* m_Surface = nullptr;
 
     uint32_t m_CurrentWidth = 0, m_CurrentHeight = 0;

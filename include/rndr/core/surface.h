@@ -2,9 +2,9 @@
 
 #include <functional>
 
-#include "rndr/core/rndr.h"
 #include "rndr/core/bounds2.h"
 #include "rndr/core/math.h"
+#include "rndr/core/rndr.h"
 
 namespace rndr
 {

@@ -28,9 +28,9 @@ struct PerVertexInfo
 {
     int PrimitiveIndex;
     int VertexIndex;
-    void* VertexData; // Data specific for each vertex
-    void* InstanceData; // Data specific for each instance
-    void* Constants; // Data constant across all models and his instances
+    void* VertexData;    // Data specific for each vertex
+    void* InstanceData;  // Data specific for each instance
+    void* Constants;     // Data constant across all models and his instances
 };
 
 using VertexShaderCallback = std::function<Point3r(const PerVertexInfo&)>;
