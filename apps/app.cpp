@@ -1,9 +1,9 @@
-#include <iostream>
 #include <chrono>
+#include <iostream>
 
 #include "rndr/core/color.h"
-#include "rndr/core/window.h"
 #include "rndr/core/transform.h"
+#include "rndr/core/window.h"
 
 #include "rndr/render/model.h"
 #include "rndr/render/pipeline.h"
@@ -78,6 +78,7 @@ int main()
 
     rndr::Model* Model = CreateModel();
 
+    real TotalTime = 0;
     while (!Window.IsClosed())
     {
         Window.ProcessEvents();
@@ -87,26 +88,26 @@ int main()
             continue;
         }
 
-        auto start = std::chrono::steady_clock().now();
+        auto Start = std::chrono::steady_clock().now();
 
         rndr::Surface Surface = Window.GetSurface();
         Surface.ClearColorBuffer(rndr::Color::Black);
         Surface.ClearDepthBuffer(-std::numeric_limits<real>::infinity());
 
-        time_t t = time(0);
         rndr::Transform Transform = rndr::Translate({-400, -400, 0});
-        Transform = rndr::RotateZ(t) * Transform;
+        Transform = rndr::RotateZ(0.01 * TotalTime) * Transform;
         Transform = rndr::Translate({400, 400, 0}) * Transform;
         Model->SetConstants(Transform);
 
-        Renderer.Draw(Model);
-
-        auto end = std::chrono::steady_clock().now();
-        int duration = std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count();
-
-        printf("Duration: %d ms\r", duration);
+        Renderer.Draw(Model, 100);
 
         Window.RenderToWindow();
+
+        auto End = std::chrono::steady_clock().now();
+        int Duration = std::chrono::duration_cast<std::chrono::milliseconds>(End - Start).count();
+        TotalTime += Duration;
+
+        printf("Duration: %d ms\r", Duration);
     }
 
     return 0;
