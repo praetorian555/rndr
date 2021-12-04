@@ -43,7 +43,7 @@ public:
     void SetConstants(const T& Constants)
     {
         T* Tmp = new T(Constants);
-        m_Constants.reset((void*)Tmp);
+        m_Constants = (void*)Tmp;
     }
 
     const Pipeline* GetPipeline() const { return m_PipelineConfig; }

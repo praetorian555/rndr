@@ -1,7 +1,9 @@
 #include <iostream>
+#include <chrono>
 
 #include "rndr/core/color.h"
 #include "rndr/core/window.h"
+#include "rndr/core/transform.h"
 
 #include "rndr/render/model.h"
 #include "rndr/render/pipeline.h"
@@ -18,8 +20,10 @@ rndr::Model* CreateModel()
     rndr::VertexShader* VertexShader = new rndr::VertexShader();
     VertexShader->Callback = [](const rndr::PerVertexInfo& Info)
     {
+        rndr::Transform* T = (rndr::Transform*)Info.Constants;
+
         VertexData* Data = (VertexData*)Info.VertexData;
-        return Data->Position;
+        return (*T)(Data->Position);
     };
 
     rndr::PixelShader* PixelShader = new rndr::PixelShader();
@@ -83,11 +87,24 @@ int main()
             continue;
         }
 
+        auto start = std::chrono::steady_clock().now();
+
         rndr::Surface Surface = Window.GetSurface();
         Surface.ClearColorBuffer(rndr::Color::Black);
         Surface.ClearDepthBuffer(-std::numeric_limits<real>::infinity());
 
+        time_t t = time(0);
+        rndr::Transform Transform = rndr::Translate({-400, -400, 0});
+        Transform = rndr::RotateZ(t) * Transform;
+        Transform = rndr::Translate({400, 400, 0}) * Transform;
+        Model->SetConstants(Transform);
+
         Renderer.Draw(Model);
+
+        auto end = std::chrono::steady_clock().now();
+        int duration = std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count();
+
+        printf("Duration: %d ms\r", duration);
 
         Window.RenderToWindow();
     }
