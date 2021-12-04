@@ -161,7 +161,7 @@ void rndr::SoftwareRenderer::DrawTriangle(void* Constants,
                 }
 
                 // Run Pixel shader
-                rndr::Color Color = m_Pipeline->PixelShader->Callback(PixelInfo);
+                rndr::Color Color = m_Pipeline->PixelShader->Callback(PixelInfo, NewPixelDepth);
 
                 // Standard depth test
                 if (m_Pipeline->PixelShader->bChangesDepth)

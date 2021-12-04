@@ -16,7 +16,7 @@ struct PerPixelInfo
     void* Constants;
 };
 
-using PixelShaderCallback = std::function<Color(const PerPixelInfo&)>;
+using PixelShaderCallback = std::function<Color(const PerPixelInfo&, real& DepthValue)>;
 
 struct PixelShader
 {

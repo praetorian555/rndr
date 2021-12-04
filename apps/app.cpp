@@ -23,7 +23,7 @@ rndr::Model* CreateModel()
     };
 
     rndr::PixelShader* PixelShader = new rndr::PixelShader();
-    PixelShader->Callback = [](const rndr::PerPixelInfo& Info)
+    PixelShader->Callback = [](const rndr::PerPixelInfo& Info, real& DepthValue)
     {
         VertexData* Data0 = (VertexData*)Info.VertexData[0];
         VertexData* Data1 = (VertexData*)Info.VertexData[1];
