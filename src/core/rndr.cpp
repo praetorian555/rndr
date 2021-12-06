@@ -2,6 +2,8 @@
 
 #include <cmath>
 
+#include "Windows.h"
+
 real rndr::ToGammaCorrectSpace(real Value, real Gamma)
 {
     if (Value <= 0.0031308)
@@ -47,4 +49,9 @@ int rndr::GetPixelSize(PixelLayout Layout)
     }
 
     return 0;
+}
+
+void rndr_private::DebugBreak()
+{
+    ::DebugBreak();
 }

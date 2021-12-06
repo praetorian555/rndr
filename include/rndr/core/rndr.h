@@ -3,6 +3,17 @@
 #include <cassert>
 #include <cstdint>
 
+namespace rndr_private
+{
+void DebugBreak();
+}
+
+#define RNDR_COND_BP(cond) \
+    if (cond)              \
+    {                      \
+        rndr_private::DebugBreak();      \
+    }
+
 // Defines precision for floating-point type.
 #if !defined(RNDR_REAL_AS_DOUBLE)
 using real = float;
