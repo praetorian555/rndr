@@ -3,6 +3,7 @@
 #include <cassert>
 
 #include <Windows.h>
+#include <windowsx.h>
 
 #include "log/log.h"
 
@@ -161,6 +162,12 @@ LRESULT CALLBACK WindowProc(HWND WindowHandle, UINT MsgCode, WPARAM ParamW, LPAR
             RNDR_INFO("WindowProc: Event WM_QUIT");
 
             break;
+        }
+        case WM_LBUTTONDOWN:
+        {
+            int X = GET_X_LPARAM(ParamL);
+            int Y = GET_Y_LPARAM(ParamL);
+            RNDR_INFO("LeftMouseButton: DOWN (%d, %d)", X, Y);
         }
     }
 
