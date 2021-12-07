@@ -8,10 +8,10 @@ namespace rndr_private
 void DebugBreak();
 }
 
-#define RNDR_COND_BP(cond) \
-    if (cond)              \
-    {                      \
-        rndr_private::DebugBreak();      \
+#define RNDR_COND_BP(cond)          \
+    if (cond)                       \
+    {                               \
+        rndr_private::DebugBreak(); \
     }
 
 // Defines precision for floating-point type.
