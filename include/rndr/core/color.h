@@ -16,10 +16,10 @@ struct Color
      */
     Color(uint32_t Value)
     {
-        R = (Value >> 16) & 0xFF;
-        G = (Value >> 8) & 0xFF;
-        B = (Value >> 0) & 0xFF;
-        A = (Value >> 24) & 0xFF;
+        R = ((Value >> 16) & 0xFF) / 255.;
+        G = ((Value >> 8) & 0xFF) / 255.;
+        B = ((Value >> 0) & 0xFF) / 255.;
+        A = ((Value >> 24) & 0xFF) / 255;
     }
 
     Color(real RR, real GG, real BB, real AA) : R(RR), G(GG), B(BB), A(AA) {}
