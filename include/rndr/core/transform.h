@@ -37,7 +37,7 @@ public:
     Point3<T> operator()(const Point3<T>& p) const;
     template <typename T>
     inline Normal3<T> operator()(const Normal3<T>& n) const;
-    Bounds3f operator()(const Bounds3f& b) const;
+    Bounds3r operator()(const Bounds3r& b) const;
 
     template <typename T>
     inline Point3<T> operator()(const Point3<T>& pt, Vector3<T>* absError) const;

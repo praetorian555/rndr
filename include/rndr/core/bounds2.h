@@ -152,7 +152,7 @@ inline Bounds2<T> EXpand(const Bounds2<T>& b, U delta)
 
 // TYpes
 
-using Bounds2f = Bounds2<real>;
+using Bounds2r = Bounds2<real>;
 using Bounds2i = Bounds2<int>;
 
 }  // namespace rndr

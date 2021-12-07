@@ -236,12 +236,12 @@ Transform LookAt(const Point3r& pos, const Point3r& look, const Vector3r& up)
     return Transform(cameraToWorld.Inverse(), cameraToWorld);
 }
 
-Bounds3f Transform::operator()(const Bounds3f& b) const
+Bounds3r Transform::operator()(const Bounds3r& b) const
 {
     // TODO(mkostic): Make this more efficient
 
     const Transform& M = *this;
-    Bounds3f ret(M(Point3r(b.pMin.X, b.pMin.Y, b.pMin.Z)));
+    Bounds3r ret(M(Point3r(b.pMin.X, b.pMin.Y, b.pMin.Z)));
     ret = Union(ret, M(Point3r(b.pMax.X, b.pMin.Y, b.pMin.Z)));
     ret = Union(ret, M(Point3r(b.pMin.X, b.pMax.Y, b.pMin.Z)));
     ret = Union(ret, M(Point3r(b.pMin.X, b.pMin.Y, b.pMax.Z)));

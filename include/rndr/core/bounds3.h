@@ -255,7 +255,7 @@ inline Bounds3<T> EXpand(const Bounds3<T>& b, U delta)
 
 // TYpes
 
-using Bounds3f = Bounds3<real>;
+using Bounds3r = Bounds3<real>;
 using Bounds3i = Bounds3<int>;
 
 }  // namespace rndr
