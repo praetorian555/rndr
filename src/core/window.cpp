@@ -165,9 +165,13 @@ LRESULT CALLBACK WindowProc(HWND WindowHandle, UINT MsgCode, WPARAM ParamW, LPAR
         }
         case WM_LBUTTONDOWN:
         {
+            rndr::Window* Wind =
+                reinterpret_cast<rndr::Window*>(GetWindowLongPtr(WindowHandle, GWLP_USERDATA));
+            int Height = Wind->GetSurface().GetHeight();
+
             int X = GET_X_LPARAM(ParamL);
             int Y = GET_Y_LPARAM(ParamL);
-            RNDR_INFO("LeftMouseButton: DOWN (%d, %d)", X, Y);
+            RNDR_INFO("LeftMouseButton: DOWN (%d, %d)", X, Height - Y);
         }
     }
 
