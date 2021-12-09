@@ -73,7 +73,6 @@ void rndr::SoftwareRenderer::DrawTriangles(void* Constants,
 
     for (int i = 0; i < Indices.size(); i += 3)
     {
-        // For now these positions need to be in the real screen space.
         Point3r Positions[3];
         void* Data[3];
 
@@ -85,15 +84,16 @@ void rndr::SoftwareRenderer::DrawTriangles(void* Constants,
             VertexInfo.VertexData = (void*)&VertexData.data()[Indices[i + j] * VertexDataStride];
             VertexInfo.InstanceData = InstanceData;
             VertexInfo.Constants = Constants;
-            Positions[j] = m_Pipeline->VertexShader->Callback(VertexInfo);
             Data[j] = VertexInfo.VertexData;
+            Positions[j] = m_Pipeline->VertexShader->Callback(VertexInfo);
+            Positions[j] = FromNDCToRasterSpace(Positions[j]);
         }
 
         DrawTriangle(Constants, Positions, Data);
     }
 }
 
-// Expecting that PositionsWithDepth are in the real screen space.
+// Positions should be in raster space.
 void rndr::SoftwareRenderer::DrawTriangle(void* Constants,
                                           const Point3r (&Positions)[3],
                                           void** VertexData)
@@ -304,4 +304,27 @@ rndr::Color rndr::SoftwareRenderer::ApplyAlphaCompositing(Color NewValue,
     NewValue.A = NewValue.A + CurrentColor.A * InvColorA;
 
     return NewValue;
+}
+
+rndr::Point3r rndr::SoftwareRenderer::FromNDCToRasterSpace(const Point3r& Point)
+{
+    int Width = m_Surface->GetWidth();
+    int Height = m_Surface->GetHeight();
+
+    Point3r Result = Point;
+    Result.X = ((1 + Point.X) / 2) * Width;
+    Result.Y = ((1 + Point.Y) / 2) * Height;
+
+    return Result;
+}
+
+rndr::Point3r rndr::SoftwareRenderer::FromRasterToNDCSpace(const Point3r& Point) {
+    int Width = m_Surface->GetWidth();
+    int Height = m_Surface->GetHeight();
+
+    Point3r Result = Point;
+    Result.X = (Point.X / (real)Width) * 2 - 1;
+    Result.Y = (Point.Y / (real)Height) * 2 - 1;
+
+    return Result;
 }

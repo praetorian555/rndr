@@ -29,6 +29,8 @@ private:
     void DrawTriangle(void* Constants, const Point3r (&PositionsWithDepth)[3], void** VertexData);
     bool RunDepthTest(real NewDepthValue, const Point2i& PixelPosition);
     Color ApplyAlphaCompositing(Color NewValue, const Point2i& PixelPosition);
+    Point3r FromNDCToRasterSpace(const Point3r& Point);
+    Point3r FromRasterToNDCSpace(const Point3r& Point);
 
 private:
     Surface* m_Surface = nullptr;

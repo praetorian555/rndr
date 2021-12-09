@@ -33,6 +33,7 @@ struct PerVertexInfo
     void* Constants;     // Data constant across all models and his instances
 };
 
+// Should return the point in NDC where x and y are in range [-1, 1] and z in range [0, 1]
 using VertexShaderCallback = std::function<Point3r(const PerVertexInfo&)>;
 
 struct VertexShader
