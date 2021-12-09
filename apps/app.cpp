@@ -4,6 +4,7 @@
 #include "rndr/core/color.h"
 #include "rndr/core/transform.h"
 #include "rndr/core/window.h"
+#include "rndr/core/camera.h"
 
 #include "rndr/render/model.h"
 #include "rndr/render/pipeline.h"
@@ -54,10 +55,10 @@ rndr::Model* CreateModel()
     // clang-format off
     std::vector<VertexData> Data =
     {
-        {{300, 300, -500}, {1, 0, 0, 0.5}},
-        {{500, 300, -1000}, {0, 1, 0, 0.5}},
-        {{300, 500, -750}, {0, 0, 1, 0.5}},
-        {{500, 500, -2000}, {1, 1, 0, 0.5}}
+        {{-2, -2, -5}, {1, 0, 0, 0.5}},
+        {{ 2, -2, -5}, {0, 1, 0, 0.5}},
+        {{-2,  2, -5}, {0, 0, 1, 0.5}},
+        {{ 2,  2, -5}, {1, 1, 0, 0.5}}
     };
     // clang-format on
 
@@ -78,6 +79,12 @@ int main()
 
     rndr::Model* Model = CreateModel();
 
+    int FilmWidth = 5;
+    int FilmHeight = 5;
+    int Near = 0;
+    int Far = -10;
+    rndr::Camera* Camera = new rndr::OrthographicCamera(rndr::Transform{}, FilmWidth, FilmHeight, Near, Far);
+
     real TotalTime = 0;
     while (!Window.IsClosed())
     {
@@ -94,10 +101,7 @@ int main()
         Surface.ClearColorBuffer(rndr::Color::Black);
         Surface.ClearDepthBuffer(-std::numeric_limits<real>::infinity());
 
-        rndr::Transform Transform = rndr::Translate({-400, -400, 0});
-        Transform = rndr::RotateZ(0.01 * TotalTime) * Transform;
-        Transform = rndr::Translate({400, 400, 0}) * Transform;
-        Model->SetConstants(Transform);
+        Model->SetConstants(Camera->FromWorldToNDC());
 
         Renderer.Draw(Model, 100);
 
