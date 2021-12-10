@@ -202,3 +202,8 @@ void rndr::Surface::RenderBlock(const Point2i& BottomLeft, const Point2i& Size, 
         }
     }
 }
+
+real rndr::Surface::GetAspectRatio() const
+{
+    return m_Options.Height != 0 ? m_Options.Width / (real)m_Options.Height : 1;
+}

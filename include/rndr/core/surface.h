@@ -65,6 +65,11 @@ public:
     const Bounds2i& GetScreenBounds() const { return m_ScreenBounds; }
 
     /**
+     * Get aspect ratio of a surface. If the height is zero the ratio will be 1.
+     */
+    real GetAspectRatio() const;
+
+    /**
      * Get the size of a pixel.
      *
      * @return Returns the size of a pixel in bytes.
