@@ -1,10 +1,10 @@
 #include <chrono>
 #include <iostream>
 
+#include "rndr/core/camera.h"
 #include "rndr/core/color.h"
 #include "rndr/core/transform.h"
 #include "rndr/core/window.h"
-#include "rndr/core/camera.h"
 
 #include "rndr/render/model.h"
 #include "rndr/render/pipeline.h"
@@ -55,14 +55,28 @@ rndr::Model* CreateModel()
     // clang-format off
     std::vector<VertexData> Data =
     {
-        {{-2, -2, -5}, {1, 0, 0, 0.5}},
-        {{ 2, -2, -5}, {0, 1, 0, 0.5}},
-        {{-2,  2, -5}, {0, 0, 1, 0.5}},
-        {{ 2,  2, -5}, {1, 1, 0, 0.5}}
+        {{-50, -50, -10}, {1, 0, 0, 1}}, // 0
+        {{ 50, -50, -10}, {0, 1, 0, 1}}, // 1
+        {{-50,  50, -10}, {0, 0, 1, 1}}, // 2
+        {{ 50,  50, -10}, {1, 1, 0, 1}}, // 3
+        {{-50, -50, -100}, {1, 0, 1, 1}}, // 5
+        {{ 50, -50, -100}, {0, 1, 1, 1}}, // 4
+        {{-50,  50, -100}, {1, 1, 1, 1}}, // 7
+        {{ 50,  50, -100}, {0.9, 0.2, 0.3, 1}}, // 6
     };
     // clang-format on
 
-    std::vector<int> Indices = {0, 1, 3, 0, 3, 2};
+    // clang-format off
+    std::vector<int> Indices = {
+        0, 1, 3, 0, 3, 2, // front face
+        5, 4, 6, 5, 6, 7, // back face
+        4, 5, 0, 5, 1, 0, // bottom face
+        2, 3, 6, 3, 7, 6, // top face
+        4, 0, 6, 0, 2, 6, // left face
+        1, 5, 3, 5, 7, 3  // right face
+
+    };
+    // clang-format on
 
     rndr::Model* Model = new rndr::Model();
     Model->SetPipeline(Pipeline);
@@ -79,11 +93,15 @@ int main()
 
     rndr::Model* Model = CreateModel();
 
-    int FilmWidth = 5;
-    int FilmHeight = 5;
-    int Near = 0;
-    int Far = -10;
-    rndr::Camera* Camera = new rndr::OrthographicCamera(rndr::Transform{}, FilmWidth, FilmHeight, Near, Far);
+    const int Width = Window.GetSurface().GetWidth();
+    const int Height = Window.GetSurface().GetHeight();
+    const int Near = 0;
+    const int Far = -1000;
+    rndr::Camera* Camera =
+        new rndr::OrthographicCamera(rndr::Transform{}, Width, Height, Near, Far);
+
+    rndr::WindowDelegates::OnResize.Add([Camera](rndr::Window*, int Width, int Height)
+                                        { Camera->SetFilmSize(Width, Height); });
 
     real TotalTime = 0;
     while (!Window.IsClosed())
@@ -101,7 +119,12 @@ int main()
         Surface.ClearColorBuffer(rndr::Color::Black);
         Surface.ClearDepthBuffer(-std::numeric_limits<real>::infinity());
 
-        Model->SetConstants(Camera->FromWorldToNDC());
+        rndr::Transform T = rndr::Translate(rndr::Vector3r(0, 0, -60)) *
+                            rndr::RotateZ(0.03 * TotalTime) * rndr::RotateY(.05 * TotalTime) *
+                            rndr::RotateX(0.02 * TotalTime) *
+                            rndr::Translate(rndr::Vector3r(0, 0, 60));
+
+        Model->SetConstants(Camera->FromWorldToNDC() * T);
 
         Renderer.Draw(Model, 1);
 
