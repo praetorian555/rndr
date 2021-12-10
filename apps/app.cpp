@@ -97,13 +97,13 @@ int main()
 
         auto Start = std::chrono::steady_clock().now();
 
-        rndr::Surface Surface = Window.GetSurface();
+        rndr::Surface& Surface = Window.GetSurface();
         Surface.ClearColorBuffer(rndr::Color::Black);
         Surface.ClearDepthBuffer(-std::numeric_limits<real>::infinity());
 
         Model->SetConstants(Camera->FromWorldToNDC());
 
-        Renderer.Draw(Model, 100);
+        Renderer.Draw(Model, 1);
 
         Window.RenderToWindow();
 
