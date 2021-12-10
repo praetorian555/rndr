@@ -27,6 +27,11 @@ public:
     const Transform& FromWorldToNDC() const { return m_WorldToNDC; }
     const Transform& FromNDCToWorld() const { return m_NDCToWorld; }
 
+    void SetFilmSize(int Width, int Height);
+
+    int GetFilmWidth() const { return m_FilmWidth; }
+    int GetFilmHeight() const { return m_FilmHeight; }
+
 private:
     Transform m_WorldToCamera;
     Transform m_CameraToWorld;

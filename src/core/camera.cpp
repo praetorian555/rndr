@@ -17,6 +17,16 @@ rndr::Camera::Camera(const Transform& WorldToCamera,
     m_NDCToWorld = m_WorldToNDC.GetInverse();
 }
 
+void rndr::Camera::SetFilmSize(int Width, int Height)
+{
+    m_FilmWidth = Width;
+    m_FilmHeight = Height;
+    m_ScreenToNDC = Scale(2 / (real)m_FilmWidth, 2 / (real)m_FilmHeight, 1);
+    m_NDCToScreen = Scale((real)m_FilmWidth / 2, (real)m_FilmHeight / 2, 1);
+    m_WorldToNDC = m_ScreenToNDC * m_CameraToScreen * m_WorldToCamera;
+    m_NDCToWorld = m_WorldToNDC.GetInverse();
+}
+
 rndr::OrthographicCamera::OrthographicCamera(const Transform& WorldToCamera,
                                              int FilmWidth,
                                              int FilmHeight,
