@@ -10,21 +10,32 @@
 #include "rndr/render/pipeline.h"
 #include "rndr/render/softrenderer.h"
 
+struct VertexData
+{
+    rndr::Point3r Position;
+    rndr::Color Color;
+};
+
+struct ConstantData
+{
+    rndr::Transform* FromModelToWorld;
+    rndr::Camera* Camera;
+};
+
 rndr::Model* CreateModel()
 {
-    struct VertexData
-    {
-        rndr::Point3r Position;
-        rndr::Color Color;
-    };
-
     rndr::VertexShader* VertexShader = new rndr::VertexShader();
     VertexShader->Callback = [](const rndr::PerVertexInfo& Info)
     {
-        rndr::Transform* T = (rndr::Transform*)Info.Constants;
-
+        ConstantData* Constants = (ConstantData*)Info.Constants;
         VertexData* Data = (VertexData*)Info.VertexData;
-        return (*T)(Data->Position);
+
+        const rndr::Point3r WorldSpace = (*Constants->FromModelToWorld)(Data->Position);
+        //const rndr::Point3r CameraSpace = Constants->Camera->FromWorldToCamera()(WorldSpace);
+        //const rndr::Point3r ScreenSpace = Constants->Camera->FromCameraToScreen()(CameraSpace);
+        //const rndr::Point3r NDCSpace = Constants->Camera->FromScreenToNDC()(ScreenSpace);
+
+        return Constants->Camera->FromWorldToNDC()(WorldSpace);
     };
 
     rndr::PixelShader* PixelShader = new rndr::PixelShader();
@@ -55,14 +66,14 @@ rndr::Model* CreateModel()
     // clang-format off
     std::vector<VertexData> Data =
     {
-        {{-50, -50, -10}, {1, 0, 0, 1}}, // 0
-        {{ 50, -50, -10}, {0, 1, 0, 1}}, // 1
-        {{-50,  50, -10}, {0, 0, 1, 1}}, // 2
-        {{ 50,  50, -10}, {1, 1, 0, 1}}, // 3
-        {{-50, -50, -100}, {1, 0, 1, 1}}, // 5
-        {{ 50, -50, -100}, {0, 1, 1, 1}}, // 4
-        {{-50,  50, -100}, {1, 1, 1, 1}}, // 7
-        {{ 50,  50, -100}, {0.9, 0.2, 0.3, 1}}, // 6
+        {{-0.5, -0.5,  0.5}, {1, 0, 0, 1}}, // 0
+        {{ 0.5, -0.5,  0.5}, {0, 1, 0, 1}}, // 1
+        {{-0.5,  0.5,  0.5}, {0, 0, 1, 1}}, // 2
+        {{ 0.5,  0.5,  0.5}, {1, 1, 0, 1}}, // 3
+        {{-0.5, -0.5, -0.5}, {1, 0, 1, 1}}, // 5
+        {{ 0.5, -0.5, -0.5}, {0, 1, 1, 1}}, // 4
+        {{-0.5,  0.5, -0.5}, {1, 1, 1, 1}}, // 7
+        {{ 0.5,  0.5, -0.5}, {0.9, 0.2, 0.3, 1}}, // 6
     };
     // clang-format on
 
@@ -95,13 +106,20 @@ int main()
 
     const int Width = Window.GetSurface().GetWidth();
     const int Height = Window.GetSurface().GetHeight();
-    const int Near = 0;
-    const int Far = -1000;
+    const real Near = 0.01;
+    const real Far = 1000;
+    const real FOV = 90;
+    const rndr::Transform FromWorldToCamera = rndr::RotateY(180);
+#if 1
     rndr::Camera* Camera =
-        new rndr::OrthographicCamera(rndr::Transform{}, Width, Height, Near, Far);
+        new rndr::PerspectiveCamera(FromWorldToCamera, Width, Height, FOV, Near, Far);
+#else
+    rndr::Camera* Camera =
+        new rndr::OrthographicCamera(FromWorldToCamera, Width, Height, Near, Far);
+#endif
 
     rndr::WindowDelegates::OnResize.Add([Camera](rndr::Window*, int Width, int Height)
-                                        { Camera->SetFilmSize(Width, Height); });
+                                        { Camera->UpdateTransforms(Width, Height); });
 
     real TotalTime = 0;
     while (!Window.IsClosed())
@@ -119,12 +137,13 @@ int main()
         Surface.ClearColorBuffer(rndr::Color::Black);
         Surface.ClearDepthBuffer(-std::numeric_limits<real>::infinity());
 
-        rndr::Transform T = rndr::Translate(rndr::Vector3r(0, 0, -60)) *
+        rndr::Transform T = rndr::Translate(rndr::Vector3r(0, 0, -200)) *
                             rndr::RotateZ(0.03 * TotalTime) * rndr::RotateY(.05 * TotalTime) *
-                            rndr::RotateX(0.02 * TotalTime) *
-                            rndr::Translate(rndr::Vector3r(0, 0, 60));
+                            rndr::RotateX(0.02 * TotalTime) * rndr::Scale(100, 100, 100);
 
-        Model->SetConstants(Camera->FromWorldToNDC() * T);
+        ConstantData Constants{&T, Camera};
+
+        Model->SetConstants(Constants);
 
         Renderer.Draw(Model, 1);
 

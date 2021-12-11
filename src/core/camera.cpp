@@ -11,20 +11,6 @@ rndr::Camera::Camera(const Transform& WorldToCamera,
 {
     m_CameraToWorld = m_WorldToCamera.GetInverse();
     m_ScreenToCamera = m_ScreenToCamera.GetInverse();
-    m_ScreenToNDC = Scale(2 / (real)FilmWidth, 2 / (real)FilmHeight, 1);
-    m_NDCToScreen = Scale((real)FilmWidth / 2, (real)FilmHeight / 2, 1);
-    m_WorldToNDC = m_ScreenToNDC * m_CameraToScreen * m_WorldToCamera;
-    m_NDCToWorld = m_WorldToNDC.GetInverse();
-}
-
-void rndr::Camera::SetFilmSize(int Width, int Height)
-{
-    m_FilmWidth = Width;
-    m_FilmHeight = Height;
-    m_ScreenToNDC = Scale(2 / (real)m_FilmWidth, 2 / (real)m_FilmHeight, 1);
-    m_NDCToScreen = Scale((real)m_FilmWidth / 2, (real)m_FilmHeight / 2, 1);
-    m_WorldToNDC = m_ScreenToNDC * m_CameraToScreen * m_WorldToCamera;
-    m_NDCToWorld = m_WorldToNDC.GetInverse();
 }
 
 rndr::OrthographicCamera::OrthographicCamera(const Transform& WorldToCamera,
@@ -36,6 +22,17 @@ rndr::OrthographicCamera::OrthographicCamera(const Transform& WorldToCamera,
       m_Near(Near),
       m_Far(Far)
 {
+    UpdateTransforms(FilmWidth, FilmHeight);
+}
+
+void rndr::OrthographicCamera::UpdateTransforms(int Width, int Height)
+{
+    m_FilmWidth = Width;
+    m_FilmHeight = Height;
+    m_ScreenToNDC = Scale(2 / (real)m_FilmWidth, 2 / (real)m_FilmHeight, 1);
+    m_NDCToScreen = Scale((real)m_FilmWidth / 2, (real)m_FilmHeight / 2, 1);
+    m_WorldToNDC = m_ScreenToNDC * m_CameraToScreen * m_WorldToCamera;
+    m_NDCToWorld = m_WorldToNDC.GetInverse();
 }
 
 rndr::PerspectiveCamera::PerspectiveCamera(const Transform& WorldToCamera,
@@ -44,11 +41,36 @@ rndr::PerspectiveCamera::PerspectiveCamera(const Transform& WorldToCamera,
                                            real FOV,
                                            real Near,
                                            real Far)
-    : Camera(WorldToCamera, Perspective(FOV, Near, Far), FilmWidth, FilmHeight),
+    : Camera(WorldToCamera,
+             Perspective(FOV, (real)FilmWidth / FilmHeight, Near, Far),
+             FilmWidth,
+             FilmHeight),
       m_FOV(FOV),
+      m_AspectRatio((real)FilmWidth / FilmHeight),
       m_Near(Near),
       m_Far(Far)
 {
+    UpdateTransforms(FilmWidth, FilmHeight);
+}
+
+void rndr::PerspectiveCamera::UpdateTransforms(int Width, int Height)
+{
+    if (Width == 0 || Height == 0)
+    {
+        return;
+    }
+
+    m_AspectRatio = (real)Width / Height;
+
+    m_FilmWidth = Width;
+    m_FilmHeight = Height;
+    m_CameraToScreen = Perspective(m_FOV, m_AspectRatio, m_Near, m_Far);
+    m_ScreenToCamera = m_CameraToScreen.GetInverse();
+
+    // Perspective projection doesn't need any scaling of x and y
+
+    m_WorldToNDC = m_ScreenToNDC * m_CameraToScreen * m_WorldToCamera;
+    m_NDCToWorld = m_WorldToNDC.GetInverse();
 }
 
 rndr::Transform rndr::Orthographic(real Near, real Far)
@@ -56,18 +78,19 @@ rndr::Transform rndr::Orthographic(real Near, real Far)
     return Scale(1, 1, 1 / (Far - Near)) * Translate(Vector3r{0, 0, -Near});
 }
 
-rndr::Transform rndr::Perspective(real FOV, real Near, real Far)
+rndr::Transform rndr::Perspective(real FOV, real AspectRatio, real Near, real Far)
 {
     // clang-format off
     Matrix4x4 Persp(
-        1.0f, 0.0f,           0.0f,                 0.0f,
-        0.0f, 1.0f,           0.0f,                 0.0f,
-        0.0f, 0.0f,    Far / (Far - Near),    -Far * Near / (Far - Near),
-        0.0f, 0.0f,           0.0f,                 1.0f
+        1.0, 0.0,           0.0,                 0.0,
+        0.0, 1.0,           0.0,                 0.0,
+        0.0, 0.0,    Far / (Far - Near),    -Far * Near / (Far - Near),
+        0.0, 0.0,           1.0,                 0.0
     );
     // clang-format on
 
-    real InvFOV = 1 / std::tan(Radians(FOV) / 2);
+    const real InvFOV = 1 / std::tan(Radians(FOV) / 2);
+    const real OneOverAspectRatio = 1 / AspectRatio;
 
-    return Scale(InvFOV, InvFOV, 1) * Transform(Persp);
+    return Scale(OneOverAspectRatio * InvFOV, InvFOV, 1) * Transform(Persp);
 }

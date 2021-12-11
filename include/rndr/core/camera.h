@@ -27,12 +27,12 @@ public:
     const Transform& FromWorldToNDC() const { return m_WorldToNDC; }
     const Transform& FromNDCToWorld() const { return m_NDCToWorld; }
 
-    void SetFilmSize(int Width, int Height);
+    virtual void UpdateTransforms(int Width, int Height) = 0;
 
     int GetFilmWidth() const { return m_FilmWidth; }
     int GetFilmHeight() const { return m_FilmHeight; }
 
-private:
+protected:
     Transform m_WorldToCamera;
     Transform m_CameraToWorld;
     Transform m_CameraToScreen;
@@ -55,6 +55,8 @@ public:
                        real Near,
                        real Far);
 
+    virtual void UpdateTransforms(int Width, int Height) override;
+
 private:
     real m_Near;
     real m_Far;
@@ -71,13 +73,16 @@ public:
                       real Near,
                       real Far);
 
+    virtual void UpdateTransforms(int Width, int Height) override;
+
 private:
     real m_FOV;
+    real m_AspectRatio;
     real m_Near;
     real m_Far;
 };
 
 Transform Orthographic(real Near, real Far);
-Transform Perspective(real FOV, real Near, real Far);
+Transform Perspective(real FOV, real AspectRatio, real Near, real Far);
 
 }  // namespace rndr
