@@ -10,6 +10,7 @@
 // Defining window deleages
 
 rndr::WindowDelegates::ResizeDelegate rndr::WindowDelegates::OnResize;
+rndr::WindowDelegates::KeyboardDelegate rndr::WindowDelegates::OnKeyboardEvent;
 
 // Window
 
@@ -172,6 +173,27 @@ LRESULT CALLBACK WindowProc(HWND WindowHandle, UINT MsgCode, WPARAM ParamW, LPAR
             int X = GET_X_LPARAM(ParamL);
             int Y = GET_Y_LPARAM(ParamL);
             RNDR_INFO("LeftMouseButton: DOWN (%d, %d)", X, Height - Y);
+            break;
+        }
+        case WM_KEYDOWN:
+        {
+            LONG_PTR Ptr = GetWindowLongPtr(WindowHandle, GWLP_USERDATA);
+            rndr::Window* Wind = reinterpret_cast<rndr::Window*>(Ptr);
+
+            rndr::WindowDelegates::OnKeyboardEvent.Execute(std::move(Wind), rndr::KeyState::Down,
+                                                           ParamW);
+
+            break;
+        }
+        case WM_KEYUP:
+        {
+            LONG_PTR Ptr = GetWindowLongPtr(WindowHandle, GWLP_USERDATA);
+            rndr::Window* Wind = reinterpret_cast<rndr::Window*>(Ptr);
+
+            rndr::WindowDelegates::OnKeyboardEvent.Execute(std::move(Wind), rndr::KeyState::Up,
+                                                           ParamW);
+
+            break;
         }
     }
 

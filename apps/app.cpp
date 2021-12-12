@@ -124,6 +124,24 @@ int main()
     rndr::WindowDelegates::OnResize.Add([Camera](rndr::Window*, int Width, int Height)
                                         { Camera->UpdateTransforms(Width, Height); });
 
+    real ModelDepth = -60;
+    rndr::WindowDelegates::OnKeyboardEvent.Add(
+        [&ModelDepth](rndr::Window*, rndr::KeyState State, rndr::VirtualKeyCode KeyCode)
+        {
+            const real Delta = 10;
+            if (State == rndr::KeyState::Down)
+            {
+                if (KeyCode == 0x51)
+                {
+                    ModelDepth -= Delta;
+                }
+                if (KeyCode == 0x45)
+                {
+                    ModelDepth += Delta;
+                }
+            }
+        });
+
     real TotalTime = 0;
     while (!Window.IsClosed())
     {
@@ -140,7 +158,7 @@ int main()
         Surface.ClearColorBuffer(rndr::Color::Black);
         Surface.ClearDepthBuffer(rndr::Infinity);
 
-        rndr::Transform T = rndr::Translate(rndr::Vector3r(0, 0, -60)) *
+        rndr::Transform T = rndr::Translate(rndr::Vector3r(0, 0, ModelDepth)) *
                             rndr::RotateY(0.02 * TotalTime) * rndr::RotateX(0.035 * TotalTime) *
                             rndr ::RotateZ(0.012 * TotalTime) * rndr::Scale(10, 10, 10);
 

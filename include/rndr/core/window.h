@@ -81,16 +81,35 @@ private:
 };
 
 /**
+ * Represents the state of the keyboard key.
+ */
+enum class KeyState
+{
+    Up,
+    Down
+};
+
+// Check out this for key codes:
+// https://docs.microsoft.com/en-us/windows/win32/inputdev/virtual-key-codes
+using VirtualKeyCode = uint32_t;
+
+/**
  * Collection of delegates related to window events.
  */
 struct WindowDelegates
 {
     using ResizeDelegate = MultiDelegate<Window*, int, int>;
+    using KeyboardDelegate = MultiDelegate<Window*, KeyState, VirtualKeyCode>;
 
     /**
      * This delegate is executed when the size of the window's client area is changed.
      */
     static ResizeDelegate OnResize;
+
+    /**
+     * This delegate is executed when the keyboard key is pressed or released.
+     */
+    static KeyboardDelegate OnKeyboardEvent;
 };
 
 }  // namespace rndr
