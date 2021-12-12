@@ -80,7 +80,7 @@ void rndr::SoftwareRenderer::DrawTriangles(void* Constants,
         {
             PerVertexInfo VertexInfo;
             VertexInfo.PrimitiveIndex = i / 3;
-            VertexInfo.VertexIndex = j;
+            VertexInfo.VertexIndex = Indices[i + j];
             VertexInfo.VertexData = (void*)&VertexData.data()[Indices[i + j] * VertexDataStride];
             VertexInfo.InstanceData = InstanceData;
             VertexInfo.Constants = Constants;
