@@ -31,11 +31,14 @@ rndr::Model* CreateModel()
         VertexData* Data = (VertexData*)Info.VertexData;
 
         const rndr::Point3r WorldSpace = (*Constants->FromModelToWorld)(Data->Position);
-        //const rndr::Point3r CameraSpace = Constants->Camera->FromWorldToCamera()(WorldSpace);
-        //const rndr::Point3r ScreenSpace = Constants->Camera->FromCameraToScreen()(CameraSpace);
-        //const rndr::Point3r NDCSpace = Constants->Camera->FromScreenToNDC()(ScreenSpace);
-
+#if 0
+        const rndr::Point3r CameraSpace = Constants->Camera->FromWorldToCamera()(WorldSpace);
+        const rndr::Point3r ScreenSpace = Constants->Camera->FromCameraToScreen()(CameraSpace);
+        const rndr::Point3r NDCSpace = Constants->Camera->FromScreenToNDC()(ScreenSpace);
+        return NDCSpace;
+#else
         return Constants->Camera->FromWorldToNDC()(WorldSpace);
+#endif
     };
 
     rndr::PixelShader* PixelShader = new rndr::PixelShader();
@@ -60,7 +63,7 @@ rndr::Model* CreateModel()
     Pipeline->WindingOrder = rndr::WindingOrder::CCW;
     Pipeline->VertexShader = VertexShader;
     Pipeline->PixelShader = PixelShader;
-    Pipeline->DepthTest = rndr::DepthTest::GreaterThan;
+    Pipeline->DepthTest = rndr::DepthTest::LesserThen;
     Pipeline->bApplyGammaCorrection = true;
 
     // clang-format off
@@ -107,9 +110,9 @@ int main()
     const int Width = Window.GetSurface().GetWidth();
     const int Height = Window.GetSurface().GetHeight();
     const real Near = 0.01;
-    const real Far = 1000;
+    const real Far = 100;
     const real FOV = 90;
-    const rndr::Transform FromWorldToCamera = rndr::RotateY(180);
+    const rndr::Transform FromWorldToCamera = rndr::RotateY(0);
 #if 1
     rndr::Camera* Camera =
         new rndr::PerspectiveCamera(FromWorldToCamera, Width, Height, FOV, Near, Far);
@@ -135,11 +138,11 @@ int main()
 
         rndr::Surface& Surface = Window.GetSurface();
         Surface.ClearColorBuffer(rndr::Color::Black);
-        Surface.ClearDepthBuffer(-std::numeric_limits<real>::infinity());
+        Surface.ClearDepthBuffer(rndr::Infinity);
 
-        rndr::Transform T = rndr::Translate(rndr::Vector3r(0, 0, -200)) *
-                            rndr::RotateZ(0.03 * TotalTime) * rndr::RotateY(.05 * TotalTime) *
-                            rndr::RotateX(0.02 * TotalTime) * rndr::Scale(100, 100, 100);
+        rndr::Transform T = rndr::Translate(rndr::Vector3r(0, 0, -60)) *
+                            rndr::RotateY(0.02 * TotalTime) * rndr::RotateX(0.035 * TotalTime) *
+                            rndr ::RotateZ(0.012 * TotalTime) * rndr::Scale(10, 10, 10);
 
         ConstantData Constants{&T, Camera};
 
