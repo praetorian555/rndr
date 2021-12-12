@@ -39,6 +39,7 @@ using NativeWindowHandle = uintptr_t;
 
 // Functions
 
+void SetupGammaTable(real Gamma = 2.4);
 real ToGammaCorrectSpace(real Value, real Gamma = 2.4);
 real ToLinearSpace(real Value, real Gamma = 2.4);
 
