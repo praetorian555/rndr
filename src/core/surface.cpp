@@ -49,8 +49,8 @@ void rndr::Surface::UpdateSize(int Width, int Height)
     m_Options.Width = Width;
     m_Options.Height = Height;
 
-    m_ScreenBounds.pMin = Point2i(0, 0);
-    m_ScreenBounds.pMax = Point2i(m_Options.Width, m_Options.Height);
+    m_ScreenBounds.pMin = Point3r(0, 0, 0);
+    m_ScreenBounds.pMax = Point3r(m_Options.Width, m_Options.Height, 1);
 
     if (m_ColorBuffer)
     {

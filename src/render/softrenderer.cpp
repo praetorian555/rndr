@@ -22,10 +22,10 @@ static bool GetBarycentricCoordinates(rndr::WindingOrder WindingOrder,
                                       const TriangleConstants& Constants,
                                       real (&BarycentricCoordinates)[3]);
 static real CalcPixelDepth(const real (&Barycentric)[3], const real (&OneOverDepth)[3]);
-static void GetTriangleBounds(const rndr::Point3r (&Positions)[3], rndr::Bounds2r& TriangleBounds);
+static void GetTriangleBounds(const rndr::Point3r (&Positions)[3], rndr::Bounds3r& TriangleBounds);
 static bool IsWindingOrderCorrect(const rndr::Point3r (&Positions)[3],
                                   rndr::WindingOrder WindingOrder);
-static bool LimitTriangleToSurface(rndr::Bounds2r& TriangleBounds, const rndr::Surface* Surface);
+static bool LimitTriangleToSurface(rndr::Bounds3r& TriangleBounds, const rndr::Surface* Surface);
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -98,7 +98,7 @@ void rndr::SoftwareRenderer::DrawTriangle(void* Constants,
                                           const Point3r (&Positions)[3],
                                           void** VertexData)
 {
-    Bounds2r TriangleBounds;
+    Bounds3r TriangleBounds;
     GetTriangleBounds(Positions, TriangleBounds);
 
     if (!LimitTriangleToSurface(TriangleBounds, m_Surface))
@@ -232,7 +232,7 @@ static real CalcPixelDepth(const real (&Barycentric)[3], const real (&OneOverDep
     return 1 / Result;
 }
 
-static void GetTriangleBounds(const rndr::Point3r (&Positions)[3], rndr::Bounds2r& TriangleBounds)
+static void GetTriangleBounds(const rndr::Point3r (&Positions)[3], rndr::Bounds3r& TriangleBounds)
 {
     rndr::Point3r Min = rndr::Min(rndr::Min(Positions[0], Positions[1]), Positions[2]);
     rndr::Point3r Max = rndr::Max(rndr::Max(Positions[0], Positions[1]), Positions[2]);
@@ -244,8 +244,8 @@ static void GetTriangleBounds(const rndr::Point3r (&Positions)[3], rndr::Bounds2
     Min += PixelCenterOffset;
     Max -= PixelCenterOffset;
 
-    TriangleBounds.pMin = rndr::Point2r(Min.X, Min.Y);
-    TriangleBounds.pMax = rndr::Point2r(Max.X, Max.Y);
+    TriangleBounds.pMin = Min;
+    TriangleBounds.pMax = Max;
 }
 
 static bool IsWindingOrderCorrect(const rndr::Point3r (&Positions)[3],
@@ -256,11 +256,11 @@ static bool IsWindingOrderCorrect(const rndr::Point3r (&Positions)[3],
     return HalfTriangleArea >= 0;
 }
 
-static bool LimitTriangleToSurface(rndr::Bounds2r& TriangleBounds, const rndr::Surface* Surface)
+static bool LimitTriangleToSurface(rndr::Bounds3r& TriangleBounds, const rndr::Surface* Surface)
 {
-    rndr::Bounds2r ScreenBounds = Surface->GetScreenBounds();
-    ScreenBounds.pMin += rndr::Point2r{0.5, 0.5};
-    ScreenBounds.pMax += rndr::Point2r{-0.5, -0.5};
+    rndr::Bounds3r ScreenBounds = Surface->GetScreenBounds();
+    ScreenBounds.pMin += rndr::Point3r{0.5, 0.5, 0};
+    ScreenBounds.pMax += rndr::Point3r{-0.5, -0.5, 0};
 
     if (!rndr::Overlaps(TriangleBounds, ScreenBounds))
     {
@@ -274,6 +274,11 @@ static bool LimitTriangleToSurface(rndr::Bounds2r& TriangleBounds, const rndr::S
 
 bool rndr::SoftwareRenderer::RunDepthTest(real NewDepthValue, const Point2i& PixelPosition)
 {
+    if (NewDepthValue < 0 || NewDepthValue > 1)
+    {
+        return false;
+    }
+
     const real DestDepth = m_Surface->GetPixelDepth(PixelPosition);
 
     switch (m_Pipeline->DepthTest)
@@ -318,7 +323,8 @@ rndr::Point3r rndr::SoftwareRenderer::FromNDCToRasterSpace(const Point3r& Point)
     return Result;
 }
 
-rndr::Point3r rndr::SoftwareRenderer::FromRasterToNDCSpace(const Point3r& Point) {
+rndr::Point3r rndr::SoftwareRenderer::FromRasterToNDCSpace(const Point3r& Point)
+{
     int Width = m_Surface->GetWidth();
     int Height = m_Surface->GetHeight();
 

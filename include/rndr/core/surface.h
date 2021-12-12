@@ -2,7 +2,7 @@
 
 #include <functional>
 
-#include "rndr/core/bounds2.h"
+#include "rndr/core/bounds3.h"
 #include "rndr/core/math.h"
 #include "rndr/core/rndr.h"
 
@@ -60,9 +60,9 @@ public:
     uint32_t GetHeight() const { return m_Options.Height; }
 
     /**
-     * Get Bounds2 object consisting of (0, 0) and (Width, Height) points.
+     * Get Bounds2 object consisting of (0, 0, 0) and (Width, Height, 1) points.
      */
-    const Bounds2i& GetScreenBounds() const { return m_ScreenBounds; }
+    const Bounds3r& GetScreenBounds() const { return m_ScreenBounds; }
 
     /**
      * Get aspect ratio of a surface. If the height is zero the ratio will be 1.
@@ -139,7 +139,7 @@ public:
 
 private:
     SurfaceOptions m_Options;
-    Bounds2i m_ScreenBounds;
+    Bounds3r m_ScreenBounds;
     uint8_t* m_ColorBuffer = nullptr;
     uint8_t* m_DepthBuffer = nullptr;
 };
