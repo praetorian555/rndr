@@ -84,8 +84,8 @@ rndr::Transform rndr::Perspective(real FOV, real AspectRatio, real Near, real Fa
     Matrix4x4 Persp(
         1.0, 0.0,           0.0,                 0.0,
         0.0, 1.0,           0.0,                 0.0,
-        0.0, 0.0,    Far / (Far - Near),    -Far * Near / (Far - Near),
-        0.0, 0.0,          -1.0,                 0.0
+        0.0, 0.0,    Far / (Far - Near),    Far * Near / (Far - Near),
+        0.0, 0.0,           1.0,                 0.0
     );
     // clang-format on
 
