@@ -300,7 +300,10 @@ rndr::Color rndr::SoftwareRenderer::ApplyAlphaCompositing(Color NewValue,
                                                           const Point2i& PixelPosition)
 {
     rndr::Color CurrentColor = m_Surface->GetPixelColor(PixelPosition);
-    CurrentColor = CurrentColor.ToLinearSpace(m_Pipeline->Gamma);
+    if (m_Pipeline->bApplyGammaCorrection)
+    {
+        CurrentColor = CurrentColor.ToLinearSpace(m_Pipeline->Gamma);
+    }
     real InvColorA = 1 - NewValue.A;
 
     NewValue.R = NewValue.A * NewValue.R + CurrentColor.R * CurrentColor.A * InvColorA;
