@@ -80,12 +80,18 @@ rndr::Transform rndr::Orthographic(real Near, real Far)
 
 rndr::Transform rndr::Perspective(real FOV, real AspectRatio, real Near, real Far)
 {
+    assert(Near > 0);
+    assert(Far > 0);
+    assert(AspectRatio != 0);
+
+    // Camera in camera space looks down the -z axis (that's the reason for minuses). We normalize z
+    // to be between 0 and 1 (that is why we divide by f - n).
     // clang-format off
     Matrix4x4 Persp(
         1.0, 0.0,           0.0,                 0.0,
         0.0, 1.0,           0.0,                 0.0,
-        0.0, 0.0,    Far / (Far - Near),    Far * Near / (Far - Near),
-        0.0, 0.0,           1.0,                 0.0
+        0.0, 0.0,    -Far / (Far - Near),    -Far * Near / (Far - Near),
+        0.0, 0.0,           -1.0,                 0.0
     );
     // clang-format on
 
