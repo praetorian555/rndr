@@ -2,6 +2,7 @@
 
 #include <cassert>
 #include <cstdint>
+#include <string>
 
 namespace rndr_private
 {
@@ -33,6 +34,17 @@ enum class PixelLayout
 };
 
 /**
+ * Defines channels and color space of the channels.
+ */
+enum class PixelFormat
+{
+    RGB,
+    RGBA,
+    sRGB,
+    sRGBA
+};
+
+/**
  * Opaque type that represents an OS window handle.
  */
 using NativeWindowHandle = uintptr_t;
@@ -47,5 +59,16 @@ real ToLinearSpace(real Value, real Gamma = 2.4);
  * Get size of a pixel in bytes.
  */
 int GetPixelSize(PixelLayout Layout);
+
+struct ImageOptions;
+
+/**
+ * Reads a file contents.
+ *
+ * @param Path to the file on disk.
+ * @param [out]Options Used to store image metadata.
+ * @param [out]Data Used to store image data.
+ */
+void ReadImageFile(const std::string& FilePath, ImageOptions& Options, uint8_t* Data);
 
 }  // namespace rndr
