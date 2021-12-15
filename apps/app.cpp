@@ -102,8 +102,6 @@ rndr::Model* CreateModel()
 
 int main()
 {
-    rndr::SetupGammaTable();
-
     rndr::Window Window;
     rndr::SoftwareRenderer Renderer(&Window.GetSurface());
 
