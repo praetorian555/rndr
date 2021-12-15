@@ -2,18 +2,14 @@
 
 #include <cassert>
 #include <cstdint>
-#include <string>
 
-namespace rndr_private
-{
-void DebugBreak();
-}
+#if !NDEBUG
+#define RNDR_DEBUG 1
+#endif  // !NDEBUG
 
-#define RNDR_COND_BP(cond)          \
-    if (cond)                       \
-    {                               \
-        rndr_private::DebugBreak(); \
-    }
+#if WIN32
+#define RNDR_WINDOWS 1
+#endif  // WIN32
 
 // Defines precision for floating-point type.
 #if !defined(RNDR_REAL_AS_DOUBLE)
@@ -48,26 +44,5 @@ enum class PixelFormat
  * Opaque type that represents an OS window handle.
  */
 using NativeWindowHandle = uintptr_t;
-
-// Functions
-
-real ToGammaCorrectSpace(real Value, real Gamma = 2.4);
-real ToLinearSpace(real Value, real Gamma = 2.4);
-
-/**
- * Get size of a pixel in bytes.
- */
-int GetPixelSize(PixelLayout Layout);
-
-struct ImageOptions;
-
-/**
- * Reads a file contents.
- *
- * @param Path to the file on disk.
- * @param [out]Options Used to store image metadata.
- * @param [out]Data Used to store image data.
- */
-void ReadImageFile(const std::string& FilePath, ImageOptions& Options, uint8_t* Data);
 
 }  // namespace rndr

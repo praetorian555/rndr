@@ -2,6 +2,7 @@
 
 #include "rndr/core/color.h"
 #include "rndr/core/math.h"
+#include "rndr/core/utilities.h"
 
 rndr::Surface::Surface(const SurfaceOptions& Options) : m_Options(Options)
 {
