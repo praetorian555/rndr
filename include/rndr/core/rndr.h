@@ -41,6 +41,15 @@ enum class PixelFormat
 };
 
 /**
+ * Enumerates all image file formats supported by the renderer.
+ */
+enum class ImageFileFormat
+{
+    BMP = 0,
+    NotSupported
+};
+
+/**
  * Opaque type that represents an OS window handle.
  */
 using NativeWindowHandle = uintptr_t;

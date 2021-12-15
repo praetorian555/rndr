@@ -1,6 +1,12 @@
 #include "rndr/core/utilities.h"
 
 #include <cmath>
+#include <filesystem>
+
+#include "rndr/render/image.h"
+
+// Private stuff
+#include "utilities/bmpparser.h"
 
 real rndr::ToGammaCorrectSpace(real Value, real Gamma)
 {
@@ -47,4 +53,41 @@ int rndr::GetPixelSize(PixelLayout Layout)
     }
 
     return 0;
+}
+
+rndr::Image* rndr::ReadImageFile(const std::string& FilePath)
+{
+    const ImageFileFormat FileFormat = GetImageFileFormat(FilePath);
+    assert(FileFormat != ImageFileFormat::NotSupported);
+
+    switch (FileFormat)
+    {
+        case ImageFileFormat::BMP:
+        {
+            return BmpParser::Read(FilePath);
+        }
+        default:
+        {
+            assert(false);
+        }
+    }
+
+    return nullptr;
+}
+
+rndr::ImageFileFormat rndr::GetImageFileFormat(const std::string& FilePathStr)
+{
+    static const char* SupportedExtensions[] = {".bmp"};
+    static const int ExtensionCount = sizeof(SupportedExtensions) / sizeof(const char*);
+
+    const std::filesystem::path FilePath(FilePathStr);
+    for (int i = 0; i < ExtensionCount; i++)
+    {
+        if (FilePath.stem().string() == SupportedExtensions[i])
+        {
+            return (ImageFileFormat)i;
+        }
+    }
+
+    return ImageFileFormat::NotSupported;
 }
