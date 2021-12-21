@@ -5,6 +5,8 @@
 namespace rndr
 {
 
+class Image;
+
 enum class DepthTest
 {
     None,
@@ -29,6 +31,9 @@ struct Pipeline
 
     bool bApplyGammaCorrection = false;
     real Gamma = 2.4;
+
+    rndr::Image* ColorImage = nullptr;
+    rndr::Image* DepthImage = nullptr;
 };
 
 }  // namespace rndr

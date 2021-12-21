@@ -2,9 +2,9 @@
 
 #include <string>
 
-#include "delegate.h"
-#include "rndr.h"
-#include "surface.h"
+#include "rndr/core/delegate.h"
+
+#include "rndr/render/image.h"
 
 namespace rndr
 {
@@ -12,7 +12,7 @@ namespace rndr
 /**
  * Configuration of the window.
  */
-struct WindowOptions
+struct WindowConfig
 {
     std::string Name = "Default Window";
 
@@ -26,7 +26,7 @@ struct WindowOptions
 class Window
 {
 public:
-    Window(const WindowOptions& Options = WindowOptions());
+    Window(const WindowConfig& Options = WindowConfig());
 
     /**
      * Processes events that occured in the window such as event closing or button press.
@@ -49,9 +49,16 @@ public:
     NativeWindowHandle GetNativeWindowHandle() const { return m_NativeWindowHandle; }
 
     /**
-     * Get window surface to which user can render.
+     * Get window's color image.
      */
-    Surface& GetSurface() { return *m_Surface; }
+    Image* GetColorImage() { return m_ColorImage; }
+    const Image* GetColorImage() const { return m_ColorImage; }
+
+    /**
+     * Get window's depth image.
+     */
+    Image* GetDepthImage() { return m_DepthImage; }
+    const Image* GetDepthImage() const { return m_DepthImage; }
 
     /**
      * Check if window size is 0 along any of the x axis.
@@ -60,7 +67,7 @@ public:
      */
     bool IsWindowMinimized() const
     {
-        return m_Surface->GetHeight() == 0 || m_Surface->GetWidth() == 0;
+        return m_ColorImage->GetConfig().Height == 0 || m_ColorImage->GetConfig().Width == 0;
     }
 
     /**
@@ -72,10 +79,11 @@ private:
     void Resize(int Width, int Height);
 
 private:
-    WindowOptions m_Options;
+    WindowConfig m_Config;
     NativeWindowHandle m_NativeWindowHandle;
 
-    Surface* m_Surface = nullptr;
+    Image* m_ColorImage = nullptr;
+    Image* m_DepthImage = nullptr;
 
     uint32_t m_CurrentWidth = 0, m_CurrentHeight = 0;
 };

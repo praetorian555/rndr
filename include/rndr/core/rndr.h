@@ -26,7 +26,8 @@ namespace rndr
  */
 enum class PixelLayout
 {
-    A8R8G8B8
+    A8R8G8B8,
+    DEPTH_F32
 };
 
 /**
@@ -37,7 +38,8 @@ enum class PixelFormat
     RGB,
     RGBA,
     sRGB,
-    sRGBA
+    sRGBA,
+    DEPTH
 };
 
 /**

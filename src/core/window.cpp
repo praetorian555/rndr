@@ -16,14 +16,23 @@ rndr::WindowDelegates::KeyboardDelegate rndr::WindowDelegates::OnKeyboardEvent;
 
 LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam);
 
-rndr::Window::Window(const rndr::WindowOptions& Options) : m_Options(Options)
+rndr::Window::Window(const rndr::WindowConfig& Config) : m_Config(Config)
 {
-    rndr::SurfaceOptions SurfaceOptions;
-    SurfaceOptions.bUseDepthBuffer = true;
-    SurfaceOptions.Width = Options.Width;
-    SurfaceOptions.Height = Options.Height;
+    rndr::ImageConfig ColorImageConfig;
+    ColorImageConfig.Width = Config.Width;
+    ColorImageConfig.Height = Config.Height;
+    ColorImageConfig.PixelFormat = PixelFormat::sRGBA;
+    ColorImageConfig.PixelLayout = PixelLayout::A8R8G8B8;
 
-    m_Surface = new Surface(SurfaceOptions);
+    m_ColorImage = new Image(ColorImageConfig);
+
+    rndr::ImageConfig DepthImageConfig;
+    DepthImageConfig.Width = Config.Width;
+    DepthImageConfig.Height = Config.Height;
+    DepthImageConfig.PixelFormat = PixelFormat::DEPTH;
+    DepthImageConfig.PixelLayout = PixelLayout::DEPTH_F32;
+
+    m_DepthImage = new Image(DepthImageConfig);
 
     rndr::WindowDelegates::OnResize.Add(
         [this](Window* Wind, int Width, int Height)
@@ -48,9 +57,9 @@ rndr::Window::Window(const rndr::WindowOptions& Options) : m_Options(Options)
     ATOM Atom = RegisterClass(&WindowClass);
     assert(Atom != 0);
 
-    HWND WindowHandle = CreateWindowEx(0, ClassName, Options.Name.c_str(), WS_OVERLAPPEDWINDOW,
-                                       CW_USEDEFAULT, CW_USEDEFAULT, Options.Width, Options.Height,
-                                       nullptr, nullptr, Instance, this);
+    HWND WindowHandle = CreateWindowEx(0, ClassName, m_Config.Name.c_str(), WS_OVERLAPPEDWINDOW,
+                                       CW_USEDEFAULT, CW_USEDEFAULT, m_Config.Width,
+                                       m_Config.Height, nullptr, nullptr, Instance, this);
     assert(WindowHandle != NULL);
 
     ShowWindow(WindowHandle, SW_SHOW);
@@ -87,7 +96,14 @@ void rndr::Window::Resize(int Width, int Height)
 {
     m_CurrentWidth = Width;
     m_CurrentHeight = Height;
-    m_Surface->UpdateSize(Width, Height);
+    if (m_ColorImage)
+    {
+        m_ColorImage->UpdateSize(Width, Height);
+    }
+    if (m_DepthImage)
+    {
+        m_DepthImage->UpdateSize(Width, Height);
+    }
 }
 
 void rndr::Window::RenderToWindow()
@@ -96,17 +112,17 @@ void rndr::Window::RenderToWindow()
 
     BITMAPINFO BitmapInfo = {};
     BitmapInfo.bmiHeader.biSize = sizeof(BitmapInfo.bmiHeader);
-    BitmapInfo.bmiHeader.biWidth = m_Surface->GetWidth();
-    BitmapInfo.bmiHeader.biHeight = m_Surface->GetHeight();
+    BitmapInfo.bmiHeader.biWidth = m_ColorImage->GetConfig().Width;
+    BitmapInfo.bmiHeader.biHeight = m_ColorImage->GetConfig().Height;
     BitmapInfo.bmiHeader.biPlanes = 1;
-    BitmapInfo.bmiHeader.biBitCount = m_Surface->GetPixelSize() * 8;
+    BitmapInfo.bmiHeader.biBitCount = m_ColorImage->GetPixelSize() * 8;
     BitmapInfo.bmiHeader.biCompression = BI_RGB;
 
     HDC DC = GetDC(WindowHandle);
 
-    StretchDIBits(DC, 0, 0, m_CurrentWidth, m_CurrentHeight, 0, 0, m_Surface->GetWidth(),
-                  m_Surface->GetHeight(), m_Surface->GetColorBuffer(), &BitmapInfo, DIB_RGB_COLORS,
-                  SRCCOPY);
+    StretchDIBits(DC, 0, 0, m_CurrentWidth, m_CurrentHeight, 0, 0,
+                  m_ColorImage->GetConfig().Width, m_ColorImage->GetConfig().Height,
+                  m_ColorImage->GetBuffer(), &BitmapInfo, DIB_RGB_COLORS, SRCCOPY);
 }
 
 LRESULT CALLBACK WindowProc(HWND WindowHandle, UINT MsgCode, WPARAM ParamW, LPARAM ParamL)
@@ -168,7 +184,7 @@ LRESULT CALLBACK WindowProc(HWND WindowHandle, UINT MsgCode, WPARAM ParamW, LPAR
         {
             rndr::Window* Wind =
                 reinterpret_cast<rndr::Window*>(GetWindowLongPtr(WindowHandle, GWLP_USERDATA));
-            int Height = Wind->GetSurface().GetHeight();
+            int Height = Wind->GetColorImage()->GetConfig().Height;
 
             int X = GET_X_LPARAM(ParamL);
             int Y = GET_Y_LPARAM(ParamL);

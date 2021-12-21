@@ -103,12 +103,12 @@ rndr::Model* CreateModel()
 int main()
 {
     rndr::Window Window;
-    rndr::SoftwareRenderer Renderer(&Window.GetSurface());
+    rndr::SoftwareRenderer Renderer;
 
     rndr::Model* Model = CreateModel();
 
-    const int Width = Window.GetSurface().GetWidth();
-    const int Height = Window.GetSurface().GetHeight();
+    const int Width = Window.GetColorImage()->GetConfig().Width;
+    const int Height = Window.GetColorImage()->GetConfig().Height;
     const real Near = 0.01;
     const real Far = 100;
     const real FOV = 90;
@@ -154,9 +154,13 @@ int main()
 
         auto Start = std::chrono::steady_clock().now();
 
-        rndr::Surface& Surface = Window.GetSurface();
-        Surface.ClearColorBuffer(rndr::Color::Black);
-        Surface.ClearDepthBuffer(rndr::Infinity);
+        rndr::Image* ColorImage = Window.GetColorImage();
+        rndr::Image* DepthImage = Window.GetDepthImage();
+        ColorImage->ClearColorBuffer(rndr::Color::Black);
+        DepthImage->ClearDepthBuffer(rndr::Infinity);
+
+        Model->GetPipeline()->ColorImage = ColorImage;
+        Model->GetPipeline()->DepthImage = DepthImage;
 
         rndr::Transform T = rndr::Translate(rndr::Vector3r(0, 0, ModelDepth)) *
                             rndr::RotateY(0.02 * TotalTime) * rndr::RotateX(0.035 * TotalTime) *

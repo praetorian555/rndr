@@ -8,13 +8,13 @@
 namespace rndr
 {
 
-class Surface;
+class Image;
 class Model;
 
 class SoftwareRenderer
 {
 public:
-    SoftwareRenderer(rndr::Surface* Surface);
+    SoftwareRenderer() = default;
 
     void SetPipeline(const rndr::Pipeline* Pipeline) { m_Pipeline = Pipeline; }
 
@@ -33,7 +33,6 @@ private:
     Point3r FromRasterToNDCSpace(const Point3r& Point);
 
 private:
-    Surface* m_Surface = nullptr;
     const Pipeline* m_Pipeline = nullptr;
 };
 
