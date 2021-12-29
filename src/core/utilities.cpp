@@ -46,6 +46,10 @@ int rndr::GetPixelSize(PixelLayout Layout)
         {
             return 4;
         }
+        case PixelLayout::B8G8R8A8:
+        {
+            return 4;
+        }
         case PixelLayout::DEPTH_F32:
         {
             return sizeof(real);

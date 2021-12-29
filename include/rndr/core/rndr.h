@@ -37,6 +37,7 @@ namespace rndr
 enum class PixelLayout
 {
     A8R8G8B8,
+    B8G8R8A8,
     DEPTH_F32
 };
 

@@ -12,26 +12,21 @@ struct Color
     /**
      * Constructor.
      *
-     * @param Value Color in AARRGGBB format.
+     * @param Value Color value in uint32_t.
+     * @param Layout the position and size of channels in a pixel value.
      */
-    Color(uint32_t Value)
-    {
-        R = ((Value >> 16) & 0xFF) / 255.;
-        G = ((Value >> 8) & 0xFF) / 255.;
-        B = ((Value >> 0) & 0xFF) / 255.;
-        A = ((Value >> 24) & 0xFF) / 255;
-    }
+    Color(uint32_t Value, PixelLayout Layout = PixelLayout::A8R8G8B8);
 
     Color(real RR, real GG, real BB, real AA) : R(RR), G(GG), B(BB), A(AA) {}
 
     Color();
 
     /**
-     * Convert Color to AARRGGBB form.
+     * Convert Color to specified PixelLayout.
      *
      * @return Returns uint32_t value that represents color.
      */
-    uint32_t ToUInt() const;
+    uint32_t ToUInt(rndr::PixelLayout Layout = rndr::PixelLayout::A8R8G8B8) const;
 
     /**
      * Apply gamma correction to the color that is in linear space.
@@ -62,6 +57,7 @@ public:
     static const rndr::Color Red;
     static const rndr::Color Green;
     static const rndr::Color Blue;
+    static const rndr::Color Pink;
 };
 
 }  // namespace rndr
