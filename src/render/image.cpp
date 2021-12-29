@@ -9,6 +9,11 @@ rndr::Image::Image(const ImageConfig& Config) : m_Config(Config)
     UpdateSize(Config.Width, Config.Height);
 }
 
+rndr::Image::~Image()
+{
+    delete m_Buffer;
+}
+
 uint32_t rndr::Image::GetPixelSize() const
 {
     return rndr::GetPixelSize(m_Config.PixelLayout);

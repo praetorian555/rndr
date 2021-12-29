@@ -2,6 +2,7 @@
 
 #include <cassert>
 #include <cstdint>
+#include <memory>
 
 #if WIN32
 #define RNDR_WINDOWS 1

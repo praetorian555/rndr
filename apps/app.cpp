@@ -4,8 +4,8 @@
 #include "rndr/core/camera.h"
 #include "rndr/core/color.h"
 #include "rndr/core/transform.h"
-#include "rndr/core/window.h"
 #include "rndr/core/utilities.h"
+#include "rndr/core/window.h"
 
 #include "rndr/render/model.h"
 #include "rndr/render/pipeline.h"
@@ -25,7 +25,7 @@ struct ConstantData
 
 rndr::Model* CreateModel()
 {
-    rndr::VertexShader* VertexShader = new rndr::VertexShader();
+    std::shared_ptr<rndr::VertexShader> VertexShader = std::make_shared<rndr::VertexShader>();
     VertexShader->Callback = [](const rndr::PerVertexInfo& Info)
     {
         ConstantData* Constants = (ConstantData*)Info.Constants;
@@ -42,7 +42,7 @@ rndr::Model* CreateModel()
 #endif
     };
 
-    rndr::PixelShader* PixelShader = new rndr::PixelShader();
+    std::shared_ptr<rndr::PixelShader> PixelShader = std::make_shared<rndr::PixelShader>();
     PixelShader->Callback = [](const rndr::PerPixelInfo& Info, real& DepthValue)
     {
         VertexData* Data0 = (VertexData*)Info.VertexData[0];
@@ -60,7 +60,7 @@ rndr::Model* CreateModel()
         return Result;
     };
 
-    rndr::Pipeline* Pipeline = new rndr::Pipeline();
+    std::shared_ptr<rndr::Pipeline> Pipeline = std::make_shared<rndr::Pipeline>();
     Pipeline->WindingOrder = rndr::WindingOrder::CCW;
     Pipeline->VertexShader = VertexShader;
     Pipeline->PixelShader = PixelShader;
@@ -107,10 +107,10 @@ int main()
     rndr::SoftwareRenderer Renderer;
 
     const std::string AssetPath = ASSET_DIR "/SMS_Ranger_Title.bmp";
-    rndr::Image* Texture = rndr::ReadImageFile(AssetPath);
+    std::unique_ptr<rndr::Image> Texture{rndr::ReadImageFile(AssetPath)};
     Texture->SetPixelLayout(rndr::PixelLayout::A8R8G8B8);
 
-    rndr::Model* Model = CreateModel();
+    std::unique_ptr<rndr::Model> Model{CreateModel()};
 
     const int Width = Window.GetColorImage()->GetConfig().Width;
     const int Height = Window.GetColorImage()->GetConfig().Height;
@@ -119,11 +119,10 @@ int main()
     const real FOV = 90;
     const rndr::Transform FromWorldToCamera = rndr::RotateY(0);
 #if 1
-    rndr::Camera* Camera =
-        new rndr::PerspectiveCamera(FromWorldToCamera, Width, Height, FOV, Near, Far);
+    std::shared_ptr<rndr::Camera> Camera =
+        std::make_unique<rndr::PerspectiveCamera>(FromWorldToCamera, Width, Height, FOV, Near, Far);
 #else
-    rndr::Camera* Camera =
-        new rndr::OrthographicCamera(FromWorldToCamera, Width, Height, Near, Far);
+    std::shared_ptr<rndr::Camera> Camera = std::make_unique<rndr::OrtographicCamera>(FromWorldToCamera, Width, Height, Near, Far);
 #endif
 
     rndr::WindowDelegates::OnResize.Add([Camera](rndr::Window*, int Width, int Height)
@@ -171,11 +170,11 @@ int main()
                             rndr::RotateY(0.02 * TotalTime) * rndr::RotateX(0.035 * TotalTime) *
                             rndr ::RotateZ(0.012 * TotalTime) * rndr::Scale(10, 10, 10);
 
-        ConstantData Constants{&T, Camera};
+        ConstantData Constants{&T, Camera.get()};
 
         Model->SetConstants(Constants);
 
-        Renderer.Draw(Model, 1);
+        Renderer.Draw(Model.get(), 1);
         ColorImage->CopyFrom(*Texture, rndr::Point2i{100, 100});
 
         Window.RenderToWindow();

@@ -31,6 +31,7 @@ class Image
 {
 public:
     Image(const ImageConfig& Options = ImageConfig{});
+    ~Image();
 
     /**
      * Will recreate internal memory buffer if Width or Height are different from existing ones.

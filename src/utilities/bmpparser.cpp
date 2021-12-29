@@ -287,17 +287,16 @@ rndr::Image* rndr::BmpParser::Read(const std::string& FilePath)
     fseek(FileHandle, 0, SEEK_SET);
     assert(FileSize > 0);
 
-    uint8_t* ImageBuffer = new uint8_t[FileSize];
-    assert(ImageBuffer);
+    std::vector<uint8_t> ImageBuffer(FileSize);
 
-    fread(ImageBuffer, 1, FileSize, FileHandle);
+    fread(ImageBuffer.data(), 1, FileSize, FileHandle);
 
-    uint8_t* Copy = ImageBuffer;
+    uint8_t* Copy = ImageBuffer.data();
     uint8_t** Offset = &Copy;
     BitmapFileInfo BitmapFileInfo = ParseBitmapFileInfo(Offset);
     BitmapInfo BitmapInfo = ParseBitmapInfo(Offset);
     const std::vector<Color> ColorPallete = ParseColorPallete(Offset, BitmapInfo);
-    assert(*Offset == ImageBuffer + BitmapFileInfo.OffBits);
+    assert(*Offset == ImageBuffer.data() + BitmapFileInfo.OffBits);
 
     rndr::ImageConfig Config;
     Config.Width = BitmapInfo.Width;
@@ -309,7 +308,6 @@ rndr::Image* rndr::BmpParser::Read(const std::string& FilePath)
     uint8_t* ImageData = ParseImageData(*Offset, BitmapInfo, ColorPallete, Image);
 
     fclose(FileHandle);
-    delete[] ImageBuffer;
 
     return Image;
 }

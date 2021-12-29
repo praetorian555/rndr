@@ -24,7 +24,7 @@ rndr::Window::Window(const rndr::WindowConfig& Config) : m_Config(Config)
     ColorImageConfig.PixelFormat = PixelFormat::sRGBA;
     ColorImageConfig.PixelLayout = PixelLayout::A8R8G8B8;
 
-    m_ColorImage = new Image(ColorImageConfig);
+    m_ColorImage = std::make_unique<Image>(new Image(ColorImageConfig));
 
     rndr::ImageConfig DepthImageConfig;
     DepthImageConfig.Width = Config.Width;
@@ -32,7 +32,7 @@ rndr::Window::Window(const rndr::WindowConfig& Config) : m_Config(Config)
     DepthImageConfig.PixelFormat = PixelFormat::DEPTH;
     DepthImageConfig.PixelLayout = PixelLayout::DEPTH_F32;
 
-    m_DepthImage = new Image(DepthImageConfig);
+    m_DepthImage = std::make_unique<Image>(new Image(DepthImageConfig));
 
     rndr::WindowDelegates::OnResize.Add(
         [this](Window* Wind, int Width, int Height)
