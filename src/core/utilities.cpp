@@ -87,7 +87,7 @@ rndr::ImageFileFormat rndr::GetImageFileFormat(const std::string& FilePathStr)
     const std::filesystem::path FilePath(FilePathStr);
     for (int i = 0; i < ExtensionCount; i++)
     {
-        if (FilePath.stem().string() == SupportedExtensions[i])
+        if (FilePath.extension().string() == SupportedExtensions[i])
         {
             return (ImageFileFormat)i;
         }
