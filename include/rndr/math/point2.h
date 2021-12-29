@@ -148,6 +148,12 @@ Point2<T> Ceil(const Point2<T>& p)
 }
 
 template <typename T>
+Point2<T> Round(const Point2<T>& p)
+{
+    return Point2<T>(std::roundf(p.X), std::roundf(p.Y));
+}
+
+template <typename T>
 Point2<T> Min(const Point2<T>& v1, const Point2<T>& v2)
 {
     return Point2<T>(std::min(v1.X, v2.X), std::min(v1.Y, v2.Y));
