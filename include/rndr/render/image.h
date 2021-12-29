@@ -18,7 +18,7 @@ struct ImageConfig
     int Height = 768;
 
     rndr::PixelLayout PixelLayout = rndr::PixelLayout::A8R8G8B8;
-    rndr::PixelFormat PixelFormat = rndr::PixelFormat::RGBA;
+    rndr::PixelFormat PixelFormat = rndr::PixelFormat::sRGBA;
 };
 
 /**
