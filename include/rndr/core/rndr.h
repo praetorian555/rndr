@@ -3,13 +3,23 @@
 #include <cassert>
 #include <cstdint>
 
-#if !NDEBUG
-#define RNDR_DEBUG 1
-#endif  // !NDEBUG
-
 #if WIN32
 #define RNDR_WINDOWS 1
 #endif  // WIN32
+
+#if !RNDR_WINDOWS
+#error "Platform not supported!"
+#endif // !RNDR_WINDOWS
+
+#if RNDR_WINDOWS
+#define RNDR_LITTLE_ENDIAN 1
+#else
+#define RNDR_BIG_ENDIAN 1
+#endif // RNDR_WINDOWS
+
+#if !NDEBUG
+#define RNDR_DEBUG 1
+#endif  // !NDEBUG
 
 // Defines precision for floating-point type.
 #if !defined(RNDR_REAL_AS_DOUBLE)
