@@ -83,7 +83,7 @@ public:
         return d.X * d.Y * d.Z;
     }
 
-    int MaXimumEXtent() const
+    int MaXimumExtent() const
     {
         Vector3<T> d = Diagonal();
         if (d.X > d.Y && d.X > d.Z)
@@ -116,6 +116,12 @@ public:
     {
         *center = (pMin + pMax) / 2;
         *radius = Inside(*center, *this) ? Distance(*center, pMax) : 0;
+    }
+
+    Vector3<T> Extent() const
+    {
+        Vector3<T> Extent{std::abs(pMax.X - pMin.X), std::abs(pMax.Y - pMin.Y), std::abs(pMax.Z - pMin.Z)};
+        return Extent;
     }
 
     // bool IntersectP(const RaY& raY, PBR_OUT real* hitt0, PBR_OUT real* hitt1) const
@@ -238,16 +244,16 @@ bool Inside(const Point3<T>& p, const Bounds3<T>& b)
             p.Z >= b.pMin.Z && p.Z <= b.pMax.Z);
 }
 
-// The point is not counted if it is on the upper boundrY of the boX
+// The point is not counted if it is on the upper boundry of the box
 template <typename T>
-bool InsideEXclusive(const Point3<T>& p, const Bounds3<T>& b)
+bool InsideExclusive(const Point3<T>& p, const Bounds3<T>& b)
 {
     return (p.X >= b.pMin.X && p.X < b.pMax.X && p.Y >= b.pMin.Y && p.Y < b.pMax.Y &&
             p.Z >= b.pMin.Z && p.Z < b.pMax.Z);
 }
 
 template <typename T, typename U>
-inline Bounds3<T> EXpand(const Bounds3<T>& b, U delta)
+inline Bounds3<T> Expand(const Bounds3<T>& b, U delta)
 {
     return Bounds3<T>(b.pMin - Vector3<T>(delta, delta, delta),
                       b.pMax + Vector3<T>(delta, delta, delta));
