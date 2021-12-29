@@ -236,3 +236,24 @@ void rndr::Image::SetPixelLayout(rndr::PixelLayout Layout)
         assert(false);
     }
 }
+
+rndr::Color rndr::Image::Sample(const Point2r& TexCoord, bool Magnified)
+{
+    rndr::Point2r PixelCoord{(m_Config.Width - 1) * TexCoord.X, (m_Config.Height - 1) * TexCoord.Y};
+
+    rndr::Point2r Min = rndr::Floor(PixelCoord);
+    rndr::Point2r Max = rndr::Ceil(PixelCoord);
+
+    Color Result;
+    ImageFiltering Filter = Magnified ? m_Config.MagFilter : m_Config.MinFilter;
+    if (Filter == ImageFiltering::NearestNeighbor)
+    {
+        rndr::Point2r Nearest = rndr::Round(PixelCoord);
+        Result = GetPixelColor(Nearest.X, Nearest.Y);
+    }
+    else if (Filter == ImageFiltering::BilinearInterpolation)
+    {
+    }
+
+    return Result;
+}

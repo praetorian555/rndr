@@ -14,13 +14,14 @@
 struct VertexData
 {
     rndr::Point3r Position;
-    rndr::Color Color;
+    rndr::Point2r TextureCoords;
 };
 
 struct ConstantData
 {
     rndr::Transform* FromModelToWorld;
     rndr::Camera* Camera;
+    rndr::Image* Texture;
 };
 
 rndr::Model* CreateModel()
@@ -45,17 +46,25 @@ rndr::Model* CreateModel()
     std::shared_ptr<rndr::PixelShader> PixelShader = std::make_shared<rndr::PixelShader>();
     PixelShader->Callback = [](const rndr::PerPixelInfo& Info, real& DepthValue)
     {
-        VertexData* Data0 = (VertexData*)Info.VertexData[0];
-        VertexData* Data1 = (VertexData*)Info.VertexData[1];
-        VertexData* Data2 = (VertexData*)Info.VertexData[2];
+        const ConstantData* const Constants = (ConstantData*)Info.Constants;
 
-        rndr::Color Result;
+        const VertexData* const Data0 = (VertexData*)Info.VertexData[0];
+        const VertexData* const Data1 = (VertexData*)Info.VertexData[1];
+        const VertexData* const Data2 = (VertexData*)Info.VertexData[2];
+
+        rndr::Point2r TexCoord;
 
         // clang-format off
-        Result = Data0->Color * Info.Barycentric[0] +
-                 Data1->Color * Info.Barycentric[1] +
-                 Data2->Color * Info.Barycentric[2];
+        TexCoord.X = Data0->TextureCoords.X * Info.Barycentric[0] +
+                     Data1->TextureCoords.X * Info.Barycentric[1] +
+                     Data2->TextureCoords.X * Info.Barycentric[2];
+
+        TexCoord.Y = Data0->TextureCoords.Y * Info.Barycentric[0] +
+                     Data1->TextureCoords.Y * Info.Barycentric[1] +
+                     Data2->TextureCoords.Y * Info.Barycentric[2];
         // clang-format on
+
+        rndr::Color Result = Constants->Texture->Sample(TexCoord, false);
 
         return Result;
     };
@@ -70,14 +79,14 @@ rndr::Model* CreateModel()
     // clang-format off
     std::vector<VertexData> Data =
     {
-        {{-0.5, -0.5,  0.5}, {1, 0, 0, 1}}, // 0
-        {{ 0.5, -0.5,  0.5}, {0, 1, 0, 1}}, // 1
-        {{-0.5,  0.5,  0.5}, {0, 0, 1, 1}}, // 2
-        {{ 0.5,  0.5,  0.5}, {1, 1, 0, 1}}, // 3
-        {{-0.5, -0.5, -0.5}, {1, 0, 1, 1}}, // 5
-        {{ 0.5, -0.5, -0.5}, {0, 1, 1, 1}}, // 4
-        {{-0.5,  0.5, -0.5}, {1, 1, 1, 1}}, // 7
-        {{ 0.5,  0.5, -0.5}, {0.9, 0.2, 0.3, 1}}, // 6
+        {{-0.5, -0.5,  0.5}, {0, 0}}, // 0
+        {{ 0.5, -0.5,  0.5}, {1, 0}}, // 1
+        {{-0.5,  0.5,  0.5}, {0, 1}}, // 2
+        {{ 0.5,  0.5,  0.5}, {1, 1}}, // 3
+        {{-0.5, -0.5, -0.5}, {0, 0}}, // 5
+        {{ 0.5, -0.5, -0.5}, {0, 1}}, // 4
+        {{-0.5,  0.5, -0.5}, {1, 0}}, // 7
+        {{ 0.5,  0.5, -0.5}, {1, 1}}, // 6
     };
     // clang-format on
 
@@ -161,7 +170,7 @@ int main()
 
         rndr::Image* ColorImage = Window.GetColorImage();
         rndr::Image* DepthImage = Window.GetDepthImage();
-        ColorImage->ClearColorBuffer(rndr::Color::Black);
+        ColorImage->ClearColorBuffer(rndr::Color::White);
         DepthImage->ClearDepthBuffer(rndr::Infinity);
 
         Model->GetPipeline()->ColorImage = ColorImage;
@@ -171,7 +180,7 @@ int main()
                             rndr::RotateY(0.02 * TotalTime) * rndr::RotateX(0.035 * TotalTime) *
                             rndr ::RotateZ(0.012 * TotalTime) * rndr::Scale(10, 10, 10);
 
-        ConstantData Constants{&T, Camera.get()};
+        ConstantData Constants{&T, Camera.get(), Texture.get()};
 
         Model->SetConstants(Constants);
 

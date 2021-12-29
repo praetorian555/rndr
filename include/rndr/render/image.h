@@ -19,6 +19,9 @@ struct ImageConfig
 
     rndr::PixelLayout PixelLayout = rndr::PixelLayout::A8R8G8B8;
     rndr::PixelFormat PixelFormat = rndr::PixelFormat::sRGBA;
+
+    rndr::ImageFiltering MagFilter = rndr::ImageFiltering::NearestNeighbor;
+    rndr::ImageFiltering MinFilter = rndr::ImageFiltering::NearestNeighbor;
 };
 
 /**
@@ -135,6 +138,11 @@ public:
      * @note Valid if image is used a depth buffer.
      */
     void ClearDepthBuffer(real ClearValue);
+
+    /**
+     * Calculate image sample based on UV coordinates.
+     */
+    rndr::Color Sample(const Point2r& TexCoord, bool Magnified);
 
 private:
     ImageConfig m_Config;
