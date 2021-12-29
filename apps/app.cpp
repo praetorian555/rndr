@@ -122,7 +122,8 @@ int main()
     std::shared_ptr<rndr::Camera> Camera =
         std::make_unique<rndr::PerspectiveCamera>(FromWorldToCamera, Width, Height, FOV, Near, Far);
 #else
-    std::shared_ptr<rndr::Camera> Camera = std::make_unique<rndr::OrtographicCamera>(FromWorldToCamera, Width, Height, Near, Far);
+    std::shared_ptr<rndr::Camera> Camera =
+        std::make_unique<rndr::OrtographicCamera>(FromWorldToCamera, Width, Height, Near, Far);
 #endif
 
     rndr::WindowDelegates::OnResize.Add([Camera](rndr::Window*, int Width, int Height)

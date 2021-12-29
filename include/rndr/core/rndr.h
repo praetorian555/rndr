@@ -10,13 +10,13 @@
 
 #if !RNDR_WINDOWS
 #error "Platform not supported!"
-#endif // !RNDR_WINDOWS
+#endif  // !RNDR_WINDOWS
 
 #if RNDR_WINDOWS
 #define RNDR_LITTLE_ENDIAN 1
 #else
 #define RNDR_BIG_ENDIAN 1
-#endif // RNDR_WINDOWS
+#endif  // RNDR_WINDOWS
 
 #if !NDEBUG
 #define RNDR_DEBUG 1

@@ -19,7 +19,10 @@ public:
     Model() = default;
     ~Model() { delete m_Constants; }
 
-    void SetPipeline(const std::shared_ptr<Pipeline>& PipelineConfig) { m_PipelineConfig = PipelineConfig; }
+    void SetPipeline(const std::shared_ptr<Pipeline>& PipelineConfig)
+    {
+        m_PipelineConfig = PipelineConfig;
+    }
 
     template <typename T>
     void SetVertexData(const std::vector<T>& VertexData)

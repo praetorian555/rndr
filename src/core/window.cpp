@@ -120,9 +120,9 @@ void rndr::Window::RenderToWindow()
 
     HDC DC = GetDC(WindowHandle);
 
-    StretchDIBits(DC, 0, 0, m_CurrentWidth, m_CurrentHeight, 0, 0,
-                  m_ColorImage->GetConfig().Width, m_ColorImage->GetConfig().Height,
-                  m_ColorImage->GetBuffer(), &BitmapInfo, DIB_RGB_COLORS, SRCCOPY);
+    StretchDIBits(DC, 0, 0, m_CurrentWidth, m_CurrentHeight, 0, 0, m_ColorImage->GetConfig().Width,
+                  m_ColorImage->GetConfig().Height, m_ColorImage->GetBuffer(), &BitmapInfo,
+                  DIB_RGB_COLORS, SRCCOPY);
 }
 
 LRESULT CALLBACK WindowProc(HWND WindowHandle, UINT MsgCode, WPARAM ParamW, LPARAM ParamL)

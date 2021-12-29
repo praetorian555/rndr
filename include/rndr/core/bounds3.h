@@ -120,7 +120,8 @@ public:
 
     Vector3<T> Extent() const
     {
-        Vector3<T> Extent{std::abs(pMax.X - pMin.X), std::abs(pMax.Y - pMin.Y), std::abs(pMax.Z - pMin.Z)};
+        Vector3<T> Extent{std::abs(pMax.X - pMin.X), std::abs(pMax.Y - pMin.Y),
+                          std::abs(pMax.Z - pMin.Z)};
         return Extent;
     }
 
