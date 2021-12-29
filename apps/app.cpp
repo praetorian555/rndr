@@ -5,6 +5,7 @@
 #include "rndr/core/color.h"
 #include "rndr/core/transform.h"
 #include "rndr/core/window.h"
+#include "rndr/core/utilities.h"
 
 #include "rndr/render/model.h"
 #include "rndr/render/pipeline.h"
@@ -105,6 +106,10 @@ int main()
     rndr::Window Window;
     rndr::SoftwareRenderer Renderer;
 
+    const std::string AssetPath = ASSET_DIR "/SMS_Ranger_Title.bmp";
+    rndr::Image* Texture = rndr::ReadImageFile(AssetPath);
+    Texture->SetPixelLayout(rndr::PixelLayout::A8R8G8B8);
+
     rndr::Model* Model = CreateModel();
 
     const int Width = Window.GetColorImage()->GetConfig().Width;
@@ -171,6 +176,7 @@ int main()
         Model->SetConstants(Constants);
 
         Renderer.Draw(Model, 1);
+        ColorImage->CopyFrom(*Texture, rndr::Point2i{100, 100});
 
         Window.RenderToWindow();
 
