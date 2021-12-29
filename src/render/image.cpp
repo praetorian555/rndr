@@ -160,6 +160,9 @@ static rndr::Color BlendColor(rndr::PixelFormat Format, rndr::Color Src, rndr::C
 
         return NewValue.ToGammaCorrectSpace(2.4);
     }
+
+    assert(false);
+    return rndr::Color::Pink;
 }
 
 void rndr::Image::CopyFrom(const rndr::Image& Source, const Point2i& BottomLeft)
@@ -195,5 +198,36 @@ void rndr::Image::CopyFrom(const rndr::Image& Source, const Point2i& BottomLeft)
             Color BlendColor = ::BlendColor(m_Config.PixelFormat, SourceColor, DstColor);
             SetPixel(BottomLeft + Position, BlendColor);
         }
+    }
+}
+
+void rndr::Image::SetPixelLayout(rndr::PixelLayout Layout)
+{
+    if (m_Config.PixelLayout == Layout)
+    {
+        return;
+    }
+
+    const int OldPixelSize = rndr::GetPixelSize(m_Config.PixelLayout);
+    const int NewPixelSize = rndr::GetPixelSize(Layout);
+
+    // TODO(mkostic): Add support for this case
+    assert(OldPixelSize == NewPixelSize);
+
+    if (OldPixelSize == 4 && NewPixelSize == 4)
+    {
+        uint32_t* OldPixels = (uint32_t*)m_Buffer;
+        uint32_t* NewPixels = (uint32_t*)m_Buffer;
+        const int Count = m_Config.Width * m_Config.Height;
+        for (int i = 0; i < Count; i++)
+        {
+            const Color Color(OldPixels[i], m_Config.PixelLayout);
+            NewPixels[i] = Color.ToUInt(Layout);
+        }
+    }
+    else
+    {
+        // TODO(mkostic): Add support for this case
+        assert(false);
     }
 }

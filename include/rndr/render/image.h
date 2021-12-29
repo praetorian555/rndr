@@ -38,6 +38,11 @@ public:
     void UpdateSize(int Width, int Height);
 
     /**
+     * Change the ordering and/or a size of channels in a pixel.
+     */
+    void SetPixelLayout(rndr::PixelLayout Layout);
+
+    /**
      * Get data buffer.
      *
      * @return Returns a pointer to the byte array.
