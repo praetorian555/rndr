@@ -124,3 +124,76 @@ real rndr::Image::GetAspectRatio() const
 {
     return m_Config.Height != 0 ? m_Config.Width / (real)m_Config.Height : 1;
 }
+
+static rndr::Color BlendColor(rndr::PixelFormat Format, rndr::Color Src, rndr::Color Dst)
+{
+    if (Format == rndr::PixelFormat::RGB || Format == rndr::PixelFormat::sRGB)
+    {
+        return Dst;
+    }
+
+    if (Format == rndr::PixelFormat::RGBA)
+    {
+        rndr::Color NewValue;
+        real InvColorSrc = 1 - Src.A;
+
+        NewValue.R = Src.A * Src.R + Dst.R * Dst.A * InvColorSrc;
+        NewValue.G = Src.A * Src.G + Dst.G * Dst.A * InvColorSrc;
+        NewValue.B = Src.A * Src.B + Dst.B * Dst.A * InvColorSrc;
+        NewValue.A = Src.A + Dst.A * InvColorSrc;
+
+        return NewValue;
+    }
+
+    if (Format == rndr::PixelFormat::sRGBA)
+    {
+        rndr::Color LinSrc = Src.ToLinearSpace(2.4);
+        rndr::Color LinDst = Dst.ToLinearSpace(2.4);
+
+        rndr::Color NewValue;
+        real InvColorSrc = 1 - Src.A;
+
+        NewValue.R = LinSrc.A * LinSrc.R + LinDst.R * LinDst.A * InvColorSrc;
+        NewValue.G = LinSrc.A * LinSrc.G + LinDst.G * LinDst.A * InvColorSrc;
+        NewValue.B = LinSrc.A * LinSrc.B + LinDst.B * LinDst.A * InvColorSrc;
+        NewValue.A = LinSrc.A + LinDst.A * InvColorSrc;
+
+        return NewValue.ToGammaCorrectSpace(2.4);
+    }
+}
+
+void rndr::Image::CopyFrom(const rndr::Image& Source, const Point2i& BottomLeft)
+{
+    if (!rndr::Overlaps(m_Bounds, Source.m_Bounds))
+    {
+        return;
+    }
+
+    // This tells us how many pixels to copy along X and Y
+    const rndr::Bounds3r OverlapBounds = rndr::Intersect(m_Bounds, Source.m_Bounds);
+    Point2i SourceStart{0, 0};
+    if (!rndr::Inside(Source.m_Bounds.pMin, m_Bounds))
+    {
+        Point2i Min{(int)Source.m_Bounds.pMin.X, (int)Source.m_Bounds.pMin.Y};
+        if (Min.X < 0)
+        {
+            SourceStart.X = std::abs(Min.X);
+        }
+        if (Min.Y < 0)
+        {
+            SourceStart.Y = std::abs(Min.Y);
+        }
+    }
+
+    for (int X = 0; X < OverlapBounds.Extent().X; X++)
+    {
+        for (int Y = 0; Y < OverlapBounds.Extent().Y; Y++)
+        {
+            Point2i Position{X, Y};
+            Color SourceColor = Source.GetPixelColor(SourceStart + Position);
+            Color DstColor = GetPixelColor(BottomLeft + Position);
+            Color BlendColor = ::BlendColor(m_Config.PixelFormat, SourceColor, DstColor);
+            SetPixel(BottomLeft + Position, BlendColor);
+        }
+    }
+}
