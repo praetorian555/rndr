@@ -25,8 +25,8 @@ void Log(Level logLevel, const char* format, ...);
 
 }  // namespace Log
 
-#define RNDR_ERROR(format, ...) Log::Log(Log::Level::Error, format, __VA_ARGS__)
-#define RNDR_WARNING(format, ...) Log::Log(Log::Level::Warning, format, __VA_ARGS__)
-#define RNDR_DEBUG(format, ...) Log::Log(Log::Level::Debug, format, __VA_ARGS__)
-#define RNDR_INFO(format, ...) Log::Log(Log::Level::Info, format, __VA_ARGS__)
-#define RNDR_TRACE(format, ...) Log::Log(Log::Level::Trace, format, __VA_ARGS__)
+#define RNDR_LOG_ERROR(format, ...) Log::Log(Log::Level::Error, format, __VA_ARGS__)
+#define RNDR_LOG_WARNING(format, ...) Log::Log(Log::Level::Warning, format, __VA_ARGS__)
+#define RNDR_LOG_DEBUG(format, ...) Log::Log(Log::Level::Debug, format, __VA_ARGS__)
+#define RNDR_LOG_INFO(format, ...) Log::Log(Log::Level::Info, format, __VA_ARGS__)
+#define RNDR_LOG_TRACE(format, ...) Log::Log(Log::Level::Trace, format, __VA_ARGS__)

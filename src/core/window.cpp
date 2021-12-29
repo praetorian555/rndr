@@ -24,7 +24,7 @@ rndr::Window::Window(const rndr::WindowConfig& Config) : m_Config(Config)
     ColorImageConfig.PixelFormat = PixelFormat::sRGBA;
     ColorImageConfig.PixelLayout = PixelLayout::A8R8G8B8;
 
-    m_ColorImage = std::make_unique<Image>(new Image(ColorImageConfig));
+    m_ColorImage = std::make_unique<Image>(ColorImageConfig);
 
     rndr::ImageConfig DepthImageConfig;
     DepthImageConfig.Width = Config.Width;
@@ -32,7 +32,7 @@ rndr::Window::Window(const rndr::WindowConfig& Config) : m_Config(Config)
     DepthImageConfig.PixelFormat = PixelFormat::DEPTH;
     DepthImageConfig.PixelLayout = PixelLayout::DEPTH_F32;
 
-    m_DepthImage = std::make_unique<Image>(new Image(DepthImageConfig));
+    m_DepthImage = std::make_unique<Image>(DepthImageConfig);
 
     rndr::WindowDelegates::OnResize.Add(
         [this](Window* Wind, int Width, int Height)
@@ -133,7 +133,7 @@ LRESULT CALLBACK WindowProc(HWND WindowHandle, UINT MsgCode, WPARAM ParamW, LPAR
     {
         case WM_CREATE:
         {
-            RNDR_INFO("WindowProc: Event WM_CREATE");
+            RNDR_LOG_INFO("WindowProc: Event WM_CREATE");
 
             CREATESTRUCT* CreateStruct = reinterpret_cast<CREATESTRUCT*>(ParamL);
             rndr::Window* Wind = reinterpret_cast<rndr::Window*>(CreateStruct->lpCreateParams);
@@ -147,7 +147,7 @@ LRESULT CALLBACK WindowProc(HWND WindowHandle, UINT MsgCode, WPARAM ParamW, LPAR
             UINT Width = LOWORD(ParamL);
             UINT Height = HIWORD(ParamL);
 
-            RNDR_INFO("WindowProc: Event WM_SIZE (%d, %d)", Width, Height);
+            RNDR_LOG_INFO("WindowProc: Event WM_SIZE (%d, %d)", Width, Height);
 
             LONG_PTR Ptr = GetWindowLongPtr(WindowHandle, GWLP_USERDATA);
             rndr::Window* Wind = reinterpret_cast<rndr::Window*>(Ptr);
@@ -158,7 +158,7 @@ LRESULT CALLBACK WindowProc(HWND WindowHandle, UINT MsgCode, WPARAM ParamW, LPAR
         }
         case WM_CLOSE:
         {
-            RNDR_INFO("WindowProc: Event WM_CLOSE");
+            RNDR_LOG_INFO("WindowProc: Event WM_CLOSE");
 
             rndr::Window* Wind =
                 reinterpret_cast<rndr::Window*>(GetWindowLongPtr(WindowHandle, GWLP_USERDATA));
@@ -170,13 +170,13 @@ LRESULT CALLBACK WindowProc(HWND WindowHandle, UINT MsgCode, WPARAM ParamW, LPAR
         }
         case WM_DESTROY:
         {
-            RNDR_INFO("WindowProc: Event WM_DESTROY");
+            RNDR_LOG_INFO("WindowProc: Event WM_DESTROY");
 
             break;
         }
         case WM_QUIT:
         {
-            RNDR_INFO("WindowProc: Event WM_QUIT");
+            RNDR_LOG_INFO("WindowProc: Event WM_QUIT");
 
             break;
         }
@@ -188,7 +188,7 @@ LRESULT CALLBACK WindowProc(HWND WindowHandle, UINT MsgCode, WPARAM ParamW, LPAR
 
             int X = GET_X_LPARAM(ParamL);
             int Y = GET_Y_LPARAM(ParamL);
-            RNDR_INFO("LeftMouseButton: DOWN (%d, %d)", X, Height - Y);
+            RNDR_LOG_INFO("LeftMouseButton: DOWN (%d, %d)", X, Height - Y);
             break;
         }
         case WM_KEYDOWN:
