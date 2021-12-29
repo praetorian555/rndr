@@ -64,6 +64,15 @@ enum class ImageFileFormat
 };
 
 /**
+ * Supported filtering techniques used for minification and magnification of an image.
+ */
+enum class ImageFiltering
+{
+    NearestNeighbor,
+    BilinearInterpolation
+};
+
+/**
  * Opaque type that represents an OS window handle.
  */
 using NativeWindowHandle = uintptr_t;
