@@ -9,7 +9,7 @@
 
 #include "rndr/render/model.h"
 #include "rndr/render/pipeline.h"
-#include "rndr/render/softrenderer.h"
+#include "rndr/render/rasterizer.h"
 
 struct VertexData
 {
@@ -113,7 +113,7 @@ rndr::Model* CreateModel()
 int main()
 {
     rndr::Window Window;
-    rndr::SoftwareRenderer Renderer;
+    rndr::Rasterizer Renderer;
 
     const std::string AssetPath = ASSET_DIR "/SMS_Ranger_Title.bmp";
     std::unique_ptr<rndr::Image> Texture{rndr::ReadImageFile(AssetPath)};

@@ -11,10 +11,13 @@ namespace rndr
 class Image;
 class Model;
 
-class SoftwareRenderer
+/**
+ * Renderer that uses rasterization to render. Rasterization is implemented fully on CPU side.
+ */
+class Rasterizer
 {
 public:
-    SoftwareRenderer() = default;
+    Rasterizer() = default;
 
     void SetPipeline(const rndr::Pipeline* Pipeline) { m_Pipeline = Pipeline; }
 

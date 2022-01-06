@@ -1,4 +1,4 @@
-#include "rndr/render/softrenderer.h"
+#include "rndr/render/rasterizer.h"
 
 #include "rndr/core/bounds3.h"
 #include "rndr/render/image.h"
@@ -29,7 +29,7 @@ static bool LimitTriangleToSurface(rndr::Bounds3r& TriangleBounds, const rndr::I
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 
-void rndr::SoftwareRenderer::Draw(rndr::Model* Model, int InstanceCount)
+void rndr::Rasterizer::Draw(rndr::Model* Model, int InstanceCount)
 {
     if (!Model->GetPipeline())
     {
@@ -58,7 +58,7 @@ void rndr::SoftwareRenderer::Draw(rndr::Model* Model, int InstanceCount)
     }
 }
 
-void rndr::SoftwareRenderer::DrawTriangles(void* Constants,
+void rndr::Rasterizer::DrawTriangles(void* Constants,
                                            const std::vector<uint8_t>& VertexData,
                                            int VertexDataStride,
                                            const std::vector<int>& Indices,
@@ -91,7 +91,7 @@ void rndr::SoftwareRenderer::DrawTriangles(void* Constants,
 }
 
 // Positions should be in raster space.
-void rndr::SoftwareRenderer::DrawTriangle(void* Constants,
+void rndr::Rasterizer::DrawTriangle(void* Constants,
                                           const Point3r (&Positions)[3],
                                           void** VertexData)
 {
@@ -269,7 +269,7 @@ static bool LimitTriangleToSurface(rndr::Bounds3r& TriangleBounds, const rndr::I
     return true;
 }
 
-bool rndr::SoftwareRenderer::RunDepthTest(real NewDepthValue, const Point2i& PixelPosition)
+bool rndr::Rasterizer::RunDepthTest(real NewDepthValue, const Point2i& PixelPosition)
 {
     if (NewDepthValue < 0 || NewDepthValue > 1)
     {
@@ -293,7 +293,7 @@ bool rndr::SoftwareRenderer::RunDepthTest(real NewDepthValue, const Point2i& Pix
     return true;
 }
 
-rndr::Color rndr::SoftwareRenderer::ApplyAlphaCompositing(Color NewValue,
+rndr::Color rndr::Rasterizer::ApplyAlphaCompositing(Color NewValue,
                                                           const Point2i& PixelPosition)
 {
     rndr::Color CurrentColor = m_Pipeline->ColorImage->GetPixelColor(PixelPosition);
@@ -311,7 +311,7 @@ rndr::Color rndr::SoftwareRenderer::ApplyAlphaCompositing(Color NewValue,
     return NewValue;
 }
 
-rndr::Point3r rndr::SoftwareRenderer::FromNDCToRasterSpace(const Point3r& Point)
+rndr::Point3r rndr::Rasterizer::FromNDCToRasterSpace(const Point3r& Point)
 {
     int Width = m_Pipeline->ColorImage->GetConfig().Width;
     int Height = m_Pipeline->ColorImage->GetConfig().Height;
@@ -323,7 +323,7 @@ rndr::Point3r rndr::SoftwareRenderer::FromNDCToRasterSpace(const Point3r& Point)
     return Result;
 }
 
-rndr::Point3r rndr::SoftwareRenderer::FromRasterToNDCSpace(const Point3r& Point)
+rndr::Point3r rndr::Rasterizer::FromRasterToNDCSpace(const Point3r& Point)
 {
     int Width = m_Pipeline->ColorImage->GetConfig().Width;
     int Height = m_Pipeline->ColorImage->GetConfig().Height;
