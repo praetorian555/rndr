@@ -9,6 +9,9 @@ namespace rndr
 {
 
 template <typename T>
+class Point3;
+
+template <typename T>
 inline bool IsNaN(const T v);
 
 template <typename T>
@@ -27,6 +30,9 @@ public:
     {
         assert(!HasNaNs());
     }
+
+    template <typename U>
+    explicit Point2(const Point3<U>& p);
 
     void Set(T val, int i)
     {
@@ -67,6 +73,20 @@ public:
     {
         X += other.X;
         Y += other.Y;
+        return *this;
+    }
+
+    template <typename U>
+    Point2<T> operator+(const U& Value) const
+    {
+        return Point2(X + Value, Y + Value);
+    }
+
+    template <typename U>
+    Point2<T>& operator+=(const U& Value)
+    {
+        X += Value;
+        Y += Value;
         return *this;
     }
 

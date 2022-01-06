@@ -115,4 +115,16 @@ inline bool IsPowerOf2(T v)
     return v && !(v & (v - 1));
 }
 
+template <typename T>
+template <typename U>
+Point2<T>::Point2(const Point3<U>& p) : X(p.X), Y(p.Y)
+{
+}
+
+template <typename T>
+template <typename U>
+Point3<T>::Point3(const Point2<U>& p) : X(p.X), Y(p.Y), Z(0)
+{
+}
+
 }  // namespace rndr
