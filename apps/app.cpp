@@ -6,6 +6,7 @@
 #include "rndr/core/transform.h"
 #include "rndr/core/utilities.h"
 #include "rndr/core/window.h"
+#include "rndr/core/threading.h"
 
 #include "rndr/render/model.h"
 #include "rndr/render/pipeline.h"
@@ -112,6 +113,8 @@ rndr::Model* CreateModel()
 
 int main()
 {
+    rndr::SetupThreading();
+
     rndr::Window Window;
     rndr::Rasterizer Renderer;
 

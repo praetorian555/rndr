@@ -1,8 +1,9 @@
 #include "rndr/render/rasterizer.h"
 
 #include "rndr/core/bounds3.h"
-#include "rndr/render/image.h"
+#include "rndr/core/threading.h"
 
+#include "rndr/render/image.h"
 #include "rndr/render/model.h"
 
 // Helpers ////////////////////////////////////////////////////////////////////////////////////////
@@ -59,41 +60,49 @@ void rndr::Rasterizer::Draw(rndr::Model* Model, int InstanceCount)
 }
 
 void rndr::Rasterizer::DrawTriangles(void* Constants,
-                                           const std::vector<uint8_t>& VertexData,
-                                           int VertexDataStride,
-                                           const std::vector<int>& Indices,
-                                           void* InstanceData)
+                                     const std::vector<uint8_t>& VertexData,
+                                     int VertexDataStride,
+                                     const std::vector<int>& Indices,
+                                     void* InstanceData)
 {
     assert(m_Pipeline);
     assert(Indices.size() != 0);
     assert(Indices.size() % 3 == 0);
 
-    for (int i = 0; i < Indices.size(); i += 3)
-    {
-        Point3r Positions[3];
-        void* Data[3];
-
-        for (int j = 0; j < 3; j++)
+    const int EndIndex = Indices.size();
+    const int StartIndex = 0;
+    const int BatchSize = 1;
+    const int StepSize = 3;
+    rndr::ForEach(
+        EndIndex,
+        [&](int i)
         {
-            PerVertexInfo VertexInfo;
-            VertexInfo.PrimitiveIndex = i / 3;
-            VertexInfo.VertexIndex = Indices[i + j];
-            VertexInfo.VertexData = (void*)&VertexData.data()[Indices[i + j] * VertexDataStride];
-            VertexInfo.InstanceData = InstanceData;
-            VertexInfo.Constants = Constants;
-            Data[j] = VertexInfo.VertexData;
-            Positions[j] = m_Pipeline->VertexShader->Callback(VertexInfo);
-            Positions[j] = FromNDCToRasterSpace(Positions[j]);
-        }
+            Point3r Positions[3];
+            void* Data[3];
 
-        DrawTriangle(Constants, Positions, Data);
-    }
+            for (int j = 0; j < 3; j++)
+            {
+                PerVertexInfo VertexInfo;
+                VertexInfo.PrimitiveIndex = i / 3;
+                VertexInfo.VertexIndex = Indices[i + j];
+                VertexInfo.VertexData =
+                    (void*)&VertexData.data()[Indices[i + j] * VertexDataStride];
+                VertexInfo.InstanceData = InstanceData;
+                VertexInfo.Constants = Constants;
+                Data[j] = VertexInfo.VertexData;
+                Positions[j] = m_Pipeline->VertexShader->Callback(VertexInfo);
+                Positions[j] = FromNDCToRasterSpace(Positions[j]);
+            }
+
+            DrawTriangle(Constants, Positions, Data);
+        },
+        StartIndex, BatchSize, StepSize);
 }
 
 // Positions should be in raster space.
 void rndr::Rasterizer::DrawTriangle(void* Constants,
-                                          const Point3r (&Positions)[3],
-                                          void** VertexData)
+                                    const Point3r (&Positions)[3],
+                                    void** VertexData)
 {
     Bounds3r TriangleBounds;
     GetTriangleBounds(Positions, TriangleBounds);
@@ -120,9 +129,9 @@ void rndr::Rasterizer::DrawTriangle(void* Constants,
     TriConstants.OneOverPointDepth[2] = 1 / Positions[2].Z;
 
     // Let's do stuff
-    for (real Y = TriangleBounds.pMin.Y; Y <= TriangleBounds.pMax.Y; Y += 1)
-    {
-        for (real X = TriangleBounds.pMin.X; X <= TriangleBounds.pMax.X; X += 1)
+    rndr::ForEach(
+        (Point2r)TriangleBounds.pMax + 1, TriangleBounds.Extent().X,
+        [&](real X, real Y)
         {
             PerPixelInfo PixelInfo;
             PixelInfo.Position = Point2i{(int)(X - 0.5), (int)(Y - 0.5)};
@@ -142,7 +151,7 @@ void rndr::Rasterizer::DrawTriangle(void* Constants,
                 {
                     if (!RunDepthTest(NewPixelDepth, PixelInfo.Position))
                     {
-                        continue;
+                        return;
                     }
 
                     m_Pipeline->DepthImage->SetPixelDepth(PixelInfo.Position, NewPixelDepth);
@@ -156,7 +165,7 @@ void rndr::Rasterizer::DrawTriangle(void* Constants,
                 {
                     if (!RunDepthTest(NewPixelDepth, PixelInfo.Position))
                     {
-                        continue;
+                        return;
                     }
 
                     m_Pipeline->DepthImage->SetPixelDepth(PixelInfo.Position, NewPixelDepth);
@@ -172,8 +181,8 @@ void rndr::Rasterizer::DrawTriangle(void* Constants,
                 // Write color into color buffer
                 m_Pipeline->ColorImage->SetPixel(PixelInfo.Position, Color);
             }
-        }
-    }
+        },
+        (Point2r)TriangleBounds.pMin);
 }
 
 // Cross product of two vectors but ignoring Z coordinate
@@ -293,8 +302,7 @@ bool rndr::Rasterizer::RunDepthTest(real NewDepthValue, const Point2i& PixelPosi
     return true;
 }
 
-rndr::Color rndr::Rasterizer::ApplyAlphaCompositing(Color NewValue,
-                                                          const Point2i& PixelPosition)
+rndr::Color rndr::Rasterizer::ApplyAlphaCompositing(Color NewValue, const Point2i& PixelPosition)
 {
     rndr::Color CurrentColor = m_Pipeline->ColorImage->GetPixelColor(PixelPosition);
     if (m_Pipeline->bApplyGammaCorrection)
