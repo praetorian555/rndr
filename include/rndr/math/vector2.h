@@ -120,6 +120,12 @@ inline T AbsDot(const Vector2<T>& v1, const Vector2<T>& v2)
 }
 
 template <typename T>
+inline real Cross(const Vector2<T>& v1, const Vector2<T>& v2)
+{
+    return v1.X * v2.Y - v2.X * v1.Y;
+}
+
+template <typename T>
 inline Vector2<T> Normalize(const Vector2<T>& v)
 {
     return v / v.Length();

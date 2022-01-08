@@ -148,6 +148,12 @@ inline Vector3<T> Cross(const Vector3<T>& v1, const Vector3<T>& v2)
 }
 
 template <typename T>
+inline real Cross2D(const Vector3<T>& v1, const Vector3<T>& v2)
+{
+    return v1.X * v2.Y - v2.X * v1.Y;
+}
+
+template <typename T>
 inline Vector3<T> Normalize(const Vector3<T>& v)
 {
     return v / v.Length();
