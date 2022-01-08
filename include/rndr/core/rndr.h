@@ -73,6 +73,23 @@ enum class ImageFiltering
 };
 
 /**
+ * Supported depth test operations.
+ */
+enum class DepthTest
+{
+    None,
+    GreaterThan,
+    LesserThen
+};
+
+enum class WindingOrder : int
+{
+    CW = -1,
+    CCW = 1
+};
+
+
+/**
  * Opaque type that represents an OS window handle.
  */
 using NativeWindowHandle = uintptr_t;

@@ -7,19 +7,6 @@ namespace rndr
 
 class Image;
 
-enum class DepthTest
-{
-    None,
-    GreaterThan,
-    LesserThen
-};
-
-enum class WindingOrder : int
-{
-    CW = -1,
-    CCW = 1
-};
-
 struct Pipeline
 {
     rndr::WindingOrder WindingOrder = rndr::WindingOrder::CCW;
