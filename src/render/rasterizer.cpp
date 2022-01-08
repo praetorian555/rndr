@@ -1,7 +1,9 @@
 #include "rndr/render/rasterizer.h"
 
 #include "rndr/core/bounds3.h"
+#include "rndr/core/coordinates.h"
 #include "rndr/core/threading.h"
+#include "rndr/core/barycentric.h"
 
 #include "rndr/render/image.h"
 #include "rndr/render/model.h"
@@ -16,17 +18,8 @@ struct TriangleConstants
     real OneOverTriangleArea;
 };
 
-static real Edge(const rndr::Vector3r& Edge, const rndr::Vector3r& Vec);
-static bool GetBarycentricCoordinates(rndr::WindingOrder WindingOrder,
-                                      const rndr::Point3r& Point,
-                                      const rndr::Point3r (&Points)[3],
-                                      const TriangleConstants& Constants,
-                                      real (&BarycentricCoordinates)[3]);
-static real CalcPixelDepth(const real (&Barycentric)[3], const real (&OneOverDepth)[3]);
-static void GetTriangleBounds(const rndr::Point3r (&Positions)[3], rndr::Bounds3r& TriangleBounds);
-static bool IsWindingOrderCorrect(const rndr::Point3r (&Positions)[3],
-                                  rndr::WindingOrder WindingOrder);
-static bool LimitTriangleToSurface(rndr::Bounds3r& TriangleBounds, const rndr::Image* Image);
+static void GetTriangleBounds(const rndr::Point3r (&Positions)[3], rndr::Bounds2i& TriangleBounds);
+static bool LimitTriangleToSurface(rndr::Bounds2i& TriangleBounds, const rndr::Image* Image);
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -73,30 +66,27 @@ void rndr::Rasterizer::DrawTriangles(void* Constants,
     const int StartIndex = 0;
     const int BatchSize = 1;
     const int StepSize = 3;
-    rndr::ForEach(
-        EndIndex,
-        [&](int i)
+
+    for (int i = 0; i < Indices.size(); i += 3)
+    {
+        Point3r Positions[3];
+        void* Data[3];
+
+        for (int j = 0; j < 3; j++)
         {
-            Point3r Positions[3];
-            void* Data[3];
+            PerVertexInfo VertexInfo;
+            VertexInfo.PrimitiveIndex = i / 3;
+            VertexInfo.VertexIndex = Indices[i + j];
+            VertexInfo.VertexData = (void*)&VertexData.data()[Indices[i + j] * VertexDataStride];
+            VertexInfo.InstanceData = InstanceData;
+            VertexInfo.Constants = Constants;
+            Data[j] = VertexInfo.VertexData;
+            Positions[j] = m_Pipeline->VertexShader->Callback(VertexInfo);
+            Positions[j] = FromNDCToRasterSpace(Positions[j]);
+        }
 
-            for (int j = 0; j < 3; j++)
-            {
-                PerVertexInfo VertexInfo;
-                VertexInfo.PrimitiveIndex = i / 3;
-                VertexInfo.VertexIndex = Indices[i + j];
-                VertexInfo.VertexData =
-                    (void*)&VertexData.data()[Indices[i + j] * VertexDataStride];
-                VertexInfo.InstanceData = InstanceData;
-                VertexInfo.Constants = Constants;
-                Data[j] = VertexInfo.VertexData;
-                Positions[j] = m_Pipeline->VertexShader->Callback(VertexInfo);
-                Positions[j] = FromNDCToRasterSpace(Positions[j]);
-            }
-
-            DrawTriangle(Constants, Positions, Data);
-        },
-        StartIndex, BatchSize, StepSize);
+        DrawTriangle(Constants, Positions, Data);
+    }
 }
 
 // Positions should be in raster space.
@@ -104,7 +94,7 @@ void rndr::Rasterizer::DrawTriangle(void* Constants,
                                     const Point3r (&Positions)[3],
                                     void** VertexData)
 {
-    Bounds3r TriangleBounds;
+    Bounds2i TriangleBounds;
     GetTriangleBounds(Positions, TriangleBounds);
 
     if (!LimitTriangleToSurface(TriangleBounds, m_Pipeline->ColorImage))
@@ -112,49 +102,39 @@ void rndr::Rasterizer::DrawTriangle(void* Constants,
         return;
     }
 
-    if (!IsWindingOrderCorrect(Positions, m_Pipeline->WindingOrder))
+    const BarycentricHelper BarHelper(m_Pipeline->WindingOrder, Positions);
+
+    if (!BarHelper.IsWindingOrderCorrect())
     {
         return;
     }
 
-    // Stuff unique for triangle
-    TriangleConstants TriConstants;
-    const real HalfTriangleArea = Edge(Positions[1] - Positions[0], Positions[2] - Positions[0]);
-    TriConstants.OneOverTriangleArea = 1 / HalfTriangleArea;
-    TriConstants.Edges[0] = Positions[2] - Positions[1];
-    TriConstants.Edges[1] = Positions[0] - Positions[2];
-    TriConstants.Edges[2] = Positions[1] - Positions[0];
-    TriConstants.OneOverPointDepth[0] = 1 / Positions[0].Z;
-    TriConstants.OneOverPointDepth[1] = 1 / Positions[1].Z;
-    TriConstants.OneOverPointDepth[2] = 1 / Positions[2].Z;
-
-    // Let's do stuff
-    rndr::ForEach(
-        (Point2r)TriangleBounds.pMax + 1, TriangleBounds.Extent().X,
-        [&](real X, real Y)
+    // X and Y are in discrete space
+    for (int Y = TriangleBounds.pMin.Y; Y <= TriangleBounds.pMax.Y; Y++)
+    {
+        for (int X = TriangleBounds.pMin.X; X <= TriangleBounds.pMax.X; X++)
         {
+            const Point2i PixelPosDiscrete{X, Y};
+
             PerPixelInfo PixelInfo;
-            PixelInfo.Position = Point2i{(int)(X - 0.5), (int)(Y - 0.5)};
+            PixelInfo.Position = PixelPosDiscrete;
             PixelInfo.Constants = Constants;
+            PixelInfo.BarCoords = BarHelper.GetCoordinates(PixelPosDiscrete);
             memcpy(PixelInfo.VertexData, VertexData, sizeof(void*) * 3);
 
-            bool IsInsideTriangle =
-                GetBarycentricCoordinates(m_Pipeline->WindingOrder, Point3r{X, Y, 0}, Positions,
-                                          TriConstants, PixelInfo.Barycentric);
-            if (IsInsideTriangle)
+            if (BarHelper.IsInside(PixelInfo.BarCoords))
             {
-                real NewPixelDepth =
-                    CalcPixelDepth(PixelInfo.Barycentric, TriConstants.OneOverPointDepth);
+                real NewPixelDepth = 1 / PixelInfo.BarCoords.Interpolate(BarHelper.m_OneOverPointDepth);
 
                 // Early depth test
                 if (!m_Pipeline->PixelShader->bChangesDepth)
                 {
-                    if (!RunDepthTest(NewPixelDepth, PixelInfo.Position))
+                    if (!RunDepthTest(PixelPosDiscrete, NewPixelDepth))
                     {
                         return;
                     }
 
-                    m_Pipeline->DepthImage->SetPixelDepth(PixelInfo.Position, NewPixelDepth);
+                    m_Pipeline->DepthImage->SetPixelDepth(PixelPosDiscrete, NewPixelDepth);
                 }
 
                 // Run Pixel shader
@@ -163,15 +143,15 @@ void rndr::Rasterizer::DrawTriangle(void* Constants,
                 // Standard depth test
                 if (m_Pipeline->PixelShader->bChangesDepth)
                 {
-                    if (!RunDepthTest(NewPixelDepth, PixelInfo.Position))
+                    if (!RunDepthTest(PixelPosDiscrete, NewPixelDepth))
                     {
                         return;
                     }
 
-                    m_Pipeline->DepthImage->SetPixelDepth(PixelInfo.Position, NewPixelDepth);
+                    m_Pipeline->DepthImage->SetPixelDepth(PixelPosDiscrete, NewPixelDepth);
                 }
 
-                Color = ApplyAlphaCompositing(Color, PixelInfo.Position);
+                Color = ApplyAlphaCompositing(PixelPosDiscrete, Color);
 
                 if (m_Pipeline->bApplyGammaCorrection)
                 {
@@ -179,106 +159,43 @@ void rndr::Rasterizer::DrawTriangle(void* Constants,
                 }
 
                 // Write color into color buffer
-                m_Pipeline->ColorImage->SetPixel(PixelInfo.Position, Color);
+                m_Pipeline->ColorImage->SetPixelColor(PixelPosDiscrete, Color);
             }
-        },
-        (Point2r)TriangleBounds.pMin);
+        }
+    }
 }
 
-// Cross product of two vectors but ignoring Z coordinate
-static real Edge(const rndr::Vector3r& Edge, const rndr::Vector3r& Vec)
+static void GetTriangleBounds(const rndr::Point3r (&Positions)[3], rndr::Bounds2i& TriangleBounds)
 {
-    return Edge.X * Vec.Y - Edge.Y * Vec.X;
+    const rndr::Point2r Positions2D[] = {
+        {Positions[0].X, Positions[0].Y},
+        {Positions[1].X, Positions[1].Y},
+        {Positions[2].X, Positions[2].Y},
+    };
+
+    const rndr::Point2r Min = rndr::Min(rndr::Min(Positions2D[0], Positions2D[1]), Positions2D[2]);
+    const rndr::Point2r Max = rndr::Max(rndr::Max(Positions2D[0], Positions2D[1]), Positions2D[2]);
+
+    // Min and Max are in continuous space, convert it to discrete space
+    TriangleBounds.pMin = rndr::PixelCoordinates::ToDiscreteSpace(Min);
+    TriangleBounds.pMax = rndr::PixelCoordinates::ToDiscreteSpace(Max);
 }
 
-static bool GetBarycentricCoordinates(rndr::WindingOrder WindingOrder,
-                                      const rndr::Point3r& Point,
-                                      const rndr::Point3r (&Points)[3],
-                                      const TriangleConstants& Constants,
-                                      real (&Barycentric)[3])
+static bool LimitTriangleToSurface(rndr::Bounds2i& TriangleBounds, const rndr::Image* Image)
 {
-    rndr::Vector3r Vec0 = Point - Points[1];
-    rndr::Vector3r Vec1 = Point - Points[2];
-    rndr::Vector3r Vec2 = Point - Points[0];
+    rndr::Bounds2i ImageBounds = Image->GetBounds();
 
-    Barycentric[0] =
-        Edge(Constants.Edges[0], Vec0) * Constants.OneOverTriangleArea * (int)WindingOrder;
-    Barycentric[1] =
-        Edge(Constants.Edges[1], Vec1) * Constants.OneOverTriangleArea * (int)WindingOrder;
-    Barycentric[2] =
-        Edge(Constants.Edges[2], Vec2) * Constants.OneOverTriangleArea * (int)WindingOrder;
-
-    if (Barycentric[0] < 0 || Barycentric[1] < 0 || Barycentric[2] < 0)
+    if (!rndr::Overlaps(TriangleBounds, ImageBounds))
     {
         return false;
     }
 
-    bool Return = true;
-    Return &= Barycentric[0] == 0
-                  ? ((Constants.Edges[0].Y == 0 && (int)WindingOrder * Constants.Edges[0].X < 0) ||
-                     ((int)WindingOrder * Constants.Edges[0].Y < 0))
-                  : true;
-    Return &= Barycentric[1] == 0
-                  ? ((Constants.Edges[1].Y == 0 && (int)WindingOrder * Constants.Edges[1].X < 0) ||
-                     ((int)WindingOrder * Constants.Edges[1].Y < 0))
-                  : true;
-    Return &= Barycentric[2] == 0
-                  ? ((Constants.Edges[2].Y == 0 && (int)WindingOrder * Constants.Edges[2].X < 0) ||
-                     ((int)WindingOrder * Constants.Edges[2].Y < 0))
-                  : true;
-
-    return Return;
-}
-
-static real CalcPixelDepth(const real (&Barycentric)[3], const real (&OneOverDepth)[3])
-{
-    real Result = OneOverDepth[0] * Barycentric[0] + OneOverDepth[1] * Barycentric[1] +
-                  OneOverDepth[2] * Barycentric[2];
-
-    return 1 / Result;
-}
-
-static void GetTriangleBounds(const rndr::Point3r (&Positions)[3], rndr::Bounds3r& TriangleBounds)
-{
-    rndr::Point3r Min = rndr::Min(rndr::Min(Positions[0], Positions[1]), Positions[2]);
-    rndr::Point3r Max = rndr::Max(rndr::Max(Positions[0], Positions[1]), Positions[2]);
-    Min = rndr::Floor(Min);
-    Max = rndr::Ceil(Max);
-
-    const rndr::Vector3r PixelCenterOffset(0.5, 0.5, 0);
-
-    Min += PixelCenterOffset;
-    Max -= PixelCenterOffset;
-
-    TriangleBounds.pMin = Min;
-    TriangleBounds.pMax = Max;
-}
-
-static bool IsWindingOrderCorrect(const rndr::Point3r (&Positions)[3],
-                                  rndr::WindingOrder WindingOrder)
-{
-    real HalfTriangleArea = Edge(Positions[1] - Positions[0], Positions[2] - Positions[0]);
-    HalfTriangleArea *= (int)WindingOrder;
-    return HalfTriangleArea >= 0;
-}
-
-static bool LimitTriangleToSurface(rndr::Bounds3r& TriangleBounds, const rndr::Image* Image)
-{
-    rndr::Bounds3r ScreenBounds = Image->GetBounds();
-    ScreenBounds.pMin += rndr::Point3r{0.5, 0.5, 0};
-    ScreenBounds.pMax += rndr::Point3r{-0.5, -0.5, 0};
-
-    if (!rndr::Overlaps(TriangleBounds, ScreenBounds))
-    {
-        return false;
-    }
-
-    TriangleBounds = rndr::Intersect(TriangleBounds, ScreenBounds);
+    TriangleBounds = rndr::Intersect(TriangleBounds, ImageBounds);
 
     return true;
 }
 
-bool rndr::Rasterizer::RunDepthTest(real NewDepthValue, const Point2i& PixelPosition)
+bool rndr::Rasterizer::RunDepthTest(const Point2i& PixelPosition, real NewDepthValue)
 {
     if (NewDepthValue < 0 || NewDepthValue > 1)
     {
@@ -302,7 +219,7 @@ bool rndr::Rasterizer::RunDepthTest(real NewDepthValue, const Point2i& PixelPosi
     return true;
 }
 
-rndr::Color rndr::Rasterizer::ApplyAlphaCompositing(Color NewValue, const Point2i& PixelPosition)
+rndr::Color rndr::Rasterizer::ApplyAlphaCompositing(const Point2i& PixelPosition, Color NewValue)
 {
     rndr::Color CurrentColor = m_Pipeline->ColorImage->GetPixelColor(PixelPosition);
     if (m_Pipeline->bApplyGammaCorrection)

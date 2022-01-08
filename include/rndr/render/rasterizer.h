@@ -30,8 +30,8 @@ private:
                        const std::vector<int>& Indices,
                        void* InstanceData);
     void DrawTriangle(void* Constants, const Point3r (&PositionsWithDepth)[3], void** VertexData);
-    bool RunDepthTest(real NewDepthValue, const Point2i& PixelPosition);
-    Color ApplyAlphaCompositing(Color NewValue, const Point2i& PixelPosition);
+    bool RunDepthTest(const Point2i& PixelPosition, real NewDepthValue);
+    Color ApplyAlphaCompositing(const Point2i& PixelPosition, Color NewValue);
     Point3r FromNDCToRasterSpace(const Point3r& Point);
     Point3r FromRasterToNDCSpace(const Point3r& Point);
 

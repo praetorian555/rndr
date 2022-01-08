@@ -56,13 +56,13 @@ rndr::Model* CreateModel()
         rndr::Point2r TexCoord;
 
         // clang-format off
-        TexCoord.X = Data0->TextureCoords.X * Info.Barycentric[0] +
-                     Data1->TextureCoords.X * Info.Barycentric[1] +
-                     Data2->TextureCoords.X * Info.Barycentric[2];
+        TexCoord.X = Data0->TextureCoords.X * Info.BarCoords[0] +
+                     Data1->TextureCoords.X * Info.BarCoords[1] +
+                     Data2->TextureCoords.X * Info.BarCoords[2];
 
-        TexCoord.Y = Data0->TextureCoords.Y * Info.Barycentric[0] +
-                     Data1->TextureCoords.Y * Info.Barycentric[1] +
-                     Data2->TextureCoords.Y * Info.Barycentric[2];
+        TexCoord.Y = Data0->TextureCoords.Y * Info.BarCoords[0] +
+                     Data1->TextureCoords.Y * Info.BarCoords[1] +
+                     Data2->TextureCoords.Y * Info.BarCoords[2];
         // clang-format on
 
         rndr::Color Result = Constants->Texture->Sample(TexCoord, false);
