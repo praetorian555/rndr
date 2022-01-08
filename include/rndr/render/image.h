@@ -2,7 +2,7 @@
 
 #include <functional>
 
-#include "rndr/core/bounds3.h"
+#include "rndr/core/bounds2.h"
 #include "rndr/core/math.h"
 #include "rndr/core/rndr.h"
 
@@ -61,9 +61,9 @@ public:
     const ImageConfig& GetConfig() const { return m_Config; }
 
     /**
-     * Get Bounds2 object consisting of (0, 0, 0) and (Width, Height, 1) points.
+     * Get Bounds2 object consisting of (0, 0) and (Width - 1, Height - 1) points.
      */
-    const Bounds3r& GetBounds() const { return m_Bounds; }
+    const Bounds2i& GetBounds() const { return m_Bounds; }
 
     /**
      * Get aspect ratio of a surface. If the height is zero the ratio will be 1.
@@ -95,7 +95,7 @@ public:
      * @param Location Location of a pixel in screen space.
      * @param Color New pixel color.
      */
-    void SetPixel(const Point2i& Location, rndr::Color Color);
+    void SetPixelColor(const Point2i& Location, rndr::Color Color);
 
     /**
      * Colors a pixel at (X, Y) location.
@@ -104,7 +104,7 @@ public:
      * @param Y Coordinate along the Y axis.
      * @param Color New pixel color.
      */
-    void SetPixel(int X, int Y, rndr::Color Color);
+    void SetPixelColor(int X, int Y, rndr::Color Color);
 
     /**
      * Set pixel depth to the specified value.
@@ -146,7 +146,7 @@ public:
 
 private:
     ImageConfig m_Config;
-    Bounds3r m_Bounds;
+    Bounds2i m_Bounds;
     uint8_t* m_Buffer = nullptr;
 };
 

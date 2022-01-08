@@ -55,8 +55,8 @@ void rndr::Image::UpdateSize(int Width, int Height)
     m_Config.Width = Width;
     m_Config.Height = Height;
 
-    m_Bounds.pMin = Point3r(0, 0, 0);
-    m_Bounds.pMax = Point3r(m_Config.Width, m_Config.Height, 1);
+    m_Bounds.pMin = Point2i{0, 0};
+    m_Bounds.pMax = Point2i{m_Config.Width - 1, m_Config.Height - 1};
 
     if (m_Buffer)
     {
@@ -74,7 +74,7 @@ void rndr::Image::UpdateSize(int Width, int Height)
     m_Buffer = new uint8_t[ByteCount];
 }
 
-void rndr::Image::SetPixel(const Point2i& Location, rndr::Color Color)
+void rndr::Image::SetPixelColor(const Point2i& Location, rndr::Color Color)
 {
     assert(Location.X >= 0 && Location.X < m_Config.Width);
     assert(Location.Y >= 0 && Location.Y < m_Config.Height);
@@ -84,9 +84,9 @@ void rndr::Image::SetPixel(const Point2i& Location, rndr::Color Color)
     Pixels[Location.X + Location.Y * m_Config.Width] = Color.ToUInt();
 }
 
-void rndr::Image::SetPixel(int X, int Y, rndr::Color Color)
+void rndr::Image::SetPixelColor(int X, int Y, rndr::Color Color)
 {
-    SetPixel(Point2i{X, Y}, Color);
+    SetPixelColor(Point2i{X, Y}, Color);
 }
 
 void rndr::Image::SetPixelDepth(const Point2i& Location, real Depth)
@@ -178,7 +178,7 @@ void rndr::Image::CopyFrom(const rndr::Image& Source, const Point2i& BottomLeft)
     }
 
     // This tells us how many pixels to copy along X and Y
-    const rndr::Bounds3r OverlapBounds = rndr::Intersect(m_Bounds, Source.m_Bounds);
+    const rndr::Bounds2i OverlapBounds = rndr::Intersect(m_Bounds, Source.m_Bounds);
     Point2i SourceStart{0, 0};
     if (!rndr::Inside(Source.m_Bounds.pMin, m_Bounds))
     {
@@ -201,7 +201,7 @@ void rndr::Image::CopyFrom(const rndr::Image& Source, const Point2i& BottomLeft)
             Color SourceColor = Source.GetPixelColor(SourceStart + Position);
             Color DstColor = GetPixelColor(BottomLeft + Position);
             Color BlendColor = ::BlendColor(m_Config.PixelFormat, SourceColor, DstColor);
-            SetPixel(BottomLeft + Position, BlendColor);
+            SetPixelColor(BottomLeft + Position, BlendColor);
         }
     }
 }
