@@ -100,6 +100,12 @@ public:
         *center = (pMin + pMax) / 2;
         *radius = Inside(*center, *this) ? Distance(*center, pMax) : 0;
     }
+
+    Vector2<T> Extent() const
+    {
+        Vector2<T> Extent{std::abs(pMax.X - pMin.X), std::abs(pMax.Y - pMin.Y)};
+        return Extent;
+    }
 };
 
 template <typename T>
