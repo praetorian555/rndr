@@ -4,14 +4,15 @@
 
 #include "rndr/core/color.h"
 #include "rndr/core/math.h"
+#include "rndr/core/barycentric.h"
 
 namespace rndr
 {
 
 struct PerPixelInfo
 {
-    Point2i Position;
-    real Barycentric[3];
+    Point2i Position; // In discrete space
+    BarycentricCoordinates BarCoords;
     void* VertexData[3];
     void* Constants;
 };
