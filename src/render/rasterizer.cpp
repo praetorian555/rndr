@@ -1,9 +1,9 @@
 #include "rndr/render/rasterizer.h"
 
+#include "rndr/core/barycentric.h"
 #include "rndr/core/bounds3.h"
 #include "rndr/core/coordinates.h"
 #include "rndr/core/threading.h"
-#include "rndr/core/barycentric.h"
 
 #include "rndr/render/image.h"
 #include "rndr/render/model.h"
@@ -20,6 +20,7 @@ struct TriangleConstants
 
 static void GetTriangleBounds(const rndr::Point3r (&Positions)[3], rndr::Bounds2i& TriangleBounds);
 static bool LimitTriangleToSurface(rndr::Bounds2i& TriangleBounds, const rndr::Image* Image);
+static bool ShouldDiscardByDepth(const rndr::Point3r (&Points)[3]);
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -102,6 +103,11 @@ void rndr::Rasterizer::DrawTriangle(void* Constants,
         return;
     }
 
+    if (ShouldDiscardByDepth(Positions))
+    {
+        return;
+    }
+
     const BarycentricHelper BarHelper(m_Pipeline->WindingOrder, Positions);
 
     if (!BarHelper.IsWindingOrderCorrect())
@@ -124,14 +130,15 @@ void rndr::Rasterizer::DrawTriangle(void* Constants,
 
             if (BarHelper.IsInside(PixelInfo.BarCoords))
             {
-                real NewPixelDepth = 1 / PixelInfo.BarCoords.Interpolate(BarHelper.m_OneOverPointDepth);
+                real NewPixelDepth =
+                    1 / PixelInfo.BarCoords.Interpolate(BarHelper.m_OneOverPointDepth);
 
                 // Early depth test
                 if (!m_Pipeline->PixelShader->bChangesDepth)
                 {
                     if (!RunDepthTest(PixelPosDiscrete, NewPixelDepth))
                     {
-                        return;
+                        continue;
                     }
 
                     m_Pipeline->DepthImage->SetPixelDepth(PixelPosDiscrete, NewPixelDepth);
@@ -145,7 +152,7 @@ void rndr::Rasterizer::DrawTriangle(void* Constants,
                 {
                     if (!RunDepthTest(PixelPosDiscrete, NewPixelDepth))
                     {
-                        return;
+                        continue;
                     }
 
                     m_Pipeline->DepthImage->SetPixelDepth(PixelPosDiscrete, NewPixelDepth);
@@ -193,6 +200,14 @@ static bool LimitTriangleToSurface(rndr::Bounds2i& TriangleBounds, const rndr::I
     TriangleBounds = rndr::Intersect(TriangleBounds, ImageBounds);
 
     return true;
+}
+
+static bool ShouldDiscardByDepth(const rndr::Point3r (&Points)[3])
+{
+    const real MinZ = std::min(std::min(Points[0].Z, Points[1].Z), Points[2].Z);
+    const real MaxZ = std::max(std::max(Points[0].Z, Points[1].Z), Points[2].Z);
+
+    return !((MinZ >= 0 && MinZ <= 1) || (MaxZ >= 0 && MaxZ <= 1) || (MinZ < 0 && MaxZ > 1));
 }
 
 bool rndr::Rasterizer::RunDepthTest(const Point2i& PixelPosition, real NewDepthValue)
