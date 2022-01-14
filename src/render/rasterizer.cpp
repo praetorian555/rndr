@@ -115,18 +115,43 @@ void rndr::Rasterizer::DrawTriangle(void* Constants,
         return;
     }
 
-    // X and Y are in discrete space
-    for (int Y = TriangleBounds.pMin.Y; Y <= TriangleBounds.pMax.Y; Y++)
-    {
-        for (int X = TriangleBounds.pMin.X; X <= TriangleBounds.pMax.X; X++)
-        {
-            const Point2i PixelPosDiscrete{X, Y};
+    // Add 1 for easier iteration
+    TriangleBounds.pMax += 1;
 
-            PerPixelInfo PixelInfo;
-            PixelInfo.Position = PixelPosDiscrete;
+    const Vector2i TriangleSize = TriangleBounds.Diagonal();
+
+    // Initialize Pixel infos
+    std::vector<PerPixelInfo> PixelInfos(TriangleBounds.SurfaceArea());
+    for (int Y = 0; Y < TriangleSize.Y; Y++)
+    {
+        for (int X = 0; X < TriangleSize.X; X++)
+        {
+            const Point2i PixelOffset{X, Y};
+
+            const int CurrentIndex = X + Y * TriangleSize.X;
+            const int NextXIndex =
+                (X == TriangleSize.X - 1) ? Y * TriangleSize.X : CurrentIndex + 1;
+            const int NextYIndex = (Y == TriangleSize.Y - 1) ? X : X + (Y + 1) * TriangleSize.X;
+            PerPixelInfo& PixelInfo = PixelInfos[CurrentIndex];
+            PixelInfo.NextX = &PixelInfos[NextXIndex];
+            PixelInfo.NextY = &PixelInfos[NextYIndex];
+            PixelInfo.Position = TriangleBounds.pMin + PixelOffset;
             PixelInfo.Constants = Constants;
-            PixelInfo.BarCoords = BarHelper.GetCoordinates(PixelPosDiscrete);
+            PixelInfo.BarCoords = BarHelper.GetCoordinates(TriangleBounds.pMin + PixelOffset);
             memcpy(PixelInfo.VertexData, VertexData, sizeof(void*) * 3);
+        }
+    }
+
+    // X and Y are in discrete space, do depth test and run pixel shader
+    for (int Y = 0; Y < TriangleSize.Y; Y++)
+    {
+        for (int X = 0; X < TriangleSize.X; X++)
+        {
+            const Point2i PixelPositionOffset{X, Y};
+            const Point2i PixelPosition = TriangleBounds.pMin + PixelPositionOffset;
+
+            const int PixelIndex = X + Y * TriangleSize.X;
+            PerPixelInfo& PixelInfo = PixelInfos[PixelIndex];
 
             if (BarHelper.IsInside(PixelInfo.BarCoords))
             {
@@ -136,12 +161,12 @@ void rndr::Rasterizer::DrawTriangle(void* Constants,
                 // Early depth test
                 if (!m_Pipeline->PixelShader->bChangesDepth)
                 {
-                    if (!RunDepthTest(PixelPosDiscrete, NewPixelDepth))
+                    if (!RunDepthTest(PixelPosition, NewPixelDepth))
                     {
                         continue;
                     }
 
-                    m_Pipeline->DepthImage->SetPixelDepth(PixelPosDiscrete, NewPixelDepth);
+                    m_Pipeline->DepthImage->SetPixelDepth(PixelPosition, NewPixelDepth);
                 }
 
                 // Run Pixel shader
@@ -150,15 +175,15 @@ void rndr::Rasterizer::DrawTriangle(void* Constants,
                 // Standard depth test
                 if (m_Pipeline->PixelShader->bChangesDepth)
                 {
-                    if (!RunDepthTest(PixelPosDiscrete, NewPixelDepth))
+                    if (!RunDepthTest(PixelPosition, NewPixelDepth))
                     {
                         continue;
                     }
 
-                    m_Pipeline->DepthImage->SetPixelDepth(PixelPosDiscrete, NewPixelDepth);
+                    m_Pipeline->DepthImage->SetPixelDepth(PixelPosition, NewPixelDepth);
                 }
 
-                Color = ApplyAlphaCompositing(PixelPosDiscrete, Color);
+                Color = ApplyAlphaCompositing(PixelPosition, Color);
 
                 if (m_Pipeline->bApplyGammaCorrection)
                 {
@@ -166,7 +191,7 @@ void rndr::Rasterizer::DrawTriangle(void* Constants,
                 }
 
                 // Write color into color buffer
-                m_Pipeline->ColorImage->SetPixelColor(PixelPosDiscrete, Color);
+                m_Pipeline->ColorImage->SetPixelColor(PixelPosition, Color);
             }
         }
     }

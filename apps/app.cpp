@@ -3,10 +3,10 @@
 
 #include "rndr/core/camera.h"
 #include "rndr/core/color.h"
+#include "rndr/core/threading.h"
 #include "rndr/core/transform.h"
 #include "rndr/core/utilities.h"
 #include "rndr/core/window.h"
-#include "rndr/core/threading.h"
 
 #include "rndr/render/model.h"
 #include "rndr/render/pipeline.h"
@@ -49,21 +49,13 @@ rndr::Model* CreateModel()
     {
         const ConstantData* const Constants = (ConstantData*)Info.Constants;
 
-        const VertexData* const Data0 = (VertexData*)Info.VertexData[0];
-        const VertexData* const Data1 = (VertexData*)Info.VertexData[1];
-        const VertexData* const Data2 = (VertexData*)Info.VertexData[2];
+        const rndr::Point2r TexCoord =
+            Info.Interpolate<rndr::Point2r, VertexData>(offsetof(VertexData, TextureCoords));
 
-        rndr::Point2r TexCoord;
-
-        // clang-format off
-        TexCoord.X = Data0->TextureCoords.X * Info.BarCoords[0] +
-                     Data1->TextureCoords.X * Info.BarCoords[1] +
-                     Data2->TextureCoords.X * Info.BarCoords[2];
-
-        TexCoord.Y = Data0->TextureCoords.Y * Info.BarCoords[0] +
-                     Data1->TextureCoords.Y * Info.BarCoords[1] +
-                     Data2->TextureCoords.Y * Info.BarCoords[2];
-        // clang-format on
+        rndr::Vector2r duvdx = Info.DerivativeX<rndr::Point2r, VertexData, rndr::Vector2r>(
+            offsetof(VertexData, TextureCoords));
+        rndr::Vector2r duvdy = Info.DerivativeY<rndr::Point2r, VertexData, rndr::Vector2r>(
+            offsetof(VertexData, TextureCoords));
 
         rndr::Color Result = Constants->Texture->Sample(TexCoord, false);
 
@@ -113,7 +105,9 @@ rndr::Model* CreateModel()
 
 int main()
 {
-    rndr::SetupThreading();
+    rndr::ThreadingConfig ThreadingConfig;
+    ThreadingConfig.ThreadCount = 1;
+    rndr::SetupThreading(ThreadingConfig);
 
     rndr::Window Window;
     rndr::Rasterizer Renderer;
