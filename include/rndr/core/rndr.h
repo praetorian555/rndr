@@ -88,7 +88,6 @@ enum class WindingOrder : int
     CCW = 1
 };
 
-
 /**
  * Opaque type that represents an OS window handle.
  */
