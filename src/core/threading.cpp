@@ -1,68 +1,60 @@
 #include "rndr/core/threading.h"
 
-static rndr::ThreadingConfig s_Config;
-static bool s_bIsInitialized = false;
+#include "log/log.h"
 
-void rndr::SetupThreading(const ThreadingConfig& Config)
+rndr::Scheduler* rndr::Scheduler::s_Scheduler = nullptr;
+
+rndr::Scheduler* rndr::Scheduler::Get()
 {
-    s_Config = Config;
-    s_bIsInitialized = true;
-}
-
-void rndr::ForEach(int EndIndex, Callback1D Callback, int StartIndex, int BatchSize, int StepSize)
-{
-    assert(s_bIsInitialized);
-
-    if (s_Config.ThreadCount == 1)
+    if (!s_Scheduler)
     {
-        for (int i = StartIndex; i < EndIndex; i += StepSize)
-        {
-            Callback(i);
-        }
-        return;
+        s_Scheduler = new Scheduler{};
     }
+
+    return s_Scheduler;
 }
 
-void rndr::ForEach(const Point2i& EndPoint,
-                   int Stride,
-                   Callback2Di Callback,
-                   const Point2i& StartPoint,
-                   int BatchSize)
+void rndr::Scheduler::Init()
 {
-    assert(s_bIsInitialized);
-
-    if (s_Config.ThreadCount == 1)
+    auto Body = [this]
     {
-        for (int Y = StartPoint.Y; Y < EndPoint.Y; Y++)
+        while (true)
         {
-            const int StartX = (Y == StartPoint.Y) ? StartPoint.X : 0;
-            const int EndX = (Y == EndPoint.Y - 1) ? EndPoint.X : Stride;
-            for (int X = StartX; X < EndX; X++)
+            TaskBaseSP Task;
+            Task = m_Queue.Pop();
+            if (!Task)
             {
-                Callback(X, Y);
+                return;
             }
+            Task->Execute();
         }
-        return;
+    };
+
+    const int ThreadCount = std::thread::hardware_concurrency();
+    RNDR_LOG_INFO("rndr::Scheduler: Using %d threads", ThreadCount);
+
+    m_Threads.resize(ThreadCount);
+    for (auto& Thread : m_Threads)
+    {
+        Thread = std::thread{Body};
     }
 }
 
-void rndr::ForEach(const Point2r& EndPoint,
-                   int Stride,
-                   Callback2Dr Callback,
-                   const Point2r& StartPoint,
-                   int BatchSize)
+void rndr::Scheduler::ShutDown()
 {
-    assert(s_bIsInitialized);
-
-    if (s_Config.ThreadCount == 1)
+    TaskBaseSP KillTask{nullptr};
+    for (const auto& Thread : m_Threads)
     {
-        for (real Y = StartPoint.Y; Y < EndPoint.Y; Y++)
-        {
-            for (real X = StartPoint.X; X < EndPoint.X; X++)
-            {
-                Callback(X, Y);
-            }
-        }
-        return;
+        m_Queue.Push(KillTask);
     }
+
+    for (auto& Thread : m_Threads)
+    {
+        Thread.join();
+    }
+}
+
+void rndr::Scheduler::ExecAsync(const TaskBaseSP& Task)
+{
+    m_Queue.Push(Task);
 }
