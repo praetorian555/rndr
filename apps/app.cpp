@@ -3,6 +3,7 @@
 
 #include "rndr/core/camera.h"
 #include "rndr/core/color.h"
+#include "rndr/core/singletons.h"
 #include "rndr/core/threading.h"
 #include "rndr/core/transform.h"
 #include "rndr/core/utilities.h"
@@ -105,9 +106,7 @@ rndr::Model* CreateModel()
 
 int main()
 {
-    rndr::ThreadingConfig ThreadingConfig;
-    ThreadingConfig.ThreadCount = 1;
-    rndr::SetupThreading(ThreadingConfig);
+    rndr::Singletons Singletons;
 
     rndr::Window Window;
     rndr::Rasterizer Renderer;
