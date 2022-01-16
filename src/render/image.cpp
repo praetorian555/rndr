@@ -4,6 +4,8 @@
 #include "rndr/core/math.h"
 #include "rndr/core/utilities.h"
 
+#include "rndr/profiling/cputracer.h"
+
 rndr::Image::Image(const ImageConfig& Config) : m_Config(Config)
 {
     UpdateSize(Config.Width, Config.Height);
@@ -52,6 +54,8 @@ real rndr::Image::GetPixelDepth(int X, int Y) const
 
 void rndr::Image::UpdateSize(int Width, int Height)
 {
+    RNDR_CPU_TRACE("Image Update Size");
+
     m_Config.Width = Width;
     m_Config.Height = Height;
 
@@ -106,6 +110,8 @@ void rndr::Image::SetPixelDepth(int X, int Y, real Depth)
 
 void rndr::Image::ClearColorBuffer(rndr::Color Color)
 {
+    RNDR_CPU_TRACE("Image Clear Color");
+
     const uint32_t C = Color.ToUInt();
     uint32_t* Pixels = (uint32_t*)m_Buffer;
     const uint32_t Size = m_Config.Width * m_Config.Height;
@@ -117,6 +123,8 @@ void rndr::Image::ClearColorBuffer(rndr::Color Color)
 
 void rndr::Image::ClearDepthBuffer(real ClearValue)
 {
+    RNDR_CPU_TRACE("Image Clear Depth");
+
     real* Pixels = (real*)m_Buffer;
     const uint32_t Size = m_Config.Width * m_Config.Height;
     for (int i = 0; i < Size; i++)
@@ -172,6 +180,8 @@ static rndr::Color BlendColor(rndr::PixelFormat Format, rndr::Color Src, rndr::C
 
 void rndr::Image::CopyFrom(const rndr::Image& Source, const Point2i& BottomLeft)
 {
+    RNDR_CPU_TRACE("Image Copy From");
+
     if (!rndr::Overlaps(m_Bounds, Source.m_Bounds))
     {
         return;

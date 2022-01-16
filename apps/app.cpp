@@ -14,6 +14,8 @@
 #include "rndr/render/pipeline.h"
 #include "rndr/render/rasterizer.h"
 
+#include "rndr/profiling/cputracer.h"
+
 #include <Windows.h>
 
 struct VertexData
@@ -165,14 +167,16 @@ int main()
     real TotalTime = 0;
     while (!Window.IsClosed())
     {
+        RNDR_CPU_TRACE("Main Loop");
+
+        auto Start = std::chrono::high_resolution_clock().now();
+
         Window.ProcessEvents();
 
         if (Window.IsWindowMinimized())
         {
             continue;
         }
-
-        auto Start = std::chrono::steady_clock().now();
 
         rndr::Image* ColorImage = Window.GetColorImage();
         rndr::Image* DepthImage = Window.GetDepthImage();
@@ -195,11 +199,9 @@ int main()
 
         Window.RenderToWindow();
 
-        auto End = std::chrono::steady_clock().now();
+        auto End = std::chrono::high_resolution_clock().now();
         int Duration = std::chrono::duration_cast<std::chrono::milliseconds>(End - Start).count();
         TotalTime += Duration;
-
-        printf("Duration: %d ms\r", Duration);
     }
 
     return 0;

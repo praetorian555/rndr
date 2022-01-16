@@ -8,6 +8,8 @@
 #include "rndr/render/image.h"
 #include "rndr/render/model.h"
 
+#include "rndr/profiling/cputracer.h"
+
 // Helpers ////////////////////////////////////////////////////////////////////////////////////////
 
 struct TriangleConstants
@@ -26,6 +28,8 @@ static bool ShouldDiscardByDepth(const rndr::Point3r (&Points)[3]);
 
 void rndr::Rasterizer::Draw(rndr::Model* Model, int InstanceCount)
 {
+    RNDR_CPU_TRACE("Draw Model");
+
     if (!Model->GetPipeline())
     {
         // TODO(mkostic): Add log
@@ -59,6 +63,8 @@ void rndr::Rasterizer::DrawTriangles(void* Constants,
                                      const std::vector<int>& Indices,
                                      void* InstanceData)
 {
+    RNDR_CPU_TRACE("Draw Instance");
+
     assert(m_Pipeline);
     assert(Indices.size() != 0);
     assert(Indices.size() % 3 == 0);
@@ -95,6 +101,8 @@ void rndr::Rasterizer::DrawTriangle(void* Constants,
                                     const Point3r (&Positions)[3],
                                     void** VertexData)
 {
+    RNDR_CPU_TRACE("Draw Triangle");
+
     Bounds2i TriangleBounds;
     GetTriangleBounds(Positions, TriangleBounds);
 
