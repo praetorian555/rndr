@@ -3,6 +3,7 @@
 
 #include "rndr/core/camera.h"
 #include "rndr/core/color.h"
+#include "rndr/core/log.h"
 #include "rndr/core/singletons.h"
 #include "rndr/core/threading.h"
 #include "rndr/core/transform.h"
@@ -12,6 +13,8 @@
 #include "rndr/render/model.h"
 #include "rndr/render/pipeline.h"
 #include "rndr/render/rasterizer.h"
+
+#include <Windows.h>
 
 struct VertexData
 {
@@ -107,6 +110,13 @@ rndr::Model* CreateModel()
 int main()
 {
     rndr::Singletons Singletons;
+
+    rndr::ParallelFor(32, 4,
+                      [](int i)
+                      {
+                          const unsigned int ThreadId = GetCurrentThreadId();
+                          RNDR_LOG_DEBUG("Hello from thread %u with index %d!", ThreadId, i);
+                      });
 
     rndr::Window Window;
     rndr::Rasterizer Renderer;

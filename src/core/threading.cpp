@@ -1,6 +1,6 @@
 #include "rndr/core/threading.h"
 
-#include "log/log.h"
+#include "rndr/core/log.h"
 
 rndr::Scheduler* rndr::Scheduler::s_Scheduler = nullptr;
 

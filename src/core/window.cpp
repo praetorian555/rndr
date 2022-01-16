@@ -5,7 +5,7 @@
 #include <Windows.h>
 #include <windowsx.h>
 
-#include "log/log.h"
+#include "rndr/core/log.h"
 
 // Defining window deleages
 
