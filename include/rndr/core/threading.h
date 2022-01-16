@@ -1,4 +1,4 @@
-#include "rndr/core/rndr.h"
+#pragma once
 
 #include <condition_variable>
 #include <memory>
@@ -101,7 +101,7 @@ protected:
     Scheduler() = default;
 
 private:
-    static Scheduler* s_Scheduler;
+    static std::unique_ptr<Scheduler> s_Scheduler;
 
     ThreadSafeQueue<TaskBaseSP> m_Queue;
     std::vector<std::thread> m_Threads;

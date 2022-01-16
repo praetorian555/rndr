@@ -2,16 +2,16 @@
 
 #include "rndr/core/log.h"
 
-rndr::Scheduler* rndr::Scheduler::s_Scheduler = nullptr;
+std::unique_ptr<rndr::Scheduler> rndr::Scheduler::s_Scheduler = nullptr;
 
 rndr::Scheduler* rndr::Scheduler::Get()
 {
     if (!s_Scheduler)
     {
-        s_Scheduler = new Scheduler{};
+        s_Scheduler.reset(new Scheduler{});
     }
 
-    return s_Scheduler;
+    return s_Scheduler.get();
 }
 
 void rndr::Scheduler::Init()
