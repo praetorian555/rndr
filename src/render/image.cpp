@@ -2,6 +2,7 @@
 
 #include "rndr/core/color.h"
 #include "rndr/core/math.h"
+#include "rndr/core/threading.h"
 #include "rndr/core/utilities.h"
 
 #include "rndr/profiling/cputracer.h"
@@ -112,25 +113,33 @@ void rndr::Image::ClearColorBuffer(rndr::Color Color)
 {
     RNDR_CPU_TRACE("Image Clear Color");
 
-    const uint32_t C = Color.ToUInt();
-    uint32_t* Pixels = (uint32_t*)m_Buffer;
-    const uint32_t Size = m_Config.Width * m_Config.Height;
-    for (int i = 0; i < Size; i++)
-    {
-        *Pixels++ = C;
-    }
+    ParallelFor(m_Config.Height, 64,
+                [this, Color](int RowIndex)
+                {
+                    const uint32_t C = Color.ToUInt();
+                    uint32_t* Pixels = (uint32_t*)m_Buffer + m_Config.Width * RowIndex;
+                    const uint32_t Size = m_Config.Width;
+                    for (int i = 0; i < Size; i++)
+                    {
+                        *Pixels++ = C;
+                    }
+                });
 }
 
 void rndr::Image::ClearDepthBuffer(real ClearValue)
 {
     RNDR_CPU_TRACE("Image Clear Depth");
 
-    real* Pixels = (real*)m_Buffer;
-    const uint32_t Size = m_Config.Width * m_Config.Height;
-    for (int i = 0; i < Size; i++)
-    {
-        *Pixels++ = ClearValue;
-    }
+    ParallelFor(m_Config.Height, 64,
+                [this, ClearValue](int RowIndex)
+                {
+                    real* Pixels = (real*)m_Buffer + m_Config.Width * RowIndex;
+                    const uint32_t Size = m_Config.Width;
+                    for (int i = 0; i < Size; i++)
+                    {
+                        *Pixels++ = ClearValue;
+                    }
+                });
 }
 
 real rndr::Image::GetAspectRatio() const
