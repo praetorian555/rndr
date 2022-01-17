@@ -9,6 +9,8 @@
 
 #include "rndr/core/math.h"
 
+#include "rndr/profiling/cputracer.h"
+
 namespace rndr
 {
 
@@ -128,6 +130,12 @@ TaskBaseSP MakeTask(Function F);
 template <typename Function>
 void ParallelFor(int End, int BatchSize, Function F);
 
+template <typename Function>
+void ParallelFor(const Point2i End, int BatchSize, Function F);
+
+template <typename Function>
+void ParallelFor(const Vector2i End, int BatchSize, Function F);
+
 // Implementation /////////////////////////////////////////////////////////////////////////////////
 
 template <typename Function>
@@ -145,6 +153,8 @@ void ParallelFor(int End, int BatchSize, Function F)
         TaskBaseSP Task = MakeTask(
             [Start = i, End = std::min(i + BatchSize, End), F]
             {
+                RNDR_CPU_TRACE("Parallel For");
+
                 for (int i = Start; i < End; i++)
                 {
                     F(i);
@@ -159,5 +169,45 @@ void ParallelFor(int End, int BatchSize, Function F)
         Task->WaitUntilDone();
     }
 }
+
+template <typename Function>
+void ParallelFor(const Point2i End, int BatchSize, Function F)
+{
+    std::vector<TaskBaseSP> Tasks;
+    for (int Y = 0; Y < End.Y; Y += BatchSize)
+    {
+        for (int X = 0; X < End.X; X += BatchSize)
+        {
+            TaskBaseSP Task = MakeTask(
+                [StartX = X, StartY = Y, EndX = std::min(X + BatchSize, End.X),
+                 EndY = std::min(Y + BatchSize, End.Y), F]
+                {
+                    RNDR_CPU_TRACE("Parallel For 2D");
+
+                    for (int Y = StartY; Y < EndY; Y++)
+                    {
+                        for (int X = StartX; X < EndX; X++)
+                        {
+                            F(X, Y);
+                        }
+                    }
+                });
+            Scheduler::Get()->ExecAsync(Task);
+            Tasks.push_back(Task);
+        }
+    }
+
+    for (auto& Task : Tasks)
+    {
+        Task->WaitUntilDone();
+    }
+}
+
+template <typename Function>
+void ParallelFor(const Vector2i End, int BatchSize, Function F)
+{
+    ParallelFor(Point2i{End.X, End.Y}, BatchSize, F);
+}
+
 
 }  // namespace rndr
