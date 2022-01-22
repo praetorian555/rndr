@@ -15,8 +15,10 @@ if (CMAKE_PROJECT_NAME STREQUAL PROJECT_NAME)
 	# Let's ensure -std=c++xx instead of -std=g++xx
   	set(CMAKE_CXX_EXTENSIONS OFF)
 
+  	include(cmake/optimized-debug.cmake)
+
 	# Configuration types
-	SET(CMAKE_CONFIGURATION_TYPES "Debug;Release" CACHE STRING "Configs" FORCE)
+	SET(CMAKE_CONFIGURATION_TYPES "Debug;OptimizedDebug;Release" CACHE STRING "Choose configuration: Debug OptimizedDebug Release" FORCE)
 
  	# Let's nicely support folders in IDEs
   	set_property(GLOBAL PROPERTY USE_FOLDERS ON)
