@@ -70,6 +70,15 @@ bool rndr::BarycentricHelper::IsWindingOrderCorrect() const
     return HalfTriangleArea >= 0;
 }
 
+bool rndr::BarycentricHelper::IsWindingOrderCorrect(const Point3r (&TrianglePoints)[3],
+                                                    rndr::WindingOrder WindingOrder)
+{
+    real HalfTriangleArea =
+        Cross2D(TrianglePoints[1] - TrianglePoints[0], TrianglePoints[2] - TrianglePoints[0]);
+    HalfTriangleArea = HalfTriangleArea * (int)WindingOrder;
+    return HalfTriangleArea >= 0;
+}
+
 rndr::BarycentricCoordinates rndr::BarycentricHelper::GetCoordinates(
     const Point2i& PixelPosition) const
 {

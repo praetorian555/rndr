@@ -18,6 +18,7 @@ struct BarycentricCoordinates
 class BarycentricHelper
 {
 public:
+    BarycentricHelper() = default;
     BarycentricHelper(rndr::WindingOrder WindingOrder, const rndr::Point3r (&TrianglePoints)[3]);
     BarycentricHelper(rndr::WindingOrder WindingOrder,
                       const rndr::Point3r& TrianglePoint0,
@@ -29,6 +30,8 @@ public:
     bool IsInside(const BarycentricCoordinates& Coordinates) const;
 
     bool IsWindingOrderCorrect() const;
+
+    static bool IsWindingOrderCorrect(const Point3r (&TrianglePoints)[3], rndr::WindingOrder);
 
 private:
     void Init();
