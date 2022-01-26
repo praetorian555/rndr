@@ -28,7 +28,7 @@ public:
     void SetVertexData(const std::vector<T>& VertexData)
     {
         m_VertexDataStride = sizeof(T);
-        m_VertexData.reserve(VertexData.size() * m_VertexDataStride);
+        m_VertexData.resize(VertexData.size() * m_VertexDataStride);
         memcpy(m_VertexData.data(), VertexData.data(), m_VertexData.capacity());
     }
 
@@ -38,7 +38,7 @@ public:
     void SetInstanceData(const std::vector<T>& InstanceData)
     {
         m_InstanceDataStride = sizeof(T);
-        m_InstanceData.reserve(InstanceData.size() * m_InstanceDataStride);
+        m_InstanceData.resize(InstanceData.size() * m_InstanceDataStride);
         memcpy(m_InstanceData.data(), InstanceData.data(), m_InstanceData.capacity());
     }
 
