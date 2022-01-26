@@ -11,6 +11,8 @@
 
 #include "rndr/profiling/cputracer.h"
 
+#define RNDR_ENABLE_MULTITHREADING (0)
+
 namespace rndr
 {
 
@@ -160,13 +162,19 @@ void ParallelFor(int End, int BatchSize, Function F)
                     F(i);
                 }
             });
+#if RNDR_ENABLE_MULTITHREADING
         Scheduler::Get()->ExecAsync(Task);
+#endif  // RNDR_ENABLE_MULTITHREADING
         Tasks.push_back(Task);
     }
 
     for (auto& Task : Tasks)
     {
+#if RNDR_ENABLE_MULTITHREADING
         Task->WaitUntilDone();
+#else
+        Task->Execute();
+#endif  // RNDR_ENABLE_MULTITHREADING
     }
 }
 
@@ -192,14 +200,20 @@ void ParallelFor(const Point2i End, int BatchSize, Function F)
                         }
                     }
                 });
+#if RNDR_ENABLE_MULTITHREADING
             Scheduler::Get()->ExecAsync(Task);
+#endif  // RNDR_ENABLE_MULTITHREADING
             Tasks.push_back(Task);
         }
     }
 
     for (auto& Task : Tasks)
     {
+#if RNDR_ENABLE_MULTITHREADING
         Task->WaitUntilDone();
+#else
+        Task->Execute();
+#endif  // RNDR_ENABLE_MULTITHREADING
     }
 }
 
@@ -208,6 +222,5 @@ void ParallelFor(const Vector2i End, int BatchSize, Function F)
 {
     ParallelFor(Point2i{End.X, End.Y}, BatchSize, F);
 }
-
 
 }  // namespace rndr

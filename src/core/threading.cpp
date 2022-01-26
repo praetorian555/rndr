@@ -30,8 +30,13 @@ void rndr::Scheduler::Init()
         }
     };
 
+#if RNDR_ENABLE_MULTITHREADING
     const int ThreadCount = std::thread::hardware_concurrency();
     RNDR_LOG_INFO("rndr::Scheduler: Using %d threads", ThreadCount);
+#else
+    const int ThreadCount = 1;
+    RNDR_LOG_INFO("rndr::Scheduler: Using only Game thread");
+#endif  // RNDR_ENABLE_MULTITHREADING
 
     m_Threads.resize(ThreadCount);
     for (auto& Thread : m_Threads)
