@@ -29,6 +29,11 @@ using real = float;
 using real = double;
 #endif  // !defined(RNDR_REAL_AS_DOUBLE)
 
+#if RNDR_WINDOWS
+#define RNDR_OPTIMIZE_OFF __pragma(optimize("", off))
+#define RNDR_OPTIMIZE_ON __pragma(optimize("", on))
+#endif // RNDR_WINDOWS
+
 namespace rndr
 {
 
