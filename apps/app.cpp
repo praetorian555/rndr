@@ -58,10 +58,10 @@ rndr::Model* CreateModel()
         const rndr::Point2r TexCoord =
             Info.Interpolate<rndr::Point2r, VertexData>(offsetof(VertexData, TextureCoords));
 
-        rndr::Vector2r duvdx = Info.DerivativeX<rndr::Point2r, VertexData, rndr::Vector2r>(
-            offsetof(VertexData, TextureCoords));
-        rndr::Vector2r duvdy = Info.DerivativeY<rndr::Point2r, VertexData, rndr::Vector2r>(
-            offsetof(VertexData, TextureCoords));
+        //rndr::Vector2r duvdx = Info.DerivativeX<rndr::Point2r, VertexData, rndr::Vector2r>(
+        //    offsetof(VertexData, TextureCoords));
+        //rndr::Vector2r duvdy = Info.DerivativeY<rndr::Point2r, VertexData, rndr::Vector2r>(
+        //    offsetof(VertexData, TextureCoords));
 
         rndr::Color Result = Constants->Texture->Sample(TexCoord, false);
 
@@ -112,13 +112,6 @@ rndr::Model* CreateModel()
 int main()
 {
     rndr::Singletons Singletons;
-
-    rndr::ParallelFor(32, 4,
-                      [](int i)
-                      {
-                          const unsigned int ThreadId = GetCurrentThreadId();
-                          RNDR_LOG_DEBUG("Hello from thread %u with index %d!", ThreadId, i);
-                      });
 
     rndr::Window Window;
     rndr::Rasterizer Renderer;

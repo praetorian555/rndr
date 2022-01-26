@@ -2,14 +2,26 @@
 
 #include <vector>
 
+#include "rndr/core/bounds2.h"
 #include "rndr/core/math.h"
+
 #include "rndr/render/pipeline.h"
+
+struct VertexShaderExecutor;
 
 namespace rndr
 {
 
 class Image;
 class Model;
+
+struct Triangle
+{
+    PerVertexInfo Vertices[3];
+    Point3r Positions[3];
+    Bounds2i Bounds{{0, 0}, {0, 0}};
+    std::unique_ptr<BarycentricHelper> BarHelper;
+};
 
 /**
  * Renderer that uses rasterization to render. Rasterization is implemented fully on CPU side.
@@ -19,7 +31,7 @@ class Rasterizer
 public:
     Rasterizer() = default;
 
-    void SetPipeline(const rndr::Pipeline* Pipeline) { m_Pipeline = Pipeline; }
+    void SetPipeline(const rndr::Pipeline* Pipeline);
 
     void Draw(rndr::Model* Model, int InstanceCount = 1);
 
@@ -35,8 +47,14 @@ private:
     Point3r FromNDCToRasterSpace(const Point3r& Point);
     Point3r FromRasterToNDCSpace(const Point3r& Point);
 
+    void ProcessPixel(const PerPixelInfo& PixelInfo, const Triangle& T);
+
+private:
+    friend struct VertexShaderExecutor;
+
 private:
     const Pipeline* m_Pipeline = nullptr;
+    std::vector<Triangle*> Triangles;
 };
 
 }  // namespace rndr
