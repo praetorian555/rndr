@@ -13,8 +13,12 @@ struct PerPixelInfo
 {
     Point2i Position;  // In discrete space
     BarycentricCoordinates BarCoords;
+
+    // User specific data
     void* VertexData[3];
-    void* Constants;
+    void* InstanceData; // Data unique for instance
+    void* Constants; // Data unique for shader
+
     PerPixelInfo* NextX;
     PerPixelInfo* NextY;
 
