@@ -11,7 +11,7 @@
 
 #include "rndr/profiling/cputracer.h"
 
-#define RNDR_ENABLE_MULTITHREADING (0)
+#define RNDR_ENABLE_MULTITHREADING (1)
 
 namespace rndr
 {
@@ -43,12 +43,12 @@ public:
     virtual void Execute() override
     {
         m_Function();
-        m_Done = true;
+        m_bDone = true;
     }
 
     virtual bool WaitUntilDone() override
     {
-        while (!m_Done)
+        while (!m_bDone)
             continue;
 
         return true;
@@ -56,7 +56,7 @@ public:
 
 private:
     Function m_Function;
-    bool m_Done = false;
+    std::atomic<bool> m_bDone = false;
 };
 
 /**
