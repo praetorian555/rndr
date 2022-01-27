@@ -57,9 +57,7 @@ void rndr::CpuTracer::ShutDown()
     s_SpdLogger->info("]");
 }
 
-void rndr::CpuTracer::AddTrace(const std::string& Name,
-                               int64_t StartUS,
-                               int64_t EndUS)
+void rndr::CpuTracer::AddTrace(const std::string& Name, int64_t StartUS, int64_t EndUS)
 {
     const int64_t Duration = EndUS - StartUS;
     const uint32_t ThreadId =

@@ -3,6 +3,7 @@
 #include "rndr/core/barycentric.h"
 #include "rndr/core/bounds3.h"
 #include "rndr/core/coordinates.h"
+#include "rndr/core/log.h"
 #include "rndr/core/threading.h"
 
 #include "rndr/render/image.h"
@@ -12,9 +13,51 @@
 
 // Helpers ////////////////////////////////////////////////////////////////////////////////////////
 
-static void GetTriangleBounds(const rndr::Point3r (&Positions)[3], rndr::Bounds2i& TriangleBounds);
-static bool LimitTriangleToSurface(rndr::Bounds2i& TriangleBounds, const rndr::Image* Image);
-static bool ShouldDiscardByDepth(const rndr::Point3r (&Points)[3]);
+struct rndr::Triangle
+{
+    rndr::PerVertexInfo Vertices[3];
+    rndr::Point3r Positions[3];
+    rndr::Bounds2i Bounds{{0, 0}, {0, 0}};
+    std::unique_ptr<rndr::BarycentricHelper> BarHelper;
+};
+
+static void GetTriangleBounds(const rndr::Point3r (&Positions)[3], rndr::Bounds2i& TriangleBounds)
+{
+    const rndr::Point2r Positions2D[] = {
+        {Positions[0].X, Positions[0].Y},
+        {Positions[1].X, Positions[1].Y},
+        {Positions[2].X, Positions[2].Y},
+    };
+
+    const rndr::Point2r Min = rndr::Min(rndr::Min(Positions2D[0], Positions2D[1]), Positions2D[2]);
+    const rndr::Point2r Max = rndr::Max(rndr::Max(Positions2D[0], Positions2D[1]), Positions2D[2]);
+
+    // Min and Max are in continuous space, convert it to discrete space
+    TriangleBounds.pMin = rndr::PixelCoordinates::ToDiscreteSpace(Min);
+    TriangleBounds.pMax = rndr::PixelCoordinates::ToDiscreteSpace(Max);
+}
+
+static bool LimitTriangleToSurface(rndr::Bounds2i& TriangleBounds, const rndr::Image* Image)
+{
+    rndr::Bounds2i ImageBounds = Image->GetBounds();
+
+    if (!rndr::Overlaps(TriangleBounds, ImageBounds))
+    {
+        return false;
+    }
+
+    TriangleBounds = rndr::Intersect(TriangleBounds, ImageBounds);
+
+    return true;
+}
+
+static bool ShouldDiscardByDepth(const rndr::Point3r (&Points)[3])
+{
+    const real MinZ = std::min(std::min(Points[0].Z, Points[1].Z), Points[2].Z);
+    const real MaxZ = std::max(std::max(Points[0].Z, Points[1].Z), Points[2].Z);
+
+    return !((MinZ >= 0 && MinZ <= 1) || (MaxZ >= 0 && MaxZ <= 1) || (MinZ < 0 && MaxZ > 1));
+}
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -150,124 +193,45 @@ void rndr::Rasterizer::Draw(rndr::Model* Model, int InstanceCount)
 
 void rndr::Rasterizer::ProcessPixel(const PerPixelInfo& PixelInfo, const Triangle& T)
 {
-    if (T.BarHelper->IsInside(PixelInfo.BarCoords))
+    if (!T.BarHelper->IsInside(PixelInfo.BarCoords))
     {
-        real NewPixelDepth = 1 / PixelInfo.BarCoords.Interpolate(T.BarHelper->m_OneOverPointDepth);
+        return;
+    }
 
-        // Early depth test
-        if (!m_Pipeline->PixelShader->bChangesDepth)
+    real NewDepth = 1 / PixelInfo.BarCoords.Interpolate(T.BarHelper->m_OneOverPointDepth);
+    const real CurrentDepth = m_Pipeline->DepthImage->GetPixelDepth(PixelInfo.Position);
+
+    // Early depth test
+    if (!m_Pipeline->PixelShader->bChangesDepth)
+    {
+        if (!PerformDepthTest(m_Pipeline->DepthTest, NewDepth, CurrentDepth))
         {
-            if (!RunDepthTest(PixelInfo.Position, NewPixelDepth))
-            {
-                return;
-            }
-
-            m_Pipeline->DepthImage->SetPixelDepth(PixelInfo.Position, NewPixelDepth);
+            return;
         }
 
-        // Run Pixel shader
-        rndr::Color Color = m_Pipeline->PixelShader->Callback(PixelInfo, NewPixelDepth);
+        m_Pipeline->DepthImage->SetPixelDepth(PixelInfo.Position, NewDepth);
+    }
 
-        // Standard depth test
-        if (m_Pipeline->PixelShader->bChangesDepth)
+    // Run Pixel shader
+    rndr::Color NewColor = m_Pipeline->PixelShader->Callback(PixelInfo, NewDepth);
+
+    // Standard depth test
+    if (m_Pipeline->PixelShader->bChangesDepth)
+    {
+        if (!PerformDepthTest(m_Pipeline->DepthTest, NewDepth, CurrentDepth))
         {
-            if (!RunDepthTest(PixelInfo.Position, NewPixelDepth))
-            {
-                return;
-            }
-
-            m_Pipeline->DepthImage->SetPixelDepth(PixelInfo.Position, NewPixelDepth);
+            return;
         }
 
-        Color = ApplyAlphaCompositing(PixelInfo.Position, Color);
-
-        if (m_Pipeline->bApplyGammaCorrection)
-        {
-            Color = Color.ToGammaCorrectSpace(m_Pipeline->Gamma);
-        }
-
-        // Write color into color buffer
-        m_Pipeline->ColorImage->SetPixelColor(PixelInfo.Position, Color);
-    }
-}
-
-static void GetTriangleBounds(const rndr::Point3r (&Positions)[3], rndr::Bounds2i& TriangleBounds)
-{
-    const rndr::Point2r Positions2D[] = {
-        {Positions[0].X, Positions[0].Y},
-        {Positions[1].X, Positions[1].Y},
-        {Positions[2].X, Positions[2].Y},
-    };
-
-    const rndr::Point2r Min = rndr::Min(rndr::Min(Positions2D[0], Positions2D[1]), Positions2D[2]);
-    const rndr::Point2r Max = rndr::Max(rndr::Max(Positions2D[0], Positions2D[1]), Positions2D[2]);
-
-    // Min and Max are in continuous space, convert it to discrete space
-    TriangleBounds.pMin = rndr::PixelCoordinates::ToDiscreteSpace(Min);
-    TriangleBounds.pMax = rndr::PixelCoordinates::ToDiscreteSpace(Max);
-}
-
-static bool LimitTriangleToSurface(rndr::Bounds2i& TriangleBounds, const rndr::Image* Image)
-{
-    rndr::Bounds2i ImageBounds = Image->GetBounds();
-
-    if (!rndr::Overlaps(TriangleBounds, ImageBounds))
-    {
-        return false;
+        m_Pipeline->DepthImage->SetPixelDepth(PixelInfo.Position, NewDepth);
     }
 
-    TriangleBounds = rndr::Intersect(TriangleBounds, ImageBounds);
+    // TODO(mkostic): Add support for different blend operators
+    Color CurrentColor = m_Pipeline->ColorImage->GetPixelColor(PixelInfo.Position);
+    NewColor = Color::Blend(NewColor, CurrentColor);
 
-    return true;
-}
-
-static bool ShouldDiscardByDepth(const rndr::Point3r (&Points)[3])
-{
-    const real MinZ = std::min(std::min(Points[0].Z, Points[1].Z), Points[2].Z);
-    const real MaxZ = std::max(std::max(Points[0].Z, Points[1].Z), Points[2].Z);
-
-    return !((MinZ >= 0 && MinZ <= 1) || (MaxZ >= 0 && MaxZ <= 1) || (MinZ < 0 && MaxZ > 1));
-}
-
-bool rndr::Rasterizer::RunDepthTest(const Point2i& PixelPosition, real NewDepthValue)
-{
-    if (NewDepthValue < 0 || NewDepthValue > 1)
-    {
-        return false;
-    }
-
-    const real DestDepth = m_Pipeline->DepthImage->GetPixelDepth(PixelPosition);
-
-    switch (m_Pipeline->DepthTest)
-    {
-        case rndr::DepthTest::GreaterThan:
-            return NewDepthValue > DestDepth;
-        case rndr::DepthTest::LesserThen:
-            return NewDepthValue < DestDepth;
-        case rndr::DepthTest::None:
-            return true;
-        default:
-            assert(false);
-    }
-
-    return true;
-}
-
-rndr::Color rndr::Rasterizer::ApplyAlphaCompositing(const Point2i& PixelPosition, Color NewValue)
-{
-    rndr::Color CurrentColor = m_Pipeline->ColorImage->GetPixelColor(PixelPosition);
-    if (m_Pipeline->bApplyGammaCorrection)
-    {
-        CurrentColor = CurrentColor.ToLinearSpace(m_Pipeline->Gamma);
-    }
-    real InvColorA = 1 - NewValue.A;
-
-    NewValue.R = NewValue.A * NewValue.R + CurrentColor.R * CurrentColor.A * InvColorA;
-    NewValue.G = NewValue.A * NewValue.G + CurrentColor.G * CurrentColor.A * InvColorA;
-    NewValue.B = NewValue.A * NewValue.B + CurrentColor.B * CurrentColor.A * InvColorA;
-    NewValue.A = NewValue.A + CurrentColor.A * InvColorA;
-
-    return NewValue;
+    // Write color into color buffer
+    m_Pipeline->ColorImage->SetPixelColor(PixelInfo.Position, NewColor);
 }
 
 rndr::Point3r rndr::Rasterizer::FromNDCToRasterSpace(const Point3r& Point)
@@ -292,4 +256,36 @@ rndr::Point3r rndr::Rasterizer::FromRasterToNDCSpace(const Point3r& Point)
     Result.Y = (Point.Y / (real)Height) * 2 - 1;
 
     return Result;
+}
+
+bool rndr::Rasterizer::PerformDepthTest(rndr::DepthTest Operator, real Src, real Dst)
+{
+    if (Src < 0 || Src > 1)
+    {
+        return false;
+    }
+
+    switch (Operator)
+    {
+        case rndr::DepthTest::GreaterThan:
+        {
+            return Src > Dst;
+        }
+        case rndr::DepthTest::LesserThen:
+        {
+            return Src < Dst;
+        }
+        case rndr::DepthTest::None:
+        {
+            return true;
+        }
+        default:
+        {
+            RNDR_LOG_ERROR("Rasterizer::PerformDepthTest: Unsupported operator supplied! Got %u",
+                           (uint32_t)Operator);
+            assert(false);
+        }
+    }
+
+    return true;
 }

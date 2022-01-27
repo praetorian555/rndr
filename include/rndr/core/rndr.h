@@ -32,7 +32,7 @@ using real = double;
 #if RNDR_WINDOWS
 #define RNDR_OPTIMIZE_OFF __pragma(optimize("", off))
 #define RNDR_OPTIMIZE_ON __pragma(optimize("", on))
-#endif // RNDR_WINDOWS
+#endif  // RNDR_WINDOWS
 
 namespace rndr
 {
@@ -48,15 +48,12 @@ enum class PixelLayout
 };
 
 /**
- * Defines channels and color space of the channels.
+ * Specifies the space in which the color is in the gamma correction.
  */
-enum class PixelFormat
+enum class GammaSpace
 {
-    RGB,
-    RGBA,
-    sRGB,
-    sRGBA,
-    DEPTH
+    GammaCorrected,
+    Linear
 };
 
 /**
@@ -97,5 +94,10 @@ enum class WindingOrder : int
  * Opaque type that represents an OS window handle.
  */
 using NativeWindowHandle = uintptr_t;
+
+/**
+ * Default gamma value.
+ */
+#define RNDR_GAMMA (2.4)
 
 }  // namespace rndr

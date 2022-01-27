@@ -58,12 +58,14 @@ rndr::Allocator* rndr::MemoryManager::GetFrameAllocatorSafe(std::thread::id Thre
     return Iter == m_FrameAllocators->end() ? nullptr : Iter->second;
 }
 
-rndr::Allocator* rndr::MemoryManager::GetGameFrameAllocator() {
+rndr::Allocator* rndr::MemoryManager::GetGameFrameAllocator()
+{
     auto& Iter = m_FrameAllocators->find(m_GameThreadId);
     return Iter == m_FrameAllocators->end() ? nullptr : Iter->second;
 }
 
-rndr::Allocator* rndr::MemoryManager::GetGameFrameAllocatorSafe() {
+rndr::Allocator* rndr::MemoryManager::GetGameFrameAllocatorSafe()
+{
     std::lock_guard<std::mutex> Lock{m_FrameAllocatorsGuard};
 
     auto& Iter = m_FrameAllocators->find(m_GameThreadId);

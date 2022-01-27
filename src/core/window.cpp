@@ -21,7 +21,7 @@ rndr::Window::Window(const rndr::WindowConfig& Config) : m_Config(Config)
     rndr::ImageConfig ColorImageConfig;
     ColorImageConfig.Width = Config.Width;
     ColorImageConfig.Height = Config.Height;
-    ColorImageConfig.PixelFormat = PixelFormat::sRGBA;
+    ColorImageConfig.GammaSpace = rndr::GammaSpace::GammaCorrected;
     ColorImageConfig.PixelLayout = PixelLayout::A8R8G8B8;
 
     m_ColorImage = std::make_unique<Image>(ColorImageConfig);
@@ -29,7 +29,7 @@ rndr::Window::Window(const rndr::WindowConfig& Config) : m_Config(Config)
     rndr::ImageConfig DepthImageConfig;
     DepthImageConfig.Width = Config.Width;
     DepthImageConfig.Height = Config.Height;
-    DepthImageConfig.PixelFormat = PixelFormat::DEPTH;
+    DepthImageConfig.GammaSpace = rndr::GammaSpace::Linear;
     DepthImageConfig.PixelLayout = PixelLayout::DEPTH_F32;
 
     m_DepthImage = std::make_unique<Image>(DepthImageConfig);

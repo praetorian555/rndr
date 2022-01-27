@@ -32,7 +32,6 @@ private:
     int64_t m_StartUS;
 };
 
-#define RNDR_CPU_TRACE(Name) \
-    rndr::CpuTrace CpuTrace_Var{Name};
+#define RNDR_CPU_TRACE(Name) rndr::CpuTrace CpuTrace_Var{Name};
 
 }  // namespace rndr

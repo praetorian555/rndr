@@ -7,7 +7,6 @@ namespace rndr
 #define RNDR_MB(x) (x * 1024 * 1024)
 #define RNDR_GB(x) (x * 1024 * 1024 * 1024)
 
-
 struct Allocator
 {
     virtual ~Allocator() = default;

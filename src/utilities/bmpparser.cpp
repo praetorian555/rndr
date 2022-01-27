@@ -184,7 +184,10 @@ static std::vector<Color> ParseColorPallete(uint8_t** Ptr, const BitmapInfo& Inf
             const uint32_t Green = ReadAndMove<uint8_t>(Ptr);
             const uint32_t Red = ReadAndMove<uint8_t>(Ptr);
             ReadAndMove<uint8_t>(Ptr);
-            ColorTable[i] = Color(Red / 255.0, Green / 255.0f, Blue / 255.0, 1);
+
+            const bool bIsPremul = false;
+            ColorTable[i] = Color(Red / 255.0, Green / 255.0f, Blue / 255.0, 1,
+                                  rndr::GammaSpace::GammaCorrected, bIsPremul);
         }
     }
 
@@ -232,8 +235,8 @@ static uint8_t* ParseImageData(uint8_t* Ptr,
                     const uint8_t Mask = BaseMask << BitsPerPixel * j;
                     const int ColorPalleteIndex = (*Ptr & Mask) >> ShiftAmount;
                     const int PixelIndex = i * PixelsPerByte + PixelsPerByte - j - 1;
-                    ImageData[PixelIndex] =
-                        ColorPallete[ColorPalleteIndex].ToUInt(PixelLayout::B8G8R8A8);
+                    ImageData[PixelIndex] = ColorPallete[ColorPalleteIndex].ToUInt32(
+                        rndr::GammaSpace::GammaCorrected, PixelLayout::B8G8R8A8);
                 }
             }
             break;
@@ -302,7 +305,7 @@ rndr::Image* rndr::BmpParser::Read(const std::string& FilePath)
     Config.Width = BitmapInfo.Width;
     Config.Height = BitmapInfo.Height;
     // TODO(mkostic): We need to figure out pixel format based on BitmapInfo
-    Config.PixelFormat = PixelFormat::sRGBA;
+    Config.GammaSpace = rndr::GammaSpace::GammaCorrected;
     Config.PixelLayout = ParsePixelLayout(BitmapInfo);
     rndr::Image* Image = new rndr::Image(Config);
     uint8_t* ImageData = ParseImageData(*Offset, BitmapInfo, ColorPallete, Image);

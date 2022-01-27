@@ -16,8 +16,8 @@ struct PerPixelInfo
 
     // User specific data
     void* VertexData[3];
-    void* InstanceData; // Data unique for instance
-    void* Constants; // Data unique for shader
+    void* InstanceData;  // Data unique for instance
+    void* Constants;     // Data unique for shader
 
     PerPixelInfo* NextX;
     PerPixelInfo* NextY;

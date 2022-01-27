@@ -58,12 +58,13 @@ rndr::Model* CreateModel()
         const rndr::Point2r TexCoord =
             Info.Interpolate<rndr::Point2r, VertexData>(offsetof(VertexData, TextureCoords));
 
-        //rndr::Vector2r duvdx = Info.DerivativeX<rndr::Point2r, VertexData, rndr::Vector2r>(
+        // rndr::Vector2r duvdx = Info.DerivativeX<rndr::Point2r, VertexData, rndr::Vector2r>(
         //    offsetof(VertexData, TextureCoords));
-        //rndr::Vector2r duvdy = Info.DerivativeY<rndr::Point2r, VertexData, rndr::Vector2r>(
+        // rndr::Vector2r duvdy = Info.DerivativeY<rndr::Point2r, VertexData, rndr::Vector2r>(
         //    offsetof(VertexData, TextureCoords));
 
         rndr::Color Result = Constants->Texture->Sample(TexCoord, false);
+        assert(Result.GammaSpace == rndr::GammaSpace::Linear);
 
         return Result;
     };
@@ -73,7 +74,6 @@ rndr::Model* CreateModel()
     Pipeline->VertexShader = VertexShader;
     Pipeline->PixelShader = PixelShader;
     Pipeline->DepthTest = rndr::DepthTest::LesserThen;
-    Pipeline->bApplyGammaCorrection = true;
 
     // clang-format off
     std::vector<VertexData> Data =
@@ -118,7 +118,7 @@ int main()
 
     const std::string AssetPath = ASSET_DIR "/SMS_Ranger_Title.bmp";
     std::unique_ptr<rndr::Image> Texture{rndr::ReadImageFile(AssetPath)};
-    Texture->SetPixelLayout(rndr::PixelLayout::A8R8G8B8);
+    Texture->SetPixelFormat(rndr::GammaSpace::GammaCorrected, rndr::PixelLayout::A8R8G8B8);
 
     std::unique_ptr<rndr::Model> Model{CreateModel()};
 
@@ -188,7 +188,7 @@ int main()
         Model->SetConstants(Constants);
 
         Renderer.Draw(Model.get(), 1);
-        ColorImage->CopyFrom(*Texture, rndr::Point2i{100, 100});
+        ColorImage->RenderImage(*Texture, rndr::Point2i{100, 100});
 
         Window.RenderToWindow();
 

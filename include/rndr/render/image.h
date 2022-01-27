@@ -3,6 +3,7 @@
 #include <functional>
 
 #include "rndr/core/bounds2.h"
+#include "rndr/core/color.h"
 #include "rndr/core/math.h"
 #include "rndr/core/rndr.h"
 
@@ -18,7 +19,7 @@ struct ImageConfig
     int Height = 768;
 
     rndr::PixelLayout PixelLayout = rndr::PixelLayout::A8R8G8B8;
-    rndr::PixelFormat PixelFormat = rndr::PixelFormat::sRGBA;
+    rndr::GammaSpace GammaSpace = rndr::GammaSpace::GammaCorrected;
 
     rndr::ImageFiltering MagFilter = rndr::ImageFiltering::NearestNeighbor;
     rndr::ImageFiltering MinFilter = rndr::ImageFiltering::NearestNeighbor;
@@ -42,9 +43,9 @@ public:
     void UpdateSize(int Width, int Height);
 
     /**
-     * Change the ordering and/or a size of channels in a pixel.
+     * Change the ordering and/or a size of channels in a pixel as well as gamma space.
      */
-    void SetPixelLayout(rndr::PixelLayout Layout);
+    void SetPixelFormat(rndr::GammaSpace Space, rndr::PixelLayout Layout);
 
     /**
      * Get data buffer.
@@ -113,17 +114,12 @@ public:
     void SetPixelDepth(int X, int Y, real Depth);
 
     /**
-     * Color a block that starts at BottomLeft of size Size with Color.
-     */
-    void RenderBlock(const Point2i& BottomLeft, const Point2i& Size, rndr::Color Color);
-
-    /**
      * Copies content from Source to this image.
      *
      * @param Source Source image.
      * @param BottomLeft Bottom left point to which to copy the Source image.
      */
-    void CopyFrom(const rndr::Image& Source, const Point2i& BottomLeft);
+    void RenderImage(const rndr::Image& Source, const Point2i& BottomLeft);
 
     /**
      * Clear the buffer with specified value.
@@ -144,8 +140,13 @@ public:
      */
     rndr::Color Sample(const Point2r& TexCoord, bool Magnified);
 
+protected:
+    void SetPixelColor(const Point2i& Position, uint32_t Color);
+    void SetPixelColor(int X, int Y, uint32_t Color);
+
 private:
     ImageConfig m_Config;
+
     Bounds2i m_Bounds;
     uint8_t* m_Buffer = nullptr;
 };

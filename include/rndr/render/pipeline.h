@@ -16,8 +16,7 @@ struct Pipeline
 
     rndr::DepthTest DepthTest = rndr::DepthTest::None;
 
-    bool bApplyGammaCorrection = false;
-    real Gamma = 2.4;
+    real Gamma = RNDR_GAMMA;
 
     rndr::Image* ColorImage = nullptr;
     rndr::Image* DepthImage = nullptr;

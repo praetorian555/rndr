@@ -12,47 +12,6 @@ rndr::Image::Image(const ImageConfig& Config) : m_Config(Config)
     UpdateSize(Config.Width, Config.Height);
 }
 
-rndr::Image::~Image()
-{
-    delete m_Buffer;
-}
-
-uint32_t rndr::Image::GetPixelSize() const
-{
-    return rndr::GetPixelSize(m_Config.PixelLayout);
-}
-
-rndr::Color rndr::Image::GetPixelColor(const Point2i& Location) const
-{
-    assert(Location.X >= 0 && Location.X < m_Config.Width);
-    assert(Location.Y >= 0 && Location.Y < m_Config.Height);
-    assert(m_Buffer);
-
-    const uint32_t* Pixels = (uint32_t*)m_Buffer;
-    const uint32_t Value = Pixels[Location.X + Location.Y * m_Config.Width];
-    return rndr::Color(Value);
-}
-
-rndr::Color rndr::Image::GetPixelColor(int X, int Y) const
-{
-    return GetPixelColor(Point2i{X, Y});
-}
-
-real rndr::Image::GetPixelDepth(const Point2i& Location) const
-{
-    assert(Location.X >= 0 && Location.X < m_Config.Width);
-    assert(Location.Y >= 0 && Location.Y < m_Config.Height);
-    assert(m_Buffer);
-
-    const real* Depths = (real*)m_Buffer;
-    return Depths[Location.X + Location.Y * m_Config.Width];
-}
-
-real rndr::Image::GetPixelDepth(int X, int Y) const
-{
-    return GetPixelDepth(Point2i{X, Y});
-}
-
 void rndr::Image::UpdateSize(int Width, int Height)
 {
     RNDR_CPU_TRACE("Image Update Size");
@@ -79,6 +38,48 @@ void rndr::Image::UpdateSize(int Width, int Height)
     m_Buffer = new uint8_t[ByteCount];
 }
 
+rndr::Image::~Image()
+{
+    delete m_Buffer;
+}
+
+uint32_t rndr::Image::GetPixelSize() const
+{
+    return rndr::GetPixelSize(m_Config.PixelLayout);
+}
+
+rndr::Color rndr::Image::GetPixelColor(const Point2i& Location) const
+{
+    assert(Location.X >= 0 && Location.X < m_Config.Width);
+    assert(Location.Y >= 0 && Location.Y < m_Config.Height);
+    assert(m_Buffer);
+
+    // TODO(mkostic): Add support for different sizes of pixels in memory
+    const uint32_t* Pixels = (uint32_t*)m_Buffer;
+    const uint32_t Value = Pixels[Location.X + Location.Y * m_Config.Width];
+    return rndr::Color(Value, m_Config.GammaSpace, m_Config.PixelLayout, true);
+}
+
+rndr::Color rndr::Image::GetPixelColor(int X, int Y) const
+{
+    return GetPixelColor(Point2i{X, Y});
+}
+
+real rndr::Image::GetPixelDepth(const Point2i& Location) const
+{
+    assert(Location.X >= 0 && Location.X < m_Config.Width);
+    assert(Location.Y >= 0 && Location.Y < m_Config.Height);
+    assert(m_Buffer);
+
+    const real* Depths = (real*)m_Buffer;
+    return Depths[Location.X + Location.Y * m_Config.Width];
+}
+
+real rndr::Image::GetPixelDepth(int X, int Y) const
+{
+    return GetPixelDepth(Point2i{X, Y});
+}
+
 void rndr::Image::SetPixelColor(const Point2i& Location, rndr::Color Color)
 {
     assert(Location.X >= 0 && Location.X < m_Config.Width);
@@ -86,10 +87,26 @@ void rndr::Image::SetPixelColor(const Point2i& Location, rndr::Color Color)
     assert(m_Buffer);
 
     uint32_t* Pixels = (uint32_t*)m_Buffer;
-    Pixels[Location.X + Location.Y * m_Config.Width] = Color.ToUInt();
+    Pixels[Location.X + Location.Y * m_Config.Width] =
+        Color.ToUInt32(m_Config.GammaSpace, m_Config.PixelLayout);
 }
 
 void rndr::Image::SetPixelColor(int X, int Y, rndr::Color Color)
+{
+    SetPixelColor(Point2i{X, Y}, Color);
+}
+
+void rndr::Image::SetPixelColor(const Point2i& Location, uint32_t Color)
+{
+    assert(Location.X >= 0 && Location.X < m_Config.Width);
+    assert(Location.Y >= 0 && Location.Y < m_Config.Height);
+    assert(m_Buffer);
+
+    uint32_t* Pixels = (uint32_t*)m_Buffer;
+    Pixels[Location.X + Location.Y * m_Config.Width] = Color;
+}
+
+void rndr::Image::SetPixelColor(int X, int Y, uint32_t Color)
 {
     SetPixelColor(Point2i{X, Y}, Color);
 }
@@ -113,10 +130,12 @@ void rndr::Image::ClearColorBuffer(rndr::Color Color)
 {
     RNDR_CPU_TRACE("Image Clear Color");
 
+    // TODO(mkostic): Add support for different pixel layout sizes
+    const uint32_t C = Color.ToUInt32(m_Config.GammaSpace, m_Config.PixelLayout);
+
     ParallelFor(m_Config.Height, 64,
-                [this, Color](int RowIndex)
+                [this, C](int RowIndex)
                 {
-                    const uint32_t C = Color.ToUInt();
                     uint32_t* Pixels = (uint32_t*)m_Buffer + m_Config.Width * RowIndex;
                     const uint32_t Size = m_Config.Width;
                     for (int i = 0; i < Size; i++)
@@ -147,47 +166,7 @@ real rndr::Image::GetAspectRatio() const
     return m_Config.Height != 0 ? m_Config.Width / (real)m_Config.Height : 1;
 }
 
-static rndr::Color BlendColor(rndr::PixelFormat Format, rndr::Color Src, rndr::Color Dst)
-{
-    if (Format == rndr::PixelFormat::RGB || Format == rndr::PixelFormat::sRGB)
-    {
-        return Dst;
-    }
-
-    if (Format == rndr::PixelFormat::RGBA)
-    {
-        rndr::Color NewValue;
-        real InvColorSrc = 1 - Src.A;
-
-        NewValue.R = Src.A * Src.R + Dst.R * Dst.A * InvColorSrc;
-        NewValue.G = Src.A * Src.G + Dst.G * Dst.A * InvColorSrc;
-        NewValue.B = Src.A * Src.B + Dst.B * Dst.A * InvColorSrc;
-        NewValue.A = Src.A + Dst.A * InvColorSrc;
-
-        return NewValue;
-    }
-
-    if (Format == rndr::PixelFormat::sRGBA)
-    {
-        rndr::Color LinSrc = Src.ToLinearSpace(2.4);
-        rndr::Color LinDst = Dst.ToLinearSpace(2.4);
-
-        rndr::Color NewValue;
-        real InvColorSrc = 1 - Src.A;
-
-        NewValue.R = LinSrc.A * LinSrc.R + LinDst.R * LinDst.A * InvColorSrc;
-        NewValue.G = LinSrc.A * LinSrc.G + LinDst.G * LinDst.A * InvColorSrc;
-        NewValue.B = LinSrc.A * LinSrc.B + LinDst.B * LinDst.A * InvColorSrc;
-        NewValue.A = LinSrc.A + LinDst.A * InvColorSrc;
-
-        return NewValue.ToGammaCorrectSpace(2.4);
-    }
-
-    assert(false);
-    return rndr::Color::Pink;
-}
-
-void rndr::Image::CopyFrom(const rndr::Image& Source, const Point2i& BottomLeft)
+void rndr::Image::RenderImage(const rndr::Image& Source, const Point2i& BottomLeft)
 {
     RNDR_CPU_TRACE("Image Copy From");
 
@@ -212,48 +191,32 @@ void rndr::Image::CopyFrom(const rndr::Image& Source, const Point2i& BottomLeft)
         }
     }
 
-    for (int X = 0; X < OverlapBounds.Extent().X; X++)
-    {
-        for (int Y = 0; Y < OverlapBounds.Extent().Y; Y++)
-        {
-            Point2i Position{X, Y};
-            Color SourceColor = Source.GetPixelColor(SourceStart + Position);
-            Color DstColor = GetPixelColor(BottomLeft + Position);
-            Color BlendColor = ::BlendColor(m_Config.PixelFormat, SourceColor, DstColor);
-            SetPixelColor(BottomLeft + Position, BlendColor);
-        }
-    }
+    ParallelFor(OverlapBounds.Extent(), 16,
+                [&](int X, int Y)
+                {
+                    Point2i Position{X, Y};
+                    Color SourceColor = Source.GetPixelColor(SourceStart + Position);
+                    Color DstColor = GetPixelColor(BottomLeft + Position);
+                    Color BlendColor = Color::Blend(SourceColor, DstColor);
+                    SetPixelColor(BottomLeft + Position, BlendColor);
+                });
 }
 
-void rndr::Image::SetPixelLayout(rndr::PixelLayout Layout)
+void rndr::Image::SetPixelFormat(rndr::GammaSpace Space, rndr::PixelLayout Layout)
 {
-    if (m_Config.PixelLayout == Layout)
-    {
-        return;
-    }
+    // TODO(mkostic): Add support for layouts that use more or less then 4 bytes
+    assert(rndr::GetPixelSize(Layout) == 4);
 
-    const int OldPixelSize = rndr::GetPixelSize(m_Config.PixelLayout);
-    const int NewPixelSize = rndr::GetPixelSize(Layout);
+    ParallelFor(m_Bounds.pMax, 64,
+                [&](int X, int Y)
+                {
+                    const Color OldColor = GetPixelColor(X, Y);
+                    const uint32_t NewColor = OldColor.ToUInt32(Space, Layout);
+                    SetPixelColor(X, Y, NewColor);
+                });
 
-    // TODO(mkostic): Add support for this case
-    assert(OldPixelSize == NewPixelSize);
-
-    if (OldPixelSize == 4 && NewPixelSize == 4)
-    {
-        uint32_t* OldPixels = (uint32_t*)m_Buffer;
-        uint32_t* NewPixels = (uint32_t*)m_Buffer;
-        const int Count = m_Config.Width * m_Config.Height;
-        for (int i = 0; i < Count; i++)
-        {
-            const Color Color(OldPixels[i], m_Config.PixelLayout);
-            NewPixels[i] = Color.ToUInt(Layout);
-        }
-    }
-    else
-    {
-        // TODO(mkostic): Add support for this case
-        assert(false);
-    }
+    m_Config.PixelLayout = Layout;
+    m_Config.GammaSpace = Space;
 }
 
 rndr::Color rndr::Image::Sample(const Point2r& TexCoord, bool Magnified)
@@ -272,6 +235,11 @@ rndr::Color rndr::Image::Sample(const Point2r& TexCoord, bool Magnified)
     }
     else if (Filter == ImageFiltering::BilinearInterpolation)
     {
+    }
+
+    if (Result.GammaSpace == rndr::GammaSpace::GammaCorrected)
+    {
+        Result = Result.ToLinearSpace();
     }
 
     return Result;
