@@ -29,7 +29,7 @@ void rndr::CpuTracer::Init()
 
     std::stringstream ss;
     ss << std::put_time(std::localtime(&in_time_t), "%d-%m-%Y-%Hh%Mm%Ss");
-    const std::string OutputName = "cputrace-" + ss.str() + ".log";
+    const std::string OutputName = "cputrace/cputrace-" + ss.str() + ".log";
 
     s_SpdLogger = spdlog::create_async<spdlog::sinks::basic_file_sink_mt>("async_cputrace_logger",
                                                                           OutputName);
