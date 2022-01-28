@@ -52,7 +52,7 @@ public:
      *
      * @return Returns a pointer to the byte array.
      */
-    uint8_t* GetBuffer() { return m_Buffer; }
+    uint8_t* GetBuffer() { return m_Buffer.data(); }
 
     /**
      * Get image configurations.
@@ -148,7 +148,7 @@ private:
     ImageConfig m_Config;
 
     Bounds2i m_Bounds;
-    uint8_t* m_Buffer = nullptr;
+    std::vector<uint8_t> m_Buffer;
 };
 
 }  // namespace rndr
