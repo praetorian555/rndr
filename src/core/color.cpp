@@ -42,6 +42,14 @@ rndr::Color::Color(uint32_t Value,
             A = ((Value >> 0) & 0xFF) / 255.;
             break;
         }
+        case PixelLayout::R8G8B8A8:
+        {
+            R = ((Value >> 24) & 0xFF) / 255.;
+            G = ((Value >> 16) & 0xFF) / 255.;
+            B = ((Value >> 8) & 0xFF) / 255.;
+            A = ((Value >> 0) & 0xFF) / 255.;
+            break;
+        }
         default:
         {
             RNDR_LOG_ERROR("Color::Color: Unsupported pixel layout! Got %u", (uint32_t)Layout);
@@ -127,6 +135,14 @@ uint32_t rndr::Color::ToUInt32(rndr::GammaSpace DesiredSpace, rndr::PixelLayout 
             Result |= (BB << 24);
             Result |= (GG << 16);
             Result |= (RR << 8);
+            Result |= (AA << 0);
+            break;
+        }
+        case PixelLayout::R8G8B8A8:
+        {
+            Result |= (RR << 24);
+            Result |= (GG << 16);
+            Result |= (BB << 8);
             Result |= (AA << 0);
             break;
         }
