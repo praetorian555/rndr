@@ -14,15 +14,11 @@
 #include "rndr/render/pipeline.h"
 #include "rndr/render/rasterizer.h"
 
+#include "rndr/geometry/cube.h"
+
 #include "rndr/profiling/cputracer.h"
 
 #include <Windows.h>
-
-struct VertexData
-{
-    rndr::Point3r Position;
-    rndr::Point2r TextureCoords;
-};
 
 struct ConstantData
 {
@@ -37,7 +33,7 @@ rndr::Model* CreateModel()
     VertexShader->Callback = [](const rndr::PerVertexInfo& Info)
     {
         ConstantData* Constants = (ConstantData*)Info.Constants;
-        VertexData* Data = (VertexData*)Info.VertexData;
+        rndr::CubeVertexData* Data = (rndr::CubeVertexData*)Info.VertexData;
 
         const rndr::Point3r WorldSpace = (*Constants->FromModelToWorld)(Data->Position);
 #if 0
@@ -55,8 +51,9 @@ rndr::Model* CreateModel()
     {
         const ConstantData* const Constants = (ConstantData*)Info.Constants;
 
+        const size_t TextureCoordsOffset = offsetof(rndr::CubeVertexData, TextureCoords);
         const rndr::Point2r TexCoord =
-            Info.Interpolate<rndr::Point2r, VertexData>(offsetof(VertexData, TextureCoords));
+            Info.Interpolate<rndr::Point2r, rndr::CubeVertexData>(TextureCoordsOffset);
 
         // rndr::Vector2r duvdx = Info.DerivativeX<rndr::Point2r, VertexData, rndr::Vector2r>(
         //    offsetof(VertexData, TextureCoords));
@@ -75,36 +72,10 @@ rndr::Model* CreateModel()
     Pipeline->PixelShader = PixelShader;
     Pipeline->DepthTest = rndr::DepthTest::LesserThen;
 
-    // clang-format off
-    std::vector<VertexData> Data =
-    {
-        {{-0.5, -0.5,  0.5}, {0, 0}}, // 0
-        {{ 0.5, -0.5,  0.5}, {1, 0}}, // 1
-        {{-0.5,  0.5,  0.5}, {0, 1}}, // 2
-        {{ 0.5,  0.5,  0.5}, {1, 1}}, // 3
-        {{-0.5, -0.5, -0.5}, {0, 0}}, // 5
-        {{ 0.5, -0.5, -0.5}, {0, 1}}, // 4
-        {{-0.5,  0.5, -0.5}, {1, 0}}, // 7
-        {{ 0.5,  0.5, -0.5}, {1, 1}}, // 6
-    };
-    // clang-format on
-
-    // clang-format off
-    std::vector<int> Indices = {
-        0, 1, 3, 0, 3, 2, // front face
-        5, 4, 6, 5, 6, 7, // back face
-        4, 5, 0, 5, 1, 0, // bottom face
-        2, 3, 6, 3, 7, 6, // top face
-        4, 0, 6, 0, 2, 6, // left face
-        1, 5, 3, 5, 7, 3  // right face
-
-    };
-    // clang-format on
-
     rndr::Model* Model = new rndr::Model();
     Model->SetPipeline(Pipeline);
-    Model->SetVertexData(Data);
-    Model->SetIndices(Indices);
+    Model->SetVertexData(rndr::Cube::GetVertices());
+    Model->SetIndices(rndr::Cube::GetIndices());
 
     return Model;
 }
@@ -139,9 +110,11 @@ int main()
     rndr::WindowDelegates::OnResize.Add([Camera](rndr::Window*, int Width, int Height)
                                         { Camera->UpdateTransforms(Width, Height); });
 
+    bool bRotationOn = true;
     real ModelDepth = -60;
     rndr::WindowDelegates::OnKeyboardEvent.Add(
-        [&ModelDepth](rndr::Window*, rndr::KeyState State, rndr::VirtualKeyCode KeyCode)
+        [&ModelDepth, &bRotationOn](rndr::Window*, rndr::KeyState State,
+                                    rndr::VirtualKeyCode KeyCode)
         {
             const real Delta = 10;
             if (State == rndr::KeyState::Down)
@@ -153,6 +126,10 @@ int main()
                 if (KeyCode == 0x45)
                 {
                     ModelDepth += Delta;
+                }
+                if (KeyCode == 0x20)
+                {
+                    bRotationOn = !bRotationOn;
                 }
             }
         });
@@ -194,7 +171,11 @@ int main()
 
         auto End = std::chrono::high_resolution_clock().now();
         int Duration = std::chrono::duration_cast<std::chrono::milliseconds>(End - Start).count();
-        TotalTime += Duration;
+
+        if (bRotationOn)
+        {
+            TotalTime += Duration;
+        }
     }
 
     return 0;
