@@ -43,10 +43,8 @@ int rndr::GetPixelSize(PixelLayout Layout)
     switch (Layout)
     {
         case PixelLayout::A8R8G8B8:
-        {
-            return 4;
-        }
         case PixelLayout::B8G8R8A8:
+        case PixelLayout::R8G8B8A8:
         {
             return 4;
         }
@@ -61,41 +59,4 @@ int rndr::GetPixelSize(PixelLayout Layout)
     }
 
     return 0;
-}
-
-rndr::Image* rndr::ReadImageFile(const std::string& FilePath)
-{
-    const ImageFileFormat FileFormat = GetImageFileFormat(FilePath);
-    assert(FileFormat != ImageFileFormat::NotSupported);
-
-    switch (FileFormat)
-    {
-        case ImageFileFormat::BMP:
-        {
-            return BmpParser::Read(FilePath);
-        }
-        default:
-        {
-            assert(false);
-        }
-    }
-
-    return nullptr;
-}
-
-rndr::ImageFileFormat rndr::GetImageFileFormat(const std::string& FilePathStr)
-{
-    static const char* SupportedExtensions[] = {".bmp"};
-    static const int ExtensionCount = sizeof(SupportedExtensions) / sizeof(const char*);
-
-    const std::filesystem::path FilePath(FilePathStr);
-    for (int i = 0; i < ExtensionCount; i++)
-    {
-        if (FilePath.extension().string() == SupportedExtensions[i])
-        {
-            return (ImageFileFormat)i;
-        }
-    }
-
-    return ImageFileFormat::NotSupported;
 }

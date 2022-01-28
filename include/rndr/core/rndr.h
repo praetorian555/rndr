@@ -63,6 +63,8 @@ enum class GammaSpace
 enum class ImageFileFormat
 {
     BMP = 0,
+    PNG,
+    JPEG,
     NotSupported
 };
 

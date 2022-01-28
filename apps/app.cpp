@@ -3,6 +3,7 @@
 
 #include "rndr/core/camera.h"
 #include "rndr/core/color.h"
+#include "rndr/core/fileutils.h"
 #include "rndr/core/log.h"
 #include "rndr/core/singletons.h"
 #include "rndr/core/threading.h"
