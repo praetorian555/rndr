@@ -8,7 +8,6 @@
 #include "rndr/core/singletons.h"
 #include "rndr/core/threading.h"
 #include "rndr/core/transform.h"
-#include "rndr/core/utilities.h"
 #include "rndr/core/window.h"
 
 #include "rndr/render/model.h"

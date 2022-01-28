@@ -3,7 +3,6 @@
 #include "rndr/core/color.h"
 #include "rndr/core/math.h"
 #include "rndr/core/threading.h"
-#include "rndr/core/utilities.h"
 
 #include "rndr/profiling/cputracer.h"
 
