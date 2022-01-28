@@ -103,7 +103,7 @@ public:
 
     Vector2<T> Extent() const
     {
-        Vector2<T> Extent{std::abs(pMax.X - pMin.X), std::abs(pMax.Y - pMin.Y)};
+        Vector2<T> Extent{std::abs(pMax.X - pMin.X) + 1, std::abs(pMax.Y - pMin.Y) + 1};
         return Extent;
     }
 };
