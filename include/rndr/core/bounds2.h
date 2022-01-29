@@ -103,7 +103,7 @@ public:
 
     Vector2<T> Extent() const
     {
-        Vector2<T> Extent{std::abs(pMax.X - pMin.X) + 1, std::abs(pMax.Y - pMin.Y) + 1};
+        Vector2<T> Extent{std::abs(pMax.X - pMin.X), std::abs(pMax.Y - pMin.Y)};
         return Extent;
     }
 };
@@ -132,22 +132,22 @@ Bounds2<T> Intersect(const Bounds2<T>& b1, const Bounds2<T>& b2)
 template <typename T>
 bool Overlaps(const Bounds2<T>& b1, const Bounds2<T>& b2)
 {
-    bool X = (b1.pMax.X >= b2.pMin.X) && (b1.pMin.X <= b2.pMax.X);
-    bool Y = (b1.pMax.Y >= b2.pMin.Y) && (b1.pMin.Y <= b2.pMax.Y);
+    bool X = (b1.pMax.X >= b2.pMin.X) && (b1.pMin.X < b2.pMax.X);
+    bool Y = (b1.pMax.Y >= b2.pMin.Y) && (b1.pMin.Y < b2.pMax.Y);
     return (X && Y);
 }
 
 template <typename T>
 bool Inside(const Point2<T>& p, const Bounds2<T>& b)
 {
-    return (p.X >= b.pMin.X && p.X <= b.pMax.X && p.Y >= b.pMin.Y && p.Y <= b.pMax.Y);
+    return (p.X >= b.pMin.X && p.X < b.pMax.X && p.Y >= b.pMin.Y && p.Y < b.pMax.Y);
 }
 
 // The point is not counted if it is on the upper boundrY of the boX
 template <typename T>
-bool InsideEXclusive(const Point2<T>& p, const Bounds2<T>& b)
+bool InsideInclusive(const Point2<T>& p, const Bounds2<T>& b)
 {
-    return (p.X >= b.pMin.X && p.X < b.pMax.X && p.Y >= b.pMin.Y && p.Y < b.pMax.Y);
+    return (p.X >= b.pMin.X && p.X <= b.pMax.X && p.Y >= b.pMin.Y && p.Y <= b.pMax.Y);
 }
 
 template <typename T, typename U>

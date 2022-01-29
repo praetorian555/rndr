@@ -19,7 +19,7 @@ void rndr::Image::UpdateSize(int Width, int Height)
     m_Config.Height = Height;
 
     m_Bounds.pMin = Point2i{0, 0};
-    m_Bounds.pMax = Point2i{m_Config.Width - 1, m_Config.Height - 1};
+    m_Bounds.pMax = Point2i{m_Config.Width, m_Config.Height};
 
     if (m_Config.Width == 0 || m_Config.Height == 0)
     {

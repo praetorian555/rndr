@@ -120,87 +120,10 @@ public:
 
     Vector3<T> Extent() const
     {
-        Vector3<T> Extent{std::abs(pMax.X - pMin.X) + 1, std::abs(pMax.Y - pMin.Y) + 1,
-                          std::abs(pMax.Z - pMin.Z) + 1};
+        Vector3<T> Extent{std::abs(pMax.X - pMin.X), std::abs(pMax.Y - pMin.Y),
+                          std::abs(pMax.Z - pMin.Z)};
         return Extent;
     }
-
-    // bool IntersectP(const RaY& raY, PBR_OUT real* hitt0, PBR_OUT real* hitt1) const
-    //{
-    //    real t0 = 0, t1 = raY.tMaX;
-
-    //    for (int i = 0; i < 3; i++)
-    //    {
-    //        real invDir = 1 / raY.d[i];
-    //        real tNear = (pMin[i] - raY.o[i]) * invDir;
-    //        real tFar = (pMax[i] - raY.o[i]) * invDir;
-
-    //        if (tNear > tFar)
-    //        {
-    //            std::swap(tNear, tFar);
-    //        }
-
-    //        // In general calculation of the t values is bounded bY Gamma(3), and whenever error
-    //        // bounds around tMin and tMaX overlap we should return true since it is ok to report
-    //        // false intersection and it is not ok to ignore a true intersection. Increasing the
-    //        // tMaX bY 2 * Gamma(3) will make sure that we return true in these cases.
-    //        tFar *= 1 + 2 * Gamma(3);
-
-    //        t0 = tNear > t0 ? tNear : t0;
-    //        t1 = tFar < t1 ? tFar : t1;
-
-    //        if (t0 > t1)
-    //        {
-    //            return false;
-    //        }
-    //    }
-
-    //    if (hitt0)
-    //    {
-    //        *hitt0 = t0;
-    //    }
-    //    if (hitt1)
-    //    {
-    //        *hitt1 = t1;
-    //    }
-
-    //    return true;
-    //}
-
-    // bool IntersectP(const RaY& raY, const Vector3f& invDir, const int dirIsNeg[3]) const
-    //{
-    //    const Bounds3f& bounds = *this;
-
-    //    real tMin = (bounds[dirIsNeg[0]].X - raY.o.X) * invDir.X;
-    //    real tMaX = (bounds[1 - dirIsNeg[0]].X - raY.o.X) * invDir.X;
-    //    tMaX *= 1 + 2 * Gamma(3);
-
-    //    real tYMin = (bounds[dirIsNeg[1]].Y - raY.o.Y) * invDir.Y;
-    //    real tYMaX = (bounds[1 - dirIsNeg[1]].Y - raY.o.Y) * invDir.Y;
-    //    tYMaX *= 1 + 2 * Gamma(3);
-
-    //    if (tMin > tYMaX || tYMin > tMaX)
-    //    {
-    //        return false;
-    //    }
-
-    //    tMin = tYMin > tMin ? tYMin : tMin;
-    //    tMaX = tYMaX < tMaX ? tYMaX : tMaX;
-
-    //    real tZMin = (bounds[dirIsNeg[2]].Z - raY.o.Z) * invDir.Z;
-    //    real tZMaX = (bounds[1 - dirIsNeg[2]].Z - raY.o.Z) * invDir.Z;
-    //    tZMaX *= 1 + 2 * Gamma(3);
-
-    //    if (tMin > tZMaX || tZMin > tMaX)
-    //    {
-    //        return false;
-    //    }
-
-    //    tMin = tZMin > tMin ? tZMin : tMin;
-    //    tMaX = tZMaX < tMaX ? tZMaX : tMaX;
-
-    //    return (tMin < raY.tMaX) && (tMaX > 0);
-    //}
 };
 
 template <typename T>
@@ -232,25 +155,25 @@ Bounds3<T> Intersect(const Bounds3<T>& b1, const Bounds3<T>& b2)
 template <typename T>
 bool Overlaps(const Bounds3<T>& b1, const Bounds3<T>& b2)
 {
-    bool X = (b1.pMax.X >= b2.pMin.X) && (b1.pMin.X <= b2.pMax.X);
-    bool Y = (b1.pMax.Y >= b2.pMin.Y) && (b1.pMin.Y <= b2.pMax.Y);
-    bool Z = (b1.pMax.Z >= b2.pMin.Z) && (b1.pMin.Z <= b2.pMax.Z);
+    bool X = (b1.pMax.X >= b2.pMin.X) && (b1.pMin.X < b2.pMax.X);
+    bool Y = (b1.pMax.Y >= b2.pMin.Y) && (b1.pMin.Y < b2.pMax.Y);
+    bool Z = (b1.pMax.Z >= b2.pMin.Z) && (b1.pMin.Z < b2.pMax.Z);
     return (X && Y && Z);
 }
 
 template <typename T>
 bool Inside(const Point3<T>& p, const Bounds3<T>& b)
 {
-    return (p.X >= b.pMin.X && p.X <= b.pMax.X && p.Y >= b.pMin.Y && p.Y <= b.pMax.Y &&
-            p.Z >= b.pMin.Z && p.Z <= b.pMax.Z);
+    return (p.X >= b.pMin.X && p.X < b.pMax.X && p.Y >= b.pMin.Y && p.Y < b.pMax.Y &&
+            p.Z >= b.pMin.Z && p.Z < b.pMax.Z);
 }
 
 // The point is not counted if it is on the upper boundry of the box
 template <typename T>
-bool InsideExclusive(const Point3<T>& p, const Bounds3<T>& b)
+bool InsideInclusive(const Point3<T>& p, const Bounds3<T>& b)
 {
-    return (p.X >= b.pMin.X && p.X < b.pMax.X && p.Y >= b.pMin.Y && p.Y < b.pMax.Y &&
-            p.Z >= b.pMin.Z && p.Z < b.pMax.Z);
+    return (p.X >= b.pMin.X && p.X <= b.pMax.X && p.Y >= b.pMin.Y && p.Y <= b.pMax.Y &&
+            p.Z >= b.pMin.Z && p.Z <= b.pMax.Z);
 }
 
 template <typename T, typename U>

@@ -152,7 +152,7 @@ void rndr::Rasterizer::Draw(rndr::Model* Model, int InstanceCount)
         const Point2i Size{std::min(BlockSize, ImageSize.X - StartPoint.X),
                            std::min(BlockSize, ImageSize.Y - StartPoint.Y)};
         const Point2i EndPoint = StartPoint + Size;
-        const Bounds2i BlockBounds{StartPoint, EndPoint + -1};
+        const Bounds2i BlockBounds{StartPoint, EndPoint};
 
         std::vector<const Triangle*> OverlappingTriangles;
         for (const Triangle& T : Triangles)
