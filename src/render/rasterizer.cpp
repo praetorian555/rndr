@@ -253,7 +253,7 @@ void rndr::Rasterizer::Draw(rndr::Model* Model, int InstanceCount)
     }
 
     const Point2i ImageSize = m_Pipeline->ColorImage->GetBounds().pMax + 1;
-    const int BlockSize = 16;
+    const int BlockSize = 64;
     Point2i BlockGrid;
     BlockGrid.X =
         ImageSize.X % BlockSize == 0 ? ImageSize.X / BlockSize : (ImageSize.X / BlockSize) + 1;
