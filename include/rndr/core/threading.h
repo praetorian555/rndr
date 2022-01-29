@@ -24,12 +24,16 @@ struct TaskBase
     virtual ~TaskBase() = default;
     virtual void Execute() = 0;
     virtual bool WaitUntilDone() = 0;
+
+    std::vector<std::shared_ptr<TaskBase>> TasksToWait;
 };
 
 /**
  * Shared pointer to the TaskBase.
  */
 using TaskBaseSP = std::shared_ptr<TaskBase>;
+
+extern thread_local TaskBase* st_ActiveTask;
 
 /**
  * Task that executes a function with no arguments and no return values.
@@ -42,14 +46,22 @@ public:
 
     virtual void Execute() override
     {
+        st_ActiveTask = this;
         m_Function();
         m_bDone = true;
+        st_ActiveTask = nullptr;
     }
 
     virtual bool WaitUntilDone() override
     {
+        assert(!st_ActiveTask);
         while (!m_bDone)
             continue;
+
+        for (auto& TaskToWait : TasksToWait)
+        {
+            TaskToWait->WaitUntilDone();
+        }
 
         return true;
     }
@@ -168,6 +180,14 @@ void ParallelFor(int End, int BatchSize, Function F, int Start)
         Tasks.push_back(Task);
     }
 
+#if RNDR_ENABLE_MULTITHREADING
+    if (st_ActiveTask)
+    {
+        st_ActiveTask->TasksToWait = Tasks;
+        return;
+    }
+#endif  // RNDR_ENABLE_MULTITHREADING
+
     for (auto& Task : Tasks)
     {
 #if RNDR_ENABLE_MULTITHREADING
@@ -206,6 +226,14 @@ void ParallelFor(const Point2i End, int BatchSize, Function F, const Point2i Sta
             Tasks.push_back(Task);
         }
     }
+
+#if RNDR_ENABLE_MULTITHREADING
+    if (st_ActiveTask)
+    {
+        st_ActiveTask->TasksToWait = Tasks;
+        return;
+    }
+#endif  // RNDR_ENABLE_MULTITHREADING
 
     for (auto& Task : Tasks)
     {

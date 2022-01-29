@@ -4,6 +4,8 @@
 
 std::unique_ptr<rndr::Scheduler> rndr::Scheduler::s_Scheduler = nullptr;
 
+thread_local rndr::TaskBase* rndr::st_ActiveTask;
+
 rndr::Scheduler* rndr::Scheduler::Get()
 {
     if (!s_Scheduler)
