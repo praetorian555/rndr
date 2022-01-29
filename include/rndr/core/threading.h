@@ -130,13 +130,13 @@ TaskBaseSP MakeTask(Function F);
  * return any value.
  */
 template <typename Function>
-void ParallelFor(int End, int BatchSize, Function F);
+void ParallelFor(int End, int BatchSize, Function F, int Start = 0);
 
 template <typename Function>
-void ParallelFor(const Point2i End, int BatchSize, Function F);
+void ParallelFor(const Point2i End, int BatchSize, Function F, const Point2i Start = {0, 0});
 
 template <typename Function>
-void ParallelFor(const Vector2i End, int BatchSize, Function F);
+void ParallelFor(const Vector2i End, int BatchSize, Function F, const Vector2i Start = {0, 0});
 
 // Implementation /////////////////////////////////////////////////////////////////////////////////
 
@@ -147,10 +147,10 @@ TaskBaseSP MakeTask(Function F)
 }
 
 template <typename Function>
-void ParallelFor(int End, int BatchSize, Function F)
+void ParallelFor(int End, int BatchSize, Function F, int Start)
 {
     std::vector<TaskBaseSP> Tasks;
-    for (int i = 0; i < End; i += BatchSize)
+    for (int i = Start; i < End; i += BatchSize)
     {
         TaskBaseSP Task = MakeTask(
             [Start = i, End = std::min(i + BatchSize, End), F]
@@ -179,12 +179,12 @@ void ParallelFor(int End, int BatchSize, Function F)
 }
 
 template <typename Function>
-void ParallelFor(const Point2i End, int BatchSize, Function F)
+void ParallelFor(const Point2i End, int BatchSize, Function F, const Point2i Start)
 {
     std::vector<TaskBaseSP> Tasks;
-    for (int Y = 0; Y < End.Y; Y += BatchSize)
+    for (int Y = Start.Y; Y < End.Y; Y += BatchSize)
     {
-        for (int X = 0; X < End.X; X += BatchSize)
+        for (int X = Start.X; X < End.X; X += BatchSize)
         {
             TaskBaseSP Task = MakeTask(
                 [StartX = X, StartY = Y, EndX = std::min(X + BatchSize, End.X),
@@ -218,9 +218,9 @@ void ParallelFor(const Point2i End, int BatchSize, Function F)
 }
 
 template <typename Function>
-void ParallelFor(const Vector2i End, int BatchSize, Function F)
+void ParallelFor(const Vector2i End, int BatchSize, Function F, const Vector2i Start)
 {
-    ParallelFor(Point2i{End.X, End.Y}, BatchSize, F);
+    ParallelFor(Point2i{End.X, End.Y}, BatchSize, F, {Start.X, Start.Y});
 }
 
 }  // namespace rndr
