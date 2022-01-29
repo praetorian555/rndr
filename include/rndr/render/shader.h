@@ -19,8 +19,13 @@ struct PerPixelInfo
     void* InstanceData;  // Data unique for instance
     void* Constants;     // Data unique for shader
 
-    PerPixelInfo* NextX;
-    PerPixelInfo* NextY;
+    PerPixelInfo* NextX = nullptr;
+    PerPixelInfo* NextY = nullptr;
+
+    int NextXMult = 1;
+    int NextYMult = 1;
+
+    bool bIsInside = false;
 
     /**
      * Used to interpolate values in specified field using barycentric coordinates of this fragment.
@@ -110,7 +115,7 @@ template <typename FieldType, typename VertexDataType, typename ReturnType>
 ReturnType PerPixelInfo::DerivativeX(size_t FieldOffset) const
 {
     const FieldType Start = Interpolate<FieldType, VertexDataType>(FieldOffset);
-    const FieldType End = NextX->Interpolate<FieldType, VertexDataType>(FieldOffset);
+    const FieldType End = NextX ? NextX->Interpolate<FieldType, VertexDataType>(FieldOffset) : Start;
 
     return End - Start;
 }
@@ -119,7 +124,7 @@ template <typename FieldType, typename VertexDataType, typename ReturnType>
 ReturnType PerPixelInfo::DerivativeY(size_t FieldOffset) const
 {
     const FieldType Start = Interpolate<FieldType, VertexDataType>(FieldOffset);
-    const FieldType End = NextY->Interpolate<FieldType, VertexDataType>(FieldOffset);
+    const FieldType End = NextY ? NextY->Interpolate<FieldType, VertexDataType>(FieldOffset) : Start;
 
     return End - Start;
 }

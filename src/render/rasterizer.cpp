@@ -6,6 +6,8 @@
 #include "rndr/core/log.h"
 #include "rndr/core/threading.h"
 
+#include "rndr/memory/stackallocator.h"
+
 #include "rndr/render/image.h"
 #include "rndr/render/model.h"
 
@@ -19,6 +21,16 @@ struct rndr::Triangle
     rndr::Point3r Positions[3];
     rndr::Bounds2i Bounds{{0, 0}, {0, 0}};
     std::unique_ptr<rndr::BarycentricHelper> BarHelper;
+
+    PerPixelInfo* Pixels = nullptr;
+
+    PerPixelInfo& GetPixelInfo(int X, int Y)
+    {
+        assert(rndr::Inside(Point2i{X, Y}, Bounds));
+        assert(Pixels);
+
+        return Pixels[(X - Bounds.pMin.X) + (Y - Bounds.pMin.Y) * Bounds.Diagonal().X];
+    }
 };
 
 static void GetTriangleBounds(const rndr::Point3r (&Positions)[3], rndr::Bounds2i& TriangleBounds)
@@ -34,7 +46,7 @@ static void GetTriangleBounds(const rndr::Point3r (&Positions)[3], rndr::Bounds2
 
     // Min and Max are in continuous space, convert it to discrete space
     TriangleBounds.pMin = rndr::PixelCoordinates::ToDiscreteSpace(Min);
-    TriangleBounds.pMax = rndr::PixelCoordinates::ToDiscreteSpace(Max);
+    TriangleBounds.pMax = rndr::PixelCoordinates::ToDiscreteSpace(Max + 1);
 }
 
 static bool LimitTriangleToSurface(rndr::Bounds2i& TriangleBounds, const rndr::Image* Image)
@@ -61,6 +73,11 @@ static bool ShouldDiscardByDepth(const rndr::Point3r (&Points)[3])
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 
+rndr::Rasterizer::Rasterizer()
+{
+    m_ScratchAllocator = new StackAllocator(RNDR_MB(1000));
+}
+
 void rndr::Rasterizer::SetPipeline(const rndr::Pipeline* Pipeline)
 {
     m_Pipeline = Pipeline;
@@ -70,7 +87,7 @@ void rndr::Rasterizer::Draw(rndr::Model* Model, int InstanceCount)
 {
     RNDR_CPU_TRACE("Draw Model");
 
-    m_Pipeline = Model->GetPipeline();
+    SetPipeline(Model->GetPipeline());
 
     const std::vector<int>& Indices = Model->GetIndices();
 
@@ -138,6 +155,84 @@ void rndr::Rasterizer::Draw(rndr::Model* Model, int InstanceCount)
         }
     }
 
+    // Allocate pixels for each of the triangles
+    for (int TriangleIndex = 0; TriangleIndex < Triangles.size(); TriangleIndex++)
+    {
+        Triangle& T = Triangles[TriangleIndex];
+        const int PixelCount = T.Bounds.SurfaceArea();
+        Triangles[TriangleIndex].Pixels =
+            (PerPixelInfo*)m_ScratchAllocator->Allocate(PixelCount * sizeof(PerPixelInfo), 64);
+    }
+
+    // Calculate barycentric coordinates of all fragments in all visible triangles.
+    ParallelFor(Triangles.size(), 1,
+                [&](int TriangleIndex)
+                {
+                    Triangle& T = Triangles[TriangleIndex];
+                    ParallelFor(
+                        T.Bounds.pMax, 16,
+                        [&](int X, int Y)
+                        {
+                            PerPixelInfo& PixelInfo = T.GetPixelInfo(X, Y);
+                            PixelInfo.VertexData[0] = T.Vertices[0].VertexData;
+                            PixelInfo.VertexData[1] = T.Vertices[1].VertexData;
+                            PixelInfo.VertexData[2] = T.Vertices[2].VertexData;
+                            PixelInfo.InstanceData = T.Vertices[0].InstanceData;
+                            PixelInfo.Constants = T.Vertices[0].Constants;
+                            PixelInfo.Position = Point2i{X, Y};
+                            PixelInfo.BarCoords = T.BarHelper->GetCoordinates(PixelInfo.Position);
+                            PixelInfo.bIsInside = T.BarHelper->IsInside(PixelInfo.BarCoords);
+                        },
+                        T.Bounds.pMin);
+                });
+
+    // Initialize fragment neighbours in all triangles
+    ParallelFor(
+        Triangles.size(), 1,
+        [&](int TriangleIndex)
+        {
+            Triangle& T = Triangles[TriangleIndex];
+            ParallelFor(
+                T.Bounds.pMax, 16,
+                [&](int X, int Y)
+                {
+                    PerPixelInfo& PixelInfo = T.GetPixelInfo(X, Y);
+                    if (!PixelInfo.bIsInside)
+                    {
+                        return;
+                    }
+
+                    // Find valid neighbour along X
+                    PixelInfo.NextX = nullptr;
+                    if (rndr::Inside({X + 1, Y}, T.Bounds) && T.GetPixelInfo(X + 1, Y).bIsInside)
+                    {
+                        PixelInfo.NextX = &T.GetPixelInfo(X + 1, Y);
+                        PixelInfo.NextXMult = 1;
+                    }
+                    else if (rndr::Inside({X - 1, Y}, T.Bounds) &&
+                             T.GetPixelInfo(X - 1, Y).bIsInside)
+                    {
+                        PixelInfo.NextX = &T.GetPixelInfo(X - 1, Y);
+                        PixelInfo.NextXMult = -1;
+                    }
+
+                    // Find valid neighbour along Y
+                    PixelInfo.NextY = nullptr;
+                    if (rndr::Inside({X, Y + 1}, T.Bounds) && T.GetPixelInfo(X, Y + 1).bIsInside)
+                    {
+                        PixelInfo.NextY = &T.GetPixelInfo(X, Y + 1);
+                        PixelInfo.NextYMult = 1;
+                    }
+                    else if (rndr::Inside({X, Y - 1}, T.Bounds) &&
+                             T.GetPixelInfo(X, Y - 1).bIsInside)
+                    {
+                        PixelInfo.NextY = &T.GetPixelInfo(X, Y - 1);
+                        PixelInfo.NextYMult = -1;
+                    }
+                },
+                T.Bounds.pMin);
+        });
+
     const Point2i ImageSize = m_Pipeline->ColorImage->GetBounds().pMax + 1;
     const int BlockSize = 16;
     Point2i BlockGrid;
@@ -146,58 +241,53 @@ void rndr::Rasterizer::Draw(rndr::Model* Model, int InstanceCount)
     BlockGrid.Y =
         ImageSize.Y % BlockSize == 0 ? ImageSize.Y / BlockSize : (ImageSize.Y / BlockSize) + 1;
 
-    auto& PixelShaderProcessor = [&](int BlockX, int BlockY)
-    {
-        const Point2i StartPoint{BlockX * BlockSize, BlockY * BlockSize};
-        const Point2i Size{std::min(BlockSize, ImageSize.X - StartPoint.X),
-                           std::min(BlockSize, ImageSize.Y - StartPoint.Y)};
-        const Point2i EndPoint = StartPoint + Size;
-        const Bounds2i BlockBounds{StartPoint, EndPoint};
-
-        std::vector<const Triangle*> OverlappingTriangles;
-        for (const Triangle& T : Triangles)
-        {
-            if (rndr::Overlaps(T.Bounds, BlockBounds))
-            {
-                OverlappingTriangles.push_back(&T);
-            }
-        }
-
-        for (const Triangle* T : OverlappingTriangles)
-        {
-            PerPixelInfo PixelInfo;
-            PixelInfo.VertexData[0] = T->Vertices[0].VertexData;
-            PixelInfo.VertexData[1] = T->Vertices[1].VertexData;
-            PixelInfo.VertexData[2] = T->Vertices[2].VertexData;
-            PixelInfo.InstanceData = T->Vertices[0].InstanceData;
-            PixelInfo.Constants = T->Vertices[0].Constants;
-            assert(PixelInfo.VertexData[0]);
-            assert(PixelInfo.VertexData[1]);
-            assert(PixelInfo.VertexData[2]);
-
-            for (int Y = StartPoint.Y; Y < EndPoint.Y; Y++)
-            {
-                for (int X = StartPoint.X; X < EndPoint.X; X++)
+    // Run pixel shaders
+    ParallelFor(BlockGrid, 1,
+                [&](int BlockX, int BlockY)
                 {
-                    PixelInfo.Position = Point2i{X, Y};
-                    PixelInfo.BarCoords = T->BarHelper->GetCoordinates(PixelInfo.Position);
+                    const Point2i StartPoint{BlockX * BlockSize, BlockY * BlockSize};
+                    const Point2i Size{std::min(BlockSize, ImageSize.X - StartPoint.X),
+                                       std::min(BlockSize, ImageSize.Y - StartPoint.Y)};
+                    const Point2i EndPoint = StartPoint + Size;
+                    const Bounds2i BlockBounds{StartPoint, EndPoint};
 
-                    ProcessPixel(PixelInfo, *T);
-                }
-            }
-        }
-    };
+                    std::vector<Triangle*> OverlappingTriangles;
+                    for (Triangle& T : Triangles)
+                    {
+                        if (rndr::Overlaps(T.Bounds, BlockBounds))
+                        {
+                            OverlappingTriangles.push_back(&T);
+                        }
+                    }
 
-    ParallelFor(BlockGrid, 1, PixelShaderProcessor);
+                    for (Triangle* T : OverlappingTriangles)
+                    {
+                        for (int Y = StartPoint.Y; Y < EndPoint.Y; Y++)
+                        {
+                            for (int X = StartPoint.X; X < EndPoint.X; X++)
+                            {
+                                if (!rndr::Inside({X, Y}, T->Bounds))
+                                {
+                                    continue;
+                                }
+
+                                PerPixelInfo& PixelInfo = T->GetPixelInfo(X, Y);
+                                if (!PixelInfo.bIsInside)
+                                {
+                                    continue;
+                                }
+
+                                ProcessPixel(PixelInfo, *T);
+                            }
+                        }
+                    }
+                });
+
+    m_ScratchAllocator->Reset();
 }
 
-void rndr::Rasterizer::ProcessPixel(const PerPixelInfo& PixelInfo, const Triangle& T)
+void rndr::Rasterizer::ProcessPixel(PerPixelInfo& PixelInfo, const Triangle& T)
 {
-    if (!T.BarHelper->IsInside(PixelInfo.BarCoords))
-    {
-        return;
-    }
-
     real NewDepth = 1 / PixelInfo.BarCoords.Interpolate(T.BarHelper->m_OneOverPointDepth);
     const real CurrentDepth = m_Pipeline->DepthImage->GetPixelDepth(PixelInfo.Position);
 
@@ -289,3 +379,15 @@ bool rndr::Rasterizer::PerformDepthTest(rndr::DepthTest Operator, real Src, real
 
     return true;
 }
+
+// rndr::PerPixelInfo& rndr::Rasterizer::GetPixelInfo(const Point2i& Position)
+//{
+//    const int Index = Position.X + Position.Y * m_Pipeline->ColorImage->GetConfig().Width;
+//    return m_PixelInfos[Index];
+//}
+//
+// rndr::PerPixelInfo& rndr::Rasterizer::GetPixelInfo(int X, int Y)
+//{
+//    const int Index = X + Y * m_Pipeline->ColorImage->GetConfig().Width;
+//    return m_PixelInfos[Index];
+//}

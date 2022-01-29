@@ -7,13 +7,12 @@
 
 #include "rndr/render/pipeline.h"
 
-struct VertexShaderExecutor;
-
 namespace rndr
 {
 
 class Image;
 class Model;
+class Allocator;
 struct Triangle;
 
 /**
@@ -22,7 +21,7 @@ struct Triangle;
 class Rasterizer
 {
 public:
-    Rasterizer() = default;
+    Rasterizer();
 
     void SetPipeline(const rndr::Pipeline* Pipeline);
 
@@ -35,13 +34,15 @@ public:
     Point3r FromRasterToNDCSpace(const Point3r& Point);
 
 private:
-    void ProcessPixel(const PerPixelInfo& PixelInfo, const Triangle& T);
+    void ProcessPixel(PerPixelInfo& PixelInfo, const Triangle& T);
 
-private:
-    friend struct VertexShaderExecutor;
+    PerPixelInfo& GetPixelInfo(const Point2i& Position);
+    PerPixelInfo& GetPixelInfo(int X, int Y);
 
 private:
     const Pipeline* m_Pipeline = nullptr;
+
+    Allocator* m_ScratchAllocator = nullptr;
 };
 
 }  // namespace rndr

@@ -55,10 +55,15 @@ rndr::Model* CreateModel()
         const rndr::Point2r TexCoord =
             Info.Interpolate<rndr::Point2r, rndr::CubeVertexData>(TextureCoordsOffset);
 
-        // rndr::Vector2r duvdx = Info.DerivativeX<rndr::Point2r, VertexData, rndr::Vector2r>(
-        //    offsetof(VertexData, TextureCoords));
-        // rndr::Vector2r duvdy = Info.DerivativeY<rndr::Point2r, VertexData, rndr::Vector2r>(
-        //    offsetof(VertexData, TextureCoords));
+        const rndr::Vector2r duvdx =
+            Info.DerivativeX<rndr::Point2r, rndr::CubeVertexData, rndr::Vector2r>(
+                TextureCoordsOffset) *
+            Info.NextXMult;
+
+        const rndr::Vector2r duvdy =
+            Info.DerivativeY<rndr::Point2r, rndr::CubeVertexData, rndr::Vector2r>(
+                TextureCoordsOffset) *
+            Info.NextYMult;
 
         rndr::Color Result = Constants->Texture->Sample(TexCoord, false);
         assert(Result.GammaSpace == rndr::GammaSpace::Linear);
