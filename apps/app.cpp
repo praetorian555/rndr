@@ -110,26 +110,35 @@ int main()
     rndr::WindowDelegates::OnResize.Add([Camera](rndr::Window*, int Width, int Height)
                                         { Camera->UpdateTransforms(Width, Height); });
 
+    real Modifier = 1;
     bool bRotationOn = true;
     real ModelDepth = -60;
     rndr::WindowDelegates::OnKeyboardEvent.Add(
-        [&ModelDepth, &bRotationOn](rndr::Window*, rndr::KeyState State,
-                                    rndr::VirtualKeyCode KeyCode)
+        [&ModelDepth, &bRotationOn, &Modifier](rndr::Window*, rndr::KeyState State,
+                                               rndr::VirtualKeyCode KeyCode)
         {
             const real Delta = 10;
             if (State == rndr::KeyState::Down)
             {
-                if (KeyCode == 0x51)
+                if (KeyCode == 0x51)  // Q
                 {
                     ModelDepth -= Delta;
                 }
-                if (KeyCode == 0x45)
+                if (KeyCode == 0x45)  // E
                 {
                     ModelDepth += Delta;
                 }
-                if (KeyCode == 0x20)
+                if (KeyCode == 0x20)  // SPACEBAR
                 {
                     bRotationOn = !bRotationOn;
+                }
+                if (KeyCode == 0xBB)  // Plus
+                {
+                    Modifier += 0.1;
+                }
+                if (KeyCode == 0xBD)  // Minus
+                {
+                    Modifier = max(0.1, Modifier - 0.1);
                 }
             }
         });
@@ -174,7 +183,7 @@ int main()
 
         if (bRotationOn)
         {
-            TotalTime += Duration;
+            TotalTime += Modifier * Duration;
         }
     }
 
