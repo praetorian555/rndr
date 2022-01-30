@@ -65,7 +65,7 @@ rndr::Model* CreateModel()
                 TextureCoordsOffset) *
             Info.NextYMult;
 
-        rndr::Color Result = Constants->Texture->Sample(TexCoord, false);
+        rndr::Color Result = Constants->Texture->Sample(TexCoord, duvdx, duvdy);
         assert(Result.GammaSpace == rndr::GammaSpace::Linear);
 
         return Result;
@@ -93,15 +93,17 @@ int main()
     rndr::Rasterizer Renderer;
 
     const std::string AssetPath = ASSET_DIR "/SMS_Ranger_Title.bmp";
-    std::unique_ptr<rndr::Image> Texture{rndr::ReadImageFile(AssetPath)};
-    Texture->SetPixelFormat(rndr::GammaSpace::GammaCorrected, rndr::PixelLayout::A8R8G8B8);
+    rndr::ImageConfig TextureConfig;
+    TextureConfig.MagFilter = rndr::ImageFiltering::NearestNeighbor;
+    TextureConfig.MinFilter = rndr::ImageFiltering::TrilinearInterpolation;
+    std::unique_ptr<rndr::Image> Texture = std::make_unique<rndr::Image>(AssetPath, TextureConfig);
 
     std::unique_ptr<rndr::Model> Model{CreateModel()};
 
     const int Width = Window.GetColorImage()->GetConfig().Width;
     const int Height = Window.GetColorImage()->GetConfig().Height;
     const real Near = 0.01;
-    const real Far = 100;
+    const real Far = 1000;
     const real FOV = 90;
     const rndr::Transform FromWorldToCamera = rndr::RotateY(0);
 #if 1

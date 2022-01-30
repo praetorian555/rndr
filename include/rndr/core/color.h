@@ -66,6 +66,8 @@ public:
     static const rndr::Color Pink;
 };
 
+Color operator*(real Value, Color C);
+
 /**
  * Converts value to gamma correct space from linear space. Value^(1 / Gamma).
  *

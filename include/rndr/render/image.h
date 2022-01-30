@@ -23,6 +23,8 @@ struct ImageConfig
 
     rndr::ImageFiltering MagFilter = rndr::ImageFiltering::NearestNeighbor;
     rndr::ImageFiltering MinFilter = rndr::ImageFiltering::NearestNeighbor;
+
+    int LODBias = 0;
 };
 
 /**
@@ -35,12 +37,9 @@ class Image
 {
 public:
     Image(const ImageConfig& Options = ImageConfig{});
-    ~Image();
+    Image(const std::string& FilePath, const ImageConfig& Options = ImageConfig{});
 
-    /**
-     * Will recreate internal memory buffer if Width or Height are different from existing ones.
-     */
-    void UpdateSize(int Width, int Height);
+    ~Image();
 
     /**
      * Change the ordering and/or a size of channels in a pixel as well as gamma space.
@@ -135,10 +134,18 @@ public:
      */
     void ClearDepthBuffer(real ClearValue);
 
+    // This is done by default if we use TrilinearInterpolation for minification filter but any
+    // change in data will not trigger the generation again.
+    void GenerateMipMaps();
+
     /**
      * Calculate image sample based on UV coordinates.
      */
-    rndr::Color Sample(const Point2r& TexCoord, bool Magnified);
+    rndr::Color Sample(const Point2r& TexCoord, const Vector2r& duvdx, const Vector2r& duvdy);
+
+    static Color SampleNearestNeighbor(const Image* I, const Point2r& TexCoord);
+    static Color SampleBilinear(const Image* I, const Point2r& TexCoord);
+    static Color SampleTrilinear(const Image* I, const Point2r& TexCoord, real LOD);
 
 protected:
     void SetPixelColor(const Point2i& Position, uint32_t Color);
@@ -149,6 +156,8 @@ private:
 
     Bounds2i m_Bounds;
     std::vector<uint8_t> m_Buffer;
+
+    std::vector<Image*> m_MipMaps;
 };
 
 }  // namespace rndr

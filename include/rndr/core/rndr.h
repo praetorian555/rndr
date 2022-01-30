@@ -74,7 +74,8 @@ enum class ImageFileFormat
 enum class ImageFiltering
 {
     NearestNeighbor,
-    BilinearInterpolation
+    BilinearInterpolation,
+    TrilinearInterpolation // Valid only for minification filter
 };
 
 /**

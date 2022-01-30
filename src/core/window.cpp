@@ -98,11 +98,17 @@ void rndr::Window::Resize(int Width, int Height)
     m_CurrentHeight = Height;
     if (m_ColorImage)
     {
-        m_ColorImage->UpdateSize(Width, Height);
+        ImageConfig Config = m_ColorImage->GetConfig();
+        Config.Width = Width;
+        Config.Height = Height;
+        m_ColorImage = std::make_unique<Image>(Config);
     }
     if (m_DepthImage)
     {
-        m_DepthImage->UpdateSize(Width, Height);
+        ImageConfig Config = m_DepthImage->GetConfig();
+        Config.Width = Width;
+        Config.Height = Height;
+        m_DepthImage = std::make_unique<Image>(Config);
     }
 }
 

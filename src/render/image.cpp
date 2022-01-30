@@ -1,6 +1,10 @@
 #include "rndr/render/image.h"
 
+#include "stb_image/stb_image.h"
+
 #include "rndr/core/color.h"
+#include "rndr/core/coordinates.h"
+#include "rndr/core/fileutils.h"
 #include "rndr/core/math.h"
 #include "rndr/core/threading.h"
 
@@ -8,16 +12,6 @@
 
 rndr::Image::Image(const ImageConfig& Config) : m_Config(Config)
 {
-    UpdateSize(Config.Width, Config.Height);
-}
-
-void rndr::Image::UpdateSize(int Width, int Height)
-{
-    RNDR_CPU_TRACE("Image Update Size");
-
-    m_Config.Width = Width;
-    m_Config.Height = Height;
-
     m_Bounds.pMin = Point2i{0, 0};
     m_Bounds.pMax = Point2i{m_Config.Width, m_Config.Height};
 
@@ -44,9 +38,97 @@ void rndr::Image::UpdateSize(int Width, int Height)
                         *Pixel = -rndr::Infinity;
                     }
                 });
+
+    if (m_Config.MinFilter == ImageFiltering::TrilinearInterpolation)
+    {
+        GenerateMipMaps();
+    }
 }
 
-rndr::Image::~Image() {}
+rndr::Image::Image(const std::string& FilePath, const ImageConfig& Config) : m_Config(Config)
+{
+    const ImageFileFormat FileFormat = rndr::GetImageFileFormat(FilePath);
+    assert(FileFormat != ImageFileFormat::NotSupported);
+
+    FILE* FileHandle = fopen(FilePath.c_str(), "r");
+    assert(FileHandle);
+
+    // stb_image library loads data starting from the top left-most pixel while our engine expects
+    // data from lower left corner first
+    const bool bShouldFlip = true;
+    stbi_set_flip_vertically_on_load(bShouldFlip);
+
+    // Note that this one will always return data in a form:
+    // 1 channel: Gray
+    // 2 channel: Gray Alpha
+    // 3 channel: Red Green Blue
+    // 4 channel: Red Green Blue Alpha
+    //
+    // Note that we always request 4 channels.
+    int Width, Height, ChannelNumber;
+    const int DesiredChannelNumber = 4;
+    uint8_t* Data = nullptr;
+
+    Data = stbi_load_from_file(FileHandle, &Width, &Height, &ChannelNumber, DesiredChannelNumber);
+
+    m_Config.Width = Width;
+    m_Config.Height = Height;
+
+    m_Bounds.pMin = Point2i{0, 0};
+    m_Bounds.pMax = Point2i{m_Config.Width, m_Config.Height};
+
+    // TODO(mkostic): How to know if image uses 16 or 8 bits per channel??
+
+    assert(Data);
+
+    // TODO(mkostic): Add support for grayscale images.
+    assert(ChannelNumber == 3 || ChannelNumber == 4);
+
+    const int PixelSize = GetPixelSize();
+    const int PixelCount = Width * Height;
+    const int BufferSize = Width * Height * PixelSize;
+
+    m_Buffer.resize(BufferSize);
+
+    for (int ByteIndex = 0; ByteIndex < BufferSize; ByteIndex += PixelSize)
+    {
+        for (int i = 0; i < PixelSize / 2; i++)
+        {
+            std::swap(Data[ByteIndex + i], Data[ByteIndex + PixelSize - 1 - i]);
+        }
+    }
+
+    uint32_t* DataU32 = (uint32_t*)Data;
+    for (int Y = 0; Y < Height; Y++)
+    {
+        for (int X = 0; X < Width; X++)
+        {
+            const bool bIsPremult = false;
+            const Color C(DataU32[X + Y * Width], m_Config.GammaSpace, PixelLayout::R8G8B8A8,
+                          bIsPremult);
+            SetPixelColor(X, Y, C);
+        }
+    }
+
+    free(Data);
+    fclose(FileHandle);
+
+    if (m_Config.MinFilter == ImageFiltering::TrilinearInterpolation)
+    {
+        GenerateMipMaps();
+    }
+}
+
+rndr::Image::~Image()
+{
+    for (int i = 0; i < m_MipMaps.size(); i++)
+    {
+        if (i != 0)
+        {
+            delete m_MipMaps[i];
+        }
+    }
+}
 
 uint32_t rndr::Image::GetPixelSize() const
 {
@@ -220,22 +302,111 @@ void rndr::Image::SetPixelFormat(rndr::GammaSpace Space, rndr::PixelLayout Layou
     m_Config.GammaSpace = Space;
 }
 
-rndr::Color rndr::Image::Sample(const Point2r& TexCoord, bool Magnified)
+void rndr::Image::GenerateMipMaps()
 {
-    rndr::Point2r PixelCoord{(m_Config.Width - 1) * TexCoord.X, (m_Config.Height - 1) * TexCoord.Y};
+    for (int i = 0; i < m_MipMaps.size(); i++)
+    {
+        if (i != 0)
+        {
+            delete m_MipMaps[i];
+            m_MipMaps[i] = nullptr;
+        }
+    }
 
-    rndr::Point2r Min = rndr::Floor(PixelCoord);
-    rndr::Point2r Max = rndr::Ceil(PixelCoord);
+    const int Max = std::max(m_Config.Width, m_Config.Height);
+    const int LevelCount = (int)rndr::Log2(Max) + 1;
+
+    m_MipMaps.resize(LevelCount);
+
+    for (int i = 0; i < m_MipMaps.size(); i++)
+    {
+        if (i == 0)
+        {
+            m_MipMaps[0] = this;
+            continue;
+        }
+
+        ImageConfig Config;
+        Config.Width = m_MipMaps[i - 1]->m_Config.Width / 2;
+        Config.Height = m_MipMaps[i - 1]->m_Config.Height / 2;
+
+        Config.Width = Config.Width == 0 ? 1 : Config.Width;
+        Config.Height = Config.Height == 0 ? 1 : Config.Height;
+
+        m_MipMaps[i] = new Image(Config);
+
+        Image* CurrentImage = m_MipMaps[i];
+        Image* PrevImage = m_MipMaps[i - 1];
+
+        for (int Y = 0; Y < m_MipMaps[i]->m_Config.Height; Y++)
+        {
+            for (int X = 0; X < m_MipMaps[i]->m_Config.Width; X++)
+            {
+                Color Result;
+                if (PrevImage->m_Config.Width == 1)
+                {
+                    const Color Bottom = PrevImage->GetPixelColor(0, 2 * Y).ToLinearSpace();
+                    const Color Top = PrevImage->GetPixelColor(0, 2 * Y + 1).ToLinearSpace();
+                    Result = 0.5 * Bottom + 0.5 * Top;
+                }
+                else if (PrevImage->m_Config.Height == 1)
+                {
+                    const Color Left = PrevImage->GetPixelColor(2 * X, 0).ToLinearSpace();
+                    const Color Right = PrevImage->GetPixelColor(2 * X + 1, 0).ToLinearSpace();
+                    Result = 0.5 * Left + 0.5 * Right;
+                }
+                else
+                {
+                    const Color BottomLeft = PrevImage->GetPixelColor(2 * X, 2 * Y).ToLinearSpace();
+                    const Color BottomRight =
+                        PrevImage->GetPixelColor(2 * X + 1, 2 * Y).ToLinearSpace();
+                    const Color TopLeft =
+                        PrevImage->GetPixelColor(2 * X, 2 * Y + 1).ToLinearSpace();
+                    const Color TopRight =
+                        PrevImage->GetPixelColor(2 * X + 1, 2 * Y + 1).ToLinearSpace();
+                    Result =
+                        0.25 * BottomLeft + 0.25 * BottomRight + 0.25 * TopLeft + 0.25 * TopRight;
+                }
+
+                CurrentImage->SetPixelColor(X, Y, Result);
+            }
+        }
+    }
+}
+
+rndr::Color rndr::Image::Sample(const Point2r& TexCoord,
+                                const Vector2r& duvdx,
+                                const Vector2r& duvdy)
+{
+    // TODO(mkostic): Rebase uv to be in range [0, 1]
+
+    const real Width = std::max(std::max(std::abs(duvdx.X), std::abs(duvdx.Y)),
+                                std::max(std::abs(duvdy.X), std::abs(duvdy.Y)));
+
+    const int MipMapLevels = m_MipMaps.size();
+    const real LOD = MipMapLevels - 1 + Log2(std::max(Width, (real)1e-8));
+
+    const ImageFiltering Filter = LOD < 0 ? m_Config.MagFilter : m_Config.MinFilter;
 
     Color Result;
-    ImageFiltering Filter = Magnified ? m_Config.MagFilter : m_Config.MinFilter;
-    if (Filter == ImageFiltering::NearestNeighbor)
+    switch (Filter)
     {
-        rndr::Point2r Nearest = rndr::Round(PixelCoord);
-        Result = GetPixelColor(Nearest.X, Nearest.Y);
-    }
-    else if (Filter == ImageFiltering::BilinearInterpolation)
-    {
+        case ImageFiltering::NearestNeighbor:
+        {
+            Result = SampleNearestNeighbor(this, TexCoord);
+            break;
+        }
+        case ImageFiltering::BilinearInterpolation:
+        {
+            Result = SampleBilinear(this, TexCoord);
+            break;
+        }
+        case ImageFiltering::TrilinearInterpolation:
+        {
+            assert(LOD >= 0);  // Not allowed for magnification filters
+            Result = SampleTrilinear(this, TexCoord, LOD);
+            break;
+        }
     }
 
     if (Result.GammaSpace == rndr::GammaSpace::GammaCorrected)
@@ -244,4 +415,51 @@ rndr::Color rndr::Image::Sample(const Point2r& TexCoord, bool Magnified)
     }
 
     return Result;
+}
+
+rndr::Color rndr::Image::SampleNearestNeighbor(const Image* I, const Point2r& TexCoord)
+{
+    const real U = TexCoord.X;
+    const real V = TexCoord.Y;
+
+    const real X = (I->m_Config.Width - 1) * U;
+    const real Y = (I->m_Config.Height - 1) * V;
+
+    const rndr::Point2i NearestDesc{(int)X, (int)Y};
+    return I->GetPixelColor(NearestDesc).ToLinearSpace();
+}
+
+rndr::Color rndr::Image::SampleBilinear(const Image* I, const Point2r& TexCoord)
+{
+    const real U = TexCoord.X;
+    const real V = TexCoord.Y;
+
+    const real X = (I->m_Config.Width - 1) * U;
+    const real Y = (I->m_Config.Height - 1) * V;
+
+    const Point2i BottomLeft{(int)(X - 0.5), (int)(Y - 0.5)};
+    const Point2i BottomRight{(int)(X + 0.5), (int)(Y - 0.5)};
+    const Point2i TopLeft{(int)(X - 0.5), (int)(Y + 0.5)};
+    const Point2i TopRight{(int)(X + 0.5), (int)(Y + 0.5)};
+
+    Color Result;
+    // clang-format off
+    Result = I->GetPixelColor(BottomLeft).ToLinearSpace()  * (1 - U) * (1 - V) +
+             I->GetPixelColor(BottomRight).ToLinearSpace() *      U  * (1 - V) +
+             I->GetPixelColor(TopLeft).ToLinearSpace()     * (1 - U) *      V  +
+             I->GetPixelColor(TopRight).ToLinearSpace()    *      U  *      V;
+    // clang-format on
+
+    return Result;
+}
+
+rndr::Color rndr::Image::SampleTrilinear(const Image* I, const Point2r& TexCoord, real LOD)
+{
+    const int Floor = (int)LOD;
+    const int Ceil = (int)(LOD + 1);
+
+    const Color FloorSample = SampleBilinear(I->m_MipMaps[Floor], TexCoord);
+    const Color CeilSample = SampleBilinear(I->m_MipMaps[Floor], TexCoord);
+
+    return rndr::Lerp(LOD - (real)Floor, FloorSample, CeilSample);
 }

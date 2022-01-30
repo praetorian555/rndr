@@ -1,22 +1,10 @@
 #pragma once
-
 #include <string>
 
 #include "rndr/core/rndr.h"
 
 namespace rndr
 {
-
-class Image;
-
-/**
- * Reads a file contents.
- *
- * @param Path to the file on disk.
- * @return Returns the Image object that stores loaded image data and metadata, or nullptr in case
- * of an error. Caller is responsible for Image object's memory.
- */
-Image* ReadImageFile(const std::string& FilePath);
 
 /**
  * Get an image file format based on the filepath.
