@@ -56,12 +56,16 @@ void rndr::BarycentricHelper::Init()
 {
     m_HalfTriangleArea = Cross2D(m_Points[1] - m_Points[0], m_Points[2] - m_Points[0]);
     m_OneOverHalfTriangleArea = 1 / m_HalfTriangleArea;
+    assert(!rndr::IsNaN(m_OneOverHalfTriangleArea));
     m_Edges[0] = m_Points[2] - m_Points[1];
     m_Edges[1] = m_Points[0] - m_Points[2];
     m_Edges[2] = m_Points[1] - m_Points[0];
     m_OneOverPointDepth[0] = 1 / m_Points[0].Z;
     m_OneOverPointDepth[1] = 1 / m_Points[1].Z;
     m_OneOverPointDepth[2] = 1 / m_Points[2].Z;
+    assert(!rndr::IsNaN(m_OneOverPointDepth[0]));
+    assert(!rndr::IsNaN(m_OneOverPointDepth[1]));
+    assert(!rndr::IsNaN(m_OneOverPointDepth[2]));
 }
 
 bool rndr::BarycentricHelper::IsWindingOrderCorrect() const

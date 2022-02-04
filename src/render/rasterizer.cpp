@@ -109,6 +109,7 @@ void rndr::Rasterizer::Draw(rndr::Model* Model, int InstanceCount)
                 std::vector<int>& Indices = Model->GetIndices();
 
                 const int TriangleCountPerInstance = Indices.size() / 3;
+                assert(TriangleCountPerInstance);
                 const int TriangleCount = TriangleCountPerInstance * InstanceCount;
 
                 rndr::Triangle& T = Triangles[TriangleIndex];
@@ -190,6 +191,9 @@ void rndr::Rasterizer::Draw(rndr::Model* Model, int InstanceCount)
                                 PixelInfo.VertexData[0] = T.Vertices[0].VertexData;
                                 PixelInfo.VertexData[1] = T.Vertices[1].VertexData;
                                 PixelInfo.VertexData[2] = T.Vertices[2].VertexData;
+                                PixelInfo.OneOverDepth[0] = T.BarHelper->m_OneOverPointDepth[0];
+                                PixelInfo.OneOverDepth[1] = T.BarHelper->m_OneOverPointDepth[1];
+                                PixelInfo.OneOverDepth[2] = T.BarHelper->m_OneOverPointDepth[2];
                                 PixelInfo.InstanceData = T.Vertices[0].InstanceData;
                                 PixelInfo.Constants = T.Vertices[0].Constants;
                                 PixelInfo.Position = Point2i{X, Y};
@@ -246,6 +250,20 @@ void rndr::Rasterizer::Draw(rndr::Model* Model, int InstanceCount)
                                 {
                                     PixelInfo.NextY = &T.GetPixelInfo(X, Y - 1);
                                     PixelInfo.NextYMult = -1;
+                                }
+
+                                if (PixelInfo.NextX)
+                                {
+                                    PixelInfo.NextX->Depth =
+                                        1 / PixelInfo.NextX->BarCoords.Interpolate(
+                                                T.BarHelper->m_OneOverPointDepth);
+                                }
+
+                                if (PixelInfo.NextY)
+                                {
+                                    PixelInfo.NextY->Depth =
+                                        1 / PixelInfo.NextY->BarCoords.Interpolate(
+                                                T.BarHelper->m_OneOverPointDepth);
                                 }
                             },
                             T.Bounds.pMin);
@@ -310,32 +328,33 @@ void rndr::Rasterizer::Draw(rndr::Model* Model, int InstanceCount)
 
 void rndr::Rasterizer::ProcessPixel(PerPixelInfo& PixelInfo, const Triangle& T)
 {
-    real NewDepth = 1 / PixelInfo.BarCoords.Interpolate(T.BarHelper->m_OneOverPointDepth);
+    PixelInfo.Depth = 1 / PixelInfo.BarCoords.Interpolate(T.BarHelper->m_OneOverPointDepth);
+    assert(!rndr::IsNaN(PixelInfo.Depth));
     const real CurrentDepth = m_Pipeline->DepthImage->GetPixelDepth(PixelInfo.Position);
 
     // Early depth test
     if (!m_Pipeline->PixelShader->bChangesDepth)
     {
-        if (!PerformDepthTest(m_Pipeline->DepthTest, NewDepth, CurrentDepth))
+        if (!PerformDepthTest(m_Pipeline->DepthTest, PixelInfo.Depth, CurrentDepth))
         {
             return;
         }
 
-        m_Pipeline->DepthImage->SetPixelDepth(PixelInfo.Position, NewDepth);
+        m_Pipeline->DepthImage->SetPixelDepth(PixelInfo.Position, PixelInfo.Depth);
     }
 
     // Run Pixel shader
-    rndr::Color NewColor = m_Pipeline->PixelShader->Callback(PixelInfo, NewDepth);
+    rndr::Color NewColor = m_Pipeline->PixelShader->Callback(PixelInfo, PixelInfo.Depth);
 
     // Standard depth test
     if (m_Pipeline->PixelShader->bChangesDepth)
     {
-        if (!PerformDepthTest(m_Pipeline->DepthTest, NewDepth, CurrentDepth))
+        if (!PerformDepthTest(m_Pipeline->DepthTest, PixelInfo.Depth, CurrentDepth))
         {
             return;
         }
 
-        m_Pipeline->DepthImage->SetPixelDepth(PixelInfo.Position, NewDepth);
+        m_Pipeline->DepthImage->SetPixelDepth(PixelInfo.Position, PixelInfo.Depth);
     }
 
     // TODO(mkostic): Add support for different blend operators

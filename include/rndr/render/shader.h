@@ -13,6 +13,8 @@ struct PerPixelInfo
 {
     Point2i Position;  // In discrete space
     BarycentricCoordinates BarCoords;
+    real OneOverDepth[3];
+    real Depth;
 
     // User specific data
     void* VertexData[3];
@@ -105,10 +107,10 @@ FieldType PerPixelInfo::Interpolate(size_t FieldOffset) const
     {
         const uint8_t* Base = reinterpret_cast<const uint8_t*>(VertexData[i]);
         const FieldType* Field = reinterpret_cast<const FieldType*>(Base + FieldOffset);
-        Return += BarCoords[i] * (*Field);
+        Return += BarCoords[i] * (*Field) * OneOverDepth[i];
     }
 
-    return Return;
+    return Return * Depth;
 }
 
 template <typename FieldType, typename VertexDataType, typename ReturnType>
