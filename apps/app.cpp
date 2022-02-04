@@ -92,11 +92,20 @@ int main()
     rndr::Window Window;
     rndr::Rasterizer Renderer;
 
-    const std::string AssetPath = ASSET_DIR "/SMS_Ranger_Title.bmp";
+    const std::string SoldierTexturePath = ASSET_DIR "/SMS_Ranger_Title.bmp";
+    const std::string WallTexturePath = ASSET_DIR "/bricked-wall.png";
+
     rndr::ImageConfig TextureConfig;
+
     TextureConfig.MagFilter = rndr::ImageFiltering::NearestNeighbor;
     TextureConfig.MinFilter = rndr::ImageFiltering::TrilinearInterpolation;
-    std::unique_ptr<rndr::Image> Texture = std::make_unique<rndr::Image>(AssetPath, TextureConfig);
+    std::unique_ptr<rndr::Image> SoldierTexture =
+        std::make_unique<rndr::Image>(SoldierTexturePath, TextureConfig);
+
+    TextureConfig.MagFilter = rndr::ImageFiltering::BilinearInterpolation;
+    TextureConfig.MinFilter = rndr::ImageFiltering::TrilinearInterpolation;
+    std::unique_ptr<rndr::Image> WallTexture =
+        std::make_unique<rndr::Image>(WallTexturePath, TextureConfig);
 
     std::unique_ptr<rndr::Model> Model{CreateModel()};
 
@@ -166,7 +175,7 @@ int main()
 
         rndr::Image* ColorImage = Window.GetColorImage();
         rndr::Image* DepthImage = Window.GetDepthImage();
-        ColorImage->ClearColorBuffer(rndr::Color::White);
+        ColorImage->ClearColorBuffer(rndr::Color::Black);
         DepthImage->ClearDepthBuffer(rndr::Infinity);
 
         Model->GetPipeline()->ColorImage = ColorImage;
@@ -176,12 +185,12 @@ int main()
                             rndr::RotateY(0.02 * TotalTime) * rndr::RotateX(0.035 * TotalTime) *
                             rndr ::RotateZ(0.012 * TotalTime) * rndr::Scale(10, 10, 10);
 
-        ConstantData Constants{&T, Camera.get(), Texture.get()};
+        ConstantData Constants{&T, Camera.get(), WallTexture.get()};
 
         Model->SetConstants(Constants);
 
         Renderer.Draw(Model.get(), 1);
-        ColorImage->RenderImage(*Texture, rndr::Point2i{100, 100});
+        ColorImage->RenderImage(*SoldierTexture, rndr::Point2i{100, 100});
 
         Window.RenderToWindow();
 

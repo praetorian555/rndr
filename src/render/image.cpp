@@ -5,6 +5,7 @@
 #include "rndr/core/color.h"
 #include "rndr/core/coordinates.h"
 #include "rndr/core/fileutils.h"
+#include "rndr/core/log.h"
 #include "rndr/core/math.h"
 #include "rndr/core/threading.h"
 
@@ -50,9 +51,6 @@ rndr::Image::Image(const std::string& FilePath, const ImageConfig& Config) : m_C
     const ImageFileFormat FileFormat = rndr::GetImageFileFormat(FilePath);
     assert(FileFormat != ImageFileFormat::NotSupported);
 
-    FILE* FileHandle = fopen(FilePath.c_str(), "r");
-    assert(FileHandle);
-
     // stb_image library loads data starting from the top left-most pixel while our engine expects
     // data from lower left corner first
     const bool bShouldFlip = true;
@@ -69,7 +67,12 @@ rndr::Image::Image(const std::string& FilePath, const ImageConfig& Config) : m_C
     const int DesiredChannelNumber = 4;
     uint8_t* Data = nullptr;
 
-    Data = stbi_load_from_file(FileHandle, &Width, &Height, &ChannelNumber, DesiredChannelNumber);
+    Data = stbi_load(FilePath.c_str(), &Width, &Height, &ChannelNumber, DesiredChannelNumber);
+    if (!Data)
+    {
+        RNDR_LOG_ERROR("Image: stbi_load_from_file failed with error: %s", stbi_failure_reason());
+        assert(Data);
+    }
 
     m_Config.Width = Width;
     m_Config.Height = Height;
@@ -78,8 +81,6 @@ rndr::Image::Image(const std::string& FilePath, const ImageConfig& Config) : m_C
     m_Bounds.pMax = Point2i{m_Config.Width, m_Config.Height};
 
     // TODO(mkostic): How to know if image uses 16 or 8 bits per channel??
-
-    assert(Data);
 
     // TODO(mkostic): Add support for grayscale images.
     assert(ChannelNumber == 3 || ChannelNumber == 4);
@@ -111,12 +112,15 @@ rndr::Image::Image(const std::string& FilePath, const ImageConfig& Config) : m_C
     }
 
     free(Data);
-    fclose(FileHandle);
 
     if (m_Config.MinFilter == ImageFiltering::TrilinearInterpolation)
     {
         GenerateMipMaps();
     }
+
+    RNDR_LOG_INFO("Successfully loaded image from file: %s, Width=%d, Height=%d, UsesMipMaps=%s",
+                  FilePath.c_str(), m_Config.Width, m_Config.Height,
+                  m_MipMaps.size() > 0 ? "YES" : "NO");
 }
 
 rndr::Image::~Image()
