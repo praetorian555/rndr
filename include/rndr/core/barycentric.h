@@ -40,7 +40,6 @@ public:
     rndr::WindingOrder m_WindingOrder;
     rndr::Point3r m_Points[3];
     rndr::Vector3r m_Edges[3];
-    real m_OneOverPointDepth[3];
     real m_HalfTriangleArea;
     real m_OneOverHalfTriangleArea;
 };
