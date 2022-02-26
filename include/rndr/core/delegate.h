@@ -52,11 +52,12 @@ struct MultiDelegate
         }
     }
 
-    void Execute(Args&&... Arguments)
+    template <typename... Args2>
+    void Execute(Args2&&... Arguments)
     {
         for (auto& Pair : m_Functors)
         {
-            Pair.second(std::forward<Args>(Arguments)...);
+            Pair.second(std::forward<Args2>(Arguments)...);
         }
     }
 
