@@ -13,7 +13,8 @@ struct PerPixelInfo
 {
     Point2i Position;  // In discrete space
     BarycentricCoordinates BarCoords;
-    real OneOverDepth[3];
+    real OneOverW[3];
+    real W;
     real Depth;
 
     // User specific data
@@ -90,7 +91,7 @@ struct PerVertexInfo
 };
 
 // Should return the point in NDC where x and y are in range [-1, 1] and z in range [0, 1]
-using VertexShaderCallback = std::function<Point3r(const PerVertexInfo&)>;
+using VertexShaderCallback = std::function<rndr::Point3r(const PerVertexInfo&, real& W)>;
 
 struct VertexShader
 {
@@ -107,17 +108,19 @@ FieldType PerPixelInfo::Interpolate(size_t FieldOffset) const
     {
         const uint8_t* Base = reinterpret_cast<const uint8_t*>(VertexData[i]);
         const FieldType* Field = reinterpret_cast<const FieldType*>(Base + FieldOffset);
-        Return += BarCoords[i] * (*Field) * OneOverDepth[i];
+        Return += BarCoords[i] * (*Field) * OneOverW[i];
     }
 
-    return Return * Depth;
+    Return = Return * W;
+    return Return;
 }
 
 template <typename FieldType, typename VertexDataType, typename ReturnType>
 ReturnType PerPixelInfo::DerivativeX(size_t FieldOffset) const
 {
     const FieldType Start = Interpolate<FieldType, VertexDataType>(FieldOffset);
-    const FieldType End = NextX ? NextX->Interpolate<FieldType, VertexDataType>(FieldOffset) : Start;
+    const FieldType End =
+        NextX ? NextX->Interpolate<FieldType, VertexDataType>(FieldOffset) : Start;
 
     return End - Start;
 }
@@ -126,7 +129,8 @@ template <typename FieldType, typename VertexDataType, typename ReturnType>
 ReturnType PerPixelInfo::DerivativeY(size_t FieldOffset) const
 {
     const FieldType Start = Interpolate<FieldType, VertexDataType>(FieldOffset);
-    const FieldType End = NextY ? NextY->Interpolate<FieldType, VertexDataType>(FieldOffset) : Start;
+    const FieldType End =
+        NextY ? NextY->Interpolate<FieldType, VertexDataType>(FieldOffset) : Start;
 
     return End - Start;
 }

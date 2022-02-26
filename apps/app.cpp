@@ -27,22 +27,26 @@ struct ConstantData
     rndr::Image* Texture;
 };
 
+int X, Y;
+bool New = false;
+
 rndr::Model* CreateModel()
 {
     std::shared_ptr<rndr::VertexShader> VertexShader = std::make_shared<rndr::VertexShader>();
-    VertexShader->Callback = [](const rndr::PerVertexInfo& Info)
+    VertexShader->Callback = [](const rndr::PerVertexInfo& Info, real& W)
     {
         ConstantData* Constants = (ConstantData*)Info.Constants;
         rndr::CubeVertexData* Data = (rndr::CubeVertexData*)Info.VertexData;
 
-        const rndr::Point3r WorldSpace = (*Constants->FromModelToWorld)(Data->Position);
+        const rndr::Point3r WorldSpace = (*Constants->FromModelToWorld)(Data->Position, W);
 #if 0
-        const rndr::Point3r CameraSpace = Constants->Camera->FromWorldToCamera()(WorldSpace);
-        const rndr::Point3r ScreenSpace = Constants->Camera->FromCameraToScreen()(CameraSpace);
-        const rndr::Point3r NDCSpace = Constants->Camera->FromScreenToNDC()(ScreenSpace);
+        const rndr::Point3r CameraSpace = Constants->Camera->FromWorldToCamera()(WorldSpace, W);
+        const rndr::Point3r ScreenSpace = Constants->Camera->FromCameraToScreen()(CameraSpace, W);
+        const rndr::Point3r NDCSpace = Constants->Camera->FromScreenToNDC()(ScreenSpace, W);
         return NDCSpace;
 #else
-        return Constants->Camera->FromWorldToNDC()(WorldSpace);
+        rndr::Point3r NDCSpace = Constants->Camera->FromWorldToNDC()(WorldSpace, W);
+        return NDCSpace;
 #endif
     };
 
@@ -54,6 +58,14 @@ rndr::Model* CreateModel()
         const size_t TextureCoordsOffset = offsetof(rndr::CubeVertexData, TextureCoords);
         const rndr::Point2r TexCoord =
             Info.Interpolate<rndr::Point2r, rndr::CubeVertexData>(TextureCoordsOffset);
+
+        if (New && Info.Position.X == X && Info.Position.Y == Y)
+        {
+            RNDR_LOG_INFO("Position=(%d, %d, %.5f), UV=(%.5f, %.5f), Bar(%.5f, %.5f, %.5f)", X, Y,
+                          Info.Depth, TexCoord.X, TexCoord.Y, Info.BarCoords[0], Info.BarCoords[1],
+                          Info.BarCoords[2]);
+            New = false;
+        }
 
         const rndr::Vector2r duvdx =
             Info.DerivativeX<rndr::Point2r, rndr::CubeVertexData, rndr::Vector2r>(
@@ -127,11 +139,12 @@ int main()
                                         { Camera->UpdateTransforms(Width, Height); });
 
     real Modifier = 1;
-    bool bRotationOn = true;
+    bool bRotationOn = false;
     real ModelDepth = -60;
+    real RotationAngle = 0;
     rndr::WindowDelegates::OnKeyboardEvent.Add(
-        [&ModelDepth, &bRotationOn, &Modifier](rndr::Window*, rndr::KeyState State,
-                                               rndr::VirtualKeyCode KeyCode)
+        [&ModelDepth, &bRotationOn, &Modifier, &RotationAngle](rndr::Window*, rndr::KeyState State,
+                                                               rndr::VirtualKeyCode KeyCode)
         {
             const real Delta = 10;
             if (State == rndr::KeyState::Down)
@@ -156,7 +169,23 @@ int main()
                 {
                     Modifier = max(0.1, Modifier - 0.1);
                 }
+                if (KeyCode == 0x41)  // A
+                {
+                    RotationAngle -= 1;
+                }
+                if (KeyCode == 0x44)  // D
+                {
+                    RotationAngle += 1;
+                }
             }
+        });
+
+    rndr::WindowDelegates::OnMouseEvent.Add(
+        [](rndr::Window*, rndr::KeyState State, rndr::VirtualKeyCode KeyCode, int X, int Y)
+        {
+            ::X = X;
+            ::Y = Y;
+            New = true;
         });
 
     real TotalTime = 0;
@@ -181,9 +210,15 @@ int main()
         Model->GetPipeline()->ColorImage = ColorImage;
         Model->GetPipeline()->DepthImage = DepthImage;
 
-        rndr::Transform T = rndr::Translate(rndr::Vector3r(0, 0, ModelDepth)) *
-                            rndr::RotateY(0.02 * TotalTime) * rndr::RotateX(0.035 * TotalTime) *
-                            rndr ::RotateZ(0.012 * TotalTime) * rndr::Scale(10, 10, 10);
+#if 0
+        rndr::Transform R = rndr::RotateY(0.02 * TotalTime) * rndr::RotateX(0.035 * TotalTime) *
+                            rndr ::RotateZ(0.012 * TotalTime);
+#else
+        rndr::Transform R = rndr::RotateY(RotationAngle);
+#endif
+
+        rndr::Transform T =
+            rndr::Translate(rndr::Vector3r(0, 0, ModelDepth)) * R * rndr::Scale(10, 10, 10);
 
         ConstantData Constants{&T, Camera.get(), WallTexture.get()};
 

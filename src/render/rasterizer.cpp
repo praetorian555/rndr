@@ -19,6 +19,9 @@ struct rndr::Triangle
 {
     rndr::PerVertexInfo Vertices[3];
     rndr::Point3r Positions[3];
+    real W[3];
+    real OneOverW[3];
+    real OneOverZ[3];
     rndr::Bounds2i Bounds{{0, 0}, {0, 0}};
     std::unique_ptr<rndr::BarycentricHelper> BarHelper;
 
@@ -132,7 +135,12 @@ void rndr::Rasterizer::Draw(rndr::Model* Model, int InstanceCount)
                     assert(VertexInfo.VertexData);
 
                     // Run Vertex shader
-                    T.Positions[VertexIndex] = m_Pipeline->VertexShader->Callback(VertexInfo);
+                    T.Positions[VertexIndex] =
+                        m_Pipeline->VertexShader->Callback(VertexInfo, T.W[VertexIndex]);
+                    assert(T.W[VertexIndex] != 0);
+                    T.OneOverW[VertexIndex] = 1 / T.W[VertexIndex];
+                    T.OneOverZ[VertexIndex] = 1 / T.Positions[VertexIndex].Z;
+
                     T.Positions[VertexIndex] = FromNDCToRasterSpace(T.Positions[VertexIndex]);
                 };
 
@@ -191,9 +199,9 @@ void rndr::Rasterizer::Draw(rndr::Model* Model, int InstanceCount)
                                 PixelInfo.VertexData[0] = T.Vertices[0].VertexData;
                                 PixelInfo.VertexData[1] = T.Vertices[1].VertexData;
                                 PixelInfo.VertexData[2] = T.Vertices[2].VertexData;
-                                PixelInfo.OneOverDepth[0] = T.BarHelper->m_OneOverPointDepth[0];
-                                PixelInfo.OneOverDepth[1] = T.BarHelper->m_OneOverPointDepth[1];
-                                PixelInfo.OneOverDepth[2] = T.BarHelper->m_OneOverPointDepth[2];
+                                PixelInfo.OneOverW[0] = T.OneOverW[0];
+                                PixelInfo.OneOverW[1] = T.OneOverW[1];
+                                PixelInfo.OneOverW[2] = T.OneOverW[2];
                                 PixelInfo.InstanceData = T.Vertices[0].InstanceData;
                                 PixelInfo.Constants = T.Vertices[0].Constants;
                                 PixelInfo.Position = Point2i{X, Y};
@@ -254,16 +262,14 @@ void rndr::Rasterizer::Draw(rndr::Model* Model, int InstanceCount)
 
                                 if (PixelInfo.NextX)
                                 {
-                                    PixelInfo.NextX->Depth =
-                                        1 / PixelInfo.NextX->BarCoords.Interpolate(
-                                                T.BarHelper->m_OneOverPointDepth);
+                                    PixelInfo.NextX->W =
+                                        1 / PixelInfo.NextX->BarCoords.Interpolate(T.OneOverW);
                                 }
 
                                 if (PixelInfo.NextY)
                                 {
-                                    PixelInfo.NextY->Depth =
-                                        1 / PixelInfo.NextY->BarCoords.Interpolate(
-                                                T.BarHelper->m_OneOverPointDepth);
+                                    PixelInfo.NextY->W =
+                                        1 / PixelInfo.NextY->BarCoords.Interpolate(T.OneOverW);
                                 }
                             },
                             T.Bounds.pMin);
@@ -328,7 +334,8 @@ void rndr::Rasterizer::Draw(rndr::Model* Model, int InstanceCount)
 
 void rndr::Rasterizer::ProcessPixel(PerPixelInfo& PixelInfo, const Triangle& T)
 {
-    PixelInfo.Depth = 1 / PixelInfo.BarCoords.Interpolate(T.BarHelper->m_OneOverPointDepth);
+    PixelInfo.W = 1 / PixelInfo.BarCoords.Interpolate(T.OneOverW);
+    PixelInfo.Depth = 1 / PixelInfo.BarCoords.Interpolate(T.OneOverZ);
     assert(!rndr::IsNaN(PixelInfo.Depth));
     const real CurrentDepth = m_Pipeline->DepthImage->GetPixelDepth(PixelInfo.Position);
 
@@ -420,15 +427,3 @@ bool rndr::Rasterizer::PerformDepthTest(rndr::DepthTest Operator, real Src, real
 
     return true;
 }
-
-// rndr::PerPixelInfo& rndr::Rasterizer::GetPixelInfo(const Point2i& Position)
-//{
-//    const int Index = Position.X + Position.Y * m_Pipeline->ColorImage->GetConfig().Width;
-//    return m_PixelInfos[Index];
-//}
-//
-// rndr::PerPixelInfo& rndr::Rasterizer::GetPixelInfo(int X, int Y)
-//{
-//    const int Index = X + Y * m_Pipeline->ColorImage->GetConfig().Width;
-//    return m_PixelInfos[Index];
-//}
