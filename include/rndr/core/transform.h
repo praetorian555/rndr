@@ -34,7 +34,7 @@ public:
     template <typename T>
     Vector3<T> operator()(const Vector3<T>& v) const;
     template <typename T>
-    Point3<T> operator()(const Point3<T>& p) const;
+    Point3<T> operator()(const Point3<T>& p, real& w) const;
     template <typename T>
     inline Normal3<T> operator()(const Normal3<T>& n) const;
     Bounds3r operator()(const Bounds3r& b) const;
@@ -77,7 +77,7 @@ Vector3<T> Transform::operator()(const Vector3<T>& v) const
 }
 
 template <typename T>
-Point3<T> Transform::operator()(const Point3<T>& p) const
+Point3<T> Transform::operator()(const Point3<T>& p, real& w) const
 {
     T x = p.X, y = p.Y, z = p.Z;
 
@@ -88,6 +88,7 @@ Point3<T> Transform::operator()(const Point3<T>& p) const
 
     assert(wp != 0);
 
+    w = wp;
     if (wp == 1)
     {
         return Point3<T>(xp, yp, zp);
