@@ -20,7 +20,7 @@ public:
     T X, Y, Z;
 
 public:
-    Point3() { X = Y = Y = 0; }
+    Point3() { X = Y = Z = 0; }
     Point3(T X, T Y, T Z) : X(X), Y(Y), Z(Z) { assert(!HasNaNs()); }
 
     template <typename U>
