@@ -11,6 +11,7 @@
 
 rndr::WindowDelegates::ResizeDelegate rndr::WindowDelegates::OnResize;
 rndr::WindowDelegates::KeyboardDelegate rndr::WindowDelegates::OnKeyboardEvent;
+rndr::WindowDelegates::MouseDelegate rndr::WindowDelegates::OnMouseEvent;
 
 // Window
 
@@ -194,7 +195,10 @@ LRESULT CALLBACK WindowProc(HWND WindowHandle, UINT MsgCode, WPARAM ParamW, LPAR
 
             int X = GET_X_LPARAM(ParamL);
             int Y = GET_Y_LPARAM(ParamL);
-            RNDR_LOG_INFO("LeftMouseButton: DOWN (%d, %d)", X, Height - Y);
+
+            rndr::WindowDelegates::OnMouseEvent.Execute(Wind, rndr::KeyState::Down, 0u, X,
+                                                        Height - Y);
+
             break;
         }
         case WM_KEYDOWN:

@@ -109,6 +109,7 @@ struct WindowDelegates
 {
     using ResizeDelegate = MultiDelegate<Window*, int, int>;
     using KeyboardDelegate = MultiDelegate<Window*, KeyState, VirtualKeyCode>;
+    using MouseDelegate = MultiDelegate<Window*, KeyState, VirtualKeyCode, int, int>;
 
     /**
      * This delegate is executed when the size of the window's client area is changed.
@@ -119,6 +120,11 @@ struct WindowDelegates
      * This delegate is executed when the keyboard key is pressed or released.
      */
     static KeyboardDelegate OnKeyboardEvent;
+
+    /**
+     * This delegate is executed when the mouse key is pressed or released.
+     */
+    static MouseDelegate OnMouseEvent;
 };
 
 }  // namespace rndr
