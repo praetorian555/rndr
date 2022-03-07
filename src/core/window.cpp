@@ -5,13 +5,20 @@
 #include <Windows.h>
 #include <windowsx.h>
 
+#include <map>
+
 #include "rndr/core/log.h"
+
+static std::map<uint32_t, rndr::InputPrimitive> g_PrimitiveMapping = {
+    {0x41, rndr::InputPrimitive::Keyboard_A}, {0x57, rndr::InputPrimitive::Keyboard_W},
+    {0x53, rndr::InputPrimitive::Keyboard_S}, {0x45, rndr::InputPrimitive::Keyboard_E},
+    {0x51, rndr::InputPrimitive::Keyboard_Q}, {0x44, rndr::InputPrimitive::Keyboard_D}};
 
 // Defining window deleages
 
 rndr::WindowDelegates::ResizeDelegate rndr::WindowDelegates::OnResize;
-rndr::WindowDelegates::KeyboardDelegate rndr::WindowDelegates::OnKeyboardEvent;
-rndr::WindowDelegates::MouseDelegate rndr::WindowDelegates::OnMouseEvent;
+rndr::WindowDelegates::ButtonDelegate rndr::WindowDelegates::OnButtonDelegate;
+rndr::WindowDelegates::MousePositionDelegate rndr::WindowDelegates::OnMousePositionDelegate;
 
 // Window
 
@@ -187,37 +194,33 @@ LRESULT CALLBACK WindowProc(HWND WindowHandle, UINT MsgCode, WPARAM ParamW, LPAR
 
             break;
         }
-        case WM_LBUTTONDOWN:
+        case WM_MOUSEMOVE:
         {
             rndr::Window* Wind =
                 reinterpret_cast<rndr::Window*>(GetWindowLongPtr(WindowHandle, GWLP_USERDATA));
-            int Height = Wind->GetColorImage()->GetConfig().Height;
+            const int Height = Wind->GetColorImage()->GetConfig().Height;
 
-            int X = GET_X_LPARAM(ParamL);
-            int Y = GET_Y_LPARAM(ParamL);
+            const int X = GET_X_LPARAM(ParamL);
+            const int Y = GET_Y_LPARAM(ParamL);
 
-            rndr::WindowDelegates::OnMouseEvent.Execute(Wind, rndr::KeyState::Down, 0u, X,
-                                                        Height - Y);
+            rndr::WindowDelegates::OnMousePositionDelegate.Execute(Wind, X, Height - Y);
 
             break;
         }
         case WM_KEYDOWN:
-        {
-            LONG_PTR Ptr = GetWindowLongPtr(WindowHandle, GWLP_USERDATA);
-            rndr::Window* Wind = reinterpret_cast<rndr::Window*>(Ptr);
-
-            rndr::WindowDelegates::OnKeyboardEvent.Execute(std::move(Wind), rndr::KeyState::Down,
-                                                           ParamW);
-
-            break;
-        }
         case WM_KEYUP:
         {
             LONG_PTR Ptr = GetWindowLongPtr(WindowHandle, GWLP_USERDATA);
             rndr::Window* Wind = reinterpret_cast<rndr::Window*>(Ptr);
 
-            rndr::WindowDelegates::OnKeyboardEvent.Execute(std::move(Wind), rndr::KeyState::Up,
-                                                           ParamW);
+            const auto Iter = g_PrimitiveMapping.find(ParamW);
+            assert(Iter != g_PrimitiveMapping.end());
+            const rndr::InputPrimitive Primitive = Iter->second;
+
+            const rndr::InputTrigger Trigger =
+                MsgCode == WM_KEYDOWN ? rndr::InputTrigger::Started : rndr::InputTrigger::Finished;
+
+            rndr::WindowDelegates::OnButtonDelegate.Execute(Wind, Trigger, Primitive);
 
             break;
         }

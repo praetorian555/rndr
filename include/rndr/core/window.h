@@ -3,6 +3,7 @@
 #include <string>
 
 #include "rndr/core/delegate.h"
+#include "rndr/core/inputprimitives.h"
 
 #include "rndr/render/image.h"
 
@@ -90,26 +91,13 @@ private:
 };
 
 /**
- * Represents the state of the keyboard key.
- */
-enum class KeyState
-{
-    Up,
-    Down
-};
-
-// Check out this for key codes:
-// https://docs.microsoft.com/en-us/windows/win32/inputdev/virtual-key-codes
-using VirtualKeyCode = uint32_t;
-
-/**
  * Collection of delegates related to window events.
  */
 struct WindowDelegates
 {
     using ResizeDelegate = MultiDelegate<Window*, int, int>;
-    using KeyboardDelegate = MultiDelegate<Window*, KeyState, VirtualKeyCode>;
-    using MouseDelegate = MultiDelegate<Window*, KeyState, VirtualKeyCode, int, int>;
+    using ButtonDelegate = MultiDelegate<Window*, InputTrigger, InputPrimitive>;
+    using MousePositionDelegate = MultiDelegate<Window*, int, int>;
 
     /**
      * This delegate is executed when the size of the window's client area is changed.
@@ -117,14 +105,14 @@ struct WindowDelegates
     static ResizeDelegate OnResize;
 
     /**
-     * This delegate is executed when the keyboard key is pressed or released.
+     * This delegate is executed when the key on keyboard or mouse is pressed or released.
      */
-    static KeyboardDelegate OnKeyboardEvent;
+    static ButtonDelegate OnButtonDelegate;
 
     /**
-     * This delegate is executed when the mouse key is pressed or released.
+     * This delegate is executed when the mouse key is moved.
      */
-    static MouseDelegate OnMouseEvent;
+    static MousePositionDelegate OnMousePositionDelegate;
 };
 
 }  // namespace rndr
