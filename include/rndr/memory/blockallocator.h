@@ -3,7 +3,7 @@
 #include <list>
 #include <string>
 
-#include "rndr/core/rndr.h"
+#include "rndr/core/base.h"
 
 #include "rndr/memory/allocator.h"
 

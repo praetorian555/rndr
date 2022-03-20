@@ -77,6 +77,22 @@ public:
      */
     void RenderToWindow();
 
+    int GetWidth() const { return m_ColorImage->GetConfig().Width; }
+    int GetHeight() const { return m_ColorImage->GetConfig().Height; }
+
+    /**
+     * If true the cursor will be limited to this window.
+     */
+    void LockCursor(bool ShouldLock);
+
+    /**
+     * When activated the cursor will be hidden and you can move inifinitely in any direction.
+     * Cursor will also be limited to this window.
+     */
+    void ActivateInfiniteCursor(bool Activate);
+
+    bool IsInfiniteCursor() const { return m_InifiniteCursor; }
+
 private:
     void Resize(int Width, int Height);
 
@@ -88,6 +104,8 @@ private:
     std::unique_ptr<Image> m_DepthImage = nullptr;
 
     uint32_t m_CurrentWidth = 0, m_CurrentHeight = 0;
+
+    bool m_InifiniteCursor = false;
 };
 
 /**
@@ -96,8 +114,9 @@ private:
 struct WindowDelegates
 {
     using ResizeDelegate = MultiDelegate<Window*, int, int>;
-    using ButtonDelegate = MultiDelegate<Window*, InputTrigger, InputPrimitive>;
+    using ButtonDelegate = MultiDelegate<Window*, InputPrimitive, InputTrigger>;
     using MousePositionDelegate = MultiDelegate<Window*, int, int>;
+    using MouseWheelDelegate = MultiDelegate<Window*, int>;
 
     /**
      * This delegate is executed when the size of the window's client area is changed.
@@ -110,9 +129,15 @@ struct WindowDelegates
     static ButtonDelegate OnButtonDelegate;
 
     /**
-     * This delegate is executed when the mouse key is moved.
+     * This delegate is executed when the mouse is moved.
      */
     static MousePositionDelegate OnMousePositionDelegate;
+
+    /**
+     * This delegate is executed when the mouse wheel is moved. The value is positive if the wheel
+     * is moved away from the user.
+     */
+    static MouseWheelDelegate OnMouseWheelMovedDelegate;
 };
 
 }  // namespace rndr

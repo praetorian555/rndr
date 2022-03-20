@@ -1,6 +1,6 @@
 #pragma once
 
-#include "rndr/core/rndr.h"
+#include "rndr/core/base.h"
 #include "rndr/core/transform.h"
 
 namespace rndr

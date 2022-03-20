@@ -22,8 +22,10 @@ enum class InputPrimitive
     _MouseStart,
     Mouse_LeftButton,
     Mouse_RightButton,
+    Mouse_MiddleButton,
     Mouse_AxisX,
     Mouse_AxisY,
+    Mouse_AxisWheel,
     Mouse_Position,
     _MouseEnd,
 
@@ -32,9 +34,10 @@ enum class InputPrimitive
 
 enum class InputTrigger
 {
-    Started,
-    Finished,
-    Triggered
+    ButtonDown,
+    ButtonUp,
+    DoubleClick,
+    AxisChanged
 };
 
 }

@@ -3,7 +3,7 @@
 #include <cmath>
 #include <numeric>
 
-#include "rndr/core/rndr.h"
+#include "rndr/core/base.h"
 
 #include "rndr/math/matrix4x4.h"
 #include "rndr/math/normal3.h"

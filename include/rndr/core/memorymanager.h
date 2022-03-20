@@ -4,7 +4,7 @@
 #include <mutex>
 #include <thread>
 
-#include "rndr/core/rndr.h"
+#include "rndr/core/base.h"
 
 #include "rndr/memory/allocator.h"
 #include "rndr/memory/blockallocator.h"

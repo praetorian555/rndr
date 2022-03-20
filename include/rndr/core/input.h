@@ -7,24 +7,34 @@
 #include <vector>
 
 #include "rndr/core/inputprimitives.h"
-#include "rndr/core/rndr.h"
+#include "rndr/core/base.h"
+#include "rndr/core/window.h"
 
 namespace rndr
 {
 
 /**
- * User defined name of the action.
+ * User defined input action.
  */
 using InputAction = std::string;
 
+/**
+ *
+ */
 struct InputBinding
 {
     InputPrimitive Primitive;
     InputTrigger Trigger;
+
+    real Modifier = 1.0;
 };
 
-using InputCallback = std::function<void(InputBinding, int X, int Y)>;
+using InputCallback =
+    std::function<void(InputPrimitive Primitive, InputTrigger Trigger, real Value)>;
 
+/**
+ * Maps a user-defined action to the array of input bindings and callback function.
+ */
 struct InputMapping
 {
     InputAction Action;
@@ -37,12 +47,19 @@ struct InputMapping
     }
 };
 
+/**
+ * Represents a collection of input mappings that can be used to handle input events.
+ */
 struct InputContext
 {
     std::map<InputAction, std::unique_ptr<InputMapping>> Mappings;
 
     InputMapping* CreateMapping(const InputAction& Action, InputCallback Callback);
-    void AddBinding(const InputAction& Action, InputPrimitive Primitive, InputTrigger Trigger);
+    void AddKeyBinding(const InputAction& Action, InputPrimitive Primitive, InputTrigger Trigger);
+    void AddAxisBinding(const InputAction& Action,
+                        InputPrimitive Primitive,
+                        InputTrigger Trigger,
+                        real Modifier = 1.0);
 
     const InputMapping* GetMapping(const InputAction& Action);
 };
@@ -57,14 +74,25 @@ public:
 
     void Update(real DeltaSeconds);
 
-    void SetContext(const InputContext* Context);
+    void SetWindow(const Window* Window);
+
+    InputContext* GetContext();
+
+    bool IsButton(InputPrimitive Primitive) const;
+    bool IsMouseButton(InputPrimitive Primitive) const;
+    bool IsKeyboardButton(InputPrimitive Primitive) const;
+
+    bool IsAxis(InputPrimitive Primitive) const;
+    bool IsMouseAxis(InputPrimitive Primitive) const;
 
 private:
     static std::unique_ptr<InputSystem> s_Input;
 
-    const InputContext* m_Context;
+    InputContext* m_Context;
     int m_X = 0, m_Y = 0;
     bool m_FirstTime = true;
+
+    const rndr::Window* m_Window = nullptr;
 };
 
 }  // namespace rndr

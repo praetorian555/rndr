@@ -1,25 +1,9 @@
 #include <chrono>
 #include <iostream>
 
-#include "rndr/core/camera.h"
-#include "rndr/core/color.h"
-#include "rndr/core/fileutils.h"
-#include "rndr/core/input.h"
-#include "rndr/core/log.h"
-#include "rndr/core/singletons.h"
-#include "rndr/core/threading.h"
-#include "rndr/core/transform.h"
-#include "rndr/core/window.h"
-
-#include "rndr/render/model.h"
-#include "rndr/render/pipeline.h"
-#include "rndr/render/rasterizer.h"
-
-#include "rndr/geometry/cube.h"
-
-#include "rndr/profiling/cputracer.h"
-
 #include <Windows.h>
+
+#include "rndr/rndr.h"
 
 struct ConstantData
 {
@@ -102,10 +86,7 @@ rndr::Model* CreateModel()
 
 int main()
 {
-    rndr::Singletons Singletons;
-
-    rndr::Window Window;
-    rndr::Rasterizer Renderer;
+    rndr::RndrApp* RndrApp = rndr::Init();
 
     const std::string SoldierTexturePath = ASSET_DIR "/SMS_Ranger_Title.bmp";
     const std::string WallTexturePath = ASSET_DIR "/bricked-wall.png";
@@ -124,8 +105,9 @@ int main()
 
     std::unique_ptr<rndr::Model> Model{CreateModel()};
 
-    const int Width = Window.GetColorImage()->GetConfig().Width;
-    const int Height = Window.GetColorImage()->GetConfig().Height;
+    rndr::Window* MainWindow = rndr::GRndrApp->GetWindow();
+    const int Width = MainWindow->GetWidth();
+    const int Height = MainWindow->GetHeight();
     const real Near = 0.01;
     const real Far = 1000;
     const real FOV = 90;
@@ -148,118 +130,103 @@ int main()
     real AngleUpDown = 0;
     real AngleLeftRight = 0;
 
-    rndr::InputContext InputContext;
-    rndr::InputSystem::Get()->SetContext(&InputContext);
+    rndr::InputContext* InputContext = rndr::GRndrApp->GetInputContext();
 
     const rndr::InputAction ZoomAction = "Zoom";
-    InputContext.CreateMapping(ZoomAction,
-                               [&ModelDepth](rndr::InputBinding Binding, int, int)
-                               {
-                                   const real Delta = 10;
-                                   if (Binding.Primitive == rndr::InputPrimitive::Keyboard_Q)
-                                   {
-                                       ModelDepth -= Delta;
-                                   }
-                                   else if (Binding.Primitive == rndr::InputPrimitive::Keyboard_E)
-                                   {
-                                       ModelDepth += Delta;
-                                   }
-                               });
-    InputContext.AddBinding(ZoomAction, rndr::InputPrimitive::Keyboard_Q,
-                            rndr::InputTrigger::Started);
-    InputContext.AddBinding(ZoomAction, rndr::InputPrimitive::Keyboard_E,
-                            rndr::InputTrigger::Started);
+    auto ZoomHandler = [&ModelDepth](rndr::InputPrimitive Primitive, rndr::InputTrigger, real)
+    {
+        const real Delta = 1;
+        if (Primitive == rndr::InputPrimitive::Keyboard_Q)
+        {
+            ModelDepth -= Delta;
+        }
+        else if (Primitive == rndr::InputPrimitive::Keyboard_E)
+        {
+            ModelDepth += Delta;
+        };
+    };
+    InputContext->CreateMapping(ZoomAction, ZoomHandler);
+    InputContext->AddKeyBinding(ZoomAction, rndr::InputPrimitive::Keyboard_Q,
+                                rndr::InputTrigger::ButtonDown);
+    InputContext->AddKeyBinding(ZoomAction, rndr::InputPrimitive::Keyboard_E,
+                                rndr::InputTrigger::ButtonDown);
 
     const rndr::InputAction RotateAction = "Rotate";
-    InputContext.CreateMapping(RotateAction,
-                               [&RotationAngle](rndr::InputBinding Binding, int, int)
-                               {
-                                   if (Binding.Primitive == rndr::InputPrimitive::Keyboard_A)
-                                   {
-                                       RotationAngle -= 1;
-                                   }
-                                   else if (Binding.Primitive == rndr::InputPrimitive::Keyboard_D)
-                                   {
-                                       RotationAngle += 1;
-                                   }
-                               });
-    InputContext.AddBinding(RotateAction, rndr::InputPrimitive::Keyboard_A,
-                            rndr::InputTrigger::Started);
-    InputContext.AddBinding(RotateAction, rndr::InputPrimitive::Keyboard_D,
-                            rndr::InputTrigger::Started);
+    auto RotateHandler = [&RotationAngle](rndr::InputPrimitive Primitive, rndr::InputTrigger, real)
+    {
+        if (Primitive == rndr::InputPrimitive::Keyboard_A)
+        {
+            RotationAngle -= 1;
+        }
+        else if (Primitive == rndr::InputPrimitive::Keyboard_D)
+        {
+            RotationAngle += 1;
+        }
+    };
+    InputContext->CreateMapping(RotateAction, RotateHandler);
+    InputContext->AddKeyBinding(RotateAction, rndr::InputPrimitive::Keyboard_A,
+                                rndr::InputTrigger::ButtonDown);
+    InputContext->AddKeyBinding(RotateAction, rndr::InputPrimitive::Keyboard_D,
+                                rndr::InputTrigger::ButtonDown);
 
     const rndr::InputAction TurnAroundAction = "TurnAround";
-    InputContext.CreateMapping(
-        TurnAroundAction,
-        [&AngleUpDown, &AngleLeftRight](rndr::InputBinding Binding, int ChangeX, int ChangeY)
-        {
-            const real Scaler = 0.1;
-            if (Binding.Primitive == rndr::InputPrimitive::Mouse_AxisX)
-            {
-                AngleLeftRight += -Scaler * ChangeX;
-            }
-            else if (Binding.Primitive == rndr::InputPrimitive::Mouse_AxisY)
-            {
-                AngleUpDown += Scaler * ChangeY;
-            }
-        });
-    InputContext.AddBinding(TurnAroundAction, rndr::InputPrimitive::Mouse_AxisX,
-                            rndr::InputTrigger::Triggered);
-    InputContext.AddBinding(TurnAroundAction, rndr::InputPrimitive::Mouse_AxisY,
-                            rndr::InputTrigger::Triggered);
-
-    real TotalTime = 0;
-    while (!Window.IsClosed())
+    auto TurnAroundHandler = [&AngleUpDown, &AngleLeftRight](rndr::InputPrimitive Primitive,
+                                                             rndr::InputTrigger, real Value)
     {
-        RNDR_CPU_TRACE("Main Loop");
-
-        auto Start = std::chrono::high_resolution_clock().now();
-
-        Window.ProcessEvents();
-
-        if (Window.IsWindowMinimized())
+        const real Scaler = 100;
+        if (Primitive == rndr::InputPrimitive::Mouse_AxisX)
         {
-            continue;
+            AngleLeftRight += Scaler * Value;
         }
+        else if (Primitive == rndr::InputPrimitive::Mouse_AxisY)
+        {
+            AngleUpDown += Scaler * Value;
+        }
+    };
+    InputContext->CreateMapping(TurnAroundAction, TurnAroundHandler);
+    InputContext->AddAxisBinding(TurnAroundAction, rndr::InputPrimitive::Mouse_AxisX,
+                                 rndr::InputTrigger::AxisChanged, -1);
+    InputContext->AddAxisBinding(TurnAroundAction, rndr::InputPrimitive::Mouse_AxisY,
+                                 rndr::InputTrigger::AxisChanged);
 
-        rndr::Image* ColorImage = Window.GetColorImage();
-        rndr::Image* DepthImage = Window.GetDepthImage();
-        ColorImage->ClearColorBuffer(rndr::Color::Black);
-        DepthImage->ClearDepthBuffer(rndr::Infinity);
+    rndr::Rasterizer Renderer;
 
-        Model->GetPipeline()->ColorImage = ColorImage;
-        Model->GetPipeline()->DepthImage = DepthImage;
+    rndr::GRndrApp->OnTickDelegate.Add(
+        [&](real DeltaSeconds)
+        {
+            rndr::Window* MainWindow = rndr::GRndrApp->GetWindow();
 
-        rndr::Transform CameraTransform = rndr::RotateX(AngleUpDown) * rndr::RotateY(AngleLeftRight);
-        CameraTransform = CameraTransform.GetInverse();
+            rndr::Image* ColorImage = MainWindow->GetColorImage();
+            rndr::Image* DepthImage = MainWindow->GetDepthImage();
+
+            Model->GetPipeline()->ColorImage = ColorImage;
+            Model->GetPipeline()->DepthImage = DepthImage;
+
+            rndr::Transform CameraTransform =
+                rndr::RotateX(AngleUpDown) * rndr::RotateY(AngleLeftRight);
+            CameraTransform = CameraTransform.GetInverse();
 
 #if 0
         rndr::Transform R = rndr::RotateY(0.02 * TotalTime) * rndr::RotateX(0.035 * TotalTime) *
                             rndr ::RotateZ(0.012 * TotalTime);
 #else
-        rndr::Transform R = rndr::RotateY(RotationAngle);
+            rndr::Transform R = rndr::RotateY(RotationAngle);
 #endif
 
-        rndr::Transform T =
-            rndr::Translate(rndr::Vector3r(0, 0, ModelDepth)) * R * rndr::Scale(10, 10, 10);
+            rndr::Transform T =
+                rndr::Translate(rndr::Vector3r(0, 0, ModelDepth)) * R * rndr::Scale(10, 10, 10);
 
-        ConstantData Constants{&T, Camera.get(), &CameraTransform, WallTexture.get()};
+            ConstantData Constants{&T, Camera.get(), &CameraTransform, WallTexture.get()};
 
-        Model->SetConstants(Constants);
+            Model->SetConstants(Constants);
 
-        Renderer.Draw(Model.get(), 1);
-        ColorImage->RenderImage(*SoldierTexture, rndr::Point2i{100, 100});
+            Renderer.Draw(Model.get(), 1);
+            ColorImage->RenderImage(*SoldierTexture, rndr::Point2i{100, 100});
+        });
 
-        Window.RenderToWindow();
+    rndr::GRndrApp->Run();
 
-        auto End = std::chrono::high_resolution_clock().now();
-        int Duration = std::chrono::duration_cast<std::chrono::milliseconds>(End - Start).count();
-
-        if (bRotationOn)
-        {
-            TotalTime += Modifier * Duration;
-        }
-    }
+    rndr::ShutDown();
 
     return 0;
 }
