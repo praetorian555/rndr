@@ -13,6 +13,14 @@ rndr::Camera::Camera(const Transform& WorldToCamera,
     m_ScreenToCamera = m_ScreenToCamera.GetInverse();
 }
 
+void rndr::Camera::UpdateWorldToCamera(const Transform& WorldToCameraTransform)
+{
+    m_WorldToCamera = WorldToCameraTransform;
+    m_CameraToWorld = m_WorldToCamera.GetInverse();
+
+    UpdateTransforms(m_FilmWidth, m_FilmHeight);
+}
+
 rndr::OrthographicCamera::OrthographicCamera(const Transform& WorldToCamera,
                                              int FilmWidth,
                                              int FilmHeight,

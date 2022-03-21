@@ -39,6 +39,8 @@ public:
      */
     virtual void UpdateTransforms(int Width, int Height) = 0;
 
+    void UpdateWorldToCamera(const Transform& WorldToCameraTransform);
+
     int GetFilmWidth() const { return m_FilmWidth; }
     int GetFilmHeight() const { return m_FilmHeight; }
 
