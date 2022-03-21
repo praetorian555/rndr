@@ -8,12 +8,17 @@
 #include <map>
 
 #include "rndr/core/log.h"
+//
+// VK_LEFT 0x25 LEFT ARROW key VK_UP 0x26 UP ARROW key VK_RIGHT 0x27 RIGHT ARROW key
+//    VK_DOWN 0x28 DOWN ARROW key
 
 static std::map<uint32_t, rndr::InputPrimitive> g_PrimitiveMapping = {
-    {0x41, rndr::InputPrimitive::Keyboard_A},  {0x57, rndr::InputPrimitive::Keyboard_W},
-    {0x53, rndr::InputPrimitive::Keyboard_S},  {0x45, rndr::InputPrimitive::Keyboard_E},
-    {0x51, rndr::InputPrimitive::Keyboard_Q},  {0x44, rndr::InputPrimitive::Keyboard_D},
-    {0x1B, rndr::InputPrimitive::Keyboard_Esc}};
+    {0x41, rndr::InputPrimitive::Keyboard_A},   {0x57, rndr::InputPrimitive::Keyboard_W},
+    {0x53, rndr::InputPrimitive::Keyboard_S},   {0x45, rndr::InputPrimitive::Keyboard_E},
+    {0x51, rndr::InputPrimitive::Keyboard_Q},   {0x44, rndr::InputPrimitive::Keyboard_D},
+    {0x1B, rndr::InputPrimitive::Keyboard_Esc}, {0x25, rndr::InputPrimitive::Keyboard_Left},
+    {0x26, rndr::InputPrimitive::Keyboard_Up},  {0x27, rndr::InputPrimitive::Keyboard_Right},
+    {0x28, rndr::InputPrimitive::Keyboard_Down}};
 
 // Defining window deleages
 
