@@ -25,7 +25,6 @@ rndr::Model* CreateModel()
         rndr::CubeVertexData* Data = (rndr::CubeVertexData*)Info.VertexData;
 
         rndr::Point3r WorldSpace = (*Constants->FromModelToWorld)(Data->Position, W);
-        WorldSpace = (*Constants->CameraWorld)(WorldSpace, W);
 #if 0
         const rndr::Point3r CameraSpace = Constants->Camera->FromWorldToCamera()(WorldSpace, W);
         const rndr::Point3r ScreenSpace = Constants->Camera->FromCameraToScreen()(CameraSpace, W);
