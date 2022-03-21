@@ -10,6 +10,7 @@
 #include "rndr/math/point2.h"
 #include "rndr/math/point3.h"
 #include "rndr/math/rng.h"
+#include "rndr/math/rotator.h"
 #include "rndr/math/vector2.h"
 #include "rndr/math/vector3.h"
 
