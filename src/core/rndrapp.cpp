@@ -64,5 +64,6 @@ void rndr::RndrApp::Run()
         auto FrameEnd = std::chrono::high_resolution_clock().now();
         FrameDuration =
             std::chrono::duration_cast<std::chrono::milliseconds>(FrameEnd - FrameStart).count();
+        FrameDuration /= 1000;
     }
 }
