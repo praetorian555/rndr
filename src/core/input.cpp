@@ -71,7 +71,7 @@ void rndr::InputSystem::Update(real DeltaSeconds)
             {
                 if (Binding.Primitive == Event.Primitive && Binding.Trigger == Event.Trigger)
                 {
-                    const real Value = 1.0;  // Has no meaning for buttons
+                    const real Value = Binding.Modifier;
                     Mapping.second->Callback(Event.Primitive, Event.Trigger, Value);
                 }
             }
@@ -215,25 +215,10 @@ rndr::InputMapping* rndr::InputContext::CreateMapping(const InputAction& Action,
     return nullptr;
 }
 
-void rndr::InputContext::AddKeyBinding(const InputAction& Action,
-                                       InputPrimitive Primitive,
-                                       InputTrigger Trigger)
-{
-    const auto& It = Mappings.find(Action);
-    assert(It != Mappings.end());
-
-    assert(rndr::InputSystem::Get()->IsButton(Primitive));
-
-    InputMapping* Mapping = It->second.get();
-
-    // TODO(mkostic): Check for duplicates
-    Mapping->Bindings.push_back(InputBinding{Primitive, Trigger});
-}
-
-void rndr::InputContext::AddAxisBinding(const InputAction& Action,
-                                        InputPrimitive Primitive,
-                                        InputTrigger Trigger,
-                                        real Modifier)
+void rndr::InputContext::AddBinding(const InputAction& Action,
+                                    InputPrimitive Primitive,
+                                    InputTrigger Trigger,
+                                    real Modifier)
 {
     const auto& It = Mappings.find(Action);
     assert(It != Mappings.end());

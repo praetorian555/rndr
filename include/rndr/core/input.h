@@ -6,8 +6,8 @@
 #include <string>
 #include <vector>
 
-#include "rndr/core/inputprimitives.h"
 #include "rndr/core/base.h"
+#include "rndr/core/inputprimitives.h"
 #include "rndr/core/window.h"
 
 namespace rndr
@@ -55,11 +55,10 @@ struct InputContext
     std::map<InputAction, std::unique_ptr<InputMapping>> Mappings;
 
     InputMapping* CreateMapping(const InputAction& Action, InputCallback Callback);
-    void AddKeyBinding(const InputAction& Action, InputPrimitive Primitive, InputTrigger Trigger);
-    void AddAxisBinding(const InputAction& Action,
-                        InputPrimitive Primitive,
-                        InputTrigger Trigger,
-                        real Modifier = 1.0);
+    void AddBinding(const InputAction& Action,
+                    InputPrimitive Primitive,
+                    InputTrigger Trigger,
+                    real Modifier = 1.0);
 
     const InputMapping* GetMapping(const InputAction& Action);
 };
@@ -94,5 +93,8 @@ private:
 
     const rndr::Window* m_Window = nullptr;
 };
+
+#define RNDR_BIND_INPUT_CALLBACK(FuncPtr, This) \
+    std::bind(FuncPtr, This, std::placeholders::_1, std::placeholders::_2, std::placeholders::_3)
 
 }  // namespace rndr
