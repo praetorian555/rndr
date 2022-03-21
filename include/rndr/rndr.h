@@ -19,3 +19,5 @@
 #include "rndr/geometry/cube.h"
 
 #include "rndr/profiling/cputracer.h"
+
+#include "rndr/camera/firstpersoncamera.h"

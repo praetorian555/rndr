@@ -9,7 +9,6 @@ struct ConstantData
 {
     rndr::Transform* FromModelToWorld;
     rndr::Camera* Camera;
-    rndr::Transform* CameraWorld;
     rndr::Image* Texture;
 };
 
@@ -122,73 +121,9 @@ int main()
     rndr::WindowDelegates::OnResize.Add([Camera](rndr::Window*, int Width, int Height)
                                         { Camera->UpdateTransforms(Width, Height); });
 
-    real Modifier = 1;
-    bool bRotationOn = false;
-    real ModelDepth = -60;
-    real RotationAngle = 0;
-    real AngleUpDown = 0;
-    real AngleLeftRight = 0;
-
-    rndr::InputContext* InputContext = rndr::GRndrApp->GetInputContext();
-
-    const rndr::InputAction ZoomAction = "Zoom";
-    auto ZoomHandler = [&ModelDepth](rndr::InputPrimitive Primitive, rndr::InputTrigger, real)
-    {
-        const real Delta = 1;
-        if (Primitive == rndr::InputPrimitive::Keyboard_Q)
-        {
-            ModelDepth -= Delta;
-        }
-        else if (Primitive == rndr::InputPrimitive::Keyboard_E)
-        {
-            ModelDepth += Delta;
-        };
-    };
-    InputContext->CreateMapping(ZoomAction, ZoomHandler);
-    InputContext->AddKeyBinding(ZoomAction, rndr::InputPrimitive::Keyboard_Q,
-                                rndr::InputTrigger::ButtonDown);
-    InputContext->AddKeyBinding(ZoomAction, rndr::InputPrimitive::Keyboard_E,
-                                rndr::InputTrigger::ButtonDown);
-
-    const rndr::InputAction RotateAction = "Rotate";
-    auto RotateHandler = [&RotationAngle](rndr::InputPrimitive Primitive, rndr::InputTrigger, real)
-    {
-        if (Primitive == rndr::InputPrimitive::Keyboard_A)
-        {
-            RotationAngle -= 1;
-        }
-        else if (Primitive == rndr::InputPrimitive::Keyboard_D)
-        {
-            RotationAngle += 1;
-        }
-    };
-    InputContext->CreateMapping(RotateAction, RotateHandler);
-    InputContext->AddKeyBinding(RotateAction, rndr::InputPrimitive::Keyboard_A,
-                                rndr::InputTrigger::ButtonDown);
-    InputContext->AddKeyBinding(RotateAction, rndr::InputPrimitive::Keyboard_D,
-                                rndr::InputTrigger::ButtonDown);
-
-    const rndr::InputAction TurnAroundAction = "TurnAround";
-    auto TurnAroundHandler = [&AngleUpDown, &AngleLeftRight](rndr::InputPrimitive Primitive,
-                                                             rndr::InputTrigger, real Value)
-    {
-        const real Scaler = 100;
-        if (Primitive == rndr::InputPrimitive::Mouse_AxisX)
-        {
-            AngleLeftRight += Scaler * Value;
-        }
-        else if (Primitive == rndr::InputPrimitive::Mouse_AxisY)
-        {
-            AngleUpDown += Scaler * Value;
-        }
-    };
-    InputContext->CreateMapping(TurnAroundAction, TurnAroundHandler);
-    InputContext->AddAxisBinding(TurnAroundAction, rndr::InputPrimitive::Mouse_AxisX,
-                                 rndr::InputTrigger::AxisChanged, -1);
-    InputContext->AddAxisBinding(TurnAroundAction, rndr::InputPrimitive::Mouse_AxisY,
-                                 rndr::InputTrigger::AxisChanged);
-
     rndr::Rasterizer Renderer;
+
+    rndr::FirstPersonCamera FPCamera(Camera.get());
 
     rndr::GRndrApp->OnTickDelegate.Add(
         [&](real DeltaSeconds)
@@ -201,21 +136,10 @@ int main()
             Model->GetPipeline()->ColorImage = ColorImage;
             Model->GetPipeline()->DepthImage = DepthImage;
 
-            rndr::Transform CameraTransform =
-                rndr::RotateX(AngleUpDown) * rndr::RotateY(AngleLeftRight);
-            CameraTransform = CameraTransform.GetInverse();
+            FPCamera.Update(DeltaSeconds);
 
-#if 0
-        rndr::Transform R = rndr::RotateY(0.02 * TotalTime) * rndr::RotateX(0.035 * TotalTime) *
-                            rndr ::RotateZ(0.012 * TotalTime);
-#else
-            rndr::Transform R = rndr::RotateY(RotationAngle);
-#endif
-
-            rndr::Transform T =
-                rndr::Translate(rndr::Vector3r(0, 0, ModelDepth)) * R * rndr::Scale(10, 10, 10);
-
-            ConstantData Constants{&T, Camera.get(), &CameraTransform, WallTexture.get()};
+            rndr::Transform ModelTransform = rndr::Translate(rndr::Vector3r{0, 0, -30});
+            ConstantData Constants{&ModelTransform, Camera.get(), WallTexture.get()};
 
             Model->SetConstants(Constants);
 
