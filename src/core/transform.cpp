@@ -204,6 +204,11 @@ Transform Rotate(real theta, const Vector3r& axis)
     return Transform(m, m.Transpose());
 }
 
+Transform Rotate(Rotator Rotator)
+{
+    return RotateY(Rotator.Yaw) * RotateZ(Rotator.Pitch) * RotateX(Rotator.Roll);
+}
+
 Transform LookAt(const Point3r& pos, const Point3r& look, const Vector3r& up)
 {
     Matrix4x4 cameraToWorld;

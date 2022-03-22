@@ -63,6 +63,7 @@ Transform RotateX(real theta);
 Transform RotateY(real theta);
 Transform RotateZ(real theta);
 Transform Rotate(real theta, const Vector3r& axis);
+Transform Rotate(Rotator Rotator);
 Transform LookAt(const Point3r& pos, const Point3r& look, const Vector3r& up);
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
