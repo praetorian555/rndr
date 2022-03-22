@@ -1,9 +1,9 @@
 #include "rndr/camera/firstpersoncamera.h"
 
 #include "rndr/core/camera.h"
+#include "rndr/core/log.h"
 #include "rndr/core/rndrapp.h"
 #include "rndr/core/transform.h"
-#include "rndr/core/log.h"
 
 rndr::FirstPersonCamera::FirstPersonCamera(rndr::Camera* ProjectionCamera)
     : m_ProjectionCamera(ProjectionCamera)
@@ -45,18 +45,18 @@ rndr::FirstPersonCamera::FirstPersonCamera(rndr::Camera* ProjectionCamera)
 
 void rndr::FirstPersonCamera::Update(real DeltaSeconds)
 {
+    m_DirectionVector = Vector3r{0, 0, -1};
     m_DirectionAngles += m_DeltaAngles;
-    m_DirectionVector = m_DirectionAngles.ToVector();
-    m_DirectionVector = rndr::RotateY(90)(m_DirectionVector);
+    m_DirectionVector = rndr::Rotate(m_DirectionAngles)(m_DirectionVector);
     m_RightVector = rndr::Cross(m_DirectionVector, Vector3r{0, 1, 0});
 
-    const real Modifier = 5;
-    m_Position += Modifier * DeltaSeconds * m_DeltaPosition.X * m_DirectionVector;
-    m_Position += Modifier * DeltaSeconds * m_DeltaPosition.Y * m_RightVector;
+    const real Speed = 5;
+    m_Position += Speed * DeltaSeconds * m_DeltaPosition.X * m_DirectionVector;
+    m_Position += Speed * DeltaSeconds * m_DeltaPosition.Y * m_RightVector;
 
-    const Transform CameraToWorld =
-        rndr::Translate(m_Position) * rndr::RotateX(m_DirectionAngles.Roll) *
-        rndr::RotateY(m_DirectionAngles.Yaw) * rndr::RotateZ(m_DirectionAngles.Pitch);
+    Rotator R = m_DirectionAngles;
+
+    const Transform CameraToWorld = rndr::Translate(m_Position) * rndr::Rotate(R);
     const Transform WorldToCamera = CameraToWorld.GetInverse();
 
     m_ProjectionCamera->UpdateWorldToCamera(WorldToCamera);
