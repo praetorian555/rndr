@@ -26,8 +26,14 @@ rndr::Model* CreateModel()
         rndr::Point3r WorldSpace = (*Constants->FromModelToWorld)(Data->Position, W);
 #if 0
         const rndr::Point3r CameraSpace = Constants->Camera->FromWorldToCamera()(WorldSpace, W);
-        const rndr::Point3r ScreenSpace = Constants->Camera->FromCameraToScreen()(CameraSpace, W);
+        real RealW;
+        const rndr::Point3r ScreenSpace = Constants->Camera->FromCameraToScreen()(CameraSpace, RealW);
         const rndr::Point3r NDCSpace = Constants->Camera->FromScreenToNDC()(ScreenSpace, W);
+        W = RealW;
+#if RNDR_DEBUG
+
+#endif
+
         return NDCSpace;
 #else
         rndr::Point3r NDCSpace = Constants->Camera->FromWorldToNDC()(WorldSpace, W);
@@ -107,15 +113,15 @@ int main()
     const int Width = MainWindow->GetWidth();
     const int Height = MainWindow->GetHeight();
     const real Near = 0.01;
-    const real Far = 1000;
-    const real FOV = 90;
+    const real Far = 100;
+    const real FOVY = 45;
     rndr::Transform FromWorldToCamera = rndr::RotateY(0);
 #if 1
-    std::shared_ptr<rndr::Camera> Camera =
-        std::make_unique<rndr::PerspectiveCamera>(FromWorldToCamera, Width, Height, FOV, Near, Far);
+    std::shared_ptr<rndr::Camera> Camera = std::make_unique<rndr::PerspectiveCamera>(
+        FromWorldToCamera, Width, Height, FOVY, Near, Far);
 #else
     std::shared_ptr<rndr::Camera> Camera =
-        std::make_unique<rndr::OrtographicCamera>(FromWorldToCamera, Width, Height, Near, Far);
+        std::make_unique<rndr::OrthographicCamera>(FromWorldToCamera, Width, Height, Near, Far);
 #endif
 
     rndr::WindowDelegates::OnResize.Add([Camera](rndr::Window*, int Width, int Height)
