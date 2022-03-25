@@ -37,6 +37,8 @@ static bool LimitTriangleToSurface(rndr::Bounds2i& TriangleBounds, const rndr::I
 
     if (!rndr::Overlaps(TriangleBounds, ImageBounds))
     {
+        const rndr::Bounds2i ZeroBounds{rndr::Point2i(), rndr::Point2i()};
+        TriangleBounds = ZeroBounds;
         return false;
     }
 
