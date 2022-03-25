@@ -144,7 +144,7 @@ int main()
 
             FPCamera.Update(DeltaSeconds);
 
-            rndr::Transform ModelTransform = rndr::Translate(rndr::Vector3r{0, 0, -30});
+            rndr::Transform ModelTransform = rndr::Translate(rndr::Vector3r{0, 0, -4});
             ConstantData Constants{&ModelTransform, Camera.get(), WallTexture.get()};
 
             Model->SetConstants(Constants);
