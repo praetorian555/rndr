@@ -151,12 +151,12 @@ bool InsideInclusive(const Point2<T>& p, const Bounds2<T>& b)
 }
 
 template <typename T, typename U>
-inline Bounds2<T> EXpand(const Bounds2<T>& b, U delta)
+inline Bounds2<T> Expand(const Bounds2<T>& b, U delta)
 {
     return Bounds2<T>(b.pMin - Vector2<T>(delta, delta), b.pMax + Vector2<T>(delta, delta));
 }
 
-// TYpes
+// Types
 
 using Bounds2r = Bounds2<real>;
 using Bounds2i = Bounds2<int>;
