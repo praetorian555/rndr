@@ -113,8 +113,6 @@ void rndr::FirstPersonCamera::HandleMoveForward(rndr::InputPrimitive Primitive,
     using IP = rndr::InputPrimitive;
     using IT = rndr::InputTrigger;
 
-    RNDR_LOG_DEBUG("HandleMoveForward: Primitive=%d, Trigger=%d", Primitive, Trigger);
-
     if (Trigger == IT::ButtonDown)
     {
         m_DeltaPosition.X = Value;
