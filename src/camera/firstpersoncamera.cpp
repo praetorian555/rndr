@@ -5,8 +5,12 @@
 #include "rndr/core/rndrapp.h"
 #include "rndr/core/transform.h"
 
-rndr::FirstPersonCamera::FirstPersonCamera(rndr::Camera* ProjectionCamera)
-    : m_ProjectionCamera(ProjectionCamera)
+rndr::FirstPersonCamera::FirstPersonCamera(rndr::Camera* ProjectionCamera,
+                                           real MovementSpeed,
+                                           real RotationSpeed)
+    : m_ProjectionCamera(ProjectionCamera),
+      m_MovementSpeed(MovementSpeed),
+      m_RotationSpeed(RotationSpeed)
 {
     rndr::InputContext* Context = GRndrApp->GetInputContext();
     assert(Context);
@@ -50,9 +54,8 @@ void rndr::FirstPersonCamera::Update(real DeltaSeconds)
     m_DirectionVector = rndr::Rotate(m_DirectionAngles)(m_DirectionVector);
     m_RightVector = rndr::Cross(m_DirectionVector, Vector3r{0, 1, 0});
 
-    const real Speed = 5;
-    m_Position += Speed * DeltaSeconds * m_DeltaPosition.X * m_DirectionVector;
-    m_Position += Speed * DeltaSeconds * m_DeltaPosition.Y * m_RightVector;
+    m_Position += m_MovementSpeed * DeltaSeconds * m_DeltaPosition.X * m_DirectionVector;
+    m_Position += m_RotationSpeed * DeltaSeconds * m_DeltaPosition.Y * m_RightVector;
 
     Rotator R = m_DirectionAngles;
 
@@ -76,66 +79,30 @@ void rndr::FirstPersonCamera::HandleLookVert(rndr::InputPrimitive Primitive,
                                              rndr::InputTrigger Trigger,
                                              real AxisValue)
 {
-    using IP = rndr::InputPrimitive;
     using IT = rndr::InputTrigger;
-
-    if (Trigger == IT::ButtonDown)
-    {
-        m_DeltaAngles.Roll = AxisValue;
-    }
-    else
-    {
-        m_DeltaAngles.Roll = 0;
-    }
+    m_DeltaAngles.Roll = Trigger == IT::ButtonDown ? m_RotationSpeed * AxisValue : 0;
 }
 
 void rndr::FirstPersonCamera::HandleLookHorz(rndr::InputPrimitive Primitive,
                                              rndr::InputTrigger Trigger,
                                              real AxisValue)
 {
-    using IP = rndr::InputPrimitive;
     using IT = rndr::InputTrigger;
-
-    if (Trigger == IT::ButtonDown)
-    {
-        m_DeltaAngles.Yaw = AxisValue;
-    }
-    else
-    {
-        m_DeltaAngles.Yaw = 0;
-    }
+    m_DeltaAngles.Yaw = Trigger == IT::ButtonDown ? m_RotationSpeed * AxisValue : 0;
 }
 
 void rndr::FirstPersonCamera::HandleMoveForward(rndr::InputPrimitive Primitive,
                                                 rndr::InputTrigger Trigger,
                                                 real Value)
 {
-    using IP = rndr::InputPrimitive;
     using IT = rndr::InputTrigger;
-
-    if (Trigger == IT::ButtonDown)
-    {
-        m_DeltaPosition.X = Value;
-    }
-    else
-    {
-        m_DeltaPosition.X = 0;
-    }
+    m_DeltaPosition.X = Trigger == IT::ButtonDown ? Value : 0;
 }
 
 void rndr::FirstPersonCamera::HandleMoveRight(rndr::InputPrimitive Primitive,
                                               rndr::InputTrigger Trigger,
                                               real Value)
 {
-    using IP = rndr::InputPrimitive;
     using IT = rndr::InputTrigger;
-
-    if (Trigger == IT::ButtonDown)
-    {
-        m_DeltaPosition.Y = Value;
-    }
-    else
-    {
-        m_DeltaPosition.Y = 0;
-    }
+    m_DeltaPosition.Y = Trigger == IT::ButtonDown ? Value : 0;
 }

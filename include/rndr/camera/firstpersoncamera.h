@@ -16,7 +16,7 @@ class Camera;
 class FirstPersonCamera
 {
 public:
-    FirstPersonCamera(rndr::Camera* ProjectionCamera);
+    FirstPersonCamera(rndr::Camera* ProjectionCamera, real MovementSpeed = 1.0, real RotationSpeed = 1.0);
 
     void Update(real DeltaSeconds);
 
@@ -40,6 +40,9 @@ private:
 
     Vector3r m_DirectionVector;
     Vector3r m_RightVector;
+
+    real m_MovementSpeed;
+    real m_RotationSpeed;
 
     bool m_bDirectionChanged = false;
 };
