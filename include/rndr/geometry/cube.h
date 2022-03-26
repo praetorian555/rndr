@@ -3,19 +3,15 @@
 #include <vector>
 
 #include "rndr/core/math.h"
+#include "rndr/render/shader.h"
 
 namespace rndr
 {
 
-struct CubeVertexData
-{
-    rndr::Point3r Position;
-    rndr::Point2r TextureCoords;
-};
-
 struct Cube
 {
-    static const std::vector<CubeVertexData>& GetVertices();
+    static const std::vector<Point3r>& GetVertexPositions();
+    static const std::vector<Point2r>& GetVertexTextureCoordinates();
     static const std::vector<int>& GetIndices();
 };
 
