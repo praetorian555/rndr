@@ -17,9 +17,9 @@ class Model
 {
 public:
     Model() = default;
-    ~Model() { delete m_Constants; }
+    virtual ~Model() { delete m_Constants; }
 
-    void SetPipeline(const std::shared_ptr<Pipeline>& PipelineConfig)
+    void SetPipeline(Pipeline* PipelineConfig)
     {
         m_PipelineConfig = PipelineConfig;
     }
@@ -49,8 +49,8 @@ public:
         m_Constants = (void*)Tmp;
     }
 
-    Pipeline* GetPipeline() { return m_PipelineConfig.get(); }
-    const Pipeline* GetPipeline() const { return m_PipelineConfig.get(); }
+    Pipeline* GetPipeline() { return m_PipelineConfig; }
+    const Pipeline* GetPipeline() const { return m_PipelineConfig; }
 
     std::vector<uint8_t>& GetVertexData() { return m_VertexData; }
     const std::vector<uint8_t>& GetVertexData() const { return m_VertexData; }
@@ -67,7 +67,7 @@ public:
     const void* GetConstants() const { return m_Constants; }
 
 private:
-    std::shared_ptr<Pipeline> m_PipelineConfig;  // Just a reference, we don't own this object
+    Pipeline* m_PipelineConfig;  // Just a reference, we don't own this object
 
     std::vector<uint8_t> m_VertexData;
     int m_VertexDataStride = 0;
