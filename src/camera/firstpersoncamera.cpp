@@ -50,12 +50,12 @@ rndr::FirstPersonCamera::FirstPersonCamera(rndr::Camera* ProjectionCamera,
 void rndr::FirstPersonCamera::Update(real DeltaSeconds)
 {
     m_DirectionVector = Vector3r{0, 0, -1};
-    m_DirectionAngles += m_DeltaAngles;
+    m_DirectionAngles += m_DeltaAngles * m_RotationSpeed;
     m_DirectionVector = rndr::Rotate(m_DirectionAngles)(m_DirectionVector);
     m_RightVector = rndr::Cross(m_DirectionVector, Vector3r{0, 1, 0});
 
     m_Position += m_MovementSpeed * DeltaSeconds * m_DeltaPosition.X * m_DirectionVector;
-    m_Position += m_RotationSpeed * DeltaSeconds * m_DeltaPosition.Y * m_RightVector;
+    m_Position += m_MovementSpeed * DeltaSeconds * m_DeltaPosition.Y * m_RightVector;
 
     Rotator R = m_DirectionAngles;
 
