@@ -7,7 +7,6 @@ class BoxRenderPass
 public:
     struct BoxConstants
     {
-        rndr::Transform* FromModelToWorld;
         rndr::Camera* Camera;
         rndr::Image* Texture;
     };
@@ -16,6 +15,11 @@ public:
     {
         rndr::Point3r Position;
         rndr::Point2r TexCoords;
+    };
+
+    struct BoxInstance
+    {
+        rndr::Transform FromModelToWorld;
     };
 
 public:
@@ -32,6 +36,8 @@ private:
     std::unique_ptr<rndr::Pipeline> m_Pipeline;
     std::unique_ptr<rndr::Model> m_Model;
     std::unique_ptr<rndr::Image> m_Texture;
+
+    std::vector<BoxInstance> m_Instances;
 
     rndr::Camera* m_Camera;
 };

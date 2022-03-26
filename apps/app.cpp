@@ -30,7 +30,7 @@ int main()
 
     rndr::Rasterizer Renderer;
 
-    rndr::FirstPersonCamera FPCamera(Camera.get());
+    rndr::FirstPersonCamera FPCamera(Camera.get(), 10, 1.2);
 
     BoxRenderPass BoxPass;
     rndr::Image* ColorImage = MainWindow->GetColorImage();
