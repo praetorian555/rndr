@@ -38,6 +38,9 @@ struct Rotator
 
      Rotator operator+(Rotator Other) const;
      Rotator& operator+=(Rotator Other);
+
+     Rotator operator*(real Val) const;
+     Rotator& operator*=(real Val);
 };
 
 }  // namespace rndr

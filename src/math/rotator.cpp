@@ -30,3 +30,17 @@ rndr::Rotator& rndr::Rotator::operator+=(Rotator Other)
 
     return *this;
 }
+
+rndr::Rotator rndr::Rotator::operator*(real Val) const
+{
+    return Rotator(Pitch * Val, Yaw * Val, Roll * Val);
+}
+
+rndr::Rotator& rndr::Rotator::operator*=(real Val)
+{
+    Pitch *= Val;
+    Yaw *= Val;
+    Roll *= Val;
+
+    return *this;
+}
