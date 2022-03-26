@@ -31,6 +31,9 @@ public:
     // Uniform number in range [0, 1)
     real UniformReal();
 
+    // Uniform number in range [Start, End)
+    real UniformRealInRange(real Start, real End);
+
 private:
     uint64_t state, inc;
 };

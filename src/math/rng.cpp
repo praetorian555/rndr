@@ -74,4 +74,12 @@ real RNG::UniformReal()
     return std::min(OneMinusEpsilon, UniformUInt32() * 0x1p-32f);
 }
 
+real RNG::UniformRealInRange(real Start, real End)
+{
+    assert(Start <= End);
+
+    const real Value = UniformReal();
+    return Start + Value * (End - Start);
+}
+
 }  // namespace rndr
