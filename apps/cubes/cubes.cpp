@@ -4,6 +4,7 @@
 #include "rndr/rndr.h"
 
 #include "boxpass.h"
+#include "lightpass.h"
 
 int main()
 {
@@ -39,8 +40,10 @@ int main()
     rndr::FirstPersonCamera FPCamera(Camera.get(), 10, 1.2);
 
     BoxRenderPass BoxPass;
-
     BoxPass.Init(FPCamera.GetProjectionCamera());
+
+    LightRenderPass LightPass;
+    LightPass.Init(FPCamera.GetProjectionCamera());
 
     rndr::GRndrApp->OnTickDelegate.Add(
         [&](real DeltaSeconds)
@@ -51,6 +54,9 @@ int main()
             rndr::Image* DepthImage = MainWindow->GetDepthImage();
             BoxPass.SetTargetImages(ColorImage, DepthImage);
             BoxPass.Render(Renderer, DeltaSeconds);
+
+            LightPass.SetTargetImages(ColorImage, DepthImage);
+            LightPass.Render(Renderer, DeltaSeconds);
 
             ColorImage->RenderImage(*SoldierTexture, rndr::Point2i{100, 100});
         });
