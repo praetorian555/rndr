@@ -1,6 +1,7 @@
 # Include spdlog only if it is not already present
 if (NOT TARGET spdlog::spdlog)
 	add_subdirectory(spdlog)
+	set_target_properties(spdlog PROPERTIES FOLDER Extern)
 endif()
 
 # Include stb_image only if it is not already present

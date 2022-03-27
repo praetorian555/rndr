@@ -24,6 +24,7 @@ if (CPPCHECK)
         --suppress=missingInclude
         --suppress=unmatchedSuppression
     )
+    set_target_properties(cppcheck PROPERTIES FOLDER CustomCommands)
 
 else()
 

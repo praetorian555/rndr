@@ -21,10 +21,10 @@ if (CLANG_FORMAT)
         -style=file
         ${FILES_TO_FORMAT}
     )
+	set_target_properties(clang-format PROPERTIES FOLDER CustomCommands)
 
 else()
 
     message(WARNING "clang-format not found, clang-format target will not work!")
 
 endif()
-

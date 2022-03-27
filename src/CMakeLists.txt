@@ -15,12 +15,4 @@ target_link_libraries(rndr PUBLIC stb_image)
 # All users of this library will need at least C++17
 target_compile_features(rndr PUBLIC cxx_std_17)
 
-# IDEs should put the headers in a nice place
-source_group(
-  TREE "${PROJECT_SOURCE_DIR}/include"
-  PREFIX "Public"
-  FILES ${PUBLIC_SOURCE_LIST})
-source_group(
-  TREE "${PROJECT_SOURCE_DIR}/src"
-  PREFIX "Private"
-  FILES ${PRIVATE_SOURCE_LIST})
+set_target_properties(rndr PROPERTIES FOLDER RNDR)

@@ -8,12 +8,5 @@ target_include_directories(stb_image PRIVATE src)
 # All users of this library will need at least C++17
 target_compile_features(stb_image PUBLIC cxx_std_17)
 
-# IDEs should put the headers in a nice place
-source_group(
-  TREE "${CMAKE_CURRENT_SOURCE_DIR}/include"
-  PREFIX "Public"
-  FILES include/stb_image/stb_image.h)
-source_group(
-  TREE "${CMAKE_CURRENT_SOURCE_DIR}/src"
-  PREFIX "Private"
-  FILES src/stb_image.cpp)
+# Put stb_image project under Extern folder in IDE
+set_target_properties(stb_image PROPERTIES FOLDER Extern)
