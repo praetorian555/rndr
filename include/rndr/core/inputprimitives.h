@@ -44,4 +44,4 @@ enum class InputTrigger
     AxisChanged
 };
 
-}
+}  // namespace rndr

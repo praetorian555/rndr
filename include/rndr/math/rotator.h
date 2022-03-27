@@ -34,13 +34,13 @@ struct Rotator
     /**
      * Returns normalized vector in the direction defined by the rotator.
      */
-     Vector3<real> ToVector();
+    Vector3<real> ToVector();
 
-     Rotator operator+(Rotator Other) const;
-     Rotator& operator+=(Rotator Other);
+    Rotator operator+(Rotator Other) const;
+    Rotator& operator+=(Rotator Other);
 
-     Rotator operator*(real Val) const;
-     Rotator& operator*=(real Val);
+    Rotator operator*(real Val) const;
+    Rotator& operator*=(real Val);
 };
 
 }  // namespace rndr

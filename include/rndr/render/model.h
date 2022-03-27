@@ -19,10 +19,7 @@ public:
     Model() = default;
     virtual ~Model() { delete m_Constants; }
 
-    void SetPipeline(Pipeline* PipelineConfig)
-    {
-        m_PipelineConfig = PipelineConfig;
-    }
+    void SetPipeline(Pipeline* PipelineConfig) { m_PipelineConfig = PipelineConfig; }
 
     template <typename T>
     void SetVertexData(const std::vector<T>& VertexData)

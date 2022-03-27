@@ -16,7 +16,9 @@ class Camera;
 class FirstPersonCamera
 {
 public:
-    FirstPersonCamera(rndr::Camera* ProjectionCamera, real MovementSpeed = 1.0, real RotationSpeed = 1.0);
+    FirstPersonCamera(rndr::Camera* ProjectionCamera,
+                      real MovementSpeed = 1.0,
+                      real RotationSpeed = 1.0);
 
     void Update(real DeltaSeconds);
 

@@ -75,7 +75,7 @@ enum class ImageFiltering
 {
     NearestNeighbor,
     BilinearInterpolation,
-    TrilinearInterpolation // Valid only for minification filter
+    TrilinearInterpolation  // Valid only for minification filter
 };
 
 /**
