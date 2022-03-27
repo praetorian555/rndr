@@ -2,7 +2,7 @@
 
 #define BIND_SHADER(Func, This) std::bind(&Func, This, std::placeholders::_1, std::placeholders::_2)
 
-void BoxRenderPass::Init(rndr::Image* ColorImage, rndr::Image* DepthImage, rndr::Camera* Camera)
+void BoxRenderPass::Init(rndr::Camera* Camera)
 {
     std::shared_ptr<rndr::VertexShader> VertexShader = std::make_shared<rndr::VertexShader>();
     VertexShader->Callback = BIND_SHADER(BoxRenderPass::VertexShader, this);
@@ -15,8 +15,6 @@ void BoxRenderPass::Init(rndr::Image* ColorImage, rndr::Image* DepthImage, rndr:
     m_Pipeline->VertexShader = VertexShader;
     m_Pipeline->PixelShader = PixelShader;
     m_Pipeline->DepthTest = rndr::DepthTest::LesserThen;
-    m_Pipeline->ColorImage = ColorImage;
-    m_Pipeline->DepthImage = DepthImage;
 
     std::vector<BoxVertex> Vertices;
     auto& CubePositions = rndr::Cube::GetVertexPositions();
@@ -69,6 +67,12 @@ void BoxRenderPass::ShutDown() {}
 void BoxRenderPass::Render(rndr::Rasterizer& Renderer, real DeltaSeconds)
 {
     Renderer.Draw(m_Model.get(), m_Instances.size());
+}
+
+void BoxRenderPass::SetTargetImages(rndr::Image* ColorImage, rndr::Image* DepthImage)
+{
+    m_Pipeline->ColorImage = ColorImage;
+    m_Pipeline->DepthImage = DepthImage;
 }
 
 rndr::Point3r BoxRenderPass::VertexShader(const rndr::PerVertexInfo& Info, real& W)

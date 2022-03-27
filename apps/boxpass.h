@@ -23,10 +23,12 @@ public:
     };
 
 public:
-    void Init(rndr::Image* ColorImage, rndr::Image* DepthImage, rndr::Camera* Camera);
+    void Init(rndr::Camera* Camera);
     void ShutDown();
 
     void Render(rndr::Rasterizer& Renderer, real DeltaSeconds);
+
+    void SetTargetImages(rndr::Image* ColorImage, rndr::Image* DepthImage);
 
 private:
     rndr::Point3r VertexShader(const rndr::PerVertexInfo& Info, real& W);

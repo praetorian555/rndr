@@ -25,23 +25,31 @@ int main()
     std::shared_ptr<rndr::Camera> Camera = std::make_unique<rndr::PerspectiveCamera>(
         rndr::Transform{}, Width, Height, FOVY, Near, Far);
 
-    rndr::WindowDelegates::OnResize.Add([Camera](rndr::Window*, int Width, int Height)
-                                        { Camera->UpdateTransforms(Width, Height); });
+    rndr::WindowDelegates::OnResize.Add(
+        [Camera, MainWindow](rndr::Window* Window, int Width, int Height)
+        {
+            if (MainWindow == Window)
+            {
+                Camera->UpdateTransforms(Width, Height);
+            }
+        });
 
     rndr::Rasterizer Renderer;
 
     rndr::FirstPersonCamera FPCamera(Camera.get(), 10, 1.2);
 
     BoxRenderPass BoxPass;
-    rndr::Image* ColorImage = MainWindow->GetColorImage();
-    rndr::Image* DepthImage = MainWindow->GetDepthImage();
-    BoxPass.Init(ColorImage, DepthImage, FPCamera.GetProjectionCamera());
+
+    BoxPass.Init(FPCamera.GetProjectionCamera());
 
     rndr::GRndrApp->OnTickDelegate.Add(
         [&](real DeltaSeconds)
         {
             FPCamera.Update(DeltaSeconds);
 
+            rndr::Image* ColorImage = MainWindow->GetColorImage();
+            rndr::Image* DepthImage = MainWindow->GetDepthImage();
+            BoxPass.SetTargetImages(ColorImage, DepthImage);
             BoxPass.Render(Renderer, DeltaSeconds);
 
             ColorImage->RenderImage(*SoldierTexture, rndr::Point2i{100, 100});
