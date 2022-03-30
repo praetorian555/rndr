@@ -103,7 +103,7 @@ Point3<T> Transform::operator()(const Point3<T>& p, real& w) const
 template <typename T>
 inline Normal3<T> Transform::operator()(const Normal3<T>& n) const
 {
-    T x = n.x, y = n.y, z = n.z;
+    T x = n.X, y = n.Y, z = n.Z;
     return Normal3<T>(
         m_MatrixInverse.m[0][0] * x + m_MatrixInverse.m[1][0] * y + m_MatrixInverse.m[2][0] * z,
         m_MatrixInverse.m[0][1] * x + m_MatrixInverse.m[1][1] * y + m_MatrixInverse.m[2][1] * z,

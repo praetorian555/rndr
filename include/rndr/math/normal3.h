@@ -14,77 +14,77 @@ template <typename T>
 class Normal3
 {
 public:
-    T x, y, z;
+    T X, Y, Z;
 
 public:
-    Normal3() { x = y = z = 0; }
-    Normal3(T x, T y, T z) : x(x), y(y), z(z) { assert(!HasNaNs()); }
-    explicit Normal3(const Vector3<T>& v) : x(v.x), y(v.y), z(v.z) { assert(!HasNaNs()); }
+    Normal3() { X = Y = Z = 0; }
+    Normal3(T X, T Y, T Z) : X(X), Y(Y), Z(Z) { assert(!HasNaNs()); }
+    explicit Normal3(const Vector3<T>& v) : X(v.X), Y(v.Y), Z(v.Z) { assert(!HasNaNs()); }
 
     void Set(T val, int i)
     {
         assert(i >= 0 && i < 3);
         if (i == 0)
-            x = val;
+            X = val;
         if (i == 1)
-            y = val;
+            Y = val;
         if (i == 2)
-            z = val;
+            Z = val;
     }
 
     T operator[](int i) const
     {
         assert(i >= 0 && i < 3);
         if (i == 0)
-            return x;
+            return X;
         if (i == 1)
-            return y;
+            return Y;
         if (i == 2)
-            return z;
+            return Z;
     }
 
-    bool HasNaNs() const { return IsNaN(x) || IsNaN(y) || IsNaN(z); }
+    bool HasNaNs() const { return IsNaN(X) || IsNaN(Y) || IsNaN(Z); }
 
     bool operator==(const Normal3<T>& other) const
     {
-        return x == other.x && y == other.y && z == other.z;
+        return X == other.X && Y == other.Y && Z == other.Z;
     }
 
     bool operator!=(const Normal3<T>& other) const { return !(*this == other); }
 
     Normal3<T> operator+(const Normal3<T>& other) const
     {
-        return Normal3(x + other.x, y + other.y, z + other.z);
+        return Normal3(X + other.X, Y + other.Y, Z + other.Z);
     }
 
     Normal3<T>& operator+=(const Normal3<T>& other)
     {
-        x += other.x;
-        y += other.y;
-        z += other.z;
+        X += other.X;
+        Y += other.Y;
+        Z += other.Z;
         return *this;
     }
 
     Normal3<T> operator-(const Normal3<T>& other) const
     {
-        return Normal3(x - other.x, y - other.y, z - other.z);
+        return Normal3(X - other.X, Y - other.Y, Z - other.Z);
     }
 
     Normal3<T>& operator-=(const Normal3<T>& other)
     {
-        x -= other.x;
-        y -= other.y;
-        z -= other.z;
+        X -= other.X;
+        Y -= other.Y;
+        Z -= other.Z;
         return *this;
     }
 
-    Normal3<T> operator*(T scalar) const { return Normal3(x * scalar, y * scalar, z * scalar); }
+    Normal3<T> operator*(T scalar) const { return Normal3(X * scalar, Y * scalar, Z * scalar); }
 
     Normal3<T>& operator*=(T scalar)
     {
-        x *= scalar;
-        y *= scalar;
-        z *= scalar;
+        X *= scalar;
+        Y *= scalar;
+        Z *= scalar;
         return *this;
     }
 
@@ -93,7 +93,7 @@ public:
     {
         assert(scalar != 0);
         float rec = (float)1 / scalar;
-        return Normal3(x * rec, y * rec, z * rec);
+        return Normal3(X * rec, Y * rec, Z * rec);
     }
 
     template <typename S>
@@ -101,17 +101,17 @@ public:
     {
         assert(scalar != 0);
         float rec = (float)1 / scalar;
-        x *= rec;
-        y *= rec;
-        z *= rec;
+        X *= rec;
+        Y *= rec;
+        Z *= rec;
         return *this;
     }
 
-    Normal3<T> operator-() const { return Normal3(-x, -y, -z); }
+    Normal3<T> operator-() const { return Normal3(-X, -Y, -Z); }
 
-    Normal3<T> Abs() const { return Normal3(std::abs(x), std::abs(y), std::abs(z)); }
+    Normal3<T> Abs() const { return Normal3(std::abs(X), std::abs(Y), std::abs(Z)); }
 
-    T LengthSquared() const { return x * x + y * y + z * z; }
+    T LengthSquared() const { return X * X + Y * Y + Z * Z; }
     T Length() const { return std::sqrt(LengthSquared()); }
 };
 
@@ -124,19 +124,19 @@ inline Normal3<T> operator*(T scalar, const Normal3<T>& v)
 template <typename T>
 inline T Dot(const Normal3<T>& v1, const Normal3<T>& v2)
 {
-    return v1.x * v2.x + v1.y * v2.y + v1.z * v2.z;
+    return v1.X * v2.X + v1.Y * v2.Y + v1.Z * v2.Z;
 }
 
 template <typename T>
 inline T Dot(const Normal3<T>& v1, const Vector3<T>& v2)
 {
-    return v1.x * v2.x + v1.y * v2.y + v1.z * v2.z;
+    return v1.X * v2.X + v1.Y * v2.Y + v1.Z * v2.Z;
 }
 
 template <typename T>
 inline T Dot(const Vector3<T>& v1, const Normal3<T>& v2)
 {
-    return v1.x * v2.x + v1.y * v2.y + v1.z * v2.z;
+    return v1.X * v2.X + v1.Y * v2.Y + v1.Z * v2.Z;
 }
 
 template <typename T>
@@ -166,37 +166,37 @@ inline Normal3<T> Normalize(const Normal3<T>& v)
 template <typename T>
 inline T MinComponent(const Normal3<T>& v)
 {
-    return std::min(v.x, std::min(v.y, v.z));
+    return std::min(v.X, std::min(v.Y, v.Z));
 }
 
 template <typename T>
 inline T MaxComponent(const Normal3<T>& v)
 {
-    return std::max(v.x, std::max(v.y, v.z));
+    return std::max(v.X, std::max(v.Y, v.Z));
 }
 
 template <typename T>
 inline int MaxDimension(const Normal3<T>& v)
 {
-    return (v.x > v.y) ? (v.x > v.z ? 0 : 2) : (v.y > v.z ? 1 : 2);
+    return (v.X > v.Y) ? (v.X > v.Z ? 0 : 2) : (v.Y > v.Z ? 1 : 2);
 }
 
 template <typename T>
 Normal3<T> Min(const Normal3<T>& p1, const Normal3<T>& p2)
 {
-    return Normal3<T>(std::min(p1.x, p2.x), std::min(p1.y, p2.y), std::min(p1.z, p2.z));
+    return Normal3<T>(std::min(p1.X, p2.X), std::min(p1.Y, p2.Y), std::min(p1.Z, p2.Z));
 }
 
 template <typename T>
 Normal3<T> Max(const Normal3<T>& v1, const Normal3<T>& v2)
 {
-    return Normal3<T>(std::max(v1.x, v2.x), std::max(v1.y, v2.y), std::max(v1.z, v2.z));
+    return Normal3<T>(std::max(v1.X, v2.X), std::max(v1.Y, v2.Y), std::max(v1.Z, v2.Z));
 }
 
 template <typename T>
-Normal3<T> Permute(const Normal3<T>& v, int x, int y, int z)
+Normal3<T> Permute(const Normal3<T>& v, int X, int Y, int Z)
 {
-    return Normal3<T>(v[x], v[y], v[z]);
+    return Normal3<T>(v[X], v[Y], v[Z]);
 }
 
 template <typename T>

@@ -82,12 +82,12 @@ int32_t CountTrailingZeros(uint32_t v);
 // Implementations
 
 template <typename T>
-Vector3<T>::Vector3(const Normal3<T>& n) : x(n.x), y(n.y), z(n.z)
+Vector3<T>::Vector3(const Normal3<T>& n) : X(n.X), Y(n.Y), Z(n.Z)
 {
 }
 
 template <typename T>
-Vector3<T>::Vector3(const Point3<T>& p) : x(p.x), y(p.y), z(p.z)
+Vector3<T>::Vector3(const Point3<T>& p) : X(p.X), Y(p.Y), Z(p.Z)
 {
 }
 
