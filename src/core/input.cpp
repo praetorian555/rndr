@@ -201,6 +201,11 @@ bool rndr::InputSystem::IsMouseAxis(InputPrimitive Primitive) const
     return false;
 }
 
+rndr::Point2i rndr::InputSystem::GetMousePosition() const
+{
+    return rndr::Point2i(m_X, m_Y);
+}
+
 // InputContext ///////////////////////////////////////////////////////////////////////////////////
 
 rndr::InputMapping* rndr::InputContext::CreateMapping(const InputAction& Action,

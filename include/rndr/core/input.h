@@ -84,6 +84,8 @@ public:
     bool IsAxis(InputPrimitive Primitive) const;
     bool IsMouseAxis(InputPrimitive Primitive) const;
 
+    rndr::Point2i GetMousePosition() const;
+
 private:
     static std::unique_ptr<InputSystem> s_Input;
 
