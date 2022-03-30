@@ -38,7 +38,7 @@ public:
         m_InstanceDataStride = sizeof(T);
         m_InstanceData.resize(InstanceData.size() * m_InstanceDataStride);
         memcpy(m_InstanceData.data(), InstanceData.data(), m_InstanceData.capacity());
-        m_InstanceDataCount = InstanceData.size();
+        m_InstanceCount = InstanceData.size();
     }
 
     template <typename T>
