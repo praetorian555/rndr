@@ -15,7 +15,7 @@ public:
     rndr::Point3r GetLightPosition() const;
 
 private:
-    rndr::Point3r VertexShader(const rndr::PerVertexInfo& Info, real& W);
+    rndr::Point4r VertexShader(const rndr::PerVertexInfo& Info);
     rndr::Color FragmentShader(const rndr::PerPixelInfo& Info, real& Depth);
 
 private:

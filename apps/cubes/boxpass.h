@@ -29,7 +29,7 @@ public:
     void SetLightPosition(rndr::Point3r LightPosition);
 
 private:
-    rndr::Point3r VertexShader(const rndr::PerVertexInfo& Info, real& W);
+    rndr::Point4r VertexShader(const rndr::PerVertexInfo& Info);
     rndr::Color FragmentShader(const rndr::PerPixelInfo& Info, real& Depth);
 
 private:

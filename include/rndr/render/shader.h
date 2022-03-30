@@ -90,8 +90,9 @@ struct PerVertexInfo
     void* Constants;     // Data constant across all models and his instances
 };
 
-// Should return the point in NDC where x and y are in range [-1, 1] and z in range [0, 1]
-using VertexShaderCallback = std::function<rndr::Point3r(const PerVertexInfo&, real& W)>;
+// Should return the point in NDC space but w should not be 1 so x, y and z should not be divided by
+// this value. This will be done by the renderer implementation
+using VertexShaderCallback = std::function<rndr::Point4r(const PerVertexInfo&)>;
 
 struct VertexShader
 {

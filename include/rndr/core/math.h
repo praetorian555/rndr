@@ -9,10 +9,12 @@
 #include "rndr/math/normal3.h"
 #include "rndr/math/point2.h"
 #include "rndr/math/point3.h"
+#include "rndr/math/point4.h"
 #include "rndr/math/rng.h"
 #include "rndr/math/rotator.h"
 #include "rndr/math/vector2.h"
 #include "rndr/math/vector3.h"
+#include "rndr/math/vector4.h"
 
 namespace rndr
 {
@@ -23,11 +25,15 @@ using Vector2i = Vector2<int>;
 using Vector2r = Vector2<real>;
 using Vector3i = Vector3<int>;
 using Vector3r = Vector3<real>;
+using Vector4i = Vector4<int>;
+using Vector4r = Vector4<real>;
 
 using Point2i = Point2<int>;
 using Point2r = Point2<real>;
 using Point3i = Point3<int>;
 using Point3r = Point3<real>;
+using Point4i = Point4<int>;
+using Point4r = Point4<real>;
 
 using Normal3r = Normal3<real>;
 
@@ -91,6 +97,11 @@ Vector3<T>::Vector3(const Point3<T>& p) : X(p.X), Y(p.Y), Z(p.Z)
 {
 }
 
+template <typename T>
+Vector4<T>::Vector4(const Point4<T>& p) : X(p.X), Y(p.Y), Z(p.Z), W(p.W)
+{
+}
+
 template <typename T, typename V, typename U>
 T Clamp(T val, V low, U high)
 {
@@ -125,6 +136,12 @@ Point2<T>::Point2(const Point3<U>& p) : X(p.X), Y(p.Y)
 template <typename T>
 template <typename U>
 Point3<T>::Point3(const Point2<U>& p) : X(p.X), Y(p.Y), Z(0)
+{
+}
+
+template <typename T>
+template <typename U>
+Point4<T>::Point4(const Point3<U>& p) : X(p.X), Y(p.Y), Z(p.Z), W(1)
 {
 }
 

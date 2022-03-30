@@ -131,8 +131,10 @@ void rndr::Rasterizer::RunVertexShadersAndSetupTriangles(Model* Model, int Insta
             assert(VertexInfo.VertexData);
 
             // Run Vertex shader
-            T.Positions[VertexIndex] =
-                m_Pipeline->VertexShader->Callback(VertexInfo, T.W[VertexIndex]);
+            rndr::Point4r Position = m_Pipeline->VertexShader->Callback(VertexInfo);
+            rndr::Point4r PositionEuclidian = Position.ToEuclidean();
+            T.Positions[VertexIndex] = rndr::Point3r(PositionEuclidian.X, PositionEuclidian.Y, PositionEuclidian.Z);
+            T.W[VertexIndex] = Position.W;
             assert(T.W[VertexIndex] != 0);
             T.OneOverW[VertexIndex] = 1 / T.W[VertexIndex];
             T.OneOverZ[VertexIndex] = 1 / T.Positions[VertexIndex].Z;

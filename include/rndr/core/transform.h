@@ -34,7 +34,9 @@ public:
     template <typename T>
     Vector3<T> operator()(const Vector3<T>& v) const;
     template <typename T>
-    Point3<T> operator()(const Point3<T>& p, real& w) const;
+    Point3<T> operator()(const Point3<T>& p) const;
+    template <typename T>
+    Point4<T> operator()(const Point4<T>& p) const;
     template <typename T>
     inline Normal3<T> operator()(const Normal3<T>& n) const;
     Bounds3r operator()(const Bounds3r& b) const;
@@ -78,7 +80,7 @@ Vector3<T> Transform::operator()(const Vector3<T>& v) const
 }
 
 template <typename T>
-Point3<T> Transform::operator()(const Point3<T>& p, real& w) const
+Point3<T> Transform::operator()(const Point3<T>& p) const
 {
     T x = p.X, y = p.Y, z = p.Z;
 
@@ -89,7 +91,6 @@ Point3<T> Transform::operator()(const Point3<T>& p, real& w) const
 
     assert(wp != 0);
 
-    w = wp;
     if (wp == 1)
     {
         return Point3<T>(xp, yp, zp);
@@ -98,6 +99,20 @@ Point3<T> Transform::operator()(const Point3<T>& p, real& w) const
     {
         return Point3<T>(xp, yp, zp) / wp;
     }
+}
+
+template <typename T>
+Point4<T> Transform::operator()(const Point4<T>& p) const
+{
+    T x = p.X, y = p.Y, z = p.Z;
+
+    T xp = m_Matrix.m[0][0] * x + m_Matrix.m[0][1] * y + m_Matrix.m[0][2] * z + m_Matrix.m[0][3];
+    T yp = m_Matrix.m[1][0] * x + m_Matrix.m[1][1] * y + m_Matrix.m[1][2] * z + m_Matrix.m[1][3];
+    T zp = m_Matrix.m[2][0] * x + m_Matrix.m[2][1] * y + m_Matrix.m[2][2] * z + m_Matrix.m[2][3];
+    T wp = m_Matrix.m[3][0] * x + m_Matrix.m[3][1] * y + m_Matrix.m[3][2] * z + m_Matrix.m[3][3];
+
+    assert(wp != 0);
+    return Point4<T>(xp, yp, zp, wp);
 }
 
 template <typename T>

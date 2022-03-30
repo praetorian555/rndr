@@ -3,7 +3,7 @@
 void BoxRenderPass::Init(rndr::Camera* Camera)
 {
     std::shared_ptr<rndr::VertexShader> VertexShader = std::make_shared<rndr::VertexShader>();
-    VertexShader->Callback = RNDR_BIND_TWO_PARAM(this, &BoxRenderPass::VertexShader);
+    VertexShader->Callback = RNDR_BIND_ONE_PARAM(this, &BoxRenderPass::VertexShader);
 
     std::shared_ptr<rndr::PixelShader> PixelShader = std::make_shared<rndr::PixelShader>();
     PixelShader->Callback = RNDR_BIND_TWO_PARAM(this, &BoxRenderPass::FragmentShader);
@@ -77,14 +77,14 @@ void BoxRenderPass::SetLightPosition(rndr::Point3r LightPosition)
     m_LightPosition = LightPosition;
 }
 
-rndr::Point3r BoxRenderPass::VertexShader(const rndr::PerVertexInfo& Info, real& W)
+rndr::Point4r BoxRenderPass::VertexShader(const rndr::PerVertexInfo& Info)
 {
     BoxVertex* VertexData = (BoxVertex*)Info.VertexData;
     BoxInstance* InstanceData = (BoxInstance*)Info.InstanceData;
 
-    rndr::Point3r WorldPosition = InstanceData->FromModelToWorld(VertexData->Position, W);
+    rndr::Point3r WorldPosition = InstanceData->FromModelToWorld(VertexData->Position);
     VertexData->WorldPosition = WorldPosition;
-    const rndr::Point3r NDCSpace = m_Camera->FromWorldToNDC()(WorldPosition, W);
+    const rndr::Point4r NDCSpace = m_Camera->FromWorldToNDC()(rndr::Point4r(WorldPosition));
     return NDCSpace;
 }
 

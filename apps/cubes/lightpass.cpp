@@ -3,7 +3,7 @@
 void LightRenderPass::Init(rndr::Camera* Camera)
 {
     std::shared_ptr<rndr::VertexShader> VertexShader = std::make_shared<rndr::VertexShader>();
-    VertexShader->Callback = RNDR_BIND_TWO_PARAM(this, &LightRenderPass::VertexShader);
+    VertexShader->Callback = RNDR_BIND_ONE_PARAM(this, &LightRenderPass::VertexShader);
 
     std::shared_ptr<rndr::PixelShader> PixelShader = std::make_shared<rndr::PixelShader>();
     PixelShader->Callback = RNDR_BIND_TWO_PARAM(this, &LightRenderPass::FragmentShader);
@@ -49,11 +49,11 @@ rndr::Point3r LightRenderPass::GetLightPosition() const
     return m_LightPosition;
 }
 
-rndr::Point3r LightRenderPass::VertexShader(const rndr::PerVertexInfo& Info, real& W)
+rndr::Point4r LightRenderPass::VertexShader(const rndr::PerVertexInfo& Info)
 {
     rndr::Transform* FullTransform = (rndr::Transform*)Info.Constants;
     rndr::Point3r* Position = (rndr::Point3r*)Info.VertexData;
-    return (*FullTransform)(*Position, W);
+    return (*FullTransform)(rndr::Point4r(*Position));
 }
 
 rndr::Color LightRenderPass::FragmentShader(const rndr::PerPixelInfo& Info, real& Depth)
