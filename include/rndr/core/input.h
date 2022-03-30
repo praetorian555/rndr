@@ -94,7 +94,6 @@ private:
     const rndr::Window* m_Window = nullptr;
 };
 
-#define RNDR_BIND_INPUT_CALLBACK(FuncPtr, This) \
-    std::bind(FuncPtr, This, std::placeholders::_1, std::placeholders::_2, std::placeholders::_3)
+#define RNDR_BIND_INPUT_CALLBACK(FuncPtr, This) RNDR_BIND_THREE_PARAM(This, FuncPtr)
 
 }  // namespace rndr

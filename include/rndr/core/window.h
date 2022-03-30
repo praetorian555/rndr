@@ -94,7 +94,8 @@ public:
     bool IsInfiniteCursor() const { return m_InifiniteCursor; }
 
 private:
-    void Resize(int Width, int Height);
+    void Resize(Window* Window, int Width, int Height);
+    void ButtonEvent(Window* Window, InputPrimitive Primitive, InputTrigger Trigger);
 
 private:
     WindowConfig m_Config;

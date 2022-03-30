@@ -7,10 +7,8 @@
 
 #include <map>
 
+#include "rndr/core/input.h"
 #include "rndr/core/log.h"
-//
-// VK_LEFT 0x25 LEFT ARROW key VK_UP 0x26 UP ARROW key VK_RIGHT 0x27 RIGHT ARROW key
-//    VK_DOWN 0x28 DOWN ARROW key
 
 static std::map<uint32_t, rndr::InputPrimitive> g_PrimitiveMapping = {
     {0x41, rndr::InputPrimitive::Keyboard_A},   {0x57, rndr::InputPrimitive::Keyboard_W},
@@ -49,14 +47,8 @@ rndr::Window::Window(const rndr::WindowConfig& Config) : m_Config(Config)
 
     m_DepthImage = std::make_unique<Image>(DepthImageConfig);
 
-    rndr::WindowDelegates::OnResize.Add(
-        [this](Window* Wind, int Width, int Height)
-        {
-            if (this == Wind)
-            {
-                Resize(Width, Height);
-            }
-        });
+    rndr::WindowDelegates::OnResize.Add(RNDR_BIND_THREE_PARAM(this, &Window::Resize));
+    rndr::WindowDelegates::OnButtonDelegate.Add(RNDR_BIND_THREE_PARAM(this, &Window::ButtonEvent));
 
     // TODO(mkostic): This will get the handle to the exe, should pass in the name of this dll if we
     // use dynamic linking
@@ -133,8 +125,21 @@ void rndr::Window::ActivateInfiniteCursor(bool Activate)
     ShowCursor(!m_InifiniteCursor);
 }
 
-void rndr::Window::Resize(int Width, int Height)
+void rndr::Window::ButtonEvent(Window* Window, InputPrimitive Primitive, InputTrigger Trigger)
 {
+    if (Primitive == InputPrimitive::Keyboard_Esc && Trigger == InputTrigger::ButtonDown)
+    {
+        Close();
+    }
+}
+
+void rndr::Window::Resize(Window* Window, int Width, int Height)
+{
+    if (Window != this)
+    {
+        return;
+    }
+
     m_CurrentWidth = Width;
     m_CurrentHeight = Height;
     if (m_ColorImage)

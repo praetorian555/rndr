@@ -2,6 +2,7 @@
 
 #include <cassert>
 #include <cstdint>
+#include <functional>
 #include <memory>
 
 #if WIN32
@@ -103,5 +104,20 @@ using NativeWindowHandle = uintptr_t;
  * Default gamma value.
  */
 #define RNDR_GAMMA (2.4)
+
+// Converts methods in the classes to the std::function
+
+#define RNDR_BIND_NO_PARAMS(This, FuncPtr) std::bind(FuncPtr, This)
+#define RNDR_BIND_ONE_PARAM(This, FuncPtr) std::bind(FuncPtr, This, std::placeholders::_1)
+#define RNDR_BIND_TWO_PARAM(This, FuncPtr) \
+    std::bind(FuncPtr, This, std::placeholders::_1, std::placeholders::_2)
+#define RNDR_BIND_THREE_PARAM(This, FuncPtr) \
+    std::bind(FuncPtr, This, std::placeholders::_1, std::placeholders::_2, std::placeholders::_3)
+#define RNDR_BIND_FOUR_PARAM(This, FuncPtr)                                                       \
+    std::bind(FuncPtr, This, std::placeholders::_1, std::placeholders::_2, std::placeholders::_3, \
+              std::placeholders::_4)
+#define RNDR_BIND_FIVE_PARAM(This, FuncPtr)                                                       \
+    std::bind(FuncPtr, This, std::placeholders::_1, std::placeholders::_2, std::placeholders::_3, \
+              std::placeholders::_4, std::placeholders::_5)
 
 }  // namespace rndr
