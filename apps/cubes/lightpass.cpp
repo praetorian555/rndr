@@ -1,14 +1,12 @@
 #include "lightpass.h"
 
-#define BIND_SHADER(Func, This) std::bind(&Func, This, std::placeholders::_1, std::placeholders::_2)
-
 void LightRenderPass::Init(rndr::Camera* Camera)
 {
     std::shared_ptr<rndr::VertexShader> VertexShader = std::make_shared<rndr::VertexShader>();
-    VertexShader->Callback = BIND_SHADER(LightRenderPass::VertexShader, this);
+    VertexShader->Callback = RNDR_BIND_TWO_PARAM(this, &LightRenderPass::VertexShader);
 
     std::shared_ptr<rndr::PixelShader> PixelShader = std::make_shared<rndr::PixelShader>();
-    PixelShader->Callback = BIND_SHADER(LightRenderPass::FragmentShader, this);
+    PixelShader->Callback = RNDR_BIND_TWO_PARAM(this, &LightRenderPass::FragmentShader);
 
     m_Pipeline = std::make_unique<rndr::Pipeline>();
     m_Pipeline->WindingOrder = rndr::WindingOrder::CCW;
@@ -22,6 +20,8 @@ void LightRenderPass::Init(rndr::Camera* Camera)
     m_Model->SetPipeline(m_Pipeline.get());
     m_Model->SetVertexData(rndr::Cube::GetVertexPositions());
     m_Model->SetIndices(rndr::Cube::GetIndices());
+
+    m_LightPosition = rndr::Point3r(0, 0, -45);
 }
 
 void LightRenderPass::ShutDown() {}
@@ -29,9 +29,8 @@ void LightRenderPass::ShutDown() {}
 void LightRenderPass::Render(rndr::Rasterizer& Renderer, real DeltaSeconds)
 {
     const real LightSize = 0.3;
-    const rndr::Vector3r LightPosition(0, 0, -45);
-    rndr::Transform LightTransform =
-        rndr::Translate(LightPosition) * rndr::Scale(LightSize, LightSize, LightSize);
+    rndr::Transform LightTransform = rndr::Translate((rndr::Vector3r)m_LightPosition) *
+                                     rndr::Scale(LightSize, LightSize, LightSize);
     LightTransform = m_Camera->FromWorldToNDC() * LightTransform;
 
     m_Model->SetConstants(LightTransform);
@@ -43,6 +42,11 @@ void LightRenderPass::SetTargetImages(rndr::Image* ColorImage, rndr::Image* Dept
 {
     m_Pipeline->ColorImage = ColorImage;
     m_Pipeline->DepthImage = DepthImage;
+}
+
+rndr::Point3r LightRenderPass::GetLightPosition() const
+{
+    return m_LightPosition;
 }
 
 rndr::Point3r LightRenderPass::VertexShader(const rndr::PerVertexInfo& Info, real& W)

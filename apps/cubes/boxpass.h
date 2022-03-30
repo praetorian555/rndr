@@ -5,16 +5,13 @@
 class BoxRenderPass
 {
 public:
-    struct BoxConstants
-    {
-        rndr::Camera* Camera;
-        rndr::Image* Texture;
-    };
-
     struct BoxVertex
     {
         rndr::Point3r Position;
         rndr::Point2r TexCoords;
+        rndr::Normal3r Normal;
+        
+        rndr::Point3r WorldPosition;
     };
 
     struct BoxInstance
@@ -29,6 +26,7 @@ public:
     void Render(rndr::Rasterizer& Renderer, real DeltaSeconds);
 
     void SetTargetImages(rndr::Image* ColorImage, rndr::Image* DepthImage);
+    void SetLightPosition(rndr::Point3r LightPosition);
 
 private:
     rndr::Point3r VertexShader(const rndr::PerVertexInfo& Info, real& W);
@@ -42,4 +40,5 @@ private:
     std::vector<BoxInstance> m_Instances;
 
     rndr::Camera* m_Camera;
+    rndr::Point3r m_LightPosition;
 };

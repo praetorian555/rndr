@@ -1,14 +1,12 @@
 #include "boxpass.h"
 
-#define BIND_SHADER(Func, This) std::bind(&Func, This, std::placeholders::_1, std::placeholders::_2)
-
 void BoxRenderPass::Init(rndr::Camera* Camera)
 {
     std::shared_ptr<rndr::VertexShader> VertexShader = std::make_shared<rndr::VertexShader>();
-    VertexShader->Callback = BIND_SHADER(BoxRenderPass::VertexShader, this);
+    VertexShader->Callback = RNDR_BIND_TWO_PARAM(this, &BoxRenderPass::VertexShader);
 
     std::shared_ptr<rndr::PixelShader> PixelShader = std::make_shared<rndr::PixelShader>();
-    PixelShader->Callback = BIND_SHADER(BoxRenderPass::FragmentShader, this);
+    PixelShader->Callback = RNDR_BIND_TWO_PARAM(this, &BoxRenderPass::FragmentShader);
 
     m_Pipeline = std::make_unique<rndr::Pipeline>();
     m_Pipeline->WindingOrder = rndr::WindingOrder::CCW;
@@ -19,9 +17,11 @@ void BoxRenderPass::Init(rndr::Camera* Camera)
     std::vector<BoxVertex> Vertices;
     auto& CubePositions = rndr::Cube::GetVertexPositions();
     auto& CubeTexCoords = rndr::Cube::GetVertexTextureCoordinates();
+    auto& CubeNormals = rndr::Cube::GetNormals();
     for (int i = 0; i < CubePositions.size(); i++)
     {
-        Vertices.push_back(BoxVertex{CubePositions[i], CubeTexCoords[i]});
+        Vertices.push_back(
+            BoxVertex{CubePositions[i], CubeTexCoords[i], CubeNormals[i], rndr::Point3r()});
     }
 
     rndr::RNG RandomGen;
@@ -52,14 +52,11 @@ void BoxRenderPass::Init(rndr::Camera* Camera)
 
     m_Camera = Camera;
 
-    BoxConstants Constants{m_Camera, m_Texture.get()};
-
     m_Model = std::make_unique<rndr::Model>();
     m_Model->SetPipeline(m_Pipeline.get());
     m_Model->SetVertexData(Vertices);
     m_Model->SetInstanceData(m_Instances);
     m_Model->SetIndices(rndr::Cube::GetIndices());
-    m_Model->SetConstants(Constants);
 }
 
 void BoxRenderPass::ShutDown() {}
@@ -75,20 +72,25 @@ void BoxRenderPass::SetTargetImages(rndr::Image* ColorImage, rndr::Image* DepthI
     m_Pipeline->DepthImage = DepthImage;
 }
 
+void BoxRenderPass::SetLightPosition(rndr::Point3r LightPosition)
+{
+    m_LightPosition = LightPosition;
+}
+
 rndr::Point3r BoxRenderPass::VertexShader(const rndr::PerVertexInfo& Info, real& W)
 {
-    BoxConstants* Constants = (BoxConstants*)Info.Constants;
     BoxVertex* VertexData = (BoxVertex*)Info.VertexData;
     BoxInstance* InstanceData = (BoxInstance*)Info.InstanceData;
 
-    rndr::Point3r WorldSpace = InstanceData->FromModelToWorld(VertexData->Position, W);
-    rndr::Point3r NDCSpace = Constants->Camera->FromWorldToNDC()(WorldSpace, W);
+    rndr::Point3r WorldPosition = InstanceData->FromModelToWorld(VertexData->Position, W);
+    VertexData->WorldPosition = WorldPosition;
+    const rndr::Point3r NDCSpace = m_Camera->FromWorldToNDC()(WorldPosition, W);
     return NDCSpace;
 }
 
 rndr::Color BoxRenderPass::FragmentShader(const rndr::PerPixelInfo& Info, real& Depth)
 {
-    const BoxConstants* const Constants = (BoxConstants*)Info.Constants;
+    BoxInstance* InstanceData = (BoxInstance*)Info.InstanceData;
 
     const size_t TextureCoordsOffset = offsetof(BoxVertex, TexCoords);
     const rndr::Point2r TexCoord = Info.Interpolate<rndr::Point2r, BoxVertex>(TextureCoordsOffset);
@@ -100,8 +102,30 @@ rndr::Color BoxRenderPass::FragmentShader(const rndr::PerPixelInfo& Info, real& 
         Info.DerivativeY<rndr::Point2r, BoxVertex, rndr::Vector2r>(TextureCoordsOffset) *
         Info.NextYMult;
 
-    rndr::Color Result = Constants->Texture->Sample(TexCoord, duvdx, duvdy);
+    rndr::Color Result = m_Texture->Sample(TexCoord, duvdx, duvdy);
     assert(Result.GammaSpace == rndr::GammaSpace::Linear);
+
+    const real AmbientStrength = 0.1;
+
+    const size_t PositionOffset = offsetof(BoxVertex, WorldPosition);
+    const rndr::Point3r FragmentPos = Info.Interpolate<rndr::Point3r, BoxVertex>(PositionOffset);
+    rndr::Vector3r LightDir = m_LightPosition - FragmentPos;
+    LightDir = rndr::Normalize(LightDir);
+    const size_t NormalOffset = offsetof(BoxVertex, Normal);
+    rndr::Normal3r Normal = Info.Interpolate<rndr::Normal3r, BoxVertex>(NormalOffset);
+    Normal = InstanceData->FromModelToWorld(Normal);
+    Normal = rndr::Normalize(Normal);
+    const real DiffuseStrength = std::max(rndr::Dot(Normal, LightDir), (real)0.0);
+
+    if (Info.Position.X == 506 && Info.Position.Y == 408)
+    {
+        RNDR_LOG_INFO("FragmentPos=(%f, %f, %f), Normal=(%f, %f, %f), DiffuseStrength=%f",
+                      FragmentPos.X, FragmentPos.Y, FragmentPos.Z, Normal.X, Normal.Y, Normal.Z, DiffuseStrength);
+    }
+
+    const real A = Result.A;
+    Result *= (AmbientStrength + DiffuseStrength);
+    Result.A = A;
 
     return Result;
 }

@@ -12,6 +12,8 @@ public:
 
     void SetTargetImages(rndr::Image* ColorImage, rndr::Image* DepthImage);
 
+    rndr::Point3r GetLightPosition() const;
+
 private:
     rndr::Point3r VertexShader(const rndr::PerVertexInfo& Info, real& W);
     rndr::Color FragmentShader(const rndr::PerPixelInfo& Info, real& Depth);
@@ -21,4 +23,6 @@ private:
     std::unique_ptr<rndr::Model> m_Model;
 
     rndr::Camera* m_Camera = nullptr;
+
+    rndr::Point3r m_LightPosition;
 };

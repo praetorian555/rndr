@@ -12,6 +12,7 @@ struct Cube
 {
     static const std::vector<Point3r>& GetVertexPositions();
     static const std::vector<Point2r>& GetVertexTextureCoordinates();
+    static const std::vector<Normal3r>& GetNormals();
     static const std::vector<int>& GetIndices();
 };
 

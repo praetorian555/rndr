@@ -34,6 +34,16 @@ int main()
                 Camera->UpdateTransforms(Width, Height);
             }
         });
+    rndr::InputContext* IC = rndr::GRndrApp->GetInputContext();
+    IC->CreateMapping("PrintPixelPosition",
+                      [](rndr::InputPrimitive, rndr::InputTrigger, real Value)
+                      {
+                          const rndr::Point2i Position =
+                              rndr::GRndrApp->GetInputSystem()->GetMousePosition();
+                          RNDR_LOG_INFO("Mouse Position = (%d, %d)", Position.X, Position.Y);
+                      });
+    IC->AddBinding("PrintPixelPosition", rndr::InputPrimitive::Mouse_LeftButton,
+                   rndr::InputTrigger::ButtonDown);
 
     rndr::Rasterizer Renderer;
 

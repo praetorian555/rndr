@@ -92,6 +92,52 @@ const std::vector<rndr::Point2r>& rndr::Cube::GetVertexTextureCoordinates()
     return s_CubeTexCoords;
 }
 
+const std::vector<rndr::Normal3r>& rndr::Cube::GetNormals()
+{
+    // clang-format off
+    static std::vector<rndr::Normal3r> s_CubeNormals
+    {
+        // Front face
+        {0, 0, 1},
+        {0, 0, 1},
+        {0, 0, 1},
+        {0, 0, 1},
+
+        // Back face
+        {0, 0, -1},
+        {0, 0, -1},
+        {0, 0, -1},
+        {0, 0, -1},
+
+        // Bottom face
+        {0, -1, 0},
+        {0, -1, 0},
+        {0, -1, 0},
+        {0, -1, 0},
+
+        // Top face
+        {0, 1, 0},
+        {0, 1, 0},
+        {0, 1, 0},
+        {0, 1, 0},
+
+        // Left face
+        {-1, 0, 0},
+        {-1, 0, 0},
+        {-1, 0, 0},
+        {-1, 0, 0},
+
+        // Right face
+        {1, 0, 0},
+        {1, 0, 0},
+        {1, 0, 0},
+        {1, 0, 0},
+    };
+    // clang-format on
+
+    return s_CubeNormals;
+}
+
 const std::vector<int>& rndr::Cube::GetIndices()
 {
     // clang-format off
