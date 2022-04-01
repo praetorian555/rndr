@@ -81,7 +81,7 @@ void rndr::Rasterizer::Draw(rndr::Model* Model)
     AllocateFragmentInfo();
     BarycentricCoordinates();
     SetupFragmentNeighbours();
-    RunPixelShaders();
+    RunFragmentShaders();
 
     m_ScratchAllocator->Reset();
 }
@@ -102,6 +102,8 @@ void rndr::Rasterizer::Setup(Model* Model)
 
 void rndr::Rasterizer::RunVertexShaders()
 {
+    RNDR_CPU_TRACE("Vertex Shaders");
+
     void* UserConstants = m_Model->GetShaderConstants().Data;
     uint8_t* UserVertexData = m_Model->GetVertexData().Data;
     const int VertexDataStride = m_Model->GetVertexStride();
@@ -124,12 +126,14 @@ void rndr::Rasterizer::RunVertexShaders()
         m_Pipeline->VertexShader->Callback(InInfo, OutInfo);
     };
 
-    const int VerticesPerThread = 16;
+    const int VerticesPerThread = 64;
     ParallelFor(m_Vertices.size(), VerticesPerThread, WorkOrder);
 }
 
 void rndr::Rasterizer::SetupTriangles()
 {
+    RNDR_CPU_TRACE("Setup Triangles");
+
     IntSpan Indices = m_Model->GetIndices();
     void* ShaderConstants = m_Model->GetShaderConstants().Data;
 
@@ -177,7 +181,7 @@ void rndr::Rasterizer::SetupTriangles()
 #endif
     };
 
-    const int TrianglesPerThread = 16;
+    const int TrianglesPerThread = 64;
     ParallelFor(m_Triangles.size(), TrianglesPerThread, WorkOrder);
 }
 
@@ -186,23 +190,28 @@ void rndr::Rasterizer::FindTrianglesToIgnore()
     RNDR_CPU_TRACE("Discard Triangles");
 
     const Vector2i ZeroVector{0, 0};
-    for (int TriangleIndex = 0; TriangleIndex < m_Triangles.size(); TriangleIndex++)
+    auto WorkOrder = [=](int TriangleIndex)
     {
-        Triangle& T = m_Triangles[TriangleIndex];
-        T.BarHelper = std::make_unique<BarycentricHelper>(m_Pipeline->WindingOrder, T.ScreenPositions);
+        {
+            Triangle& T = m_Triangles[TriangleIndex];
+            T.BarHelper = std::make_unique<BarycentricHelper>(m_Pipeline->WindingOrder, T.ScreenPositions);
 
-        const bool bIsOutsideXY = T.Bounds.Diagonal() == ZeroVector;
-        const bool bIsOutsideZ = ShouldDiscardByDepth(T.ScreenPositions);
-        const bool bBackFace = !T.BarHelper->IsWindingOrderCorrect();
+            const bool bIsOutsideXY = T.Bounds.Diagonal() == ZeroVector;
+            const bool bIsOutsideZ = ShouldDiscardByDepth(T.ScreenPositions);
+            const bool bBackFace = !T.BarHelper->IsWindingOrderCorrect();
 
 #if RNDR_DEBUG
-        T.bOutsideXY = bIsOutsideXY;
-        T.bOutsideZ = bIsOutsideZ;
-        T.bBackFace = bBackFace;
+            T.bOutsideXY = bIsOutsideXY;
+            T.bOutsideZ = bIsOutsideZ;
+            T.bBackFace = bBackFace;
 #endif
 
-        T.bIgnore = bIsOutsideXY || bBackFace || bIsOutsideZ;
-    }
+            T.bIgnore = bIsOutsideXY || bBackFace || bIsOutsideZ;
+        }
+    };
+
+    const int TrianglesPerThread = 64;
+    ParallelFor(m_Triangles.size(), TrianglesPerThread, WorkOrder);
 }
 
 void rndr::Rasterizer::AllocateFragmentInfo()
@@ -251,7 +260,7 @@ void rndr::Rasterizer::BarycentricCoordinates()
         ParallelFor(EndPoint, GridSideSize, WorkOrder, StartPoint);
     };
 
-    const int TrianglesPerThread = 1;
+    const int TrianglesPerThread = 64;
     ParallelFor(m_Triangles.size(), TrianglesPerThread, WorkOrder);
 }
 
@@ -318,16 +327,16 @@ void rndr::Rasterizer::SetupFragmentNeighbours()
         ParallelFor(EndPoint, GridSideSize, WorkOrder, StartPoint);
     };
 
-    const int TrianglesPerThread = 1;
+    const int TrianglesPerThread = 64;
     ParallelFor(m_Triangles.size(), TrianglesPerThread, WorkOrder);
 }
 
-void rndr::Rasterizer::RunPixelShaders()
+void rndr::Rasterizer::RunFragmentShaders()
 {
-    RNDR_CPU_TRACE("Run Pixel Shaders");
+    RNDR_CPU_TRACE("Run Fragment Shaders");
 
     const Point2i ImageSize = m_Pipeline->ColorImage->GetBounds().pMax + 1;
-    const int BlockSize = 64;
+    const int BlockSize = 32;
 
     auto WorkOrder = [this, ImageSize, BlockSize](int BlockX, int BlockY)
     {

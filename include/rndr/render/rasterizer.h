@@ -56,7 +56,7 @@ private:
     void AllocateFragmentInfo();
     void BarycentricCoordinates();
     void SetupFragmentNeighbours();
-    void RunPixelShaders();
+    void RunFragmentShaders();
 
     void ProcessFragment(const Triangle& T, InFragmentInfo& InInfo);
 
