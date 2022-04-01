@@ -9,6 +9,8 @@ namespace rndr
 
 template <typename T>
 class Point2;
+template <typename T>
+class Point4;
 
 template <typename T>
 inline bool IsNaN(const T v);
@@ -31,6 +33,9 @@ public:
 
     template <typename U>
     explicit Point3(const Point2<U>& p);
+
+    template <typename U>
+    explicit Point3(const Point4<U>& p);
 
     void Set(T val, int i)
     {

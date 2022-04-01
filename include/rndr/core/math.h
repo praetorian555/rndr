@@ -145,4 +145,10 @@ Point4<T>::Point4(const Point3<U>& p) : X(p.X), Y(p.Y), Z(p.Z), W(1)
 {
 }
 
+template <typename T>
+template <typename U>
+Point3<T>::Point3(const Point4<U>& p) : X(p.X), Y(p.Y), Z(p.Z)
+{
+}
+
 }  // namespace rndr
