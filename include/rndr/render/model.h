@@ -1,86 +1,79 @@
 #pragma once
 
-#include <memory>
 #include <vector>
 
 #include "rndr/core/base.h"
+#include "rndr/core/span.h"
+
+#include "rndr/render/pipeline.h"
 
 namespace rndr
 {
 
-class Pipeline;
-
 /**
- * This class encapsulates all data needed to render a model described by triangles.
+ * This class encapsulates all data needed to render a model described by triangles. It stores geometry of the mesh and material info
+ * (pipeline config and textures).
  */
 class Model
 {
 public:
-    Model() = default;
-    virtual ~Model() { delete m_Constants; }
+    /**
+     * Constructor.
+     *
+     * @param Pipeline Pipeline object used to configure the rendering pipeline.
+     * @param VertexData Data representing the geometry of a mesh in a form of byte array.
+     * @param VertexStride Size in bytes of one vertex.
+     * @param OutVertexStride Size in bytes of a structure that is the output structure of the vertex shader.
+     * @param Indices Array of vertex indices that form triangles of the mesh.
+     * @param ShaderConstants Array of bytes that represent data that is constant during the pipeline execution.
+     * @param InstanceCount Number of instances of the given mesh.
+     * @param InstanceData Array of bytes reprenting data specific to the instance.
+     * @param InstanceStride Size in bytes of data for one instance.
+     */
+    Model(Pipeline* Pipeline,
+          ByteSpan VertexData,
+          int VertexStride,
+          int OutVertexStride,
+          IntSpan Indices,
+          ByteSpan ShaderConstants,
+          int InstanceCount = 1,
+          ByteSpan InstanceData = ByteSpan(),
+          int InstanceStride = 1);
+    ~Model() = default;
 
-    void SetPipeline(Pipeline* PipelineConfig) { m_PipelineConfig = PipelineConfig; }
+    Pipeline* GetPipeline() { return m_Pipeline; }
+    const Pipeline* GetPipeline() const { return m_Pipeline; }
 
-    template <typename T>
-    void SetVertexData(const std::vector<T>& VertexData)
-    {
-        m_VertexDataStride = sizeof(T);
-        m_VertexData.resize(VertexData.size() * m_VertexDataStride);
-        memcpy(m_VertexData.data(), VertexData.data(), m_VertexData.capacity());
-        m_VertexCount = VertexData.size();
-    }
-
-    void SetIndices(const std::vector<int>& Indices) { m_Indices = Indices; }
-
-    template <typename T>
-    void SetInstanceData(const std::vector<T>& InstanceData)
-    {
-        m_InstanceDataStride = sizeof(T);
-        m_InstanceData.resize(InstanceData.size() * m_InstanceDataStride);
-        memcpy(m_InstanceData.data(), InstanceData.data(), m_InstanceData.capacity());
-        m_InstanceCount = InstanceData.size();
-    }
-
-    template <typename T>
-    void SetConstants(const T& Constants)
-    {
-        T* Tmp = new T(Constants);
-        m_Constants = (void*)Tmp;
-    }
-
-    Pipeline* GetPipeline() { return m_PipelineConfig; }
-    const Pipeline* GetPipeline() const { return m_PipelineConfig; }
-
-    std::vector<uint8_t>& GetVertexData() { return m_VertexData; }
-    const std::vector<uint8_t>& GetVertexData() const { return m_VertexData; }
-    int GetVertexDataStride() const { return m_VertexDataStride; }
+    ByteSpan GetVertexData() const { return ByteSpan(m_VertexData); }
+    int GetVertexStride() const { return m_VertexStride; }
     int GetVertexCount() const { return m_VertexCount; }
 
-    std::vector<int>& GetIndices() { return m_Indices; }
-    const std::vector<int>& GetIndices() const { return m_Indices; }
+    int GetOutVertexStride() const { return m_OutVertexStride; }
 
-    std::vector<uint8_t>& GetInstanceData() { return m_InstanceData; }
-    const std::vector<uint8_t>& GetInstanceData() const { return m_InstanceData; }
-    int GetInstanceDataStride() const { return m_InstanceDataStride; }
+    IntSpan GetIndices() const { return IntSpan(m_Indices); }
+
+    ByteSpan GetInstanceData() const { return !m_InstanceData.empty() ? ByteSpan(m_InstanceData) : ByteSpan(); }
+    int GetInstanceStride() const { return m_InstanceStride; }
     int GetInstanceCount() const { return m_InstanceCount; }
 
-    void* GetConstants() { return m_Constants; }
-    const void* GetConstants() const { return m_Constants; }
+    ByteSpan GetShaderConstants() { return !m_ShaderConstants.empty() ? ByteSpan(m_ShaderConstants) : ByteSpan(); }
 
 private:
-    Pipeline* m_PipelineConfig;  // Just a reference, we don't own this object
+    Pipeline* m_Pipeline;  // Just a reference, we don't own this object
 
     std::vector<uint8_t> m_VertexData;
-    int m_VertexDataStride = 0;
+    int m_VertexStride = 0;
     int m_VertexCount = 0;
+
+    int m_OutVertexStride = 0;
 
     std::vector<int> m_Indices;
 
     std::vector<uint8_t> m_InstanceData;
-    int m_InstanceDataStride = 0;
+    int m_InstanceStride = 0;
     int m_InstanceCount = 0;
 
-    void* m_Constants = nullptr;
+    std::vector<uint8_t> m_ShaderConstants;
 };
 
 }  // namespace rndr
