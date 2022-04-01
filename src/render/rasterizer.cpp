@@ -69,26 +69,16 @@ void rndr::Rasterizer::SetPipeline(const rndr::Pipeline* Pipeline)
     m_Pipeline = Pipeline;
 }
 
-void rndr::Rasterizer::Draw(rndr::Model* Model, int InstanceCount)
+void rndr::Rasterizer::Draw(rndr::Model* Model)
 {
     RNDR_CPU_TRACE("Draw Model");
 
-    // Get number of triangles
-    const std::vector<int>& Indices = Model->GetIndices();
-    const int TriangleCountPerInstance = Indices.size() / 3;
-    const int TriangleCount = TriangleCountPerInstance * InstanceCount;
+    Setup(Model);
 
-    // Configure transient properties
-    SetPipeline(Model->GetPipeline());
-    m_Triangles.resize(TriangleCount);
-
-#if RNDR_DEBUG
-    m_TriangleDebugInfos.resize(TriangleCount);
-#endif
-
-    RunVertexShadersAndSetupTriangles(Model, InstanceCount);
+    RunVertexShaders();
+    SetupTriangles();
     FindTrianglesToIgnore();
-    AllocatePixelInfo();
+    AllocateFragmentInfo();
     BarycentricCoordinates();
     SetupFragmentNeighbours();
     RunPixelShaders();
@@ -96,71 +86,94 @@ void rndr::Rasterizer::Draw(rndr::Model* Model, int InstanceCount)
     m_ScratchAllocator->Reset();
 }
 
-void rndr::Rasterizer::RunVertexShadersAndSetupTriangles(Model* Model, int InstanceCount)
+void rndr::Rasterizer::Setup(Model* Model)
 {
-    RNDR_CPU_TRACE("Run Vertex Shaders");
+    m_Model = Model;
+    m_Pipeline = Model->GetPipeline();
+    m_InstanceCount = Model->GetInstanceCount();
+    m_VerticesPerInstanceCount = Model->GetVertexCount();
+    m_TrianglePerInstanceCount = Model->GetIndices().Size / 3;
+    const int VerticesCount = m_InstanceCount * m_VerticesPerInstanceCount;
+    const int TriangleCount = m_InstanceCount * m_TrianglePerInstanceCount;
+    m_Vertices.resize(VerticesCount);
+    m_UserVertices.resize(VerticesCount * Model->GetOutVertexStride());
+    m_Triangles.resize(TriangleCount);
+}
 
-    auto WorkOrder = [this, Model, InstanceCount](int TriangleIndex)
+void rndr::Rasterizer::RunVertexShaders()
+{
+    void* UserConstants = m_Model->GetShaderConstants().Data;
+    uint8_t* UserVertexData = m_Model->GetVertexData().Data;
+    const int VertexDataStride = m_Model->GetVertexStride();
+    uint8_t* UserInstanceData = m_Model->GetInstanceData().Data;
+    const int InstanceDataStride = m_Model->GetInstanceStride();
+    const int OutVertexStride = m_Model->GetOutVertexStride();
+
+    auto WorkOrder = [=](int VertexIndex)
     {
-        std::vector<uint8_t>& VertexData = Model->GetVertexData();
-        const int VertexDataStride = Model->GetVertexDataStride();
-        std::vector<uint8_t>& InstanceData = Model->GetInstanceData();
-        const int InstanceDataStride = Model->GetInstanceDataStride();
-        std::vector<int>& Indices = Model->GetIndices();
+        const int ModelVertexIndex = VertexIndex % m_VerticesPerInstanceCount;
+        const int InstanceIndex = VertexIndex / m_VerticesPerInstanceCount;
 
-        const int TriangleCountPerInstance = Indices.size() / 3;
-        assert(TriangleCountPerInstance);
-        const int TriangleCount = TriangleCountPerInstance * InstanceCount;
+        InVertexInfo InInfo;
+        InInfo.VertexIndex = VertexIndex;
+        InInfo.UserVertexData = UserVertexData + ModelVertexIndex * VertexDataStride;
+        InInfo.UserInstanceData = UserInstanceData + InstanceIndex * InstanceDataStride;
+        InInfo.UserConstants = UserConstants;
+        OutVertexInfo& OutInfo = *(m_Vertices.data() + VertexIndex);
+        OutInfo.UserVertexData = m_UserVertices.data() + VertexIndex * OutVertexStride;
+        m_Pipeline->VertexShader->Callback(InInfo, OutInfo);
+    };
 
-        rndr::Triangle& T = m_Triangles[TriangleIndex];
+    const int VerticesPerThread = 16;
+    ParallelFor(m_Vertices.size(), VerticesPerThread, WorkOrder);
+}
 
-        const int InstanceIndex = TriangleIndex / TriangleCountPerInstance;
-        const int Offset = InstanceIndex * InstanceDataStride;
-        void* InstancePtr = InstanceData.empty() ? nullptr : (void*)&InstanceData[Offset];
+void rndr::Rasterizer::SetupTriangles()
+{
+    IntSpan Indices = m_Model->GetIndices();
+    void* ShaderConstants = m_Model->GetShaderConstants().Data;
 
-        for (int VertexIndex = 0; VertexIndex < 3; VertexIndex++)
-        {
-            const int IndexOfIndex = (TriangleIndex % TriangleCountPerInstance) * 3 + VertexIndex;
-            rndr::PerVertexInfo& VertexInfo = T.Vertices[VertexIndex];
-            VertexInfo.PrimitiveIndex = TriangleIndex;
-            VertexInfo.VertexIndex = Indices[IndexOfIndex];
-            VertexInfo.VertexData =
-                (void*)&(VertexData.data()[VertexInfo.VertexIndex * VertexDataStride]);
-            VertexInfo.InstanceData = InstancePtr;
-            VertexInfo.Constants = Model->GetConstants();
-            assert(VertexInfo.VertexData);
+    auto WorkOrder = [=](int TriangleIndex)
+    {
+        const int ModelTriangleIndex = TriangleIndex % m_TrianglePerInstanceCount;
+        const int InstanceIndex = TriangleIndex / m_TrianglePerInstanceCount;
+        const int BaseVertexPosition = InstanceIndex * m_VerticesPerInstanceCount;
+        const int BaseIndex = ModelTriangleIndex * 3;
+        const int VertexIndex0 = BaseVertexPosition + Indices.Data[BaseIndex];
+        const int VertexIndex1 = BaseVertexPosition + Indices.Data[BaseIndex + 1];
+        const int VertexIndex2 = BaseVertexPosition + Indices.Data[BaseIndex + 2];
 
-            // Run Vertex shader
-            rndr::Point4r Position = m_Pipeline->VertexShader->Callback(VertexInfo);
-            rndr::Point4r PositionEuclidian = Position.ToEuclidean();
-            T.Positions[VertexIndex] = rndr::Point3r(PositionEuclidian.X, PositionEuclidian.Y, PositionEuclidian.Z);
-            T.W[VertexIndex] = Position.W;
-            assert(T.W[VertexIndex] != 0);
-            T.OneOverW[VertexIndex] = 1 / T.W[VertexIndex];
-            T.OneOverZ[VertexIndex] = 1 / T.Positions[VertexIndex].Z;
+        rndr::Point3r NDCPositions[] = {(rndr::Point3r)m_Vertices[VertexIndex0].PositionNDCNonEucliean.ToEuclidean(),
+                                        (rndr::Point3r)m_Vertices[VertexIndex1].PositionNDCNonEucliean.ToEuclidean(),
+                                        (rndr::Point3r)m_Vertices[VertexIndex2].PositionNDCNonEucliean.ToEuclidean()};
 
-#if RNDR_DEBUG
-            m_TriangleDebugInfos[TriangleIndex].NDCPosition[VertexIndex] = T.Positions[VertexIndex];
-#endif
-
-            T.Positions[VertexIndex] = FromNDCToRasterSpace(T.Positions[VertexIndex]);
-
-#if RNDR_DEBUG
-            m_TriangleDebugInfos[TriangleIndex].ScreenPosition[VertexIndex] =
-                T.Positions[VertexIndex];
-#endif
-        };
-
-        GetTriangleBounds(T.Positions, T.Bounds);
-
-#if RNDR_DEBUG
-        m_TriangleDebugInfos[TriangleIndex].OriginalBounds = T.Bounds;
-#endif
-
+        Triangle& T = m_Triangles[TriangleIndex];
+        T.W[0] = m_Vertices[VertexIndex0].PositionNDCNonEucliean.W;
+        T.W[1] = m_Vertices[VertexIndex1].PositionNDCNonEucliean.W;
+        T.W[2] = m_Vertices[VertexIndex2].PositionNDCNonEucliean.W;
+        T.OneOverW[0] = 1 / T.W[0];
+        T.OneOverW[1] = 1 / T.W[1];
+        T.OneOverW[2] = 1 / T.W[2];
+        T.ScreenPositions[0] = FromNDCToRasterSpace(NDCPositions[0]);
+        T.ScreenPositions[1] = FromNDCToRasterSpace(NDCPositions[1]);
+        T.ScreenPositions[2] = FromNDCToRasterSpace(NDCPositions[2]);
+        T.OneOverDepth[0] = 1 / T.ScreenPositions[0].Z;
+        T.OneOverDepth[1] = 1 / T.ScreenPositions[1].Z;
+        T.OneOverDepth[2] = 1 / T.ScreenPositions[2].Z;
+        T.OutVertexData[0] = &m_Vertices[VertexIndex0];
+        T.OutVertexData[1] = &m_Vertices[VertexIndex1];
+        T.OutVertexData[2] = &m_Vertices[VertexIndex2];
+        T.ShaderConstants = ShaderConstants;
+        Bounds2i Bounds;
+        GetTriangleBounds(T.ScreenPositions, Bounds);
+        T.Bounds = Bounds;
         LimitTriangleToSurface(T.Bounds, m_Pipeline->ColorImage);
 
 #if RNDR_DEBUG
-        m_TriangleDebugInfos[TriangleIndex].ScreenBounds = T.Bounds;
+        T.Indices[0] = VertexIndex0;
+        T.Indices[1] = VertexIndex1;
+        T.Indices[2] = VertexIndex2;
+        T.BoundsUnlimited = Bounds;
 #endif
     };
 
@@ -176,23 +189,23 @@ void rndr::Rasterizer::FindTrianglesToIgnore()
     for (int TriangleIndex = 0; TriangleIndex < m_Triangles.size(); TriangleIndex++)
     {
         Triangle& T = m_Triangles[TriangleIndex];
-        T.BarHelper = std::make_unique<BarycentricHelper>(m_Pipeline->WindingOrder, T.Positions);
+        T.BarHelper = std::make_unique<BarycentricHelper>(m_Pipeline->WindingOrder, T.ScreenPositions);
 
         const bool bIsOutsideXY = T.Bounds.Diagonal() == ZeroVector;
-        const bool bIsOutsideZ = ShouldDiscardByDepth(T.Positions);
+        const bool bIsOutsideZ = ShouldDiscardByDepth(T.ScreenPositions);
         const bool bBackFace = !T.BarHelper->IsWindingOrderCorrect();
 
 #if RNDR_DEBUG
-        m_TriangleDebugInfos[TriangleIndex].bIsOutsideXY = bIsOutsideXY;
-        m_TriangleDebugInfos[TriangleIndex].bIsOutsideZ = bIsOutsideZ;
-        m_TriangleDebugInfos[TriangleIndex].bBackFace = bBackFace;
+        T.bOutsideXY = bIsOutsideXY;
+        T.bOutsideZ = bIsOutsideZ;
+        T.bBackFace = bBackFace;
 #endif
 
         T.bIgnore = bIsOutsideXY || bBackFace || bIsOutsideZ;
     }
 }
 
-void rndr::Rasterizer::AllocatePixelInfo()
+void rndr::Rasterizer::AllocateFragmentInfo()
 {
     RNDR_CPU_TRACE("Allocate Fragment Memory");
 
@@ -206,10 +219,9 @@ void rndr::Rasterizer::AllocatePixelInfo()
         }
 
         const int PixelCount = T.Bounds.SurfaceArea();
-        const int ByteCount = PixelCount * sizeof(PerPixelInfo);
+        const int ByteCount = PixelCount * sizeof(InFragmentInfo);
         const int Alignment = 64;
-        m_Triangles[TriangleIndex].Pixels =
-            (PerPixelInfo*)m_ScratchAllocator->Allocate(ByteCount, Alignment);
+        m_Triangles[TriangleIndex].Fragments = (InFragmentInfo*)m_ScratchAllocator->Allocate(ByteCount, Alignment);
     }
 }
 
@@ -227,18 +239,10 @@ void rndr::Rasterizer::BarycentricCoordinates()
 
         auto WorkOrder = [&](int X, int Y)
         {
-            PerPixelInfo& PixelInfo = T.GetPixelInfo(X, Y);
-            PixelInfo.VertexData[0] = T.Vertices[0].VertexData;
-            PixelInfo.VertexData[1] = T.Vertices[1].VertexData;
-            PixelInfo.VertexData[2] = T.Vertices[2].VertexData;
-            PixelInfo.OneOverW[0] = T.OneOverW[0];
-            PixelInfo.OneOverW[1] = T.OneOverW[1];
-            PixelInfo.OneOverW[2] = T.OneOverW[2];
-            PixelInfo.InstanceData = T.Vertices[0].InstanceData;
-            PixelInfo.Constants = T.Vertices[0].Constants;
-            PixelInfo.Position = Point2i{X, Y};
-            PixelInfo.BarCoords = T.BarHelper->GetCoordinates(PixelInfo.Position);
-            PixelInfo.bIsInside = T.BarHelper->IsInside(PixelInfo.BarCoords);
+            InFragmentInfo& InInfo = T.GetFragmentInfo(X, Y);
+            InInfo.Position = Point2i{X, Y};
+            InInfo.BarCoords = T.BarHelper->GetCoordinates(InInfo.Position);
+            InInfo.bIsInside = T.BarHelper->IsInside(InInfo.BarCoords);
         };
 
         const int GridSideSize = 32;
@@ -265,46 +269,46 @@ void rndr::Rasterizer::SetupFragmentNeighbours()
 
         auto WorkOrder = [this, &T](int X, int Y)
         {
-            PerPixelInfo& PixelInfo = T.GetPixelInfo(X, Y);
-            if (!PixelInfo.bIsInside)
+            InFragmentInfo& InInfo = T.GetFragmentInfo(X, Y);
+            if (!InInfo.bIsInside)
             {
                 return;
             }
 
             // Find valid neighbour along X
-            PixelInfo.NextX = nullptr;
-            if (rndr::Inside({X + 1, Y}, T.Bounds) && T.GetPixelInfo(X + 1, Y).bIsInside)
+            InInfo.NextX = nullptr;
+            if (rndr::Inside({X + 1, Y}, T.Bounds) && T.GetFragmentInfo(X + 1, Y).bIsInside)
             {
-                PixelInfo.NextX = &T.GetPixelInfo(X + 1, Y);
-                PixelInfo.NextXMult = 1;
+                InInfo.NextX = &T.GetFragmentInfo(X + 1, Y);
+                InInfo.NextXMult = 1;
             }
-            else if (rndr::Inside({X - 1, Y}, T.Bounds) && T.GetPixelInfo(X - 1, Y).bIsInside)
+            else if (rndr::Inside({X - 1, Y}, T.Bounds) && T.GetFragmentInfo(X - 1, Y).bIsInside)
             {
-                PixelInfo.NextX = &T.GetPixelInfo(X - 1, Y);
-                PixelInfo.NextXMult = -1;
+                InInfo.NextX = &T.GetFragmentInfo(X - 1, Y);
+                InInfo.NextXMult = -1;
             }
 
             // Find valid neighbour along Y
-            PixelInfo.NextY = nullptr;
-            if (rndr::Inside({X, Y + 1}, T.Bounds) && T.GetPixelInfo(X, Y + 1).bIsInside)
+            InInfo.NextY = nullptr;
+            if (rndr::Inside({X, Y + 1}, T.Bounds) && T.GetFragmentInfo(X, Y + 1).bIsInside)
             {
-                PixelInfo.NextY = &T.GetPixelInfo(X, Y + 1);
-                PixelInfo.NextYMult = 1;
+                InInfo.NextY = &T.GetFragmentInfo(X, Y + 1);
+                InInfo.NextYMult = 1;
             }
-            else if (rndr::Inside({X, Y - 1}, T.Bounds) && T.GetPixelInfo(X, Y - 1).bIsInside)
+            else if (rndr::Inside({X, Y - 1}, T.Bounds) && T.GetFragmentInfo(X, Y - 1).bIsInside)
             {
-                PixelInfo.NextY = &T.GetPixelInfo(X, Y - 1);
-                PixelInfo.NextYMult = -1;
-            }
-
-            if (PixelInfo.NextX)
-            {
-                PixelInfo.NextX->W = 1 / PixelInfo.NextX->BarCoords.Interpolate(T.OneOverW);
+                InInfo.NextY = &T.GetFragmentInfo(X, Y - 1);
+                InInfo.NextYMult = -1;
             }
 
-            if (PixelInfo.NextY)
+            if (InInfo.NextX)
             {
-                PixelInfo.NextY->W = 1 / PixelInfo.NextY->BarCoords.Interpolate(T.OneOverW);
+                InInfo.NextX->W = 1 / InInfo.NextX->BarCoords.Interpolate(T.OneOverW);
+            }
+
+            if (InInfo.NextY)
+            {
+                InInfo.NextY->W = 1 / InInfo.NextY->BarCoords.Interpolate(T.OneOverW);
             }
         };
 
@@ -328,8 +332,7 @@ void rndr::Rasterizer::RunPixelShaders()
     auto WorkOrder = [this, ImageSize, BlockSize](int BlockX, int BlockY)
     {
         const Point2i StartPoint{BlockX * BlockSize, BlockY * BlockSize};
-        const Point2i Size{std::min(BlockSize, ImageSize.X - StartPoint.X),
-                           std::min(BlockSize, ImageSize.Y - StartPoint.Y)};
+        const Point2i Size{std::min(BlockSize, ImageSize.X - StartPoint.X), std::min(BlockSize, ImageSize.Y - StartPoint.Y)};
         const Point2i EndPoint = StartPoint + Size;
         const Bounds2i BlockBounds{StartPoint, EndPoint};
 
@@ -353,13 +356,13 @@ void rndr::Rasterizer::RunPixelShaders()
                         continue;
                     }
 
-                    PerPixelInfo& PixelInfo = T->GetPixelInfo(X, Y);
-                    if (!PixelInfo.bIsInside)
+                    InFragmentInfo& InInfo = T->GetFragmentInfo(X, Y);
+                    if (!InInfo.bIsInside)
                     {
                         continue;
                     }
 
-                    ProcessPixel(PixelInfo, *T);
+                    ProcessFragment(*T, InInfo);
                 }
             }
         }
@@ -367,53 +370,52 @@ void rndr::Rasterizer::RunPixelShaders()
 
     // Block will either have side size of BlockSize or whatever is left to the image's edge
     Point2i BlockGrid;
-    BlockGrid.X =
-        ImageSize.X % BlockSize == 0 ? ImageSize.X / BlockSize : (ImageSize.X / BlockSize) + 1;
-    BlockGrid.Y =
-        ImageSize.Y % BlockSize == 0 ? ImageSize.Y / BlockSize : (ImageSize.Y / BlockSize) + 1;
+    BlockGrid.X = ImageSize.X % BlockSize == 0 ? ImageSize.X / BlockSize : (ImageSize.X / BlockSize) + 1;
+    BlockGrid.Y = ImageSize.Y % BlockSize == 0 ? ImageSize.Y / BlockSize : (ImageSize.Y / BlockSize) + 1;
 
     const int BlocksPerThread = 1;
     ParallelFor(BlockGrid, BlocksPerThread, WorkOrder);
 }
 
-void rndr::Rasterizer::ProcessPixel(PerPixelInfo& PixelInfo, const Triangle& T)
+void rndr::Rasterizer::ProcessFragment(const Triangle& T, InFragmentInfo& InInfo)
 {
-    PixelInfo.W = 1 / PixelInfo.BarCoords.Interpolate(T.OneOverW);
-    PixelInfo.Depth = 1 / PixelInfo.BarCoords.Interpolate(T.OneOverZ);
-    assert(!rndr::IsNaN(PixelInfo.Depth));
-    const real CurrentDepth = m_Pipeline->DepthImage->GetPixelDepth(PixelInfo.Position);
+    InInfo.W = 1 / InInfo.BarCoords.Interpolate(T.OneOverW);
+    InInfo.Depth = 1 / InInfo.BarCoords.Interpolate(T.OneOverDepth);
+    assert(!rndr::IsNaN(InInfo.Depth));
+    const real CurrentDepth = m_Pipeline->DepthImage->GetPixelDepth(InInfo.Position);
 
     // Early depth test
     if (!m_Pipeline->PixelShader->bChangesDepth)
     {
-        if (!PerformDepthTest(m_Pipeline->DepthTest, PixelInfo.Depth, CurrentDepth))
+        if (!PerformDepthTest(m_Pipeline->DepthTest, InInfo.Depth, CurrentDepth))
         {
             return;
         }
 
-        m_Pipeline->DepthImage->SetPixelDepth(PixelInfo.Position, PixelInfo.Depth);
+        m_Pipeline->DepthImage->SetPixelDepth(InInfo.Position, InInfo.Depth);
     }
 
     // Run Pixel shader
-    rndr::Color NewColor = m_Pipeline->PixelShader->Callback(PixelInfo, PixelInfo.Depth);
+    OutFragmentInfo OutInfo;
+    m_Pipeline->PixelShader->Callback(T, InInfo, OutInfo);
 
     // Standard depth test
     if (m_Pipeline->PixelShader->bChangesDepth)
     {
-        if (!PerformDepthTest(m_Pipeline->DepthTest, PixelInfo.Depth, CurrentDepth))
+        if (!PerformDepthTest(m_Pipeline->DepthTest, InInfo.Depth, CurrentDepth))
         {
             return;
         }
 
-        m_Pipeline->DepthImage->SetPixelDepth(PixelInfo.Position, PixelInfo.Depth);
+        m_Pipeline->DepthImage->SetPixelDepth(InInfo.Position, InInfo.Depth);
     }
 
     // TODO(mkostic): Add support for different blend operators
-    Color CurrentColor = m_Pipeline->ColorImage->GetPixelColor(PixelInfo.Position);
-    NewColor = Color::Blend(NewColor, CurrentColor);
+    Color CurrentColor = m_Pipeline->ColorImage->GetPixelColor(InInfo.Position);
+    OutInfo.Color = Color::Blend(OutInfo.Color, CurrentColor);
 
     // Write color into color buffer
-    m_Pipeline->ColorImage->SetPixelColor(PixelInfo.Position, NewColor);
+    m_Pipeline->ColorImage->SetPixelColor(InInfo.Position, OutInfo.Color);
 }
 
 rndr::Point3r rndr::Rasterizer::FromNDCToRasterSpace(const Point3r& Point)
@@ -463,8 +465,7 @@ bool rndr::Rasterizer::PerformDepthTest(rndr::DepthTest Operator, real Src, real
         }
         default:
         {
-            RNDR_LOG_ERROR("Rasterizer::PerformDepthTest: Unsupported operator supplied! Got %u",
-                           (uint32_t)Operator);
+            RNDR_LOG_ERROR("Rasterizer::PerformDepthTest: Unsupported operator supplied! Got %u", (uint32_t)Operator);
             assert(false);
         }
     }

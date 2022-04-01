@@ -184,7 +184,7 @@ rndr::Color rndr::Color::operator*(real Value) const
     assert(GammaSpace == rndr::GammaSpace::Linear);
 
     const bool bIsPremultiplied = true;
-    return Color{R * Value, G * Value, B * Value, A * Value, GammaSpace, bIsPremultiplied};
+    return Color{R * Value, G * Value, B * Value, A, GammaSpace, bIsPremultiplied};
 }
 
 rndr::Color rndr::operator*(real Value, Color C)
@@ -199,7 +199,6 @@ rndr::Color& rndr::Color::operator*=(real Value)
     R *= Value;
     G *= Value;
     B *= Value;
-    A *= Value;
 
     return *this;
 }

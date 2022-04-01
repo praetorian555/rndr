@@ -1,6 +1,6 @@
 #include "rndr/geometry/cube.h"
 
-const std::vector<rndr::Point3r>& rndr::Cube::GetVertexPositions()
+rndr::Span<rndr::Point3r> rndr::Cube::GetVertexPositions()
 {
     // clang-format off
     static std::vector<rndr::Point3r> s_CubePositions
@@ -46,7 +46,7 @@ const std::vector<rndr::Point3r>& rndr::Cube::GetVertexPositions()
     return s_CubePositions;
 }
 
-const std::vector<rndr::Point2r>& rndr::Cube::GetVertexTextureCoordinates()
+rndr::Span<rndr::Point2r> rndr::Cube::GetVertexTextureCoordinates()
 {
     // clang-format off
     static std::vector<rndr::Point2r> s_CubeTexCoords
@@ -92,7 +92,7 @@ const std::vector<rndr::Point2r>& rndr::Cube::GetVertexTextureCoordinates()
     return s_CubeTexCoords;
 }
 
-const std::vector<rndr::Normal3r>& rndr::Cube::GetNormals()
+rndr::Span<rndr::Normal3r> rndr::Cube::GetNormals()
 {
     // clang-format off
     static std::vector<rndr::Normal3r> s_CubeNormals
@@ -138,7 +138,7 @@ const std::vector<rndr::Normal3r>& rndr::Cube::GetNormals()
     return s_CubeNormals;
 }
 
-const std::vector<int>& rndr::Cube::GetIndices()
+rndr::IntSpan rndr::Cube::GetIndices()
 {
     // clang-format off
     static std::vector<int> s_CubeIndices

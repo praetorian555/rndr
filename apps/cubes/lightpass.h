@@ -15,8 +15,8 @@ public:
     rndr::Point3r GetLightPosition() const;
 
 private:
-    rndr::Point4r VertexShader(const rndr::PerVertexInfo& Info);
-    rndr::Color FragmentShader(const rndr::PerPixelInfo& Info, real& Depth);
+    void VertexShader(const rndr::InVertexInfo& InInfo, rndr::OutVertexInfo& OutInfo);
+    void FragmentShader(const rndr::Triangle& T, const rndr::InFragmentInfo& InInfo, rndr::OutFragmentInfo& OutInfo);
 
 private:
     std::unique_ptr<rndr::Pipeline> m_Pipeline;

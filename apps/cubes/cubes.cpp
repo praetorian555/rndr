@@ -63,6 +63,7 @@ int main()
             rndr::Image* ColorImage = MainWindow->GetColorImage();
             rndr::Image* DepthImage = MainWindow->GetDepthImage();
             BoxPass.SetTargetImages(ColorImage, DepthImage);
+            BoxPass.SetLightPosition(LightPass.GetLightPosition());
             BoxPass.Render(Renderer, DeltaSeconds);
 
             LightPass.SetTargetImages(ColorImage, DepthImage);

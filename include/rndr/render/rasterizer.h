@@ -14,26 +14,6 @@ class Image;
 class Model;
 class Allocator;
 
-struct Triangle
-{
-    rndr::PerVertexInfo Vertices[3];
-    rndr::Point3r Positions[3];
-    real W[3];
-    real OneOverW[3];
-    real OneOverZ[3];
-    rndr::Bounds2i Bounds{{0, 0}, {0, 0}};
-    std::unique_ptr<rndr::BarycentricHelper> BarHelper;
-    PerPixelInfo* Pixels = nullptr;
-    bool bIgnore = false;
-
-    PerPixelInfo& GetPixelInfo(int X, int Y)
-    {
-        assert(rndr::Inside(Point2i{X, Y}, Bounds));
-        assert(Pixels);
-
-        return Pixels[(X - Bounds.pMin.X) + (Y - Bounds.pMin.Y) * Bounds.Diagonal().X];
-    }
-};
 
 #if RNDR_DEBUG
 
@@ -60,7 +40,7 @@ public:
 
     void SetPipeline(const rndr::Pipeline* Pipeline);
 
-    void Draw(rndr::Model* Model, int InstanceCount = 1);
+    void Draw(rndr::Model* Model);
 
     // Assumes valid depth values are in range [0, 1]
     static bool PerformDepthTest(rndr::DepthTest Operator, real Src, real Dst);
@@ -69,21 +49,26 @@ public:
     Point3r FromRasterToNDCSpace(const Point3r& Point);
 
 private:
-    void RunVertexShadersAndSetupTriangles(Model* Model, int InstanceCount);
+    void Setup(Model* Model);
+    void RunVertexShaders();
+    void SetupTriangles();
     void FindTrianglesToIgnore();
-    void AllocatePixelInfo();
+    void AllocateFragmentInfo();
     void BarycentricCoordinates();
     void SetupFragmentNeighbours();
     void RunPixelShaders();
 
-    void ProcessPixel(PerPixelInfo& PixelInfo, const Triangle& T);
-
-    PerPixelInfo& GetPixelInfo(const Point2i& Position);
-    PerPixelInfo& GetPixelInfo(int X, int Y);
+    void ProcessFragment(const Triangle& T, InFragmentInfo& InInfo);
 
 private:
     const Pipeline* m_Pipeline = nullptr;
     std::vector<Triangle> m_Triangles;
+    std::vector<OutVertexInfo> m_Vertices;
+    std::vector<uint8_t> m_UserVertices;
+    int m_InstanceCount;
+    int m_VerticesPerInstanceCount;
+    int m_TrianglePerInstanceCount;
+    Model* m_Model;
 
     Allocator* m_ScratchAllocator = nullptr;
 

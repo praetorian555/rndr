@@ -1,8 +1,8 @@
 #pragma once
 
-#include <vector>
-
+#include "rndr/core/span.h"
 #include "rndr/core/math.h"
+
 #include "rndr/render/shader.h"
 
 namespace rndr
@@ -10,10 +10,10 @@ namespace rndr
 
 struct Cube
 {
-    static const std::vector<Point3r>& GetVertexPositions();
-    static const std::vector<Point2r>& GetVertexTextureCoordinates();
-    static const std::vector<Normal3r>& GetNormals();
-    static const std::vector<int>& GetIndices();
+    static Span<Point3r> GetVertexPositions();
+    static Span<Point2r> GetVertexTextureCoordinates();
+    static Span<Normal3r> GetNormals();
+    static IntSpan GetIndices();
 };
 
 }  // namespace rndr
