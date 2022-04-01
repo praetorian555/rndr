@@ -7,13 +7,13 @@ void BoxRenderPass::Init(rndr::Camera* Camera)
     std::shared_ptr<rndr::VertexShader> VertexShader = std::make_shared<rndr::VertexShader>();
     VertexShader->Callback = RNDR_BIND_TWO_PARAM(this, &BoxRenderPass::VertexShader);
 
-    std::shared_ptr<rndr::PixelShader> PixelShader = std::make_shared<rndr::PixelShader>();
-    PixelShader->Callback = RNDR_BIND_THREE_PARAM(this, &BoxRenderPass::FragmentShader);
+    std::shared_ptr<rndr::FragmentShader> FragShader = std::make_shared<rndr::FragmentShader>();
+    FragShader->Callback = RNDR_BIND_THREE_PARAM(this, &BoxRenderPass::FragmentShader);
 
     m_Pipeline = std::make_unique<rndr::Pipeline>();
     m_Pipeline->WindingOrder = rndr::WindingOrder::CCW;
     m_Pipeline->VertexShader = VertexShader;
-    m_Pipeline->PixelShader = PixelShader;
+    m_Pipeline->FragmentShader = FragShader;
     m_Pipeline->DepthTest = rndr::DepthTest::LesserThen;
 
     std::vector<BoxVertex> Vertices;

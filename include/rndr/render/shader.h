@@ -10,6 +10,50 @@
 namespace rndr
 {
 
+struct Triangle;
+
+/**
+ * Holds vertex shader input data.
+ */
+struct InVertexInfo
+{
+    int VertexIndex;
+
+    void* UserVertexData;    // Data specific for each vertex
+    void* UserInstanceData;  // Data specific for each instance
+    void* UserConstants;     // Data constant across all models and his instances
+};
+
+/**
+ * Holds vertex shader output data.
+ */
+struct OutVertexInfo
+{
+    // Position of a vertex in the NDC space but not divided by W component.
+    rndr::Point4r PositionNDCNonEucliean;
+
+    // This should store data that should be interpolated for fragment shader. User defines the size
+    // of this object as part of the model specification and rasterizer will allocate this memory so
+    // that user only needs to cast it to his type.
+    void* UserVertexData;
+};
+
+/**
+ * Interface for a vertex shader implementation.
+ */
+using VertexShaderCallback = std::function<void(const InVertexInfo&, OutVertexInfo&)>;
+
+/**
+ * Holds vertex shader implementation and configuration.
+ */
+struct VertexShader
+{
+    VertexShaderCallback Callback;
+};
+
+/**
+ * Holds the input data for a fragment shader.
+ */
 struct InFragmentInfo
 {
     Point2i Position;  // In discrete space
@@ -26,47 +70,27 @@ struct InFragmentInfo
     bool bIsInside = false;
 };
 
+/**
+ * Holds the output data of a fragment shader.
+ */
 struct OutFragmentInfo
 {
     rndr::Color Color;
     real Depth;
 };
-struct Triangle;
-using PixelShaderCallback = std::function<void(const Triangle&, const InFragmentInfo&, OutFragmentInfo&)>;
 
-struct PixelShader
+/**
+ * Interface for a fragment shader implementation.
+ */
+using FragmentShaderCallback = std::function<void(const Triangle&, const InFragmentInfo&, OutFragmentInfo&)>;
+
+/**
+ * Holds fragment shader implementation and configuration.
+ */
+struct FragmentShader
 {
     bool bChangesDepth = false;
-    PixelShaderCallback Callback;
-};
-
-struct InVertexInfo
-{
-    int VertexIndex;
-
-    void* UserVertexData;    // Data specific for each vertex
-    void* UserInstanceData;  // Data specific for each instance
-    void* UserConstants;     // Data constant across all models and his instances
-};
-
-struct OutVertexInfo
-{
-    // Position of a vertex in the NDC space but not divided by W component.
-    rndr::Point4r PositionNDCNonEucliean;
-
-    // This should store data that should be interpolated for fragment shader. User defines the size
-    // of this object as part of the model specification and rasterizer will allocate this memory so
-    // that user only needs to cast it to his type.
-    void* UserVertexData;
-};
-
-// Should return the point in NDC space but w should not be 1 so x, y and z should not be divided by
-// this value. This will be done by the renderer implementation
-using VertexShaderCallback = std::function<void(const InVertexInfo&, OutVertexInfo&)>;
-
-struct VertexShader
-{
-    VertexShaderCallback Callback;
+    FragmentShaderCallback Callback;
 };
 
 struct Triangle

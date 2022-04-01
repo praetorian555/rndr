@@ -12,7 +12,7 @@ struct Pipeline
     rndr::WindingOrder WindingOrder = rndr::WindingOrder::CCW;
 
     std::shared_ptr<rndr::VertexShader> VertexShader;
-    std::shared_ptr<rndr::PixelShader> PixelShader;
+    std::shared_ptr<rndr::FragmentShader> FragmentShader;
 
     rndr::DepthTest DepthTest = rndr::DepthTest::None;
 

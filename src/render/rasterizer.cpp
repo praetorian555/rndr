@@ -385,7 +385,7 @@ void rndr::Rasterizer::ProcessFragment(const Triangle& T, InFragmentInfo& InInfo
     const real CurrentDepth = m_Pipeline->DepthImage->GetPixelDepth(InInfo.Position);
 
     // Early depth test
-    if (!m_Pipeline->PixelShader->bChangesDepth)
+    if (!m_Pipeline->FragmentShader->bChangesDepth)
     {
         if (!PerformDepthTest(m_Pipeline->DepthTest, InInfo.Depth, CurrentDepth))
         {
@@ -397,10 +397,10 @@ void rndr::Rasterizer::ProcessFragment(const Triangle& T, InFragmentInfo& InInfo
 
     // Run Pixel shader
     OutFragmentInfo OutInfo;
-    m_Pipeline->PixelShader->Callback(T, InInfo, OutInfo);
+    m_Pipeline->FragmentShader->Callback(T, InInfo, OutInfo);
 
     // Standard depth test
-    if (m_Pipeline->PixelShader->bChangesDepth)
+    if (m_Pipeline->FragmentShader->bChangesDepth)
     {
         if (!PerformDepthTest(m_Pipeline->DepthTest, InInfo.Depth, CurrentDepth))
         {
