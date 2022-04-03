@@ -47,7 +47,7 @@ int main()
 
     rndr::Rasterizer Renderer;
 
-    rndr::FirstPersonCamera FPCamera(Camera.get(), 10, 1.2);
+    rndr::FirstPersonCamera FPCamera(Camera.get(), rndr::Point3r(), 10, 1.2);
 
     BoxRenderPass BoxPass;
     BoxPass.Init(FPCamera.GetProjectionCamera());
@@ -64,6 +64,7 @@ int main()
             rndr::Image* DepthImage = MainWindow->GetDepthImage();
             BoxPass.SetTargetImages(ColorImage, DepthImage);
             BoxPass.SetLightPosition(LightPass.GetLightPosition());
+            BoxPass.SetViewerPosition(FPCamera.GetPosition());
             BoxPass.Render(Renderer, DeltaSeconds);
 
             LightPass.SetTargetImages(ColorImage, DepthImage);

@@ -5,6 +5,11 @@
 class BoxRenderPass
 {
 public:
+    struct BoxShaderConstants
+    {
+        rndr::Point3r ViewerPosition;
+    };
+
     struct BoxVertex
     {
         rndr::Point3r Position;
@@ -32,6 +37,7 @@ public:
 
     void SetTargetImages(rndr::Image* ColorImage, rndr::Image* DepthImage);
     void SetLightPosition(rndr::Point3r LightPosition);
+    void SetViewerPosition(rndr::Point3r ViewerPosition);
 
 private:
     void VertexShader(const rndr::InVertexInfo& InInfo, rndr::OutVertexInfo& OutInfo);
@@ -46,4 +52,5 @@ private:
 
     rndr::Camera* m_Camera;
     rndr::Point3r m_LightPosition;
+    rndr::Point3r m_ViewerPosition;
 };

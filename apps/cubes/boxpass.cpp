@@ -61,14 +61,18 @@ void BoxRenderPass::Init(rndr::Camera* Camera)
     const int InstanceCount = m_Instances.size();
     rndr::ByteSpan EmptySpan;
     rndr::IntSpan Indices = rndr::Cube::GetIndices();
-     m_Model = std::make_unique<rndr::Model>(m_Pipeline.get(), VertexData, VertexStride, OutVertexStride, Indices,
-                                            EmptySpan, InstanceCount, InstanceData, InstanceStride);
+    m_Model = std::make_unique<rndr::Model>(m_Pipeline.get(), VertexData, VertexStride, OutVertexStride, Indices, EmptySpan, InstanceCount,
+                                            InstanceData, InstanceStride);
 }
 
 void BoxRenderPass::ShutDown() {}
 
 void BoxRenderPass::Render(rndr::Rasterizer& Renderer, real DeltaSeconds)
 {
+    BoxShaderConstants Constants{m_ViewerPosition};
+    rndr::ByteSpan ConstantsSpan((uint8_t*)&Constants, sizeof(BoxShaderConstants));
+    m_Model->SetShaderConstants(ConstantsSpan);
+
     Renderer.Draw(m_Model.get());
 }
 
@@ -81,6 +85,11 @@ void BoxRenderPass::SetTargetImages(rndr::Image* ColorImage, rndr::Image* DepthI
 void BoxRenderPass::SetLightPosition(rndr::Point3r LightPosition)
 {
     m_LightPosition = LightPosition;
+}
+
+void BoxRenderPass::SetViewerPosition(rndr::Point3r ViewerPosition)
+{
+    m_ViewerPosition = ViewerPosition;
 }
 
 void BoxRenderPass::VertexShader(const rndr::InVertexInfo& InInfo, rndr::OutVertexInfo& OutInfo)
@@ -99,23 +108,30 @@ void BoxRenderPass::VertexShader(const rndr::InVertexInfo& InInfo, rndr::OutVert
 
 void BoxRenderPass::FragmentShader(const rndr::Triangle& T, const rndr::InFragmentInfo& InInfo, rndr::OutFragmentInfo& OutInfo)
 {
-     const rndr::Point2r TexCoords = RNDR_INTERPOLATE(T, OutBoxVertex, rndr::Point2r, TexCoords, InInfo);
-     const rndr::Vector2r duvdx = RNDR_DX(T, OutBoxVertex, rndr::Point2r, TexCoords, rndr::Vector2r, InInfo);
-     const rndr::Vector2r duvdy = RNDR_DY(T, OutBoxVertex, rndr::Point2r, TexCoords, rndr::Vector2r, InInfo);
+    const rndr::Point2r TexCoords = RNDR_INTERPOLATE(T, OutBoxVertex, rndr::Point2r, TexCoords, InInfo);
+    const rndr::Vector2r duvdx = RNDR_DX(T, OutBoxVertex, rndr::Point2r, TexCoords, rndr::Vector2r, InInfo);
+    const rndr::Vector2r duvdy = RNDR_DY(T, OutBoxVertex, rndr::Point2r, TexCoords, rndr::Vector2r, InInfo);
 
-     rndr::Color Result = m_Texture->Sample(TexCoords, duvdx, duvdy);
-     assert(Result.GammaSpace == rndr::GammaSpace::Linear);
+    rndr::Color Result = m_Texture->Sample(TexCoords, duvdx, duvdy);
+    assert(Result.GammaSpace == rndr::GammaSpace::Linear);
 
-     const rndr::Point3r FragmentPosition = RNDR_INTERPOLATE(T, OutBoxVertex, rndr::Point3r, PositionWorld, InInfo);
-     rndr::Normal3r Normal = RNDR_INTERPOLATE(T, OutBoxVertex, rndr::Normal3r, Normal, InInfo);
-     Normal = rndr::Normalize(Normal);
-     rndr::Vector3r LightDirection = m_LightPosition - FragmentPosition;
-     LightDirection = rndr::Normalize(LightDirection);
+    const rndr::Point3r FragmentPosition = RNDR_INTERPOLATE(T, OutBoxVertex, rndr::Point3r, PositionWorld, InInfo);
+    rndr::Normal3r Normal = RNDR_INTERPOLATE(T, OutBoxVertex, rndr::Normal3r, Normal, InInfo);
+    Normal = rndr::Normalize(Normal);
+    rndr::Vector3r LightDirection = m_LightPosition - FragmentPosition;
+    LightDirection = rndr::Normalize(LightDirection);
 
-     const real AmbientStrength = 0.1;
-     const real DiffuseStrength = std::max(rndr::Dot(Normal, LightDirection), (real)0.0);
+    BoxShaderConstants* Constants = (BoxShaderConstants*)T.ShaderConstants;
+    const rndr::Vector3r ViewDirection = rndr::Normalize(Constants->ViewerPosition - FragmentPosition);
+    const rndr::Vector3r ReflectedDirection = rndr::Reflect(LightDirection, (rndr::Vector3r)Normal);
 
-     Result *= (AmbientStrength + DiffuseStrength);
+    const real AmbientStrength = 0.1;
+    const real DiffuseStrength = 0.3 * std::max(rndr::Dot(Normal, LightDirection), (real)0.0);
+    const real Dot = rndr::Dot(ViewDirection, ReflectedDirection);
+    const real Max = std::max(Dot, (real)0.0);
+    const real SpecularStrength = 2 * std::pow(Max, 32);
 
-     OutInfo.Color = Result;
+    Result *= (AmbientStrength + DiffuseStrength + SpecularStrength);
+
+    OutInfo.Color = Result;
 }
