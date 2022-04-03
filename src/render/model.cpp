@@ -42,3 +42,16 @@ rndr::Model::Model(Pipeline* Pipeline,
         assert(InstanceData.Size / InstanceStride == InstanceCount);
     }
 }
+
+void rndr::Model::SetShaderConstants(ByteSpan ShaderConstants)
+{
+    if (ShaderConstants)
+    {
+        m_ShaderConstants.resize(ShaderConstants.Size);
+        memcpy(m_ShaderConstants.data(), ShaderConstants.Data, ShaderConstants.Size);
+    }
+    else
+    {
+        m_ShaderConstants.clear();
+    }
+}

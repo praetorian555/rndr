@@ -41,6 +41,8 @@ public:
           int InstanceStride = 1);
     ~Model() = default;
 
+    void SetShaderConstants(ByteSpan ShaderConstants);
+
     Pipeline* GetPipeline() { return m_Pipeline; }
     const Pipeline* GetPipeline() const { return m_Pipeline; }
 
