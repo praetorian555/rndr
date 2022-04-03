@@ -50,17 +50,11 @@ public:
 
     bool HasNaNs() const { return IsNaN(X) || IsNaN(Y) || IsNaN(Z); }
 
-    bool operator==(const Vector3<T>& other) const
-    {
-        return X == other.X && Y == other.Y && Z == other.Z;
-    }
+    bool operator==(const Vector3<T>& other) const { return X == other.X && Y == other.Y && Z == other.Z; }
 
     bool operator!=(const Vector3<T>& other) const { return !(*this == other); }
 
-    Vector3<T> operator+(const Vector3<T>& other) const
-    {
-        return Vector3(X + other.X, Y + other.Y, Z + other.Z);
-    }
+    Vector3<T> operator+(const Vector3<T>& other) const { return Vector3(X + other.X, Y + other.Y, Z + other.Z); }
 
     Vector3<T>& operator+=(const Vector3<T>& other)
     {
@@ -70,10 +64,7 @@ public:
         return *this;
     }
 
-    Vector3<T> operator-(const Vector3<T>& other) const
-    {
-        return Vector3(X - other.X, Y - other.Y, Z - other.Z);
-    }
+    Vector3<T> operator-(const Vector3<T>& other) const { return Vector3(X - other.X, Y - other.Y, Z - other.Z); }
 
     Vector3<T>& operator-=(const Vector3<T>& other)
     {
@@ -143,8 +134,7 @@ inline Vector3<T> Cross(const Vector3<T>& v1, const Vector3<T>& v2)
 {
     double v1X = v1.X, v1Y = v1.Y, v1Z = v1.Z;
     double v2X = v2.X, v2Y = v2.Y, v2Z = v2.Z;
-    return Vector3<T>((v1Y * v2Z) - (v1Z * v2Y), (v1Z * v2X) - (v1X * v2Z),
-                      (v1X * v2Y) - (v1Y * v2X));
+    return Vector3<T>((v1Y * v2Z) - (v1Z * v2Y), (v1Z * v2X) - (v1X * v2Z), (v1X * v2Y) - (v1Y * v2X));
 }
 
 template <typename T>
@@ -207,6 +197,12 @@ inline void CoordinateSystem(const Vector3<T>& v1, Vector3<T>* v2, Vector3<T>* v
         *v2 = Vector3<T>(0, v1.Z, -v1.Y) / std::sqrt(v1.Y * v1.Y + v1.Z * v1.Z);
     }
     *v3 = Cross(v1, *v2);
+}
+
+template <typename T>
+inline Vector3<T> Reflect(const Vector3<T>& Incidence, const Vector3<T>& Normal)
+{
+    return 2 * Dot(Incidence, Normal) * Normal - Incidence;
 }
 
 }  // namespace rndr
