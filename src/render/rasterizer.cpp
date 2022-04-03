@@ -61,7 +61,7 @@ static bool ShouldDiscardByDepth(const rndr::Point3r (&Points)[3])
 
 rndr::Rasterizer::Rasterizer()
 {
-    m_ScratchAllocator = new StackAllocator(RNDR_MB(1000));
+    m_ScratchAllocator = new StackAllocator(RNDR_MB(1024));
 }
 
 void rndr::Rasterizer::SetPipeline(const rndr::Pipeline* Pipeline)
@@ -95,9 +95,12 @@ void rndr::Rasterizer::Setup(Model* Model)
     m_TrianglePerInstanceCount = Model->GetIndices().Size / 3;
     const int VerticesCount = m_InstanceCount * m_VerticesPerInstanceCount;
     const int TriangleCount = m_InstanceCount * m_TrianglePerInstanceCount;
-    m_Vertices.resize(VerticesCount);
-    m_UserVertices.resize(VerticesCount * Model->GetOutVertexStride());
-    m_Triangles.resize(TriangleCount);
+    m_Triangles.Size = TriangleCount;
+    m_Triangles.Data = (Triangle*)m_ScratchAllocator->Allocate(TriangleCount * sizeof(Triangle), 64);
+    m_Vertices.Size = VerticesCount;
+    m_Vertices.Data = (OutVertexInfo*)m_ScratchAllocator->Allocate(VerticesCount * sizeof(OutVertexInfo), 64);
+    m_UserVertices.Size = VerticesCount * Model->GetOutVertexStride();
+    m_UserVertices.Data = (uint8_t*)m_ScratchAllocator->Allocate(m_UserVertices.Size, 64);
 }
 
 void rndr::Rasterizer::RunVertexShaders()
@@ -121,13 +124,13 @@ void rndr::Rasterizer::RunVertexShaders()
         InInfo.UserVertexData = UserVertexData + ModelVertexIndex * VertexDataStride;
         InInfo.UserInstanceData = UserInstanceData + InstanceIndex * InstanceDataStride;
         InInfo.UserConstants = UserConstants;
-        OutVertexInfo& OutInfo = *(m_Vertices.data() + VertexIndex);
-        OutInfo.UserVertexData = m_UserVertices.data() + VertexIndex * OutVertexStride;
+        OutVertexInfo& OutInfo = *(m_Vertices.Data + VertexIndex);
+        OutInfo.UserVertexData = m_UserVertices.Data + VertexIndex * OutVertexStride;
         m_Pipeline->VertexShader->Callback(InInfo, OutInfo);
     };
 
     const int VerticesPerThread = 64;
-    ParallelFor(m_Vertices.size(), VerticesPerThread, WorkOrder);
+    ParallelFor(m_Vertices.Size, VerticesPerThread, WorkOrder);
 }
 
 void rndr::Rasterizer::SetupTriangles()
@@ -172,6 +175,7 @@ void rndr::Rasterizer::SetupTriangles()
         GetTriangleBounds(T.ScreenPositions, Bounds);
         T.Bounds = Bounds;
         LimitTriangleToSurface(T.Bounds, m_Pipeline->ColorImage);
+        T.BarHelper = BarycentricHelper(m_Pipeline->WindingOrder, T.ScreenPositions);
 
 #if RNDR_DEBUG
         T.Indices[0] = VertexIndex0;
@@ -182,7 +186,7 @@ void rndr::Rasterizer::SetupTriangles()
     };
 
     const int TrianglesPerThread = 64;
-    ParallelFor(m_Triangles.size(), TrianglesPerThread, WorkOrder);
+    ParallelFor(m_Triangles.Size, TrianglesPerThread, WorkOrder);
 }
 
 void rndr::Rasterizer::FindTrianglesToIgnore()
@@ -194,11 +198,10 @@ void rndr::Rasterizer::FindTrianglesToIgnore()
     {
         {
             Triangle& T = m_Triangles[TriangleIndex];
-            T.BarHelper = std::make_unique<BarycentricHelper>(m_Pipeline->WindingOrder, T.ScreenPositions);
 
             const bool bIsOutsideXY = T.Bounds.Diagonal() == ZeroVector;
             const bool bIsOutsideZ = ShouldDiscardByDepth(T.ScreenPositions);
-            const bool bBackFace = !T.BarHelper->IsWindingOrderCorrect();
+            const bool bBackFace = !T.BarHelper.IsWindingOrderCorrect();
 
 #if RNDR_DEBUG
             T.bOutsideXY = bIsOutsideXY;
@@ -211,14 +214,14 @@ void rndr::Rasterizer::FindTrianglesToIgnore()
     };
 
     const int TrianglesPerThread = 64;
-    ParallelFor(m_Triangles.size(), TrianglesPerThread, WorkOrder);
+    ParallelFor(m_Triangles.Size, TrianglesPerThread, WorkOrder);
 }
 
 void rndr::Rasterizer::AllocateFragmentInfo()
 {
     RNDR_CPU_TRACE("Allocate Fragment Memory");
 
-    for (int TriangleIndex = 0; TriangleIndex < m_Triangles.size(); TriangleIndex++)
+    for (int TriangleIndex = 0; TriangleIndex < m_Triangles.Size; TriangleIndex++)
     {
         Triangle& T = m_Triangles[TriangleIndex];
 
@@ -250,8 +253,8 @@ void rndr::Rasterizer::BarycentricCoordinates()
         {
             InFragmentInfo& InInfo = T.GetFragmentInfo(X, Y);
             InInfo.Position = Point2i{X, Y};
-            InInfo.BarCoords = T.BarHelper->GetCoordinates(InInfo.Position);
-            InInfo.bIsInside = T.BarHelper->IsInside(InInfo.BarCoords);
+            InInfo.BarCoords = T.BarHelper.GetCoordinates(InInfo.Position);
+            InInfo.bIsInside = T.BarHelper.IsInside(InInfo.BarCoords);
         };
 
         const int GridSideSize = 32;
@@ -261,7 +264,7 @@ void rndr::Rasterizer::BarycentricCoordinates()
     };
 
     const int TrianglesPerThread = 64;
-    ParallelFor(m_Triangles.size(), TrianglesPerThread, WorkOrder);
+    ParallelFor(m_Triangles.Size, TrianglesPerThread, WorkOrder);
 }
 
 void rndr::Rasterizer::SetupFragmentNeighbours()
@@ -328,7 +331,7 @@ void rndr::Rasterizer::SetupFragmentNeighbours()
     };
 
     const int TrianglesPerThread = 64;
-    ParallelFor(m_Triangles.size(), TrianglesPerThread, WorkOrder);
+    ParallelFor(m_Triangles.Size, TrianglesPerThread, WorkOrder);
 }
 
 void rndr::Rasterizer::RunFragmentShaders()
@@ -345,33 +348,30 @@ void rndr::Rasterizer::RunFragmentShaders()
         const Point2i EndPoint = StartPoint + Size;
         const Bounds2i BlockBounds{StartPoint, EndPoint};
 
-        std::vector<Triangle*> OverlappingTriangles;
-        for (Triangle& T : m_Triangles)
+        for (int TriangleIndex = 0; TriangleIndex < m_Triangles.Size; TriangleIndex++)
         {
-            if (!T.bIgnore && rndr::Overlaps(T.Bounds, BlockBounds))
+            Triangle& T = m_Triangles[TriangleIndex];
+            if (T.bIgnore || !rndr::Overlaps(T.Bounds, BlockBounds))
             {
-                OverlappingTriangles.push_back(&T);
+                continue;
             }
-        }
 
-        for (Triangle* T : OverlappingTriangles)
-        {
             for (int Y = StartPoint.Y; Y < EndPoint.Y; Y++)
             {
                 for (int X = StartPoint.X; X < EndPoint.X; X++)
                 {
-                    if (!rndr::Inside({X, Y}, T->Bounds))
+                    if (!rndr::Inside({X, Y}, T.Bounds))
                     {
                         continue;
                     }
 
-                    InFragmentInfo& InInfo = T->GetFragmentInfo(X, Y);
+                    InFragmentInfo& InInfo = T.GetFragmentInfo(X, Y);
                     if (!InInfo.bIsInside)
                     {
                         continue;
                     }
 
-                    ProcessFragment(*T, InInfo);
+                    ProcessFragment(T, InInfo);
                 }
             }
         }

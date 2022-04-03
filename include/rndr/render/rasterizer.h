@@ -1,9 +1,8 @@
 #pragma once
 
-#include <vector>
-
 #include "rndr/core/bounds2.h"
 #include "rndr/core/math.h"
+#include "rndr/core/span.h"
 
 #include "rndr/render/pipeline.h"
 
@@ -13,22 +12,6 @@ namespace rndr
 class Image;
 class Model;
 class Allocator;
-
-
-#if RNDR_DEBUG
-
-struct TriangleDebugInfo
-{
-    rndr::Point3r NDCPosition[3];
-    rndr::Point3r ScreenPosition[3];
-    rndr::Bounds2i OriginalBounds;
-    rndr::Bounds2i ScreenBounds;
-    bool bIsOutsideXY = false;
-    bool bIsOutsideZ = false;
-    bool bBackFace = false;
-};
-
-#endif
 
 /**
  * Renderer that uses rasterization to render. Rasterization is implemented fully on CPU side.
@@ -62,19 +45,15 @@ private:
 
 private:
     const Pipeline* m_Pipeline = nullptr;
-    std::vector<Triangle> m_Triangles;
-    std::vector<OutVertexInfo> m_Vertices;
-    std::vector<uint8_t> m_UserVertices;
+    rndr::Span<Triangle> m_Triangles;
+    rndr::Span<OutVertexInfo> m_Vertices;
+    rndr::ByteSpan m_UserVertices;
     int m_InstanceCount;
     int m_VerticesPerInstanceCount;
     int m_TrianglePerInstanceCount;
     Model* m_Model;
 
     Allocator* m_ScratchAllocator = nullptr;
-
-#if RNDR_DEBUG
-    std::vector<TriangleDebugInfo> m_TriangleDebugInfos;
-#endif
 };
 
 }  // namespace rndr

@@ -103,7 +103,7 @@ struct Triangle
     real OneOverW[3];
     real OneOverDepth[3];
     rndr::Bounds2i Bounds{{0, 0}, {0, 0}};
-    std::unique_ptr<rndr::BarycentricHelper> BarHelper;
+    rndr::BarycentricHelper BarHelper;
 
     InFragmentInfo* Fragments = nullptr;
     bool bIgnore = false;
