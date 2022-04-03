@@ -6,11 +6,10 @@
 #include "rndr/core/transform.h"
 
 rndr::FirstPersonCamera::FirstPersonCamera(rndr::Camera* ProjectionCamera,
+                                           rndr::Point3r StartingPosition,
                                            real MovementSpeed,
                                            real RotationSpeed)
-    : m_ProjectionCamera(ProjectionCamera),
-      m_MovementSpeed(MovementSpeed),
-      m_RotationSpeed(RotationSpeed)
+    : m_ProjectionCamera(ProjectionCamera), m_Position(StartingPosition), m_MovementSpeed(MovementSpeed), m_RotationSpeed(RotationSpeed)
 {
     rndr::InputContext* Context = GRndrApp->GetInputContext();
     assert(Context);
@@ -18,29 +17,25 @@ rndr::FirstPersonCamera::FirstPersonCamera(rndr::Camera* ProjectionCamera,
     using IP = rndr::InputPrimitive;
     using IT = rndr::InputTrigger;
 
-    Context->CreateMapping("MoveForward",
-                           RNDR_BIND_INPUT_CALLBACK(&FirstPersonCamera::HandleMoveForward, this));
+    Context->CreateMapping("MoveForward", RNDR_BIND_INPUT_CALLBACK(&FirstPersonCamera::HandleMoveForward, this));
     Context->AddBinding("MoveForward", IP::Keyboard_W, IT::ButtonDown);
     Context->AddBinding("MoveForward", IP::Keyboard_W, IT::ButtonUp);
     Context->AddBinding("MoveForward", IP::Keyboard_S, IT::ButtonDown, -1);
     Context->AddBinding("MoveForward", IP::Keyboard_S, IT::ButtonUp, -1);
 
-    Context->CreateMapping("MoveRight",
-                           RNDR_BIND_INPUT_CALLBACK(&FirstPersonCamera::HandleMoveRight, this));
+    Context->CreateMapping("MoveRight", RNDR_BIND_INPUT_CALLBACK(&FirstPersonCamera::HandleMoveRight, this));
     Context->AddBinding("MoveRight", IP::Keyboard_A, IT::ButtonDown, -1);
     Context->AddBinding("MoveRight", IP::Keyboard_A, IT::ButtonUp, -1);
     Context->AddBinding("MoveRight", IP::Keyboard_D, IT::ButtonDown);
     Context->AddBinding("MoveRight", IP::Keyboard_D, IT::ButtonUp);
 
-    Context->CreateMapping("LookAroundVert",
-                           RNDR_BIND_INPUT_CALLBACK(&FirstPersonCamera::HandleLookVert, this));
+    Context->CreateMapping("LookAroundVert", RNDR_BIND_INPUT_CALLBACK(&FirstPersonCamera::HandleLookVert, this));
     Context->AddBinding("LookAroundVert", IP::Keyboard_Up, IT::ButtonDown);
     Context->AddBinding("LookAroundVert", IP::Keyboard_Up, IT::ButtonUp);
     Context->AddBinding("LookAroundVert", IP::Keyboard_Down, IT::ButtonDown, -1);
     Context->AddBinding("LookAroundVert", IP::Keyboard_Down, IT::ButtonUp, -1);
 
-    Context->CreateMapping("LookAroundHorz",
-                           RNDR_BIND_INPUT_CALLBACK(&FirstPersonCamera::HandleLookHorz, this));
+    Context->CreateMapping("LookAroundHorz", RNDR_BIND_INPUT_CALLBACK(&FirstPersonCamera::HandleLookHorz, this));
     Context->AddBinding("LookAroundHorz", IP::Keyboard_Right, IT::ButtonDown, -1);
     Context->AddBinding("LookAroundHorz", IP::Keyboard_Right, IT::ButtonUp, -1);
     Context->AddBinding("LookAroundHorz", IP::Keyboard_Left, IT::ButtonDown, 1);
@@ -59,7 +54,7 @@ void rndr::FirstPersonCamera::Update(real DeltaSeconds)
 
     Rotator R = m_DirectionAngles;
 
-    const Transform CameraToWorld = rndr::Translate(m_Position) * rndr::Rotate(R);
+    const Transform CameraToWorld = rndr::Translate((rndr::Vector3r)m_Position) * rndr::Rotate(R);
     const Transform WorldToCamera = CameraToWorld.GetInverse();
 
     m_ProjectionCamera->UpdateWorldToCamera(WorldToCamera);
@@ -75,33 +70,30 @@ void rndr::FirstPersonCamera::SetProjectionCamera(rndr::Camera* ProjectionCamera
     m_ProjectionCamera = ProjectionCamera;
 }
 
-void rndr::FirstPersonCamera::HandleLookVert(rndr::InputPrimitive Primitive,
-                                             rndr::InputTrigger Trigger,
-                                             real AxisValue)
+rndr::Point3r rndr::FirstPersonCamera::GetPosition() const
+{
+    return m_Position;
+}
+
+void rndr::FirstPersonCamera::HandleLookVert(rndr::InputPrimitive Primitive, rndr::InputTrigger Trigger, real AxisValue)
 {
     using IT = rndr::InputTrigger;
     m_DeltaAngles.Roll = Trigger == IT::ButtonDown ? m_RotationSpeed * AxisValue : 0;
 }
 
-void rndr::FirstPersonCamera::HandleLookHorz(rndr::InputPrimitive Primitive,
-                                             rndr::InputTrigger Trigger,
-                                             real AxisValue)
+void rndr::FirstPersonCamera::HandleLookHorz(rndr::InputPrimitive Primitive, rndr::InputTrigger Trigger, real AxisValue)
 {
     using IT = rndr::InputTrigger;
     m_DeltaAngles.Yaw = Trigger == IT::ButtonDown ? m_RotationSpeed * AxisValue : 0;
 }
 
-void rndr::FirstPersonCamera::HandleMoveForward(rndr::InputPrimitive Primitive,
-                                                rndr::InputTrigger Trigger,
-                                                real Value)
+void rndr::FirstPersonCamera::HandleMoveForward(rndr::InputPrimitive Primitive, rndr::InputTrigger Trigger, real Value)
 {
     using IT = rndr::InputTrigger;
     m_DeltaPosition.X = Trigger == IT::ButtonDown ? Value : 0;
 }
 
-void rndr::FirstPersonCamera::HandleMoveRight(rndr::InputPrimitive Primitive,
-                                              rndr::InputTrigger Trigger,
-                                              real Value)
+void rndr::FirstPersonCamera::HandleMoveRight(rndr::InputPrimitive Primitive, rndr::InputTrigger Trigger, real Value)
 {
     using IT = rndr::InputTrigger;
     m_DeltaPosition.Y = Trigger == IT::ButtonDown ? Value : 0;

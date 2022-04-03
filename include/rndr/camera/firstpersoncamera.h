@@ -17,6 +17,7 @@ class FirstPersonCamera
 {
 public:
     FirstPersonCamera(rndr::Camera* ProjectionCamera,
+                      rndr::Point3r StartingPosition = rndr::Point3r(),
                       real MovementSpeed = 1.0,
                       real RotationSpeed = 1.0);
 
@@ -24,6 +25,8 @@ public:
 
     rndr::Camera* GetProjectionCamera();
     void SetProjectionCamera(rndr::Camera* ProjectionCamera);
+
+    rndr::Point3r GetPosition() const;
 
 private:
     void HandleLookVert(rndr::InputPrimitive Primitive, rndr::InputTrigger Trigger, real AxisValue);
@@ -34,7 +37,7 @@ private:
 private:
     rndr::Camera* m_ProjectionCamera = nullptr;
 
-    Vector3r m_Position;
+    Point3r m_Position;
     Rotator m_DirectionAngles;
 
     Rotator m_DeltaAngles;
