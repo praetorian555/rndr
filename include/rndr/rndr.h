@@ -16,6 +16,7 @@
 #include "rndr/render/model.h"
 #include "rndr/render/pipeline.h"
 #include "rndr/render/rasterizer.h"
+#include "rndr/render/shaders/phong.h"
 
 #include "rndr/geometry/cube.h"
 

@@ -5,10 +5,10 @@
 void BoxRenderPass::Init(rndr::Camera* Camera)
 {
     std::shared_ptr<rndr::VertexShader> VertexShader = std::make_shared<rndr::VertexShader>();
-    VertexShader->Callback = RNDR_BIND_TWO_PARAM(this, &BoxRenderPass::VertexShader);
+    VertexShader->Callback = RNDR_BIND_TWO_PARAM(&m_Shader, &rndr::PhongShader::VertexShader);
 
     std::shared_ptr<rndr::FragmentShader> FragShader = std::make_shared<rndr::FragmentShader>();
-    FragShader->Callback = RNDR_BIND_THREE_PARAM(this, &BoxRenderPass::FragmentShader);
+    FragShader->Callback = RNDR_BIND_THREE_PARAM(&m_Shader, &rndr::PhongShader::FragmentShader);
 
     m_Pipeline = std::make_unique<rndr::Pipeline>();
     m_Pipeline->WindingOrder = rndr::WindingOrder::CCW;
@@ -16,13 +16,13 @@ void BoxRenderPass::Init(rndr::Camera* Camera)
     m_Pipeline->FragmentShader = FragShader;
     m_Pipeline->DepthTest = rndr::DepthTest::LesserThen;
 
-    std::vector<BoxVertex> Vertices;
+    std::vector<rndr::PhongShader::InVertex> Vertices;
     auto& CubePositions = rndr::Cube::GetVertexPositions();
     auto& CubeTexCoords = rndr::Cube::GetVertexTextureCoordinates();
     auto& CubeNormals = rndr::Cube::GetNormals();
     for (int i = 0; i < CubePositions.Size; i++)
     {
-        Vertices.push_back(BoxVertex{CubePositions[i], CubeTexCoords[i], CubeNormals[i]});
+        Vertices.push_back(rndr::PhongShader::InVertex{CubePositions[i], CubeTexCoords[i], CubeNormals[i]});
     }
 
     rndr::RNG RandomGen;
@@ -53,25 +53,30 @@ void BoxRenderPass::Init(rndr::Camera* Camera)
 
     m_Camera = Camera;
 
-    rndr::ByteSpan VertexData((uint8_t*)Vertices.data(), Vertices.size() * sizeof(BoxVertex));
-    rndr::ByteSpan InstanceData((uint8_t*)m_Instances.data(), m_Instances.size() * sizeof(BoxInstance));
-    const int VertexStride = sizeof(BoxVertex);
-    const int OutVertexStride = sizeof(OutBoxVertex);
-    const int InstanceStride = sizeof(BoxInstance);
+    rndr::ByteSpan VertexData((uint8_t*)Vertices.data(), Vertices.size() * sizeof(rndr::PhongShader::InVertex));
+    rndr::ByteSpan InstanceData((uint8_t*)m_Instances.data(), m_Instances.size() * sizeof(rndr::PhongShader::InInstance));
+    const int VertexStride = sizeof(rndr::PhongShader::InVertex);
+    const int OutVertexStride = sizeof(rndr::PhongShader::OutVertex);
+    const int InstanceStride = sizeof(rndr::PhongShader::InInstance);
     const int InstanceCount = m_Instances.size();
     rndr::ByteSpan EmptySpan;
     rndr::IntSpan Indices = rndr::Cube::GetIndices();
     m_Model = std::make_unique<rndr::Model>(m_Pipeline.get(), VertexData, VertexStride, OutVertexStride, Indices, EmptySpan, InstanceCount,
                                             InstanceData, InstanceStride);
+
+    m_Shader.SetCamera(Camera);
+    m_Shader.SetDiffuseImage(m_Texture.get());
+    m_Shader.SetSpecularColor(rndr::Color::White);
 }
 
 void BoxRenderPass::ShutDown() {}
 
 void BoxRenderPass::Render(rndr::Rasterizer& Renderer, real DeltaSeconds)
 {
-    BoxShaderConstants Constants{m_ViewerPosition};
-    rndr::ByteSpan ConstantsSpan((uint8_t*)&Constants, sizeof(BoxShaderConstants));
-    m_Model->SetShaderConstants(ConstantsSpan);
+    m_Shader.ClearLights();
+
+    m_Shader.SetViewPosition(m_ViewerPosition);
+    m_Shader.AddPointLight(m_LightPosition, rndr::Color::White);
 
     Renderer.Draw(m_Model.get());
 }
@@ -90,48 +95,4 @@ void BoxRenderPass::SetLightPosition(rndr::Point3r LightPosition)
 void BoxRenderPass::SetViewerPosition(rndr::Point3r ViewerPosition)
 {
     m_ViewerPosition = ViewerPosition;
-}
-
-void BoxRenderPass::VertexShader(const rndr::InVertexInfo& InInfo, rndr::OutVertexInfo& OutInfo)
-{
-    BoxVertex* InVertexData = (BoxVertex*)InInfo.UserVertexData;
-    BoxInstance* InInstanceData = (BoxInstance*)InInfo.UserInstanceData;
-
-    rndr::Point3r WorldPosition = InInstanceData->FromModelToWorld(InVertexData->Position);
-
-    OutInfo.PositionNDCNonEucliean = m_Camera->FromWorldToNDC()(rndr::Point4r(WorldPosition));
-    OutBoxVertex* OutVertexData = (OutBoxVertex*)OutInfo.UserVertexData;
-    OutVertexData->Normal = InInstanceData->FromModelToWorld(InVertexData->Normal);
-    OutVertexData->TexCoords = InVertexData->TexCoords;
-    OutVertexData->PositionWorld = WorldPosition;
-}
-
-void BoxRenderPass::FragmentShader(const rndr::Triangle& T, const rndr::InFragmentInfo& InInfo, rndr::OutFragmentInfo& OutInfo)
-{
-    const rndr::Point2r TexCoords = RNDR_INTERPOLATE(T, OutBoxVertex, rndr::Point2r, TexCoords, InInfo);
-    const rndr::Vector2r duvdx = RNDR_DX(T, OutBoxVertex, rndr::Point2r, TexCoords, rndr::Vector2r, InInfo);
-    const rndr::Vector2r duvdy = RNDR_DY(T, OutBoxVertex, rndr::Point2r, TexCoords, rndr::Vector2r, InInfo);
-
-    rndr::Color Result = m_Texture->Sample(TexCoords, duvdx, duvdy);
-    assert(Result.GammaSpace == rndr::GammaSpace::Linear);
-
-    const rndr::Point3r FragmentPosition = RNDR_INTERPOLATE(T, OutBoxVertex, rndr::Point3r, PositionWorld, InInfo);
-    rndr::Normal3r Normal = RNDR_INTERPOLATE(T, OutBoxVertex, rndr::Normal3r, Normal, InInfo);
-    Normal = rndr::Normalize(Normal);
-    rndr::Vector3r LightDirection = m_LightPosition - FragmentPosition;
-    LightDirection = rndr::Normalize(LightDirection);
-
-    BoxShaderConstants* Constants = (BoxShaderConstants*)T.ShaderConstants;
-    const rndr::Vector3r ViewDirection = rndr::Normalize(Constants->ViewerPosition - FragmentPosition);
-    const rndr::Vector3r ReflectedDirection = rndr::Reflect(LightDirection, (rndr::Vector3r)Normal);
-
-    const real AmbientStrength = 0.1;
-    const real DiffuseStrength = 0.3 * std::max(rndr::Dot(Normal, LightDirection), (real)0.0);
-    const real Dot = rndr::Dot(ViewDirection, ReflectedDirection);
-    const real Max = std::max(Dot, (real)0.0);
-    const real SpecularStrength = 2 * std::pow(Max, 32);
-
-    Result *= (AmbientStrength + DiffuseStrength + SpecularStrength);
-
-    OutInfo.Color = Result;
 }
