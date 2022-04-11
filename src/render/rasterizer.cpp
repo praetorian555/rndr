@@ -52,9 +52,7 @@ static bool ShouldDiscardByDepth(const rndr::Point3r (&Points)[3])
     const real MinZ = std::min(std::min(Points[0].Z, Points[1].Z), Points[2].Z);
     const real MaxZ = std::max(std::max(Points[0].Z, Points[1].Z), Points[2].Z);
 
-    // Currently discard any triangle that has one point outside the NDC along z
-    // TODO(mkostic): Fix this to clip triangles
-    return MinZ < 0 || MaxZ > 1;
+    return (MinZ < 0 && MaxZ < 0) || (MinZ > 1 && MaxZ > 1);
 }
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
