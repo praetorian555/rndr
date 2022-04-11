@@ -47,6 +47,8 @@ struct Color
 
     Color operator*(real Value) const;
     Color& operator*=(real Value);
+    Color operator*(Color Other) const;
+    Color& operator*=(Color Other);
     Color operator+(Color Other) const;
     Color& operator+=(Color Other);
 

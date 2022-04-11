@@ -8,18 +8,14 @@ const rndr::Color rndr::Color::White{1, 1, 1, 1, rndr::GammaSpace::GammaCorrecte
 const rndr::Color rndr::Color::Red{1, 0, 0, 1, rndr::GammaSpace::GammaCorrected, true};
 const rndr::Color rndr::Color::Green{0, 1, 0, 1, rndr::GammaSpace::GammaCorrected, true};
 const rndr::Color rndr::Color::Blue{0, 0, 1, 1, rndr::GammaSpace::GammaCorrected, true};
-const rndr::Color rndr::Color::Pink{
-    1, 0x69 / 255.0, 0xB4 / 255.0, 1, rndr::GammaSpace::GammaCorrected, true};
+const rndr::Color rndr::Color::Pink{1, 0x69 / 255.0, 0xB4 / 255.0, 1, rndr::GammaSpace::GammaCorrected, true};
 
 rndr::Color::Color()
 {
     *this = Pink;
 }
 
-rndr::Color::Color(uint32_t Value,
-                   rndr::GammaSpace Space,
-                   PixelLayout Layout,
-                   bool bIsPremultiplied)
+rndr::Color::Color(uint32_t Value, rndr::GammaSpace Space, PixelLayout Layout, bool bIsPremultiplied)
 {
     GammaSpace = Space;
 
@@ -65,12 +61,7 @@ rndr::Color::Color(uint32_t Value,
     }
 }
 
-rndr::Color::Color(real RR,
-                   real GG,
-                   real BB,
-                   real AA,
-                   rndr::GammaSpace Space,
-                   bool bIsPremultiplied)
+rndr::Color::Color(real RR, real GG, real BB, real AA, rndr::GammaSpace Space, bool bIsPremultiplied)
     : R(RR), B(BB), G(GG), A(AA), GammaSpace(Space)
 {
     if (!bIsPremultiplied && A != 1)
@@ -162,9 +153,8 @@ rndr::Color rndr::Color::ToGammaCorrectSpace(real Gamma) const
     }
 
     const bool IsPremultiplied = true;
-    return Color(rndr::ToGammaCorrectSpace(R, Gamma), rndr::ToGammaCorrectSpace(G, Gamma),
-                 rndr::ToGammaCorrectSpace(B, Gamma), A, rndr::GammaSpace::GammaCorrected,
-                 IsPremultiplied);
+    return Color(rndr::ToGammaCorrectSpace(R, Gamma), rndr::ToGammaCorrectSpace(G, Gamma), rndr::ToGammaCorrectSpace(B, Gamma), A,
+                 rndr::GammaSpace::GammaCorrected, IsPremultiplied);
 }
 
 rndr::Color rndr::Color::ToLinearSpace(real Gamma) const
@@ -175,23 +165,24 @@ rndr::Color rndr::Color::ToLinearSpace(real Gamma) const
     }
 
     const bool IsPremultiplied = true;
-    return Color(rndr::ToLinearSpace(R, Gamma), rndr::ToLinearSpace(G, Gamma),
-                 rndr::ToLinearSpace(B, Gamma), A, rndr::GammaSpace::Linear, IsPremultiplied);
+    return Color(rndr::ToLinearSpace(R, Gamma), rndr::ToLinearSpace(G, Gamma), rndr::ToLinearSpace(B, Gamma), A, rndr::GammaSpace::Linear,
+                 IsPremultiplied);
 }
 
 rndr::Color rndr::Color::operator*(real Value) const
 {
     assert(GammaSpace == rndr::GammaSpace::Linear);
 
-    const bool bIsPremultiplied = true;
-    real RR = R * Value;
-    real GG = G * Value;
-    real BB = B * Value;
-    RR = RR > 1 ? 1 : RR;
-    GG = GG > 1 ? 1 : GG;
-    BB = BB > 1 ? 1 : BB;
+    Color C;
+    C.GammaSpace = GammaSpace::Linear;
+    C.R = R * Value;
+    C.G = G * Value;
+    C.B = B * Value;
+    C.R = Clamp(C.R, 0, 1);
+    C.G = Clamp(C.G, 0, 1);
+    C.B = Clamp(C.B, 0, 1);
 
-    return Color{RR, GG, BB, A, GammaSpace, bIsPremultiplied};
+    return C;
 }
 
 rndr::Color rndr::operator*(real Value, Color C)
@@ -207,9 +198,42 @@ rndr::Color& rndr::Color::operator*=(real Value)
     G *= Value;
     B *= Value;
 
-    R = R > 1 ? 1 : R;
-    G = G > 1 ? 1 : G;
-    B = B > 1 ? 1 : B;
+    R = Clamp(R, 0, 1);
+    G = Clamp(G, 0, 1);
+    B = Clamp(B, 0, 1);
+
+    return *this;
+}
+
+rndr::Color rndr::Color::operator*(Color Other) const
+{
+    assert(GammaSpace == rndr::GammaSpace::Linear);
+    assert(Other.GammaSpace == rndr::GammaSpace::Linear);
+
+    Color C(*this);
+    C.R *= Other.R;
+    C.G *= Other.G;
+    C.B *= Other.B;
+
+    C.R = rndr::Clamp(C.R, 0, 1);
+    C.G = rndr::Clamp(C.G, 0, 1);
+    C.B = rndr::Clamp(C.B, 0, 1);
+
+    return C;
+}
+
+rndr::Color& rndr::Color::operator*=(Color Other)
+{
+    assert(GammaSpace == rndr::GammaSpace::Linear);
+    assert(Other.GammaSpace == rndr::GammaSpace::Linear);
+
+    R *= Other.R;
+    G *= Other.G;
+    B *= Other.B;
+
+    R = rndr::Clamp(R, 0, 1);
+    G = rndr::Clamp(G, 0, 1);
+    B = rndr::Clamp(B, 0, 1);
 
     return *this;
 }
@@ -220,8 +244,14 @@ rndr::Color rndr::Color::operator+(Color Other) const
     assert(Other.GammaSpace == rndr::GammaSpace::Linear);
 
     const bool bIsPremultiplied = true;
-    return Color(R + Other.R, G + Other.G, B + Other.B, std::min(A + Other.A, (real)1), GammaSpace,
-                 bIsPremultiplied);
+    Color C;
+    C.GammaSpace = GammaSpace::Linear;
+    C.R = Clamp(R + Other.R, 0, 1);
+    C.G = Clamp(G + Other.G, 0, 1);
+    C.B = Clamp(B + Other.B, 0, 1);
+    C.A = std::min(A + Other.A, (real)1);
+
+    return C;
 }
 
 rndr::Color& rndr::Color::operator+=(Color Other)
@@ -233,6 +263,10 @@ rndr::Color& rndr::Color::operator+=(Color Other)
     G += Other.G;
     B += Other.B;
     A = std::min(A + Other.A, (real)1);
+
+    R = Clamp(R, 0, 1);
+    G = Clamp(G, 0, 1);
+    B = Clamp(B, 0, 1);
 
     return *this;
 }
