@@ -1,16 +1,15 @@
 #pragma once
 
-#include <functional>
-
 #include "rndr/core/barycentric.h"
 #include "rndr/core/bounds2.h"
 #include "rndr/core/color.h"
-#include "rndr/core/math.h"
+#include "rndr/core/pipeline.h"
 
 namespace rndr
 {
 
-struct Triangle;
+class Triangle;
+class Image;
 
 /**
  * Holds vertex shader input data.
@@ -36,19 +35,6 @@ struct OutVertexInfo
     // of this object as part of the model specification and rasterizer will allocate this memory so
     // that user only needs to cast it to his type.
     void* UserVertexData;
-};
-
-/**
- * Interface for a vertex shader implementation.
- */
-using VertexShaderCallback = std::function<void(const InVertexInfo&, OutVertexInfo&)>;
-
-/**
- * Holds vertex shader implementation and configuration.
- */
-struct VertexShader
-{
-    VertexShaderCallback Callback;
 };
 
 /**
@@ -79,22 +65,12 @@ struct OutFragmentInfo
     real Depth;
 };
 
-/**
- * Interface for a fragment shader implementation.
- */
-using FragmentShaderCallback = std::function<void(const Triangle&, const InFragmentInfo&, OutFragmentInfo&)>;
+using VertexShader = std::function<void(const InVertexInfo&, OutVertexInfo&)>;
+using FragmentShader = std::function<void(const Triangle&, const InFragmentInfo&, OutFragmentInfo&)>;
 
-/**
- * Holds fragment shader implementation and configuration.
- */
-struct FragmentShader
+class Triangle
 {
-    bool bChangesDepth = false;
-    FragmentShaderCallback Callback;
-};
-
-struct Triangle
-{
+public:
     rndr::Point3r ScreenPositions[3];
     OutVertexInfo* OutVertexData[3];
     void* ShaderConstants;
@@ -116,13 +92,12 @@ struct Triangle
     bool bBackFace;
 #endif
 
-    InFragmentInfo& GetFragmentInfo(int X, int Y)
-    {
-        assert(rndr::Inside(Point2i{X, Y}, Bounds));
-        assert(Fragments);
-
-        return Fragments[(X - Bounds.pMin.X) + (Y - Bounds.pMin.Y) * Bounds.Diagonal().X];
-    }
+public:
+    /**
+     * Get an InFragmentInfo object corresponding to the pixel at location (X, Y). X and Y are in screen space and are not relative to the
+     * triangle.
+     */
+    InFragmentInfo& GetFragmentInfo(int X, int Y);
 
     /**
      * Used to interpolate values in specified field using barycentric coordinates of this fragment.
@@ -175,6 +150,49 @@ struct Triangle
 
 #define RNDR_DY(TriangleRef, VertexType, FieldType, FieldName, ReturnType, FragmentInfo) \
     TriangleRef.DerivativeY<FieldType, VertexType, ReturnType>(offsetof(VertexType, FieldName), FragmentInfo);
+
+/**
+ * Pipeline object used to configure the Rasterizer renderer.
+ */
+struct Pipeline
+{
+public:
+    // Pipeline properties
+
+    rndr::WindingOrder WindingOrder;
+
+    rndr::VertexShader VertexShader;
+    rndr::FragmentShader FragmentShader;
+
+    BlendFactor SrcColorBlendFactor;
+    BlendFactor DstColorBlendFactor;
+    BlendFactor SrcAlphaBlendFactor;
+    BlendFactor DstAlphaBlendFactor;
+    BlendOperator ColorBlendOperator;
+    BlendOperator AlphaBlendOperator;
+    Vector3r ConstBlendColor;
+    real ConstBlendAlpha;
+
+    rndr::DepthTest DepthTestOperator;
+    real MinDepth;
+    real MaxDepth;
+    bool bChangesDepth;
+
+    real Gamma = RNDR_GAMMA;
+
+    rndr::Image* ColorImage = nullptr;
+    rndr::Image* DepthImage = nullptr;
+
+public:
+    Vector4r Blend(const Vector4r& Src, const Vector4r Dst) const;
+    bool DepthTest(real Src, real Dst) const;
+
+private:
+    Vector3r GetBlendColorFactor(BlendFactor FactorName, const Vector4r& Src, const Vector4r& Dst) const;
+    real GetBlendAlphaFactor(BlendFactor FactorName, const Vector4r& Src, const Vector4r& Dst) const;
+    Vector3r PerformBlendOperation(BlendOperator Op, const Vector3r& Src, const Vector3r& Dst) const;
+    real PerformBlendOperation(BlendOperator Op, real SrcAlpha, real DstAlpha) const;
+};
 
 // Implementations ////////////////////////////////////////////////////////////////////////////////
 

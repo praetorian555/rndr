@@ -5,11 +5,12 @@
 #include "rndr/core/coordinates.h"
 #include "rndr/core/log.h"
 #include "rndr/core/threading.h"
+#include "rndr/core/model.h"
 
 #include "rndr/memory/stackallocator.h"
 
-#include "rndr/render/image.h"
-#include "rndr/render/model.h"
+#include "rndr/render/rasterimage.h"
+#include "rndr/render/rasterpipeline.h"
 
 #include "rndr/profiling/cputracer.h"
 
@@ -124,7 +125,7 @@ void rndr::Rasterizer::RunVertexShaders()
         InInfo.UserConstants = UserConstants;
         OutVertexInfo& OutInfo = *(m_Vertices.Data + VertexIndex);
         OutInfo.UserVertexData = m_UserVertices.Data + VertexIndex * OutVertexStride;
-        m_Pipeline->VertexShader->Callback(InInfo, OutInfo);
+        m_Pipeline->VertexShader(InInfo, OutInfo);
     };
 
     const int VerticesPerThread = 64;
@@ -392,7 +393,7 @@ void rndr::Rasterizer::ProcessFragment(const Triangle& T, InFragmentInfo& InInfo
     const real CurrentDepth = m_Pipeline->DepthImage->GetPixelDepth(InInfo.Position);
 
     // Early depth test
-    if (!m_Pipeline->FragmentShader->bChangesDepth)
+    if (!m_Pipeline->bChangesDepth)
     {
         if (!m_Pipeline->DepthTest(InInfo.Depth, CurrentDepth))
         {
@@ -405,10 +406,10 @@ void rndr::Rasterizer::ProcessFragment(const Triangle& T, InFragmentInfo& InInfo
     // Run Pixel shader
     OutFragmentInfo OutInfo;
     OutInfo.Depth = InInfo.Depth;
-    m_Pipeline->FragmentShader->Callback(T, InInfo, OutInfo);
+    m_Pipeline->FragmentShader(T, InInfo, OutInfo);
 
     // Standard depth test
-    if (m_Pipeline->FragmentShader->bChangesDepth)
+    if (m_Pipeline->bChangesDepth)
     {
         if (!m_Pipeline->DepthTest(OutInfo.Depth, CurrentDepth))
         {

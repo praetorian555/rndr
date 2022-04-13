@@ -1,7 +1,5 @@
 #include "rndr/render/shaders/phong.h"
 
-#include "rndr/core/debug.h"
-
 void rndr::PhongShader::VertexShader(const InVertexInfo& InInfo, OutVertexInfo& OutInfo)
 {
     InVertex* InVertexData = (InVertex*)InInfo.UserVertexData;

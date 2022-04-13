@@ -1,4 +1,4 @@
-#include "rndr/render/image.h"
+#include "rndr/render/rasterimage.h"
 
 #include "stb_image/stb_image.h"
 

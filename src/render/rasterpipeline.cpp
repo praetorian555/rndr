@@ -1,6 +1,14 @@
-#include "rndr/render/pipeline.h"
+#include "rndr/render/rasterpipeline.h"
 
 #include "rndr/core/math.h"
+
+rndr::InFragmentInfo& rndr::Triangle::GetFragmentInfo(int X, int Y)
+{
+    assert(rndr::Inside(Point2i{X, Y}, Bounds));
+    assert(Fragments);
+
+    return Fragments[(X - Bounds.pMin.X) + (Y - Bounds.pMin.Y) * Bounds.Diagonal().X];
+}
 
 rndr::Vector4r rndr::Pipeline::Blend(const Vector4r& Src, const Vector4r Dst) const
 {
@@ -151,7 +159,7 @@ bool rndr::Pipeline::DepthTest(real Src, real Dst) const
 {
     if (Src < 0 || Src > 1)
     {
-        return false;    
+        return false;
     }
 
     switch (DepthTestOperator)

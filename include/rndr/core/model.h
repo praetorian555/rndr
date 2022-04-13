@@ -5,7 +5,7 @@
 #include "rndr/core/base.h"
 #include "rndr/core/span.h"
 
-#include "rndr/render/pipeline.h"
+#include "rndr/render/rasterpipeline.h"
 
 namespace rndr
 {

@@ -39,68 +39,6 @@ namespace rndr
 {
 
 /**
- * Exact positions of channels and their size in bits.
- */
-enum class PixelLayout
-{
-    A8R8G8B8,
-    B8G8R8A8,
-    R8G8B8A8,
-    DEPTH_F32
-};
-
-/**
- * Specifies the space in which the color is in the gamma correction.
- */
-enum class GammaSpace
-{
-    GammaCorrected,
-    Linear
-};
-
-/**
- * Enumerates all image file formats supported by the renderer.
- */
-enum class ImageFileFormat
-{
-    BMP = 0,
-    PNG,
-    JPEG,
-    NotSupported
-};
-
-/**
- * Supported filtering techniques used for minification and magnification of an image.
- */
-enum class ImageFiltering
-{
-    NearestNeighbor,
-    BilinearInterpolation,
-    TrilinearInterpolation  // Valid only for minification filter
-};
-
-/**
- * Supported depth test operations.
- */
-enum class DepthTest
-{
-    Never,
-    Always,
-    Less,
-    Greater,
-    Equal,
-    NotEqual,
-    LessEqual,
-    GreaterEqual
-};
-
-enum class WindingOrder : int
-{
-    CW = -1,
-    CCW = 1
-};
-
-/**
  * Opaque type that represents an OS window handle.
  */
 using NativeWindowHandle = uintptr_t;

@@ -2,6 +2,7 @@
 
 #include "rndr/core/log.h"
 #include "rndr/core/math.h"
+#include "rndr/core/pipeline.h"
 
 const rndr::Color rndr::Color::Black{0, 0, 0, 1, rndr::GammaSpace::GammaCorrected, true};
 const rndr::Color rndr::Color::White{1, 1, 1, 1, rndr::GammaSpace::GammaCorrected, true};

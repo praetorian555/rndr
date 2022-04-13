@@ -1,6 +1,7 @@
 #pragma once
 
 #include "rndr/core/base.h"
+#include "rndr/core/pipeline.h"
 
 namespace rndr
 {

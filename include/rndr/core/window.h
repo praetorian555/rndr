@@ -5,7 +5,7 @@
 #include "rndr/core/delegate.h"
 #include "rndr/core/inputprimitives.h"
 
-#include "rndr/render/image.h"
+#include "rndr/render/rasterimage.h"
 
 namespace rndr
 {
