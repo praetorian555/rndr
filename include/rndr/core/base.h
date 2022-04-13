@@ -84,9 +84,14 @@ enum class ImageFiltering
  */
 enum class DepthTest
 {
-    None,
-    GreaterThan,
-    LesserThen
+    Never,
+    Always,
+    Less,
+    Greater,
+    Equal,
+    NotEqual,
+    LessEqual,
+    GreaterEqual
 };
 
 enum class WindingOrder : int

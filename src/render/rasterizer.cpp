@@ -394,7 +394,7 @@ void rndr::Rasterizer::ProcessFragment(const Triangle& T, InFragmentInfo& InInfo
     // Early depth test
     if (!m_Pipeline->FragmentShader->bChangesDepth)
     {
-        if (!PerformDepthTest(m_Pipeline->DepthTest, InInfo.Depth, CurrentDepth))
+        if (!m_Pipeline->DepthTest(InInfo.Depth, CurrentDepth))
         {
             return;
         }
@@ -404,12 +404,13 @@ void rndr::Rasterizer::ProcessFragment(const Triangle& T, InFragmentInfo& InInfo
 
     // Run Pixel shader
     OutFragmentInfo OutInfo;
+    OutInfo.Depth = InInfo.Depth;
     m_Pipeline->FragmentShader->Callback(T, InInfo, OutInfo);
 
     // Standard depth test
     if (m_Pipeline->FragmentShader->bChangesDepth)
     {
-        if (!PerformDepthTest(m_Pipeline->DepthTest, InInfo.Depth, CurrentDepth))
+        if (!m_Pipeline->DepthTest(OutInfo.Depth, CurrentDepth))
         {
             return;
         }
@@ -447,35 +448,4 @@ rndr::Point3r rndr::Rasterizer::FromRasterToNDCSpace(const Point3r& Point)
     Result.Y = (Point.Y / (real)Height) * 2 - 1;
 
     return Result;
-}
-
-bool rndr::Rasterizer::PerformDepthTest(rndr::DepthTest Operator, real Src, real Dst)
-{
-    if (Src < 0 || Src > 1)
-    {
-        return false;
-    }
-
-    switch (Operator)
-    {
-        case rndr::DepthTest::GreaterThan:
-        {
-            return Src > Dst;
-        }
-        case rndr::DepthTest::LesserThen:
-        {
-            return Src < Dst;
-        }
-        case rndr::DepthTest::None:
-        {
-            return true;
-        }
-        default:
-        {
-            RNDR_LOG_ERROR("Rasterizer::PerformDepthTest: Unsupported operator supplied! Got %u", (uint32_t)Operator);
-            assert(false);
-        }
-    }
-
-    return true;
 }

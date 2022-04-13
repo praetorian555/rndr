@@ -14,7 +14,17 @@ void BoxRenderPass::Init(rndr::Camera* Camera)
     m_Pipeline->WindingOrder = rndr::WindingOrder::CCW;
     m_Pipeline->VertexShader = VertexShader;
     m_Pipeline->FragmentShader = FragShader;
-    m_Pipeline->DepthTest = rndr::DepthTest::LesserThen;
+
+    m_Pipeline->DepthTestOperator = rndr::DepthTest::Less;
+    m_Pipeline->MinDepth = 0.01;
+    m_Pipeline->MaxDepth = 100;
+
+    m_Pipeline->ColorBlendOperator = rndr::BlendOperator::Add;
+    m_Pipeline->SrcColorBlendFactor = rndr::BlendFactor::SrcAlpha;
+    m_Pipeline->DstColorBlendFactor = rndr::BlendFactor::OneMinusSrcAlpha;
+    m_Pipeline->AlphaBlendOperator = rndr::BlendOperator::Add;
+    m_Pipeline->SrcAlphaBlendFactor = rndr::BlendFactor::One;
+    m_Pipeline->DstAlphaBlendFactor = rndr::BlendFactor::OneMinusSrcAlpha;
 
     std::vector<rndr::PhongShader::InVertex> Vertices;
     auto& CubePositions = rndr::Cube::GetVertexPositions();
