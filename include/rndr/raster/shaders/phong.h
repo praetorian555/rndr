@@ -6,8 +6,8 @@
 
 #if defined RNDR_RASTER
 
-#include "rndr/render/rasterimage.h"
-#include "rndr/render/rasterpipeline.h"
+#include "rndr/raster/rasterimage.h"
+#include "rndr/raster/rasterpipeline.h"
 
 namespace rndr
 {

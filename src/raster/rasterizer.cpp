@@ -1,4 +1,4 @@
-#include "rndr/render/rasterizer.h"
+#include "rndr/raster/rasterizer.h"
 
 #include "rndr/core/barycentric.h"
 #include "rndr/core/bounds3.h"
@@ -13,8 +13,8 @@
 
 #if defined RNDR_RASTER
 
-#include "rndr/render/rasterimage.h"
-#include "rndr/render/rasterpipeline.h"
+#include "rndr/raster/rasterimage.h"
+#include "rndr/raster/rasterpipeline.h"
 
 // Helpers ////////////////////////////////////////////////////////////////////////////////////////
 

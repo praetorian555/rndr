@@ -8,6 +8,8 @@
 #include "rndr/core/math.h"
 #include "rndr/core/pipeline.h"
 
+#if defined RNDR_RASTER
+
 namespace rndr
 {
 
@@ -162,3 +164,5 @@ private:
 };
 
 }  // namespace rndr
+
+#endif // RNDR_RASTER

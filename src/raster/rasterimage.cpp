@@ -1,4 +1,4 @@
-#include "rndr/render/rasterimage.h"
+#include "rndr/raster/rasterimage.h"
 
 #include "stb_image/stb_image.h"
 
@@ -10,6 +10,8 @@
 #include "rndr/core/threading.h"
 
 #include "rndr/profiling/cputracer.h"
+
+#if defined RNDR_RASTER
 
 rndr::Image::Image(const ImageConfig& Config) : m_Config(Config)
 {
@@ -467,3 +469,5 @@ rndr::Color rndr::Image::SampleTrilinear(const Image* I, const Point2r& TexCoord
 
     return rndr::Lerp(LOD - (real)Floor, FloorSample, CeilSample);
 }
+
+#endif // RNDR_RASTER

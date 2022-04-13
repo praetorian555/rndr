@@ -7,7 +7,7 @@
 #include "rndr/core/inputprimitives.h"
 
 #if defined RNDR_RASTER
-#include "rndr/render/rasterimage.h"
+#include "rndr/raster/rasterimage.h"
 #else
 #error "Image implementation is missing!"
 #endif

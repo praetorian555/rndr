@@ -1,6 +1,8 @@
-#include "rndr/render/rasterpipeline.h"
+#include "rndr/raster/rasterpipeline.h"
 
 #include "rndr/core/math.h"
+
+#if defined RNDR_RASTER
 
 rndr::InFragmentInfo& rndr::Triangle::GetFragmentInfo(int X, int Y)
 {
@@ -187,3 +189,5 @@ bool rndr::Pipeline::DepthTest(real Src, real Dst) const
 
     return false;
 }
+
+#endif // RNDR_RASTER

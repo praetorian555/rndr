@@ -5,6 +5,8 @@
 #include "rndr/core/color.h"
 #include "rndr/core/pipeline.h"
 
+#if defined RNDR_RASTER
+
 namespace rndr
 {
 
@@ -230,3 +232,5 @@ ReturnType Triangle::DerivativeY(size_t FieldOffset, const InFragmentInfo& InInf
 }
 
 }  // namespace rndr
+
+#endif // RNDR_RASTER
