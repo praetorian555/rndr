@@ -10,6 +10,10 @@ template <typename T>
 inline bool IsNaN(const T v);
 
 template <typename T>
+class Vector2;
+template <typename T>
+class Vector4;
+template <typename T>
 class Normal3;
 template <typename T>
 class Point3;
@@ -25,6 +29,12 @@ public:
     Vector3(T X, T Y, T Z) : X(X), Y(Y), Z(Z) { assert(!HasNaNs()); }
     explicit Vector3(const Normal3<T>& n);
     explicit Vector3(const Point3<T>& p);
+
+    explicit Vector3(const Vector2<T>& XY, T Z = 0);
+
+    Vector2<T> XY() const;
+    Vector2<T> YZ() const;
+    Vector2<T> XZ() const;
 
     void Set(T val, int i)
     {
@@ -81,6 +91,16 @@ public:
         X *= scalar;
         Y *= scalar;
         Z *= scalar;
+        return *this;
+    }
+
+    Vector3<T> operator*(const Vector3<T>& Other) const { return Vector3(X * Other.X, Y * Other.Y, Z * Other.Z); }
+
+    Vector3<T>& operator*=(const Vector3<T>& Other)
+    {
+        X *= Other.X;
+        Y *= Other.Y;
+        Z *= Other.Z;
         return *this;
     }
 

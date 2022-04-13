@@ -10,6 +10,10 @@ template <typename T>
 inline bool IsNaN(const T v);
 
 template <typename T>
+class Vector2;
+template <typename T>
+class Vector3;
+template <typename T>
 class Normal3;
 template <typename T>
 class Point4;
@@ -18,12 +22,37 @@ template <typename T>
 class Vector4
 {
 public:
-    T X, Y, Z, W;
+    union
+    {
+        struct
+        {
+            T X, Y, Z, W;
+        };
+        struct
+        {
+            T R, G, B, A;
+        };
+    };
 
 public:
     Vector4() { X = Y = Z = W = 0; }
-    Vector4(T X, T Y, T Z) : X(X), Y(Y), Z(Z), W(W) { assert(!HasNaNs()); }
+    Vector4(T X, T Y, T Z, T W) : X(X), Y(Y), Z(Z), W(W) { assert(!HasNaNs()); }
     explicit Vector4(const Point4<T>& p);
+
+    explicit Vector4(const Vector2<T>& XY, T Z = 0, T W = 0);
+    explicit Vector4(const Vector3<T>& XYZ, T W = 0);
+
+    Vector2<T> XY() const;
+    Vector2<T> XZ() const;
+    Vector2<T> XW() const;
+    Vector2<T> YZ() const;
+    Vector2<T> YW() const;
+    Vector2<T> ZW() const;
+
+    Vector3<T> XYZ() const;
+    Vector3<T> XYW() const;
+    Vector3<T> XZW() const;
+    Vector3<T> YZW() const;
 
     void Set(T val, int i)
     {

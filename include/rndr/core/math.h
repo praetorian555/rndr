@@ -102,10 +102,115 @@ Vector4<T>::Vector4(const Point4<T>& p) : X(p.X), Y(p.Y), Z(p.Z), W(p.W)
 {
 }
 
+template <typename T>
+Vector3<T>::Vector3(const Vector2<T>& XY, T Z) : X(XY.X), Y(XY.Y), Z(Z)
+{
+}
+
+template <typename T>
+Vector2<T> Vector3<T>::XY() const
+{
+    return Vector2<T>(X, Y);
+}
+
+template <typename T>
+Vector2<T> Vector3<T>::YZ() const
+{
+    return Vector2<T>(Y, Z);
+}
+
+template <typename T>
+Vector2<T> Vector3<T>::XZ() const
+{
+    return Vector2<T>(X, Z);
+}
+
+template <typename T>
+Vector4<T>::Vector4(const Vector2<T>& XY, T Z, T W) : X(XY.X), Y(XY.Y), Z(Z), W(W)
+{
+}
+
+template <typename T>
+Vector4<T>::Vector4(const Vector3<T>& XYZ, T W) : X(XYZ.X), Y(XYZ.Y), Z(XYZ.Z), W(W)
+{
+}
+
+template <typename T>
+Vector2<T> Vector4<T>::XY() const
+{
+    return Vector2<T>(X, Y);
+}
+
+template <typename T>
+Vector2<T> Vector4<T>::XZ() const
+{
+    return Vector2<T>(X, Z);
+}
+
+template <typename T>
+Vector2<T> Vector4<T>::XW() const
+{
+    return Vector2<T>(X, W);
+}
+
+template <typename T>
+Vector2<T> Vector4<T>::YZ() const
+{
+    return Vector2<T>(Y, Z);
+}
+
+template <typename T>
+Vector2<T> Vector4<T>::YW() const
+{
+    return Vector2<T>(Y, W);
+}
+
+template <typename T>
+Vector2<T> Vector4<T>::ZW() const
+{
+    return Vector2<T>(Z, W);
+}
+
+template <typename T>
+Vector3<T> Vector4<T>::XYZ() const
+{
+    return Vector3<T>(X, Y, Z);
+}
+
+template <typename T>
+Vector3<T> Vector4<T>::XYW() const
+{
+    return Vector3<T>(X, Y, W);
+}
+
+template <typename T>
+Vector3<T> Vector4<T>::XZW() const
+{
+    return Vector3<T>(X, Z, W);
+}
+
+template <typename T>
+Vector3<T> Vector4<T>::YZW() const
+{
+    return Vector3<T>(Y, Z, W);
+}
+
 template <typename T, typename V, typename U>
 T Clamp(T val, V low, U high)
 {
     return val < low ? low : (val > high ? high : val);
+}
+
+template <typename T, typename V, typename U>
+Vector3<T> Clamp(const Vector3<T>& val, V low, U high)
+{
+    return Vector3<T>(Clamp(val.X, low, high), Clamp(val.Y, low, high), Clamp(val.Z, low, high));
+}
+
+template <typename T, typename V, typename U>
+Vector4<T> Clamp(const Vector4<T>& val, V low, U high)
+{
+    return Vector4<T>(Clamp(val.X, low, high), Clamp(val.Y, low, high), Clamp(val.Z, low, high), Clamp(val.W, low, high));
 }
 
 template <typename T>
