@@ -4,8 +4,8 @@
 #include "rndr/core/bounds3.h"
 #include "rndr/core/coordinates.h"
 #include "rndr/core/log.h"
-#include "rndr/core/threading.h"
 #include "rndr/core/model.h"
+#include "rndr/core/threading.h"
 
 #include "rndr/memory/stackallocator.h"
 
@@ -55,7 +55,9 @@ static bool ShouldDiscardByDepth(const rndr::Point3r (&Points)[3])
     const real MinZ = std::min(std::min(Points[0].Z, Points[1].Z), Points[2].Z);
     const real MaxZ = std::max(std::max(Points[0].Z, Points[1].Z), Points[2].Z);
 
-    return (MinZ < 0 && MaxZ < 0) || (MinZ > 1 && MaxZ > 1);
+    // TODO(mkostic): Currently there is an issue when triangle is partially in the view box based on his depth. For this reason we will
+    // discard any triangle that is partially outside the view box.
+    return (MinZ < 0) || (MaxZ > 1);
 }
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
@@ -453,4 +455,4 @@ rndr::Point3r rndr::Rasterizer::FromRasterToNDCSpace(const Point3r& Point)
     return Result;
 }
 
-#endif // RNDR_RASTER
+#endif  // RNDR_RASTER
