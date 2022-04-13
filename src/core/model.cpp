@@ -1,4 +1,4 @@
-#include "rndr/render/model.h"
+#include "rndr/core/model.h"
 
 rndr::Model::Model(Pipeline* Pipeline,
                    ByteSpan VertexData,

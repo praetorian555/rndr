@@ -9,10 +9,12 @@
 
 #include "rndr/memory/stackallocator.h"
 
+#include "rndr/profiling/cputracer.h"
+
+#if defined RNDR_RASTER
+
 #include "rndr/render/rasterimage.h"
 #include "rndr/render/rasterpipeline.h"
-
-#include "rndr/profiling/cputracer.h"
 
 // Helpers ////////////////////////////////////////////////////////////////////////////////////////
 
@@ -450,3 +452,5 @@ rndr::Point3r rndr::Rasterizer::FromRasterToNDCSpace(const Point3r& Point)
 
     return Result;
 }
+
+#endif // RNDR_RASTER

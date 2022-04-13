@@ -1,11 +1,12 @@
 #pragma once
 
-#include "rndr/render/rasterimage.h"
-
 #include "rndr/core/transform.h"
 #include "rndr/core/camera.h"
 #include "rndr/core/pipeline.h"
 
+#if defined RNDR_RASTER
+
+#include "rndr/render/rasterimage.h"
 #include "rndr/render/rasterpipeline.h"
 
 namespace rndr
@@ -85,3 +86,5 @@ private:
 };
 
 }  // namespace rndr
+
+#endif // RNDR_RASTER

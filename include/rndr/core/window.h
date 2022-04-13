@@ -2,10 +2,15 @@
 
 #include <string>
 
+#include "rndr/core/base.h"
 #include "rndr/core/delegate.h"
 #include "rndr/core/inputprimitives.h"
 
+#if defined RNDR_RASTER
 #include "rndr/render/rasterimage.h"
+#else
+#error "Image implementation is missing!"
+#endif
 
 namespace rndr
 {

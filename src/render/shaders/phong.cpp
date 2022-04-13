@@ -1,5 +1,7 @@
 #include "rndr/render/shaders/phong.h"
 
+#if defined RNDR_RASTER
+
 void rndr::PhongShader::VertexShader(const InVertexInfo& InInfo, OutVertexInfo& OutInfo)
 {
     InVertex* InVertexData = (InVertex*)InInfo.UserVertexData;
@@ -86,3 +88,5 @@ void rndr::PhongShader::ClearLights()
     m_PointLights.clear();
     m_DirectionalLights.clear();
 }
+
+#endif // RNDR_RASTER

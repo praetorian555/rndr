@@ -4,6 +4,8 @@
 #include "rndr/core/math.h"
 #include "rndr/core/span.h"
 
+#if defined RNDR_RASTER
+
 #include "rndr/render/rasterpipeline.h"
 
 namespace rndr
@@ -57,3 +59,5 @@ private:
 };
 
 }  // namespace rndr
+
+#endif // RNDR_RASTER

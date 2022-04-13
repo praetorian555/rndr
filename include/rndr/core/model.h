@@ -5,7 +5,11 @@
 #include "rndr/core/base.h"
 #include "rndr/core/span.h"
 
+#if defined RNDR_RASTER
 #include "rndr/render/rasterpipeline.h"
+#else
+#error Pipeline implementation is missing!
+#endif
 
 namespace rndr
 {

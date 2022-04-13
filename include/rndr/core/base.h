@@ -23,6 +23,10 @@
 #define RNDR_DEBUG 1
 #endif  // !NDEBUG
 
+#if !RNDR_RASTER && !RNDR_OPENGL && !RNDR_DX11 && !RNDR_VULKAN && !RNDR_METAL
+#define RNDR_RASTER
+#endif
+
 // Defines precision for floating-point type.
 #if !defined(RNDR_REAL_AS_DOUBLE)
 using real = float;

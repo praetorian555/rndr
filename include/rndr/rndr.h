@@ -15,12 +15,12 @@
 #include "rndr/core/transform.h"
 #include "rndr/core/window.h"
 
-#include "rndr/render/rasterizer.h"
-#include "rndr/render/rasterpipeline.h"
-#include "rndr/render/shaders/phong.h"
-
 #include "rndr/geometry/cube.h"
 
 #include "rndr/profiling/cputracer.h"
+
+#include "rndr/render/rasterizer.h"
+#include "rndr/render/rasterpipeline.h"
+#include "rndr/render/shaders/phong.h"
 
 #include "rndr/camera/firstpersoncamera.h"
