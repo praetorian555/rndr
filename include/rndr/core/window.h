@@ -72,10 +72,7 @@ public:
      *
      * @return Returns true if we shouldn't render to this window.
      */
-    bool IsWindowMinimized() const
-    {
-        return m_ColorImage->GetConfig().Height == 0 || m_ColorImage->GetConfig().Width == 0;
-    }
+    bool IsWindowMinimized() const { return m_ColorImage->GetConfig().Height == 0 || m_ColorImage->GetConfig().Width == 0; }
 
     /**
      * Copies window's surface buffer to window internal buffer that is displayed on screen.

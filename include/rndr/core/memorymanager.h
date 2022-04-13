@@ -51,38 +51,31 @@ void Delete(rndr::Allocator* A, T* DataPtr, int Count)
 /**
  * Allocates memory using persistent allocator and invokes constructor of type Type on this memory.
  */
-#define RNDR_NEW_PERSISTENT(Type, Count, ...) \
-    RNDR_NEW(rndr::MemoryManager::Get()->GetPersistentAllocator(), Type, Count, __VA_ARGS__)
+#define RNDR_NEW_PERSISTENT(Type, Count, ...) RNDR_NEW(rndr::MemoryManager::Get()->GetPersistentAllocator(), Type, Count, __VA_ARGS__)
 
 /**
  * Allocates memory using frame allocator for current thread and invokes constructor of type Type on
  * this memory.
  */
-#define RNDR_NEW_FRAME(Type, Count, ...)                                                      \
-    RNDR_NEW(rndr::MemoryManager::Get()->GetFrameAllocator(std::this_thread::get_id()), Type, \
-             Count, __VA_ARGS__)
+#define RNDR_NEW_FRAME(Type, Count, ...) \
+    RNDR_NEW(rndr::MemoryManager::Get()->GetFrameAllocator(std::this_thread::get_id()), Type, Count, __VA_ARGS__)
 
 /**
  * Allocates memory using frame allocator for game thread and invokes constructor of type Type on
  * this memory.
  */
-#define RNDR_NEW_GAME_FRAME(Type, Count, ...) \
-    RNDR_NEW(rndr::MemoryManager::Get()->GetGameFrameAllocator(), Type, Count, __VA_ARGS__)
+#define RNDR_NEW_GAME_FRAME(Type, Count, ...) RNDR_NEW(rndr::MemoryManager::Get()->GetGameFrameAllocator(), Type, Count, __VA_ARGS__)
 
 // Macros to used for deallocation and destructor invokation ///////////////////////////////////////
 
-#define RNDR_DELETE(AllocatorPtr, Type, DataPtr, Count) \
-    rndr::Delete<Type>(AllocatorPtr, DataPtr, Count)
+#define RNDR_DELETE(AllocatorPtr, Type, DataPtr, Count) rndr::Delete<Type>(AllocatorPtr, DataPtr, Count)
 
-#define RNDR_DELETE_PERSISTENT(Type, DataPtr, Count) \
-    RNDR_DELETE(rndr::MemoryManager::Get()->GetPersistentAllocator(), Type, DataPtr, Count)
+#define RNDR_DELETE_PERSISTENT(Type, DataPtr, Count) RNDR_DELETE(rndr::MemoryManager::Get()->GetPersistentAllocator(), Type, DataPtr, Count)
 
-#define RNDR_DELETE_FRAME(Type, DataPtr, Count)                                                  \
-    RNDR_DELETE(rndr::MemoryManager::Get()->GetFrameAllocator(std::this_thread::get_id()), Type, \
-                DataPtr, Count)
+#define RNDR_DELETE_FRAME(Type, DataPtr, Count) \
+    RNDR_DELETE(rndr::MemoryManager::Get()->GetFrameAllocator(std::this_thread::get_id()), Type, DataPtr, Count)
 
-#define RNDR_DELETE_GAME_FRAME(Type, DataPtr, Count) \
-    RNDR_DELETE(rndr::MemoryManager::Get()->GetGameFrameAllocator(), Type, DataPtr, Count)
+#define RNDR_DELETE_GAME_FRAME(Type, DataPtr, Count) RNDR_DELETE(rndr::MemoryManager::Get()->GetGameFrameAllocator(), Type, DataPtr, Count)
 
 // STD Allocators and Deleters ////////////////////////////////////////////////////////////////////
 
@@ -204,11 +197,8 @@ public:
 
 public:
     using AllocatorUP = std::unique_ptr<Allocator, StdPersistentDeleter<Allocator>>;
-    using AllocatorMap =
-        std::map<std::thread::id,
-                 Allocator*,
-                 std::less<std::thread::id>,
-                 StdPersistentAllocator<std::pair<const std::thread::id, Allocator*>>>;
+    using AllocatorMap = std::
+        map<std::thread::id, Allocator*, std::less<std::thread::id>, StdPersistentAllocator<std::pair<const std::thread::id, Allocator*>>>;
 
 private:
     static MemoryManager s_Manager;

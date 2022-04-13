@@ -6,9 +6,7 @@
 
 #define INVALID_BLOCK_ID (-1)
 
-rndr::BlockAllocator::BlockAllocator(size_t BlockSize,
-                                     size_t MaxBlocksPerSection,
-                                     const std::string& DebugName)
+rndr::BlockAllocator::BlockAllocator(size_t BlockSize, size_t MaxBlocksPerSection, const std::string& DebugName)
     : m_BlockSize(BlockSize), m_BlockCount(MaxBlocksPerSection), m_DebugName(DebugName)
 {
     assert(BlockSize >= 8);
@@ -105,16 +103,14 @@ rndr::BlockAllocator::Section& rndr::BlockAllocator::FindSection(void* Ptr)
     return Section{};
 }
 
-rndr::BlockAllocator::Section& rndr::BlockAllocator::AllocateSection(uint64_t BlockCount,
-                                                                     uint64_t BlockSize)
+rndr::BlockAllocator::Section& rndr::BlockAllocator::AllocateSection(uint64_t BlockCount, uint64_t BlockSize)
 {
     Section S;
     S.BlockCount = BlockCount;
     S.BlockSize = BlockSize;
 
 #if RNDR_WINDOWS
-    void* Addr = VirtualAlloc(nullptr, S.BlockSize * S.BlockCount, MEM_RESERVE | MEM_COMMIT,
-                              PAGE_EXECUTE_READWRITE);
+    void* Addr = VirtualAlloc(nullptr, S.BlockSize * S.BlockCount, MEM_RESERVE | MEM_COMMIT, PAGE_EXECUTE_READWRITE);
     assert(Addr);
     S.Data = reinterpret_cast<uint8_t*>(Addr);
 #else

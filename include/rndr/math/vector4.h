@@ -82,17 +82,11 @@ public:
 
     bool HasNaNs() const { return IsNaN(X) || IsNaN(Y) || IsNaN(Z) || IsNaN(W); }
 
-    bool operator==(const Vector4<T>& other) const
-    {
-        return X == other.X && Y == other.Y && Z == other.Z && W == other.W;
-    }
+    bool operator==(const Vector4<T>& other) const { return X == other.X && Y == other.Y && Z == other.Z && W == other.W; }
 
     bool operator!=(const Vector4<T>& other) const { return !(*this == other); }
 
-    Vector4<T> operator+(const Vector4<T>& other) const
-    {
-        return Vector4(X + other.X, Y + other.Y, Z + other.Z, W + other.W);
-    }
+    Vector4<T> operator+(const Vector4<T>& other) const { return Vector4(X + other.X, Y + other.Y, Z + other.Z, W + other.W); }
 
     Vector4<T>& operator+=(const Vector4<T>& other)
     {
@@ -103,10 +97,7 @@ public:
         return *this;
     }
 
-    Vector4<T> operator-(const Vector4<T>& other) const
-    {
-        return Vector4(X - other.X, Y - other.Y, Z - other.Z, W + other.W);
-    }
+    Vector4<T> operator-(const Vector4<T>& other) const { return Vector4(X - other.X, Y - other.Y, Z - other.Z, W + other.W); }
 
     Vector4<T>& operator-=(const Vector4<T>& other)
     {
@@ -183,15 +174,13 @@ inline Vector4<T> Normalize(const Vector4<T>& v)
 template <typename T>
 Vector4<T> Min(const Vector4<T>& p1, const Vector4<T>& p2)
 {
-    return Vector4<T>(std::min(p1.X, p2.X), std::min(p1.Y, p2.Y), std::min(p1.Z, p2.Z),
-                      std::min(p1.W, p2.W));
+    return Vector4<T>(std::min(p1.X, p2.X), std::min(p1.Y, p2.Y), std::min(p1.Z, p2.Z), std::min(p1.W, p2.W));
 }
 
 template <typename T>
 Vector4<T> Max(const Vector4<T>& v1, const Vector4<T>& v2)
 {
-    return Vector4<T>(std::max(v1.X, v2.X), std::max(v1.Y, v2.Y), std::max(v1.Z, v2.Z),
-                      std::max(v1.W, v2.W));
+    return Vector4<T>(std::max(v1.X, v2.X), std::max(v1.Y, v2.Y), std::max(v1.Z, v2.Z), std::max(v1.W, v2.W));
 }
 
 template <typename T>

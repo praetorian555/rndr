@@ -29,8 +29,7 @@ real rndr::BarycentricCoordinates::operator[](int i) const
     return X;
 }
 
-rndr::BarycentricHelper::BarycentricHelper(rndr::WindingOrder WindingOrder,
-                                           const rndr::Point3r (&TrianglePoints)[3])
+rndr::BarycentricHelper::BarycentricHelper(rndr::WindingOrder WindingOrder, const rndr::Point3r (&TrianglePoints)[3])
 {
     m_WindingOrder = WindingOrder;
 
@@ -68,20 +67,16 @@ bool rndr::BarycentricHelper::IsWindingOrderCorrect() const
     return HalfTriangleArea >= 0;
 }
 
-bool rndr::BarycentricHelper::IsWindingOrderCorrect(const Point3r (&TrianglePoints)[3],
-                                                    rndr::WindingOrder WindingOrder)
+bool rndr::BarycentricHelper::IsWindingOrderCorrect(const Point3r (&TrianglePoints)[3], rndr::WindingOrder WindingOrder)
 {
-    real HalfTriangleArea =
-        Cross2D(TrianglePoints[1] - TrianglePoints[0], TrianglePoints[2] - TrianglePoints[0]);
+    real HalfTriangleArea = Cross2D(TrianglePoints[1] - TrianglePoints[0], TrianglePoints[2] - TrianglePoints[0]);
     HalfTriangleArea = HalfTriangleArea * (int)WindingOrder;
     return HalfTriangleArea >= 0;
 }
 
-rndr::BarycentricCoordinates rndr::BarycentricHelper::GetCoordinates(
-    const Point2i& PixelPosition) const
+rndr::BarycentricCoordinates rndr::BarycentricHelper::GetCoordinates(const Point2i& PixelPosition) const
 {
-    const rndr::Point3r Point =
-        rndr::PixelCoordinates::ToContinuousSpace((rndr::Point3i)PixelPosition);
+    const rndr::Point3r Point = rndr::PixelCoordinates::ToContinuousSpace((rndr::Point3i)PixelPosition);
 
     const rndr::Vector3r Vec0 = Point - m_Points[1];
     const rndr::Vector3r Vec1 = Point - m_Points[2];
@@ -103,15 +98,12 @@ bool rndr::BarycentricHelper::IsInside(const BarycentricCoordinates& Coords) con
     }
 
     bool Return = true;
-    Return &= Coords.X == 0 ? ((m_Edges[0].Y == 0 && (int)m_WindingOrder * m_Edges[0].X < 0) ||
-                               ((int)m_WindingOrder * m_Edges[0].Y < 0))
-                            : true;
-    Return &= Coords.Y == 0 ? ((m_Edges[1].Y == 0 && (int)m_WindingOrder * m_Edges[1].X < 0) ||
-                               ((int)m_WindingOrder * m_Edges[1].Y < 0))
-                            : true;
-    Return &= Coords.Z == 0 ? ((m_Edges[2].Y == 0 && (int)m_WindingOrder * m_Edges[2].X < 0) ||
-                               ((int)m_WindingOrder * m_Edges[2].Y < 0))
-                            : true;
+    Return &=
+        Coords.X == 0 ? ((m_Edges[0].Y == 0 && (int)m_WindingOrder * m_Edges[0].X < 0) || ((int)m_WindingOrder * m_Edges[0].Y < 0)) : true;
+    Return &=
+        Coords.Y == 0 ? ((m_Edges[1].Y == 0 && (int)m_WindingOrder * m_Edges[1].X < 0) || ((int)m_WindingOrder * m_Edges[1].Y < 0)) : true;
+    Return &=
+        Coords.Z == 0 ? ((m_Edges[2].Y == 0 && (int)m_WindingOrder * m_Edges[2].X < 0) || ((int)m_WindingOrder * m_Edges[2].Y < 0)) : true;
 
     return Return;
 }

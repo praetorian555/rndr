@@ -19,9 +19,9 @@
 
 #include "rndr/profiling/cputracer.h"
 
+#include "rndr/raster/rasterimage.h"
 #include "rndr/raster/rasterizer.h"
 #include "rndr/raster/rasterpipeline.h"
-#include "rndr/raster/rasterimage.h"
 #include "rndr/raster/shaders/phong.h"
 
 #include "rndr/camera/firstpersoncamera.h"

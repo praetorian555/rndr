@@ -23,8 +23,7 @@ public:
     Bounds2(const Point2<T>& p) : pMin(p), pMax(p) {}
 
     Bounds2(const Point2<T>& p1, const Point2<T>& p2)
-        : pMin(std::min(p1.X, p2.X), std::min(p1.Y, p2.Y)),
-          pMax(std::max(p1.X, p2.X), std::max(p1.Y, p2.Y))
+        : pMin(std::min(p1.X, p2.X), std::min(p1.Y, p2.Y)), pMax(std::max(p1.X, p2.X), std::max(p1.Y, p2.Y))
     {
     }
 
@@ -61,10 +60,7 @@ public:
         }
     }
 
-    Point2<T> Corner(int corner) const
-    {
-        return Point2<T>((*this)[(corner & 1)].X, (*this)[(corner & 2) ? 1 : 0].Y);
-    }
+    Point2<T> Corner(int corner) const { return Point2<T>((*this)[(corner & 1)].X, (*this)[(corner & 2) ? 1 : 0].Y); }
 
     Vector2<T> Diagonal() const { return pMax - pMin; }
 
@@ -80,10 +76,7 @@ public:
         return d.X > d.Y ? 0 : 1;
     }
 
-    Point2<T> Lerp(const Point2r& t) const
-    {
-        return Point2<T>(rndr::Lerp(t.X, pMin.X, pMax.X), rndr::Lerp(t.Y, pMin.Y, pMax.Y));
-    }
+    Point2<T> Lerp(const Point2r& t) const { return Point2<T>(rndr::Lerp(t.X, pMin.X, pMax.X), rndr::Lerp(t.Y, pMin.Y, pMax.Y)); }
 
     Vector2<T> Offset(const Point2<T>& p) const
     {

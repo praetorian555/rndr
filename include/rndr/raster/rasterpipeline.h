@@ -233,4 +233,4 @@ ReturnType Triangle::DerivativeY(size_t FieldOffset, const InFragmentInfo& InInf
 
 }  // namespace rndr
 
-#endif // RNDR_RASTER
+#endif  // RNDR_RASTER

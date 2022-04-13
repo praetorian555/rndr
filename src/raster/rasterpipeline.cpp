@@ -190,4 +190,4 @@ bool rndr::Pipeline::DepthTest(real Src, real Dst) const
     return false;
 }
 
-#endif // RNDR_RASTER
+#endif  // RNDR_RASTER

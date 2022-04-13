@@ -42,10 +42,7 @@ public:
 
     bool operator!=(const Vector2<T>& other) const { return !(*this == other); }
 
-    Vector2<T> operator+(const Vector2<T>& other) const
-    {
-        return Vector2(X + other.X, Y + other.Y);
-    }
+    Vector2<T> operator+(const Vector2<T>& other) const { return Vector2(X + other.X, Y + other.Y); }
 
     Vector2<T>& operator+=(const Vector2<T>& other)
     {
@@ -54,10 +51,7 @@ public:
         return *this;
     }
 
-    Vector2<T> operator-(const Vector2<T>& other) const
-    {
-        return Vector2(X - other.X, Y - other.Y);
-    }
+    Vector2<T> operator-(const Vector2<T>& other) const { return Vector2(X - other.X, Y - other.Y); }
 
     Vector2<T>& operator-=(const Vector2<T>& other)
     {

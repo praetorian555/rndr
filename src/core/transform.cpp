@@ -7,10 +7,7 @@ Transform::Transform(const real mat[4][4]) : m_Matrix(mat), m_MatrixInverse(m_Ma
 
 Transform::Transform(const Matrix4x4& mat) : m_Matrix(mat), m_MatrixInverse(m_Matrix.Inverse()) {}
 
-Transform::Transform(const Matrix4x4& mat, const Matrix4x4& invMat)
-    : m_Matrix(mat), m_MatrixInverse(invMat)
-{
-}
+Transform::Transform(const Matrix4x4& mat, const Matrix4x4& invMat) : m_Matrix(mat), m_MatrixInverse(invMat) {}
 
 Transform Inverse(const Transform& t)
 {
@@ -78,12 +75,9 @@ Transform Transform::operator*(const Transform& other) const
 
 bool Transform::SwapsHandedness() const
 {
-    real det = m_Matrix.m[0][0] *
-                   (m_Matrix.m[1][1] * m_Matrix.m[2][2] - m_Matrix.m[1][2] * m_Matrix.m[2][1]) -
-               m_Matrix.m[0][1] *
-                   (m_Matrix.m[1][0] * m_Matrix.m[2][2] - m_Matrix.m[1][2] * m_Matrix.m[2][0]) +
-               m_Matrix.m[0][2] *
-                   (m_Matrix.m[1][0] * m_Matrix.m[2][1] - m_Matrix.m[1][1] * m_Matrix.m[2][0]);
+    real det = m_Matrix.m[0][0] * (m_Matrix.m[1][1] * m_Matrix.m[2][2] - m_Matrix.m[1][2] * m_Matrix.m[2][1]) -
+               m_Matrix.m[0][1] * (m_Matrix.m[1][0] * m_Matrix.m[2][2] - m_Matrix.m[1][2] * m_Matrix.m[2][0]) +
+               m_Matrix.m[0][2] * (m_Matrix.m[1][0] * m_Matrix.m[2][1] - m_Matrix.m[1][1] * m_Matrix.m[2][0]);
     return det < 0;
 }
 

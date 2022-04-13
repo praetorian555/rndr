@@ -14,8 +14,7 @@ int main()
     rndr::ImageConfig TextureConfig;
     TextureConfig.MagFilter = rndr::ImageFiltering::NearestNeighbor;
     TextureConfig.MinFilter = rndr::ImageFiltering::TrilinearInterpolation;
-    std::unique_ptr<rndr::Image> SoldierTexture =
-        std::make_unique<rndr::Image>(SoldierTexturePath, TextureConfig);
+    std::unique_ptr<rndr::Image> SoldierTexture = std::make_unique<rndr::Image>(SoldierTexturePath, TextureConfig);
 
     rndr::Window* MainWindow = rndr::GRndrApp->GetWindow();
     const int Width = MainWindow->GetWidth();
@@ -23,8 +22,7 @@ int main()
     const real Near = 0.01;
     const real Far = 100;
     const real FOVY = 45;
-    std::shared_ptr<rndr::Camera> Camera = std::make_unique<rndr::PerspectiveCamera>(
-        rndr::Transform{}, Width, Height, FOVY, Near, Far);
+    std::shared_ptr<rndr::Camera> Camera = std::make_unique<rndr::PerspectiveCamera>(rndr::Transform{}, Width, Height, FOVY, Near, Far);
 
     rndr::WindowDelegates::OnResize.Add(
         [Camera, MainWindow](rndr::Window* Window, int Width, int Height)
@@ -38,12 +36,10 @@ int main()
     IC->CreateMapping("PrintPixelPosition",
                       [](rndr::InputPrimitive, rndr::InputTrigger, real Value)
                       {
-                          const rndr::Point2i Position =
-                              rndr::GRndrApp->GetInputSystem()->GetMousePosition();
+                          const rndr::Point2i Position = rndr::GRndrApp->GetInputSystem()->GetMousePosition();
                           RNDR_LOG_INFO("Mouse Position = (%d, %d)", Position.X, Position.Y);
                       });
-    IC->AddBinding("PrintPixelPosition", rndr::InputPrimitive::Mouse_LeftButton,
-                   rndr::InputTrigger::ButtonDown);
+    IC->AddBinding("PrintPixelPosition", rndr::InputPrimitive::Mouse_LeftButton, rndr::InputTrigger::ButtonDown);
 
     rndr::Rasterizer Renderer;
 

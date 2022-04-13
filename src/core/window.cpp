@@ -11,12 +11,10 @@
 #include "rndr/core/log.h"
 
 static std::map<uint32_t, rndr::InputPrimitive> g_PrimitiveMapping = {
-    {0x41, rndr::InputPrimitive::Keyboard_A},   {0x57, rndr::InputPrimitive::Keyboard_W},
-    {0x53, rndr::InputPrimitive::Keyboard_S},   {0x45, rndr::InputPrimitive::Keyboard_E},
-    {0x51, rndr::InputPrimitive::Keyboard_Q},   {0x44, rndr::InputPrimitive::Keyboard_D},
-    {0x1B, rndr::InputPrimitive::Keyboard_Esc}, {0x25, rndr::InputPrimitive::Keyboard_Left},
-    {0x26, rndr::InputPrimitive::Keyboard_Up},  {0x27, rndr::InputPrimitive::Keyboard_Right},
-    {0x28, rndr::InputPrimitive::Keyboard_Down}};
+    {0x41, rndr::InputPrimitive::Keyboard_A},     {0x57, rndr::InputPrimitive::Keyboard_W},    {0x53, rndr::InputPrimitive::Keyboard_S},
+    {0x45, rndr::InputPrimitive::Keyboard_E},     {0x51, rndr::InputPrimitive::Keyboard_Q},    {0x44, rndr::InputPrimitive::Keyboard_D},
+    {0x1B, rndr::InputPrimitive::Keyboard_Esc},   {0x25, rndr::InputPrimitive::Keyboard_Left}, {0x26, rndr::InputPrimitive::Keyboard_Up},
+    {0x27, rndr::InputPrimitive::Keyboard_Right}, {0x28, rndr::InputPrimitive::Keyboard_Down}};
 
 // Defining window deleages
 
@@ -64,9 +62,8 @@ rndr::Window::Window(const rndr::WindowConfig& Config) : m_Config(Config)
     ATOM Atom = RegisterClass(&WindowClass);
     assert(Atom != 0);
 
-    HWND WindowHandle = CreateWindowEx(0, ClassName, m_Config.Name.c_str(), WS_OVERLAPPEDWINDOW,
-                                       CW_USEDEFAULT, CW_USEDEFAULT, m_Config.Width,
-                                       m_Config.Height, nullptr, nullptr, Instance, this);
+    HWND WindowHandle = CreateWindowEx(0, ClassName, m_Config.Name.c_str(), WS_OVERLAPPEDWINDOW, CW_USEDEFAULT, CW_USEDEFAULT,
+                                       m_Config.Width, m_Config.Height, nullptr, nullptr, Instance, this);
     assert(WindowHandle != NULL);
 
     ShowWindow(WindowHandle, SW_SHOW);
@@ -172,9 +169,8 @@ void rndr::Window::RenderToWindow()
 
     HDC DC = GetDC(WindowHandle);
 
-    StretchDIBits(DC, 0, 0, m_CurrentWidth, m_CurrentHeight, 0, 0, m_ColorImage->GetConfig().Width,
-                  m_ColorImage->GetConfig().Height, m_ColorImage->GetBuffer(), &BitmapInfo,
-                  DIB_RGB_COLORS, SRCCOPY);
+    StretchDIBits(DC, 0, 0, m_CurrentWidth, m_CurrentHeight, 0, 0, m_ColorImage->GetConfig().Width, m_ColorImage->GetConfig().Height,
+                  m_ColorImage->GetBuffer(), &BitmapInfo, DIB_RGB_COLORS, SRCCOPY);
 }
 
 LRESULT CALLBACK WindowProc(HWND WindowHandle, UINT MsgCode, WPARAM ParamW, LPARAM ParamL)
@@ -259,56 +255,52 @@ LRESULT CALLBACK WindowProc(HWND WindowHandle, UINT MsgCode, WPARAM ParamW, LPAR
         }
         case WM_LBUTTONDBLCLK:
         {
-            rndr::WindowDelegates::OnButtonDelegate.Execute(
-                Window, rndr::InputPrimitive::Mouse_LeftButton, rndr::InputTrigger::DoubleClick);
+            rndr::WindowDelegates::OnButtonDelegate.Execute(Window, rndr::InputPrimitive::Mouse_LeftButton,
+                                                            rndr::InputTrigger::DoubleClick);
             break;
         }
         case WM_RBUTTONDBLCLK:
         {
-            rndr::WindowDelegates::OnButtonDelegate.Execute(
-                Window, rndr::InputPrimitive::Mouse_RightButton, rndr::InputTrigger::DoubleClick);
+            rndr::WindowDelegates::OnButtonDelegate.Execute(Window, rndr::InputPrimitive::Mouse_RightButton,
+                                                            rndr::InputTrigger::DoubleClick);
             break;
         }
         case WM_MBUTTONDBLCLK:
         {
-            rndr::WindowDelegates::OnButtonDelegate.Execute(
-                Window, rndr::InputPrimitive::Mouse_MiddleButton, rndr::InputTrigger::DoubleClick);
+            rndr::WindowDelegates::OnButtonDelegate.Execute(Window, rndr::InputPrimitive::Mouse_MiddleButton,
+                                                            rndr::InputTrigger::DoubleClick);
             break;
         }
         case WM_LBUTTONDOWN:
         {
-            rndr::WindowDelegates::OnButtonDelegate.Execute(
-                Window, rndr::InputPrimitive::Mouse_LeftButton, rndr::InputTrigger::ButtonDown);
+            rndr::WindowDelegates::OnButtonDelegate.Execute(Window, rndr::InputPrimitive::Mouse_LeftButton, rndr::InputTrigger::ButtonDown);
             break;
         }
         case WM_LBUTTONUP:
         {
-            rndr::WindowDelegates::OnButtonDelegate.Execute(
-                Window, rndr::InputPrimitive::Mouse_LeftButton, rndr::InputTrigger::ButtonUp);
+            rndr::WindowDelegates::OnButtonDelegate.Execute(Window, rndr::InputPrimitive::Mouse_LeftButton, rndr::InputTrigger::ButtonUp);
             break;
         }
         case WM_RBUTTONDOWN:
         {
-            rndr::WindowDelegates::OnButtonDelegate.Execute(
-                Window, rndr::InputPrimitive::Mouse_RightButton, rndr::InputTrigger::ButtonDown);
+            rndr::WindowDelegates::OnButtonDelegate.Execute(Window, rndr::InputPrimitive::Mouse_RightButton,
+                                                            rndr::InputTrigger::ButtonDown);
             break;
         }
         case WM_RBUTTONUP:
         {
-            rndr::WindowDelegates::OnButtonDelegate.Execute(
-                Window, rndr::InputPrimitive::Mouse_RightButton, rndr::InputTrigger::ButtonUp);
+            rndr::WindowDelegates::OnButtonDelegate.Execute(Window, rndr::InputPrimitive::Mouse_RightButton, rndr::InputTrigger::ButtonUp);
             break;
         }
         case WM_MBUTTONDOWN:
         {
-            rndr::WindowDelegates::OnButtonDelegate.Execute(
-                Window, rndr::InputPrimitive::Mouse_MiddleButton, rndr::InputTrigger::ButtonDown);
+            rndr::WindowDelegates::OnButtonDelegate.Execute(Window, rndr::InputPrimitive::Mouse_MiddleButton,
+                                                            rndr::InputTrigger::ButtonDown);
             break;
         }
         case WM_MBUTTONUP:
         {
-            rndr::WindowDelegates::OnButtonDelegate.Execute(
-                Window, rndr::InputPrimitive::Mouse_MiddleButton, rndr::InputTrigger::ButtonUp);
+            rndr::WindowDelegates::OnButtonDelegate.Execute(Window, rndr::InputPrimitive::Mouse_MiddleButton, rndr::InputTrigger::ButtonUp);
             break;
         }
         case WM_KEYDOWN:
@@ -318,9 +310,7 @@ LRESULT CALLBACK WindowProc(HWND WindowHandle, UINT MsgCode, WPARAM ParamW, LPAR
             assert(Iter != g_PrimitiveMapping.end());
 
             const rndr::InputPrimitive Primitive = Iter->second;
-            const rndr::InputTrigger Trigger = MsgCode == WM_KEYDOWN
-                                                   ? rndr::InputTrigger::ButtonDown
-                                                   : rndr::InputTrigger::ButtonUp;
+            const rndr::InputTrigger Trigger = MsgCode == WM_KEYDOWN ? rndr::InputTrigger::ButtonDown : rndr::InputTrigger::ButtonUp;
 
             rndr::WindowDelegates::OnButtonDelegate.Execute(Window, Primitive, Trigger);
 

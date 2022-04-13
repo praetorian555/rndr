@@ -60,17 +60,11 @@ public:
 
     bool HasNaNs() const { return IsNaN(X) || IsNaN(Y) || IsNaN(Z) || IsNaN(W); }
 
-    bool operator==(const Point4<T>& Other) const
-    {
-        return X == Other.X && Y == Other.Y && Z == Other.Z && W == Other.W;
-    }
+    bool operator==(const Point4<T>& Other) const { return X == Other.X && Y == Other.Y && Z == Other.Z && W == Other.W; }
 
     bool operator!=(const Point4<T>& Other) const { return !(*this == Other); }
 
-    Point4<T> operator+(const Vector4<T>& Vec) const
-    {
-        return Point4(X + Vec.X, Y + Vec.Y, Z + Vec.Z, W + Vec.W);
-    }
+    Point4<T> operator+(const Vector4<T>& Vec) const { return Point4(X + Vec.X, Y + Vec.Y, Z + Vec.Z, W + Vec.W); }
 
     Point4<T>& operator+=(const Vector4<T>& Vec)
     {
@@ -81,10 +75,7 @@ public:
         return *this;
     }
 
-    Point4<T> operator+(const Point4<T>& Other) const
-    {
-        return Point4(X + Other.X, Y + Other.Y, Z + Other.Z, W + Other.W);
-    }
+    Point4<T> operator+(const Point4<T>& Other) const { return Point4(X + Other.X, Y + Other.Y, Z + Other.Z, W + Other.W); }
 
     Point4<T>& operator+=(const Point4<T>& Other)
     {
@@ -111,15 +102,9 @@ public:
         return *this;
     }
 
-    Point4<T> operator-(const Vector4<T>& Vec) const
-    {
-        return Point4(X - Vec.X, Y - Vec.Y, Z - Vec.Z, W - Vec.W);
-    }
+    Point4<T> operator-(const Vector4<T>& Vec) const { return Point4(X - Vec.X, Y - Vec.Y, Z - Vec.Z, W - Vec.W); }
 
-    Vector4<T> operator-(const Point4<T>& Other) const
-    {
-        return Vector4(X - Other.X, Y - Other.Y, Z - Other.Z, W - Other.W);
-    }
+    Vector4<T> operator-(const Point4<T>& Other) const { return Vector4(X - Other.X, Y - Other.Y, Z - Other.Z, W - Other.W); }
 
     Point4<T>& operator-=(const Vector4<T>& Vec)
     {
@@ -130,10 +115,7 @@ public:
         return *this;
     }
 
-    Point4<T> operator*(T scalar) const
-    {
-        return Point4(X * scalar, Y * scalar, Z * scalar, W * scalar);
-    }
+    Point4<T> operator*(T scalar) const { return Point4(X * scalar, Y * scalar, Z * scalar, W * scalar); }
 
     Point4<T>& operator*=(T scalar)
     {
@@ -213,15 +195,13 @@ Point4<T> Ceil(const Point4<T>& p)
 template <typename T>
 Point4<T> Min(const Point4<T>& p1, const Point4<T>& p2)
 {
-    return Point4<T>(std::min(p1.X, p2.X), std::min(p1.Y, p2.Y), std::min(p1.Z, p2.Z),
-                     std::min(p1.W, p2.W));
+    return Point4<T>(std::min(p1.X, p2.X), std::min(p1.Y, p2.Y), std::min(p1.Z, p2.Z), std::min(p1.W, p2.W));
 }
 
 template <typename T>
 Point4<T> Max(const Point4<T>& Vec1, const Point4<T>& Vec2)
 {
-    return Point4<T>(std::max(Vec1.X, Vec2.X), std::max(Vec1.Y, Vec2.Y), std::max(Vec1.Z, Vec2.Z),
-                     std::max(Vec1.W, Vec2.W));
+    return Point4<T>(std::max(Vec1.X, Vec2.X), std::max(Vec1.Y, Vec2.Y), std::max(Vec1.Z, Vec2.Z), std::max(Vec1.W, Vec2.W));
 }
 
 template <typename T>

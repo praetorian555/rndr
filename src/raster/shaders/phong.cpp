@@ -89,4 +89,4 @@ void rndr::PhongShader::ClearLights()
     m_DirectionalLights.clear();
 }
 
-#endif // RNDR_RASTER
+#endif  // RNDR_RASTER

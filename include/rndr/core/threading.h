@@ -207,8 +207,7 @@ void ParallelFor(const Point2i End, int BatchSize, Function F, const Point2i Sta
         for (int X = Start.X; X < End.X; X += BatchSize)
         {
             TaskBaseSP Task = MakeTask(
-                [StartX = X, StartY = Y, EndX = std::min(X + BatchSize, End.X),
-                 EndY = std::min(Y + BatchSize, End.Y), F]
+                [StartX = X, StartY = Y, EndX = std::min(X + BatchSize, End.X), EndY = std::min(Y + BatchSize, End.Y), F]
                 {
                     RNDR_CPU_TRACE("Parallel For 2D");
 

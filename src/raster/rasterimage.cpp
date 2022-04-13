@@ -107,8 +107,7 @@ rndr::Image::Image(const std::string& FilePath, const ImageConfig& Config) : m_C
         for (int X = 0; X < Width; X++)
         {
             const bool bIsPremult = false;
-            const Color C(DataU32[X + Y * Width], m_Config.GammaSpace, PixelLayout::R8G8B8A8,
-                          bIsPremult);
+            const Color C(DataU32[X + Y * Width], m_Config.GammaSpace, PixelLayout::R8G8B8A8, bIsPremult);
             SetPixelColor(X, Y, C);
         }
     }
@@ -120,9 +119,8 @@ rndr::Image::Image(const std::string& FilePath, const ImageConfig& Config) : m_C
         GenerateMipMaps();
     }
 
-    RNDR_LOG_INFO("Successfully loaded image from file: %s, Width=%d, Height=%d, UsesMipMaps=%s",
-                  FilePath.c_str(), m_Config.Width, m_Config.Height,
-                  m_MipMaps.size() > 0 ? "YES" : "NO");
+    RNDR_LOG_INFO("Successfully loaded image from file: %s, Width=%d, Height=%d, UsesMipMaps=%s", FilePath.c_str(), m_Config.Width,
+                  m_Config.Height, m_MipMaps.size() > 0 ? "YES" : "NO");
 }
 
 rndr::Image::~Image()
@@ -177,8 +175,7 @@ void rndr::Image::SetPixelColor(const Point2i& Location, rndr::Color Color)
     assert(Location.Y >= 0 && Location.Y < m_Config.Height);
 
     uint32_t* Pixels = (uint32_t*)m_Buffer.data();
-    Pixels[Location.X + Location.Y * m_Config.Width] =
-        Color.ToUInt32(m_Config.GammaSpace, m_Config.PixelLayout);
+    Pixels[Location.X + Location.Y * m_Config.Width] = Color.ToUInt32(m_Config.GammaSpace, m_Config.PixelLayout);
 }
 
 void rndr::Image::SetPixelColor(int X, int Y, rndr::Color Color)
@@ -364,14 +361,10 @@ void rndr::Image::GenerateMipMaps()
                 else
                 {
                     const Color BottomLeft = PrevImage->GetPixelColor(2 * X, 2 * Y).ToLinearSpace();
-                    const Color BottomRight =
-                        PrevImage->GetPixelColor(2 * X + 1, 2 * Y).ToLinearSpace();
-                    const Color TopLeft =
-                        PrevImage->GetPixelColor(2 * X, 2 * Y + 1).ToLinearSpace();
-                    const Color TopRight =
-                        PrevImage->GetPixelColor(2 * X + 1, 2 * Y + 1).ToLinearSpace();
-                    Result =
-                        0.25 * BottomLeft + 0.25 * BottomRight + 0.25 * TopLeft + 0.25 * TopRight;
+                    const Color BottomRight = PrevImage->GetPixelColor(2 * X + 1, 2 * Y).ToLinearSpace();
+                    const Color TopLeft = PrevImage->GetPixelColor(2 * X, 2 * Y + 1).ToLinearSpace();
+                    const Color TopRight = PrevImage->GetPixelColor(2 * X + 1, 2 * Y + 1).ToLinearSpace();
+                    Result = 0.25 * BottomLeft + 0.25 * BottomRight + 0.25 * TopLeft + 0.25 * TopRight;
                 }
 
                 CurrentImage->SetPixelColor(X, Y, Result);
@@ -380,14 +373,11 @@ void rndr::Image::GenerateMipMaps()
     }
 }
 
-rndr::Color rndr::Image::Sample(const Point2r& TexCoord,
-                                const Vector2r& duvdx,
-                                const Vector2r& duvdy)
+rndr::Color rndr::Image::Sample(const Point2r& TexCoord, const Vector2r& duvdx, const Vector2r& duvdy)
 {
     // TODO(mkostic): Rebase uv to be in range [0, 1]
 
-    const real Width = std::max(std::max(std::abs(duvdx.X), std::abs(duvdx.Y)),
-                                std::max(std::abs(duvdy.X), std::abs(duvdy.Y)));
+    const real Width = std::max(std::max(std::abs(duvdx.X), std::abs(duvdx.Y)), std::max(std::abs(duvdy.X), std::abs(duvdy.Y)));
 
     const int MipMapLevels = m_MipMaps.size();
     const real LOD = MipMapLevels - 1 + Log2(std::max(Width, (real)1e-8));
@@ -470,4 +460,4 @@ rndr::Color rndr::Image::SampleTrilinear(const Image* I, const Point2r& TexCoord
     return rndr::Lerp(LOD - (real)Floor, FloorSample, CeilSample);
 }
 
-#endif // RNDR_RASTER
+#endif  // RNDR_RASTER

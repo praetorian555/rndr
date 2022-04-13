@@ -14,10 +14,7 @@ class Camera
 {
 
 public:
-    Camera(const Transform& WorldToCamera,
-           const Transform& CameraToScreen,
-           int FilmWidth,
-           int FilmHeight);
+    Camera(const Transform& WorldToCamera, const Transform& CameraToScreen, int FilmWidth, int FilmHeight);
 
     const Transform& FromWorldToCamera() const { return m_WorldToCamera; }
     const Transform& FromCameraToWorld() const { return m_CameraToWorld; }
@@ -64,11 +61,7 @@ protected:
 class OrthographicCamera : public Camera
 {
 public:
-    OrthographicCamera(const Transform& WorldToCamera,
-                       int FilmWidth,
-                       int FilmHeight,
-                       real Near,
-                       real Far);
+    OrthographicCamera(const Transform& WorldToCamera, int FilmWidth, int FilmHeight, real Near, real Far);
 
     virtual void UpdateTransforms(int Width, int Height) override;
 
@@ -95,12 +88,7 @@ public:
      * @param Near Near plane z value. Always positive. Can't be zero.
      * @param Far Far plane z value. Always positive.
      */
-    PerspectiveCamera(const Transform& WorldToCamera,
-                      int FilmWidth,
-                      int FilmHeight,
-                      real FOV,
-                      real Near,
-                      real Far);
+    PerspectiveCamera(const Transform& WorldToCamera, int FilmWidth, int FilmHeight, real FOV, real Near, real Far);
 
     virtual void UpdateTransforms(int Width, int Height) override;
 

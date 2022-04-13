@@ -165,4 +165,4 @@ private:
 
 }  // namespace rndr
 
-#endif // RNDR_RASTER
+#endif  // RNDR_RASTER

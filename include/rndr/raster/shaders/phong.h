@@ -1,8 +1,8 @@
 #pragma once
 
-#include "rndr/core/transform.h"
 #include "rndr/core/camera.h"
 #include "rndr/core/pipeline.h"
+#include "rndr/core/transform.h"
 
 #if defined RNDR_RASTER
 
@@ -87,4 +87,4 @@ private:
 
 }  // namespace rndr
 
-#endif // RNDR_RASTER
+#endif  // RNDR_RASTER

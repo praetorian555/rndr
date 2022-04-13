@@ -1,13 +1,7 @@
 #include "rndr/core/camera.h"
 
-rndr::Camera::Camera(const Transform& WorldToCamera,
-                     const Transform& CameraToScreen,
-                     int FilmWidth,
-                     int FilmHeight)
-    : m_WorldToCamera(WorldToCamera),
-      m_CameraToScreen(CameraToScreen),
-      m_FilmWidth(FilmWidth),
-      m_FilmHeight(FilmHeight)
+rndr::Camera::Camera(const Transform& WorldToCamera, const Transform& CameraToScreen, int FilmWidth, int FilmHeight)
+    : m_WorldToCamera(WorldToCamera), m_CameraToScreen(CameraToScreen), m_FilmWidth(FilmWidth), m_FilmHeight(FilmHeight)
 {
     m_CameraToWorld = m_WorldToCamera.GetInverse();
     m_ScreenToCamera = m_ScreenToCamera.GetInverse();
@@ -21,14 +15,8 @@ void rndr::Camera::UpdateWorldToCamera(const Transform& WorldToCameraTransform)
     UpdateTransforms(m_FilmWidth, m_FilmHeight);
 }
 
-rndr::OrthographicCamera::OrthographicCamera(const Transform& WorldToCamera,
-                                             int FilmWidth,
-                                             int FilmHeight,
-                                             real Near,
-                                             real Far)
-    : Camera(WorldToCamera, Orthographic(Near, Far), FilmWidth, FilmHeight),
-      m_Near(Near),
-      m_Far(Far)
+rndr::OrthographicCamera::OrthographicCamera(const Transform& WorldToCamera, int FilmWidth, int FilmHeight, real Near, real Far)
+    : Camera(WorldToCamera, Orthographic(Near, Far), FilmWidth, FilmHeight), m_Near(Near), m_Far(Far)
 {
     UpdateTransforms(FilmWidth, FilmHeight);
 }
@@ -43,16 +31,8 @@ void rndr::OrthographicCamera::UpdateTransforms(int Width, int Height)
     m_NDCToWorld = m_WorldToNDC.GetInverse();
 }
 
-rndr::PerspectiveCamera::PerspectiveCamera(const Transform& WorldToCamera,
-                                           int FilmWidth,
-                                           int FilmHeight,
-                                           real FOV,
-                                           real Near,
-                                           real Far)
-    : Camera(WorldToCamera,
-             Perspective(FOV, (real)FilmWidth / FilmHeight, Near, Far),
-             FilmWidth,
-             FilmHeight),
+rndr::PerspectiveCamera::PerspectiveCamera(const Transform& WorldToCamera, int FilmWidth, int FilmHeight, real FOV, real Near, real Far)
+    : Camera(WorldToCamera, Perspective(FOV, (real)FilmWidth / FilmHeight, Near, Far), FilmWidth, FilmHeight),
       m_FOV(FOV),
       m_AspectRatio((real)FilmWidth / FilmHeight),
       m_Near(Near),

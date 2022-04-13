@@ -56,17 +56,13 @@ public:
         }
     }
 
-    bool operator==(const Bounds3<T>& other) const
-    {
-        return pMin == other.pMin && pMax == other.pMax;
-    }
+    bool operator==(const Bounds3<T>& other) const { return pMin == other.pMin && pMax == other.pMax; }
 
     bool operator!=(const Bounds3<T>& other) const { return !(*this == other); }
 
     Point3<T> Corner(int corner) const
     {
-        return Point3<T>((*this)[(corner & 1)].X, (*this)[(corner & 2) ? 1 : 0].Y,
-                         (*this)[(corner & 4) ? 1 : 0].Z);
+        return Point3<T>((*this)[(corner & 1)].X, (*this)[(corner & 2) ? 1 : 0].Y, (*this)[(corner & 4) ? 1 : 0].Z);
     }
 
     Vector3<T> Diagonal() const { return pMax - pMin; }
@@ -96,8 +92,7 @@ public:
 
     Point3<T> Lerp(const Point3r& t) const
     {
-        return Point3<T>(rndr::Lerp(t.X, pMin.X, pMax.X), rndr::Lerp(t.Y, pMin.Y, pMax.Y),
-                         rndr::Lerp(t.Z, pMin.Z, pMax.Z));
+        return Point3<T>(rndr::Lerp(t.X, pMin.X, pMax.X), rndr::Lerp(t.Y, pMin.Y, pMax.Y), rndr::Lerp(t.Z, pMin.Z, pMax.Z));
     }
 
     Vector3<T> Offset(const Point3<T>& p) const
@@ -120,8 +115,7 @@ public:
 
     Vector3<T> Extent() const
     {
-        Vector3<T> Extent{std::abs(pMax.X - pMin.X), std::abs(pMax.Y - pMin.Y),
-                          std::abs(pMax.Z - pMin.Z)};
+        Vector3<T> Extent{std::abs(pMax.X - pMin.X), std::abs(pMax.Y - pMin.Y), std::abs(pMax.Z - pMin.Z)};
         return Extent;
     }
 };
@@ -129,27 +123,22 @@ public:
 template <typename T>
 Bounds3<T> Union(const Bounds3<T>& b, const Point3<T>& p)
 {
-    return Bounds3<T>(
-        Point3<T>(std::min(b.pMin.X, p.X), std::min(b.pMin.Y, p.Y), std::min(b.pMin.Z, p.Z)),
-        Point3<T>(std::max(b.pMax.X, p.X), std::max(b.pMax.Y, p.Y), std::max(b.pMax.Z, p.Z)));
+    return Bounds3<T>(Point3<T>(std::min(b.pMin.X, p.X), std::min(b.pMin.Y, p.Y), std::min(b.pMin.Z, p.Z)),
+                      Point3<T>(std::max(b.pMax.X, p.X), std::max(b.pMax.Y, p.Y), std::max(b.pMax.Z, p.Z)));
 }
 
 template <typename T>
 Bounds3<T> Union(const Bounds3<T>& b1, const Bounds3<T>& b2)
 {
-    return Bounds3<T>(Point3<T>(std::min(b1.pMin.X, b2.pMin.X), std::min(b1.pMin.Y, b2.pMin.Y),
-                                std::min(b1.pMin.Z, b2.pMin.Z)),
-                      Point3<T>(std::max(b1.pMax.X, b2.pMax.X), std::max(b1.pMax.Y, b2.pMax.Y),
-                                std::max(b1.pMax.Z, b2.pMax.Z)));
+    return Bounds3<T>(Point3<T>(std::min(b1.pMin.X, b2.pMin.X), std::min(b1.pMin.Y, b2.pMin.Y), std::min(b1.pMin.Z, b2.pMin.Z)),
+                      Point3<T>(std::max(b1.pMax.X, b2.pMax.X), std::max(b1.pMax.Y, b2.pMax.Y), std::max(b1.pMax.Z, b2.pMax.Z)));
 }
 
 template <typename T>
 Bounds3<T> Intersect(const Bounds3<T>& b1, const Bounds3<T>& b2)
 {
-    return Bounds3<T>(Point3<T>(std::max(b1.pMin.X, b2.pMin.X), std::max(b1.pMin.Y, b2.pMin.Y),
-                                std::max(b1.pMin.Z, b2.pMin.Z)),
-                      Point3<T>(std::min(b1.pMax.X, b2.pMax.X), std::min(b1.pMax.Y, b2.pMax.Y),
-                                std::min(b1.pMax.Z, b2.pMax.Z)));
+    return Bounds3<T>(Point3<T>(std::max(b1.pMin.X, b2.pMin.X), std::max(b1.pMin.Y, b2.pMin.Y), std::max(b1.pMin.Z, b2.pMin.Z)),
+                      Point3<T>(std::min(b1.pMax.X, b2.pMax.X), std::min(b1.pMax.Y, b2.pMax.Y), std::min(b1.pMax.Z, b2.pMax.Z)));
 }
 
 template <typename T>
@@ -164,23 +153,20 @@ bool Overlaps(const Bounds3<T>& b1, const Bounds3<T>& b2)
 template <typename T>
 bool Inside(const Point3<T>& p, const Bounds3<T>& b)
 {
-    return (p.X >= b.pMin.X && p.X < b.pMax.X && p.Y >= b.pMin.Y && p.Y < b.pMax.Y &&
-            p.Z >= b.pMin.Z && p.Z < b.pMax.Z);
+    return (p.X >= b.pMin.X && p.X < b.pMax.X && p.Y >= b.pMin.Y && p.Y < b.pMax.Y && p.Z >= b.pMin.Z && p.Z < b.pMax.Z);
 }
 
 // The point is not counted if it is on the upper boundry of the box
 template <typename T>
 bool InsideInclusive(const Point3<T>& p, const Bounds3<T>& b)
 {
-    return (p.X >= b.pMin.X && p.X <= b.pMax.X && p.Y >= b.pMin.Y && p.Y <= b.pMax.Y &&
-            p.Z >= b.pMin.Z && p.Z <= b.pMax.Z);
+    return (p.X >= b.pMin.X && p.X <= b.pMax.X && p.Y >= b.pMin.Y && p.Y <= b.pMax.Y && p.Z >= b.pMin.Z && p.Z <= b.pMax.Z);
 }
 
 template <typename T, typename U>
 inline Bounds3<T> Expand(const Bounds3<T>& b, U delta)
 {
-    return Bounds3<T>(b.pMin - Vector3<T>(delta, delta, delta),
-                      b.pMax + Vector3<T>(delta, delta, delta));
+    return Bounds3<T>(b.pMin - Vector3<T>(delta, delta, delta), b.pMax + Vector3<T>(delta, delta, delta));
 }
 
 // TYpes

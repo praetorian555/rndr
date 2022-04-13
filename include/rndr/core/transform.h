@@ -44,15 +44,11 @@ public:
     template <typename T>
     inline Point3<T> operator()(const Point3<T>& pt, Vector3<T>* absError) const;
     template <typename T>
-    inline Point3<T> operator()(const Point3<T>& p,
-                                const Vector3<T>& pError,
-                                Vector3<T>* absError) const;
+    inline Point3<T> operator()(const Point3<T>& p, const Vector3<T>& pError, Vector3<T>* absError) const;
     template <typename T>
     inline Vector3<T> operator()(const Vector3<T>& v, Vector3<T>* absError) const;
     template <typename T>
-    inline Vector3<T> operator()(const Vector3<T>& v,
-                                 const Vector3<T>& vError,
-                                 Vector3<T>* absError) const;
+    inline Vector3<T> operator()(const Vector3<T>& v, const Vector3<T>& vError, Vector3<T>* absError) const;
 
 private:
     Matrix4x4 m_Matrix;
@@ -119,10 +115,9 @@ template <typename T>
 inline Normal3<T> Transform::operator()(const Normal3<T>& n) const
 {
     T x = n.X, y = n.Y, z = n.Z;
-    return Normal3<T>(
-        m_MatrixInverse.m[0][0] * x + m_MatrixInverse.m[1][0] * y + m_MatrixInverse.m[2][0] * z,
-        m_MatrixInverse.m[0][1] * x + m_MatrixInverse.m[1][1] * y + m_MatrixInverse.m[2][1] * z,
-        m_MatrixInverse.m[0][2] * x + m_MatrixInverse.m[1][2] * y + m_MatrixInverse.m[2][2] * z);
+    return Normal3<T>(m_MatrixInverse.m[0][0] * x + m_MatrixInverse.m[1][0] * y + m_MatrixInverse.m[2][0] * z,
+                      m_MatrixInverse.m[0][1] * x + m_MatrixInverse.m[1][1] * y + m_MatrixInverse.m[2][1] * z,
+                      m_MatrixInverse.m[0][2] * x + m_MatrixInverse.m[1][2] * y + m_MatrixInverse.m[2][2] * z);
 }
 
 }  // namespace rndr

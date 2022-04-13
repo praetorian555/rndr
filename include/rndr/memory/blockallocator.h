@@ -12,9 +12,7 @@ namespace rndr
 
 struct BlockAllocator : public Allocator
 {
-    BlockAllocator(size_t BlockSize,
-                   size_t MaxBlocksPerSection = 128,
-                   const std::string& DebugName = "BlockAllocator");
+    BlockAllocator(size_t BlockSize, size_t MaxBlocksPerSection = 128, const std::string& DebugName = "BlockAllocator");
     ~BlockAllocator();
 
     virtual void* Allocate(size_t Size, size_t Allignment) override;
