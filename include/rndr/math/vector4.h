@@ -110,6 +110,8 @@ public:
 
     Vector4<T> operator*(T scalar) const { return Vector4(X * scalar, Y * scalar, Z * scalar, W * scalar); }
 
+     Vector4<T> operator*(const Vector4<T>& Other) const { return Vector4(X * Other.X, Y * Other.Y, Z * Other.Z, W * Other.W); }
+
     Vector4<T>& operator*=(T scalar)
     {
         X *= scalar;
@@ -147,10 +149,10 @@ public:
     T Length() const { return std::sqrt(LengthSquared()); }
 };
 
-template <typename T>
-inline Vector4<T> operator*(T scalar, const Vector4<T>& v)
+template <typename U, typename T>
+inline Vector4<T> operator*(U scalar, const Vector4<T>& v)
 {
-    return v * scalar;
+    return v * (T)scalar;
 }
 
 template <typename T>

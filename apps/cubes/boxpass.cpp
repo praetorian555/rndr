@@ -71,7 +71,7 @@ void BoxRenderPass::Init(rndr::Camera* Camera)
 
     m_Shader.SetCamera(Camera);
     m_Shader.SetDiffuseImage(m_Texture.get());
-    m_Shader.SetSpecularColor(rndr::Color::White);
+    m_Shader.SetSpecularColor(rndr::Colors::White.XYZ());
 }
 
 void BoxRenderPass::ShutDown() {}
@@ -81,7 +81,7 @@ void BoxRenderPass::Render(rndr::Rasterizer& Renderer, real DeltaSeconds)
     m_Shader.ClearLights();
 
     m_Shader.SetViewPosition(m_ViewerPosition);
-    m_Shader.AddPointLight(m_LightPosition, rndr::Color::White);
+    m_Shader.AddPointLight(m_LightPosition, rndr::Colors::White.XYZ());
 
     Renderer.Draw(m_Model.get());
 }

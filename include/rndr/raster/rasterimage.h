@@ -4,7 +4,7 @@
 
 #include "rndr/core/base.h"
 #include "rndr/core/bounds2.h"
-#include "rndr/core/color.h"
+#include "rndr/core/colors.h"
 #include "rndr/core/math.h"
 #include "rndr/core/pipeline.h"
 
@@ -81,10 +81,10 @@ public:
     uint32_t GetPixelSize() const;
 
     /**
-     * Get color of specified pixel.
+     * Get color of specified pixel in linear space.
      */
-    rndr::Color GetPixelColor(const Point2i& Location) const;
-    rndr::Color GetPixelColor(int X, int Y) const;
+    Vector4r GetPixelColor(const Point2i& Location) const;
+    Vector4r GetPixelColor(int X, int Y) const;
 
     /**
      * Get depth of a specified pixel.
@@ -93,21 +93,21 @@ public:
     real GetPixelDepth(int X, int Y) const;
 
     /**
-     * Colors a pixel at specified location.
+     * Colors a pixel at a specified location.
      *
      * @param Location Location of a pixel in screen space.
-     * @param Color New pixel color.
+     * @param Color New pixel color in linear space.
      */
-    void SetPixelColor(const Point2i& Location, rndr::Color Color);
+    void SetPixelColor(const Point2i& Location, const Vector4r& Color);
 
     /**
      * Colors a pixel at (X, Y) location.
      *
      * @param X Coordinate along the X axis.
      * @param Y Coordinate along the Y axis.
-     * @param Color New pixel color.
+     * @param Color New pixel color in linear space.
      */
-    void SetPixelColor(int X, int Y, rndr::Color Color);
+    void SetPixelColor(int X, int Y, const Vector4r& Color);
 
     /**
      * Set pixel depth to the specified value.
@@ -125,10 +125,10 @@ public:
 
     /**
      * Clear the buffer with specified value.
-     *
+     * @param Color The color to fill the buffer with. Should be in linear space.
      * @note Valid if image is used a color buffer.
      */
-    void ClearColorBuffer(rndr::Color Color);
+    void ClearColorBuffer(const Vector4r& Color);
 
     /**
      * Clear the buffer with specified value.
@@ -144,11 +144,11 @@ public:
     /**
      * Calculate image sample based on UV coordinates.
      */
-    rndr::Color Sample(const Point2r& TexCoord, const Vector2r& duvdx, const Vector2r& duvdy);
+    Vector4r Sample(const Point2r& TexCoord, const Vector2r& duvdx, const Vector2r& duvdy);
 
-    static Color SampleNearestNeighbor(const Image* I, const Point2r& TexCoord);
-    static Color SampleBilinear(const Image* I, const Point2r& TexCoord);
-    static Color SampleTrilinear(const Image* I, const Point2r& TexCoord, real LOD);
+    static Vector4r SampleNearestNeighbor(const Image* I, const Point2r& TexCoord);
+    static Vector4r SampleBilinear(const Image* I, const Point2r& TexCoord);
+    static Vector4r SampleTrilinear(const Image* I, const Point2r& TexCoord, real LOD);
 
 protected:
     void SetPixelColor(const Point2i& Position, uint32_t Color);

@@ -424,8 +424,8 @@ void rndr::Rasterizer::ProcessFragment(const Triangle& T, InFragmentInfo& InInfo
     }
 
     // TODO(mkostic): Add support for different blend operators
-    Color CurrentColor = m_Pipeline->ColorImage->GetPixelColor(InInfo.Position);
-    OutInfo.Color = Color::Blend(OutInfo.Color, CurrentColor);
+    const Vector4r CurrentColor = m_Pipeline->ColorImage->GetPixelColor(InInfo.Position);
+    OutInfo.Color = m_Pipeline->Blend(OutInfo.Color, CurrentColor);
 
     // Write color into color buffer
     m_Pipeline->ColorImage->SetPixelColor(InInfo.Position, OutInfo.Color);

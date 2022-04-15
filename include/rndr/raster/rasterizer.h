@@ -47,9 +47,9 @@ private:
 
 private:
     const Pipeline* m_Pipeline = nullptr;
-    rndr::Span<Triangle> m_Triangles;
-    rndr::Span<OutVertexInfo> m_Vertices;
-    rndr::ByteSpan m_UserVertices;
+    Span<Triangle> m_Triangles;
+    Span<OutVertexInfo> m_Vertices;
+    ByteSpan m_UserVertices;
     int m_InstanceCount;
     int m_VerticesPerInstanceCount;
     int m_TrianglePerInstanceCount;

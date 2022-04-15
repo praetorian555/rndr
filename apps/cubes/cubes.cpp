@@ -65,8 +65,6 @@ int main()
 
             LightPass.SetTargetImages(ColorImage, DepthImage);
             LightPass.Render(Renderer, DeltaSeconds);
-
-            ColorImage->RenderImage(*SoldierTexture, rndr::Point2i{100, 100});
         });
 
     rndr::GRndrApp->Run();

@@ -22,16 +22,16 @@ void rndr::PhongShader::FragmentShader(const Triangle& Triangle, const InFragmen
     const Vector2r duvdx = RNDR_DX(Triangle, OutVertex, Point2r, TexCoords, Vector2r, InInfo);
     const Vector2r duvdy = RNDR_DY(Triangle, OutVertex, Point2r, TexCoords, Vector2r, InInfo);
 
-    Color Kd = m_Kd;
+    Vector3r Kd = m_Kd;
     if (m_DiffuseImage)
     {
-        Kd = m_DiffuseImage->Sample(TexCoords, duvdx, duvdy);
+        Kd = m_DiffuseImage->Sample(TexCoords, duvdx, duvdy).XYZ();
     }
 
-    Color Ks = m_Ks;
+    Vector3r Ks = m_Ks;
     if (m_SpecularImage)
     {
-        Ks = m_SpecularImage->Sample(TexCoords, duvdx, duvdy);
+        Ks = m_SpecularImage->Sample(TexCoords, duvdx, duvdy).XYZ();
     }
 
     const Point3r FragmentPosition = RNDR_INTERPOLATE(Triangle, OutVertex, Point3r, PositionWorld, InInfo);
@@ -39,7 +39,7 @@ void rndr::PhongShader::FragmentShader(const Triangle& Triangle, const InFragmen
     Normal = Normalize(Normal);
     const Vector3r ViewDirection = Normalize(m_ViewPosition - FragmentPosition);
 
-    OutInfo.Color = Color::Black.ToLinearSpace();
+    Vector3r TotalColor;
     for (int i = 0; i < m_PointLights.size(); i++)
     {
         // TODO(mkostic): Add attenuation support
@@ -54,7 +54,12 @@ void rndr::PhongShader::FragmentShader(const Triangle& Triangle, const InFragmen
         const real Max = std::max(Dot, (real)0.0);
         const real SpecularTerm = std::pow(std::max(rndr::Dot(ViewDirection, ReflectedDirection), (real)0.0), m_Shininess);
 
-        OutInfo.Color += (Kd * AmbientTerm + Kd * DiffuseTerm + Ks * SpecularTerm) * m_PointLights[i].Irradiance;
+        const Vector3r AmbientColor = Kd * AmbientTerm;
+        const Vector3r DiffuseColor = Kd * DiffuseTerm;
+        const Vector3r SpecularColor = Ks * SpecularTerm;
+        const Vector3r FinalColor = (AmbientColor + DiffuseColor + SpecularColor) * m_PointLights[i].Irradiance;
+        
+        TotalColor += FinalColor;
     }
 
     for (int i = 0; i < m_DirectionalLights.size(); i++)
@@ -68,19 +73,22 @@ void rndr::PhongShader::FragmentShader(const Triangle& Triangle, const InFragmen
         const real Dot = rndr::Dot(ViewDirection, ReflectedDirection);
         const real Max = std::max(Dot, (real)0.0);
         const real SpecularTerm = std::pow(std::max(rndr::Dot(ViewDirection, ReflectedDirection), (real)0.0), m_Shininess);
+        const Vector3r FinalColor = (Kd * AmbientTerm + Kd * DiffuseTerm + Ks * SpecularTerm) * m_DirectionalLights[i].Irradiance;
 
-        OutInfo.Color += (Kd * AmbientTerm + Kd * DiffuseTerm + Ks * SpecularTerm) * m_DirectionalLights[i].Irradiance;
+        TotalColor += FinalColor;
     }
+
+    OutInfo.Color = Vector4r(TotalColor, 1);
 }
 
-void rndr::PhongShader::AddPointLight(const Point3r& LightPosition, const Color& LightColor)
+void rndr::PhongShader::AddPointLight(const Point3r& LightPosition, const Vector3r& LightColor)
 {
-    m_PointLights.push_back(PointLight{LightPosition, LightColor.ToLinearSpace()});
+    m_PointLights.push_back(PointLight{LightPosition, LightColor});
 }
 
-void rndr::PhongShader::AddDirectionalLight(const Vector3r& Direction, const Color& LightColor)
+void rndr::PhongShader::AddDirectionalLight(const Vector3r& Direction, const Vector3r& LightColor)
 {
-    m_DirectionalLights.push_back(DirectionalLight{Direction, LightColor.ToLinearSpace()});
+    m_DirectionalLights.push_back(DirectionalLight{Direction, LightColor});
 }
 
 void rndr::PhongShader::ClearLights()

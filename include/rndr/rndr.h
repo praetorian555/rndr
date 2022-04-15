@@ -1,7 +1,7 @@
 #pragma once
 
 #include "rndr/core/camera.h"
-#include "rndr/core/color.h"
+#include "rndr/core/colors.h"
 #include "rndr/core/fileutils.h"
 #include "rndr/core/input.h"
 #include "rndr/core/log.h"

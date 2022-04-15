@@ -54,7 +54,7 @@ void rndr::RndrApp::Run()
 
         rndr::Image* ColorImage = m_Window->GetColorImage();
         rndr::Image* DepthImage = m_Window->GetDepthImage();
-        ColorImage->ClearColorBuffer(rndr::Color::Black);
+        ColorImage->ClearColorBuffer(rndr::Colors::Black);
         DepthImage->ClearDepthBuffer(rndr::Infinity);
 
         OnTickDelegate.Execute(FrameDuration);

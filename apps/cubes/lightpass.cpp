@@ -62,5 +62,5 @@ void LightRenderPass::VertexShader(const rndr::InVertexInfo& InInfo, rndr::OutVe
 
 void LightRenderPass::FragmentShader(const rndr::Triangle& T, const rndr::InFragmentInfo& InInfo, rndr::OutFragmentInfo& OutInfo)
 {
-    OutInfo.Color = rndr::Color::White;
+    OutInfo.Color = rndr::Colors::White;
 }

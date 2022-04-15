@@ -42,15 +42,15 @@ public:
 
     void SetViewPosition(const Point3r Position) { m_ViewPosition = Position; }
 
-    void AddPointLight(const Point3r& LightPosition, const Color& LightColor);
-    void AddDirectionalLight(const Vector3r& Direction, const Color& LightColor);
+    void AddPointLight(const Point3r& LightPosition, const Vector3r& LightColor);
+    void AddDirectionalLight(const Vector3r& Direction, const Vector3r& LightColor);
     void ClearLights();
 
     void SetDiffuseImage(Image* DiffuseImage) { m_DiffuseImage = DiffuseImage; }
     void SetSpecularImage(Image* SpecularImage) { m_SpecularImage = SpecularImage; }
 
-    void SetDiffuseColor(const Color& DiffuseColor) { m_Kd = DiffuseColor.ToLinearSpace(); }
-    void SetSpecularColor(const Color& SpecularColor) { m_Ks = SpecularColor.ToLinearSpace(); }
+    void SetDiffuseColor(const Vector3r& DiffuseColor) { m_Kd = DiffuseColor; }
+    void SetSpecularColor(const Vector3r& SpecularColor) { m_Ks = SpecularColor; }
 
     void SetShininess(int Shininess) { m_Shininess = Shininess; }
 
@@ -60,13 +60,13 @@ private:
     struct PointLight
     {
         Point3r Position;
-        Color Irradiance;
+        Vector3r Irradiance;
     };
 
     struct DirectionalLight
     {
         Vector3r Direction;
-        Color Irradiance;
+        Vector3r Irradiance;
     };
 
 private:
@@ -74,8 +74,8 @@ private:
     Image* m_SpecularImage = nullptr;
 
     int m_Shininess = 32;
-    Color m_Kd = Color::Black;
-    Color m_Ks = Color::Black;
+    Vector3r m_Kd = Colors::Black.XYZ();
+    Vector3r m_Ks = Colors::Black.XYZ();
 
     rndr::Point3r m_ViewPosition;
 

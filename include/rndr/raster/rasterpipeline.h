@@ -2,7 +2,7 @@
 
 #include "rndr/core/barycentric.h"
 #include "rndr/core/bounds2.h"
-#include "rndr/core/color.h"
+#include "rndr/core/colors.h"
 #include "rndr/core/pipeline.h"
 
 #if defined RNDR_RASTER
@@ -63,7 +63,7 @@ struct InFragmentInfo
  */
 struct OutFragmentInfo
 {
-    rndr::Color Color;
+    Vector4r Color;
     real Depth;
 };
 
