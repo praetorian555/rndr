@@ -423,7 +423,6 @@ void rndr::Rasterizer::ProcessFragment(const Triangle& T, InFragmentInfo& InInfo
         m_Pipeline->DepthImage->SetPixelValue(InInfo.Position, InInfo.Depth);
     }
 
-    // TODO(mkostic): Add support for different blend operators
     const Vector4r CurrentColor = m_Pipeline->ColorImage->GetPixelColor(InInfo.Position);
     OutInfo.Color = m_Pipeline->Blend(OutInfo.Color, CurrentColor);
 
@@ -433,8 +432,8 @@ void rndr::Rasterizer::ProcessFragment(const Triangle& T, InFragmentInfo& InInfo
 
 rndr::Point3r rndr::Rasterizer::FromNDCToRasterSpace(const Point3r& Point)
 {
-    int Width = m_Pipeline->ColorImage->GetConfig().Width;
-    int Height = m_Pipeline->ColorImage->GetConfig().Height;
+    int Width = m_Pipeline->ColorImage->GetWidth();
+    int Height = m_Pipeline->ColorImage->GetHeight();
 
     Point3r Result = Point;
     Result.X = ((1 + Point.X) / 2) * Width;
@@ -445,8 +444,8 @@ rndr::Point3r rndr::Rasterizer::FromNDCToRasterSpace(const Point3r& Point)
 
 rndr::Point3r rndr::Rasterizer::FromRasterToNDCSpace(const Point3r& Point)
 {
-    int Width = m_Pipeline->ColorImage->GetConfig().Width;
-    int Height = m_Pipeline->ColorImage->GetConfig().Height;
+    int Width = m_Pipeline->ColorImage->GetWidth();
+    int Height = m_Pipeline->ColorImage->GetHeight();
 
     Point3r Result = Point;
     Result.X = (Point.X / (real)Width) * 2 - 1;

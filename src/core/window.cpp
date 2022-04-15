@@ -30,20 +30,16 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam);
 rndr::Window::Window(const rndr::WindowConfig& Config) : m_Config(Config)
 {
     rndr::ImageConfig ColorImageConfig;
-    ColorImageConfig.Width = Config.Width;
-    ColorImageConfig.Height = Config.Height;
     ColorImageConfig.GammaSpace = rndr::GammaSpace::GammaCorrected;
     ColorImageConfig.PixelLayout = PixelLayout::A8R8G8B8;
 
-    m_ColorImage = std::make_unique<Image>(ColorImageConfig);
+    m_ColorImage = std::make_unique<Image>(Config.Width, Config.Height, ColorImageConfig);
 
     rndr::ImageConfig DepthImageConfig;
-    DepthImageConfig.Width = Config.Width;
-    DepthImageConfig.Height = Config.Height;
     DepthImageConfig.GammaSpace = rndr::GammaSpace::Linear;
     DepthImageConfig.PixelLayout = PixelLayout::DEPTH_F32;
 
-    m_DepthImage = std::make_unique<Image>(DepthImageConfig);
+    m_DepthImage = std::make_unique<Image>(Config.Width, Config.Height, DepthImageConfig);
 
     rndr::WindowDelegates::OnResize.Add(RNDR_BIND_THREE_PARAM(this, &Window::Resize));
     rndr::WindowDelegates::OnButtonDelegate.Add(RNDR_BIND_THREE_PARAM(this, &Window::ButtonEvent));
@@ -62,8 +58,12 @@ rndr::Window::Window(const rndr::WindowConfig& Config) : m_Config(Config)
     ATOM Atom = RegisterClass(&WindowClass);
     assert(Atom != 0);
 
-    HWND WindowHandle = CreateWindowEx(0, ClassName, m_Config.Name.c_str(), WS_OVERLAPPEDWINDOW, CW_USEDEFAULT, CW_USEDEFAULT,
-                                       m_Config.Width, m_Config.Height, nullptr, nullptr, Instance, this);
+    RECT WindowRect = {0, 0, Config.Width, Config.Height};
+    AdjustWindowRect(&WindowRect, WS_OVERLAPPEDWINDOW, FALSE);
+
+    HWND WindowHandle =
+        CreateWindowEx(0, ClassName, m_Config.Name.c_str(), WS_OVERLAPPEDWINDOW, CW_USEDEFAULT, CW_USEDEFAULT,
+                       WindowRect.right - WindowRect.left, WindowRect.bottom - WindowRect.top, nullptr, nullptr, Instance, this);
     assert(WindowHandle != NULL);
 
     ShowWindow(WindowHandle, SW_SHOW);
@@ -142,16 +142,12 @@ void rndr::Window::Resize(Window* Window, int Width, int Height)
     if (m_ColorImage)
     {
         ImageConfig Config = m_ColorImage->GetConfig();
-        Config.Width = Width;
-        Config.Height = Height;
-        m_ColorImage = std::make_unique<Image>(Config);
+        m_ColorImage = std::make_unique<Image>(Width, Height, Config);
     }
     if (m_DepthImage)
     {
         ImageConfig Config = m_DepthImage->GetConfig();
-        Config.Width = Width;
-        Config.Height = Height;
-        m_DepthImage = std::make_unique<Image>(Config);
+        m_DepthImage = std::make_unique<Image>(Width, Height, Config);
     }
 }
 
@@ -161,15 +157,15 @@ void rndr::Window::RenderToWindow()
 
     BITMAPINFO BitmapInfo = {};
     BitmapInfo.bmiHeader.biSize = sizeof(BitmapInfo.bmiHeader);
-    BitmapInfo.bmiHeader.biWidth = m_ColorImage->GetConfig().Width;
-    BitmapInfo.bmiHeader.biHeight = m_ColorImage->GetConfig().Height;
+    BitmapInfo.bmiHeader.biWidth = m_ColorImage->GetWidth();
+    BitmapInfo.bmiHeader.biHeight = m_ColorImage->GetHeight();
     BitmapInfo.bmiHeader.biPlanes = 1;
     BitmapInfo.bmiHeader.biBitCount = m_ColorImage->GetPixelSize() * 8;
     BitmapInfo.bmiHeader.biCompression = BI_RGB;
 
     HDC DC = GetDC(WindowHandle);
 
-    StretchDIBits(DC, 0, 0, m_CurrentWidth, m_CurrentHeight, 0, 0, m_ColorImage->GetConfig().Width, m_ColorImage->GetConfig().Height,
+    StretchDIBits(DC, 0, 0, m_CurrentWidth, m_CurrentHeight, 0, 0, m_ColorImage->GetWidth(), m_ColorImage->GetHeight(),
                   m_ColorImage->GetBuffer(), &BitmapInfo, DIB_RGB_COLORS, SRCCOPY);
 }
 

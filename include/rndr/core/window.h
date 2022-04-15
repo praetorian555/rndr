@@ -72,15 +72,15 @@ public:
      *
      * @return Returns true if we shouldn't render to this window.
      */
-    bool IsWindowMinimized() const { return m_ColorImage->GetConfig().Height == 0 || m_ColorImage->GetConfig().Width == 0; }
+    bool IsWindowMinimized() const { return m_ColorImage->GetHeight() == 0 || m_ColorImage->GetWidth() == 0; }
 
     /**
      * Copies window's surface buffer to window internal buffer that is displayed on screen.
      */
     void RenderToWindow();
 
-    int GetWidth() const { return m_ColorImage->GetConfig().Width; }
-    int GetHeight() const { return m_ColorImage->GetConfig().Height; }
+    int GetWidth() const { return m_ColorImage->GetWidth(); }
+    int GetHeight() const { return m_ColorImage->GetHeight(); }
 
     /**
      * If true the cursor will be limited to this window.

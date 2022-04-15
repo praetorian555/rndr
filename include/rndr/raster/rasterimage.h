@@ -19,14 +19,13 @@ class Sampler2D;
 
 struct ImageConfig
 {
-    int Width = 1024;
-    int Height = 768;
+    PixelLayout PixelLayout = PixelLayout::A8R8G8B8;
+    GammaSpace GammaSpace = GammaSpace::GammaCorrected;
 
-    rndr::PixelLayout PixelLayout = rndr::PixelLayout::A8R8G8B8;
-    rndr::GammaSpace GammaSpace = rndr::GammaSpace::GammaCorrected;
-
-    rndr::ImageFiltering MagFilter = rndr::ImageFiltering::NearestNeighbor;
-    rndr::ImageFiltering MinFilter = rndr::ImageFiltering::NearestNeighbor;
+    ImageFiltering MagFilter = ImageFiltering::Point;
+    ImageFiltering MinFilter = ImageFiltering::Point;
+    ImageFiltering MipFilter = ImageFiltering::Linear;
+    bool bUseMips = false;
 
     int LODBias = 0;
 };
@@ -40,7 +39,7 @@ struct ImageConfig
 class Image
 {
 public:
-    Image(const ImageConfig& Options = ImageConfig{});
+    Image(int Width, int Height, const ImageConfig& Options = ImageConfig{});
     Image(const std::string& FilePath, const ImageConfig& Options = ImageConfig{});
 
     ~Image();
@@ -50,36 +49,14 @@ public:
      */
     void SetPixelFormat(rndr::GammaSpace Space, rndr::PixelLayout Layout);
 
-    /**
-     * Get data buffer.
-     *
-     * @return Returns a pointer to the byte array.
-     */
+    // Getters
     uint8_t* GetBuffer() { return m_Buffer.data(); }
-
-    /**
-     * Get image configurations.
-     *
-     * @return Returns read-only image config.
-     */
     const ImageConfig& GetConfig() const { return m_Config; }
-
-    /**
-     * Get Bounds2 object consisting of (0, 0) and (Width - 1, Height - 1) points.
-     */
     const Bounds2i& GetBounds() const { return m_Bounds; }
-
-    /**
-     * Get aspect ratio of a surface. If the height is zero the ratio will be 1.
-     */
     real GetAspectRatio() const;
-
-    /**
-     * Get the size of a pixel.
-     *
-     * @return Returns the size of a pixel in bytes.
-     */
     uint32_t GetPixelSize() const;
+    int GetWidth() const { return m_Width; }
+    int GetHeight() const { return m_Height; }
 
     /**
      * Set value of a pixel.
@@ -93,20 +70,14 @@ public:
     void SetPixelValue(int X, int Y, const T& Value);
 
     /**
-     * Get color of specified pixel in linear space.
+     * Get pixel color in linear space.
      */
     Vector4r GetPixelColor(const Point2i& Location) const;
     Vector4r GetPixelColor(int X, int Y) const;
 
-    /**
-     * Get depth of a specified pixel.
-     */
     real GetPixelDepth(const Point2i& Location) const;
     real GetPixelDepth(int X, int Y) const;
 
-    /**
-     * Get stencil value of a specified pixel.
-     */
     uint8_t GetStencilValue(const Point2i& Location) const;
     uint8_t GetStencilValue(int X, int Y) const;
 
@@ -135,10 +106,10 @@ private:
 
 private:
     ImageConfig m_Config;
-
     Bounds2i m_Bounds;
-    std::vector<uint8_t> m_Buffer;
+    int m_Width, m_Height;
 
+    std::vector<uint8_t> m_Buffer;
     std::vector<Image*> m_MipMaps;
 };
 

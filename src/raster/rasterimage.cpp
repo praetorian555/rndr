@@ -13,18 +13,18 @@
 
 #if defined RNDR_RASTER
 
-rndr::Image::Image(const ImageConfig& Config) : m_Config(Config)
+rndr::Image::Image(int Width, int Height, const ImageConfig& Config) : m_Config(Config), m_Width(Width), m_Height(Height)
 {
     m_Bounds.pMin = Point2i{0, 0};
-    m_Bounds.pMax = Point2i{m_Config.Width, m_Config.Height};
+    m_Bounds.pMax = Point2i{Width, Height};
 
-    if (m_Config.Width == 0 || m_Config.Height == 0)
+    if (Width == 0 || Height == 0)
     {
         return;
     }
 
     uint32_t PixelSize = rndr::GetPixelSize(m_Config.PixelLayout);
-    uint32_t ByteCount = m_Config.Width * m_Config.Height * PixelSize;
+    uint32_t ByteCount = Width * Height * PixelSize;
     m_Buffer.resize(ByteCount);
 
     ParallelFor(ByteCount / PixelSize, 64,
@@ -43,7 +43,7 @@ rndr::Image::Image(const ImageConfig& Config) : m_Config(Config)
                     }
                 });
 
-    if (m_Config.MinFilter == ImageFiltering::TrilinearInterpolation)
+    if (m_Config.bUseMips)
     {
         GenerateMipMaps();
     }
@@ -77,11 +77,11 @@ rndr::Image::Image(const std::string& FilePath, const ImageConfig& Config) : m_C
         assert(Data);
     }
 
-    m_Config.Width = Width;
-    m_Config.Height = Height;
+    m_Width = Width;
+    m_Height = Height;
 
     m_Bounds.pMin = Point2i{0, 0};
-    m_Bounds.pMax = Point2i{m_Config.Width, m_Config.Height};
+    m_Bounds.pMax = Point2i{m_Width, m_Height};
 
     // TODO(mkostic): How to know if image uses 16 or 8 bits per channel??
 
@@ -115,13 +115,13 @@ rndr::Image::Image(const std::string& FilePath, const ImageConfig& Config) : m_C
 
     free(Data);
 
-    if (m_Config.MinFilter == ImageFiltering::TrilinearInterpolation)
+    if (m_Config.bUseMips)
     {
         GenerateMipMaps();
     }
 
-    RNDR_LOG_INFO("Successfully loaded image from file: %s, Width=%d, Height=%d, UsesMipMaps=%s", FilePath.c_str(), m_Config.Width,
-                  m_Config.Height, m_MipMaps.size() > 0 ? "YES" : "NO");
+    RNDR_LOG_INFO("Successfully loaded image from file: %s, Width=%d, Height=%d, UsesMipMaps=%s", FilePath.c_str(), m_Width, m_Height,
+                  m_MipMaps.size() > 0 ? "YES" : "NO");
 }
 
 rndr::Image::~Image()
@@ -142,12 +142,12 @@ uint32_t rndr::Image::GetPixelSize() const
 
 rndr::Vector4r rndr::Image::GetPixelColor(const Point2i& Location) const
 {
-    assert(Location.X >= 0 && Location.X < m_Config.Width);
-    assert(Location.Y >= 0 && Location.Y < m_Config.Height);
+    assert(Location.X >= 0 && Location.X < m_Width);
+    assert(Location.Y >= 0 && Location.Y < m_Height);
 
     // TODO(mkostic): Add support for different sizes of pixels in memory
     const uint32_t* Pixels = (uint32_t*)m_Buffer.data();
-    const uint32_t Value = Pixels[Location.X + Location.Y * m_Config.Width];
+    const uint32_t Value = Pixels[Location.X + Location.Y * m_Width];
     Vector4r LinearColor = ColorToVector(Value, m_Config.PixelLayout);
     if (m_Config.GammaSpace == GammaSpace::GammaCorrected)
     {
@@ -163,11 +163,11 @@ rndr::Vector4r rndr::Image::GetPixelColor(int X, int Y) const
 
 real rndr::Image::GetPixelDepth(const Point2i& Location) const
 {
-    assert(Location.X >= 0 && Location.X < m_Config.Width);
-    assert(Location.Y >= 0 && Location.Y < m_Config.Height);
+    assert(Location.X >= 0 && Location.X < m_Width);
+    assert(Location.Y >= 0 && Location.Y < m_Height);
 
     const real* Depths = (real*)m_Buffer.data();
-    return Depths[Location.X + Location.Y * m_Config.Width];
+    return Depths[Location.X + Location.Y * m_Width];
 }
 
 real rndr::Image::GetPixelDepth(int X, int Y) const
@@ -177,11 +177,11 @@ real rndr::Image::GetPixelDepth(int X, int Y) const
 
 uint8_t rndr::Image::GetStencilValue(const Point2i& Location) const
 {
-    assert(Location.X >= 0 && Location.X < m_Config.Width);
-    assert(Location.Y >= 0 && Location.Y < m_Config.Height);
+    assert(Location.X >= 0 && Location.X < m_Width);
+    assert(Location.Y >= 0 && Location.Y < m_Height);
 
     const uint8_t* Values = (uint8_t*)m_Buffer.data();
-    return Values[Location.X + Location.Y * m_Config.Width];
+    return Values[Location.X + Location.Y * m_Width];
 }
 
 uint8_t rndr::Image::GetStencilValue(int X, int Y) const
@@ -233,8 +233,8 @@ void rndr::Image::SetPixelValue<uint8_t>(int X, int Y, const uint8_t& Value)
 
 void rndr::Image::SetPixelColor(const Point2i& Location, const Vector4r& Color)
 {
-    assert(Location.X >= 0 && Location.X < m_Config.Width);
-    assert(Location.Y >= 0 && Location.Y < m_Config.Height);
+    assert(Location.X >= 0 && Location.X < m_Width);
+    assert(Location.Y >= 0 && Location.Y < m_Height);
 
     uint32_t* Pixels = (uint32_t*)m_Buffer.data();
     Vector4r sRGBColor = Color;
@@ -243,34 +243,34 @@ void rndr::Image::SetPixelColor(const Point2i& Location, const Vector4r& Color)
         sRGBColor = ToGammaCorrectSpace(Color);
     }
     const uint32_t Packed = ColorToUInt32(sRGBColor, m_Config.PixelLayout);
-    Pixels[Location.X + Location.Y * m_Config.Width] = Packed;
+    Pixels[Location.X + Location.Y * m_Width] = Packed;
 }
 
 void rndr::Image::SetPixelColor(const Point2i& Location, uint32_t Color)
 {
-    assert(Location.X >= 0 && Location.X < m_Config.Width);
-    assert(Location.Y >= 0 && Location.Y < m_Config.Height);
+    assert(Location.X >= 0 && Location.X < m_Width);
+    assert(Location.Y >= 0 && Location.Y < m_Height);
 
     uint32_t* Pixels = (uint32_t*)m_Buffer.data();
-    Pixels[Location.X + Location.Y * m_Config.Width] = Color;
+    Pixels[Location.X + Location.Y * m_Width] = Color;
 }
 
 void rndr::Image::SetPixelDepth(const Point2i& Location, real Depth)
 {
-    assert(Location.X >= 0 && Location.X < m_Config.Width);
-    assert(Location.Y >= 0 && Location.Y < m_Config.Height);
+    assert(Location.X >= 0 && Location.X < m_Width);
+    assert(Location.Y >= 0 && Location.Y < m_Height);
 
     real* Depths = (real*)m_Buffer.data();
-    Depths[Location.X + Location.Y * m_Config.Width] = Depth;
+    Depths[Location.X + Location.Y * m_Width] = Depth;
 }
 
 void rndr::Image::SetPixelStencilValue(const Point2i& Location, uint8_t Value)
 {
-    assert(Location.X >= 0 && Location.X < m_Config.Width);
-    assert(Location.Y >= 0 && Location.Y < m_Config.Height);
+    assert(Location.X >= 0 && Location.X < m_Width);
+    assert(Location.Y >= 0 && Location.Y < m_Height);
 
     uint8_t* Values = (uint8_t*)m_Buffer.data();
-    Values[Location.X + Location.Y * m_Config.Width] = Value;
+    Values[Location.X + Location.Y * m_Width] = Value;
 }
 
 template <>
@@ -303,11 +303,11 @@ void rndr::Image::ClearColor(const Vector4r& Color)
     }
     const uint32_t PackedColor = ColorToUInt32(sRGBColor, m_Config.PixelLayout);
 
-    ParallelFor(m_Config.Height, 64,
+    ParallelFor(m_Height, 64,
                 [this, PackedColor](int RowIndex)
                 {
-                    uint32_t* Pixels = (uint32_t*)m_Buffer.data() + m_Config.Width * RowIndex;
-                    const uint32_t Size = m_Config.Width;
+                    uint32_t* Pixels = (uint32_t*)m_Buffer.data() + m_Width * RowIndex;
+                    const uint32_t Size = m_Width;
                     for (int i = 0; i < Size; i++)
                     {
                         *Pixels++ = PackedColor;
@@ -319,11 +319,11 @@ void rndr::Image::ClearDepth(real ClearValue)
 {
     RNDR_CPU_TRACE("Image Clear Depth");
 
-    ParallelFor(m_Config.Height, 64,
+    ParallelFor(m_Height, 64,
                 [this, ClearValue](int RowIndex)
                 {
-                    real* Pixels = (real*)m_Buffer.data() + m_Config.Width * RowIndex;
-                    const uint32_t Size = m_Config.Width;
+                    real* Pixels = (real*)m_Buffer.data() + m_Width * RowIndex;
+                    const uint32_t Size = m_Width;
                     for (int i = 0; i < Size; i++)
                     {
                         *Pixels++ = ClearValue;
@@ -335,11 +335,11 @@ void rndr::Image::ClearStencil(uint8_t ClearValue)
 {
     RNDR_CPU_TRACE("Image Clear Depth");
 
-    ParallelFor(m_Config.Height, 64,
+    ParallelFor(m_Height, 64,
                 [this, ClearValue](int RowIndex)
                 {
-                    uint8_t* Pixels = (uint8_t*)m_Buffer.data() + m_Config.Width * RowIndex;
-                    const uint32_t Size = m_Config.Width;
+                    uint8_t* Pixels = (uint8_t*)m_Buffer.data() + m_Width * RowIndex;
+                    const uint32_t Size = m_Width;
                     for (int i = 0; i < Size; i++)
                     {
                         *Pixels++ = ClearValue;
@@ -349,7 +349,7 @@ void rndr::Image::ClearStencil(uint8_t ClearValue)
 
 real rndr::Image::GetAspectRatio() const
 {
-    return m_Config.Height != 0 ? m_Config.Width / (real)m_Config.Height : 1;
+    return m_Height != 0 ? m_Width / (real)m_Height : 1;
 }
 
 void rndr::Image::SetPixelFormat(rndr::GammaSpace Space, rndr::PixelLayout Layout)
@@ -385,7 +385,7 @@ void rndr::Image::GenerateMipMaps()
         }
     }
 
-    const int Max = std::max(m_Config.Width, m_Config.Height);
+    const int Max = std::max(m_Width, m_Height);
     const int LevelCount = (int)rndr::Log2(Max) + 1;
 
     m_MipMaps.resize(LevelCount);
@@ -398,30 +398,29 @@ void rndr::Image::GenerateMipMaps()
             continue;
         }
 
-        ImageConfig Config;
-        Config.Width = m_MipMaps[i - 1]->m_Config.Width / 2;
-        Config.Height = m_MipMaps[i - 1]->m_Config.Height / 2;
+        int NewWidth = m_MipMaps[i - 1]->m_Width / 2;
+        int NewHeight = m_MipMaps[i - 1]->m_Height / 2;
 
-        Config.Width = Config.Width == 0 ? 1 : Config.Width;
-        Config.Height = Config.Height == 0 ? 1 : Config.Height;
+        NewWidth = NewWidth == 0 ? 1 : NewWidth;
+        NewHeight = NewHeight == 0 ? 1 : NewHeight;
 
-        m_MipMaps[i] = new Image(Config);
+        m_MipMaps[i] = new Image(NewWidth, NewHeight, m_Config);
 
         Image* CurrentImage = m_MipMaps[i];
         Image* PrevImage = m_MipMaps[i - 1];
 
-        for (int Y = 0; Y < m_MipMaps[i]->m_Config.Height; Y++)
+        for (int Y = 0; Y < m_MipMaps[i]->m_Height; Y++)
         {
-            for (int X = 0; X < m_MipMaps[i]->m_Config.Width; X++)
+            for (int X = 0; X < m_MipMaps[i]->m_Width; X++)
             {
                 Vector4r Result;
-                if (PrevImage->m_Config.Width == 1)
+                if (PrevImage->m_Width == 1)
                 {
                     const Vector4r Bottom = PrevImage->GetPixelColor(0, 2 * Y);
                     const Vector4r Top = PrevImage->GetPixelColor(0, 2 * Y + 1);
                     Result = 0.5 * Bottom + 0.5 * Top;
                 }
-                else if (PrevImage->m_Config.Height == 1)
+                else if (PrevImage->m_Height == 1)
                 {
                     const Vector4r Left = PrevImage->GetPixelColor(2 * X, 0);
                     const Vector4r Right = PrevImage->GetPixelColor(2 * X + 1, 0);

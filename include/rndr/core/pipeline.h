@@ -36,9 +36,8 @@ enum class ImageFileFormat
 
 enum class ImageFiltering
 {
-    NearestNeighbor,
-    BilinearInterpolation,
-    TrilinearInterpolation  // Valid only for minification filter
+    Point, // Sometimes called NearestNeighbour
+    Linear, // Also bilinear
 };
 
 enum class DepthTest

@@ -52,8 +52,10 @@ void BoxRenderPass::Init(rndr::Camera* Camera)
 
     const std::string WallTexturePath = ASSET_DIR "/bricked-wall.png";
     rndr::ImageConfig TextureConfig;
-    TextureConfig.MagFilter = rndr::ImageFiltering::BilinearInterpolation;
-    TextureConfig.MinFilter = rndr::ImageFiltering::TrilinearInterpolation;
+    TextureConfig.MagFilter = rndr::ImageFiltering::Linear;
+    TextureConfig.MinFilter = rndr::ImageFiltering::Linear;
+    TextureConfig.MipFilter = rndr::ImageFiltering::Linear;
+    TextureConfig.bUseMips = true;
     m_Texture = std::make_unique<rndr::Image>(WallTexturePath, TextureConfig);
 
     m_Camera = Camera;

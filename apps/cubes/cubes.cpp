@@ -10,12 +10,6 @@ int main()
 {
     rndr::RndrApp* RndrApp = rndr::Init();
 
-    const std::string SoldierTexturePath = ASSET_DIR "/SMS_Ranger_Title.bmp";
-    rndr::ImageConfig TextureConfig;
-    TextureConfig.MagFilter = rndr::ImageFiltering::NearestNeighbor;
-    TextureConfig.MinFilter = rndr::ImageFiltering::TrilinearInterpolation;
-    std::unique_ptr<rndr::Image> SoldierTexture = std::make_unique<rndr::Image>(SoldierTexturePath, TextureConfig);
-
     rndr::Window* MainWindow = rndr::GRndrApp->GetWindow();
     const int Width = MainWindow->GetWidth();
     const int Height = MainWindow->GetHeight();
