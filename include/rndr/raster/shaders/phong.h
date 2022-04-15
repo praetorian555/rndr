@@ -8,6 +8,7 @@
 
 #include "rndr/raster/rasterimage.h"
 #include "rndr/raster/rasterpipeline.h"
+#include "rndr/raster/rastersampler.h"
 
 namespace rndr
 {
@@ -70,8 +71,8 @@ private:
     };
 
 private:
-    Image* m_DiffuseImage = nullptr;
-    Image* m_SpecularImage = nullptr;
+    Sampler2D m_DiffuseImage = nullptr;
+    Sampler2D m_SpecularImage = nullptr;
 
     int m_Shininess = 32;
     Vector3r m_Kd = Colors::Black.XYZ();

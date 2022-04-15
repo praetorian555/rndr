@@ -18,6 +18,8 @@ void rndr::PhongShader::VertexShader(const InVertexInfo& InInfo, OutVertexInfo& 
 
 void rndr::PhongShader::FragmentShader(const Triangle& Triangle, const InFragmentInfo& InInfo, OutFragmentInfo& OutInfo)
 {
+    
+
     const Point2r TexCoords = RNDR_INTERPOLATE(Triangle, OutVertex, Point2r, TexCoords, InInfo);
     const Vector2r duvdx = RNDR_DX(Triangle, OutVertex, Point2r, TexCoords, Vector2r, InInfo);
     const Vector2r duvdy = RNDR_DY(Triangle, OutVertex, Point2r, TexCoords, Vector2r, InInfo);
@@ -25,13 +27,13 @@ void rndr::PhongShader::FragmentShader(const Triangle& Triangle, const InFragmen
     Vector3r Kd = m_Kd;
     if (m_DiffuseImage)
     {
-        Kd = m_DiffuseImage->Sample(TexCoords, duvdx, duvdy).XYZ();
+        Kd = m_DiffuseImage.Sample(TexCoords, duvdx, duvdy).XYZ();
     }
 
     Vector3r Ks = m_Ks;
     if (m_SpecularImage)
     {
-        Ks = m_SpecularImage->Sample(TexCoords, duvdx, duvdy).XYZ();
+        Ks = m_SpecularImage.Sample(TexCoords, duvdx, duvdy).XYZ();
     }
 
     const Point3r FragmentPosition = RNDR_INTERPOLATE(Triangle, OutVertex, Point3r, PositionWorld, InInfo);

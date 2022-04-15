@@ -15,6 +15,7 @@ namespace rndr
 
 class Window;
 struct Color;
+class Sampler2D;
 
 struct ImageConfig
 {
@@ -81,6 +82,17 @@ public:
     uint32_t GetPixelSize() const;
 
     /**
+     * Set value of a pixel.
+     * @tparam T Value type. Use Vector4r for colors, real for depth and uint32_t for stencil value.
+     * @param Location Pixel position in screen space where origin is in bottom left corner.
+     * @param Value Value to set in pixel. If this is a color value make sure that it is in linear space.
+     */
+    template <typename T>
+    void SetPixelValue(const Point2i& Location, const T& Value);
+    template <typename T>
+    void SetPixelValue(int X, int Y, const T& Value);
+
+    /**
      * Get color of specified pixel in linear space.
      */
     Vector4r GetPixelColor(const Point2i& Location) const;
@@ -93,66 +105,33 @@ public:
     real GetPixelDepth(int X, int Y) const;
 
     /**
-     * Colors a pixel at a specified location.
-     *
-     * @param Location Location of a pixel in screen space.
-     * @param Color New pixel color in linear space.
+     * Get stencil value of a specified pixel.
      */
-    void SetPixelColor(const Point2i& Location, const Vector4r& Color);
+    uint8_t GetStencilValue(const Point2i& Location) const;
+    uint8_t GetStencilValue(int X, int Y) const;
 
     /**
-     * Colors a pixel at (X, Y) location.
-     *
-     * @param X Coordinate along the X axis.
-     * @param Y Coordinate along the Y axis.
-     * @param Color New pixel color in linear space.
+     * Clear the image with specified value.
+     * @tparam T Value type. Use Vector4r for colors, real for depth and uint32_t for stencil value.
+     * @param Value Value to set in pixel. If this is a color value make sure that it is in linear space.
      */
-    void SetPixelColor(int X, int Y, const Vector4r& Color);
-
-    /**
-     * Set pixel depth to the specified value.
-     */
-    void SetPixelDepth(const Point2i& Location, real Depth);
-    void SetPixelDepth(int X, int Y, real Depth);
-
-    /**
-     * Copies content from Source to this image.
-     *
-     * @param Source Source image.
-     * @param BottomLeft Bottom left point to which to copy the Source image.
-     */
-    void RenderImage(const rndr::Image& Source, const Point2i& BottomLeft);
-
-    /**
-     * Clear the buffer with specified value.
-     * @param Color The color to fill the buffer with. Should be in linear space.
-     * @note Valid if image is used a color buffer.
-     */
-    void ClearColorBuffer(const Vector4r& Color);
-
-    /**
-     * Clear the buffer with specified value.
-     *
-     * @note Valid if image is used a depth buffer.
-     */
-    void ClearDepthBuffer(real ClearValue);
-
-    // This is done by default if we use TrilinearInterpolation for minification filter but any
-    // change in data will not trigger the generation again.
-    void GenerateMipMaps();
-
-    /**
-     * Calculate image sample based on UV coordinates.
-     */
-    Vector4r Sample(const Point2r& TexCoord, const Vector2r& duvdx, const Vector2r& duvdy);
-
-    static Vector4r SampleNearestNeighbor(const Image* I, const Point2r& TexCoord);
-    static Vector4r SampleBilinear(const Image* I, const Point2r& TexCoord);
-    static Vector4r SampleTrilinear(const Image* I, const Point2r& TexCoord, real LOD);
+    template <typename T>
+    void Clear(const T& Value);
 
 protected:
+    void SetPixelColor(const Point2i& Location, const Vector4r& Color);
     void SetPixelColor(const Point2i& Position, uint32_t Color);
-    void SetPixelColor(int X, int Y, uint32_t Color);
+    void SetPixelDepth(const Point2i& Location, real Depth);
+    void SetPixelStencilValue(const Point2i& Location, uint8_t Value);
+
+    void ClearColor(const Vector4r& Color);
+    void ClearDepth(real Depth);
+    void ClearStencil(uint8_t Value);
+
+    void GenerateMipMaps();
+
+private:
+    friend struct Sampler2D;
 
 private:
     ImageConfig m_Config;
@@ -162,6 +141,47 @@ private:
 
     std::vector<Image*> m_MipMaps;
 };
+
+// Implementations
+template <typename T>
+void Image::SetPixelValue(const Point2i& Location, const T& Value)
+{
+    assert(false);
+}
+
+template <typename T>
+void Image::SetPixelValue(int X, int Y, const T& Value)
+{
+    assert(false);
+}
+
+template <typename T>
+void Image::Clear(const T& Value)
+{
+    assert(false);
+}
+
+template <>
+void Image::SetPixelValue<Vector4r>(const Point2i& Location, const Vector4r& Value);
+template <>
+void Image::SetPixelValue<real>(const Point2i& Location, const real& Value);
+template <>
+void Image::SetPixelValue<uint8_t>(const Point2i& Location, const uint8_t& Value);
+
+template <>
+void Image::SetPixelValue<Vector4r>(int X, int Y, const Vector4r& Value);
+template <>
+void Image::SetPixelValue<real>(int X, int Y, const real& Value);
+template <>
+void Image::SetPixelValue<uint8_t>(int X, int Y, const uint8_t& Value);
+
+template <>
+void Image::Clear<Vector4r>(const Vector4r& Value);
+template <>
+void Image::Clear<real>(const real& Value);
+template <>
+void Image::Clear<uint8_t>(const uint8_t& Value);
+
 
 }  // namespace rndr
 

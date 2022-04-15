@@ -16,7 +16,8 @@ enum class PixelLayout
     A8R8G8B8,
     B8G8R8A8,
     R8G8B8A8,
-    DEPTH_F32
+    DEPTH_F32,
+    STENCIL_UINT8
 };
 
 enum class GammaSpace

@@ -109,7 +109,7 @@ rndr::Image::Image(const std::string& FilePath, const ImageConfig& Config) : m_C
         {
             Vector4r Color = ColorToVector(DataU32[X + Y * Width], PixelLayout::R8G8B8A8);
             Color = ToLinearSpace(Color);
-            SetPixelColor(X, Y, Color);
+            SetPixelColor(Point2i{X, Y}, Color);
         }
     }
 
@@ -175,6 +175,62 @@ real rndr::Image::GetPixelDepth(int X, int Y) const
     return GetPixelDepth(Point2i{X, Y});
 }
 
+uint8_t rndr::Image::GetStencilValue(const Point2i& Location) const
+{
+    assert(Location.X >= 0 && Location.X < m_Config.Width);
+    assert(Location.Y >= 0 && Location.Y < m_Config.Height);
+
+    const uint8_t* Values = (uint8_t*)m_Buffer.data();
+    return Values[Location.X + Location.Y * m_Config.Width];
+}
+
+uint8_t rndr::Image::GetStencilValue(int X, int Y) const
+{
+    return GetStencilValue(Point2i{X, Y});
+}
+
+template <>
+void rndr::Image::SetPixelValue<rndr::Vector4r>(const Point2i& Location, const Vector4r& Value)
+{
+    assert(m_Config.PixelLayout != PixelLayout::DEPTH_F32 && m_Config.PixelLayout != PixelLayout::STENCIL_UINT8);
+    SetPixelColor(Location, Value);
+}
+
+template <>
+void rndr::Image::SetPixelValue<real>(const Point2i& Location, const real& Value)
+{
+    assert(m_Config.PixelLayout == PixelLayout::DEPTH_F32);
+    SetPixelDepth(Location, Value);
+}
+
+template <>
+void rndr::Image::SetPixelValue<uint8_t>(const Point2i& Location, const uint8_t& Value)
+{
+    assert(m_Config.PixelLayout == PixelLayout::STENCIL_UINT8);
+    SetPixelStencilValue(Location, Value);
+}
+
+template <>
+void rndr::Image::SetPixelValue<rndr::Vector4r>(int X, int Y, const Vector4r& Value)
+{
+    assert(m_Config.PixelLayout != PixelLayout::DEPTH_F32 && m_Config.PixelLayout != PixelLayout::STENCIL_UINT8);
+    SetPixelColor(Point2i{X, Y}, Value);
+}
+
+template <>
+void rndr::Image::SetPixelValue<real>(int X, int Y, const real& Value)
+{
+    assert(m_Config.PixelLayout == PixelLayout::DEPTH_F32);
+    SetPixelDepth(Point2i{X, Y}, Value);
+}
+
+template <>
+void rndr::Image::SetPixelValue<uint8_t>(int X, int Y, const uint8_t& Value)
+{
+    assert(m_Config.PixelLayout == PixelLayout::STENCIL_UINT8);
+    SetPixelStencilValue(Point2i{X, Y}, Value);
+}
+
 void rndr::Image::SetPixelColor(const Point2i& Location, const Vector4r& Color)
 {
     assert(Location.X >= 0 && Location.X < m_Config.Width);
@@ -190,11 +246,6 @@ void rndr::Image::SetPixelColor(const Point2i& Location, const Vector4r& Color)
     Pixels[Location.X + Location.Y * m_Config.Width] = Packed;
 }
 
-void rndr::Image::SetPixelColor(int X, int Y, const Vector4r& Color)
-{
-    SetPixelColor(Point2i{X, Y}, Color);
-}
-
 void rndr::Image::SetPixelColor(const Point2i& Location, uint32_t Color)
 {
     assert(Location.X >= 0 && Location.X < m_Config.Width);
@@ -202,11 +253,6 @@ void rndr::Image::SetPixelColor(const Point2i& Location, uint32_t Color)
 
     uint32_t* Pixels = (uint32_t*)m_Buffer.data();
     Pixels[Location.X + Location.Y * m_Config.Width] = Color;
-}
-
-void rndr::Image::SetPixelColor(int X, int Y, uint32_t Color)
-{
-    SetPixelColor(Point2i{X, Y}, Color);
 }
 
 void rndr::Image::SetPixelDepth(const Point2i& Location, real Depth)
@@ -218,12 +264,34 @@ void rndr::Image::SetPixelDepth(const Point2i& Location, real Depth)
     Depths[Location.X + Location.Y * m_Config.Width] = Depth;
 }
 
-void rndr::Image::SetPixelDepth(int X, int Y, real Depth)
+void rndr::Image::SetPixelStencilValue(const Point2i& Location, uint8_t Value)
 {
-    SetPixelDepth(Point2i{X, Y}, Depth);
+    assert(Location.X >= 0 && Location.X < m_Config.Width);
+    assert(Location.Y >= 0 && Location.Y < m_Config.Height);
+
+    uint8_t* Values = (uint8_t*)m_Buffer.data();
+    Values[Location.X + Location.Y * m_Config.Width] = Value;
 }
 
-void rndr::Image::ClearColorBuffer(const Vector4r& Color)
+template <>
+void rndr::Image::Clear<rndr::Vector4r>(const Vector4r& Value)
+{
+    ClearColor(Value);
+}
+
+template <>
+void rndr::Image::Clear<real>(const real& Value)
+{
+    ClearDepth(Value);
+}
+
+template <>
+void rndr::Image::Clear<uint8_t>(const uint8_t& Value)
+{
+    ClearStencil(Value);
+}
+
+void rndr::Image::ClearColor(const Vector4r& Color)
 {
     RNDR_CPU_TRACE("Image Clear Color");
 
@@ -247,7 +315,7 @@ void rndr::Image::ClearColorBuffer(const Vector4r& Color)
                 });
 }
 
-void rndr::Image::ClearDepthBuffer(real ClearValue)
+void rndr::Image::ClearDepth(real ClearValue)
 {
     RNDR_CPU_TRACE("Image Clear Depth");
 
@@ -255,6 +323,22 @@ void rndr::Image::ClearDepthBuffer(real ClearValue)
                 [this, ClearValue](int RowIndex)
                 {
                     real* Pixels = (real*)m_Buffer.data() + m_Config.Width * RowIndex;
+                    const uint32_t Size = m_Config.Width;
+                    for (int i = 0; i < Size; i++)
+                    {
+                        *Pixels++ = ClearValue;
+                    }
+                });
+}
+
+void rndr::Image::ClearStencil(uint8_t ClearValue)
+{
+    RNDR_CPU_TRACE("Image Clear Depth");
+
+    ParallelFor(m_Config.Height, 64,
+                [this, ClearValue](int RowIndex)
+                {
+                    uint8_t* Pixels = (uint8_t*)m_Buffer.data() + m_Config.Width * RowIndex;
                     const uint32_t Size = m_Config.Width;
                     for (int i = 0; i < Size; i++)
                     {
@@ -283,7 +367,7 @@ void rndr::Image::SetPixelFormat(rndr::GammaSpace Space, rndr::PixelLayout Layou
                     }
                     const uint32_t NewColor = ColorToUInt32(OldColor, Layout);
                     assert(NewColor & 0xFF000000);
-                    SetPixelColor(X, Y, NewColor);
+                    SetPixelColor(Point2i{X, Y}, NewColor);
                 });
 
     m_Config.PixelLayout = Layout;
@@ -352,98 +436,10 @@ void rndr::Image::GenerateMipMaps()
                     Result = 0.25 * BottomLeft + 0.25 * BottomRight + 0.25 * TopLeft + 0.25 * TopRight;
                 }
 
-                CurrentImage->SetPixelColor(X, Y, Result);
+                CurrentImage->SetPixelColor(Point2i{X, Y}, Result);
             }
         }
     }
-}
-
-rndr::Vector4r rndr::Image::Sample(const Point2r& TexCoord, const Vector2r& duvdx, const Vector2r& duvdy)
-{
-    // TODO(mkostic): Rebase uv to be in range [0, 1]
-
-    const real Width = std::max(std::max(std::abs(duvdx.X), std::abs(duvdx.Y)), std::max(std::abs(duvdy.X), std::abs(duvdy.Y)));
-
-    const int MipMapLevels = m_MipMaps.size();
-    real LOD = MipMapLevels - 1 + Log2(std::max(Width, (real)1e-8));
-    LOD += m_Config.LODBias;
-
-    const ImageFiltering Filter = LOD < 0 ? m_Config.MagFilter : m_Config.MinFilter;
-
-    Vector4r Result;
-    switch (Filter)
-    {
-        case ImageFiltering::NearestNeighbor:
-        {
-            Result = SampleNearestNeighbor(this, TexCoord);
-            break;
-        }
-        case ImageFiltering::BilinearInterpolation:
-        {
-            Result = SampleBilinear(this, TexCoord);
-            break;
-        }
-        case ImageFiltering::TrilinearInterpolation:
-        {
-            assert(LOD >= 0);  // Not allowed for magnification filters
-            Result = SampleTrilinear(this, TexCoord, LOD);
-            break;
-        }
-    }
-
-    return Result;
-}
-
-rndr::Vector4r rndr::Image::SampleNearestNeighbor(const Image* I, const Point2r& TexCoord)
-{
-    const real U = TexCoord.X;
-    const real V = TexCoord.Y;
-
-    const real X = (I->m_Config.Width - 1) * U;
-    const real Y = (I->m_Config.Height - 1) * V;
-
-    const rndr::Point2i NearestDesc{(int)X, (int)Y};
-    return I->GetPixelColor(NearestDesc);
-}
-
-rndr::Vector4r rndr::Image::SampleBilinear(const Image* I, const Point2r& TexCoord)
-{
-    const real U = TexCoord.X;
-    const real V = TexCoord.Y;
-
-    const real X = (I->m_Config.Width - 1) * U;
-    const real Y = (I->m_Config.Height - 1) * V;
-
-    const Point2i BottomLeft{(int)(X - 0.5), (int)(Y - 0.5)};
-    const Point2i BottomRight{(int)(X + 0.5), (int)(Y - 0.5)};
-    const Point2i TopLeft{(int)(X - 0.5), (int)(Y + 0.5)};
-    const Point2i TopRight{(int)(X + 0.5), (int)(Y + 0.5)};
-
-    Vector4r Result;
-    // clang-format off
-    Result = I->GetPixelColor(BottomLeft)  * (1 - U) * (1 - V) +
-             I->GetPixelColor(BottomRight) *      U  * (1 - V) +
-             I->GetPixelColor(TopLeft)     * (1 - U) *      V  +
-             I->GetPixelColor(TopRight)    *      U  *      V;
-    // clang-format on
-
-    return Result;
-}
-
-rndr::Vector4r rndr::Image::SampleTrilinear(const Image* I, const Point2r& TexCoord, real LOD)
-{
-    const int Floor = (int)LOD;
-    int Ceil = (int)(LOD + 1);
-
-    if (Ceil == I->m_MipMaps.size())
-    {
-        Ceil = Floor;
-    }
-
-    const Vector4r FloorSample = SampleBilinear(I->m_MipMaps[Floor], TexCoord);
-    const Vector4r CeilSample = SampleBilinear(I->m_MipMaps[Ceil], TexCoord);
-
-    return rndr::Lerp(LOD - (real)Floor, FloorSample, CeilSample);
 }
 
 #endif  // RNDR_RASTER

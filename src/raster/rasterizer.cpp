@@ -404,7 +404,7 @@ void rndr::Rasterizer::ProcessFragment(const Triangle& T, InFragmentInfo& InInfo
             return;
         }
 
-        m_Pipeline->DepthImage->SetPixelDepth(InInfo.Position, InInfo.Depth);
+        m_Pipeline->DepthImage->SetPixelValue(InInfo.Position, InInfo.Depth);
     }
 
     // Run Pixel shader
@@ -420,7 +420,7 @@ void rndr::Rasterizer::ProcessFragment(const Triangle& T, InFragmentInfo& InInfo
             return;
         }
 
-        m_Pipeline->DepthImage->SetPixelDepth(InInfo.Position, InInfo.Depth);
+        m_Pipeline->DepthImage->SetPixelValue(InInfo.Position, InInfo.Depth);
     }
 
     // TODO(mkostic): Add support for different blend operators
@@ -428,7 +428,7 @@ void rndr::Rasterizer::ProcessFragment(const Triangle& T, InFragmentInfo& InInfo
     OutInfo.Color = m_Pipeline->Blend(OutInfo.Color, CurrentColor);
 
     // Write color into color buffer
-    m_Pipeline->ColorImage->SetPixelColor(InInfo.Position, OutInfo.Color);
+    m_Pipeline->ColorImage->SetPixelValue(InInfo.Position, OutInfo.Color);
 }
 
 rndr::Point3r rndr::Rasterizer::FromNDCToRasterSpace(const Point3r& Point)
