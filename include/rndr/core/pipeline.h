@@ -8,6 +8,11 @@
 namespace rndr
 {
 
+struct PipelineConstants
+{
+    static constexpr int MaxFrameBufferColorBuffers = 4;
+};
+
 /**
  * Exact positions of channels and their size in bits.
  */
@@ -83,6 +88,40 @@ enum class BlendOperator
     ReverseSubtract,  // Destination - Source
     Min,
     Max
+};
+
+struct ImageConfig
+{
+    PixelLayout PixelLayout = PixelLayout::A8R8G8B8;
+    GammaSpace GammaSpace = GammaSpace::GammaCorrected;
+
+    ImageFiltering MagFilter = ImageFiltering::Point;
+    ImageFiltering MinFilter = ImageFiltering::Point;
+    ImageFiltering MipFilter = ImageFiltering::Linear;
+    bool bUseMips = false;
+
+    int LODBias = 0;
+};
+
+struct FrameBufferProperties
+{
+    bool bWindowFrameBuffer = false;
+
+    int ColorBufferCount = 1;
+    PixelLayout ColorPixelLayout[PipelineConstants::MaxFrameBufferColorBuffers] = {PixelLayout::A8R8G8B8};
+    GammaSpace ColorGammaSpace[PipelineConstants::MaxFrameBufferColorBuffers] = {GammaSpace::GammaCorrected};
+
+    bool bUseDepthStencil = false;
+    PixelLayout DepthPixelLayout = PixelLayout::DEPTH_F32;
+    PixelLayout StencilPixelLayout = PixelLayout::STENCIL_UINT8;
+};
+
+struct GraphicsContextProperties
+{
+    int WindowWidth = 0;
+    int WindowHeight = 0;
+
+    FrameBufferProperties FrameBuffer;
 };
 
 // Helper functions

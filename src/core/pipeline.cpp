@@ -157,6 +157,10 @@ int rndr::GetPixelSize(PixelLayout Layout)
         {
             return sizeof(real);
         }
+        case PixelLayout::STENCIL_UINT8:
+        {
+            return sizeof(uint8_t);
+        }
         default:
         {
             assert(false);

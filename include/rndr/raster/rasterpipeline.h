@@ -12,6 +12,7 @@ namespace rndr
 
 class Triangle;
 class Image;
+class FrameBuffer;
 
 /**
  * Holds vertex shader input data.
@@ -182,8 +183,7 @@ public:
 
     real Gamma = RNDR_GAMMA;
 
-    rndr::Image* ColorImage = nullptr;
-    rndr::Image* DepthImage = nullptr;
+    FrameBuffer* RenderTarget;
 
 public:
     Vector4r Blend(const Vector4r& Src, const Vector4r Dst) const;

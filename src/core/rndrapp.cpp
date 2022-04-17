@@ -9,6 +9,10 @@
 
 #include "rndr/profiling/cputracer.h"
 
+#if defined RNDR_RASTER
+#include "rndr/raster/rastergraphicscontext.h"
+#endif // RNDR_RASTER
+
 rndr::RndrApp* rndr::GRndrApp = nullptr;
 
 rndr::RndrApp::RndrApp()
@@ -52,14 +56,13 @@ void rndr::RndrApp::Run()
 
         rndr::InputSystem::Get()->Update(FrameDuration);
 
-        rndr::Image* ColorImage = m_Window->GetColorImage();
-        rndr::Image* DepthImage = m_Window->GetDepthImage();
-        ColorImage->Clear(rndr::Colors::Black);
-        DepthImage->Clear(rndr::Infinity);
+        GraphicsContext* GC = m_Window->GetGraphicsContext();
+        GC->ClearColor(nullptr, Colors::Black);
+        GC->ClearDepth(nullptr, rndr::Infinity);
 
         OnTickDelegate.Execute(FrameDuration);
 
-        m_Window->RenderToWindow();
+        GC->Present(false);
 
         auto FrameEnd = std::chrono::high_resolution_clock().now();
         FrameDuration = std::chrono::duration_cast<std::chrono::milliseconds>(FrameEnd - FrameStart).count();

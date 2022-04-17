@@ -11,7 +11,6 @@
 namespace rndr
 {
 
-class Image;
 class Model;
 class Allocator;
 
@@ -26,9 +25,6 @@ public:
     void SetPipeline(const rndr::Pipeline* Pipeline);
 
     void Draw(rndr::Model* Model);
-
-    // Assumes valid depth values are in range [0, 1]
-    static bool PerformDepthTest(rndr::DepthTest Operator, real Src, real Dst);
 
     Point3r FromNDCToRasterSpace(const Point3r& Point);
     Point3r FromRasterToNDCSpace(const Point3r& Point);

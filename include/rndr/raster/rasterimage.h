@@ -3,32 +3,18 @@
 #include <functional>
 
 #include "rndr/core/base.h"
+
+#if defined RNDR_RASTER
+
 #include "rndr/core/bounds2.h"
 #include "rndr/core/colors.h"
 #include "rndr/core/math.h"
 #include "rndr/core/pipeline.h"
 
-#if defined RNDR_RASTER
-
 namespace rndr
 {
 
-class Window;
-struct Color;
 class Sampler2D;
-
-struct ImageConfig
-{
-    PixelLayout PixelLayout = PixelLayout::A8R8G8B8;
-    GammaSpace GammaSpace = GammaSpace::GammaCorrected;
-
-    ImageFiltering MagFilter = ImageFiltering::Point;
-    ImageFiltering MinFilter = ImageFiltering::Point;
-    ImageFiltering MipFilter = ImageFiltering::Linear;
-    bool bUseMips = false;
-
-    int LODBias = 0;
-};
 
 /**
  * Represents a memory buffer to which user can render.
@@ -39,6 +25,7 @@ struct ImageConfig
 class Image
 {
 public:
+    Image() = default;
     Image(int Width, int Height, const ImageConfig& Options = ImageConfig{});
     Image(const std::string& FilePath, const ImageConfig& Options = ImageConfig{});
 
@@ -152,7 +139,6 @@ template <>
 void Image::Clear<real>(const real& Value);
 template <>
 void Image::Clear<uint8_t>(const uint8_t& Value);
-
 
 }  // namespace rndr
 

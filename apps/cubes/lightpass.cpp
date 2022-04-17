@@ -1,7 +1,9 @@
 #include "lightpass.h"
 
-void LightRenderPass::Init(rndr::Camera* Camera)
+void LightRenderPass::Init(rndr::GraphicsContext* GraphicsContext, rndr::Camera* Camera)
 {
+    m_GraphicsContext = GraphicsContext;
+
     m_Pipeline = std::make_unique<rndr::Pipeline>();
     m_Pipeline->WindingOrder = rndr::WindingOrder::CCW;
     m_Pipeline->VertexShader = RNDR_BIND_TWO_PARAM(this, &LightRenderPass::VertexShader);
@@ -19,6 +21,8 @@ void LightRenderPass::Init(rndr::Camera* Camera)
     m_Pipeline->SrcAlphaBlendFactor = rndr::BlendFactor::One;
     m_Pipeline->DstAlphaBlendFactor = rndr::BlendFactor::OneMinusSrcAlpha;
 
+    m_Pipeline->RenderTarget = m_GraphicsContext->GetWindowFrameBuffer();
+
     m_Camera = Camera;
 
     rndr::Transform ShaderConstant;
@@ -30,7 +34,7 @@ void LightRenderPass::Init(rndr::Camera* Camera)
 
 void LightRenderPass::ShutDown() {}
 
-void LightRenderPass::Render(rndr::Rasterizer& Renderer, real DeltaSeconds)
+void LightRenderPass::Render(real DeltaSeconds)
 {
     const real LightSize = 0.3;
     rndr::Transform LightTransform = rndr::Translate((rndr::Vector3r)m_LightPosition) * rndr::Scale(LightSize, LightSize, LightSize);
@@ -39,13 +43,7 @@ void LightRenderPass::Render(rndr::Rasterizer& Renderer, real DeltaSeconds)
     rndr::Transform* ShaderConstant = (rndr::Transform*)m_Model->GetShaderConstants().Data;
     *ShaderConstant = LightTransform;
 
-    Renderer.Draw(m_Model.get());
-}
-
-void LightRenderPass::SetTargetImages(rndr::Image* ColorImage, rndr::Image* DepthImage)
-{
-    m_Pipeline->ColorImage = ColorImage;
-    m_Pipeline->DepthImage = DepthImage;
+    m_GraphicsContext->Render(m_Model.get());
 }
 
 rndr::Point3r LightRenderPass::GetLightPosition() const

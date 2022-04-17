@@ -30,16 +30,21 @@ rndr::Image::Image(int Width, int Height, const ImageConfig& Config) : m_Config(
     ParallelFor(ByteCount / PixelSize, 64,
                 [&](int i)
                 {
-                    if (m_Config.PixelLayout != rndr::PixelLayout::DEPTH_F32)
+                    if (m_Config.PixelLayout == PixelLayout::DEPTH_F32)
+                    {
+                        real* Pixel = (real*)(m_Buffer.data() + i * PixelSize);
+                        *Pixel = rndr::Infinity;
+                    }
+                    else if (m_Config.PixelLayout == PixelLayout::STENCIL_UINT8)
+                    {
+                        uint8_t* Pixel = (uint8_t*)(m_Buffer.data() + i * PixelSize);
+                        *Pixel = 0;
+                    }
+                    else
                     {
                         uint32_t* Pixel = (uint32_t*)(m_Buffer.data() + i * PixelSize);
                         Vector4r BackgroundColor = ToGammaCorrectSpace(Colors::Pink);
                         *Pixel = ColorToUInt32(BackgroundColor, m_Config.PixelLayout);
-                    }
-                    else
-                    {
-                        real* Pixel = (real*)(m_Buffer.data() + i * PixelSize);
-                        *Pixel = -rndr::Infinity;
                     }
                 });
 

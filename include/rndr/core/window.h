@@ -7,6 +7,7 @@
 #include "rndr/core/inputprimitives.h"
 
 #if defined RNDR_RASTER
+#include "rndr/raster/rastergraphicscontext.h"
 #include "rndr/raster/rasterimage.h"
 #else
 #error "Image implementation is missing!"
@@ -21,9 +22,6 @@ namespace rndr
 struct WindowConfig
 {
     std::string Name = "Default Window";
-
-    int Width = 1024;
-    int Height = 768;
 };
 
 /**
@@ -32,7 +30,7 @@ struct WindowConfig
 class Window
 {
 public:
-    Window(const WindowConfig& Options = WindowConfig());
+    Window(int Width = 1024, int Height = 768, const WindowConfig& Options = WindowConfig());
     ~Window() = default;
 
     /**
@@ -40,47 +38,14 @@ public:
      */
     void ProcessEvents();
 
-    /**
-     * Check if window is closed.
-     */
     bool IsClosed() const;
-
-    /**
-     * Close the window.
-     */
     void Close();
 
-    /**
-     * Get OS window handle.
-     */
-    NativeWindowHandle GetNativeWindowHandle() const { return m_NativeWindowHandle; }
-
-    /**
-     * Get window's color image.
-     */
-    Image* GetColorImage() { return m_ColorImage.get(); }
-    const Image* GetColorImage() const { return m_ColorImage.get(); }
-
-    /**
-     * Get window's depth image.
-     */
-    Image* GetDepthImage() { return m_DepthImage.get(); }
-    const Image* GetDepthImage() const { return m_DepthImage.get(); }
-
-    /**
-     * Check if window size is 0 along any of the x axis.
-     *
-     * @return Returns true if we shouldn't render to this window.
-     */
-    bool IsWindowMinimized() const { return m_ColorImage->GetHeight() == 0 || m_ColorImage->GetWidth() == 0; }
-
-    /**
-     * Copies window's surface buffer to window internal buffer that is displayed on screen.
-     */
-    void RenderToWindow();
-
-    int GetWidth() const { return m_ColorImage->GetWidth(); }
-    int GetHeight() const { return m_ColorImage->GetHeight(); }
+    NativeWindowHandle GetNativeWindowHandle() const;
+    int GetWidth() const;
+    int GetHeight() const;
+    bool IsWindowMinimized() const;
+    GraphicsContext* GetGraphicsContext() const;
 
     /**
      * If true the cursor will be limited to this window.
@@ -103,10 +68,8 @@ private:
     WindowConfig m_Config;
     NativeWindowHandle m_NativeWindowHandle;
 
-    std::unique_ptr<Image> m_ColorImage = nullptr;
-    std::unique_ptr<Image> m_DepthImage = nullptr;
-
-    uint32_t m_CurrentWidth = 0, m_CurrentHeight = 0;
+    std::unique_ptr<GraphicsContext> m_GraphicsContext;
+    int m_Width = 0, m_Height = 0;
 
     bool m_InifiniteCursor = false;
 };

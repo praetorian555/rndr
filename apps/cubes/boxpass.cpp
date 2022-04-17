@@ -2,8 +2,10 @@
 
 #include "rndr/core/debug.h"
 
-void BoxRenderPass::Init(rndr::Camera* Camera)
+void BoxRenderPass::Init(rndr::GraphicsContext* GraphicsContext, rndr::Camera* Camera)
 {
+    m_GraphicsContext = GraphicsContext;
+
     m_Pipeline = std::make_unique<rndr::Pipeline>();
     m_Pipeline->WindingOrder = rndr::WindingOrder::CCW;
     m_Pipeline->VertexShader = RNDR_BIND_TWO_PARAM(&m_Shader, &rndr::PhongShader::VertexShader);
@@ -20,6 +22,8 @@ void BoxRenderPass::Init(rndr::Camera* Camera)
     m_Pipeline->AlphaBlendOperator = rndr::BlendOperator::Add;
     m_Pipeline->SrcAlphaBlendFactor = rndr::BlendFactor::One;
     m_Pipeline->DstAlphaBlendFactor = rndr::BlendFactor::OneMinusSrcAlpha;
+
+    m_Pipeline->RenderTarget = m_GraphicsContext->GetWindowFrameBuffer();
 
     std::vector<rndr::PhongShader::InVertex> Vertices;
     auto& CubePositions = rndr::Cube::GetVertexPositions();
@@ -78,20 +82,14 @@ void BoxRenderPass::Init(rndr::Camera* Camera)
 
 void BoxRenderPass::ShutDown() {}
 
-void BoxRenderPass::Render(rndr::Rasterizer& Renderer, real DeltaSeconds)
+void BoxRenderPass::Render(real DeltaSeconds)
 {
     m_Shader.ClearLights();
 
     m_Shader.SetViewPosition(m_ViewerPosition);
     m_Shader.AddPointLight(m_LightPosition, rndr::Colors::White.XYZ());
 
-    Renderer.Draw(m_Model.get());
-}
-
-void BoxRenderPass::SetTargetImages(rndr::Image* ColorImage, rndr::Image* DepthImage)
-{
-    m_Pipeline->ColorImage = ColorImage;
-    m_Pipeline->DepthImage = DepthImage;
+    m_GraphicsContext->Render(m_Model.get());
 }
 
 void BoxRenderPass::SetLightPosition(rndr::Point3r LightPosition)

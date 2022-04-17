@@ -35,30 +35,25 @@ int main()
                       });
     IC->AddBinding("PrintPixelPosition", rndr::InputPrimitive::Mouse_LeftButton, rndr::InputTrigger::ButtonDown);
 
-    rndr::Rasterizer Renderer;
-
     rndr::FirstPersonCamera FPCamera(Camera.get(), rndr::Point3r(), 10, 1.2);
 
+    rndr::GraphicsContext* GC = MainWindow->GetGraphicsContext();
     BoxRenderPass BoxPass;
-    BoxPass.Init(FPCamera.GetProjectionCamera());
+    BoxPass.Init(GC, FPCamera.GetProjectionCamera());
 
     LightRenderPass LightPass;
-    LightPass.Init(FPCamera.GetProjectionCamera());
+    LightPass.Init(GC, FPCamera.GetProjectionCamera());
 
     rndr::GRndrApp->OnTickDelegate.Add(
         [&](real DeltaSeconds)
         {
             FPCamera.Update(DeltaSeconds);
 
-            rndr::Image* ColorImage = MainWindow->GetColorImage();
-            rndr::Image* DepthImage = MainWindow->GetDepthImage();
-            BoxPass.SetTargetImages(ColorImage, DepthImage);
             BoxPass.SetLightPosition(LightPass.GetLightPosition());
             BoxPass.SetViewerPosition(FPCamera.GetPosition());
-            BoxPass.Render(Renderer, DeltaSeconds);
+            BoxPass.Render(DeltaSeconds);
 
-            LightPass.SetTargetImages(ColorImage, DepthImage);
-            LightPass.Render(Renderer, DeltaSeconds);
+            LightPass.Render(DeltaSeconds);
         });
 
     rndr::GRndrApp->Run();

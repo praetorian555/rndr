@@ -5,12 +5,11 @@
 class BoxRenderPass
 {
 public:
-    void Init(rndr::Camera* Camera);
+    void Init(rndr::GraphicsContext* GraphicsContext, rndr::Camera* Camera);
     void ShutDown();
 
-    void Render(rndr::Rasterizer& Renderer, real DeltaSeconds);
+    void Render(real DeltaSeconds);
 
-    void SetTargetImages(rndr::Image* ColorImage, rndr::Image* DepthImage);
     void SetLightPosition(rndr::Point3r LightPosition);
     void SetViewerPosition(rndr::Point3r ViewerPosition);
 
@@ -19,6 +18,8 @@ private:
     void FragmentShader(const rndr::Triangle& T, const rndr::InFragmentInfo& InInfo, rndr::OutFragmentInfo& OutInfo);
 
 private:
+    rndr::GraphicsContext* m_GraphicsContext;
+
     std::unique_ptr<rndr::Pipeline> m_Pipeline;
     std::unique_ptr<rndr::Model> m_Model;
     std::unique_ptr<rndr::Image> m_Texture;

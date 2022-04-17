@@ -13,6 +13,7 @@
 
 #if defined RNDR_RASTER
 
+#include "rndr/raster/rasterframebuffer.h"
 #include "rndr/raster/rasterimage.h"
 #include "rndr/raster/rasterpipeline.h"
 
@@ -177,7 +178,7 @@ void rndr::Rasterizer::SetupTriangles()
         Bounds2i Bounds;
         GetTriangleBounds(T.ScreenPositions, Bounds);
         T.Bounds = Bounds;
-        LimitTriangleToSurface(T.Bounds, m_Pipeline->ColorImage);
+        LimitTriangleToSurface(T.Bounds, m_Pipeline->RenderTarget->GetColorBuffer());
         T.BarHelper = BarycentricHelper(m_Pipeline->WindingOrder, T.ScreenPositions);
 
 #if RNDR_DEBUG
@@ -341,7 +342,8 @@ void rndr::Rasterizer::RunFragmentShaders()
 {
     RNDR_CPU_TRACE("Run Fragment Shaders");
 
-    const Point2i ImageSize = m_Pipeline->ColorImage->GetBounds().pMax + 1;
+    Image* ColorBuffer = m_Pipeline->RenderTarget->GetColorBuffer();
+    const Point2i ImageSize = ColorBuffer->GetBounds().pMax + 1;
     const int BlockSize = 32;
 
     auto WorkOrder = [this, ImageSize, BlockSize](int BlockX, int BlockY)
@@ -391,10 +393,13 @@ void rndr::Rasterizer::RunFragmentShaders()
 
 void rndr::Rasterizer::ProcessFragment(const Triangle& T, InFragmentInfo& InInfo)
 {
+    Image* ColorBuffer = m_Pipeline->RenderTarget->GetColorBuffer();
+    Image* DepthBuffer = m_Pipeline->RenderTarget->GetDepthBuffer();
+
     InInfo.W = 1 / InInfo.BarCoords.Interpolate(T.OneOverW);
     InInfo.Depth = 1 / InInfo.BarCoords.Interpolate(T.OneOverDepth);
     assert(!rndr::IsNaN(InInfo.Depth));
-    const real CurrentDepth = m_Pipeline->DepthImage->GetPixelDepth(InInfo.Position);
+    const real CurrentDepth = DepthBuffer->GetPixelDepth(InInfo.Position);
 
     // Early depth test
     if (!m_Pipeline->bChangesDepth)
@@ -404,7 +409,7 @@ void rndr::Rasterizer::ProcessFragment(const Triangle& T, InFragmentInfo& InInfo
             return;
         }
 
-        m_Pipeline->DepthImage->SetPixelValue(InInfo.Position, InInfo.Depth);
+        DepthBuffer->SetPixelValue(InInfo.Position, InInfo.Depth);
     }
 
     // Run Pixel shader
@@ -420,20 +425,20 @@ void rndr::Rasterizer::ProcessFragment(const Triangle& T, InFragmentInfo& InInfo
             return;
         }
 
-        m_Pipeline->DepthImage->SetPixelValue(InInfo.Position, InInfo.Depth);
+        DepthBuffer->SetPixelValue(InInfo.Position, InInfo.Depth);
     }
 
-    const Vector4r CurrentColor = m_Pipeline->ColorImage->GetPixelColor(InInfo.Position);
+    const Vector4r CurrentColor = ColorBuffer->GetPixelColor(InInfo.Position);
     OutInfo.Color = m_Pipeline->Blend(OutInfo.Color, CurrentColor);
 
     // Write color into color buffer
-    m_Pipeline->ColorImage->SetPixelValue(InInfo.Position, OutInfo.Color);
+    ColorBuffer->SetPixelValue(InInfo.Position, OutInfo.Color);
 }
 
 rndr::Point3r rndr::Rasterizer::FromNDCToRasterSpace(const Point3r& Point)
 {
-    int Width = m_Pipeline->ColorImage->GetWidth();
-    int Height = m_Pipeline->ColorImage->GetHeight();
+    int Width = m_Pipeline->RenderTarget->GetWidth();
+    int Height = m_Pipeline->RenderTarget->GetHeight();
 
     Point3r Result = Point;
     Result.X = ((1 + Point.X) / 2) * Width;
@@ -444,8 +449,8 @@ rndr::Point3r rndr::Rasterizer::FromNDCToRasterSpace(const Point3r& Point)
 
 rndr::Point3r rndr::Rasterizer::FromRasterToNDCSpace(const Point3r& Point)
 {
-    int Width = m_Pipeline->ColorImage->GetWidth();
-    int Height = m_Pipeline->ColorImage->GetHeight();
+    int Width = m_Pipeline->RenderTarget->GetWidth();
+    int Height = m_Pipeline->RenderTarget->GetHeight();
 
     Point3r Result = Point;
     Result.X = (Point.X / (real)Width) * 2 - 1;

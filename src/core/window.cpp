@@ -1,11 +1,12 @@
 #include "rndr/core/window.h"
 
 #include <cassert>
+#include <map>
 
+#if defined RNDR_WINDOWS
 #include <Windows.h>
 #include <windowsx.h>
-
-#include <map>
+#endif // RNDR_WINDOWS
 
 #include "rndr/core/input.h"
 #include "rndr/core/log.h"
@@ -27,19 +28,13 @@ rndr::WindowDelegates::MouseWheelDelegate rndr::WindowDelegates::OnMouseWheelMov
 
 LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam);
 
-rndr::Window::Window(const rndr::WindowConfig& Config) : m_Config(Config)
+rndr::Window::Window(int Width, int Height, const WindowConfig& Config) : m_Width(Width), m_Height(Height), m_Config(Config)
 {
-    rndr::ImageConfig ColorImageConfig;
-    ColorImageConfig.GammaSpace = rndr::GammaSpace::GammaCorrected;
-    ColorImageConfig.PixelLayout = PixelLayout::A8R8G8B8;
-
-    m_ColorImage = std::make_unique<Image>(Config.Width, Config.Height, ColorImageConfig);
-
-    rndr::ImageConfig DepthImageConfig;
-    DepthImageConfig.GammaSpace = rndr::GammaSpace::Linear;
-    DepthImageConfig.PixelLayout = PixelLayout::DEPTH_F32;
-
-    m_DepthImage = std::make_unique<Image>(Config.Width, Config.Height, DepthImageConfig);
+    GraphicsContextProperties GCProps;
+    GCProps.WindowWidth = m_Width;
+    GCProps.WindowHeight = m_Height;
+    GCProps.FrameBuffer.bUseDepthStencil = true;
+    m_GraphicsContext = std::make_unique<GraphicsContext>(this, GCProps);
 
     rndr::WindowDelegates::OnResize.Add(RNDR_BIND_THREE_PARAM(this, &Window::Resize));
     rndr::WindowDelegates::OnButtonDelegate.Add(RNDR_BIND_THREE_PARAM(this, &Window::ButtonEvent));
@@ -58,7 +53,7 @@ rndr::Window::Window(const rndr::WindowConfig& Config) : m_Config(Config)
     ATOM Atom = RegisterClass(&WindowClass);
     assert(Atom != 0);
 
-    RECT WindowRect = {0, 0, Config.Width, Config.Height};
+    RECT WindowRect = {0, 0, m_Width, m_Height};
     AdjustWindowRect(&WindowRect, WS_OVERLAPPEDWINDOW, FALSE);
 
     HWND WindowHandle =
@@ -94,6 +89,31 @@ void rndr::Window::Close()
     bool Result = DestroyWindow(WindowHandle);
     assert(Result);
     m_NativeWindowHandle = 0;
+}
+
+rndr::NativeWindowHandle rndr::Window::GetNativeWindowHandle() const
+{
+    return m_NativeWindowHandle;
+}
+
+int rndr::Window::GetWidth() const
+{
+    return m_Width;
+}
+
+int rndr::Window::GetHeight() const
+{
+    return m_Height;
+}
+
+bool rndr::Window::IsWindowMinimized() const
+{
+    return m_Width == 0 || m_Height == 0;
+}
+
+rndr::GraphicsContext* rndr::Window::GetGraphicsContext() const
+{
+    return m_GraphicsContext.get();
 }
 
 void rndr::Window::LockCursor(bool ShouldLock)
@@ -137,36 +157,8 @@ void rndr::Window::Resize(Window* Window, int Width, int Height)
         return;
     }
 
-    m_CurrentWidth = Width;
-    m_CurrentHeight = Height;
-    if (m_ColorImage)
-    {
-        ImageConfig Config = m_ColorImage->GetConfig();
-        m_ColorImage = std::make_unique<Image>(Width, Height, Config);
-    }
-    if (m_DepthImage)
-    {
-        ImageConfig Config = m_DepthImage->GetConfig();
-        m_DepthImage = std::make_unique<Image>(Width, Height, Config);
-    }
-}
-
-void rndr::Window::RenderToWindow()
-{
-    HWND WindowHandle = reinterpret_cast<HWND>(m_NativeWindowHandle);
-
-    BITMAPINFO BitmapInfo = {};
-    BitmapInfo.bmiHeader.biSize = sizeof(BitmapInfo.bmiHeader);
-    BitmapInfo.bmiHeader.biWidth = m_ColorImage->GetWidth();
-    BitmapInfo.bmiHeader.biHeight = m_ColorImage->GetHeight();
-    BitmapInfo.bmiHeader.biPlanes = 1;
-    BitmapInfo.bmiHeader.biBitCount = m_ColorImage->GetPixelSize() * 8;
-    BitmapInfo.bmiHeader.biCompression = BI_RGB;
-
-    HDC DC = GetDC(WindowHandle);
-
-    StretchDIBits(DC, 0, 0, m_CurrentWidth, m_CurrentHeight, 0, 0, m_ColorImage->GetWidth(), m_ColorImage->GetHeight(),
-                  m_ColorImage->GetBuffer(), &BitmapInfo, DIB_RGB_COLORS, SRCCOPY);
+    m_Width = Width;
+    m_Height = Height;
 }
 
 LRESULT CALLBACK WindowProc(HWND WindowHandle, UINT MsgCode, WPARAM ParamW, LPARAM ParamL)

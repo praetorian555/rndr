@@ -19,6 +19,8 @@
 
 #include "rndr/profiling/cputracer.h"
 
+#include "rndr/raster/rasterframebuffer.h"
+#include "rndr/raster/rastergraphicscontext.h"
 #include "rndr/raster/rasterimage.h"
 #include "rndr/raster/rasterizer.h"
 #include "rndr/raster/rasterpipeline.h"
