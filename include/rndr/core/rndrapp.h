@@ -3,15 +3,23 @@
 #include "rndr/core/base.h"
 #include "rndr/core/delegate.h"
 #include "rndr/core/singletons.h"
+#include "rndr/core/window.h"
 
 namespace rndr
 {
 
-class Window;
 class InputSystem;
 class InputContext;
 
 using TickDelegate = MultiDelegate<real /* DeltaSeconds */>;
+
+struct RndrAppProperties
+{
+    int WindowWidth = 1024;
+    int WindowHeight = 768;
+
+    WindowProperties Window;
+};
 
 /**
  * Main API of the rndr library. Each program has only one instance of this class.
@@ -20,7 +28,7 @@ using TickDelegate = MultiDelegate<real /* DeltaSeconds */>;
 class RndrApp
 {
 public:
-    RndrApp();
+    RndrApp(const RndrAppProperties& Props = RndrAppProperties{});
 
     Window* GetWindow();
     InputSystem* GetInputSystem();

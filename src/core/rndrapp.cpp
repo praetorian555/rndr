@@ -5,7 +5,6 @@
 
 #include "rndr/core/input.h"
 #include "rndr/core/rndrapp.h"
-#include "rndr/core/window.h"
 
 #include "rndr/profiling/cputracer.h"
 
@@ -15,10 +14,10 @@
 
 rndr::RndrApp* rndr::GRndrApp = nullptr;
 
-rndr::RndrApp::RndrApp()
+rndr::RndrApp::RndrApp(const RndrAppProperties& Props)
 {
     assert(!GRndrApp);
-    m_Window = new rndr::Window{};
+    m_Window = new rndr::Window(Props.WindowWidth, Props.WindowHeight, Props.Window);
     GetInputSystem()->SetWindow(m_Window);
 }
 

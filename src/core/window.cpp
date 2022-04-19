@@ -28,7 +28,7 @@ rndr::WindowDelegates::MouseWheelDelegate rndr::WindowDelegates::OnMouseWheelMov
 
 LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam);
 
-rndr::Window::Window(int Width, int Height, const WindowConfig& Config) : m_Width(Width), m_Height(Height), m_Config(Config)
+rndr::Window::Window(int Width, int Height, const WindowProperties& Props) : m_Width(Width), m_Height(Height), m_Props(Props)
 {
     GraphicsContextProperties GCProps;
     GCProps.WindowWidth = m_Width;
@@ -57,7 +57,7 @@ rndr::Window::Window(int Width, int Height, const WindowConfig& Config) : m_Widt
     AdjustWindowRect(&WindowRect, WS_OVERLAPPEDWINDOW, FALSE);
 
     HWND WindowHandle =
-        CreateWindowEx(0, ClassName, m_Config.Name.c_str(), WS_OVERLAPPEDWINDOW, CW_USEDEFAULT, CW_USEDEFAULT,
+        CreateWindowEx(0, ClassName, m_Props.Name.c_str(), WS_OVERLAPPEDWINDOW, CW_USEDEFAULT, CW_USEDEFAULT,
                        WindowRect.right - WindowRect.left, WindowRect.bottom - WindowRect.top, nullptr, nullptr, Instance, this);
     assert(WindowHandle != NULL);
 

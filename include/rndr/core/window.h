@@ -19,7 +19,7 @@ namespace rndr
 /**
  * Configuration of the window.
  */
-struct WindowConfig
+struct WindowProperties
 {
     std::string Name = "Default Window";
 };
@@ -30,7 +30,7 @@ struct WindowConfig
 class Window
 {
 public:
-    Window(int Width = 1024, int Height = 768, const WindowConfig& Options = WindowConfig());
+    Window(int Width = 1024, int Height = 768, const WindowProperties& Props = WindowProperties());
     ~Window() = default;
 
     /**
@@ -65,7 +65,7 @@ private:
     void ButtonEvent(Window* Window, InputPrimitive Primitive, InputTrigger Trigger);
 
 private:
-    WindowConfig m_Config;
+    WindowProperties m_Props;
     NativeWindowHandle m_NativeWindowHandle;
 
     std::unique_ptr<GraphicsContext> m_GraphicsContext;
