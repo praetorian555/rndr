@@ -15,7 +15,7 @@ rndr::FrameBuffer::FrameBuffer(GraphicsContext* Context, int Width, int Height, 
     {
         if (!bIsNull)
         {
-            ImageConfig ImageProps;
+            ImageProperties ImageProps;
             ImageProps.PixelLayout = m_Props.ColorPixelLayout[i];
             ImageProps.GammaSpace = m_Props.ColorGammaSpace[i];
             std::unique_ptr<Image> Image = std::make_unique<rndr::Image>(m_Width, m_Height, ImageProps);
@@ -31,7 +31,7 @@ rndr::FrameBuffer::FrameBuffer(GraphicsContext* Context, int Width, int Height, 
     m_StencilBuffer = nullptr;
     if (m_Props.bUseDepthStencil && !bIsNull)
     {
-        ImageConfig ImageProps;
+        ImageProperties ImageProps;
         ImageProps.PixelLayout = m_Props.DepthPixelLayout;
         ImageProps.GammaSpace = GammaSpace::Linear;
         m_DepthBuffer = std::make_unique<rndr::Image>(m_Width, m_Height, ImageProps);
@@ -53,7 +53,7 @@ void rndr::FrameBuffer::SetSize(int Width, int Height)
         m_ColorBuffers[i] = nullptr;
         if (!bIsNull)
         {
-            ImageConfig ImageProps;
+            ImageProperties ImageProps;
             ImageProps.PixelLayout = m_Props.ColorPixelLayout[i];
             ImageProps.GammaSpace = m_Props.ColorGammaSpace[i];
             m_ColorBuffers[i] = std::make_unique<rndr::Image>(m_Width, m_Height, ImageProps);
@@ -64,7 +64,7 @@ void rndr::FrameBuffer::SetSize(int Width, int Height)
     m_StencilBuffer = nullptr;
     if (m_Props.bUseDepthStencil && !bIsNull)
     {
-        ImageConfig ImageProps;
+        ImageProperties ImageProps;
         ImageProps.PixelLayout = m_Props.DepthPixelLayout;
         ImageProps.GammaSpace = GammaSpace::Linear;
         m_DepthBuffer = std::make_unique<rndr::Image>(m_Width, m_Height, ImageProps);

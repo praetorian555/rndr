@@ -2,6 +2,7 @@
 
 #include "rndr/core/base.h"
 #include "rndr/core/math.h"
+#include "rndr/core/colors.h"
 
 // Contains all types used to configure a render pipeline.
 
@@ -43,6 +44,14 @@ enum class ImageFiltering
 {
     Point, // Sometimes called NearestNeighbour
     Linear, // Also bilinear
+};
+
+enum class ImageWrapping
+{
+    Clamp,
+    Border,
+    Repeat,
+    MirrorRepeat
 };
 
 enum class DepthTest
@@ -90,10 +99,14 @@ enum class BlendOperator
     Max
 };
 
-struct ImageConfig
+struct ImageProperties
 {
     PixelLayout PixelLayout = PixelLayout::A8R8G8B8;
     GammaSpace GammaSpace = GammaSpace::GammaCorrected;
+
+    ImageWrapping WrapU = ImageWrapping::Repeat;
+    ImageWrapping WrapV = ImageWrapping::Repeat;
+    Vector4r WrapBorderColor = Colors::Pink;
 
     ImageFiltering MagFilter = ImageFiltering::Point;
     ImageFiltering MinFilter = ImageFiltering::Point;

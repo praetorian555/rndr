@@ -13,7 +13,7 @@
 
 #if defined RNDR_RASTER
 
-rndr::Image::Image(int Width, int Height, const ImageConfig& Config) : m_Config(Config), m_Width(Width), m_Height(Height)
+rndr::Image::Image(int Width, int Height, const ImageProperties& Props) : m_Props(Props), m_Width(Width), m_Height(Height)
 {
     m_Bounds.pMin = Point2i{0, 0};
     m_Bounds.pMax = Point2i{Width, Height};
@@ -23,19 +23,19 @@ rndr::Image::Image(int Width, int Height, const ImageConfig& Config) : m_Config(
         return;
     }
 
-    uint32_t PixelSize = rndr::GetPixelSize(m_Config.PixelLayout);
+    uint32_t PixelSize = rndr::GetPixelSize(m_Props.PixelLayout);
     uint32_t ByteCount = Width * Height * PixelSize;
     m_Buffer.resize(ByteCount);
 
     ParallelFor(ByteCount / PixelSize, 64,
                 [&](int i)
                 {
-                    if (m_Config.PixelLayout == PixelLayout::DEPTH_F32)
+                    if (m_Props.PixelLayout == PixelLayout::DEPTH_F32)
                     {
                         real* Pixel = (real*)(m_Buffer.data() + i * PixelSize);
                         *Pixel = rndr::Infinity;
                     }
-                    else if (m_Config.PixelLayout == PixelLayout::STENCIL_UINT8)
+                    else if (m_Props.PixelLayout == PixelLayout::STENCIL_UINT8)
                     {
                         uint8_t* Pixel = (uint8_t*)(m_Buffer.data() + i * PixelSize);
                         *Pixel = 0;
@@ -44,17 +44,17 @@ rndr::Image::Image(int Width, int Height, const ImageConfig& Config) : m_Config(
                     {
                         uint32_t* Pixel = (uint32_t*)(m_Buffer.data() + i * PixelSize);
                         Vector4r BackgroundColor = ToGammaCorrectSpace(Colors::Pink);
-                        *Pixel = ColorToUInt32(BackgroundColor, m_Config.PixelLayout);
+                        *Pixel = ColorToUInt32(BackgroundColor, m_Props.PixelLayout);
                     }
                 });
 
-    if (m_Config.bUseMips)
+    if (m_Props.bUseMips)
     {
         GenerateMipMaps();
     }
 }
 
-rndr::Image::Image(const std::string& FilePath, const ImageConfig& Config) : m_Config(Config)
+rndr::Image::Image(const std::string& FilePath, const ImageProperties& Props) : m_Props(Props)
 {
     const ImageFileFormat FileFormat = rndr::GetImageFileFormat(FilePath);
     assert(FileFormat != ImageFileFormat::NotSupported);
@@ -120,7 +120,7 @@ rndr::Image::Image(const std::string& FilePath, const ImageConfig& Config) : m_C
 
     free(Data);
 
-    if (m_Config.bUseMips)
+    if (m_Props.bUseMips)
     {
         GenerateMipMaps();
     }
@@ -142,7 +142,7 @@ rndr::Image::~Image()
 
 uint32_t rndr::Image::GetPixelSize() const
 {
-    return rndr::GetPixelSize(m_Config.PixelLayout);
+    return rndr::GetPixelSize(m_Props.PixelLayout);
 }
 
 rndr::Vector4r rndr::Image::GetPixelColor(const Point2i& Location) const
@@ -153,8 +153,8 @@ rndr::Vector4r rndr::Image::GetPixelColor(const Point2i& Location) const
     // TODO(mkostic): Add support for different sizes of pixels in memory
     const uint32_t* Pixels = (uint32_t*)m_Buffer.data();
     const uint32_t Value = Pixels[Location.X + Location.Y * m_Width];
-    Vector4r LinearColor = ColorToVector(Value, m_Config.PixelLayout);
-    if (m_Config.GammaSpace == GammaSpace::GammaCorrected)
+    Vector4r LinearColor = ColorToVector(Value, m_Props.PixelLayout);
+    if (m_Props.GammaSpace == GammaSpace::GammaCorrected)
     {
         LinearColor = ToLinearSpace(LinearColor);
     }
@@ -197,42 +197,42 @@ uint8_t rndr::Image::GetStencilValue(int X, int Y) const
 template <>
 void rndr::Image::SetPixelValue<rndr::Vector4r>(const Point2i& Location, const Vector4r& Value)
 {
-    assert(m_Config.PixelLayout != PixelLayout::DEPTH_F32 && m_Config.PixelLayout != PixelLayout::STENCIL_UINT8);
+    assert(m_Props.PixelLayout != PixelLayout::DEPTH_F32 && m_Props.PixelLayout != PixelLayout::STENCIL_UINT8);
     SetPixelColor(Location, Value);
 }
 
 template <>
 void rndr::Image::SetPixelValue<real>(const Point2i& Location, const real& Value)
 {
-    assert(m_Config.PixelLayout == PixelLayout::DEPTH_F32);
+    assert(m_Props.PixelLayout == PixelLayout::DEPTH_F32);
     SetPixelDepth(Location, Value);
 }
 
 template <>
 void rndr::Image::SetPixelValue<uint8_t>(const Point2i& Location, const uint8_t& Value)
 {
-    assert(m_Config.PixelLayout == PixelLayout::STENCIL_UINT8);
+    assert(m_Props.PixelLayout == PixelLayout::STENCIL_UINT8);
     SetPixelStencilValue(Location, Value);
 }
 
 template <>
 void rndr::Image::SetPixelValue<rndr::Vector4r>(int X, int Y, const Vector4r& Value)
 {
-    assert(m_Config.PixelLayout != PixelLayout::DEPTH_F32 && m_Config.PixelLayout != PixelLayout::STENCIL_UINT8);
+    assert(m_Props.PixelLayout != PixelLayout::DEPTH_F32 && m_Props.PixelLayout != PixelLayout::STENCIL_UINT8);
     SetPixelColor(Point2i{X, Y}, Value);
 }
 
 template <>
 void rndr::Image::SetPixelValue<real>(int X, int Y, const real& Value)
 {
-    assert(m_Config.PixelLayout == PixelLayout::DEPTH_F32);
+    assert(m_Props.PixelLayout == PixelLayout::DEPTH_F32);
     SetPixelDepth(Point2i{X, Y}, Value);
 }
 
 template <>
 void rndr::Image::SetPixelValue<uint8_t>(int X, int Y, const uint8_t& Value)
 {
-    assert(m_Config.PixelLayout == PixelLayout::STENCIL_UINT8);
+    assert(m_Props.PixelLayout == PixelLayout::STENCIL_UINT8);
     SetPixelStencilValue(Point2i{X, Y}, Value);
 }
 
@@ -243,11 +243,11 @@ void rndr::Image::SetPixelColor(const Point2i& Location, const Vector4r& Color)
 
     uint32_t* Pixels = (uint32_t*)m_Buffer.data();
     Vector4r sRGBColor = Color;
-    if (m_Config.GammaSpace == GammaSpace::GammaCorrected)
+    if (m_Props.GammaSpace == GammaSpace::GammaCorrected)
     {
         sRGBColor = ToGammaCorrectSpace(Color);
     }
-    const uint32_t Packed = ColorToUInt32(sRGBColor, m_Config.PixelLayout);
+    const uint32_t Packed = ColorToUInt32(sRGBColor, m_Props.PixelLayout);
     Pixels[Location.X + Location.Y * m_Width] = Packed;
 }
 
@@ -302,11 +302,11 @@ void rndr::Image::ClearColor(const Vector4r& Color)
 
     // TODO(mkostic): Add support for different pixel layout sizes
     Vector4r sRGBColor = Color;
-    if (m_Config.GammaSpace == GammaSpace::GammaCorrected)
+    if (m_Props.GammaSpace == GammaSpace::GammaCorrected)
     {
         sRGBColor = ToGammaCorrectSpace(Color);
     }
-    const uint32_t PackedColor = ColorToUInt32(sRGBColor, m_Config.PixelLayout);
+    const uint32_t PackedColor = ColorToUInt32(sRGBColor, m_Props.PixelLayout);
 
     ParallelFor(m_Height, 64,
                 [this, PackedColor](int RowIndex)
@@ -366,7 +366,7 @@ void rndr::Image::SetPixelFormat(rndr::GammaSpace Space, rndr::PixelLayout Layou
                 [&](int X, int Y)
                 {
                     Vector4r OldColor = GetPixelColor(X, Y);
-                    if (m_Config.GammaSpace != Space)
+                    if (m_Props.GammaSpace != Space)
                     {
                         OldColor = ToDesiredSpace(OldColor, Space);
                     }
@@ -375,8 +375,8 @@ void rndr::Image::SetPixelFormat(rndr::GammaSpace Space, rndr::PixelLayout Layou
                     SetPixelColor(Point2i{X, Y}, NewColor);
                 });
 
-    m_Config.PixelLayout = Layout;
-    m_Config.GammaSpace = Space;
+    m_Props.PixelLayout = Layout;
+    m_Props.GammaSpace = Space;
 }
 
 void rndr::Image::GenerateMipMaps()
@@ -409,7 +409,7 @@ void rndr::Image::GenerateMipMaps()
         NewWidth = NewWidth == 0 ? 1 : NewWidth;
         NewHeight = NewHeight == 0 ? 1 : NewHeight;
 
-        m_MipMaps[i] = new Image(NewWidth, NewHeight, m_Config);
+        m_MipMaps[i] = new Image(NewWidth, NewHeight, m_Props);
 
         Image* CurrentImage = m_MipMaps[i];
         Image* PrevImage = m_MipMaps[i - 1];

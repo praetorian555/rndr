@@ -4,23 +4,28 @@
 
 rndr::Sampler2D::Sampler2D(Image* Image) : m_Image(Image) {}
 
-rndr::Vector4r rndr::Sampler2D::Sample(const Point2r& TexCoord, const Vector2r& duvdx, const Vector2r& duvdy)
+rndr::Vector4r rndr::Sampler2D::Sample(const Point2r& TC, const Vector2r& duvdx, const Vector2r& duvdy)
 {
-    // TODO(mkostic): Rebase uv to be in range [0, 1]
+    Point2r TexCoords = Wrap(TC);
+    // Special case, we use Inifinity to signal that we need to wrap coordinates with specified border color
+    if (TexCoords.X == Infinity || TexCoords.Y == Infinity)
+    {
+        return m_Image->m_Props.WrapBorderColor;
+    }
 
     const real Width = std::max(std::max(std::abs(duvdx.X), std::abs(duvdx.Y)), std::max(std::abs(duvdy.X), std::abs(duvdy.Y)));
 
     const int MipMapLevels = m_Image->m_MipMaps.size();
     real LOD = MipMapLevels - 1 + Log2(std::max(Width, (real)1e-8));
-    LOD += m_Image->m_Config.LODBias;
+    LOD += m_Image->m_Props.LODBias;
 
-    const ImageFiltering Filter = LOD < 0 ? m_Image->m_Config.MagFilter : m_Image->m_Config.MinFilter;
-    bool bIsMin = LOD >= 0; 
+    const ImageFiltering Filter = LOD < 0 ? m_Image->m_Props.MagFilter : m_Image->m_Props.MinFilter;
+    bool bIsMin = LOD >= 0;
 
     Vector4r Result;
-    if (bIsMin && m_Image->m_Config.bUseMips)
+    if (bIsMin && m_Image->m_Props.bUseMips)
     {
-        Result = SampleTrilinear(m_Image, TexCoord, LOD);
+        Result = SampleTrilinear(m_Image, TexCoords, LOD);
     }
     else
     {
@@ -28,12 +33,12 @@ rndr::Vector4r rndr::Sampler2D::Sample(const Point2r& TexCoord, const Vector2r& 
         {
             case ImageFiltering::Point:
             {
-                Result = SampleNearestNeighbor(m_Image, TexCoord);
+                Result = SampleNearestNeighbor(m_Image, TexCoords);
                 break;
             }
             case ImageFiltering::Linear:
             {
-                Result = SampleBilinear(m_Image, TexCoord);
+                Result = SampleBilinear(m_Image, TexCoords);
                 break;
             }
         }
@@ -42,10 +47,10 @@ rndr::Vector4r rndr::Sampler2D::Sample(const Point2r& TexCoord, const Vector2r& 
     return Result;
 }
 
-rndr::Vector4r rndr::Sampler2D::SampleNearestNeighbor(const Image* I, const Point2r& TexCoord)
+rndr::Vector4r rndr::Sampler2D::SampleNearestNeighbor(const Image* I, const Point2r& TexCoords)
 {
-    const real U = TexCoord.X;
-    const real V = TexCoord.Y;
+    const real U = TexCoords.X;
+    const real V = TexCoords.Y;
 
     const real X = (I->m_Width - 1) * U;
     const real Y = (I->m_Height - 1) * V;
@@ -54,10 +59,10 @@ rndr::Vector4r rndr::Sampler2D::SampleNearestNeighbor(const Image* I, const Poin
     return I->GetPixelColor(NearestDesc);
 }
 
-rndr::Vector4r rndr::Sampler2D::SampleBilinear(const Image* I, const Point2r& TexCoord)
+rndr::Vector4r rndr::Sampler2D::SampleBilinear(const Image* I, const Point2r& TexCoords)
 {
-    const real U = TexCoord.X;
-    const real V = TexCoord.Y;
+    const real U = TexCoords.X;
+    const real V = TexCoords.Y;
 
     const real X = (I->m_Width - 1) * U;
     const real Y = (I->m_Height - 1) * V;
@@ -93,7 +98,7 @@ rndr::Vector4r rndr::Sampler2D::SampleTrilinear(const Image* I, const Point2r& T
 
     real t = LOD - (real)Floor;
 
-    if (m_Image->m_Config.MipFilter == ImageFiltering::Point)
+    if (m_Image->m_Props.MipFilter == ImageFiltering::Point)
     {
         return t > 0.5 ? CeilSample : FloorSample;
     }
@@ -101,6 +106,58 @@ rndr::Vector4r rndr::Sampler2D::SampleTrilinear(const Image* I, const Point2r& T
     {
         return rndr::Lerp(t, FloorSample, CeilSample);
     }
+}
+
+rndr::Point2r rndr::Sampler2D::Wrap(const Point2r& TexCoords) const
+{
+    Point2r NewTexCoords;
+    NewTexCoords.X = Wrap(TexCoords.X, m_Image->m_Props.WrapU);
+    NewTexCoords.Y = Wrap(TexCoords.Y, m_Image->m_Props.WrapV);
+    return NewTexCoords;
+}
+
+real rndr::Sampler2D::Wrap(real Value, ImageWrapping WrapMethod) const
+{
+    switch (WrapMethod)
+    {
+        case ImageWrapping::Clamp:
+        {
+            Value = Clamp(Value, 0, 1);
+            break;
+        }
+        case ImageWrapping::Border:
+        {
+            const bool bIsInRange = Value >= 0 && Value <= 1;
+            Value = bIsInRange ? Value : Infinity;
+            break;
+        }
+        case ImageWrapping::Repeat:
+        {
+            int WholeValue = (int)Value;
+            Value = Value - WholeValue;
+            break;
+        }
+        case ImageWrapping::MirrorRepeat:
+        {
+            int WholeValue = (int)Value;
+            if (WholeValue % 2 == 0)
+            {
+                Value = Value - WholeValue;
+            }
+            else
+            {
+                Value = Value - WholeValue;
+                Value = 1 - Value;
+            }
+            break;
+        }
+        default:
+        {
+            assert(false);
+        }
+    }
+
+    return Value;
 }
 
 #endif  // RNDR_RASTER

@@ -26,6 +26,9 @@ private:
     Vector4r SampleBilinear(const Image* I, const Point2r& TexCoord);
     Vector4r SampleTrilinear(const Image* I, const Point2r& TexCoord, real LOD);
 
+    Point2r Wrap(const Point2r& TexCoords) const;
+    real Wrap(real Value, ImageWrapping WrapMethod) const;
+
 private:
     Image* m_Image;
 };

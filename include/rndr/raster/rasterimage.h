@@ -26,8 +26,8 @@ class Image
 {
 public:
     Image() = default;
-    Image(int Width, int Height, const ImageConfig& Options = ImageConfig{});
-    Image(const std::string& FilePath, const ImageConfig& Options = ImageConfig{});
+    Image(int Width, int Height, const ImageProperties& Props = ImageProperties{});
+    Image(const std::string& FilePath, const ImageProperties& Props = ImageProperties{});
 
     ~Image();
 
@@ -38,7 +38,7 @@ public:
 
     // Getters
     uint8_t* GetBuffer() { return m_Buffer.data(); }
-    const ImageConfig& GetConfig() const { return m_Config; }
+    const ImageProperties& GetProperties() const { return m_Props; }
     const Bounds2i& GetBounds() const { return m_Bounds; }
     real GetAspectRatio() const;
     uint32_t GetPixelSize() const;
@@ -92,7 +92,7 @@ private:
     friend struct Sampler2D;
 
 private:
-    ImageConfig m_Config;
+    ImageProperties m_Props;
     Bounds2i m_Bounds;
     int m_Width, m_Height;
 
