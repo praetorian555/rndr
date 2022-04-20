@@ -11,19 +11,18 @@ int main()
     rndr::RndrApp* RndrApp = rndr::Init();
 
     rndr::Window* MainWindow = rndr::GRndrApp->GetWindow();
-    const int Width = MainWindow->GetWidth();
-    const int Height = MainWindow->GetHeight();
-    const real Near = 0.01;
-    const real Far = 100;
-    const real FOVY = 45;
-    std::shared_ptr<rndr::Camera> Camera = std::make_unique<rndr::PerspectiveCamera>(rndr::Transform{}, Width, Height, FOVY, Near, Far);
+    rndr::ProjectionCameraProperties CameraProps;
+    CameraProps.Projection = rndr::ProjectionType::Perspective;
+    CameraProps.ScreenWidth = MainWindow->GetWidth();
+    CameraProps.ScreenHeight = MainWindow->GetHeight();
+    std::shared_ptr<rndr::ProjectionCamera> Camera = std::make_unique<rndr::ProjectionCamera>(rndr::Transform{}, CameraProps);
 
     rndr::WindowDelegates::OnResize.Add(
         [Camera, MainWindow](rndr::Window* Window, int Width, int Height)
         {
             if (MainWindow == Window)
             {
-                Camera->UpdateTransforms(Width, Height);
+                Camera->SetScreenSize(Width, Height);
             }
         });
     rndr::InputContext* IC = rndr::GRndrApp->GetInputContext();

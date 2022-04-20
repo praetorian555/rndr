@@ -5,7 +5,7 @@
 class BoxRenderPass
 {
 public:
-    void Init(rndr::GraphicsContext* GraphicsContext, rndr::Camera* Camera);
+    void Init(rndr::GraphicsContext* GraphicsContext, rndr::ProjectionCamera* Camera);
     void ShutDown();
 
     void Render(real DeltaSeconds);
@@ -28,7 +28,7 @@ private:
 
     std::vector<rndr::PhongShader::InInstance> m_Instances;
 
-    rndr::Camera* m_Camera;
+    rndr::ProjectionCamera* m_Camera;
     rndr::Point3r m_LightPosition;
     rndr::Point3r m_ViewerPosition;
 };

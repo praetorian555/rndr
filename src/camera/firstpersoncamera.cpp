@@ -1,11 +1,11 @@
 #include "rndr/camera/firstpersoncamera.h"
 
-#include "rndr/core/camera.h"
+#include "rndr/core/projectioncamera.h"
 #include "rndr/core/log.h"
 #include "rndr/core/rndrapp.h"
 #include "rndr/core/transform.h"
 
-rndr::FirstPersonCamera::FirstPersonCamera(rndr::Camera* ProjectionCamera,
+rndr::FirstPersonCamera::FirstPersonCamera(rndr::ProjectionCamera* ProjectionCamera,
                                            rndr::Point3r StartingPosition,
                                            real MovementSpeed,
                                            real RotationSpeed)
@@ -57,15 +57,15 @@ void rndr::FirstPersonCamera::Update(real DeltaSeconds)
     const Transform CameraToWorld = rndr::Translate((rndr::Vector3r)m_Position) * rndr::Rotate(R);
     const Transform WorldToCamera = CameraToWorld.GetInverse();
 
-    m_ProjectionCamera->UpdateWorldToCamera(WorldToCamera);
+    m_ProjectionCamera->SetWorldToCamera(WorldToCamera);
 }
 
-rndr::Camera* rndr::FirstPersonCamera::GetProjectionCamera()
+rndr::ProjectionCamera* rndr::FirstPersonCamera::GetProjectionCamera()
 {
     return m_ProjectionCamera;
 }
 
-void rndr::FirstPersonCamera::SetProjectionCamera(rndr::Camera* ProjectionCamera)
+void rndr::FirstPersonCamera::SetProjectionCamera(rndr::ProjectionCamera* ProjectionCamera)
 {
     m_ProjectionCamera = ProjectionCamera;
 }

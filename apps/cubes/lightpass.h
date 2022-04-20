@@ -5,7 +5,7 @@
 class LightRenderPass
 {
 public:
-    void Init(rndr::GraphicsContext* GraphicsContext, rndr::Camera* Camera);
+    void Init(rndr::GraphicsContext* GraphicsContext, rndr::ProjectionCamera* Camera);
     void ShutDown();
 
     void Render(real DeltaSeconds);
@@ -21,7 +21,7 @@ private:
     std::unique_ptr<rndr::Pipeline> m_Pipeline;
     std::unique_ptr<rndr::Model> m_Model;
 
-    rndr::Camera* m_Camera = nullptr;
+    rndr::ProjectionCamera* m_Camera = nullptr;
 
     rndr::Point3r m_LightPosition;
 };

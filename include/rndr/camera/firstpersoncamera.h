@@ -7,7 +7,7 @@
 namespace rndr
 {
 
-class Camera;
+class ProjectionCamera;
 
 /**
  * Wrapper for movement of the camera from the first person point of view. Used to acquire world to
@@ -16,26 +16,26 @@ class Camera;
 class FirstPersonCamera
 {
 public:
-    FirstPersonCamera(rndr::Camera* ProjectionCamera,
-                      rndr::Point3r StartingPosition = rndr::Point3r(),
+    FirstPersonCamera(ProjectionCamera* ProjectionCamera,
+                      Point3r StartingPosition = Point3r(),
                       real MovementSpeed = 1.0,
                       real RotationSpeed = 1.0);
 
     void Update(real DeltaSeconds);
 
-    rndr::Camera* GetProjectionCamera();
-    void SetProjectionCamera(rndr::Camera* ProjectionCamera);
+    ProjectionCamera* GetProjectionCamera();
+    void SetProjectionCamera(ProjectionCamera* ProjectionCamera);
 
-    rndr::Point3r GetPosition() const;
-
-private:
-    void HandleLookVert(rndr::InputPrimitive Primitive, rndr::InputTrigger Trigger, real AxisValue);
-    void HandleLookHorz(rndr::InputPrimitive Primitive, rndr::InputTrigger Trigger, real AxisValue);
-    void HandleMoveForward(rndr::InputPrimitive Primitive, rndr::InputTrigger Trigger, real);
-    void HandleMoveRight(rndr::InputPrimitive Primitive, rndr::InputTrigger Trigger, real);
+    Point3r GetPosition() const;
 
 private:
-    rndr::Camera* m_ProjectionCamera = nullptr;
+    void HandleLookVert(InputPrimitive Primitive, InputTrigger Trigger, real AxisValue);
+    void HandleLookHorz(InputPrimitive Primitive, InputTrigger Trigger, real AxisValue);
+    void HandleMoveForward(InputPrimitive Primitive, InputTrigger Trigger, real);
+    void HandleMoveRight(InputPrimitive Primitive, InputTrigger Trigger, real);
+
+private:
+    ProjectionCamera* m_ProjectionCamera = nullptr;
 
     Point3r m_Position;
     Rotator m_DirectionAngles;

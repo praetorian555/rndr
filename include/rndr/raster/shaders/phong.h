@@ -1,6 +1,6 @@
 #pragma once
 
-#include "rndr/core/camera.h"
+#include "rndr/core/projectioncamera.h"
 #include "rndr/core/pipeline.h"
 #include "rndr/core/transform.h"
 
@@ -55,7 +55,7 @@ public:
 
     void SetShininess(int Shininess) { m_Shininess = Shininess; }
 
-    void SetCamera(Camera* Camera) { m_Camera = Camera; }
+    void SetCamera(ProjectionCamera* Camera) { m_Camera = Camera; }
 
 private:
     struct PointLight
@@ -83,7 +83,7 @@ private:
     std::vector<PointLight> m_PointLights;
     std::vector<DirectionalLight> m_DirectionalLights;
 
-    Camera* m_Camera;
+    ProjectionCamera* m_Camera;
 };
 
 }  // namespace rndr

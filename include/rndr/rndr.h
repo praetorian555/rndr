@@ -1,6 +1,6 @@
 #pragma once
 
-#include "rndr/core/camera.h"
+#include "rndr/core/projectioncamera.h"
 #include "rndr/core/colors.h"
 #include "rndr/core/fileutils.h"
 #include "rndr/core/input.h"

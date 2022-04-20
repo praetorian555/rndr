@@ -1,6 +1,6 @@
 #include "lightpass.h"
 
-void LightRenderPass::Init(rndr::GraphicsContext* GraphicsContext, rndr::Camera* Camera)
+void LightRenderPass::Init(rndr::GraphicsContext* GraphicsContext, rndr::ProjectionCamera* Camera)
 {
     m_GraphicsContext = GraphicsContext;
 

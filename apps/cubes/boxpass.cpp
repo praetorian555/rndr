@@ -2,7 +2,7 @@
 
 #include "rndr/core/debug.h"
 
-void BoxRenderPass::Init(rndr::GraphicsContext* GraphicsContext, rndr::Camera* Camera)
+void BoxRenderPass::Init(rndr::GraphicsContext* GraphicsContext, rndr::ProjectionCamera* Camera)
 {
     m_GraphicsContext = GraphicsContext;
 
