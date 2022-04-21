@@ -176,10 +176,9 @@ public:
     Vector3r ConstBlendColor;
     real ConstBlendAlpha;
 
-    rndr::DepthTest DepthTestOperator;
-    real MinDepth;
-    real MaxDepth;
-    bool bChangesDepth;
+    bool bUseDepthTest;
+    DepthTest DepthTestOperator;
+    bool bFragmentShaderChangesDepth;
 
     real Gamma = RNDR_GAMMA;
 

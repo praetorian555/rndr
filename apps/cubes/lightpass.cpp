@@ -9,10 +9,9 @@ void LightRenderPass::Init(rndr::GraphicsContext* GraphicsContext, rndr::Project
     m_Pipeline->VertexShader = RNDR_BIND_TWO_PARAM(this, &LightRenderPass::VertexShader);
     m_Pipeline->FragmentShader = RNDR_BIND_THREE_PARAM(this, &LightRenderPass::FragmentShader);
 
+    m_Pipeline->bUseDepthTest = true;
     m_Pipeline->DepthTestOperator = rndr::DepthTest::Less;
-    m_Pipeline->MinDepth = 0.01;
-    m_Pipeline->MaxDepth = 100;
-    m_Pipeline->bChangesDepth = false;
+    m_Pipeline->bFragmentShaderChangesDepth = false;
 
     m_Pipeline->ColorBlendOperator = rndr::BlendOperator::Add;
     m_Pipeline->SrcColorBlendFactor = rndr::BlendFactor::SrcAlpha;

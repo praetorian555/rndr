@@ -41,6 +41,8 @@ private:
 
     void ProcessFragment(const Triangle& T, InFragmentInfo& InInfo);
 
+    bool RunDepthTest(const Point2i& PixelPosition, real NewDepth, real CurrentDepth, bool bIsEarly = false);
+
 private:
     const Pipeline* m_Pipeline = nullptr;
     Span<Triangle> m_Triangles;

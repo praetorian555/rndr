@@ -11,10 +11,9 @@ void BoxRenderPass::Init(rndr::GraphicsContext* GraphicsContext, rndr::Projectio
     m_Pipeline->VertexShader = RNDR_BIND_TWO_PARAM(&m_Shader, &rndr::PhongShader::VertexShader);
     m_Pipeline->FragmentShader = RNDR_BIND_THREE_PARAM(&m_Shader, &rndr::PhongShader::FragmentShader);
 
+    m_Pipeline->bUseDepthTest = true;
     m_Pipeline->DepthTestOperator = rndr::DepthTest::Less;
-    m_Pipeline->MinDepth = 0.01;
-    m_Pipeline->MaxDepth = 100;
-    m_Pipeline->bChangesDepth = false;
+    m_Pipeline->bFragmentShaderChangesDepth = false;
 
     m_Pipeline->ColorBlendOperator = rndr::BlendOperator::Add;
     m_Pipeline->SrcColorBlendFactor = rndr::BlendFactor::SrcAlpha;

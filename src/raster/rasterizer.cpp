@@ -402,14 +402,10 @@ void rndr::Rasterizer::ProcessFragment(const Triangle& T, InFragmentInfo& InInfo
     const real CurrentDepth = DepthBuffer->GetPixelDepth(InInfo.Position);
 
     // Early depth test
-    if (!m_Pipeline->bChangesDepth)
+    bool bPass = RunDepthTest(InInfo.Position, InInfo.Depth, CurrentDepth, /* bIsEarly= */ true);
+    if (!bPass)
     {
-        if (!m_Pipeline->DepthTest(InInfo.Depth, CurrentDepth))
-        {
-            return;
-        }
-
-        DepthBuffer->SetPixelValue(InInfo.Position, InInfo.Depth);
+        return;
     }
 
     // Run Pixel shader
@@ -418,14 +414,10 @@ void rndr::Rasterizer::ProcessFragment(const Triangle& T, InFragmentInfo& InInfo
     m_Pipeline->FragmentShader(T, InInfo, OutInfo);
 
     // Standard depth test
-    if (m_Pipeline->bChangesDepth)
+    bPass = RunDepthTest(InInfo.Position, InInfo.Depth, CurrentDepth);
+    if (!bPass)
     {
-        if (!m_Pipeline->DepthTest(OutInfo.Depth, CurrentDepth))
-        {
-            return;
-        }
-
-        DepthBuffer->SetPixelValue(InInfo.Position, InInfo.Depth);
+        return;
     }
 
     const Vector4r CurrentColor = ColorBuffer->GetPixelColor(InInfo.Position);
@@ -433,6 +425,28 @@ void rndr::Rasterizer::ProcessFragment(const Triangle& T, InFragmentInfo& InInfo
 
     // Write color into color buffer
     ColorBuffer->SetPixelValue(InInfo.Position, OutInfo.Color);
+}
+
+bool rndr::Rasterizer::RunDepthTest(const Point2i& PixelPosition, real NewDepth, real CurrentDepth, bool bIsEarly)
+{
+    Image* DepthBuffer = m_Pipeline->RenderTarget->GetDepthBuffer();
+
+    if (!m_Pipeline->bUseDepthTest)
+    {
+        return true;
+    }
+
+    if ((bIsEarly && !m_Pipeline->bFragmentShaderChangesDepth) || !bIsEarly)
+    {
+        if (!m_Pipeline->DepthTest(NewDepth, CurrentDepth))
+        {
+            return false;
+        }
+
+        DepthBuffer->SetPixelValue(PixelPosition, NewDepth);
+    }
+
+    return true;
 }
 
 rndr::Point3r rndr::Rasterizer::FromNDCToRasterSpace(const Point3r& Point)
