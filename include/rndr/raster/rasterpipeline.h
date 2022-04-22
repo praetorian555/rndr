@@ -83,6 +83,7 @@ public:
     real OneOverDepth[3];
     rndr::Bounds2i Bounds{{0, 0}, {0, 0}};
     rndr::BarycentricHelper BarHelper;
+    rndr::WindingOrder WindingOrder;
 
     InFragmentInfo* Fragments = nullptr;
     bool bIgnore = false;
@@ -154,6 +155,16 @@ public:
 #define RNDR_DY(TriangleRef, VertexType, FieldType, FieldName, ReturnType, FragmentInfo) \
     TriangleRef.DerivativeY<FieldType, VertexType, ReturnType>(offsetof(VertexType, FieldName), FragmentInfo);
 
+struct StencilProperties
+{
+    StencilComparator Compare = StencilComparator::Never;
+    uint8_t RefValue = 0;
+    uint8_t Mask = 0xFF;
+    StencilOperation FailOperation = StencilOperation::Keep;
+    StencilOperation StencilPassDepthFailOperation = StencilOperation::Keep;
+    StencilOperation StencilPassDepthPassOperation = StencilOperation::Keep;
+};
+
 /**
  * Pipeline object used to configure the Rasterizer renderer.
  */
@@ -162,23 +173,29 @@ struct Pipeline
 public:
     // Pipeline properties
 
-    rndr::WindingOrder WindingOrder;
+    bool bEnableCulling = true;
+    WindingOrder FrontFaceWindingOrder = WindingOrder::CCW;
+    Face CullFace = Face::Back;
 
     rndr::VertexShader VertexShader;
     rndr::FragmentShader FragmentShader;
 
-    BlendFactor SrcColorBlendFactor;
-    BlendFactor DstColorBlendFactor;
-    BlendFactor SrcAlphaBlendFactor;
-    BlendFactor DstAlphaBlendFactor;
-    BlendOperator ColorBlendOperator;
-    BlendOperator AlphaBlendOperator;
-    Vector3r ConstBlendColor;
-    real ConstBlendAlpha;
+    BlendFactor SrcColorBlendFactor = BlendFactor::SrcAlpha;
+    BlendFactor DstColorBlendFactor = BlendFactor::OneMinusSrcAlpha;
+    BlendFactor SrcAlphaBlendFactor = BlendFactor::One;
+    BlendFactor DstAlphaBlendFactor = BlendFactor::OneMinusSrcAlpha;
+    BlendOperator ColorBlendOperator = BlendOperator::Add;
+    BlendOperator AlphaBlendOperator = BlendOperator::Add;
+    Vector3r ConstBlendColor = Colors::Black.XYZ();
+    real ConstBlendAlpha = 1.0;
 
-    bool bUseDepthTest;
-    DepthTest DepthTestOperator;
-    bool bFragmentShaderChangesDepth;
+    bool bUseDepthTest = false;
+    bool bFragmentShaderChangesDepth = false;
+    DepthTest DepthTestOperator = DepthTest::Never;
+
+    bool bUseStencilTest = false;
+    bool bFragmentShaderChangesStencil = false;
+    StencilProperties StencilPropsPerFace[2];
 
     real Gamma = RNDR_GAMMA;
 
@@ -186,6 +203,7 @@ public:
 
 public:
     Vector4r Blend(const Vector4r& Src, const Vector4r Dst) const;
+    bool StencilTest(real& Src, real Dst) const;
     bool DepthTest(real Src, real Dst) const;
 
 private:

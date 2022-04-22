@@ -7,7 +7,11 @@ void BoxRenderPass::Init(rndr::GraphicsContext* GraphicsContext, rndr::Projectio
     m_GraphicsContext = GraphicsContext;
 
     m_Pipeline = std::make_unique<rndr::Pipeline>();
-    m_Pipeline->WindingOrder = rndr::WindingOrder::CCW;
+
+    m_Pipeline->bEnableCulling = true;
+    m_Pipeline->FrontFaceWindingOrder = rndr::WindingOrder::CCW;
+    m_Pipeline->CullFace = rndr::Face::Back;
+
     m_Pipeline->VertexShader = RNDR_BIND_TWO_PARAM(&m_Shader, &rndr::PhongShader::VertexShader);
     m_Pipeline->FragmentShader = RNDR_BIND_THREE_PARAM(&m_Shader, &rndr::PhongShader::FragmentShader);
 

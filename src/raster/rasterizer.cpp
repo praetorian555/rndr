@@ -4,6 +4,7 @@
 #include "rndr/core/bounds3.h"
 #include "rndr/core/coordinates.h"
 #include "rndr/core/log.h"
+#include "rndr/core/math.h"
 #include "rndr/core/model.h"
 #include "rndr/core/threading.h"
 
@@ -59,6 +60,30 @@ static bool ShouldDiscardByDepth(const rndr::Point3r (&Points)[3])
     // TODO(mkostic): Currently there is an issue when triangle is partially in the view box based on his depth. For this reason we will
     // discard any triangle that is partially outside the view box.
     return (MinZ < 0) || (MaxZ > 1);
+}
+
+static rndr::WindingOrder GetWindingOrder(const rndr::Point3r (&Points)[3])
+{
+    real Value = Cross2D(Points[1] - Points[0], Points[2] - Points[0]);
+    assert(Value != 0);
+
+    return Value > 0 ? rndr::WindingOrder::CCW : rndr::WindingOrder::CW;
+}
+
+static bool ShouldDiscardFace(const rndr::Pipeline* Pipeline, rndr::WindingOrder TriangleWindingOrder)
+{
+    if (!Pipeline->bEnableCulling)
+    {
+        return false;
+    }
+
+    if (Pipeline->CullFace == rndr::Face::FrontBack)
+    {
+        return true;
+    }
+
+    const bool bIsFrontFace = Pipeline->FrontFaceWindingOrder == TriangleWindingOrder;
+    return (Pipeline->CullFace == rndr::Face::Front) && bIsFrontFace;
 }
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
@@ -179,7 +204,8 @@ void rndr::Rasterizer::SetupTriangles()
         GetTriangleBounds(T.ScreenPositions, Bounds);
         T.Bounds = Bounds;
         LimitTriangleToSurface(T.Bounds, m_Pipeline->RenderTarget->GetColorBuffer());
-        T.BarHelper = BarycentricHelper(m_Pipeline->WindingOrder, T.ScreenPositions);
+        T.WindingOrder = GetWindingOrder(T.ScreenPositions);
+        T.BarHelper = BarycentricHelper(T.WindingOrder, T.ScreenPositions);
 
 #if RNDR_DEBUG
         T.Indices[0] = VertexIndex0;
@@ -205,7 +231,7 @@ void rndr::Rasterizer::FindTrianglesToIgnore()
 
             const bool bIsOutsideXY = T.Bounds.Diagonal() == ZeroVector;
             const bool bIsOutsideZ = ShouldDiscardByDepth(T.ScreenPositions);
-            const bool bBackFace = !T.BarHelper.IsWindingOrderCorrect();
+            const bool bBackFace = ShouldDiscardFace(m_Pipeline, T.WindingOrder);
 
 #if RNDR_DEBUG
             T.bOutsideXY = bIsOutsideXY;

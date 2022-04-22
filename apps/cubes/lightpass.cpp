@@ -5,7 +5,11 @@ void LightRenderPass::Init(rndr::GraphicsContext* GraphicsContext, rndr::Project
     m_GraphicsContext = GraphicsContext;
 
     m_Pipeline = std::make_unique<rndr::Pipeline>();
-    m_Pipeline->WindingOrder = rndr::WindingOrder::CCW;
+
+    m_Pipeline->bEnableCulling = true;
+    m_Pipeline->FrontFaceWindingOrder = rndr::WindingOrder::CCW;
+    m_Pipeline->CullFace = rndr::Face::Back;
+
     m_Pipeline->VertexShader = RNDR_BIND_TWO_PARAM(this, &LightRenderPass::VertexShader);
     m_Pipeline->FragmentShader = RNDR_BIND_THREE_PARAM(this, &LightRenderPass::FragmentShader);
 

@@ -54,6 +54,22 @@ enum class ImageWrapping
     MirrorRepeat
 };
 
+enum class WindingOrder : uint32_t
+{
+    CW = -1,
+    CCW = 1
+};
+
+enum class Face : uint32_t
+{
+    Front = 0,
+    Back,
+    FrontBack,
+
+    Count
+};
+
+// TODO(mkostic): Probably merge DepthTest and StencilComparator in a single enum
 enum class DepthTest
 {
     Never,
@@ -66,10 +82,28 @@ enum class DepthTest
     GreaterEqual
 };
 
-enum class WindingOrder : int
+enum class StencilComparator
 {
-    CW = -1,
-    CCW = 1
+    Never,
+    Always,
+    Less,
+    Greater,
+    Equal,
+    NotEqual,
+    LessEqual,
+    GreaterEqual
+};
+
+enum class StencilOperation
+{
+    Keep,
+    Invert,
+    Zero,
+    Replace,
+    Increment,
+    IncrementWrap,
+    Decrement,
+    DecrementWrap
 };
 
 enum class BlendFactor

@@ -4,6 +4,7 @@
 #include <cstdint>
 #include <functional>
 #include <memory>
+#include <type_traits>
 
 #if WIN32
 #define RNDR_WINDOWS 1
@@ -39,14 +40,6 @@ using real = double;
 #define RNDR_OPTIMIZE_ON __pragma(optimize("", on))
 #endif  // RNDR_WINDOWS
 
-namespace rndr
-{
-
-/**
- * Opaque type that represents an OS window handle.
- */
-using NativeWindowHandle = uintptr_t;
-
 /**
  * Default gamma value.
  */
@@ -63,5 +56,15 @@ using NativeWindowHandle = uintptr_t;
 #define RNDR_BIND_FIVE_PARAM(This, FuncPtr)                                                                              \
     std::bind(FuncPtr, This, std::placeholders::_1, std::placeholders::_2, std::placeholders::_3, std::placeholders::_4, \
               std::placeholders::_5)
+
+#define RNDR_ENUM_TO_TYPE(EnumType, Value) static_cast<std::underlying_type_t<EnumType>>(Value)
+
+namespace rndr
+{
+
+/**
+ * Opaque type that represents an OS window handle.
+ */
+using NativeWindowHandle = uintptr_t;
 
 }  // namespace rndr
