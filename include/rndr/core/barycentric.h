@@ -20,27 +20,22 @@ class BarycentricHelper
 {
 public:
     BarycentricHelper() = default;
-    BarycentricHelper(rndr::WindingOrder WindingOrder, const rndr::Point3r (&TrianglePoints)[3]);
-    BarycentricHelper(rndr::WindingOrder WindingOrder,
-                      const rndr::Point3r& TrianglePoint0,
-                      const rndr::Point3r& TrianglePoint1,
-                      const rndr::Point3r& TrianglePoint2);
+    BarycentricHelper(WindingOrder FrontFaceWindingOrder, const rndr::Point3r (&TrianglePoints)[3]);
+    BarycentricHelper(WindingOrder FrontFaceWindingOrder,
+                      const Point3r& TrianglePoint0,
+                      const Point3r& TrianglePoint1,
+                      const Point3r& TrianglePoint2);
 
     BarycentricCoordinates GetCoordinates(const Point2i& PixelPosition) const;
-
     bool IsInside(const BarycentricCoordinates& Coordinates) const;
-
-    bool IsWindingOrderCorrect() const;
-
-    static bool IsWindingOrderCorrect(const Point3r (&TrianglePoints)[3], rndr::WindingOrder);
 
 private:
     void Init();
 
 public:
-    rndr::WindingOrder m_WindingOrder;
-    rndr::Point3r m_Points[3];
-    rndr::Vector3r m_Edges[3];
+    WindingOrder m_FrontFaceWindingOrder;
+    Point3r m_Points[3];
+    Vector3r m_Edges[3];
     real m_HalfTriangleArea;
     real m_OneOverHalfTriangleArea;
 };

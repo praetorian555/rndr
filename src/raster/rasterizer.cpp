@@ -83,7 +83,8 @@ static bool ShouldDiscardFace(const rndr::Pipeline* Pipeline, rndr::WindingOrder
     }
 
     const bool bIsFrontFace = Pipeline->FrontFaceWindingOrder == TriangleWindingOrder;
-    return (Pipeline->CullFace == rndr::Face::Front) && bIsFrontFace;
+    const bool bIsBackFace = !bIsFrontFace;
+    return ((Pipeline->CullFace == rndr::Face::Front) && bIsFrontFace) || ((Pipeline->CullFace == rndr::Face::Back) && bIsBackFace);
 }
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
@@ -205,7 +206,14 @@ void rndr::Rasterizer::SetupTriangles()
         T.Bounds = Bounds;
         LimitTriangleToSurface(T.Bounds, m_Pipeline->RenderTarget->GetColorBuffer());
         T.WindingOrder = GetWindingOrder(T.ScreenPositions);
-        T.BarHelper = BarycentricHelper(T.WindingOrder, T.ScreenPositions);
+        
+        // Just a little switch to ensure proper behaviour
+        WindingOrder PipelineWindingOrder = m_Pipeline->FrontFaceWindingOrder;
+        if (m_Pipeline->CullFace == Face::Front)
+        {
+            PipelineWindingOrder = PipelineWindingOrder == WindingOrder::CW ? WindingOrder::CCW : WindingOrder::CW;
+        }
+        T.BarHelper = BarycentricHelper(PipelineWindingOrder, T.ScreenPositions);
 
 #if RNDR_DEBUG
         T.Indices[0] = VertexIndex0;
