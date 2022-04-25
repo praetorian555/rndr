@@ -3,13 +3,9 @@
 #include <vector>
 
 #include "rndr/core/base.h"
+#include "rndr/core/graphicstypes.h"
+#include "rndr/core/pipeline.h"
 #include "rndr/core/span.h"
-
-#if defined RNDR_RASTER
-#include "rndr/raster/rasterpipeline.h"
-#else
-#error Pipeline implementation is missing!
-#endif
 
 namespace rndr
 {

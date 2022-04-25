@@ -2,7 +2,7 @@
 #include <string>
 
 #include "rndr/core/base.h"
-#include "rndr/core/pipeline.h"
+#include "rndr/core/graphicstypes.h"
 
 namespace rndr
 {
