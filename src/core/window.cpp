@@ -33,7 +33,16 @@ rndr::Window::Window(int Width, int Height, const WindowProperties& Props) : m_W
     GraphicsContextProperties GCProps;
     GCProps.WindowWidth = m_Width;
     GCProps.WindowHeight = m_Height;
+    GCProps.FrameBuffer.ColorBufferCount = 1;
+    GCProps.FrameBuffer.ColorBufferProperties[0].PixelFormat = PixelFormat::R8G8B8A8_UNORM_SRGB;
+    GCProps.FrameBuffer.ColorBufferProperties[0].CPUAccess = CPUAccess::None;
+    GCProps.FrameBuffer.ColorBufferProperties[0].Usage = Usage::GPUReadWrite;
+    GCProps.FrameBuffer.ColorBufferProperties[0].bUseMips = false;
     GCProps.FrameBuffer.bUseDepthStencil = true;
+    GCProps.FrameBuffer.DepthStencilBufferProperties.PixelFormat = PixelFormat::DEPTH24_STENCIL8;
+    GCProps.FrameBuffer.DepthStencilBufferProperties.CPUAccess = CPUAccess::None;
+    GCProps.FrameBuffer.DepthStencilBufferProperties.Usage = Usage::GPUReadWrite;
+    GCProps.FrameBuffer.DepthStencilBufferProperties.bUseMips = false;
     m_GraphicsContext = std::make_unique<GraphicsContext>(this, GCProps);
 
     rndr::WindowDelegates::OnResize.Add(RNDR_BIND_THREE_PARAM(this, &Window::Resize));
