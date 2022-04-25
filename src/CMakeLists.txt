@@ -9,8 +9,18 @@ add_library(rndr ${PRIVATE_SOURCE_LIST} ${PUBLIC_SOURCE_LIST})
 target_include_directories(rndr PUBLIC ${PROJECT_SOURCE_DIR}/include)
 target_include_directories(rndr PRIVATE ${PROJECT_SOURCE_DIR}/src)
 
+# Setup graphics API to use
+if (DX11)
+target_compile_definitions(rndr PUBLIC RNDR_DX11)
+endif()
+
+# Setup library dependencies
 target_link_libraries(rndr PUBLIC spdlog::spdlog)
 target_link_libraries(rndr PUBLIC stb_image)
+if (DX11)
+target_link_libraries(rndr PUBLIC d3d11.lib dxgi.lib d3dcompiler.lib)
+endif()
+
 
 # All users of this library will need at least C++17
 target_compile_features(rndr PUBLIC cxx_std_17)
