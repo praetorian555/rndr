@@ -22,7 +22,7 @@ If you already cloned the project but forgot the --recurse-submodules you can us
 
 To generate a build system go to the root of a project and use:
 
-	cmake -S . -B <path_to_build_dir>
+	cmake -S <path_to_lib_root> -B <path_to_build_dir>
 
 To build project using the cmake from command line:
 
@@ -37,4 +37,14 @@ The clang-format target will apply formatting to all files under apps, include a
 
 If you are using MSVC compiler you can use address sanitizer tool by setting the ADDRESS_SANITIZER flag when invoking the cmake command:
 
-	cmake -S <root_project_dir> -B <build_dir> -DADDRESS_SANITIZER=ON 
+	cmake -S <path_to_lib_root> -B <build_dir> -DADDRESS_SANITIZER=ON
+
+## Build Configuration ##
+
+By default rndr will using Raster rendering API. This is custom implementation that provides a rasterizer implemented on the CPU side. If you want to use one of the standard graphics API supply one of the following flags when generating a build system:
+
+* DX11
+
+For example, if you want to use DirectX 11 API we would generate build system with the following command:
+
+	cmake -S <path_to_lib_root> -B <path_to_build_dir> -DDX11=ON
