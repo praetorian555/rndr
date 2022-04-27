@@ -24,6 +24,7 @@ public:
     ID3D11Device* GetDevice();
     ID3D11DeviceContext* GetDeviceContext();
     IDXGISwapChain* GetSwapchain();
+    D3D_FEATURE_LEVEL GetFeatureLevel();
 
     FrameBuffer* GetWindowFrameBuffer();
 
@@ -37,6 +38,7 @@ private:
     ID3D11Device* m_Device;
     ID3D11DeviceContext* m_DeviceContext;
     IDXGISwapChain* m_Swapchain;
+    D3D_FEATURE_LEVEL m_FeatureLevel;
 
     std::unique_ptr<FrameBuffer> m_WindowFrameBuffer;
 };

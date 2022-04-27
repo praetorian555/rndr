@@ -103,6 +103,69 @@ D3D11_PRIMITIVE_TOPOLOGY rndr::FromPrimitiveTopology(PrimitiveTopology Topology)
     return D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST;
 }
 
+D3D11_INPUT_CLASSIFICATION rndr::FromDataRepetition(DataRepetition Repetition)
+{
+    switch (Repetition)
+    {
+        case DataRepetition::PerVertex:
+            return D3D11_INPUT_PER_VERTEX_DATA;
+        case DataRepetition::PerInstance:
+            return D3D11_INPUT_PER_INSTANCE_DATA;
+        default:
+            assert(false);
+    }
+
+    return D3D11_INPUT_PER_VERTEX_DATA;
+}
+
+D3D11_FILTER rndr::FromImageFiltering(ImageFiltering Filter)
+{
+    switch (Filter)
+    {
+        case ImageFiltering::MinMagMipPoint:
+            return D3D11_FILTER_MIN_MAG_MIP_POINT;
+        case ImageFiltering::MinMagPoint_MipLinear:
+            return D3D11_FILTER_MIN_MAG_POINT_MIP_LINEAR;
+        case ImageFiltering::MinPoint_MagLinear_MipPoint:
+            return D3D11_FILTER_MIN_POINT_MAG_LINEAR_MIP_POINT;
+        case ImageFiltering::MinPoint_MagMipLinear:
+            return D3D11_FILTER_MIN_POINT_MAG_MIP_LINEAR;
+        case ImageFiltering::MinLinear_MagMipPoint:
+            return D3D11_FILTER_MIN_LINEAR_MAG_MIP_POINT;
+        case ImageFiltering::MinLinear_MagPoint_MipLinear:
+            return D3D11_FILTER_MIN_LINEAR_MAG_POINT_MIP_LINEAR;
+        case ImageFiltering::MinMagLinear_MipPoint:
+            return D3D11_FILTER_MIN_MAG_LINEAR_MIP_POINT;
+        case ImageFiltering::MinMagMipLinear:
+            return D3D11_FILTER_MIN_MAG_MIP_LINEAR;
+        case ImageFiltering::Anisotropic:
+            return D3D11_FILTER_ANISOTROPIC;
+        default:
+            assert(false);
+    }
+
+    return D3D11_FILTER_MIN_MAG_MIP_LINEAR;
+}
+
+D3D11_TEXTURE_ADDRESS_MODE rndr::FromImageAddressing(ImageAddressing AddressMode)
+{
+    switch (AddressMode)
+    {
+        case ImageAddressing::Repeat:
+            return D3D11_TEXTURE_ADDRESS_WRAP;
+        case ImageAddressing::MirrorRepeat:
+            return D3D11_TEXTURE_ADDRESS_MIRROR;
+        case ImageAddressing::Clamp:
+            return D3D11_TEXTURE_ADDRESS_CLAMP;
+        case ImageAddressing::MirrorOnce:
+            return D3D11_TEXTURE_ADDRESS_MIRROR_ONCE;
+        default:
+            assert(false);
+    }
+
+    return D3D11_TEXTURE_ADDRESS_WRAP;
+}
+
 bool rndr::IsRenderTarget(PixelFormat Format)
 {
     return Format != PixelFormat::DEPTH24_STENCIL8;

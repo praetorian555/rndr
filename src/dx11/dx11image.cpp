@@ -69,6 +69,17 @@ void rndr::Image::Create()
         }
     }
 
+    D3D11_SHADER_RESOURCE_VIEW_DESC ResourceDesc;
+    ResourceDesc.Format = FromPixelFormat(m_Props.PixelFormat);
+    ResourceDesc.ViewDimension = D3D11_SRV_DIMENSION_TEXTURE2D;
+    ResourceDesc.Texture2D.MipLevels = 1;
+    ResourceDesc.Texture2D.MostDetailedMip = 0;
+    Result = Device->CreateShaderResourceView(m_Texture, &ResourceDesc, &m_ShaderResourceView);
+    if (FAILED(Result))
+    {
+        RNDR_LOG_ERROR("Failed to create ID3D11ShaderResourceView!");
+    }
+
     if (IsRenderTarget(m_Props.PixelFormat))
     {
         Result = Device->CreateRenderTargetView(m_Texture, nullptr, &m_RenderTargetView);
@@ -108,6 +119,11 @@ ID3D11RenderTargetView* rndr::Image::GetRenderTargetView()
 ID3D11DepthStencilView* rndr::Image::GetStencilTargetView()
 {
     return m_DepthStencilView;
+}
+
+ID3D11ShaderResourceView* rndr::Image::GetShaderResourceView()
+{
+    return m_ShaderResourceView;
 }
 
 #endif  // RNDR_DX11

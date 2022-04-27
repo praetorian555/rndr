@@ -3,8 +3,7 @@
 #include "rndr/core/base.h"
 #include "rndr/core/colors.h"
 #include "rndr/core/math.h"
-
-// Contains all types used to configure a render pipeline.
+#include "rndr/core/span.h"
 
 namespace rndr
 {
@@ -12,6 +11,9 @@ namespace rndr
 struct GraphicsConstants
 {
     static constexpr int MaxFrameBufferColorBuffers = 4;
+    static constexpr int MaxInputLayoutEntries = 8;
+    static constexpr int MaxShaderResourceBindSlots = 128;
+    static constexpr int MaxConstantBuffers = 16;
 };
 
 /**
@@ -23,7 +25,8 @@ enum class PixelFormat
     R8G8B8A8_UNORM_SRGB,
     B8G8R8A8_UNORM,
     B8G8R8A8_UNORM_SRGB,
-    DEPTH24_STENCIL8
+    DEPTH24_STENCIL8,
+    R32G32B32_FLOAT
 };
 
 enum class GammaSpace
@@ -42,16 +45,24 @@ enum class ImageFileFormat
 
 enum class ImageFiltering
 {
-    Point,   // Sometimes called NearestNeighbour
-    Linear,  // Also bilinear
+    MinMagMipPoint = 0,
+    MinMagMipLinear,
+    MinMagPoint_MipLinear,
+    MinPoint_MagLinear_MipPoint,
+    MinPoint_MagMipLinear,
+    MinLinear_MagMipPoint,
+    MinLinear_MagPoint_MipLinear,
+    MinMagLinear_MipPoint,
+    Anisotropic,
 };
 
-enum class ImageWrapping
+enum class ImageAddressing
 {
+    Repeat,
+    MirrorRepeat,
     Clamp,
     Border,
-    Repeat,
-    MirrorRepeat
+    MirrorOnce
 };
 
 enum class CPUAccess
@@ -186,15 +197,66 @@ struct GraphicsContextProperties
 
 struct SamplerProperties
 {
-    ImageWrapping WrapU = ImageWrapping::Repeat;
-    ImageWrapping WrapV = ImageWrapping::Repeat;
+    ImageAddressing AddressingU = ImageAddressing::Repeat;
+    ImageAddressing AddressingV = ImageAddressing::Repeat;
+    ImageAddressing AddressingW = ImageAddressing::Repeat;
+
     Vector4r WrapBorderColor = Colors::Pink;
 
-    ImageFiltering MagFilter = ImageFiltering::Point;
-    ImageFiltering MinFilter = ImageFiltering::Point;
-    ImageFiltering MipFilter = ImageFiltering::Linear;
+    ImageFiltering Filter = ImageFiltering::MinMagMipLinear;
 
-    int LODBias = 0;
+    real LODBias = 0;
+    real MinLOD = 0;
+    real MaxLOD = 50'000;
+
+    uint32_t MaxAnisotropy = 0;
+};
+
+struct ConstantBufferProperties
+{
+    int Size;
+    Usage Usage = Usage::GPUReadCPUWrite;
+    CPUAccess CPUAccess = CPUAccess::Write;
+};
+
+enum class DataRepetition
+{
+    PerVertex,
+    PerInstance
+};
+
+struct InputLayoutProperties
+{
+    std::string SemanticName;
+    int SemanticIndex;
+    PixelFormat Format;
+    int OffsetInVertex;
+    // Corresponds to the index of a vertex buffer in a mesh
+    int InputSlot;
+    DataRepetition Repetition;
+    // In case data is repeated on instance level this allows us to skip some instances
+    int InstanceStepRate;
+};
+
+// Returns the number of occupied entries, first argument contains MaxInputLayoutEntries entries.
+using SetupInputLayout = std::function<int(Span<InputLayoutProperties>)>;
+
+enum class ShaderType
+{
+    Vertex,
+    Fragment
+};
+
+struct ShaderProperties
+{
+    ShaderType Type;
+
+    std::wstring FilePath;
+    std::string EntryPoint;
+    bool bCompilationNeeded = true;
+
+    // Used to allow user to setup input layout for specific shader, if there is no layout just leave this field empty.
+    SetupInputLayout InputLayoutCallback;
 };
 
 // Helper functions

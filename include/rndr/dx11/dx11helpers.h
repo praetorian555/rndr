@@ -19,6 +19,9 @@ PixelFormat ToPixelFormat(DXGI_FORMAT Format);
 uint32_t FromCPUAccess(CPUAccess Access);
 D3D11_USAGE FromUsage(Usage Usage);
 D3D11_PRIMITIVE_TOPOLOGY FromPrimitiveTopology(PrimitiveTopology Topology);
+D3D11_INPUT_CLASSIFICATION FromDataRepetition(DataRepetition Repetition);
+D3D11_FILTER FromImageFiltering(ImageFiltering Filter);
+D3D11_TEXTURE_ADDRESS_MODE FromImageAddressing(ImageAddressing AddressMode);
 
 bool IsRenderTarget(PixelFormat Format);
 bool IsDepthStencil(PixelFormat Format);

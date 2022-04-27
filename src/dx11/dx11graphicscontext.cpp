@@ -36,7 +36,6 @@ rndr::GraphicsContext::GraphicsContext(Window* Window, GraphicsContextProperties
     D3D_FEATURE_LEVEL FeatureLevels[] = {D3D_FEATURE_LEVEL_11_1, D3D_FEATURE_LEVEL_11_0, D3D_FEATURE_LEVEL_10_1, D3D_FEATURE_LEVEL_10_0,
                                          D3D_FEATURE_LEVEL_9_3,  D3D_FEATURE_LEVEL_9_2,  D3D_FEATURE_LEVEL_9_1};
     // This will be the feature level that is used to create our device and swap chain.
-    D3D_FEATURE_LEVEL FeatureLevel;
     IDXGIAdapter* Adapter = nullptr;  // Use default adapter
     HMODULE SoftwareRasterizerModule = nullptr;
     HRESULT Result = D3D11CreateDeviceAndSwapChain(Adapter, D3D_DRIVER_TYPE_HARDWARE, SoftwareRasterizerModule, CreateDeviceFlags,
@@ -78,6 +77,11 @@ ID3D11DeviceContext* rndr::GraphicsContext::GetDeviceContext()
 IDXGISwapChain* rndr::GraphicsContext::GetSwapchain()
 {
     return m_Swapchain;
+}
+
+D3D_FEATURE_LEVEL rndr::GraphicsContext::GetFeatureLevel()
+{
+    return m_FeatureLevel;
 }
 
 rndr::FrameBuffer* rndr::GraphicsContext::GetWindowFrameBuffer()

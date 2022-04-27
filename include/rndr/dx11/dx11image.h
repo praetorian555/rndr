@@ -8,6 +8,7 @@
 
 struct ID3D11RenderTargetView;
 struct ID3D11DepthStencilView;
+struct ID3D11ShaderResourceView;
 struct ID3D11Texture2D;
 
 namespace rndr
@@ -25,6 +26,7 @@ public:
 
     ID3D11RenderTargetView* GetRenderTargetView();
     ID3D11DepthStencilView* GetStencilTargetView();
+    ID3D11ShaderResourceView* GetShaderResourceView();
 
 private:
     void Create();
@@ -35,6 +37,7 @@ private:
     ImageProperties m_Props;
 
     ID3D11Texture2D* m_Texture;
+    ID3D11ShaderResourceView* m_ShaderResourceView;
     union
     {
         ID3D11RenderTargetView* m_RenderTargetView;
