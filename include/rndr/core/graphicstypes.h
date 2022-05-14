@@ -26,7 +26,10 @@ enum class PixelFormat
     B8G8R8A8_UNORM,
     B8G8R8A8_UNORM_SRGB,
     DEPTH24_STENCIL8,
-    R32G32B32_FLOAT
+    R32G32B32A32_FLOAT,
+    R32G32B32_FLOAT,
+    R32G32_FLOAT,
+    R32_FLOAT
 };
 
 enum class GammaSpace
@@ -88,9 +91,9 @@ enum class WindingOrder : uint32_t
 
 enum class Face : uint32_t
 {
-    Front = 0,
+    None = 0,
+    Front,
     Back,
-    FrontBack,
 
     Count
 };
@@ -105,7 +108,7 @@ enum class PrimitiveTopology
 };
 
 // TODO(mkostic): Probably merge DepthTest and StencilComparator in a single enum
-enum class DepthTest
+enum class Comparator
 {
     Never,
     Always,
@@ -168,12 +171,40 @@ enum class BlendOperator
     Max
 };
 
+enum class BufferBindFlag
+{
+    Vertex,
+    Constant,
+    Index
+};
+
+namespace ImageBindFlags
+{
+enum : uint32_t
+{
+    RenderTarget = 1 << 0,
+    DepthStencil = 1 << 1,
+    ShaderResource = 1 << 2
+};
+}
+
+struct BufferProperties
+{
+    BufferBindFlag BindFlag;
+    CPUAccess CPUAccess;
+    Usage Usage;
+    int Size;
+    int Stride;
+};
+
 struct ImageProperties
 {
     PixelFormat PixelFormat = PixelFormat::R8G8B8A8_UNORM_SRGB;
     CPUAccess CPUAccess = CPUAccess::None;
     Usage Usage = Usage::GPUReadWrite;
     bool bUseMips = false;
+    uint32_t ImageBindFlags = ImageBindFlags::RenderTarget | ImageBindFlags::ShaderResource;
+    int ArraySize = 1;
 };
 
 struct FrameBufferProperties
@@ -225,22 +256,6 @@ enum class DataRepetition
     PerInstance
 };
 
-struct InputLayoutProperties
-{
-    std::string SemanticName;
-    int SemanticIndex;
-    PixelFormat Format;
-    int OffsetInVertex;
-    // Corresponds to the index of a vertex buffer in a mesh
-    int InputSlot;
-    DataRepetition Repetition;
-    // In case data is repeated on instance level this allows us to skip some instances
-    int InstanceStepRate;
-};
-
-// Returns the number of occupied entries, first argument contains MaxInputLayoutEntries entries.
-using SetupInputLayout = std::function<int(Span<InputLayoutProperties>)>;
-
 enum class ShaderType
 {
     Vertex,
@@ -254,9 +269,81 @@ struct ShaderProperties
     std::wstring FilePath;
     std::string EntryPoint;
     bool bCompilationNeeded = true;
+};
 
-    // Used to allow user to setup input layout for specific shader, if there is no layout just leave this field empty.
-    SetupInputLayout InputLayoutCallback;
+enum class DepthMask
+{
+    None,
+    All
+};
+
+enum class FillMode
+{
+    Solid,
+    Wireframe
+};
+
+constexpr int AppendAlignedElement = -1;
+struct InputLayoutProperties
+{
+    std::string SemanticName;
+    int SemanticIndex;
+    PixelFormat Format;
+    int OffsetInVertex; // Use AppendAlignedElement to align it to the previous element
+    // Corresponds to the index of a vertex buffer in a mesh
+    int InputSlot;
+    DataRepetition Repetition;
+    // In case data is repeated on instance level this allows us to skip some instances
+    int InstanceStepRate;
+};
+
+struct RasterizerProperties
+{
+    FillMode FillMode = FillMode::Solid;
+    WindingOrder FrontFaceWindingOrder = WindingOrder::CCW;
+    Face CullFace = Face::Back;
+    int DepthBias = 0;
+    real DepthBiasClamp = 0.0;
+    real SlopeScaledDepthBias = 0.0;
+    bool bDepthClipEnable;
+    bool bScissorEnable;
+    bool bMultisampleEnable;
+    bool bAntialiasedLineEnable;
+};
+
+struct DepthStencilProperties
+{
+    bool bDepthEnable = false;
+    Comparator DepthComparator = Comparator::Less;
+    DepthMask DepthMask = DepthMask::All;
+
+    bool bStencilEnable = false;
+    uint8_t StencilReadMask = 0xFF;
+    uint8_t StencilWriteMask = 0xFF;
+    uint32_t StencilRefValue = 0;
+
+    StencilOperation StencilFrontFaceFailOp = StencilOperation::Keep;
+    StencilOperation StencilFrontFaceDepthFailOp = StencilOperation::Keep;
+    StencilOperation StencilFrontFacePassOp = StencilOperation::Keep;
+    Comparator StencilFrontFaceComparator = Comparator::Never;
+
+    StencilOperation StencilBackFaceFailOp = StencilOperation::Keep;
+    StencilOperation StencilBackFaceDepthFailOp = StencilOperation::Keep;
+    StencilOperation StencilBackFacePassOp = StencilOperation::Keep;
+    Comparator StencilBackFaceComparator = Comparator::Never;
+};
+
+struct BlendProperties
+{
+    bool bBlendEnable = true;
+    BlendFactor SrcColorFactor;
+    BlendFactor DstColorFactor;
+    BlendOperator ColorOperator;
+    BlendFactor SrcAlphaFactor;
+    BlendFactor DstAlphaFactor;
+    BlendOperator AlphaOperator;
+    Vector3r ConstColor;
+    real ConstAlpha;
 };
 
 // Helper functions

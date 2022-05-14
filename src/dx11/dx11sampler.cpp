@@ -14,15 +14,15 @@ rndr::Sampler::Sampler(GraphicsContext* Context, const SamplerProperties& Props)
     ID3D11Device* Device = Context->GetDevice();
 
     D3D11_SAMPLER_DESC Desc;
-    Desc.AddressU = FromImageAddressing(m_Props.AddressingU);
-    Desc.AddressV = FromImageAddressing(m_Props.AddressingV);
-    Desc.AddressW = FromImageAddressing(m_Props.AddressingW);
+    Desc.AddressU = DX11FromImageAddressing(m_Props.AddressingU);
+    Desc.AddressV = DX11FromImageAddressing(m_Props.AddressingV);
+    Desc.AddressW = DX11FromImageAddressing(m_Props.AddressingW);
     Desc.BorderColor[0] = m_Props.WrapBorderColor.X;
     Desc.BorderColor[1] = m_Props.WrapBorderColor.Y;
     Desc.BorderColor[2] = m_Props.WrapBorderColor.Z;
     Desc.BorderColor[3] = m_Props.WrapBorderColor.W;
     Desc.ComparisonFunc = D3D11_COMPARISON_ALWAYS;  // TODO(mkostic): Add support for this
-    Desc.Filter = FromImageFiltering(m_Props.Filter);
+    Desc.Filter = DX11FromImageFiltering(m_Props.Filter);
     Desc.MaxAnisotropy = m_Props.MaxAnisotropy;
     Desc.MipLODBias = m_Props.LODBias;
     Desc.MinLOD = m_Props.MinLOD;

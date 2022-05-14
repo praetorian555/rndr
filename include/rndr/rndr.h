@@ -1,5 +1,7 @@
 #pragma once
 
+#include "rndr/core/buffer.h"
+#include "rndr/core/shader.h"
 #include "rndr/core/colors.h"
 #include "rndr/core/fileutils.h"
 #include "rndr/core/framebuffer.h"
@@ -8,7 +10,6 @@
 #include "rndr/core/image.h"
 #include "rndr/core/input.h"
 #include "rndr/core/log.h"
-#include "rndr/core/model.h"
 #include "rndr/core/pipeline.h"
 #include "rndr/core/projectioncamera.h"
 #include "rndr/core/rndrapp.h"

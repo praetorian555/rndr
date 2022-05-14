@@ -5,125 +5,163 @@
 #include <Windows.h>
 #include <d3d11.h>
 
+#include "stb_image/stb_image.h"
+
+#include "rndr/core/fileutils.h"
 #include "rndr/core/graphicscontext.h"
 #include "rndr/core/log.h"
 
 #include "rndr/dx11/dx11helpers.h"
 
 rndr::Image::Image(GraphicsContext* Context, int Width, int Height, const ImageProperties& Props)
-    : m_GraphicsContext(Context), m_Width(Width), m_Height(Height), m_Props(Props), m_bSwapchainBackBuffer(false)
+    : Width(Width), Height(Height), Props(Props), bSwapchainBackBuffer(false)
 {
-    Create();
+    Create(Context);
 }
 
-rndr::Image::Image(GraphicsContext* Context) : m_GraphicsContext(Context), m_bSwapchainBackBuffer(true)
+rndr::Image::Image(GraphicsContext* Context) : bSwapchainBackBuffer(true)
 {
-    IDXGISwapChain* Swapchain = m_GraphicsContext->GetSwapchain();
+    IDXGISwapChain* Swapchain = Context->GetSwapchain();
     DXGI_SWAP_CHAIN_DESC Desc;
     Swapchain->GetDesc(&Desc);
-    m_Width = Desc.BufferDesc.Width;
-    m_Height = Desc.BufferDesc.Height;
-    m_Props.PixelFormat = ToPixelFormat(Desc.BufferDesc.Format);
-    m_Props.CPUAccess = CPUAccess::None;
-    m_Props.Usage = Usage::GPUReadWrite;
-    m_Props.bUseMips = false;
+    Width = Desc.BufferDesc.Width;
+    Height = Desc.BufferDesc.Height;
+    Props.PixelFormat = DX11ToPixelFormat(Desc.BufferDesc.Format);
+    Props.ImageBindFlags = ImageBindFlags::RenderTarget;
+    Props.CPUAccess = CPUAccess::None;
+    Props.Usage = Usage::GPUReadWrite;
+    Props.bUseMips = false;
 
-    Create();
+    Create(Context);
 }
 
-void rndr::Image::Create()
+rndr::Image::Image(GraphicsContext* Context, const std::string& FilePath, const ImageProperties& P) : Props(P), bSwapchainBackBuffer(false)
 {
-    ID3D11Device* Device = m_GraphicsContext->GetDevice();
+    const ImageFileFormat FileFormat = rndr::GetImageFileFormat(FilePath);
+    assert(FileFormat != ImageFileFormat::NotSupported);
+
+    // stb_image library loads data starting from the top left-most pixel while our engine expects
+    // data from lower left corner first
+    const bool bShouldFlip = true;
+    stbi_set_flip_vertically_on_load(bShouldFlip);
+
+    // Note that this one will always return data in a form:
+    // 1 channel: Gray
+    // 2 channel: Gray Alpha
+    // 3 channel: Red Green Blue
+    // 4 channel: Red Green Blue Alpha
+    //
+    // Note that we always request 4 channels.
+    int ChannelNumber;
+    const int DesiredChannelNumber = 4;
+    ByteSpan Data;
+
+    Data = stbi_load(FilePath.c_str(), &Width, &Height, &ChannelNumber, DesiredChannelNumber);
+    if (!Data)
+    {
+        RNDR_LOG_ERROR_OR_ASSERT("Image: stbi_load_from_file failed with error: %s", stbi_failure_reason());
+        assert(Data);
+    }
+
+    // TODO(mkostic): How to know if image uses 16 or 8 bits per channel??
+
+    // TODO(mkostic): Add support for grayscale images.
+    assert(ChannelNumber == 3 || ChannelNumber == 4);
+
+    const int PixelSize = GetPixelSize(Props.PixelFormat);
+    const int PixelCount = Width * Height;
+    const int BufferSize = Width * Height * PixelSize;
+    Data.Size = BufferSize;
+
+    Create(Context, Data);
+
+    free(Data.Data);
+}
+
+void rndr::Image::Create(GraphicsContext* Context, ByteSpan Data)
+{
+    ID3D11Device* Device = Context->GetDevice();
     HRESULT Result;
 
-    if (!m_bSwapchainBackBuffer)
+    if (!bSwapchainBackBuffer)
     {
         D3D11_TEXTURE2D_DESC Desc;
         ZeroMemory(&Desc, sizeof(D3D11_TEXTURE2D_DESC));
-        Desc.ArraySize = 1;
-        Desc.BindFlags = IsRenderTarget(m_Props.PixelFormat) ? D3D11_BIND_RENDER_TARGET : D3D11_BIND_DEPTH_STENCIL;
-        Desc.CPUAccessFlags = FromCPUAccess(m_Props.CPUAccess);
-        Desc.Format = FromPixelFormat(m_Props.PixelFormat);
-        Desc.Width = m_Width;
-        Desc.Height = m_Height;
+        Desc.BindFlags = DX11FromImageBindFlags(Props.ImageBindFlags);
+        Desc.CPUAccessFlags = DX11FromCPUAccess(Props.CPUAccess);
+        Desc.Format = DX11FromPixelFormat(Props.PixelFormat);
+        Desc.Usage = DX11FromUsage(Props.Usage);
+        Desc.Width = Width;
+        Desc.Height = Height;
+        Desc.ArraySize = Props.ArraySize;
         Desc.MiscFlags = 0;
-        Desc.Usage = FromUsage(m_Props.Usage);
+        Desc.MipLevels = 1;
         Desc.SampleDesc.Count = 1;  // TODO(mkostic): Add options for multisampling in props
         Desc.SampleDesc.Quality = 0;
 
-        Result = Device->CreateTexture2D(&Desc, nullptr, &m_Texture);
+        const int PixelSize = GetPixelSize(Props.PixelFormat);
+        const int PitchSize = Width * PixelSize;
+        D3D11_SUBRESOURCE_DATA InitialData;
+        InitialData.pSysMem = Data.Data;
+        InitialData.SysMemPitch = PitchSize;
+        InitialData.SysMemSlicePitch = 0;
+        D3D11_SUBRESOURCE_DATA* InitialDataPtr = Data ? &InitialData : nullptr;
+
+        Result = Device->CreateTexture2D(&Desc, InitialDataPtr, &DX11Texture);
         if (FAILED(Result))
         {
-            RNDR_LOG_ERROR("Failed to create ID3D11Texture2D!");
+            RNDR_LOG_ERROR_OR_ASSERT("Failed to create ID3D11Texture2D!");
             return;
         }
     }
     else
     {
-        IDXGISwapChain* Swapchain = m_GraphicsContext->GetSwapchain();
-        HRESULT Result = Swapchain->GetBuffer(0, __uuidof(ID3D11Texture2D), (LPVOID*)&m_Texture);
+        IDXGISwapChain* Swapchain = Context->GetSwapchain();
+        HRESULT Result = Swapchain->GetBuffer(0, __uuidof(ID3D11Texture2D), (LPVOID*)&DX11Texture);
         if (FAILED(Result))
         {
-            RNDR_LOG_ERROR("Failed to get back buffer from the swapchain!");
+            RNDR_LOG_ERROR_OR_ASSERT("Failed to get back buffer from the swapchain!");
             return;
         }
     }
 
-    D3D11_SHADER_RESOURCE_VIEW_DESC ResourceDesc;
-    ResourceDesc.Format = FromPixelFormat(m_Props.PixelFormat);
-    ResourceDesc.ViewDimension = D3D11_SRV_DIMENSION_TEXTURE2D;
-    ResourceDesc.Texture2D.MipLevels = 1;
-    ResourceDesc.Texture2D.MostDetailedMip = 0;
-    Result = Device->CreateShaderResourceView(m_Texture, &ResourceDesc, &m_ShaderResourceView);
-    if (FAILED(Result))
+    if (Props.ImageBindFlags & ImageBindFlags::ShaderResource)
     {
-        RNDR_LOG_ERROR("Failed to create ID3D11ShaderResourceView!");
-    }
-
-    if (IsRenderTarget(m_Props.PixelFormat))
-    {
-        Result = Device->CreateRenderTargetView(m_Texture, nullptr, &m_RenderTargetView);
+        D3D11_SHADER_RESOURCE_VIEW_DESC ResourceDesc;
+        ResourceDesc.Format = DX11FromPixelFormat(Props.PixelFormat);
+        ResourceDesc.ViewDimension = D3D11_SRV_DIMENSION_TEXTURE2D;
+        ResourceDesc.Texture2D.MipLevels = Props.bUseMips ? -1 : 1;
+        ResourceDesc.Texture2D.MostDetailedMip = 0;
+        Result = Device->CreateShaderResourceView(DX11Texture, &ResourceDesc, &DX11ShaderResourceView);
         if (FAILED(Result))
         {
-            RNDR_LOG_ERROR("Failed to create ID3D11RenderTargetView!");
+            RNDR_LOG_ERROR_OR_ASSERT("Failed to create ID3D11ShaderResourceView!");
         }
     }
-    else
+    if (Props.ImageBindFlags & ImageBindFlags::RenderTarget)
     {
-        Result = Device->CreateDepthStencilView(m_Texture, nullptr, &m_DepthStencilView);
+        Result = Device->CreateRenderTargetView(DX11Texture, nullptr, &DX11RenderTargetView);
         if (FAILED(Result))
         {
-            RNDR_LOG_ERROR("Failed to create ID3D11DepthStencilView!");
+            RNDR_LOG_ERROR_OR_ASSERT("Failed to create ID3D11RenderTargetView!");
+        }
+    }
+    if (Props.ImageBindFlags & ImageBindFlags::DepthStencil)
+    {
+        Result = Device->CreateDepthStencilView(DX11Texture, nullptr, &DX11DepthStencilView);
+        if (FAILED(Result))
+        {
+            RNDR_LOG_ERROR_OR_ASSERT("Failed to create ID3D11DepthStencilView!");
         }
     }
 }
 
 rndr::Image::~Image()
 {
-    DX11SafeRelease(m_Texture);
-    if (IsRenderTarget(m_Props.PixelFormat))
-    {
-        DX11SafeRelease(m_RenderTargetView);
-    }
-    else
-    {
-        DX11SafeRelease(m_DepthStencilView);
-    }
-}
-
-ID3D11RenderTargetView* rndr::Image::GetRenderTargetView()
-{
-    return m_RenderTargetView;
-}
-
-ID3D11DepthStencilView* rndr::Image::GetStencilTargetView()
-{
-    return m_DepthStencilView;
-}
-
-ID3D11ShaderResourceView* rndr::Image::GetShaderResourceView()
-{
-    return m_ShaderResourceView;
+    DX11SafeRelease(DX11Texture);
+    DX11SafeRelease(DX11ShaderResourceView);
+    DX11SafeRelease(DX11RenderTargetView);
+    DX11SafeRelease(DX11DepthStencilView);
 }
 
 #endif  // RNDR_DX11

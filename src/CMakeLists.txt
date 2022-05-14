@@ -18,7 +18,7 @@ endif()
 target_link_libraries(rndr PUBLIC spdlog::spdlog)
 target_link_libraries(rndr PUBLIC stb_image)
 if (DX11)
-target_link_libraries(rndr PUBLIC d3d11.lib dxgi.lib d3dcompiler.lib d3dx11.lib)
+target_link_libraries(rndr PUBLIC d3d11.lib dxgi.lib d3dcompiler.lib)
 endif()
 
 

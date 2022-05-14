@@ -15,11 +15,27 @@ struct Span
     Span(const std::vector<T>& Vec) : Data((T*)Vec.data()), Size(Vec.size()) {}
 
     template <typename U>
+    Span(const std::vector<U>& Vec)
+    {
+        Data = (T*)Vec.data();
+        Size = Vec.size() * sizeof(U) / sizeof(T);
+        assert(Vec.size() * sizeof(U) % sizeof(T) == 0);
+    }
+
+    template <typename U>
     Span(const Span<U>& Other)
     {
         Data = (T*)Other.Data;
         Size = Other.Size * sizeof(U) / sizeof(T);
         assert(Other.Size * sizeof(U) % sizeof(T) == 0);
+    }
+
+    template <typename U>
+    Span(const U* Ptr)
+    {
+        Data = (T*)Ptr;
+        Size = sizeof(U) / sizeof(T);
+        assert(sizeof(U) % sizeof(T) == 0);
     }
 
     operator bool() const { return Data != nullptr && Size != 0; }

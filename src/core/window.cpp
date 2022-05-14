@@ -6,7 +6,7 @@
 #if defined RNDR_WINDOWS
 #include <Windows.h>
 #include <windowsx.h>
-#endif // RNDR_WINDOWS
+#endif  // RNDR_WINDOWS
 
 #include "rndr/core/input.h"
 #include "rndr/core/log.h"
@@ -30,21 +30,6 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam);
 
 rndr::Window::Window(int Width, int Height, const WindowProperties& Props) : m_Width(Width), m_Height(Height), m_Props(Props)
 {
-    GraphicsContextProperties GCProps;
-    GCProps.WindowWidth = m_Width;
-    GCProps.WindowHeight = m_Height;
-    GCProps.FrameBuffer.ColorBufferCount = 1;
-    GCProps.FrameBuffer.ColorBufferProperties[0].PixelFormat = PixelFormat::R8G8B8A8_UNORM_SRGB;
-    GCProps.FrameBuffer.ColorBufferProperties[0].CPUAccess = CPUAccess::None;
-    GCProps.FrameBuffer.ColorBufferProperties[0].Usage = Usage::GPUReadWrite;
-    GCProps.FrameBuffer.ColorBufferProperties[0].bUseMips = false;
-    GCProps.FrameBuffer.bUseDepthStencil = true;
-    GCProps.FrameBuffer.DepthStencilBufferProperties.PixelFormat = PixelFormat::DEPTH24_STENCIL8;
-    GCProps.FrameBuffer.DepthStencilBufferProperties.CPUAccess = CPUAccess::None;
-    GCProps.FrameBuffer.DepthStencilBufferProperties.Usage = Usage::GPUReadWrite;
-    GCProps.FrameBuffer.DepthStencilBufferProperties.bUseMips = false;
-    m_GraphicsContext = std::make_unique<GraphicsContext>(this, GCProps);
-
     rndr::WindowDelegates::OnResize.Add(RNDR_BIND_THREE_PARAM(this, &Window::Resize));
     rndr::WindowDelegates::OnButtonDelegate.Add(RNDR_BIND_THREE_PARAM(this, &Window::ButtonEvent));
 
@@ -73,6 +58,24 @@ rndr::Window::Window(int Width, int Height, const WindowProperties& Props) : m_W
     ShowWindow(WindowHandle, SW_SHOW);
 
     m_NativeWindowHandle = reinterpret_cast<uintptr_t>(WindowHandle);
+
+    GraphicsContextProperties GCProps;
+    GCProps.WindowWidth = m_Width;
+    GCProps.WindowHeight = m_Height;
+    GCProps.FrameBuffer.bWindowFrameBuffer = true;
+    GCProps.FrameBuffer.ColorBufferCount = 1;
+    GCProps.FrameBuffer.ColorBufferProperties[0].PixelFormat = PixelFormat::R8G8B8A8_UNORM_SRGB;
+    GCProps.FrameBuffer.ColorBufferProperties[0].CPUAccess = CPUAccess::None;
+    GCProps.FrameBuffer.ColorBufferProperties[0].Usage = Usage::GPUReadWrite;
+    GCProps.FrameBuffer.ColorBufferProperties[0].bUseMips = false;
+    GCProps.FrameBuffer.ColorBufferProperties[0].ImageBindFlags = ImageBindFlags::RenderTarget;
+    GCProps.FrameBuffer.bUseDepthStencil = true;
+    GCProps.FrameBuffer.DepthStencilBufferProperties.ImageBindFlags = ImageBindFlags::DepthStencil;
+    GCProps.FrameBuffer.DepthStencilBufferProperties.PixelFormat = PixelFormat::DEPTH24_STENCIL8;
+    GCProps.FrameBuffer.DepthStencilBufferProperties.CPUAccess = CPUAccess::None;
+    GCProps.FrameBuffer.DepthStencilBufferProperties.Usage = Usage::GPUReadWrite;
+    GCProps.FrameBuffer.DepthStencilBufferProperties.bUseMips = false;
+    m_GraphicsContext = std::make_unique<GraphicsContext>(this, GCProps);
 }
 
 void rndr::Window::ProcessEvents()

@@ -1,18 +1,17 @@
 #include "rndr/raster/rasterizer.h"
 
+#if defined RNDR_RASTER
+
 #include "rndr/core/barycentric.h"
 #include "rndr/core/bounds3.h"
 #include "rndr/core/coordinates.h"
 #include "rndr/core/log.h"
 #include "rndr/core/math.h"
-#include "rndr/core/model.h"
 #include "rndr/core/threading.h"
 
 #include "rndr/memory/stackallocator.h"
 
 #include "rndr/profiling/cputracer.h"
-
-#if defined RNDR_RASTER
 
 #include "rndr/raster/rasterframebuffer.h"
 #include "rndr/raster/rasterimage.h"

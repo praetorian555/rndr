@@ -16,35 +16,26 @@ namespace rndr
 
 class GraphicsContext;
 
-class Image
+struct Image
 {
-public:
+    int Width, Height;
+    ImageProperties Props;
+
+    ID3D11Texture2D* DX11Texture = nullptr;
+    ID3D11ShaderResourceView* DX11ShaderResourceView = nullptr;
+    ID3D11RenderTargetView* DX11RenderTargetView = nullptr;
+    ID3D11DepthStencilView* DX11DepthStencilView = nullptr;
+
+    bool bSwapchainBackBuffer;
+
     Image(GraphicsContext* Context, int Width, int Height, const ImageProperties& Props = ImageProperties{});
     Image(GraphicsContext* Context);
+    Image(GraphicsContext* Context, const std::string& FilePath, const ImageProperties& Props = ImageProperties{});
 
     ~Image();
 
-    ID3D11RenderTargetView* GetRenderTargetView();
-    ID3D11DepthStencilView* GetStencilTargetView();
-    ID3D11ShaderResourceView* GetShaderResourceView();
-
 private:
-    void Create();
-
-private:
-    GraphicsContext* m_GraphicsContext;
-    int m_Width, m_Height;
-    ImageProperties m_Props;
-
-    ID3D11Texture2D* m_Texture;
-    ID3D11ShaderResourceView* m_ShaderResourceView;
-    union
-    {
-        ID3D11RenderTargetView* m_RenderTargetView;
-        ID3D11DepthStencilView* m_DepthStencilView;
-    };
-
-    bool m_bSwapchainBackBuffer;
+    void Create(GraphicsContext* Context, ByteSpan Data = ByteSpan{});
 };
 
 }  // namespace rndr

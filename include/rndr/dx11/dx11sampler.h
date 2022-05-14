@@ -22,6 +22,9 @@ public:
     ID3D11SamplerState* GetSamplerState();
 
 private:
+    friend class GraphicsContext;
+
+private:
     SamplerProperties m_Props;
     ID3D11SamplerState* m_State;
 };

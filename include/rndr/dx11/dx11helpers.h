@@ -14,14 +14,23 @@ namespace rndr
 template <typename T>
 inline void DX11SafeRelease(T& Ptr);
 
-DXGI_FORMAT FromPixelFormat(PixelFormat Format);
-PixelFormat ToPixelFormat(DXGI_FORMAT Format);
-uint32_t FromCPUAccess(CPUAccess Access);
-D3D11_USAGE FromUsage(Usage Usage);
-D3D11_PRIMITIVE_TOPOLOGY FromPrimitiveTopology(PrimitiveTopology Topology);
-D3D11_INPUT_CLASSIFICATION FromDataRepetition(DataRepetition Repetition);
-D3D11_FILTER FromImageFiltering(ImageFiltering Filter);
-D3D11_TEXTURE_ADDRESS_MODE FromImageAddressing(ImageAddressing AddressMode);
+DXGI_FORMAT DX11FromPixelFormat(PixelFormat Format);
+PixelFormat DX11ToPixelFormat(DXGI_FORMAT Format);
+uint32_t DX11FromCPUAccess(CPUAccess Access);
+D3D11_USAGE DX11FromUsage(Usage Usage);
+D3D11_PRIMITIVE_TOPOLOGY DX11FromPrimitiveTopology(PrimitiveTopology Topology);
+D3D11_INPUT_CLASSIFICATION DX11FromDataRepetition(DataRepetition Repetition);
+D3D11_FILTER DX11FromImageFiltering(ImageFiltering Filter);
+D3D11_TEXTURE_ADDRESS_MODE DX11FromImageAddressing(ImageAddressing AddressMode);
+uint32_t DX11FromImageBindFlags(uint32_t ImageBindFlags);
+uint32_t DX11FromBufferBindFlag(BufferBindFlag Flag);
+D3D11_FILL_MODE DX11FromFillMode(FillMode Mode);
+D3D11_CULL_MODE DX11FromFace(Face Face);
+D3D11_COMPARISON_FUNC DX11FromComparator(Comparator Comp);
+D3D11_DEPTH_WRITE_MASK DX11FromDepthMask(DepthMask Mask);
+D3D11_STENCIL_OP DX11FromStencilOperation(StencilOperation Op);
+D3D11_BLEND DX11FromBlendFactor(BlendFactor Factor);
+D3D11_BLEND_OP DX11FromBlendOperator(BlendOperator Op);
 
 bool IsRenderTarget(PixelFormat Format);
 bool IsDepthStencil(PixelFormat Format);

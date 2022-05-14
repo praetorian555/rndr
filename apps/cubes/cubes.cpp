@@ -40,19 +40,19 @@ int main()
     BoxRenderPass BoxPass;
     BoxPass.Init(GC, FPCamera.GetProjectionCamera());
 
-    LightRenderPass LightPass;
-    LightPass.Init(GC, FPCamera.GetProjectionCamera());
+    //LightRenderPass LightPass;
+    //LightPass.Init(GC, FPCamera.GetProjectionCamera());
 
     rndr::GRndrApp->OnTickDelegate.Add(
         [&](real DeltaSeconds)
         {
             FPCamera.Update(DeltaSeconds);
 
-            BoxPass.SetLightPosition(LightPass.GetLightPosition());
+            //BoxPass.SetLightPosition(LightPass.GetLightPosition());
             BoxPass.SetViewerPosition(FPCamera.GetPosition());
             BoxPass.Render(DeltaSeconds);
 
-            LightPass.Render(DeltaSeconds);
+            //LightPass.Render(DeltaSeconds);
         });
 
     rndr::GRndrApp->Run();

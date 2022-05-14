@@ -3,14 +3,12 @@
 #include <cassert>
 #include <chrono>
 
+#include "rndr/core/graphicscontext.h"
+#include "rndr/core/image.h"
 #include "rndr/core/input.h"
 #include "rndr/core/rndrapp.h"
 
 #include "rndr/profiling/cputracer.h"
-
-#if defined RNDR_RASTER
-#include "rndr/raster/rastergraphicscontext.h"
-#endif // RNDR_RASTER
 
 rndr::RndrApp* rndr::GRndrApp = nullptr;
 
@@ -56,8 +54,8 @@ void rndr::RndrApp::Run()
         rndr::InputSystem::Get()->Update(FrameDuration);
 
         GraphicsContext* GC = m_Window->GetGraphicsContext();
-        GC->ClearColor(nullptr, Colors::Black);
-        GC->ClearDepth(nullptr, rndr::Infinity);
+        GC->ClearColor(nullptr, Colors::Pink);
+        GC->ClearDepth(nullptr, 1.0);
 
         OnTickDelegate.Execute(FrameDuration);
 

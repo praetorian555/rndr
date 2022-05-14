@@ -38,6 +38,7 @@ using real = double;
 #if RNDR_WINDOWS
 #define RNDR_OPTIMIZE_OFF __pragma(optimize("", off))
 #define RNDR_OPTIMIZE_ON __pragma(optimize("", on))
+#define RNDR_ALIGN(Amount) __declspec(align(Amount))
 #endif  // RNDR_WINDOWS
 
 /**

@@ -32,6 +32,7 @@ public:
         {
             T R, G, B, A;
         };
+        T Elements[4];
     };
 
 public:
