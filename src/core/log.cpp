@@ -24,6 +24,7 @@ void rndr::StdAsyncLogger::Init()
 {
     spdlog::set_level(spdlog::level::debug);
     spdlog::set_level(spdlog::level::trace);
+    spdlog::set_pattern("[%H:%M:%S:%e][%P][%t][%^%l%$][%@] %v");
 
     spdlog::init_thread_pool(8192, 1);  // queue with 8k items and 1 backing thread.
     s_SpdLogger = spdlog::create_async<spdlog::sinks::stdout_color_sink_mt>("async_stdout_logger");
@@ -31,10 +32,12 @@ void rndr::StdAsyncLogger::Init()
 
 void rndr::StdAsyncLogger::ShutDown() {}
 
-void rndr::StdAsyncLogger::Log(rndr::LogLevel LogLevel, const char* format, ...)
+void rndr::StdAsyncLogger::Log(const char* File, int Line, const char* Function, rndr::LogLevel LogLevel, const char* format, ...)
 {
     const int MESSAGE_SIZE = 4096;
     char message[MESSAGE_SIZE] = {};
+
+    spdlog::source_loc SourceInfo(File, Line, Function);
 
     va_list args;
     va_start(args, format);
@@ -45,27 +48,27 @@ void rndr::StdAsyncLogger::Log(rndr::LogLevel LogLevel, const char* format, ...)
     {
         case rndr::LogLevel::Error:
         {
-            s_SpdLogger->error("{}", message);
+            s_SpdLogger->log(SourceInfo, spdlog::level::level_enum::err, message);
             break;
         }
         case rndr::LogLevel::Warning:
         {
-            s_SpdLogger->warn("{}", message);
+            s_SpdLogger->log(SourceInfo, spdlog::level::level_enum::warn, message);            
             break;
         }
         case rndr::LogLevel::Debug:
         {
-            s_SpdLogger->debug("{}", message);
+            s_SpdLogger->log(SourceInfo, spdlog::level::level_enum::debug, message);
             break;
         }
         case rndr::LogLevel::Info:
         {
-            s_SpdLogger->info("{}", message);
+            s_SpdLogger->log(SourceInfo, spdlog::level::level_enum::info, message);
             break;
         }
         case rndr::LogLevel::Trace:
         {
-            s_SpdLogger->trace("{}", message);
+            s_SpdLogger->log(SourceInfo, spdlog::level::level_enum::trace, message);
             break;
         }
     }
