@@ -124,14 +124,14 @@ void BoxRenderPass::Init(rndr::GraphicsContext* GraphicsContext, rndr::Projectio
     VertexBufferProps.Stride = sizeof(Vertices);
     m_VertexBuffer = m_GraphicsContext->CreateBuffer(VertexBufferProps, Vertices);
 
-    rndr::RNG RandomGen;
+    math::RNG RandomGen;
     const int BoxCount = 100;
     m_Instances.resize(BoxCount);
 
     for (int i = 0; i < BoxCount; i++)
     {
         const real ScaleFactor = RandomGen.UniformRealInRange(0.8, 2.0);
-        rndr::Rotator Angles;
+        math::Rotator Angles;
         Angles.Pitch = RandomGen.UniformRealInRange(-90, 90);
         Angles.Yaw = RandomGen.UniformRealInRange(-90, 90);
         Angles.Roll = RandomGen.UniformRealInRange(-90, 90);

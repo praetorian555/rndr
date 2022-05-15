@@ -9,44 +9,30 @@ template <typename T>
 class Bounds2
 {
 public:
-    Point2<T> pMin, pMax;
+    math::Point2<T> pMin, pMax;
 
 public:
     Bounds2()
     {
         T minNum = std::numeric_limits<T>::lowest();
         T maxNum = std::numeric_limits<T>::max();
-        pMin = Point2<T>(minNum, minNum);
-        pMax = Point2<T>(maxNum, maxNum);
+        pMin = math::Point2<T>(minNum, minNum);
+        pMax = math::Point2<T>(maxNum, maxNum);
     }
 
-    Bounds2(const Point2<T>& p) : pMin(p), pMax(p) {}
+    Bounds2(const math::Point2<T>& p) : pMin(p), pMax(p) {}
 
-    Bounds2(const Point2<T>& p1, const Point2<T>& p2)
+    Bounds2(const math::Point2<T>& p1, const math::Point2<T>& p2)
         : pMin(std::min(p1.X, p2.X), std::min(p1.Y, p2.Y)), pMax(std::max(p1.X, p2.X), std::max(p1.Y, p2.Y))
     {
     }
 
     template <typename U>
-    Bounds2(const Bounds2<U>& other) : pMin((Point2<T>)other.pMin), pMax((Point2<T>)other.pMax)
+    Bounds2(const Bounds2<U>& other) : pMin((math::Point2<T>)other.pMin), pMax((math::Point2<T>)other.pMax)
     {
     }
 
-    const Point2<T>& operator[](int i) const
-    {
-        assert(i >= 0 && i < 2);
-        if (i == 0)
-        {
-            return pMin;
-        }
-
-        if (i == 1)
-        {
-            return pMax;
-        }
-    }
-
-    Point2<T>& operator[](int i)
+    const math::Point2<T>& operator[](int i) const
     {
         assert(i >= 0 && i < 2);
         if (i == 0)
@@ -60,27 +46,41 @@ public:
         }
     }
 
-    Point2<T> Corner(int corner) const { return Point2<T>((*this)[(corner & 1)].X, (*this)[(corner & 2) ? 1 : 0].Y); }
+    math::Point2<T>& operator[](int i)
+    {
+        assert(i >= 0 && i < 2);
+        if (i == 0)
+        {
+            return pMin;
+        }
 
-    Vector2<T> Diagonal() const { return pMax - pMin; }
+        if (i == 1)
+        {
+            return pMax;
+        }
+    }
+
+    math::Point2<T> Corner(int corner) const { return math::Point2<T>((*this)[(corner & 1)].X, (*this)[(corner & 2) ? 1 : 0].Y); }
+
+    math::Vector2<T> Diagonal() const { return pMax - pMin; }
 
     T SurfaceArea() const
     {
-        Vector2<T> d = Diagonal();
+        math::Vector2<T> d = Diagonal();
         return d.X * d.Y;
     }
 
     int MaXimumEXtent() const
     {
-        Vector2<T> d = Diagonal();
+        math::Vector2<T> d = Diagonal();
         return d.X > d.Y ? 0 : 1;
     }
 
-    Point2<T> Lerp(const Point2r& t) const { return Point2<T>(rndr::Lerp(t.X, pMin.X, pMax.X), rndr::Lerp(t.Y, pMin.Y, pMax.Y)); }
+    math::Point2<T> Lerp(const math::Point2r& t) const { return math::Point2<T>(rndr::Lerp(t.X, pMin.X, pMax.X), rndr::Lerp(t.Y, pMin.Y, pMax.Y)); }
 
-    Vector2<T> Offset(const Point2<T>& p) const
+    math::Vector2<T> Offset(const math::Point2<T>& p) const
     {
-        Vector2<T> o = p - pMin;
+        math::Vector2<T> o = p - pMin;
         if (pMax.X > pMin.X)
             o.X /= pMax.X - pMin.X;
         if (pMax.Y > pMin.Y)
@@ -88,38 +88,38 @@ public:
         return o;
     }
 
-    void BoundingSphere(Point2<T>* center, real* radius) const
+    void BoundingSphere(math::Point2<T>* center, real* radius) const
     {
         *center = (pMin + pMax) / 2;
         *radius = Inside(*center, *this) ? Distance(*center, pMax) : 0;
     }
 
-    Vector2<T> Extent() const
+    math::Vector2<T> Extent() const
     {
-        Vector2<T> Extent{std::abs(pMax.X - pMin.X), std::abs(pMax.Y - pMin.Y)};
+        math::Vector2<T> Extent{std::abs(pMax.X - pMin.X), std::abs(pMax.Y - pMin.Y)};
         return Extent;
     }
 };
 
 template <typename T>
-Bounds2<T> Union(const Bounds2<T>& b, const Point2<T>& p)
+Bounds2<T> Union(const Bounds2<T>& b, const math::Point2<T>& p)
 {
-    return Bounds2<T>(Point2<T>(std::min(b.pMin.X, p.X), std::min(b.pMin.Y, p.Y)),
-                      Point2<T>(std::max(b.pMax.X, p.X), std::max(b.pMax.Y, p.Y)));
+    return Bounds2<T>(math::Point2<T>(std::min(b.pMin.X, p.X), std::min(b.pMin.Y, p.Y)),
+                      math::Point2<T>(std::max(b.pMax.X, p.X), std::max(b.pMax.Y, p.Y)));
 }
 
 template <typename T>
 Bounds2<T> Union(const Bounds2<T>& b1, const Bounds2<T>& b2)
 {
-    return Bounds2<T>(Point2<T>(std::min(b1.pMin.X, b2.pMin.X), std::min(b1.pMin.Y, b2.pMin.Y)),
-                      Point2<T>(std::max(b1.pMax.X, b2.pMax.X), std::max(b1.pMax.Y, b2.pMax.Y)));
+    return Bounds2<T>(math::Point2<T>(std::min(b1.pMin.X, b2.pMin.X), std::min(b1.pMin.Y, b2.pMin.Y)),
+                      math::Point2<T>(std::max(b1.pMax.X, b2.pMax.X), std::max(b1.pMax.Y, b2.pMax.Y)));
 }
 
 template <typename T>
 Bounds2<T> Intersect(const Bounds2<T>& b1, const Bounds2<T>& b2)
 {
-    return Bounds2<T>(Point2<T>(std::max(b1.pMin.X, b2.pMin.X), std::max(b1.pMin.Y, b2.pMin.Y)),
-                      Point2<T>(std::min(b1.pMax.X, b2.pMax.X), std::min(b1.pMax.Y, b2.pMax.Y)));
+    return Bounds2<T>(math::Point2<T>(std::max(b1.pMin.X, b2.pMin.X), std::max(b1.pMin.Y, b2.pMin.Y)),
+                      math::Point2<T>(std::min(b1.pMax.X, b2.pMax.X), std::min(b1.pMax.Y, b2.pMax.Y)));
 }
 
 template <typename T>
@@ -131,14 +131,14 @@ bool Overlaps(const Bounds2<T>& b1, const Bounds2<T>& b2)
 }
 
 template <typename T>
-bool Inside(const Point2<T>& p, const Bounds2<T>& b)
+bool Inside(const math::Point2<T>& p, const Bounds2<T>& b)
 {
     return (p.X >= b.pMin.X && p.X < b.pMax.X && p.Y >= b.pMin.Y && p.Y < b.pMax.Y);
 }
 
 // The point is not counted if it is on the upper boundrY of the boX
 template <typename T>
-bool InsideInclusive(const Point2<T>& p, const Bounds2<T>& b)
+bool InsideInclusive(const math::Point2<T>& p, const Bounds2<T>& b)
 {
     return (p.X >= b.pMin.X && p.X <= b.pMax.X && p.Y >= b.pMin.Y && p.Y <= b.pMax.Y);
 }
@@ -146,7 +146,7 @@ bool InsideInclusive(const Point2<T>& p, const Bounds2<T>& b)
 template <typename T, typename U>
 inline Bounds2<T> Expand(const Bounds2<T>& b, U delta)
 {
-    return Bounds2<T>(b.pMin - Vector2<T>(delta, delta), b.pMax + Vector2<T>(delta, delta));
+    return Bounds2<T>(b.pMin - math::Vector2<T>(delta, delta), b.pMax + math::Vector2<T>(delta, delta));
 }
 
 // Types

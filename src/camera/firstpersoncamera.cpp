@@ -47,12 +47,12 @@ void rndr::FirstPersonCamera::Update(real DeltaSeconds)
     m_DirectionVector = Vector3r{0, 0, -1};
     m_DirectionAngles += m_DeltaAngles * m_RotationSpeed;
     m_DirectionVector = rndr::Rotate(m_DirectionAngles)(m_DirectionVector);
-    m_RightVector = rndr::Cross(m_DirectionVector, Vector3r{0, 1, 0});
+    m_RightVector = math::Cross(m_DirectionVector, Vector3r{0, 1, 0});
 
     m_Position += m_MovementSpeed * DeltaSeconds * m_DeltaPosition.X * m_DirectionVector;
     m_Position += m_MovementSpeed * DeltaSeconds * m_DeltaPosition.Y * m_RightVector;
 
-    Rotator R = m_DirectionAngles;
+    math::Rotator R = m_DirectionAngles;
 
     const Transform CameraToWorld = rndr::Translate((rndr::Vector3r)m_Position) * rndr::Rotate(R);
     const Transform WorldToCamera = CameraToWorld.GetInverse();

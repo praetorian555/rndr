@@ -88,7 +88,7 @@ rndr::Transform rndr::Perspective(real FOV, real AspectRatio, real Near, real Fa
     // Camera in camera space looks down the -z axis (that's the reason for minuses). We normalize z
     // to be between 0 and 1 (that is why we divide by f - n).
     // clang-format off
-    Matrix4x4 Persp(
+    math::Matrix4x4 Persp(
         1.0, 0.0,           0.0,                 0.0,
         0.0, 1.0,           0.0,                 0.0,
         0.0, 0.0,    -Far / (Far - Near),    -Far * Near / (Far - Near),
@@ -96,7 +96,7 @@ rndr::Transform rndr::Perspective(real FOV, real AspectRatio, real Near, real Fa
     );
     // clang-format on
 
-    const real InvFOV = 1 / std::tan(Radians(FOV) / 2);
+    const real InvFOV = 1 / std::tan(math::Radians(FOV) / 2);
     const real OneOverAspectRatio = 1 / AspectRatio;
 
     return Scale(OneOverAspectRatio * InvFOV, InvFOV, 1) * Transform(Persp);

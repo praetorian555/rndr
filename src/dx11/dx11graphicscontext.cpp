@@ -156,7 +156,7 @@ void rndr::GraphicsContext::ClearColor(Image* Image, Vector4r Color)
     {
         Image = m_WindowFrameBuffer->ColorBuffers[0];
     }
-    m_DeviceContext->ClearRenderTargetView(Image->DX11RenderTargetView, Color.Elements);
+    m_DeviceContext->ClearRenderTargetView(Image->DX11RenderTargetView, Color.Data);
 }
 
 void rndr::GraphicsContext::ClearDepth(Image* Image, real Depth)

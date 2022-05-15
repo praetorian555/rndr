@@ -38,9 +38,9 @@ private:
     ProjectionCamera* m_ProjectionCamera = nullptr;
 
     Point3r m_Position;
-    Rotator m_DirectionAngles;
+    math::Rotator m_DirectionAngles;
 
-    Rotator m_DeltaAngles;
+    math::Rotator m_DeltaAngles;
     Vector3r m_DeltaPosition;
 
     Vector3r m_DirectionVector;

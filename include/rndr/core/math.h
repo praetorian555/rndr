@@ -1,259 +1,28 @@
 ﻿#pragma once
 
-#include <cmath>
-#include <numeric>
+#include <math/math.h>
 
 #include "rndr/core/base.h"
-
-#include "rndr/math/matrix4x4.h"
-#include "rndr/math/normal3.h"
-#include "rndr/math/point2.h"
-#include "rndr/math/point3.h"
-#include "rndr/math/point4.h"
-#include "rndr/math/rng.h"
-#include "rndr/math/rotator.h"
-#include "rndr/math/vector2.h"
-#include "rndr/math/vector3.h"
-#include "rndr/math/vector4.h"
 
 namespace rndr
 {
 
 // Types
 
-using Vector2i = Vector2<int>;
-using Vector2r = Vector2<real>;
-using Vector3i = Vector3<int>;
-using Vector3r = Vector3<real>;
-using Vector4i = Vector4<int>;
-using Vector4r = Vector4<real>;
+using Vector2i = math::Vector2<int>;
+using Vector2r = math::Vector2<real>;
+using Vector3i = math::Vector3<int>;
+using Vector3r = math::Vector3<real>;
+using Vector4i = math::Vector4<int>;
+using Vector4r = math::Vector4<real>;
 
-using Point2i = Point2<int>;
-using Point2r = Point2<real>;
-using Point3i = Point3<int>;
-using Point3r = Point3<real>;
-using Point4i = Point4<int>;
-using Point4r = Point4<real>;
+using Point2i = math::Point2<int>;
+using Point2r = math::Point2<real>;
+using Point3i = math::Point3<int>;
+using Point3r = math::Point3<real>;
+using Point4i = math::Point4<int>;
+using Point4r = math::Point4<real>;
 
-using Normal3r = Normal3<real>;
-
-// Constants
-
-static constexpr real Pi = 3.14159265358979323846;
-static constexpr real InvPi = 0.31830988618379067154;
-static constexpr real Inv2Pi = 0.15915494309189533577;
-static constexpr real Inv4Pi = 0.07957747154594766788;
-static constexpr real PiOver2 = 1.57079632679489661923;
-static constexpr real PiOver4 = 0.78539816339744830961;
-static constexpr real Sqrt2 = 1.41421356237309504880;
-static constexpr real Infinity = std::numeric_limits<real>::infinity();
-
-// Functions
-
-template <typename T>
-inline bool IsNaN(const T v)
-{
-    return std::isnan(v);
-}
-
-template <>
-inline bool IsNaN<int>(const int v)
-{
-    return false;
-}
-
-template <typename T, typename V, typename U>
-T Clamp(T val, V low, U high);
-
-template <typename T>
-T Mod(T a, T b);
-
-template <typename T>
-T Lerp(real t, T p0, T p1);
-
-template <typename T>
-bool IsPowerOf2(T v);
-
-real Radians(real deg);
-real Degrees(real rad);
-
-real Log2(real x);
-int32_t Log2Int(uint32_t v);
-
-int32_t RoundUpPow2(int32_t v);
-
-int32_t CountTrailingZeros(uint32_t v);
-
-///////////////////////////////////////////////////////////////////////////////////////////////////
-// Implementations
-
-template <typename T>
-Vector3<T>::Vector3(const Normal3<T>& n) : X(n.X), Y(n.Y), Z(n.Z)
-{
-}
-
-template <typename T>
-Vector3<T>::Vector3(const Point3<T>& p) : X(p.X), Y(p.Y), Z(p.Z)
-{
-}
-
-template <typename T>
-Vector4<T>::Vector4(const Point4<T>& p) : X(p.X), Y(p.Y), Z(p.Z), W(p.W)
-{
-}
-
-template <typename T>
-Vector3<T>::Vector3(const Vector2<T>& XY, T Z) : X(XY.X), Y(XY.Y), Z(Z)
-{
-}
-
-template <typename T>
-Vector2<T> Vector3<T>::XY() const
-{
-    return Vector2<T>(X, Y);
-}
-
-template <typename T>
-Vector2<T> Vector3<T>::YZ() const
-{
-    return Vector2<T>(Y, Z);
-}
-
-template <typename T>
-Vector2<T> Vector3<T>::XZ() const
-{
-    return Vector2<T>(X, Z);
-}
-
-template <typename T>
-Vector4<T>::Vector4(const Vector2<T>& XY, T Z, T W) : X(XY.X), Y(XY.Y), Z(Z), W(W)
-{
-}
-
-template <typename T>
-Vector4<T>::Vector4(const Vector3<T>& XYZ, T W) : X(XYZ.X), Y(XYZ.Y), Z(XYZ.Z), W(W)
-{
-}
-
-template <typename T>
-Vector2<T> Vector4<T>::XY() const
-{
-    return Vector2<T>(X, Y);
-}
-
-template <typename T>
-Vector2<T> Vector4<T>::XZ() const
-{
-    return Vector2<T>(X, Z);
-}
-
-template <typename T>
-Vector2<T> Vector4<T>::XW() const
-{
-    return Vector2<T>(X, W);
-}
-
-template <typename T>
-Vector2<T> Vector4<T>::YZ() const
-{
-    return Vector2<T>(Y, Z);
-}
-
-template <typename T>
-Vector2<T> Vector4<T>::YW() const
-{
-    return Vector2<T>(Y, W);
-}
-
-template <typename T>
-Vector2<T> Vector4<T>::ZW() const
-{
-    return Vector2<T>(Z, W);
-}
-
-template <typename T>
-Vector3<T> Vector4<T>::XYZ() const
-{
-    return Vector3<T>(X, Y, Z);
-}
-
-template <typename T>
-Vector3<T> Vector4<T>::XYW() const
-{
-    return Vector3<T>(X, Y, W);
-}
-
-template <typename T>
-Vector3<T> Vector4<T>::XZW() const
-{
-    return Vector3<T>(X, Z, W);
-}
-
-template <typename T>
-Vector3<T> Vector4<T>::YZW() const
-{
-    return Vector3<T>(Y, Z, W);
-}
-
-template <typename T, typename V, typename U>
-T Clamp(T val, V low, U high)
-{
-    return val < low ? low : (val > high ? high : val);
-}
-
-template <typename T, typename V, typename U>
-Vector3<T> Clamp(const Vector3<T>& val, V low, U high)
-{
-    return Vector3<T>(Clamp(val.X, low, high), Clamp(val.Y, low, high), Clamp(val.Z, low, high));
-}
-
-template <typename T, typename V, typename U>
-Vector4<T> Clamp(const Vector4<T>& val, V low, U high)
-{
-    return Vector4<T>(Clamp(val.X, low, high), Clamp(val.Y, low, high), Clamp(val.Z, low, high), Clamp(val.W, low, high));
-}
-
-template <typename T>
-T Mod(T a, T b)
-{
-    T result = a - (a / b) * b;
-    return (T)((result < 0) ? result + b : result);
-}
-
-template <typename T>
-T Lerp(real t, T p0, T p1)
-{
-    return (1 - t) * p0 + t * p1;
-}
-
-template <typename T>
-inline bool IsPowerOf2(T v)
-{
-    return v && !(v & (v - 1));
-}
-
-template <typename T>
-template <typename U>
-Point2<T>::Point2(const Point3<U>& p) : X(p.X), Y(p.Y)
-{
-}
-
-template <typename T>
-template <typename U>
-Point3<T>::Point3(const Point2<U>& p) : X(p.X), Y(p.Y), Z(0)
-{
-}
-
-template <typename T>
-template <typename U>
-Point4<T>::Point4(const Point3<U>& p) : X(p.X), Y(p.Y), Z(p.Z), W(1)
-{
-}
-
-template <typename T>
-template <typename U>
-Point3<T>::Point3(const Point4<U>& p) : X(p.X), Y(p.Y), Z(p.Z)
-{
-}
+using Normal3r = math::Normal3<real>;
 
 }  // namespace rndr

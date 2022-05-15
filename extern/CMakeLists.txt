@@ -8,3 +8,8 @@ endif()
 if (NOT TARGET stb_image)
 	add_subdirectory(stb_image)
 endif()
+
+# Include math only if it is not already present
+if (NOT TARGET math)
+	add_subdirectory(math)
+endif()

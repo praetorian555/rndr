@@ -17,6 +17,7 @@ endif()
 # Setup library dependencies
 target_link_libraries(rndr PUBLIC spdlog::spdlog)
 target_link_libraries(rndr PUBLIC stb_image)
+target_link_libraries(rndr PUBLIC math)
 if (DX11)
 target_link_libraries(rndr PUBLIC d3d11.lib dxgi.lib d3dcompiler.lib)
 endif()
