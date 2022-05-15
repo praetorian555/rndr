@@ -11,8 +11,12 @@ include(cmake/utils.cmake)
 
 # Library options
 option(RNDR_UNITY "Enable unity builds" OFF)
+option(RNDR_DX11 "Use DX11 API" ON)
+option(RNDR_HANDMADE "Use handmade software rendering pipeline" OFF)
 
 message(STATUS "RNDR_UNITY ${RNDR_UNITY}")
+message(STATUS "RNDR_DX11 ${RNDR_DX11}")
+message(STATUS "RNDR_HANDMADE ${RNDR_HANDMADE}")
 
 # Only do these if this is the main project, and not if it is included through add_subdirectory
 if (CMAKE_PROJECT_NAME STREQUAL PROJECT_NAME)

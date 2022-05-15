@@ -11,7 +11,7 @@ target_include_directories(rndr PUBLIC ${PROJECT_SOURCE_DIR}/include)
 target_include_directories(rndr PRIVATE ${PROJECT_SOURCE_DIR}/src)
 
 # Setup graphics API to use
-if (DX11)
+if (RNDR_DX11)
 target_compile_definitions(rndr PUBLIC RNDR_DX11)
 endif()
 
@@ -19,7 +19,7 @@ endif()
 target_link_libraries(rndr PUBLIC spdlog::spdlog)
 target_link_libraries(rndr PUBLIC stb_image)
 target_link_libraries(rndr PUBLIC math)
-if (DX11)
+if (RNDR_DX11)
 target_link_libraries(rndr PUBLIC d3d11.lib dxgi.lib d3dcompiler.lib)
 endif()
 
