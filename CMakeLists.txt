@@ -9,6 +9,11 @@ project(
 # Include utils script
 include(cmake/utils.cmake)
 
+# Library options
+option(RNDR_UNITY "Enable unity builds" OFF)
+
+message(STATUS "RNDR_UNITY ${RNDR_UNITY}")
+
 # Only do these if this is the main project, and not if it is included through add_subdirectory
 if (CMAKE_PROJECT_NAME STREQUAL PROJECT_NAME)
 
