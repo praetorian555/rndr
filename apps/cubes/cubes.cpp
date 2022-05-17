@@ -15,6 +15,10 @@ int main()
     CameraProps.Projection = rndr::ProjectionType::Perspective;
     CameraProps.ScreenWidth = MainWindow->GetWidth();
     CameraProps.ScreenHeight = MainWindow->GetHeight();
+    CameraProps.Near = 0.01;
+    CameraProps.Far = 100;
+    CameraProps.VerticalFOV = 60;
+    CameraProps.OrtographicWidth = 50;
     std::shared_ptr<rndr::ProjectionCamera> Camera = std::make_unique<rndr::ProjectionCamera>(math::Transform{}, CameraProps);
 
     rndr::WindowDelegates::OnResize.Add(
@@ -34,7 +38,7 @@ int main()
                       });
     IC->AddBinding("PrintPixelPosition", rndr::InputPrimitive::Mouse_LeftButton, rndr::InputTrigger::ButtonDown);
 
-    rndr::FirstPersonCamera FPCamera(Camera.get(), rndr::Point3r(), 10, 1.2);
+    rndr::FirstPersonCamera FPCamera(Camera.get(), rndr::Point3r(), 10, 0.1);
 
     rndr::GraphicsContext* GC = MainWindow->GetGraphicsContext();
     BoxRenderPass BoxPass;

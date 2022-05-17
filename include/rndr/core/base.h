@@ -28,6 +28,12 @@
 #define RNDR_RASTER
 #endif
 
+#if defined RNDR_DX11
+#define RNDR_LEFT_HANDED 1
+#else
+#define RNDR_RIGHT_HANDED 1
+#endif
+
 // Defines precision for floating-point type.
 #if !defined(RNDR_REAL_AS_DOUBLE)
 using real = float;

@@ -19,6 +19,8 @@ struct ProjectionCameraProperties
     int ScreenWidth = 0;
     int ScreenHeight = 0;
 
+    int OrtographicWidth = 10;
+
     // Position of the near plane along z axis. Always positive value. In case of a perspective projection it can't be 0.
     real Near = 0.01;
 
@@ -45,14 +47,6 @@ public:
     const math::Transform& FromWorldToNDC() const { return m_WorldToNDC; }
     const math::Transform& FromNDCToWorld() const { return m_NDCToWorld; }
 
-#if defined RNDR_DEBUG
-    const math::Transform& FromCameraToScreen() const { return m_CameraToScreen; }
-    const math::Transform& FromScreenToCamera() const { return m_ScreenToCamera; }
-
-    const math::Transform& FromScreenToNDC() const { return m_ScreenToNDC; }
-    const math::Transform& FromNDCToScreen() const { return m_NDCToScreen; }
-#endif  // RNDR_DEBUG
-
     void SetScreenSize(int ScreenWidth, int ScreenHeight);
     void SetNearAndFar(real Near, real Far);
     void SetVerticalFOV(real FOV);
@@ -63,19 +57,15 @@ public:
 
 private:
     math::Transform GetProjectionTransform() const;
+    real GetAspectRatio() const;
 
 private:
     math::Transform m_WorldToCamera;
     math::Transform m_CameraToWorld;
+    math::Transform m_CameraToNDC;
+    math::Transform m_NDCToCamera;
     math::Transform m_WorldToNDC;
     math::Transform m_NDCToWorld;
-
-#if defined RNDR_DEBUG
-    math::Transform m_CameraToScreen;
-    math::Transform m_ScreenToCamera;
-    math::Transform m_ScreenToNDC;
-    math::Transform m_NDCToScreen;
-#endif  // RNDR_DEBUG
 
     ProjectionCameraProperties m_Props;
 };

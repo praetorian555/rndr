@@ -125,7 +125,7 @@ void BoxRenderPass::Init(rndr::GraphicsContext* GraphicsContext, rndr::Projectio
     m_VertexBuffer = m_GraphicsContext->CreateBuffer(VertexBufferProps, Vertices);
 
     math::RNG RandomGen;
-    const int BoxCount = 100;
+    const int BoxCount = 1000;
     m_Instances.resize(BoxCount);
 
     for (int i = 0; i < BoxCount; i++)
@@ -135,14 +135,14 @@ void BoxRenderPass::Init(rndr::GraphicsContext* GraphicsContext, rndr::Projectio
         Angles.Pitch = RandomGen.UniformRealInRange(-90, 90);
         Angles.Yaw = RandomGen.UniformRealInRange(-90, 90);
         Angles.Roll = RandomGen.UniformRealInRange(-90, 90);
-        rndr::Vector3r Position;
-        Position.X = RandomGen.UniformRealInRange(-30, 30);
-        Position.Y = RandomGen.UniformRealInRange(-30, 30);
-        Position.Z = RandomGen.UniformRealInRange(-60, -30);
+        rndr::Vector3r Position{0, 0, 10};
+        Position.X = RandomGen.UniformRealInRange(-100, 100);
+        Position.Y = RandomGen.UniformRealInRange(-100, 100);
+        Position.Z = RandomGen.UniformRealInRange(30, 60);
 
         m_Instances[i].FromModelToWorld =
             math::Translate(Position) * math::Rotate(Angles) * math::Scale(ScaleFactor, ScaleFactor, ScaleFactor);
-        m_Instances[i].FromModelToWorld = m_Instances[i].FromModelToWorld.GetInverse();
+        m_Instances[i].FromModelToWorld = math::Transpose(m_Instances[i].FromModelToWorld);
     }
 
     rndr::BufferProperties InstanceBufferProps;
@@ -229,7 +229,7 @@ void BoxRenderPass::Render(real DeltaSeconds)
     m_GraphicsContext->BindBuffer(m_ConstantBuffer, 0, m_VertexShader);
     m_GraphicsContext->BindBuffer(m_ConstantBuffer, 0, m_FragmentShader);
     ShaderConstants Constants;
-    Constants.FromWorldToNDC = m_Camera->FromWorldToNDC().GetInverse();
+    Constants.FromWorldToNDC = m_Camera->FromWorldToNDC();
     Constants.LightPosition = m_LightPosition;
     Constants.ViewerPosition = m_ViewerPosition;
     m_ConstantBuffer->Update(&Constants);

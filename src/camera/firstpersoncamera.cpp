@@ -1,9 +1,9 @@
 #include "rndr/camera/firstpersoncamera.h"
 
-#include "rndr/core/projectioncamera.h"
 #include "rndr/core/log.h"
-#include "rndr/core/rndrapp.h"
 #include "rndr/core/math.h"
+#include "rndr/core/projectioncamera.h"
+#include "rndr/core/rndrapp.h"
 
 rndr::FirstPersonCamera::FirstPersonCamera(rndr::ProjectionCamera* ProjectionCamera,
                                            rndr::Point3r StartingPosition,
@@ -44,12 +44,18 @@ rndr::FirstPersonCamera::FirstPersonCamera(rndr::ProjectionCamera* ProjectionCam
 
 void rndr::FirstPersonCamera::Update(real DeltaSeconds)
 {
+#if defined RNDR_LEFT_HANDED
+    const real HandednessMultiplier = -1;
+#else
+    const real HandednessMultiplier = 1;
+#endif
+
     m_DirectionVector = Vector3r{0, 0, -1};
-    m_DirectionAngles += m_DeltaAngles * m_RotationSpeed;
+    m_DirectionAngles += HandednessMultiplier * m_DeltaAngles * m_RotationSpeed;
     m_DirectionVector = math::Rotate(m_DirectionAngles)(m_DirectionVector);
     m_RightVector = math::Cross(m_DirectionVector, Vector3r{0, 1, 0});
 
-    m_Position += m_MovementSpeed * DeltaSeconds * m_DeltaPosition.X * m_DirectionVector;
+    m_Position += HandednessMultiplier * m_MovementSpeed * DeltaSeconds * m_DeltaPosition.X * m_DirectionVector;
     m_Position += m_MovementSpeed * DeltaSeconds * m_DeltaPosition.Y * m_RightVector;
 
     math::Rotator R = m_DirectionAngles;

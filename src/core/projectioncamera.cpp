@@ -35,22 +35,10 @@ void rndr::ProjectionCamera::SetProperties(const ProjectionCameraProperties& Pro
 {
     m_Props = Props;
 
-    math::Transform CameraToScreen = GetProjectionTransform();
+    m_CameraToNDC = GetProjectionTransform();
+    m_NDCToCamera = m_CameraToNDC.GetInverse();
 
-    math::Transform ScreenToNDC;
-    if (Props.Projection == ProjectionType::Orthographic)
-    {
-        ScreenToNDC = math::Scale(2 / (real)m_Props.ScreenWidth, 2 / (real)m_Props.ScreenHeight, 1);
-    }
-
-#if defined RNDR_DEBUG
-    m_CameraToScreen = CameraToScreen;
-    m_ScreenToCamera = m_CameraToScreen.GetInverse();
-    m_ScreenToNDC = ScreenToNDC;
-    m_NDCToScreen = m_ScreenToNDC.GetInverse();
-#endif
-
-    m_WorldToNDC = ScreenToNDC * CameraToScreen * m_WorldToCamera;
+    m_WorldToNDC = m_CameraToNDC * m_WorldToCamera;
     m_NDCToWorld = m_WorldToNDC.GetInverse();
 }
 
@@ -63,13 +51,29 @@ void rndr::ProjectionCamera::SetWorldToCamera(const math::Transform& WorldToCame
 
 math::Transform rndr::ProjectionCamera::GetProjectionTransform() const
 {
+    const real AspectRatio = GetAspectRatio();
     if (m_Props.Projection == ProjectionType::Orthographic)
     {
-        return (math::Transform)math::Orhographic_LH_N0(-1, 1, -1, 1, m_Props.Near, m_Props.Far);
+        const real Width = m_Props.OrtographicWidth;
+        const real Height = Width / AspectRatio;
+#if RNDR_LEFT_HANDED
+        return (math::Transform)math::Orhographic_LH_N0(-Width / 2, Width / 2, -Height / 2, Height / 2, m_Props.Near, m_Props.Far);
+#else
+        return (math::Transform)math::Orhographic_RH_N0(-Width / 2, Width / 2, -Height / 2, Height / 2, m_Props.Near, m_Props.Far);
+#endif
     }
     else
     {
-        real AspectRatio = (real)m_Props.ScreenWidth / m_Props.ScreenHeight;
+#if RNDR_LEFT_HANDED
         return (math::Transform)math::Perspective_LH_N0(m_Props.VerticalFOV, AspectRatio, m_Props.Near, m_Props.Far);
+#else
+        return (math::Transform)math::Perspective_RH_N0(m_Props.VerticalFOV, AspectRatio, m_Props.Near, m_Props.Far);
+#endif
     }
+}
+
+real rndr::ProjectionCamera::GetAspectRatio() const
+{
+    assert(m_Props.ScreenHeight != 0);
+    return (real)m_Props.ScreenWidth / m_Props.ScreenHeight;
 }
