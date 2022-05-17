@@ -3,7 +3,7 @@
 #include "rndr/core/projectioncamera.h"
 #include "rndr/core/log.h"
 #include "rndr/core/rndrapp.h"
-#include "rndr/core/transform.h"
+#include "rndr/core/math.h"
 
 rndr::FirstPersonCamera::FirstPersonCamera(rndr::ProjectionCamera* ProjectionCamera,
                                            rndr::Point3r StartingPosition,
@@ -46,7 +46,7 @@ void rndr::FirstPersonCamera::Update(real DeltaSeconds)
 {
     m_DirectionVector = Vector3r{0, 0, -1};
     m_DirectionAngles += m_DeltaAngles * m_RotationSpeed;
-    m_DirectionVector = rndr::Rotate(m_DirectionAngles)(m_DirectionVector);
+    m_DirectionVector = math::Rotate(m_DirectionAngles)(m_DirectionVector);
     m_RightVector = math::Cross(m_DirectionVector, Vector3r{0, 1, 0});
 
     m_Position += m_MovementSpeed * DeltaSeconds * m_DeltaPosition.X * m_DirectionVector;
@@ -54,8 +54,8 @@ void rndr::FirstPersonCamera::Update(real DeltaSeconds)
 
     math::Rotator R = m_DirectionAngles;
 
-    const Transform CameraToWorld = rndr::Translate((rndr::Vector3r)m_Position) * rndr::Rotate(R);
-    const Transform WorldToCamera = CameraToWorld.GetInverse();
+    const math::Transform CameraToWorld = math::Translate((rndr::Vector3r)m_Position) * math::Rotate(R);
+    const math::Transform WorldToCamera(CameraToWorld.GetInverse());
 
     m_ProjectionCamera->SetWorldToCamera(WorldToCamera);
 }

@@ -58,7 +58,7 @@ public:
     void BindShader(Shader* Shader);
     void BindImageAsShaderResource(Image* Image, int Slot, Shader* Shader);
     void BindSampler(Sampler* Sampler, int Slot, Shader* Shader);
-    void BindBuffer(Buffer* Buffer, int Slot = 0, Shader* Shader = nullptr);
+    void BindBuffer(Buffer* Buffer, int Slot, Shader* Shader = nullptr);
     void BindFrameBuffer(FrameBuffer* FrameBuffer);
     void BindInputLayout(InputLayout* InputLayout);
     void BindRasterizerState(RasterizerState* State);

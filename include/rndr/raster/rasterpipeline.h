@@ -1,7 +1,6 @@
 #pragma once
 
 #include "rndr/core/barycentric.h"
-#include "rndr/core/bounds2.h"
 #include "rndr/core/colors.h"
 #include "rndr/core/pipeline.h"
 

@@ -289,7 +289,7 @@ void rndr::GraphicsContext::BindBuffer(Buffer* Buffer, int Slot, Shader* Shader)
     {
         const uint32_t Stride = Buffer->Props.Stride;
         const uint32_t Offset = 0;
-        m_DeviceContext->IASetVertexBuffers(0, 1, &Buffer->DX11Buffer, &Stride, &Offset);
+        m_DeviceContext->IASetVertexBuffers(Slot, 1, &Buffer->DX11Buffer, &Stride, &Offset);
     }
 }
 

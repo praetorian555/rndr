@@ -15,7 +15,7 @@ int main()
     CameraProps.Projection = rndr::ProjectionType::Perspective;
     CameraProps.ScreenWidth = MainWindow->GetWidth();
     CameraProps.ScreenHeight = MainWindow->GetHeight();
-    std::shared_ptr<rndr::ProjectionCamera> Camera = std::make_unique<rndr::ProjectionCamera>(rndr::Transform{}, CameraProps);
+    std::shared_ptr<rndr::ProjectionCamera> Camera = std::make_unique<rndr::ProjectionCamera>(math::Transform{}, CameraProps);
 
     rndr::WindowDelegates::OnResize.Add(
         [Camera, MainWindow](rndr::Window* Window, int Width, int Height)

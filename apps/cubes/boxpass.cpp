@@ -121,7 +121,7 @@ void BoxRenderPass::Init(rndr::GraphicsContext* GraphicsContext, rndr::Projectio
     VertexBufferProps.CPUAccess = rndr::CPUAccess::None;
     VertexBufferProps.Usage = rndr::Usage::GPUReadWrite;
     VertexBufferProps.Size = Vertices.size() * sizeof(Vertices);
-    VertexBufferProps.Stride = sizeof(Vertices);
+    VertexBufferProps.Stride = sizeof(InVertex);
     m_VertexBuffer = m_GraphicsContext->CreateBuffer(VertexBufferProps, Vertices);
 
     math::RNG RandomGen;
@@ -141,7 +141,7 @@ void BoxRenderPass::Init(rndr::GraphicsContext* GraphicsContext, rndr::Projectio
         Position.Z = RandomGen.UniformRealInRange(-60, -30);
 
         m_Instances[i].FromModelToWorld =
-            rndr::Translate(Position) * rndr::Rotate(Angles) * rndr::Scale(ScaleFactor, ScaleFactor, ScaleFactor);
+            math::Translate(Position) * math::Rotate(Angles) * math::Scale(ScaleFactor, ScaleFactor, ScaleFactor);
         m_Instances[i].FromModelToWorld = m_Instances[i].FromModelToWorld.GetInverse();
     }
 
@@ -165,7 +165,7 @@ void BoxRenderPass::Init(rndr::GraphicsContext* GraphicsContext, rndr::Projectio
     m_IndexCount = Indices.Size;
 
     ShaderConstants Constants;
-    Constants.FromWorldToNDC = m_Camera->FromWorldToNDC().GetInverse();
+    Constants.FromWorldToNDC = math::Transpose(m_Camera->FromWorldToNDC());
     Constants.LightPosition = m_LightPosition;
     Constants.ViewerPosition = m_ViewerPosition;
     rndr::BufferProperties ConstBufferProps;
@@ -222,9 +222,9 @@ void BoxRenderPass::Render(real DeltaSeconds)
     m_GraphicsContext->BindDepthStencilState(m_DepthStencilState);
     m_GraphicsContext->BindBlendState(m_BlendState);
 
-    m_GraphicsContext->BindBuffer(m_VertexBuffer);
-    m_GraphicsContext->BindBuffer(m_InstanceBuffer);
-    m_GraphicsContext->BindBuffer(m_IndexBuffer);
+    m_GraphicsContext->BindBuffer(m_VertexBuffer, 0);
+    m_GraphicsContext->BindBuffer(m_InstanceBuffer, 1);
+    m_GraphicsContext->BindBuffer(m_IndexBuffer, 0);
 
     m_GraphicsContext->BindBuffer(m_ConstantBuffer, 0, m_VertexShader);
     m_GraphicsContext->BindBuffer(m_ConstantBuffer, 0, m_FragmentShader);

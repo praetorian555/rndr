@@ -100,7 +100,7 @@ rndr::BlockAllocator::Section& rndr::BlockAllocator::FindSection(void* Ptr)
     }
 
     assert(false);
-    return Section{};
+    return m_Sections.front();
 }
 
 rndr::BlockAllocator::Section& rndr::BlockAllocator::AllocateSection(uint64_t BlockCount, uint64_t BlockSize)

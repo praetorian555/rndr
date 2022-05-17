@@ -44,11 +44,12 @@ void rndr::CpuTracer::ShutDown()
     const auto Timestamp = std::chrono::high_resolution_clock::now();
     const int64_t StartUS = std::chrono::duration_cast<std::chrono::microseconds>(Timestamp.time_since_epoch()).count();
     const uint32_t ThreadId = GetCurrentThreadId();  // TODO(mkostic): Hide this behind platform-agnostic API
+    const int64_t DurationUS = 0;
     sprintf(Trace,
             "{\"name\":\"%s\", \"cat\":\"\", \"ph\":\"X\", \"ts\": %I64d, \"dur\": %I64d, "
             "\"pid\": "
             "0, \"tid\": %u}",
-            "", StartUS, 0, ThreadId);
+            "", StartUS, DurationUS, ThreadId);
 
     s_SpdLogger->info("{}", Trace);
     s_SpdLogger->info("]");

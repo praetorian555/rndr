@@ -1,6 +1,5 @@
 #pragma once
 
-#include "rndr/core/bounds2.h"
 #include "rndr/core/math.h"
 #include "rndr/core/span.h"
 

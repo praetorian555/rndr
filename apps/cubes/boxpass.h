@@ -21,12 +21,12 @@ private:
 
     struct InInstance
     {
-        rndr::Transform FromModelToWorld;
+        math::Transform FromModelToWorld;
     };
 
     RNDR_ALIGN(16) struct ShaderConstants
     {
-        rndr::Transform FromWorldToNDC;
+        math::Transform FromWorldToNDC;
         rndr::Point3r LightPosition;
         rndr::Vector4r LightColor;
         rndr::Point3r ViewerPosition;
