@@ -229,7 +229,7 @@ void BoxRenderPass::Render(real DeltaSeconds)
     m_GraphicsContext->BindBuffer(m_ConstantBuffer, 0, m_VertexShader);
     m_GraphicsContext->BindBuffer(m_ConstantBuffer, 0, m_FragmentShader);
     ShaderConstants Constants;
-    Constants.FromWorldToNDC = m_Camera->FromWorldToNDC();
+    Constants.FromWorldToNDC = math::Transpose(m_Camera->FromWorldToNDC());
     Constants.LightPosition = m_LightPosition;
     Constants.ViewerPosition = m_ViewerPosition;
     m_ConstantBuffer->Update(&Constants);

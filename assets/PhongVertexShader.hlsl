@@ -19,7 +19,7 @@ struct VSOutput
 
 cbuffer Camera
 {
-    matrix FromWorldToNDC;
+    row_major matrix FromWorldToNDC;
     float3 LightPosition;
     float3 ViewPosition;
 };
