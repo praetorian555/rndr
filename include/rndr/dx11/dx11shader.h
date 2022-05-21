@@ -14,14 +14,7 @@
 namespace rndr
 {
 
-class Image;
 class GraphicsContext;
-class Sampler;
-
-class ConstantBuffer
-{
-
-};
 
 struct Shader
 {

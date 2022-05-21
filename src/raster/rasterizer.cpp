@@ -205,7 +205,7 @@ void rndr::Rasterizer::SetupTriangles()
         T.Bounds = Bounds;
         LimitTriangleToSurface(T.Bounds, m_Pipeline->RenderTarget->GetColorBuffer());
         T.WindingOrder = GetWindingOrder(T.ScreenPositions);
-        
+
         // Just a little switch to ensure proper behaviour
         WindingOrder PipelineWindingOrder = m_Pipeline->FrontFaceWindingOrder;
         if (m_Pipeline->CullFace == Face::Front)

@@ -31,8 +31,7 @@ real rndr::BarycentricCoordinates::operator[](int i) const
     return X;
 }
 
-rndr::BarycentricHelper::BarycentricHelper(WindingOrder FrontFaceWindingOrder,
-                                           const rndr::Point3r (&TrianglePoints)[3])
+rndr::BarycentricHelper::BarycentricHelper(WindingOrder FrontFaceWindingOrder, const rndr::Point3r (&TrianglePoints)[3])
 {
     m_FrontFaceWindingOrder = FrontFaceWindingOrder;
 

@@ -5,8 +5,8 @@
 #include <Windows.h>
 
 #include "rndr/core/framebuffer.h"
-#include "rndr/core/window.h"
 #include "rndr/core/log.h"
+#include "rndr/core/window.h"
 
 #include "rndr/dx11/dx11buffer.h"
 #include "rndr/dx11/dx11helpers.h"

@@ -4,8 +4,8 @@
 
 #if defined RNDR_RASTER
 
-#include <vector>
 #include <memory>
+#include <vector>
 
 #include "rndr/core/pipeline.h"
 

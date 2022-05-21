@@ -18,7 +18,6 @@ void rndr::PhongShader::VertexShader(const InVertexInfo& InInfo, OutVertexInfo& 
 
 void rndr::PhongShader::FragmentShader(const Triangle& Triangle, const InFragmentInfo& InInfo, OutFragmentInfo& OutInfo)
 {
-    
 
     const Point2r TexCoords = RNDR_INTERPOLATE(Triangle, OutVertex, Point2r, TexCoords, InInfo);
     const Vector2r duvdx = RNDR_DX(Triangle, OutVertex, Point2r, TexCoords, Vector2r, InInfo);
@@ -60,7 +59,7 @@ void rndr::PhongShader::FragmentShader(const Triangle& Triangle, const InFragmen
         const Vector3r DiffuseColor = Kd * DiffuseTerm;
         const Vector3r SpecularColor = Ks * SpecularTerm;
         const Vector3r FinalColor = (AmbientColor + DiffuseColor + SpecularColor) * m_PointLights[i].Irradiance;
-        
+
         TotalColor += FinalColor;
     }
 

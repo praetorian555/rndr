@@ -7,8 +7,8 @@
 
 #include "rndr/core/pipeline.h"
 
-#include "rndr/raster/rasterizer.h"
 #include "rndr/raster/rasterframebuffer.h"
+#include "rndr/raster/rasterizer.h"
 
 namespace rndr
 {

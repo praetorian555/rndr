@@ -4,8 +4,8 @@
 
 #include "rndr/core/base.h"
 #include "rndr/core/delegate.h"
-#include "rndr/core/inputprimitives.h"
 #include "rndr/core/graphicscontext.h"
+#include "rndr/core/inputprimitives.h"
 
 namespace rndr
 {

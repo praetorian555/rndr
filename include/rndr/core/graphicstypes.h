@@ -289,7 +289,7 @@ struct InputLayoutProperties
     std::string SemanticName;
     int SemanticIndex;
     PixelFormat Format;
-    int OffsetInVertex; // Use AppendAlignedElement to align it to the previous element
+    int OffsetInVertex;  // Use AppendAlignedElement to align it to the previous element
     // Corresponds to the index of a vertex buffer in a mesh
     int InputSlot;
     DataRepetition Repetition;

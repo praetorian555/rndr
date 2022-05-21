@@ -53,7 +53,7 @@ void rndr::StdAsyncLogger::Log(const char* File, int Line, const char* Function,
         }
         case rndr::LogLevel::Warning:
         {
-            s_SpdLogger->log(SourceInfo, spdlog::level::level_enum::warn, message);            
+            s_SpdLogger->log(SourceInfo, spdlog::level::level_enum::warn, message);
             break;
         }
         case rndr::LogLevel::Debug:

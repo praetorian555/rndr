@@ -10,8 +10,7 @@
 #include "rndr/dx11/dx11graphicscontext.h"
 #include "rndr/dx11/dx11helpers.h"
 
-rndr::Buffer::Buffer(rndr::GraphicsContext* Context, const BufferProperties& P, ByteSpan InitialData)
-    : GraphicsContext(Context), Props(P)
+rndr::Buffer::Buffer(rndr::GraphicsContext* Context, const BufferProperties& P, ByteSpan InitialData) : GraphicsContext(Context), Props(P)
 {
     assert(Props.Size == InitialData.Size);
 
