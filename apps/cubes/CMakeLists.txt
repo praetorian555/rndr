@@ -10,8 +10,8 @@ set_target_properties(cubes PROPERTIES FOLDER Examples)
 
 # Enable unity build
 if (RNDR_UNITY)
-set_target_properties(rndr PROPERTIES UNITY_BUILD TRUE)
+set_target_properties(cubes PROPERTIES UNITY_BUILD TRUE)
 endif()
 
 # Compiler options
-target_compile_options(rndr PRIVATE $<$<CXX_COMPILER_ID:MSVC>:/MP>)
+target_compile_options(cubes PRIVATE $<$<CXX_COMPILER_ID:MSVC>:/MP>)
