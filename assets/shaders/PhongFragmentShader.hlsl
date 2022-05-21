@@ -2,8 +2,8 @@ struct FSInput
 {
     float4 Position : SV_POSITION;
     float4 PositionWorld : POSITION;
-    float2 TexCoords : TEXCOORD;
     float3 Normal : NORMAL;
+    float2 TexCoords : TEXCOORD;
 };
 
 cbuffer Camera

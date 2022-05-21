@@ -3,8 +3,6 @@ struct Input
     float3 Position : POSITION;
     float2 TexCoords : TEXCOORD;
     float3 Normal : NORMAL;
-    float3 Tangent : TANGENT;
-    float3 Bitangent : BINORMAL;
     // Instance matrix - model to world
     float4 RowX : ROWX;
     float4 RowY : ROWY;
@@ -32,8 +30,8 @@ Output PhongVertexShader(Input In)
     matrix ModelToWorld = float4x4(In.RowX, In.RowY, In.RowZ, In.RowW);
     Out.PositionWorld = mul(float4(In.Position, 1.0f), ModelToWorld);
     Out.Position = mul(Out.PositionWorld, ProjectionMatrix);
-    Out.TexCoords = Input.TexCoords;
-    Out.Normal = mul(Input.Normal, ModelToWorld);
+    Out.TexCoords = In.TexCoords;
+    Out.Normal = mul(In.Normal, ModelToWorld);
 
     return Out;
 }

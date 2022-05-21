@@ -51,7 +51,7 @@ private:
 #if defined RNDR_RASTER
     rndr::PhongShader m_Shader;
     std::vector<rndr::PhongShader::InInstance> m_Instances;
-    #else
+#else
     rndr::Shader* m_VertexShader;
     rndr::Shader* m_FragmentShader;
     std::vector<InInstance> m_Instances;

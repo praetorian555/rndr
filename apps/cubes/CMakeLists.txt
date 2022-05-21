@@ -1,4 +1,4 @@
-add_executable(cubes cubes.cpp boxpass.cpp boxpass.h lightpass.cpp lightpass.h)
+add_executable(cubes cubes.cpp boxpass.cpp boxpass.h)
 
 target_compile_features(cubes PRIVATE cxx_std_17)
 
