@@ -18,7 +18,6 @@ if (CPPCHECK)
         -I ../include
         -I ../src
         -I ../apps
-        --check-config
         -q
         --suppress=missingIncludeSystem
         --suppress=missingInclude
