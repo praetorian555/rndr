@@ -10,14 +10,14 @@ void BoxRenderPass::Init(rndr::GraphicsContext* GraphicsContext, rndr::Projectio
     rndr::ShaderProperties VertexShaderProps;
     VertexShaderProps.bCompilationNeeded = true;
     VertexShaderProps.Type = rndr::ShaderType::Vertex;
-    VertexShaderProps.FilePath = ASSET_DIR L"/shaders/PhongVertexShader.hlsl";
+    VertexShaderProps.FilePath = RNDR_ASSET_DIR L"/shaders/PhongVertexShader.hlsl";
     VertexShaderProps.EntryPoint = "PhongVertexShader";
     m_VertexShader = m_GraphicsContext->CreateShader(VertexShaderProps);
 
     rndr::ShaderProperties FragmentShaderProps;
     FragmentShaderProps.bCompilationNeeded = true;
     FragmentShaderProps.Type = rndr::ShaderType::Fragment;
-    FragmentShaderProps.FilePath = ASSET_DIR L"/shaders/PhongFragmentShader.hlsl";
+    FragmentShaderProps.FilePath = RNDR_ASSET_DIR L"/shaders/PhongFragmentShader.hlsl";
     FragmentShaderProps.EntryPoint = "PhongFragmentShader";
     m_FragmentShader = m_GraphicsContext->CreateShader(FragmentShaderProps);
 
@@ -176,7 +176,7 @@ void BoxRenderPass::Init(rndr::GraphicsContext* GraphicsContext, rndr::Projectio
     ConstBufferProps.Stride = sizeof(Constants);
     m_ConstantBuffer = m_GraphicsContext->CreateBuffer(ConstBufferProps, &Constants);
 
-    const std::string WallTexturePath = ASSET_DIR "/textures/bricked-wall.png";
+    const std::string WallTexturePath = RNDR_ASSET_DIR "/textures/bricked-wall.png";
     rndr::ImageProperties TextureProps;
     TextureProps.ImageBindFlags = rndr::ImageBindFlags::ShaderResource;
     TextureProps.ArraySize = 1;

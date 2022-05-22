@@ -14,6 +14,9 @@ target_include_directories(rndr PRIVATE ${PROJECT_SOURCE_DIR}/src)
 if (RNDR_DX11)
 target_compile_definitions(rndr PUBLIC RNDR_DX11)
 endif()
+if (RNDR_HANDMADE)
+target_compile_definitions(rndr PUBLIC RNDR_HANDMADE)
+endif()
 
 # Setup library dependencies
 target_link_libraries(rndr PUBLIC spdlog::spdlog)
@@ -33,10 +36,12 @@ target_compile_features(rndr PUBLIC cxx_std_17)
 
 # Compiler options
 target_compile_options(rndr PRIVATE $<$<CXX_COMPILER_ID:MSVC>:/MP>)
-
-set_target_properties(rndr PROPERTIES FOLDER RNDR)
+if (RNDR_SANITIZER)
+  target_compile_options(rndr PRIVATE $<$<CXX_COMPILER_ID:MSVC>:/fsanitize=address>)
+endif()
 
 # IDEs should put the headers in a nice place
+set_target_properties(rndr PROPERTIES FOLDER RNDR)
 source_group(
   TREE "${PROJECT_SOURCE_DIR}/include"
   PREFIX "API"
@@ -45,10 +50,11 @@ source_group(
   TREE "${PROJECT_SOURCE_DIR}/src"
   PREFIX "Implementation"
   FILES ${PRIVATE_SOURCE_LIST})
-
-if (MATH_UNITY)
+if (RNDR_UNITY)
   source_group(
     TREE "${PROJECT_BINARY_DIR}/src/CMakeFiles/rndr.dir/Unity"
     PREFIX "Unity"
     FILES ${UNITY_SOURCE_LIST})
 endif()
+
+target_compile_definitions(rndr PUBLIC RNDR_ASSET_DIR="${CMAKE_CURRENT_SOURCE_DIR}/../assets")

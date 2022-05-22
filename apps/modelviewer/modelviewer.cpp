@@ -94,7 +94,7 @@ void InitRenderPrimitives()
         rndr::ShaderProperties VertexShaderProps;
         VertexShaderProps.bCompilationNeeded = true;
         VertexShaderProps.Type = rndr::ShaderType::Vertex;
-        VertexShaderProps.FilePath = ASSET_DIR L"/shaders/MaterialVertexShader.hlsl";
+        VertexShaderProps.FilePath = RNDR_ASSET_DIR L"/shaders/MaterialVertexShader.hlsl";
         VertexShaderProps.EntryPoint = "MaterialVertexShader";
         g_VertexShader = g_Context->CreateShader(VertexShaderProps);
         assert(g_VertexShader);
@@ -102,7 +102,7 @@ void InitRenderPrimitives()
         rndr::ShaderProperties FragmentShaderProps;
         FragmentShaderProps.bCompilationNeeded = true;
         FragmentShaderProps.Type = rndr::ShaderType::Fragment;
-        FragmentShaderProps.FilePath = ASSET_DIR L"/shaders/MaterialFragmentShader.hlsl";
+        FragmentShaderProps.FilePath = RNDR_ASSET_DIR L"/shaders/MaterialFragmentShader.hlsl";
         FragmentShaderProps.EntryPoint = "MaterialFragmentShader";
         g_FragmentShader = g_Context->CreateShader(FragmentShaderProps);
         assert(g_FragmentShader);
@@ -244,7 +244,7 @@ void InitRenderPrimitives()
             rndr::Vector3r Bitangent;
         };
 
-        std::string CubeObjPath = ASSET_DIR "/models/cube.obj";
+        std::string CubeObjPath = RNDR_ASSET_DIR "/models/cube.obj";
         g_CubeMesh = rndr::ObjParser::Parse(CubeObjPath);
 
         std::vector<InVertex> Vertices;
@@ -310,7 +310,7 @@ void InitRenderPrimitives()
     }
 
     {
-        const std::string TexturePath = ASSET_DIR "/textures/templategrid_albedo.png";
+        const std::string TexturePath = RNDR_ASSET_DIR "/textures/templategrid_albedo.png";
         rndr::ImageProperties TextureProps;
         TextureProps.ImageBindFlags = rndr::ImageBindFlags::ShaderResource;
         TextureProps.ArraySize = 1;
@@ -322,7 +322,7 @@ void InitRenderPrimitives()
     }
 
     {
-        const std::string TexturePath = ASSET_DIR "/textures/templategrid_normal.png";
+        const std::string TexturePath = RNDR_ASSET_DIR "/textures/templategrid_normal.png";
         rndr::ImageProperties TextureProps;
         TextureProps.ImageBindFlags = rndr::ImageBindFlags::ShaderResource;
         TextureProps.ArraySize = 1;
@@ -334,7 +334,7 @@ void InitRenderPrimitives()
     }
 
     {
-        const std::string TexturePath = ASSET_DIR "/textures/templategrid_specular.png";
+        const std::string TexturePath = RNDR_ASSET_DIR "/textures/templategrid_specular.png";
         rndr::ImageProperties TextureProps;
         TextureProps.ImageBindFlags = rndr::ImageBindFlags::ShaderResource;
         TextureProps.ArraySize = 1;

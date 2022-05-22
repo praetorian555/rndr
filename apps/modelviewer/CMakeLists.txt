@@ -4,11 +4,11 @@ target_compile_features(modelviewer PRIVATE cxx_std_17)
 
 target_link_libraries(modelviewer PRIVATE rndr)
 
-# Path to asset folder
-target_compile_definitions(modelviewer PRIVATE ASSET_DIR="${CMAKE_CURRENT_SOURCE_DIR}/../../assets")
-
 # Compiler options
 target_compile_options(cubes PRIVATE $<$<CXX_COMPILER_ID:MSVC>:/MP>)
+if (RNDR_SANITIZER)
+  target_compile_options(rndr PRIVATE $<$<CXX_COMPILER_ID:MSVC>:/fsanitize=address>)
+endif()
 
 # Enable unity build
 if (RNDR_UNITY)

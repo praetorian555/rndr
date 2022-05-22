@@ -11,11 +11,12 @@ include(cmake/utils.cmake)
 
 # Library options
 option(RNDR_UNITY "Enable unity builds" OFF)
+option(RNDR_SANITIZER "Enable address sanitizer" OFF)
 option(RNDR_DX11 "Use DX11 API" ON)
 option(RNDR_HANDMADE "Use handmade software rendering pipeline" OFF)
 
 message(STATUS "RNDR_UNITY ${RNDR_UNITY}")
-message(STATUS "RNDR_SANITIZER ${RNDR_SANTIIZER}")
+message(STATUS "RNDR_SANITIZER ${RNDR_SANITIZER}")
 message(STATUS "RNDR_DX11 ${RNDR_DX11}")
 message(STATUS "RNDR_HANDMADE ${RNDR_HANDMADE}")
 
@@ -32,13 +33,6 @@ if (CMAKE_PROJECT_NAME STREQUAL PROJECT_NAME)
 
  	# Let's nicely support folders in IDEs
   	set_property(GLOBAL PROPERTY USE_FOLDERS ON)
-
-  	# Setup address sanitizer if this option is selected
-  	if (RNDR_SANITIZER)
-		add_compile_options(
-			# For MSVC compilers activate address sanitizer
-	  		$<$<CXX_COMPILER_ID:MSVC>:/fsanitize=address>)
-	endif()
 
   	# Include cmake scripts here
   	include(cmake/clang-format.cmake)
