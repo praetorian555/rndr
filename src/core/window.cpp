@@ -307,13 +307,13 @@ LRESULT CALLBACK WindowProc(HWND WindowHandle, UINT MsgCode, WPARAM ParamW, LPAR
         case WM_KEYUP:
         {
             const auto Iter = g_PrimitiveMapping.find(ParamW);
-            assert(Iter != g_PrimitiveMapping.end());
-
+            if (Iter == g_PrimitiveMapping.end())
+            {
+                break;
+            }
             const rndr::InputPrimitive Primitive = Iter->second;
             const rndr::InputTrigger Trigger = MsgCode == WM_KEYDOWN ? rndr::InputTrigger::ButtonDown : rndr::InputTrigger::ButtonUp;
-
             rndr::WindowDelegates::OnButtonDelegate.Execute(Window, Primitive, Trigger);
-
             break;
         }
         case WM_MOUSEWHEEL:
