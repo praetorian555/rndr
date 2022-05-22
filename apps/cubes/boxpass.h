@@ -61,6 +61,8 @@ private:
     rndr::Point3r m_LightPosition;
     rndr::Point3r m_ViewerPosition;
 
+    rndr::Mesh* m_Mesh;
+
     int m_IndexCount;
     int m_InstanceCount;
 };

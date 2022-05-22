@@ -21,8 +21,6 @@
 #include "rndr/core/threading.h"
 #include "rndr/core/window.h"
 
-#include "rndr/geometry/cube.h"
-
 #include "rndr/profiling/cputracer.h"
 
 #include "rndr/raster/shaders/phong.h"

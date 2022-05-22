@@ -79,7 +79,7 @@ void BoxRenderPass::Init(rndr::GraphicsContext* GraphicsContext, rndr::Projectio
     RasterProps.bMultisampleEnable = false;
     RasterProps.bScissorEnable = false;
     RasterProps.CullFace = rndr::Face::Back;
-    RasterProps.FrontFaceWindingOrder = rndr::WindingOrder::CCW;
+    RasterProps.FrontFaceWindingOrder = rndr::WindingOrder::CW;
     RasterProps.FillMode = rndr::FillMode::Solid;
     m_RasterizerState = m_GraphicsContext->CreateRasterizerState(RasterProps);
 
@@ -103,17 +103,17 @@ void BoxRenderPass::Init(rndr::GraphicsContext* GraphicsContext, rndr::Projectio
     struct InVertex
     {
         rndr::Point3r Position;
-        rndr::Point2r TexCoords;
+        rndr::Vector2r TexCoords;
         rndr::Normal3r Normal;
     };
 
+    std::string CubeObjPath = RNDR_ASSET_DIR "/models/cube.obj";
+    m_Mesh = rndr::ObjParser::Parse(CubeObjPath);
+
     std::vector<InVertex> Vertices;
-    auto& CubePositions = rndr::Cube::GetVertexPositions();
-    auto& CubeTexCoords = rndr::Cube::GetVertexTextureCoordinates();
-    auto& CubeNormals = rndr::Cube::GetNormals();
-    for (int i = 0; i < CubePositions.Size; i++)
+    for (int i = 0; i < m_Mesh->GetPositions().Size; i++)
     {
-        Vertices.push_back(InVertex{CubePositions[i], CubeTexCoords[i], CubeNormals[i]});
+        Vertices.push_back(InVertex{m_Mesh->GetPositions()[i], m_Mesh->GetTexCoords()[i], m_Mesh->GetNormals()[i]});
     }
 
     rndr::BufferProperties VertexBufferProps;
@@ -122,7 +122,7 @@ void BoxRenderPass::Init(rndr::GraphicsContext* GraphicsContext, rndr::Projectio
     VertexBufferProps.Usage = rndr::Usage::GPUReadWrite;
     VertexBufferProps.Size = Vertices.size() * sizeof(Vertices);
     VertexBufferProps.Stride = sizeof(InVertex);
-    m_VertexBuffer = m_GraphicsContext->CreateBuffer(VertexBufferProps, Vertices);
+    m_VertexBuffer = m_GraphicsContext->CreateBuffer(VertexBufferProps, (rndr::ByteSpan)Vertices);
 
     math::RNG RandomGen;
     const int BoxCount = 1000;
@@ -151,10 +151,10 @@ void BoxRenderPass::Init(rndr::GraphicsContext* GraphicsContext, rndr::Projectio
     InstanceBufferProps.Usage = rndr::Usage::GPUReadWrite;
     InstanceBufferProps.Size = m_Instances.size() * sizeof(InInstance);
     InstanceBufferProps.Stride = sizeof(InInstance);
-    m_InstanceBuffer = m_GraphicsContext->CreateBuffer(InstanceBufferProps, m_Instances);
+    m_InstanceBuffer = m_GraphicsContext->CreateBuffer(InstanceBufferProps, (rndr::ByteSpan)m_Instances);
     m_InstanceCount = m_Instances.size();
 
-    rndr::IntSpan Indices = rndr::Cube::GetIndices();
+    rndr::IntSpan Indices = m_Mesh->GetIndices();
     rndr::BufferProperties IndexBufferProps;
     IndexBufferProps.BindFlag = rndr::BufferBindFlag::Index;
     IndexBufferProps.CPUAccess = rndr::CPUAccess::None;
@@ -170,11 +170,11 @@ void BoxRenderPass::Init(rndr::GraphicsContext* GraphicsContext, rndr::Projectio
     Constants.ViewerPosition = m_ViewerPosition;
     rndr::BufferProperties ConstBufferProps;
     ConstBufferProps.BindFlag = rndr::BufferBindFlag::Constant;
-    ConstBufferProps.CPUAccess = rndr::CPUAccess::Write;
-    ConstBufferProps.Usage = rndr::Usage::GPUReadCPUWrite;
+    ConstBufferProps.CPUAccess = rndr::CPUAccess::None;
+    ConstBufferProps.Usage = rndr::Usage::GPUReadWrite;
     ConstBufferProps.Size = sizeof(Constants);
     ConstBufferProps.Stride = sizeof(Constants);
-    m_ConstantBuffer = m_GraphicsContext->CreateBuffer(ConstBufferProps, &Constants);
+    m_ConstantBuffer = m_GraphicsContext->CreateBuffer(ConstBufferProps, (rndr::ByteSpan)&Constants);
 
     const std::string WallTexturePath = RNDR_ASSET_DIR "/textures/bricked-wall.png";
     rndr::ImageProperties TextureProps;
@@ -215,6 +215,9 @@ void BoxRenderPass::ShutDown()
 
 void BoxRenderPass::Render(real DeltaSeconds)
 {
+    m_GraphicsContext->ClearColor(nullptr, rndr::Colors::Blue);
+    m_GraphicsContext->ClearDepth(nullptr, 1);
+
     m_GraphicsContext->BindShader(m_VertexShader);
     m_GraphicsContext->BindShader(m_FragmentShader);
     m_GraphicsContext->BindInputLayout(m_InputLayout);
@@ -232,7 +235,7 @@ void BoxRenderPass::Render(real DeltaSeconds)
     Constants.FromWorldToNDC = math::Transpose(m_Camera->FromWorldToNDC());
     Constants.LightPosition = m_LightPosition;
     Constants.ViewerPosition = m_ViewerPosition;
-    m_ConstantBuffer->Update(&Constants);
+    m_ConstantBuffer->Update((rndr::ByteSpan)&Constants);
 
     m_GraphicsContext->BindImageAsShaderResource(m_Texture, 0, m_FragmentShader);
     m_GraphicsContext->BindSampler(m_Sampler, 0, m_FragmentShader);
