@@ -35,7 +35,10 @@ rndr::Buffer::Buffer(rndr::GraphicsContext* Context, const BufferProperties& P, 
     }
 }
 
-rndr::Buffer::~Buffer() {}
+rndr::Buffer::~Buffer()
+{
+    DX11SafeRelease(DX11Buffer);
+}
 
 void rndr::Buffer::Update(ByteSpan Data) const
 {
