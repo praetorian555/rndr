@@ -11,7 +11,7 @@ namespace rndr
 struct GraphicsConstants
 {
     static constexpr int MaxFrameBufferColorBuffers = 4;
-    static constexpr int MaxInputLayoutEntries = 8;
+    static constexpr int MaxInputLayoutEntries = 32;
     static constexpr int MaxShaderResourceBindSlots = 128;
     static constexpr int MaxConstantBuffers = 16;
 };

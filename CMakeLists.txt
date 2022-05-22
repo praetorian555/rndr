@@ -15,6 +15,7 @@ option(RNDR_DX11 "Use DX11 API" ON)
 option(RNDR_HANDMADE "Use handmade software rendering pipeline" OFF)
 
 message(STATUS "RNDR_UNITY ${RNDR_UNITY}")
+message(STATUS "RNDR_SANITIZER ${RNDR_SANTIIZER}")
 message(STATUS "RNDR_DX11 ${RNDR_DX11}")
 message(STATUS "RNDR_HANDMADE ${RNDR_HANDMADE}")
 
@@ -33,7 +34,7 @@ if (CMAKE_PROJECT_NAME STREQUAL PROJECT_NAME)
   	set_property(GLOBAL PROPERTY USE_FOLDERS ON)
 
   	# Setup address sanitizer if this option is selected
-  	if (ADDRESS_SANITIZER)
+  	if (RNDR_SANITIZER)
 		add_compile_options(
 			# For MSVC compilers activate address sanitizer
 	  		$<$<CXX_COMPILER_ID:MSVC>:/fsanitize=address>)

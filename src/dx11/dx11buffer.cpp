@@ -40,16 +40,7 @@ rndr::Buffer::~Buffer() {}
 void rndr::Buffer::Update(ByteSpan Data) const
 {
     ID3D11DeviceContext* DeviceContext = GraphicsContext->GetDeviceContext();
-
-    D3D11_MAPPED_SUBRESOURCE MappedResource;
-    HRESULT Result = DeviceContext->Map(DX11Buffer, 0, D3D11_MAP_WRITE_DISCARD, 0, &MappedResource);
-    if (FAILED(Result))
-    {
-        RNDR_LOG_ERROR_OR_ASSERT("Failed to map a buffer resource!");
-        return;
-    }
-    memcpy(MappedResource.pData, Data.Data, Data.Size);
-    DeviceContext->Unmap(DX11Buffer, 0);
+    DeviceContext->UpdateSubresource(DX11Buffer, 0, nullptr, Data.Data, 0, 0);
 }
 
 #endif  // RNDR_DX11

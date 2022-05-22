@@ -53,12 +53,9 @@ void rndr::RndrApp::Run()
 
         rndr::InputSystem::Get()->Update(FrameDuration);
 
-        GraphicsContext* GC = m_Window->GetGraphicsContext();
-        GC->ClearColor(nullptr, Colors::Pink);
-        GC->ClearDepth(nullptr, 1.0);
-
         OnTickDelegate.Execute(FrameDuration);
 
+        GraphicsContext* GC = m_Window->GetGraphicsContext();
         GC->Present(false);
 
         auto FrameEnd = std::chrono::high_resolution_clock().now();

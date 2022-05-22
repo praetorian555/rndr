@@ -13,6 +13,7 @@ rndr::InputLayout::InputLayout(GraphicsContext* Context, Span<InputLayoutPropert
     this->Props = Span<InputLayoutProperties>(new InputLayoutProperties[Props.Size], Props.Size);
     memcpy(this->Props.Data, Props.Data, sizeof(InputLayoutProperties) * Props.Size);
 
+    assert(Props.Size <= GraphicsConstants::MaxInputLayoutEntries);
     D3D11_INPUT_ELEMENT_DESC InputDescriptors[GraphicsConstants::MaxInputLayoutEntries] = {};
     for (int i = 0; i < Props.Size; i++)
     {
