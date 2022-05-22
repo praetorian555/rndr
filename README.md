@@ -1,5 +1,13 @@
 # Renderer in C++ #
 
+## About ##
+
+This project is my attempt to learn all about the rendering in modern 3D games. It originally started as me trying to create a rasterizer from scratch in software without the help of GPU.
+
+Currently this library offers a basic rendering API that hides differences between standard GPU APIs. It provides implementation of this API using DX11 and my software, handmade implementation.
+
+To see how to use this library checkout apps/cubes sample app.
+
 ## Requirements ##
 
 To setup this project you will need:
@@ -35,16 +43,15 @@ If you installed the _clang-format_ and _cppcheck*_ tools you will have access t
 
 The clang-format target will apply formatting to all files under apps, include and src folders. The cppcheck target will apply static-code analysis on all cpp and c files nder apps and src folders.
 
-If you are using MSVC compiler you can use address sanitizer tool by setting the ADDRESS_SANITIZER flag when invoking the cmake command:
+If you are using MSVC compiler you can use address sanitizer tool by setting the RNDR_SANITIZER flag when invoking the cmake command:
 
-	cmake -S <path_to_lib_root> -B <build_dir> -DADDRESS_SANITIZER=ON
+	cmake -S <path_to_lib_root> -B <build_dir> -DRNDR_SANITIZER=ON
 
 ## Build Configuration ##
 
-By default rndr will using Raster rendering API. This is custom implementation that provides a rasterizer implemented on the CPU side. If you want to use one of the standard graphics API supply one of the following flags when generating a build system:
+The library currently offers following options for configuration:
 
-* DX11
-
-For example, if you want to use DirectX 11 API we would generate build system with the following command:
-
-	cmake -S <path_to_lib_root> -B <path_to_build_dir> -DDX11=ON
+ * RNDR_UNITY - Enables unity build of the library. By default OFF.
+ * RNDR_SANITIZER - Enables address sanitizer in the build. By default OFF.
+ * RNDR_HANDMADE - Use software implementation of the rendering API. By default OFF. Currently not building so don't use!
+ * RNDR_DX11 - Use DX11 as the implementation of the rendering API. By default ON.
