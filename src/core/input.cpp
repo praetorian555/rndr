@@ -39,6 +39,7 @@ rndr::InputSystem* rndr::InputSystem::Get()
 
 void rndr::InputSystem::Init()
 {
+    assert(!m_Context);
     m_Context = new InputContext{};
 
     rndr::WindowDelegates::OnButtonDelegate.Add(
@@ -55,7 +56,10 @@ void rndr::InputSystem::Init()
                                                          { g_MouseWheelEvents.push(MouseWheelEvent{DeltaWheel}); });
 }
 
-void rndr::InputSystem::ShutDown() {}
+void rndr::InputSystem::ShutDown()
+{
+    delete m_Context;
+}
 
 void rndr::InputSystem::Update(real DeltaSeconds)
 {

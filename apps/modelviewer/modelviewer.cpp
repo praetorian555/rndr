@@ -279,7 +279,7 @@ void InitRenderPrimitives()
         VertexBufferProps.Usage = rndr::Usage::GPUReadWrite;
         VertexBufferProps.Size = Vertices.size() * sizeof(InVertex);
         VertexBufferProps.Stride = sizeof(InVertex);
-        g_VertexBuffer = g_Context->CreateBuffer(VertexBufferProps, Vertices);
+        g_VertexBuffer = g_Context->CreateBuffer(VertexBufferProps, (rndr::ByteSpan)Vertices);
     }
 
     {
@@ -290,7 +290,7 @@ void InitRenderPrimitives()
         InstanceBufferProps.Usage = rndr::Usage::GPUReadWrite;
         InstanceBufferProps.Size = sizeof(InInstance);
         InstanceBufferProps.Stride = sizeof(InInstance);
-        g_InstanceBuffer = g_Context->CreateBuffer(InstanceBufferProps, &Instance);
+        g_InstanceBuffer = g_Context->CreateBuffer(InstanceBufferProps, (rndr::ByteSpan)&Instance);
     }
 
     {
@@ -312,7 +312,7 @@ void InitRenderPrimitives()
         ConstBufferProps.Usage = rndr::Usage::GPUReadWrite;
         ConstBufferProps.Size = sizeof(Constants);
         ConstBufferProps.Stride = sizeof(Constants);
-        g_VertexConstantBuffer = g_Context->CreateBuffer(ConstBufferProps, &Constants);
+        g_VertexConstantBuffer = g_Context->CreateBuffer(ConstBufferProps, (rndr::ByteSpan)&Constants);
     }
 
     {
@@ -323,7 +323,7 @@ void InitRenderPrimitives()
         ConstBufferProps.Usage = rndr::Usage::GPUReadWrite;
         ConstBufferProps.Size = sizeof(Constants);
         ConstBufferProps.Stride = sizeof(Constants);
-        g_FragmentConstantBuffer = g_Context->CreateBuffer(ConstBufferProps, &Constants);
+        g_FragmentConstantBuffer = g_Context->CreateBuffer(ConstBufferProps, (rndr::ByteSpan)&Constants);
     }
 
     {
@@ -418,20 +418,20 @@ void Update(float DeltaSeconds)
         Instance.FromWorldToModel = Instance.FromModelToWorld.GetInverse();
         Instance.FromModelToWorld = math::Transpose(Instance.FromModelToWorld);
         Instance.FromWorldToModel = math::Transpose(Instance.FromWorldToModel);
-        g_InstanceBuffer->Update(&Instance);
+        g_InstanceBuffer->Update((rndr::ByteSpan)&Instance);
     }
 
     // Update vertex shader constants
     {
         VertexShaderConstants Constants;
         Constants.FromWorldToNDC = math::Transpose(g_Camera->FromWorldToNDC());
-        g_VertexConstantBuffer->Update(&Constants);
+        g_VertexConstantBuffer->Update((rndr::ByteSpan)&Constants);
     }
 
     // Update fragment shader constants
     {
         FragmentShaderConstants Constants;
-        g_FragmentConstantBuffer->Update(&Constants);
+        g_FragmentConstantBuffer->Update((rndr::ByteSpan)&Constants);
     }
 }
 

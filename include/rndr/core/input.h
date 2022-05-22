@@ -80,9 +80,12 @@ public:
     rndr::Point2i GetMousePosition() const;
 
 private:
+    InputSystem() = default;
+
+private:
     static std::unique_ptr<InputSystem> s_Input;
 
-    InputContext* m_Context;
+    InputContext* m_Context = nullptr;
     int m_X = 0, m_Y = 0;
     bool m_FirstTime = true;
 

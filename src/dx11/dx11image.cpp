@@ -56,8 +56,8 @@ rndr::Image::Image(GraphicsContext* Context, const std::string& FilePath, const 
     const int DesiredChannelNumber = 4;
     ByteSpan Data;
 
-    Data = stbi_load(FilePath.c_str(), &Width, &Height, &ChannelNumber, DesiredChannelNumber);
-    if (!Data)
+    Data.Data = stbi_load(FilePath.c_str(), &Width, &Height, &ChannelNumber, DesiredChannelNumber);
+    if (!Data.Data)
     {
         RNDR_LOG_ERROR_OR_ASSERT("Image: stbi_load_from_file failed with error: %s", stbi_failure_reason());
         assert(Data);

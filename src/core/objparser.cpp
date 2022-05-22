@@ -52,6 +52,20 @@ static int GoToNextLine(const char* Data, int StartPosition)
     return StartPosition;
 }
 
+static int ScanString(const char* StreamPtr, char* DstBuffer, int MaxBufferSize)
+{
+    memset(DstBuffer, 0, MaxBufferSize);
+    for (int i = 0; i < MaxBufferSize - 1; i++)
+    {
+        char Ch = *StreamPtr;
+        if (Ch != '\r' && Ch != '\n' && Ch != ' ')
+        {
+            DstBuffer[i] = Ch;
+        }
+    }
+    return 1;
+}
+
 rndr::Mesh* rndr::ObjParser::Parse(Span<char> Data)
 {
     std::string MeshName;
@@ -84,7 +98,7 @@ rndr::Mesh* rndr::ObjParser::Parse(Span<char> Data)
         {
             Position += 3;
             Vector2r TexCoords;
-            int Result = sscanf(Data.Data + Position, "%f %f", &TexCoords.X, &TexCoords.Y);
+            int Result = sscanf_s(Data.Data + Position, "%f %f", &TexCoords.X, &TexCoords.Y);
             assert(Result == 2);
             VertexTexCoords.push_back(TexCoords);
             Position = GoToNextLine(Data.Data, Position);
@@ -94,7 +108,7 @@ rndr::Mesh* rndr::ObjParser::Parse(Span<char> Data)
         {
             Position += 3;
             Normal3r Normal;
-            int Result = sscanf(Data.Data + Position, "%f %f %f", &Normal.X, &Normal.Y, &Normal.Z);
+            int Result = sscanf_s(Data.Data + Position, "%f %f %f", &Normal.X, &Normal.Y, &Normal.Z);
             assert(Result == 3);
             VertexNormals.push_back(Normal);
             Position = GoToNextLine(Data.Data, Position);
@@ -104,7 +118,7 @@ rndr::Mesh* rndr::ObjParser::Parse(Span<char> Data)
         {
             Position += 2;
             Point3r VertexPosition;
-            int Result = sscanf(Data.Data + Position, "%f %f %f", &VertexPosition.X, &VertexPosition.Y, &VertexPosition.Z);
+            int Result = sscanf_s(Data.Data + Position, "%f %f %f", &VertexPosition.X, &VertexPosition.Y, &VertexPosition.Z);
             assert(Result == 3);
             VertexPositions.push_back(VertexPosition);
             Position = GoToNextLine(Data.Data, Position);
@@ -114,9 +128,9 @@ rndr::Mesh* rndr::ObjParser::Parse(Span<char> Data)
         {
             Position += 2;
             ObjFace Face;
-            int Result =
-                sscanf(Data.Data + Position, "%d/%d/%d %d/%d/%d %d/%d/%d", &Face.Positions[0], &Face.TexCoords[0], &Face.Normals[0],
-                       &Face.Positions[1], &Face.TexCoords[1], &Face.Normals[1], &Face.Positions[2], &Face.TexCoords[2], &Face.Normals[2]);
+            int Result = sscanf_s(Data.Data + Position, "%d/%d/%d %d/%d/%d %d/%d/%d", &Face.Positions[0], &Face.TexCoords[0],
+                                  &Face.Normals[0], &Face.Positions[1], &Face.TexCoords[1], &Face.Normals[1], &Face.Positions[2],
+                                  &Face.TexCoords[2], &Face.Normals[2]);
             assert(Result == 9);
             Faces.push_back(Face);
             Position = GoToNextLine(Data.Data, Position);
@@ -131,7 +145,7 @@ rndr::Mesh* rndr::ObjParser::Parse(Span<char> Data)
         {
             Position += 2;
             char Name[128] = {};
-            int Result = sscanf(Data.Data + Position, "%s", Name);
+            int Result = ScanString(Data.Data + Position, Name, 128);
             MeshName = Name;
             Position = GoToNextLine(Data.Data, Position);
         }
@@ -165,7 +179,7 @@ rndr::Mesh* rndr::ObjParser::Parse(Span<char> Data)
             Positions[3 * i + j] = VertexPositions[F.Positions[j] - 1];
             TexCoords[3 * i + j] = VertexTexCoords[F.TexCoords[j] - 1];
             Normals[3 * i + j] = VertexNormals[F.Normals[j] - 1];
-            Indices[3 * i + j] = 3*i + j;
+            Indices[3 * i + j] = 3 * i + j;
         }
     }
 

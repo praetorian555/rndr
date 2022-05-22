@@ -12,10 +12,10 @@ struct Span
 {
     Span() : Data(nullptr), Size(0) {}
     Span(T* Data, size_t Size) : Data(Data), Size(Size) {}
-    Span(const std::vector<T>& Vec) : Data((T*)Vec.data()), Size(Vec.size()) {}
+    explicit Span(const std::vector<T>& Vec) : Data((T*)Vec.data()), Size(Vec.size()) {}
 
     template <typename U>
-    Span(const std::vector<U>& Vec)
+    explicit Span(const std::vector<U>& Vec)
     {
         Data = (T*)Vec.data();
         Size = Vec.size() * sizeof(U) / sizeof(T);
@@ -23,7 +23,7 @@ struct Span
     }
 
     template <typename U>
-    Span(const Span<U>& Other)
+    explicit Span(const Span<U>& Other)
     {
         Data = (T*)Other.Data;
         Size = Other.Size * sizeof(U) / sizeof(T);
@@ -31,7 +31,7 @@ struct Span
     }
 
     template <typename U>
-    Span(const U* Ptr)
+    explicit Span(const U* Ptr)
     {
         Data = (T*)Ptr;
         Size = sizeof(U) / sizeof(T);

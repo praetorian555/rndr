@@ -45,7 +45,7 @@ struct MultiDelegate
             return;
         }
 
-        auto& Iterator = m_Functors.find(Handle);
+        auto Iterator = m_Functors.find(Handle);
         if (Iterator != m_Functors.end())
         {
             m_Functors.erase(Iterator);

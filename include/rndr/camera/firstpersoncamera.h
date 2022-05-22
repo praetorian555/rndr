@@ -16,10 +16,10 @@ class ProjectionCamera;
 class FirstPersonCamera
 {
 public:
-    FirstPersonCamera(ProjectionCamera* ProjectionCamera,
-                      Point3r StartingPosition = Point3r(),
-                      real MovementSpeed = 1.0,
-                      real RotationSpeed = 1.0);
+    explicit FirstPersonCamera(ProjectionCamera* ProjectionCamera,
+                               Point3r StartingPosition = Point3r(),
+                               real MovementSpeed = 1.0,
+                               real RotationSpeed = 1.0);
 
     void Update(real DeltaSeconds);
 
