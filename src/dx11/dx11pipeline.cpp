@@ -8,10 +8,13 @@
 #include "rndr/dx11/dx11helpers.h"
 #include "rndr/dx11/dx11shader.h"
 
-rndr::InputLayout::InputLayout(GraphicsContext* Context, Span<InputLayoutProperties> Props, rndr::Shader* Shader)
+rndr::InputLayout::InputLayout(GraphicsContext* Context, Span<InputLayoutProperties> P, rndr::Shader* Shader)
 {
-    this->Props = Span<InputLayoutProperties>(new InputLayoutProperties[Props.Size], Props.Size);
-    memcpy(this->Props.Data, Props.Data, sizeof(InputLayoutProperties) * Props.Size);
+    Props = Span<InputLayoutProperties>(new InputLayoutProperties[P.Size], P.Size);
+    for (int i = 0; i < P.Size; i++)
+    {
+        Props.Data[i] = P.Data[i];
+    }
 
     assert(Props.Size <= GraphicsConstants::MaxInputLayoutEntries);
     D3D11_INPUT_ELEMENT_DESC InputDescriptors[GraphicsConstants::MaxInputLayoutEntries] = {};
