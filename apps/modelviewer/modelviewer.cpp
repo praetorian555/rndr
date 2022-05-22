@@ -43,6 +43,8 @@ rndr::Image* g_SpecularImage = nullptr;
 rndr::Sampler* g_Sampler = nullptr;
 
 rndr::Mesh* g_CubeMesh = nullptr;
+math::Rotator g_MeshRotation;
+rndr::Vector3r g_MeshRotationState;
 
 void Init();
 void InitRenderPrimitives();
@@ -52,6 +54,9 @@ void Loop(float DeltaSeconds);
 void Update(float DeltaSeconds);
 void Render(float DeltaSeconds);
 void Present(bool bVSync);
+
+void RotateAroundX(rndr::InputPrimitive Primitive, rndr::InputTrigger Trigger, real Value);
+void RotateAroundY(rndr::InputPrimitive Primitive, rndr::InputTrigger Trigger, real Value);
 
 int main()
 {
@@ -84,6 +89,18 @@ void Init()
                 g_Camera->SetScreenSize(Width, Height);
             }
         });
+
+    rndr::InputContext* InputContext = g_App->GetInputContext();
+    InputContext->CreateMapping("RotateAroundY", RotateAroundY);
+    InputContext->AddBinding("RotateAroundY", rndr::InputPrimitive::Keyboard_A, rndr::InputTrigger::ButtonDown, 1);
+    InputContext->AddBinding("RotateAroundY", rndr::InputPrimitive::Keyboard_D, rndr::InputTrigger::ButtonDown, -1);
+    InputContext->AddBinding("RotateAroundY", rndr::InputPrimitive::Keyboard_A, rndr::InputTrigger::ButtonUp, 0);
+    InputContext->AddBinding("RotateAroundY", rndr::InputPrimitive::Keyboard_D, rndr::InputTrigger::ButtonUp, 0);
+    InputContext->CreateMapping("RotateAroundX", RotateAroundX);
+    InputContext->AddBinding("RotateAroundX", rndr::InputPrimitive::Keyboard_W, rndr::InputTrigger::ButtonDown, 1);
+    InputContext->AddBinding("RotateAroundX", rndr::InputPrimitive::Keyboard_S, rndr::InputTrigger::ButtonDown, -1);
+    InputContext->AddBinding("RotateAroundX", rndr::InputPrimitive::Keyboard_W, rndr::InputTrigger::ButtonUp, 0);
+    InputContext->AddBinding("RotateAroundX", rndr::InputPrimitive::Keyboard_S, rndr::InputTrigger::ButtonUp, 0);
 
     InitRenderPrimitives();
 }
@@ -393,11 +410,14 @@ void Update(float DeltaSeconds)
 {
     // Update instance transforms
     {
+        const float RotationSpeed = 10;
+        g_MeshRotation.Roll += g_MeshRotationState.X * RotationSpeed * DeltaSeconds;
+        g_MeshRotation.Yaw += g_MeshRotationState.Y * RotationSpeed * DeltaSeconds;
         InInstance Instance;
-        Instance.FromModelToWorld = math::Translate(rndr::Vector3r(0, 0, 20)) * math::Scale(5, 5, 5);
+        Instance.FromModelToWorld = math::Translate(rndr::Vector3r(0, 0, 20)) * math::Scale(5, 5, 5) * math::Rotate(g_MeshRotation);
         Instance.FromWorldToModel = Instance.FromModelToWorld.GetInverse();
         Instance.FromModelToWorld = math::Transpose(Instance.FromModelToWorld);
-        Instance.FromWorldToModel = math::Transpose(Instance.FromWorldToModel); 
+        Instance.FromWorldToModel = math::Transpose(Instance.FromWorldToModel);
         g_InstanceBuffer->Update(&Instance);
     }
 
@@ -447,4 +467,14 @@ void Present(bool bVSync)
 {
     rndr::GraphicsContext* GC = g_App->GetWindow()->GetGraphicsContext();
     GC->Present(bVSync);
+}
+
+void RotateAroundX(rndr::InputPrimitive Primitive, rndr::InputTrigger Trigger, real Value)
+{
+    g_MeshRotationState.X = Value;
+}
+
+void RotateAroundY(rndr::InputPrimitive Primitive, rndr::InputTrigger Trigger, real Value)
+{
+    g_MeshRotationState.Y = Value;
 }
