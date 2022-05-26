@@ -37,7 +37,8 @@ OutVertex MaterialVertexShader(InVertex In)
     OutVertex Out;
     Out.Position = mul(float4(In.Position, 1.0f), FromModelToWorld);
     Out.Position = mul(Out.Position, FromWorldToNDC);
-    Out.Normal = mul(float4(In.Normal, 1.0f), transpose(FromWorldToModel));
+    Out.Normal = mul(float4(In.Normal, 1.0f), FromWorldToModel);
+    Out.Normal = normalize(Out.Normal);
     Out.TexCoords = In.TexCoords;
 
     return Out;

@@ -90,7 +90,7 @@ static const char* GetShaderModel(D3D_FEATURE_LEVEL FeatureLevel, rndr::ShaderTy
 
 rndr::Shader::Shader(GraphicsContext* Context, const ShaderProperties& P) : Props(P)
 {
-    ID3DBlob* ErrorMessage;
+    ID3DBlob* ErrorMessage = nullptr;
     const char* Model = GetShaderModel(Context->GetFeatureLevel(), Props.Type);
 
     UINT Flags = D3DCOMPILE_ENABLE_STRICTNESS;
@@ -102,8 +102,16 @@ rndr::Shader::Shader(GraphicsContext* Context, const ShaderProperties& P) : Prop
                                         &DX11ShaderBuffer, &ErrorMessage);
     if (FAILED(Result))
     {
-        RNDR_LOG_ERROR_OR_ASSERT("Failed to compile shader from file:\n%s", (const char*)ErrorMessage->GetBufferPointer());
+        RNDR_LOG_ERROR_OR_ASSERT("Failed to compile shader from file:\n%s",
+                                 ErrorMessage ? (const char*)ErrorMessage->GetBufferPointer() : "No info");
         return;
+    }
+    else
+    {
+        if (ErrorMessage)
+        {
+            RNDR_LOG_WARNING("Shader compiled successfully with following message:\n%s", (const char*)ErrorMessage->GetBufferPointer());
+        }
     }
 
     ID3D11Device* Device = Context->GetDevice();

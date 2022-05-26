@@ -10,8 +10,9 @@ RNDR_ALIGN(16) struct VertexShaderConstants
 RNDR_ALIGN(16) struct FragmentShaderConstants
 {
     rndr::Vector3r LightDirection;
-    rndr::Vector4r LightColor;
-    rndr::Point3r ViewerPosition;
+    float Padding1 = 0;
+    rndr::Vector3r LightColor;
+    float AmbientStrength = 0.1;
 };
 
 struct InInstance
@@ -45,6 +46,9 @@ rndr::Sampler* g_Sampler = nullptr;
 rndr::Mesh* g_CubeMesh = nullptr;
 math::Rotator g_MeshRotation;
 rndr::Vector3r g_MeshRotationState;
+
+rndr::Vector3r g_LightDirection;
+rndr::Vector4r g_LightColor;
 
 void Init();
 void InitRenderPrimitives();
@@ -270,7 +274,8 @@ void InitRenderPrimitives()
         auto& CubeNormals = g_CubeMesh->GetNormals();
         for (int i = 0; i < CubePositions.Size; i++)
         {
-            Vertices.push_back(InVertex{CubePositions[i], CubeTexCoords[i], CubeNormals[i]});
+            rndr::Normal3r Normal = CubeNormals[i];
+            Vertices.push_back(InVertex{CubePositions[i], CubeTexCoords[i], Normal});
         }
 
         rndr::BufferProperties VertexBufferProps;
@@ -414,8 +419,8 @@ void Update(float DeltaSeconds)
         g_MeshRotation.Roll += g_MeshRotationState.X * RotationSpeed * DeltaSeconds;
         g_MeshRotation.Yaw += g_MeshRotationState.Y * RotationSpeed * DeltaSeconds;
         InInstance Instance;
-        Instance.FromModelToWorld = math::Translate(rndr::Vector3r(0, 0, 20)) * math::Scale(5, 5, 5) * math::Rotate(g_MeshRotation);
-        Instance.FromWorldToModel = Instance.FromModelToWorld.GetInverse();
+        Instance.FromModelToWorld = math::Translate(rndr::Vector3r(0, 0, 20)) * math::Scale(2, 2, 2) * math::Rotate(g_MeshRotation);
+        Instance.FromWorldToModel = math::Transpose((math::Transform)Instance.FromModelToWorld.GetInverse());
         Instance.FromModelToWorld = math::Transpose(Instance.FromModelToWorld);
         Instance.FromWorldToModel = math::Transpose(Instance.FromWorldToModel);
         g_InstanceBuffer->Update((rndr::ByteSpan)&Instance);
@@ -430,7 +435,12 @@ void Update(float DeltaSeconds)
 
     // Update fragment shader constants
     {
+        g_LightColor = rndr::Colors::Pink;
+        g_LightDirection = rndr::Point3r{} - rndr::Point3r{-50, 50, 0};
+        g_LightDirection = math::Normalize(g_LightDirection);
         FragmentShaderConstants Constants;
+        Constants.LightDirection = g_LightDirection;
+        Constants.LightColor = g_LightColor.XYZ();
         g_FragmentConstantBuffer->Update((rndr::ByteSpan)&Constants);
     }
 }
