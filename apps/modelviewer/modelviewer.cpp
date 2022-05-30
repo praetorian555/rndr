@@ -441,6 +441,7 @@ void Update(float DeltaSeconds)
         FragmentShaderConstants Constants;
         Constants.LightDirection = g_LightDirection;
         Constants.LightColor = g_LightColor.XYZ();
+        Constants.AmbientStrength = 0.01f;
         g_FragmentConstantBuffer->Update((rndr::ByteSpan)&Constants);
     }
 }
