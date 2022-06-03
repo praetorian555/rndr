@@ -32,12 +32,12 @@ cbuffer Constants
 OutVertex MaterialVertexShader(InVertex In)
 {
     matrix FromModelToWorld = float4x4(In.RowX, In.RowY, In.RowZ, In.RowW);
-    matrix FromWorldToModel = float4x4(In.InvRowX, In.InvRowY, In.InvRowZ, In.InvRowW);
+    matrix NormalTransform = float4x4(In.InvRowX, In.InvRowY, In.InvRowZ, In.InvRowW);
 
     OutVertex Out;
     Out.Position = mul(float4(In.Position, 1.0f), FromModelToWorld);
     Out.Position = mul(Out.Position, FromWorldToNDC);
-    Out.Normal = mul(float4(In.Normal, 1.0f), FromWorldToModel);
+    Out.Normal = mul(In.Normal, (float3x3) NormalTransform);
     Out.Normal = normalize(Out.Normal);
     Out.TexCoords = In.TexCoords;
 
