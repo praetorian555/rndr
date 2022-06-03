@@ -20,6 +20,7 @@ struct InVertex
 struct OutVertex
 {
     float4 Position : SV_POSITION;
+    float3 PositionWorld : POSITION;
     float3 Normal : NORMAL;
     float2 TexCoords : TEXCOORD;
 };
@@ -36,6 +37,7 @@ OutVertex MaterialVertexShader(InVertex In)
 
     OutVertex Out;
     Out.Position = mul(float4(In.Position, 1.0f), FromModelToWorld);
+    Out.PositionWorld = float3(Out.Position.x, Out.Position.y, Out.Position.z);
     Out.Position = mul(Out.Position, FromWorldToNDC);
     Out.Normal = mul(In.Normal, (float3x3) NormalTransform);
     Out.Normal = normalize(Out.Normal);

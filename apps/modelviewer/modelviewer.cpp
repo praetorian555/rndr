@@ -9,10 +9,13 @@ RNDR_ALIGN(16) struct VertexShaderConstants
 
 RNDR_ALIGN(16) struct FragmentShaderConstants
 {
-    rndr::Vector3r LightDirection;
+    rndr::Point3r ViewerPosition;
     float Padding1 = 0;
+    rndr::Vector3r LightDirection;
+    float Padding2 = 0;
     rndr::Vector3r LightColor;
     float AmbientStrength = 0.1;
+    float Shininess = 32;
 };
 
 struct InInstance
@@ -439,9 +442,11 @@ void Update(float DeltaSeconds)
         g_LightDirection = rndr::Point3r{} - rndr::Point3r{-50, 50, 0};
         g_LightDirection = math::Normalize(g_LightDirection);
         FragmentShaderConstants Constants;
+        Constants.ViewerPosition = rndr::Point3r{};
         Constants.LightDirection = g_LightDirection;
         Constants.LightColor = g_LightColor.XYZ();
         Constants.AmbientStrength = 0.01f;
+        Constants.Shininess = 64;
         g_FragmentConstantBuffer->Update((rndr::ByteSpan)&Constants);
     }
 }
