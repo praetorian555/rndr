@@ -24,6 +24,8 @@ struct InInstance
     math::Transform FromWorldToModel;
 };
 
+std::string g_ModelPath;
+
 rndr::RndrApp* g_App = nullptr;
 rndr::GraphicsContext* g_Context = nullptr;
 rndr::FirstPersonCamera* g_Camera = nullptr;
@@ -46,7 +48,7 @@ rndr::Image* g_NormalImage = nullptr;
 rndr::Image* g_SpecularImage = nullptr;
 rndr::Sampler* g_Sampler = nullptr;
 
-rndr::Mesh* g_CubeMesh = nullptr;
+rndr::Mesh* g_Mesh = nullptr;
 math::Rotator g_MeshRotation;
 rndr::Vector3r g_MeshRotationState;
 
@@ -65,8 +67,17 @@ void Present(bool bVSync);
 void RotateAroundX(rndr::InputPrimitive Primitive, rndr::InputTrigger Trigger, real Value);
 void RotateAroundY(rndr::InputPrimitive Primitive, rndr::InputTrigger Trigger, real Value);
 
-int main()
+int main(int argc, char** argv)
 {
+    if (argc < 2)
+    {
+        g_ModelPath = RNDR_ASSET_DIR "/models/cube_left.obj";
+    }
+    else
+    {
+        g_ModelPath = argv[1];
+    }
+
     Init();
     g_App->Run();
     CleanUp();
@@ -269,13 +280,13 @@ void InitRenderPrimitives()
             rndr::Vector3r Bitangent;
         };
 
-        std::string CubeObjPath = RNDR_ASSET_DIR "/models/cube.obj";
-        g_CubeMesh = rndr::ObjParser::Parse(CubeObjPath);
+        RNDR_LOG_INFO("Loding model from file %s", g_ModelPath.c_str());
+        g_Mesh = rndr::ObjParser::Parse(g_ModelPath);
 
         std::vector<InVertex> Vertices;
-        auto& CubePositions = g_CubeMesh->GetPositions();
-        auto& CubeTexCoords = g_CubeMesh->GetTexCoords();
-        auto& CubeNormals = g_CubeMesh->GetNormals();
+        auto& CubePositions = g_Mesh->GetPositions();
+        auto& CubeTexCoords = g_Mesh->GetTexCoords();
+        auto& CubeNormals = g_Mesh->GetNormals();
         for (int i = 0; i < CubePositions.Size; i++)
         {
             rndr::Normal3r Normal = CubeNormals[i];
@@ -307,9 +318,9 @@ void InitRenderPrimitives()
         IndexBufferProps.BindFlag = rndr::BufferBindFlag::Index;
         IndexBufferProps.CPUAccess = rndr::CPUAccess::None;
         IndexBufferProps.Usage = rndr::Usage::GPUReadWrite;
-        IndexBufferProps.Size = g_CubeMesh->GetIndices().Size * sizeof(int);
+        IndexBufferProps.Size = g_Mesh->GetIndices().Size * sizeof(int);
         IndexBufferProps.Stride = sizeof(int);
-        g_IndexBuffer = g_Context->CreateBuffer(IndexBufferProps, rndr::ByteSpan(g_CubeMesh->GetIndices()));
+        g_IndexBuffer = g_Context->CreateBuffer(IndexBufferProps, rndr::ByteSpan(g_Mesh->GetIndices()));
     }
 
     {
@@ -385,7 +396,7 @@ void InitRenderPrimitives()
 void CleanUp()
 {
     delete g_Camera;
-    delete g_CubeMesh;
+    delete g_Mesh;
 
     g_Context->DestroyShader(g_VertexShader);
     g_Context->DestroyShader(g_FragmentShader);
@@ -479,7 +490,7 @@ void Render(float DeltaSeconds)
 
     g_Context->BindFrameBuffer(g_Context->GetWindowFrameBuffer());
 
-    g_Context->DrawIndexed(rndr::PrimitiveTopology::TriangleList, g_CubeMesh->GetIndices().Size);
+    g_Context->DrawIndexed(rndr::PrimitiveTopology::TriangleList, g_Mesh->GetIndices().Size);
 }
 
 void Present(bool bVSync)
