@@ -12,10 +12,11 @@
 #include "rndr/core/log.h"
 
 static std::map<uint32_t, rndr::InputPrimitive> g_PrimitiveMapping = {
-    {0x41, rndr::InputPrimitive::Keyboard_A},     {0x57, rndr::InputPrimitive::Keyboard_W},    {0x53, rndr::InputPrimitive::Keyboard_S},
-    {0x45, rndr::InputPrimitive::Keyboard_E},     {0x51, rndr::InputPrimitive::Keyboard_Q},    {0x44, rndr::InputPrimitive::Keyboard_D},
-    {0x1B, rndr::InputPrimitive::Keyboard_Esc},   {0x25, rndr::InputPrimitive::Keyboard_Left}, {0x26, rndr::InputPrimitive::Keyboard_Up},
-    {0x27, rndr::InputPrimitive::Keyboard_Right}, {0x28, rndr::InputPrimitive::Keyboard_Down}};
+    {0x41, rndr::InputPrimitive::Keyboard_A},  {0x57, rndr::InputPrimitive::Keyboard_W},     {0x53, rndr::InputPrimitive::Keyboard_S},
+    {0x45, rndr::InputPrimitive::Keyboard_E},  {0x51, rndr::InputPrimitive::Keyboard_Q},     {0x44, rndr::InputPrimitive::Keyboard_D},
+    {0x49, rndr::InputPrimitive::Keyboard_I},  {0x4A, rndr::InputPrimitive::Keyboard_J},     {0x4B, rndr::InputPrimitive::Keyboard_K},
+    {0x4C, rndr::InputPrimitive::Keyboard_L},  {0x1B, rndr::InputPrimitive::Keyboard_Esc},   {0x25, rndr::InputPrimitive::Keyboard_Left},
+    {0x26, rndr::InputPrimitive::Keyboard_Up}, {0x27, rndr::InputPrimitive::Keyboard_Right}, {0x28, rndr::InputPrimitive::Keyboard_Down}};
 
 // Defining window deleages
 
