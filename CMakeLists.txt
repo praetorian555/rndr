@@ -12,12 +12,13 @@ include(cmake/utils.cmake)
 # Library options
 option(RNDR_UNITY "Enable unity builds" OFF)
 option(RNDR_SANITIZER "Enable address sanitizer" OFF)
+option(RNDR_IMGUI "Include imgui support in the library build" ON)
 option(RNDR_DX11 "Use DX11 API" ON)
 option(RNDR_HANDMADE "Use handmade software rendering pipeline" OFF)
-option(RNDR_IMGUI "Include imgui support in the library build" ON)
 
 message(STATUS "RNDR_UNITY ${RNDR_UNITY}")
 message(STATUS "RNDR_SANITIZER ${RNDR_SANITIZER}")
+message(STATUS "RNDR_IMGUI ${RNDR_IMGUI}")
 message(STATUS "RNDR_DX11 ${RNDR_DX11}")
 message(STATUS "RNDR_HANDMADE ${RNDR_HANDMADE}")
 

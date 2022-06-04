@@ -23,18 +23,13 @@ endif()
 # Include imgui
 if (RNDR_IMGUI)
 
-add_library(imgui
-			imgui/imconfig.h
-			imgui/imgui_demo.cpp
-            imgui/imgui_draw.cpp
-			imgui/imgui_internal.h
-			imgui/imgui_tables.cpp
-			imgui/imgui_widgets.cpp
-			imgui/imgui.cpp
-			imgui/imgui.h
-			imgui/imstb_rectpack.h
-			imgui/imstb_textedit.h
-			imgui/imstb_truetype.h)
+set(IMGUI_SOURCE_LIST imgui/imgui_demo.cpp imgui/imgui_draw.cpp imgui/imgui_tables.cpp
+	imgui/imgui_widgets.cpp imgui/imgui.cpp)
+
+set(IMGUI_HEADER_LIST imgui/imconfig.h imgui/imgui_internal.h imgui/imgui.h imgui/imstb_rectpack.h
+	imgui/imstb_textedit.h imgui/imstb_truetype.h)
+
+add_library(imgui ${IMGUI_SOURCE_LIST} ${IMGUI_HEADER_LIST})
 
 # Enable unity build
 if (RNDR_UNITY)
@@ -48,6 +43,24 @@ target_compile_features(imgui PUBLIC cxx_std_17)
 target_compile_options(imgui PRIVATE $<$<CXX_COMPILER_ID:MSVC>:/MP>)
 if (RNDR_SANITIZER)
   target_compile_options(imgui PRIVATE $<$<CXX_COMPILER_ID:MSVC>:/fsanitize=address>)
+endif()
+
+# IDEs should put the headers in a nice place
+set_target_properties(imgui PROPERTIES FOLDER Extern)
+source_group(
+  TREE "${PROJECT_SOURCE_DIR}/extern/imgui"
+  PREFIX "API"
+  FILES ${IMGUI_HEADER_LIST})
+source_group(
+  TREE "${PROJECT_SOURCE_DIR}/extern/imgui"
+  PREFIX "Implementation"
+  FILES ${IMGUI_SOURCE_LIST})
+if (RNDR_UNITY)
+	file(GLOB_RECURSE IMGUI_UNITY_LIST CONFIGURE_DEPENDS "${PROJECT_BINARY_DIR}/extern/CMakeFiles/*.cxx")
+  source_group(
+    TREE "${PROJECT_BINARY_DIR}/extern/CMakeFiles/imgui.dir/Unity"
+    PREFIX "Unity"
+    FILES ${IMGUI_UNITY_LIST})
 endif()
 
 endif()
