@@ -26,7 +26,7 @@ struct InInstance
 
 rndr::RndrApp* g_App = nullptr;
 rndr::GraphicsContext* g_Context = nullptr;
-rndr::ProjectionCamera* g_Camera = nullptr;
+rndr::FirstPersonCamera* g_Camera = nullptr;
 
 rndr::Shader* g_VertexShader = nullptr;
 rndr::Shader* g_FragmentShader = nullptr;
@@ -86,28 +86,29 @@ void Init()
     CameraProps.ScreenHeight = g_App->GetWindow()->GetHeight();
     CameraProps.Near = 0.01f;
     CameraProps.Far = 100.0f;
-    g_Camera = new rndr::ProjectionCamera(math::Translate(rndr::Vector3r(0, 0, 0)), CameraProps);
+    rndr::ProjectionCamera* ProjCamera = new rndr::ProjectionCamera(math::Transform{}, CameraProps);
+    g_Camera = new rndr::FirstPersonCamera(ProjCamera, rndr::Point3r{0, 0, -20}, 10);
 
     rndr::WindowDelegates::OnResize.Add(
         [](rndr::Window* Window, int Width, int Height)
         {
             if (g_App->GetWindow() == Window)
             {
-                g_Camera->SetScreenSize(Width, Height);
+                g_Camera->GetProjectionCamera()->SetScreenSize(Width, Height);
             }
         });
 
     rndr::InputContext* InputContext = g_App->GetInputContext();
     InputContext->CreateMapping("RotateAroundY", RotateAroundY);
-    InputContext->AddBinding("RotateAroundY", rndr::InputPrimitive::Keyboard_A, rndr::InputTrigger::ButtonDown, 1);
-    InputContext->AddBinding("RotateAroundY", rndr::InputPrimitive::Keyboard_D, rndr::InputTrigger::ButtonDown, -1);
-    InputContext->AddBinding("RotateAroundY", rndr::InputPrimitive::Keyboard_A, rndr::InputTrigger::ButtonUp, 0);
-    InputContext->AddBinding("RotateAroundY", rndr::InputPrimitive::Keyboard_D, rndr::InputTrigger::ButtonUp, 0);
+    InputContext->AddBinding("RotateAroundY", rndr::InputPrimitive::Keyboard_J, rndr::InputTrigger::ButtonDown, 1);
+    InputContext->AddBinding("RotateAroundY", rndr::InputPrimitive::Keyboard_L, rndr::InputTrigger::ButtonDown, -1);
+    InputContext->AddBinding("RotateAroundY", rndr::InputPrimitive::Keyboard_J, rndr::InputTrigger::ButtonUp, 0);
+    InputContext->AddBinding("RotateAroundY", rndr::InputPrimitive::Keyboard_L, rndr::InputTrigger::ButtonUp, 0);
     InputContext->CreateMapping("RotateAroundX", RotateAroundX);
-    InputContext->AddBinding("RotateAroundX", rndr::InputPrimitive::Keyboard_W, rndr::InputTrigger::ButtonDown, 1);
-    InputContext->AddBinding("RotateAroundX", rndr::InputPrimitive::Keyboard_S, rndr::InputTrigger::ButtonDown, -1);
-    InputContext->AddBinding("RotateAroundX", rndr::InputPrimitive::Keyboard_W, rndr::InputTrigger::ButtonUp, 0);
-    InputContext->AddBinding("RotateAroundX", rndr::InputPrimitive::Keyboard_S, rndr::InputTrigger::ButtonUp, 0);
+    InputContext->AddBinding("RotateAroundX", rndr::InputPrimitive::Keyboard_I, rndr::InputTrigger::ButtonDown, 1);
+    InputContext->AddBinding("RotateAroundX", rndr::InputPrimitive::Keyboard_K, rndr::InputTrigger::ButtonDown, -1);
+    InputContext->AddBinding("RotateAroundX", rndr::InputPrimitive::Keyboard_I, rndr::InputTrigger::ButtonUp, 0);
+    InputContext->AddBinding("RotateAroundX", rndr::InputPrimitive::Keyboard_K, rndr::InputTrigger::ButtonUp, 0);
 
     InitRenderPrimitives();
 }
@@ -313,7 +314,7 @@ void InitRenderPrimitives()
 
     {
         VertexShaderConstants Constants;
-        Constants.FromWorldToNDC = math::Transpose(g_Camera->FromWorldToNDC());
+        Constants.FromWorldToNDC = math::Transpose(g_Camera->GetProjectionCamera()->FromWorldToNDC());
         rndr::BufferProperties ConstBufferProps;
         ConstBufferProps.BindFlag = rndr::BufferBindFlag::Constant;
         ConstBufferProps.CPUAccess = rndr::CPUAccess::None;
@@ -422,7 +423,7 @@ void Update(float DeltaSeconds)
         g_MeshRotation.Roll += g_MeshRotationState.X * RotationSpeed * DeltaSeconds;
         g_MeshRotation.Yaw += g_MeshRotationState.Y * RotationSpeed * DeltaSeconds;
         InInstance Instance;
-        Instance.FromModelToWorld = math::Translate(rndr::Vector3r(0, 0, 20)) * math::Scale(2, 2, 2) * math::Rotate(g_MeshRotation);
+        Instance.FromModelToWorld = math::Scale(2, 2, 2) * math::Rotate(g_MeshRotation);
         Instance.FromWorldToModel = math::Transpose((math::Transform)Instance.FromModelToWorld.GetInverse());
         Instance.FromModelToWorld = math::Transpose(Instance.FromModelToWorld);
         Instance.FromWorldToModel = math::Transpose(Instance.FromWorldToModel);
@@ -432,7 +433,7 @@ void Update(float DeltaSeconds)
     // Update vertex shader constants
     {
         VertexShaderConstants Constants;
-        Constants.FromWorldToNDC = math::Transpose(g_Camera->FromWorldToNDC());
+        Constants.FromWorldToNDC = math::Transpose(g_Camera->GetProjectionCamera()->FromWorldToNDC());
         g_VertexConstantBuffer->Update((rndr::ByteSpan)&Constants);
     }
 
@@ -449,6 +450,8 @@ void Update(float DeltaSeconds)
         Constants.Shininess = 64;
         g_FragmentConstantBuffer->Update((rndr::ByteSpan)&Constants);
     }
+
+    g_Camera->Update(DeltaSeconds);
 }
 
 void Render(float DeltaSeconds)
