@@ -37,9 +37,9 @@ rndr::RasterizerState* g_RasterizerState = nullptr;
 rndr::DepthStencilState* g_DepthStencilState = nullptr;
 rndr::BlendState* g_BlendState = nullptr;
 
-rndr::Buffer* g_VertexBuffer = nullptr;
+std::vector<rndr::Buffer*> g_VertexBuffers;
+std::vector<rndr::Buffer*> g_IndexBuffers;
 rndr::Buffer* g_InstanceBuffer = nullptr;
-rndr::Buffer* g_IndexBuffer = nullptr;
 rndr::Buffer* g_VertexConstantBuffer = nullptr;
 rndr::Buffer* g_FragmentConstantBuffer = nullptr;
 
@@ -48,7 +48,7 @@ rndr::Image* g_NormalImage = nullptr;
 rndr::Image* g_SpecularImage = nullptr;
 rndr::Sampler* g_Sampler = nullptr;
 
-rndr::Mesh* g_Mesh = nullptr;
+rndr::Model* g_Model = nullptr;
 math::Rotator g_MeshRotation;
 rndr::Vector3r g_MeshRotationState;
 
@@ -281,25 +281,31 @@ void InitRenderPrimitives()
         };
 
         RNDR_LOG_INFO("Loding model from file %s", g_ModelPath.c_str());
-        g_Mesh = rndr::ObjParser::Parse(g_ModelPath);
+        g_Model = rndr::ObjParser::Parse(g_ModelPath);
 
-        std::vector<InVertex> Vertices;
-        auto& CubePositions = g_Mesh->GetPositions();
-        auto& CubeTexCoords = g_Mesh->GetTexCoords();
-        auto& CubeNormals = g_Mesh->GetNormals();
-        for (int i = 0; i < CubePositions.Size; i++)
+        for (int i = 0; i < g_Model->GetMeshes().Size; i++)
         {
-            rndr::Normal3r Normal = CubeNormals[i];
-            Vertices.push_back(InVertex{CubePositions[i], CubeTexCoords[i], Normal});
-        }
+            rndr::Mesh* Mesh = g_Model->GetMeshes()[i];
 
-        rndr::BufferProperties VertexBufferProps;
-        VertexBufferProps.BindFlag = rndr::BufferBindFlag::Vertex;
-        VertexBufferProps.CPUAccess = rndr::CPUAccess::None;
-        VertexBufferProps.Usage = rndr::Usage::GPUReadWrite;
-        VertexBufferProps.Size = Vertices.size() * sizeof(InVertex);
-        VertexBufferProps.Stride = sizeof(InVertex);
-        g_VertexBuffer = g_Context->CreateBuffer(VertexBufferProps, (rndr::ByteSpan)Vertices);
+            std::vector<InVertex> Vertices;
+            auto& CubePositions = Mesh->GetPositions();
+            auto& CubeTexCoords = Mesh->GetTexCoords();
+            auto& CubeNormals = Mesh->GetNormals();
+            for (int i = 0; i < CubePositions.Size; i++)
+            {
+                rndr::Normal3r Normal = CubeNormals[i];
+                Vertices.push_back(InVertex{CubePositions[i], CubeTexCoords[i], Normal});
+            }
+
+            rndr::BufferProperties VertexBufferProps;
+            VertexBufferProps.BindFlag = rndr::BufferBindFlag::Vertex;
+            VertexBufferProps.CPUAccess = rndr::CPUAccess::None;
+            VertexBufferProps.Usage = rndr::Usage::GPUReadWrite;
+            VertexBufferProps.Size = Vertices.size() * sizeof(InVertex);
+            VertexBufferProps.Stride = sizeof(InVertex);
+            rndr::Buffer* VertexBuffer = g_Context->CreateBuffer(VertexBufferProps, (rndr::ByteSpan)Vertices);
+            g_VertexBuffers.push_back(VertexBuffer);
+        }
     }
 
     {
@@ -313,14 +319,17 @@ void InitRenderPrimitives()
         g_InstanceBuffer = g_Context->CreateBuffer(InstanceBufferProps, (rndr::ByteSpan)&Instance);
     }
 
+    for (int i = 0; i < g_Model->GetMeshes().Size; i++)
     {
+        rndr::Mesh* Mesh = g_Model->GetMeshes()[i];
         rndr::BufferProperties IndexBufferProps;
         IndexBufferProps.BindFlag = rndr::BufferBindFlag::Index;
         IndexBufferProps.CPUAccess = rndr::CPUAccess::None;
         IndexBufferProps.Usage = rndr::Usage::GPUReadWrite;
-        IndexBufferProps.Size = g_Mesh->GetIndices().Size * sizeof(int);
+        IndexBufferProps.Size = Mesh->GetIndices().Size * sizeof(int);
         IndexBufferProps.Stride = sizeof(int);
-        g_IndexBuffer = g_Context->CreateBuffer(IndexBufferProps, rndr::ByteSpan(g_Mesh->GetIndices()));
+        rndr::Buffer* IndexBuffer = g_Context->CreateBuffer(IndexBufferProps, rndr::ByteSpan(Mesh->GetIndices()));
+        g_IndexBuffers.push_back(IndexBuffer);
     }
 
     {
@@ -396,7 +405,7 @@ void InitRenderPrimitives()
 void CleanUp()
 {
     delete g_Camera;
-    delete g_Mesh;
+    delete g_Model;
 
     g_Context->DestroyShader(g_VertexShader);
     g_Context->DestroyShader(g_FragmentShader);
@@ -405,9 +414,15 @@ void CleanUp()
     g_Context->DestroyDepthStencilState(g_DepthStencilState);
     g_Context->DestroyBlendState(g_BlendState);
 
-    g_Context->DestroyBuffer(g_VertexBuffer);
+    for (rndr::Buffer* Buff : g_VertexBuffers)
+    {
+        g_Context->DestroyBuffer(Buff);
+    }
     g_Context->DestroyBuffer(g_InstanceBuffer);
-    g_Context->DestroyBuffer(g_IndexBuffer);
+    for (rndr::Buffer* Buff : g_IndexBuffers)
+    {
+        g_Context->DestroyBuffer(Buff);
+    }
     g_Context->DestroyBuffer(g_VertexConstantBuffer);
     g_Context->DestroyBuffer(g_FragmentConstantBuffer);
 
@@ -477,9 +492,7 @@ void Render(float DeltaSeconds)
     g_Context->BindDepthStencilState(g_DepthStencilState);
     g_Context->BindBlendState(g_BlendState);
 
-    g_Context->BindBuffer(g_VertexBuffer, 0);
     g_Context->BindBuffer(g_InstanceBuffer, 1);
-    g_Context->BindBuffer(g_IndexBuffer, 0);
 
     g_Context->BindBuffer(g_VertexConstantBuffer, 0, g_VertexShader);
     g_Context->BindBuffer(g_FragmentConstantBuffer, 0, g_FragmentShader);
@@ -490,7 +503,13 @@ void Render(float DeltaSeconds)
 
     g_Context->BindFrameBuffer(g_Context->GetWindowFrameBuffer());
 
-    g_Context->DrawIndexed(rndr::PrimitiveTopology::TriangleList, g_Mesh->GetIndices().Size);
+    for (int i = 0; i < g_VertexBuffers.size(); i++)
+    {
+        g_Context->BindBuffer(g_VertexBuffers[i], 0);
+        g_Context->BindBuffer(g_IndexBuffers[i], 0);
+        rndr::Mesh* Mesh = g_Model->GetMeshes()[i];
+        g_Context->DrawIndexed(rndr::PrimitiveTopology::TriangleList, Mesh->GetIndices().Size);
+    }
 }
 
 void Present(bool bVSync)

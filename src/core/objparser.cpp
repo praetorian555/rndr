@@ -3,10 +3,12 @@
 #include <filesystem>
 
 #include "rndr/core/log.h"
+#include "rndr/core/material.h"
 #include "rndr/core/math.h"
 #include "rndr/core/mesh.h"
+#include "rndr/core/model.h"
 
-rndr::Mesh* rndr::ObjParser::Parse(const std::string& FilePath)
+rndr::Model* rndr::ObjParser::Parse(const std::string& FilePath)
 {
     if (!std::filesystem::exists(FilePath))
     {
@@ -39,9 +41,9 @@ rndr::Mesh* rndr::ObjParser::Parse(const std::string& FilePath)
     assert(BytesRead == FileSize);
     fclose(FileHandle);
 
-    Mesh* Mesh = Parse(FileContents);
+    Model* Mod = Parse(FileContents);
     delete[] FileContents.Data;
-    return Mesh;
+    return Mod;
 }
 
 static int GoToNextLine(const char* Data, int StartPosition)
@@ -57,7 +59,7 @@ static int ScanString(const char* StreamPtr, char* DstBuffer, int MaxBufferSize)
     memset(DstBuffer, 0, MaxBufferSize);
     for (int i = 0; i < MaxBufferSize - 1; i++)
     {
-        char Ch = *StreamPtr;
+        char Ch = *StreamPtr++;
         if (Ch != '\r' && Ch != '\n' && Ch != ' ')
         {
             DstBuffer[i] = Ch;
@@ -66,25 +68,49 @@ static int ScanString(const char* StreamPtr, char* DstBuffer, int MaxBufferSize)
     return 1;
 }
 
-rndr::Mesh* rndr::ObjParser::Parse(Span<char> Data)
+struct ObjFace
+{
+    int Positions[3];
+    int TexCoords[3];
+    int Normals[3];
+};
+
+static rndr::Mesh* ConstructMesh(const std::string& Name,
+                                 const std::vector<rndr::Point3r>& Positions,
+                                 const std::vector<rndr::Vector2r>& TexCoords,
+                                 const std::vector<rndr::Normal3r>& Normals,
+                                 const std::vector<ObjFace>& Faces);
+
+static float ReadFloat(const char* Data, int& Position)
+{
+    char* EndPtr;
+    float Value = strtof(Data, &EndPtr);
+    Position += EndPtr - Data;
+    return Value;
+}
+
+static int ReadInt(const char* Data, int& Position)
+{
+    char* EndPtr;
+    int Value = strtol(Data, &EndPtr, 10);
+    Position += EndPtr - Data;
+    return Value;
+}
+
+rndr::Model* rndr::ObjParser::Parse(Span<char> Data)
 {
     std::string MeshName;
-    constexpr int DefaultSize = 100;
-    std::vector<Point3r> VertexPositions;
-    std::vector<Vector2r> VertexTexCoords;
-    std::vector<Normal3r> VertexNormals;
-    VertexPositions.reserve(DefaultSize);
-    VertexTexCoords.reserve(DefaultSize);
-    VertexNormals.reserve(DefaultSize);
-
-    struct ObjFace
-    {
-        int Positions[3];
-        int TexCoords[3];
-        int Normals[3];
-    };
+    constexpr int DefaultSize = 50'000;
+    std::vector<Point3r> Positions;
+    std::vector<Vector2r> TexCoords;
+    std::vector<Normal3r> Normals;
     std::vector<ObjFace> Faces;
+    Positions.reserve(DefaultSize);
+    TexCoords.reserve(DefaultSize);
+    Normals.reserve(DefaultSize);
     Faces.reserve(DefaultSize);
+
+    Model* Mod = new Model();
 
     for (int Position = 0; Position < Data.Size;)
     {
@@ -97,10 +123,10 @@ rndr::Mesh* rndr::ObjParser::Parse(Span<char> Data)
         else if (strncmp(Data.Data + Position, "vt ", 3) == 0)
         {
             Position += 3;
-            Vector2r TexCoords;
-            int Result = sscanf_s(Data.Data + Position, "%f %f", &TexCoords.X, &TexCoords.Y);
-            assert(Result == 2);
-            VertexTexCoords.push_back(TexCoords);
+            Vector2r Value;
+            Value.X = ReadFloat(Data.Data + Position, Position);
+            Value.Y = ReadFloat(Data.Data + Position, Position);
+            TexCoords.push_back(Value);
             Position = GoToNextLine(Data.Data, Position);
         }
         // Vertex normal
@@ -108,9 +134,10 @@ rndr::Mesh* rndr::ObjParser::Parse(Span<char> Data)
         {
             Position += 3;
             Normal3r Normal;
-            int Result = sscanf_s(Data.Data + Position, "%f %f %f", &Normal.X, &Normal.Y, &Normal.Z);
-            assert(Result == 3);
-            VertexNormals.push_back(Normal);
+            Normal.X = ReadFloat(Data.Data + Position, Position);
+            Normal.Y = ReadFloat(Data.Data + Position, Position);
+            Normal.Z = ReadFloat(Data.Data + Position, Position);
+            Normals.push_back(Normal);
             Position = GoToNextLine(Data.Data, Position);
         }
         // Vertex position
@@ -118,9 +145,10 @@ rndr::Mesh* rndr::ObjParser::Parse(Span<char> Data)
         {
             Position += 2;
             Point3r VertexPosition;
-            int Result = sscanf_s(Data.Data + Position, "%f %f %f", &VertexPosition.X, &VertexPosition.Y, &VertexPosition.Z);
-            assert(Result == 3);
-            VertexPositions.push_back(VertexPosition);
+            VertexPosition.X = ReadFloat(Data.Data + Position, Position);
+            VertexPosition.Y = ReadFloat(Data.Data + Position, Position);
+            VertexPosition.Z = ReadFloat(Data.Data + Position, Position);
+            Positions.push_back(VertexPosition);
             Position = GoToNextLine(Data.Data, Position);
         }
         // Face
@@ -128,10 +156,21 @@ rndr::Mesh* rndr::ObjParser::Parse(Span<char> Data)
         {
             Position += 2;
             ObjFace Face;
-            int Result = sscanf_s(Data.Data + Position, "%d/%d/%d %d/%d/%d %d/%d/%d", &Face.Positions[0], &Face.TexCoords[0],
-                                  &Face.Normals[0], &Face.Positions[1], &Face.TexCoords[1], &Face.Normals[1], &Face.Positions[2],
-                                  &Face.TexCoords[2], &Face.Normals[2]);
-            assert(Result == 9);
+            Face.Positions[0] = ReadInt(Data.Data + Position, Position);
+            Position++;
+            Face.TexCoords[0] = ReadInt(Data.Data + Position, Position);
+            Position++;
+            Face.Normals[0] = ReadInt(Data.Data + Position, Position);
+            Face.Positions[1] = ReadInt(Data.Data + Position, Position);
+            Position++;
+            Face.TexCoords[1] = ReadInt(Data.Data + Position, Position);
+            Position++;
+            Face.Normals[1] = ReadInt(Data.Data + Position, Position);
+            Face.Positions[2] = ReadInt(Data.Data + Position, Position);
+            Position++;
+            Face.TexCoords[2] = ReadInt(Data.Data + Position, Position);
+            Position++;
+            Face.Normals[2] = ReadInt(Data.Data + Position, Position);
             Faces.push_back(Face);
             Position = GoToNextLine(Data.Data, Position);
         }
@@ -143,6 +182,17 @@ rndr::Mesh* rndr::ObjParser::Parse(Span<char> Data)
         // Mesh name
         else if (strncmp(Data.Data + Position, "o ", 2) == 0)
         {
+            if (!MeshName.empty())
+            {
+                Mesh* Mesh = ConstructMesh(MeshName, Positions, TexCoords, Normals, Faces);
+                Mod->AddMesh(Mesh);
+                MeshName.clear();
+                // Positions.clear();
+                // TexCoords.clear();
+                // Normals.clear();
+                // Faces.clear();
+            }
+
             Position += 2;
             char Name[128] = {};
             int Result = ScanString(Data.Data + Position, Name, 128);
@@ -165,24 +215,41 @@ rndr::Mesh* rndr::ObjParser::Parse(Span<char> Data)
         }
     }
 
+    if (!MeshName.empty())
+    {
+        Mesh* Mesh = ConstructMesh(MeshName, Positions, TexCoords, Normals, Faces);
+        Mod->AddMesh(Mesh);
+    }
+
+    return Mod;
+}
+
+static rndr::Mesh* ConstructMesh(const std::string& Name,
+                                 const std::vector<rndr::Point3r>& Positions,
+                                 const std::vector<rndr::Vector2r>& TexCoords,
+                                 const std::vector<rndr::Normal3r>& Normals,
+                                 const std::vector<ObjFace>& Faces)
+{
     const int VertexCount = Faces.size() * 3;
-    Span<Point3r> Positions(new Point3r[VertexCount], VertexCount);
-    Span<Vector2r> TexCoords(new Vector2r[VertexCount], VertexCount);
-    Span<Normal3r> Normals(new Normal3r[VertexCount], VertexCount);
-    Span<int> Indices(new int[VertexCount], VertexCount);
+    rndr::Span<rndr::Point3r> MeshPositions(new rndr::Point3r[VertexCount], VertexCount);
+    rndr::Span<rndr::Vector2r> MeshTexCoords(new rndr::Vector2r[VertexCount], VertexCount);
+    rndr::Span<rndr::Normal3r> MeshNormals(new rndr::Normal3r[VertexCount], VertexCount);
+    rndr::Span<int> MeshIndices(new int[VertexCount], VertexCount);
+    rndr::Span<rndr::Vector3r> MeshTangents;
+    rndr::Span<rndr::Vector3r> MeshBitangents;
 
     for (int i = 0; i < Faces.size(); i++)
     {
-        ObjFace& F = Faces[i];
+        const ObjFace& F = Faces[i];
         for (int j = 0; j < 3; j++)
         {
-            Positions[3 * i + j] = VertexPositions[F.Positions[j] - 1];
-            TexCoords[3 * i + j] = VertexTexCoords[F.TexCoords[j] - 1];
-            Normals[3 * i + j] = VertexNormals[F.Normals[j] - 1];
-            Indices[3 * i + j] = 3 * i + j;
+            MeshPositions[3 * i + j] = Positions[F.Positions[j] - 1];
+            MeshTexCoords[3 * i + j] = TexCoords[F.TexCoords[j] - 1];
+            MeshNormals[3 * i + j] = Normals[F.Normals[j] - 1];
+            MeshIndices[3 * i + j] = 3 * i + j;
         }
     }
 
-    Mesh* M = new Mesh(MeshName, Positions, TexCoords, Normals, Span<Vector3r>{}, Span<Vector3r>{}, Indices);
-    return M;
+    rndr::Mesh* Mesh = new rndr::Mesh(Name, MeshPositions, MeshTexCoords, MeshNormals, MeshTangents, MeshBitangents, MeshIndices);
+    return Mesh;
 }

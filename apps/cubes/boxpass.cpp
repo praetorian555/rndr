@@ -108,7 +108,7 @@ void BoxRenderPass::Init(rndr::GraphicsContext* GraphicsContext, rndr::Projectio
     };
 
     std::string CubeObjPath = RNDR_ASSET_DIR "/models/cube.obj";
-    m_Mesh = rndr::ObjParser::Parse(CubeObjPath);
+    m_Mesh = rndr::ObjParser::Parse(CubeObjPath)->GetMeshes()[0];
 
     std::vector<InVertex> Vertices;
     for (int i = 0; i < m_Mesh->GetPositions().Size; i++)

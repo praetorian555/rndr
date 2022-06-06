@@ -7,12 +7,12 @@ namespace rndr
 {
 
 // Forward declarations
-class Mesh;
+class Model;
 
 struct ObjParser
 {
-    static Mesh* Parse(const std::string& FilePath);
-    static Mesh* Parse(Span<char> Data);
+    static Model* Parse(const std::string& FilePath);
+    static Model* Parse(Span<char> Data);
 };
 
 }  // namespace rndr
