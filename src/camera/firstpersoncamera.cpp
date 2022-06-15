@@ -1,12 +1,13 @@
 #include "rndr/camera/firstpersoncamera.h"
 
+#include "math/transform.h"
+
 #include "rndr/core/log.h"
-#include "rndr/core/math.h"
 #include "rndr/core/projectioncamera.h"
 #include "rndr/core/rndrapp.h"
 
 rndr::FirstPersonCamera::FirstPersonCamera(rndr::ProjectionCamera* ProjectionCamera,
-                                           rndr::Point3r StartingPosition,
+                                           math::Point3 StartingPosition,
                                            real MovementSpeed,
                                            real RotationSpeed)
     : m_ProjectionCamera(ProjectionCamera), m_Position(StartingPosition), m_MovementSpeed(MovementSpeed), m_RotationSpeed(RotationSpeed)
@@ -50,17 +51,17 @@ void rndr::FirstPersonCamera::Update(real DeltaSeconds)
     const real HandednessMultiplier = 1;
 #endif
 
-    m_DirectionVector = Vector3r{0, 0, -1};
+    m_DirectionVector = math::Vector3{0, 0, -1};
     m_DirectionAngles += HandednessMultiplier * m_DeltaAngles * m_RotationSpeed;
     m_DirectionVector = math::Rotate(m_DirectionAngles)(m_DirectionVector);
-    m_RightVector = math::Cross(m_DirectionVector, Vector3r{0, 1, 0});
+    m_RightVector = math::Cross(m_DirectionVector, math::Vector3{0, 1, 0});
 
     m_Position += HandednessMultiplier * m_MovementSpeed * DeltaSeconds * m_DeltaPosition.X * m_DirectionVector;
     m_Position += m_MovementSpeed * DeltaSeconds * m_DeltaPosition.Y * m_RightVector;
 
     math::Rotator R = m_DirectionAngles;
 
-    const math::Transform CameraToWorld = math::Translate((rndr::Vector3r)m_Position) * math::Rotate(R);
+    const math::Transform CameraToWorld = math::Translate((math::Vector3)m_Position) * math::Rotate(R);
     const math::Transform WorldToCamera(CameraToWorld.GetInverse());
 
     m_ProjectionCamera->SetWorldToCamera(WorldToCamera);
@@ -76,7 +77,7 @@ void rndr::FirstPersonCamera::SetProjectionCamera(rndr::ProjectionCamera* Projec
     m_ProjectionCamera = ProjectionCamera;
 }
 
-rndr::Point3r rndr::FirstPersonCamera::GetPosition() const
+math::Point3 rndr::FirstPersonCamera::GetPosition() const
 {
     return m_Position;
 }

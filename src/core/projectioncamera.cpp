@@ -1,5 +1,7 @@
 #include "rndr/core/projectioncamera.h"
 
+#include "math/projections.h"
+
 rndr::ProjectionCamera::ProjectionCamera(const math::Transform& WorldToCamera, const ProjectionCameraProperties& Props)
     : m_WorldToCamera(WorldToCamera), m_Props(Props)
 {

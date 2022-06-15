@@ -1,7 +1,8 @@
 #pragma once
 
+#include "math/transform.h"
+
 #include "rndr/core/base.h"
-#include "rndr/core/math.h"
 
 namespace rndr
 {

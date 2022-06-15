@@ -6,6 +6,8 @@
 #include <string>
 #include <vector>
 
+#include "math/point2.h"
+
 #include "rndr/core/base.h"
 #include "rndr/core/inputprimitives.h"
 #include "rndr/core/window.h"
@@ -77,7 +79,7 @@ public:
     bool IsAxis(InputPrimitive Primitive) const;
     bool IsMouseAxis(InputPrimitive Primitive) const;
 
-    rndr::Point2i GetMousePosition() const;
+    math::Point2 GetMousePosition() const;
 
 private:
     InputSystem() = default;

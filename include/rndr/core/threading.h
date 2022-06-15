@@ -7,7 +7,7 @@
 #include <thread>
 #include <vector>
 
-#include "rndr/core/math.h"
+#include "math/point2.h"
 
 #include "rndr/profiling/cputracer.h"
 
@@ -145,10 +145,10 @@ template <typename Function>
 void ParallelFor(int End, int BatchSize, Function F, int Start = 0);
 
 template <typename Function>
-void ParallelFor(const Point2i End, int BatchSize, Function F, const Point2i Start = {0, 0});
+void ParallelFor(const math::Point2 End, int BatchSize, Function F, const math::Point2 Start = {0, 0});
 
 template <typename Function>
-void ParallelFor(const Vector2i End, int BatchSize, Function F, const Vector2i Start = {0, 0});
+void ParallelFor(const math::Vector2 End, int BatchSize, Function F, const math::Vector2 Start = {0, 0});
 
 // Implementation /////////////////////////////////////////////////////////////////////////////////
 
@@ -199,7 +199,7 @@ void ParallelFor(int End, int BatchSize, Function F, int Start)
 }
 
 template <typename Function>
-void ParallelFor(const Point2i End, int BatchSize, Function F, const Point2i Start)
+void ParallelFor(const math::Point2 End, int BatchSize, Function F, const math::Point2 Start)
 {
     std::vector<TaskBaseSP> Tasks;
     for (int Y = Start.Y; Y < End.Y; Y += BatchSize)
@@ -245,7 +245,7 @@ void ParallelFor(const Point2i End, int BatchSize, Function F, const Point2i Sta
 }
 
 template <typename Function>
-void ParallelFor(const Vector2i End, int BatchSize, Function F, const Vector2i Start)
+void ParallelFor(const math::Vector2 End, int BatchSize, Function F, const math::Vector2 Start)
 {
     ParallelFor(Point2i{End.X, End.Y}, BatchSize, F, {Start.X, Start.Y});
 }

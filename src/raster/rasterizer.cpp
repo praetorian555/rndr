@@ -19,7 +19,7 @@
 
 // Helpers ////////////////////////////////////////////////////////////////////////////////////////
 
-static void GetTriangleBounds(const rndr::Point3r (&Positions)[3], rndr::Bounds2i& TriangleBounds)
+static void GetTriangleBounds(const rndr::math::Point3 (&Positions)[3], rndr::Bounds2i& TriangleBounds)
 {
     const rndr::Point2r Positions2D[] = {
         {Positions[0].X, Positions[0].Y},
@@ -41,7 +41,7 @@ static bool LimitTriangleToSurface(rndr::Bounds2i& TriangleBounds, const rndr::I
 
     if (!rndr::Overlaps(TriangleBounds, ImageBounds))
     {
-        const rndr::Bounds2i ZeroBounds{rndr::Point2i(), rndr::Point2i()};
+        const rndr::Bounds2i ZeroBounds{math::Point2(), math::Point2()};
         TriangleBounds = ZeroBounds;
         return false;
     }
@@ -51,7 +51,7 @@ static bool LimitTriangleToSurface(rndr::Bounds2i& TriangleBounds, const rndr::I
     return true;
 }
 
-static bool ShouldDiscardByDepth(const rndr::Point3r (&Points)[3])
+static bool ShouldDiscardByDepth(const rndr::math::Point3 (&Points)[3])
 {
     const real MinZ = std::min(std::min(Points[0].Z, Points[1].Z), Points[2].Z);
     const real MaxZ = std::max(std::max(Points[0].Z, Points[1].Z), Points[2].Z);
@@ -61,7 +61,7 @@ static bool ShouldDiscardByDepth(const rndr::Point3r (&Points)[3])
     return (MinZ < 0) || (MaxZ > 1);
 }
 
-static rndr::WindingOrder GetWindingOrder(const rndr::Point3r (&Points)[3])
+static rndr::WindingOrder GetWindingOrder(const rndr::math::Point3 (&Points)[3])
 {
     real Value = Cross2D(Points[1] - Points[0], Points[2] - Points[0]);
     assert(Value != 0);
@@ -179,9 +179,9 @@ void rndr::Rasterizer::SetupTriangles()
         const int VertexIndex1 = BaseVertexPosition + Indices.Data[BaseIndex + 1];
         const int VertexIndex2 = BaseVertexPosition + Indices.Data[BaseIndex + 2];
 
-        rndr::Point3r NDCPositions[] = {(rndr::Point3r)m_Vertices[VertexIndex0].PositionNDCNonEucliean.ToEuclidean(),
-                                        (rndr::Point3r)m_Vertices[VertexIndex1].PositionNDCNonEucliean.ToEuclidean(),
-                                        (rndr::Point3r)m_Vertices[VertexIndex2].PositionNDCNonEucliean.ToEuclidean()};
+        rndr::math::Point3 NDCPositions[] = {(math::Point3)m_Vertices[VertexIndex0].PositionNDCNonEucliean.ToEuclidean(),
+                                             (math::Point3)m_Vertices[VertexIndex1].PositionNDCNonEucliean.ToEuclidean(),
+                                             (math::Point3)m_Vertices[VertexIndex2].PositionNDCNonEucliean.ToEuclidean()};
 
         Triangle& T = m_Triangles[TriangleIndex];
         T.W[0] = m_Vertices[VertexIndex0].PositionNDCNonEucliean.W;
@@ -289,14 +289,14 @@ void rndr::Rasterizer::BarycentricCoordinates()
         auto WorkOrder = [&](int X, int Y)
         {
             InFragmentInfo& InInfo = T.GetFragmentInfo(X, Y);
-            InInfo.Position = Point2i{X, Y};
+            InInfo.Position = math::Point2{X, Y};
             InInfo.BarCoords = T.BarHelper.GetCoordinates(InInfo.Position);
             InInfo.bIsInside = T.BarHelper.IsInside(InInfo.BarCoords);
         };
 
         const int GridSideSize = 32;
-        const Point2i EndPoint = T.Bounds.pMax;
-        const Point2i StartPoint = T.Bounds.pMin;
+        const math::Point2 EndPoint = T.Bounds.pMax;
+        const math::Point2 StartPoint = T.Bounds.pMin;
         ParallelFor(EndPoint, GridSideSize, WorkOrder, StartPoint);
     };
 
@@ -362,8 +362,8 @@ void rndr::Rasterizer::SetupFragmentNeighbours()
         };
 
         const int GridSideSize = 32;
-        const Point2i EndPoint = T.Bounds.pMax;
-        const Point2i StartPoint = T.Bounds.pMin;
+        const math::Point2 EndPoint = T.Bounds.pMax;
+        const math::Point2 StartPoint = T.Bounds.pMin;
         ParallelFor(EndPoint, GridSideSize, WorkOrder, StartPoint);
     };
 
@@ -376,14 +376,14 @@ void rndr::Rasterizer::RunFragmentShaders()
     RNDR_CPU_TRACE("Run Fragment Shaders");
 
     Image* ColorBuffer = m_Pipeline->RenderTarget->GetColorBuffer();
-    const Point2i ImageSize = ColorBuffer->GetBounds().pMax + 1;
+    const math::Point2 ImageSize = ColorBuffer->GetBounds().pMax + 1;
     const int BlockSize = 32;
 
     auto WorkOrder = [this, ImageSize, BlockSize](int BlockX, int BlockY)
     {
-        const Point2i StartPoint{BlockX * BlockSize, BlockY * BlockSize};
-        const Point2i Size{std::min(BlockSize, ImageSize.X - StartPoint.X), std::min(BlockSize, ImageSize.Y - StartPoint.Y)};
-        const Point2i EndPoint = StartPoint + Size;
+        const math::Point2 StartPoint{BlockX * BlockSize, BlockY * BlockSize};
+        const math::Point2 Size{std::min(BlockSize, ImageSize.X - StartPoint.X), std::min(BlockSize, ImageSize.Y - StartPoint.Y)};
+        const math::Point2 EndPoint = StartPoint + Size;
         const Bounds2i BlockBounds{StartPoint, EndPoint};
 
         for (int TriangleIndex = 0; TriangleIndex < m_Triangles.Size; TriangleIndex++)
@@ -416,7 +416,7 @@ void rndr::Rasterizer::RunFragmentShaders()
     };
 
     // Block will either have side size of BlockSize or whatever is left to the image's edge
-    Point2i BlockGrid;
+    math::Point2 BlockGrid;
     BlockGrid.X = ImageSize.X % BlockSize == 0 ? ImageSize.X / BlockSize : (ImageSize.X / BlockSize) + 1;
     BlockGrid.Y = ImageSize.Y % BlockSize == 0 ? ImageSize.Y / BlockSize : (ImageSize.Y / BlockSize) + 1;
 
@@ -453,14 +453,14 @@ void rndr::Rasterizer::ProcessFragment(const Triangle& T, InFragmentInfo& InInfo
         return;
     }
 
-    const Vector4r CurrentColor = ColorBuffer->GetPixelColor(InInfo.Position);
+    const math::Vector4CurrentColor = ColorBuffer->GetPixelColor(InInfo.Position);
     OutInfo.Color = m_Pipeline->Blend(OutInfo.Color, CurrentColor);
 
     // Write color into color buffer
     ColorBuffer->SetPixelValue(InInfo.Position, OutInfo.Color);
 }
 
-bool rndr::Rasterizer::RunDepthTest(const Point2i& PixelPosition, real NewDepth, real CurrentDepth, bool bIsEarly)
+bool rndr::Rasterizer::RunDepthTest(const math::Point2& PixelPosition, real NewDepth, real CurrentDepth, bool bIsEarly)
 {
     Image* DepthBuffer = m_Pipeline->RenderTarget->GetDepthBuffer();
 
@@ -482,24 +482,24 @@ bool rndr::Rasterizer::RunDepthTest(const Point2i& PixelPosition, real NewDepth,
     return true;
 }
 
-rndr::Point3r rndr::Rasterizer::FromNDCToRasterSpace(const Point3r& Point)
+rndr::math::Point3 rndr::Rasterizer::FromNDCToRasterSpace(const Point3& Point)
 {
     int Width = m_Pipeline->RenderTarget->GetWidth();
     int Height = m_Pipeline->RenderTarget->GetHeight();
 
-    Point3r Result = Point;
+    math::Point3 Result = Point;
     Result.X = ((1 + Point.X) / 2) * Width;
     Result.Y = ((1 + Point.Y) / 2) * Height;
 
     return Result;
 }
 
-rndr::Point3r rndr::Rasterizer::FromRasterToNDCSpace(const Point3r& Point)
+rndr::math::Point3 rndr::Rasterizer::FromRasterToNDCSpace(const Point3& Point)
 {
     int Width = m_Pipeline->RenderTarget->GetWidth();
     int Height = m_Pipeline->RenderTarget->GetHeight();
 
-    Point3r Result = Point;
+    math::Point3 Result = Point;
     Result.X = (Point.X / (real)Width) * 2 - 1;
     Result.Y = (Point.Y / (real)Height) * 2 - 1;
 

@@ -1,7 +1,8 @@
 #pragma once
 
+#include "math/vector3.h"
+
 #include "rndr/core/base.h"
-#include "rndr/core/math.h"
 
 namespace rndr
 {
@@ -15,9 +16,9 @@ public:
     Material() = default;
 
 private:
-    Vector3r m_Ka;  // Ambient color
-    Vector3r m_Kd;  // Diffuse color
-    Vector3r m_Ks;  // Specular color
+    math::Vector3 m_Ka;  // Ambient color
+    math::Vector3 m_Kd;  // Diffuse color
+    math::Vector3 m_Ks;  // Specular color
 
     Image* m_AmbientImage = nullptr;
     Image* m_DiffuseImage = nullptr;

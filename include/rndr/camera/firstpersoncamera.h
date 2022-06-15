@@ -1,8 +1,11 @@
 #pragma once
 
+#include "math/point3.h"
+#include "math/rotator.h"
+#include "math/vector3.h"
+
 #include "rndr/core/base.h"
 #include "rndr/core/input.h"
-#include "rndr/core/math.h"
 
 namespace rndr
 {
@@ -17,7 +20,7 @@ class FirstPersonCamera
 {
 public:
     explicit FirstPersonCamera(ProjectionCamera* ProjectionCamera,
-                               Point3r StartingPosition = Point3r(),
+                               math::Point3 StartingPosition = math::Point3(),
                                real MovementSpeed = 1.0,
                                real RotationSpeed = 1.0);
 
@@ -26,7 +29,7 @@ public:
     ProjectionCamera* GetProjectionCamera();
     void SetProjectionCamera(ProjectionCamera* ProjectionCamera);
 
-    Point3r GetPosition() const;
+    math::Point3 GetPosition() const;
 
 private:
     void HandleLookVert(InputPrimitive Primitive, InputTrigger Trigger, real AxisValue);
@@ -37,14 +40,14 @@ private:
 private:
     ProjectionCamera* m_ProjectionCamera = nullptr;
 
-    Point3r m_Position;
+    math::Point3 m_Position;
     math::Rotator m_DirectionAngles;
 
     math::Rotator m_DeltaAngles;
-    Vector3r m_DeltaPosition;
+    math::Vector3 m_DeltaPosition;
 
-    Vector3r m_DirectionVector;
-    Vector3r m_RightVector;
+    math::Vector3 m_DirectionVector;
+    math::Vector3 m_RightVector;
 
     real m_MovementSpeed;
     real m_RotationSpeed;

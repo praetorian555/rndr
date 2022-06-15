@@ -1,7 +1,8 @@
 #pragma once
 
+#include "math/vector4.h"
+
 #include "rndr/core/base.h"
-#include "rndr/core/math.h"
 
 namespace rndr
 {
@@ -11,12 +12,12 @@ namespace rndr
  */
 struct Colors
 {
-    static const Vector4r Black;
-    static const Vector4r White;
-    static const Vector4r Red;
-    static const Vector4r Green;
-    static const Vector4r Blue;
-    static const Vector4r Pink;
+    static const math::Vector4 Black;
+    static const math::Vector4 White;
+    static const math::Vector4 Red;
+    static const math::Vector4 Green;
+    static const math::Vector4 Blue;
+    static const math::Vector4 Pink;
 };
 
 }  // namespace rndr

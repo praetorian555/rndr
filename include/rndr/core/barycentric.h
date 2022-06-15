@@ -1,7 +1,12 @@
 #pragma once
 
-#include "rndr/core/math.h"
+#include "math/point3.h"
+#include "math/vector3.h"
+
 #include "rndr/core/pipeline.h"
+
+// Forward declarations
+struct math::Point2;
 
 namespace rndr
 {
@@ -20,13 +25,13 @@ class BarycentricHelper
 {
 public:
     BarycentricHelper() = default;
-    BarycentricHelper(WindingOrder FrontFaceWindingOrder, const rndr::Point3r (&TrianglePoints)[3]);
+    BarycentricHelper(WindingOrder FrontFaceWindingOrder, const math::Point3 (&TrianglePoints)[3]);
     BarycentricHelper(WindingOrder FrontFaceWindingOrder,
-                      const Point3r& TrianglePoint0,
-                      const Point3r& TrianglePoint1,
-                      const Point3r& TrianglePoint2);
+                      const math::Point3& TrianglePoint0,
+                      const math::Point3& TrianglePoint1,
+                      const math::Point3& TrianglePoint2);
 
-    BarycentricCoordinates GetCoordinates(const Point2i& PixelPosition) const;
+    BarycentricCoordinates GetCoordinates(const math::Point2& PixelPosition) const;
     bool IsInside(const BarycentricCoordinates& Coordinates) const;
 
 private:
@@ -34,8 +39,8 @@ private:
 
 public:
     WindingOrder m_FrontFaceWindingOrder;
-    Point3r m_Points[3];
-    Vector3r m_Edges[3];
+    math::Point3 m_Points[3];
+    math::Vector3 m_Edges[3];
     real m_HalfTriangleArea;
     real m_OneOverHalfTriangleArea;
 };

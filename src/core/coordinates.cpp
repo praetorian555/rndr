@@ -1,21 +1,21 @@
 #include "rndr/core/coordinates.h"
 
-rndr::Point2i rndr::PixelCoordinates::ToDiscreteSpace(const Point2r& Point)
+math::Point2 rndr::PixelCoordinates::ToDiscreteSpace(const math::Point2& Point)
 {
-    return Point2i{(int)std::floor(Point.X), (int)std::floor(Point.Y)};
+    return math::Point2{std::floor(Point.X), std::floor(Point.Y)};
 }
 
-rndr::Point3i rndr::PixelCoordinates::ToDiscreteSpace(const Point3r& Point)
+math::Point3 rndr::PixelCoordinates::ToDiscreteSpace(const math::Point3& Point)
 {
-    return Point3i{(int)std::floor(Point.X), (int)std::floor(Point.Y), (int)std::floor(Point.Z)};
+    return math::Point3{std::floor(Point.X), std::floor(Point.Y), std::floor(Point.Z)};
 }
 
-rndr::Point2r rndr::PixelCoordinates::ToContinuousSpace(const Point2i& Point)
+math::Point2 rndr::PixelCoordinates::ToContinuousSpace(const math::Point2& Point)
 {
-    return Point2r{(real)Point.X + (real)0.5, (real)Point.Y + (real)0.5};
+    return math::Point2{Point.X + 0.5f, Point.Y + 0.5f};
 }
 
-rndr::Point3r rndr::PixelCoordinates::ToContinuousSpace(const Point3i& Point)
+math::Point3 rndr::PixelCoordinates::ToContinuousSpace(const math::Point3& Point)
 {
-    return Point3r{(real)Point.X + (real)0.5, (real)Point.Y + (real)0.5, (real)Point.Z + (real)0.5};
+    return math::Point3{Point.X + 0.5f, Point.Y + 0.5f, Point.Z + 0.5f};
 }

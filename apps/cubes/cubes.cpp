@@ -1,6 +1,8 @@
 #include <chrono>
 #include <iostream>
 
+#include "math/point3.h"
+
 #include "rndr/rndr.h"
 
 #include "boxpass.h"
@@ -29,7 +31,7 @@ int main()
             }
         });
 
-    rndr::FirstPersonCamera FPCamera(Camera.get(), rndr::Point3r(), 10, 0.1);
+    rndr::FirstPersonCamera FPCamera(Camera.get(), math::Point3(), 10, 0.1);
 
     rndr::GraphicsContext* GC = MainWindow->GetGraphicsContext();
     BoxRenderPass BoxPass;

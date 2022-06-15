@@ -1,6 +1,5 @@
 #pragma once
 
-#include "rndr/core/math.h"
 #include "rndr/core/span.h"
 
 #if defined RNDR_RASTER
@@ -25,8 +24,8 @@ public:
 
     void Draw(rndr::Model* Model);
 
-    Point3r FromNDCToRasterSpace(const Point3r& Point);
-    Point3r FromRasterToNDCSpace(const Point3r& Point);
+    math::Point3 FromNDCToRasterSpace(const Point3& Point);
+    math::Point3 FromRasterToNDCSpace(const Point3& Point);
 
 private:
     void Setup(Model* Model);
@@ -40,7 +39,7 @@ private:
 
     void ProcessFragment(const Triangle& T, InFragmentInfo& InInfo);
 
-    bool RunDepthTest(const Point2i& PixelPosition, real NewDepth, real CurrentDepth, bool bIsEarly = false);
+    bool RunDepthTest(const math::Point2& PixelPosition, real NewDepth, real CurrentDepth, bool bIsEarly = false);
 
 private:
     const Pipeline* m_Pipeline = nullptr;

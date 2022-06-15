@@ -2,9 +2,13 @@
 
 #include <filesystem>
 
+#include "math/normal3.h"
+#include "math/point3.h"
+#include "math/vector2.h"
+#include "math/vector3.h"
+
 #include "rndr/core/log.h"
 #include "rndr/core/material.h"
-#include "rndr/core/math.h"
 #include "rndr/core/mesh.h"
 #include "rndr/core/model.h"
 
@@ -76,9 +80,9 @@ struct ObjFace
 };
 
 static rndr::Mesh* ConstructMesh(const std::string& Name,
-                                 const std::vector<rndr::Point3r>& Positions,
-                                 const std::vector<rndr::Vector2r>& TexCoords,
-                                 const std::vector<rndr::Normal3r>& Normals,
+                                 const std::vector<math::Point3>& Positions,
+                                 const std::vector<math::Vector2>& TexCoords,
+                                 const std::vector<math::Normal3>& Normals,
                                  const std::vector<ObjFace>& Faces);
 
 static float ReadFloat(const char* Data, int& Position)
@@ -101,9 +105,9 @@ rndr::Model* rndr::ObjParser::Parse(Span<char> Data)
 {
     std::string MeshName;
     constexpr int DefaultSize = 50'000;
-    std::vector<Point3r> Positions;
-    std::vector<Vector2r> TexCoords;
-    std::vector<Normal3r> Normals;
+    std::vector<math::Point3> Positions;
+    std::vector<math::Vector2> TexCoords;
+    std::vector<math::Normal3> Normals;
     std::vector<ObjFace> Faces;
     Positions.reserve(DefaultSize);
     TexCoords.reserve(DefaultSize);
@@ -123,7 +127,7 @@ rndr::Model* rndr::ObjParser::Parse(Span<char> Data)
         else if (strncmp(Data.Data + Position, "vt ", 3) == 0)
         {
             Position += 3;
-            Vector2r Value;
+            math::Vector2 Value;
             Value.X = ReadFloat(Data.Data + Position, Position);
             Value.Y = ReadFloat(Data.Data + Position, Position);
             TexCoords.push_back(Value);
@@ -133,7 +137,7 @@ rndr::Model* rndr::ObjParser::Parse(Span<char> Data)
         else if (strncmp(Data.Data + Position, "vn ", 3) == 0)
         {
             Position += 3;
-            Normal3r Normal;
+            math::Normal3 Normal;
             Normal.X = ReadFloat(Data.Data + Position, Position);
             Normal.Y = ReadFloat(Data.Data + Position, Position);
             Normal.Z = ReadFloat(Data.Data + Position, Position);
@@ -144,7 +148,7 @@ rndr::Model* rndr::ObjParser::Parse(Span<char> Data)
         else if (strncmp(Data.Data + Position, "v ", 2) == 0)
         {
             Position += 2;
-            Point3r VertexPosition;
+            math::Point3 VertexPosition;
             VertexPosition.X = ReadFloat(Data.Data + Position, Position);
             VertexPosition.Y = ReadFloat(Data.Data + Position, Position);
             VertexPosition.Z = ReadFloat(Data.Data + Position, Position);
@@ -225,18 +229,18 @@ rndr::Model* rndr::ObjParser::Parse(Span<char> Data)
 }
 
 static rndr::Mesh* ConstructMesh(const std::string& Name,
-                                 const std::vector<rndr::Point3r>& Positions,
-                                 const std::vector<rndr::Vector2r>& TexCoords,
-                                 const std::vector<rndr::Normal3r>& Normals,
+                                 const std::vector<math::Point3>& Positions,
+                                 const std::vector<math::Vector2>& TexCoords,
+                                 const std::vector<math::Normal3>& Normals,
                                  const std::vector<ObjFace>& Faces)
 {
     const int VertexCount = Faces.size() * 3;
-    rndr::Span<rndr::Point3r> MeshPositions(new rndr::Point3r[VertexCount], VertexCount);
-    rndr::Span<rndr::Vector2r> MeshTexCoords(new rndr::Vector2r[VertexCount], VertexCount);
-    rndr::Span<rndr::Normal3r> MeshNormals(new rndr::Normal3r[VertexCount], VertexCount);
+    rndr::Span<math::Point3> MeshPositions(new math::Point3[VertexCount], VertexCount);
+    rndr::Span<math::Vector2> MeshTexCoords(new math::Vector2[VertexCount], VertexCount);
+    rndr::Span<math::Normal3> MeshNormals(new math::Normal3[VertexCount], VertexCount);
     rndr::Span<int> MeshIndices(new int[VertexCount], VertexCount);
-    rndr::Span<rndr::Vector3r> MeshTangents;
-    rndr::Span<rndr::Vector3r> MeshBitangents;
+    rndr::Span<math::Vector3> MeshTangents;
+    rndr::Span<math::Vector3> MeshBitangents;
 
     for (int i = 0; i < Faces.size(); i++)
     {

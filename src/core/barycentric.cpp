@@ -1,7 +1,8 @@
 #include "rndr/core/barycentric.h"
 
-#include "rndr/core/coordinates.h"
+#include "math/point2.h"
 
+#include "rndr/core/coordinates.h"
 #include "rndr/core/debug.h"
 
 real rndr::BarycentricCoordinates::Interpolate(const real (&Values)[3]) const
@@ -31,7 +32,7 @@ real rndr::BarycentricCoordinates::operator[](int i) const
     return X;
 }
 
-rndr::BarycentricHelper::BarycentricHelper(WindingOrder FrontFaceWindingOrder, const rndr::Point3r (&TrianglePoints)[3])
+rndr::BarycentricHelper::BarycentricHelper(WindingOrder FrontFaceWindingOrder, const math::Point3 (&TrianglePoints)[3])
 {
     m_FrontFaceWindingOrder = FrontFaceWindingOrder;
 
@@ -40,9 +41,9 @@ rndr::BarycentricHelper::BarycentricHelper(WindingOrder FrontFaceWindingOrder, c
 }
 
 rndr::BarycentricHelper::BarycentricHelper(WindingOrder FrontFaceWindingOrder,
-                                           const rndr::Point3r& TrianglePoint0,
-                                           const rndr::Point3r& TrianglePoint1,
-                                           const rndr::Point3r& TrianglePoint2)
+                                           const math::Point3& TrianglePoint0,
+                                           const math::Point3& TrianglePoint1,
+                                           const math::Point3& TrianglePoint2)
 {
     m_FrontFaceWindingOrder = FrontFaceWindingOrder;
 
@@ -64,17 +65,17 @@ void rndr::BarycentricHelper::Init()
     m_Edges[2] = m_Points[1] - m_Points[0];
 }
 
-rndr::BarycentricCoordinates rndr::BarycentricHelper::GetCoordinates(const Point2i& PixelPosition) const
+rndr::BarycentricCoordinates rndr::BarycentricHelper::GetCoordinates(const math::Point2& PixelPosition) const
 {
     // NOTE(mkostic): Since we are using right-handed coordinate system and, hence, right-handed rule for the cross product, then when
     // points are in counter-clockwise order we get positive results if the pixel position is inside the triangle. When we are using
     // clockwise order of points we multiply the coordinates with negative one to keep them positive.
 
-    const rndr::Point3r Point = rndr::PixelCoordinates::ToContinuousSpace((rndr::Point3i)PixelPosition);
+    const math::Point3 Point = rndr::PixelCoordinates::ToContinuousSpace((math::Point3)PixelPosition);
 
-    Vector3r Vec0;
-    Vector3r Vec1;
-    Vector3r Vec2;
+    math::Vector3 Vec0;
+    math::Vector3 Vec1;
+    math::Vector3 Vec2;
     Vec0 = Point - m_Points[1];
     Vec1 = Point - m_Points[2];
     Vec2 = Point - m_Points[0];

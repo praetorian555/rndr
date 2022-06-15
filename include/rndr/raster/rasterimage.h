@@ -47,40 +47,40 @@ public:
 
     /**
      * Set value of a pixel.
-     * @tparam T Value type. Use Vector4r for colors, real for depth and uint32_t for stencil value.
+     * @tparam T Value type. Use math::Vector4for colors, real for depth and uint32_t for stencil value.
      * @param Location Pixel position in screen space where origin is in bottom left corner.
      * @param Value Value to set in pixel. If this is a color value make sure that it is in linear space.
      */
     template <typename T>
-    void SetPixelValue(const Point2i& Location, const T& Value);
+    void SetPixelValue(const math::Point2& Location, const T& Value);
     template <typename T>
     void SetPixelValue(int X, int Y, const T& Value);
 
     /**
      * Get pixel color in linear space.
      */
-    Vector4r GetPixelColor(const Point2i& Location) const;
-    Vector4r GetPixelColor(int X, int Y) const;
+    math::Vector4GetPixelColor(const math::Point2& Location) const;
+    math::Vector4GetPixelColor(int X, int Y) const;
 
-    real GetPixelDepth(const Point2i& Location) const;
+    real GetPixelDepth(const math::Point2& Location) const;
     real GetPixelDepth(int X, int Y) const;
 
-    uint8_t GetStencilValue(const Point2i& Location) const;
+    uint8_t GetStencilValue(const math::Point2& Location) const;
     uint8_t GetStencilValue(int X, int Y) const;
 
     /**
      * Clear the image with specified value.
-     * @tparam T Value type. Use Vector4r for colors, real for depth and uint32_t for stencil value.
+     * @tparam T Value type. Use math::Vector4for colors, real for depth and uint32_t for stencil value.
      * @param Value Value to set in pixel. If this is a color value make sure that it is in linear space.
      */
     template <typename T>
     void Clear(const T& Value);
 
 protected:
-    void SetPixelColor(const Point2i& Location, const Vector4r& Color);
-    void SetPixelColor(const Point2i& Position, uint32_t Color);
-    void SetPixelDepth(const Point2i& Location, real Depth);
-    void SetPixelStencilValue(const Point2i& Location, uint8_t Value);
+    void SetPixelColor(const math::Point2& Location, const Vector4r& Color);
+    void SetPixelColor(const math::Point2& Position, uint32_t Color);
+    void SetPixelDepth(const math::Point2& Location, real Depth);
+    void SetPixelStencilValue(const math::Point2& Location, uint8_t Value);
 
     void ClearColor(const Vector4r& Color);
     void ClearDepth(real Depth);
@@ -102,7 +102,7 @@ private:
 
 // Implementations
 template <typename T>
-void Image::SetPixelValue(const Point2i& Location, const T& Value)
+void Image::SetPixelValue(const math::Point2& Location, const T& Value)
 {
     assert(false);
 }
@@ -120,11 +120,11 @@ void Image::Clear(const T& Value)
 }
 
 template <>
-void Image::SetPixelValue<Vector4r>(const Point2i& Location, const Vector4r& Value);
+void Image::SetPixelValue<Vector4r>(const math::Point2& Location, const Vector4r& Value);
 template <>
-void Image::SetPixelValue<real>(const Point2i& Location, const real& Value);
+void Image::SetPixelValue<real>(const math::Point2& Location, const real& Value);
 template <>
-void Image::SetPixelValue<uint8_t>(const Point2i& Location, const uint8_t& Value);
+void Image::SetPixelValue<uint8_t>(const math::Point2& Location, const uint8_t& Value);
 
 template <>
 void Image::SetPixelValue<Vector4r>(int X, int Y, const Vector4r& Value);

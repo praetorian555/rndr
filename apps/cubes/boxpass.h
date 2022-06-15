@@ -1,5 +1,8 @@
 #pragma once
 
+#include "math/point3.h"
+#include "math/vector4.h"
+
 #include "rndr/rndr.h"
 
 class BoxRenderPass
@@ -10,8 +13,8 @@ public:
 
     void Render(real DeltaSeconds);
 
-    void SetLightPosition(rndr::Point3r LightPosition);
-    void SetViewerPosition(rndr::Point3r ViewerPosition);
+    void SetLightPosition(math::Point3 LightPosition);
+    void SetViewerPosition(math::Point3 ViewerPosition);
 
 private:
 #if defined RNDR_RASTER
@@ -27,9 +30,9 @@ private:
     RNDR_ALIGN(16) struct ShaderConstants
     {
         math::Transform FromWorldToNDC;
-        rndr::Point3r LightPosition;
-        rndr::Vector4r LightColor;
-        rndr::Point3r ViewerPosition;
+        math::Point3 LightPosition;
+        math::Vector4 LightColor;
+        math::Point3 ViewerPosition;
     };
 
 private:
@@ -58,8 +61,8 @@ private:
 #endif RNDR_RASTER
 
     rndr::ProjectionCamera* m_Camera;
-    rndr::Point3r m_LightPosition;
-    rndr::Point3r m_ViewerPosition;
+    math::Point3 m_LightPosition;
+    math::Point3 m_ViewerPosition;
 
     rndr::Mesh* m_Mesh;
 

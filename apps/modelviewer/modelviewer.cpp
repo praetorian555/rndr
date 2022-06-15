@@ -1,6 +1,13 @@
-#include "rndr/rndr.h"
-
 #include <vector>
+
+#include "math/normal3.h"
+#include "math/point3.h"
+#include "math/rotator.h"
+#include "math/transform.h"
+#include "math/vector2.h"
+#include "math/vector3.h"
+
+#include "rndr/rndr.h"
 
 RNDR_ALIGN(16) struct VertexShaderConstants
 {
@@ -9,11 +16,11 @@ RNDR_ALIGN(16) struct VertexShaderConstants
 
 RNDR_ALIGN(16) struct FragmentShaderConstants
 {
-    rndr::Point3r ViewerPosition;
+    math::Point3 ViewerPosition;
     float Padding1 = 0;
-    rndr::Vector3r LightDirection;
+    math::Vector3 LightDirection;
     float Padding2 = 0;
-    rndr::Vector3r LightColor;
+    math::Vector3 LightColor;
     float AmbientStrength = 0.1;
     float Shininess = 32;
 };
@@ -50,10 +57,10 @@ rndr::Sampler* g_Sampler = nullptr;
 
 rndr::Model* g_Model = nullptr;
 math::Rotator g_MeshRotation;
-rndr::Vector3r g_MeshRotationState;
+math::Vector3 g_MeshRotationState;
 
-rndr::Vector3r g_LightDirection;
-rndr::Vector4r g_LightColor;
+math::Vector3 g_LightDirection;
+math::Vector4 g_LightColor;
 
 void Init();
 void InitRenderPrimitives();
@@ -98,7 +105,7 @@ void Init()
     CameraProps.Near = 0.01f;
     CameraProps.Far = 100.0f;
     rndr::ProjectionCamera* ProjCamera = new rndr::ProjectionCamera(math::Transform{}, CameraProps);
-    g_Camera = new rndr::FirstPersonCamera(ProjCamera, rndr::Point3r{0, 0, -20}, 10);
+    g_Camera = new rndr::FirstPersonCamera(ProjCamera, math::Point3{0, 0, -20}, 10);
 
     rndr::WindowDelegates::OnResize.Add(
         [](rndr::Window* Window, int Width, int Height)
@@ -273,11 +280,11 @@ void InitRenderPrimitives()
     {
         struct InVertex
         {
-            rndr::Point3r Position;
-            rndr::Vector2r TexCoords;
-            rndr::Normal3r Normal;
-            rndr::Vector3r Tangent;
-            rndr::Vector3r Bitangent;
+            math::Point3 Position;
+            math::Vector2 TexCoords;
+            math::Normal3 Normal;
+            math::Vector3 Tangent;
+            math::Vector3 Bitangent;
         };
 
         RNDR_LOG_INFO("Loding model from file %s", g_ModelPath.c_str());
@@ -293,7 +300,7 @@ void InitRenderPrimitives()
             auto& CubeNormals = Mesh->GetNormals();
             for (int i = 0; i < CubePositions.Size; i++)
             {
-                rndr::Normal3r Normal = CubeNormals[i];
+                math::Normal3 Normal = CubeNormals[i];
                 Vertices.push_back(InVertex{CubePositions[i], CubeTexCoords[i], Normal});
             }
 
@@ -466,10 +473,10 @@ void Update(float DeltaSeconds)
     // Update fragment shader constants
     {
         g_LightColor = rndr::Colors::Pink;
-        g_LightDirection = rndr::Point3r{} - rndr::Point3r{-50, 50, 0};
+        g_LightDirection = math::Point3{} - math::Point3{-50, 50, 0};
         g_LightDirection = math::Normalize(g_LightDirection);
         FragmentShaderConstants Constants;
-        Constants.ViewerPosition = rndr::Point3r{};
+        Constants.ViewerPosition = math::Point3{};
         Constants.LightDirection = g_LightDirection;
         Constants.LightColor = g_LightColor.XYZ();
         Constants.AmbientStrength = 0.01f;

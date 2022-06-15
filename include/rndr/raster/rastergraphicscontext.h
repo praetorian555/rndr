@@ -1,7 +1,6 @@
 #pragma once
 
 #include "rndr/core/base.h"
-#include "rndr/core/math.h"
 
 #if defined RNDR_RASTER
 

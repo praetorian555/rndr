@@ -30,19 +30,20 @@ real rndr::ToLinearSpace(real Value, real Gamma)
 #endif
 }
 
-rndr::Vector4r rndr::ToGammaCorrectSpace(const Vector4r& Color, real Gamma)
+math::Vector4 rndr::ToGammaCorrectSpace(const math::Vector4& Color, real Gamma)
 {
-    return Vector4r(ToGammaCorrectSpace(Color.R, Gamma), ToGammaCorrectSpace(Color.G, Gamma), ToGammaCorrectSpace(Color.B, Gamma), Color.A);
+    return math::Vector4(ToGammaCorrectSpace(Color.R, Gamma), ToGammaCorrectSpace(Color.G, Gamma), ToGammaCorrectSpace(Color.B, Gamma),
+                         Color.A);
 }
 
-rndr::Vector4r rndr::ToLinearSpace(const Vector4r& Color, real Gamma)
+math::Vector4 rndr::ToLinearSpace(const math::Vector4& Color, real Gamma)
 {
-    return Vector4r(ToLinearSpace(Color.R, Gamma), ToLinearSpace(Color.G, Gamma), ToLinearSpace(Color.B, Gamma), Color.A);
+    return math::Vector4(ToLinearSpace(Color.R, Gamma), ToLinearSpace(Color.G, Gamma), ToLinearSpace(Color.B, Gamma), Color.A);
 }
 
-rndr::Vector4r rndr::ToDesiredSpace(const Vector4r& Color, GammaSpace DesiredSpace, real Gamma)
+math::Vector4 rndr::ToDesiredSpace(const math::Vector4& Color, GammaSpace DesiredSpace, real Gamma)
 {
-    Vector4r Result;
+    math::Vector4 Result;
 
     if (DesiredSpace == GammaSpace::GammaCorrected)
     {
@@ -60,7 +61,7 @@ rndr::Vector4r rndr::ToDesiredSpace(const Vector4r& Color, GammaSpace DesiredSpa
     return Result;
 }
 
-uint32_t rndr::ColorToUInt32(const Vector4r& Color, PixelFormat Format)
+uint32_t rndr::ColorToUInt32(const math::Vector4& Color, PixelFormat Format)
 {
     uint32_t RR = (uint32_t)std::roundf(Color.R * 255);
     uint32_t GG = (uint32_t)std::roundf(Color.G * 255);
@@ -98,9 +99,9 @@ uint32_t rndr::ColorToUInt32(const Vector4r& Color, PixelFormat Format)
     return Result;
 }
 
-rndr::Vector4r rndr::ColorToVector(uint32_t Color, PixelFormat Format)
+math::Vector4 rndr::ColorToVector(uint32_t Color, PixelFormat Format)
 {
-    Vector4r Vec;
+    math::Vector4 Vec;
 
     switch (Format)
     {

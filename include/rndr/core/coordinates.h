@@ -1,6 +1,9 @@
 #pragma once
 
-#include "rndr/core/math.h"
+#include "math/point2.h"
+#include "math/point3.h"
+
+#include "rndr/core/base.h"
 
 namespace rndr
 {
@@ -12,11 +15,11 @@ namespace rndr
 
 struct PixelCoordinates
 {
-    static Point2i ToDiscreteSpace(const Point2r& Point);
-    static Point3i ToDiscreteSpace(const Point3r& Point);
+    static math::Point2 ToDiscreteSpace(const math::Point2& Point);
+    static math::Point3 ToDiscreteSpace(const math::Point3& Point);
 
-    static Point2r ToContinuousSpace(const Point2i& Point);
-    static Point3r ToContinuousSpace(const Point3i& Point);
+    static math::Point2 ToContinuousSpace(const math::Point2& Point);
+    static math::Point3 ToContinuousSpace(const math::Point3& Point);
 };
 
 }  // namespace rndr

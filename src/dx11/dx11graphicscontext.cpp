@@ -150,7 +150,7 @@ rndr::BlendState* rndr::GraphicsContext::CreateBlendState(const BlendProperties&
     return new BlendState(this, Props);
 }
 
-void rndr::GraphicsContext::ClearColor(Image* Image, Vector4r Color)
+void rndr::GraphicsContext::ClearColor(Image* Image, math::Vector4 Color)
 {
     if (!Image)
     {

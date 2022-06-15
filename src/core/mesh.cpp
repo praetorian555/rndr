@@ -1,11 +1,11 @@
 #include "rndr/core/mesh.h"
 
 rndr::Mesh::Mesh(const std::string& Name,
-                 Span<Point3r> Positions,
-                 Span<Vector2r> TexCoords,
-                 Span<Normal3r> Normals,
-                 Span<Vector3r> Tangents,
-                 Span<Vector3r> Bitangents,
+                 Span<math::Point3> Positions,
+                 Span<math::Vector2> TexCoords,
+                 Span<math::Normal3> Normals,
+                 Span<math::Vector3> Tangents,
+                 Span<math::Vector3> Bitangents,
                  Span<int> Indices)
     : m_Name(Name),
       m_Positions(Positions),
@@ -32,27 +32,27 @@ const std::string& rndr::Mesh::GetName() const
     return m_Name;
 }
 
-const rndr::Span<rndr::Point3r>& rndr::Mesh::GetPositions() const
+const rndr::Span<math::Point3>& rndr::Mesh::GetPositions() const
 {
     return m_Positions;
 }
 
-const rndr::Span<rndr::Vector2r>& rndr::Mesh::GetTexCoords() const
+const rndr::Span<math::Vector2>& rndr::Mesh::GetTexCoords() const
 {
     return m_TexCoords;
 }
 
-const rndr::Span<rndr::Normal3r>& rndr::Mesh::GetNormals() const
+const rndr::Span<math::Normal3>& rndr::Mesh::GetNormals() const
 {
     return m_Normals;
 }
 
-const rndr::Span<rndr::Vector3r>& rndr::Mesh::GetTangents() const
+const rndr::Span<math::Vector3>& rndr::Mesh::GetTangents() const
 {
     return m_Tangents;
 }
 
-const rndr::Span<rndr::Vector3r>& rndr::Mesh::GetBitangents() const
+const rndr::Span<math::Vector3>& rndr::Mesh::GetBitangents() const
 {
     return m_Bitangents;
 }

@@ -8,7 +8,9 @@
 #include <d3dcompiler.h>
 
 #include "rndr/core/graphicstypes.h"
-#include "rndr/core/math.h"
+
+// Forward declarations
+struct math::Vector4;
 
 namespace rndr
 {
@@ -50,7 +52,7 @@ public:
     DepthStencilState* CreateDepthStencilState(const DepthStencilProperties& Props);
     BlendState* CreateBlendState(const BlendProperties& Props);
 
-    void ClearColor(Image* Image, Vector4r Color);
+    void ClearColor(Image* Image, math::Vector4 Color);
     void ClearDepth(Image* Image, real Depth);
     void ClearStencil(Image* Image, uint8_t Stencil);
     void ClearDepthStencil(Image* Image, real Depth, uint8_t Stencil);

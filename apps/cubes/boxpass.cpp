@@ -1,5 +1,7 @@
 #include "boxpass.h"
 
+#include "math/rng.h"
+
 #include "rndr/core/debug.h"
 
 void BoxRenderPass::Init(rndr::GraphicsContext* GraphicsContext, rndr::ProjectionCamera* Camera)
@@ -102,9 +104,9 @@ void BoxRenderPass::Init(rndr::GraphicsContext* GraphicsContext, rndr::Projectio
 
     struct InVertex
     {
-        rndr::Point3r Position;
-        rndr::Vector2r TexCoords;
-        rndr::Normal3r Normal;
+        math::Point3 Position;
+        math::Vector2 TexCoords;
+        math::Normal3 Normal;
     };
 
     std::string CubeObjPath = RNDR_ASSET_DIR "/models/cube.obj";
@@ -135,7 +137,7 @@ void BoxRenderPass::Init(rndr::GraphicsContext* GraphicsContext, rndr::Projectio
         Angles.Pitch = RandomGen.UniformRealInRange(-90, 90);
         Angles.Yaw = RandomGen.UniformRealInRange(-90, 90);
         Angles.Roll = RandomGen.UniformRealInRange(-90, 90);
-        rndr::Vector3r Position{0, 0, 10};
+        math::Vector3 Position{0, 0, 10};
         Position.X = RandomGen.UniformRealInRange(-100, 100);
         Position.Y = RandomGen.UniformRealInRange(-100, 100);
         Position.Z = RandomGen.UniformRealInRange(30, 60);
@@ -245,12 +247,12 @@ void BoxRenderPass::Render(real DeltaSeconds)
     m_GraphicsContext->DrawIndexedInstanced(rndr::PrimitiveTopology::TriangleList, m_IndexCount, m_InstanceCount);
 }
 
-void BoxRenderPass::SetLightPosition(rndr::Point3r LightPosition)
+void BoxRenderPass::SetLightPosition(math::Point3 LightPosition)
 {
     m_LightPosition = LightPosition;
 }
 
-void BoxRenderPass::SetViewerPosition(rndr::Point3r ViewerPosition)
+void BoxRenderPass::SetViewerPosition(math::Point3 ViewerPosition)
 {
     m_ViewerPosition = ViewerPosition;
 }

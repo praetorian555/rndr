@@ -4,7 +4,7 @@
 
 rndr::Sampler2D::Sampler2D(Image* Image) : m_Image(Image) {}
 
-rndr::Vector4r rndr::Sampler2D::Sample(const Point2r& TC, const Vector2r& duvdx, const Vector2r& duvdy)
+rndr::math::Vector4rndr::Sampler2D::Sample(const Point2r& TC, const math::Vector2& duvdx, const math::Vector2& duvdy)
 {
     Point2r TexCoords = Wrap(TC);
     // Special case, we use Inifinity to signal that we need to wrap coordinates with specified border color
@@ -22,7 +22,7 @@ rndr::Vector4r rndr::Sampler2D::Sample(const Point2r& TC, const Vector2r& duvdx,
     const ImageFiltering Filter = LOD < 0 ? m_Image->m_Props.MagFilter : m_Image->m_Props.MinFilter;
     bool bIsMin = LOD >= 0;
 
-    Vector4r Result;
+    math::Vector4Result;
     if (bIsMin && m_Image->m_Props.bUseMips)
     {
         Result = SampleTrilinear(m_Image, TexCoords, LOD);
@@ -47,7 +47,7 @@ rndr::Vector4r rndr::Sampler2D::Sample(const Point2r& TC, const Vector2r& duvdx,
     return Result;
 }
 
-rndr::Vector4r rndr::Sampler2D::SampleNearestNeighbor(const Image* I, const Point2r& TexCoords)
+rndr::math::Vector4rndr::Sampler2D::SampleNearestNeighbor(const Image* I, const Point2r& TexCoords)
 {
     const real U = TexCoords.X;
     const real V = TexCoords.Y;
@@ -55,11 +55,11 @@ rndr::Vector4r rndr::Sampler2D::SampleNearestNeighbor(const Image* I, const Poin
     const real X = (I->m_Width - 1) * U;
     const real Y = (I->m_Height - 1) * V;
 
-    const rndr::Point2i NearestDesc{(int)X, (int)Y};
+    const math::Point2 NearestDesc{(int)X, (int)Y};
     return I->GetPixelColor(NearestDesc);
 }
 
-rndr::Vector4r rndr::Sampler2D::SampleBilinear(const Image* I, const Point2r& TexCoords)
+rndr::math::Vector4rndr::Sampler2D::SampleBilinear(const Image* I, const Point2r& TexCoords)
 {
     const real U = TexCoords.X;
     const real V = TexCoords.Y;
@@ -67,12 +67,12 @@ rndr::Vector4r rndr::Sampler2D::SampleBilinear(const Image* I, const Point2r& Te
     const real X = (I->m_Width - 1) * U;
     const real Y = (I->m_Height - 1) * V;
 
-    const Point2i BottomLeft{(int)(X - 0.5), (int)(Y - 0.5)};
-    const Point2i BottomRight{(int)(X + 0.5), (int)(Y - 0.5)};
-    const Point2i TopLeft{(int)(X - 0.5), (int)(Y + 0.5)};
-    const Point2i TopRight{(int)(X + 0.5), (int)(Y + 0.5)};
+    const math::Point2 BottomLeft{(int)(X - 0.5), (int)(Y - 0.5)};
+    const math::Point2 BottomRight{(int)(X + 0.5), (int)(Y - 0.5)};
+    const math::Point2 TopLeft{(int)(X - 0.5), (int)(Y + 0.5)};
+    const math::Point2 TopRight{(int)(X + 0.5), (int)(Y + 0.5)};
 
-    Vector4r Result;
+    math::Vector4Result;
     // clang-format off
     Result = I->GetPixelColor(BottomLeft)  * (1 - U) * (1 - V) +
              I->GetPixelColor(BottomRight) *      U  * (1 - V) +
@@ -83,7 +83,7 @@ rndr::Vector4r rndr::Sampler2D::SampleBilinear(const Image* I, const Point2r& Te
     return Result;
 }
 
-rndr::Vector4r rndr::Sampler2D::SampleTrilinear(const Image* I, const Point2r& TexCoord, real LOD)
+rndr::math::Vector4rndr::Sampler2D::SampleTrilinear(const Image* I, const Point2r& TexCoord, real LOD)
 {
     const int Floor = (int)LOD;
     int Ceil = (int)(LOD + 1);
@@ -93,8 +93,8 @@ rndr::Vector4r rndr::Sampler2D::SampleTrilinear(const Image* I, const Point2r& T
         Ceil = Floor;
     }
 
-    const Vector4r FloorSample = SampleBilinear(I->m_MipMaps[Floor], TexCoord);
-    const Vector4r CeilSample = SampleBilinear(I->m_MipMaps[Ceil], TexCoord);
+    const math::Vector4FloorSample = SampleBilinear(I->m_MipMaps[Floor], TexCoord);
+    const math::Vector4CeilSample = SampleBilinear(I->m_MipMaps[Ceil], TexCoord);
 
     real t = LOD - (real)Floor;
 

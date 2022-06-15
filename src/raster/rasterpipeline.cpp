@@ -1,24 +1,22 @@
 #include "rndr/raster/rasterpipeline.h"
 
-#include "rndr/core/math.h"
-
 #if defined RNDR_RASTER
 
 rndr::InFragmentInfo& rndr::Triangle::GetFragmentInfo(int X, int Y)
 {
-    assert(rndr::Inside(Point2i{X, Y}, Bounds));
+    assert(rndr::Inside(math::Point2{X, Y}, Bounds));
     assert(Fragments);
 
     return Fragments[(X - Bounds.pMin.X) + (Y - Bounds.pMin.Y) * Bounds.Diagonal().X];
 }
 
-rndr::Vector4r rndr::Pipeline::Blend(const Vector4r& Src, const Vector4r Dst) const
+rndr::math::Vector4rndr::Pipeline::Blend(const Vector4r& Src, const math::Vector4Dst) const
 {
-    const Vector3r SrcColorFactor = GetBlendColorFactor(SrcColorBlendFactor, Src, Dst);
-    const Vector3r DstColorFactor = GetBlendColorFactor(DstColorBlendFactor, Src, Dst);
-    const Vector3r SrcColor = Clamp(Src.XYZ() * SrcColorFactor, 0, 1);
-    const Vector3r DstColor = Clamp(Dst.XYZ() * DstColorFactor, 0, 1);
-    const Vector3r BlendedColor = PerformBlendOperation(ColorBlendOperator, SrcColor, DstColor);
+    const math::Vector3 SrcColorFactor = GetBlendColorFactor(SrcColorBlendFactor, Src, Dst);
+    const math::Vector3 DstColorFactor = GetBlendColorFactor(DstColorBlendFactor, Src, Dst);
+    const math::Vector3 SrcColor = Clamp(Src.XYZ() * SrcColorFactor, 0, 1);
+    const math::Vector3 DstColor = Clamp(Dst.XYZ() * DstColorFactor, 0, 1);
+    const math::Vector3 BlendedColor = PerformBlendOperation(ColorBlendOperator, SrcColor, DstColor);
 
     const real SrcAlphaFactor = GetBlendAlphaFactor(SrcAlphaBlendFactor, Src, Dst);
     const real DstAlphaFactor = GetBlendAlphaFactor(DstAlphaBlendFactor, Src, Dst);
@@ -29,7 +27,7 @@ rndr::Vector4r rndr::Pipeline::Blend(const Vector4r& Src, const Vector4r Dst) co
     return Vector4r(BlendedColor, BlendedAlpha);
 }
 
-rndr::Vector3r rndr::Pipeline::GetBlendColorFactor(BlendFactor FactorName, const Vector4r& Src, const Vector4r& Dst) const
+rndr::math::Vector3 rndr::Pipeline::GetBlendColorFactor(BlendFactor FactorName, const Vector4r& Src, const Vector4r& Dst) const
 {
     switch (FactorName)
     {
@@ -101,9 +99,9 @@ real rndr::Pipeline::GetBlendAlphaFactor(BlendFactor FactorName, const Vector4r&
     return 1;
 }
 
-rndr::Vector3r rndr::Pipeline::PerformBlendOperation(BlendOperator Op, const Vector3r& Src, const Vector3r& Dst) const
+rndr::math::Vector3 rndr::Pipeline::PerformBlendOperation(BlendOperator Op, const Vector3r& Src, const Vector3r& Dst) const
 {
-    Vector3r Result;
+    math::Vector3 Result;
     switch (Op)
     {
         case BlendOperator::Add:

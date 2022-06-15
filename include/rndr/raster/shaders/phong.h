@@ -20,16 +20,16 @@ public:
     // How vertex data should be organized in the vertex buffer
     struct InVertex
     {
-        Point3r Position;
+        math::Point3 Position;
         Point2r TexCoords;
-        Normal3r Normal;
+        math::Normal3 Normal;
     };
 
     struct OutVertex
     {
         Point2r TexCoords;
-        Point3r PositionWorld;
-        Normal3r NormalWorld;
+        math::Point3 PositionWorld;
+        math::Normal3 NormalWorld;
     };
 
     // How instance data should be organized in the instance buffer
@@ -42,9 +42,9 @@ public:
     void VertexShader(const InVertexInfo& InInfo, OutVertexInfo& OutInfo);
     void FragmentShader(const Triangle& Triangle, const InFragmentInfo& InInfo, OutFragmentInfo& OutInfo);
 
-    void SetViewPosition(const Point3r Position) { m_ViewPosition = Position; }
+    void SetViewPosition(const math::Point3 Position) { m_ViewPosition = Position; }
 
-    void AddPointLight(const Point3r& LightPosition, const Vector3r& LightColor);
+    void AddPointLight(const Point3& LightPosition, const Vector3r& LightColor);
     void AddDirectionalLight(const Vector3r& Direction, const Vector3r& LightColor);
     void ClearLights();
 
@@ -61,14 +61,14 @@ public:
 private:
     struct PointLight
     {
-        Point3r Position;
-        Vector3r Irradiance;
+        math::Point3 Position;
+        math::Vector3 Irradiance;
     };
 
     struct DirectionalLight
     {
-        Vector3r Direction;
-        Vector3r Irradiance;
+        math::Vector3 Direction;
+        math::Vector3 Irradiance;
     };
 
 private:
@@ -76,10 +76,10 @@ private:
     Sampler2D m_SpecularImage = nullptr;
 
     int m_Shininess = 32;
-    Vector3r m_Kd = Colors::Black.XYZ();
-    Vector3r m_Ks = Colors::Black.XYZ();
+    math::Vector3 m_Kd = Colors::Black.XYZ();
+    math::Vector3 m_Ks = Colors::Black.XYZ();
 
-    rndr::Point3r m_ViewPosition;
+    rndr::math::Point3 m_ViewPosition;
 
     std::vector<PointLight> m_PointLights;
     std::vector<DirectionalLight> m_DirectionalLights;

@@ -1,8 +1,10 @@
 #pragma once
 
+#include "math/vector3.h"
+#include "math/vector4.h"
+
 #include "rndr/core/base.h"
 #include "rndr/core/colors.h"
-#include "rndr/core/math.h"
 #include "rndr/core/span.h"
 
 namespace rndr
@@ -232,7 +234,7 @@ struct SamplerProperties
     ImageAddressing AddressingV = ImageAddressing::Repeat;
     ImageAddressing AddressingW = ImageAddressing::Repeat;
 
-    Vector4r WrapBorderColor = Colors::Pink;
+    math::Vector4 WrapBorderColor = Colors::Pink;
 
     ImageFiltering Filter = ImageFiltering::MinMagMipLinear;
 
@@ -342,7 +344,7 @@ struct BlendProperties
     BlendFactor SrcAlphaFactor;
     BlendFactor DstAlphaFactor;
     BlendOperator AlphaOperator;
-    Vector3r ConstColor;
+    math::Vector3 ConstColor;
     real ConstAlpha;
 };
 
@@ -370,7 +372,7 @@ real ToLinearSpace(real Value, real Gamma = RNDR_GAMMA);
  * @param Gamma Gamma value to be used. By default it uses RNDR_GAMMA.
  * @return Returns color in gamma correction space (color ^ (1 / gamma)).
  */
-Vector4r ToGammaCorrectSpace(const Vector4r& Color, real Gamma = RNDR_GAMMA);
+math::Vector4 ToGammaCorrectSpace(const math::Vector4& Color, real Gamma = RNDR_GAMMA);
 
 /**
  * Convert gamma corrected (sRGB) color back to linear space.
@@ -378,7 +380,7 @@ Vector4r ToGammaCorrectSpace(const Vector4r& Color, real Gamma = RNDR_GAMMA);
  * @return Returns color value in linear space (gamma_corrected_color ^ (gamma)).
  * @note Using gamma of 2 for easier calculation.
  */
-Vector4r ToLinearSpace(const Vector4r& Color, real Gamma = RNDR_GAMMA);
+math::Vector4 ToLinearSpace(const math::Vector4& Color, real Gamma = RNDR_GAMMA);
 
 /**
  * Convert Color to the desired gamma space.
@@ -387,7 +389,7 @@ Vector4r ToLinearSpace(const Vector4r& Color, real Gamma = RNDR_GAMMA);
  * @param Gamma Gamma value to use for conversion.
  * @return Returns color in vector form in desired gamma space.
  */
-Vector4r ToDesiredSpace(const Vector4r& Color, GammaSpace DesiredSpace, real Gamma = RNDR_GAMMA);
+math::Vector4 ToDesiredSpace(const math::Vector4& Color, GammaSpace DesiredSpace, real Gamma = RNDR_GAMMA);
 
 /**
  * Convert a color from a vector representation to packed pixel representation.
@@ -395,7 +397,7 @@ Vector4r ToDesiredSpace(const Vector4r& Color, GammaSpace DesiredSpace, real Gam
  * @param Layout Organization and size of color channels in a packed pixel representation.
  * @return Returns packed pixel representation.
  */
-uint32_t ColorToUInt32(const Vector4r& Color, PixelFormat Format);
+uint32_t ColorToUInt32(const math::Vector4& Color, PixelFormat Format);
 
 /**
  * Convert color from a packed pixel representation to a vector representation.
@@ -403,7 +405,7 @@ uint32_t ColorToUInt32(const Vector4r& Color, PixelFormat Format);
  * @param Layout Organization and size of color channels in a packed pixel representation.
  * @return Returns vector representation of a color.
  */
-Vector4r ColorToVector(uint32_t Color, PixelFormat Format);
+math::Vector4 ColorToVector(uint32_t Color, PixelFormat Format);
 
 /**
  * Get size of a pixel in bytes based on the layout.

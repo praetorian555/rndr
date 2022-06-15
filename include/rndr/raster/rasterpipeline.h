@@ -44,7 +44,7 @@ struct OutVertexInfo
  */
 struct InFragmentInfo
 {
-    Point2i Position;  // In discrete space
+    math::Point2 Position;  // In discrete space
     BarycentricCoordinates BarCoords;
     real W;
     real Depth;
@@ -63,7 +63,7 @@ struct InFragmentInfo
  */
 struct OutFragmentInfo
 {
-    Vector4r Color;
+    math::Vector4Color;
     real Depth;
 };
 
@@ -73,7 +73,7 @@ using FragmentShader = std::function<void(const Triangle&, const InFragmentInfo&
 class Triangle
 {
 public:
-    rndr::Point3r ScreenPositions[3];
+    rndr::math::Point3 ScreenPositions[3];
     OutVertexInfo* OutVertexData[3];
     void* ShaderConstants;
 
@@ -185,7 +185,7 @@ public:
     BlendFactor DstAlphaBlendFactor = BlendFactor::OneMinusSrcAlpha;
     BlendOperator ColorBlendOperator = BlendOperator::Add;
     BlendOperator AlphaBlendOperator = BlendOperator::Add;
-    Vector3r ConstBlendColor = Colors::Black.XYZ();
+    math::Vector3 ConstBlendColor = Colors::Black.XYZ();
     real ConstBlendAlpha = 1.0;
 
     bool bUseDepthTest = false;
@@ -201,14 +201,14 @@ public:
     FrameBuffer* RenderTarget;
 
 public:
-    Vector4r Blend(const Vector4r& Src, const Vector4r Dst) const;
+    math::Vector4Blend(const Vector4r& Src, const math::Vector4Dst) const;
     bool StencilTest(real& Src, real Dst) const;
     bool DepthTest(real Src, real Dst) const;
 
 private:
-    Vector3r GetBlendColorFactor(BlendFactor FactorName, const Vector4r& Src, const Vector4r& Dst) const;
+    math::Vector3 GetBlendColorFactor(BlendFactor FactorName, const Vector4r& Src, const Vector4r& Dst) const;
     real GetBlendAlphaFactor(BlendFactor FactorName, const Vector4r& Src, const Vector4r& Dst) const;
-    Vector3r PerformBlendOperation(BlendOperator Op, const Vector3r& Src, const Vector3r& Dst) const;
+    math::Vector3 PerformBlendOperation(BlendOperator Op, const Vector3r& Src, const Vector3r& Dst) const;
     real PerformBlendOperation(BlendOperator Op, real SrcAlpha, real DstAlpha) const;
 };
 

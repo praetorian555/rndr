@@ -6,7 +6,6 @@
 #include "rndr/core/coordinates.h"
 #include "rndr/core/fileutils.h"
 #include "rndr/core/log.h"
-#include "rndr/core/math.h"
 #include "rndr/core/threading.h"
 
 #include "rndr/profiling/cputracer.h"
@@ -15,8 +14,8 @@
 
 rndr::Image::Image(int Width, int Height, const ImageProperties& Props) : m_Props(Props), m_Width(Width), m_Height(Height)
 {
-    m_Bounds.pMin = Point2i{0, 0};
-    m_Bounds.pMax = Point2i{Width, Height};
+    m_Bounds.pMin = math::Point2{0, 0};
+    m_Bounds.pMax = math::Point2{Width, Height};
 
     if (Width == 0 || Height == 0)
     {
@@ -43,7 +42,7 @@ rndr::Image::Image(int Width, int Height, const ImageProperties& Props) : m_Prop
                     else
                     {
                         uint32_t* Pixel = (uint32_t*)(m_Buffer.data() + i * PixelSize);
-                        Vector4r BackgroundColor = ToGammaCorrectSpace(Colors::Pink);
+                        math::Vector4BackgroundColor = ToGammaCorrectSpace(Colors::Pink);
                         *Pixel = ColorToUInt32(BackgroundColor, m_Props.PixelLayout);
                     }
                 });
@@ -85,8 +84,8 @@ rndr::Image::Image(const std::string& FilePath, const ImageProperties& Props) : 
     m_Width = Width;
     m_Height = Height;
 
-    m_Bounds.pMin = Point2i{0, 0};
-    m_Bounds.pMax = Point2i{m_Width, m_Height};
+    m_Bounds.pMin = math::Point2{0, 0};
+    m_Bounds.pMax = math::Point2{m_Width, m_Height};
 
     // TODO(mkostic): How to know if image uses 16 or 8 bits per channel??
 
@@ -112,9 +111,9 @@ rndr::Image::Image(const std::string& FilePath, const ImageProperties& Props) : 
     {
         for (int X = 0; X < Width; X++)
         {
-            Vector4r Color = ColorToVector(DataU32[X + Y * Width], PixelLayout::R8G8B8A8);
+            math::Vector4Color = ColorToVector(DataU32[X + Y * Width], PixelLayout::R8G8B8A8);
             Color = ToLinearSpace(Color);
-            SetPixelColor(Point2i{X, Y}, Color);
+            SetPixelColor(math::Point2{X, Y}, Color);
         }
     }
 
@@ -145,7 +144,7 @@ uint32_t rndr::Image::GetPixelSize() const
     return rndr::GetPixelSize(m_Props.PixelLayout);
 }
 
-rndr::Vector4r rndr::Image::GetPixelColor(const Point2i& Location) const
+rndr::math::Vector4rndr::Image::GetPixelColor(const math::Point2& Location) const
 {
     assert(Location.X >= 0 && Location.X < m_Width);
     assert(Location.Y >= 0 && Location.Y < m_Height);
@@ -153,7 +152,7 @@ rndr::Vector4r rndr::Image::GetPixelColor(const Point2i& Location) const
     // TODO(mkostic): Add support for different sizes of pixels in memory
     const uint32_t* Pixels = (uint32_t*)m_Buffer.data();
     const uint32_t Value = Pixels[Location.X + Location.Y * m_Width];
-    Vector4r LinearColor = ColorToVector(Value, m_Props.PixelLayout);
+    math::Vector4LinearColor = ColorToVector(Value, m_Props.PixelLayout);
     if (m_Props.GammaSpace == GammaSpace::GammaCorrected)
     {
         LinearColor = ToLinearSpace(LinearColor);
@@ -161,12 +160,12 @@ rndr::Vector4r rndr::Image::GetPixelColor(const Point2i& Location) const
     return LinearColor;
 }
 
-rndr::Vector4r rndr::Image::GetPixelColor(int X, int Y) const
+rndr::math::Vector4rndr::Image::GetPixelColor(int X, int Y) const
 {
-    return GetPixelColor(Point2i{X, Y});
+    return GetPixelColor(math::Point2{X, Y});
 }
 
-real rndr::Image::GetPixelDepth(const Point2i& Location) const
+real rndr::Image::GetPixelDepth(const math::Point2& Location) const
 {
     assert(Location.X >= 0 && Location.X < m_Width);
     assert(Location.Y >= 0 && Location.Y < m_Height);
@@ -177,10 +176,10 @@ real rndr::Image::GetPixelDepth(const Point2i& Location) const
 
 real rndr::Image::GetPixelDepth(int X, int Y) const
 {
-    return GetPixelDepth(Point2i{X, Y});
+    return GetPixelDepth(math::Point2{X, Y});
 }
 
-uint8_t rndr::Image::GetStencilValue(const Point2i& Location) const
+uint8_t rndr::Image::GetStencilValue(const math::Point2& Location) const
 {
     assert(Location.X >= 0 && Location.X < m_Width);
     assert(Location.Y >= 0 && Location.Y < m_Height);
@@ -191,25 +190,25 @@ uint8_t rndr::Image::GetStencilValue(const Point2i& Location) const
 
 uint8_t rndr::Image::GetStencilValue(int X, int Y) const
 {
-    return GetStencilValue(Point2i{X, Y});
+    return GetStencilValue(math::Point2{X, Y});
 }
 
 template <>
-void rndr::Image::SetPixelValue<rndr::Vector4r>(const Point2i& Location, const Vector4r& Value)
+void rndr::Image::SetPixelValue<rndr::Vector4r>(const math::Point2& Location, const Vector4r& Value)
 {
     assert(m_Props.PixelLayout != PixelLayout::DEPTH_F32 && m_Props.PixelLayout != PixelLayout::STENCIL_UINT8);
     SetPixelColor(Location, Value);
 }
 
 template <>
-void rndr::Image::SetPixelValue<real>(const Point2i& Location, const real& Value)
+void rndr::Image::SetPixelValue<real>(const math::Point2& Location, const real& Value)
 {
     assert(m_Props.PixelLayout == PixelLayout::DEPTH_F32);
     SetPixelDepth(Location, Value);
 }
 
 template <>
-void rndr::Image::SetPixelValue<uint8_t>(const Point2i& Location, const uint8_t& Value)
+void rndr::Image::SetPixelValue<uint8_t>(const math::Point2& Location, const uint8_t& Value)
 {
     assert(m_Props.PixelLayout == PixelLayout::STENCIL_UINT8);
     SetPixelStencilValue(Location, Value);
@@ -219,30 +218,30 @@ template <>
 void rndr::Image::SetPixelValue<rndr::Vector4r>(int X, int Y, const Vector4r& Value)
 {
     assert(m_Props.PixelLayout != PixelLayout::DEPTH_F32 && m_Props.PixelLayout != PixelLayout::STENCIL_UINT8);
-    SetPixelColor(Point2i{X, Y}, Value);
+    SetPixelColor(math::Point2{X, Y}, Value);
 }
 
 template <>
 void rndr::Image::SetPixelValue<real>(int X, int Y, const real& Value)
 {
     assert(m_Props.PixelLayout == PixelLayout::DEPTH_F32);
-    SetPixelDepth(Point2i{X, Y}, Value);
+    SetPixelDepth(math::Point2{X, Y}, Value);
 }
 
 template <>
 void rndr::Image::SetPixelValue<uint8_t>(int X, int Y, const uint8_t& Value)
 {
     assert(m_Props.PixelLayout == PixelLayout::STENCIL_UINT8);
-    SetPixelStencilValue(Point2i{X, Y}, Value);
+    SetPixelStencilValue(math::Point2{X, Y}, Value);
 }
 
-void rndr::Image::SetPixelColor(const Point2i& Location, const Vector4r& Color)
+void rndr::Image::SetPixelColor(const math::Point2& Location, const Vector4r& Color)
 {
     assert(Location.X >= 0 && Location.X < m_Width);
     assert(Location.Y >= 0 && Location.Y < m_Height);
 
     uint32_t* Pixels = (uint32_t*)m_Buffer.data();
-    Vector4r sRGBColor = Color;
+    math::Vector4sRGBColor = Color;
     if (m_Props.GammaSpace == GammaSpace::GammaCorrected)
     {
         sRGBColor = ToGammaCorrectSpace(Color);
@@ -251,7 +250,7 @@ void rndr::Image::SetPixelColor(const Point2i& Location, const Vector4r& Color)
     Pixels[Location.X + Location.Y * m_Width] = Packed;
 }
 
-void rndr::Image::SetPixelColor(const Point2i& Location, uint32_t Color)
+void rndr::Image::SetPixelColor(const math::Point2& Location, uint32_t Color)
 {
     assert(Location.X >= 0 && Location.X < m_Width);
     assert(Location.Y >= 0 && Location.Y < m_Height);
@@ -260,7 +259,7 @@ void rndr::Image::SetPixelColor(const Point2i& Location, uint32_t Color)
     Pixels[Location.X + Location.Y * m_Width] = Color;
 }
 
-void rndr::Image::SetPixelDepth(const Point2i& Location, real Depth)
+void rndr::Image::SetPixelDepth(const math::Point2& Location, real Depth)
 {
     assert(Location.X >= 0 && Location.X < m_Width);
     assert(Location.Y >= 0 && Location.Y < m_Height);
@@ -269,7 +268,7 @@ void rndr::Image::SetPixelDepth(const Point2i& Location, real Depth)
     Depths[Location.X + Location.Y * m_Width] = Depth;
 }
 
-void rndr::Image::SetPixelStencilValue(const Point2i& Location, uint8_t Value)
+void rndr::Image::SetPixelStencilValue(const math::Point2& Location, uint8_t Value)
 {
     assert(Location.X >= 0 && Location.X < m_Width);
     assert(Location.Y >= 0 && Location.Y < m_Height);
@@ -301,7 +300,7 @@ void rndr::Image::ClearColor(const Vector4r& Color)
     RNDR_CPU_TRACE("Image Clear Color");
 
     // TODO(mkostic): Add support for different pixel layout sizes
-    Vector4r sRGBColor = Color;
+    math::Vector4sRGBColor = Color;
     if (m_Props.GammaSpace == GammaSpace::GammaCorrected)
     {
         sRGBColor = ToGammaCorrectSpace(Color);
@@ -365,14 +364,14 @@ void rndr::Image::SetPixelFormat(rndr::GammaSpace Space, rndr::PixelLayout Layou
     ParallelFor(m_Bounds.Extent(), 64,
                 [&](int X, int Y)
                 {
-                    Vector4r OldColor = GetPixelColor(X, Y);
+                    math::Vector4OldColor = GetPixelColor(X, Y);
                     if (m_Props.GammaSpace != Space)
                     {
                         OldColor = ToDesiredSpace(OldColor, Space);
                     }
                     const uint32_t NewColor = ColorToUInt32(OldColor, Layout);
                     assert(NewColor & 0xFF000000);
-                    SetPixelColor(Point2i{X, Y}, NewColor);
+                    SetPixelColor(math::Point2{X, Y}, NewColor);
                 });
 
     m_Props.PixelLayout = Layout;
@@ -418,29 +417,29 @@ void rndr::Image::GenerateMipMaps()
         {
             for (int X = 0; X < m_MipMaps[i]->m_Width; X++)
             {
-                Vector4r Result;
+                math::Vector4Result;
                 if (PrevImage->m_Width == 1)
                 {
-                    const Vector4r Bottom = PrevImage->GetPixelColor(0, 2 * Y);
-                    const Vector4r Top = PrevImage->GetPixelColor(0, 2 * Y + 1);
+                    const math::Vector4Bottom = PrevImage->GetPixelColor(0, 2 * Y);
+                    const math::Vector4Top = PrevImage->GetPixelColor(0, 2 * Y + 1);
                     Result = 0.5 * Bottom + 0.5 * Top;
                 }
                 else if (PrevImage->m_Height == 1)
                 {
-                    const Vector4r Left = PrevImage->GetPixelColor(2 * X, 0);
-                    const Vector4r Right = PrevImage->GetPixelColor(2 * X + 1, 0);
+                    const math::Vector4Left = PrevImage->GetPixelColor(2 * X, 0);
+                    const math::Vector4Right = PrevImage->GetPixelColor(2 * X + 1, 0);
                     Result = 0.5 * Left + 0.5 * Right;
                 }
                 else
                 {
-                    const Vector4r BottomLeft = PrevImage->GetPixelColor(2 * X, 2 * Y);
-                    const Vector4r BottomRight = PrevImage->GetPixelColor(2 * X + 1, 2 * Y);
-                    const Vector4r TopLeft = PrevImage->GetPixelColor(2 * X, 2 * Y + 1);
-                    const Vector4r TopRight = PrevImage->GetPixelColor(2 * X + 1, 2 * Y + 1);
+                    const math::Vector4BottomLeft = PrevImage->GetPixelColor(2 * X, 2 * Y);
+                    const math::Vector4BottomRight = PrevImage->GetPixelColor(2 * X + 1, 2 * Y);
+                    const math::Vector4TopLeft = PrevImage->GetPixelColor(2 * X, 2 * Y + 1);
+                    const math::Vector4TopRight = PrevImage->GetPixelColor(2 * X + 1, 2 * Y + 1);
                     Result = 0.25 * BottomLeft + 0.25 * BottomRight + 0.25 * TopLeft + 0.25 * TopRight;
                 }
 
-                CurrentImage->SetPixelColor(Point2i{X, Y}, Result);
+                CurrentImage->SetPixelColor(math::Point2{X, Y}, Result);
             }
         }
     }
