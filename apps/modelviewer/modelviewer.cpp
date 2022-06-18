@@ -8,6 +8,7 @@
 #include "math/vector3.h"
 
 #include "rndr/rndr.h"
+#include "rndr/ui/uisystem.h"
 
 RNDR_ALIGN(16) struct VertexShaderConstants
 {
@@ -96,6 +97,10 @@ void Init()
     assert(g_App);
     g_App->OnTickDelegate.Add(Loop);
     g_Context = g_App->GetWindow()->GetGraphicsContext();
+
+    rndr::ui::Properties Props;
+    bool Result = rndr::ui::Init(g_Context, Props);
+    assert(Result);
 
     rndr::ProjectionCameraProperties CameraProps;
     CameraProps.Projection = rndr::ProjectionType::Perspective;
@@ -438,6 +443,7 @@ void CleanUp()
     g_Context->DestroyImage(g_SpecularImage);
     g_Context->DestroySampler(g_Sampler);
 
+    rndr::ui::ShutDown();
     rndr::ShutDown();
 }
 
@@ -517,6 +523,28 @@ void Render(float DeltaSeconds)
         rndr::Mesh* Mesh = g_Model->GetMeshes()[i];
         g_Context->DrawIndexed(rndr::PrimitiveTopology::TriangleList, Mesh->GetIndices().Size);
     }
+
+    rndr::ui::StartFrame();
+
+    rndr::ui::BoxProperties Props;
+    Props.BottomLeft = math::Point2{100, 100};
+    Props.Size = math::Vector2{300, 100};
+    Props.Color = math::Vector4{0, 1, 0, 1};
+    rndr::ui::StartBox(Props);
+    Props.BottomLeft = math::Point2{110, 110};
+    Props.Size = math::Vector2{50, 50};
+    Props.Color = math::Vector4{0, 0, 1, 1};
+    rndr::ui::StartBox(Props);
+    rndr::ui::EndBox();
+    rndr::ui::EndBox();
+
+    Props.BottomLeft = math::Point2{500, 100};
+    Props.Size = math::Vector2{100, 100};
+    Props.Color = math::Vector4{1, 0, 0, 1};
+    rndr::ui::StartBox(Props);
+    rndr::ui::EndBox();
+
+    rndr::ui::EndFrame();
 }
 
 void Present(bool bVSync)

@@ -12,8 +12,6 @@
 
 rndr::Buffer::Buffer(rndr::GraphicsContext* Context, const BufferProperties& P, ByteSpan InitialData) : GraphicsContext(Context), Props(P)
 {
-    assert(Props.Size == InitialData.Size);
-
     D3D11_BUFFER_DESC Desc;
     Desc.BindFlags = DX11FromBufferBindFlag(Props.BindFlag);
     Desc.Usage = DX11FromUsage(Props.Usage);
@@ -42,6 +40,14 @@ rndr::Buffer::~Buffer()
 
 void rndr::Buffer::Update(ByteSpan Data) const
 {
+    // D3D11_BOX Box;
+    // Box.left = 0;
+    // Box.right = Data.Size;
+    // Box.bottom = 1;
+    // Box.top = 0;
+    // Box.back = 1;
+    // Box.front = 0;
+
     ID3D11DeviceContext* DeviceContext = GraphicsContext->GetDeviceContext();
     DeviceContext->UpdateSubresource(DX11Buffer, 0, nullptr, Data.Data, 0, 0);
 }
