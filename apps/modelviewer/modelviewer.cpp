@@ -535,6 +535,25 @@ void Render(float DeltaSeconds)
     Props.Size = math::Vector2{50, 50};
     Props.Color = math::Vector4{0, 0, 1, 1};
     rndr::ui::StartBox(Props);
+
+    static float AnimTime = 0;
+    static float AnimDuration = 0.2;
+    static float FinalAlpha = 0.5;
+
+    if (rndr::ui::MouseHovers())
+    {
+        AnimTime += DeltaSeconds;
+        AnimTime = math::Clamp(AnimTime, 0, AnimDuration);
+        float Alpha = math::Lerp(AnimTime / AnimDuration, 1, FinalAlpha);
+        rndr::ui::SetColor(math::Vector4(0, 0, 1, Alpha));
+    }
+    else
+    {
+        AnimTime -= DeltaSeconds;
+        AnimTime = math::Clamp(AnimTime, 0, AnimDuration);
+        float Alpha = math::Lerp(AnimTime / AnimDuration, 1, FinalAlpha);
+        rndr::ui::SetColor(math::Vector4(0, 0, 1, Alpha));
+    }
     rndr::ui::EndBox();
     rndr::ui::EndBox();
 

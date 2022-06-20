@@ -35,5 +35,12 @@ void EndFrame();
 void StartBox(const BoxProperties& Props);
 void EndBox();
 
+void SetColor(const math::Vector4& Color);
+void SetDim(const math::Point2& BottomLeft, const math::Vector2& Size);
+
+bool MouseHovers();
+bool LeftMouseButtonClicked();
+bool RightMouseButtonClicked();
+
 }  // namespace ui
 }  // namespace rndr
