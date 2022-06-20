@@ -100,7 +100,7 @@ void rndr::InputSystem::Update(real DeltaSeconds)
             {
                 if (Binding.Primitive == InputPrimitive::Mouse_AxisX)
                 {
-                    real Value = 0; 
+                    real Value = 0;
                     if (Binding.Trigger == InputTrigger::AxisChangedRelative)
                     {
                         Value = Binding.Modifier * ((Event.X - m_X) / (real)m_Window->GetWidth());
