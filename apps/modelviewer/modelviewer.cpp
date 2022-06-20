@@ -557,10 +557,20 @@ void Render(float DeltaSeconds)
     rndr::ui::EndBox();
     rndr::ui::EndBox();
 
+    const math::Vector4 FirstColor = math::Vector4{1, 0, 0, 1};
+    const math::Vector4 SecondColor = math::Vector4{1, 0, 0, 0.75};
+    static math::Vector4 NextColor = SecondColor;
+    static math::Vector4 Color = FirstColor;
+
     Props.BottomLeft = math::Point2{500, 100};
     Props.Size = math::Vector2{100, 100};
-    Props.Color = math::Vector4{1, 0, 0, 1};
+    Props.Color = Color;
     rndr::ui::StartBox(Props);
+    if (rndr::ui::LeftMouseButtonClicked())
+    {
+        Color = NextColor;
+        NextColor = NextColor == FirstColor ? SecondColor : FirstColor;
+    }
     rndr::ui::EndBox();
 
     rndr::ui::EndFrame();

@@ -322,6 +322,11 @@ void rndr::ui::EndFrame()
     }
 
     CleanupBoxes();
+
+    for (int i = 0; i < 3; i++)
+    {
+        g_PrevButtonState[i] = g_ButtonState[i];
+    }
 }
 
 void rndr::ui::StartBox(const BoxProperties& Props)
@@ -369,7 +374,7 @@ bool rndr::ui::MouseHovers()
 bool rndr::ui::LeftMouseButtonClicked()
 {
     const int Index = 0;
-    return g_PrevButtonState[Index] && !g_ButtonState[Index];
+    return MouseHovers() && g_PrevButtonState[Index] && !g_ButtonState[Index];
 }
 
 bool rndr::ui::RightMouseButtonClicked()
@@ -429,8 +434,8 @@ void rndr::ui::OnMouseMovement(InputPrimitive Primitive, InputTrigger Trigger, r
 
 void rndr::ui::OnButtonEvent(InputPrimitive Primitive, InputTrigger Trigger, real Value)
 {
+    // TODO(mkostic): Currently this doesn't handle multiple edges in one frame
     int Index = (int)Primitive - (int)InputPrimitive::Mouse_LeftButton;
-    g_PrevButtonState[Index] = g_ButtonState[Index];
     g_ButtonState[Index] = Trigger == InputTrigger::ButtonUp;
 }
 
