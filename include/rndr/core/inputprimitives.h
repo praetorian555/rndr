@@ -45,7 +45,8 @@ enum class InputTrigger
     ButtonDown,
     ButtonUp,
     DoubleClick,
-    AxisChanged
+    AxisChangedRelative,
+    AxisChangedAbsolute
 };
 
 }  // namespace rndr

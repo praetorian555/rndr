@@ -100,12 +100,28 @@ void rndr::InputSystem::Update(real DeltaSeconds)
             {
                 if (Binding.Primitive == InputPrimitive::Mouse_AxisX)
                 {
-                    const real Value = Binding.Modifier * ((Event.X - m_X) / (real)m_Window->GetWidth());
+                    real Value = 0; 
+                    if (Binding.Trigger == InputTrigger::AxisChangedRelative)
+                    {
+                        Value = Binding.Modifier * ((Event.X - m_X) / (real)m_Window->GetWidth());
+                    }
+                    else if (Binding.Trigger == InputTrigger::AxisChangedAbsolute)
+                    {
+                        Value = Event.X;
+                    }
                     Mapping.second->Callback(Binding.Primitive, Binding.Trigger, Value);
                 }
                 else if (Binding.Primitive == InputPrimitive::Mouse_AxisY)
                 {
-                    const real Value = Binding.Modifier * ((Event.Y - m_Y) / (real)m_Window->GetHeight());
+                    real Value = 0;
+                    if (Binding.Trigger == InputTrigger::AxisChangedRelative)
+                    {
+                        real Value = Binding.Modifier * ((Event.Y - m_Y) / (real)m_Window->GetHeight());
+                    }
+                    else if (Binding.Trigger == InputTrigger::AxisChangedAbsolute)
+                    {
+                        Value = Event.Y;
+                    }
                     Mapping.second->Callback(Binding.Primitive, Binding.Trigger, Value);
                 }
             }
