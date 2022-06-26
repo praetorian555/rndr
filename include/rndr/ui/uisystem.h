@@ -21,9 +21,13 @@ struct Properties
 
 struct BoxProperties
 {
+    // Bottom left point of the box in pixels. Origin of the UI scene is at (0, 0) in bottom left corner of the screen. It grows to the
+    // right and upwards.
     math::Point2 BottomLeft;
-    math::Vector2 Size;
-    math::Vector4 Color;
+    // Size of the box in pixels.
+    math::Vector2 Size = math::Vector2{100, 100};
+    // Tint of the box.
+    math::Vector4 Color = rndr::Colors::Pink;
 };
 
 bool Init(GraphicsContext* Context, const Properties& Props);
