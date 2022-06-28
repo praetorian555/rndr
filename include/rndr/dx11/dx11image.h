@@ -26,16 +26,13 @@ struct Image
     ID3D11RenderTargetView* DX11RenderTargetView = nullptr;
     ID3D11DepthStencilView* DX11DepthStencilView = nullptr;
 
-    bool bSwapchainBackBuffer;
+    Image() = default;
 
-    Image(GraphicsContext* Context, int Width, int Height, const ImageProperties& Props = ImageProperties{});
-    Image(GraphicsContext* Context);
-    Image(GraphicsContext* Context, const std::string& FilePath, const ImageProperties& Props = ImageProperties{});
+    bool Init(GraphicsContext* Context, int Width, int Height, const ImageProperties& Props, ByteSpan InitData);
+    bool InitArray(GraphicsContext* Context, int Width, int Height, const ImageProperties& Props, Span<ByteSpan> InitData);
+    bool InitSwapchainBackBuffer(GraphicsContext* Context);
 
     ~Image();
-
-private:
-    void Create(GraphicsContext* Context, ByteSpan Data = ByteSpan{});
 };
 
 }  // namespace rndr

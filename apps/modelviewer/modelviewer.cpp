@@ -9,6 +9,7 @@
 
 #include "rndr/rndr.h"
 #include "rndr/ui/uisystem.h"
+#include "rndr/core/fileutils.h"
 
 RNDR_ALIGN(16) struct VertexShaderConstants
 {
@@ -369,38 +370,41 @@ void InitRenderPrimitives()
 
     {
         const std::string TexturePath = RNDR_ASSET_DIR "/textures/templategrid_albedo.png";
+        rndr::CPUImage ImageInfo = rndr::ReadEntireImage(TexturePath);
         rndr::ImageProperties TextureProps;
         TextureProps.ImageBindFlags = rndr::ImageBindFlags::ShaderResource;
         TextureProps.ArraySize = 1;
         TextureProps.bUseMips = true;
         TextureProps.CPUAccess = rndr::CPUAccess::None;
         TextureProps.Usage = rndr::Usage::GPUReadWrite;
-        TextureProps.PixelFormat = rndr::PixelFormat::R8G8B8A8_UNORM_SRGB;
-        g_DiffuseImage = g_Context->CreateImage(TexturePath.c_str(), TextureProps);
+        TextureProps.PixelFormat = ImageInfo.Format;
+        g_DiffuseImage = g_Context->CreateImage(ImageInfo.Width, ImageInfo.Height, TextureProps, ImageInfo.Data);
     }
 
     {
         const std::string TexturePath = RNDR_ASSET_DIR "/textures/templategrid_normal.png";
+        rndr::CPUImage ImageInfo = rndr::ReadEntireImage(TexturePath);
         rndr::ImageProperties TextureProps;
         TextureProps.ImageBindFlags = rndr::ImageBindFlags::ShaderResource;
         TextureProps.ArraySize = 1;
         TextureProps.bUseMips = true;
         TextureProps.CPUAccess = rndr::CPUAccess::None;
         TextureProps.Usage = rndr::Usage::GPUReadWrite;
-        TextureProps.PixelFormat = rndr::PixelFormat::R8G8B8A8_UNORM_SRGB;
-        g_NormalImage = g_Context->CreateImage(TexturePath.c_str(), TextureProps);
+        TextureProps.PixelFormat = ImageInfo.Format;
+        g_NormalImage = g_Context->CreateImage(ImageInfo.Width, ImageInfo.Height, TextureProps, ImageInfo.Data);
     }
 
     {
         const std::string TexturePath = RNDR_ASSET_DIR "/textures/templategrid_specular.png";
+        rndr::CPUImage ImageInfo = rndr::ReadEntireImage(TexturePath);
         rndr::ImageProperties TextureProps;
         TextureProps.ImageBindFlags = rndr::ImageBindFlags::ShaderResource;
         TextureProps.ArraySize = 1;
         TextureProps.bUseMips = true;
         TextureProps.CPUAccess = rndr::CPUAccess::None;
         TextureProps.Usage = rndr::Usage::GPUReadWrite;
-        TextureProps.PixelFormat = rndr::PixelFormat::R8G8B8A8_UNORM_SRGB;
-        g_SpecularImage = g_Context->CreateImage(TexturePath.c_str(), TextureProps);
+        TextureProps.PixelFormat = ImageInfo.Format;
+        g_SpecularImage = g_Context->CreateImage(ImageInfo.Width, ImageInfo.Height, TextureProps, ImageInfo.Data);
     }
 
     {

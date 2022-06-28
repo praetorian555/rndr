@@ -23,7 +23,7 @@ rndr::FrameBuffer::FrameBuffer(rndr::GraphicsContext* Context, int Width, int He
         RNDR_LOG_INFO("Creating window framebuffer...");
 
         // Special image that uses swapchain buffer
-        ColorBuffers[0] = GraphicsContext->CreateImage();
+        ColorBuffers[0] = GraphicsContext->CreateImageForSwapchainBackBuffer();
     }
 
     if (Props.ColorBufferCount > 1)
@@ -31,13 +31,13 @@ rndr::FrameBuffer::FrameBuffer(rndr::GraphicsContext* Context, int Width, int He
         const int StartIndex = Props.bWindowFrameBuffer ? 1 : 0;
         for (int i = StartIndex; i < Props.ColorBufferCount; i++)
         {
-            ColorBuffers[i] = GraphicsContext->CreateImage(Width, Height, Props.ColorBufferProperties[i]);
+            ColorBuffers[i] = GraphicsContext->CreateImage(Width, Height, Props.ColorBufferProperties[i], ByteSpan{});
         }
     }
 
     if (Props.bUseDepthStencil)
     {
-        DepthStencilBuffer = GraphicsContext->CreateImage(Width, Height, Props.DepthStencilBufferProperties);
+        DepthStencilBuffer = GraphicsContext->CreateImage(Width, Height, Props.DepthStencilBufferProperties, ByteSpan{});
     }
 
     Viewport.Width = Width;
@@ -104,7 +104,7 @@ void rndr::FrameBuffer::SetSize(int W, int H)
         RNDR_LOG_INFO("Resizing window framebuffer...");
 
         // Special image that uses swapchain buffer
-        ColorBuffers[0] = GraphicsContext->CreateImage();
+        ColorBuffers[0] = GraphicsContext->CreateImageForSwapchainBackBuffer();
     }
 
     if (Props.ColorBufferCount > 1)
@@ -112,13 +112,13 @@ void rndr::FrameBuffer::SetSize(int W, int H)
         const int StartIndex = Props.bWindowFrameBuffer ? 1 : 0;
         for (int i = StartIndex; i < Props.ColorBufferCount; i++)
         {
-            ColorBuffers[i] = GraphicsContext->CreateImage(Width, Height, Props.ColorBufferProperties[i]);
+            ColorBuffers[i] = GraphicsContext->CreateImage(Width, Height, Props.ColorBufferProperties[i], ByteSpan{});
         }
     }
 
     if (Props.bUseDepthStencil)
     {
-        DepthStencilBuffer = GraphicsContext->CreateImage(Width, Height, Props.DepthStencilBufferProperties);
+        DepthStencilBuffer = GraphicsContext->CreateImage(Width, Height, Props.DepthStencilBufferProperties, ByteSpan{});
     }
 
     Viewport.Width = Width;

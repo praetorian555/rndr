@@ -100,19 +100,25 @@ rndr::Shader* rndr::GraphicsContext::CreateShader(const ShaderProperties& Props)
     return new Shader(this, Props);
 }
 
-rndr::Image* rndr::GraphicsContext::CreateImage(int Width, int Height, const ImageProperties& Props)
+rndr::Image* rndr::GraphicsContext::CreateImage(int Width, int Height, const ImageProperties& Props, ByteSpan InitData)
 {
-    return new Image(this, Width, Height, Props);
+    Image* Im = new Image();
+    Im->Init(this, Width, Height, Props, InitData);
+    return Im;
 }
 
-rndr::Image* rndr::GraphicsContext::CreateImage(const std::string& FilePath, const ImageProperties& Props)
+rndr::Image* rndr::GraphicsContext::CreateImageArray(int Width, int Height, const ImageProperties& Props, Span<ByteSpan> InitData)
 {
-    return new Image(this, FilePath, Props);
+    Image* Im = new Image();
+    Im->InitArray(this, Width, Height, Props, InitData);
+    return Im;
 }
 
-rndr::Image* rndr::GraphicsContext::CreateImage()
+rndr::Image* rndr::GraphicsContext::CreateImageForSwapchainBackBuffer()
 {
-    return new Image(this);
+    Image* Im = new Image();
+    Im->InitSwapchainBackBuffer(this);
+    return Im;
 }
 
 rndr::Sampler* rndr::GraphicsContext::CreateSampler(const SamplerProperties& Props)

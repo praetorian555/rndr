@@ -179,14 +179,15 @@ void BoxRenderPass::Init(rndr::GraphicsContext* GraphicsContext, rndr::Projectio
     m_ConstantBuffer = m_GraphicsContext->CreateBuffer(ConstBufferProps, (rndr::ByteSpan)&Constants);
 
     const std::string WallTexturePath = RNDR_ASSET_DIR "/textures/bricked-wall.png";
+    rndr::CPUImage ImageInfo = rndr::ReadEntireImage(WallTexturePath);
     rndr::ImageProperties TextureProps;
     TextureProps.ImageBindFlags = rndr::ImageBindFlags::ShaderResource;
     TextureProps.ArraySize = 1;
     TextureProps.bUseMips = true;
     TextureProps.CPUAccess = rndr::CPUAccess::None;
     TextureProps.Usage = rndr::Usage::GPUReadWrite;
-    TextureProps.PixelFormat = rndr::PixelFormat::R8G8B8A8_UNORM_SRGB;
-    m_Texture = m_GraphicsContext->CreateImage(WallTexturePath, TextureProps);
+    TextureProps.PixelFormat = ImageInfo.Format;
+    m_Texture = m_GraphicsContext->CreateImage(ImageInfo.Width, ImageInfo.Height, TextureProps, ImageInfo.Data);
 
     rndr::SamplerProperties SamplerProps;
     SamplerProps.AddressingU = rndr::ImageAddressing::Repeat;

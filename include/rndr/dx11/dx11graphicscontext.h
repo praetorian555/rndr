@@ -41,9 +41,9 @@ public:
     FrameBuffer* GetWindowFrameBuffer();
 
     Shader* CreateShader(const ShaderProperties& Props);
-    Image* CreateImage(int Width, int Height, const ImageProperties& Props);
-    Image* CreateImage(const std::string& FilePath, const ImageProperties& Props);
-    Image* CreateImage();
+    Image* CreateImage(int Width, int Height, const ImageProperties& Props, ByteSpan InitData);
+    Image* CreateImageArray(int Width, int Height, const ImageProperties& Props, Span<ByteSpan> InitData);
+    Image* CreateImageForSwapchainBackBuffer();
     Sampler* CreateSampler(const SamplerProperties& Props);
     Buffer* CreateBuffer(const BufferProperties& Props, ByteSpan InitialData);
     FrameBuffer* CreateFrameBuffer(int Width, int Height, const FrameBufferProperties& Props);
