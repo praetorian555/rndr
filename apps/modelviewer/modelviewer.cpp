@@ -7,9 +7,9 @@
 #include "math/vector2.h"
 #include "math/vector3.h"
 
+#include "rndr/core/fileutils.h"
 #include "rndr/rndr.h"
 #include "rndr/ui/uisystem.h"
-#include "rndr/core/fileutils.h"
 
 RNDR_ALIGN(16) struct VertexShaderConstants
 {
