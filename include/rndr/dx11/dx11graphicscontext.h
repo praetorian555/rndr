@@ -68,7 +68,7 @@ public:
     void BindBlendState(BlendState* State);
 
     void DrawIndexed(PrimitiveTopology Topology, int IndicesCount);
-    void DrawIndexedInstanced(PrimitiveTopology Topology, int IndicesCount, int InstanceCount);
+    void DrawIndexedInstanced(PrimitiveTopology Topology, int IndexCount, int InstanceCount, int IndexOffset = 0, int InstanceOffset = 0);
 
     void Present(bool bVSync);
 

@@ -347,10 +347,14 @@ void rndr::GraphicsContext::DrawIndexed(PrimitiveTopology Topology, int IndicesC
     m_DeviceContext->DrawIndexed(IndicesCount, 0, 0);
 }
 
-void rndr::GraphicsContext::DrawIndexedInstanced(PrimitiveTopology Topology, int IndicesCount, int InstanceCount)
+void rndr::GraphicsContext::DrawIndexedInstanced(PrimitiveTopology Topology,
+                                                 int IndexCount,
+                                                 int InstanceCount,
+                                                 int IndexOffset,
+                                                 int InstanceOffset)
 {
     m_DeviceContext->IASetPrimitiveTopology(DX11FromPrimitiveTopology(Topology));
-    m_DeviceContext->DrawIndexedInstanced(IndicesCount, InstanceCount, 0, 0, 0);
+    m_DeviceContext->DrawIndexedInstanced(IndexCount, InstanceCount, IndexOffset, 0, InstanceOffset);
 }
 
 void rndr::GraphicsContext::Present(bool bVSync)
