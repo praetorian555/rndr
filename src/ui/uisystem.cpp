@@ -1,5 +1,6 @@
 #include "rndr/ui/uisystem.h"
 
+#include <algorithm>
 #include <vector>
 
 #include "math/bounds2.h"
@@ -72,7 +73,7 @@ static bool g_ButtonState[3];
 static int g_PrevScrollPosition = 0;
 static int g_ScrollPosition = 0;
 
-static std::vector<InstanceData> BatchBoxes(int Level = 1);
+static std::vector<InstanceData> BatchBoxes();
 static void CleanupBoxes();
 static void OnMouseMovement(InputPrimitive Primitive, InputTrigger Trigger, real Value);
 static void OnButtonEvent(InputPrimitive Primitive, InputTrigger Trigger, real Value);
@@ -336,19 +337,24 @@ void rndr::ui::EndFrame()
     g_Context->BindSampler(g_Sampler, 0, g_FragmentShader);
     g_Context->BindFrameBuffer(nullptr);
 
-    int TargetLevel = 1;
-    while (true)
+    auto Compare = [](const Box* A, const Box* B) { return A->Level < B->Level; };
+    std::sort(g_Boxes.begin(), g_Boxes.end(), Compare);
+    std::vector<InstanceData> Data = BatchBoxes();
+    int Offset = 0;
+    while (Offset < g_Boxes.size())
     {
-        std::vector<InstanceData> Data = BatchBoxes(TargetLevel++);
-        if (!Data.empty())
+        const int InstanceOffset = Offset;
+        int RefLevel = g_Boxes[Offset++]->Level;
+        while (Offset < g_Boxes.size() && RefLevel == g_Boxes[Offset]->Level)
         {
-            g_InstanceBuffer->Update(ByteSpan(Data));
-            g_Context->DrawIndexedInstanced(PrimitiveTopology::TriangleList, 6, Data.size());
+            Offset++;
         }
-        else
-        {
-            break;
-        }
+        const int InstanceCount = Offset - InstanceOffset;
+
+        g_InstanceBuffer->Update(ByteSpan(Data));
+        const int IndexCount = 6;
+        const int IndexOffset = 0;
+        g_Context->DrawIndexedInstanced(PrimitiveTopology::TriangleList, IndexCount, InstanceCount, IndexOffset, InstanceOffset);
     }
 
     CleanupBoxes();
@@ -413,15 +419,11 @@ bool rndr::ui::RightMouseButtonClicked()
     return g_PrevButtonState[Index] && !g_ButtonState[Index];
 }
 
-std::vector<rndr::ui::InstanceData> rndr::ui::BatchBoxes(int Level)
+std::vector<rndr::ui::InstanceData> rndr::ui::BatchBoxes()
 {
     std::vector<InstanceData> Instances;
     for (Box* B : g_Boxes)
     {
-        if (B->Level != Level)
-        {
-            continue;
-        }
         InstanceData Data;
         Data.BottomLeft = B->Props.BottomLeft;
         Data.TopRight = B->Props.BottomLeft + B->Props.Size;
