@@ -20,6 +20,9 @@ namespace rndr
 namespace ui
 {
 
+static constexpr int kMaxInstances = 512;
+static constexpr int kWhiteImageIndex = 0;
+
 static GraphicsContext* g_Context = nullptr;
 static Shader* g_VertexShader = nullptr;
 static Shader* g_FragmentShader = nullptr;
@@ -28,18 +31,21 @@ static RasterizerState* g_RasterizerState = nullptr;
 static DepthStencilState* g_DepthStencilState = nullptr;
 static BlendState* g_BlendState = nullptr;
 
-static Buffer* g_VertexBuffer = nullptr;
 static Buffer* g_InstanceBuffer = nullptr;
 static Buffer* g_IndexBuffer = nullptr;
 static Buffer* g_GlobalsConstantBuffer = nullptr;
 
-static constexpr int kMaxInstances = 512;
+static Sampler* g_Sampler = nullptr;
+static Image* g_ImageArray = nullptr;
 
 struct InstanceData
 {
     math::Point2 BottomLeft;
     math::Point2 TopRight;
+    math::Point2 TexCoordsBottomLeft;
+    math::Point2 TexCoordsTopRight;
     math::Vector4 Color;
+    float AtlasIndex;
 };
 
 RNDR_ALIGN(16) struct ShaderGlobals
@@ -103,36 +109,50 @@ bool rndr::ui::Init(GraphicsContext* Context, const Properties& Props)
         return false;
     }
 
-    InputLayoutProperties ILProps[4];
+    InputLayoutProperties ILProps[6];
     ILProps[0].SemanticName = "POSITION";
     ILProps[0].SemanticIndex = 0;
     ILProps[0].InputSlot = 0;
     ILProps[0].Format = rndr::PixelFormat::R32G32_FLOAT;
     ILProps[0].OffsetInVertex = 0;
-    ILProps[0].Repetition = rndr::DataRepetition::PerVertex;
-    ILProps[0].InstanceStepRate = 0;
+    ILProps[0].Repetition = rndr::DataRepetition::PerInstance;
+    ILProps[0].InstanceStepRate = 1;
     ILProps[1].SemanticName = "POSITION";
     ILProps[1].SemanticIndex = 1;
-    ILProps[1].InputSlot = 1;
+    ILProps[1].InputSlot = 0;
     ILProps[1].Format = rndr::PixelFormat::R32G32_FLOAT;
-    ILProps[1].OffsetInVertex = 0;
+    ILProps[1].OffsetInVertex = AppendAlignedElement;
     ILProps[1].Repetition = rndr::DataRepetition::PerInstance;
     ILProps[1].InstanceStepRate = 1;
-    ILProps[2].SemanticName = "POSITION";
-    ILProps[2].SemanticIndex = 2;
-    ILProps[2].InputSlot = 1;
+    ILProps[2].SemanticName = "TEXCOORD";
+    ILProps[2].SemanticIndex = 0;
+    ILProps[2].InputSlot = 0;
     ILProps[2].Format = rndr::PixelFormat::R32G32_FLOAT;
     ILProps[2].OffsetInVertex = AppendAlignedElement;
     ILProps[2].Repetition = rndr::DataRepetition::PerInstance;
     ILProps[2].InstanceStepRate = 1;
-    ILProps[3].SemanticName = "COLOR";
-    ILProps[3].SemanticIndex = 0;
-    ILProps[3].InputSlot = 1;
-    ILProps[3].Format = rndr::PixelFormat::R32G32B32A32_FLOAT;
+    ILProps[3].SemanticName = "TEXCOORD";
+    ILProps[3].SemanticIndex = 1;
+    ILProps[3].InputSlot = 0;
+    ILProps[3].Format = rndr::PixelFormat::R32G32_FLOAT;
     ILProps[3].OffsetInVertex = AppendAlignedElement;
     ILProps[3].Repetition = rndr::DataRepetition::PerInstance;
     ILProps[3].InstanceStepRate = 1;
-    g_InputLayout = g_Context->CreateInputLayout(Span(ILProps, 4), g_VertexShader);
+    ILProps[4].SemanticName = "COLOR";
+    ILProps[4].SemanticIndex = 0;
+    ILProps[4].InputSlot = 0;
+    ILProps[4].Format = rndr::PixelFormat::R32G32B32A32_FLOAT;
+    ILProps[4].OffsetInVertex = AppendAlignedElement;
+    ILProps[4].Repetition = rndr::DataRepetition::PerInstance;
+    ILProps[4].InstanceStepRate = 1;
+    ILProps[5].SemanticName = "BLENDINDICES";
+    ILProps[5].SemanticIndex = 0;
+    ILProps[5].InputSlot = 0;
+    ILProps[5].Format = rndr::PixelFormat::R32_FLOAT;
+    ILProps[5].OffsetInVertex = AppendAlignedElement;
+    ILProps[5].Repetition = rndr::DataRepetition::PerInstance;
+    ILProps[5].InstanceStepRate = 1;
+    g_InputLayout = g_Context->CreateInputLayout(Span(ILProps, 6), g_VertexShader);
     if (!g_InputLayout)
     {
         RNDR_LOG_ERROR("Failed to create InputLayout!");
@@ -181,21 +201,6 @@ bool rndr::ui::Init(GraphicsContext* Context, const Properties& Props)
         return false;
     }
 
-    math::Vector2 VertexData[] = {math::Vector2{-1, -1}, math::Vector2{1, -1}, math::Vector2{-1, 1}, math::Vector2{1, 1}};
-
-    BufferProperties VertexBufferProps;
-    VertexBufferProps.BindFlag = BufferBindFlag::Vertex;
-    VertexBufferProps.CPUAccess = CPUAccess::None;
-    VertexBufferProps.Usage = Usage::GPUReadWrite;
-    VertexBufferProps.Size = sizeof(VertexData);
-    VertexBufferProps.Stride = sizeof(math::Vector2);
-    g_VertexBuffer = g_Context->CreateBuffer(VertexBufferProps, ByteSpan(VertexData));
-    if (!g_VertexBuffer)
-    {
-        RNDR_LOG_ERROR("Failed to create vertex Buffer!");
-        return false;
-    }
-
     InstanceData Instances[kMaxInstances];
     BufferProperties InstanceBufferProps;
     InstanceBufferProps.BindFlag = rndr::BufferBindFlag::Vertex;
@@ -239,6 +244,29 @@ bool rndr::ui::Init(GraphicsContext* Context, const Properties& Props)
         return false;
     }
 
+    ImageProperties WhiteImageProps;
+    WhiteImageProps.ArraySize = 1;
+    WhiteImageProps.bUseMips = false;
+    WhiteImageProps.CPUAccess = CPUAccess::None;
+    WhiteImageProps.Usage = Usage::GPURead;
+    WhiteImageProps.PixelFormat = PixelFormat::R8G8B8A8_UNORM_SRGB;
+    WhiteImageProps.ImageBindFlags = ImageBindFlags::ShaderResource;
+    uint32_t InitData = 0xFFFFFFFF;
+    g_ImageArray = g_Context->CreateImage(1, 1, WhiteImageProps, (ByteSpan)&InitData);
+    if (!g_ImageArray)
+    {
+        RNDR_LOG_ERROR("Failed to create white image!");
+        return false;
+    }
+
+    SamplerProperties SamplerProps;
+    g_Sampler = g_Context->CreateSampler(SamplerProps);
+    if (!g_Sampler)
+    {
+        RNDR_LOG_ERROR("Failed to create sampler!");
+        return false;
+    }
+
     Box* ScreenBox = new Box();
     BoxProperties BoxProps;
     BoxProps.BottomLeft = math::Point2{0, 0};
@@ -267,10 +295,11 @@ bool rndr::ui::Init(GraphicsContext* Context, const Properties& Props)
 
 bool rndr::ui::ShutDown()
 {
+    g_Context->DestroyImage(g_ImageArray);
+    g_Context->DestroySampler(g_Sampler);
     g_Context->DestroyBuffer(g_GlobalsConstantBuffer);
     g_Context->DestroyBuffer(g_IndexBuffer);
     g_Context->DestroyBuffer(g_InstanceBuffer);
-    g_Context->DestroyBuffer(g_VertexBuffer);
     g_Context->DestroyBlendState(g_BlendState);
     g_Context->DestroyDepthStencilState(g_DepthStencilState);
     g_Context->DestroyRasterizerState(g_RasterizerState);
@@ -300,10 +329,11 @@ void rndr::ui::EndFrame()
     g_Context->BindRasterizerState(g_RasterizerState);
     g_Context->BindDepthStencilState(g_DepthStencilState);
     g_Context->BindBlendState(g_BlendState);
-    g_Context->BindBuffer(g_VertexBuffer, 0);
-    g_Context->BindBuffer(g_InstanceBuffer, 1);
+    g_Context->BindBuffer(g_InstanceBuffer, 0);
     g_Context->BindBuffer(g_IndexBuffer, 0);
     g_Context->BindBuffer(g_GlobalsConstantBuffer, 0, g_VertexShader);
+    g_Context->BindImageAsShaderResource(g_ImageArray, 0, g_FragmentShader);
+    g_Context->BindSampler(g_Sampler, 0, g_FragmentShader);
     g_Context->BindFrameBuffer(nullptr);
 
     int TargetLevel = 1;
@@ -395,7 +425,11 @@ std::vector<rndr::ui::InstanceData> rndr::ui::BatchBoxes(int Level)
         InstanceData Data;
         Data.BottomLeft = B->Props.BottomLeft;
         Data.TopRight = B->Props.BottomLeft + B->Props.Size;
+        // TODO(mkostic): Get this data based on the atlas map
+        Data.TexCoordsBottomLeft = math::Point2{0, 0};
+        Data.TexCoordsTopRight = math::Point2{1, 1};
         Data.Color = B->Props.Color;
+        Data.AtlasIndex = 0;
         Instances.push_back(Data);
     }
 
