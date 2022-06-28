@@ -203,7 +203,7 @@ struct ImageProperties
 {
     PixelFormat PixelFormat = PixelFormat::R8G8B8A8_UNORM_SRGB;
     CPUAccess CPUAccess = CPUAccess::None;
-    Usage Usage = Usage::GPUReadWrite;
+    Usage Usage = Usage::GPURead;
     bool bUseMips = false;
     uint32_t ImageBindFlags = ImageBindFlags::RenderTarget | ImageBindFlags::ShaderResource;
     int ArraySize = 1;
