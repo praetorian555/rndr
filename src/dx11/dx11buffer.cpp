@@ -41,8 +41,22 @@ rndr::Buffer::~Buffer()
 void rndr::Buffer::Update(ByteSpan Data) const
 {
     assert(Data.Size <= Props.Size);
+
+    D3D11_BOX* DestRegionPtr = nullptr;
+    D3D11_BOX DestRegion;
+    if (Props.BindFlag != BufferBindFlag::Constant)
+    {
+        DestRegion.left = 0;
+        DestRegion.right = Data.Size;
+        DestRegion.top = 0;
+        DestRegion.bottom = 1;
+        DestRegion.front = 0;
+        DestRegion.back = 1;
+        DestRegionPtr = &DestRegion;
+    }
+
     ID3D11DeviceContext* DeviceContext = GraphicsContext->GetDeviceContext();
-    DeviceContext->UpdateSubresource(DX11Buffer, 0, nullptr, Data.Data, 0, 0);
+    DeviceContext->UpdateSubresource(DX11Buffer, 0, DestRegionPtr, Data.Data, 0, 0);
 }
 
 #endif  // RNDR_DX11
