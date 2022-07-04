@@ -16,6 +16,8 @@ namespace rndr
  */
 ImageFileFormat GetImageFileFormat(const std::string& FilePath);
 
+ByteSpan ReadEntireFile(const std::string& FilePath);
+
 struct CPUImage
 {
     int Width, Height;
