@@ -133,9 +133,11 @@ bool rndr::Image::InitArray(GraphicsContext* Context, int Width, int Height, con
         D3D11_SHADER_RESOURCE_VIEW_DESC ResourceDesc;
         ZeroMemory(&ResourceDesc, sizeof(ResourceDesc));
         ResourceDesc.Format = DX11FromPixelFormat(Props.PixelFormat);
-        ResourceDesc.ViewDimension = D3D11_SRV_DIMENSION_TEXTURE2D;
-        ResourceDesc.Texture2D.MipLevels = Props.bUseMips ? -1 : 1;
-        ResourceDesc.Texture2D.MostDetailedMip = 0;
+        ResourceDesc.ViewDimension = D3D11_SRV_DIMENSION_TEXTURE2DARRAY;
+        ResourceDesc.Texture2DArray.MipLevels = Props.bUseMips ? -1 : 1;
+        ResourceDesc.Texture2DArray.MostDetailedMip = 0;
+        ResourceDesc.Texture2DArray.FirstArraySlice = 0;
+        ResourceDesc.Texture2DArray.ArraySize = InitData.Size;
         Result = Device->CreateShaderResourceView(DX11Texture, &ResourceDesc, &DX11ShaderResourceView);
         if (FAILED(Result))
         {
