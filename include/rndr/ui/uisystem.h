@@ -30,6 +30,13 @@ struct BoxProperties
     math::Vector4 Color = rndr::Colors::Pink;
 };
 
+struct TextBoxProperties
+{
+    math::Point2 BaseLineStart;
+    float Scale;
+    math::Vector4 Color = rndr::Colors::Pink;
+};
+
 bool Init(GraphicsContext* Context, const Properties& Props);
 bool ShutDown();
 
@@ -38,6 +45,8 @@ void EndFrame();
 
 void StartBox(const BoxProperties& Props);
 void EndBox();
+
+void DrawTextBox(const std::string& Text, const TextBoxProperties& Props);
 
 void SetColor(const math::Vector4& Color);
 void SetDim(const math::Point2& BottomLeft, const math::Vector2& Size);

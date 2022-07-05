@@ -530,6 +530,11 @@ void Render(float DeltaSeconds)
 
     rndr::ui::StartFrame();
 
+    rndr::ui::TextBoxProperties TBProps;
+    TBProps.BaseLineStart = math::Point2(150, 650);
+    TBProps.Scale = 1.0f;
+    rndr::ui::DrawTextBox("Hello there general!\nWill you fight with me?", TBProps);
+
     rndr::ui::BoxProperties Props;
     Props.BottomLeft = math::Point2{100, 100};
     Props.Size = math::Vector2{300, 100};

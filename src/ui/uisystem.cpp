@@ -3,11 +3,14 @@
 #include <algorithm>
 #include <vector>
 
+#include <stb_truetype/stb_truetype.h>
+
 #include "math/bounds2.h"
 #include "math/point2.h"
 #include "math/vector4.h"
 
 #include "rndr/core/buffer.h"
+#include "rndr/core/fileutils.h"
 #include "rndr/core/framebuffer.h"
 #include "rndr/core/graphicscontext.h"
 #include "rndr/core/graphicstypes.h"
@@ -22,6 +25,8 @@ namespace ui
 {
 
 static constexpr int kMaxInstances = 512;
+static constexpr int kDefaultFontSize = 36;
+static constexpr int kGlyphImageSize = 36;
 static constexpr int kWhiteImageIndex = 0;
 
 static GraphicsContext* g_Context = nullptr;
@@ -61,6 +66,38 @@ struct Box
     std::vector<Box*> Children;
     int Level;
     math::Bounds2 Bounds;
+    int AtlasIndex = kWhiteImageIndex;
+    math::Point2 TexCoordsBottomLeft = math::Point2{0, 0};
+    math::Point2 TexCoordsTopRight = math::Point2{1, 1};
+};
+
+struct GlyphInfo
+{
+    int Width = 0;
+    int Height = 0;
+    int OffsetX = 0;
+    int OffsetY = 0;
+    math::Point2 UVStart;
+    math::Point2 UVEnd;
+    ByteSpan Data;
+};
+
+struct AtlasInfo
+{
+    stbtt_fontinfo FontInfo;
+    Span<GlyphInfo> Glyphs;
+    // Factor to convert unscaled units to pixels
+    float Scale;
+    // Distance between baseline and the highest point of a font can have in pixels
+    int Ascent;
+    // Distance between baseline and the lowest point of a font, negative number in pixels
+    int Descent;
+    // Distance between font descent of one line and font ascent of the line beneath
+    int LineGap;
+    // First unicode value of the character range
+    int StartCodepoint;
+    // Unicode value after the last value in the character range
+    int EndCodepoint;
 };
 
 static std::vector<Box*> g_Stack;
@@ -73,11 +110,15 @@ static bool g_ButtonState[3];
 static int g_PrevScrollPosition = 0;
 static int g_ScrollPosition = 0;
 
+static AtlasInfo g_Atlas;
+
 static std::vector<InstanceData> BatchBoxes();
 static void CleanupBoxes();
 static void OnMouseMovement(InputPrimitive Primitive, InputTrigger Trigger, real Value);
 static void OnButtonEvent(InputPrimitive Primitive, InputTrigger Trigger, real Value);
 static void OnScroll(InputPrimitive Primitive, InputTrigger Trigger, real Value);
+
+static AtlasInfo GetAtlas(const std::string& FontPath, float SizeInPixels, float ImageSize);
 
 }  // namespace ui
 }  // namespace rndr
@@ -245,15 +286,27 @@ bool rndr::ui::Init(GraphicsContext* Context, const Properties& Props)
         return false;
     }
 
+    g_Atlas = GetAtlas("C:/Windows/Fonts/consola.ttf", kDefaultFontSize, kGlyphImageSize);
+    assert(g_Atlas.Glyphs);
+
     ImageProperties WhiteImageProps;
-    WhiteImageProps.ArraySize = 1;
+    WhiteImageProps.ArraySize = g_Atlas.Glyphs.Size + 1;
     WhiteImageProps.bUseMips = false;
     WhiteImageProps.CPUAccess = CPUAccess::None;
     WhiteImageProps.Usage = Usage::GPURead;
     WhiteImageProps.PixelFormat = PixelFormat::R8G8B8A8_UNORM_SRGB;
     WhiteImageProps.ImageBindFlags = ImageBindFlags::ShaderResource;
-    uint32_t InitData = 0xFFFFFFFF;
-    g_ImageArray = g_Context->CreateImage(1, 1, WhiteImageProps, (ByteSpan)&InitData);
+    Span<ByteSpan> InitData;
+    InitData.Size = g_Atlas.Glyphs.Size + 1;
+    InitData.Data = new ByteSpan[InitData.Size];
+    InitData.Data[0].Size = kGlyphImageSize * kGlyphImageSize * 4;
+    InitData.Data[0].Data = new uint8_t[InitData.Data[0].Size];
+    memset(InitData.Data[0].Data, 0xFF, InitData.Data[0].Size);
+    for (int i = 0; i < g_Atlas.Glyphs.Size; i++)
+    {
+        InitData[i + 1] = g_Atlas.Glyphs[i].Data;
+    }
+    g_ImageArray = g_Context->CreateImageArray(kGlyphImageSize, kGlyphImageSize, WhiteImageProps, InitData);
     if (!g_ImageArray)
     {
         RNDR_LOG_ERROR("Failed to create white image!");
@@ -349,7 +402,7 @@ void rndr::ui::EndFrame()
         {
             Offset++;
         }
-        const int InstanceCount = Offset - InstanceOffset;
+        const int InstanceCount = Offset - InstanceOffset + 1;
 
         g_InstanceBuffer->Update(ByteSpan(Data));
         const int IndexCount = 6;
@@ -382,6 +435,59 @@ void rndr::ui::EndBox()
 {
     assert(g_Stack.size() > 1);
     g_Stack.pop_back();
+}
+
+void rndr::ui::DrawTextBox(const std::string& Text, const TextBoxProperties& Props)
+{
+    math::Point2 StartPos = Props.BaseLineStart;
+    for (int i = 0; i < Text.size(); i++)
+    {
+        int Codepoint = Text[i];
+
+        int Advance, Bearing;
+        stbtt_GetCodepointHMetrics(&g_Atlas.FontInfo, Codepoint, &Advance, &Bearing);
+        Advance *= g_Atlas.Scale;
+        Bearing *= g_Atlas.Scale;
+
+        if (Codepoint == ' ')
+        {
+            int KernAdvance = stbtt_GetCodepointKernAdvance(&g_Atlas.FontInfo, Codepoint, Text[i + 1]);
+            KernAdvance *= g_Atlas.Scale;
+            StartPos.X += Props.Scale * (Bearing + Advance + KernAdvance);
+            continue;
+        }
+
+        if (Codepoint == '\n')
+        {
+            StartPos.X = Props.BaseLineStart.X;
+            StartPos.Y -= Props.Scale * (g_Atlas.Ascent + g_Atlas.LineGap - g_Atlas.Descent);
+            continue;
+        }
+
+        const GlyphInfo& Info = g_Atlas.Glyphs[Codepoint - g_Atlas.StartCodepoint];
+
+        assert(g_Boxes.size() < kMaxInstances);
+        Box* B = new Box();
+        BoxProperties BoxProps;
+        BoxProps.BottomLeft = StartPos;
+        BoxProps.BottomLeft.X += Props.Scale * Info.OffsetX;
+        BoxProps.BottomLeft.Y -= Props.Scale * (Info.Height + Info.OffsetY);
+        BoxProps.Size = math::Vector2{Props.Scale * Info.Width, Props.Scale * Info.Height};
+        BoxProps.Color = Props.Color;
+        B->Props = BoxProps;
+        B->Parent = g_Stack.back();
+        B->Parent->Children.push_back(B);
+        B->Level = B->Parent->Level + 1;
+        B->Bounds = math::Bounds2(BoxProps.BottomLeft, BoxProps.BottomLeft + BoxProps.Size);
+        B->AtlasIndex = Codepoint - g_Atlas.StartCodepoint + 1; // TODO(mkostic): This should be part of the GlyphInfo or Atlas
+        B->TexCoordsBottomLeft = Info.UVStart;
+        B->TexCoordsTopRight = Info.UVEnd;
+        g_Boxes.push_back(B);
+
+        int KernAdvance = stbtt_GetCodepointKernAdvance(&g_Atlas.FontInfo, Codepoint, Text[i + 1]);
+        KernAdvance *= g_Atlas.Scale;
+        StartPos.X += Props.Scale * (Bearing + Advance + KernAdvance);
+    }
 }
 
 void rndr::ui::SetColor(const math::Vector4& Color)
@@ -427,11 +533,10 @@ std::vector<rndr::ui::InstanceData> rndr::ui::BatchBoxes()
         InstanceData Data;
         Data.BottomLeft = B->Props.BottomLeft;
         Data.TopRight = B->Props.BottomLeft + B->Props.Size;
-        // TODO(mkostic): Get this data based on the atlas map
-        Data.TexCoordsBottomLeft = math::Point2{0, 0};
-        Data.TexCoordsTopRight = math::Point2{1, 1};
+        Data.TexCoordsBottomLeft = B->TexCoordsBottomLeft;
+        Data.TexCoordsTopRight = B->TexCoordsTopRight;
         Data.Color = B->Props.Color;
-        Data.AtlasIndex = 0;
+        Data.AtlasIndex = B->AtlasIndex;
         Instances.push_back(Data);
     }
 
@@ -479,4 +584,77 @@ void rndr::ui::OnScroll(InputPrimitive Primitive, InputTrigger Trigger, real Val
 {
     g_PrevScrollPosition = g_ScrollPosition;
     g_ScrollPosition += Value;
+}
+
+rndr::ui::AtlasInfo rndr::ui::GetAtlas(const std::string& FontPath, float SizeInPixels, float ImageSize)
+{
+    assert(ImageSize >= SizeInPixels);
+
+    // TODO(mkostic): ASCII table hardcode
+    constexpr int kStartCodepoint = 33;
+    constexpr int kEndCodepoint = 127;
+
+    ByteSpan FileContents = ReadEntireFile(FontPath);
+    assert(FileContents);
+
+    AtlasInfo AtlasInfo;
+    AtlasInfo.StartCodepoint = kStartCodepoint;
+    AtlasInfo.EndCodepoint = kEndCodepoint;
+    int FontOffset = stbtt_GetFontOffsetForIndex(FileContents.Data, 0);
+    int Result = stbtt_InitFont(&AtlasInfo.FontInfo, FileContents.Data, FontOffset);
+    if (!Result)
+    {
+        RNDR_LOG_ERROR("stbtt_InitFont failed!");
+        return AtlasInfo;
+    }
+
+    AtlasInfo.Glyphs.Size = kEndCodepoint - kStartCodepoint;
+    AtlasInfo.Glyphs.Data = new GlyphInfo[AtlasInfo.Glyphs.Size];
+
+    AtlasInfo.Scale = stbtt_ScaleForPixelHeight(&AtlasInfo.FontInfo, SizeInPixels);
+
+    int Ascent, Descent, LineGap;
+    stbtt_GetFontVMetrics(&AtlasInfo.FontInfo, &AtlasInfo.Ascent, &AtlasInfo.Descent, &AtlasInfo.LineGap);
+    AtlasInfo.Ascent *= AtlasInfo.Scale;
+    AtlasInfo.Descent *= AtlasInfo.Scale;
+    AtlasInfo.LineGap *= AtlasInfo.Scale;
+
+    for (int Codepoint = kStartCodepoint; Codepoint < kEndCodepoint; Codepoint++)
+    {
+        const int GlyphIndex = Codepoint - kStartCodepoint;
+        assert(GlyphIndex >= 0);
+        GlyphInfo& Info = AtlasInfo.Glyphs[GlyphIndex];
+        uint8_t* MonoData = stbtt_GetCodepointBitmap(&AtlasInfo.FontInfo, 0, AtlasInfo.Scale, Codepoint, &Info.Width, &Info.Height,
+                                                     &Info.OffsetX, &Info.OffsetY);
+        Info.Data.Size = ImageSize * ImageSize * 4;
+        Info.Data.Data = new uint8_t[Info.Data.Size];
+
+        constexpr uint32_t kClearValue = 0x00FFFFFF;
+        for (int Y = 0; Y < ImageSize; Y++)
+        {
+            for (int X = 0; X < ImageSize; X++)
+            {
+                uint32_t* Data = (uint32_t*)Info.Data.Data;
+                Data[Y * (int)ImageSize + X] = kClearValue;
+            }
+        }
+
+        constexpr int kOffset = 0;
+        for (int Y = 0; Y < Info.Height; Y++)
+        {
+            for (int X = 0; X < Info.Width; X++)
+            {
+                uint32_t* Data = (uint32_t*)Info.Data.Data;
+                uint32_t Alpha = MonoData[Y * Info.Width + X];
+
+                Data[(Y + kOffset) * (int)ImageSize + X + kOffset] = kClearValue | (Alpha << 24);
+            }
+        }
+
+        Info.UVStart = math::Point2{0, 0};
+        Info.UVEnd = math::Point2{(Info.Width + 2 * kOffset) / (float)ImageSize, (Info.Height + 2 * kOffset) / (float)ImageSize};
+
+        stbtt_FreeBitmap(MonoData, nullptr);
+    }
+    return AtlasInfo;
 }
