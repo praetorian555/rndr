@@ -26,6 +26,7 @@ namespace ui
 
 static constexpr int kMaxInstances = 512;
 static constexpr int kDefaultFontSize = 36;
+static constexpr int kMaxImageSize = 2 * kDefaultFontSize * 20;
 static constexpr int kWhiteImageIndex = 0;
 
 static GraphicsContext* g_Context = nullptr;
@@ -120,7 +121,7 @@ static void OnMouseMovement(InputPrimitive Primitive, InputTrigger Trigger, real
 static void OnButtonEvent(InputPrimitive Primitive, InputTrigger Trigger, real Value);
 static void OnScroll(InputPrimitive Primitive, InputTrigger Trigger, real Value);
 
-static AtlasInfo GetAtlas(const std::string& FontPath, float SizeInPixels);
+static AtlasInfo GetAtlas(const std::string& FontPath, float SizeInPixels, float MaxImageSizeInPixels);
 
 }  // namespace ui
 }  // namespace rndr
@@ -288,7 +289,7 @@ bool rndr::ui::Init(GraphicsContext* Context, const Properties& Props)
         return false;
     }
 
-    g_Atlas = GetAtlas("C:/Windows/Fonts/consola.ttf", kDefaultFontSize);
+    g_Atlas = GetAtlas("C:/Windows/Fonts/consola.ttf", kDefaultFontSize, kMaxImageSize);
     assert(g_Atlas.Glyphs);
 
     ImageProperties WhiteImageProps;
@@ -305,9 +306,7 @@ bool rndr::ui::Init(GraphicsContext* Context, const Properties& Props)
     InitData.Data[0].Data = new uint8_t[InitData.Data[0].Size];
     memset(InitData.Data[0].Data, 0xFF, InitData.Data[0].Size);
     InitData.Data[1] = g_Atlas.Data;
-    const int ImageWidth = g_Atlas.SideCount * kDefaultFontSize;
-    const int ImageHeight = g_Atlas.SideCount * kDefaultFontSize;
-    g_ImageArray = g_Context->CreateImageArray(ImageWidth, ImageHeight, WhiteImageProps, InitData);
+    g_ImageArray = g_Context->CreateImageArray(kMaxImageSize, kMaxImageSize, WhiteImageProps, InitData);
     if (!g_ImageArray)
     {
         RNDR_LOG_ERROR("Failed to create white image!");
@@ -598,7 +597,7 @@ static int GetAtlasSideSize(int GlyphCount)
     }
 }
 
-rndr::ui::AtlasInfo rndr::ui::GetAtlas(const std::string& FontPath, float SizeInPixels)
+rndr::ui::AtlasInfo rndr::ui::GetAtlas(const std::string& FontPath, float SizeInPixels, float MaxImageSizeInPixels)
 {
     // TODO(mkostic): ASCII table hardcode
     constexpr int kStartCodepoint = 33;
@@ -634,14 +633,12 @@ rndr::ui::AtlasInfo rndr::ui::GetAtlas(const std::string& FontPath, float SizeIn
     AtlasInfo.LineGap *= AtlasInfo.Scale;
 
     const int PixelSize = 4;
-    const int StridePixels = AtlasInfo.SideCount * (int)SizeInPixels; 
-    const int Stride = StridePixels * PixelSize;
-    AtlasInfo.Data.Size = Stride * Stride;
+    AtlasInfo.Data.Size = MaxImageSizeInPixels * MaxImageSizeInPixels * PixelSize;
     AtlasInfo.Data.Data = new uint8_t[AtlasInfo.Data.Size];
     assert(AtlasInfo.Data.Data);
 
     constexpr uint32_t kFullyTransparentWhite = 0x00FFFFFF;
-    for (int i = 0; i < StridePixels * StridePixels; i++)
+    for (int i = 0; i < MaxImageSizeInPixels * MaxImageSizeInPixels; i++)
     {
         uint32_t* Ptr = (uint32_t*)AtlasInfo.Data.Data;
         Ptr[i] = kFullyTransparentWhite;
@@ -663,15 +660,15 @@ rndr::ui::AtlasInfo rndr::ui::GetAtlas(const std::string& FontPath, float SizeIn
             for (int X = 0; X < Info.Width; X++)
             {
                 uint32_t Alpha = MonoData[Y * Info.Width + X];
-                const int Index = (OffsetY * (int)SizeInPixels + Y) * StridePixels + (OffsetX * (int)SizeInPixels + X);
+                const int Index = (OffsetY * (int)SizeInPixels + Y) * MaxImageSizeInPixels + (OffsetX * (int)SizeInPixels + X);
                 Ptr[Index] = kFullyTransparentWhite | (Alpha << 24);
             }
         }
 
-        Info.UVStart.X = OffsetX / (float)AtlasInfo.SideCount;
-        Info.UVStart.Y = OffsetY / (float)AtlasInfo.SideCount;
-        Info.UVEnd.X = (OffsetX * SizeInPixels + Info.Width) / (AtlasInfo.SideCount * SizeInPixels);
-        Info.UVEnd.Y = (OffsetY * SizeInPixels + Info.Height) / (AtlasInfo.SideCount * SizeInPixels);
+        Info.UVStart.X = (OffsetX * SizeInPixels) / MaxImageSizeInPixels;
+        Info.UVStart.Y = (OffsetY * SizeInPixels) / MaxImageSizeInPixels;
+        Info.UVEnd.X = (OffsetX * SizeInPixels + Info.Width) / MaxImageSizeInPixels;
+        Info.UVEnd.Y = (OffsetY * SizeInPixels + Info.Height) / MaxImageSizeInPixels;
 
         stbtt_FreeBitmap(MonoData, nullptr);
     }
