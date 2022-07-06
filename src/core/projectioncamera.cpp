@@ -76,6 +76,9 @@ math::Transform rndr::ProjectionCamera::GetProjectionTransform() const
 
 real rndr::ProjectionCamera::GetAspectRatio() const
 {
-    assert(m_Props.ScreenHeight != 0);
+    if (m_Props.ScreenHeight == 0)
+    {
+        return 1;
+    }
     return (real)m_Props.ScreenWidth / m_Props.ScreenHeight;
 }
