@@ -26,7 +26,6 @@ namespace ui
 
 static constexpr int kMaxInstances = 512;
 static constexpr int kDefaultFontSize = 36;
-static constexpr int kGlyphImageSize = 36;
 static constexpr int kWhiteImageIndex = 0;
 
 static GraphicsContext* g_Context = nullptr;
@@ -79,7 +78,6 @@ struct GlyphInfo
     int OffsetY = 0;
     math::Point2 UVStart;
     math::Point2 UVEnd;
-    ByteSpan Data;
 };
 
 struct AtlasInfo
@@ -98,6 +96,10 @@ struct AtlasInfo
     int StartCodepoint;
     // Unicode value after the last value in the character range
     int EndCodepoint;
+    // Atlas image
+    ByteSpan Data;
+    // Number of glyphs per side
+    int SideCount;
 };
 
 static std::vector<Box*> g_Stack;
@@ -118,7 +120,7 @@ static void OnMouseMovement(InputPrimitive Primitive, InputTrigger Trigger, real
 static void OnButtonEvent(InputPrimitive Primitive, InputTrigger Trigger, real Value);
 static void OnScroll(InputPrimitive Primitive, InputTrigger Trigger, real Value);
 
-static AtlasInfo GetAtlas(const std::string& FontPath, float SizeInPixels, float ImageSize);
+static AtlasInfo GetAtlas(const std::string& FontPath, float SizeInPixels);
 
 }  // namespace ui
 }  // namespace rndr
@@ -286,27 +288,26 @@ bool rndr::ui::Init(GraphicsContext* Context, const Properties& Props)
         return false;
     }
 
-    g_Atlas = GetAtlas("C:/Windows/Fonts/consola.ttf", kDefaultFontSize, kGlyphImageSize);
+    g_Atlas = GetAtlas("C:/Windows/Fonts/consola.ttf", kDefaultFontSize);
     assert(g_Atlas.Glyphs);
 
     ImageProperties WhiteImageProps;
-    WhiteImageProps.ArraySize = g_Atlas.Glyphs.Size + 1;
+    WhiteImageProps.ArraySize = 2;
     WhiteImageProps.bUseMips = false;
     WhiteImageProps.CPUAccess = CPUAccess::None;
     WhiteImageProps.Usage = Usage::GPURead;
     WhiteImageProps.PixelFormat = PixelFormat::R8G8B8A8_UNORM_SRGB;
     WhiteImageProps.ImageBindFlags = ImageBindFlags::ShaderResource;
     Span<ByteSpan> InitData;
-    InitData.Size = g_Atlas.Glyphs.Size + 1;
+    InitData.Size = 2;
     InitData.Data = new ByteSpan[InitData.Size];
-    InitData.Data[0].Size = kGlyphImageSize * kGlyphImageSize * 4;
+    InitData.Data[0].Size = g_Atlas.Data.Size;
     InitData.Data[0].Data = new uint8_t[InitData.Data[0].Size];
     memset(InitData.Data[0].Data, 0xFF, InitData.Data[0].Size);
-    for (int i = 0; i < g_Atlas.Glyphs.Size; i++)
-    {
-        InitData[i + 1] = g_Atlas.Glyphs[i].Data;
-    }
-    g_ImageArray = g_Context->CreateImageArray(kGlyphImageSize, kGlyphImageSize, WhiteImageProps, InitData);
+    InitData.Data[1] = g_Atlas.Data;
+    const int ImageWidth = g_Atlas.SideCount * kDefaultFontSize;
+    const int ImageHeight = g_Atlas.SideCount * kDefaultFontSize;
+    g_ImageArray = g_Context->CreateImageArray(ImageWidth, ImageHeight, WhiteImageProps, InitData);
     if (!g_ImageArray)
     {
         RNDR_LOG_ERROR("Failed to create white image!");
@@ -479,7 +480,7 @@ void rndr::ui::DrawTextBox(const std::string& Text, const TextBoxProperties& Pro
         B->Parent->Children.push_back(B);
         B->Level = B->Parent->Level + 1;
         B->Bounds = math::Bounds2(BoxProps.BottomLeft, BoxProps.BottomLeft + BoxProps.Size);
-        B->AtlasIndex = Codepoint - g_Atlas.StartCodepoint + 1; // TODO(mkostic): This should be part of the GlyphInfo or Atlas
+        B->AtlasIndex = 1;  // TODO(mkostic): This should be part of the GlyphInfo or Atlas
         B->TexCoordsBottomLeft = Info.UVStart;
         B->TexCoordsTopRight = Info.UVEnd;
         g_Boxes.push_back(B);
@@ -586,18 +587,31 @@ void rndr::ui::OnScroll(InputPrimitive Primitive, InputTrigger Trigger, real Val
     g_ScrollPosition += Value;
 }
 
-rndr::ui::AtlasInfo rndr::ui::GetAtlas(const std::string& FontPath, float SizeInPixels, float ImageSize)
+static int GetAtlasSideSize(int GlyphCount)
 {
-    assert(ImageSize >= SizeInPixels);
+    for (int i = 1;; i++)
+    {
+        if (GlyphCount <= i * i)
+        {
+            return i;
+        }
+    }
+}
 
+rndr::ui::AtlasInfo rndr::ui::GetAtlas(const std::string& FontPath, float SizeInPixels)
+{
     // TODO(mkostic): ASCII table hardcode
     constexpr int kStartCodepoint = 33;
     constexpr int kEndCodepoint = 127;
+    constexpr int kGlyphCount = kEndCodepoint - kStartCodepoint;
+
+    AtlasInfo AtlasInfo;
+
+    AtlasInfo.SideCount = GetAtlasSideSize(kGlyphCount);
 
     ByteSpan FileContents = ReadEntireFile(FontPath);
     assert(FileContents);
 
-    AtlasInfo AtlasInfo;
     AtlasInfo.StartCodepoint = kStartCodepoint;
     AtlasInfo.EndCodepoint = kEndCodepoint;
     int FontOffset = stbtt_GetFontOffsetForIndex(FileContents.Data, 0);
@@ -619,6 +633,21 @@ rndr::ui::AtlasInfo rndr::ui::GetAtlas(const std::string& FontPath, float SizeIn
     AtlasInfo.Descent *= AtlasInfo.Scale;
     AtlasInfo.LineGap *= AtlasInfo.Scale;
 
+    const int PixelSize = 4;
+    const int StridePixels = AtlasInfo.SideCount * (int)SizeInPixels; 
+    const int Stride = StridePixels * PixelSize;
+    AtlasInfo.Data.Size = Stride * Stride;
+    AtlasInfo.Data.Data = new uint8_t[AtlasInfo.Data.Size];
+    assert(AtlasInfo.Data.Data);
+
+    constexpr uint32_t kFullyTransparentWhite = 0x00FFFFFF;
+    for (int i = 0; i < StridePixels * StridePixels; i++)
+    {
+        uint32_t* Ptr = (uint32_t*)AtlasInfo.Data.Data;
+        Ptr[i] = kFullyTransparentWhite;
+    }
+
+    uint32_t* Ptr = (uint32_t*)AtlasInfo.Data.Data;
     for (int Codepoint = kStartCodepoint; Codepoint < kEndCodepoint; Codepoint++)
     {
         const int GlyphIndex = Codepoint - kStartCodepoint;
@@ -626,33 +655,23 @@ rndr::ui::AtlasInfo rndr::ui::GetAtlas(const std::string& FontPath, float SizeIn
         GlyphInfo& Info = AtlasInfo.Glyphs[GlyphIndex];
         uint8_t* MonoData = stbtt_GetCodepointBitmap(&AtlasInfo.FontInfo, 0, AtlasInfo.Scale, Codepoint, &Info.Width, &Info.Height,
                                                      &Info.OffsetX, &Info.OffsetY);
-        Info.Data.Size = ImageSize * ImageSize * 4;
-        Info.Data.Data = new uint8_t[Info.Data.Size];
+        int OffsetX = GlyphIndex % AtlasInfo.SideCount;
+        int OffsetY = GlyphIndex / AtlasInfo.SideCount;
 
-        constexpr uint32_t kClearValue = 0x00FFFFFF;
-        for (int Y = 0; Y < ImageSize; Y++)
-        {
-            for (int X = 0; X < ImageSize; X++)
-            {
-                uint32_t* Data = (uint32_t*)Info.Data.Data;
-                Data[Y * (int)ImageSize + X] = kClearValue;
-            }
-        }
-
-        constexpr int kOffset = 0;
         for (int Y = 0; Y < Info.Height; Y++)
         {
             for (int X = 0; X < Info.Width; X++)
             {
-                uint32_t* Data = (uint32_t*)Info.Data.Data;
                 uint32_t Alpha = MonoData[Y * Info.Width + X];
-
-                Data[(Y + kOffset) * (int)ImageSize + X + kOffset] = kClearValue | (Alpha << 24);
+                const int Index = (OffsetY * (int)SizeInPixels + Y) * StridePixels + (OffsetX * (int)SizeInPixels + X);
+                Ptr[Index] = kFullyTransparentWhite | (Alpha << 24);
             }
         }
 
-        Info.UVStart = math::Point2{0, 0};
-        Info.UVEnd = math::Point2{(Info.Width + 2 * kOffset) / (float)ImageSize, (Info.Height + 2 * kOffset) / (float)ImageSize};
+        Info.UVStart.X = OffsetX / (float)AtlasInfo.SideCount;
+        Info.UVStart.Y = OffsetY / (float)AtlasInfo.SideCount;
+        Info.UVEnd.X = (OffsetX * SizeInPixels + Info.Width) / (AtlasInfo.SideCount * SizeInPixels);
+        Info.UVEnd.Y = (OffsetY * SizeInPixels + Info.Height) / (AtlasInfo.SideCount * SizeInPixels);
 
         stbtt_FreeBitmap(MonoData, nullptr);
     }
