@@ -103,7 +103,8 @@ void Init()
     g_App->OnTickDelegate.Add(Loop);
     g_Context = g_App->GetWindow()->GetGraphicsContext();
 
-    bool Result = rndr::ui::Init(g_Context);
+    rndr::ui::UIProperties UIProps;
+    bool Result = rndr::ui::Init(g_Context, UIProps);
     assert(Result);
     Font = rndr::ui::AddFont("C:/Windows/Fonts/arial.ttf", 36);
     LargerFont = rndr::ui::AddFont("C:/Windows/Fonts/arial.ttf", 72);

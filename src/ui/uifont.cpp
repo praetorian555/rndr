@@ -8,6 +8,8 @@
 #include "rndr/core/log.h"
 #include "rndr/core/span.h"
 
+#include "rndr/ui/uisystem.h"
+
 #define SQUARE(x) ((x) * (x))
 
 namespace rndr
@@ -16,6 +18,18 @@ namespace ui
 {
 
 // Private types
+
+struct GlyphInfo
+{
+    uint32_t Codepoint = 0;
+    int Width = 0;
+    int Height = 0;
+    int OffsetX = 0;
+    int OffsetY = 0;
+    int Advance = 0;
+    math::Point2 UVStart;
+    math::Point2 UVEnd;
+};
 
 struct AtlasInfo
 {
@@ -49,22 +63,22 @@ struct AtlasInfo
 };
 
 // Private constants
-static constexpr int kMaxAtlasCount = 128;
-static constexpr int kMaxAtlasSideSizeInPixels = 72 * 20;
 static constexpr int kStartCodepointASCII = 33;
 static constexpr int kEndCodepointASCII = 127;
 
+// Module private data
+extern UIProperties g_UIProps;
+
 // Private data
-static AtlasInfo* g_Atlases[kMaxAtlasCount];
+static Span<AtlasInfo*> g_Atlases;
 
 // Main module functions
-int GetRenderId();
+RenderId AllocateRenderId();
 void UpdateRenderResource(int RenderId, ByteSpan Contents);
 
 // Module private functions
-void InitFont();
+bool InitFont();
 void ShutDownFont();
-int GetMaxAtlasSideSizeInPixels();
 
 // Private functions
 static AtlasInfo* GetAtlas(const char* FontName, float FontSize);
@@ -76,17 +90,23 @@ static bool ContainsCodepoint(FontHandle Font, int Codepoint);
 }  // namespace ui
 }  // namespace rndr
 
-void rndr::ui::InitFont()
+bool rndr::ui::InitFont()
 {
-    for (int i = 0; i < kMaxAtlasCount; i++)
+    assert(g_UIProps.MaxAtlasCount > 0);
+    g_Atlases.Size = g_UIProps.MaxAtlasCount;
+    g_Atlases.Data = new AtlasInfo*[g_Atlases.Size];
+
+    for (int i = 0; i < g_Atlases.Size; i++)
     {
         g_Atlases[i] = nullptr;
     }
+
+    return true;
 }
 
 void rndr::ui::ShutDownFont()
 {
-    for (int i = 0; i < kMaxAtlasCount; i++)
+    for (int i = 0; i < g_Atlases.Size; i++)
     {
         if (!g_Atlases[i])
         {
@@ -98,11 +118,7 @@ void rndr::ui::ShutDownFont()
         delete g_Atlases[i];
         g_Atlases[i] = nullptr;
     }
-}
-
-int rndr::ui::GetMaxAtlasSideSizeInPixels()
-{
-    return kMaxAtlasSideSizeInPixels;
+    delete[] g_Atlases.Data;
 }
 
 rndr::ui::FontHandle rndr::ui::AddFont(const char* FilePath, float FontSizeInPixels)
@@ -121,7 +137,7 @@ rndr::ui::FontHandle rndr::ui::AddFont(const char* FilePath, float FontSizeInPix
         return Atlas->Handle;
     }
     FontHandle FreeHandle = kInvalidFontHandle;
-    for (int i = 0; i < kMaxAtlasCount; i++)
+    for (int i = 0; i < g_Atlases.Size; i++)
     {
         if (!g_Atlases[i])
         {
@@ -131,7 +147,7 @@ rndr::ui::FontHandle rndr::ui::AddFont(const char* FilePath, float FontSizeInPix
     }
     if (FreeHandle == kInvalidFontHandle)
     {
-        RNDR_LOG_ERROR("Max number of supported fonts reached, supported %d fonts!", kMaxAtlasCount);
+        RNDR_LOG_ERROR("Max number of supported fonts reached, supported %d fonts!", g_Atlases.Size);
         return kInvalidFontHandle;
     }
     Atlas = CreateAtlas(FontPath.string(), FontSizeInPixels);
@@ -148,7 +164,7 @@ rndr::ui::FontHandle rndr::ui::AddFont(const char* FilePath, float FontSizeInPix
 
 void rndr::ui::RemoveFont(FontHandle Handle)
 {
-    if (Handle < 0 || Handle >= kMaxAtlasCount)
+    if (Handle < 0 || Handle >= g_Atlases.Size)
     {
         return;
     }
@@ -286,7 +302,7 @@ int rndr::ui::GetFontRenderId(FontHandle Handle)
 
 rndr::ui::AtlasInfo* rndr::ui::GetAtlas(const char* FontName, float FontSize)
 {
-    for (int i = 0; i < kMaxAtlasCount; i++)
+    for (int i = 0; i < g_Atlases.Size; i++)
     {
         if (!g_Atlases[i])
         {
@@ -302,7 +318,7 @@ rndr::ui::AtlasInfo* rndr::ui::GetAtlas(const char* FontName, float FontSize)
 
 rndr::ui::AtlasInfo* rndr::ui::GetAtlas(FontHandle Handle)
 {
-    if (Handle < 0 || Handle >= kMaxAtlasCount)
+    if (Handle < 0 || Handle >= g_Atlases.Size)
     {
         RNDR_LOG_ERROR("Invalid handle!");
         return nullptr;
@@ -314,7 +330,7 @@ rndr::ui::AtlasInfo* rndr::ui::CreateAtlas(const std::string& FontPath, float Si
 {
     constexpr int kGlyphCount = kEndCodepointASCII - kStartCodepointASCII;
 
-    int SideCount = GetMinGlyphCountPerSize(SizeInPixels, kGlyphCount, kMaxAtlasSideSizeInPixels);
+    int SideCount = GetMinGlyphCountPerSize(SizeInPixels, kGlyphCount, g_UIProps.MaxImageSideSize);
     if (SideCount == 0)
     {
         RNDR_LOG_ERROR("Not enough space for glyphs!");
@@ -349,11 +365,11 @@ rndr::ui::AtlasInfo* rndr::ui::CreateAtlas(const std::string& FontPath, float Si
     Atlas->Glyphs.Data = new GlyphInfo[kGlyphCount];
 
     constexpr int kPixelSize = 4;
-    Atlas->Contents.Size = SQUARE(kMaxAtlasSideSizeInPixels) * kPixelSize;
+    Atlas->Contents.Size = SQUARE(g_UIProps.MaxImageSideSize) * kPixelSize;
     Atlas->Contents.Data = new uint8_t[Atlas->Contents.Size];
     assert(Atlas->Contents.Data);
 
-    Atlas->RenderId = GetRenderId();
+    Atlas->RenderId = AllocateRenderId();
     if (Atlas->RenderId == -1)
     {
         RNDR_LOG_ERROR("Failed to obtain render id!");
@@ -361,7 +377,7 @@ rndr::ui::AtlasInfo* rndr::ui::CreateAtlas(const std::string& FontPath, float Si
     }
 
     constexpr uint32_t kFullyTransparentWhite = 0x00FFFFFF;
-    for (int i = 0; i < SQUARE(kMaxAtlasSideSizeInPixels); i++)
+    for (int i = 0; i < SQUARE(g_UIProps.MaxImageSideSize); i++)
     {
         uint32_t* Ptr = (uint32_t*)Atlas->Contents.Data;
         Ptr[i] = kFullyTransparentWhite;
@@ -385,7 +401,7 @@ rndr::ui::AtlasInfo* rndr::ui::CreateAtlas(const std::string& FontPath, float Si
             for (int X = 0; X < Info.Width; X++)
             {
                 uint32_t Alpha = MonoData[Y * Info.Width + X];
-                const int Index = (OffsetY * (int)SizeInPixels + Y) * kMaxAtlasSideSizeInPixels + (OffsetX * (int)SizeInPixels + X);
+                const int Index = (OffsetY * (int)SizeInPixels + Y) * g_UIProps.MaxImageSideSize + (OffsetX * (int)SizeInPixels + X);
                 Ptr[Index] = kFullyTransparentWhite | (Alpha << 24);
             }
         }
@@ -393,10 +409,10 @@ rndr::ui::AtlasInfo* rndr::ui::CreateAtlas(const std::string& FontPath, float Si
         stbtt_GetCodepointHMetrics(&Atlas->FontInfo, Codepoint, &Info.Advance, nullptr);
         Info.Advance *= Atlas->Scale;
 
-        Info.UVStart.X = (OffsetX * SizeInPixels) / kMaxAtlasSideSizeInPixels;
-        Info.UVStart.Y = (OffsetY * SizeInPixels) / kMaxAtlasSideSizeInPixels;
-        Info.UVEnd.X = (OffsetX * SizeInPixels + Info.Width) / kMaxAtlasSideSizeInPixels;
-        Info.UVEnd.Y = (OffsetY * SizeInPixels + Info.Height) / kMaxAtlasSideSizeInPixels;
+        Info.UVStart.X = (OffsetX * SizeInPixels) / g_UIProps.MaxImageSideSize;
+        Info.UVStart.Y = (OffsetY * SizeInPixels) / g_UIProps.MaxImageSideSize;
+        Info.UVEnd.X = (OffsetX * SizeInPixels + Info.Width) / g_UIProps.MaxImageSideSize;
+        Info.UVEnd.Y = (OffsetY * SizeInPixels + Info.Height) / g_UIProps.MaxImageSideSize;
 
         stbtt_FreeBitmap(MonoData, nullptr);
     }

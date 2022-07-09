@@ -10,18 +10,6 @@ namespace ui
 using FontHandle = int;
 constexpr FontHandle kInvalidFontHandle = -1;
 
-struct GlyphInfo
-{
-    uint32_t Codepoint = 0;
-    int Width = 0;
-    int Height = 0;
-    int OffsetX = 0;
-    int OffsetY = 0;
-    int Advance = 0;
-    math::Point2 UVStart;
-    math::Point2 UVEnd;
-};
-
 FontHandle AddFont(const char* FilePath, float FontSizeInPixels);
 void RemoveFont(FontHandle Handle);
 

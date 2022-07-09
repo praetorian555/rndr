@@ -7,6 +7,7 @@
 #include "rndr/core/base.h"
 
 #include "rndr/ui/uifont.h"
+#include "rndr/ui/uirender.h"
 
 namespace rndr
 {
@@ -16,6 +17,9 @@ struct GraphicsContext;
 
 namespace ui
 {
+
+static constexpr RenderId kWhiteImageRenderId = 0;
+
 
 struct BoxProperties
 {
@@ -37,7 +41,15 @@ struct TextBoxProperties
     FontHandle Font = kInvalidFontHandle;
 };
 
-bool Init(GraphicsContext* Context);
+struct UIProperties
+{
+    int MaxInstanceCount = 1024;
+    int MaxImageArraySize = 32;
+    int MaxImageSideSize = 72 * 20;
+    int MaxAtlasCount = 32;
+};
+
+bool Init(GraphicsContext* Context, const UIProperties& Props);
 bool ShutDown();
 
 void StartFrame();
