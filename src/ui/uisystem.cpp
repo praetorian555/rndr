@@ -284,6 +284,7 @@ bool rndr::ui::Init(GraphicsContext* Context)
     g_RenderResources[0] = true;
 
     SamplerProperties SamplerProps;
+    SamplerProps.Filter = ImageFiltering::MinMagPoint_MipLinear;
     g_Sampler = g_Context->CreateSampler(SamplerProps);
     if (!g_Sampler)
     {
