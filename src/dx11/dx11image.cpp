@@ -230,6 +230,25 @@ bool rndr::Image::InitSwapchainBackBuffer(GraphicsContext* Context)
     return true;
 }
 
+void rndr::Image::Update(GraphicsContext* Context, int ArrayIndex, ByteSpan Contents) const
+{
+    D3D11_BOX* DestRegionPtr = nullptr;
+    D3D11_BOX DestRegion;
+    DestRegion.left = 0;
+    DestRegion.right = Width;
+    DestRegion.top = 0;
+    DestRegion.bottom = Height;
+    DestRegion.front = 0;
+    DestRegion.back = 1;
+    DestRegionPtr = &DestRegion;
+
+    ID3D11DeviceContext* DeviceContext = Context->GetDeviceContext();
+    // TODO(mkostic): Handle case for multiple mip maps
+    uint32_t SubresourceIndex = D3D11CalcSubresource(0, ArrayIndex, 1);
+    DeviceContext->UpdateSubresource(DX11Texture, SubresourceIndex, DestRegionPtr, Contents.Data, Width * GetPixelSize(Props.PixelFormat),
+                                     Width * Height * GetPixelSize(Props.PixelFormat));
+}
+
 rndr::Image::~Image()
 {
     DX11SafeRelease(DX11Texture);

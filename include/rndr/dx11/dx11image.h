@@ -33,6 +33,8 @@ struct Image
     bool InitSwapchainBackBuffer(GraphicsContext* Context);
 
     ~Image();
+
+    void Update(GraphicsContext* Context, int ArrayIndex, ByteSpan Contents) const;
 };
 
 }  // namespace rndr
