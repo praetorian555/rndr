@@ -109,6 +109,8 @@ void rndr::ui::StartFrame()
     const math::Vector2 ScreenSize = GetRenderScreenSize();
     g_Stack[0]->Props.Size = ScreenSize;
     g_Stack[0]->Bounds = math::Bounds2(math::Point2{}, math::Point2{} + ScreenSize);
+
+    g_Boxes.push_back(g_Stack[0]);
 }
 
 void rndr::ui::EndFrame()
@@ -238,6 +240,7 @@ bool rndr::ui::RightMouseButtonClicked()
 
 void rndr::ui::CleanupBoxes()
 {
+    g_Boxes[0] = nullptr;
     for (Box* B : g_Boxes)
     {
         delete B;
