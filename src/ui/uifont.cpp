@@ -49,8 +49,8 @@ struct AtlasInfo
 };
 
 // Private constants
-static constexpr int kMaxAtlasCount = 16;
-static constexpr int kMaxAtlasSideSizeInPixels = 36 * 10;
+static constexpr int kMaxAtlasCount = 128;
+static constexpr int kMaxAtlasSideSizeInPixels = 72 * 20;
 static constexpr int kStartCodepointASCII = 33;
 static constexpr int kEndCodepointASCII = 127;
 
