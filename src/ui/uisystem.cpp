@@ -566,7 +566,7 @@ int rndr::ui::GetRenderId()
 {
     for (int i = 0; i < kMaxImageArraySize; i++)
     {
-        if (!g_RenderResources[i] && i == 3)
+        if (!g_RenderResources[i])
         {
             g_RenderResources[i] = true;
             return i;
