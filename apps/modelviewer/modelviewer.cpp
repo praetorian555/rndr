@@ -65,6 +65,8 @@ math::Vector3 g_LightDirection;
 math::Vector4 g_LightColor;
 
 rndr::ui::FontHandle Font;
+rndr::ui::FontHandle LargerFont;
+rndr::ui::FontHandle HugeFont;
 
 void Init();
 void InitRenderPrimitives();
@@ -104,7 +106,11 @@ void Init()
     bool Result = rndr::ui::Init(g_Context);
     assert(Result);
     Font = rndr::ui::AddFont("C:/Windows/Fonts/arial.ttf", 36);
+    LargerFont = rndr::ui::AddFont("C:/Windows/Fonts/arial.ttf", 72);
+    HugeFont = rndr::ui::AddFont("C:/Windows/Fonts/arial.ttf", 144);
     assert(Font != rndr::ui::kInvalidFontHandle);
+    assert(LargerFont != rndr::ui::kInvalidFontHandle);
+    assert(HugeFont != rndr::ui::kInvalidFontHandle);
 
     rndr::ProjectionCameraProperties CameraProps;
     CameraProps.Projection = rndr::ProjectionType::Perspective;
@@ -538,8 +544,17 @@ void Render(float DeltaSeconds)
     TBProps.Scale = 2.0f;
     TBProps.Font = Font;
     TBProps.Color = rndr::Colors::White;
-    //rndr::ui::DrawTextBox("Hello there general!\nWill you fight with me?", TBProps);
-    rndr::ui::DrawTextBox("Will you fight with me?\nComrade", TBProps);
+    rndr::ui::DrawTextBox("I am scaled by factor of 2.0", TBProps);
+
+    TBProps.BaseLineStart = math::Point2(150, 500);
+    TBProps.Scale = 1.0f;
+    TBProps.Font = LargerFont;
+    rndr::ui::DrawTextBox("I am not scaled", TBProps);
+
+    TBProps.BaseLineStart = math::Point2(150, 400);
+    TBProps.Scale = 0.5f;
+    TBProps.Font = HugeFont;
+    rndr::ui::DrawTextBox("I am scaled by factor of 0.5", TBProps);
 
     rndr::ui::BoxProperties Props;
     Props.BottomLeft = math::Point2{100, 100};
