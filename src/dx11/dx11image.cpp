@@ -90,10 +90,11 @@ bool rndr::Image::Init(GraphicsContext* Context, int Width, int Height, const Im
     return true;
 }
 
-bool rndr::Image::InitArray(GraphicsContext* Context, int Width, int Height, const ImageProperties& P, Span<ByteSpan> InitData)
+bool rndr::Image::InitArray(GraphicsContext* Context, int W, int H, const ImageProperties& P, Span<ByteSpan> InitData)
 {
     Props = P;
-    assert(Props.ArraySize == InitData.Size);
+    Width = W;
+    Height = H;
 
     D3D11_TEXTURE2D_DESC Desc;
     ZeroMemory(&Desc, sizeof(D3D11_TEXTURE2D_DESC));
@@ -105,7 +106,7 @@ bool rndr::Image::InitArray(GraphicsContext* Context, int Width, int Height, con
     Desc.Height = Height;
     Desc.ArraySize = Props.ArraySize;
     Desc.MiscFlags = 0;
-    Desc.MipLevels = 1;
+    Desc.MipLevels = Props.bUseMips ? 0 : 1;
     Desc.SampleDesc.Count = 1;  // TODO(mkostic): Add options for multisampling in props
     Desc.SampleDesc.Quality = 0;
 
@@ -114,7 +115,8 @@ bool rndr::Image::InitArray(GraphicsContext* Context, int Width, int Height, con
     D3D11_SUBRESOURCE_DATA* InitialData = new D3D11_SUBRESOURCE_DATA[Props.ArraySize];
     for (int i = 0; i < Props.ArraySize; i++)
     {
-        InitialData[i].pSysMem = InitData[i].Data;
+        int InitDataIndex = InitData.Size != 1 ? i : 0;
+        InitialData[i].pSysMem = InitData[InitDataIndex].Data;
         InitialData[i].SysMemPitch = PitchSize;
         InitialData[i].SysMemSlicePitch = 0;
     }
@@ -137,7 +139,7 @@ bool rndr::Image::InitArray(GraphicsContext* Context, int Width, int Height, con
         ResourceDesc.Texture2DArray.MipLevels = Props.bUseMips ? -1 : 1;
         ResourceDesc.Texture2DArray.MostDetailedMip = 0;
         ResourceDesc.Texture2DArray.FirstArraySlice = 0;
-        ResourceDesc.Texture2DArray.ArraySize = InitData.Size;
+        ResourceDesc.Texture2DArray.ArraySize = Props.ArraySize;
         Result = Device->CreateShaderResourceView(DX11Texture, &ResourceDesc, &DX11ShaderResourceView);
         if (FAILED(Result))
         {
