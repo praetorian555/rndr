@@ -3,8 +3,6 @@
 #include <algorithm>
 #include <vector>
 
-#include <stb_truetype/stb_truetype.h>
-
 #include "math/bounds2.h"
 #include "math/point2.h"
 #include "math/vector4.h"
@@ -25,8 +23,7 @@ namespace ui
 {
 
 static constexpr int kMaxInstances = 512;
-static constexpr int kDefaultFontSize = 36;
-static constexpr int kMaxImageSize = 2 * kDefaultFontSize * 20;
+static constexpr int kMaxImageArraySize = 32;
 static constexpr int kWhiteImageIndex = 0;
 
 static GraphicsContext* g_Context = nullptr;
@@ -71,38 +68,6 @@ struct Box
     math::Point2 TexCoordsTopRight = math::Point2{1, 1};
 };
 
-struct GlyphInfo
-{
-    int Width = 0;
-    int Height = 0;
-    int OffsetX = 0;
-    int OffsetY = 0;
-    math::Point2 UVStart;
-    math::Point2 UVEnd;
-};
-
-struct AtlasInfo
-{
-    stbtt_fontinfo FontInfo;
-    Span<GlyphInfo> Glyphs;
-    // Factor to convert unscaled units to pixels
-    float Scale;
-    // Distance between baseline and the highest point of a font can have in pixels
-    int Ascent;
-    // Distance between baseline and the lowest point of a font, negative number in pixels
-    int Descent;
-    // Distance between font descent of one line and font ascent of the line beneath
-    int LineGap;
-    // First unicode value of the character range
-    int StartCodepoint;
-    // Unicode value after the last value in the character range
-    int EndCodepoint;
-    // Atlas image
-    ByteSpan Data;
-    // Number of glyphs per side
-    int SideCount;
-};
-
 static std::vector<Box*> g_Stack;
 static std::vector<Box*> g_Boxes;
 
@@ -113,7 +78,16 @@ static bool g_ButtonState[3];
 static int g_PrevScrollPosition = 0;
 static int g_ScrollPosition = 0;
 
-static AtlasInfo g_Atlas;
+static bool g_RenderResources[kMaxImageArraySize];
+
+// Font module
+void InitFont();
+void ShutDownFont();
+int GetMaxAtlasSideSizeInPixels();
+
+// Module private
+int GetRenderId();
+void UpdateRenderResource(int RenderId, ByteSpan Contents);
 
 static std::vector<InstanceData> BatchBoxes();
 static void CleanupBoxes();
@@ -121,12 +95,10 @@ static void OnMouseMovement(InputPrimitive Primitive, InputTrigger Trigger, real
 static void OnButtonEvent(InputPrimitive Primitive, InputTrigger Trigger, real Value);
 static void OnScroll(InputPrimitive Primitive, InputTrigger Trigger, real Value);
 
-static AtlasInfo GetAtlas(const std::string& FontPath, float SizeInPixels, float MaxImageSizeInPixels);
-
 }  // namespace ui
 }  // namespace rndr
 
-bool rndr::ui::Init(GraphicsContext* Context, const Properties& Props)
+bool rndr::ui::Init(GraphicsContext* Context)
 {
     g_Context = Context;
 
@@ -289,29 +261,27 @@ bool rndr::ui::Init(GraphicsContext* Context, const Properties& Props)
         return false;
     }
 
-    g_Atlas = GetAtlas("C:/Windows/Fonts/consola.ttf", kDefaultFontSize, kMaxImageSize);
-    assert(g_Atlas.Glyphs);
-
-    ImageProperties WhiteImageProps;
-    WhiteImageProps.ArraySize = 2;
-    WhiteImageProps.bUseMips = false;
-    WhiteImageProps.CPUAccess = CPUAccess::None;
-    WhiteImageProps.Usage = Usage::GPURead;
-    WhiteImageProps.PixelFormat = PixelFormat::R8G8B8A8_UNORM_SRGB;
-    WhiteImageProps.ImageBindFlags = ImageBindFlags::ShaderResource;
+    ImageProperties ImageArrayProps;
+    ImageArrayProps.ArraySize = kMaxImageArraySize;
+    ImageArrayProps.bUseMips = false;
+    ImageArrayProps.CPUAccess = CPUAccess::None;
+    ImageArrayProps.Usage = Usage::GPUReadWrite;
+    ImageArrayProps.PixelFormat = PixelFormat::R8G8B8A8_UNORM_SRGB;
+    ImageArrayProps.ImageBindFlags = ImageBindFlags::ShaderResource;
+    const int ImageSideSize = GetMaxAtlasSideSizeInPixels();
     Span<ByteSpan> InitData;
-    InitData.Size = 2;
+    InitData.Size = 1;
     InitData.Data = new ByteSpan[InitData.Size];
-    InitData.Data[0].Size = g_Atlas.Data.Size;
+    InitData.Data[0].Size = ImageSideSize * ImageSideSize * 4;
     InitData.Data[0].Data = new uint8_t[InitData.Data[0].Size];
     memset(InitData.Data[0].Data, 0xFF, InitData.Data[0].Size);
-    InitData.Data[1] = g_Atlas.Data;
-    g_ImageArray = g_Context->CreateImageArray(kMaxImageSize, kMaxImageSize, WhiteImageProps, InitData);
+    g_ImageArray = g_Context->CreateImageArray(ImageSideSize, ImageSideSize, ImageArrayProps, InitData);
     if (!g_ImageArray)
     {
         RNDR_LOG_ERROR("Failed to create white image!");
         return false;
     }
+    g_RenderResources[0] = true;
 
     SamplerProperties SamplerProps;
     g_Sampler = g_Context->CreateSampler(SamplerProps);
@@ -344,11 +314,15 @@ bool rndr::ui::Init(GraphicsContext* Context, const Properties& Props)
     InputContext->CreateMapping("Scroll", OnScroll);
     InputContext->AddBinding("Scroll", rndr::InputPrimitive::Mouse_AxisWheel, rndr::InputTrigger::AxisChangedAbsolute);
 
+    InitFont();
+
     return true;
 }
 
 bool rndr::ui::ShutDown()
 {
+    ShutDownFont();
+
     g_Context->DestroyImage(g_ImageArray);
     g_Context->DestroySampler(g_Sampler);
     g_Context->DestroyBuffer(g_GlobalsConstantBuffer);
@@ -439,54 +413,56 @@ void rndr::ui::EndBox()
 
 void rndr::ui::DrawTextBox(const std::string& Text, const TextBoxProperties& Props)
 {
+    if (!ContainsFont(Props.Font))
+    {
+        RNDR_LOG_ERROR("Invalid font!");
+        return;
+    }
+
+    const int VerticalAdvance = GetFontVerticalAdvance(Props.Font);
+
     math::Point2 StartPos = Props.BaseLineStart;
     for (int i = 0; i < Text.size(); i++)
     {
         int Codepoint = Text[i];
 
-        int Advance, Bearing;
-        stbtt_GetCodepointHMetrics(&g_Atlas.FontInfo, Codepoint, &Advance, &Bearing);
-        Advance *= g_Atlas.Scale;
-        Bearing *= g_Atlas.Scale;
-
-        if (Codepoint == ' ')
-        {
-            int KernAdvance = stbtt_GetCodepointKernAdvance(&g_Atlas.FontInfo, Codepoint, Text[i + 1]);
-            KernAdvance *= g_Atlas.Scale;
-            StartPos.X += Props.Scale * (Bearing + Advance + KernAdvance);
-            continue;
-        }
-
         if (Codepoint == '\n')
         {
             StartPos.X = Props.BaseLineStart.X;
-            StartPos.Y -= Props.Scale * (g_Atlas.Ascent + g_Atlas.LineGap - g_Atlas.Descent);
+            StartPos.Y -= Props.Scale * VerticalAdvance;
             continue;
         }
 
-        const GlyphInfo& Info = g_Atlas.Glyphs[Codepoint - g_Atlas.StartCodepoint];
+        const int GlyphAdvance = GetGlyphAdvance(Props.Font, Codepoint, Text[i + 1]) + 1;
+
+        if (Codepoint == ' ')
+        {
+            StartPos.X += Props.Scale * GlyphAdvance;
+            continue;
+        }
+
+        math::Vector2 GlyphSize = GetGlyphSize(Props.Font, Codepoint);
+        GlyphSize *= Props.Scale;
+
+        math::Vector2 GlyphBearing = GetGlyphBearing(Props.Font, Codepoint);
+        GlyphBearing *= Props.Scale;
 
         assert(g_Boxes.size() < kMaxInstances);
         Box* B = new Box();
         BoxProperties BoxProps;
-        BoxProps.BottomLeft = StartPos;
-        BoxProps.BottomLeft.X += Props.Scale * Info.OffsetX;
-        BoxProps.BottomLeft.Y -= Props.Scale * (Info.Height + Info.OffsetY);
-        BoxProps.Size = math::Vector2{Props.Scale * Info.Width, Props.Scale * Info.Height};
+        BoxProps.BottomLeft = StartPos + GlyphBearing;
+        BoxProps.Size = GlyphSize;
         BoxProps.Color = Props.Color;
         B->Props = BoxProps;
         B->Parent = g_Stack.back();
         B->Parent->Children.push_back(B);
         B->Level = B->Parent->Level + 1;
         B->Bounds = math::Bounds2(BoxProps.BottomLeft, BoxProps.BottomLeft + BoxProps.Size);
-        B->AtlasIndex = 1;  // TODO(mkostic): This should be part of the GlyphInfo or Atlas
-        B->TexCoordsBottomLeft = Info.UVStart;
-        B->TexCoordsTopRight = Info.UVEnd;
+        B->AtlasIndex = GetFontRenderId(Props.Font);
+        GetGlyphTexCoords(Props.Font, Codepoint, &B->TexCoordsBottomLeft, &B->TexCoordsTopRight);
         g_Boxes.push_back(B);
 
-        int KernAdvance = stbtt_GetCodepointKernAdvance(&g_Atlas.FontInfo, Codepoint, Text[i + 1]);
-        KernAdvance *= g_Atlas.Scale;
-        StartPos.X += Props.Scale * (Bearing + Advance + KernAdvance);
+        StartPos.X += Props.Scale * GlyphAdvance;
     }
 }
 
@@ -586,91 +562,21 @@ void rndr::ui::OnScroll(InputPrimitive Primitive, InputTrigger Trigger, real Val
     g_ScrollPosition += Value;
 }
 
-static int GetAtlasSideSize(int GlyphCount)
+int rndr::ui::GetRenderId()
 {
-    for (int i = 1;; i++)
+    for (int i = 0; i < kMaxImageArraySize; i++)
     {
-        if (GlyphCount <= i * i)
+        if (!g_RenderResources[i] && i == 3)
         {
+            g_RenderResources[i] = true;
             return i;
         }
     }
+    return -1;
 }
 
-rndr::ui::AtlasInfo rndr::ui::GetAtlas(const std::string& FontPath, float SizeInPixels, float MaxImageSizeInPixels)
+void rndr::ui::UpdateRenderResource(int RenderId, ByteSpan Contents)
 {
-    // TODO(mkostic): ASCII table hardcode
-    constexpr int kStartCodepoint = 33;
-    constexpr int kEndCodepoint = 127;
-    constexpr int kGlyphCount = kEndCodepoint - kStartCodepoint;
-
-    AtlasInfo AtlasInfo;
-
-    AtlasInfo.SideCount = GetAtlasSideSize(kGlyphCount);
-
-    ByteSpan FileContents = ReadEntireFile(FontPath);
-    assert(FileContents);
-
-    AtlasInfo.StartCodepoint = kStartCodepoint;
-    AtlasInfo.EndCodepoint = kEndCodepoint;
-    int FontOffset = stbtt_GetFontOffsetForIndex(FileContents.Data, 0);
-    int Result = stbtt_InitFont(&AtlasInfo.FontInfo, FileContents.Data, FontOffset);
-    if (!Result)
-    {
-        RNDR_LOG_ERROR("stbtt_InitFont failed!");
-        return AtlasInfo;
-    }
-
-    AtlasInfo.Glyphs.Size = kEndCodepoint - kStartCodepoint;
-    AtlasInfo.Glyphs.Data = new GlyphInfo[AtlasInfo.Glyphs.Size];
-
-    AtlasInfo.Scale = stbtt_ScaleForPixelHeight(&AtlasInfo.FontInfo, SizeInPixels);
-
-    int Ascent, Descent, LineGap;
-    stbtt_GetFontVMetrics(&AtlasInfo.FontInfo, &AtlasInfo.Ascent, &AtlasInfo.Descent, &AtlasInfo.LineGap);
-    AtlasInfo.Ascent *= AtlasInfo.Scale;
-    AtlasInfo.Descent *= AtlasInfo.Scale;
-    AtlasInfo.LineGap *= AtlasInfo.Scale;
-
-    const int PixelSize = 4;
-    AtlasInfo.Data.Size = MaxImageSizeInPixels * MaxImageSizeInPixels * PixelSize;
-    AtlasInfo.Data.Data = new uint8_t[AtlasInfo.Data.Size];
-    assert(AtlasInfo.Data.Data);
-
-    constexpr uint32_t kFullyTransparentWhite = 0x00FFFFFF;
-    for (int i = 0; i < MaxImageSizeInPixels * MaxImageSizeInPixels; i++)
-    {
-        uint32_t* Ptr = (uint32_t*)AtlasInfo.Data.Data;
-        Ptr[i] = kFullyTransparentWhite;
-    }
-
-    uint32_t* Ptr = (uint32_t*)AtlasInfo.Data.Data;
-    for (int Codepoint = kStartCodepoint; Codepoint < kEndCodepoint; Codepoint++)
-    {
-        const int GlyphIndex = Codepoint - kStartCodepoint;
-        assert(GlyphIndex >= 0);
-        GlyphInfo& Info = AtlasInfo.Glyphs[GlyphIndex];
-        uint8_t* MonoData = stbtt_GetCodepointBitmap(&AtlasInfo.FontInfo, 0, AtlasInfo.Scale, Codepoint, &Info.Width, &Info.Height,
-                                                     &Info.OffsetX, &Info.OffsetY);
-        int OffsetX = GlyphIndex % AtlasInfo.SideCount;
-        int OffsetY = GlyphIndex / AtlasInfo.SideCount;
-
-        for (int Y = 0; Y < Info.Height; Y++)
-        {
-            for (int X = 0; X < Info.Width; X++)
-            {
-                uint32_t Alpha = MonoData[Y * Info.Width + X];
-                const int Index = (OffsetY * (int)SizeInPixels + Y) * MaxImageSizeInPixels + (OffsetX * (int)SizeInPixels + X);
-                Ptr[Index] = kFullyTransparentWhite | (Alpha << 24);
-            }
-        }
-
-        Info.UVStart.X = (OffsetX * SizeInPixels) / MaxImageSizeInPixels;
-        Info.UVStart.Y = (OffsetY * SizeInPixels) / MaxImageSizeInPixels;
-        Info.UVEnd.X = (OffsetX * SizeInPixels + Info.Width) / MaxImageSizeInPixels;
-        Info.UVEnd.Y = (OffsetY * SizeInPixels + Info.Height) / MaxImageSizeInPixels;
-
-        stbtt_FreeBitmap(MonoData, nullptr);
-    }
-    return AtlasInfo;
+    assert(g_RenderResources[RenderId]);
+    g_ImageArray->Update(g_Context, RenderId, Contents);
 }

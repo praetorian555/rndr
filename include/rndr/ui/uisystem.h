@@ -6,6 +6,8 @@
 
 #include "rndr/core/base.h"
 
+#include "rndr/ui/uifont.h"
+
 namespace rndr
 {
 
@@ -14,10 +16,6 @@ struct GraphicsContext;
 
 namespace ui
 {
-
-struct Properties
-{
-};
 
 struct BoxProperties
 {
@@ -35,9 +33,11 @@ struct TextBoxProperties
     math::Point2 BaseLineStart;
     float Scale;
     math::Vector4 Color = rndr::Colors::Pink;
+    // FontHandle that you get by calling AddFont function.
+    FontHandle Font = kInvalidFontHandle;
 };
 
-bool Init(GraphicsContext* Context, const Properties& Props);
+bool Init(GraphicsContext* Context);
 bool ShutDown();
 
 void StartFrame();

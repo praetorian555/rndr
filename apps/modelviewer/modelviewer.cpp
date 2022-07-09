@@ -64,6 +64,8 @@ math::Vector3 g_MeshRotationState;
 math::Vector3 g_LightDirection;
 math::Vector4 g_LightColor;
 
+rndr::ui::FontHandle Font;
+
 void Init();
 void InitRenderPrimitives();
 void CleanUp();
@@ -99,9 +101,10 @@ void Init()
     g_App->OnTickDelegate.Add(Loop);
     g_Context = g_App->GetWindow()->GetGraphicsContext();
 
-    rndr::ui::Properties Props;
-    bool Result = rndr::ui::Init(g_Context, Props);
+    bool Result = rndr::ui::Init(g_Context);
     assert(Result);
+    Font = rndr::ui::AddFont("C:/Windows/Fonts/arial.ttf", 36);
+    assert(Font != rndr::ui::kInvalidFontHandle);
 
     rndr::ProjectionCameraProperties CameraProps;
     CameraProps.Projection = rndr::ProjectionType::Perspective;
@@ -532,8 +535,11 @@ void Render(float DeltaSeconds)
 
     rndr::ui::TextBoxProperties TBProps;
     TBProps.BaseLineStart = math::Point2(150, 650);
-    TBProps.Scale = 1.0f;
-    rndr::ui::DrawTextBox("Hello there general!\nWill you fight with me?", TBProps);
+    TBProps.Scale = 2.0f;
+    TBProps.Font = Font;
+    TBProps.Color = rndr::Colors::White;
+    //rndr::ui::DrawTextBox("Hello there general!\nWill you fight with me?", TBProps);
+    rndr::ui::DrawTextBox("Will you fight with me?\nComrade", TBProps);
 
     rndr::ui::BoxProperties Props;
     Props.BottomLeft = math::Point2{100, 100};
