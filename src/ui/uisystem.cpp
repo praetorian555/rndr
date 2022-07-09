@@ -23,7 +23,7 @@ namespace ui
 {
 
 static constexpr int kMaxInstances = 512;
-static constexpr int kMaxImageArraySize = 32;
+static constexpr int kMaxImageArraySize = 512;
 static constexpr int kWhiteImageIndex = 0;
 
 static GraphicsContext* g_Context = nullptr;
