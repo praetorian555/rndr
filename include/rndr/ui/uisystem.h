@@ -49,8 +49,8 @@ struct BoxProperties
 struct TextBoxProperties
 {
     math::Point2 BaseLineStart;
-    float Scale;
-    math::Vector4 Color = Colors::Pink;
+    float Scale = 1.0f;
+    math::Vector4 Color = Colors::White;
     // FontHandle that you get by calling AddFont function.
     FontHandle Font = kInvalidFontHandle;
 };
@@ -58,7 +58,7 @@ struct TextBoxProperties
 struct ImageBoxProperties
 {
     math::Point2 BottomLeft;
-    ImageId ImageId;
+    ImageId ImageId = kInvalidImageId;
     math::Vector4 Color = Colors::White;
     float Scale = 1.0f;
 };
