@@ -176,7 +176,7 @@ void rndr::ui::DrawTextBox(const std::string& Text, const TextBoxProperties& Pro
             continue;
         }
 
-        const int GlyphAdvance = GetGlyphAdvance(Props.Font, Codepoint, Text[i + 1]) + 1;
+        const int GlyphAdvance = GetGlyphAdvance(Props.Font, Codepoint, Text[i + 1]);
 
         if (Codepoint == ' ')
         {
