@@ -10,6 +10,7 @@ namespace ui
 {
 
 using RenderId = int;
+static constexpr RenderId kInvalidRenderId = -1;
 
 math::Vector2 GetRenderScreenSize();
 

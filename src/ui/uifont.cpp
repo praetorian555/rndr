@@ -295,7 +295,7 @@ int rndr::ui::GetFontRenderId(FontHandle Handle)
     if (!Atlas)
     {
         RNDR_LOG_ERROR("Font handle %d doesn't correspond to any font, did you call AddFont?");
-        return -1;
+        return kInvalidRenderId;
     }
     return Atlas->RenderId;
 }
