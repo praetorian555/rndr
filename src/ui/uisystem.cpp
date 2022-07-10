@@ -17,8 +17,8 @@
 #include "rndr/core/pipeline.h"
 #include "rndr/core/shader.h"
 
-#include "rndr/ui/uirender.h"
 #include "rndr/ui/uibox.h"
+#include "rndr/ui/uirender.h"
 
 namespace rndr
 {
@@ -49,6 +49,10 @@ void ShutDownRender();
 void StartRenderFrame();
 void EndRenderFrame(const Span<Box*> SortedBoxes);
 
+// Image module
+bool InitImage();
+void ShutDownImage();
+
 // Private functions
 static void CleanupBoxes();
 static void OnMouseMovement(InputPrimitive Primitive, InputTrigger Trigger, real Value);
@@ -64,6 +68,7 @@ bool rndr::ui::Init(GraphicsContext* Context, const UIProperties& Props)
 
     InitRender(Context);
     InitFont();
+    InitImage();
 
     // TODO: Move this to separate function
     Box* ScreenBox = new Box();
@@ -95,6 +100,7 @@ bool rndr::ui::Init(GraphicsContext* Context, const UIProperties& Props)
 
 bool rndr::ui::ShutDown()
 {
+    ShutDownImage();
     ShutDownFont();
     ShutDownRender();
 
@@ -201,6 +207,25 @@ void rndr::ui::DrawTextBox(const std::string& Text, const TextBoxProperties& Pro
 
         StartPos.X += Props.Scale * GlyphAdvance;
     }
+}
+
+void rndr::ui::DrawImageBox(const ImageBoxProperties& Props)
+{
+    assert(g_Boxes.size() < kMaxInstances);
+    Box* B = new Box();
+    BoxProperties BoxProps;
+    BoxProps.BottomLeft = Props.Scale * Props.BottomLeft;
+    BoxProps.Size = Props.Scale * GetImageSize(Props.ImageId);
+    BoxProps.Color = Props.Color;
+    B->Props = BoxProps;
+    B->Parent = g_Stack.back();
+    B->Parent->Children.push_back(B);
+    B->Level = B->Parent->Level + 1;
+    B->Bounds = math::Bounds2(BoxProps.BottomLeft, BoxProps.BottomLeft + BoxProps.Size);
+    B->RenderId = GetImageRenderId(Props.ImageId);
+    GetImageTexCoords(Props.ImageId, &B->TexCoordsBottomLeft, &B->TexCoordsTopRight);
+    g_Stack.push_back(B);
+    g_Boxes.push_back(B);
 }
 
 void rndr::ui::SetColor(const math::Vector4& Color)

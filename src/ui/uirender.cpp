@@ -63,13 +63,14 @@ static Buffer* g_GlobalsConstantBuffer = nullptr;
 static Sampler* g_Sampler = nullptr;
 static Image* g_ImageArray = nullptr;
 
-static std::vector<bool> g_RenderResources;
+static Span<bool> g_RenderResources;
 
 // Module private API
 bool InitRender(GraphicsContext* Context);
 void ShutDownRender();
 RenderId AllocateRenderId();
-void UpdateRenderResource(RenderId Id, ByteSpan Contents);
+void FreeRenderId(RenderId Id);
+void UpdateRenderResource(RenderId Id, ByteSpan Contents, int Width, int Height);
 void StartRenderFrame();
 void EndRenderFrame(const Span<Box*> SortedBoxes);
 
@@ -84,7 +85,12 @@ bool rndr::ui::InitRender(GraphicsContext* Context)
     g_Context = Context;
 
     assert(g_UIProps.MaxImageArraySize != 0);
-    g_RenderResources.resize(g_UIProps.MaxImageArraySize);
+    g_RenderResources.Size = g_UIProps.MaxImageArraySize;
+    g_RenderResources.Data = new bool[g_RenderResources.Size];
+    for (int i = 0; i < g_RenderResources.Size; i++)
+    {
+        g_RenderResources[i] = false;
+    }
 
     ShaderProperties VertexShaderProps;
     VertexShaderProps.bCompilationNeeded = true;
@@ -284,6 +290,8 @@ bool rndr::ui::InitRender(GraphicsContext* Context)
 
 void rndr::ui::ShutDownRender()
 {
+    delete[] g_RenderResources.Data;
+
     g_Context->DestroyImage(g_ImageArray);
     g_Context->DestroySampler(g_Sampler);
     g_Context->DestroyBuffer(g_GlobalsConstantBuffer);
@@ -310,10 +318,19 @@ rndr::ui::RenderId rndr::ui::AllocateRenderId()
     return -1;
 }
 
-void rndr::ui::UpdateRenderResource(RenderId Id, ByteSpan Contents)
+void rndr::ui::FreeRenderId(RenderId Id)
+{
+    if (Id < 0 || Id > g_RenderResources.Size)
+    {
+        return;
+    }
+    g_RenderResources[Id] = false;
+}
+
+void rndr::ui::UpdateRenderResource(RenderId Id, ByteSpan Contents, int Width, int Height)
 {
     assert(g_RenderResources[Id]);
-    g_ImageArray->Update(g_Context, Id, Contents);
+    g_ImageArray->Update(g_Context, Id, Contents, Width, Height);
 }
 
 math::Vector2 rndr::ui::GetRenderScreenSize()

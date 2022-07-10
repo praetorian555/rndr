@@ -74,7 +74,8 @@ static Span<AtlasInfo*> g_Atlases;
 
 // Main module functions
 RenderId AllocateRenderId();
-void UpdateRenderResource(int RenderId, ByteSpan Contents);
+void FreeRenderId(RenderId Id);
+void UpdateRenderResource(int RenderId, ByteSpan Contents, int Width, int Height);
 
 // Module private functions
 bool InitFont();
@@ -173,6 +174,7 @@ void rndr::ui::RemoveFont(FontHandle Handle)
     {
         return;
     }
+    FreeRenderId(Atlas->RenderId);
     delete[] Atlas->Contents.Data;
     delete[] Atlas->Glyphs.Data;
     delete[] Atlas->FontInfo.data;
@@ -420,7 +422,7 @@ rndr::ui::AtlasInfo* rndr::ui::CreateAtlas(const std::string& FontPath, float Si
     stbtt_GetCodepointHMetrics(&Atlas->FontInfo, ' ', &Atlas->SpaceAdvance, nullptr);
     Atlas->SpaceAdvance *= Atlas->Scale;
 
-    UpdateRenderResource(Atlas->RenderId, Atlas->Contents);
+    UpdateRenderResource(Atlas->RenderId, Atlas->Contents, g_UIProps.MaxImageSideSize, g_UIProps.MaxImageSideSize);
 
     return Atlas;
 }

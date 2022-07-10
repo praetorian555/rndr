@@ -34,7 +34,7 @@ struct Image
 
     ~Image();
 
-    void Update(GraphicsContext* Context, int ArrayIndex, ByteSpan Contents) const;
+    void Update(GraphicsContext* Context, int ArrayIndex, ByteSpan Contents, int BoxWidth, int BoxHeight) const;
 };
 
 }  // namespace rndr
