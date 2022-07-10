@@ -10,6 +10,8 @@ if (RNDR_SANITIZER)
   target_compile_options(fendexam1 PRIVATE $<$<CXX_COMPILER_ID:MSVC>:/fsanitize=address>)
 endif()
 
+target_compile_definitions(fendexam1 PRIVATE FE_WORK_DIR="${CMAKE_CURRENT_SOURCE_DIR}/")
+
 # Enable unity build
 if (RNDR_UNITY)
 set_target_properties(fendexam1 PROPERTIES UNITY_BUILD TRUE)
