@@ -49,9 +49,6 @@ rndr::ByteSpan rndr::ReadEntireFile(const std::string& FilePath)
 
 rndr::CPUImage rndr::ReadEntireImage(const std::string& FilePath)
 {
-    // We need this since stb loads data in top to bottom fashion
-    stbi_set_flip_vertically_on_load(true);
-
     int ChannelsInFile;
     CPUImage Image;
     Image.Format = PixelFormat::R8G8B8A8_UNORM_SRGB;
