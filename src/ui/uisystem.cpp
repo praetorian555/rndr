@@ -242,6 +242,16 @@ void rndr::ui::SetDim(const math::Point2& BottomLeft, const math::Vector2& Size)
     B->Bounds = math::Bounds2(BottomLeft, BottomLeft + Size);
 }
 
+float rndr::ui::GetViewportWidth()
+{
+    return GetRenderScreenSize().X;
+}
+
+float rndr::ui::GetViewportHeight()
+{
+    return GetRenderScreenSize().Y;
+}
+
 bool rndr::ui::MouseHovers()
 {
     Box* B = g_Stack.back();

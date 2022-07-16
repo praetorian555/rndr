@@ -91,5 +91,8 @@ bool MouseHovers();
 bool LeftMouseButtonClicked();
 bool RightMouseButtonClicked();
 
+float GetViewportWidth();
+float GetViewportHeight();
+
 }  // namespace ui
 }  // namespace rndr
