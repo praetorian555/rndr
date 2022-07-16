@@ -24,8 +24,16 @@ static constexpr RenderId kWhiteImageRenderId = 0;
 
 enum class PositionMode
 {
-    Absolute,
-    ParentRelative
+    ViewportRelativeTopLeft,
+    ViewportRelativeBottomLeft,
+    ViewportRelativeTopRight,
+    ViewportRelativeBottomRight,
+    ViewportRelativeCenter,
+    ParentRelativeTopLeft,
+    ParentRelativeBottomLeft,
+    ParentRelativeTopRight,
+    ParentRelativeBottomRight,
+    ParentRelativeCenter,
 };
 
 enum class SizeMode
@@ -37,6 +45,9 @@ enum class SizeMode
 
 struct BoxProperties
 {
+    PositionMode PositionModeX = PositionMode::ViewportRelativeBottomLeft;
+    PositionMode PositionModeY = PositionMode::ViewportRelativeBottomLeft;
+
     // Bottom left point of the box in pixels. Origin of the UI scene is at (0, 0) in bottom left corner of the screen. It grows to the
     // right and upwards.
     math::Point2 BottomLeft;
@@ -48,6 +59,9 @@ struct BoxProperties
 
 struct TextBoxProperties
 {
+    PositionMode PositionModeX = PositionMode::ViewportRelativeBottomLeft;
+    PositionMode PositionModeY = PositionMode::ViewportRelativeBottomLeft;
+
     math::Point2 BaseLineStart;
     float Scale = 1.0f;
     math::Vector4 Color = Colors::White;
@@ -57,6 +71,9 @@ struct TextBoxProperties
 
 struct ImageBoxProperties
 {
+    PositionMode PositionModeX = PositionMode::ViewportRelativeBottomLeft;
+    PositionMode PositionModeY = PositionMode::ViewportRelativeBottomLeft;
+
     math::Point2 BottomLeft;
     ImageId ImageId = kInvalidImageId;
     math::Vector4 Color = Colors::White;

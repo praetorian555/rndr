@@ -135,12 +135,105 @@ void rndr::ui::EndFrame()
     }
 }
 
+static float CalculatePosition(rndr::ui::PositionMode Mode, rndr::ui::Box* Parent, float Offset, int ValueIndex)
+{
+    const math::Vector2 ScreenSize = rndr::ui::GetRenderScreenSize();
+
+    math::Point2 Ref;
+
+    float Result = 0.0f;
+    switch (Mode)
+    {
+        case rndr::ui::PositionMode::ViewportRelativeTopLeft:
+        {
+            Ref.Y = ScreenSize.Y;
+            break;
+        }
+        case rndr::ui::PositionMode::ViewportRelativeBottomLeft:
+        {
+            break;
+        }
+        case rndr::ui::PositionMode::ViewportRelativeTopRight:
+        {
+            Ref.X = ScreenSize.X;
+            Ref.Y = ScreenSize.Y;
+            break;
+        }
+        case rndr::ui::PositionMode::ViewportRelativeBottomRight:
+        {
+            Ref.X = ScreenSize.X;
+            break;
+        }
+        case rndr::ui::PositionMode::ViewportRelativeCenter:
+        {
+            // TODO: Implement
+            assert(false);
+            break;
+        }
+        case rndr::ui::PositionMode::ParentRelativeTopLeft:
+        {
+            if (Parent)
+            {
+                Ref = Parent->Props.BottomLeft;
+                Ref.Y += Parent->Props.Size.Y;
+            }
+            break;
+        }
+        case rndr::ui::PositionMode::ParentRelativeBottomLeft:
+        {
+            if (Parent)
+            {
+                Ref = Parent->Props.BottomLeft;
+            }
+            break;
+        }
+        case rndr::ui::PositionMode::ParentRelativeTopRight:
+        {
+            if (Parent)
+            {
+                Ref = Parent->Props.BottomLeft;
+                Ref += Parent->Props.Size;
+            }
+            break;
+        }
+        case rndr::ui::PositionMode::ParentRelativeBottomRight:
+        {
+            if (Parent)
+            {
+                Ref = Parent->Props.BottomLeft;
+                Ref.X += Parent->Props.Size.X;
+            }
+            break;
+        }
+        case rndr::ui::PositionMode::ParentRelativeCenter:
+        {
+            // TODO: Implement
+            assert(false);
+            break;
+        }
+        default:
+        {
+            assert(false);
+            break;
+        }
+    }
+
+    Result = Ref.Data[ValueIndex] + Offset;
+    return Result;
+}
+
 void rndr::ui::StartBox(const BoxProperties& Props)
 {
+    Box* Parent = g_Stack.back();
+    math::Point2 BottomLeft;
+    BottomLeft.X = CalculatePosition(Props.PositionModeX, Parent, Props.BottomLeft.X, 0);
+    BottomLeft.Y = CalculatePosition(Props.PositionModeY, Parent, Props.BottomLeft.Y, 1);
+
     assert(g_Boxes.size() < kMaxInstances);
     Box* B = new Box();
     B->Props = Props;
-    B->Parent = g_Stack.back();
+    B->Props.BottomLeft = BottomLeft;
+    B->Parent = Parent;
     B->Parent->Children.push_back(B);
     B->Level = B->Parent->Level + 1;
     B->Bounds = math::Bounds2(Props.BottomLeft, Props.BottomLeft + Props.Size);
@@ -164,7 +257,10 @@ void rndr::ui::DrawTextBox(const std::string& Text, const TextBoxProperties& Pro
 
     const int VerticalAdvance = GetFontVerticalAdvance(Props.Font);
 
+    Box* Parent = g_Stack.back();
     math::Point2 StartPos = Props.BaseLineStart;
+    StartPos.X = CalculatePosition(Props.PositionModeX, Parent, StartPos.X, 0);
+    StartPos.Y = CalculatePosition(Props.PositionModeY, Parent, StartPos.Y, 1);
     for (int i = 0; i < Text.size(); i++)
     {
         int Codepoint = Text[i];
@@ -211,20 +307,24 @@ void rndr::ui::DrawTextBox(const std::string& Text, const TextBoxProperties& Pro
 
 void rndr::ui::DrawImageBox(const ImageBoxProperties& Props)
 {
+    Box* Parent = g_Stack.back();
+    math::Point2 BottomLeft;
+    BottomLeft.X = CalculatePosition(Props.PositionModeX, Parent, Props.BottomLeft.X, 0);
+    BottomLeft.Y = CalculatePosition(Props.PositionModeY, Parent, Props.BottomLeft.Y, 1);
+
     assert(g_Boxes.size() < kMaxInstances);
     Box* B = new Box();
     BoxProperties BoxProps;
-    BoxProps.BottomLeft = Props.Scale * Props.BottomLeft;
+    BoxProps.BottomLeft = BottomLeft;
     BoxProps.Size = Props.Scale * GetImageSize(Props.ImageId);
     BoxProps.Color = Props.Color;
     B->Props = BoxProps;
-    B->Parent = g_Stack.back();
+    B->Parent = Parent;
     B->Parent->Children.push_back(B);
     B->Level = B->Parent->Level + 1;
     B->Bounds = math::Bounds2(BoxProps.BottomLeft, BoxProps.BottomLeft + BoxProps.Size);
     B->RenderId = GetImageRenderId(Props.ImageId);
     GetImageTexCoords(Props.ImageId, &B->TexCoordsBottomLeft, &B->TexCoordsTopRight);
-    g_Stack.push_back(B);
     g_Boxes.push_back(B);
 }
 
