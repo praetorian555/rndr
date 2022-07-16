@@ -6,9 +6,11 @@
 class rndr::GraphicsContext;
 class rndr::Window;
 
+static void LoadAssets();
+
 static void AppLoop(float DeltaSeconds);
 
-static void LoadAssets();
+static void DrawNavBar(float DeltaSeconds);
 
 constexpr int kDefaultFontSize = 18;
 
@@ -46,33 +48,6 @@ int main()
     rndr::ShutDown();
 }
 
-void AppLoop(float DeltaSeconds)
-{
-    rndr::ui::StartFrame();
-
-    math::Vector4 BackgroundColor{1, 1, 1, 1};
-    rndr::ui::SetColor(BackgroundColor);
-
-    rndr::ui::ImageBoxProperties IBProps;
-    IBProps.BottomLeft = math::Point2{0, 0};
-    IBProps.ImageId = LogoImage;
-    IBProps.Scale = 0.5f;
-    rndr::ui::DrawImageBox(IBProps);
-
-    IBProps.BottomLeft = math::Point2{100, 0};
-    IBProps.ImageId = ArrowDownImage;
-    IBProps.Scale = 2.0f;
-    rndr::ui::DrawImageBox(IBProps);
-
-    rndr::ui::TextBoxProperties TBProps;
-    TBProps.BaseLineStart = math::Point2{0, 100};
-    TBProps.Font = EpilogueBoldFont;
-    TBProps.Color = rndr::Colors::Black;
-    rndr::ui::DrawTextBox("Learn more", TBProps);
-
-    rndr::ui::EndFrame();
-}
-
 static rndr::ui::ImageId LoadImageAsset(const char* ImagePath)
 {
     rndr::ui::ImageId Id = rndr::ui::AddImage(ImagePath);
@@ -105,4 +80,66 @@ void LoadAssets()
 
     EpilogueMediumFont = LoadFontAsset(FE_WORK_DIR "fonts/Epilogue-Medium.ttf", kDefaultFontSize);
     EpilogueBoldFont = LoadFontAsset(FE_WORK_DIR "fonts/Epilogue-Bold.ttf", kDefaultFontSize);
+}
+
+void AppLoop(float DeltaSeconds)
+{
+    rndr::ui::StartFrame();
+
+    DrawNavBar(DeltaSeconds);
+
+    rndr::ui::EndFrame();
+}
+
+static void DrawMenuText(const char* Text, float Offset)
+{
+    rndr::ui::TextBoxProperties TextProps;
+    TextProps.PositionModeX = rndr::ui::PositionMode::ParentRelativeBottomLeft;
+    TextProps.PositionModeY = rndr::ui::PositionMode::ParentRelativeBottomLeft;
+    TextProps.BaseLineStart = math::Point2{Offset, 30};
+    TextProps.Scale = 1.0f;
+    TextProps.Font = EpilogueMediumFont;
+    TextProps.Color = math::Vector4{0.7, 0.7, 0.7, 1.0};
+    rndr::ui::DrawTextBox(Text, TextProps);
+}
+
+void DrawNavBar(float DeltaSeconds)
+{
+    rndr::ui::BoxProperties NavBarProps;
+    NavBarProps.Size.X = rndr::ui::GetViewportWidth();
+    NavBarProps.Size.Y = 80;
+    NavBarProps.PositionModeX = rndr::ui::PositionMode::ViewportRelativeTopLeft;
+    NavBarProps.PositionModeY = rndr::ui::PositionMode::ViewportRelativeTopLeft;
+    NavBarProps.BottomLeft = math::Point2{0, -NavBarProps.Size.Y};
+    NavBarProps.Color = rndr::Colors::Pink;
+
+    rndr::ui::StartBox(NavBarProps);
+
+    rndr::ui::ImageBoxProperties LogoProps;
+    LogoProps.PositionModeX = rndr::ui::PositionMode::ParentRelativeBottomLeft;
+    LogoProps.PositionModeY = rndr::ui::PositionMode::ParentRelativeBottomLeft;
+    LogoProps.BottomLeft = math::Point2{30, 25};
+    LogoProps.Scale = 1.0f;
+    LogoProps.ImageId = LogoImage;
+
+    rndr::ui::DrawImageBox(LogoProps);
+
+    DrawMenuText("Features", 150);
+    DrawMenuText("Companies", 250);
+    DrawMenuText("Careers", 350);
+    DrawMenuText("About", 450);
+
+    rndr::ui::TextBoxProperties ButtonProps;
+    ButtonProps.PositionModeX = rndr::ui::PositionMode::ParentRelativeBottomRight;
+    ButtonProps.PositionModeY = rndr::ui::PositionMode::ParentRelativeBottomRight;
+    ButtonProps.BaseLineStart = math::Point2{-100, 30};
+    ButtonProps.Font = EpilogueMediumFont;
+
+    rndr::ui::DrawTextBox("Register", ButtonProps);
+
+    ButtonProps.BaseLineStart = math::Point2{-200, 30};
+
+    rndr::ui::DrawTextBox("Login", ButtonProps);
+
+    rndr::ui::EndBox();
 }
