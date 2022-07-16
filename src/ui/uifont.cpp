@@ -236,6 +236,28 @@ int rndr::ui::GetFontVerticalAdvance(FontHandle Font)
     return Atlas->Ascent + std::abs(Atlas->Descent) + Atlas->LineGap;
 }
 
+int rndr::ui::GetFontDescent(FontHandle Font)
+{
+    AtlasInfo* Atlas = GetAtlas(Font);
+    if (!Atlas)
+    {
+        RNDR_LOG_ERROR("Font handle %d doesn't correspond to any font, did you call AddFont?");
+        return 0;
+    }
+    return Atlas->Descent;
+}
+
+int rndr::ui::GetFontAscent(FontHandle Font)
+{
+    AtlasInfo* Atlas = GetAtlas(Font);
+    if (!Atlas)
+    {
+        RNDR_LOG_ERROR("Font handle %d doesn't correspond to any font, did you call AddFont?");
+        return 0;
+    }
+    return Atlas->Ascent;
+}
+
 math::Vector2 rndr::ui::GetGlyphSize(FontHandle Font, int Codepoint)
 {
     if (!ContainsCodepoint(Font, Codepoint))

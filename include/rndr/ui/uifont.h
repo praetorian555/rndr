@@ -28,6 +28,12 @@ int GetGlyphAdvance(FontHandle Font, int CurrentCodepoint, int NextCodepoint);
 // Returns how much to advance the baseline vertically. Returns 0 in case that Font is invalid.
 int GetFontVerticalAdvance(FontHandle Font);
 
+// Get distance between baseline and the lowest point of the font. Returns negative value or 0.
+int GetFontDescent(FontHandle Font);
+
+// Get distance between baseline and the highest point of the font. Returns positive value or 0.
+int GetFontAscent(FontHandle Font);
+
 // Returns the dimensions of the glyph image.
 math::Vector2 GetGlyphSize(FontHandle Font, int Codepoint);
 
