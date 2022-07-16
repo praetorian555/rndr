@@ -544,7 +544,7 @@ void Render(float DeltaSeconds)
     TBProps.BaseLineStart = math::Point2(150, 650);
     TBProps.Scale = 2.0f;
     TBProps.Font = Font;
-    TBProps.Color = rndr::Colors::White;
+    TBProps.TextColor = rndr::Colors::White;
     rndr::ui::DrawTextBox("I am scaled by factor of 2.0", TBProps);
 
     TBProps.BaseLineStart = math::Point2(150, 500);

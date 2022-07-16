@@ -64,7 +64,8 @@ struct TextBoxProperties
 
     math::Point2 BaseLineStart;
     float Scale = 1.0f;
-    math::Vector4 Color = Colors::White;
+    math::Vector4 TextColor = Colors::White;
+    math::Vector4 BackgroundColor = math::Vector4{0, 0, 0, 0};
     // FontHandle that you get by calling AddFont function.
     FontHandle Font = kInvalidFontHandle;
 };

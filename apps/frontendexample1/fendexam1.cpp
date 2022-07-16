@@ -99,7 +99,7 @@ static void DrawMenuText(const char* Text, float Offset)
     TextProps.BaseLineStart = math::Point2{Offset, 30};
     TextProps.Scale = 1.0f;
     TextProps.Font = EpilogueMediumFont;
-    TextProps.Color = math::Vector4{0.7, 0.7, 0.7, 1.0};
+    TextProps.TextColor = math::Vector4{0.7, 0.7, 0.7, 1.0};
     rndr::ui::DrawTextBox(Text, TextProps);
 }
 

@@ -255,19 +255,36 @@ void rndr::ui::DrawTextBox(const std::string& Text, const TextBoxProperties& Pro
         return;
     }
 
+    Box* Parent = new Box{};
+    Parent->Props.Color = Props.BackgroundColor;
+    Parent->Parent = g_Stack.back();
+    Parent->Parent->Children.push_back(Parent);
+    Parent->Level = Parent->Parent->Level + 1;
+    Parent->RenderId = kWhiteImageRenderId;
+    g_Boxes.push_back(Parent);
+
     const int VerticalAdvance = GetFontVerticalAdvance(Props.Font);
 
-    Box* Parent = g_Stack.back();
     math::Point2 StartPos = Props.BaseLineStart;
-    StartPos.X = CalculatePosition(Props.PositionModeX, Parent, StartPos.X, 0);
-    StartPos.Y = CalculatePosition(Props.PositionModeY, Parent, StartPos.Y, 1);
+    StartPos.X = CalculatePosition(Props.PositionModeX, Parent->Parent, StartPos.X, 0);
+    StartPos.Y = CalculatePosition(Props.PositionModeY, Parent->Parent, StartPos.Y, 1);
+    const math::Point2 OriginalStartPos = StartPos;
+
+    Parent->Props.BottomLeft.X = StartPos.X;
+    Parent->Props.BottomLeft.Y = StartPos.Y + Props.Scale * GetFontDescent(Props.Font);
+    Parent->Props.Size.X = 0;
+    Parent->Props.Size.Y = Props.Scale * GetFontSize(Props.Font);
     for (int i = 0; i < Text.size(); i++)
     {
         int Codepoint = Text[i];
 
         if (Codepoint == '\n')
         {
-            StartPos.X = Props.BaseLineStart.X;
+            if (Parent->Props.Size.X < StartPos.X - OriginalStartPos.X)
+            {
+                Parent->Props.Size.X = StartPos.X - OriginalStartPos.X;
+            }
+            StartPos.X = OriginalStartPos.X;
             StartPos.Y -= Props.Scale * VerticalAdvance;
             continue;
         }
@@ -291,9 +308,9 @@ void rndr::ui::DrawTextBox(const std::string& Text, const TextBoxProperties& Pro
         BoxProperties BoxProps;
         BoxProps.BottomLeft = StartPos + GlyphBearing;
         BoxProps.Size = GlyphSize;
-        BoxProps.Color = Props.Color;
+        BoxProps.Color = Props.TextColor;
         B->Props = BoxProps;
-        B->Parent = g_Stack.back();
+        B->Parent = Parent;
         B->Parent->Children.push_back(B);
         B->Level = B->Parent->Level + 1;
         B->Bounds = math::Bounds2(BoxProps.BottomLeft, BoxProps.BottomLeft + BoxProps.Size);
@@ -303,6 +320,12 @@ void rndr::ui::DrawTextBox(const std::string& Text, const TextBoxProperties& Pro
 
         StartPos.X += Props.Scale * GlyphAdvance;
     }
+
+    if (Parent->Props.Size.X < StartPos.X - OriginalStartPos.X)
+    {
+        Parent->Props.Size.X = StartPos.X - OriginalStartPos.X;
+    }
+    Parent->Bounds = math::Bounds2(Parent->Props.BottomLeft, Parent->Props.BottomLeft + Parent->Props.Size);
 }
 
 void rndr::ui::DrawImageBox(const ImageBoxProperties& Props)
