@@ -65,8 +65,8 @@ struct TextBoxProperties
     float Scale = 1.0f;
     math::Vector4 TextColor = Colors::White;
     math::Vector4 BackgroundColor = math::Vector4{0, 0, 0, 0};
-    // FontHandle that you get by calling AddFont function.
-    FontHandle Font = kInvalidFontHandle;
+    // FontId that you get by calling AddFont function.
+    FontId Font = kInvalidFontId;
 };
 
 struct ImageBoxProperties

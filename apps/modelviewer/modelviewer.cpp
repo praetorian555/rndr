@@ -64,9 +64,9 @@ math::Vector3 g_MeshRotationState;
 math::Vector3 g_LightDirection;
 math::Vector4 g_LightColor;
 
-rndr::ui::FontHandle Font;
-rndr::ui::FontHandle LargerFont;
-rndr::ui::FontHandle HugeFont;
+rndr::ui::FontId Font;
+rndr::ui::FontId LargerFont;
+rndr::ui::FontId HugeFont;
 
 void Init();
 void InitRenderPrimitives();
@@ -109,9 +109,9 @@ void Init()
     Font = rndr::ui::AddFont("C:/Windows/Fonts/arial.ttf", 36);
     LargerFont = rndr::ui::AddFont("C:/Windows/Fonts/arial.ttf", 72);
     HugeFont = rndr::ui::AddFont("C:/Windows/Fonts/arial.ttf", 144);
-    assert(Font != rndr::ui::kInvalidFontHandle);
-    assert(LargerFont != rndr::ui::kInvalidFontHandle);
-    assert(HugeFont != rndr::ui::kInvalidFontHandle);
+    assert(Font != rndr::ui::kInvalidFontId);
+    assert(LargerFont != rndr::ui::kInvalidFontId);
+    assert(HugeFont != rndr::ui::kInvalidFontId);
 
     rndr::ProjectionCameraProperties CameraProps;
     CameraProps.Projection = rndr::ProjectionType::Perspective;

@@ -28,8 +28,8 @@ rndr::ui::ImageId ClientDataBizImage;
 rndr::ui::ImageId ClientMakerImage;
 rndr::ui::ImageId ClientMeetImage;
 
-rndr::ui::FontHandle EpilogueMediumFont;
-rndr::ui::FontHandle EpilogueBoldFont;
+rndr::ui::FontId EpilogueMediumFont;
+rndr::ui::FontId EpilogueBoldFont;
 
 int main()
 {
@@ -55,10 +55,10 @@ static rndr::ui::ImageId LoadImageAsset(const char* ImagePath)
     return Id;
 }
 
-static rndr::ui::FontHandle LoadFontAsset(const char* FontPath, int Size)
+static rndr::ui::FontId LoadFontAsset(const char* FontPath, int Size)
 {
-    rndr::ui::FontHandle Id = rndr::ui::AddFont(FontPath, Size);
-    assert(Id != rndr::ui::kInvalidFontHandle);
+    rndr::ui::FontId Id = rndr::ui::AddFont(FontPath, Size);
+    assert(Id != rndr::ui::kInvalidFontId);
     return Id;
 }
 

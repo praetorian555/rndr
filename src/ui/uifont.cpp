@@ -36,7 +36,7 @@ struct AtlasInfo
     std::string FontName;
     float FontSizeInPixels;
 
-    FontHandle Handle;
+    FontId Id;
 
     stbtt_fontinfo FontInfo;
 
@@ -83,10 +83,10 @@ void ShutDownFont();
 
 // Private functions
 static AtlasInfo* GetAtlas(const char* FontName, float FontSize);
-static AtlasInfo* GetAtlas(FontHandle Handle);
+static AtlasInfo* GetAtlas(FontId Id);
 static AtlasInfo* CreateAtlas(const std::string& FontPath, float SizeInPixels);
 static int GetMinGlyphCountPerSize(int GlyphSize, int GlyphCount, int SideInPixels);
-static bool ContainsCodepoint(FontHandle Font, int Codepoint);
+static bool ContainsCodepoint(FontId Font, int Codepoint);
 
 }  // namespace ui
 }  // namespace rndr
@@ -122,54 +122,54 @@ void rndr::ui::ShutDownFont()
     delete[] g_Atlases.Data;
 }
 
-rndr::ui::FontHandle rndr::ui::AddFont(const char* FilePath, float FontSizeInPixels)
+rndr::ui::FontId rndr::ui::AddFont(const char* FilePath, float FontSizeInPixels)
 {
     std::filesystem::path FontPath(FilePath);
     if (FontPath.extension() != ".ttf")
     {
         RNDR_LOG_ERROR("We only support .ttf font files!");
-        return kInvalidFontHandle;
+        return kInvalidFontId;
     }
     std::string FontName = FontPath.stem().string();
     AtlasInfo* Atlas = GetAtlas(FontName.c_str(), FontSizeInPixels);
     if (Atlas)
     {
         RNDR_LOG_INFO("Font with a name %s and a pixel size %d already present...", FontName.c_str(), FontSizeInPixels);
-        return Atlas->Handle;
+        return Atlas->Id;
     }
-    FontHandle FreeHandle = kInvalidFontHandle;
+    FontId FreeId = kInvalidFontId;
     for (int i = 0; i < g_Atlases.Size; i++)
     {
         if (!g_Atlases[i])
         {
-            FreeHandle = i;
+            FreeId = i;
             break;
         }
     }
-    if (FreeHandle == kInvalidFontHandle)
+    if (FreeId == kInvalidFontId)
     {
         RNDR_LOG_ERROR("Max number of supported fonts reached, supported %d fonts!", g_Atlases.Size);
-        return kInvalidFontHandle;
+        return kInvalidFontId;
     }
     Atlas = CreateAtlas(FontPath.string(), FontSizeInPixels);
     if (!Atlas)
     {
         RNDR_LOG_ERROR("Failed to create a font atlas from font file %s!", FilePath);
-        return kInvalidFontHandle;
+        return kInvalidFontId;
     }
-    Atlas->Handle = FreeHandle;
-    g_Atlases[FreeHandle] = Atlas;
-    RNDR_LOG_INFO("Successfully added font %s with pixel size %d with font handle %d", FontName.c_str(), (int)FontSizeInPixels, FreeHandle);
-    return Atlas->Handle;
+    Atlas->Id = FreeId;
+    g_Atlases[FreeId] = Atlas;
+    RNDR_LOG_INFO("Successfully added font %s with pixel size %d with font id %d", FontName.c_str(), (int)FontSizeInPixels, FreeId);
+    return Atlas->Id;
 }
 
-void rndr::ui::RemoveFont(FontHandle Handle)
+void rndr::ui::RemoveFont(FontId Id)
 {
-    if (Handle < 0 || Handle >= g_Atlases.Size)
+    if (Id < 0 || Id >= g_Atlases.Size)
     {
         return;
     }
-    AtlasInfo* Atlas = g_Atlases[Handle];
+    AtlasInfo* Atlas = g_Atlases[Id];
     if (!Atlas)
     {
         return;
@@ -179,7 +179,7 @@ void rndr::ui::RemoveFont(FontHandle Handle)
     delete[] Atlas->Glyphs.Data;
     delete[] Atlas->FontInfo.data;
     delete Atlas;
-    g_Atlases[Handle] = nullptr;
+    g_Atlases[Id] = nullptr;
 }
 
 bool rndr::ui::ContainsFont(const char* FontName, float FontSizeInPixels)
@@ -187,28 +187,28 @@ bool rndr::ui::ContainsFont(const char* FontName, float FontSizeInPixels)
     return GetAtlas(FontName, FontSizeInPixels) != nullptr;
 }
 
-bool rndr::ui::ContainsFont(FontHandle Font)
+bool rndr::ui::ContainsFont(FontId Font)
 {
     return GetAtlas(Font) != nullptr;
 }
 
-int rndr::ui::GetFontSize(FontHandle Font)
+int rndr::ui::GetFontSize(FontId Font)
 {
     AtlasInfo* Atlas = GetAtlas(Font);
     if (!Atlas)
     {
-        RNDR_LOG_ERROR("Font handle %d doesn't correspond to any font, did you call AddFont?");
+        RNDR_LOG_ERROR("Font id %d doesn't correspond to any font, did you call AddFont?");
         return 0;
     }
     return Atlas->Ascent + std::abs(Atlas->Descent);
 }
 
-int rndr::ui::GetGlyphAdvance(FontHandle Font, int CurrentCodepoint, int NextCodepoint)
+int rndr::ui::GetGlyphAdvance(FontId Font, int CurrentCodepoint, int NextCodepoint)
 {
     AtlasInfo* Atlas = GetAtlas(Font);
     if (!Atlas)
     {
-        RNDR_LOG_ERROR("Font handle %d doesn't correspond to any font, did you call AddFont?");
+        RNDR_LOG_ERROR("Font id %d doesn't correspond to any font, did you call AddFont?");
         return 0;
     }
     int KernAdvance = stbtt_GetCodepointKernAdvance(&Atlas->FontInfo, CurrentCodepoint, NextCodepoint);
@@ -225,40 +225,40 @@ int rndr::ui::GetGlyphAdvance(FontHandle Font, int CurrentCodepoint, int NextCod
     return Advance + KernAdvance;
 }
 
-int rndr::ui::GetFontVerticalAdvance(FontHandle Font)
+int rndr::ui::GetFontVerticalAdvance(FontId Font)
 {
     AtlasInfo* Atlas = GetAtlas(Font);
     if (!Atlas)
     {
-        RNDR_LOG_ERROR("Font handle %d doesn't correspond to any font, did you call AddFont?");
+        RNDR_LOG_ERROR("Font id %d doesn't correspond to any font, did you call AddFont?");
         return 0;
     }
     return Atlas->Ascent + std::abs(Atlas->Descent) + Atlas->LineGap;
 }
 
-int rndr::ui::GetFontDescent(FontHandle Font)
+int rndr::ui::GetFontDescent(FontId Font)
 {
     AtlasInfo* Atlas = GetAtlas(Font);
     if (!Atlas)
     {
-        RNDR_LOG_ERROR("Font handle %d doesn't correspond to any font, did you call AddFont?");
+        RNDR_LOG_ERROR("Font id %d doesn't correspond to any font, did you call AddFont?");
         return 0;
     }
     return Atlas->Descent;
 }
 
-int rndr::ui::GetFontAscent(FontHandle Font)
+int rndr::ui::GetFontAscent(FontId Font)
 {
     AtlasInfo* Atlas = GetAtlas(Font);
     if (!Atlas)
     {
-        RNDR_LOG_ERROR("Font handle %d doesn't correspond to any font, did you call AddFont?");
+        RNDR_LOG_ERROR("Font id %d doesn't correspond to any font, did you call AddFont?");
         return 0;
     }
     return Atlas->Ascent;
 }
 
-math::Vector2 rndr::ui::GetGlyphSize(FontHandle Font, int Codepoint)
+math::Vector2 rndr::ui::GetGlyphSize(FontId Font, int Codepoint)
 {
     if (!ContainsCodepoint(Font, Codepoint))
     {
@@ -267,14 +267,14 @@ math::Vector2 rndr::ui::GetGlyphSize(FontHandle Font, int Codepoint)
     AtlasInfo* Atlas = GetAtlas(Font);
     if (!Atlas)
     {
-        RNDR_LOG_ERROR("Font handle %d doesn't correspond to any font, did you call AddFont?");
+        RNDR_LOG_ERROR("Font id %d doesn't correspond to any font, did you call AddFont?");
         return math::Vector2{};
     }
     GlyphInfo* Info = &Atlas->Glyphs[Codepoint - Atlas->StartCodepoint];
     return math::Vector2{(float)Info->Width, (float)Info->Height};
 }
 
-math::Vector2 rndr::ui::GetGlyphBearing(FontHandle Font, int Codepoint)
+math::Vector2 rndr::ui::GetGlyphBearing(FontId Font, int Codepoint)
 {
     if (!ContainsCodepoint(Font, Codepoint))
     {
@@ -283,14 +283,14 @@ math::Vector2 rndr::ui::GetGlyphBearing(FontHandle Font, int Codepoint)
     AtlasInfo* Atlas = GetAtlas(Font);
     if (!Atlas)
     {
-        RNDR_LOG_ERROR("Font handle %d doesn't correspond to any font, did you call AddFont?");
+        RNDR_LOG_ERROR("Font id %d doesn't correspond to any font, did you call AddFont?");
         return math::Vector2{};
     }
     GlyphInfo* Info = &Atlas->Glyphs[Codepoint - Atlas->StartCodepoint];
     return math::Vector2{(float)Info->OffsetX, (float)-(Info->Height + Info->OffsetY)};
 }
 
-void rndr::ui::GetGlyphTexCoords(FontHandle Font, int Codepoint, math::Point2* BottomLeft, math::Point2* TopRight)
+void rndr::ui::GetGlyphTexCoords(FontId Font, int Codepoint, math::Point2* BottomLeft, math::Point2* TopRight)
 {
     if (!ContainsCodepoint(Font, Codepoint))
     {
@@ -299,7 +299,7 @@ void rndr::ui::GetGlyphTexCoords(FontHandle Font, int Codepoint, math::Point2* B
     AtlasInfo* Atlas = GetAtlas(Font);
     if (!Atlas)
     {
-        RNDR_LOG_ERROR("Font handle %d doesn't correspond to any font, did you call AddFont?");
+        RNDR_LOG_ERROR("Font id %d doesn't correspond to any font, did you call AddFont?");
         return;
     }
     GlyphInfo* Info = &Atlas->Glyphs[Codepoint - Atlas->StartCodepoint];
@@ -313,12 +313,12 @@ void rndr::ui::GetGlyphTexCoords(FontHandle Font, int Codepoint, math::Point2* B
     }
 }
 
-int rndr::ui::GetFontRenderId(FontHandle Handle)
+int rndr::ui::GetFontRenderId(FontId Id)
 {
-    AtlasInfo* Atlas = GetAtlas(Handle);
+    AtlasInfo* Atlas = GetAtlas(Id);
     if (!Atlas)
     {
-        RNDR_LOG_ERROR("Font handle %d doesn't correspond to any font, did you call AddFont?");
+        RNDR_LOG_ERROR("Font id %d doesn't correspond to any font, did you call AddFont?");
         return kInvalidRenderId;
     }
     return Atlas->RenderId;
@@ -340,14 +340,14 @@ rndr::ui::AtlasInfo* rndr::ui::GetAtlas(const char* FontName, float FontSize)
     return nullptr;
 }
 
-rndr::ui::AtlasInfo* rndr::ui::GetAtlas(FontHandle Handle)
+rndr::ui::AtlasInfo* rndr::ui::GetAtlas(FontId Id)
 {
-    if (Handle < 0 || Handle >= g_Atlases.Size)
+    if (Id < 0 || Id >= g_Atlases.Size)
     {
-        RNDR_LOG_ERROR("Invalid handle!");
+        RNDR_LOG_ERROR("Invalid id!");
         return nullptr;
     }
-    return g_Atlases[Handle];
+    return g_Atlases[Id];
 }
 
 rndr::ui::AtlasInfo* rndr::ui::CreateAtlas(const std::string& FontPath, float SizeInPixels)
@@ -467,7 +467,7 @@ int rndr::ui::GetMinGlyphCountPerSize(int GlyphSize, int GlyphCount, int SideInP
     }
 }
 
-bool rndr::ui::ContainsCodepoint(FontHandle Font, int Codepoint)
+bool rndr::ui::ContainsCodepoint(FontId Font, int Codepoint)
 {
     AtlasInfo* Atlas = GetAtlas(Font);
     if (!Atlas)
