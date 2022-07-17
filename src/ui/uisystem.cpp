@@ -166,8 +166,8 @@ static float CalculatePosition(rndr::ui::PositionMode Mode, rndr::ui::Box* Paren
         }
         case rndr::ui::PositionMode::ViewportRelativeCenter:
         {
-            // TODO: Implement
-            assert(false);
+            Ref.X = ScreenSize.X / 2;
+            Ref.Y = ScreenSize.Y / 2;
             break;
         }
         case rndr::ui::PositionMode::ParentRelativeTopLeft:
@@ -207,8 +207,9 @@ static float CalculatePosition(rndr::ui::PositionMode Mode, rndr::ui::Box* Paren
         }
         case rndr::ui::PositionMode::ParentRelativeCenter:
         {
-            // TODO: Implement
-            assert(false);
+            Ref = Parent->Props.BottomLeft;
+            Ref.X += Parent->Props.Size.X / 2;
+            Ref.Y += Parent->Props.Size.Y / 2;
             break;
         }
         default:
@@ -222,12 +223,20 @@ static float CalculatePosition(rndr::ui::PositionMode Mode, rndr::ui::Box* Paren
     return Result;
 }
 
+static bool IsPositionModeCenter(rndr::ui::PositionMode Mode)
+{
+    return Mode == rndr::ui::PositionMode::ParentRelativeCenter || Mode == rndr::ui::PositionMode::ViewportRelativeCenter;
+}
+
 void rndr::ui::StartBox(const BoxProperties& Props)
 {
     Box* Parent = g_Stack.back();
+    math::Vector2 Offset;
+    Offset.X = IsPositionModeCenter(Props.PositionModeX) ? -Props.Size.X / 2 : Props.BottomLeft.X;
+    Offset.Y = IsPositionModeCenter(Props.PositionModeY) ? -Props.Size.Y / 2 : Props.BottomLeft.Y;
     math::Point2 BottomLeft;
-    BottomLeft.X = CalculatePosition(Props.PositionModeX, Parent, Props.BottomLeft.X, 0);
-    BottomLeft.Y = CalculatePosition(Props.PositionModeY, Parent, Props.BottomLeft.Y, 1);
+    BottomLeft.X = CalculatePosition(Props.PositionModeX, Parent, Offset.X, 0);
+    BottomLeft.Y = CalculatePosition(Props.PositionModeY, Parent, Offset.Y, 1);
 
     assert(g_Boxes.size() < kMaxInstances);
     Box* B = new Box();
@@ -264,14 +273,32 @@ void rndr::ui::DrawTextBox(const std::string& Text, const TextBoxProperties& Pro
     g_Boxes.push_back(Parent);
 
     const int VerticalAdvance = GetFontVerticalAdvance(Props.Font);
+    const float Descent = Props.Scale * GetFontDescent(Props.Font);
+
+    const bool bCenterX = IsPositionModeCenter(Props.PositionModeX);
+    const bool bCenterY = IsPositionModeCenter(Props.PositionModeY);
 
     math::Point2 StartPos = Props.BaseLineStart;
-    StartPos.X = CalculatePosition(Props.PositionModeX, Parent->Parent, StartPos.X, 0);
-    StartPos.Y = CalculatePosition(Props.PositionModeY, Parent->Parent, StartPos.Y, 1);
+    if (bCenterX)
+    {
+        StartPos.X = 0;
+    }
+    else
+    {
+        StartPos.X = CalculatePosition(Props.PositionModeX, Parent->Parent, StartPos.X, 0);
+    }
+    if (bCenterY)
+    {
+        StartPos.Y = 0;
+    }
+    else
+    {
+        StartPos.Y = CalculatePosition(Props.PositionModeY, Parent->Parent, StartPos.Y, 1);
+    }
     const math::Point2 OriginalStartPos = StartPos;
 
     Parent->Props.BottomLeft.X = StartPos.X;
-    Parent->Props.BottomLeft.Y = StartPos.Y + Props.Scale * GetFontDescent(Props.Font);
+    Parent->Props.BottomLeft.Y = StartPos.Y + Descent;
     Parent->Props.Size.X = 0;
     Parent->Props.Size.Y = Props.Scale * GetFontSize(Props.Font);
     for (int i = 0; i < Text.size(); i++)
@@ -325,21 +352,49 @@ void rndr::ui::DrawTextBox(const std::string& Text, const TextBoxProperties& Pro
     {
         Parent->Props.Size.X = StartPos.X - OriginalStartPos.X;
     }
+
     Parent->Bounds = math::Bounds2(Parent->Props.BottomLeft, Parent->Props.BottomLeft + Parent->Props.Size);
+
+    if (bCenterX || bCenterY)
+    {
+        math::Point2 BottomLeft;
+        if (bCenterX)
+        {
+            const float Offset = -Parent->Props.Size.X / 2;
+            BottomLeft.X = CalculatePosition(Props.PositionModeX, Parent->Parent, Offset, 0);
+        }
+        if (bCenterY)
+        {
+            const float Offset = -Parent->Props.Size.Y / 2;
+            BottomLeft.Y = CalculatePosition(Props.PositionModeY, Parent->Parent, Offset, 1);
+            BottomLeft.Y -= Descent;
+        }
+
+        for (Box* Child : Parent->Children)
+        {
+            Child->Props.BottomLeft += BottomLeft;
+        }
+    }
 }
 
 void rndr::ui::DrawImageBox(const ImageBoxProperties& Props)
 {
     Box* Parent = g_Stack.back();
+    const math::Vector2 ImageSize = Props.Scale * GetImageSize(Props.ImageId);
+
+    math::Vector2 Offset;
+    Offset.X = IsPositionModeCenter(Props.PositionModeX) ? -ImageSize.X / 2 : Props.BottomLeft.X;
+    Offset.Y = IsPositionModeCenter(Props.PositionModeY) ? -ImageSize.Y / 2 : Props.BottomLeft.Y;
+
     math::Point2 BottomLeft;
-    BottomLeft.X = CalculatePosition(Props.PositionModeX, Parent, Props.BottomLeft.X, 0);
-    BottomLeft.Y = CalculatePosition(Props.PositionModeY, Parent, Props.BottomLeft.Y, 1);
+    BottomLeft.X = CalculatePosition(Props.PositionModeX, Parent, Offset.X, 0);
+    BottomLeft.Y = CalculatePosition(Props.PositionModeY, Parent, Offset.Y, 1);
 
     assert(g_Boxes.size() < kMaxInstances);
     Box* B = new Box();
     BoxProperties BoxProps;
     BoxProps.BottomLeft = BottomLeft;
-    BoxProps.Size = Props.Scale * GetImageSize(Props.ImageId);
+    BoxProps.Size = ImageSize;
     BoxProps.Color = Props.Color;
     B->Props = BoxProps;
     B->Parent = Parent;
