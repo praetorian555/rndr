@@ -215,8 +215,25 @@ static bool IsPositionModeCenter(rndr::ui::PositionMode Mode)
     return Mode == rndr::ui::PositionMode::ParentCenter || Mode == rndr::ui::PositionMode::ViewportCenter;
 }
 
+static bool IsPositionModeX(rndr::ui::PositionMode Mode)
+{
+    return Mode == rndr::ui::PositionMode::ParentLeft || Mode == rndr::ui::PositionMode::ParentRight ||
+           Mode == rndr::ui::PositionMode::ParentCenter || Mode == rndr::ui::PositionMode::ViewportLeft ||
+           Mode == rndr::ui::PositionMode::ViewportRight || Mode == rndr::ui::PositionMode::ViewportCenter;
+}
+
+static bool IsPositionModeY(rndr::ui::PositionMode Mode)
+{
+    return Mode == rndr::ui::PositionMode::ParentTop || Mode == rndr::ui::PositionMode::ParentBottom ||
+           Mode == rndr::ui::PositionMode::ParentCenter || Mode == rndr::ui::PositionMode::ViewportTop ||
+           Mode == rndr::ui::PositionMode::ViewportBottom || Mode == rndr::ui::PositionMode::ViewportCenter;
+}
+
 void rndr::ui::StartBox(const BoxProperties& Props)
 {
+    assert(IsPositionModeX(Props.PositionModeX));
+    assert(IsPositionModeY(Props.PositionModeY));
+
     Box* Parent = g_Stack.back();
     math::Vector2 Offset;
     Offset.X = IsPositionModeCenter(Props.PositionModeX) ? -Props.Size.X / 2 : Props.BottomLeft.X;
@@ -245,6 +262,9 @@ void rndr::ui::EndBox()
 
 void rndr::ui::DrawTextBox(const std::string& Text, const TextBoxProperties& Props)
 {
+    assert(IsPositionModeX(Props.PositionModeX));
+    assert(IsPositionModeY(Props.PositionModeY));
+
     if (!ContainsFont(Props.Font))
     {
         RNDR_LOG_ERROR("Invalid font!");
@@ -366,6 +386,9 @@ void rndr::ui::DrawTextBox(const std::string& Text, const TextBoxProperties& Pro
 
 void rndr::ui::DrawImageBox(const ImageBoxProperties& Props)
 {
+    assert(IsPositionModeX(Props.PositionModeX));
+    assert(IsPositionModeY(Props.PositionModeY));
+
     Box* Parent = g_Stack.back();
     const math::Vector2 ImageSize = Props.Scale * GetImageSize(Props.ImageId);
 
