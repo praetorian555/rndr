@@ -1,7 +1,7 @@
 #pragma once
 
-#include "math/vector2.h"
 #include "math/point2.h"
+#include "math/vector2.h"
 
 #include "rndr/ui/uirender.h"
 
@@ -20,5 +20,5 @@ math::Vector2 GetImageSize(ImageId Id);
 void GetImageTexCoords(ImageId Id, math::Point2* BottomLeft, math::Point2* TopRight);
 RenderId GetImageRenderId(ImageId Id);
 
-}
+}  // namespace ui
 }  // namespace rndr

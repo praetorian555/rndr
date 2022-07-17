@@ -14,5 +14,5 @@ static constexpr RenderId kInvalidRenderId = -1;
 
 math::Vector2 GetRenderScreenSize();
 
-}
+}  // namespace ui
 }  // namespace rndr

@@ -20,7 +20,7 @@ struct Box
 
     int Level;
     math::Bounds2 Bounds;
-    
+
     // Used only when box should display an image
     RenderId RenderId = kWhiteImageRenderId;
     math::Point2 TexCoordsBottomLeft = math::Point2{0, 0};

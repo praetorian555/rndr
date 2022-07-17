@@ -139,7 +139,7 @@ void DrawNavBar(float DeltaSeconds)
     rndr::ui::DrawTextBox("Register", ButtonProps);
 
     ButtonProps.BaseLineStart = math::Point2{-200, 0};
-     
+
     rndr::ui::DrawTextBox("Login", ButtonProps);
 
     rndr::ui::EndBox();
