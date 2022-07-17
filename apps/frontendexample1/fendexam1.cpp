@@ -95,11 +95,11 @@ static void DrawMenuText(const char* Text, float Offset)
 {
     rndr::ui::TextBoxProperties TextProps;
     TextProps.PositionModeX = rndr::ui::PositionMode::ParentRelativeBottomLeft;
-    TextProps.PositionModeY = rndr::ui::PositionMode::ParentRelativeBottomLeft;
-    TextProps.BaseLineStart = math::Point2{Offset, 30};
+    TextProps.PositionModeY = rndr::ui::PositionMode::ParentRelativeCenter;
+    TextProps.BaseLineStart = math::Point2{Offset, 10};
     TextProps.Scale = 1.0f;
     TextProps.Font = EpilogueMediumFont;
-    TextProps.TextColor = math::Vector4{0.7, 0.7, 0.7, 1.0};
+    TextProps.TextColor = math::Vector4{0, 0, 0, 1.0};
     rndr::ui::DrawTextBox(Text, TextProps);
 }
 
@@ -111,13 +111,13 @@ void DrawNavBar(float DeltaSeconds)
     NavBarProps.PositionModeX = rndr::ui::PositionMode::ViewportRelativeTopLeft;
     NavBarProps.PositionModeY = rndr::ui::PositionMode::ViewportRelativeTopLeft;
     NavBarProps.BottomLeft = math::Point2{0, -NavBarProps.Size.Y};
-    NavBarProps.Color = rndr::Colors::Pink;
+    NavBarProps.Color = rndr::Colors::White;
 
     rndr::ui::StartBox(NavBarProps);
 
     rndr::ui::ImageBoxProperties LogoProps;
     LogoProps.PositionModeX = rndr::ui::PositionMode::ParentRelativeBottomLeft;
-    LogoProps.PositionModeY = rndr::ui::PositionMode::ParentRelativeBottomLeft;
+    LogoProps.PositionModeY = rndr::ui::PositionMode::ParentRelativeCenter;
     LogoProps.BottomLeft = math::Point2{30, 25};
     LogoProps.Scale = 1.0f;
     LogoProps.ImageId = LogoImage;
@@ -131,13 +131,14 @@ void DrawNavBar(float DeltaSeconds)
 
     rndr::ui::TextBoxProperties ButtonProps;
     ButtonProps.PositionModeX = rndr::ui::PositionMode::ParentRelativeBottomRight;
-    ButtonProps.PositionModeY = rndr::ui::PositionMode::ParentRelativeBottomRight;
-    ButtonProps.BaseLineStart = math::Point2{-100, 30};
+    ButtonProps.PositionModeY = rndr::ui::PositionMode::ParentRelativeCenter;
+    ButtonProps.BaseLineStart = math::Point2{-100, 0};
     ButtonProps.Font = EpilogueMediumFont;
+    ButtonProps.TextColor = rndr::Colors::Black;
 
     rndr::ui::DrawTextBox("Register", ButtonProps);
 
-    ButtonProps.BaseLineStart = math::Point2{-200, 30};
+    ButtonProps.BaseLineStart = math::Point2{-200, 0};
 
     rndr::ui::DrawTextBox("Login", ButtonProps);
 
