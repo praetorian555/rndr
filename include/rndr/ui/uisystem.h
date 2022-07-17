@@ -24,29 +24,28 @@ static constexpr RenderId kWhiteImageRenderId = 0;
 
 enum class PositionMode
 {
-    ViewportRelativeTopLeft,
-    ViewportRelativeBottomLeft,
-    ViewportRelativeTopRight,
-    ViewportRelativeBottomRight,
-    ViewportRelativeCenter,
-    ParentRelativeTopLeft,
-    ParentRelativeBottomLeft,
-    ParentRelativeTopRight,
-    ParentRelativeBottomRight,
-    ParentRelativeCenter,
+    ViewportLeft,
+    ViewportRight,
+    ViewportTop,
+    ViewportBottom,
+    ViewportCenter,
+    ParentLeft,
+    ParentRight,
+    ParentTop,
+    ParentBottom,
+    ParentCenter,
 };
 
 enum class SizeMode
 {
-    Absolute,     // Whatever is in the Size field is the final size of the box
-    FitChildren,  // Sized so that it encompases all children
-    FitParent     // Sized same as the parent
+    Absolute,  // Whatever is in the Size field is the final size of the box
+    FitParent  // Sized same as the parent
 };
 
 struct BoxProperties
 {
-    PositionMode PositionModeX = PositionMode::ViewportRelativeBottomLeft;
-    PositionMode PositionModeY = PositionMode::ViewportRelativeBottomLeft;
+    PositionMode PositionModeX = PositionMode::ViewportLeft;
+    PositionMode PositionModeY = PositionMode::ViewportBottom;
 
     // Bottom left point of the box in pixels. Origin of the UI scene is at (0, 0) in bottom left corner of the screen. It grows to the
     // right and upwards.
@@ -59,8 +58,8 @@ struct BoxProperties
 
 struct TextBoxProperties
 {
-    PositionMode PositionModeX = PositionMode::ViewportRelativeBottomLeft;
-    PositionMode PositionModeY = PositionMode::ViewportRelativeBottomLeft;
+    PositionMode PositionModeX = PositionMode::ViewportLeft;
+    PositionMode PositionModeY = PositionMode::ViewportBottom;
 
     math::Point2 BaseLineStart;
     float Scale = 1.0f;
@@ -72,8 +71,8 @@ struct TextBoxProperties
 
 struct ImageBoxProperties
 {
-    PositionMode PositionModeX = PositionMode::ViewportRelativeBottomLeft;
-    PositionMode PositionModeY = PositionMode::ViewportRelativeBottomLeft;
+    PositionMode PositionModeX = PositionMode::ViewportLeft;
+    PositionMode PositionModeY = PositionMode::ViewportBottom;
 
     math::Point2 BottomLeft;
     ImageId ImageId = kInvalidImageId;

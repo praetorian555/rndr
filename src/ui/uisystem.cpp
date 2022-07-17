@@ -144,33 +144,28 @@ static float CalculatePosition(rndr::ui::PositionMode Mode, rndr::ui::Box* Paren
     float Result = 0.0f;
     switch (Mode)
     {
-        case rndr::ui::PositionMode::ViewportRelativeTopLeft:
+        case rndr::ui::PositionMode::ViewportTop:
         {
             Ref.Y = ScreenSize.Y;
             break;
         }
-        case rndr::ui::PositionMode::ViewportRelativeBottomLeft:
-        {
-            break;
-        }
-        case rndr::ui::PositionMode::ViewportRelativeTopRight:
-        {
-            Ref.X = ScreenSize.X;
-            Ref.Y = ScreenSize.Y;
-            break;
-        }
-        case rndr::ui::PositionMode::ViewportRelativeBottomRight:
+        case rndr::ui::PositionMode::ViewportRight:
         {
             Ref.X = ScreenSize.X;
             break;
         }
-        case rndr::ui::PositionMode::ViewportRelativeCenter:
+        case rndr::ui::PositionMode::ViewportBottom:
+        case rndr::ui::PositionMode::ViewportLeft:
+        {
+            break;
+        }
+        case rndr::ui::PositionMode::ViewportCenter:
         {
             Ref.X = ScreenSize.X / 2;
             Ref.Y = ScreenSize.Y / 2;
             break;
         }
-        case rndr::ui::PositionMode::ParentRelativeTopLeft:
+        case rndr::ui::PositionMode::ParentTop:
         {
             if (Parent)
             {
@@ -179,7 +174,8 @@ static float CalculatePosition(rndr::ui::PositionMode Mode, rndr::ui::Box* Paren
             }
             break;
         }
-        case rndr::ui::PositionMode::ParentRelativeBottomLeft:
+        case rndr::ui::PositionMode::ParentLeft:
+        case rndr::ui::PositionMode::ParentBottom:
         {
             if (Parent)
             {
@@ -187,16 +183,7 @@ static float CalculatePosition(rndr::ui::PositionMode Mode, rndr::ui::Box* Paren
             }
             break;
         }
-        case rndr::ui::PositionMode::ParentRelativeTopRight:
-        {
-            if (Parent)
-            {
-                Ref = Parent->Props.BottomLeft;
-                Ref += Parent->Props.Size;
-            }
-            break;
-        }
-        case rndr::ui::PositionMode::ParentRelativeBottomRight:
+        case rndr::ui::PositionMode::ParentRight:
         {
             if (Parent)
             {
@@ -205,7 +192,7 @@ static float CalculatePosition(rndr::ui::PositionMode Mode, rndr::ui::Box* Paren
             }
             break;
         }
-        case rndr::ui::PositionMode::ParentRelativeCenter:
+        case rndr::ui::PositionMode::ParentCenter:
         {
             Ref = Parent->Props.BottomLeft;
             Ref.X += Parent->Props.Size.X / 2;
@@ -225,7 +212,7 @@ static float CalculatePosition(rndr::ui::PositionMode Mode, rndr::ui::Box* Paren
 
 static bool IsPositionModeCenter(rndr::ui::PositionMode Mode)
 {
-    return Mode == rndr::ui::PositionMode::ParentRelativeCenter || Mode == rndr::ui::PositionMode::ViewportRelativeCenter;
+    return Mode == rndr::ui::PositionMode::ParentCenter || Mode == rndr::ui::PositionMode::ViewportCenter;
 }
 
 void rndr::ui::StartBox(const BoxProperties& Props)
