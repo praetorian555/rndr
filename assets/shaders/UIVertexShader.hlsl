@@ -5,7 +5,10 @@ struct InstanceData
     float2 TexCoordsBottomLeft : TEXCOORD0;
     float2 TexCoordsTopRight : TEXCOORD1;
     float4 Color : COLOR;
-    float AtlasIndex : BLENDINDICES;
+    float AtlasIndex : BLENDINDICES0;
+    float CornerRadius : BLENDINDICES1;
+    float EdgeSoftness : BLENDINDICES2;
+    float BorderThickness : BLENDINDICES3;
     uint VertexIndex : SV_VertexID;
 };
 
@@ -13,8 +16,14 @@ struct OutData
 {
     float4 Position : SV_POSITION;
     float4 Color : COLOR;
-    float2 TexCoords : TEXCOORD;
-    float AtlasIndex : BLENDINDICES;
+    float2 TexCoords : TEXCOORD0;
+    float2 ScreenCenter : TEXCOORD1;
+    float2 ScreenHalfSize : TEXCOORD2;
+    float2 ScreenPosition : TEXCOORD3;
+    float AtlasIndex : BLENDINDICES0;
+    float CornerRadius : BLENDINDICES1;
+    float EdgeSoftness : BLENDINDICES2;
+    float BorderThickness : BLENDINDICES3;
 };
 
 cbuffer Constants
@@ -45,10 +54,11 @@ OutData Main(InstanceData In)
     
     float2 HalfSize = (In.TopRight - In.BottomLeft) / 2;
     float2 Center = In.BottomLeft + HalfSize;
-    float2 TexCoordsSize = (In.TexCoordsTopRight - In.TexCoordsBottomLeft);
-    
     float2 ScreenPosition = DefaultPositions[In.VertexIndex] * HalfSize + Center;
+    
+    float2 TexCoordsSize = (In.TexCoordsTopRight - In.TexCoordsBottomLeft);
     float2 TexCoords = In.TexCoordsBottomLeft + DefaultTexCoords[In.VertexIndex] * TexCoordsSize;
+    
     OutData Out;
     Out.Position = float4(
         2 * ScreenPosition.x / ScreenSize.x - 1,
@@ -58,7 +68,13 @@ OutData Main(InstanceData In)
     );
     Out.Color = In.Color;
     Out.TexCoords = TexCoords;
+    Out.ScreenCenter = Center;
+    Out.ScreenHalfSize = HalfSize;
+    Out.ScreenPosition = ScreenPosition;
     Out.AtlasIndex = In.AtlasIndex;
+    Out.CornerRadius = In.CornerRadius;
+    Out.EdgeSoftness = In.EdgeSoftness;
+    Out.BorderThickness = In.BorderThickness;
     
     return Out;
 }

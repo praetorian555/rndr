@@ -35,6 +35,9 @@ struct InstanceData
     math::Point2 TexCoordsTopRight;
     math::Vector4 Color;
     float RenderId;
+    float CornerRadius = 0.0f;
+    float EdgeSoftness = 0.0f;
+    float BorderThickness = 0.0f;
 };
 
 RNDR_ALIGN(16) struct ShaderGlobals
@@ -116,7 +119,7 @@ bool rndr::ui::InitRender(GraphicsContext* Context)
         return false;
     }
 
-    InputLayoutProperties ILProps[6];
+    InputLayoutProperties ILProps[9];
     ILProps[0].SemanticName = "POSITION";
     ILProps[0].SemanticIndex = 0;
     ILProps[0].InputSlot = 0;
@@ -159,7 +162,28 @@ bool rndr::ui::InitRender(GraphicsContext* Context)
     ILProps[5].OffsetInVertex = AppendAlignedElement;
     ILProps[5].Repetition = rndr::DataRepetition::PerInstance;
     ILProps[5].InstanceStepRate = 1;
-    g_InputLayout = g_Context->CreateInputLayout(Span(ILProps, 6), g_VertexShader);
+    ILProps[6].SemanticName = "BLENDINDICES";
+    ILProps[6].SemanticIndex = 1;
+    ILProps[6].InputSlot = 0;
+    ILProps[6].Format = rndr::PixelFormat::R32_FLOAT;
+    ILProps[6].OffsetInVertex = AppendAlignedElement;
+    ILProps[6].Repetition = rndr::DataRepetition::PerInstance;
+    ILProps[6].InstanceStepRate = 1;
+    ILProps[7].SemanticName = "BLENDINDICES";
+    ILProps[7].SemanticIndex = 2;
+    ILProps[7].InputSlot = 0;
+    ILProps[7].Format = rndr::PixelFormat::R32_FLOAT;
+    ILProps[7].OffsetInVertex = AppendAlignedElement;
+    ILProps[7].Repetition = rndr::DataRepetition::PerInstance;
+    ILProps[7].InstanceStepRate = 1;
+    ILProps[8].SemanticName = "BLENDINDICES";
+    ILProps[8].SemanticIndex = 3;
+    ILProps[8].InputSlot = 0;
+    ILProps[8].Format = rndr::PixelFormat::R32_FLOAT;
+    ILProps[8].OffsetInVertex = AppendAlignedElement;
+    ILProps[8].Repetition = rndr::DataRepetition::PerInstance;
+    ILProps[8].InstanceStepRate = 1;
+    g_InputLayout = g_Context->CreateInputLayout(Span(ILProps, 9), g_VertexShader);
     if (!g_InputLayout)
     {
         RNDR_LOG_ERROR("Failed to create InputLayout!");
@@ -393,6 +417,9 @@ std::vector<rndr::ui::InstanceData> rndr::ui::ConvertBoxesIntoInstanceData(const
         Data.TexCoordsTopRight = B->TexCoordsTopRight;
         Data.Color = B->Props.Color;
         Data.RenderId = B->RenderId;
+        Data.CornerRadius = B->Props.CornerRadius;
+        Data.EdgeSoftness = B->Props.EdgeSoftness;
+        Data.BorderThickness = B->Props.BorderThickness;
         Instances.push_back(Data);
     }
     return Instances;

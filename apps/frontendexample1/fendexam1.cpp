@@ -12,7 +12,7 @@ static void AppLoop(float DeltaSeconds);
 
 static void DrawNavBar(float DeltaSeconds);
 
-constexpr int kDefaultFontSize = 18;
+constexpr int kDefaultFontSize = 14;
 
 rndr::ui::ImageId ArrowUpImage;
 rndr::ui::ImageId ArrowDownImage;
@@ -88,6 +88,14 @@ void AppLoop(float DeltaSeconds)
 
     DrawNavBar(DeltaSeconds);
 
+    rndr::ui::BoxProperties Props;
+    Props.PositionModeX = rndr::ui::PositionMode::ViewportCenter;
+    Props.PositionModeY = rndr::ui::PositionMode::ViewportCenter;
+    Props.Color = rndr::Colors::Red;
+    Props.Size = math::Vector2(100, 100);
+    rndr::ui::StartBox(Props);
+    rndr::ui::EndBox();
+
     rndr::ui::EndFrame();
 }
 
@@ -130,16 +138,27 @@ void DrawNavBar(float DeltaSeconds)
     DrawMenuText("About", 450);
 
     rndr::ui::TextBoxProperties ButtonProps;
-    ButtonProps.PositionModeX = rndr::ui::PositionMode::ParentRight;
+    ButtonProps.PositionModeX = rndr::ui::PositionMode::ParentCenter;
     ButtonProps.PositionModeY = rndr::ui::PositionMode::ParentCenter;
-    ButtonProps.BaseLineStart = math::Point2{-100, 0};
     ButtonProps.Font = EpilogueMediumFont;
     ButtonProps.TextColor = rndr::Colors::Black;
 
+    rndr::ui::BoxProperties ButtonWrapProps;
+    ButtonWrapProps.PositionModeX = rndr::ui::PositionMode::ParentRight;
+    ButtonWrapProps.PositionModeY = rndr::ui::PositionMode::ParentCenter;
+    ButtonWrapProps.BottomLeft.X = -140;
+    ButtonWrapProps.Size = math::Vector2{120, 40};
+    ButtonWrapProps.Color = rndr::Colors::Black;
+    ButtonWrapProps.BorderThickness = 2.0f;
+    ButtonWrapProps.CornerRadius = 10.0f;
+    ButtonWrapProps.EdgeSoftness = 0.8f;
+
+    rndr::ui::StartBox(ButtonWrapProps);
     rndr::ui::DrawTextBox("Register", ButtonProps);
+    rndr::ui::EndBox();
 
+    ButtonProps.PositionModeX = rndr::ui::PositionMode::ParentRight;
     ButtonProps.BaseLineStart = math::Point2{-200, 0};
-
     rndr::ui::DrawTextBox("Login", ButtonProps);
 
     rndr::ui::EndBox();

@@ -54,6 +54,10 @@ struct BoxProperties
     math::Vector2 Size = math::Vector2{100, 100};
     // Tint of the box.
     math::Vector4 Color = rndr::Colors::Pink;
+
+    float CornerRadius = 0.0f;
+    float EdgeSoftness = 0.0f;
+    float BorderThickness = 0.0f;
 };
 
 struct TextBoxProperties
