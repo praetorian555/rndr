@@ -10,3 +10,7 @@ target_compile_features(stb_image PUBLIC cxx_std_17)
 
 # Put stb_image project under Extern folder in IDE
 set_target_properties(stb_image PROPERTIES FOLDER Extern)
+
+if (RNDR_SANITIZER)
+    target_compile_options(stb_image PRIVATE $<$<CXX_COMPILER_ID:MSVC>:/fsanitize=address>)
+endif()

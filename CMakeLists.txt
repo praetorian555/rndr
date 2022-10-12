@@ -10,8 +10,8 @@ project(
 include(cmake/utils.cmake)
 
 # Library options
-option(RNDR_UNITY "Enable unity builds" OFF)
-option(RNDR_SANITIZER "Enable address sanitizer" OFF)
+option(RNDR_UNITY "Enable unity builds" ON)
+option(RNDR_SANITIZER "Enable address sanitizer" ON)
 option(RNDR_DX11 "Use DX11 API" ON)
 option(RNDR_HANDMADE "Use handmade software rendering pipeline" OFF)
 

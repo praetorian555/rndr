@@ -2,6 +2,10 @@
 if (NOT TARGET spdlog::spdlog)
 	add_subdirectory(spdlog)
 	set_target_properties(spdlog PROPERTIES FOLDER Extern)
+	target_compile_features(spdlog PRIVATE cxx_std_17)
+	if (RNDR_SANITIZER)
+		target_compile_options(spdlog PRIVATE $<$<AND:$<CXX_COMPILER_ID:MSVC>,$<NOT:$<CONFIG:Release>>>:/fsanitize=address>)
+  endif()
 endif()
 
 # Include stb_image only if it is not already present
@@ -16,11 +20,8 @@ endif()
 
 # Include math only if it is not already present
 if (NOT TARGET math)
-	if (RNDR_UNITY)
-		set(MATH_UNITY ON CACHE BOOL "" FORCE)
-	else()
-		set(MATH_UNITY OFF CACHE BOOL "" FORCE)
-	endif()
+	set(MATH_UNITY ${RNDR_UNITY} CACHE BOOL "" FORCE)
+	set(MATH_SANITIZER ${RNDR_SANITIZER} CACHE BOOL "" FORCE)
 	add_subdirectory(math)
 	set_target_properties(math PROPERTIES FOLDER Extern)
 endif()
