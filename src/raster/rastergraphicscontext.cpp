@@ -1,12 +1,12 @@
-#include "rndr/raster/rastergraphicscontext.h"
+#include "rndr/render/raster/rastergraphicscontext.h"
 
 #if defined RNDR_RASTER
 
 #include "rndr/core/window.h"
 
-#include "rndr/raster/rasterframebuffer.h"
-#include "rndr/raster/rasterimage.h"
-#include "rndr/raster/rasterizer.h"
+#include "rndr/render/raster/rasterframebuffer.h"
+#include "rndr/render/raster/rasterimage.h"
+#include "rndr/render/raster/rasterizer.h"
 
 #if defined RNDR_WINDOWS
 #include <Windows.h>

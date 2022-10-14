@@ -6,16 +6,17 @@
 #include "math/point2.h"
 #include "math/vector4.h"
 
-#include "rndr/core/buffer.h"
 #include "rndr/core/fileutils.h"
-#include "rndr/core/framebuffer.h"
-#include "rndr/core/graphicscontext.h"
-#include "rndr/core/graphicstypes.h"
 #include "rndr/core/input.h"
 #include "rndr/core/log.h"
-#include "rndr/core/pipeline.h"
-#include "rndr/core/shader.h"
 #include "rndr/core/span.h"
+
+#include "rndr/render/buffer.h"
+#include "rndr/render/framebuffer.h"
+#include "rndr/render/graphicscontext.h"
+#include "rndr/render/graphicstypes.h"
+#include "rndr/render/pipeline.h"
+#include "rndr/render/shader.h"
 
 #include "rndr/ui/uibox.h"
 #include "rndr/ui/uisystem.h"

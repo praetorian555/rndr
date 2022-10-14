@@ -1,12 +1,12 @@
-#include "rndr/dx11/dx11framebuffer.h"
+#include "rndr/render/dx11/dx11framebuffer.h"
 
 #if defined RNDR_DX11
 
 #include "rndr/core/log.h"
 
-#include "rndr/dx11/dx11graphicscontext.h"
-#include "rndr/dx11/dx11helpers.h"
-#include "rndr/dx11/dx11image.h"
+#include "rndr/render/dx11/dx11graphicscontext.h"
+#include "rndr/render/dx11/dx11helpers.h"
+#include "rndr/render/dx11/dx11image.h"
 
 rndr::FrameBuffer::FrameBuffer(rndr::GraphicsContext* Context, int Width, int Height, const FrameBufferProperties& Props)
     : GraphicsContext(Context), Width(Width), Height(Height), Props(Props)

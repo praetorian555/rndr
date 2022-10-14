@@ -3,9 +3,9 @@
 #include "rndr/core/base.h"
 
 #if defined RNDR_RASTER
-#include "rndr/raster/rasterpipeline.h"
+#include "rndr/render/raster/rasterpipeline.h"
 #elif defined RNDR_DX11
-#include "rndr/dx11/dx11pipeline.h"
+#include "rndr/render/dx11/dx11pipeline.h"
 #else
 #error Pipeline implementation is missing!
 #endif

@@ -1,4 +1,4 @@
-#include "rndr/raster/rasterpipeline.h"
+#include "rndr/render/raster/rasterpipeline.h"
 
 #if defined RNDR_RASTER
 

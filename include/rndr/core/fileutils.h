@@ -2,7 +2,8 @@
 #include <string>
 
 #include "rndr/core/base.h"
-#include "rndr/core/graphicstypes.h"
+
+#include "rndr/render/graphicstypes.h"
 
 namespace rndr
 {

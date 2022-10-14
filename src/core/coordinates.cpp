@@ -1,4 +1,4 @@
-#include "rndr/core/coordinates.h"
+#include "rndr/render/coordinates.h"
 
 math::Point2 rndr::PixelCoordinates::ToDiscreteSpace(const math::Point2& Point)
 {

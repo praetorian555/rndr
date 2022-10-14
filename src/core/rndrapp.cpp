@@ -3,12 +3,13 @@
 #include <cassert>
 #include <chrono>
 
-#include "rndr/core/graphicscontext.h"
-#include "rndr/core/image.h"
 #include "rndr/core/input.h"
 #include "rndr/core/rndrapp.h"
 
 #include "rndr/profiling/cputracer.h"
+
+#include "rndr/render/graphicscontext.h"
+#include "rndr/render/image.h"
 
 rndr::RndrApp* rndr::GRndrApp = nullptr;
 

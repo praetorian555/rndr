@@ -1,8 +1,8 @@
 #pragma once
 
-#include "rndr/core/barycentric.h"
-#include "rndr/core/colors.h"
-#include "rndr/core/pipeline.h"
+#include "rndr/render/barycentric.h"
+#include "rndr/render/colors.h"
+#include "rndr/render/pipeline.h"
 
 #if defined RNDR_RASTER
 

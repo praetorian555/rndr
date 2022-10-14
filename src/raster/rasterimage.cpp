@@ -1,12 +1,13 @@
-#include "rndr/raster/rasterimage.h"
+#include "rndr/render/raster/rasterimage.h"
 
 #include "stb_image/stb_image.h"
 
-#include "rndr/core/colors.h"
-#include "rndr/core/coordinates.h"
 #include "rndr/core/fileutils.h"
 #include "rndr/core/log.h"
 #include "rndr/core/threading.h"
+
+#include "rndr/render/colors.h"
+#include "rndr/render/coordinates.h"
 
 #include "rndr/profiling/cputracer.h"
 

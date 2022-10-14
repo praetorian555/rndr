@@ -1,15 +1,16 @@
 #pragma once
 
-#include "rndr/core/pipeline.h"
 #include "rndr/core/projectioncamera.h"
 
 #include "math/transform.h"
 
+#include "rndr/render/pipeline.h"
+
 #if defined RNDR_RASTER
 
-#include "rndr/raster/rasterimage.h"
-#include "rndr/raster/rasterpipeline.h"
-#include "rndr/raster/rastersampler.h"
+#include "rndr/render/raster/rasterimage.h"
+#include "rndr/render/raster/rasterpipeline.h"
+#include "rndr/render/raster/rastersampler.h"
 
 namespace rndr
 {

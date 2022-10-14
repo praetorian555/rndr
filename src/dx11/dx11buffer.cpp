@@ -1,4 +1,4 @@
-#include "rndr/dx11/dx11buffer.h"
+#include "rndr/render/dx11/dx11buffer.h"
 
 #if defined RNDR_DX11
 
@@ -7,8 +7,8 @@
 
 #include "rndr/core/log.h"
 
-#include "rndr/dx11/dx11graphicscontext.h"
-#include "rndr/dx11/dx11helpers.h"
+#include "rndr/render/dx11/dx11graphicscontext.h"
+#include "rndr/render/dx11/dx11helpers.h"
 
 rndr::Buffer::Buffer(rndr::GraphicsContext* Context, const BufferProperties& P, ByteSpan InitialData) : GraphicsContext(Context), Props(P)
 {

@@ -8,9 +8,10 @@
 #include "math/vector3.h"
 
 #include "rndr/core/log.h"
-#include "rndr/core/material.h"
-#include "rndr/core/mesh.h"
-#include "rndr/core/model.h"
+
+#include "rndr/render/material.h"
+#include "rndr/render/mesh.h"
+#include "rndr/render/model.h"
 
 rndr::Model* rndr::ObjParser::Parse(const std::string& FilePath)
 {

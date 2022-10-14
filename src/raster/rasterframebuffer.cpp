@@ -1,8 +1,8 @@
-#include "rndr/raster/rasterframebuffer.h"
+#include "rndr/render/raster/rasterframebuffer.h"
 
 #if defined RNDR_RASTER
 
-#include "rndr/raster/rastergraphicscontext.h"
+#include "rndr/render/raster/rastergraphicscontext.h"
 
 rndr::FrameBuffer::FrameBuffer(GraphicsContext* Context, int Width, int Height, const FrameBufferProperties& Props)
     : m_Context(Context), m_Width(Width), m_Height(Height), m_Props(Props)

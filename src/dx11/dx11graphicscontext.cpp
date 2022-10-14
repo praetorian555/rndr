@@ -1,19 +1,19 @@
-#include "rndr/dx11/dx11graphicscontext.h"
+#include "rndr/render/dx11/dx11graphicscontext.h"
 
 #if defined RNDR_DX11
 
 #include <Windows.h>
 
-#include "rndr/core/framebuffer.h"
 #include "rndr/core/log.h"
 #include "rndr/core/window.h"
 
-#include "rndr/dx11/dx11buffer.h"
-#include "rndr/dx11/dx11helpers.h"
-#include "rndr/dx11/dx11image.h"
-#include "rndr/dx11/dx11pipeline.h"
-#include "rndr/dx11/dx11sampler.h"
-#include "rndr/dx11/dx11shader.h"
+#include "rndr/render/dx11/dx11buffer.h"
+#include "rndr/render/dx11/dx11helpers.h"
+#include "rndr/render/dx11/dx11image.h"
+#include "rndr/render/dx11/dx11pipeline.h"
+#include "rndr/render/dx11/dx11sampler.h"
+#include "rndr/render/dx11/dx11shader.h"
+#include "rndr/render/framebuffer.h"
 
 rndr::GraphicsContext::GraphicsContext(Window* Window, GraphicsContextProperties Props) : m_Window(Window), m_Props(Props)
 {

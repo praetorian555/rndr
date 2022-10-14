@@ -1,9 +1,10 @@
-#include "rndr/core/barycentric.h"
+#include "rndr/render/barycentric.h"
 
 #include "math/point2.h"
 
-#include "rndr/core/coordinates.h"
 #include "rndr/core/debug.h"
+
+#include "rndr/render/coordinates.h"
 
 real rndr::BarycentricCoordinates::Interpolate(const real (&Values)[3]) const
 {

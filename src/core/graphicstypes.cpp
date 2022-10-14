@@ -1,4 +1,4 @@
-#include "rndr/core/graphicstypes.h"
+#include "rndr/render/graphicstypes.h"
 
 real rndr::ToGammaCorrectSpace(real Value, real Gamma)
 {

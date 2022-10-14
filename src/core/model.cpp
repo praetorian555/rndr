@@ -1,7 +1,7 @@
-#include "rndr/core/model.h"
+#include "rndr/render/model.h"
 
-#include "rndr/core/material.h"
-#include "rndr/core/mesh.h"
+#include "rndr/render/material.h"
+#include "rndr/render/mesh.h"
 
 void rndr::Model::AddMesh(Mesh* Mesh)
 {

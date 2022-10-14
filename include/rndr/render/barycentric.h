@@ -3,7 +3,7 @@
 #include "math/point3.h"
 #include "math/vector3.h"
 
-#include "rndr/core/pipeline.h"
+#include "rndr/render/pipeline.h"
 
 // Forward declarations
 struct math::Point2;

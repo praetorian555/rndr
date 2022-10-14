@@ -1,4 +1,4 @@
-#include "rndr/core/colors.h"
+#include "rndr/render/colors.h"
 
 const math::Vector4 rndr::Colors::Black{0, 0, 0, 1};
 const math::Vector4 rndr::Colors::White{1, 1, 1, 1};

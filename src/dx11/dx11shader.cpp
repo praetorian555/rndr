@@ -1,14 +1,14 @@
-#include "rndr/dx11/dx11shader.h"
+#include "rndr/render/dx11/dx11shader.h"
 
 #if defined RNDR_DX11
 
-#include "rndr/core/graphicstypes.h"
 #include "rndr/core/log.h"
 
-#include "rndr/dx11/dx11graphicscontext.h"
-#include "rndr/dx11/dx11helpers.h"
-#include "rndr/dx11/dx11image.h"
-#include "rndr/dx11/dx11sampler.h"
+#include "rndr/render/dx11/dx11graphicscontext.h"
+#include "rndr/render/dx11/dx11helpers.h"
+#include "rndr/render/dx11/dx11image.h"
+#include "rndr/render/dx11/dx11sampler.h"
+#include "rndr/render/graphicstypes.h"
 
 // TODO(mkostic): Add support for different shader models and move this to dx11helpers
 static const char* GetShaderModel(D3D_FEATURE_LEVEL FeatureLevel, rndr::ShaderType Type)

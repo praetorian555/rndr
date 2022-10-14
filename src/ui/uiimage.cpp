@@ -2,7 +2,8 @@
 
 #include "rndr/core/fileutils.h"
 #include "rndr/core/log.h"
-#include "rndr/core/pipeline.h"
+
+#include "rndr/render/pipeline.h"
 
 #include "rndr/ui/uisystem.h"
 

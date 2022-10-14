@@ -8,8 +8,8 @@
 
 #include <d3d11.h>
 
-#include "rndr/core/graphicstypes.h"
-#include "rndr/core/image.h"
+#include "rndr/render/graphicstypes.h"
+#include "rndr/render/image.h"
 
 namespace rndr
 {

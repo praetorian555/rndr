@@ -1,10 +1,10 @@
-#include "rndr/raster/rasterizer.h"
+#include "rndr/render/raster/rasterizer.h"
 
 #if defined RNDR_RASTER
 
-#include "rndr/core/barycentric.h"
+#include "rndr/render/barycentric.h"
 #include "rndr/core/bounds3.h"
-#include "rndr/core/coordinates.h"
+#include "rndr/render/coordinates.h"
 #include "rndr/core/log.h"
 #include "rndr/core/math.h"
 #include "rndr/core/threading.h"

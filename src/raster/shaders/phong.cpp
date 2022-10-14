@@ -1,4 +1,4 @@
-#include "rndr/raster/shaders/phong.h"
+#include "rndr/render/raster/shaders/phong.h"
 
 #if defined RNDR_RASTER
 

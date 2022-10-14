@@ -1,4 +1,4 @@
-#include "rndr/core/mesh.h"
+#include "rndr/render/mesh.h"
 
 rndr::Mesh::Mesh(const std::string& Name,
                  Span<math::Point3> Positions,

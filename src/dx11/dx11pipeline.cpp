@@ -1,12 +1,12 @@
-#include "rndr/dx11/dx11pipeline.h"
+#include "rndr/render/dx11/dx11pipeline.h"
 
 #if defined RNDR_DX11
 
 #include "rndr/core/log.h"
 
-#include "rndr/dx11/dx11graphicscontext.h"
-#include "rndr/dx11/dx11helpers.h"
-#include "rndr/dx11/dx11shader.h"
+#include "rndr/render/dx11/dx11graphicscontext.h"
+#include "rndr/render/dx11/dx11helpers.h"
+#include "rndr/render/dx11/dx11shader.h"
 
 rndr::InputLayout::InputLayout(GraphicsContext* Context, Span<InputLayoutProperties> P, rndr::Shader* Shader)
 {

@@ -1,4 +1,4 @@
-#include "rndr/raster/rastersampler.h"
+#include "rndr/render/raster/rastersampler.h"
 
 #if defined RNDR_RASTER
 

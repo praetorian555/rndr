@@ -1,13 +1,13 @@
-#include "rndr/dx11/dx11sampler.h"
+#include "rndr/render/dx11/dx11sampler.h"
 
 #if defined RNDR_DX11
 
 #include <d3d.h>
 
-#include "rndr/dx11/dx11graphicscontext.h"
-#include "rndr/dx11/dx11helpers.h"
-
 #include "rndr/core/log.h"
+
+#include "rndr/render/dx11/dx11graphicscontext.h"
+#include "rndr/render/dx11/dx11helpers.h"
 
 rndr::Sampler::Sampler(GraphicsContext* Context, const SamplerProperties& Props) : m_Props(Props)
 {

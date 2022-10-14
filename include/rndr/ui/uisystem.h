@@ -5,7 +5,8 @@
 #include "math/vector4.h"
 
 #include "rndr/core/base.h"
-#include "rndr/core/colors.h"
+
+#include "rndr/render/colors.h"
 
 #include "rndr/ui/uifont.h"
 #include "rndr/ui/uiimage.h"

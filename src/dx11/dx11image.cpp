@@ -1,4 +1,4 @@
-#include "rndr/dx11/dx11image.h"
+#include "rndr/render/dx11/dx11image.h"
 
 #if defined RNDR_DX11
 
@@ -8,10 +8,10 @@
 #include "stb_image/stb_image.h"
 
 #include "rndr/core/fileutils.h"
-#include "rndr/core/graphicscontext.h"
 #include "rndr/core/log.h"
 
-#include "rndr/dx11/dx11helpers.h"
+#include "rndr/render/dx11/dx11helpers.h"
+#include "rndr/render/graphicscontext.h"
 
 bool rndr::Image::Init(GraphicsContext* Context, int Width, int Height, const ImageProperties& P, ByteSpan InitData)
 {

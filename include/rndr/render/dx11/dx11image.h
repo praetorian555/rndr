@@ -4,7 +4,7 @@
 
 #if defined RNDR_DX11
 
-#include "rndr/core/graphicstypes.h"
+#include "rndr/render/graphicstypes.h"
 
 struct ID3D11RenderTargetView;
 struct ID3D11DepthStencilView;
