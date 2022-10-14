@@ -2,12 +2,13 @@
 
 #if defined RNDR_RASTER
 
-#include "rndr/render/barycentric.h"
 #include "rndr/core/bounds3.h"
-#include "rndr/render/coordinates.h"
 #include "rndr/core/log.h"
 #include "rndr/core/math.h"
 #include "rndr/core/threading.h"
+
+#include "rndr/render/barycentric.h"
+#include "rndr/render/coordinates.h"
 
 #include "rndr/memory/stackallocator.h"
 
