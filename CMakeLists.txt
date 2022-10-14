@@ -48,6 +48,9 @@ endif()
   	# The compiled library code is here
 	add_subdirectory(src)
 
+	# Tests
+	add_subdirectory(tests)
+
 if (CMAKE_PROJECT_NAME STREQUAL PROJECT_NAME)
 
 	# The executable code is here
