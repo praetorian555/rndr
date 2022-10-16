@@ -15,6 +15,7 @@ namespace rndr
 {
 
 class GraphicsContext;
+struct SwapChain;
 
 struct FrameBuffer
 {
@@ -27,6 +28,13 @@ struct FrameBuffer
 
     FrameBuffer(rndr::GraphicsContext* Context, int Width, int Height, const FrameBufferProperties& Props = FrameBufferProperties{});
     ~FrameBuffer();
+
+    bool Init(rndr::GraphicsContext* Context, int Width, int Height, const FrameBufferProperties& Props = FrameBufferProperties{});
+    bool InitForSwapChain(rndr::GraphicsContext* Context,
+                          rndr::SwapChain* SwapChain,
+                          int Width,
+                          int Height,
+                          const FrameBufferProperties& Props = FrameBufferProperties{});
 
     void SetSize(int Width, int Height);
 

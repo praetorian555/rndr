@@ -528,7 +528,7 @@ void Render(float DeltaSeconds)
     g_Context->BindImageAsShaderResource(g_SpecularImage, 2, g_FragmentShader);
     g_Context->BindSampler(g_Sampler, 0, g_FragmentShader);
 
-    g_Context->BindFrameBuffer(g_Context->GetWindowFrameBuffer());
+    //g_Context->BindFrameBuffer(g_Context->GetWindowFrameBuffer());
 
     for (int i = 0; i < g_VertexBuffers.size(); i++)
     {

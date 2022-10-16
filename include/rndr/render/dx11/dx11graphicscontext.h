@@ -4,6 +4,8 @@
 
 #if defined RNDR_DX11
 
+#include <string>
+
 #include <d3d11.h>
 #include <d3dcompiler.h>
 
@@ -26,20 +28,21 @@ struct InputLayout;
 struct RasterizerState;
 struct DepthStencilState;
 struct BlendState;
+struct SwapChain;
 
 class GraphicsContext
 {
 public:
-    GraphicsContext(Window* Window, GraphicsContextProperties Props = GraphicsContextProperties{});
+    GraphicsContext() = default;
     ~GraphicsContext();
+
+    bool Init(GraphicsContextProperties Props = GraphicsContextProperties{});
 
     ID3D11Device* GetDevice();
     ID3D11DeviceContext* GetDeviceContext();
-    IDXGISwapChain* GetSwapchain();
     D3D_FEATURE_LEVEL GetFeatureLevel();
 
-    FrameBuffer* GetWindowFrameBuffer();
-
+    SwapChain* CreateSwapChain(const SwapChainProperties& Props);
     Shader* CreateShader(const ShaderProperties& Props);
     Image* CreateImage(int Width, int Height, const ImageProperties& Props, ByteSpan InitData);
     Image* CreateImageArray(int Width, int Height, const ImageProperties& Props, Span<ByteSpan> InitData);
@@ -47,6 +50,7 @@ public:
     Sampler* CreateSampler(const SamplerProperties& Props);
     Buffer* CreateBuffer(const BufferProperties& Props, ByteSpan InitialData);
     FrameBuffer* CreateFrameBuffer(int Width, int Height, const FrameBufferProperties& Props);
+    FrameBuffer* CreateFrameBufferForSwapChain(SwapChain* SwapChain, int Width, int Height, const FrameBufferProperties& Props);
     InputLayout* CreateInputLayout(Span<InputLayoutProperties> Pros, Shader* Shader);
     RasterizerState* CreateRasterizerState(const RasterizerProperties& Props);
     DepthStencilState* CreateDepthStencilState(const DepthStencilProperties& Props);
@@ -72,6 +76,7 @@ public:
 
     void Present(bool bVSync);
 
+    void DestroySwapChain(SwapChain* SwapChain);
     void DestroyShader(Shader* Shader);
     void DestroyImage(Image* Image);
     void DestroySampler(Sampler* Sampler);
@@ -82,19 +87,17 @@ public:
     void DestroyDepthStencilState(DepthStencilState* State);
     void DestroyBlendState(BlendState* State);
 
-private:
-    void WindowResize(Window* Window, int Width, int Height);
+    std::string WindowsGetErrorMessage(HRESULT ErrorCode);
 
 private:
-    Window* m_Window;
     GraphicsContextProperties m_Props;
 
-    ID3D11Device* m_Device;
-    ID3D11DeviceContext* m_DeviceContext;
-    IDXGISwapChain* m_Swapchain;
+    ID3D11Device* m_Device = nullptr;
+    ID3D11DeviceContext* m_DeviceContext = nullptr;
     D3D_FEATURE_LEVEL m_FeatureLevel;
 
-    std::unique_ptr<FrameBuffer> m_WindowFrameBuffer;
+    ID3D11InfoQueue* m_DebugInfoQueue = nullptr;
+    int m_DebugLastMessageId = 0;
 };
 
 }  // namespace rndr

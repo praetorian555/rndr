@@ -95,9 +95,9 @@ void rndr::FrameBuffer::SetSize(int W, int H)
     }
     DepthStencilBuffer = nullptr;
 
-    IDXGISwapChain* Swapchain = GraphicsContext->GetSwapchain();
-    DXGI_FORMAT NewFormat = DX11FromPixelFormat(Props.ColorBufferProperties[0].PixelFormat);
-    Swapchain->ResizeBuffers(1, Width, Height, NewFormat, 0);
+    //IDXGISwapChain* Swapchain = GraphicsContext->GetSwapchain();
+    //DXGI_FORMAT NewFormat = DX11FromPixelFormat(Props.ColorBufferProperties[0].PixelFormat);
+    //Swapchain->ResizeBuffers(1, Width, Height, NewFormat, 0);
 
     if (Props.bWindowFrameBuffer)
     {

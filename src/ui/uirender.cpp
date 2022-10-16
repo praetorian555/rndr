@@ -360,7 +360,7 @@ void rndr::ui::UpdateRenderResource(RenderId Id, ByteSpan Contents, int Width, i
 
 math::Vector2 rndr::ui::GetRenderScreenSize()
 {
-    return math::Vector2{(float)g_Context->GetWindowFrameBuffer()->Width, (float)g_Context->GetWindowFrameBuffer()->Height};
+    return math::Vector2{/* (float)g_Context->GetWindowFrameBuffer()->Width, (float)g_Context->GetWindowFrameBuffer()->Height*/};
 }
 
 void rndr::ui::StartRenderFrame()

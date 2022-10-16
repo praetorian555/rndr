@@ -30,7 +30,11 @@ void rndr::StdAsyncLogger::Init()
     s_SpdLogger = spdlog::create_async<spdlog::sinks::stdout_color_sink_mt>("async_stdout_logger");
 }
 
-void rndr::StdAsyncLogger::ShutDown() {}
+void rndr::StdAsyncLogger::ShutDown()
+{
+    spdlog::drop(s_SpdLogger->name());
+    s_SpdLogger.reset();
+}
 
 void rndr::StdAsyncLogger::Log(const char* File, int Line, const char* Function, rndr::LogLevel LogLevel, const char* format, ...)
 {

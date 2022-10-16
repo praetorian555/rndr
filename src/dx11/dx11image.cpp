@@ -186,13 +186,14 @@ bool rndr::Image::InitSwapchainBackBuffer(GraphicsContext* Context)
     Props.PixelFormat = PixelFormat::R8G8B8A8_UNORM_SRGB;
     Props.ImageBindFlags = ImageBindFlags::RenderTarget;
 
-    IDXGISwapChain* Swapchain = Context->GetSwapchain();
-    HRESULT Result = Swapchain->GetBuffer(0, __uuidof(ID3D11Texture2D), (LPVOID*)&DX11Texture);
-    if (FAILED(Result))
-    {
-        RNDR_LOG_ERROR("Failed to get back buffer image from the swapchain!");
-        return false;
-    }
+    HRESULT Result;
+    //IDXGISwapChain* Swapchain = Context->GetSwapchain();
+    //HRESULT Result = Swapchain->GetBuffer(0, __uuidof(ID3D11Texture2D), (LPVOID*)&DX11Texture);
+    //if (FAILED(Result))
+    //{
+    //    RNDR_LOG_ERROR("Failed to get back buffer image from the swapchain!");
+    //    return false;
+    //}
 
     ID3D11Device* Device = Context->GetDevice();
     if (Props.ImageBindFlags & ImageBindFlags::ShaderResource)

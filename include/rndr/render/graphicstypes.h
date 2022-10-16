@@ -223,10 +223,20 @@ struct FrameBufferProperties
 
 struct GraphicsContextProperties
 {
-    int WindowWidth = 0;
-    int WindowHeight = 0;
+    bool bEnableDebugLayer = true;
+    bool bFailWarning = true;
 
+    bool bMakeThreadSafe = false;
+    // In case of workloads that last more then 2 seconds don't trigger a timeout
+    bool bDisableGPUTimeout = false;
+};
+
+struct SwapChainProperties
+{
+    int Width = 0;
+    int Height = 0;
     FrameBufferProperties FrameBuffer;
+    bool bWindowed = true;
 };
 
 struct SamplerProperties
