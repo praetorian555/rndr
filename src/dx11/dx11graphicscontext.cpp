@@ -61,6 +61,10 @@ rndr::GraphicsContext::~GraphicsContext()
 {
     DX11SafeRelease(m_Device);
     DX11SafeRelease(m_DeviceContext);
+    if (m_DebugInfoQueue)
+    {
+        DX11SafeRelease(m_DebugInfoQueue);
+    }
 }
 
 bool rndr::GraphicsContext::Init(GraphicsContextProperties Props)
