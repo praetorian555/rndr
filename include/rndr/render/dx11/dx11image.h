@@ -42,7 +42,7 @@ struct Image
     // TODO: Method for copying this image into another, performed on the GPU side
 
 private:
-    bool InitInternal(GraphicsContext* Context, Span<ByteSpan> InitData);
+    bool InitInternal(GraphicsContext* Context, Span<ByteSpan> InitData, bool bCubeMap = false);
 };
 
 }  // namespace rndr

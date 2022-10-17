@@ -20,8 +20,7 @@ std::string rndr::GraphicsContext::WindowsGetErrorMessage(HRESULT ErrorCode)
 {
     constexpr DWORD BufferSize = 1024;
     char Buffer[BufferSize] = {};
-    FormatMessage(FORMAT_MESSAGE_FROM_SYSTEM, nullptr, ErrorCode, MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT), Buffer, BufferSize,
-                  nullptr);
+    FormatMessage(FORMAT_MESSAGE_FROM_SYSTEM, nullptr, ErrorCode, MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT), Buffer, BufferSize, nullptr);
     std::string Rtn(Buffer);
 
     if (!m_DebugInfoQueue)
@@ -154,10 +153,31 @@ rndr::Image* rndr::GraphicsContext::CreateImage(int Width, int Height, const Ima
     return Im;
 }
 
-rndr::Image* rndr::GraphicsContext::CreateImageArray(int Width, int Height, int ArraySize, const ImageProperties& Props, Span<ByteSpan> InitData)
+rndr::Image* rndr::GraphicsContext::CreateImageArray(int Width,
+                                                     int Height,
+                                                     int ArraySize,
+                                                     const ImageProperties& Props,
+                                                     Span<ByteSpan> InitData)
 {
     Image* Im = new Image();
-    Im->InitArray(this, Width, Height, ArraySize, Props, InitData);
+    bool Status = Im->InitArray(this, Width, Height, ArraySize, Props, InitData);
+    if (!Status)
+    {
+        delete Im;
+        Im = nullptr;
+    }
+    return Im;
+}
+
+rndr::Image* rndr::GraphicsContext::CreateCubeMap(int Width, int Height, const ImageProperties& Props, Span<ByteSpan> InitData)
+{
+    Image* Im = new Image();
+    bool Status = Im->InitCubeMap(this, Width, Height, Props, InitData);
+    if (!Status)
+    {
+        delete Im;
+        Im = nullptr;
+    }
     return Im;
 }
 

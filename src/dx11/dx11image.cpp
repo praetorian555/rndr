@@ -20,6 +20,12 @@ bool rndr::Image::Init(GraphicsContext* Context, int Width, int Height, const Im
     this->Height = Height;
     this->ArraySize = 1;
 
+    if (Width == 0 || Height == 0)
+    {
+        RNDR_LOG_ERROR("Image::Init: Width and Height can't be zero!");
+        return false;
+    }
+
     ByteSpan DataArray[1] = {InitData};
     Span<ByteSpan> Data{DataArray, 1};
     return InitInternal(Context, InitData ? Data : Span<ByteSpan>{});
@@ -47,67 +53,43 @@ bool rndr::Image::InitArray(GraphicsContext* Context,
         RNDR_LOG_ERROR("Image::InitArray: There is init data but the size doesn't match the array size!");
         return false;
     }
+    if (Width == 0 || Height == 0)
+    {
+        RNDR_LOG_ERROR("Image::InitArray: Width and Height can't be zero!");
+        return false;
+    }
 
     return InitInternal(Context, InitData);
 }
 
+bool rndr::Image::InitCubeMap(GraphicsContext* Context, int Width, int Height, const ImageProperties& Props, Span<ByteSpan> InitData)
+{
+    this->Props = Props;
+    this->Width = Width;
+    this->Height = Height;
+    this->ArraySize = 6;
+
+    if (InitData && InitData.Size != this->ArraySize)
+    {
+        RNDR_LOG_ERROR("Image::InitCubeMap: There is init data but the size doesn't match the array size!");
+        return false;
+    }
+    if (Width == 0 || Height == 0)
+    {
+        RNDR_LOG_ERROR("Image::InitCubeMap: Width and Height can't be zero!");
+        return false;
+    }
+
+    return InitInternal(Context, InitData, true);
+}
+
 bool rndr::Image::InitSwapchainBackBuffer(GraphicsContext* Context)
 {
-    // Props.ArraySize = 1;
-    // Props.bUseMips = false;
-    // Props.CPUAccess = CPUAccess::None;
-    // Props.Usage = Usage::GPUReadWrite;
-    // Props.PixelFormat = PixelFormat::R8G8B8A8_UNORM_SRGB;
-    // Props.ImageBindFlags = ImageBindFlags::RenderTarget;
-
-    // HRESULT Result;
-    //// IDXGISwapChain* Swapchain = Context->GetSwapchain();
-    //// HRESULT Result = Swapchain->GetBuffer(0, __uuidof(ID3D11Texture2D), (LPVOID*)&DX11Texture);
-    //// if (FAILED(Result))
-    ////{
-    ////     RNDR_LOG_ERROR("Failed to get back buffer image from the swapchain!");
-    ////     return false;
-    //// }
-
-    // ID3D11Device* Device = Context->GetDevice();
-    // if (Props.ImageBindFlags & ImageBindFlags::ShaderResource)
-    //{
-    //     D3D11_SHADER_RESOURCE_VIEW_DESC ResourceDesc;
-    //     ZeroMemory(&ResourceDesc, sizeof(ResourceDesc));
-    //     ResourceDesc.Format = DX11FromPixelFormat(Props.PixelFormat);
-    //     ResourceDesc.ViewDimension = D3D11_SRV_DIMENSION_TEXTURE2D;
-    //     ResourceDesc.Texture2D.MipLevels = Props.bUseMips ? -1 : 1;
-    //     ResourceDesc.Texture2D.MostDetailedMip = 0;
-    //     Result = Device->CreateShaderResourceView(DX11Texture, &ResourceDesc, &DX11ShaderResourceView);
-    //     if (FAILED(Result))
-    //     {
-    //         RNDR_LOG_ERROR("Failed to create ID3D11ShaderResourceView!");
-    //         return false;
-    //     }
-    // }
-    // if (Props.ImageBindFlags & ImageBindFlags::RenderTarget)
-    //{
-    //     Result = Device->CreateRenderTargetView(DX11Texture, nullptr, &DX11RenderTargetView);
-    //     if (FAILED(Result))
-    //     {
-    //         RNDR_LOG_ERROR("Failed to create ID3D11RenderTargetView!");
-    //         return false;
-    //     }
-    // }
-    // if (Props.ImageBindFlags & ImageBindFlags::DepthStencil)
-    //{
-    //     Result = Device->CreateDepthStencilView(DX11Texture, nullptr, &DX11DepthStencilView);
-    //     if (FAILED(Result))
-    //     {
-    //         RNDR_LOG_ERROR("Failed to create ID3D11DepthStencilView!");
-    //         return false;
-    //     }
-    // }
-
+    // TODO: Remove
     return true;
 }
 
-bool rndr::Image::InitInternal(GraphicsContext* Context, Span<ByteSpan> InitData)
+bool rndr::Image::InitInternal(GraphicsContext* Context, Span<ByteSpan> InitData, bool bCubeMap)
 {
     D3D11_TEXTURE2D_DESC Desc;
     ZeroMemory(&Desc, sizeof(D3D11_TEXTURE2D_DESC));
@@ -119,6 +101,7 @@ bool rndr::Image::InitInternal(GraphicsContext* Context, Span<ByteSpan> InitData
     Desc.Height = Height;
     Desc.ArraySize = ArraySize;
     Desc.MipLevels = Props.bUseMips ? 0 : 1;
+    Desc.MiscFlags = bCubeMap ? D3D11_RESOURCE_MISC_TEXTURECUBE : 0;
 
     // TODO(mkostic): Add options for multisampling in props
     Desc.SampleDesc.Count = 1;
@@ -154,9 +137,17 @@ bool rndr::Image::InitInternal(GraphicsContext* Context, Span<ByteSpan> InitData
         D3D11_SHADER_RESOURCE_VIEW_DESC ResourceDesc;
         ZeroMemory(&ResourceDesc, sizeof(ResourceDesc));
         ResourceDesc.Format = DX11FromPixelFormat(Props.PixelFormat);
-        ResourceDesc.ViewDimension = D3D11_SRV_DIMENSION_TEXTURE2DARRAY;
-        ResourceDesc.Texture2DArray.MipLevels = Props.bUseMips ? -1 : 1;
-        ResourceDesc.Texture2DArray.ArraySize = ArraySize;
+        if (!bCubeMap)
+        {
+            ResourceDesc.ViewDimension = D3D11_SRV_DIMENSION_TEXTURE2DARRAY;
+            ResourceDesc.Texture2DArray.MipLevels = Props.bUseMips ? -1 : 1;
+            ResourceDesc.Texture2DArray.ArraySize = ArraySize;
+        }
+        else
+        {
+            ResourceDesc.ViewDimension = D3D11_SRV_DIMENSION_TEXTURECUBE;
+            ResourceDesc.TextureCube.MipLevels = Props.bUseMips ? -1 : 1;
+        }
         Result = Device->CreateShaderResourceView(DX11Texture, &ResourceDesc, &DX11ShaderResourceView);
         if (FAILED(Result))
         {
