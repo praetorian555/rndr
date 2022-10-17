@@ -45,7 +45,7 @@ public:
     SwapChain* CreateSwapChain(const SwapChainProperties& Props);
     Shader* CreateShader(const ShaderProperties& Props);
     Image* CreateImage(int Width, int Height, const ImageProperties& Props, ByteSpan InitData);
-    Image* CreateImageArray(int Width, int Height, const ImageProperties& Props, Span<ByteSpan> InitData);
+    Image* CreateImageArray(int Width, int Height, int ArraySize, const ImageProperties& Props, Span<ByteSpan> InitData);
     Image* CreateImageForSwapchainBackBuffer();
     Sampler* CreateSampler(const SamplerProperties& Props);
     Buffer* CreateBuffer(const BufferProperties& Props, ByteSpan InitialData);

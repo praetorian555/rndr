@@ -80,10 +80,14 @@ enum class CPUAccess
 
 enum class Usage
 {
-    GPUReadWrite,  // Default
+    // Default, Use this when you need to update the resource from the CPU side sparingly
+    GPUReadWrite,
+    // Immutable, once created it can't be changed, you need initialization data during the creation
     GPURead,
+    // Used when we need to update resource every frame, such as constant buffers
     GPUReadCPUWrite,
-    FromGPUToCPU  // Data transfer
+    // Used when we need to move data from the GPU to the CPU side, for example after rendering
+    FromGPUToCPU
 };
 
 enum class WindingOrder : uint32_t
@@ -204,10 +208,9 @@ struct ImageProperties
 {
     PixelFormat PixelFormat = PixelFormat::R8G8B8A8_UNORM_SRGB;
     CPUAccess CPUAccess = CPUAccess::None;
-    Usage Usage = Usage::GPURead;
+    Usage Usage = Usage::GPUReadWrite;
     bool bUseMips = false;
-    uint32_t ImageBindFlags = ImageBindFlags::RenderTarget | ImageBindFlags::ShaderResource;
-    int ArraySize = 1;
+    uint32_t ImageBindFlags = ImageBindFlags::ShaderResource;
 };
 
 struct FrameBufferProperties

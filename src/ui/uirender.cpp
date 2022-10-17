@@ -279,7 +279,6 @@ bool rndr::ui::InitRender(GraphicsContext* Context)
 
     assert(g_UIProps.MaxImageArraySize != 0);
     ImageProperties ImageArrayProps;
-    ImageArrayProps.ArraySize = g_UIProps.MaxImageArraySize;
     ImageArrayProps.bUseMips = false;
     ImageArrayProps.CPUAccess = CPUAccess::None;
     ImageArrayProps.Usage = Usage::GPUReadWrite;
@@ -291,7 +290,7 @@ bool rndr::ui::InitRender(GraphicsContext* Context)
     InitData.Data[0].Size = g_UIProps.MaxImageSideSize * g_UIProps.MaxImageSideSize * 4;
     InitData.Data[0].Data = new uint8_t[InitData.Data[0].Size];
     memset(InitData.Data[0].Data, 0xFF, InitData.Data[0].Size);
-    g_ImageArray = g_Context->CreateImageArray(g_UIProps.MaxImageSideSize, g_UIProps.MaxImageSideSize, ImageArrayProps, InitData);
+    g_ImageArray = g_Context->CreateImageArray(g_UIProps.MaxImageSideSize, g_UIProps.MaxImageSideSize, g_UIProps.MaxImageArraySize, ImageArrayProps, InitData);
     if (!g_ImageArray)
     {
         RNDR_LOG_ERROR("Failed to create white image!");

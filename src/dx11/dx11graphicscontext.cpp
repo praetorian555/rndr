@@ -145,14 +145,19 @@ rndr::Shader* rndr::GraphicsContext::CreateShader(const ShaderProperties& Props)
 rndr::Image* rndr::GraphicsContext::CreateImage(int Width, int Height, const ImageProperties& Props, ByteSpan InitData)
 {
     Image* Im = new Image();
-    Im->Init(this, Width, Height, Props, InitData);
+    bool Status = Im->Init(this, Width, Height, Props, InitData);
+    if (!Status)
+    {
+        delete Im;
+        Im = nullptr;
+    }
     return Im;
 }
 
-rndr::Image* rndr::GraphicsContext::CreateImageArray(int Width, int Height, const ImageProperties& Props, Span<ByteSpan> InitData)
+rndr::Image* rndr::GraphicsContext::CreateImageArray(int Width, int Height, int ArraySize, const ImageProperties& Props, Span<ByteSpan> InitData)
 {
     Image* Im = new Image();
-    Im->InitArray(this, Width, Height, Props, InitData);
+    Im->InitArray(this, Width, Height, ArraySize, Props, InitData);
     return Im;
 }
 
