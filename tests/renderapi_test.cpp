@@ -134,3 +134,231 @@ TEST_CASE("Image", "RenderAPI")
 
     rndr::StdAsyncLogger::Get()->ShutDown();
 }
+
+TEST_CASE("ImageArray", "RenderAPI")
+{
+    rndr::StdAsyncLogger::Get()->Init();
+
+    rndr::GraphicsContext GC;
+    {
+        rndr::GraphicsContextProperties Props;
+        Props.bDisableGPUTimeout = false;
+        Props.bEnableDebugLayer = true;
+        Props.bFailWarning = true;
+        Props.bMakeThreadSafe = true;
+        REQUIRE(GC.Init(Props) == true);
+    }
+
+    const rndr::Span<rndr::ByteSpan> EmptyData;
+    const int Width = 400;
+    const int Height = 100;
+    const int ArraySize = 8;
+    SECTION("Default Props with Invalid Width or Height")
+    {
+        rndr::ImageProperties ImageProps;
+        rndr::Image* Image = GC.CreateImageArray(0, 0, ArraySize, ImageProps, EmptyData);
+        REQUIRE(Image == nullptr);
+    }
+    SECTION("Default Props with Invalid ArraySize")
+    {
+        rndr::ImageProperties ImageProps;
+        rndr::Image* Image = GC.CreateImageArray(Width, Height, 1, ImageProps, EmptyData);
+        REQUIRE(Image == nullptr);
+    }
+    SECTION("Default Props with Valid Width and Height")
+    {
+        rndr::ImageProperties ImageProps;
+        rndr::Image* Image = GC.CreateImageArray(Width, Height, ArraySize, ImageProps, EmptyData);
+        REQUIRE(Image != nullptr);
+    }
+    SECTION("Immutable Image Array")
+    {
+        rndr::ByteSpan Entry{};
+        Entry.Size = Width * Height * 4;
+        Entry.Data = new uint8_t[Entry.Size];
+        rndr::Span<rndr::ByteSpan> InitData;
+        InitData.Size = ArraySize;
+        InitData.Data = new rndr::ByteSpan[InitData.Size];
+        for (int i = 0; i < ArraySize; i++)
+        {
+            InitData[i] = Entry;
+        }
+        rndr::ImageProperties ImageProps;
+        ImageProps.Usage = rndr::Usage::GPURead;
+        rndr::Image* Image = GC.CreateImageArray(Width, Height, ArraySize, ImageProps, InitData);
+        REQUIRE(Image != nullptr);
+        delete[] Entry.Data;
+        delete[] InitData.Data;
+    }
+    SECTION("Immutable Image Array With Invalid Init Data")
+    {
+        rndr::ByteSpan Entry{};
+        Entry.Size = Width * Height * 4;
+        Entry.Data = new uint8_t[Entry.Size];
+        rndr::Span<rndr::ByteSpan> InitData;
+        InitData.Size = ArraySize - 3;
+        InitData.Data = new rndr::ByteSpan[InitData.Size];
+        for (int i = 0; i < ArraySize - 3; i++)
+        {
+            InitData[i] = Entry;
+        }
+        rndr::ImageProperties ImageProps;
+        ImageProps.Usage = rndr::Usage::GPURead;
+        rndr::Image* Image = GC.CreateImageArray(Width, Height, ArraySize, ImageProps, InitData);
+        REQUIRE(Image == nullptr);
+        delete[] Entry.Data;
+        delete[] InitData.Data;
+    }
+    SECTION("Generate Mips")
+    {
+        rndr::ImageProperties ImageProps;
+        ImageProps.bUseMips = true;
+        rndr::Image* Image = GC.CreateImageArray(Width, Height, ArraySize, ImageProps, EmptyData);
+        REQUIRE(Image != nullptr);
+    }
+    SECTION("Use as render target")
+    {
+        rndr::ImageProperties ImageProps;
+        ImageProps.ImageBindFlags = rndr::ImageBindFlags::RenderTarget;
+        rndr::Image* Image = GC.CreateImageArray(Width, Height, ArraySize, ImageProps, EmptyData);
+        REQUIRE(Image != nullptr);
+    }
+    SECTION("Use as depth stencil texture")
+    {
+        rndr::ImageProperties ImageProps;
+        ImageProps.PixelFormat = rndr::PixelFormat::DEPTH24_STENCIL8;
+        ImageProps.ImageBindFlags = rndr::ImageBindFlags::DepthStencil;
+        rndr::Image* Image = GC.CreateImageArray(Width, Height, ArraySize, ImageProps, EmptyData);
+        REQUIRE(Image != nullptr);
+    }
+    SECTION("Use dynamic image array as shader resource")
+    {
+        rndr::ImageProperties ImageProps;
+        ImageProps.Usage = rndr::Usage::GPUReadCPUWrite;
+        ImageProps.CPUAccess = rndr::CPUAccess::Write;
+        rndr::Image* Image = GC.CreateImageArray(Width, Height, ArraySize, ImageProps, EmptyData);
+        REQUIRE(Image == nullptr);
+    }
+    SECTION("Create staging image array")
+    {
+        rndr::ImageProperties ImageProps;
+        ImageProps.Usage = rndr::Usage::FromGPUToCPU;
+        ImageProps.ImageBindFlags = 0;
+        ImageProps.CPUAccess = rndr::CPUAccess::Read;
+        rndr::Image* Image = GC.CreateImageArray(Width, Height, ArraySize, ImageProps, EmptyData);
+        REQUIRE(Image != nullptr);
+    }
+
+    rndr::StdAsyncLogger::Get()->ShutDown();
+}
+
+TEST_CASE("CubeMap", "RenderAPI")
+{
+    rndr::StdAsyncLogger::Get()->Init();
+
+    rndr::GraphicsContext GC;
+    {
+        rndr::GraphicsContextProperties Props;
+        Props.bDisableGPUTimeout = false;
+        Props.bEnableDebugLayer = true;
+        Props.bFailWarning = true;
+        Props.bMakeThreadSafe = true;
+        REQUIRE(GC.Init(Props) == true);
+    }
+
+    const rndr::Span<rndr::ByteSpan> EmptyData;
+    const int Width = 400;
+    const int Height = 400;
+    const int ArraySize = 6;
+    SECTION("Default Props with Invalid Width or Height")
+    {
+        rndr::ImageProperties ImageProps;
+        rndr::Image* Image = GC.CreateCubeMap(0, 0, ImageProps, EmptyData);
+        REQUIRE(Image == nullptr);
+    }
+    SECTION("Default Props")
+    {
+        rndr::ImageProperties ImageProps;
+        rndr::Image* Image = GC.CreateCubeMap(Width, Height, ImageProps, EmptyData);
+        REQUIRE(Image != nullptr);
+    }
+    SECTION("Immutable Cube Map")
+    {
+        rndr::ByteSpan Entry{};
+        Entry.Size = Width * Height * 4;
+        Entry.Data = new uint8_t[Entry.Size];
+        rndr::Span<rndr::ByteSpan> InitData;
+        InitData.Size = ArraySize;
+        InitData.Data = new rndr::ByteSpan[InitData.Size];
+        for (int i = 0; i < ArraySize; i++)
+        {
+            InitData[i] = Entry;
+        }
+        rndr::ImageProperties ImageProps;
+        ImageProps.Usage = rndr::Usage::GPURead;
+        rndr::Image* Image = GC.CreateCubeMap(Width, Height, ImageProps, InitData);
+        REQUIRE(Image != nullptr);
+        delete[] Entry.Data;
+        delete[] InitData.Data;
+    }
+    SECTION("Immutable Cube Map With Invalid Init Data")
+    {
+        rndr::ByteSpan Entry{};
+        Entry.Size = Width * Height * 4;
+        Entry.Data = new uint8_t[Entry.Size];
+        rndr::Span<rndr::ByteSpan> InitData;
+        InitData.Size = ArraySize - 3;
+        InitData.Data = new rndr::ByteSpan[InitData.Size];
+        for (int i = 0; i < ArraySize - 3; i++)
+        {
+            InitData[i] = Entry;
+        }
+        rndr::ImageProperties ImageProps;
+        ImageProps.Usage = rndr::Usage::GPURead;
+        rndr::Image* Image = GC.CreateCubeMap(Width, Height, ImageProps, InitData);
+        REQUIRE(Image == nullptr);
+        delete[] Entry.Data;
+        delete[] InitData.Data;
+    }
+    SECTION("Generate Mips")
+    {
+        rndr::ImageProperties ImageProps;
+        ImageProps.bUseMips = true;
+        rndr::Image* Image = GC.CreateCubeMap(Width, Height, ImageProps, EmptyData);
+        REQUIRE(Image != nullptr);
+    }
+    SECTION("Use as render target")
+    {
+        rndr::ImageProperties ImageProps;
+        ImageProps.ImageBindFlags = rndr::ImageBindFlags::RenderTarget;
+        rndr::Image* Image = GC.CreateCubeMap(Width, Height, ImageProps, EmptyData);
+        REQUIRE(Image != nullptr);
+    }
+    SECTION("Use as depth stencil texture")
+    {
+        rndr::ImageProperties ImageProps;
+        ImageProps.PixelFormat = rndr::PixelFormat::DEPTH24_STENCIL8;
+        ImageProps.ImageBindFlags = rndr::ImageBindFlags::DepthStencil;
+        rndr::Image* Image = GC.CreateCubeMap(Width, Height, ImageProps, EmptyData);
+        REQUIRE(Image != nullptr);
+    }
+    SECTION("Use dynamic cube map as shader resource")
+    {
+        rndr::ImageProperties ImageProps;
+        ImageProps.Usage = rndr::Usage::GPUReadCPUWrite;
+        ImageProps.CPUAccess = rndr::CPUAccess::Write;
+        rndr::Image* Image = GC.CreateCubeMap(Width, Height, ImageProps, EmptyData);
+        REQUIRE(Image == nullptr);
+    }
+    SECTION("Create staging cube map")
+    {
+        rndr::ImageProperties ImageProps;
+        ImageProps.Usage = rndr::Usage::FromGPUToCPU;
+        ImageProps.ImageBindFlags = 0;
+        ImageProps.CPUAccess = rndr::CPUAccess::Read;
+        rndr::Image* Image = GC.CreateCubeMap(Width, Height, ImageProps, EmptyData);
+        REQUIRE(Image != nullptr);
+    }
+
+    rndr::StdAsyncLogger::Get()->ShutDown();
+}
