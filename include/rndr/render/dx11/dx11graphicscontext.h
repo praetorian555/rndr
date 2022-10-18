@@ -89,6 +89,7 @@ public:
     void DestroyBlendState(BlendState* State);
 
     std::string WindowsGetErrorMessage(HRESULT ErrorCode);
+    bool WindowsHasFailed(HRESULT ErrorCode);
 
 private:
     GraphicsContextProperties m_Props;

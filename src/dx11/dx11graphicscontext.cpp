@@ -56,6 +56,44 @@ std::string rndr::GraphicsContext::WindowsGetErrorMessage(HRESULT ErrorCode)
     return Rtn;
 }
 
+bool rndr::GraphicsContext::WindowsHasFailed(HRESULT ErrorCode)
+{
+    if (FAILED(ErrorCode))
+    {
+        return true;
+    }
+    if (!m_DebugInfoQueue)
+    {
+        return false;
+    }
+
+    bool bStatus = false;
+    UINT64 MessageCount = m_DebugInfoQueue->GetNumStoredMessages();
+    for (UINT64 i = 0; i < MessageCount; i++)
+    {
+        SIZE_T MessageSize = 0;
+        m_DebugInfoQueue->GetMessage(i, nullptr, &MessageSize);
+        D3D11_MESSAGE* Message = (D3D11_MESSAGE*)malloc(MessageSize);
+        HRESULT Result = m_DebugInfoQueue->GetMessage(i, Message, &MessageSize);
+        assert(!FAILED(Result));
+        if (!Message)
+        {
+            continue;
+        }
+
+        bool bShouldFail = Message->Severity == D3D11_MESSAGE_SEVERITY_ERROR;
+        bShouldFail |= m_Props.bFailWarning && Message->Severity == D3D11_MESSAGE_SEVERITY_WARNING;
+        if (bShouldFail)
+        {
+            bStatus = true;
+        }
+
+        free(Message);
+    }
+
+    return bStatus;
+}
+
 rndr::GraphicsContext::~GraphicsContext()
 {
     DX11SafeRelease(m_Device);
@@ -93,7 +131,7 @@ bool rndr::GraphicsContext::Init(GraphicsContextProperties Props)
     HMODULE SoftwareRasterizerModule = nullptr;
     HRESULT Result = D3D11CreateDevice(Adapter, D3D_DRIVER_TYPE_HARDWARE, SoftwareRasterizerModule, Flags, FeatureLevels,
                                        _countof(FeatureLevels), D3D11_SDK_VERSION, &m_Device, &m_FeatureLevel, &m_DeviceContext);
-    if (FAILED(Result))
+    if (WindowsHasFailed(Result))
     {
         std::string ErrorMessage = WindowsGetErrorMessage(Result);
         RNDR_LOG_ERROR("%s", ErrorMessage.c_str());
@@ -106,7 +144,7 @@ bool rndr::GraphicsContext::Init(GraphicsContextProperties Props)
     }
 
     Result = m_Device->QueryInterface(__uuidof(ID3D11InfoQueue), (void**)&m_DebugInfoQueue);
-    if (FAILED(Result))
+    if (WindowsHasFailed(Result))
     {
         std::string ErrorMessage = WindowsGetErrorMessage(Result);
         RNDR_LOG_ERROR("%s", ErrorMessage.c_str());
