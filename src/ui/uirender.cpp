@@ -354,7 +354,9 @@ void rndr::ui::FreeRenderId(RenderId Id)
 void rndr::ui::UpdateRenderResource(RenderId Id, ByteSpan Contents, int Width, int Height)
 {
     assert(g_RenderResources[Id]);
-    g_ImageArray->Update(g_Context, Id, Contents, Width, Height);
+    const math::Point2 Start;
+    const math::Vector2 Size{(float)Width, (float)Height};
+    g_ImageArray->Update(g_Context, Id, Start, Size, Contents);
 }
 
 math::Vector2 rndr::ui::GetRenderScreenSize()

@@ -383,7 +383,6 @@ void InitRenderPrimitives()
         rndr::CPUImage ImageInfo = rndr::ReadEntireImage(TexturePath);
         rndr::ImageProperties TextureProps;
         TextureProps.ImageBindFlags = rndr::ImageBindFlags::ShaderResource;
-        TextureProps.ArraySize = 1;
         TextureProps.bUseMips = true;
         TextureProps.CPUAccess = rndr::CPUAccess::None;
         TextureProps.Usage = rndr::Usage::GPUReadWrite;
@@ -396,7 +395,6 @@ void InitRenderPrimitives()
         rndr::CPUImage ImageInfo = rndr::ReadEntireImage(TexturePath);
         rndr::ImageProperties TextureProps;
         TextureProps.ImageBindFlags = rndr::ImageBindFlags::ShaderResource;
-        TextureProps.ArraySize = 1;
         TextureProps.bUseMips = true;
         TextureProps.CPUAccess = rndr::CPUAccess::None;
         TextureProps.Usage = rndr::Usage::GPUReadWrite;
@@ -409,7 +407,6 @@ void InitRenderPrimitives()
         rndr::CPUImage ImageInfo = rndr::ReadEntireImage(TexturePath);
         rndr::ImageProperties TextureProps;
         TextureProps.ImageBindFlags = rndr::ImageBindFlags::ShaderResource;
-        TextureProps.ArraySize = 1;
         TextureProps.bUseMips = true;
         TextureProps.CPUAccess = rndr::CPUAccess::None;
         TextureProps.Usage = rndr::Usage::GPUReadWrite;
