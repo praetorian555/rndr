@@ -28,6 +28,7 @@ std::string rndr::GraphicsContext::WindowsGetErrorMessage(HRESULT ErrorCode)
         return Rtn;
     }
 
+    bool bAddNewLine = false;
     UINT64 MessageCount = m_DebugInfoQueue->GetNumStoredMessages();
     for (UINT64 i = 0; i < MessageCount; i++)
     {
@@ -44,11 +45,17 @@ std::string rndr::GraphicsContext::WindowsGetErrorMessage(HRESULT ErrorCode)
         bShouldLog |= m_Props.bFailWarning && Message->Severity == D3D11_MESSAGE_SEVERITY_WARNING;
         if (bShouldLog)
         {
-            Rtn += "\n";
+            bAddNewLine = true;
+            Rtn += "\n\t";
             Rtn += Message->pDescription;
         }
 
         free(Message);
+    }
+
+    if (bAddNewLine)
+    {
+        Rtn += "\n";
     }
 
     m_DebugInfoQueue->ClearStoredMessages();
