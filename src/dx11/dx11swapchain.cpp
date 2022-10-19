@@ -68,12 +68,12 @@ bool rndr::SwapChain::Init(GraphicsContext* Context, void* NativeWindowHandle, c
         return false;
     }
 
-    //FrameBuffer = Context->CreateFrameBufferForSwapChain(this, Props.Width, Props.Height, Props.FrameBuffer);
-    //if (!FrameBuffer)
+    // FrameBuffer = Context->CreateFrameBufferForSwapChain(this, Props.Width, Props.Height, Props.FrameBuffer);
+    // if (!FrameBuffer)
     //{
-    //    RNDR_LOG_ERROR("Failed to create a framebuffer for swapchain!");
-    //    return false;
-    //}
+    //     RNDR_LOG_ERROR("Failed to create a framebuffer for swapchain!");
+    //     return false;
+    // }
 
     return true;
 }

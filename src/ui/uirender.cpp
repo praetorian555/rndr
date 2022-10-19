@@ -290,7 +290,8 @@ bool rndr::ui::InitRender(GraphicsContext* Context)
     InitData.Data[0].Size = g_UIProps.MaxImageSideSize * g_UIProps.MaxImageSideSize * 4;
     InitData.Data[0].Data = new uint8_t[InitData.Data[0].Size];
     memset(InitData.Data[0].Data, 0xFF, InitData.Data[0].Size);
-    g_ImageArray = g_Context->CreateImageArray(g_UIProps.MaxImageSideSize, g_UIProps.MaxImageSideSize, g_UIProps.MaxImageArraySize, ImageArrayProps, InitData);
+    g_ImageArray = g_Context->CreateImageArray(g_UIProps.MaxImageSideSize, g_UIProps.MaxImageSideSize, g_UIProps.MaxImageArraySize,
+                                               ImageArrayProps, InitData);
     if (!g_ImageArray)
     {
         RNDR_LOG_ERROR("Failed to create white image!");
@@ -356,7 +357,7 @@ void rndr::ui::UpdateRenderResource(RenderId Id, ByteSpan Contents, int Width, i
     assert(g_RenderResources[Id]);
     const math::Point2 Start;
     const math::Vector2 Size{(float)Width, (float)Height};
-    //g_ImageArray->Update(g_Context, Id, Start, Size, Contents);
+    // g_ImageArray->Update(g_Context, Id, Start, Size, Contents);
 }
 
 math::Vector2 rndr::ui::GetRenderScreenSize()

@@ -13,7 +13,7 @@ namespace rndr
 
 class GraphicsContext;
 struct FrameBuffer;
-    
+
 struct SwapChain
 {
     IDXGISwapChain* DX11SwapChain;

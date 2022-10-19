@@ -61,8 +61,8 @@ rndr::Window::Window(int Width, int Height, const WindowProperties& Props) : m_W
     m_NativeWindowHandle = reinterpret_cast<uintptr_t>(WindowHandle);
 
     GraphicsContextProperties GCProps;
-    //GCProps.WindowWidth = m_Width;
-    //GCProps.WindowHeight = m_Height;
+    // GCProps.WindowWidth = m_Width;
+    // GCProps.WindowHeight = m_Height;
     m_GraphicsContext = std::make_unique<GraphicsContext>();
 }
 

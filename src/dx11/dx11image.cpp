@@ -7,9 +7,9 @@
 
 #include "stb_image/stb_image.h"
 
+#include "math/bounds2.h"
 #include "math/point2.h"
 #include "math/vector2.h"
-#include "math/bounds2.h"
 
 #include "rndr/core/fileutils.h"
 #include "rndr/core/log.h"
