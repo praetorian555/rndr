@@ -20,14 +20,21 @@ rndr::StdAsyncLogger* rndr::StdAsyncLogger::Get()
     return s_Logger.get();
 }
 
-void rndr::StdAsyncLogger::Init()
+void rndr::StdAsyncLogger::Init(bool bMultithread)
 {
     spdlog::set_level(spdlog::level::debug);
     spdlog::set_level(spdlog::level::trace);
     spdlog::set_pattern("[%H:%M:%S:%e][%P][%t][%^%l%$][%@] %v");
 
     spdlog::init_thread_pool(8192, 1);  // queue with 8k items and 1 backing thread.
-    s_SpdLogger = spdlog::create_async<spdlog::sinks::stdout_color_sink_mt>("async_stdout_logger");
+    if (bMultithread)
+    {
+        s_SpdLogger = spdlog::create_async<spdlog::sinks::stdout_color_sink_mt>("async_stdout_logger");
+    }
+    else
+    {
+        s_SpdLogger = spdlog::create<spdlog::sinks::stdout_color_sink_st>("stdout_logger");
+    }
 }
 
 void rndr::StdAsyncLogger::ShutDown()

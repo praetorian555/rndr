@@ -19,7 +19,7 @@ class StdAsyncLogger
 public:
     static StdAsyncLogger* Get();
 
-    void Init();
+    void Init(bool bMultithread = false);
     void ShutDown();
 
     void Log(const char* File, int Line, const char* Function, rndr::LogLevel LogLevel, const char* Format, ...);
