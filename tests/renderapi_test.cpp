@@ -1,5 +1,7 @@
 #include <catch2/catch_test_macros.hpp>
 
+#include "math/math.h"
+
 #include "rndr/core/log.h"
 
 #include "rndr/render/graphicscontext.h"
@@ -360,5 +362,57 @@ TEST_CASE("CubeMap", "RenderAPI")
         REQUIRE(Image != nullptr);
     }
 
+    rndr::StdAsyncLogger::Get()->ShutDown();
+}
+
+TEST_CASE("ImageUpdate", "RenderAPI")
+{
+    rndr::StdAsyncLogger::Get()->Init();
+
+    const rndr::Span<rndr::ByteSpan> EmptyDataArray;
+    const rndr::ByteSpan EmptyData;
+    const int Width = 400;
+    const int Height = 100;
+    const int ArraySize = 8;
+    const math::Point2 Start;
+    const math::Point2 BadStart{200, 500};
+    const math::Vector2 Size{50, 50};
+    rndr::ByteSpan UpdateData;
+    UpdateData.Size = 50 * 50 * 4;
+    UpdateData.Data = new uint8_t[UpdateData.Size];
+    rndr::GraphicsContext GC;
+    rndr::GraphicsContextProperties Props;
+    Props.bDisableGPUTimeout = false;
+    Props.bEnableDebugLayer = true;
+    Props.bFailWarning = true;
+    Props.bMakeThreadSafe = true;
+    REQUIRE(GC.Init(Props) == true);
+
+    SECTION("Default Usage")
+    {
+        rndr::ImageProperties ImageProps;
+        rndr::Image* Image = GC.CreateImageArray(Width, Height, ArraySize, ImageProps, EmptyDataArray);
+        REQUIRE(Image != nullptr);
+
+        SECTION("Update")
+        {
+            const bool Result = Image->Update(&GC, 0, Start, Size, UpdateData);
+            REQUIRE(Result == true);
+        }
+        SECTION("Invalid Update")
+        {
+            bool Result; 
+            Result = Image->Update(&GC, ArraySize, Start, Size, UpdateData);
+            REQUIRE(Result == false);
+            Result = Image->Update(&GC, -1, Start, Size, UpdateData);
+            REQUIRE(Result == false);
+            Result = Image->Update(&GC, 3, BadStart, Size, UpdateData);
+            REQUIRE(Result == false);
+            Result = Image->Update(&GC, 3, Start, Size, EmptyData);
+            REQUIRE(Result == false);
+        }
+    }
+
+    delete[] UpdateData.Data;
     rndr::StdAsyncLogger::Get()->ShutDown();
 }
