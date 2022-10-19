@@ -232,9 +232,26 @@ bool rndr::Image::Update(GraphicsContext* Context,
         return false;
     }
 
+    ID3D11DeviceContext* DeviceContext = Context->GetDeviceContext();
     if (Props.Usage == Usage::GPUReadCPUWrite)
     {
-        // TODO
+        D3D11_MAPPED_SUBRESOURCE Subresource;
+        HRESULT Result = DeviceContext->Map(DX11Texture, ArrayIndex, D3D11_MAP_WRITE_DISCARD, 0, &Subresource);
+        if (Context->WindowsHasFailed(Result))
+        {
+            std::string ErrorMessage = Context->WindowsGetErrorMessage(Result);
+            RNDR_LOG_ERROR("%s", ErrorMessage.c_str());
+            return false;
+        }
+
+        for (int i = 0; i < Size.Y; i++)
+        {
+            memcpy((uint8_t*)Subresource.pData + i * Subresource.RowPitch, Contents.Data + i * (int)Size.X * PixelSize,
+                   (int)Size.X * PixelSize);
+        }
+
+        DeviceContext->Unmap(DX11Texture, ArrayIndex);
+
         return true;
     }
 
@@ -249,7 +266,6 @@ bool rndr::Image::Update(GraphicsContext* Context,
     DestRegionPtr = &DestRegion;
     const int BoxWidth = End.X - Start.X;
 
-    ID3D11DeviceContext* DeviceContext = Context->GetDeviceContext();
     const uint32_t SubresourceIndex = D3D11CalcSubresource(0, ArrayIndex, 1);
     DeviceContext->UpdateSubresource(DX11Texture, SubresourceIndex, DestRegionPtr, Contents.Data, BoxWidth * PixelSize, 0);
 

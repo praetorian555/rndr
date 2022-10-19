@@ -401,7 +401,7 @@ TEST_CASE("ImageUpdate", "RenderAPI")
         }
         SECTION("Invalid Update")
         {
-            bool Result; 
+            bool Result;
             Result = Image->Update(&GC, ArraySize, Start, Size, UpdateData);
             REQUIRE(Result == false);
             Result = Image->Update(&GC, -1, Start, Size, UpdateData);
@@ -410,6 +410,18 @@ TEST_CASE("ImageUpdate", "RenderAPI")
             REQUIRE(Result == false);
             Result = Image->Update(&GC, 3, Start, Size, EmptyData);
             REQUIRE(Result == false);
+        }
+    }
+    SECTION("Dynamic Usage")
+    {
+        rndr::ImageProperties ImageProps;
+        rndr::Image* Image = GC.CreateImageArray(Width, Height, ArraySize, ImageProps, EmptyDataArray);
+        REQUIRE(Image != nullptr);
+
+        SECTION("Update")
+        {
+            const bool Result = Image->Update(&GC, 0, Start, Size, UpdateData);
+            REQUIRE(Result == true);
         }
     }
 
