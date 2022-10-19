@@ -11,6 +11,12 @@ struct ID3D11DepthStencilView;
 struct ID3D11ShaderResourceView;
 struct ID3D11Texture2D;
 
+namespace math
+{
+class Point2;
+class Vector2;
+}  // namespace math
+
 namespace rndr
 {
 
@@ -37,7 +43,7 @@ struct Image
 
     ~Image();
 
-    void Update(GraphicsContext* Context, int ArrayIndex, ByteSpan Contents, int BoxWidth, int BoxHeight) const;
+    bool Update(GraphicsContext* Context, int ArrayIndex, const math::Point2& Start, const math::Vector2& Size, ByteSpan Contents) const;
 
     // TODO: Method for copying this image into another, performed on the GPU side
 

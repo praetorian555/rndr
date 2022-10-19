@@ -7,6 +7,10 @@
 
 #include "stb_image/stb_image.h"
 
+#include "math/point2.h"
+#include "math/vector2.h"
+#include "math/bounds2.h"
+
 #include "rndr/core/fileutils.h"
 #include "rndr/core/log.h"
 
@@ -188,23 +192,68 @@ bool rndr::Image::InitInternal(GraphicsContext* Context, Span<ByteSpan> InitData
     return true;
 }
 
-void rndr::Image::Update(GraphicsContext* Context, int ArrayIndex, ByteSpan Contents, int BoxWidth, int BoxHeight) const
+bool rndr::Image::Update(GraphicsContext* Context,
+                         int ArrayIndex,
+                         const math::Point2& Start,
+                         const math::Vector2& Size,
+                         ByteSpan Contents) const
 {
+    if (Props.Usage == Usage::GPURead)
+    {
+        RNDR_LOG_ERROR("Image::Update: Can't update immutable image!");
+        return false;
+    }
+    if (Props.bUseMips)
+    {
+        RNDR_LOG_ERROR("Image::Update: Update of image with mips not supported!");
+        return false;
+    }
+    if (ArrayIndex < 0 || ArrayIndex >= ArraySize)
+    {
+        RNDR_LOG_ERROR("Image::Update: Invalid image index!");
+        return false;
+    }
+    const math::Bounds2 ImageBounds({0, 0}, {(float)Width, (float)Height});
+    const math::Point2 End = Start + Size;
+    if (!math::InsideInclusive(Start, ImageBounds))
+    {
+        RNDR_LOG_ERROR("Image::Update: Invalid Start point!");
+        return false;
+    }
+    if (!math::InsideInclusive(Start, ImageBounds))
+    {
+        RNDR_LOG_ERROR("Image::Update: Invalid End point!");
+        return false;
+    }
+    const int PixelSize = GetPixelSize(Props.PixelFormat);
+    if (!Contents || Contents.Size != Size.X * Size.Y * PixelSize)
+    {
+        RNDR_LOG_ERROR("Image::Update: Invalid contents!");
+        return false;
+    }
+
+    if (Props.Usage == Usage::GPUReadCPUWrite)
+    {
+        // TODO
+        return true;
+    }
+
     D3D11_BOX* DestRegionPtr = nullptr;
     D3D11_BOX DestRegion;
-    DestRegion.left = 0;
-    DestRegion.right = BoxWidth;
-    DestRegion.top = 0;
-    DestRegion.bottom = BoxHeight;
+    DestRegion.left = Start.X;
+    DestRegion.right = End.X;
+    DestRegion.top = Start.Y;
+    DestRegion.bottom = End.Y;
     DestRegion.front = 0;
     DestRegion.back = 1;
     DestRegionPtr = &DestRegion;
+    const int BoxWidth = End.X - Start.X;
 
     ID3D11DeviceContext* DeviceContext = Context->GetDeviceContext();
-    // TODO(mkostic): Handle case for multiple mip maps
     const uint32_t SubresourceIndex = D3D11CalcSubresource(0, ArrayIndex, 1);
-    const int PixelSize = GetPixelSize(Props.PixelFormat);
     DeviceContext->UpdateSubresource(DX11Texture, SubresourceIndex, DestRegionPtr, Contents.Data, BoxWidth * PixelSize, 0);
+
+    return true;
 }
 
 rndr::Image::~Image()
