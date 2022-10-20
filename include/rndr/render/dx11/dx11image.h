@@ -45,6 +45,8 @@ struct Image
 
     bool Update(GraphicsContext* Context, int ArrayIndex, const math::Point2& Start, const math::Vector2& Size, ByteSpan Contents) const;
     bool Read(GraphicsContext* Context, int ArrayIndex, const math::Point2& Start, const math::Vector2& Size, ByteSpan OutContents) const;
+    
+    static bool Copy(GraphicsContext* Context, Image* Src, Image* Dest);
 
 private:
     bool InitInternal(GraphicsContext* Context, Span<ByteSpan> InitData, bool bCubeMap = false);

@@ -483,3 +483,63 @@ TEST_CASE("ImageRead", "RenderAPI")
     delete[] InitData.Data;
     rndr::StdAsyncLogger::Get()->ShutDown();
 }
+
+TEST_CASE("ImageCopy", "RenderAPI")
+{
+    rndr::StdAsyncLogger::Get()->Init();
+
+    const rndr::ByteSpan EmptyData;
+    const int Width = 400;
+    const int Height = 100;
+    const int ArraySize = 8;
+    const math::Point2 Start;
+    const math::Point2 BadStart{200, 500};
+    const math::Vector2 Size{50, 50};
+    rndr::ByteSpan InitData;
+    InitData.Size = Width * Height * 4;
+    InitData.Data = new uint8_t[InitData.Size];
+    const uint32_t PixelPattern = 0xABABABAB;
+    for (int i = 0; i < InitData.Size / 4; i++)
+    {
+        uint32_t* PixelData = reinterpret_cast<uint32_t*>(InitData.Data);
+        *PixelData = PixelPattern;
+    }
+    rndr::GraphicsContext GC;
+    rndr::GraphicsContextProperties Props;
+    Props.bDisableGPUTimeout = false;
+    Props.bEnableDebugLayer = true;
+    Props.bFailWarning = true;
+    Props.bMakeThreadSafe = true;
+    REQUIRE(GC.Init(Props) == true);
+
+    SECTION("Copy and Read Back")
+    {
+        rndr::ImageProperties ImageProps;
+        rndr::Image* RenderingImage = GC.CreateImage(Width, Height, ImageProps, InitData);
+        REQUIRE(RenderingImage != nullptr);
+
+        ImageProps.ImageBindFlags = 0;
+        ImageProps.Usage = rndr::Usage::FromGPUToCPU;
+        ImageProps.CPUAccess = rndr::CPUAccess::Read;
+        rndr::Image* DstImage = GC.CreateImage(Width, Height, ImageProps, EmptyData);
+        REQUIRE(DstImage != nullptr);
+
+        const bool CopyStatus = rndr::Image::Copy(&GC, RenderingImage, DstImage);
+        REQUIRE(CopyStatus == true);
+
+        rndr::ByteSpan ReadContents;
+        ReadContents.Size = 50 * 50 * 4;
+        ReadContents.Data = new uint8_t[ReadContents.Size];
+        const bool ReadStatus = DstImage->Read(&GC, 0, Start, Size, ReadContents);
+        REQUIRE(ReadStatus == true);
+        for (int i = 0; i < ReadContents.Size / 4; i++)
+        {
+            uint32_t* PixelData = reinterpret_cast<uint32_t*>(ReadContents.Data);
+            REQUIRE(*PixelData == PixelPattern);
+        }
+        delete[] ReadContents.Data;
+    }
+
+    delete[] InitData.Data;
+    rndr::StdAsyncLogger::Get()->ShutDown();
+}

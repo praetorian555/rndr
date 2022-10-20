@@ -340,6 +340,31 @@ bool rndr::Image::Read(GraphicsContext* Context,
     return true;
 }
 
+bool rndr::Image::Copy(GraphicsContext* Context, Image* Src, Image* Dest)
+{
+    if (!Src)
+    {
+        RNDR_LOG_ERROR("Image::Copy: Source image is invalid!");
+        return false;
+    }
+    if (!Dest)
+    {
+        RNDR_LOG_ERROR("Image::Copy: Destination image is invalid!");
+        return false;
+    }
+
+    ID3D11DeviceContext* DeviceContext = Context->GetDeviceContext();
+    DeviceContext->CopyResource(Dest->DX11Texture, Src->DX11Texture);
+    if (Context->WindowsHasFailed())
+    {
+        std::string ErrorMessage = Context->WindowsGetErrorMessage();
+        RNDR_LOG_ERROR("%s", ErrorMessage.c_str());
+        return false;
+    }
+
+    return true;
+}
+
 rndr::Image::~Image()
 {
     DX11SafeRelease(DX11Texture);
