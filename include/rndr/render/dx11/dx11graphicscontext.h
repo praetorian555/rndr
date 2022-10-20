@@ -88,8 +88,8 @@ public:
     void DestroyDepthStencilState(DepthStencilState* State);
     void DestroyBlendState(BlendState* State);
 
-    std::string WindowsGetErrorMessage(HRESULT ErrorCode);
-    bool WindowsHasFailed(HRESULT ErrorCode);
+    std::string WindowsGetErrorMessage(HRESULT ErrorCode = S_OK);
+    bool WindowsHasFailed(HRESULT ErrorCode = S_OK);
 
 private:
     GraphicsContextProperties m_Props;

@@ -18,10 +18,19 @@
 
 std::string rndr::GraphicsContext::WindowsGetErrorMessage(HRESULT ErrorCode)
 {
-    constexpr DWORD BufferSize = 1024;
-    char Buffer[BufferSize] = {};
-    FormatMessage(FORMAT_MESSAGE_FROM_SYSTEM, nullptr, ErrorCode, MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT), Buffer, BufferSize, nullptr);
-    std::string Rtn(Buffer);
+    std::string Rtn;
+    if (ErrorCode != S_OK)
+    {
+        constexpr DWORD BufferSize = 1024;
+        char Buffer[BufferSize] = {};
+        FormatMessage(FORMAT_MESSAGE_FROM_SYSTEM, nullptr, ErrorCode, MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT), Buffer, BufferSize,
+                      nullptr);
+        Rtn += Buffer;
+    }
+    else
+    {
+        Rtn += "Error occurred in debug layer.\n";
+    }
 
     if (!m_DebugInfoQueue)
     {
