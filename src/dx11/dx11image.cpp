@@ -234,6 +234,12 @@ bool rndr::Image::Update(GraphicsContext* Context,
 
     ID3D11DeviceContext* DeviceContext = Context->GetDeviceContext();
     const uint32_t SubresourceIndex = D3D11CalcSubresource(0, ArrayIndex, 1);
+    if (Context->WindowsHasFailed())
+    {
+        std::string ErrorMessage = Context->WindowsGetErrorMessage();
+        RNDR_LOG_ERROR("%s", ErrorMessage.c_str());
+        return false;
+    }
     if (Props.Usage == Usage::GPUReadCPUWrite)
     {
         D3D11_MAPPED_SUBRESOURCE Subresource;
@@ -252,6 +258,12 @@ bool rndr::Image::Update(GraphicsContext* Context,
         }
 
         DeviceContext->Unmap(DX11Texture, ArrayIndex);
+        if (Context->WindowsHasFailed())
+        {
+            std::string ErrorMessage = Context->WindowsGetErrorMessage();
+            RNDR_LOG_ERROR("%s", ErrorMessage.c_str());
+            return false;
+        }
 
         return true;
     }
@@ -268,6 +280,12 @@ bool rndr::Image::Update(GraphicsContext* Context,
     const int BoxWidth = End.X - Start.X;
 
     DeviceContext->UpdateSubresource(DX11Texture, SubresourceIndex, DestRegionPtr, Contents.Data, BoxWidth * PixelSize, 0);
+    if (Context->WindowsHasFailed())
+    {
+        std::string ErrorMessage = Context->WindowsGetErrorMessage();
+        RNDR_LOG_ERROR("%s", ErrorMessage.c_str());
+        return false;
+    }
 
     return true;
 }
@@ -319,6 +337,12 @@ bool rndr::Image::Read(GraphicsContext* Context,
 
     ID3D11DeviceContext* DeviceContext = Context->GetDeviceContext();
     const uint32_t SubresourceIndex = D3D11CalcSubresource(0, ArrayIndex, 1);
+    if (Context->WindowsHasFailed())
+    {
+        std::string ErrorMessage = Context->WindowsGetErrorMessage();
+        RNDR_LOG_ERROR("%s", ErrorMessage.c_str());
+        return false;
+    }
 
     D3D11_MAPPED_SUBRESOURCE Subresource;
     HRESULT Result = DeviceContext->Map(DX11Texture, SubresourceIndex, D3D11_MAP_READ, 0, &Subresource);
@@ -336,6 +360,12 @@ bool rndr::Image::Read(GraphicsContext* Context,
     }
 
     DeviceContext->Unmap(DX11Texture, ArrayIndex);
+    if (Context->WindowsHasFailed())
+    {
+        std::string ErrorMessage = Context->WindowsGetErrorMessage();
+        RNDR_LOG_ERROR("%s", ErrorMessage.c_str());
+        return false;
+    }
 
     return true;
 }
