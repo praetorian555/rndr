@@ -44,8 +44,7 @@ struct Image
     ~Image();
 
     bool Update(GraphicsContext* Context, int ArrayIndex, const math::Point2& Start, const math::Vector2& Size, ByteSpan Contents) const;
-
-    // TODO: Method for copying this image into another, performed on the GPU side
+    bool Read(GraphicsContext* Context, int ArrayIndex, const math::Point2& Start, const math::Vector2& Size, ByteSpan OutContents) const;
 
 private:
     bool InitInternal(GraphicsContext* Context, Span<ByteSpan> InitData, bool bCubeMap = false);

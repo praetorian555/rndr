@@ -233,10 +233,11 @@ bool rndr::Image::Update(GraphicsContext* Context,
     }
 
     ID3D11DeviceContext* DeviceContext = Context->GetDeviceContext();
+    const uint32_t SubresourceIndex = D3D11CalcSubresource(0, ArrayIndex, 1);
     if (Props.Usage == Usage::GPUReadCPUWrite)
     {
         D3D11_MAPPED_SUBRESOURCE Subresource;
-        HRESULT Result = DeviceContext->Map(DX11Texture, ArrayIndex, D3D11_MAP_WRITE_DISCARD, 0, &Subresource);
+        HRESULT Result = DeviceContext->Map(DX11Texture, SubresourceIndex, D3D11_MAP_WRITE_DISCARD, 0, &Subresource);
         if (Context->WindowsHasFailed(Result))
         {
             std::string ErrorMessage = Context->WindowsGetErrorMessage(Result);
@@ -266,8 +267,75 @@ bool rndr::Image::Update(GraphicsContext* Context,
     DestRegionPtr = &DestRegion;
     const int BoxWidth = End.X - Start.X;
 
-    const uint32_t SubresourceIndex = D3D11CalcSubresource(0, ArrayIndex, 1);
     DeviceContext->UpdateSubresource(DX11Texture, SubresourceIndex, DestRegionPtr, Contents.Data, BoxWidth * PixelSize, 0);
+
+    return true;
+}
+
+bool rndr::Image::Read(GraphicsContext* Context,
+                       int ArrayIndex,
+                       const math::Point2& Start,
+                       const math::Vector2& Size,
+                       ByteSpan OutContents) const
+{
+    if (Props.Usage != Usage::FromGPUToCPU)
+    {
+        RNDR_LOG_ERROR("Image::Read: Only Usage::FromGPUToCPU is supported!");
+        return false;
+    }
+    if (((uint32_t)Props.CPUAccess & (uint32_t)CPUAccess::Read) == 0u)
+    {
+        RNDR_LOG_ERROR("Image::Read: Missing CPUAccess::Read!");
+        return false;
+    }
+    if (Props.bUseMips)
+    {
+        RNDR_LOG_ERROR("Image::Read: Update of image with mips not supported!");
+        return false;
+    }
+    if (ArrayIndex < 0 || ArrayIndex >= ArraySize)
+    {
+        RNDR_LOG_ERROR("Image::Read: Invalid image index!");
+        return false;
+    }
+    const math::Bounds2 ImageBounds({0, 0}, {(float)Width, (float)Height});
+    const math::Point2 End = Start + Size;
+    if (!math::InsideInclusive(Start, ImageBounds))
+    {
+        RNDR_LOG_ERROR("Image::Read: Invalid Start point!");
+        return false;
+    }
+    if (!math::InsideInclusive(Start, ImageBounds))
+    {
+        RNDR_LOG_ERROR("Image::Read: Invalid End point!");
+        return false;
+    }
+    const int PixelSize = GetPixelSize(Props.PixelFormat);
+    if (!OutContents || OutContents.Size != Size.X * Size.Y * PixelSize)
+    {
+        RNDR_LOG_ERROR("Image::Read: Invalid contents!");
+        return false;
+    }
+
+    ID3D11DeviceContext* DeviceContext = Context->GetDeviceContext();
+    const uint32_t SubresourceIndex = D3D11CalcSubresource(0, ArrayIndex, 1);
+
+    D3D11_MAPPED_SUBRESOURCE Subresource;
+    HRESULT Result = DeviceContext->Map(DX11Texture, SubresourceIndex, D3D11_MAP_READ, 0, &Subresource);
+    if (Context->WindowsHasFailed(Result))
+    {
+        std::string ErrorMessage = Context->WindowsGetErrorMessage(Result);
+        RNDR_LOG_ERROR("%s", ErrorMessage.c_str());
+        return false;
+    }
+
+    for (int i = 0; i < Size.Y; i++)
+    {
+        memcpy(OutContents.Data + i * (int)Size.X * PixelSize, (uint8_t*)Subresource.pData + i * Subresource.RowPitch,
+               (int)Size.X * PixelSize);
+    }
+
+    DeviceContext->Unmap(DX11Texture, ArrayIndex);
 
     return true;
 }
