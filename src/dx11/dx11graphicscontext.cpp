@@ -254,7 +254,14 @@ rndr::Buffer* rndr::GraphicsContext::CreateBuffer(const BufferProperties& Props,
 
 rndr::FrameBuffer* rndr::GraphicsContext::CreateFrameBuffer(int Width, int Height, const FrameBufferProperties& Props)
 {
-    return new FrameBuffer(this, Width, Height, Props);
+    FrameBuffer* FB = new FrameBuffer();
+    bool Status = FB->Init(this, Width, Height, Props);
+    if (!Status)
+    {
+        delete FB;
+        FB = nullptr;
+    }
+    return FB;
 }
 
 rndr::FrameBuffer* rndr::GraphicsContext::CreateFrameBufferForSwapChain(SwapChain* SwapChain,
@@ -447,7 +454,7 @@ void rndr::GraphicsContext::BindFrameBuffer(FrameBuffer* FrameBuffer)
     }
 
     m_DeviceContext->OMSetRenderTargets(RenderTargetCount, RenderTargetViews.data(), DepthStencilView);
-    m_DeviceContext->RSSetViewports(1, &FrameBuffer->Viewport);
+    m_DeviceContext->RSSetViewports(1, &FrameBuffer->DX11Viewport);
 }
 
 void rndr::GraphicsContext::BindInputLayout(InputLayout* InputLayout)

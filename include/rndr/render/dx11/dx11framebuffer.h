@@ -11,6 +11,8 @@
 #include "rndr/render/graphicstypes.h"
 #include "rndr/render/image.h"
 
+class math::Point2;
+
 namespace rndr
 {
 
@@ -19,26 +21,25 @@ struct SwapChain;
 
 struct FrameBuffer
 {
-    GraphicsContext* GraphicsContext;
     int Width, Height;
     FrameBufferProperties Props;
+
     Span<Image*> ColorBuffers;
     Image* DepthStencilBuffer = nullptr;
-    D3D11_VIEWPORT Viewport;
 
-    FrameBuffer(rndr::GraphicsContext* Context, int Width, int Height, const FrameBufferProperties& Props = FrameBufferProperties{});
+    D3D11_VIEWPORT DX11Viewport;
+
+    FrameBuffer() = default;
     ~FrameBuffer();
 
     bool Init(rndr::GraphicsContext* Context, int Width, int Height, const FrameBufferProperties& Props = FrameBufferProperties{});
-    bool InitForSwapChain(rndr::GraphicsContext* Context,
-                          rndr::SwapChain* SwapChain,
-                          int Width,
-                          int Height,
-                          const FrameBufferProperties& Props = FrameBufferProperties{});
 
-    void SetSize(int Width, int Height);
+    bool Resize(rndr::GraphicsContext* Context, int Width, int Height);
+    bool UpdateViewport(float Width, float Height, const math::Point2& TopLeft, float MinDepth, float MaxDepth);
 
+private:
     void Clear();
+    bool InitInternal(rndr::GraphicsContext* Context);
 };
 
 }  // namespace rndr

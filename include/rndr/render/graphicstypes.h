@@ -216,8 +216,6 @@ struct ImageProperties
 
 struct FrameBufferProperties
 {
-    bool bWindowFrameBuffer = false;
-
     int ColorBufferCount = 1;
     ImageProperties ColorBufferProperties[GraphicsConstants::MaxFrameBufferColorBuffers];
 
