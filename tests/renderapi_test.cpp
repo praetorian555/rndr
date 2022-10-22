@@ -4,6 +4,7 @@
 
 #include "rndr/core/log.h"
 
+#include "rndr/render/framebuffer.h"
 #include "rndr/render/graphicscontext.h"
 #include "rndr/render/image.h"
 
@@ -638,5 +639,57 @@ TEST_CASE("ImageCopy", "RenderAPI")
     }
 
     delete[] InitData.Data;
+    rndr::StdAsyncLogger::Get()->ShutDown();
+}
+
+TEST_CASE("FrameBuffer", "RenderAPI")
+{
+    rndr::StdAsyncLogger::Get()->Init();
+
+    rndr::GraphicsContext GC;
+    rndr::GraphicsContextProperties Props;
+    Props.bDisableGPUTimeout = false;
+    Props.bEnableDebugLayer = true;
+    Props.bFailWarning = true;
+    Props.bMakeThreadSafe = true;
+    REQUIRE(GC.Init(Props) == true);
+
+    SECTION("Default")
+    {
+        rndr::FrameBufferProperties Props;
+        rndr::FrameBuffer* FB = GC.CreateFrameBuffer(100, 400, Props);
+        REQUIRE(FB != nullptr);
+        delete FB;
+    }
+    SECTION("All On")
+    {
+        rndr::FrameBufferProperties Props;
+        Props.bUseDepthStencil = true;
+        Props.ColorBufferCount = rndr::GraphicsConstants::MaxFrameBufferColorBuffers;
+        rndr::FrameBuffer* FB = GC.CreateFrameBuffer(100, 400, Props);
+        REQUIRE(FB != nullptr);
+        delete FB;
+    }
+    SECTION("Bad Size")
+    {
+        rndr::FrameBufferProperties Props;
+        rndr::FrameBuffer* FB = GC.CreateFrameBuffer(0, 400, Props);
+        REQUIRE(FB == nullptr);
+    }
+    SECTION("Resize")
+    {
+        rndr::FrameBufferProperties Props;
+        rndr::FrameBuffer* FB = GC.CreateFrameBuffer(100, 400, Props);
+        REQUIRE(FB != nullptr);
+
+        bool ResizeStatus = FB->Resize(&GC, 500, 500);
+        REQUIRE(ResizeStatus == true);
+
+        bool ResizeStatus2 = FB->Resize(&GC, 200, 0);
+        REQUIRE(ResizeStatus2 == false);
+
+        delete FB;
+    }
+
     rndr::StdAsyncLogger::Get()->ShutDown();
 }
