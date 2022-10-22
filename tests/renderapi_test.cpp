@@ -73,6 +73,7 @@ TEST_CASE("Image", "RenderAPI")
         rndr::ImageProperties ImageProps;
         rndr::Image* Image = GC.CreateImage(100, 400, ImageProps, rndr::ByteSpan{});
         REQUIRE(Image != nullptr);
+        delete Image;
     }
     SECTION("Immutable Image")
     {
@@ -85,6 +86,7 @@ TEST_CASE("Image", "RenderAPI")
         ImageProps.Usage = rndr::Usage::GPURead;
         rndr::Image* Image = GC.CreateImage(Width, Height, ImageProps, InitData);
         REQUIRE(Image != nullptr);
+        delete Image;
         delete[] InitData.Data;
     }
     SECTION("Generate Mips")
@@ -93,6 +95,7 @@ TEST_CASE("Image", "RenderAPI")
         ImageProps.bUseMips = true;
         rndr::Image* Image = GC.CreateImage(100, 400, ImageProps, rndr::ByteSpan{});
         REQUIRE(Image != nullptr);
+        delete Image;
     }
     SECTION("Use as render target")
     {
@@ -100,6 +103,7 @@ TEST_CASE("Image", "RenderAPI")
         ImageProps.ImageBindFlags = rndr::ImageBindFlags::RenderTarget;
         rndr::Image* Image = GC.CreateImage(100, 400, ImageProps, rndr::ByteSpan{});
         REQUIRE(Image != nullptr);
+        delete Image;
     }
     SECTION("Use as depth stencil texture")
     {
@@ -108,6 +112,7 @@ TEST_CASE("Image", "RenderAPI")
         ImageProps.ImageBindFlags = rndr::ImageBindFlags::DepthStencil;
         rndr::Image* Image = GC.CreateImage(100, 400, ImageProps, rndr::ByteSpan{});
         REQUIRE(Image != nullptr);
+        delete Image;
     }
     SECTION("Use as render target and shader resource")
     {
@@ -115,6 +120,7 @@ TEST_CASE("Image", "RenderAPI")
         ImageProps.ImageBindFlags = rndr::ImageBindFlags::RenderTarget | rndr::ImageBindFlags::ShaderResource;
         rndr::Image* Image = GC.CreateImage(100, 400, ImageProps, rndr::ByteSpan{});
         REQUIRE(Image != nullptr);
+        delete Image;
     }
     SECTION("Use dynamic image as shader resource")
     {
@@ -123,6 +129,7 @@ TEST_CASE("Image", "RenderAPI")
         ImageProps.CPUAccess = rndr::CPUAccess::Write;
         rndr::Image* Image = GC.CreateImage(100, 400, ImageProps, rndr::ByteSpan{});
         REQUIRE(Image != nullptr);
+        delete Image;
     }
     SECTION("Create staging image")
     {
@@ -132,6 +139,7 @@ TEST_CASE("Image", "RenderAPI")
         ImageProps.CPUAccess = rndr::CPUAccess::Read;
         rndr::Image* Image = GC.CreateImage(100, 400, ImageProps, rndr::ByteSpan{});
         REQUIRE(Image != nullptr);
+        delete Image;
     }
     SECTION("Multisampling Valid")
     {
@@ -139,6 +147,7 @@ TEST_CASE("Image", "RenderAPI")
         ImageProps.SampleCount = 8;
         rndr::Image* Image = GC.CreateImage(100, 400, ImageProps, rndr::ByteSpan{});
         REQUIRE(Image != nullptr);
+        delete Image;
     }
     SECTION("Multisampling Invalid")
     {
@@ -154,6 +163,7 @@ TEST_CASE("Image", "RenderAPI")
         ImageProps.ImageBindFlags = rndr::ImageBindFlags::RenderTarget;
         rndr::Image* Image = GC.CreateImage(100, 400, ImageProps, rndr::ByteSpan{});
         REQUIRE(Image != nullptr);
+        delete Image;
     }
     SECTION("Multisampling Valid Depth Stencil Target")
     {
@@ -163,6 +173,7 @@ TEST_CASE("Image", "RenderAPI")
         ImageProps.ImageBindFlags = rndr::ImageBindFlags::DepthStencil;
         rndr::Image* Image = GC.CreateImage(100, 400, ImageProps, rndr::ByteSpan{});
         REQUIRE(Image != nullptr);
+        delete Image;
     }
 
     rndr::StdAsyncLogger::Get()->ShutDown();
@@ -203,6 +214,7 @@ TEST_CASE("ImageArray", "RenderAPI")
         rndr::ImageProperties ImageProps;
         rndr::Image* Image = GC.CreateImageArray(Width, Height, ArraySize, ImageProps, EmptyData);
         REQUIRE(Image != nullptr);
+        delete Image;
     }
     SECTION("Immutable Image Array")
     {
@@ -220,6 +232,7 @@ TEST_CASE("ImageArray", "RenderAPI")
         ImageProps.Usage = rndr::Usage::GPURead;
         rndr::Image* Image = GC.CreateImageArray(Width, Height, ArraySize, ImageProps, InitData);
         REQUIRE(Image != nullptr);
+        delete Image;
         delete[] Entry.Data;
         delete[] InitData.Data;
     }
@@ -248,6 +261,7 @@ TEST_CASE("ImageArray", "RenderAPI")
         ImageProps.bUseMips = true;
         rndr::Image* Image = GC.CreateImageArray(Width, Height, ArraySize, ImageProps, EmptyData);
         REQUIRE(Image != nullptr);
+        delete Image;
     }
     SECTION("Use as render target")
     {
@@ -255,6 +269,7 @@ TEST_CASE("ImageArray", "RenderAPI")
         ImageProps.ImageBindFlags = rndr::ImageBindFlags::RenderTarget;
         rndr::Image* Image = GC.CreateImageArray(Width, Height, ArraySize, ImageProps, EmptyData);
         REQUIRE(Image != nullptr);
+        delete Image;
     }
     SECTION("Use as depth stencil texture")
     {
@@ -263,6 +278,7 @@ TEST_CASE("ImageArray", "RenderAPI")
         ImageProps.ImageBindFlags = rndr::ImageBindFlags::DepthStencil;
         rndr::Image* Image = GC.CreateImageArray(Width, Height, ArraySize, ImageProps, EmptyData);
         REQUIRE(Image != nullptr);
+        delete Image;
     }
     SECTION("Use dynamic image array as shader resource")
     {
@@ -280,6 +296,7 @@ TEST_CASE("ImageArray", "RenderAPI")
         ImageProps.CPUAccess = rndr::CPUAccess::Read;
         rndr::Image* Image = GC.CreateImageArray(Width, Height, ArraySize, ImageProps, EmptyData);
         REQUIRE(Image != nullptr);
+        delete Image;
     }
     SECTION("Multisampling Valid")
     {
@@ -287,6 +304,7 @@ TEST_CASE("ImageArray", "RenderAPI")
         ImageProps.SampleCount = 8;
         rndr::Image* Image = GC.CreateImageArray(Width, Height, ArraySize, ImageProps, EmptyData);
         REQUIRE(Image != nullptr);
+        delete Image;
     }
     SECTION("Multisampling Invalid")
     {
@@ -302,6 +320,7 @@ TEST_CASE("ImageArray", "RenderAPI")
         ImageProps.ImageBindFlags = rndr::ImageBindFlags::RenderTarget;
         rndr::Image* Image = GC.CreateImageArray(Width, Height, ArraySize, ImageProps, EmptyData);
         REQUIRE(Image != nullptr);
+        delete Image;
     }
     SECTION("Multisampling Valid Depth Stencil Target")
     {
@@ -311,6 +330,7 @@ TEST_CASE("ImageArray", "RenderAPI")
         ImageProps.ImageBindFlags = rndr::ImageBindFlags::DepthStencil;
         rndr::Image* Image = GC.CreateImageArray(Width, Height, ArraySize, ImageProps, EmptyData);
         REQUIRE(Image != nullptr);
+        delete Image;
     }
 
     rndr::StdAsyncLogger::Get()->ShutDown();
@@ -345,6 +365,7 @@ TEST_CASE("CubeMap", "RenderAPI")
         rndr::ImageProperties ImageProps;
         rndr::Image* Image = GC.CreateCubeMap(Width, Height, ImageProps, EmptyData);
         REQUIRE(Image != nullptr);
+        delete Image;
     }
     SECTION("Immutable Cube Map")
     {
@@ -362,6 +383,7 @@ TEST_CASE("CubeMap", "RenderAPI")
         ImageProps.Usage = rndr::Usage::GPURead;
         rndr::Image* Image = GC.CreateCubeMap(Width, Height, ImageProps, InitData);
         REQUIRE(Image != nullptr);
+        delete Image;
         delete[] Entry.Data;
         delete[] InitData.Data;
     }
@@ -390,6 +412,7 @@ TEST_CASE("CubeMap", "RenderAPI")
         ImageProps.bUseMips = true;
         rndr::Image* Image = GC.CreateCubeMap(Width, Height, ImageProps, EmptyData);
         REQUIRE(Image != nullptr);
+        delete Image;
     }
     SECTION("Use as render target")
     {
@@ -397,6 +420,7 @@ TEST_CASE("CubeMap", "RenderAPI")
         ImageProps.ImageBindFlags = rndr::ImageBindFlags::RenderTarget;
         rndr::Image* Image = GC.CreateCubeMap(Width, Height, ImageProps, EmptyData);
         REQUIRE(Image != nullptr);
+        delete Image;
     }
     SECTION("Use as depth stencil texture")
     {
@@ -405,6 +429,7 @@ TEST_CASE("CubeMap", "RenderAPI")
         ImageProps.ImageBindFlags = rndr::ImageBindFlags::DepthStencil;
         rndr::Image* Image = GC.CreateCubeMap(Width, Height, ImageProps, EmptyData);
         REQUIRE(Image != nullptr);
+        delete Image;
     }
     SECTION("Use dynamic cube map as shader resource")
     {
@@ -422,6 +447,7 @@ TEST_CASE("CubeMap", "RenderAPI")
         ImageProps.CPUAccess = rndr::CPUAccess::Read;
         rndr::Image* Image = GC.CreateCubeMap(Width, Height, ImageProps, EmptyData);
         REQUIRE(Image != nullptr);
+        delete Image;
     }
 
     rndr::StdAsyncLogger::Get()->ShutDown();
@@ -473,6 +499,8 @@ TEST_CASE("ImageUpdate", "RenderAPI")
             Result = Image->Update(&GC, 3, Start, Size, EmptyData);
             REQUIRE(Result == false);
         }
+
+        delete Image;
     }
     SECTION("Dynamic Usage")
     {
@@ -485,6 +513,8 @@ TEST_CASE("ImageUpdate", "RenderAPI")
             const bool Result = Image->Update(&GC, 0, Start, Size, UpdateData);
             REQUIRE(Result == true);
         }
+
+        delete Image;
     }
 
     delete[] UpdateData.Data;
@@ -539,6 +569,8 @@ TEST_CASE("ImageRead", "RenderAPI")
             uint32_t* PixelData = reinterpret_cast<uint32_t*>(ReadContents.Data);
             REQUIRE(*PixelData == PixelPattern);
         }
+
+        delete Image;
         delete[] ReadContents.Data;
     }
 
@@ -599,6 +631,9 @@ TEST_CASE("ImageCopy", "RenderAPI")
             uint32_t* PixelData = reinterpret_cast<uint32_t*>(ReadContents.Data);
             REQUIRE(*PixelData == PixelPattern);
         }
+
+        delete RenderingImage;
+        delete DstImage;
         delete[] ReadContents.Data;
     }
 
