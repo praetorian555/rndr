@@ -106,10 +106,8 @@ bool rndr::Image::InitInternal(GraphicsContext* Context, Span<ByteSpan> InitData
     Desc.ArraySize = ArraySize;
     Desc.MipLevels = Props.bUseMips ? 0 : 1;
     Desc.MiscFlags = bCubeMap ? D3D11_RESOURCE_MISC_TEXTURECUBE : 0;
-
-    // TODO(mkostic): Add options for multisampling in props
-    Desc.SampleDesc.Count = 1;
-    Desc.SampleDesc.Quality = 0;
+    Desc.SampleDesc.Count = Props.SampleCount;
+    Desc.SampleDesc.Quality = Props.SampleCount > 1 ? D3D11_STANDARD_MULTISAMPLE_PATTERN : 0;
 
     const int PixelSize = GetPixelSize(Props.PixelFormat);
     const int PitchSize = Width * PixelSize;
@@ -143,9 +141,32 @@ bool rndr::Image::InitInternal(GraphicsContext* Context, Span<ByteSpan> InitData
         ResourceDesc.Format = DX11FromPixelFormat(Props.PixelFormat);
         if (!bCubeMap)
         {
-            ResourceDesc.ViewDimension = D3D11_SRV_DIMENSION_TEXTURE2DARRAY;
-            ResourceDesc.Texture2DArray.MipLevels = Props.bUseMips ? -1 : 1;
-            ResourceDesc.Texture2DArray.ArraySize = ArraySize;
+            if (ArraySize == 1)
+            {
+                if (Props.SampleCount > 1)
+                {
+                    ResourceDesc.ViewDimension = D3D11_SRV_DIMENSION_TEXTURE2DMS;
+                }
+                else
+                {
+                    ResourceDesc.ViewDimension = D3D11_SRV_DIMENSION_TEXTURE2D;
+                    ResourceDesc.Texture2D.MipLevels = Props.bUseMips ? -1 : 1;
+                }
+            }
+            else
+            {
+                if (Props.SampleCount > 1)
+                {
+                    ResourceDesc.ViewDimension = D3D11_SRV_DIMENSION_TEXTURE2DMSARRAY;
+                    ResourceDesc.Texture2DMSArray.ArraySize = ArraySize;
+                }
+                else
+                {
+                    ResourceDesc.ViewDimension = D3D11_SRV_DIMENSION_TEXTURE2DARRAY;
+                    ResourceDesc.Texture2DArray.MipLevels = Props.bUseMips ? -1 : 1;
+                    ResourceDesc.Texture2DArray.ArraySize = ArraySize;
+                }
+            }
         }
         else
         {
@@ -162,11 +183,34 @@ bool rndr::Image::InitInternal(GraphicsContext* Context, Span<ByteSpan> InitData
     }
     if (Props.ImageBindFlags & ImageBindFlags::RenderTarget)
     {
-        D3D11_RENDER_TARGET_VIEW_DESC Desc;
-        ZeroMemory(&Desc, sizeof(Desc));
-        Desc.Format = DX11FromPixelFormat(Props.PixelFormat);
-        Desc.ViewDimension = D3D11_RTV_DIMENSION_TEXTURE2D;
-        Result = Device->CreateRenderTargetView(DX11Texture, &Desc, &DX11RenderTargetView);
+        D3D11_RENDER_TARGET_VIEW_DESC ResourceDesc;
+        ZeroMemory(&ResourceDesc, sizeof(ResourceDesc));
+        ResourceDesc.Format = DX11FromPixelFormat(Props.PixelFormat);
+        if (ArraySize == 1)
+        {
+            if (Props.SampleCount > 1)
+            {
+                ResourceDesc.ViewDimension = D3D11_RTV_DIMENSION_TEXTURE2DMS;
+            }
+            else
+            {
+                ResourceDesc.ViewDimension = D3D11_RTV_DIMENSION_TEXTURE2D;
+            }
+        }
+        else
+        {
+            if (Props.SampleCount > 1)
+            {
+                ResourceDesc.ViewDimension = D3D11_RTV_DIMENSION_TEXTURE2DMSARRAY;
+                ResourceDesc.Texture2DMSArray.ArraySize = ArraySize;
+            }
+            else
+            {
+                ResourceDesc.ViewDimension = D3D11_RTV_DIMENSION_TEXTURE2DARRAY;
+                ResourceDesc.Texture2DArray.ArraySize = ArraySize;
+            }
+        }
+        Result = Device->CreateRenderTargetView(DX11Texture, &ResourceDesc, &DX11RenderTargetView);
         if (FAILED(Result))
         {
             std::string ErrorMessage = Context->WindowsGetErrorMessage(Result);
@@ -176,11 +220,34 @@ bool rndr::Image::InitInternal(GraphicsContext* Context, Span<ByteSpan> InitData
     }
     if (Props.ImageBindFlags & ImageBindFlags::DepthStencil)
     {
-        D3D11_DEPTH_STENCIL_VIEW_DESC Desc;
-        ZeroMemory(&Desc, sizeof(Desc));
-        Desc.Format = DX11FromPixelFormat(Props.PixelFormat);
-        Desc.ViewDimension = D3D11_DSV_DIMENSION_TEXTURE2D;
-        Result = Device->CreateDepthStencilView(DX11Texture, &Desc, &DX11DepthStencilView);
+        D3D11_DEPTH_STENCIL_VIEW_DESC ResourceDesc;
+        ZeroMemory(&ResourceDesc, sizeof(ResourceDesc));
+        ResourceDesc.Format = DX11FromPixelFormat(Props.PixelFormat);
+        if (ArraySize == 1)
+        {
+            if (Props.SampleCount > 1)
+            {
+                ResourceDesc.ViewDimension = D3D11_DSV_DIMENSION_TEXTURE2DMS;
+            }
+            else
+            {
+                ResourceDesc.ViewDimension = D3D11_DSV_DIMENSION_TEXTURE2D;
+            }
+        }
+        else
+        {
+            if (Props.SampleCount > 1)
+            {
+                ResourceDesc.ViewDimension = D3D11_DSV_DIMENSION_TEXTURE2DMSARRAY;
+                ResourceDesc.Texture2DMSArray.ArraySize = ArraySize;
+            }
+            else
+            {
+                ResourceDesc.ViewDimension = D3D11_DSV_DIMENSION_TEXTURE2DARRAY;
+                ResourceDesc.Texture2DArray.ArraySize = ArraySize;
+            }
+        }
+        Result = Device->CreateDepthStencilView(DX11Texture, &ResourceDesc, &DX11DepthStencilView);
         if (FAILED(Result))
         {
             std::string ErrorMessage = Context->WindowsGetErrorMessage(Result);

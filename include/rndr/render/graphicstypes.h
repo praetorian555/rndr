@@ -211,6 +211,7 @@ struct ImageProperties
     Usage Usage = Usage::GPUReadWrite;
     bool bUseMips = false;
     uint32_t ImageBindFlags = ImageBindFlags::ShaderResource;
+    uint32_t SampleCount = 1;
 };
 
 struct FrameBufferProperties

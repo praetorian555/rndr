@@ -133,6 +133,37 @@ TEST_CASE("Image", "RenderAPI")
         rndr::Image* Image = GC.CreateImage(100, 400, ImageProps, rndr::ByteSpan{});
         REQUIRE(Image != nullptr);
     }
+    SECTION("Multisampling Valid")
+    {
+        rndr::ImageProperties ImageProps;
+        ImageProps.SampleCount = 8;
+        rndr::Image* Image = GC.CreateImage(100, 400, ImageProps, rndr::ByteSpan{});
+        REQUIRE(Image != nullptr);
+    }
+    SECTION("Multisampling Invalid")
+    {
+        rndr::ImageProperties ImageProps;
+        ImageProps.SampleCount = 3;
+        rndr::Image* Image = GC.CreateImage(100, 400, ImageProps, rndr::ByteSpan{});
+        REQUIRE(Image == nullptr);
+    }
+    SECTION("Multisampling Valid Render Target")
+    {
+        rndr::ImageProperties ImageProps;
+        ImageProps.SampleCount = 8;
+        ImageProps.ImageBindFlags = rndr::ImageBindFlags::RenderTarget;
+        rndr::Image* Image = GC.CreateImage(100, 400, ImageProps, rndr::ByteSpan{});
+        REQUIRE(Image != nullptr);
+    }
+    SECTION("Multisampling Valid Depth Stencil Target")
+    {
+        rndr::ImageProperties ImageProps;
+        ImageProps.SampleCount = 8;
+        ImageProps.PixelFormat = rndr::PixelFormat::DEPTH24_STENCIL8;
+        ImageProps.ImageBindFlags = rndr::ImageBindFlags::DepthStencil;
+        rndr::Image* Image = GC.CreateImage(100, 400, ImageProps, rndr::ByteSpan{});
+        REQUIRE(Image != nullptr);
+    }
 
     rndr::StdAsyncLogger::Get()->ShutDown();
 }
@@ -247,6 +278,37 @@ TEST_CASE("ImageArray", "RenderAPI")
         ImageProps.Usage = rndr::Usage::FromGPUToCPU;
         ImageProps.ImageBindFlags = 0;
         ImageProps.CPUAccess = rndr::CPUAccess::Read;
+        rndr::Image* Image = GC.CreateImageArray(Width, Height, ArraySize, ImageProps, EmptyData);
+        REQUIRE(Image != nullptr);
+    }
+    SECTION("Multisampling Valid")
+    {
+        rndr::ImageProperties ImageProps;
+        ImageProps.SampleCount = 8;
+        rndr::Image* Image = GC.CreateImageArray(Width, Height, ArraySize, ImageProps, EmptyData);
+        REQUIRE(Image != nullptr);
+    }
+    SECTION("Multisampling Invalid")
+    {
+        rndr::ImageProperties ImageProps;
+        ImageProps.SampleCount = 3;
+        rndr::Image* Image = GC.CreateImageArray(Width, Height, ArraySize, ImageProps, EmptyData);
+        REQUIRE(Image == nullptr);
+    }
+    SECTION("Multisampling Valid Render Target")
+    {
+        rndr::ImageProperties ImageProps;
+        ImageProps.SampleCount = 8;
+        ImageProps.ImageBindFlags = rndr::ImageBindFlags::RenderTarget;
+        rndr::Image* Image = GC.CreateImageArray(Width, Height, ArraySize, ImageProps, EmptyData);
+        REQUIRE(Image != nullptr);
+    }
+    SECTION("Multisampling Valid Depth Stencil Target")
+    {
+        rndr::ImageProperties ImageProps;
+        ImageProps.SampleCount = 8;
+        ImageProps.PixelFormat = rndr::PixelFormat::DEPTH24_STENCIL8;
+        ImageProps.ImageBindFlags = rndr::ImageBindFlags::DepthStencil;
         rndr::Image* Image = GC.CreateImageArray(Width, Height, ArraySize, ImageProps, EmptyData);
         REQUIRE(Image != nullptr);
     }
