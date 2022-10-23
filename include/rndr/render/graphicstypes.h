@@ -245,7 +245,7 @@ struct SamplerProperties
 
     real LODBias = 0;
     real MinLOD = 0;
-    real MaxLOD = 50'000;
+    real MaxLOD = math::kLargestFloat;
 
     uint32_t MaxAnisotropy = 0;
 };
