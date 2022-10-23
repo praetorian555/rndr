@@ -169,12 +169,12 @@ enum class BlendOperator
     Max
 };
 
-enum class BufferBindFlag
+enum class BufferType
 {
-    None,
+    Readback,
     Vertex,
-    Constant,
-    Index
+    Index,
+    Constant
 };
 
 namespace ImageBindFlags
@@ -189,7 +189,7 @@ enum : uint32_t
 
 struct BufferProperties
 {
-    BufferBindFlag BindFlag = BufferBindFlag::Constant;
+    BufferType Type = BufferType::Constant;
     Usage Usage = Usage::Default;
     // Total size of a buffer
     int Size = 0;

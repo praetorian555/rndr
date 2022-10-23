@@ -26,7 +26,7 @@ bool rndr::Buffer::Init(GraphicsContext* Context, const BufferProperties& Props,
     this->Props = Props;
 
     D3D11_BUFFER_DESC Desc;
-    Desc.BindFlags = DX11FromBufferBindFlag(Props.BindFlag);
+    Desc.BindFlags = DX11FromBufferTypeToBindFlag(Props.Type);
     Desc.Usage = DX11FromUsage(Props.Usage);
     Desc.CPUAccessFlags = DX11FromUsageToCPUAccess(Props.Usage);
     Desc.ByteWidth = Props.Size;

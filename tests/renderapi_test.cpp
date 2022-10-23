@@ -663,7 +663,7 @@ TEST_CASE("Buffer", "RenderAPI")
     {
         rndr::BufferProperties Props;
         Props.Usage = rndr::Usage::Readback;
-        Props.BindFlag = rndr::BufferBindFlag::None;
+        Props.Type = rndr::BufferType::Readback;
         Props.Size = Size;
         Props.Stride = Stride;
         rndr::Buffer* Buff = GC.CreateBuffer(Props, InitData);

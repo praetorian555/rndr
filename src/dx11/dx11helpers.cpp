@@ -191,17 +191,17 @@ uint32_t rndr::DX11FromImageBindFlags(uint32_t ImageBindFlags)
     return Result;
 }
 
-uint32_t rndr::DX11FromBufferBindFlag(BufferBindFlag Flag)
+uint32_t rndr::DX11FromBufferTypeToBindFlag(BufferType Type)
 {
-    switch (Flag)
+    switch (Type)
     {
-        case BufferBindFlag::None:
+        case BufferType::Readback:
             return 0;
-        case BufferBindFlag::Vertex:
+        case BufferType::Vertex:
             return D3D11_BIND_VERTEX_BUFFER;
-        case BufferBindFlag::Index:
+        case BufferType::Index:
             return D3D11_BIND_INDEX_BUFFER;
-        case BufferBindFlag::Constant:
+        case BufferType::Constant:
             return D3D11_BIND_CONSTANT_BUFFER;
         default:
             assert(false);

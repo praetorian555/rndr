@@ -428,7 +428,7 @@ void rndr::GraphicsContext::BindBuffer(Buffer* Buffer, int Slot, Shader* Shader)
         return;
     }
 
-    if (Buffer->Props.BindFlag == BufferBindFlag::Index)
+    if (Buffer->Props.Type == BufferType::Index)
     {
         assert(Buffer->Props.Stride == 4 || Buffer->Props.Stride == 2);
         DXGI_FORMAT Format = Buffer->Props.Stride == 4 ? DXGI_FORMAT_R32_UINT : DXGI_FORMAT_R16_UINT;

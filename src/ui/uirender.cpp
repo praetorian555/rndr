@@ -236,7 +236,7 @@ bool rndr::ui::InitRender(GraphicsContext* Context)
     assert(g_UIProps.MaxInstanceCount != 0);
     InstanceData* Instances = new InstanceData[g_UIProps.MaxInstanceCount];
     BufferProperties InstanceBufferProps;
-    InstanceBufferProps.BindFlag = rndr::BufferBindFlag::Vertex;
+    InstanceBufferProps.Type = rndr::BufferType::Vertex;
     InstanceBufferProps.Usage = rndr::Usage::Default;
     InstanceBufferProps.Size = g_UIProps.MaxInstanceCount * sizeof(InstanceData);
     InstanceBufferProps.Stride = sizeof(InstanceData);
@@ -250,7 +250,7 @@ bool rndr::ui::InitRender(GraphicsContext* Context)
 
     int IndexData[] = {0, 1, 2, 1, 3, 2};
     BufferProperties IndexBufferProps;
-    IndexBufferProps.BindFlag = BufferBindFlag::Index;
+    IndexBufferProps.Type = BufferType::Index;
     IndexBufferProps.Usage = Usage::Default;
     IndexBufferProps.Size = sizeof(IndexData);
     IndexBufferProps.Stride = sizeof(int);
@@ -263,7 +263,7 @@ bool rndr::ui::InitRender(GraphicsContext* Context)
 
     ShaderGlobals Globals;
     BufferProperties ConstBufferProps;
-    ConstBufferProps.BindFlag = BufferBindFlag::Constant;
+    ConstBufferProps.Type = BufferType::Constant;
     ConstBufferProps.Usage = Usage::Default;
     ConstBufferProps.Size = sizeof(ShaderGlobals);
     ConstBufferProps.Stride = sizeof(ShaderGlobals);

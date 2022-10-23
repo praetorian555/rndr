@@ -321,7 +321,7 @@ void InitRenderPrimitives()
             }
 
             rndr::BufferProperties VertexBufferProps;
-            VertexBufferProps.BindFlag = rndr::BufferBindFlag::Vertex;
+            VertexBufferProps.Type = rndr::BufferType::Vertex;
             VertexBufferProps.Usage = rndr::Usage::Default;
             VertexBufferProps.Size = Vertices.size() * sizeof(InVertex);
             VertexBufferProps.Stride = sizeof(InVertex);
@@ -333,7 +333,7 @@ void InitRenderPrimitives()
     {
         InInstance Instance;
         rndr::BufferProperties InstanceBufferProps;
-        InstanceBufferProps.BindFlag = rndr::BufferBindFlag::Vertex;
+        InstanceBufferProps.Type = rndr::BufferType::Vertex;
         InstanceBufferProps.Usage = rndr::Usage::Default;
         InstanceBufferProps.Size = sizeof(InInstance);
         InstanceBufferProps.Stride = sizeof(InInstance);
@@ -344,7 +344,7 @@ void InitRenderPrimitives()
     {
         rndr::Mesh* Mesh = g_Model->GetMeshes()[i];
         rndr::BufferProperties IndexBufferProps;
-        IndexBufferProps.BindFlag = rndr::BufferBindFlag::Index;
+        IndexBufferProps.Type = rndr::BufferType::Index;
         IndexBufferProps.Usage = rndr::Usage::Default;
         IndexBufferProps.Size = Mesh->GetIndices().Size * sizeof(int);
         IndexBufferProps.Stride = sizeof(int);
@@ -356,7 +356,7 @@ void InitRenderPrimitives()
         VertexShaderConstants Constants;
         Constants.FromWorldToNDC = math::Transpose(g_Camera->GetProjectionCamera()->FromWorldToNDC());
         rndr::BufferProperties ConstBufferProps;
-        ConstBufferProps.BindFlag = rndr::BufferBindFlag::Constant;
+        ConstBufferProps.Type = rndr::BufferType::Constant;
         ConstBufferProps.Usage = rndr::Usage::Default;
         ConstBufferProps.Size = sizeof(Constants);
         ConstBufferProps.Stride = sizeof(Constants);
@@ -366,7 +366,7 @@ void InitRenderPrimitives()
     {
         FragmentShaderConstants Constants;
         rndr::BufferProperties ConstBufferProps;
-        ConstBufferProps.BindFlag = rndr::BufferBindFlag::Constant;
+        ConstBufferProps.Type = rndr::BufferType::Constant;
         ConstBufferProps.Usage = rndr::Usage::Default;
         ConstBufferProps.Size = sizeof(Constants);
         ConstBufferProps.Stride = sizeof(Constants);

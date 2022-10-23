@@ -23,7 +23,7 @@ D3D11_INPUT_CLASSIFICATION DX11FromDataRepetition(DataRepetition Repetition);
 D3D11_FILTER DX11FromImageFiltering(ImageFiltering Filter);
 D3D11_TEXTURE_ADDRESS_MODE DX11FromImageAddressing(ImageAddressing AddressMode);
 uint32_t DX11FromImageBindFlags(uint32_t ImageBindFlags);
-uint32_t DX11FromBufferBindFlag(BufferBindFlag Flag);
+uint32_t DX11FromBufferTypeToBindFlag(BufferType Type);
 D3D11_FILL_MODE DX11FromFillMode(FillMode Mode);
 D3D11_CULL_MODE DX11FromFace(Face Face);
 D3D11_COMPARISON_FUNC DX11FromComparator(Comparator Comp);
