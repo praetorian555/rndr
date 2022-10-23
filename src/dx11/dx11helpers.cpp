@@ -195,6 +195,8 @@ uint32_t rndr::DX11FromBufferBindFlag(BufferBindFlag Flag)
 {
     switch (Flag)
     {
+        case BufferBindFlag::None:
+            return 0;
         case BufferBindFlag::Vertex:
             return D3D11_BIND_VERTEX_BUFFER;
         case BufferBindFlag::Index:

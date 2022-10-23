@@ -171,6 +171,7 @@ enum class BlendOperator
 
 enum class BufferBindFlag
 {
+    None,
     Vertex,
     Constant,
     Index
