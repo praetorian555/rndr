@@ -4,6 +4,7 @@
 
 #include "rndr/core/log.h"
 
+#include "rndr/render/buffer.h"
 #include "rndr/render/framebuffer.h"
 #include "rndr/render/graphicscontext.h"
 #include "rndr/render/image.h"
@@ -591,5 +592,97 @@ TEST_CASE("FrameBuffer", "RenderAPI")
         delete FB;
     }
 
+    rndr::StdAsyncLogger::Get()->ShutDown();
+}
+
+TEST_CASE("Buffer", "RenderAPI")
+{
+    rndr::StdAsyncLogger::Get()->Init();
+
+    rndr::GraphicsContext GC;
+    REQUIRE(GC.Init() == true);
+
+    rndr::ByteSpan EmptyData;
+    const int Size = 32;
+    const int Stride = 16;
+    rndr::ByteSpan InitData;
+    InitData.Size = Size;
+    InitData.Data = new uint8_t[Size];
+    memset(InitData.Data, 0xAF, Size);
+
+    SECTION("Default No Init Data")
+    {
+        rndr::BufferProperties Props;
+        rndr::Buffer* Buff = GC.CreateBuffer(Props, EmptyData);
+        REQUIRE(Buff == nullptr);
+    }
+    SECTION("Default No Init Data Valid Size")
+    {
+        rndr::BufferProperties Props;
+        Props.Size = Size;
+        rndr::Buffer* Buff = GC.CreateBuffer(Props, EmptyData);
+        REQUIRE(Buff == nullptr);
+    }
+    SECTION("Default No Init Data All Valid")
+    {
+        rndr::BufferProperties Props;
+        Props.Size = Size;
+        Props.Stride = Stride;
+        rndr::Buffer* Buff = GC.CreateBuffer(Props, EmptyData);
+        REQUIRE(Buff != nullptr);
+        delete Buff;
+    }
+    SECTION("With Init Data")
+    {
+        rndr::BufferProperties Props;
+        Props.Size = Size;
+        Props.Stride = Stride;
+        rndr::Buffer* Buff = GC.CreateBuffer(Props, InitData);
+        REQUIRE(Buff != nullptr);
+        delete Buff;
+    }
+    SECTION("Dynamic")
+    {
+        rndr::BufferProperties Props;
+        Props.Usage = rndr::Usage::Dynamic;
+        Props.Size = Size;
+        Props.Stride = Stride;
+        rndr::Buffer* Buff = GC.CreateBuffer(Props, InitData);
+        REQUIRE(Buff != nullptr);
+
+        SECTION("Update")
+        {
+            uint8_t UpdateData[16] = {};
+            const bool Status = Buff->Update(&GC, rndr::ByteSpan{UpdateData, 16}, 16);
+            REQUIRE(Status == true);
+        }
+
+        delete Buff;
+    }
+    SECTION("Readback")
+    {
+        rndr::BufferProperties Props;
+        Props.Usage = rndr::Usage::Readback;
+        Props.BindFlag = rndr::BufferBindFlag::None;
+        Props.Size = Size;
+        Props.Stride = Stride;
+        rndr::Buffer* Buff = GC.CreateBuffer(Props, InitData);
+        REQUIRE(Buff != nullptr);
+
+        SECTION("Read")
+        {
+            uint8_t ReadData[16] = {};
+            const bool Status = Buff->Read(&GC, rndr::ByteSpan{ReadData, 16}, 16);
+            REQUIRE(Status == true);
+            for (int i = 0; i < 16; i++)
+            {
+                REQUIRE(ReadData[i] == 0xAF);
+            }
+        }
+
+        delete Buff;
+    }
+
+    delete InitData.Data;
     rndr::StdAsyncLogger::Get()->ShutDown();
 }
