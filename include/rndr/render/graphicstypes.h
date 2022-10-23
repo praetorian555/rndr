@@ -218,7 +218,7 @@ struct GraphicsContextProperties
     bool bEnableDebugLayer = true;
     bool bFailWarning = true;
 
-    bool bMakeThreadSafe = false;
+    bool bMakeThreadSafe = true;
     // In case of workloads that last more then 2 seconds don't trigger a timeout
     bool bDisableGPUTimeout = false;
 };
