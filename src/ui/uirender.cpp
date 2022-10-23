@@ -237,8 +237,7 @@ bool rndr::ui::InitRender(GraphicsContext* Context)
     InstanceData* Instances = new InstanceData[g_UIProps.MaxInstanceCount];
     BufferProperties InstanceBufferProps;
     InstanceBufferProps.BindFlag = rndr::BufferBindFlag::Vertex;
-    InstanceBufferProps.CPUAccess = rndr::CPUAccess::None;
-    InstanceBufferProps.Usage = rndr::Usage::GPUReadWrite;
+    InstanceBufferProps.Usage = rndr::Usage::Default;
     InstanceBufferProps.Size = g_UIProps.MaxInstanceCount * sizeof(InstanceData);
     InstanceBufferProps.Stride = sizeof(InstanceData);
     g_InstanceBuffer = g_Context->CreateBuffer(InstanceBufferProps, ByteSpan(Instances));
@@ -252,8 +251,7 @@ bool rndr::ui::InitRender(GraphicsContext* Context)
     int IndexData[] = {0, 1, 2, 1, 3, 2};
     BufferProperties IndexBufferProps;
     IndexBufferProps.BindFlag = BufferBindFlag::Index;
-    IndexBufferProps.CPUAccess = CPUAccess::None;
-    IndexBufferProps.Usage = Usage::GPUReadWrite;
+    IndexBufferProps.Usage = Usage::Default;
     IndexBufferProps.Size = sizeof(IndexData);
     IndexBufferProps.Stride = sizeof(int);
     g_IndexBuffer = g_Context->CreateBuffer(IndexBufferProps, ByteSpan(IndexData));
@@ -266,8 +264,7 @@ bool rndr::ui::InitRender(GraphicsContext* Context)
     ShaderGlobals Globals;
     BufferProperties ConstBufferProps;
     ConstBufferProps.BindFlag = BufferBindFlag::Constant;
-    ConstBufferProps.CPUAccess = CPUAccess::None;
-    ConstBufferProps.Usage = Usage::GPUReadWrite;
+    ConstBufferProps.Usage = Usage::Default;
     ConstBufferProps.Size = sizeof(ShaderGlobals);
     ConstBufferProps.Stride = sizeof(ShaderGlobals);
     g_GlobalsConstantBuffer = g_Context->CreateBuffer(ConstBufferProps, ByteSpan(&Globals));
@@ -280,8 +277,7 @@ bool rndr::ui::InitRender(GraphicsContext* Context)
     assert(g_UIProps.MaxImageArraySize != 0);
     ImageProperties ImageArrayProps;
     ImageArrayProps.bUseMips = false;
-    ImageArrayProps.CPUAccess = CPUAccess::None;
-    ImageArrayProps.Usage = Usage::GPUReadWrite;
+    ImageArrayProps.Usage = Usage::Default;
     ImageArrayProps.PixelFormat = PixelFormat::R8G8B8A8_UNORM_SRGB;
     ImageArrayProps.ImageBindFlags = ImageBindFlags::ShaderResource;
     Span<ByteSpan> InitData;

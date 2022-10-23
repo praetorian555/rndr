@@ -64,16 +64,16 @@ rndr::PixelFormat rndr::DX11ToPixelFormat(DXGI_FORMAT Format)
     return PixelFormat::R8G8B8A8_UNORM;
 }
 
-uint32_t rndr::DX11FromCPUAccess(CPUAccess Access)
+uint32_t rndr::DX11FromUsageToCPUAccess(rndr::Usage Usage)
 {
-    switch (Access)
+    switch (Usage)
     {
-        case CPUAccess::None:
+        case rndr::Usage::Default:
             return 0;
-        case CPUAccess::Read:
-            return D3D11_CPU_ACCESS_READ;
-        case CPUAccess::Write:
+        case rndr::Usage::Dynamic:
             return D3D11_CPU_ACCESS_WRITE;
+        case rndr::Usage::Readback:
+            return D3D11_CPU_ACCESS_READ;
         default:
             assert(false);
     }
@@ -85,13 +85,11 @@ D3D11_USAGE rndr::DX11FromUsage(Usage Usage)
 {
     switch (Usage)
     {
-        case Usage::GPUReadWrite:
+        case Usage::Default:
             return D3D11_USAGE_DEFAULT;
-        case Usage::GPURead:
-            return D3D11_USAGE_IMMUTABLE;
-        case Usage::GPUReadCPUWrite:
+        case Usage::Dynamic:
             return D3D11_USAGE_DYNAMIC;
-        case Usage::FromGPUToCPU:
+        case Usage::Readback:
             return D3D11_USAGE_STAGING;
         default:
             assert(false);

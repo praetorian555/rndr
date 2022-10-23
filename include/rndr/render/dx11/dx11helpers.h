@@ -16,7 +16,7 @@ inline void DX11SafeRelease(T& Ptr);
 
 DXGI_FORMAT DX11FromPixelFormat(PixelFormat Format);
 PixelFormat DX11ToPixelFormat(DXGI_FORMAT Format);
-uint32_t DX11FromCPUAccess(CPUAccess Access);
+uint32_t DX11FromUsageToCPUAccess(rndr::Usage Usage);
 D3D11_USAGE DX11FromUsage(Usage Usage);
 D3D11_PRIMITIVE_TOPOLOGY DX11FromPrimitiveTopology(PrimitiveTopology Topology);
 D3D11_INPUT_CLASSIFICATION DX11FromDataRepetition(DataRepetition Repetition);

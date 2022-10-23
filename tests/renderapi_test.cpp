@@ -76,20 +76,6 @@ TEST_CASE("Image", "RenderAPI")
         REQUIRE(Image != nullptr);
         delete Image;
     }
-    SECTION("Immutable Image")
-    {
-        const int Width = 100;
-        const int Height = 400;
-        rndr::ByteSpan InitData{};
-        InitData.Size = Width * Height * 4;
-        InitData.Data = new uint8_t[InitData.Size];
-        rndr::ImageProperties ImageProps;
-        ImageProps.Usage = rndr::Usage::GPURead;
-        rndr::Image* Image = GC.CreateImage(Width, Height, ImageProps, InitData);
-        REQUIRE(Image != nullptr);
-        delete Image;
-        delete[] InitData.Data;
-    }
     SECTION("Generate Mips")
     {
         rndr::ImageProperties ImageProps;
@@ -126,18 +112,16 @@ TEST_CASE("Image", "RenderAPI")
     SECTION("Use dynamic image as shader resource")
     {
         rndr::ImageProperties ImageProps;
-        ImageProps.Usage = rndr::Usage::GPUReadCPUWrite;
-        ImageProps.CPUAccess = rndr::CPUAccess::Write;
+        ImageProps.Usage = rndr::Usage::Dynamic;
         rndr::Image* Image = GC.CreateImage(100, 400, ImageProps, rndr::ByteSpan{});
         REQUIRE(Image != nullptr);
         delete Image;
     }
-    SECTION("Create staging image")
+    SECTION("Create readback image")
     {
         rndr::ImageProperties ImageProps;
-        ImageProps.Usage = rndr::Usage::FromGPUToCPU;
+        ImageProps.Usage = rndr::Usage::Readback;
         ImageProps.ImageBindFlags = 0;
-        ImageProps.CPUAccess = rndr::CPUAccess::Read;
         rndr::Image* Image = GC.CreateImage(100, 400, ImageProps, rndr::ByteSpan{});
         REQUIRE(Image != nullptr);
         delete Image;
@@ -217,45 +201,6 @@ TEST_CASE("ImageArray", "RenderAPI")
         REQUIRE(Image != nullptr);
         delete Image;
     }
-    SECTION("Immutable Image Array")
-    {
-        rndr::ByteSpan Entry{};
-        Entry.Size = Width * Height * 4;
-        Entry.Data = new uint8_t[Entry.Size];
-        rndr::Span<rndr::ByteSpan> InitData;
-        InitData.Size = ArraySize;
-        InitData.Data = new rndr::ByteSpan[InitData.Size];
-        for (int i = 0; i < ArraySize; i++)
-        {
-            InitData[i] = Entry;
-        }
-        rndr::ImageProperties ImageProps;
-        ImageProps.Usage = rndr::Usage::GPURead;
-        rndr::Image* Image = GC.CreateImageArray(Width, Height, ArraySize, ImageProps, InitData);
-        REQUIRE(Image != nullptr);
-        delete Image;
-        delete[] Entry.Data;
-        delete[] InitData.Data;
-    }
-    SECTION("Immutable Image Array With Invalid Init Data")
-    {
-        rndr::ByteSpan Entry{};
-        Entry.Size = Width * Height * 4;
-        Entry.Data = new uint8_t[Entry.Size];
-        rndr::Span<rndr::ByteSpan> InitData;
-        InitData.Size = ArraySize - 3;
-        InitData.Data = new rndr::ByteSpan[InitData.Size];
-        for (int i = 0; i < ArraySize - 3; i++)
-        {
-            InitData[i] = Entry;
-        }
-        rndr::ImageProperties ImageProps;
-        ImageProps.Usage = rndr::Usage::GPURead;
-        rndr::Image* Image = GC.CreateImageArray(Width, Height, ArraySize, ImageProps, InitData);
-        REQUIRE(Image == nullptr);
-        delete[] Entry.Data;
-        delete[] InitData.Data;
-    }
     SECTION("Generate Mips")
     {
         rndr::ImageProperties ImageProps;
@@ -284,17 +229,15 @@ TEST_CASE("ImageArray", "RenderAPI")
     SECTION("Use dynamic image array as shader resource")
     {
         rndr::ImageProperties ImageProps;
-        ImageProps.Usage = rndr::Usage::GPUReadCPUWrite;
-        ImageProps.CPUAccess = rndr::CPUAccess::Write;
+        ImageProps.Usage = rndr::Usage::Dynamic;
         rndr::Image* Image = GC.CreateImageArray(Width, Height, ArraySize, ImageProps, EmptyData);
         REQUIRE(Image == nullptr);
     }
-    SECTION("Create staging image array")
+    SECTION("Create readback image array")
     {
         rndr::ImageProperties ImageProps;
-        ImageProps.Usage = rndr::Usage::FromGPUToCPU;
+        ImageProps.Usage = rndr::Usage::Readback;
         ImageProps.ImageBindFlags = 0;
-        ImageProps.CPUAccess = rndr::CPUAccess::Read;
         rndr::Image* Image = GC.CreateImageArray(Width, Height, ArraySize, ImageProps, EmptyData);
         REQUIRE(Image != nullptr);
         delete Image;
@@ -368,45 +311,6 @@ TEST_CASE("CubeMap", "RenderAPI")
         REQUIRE(Image != nullptr);
         delete Image;
     }
-    SECTION("Immutable Cube Map")
-    {
-        rndr::ByteSpan Entry{};
-        Entry.Size = Width * Height * 4;
-        Entry.Data = new uint8_t[Entry.Size];
-        rndr::Span<rndr::ByteSpan> InitData;
-        InitData.Size = ArraySize;
-        InitData.Data = new rndr::ByteSpan[InitData.Size];
-        for (int i = 0; i < ArraySize; i++)
-        {
-            InitData[i] = Entry;
-        }
-        rndr::ImageProperties ImageProps;
-        ImageProps.Usage = rndr::Usage::GPURead;
-        rndr::Image* Image = GC.CreateCubeMap(Width, Height, ImageProps, InitData);
-        REQUIRE(Image != nullptr);
-        delete Image;
-        delete[] Entry.Data;
-        delete[] InitData.Data;
-    }
-    SECTION("Immutable Cube Map With Invalid Init Data")
-    {
-        rndr::ByteSpan Entry{};
-        Entry.Size = Width * Height * 4;
-        Entry.Data = new uint8_t[Entry.Size];
-        rndr::Span<rndr::ByteSpan> InitData;
-        InitData.Size = ArraySize - 3;
-        InitData.Data = new rndr::ByteSpan[InitData.Size];
-        for (int i = 0; i < ArraySize - 3; i++)
-        {
-            InitData[i] = Entry;
-        }
-        rndr::ImageProperties ImageProps;
-        ImageProps.Usage = rndr::Usage::GPURead;
-        rndr::Image* Image = GC.CreateCubeMap(Width, Height, ImageProps, InitData);
-        REQUIRE(Image == nullptr);
-        delete[] Entry.Data;
-        delete[] InitData.Data;
-    }
     SECTION("Generate Mips")
     {
         rndr::ImageProperties ImageProps;
@@ -435,17 +339,15 @@ TEST_CASE("CubeMap", "RenderAPI")
     SECTION("Use dynamic cube map as shader resource")
     {
         rndr::ImageProperties ImageProps;
-        ImageProps.Usage = rndr::Usage::GPUReadCPUWrite;
-        ImageProps.CPUAccess = rndr::CPUAccess::Write;
+        ImageProps.Usage = rndr::Usage::Dynamic;
         rndr::Image* Image = GC.CreateCubeMap(Width, Height, ImageProps, EmptyData);
         REQUIRE(Image == nullptr);
     }
-    SECTION("Create staging cube map")
+    SECTION("Create readback cube map")
     {
         rndr::ImageProperties ImageProps;
-        ImageProps.Usage = rndr::Usage::FromGPUToCPU;
+        ImageProps.Usage = rndr::Usage::Readback;
         ImageProps.ImageBindFlags = 0;
-        ImageProps.CPUAccess = rndr::CPUAccess::Read;
         rndr::Image* Image = GC.CreateCubeMap(Width, Height, ImageProps, EmptyData);
         REQUIRE(Image != nullptr);
         delete Image;
@@ -554,8 +456,7 @@ TEST_CASE("ImageRead", "RenderAPI")
     SECTION("From GPU to CPU Usage")
     {
         rndr::ImageProperties ImageProps;
-        ImageProps.Usage = rndr::Usage::FromGPUToCPU;
-        ImageProps.CPUAccess = rndr::CPUAccess::Read;
+        ImageProps.Usage = rndr::Usage::Readback;
         ImageProps.ImageBindFlags = 0;
         rndr::Image* Image = GC.CreateImage(Width, Height, ImageProps, InitData);
         REQUIRE(Image != nullptr);
@@ -614,8 +515,7 @@ TEST_CASE("ImageCopy", "RenderAPI")
         REQUIRE(RenderingImage != nullptr);
 
         ImageProps.ImageBindFlags = 0;
-        ImageProps.Usage = rndr::Usage::FromGPUToCPU;
-        ImageProps.CPUAccess = rndr::CPUAccess::Read;
+        ImageProps.Usage = rndr::Usage::Readback;
         rndr::Image* DstImage = GC.CreateImage(Width, Height, ImageProps, EmptyData);
         REQUIRE(DstImage != nullptr);
 

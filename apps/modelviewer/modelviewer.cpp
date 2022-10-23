@@ -322,8 +322,7 @@ void InitRenderPrimitives()
 
             rndr::BufferProperties VertexBufferProps;
             VertexBufferProps.BindFlag = rndr::BufferBindFlag::Vertex;
-            VertexBufferProps.CPUAccess = rndr::CPUAccess::None;
-            VertexBufferProps.Usage = rndr::Usage::GPUReadWrite;
+            VertexBufferProps.Usage = rndr::Usage::Default;
             VertexBufferProps.Size = Vertices.size() * sizeof(InVertex);
             VertexBufferProps.Stride = sizeof(InVertex);
             rndr::Buffer* VertexBuffer = g_Context->CreateBuffer(VertexBufferProps, (rndr::ByteSpan)Vertices);
@@ -335,8 +334,7 @@ void InitRenderPrimitives()
         InInstance Instance;
         rndr::BufferProperties InstanceBufferProps;
         InstanceBufferProps.BindFlag = rndr::BufferBindFlag::Vertex;
-        InstanceBufferProps.CPUAccess = rndr::CPUAccess::None;
-        InstanceBufferProps.Usage = rndr::Usage::GPUReadWrite;
+        InstanceBufferProps.Usage = rndr::Usage::Default;
         InstanceBufferProps.Size = sizeof(InInstance);
         InstanceBufferProps.Stride = sizeof(InInstance);
         g_InstanceBuffer = g_Context->CreateBuffer(InstanceBufferProps, (rndr::ByteSpan)&Instance);
@@ -347,8 +345,7 @@ void InitRenderPrimitives()
         rndr::Mesh* Mesh = g_Model->GetMeshes()[i];
         rndr::BufferProperties IndexBufferProps;
         IndexBufferProps.BindFlag = rndr::BufferBindFlag::Index;
-        IndexBufferProps.CPUAccess = rndr::CPUAccess::None;
-        IndexBufferProps.Usage = rndr::Usage::GPUReadWrite;
+        IndexBufferProps.Usage = rndr::Usage::Default;
         IndexBufferProps.Size = Mesh->GetIndices().Size * sizeof(int);
         IndexBufferProps.Stride = sizeof(int);
         rndr::Buffer* IndexBuffer = g_Context->CreateBuffer(IndexBufferProps, rndr::ByteSpan(Mesh->GetIndices()));
@@ -360,8 +357,7 @@ void InitRenderPrimitives()
         Constants.FromWorldToNDC = math::Transpose(g_Camera->GetProjectionCamera()->FromWorldToNDC());
         rndr::BufferProperties ConstBufferProps;
         ConstBufferProps.BindFlag = rndr::BufferBindFlag::Constant;
-        ConstBufferProps.CPUAccess = rndr::CPUAccess::None;
-        ConstBufferProps.Usage = rndr::Usage::GPUReadWrite;
+        ConstBufferProps.Usage = rndr::Usage::Default;
         ConstBufferProps.Size = sizeof(Constants);
         ConstBufferProps.Stride = sizeof(Constants);
         g_VertexConstantBuffer = g_Context->CreateBuffer(ConstBufferProps, (rndr::ByteSpan)&Constants);
@@ -371,8 +367,7 @@ void InitRenderPrimitives()
         FragmentShaderConstants Constants;
         rndr::BufferProperties ConstBufferProps;
         ConstBufferProps.BindFlag = rndr::BufferBindFlag::Constant;
-        ConstBufferProps.CPUAccess = rndr::CPUAccess::None;
-        ConstBufferProps.Usage = rndr::Usage::GPUReadWrite;
+        ConstBufferProps.Usage = rndr::Usage::Default;
         ConstBufferProps.Size = sizeof(Constants);
         ConstBufferProps.Stride = sizeof(Constants);
         g_FragmentConstantBuffer = g_Context->CreateBuffer(ConstBufferProps, (rndr::ByteSpan)&Constants);
@@ -384,8 +379,7 @@ void InitRenderPrimitives()
         rndr::ImageProperties TextureProps;
         TextureProps.ImageBindFlags = rndr::ImageBindFlags::ShaderResource;
         TextureProps.bUseMips = true;
-        TextureProps.CPUAccess = rndr::CPUAccess::None;
-        TextureProps.Usage = rndr::Usage::GPUReadWrite;
+        TextureProps.Usage = rndr::Usage::Default;
         TextureProps.PixelFormat = ImageInfo.Format;
         g_DiffuseImage = g_Context->CreateImage(ImageInfo.Width, ImageInfo.Height, TextureProps, ImageInfo.Data);
     }
@@ -396,8 +390,7 @@ void InitRenderPrimitives()
         rndr::ImageProperties TextureProps;
         TextureProps.ImageBindFlags = rndr::ImageBindFlags::ShaderResource;
         TextureProps.bUseMips = true;
-        TextureProps.CPUAccess = rndr::CPUAccess::None;
-        TextureProps.Usage = rndr::Usage::GPUReadWrite;
+        TextureProps.Usage = rndr::Usage::Default;
         TextureProps.PixelFormat = ImageInfo.Format;
         g_NormalImage = g_Context->CreateImage(ImageInfo.Width, ImageInfo.Height, TextureProps, ImageInfo.Data);
     }
@@ -408,8 +401,7 @@ void InitRenderPrimitives()
         rndr::ImageProperties TextureProps;
         TextureProps.ImageBindFlags = rndr::ImageBindFlags::ShaderResource;
         TextureProps.bUseMips = true;
-        TextureProps.CPUAccess = rndr::CPUAccess::None;
-        TextureProps.Usage = rndr::Usage::GPUReadWrite;
+        TextureProps.Usage = rndr::Usage::Default;
         TextureProps.PixelFormat = ImageInfo.Format;
         g_SpecularImage = g_Context->CreateImage(ImageInfo.Width, ImageInfo.Height, TextureProps, ImageInfo.Data);
     }

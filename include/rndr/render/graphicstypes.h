@@ -71,23 +71,14 @@ enum class ImageAddressing
     MirrorOnce
 };
 
-enum class CPUAccess
-{
-    None,
-    Read,  // Only if Usage is FromGPUToCPU
-    Write  // Only if Usage is GPUReadCPUWrite or FromGPUToCPU
-};
-
 enum class Usage
 {
-    // Default, Use this when you need to update the resource from the CPU side sparingly
-    GPUReadWrite,
-    // Immutable, once created it can't be changed, you need initialization data during the creation
-    GPURead,
+    // Use this when you need to update the resource from the CPU side sparingly and mostly it is only processed or used by GPU
+    Default,
     // Used when we need to update resource every frame, such as constant buffers
-    GPUReadCPUWrite,
+    Dynamic,
     // Used when we need to move data from the GPU to the CPU side, for example after rendering
-    FromGPUToCPU
+    Readback
 };
 
 enum class WindingOrder : uint32_t
@@ -198,7 +189,6 @@ enum : uint32_t
 struct BufferProperties
 {
     BufferBindFlag BindFlag;
-    CPUAccess CPUAccess;
     Usage Usage;
     int Size;
     int Stride;
@@ -207,8 +197,7 @@ struct BufferProperties
 struct ImageProperties
 {
     PixelFormat PixelFormat = PixelFormat::R8G8B8A8_UNORM_SRGB;
-    CPUAccess CPUAccess = CPUAccess::None;
-    Usage Usage = Usage::GPUReadWrite;
+    Usage Usage = Usage::Default;
     bool bUseMips = false;
     uint32_t ImageBindFlags = ImageBindFlags::ShaderResource;
     uint32_t SampleCount = 1;
@@ -256,13 +245,6 @@ struct SamplerProperties
     real MaxLOD = 50'000;
 
     uint32_t MaxAnisotropy = 0;
-};
-
-struct ConstantBufferProperties
-{
-    int Size;
-    Usage Usage = Usage::GPUReadCPUWrite;
-    CPUAccess CPUAccess = CPUAccess::Write;
 };
 
 enum class DataRepetition

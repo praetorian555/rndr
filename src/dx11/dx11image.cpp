@@ -98,7 +98,7 @@ bool rndr::Image::InitInternal(GraphicsContext* Context, Span<ByteSpan> InitData
     D3D11_TEXTURE2D_DESC Desc;
     ZeroMemory(&Desc, sizeof(D3D11_TEXTURE2D_DESC));
     Desc.BindFlags = DX11FromImageBindFlags(Props.ImageBindFlags);
-    Desc.CPUAccessFlags = DX11FromCPUAccess(Props.CPUAccess);
+    Desc.CPUAccessFlags = DX11FromUsageToCPUAccess(Props.Usage);
     Desc.Format = DX11FromPixelFormat(Props.PixelFormat);
     Desc.Usage = DX11FromUsage(Props.Usage);
     Desc.Width = Width;
@@ -265,9 +265,9 @@ bool rndr::Image::Update(GraphicsContext* Context,
                          const math::Vector2& Size,
                          ByteSpan Contents) const
 {
-    if (Props.Usage == Usage::GPURead)
+    if (Props.Usage == Usage::Readback)
     {
-        RNDR_LOG_ERROR("Image::Update: Can't update immutable image!");
+        RNDR_LOG_ERROR("Image::Update: Can't update readback image!");
         return false;
     }
     if (Props.bUseMips)
@@ -307,7 +307,7 @@ bool rndr::Image::Update(GraphicsContext* Context,
         RNDR_LOG_ERROR("%s", ErrorMessage.c_str());
         return false;
     }
-    if (Props.Usage == Usage::GPUReadCPUWrite)
+    if (Props.Usage == Usage::Dynamic)
     {
         D3D11_MAPPED_SUBRESOURCE Subresource;
         HRESULT Result = DeviceContext->Map(DX11Texture, SubresourceIndex, D3D11_MAP_WRITE_DISCARD, 0, &Subresource);
@@ -334,6 +334,8 @@ bool rndr::Image::Update(GraphicsContext* Context,
 
         return true;
     }
+
+    // Image has default usage
 
     D3D11_BOX* DestRegionPtr = nullptr;
     D3D11_BOX DestRegion;
@@ -363,14 +365,9 @@ bool rndr::Image::Read(GraphicsContext* Context,
                        const math::Vector2& Size,
                        ByteSpan OutContents) const
 {
-    if (Props.Usage != Usage::FromGPUToCPU)
+    if (Props.Usage != Usage::Readback)
     {
-        RNDR_LOG_ERROR("Image::Read: Only Usage::FromGPUToCPU is supported!");
-        return false;
-    }
-    if (((uint32_t)Props.CPUAccess & (uint32_t)CPUAccess::Read) == 0u)
-    {
-        RNDR_LOG_ERROR("Image::Read: Missing CPUAccess::Read!");
+        RNDR_LOG_ERROR("Image::Read: Only image with readback usage can be read from!");
         return false;
     }
     if (Props.bUseMips)

@@ -20,7 +20,7 @@ bool rndr::Buffer::Init(GraphicsContext* Context, const BufferProperties& Props,
     D3D11_BUFFER_DESC Desc;
     Desc.BindFlags = DX11FromBufferBindFlag(Props.BindFlag);
     Desc.Usage = DX11FromUsage(Props.Usage);
-    Desc.CPUAccessFlags = DX11FromCPUAccess(Props.CPUAccess);
+    Desc.CPUAccessFlags = DX11FromUsageToCPUAccess(Props.Usage);
     Desc.ByteWidth = Props.Size;
     Desc.MiscFlags = 0;
     Desc.StructureByteStride = 0;
@@ -43,9 +43,9 @@ bool rndr::Buffer::Init(GraphicsContext* Context, const BufferProperties& Props,
 
 bool rndr::Buffer::Update(GraphicsContext* Context, ByteSpan Data, int StartOffset) const
 {
-    if (Props.Usage == Usage::GPURead)
+    if (Props.Usage == Usage::Readback)
     {
-        RNDR_LOG_ERROR("Buffer::Update: Can't update immutable buffer!");
+        RNDR_LOG_ERROR("Buffer::Update: Can't update readback buffer!");
         return false;
     }
     if (!Data)
@@ -65,7 +65,7 @@ bool rndr::Buffer::Update(GraphicsContext* Context, ByteSpan Data, int StartOffs
     }
 
     ID3D11DeviceContext* DeviceContext = Context->GetDeviceContext();
-    if (Props.Usage == Usage::GPUReadCPUWrite)
+    if (Props.Usage == Usage::Dynamic)
     {
         D3D11_MAPPED_SUBRESOURCE Subresource;
         HRESULT Result = DeviceContext->Map(DX11Buffer, 0, D3D11_MAP_WRITE_DISCARD, 0, &Subresource);
