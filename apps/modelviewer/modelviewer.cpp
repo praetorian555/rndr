@@ -477,14 +477,14 @@ void Update(float DeltaSeconds)
         Instance.FromWorldToModel = math::Transpose((math::Transform)Instance.FromModelToWorld.GetInverse());
         Instance.FromModelToWorld = math::Transpose(Instance.FromModelToWorld);
         Instance.FromWorldToModel = math::Transpose(Instance.FromWorldToModel);
-        g_InstanceBuffer->Update((rndr::ByteSpan)&Instance);
+        g_InstanceBuffer->Update(g_Context, (rndr::ByteSpan)&Instance);
     }
 
     // Update vertex shader constants
     {
         VertexShaderConstants Constants;
         Constants.FromWorldToNDC = math::Transpose(g_Camera->GetProjectionCamera()->FromWorldToNDC());
-        g_VertexConstantBuffer->Update((rndr::ByteSpan)&Constants);
+        g_VertexConstantBuffer->Update(g_Context, (rndr::ByteSpan)&Constants);
     }
 
     // Update fragment shader constants
@@ -498,7 +498,7 @@ void Update(float DeltaSeconds)
         Constants.LightColor = g_LightColor.XYZ();
         Constants.AmbientStrength = 0.01f;
         Constants.Shininess = 64;
-        g_FragmentConstantBuffer->Update((rndr::ByteSpan)&Constants);
+        g_FragmentConstantBuffer->Update(g_Context, (rndr::ByteSpan)&Constants);
     }
 
     g_Camera->Update(DeltaSeconds);

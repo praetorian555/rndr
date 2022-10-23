@@ -249,7 +249,14 @@ rndr::Sampler* rndr::GraphicsContext::CreateSampler(const SamplerProperties& Pro
 
 rndr::Buffer* rndr::GraphicsContext::CreateBuffer(const BufferProperties& Props, ByteSpan InitialData)
 {
-    return new Buffer(this, Props, InitialData);
+    Buffer* Buff = new Buffer();
+    bool Status = Buff->Init(this, Props, InitialData);
+    if (!Status)
+    {
+        delete Buff;
+        Buff = nullptr;
+    }
+    return Buff;
 }
 
 rndr::FrameBuffer* rndr::GraphicsContext::CreateFrameBuffer(int Width, int Height, const FrameBufferProperties& Props)

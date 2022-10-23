@@ -369,7 +369,7 @@ void rndr::ui::StartRenderFrame()
 {
     ShaderGlobals Globals;
     Globals.ScreenSize = GetRenderScreenSize();
-    g_GlobalsConstantBuffer->Update(ByteSpan(&Globals));
+    g_GlobalsConstantBuffer->Update(g_Context, ByteSpan(&Globals));
 }
 
 void rndr::ui::EndRenderFrame(const Span<Box*> SortedBoxes)
@@ -388,7 +388,7 @@ void rndr::ui::EndRenderFrame(const Span<Box*> SortedBoxes)
     g_Context->BindFrameBuffer(nullptr);
 
     std::vector<InstanceData> Data = ConvertBoxesIntoInstanceData(SortedBoxes);
-    g_InstanceBuffer->Update(ByteSpan(Data));
+    g_InstanceBuffer->Update(g_Context, ByteSpan(Data));
 
     int Offset = 0;
     while (Offset < SortedBoxes.Size)

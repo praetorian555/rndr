@@ -15,14 +15,16 @@ class GraphicsContext;
 
 struct Buffer
 {
-    GraphicsContext* GraphicsContext;
     BufferProperties Props;
+
     ID3D11Buffer* DX11Buffer;
 
-    Buffer(rndr::GraphicsContext* Context, const BufferProperties& P = BufferProperties{}, ByteSpan InitialData = ByteSpan{});
+    Buffer() = default;
     ~Buffer();
 
-    void Update(ByteSpan Data) const;
+    bool Init(rndr::GraphicsContext* Context, const BufferProperties& Props = BufferProperties{}, ByteSpan InitialData = ByteSpan{});
+
+    bool Update(rndr::GraphicsContext* Context, ByteSpan Data, int StartOffset = 0) const;
 };
 
 }  // namespace rndr
