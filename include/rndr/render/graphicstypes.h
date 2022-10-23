@@ -187,6 +187,30 @@ enum : uint32_t
 };
 }
 
+enum class DataRepetition
+{
+    PerVertex,
+    PerInstance
+};
+
+enum class ShaderType
+{
+    Vertex,
+    Fragment
+};
+
+enum class DepthMask
+{
+    None,
+    All
+};
+
+enum class FillMode
+{
+    Solid,
+    Wireframe
+};
+
 struct BufferProperties
 {
     BufferType Type = BufferType::Constant;
@@ -250,18 +274,6 @@ struct SamplerProperties
     uint32_t MaxAnisotropy = 0;
 };
 
-enum class DataRepetition
-{
-    PerVertex,
-    PerInstance
-};
-
-enum class ShaderType
-{
-    Vertex,
-    Fragment
-};
-
 struct ShaderProperties
 {
     ShaderType Type;
@@ -269,18 +281,6 @@ struct ShaderProperties
     std::wstring FilePath;
     std::string EntryPoint;
     bool bCompilationNeeded = true;
-};
-
-enum class DepthMask
-{
-    None,
-    All
-};
-
-enum class FillMode
-{
-    Solid,
-    Wireframe
 };
 
 constexpr int AppendAlignedElement = -1;
