@@ -13,20 +13,15 @@ namespace rndr
 
 class GraphicsContext;
 
-class Sampler
+struct Sampler
 {
-public:
-    Sampler(GraphicsContext* Context, const SamplerProperties& Props = SamplerProperties{});
+    SamplerProperties Props;
+
+    ID3D11SamplerState* DX11State;
+
     ~Sampler();
 
-    ID3D11SamplerState* GetSamplerState();
-
-private:
-    friend class GraphicsContext;
-
-private:
-    SamplerProperties m_Props;
-    ID3D11SamplerState* m_State;
+    bool Init(rndr::GraphicsContext* Context, const SamplerProperties& Props = SamplerProperties{});
 };
 
 }  // namespace rndr

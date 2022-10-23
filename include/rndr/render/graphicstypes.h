@@ -270,6 +270,7 @@ struct SamplerProperties
     real LODBias = 0;
     real MinLOD = 0;
     real MaxLOD = math::kLargestFloat;
+    Comparator Comp = Comparator::Never;
 
     uint32_t MaxAnisotropy = 0;
 };

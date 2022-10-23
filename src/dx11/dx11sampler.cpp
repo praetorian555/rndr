@@ -9,41 +9,41 @@
 #include "rndr/render/dx11/dx11graphicscontext.h"
 #include "rndr/render/dx11/dx11helpers.h"
 
-rndr::Sampler::Sampler(GraphicsContext* Context, const SamplerProperties& Props) : m_Props(Props)
+bool rndr::Sampler::Init(GraphicsContext* Context, const SamplerProperties& Props)
 {
+    this->Props = Props;
+
     ID3D11Device* Device = Context->GetDevice();
 
     D3D11_SAMPLER_DESC Desc;
-    Desc.AddressU = DX11FromImageAddressing(m_Props.AddressingU);
-    Desc.AddressV = DX11FromImageAddressing(m_Props.AddressingV);
-    Desc.AddressW = DX11FromImageAddressing(m_Props.AddressingW);
-    Desc.BorderColor[0] = m_Props.WrapBorderColor.X;
-    Desc.BorderColor[1] = m_Props.WrapBorderColor.Y;
-    Desc.BorderColor[2] = m_Props.WrapBorderColor.Z;
-    Desc.BorderColor[3] = m_Props.WrapBorderColor.W;
-    Desc.ComparisonFunc = D3D11_COMPARISON_ALWAYS;  // TODO(mkostic): Add support for this
-    Desc.Filter = DX11FromImageFiltering(m_Props.Filter);
-    Desc.MaxAnisotropy = m_Props.MaxAnisotropy;
-    Desc.MipLODBias = m_Props.LODBias;
-    Desc.MinLOD = m_Props.MinLOD;
-    Desc.MaxLOD = m_Props.MaxLOD;
+    Desc.AddressU = DX11FromImageAddressing(Props.AddressingU);
+    Desc.AddressV = DX11FromImageAddressing(Props.AddressingV);
+    Desc.AddressW = DX11FromImageAddressing(Props.AddressingW);
+    Desc.BorderColor[0] = Props.WrapBorderColor.X;
+    Desc.BorderColor[1] = Props.WrapBorderColor.Y;
+    Desc.BorderColor[2] = Props.WrapBorderColor.Z;
+    Desc.BorderColor[3] = Props.WrapBorderColor.W;
+    Desc.ComparisonFunc = DX11FromComparator(Props.Comp);
+    Desc.Filter = DX11FromImageFiltering(Props.Filter);
+    Desc.MaxAnisotropy = Props.MaxAnisotropy;
+    Desc.MipLODBias = Props.LODBias;
+    Desc.MinLOD = Props.MinLOD;
+    Desc.MaxLOD = Props.MaxLOD;
 
-    HRESULT Result = Device->CreateSamplerState(&Desc, &m_State);
-    if (FAILED(Result))
+    HRESULT Result = Device->CreateSamplerState(&Desc, &DX11State);
+    if (Context->WindowsHasFailed(Result))
     {
-        RNDR_LOG_ERROR("Failed to create sampler state!");
-        return;
+        const std::string ErrorMessage = Context->WindowsGetErrorMessage(Result);
+        RNDR_LOG_ERROR("%s", ErrorMessage.c_str());
+        return false;
     }
+
+    return true;
 }
 
 rndr::Sampler::~Sampler()
 {
-    DX11SafeRelease(m_State);
-}
-
-ID3D11SamplerState* rndr::Sampler::GetSamplerState()
-{
-    return m_State;
+    DX11SafeRelease(DX11State);
 }
 
 #endif  // RNDR_DX11

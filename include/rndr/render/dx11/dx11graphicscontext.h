@@ -21,7 +21,7 @@ class Window;
 class FrameBuffer;
 class Image;
 class Shader;
-class Sampler;
+struct Sampler;
 class Buffer;
 
 struct InputLayout;

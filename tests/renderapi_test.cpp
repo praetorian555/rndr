@@ -8,6 +8,7 @@
 #include "rndr/render/framebuffer.h"
 #include "rndr/render/graphicscontext.h"
 #include "rndr/render/image.h"
+#include "rndr/render/sampler.h"
 
 TEST_CASE("GraphicsContext", "RenderAPI")
 {
@@ -684,5 +685,23 @@ TEST_CASE("Buffer", "RenderAPI")
     }
 
     delete InitData.Data;
+    rndr::StdAsyncLogger::Get()->ShutDown();
+}
+
+TEST_CASE("Sampler", "RenderAPI")
+{
+    rndr::StdAsyncLogger::Get()->Init();
+
+    rndr::GraphicsContext GC;
+    REQUIRE(GC.Init() == true);
+
+    SECTION("Default")
+    {
+        rndr::SamplerProperties Props;
+        rndr::Sampler* S = GC.CreateSampler(Props);
+        REQUIRE(S != nullptr);
+        delete S;
+    }
+
     rndr::StdAsyncLogger::Get()->ShutDown();
 }

@@ -244,7 +244,14 @@ rndr::Image* rndr::GraphicsContext::CreateImageForSwapchainBackBuffer()
 
 rndr::Sampler* rndr::GraphicsContext::CreateSampler(const SamplerProperties& Props)
 {
-    return new Sampler(this, Props);
+    Sampler* S = new Sampler();
+    const bool Status = S->Init(this, Props);
+    if (!Status)
+    {
+        delete S;
+        return nullptr;
+    }
+    return S;
 }
 
 rndr::Buffer* rndr::GraphicsContext::CreateBuffer(const BufferProperties& Props, ByteSpan InitialData)
@@ -389,12 +396,12 @@ void rndr::GraphicsContext::BindSampler(Sampler* Sampler, int Slot, Shader* Shad
     {
         case ShaderType::Vertex:
         {
-            m_DeviceContext->VSSetSamplers(Slot, 1, &Sampler->m_State);
+            m_DeviceContext->VSSetSamplers(Slot, 1, &Sampler->DX11State);
             break;
         }
         case ShaderType::Fragment:
         {
-            m_DeviceContext->PSSetSamplers(Slot, 1, &Sampler->m_State);
+            m_DeviceContext->PSSetSamplers(Slot, 1, &Sampler->DX11State);
             break;
         }
         default:
