@@ -189,10 +189,12 @@ enum : uint32_t
 
 struct BufferProperties
 {
-    BufferBindFlag BindFlag;
-    Usage Usage;
-    int Size;
-    int Stride;
+    BufferBindFlag BindFlag = BufferBindFlag::Constant;
+    Usage Usage = Usage::Default;
+    // Total size of a buffer
+    int Size = 0;
+    // Size of one element, in bytes, in an array of elements
+    int Stride = 0;
 };
 
 struct ImageProperties
