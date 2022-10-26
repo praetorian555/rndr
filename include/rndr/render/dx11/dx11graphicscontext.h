@@ -43,7 +43,7 @@ public:
     D3D_FEATURE_LEVEL GetFeatureLevel();
 
     SwapChain* CreateSwapChain(const SwapChainProperties& Props);
-    Shader* CreateShader(const ShaderProperties& Props);
+    Shader* CreateShader(const ByteSpan& ShaderContents, const ShaderProperties& Props);
     Image* CreateImage(int Width, int Height, const ImageProperties& Props, ByteSpan InitData);
     Image* CreateImageArray(int Width, int Height, int ArraySize, const ImageProperties& Props, Span<ByteSpan> InitData);
     Image* CreateCubeMap(int Width, int Height, const ImageProperties& Props, Span<ByteSpan> InitData);

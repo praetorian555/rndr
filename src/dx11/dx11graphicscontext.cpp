@@ -190,9 +190,16 @@ rndr::SwapChain* rndr::GraphicsContext::CreateSwapChain(const SwapChainPropertie
     return nullptr;
 }
 
-rndr::Shader* rndr::GraphicsContext::CreateShader(const ShaderProperties& Props)
+rndr::Shader* rndr::GraphicsContext::CreateShader(const ByteSpan& ShaderContents, const ShaderProperties& Props)
 {
-    return new Shader(this, Props);
+    Shader* S = new Shader();
+    const bool Status = S->Init(this, ShaderContents, Props);
+    if (!Status)
+    {
+        delete S;
+        return nullptr;
+    }
+    return S;
 }
 
 rndr::Image* rndr::GraphicsContext::CreateImage(int Width, int Height, const ImageProperties& Props, ByteSpan InitData)

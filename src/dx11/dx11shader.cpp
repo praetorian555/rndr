@@ -88,31 +88,48 @@ static const char* GetShaderModel(D3D_FEATURE_LEVEL FeatureLevel, rndr::ShaderTy
     return "";
 }
 
-rndr::Shader::Shader(GraphicsContext* Context, const ShaderProperties& P) : Props(P)
+bool rndr::Shader::Init(GraphicsContext* Context, const ByteSpan& ShaderContents, const ShaderProperties& Props)
 {
+    if (!ShaderContents)
+    {
+        RNDR_LOG_ERROR("rndr::Shader::Init: Shader contents are empty!");
+        return false;
+    }
+
+    this->Props = Props;
+
     ID3DBlob* ErrorMessage = nullptr;
     const char* Model = GetShaderModel(Context->GetFeatureLevel(), Props.Type);
 
     UINT Flags = D3DCOMPILE_ENABLE_STRICTNESS;
-#if _DEBUG
+#if RNDR_DEBUG
     Flags |= D3DCOMPILE_DEBUG;
 #endif
 
-    HRESULT Result = D3DCompileFromFile(Props.FilePath.c_str(), nullptr, nullptr, Props.EntryPoint.c_str(), Model, Flags, 0,
-                                        &DX11ShaderBuffer, &ErrorMessage);
-    if (FAILED(Result))
+    D3D_SHADER_MACRO* Macros = nullptr;
+    if (!Props.Macros.empty())
     {
-        RNDR_LOG_ERROR_OR_ASSERT("Failed to compile shader from file:\n%s",
-                                 ErrorMessage ? (const char*)ErrorMessage->GetBufferPointer() : "No info");
-        return;
-    }
-    else
-    {
-        if (ErrorMessage)
+        const int Size = Props.Macros.size() + 1;
+        Macros = new D3D_SHADER_MACRO[Size];
+        memset(Macros, 0, sizeof(D3D_SHADER_MACRO) * Size);
+        for (int i = 0; i < Size - 1; i++)
         {
-            RNDR_LOG_WARNING("Shader compiled successfully with following message:\n%s", (const char*)ErrorMessage->GetBufferPointer());
+            Macros[i].Name = Props.Macros[i].Name.c_str();
+            Macros[i].Definition = Props.Macros[i].Definition.c_str();
         }
     }
+
+    HRESULT Result = D3DCompile(ShaderContents.Data, ShaderContents.Size, nullptr, Macros, nullptr, Props.EntryPoint.c_str(), Model,
+                                Flags, 0, &DX11ShaderBuffer, &ErrorMessage);
+    if (Context->WindowsHasFailed(Result))
+    {
+        const std::string Message = Context->WindowsGetErrorMessage(Result);
+        RNDR_LOG_ERROR("rndr::Shader::Init: %s", Message.c_str());
+        RNDR_LOG_ERROR("rndr::Shader::Init: %s", ErrorMessage->GetBufferPointer());
+        return false;
+    }
+
+    delete[] Macros;
 
     ID3D11Device* Device = Context->GetDevice();
     switch (Props.Type)
@@ -128,11 +145,14 @@ rndr::Shader::Shader(GraphicsContext* Context, const ShaderProperties& P) : Prop
         default:
             assert(false);
     }
-    if (FAILED(Result))
+    if (Context->WindowsHasFailed(Result))
     {
-        RNDR_LOG_ERROR_OR_ASSERT("Failed to create a shader!");
-        return;
+        const std::string Message = Context->WindowsGetErrorMessage(Result);
+        RNDR_LOG_ERROR("rndr::Shader::Init: %s", Message.c_str());
+        return false;
     }
+
+    return true;
 }
 
 rndr::Shader::~Shader()

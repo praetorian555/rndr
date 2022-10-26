@@ -150,21 +150,21 @@ void Init()
 void InitRenderPrimitives()
 {
     {
+        rndr::ByteSpan ShaderContents = rndr::ReadEntireFile(RNDR_ASSET_DIR "/shaders/MaterialVertexShader.hlsl");
         rndr::ShaderProperties VertexShaderProps;
-        VertexShaderProps.bCompilationNeeded = true;
         VertexShaderProps.Type = rndr::ShaderType::Vertex;
-        VertexShaderProps.FilePath = RNDR_ASSET_DIR L"/shaders/MaterialVertexShader.hlsl";
         VertexShaderProps.EntryPoint = "MaterialVertexShader";
-        g_VertexShader = g_Context->CreateShader(VertexShaderProps);
+        g_VertexShader = g_Context->CreateShader(ShaderContents, VertexShaderProps);
         assert(g_VertexShader);
+        delete[] ShaderContents.Data;
 
+        ShaderContents = rndr::ReadEntireFile(RNDR_ASSET_DIR "/shaders/MaterialFragmentShader.hlsl");
         rndr::ShaderProperties FragmentShaderProps;
-        FragmentShaderProps.bCompilationNeeded = true;
         FragmentShaderProps.Type = rndr::ShaderType::Fragment;
-        FragmentShaderProps.FilePath = RNDR_ASSET_DIR L"/shaders/MaterialFragmentShader.hlsl";
         FragmentShaderProps.EntryPoint = "MaterialFragmentShader";
-        g_FragmentShader = g_Context->CreateShader(FragmentShaderProps);
+        g_FragmentShader = g_Context->CreateShader(ShaderContents, FragmentShaderProps);
         assert(g_FragmentShader);
+        delete[] ShaderContents.Data;
     }
 
     {

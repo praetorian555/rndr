@@ -19,6 +19,7 @@ class GraphicsContext;
 struct Shader
 {
     ShaderProperties Props;
+
     ID3DBlob* DX11ShaderBuffer;
     union
     {
@@ -26,8 +27,9 @@ struct Shader
         ID3D11PixelShader* DX11FragmentShader;
     };
 
-    Shader(GraphicsContext* Context, const ShaderProperties& Props = ShaderProperties{});
     ~Shader();
+
+    bool Init(GraphicsContext* Context, const ByteSpan& ShaderContents, const ShaderProperties& Props = ShaderProperties{});
 };
 
 }  // namespace rndr

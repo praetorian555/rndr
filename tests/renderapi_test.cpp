@@ -9,6 +9,7 @@
 #include "rndr/render/graphicscontext.h"
 #include "rndr/render/image.h"
 #include "rndr/render/sampler.h"
+#include "rndr/render/shader.h"
 
 TEST_CASE("GraphicsContext", "RenderAPI")
 {
@@ -699,6 +700,29 @@ TEST_CASE("Sampler", "RenderAPI")
     {
         rndr::SamplerProperties Props;
         rndr::Sampler* S = GC.CreateSampler(Props);
+        REQUIRE(S != nullptr);
+        delete S;
+    }
+
+    rndr::StdAsyncLogger::Get()->ShutDown();
+}
+
+TEST_CASE("Shader", "RenderAPI")
+{
+    rndr::StdAsyncLogger::Get()->Init();
+
+    rndr::GraphicsContext GC;
+    REQUIRE(GC.Init() == true);
+
+    SECTION("Default")
+    {
+        std::string ShaderContents = "struct InVertex{};\nstruct OutVertex{float4 Position : SV_POSITION;};\nOutVertex main(InVertex In)\n{\nOutVertex Out;\nOut.Position = float4(1, 1, 1, 1);\nreturn Out;\n}\n";
+        rndr::ByteSpan Data((uint8_t*)ShaderContents.data(), ShaderContents.size());
+
+        rndr::ShaderProperties Props;
+        Props.Type = rndr::ShaderType::Vertex;
+        Props.EntryPoint = "main";
+        rndr::Shader* S = GC.CreateShader(Data, Props);
         REQUIRE(S != nullptr);
         delete S;
     }

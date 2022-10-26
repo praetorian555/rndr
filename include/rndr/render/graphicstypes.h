@@ -275,13 +275,19 @@ struct SamplerProperties
     uint32_t MaxAnisotropy = 0;
 };
 
+struct ShaderMacro
+{
+    std::string Name;
+    std::string Definition;
+};
+
 struct ShaderProperties
 {
     ShaderType Type;
 
-    std::wstring FilePath;
     std::string EntryPoint;
-    bool bCompilationNeeded = true;
+    std::vector<ShaderMacro> Macros;
+    // TODO: Add support for include files
 };
 
 constexpr int AppendAlignedElement = -1;

@@ -96,29 +96,29 @@ bool rndr::ui::InitRender(GraphicsContext* Context)
         g_RenderResources[i] = false;
     }
 
+    ByteSpan ShaderContents = rndr::ReadEntireFile(RNDR_ASSET_DIR "/shaders/UIVertexShader.hlsl");
     ShaderProperties VertexShaderProps;
-    VertexShaderProps.bCompilationNeeded = true;
     VertexShaderProps.Type = ShaderType::Vertex;
-    VertexShaderProps.FilePath = RNDR_ASSET_DIR L"/shaders/UIVertexShader.hlsl";
     VertexShaderProps.EntryPoint = "Main";
-    g_VertexShader = g_Context->CreateShader(VertexShaderProps);
+    g_VertexShader = g_Context->CreateShader(ShaderContents, VertexShaderProps);
     if (!g_VertexShader)
     {
         RNDR_LOG_ERROR("Failed to create vertex shader!");
         return false;
     }
+    delete[] ShaderContents.Data;
 
+    ShaderContents = rndr::ReadEntireFile(RNDR_ASSET_DIR "/shaders/UIFragmentShader.hlsl");
     ShaderProperties FragmentShaderProps;
-    FragmentShaderProps.bCompilationNeeded = true;
     FragmentShaderProps.Type = ShaderType::Fragment;
-    FragmentShaderProps.FilePath = RNDR_ASSET_DIR L"/shaders/UIFragmentShader.hlsl";
     FragmentShaderProps.EntryPoint = "Main";
-    g_FragmentShader = g_Context->CreateShader(FragmentShaderProps);
+    g_FragmentShader = g_Context->CreateShader(ShaderContents, FragmentShaderProps);
     if (!g_FragmentShader)
     {
         RNDR_LOG_ERROR("Failed to create fragment shader!");
         return false;
     }
+    delete[] ShaderContents.Data;
 
     InputLayoutProperties ILProps[9];
     ILProps[0].SemanticName = "POSITION";
