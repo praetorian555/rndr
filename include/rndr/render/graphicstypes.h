@@ -294,14 +294,14 @@ constexpr int AppendAlignedElement = -1;
 struct InputLayoutProperties
 {
     std::string SemanticName;
-    int SemanticIndex;
-    PixelFormat Format;
-    int OffsetInVertex;  // Use AppendAlignedElement to align it to the previous element
+    int SemanticIndex = 0;
+    PixelFormat Format = PixelFormat::R32G32B32_FLOAT;
+    int OffsetInVertex = 0;  // Use AppendAlignedElement to align it to the previous element
     // Corresponds to the index of a vertex buffer in a mesh
-    int InputSlot;
-    DataRepetition Repetition;
+    int InputSlot = 0;
+    DataRepetition Repetition = DataRepetition::PerVertex;
     // In case data is repeated on instance level this allows us to skip some instances
-    int InstanceStepRate;
+    int InstanceStepRate = 0;
 };
 
 struct RasterizerProperties
@@ -312,10 +312,10 @@ struct RasterizerProperties
     int DepthBias = 0;
     real DepthBiasClamp = 0.0;
     real SlopeScaledDepthBias = 0.0;
-    bool bDepthClipEnable;
-    bool bScissorEnable;
-    bool bMultisampleEnable;
-    bool bAntialiasedLineEnable;
+    bool bDepthClipEnable = true;
+    bool bScissorEnable = false;
+    bool bMultisampleEnable = false;
+    bool bAntialiasedLineEnable = false;
 };
 
 struct DepthStencilProperties
@@ -343,14 +343,14 @@ struct DepthStencilProperties
 struct BlendProperties
 {
     bool bBlendEnable = true;
-    BlendFactor SrcColorFactor;
-    BlendFactor DstColorFactor;
-    BlendOperator ColorOperator;
-    BlendFactor SrcAlphaFactor;
-    BlendFactor DstAlphaFactor;
-    BlendOperator AlphaOperator;
+    BlendFactor SrcColorFactor = BlendFactor::SrcAlpha;
+    BlendFactor DstColorFactor = BlendFactor::OneMinusSrcAlpha;
+    BlendOperator ColorOperator = BlendOperator::Add;
+    BlendFactor SrcAlphaFactor = BlendFactor::One;
+    BlendFactor DstAlphaFactor = BlendFactor::OneMinusSrcAlpha;
+    BlendOperator AlphaOperator = BlendOperator::Add;
     math::Vector3 ConstColor;
-    real ConstAlpha;
+    real ConstAlpha = 0.0f;
 };
 
 // Helper functions
