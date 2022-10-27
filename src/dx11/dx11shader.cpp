@@ -119,8 +119,8 @@ bool rndr::Shader::Init(GraphicsContext* Context, const ByteSpan& ShaderContents
         }
     }
 
-    HRESULT Result = D3DCompile(ShaderContents.Data, ShaderContents.Size, nullptr, Macros, nullptr, Props.EntryPoint.c_str(), Model,
-                                Flags, 0, &DX11ShaderBuffer, &ErrorMessage);
+    HRESULT Result = D3DCompile(ShaderContents.Data, ShaderContents.Size, nullptr, Macros, nullptr, Props.EntryPoint.c_str(), Model, Flags,
+                                0, &DX11ShaderBuffer, &ErrorMessage);
     if (Context->WindowsHasFailed(Result))
     {
         const std::string Message = Context->WindowsGetErrorMessage(Result);
