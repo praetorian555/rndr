@@ -8,15 +8,35 @@
 #include "rndr/render/dx11/dx11helpers.h"
 #include "rndr/render/dx11/dx11shader.h"
 
-rndr::InputLayout::InputLayout(GraphicsContext* Context, Span<InputLayoutProperties> P, rndr::Shader* Shader)
+bool rndr::InputLayout::Init(GraphicsContext* Context, Span<InputLayoutProperties> Props, rndr::Shader* Shader)
 {
-    Props = Span<InputLayoutProperties>(new InputLayoutProperties[P.Size], P.Size);
-    for (int i = 0; i < P.Size; i++)
+    if (!Context)
     {
-        Props.Data[i] = P.Data[i];
+        RNDR_LOG_ERROR("InputLayout::Init: Invalid graphics context!");
+        return false;
+    }
+    if (!Props)
+    {
+        RNDR_LOG_ERROR("InputLayout::Init: No entries!");
+        return false;
+    }
+    if (Props.Size > GraphicsConstants::MaxInputLayoutEntries)
+    {
+        RNDR_LOG_ERROR("InputLayout::Init: Too many entries!");
+        return false;
+    }
+    if (!Shader)
+    {
+        RNDR_LOG_ERROR("InputLayout::Init: Invalid shader!");
+        return false;
     }
 
-    assert(Props.Size <= GraphicsConstants::MaxInputLayoutEntries);
+    this->Props = Span<InputLayoutProperties>(new InputLayoutProperties[Props.Size], Props.Size);
+    for (int i = 0; i < Props.Size; i++)
+    {
+        this->Props.Data[i] = Props.Data[i];
+    }
+
     D3D11_INPUT_ELEMENT_DESC InputDescriptors[GraphicsConstants::MaxInputLayoutEntries] = {};
     for (int i = 0; i < Props.Size; i++)
     {
@@ -33,21 +53,35 @@ rndr::InputLayout::InputLayout(GraphicsContext* Context, Span<InputLayoutPropert
     ID3D11Device* Device = Context->GetDevice();
     HRESULT Result = Device->CreateInputLayout(InputDescriptors, Props.Size, Shader->DX11ShaderBuffer->GetBufferPointer(),
                                                Shader->DX11ShaderBuffer->GetBufferSize(), &DX11InputLayout);
-    if (FAILED(Result))
+    if (Context->WindowsHasFailed(Result))
     {
-        RNDR_LOG_ERROR_OR_ASSERT("Failed to setup the input layout!");
-        return;
+        const std::string ErrorMessage = Context->WindowsGetErrorMessage(Result);
+        RNDR_LOG_ERROR("InputLayout::Init: %s", ErrorMessage.c_str());
+        return false;
     }
+
+    return true;
 }
 
 rndr::InputLayout::~InputLayout()
 {
-    delete[] Props.Data;
+    if (Props)
+    {
+        delete[] Props.Data;
+    }
     DX11SafeRelease(DX11InputLayout);
 }
 
-rndr::RasterizerState::RasterizerState(GraphicsContext* Context, const RasterizerProperties& P) : Props(P)
+bool rndr::RasterizerState::Init(GraphicsContext* Context, const RasterizerProperties& Props)
 {
+    if (!Context)
+    {
+        RNDR_LOG_ERROR("RasterizerState::Init: Invalid graphics context!");
+        return false;
+    }
+
+    this->Props = Props;
+
     D3D11_RASTERIZER_DESC RasterizerDesc;
     RasterizerDesc.FillMode = DX11FromFillMode(Props.FillMode);
     RasterizerDesc.CullMode = DX11FromFace(Props.CullFace);
@@ -61,11 +95,14 @@ rndr::RasterizerState::RasterizerState(GraphicsContext* Context, const Rasterize
     RasterizerDesc.MultisampleEnable = Props.bScissorEnable;
     ID3D11Device* Device = Context->GetDevice();
     HRESULT Result = Device->CreateRasterizerState(&RasterizerDesc, &DX11RasterizerState);
-    if (FAILED(Result))
+    if (Context->WindowsHasFailed(Result))
     {
-        RNDR_LOG_ERROR_OR_ASSERT("Failed to create rasterizer state!");
-        return;
+        const std::string ErrorMessage = Context->WindowsGetErrorMessage(Result);
+        RNDR_LOG_ERROR("RasterizerState::Init: %s", ErrorMessage.c_str());
+        return false;
     }
+
+    return true;
 }
 
 rndr::RasterizerState::~RasterizerState()
@@ -73,8 +110,16 @@ rndr::RasterizerState::~RasterizerState()
     DX11SafeRelease(DX11RasterizerState);
 }
 
-rndr::DepthStencilState::DepthStencilState(GraphicsContext* Context, const DepthStencilProperties& P) : Props(P)
+bool rndr::DepthStencilState::Init(GraphicsContext* Context, const DepthStencilProperties& Props)
 {
+    if (!Context)
+    {
+        RNDR_LOG_ERROR("DepthStencilState::Init: Invalid graphics context!");
+        return false;
+    }
+
+    this->Props = Props;
+
     D3D11_DEPTH_STENCIL_DESC DepthStencilDesc;
     DepthStencilDesc.DepthEnable = Props.bDepthEnable;
     DepthStencilDesc.DepthFunc = DX11FromComparator(Props.DepthComparator);
@@ -92,11 +137,14 @@ rndr::DepthStencilState::DepthStencilState(GraphicsContext* Context, const Depth
     DepthStencilDesc.FrontFace.StencilPassOp = DX11FromStencilOperation(Props.StencilFrontFacePassOp);
     ID3D11Device* Device = Context->GetDevice();
     HRESULT Result = Device->CreateDepthStencilState(&DepthStencilDesc, &DX11DepthStencilState);
-    if (FAILED(Result))
+    if (Context->WindowsHasFailed(Result))
     {
-        RNDR_LOG_ERROR_OR_ASSERT("Failed to create depth stencil state!");
-        return;
+        const std::string ErrorMessage = Context->WindowsGetErrorMessage(Result);
+        RNDR_LOG_ERROR("DepthStencilState::Init: %s", ErrorMessage.c_str());
+        return false;
     }
+
+    return true;
 }
 
 rndr::DepthStencilState::~DepthStencilState()
@@ -104,8 +152,16 @@ rndr::DepthStencilState::~DepthStencilState()
     DX11SafeRelease(DX11DepthStencilState);
 }
 
-rndr::BlendState::BlendState(GraphicsContext* Context, const BlendProperties& P) : Props(P)
+bool rndr::BlendState::Init(GraphicsContext* Context, const BlendProperties& Props)
 {
+    if (!Context)
+    {
+        RNDR_LOG_ERROR("BlendState::Init: Invalid graphics context!");
+        return false;
+    }
+
+    this->Props = Props;
+
     D3D11_BLEND_DESC BlendDesc;
     ZeroMemory(&BlendDesc, sizeof(D3D11_BLEND_DESC));
     BlendDesc.AlphaToCoverageEnable = false;
@@ -120,11 +176,14 @@ rndr::BlendState::BlendState(GraphicsContext* Context, const BlendProperties& P)
     BlendDesc.RenderTarget[0].BlendOpAlpha = DX11FromBlendOperator(Props.AlphaOperator);
     ID3D11Device* Device = Context->GetDevice();
     HRESULT Result = Device->CreateBlendState(&BlendDesc, &DX11BlendState);
-    if (FAILED(Result))
+    if (Context->WindowsHasFailed(Result))
     {
-        RNDR_LOG_ERROR_OR_ASSERT("Failed to create blend state!");
-        return;
+        const std::string ErrorMessage = Context->WindowsGetErrorMessage(Result);
+        RNDR_LOG_ERROR("BlendState::Init: %s", ErrorMessage.c_str());
+        return false;
     }
+
+    return true;
 }
 
 rndr::BlendState::~BlendState()

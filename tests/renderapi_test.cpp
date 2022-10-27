@@ -716,13 +716,115 @@ TEST_CASE("Shader", "RenderAPI")
 
     SECTION("Default")
     {
-        std::string ShaderContents = "struct InVertex{};\nstruct OutVertex{float4 Position : SV_POSITION;};\nOutVertex main(InVertex In)\n{\nOutVertex Out;\nOut.Position = float4(1, 1, 1, 1);\nreturn Out;\n}\n";
+        std::string ShaderContents =
+            "struct InVertex{};\nstruct OutVertex{float4 Position : SV_POSITION;};\nOutVertex main(InVertex In)\n{\nOutVertex "
+            "Out;\nOut.Position = float4(1, 1, 1, 1);\nreturn Out;\n}\n";
         rndr::ByteSpan Data((uint8_t*)ShaderContents.data(), ShaderContents.size());
 
         rndr::ShaderProperties Props;
         Props.Type = rndr::ShaderType::Vertex;
         Props.EntryPoint = "main";
         rndr::Shader* S = GC.CreateShader(Data, Props);
+        REQUIRE(S != nullptr);
+        delete S;
+    }
+
+    rndr::StdAsyncLogger::Get()->ShutDown();
+}
+
+TEST_CASE("InputLayout", "RenderAPI")
+{
+    rndr::StdAsyncLogger::Get()->Init();
+
+    rndr::GraphicsContext GC;
+    REQUIRE(GC.Init() == true);
+
+    SECTION("Default")
+    {
+        std::string ShaderContents =
+            "struct InVertex{ float4 Position : POSITION; float3 Normal : NORMAL; };\nstruct OutVertex{float4 Position : "
+            "SV_POSITION;};\nOutVertex main(InVertex In)\n{\nOutVertex "
+            "Out;\nOut.Position = float4(1, 1, 1, 1);\nreturn Out;\n}\n";
+        rndr::ByteSpan Data((uint8_t*)ShaderContents.data(), ShaderContents.size());
+
+        rndr::ShaderProperties Props;
+        Props.Type = rndr::ShaderType::Vertex;
+        Props.EntryPoint = "main";
+        rndr::Shader* S = GC.CreateShader(Data, Props);
+        REQUIRE(S != nullptr);
+
+        rndr::InputLayoutProperties LayoutProps[2];
+        LayoutProps[0].SemanticName = "POSITION";
+        LayoutProps[0].SemanticIndex = 0;
+        LayoutProps[0].InputSlot = 0;
+        LayoutProps[0].OffsetInVertex = 0;
+        LayoutProps[0].Repetition = rndr::DataRepetition::PerVertex;
+        LayoutProps[0].Format = rndr::PixelFormat::R32G32B32A32_FLOAT;
+        LayoutProps[1].SemanticName = "NORMAL";
+        LayoutProps[1].SemanticIndex = 0;
+        LayoutProps[1].InputSlot = 0;
+        LayoutProps[1].OffsetInVertex = rndr::AppendAlignedElement;
+        LayoutProps[1].Repetition = rndr::DataRepetition::PerVertex;
+        LayoutProps[1].Format = rndr::PixelFormat::R32G32B32_FLOAT;
+        rndr::Span<rndr::InputLayoutProperties> PackedProps(LayoutProps, 2);
+
+        rndr::InputLayout* Layout = GC.CreateInputLayout(PackedProps, S);
+        REQUIRE(Layout != nullptr);
+
+        delete Layout;
+        delete S;
+    }
+
+    rndr::StdAsyncLogger::Get()->ShutDown();
+}
+
+TEST_CASE("RasterizerState", "RenderAPI")
+{
+    rndr::StdAsyncLogger::Get()->Init();
+
+    rndr::GraphicsContext GC;
+    REQUIRE(GC.Init() == true);
+
+    SECTION("Default")
+    {
+        rndr::RasterizerProperties Props;
+        rndr::RasterizerState* S = GC.CreateRasterizerState(Props);
+        REQUIRE(S != nullptr);
+        delete S;
+    }
+
+    rndr::StdAsyncLogger::Get()->ShutDown();
+}
+
+TEST_CASE("DepthStencilState", "RenderAPI")
+{
+    rndr::StdAsyncLogger::Get()->Init();
+
+    rndr::GraphicsContext GC;
+    REQUIRE(GC.Init() == true);
+
+    SECTION("Default")
+    {
+        rndr::DepthStencilProperties Props;
+        rndr::DepthStencilState* S = GC.CreateDepthStencilState(Props);
+        REQUIRE(S != nullptr);
+        delete S;
+    }
+
+    rndr::StdAsyncLogger::Get()->ShutDown();
+}
+
+TEST_CASE("BlendState", "RenderAPI")
+{
+    rndr::StdAsyncLogger::Get()->Init();
+
+    rndr::GraphicsContext GC;
+    REQUIRE(GC.Init() == true);
+
+    SECTION("Default")
+    {
+        rndr::BlendProperties Props;
+        rndr::BlendState* S = GC.CreateBlendState(Props);
         REQUIRE(S != nullptr);
         delete S;
     }

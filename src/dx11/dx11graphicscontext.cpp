@@ -295,22 +295,50 @@ rndr::FrameBuffer* rndr::GraphicsContext::CreateFrameBufferForSwapChain(SwapChai
 
 rndr::InputLayout* rndr::GraphicsContext::CreateInputLayout(Span<InputLayoutProperties> Props, Shader* Shader)
 {
-    return new InputLayout(this, Props, Shader);
+    InputLayout* Layout = new InputLayout();
+    const bool Status = Layout->Init(this, Props, Shader);
+    if (!Status)
+    {
+        delete Layout;
+        return nullptr;
+    }
+    return Layout;
 }
 
 rndr::RasterizerState* rndr::GraphicsContext::CreateRasterizerState(const RasterizerProperties& Props)
 {
-    return new RasterizerState(this, Props);
+    RasterizerState* State = new RasterizerState();
+    const bool Status = State->Init(this, Props);
+    if (!Status)
+    {
+        delete State;
+        return nullptr;
+    }
+    return State;
 }
 
 rndr::DepthStencilState* rndr::GraphicsContext::CreateDepthStencilState(const DepthStencilProperties& Props)
 {
-    return new DepthStencilState(this, Props);
+    DepthStencilState* State = new DepthStencilState();
+    const bool Status = State->Init(this, Props);
+    if (!Status)
+    {
+        delete State;
+        return nullptr;
+    }
+    return State;
 }
 
 rndr::BlendState* rndr::GraphicsContext::CreateBlendState(const BlendProperties& Props)
 {
-    return new BlendState(this, Props);
+    BlendState* State = new BlendState();
+    const bool Status = State->Init(this, Props);
+    if (!Status)
+    {
+        delete State;
+        return nullptr;
+    }
+    return State;
 }
 
 void rndr::GraphicsContext::ClearColor(Image* Image, math::Vector4 Color)
