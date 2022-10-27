@@ -8,6 +8,7 @@
 #include "rndr/render/framebuffer.h"
 #include "rndr/render/graphicscontext.h"
 #include "rndr/render/image.h"
+#include "rndr/render/pipeline.h"
 #include "rndr/render/sampler.h"
 #include "rndr/render/shader.h"
 
@@ -773,6 +774,137 @@ TEST_CASE("InputLayout", "RenderAPI")
 
         delete Layout;
         delete S;
+    }
+
+    rndr::StdAsyncLogger::Get()->ShutDown();
+}
+
+TEST_CASE("InputLayoutBuilder", "RenderAPI")
+{
+    rndr::StdAsyncLogger::Get()->Init();
+
+    rndr::GraphicsContext GC;
+    REQUIRE(GC.Init() == true);
+
+    SECTION("Default")
+    {
+        std::string ShaderContents =
+            "struct InVertex{ float4 Position : POSITION; float3 Normal : NORMAL; };\nstruct OutVertex{float4 Position : "
+            "SV_POSITION;};\nOutVertex main(InVertex In)\n{\nOutVertex "
+            "Out;\nOut.Position = float4(1, 1, 1, 1);\nreturn Out;\n}\n";
+        rndr::ByteSpan Data((uint8_t*)ShaderContents.data(), ShaderContents.size());
+
+        rndr::ShaderProperties Props;
+        Props.Type = rndr::ShaderType::Vertex;
+        Props.EntryPoint = "main";
+        rndr::Shader* S = GC.CreateShader(Data, Props);
+        REQUIRE(S != nullptr);
+
+        rndr::InputLayoutBuilder Builder;
+        rndr::Span<rndr::InputLayoutProperties> LayoutProps = Builder.AddBuffer(0, rndr::DataRepetition::PerVertex, 0)
+                                                                  .AppendElement(0, "POSITION", rndr::PixelFormat::R32G32B32A32_FLOAT)
+                                                                  .AppendElement(0, "NORMAL", rndr::PixelFormat::R32G32B32_FLOAT)
+                                                                  .Build();
+
+        REQUIRE(LayoutProps.Size == 2);
+        REQUIRE(LayoutProps[0].SemanticName == "POSITION");
+        REQUIRE(LayoutProps[0].SemanticIndex == 0);
+        REQUIRE(LayoutProps[0].InputSlot == 0);
+        REQUIRE(LayoutProps[0].OffsetInVertex == 0);
+        REQUIRE(LayoutProps[0].Repetition == rndr::DataRepetition::PerVertex);
+        REQUIRE(LayoutProps[0].Format == rndr::PixelFormat::R32G32B32A32_FLOAT);
+        REQUIRE(LayoutProps[1].SemanticName == "NORMAL");
+        REQUIRE(LayoutProps[1].SemanticIndex == 0);
+        REQUIRE(LayoutProps[1].InputSlot == 0);
+        REQUIRE(LayoutProps[1].OffsetInVertex == rndr::AppendAlignedElement);
+        REQUIRE(LayoutProps[1].Repetition == rndr::DataRepetition::PerVertex);
+        REQUIRE(LayoutProps[1].Format == rndr::PixelFormat::R32G32B32_FLOAT);
+
+        rndr::InputLayout* Layout = GC.CreateInputLayout(LayoutProps, S);
+        REQUIRE(Layout != nullptr);
+
+        delete Layout;
+        delete S;
+    }
+    SECTION("Complex")
+    {
+        rndr::InputLayoutBuilder Builder;
+        rndr::Span<rndr::InputLayoutProperties> LayoutProps = Builder.AddBuffer(0, rndr::DataRepetition::PerInstance, 1)
+                                                                  .AppendElement(0, "POSITION", rndr::PixelFormat::R32G32_FLOAT)
+                                                                  .AppendElement(0, "POSITION", rndr::PixelFormat::R32G32_FLOAT)
+                                                                  .AppendElement(0, "TEXCOORD", rndr::PixelFormat::R32G32_FLOAT)
+                                                                  .AppendElement(0, "TEXCOORD", rndr::PixelFormat::R32G32_FLOAT)
+                                                                  .AppendElement(0, "COLOR", rndr::PixelFormat::R32G32B32A32_FLOAT)
+                                                                  .AppendElement(0, "BLENDINDICES", rndr::PixelFormat::R32_FLOAT)
+                                                                  .AppendElement(0, "BLENDINDICES", rndr::PixelFormat::R32_FLOAT)
+                                                                  .AppendElement(0, "BLENDINDICES", rndr::PixelFormat::R32_FLOAT)
+                                                                  .AppendElement(0, "BLENDINDICES", rndr::PixelFormat::R32_FLOAT)
+                                                                  .Build();
+
+        REQUIRE(LayoutProps.Size == 9);
+        REQUIRE(LayoutProps[0].SemanticName == "POSITION");
+        REQUIRE(LayoutProps[0].SemanticIndex == 0);
+        REQUIRE(LayoutProps[0].InputSlot == 0);
+        REQUIRE(LayoutProps[0].Format == rndr::PixelFormat::R32G32_FLOAT);
+        REQUIRE(LayoutProps[0].OffsetInVertex == 0);
+        REQUIRE(LayoutProps[0].Repetition == rndr::DataRepetition::PerInstance);
+        REQUIRE(LayoutProps[0].InstanceStepRate == 1);
+        REQUIRE(LayoutProps[1].SemanticName == "POSITION");
+        REQUIRE(LayoutProps[1].SemanticIndex == 1);
+        REQUIRE(LayoutProps[1].InputSlot == 0);
+        REQUIRE(LayoutProps[1].Format == rndr::PixelFormat::R32G32_FLOAT);
+        REQUIRE(LayoutProps[1].OffsetInVertex == rndr::AppendAlignedElement);
+        REQUIRE(LayoutProps[1].Repetition == rndr::DataRepetition::PerInstance);
+        REQUIRE(LayoutProps[1].InstanceStepRate == 1);
+        REQUIRE(LayoutProps[2].SemanticName == "TEXCOORD");
+        REQUIRE(LayoutProps[2].SemanticIndex == 0);
+        REQUIRE(LayoutProps[2].InputSlot == 0);
+        REQUIRE(LayoutProps[2].Format == rndr::PixelFormat::R32G32_FLOAT);
+        REQUIRE(LayoutProps[2].OffsetInVertex == rndr::AppendAlignedElement);
+        REQUIRE(LayoutProps[2].Repetition == rndr::DataRepetition::PerInstance);
+        REQUIRE(LayoutProps[2].InstanceStepRate == 1);
+        REQUIRE(LayoutProps[3].SemanticName == "TEXCOORD");
+        REQUIRE(LayoutProps[3].SemanticIndex == 1);
+        REQUIRE(LayoutProps[3].InputSlot == 0);
+        REQUIRE(LayoutProps[3].Format == rndr::PixelFormat::R32G32_FLOAT);
+        REQUIRE(LayoutProps[3].OffsetInVertex == rndr::AppendAlignedElement);
+        REQUIRE(LayoutProps[3].Repetition == rndr::DataRepetition::PerInstance);
+        REQUIRE(LayoutProps[3].InstanceStepRate == 1);
+        REQUIRE(LayoutProps[4].SemanticName == "COLOR");
+        REQUIRE(LayoutProps[4].SemanticIndex == 0);
+        REQUIRE(LayoutProps[4].InputSlot == 0);
+        REQUIRE(LayoutProps[4].Format == rndr::PixelFormat::R32G32B32A32_FLOAT);
+        REQUIRE(LayoutProps[4].OffsetInVertex == rndr::AppendAlignedElement);
+        REQUIRE(LayoutProps[4].Repetition == rndr::DataRepetition::PerInstance);
+        REQUIRE(LayoutProps[4].InstanceStepRate == 1);
+        REQUIRE(LayoutProps[5].SemanticName == "BLENDINDICES");
+        REQUIRE(LayoutProps[5].SemanticIndex == 0);
+        REQUIRE(LayoutProps[5].InputSlot == 0);
+        REQUIRE(LayoutProps[5].Format == rndr::PixelFormat::R32_FLOAT);
+        REQUIRE(LayoutProps[5].OffsetInVertex == rndr::AppendAlignedElement);
+        REQUIRE(LayoutProps[5].Repetition == rndr::DataRepetition::PerInstance);
+        REQUIRE(LayoutProps[5].InstanceStepRate == 1);
+        REQUIRE(LayoutProps[6].SemanticName == "BLENDINDICES");
+        REQUIRE(LayoutProps[6].SemanticIndex == 1);
+        REQUIRE(LayoutProps[6].InputSlot == 0);
+        REQUIRE(LayoutProps[6].Format == rndr::PixelFormat::R32_FLOAT);
+        REQUIRE(LayoutProps[6].OffsetInVertex == rndr::AppendAlignedElement);
+        REQUIRE(LayoutProps[6].Repetition == rndr::DataRepetition::PerInstance);
+        REQUIRE(LayoutProps[6].InstanceStepRate == 1);
+        REQUIRE(LayoutProps[7].SemanticName == "BLENDINDICES");
+        REQUIRE(LayoutProps[7].SemanticIndex == 2);
+        REQUIRE(LayoutProps[7].InputSlot == 0);
+        REQUIRE(LayoutProps[7].Format == rndr::PixelFormat::R32_FLOAT);
+        REQUIRE(LayoutProps[7].OffsetInVertex == rndr::AppendAlignedElement);
+        REQUIRE(LayoutProps[7].Repetition == rndr::DataRepetition::PerInstance);
+        REQUIRE(LayoutProps[7].InstanceStepRate == 1);
+        REQUIRE(LayoutProps[8].SemanticName == "BLENDINDICES");
+        REQUIRE(LayoutProps[8].SemanticIndex == 3);
+        REQUIRE(LayoutProps[8].InputSlot == 0);
+        REQUIRE(LayoutProps[8].Format == rndr::PixelFormat::R32_FLOAT);
+        REQUIRE(LayoutProps[8].OffsetInVertex == rndr::AppendAlignedElement);
+        REQUIRE(LayoutProps[8].Repetition == rndr::DataRepetition::PerInstance);
+        REQUIRE(LayoutProps[8].InstanceStepRate == 1);
     }
 
     rndr::StdAsyncLogger::Get()->ShutDown();
