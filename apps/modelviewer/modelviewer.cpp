@@ -285,10 +285,10 @@ void InitRenderPrimitives()
         rndr::BlendProperties BlendProps;
         BlendProps.bBlendEnable = true;
         BlendProps.SrcColorFactor = rndr::BlendFactor::SrcAlpha;
-        BlendProps.DstColorFactor = rndr::BlendFactor::OneMinusSrcAlpha;
+        BlendProps.DstColorFactor = rndr::BlendFactor::InvSrcAlpha;
         BlendProps.ColorOperator = rndr::BlendOperator::Add;
         BlendProps.SrcAlphaFactor = rndr::BlendFactor::One;
-        BlendProps.DstAlphaFactor = rndr::BlendFactor::OneMinusSrcAlpha;
+        BlendProps.DstAlphaFactor = rndr::BlendFactor::InvSrcAlpha;
         BlendProps.AlphaOperator = rndr::BlendOperator::Add;
         g_BlendState = g_Context->CreateBlendState(BlendProps);
     }

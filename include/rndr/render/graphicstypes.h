@@ -148,16 +148,16 @@ enum class BlendFactor
     One,
     SrcColor,
     DstColor,
-    OneMinusSrcColor,
-    OneMinusDstColor,
+    InvSrcColor,
+    InvDstColor,
     SrcAlpha,
     DstAlpha,
-    OneMinusSrcAlpha,
-    OneMinusDstAlpha,
+    InvSrcAlpha,
+    InvDstAlpha,
     ConstColor,
-    OneMinusConstColor,
+    InvConstColor,
     ConstAlpha,
-    OneMinusConstAlpha
+    InvConstAlpha
 };
 
 enum class BlendOperator
@@ -344,10 +344,10 @@ struct BlendProperties
 {
     bool bBlendEnable = true;
     BlendFactor SrcColorFactor = BlendFactor::SrcAlpha;
-    BlendFactor DstColorFactor = BlendFactor::OneMinusSrcAlpha;
+    BlendFactor DstColorFactor = BlendFactor::InvSrcAlpha;
     BlendOperator ColorOperator = BlendOperator::Add;
     BlendFactor SrcAlphaFactor = BlendFactor::One;
-    BlendFactor DstAlphaFactor = BlendFactor::OneMinusSrcAlpha;
+    BlendFactor DstAlphaFactor = BlendFactor::InvSrcAlpha;
     BlendOperator AlphaOperator = BlendOperator::Add;
     math::Vector3 ConstColor;
     real ConstAlpha = 0.0f;

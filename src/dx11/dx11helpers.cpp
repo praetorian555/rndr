@@ -323,25 +323,25 @@ D3D11_BLEND rndr::DX11FromBlendFactor(BlendFactor Factor)
             return D3D11_BLEND_SRC_COLOR;
         case BlendFactor::DstColor:
             return D3D11_BLEND_DEST_COLOR;
-        case BlendFactor::OneMinusSrcColor:
+        case BlendFactor::InvSrcColor:
             return D3D11_BLEND_INV_SRC_COLOR;
-        case BlendFactor::OneMinusDstColor:
+        case BlendFactor::InvDstColor:
             return D3D11_BLEND_INV_DEST_COLOR;
         case BlendFactor::SrcAlpha:
             return D3D11_BLEND_SRC_ALPHA;
         case BlendFactor::DstAlpha:
             return D3D11_BLEND_DEST_ALPHA;
-        case BlendFactor::OneMinusSrcAlpha:
+        case BlendFactor::InvSrcAlpha:
             return D3D11_BLEND_INV_SRC_ALPHA;
-        case BlendFactor::OneMinusDstAlpha:
+        case BlendFactor::InvDstAlpha:
             return D3D11_BLEND_INV_DEST_ALPHA;
         case BlendFactor::ConstColor:
             return D3D11_BLEND_SRC1_COLOR;
-        case BlendFactor::OneMinusConstColor:
+        case BlendFactor::InvConstColor:
             return D3D11_BLEND_INV_SRC1_COLOR;
         case BlendFactor::ConstAlpha:
             return D3D11_BLEND_SRC1_ALPHA;
-        case BlendFactor::OneMinusConstAlpha:
+        case BlendFactor::InvConstAlpha:
             return D3D11_BLEND_INV_SRC1_ALPHA;
         default:
             assert(false);
