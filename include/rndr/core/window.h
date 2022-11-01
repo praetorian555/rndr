@@ -40,7 +40,6 @@ public:
     int GetWidth() const;
     int GetHeight() const;
     bool IsWindowMinimized() const;
-    GraphicsContext* GetGraphicsContext() const;
 
     /**
      * If true the cursor will be limited to this window.
@@ -63,9 +62,7 @@ private:
     WindowProperties m_Props;
     NativeWindowHandle m_NativeWindowHandle;
 
-    std::unique_ptr<GraphicsContext> m_GraphicsContext;
     int m_Width = 0, m_Height = 0;
-
     bool m_InifiniteCursor = false;
 };
 

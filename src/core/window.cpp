@@ -59,11 +59,6 @@ rndr::Window::Window(int Width, int Height, const WindowProperties& Props) : m_W
     ShowWindow(WindowHandle, SW_SHOW);
 
     m_NativeWindowHandle = reinterpret_cast<uintptr_t>(WindowHandle);
-
-    GraphicsContextProperties GCProps;
-    // GCProps.WindowWidth = m_Width;
-    // GCProps.WindowHeight = m_Height;
-    m_GraphicsContext = std::make_unique<GraphicsContext>();
 }
 
 void rndr::Window::ProcessEvents()
@@ -109,11 +104,6 @@ int rndr::Window::GetHeight() const
 bool rndr::Window::IsWindowMinimized() const
 {
     return m_Width == 0 || m_Height == 0;
-}
-
-rndr::GraphicsContext* rndr::Window::GetGraphicsContext() const
-{
-    return m_GraphicsContext.get();
 }
 
 void rndr::Window::LockCursor(bool ShouldLock)

@@ -101,7 +101,7 @@ void Init()
     g_App = rndr::Init();
     assert(g_App);
     g_App->OnTickDelegate.Add(Loop);
-    g_Context = g_App->GetWindow()->GetGraphicsContext();
+    g_Context = g_App->GetGraphicsContext();
 
     rndr::ui::UIProperties UIProps;
     bool Result = rndr::ui::Init(g_Context, UIProps);
@@ -598,8 +598,8 @@ void Render(float DeltaSeconds)
 
 void Present(bool bVSync)
 {
-    rndr::GraphicsContext* GC = g_App->GetWindow()->GetGraphicsContext();
-    GC->Present(bVSync);
+    rndr::GraphicsContext* GC = g_App->GetGraphicsContext();
+    GC->Present(g_App->GetSwapChain(), bVSync);
 }
 
 void RotateAroundX(rndr::InputPrimitive Primitive, rndr::InputTrigger Trigger, real Value)

@@ -361,16 +361,23 @@ void rndr::GraphicsContext::ClearColor(Image* Image, math::Vector4 Color)
 {
     if (!Image)
     {
-        // Image = m_WindowFrameBuffer->ColorBuffers[0];
+        RNDR_LOG_ERROR("GraphicsContext::ClearColor: Invalid image!");
+        return;
     }
     m_DeviceContext->ClearRenderTargetView(Image->DX11RenderTargetView, Color.Data);
+    if (WindowsHasFailed())
+    {
+        const std::string ErrorMessage = WindowsGetErrorMessage();
+        RNDR_LOG_ERROR("GraphicsContext::ClearColor: %s", ErrorMessage.c_str());
+    }
 }
 
 void rndr::GraphicsContext::ClearDepth(Image* Image, real Depth)
 {
     if (!Image)
     {
-        // Image = m_WindowFrameBuffer->DepthStencilBuffer;
+        RNDR_LOG_ERROR("GraphicsContext::ClearDepth: Invalid image!");
+        return;
     }
     m_DeviceContext->ClearDepthStencilView(Image->DX11DepthStencilView, D3D11_CLEAR_DEPTH, Depth, 0);
 }
@@ -379,7 +386,8 @@ void rndr::GraphicsContext::ClearStencil(Image* Image, uint8_t Stencil)
 {
     if (!Image)
     {
-        // Image = m_WindowFrameBuffer->DepthStencilBuffer;
+        RNDR_LOG_ERROR("GraphicsContext::ClearStencil: Invalid image!");
+        return;
     }
     m_DeviceContext->ClearDepthStencilView(Image->DX11DepthStencilView, D3D11_CLEAR_STENCIL, 0, Stencil);
 }
@@ -388,7 +396,8 @@ void rndr::GraphicsContext::ClearDepthStencil(Image* Image, real Depth, uint8_t 
 {
     if (!Image)
     {
-        // Image = m_WindowFrameBuffer->DepthStencilBuffer;
+        RNDR_LOG_ERROR("GraphicsContext::ClearDepthStencil: Invalid image!");
+        return;
     }
     m_DeviceContext->ClearDepthStencilView(Image->DX11DepthStencilView, D3D11_CLEAR_DEPTH | D3D11_CLEAR_STENCIL, Depth, Stencil);
 }
@@ -504,9 +513,9 @@ void rndr::GraphicsContext::BindFrameBuffer(FrameBuffer* FrameBuffer)
 {
     if (!FrameBuffer)
     {
-        // FrameBuffer = m_WindowFrameBuffer.get();
+        RNDR_LOG_ERROR("GraphicsContext::BindFrameBuffer: Invalid framebuffer!");
+        return;
     }
-    assert(FrameBuffer);
 
     ID3D11DepthStencilView* DepthStencilView = FrameBuffer->DepthStencilBuffer->DX11DepthStencilView;
     std::vector<ID3D11RenderTargetView*> RenderTargetViews;

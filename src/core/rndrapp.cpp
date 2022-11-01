@@ -17,12 +17,26 @@ rndr::RndrApp::RndrApp(const RndrAppProperties& Props)
 {
     assert(!GRndrApp);
     m_Window = new rndr::Window(Props.WindowWidth, Props.WindowHeight, Props.Window);
+    m_GraphicsContext = new GraphicsContext();
+    m_GraphicsContext->Init();
+    m_SwapChain = new SwapChain();
+    m_SwapChain->Init(m_GraphicsContext, (void*)m_Window->GetNativeWindowHandle(), Props.WindowWidth, Props.WindowHeight);
     GetInputSystem()->SetWindow(m_Window);
 }
 
 rndr::Window* rndr::RndrApp::GetWindow()
 {
     return m_Window;
+}
+
+rndr::GraphicsContext* rndr::RndrApp::GetGraphicsContext()
+{
+    return m_GraphicsContext;
+}
+
+rndr::SwapChain* rndr::RndrApp::GetSwapChain()
+{
+    return m_SwapChain;
 }
 
 rndr::InputSystem* rndr::RndrApp::GetInputSystem()
@@ -56,8 +70,7 @@ void rndr::RndrApp::Run()
 
         OnTickDelegate.Execute(FrameDuration);
 
-        GraphicsContext* GC = m_Window->GetGraphicsContext();
-        GC->Present(false);
+        m_GraphicsContext->Present(m_SwapChain, false);
 
         auto FrameEnd = std::chrono::high_resolution_clock().now();
         FrameDuration = std::chrono::duration_cast<std::chrono::microseconds>(FrameEnd - FrameStart).count();

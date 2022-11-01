@@ -5,6 +5,9 @@
 #include "rndr/core/singletons.h"
 #include "rndr/core/window.h"
 
+#include "rndr/render/graphicscontext.h"
+#include "rndr/render/swapchain.h"
+
 namespace rndr
 {
 
@@ -31,6 +34,8 @@ public:
     RndrApp(const RndrAppProperties& Props = RndrAppProperties{});
 
     Window* GetWindow();
+    GraphicsContext* GetGraphicsContext();
+    SwapChain* GetSwapChain();
     InputSystem* GetInputSystem();
     InputContext* GetInputContext();
 
@@ -43,6 +48,8 @@ public:
 private:
     Singletons m_Singletons;
     Window* m_Window;
+    GraphicsContext* m_GraphicsContext;
+    SwapChain* m_SwapChain;
 };
 
 /**
