@@ -6,28 +6,38 @@
 
 #include "rndr/core/log.h"
 
+#include "rndr/render/dx11/dx11framebuffer.h"
+#include "rndr/render/dx11/dx11graphicscontext.h"
 #include "rndr/render/dx11/dx11helpers.h"
-#include "rndr/render/graphicscontext.h"
 
-bool rndr::SwapChain::Init(GraphicsContext* Context, void* NativeWindowHandle, const SwapChainProperties& P)
+rndr::SwapChain::~SwapChain()
 {
-    Props = P;
+    DX11SafeRelease(DX11SwapChain);
+    delete FrameBuffer;
+}
+
+bool rndr::SwapChain::Init(GraphicsContext* Context, void* NativeWindowHandle, int Width, int Height, const SwapChainProperties& Props)
+{
+    this->Props = Props;
+    this->Width = Width;
+    this->Height = Height;
 
     HWND WindowHandle = reinterpret_cast<HWND>(NativeWindowHandle);
     if (!IsWindow(WindowHandle))
     {
-        RNDR_LOG_ERROR("Native window handle is invalid!");
+        RNDR_LOG_ERROR("SwapChain::Init: Native window handle is invalid!");
         return false;
     }
 
     DXGI_SWAP_CHAIN_DESC SwapChainDesc;
     ZeroMemory(&SwapChainDesc, sizeof(DXGI_SWAP_CHAIN_DESC));
-    SwapChainDesc.BufferDesc.Width = Props.Width;
-    SwapChainDesc.BufferDesc.Height = Props.Height;
-    SwapChainDesc.BufferDesc.Format = DX11FromPixelFormat(Props.FrameBuffer.ColorBufferProperties[0].PixelFormat);
+    SwapChainDesc.BufferDesc.Width = Width;
+    SwapChainDesc.BufferDesc.Height = Height;
+    SwapChainDesc.BufferDesc.Format = DX11FromPixelFormat(Props.ColorFormat);
     SwapChainDesc.BufferDesc.RefreshRate = DXGI_RATIONAL{0, 1};  // Zero
     SwapChainDesc.BufferCount = 2;
-    SwapChainDesc.SwapEffect = DXGI_SWAP_EFFECT_FLIP_SEQUENTIAL;
+    SwapChainDesc.BufferUsage = DXGI_USAGE_RENDER_TARGET_OUTPUT;
+    SwapChainDesc.SwapEffect = DXGI_SWAP_EFFECT_FLIP_DISCARD;
     SwapChainDesc.Windowed = Props.bWindowed;
     SwapChainDesc.OutputWindow = WindowHandle;
     SwapChainDesc.SampleDesc.Count = 1;
@@ -35,10 +45,10 @@ bool rndr::SwapChain::Init(GraphicsContext* Context, void* NativeWindowHandle, c
 
     IDXGIDevice* DXGIDevice = nullptr;
     HRESULT Result = Context->GetDevice()->QueryInterface(__uuidof(IDXGIDevice), (void**)&DXGIDevice);
-    if (FAILED(Result))
+    if (Context->WindowsHasFailed(Result))
     {
         std::string ErrorMessage = Context->WindowsGetErrorMessage(Result);
-        RNDR_LOG_ERROR("%s", ErrorMessage.c_str());
+        RNDR_LOG_ERROR("SwapChain::Init: %s", ErrorMessage.c_str());
         return false;
     }
 
@@ -47,7 +57,7 @@ bool rndr::SwapChain::Init(GraphicsContext* Context, void* NativeWindowHandle, c
     if (FAILED(Result))
     {
         std::string ErrorMessage = Context->WindowsGetErrorMessage(Result);
-        RNDR_LOG_ERROR("%s", ErrorMessage.c_str());
+        RNDR_LOG_ERROR("SwapChain::Init: %s", ErrorMessage.c_str());
         return false;
     }
 
@@ -56,7 +66,7 @@ bool rndr::SwapChain::Init(GraphicsContext* Context, void* NativeWindowHandle, c
     if (FAILED(Result))
     {
         std::string ErrorMessage = Context->WindowsGetErrorMessage(Result);
-        RNDR_LOG_ERROR("%s", ErrorMessage.c_str());
+        RNDR_LOG_ERROR("SwapChain::Init: %s", ErrorMessage.c_str());
         return false;
     }
 
@@ -64,16 +74,16 @@ bool rndr::SwapChain::Init(GraphicsContext* Context, void* NativeWindowHandle, c
     if (FAILED(Result))
     {
         std::string ErrorMessage = Context->WindowsGetErrorMessage(Result);
-        RNDR_LOG_ERROR("%s", ErrorMessage.c_str());
+        RNDR_LOG_ERROR("SwapChain::Init: %s", ErrorMessage.c_str());
         return false;
     }
 
-    // FrameBuffer = Context->CreateFrameBufferForSwapChain(this, Props.Width, Props.Height, Props.FrameBuffer);
-    // if (!FrameBuffer)
-    //{
-    //     RNDR_LOG_ERROR("Failed to create a framebuffer for swapchain!");
-    //     return false;
-    // }
+    FrameBuffer = Context->CreateFrameBufferForSwapChain(Width, Height, this);
+    if (!FrameBuffer)
+    {
+        RNDR_LOG_ERROR("Failed to create a framebuffer for swapchain!");
+        return false;
+    }
 
     return true;
 }

@@ -251,9 +251,9 @@ struct GraphicsContextProperties
 
 struct SwapChainProperties
 {
-    int Width = 0;
-    int Height = 0;
-    FrameBufferProperties FrameBuffer;
+    PixelFormat ColorFormat = PixelFormat::R8G8B8A8_UNORM;
+    PixelFormat DepthStencilFormat = PixelFormat::DEPTH24_STENCIL8;
+    bool bUseDepthStencil = false;
     bool bWindowed = true;
 };
 

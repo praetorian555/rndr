@@ -3,6 +3,7 @@
 #include "math/math.h"
 
 #include "rndr/core/log.h"
+#include "rndr/core/window.h"
 
 #include "rndr/render/buffer.h"
 #include "rndr/render/framebuffer.h"
@@ -11,6 +12,7 @@
 #include "rndr/render/pipeline.h"
 #include "rndr/render/sampler.h"
 #include "rndr/render/shader.h"
+#include "rndr/render/swapchain.h"
 
 TEST_CASE("GraphicsContext", "RenderAPI")
 {
@@ -957,6 +959,34 @@ TEST_CASE("BlendState", "RenderAPI")
     {
         rndr::BlendProperties Props;
         rndr::BlendState* S = GC.CreateBlendState(Props);
+        REQUIRE(S != nullptr);
+        delete S;
+    }
+
+    rndr::StdAsyncLogger::Get()->ShutDown();
+}
+
+TEST_CASE("SwapChain", "RenderAPI")
+{
+    rndr::StdAsyncLogger::Get()->Init();
+
+    rndr::Window W;
+    rndr::GraphicsContext GC;
+    REQUIRE(GC.Init() == true);
+
+    SECTION("Default")
+    {
+        rndr::SwapChainProperties Props;
+        rndr::SwapChain* S = GC.CreateSwapChain((void*)W.GetNativeWindowHandle(), W.GetWidth(), W.GetHeight(), Props);
+
+        SECTION("Present")
+        {
+            GC.ClearColor(S->FrameBuffer->ColorBuffers[0], math::Vector4{1, 1, 1, 1});
+            GC.Present(S, true);
+            GC.ClearColor(S->FrameBuffer->ColorBuffers[0], math::Vector4{1, 1, 0.5, 1});
+            GC.Present(S, true);
+        }
+
         REQUIRE(S != nullptr);
         delete S;
     }

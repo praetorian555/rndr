@@ -21,12 +21,14 @@ namespace rndr
 {
 
 class GraphicsContext;
+struct SwapChain;
 
 struct Image
 {
     int Width = 0;
     int Height = 0;
     int ArraySize = 1;
+    int BackBufferIndex = -1;
     ImageProperties Props;
 
     ID3D11Texture2D* DX11Texture = nullptr;
@@ -39,7 +41,7 @@ struct Image
     bool Init(GraphicsContext* Context, int Width, int Height, const ImageProperties& Props, ByteSpan InitData);
     bool InitArray(GraphicsContext* Context, int Width, int Height, int ArraySize, const ImageProperties& Props, Span<ByteSpan> InitData);
     bool InitCubeMap(GraphicsContext* Context, int Width, int Height, const ImageProperties& Props, Span<ByteSpan> InitData);
-    bool InitSwapchainBackBuffer(GraphicsContext* Context);
+    bool InitSwapchainBackBuffer(GraphicsContext* Context, rndr::SwapChain* SwapChain, int BufferIndex);
 
     ~Image();
 
@@ -49,7 +51,7 @@ struct Image
     static bool Copy(GraphicsContext* Context, Image* Src, Image* Dest);
 
 private:
-    bool InitInternal(GraphicsContext* Context, Span<ByteSpan> InitData, bool bCubeMap = false);
+    bool InitInternal(GraphicsContext* Context, Span<ByteSpan> InitData, bool bCubeMap = false, rndr::SwapChain* SwapChain = nullptr);
 };
 
 }  // namespace rndr

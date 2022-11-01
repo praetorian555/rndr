@@ -9,6 +9,7 @@
 #include "rndr/render/dx11/dx11graphicscontext.h"
 #include "rndr/render/dx11/dx11helpers.h"
 #include "rndr/render/dx11/dx11image.h"
+#include "rndr/render/dx11/dx11swapchain.h"
 
 rndr::FrameBuffer::~FrameBuffer()
 {
@@ -33,6 +34,48 @@ bool rndr::FrameBuffer::Init(GraphicsContext* Context, int Width, int Height, co
     this->Height = Height;
 
     return InitInternal(Context);
+}
+
+bool rndr::FrameBuffer::InitForSwapChain(rndr::GraphicsContext* Context, int Width, int Height, rndr::SwapChain* SwapChain)
+{
+    if (!Context)
+    {
+        RNDR_LOG_ERROR("FrameBuffer::InitForSwapChain: Invalid graphics context!");
+        return false;
+    }
+    if (!SwapChain)
+    {
+        RNDR_LOG_ERROR("FrameBuffer::InitForSwapChain: Invalid swapchain!");
+        return false;
+    }
+
+    this->Props.ColorBufferCount = 1;
+    this->Props.ColorBufferProperties[0].bUseMips = false;
+    this->Props.ColorBufferProperties[0].SampleCount = 1;
+    this->Props.ColorBufferProperties[0].PixelFormat = SwapChain->Props.ColorFormat;
+    this->Props.ColorBufferProperties[0].Usage = Usage::Default;
+    this->Props.ColorBufferProperties[0].ImageBindFlags = ImageBindFlags::RenderTarget;
+    this->Props.bUseDepthStencil = SwapChain->Props.bUseDepthStencil;
+    this->Props.DepthStencilBufferProperties.bUseMips = false;
+    this->Props.DepthStencilBufferProperties.SampleCount = 1;
+    this->Props.DepthStencilBufferProperties.PixelFormat = SwapChain->Props.DepthStencilFormat;
+    this->Props.DepthStencilBufferProperties.Usage = Usage::Default;
+    this->Props.DepthStencilBufferProperties.ImageBindFlags = ImageBindFlags::DepthStencil;
+    this->Width = Width;
+    this->Height = Height;
+
+    if (Width == 0 || Height == 0)
+    {
+        RNDR_LOG_ERROR("FrameBuffer::InitForSwapChain: Invalid width or height!");
+        return false;
+    }
+    if (Props.ColorBufferCount <= 0 || Props.ColorBufferCount > GraphicsConstants::MaxFrameBufferColorBuffers)
+    {
+        RNDR_LOG_ERROR("FrameBuffer::InitForSwapChain: Invalid number of color buffers!");
+        return false;
+    }
+
+    return InitInternal(Context, SwapChain);
 }
 
 bool rndr::FrameBuffer::Resize(rndr::GraphicsContext* Context, int Width, int Height)
@@ -92,7 +135,7 @@ void rndr::FrameBuffer::Clear()
     }
 }
 
-bool rndr::FrameBuffer::InitInternal(GraphicsContext* Context)
+bool rndr::FrameBuffer::InitInternal(GraphicsContext* Context, SwapChain* SwapChain)
 {
     ColorBuffers = Span<Image*>(new Image*[Props.ColorBufferCount], Props.ColorBufferCount);
     for (int i = 0; i < Props.ColorBufferCount; i++)
@@ -104,9 +147,17 @@ bool rndr::FrameBuffer::InitInternal(GraphicsContext* Context)
     ByteSpan EmptyData;
     for (int i = 0; i < Props.ColorBufferCount; i++)
     {
-        ColorBuffers[i] = Context->CreateImage(Width, Height, Props.ColorBufferProperties[i], EmptyData);
+        if (!SwapChain)
+        {
+            ColorBuffers[i] = Context->CreateImage(Width, Height, Props.ColorBufferProperties[i], EmptyData);
+        }
+        else
+        {
+            ColorBuffers[i] = Context->CreateImageForSwapChain(SwapChain, i);
+        }
         if (!ColorBuffers[i])
         {
+            RNDR_LOG_ERROR("FrameBuffer::InitInternal: Failed to create color image!");
             return false;
         }
     }
@@ -115,6 +166,7 @@ bool rndr::FrameBuffer::InitInternal(GraphicsContext* Context)
         DepthStencilBuffer = Context->CreateImage(Width, Height, Props.DepthStencilBufferProperties, EmptyData);
         if (!DepthStencilBuffer)
         {
+            RNDR_LOG_ERROR("FrameBuffer::InitInternal: Failed to create depth stencil image!");
             return false;
         }
     }

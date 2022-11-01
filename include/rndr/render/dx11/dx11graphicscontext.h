@@ -42,16 +42,16 @@ public:
     ID3D11DeviceContext* GetDeviceContext();
     D3D_FEATURE_LEVEL GetFeatureLevel();
 
-    SwapChain* CreateSwapChain(const SwapChainProperties& Props);
+    SwapChain* CreateSwapChain(void* NativeWindowHandle, int Width, int Height, const SwapChainProperties& Props);
     Shader* CreateShader(const ByteSpan& ShaderContents, const ShaderProperties& Props);
     Image* CreateImage(int Width, int Height, const ImageProperties& Props, ByteSpan InitData);
     Image* CreateImageArray(int Width, int Height, int ArraySize, const ImageProperties& Props, Span<ByteSpan> InitData);
     Image* CreateCubeMap(int Width, int Height, const ImageProperties& Props, Span<ByteSpan> InitData);
-    Image* CreateImageForSwapchainBackBuffer();
+    Image* CreateImageForSwapChain(SwapChain* SwapChain, int BufferIndex);
     Sampler* CreateSampler(const SamplerProperties& Props);
     Buffer* CreateBuffer(const BufferProperties& Props, ByteSpan InitialData);
     FrameBuffer* CreateFrameBuffer(int Width, int Height, const FrameBufferProperties& Props);
-    FrameBuffer* CreateFrameBufferForSwapChain(SwapChain* SwapChain, int Width, int Height, const FrameBufferProperties& Props);
+    FrameBuffer* CreateFrameBufferForSwapChain(int Width, int Height, SwapChain* SwapChain);
     InputLayout* CreateInputLayout(Span<InputLayoutProperties> Pros, Shader* Shader);
     RasterizerState* CreateRasterizerState(const RasterizerProperties& Props);
     DepthStencilState* CreateDepthStencilState(const DepthStencilProperties& Props);
@@ -75,7 +75,7 @@ public:
     void DrawIndexed(PrimitiveTopology Topology, int IndicesCount);
     void DrawIndexedInstanced(PrimitiveTopology Topology, int IndexCount, int InstanceCount, int IndexOffset = 0, int InstanceOffset = 0);
 
-    void Present(bool bVSync);
+    void Present(SwapChain* SwapChain, bool bVSync);
 
     void DestroySwapChain(SwapChain* SwapChain);
     void DestroyShader(Shader* Shader);

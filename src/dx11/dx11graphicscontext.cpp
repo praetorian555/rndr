@@ -185,9 +185,16 @@ D3D_FEATURE_LEVEL rndr::GraphicsContext::GetFeatureLevel()
     return m_FeatureLevel;
 }
 
-rndr::SwapChain* rndr::GraphicsContext::CreateSwapChain(const SwapChainProperties& Props)
+rndr::SwapChain* rndr::GraphicsContext::CreateSwapChain(void* NativeWindowHandle, int Width, int Height, const SwapChainProperties& Props)
 {
-    return nullptr;
+    SwapChain* S = new SwapChain();
+    const bool Status = S->Init(this, NativeWindowHandle, Width, Height, Props);
+    if (!Status)
+    {
+        delete S;
+        return nullptr;
+    }
+    return S;
 }
 
 rndr::Shader* rndr::GraphicsContext::CreateShader(const ByteSpan& ShaderContents, const ShaderProperties& Props)
@@ -242,10 +249,15 @@ rndr::Image* rndr::GraphicsContext::CreateCubeMap(int Width, int Height, const I
     return Im;
 }
 
-rndr::Image* rndr::GraphicsContext::CreateImageForSwapchainBackBuffer()
+rndr::Image* rndr::GraphicsContext::CreateImageForSwapChain(SwapChain* SwapChain, int BufferIndex)
 {
     Image* Im = new Image();
-    Im->InitSwapchainBackBuffer(this);
+    const bool Status = Im->InitSwapchainBackBuffer(this, SwapChain, BufferIndex);
+    if (!Status)
+    {
+        delete Im;
+        return nullptr;
+    }
     return Im;
 }
 
@@ -285,12 +297,16 @@ rndr::FrameBuffer* rndr::GraphicsContext::CreateFrameBuffer(int Width, int Heigh
     return FB;
 }
 
-rndr::FrameBuffer* rndr::GraphicsContext::CreateFrameBufferForSwapChain(SwapChain* SwapChain,
-                                                                        int Width,
-                                                                        int Height,
-                                                                        const FrameBufferProperties& Props)
+rndr::FrameBuffer* rndr::GraphicsContext::CreateFrameBufferForSwapChain(int Width, int Height, SwapChain* SwapChain)
 {
-    return nullptr;
+    FrameBuffer* FB = new FrameBuffer();
+    const bool Status = FB->InitForSwapChain(this, Width, Height, SwapChain);
+    if (!Status)
+    {
+        delete FB;
+        return nullptr;
+    }
+    return FB;
 }
 
 rndr::InputLayout* rndr::GraphicsContext::CreateInputLayout(Span<InputLayoutProperties> Props, Shader* Shader)
@@ -542,11 +558,16 @@ void rndr::GraphicsContext::DrawIndexedInstanced(PrimitiveTopology Topology,
     m_DeviceContext->DrawIndexedInstanced(IndexCount, InstanceCount, IndexOffset, 0, InstanceOffset);
 }
 
-void rndr::GraphicsContext::Present(bool bVSync)
+void rndr::GraphicsContext::Present(SwapChain* SwapChain, bool bVSync)
 {
-    const uint32_t SyncInterval = bVSync ? 1 : 0;
+    // TODO: Look into ALLOW_TEARING
     const uint32_t Flags = 0;
-    // m_Swapchain->Present(SyncInterval, Flags);
+    const HRESULT Result = SwapChain->DX11SwapChain->Present(bVSync, Flags);
+    if (WindowsHasFailed(Result))
+    {
+        const std::string ErrorMessage = WindowsGetErrorMessage(Result);
+        RNDR_LOG_ERROR("GraphicsContext::Present: %s", ErrorMessage.c_str());
+    }
 }
 
 void rndr::GraphicsContext::DestroySwapChain(SwapChain* SwapChain) {}

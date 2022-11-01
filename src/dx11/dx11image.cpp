@@ -14,8 +14,9 @@
 #include "rndr/core/fileutils.h"
 #include "rndr/core/log.h"
 
+#include "rndr/render/dx11/dx11graphicscontext.h"
 #include "rndr/render/dx11/dx11helpers.h"
-#include "rndr/render/graphicscontext.h"
+#include "rndr/render/dx11/dx11swapchain.h"
 
 bool rndr::Image::Init(GraphicsContext* Context, int Width, int Height, const ImageProperties& Props, ByteSpan InitData)
 {
@@ -87,13 +88,22 @@ bool rndr::Image::InitCubeMap(GraphicsContext* Context, int Width, int Height, c
     return InitInternal(Context, InitData, true);
 }
 
-bool rndr::Image::InitSwapchainBackBuffer(GraphicsContext* Context)
+bool rndr::Image::InitSwapchainBackBuffer(GraphicsContext* Context, rndr::SwapChain* SwapChain, int BufferIndex)
 {
-    // TODO: Remove
-    return true;
+    this->Props.bUseMips = false;
+    this->Props.SampleCount = 1;
+    this->Props.ImageBindFlags = ImageBindFlags::RenderTarget;
+    this->Props.Usage = Usage::Default;
+    this->Props.PixelFormat = SwapChain->Props.ColorFormat;
+    this->Width = SwapChain->Width;
+    this->Height = SwapChain->Height;
+    this->ArraySize = 1;
+    this->BackBufferIndex = BufferIndex;
+
+    return InitInternal(Context, Span<ByteSpan>{}, false, SwapChain);
 }
 
-bool rndr::Image::InitInternal(GraphicsContext* Context, Span<ByteSpan> InitData, bool bCubeMap)
+bool rndr::Image::InitInternal(GraphicsContext* Context, Span<ByteSpan> InitData, bool bCubeMap, SwapChain* SwapChain)
 {
     D3D11_TEXTURE2D_DESC Desc;
     ZeroMemory(&Desc, sizeof(D3D11_TEXTURE2D_DESC));
@@ -125,13 +135,28 @@ bool rndr::Image::InitInternal(GraphicsContext* Context, Span<ByteSpan> InitData
     }
 
     ID3D11Device* Device = Context->GetDevice();
-    HRESULT Result = Device->CreateTexture2D(&Desc, InitialDataPtr, &DX11Texture);
-    delete[] InitialDataPtr;
-    if (FAILED(Result))
+    HRESULT Result;
+
+    if (!SwapChain)
     {
-        std::string ErrorMessage = Context->WindowsGetErrorMessage(Result);
-        RNDR_LOG_ERROR("%s", ErrorMessage.c_str());
-        return false;
+        Result = Device->CreateTexture2D(&Desc, InitialDataPtr, &DX11Texture);
+        delete[] InitialDataPtr;
+        if (Context->WindowsHasFailed(Result))
+        {
+            std::string ErrorMessage = Context->WindowsGetErrorMessage(Result);
+            RNDR_LOG_ERROR("Image::InitInternal: %s", ErrorMessage.c_str());
+            return false;
+        }
+    }
+    else
+    {
+        Result = SwapChain->DX11SwapChain->GetBuffer(BackBufferIndex, __uuidof(ID3D11Texture2D), (LPVOID*)&DX11Texture);
+        if (Context->WindowsHasFailed(Result))
+        {
+            const std::string ErrorMessage = Context->WindowsGetErrorMessage(Result);
+            RNDR_LOG_ERROR("Image::InitInternal: %s", ErrorMessage.c_str());
+            return false;
+        }
     }
 
     if (Props.ImageBindFlags & ImageBindFlags::ShaderResource)
@@ -174,7 +199,7 @@ bool rndr::Image::InitInternal(GraphicsContext* Context, Span<ByteSpan> InitData
             ResourceDesc.TextureCube.MipLevels = Props.bUseMips ? -1 : 1;
         }
         Result = Device->CreateShaderResourceView(DX11Texture, &ResourceDesc, &DX11ShaderResourceView);
-        if (FAILED(Result))
+        if (Context->WindowsHasFailed(Result))
         {
             std::string ErrorMessage = Context->WindowsGetErrorMessage(Result);
             RNDR_LOG_ERROR("%s", ErrorMessage.c_str());
@@ -211,7 +236,7 @@ bool rndr::Image::InitInternal(GraphicsContext* Context, Span<ByteSpan> InitData
             }
         }
         Result = Device->CreateRenderTargetView(DX11Texture, &ResourceDesc, &DX11RenderTargetView);
-        if (FAILED(Result))
+        if (Context->WindowsHasFailed(Result))
         {
             std::string ErrorMessage = Context->WindowsGetErrorMessage(Result);
             RNDR_LOG_ERROR("%s", ErrorMessage.c_str());
@@ -248,7 +273,7 @@ bool rndr::Image::InitInternal(GraphicsContext* Context, Span<ByteSpan> InitData
             }
         }
         Result = Device->CreateDepthStencilView(DX11Texture, &ResourceDesc, &DX11DepthStencilView);
-        if (FAILED(Result))
+        if (Context->WindowsHasFailed(Result))
         {
             std::string ErrorMessage = Context->WindowsGetErrorMessage(Result);
             RNDR_LOG_ERROR("%s", ErrorMessage.c_str());

@@ -16,11 +16,16 @@ struct FrameBuffer;
 
 struct SwapChain
 {
-    IDXGISwapChain* DX11SwapChain;
     SwapChainProperties Props;
+    int Width = 0, Height = 0;
+    
+    IDXGISwapChain* DX11SwapChain;
     FrameBuffer* FrameBuffer;
 
-    bool Init(GraphicsContext* Context, void* NativeWindowHandle, const SwapChainProperties& Props = SwapChainProperties{});
+    SwapChain() = default;
+    ~SwapChain();
+
+    bool Init(GraphicsContext* Context, void* NativeWindowHandle, int Width, int Height, const SwapChainProperties& Props = SwapChainProperties{});
 };
 
 }  // namespace rndr
