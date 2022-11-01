@@ -32,6 +32,7 @@ class RndrApp
 {
 public:
     RndrApp(const RndrAppProperties& Props = RndrAppProperties{});
+    ~RndrApp();
 
     Window* GetWindow();
     GraphicsContext* GetGraphicsContext();

@@ -24,6 +24,13 @@ rndr::RndrApp::RndrApp(const RndrAppProperties& Props)
     GetInputSystem()->SetWindow(m_Window);
 }
 
+rndr::RndrApp::~RndrApp()
+{
+    delete m_SwapChain;
+    delete m_GraphicsContext;
+    delete m_Window;
+}
+
 rndr::Window* rndr::RndrApp::GetWindow()
 {
     return m_Window;
