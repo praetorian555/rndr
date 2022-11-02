@@ -19,8 +19,8 @@ struct SwapChain
     SwapChainProperties Props;
     int Width = 0, Height = 0;
     
-    IDXGISwapChain* DX11SwapChain;
-    FrameBuffer* FrameBuffer;
+    IDXGISwapChain* DX11SwapChain = nullptr;
+    FrameBuffer* FrameBuffer = nullptr;
 
     SwapChain() = default;
     ~SwapChain();

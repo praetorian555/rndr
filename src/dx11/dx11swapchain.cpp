@@ -61,8 +61,8 @@ bool rndr::SwapChain::Init(GraphicsContext* Context, void* NativeWindowHandle, i
         return false;
     }
 
-    IDXGIFactory* IDXGIFactory = nullptr;
-    Result = DXGIAdapter->GetParent(__uuidof(IDXGIFactory), (void**)&IDXGIFactory);
+    IDXGIFactory* DXGIFactory = nullptr;
+    Result = DXGIAdapter->GetParent(__uuidof(IDXGIFactory), (void**)&DXGIFactory);
     if (FAILED(Result))
     {
         std::string ErrorMessage = Context->WindowsGetErrorMessage(Result);
@@ -70,7 +70,7 @@ bool rndr::SwapChain::Init(GraphicsContext* Context, void* NativeWindowHandle, i
         return false;
     }
 
-    Result = IDXGIFactory->CreateSwapChain(Context->GetDevice(), &SwapChainDesc, &DX11SwapChain);
+    Result = DXGIFactory->CreateSwapChain(Context->GetDevice(), &SwapChainDesc, &DX11SwapChain);
     if (FAILED(Result))
     {
         std::string ErrorMessage = Context->WindowsGetErrorMessage(Result);
@@ -84,6 +84,10 @@ bool rndr::SwapChain::Init(GraphicsContext* Context, void* NativeWindowHandle, i
         RNDR_LOG_ERROR("Failed to create a framebuffer for swapchain!");
         return false;
     }
+
+    DX11SafeRelease(DXGIFactory);
+    DX11SafeRelease(DXGIAdapter);
+    DX11SafeRelease(DXGIDevice);
 
     return true;
 }
