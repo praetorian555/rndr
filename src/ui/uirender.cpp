@@ -313,17 +313,17 @@ void rndr::ui::ShutDownRender()
 {
     delete[] g_RenderResources.Data;
 
-    g_Context->DestroyImage(g_ImageArray);
-    g_Context->DestroySampler(g_Sampler);
-    g_Context->DestroyBuffer(g_GlobalsConstantBuffer);
-    g_Context->DestroyBuffer(g_IndexBuffer);
-    g_Context->DestroyBuffer(g_InstanceBuffer);
-    g_Context->DestroyBlendState(g_BlendState);
-    g_Context->DestroyDepthStencilState(g_DepthStencilState);
-    g_Context->DestroyRasterizerState(g_RasterizerState);
-    g_Context->DestroyInputLayout(g_InputLayout);
-    g_Context->DestroyShader(g_FragmentShader);
-    g_Context->DestroyShader(g_VertexShader);
+    delete g_ImageArray;
+    delete g_Sampler;
+    delete g_GlobalsConstantBuffer;
+    delete g_IndexBuffer;
+    delete g_InstanceBuffer;
+    delete g_BlendState;
+    delete g_DepthStencilState;
+    delete g_RasterizerState;
+    delete g_InputLayout;
+    delete g_FragmentShader;
+    delete g_VertexShader;
 }
 
 rndr::ui::RenderId rndr::ui::AllocateRenderId()

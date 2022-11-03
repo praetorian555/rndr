@@ -77,17 +77,6 @@ public:
 
     void Present(SwapChain* SwapChain, bool bVSync);
 
-    void DestroySwapChain(SwapChain* SwapChain);
-    void DestroyShader(Shader* Shader);
-    void DestroyImage(Image* Image);
-    void DestroySampler(Sampler* Sampler);
-    void DestroyBuffer(Buffer* Buffer);
-    void DestroyFrameBuffer(FrameBuffer* FrameBuffer);
-    void DestroyInputLayout(InputLayout* InputLayout);
-    void DestroyRasterizerState(RasterizerState* State);
-    void DestroyDepthStencilState(DepthStencilState* State);
-    void DestroyBlendState(BlendState* State);
-
     std::string WindowsGetErrorMessage(HRESULT ErrorCode = S_OK);
     bool WindowsHasFailed(HRESULT ErrorCode = S_OK);
 

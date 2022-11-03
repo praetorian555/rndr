@@ -422,29 +422,29 @@ void CleanUp()
     delete g_Camera;
     delete g_Model;
 
-    g_Context->DestroyShader(g_VertexShader);
-    g_Context->DestroyShader(g_FragmentShader);
-    g_Context->DestroyInputLayout(g_InputLayout);
-    g_Context->DestroyRasterizerState(g_RasterizerState);
-    g_Context->DestroyDepthStencilState(g_DepthStencilState);
-    g_Context->DestroyBlendState(g_BlendState);
+    delete g_VertexShader;
+    delete g_FragmentShader;
+    delete g_InputLayout;
+    delete g_RasterizerState;
+    delete g_DepthStencilState;
+    delete g_BlendState;
 
     for (rndr::Buffer* Buff : g_VertexBuffers)
     {
-        g_Context->DestroyBuffer(Buff);
+        delete Buff;
     }
-    g_Context->DestroyBuffer(g_InstanceBuffer);
+    delete g_InstanceBuffer;
     for (rndr::Buffer* Buff : g_IndexBuffers)
     {
-        g_Context->DestroyBuffer(Buff);
+        delete Buff;
     }
-    g_Context->DestroyBuffer(g_VertexConstantBuffer);
-    g_Context->DestroyBuffer(g_FragmentConstantBuffer);
+    delete g_VertexConstantBuffer;
+    delete g_FragmentConstantBuffer;
 
-    g_Context->DestroyImage(g_DiffuseImage);
-    g_Context->DestroyImage(g_NormalImage);
-    g_Context->DestroyImage(g_SpecularImage);
-    g_Context->DestroySampler(g_Sampler);
+    delete g_DiffuseImage;
+    delete g_NormalImage;
+    delete g_SpecularImage;
+    delete g_Sampler;
 
     rndr::ui::ShutDown();
     rndr::ShutDown();
