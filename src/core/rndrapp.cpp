@@ -19,9 +19,13 @@ rndr::RndrApp::RndrApp(const RndrAppProperties& Props)
     m_Window = new rndr::Window(Props.WindowWidth, Props.WindowHeight, Props.Window);
     m_GraphicsContext = new GraphicsContext();
     m_GraphicsContext->Init();
-    m_SwapChain = new SwapChain();
-    m_SwapChain->Init(m_GraphicsContext, (void*)m_Window->GetNativeWindowHandle(), Props.WindowWidth, Props.WindowHeight);
-    GetInputSystem()->SetWindow(m_Window);
+    if (Props.bCreateWindow)
+    {
+        m_Window = new rndr::Window(Props.WindowWidth, Props.WindowHeight, Props.Window);
+        m_SwapChain = new SwapChain();
+        m_SwapChain->Init(m_GraphicsContext, (void*)m_Window->GetNativeWindowHandle(), Props.WindowWidth, Props.WindowHeight);
+        GetInputSystem()->SetWindow(m_Window);
+    }
 }
 
 rndr::RndrApp::~RndrApp()

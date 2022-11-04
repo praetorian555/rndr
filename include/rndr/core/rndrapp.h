@@ -21,6 +21,7 @@ struct RndrAppProperties
     int WindowWidth = 1024;
     int WindowHeight = 768;
 
+    bool bCreateWindow = false;
     WindowProperties Window;
 };
 
