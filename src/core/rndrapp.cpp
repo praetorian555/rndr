@@ -13,10 +13,20 @@
 
 rndr::RndrApp* rndr::GRndrApp = nullptr;
 
+static rndr::DefaultAllocator g_DefaultAllocator;
+
 rndr::RndrApp::RndrApp(const RndrAppProperties& Props)
 {
     assert(!GRndrApp);
-    m_Window = new rndr::Window(Props.WindowWidth, Props.WindowHeight, Props.Window);
+
+    if (Props.UserAllocator)
+    {
+        m_Allocator = Props.UserAllocator;
+    }
+    else
+    {
+        m_Allocator = &g_DefaultAllocator;
+    }
     m_GraphicsContext = new GraphicsContext();
     m_GraphicsContext->Init();
     if (Props.bCreateWindow)
