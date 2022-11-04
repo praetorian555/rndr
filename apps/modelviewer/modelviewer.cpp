@@ -35,7 +35,7 @@ struct InInstance
 
 std::string g_ModelPath;
 
-rndr::RndrApp* g_App = nullptr;
+rndr::RndrContext* g_App = nullptr;
 rndr::GraphicsContext* g_Context = nullptr;
 rndr::FirstPersonCamera* g_Camera = nullptr;
 
@@ -98,7 +98,7 @@ int main(int argc, char** argv)
 
 void Init()
 {
-    g_App = rndr::Init();
+    g_App = new rndr::RndrContext{};
     assert(g_App);
     g_App->OnTickDelegate.Add(Loop);
     g_Context = g_App->GetGraphicsContext();
@@ -121,7 +121,7 @@ void Init()
     CameraProps.Near = 0.01f;
     CameraProps.Far = 100.0f;
     rndr::ProjectionCamera* ProjCamera = new rndr::ProjectionCamera(math::Transform{}, CameraProps);
-    g_Camera = new rndr::FirstPersonCamera(ProjCamera, math::Point3{0, 0, -20}, 10);
+    g_Camera = new rndr::FirstPersonCamera(g_App, ProjCamera, math::Point3{0, 0, -20}, 10);
 
     rndr::WindowDelegates::OnResize.Add(
         [](rndr::Window* Window, int Width, int Height)
@@ -447,7 +447,7 @@ void CleanUp()
     delete g_Sampler;
 
     rndr::ui::ShutDown();
-    rndr::ShutDown();
+    delete g_App;
 }
 
 void Loop(float DeltaSeconds)

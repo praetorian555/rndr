@@ -2,11 +2,11 @@
 
 #include "math/math.h"
 
-#include "rndr/core/rndrapp.h"
+#include "rndr/core/rndrcontext.h"
 
 TEST_CASE("SingleObject", "Memory")
 {
-    rndr::RndrApp* App = new rndr::RndrApp();
+    rndr::RndrContext* App = new rndr::RndrContext();
     REQUIRE(App != nullptr);
 
     int* MyInt = RNDR_NEW(App, int, "My Int", 5);
@@ -43,7 +43,7 @@ TEST_CASE("SingleObject", "Memory")
 
 TEST_CASE("Arrays", "Memory")
 {
-    rndr::RndrApp* App = new rndr::RndrApp();
+    rndr::RndrContext* App = new rndr::RndrContext();
     REQUIRE(App != nullptr);
 
     int* MyInts = RNDR_NEW_ARRAY(App, int, 100, "My Int");

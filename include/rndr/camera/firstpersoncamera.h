@@ -6,6 +6,7 @@
 
 #include "rndr/core/base.h"
 #include "rndr/core/input.h"
+#include "rndr/core/rndrcontext.h"
 
 namespace rndr
 {
@@ -19,7 +20,8 @@ class ProjectionCamera;
 class FirstPersonCamera
 {
 public:
-    explicit FirstPersonCamera(ProjectionCamera* ProjectionCamera,
+    explicit FirstPersonCamera(RndrContext* Context,
+                               ProjectionCamera* ProjectionCamera,
                                math::Point3 StartingPosition = math::Point3(),
                                real MovementSpeed = 1.0,
                                real RotationSpeed = 1.0);

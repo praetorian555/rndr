@@ -1,5 +1,4 @@
-#include "rndr/core/rndrapp.h"
-#include "rndr/core/setup.h"
+#include "rndr/core/rndrcontext.h"
 
 #include "rndr/ui/uisystem.h"
 
@@ -33,7 +32,7 @@ rndr::ui::FontId EpilogueBoldFont;
 
 int main()
 {
-    rndr::RndrApp* App = rndr::Init();
+    rndr::RndrContext* App = new rndr::RndrContext{};
     App->OnTickDelegate.Add(AppLoop);
 
     rndr::GraphicsContext* Context = App->GetGraphicsContext();
@@ -45,7 +44,7 @@ int main()
     App->Run();
 
     rndr::ui::ShutDown();
-    rndr::ShutDown();
+    delete App;
 }
 
 static rndr::ui::ImageId LoadImageAsset(const char* ImagePath)

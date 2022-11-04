@@ -4,15 +4,16 @@
 
 #include "rndr/core/log.h"
 #include "rndr/core/projectioncamera.h"
-#include "rndr/core/rndrapp.h"
+#include "rndr/core/rndrcontext.h"
 
-rndr::FirstPersonCamera::FirstPersonCamera(rndr::ProjectionCamera* ProjectionCamera,
+rndr::FirstPersonCamera::FirstPersonCamera(rndr::RndrContext* RndrContext,
+                                           rndr::ProjectionCamera* ProjectionCamera,
                                            math::Point3 StartingPosition,
                                            real MovementSpeed,
                                            real RotationSpeed)
     : m_ProjectionCamera(ProjectionCamera), m_Position(StartingPosition), m_MovementSpeed(MovementSpeed), m_RotationSpeed(RotationSpeed)
 {
-    rndr::InputContext* Context = GRndrApp->GetInputContext();
+    rndr::InputContext* Context = RndrContext->GetInputContext();
     assert(Context);
 
     using IP = rndr::InputPrimitive;

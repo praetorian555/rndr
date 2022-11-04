@@ -17,7 +17,7 @@ class InputContext;
 
 using TickDelegate = MultiDelegate<real /* DeltaSeconds */>;
 
-struct RndrAppProperties
+struct RndrContextProperties
 {
     int WindowWidth = 1024;
     int WindowHeight = 768;
@@ -29,14 +29,13 @@ struct RndrAppProperties
 };
 
 /**
- * Main API of the rndr library. Each program has only one instance of this class.
- * Instantiated using the RndrInit function call.
+ * Main API of the rndr library.
  */
-class RndrApp
+class RndrContext
 {
 public:
-    RndrApp(const RndrAppProperties& Props = RndrAppProperties{});
-    ~RndrApp();
+    RndrContext(const RndrContextProperties& Props = RndrContextProperties{});
+    ~RndrContext();
 
     Window* GetWindow();
     GraphicsContext* GetGraphicsContext();
@@ -106,14 +105,9 @@ private:
     Allocator* m_Allocator = nullptr;
 };
 
-/**
- * Globally available pointer to the only RndrApp instance in this program.
- */
-extern RndrApp* GRndrApp;
-
 }  // namespace rndr
 
-#define RNDR_NEW(RndrApp, Type, Tag, ...) RndrApp->Create<Type>(Tag, __FILE__, __LINE__, __VA_ARGS__)
-#define RNDR_NEW_ARRAY(RndrApp, Type, Count, Tag, ...) RndrApp->CreateArray<Type>(Count, Tag, __FILE__, __LINE__)
-#define RNDR_DELETE(RndrApp, Type, Ptr) RndrApp->Destroy<Type>(Ptr)
-#define RNDR_DELETE_ARRAY(RndrApp, Type, Ptr, Count) RndrApp->DestroyArray<Type>(Ptr, Count)
+#define RNDR_NEW(RndrContext, Type, Tag, ...) RndrContext->Create<Type>(Tag, __FILE__, __LINE__, __VA_ARGS__)
+#define RNDR_NEW_ARRAY(RndrContext, Type, Count, Tag, ...) RndrContext->CreateArray<Type>(Count, Tag, __FILE__, __LINE__)
+#define RNDR_DELETE(RndrContext, Type, Ptr) RndrContext->Destroy<Type>(Ptr)
+#define RNDR_DELETE_ARRAY(RndrContext, Type, Ptr, Count) RndrContext->DestroyArray<Type>(Ptr, Count)

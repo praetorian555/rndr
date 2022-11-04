@@ -1,24 +1,20 @@
-#include "rndr/core/rndrapp.h"
+#include "rndr/core/rndrcontext.h"
 
 #include <cassert>
 #include <chrono>
 
 #include "rndr/core/input.h"
-#include "rndr/core/rndrapp.h"
+#include "rndr/core/rndrcontext.h"
 
 #include "rndr/profiling/cputracer.h"
 
 #include "rndr/render/graphicscontext.h"
 #include "rndr/render/image.h"
 
-rndr::RndrApp* rndr::GRndrApp = nullptr;
-
 static rndr::DefaultAllocator g_DefaultAllocator;
 
-rndr::RndrApp::RndrApp(const RndrAppProperties& Props)
+rndr::RndrContext::RndrContext(const RndrContextProperties& Props)
 {
-    assert(!GRndrApp);
-
     if (Props.UserAllocator)
     {
         m_Allocator = Props.UserAllocator;
@@ -38,39 +34,39 @@ rndr::RndrApp::RndrApp(const RndrAppProperties& Props)
     }
 }
 
-rndr::RndrApp::~RndrApp()
+rndr::RndrContext::~RndrContext()
 {
     delete m_SwapChain;
     delete m_GraphicsContext;
     delete m_Window;
 }
 
-rndr::Window* rndr::RndrApp::GetWindow()
+rndr::Window* rndr::RndrContext::GetWindow()
 {
     return m_Window;
 }
 
-rndr::GraphicsContext* rndr::RndrApp::GetGraphicsContext()
+rndr::GraphicsContext* rndr::RndrContext::GetGraphicsContext()
 {
     return m_GraphicsContext;
 }
 
-rndr::SwapChain* rndr::RndrApp::GetSwapChain()
+rndr::SwapChain* rndr::RndrContext::GetSwapChain()
 {
     return m_SwapChain;
 }
 
-rndr::InputSystem* rndr::RndrApp::GetInputSystem()
+rndr::InputSystem* rndr::RndrContext::GetInputSystem()
 {
     return rndr::InputSystem::Get();
 }
 
-rndr::InputContext* rndr::RndrApp::GetInputContext()
+rndr::InputContext* rndr::RndrContext::GetInputContext()
 {
     return rndr::InputSystem::Get()->GetContext();
 }
 
-void rndr::RndrApp::Run()
+void rndr::RndrContext::Run()
 {
     real FrameDuration = 0;
 
