@@ -8,16 +8,16 @@
 
 rndr::Singletons::Singletons()
 {
-    StdAsyncLogger::Get()->Init();
-    InputSystem::Get()->Init();
-    Scheduler::Get()->Init();
-    CpuTracer::Get()->Init();
+    //StdAsyncLogger::Get()->Init();
+    //InputSystem::Get()->Init();
+    //Scheduler::Get()->Init();
+    //CpuTracer::Get()->Init();
 }
 
 rndr::Singletons::~Singletons()
 {
-    CpuTracer::Get()->ShutDown();
-    Scheduler::Get()->ShutDown();
-    InputSystem::Get()->ShutDown();
-    StdAsyncLogger::Get()->ShutDown();
+    //CpuTracer::Get()->ShutDown();
+    //Scheduler::Get()->ShutDown();
+    //InputSystem::Get()->ShutDown();
+    //StdAsyncLogger::Get()->ShutDown();
 }
