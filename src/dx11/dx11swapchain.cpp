@@ -5,6 +5,7 @@
 #include <dxgi.h>
 
 #include "rndr/core/log.h"
+#include "rndr/core/rndrcontext.h"
 
 #include "rndr/render/dx11/dx11framebuffer.h"
 #include "rndr/render/dx11/dx11graphicscontext.h"
@@ -13,11 +14,12 @@
 rndr::SwapChain::~SwapChain()
 {
     DX11SafeRelease(DX11SwapChain);
-    delete FrameBuffer;
+    RNDR_DELETE(Context, rndr::FrameBuffer, FrameBuffer);
 }
 
 bool rndr::SwapChain::Init(GraphicsContext* Context, void* NativeWindowHandle, int Width, int Height, const SwapChainProperties& Props)
 {
+    this->Context = Context->GetRndrContext();
     this->Props = Props;
     this->Width = Width;
     this->Height = Height;

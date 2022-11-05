@@ -36,11 +36,12 @@ public:
     GraphicsContext() = default;
     ~GraphicsContext();
 
-    bool Init(GraphicsContextProperties Props = GraphicsContextProperties{});
+    bool Init(class RndrContext* RndrContext, GraphicsContextProperties Props = GraphicsContextProperties{});
 
     ID3D11Device* GetDevice();
     ID3D11DeviceContext* GetDeviceContext();
     D3D_FEATURE_LEVEL GetFeatureLevel();
+    class RndrContext* GetRndrContext();
 
     SwapChain* CreateSwapChain(void* NativeWindowHandle, int Width, int Height, const SwapChainProperties& Props);
     Shader* CreateShader(const ByteSpan& ShaderContents, const ShaderProperties& Props);
@@ -81,6 +82,7 @@ public:
     bool WindowsHasFailed(HRESULT ErrorCode = S_OK);
 
 private:
+    RndrContext* m_RndrContext = nullptr;
     GraphicsContextProperties m_Props;
 
     ID3D11Device* m_Device = nullptr;

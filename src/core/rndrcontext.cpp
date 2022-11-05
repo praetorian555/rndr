@@ -5,6 +5,7 @@
 
 #include "rndr/core/input.h"
 #include "rndr/core/rndrcontext.h"
+#include "rndr/core/log.h"
 
 #include "rndr/profiling/cputracer.h"
 
@@ -23,22 +24,28 @@ rndr::RndrContext::RndrContext(const RndrContextProperties& Props)
     {
         m_Allocator = &g_DefaultAllocator;
     }
-    m_GraphicsContext = new GraphicsContext();
-    m_GraphicsContext->Init();
+
+    StdAsyncLogger::Get()->Init();
+
+    m_GraphicsContext = RNDR_NEW(this, GraphicsContext, "rndr::RndrContext: GraphicsContext");
+    m_GraphicsContext->Init(this, Props.GraphicsContext);
     if (Props.bCreateWindow)
     {
-        m_Window = new rndr::Window(Props.WindowWidth, Props.WindowHeight, Props.Window);
-        m_SwapChain = new SwapChain();
-        m_SwapChain->Init(m_GraphicsContext, (void*)m_Window->GetNativeWindowHandle(), Props.WindowWidth, Props.WindowHeight);
+        m_Window = RNDR_NEW(this, Window, "rndr::RndrContext: Window", Props.WindowWidth, Props.WindowHeight, Props.Window);
         GetInputSystem()->SetWindow(m_Window);
+
+        void* NativeWindowHandle = (void*)m_Window->GetNativeWindowHandle();
+        m_SwapChain = m_GraphicsContext->CreateSwapChain(NativeWindowHandle, Props.WindowWidth, Props.WindowHeight, Props.SwapChain);
     }
 }
 
 rndr::RndrContext::~RndrContext()
 {
-    delete m_SwapChain;
-    delete m_GraphicsContext;
-    delete m_Window;
+    RNDR_DELETE(this, SwapChain, m_SwapChain);
+    RNDR_DELETE(this, GraphicsContext, m_GraphicsContext);
+    RNDR_DELETE(this, Window, m_Window);
+
+    StdAsyncLogger::Get()->ShutDown();
 }
 
 rndr::Window* rndr::RndrContext::GetWindow()

@@ -26,7 +26,7 @@ class Window
 {
 public:
     Window(int Width = 1024, int Height = 768, const WindowProperties& Props = WindowProperties());
-    ~Window() = default;
+    ~Window();
 
     /**
      * Processes events that occured in the window such as event closing or button press.

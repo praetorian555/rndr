@@ -25,6 +25,9 @@ struct RndrContextProperties
     bool bCreateWindow = false;
     WindowProperties Window;
 
+    GraphicsContextProperties GraphicsContext;
+    SwapChainProperties SwapChain;
+
     Allocator* UserAllocator = nullptr;
 };
 
@@ -75,6 +78,10 @@ public:
     template <typename T>
     void Destroy(T* Ptr)
     {
+        if (!Ptr)
+        {
+            return;
+        }
         Ptr->~T();
         m_Allocator->Deallocate(Ptr);
     }
@@ -82,6 +89,10 @@ public:
     template <typename T>
     void DestroyArray(T* Ptr, int Count)
     {
+        if (!Ptr)
+        {
+            return;
+        }
         if (Count > 0)
         {
             T* It = Ptr;
@@ -107,7 +118,7 @@ private:
 
 }  // namespace rndr
 
-#define RNDR_NEW(RndrContext, Type, Tag, ...) RndrContext->Create<Type>(Tag, __FILE__, __LINE__, __VA_ARGS__)
-#define RNDR_NEW_ARRAY(RndrContext, Type, Count, Tag, ...) RndrContext->CreateArray<Type>(Count, Tag, __FILE__, __LINE__)
-#define RNDR_DELETE(RndrContext, Type, Ptr) RndrContext->Destroy<Type>(Ptr)
-#define RNDR_DELETE_ARRAY(RndrContext, Type, Ptr, Count) RndrContext->DestroyArray<Type>(Ptr, Count)
+#define RNDR_NEW(RndrContext, Type, Tag, ...) (RndrContext)->Create<Type>(Tag, __FILE__, __LINE__, __VA_ARGS__)
+#define RNDR_NEW_ARRAY(RndrContext, Type, Count, Tag, ...) (RndrContext)->CreateArray<Type>(Count, Tag, __FILE__, __LINE__)
+#define RNDR_DELETE(RndrContext, Type, Ptr) (RndrContext)->Destroy<Type>(Ptr), Ptr = nullptr
+#define RNDR_DELETE_ARRAY(RndrContext, Type, Ptr, Count) (RndrContext)->DestroyArray<Type>(Ptr, Count), Ptr = nullptr

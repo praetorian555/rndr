@@ -19,6 +19,7 @@ struct SwapChain
     SwapChainProperties Props;
     int Width = 0, Height = 0;
     
+    class RndrContext* Context = nullptr;
     IDXGISwapChain* DX11SwapChain = nullptr;
     FrameBuffer* FrameBuffer = nullptr;
 

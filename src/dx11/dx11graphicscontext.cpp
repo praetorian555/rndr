@@ -5,7 +5,7 @@
 #include <Windows.h>
 
 #include "rndr/core/log.h"
-#include "rndr/core/window.h"
+#include "rndr/core/rndrcontext.h"
 
 #include "rndr/render/dx11/dx11buffer.h"
 #include "rndr/render/dx11/dx11framebuffer.h"
@@ -112,6 +112,9 @@ bool rndr::GraphicsContext::WindowsHasFailed(HRESULT ErrorCode)
 
 rndr::GraphicsContext::~GraphicsContext()
 {
+    m_DeviceContext->ClearState();
+    m_DeviceContext->Flush();
+
     DX11SafeRelease(m_Device);
     DX11SafeRelease(m_DeviceContext);
     if (m_DebugInfoQueue)
@@ -120,9 +123,10 @@ rndr::GraphicsContext::~GraphicsContext()
     }
 }
 
-bool rndr::GraphicsContext::Init(GraphicsContextProperties Props)
+bool rndr::GraphicsContext::Init(RndrContext* RndrContext, GraphicsContextProperties Props)
 {
     m_Props = Props;
+    m_RndrContext = RndrContext;
 
     UINT Flags = 0;
 #if RNDR_DEBUG
@@ -185,38 +189,37 @@ D3D_FEATURE_LEVEL rndr::GraphicsContext::GetFeatureLevel()
     return m_FeatureLevel;
 }
 
+rndr::RndrContext* rndr::GraphicsContext::GetRndrContext()
+{
+    return m_RndrContext;
+}
+
 rndr::SwapChain* rndr::GraphicsContext::CreateSwapChain(void* NativeWindowHandle, int Width, int Height, const SwapChainProperties& Props)
 {
-    SwapChain* S = new SwapChain();
-    const bool Status = S->Init(this, NativeWindowHandle, Width, Height, Props);
-    if (!Status)
+    SwapChain* S = RNDR_NEW(m_RndrContext, SwapChain, "rndr::GraphicsContext: SwapChain");
+    if (!S || !S->Init(this, NativeWindowHandle, Width, Height, Props))
     {
-        delete S;
-        return nullptr;
+        RNDR_DELETE(m_RndrContext, SwapChain, S);
     }
     return S;
 }
 
 rndr::Shader* rndr::GraphicsContext::CreateShader(const ByteSpan& ShaderContents, const ShaderProperties& Props)
 {
-    Shader* S = new Shader();
-    const bool Status = S->Init(this, ShaderContents, Props);
-    if (!Status)
+    Shader* S = RNDR_NEW(m_RndrContext, Shader, "rndr::GraphicsContext: Shader");
+    if (!S || !S->Init(this, ShaderContents, Props))
     {
-        delete S;
-        return nullptr;
+        RNDR_DELETE(m_RndrContext, Shader, S);
     }
     return S;
 }
 
 rndr::Image* rndr::GraphicsContext::CreateImage(int Width, int Height, const ImageProperties& Props, ByteSpan InitData)
 {
-    Image* Im = new Image();
-    bool Status = Im->Init(this, Width, Height, Props, InitData);
-    if (!Status)
+    Image* Im = RNDR_NEW(m_RndrContext, Image, "rndr::GraphicsContext: Image");
+    if (!Im || !Im->Init(this, Width, Height, Props, InitData))
     {
-        delete Im;
-        Im = nullptr;
+        RNDR_DELETE(m_RndrContext, Image, Im);
     }
     return Im;
 }
@@ -227,132 +230,110 @@ rndr::Image* rndr::GraphicsContext::CreateImageArray(int Width,
                                                      const ImageProperties& Props,
                                                      Span<ByteSpan> InitData)
 {
-    Image* Im = new Image();
-    bool Status = Im->InitArray(this, Width, Height, ArraySize, Props, InitData);
-    if (!Status)
+    Image* Im = RNDR_NEW(m_RndrContext, Image, "rndr::GraphicsContext: ImageArray");
+    if (!Im || !Im->InitArray(this, Width, Height, ArraySize, Props, InitData))
     {
-        delete Im;
-        Im = nullptr;
+        RNDR_DELETE(m_RndrContext, Image, Im);
     }
     return Im;
 }
 
 rndr::Image* rndr::GraphicsContext::CreateCubeMap(int Width, int Height, const ImageProperties& Props, Span<ByteSpan> InitData)
 {
-    Image* Im = new Image();
-    bool Status = Im->InitCubeMap(this, Width, Height, Props, InitData);
-    if (!Status)
+    Image* Im = RNDR_NEW(m_RndrContext, Image, "rndr::GraphicsContext: CubeMap");
+    if (!Im || !Im->InitCubeMap(this, Width, Height, Props, InitData))
     {
-        delete Im;
-        Im = nullptr;
+        RNDR_DELETE(m_RndrContext, Image, Im);
     }
     return Im;
 }
 
 rndr::Image* rndr::GraphicsContext::CreateImageForSwapChain(SwapChain* SwapChain, int BufferIndex)
 {
-    Image* Im = new Image();
-    const bool Status = Im->InitSwapchainBackBuffer(this, SwapChain, BufferIndex);
-    if (!Status)
+    Image* Im = RNDR_NEW(m_RndrContext, Image, "rndr::GraphicsContext: ImageSwapChain");
+    if (!Im || !Im->InitSwapchainBackBuffer(this, SwapChain, BufferIndex))
     {
-        delete Im;
-        return nullptr;
+        RNDR_DELETE(m_RndrContext, Image, Im);
     }
     return Im;
 }
 
 rndr::Sampler* rndr::GraphicsContext::CreateSampler(const SamplerProperties& Props)
 {
-    Sampler* S = new Sampler();
-    const bool Status = S->Init(this, Props);
-    if (!Status)
+    Sampler* S = RNDR_NEW(m_RndrContext, Sampler, "rndr::GraphicsContext: Sampler");
+    if (!S || !S->Init(this, Props))
     {
-        delete S;
-        return nullptr;
+        RNDR_DELETE(m_RndrContext, Sampler, S);
     }
     return S;
 }
 
 rndr::Buffer* rndr::GraphicsContext::CreateBuffer(const BufferProperties& Props, ByteSpan InitialData)
 {
-    Buffer* Buff = new Buffer();
-    bool Status = Buff->Init(this, Props, InitialData);
-    if (!Status)
+    Buffer* Buff = RNDR_NEW(m_RndrContext, Buffer, "rndr::GraphicsContext: Buffer");
+    if (!Buff || !Buff->Init(this, Props, InitialData))
     {
-        delete Buff;
-        Buff = nullptr;
+        RNDR_DELETE(m_RndrContext, Buffer, Buff);
     }
     return Buff;
 }
 
 rndr::FrameBuffer* rndr::GraphicsContext::CreateFrameBuffer(int Width, int Height, const FrameBufferProperties& Props)
 {
-    FrameBuffer* FB = new FrameBuffer();
-    bool Status = FB->Init(this, Width, Height, Props);
-    if (!Status)
+    FrameBuffer* FB = RNDR_NEW(m_RndrContext, FrameBuffer, "rndr::GraphicsContext: FrameBuffer");
+    if (!FB || !FB->Init(this, Width, Height, Props))
     {
-        delete FB;
-        FB = nullptr;
+        RNDR_DELETE(m_RndrContext, FrameBuffer, FB);
     }
     return FB;
 }
 
 rndr::FrameBuffer* rndr::GraphicsContext::CreateFrameBufferForSwapChain(int Width, int Height, SwapChain* SwapChain)
 {
-    FrameBuffer* FB = new FrameBuffer();
-    const bool Status = FB->InitForSwapChain(this, Width, Height, SwapChain);
-    if (!Status)
+    FrameBuffer* FB = RNDR_NEW(m_RndrContext, FrameBuffer, "rndr::GraphicsContext: FrameBuffer");
+    if (!FB || !FB->InitForSwapChain(this, Width, Height, SwapChain))
     {
-        delete FB;
-        return nullptr;
+        RNDR_DELETE(m_RndrContext, FrameBuffer, FB);
     }
     return FB;
 }
 
 rndr::InputLayout* rndr::GraphicsContext::CreateInputLayout(Span<InputLayoutProperties> Props, Shader* Shader)
 {
-    InputLayout* Layout = new InputLayout();
-    const bool Status = Layout->Init(this, Props, Shader);
-    if (!Status)
+    InputLayout* Layout = RNDR_NEW(m_RndrContext, InputLayout, "rndr::GraphicsContext: InputLayout");
+    if (!Layout || !Layout->Init(this, Props, Shader))
     {
-        delete Layout;
-        return nullptr;
+        RNDR_DELETE(m_RndrContext, InputLayout, Layout);
     }
     return Layout;
 }
 
 rndr::RasterizerState* rndr::GraphicsContext::CreateRasterizerState(const RasterizerProperties& Props)
 {
-    RasterizerState* State = new RasterizerState();
-    const bool Status = State->Init(this, Props);
-    if (!Status)
+    RasterizerState* State = RNDR_NEW(m_RndrContext, RasterizerState, "rndr::GraphicsContext: RasterizerState");
+    if (!State || !State->Init(this, Props))
     {
-        delete State;
-        return nullptr;
+        RNDR_DELETE(m_RndrContext, RasterizerState, State);
     }
     return State;
 }
 
 rndr::DepthStencilState* rndr::GraphicsContext::CreateDepthStencilState(const DepthStencilProperties& Props)
 {
-    DepthStencilState* State = new DepthStencilState();
-    const bool Status = State->Init(this, Props);
-    if (!Status)
+    DepthStencilState* State = RNDR_NEW(m_RndrContext, DepthStencilState, "rndr::GraphicsContext: DepthStencilState");
+    if (!State || !State->Init(this, Props))
     {
-        delete State;
-        return nullptr;
+        RNDR_DELETE(m_RndrContext, DepthStencilState, State);
     }
     return State;
 }
 
 rndr::BlendState* rndr::GraphicsContext::CreateBlendState(const BlendProperties& Props)
 {
-    BlendState* State = new BlendState();
-    const bool Status = State->Init(this, Props);
-    if (!Status)
+    BlendState* State = RNDR_NEW(m_RndrContext, BlendState, "rndr::GraphicsContext: BlendState");
+    if (!State || !State->Init(this, Props))
     {
-        delete State;
-        return nullptr;
+        RNDR_DELETE(m_RndrContext, BlendState, State);
     }
     return State;
 }

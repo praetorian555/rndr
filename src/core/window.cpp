@@ -40,13 +40,16 @@ rndr::Window::Window(int Width, int Height, const WindowProperties& Props) : m_W
     const char* ClassName = "RndrWindowClass";
 
     WNDCLASS WindowClass{};
-    WindowClass.lpszClassName = ClassName;
-    WindowClass.hInstance = Instance;
-    WindowClass.lpfnWndProc = WindowProc;
-    WindowClass.style = CS_OWNDC | CS_HREDRAW | CS_VREDRAW;
+    if (!GetClassInfo(Instance, ClassName, &WindowClass))
+    {
+        WindowClass.lpszClassName = ClassName;
+        WindowClass.hInstance = Instance;
+        WindowClass.lpfnWndProc = WindowProc;
+        WindowClass.style = CS_OWNDC | CS_HREDRAW | CS_VREDRAW;
 
-    ATOM Atom = RegisterClass(&WindowClass);
-    assert(Atom != 0);
+        ATOM Atom = RegisterClass(&WindowClass);
+        assert(Atom != 0);
+    }
 
     RECT WindowRect = {0, 0, m_Width, m_Height};
     AdjustWindowRect(&WindowRect, WS_OVERLAPPEDWINDOW, FALSE);
@@ -59,6 +62,11 @@ rndr::Window::Window(int Width, int Height, const WindowProperties& Props) : m_W
     ShowWindow(WindowHandle, SW_SHOW);
 
     m_NativeWindowHandle = reinterpret_cast<uintptr_t>(WindowHandle);
+}
+
+rndr::Window::~Window()
+{
+    Close();
 }
 
 void rndr::Window::ProcessEvents()
