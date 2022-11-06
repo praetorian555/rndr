@@ -3,9 +3,9 @@
 #include "rndr/core/allocator.h"
 #include "rndr/core/base.h"
 #include "rndr/core/delegate.h"
+#include "rndr/core/log.h"
 #include "rndr/core/singletons.h"
 #include "rndr/core/window.h"
-#include "rndr/core/log.h"
 
 #include "rndr/render/graphicscontext.h"
 #include "rndr/render/swapchain.h"

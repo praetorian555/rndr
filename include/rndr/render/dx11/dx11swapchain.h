@@ -25,7 +25,11 @@ struct SwapChain
     SwapChain() = default;
     ~SwapChain();
 
-    bool Init(GraphicsContext* Context, void* NativeWindowHandle, int Width, int Height, const SwapChainProperties& Props = SwapChainProperties{});
+    bool Init(GraphicsContext* Context,
+              void* NativeWindowHandle,
+              int Width,
+              int Height,
+              const SwapChainProperties& Props = SwapChainProperties{});
 };
 
 }  // namespace rndr
