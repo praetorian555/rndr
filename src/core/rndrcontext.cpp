@@ -58,7 +58,7 @@ rndr::Window* rndr::RndrContext::CreateWin(int Width, int Height, const WindowPr
         return nullptr;
     }
 
-    Window* W = RNDR_NEW(this, Window, "rndr::RndrContext: Window", Width, Height, Props);
+    Window* W = RNDR_NEW(Window, "rndr::RndrContext: Window", Width, Height, Props);
     return W;
 }
 
@@ -70,10 +70,10 @@ rndr::GraphicsContext* rndr::RndrContext::CreateGraphicsContext(const GraphicsCo
         return nullptr;
     }
 
-    GraphicsContext* GC = RNDR_NEW(this, GraphicsContext, "rndr::RndrContext: GraphicsContext");
-    if (!GC || !GC->Init(this, Props))
+    GraphicsContext* GC = RNDR_NEW(GraphicsContext, "rndr::RndrContext: GraphicsContext");
+    if (!GC || !GC->Init(Props))
     {
-        RNDR_DELETE(this, GraphicsContext, GC);
+        RNDR_DELETE(GraphicsContext, GC);
     }
     return GC;
 }

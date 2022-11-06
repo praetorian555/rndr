@@ -29,28 +29,28 @@ TEST_CASE("GraphicsContext", "RenderAPI")
     {
         rndr::GraphicsContext* Ctx = RndrCtx->CreateGraphicsContext(Props);
         REQUIRE(Ctx != nullptr);
-        RNDR_DELETE(RndrCtx.get(), rndr::GraphicsContext, Ctx);
+        RNDR_DELETE(rndr::GraphicsContext, Ctx);
     }
     SECTION("Disable GPU Timeout")
     {
         Props.bDisableGPUTimeout = true;
         rndr::GraphicsContext* Ctx = RndrCtx->CreateGraphicsContext(Props);
         REQUIRE(Ctx != nullptr);
-        RNDR_DELETE(RndrCtx.get(), rndr::GraphicsContext, Ctx);
+        RNDR_DELETE(rndr::GraphicsContext, Ctx);
     }
     SECTION("No Debug Layer")
     {
         Props.bEnableDebugLayer = false;
         rndr::GraphicsContext* Ctx = RndrCtx->CreateGraphicsContext(Props);
         REQUIRE(Ctx != nullptr);
-        RNDR_DELETE(RndrCtx.get(), rndr::GraphicsContext, Ctx);
+        RNDR_DELETE(rndr::GraphicsContext, Ctx);
     }
     SECTION("Not Thread Safe")
     {
         Props.bMakeThreadSafe = false;
         rndr::GraphicsContext* Ctx = RndrCtx->CreateGraphicsContext(Props);
         REQUIRE(Ctx != nullptr);
-        RNDR_DELETE(RndrCtx.get(), rndr::GraphicsContext, Ctx);
+        RNDR_DELETE(rndr::GraphicsContext, Ctx);
     }
 }
 
@@ -71,7 +71,7 @@ TEST_CASE("Image", "RenderAPI")
         rndr::ImageProperties ImageProps;
         rndr::Image* Image = Ctx->CreateImage(100, 400, ImageProps, rndr::ByteSpan{});
         REQUIRE(Image != nullptr);
-        RNDR_DELETE(RndrCtx.get(), rndr::Image, Image);
+        RNDR_DELETE(rndr::Image, Image);
     }
     SECTION("Generate Mips")
     {
@@ -79,7 +79,7 @@ TEST_CASE("Image", "RenderAPI")
         ImageProps.bUseMips = true;
         rndr::Image* Image = Ctx->CreateImage(100, 400, ImageProps, rndr::ByteSpan{});
         REQUIRE(Image != nullptr);
-        RNDR_DELETE(RndrCtx.get(), rndr::Image, Image);
+        RNDR_DELETE(rndr::Image, Image);
     }
     SECTION("Use as render target")
     {
@@ -87,7 +87,7 @@ TEST_CASE("Image", "RenderAPI")
         ImageProps.ImageBindFlags = rndr::ImageBindFlags::RenderTarget;
         rndr::Image* Image = Ctx->CreateImage(100, 400, ImageProps, rndr::ByteSpan{});
         REQUIRE(Image != nullptr);
-        RNDR_DELETE(RndrCtx.get(), rndr::Image, Image);
+        RNDR_DELETE(rndr::Image, Image);
     }
     SECTION("Use as depth stencil texture")
     {
@@ -96,7 +96,7 @@ TEST_CASE("Image", "RenderAPI")
         ImageProps.ImageBindFlags = rndr::ImageBindFlags::DepthStencil;
         rndr::Image* Image = Ctx->CreateImage(100, 400, ImageProps, rndr::ByteSpan{});
         REQUIRE(Image != nullptr);
-        RNDR_DELETE(RndrCtx.get(), rndr::Image, Image);
+        RNDR_DELETE(rndr::Image, Image);
     }
     SECTION("Use as render target and shader resource")
     {
@@ -104,7 +104,7 @@ TEST_CASE("Image", "RenderAPI")
         ImageProps.ImageBindFlags = rndr::ImageBindFlags::RenderTarget | rndr::ImageBindFlags::ShaderResource;
         rndr::Image* Image = Ctx->CreateImage(100, 400, ImageProps, rndr::ByteSpan{});
         REQUIRE(Image != nullptr);
-        RNDR_DELETE(RndrCtx.get(), rndr::Image, Image);
+        RNDR_DELETE(rndr::Image, Image);
     }
     SECTION("Use dynamic image as shader resource")
     {
@@ -112,7 +112,7 @@ TEST_CASE("Image", "RenderAPI")
         ImageProps.Usage = rndr::Usage::Dynamic;
         rndr::Image* Image = Ctx->CreateImage(100, 400, ImageProps, rndr::ByteSpan{});
         REQUIRE(Image != nullptr);
-        RNDR_DELETE(RndrCtx.get(), rndr::Image, Image);
+        RNDR_DELETE(rndr::Image, Image);
     }
     SECTION("Create readback image")
     {
@@ -121,7 +121,7 @@ TEST_CASE("Image", "RenderAPI")
         ImageProps.ImageBindFlags = 0;
         rndr::Image* Image = Ctx->CreateImage(100, 400, ImageProps, rndr::ByteSpan{});
         REQUIRE(Image != nullptr);
-        RNDR_DELETE(RndrCtx.get(), rndr::Image, Image);
+        RNDR_DELETE(rndr::Image, Image);
     }
     SECTION("Multisampling Valid")
     {
@@ -129,7 +129,7 @@ TEST_CASE("Image", "RenderAPI")
         ImageProps.SampleCount = 8;
         rndr::Image* Image = Ctx->CreateImage(100, 400, ImageProps, rndr::ByteSpan{});
         REQUIRE(Image != nullptr);
-        RNDR_DELETE(RndrCtx.get(), rndr::Image, Image);
+        RNDR_DELETE(rndr::Image, Image);
     }
     SECTION("Multisampling Invalid")
     {
@@ -145,7 +145,7 @@ TEST_CASE("Image", "RenderAPI")
         ImageProps.ImageBindFlags = rndr::ImageBindFlags::RenderTarget;
         rndr::Image* Image = Ctx->CreateImage(100, 400, ImageProps, rndr::ByteSpan{});
         REQUIRE(Image != nullptr);
-        RNDR_DELETE(RndrCtx.get(), rndr::Image, Image);
+        RNDR_DELETE(rndr::Image, Image);
     }
     SECTION("Multisampling Valid Depth Stencil Target")
     {
@@ -155,10 +155,10 @@ TEST_CASE("Image", "RenderAPI")
         ImageProps.ImageBindFlags = rndr::ImageBindFlags::DepthStencil;
         rndr::Image* Image = Ctx->CreateImage(100, 400, ImageProps, rndr::ByteSpan{});
         REQUIRE(Image != nullptr);
-        RNDR_DELETE(RndrCtx.get(), rndr::Image, Image);
+        RNDR_DELETE(rndr::Image, Image);
     }
 
-    RNDR_DELETE(RndrCtx.get(), rndr::GraphicsContext, Ctx);
+    RNDR_DELETE(rndr::GraphicsContext, Ctx);
 }
 
 TEST_CASE("ImageArray", "RenderAPI")
@@ -188,7 +188,7 @@ TEST_CASE("ImageArray", "RenderAPI")
         rndr::ImageProperties ImageProps;
         rndr::Image* Image = Ctx->CreateImageArray(Width, Height, ArraySize, ImageProps, EmptyData);
         REQUIRE(Image != nullptr);
-        RNDR_DELETE(RndrCtx.get(), rndr::Image, Image);
+        RNDR_DELETE(rndr::Image, Image);
     }
     SECTION("Generate Mips")
     {
@@ -196,7 +196,7 @@ TEST_CASE("ImageArray", "RenderAPI")
         ImageProps.bUseMips = true;
         rndr::Image* Image = Ctx->CreateImageArray(Width, Height, ArraySize, ImageProps, EmptyData);
         REQUIRE(Image != nullptr);
-        RNDR_DELETE(RndrCtx.get(), rndr::Image, Image);
+        RNDR_DELETE(rndr::Image, Image);
     }
     SECTION("Use as render target")
     {
@@ -204,7 +204,7 @@ TEST_CASE("ImageArray", "RenderAPI")
         ImageProps.ImageBindFlags = rndr::ImageBindFlags::RenderTarget;
         rndr::Image* Image = Ctx->CreateImageArray(Width, Height, ArraySize, ImageProps, EmptyData);
         REQUIRE(Image != nullptr);
-        RNDR_DELETE(RndrCtx.get(), rndr::Image, Image);
+        RNDR_DELETE(rndr::Image, Image);
     }
     SECTION("Use as depth stencil texture")
     {
@@ -213,7 +213,7 @@ TEST_CASE("ImageArray", "RenderAPI")
         ImageProps.ImageBindFlags = rndr::ImageBindFlags::DepthStencil;
         rndr::Image* Image = Ctx->CreateImageArray(Width, Height, ArraySize, ImageProps, EmptyData);
         REQUIRE(Image != nullptr);
-        RNDR_DELETE(RndrCtx.get(), rndr::Image, Image);
+        RNDR_DELETE(rndr::Image, Image);
     }
     SECTION("Use dynamic image array as shader resource")
     {
@@ -229,7 +229,7 @@ TEST_CASE("ImageArray", "RenderAPI")
         ImageProps.ImageBindFlags = 0;
         rndr::Image* Image = Ctx->CreateImageArray(Width, Height, ArraySize, ImageProps, EmptyData);
         REQUIRE(Image != nullptr);
-        RNDR_DELETE(RndrCtx.get(), rndr::Image, Image);
+        RNDR_DELETE(rndr::Image, Image);
     }
     SECTION("Multisampling Valid")
     {
@@ -237,7 +237,7 @@ TEST_CASE("ImageArray", "RenderAPI")
         ImageProps.SampleCount = 8;
         rndr::Image* Image = Ctx->CreateImageArray(Width, Height, ArraySize, ImageProps, EmptyData);
         REQUIRE(Image != nullptr);
-        RNDR_DELETE(RndrCtx.get(), rndr::Image, Image);
+        RNDR_DELETE(rndr::Image, Image);
     }
     SECTION("Multisampling Invalid")
     {
@@ -253,7 +253,7 @@ TEST_CASE("ImageArray", "RenderAPI")
         ImageProps.ImageBindFlags = rndr::ImageBindFlags::RenderTarget;
         rndr::Image* Image = Ctx->CreateImageArray(Width, Height, ArraySize, ImageProps, EmptyData);
         REQUIRE(Image != nullptr);
-        RNDR_DELETE(RndrCtx.get(), rndr::Image, Image);
+        RNDR_DELETE(rndr::Image, Image);
     }
     SECTION("Multisampling Valid Depth Stencil Target")
     {
@@ -263,10 +263,10 @@ TEST_CASE("ImageArray", "RenderAPI")
         ImageProps.ImageBindFlags = rndr::ImageBindFlags::DepthStencil;
         rndr::Image* Image = Ctx->CreateImageArray(Width, Height, ArraySize, ImageProps, EmptyData);
         REQUIRE(Image != nullptr);
-        RNDR_DELETE(RndrCtx.get(), rndr::Image, Image);
+        RNDR_DELETE(rndr::Image, Image);
     }
 
-    RNDR_DELETE(RndrCtx.get(), rndr::GraphicsContext, Ctx);
+    RNDR_DELETE(rndr::GraphicsContext, Ctx);
 }
 
 TEST_CASE("CubeMap", "RenderAPI")
@@ -290,7 +290,7 @@ TEST_CASE("CubeMap", "RenderAPI")
         rndr::ImageProperties ImageProps;
         rndr::Image* Image = Ctx->CreateCubeMap(Width, Height, ImageProps, EmptyData);
         REQUIRE(Image != nullptr);
-        RNDR_DELETE(RndrCtx.get(), rndr::Image, Image);
+        RNDR_DELETE(rndr::Image, Image);
     }
     SECTION("Generate Mips")
     {
@@ -298,7 +298,7 @@ TEST_CASE("CubeMap", "RenderAPI")
         ImageProps.bUseMips = true;
         rndr::Image* Image = Ctx->CreateCubeMap(Width, Height, ImageProps, EmptyData);
         REQUIRE(Image != nullptr);
-        RNDR_DELETE(RndrCtx.get(), rndr::Image, Image);
+        RNDR_DELETE(rndr::Image, Image);
     }
     SECTION("Use as render target")
     {
@@ -306,7 +306,7 @@ TEST_CASE("CubeMap", "RenderAPI")
         ImageProps.ImageBindFlags = rndr::ImageBindFlags::RenderTarget;
         rndr::Image* Image = Ctx->CreateCubeMap(Width, Height, ImageProps, EmptyData);
         REQUIRE(Image != nullptr);
-        RNDR_DELETE(RndrCtx.get(), rndr::Image, Image);
+        RNDR_DELETE(rndr::Image, Image);
     }
     SECTION("Use as depth stencil texture")
     {
@@ -315,7 +315,7 @@ TEST_CASE("CubeMap", "RenderAPI")
         ImageProps.ImageBindFlags = rndr::ImageBindFlags::DepthStencil;
         rndr::Image* Image = Ctx->CreateCubeMap(Width, Height, ImageProps, EmptyData);
         REQUIRE(Image != nullptr);
-        RNDR_DELETE(RndrCtx.get(), rndr::Image, Image);
+        RNDR_DELETE(rndr::Image, Image);
     }
     SECTION("Use dynamic cube map as shader resource")
     {
@@ -331,10 +331,10 @@ TEST_CASE("CubeMap", "RenderAPI")
         ImageProps.ImageBindFlags = 0;
         rndr::Image* Image = Ctx->CreateCubeMap(Width, Height, ImageProps, EmptyData);
         REQUIRE(Image != nullptr);
-        RNDR_DELETE(RndrCtx.get(), rndr::Image, Image);
+        RNDR_DELETE(rndr::Image, Image);
     }
 
-    RNDR_DELETE(RndrCtx.get(), rndr::GraphicsContext, Ctx);
+    RNDR_DELETE(rndr::GraphicsContext, Ctx);
 }
 
 TEST_CASE("ImageUpdate", "RenderAPI")
@@ -379,7 +379,7 @@ TEST_CASE("ImageUpdate", "RenderAPI")
             REQUIRE(Result == false);
         }
 
-        RNDR_DELETE(RndrCtx.get(), rndr::Image, Image);
+        RNDR_DELETE(rndr::Image, Image);
     }
     SECTION("Dynamic Usage")
     {
@@ -393,11 +393,11 @@ TEST_CASE("ImageUpdate", "RenderAPI")
             REQUIRE(Result == true);
         }
 
-        RNDR_DELETE(RndrCtx.get(), rndr::Image, Image);
+        RNDR_DELETE(rndr::Image, Image);
     }
 
     delete[] UpdateData.Data;
-    RNDR_DELETE(RndrCtx.get(), rndr::GraphicsContext, Ctx);
+    RNDR_DELETE(rndr::GraphicsContext, Ctx);
 }
 
 TEST_CASE("ImageRead", "RenderAPI")
@@ -443,12 +443,12 @@ TEST_CASE("ImageRead", "RenderAPI")
             REQUIRE(*PixelData == PixelPattern);
         }
 
-        RNDR_DELETE(RndrCtx.get(), rndr::Image, Image);
+        RNDR_DELETE(rndr::Image, Image);
         delete[] ReadContents.Data;
     }
 
     delete[] InitData.Data;
-    RNDR_DELETE(RndrCtx.get(), rndr::GraphicsContext, Ctx);
+    RNDR_DELETE(rndr::GraphicsContext, Ctx);
 }
 
 TEST_CASE("ImageCopy", "RenderAPI")
@@ -499,13 +499,13 @@ TEST_CASE("ImageCopy", "RenderAPI")
             REQUIRE(*PixelData == PixelPattern);
         }
 
-        RNDR_DELETE(RndrCtx.get(), rndr::Image, RenderingImage);
-        RNDR_DELETE(RndrCtx.get(), rndr::Image, DstImage);
+        RNDR_DELETE(rndr::Image, RenderingImage);
+        RNDR_DELETE(rndr::Image, DstImage);
         delete[] ReadContents.Data;
     }
 
     delete[] InitData.Data;
-    RNDR_DELETE(RndrCtx.get(), rndr::GraphicsContext, Ctx);
+    RNDR_DELETE(rndr::GraphicsContext, Ctx);
 }
 
 TEST_CASE("FrameBuffer", "RenderAPI")
@@ -519,7 +519,7 @@ TEST_CASE("FrameBuffer", "RenderAPI")
         rndr::FrameBufferProperties Props;
         rndr::FrameBuffer* FB = Ctx->CreateFrameBuffer(100, 400, Props);
         REQUIRE(FB != nullptr);
-        RNDR_DELETE(RndrCtx.get(), rndr::FrameBuffer, FB);
+        RNDR_DELETE(rndr::FrameBuffer, FB);
     }
     SECTION("All On")
     {
@@ -528,7 +528,7 @@ TEST_CASE("FrameBuffer", "RenderAPI")
         Props.ColorBufferCount = rndr::GraphicsConstants::MaxFrameBufferColorBuffers;
         rndr::FrameBuffer* FB = Ctx->CreateFrameBuffer(100, 400, Props);
         REQUIRE(FB != nullptr);
-        RNDR_DELETE(RndrCtx.get(), rndr::FrameBuffer, FB);
+        RNDR_DELETE(rndr::FrameBuffer, FB);
     }
     SECTION("Bad Size")
     {
@@ -548,10 +548,10 @@ TEST_CASE("FrameBuffer", "RenderAPI")
         bool ResizeStatus2 = FB->Resize(Ctx, 200, 0);
         REQUIRE(ResizeStatus2 == false);
 
-        RNDR_DELETE(RndrCtx.get(), rndr::FrameBuffer, FB);
+        RNDR_DELETE(rndr::FrameBuffer, FB);
     }
 
-    RNDR_DELETE(RndrCtx.get(), rndr::GraphicsContext, Ctx);
+    RNDR_DELETE(rndr::GraphicsContext, Ctx);
 }
 
 TEST_CASE("Buffer", "RenderAPI")
@@ -588,7 +588,7 @@ TEST_CASE("Buffer", "RenderAPI")
         Props.Stride = Stride;
         rndr::Buffer* Buff = Ctx->CreateBuffer(Props, EmptyData);
         REQUIRE(Buff != nullptr);
-        RNDR_DELETE(RndrCtx.get(), rndr::Buffer, Buff);
+        RNDR_DELETE(rndr::Buffer, Buff);
     }
     SECTION("With Init Data")
     {
@@ -597,7 +597,7 @@ TEST_CASE("Buffer", "RenderAPI")
         Props.Stride = Stride;
         rndr::Buffer* Buff = Ctx->CreateBuffer(Props, InitData);
         REQUIRE(Buff != nullptr);
-        RNDR_DELETE(RndrCtx.get(), rndr::Buffer, Buff);
+        RNDR_DELETE(rndr::Buffer, Buff);
     }
     SECTION("Dynamic")
     {
@@ -615,7 +615,7 @@ TEST_CASE("Buffer", "RenderAPI")
             REQUIRE(Status == true);
         }
 
-        RNDR_DELETE(RndrCtx.get(), rndr::Buffer, Buff);
+        RNDR_DELETE(rndr::Buffer, Buff);
     }
     SECTION("Readback")
     {
@@ -638,11 +638,11 @@ TEST_CASE("Buffer", "RenderAPI")
             }
         }
 
-        RNDR_DELETE(RndrCtx.get(), rndr::Buffer, Buff);
+        RNDR_DELETE(rndr::Buffer, Buff);
     }
 
     delete InitData.Data;
-    RNDR_DELETE(RndrCtx.get(), rndr::GraphicsContext, Ctx);
+    RNDR_DELETE(rndr::GraphicsContext, Ctx);
 }
 
 TEST_CASE("Sampler", "RenderAPI")
@@ -656,10 +656,10 @@ TEST_CASE("Sampler", "RenderAPI")
         rndr::SamplerProperties Props;
         rndr::Sampler* S = Ctx->CreateSampler(Props);
         REQUIRE(S != nullptr);
-        RNDR_DELETE(RndrCtx.get(), rndr::Sampler, S);
+        RNDR_DELETE(rndr::Sampler, S);
     }
 
-    RNDR_DELETE(RndrCtx.get(), rndr::GraphicsContext, Ctx);
+    RNDR_DELETE(rndr::GraphicsContext, Ctx);
 }
 
 TEST_CASE("Shader", "RenderAPI")
@@ -680,10 +680,10 @@ TEST_CASE("Shader", "RenderAPI")
         Props.EntryPoint = "main";
         rndr::Shader* S = Ctx->CreateShader(Data, Props);
         REQUIRE(S != nullptr);
-        RNDR_DELETE(RndrCtx.get(), rndr::Shader, S);
+        RNDR_DELETE(rndr::Shader, S);
     }
 
-    RNDR_DELETE(RndrCtx.get(), rndr::GraphicsContext, Ctx);
+    RNDR_DELETE(rndr::GraphicsContext, Ctx);
 }
 
 TEST_CASE("InputLayout", "RenderAPI")
@@ -724,11 +724,11 @@ TEST_CASE("InputLayout", "RenderAPI")
         rndr::InputLayout* Layout = Ctx->CreateInputLayout(PackedProps, S);
         REQUIRE(Layout != nullptr);
 
-        RNDR_DELETE(RndrCtx.get(), rndr::InputLayout, Layout);
-        RNDR_DELETE(RndrCtx.get(), rndr::Shader, S);
+        RNDR_DELETE(rndr::InputLayout, Layout);
+        RNDR_DELETE(rndr::Shader, S);
     }
 
-    RNDR_DELETE(RndrCtx.get(), rndr::GraphicsContext, Ctx);
+    RNDR_DELETE(rndr::GraphicsContext, Ctx);
 }
 
 TEST_CASE("InputLayoutBuilder", "RenderAPI")
@@ -774,8 +774,8 @@ TEST_CASE("InputLayoutBuilder", "RenderAPI")
         rndr::InputLayout* Layout = Ctx->CreateInputLayout(LayoutProps, S);
         REQUIRE(Layout != nullptr);
 
-        RNDR_DELETE(RndrCtx.get(), rndr::InputLayout, Layout);
-        RNDR_DELETE(RndrCtx.get(), rndr::Shader, S);
+        RNDR_DELETE(rndr::InputLayout, Layout);
+        RNDR_DELETE(rndr::Shader, S);
     }
     SECTION("Complex")
     {
@@ -858,7 +858,7 @@ TEST_CASE("InputLayoutBuilder", "RenderAPI")
         REQUIRE(LayoutProps[8].InstanceStepRate == 1);
     }
 
-    RNDR_DELETE(RndrCtx.get(), rndr::GraphicsContext, Ctx);
+    RNDR_DELETE(rndr::GraphicsContext, Ctx);
 }
 
 TEST_CASE("RasterizerState", "RenderAPI")
@@ -872,10 +872,10 @@ TEST_CASE("RasterizerState", "RenderAPI")
         rndr::RasterizerProperties Props;
         rndr::RasterizerState* S = Ctx->CreateRasterizerState(Props);
         REQUIRE(S != nullptr);
-        RNDR_DELETE(RndrCtx.get(), rndr::RasterizerState, S);
+        RNDR_DELETE(rndr::RasterizerState, S);
     }
 
-    RNDR_DELETE(RndrCtx.get(), rndr::GraphicsContext, Ctx);
+    RNDR_DELETE(rndr::GraphicsContext, Ctx);
 }
 
 TEST_CASE("DepthStencilState", "RenderAPI")
@@ -889,10 +889,10 @@ TEST_CASE("DepthStencilState", "RenderAPI")
         rndr::DepthStencilProperties Props;
         rndr::DepthStencilState* S = Ctx->CreateDepthStencilState(Props);
         REQUIRE(S != nullptr);
-        RNDR_DELETE(RndrCtx.get(), rndr::DepthStencilState, S);
+        RNDR_DELETE(rndr::DepthStencilState, S);
     }
 
-    RNDR_DELETE(RndrCtx.get(), rndr::GraphicsContext, Ctx);
+    RNDR_DELETE(rndr::GraphicsContext, Ctx);
 }
 
 TEST_CASE("BlendState", "RenderAPI")
@@ -906,10 +906,10 @@ TEST_CASE("BlendState", "RenderAPI")
         rndr::BlendProperties Props;
         rndr::BlendState* S = Ctx->CreateBlendState(Props);
         REQUIRE(S != nullptr);
-        RNDR_DELETE(RndrCtx.get(), rndr::BlendState, S);
+        RNDR_DELETE(rndr::BlendState, S);
     }
 
-    RNDR_DELETE(RndrCtx.get(), rndr::GraphicsContext, Ctx);
+    RNDR_DELETE(rndr::GraphicsContext, Ctx);
 }
 
 TEST_CASE("SwapChain", "RenderAPI")
@@ -929,7 +929,7 @@ TEST_CASE("SwapChain", "RenderAPI")
     Ctx->ClearColor(S->FrameBuffer->ColorBuffers[0], math::Vector4{1, 1, 0.5, 1});
     Ctx->Present(S, true);
 
-    RNDR_DELETE(RndrCtx.get(), rndr::SwapChain, S);
-    RNDR_DELETE(RndrCtx.get(), rndr::Window, Win);
-    RNDR_DELETE(RndrCtx.get(), rndr::GraphicsContext, Ctx);
+    RNDR_DELETE(rndr::SwapChain, S);
+    RNDR_DELETE(rndr::Window, Win);
+    RNDR_DELETE(rndr::GraphicsContext, Ctx);
 }

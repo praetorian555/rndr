@@ -24,7 +24,6 @@ struct FrameBuffer
     int Width, Height;
     FrameBufferProperties Props;
 
-    class RndrContext* Context = nullptr;
     Span<Image*> ColorBuffers;
     Image* DepthStencilBuffer = nullptr;
 

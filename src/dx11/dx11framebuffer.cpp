@@ -30,7 +30,6 @@ bool rndr::FrameBuffer::Init(GraphicsContext* Context, int Width, int Height, co
         return false;
     }
 
-    this->Context = Context->GetRndrContext();
     this->Props = Props;
     this->Width = Width;
     this->Height = Height;
@@ -50,8 +49,6 @@ bool rndr::FrameBuffer::InitForSwapChain(rndr::GraphicsContext* Context, int Wid
         RNDR_LOG_ERROR("FrameBuffer::InitForSwapChain: Invalid swapchain!");
         return false;
     }
-
-    this->Context = Context->GetRndrContext();
 
     this->Props.ColorBufferCount = 1;
     this->Props.ColorBufferProperties[0].bUseMips = false;
@@ -126,23 +123,21 @@ void rndr::FrameBuffer::Clear()
     {
         for (int i = 0; i < ColorBuffers.Size; i++)
         {
-            RNDR_DELETE(Context, Image, ColorBuffers[i]);
+            RNDR_DELETE(Image, ColorBuffers[i]);
         }
-        RNDR_DELETE(Context, Image*, ColorBuffers.Data);
+        RNDR_DELETE(Image*, ColorBuffers.Data);
         ColorBuffers.Data = nullptr;
         ColorBuffers.Size = 0;
     }
     if (DepthStencilBuffer)
     {
-        RNDR_DELETE(Context, Image, DepthStencilBuffer);
+        RNDR_DELETE(Image, DepthStencilBuffer);
     }
 }
 
 bool rndr::FrameBuffer::InitInternal(GraphicsContext* Context, SwapChain* SwapChain)
 {
-    RndrContext* RndrContext = Context->GetRndrContext();
-
-    ColorBuffers.Data = RNDR_NEW_ARRAY(RndrContext, Image*, Props.ColorBufferCount, "rndr::FrameBuffer: Image");
+    ColorBuffers.Data = RNDR_NEW_ARRAY(Image*, Props.ColorBufferCount, "rndr::FrameBuffer: Image");
     ColorBuffers.Size = Props.ColorBufferCount;
     for (int i = 0; i < Props.ColorBufferCount; i++)
     {

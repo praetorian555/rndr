@@ -14,12 +14,11 @@
 rndr::SwapChain::~SwapChain()
 {
     DX11SafeRelease(DX11SwapChain);
-    RNDR_DELETE(Context, rndr::FrameBuffer, FrameBuffer);
+    RNDR_DELETE(rndr::FrameBuffer, FrameBuffer);
 }
 
 bool rndr::SwapChain::Init(GraphicsContext* Context, void* NativeWindowHandle, int Width, int Height, const SwapChainProperties& Props)
 {
-    this->Context = Context->GetRndrContext();
     this->Props = Props;
     this->Width = Width;
     this->Height = Height;

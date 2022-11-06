@@ -9,7 +9,7 @@ TEST_CASE("SingleObject", "Memory")
     rndr::RndrContext* App = new rndr::RndrContext();
     REQUIRE(App != nullptr);
 
-    int* MyInt = RNDR_NEW(App, int, "My Int", 5);
+    int* MyInt = RNDR_NEW(int, "My Int", 5);
     REQUIRE(*MyInt == 5);
 
     struct AggregateType
@@ -18,13 +18,13 @@ TEST_CASE("SingleObject", "Memory")
         double b;
     };
 
-    RNDR_DELETE(App, int, MyInt);
+    RNDR_DELETE(int, MyInt);
 
-    AggregateType* A = RNDR_NEW(App, AggregateType, "", 10, 15.2);
+    AggregateType* A = RNDR_NEW(AggregateType, "", 10, 15.2);
     REQUIRE(A->a == 10);
     REQUIRE(A->b == 15.2);
 
-    RNDR_DELETE(App, AggregateType, A);
+    RNDR_DELETE(AggregateType, A);
 
     struct AggregateType2
     {
@@ -33,10 +33,10 @@ TEST_CASE("SingleObject", "Memory")
 
         AggregateType2(int aa) { a = 10; }
     };
-    AggregateType2* B = RNDR_NEW(App, AggregateType2, "", 20);
+    AggregateType2* B = RNDR_NEW(AggregateType2, "", 20);
     REQUIRE(B->a == 10);
 
-    RNDR_DELETE(App, AggregateType2, B);
+    RNDR_DELETE(AggregateType2, B);
 
     delete App;
 }
@@ -46,12 +46,12 @@ TEST_CASE("Arrays", "Memory")
     rndr::RndrContext* App = new rndr::RndrContext();
     REQUIRE(App != nullptr);
 
-    int* MyInts = RNDR_NEW_ARRAY(App, int, 100, "My Int");
+    int* MyInts = RNDR_NEW_ARRAY(int, 100, "My Int");
     for (int i = 0; i < 100; i++)
     {
         REQUIRE(MyInts[i] == 0);
     }
-    RNDR_DELETE_ARRAY(App, int, MyInts, 100);
+    RNDR_DELETE_ARRAY(int, MyInts, 100);
 
     struct AggregateType
     {
@@ -59,13 +59,13 @@ TEST_CASE("Arrays", "Memory")
         double b = 5.5;
     };
 
-    AggregateType* A = RNDR_NEW_ARRAY(App, AggregateType, 10, "");
+    AggregateType* A = RNDR_NEW_ARRAY(AggregateType, 10, "");
     for (int i = 0; i < 10; i++)
     {
         REQUIRE(A->a == 2);
         REQUIRE(A->b == 5.5);
     }
-    RNDR_DELETE_ARRAY(App, AggregateType, A, 10);
+    RNDR_DELETE_ARRAY(AggregateType, A, 10);
 
     delete App;
 }
