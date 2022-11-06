@@ -4,8 +4,8 @@
 #include <chrono>
 
 #include "rndr/core/input.h"
-#include "rndr/core/rndrcontext.h"
 #include "rndr/core/log.h"
+#include "rndr/core/rndrcontext.h"
 
 #include "rndr/profiling/cputracer.h"
 
@@ -46,6 +46,22 @@ rndr::RndrContext::~RndrContext()
     RNDR_DELETE(this, Window, m_Window);
 
     StdAsyncLogger::Get()->ShutDown();
+}
+
+rndr::Window* rndr::RndrContext::CreateWin(int Width, int Height, const WindowProperties& Props)
+{
+    Window* W = RNDR_NEW(this, Window, "rndr::RndrContext: Window", Width, Height, Props);
+    return W;
+}
+
+rndr::GraphicsContext* rndr::RndrContext::CreateGraphicsContext(const GraphicsContextProperties& Props)
+{
+    GraphicsContext* GC = RNDR_NEW(this, GraphicsContext, "rndr::RndrContext: GraphicsContext");
+    if (!GC || !GC->Init(this, Props))
+    {
+        RNDR_DELETE(this, GraphicsContext, GC);
+    }
+    return GC;
 }
 
 rndr::Window* rndr::RndrContext::GetWindow()

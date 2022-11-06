@@ -46,6 +46,9 @@ public:
     InputSystem* GetInputSystem();
     InputContext* GetInputContext();
 
+    Window* CreateWin(int Width, int Height, const WindowProperties& Props = WindowProperties{});
+    GraphicsContext* CreateGraphicsContext(const GraphicsContextProperties& Props = GraphicsContextProperties{});
+
     // Run render loop.
     void Run();
 
