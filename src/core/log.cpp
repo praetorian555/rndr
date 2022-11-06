@@ -6,81 +6,72 @@
 #include "spdlog/sinks/stdout_color_sinks.h"
 #include "spdlog/spdlog.h"
 
-std::unique_ptr<rndr::StdAsyncLogger> rndr::StdAsyncLogger::s_Logger;
+#include "rndr/core/rndrcontext.h"
 
-static std::shared_ptr<spdlog::logger> s_SpdLogger;
-
-rndr::StdAsyncLogger* rndr::StdAsyncLogger::Get()
-{
-    if (!s_Logger)
-    {
-        s_Logger = std::make_unique<StdAsyncLogger>();
-    }
-
-    return s_Logger.get();
-}
-
-void rndr::StdAsyncLogger::Init(bool bMultithread)
+rndr::StdAsyncLogger::StdAsyncLogger()
 {
     spdlog::set_level(spdlog::level::debug);
     spdlog::set_level(spdlog::level::trace);
     spdlog::set_pattern("[%H:%M:%S:%e][%P][%t][%^%l%$][%@] %v");
 
     spdlog::init_thread_pool(8192, 1);  // queue with 8k items and 1 backing thread.
-    if (bMultithread)
-    {
-        s_SpdLogger = spdlog::create_async<spdlog::sinks::stdout_color_sink_mt>("async_stdout_logger");
-    }
-    else
-    {
-        s_SpdLogger = spdlog::create<spdlog::sinks::stdout_color_sink_st>("stdout_logger");
-    }
+
+    std::shared_ptr<spdlog::logger> spl = spdlog::create<spdlog::sinks::stdout_color_sink_st>("stdout_logger");
+    m_ImplLogger = spl.get();
 }
 
-void rndr::StdAsyncLogger::ShutDown()
+rndr::StdAsyncLogger::~StdAsyncLogger()
 {
-    spdlog::drop(s_SpdLogger->name());
-    s_SpdLogger.reset();
+    spdlog::drop(m_ImplLogger->name());
 }
 
-void rndr::StdAsyncLogger::Log(const char* File, int Line, const char* Function, rndr::LogLevel LogLevel, const char* format, ...)
+void rndr::StdAsyncLogger::Log(const char* File, int Line, const char* Function, rndr::LogLevel LogLevel, const char* Message)
 {
-    const int MESSAGE_SIZE = 4096;
-    char message[MESSAGE_SIZE] = {};
-
     spdlog::source_loc SourceInfo(File, Line, Function);
-
-    va_list args;
-    va_start(args, format);
-    vsprintf_s(message, MESSAGE_SIZE, format, args);
-    va_end(args);
 
     switch (LogLevel)
     {
         case rndr::LogLevel::Error:
         {
-            s_SpdLogger->log(SourceInfo, spdlog::level::level_enum::err, message);
+            m_ImplLogger->log(SourceInfo, spdlog::level::level_enum::err, Message);
             break;
         }
         case rndr::LogLevel::Warning:
         {
-            s_SpdLogger->log(SourceInfo, spdlog::level::level_enum::warn, message);
+            m_ImplLogger->log(SourceInfo, spdlog::level::level_enum::warn, Message);
             break;
         }
         case rndr::LogLevel::Debug:
         {
-            s_SpdLogger->log(SourceInfo, spdlog::level::level_enum::debug, message);
+            m_ImplLogger->log(SourceInfo, spdlog::level::level_enum::debug, Message);
             break;
         }
         case rndr::LogLevel::Info:
         {
-            s_SpdLogger->log(SourceInfo, spdlog::level::level_enum::info, message);
+            m_ImplLogger->log(SourceInfo, spdlog::level::level_enum::info, Message);
             break;
         }
         case rndr::LogLevel::Trace:
         {
-            s_SpdLogger->log(SourceInfo, spdlog::level::level_enum::trace, message);
+            m_ImplLogger->log(SourceInfo, spdlog::level::level_enum::trace, Message);
             break;
         }
+    }
+}
+
+void rndr::Log(const char* File, int Line, const char* Function, rndr::LogLevel LogLevel, const char* Format, ...)
+{
+    constexpr int MESSAGE_SIZE = 4096;
+    char Message[MESSAGE_SIZE] = {};
+
+    va_list Args;
+    va_start(Args, Format);
+    vsprintf_s(Message, MESSAGE_SIZE, Format, Args);
+    va_end(Args);
+
+    Logger* L = GRndrContext->GetLogger();
+    if (L)
+    {
+        L->Log(File, Line, Function, LogLevel, Message);
     }
 }

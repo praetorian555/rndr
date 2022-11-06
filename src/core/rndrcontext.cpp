@@ -28,6 +28,7 @@ rndr::RndrContext::RndrContext(const RndrContextProperties& Props)
 
     GRndrContext = this;
 
+    m_Props = Props;
     if (Props.UserAllocator)
     {
         m_Allocator = Props.UserAllocator;
@@ -36,8 +37,7 @@ rndr::RndrContext::RndrContext(const RndrContextProperties& Props)
     {
         m_Allocator = &g_DefaultAllocator;
     }
-
-    StdAsyncLogger::Get()->Init();
+    m_Logger = Props.UserLogger ? Props.UserLogger : RNDR_NEW(StdAsyncLogger, "Logger");
 
     bInitialized = true;
 }
@@ -46,7 +46,10 @@ rndr::RndrContext::~RndrContext()
 {
     if (bInitialized)
     {
-        StdAsyncLogger::Get()->ShutDown();
+        if (!m_Props.UserLogger)
+        {
+            RNDR_DELETE(Logger, m_Logger);
+        }
         GRndrContext = nullptr;
     }
 }
@@ -77,6 +80,11 @@ rndr::GraphicsContext* rndr::RndrContext::CreateGraphicsContext(const GraphicsCo
         RNDR_DELETE(GraphicsContext, GC);
     }
     return GC;
+}
+
+rndr::Logger* rndr::RndrContext::GetLogger()
+{
+    return m_Logger;
 }
 
 rndr::Allocator* rndr::RndrContext::GetAllocator()

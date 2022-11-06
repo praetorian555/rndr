@@ -5,6 +5,7 @@
 #include "rndr/core/delegate.h"
 #include "rndr/core/singletons.h"
 #include "rndr/core/window.h"
+#include "rndr/core/log.h"
 
 #include "rndr/render/graphicscontext.h"
 #include "rndr/render/swapchain.h"
@@ -20,6 +21,7 @@ using TickDelegate = MultiDelegate<real /* DeltaSeconds */>;
 struct RndrContextProperties
 {
     Allocator* UserAllocator = nullptr;
+    Logger* UserLogger = nullptr;
 };
 
 /**
@@ -32,6 +34,7 @@ public:
     ~RndrContext();
 
     Allocator* GetAllocator();
+    Logger* GetLogger();
 
     InputSystem* GetInputSystem();
     InputContext* GetInputContext();
@@ -102,10 +105,12 @@ public:
     TickDelegate OnTickDelegate;
 
 private:
+    RndrContextProperties m_Props;
     bool bInitialized = false;
 
     Singletons m_Singletons;
     Allocator* m_Allocator = nullptr;
+    Logger* m_Logger = nullptr;
 };
 
 extern RndrContext* GRndrContext;

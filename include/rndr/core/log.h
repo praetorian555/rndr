@@ -2,6 +2,11 @@
 
 #include "rndr/core/base.h"
 
+namespace spdlog
+{
+class logger;
+}
+
 namespace rndr
 {
 
@@ -14,31 +19,35 @@ enum class LogLevel
     Trace
 };
 
-class StdAsyncLogger
+class Logger
 {
 public:
-    static StdAsyncLogger* Get();
+    virtual ~Logger() = default;
 
-    void Init(bool bMultithread = false);
-    void ShutDown();
+    virtual void Log(const char* File, int Line, const char* Function, rndr::LogLevel LogLevel, const char* Message) = 0;
+};
 
-    void Log(const char* File, int Line, const char* Function, rndr::LogLevel LogLevel, const char* Format, ...);
+class StdAsyncLogger : public Logger
+{
+public:
+    StdAsyncLogger();
+    ~StdAsyncLogger();
+
+    virtual void Log(const char* File, int Line, const char* Function, rndr::LogLevel LogLevel, const char* Message) override;
 
 private:
-    static std::unique_ptr<StdAsyncLogger> s_Logger;
+    spdlog::logger* m_ImplLogger = nullptr;
 };
+
+void Log(const char* File, int Line, const char* Function, rndr::LogLevel LogLevel, const char* Format, ...);
 
 }  // namespace rndr
 
-#define RNDR_LOG_ERROR(format, ...) \
-    rndr::StdAsyncLogger::Get()->Log(__FILE__, __LINE__, __func__, rndr::LogLevel::Error, format, __VA_ARGS__)
-#define RNDR_LOG_WARNING(format, ...) \
-    rndr::StdAsyncLogger::Get()->Log(__FILE__, __LINE__, __func__, rndr::LogLevel::Warning, format, __VA_ARGS__)
-#define RNDR_LOG_DEBUG(format, ...) \
-    rndr::StdAsyncLogger::Get()->Log(__FILE__, __LINE__, __func__, rndr::LogLevel::Debug, format, __VA_ARGS__)
-#define RNDR_LOG_INFO(format, ...) rndr::StdAsyncLogger::Get()->Log(__FILE__, __LINE__, __func__, rndr::LogLevel::Info, format, __VA_ARGS__)
-#define RNDR_LOG_TRACE(format, ...) \
-    rndr::StdAsyncLogger::Get()->Log(__FILE__, __LINE__, __func__, rndr::LogLevel::Trace, format, __VA_ARGS__)
+#define RNDR_LOG_ERROR(format, ...) rndr::Log(__FILE__, __LINE__, __func__, rndr::LogLevel::Error, format, __VA_ARGS__)
+#define RNDR_LOG_WARNING(format, ...) rndr::Log(__FILE__, __LINE__, __func__, rndr::LogLevel::Warning, format, __VA_ARGS__)
+#define RNDR_LOG_DEBUG(format, ...) rndr::Log(__FILE__, __LINE__, __func__, rndr::LogLevel::Debug, format, __VA_ARGS__)
+#define RNDR_LOG_INFO(format, ...) rndr::Log(__FILE__, __LINE__, __func__, rndr::LogLevel::Info, format, __VA_ARGS__)
+#define RNDR_LOG_TRACE(format, ...) rndr::Log(__FILE__, __LINE__, __func__, rndr::LogLevel::Trace, format, __VA_ARGS__)
 
 #if defined RNDR_DEBUG
 #define RNDR_LOG_ERROR_OR_ASSERT(format, ...) \
