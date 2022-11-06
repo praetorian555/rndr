@@ -14,8 +14,19 @@
 
 static rndr::DefaultAllocator g_DefaultAllocator;
 
+rndr::RndrContext* rndr::GRndrContext = nullptr;
+
 rndr::RndrContext::RndrContext(const RndrContextProperties& Props)
 {
+    if (GRndrContext)
+    {
+        RNDR_LOG_ERROR("RndrContext already created, there can be only one!");
+        bInitialized = false;
+        return;
+    }
+
+    GRndrContext = this;
+
     if (Props.UserAllocator)
     {
         m_Allocator = Props.UserAllocator;
@@ -26,21 +37,39 @@ rndr::RndrContext::RndrContext(const RndrContextProperties& Props)
     }
 
     StdAsyncLogger::Get()->Init();
+
+    bInitialized = true;
 }
 
 rndr::RndrContext::~RndrContext()
 {
-    StdAsyncLogger::Get()->ShutDown();
+    if (bInitialized)
+    {
+        StdAsyncLogger::Get()->ShutDown();
+        GRndrContext = nullptr;
+    }
 }
 
 rndr::Window* rndr::RndrContext::CreateWin(int Width, int Height, const WindowProperties& Props)
 {
+    if (!bInitialized)
+    {
+        RNDR_LOG_ERROR("RndrContext instance didn't initialize properly!");
+        return nullptr;
+    }
+
     Window* W = RNDR_NEW(this, Window, "rndr::RndrContext: Window", Width, Height, Props);
     return W;
 }
 
 rndr::GraphicsContext* rndr::RndrContext::CreateGraphicsContext(const GraphicsContextProperties& Props)
 {
+    if (!bInitialized)
+    {
+        RNDR_LOG_ERROR("RndrContext instance didn't initialize properly!");
+        return nullptr;
+    }
+
     GraphicsContext* GC = RNDR_NEW(this, GraphicsContext, "rndr::RndrContext: GraphicsContext");
     if (!GC || !GC->Init(this, Props))
     {
@@ -51,11 +80,23 @@ rndr::GraphicsContext* rndr::RndrContext::CreateGraphicsContext(const GraphicsCo
 
 rndr::InputSystem* rndr::RndrContext::GetInputSystem()
 {
+    if (!bInitialized)
+    {
+        RNDR_LOG_ERROR("RndrContext instance didn't initialize properly!");
+        return nullptr;
+    }
+
     return rndr::InputSystem::Get();
 }
 
 rndr::InputContext* rndr::RndrContext::GetInputContext()
 {
+    if (!bInitialized)
+    {
+        RNDR_LOG_ERROR("RndrContext instance didn't initialize properly!");
+        return nullptr;
+    }
+
     return rndr::InputSystem::Get()->GetContext();
 }
 

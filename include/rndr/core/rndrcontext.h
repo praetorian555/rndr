@@ -100,9 +100,13 @@ public:
     TickDelegate OnTickDelegate;
 
 private:
+    bool bInitialized = false;
+
     Singletons m_Singletons;
     Allocator* m_Allocator = nullptr;
 };
+
+extern RndrContext* GRndrContext;
 
 }  // namespace rndr
 
