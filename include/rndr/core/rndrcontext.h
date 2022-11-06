@@ -45,62 +45,6 @@ public:
     // Run render loop.
     void Run();
 
-    template <typename T, typename... Args>
-    T* Create(const char* Tag, const char* File, int Line, Args&&... Arguments)
-    {
-        void* Memory = m_Allocator->Allocate(sizeof(T), Tag, File, Line);
-        if (!Memory)
-        {
-            return nullptr;
-        }
-        return new (Memory) T{std::forward<Args>(Arguments)...};
-    }
-
-    template <typename T>
-    T* CreateArray(int Count, const char* Tag, const char* File, int Line)
-    {
-        if (Count <= 0)
-        {
-            return nullptr;
-        }
-        void* Memory = m_Allocator->Allocate(Count * sizeof(T), Tag, File, Line);
-        if (!Memory)
-        {
-            return nullptr;
-        }
-        return new (Memory) T[Count]{};
-    }
-
-    template <typename T>
-    void Destroy(T* Ptr)
-    {
-        if (!Ptr)
-        {
-            return;
-        }
-        Ptr->~T();
-        m_Allocator->Deallocate(Ptr);
-    }
-
-    template <typename T>
-    void DestroyArray(T* Ptr, int Count)
-    {
-        if (!Ptr)
-        {
-            return;
-        }
-        if (Count > 0)
-        {
-            T* It = Ptr;
-            for (int i = 0; i < Count; i++)
-            {
-                It->~T();
-                It++;
-            }
-        }
-        m_Allocator->Deallocate(Ptr);
-    }
-
 public:
     TickDelegate OnTickDelegate;
 
