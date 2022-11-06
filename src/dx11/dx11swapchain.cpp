@@ -5,7 +5,7 @@
 #include <dxgi.h>
 
 #include "rndr/core/log.h"
-#include "rndr/core/rndrcontext.h"
+#include "rndr/core/memory.h"
 
 #include "rndr/render/dx11/dx11framebuffer.h"
 #include "rndr/render/dx11/dx11graphicscontext.h"

@@ -31,6 +31,8 @@ public:
     RndrContext(const RndrContextProperties& Props = RndrContextProperties{});
     ~RndrContext();
 
+    Allocator* GetAllocator();
+
     InputSystem* GetInputSystem();
     InputContext* GetInputContext();
 
@@ -109,8 +111,3 @@ private:
 extern RndrContext* GRndrContext;
 
 }  // namespace rndr
-
-#define RNDR_NEW(Type, Tag, ...) rndr::GRndrContext->Create<Type>(Tag, __FILE__, __LINE__, __VA_ARGS__)
-#define RNDR_NEW_ARRAY(Type, Count, Tag, ...) rndr::GRndrContext->CreateArray<Type>(Count, Tag, __FILE__, __LINE__)
-#define RNDR_DELETE(Type, Ptr) rndr::GRndrContext->Destroy<Type>(Ptr), Ptr = nullptr
-#define RNDR_DELETE_ARRAY(Type, Ptr, Count) rndr::GRndrContext->DestroyArray<Type>(Ptr, Count), Ptr = nullptr

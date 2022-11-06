@@ -5,6 +5,7 @@
 
 #include "rndr/core/input.h"
 #include "rndr/core/log.h"
+#include "rndr/core/memory.h"
 #include "rndr/core/rndrcontext.h"
 
 #include "rndr/profiling/cputracer.h"
@@ -76,6 +77,11 @@ rndr::GraphicsContext* rndr::RndrContext::CreateGraphicsContext(const GraphicsCo
         RNDR_DELETE(GraphicsContext, GC);
     }
     return GC;
+}
+
+rndr::Allocator* rndr::RndrContext::GetAllocator()
+{
+    return m_Allocator;
 }
 
 rndr::InputSystem* rndr::RndrContext::GetInputSystem()

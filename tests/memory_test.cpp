@@ -3,6 +3,7 @@
 #include "math/math.h"
 
 #include "rndr/core/rndrcontext.h"
+#include "rndr/core/memory.h"
 
 TEST_CASE("SingleObject", "Memory")
 {

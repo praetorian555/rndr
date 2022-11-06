@@ -5,6 +5,7 @@
 #include "rndr/core/log.h"
 #include "rndr/core/rndrcontext.h"
 #include "rndr/core/window.h"
+#include "rndr/core/memory.h"
 
 #include "rndr/render/buffer.h"
 #include "rndr/render/framebuffer.h"
