@@ -26,25 +26,10 @@ rndr::RndrContext::RndrContext(const RndrContextProperties& Props)
     }
 
     StdAsyncLogger::Get()->Init();
-
-    m_GraphicsContext = RNDR_NEW(this, GraphicsContext, "rndr::RndrContext: GraphicsContext");
-    m_GraphicsContext->Init(this, Props.GraphicsContext);
-    if (Props.bCreateWindow)
-    {
-        m_Window = RNDR_NEW(this, Window, "rndr::RndrContext: Window", Props.WindowWidth, Props.WindowHeight, Props.Window);
-        GetInputSystem()->SetWindow(m_Window);
-
-        void* NativeWindowHandle = (void*)m_Window->GetNativeWindowHandle();
-        m_SwapChain = m_GraphicsContext->CreateSwapChain(NativeWindowHandle, Props.WindowWidth, Props.WindowHeight, Props.SwapChain);
-    }
 }
 
 rndr::RndrContext::~RndrContext()
 {
-    RNDR_DELETE(this, SwapChain, m_SwapChain);
-    RNDR_DELETE(this, GraphicsContext, m_GraphicsContext);
-    RNDR_DELETE(this, Window, m_Window);
-
     StdAsyncLogger::Get()->ShutDown();
 }
 
@@ -64,21 +49,6 @@ rndr::GraphicsContext* rndr::RndrContext::CreateGraphicsContext(const GraphicsCo
     return GC;
 }
 
-rndr::Window* rndr::RndrContext::GetWindow()
-{
-    return m_Window;
-}
-
-rndr::GraphicsContext* rndr::RndrContext::GetGraphicsContext()
-{
-    return m_GraphicsContext;
-}
-
-rndr::SwapChain* rndr::RndrContext::GetSwapChain()
-{
-    return m_SwapChain;
-}
-
 rndr::InputSystem* rndr::RndrContext::GetInputSystem()
 {
     return rndr::InputSystem::Get();
@@ -91,7 +61,7 @@ rndr::InputContext* rndr::RndrContext::GetInputContext()
 
 void rndr::RndrContext::Run()
 {
-    real FrameDuration = 0;
+    /*real FrameDuration = 0;
 
     while (!m_Window->IsClosed())
     {
@@ -116,5 +86,5 @@ void rndr::RndrContext::Run()
         FrameDuration = std::chrono::duration_cast<std::chrono::microseconds>(FrameEnd - FrameStart).count();
         FrameDuration /= 1'000'000;
         FrameDuration = math::Clamp(FrameDuration, 0, 0.05);
-    }
+    }*/
 }

@@ -17,41 +17,47 @@
 
 TEST_CASE("GraphicsContext", "RenderAPI")
 {
-    rndr::RndrContextProperties Props;
-    Props.GraphicsContext.bDisableGPUTimeout = false;
-    Props.GraphicsContext.bEnableDebugLayer = true;
-    Props.GraphicsContext.bFailWarning = true;
-    Props.GraphicsContext.bMakeThreadSafe = true;
+    std::unique_ptr<rndr::RndrContext> RndrCtx(new rndr::RndrContext());
+
+    rndr::GraphicsContextProperties Props;
+    Props.bDisableGPUTimeout = false;
+    Props.bEnableDebugLayer = true;
+    Props.bFailWarning = true;
+    Props.bMakeThreadSafe = true;
 
     SECTION("Default")
     {
-        std::unique_ptr<rndr::RndrContext> Ctx(new rndr::RndrContext(Props));
-        REQUIRE(Ctx->GetGraphicsContext() != nullptr);
+        rndr::GraphicsContext* Ctx = RndrCtx->CreateGraphicsContext(Props);
+        REQUIRE(Ctx != nullptr);
+        RNDR_DELETE(RndrCtx.get(), rndr::GraphicsContext, Ctx);
     }
     SECTION("Disable GPU Timeout")
     {
-        Props.GraphicsContext.bDisableGPUTimeout = true;
-        std::unique_ptr<rndr::RndrContext> Ctx(new rndr::RndrContext(Props));
-        REQUIRE(Ctx->GetGraphicsContext() != nullptr);
+        Props.bDisableGPUTimeout = true;
+        rndr::GraphicsContext* Ctx = RndrCtx->CreateGraphicsContext(Props);
+        REQUIRE(Ctx != nullptr);
+        RNDR_DELETE(RndrCtx.get(), rndr::GraphicsContext, Ctx);
     }
     SECTION("No Debug Layer")
     {
-        Props.GraphicsContext.bEnableDebugLayer = false;
-        std::unique_ptr<rndr::RndrContext> Ctx(new rndr::RndrContext(Props));
-        REQUIRE(Ctx->GetGraphicsContext() != nullptr);
+        Props.bEnableDebugLayer = false;
+        rndr::GraphicsContext* Ctx = RndrCtx->CreateGraphicsContext(Props);
+        REQUIRE(Ctx != nullptr);
+        RNDR_DELETE(RndrCtx.get(), rndr::GraphicsContext, Ctx);
     }
     SECTION("Not Thread Safe")
     {
-        Props.GraphicsContext.bMakeThreadSafe = false;
-        std::unique_ptr<rndr::RndrContext> Ctx(new rndr::RndrContext(Props));
-        REQUIRE(Ctx->GetGraphicsContext() != nullptr);
+        Props.bMakeThreadSafe = false;
+        rndr::GraphicsContext* Ctx = RndrCtx->CreateGraphicsContext(Props);
+        REQUIRE(Ctx != nullptr);
+        RNDR_DELETE(RndrCtx.get(), rndr::GraphicsContext, Ctx);
     }
 }
 
 TEST_CASE("Image", "RenderAPI")
 {
     std::unique_ptr<rndr::RndrContext> RndrCtx(new rndr::RndrContext());
-    rndr::GraphicsContext* Ctx = RndrCtx->GetGraphicsContext();
+    rndr::GraphicsContext* Ctx = RndrCtx->CreateGraphicsContext();
     REQUIRE(Ctx != nullptr);
 
     SECTION("Default Props with Invalid Width or Height")
@@ -151,12 +157,14 @@ TEST_CASE("Image", "RenderAPI")
         REQUIRE(Image != nullptr);
         RNDR_DELETE(RndrCtx.get(), rndr::Image, Image);
     }
+
+    RNDR_DELETE(RndrCtx.get(), rndr::GraphicsContext, Ctx);
 }
 
 TEST_CASE("ImageArray", "RenderAPI")
 {
     std::unique_ptr<rndr::RndrContext> RndrCtx(new rndr::RndrContext());
-    rndr::GraphicsContext* Ctx = RndrCtx->GetGraphicsContext();
+    rndr::GraphicsContext* Ctx = RndrCtx->CreateGraphicsContext();
     REQUIRE(Ctx != nullptr);
 
     const rndr::Span<rndr::ByteSpan> EmptyData;
@@ -257,12 +265,14 @@ TEST_CASE("ImageArray", "RenderAPI")
         REQUIRE(Image != nullptr);
         RNDR_DELETE(RndrCtx.get(), rndr::Image, Image);
     }
+
+    RNDR_DELETE(RndrCtx.get(), rndr::GraphicsContext, Ctx);
 }
 
 TEST_CASE("CubeMap", "RenderAPI")
 {
     std::unique_ptr<rndr::RndrContext> RndrCtx(new rndr::RndrContext());
-    rndr::GraphicsContext* Ctx = RndrCtx->GetGraphicsContext();
+    rndr::GraphicsContext* Ctx = RndrCtx->CreateGraphicsContext();
     REQUIRE(Ctx != nullptr);
 
     const rndr::Span<rndr::ByteSpan> EmptyData;
@@ -323,12 +333,14 @@ TEST_CASE("CubeMap", "RenderAPI")
         REQUIRE(Image != nullptr);
         RNDR_DELETE(RndrCtx.get(), rndr::Image, Image);
     }
+
+    RNDR_DELETE(RndrCtx.get(), rndr::GraphicsContext, Ctx);
 }
 
 TEST_CASE("ImageUpdate", "RenderAPI")
 {
     std::unique_ptr<rndr::RndrContext> RndrCtx(new rndr::RndrContext());
-    rndr::GraphicsContext* Ctx = RndrCtx->GetGraphicsContext();
+    rndr::GraphicsContext* Ctx = RndrCtx->CreateGraphicsContext();
     REQUIRE(Ctx != nullptr);
 
     const rndr::Span<rndr::ByteSpan> EmptyDataArray;
@@ -385,12 +397,13 @@ TEST_CASE("ImageUpdate", "RenderAPI")
     }
 
     delete[] UpdateData.Data;
+    RNDR_DELETE(RndrCtx.get(), rndr::GraphicsContext, Ctx);
 }
 
 TEST_CASE("ImageRead", "RenderAPI")
 {
     std::unique_ptr<rndr::RndrContext> RndrCtx(new rndr::RndrContext());
-    rndr::GraphicsContext* Ctx = RndrCtx->GetGraphicsContext();
+    rndr::GraphicsContext* Ctx = RndrCtx->CreateGraphicsContext();
     REQUIRE(Ctx != nullptr);
 
     const rndr::Span<rndr::ByteSpan> EmptyDataArray;
@@ -435,12 +448,13 @@ TEST_CASE("ImageRead", "RenderAPI")
     }
 
     delete[] InitData.Data;
+    RNDR_DELETE(RndrCtx.get(), rndr::GraphicsContext, Ctx);
 }
 
 TEST_CASE("ImageCopy", "RenderAPI")
 {
     std::unique_ptr<rndr::RndrContext> RndrCtx(new rndr::RndrContext());
-    rndr::GraphicsContext* Ctx = RndrCtx->GetGraphicsContext();
+    rndr::GraphicsContext* Ctx = RndrCtx->CreateGraphicsContext();
     REQUIRE(Ctx != nullptr);
 
     const rndr::ByteSpan EmptyData;
@@ -491,12 +505,13 @@ TEST_CASE("ImageCopy", "RenderAPI")
     }
 
     delete[] InitData.Data;
+    RNDR_DELETE(RndrCtx.get(), rndr::GraphicsContext, Ctx);
 }
 
 TEST_CASE("FrameBuffer", "RenderAPI")
 {
     std::unique_ptr<rndr::RndrContext> RndrCtx(new rndr::RndrContext());
-    rndr::GraphicsContext* Ctx = RndrCtx->GetGraphicsContext();
+    rndr::GraphicsContext* Ctx = RndrCtx->CreateGraphicsContext();
     REQUIRE(Ctx != nullptr);
 
     SECTION("Default")
@@ -535,12 +550,14 @@ TEST_CASE("FrameBuffer", "RenderAPI")
 
         RNDR_DELETE(RndrCtx.get(), rndr::FrameBuffer, FB);
     }
+
+    RNDR_DELETE(RndrCtx.get(), rndr::GraphicsContext, Ctx);
 }
 
 TEST_CASE("Buffer", "RenderAPI")
 {
     std::unique_ptr<rndr::RndrContext> RndrCtx(new rndr::RndrContext());
-    rndr::GraphicsContext* Ctx = RndrCtx->GetGraphicsContext();
+    rndr::GraphicsContext* Ctx = RndrCtx->CreateGraphicsContext();
     REQUIRE(Ctx != nullptr);
 
     rndr::ByteSpan EmptyData;
@@ -625,12 +642,13 @@ TEST_CASE("Buffer", "RenderAPI")
     }
 
     delete InitData.Data;
+    RNDR_DELETE(RndrCtx.get(), rndr::GraphicsContext, Ctx);
 }
 
 TEST_CASE("Sampler", "RenderAPI")
 {
     std::unique_ptr<rndr::RndrContext> RndrCtx(new rndr::RndrContext());
-    rndr::GraphicsContext* Ctx = RndrCtx->GetGraphicsContext();
+    rndr::GraphicsContext* Ctx = RndrCtx->CreateGraphicsContext();
     REQUIRE(Ctx != nullptr);
 
     SECTION("Default")
@@ -640,12 +658,14 @@ TEST_CASE("Sampler", "RenderAPI")
         REQUIRE(S != nullptr);
         RNDR_DELETE(RndrCtx.get(), rndr::Sampler, S);
     }
+
+    RNDR_DELETE(RndrCtx.get(), rndr::GraphicsContext, Ctx);
 }
 
 TEST_CASE("Shader", "RenderAPI")
 {
     std::unique_ptr<rndr::RndrContext> RndrCtx(new rndr::RndrContext());
-    rndr::GraphicsContext* Ctx = RndrCtx->GetGraphicsContext();
+    rndr::GraphicsContext* Ctx = RndrCtx->CreateGraphicsContext();
     REQUIRE(Ctx != nullptr);
 
     SECTION("Default")
@@ -662,12 +682,14 @@ TEST_CASE("Shader", "RenderAPI")
         REQUIRE(S != nullptr);
         RNDR_DELETE(RndrCtx.get(), rndr::Shader, S);
     }
+
+    RNDR_DELETE(RndrCtx.get(), rndr::GraphicsContext, Ctx);
 }
 
 TEST_CASE("InputLayout", "RenderAPI")
 {
     std::unique_ptr<rndr::RndrContext> RndrCtx(new rndr::RndrContext());
-    rndr::GraphicsContext* Ctx = RndrCtx->GetGraphicsContext();
+    rndr::GraphicsContext* Ctx = RndrCtx->CreateGraphicsContext();
     REQUIRE(Ctx != nullptr);
 
     SECTION("Default")
@@ -705,12 +727,14 @@ TEST_CASE("InputLayout", "RenderAPI")
         RNDR_DELETE(RndrCtx.get(), rndr::InputLayout, Layout);
         RNDR_DELETE(RndrCtx.get(), rndr::Shader, S);
     }
+
+    RNDR_DELETE(RndrCtx.get(), rndr::GraphicsContext, Ctx);
 }
 
 TEST_CASE("InputLayoutBuilder", "RenderAPI")
 {
     std::unique_ptr<rndr::RndrContext> RndrCtx(new rndr::RndrContext());
-    rndr::GraphicsContext* Ctx = RndrCtx->GetGraphicsContext();
+    rndr::GraphicsContext* Ctx = RndrCtx->CreateGraphicsContext();
     REQUIRE(Ctx != nullptr);
 
     SECTION("Default")
@@ -833,12 +857,14 @@ TEST_CASE("InputLayoutBuilder", "RenderAPI")
         REQUIRE(LayoutProps[8].Repetition == rndr::DataRepetition::PerInstance);
         REQUIRE(LayoutProps[8].InstanceStepRate == 1);
     }
+
+    RNDR_DELETE(RndrCtx.get(), rndr::GraphicsContext, Ctx);
 }
 
 TEST_CASE("RasterizerState", "RenderAPI")
 {
     std::unique_ptr<rndr::RndrContext> RndrCtx(new rndr::RndrContext());
-    rndr::GraphicsContext* Ctx = RndrCtx->GetGraphicsContext();
+    rndr::GraphicsContext* Ctx = RndrCtx->CreateGraphicsContext();
     REQUIRE(Ctx != nullptr);
 
     SECTION("Default")
@@ -848,12 +874,14 @@ TEST_CASE("RasterizerState", "RenderAPI")
         REQUIRE(S != nullptr);
         RNDR_DELETE(RndrCtx.get(), rndr::RasterizerState, S);
     }
+
+    RNDR_DELETE(RndrCtx.get(), rndr::GraphicsContext, Ctx);
 }
 
 TEST_CASE("DepthStencilState", "RenderAPI")
 {
     std::unique_ptr<rndr::RndrContext> RndrCtx(new rndr::RndrContext());
-    rndr::GraphicsContext* Ctx = RndrCtx->GetGraphicsContext();
+    rndr::GraphicsContext* Ctx = RndrCtx->CreateGraphicsContext();
     REQUIRE(Ctx != nullptr);
 
     SECTION("Default")
@@ -863,12 +891,14 @@ TEST_CASE("DepthStencilState", "RenderAPI")
         REQUIRE(S != nullptr);
         RNDR_DELETE(RndrCtx.get(), rndr::DepthStencilState, S);
     }
+
+    RNDR_DELETE(RndrCtx.get(), rndr::GraphicsContext, Ctx);
 }
 
 TEST_CASE("BlendState", "RenderAPI")
 {
     std::unique_ptr<rndr::RndrContext> RndrCtx(new rndr::RndrContext());
-    rndr::GraphicsContext* Ctx = RndrCtx->GetGraphicsContext();
+    rndr::GraphicsContext* Ctx = RndrCtx->CreateGraphicsContext();
     REQUIRE(Ctx != nullptr);
 
     SECTION("Default")
@@ -878,21 +908,28 @@ TEST_CASE("BlendState", "RenderAPI")
         REQUIRE(S != nullptr);
         RNDR_DELETE(RndrCtx.get(), rndr::BlendState, S);
     }
+
+    RNDR_DELETE(RndrCtx.get(), rndr::GraphicsContext, Ctx);
 }
 
 TEST_CASE("SwapChain", "RenderAPI")
 {
-    rndr::RndrContextProperties Props;
-    Props.bCreateWindow = true;
-    std::unique_ptr<rndr::RndrContext> RndrCtx(new rndr::RndrContext(Props));
-    rndr::GraphicsContext* Ctx = RndrCtx->GetGraphicsContext();
+    std::unique_ptr<rndr::RndrContext> RndrCtx(new rndr::RndrContext());
+    rndr::GraphicsContext* Ctx = RndrCtx->CreateGraphicsContext();
+    rndr::Window* Win = RndrCtx->CreateWin(800, 600);
     REQUIRE(Ctx != nullptr);
 
-    rndr::SwapChain* S = RndrCtx->GetSwapChain();
+    void* NativeWinHandle = (void*)Win->GetNativeWindowHandle();
+    rndr::SwapChainProperties SwapProps;
+    rndr::SwapChain* S = Ctx->CreateSwapChain(NativeWinHandle, Win->GetWidth(), Win->GetHeight(), SwapProps);
     REQUIRE(S != nullptr);
 
     Ctx->ClearColor(S->FrameBuffer->ColorBuffers[0], math::Vector4{1, 1, 1, 1});
     Ctx->Present(S, true);
     Ctx->ClearColor(S->FrameBuffer->ColorBuffers[0], math::Vector4{1, 1, 0.5, 1});
     Ctx->Present(S, true);
+
+    RNDR_DELETE(RndrCtx.get(), rndr::SwapChain, S);
+    RNDR_DELETE(RndrCtx.get(), rndr::Window, Win);
+    RNDR_DELETE(RndrCtx.get(), rndr::GraphicsContext, Ctx);
 }

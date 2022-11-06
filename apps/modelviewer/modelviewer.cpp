@@ -37,8 +37,10 @@ std::string g_ModelPath;
 
 rndr::RndrContext* g_App = nullptr;
 rndr::GraphicsContext* g_Context = nullptr;
+rndr::Window* g_Window = nullptr;
 rndr::FirstPersonCamera* g_Camera = nullptr;
 
+rndr::SwapChain* g_SwapChain = nullptr;
 rndr::Shader* g_VertexShader = nullptr;
 rndr::Shader* g_FragmentShader = nullptr;
 rndr::InputLayout* g_InputLayout = nullptr;
@@ -101,7 +103,8 @@ void Init()
     g_App = new rndr::RndrContext{};
     assert(g_App);
     g_App->OnTickDelegate.Add(Loop);
-    g_Context = g_App->GetGraphicsContext();
+    g_Context = g_App->CreateGraphicsContext();
+    g_Window = g_App->CreateWin(1024, 768);
 
     rndr::ui::UIProperties UIProps;
     bool Result = rndr::ui::Init(g_Context, UIProps);
@@ -116,8 +119,8 @@ void Init()
     rndr::ProjectionCameraProperties CameraProps;
     CameraProps.Projection = rndr::ProjectionType::Perspective;
     CameraProps.VerticalFOV = 60;
-    CameraProps.ScreenWidth = g_App->GetWindow()->GetWidth();
-    CameraProps.ScreenHeight = g_App->GetWindow()->GetHeight();
+    CameraProps.ScreenWidth = g_Window->GetWidth();
+    CameraProps.ScreenHeight = g_Window->GetHeight();
     CameraProps.Near = 0.01f;
     CameraProps.Far = 100.0f;
     rndr::ProjectionCamera* ProjCamera = new rndr::ProjectionCamera(math::Transform{}, CameraProps);
@@ -126,7 +129,7 @@ void Init()
     rndr::WindowDelegates::OnResize.Add(
         [](rndr::Window* Window, int Width, int Height)
         {
-            if (g_App->GetWindow() == Window)
+            if (g_Window == Window)
             {
                 g_Camera->GetProjectionCamera()->SetScreenSize(Width, Height);
             }
@@ -598,8 +601,7 @@ void Render(float DeltaSeconds)
 
 void Present(bool bVSync)
 {
-    rndr::GraphicsContext* GC = g_App->GetGraphicsContext();
-    GC->Present(g_App->GetSwapChain(), bVSync);
+    g_Context->Present(g_SwapChain, bVSync);
 }
 
 void RotateAroundX(rndr::InputPrimitive Primitive, rndr::InputTrigger Trigger, real Value)

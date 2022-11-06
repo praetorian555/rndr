@@ -35,7 +35,7 @@ int main()
     rndr::RndrContext* App = new rndr::RndrContext{};
     App->OnTickDelegate.Add(AppLoop);
 
-    rndr::GraphicsContext* Context = App->GetGraphicsContext();
+    rndr::GraphicsContext* Context = App->CreateGraphicsContext();
     rndr::ui::UIProperties UIProps;
     rndr::ui::Init(Context, UIProps);
 

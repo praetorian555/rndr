@@ -19,15 +19,6 @@ using TickDelegate = MultiDelegate<real /* DeltaSeconds */>;
 
 struct RndrContextProperties
 {
-    int WindowWidth = 1024;
-    int WindowHeight = 768;
-
-    bool bCreateWindow = false;
-    WindowProperties Window;
-
-    GraphicsContextProperties GraphicsContext;
-    SwapChainProperties SwapChain;
-
     Allocator* UserAllocator = nullptr;
 };
 
@@ -40,9 +31,6 @@ public:
     RndrContext(const RndrContextProperties& Props = RndrContextProperties{});
     ~RndrContext();
 
-    Window* GetWindow();
-    GraphicsContext* GetGraphicsContext();
-    SwapChain* GetSwapChain();
     InputSystem* GetInputSystem();
     InputContext* GetInputContext();
 
@@ -113,9 +101,6 @@ public:
 
 private:
     Singletons m_Singletons;
-    Window* m_Window = nullptr;
-    GraphicsContext* m_GraphicsContext = nullptr;
-    SwapChain* m_SwapChain = nullptr;
     Allocator* m_Allocator = nullptr;
 };
 
