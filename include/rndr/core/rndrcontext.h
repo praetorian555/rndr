@@ -55,6 +55,8 @@ private:
     Singletons m_Singletons;
     Allocator* m_Allocator = nullptr;
     Logger* m_Logger = nullptr;
+
+    class InputSystem* m_InputSystem = nullptr;
 };
 
 extern RndrContext* GRndrContext;

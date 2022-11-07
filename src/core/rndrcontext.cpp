@@ -39,7 +39,7 @@ rndr::RndrContext::RndrContext(const RndrContextProperties& Props)
     }
     m_Logger = Props.UserLogger ? Props.UserLogger : RNDR_NEW(StdAsyncLogger, "Logger");
 
-    InputSystem::Get()->Init();
+    m_InputSystem = RNDR_NEW(InputSystem, "InputSystem");
 
     bInitialized = true;
 }
@@ -48,7 +48,7 @@ rndr::RndrContext::~RndrContext()
 {
     if (bInitialized)
     {
-        InputSystem::Get()->ShutDown();
+        RNDR_DELETE(InputSystem, m_InputSystem);
 
         if (!m_Props.UserLogger)
         {
@@ -104,7 +104,7 @@ rndr::InputSystem* rndr::RndrContext::GetInputSystem()
         return nullptr;
     }
 
-    return rndr::InputSystem::Get();
+    return m_InputSystem;
 }
 
 rndr::InputContext* rndr::RndrContext::GetInputContext()
@@ -115,7 +115,7 @@ rndr::InputContext* rndr::RndrContext::GetInputContext()
         return nullptr;
     }
 
-    return rndr::InputSystem::Get()->GetContext();
+    return m_InputSystem->GetContext();
 }
 
 void rndr::RndrContext::Run()

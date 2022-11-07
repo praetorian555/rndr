@@ -2,6 +2,7 @@
 
 #include <queue>
 
+#include "rndr/core/memory.h"
 #include "rndr/core/window.h"
 
 // InputSystem ////////////////////////////////////////////////////////////////////////////////////
@@ -29,21 +30,10 @@ static std::queue<ButtonEvent> g_ButtonEvents;
 static std::queue<MousePositionEvent> g_MousePositionEvents;
 static std::queue<MouseWheelEvent> g_MouseWheelEvents;
 
-std::unique_ptr<rndr::InputSystem> rndr::InputSystem::s_Input;
-
-rndr::InputSystem* rndr::InputSystem::Get()
-{
-    if (!s_Input)
-    {
-        s_Input.reset(new InputSystem());
-    }
-    return s_Input.get();
-}
-
-void rndr::InputSystem::Init()
+rndr::InputSystem::InputSystem()
 {
     assert(!m_Context);
-    m_Context = new InputContext{};
+    m_Context = RNDR_NEW(InputContext, "InputSystem: Default InputContext");
 
     rndr::WindowDelegates::OnButtonDelegate.Add(
         [this](rndr::Window* Win, rndr::InputPrimitive Primitive, rndr::InputTrigger Trigger) {
@@ -61,9 +51,9 @@ void rndr::InputSystem::Init()
         });
 }
 
-void rndr::InputSystem::ShutDown()
+rndr::InputSystem::~InputSystem()
 {
-    delete m_Context;
+    RNDR_DELETE(InputContext, m_Context);
 }
 
 void rndr::InputSystem::Update(real DeltaSeconds)

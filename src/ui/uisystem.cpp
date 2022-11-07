@@ -10,6 +10,7 @@
 #include "rndr/core/fileutils.h"
 #include "rndr/core/input.h"
 #include "rndr/core/log.h"
+#include "rndr/core/rndrcontext.h"
 
 #include "rndr/render/buffer.h"
 #include "rndr/render/framebuffer.h"
@@ -84,7 +85,7 @@ bool rndr::ui::Init(GraphicsContext* Context, const UIProperties& Props)
     g_Stack.push_back(ScreenBox);
 
     // Move this to separate function
-    rndr::InputContext* InputContext = rndr::InputSystem::Get()->GetContext();
+    rndr::InputContext* InputContext = GRndrContext->GetInputContext();
     InputContext->CreateMapping("MouseMovement", OnMouseMovement);
     InputContext->AddBinding("MouseMovement", rndr::InputPrimitive::Mouse_AxisX, rndr::InputTrigger::AxisChangedAbsolute);
     InputContext->AddBinding("MouseMovement", rndr::InputPrimitive::Mouse_AxisY, rndr::InputTrigger::AxisChangedAbsolute);
