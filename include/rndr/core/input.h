@@ -68,8 +68,6 @@ public:
 
     void Update(real DeltaSeconds);
 
-    void SetWindow(const Window* Window);
-
     InputContext* GetContext();
 
     bool IsButton(InputPrimitive Primitive) const;
@@ -90,8 +88,6 @@ private:
     InputContext* m_Context = nullptr;
     int m_X = 0, m_Y = 0;
     bool m_FirstTime = true;
-
-    const rndr::Window* m_Window = nullptr;
 };
 
 #define RNDR_BIND_INPUT_CALLBACK(FuncPtr, This) RNDR_BIND_THREE_PARAM(This, FuncPtr)

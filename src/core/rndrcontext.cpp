@@ -39,6 +39,8 @@ rndr::RndrContext::RndrContext(const RndrContextProperties& Props)
     }
     m_Logger = Props.UserLogger ? Props.UserLogger : RNDR_NEW(StdAsyncLogger, "Logger");
 
+    InputSystem::Get()->Init();
+
     bInitialized = true;
 }
 
@@ -46,6 +48,8 @@ rndr::RndrContext::~RndrContext()
 {
     if (bInitialized)
     {
+        InputSystem::Get()->ShutDown();
+
         if (!m_Props.UserLogger)
         {
             RNDR_DELETE(Logger, m_Logger);

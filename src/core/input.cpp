@@ -8,17 +8,20 @@
 
 struct ButtonEvent
 {
+    rndr::Window* OriginWindow = nullptr;
     rndr::InputPrimitive Primitive;
     rndr::InputTrigger Trigger;
 };
 
 struct MousePositionEvent
 {
+    rndr::Window* OriginWindow = nullptr;
     int X, Y;
 };
 
 struct MouseWheelEvent
 {
+    rndr::Window* OriginWindow = nullptr;
     int DeltaWheel;
 };
 
@@ -43,17 +46,19 @@ void rndr::InputSystem::Init()
     m_Context = new InputContext{};
 
     rndr::WindowDelegates::OnButtonDelegate.Add(
-        [this](rndr::Window*, rndr::InputPrimitive Primitive, rndr::InputTrigger Trigger) {
-            g_ButtonEvents.push(ButtonEvent{Primitive, Trigger});
+        [this](rndr::Window* Win, rndr::InputPrimitive Primitive, rndr::InputTrigger Trigger) {
+            g_ButtonEvents.push(ButtonEvent{Win, Primitive, Trigger});
         });
 
     rndr::WindowDelegates::OnMousePositionDelegate.Add(
-        [this](rndr::Window*, int X, int Y) {
-            g_MousePositionEvents.push(MousePositionEvent{X, Y});
+        [this](rndr::Window* Win, int X, int Y) {
+            g_MousePositionEvents.push(MousePositionEvent{Win, X, Y});
         });
 
-    rndr::WindowDelegates::OnMouseWheelMovedDelegate.Add([this](rndr::Window*, int DeltaWheel)
-                                                         { g_MouseWheelEvents.push(MouseWheelEvent{DeltaWheel}); });
+    rndr::WindowDelegates::OnMouseWheelMovedDelegate.Add(
+        [this](rndr::Window* Win, int DeltaWheel) {
+            g_MouseWheelEvents.push(MouseWheelEvent{Win, DeltaWheel});
+        });
 }
 
 void rndr::InputSystem::ShutDown()
@@ -103,7 +108,7 @@ void rndr::InputSystem::Update(real DeltaSeconds)
                     real Value = 0;
                     if (Binding.Trigger == InputTrigger::AxisChangedRelative)
                     {
-                        Value = Binding.Modifier * ((Event.X - m_X) / (real)m_Window->GetWidth());
+                        Value = Binding.Modifier * ((Event.X - m_X) / (real)Event.OriginWindow->GetWidth());
                     }
                     else if (Binding.Trigger == InputTrigger::AxisChangedAbsolute)
                     {
@@ -116,7 +121,7 @@ void rndr::InputSystem::Update(real DeltaSeconds)
                     real Value = 0;
                     if (Binding.Trigger == InputTrigger::AxisChangedRelative)
                     {
-                        real Value = Binding.Modifier * ((Event.Y - m_Y) / (real)m_Window->GetHeight());
+                        real Value = Binding.Modifier * ((Event.Y - m_Y) / (real)Event.OriginWindow->GetHeight());
                     }
                     else if (Binding.Trigger == InputTrigger::AxisChangedAbsolute)
                     {
@@ -147,12 +152,6 @@ void rndr::InputSystem::Update(real DeltaSeconds)
             }
         }
     }
-}
-
-void rndr::InputSystem::SetWindow(const Window* Window)
-{
-    assert(Window);
-    m_Window = Window;
 }
 
 rndr::InputContext* rndr::InputSystem::GetContext()
