@@ -3,9 +3,9 @@
 #include "math/math.h"
 
 #include "rndr/core/log.h"
+#include "rndr/core/memory.h"
 #include "rndr/core/rndrcontext.h"
 #include "rndr/core/window.h"
-#include "rndr/core/memory.h"
 
 #include "rndr/render/buffer.h"
 #include "rndr/render/framebuffer.h"
@@ -28,125 +28,112 @@ TEST_CASE("GraphicsContext", "RenderAPI")
 
     SECTION("Default")
     {
-        rndr::GraphicsContext* Ctx = RndrCtx->CreateGraphicsContext(Props);
-        REQUIRE(Ctx != nullptr);
-        RNDR_DELETE(rndr::GraphicsContext, Ctx);
+        rndr::ScopePtr<rndr::GraphicsContext> Ctx = RndrCtx->CreateGraphicsContext(Props);
+        REQUIRE(Ctx.Get() != nullptr);
     }
     SECTION("Disable GPU Timeout")
     {
         Props.bDisableGPUTimeout = true;
-        rndr::GraphicsContext* Ctx = RndrCtx->CreateGraphicsContext(Props);
-        REQUIRE(Ctx != nullptr);
-        RNDR_DELETE(rndr::GraphicsContext, Ctx);
+        rndr::ScopePtr<rndr::GraphicsContext> Ctx = RndrCtx->CreateGraphicsContext(Props);
+        REQUIRE(Ctx.Get() != nullptr);
     }
     SECTION("No Debug Layer")
     {
         Props.bEnableDebugLayer = false;
-        rndr::GraphicsContext* Ctx = RndrCtx->CreateGraphicsContext(Props);
-        REQUIRE(Ctx != nullptr);
-        RNDR_DELETE(rndr::GraphicsContext, Ctx);
+        rndr::ScopePtr<rndr::GraphicsContext> Ctx = RndrCtx->CreateGraphicsContext(Props);
+        REQUIRE(Ctx.Get() != nullptr);
     }
     SECTION("Not Thread Safe")
     {
         Props.bMakeThreadSafe = false;
-        rndr::GraphicsContext* Ctx = RndrCtx->CreateGraphicsContext(Props);
-        REQUIRE(Ctx != nullptr);
-        RNDR_DELETE(rndr::GraphicsContext, Ctx);
+        rndr::ScopePtr<rndr::GraphicsContext> Ctx = RndrCtx->CreateGraphicsContext(Props);
+        REQUIRE(Ctx.Get() != nullptr);
     }
 }
 
 TEST_CASE("Image", "RenderAPI")
 {
-    std::unique_ptr<rndr::RndrContext> RndrCtx(new rndr::RndrContext());
-    rndr::GraphicsContext* Ctx = RndrCtx->CreateGraphicsContext();
-    REQUIRE(Ctx != nullptr);
+    std::unique_ptr<rndr::RndrContext> RndrCtx = std::make_unique<rndr::RndrContext>();
+    rndr::ScopePtr<rndr::GraphicsContext> Ctx = RndrCtx->CreateGraphicsContext();
+    REQUIRE(Ctx.Get() != nullptr);
 
     SECTION("Default Props with Invalid Width or Height")
     {
         rndr::ImageProperties ImageProps;
-        rndr::Image* Image = Ctx->CreateImage(0, 0, ImageProps, rndr::ByteSpan{});
-        REQUIRE(Image == nullptr);
+        rndr::ScopePtr<rndr::Image> Image = Ctx->CreateImage(0, 0, ImageProps, rndr::ByteSpan{});
+        REQUIRE(Image.Get() == nullptr);
     }
     SECTION("Default Props with Valid Width and Height")
     {
         rndr::ImageProperties ImageProps;
-        rndr::Image* Image = Ctx->CreateImage(100, 400, ImageProps, rndr::ByteSpan{});
-        REQUIRE(Image != nullptr);
-        RNDR_DELETE(rndr::Image, Image);
+        rndr::ScopePtr<rndr::Image> Image = Ctx->CreateImage(100, 400, ImageProps, rndr::ByteSpan{});
+        REQUIRE(Image.Get() != nullptr);
     }
     SECTION("Generate Mips")
     {
         rndr::ImageProperties ImageProps;
         ImageProps.bUseMips = true;
-        rndr::Image* Image = Ctx->CreateImage(100, 400, ImageProps, rndr::ByteSpan{});
-        REQUIRE(Image != nullptr);
-        RNDR_DELETE(rndr::Image, Image);
+        rndr::ScopePtr<rndr::Image> Image = Ctx->CreateImage(100, 400, ImageProps, rndr::ByteSpan{});
+        REQUIRE(Image.Get() != nullptr);
     }
     SECTION("Use as render target")
     {
         rndr::ImageProperties ImageProps;
         ImageProps.ImageBindFlags = rndr::ImageBindFlags::RenderTarget;
-        rndr::Image* Image = Ctx->CreateImage(100, 400, ImageProps, rndr::ByteSpan{});
-        REQUIRE(Image != nullptr);
-        RNDR_DELETE(rndr::Image, Image);
+        rndr::ScopePtr<rndr::Image> Image = Ctx->CreateImage(100, 400, ImageProps, rndr::ByteSpan{});
+        REQUIRE(Image.Get() != nullptr);
     }
     SECTION("Use as depth stencil texture")
     {
         rndr::ImageProperties ImageProps;
         ImageProps.PixelFormat = rndr::PixelFormat::DEPTH24_STENCIL8;
         ImageProps.ImageBindFlags = rndr::ImageBindFlags::DepthStencil;
-        rndr::Image* Image = Ctx->CreateImage(100, 400, ImageProps, rndr::ByteSpan{});
-        REQUIRE(Image != nullptr);
-        RNDR_DELETE(rndr::Image, Image);
+        rndr::ScopePtr<rndr::Image> Image = Ctx->CreateImage(100, 400, ImageProps, rndr::ByteSpan{});
+        REQUIRE(Image.Get() != nullptr);
     }
     SECTION("Use as render target and shader resource")
     {
         rndr::ImageProperties ImageProps;
         ImageProps.ImageBindFlags = rndr::ImageBindFlags::RenderTarget | rndr::ImageBindFlags::ShaderResource;
-        rndr::Image* Image = Ctx->CreateImage(100, 400, ImageProps, rndr::ByteSpan{});
-        REQUIRE(Image != nullptr);
-        RNDR_DELETE(rndr::Image, Image);
+        rndr::ScopePtr<rndr::Image> Image = Ctx->CreateImage(100, 400, ImageProps, rndr::ByteSpan{});
+        REQUIRE(Image.Get() != nullptr);
     }
     SECTION("Use dynamic image as shader resource")
     {
         rndr::ImageProperties ImageProps;
         ImageProps.Usage = rndr::Usage::Dynamic;
-        rndr::Image* Image = Ctx->CreateImage(100, 400, ImageProps, rndr::ByteSpan{});
-        REQUIRE(Image != nullptr);
-        RNDR_DELETE(rndr::Image, Image);
+        rndr::ScopePtr<rndr::Image> Image = Ctx->CreateImage(100, 400, ImageProps, rndr::ByteSpan{});
+        REQUIRE(Image.Get() != nullptr);
     }
     SECTION("Create readback image")
     {
         rndr::ImageProperties ImageProps;
         ImageProps.Usage = rndr::Usage::Readback;
         ImageProps.ImageBindFlags = 0;
-        rndr::Image* Image = Ctx->CreateImage(100, 400, ImageProps, rndr::ByteSpan{});
-        REQUIRE(Image != nullptr);
-        RNDR_DELETE(rndr::Image, Image);
+        rndr::ScopePtr<rndr::Image> Image = Ctx->CreateImage(100, 400, ImageProps, rndr::ByteSpan{});
+        REQUIRE(Image.Get() != nullptr);
     }
     SECTION("Multisampling Valid")
     {
         rndr::ImageProperties ImageProps;
         ImageProps.SampleCount = 8;
-        rndr::Image* Image = Ctx->CreateImage(100, 400, ImageProps, rndr::ByteSpan{});
-        REQUIRE(Image != nullptr);
-        RNDR_DELETE(rndr::Image, Image);
+        rndr::ScopePtr<rndr::Image> Image = Ctx->CreateImage(100, 400, ImageProps, rndr::ByteSpan{});
+        REQUIRE(Image.Get() != nullptr);
     }
     SECTION("Multisampling Invalid")
     {
         rndr::ImageProperties ImageProps;
         ImageProps.SampleCount = 3;
-        rndr::Image* Image = Ctx->CreateImage(100, 400, ImageProps, rndr::ByteSpan{});
-        REQUIRE(Image == nullptr);
+        rndr::ScopePtr<rndr::Image> Image = Ctx->CreateImage(100, 400, ImageProps, rndr::ByteSpan{});
+        REQUIRE(Image.Get() == nullptr);
     }
     SECTION("Multisampling Valid Render Target")
     {
         rndr::ImageProperties ImageProps;
         ImageProps.SampleCount = 8;
         ImageProps.ImageBindFlags = rndr::ImageBindFlags::RenderTarget;
-        rndr::Image* Image = Ctx->CreateImage(100, 400, ImageProps, rndr::ByteSpan{});
-        REQUIRE(Image != nullptr);
-        RNDR_DELETE(rndr::Image, Image);
+        rndr::ScopePtr<rndr::Image> Image = Ctx->CreateImage(100, 400, ImageProps, rndr::ByteSpan{});
+        REQUIRE(Image.Get() != nullptr);
     }
     SECTION("Multisampling Valid Depth Stencil Target")
     {
@@ -154,12 +141,9 @@ TEST_CASE("Image", "RenderAPI")
         ImageProps.SampleCount = 8;
         ImageProps.PixelFormat = rndr::PixelFormat::DEPTH24_STENCIL8;
         ImageProps.ImageBindFlags = rndr::ImageBindFlags::DepthStencil;
-        rndr::Image* Image = Ctx->CreateImage(100, 400, ImageProps, rndr::ByteSpan{});
-        REQUIRE(Image != nullptr);
-        RNDR_DELETE(rndr::Image, Image);
+        rndr::ScopePtr<rndr::Image> Image = Ctx->CreateImage(100, 400, ImageProps, rndr::ByteSpan{});
+        REQUIRE(Image.Get() != nullptr);
     }
-
-    RNDR_DELETE(rndr::GraphicsContext, Ctx);
 }
 
 TEST_CASE("ImageArray", "RenderAPI")
@@ -916,21 +900,17 @@ TEST_CASE("BlendState", "RenderAPI")
 TEST_CASE("SwapChain", "RenderAPI")
 {
     std::unique_ptr<rndr::RndrContext> RndrCtx(new rndr::RndrContext());
-    rndr::GraphicsContext* Ctx = RndrCtx->CreateGraphicsContext();
-    rndr::Window* Win = RndrCtx->CreateWin(800, 600);
-    REQUIRE(Ctx != nullptr);
+    rndr::ScopePtr<rndr::GraphicsContext> Ctx = RndrCtx->CreateGraphicsContext();
+    rndr::ScopePtr<rndr::Window> Win = RndrCtx->CreateWin(800, 600);
+    REQUIRE(Ctx.Get() != nullptr);
 
     void* NativeWinHandle = (void*)Win->GetNativeWindowHandle();
     rndr::SwapChainProperties SwapProps;
-    rndr::SwapChain* S = Ctx->CreateSwapChain(NativeWinHandle, Win->GetWidth(), Win->GetHeight(), SwapProps);
-    REQUIRE(S != nullptr);
+    rndr::ScopePtr<rndr::SwapChain> S = Ctx->CreateSwapChain(NativeWinHandle, Win->GetWidth(), Win->GetHeight(), SwapProps);
+    REQUIRE(S.Get() != nullptr);
 
     Ctx->ClearColor(S->FrameBuffer->ColorBuffers[0], math::Vector4{1, 1, 1, 1});
-    Ctx->Present(S, true);
+    Ctx->Present(S.Get(), true);
     Ctx->ClearColor(S->FrameBuffer->ColorBuffers[0], math::Vector4{1, 1, 0.5, 1});
-    Ctx->Present(S, true);
-
-    RNDR_DELETE(rndr::SwapChain, S);
-    RNDR_DELETE(rndr::Window, Win);
-    RNDR_DELETE(rndr::GraphicsContext, Ctx);
+    Ctx->Present(S.Get(), true);
 }
