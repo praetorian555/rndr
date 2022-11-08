@@ -78,6 +78,40 @@ void DeleteArray(Allocator* Alloc, T* Ptr, int Count)
     Alloc->Deallocate(Ptr);
 }
 
+template <typename T>
+class ScopePtr
+{
+public:
+    ScopePtr(T* Data = nullptr) : m_Data(Data) {}
+    ~ScopePtr() { Delete<T>(GRndrContext->GetAllocator(), m_Data); }
+
+    ScopePtr(const ScopePtr& Other) = delete;
+    ScopePtr<T>& operator=(const ScopePtr& Other) = delete;
+
+    ScopePtr(ScopePtr&& Other) noexcept
+    {
+        Delete<T>(GRndrContext->GetAllocator(), m_Data);
+        m_Data = Other.m_Data;
+        Other.m_Data = nullptr;
+    }
+
+    ScopePtr<T>& operator=(ScopePtr&& Other)
+    {
+        Delete<T>(GRndrContext->GetAllocator(), m_Data);
+        m_Data = Other.m_Data;
+        Other.m_Data = nullptr;
+        return *this;
+    }
+
+    T* Get() { return m_Data; }
+
+    T& operator*() { return *m_Data; }
+    T* operator->() { return m_Data; }
+
+private:
+    T* m_Data = nullptr;
+};
+
 }  // namespace rndr
 
 #define RNDR_NEW(Type, Tag, ...) rndr::New<Type>(rndr::GRndrContext->GetAllocator(), Tag, __FILE__, __LINE__, __VA_ARGS__)

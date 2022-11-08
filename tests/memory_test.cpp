@@ -2,8 +2,8 @@
 
 #include "math/math.h"
 
-#include "rndr/core/rndrcontext.h"
 #include "rndr/core/memory.h"
+#include "rndr/core/rndrcontext.h"
 
 TEST_CASE("SingleObject", "Memory")
 {
@@ -69,4 +69,40 @@ TEST_CASE("Arrays", "Memory")
     RNDR_DELETE_ARRAY(AggregateType, A, 10);
 
     delete App;
+}
+
+TEST_CASE("ScopePtr", "Memory")
+{
+    std::unique_ptr<rndr::RndrContext> Ctx = std::make_unique<rndr::RndrContext>();
+
+    {
+        rndr::ScopePtr<int> Data = RNDR_NEW(int, "", 5);
+        REQUIRE(*Data == 5);
+    }
+
+    {
+        rndr::ScopePtr<int> Data1 = RNDR_NEW(int, "", 5);
+        REQUIRE(*Data1 == 5);
+
+        rndr::ScopePtr<int> Data2 = std::move(Data1);
+        REQUIRE(*Data2 == 5);
+        REQUIRE(Data1.Get() == nullptr);
+
+        rndr::ScopePtr<int> Data3 = RNDR_NEW(int, "", 10);
+        REQUIRE(*Data3 == 10);
+
+        Data3 = std::move(Data2);
+        REQUIRE(*Data3 == 5);
+        REQUIRE(Data2.Get() == nullptr);
+    }
+
+    {
+        struct MyData
+        {
+            int a;
+        };
+
+        rndr::ScopePtr<MyData> Data = RNDR_NEW(MyData, "", 5);
+        REQUIRE(Data->a == 5);
+    }
 }
