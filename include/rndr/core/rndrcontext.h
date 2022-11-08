@@ -4,7 +4,6 @@
 #include "rndr/core/base.h"
 #include "rndr/core/delegate.h"
 #include "rndr/core/log.h"
-#include "rndr/core/singletons.h"
 #include "rndr/core/window.h"
 
 #include "rndr/render/graphicscontext.h"
@@ -52,7 +51,6 @@ private:
     RndrContextProperties m_Props;
     bool bInitialized = false;
 
-    Singletons m_Singletons;
     Allocator* m_Allocator = nullptr;
     Logger* m_Logger = nullptr;
 

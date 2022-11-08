@@ -6,7 +6,6 @@
 #include "rndr/core/objparser.h"
 #include "rndr/core/projectioncamera.h"
 #include "rndr/core/rndrcontext.h"
-#include "rndr/core/singletons.h"
 #include "rndr/core/span.h"
 #include "rndr/core/threading.h"
 #include "rndr/core/window.h"
