@@ -108,6 +108,8 @@ public:
     T& operator*() { return *m_Data; }
     T* operator->() { return m_Data; }
 
+    bool IsValid() const { return m_Data != nullptr; }
+
 private:
     T* m_Data = nullptr;
 };
