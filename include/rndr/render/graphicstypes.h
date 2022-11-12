@@ -178,7 +178,8 @@ enum class BufferType
     Readback,
     Vertex,
     Index,
-    Constant
+    Constant,
+    UnorderedAccess
 };
 
 namespace ImageBindFlags
@@ -187,7 +188,8 @@ enum : uint32_t
 {
     RenderTarget = 1 << 0,
     DepthStencil = 1 << 1,
-    ShaderResource = 1 << 2
+    ShaderResource = 1 << 2,
+    UnorderedAccess = 1 << 3,
 };
 }
 

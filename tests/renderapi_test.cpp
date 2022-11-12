@@ -144,6 +144,13 @@ TEST_CASE("Image", "RenderAPI")
         rndr::ScopePtr<rndr::Image> Image = Ctx->CreateImage(100, 400, ImageProps, rndr::ByteSpan{});
         REQUIRE(Image.IsValid());
     }
+    SECTION("Unordered Access")
+    {
+        rndr::ImageProperties ImageProps;
+        ImageProps.ImageBindFlags = rndr::ImageBindFlags::UnorderedAccess;
+        rndr::ScopePtr<rndr::Image> Image = Ctx->CreateImage(100, 400, ImageProps, rndr::ByteSpan{});
+        REQUIRE(Image.IsValid());
+    }
 }
 
 TEST_CASE("ImageArray", "RenderAPI")
@@ -242,6 +249,13 @@ TEST_CASE("ImageArray", "RenderAPI")
         rndr::ScopePtr<rndr::Image> Image = Ctx->CreateImageArray(Width, Height, ArraySize, ImageProps, EmptyData);
         REQUIRE(Image.IsValid());
     }
+    SECTION("Unordered Access")
+    {
+        rndr::ImageProperties ImageProps;
+        ImageProps.ImageBindFlags = rndr::ImageBindFlags::UnorderedAccess;
+        rndr::ScopePtr<rndr::Image> Image = Ctx->CreateImageArray(Width, Height, ArraySize, ImageProps, EmptyData);
+        REQUIRE(Image.IsValid());
+    }
 }
 
 TEST_CASE("CubeMap", "RenderAPI")
@@ -300,6 +314,14 @@ TEST_CASE("CubeMap", "RenderAPI")
         rndr::ImageProperties ImageProps;
         ImageProps.Usage = rndr::Usage::Readback;
         ImageProps.ImageBindFlags = 0;
+        rndr::ScopePtr<rndr::Image> Image = Ctx->CreateCubeMap(Width, Height, ImageProps, EmptyData);
+        REQUIRE(Image.IsValid());
+    }
+    SECTION("Unordered Access")
+    {
+        rndr::ImageProperties ImageProps;
+        ImageProps.PixelFormat = rndr::PixelFormat::R8G8B8A8_TYPELESS;
+        ImageProps.ImageBindFlags = rndr::ImageBindFlags::UnorderedAccess;
         rndr::ScopePtr<rndr::Image> Image = Ctx->CreateCubeMap(Width, Height, ImageProps, EmptyData);
         REQUIRE(Image.IsValid());
     }
@@ -584,6 +606,27 @@ TEST_CASE("Buffer", "RenderAPI")
             {
                 REQUIRE(ReadData[i] == 0xAF);
             }
+        }
+    }
+    SECTION("Unordered Access")
+    {
+        rndr::BufferProperties Props;
+        SECTION("Default Usage")
+        {
+            Props.Type = rndr::BufferType::UnorderedAccess;
+            Props.Size = Size;
+            Props.Stride = Stride;
+            rndr::ScopePtr<rndr::Buffer> Buff = Ctx->CreateBuffer(Props, InitData);
+            REQUIRE(Buff.IsValid());
+        }
+        SECTION("Dynamic Usage")
+        {
+            Props.Usage = rndr::Usage::Dynamic;
+            Props.Type = rndr::BufferType::UnorderedAccess;
+            Props.Size = Size;
+            Props.Stride = Stride;
+            rndr::ScopePtr<rndr::Buffer> Buff = Ctx->CreateBuffer(Props, InitData);
+            REQUIRE(!Buff.IsValid());
         }
     }
 

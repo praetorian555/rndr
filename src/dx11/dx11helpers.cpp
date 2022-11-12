@@ -192,6 +192,7 @@ uint32_t rndr::DX11FromImageBindFlags(uint32_t ImageBindFlags)
     Result |= ImageBindFlags & ImageBindFlags::RenderTarget ? D3D11_BIND_RENDER_TARGET : 0;
     Result |= ImageBindFlags & ImageBindFlags::DepthStencil ? D3D11_BIND_DEPTH_STENCIL : 0;
     Result |= ImageBindFlags & ImageBindFlags::ShaderResource ? D3D11_BIND_SHADER_RESOURCE : 0;
+    Result |= ImageBindFlags & ImageBindFlags::UnorderedAccess ? D3D11_BIND_UNORDERED_ACCESS : 0;
     return Result;
 }
 
@@ -207,6 +208,8 @@ uint32_t rndr::DX11FromBufferTypeToBindFlag(BufferType Type)
             return D3D11_BIND_INDEX_BUFFER;
         case BufferType::Constant:
             return D3D11_BIND_CONSTANT_BUFFER;
+        case BufferType::UnorderedAccess:
+            return D3D11_BIND_UNORDERED_ACCESS;
         default:
             assert(false);
     }

@@ -43,7 +43,7 @@ bool rndr::Buffer::Init(GraphicsContext* Context, const BufferProperties& Props,
     if (Context->WindowsHasFailed(Result))
     {
         const std::string ErrorMessage = Context->WindowsGetErrorMessage();
-        RNDR_LOG_ERROR("%s", ErrorMessage.c_str());
+        RNDR_LOG_ERROR("Buffer::Init: %s", ErrorMessage.c_str());
         return false;
     }
 
