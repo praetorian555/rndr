@@ -36,7 +36,7 @@ public:
     virtual void Log(const char* File, int Line, const char* Function, rndr::LogLevel LogLevel, const char* Message) override;
 
 private:
-    spdlog::logger* m_ImplLogger = nullptr;
+    std::shared_ptr<spdlog::logger> m_ImplLogger = nullptr;
 };
 
 void Log(const char* File, int Line, const char* Function, rndr::LogLevel LogLevel, const char* Format, ...);

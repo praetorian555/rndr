@@ -16,8 +16,7 @@ rndr::StdAsyncLogger::StdAsyncLogger()
 
     spdlog::init_thread_pool(8192, 1);  // queue with 8k items and 1 backing thread.
 
-    std::shared_ptr<spdlog::logger> spl = spdlog::create<spdlog::sinks::stdout_color_sink_st>("stdout_logger");
-    m_ImplLogger = spl.get();
+    m_ImplLogger = spdlog::create<spdlog::sinks::stdout_color_sink_st>("stdout_logger");
 }
 
 rndr::StdAsyncLogger::~StdAsyncLogger()
