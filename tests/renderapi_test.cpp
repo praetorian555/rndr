@@ -18,7 +18,7 @@
 
 TEST_CASE("GraphicsContext", "RenderAPI")
 {
-    std::unique_ptr<rndr::RndrContext> RndrCtx(new rndr::RndrContext());
+    std::unique_ptr<rndr::RndrContext> RndrCtx = std::make_unique<rndr::RndrContext>();
 
     rndr::GraphicsContextProperties Props;
     Props.bDisableGPUTimeout = false;
@@ -29,25 +29,25 @@ TEST_CASE("GraphicsContext", "RenderAPI")
     SECTION("Default")
     {
         rndr::ScopePtr<rndr::GraphicsContext> Ctx = RndrCtx->CreateGraphicsContext(Props);
-        REQUIRE(Ctx.Get() != nullptr);
+        REQUIRE(Ctx.IsValid());
     }
     SECTION("Disable GPU Timeout")
     {
         Props.bDisableGPUTimeout = true;
         rndr::ScopePtr<rndr::GraphicsContext> Ctx = RndrCtx->CreateGraphicsContext(Props);
-        REQUIRE(Ctx.Get() != nullptr);
+        REQUIRE(Ctx.IsValid());
     }
     SECTION("No Debug Layer")
     {
         Props.bEnableDebugLayer = false;
         rndr::ScopePtr<rndr::GraphicsContext> Ctx = RndrCtx->CreateGraphicsContext(Props);
-        REQUIRE(Ctx.Get() != nullptr);
+        REQUIRE(Ctx.IsValid());
     }
     SECTION("Not Thread Safe")
     {
         Props.bMakeThreadSafe = false;
         rndr::ScopePtr<rndr::GraphicsContext> Ctx = RndrCtx->CreateGraphicsContext(Props);
-        REQUIRE(Ctx.Get() != nullptr);
+        REQUIRE(Ctx.IsValid());
     }
 }
 
@@ -55,33 +55,33 @@ TEST_CASE("Image", "RenderAPI")
 {
     std::unique_ptr<rndr::RndrContext> RndrCtx = std::make_unique<rndr::RndrContext>();
     rndr::ScopePtr<rndr::GraphicsContext> Ctx = RndrCtx->CreateGraphicsContext();
-    REQUIRE(Ctx.Get() != nullptr);
+    REQUIRE(Ctx.IsValid());
 
     SECTION("Default Props with Invalid Width or Height")
     {
         rndr::ImageProperties ImageProps;
         rndr::ScopePtr<rndr::Image> Image = Ctx->CreateImage(0, 0, ImageProps, rndr::ByteSpan{});
-        REQUIRE(Image.Get() == nullptr);
+        REQUIRE(!Image.IsValid());
     }
     SECTION("Default Props with Valid Width and Height")
     {
         rndr::ImageProperties ImageProps;
         rndr::ScopePtr<rndr::Image> Image = Ctx->CreateImage(100, 400, ImageProps, rndr::ByteSpan{});
-        REQUIRE(Image.Get() != nullptr);
+        REQUIRE(Image.IsValid());
     }
     SECTION("Generate Mips")
     {
         rndr::ImageProperties ImageProps;
         ImageProps.bUseMips = true;
         rndr::ScopePtr<rndr::Image> Image = Ctx->CreateImage(100, 400, ImageProps, rndr::ByteSpan{});
-        REQUIRE(Image.Get() != nullptr);
+        REQUIRE(Image.IsValid());
     }
     SECTION("Use as render target")
     {
         rndr::ImageProperties ImageProps;
         ImageProps.ImageBindFlags = rndr::ImageBindFlags::RenderTarget;
         rndr::ScopePtr<rndr::Image> Image = Ctx->CreateImage(100, 400, ImageProps, rndr::ByteSpan{});
-        REQUIRE(Image.Get() != nullptr);
+        REQUIRE(Image.IsValid());
     }
     SECTION("Use as depth stencil texture")
     {
@@ -89,21 +89,21 @@ TEST_CASE("Image", "RenderAPI")
         ImageProps.PixelFormat = rndr::PixelFormat::DEPTH24_STENCIL8;
         ImageProps.ImageBindFlags = rndr::ImageBindFlags::DepthStencil;
         rndr::ScopePtr<rndr::Image> Image = Ctx->CreateImage(100, 400, ImageProps, rndr::ByteSpan{});
-        REQUIRE(Image.Get() != nullptr);
+        REQUIRE(Image.IsValid());
     }
     SECTION("Use as render target and shader resource")
     {
         rndr::ImageProperties ImageProps;
         ImageProps.ImageBindFlags = rndr::ImageBindFlags::RenderTarget | rndr::ImageBindFlags::ShaderResource;
         rndr::ScopePtr<rndr::Image> Image = Ctx->CreateImage(100, 400, ImageProps, rndr::ByteSpan{});
-        REQUIRE(Image.Get() != nullptr);
+        REQUIRE(Image.IsValid());
     }
     SECTION("Use dynamic image as shader resource")
     {
         rndr::ImageProperties ImageProps;
         ImageProps.Usage = rndr::Usage::Dynamic;
         rndr::ScopePtr<rndr::Image> Image = Ctx->CreateImage(100, 400, ImageProps, rndr::ByteSpan{});
-        REQUIRE(Image.Get() != nullptr);
+        REQUIRE(Image.IsValid());
     }
     SECTION("Create readback image")
     {
@@ -111,21 +111,21 @@ TEST_CASE("Image", "RenderAPI")
         ImageProps.Usage = rndr::Usage::Readback;
         ImageProps.ImageBindFlags = 0;
         rndr::ScopePtr<rndr::Image> Image = Ctx->CreateImage(100, 400, ImageProps, rndr::ByteSpan{});
-        REQUIRE(Image.Get() != nullptr);
+        REQUIRE(Image.IsValid());
     }
     SECTION("Multisampling Valid")
     {
         rndr::ImageProperties ImageProps;
         ImageProps.SampleCount = 8;
         rndr::ScopePtr<rndr::Image> Image = Ctx->CreateImage(100, 400, ImageProps, rndr::ByteSpan{});
-        REQUIRE(Image.Get() != nullptr);
+        REQUIRE(Image.IsValid());
     }
     SECTION("Multisampling Invalid")
     {
         rndr::ImageProperties ImageProps;
         ImageProps.SampleCount = 3;
         rndr::ScopePtr<rndr::Image> Image = Ctx->CreateImage(100, 400, ImageProps, rndr::ByteSpan{});
-        REQUIRE(Image.Get() == nullptr);
+        REQUIRE(!Image.Get());
     }
     SECTION("Multisampling Valid Render Target")
     {
@@ -133,7 +133,7 @@ TEST_CASE("Image", "RenderAPI")
         ImageProps.SampleCount = 8;
         ImageProps.ImageBindFlags = rndr::ImageBindFlags::RenderTarget;
         rndr::ScopePtr<rndr::Image> Image = Ctx->CreateImage(100, 400, ImageProps, rndr::ByteSpan{});
-        REQUIRE(Image.Get() != nullptr);
+        REQUIRE(Image.IsValid());
     }
     SECTION("Multisampling Valid Depth Stencil Target")
     {
@@ -142,15 +142,15 @@ TEST_CASE("Image", "RenderAPI")
         ImageProps.PixelFormat = rndr::PixelFormat::DEPTH24_STENCIL8;
         ImageProps.ImageBindFlags = rndr::ImageBindFlags::DepthStencil;
         rndr::ScopePtr<rndr::Image> Image = Ctx->CreateImage(100, 400, ImageProps, rndr::ByteSpan{});
-        REQUIRE(Image.Get() != nullptr);
+        REQUIRE(Image.IsValid());
     }
 }
 
 TEST_CASE("ImageArray", "RenderAPI")
 {
-    std::unique_ptr<rndr::RndrContext> RndrCtx(new rndr::RndrContext());
-    rndr::GraphicsContext* Ctx = RndrCtx->CreateGraphicsContext();
-    REQUIRE(Ctx != nullptr);
+    std::unique_ptr<rndr::RndrContext> RndrCtx = std::make_unique<rndr::RndrContext>();
+    rndr::ScopePtr<rndr::GraphicsContext> Ctx = RndrCtx->CreateGraphicsContext();
+    REQUIRE(Ctx.IsValid());
 
     const rndr::Span<rndr::ByteSpan> EmptyData;
     const int Width = 400;
@@ -159,86 +159,79 @@ TEST_CASE("ImageArray", "RenderAPI")
     SECTION("Default Props with Invalid Width or Height")
     {
         rndr::ImageProperties ImageProps;
-        rndr::Image* Image = Ctx->CreateImageArray(0, 0, ArraySize, ImageProps, EmptyData);
-        REQUIRE(Image == nullptr);
+        rndr::ScopePtr<rndr::Image> Image = Ctx->CreateImageArray(0, 0, ArraySize, ImageProps, EmptyData);
+        REQUIRE(!Image.IsValid());
     }
     SECTION("Default Props with Invalid ArraySize")
     {
         rndr::ImageProperties ImageProps;
-        rndr::Image* Image = Ctx->CreateImageArray(Width, Height, 1, ImageProps, EmptyData);
-        REQUIRE(Image == nullptr);
+        rndr::ScopePtr<rndr::Image> Image = Ctx->CreateImageArray(Width, Height, 1, ImageProps, EmptyData);
+        REQUIRE(!Image.IsValid());
     }
     SECTION("Default Props with Valid Width and Height")
     {
         rndr::ImageProperties ImageProps;
-        rndr::Image* Image = Ctx->CreateImageArray(Width, Height, ArraySize, ImageProps, EmptyData);
-        REQUIRE(Image != nullptr);
-        RNDR_DELETE(rndr::Image, Image);
+        rndr::ScopePtr<rndr::Image> Image = Ctx->CreateImageArray(Width, Height, ArraySize, ImageProps, EmptyData);
+        REQUIRE(Image.IsValid());
     }
     SECTION("Generate Mips")
     {
         rndr::ImageProperties ImageProps;
         ImageProps.bUseMips = true;
-        rndr::Image* Image = Ctx->CreateImageArray(Width, Height, ArraySize, ImageProps, EmptyData);
-        REQUIRE(Image != nullptr);
-        RNDR_DELETE(rndr::Image, Image);
+        rndr::ScopePtr<rndr::Image> Image = Ctx->CreateImageArray(Width, Height, ArraySize, ImageProps, EmptyData);
+        REQUIRE(Image.IsValid());
     }
     SECTION("Use as render target")
     {
         rndr::ImageProperties ImageProps;
         ImageProps.ImageBindFlags = rndr::ImageBindFlags::RenderTarget;
-        rndr::Image* Image = Ctx->CreateImageArray(Width, Height, ArraySize, ImageProps, EmptyData);
-        REQUIRE(Image != nullptr);
-        RNDR_DELETE(rndr::Image, Image);
+        rndr::ScopePtr<rndr::Image> Image = Ctx->CreateImageArray(Width, Height, ArraySize, ImageProps, EmptyData);
+        REQUIRE(Image.IsValid());
     }
     SECTION("Use as depth stencil texture")
     {
         rndr::ImageProperties ImageProps;
         ImageProps.PixelFormat = rndr::PixelFormat::DEPTH24_STENCIL8;
         ImageProps.ImageBindFlags = rndr::ImageBindFlags::DepthStencil;
-        rndr::Image* Image = Ctx->CreateImageArray(Width, Height, ArraySize, ImageProps, EmptyData);
-        REQUIRE(Image != nullptr);
-        RNDR_DELETE(rndr::Image, Image);
+        rndr::ScopePtr<rndr::Image> Image = Ctx->CreateImageArray(Width, Height, ArraySize, ImageProps, EmptyData);
+        REQUIRE(Image.IsValid());
     }
     SECTION("Use dynamic image array as shader resource")
     {
         rndr::ImageProperties ImageProps;
         ImageProps.Usage = rndr::Usage::Dynamic;
-        rndr::Image* Image = Ctx->CreateImageArray(Width, Height, ArraySize, ImageProps, EmptyData);
-        REQUIRE(Image == nullptr);
+        rndr::ScopePtr<rndr::Image> Image = Ctx->CreateImageArray(Width, Height, ArraySize, ImageProps, EmptyData);
+        REQUIRE(!Image.IsValid());
     }
     SECTION("Create readback image array")
     {
         rndr::ImageProperties ImageProps;
         ImageProps.Usage = rndr::Usage::Readback;
         ImageProps.ImageBindFlags = 0;
-        rndr::Image* Image = Ctx->CreateImageArray(Width, Height, ArraySize, ImageProps, EmptyData);
-        REQUIRE(Image != nullptr);
-        RNDR_DELETE(rndr::Image, Image);
+        rndr::ScopePtr<rndr::Image> Image = Ctx->CreateImageArray(Width, Height, ArraySize, ImageProps, EmptyData);
+        REQUIRE(Image.IsValid());
     }
     SECTION("Multisampling Valid")
     {
         rndr::ImageProperties ImageProps;
         ImageProps.SampleCount = 8;
-        rndr::Image* Image = Ctx->CreateImageArray(Width, Height, ArraySize, ImageProps, EmptyData);
-        REQUIRE(Image != nullptr);
-        RNDR_DELETE(rndr::Image, Image);
+        rndr::ScopePtr<rndr::Image> Image = Ctx->CreateImageArray(Width, Height, ArraySize, ImageProps, EmptyData);
+        REQUIRE(Image.IsValid());
     }
     SECTION("Multisampling Invalid")
     {
         rndr::ImageProperties ImageProps;
         ImageProps.SampleCount = 3;
-        rndr::Image* Image = Ctx->CreateImageArray(Width, Height, ArraySize, ImageProps, EmptyData);
-        REQUIRE(Image == nullptr);
+        rndr::ScopePtr<rndr::Image> Image = Ctx->CreateImageArray(Width, Height, ArraySize, ImageProps, EmptyData);
+        REQUIRE(!Image.IsValid());
     }
     SECTION("Multisampling Valid Render Target")
     {
         rndr::ImageProperties ImageProps;
         ImageProps.SampleCount = 8;
         ImageProps.ImageBindFlags = rndr::ImageBindFlags::RenderTarget;
-        rndr::Image* Image = Ctx->CreateImageArray(Width, Height, ArraySize, ImageProps, EmptyData);
-        REQUIRE(Image != nullptr);
-        RNDR_DELETE(rndr::Image, Image);
+        rndr::ScopePtr<rndr::Image> Image = Ctx->CreateImageArray(Width, Height, ArraySize, ImageProps, EmptyData);
+        REQUIRE(Image.IsValid());
     }
     SECTION("Multisampling Valid Depth Stencil Target")
     {
@@ -246,19 +239,16 @@ TEST_CASE("ImageArray", "RenderAPI")
         ImageProps.SampleCount = 8;
         ImageProps.PixelFormat = rndr::PixelFormat::DEPTH24_STENCIL8;
         ImageProps.ImageBindFlags = rndr::ImageBindFlags::DepthStencil;
-        rndr::Image* Image = Ctx->CreateImageArray(Width, Height, ArraySize, ImageProps, EmptyData);
-        REQUIRE(Image != nullptr);
-        RNDR_DELETE(rndr::Image, Image);
+        rndr::ScopePtr<rndr::Image> Image = Ctx->CreateImageArray(Width, Height, ArraySize, ImageProps, EmptyData);
+        REQUIRE(Image.IsValid());
     }
-
-    RNDR_DELETE(rndr::GraphicsContext, Ctx);
 }
 
 TEST_CASE("CubeMap", "RenderAPI")
 {
-    std::unique_ptr<rndr::RndrContext> RndrCtx(new rndr::RndrContext());
-    rndr::GraphicsContext* Ctx = RndrCtx->CreateGraphicsContext();
-    REQUIRE(Ctx != nullptr);
+    std::unique_ptr<rndr::RndrContext> RndrCtx = std::make_unique<rndr::RndrContext>();
+    rndr::ScopePtr<rndr::GraphicsContext> Ctx = RndrCtx->CreateGraphicsContext();
+    REQUIRE(Ctx.IsValid());
 
     const rndr::Span<rndr::ByteSpan> EmptyData;
     const int Width = 400;
@@ -267,66 +257,59 @@ TEST_CASE("CubeMap", "RenderAPI")
     SECTION("Default Props with Invalid Width or Height")
     {
         rndr::ImageProperties ImageProps;
-        rndr::Image* Image = Ctx->CreateCubeMap(0, 0, ImageProps, EmptyData);
-        REQUIRE(Image == nullptr);
+        rndr::ScopePtr<rndr::Image> Image = Ctx->CreateCubeMap(0, 0, ImageProps, EmptyData);
+        REQUIRE(!Image.IsValid());
     }
     SECTION("Default Props")
     {
         rndr::ImageProperties ImageProps;
-        rndr::Image* Image = Ctx->CreateCubeMap(Width, Height, ImageProps, EmptyData);
-        REQUIRE(Image != nullptr);
-        RNDR_DELETE(rndr::Image, Image);
+        rndr::ScopePtr<rndr::Image> Image = Ctx->CreateCubeMap(Width, Height, ImageProps, EmptyData);
+        REQUIRE(Image.IsValid());
     }
     SECTION("Generate Mips")
     {
         rndr::ImageProperties ImageProps;
         ImageProps.bUseMips = true;
-        rndr::Image* Image = Ctx->CreateCubeMap(Width, Height, ImageProps, EmptyData);
-        REQUIRE(Image != nullptr);
-        RNDR_DELETE(rndr::Image, Image);
+        rndr::ScopePtr<rndr::Image> Image = Ctx->CreateCubeMap(Width, Height, ImageProps, EmptyData);
+        REQUIRE(Image.IsValid());
     }
     SECTION("Use as render target")
     {
         rndr::ImageProperties ImageProps;
         ImageProps.ImageBindFlags = rndr::ImageBindFlags::RenderTarget;
-        rndr::Image* Image = Ctx->CreateCubeMap(Width, Height, ImageProps, EmptyData);
-        REQUIRE(Image != nullptr);
-        RNDR_DELETE(rndr::Image, Image);
+        rndr::ScopePtr<rndr::Image> Image = Ctx->CreateCubeMap(Width, Height, ImageProps, EmptyData);
+        REQUIRE(Image.IsValid());
     }
     SECTION("Use as depth stencil texture")
     {
         rndr::ImageProperties ImageProps;
         ImageProps.PixelFormat = rndr::PixelFormat::DEPTH24_STENCIL8;
         ImageProps.ImageBindFlags = rndr::ImageBindFlags::DepthStencil;
-        rndr::Image* Image = Ctx->CreateCubeMap(Width, Height, ImageProps, EmptyData);
-        REQUIRE(Image != nullptr);
-        RNDR_DELETE(rndr::Image, Image);
+        rndr::ScopePtr<rndr::Image> Image = Ctx->CreateCubeMap(Width, Height, ImageProps, EmptyData);
+        REQUIRE(Image.IsValid());
     }
     SECTION("Use dynamic cube map as shader resource")
     {
         rndr::ImageProperties ImageProps;
         ImageProps.Usage = rndr::Usage::Dynamic;
-        rndr::Image* Image = Ctx->CreateCubeMap(Width, Height, ImageProps, EmptyData);
-        REQUIRE(Image == nullptr);
+        rndr::ScopePtr<rndr::Image> Image = Ctx->CreateCubeMap(Width, Height, ImageProps, EmptyData);
+        REQUIRE(!Image.IsValid());
     }
     SECTION("Create readback cube map")
     {
         rndr::ImageProperties ImageProps;
         ImageProps.Usage = rndr::Usage::Readback;
         ImageProps.ImageBindFlags = 0;
-        rndr::Image* Image = Ctx->CreateCubeMap(Width, Height, ImageProps, EmptyData);
-        REQUIRE(Image != nullptr);
-        RNDR_DELETE(rndr::Image, Image);
+        rndr::ScopePtr<rndr::Image> Image = Ctx->CreateCubeMap(Width, Height, ImageProps, EmptyData);
+        REQUIRE(Image.IsValid());
     }
-
-    RNDR_DELETE(rndr::GraphicsContext, Ctx);
 }
 
 TEST_CASE("ImageUpdate", "RenderAPI")
 {
-    std::unique_ptr<rndr::RndrContext> RndrCtx(new rndr::RndrContext());
-    rndr::GraphicsContext* Ctx = RndrCtx->CreateGraphicsContext();
-    REQUIRE(Ctx != nullptr);
+    std::unique_ptr<rndr::RndrContext> RndrCtx = std::make_unique<rndr::RndrContext>();
+    rndr::ScopePtr<rndr::GraphicsContext> Ctx = RndrCtx->CreateGraphicsContext();
+    REQUIRE(Ctx.IsValid());
 
     const rndr::Span<rndr::ByteSpan> EmptyDataArray;
     const rndr::ByteSpan EmptyData;
@@ -343,53 +326,48 @@ TEST_CASE("ImageUpdate", "RenderAPI")
     SECTION("Default Usage")
     {
         rndr::ImageProperties ImageProps;
-        rndr::Image* Image = Ctx->CreateImageArray(Width, Height, ArraySize, ImageProps, EmptyDataArray);
-        REQUIRE(Image != nullptr);
+        rndr::ScopePtr<rndr::Image> Image = Ctx->CreateImageArray(Width, Height, ArraySize, ImageProps, EmptyDataArray);
+        REQUIRE(Image.IsValid());
 
         SECTION("Update")
         {
-            const bool Result = Image->Update(Ctx, 0, Start, Size, UpdateData);
+            const bool Result = Image->Update(Ctx.Get(), 0, Start, Size, UpdateData);
             REQUIRE(Result == true);
         }
         SECTION("Invalid Update")
         {
             bool Result;
-            Result = Image->Update(Ctx, ArraySize, Start, Size, UpdateData);
+            Result = Image->Update(Ctx.Get(), ArraySize, Start, Size, UpdateData);
             REQUIRE(Result == false);
-            Result = Image->Update(Ctx, -1, Start, Size, UpdateData);
+            Result = Image->Update(Ctx.Get(), -1, Start, Size, UpdateData);
             REQUIRE(Result == false);
-            Result = Image->Update(Ctx, 3, BadStart, Size, UpdateData);
+            Result = Image->Update(Ctx.Get(), 3, BadStart, Size, UpdateData);
             REQUIRE(Result == false);
-            Result = Image->Update(Ctx, 3, Start, Size, EmptyData);
+            Result = Image->Update(Ctx.Get(), 3, Start, Size, EmptyData);
             REQUIRE(Result == false);
         }
-
-        RNDR_DELETE(rndr::Image, Image);
     }
     SECTION("Dynamic Usage")
     {
         rndr::ImageProperties ImageProps;
-        rndr::Image* Image = Ctx->CreateImageArray(Width, Height, ArraySize, ImageProps, EmptyDataArray);
-        REQUIRE(Image != nullptr);
+        rndr::ScopePtr<rndr::Image> Image = Ctx->CreateImageArray(Width, Height, ArraySize, ImageProps, EmptyDataArray);
+        REQUIRE(Image.IsValid());
 
         SECTION("Update")
         {
-            const bool Result = Image->Update(Ctx, 0, Start, Size, UpdateData);
+            const bool Result = Image->Update(Ctx.Get(), 0, Start, Size, UpdateData);
             REQUIRE(Result == true);
         }
-
-        RNDR_DELETE(rndr::Image, Image);
     }
 
     delete[] UpdateData.Data;
-    RNDR_DELETE(rndr::GraphicsContext, Ctx);
 }
 
 TEST_CASE("ImageRead", "RenderAPI")
 {
-    std::unique_ptr<rndr::RndrContext> RndrCtx(new rndr::RndrContext());
-    rndr::GraphicsContext* Ctx = RndrCtx->CreateGraphicsContext();
-    REQUIRE(Ctx != nullptr);
+    std::unique_ptr<rndr::RndrContext> RndrCtx = std::make_unique<rndr::RndrContext>();
+    rndr::ScopePtr<rndr::GraphicsContext> Ctx = RndrCtx->CreateGraphicsContext();
+    REQUIRE(Ctx.IsValid());
 
     const rndr::Span<rndr::ByteSpan> EmptyDataArray;
     const rndr::ByteSpan EmptyData;
@@ -414,13 +392,13 @@ TEST_CASE("ImageRead", "RenderAPI")
         rndr::ImageProperties ImageProps;
         ImageProps.Usage = rndr::Usage::Readback;
         ImageProps.ImageBindFlags = 0;
-        rndr::Image* Image = Ctx->CreateImage(Width, Height, ImageProps, InitData);
-        REQUIRE(Image != nullptr);
+        rndr::ScopePtr<rndr::Image> Image = Ctx->CreateImage(Width, Height, ImageProps, InitData);
+        REQUIRE(Image.IsValid());
 
         rndr::ByteSpan ReadContents;
         ReadContents.Size = 50 * 50 * 4;
         ReadContents.Data = new uint8_t[ReadContents.Size];
-        const bool ReadStatus = Image->Read(Ctx, 0, Start, Size, ReadContents);
+        const bool ReadStatus = Image->Read(Ctx.Get(), 0, Start, Size, ReadContents);
         REQUIRE(ReadStatus == true);
         for (int i = 0; i < ReadContents.Size / 4; i++)
         {
@@ -428,19 +406,17 @@ TEST_CASE("ImageRead", "RenderAPI")
             REQUIRE(*PixelData == PixelPattern);
         }
 
-        RNDR_DELETE(rndr::Image, Image);
         delete[] ReadContents.Data;
     }
 
     delete[] InitData.Data;
-    RNDR_DELETE(rndr::GraphicsContext, Ctx);
 }
 
 TEST_CASE("ImageCopy", "RenderAPI")
 {
-    std::unique_ptr<rndr::RndrContext> RndrCtx(new rndr::RndrContext());
-    rndr::GraphicsContext* Ctx = RndrCtx->CreateGraphicsContext();
-    REQUIRE(Ctx != nullptr);
+    std::unique_ptr<rndr::RndrContext> RndrCtx = std::make_unique<rndr::RndrContext>();
+    rndr::ScopePtr<rndr::GraphicsContext> Ctx = RndrCtx->CreateGraphicsContext();
+    REQUIRE(Ctx.IsValid());
 
     const rndr::ByteSpan EmptyData;
     const int Width = 400;
@@ -462,21 +438,21 @@ TEST_CASE("ImageCopy", "RenderAPI")
     SECTION("Copy and Read Back")
     {
         rndr::ImageProperties ImageProps;
-        rndr::Image* RenderingImage = Ctx->CreateImage(Width, Height, ImageProps, InitData);
-        REQUIRE(RenderingImage != nullptr);
+        rndr::ScopePtr<rndr::Image> RenderingImage = Ctx->CreateImage(Width, Height, ImageProps, InitData);
+        REQUIRE(RenderingImage.IsValid());
 
         ImageProps.ImageBindFlags = 0;
         ImageProps.Usage = rndr::Usage::Readback;
-        rndr::Image* DstImage = Ctx->CreateImage(Width, Height, ImageProps, EmptyData);
-        REQUIRE(DstImage != nullptr);
+        rndr::ScopePtr<rndr::Image> DstImage = Ctx->CreateImage(Width, Height, ImageProps, EmptyData);
+        REQUIRE(DstImage.IsValid());
 
-        const bool CopyStatus = rndr::Image::Copy(Ctx, RenderingImage, DstImage);
+        const bool CopyStatus = rndr::Image::Copy(Ctx.Get(), RenderingImage.Get(), DstImage.Get());
         REQUIRE(CopyStatus == true);
 
         rndr::ByteSpan ReadContents;
         ReadContents.Size = 50 * 50 * 4;
         ReadContents.Data = new uint8_t[ReadContents.Size];
-        const bool ReadStatus = DstImage->Read(Ctx, 0, Start, Size, ReadContents);
+        const bool ReadStatus = DstImage->Read(Ctx.Get(), 0, Start, Size, ReadContents);
         REQUIRE(ReadStatus == true);
         for (int i = 0; i < ReadContents.Size / 4; i++)
         {
@@ -484,66 +460,57 @@ TEST_CASE("ImageCopy", "RenderAPI")
             REQUIRE(*PixelData == PixelPattern);
         }
 
-        RNDR_DELETE(rndr::Image, RenderingImage);
-        RNDR_DELETE(rndr::Image, DstImage);
         delete[] ReadContents.Data;
     }
 
     delete[] InitData.Data;
-    RNDR_DELETE(rndr::GraphicsContext, Ctx);
 }
 
 TEST_CASE("FrameBuffer", "RenderAPI")
 {
-    std::unique_ptr<rndr::RndrContext> RndrCtx(new rndr::RndrContext());
-    rndr::GraphicsContext* Ctx = RndrCtx->CreateGraphicsContext();
-    REQUIRE(Ctx != nullptr);
+    std::unique_ptr<rndr::RndrContext> RndrCtx = std::make_unique<rndr::RndrContext>();
+    rndr::ScopePtr<rndr::GraphicsContext> Ctx = RndrCtx->CreateGraphicsContext();
+    REQUIRE(Ctx.IsValid());
 
     SECTION("Default")
     {
         rndr::FrameBufferProperties Props;
-        rndr::FrameBuffer* FB = Ctx->CreateFrameBuffer(100, 400, Props);
-        REQUIRE(FB != nullptr);
-        RNDR_DELETE(rndr::FrameBuffer, FB);
+        rndr::ScopePtr<rndr::FrameBuffer> FB = Ctx->CreateFrameBuffer(100, 400, Props);
+        REQUIRE(FB.IsValid());
     }
     SECTION("All On")
     {
         rndr::FrameBufferProperties Props;
         Props.bUseDepthStencil = true;
         Props.ColorBufferCount = rndr::GraphicsConstants::MaxFrameBufferColorBuffers;
-        rndr::FrameBuffer* FB = Ctx->CreateFrameBuffer(100, 400, Props);
-        REQUIRE(FB != nullptr);
-        RNDR_DELETE(rndr::FrameBuffer, FB);
+        rndr::ScopePtr<rndr::FrameBuffer> FB = Ctx->CreateFrameBuffer(100, 400, Props);
+        REQUIRE(FB.IsValid());
     }
     SECTION("Bad Size")
     {
         rndr::FrameBufferProperties Props;
-        rndr::FrameBuffer* FB = Ctx->CreateFrameBuffer(0, 400, Props);
-        REQUIRE(FB == nullptr);
+        rndr::ScopePtr<rndr::FrameBuffer> FB = Ctx->CreateFrameBuffer(0, 400, Props);
+        REQUIRE(!FB.IsValid());
     }
     SECTION("Resize")
     {
         rndr::FrameBufferProperties Props;
-        rndr::FrameBuffer* FB = Ctx->CreateFrameBuffer(100, 400, Props);
-        REQUIRE(FB != nullptr);
+        rndr::ScopePtr<rndr::FrameBuffer> FB = Ctx->CreateFrameBuffer(100, 400, Props);
+        REQUIRE(FB.IsValid());
 
-        bool ResizeStatus = FB->Resize(Ctx, 500, 500);
+        bool ResizeStatus = FB->Resize(Ctx.Get(), 500, 500);
         REQUIRE(ResizeStatus == true);
 
-        bool ResizeStatus2 = FB->Resize(Ctx, 200, 0);
+        bool ResizeStatus2 = FB->Resize(Ctx.Get(), 200, 0);
         REQUIRE(ResizeStatus2 == false);
-
-        RNDR_DELETE(rndr::FrameBuffer, FB);
     }
-
-    RNDR_DELETE(rndr::GraphicsContext, Ctx);
 }
 
 TEST_CASE("Buffer", "RenderAPI")
 {
-    std::unique_ptr<rndr::RndrContext> RndrCtx(new rndr::RndrContext());
-    rndr::GraphicsContext* Ctx = RndrCtx->CreateGraphicsContext();
-    REQUIRE(Ctx != nullptr);
+    std::unique_ptr<rndr::RndrContext> RndrCtx = std::make_unique<rndr::RndrContext>();
+    rndr::ScopePtr<rndr::GraphicsContext> Ctx = RndrCtx->CreateGraphicsContext();
+    REQUIRE(Ctx.IsValid());
 
     rndr::ByteSpan EmptyData;
     const int Size = 32;
@@ -556,33 +523,31 @@ TEST_CASE("Buffer", "RenderAPI")
     SECTION("Default No Init Data")
     {
         rndr::BufferProperties Props;
-        rndr::Buffer* Buff = Ctx->CreateBuffer(Props, EmptyData);
-        REQUIRE(Buff == nullptr);
+        rndr::ScopePtr<rndr::Buffer> Buff = Ctx->CreateBuffer(Props, EmptyData);
+        REQUIRE(!Buff.IsValid());
     }
     SECTION("Default No Init Data Valid Size")
     {
         rndr::BufferProperties Props;
         Props.Size = Size;
-        rndr::Buffer* Buff = Ctx->CreateBuffer(Props, EmptyData);
-        REQUIRE(Buff == nullptr);
+        rndr::ScopePtr<rndr::Buffer> Buff = Ctx->CreateBuffer(Props, EmptyData);
+        REQUIRE(!Buff.IsValid());
     }
     SECTION("Default No Init Data All Valid")
     {
         rndr::BufferProperties Props;
         Props.Size = Size;
         Props.Stride = Stride;
-        rndr::Buffer* Buff = Ctx->CreateBuffer(Props, EmptyData);
-        REQUIRE(Buff != nullptr);
-        RNDR_DELETE(rndr::Buffer, Buff);
+        rndr::ScopePtr<rndr::Buffer> Buff = Ctx->CreateBuffer(Props, EmptyData);
+        REQUIRE(Buff.IsValid());
     }
     SECTION("With Init Data")
     {
         rndr::BufferProperties Props;
         Props.Size = Size;
         Props.Stride = Stride;
-        rndr::Buffer* Buff = Ctx->CreateBuffer(Props, InitData);
-        REQUIRE(Buff != nullptr);
-        RNDR_DELETE(rndr::Buffer, Buff);
+        rndr::ScopePtr<rndr::Buffer> Buff = Ctx->CreateBuffer(Props, InitData);
+        REQUIRE(Buff.IsValid());
     }
     SECTION("Dynamic")
     {
@@ -590,17 +555,15 @@ TEST_CASE("Buffer", "RenderAPI")
         Props.Usage = rndr::Usage::Dynamic;
         Props.Size = Size;
         Props.Stride = Stride;
-        rndr::Buffer* Buff = Ctx->CreateBuffer(Props, InitData);
-        REQUIRE(Buff != nullptr);
+        rndr::ScopePtr<rndr::Buffer> Buff = Ctx->CreateBuffer(Props, InitData);
+        REQUIRE(Buff.IsValid());
 
         SECTION("Update")
         {
             uint8_t UpdateData[16] = {};
-            const bool Status = Buff->Update(Ctx, rndr::ByteSpan{UpdateData, 16}, 16);
+            const bool Status = Buff->Update(Ctx.Get(), rndr::ByteSpan{UpdateData, 16}, 16);
             REQUIRE(Status == true);
         }
-
-        RNDR_DELETE(rndr::Buffer, Buff);
     }
     SECTION("Readback")
     {
@@ -609,49 +572,43 @@ TEST_CASE("Buffer", "RenderAPI")
         Props.Type = rndr::BufferType::Readback;
         Props.Size = Size;
         Props.Stride = Stride;
-        rndr::Buffer* Buff = Ctx->CreateBuffer(Props, InitData);
-        REQUIRE(Buff != nullptr);
+        rndr::ScopePtr<rndr::Buffer> Buff = Ctx->CreateBuffer(Props, InitData);
+        REQUIRE(Buff.IsValid());
 
         SECTION("Read")
         {
             uint8_t ReadData[16] = {};
-            const bool Status = Buff->Read(Ctx, rndr::ByteSpan{ReadData, 16}, 16);
+            const bool Status = Buff->Read(Ctx.Get(), rndr::ByteSpan{ReadData, 16}, 16);
             REQUIRE(Status == true);
             for (int i = 0; i < 16; i++)
             {
                 REQUIRE(ReadData[i] == 0xAF);
             }
         }
-
-        RNDR_DELETE(rndr::Buffer, Buff);
     }
 
     delete InitData.Data;
-    RNDR_DELETE(rndr::GraphicsContext, Ctx);
 }
 
 TEST_CASE("Sampler", "RenderAPI")
 {
-    std::unique_ptr<rndr::RndrContext> RndrCtx(new rndr::RndrContext());
-    rndr::GraphicsContext* Ctx = RndrCtx->CreateGraphicsContext();
-    REQUIRE(Ctx != nullptr);
+    std::unique_ptr<rndr::RndrContext> RndrCtx = std::make_unique<rndr::RndrContext>();
+    rndr::ScopePtr<rndr::GraphicsContext> Ctx = RndrCtx->CreateGraphicsContext();
+    REQUIRE(Ctx.IsValid());
 
     SECTION("Default")
     {
         rndr::SamplerProperties Props;
-        rndr::Sampler* S = Ctx->CreateSampler(Props);
-        REQUIRE(S != nullptr);
-        RNDR_DELETE(rndr::Sampler, S);
+        rndr::ScopePtr<rndr::Sampler> S = Ctx->CreateSampler(Props);
+        REQUIRE(S.IsValid());
     }
-
-    RNDR_DELETE(rndr::GraphicsContext, Ctx);
 }
 
 TEST_CASE("Shader", "RenderAPI")
 {
-    std::unique_ptr<rndr::RndrContext> RndrCtx(new rndr::RndrContext());
-    rndr::GraphicsContext* Ctx = RndrCtx->CreateGraphicsContext();
-    REQUIRE(Ctx != nullptr);
+    std::unique_ptr<rndr::RndrContext> RndrCtx = std::make_unique<rndr::RndrContext>();
+    rndr::ScopePtr<rndr::GraphicsContext> Ctx = RndrCtx->CreateGraphicsContext();
+    REQUIRE(Ctx.IsValid());
 
     SECTION("Default")
     {
@@ -663,19 +620,16 @@ TEST_CASE("Shader", "RenderAPI")
         rndr::ShaderProperties Props;
         Props.Type = rndr::ShaderType::Vertex;
         Props.EntryPoint = "main";
-        rndr::Shader* S = Ctx->CreateShader(Data, Props);
-        REQUIRE(S != nullptr);
-        RNDR_DELETE(rndr::Shader, S);
+        rndr::ScopePtr<rndr::Shader> S = Ctx->CreateShader(Data, Props);
+        REQUIRE(S.IsValid());
     }
-
-    RNDR_DELETE(rndr::GraphicsContext, Ctx);
 }
 
 TEST_CASE("InputLayout", "RenderAPI")
 {
-    std::unique_ptr<rndr::RndrContext> RndrCtx(new rndr::RndrContext());
-    rndr::GraphicsContext* Ctx = RndrCtx->CreateGraphicsContext();
-    REQUIRE(Ctx != nullptr);
+    std::unique_ptr<rndr::RndrContext> RndrCtx = std::make_unique<rndr::RndrContext>();
+    rndr::ScopePtr<rndr::GraphicsContext> Ctx = RndrCtx->CreateGraphicsContext();
+    REQUIRE(Ctx.IsValid());
 
     SECTION("Default")
     {
@@ -688,8 +642,8 @@ TEST_CASE("InputLayout", "RenderAPI")
         rndr::ShaderProperties Props;
         Props.Type = rndr::ShaderType::Vertex;
         Props.EntryPoint = "main";
-        rndr::Shader* S = Ctx->CreateShader(Data, Props);
-        REQUIRE(S != nullptr);
+        rndr::ScopePtr<rndr::Shader> S = Ctx->CreateShader(Data, Props);
+        REQUIRE(S.IsValid());
 
         rndr::InputLayoutProperties LayoutProps[2];
         LayoutProps[0].SemanticName = "POSITION";
@@ -706,21 +660,16 @@ TEST_CASE("InputLayout", "RenderAPI")
         LayoutProps[1].Format = rndr::PixelFormat::R32G32B32_FLOAT;
         rndr::Span<rndr::InputLayoutProperties> PackedProps(LayoutProps, 2);
 
-        rndr::InputLayout* Layout = Ctx->CreateInputLayout(PackedProps, S);
-        REQUIRE(Layout != nullptr);
-
-        RNDR_DELETE(rndr::InputLayout, Layout);
-        RNDR_DELETE(rndr::Shader, S);
+        rndr::ScopePtr<rndr::InputLayout> Layout = Ctx->CreateInputLayout(PackedProps, S.Get());
+        REQUIRE(Layout.IsValid());
     }
-
-    RNDR_DELETE(rndr::GraphicsContext, Ctx);
 }
 
 TEST_CASE("InputLayoutBuilder", "RenderAPI")
 {
-    std::unique_ptr<rndr::RndrContext> RndrCtx(new rndr::RndrContext());
-    rndr::GraphicsContext* Ctx = RndrCtx->CreateGraphicsContext();
-    REQUIRE(Ctx != nullptr);
+    std::unique_ptr<rndr::RndrContext> RndrCtx = std::make_unique<rndr::RndrContext>();
+    rndr::ScopePtr<rndr::GraphicsContext> Ctx = RndrCtx->CreateGraphicsContext();
+    REQUIRE(Ctx.IsValid());
 
     SECTION("Default")
     {
@@ -733,8 +682,8 @@ TEST_CASE("InputLayoutBuilder", "RenderAPI")
         rndr::ShaderProperties Props;
         Props.Type = rndr::ShaderType::Vertex;
         Props.EntryPoint = "main";
-        rndr::Shader* S = Ctx->CreateShader(Data, Props);
-        REQUIRE(S != nullptr);
+        rndr::ScopePtr<rndr::Shader> S = Ctx->CreateShader(Data, Props);
+        REQUIRE(S.IsValid());
 
         rndr::InputLayoutBuilder Builder;
         rndr::Span<rndr::InputLayoutProperties> LayoutProps = Builder.AddBuffer(0, rndr::DataRepetition::PerVertex, 0)
@@ -756,11 +705,8 @@ TEST_CASE("InputLayoutBuilder", "RenderAPI")
         REQUIRE(LayoutProps[1].Repetition == rndr::DataRepetition::PerVertex);
         REQUIRE(LayoutProps[1].Format == rndr::PixelFormat::R32G32B32_FLOAT);
 
-        rndr::InputLayout* Layout = Ctx->CreateInputLayout(LayoutProps, S);
-        REQUIRE(Layout != nullptr);
-
-        RNDR_DELETE(rndr::InputLayout, Layout);
-        RNDR_DELETE(rndr::Shader, S);
+        rndr::ScopePtr<rndr::InputLayout> Layout = Ctx->CreateInputLayout(LayoutProps, S.Get());
+        REQUIRE(Layout.IsValid());
     }
     SECTION("Complex")
     {
@@ -842,13 +788,11 @@ TEST_CASE("InputLayoutBuilder", "RenderAPI")
         REQUIRE(LayoutProps[8].Repetition == rndr::DataRepetition::PerInstance);
         REQUIRE(LayoutProps[8].InstanceStepRate == 1);
     }
-
-    RNDR_DELETE(rndr::GraphicsContext, Ctx);
 }
 
 TEST_CASE("RasterizerState", "RenderAPI")
 {
-    std::unique_ptr<rndr::RndrContext> RndrCtx(new rndr::RndrContext());
+    std::unique_ptr<rndr::RndrContext> RndrCtx = std::make_unique<rndr::RndrContext>();
     rndr::GraphicsContext* Ctx = RndrCtx->CreateGraphicsContext();
     REQUIRE(Ctx != nullptr);
 
@@ -865,49 +809,43 @@ TEST_CASE("RasterizerState", "RenderAPI")
 
 TEST_CASE("DepthStencilState", "RenderAPI")
 {
-    std::unique_ptr<rndr::RndrContext> RndrCtx(new rndr::RndrContext());
-    rndr::GraphicsContext* Ctx = RndrCtx->CreateGraphicsContext();
-    REQUIRE(Ctx != nullptr);
+    std::unique_ptr<rndr::RndrContext> RndrCtx = std::make_unique<rndr::RndrContext>();
+    rndr::ScopePtr<rndr::GraphicsContext> Ctx = RndrCtx->CreateGraphicsContext();
+    REQUIRE(Ctx.IsValid());
 
     SECTION("Default")
     {
         rndr::DepthStencilProperties Props;
-        rndr::DepthStencilState* S = Ctx->CreateDepthStencilState(Props);
-        REQUIRE(S != nullptr);
-        RNDR_DELETE(rndr::DepthStencilState, S);
+        rndr::ScopePtr<rndr::DepthStencilState> S = Ctx->CreateDepthStencilState(Props);
+        REQUIRE(S.IsValid());
     }
-
-    RNDR_DELETE(rndr::GraphicsContext, Ctx);
 }
 
 TEST_CASE("BlendState", "RenderAPI")
 {
-    std::unique_ptr<rndr::RndrContext> RndrCtx(new rndr::RndrContext());
-    rndr::GraphicsContext* Ctx = RndrCtx->CreateGraphicsContext();
-    REQUIRE(Ctx != nullptr);
+    std::unique_ptr<rndr::RndrContext> RndrCtx = std::make_unique<rndr::RndrContext>();
+    rndr::ScopePtr<rndr::GraphicsContext> Ctx = RndrCtx->CreateGraphicsContext();
+    REQUIRE(Ctx.IsValid());
 
     SECTION("Default")
     {
         rndr::BlendProperties Props;
-        rndr::BlendState* S = Ctx->CreateBlendState(Props);
-        REQUIRE(S != nullptr);
-        RNDR_DELETE(rndr::BlendState, S);
+        rndr::ScopePtr<rndr::BlendState> S = Ctx->CreateBlendState(Props);
+        REQUIRE(S.IsValid());
     }
-
-    RNDR_DELETE(rndr::GraphicsContext, Ctx);
 }
 
 TEST_CASE("SwapChain", "RenderAPI")
 {
-    std::unique_ptr<rndr::RndrContext> RndrCtx(new rndr::RndrContext());
+    std::unique_ptr<rndr::RndrContext> RndrCtx = std::make_unique<rndr::RndrContext>();
     rndr::ScopePtr<rndr::GraphicsContext> Ctx = RndrCtx->CreateGraphicsContext();
     rndr::ScopePtr<rndr::Window> Win = RndrCtx->CreateWin(800, 600);
-    REQUIRE(Ctx.Get() != nullptr);
+    REQUIRE(Ctx.IsValid());
 
     void* NativeWinHandle = (void*)Win->GetNativeWindowHandle();
     rndr::SwapChainProperties SwapProps;
     rndr::ScopePtr<rndr::SwapChain> S = Ctx->CreateSwapChain(NativeWinHandle, Win->GetWidth(), Win->GetHeight(), SwapProps);
-    REQUIRE(S.Get() != nullptr);
+    REQUIRE(S.IsValid());
 
     Ctx->ClearColor(S->FrameBuffer->ColorBuffers[0], math::Vector4{1, 1, 1, 1});
     Ctx->Present(S.Get(), true);
