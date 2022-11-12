@@ -391,6 +391,9 @@ void rndr::GraphicsContext::BindShader(Shader* Shader)
             m_DeviceContext->PSSetShader(Shader->DX11FragmentShader, nullptr, 0);
             break;
         }
+        case ShaderType::Compute:
+            m_DeviceContext->CSSetShader(Shader->DX11ComputeShader, nullptr, 0);
+            break;
         default:
         {
             assert(false);
@@ -540,6 +543,11 @@ void rndr::GraphicsContext::DrawIndexedInstanced(PrimitiveTopology Topology,
 {
     m_DeviceContext->IASetPrimitiveTopology(DX11FromPrimitiveTopology(Topology));
     m_DeviceContext->DrawIndexedInstanced(IndexCount, InstanceCount, IndexOffset, 0, InstanceOffset);
+}
+
+void rndr::GraphicsContext::Dispatch(const uint32_t ThreadGroupCountX, const uint32_t ThreadGroupCountY, const uint32_t ThreadGroupCountZ)
+{
+    m_DeviceContext->Dispatch(ThreadGroupCountX, ThreadGroupCountY, ThreadGroupCountZ);
 }
 
 void rndr::GraphicsContext::Present(SwapChain* SwapChain, bool bVSync)

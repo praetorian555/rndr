@@ -196,7 +196,8 @@ enum class DataRepetition
 enum class ShaderType
 {
     Vertex,
-    Fragment
+    Fragment,
+    Compute
 };
 
 enum class DepthMask

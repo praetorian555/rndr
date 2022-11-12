@@ -25,6 +25,7 @@ struct Shader
     {
         ID3D11VertexShader* DX11VertexShader;
         ID3D11PixelShader* DX11FragmentShader;
+        ID3D11ComputeShader* DX11ComputeShader;
     };
 
     ~Shader();

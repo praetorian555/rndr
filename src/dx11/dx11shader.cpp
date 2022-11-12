@@ -142,6 +142,10 @@ bool rndr::Shader::Init(GraphicsContext* Context, const ByteSpan& ShaderContents
             Result = Device->CreatePixelShader(DX11ShaderBuffer->GetBufferPointer(), DX11ShaderBuffer->GetBufferSize(), nullptr,
                                                &DX11FragmentShader);
             break;
+        case ShaderType::Compute:
+            Result = Device->CreateComputeShader(DX11ShaderBuffer->GetBufferPointer(), DX11ShaderBuffer->GetBufferSize(), nullptr,
+                                                 &DX11ComputeShader);
+            break;
         default:
             assert(false);
     }
@@ -165,6 +169,9 @@ rndr::Shader::~Shader()
             break;
         case ShaderType::Fragment:
             DX11SafeRelease(DX11FragmentShader);
+            break;
+        case ShaderType::Compute:
+            DX11SafeRelease(DX11ComputeShader);
             break;
     }
 }
