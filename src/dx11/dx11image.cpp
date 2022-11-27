@@ -284,6 +284,7 @@ bool rndr::Image::InitInternal(GraphicsContext* Context, Span<ByteSpan> InitData
     return true;
 }
 
+// FIXME: Refactor this to support both CommandList and GraphicsContext
 bool rndr::Image::Update(GraphicsContext* Context,
                          int ArrayIndex,
                          const math::Point2& Start,
@@ -459,6 +460,7 @@ bool rndr::Image::Read(GraphicsContext* Context,
     return true;
 }
 
+// TODO: Check if we can do this with CommandList
 bool rndr::Image::Copy(GraphicsContext* Context, Image* Src, Image* Dest)
 {
     if (!Src)
