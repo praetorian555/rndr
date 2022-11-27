@@ -23,7 +23,7 @@ struct GraphicsConstants
 
 /**
  * Exact positions of channels and their size in bits.
- * 
+ *
  * UNORM - Interpreted by a shader as floating-point value in the range [0, 1].
  * SNORM - Interpreted by a shader as floating-point value in the range [-1, 1].
  */
