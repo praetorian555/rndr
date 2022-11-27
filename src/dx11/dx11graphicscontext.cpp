@@ -5,9 +5,11 @@
 #include <Windows.h>
 
 #include "rndr/core/log.h"
+#include "rndr/core/memory.h"
 #include "rndr/core/rndrcontext.h"
 
 #include "rndr/render/dx11/dx11buffer.h"
+#include "rndr/render/dx11/dx11commandlist.h"
 #include "rndr/render/dx11/dx11framebuffer.h"
 #include "rndr/render/dx11/dx11helpers.h"
 #include "rndr/render/dx11/dx11image.h"
@@ -332,6 +334,16 @@ rndr::BlendState* rndr::GraphicsContext::CreateBlendState(const BlendProperties&
     return State;
 }
 
+rndr::CommandList* rndr::GraphicsContext::CreateCommandList()
+{
+    CommandList* CL = RNDR_NEW(CommandList, "rndr::GrapcsContext: CommandList");
+    if (!CL || !CL->Init(this))
+    {
+        RNDR_DELETE(CommandList, CL);
+    }
+    return CL;
+}
+
 void rndr::GraphicsContext::ClearColor(Image* Image, math::Vector4 Color)
 {
     if (!Image)
@@ -548,6 +560,25 @@ void rndr::GraphicsContext::DrawIndexedInstanced(PrimitiveTopology Topology,
 void rndr::GraphicsContext::Dispatch(const uint32_t ThreadGroupCountX, const uint32_t ThreadGroupCountY, const uint32_t ThreadGroupCountZ)
 {
     m_DeviceContext->Dispatch(ThreadGroupCountX, ThreadGroupCountY, ThreadGroupCountZ);
+}
+
+void rndr::GraphicsContext::SubmitCommandList(CommandList* List)
+{
+    if (!List)
+    {
+        return;
+    }
+    if (!List->IsFinished())
+    {
+        RNDR_LOG_ERROR("GraphicsContext::SubmitCommandList: User didn't call Finish on the CommandList object!");
+        return;
+    }
+    m_DeviceContext->ExecuteCommandList(List->DX11CommandList, false);
+    if (WindowsHasFailed())
+    {
+        const std::string ErrorMessage = WindowsGetErrorMessage();
+        RNDR_LOG_ERROR("GraphicsContext::SubmitCommandList: %s", ErrorMessage.c_str());
+    }
 }
 
 void rndr::GraphicsContext::Present(SwapChain* SwapChain, bool bVSync)

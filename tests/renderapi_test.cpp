@@ -15,6 +15,7 @@
 #include "rndr/render/sampler.h"
 #include "rndr/render/shader.h"
 #include "rndr/render/swapchain.h"
+#include "rndr/render/commandlist.h"
 
 TEST_CASE("GraphicsContext", "RenderAPI")
 {
@@ -894,4 +895,20 @@ TEST_CASE("SwapChain", "RenderAPI")
     Ctx->Present(S.Get(), true);
     Ctx->ClearColor(S->FrameBuffer->ColorBuffers[0], math::Vector4{1, 1, 0.5, 1});
     Ctx->Present(S.Get(), true);
+}
+
+TEST_CASE("CommandList", "RenderAPI")
+{
+    std::unique_ptr<rndr::RndrContext> RndrCtx = std::make_unique<rndr::RndrContext>();
+    rndr::ScopePtr<rndr::GraphicsContext> Ctx = RndrCtx->CreateGraphicsContext();
+    REQUIRE(Ctx.IsValid());
+
+    rndr::ScopePtr<rndr::CommandList> CL = Ctx->CreateCommandList();
+    REQUIRE(CL.IsValid());
+
+    CL->Finish(Ctx.Get());
+    REQUIRE(CL->IsFinished());
+
+    Ctx->SubmitCommandList(CL.Get());
+
 }

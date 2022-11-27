@@ -17,13 +17,12 @@ struct math::Vector4;
 namespace rndr
 {
 
-class Window;
-class FrameBuffer;
-class Image;
-class Shader;
+struct FrameBuffer;
+struct Image;
+struct Shader;
 struct Sampler;
-class Buffer;
-
+struct Buffer;
+struct CommandList;
 struct InputLayout;
 struct RasterizerState;
 struct DepthStencilState;
@@ -56,6 +55,7 @@ public:
     RasterizerState* CreateRasterizerState(const RasterizerProperties& Props);
     DepthStencilState* CreateDepthStencilState(const DepthStencilProperties& Props);
     BlendState* CreateBlendState(const BlendProperties& Props);
+    CommandList* CreateCommandList();
 
     void ClearColor(Image* Image, math::Vector4 Color);
     void ClearDepth(Image* Image, real Depth);
@@ -76,6 +76,8 @@ public:
     void DrawIndexedInstanced(PrimitiveTopology Topology, int IndexCount, int InstanceCount, int IndexOffset = 0, int InstanceOffset = 0);
 
     void Dispatch(const uint32_t ThreadGroupCountX, const uint32_t ThreadGroupCountY, const uint32_t ThreadGroupCountZ);
+
+    void SubmitCommandList(CommandList* List);
 
     void Present(SwapChain* SwapChain, bool bVSync);
 
