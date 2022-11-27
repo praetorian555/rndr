@@ -8,6 +8,7 @@
 #include "rndr/core/window.h"
 
 #include "rndr/render/buffer.h"
+#include "rndr/render/commandlist.h"
 #include "rndr/render/framebuffer.h"
 #include "rndr/render/graphicscontext.h"
 #include "rndr/render/image.h"
@@ -15,7 +16,6 @@
 #include "rndr/render/sampler.h"
 #include "rndr/render/shader.h"
 #include "rndr/render/swapchain.h"
-#include "rndr/render/commandlist.h"
 
 TEST_CASE("GraphicsContext", "RenderAPI")
 {
@@ -906,9 +906,18 @@ TEST_CASE("CommandList", "RenderAPI")
     rndr::ScopePtr<rndr::CommandList> CL = Ctx->CreateCommandList();
     REQUIRE(CL.IsValid());
 
+    constexpr int ImageWidth = 800;
+    constexpr int ImageHeight = 600;
+    rndr::ImageProperties Props;
+    Props.ImageBindFlags = rndr::ImageBindFlags::RenderTarget;
+    rndr::ScopePtr<rndr::Image> Im = Ctx->CreateImage(ImageWidth, ImageHeight, Props, rndr::ByteSpan{});
+    REQUIRE(Im.IsValid());
+
+    CL->ClearColor(Im.Get(), math::Vector4{1, 1, 1, 1});
+
     CL->Finish(Ctx.Get());
     REQUIRE(CL->IsFinished());
 
-    Ctx->SubmitCommandList(CL.Get());
-
+    const bool Status = Ctx->SubmitCommandList(CL.Get());
+    REQUIRE(Status == true);
 }

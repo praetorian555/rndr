@@ -346,7 +346,7 @@ rndr::CommandList* rndr::GraphicsContext::CreateCommandList()
 
 void rndr::GraphicsContext::ClearColor(Image* Image, math::Vector4 Color)
 {
-    if (!Image)
+    if (!Image || !Image->DX11RenderTargetView)
     {
         RNDR_LOG_ERROR("GraphicsContext::ClearColor: Invalid image!");
         return;
@@ -361,7 +361,7 @@ void rndr::GraphicsContext::ClearColor(Image* Image, math::Vector4 Color)
 
 void rndr::GraphicsContext::ClearDepth(Image* Image, real Depth)
 {
-    if (!Image)
+    if (!Image || !Image->DX11DepthStencilView)
     {
         RNDR_LOG_ERROR("GraphicsContext::ClearDepth: Invalid image!");
         return;
@@ -371,7 +371,7 @@ void rndr::GraphicsContext::ClearDepth(Image* Image, real Depth)
 
 void rndr::GraphicsContext::ClearStencil(Image* Image, uint8_t Stencil)
 {
-    if (!Image)
+    if (!Image || !Image->DX11DepthStencilView)
     {
         RNDR_LOG_ERROR("GraphicsContext::ClearStencil: Invalid image!");
         return;
@@ -381,7 +381,7 @@ void rndr::GraphicsContext::ClearStencil(Image* Image, uint8_t Stencil)
 
 void rndr::GraphicsContext::ClearDepthStencil(Image* Image, real Depth, uint8_t Stencil)
 {
-    if (!Image)
+    if (!Image || !Image->DX11DepthStencilView)
     {
         RNDR_LOG_ERROR("GraphicsContext::ClearDepthStencil: Invalid image!");
         return;
@@ -562,23 +562,25 @@ void rndr::GraphicsContext::Dispatch(const uint32_t ThreadGroupCountX, const uin
     m_DeviceContext->Dispatch(ThreadGroupCountX, ThreadGroupCountY, ThreadGroupCountZ);
 }
 
-void rndr::GraphicsContext::SubmitCommandList(CommandList* List)
+bool rndr::GraphicsContext::SubmitCommandList(CommandList* List)
 {
     if (!List)
     {
-        return;
+        return false;
     }
     if (!List->IsFinished())
     {
         RNDR_LOG_ERROR("GraphicsContext::SubmitCommandList: User didn't call Finish on the CommandList object!");
-        return;
+        return false;
     }
     m_DeviceContext->ExecuteCommandList(List->DX11CommandList, false);
     if (WindowsHasFailed())
     {
         const std::string ErrorMessage = WindowsGetErrorMessage();
         RNDR_LOG_ERROR("GraphicsContext::SubmitCommandList: %s", ErrorMessage.c_str());
+        return false;
     }
+    return true;
 }
 
 void rndr::GraphicsContext::Present(SwapChain* SwapChain, bool bVSync)

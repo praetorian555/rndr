@@ -77,7 +77,7 @@ public:
 
     void Dispatch(const uint32_t ThreadGroupCountX, const uint32_t ThreadGroupCountY, const uint32_t ThreadGroupCountZ);
 
-    void SubmitCommandList(CommandList* List);
+    bool SubmitCommandList(CommandList* List);
 
     void Present(SwapChain* SwapChain, bool bVSync);
 
