@@ -21,6 +21,8 @@
 std::string rndr::GraphicsContext::WindowsGetErrorMessage(HRESULT ErrorCode)
 {
     std::string Rtn;
+
+#if RNDR_DEBUG
     if (ErrorCode != S_OK)
     {
         constexpr DWORD BufferSize = 1024;
@@ -70,6 +72,7 @@ std::string rndr::GraphicsContext::WindowsGetErrorMessage(HRESULT ErrorCode)
     }
 
     m_DebugInfoQueue->ClearStoredMessages();
+#endif  // RNDR_DEBUG
 
     return Rtn;
 }
@@ -80,6 +83,8 @@ bool rndr::GraphicsContext::WindowsHasFailed(HRESULT ErrorCode)
     {
         return true;
     }
+
+#if RNDR_DEBUG
     if (!m_DebugInfoQueue)
     {
         return false;
@@ -110,6 +115,9 @@ bool rndr::GraphicsContext::WindowsHasFailed(HRESULT ErrorCode)
     }
 
     return bStatus;
+#else
+    return false;
+#endif  // RNDR_DEBUG
 }
 
 rndr::GraphicsContext::~GraphicsContext()
@@ -119,10 +127,13 @@ rndr::GraphicsContext::~GraphicsContext()
 
     DX11SafeRelease(m_Device);
     DX11SafeRelease(m_DeviceContext);
+
+#if RNDR_DEBUG
     if (m_DebugInfoQueue)
     {
         DX11SafeRelease(m_DebugInfoQueue);
     }
+#endif  // RNDR_DEBUG
 }
 
 bool rndr::GraphicsContext::Init(GraphicsContextProperties Props)
@@ -164,6 +175,7 @@ bool rndr::GraphicsContext::Init(GraphicsContextProperties Props)
         return true;
     }
 
+#if RNDR_DEBUG
     Result = m_Device->QueryInterface(__uuidof(ID3D11InfoQueue), (void**)&m_DebugInfoQueue);
     if (WindowsHasFailed(Result))
     {
@@ -171,6 +183,7 @@ bool rndr::GraphicsContext::Init(GraphicsContextProperties Props)
         RNDR_LOG_ERROR("%s", ErrorMessage.c_str());
         return false;
     }
+#endif  // RNDR_DEBUG
 
     return true;
 }

@@ -91,8 +91,10 @@ private:
     ID3D11DeviceContext* m_DeviceContext = nullptr;
     D3D_FEATURE_LEVEL m_FeatureLevel;
 
+#if RNDR_DEBUG
     ID3D11InfoQueue* m_DebugInfoQueue = nullptr;
     int m_DebugLastMessageId = 0;
+#endif  // RNDR_DEBUG
 };
 
 }  // namespace rndr
