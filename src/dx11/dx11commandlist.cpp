@@ -95,7 +95,6 @@ void rndr::CommandList::ClearDepthStencil(Image* Image, real Depth, uint8_t Sten
     DX11DeferredContext->ClearDepthStencilView(Image->DX11DepthStencilView, D3D11_CLEAR_DEPTH | D3D11_CLEAR_STENCIL, Depth, Stencil);
 }
 
-
 void rndr::CommandList::BindShader(Shader* Shader)
 {
     switch (Shader->Props.Type)
@@ -255,10 +254,10 @@ void rndr::CommandList::DrawIndexed(PrimitiveTopology Topology, int IndicesCount
 }
 
 void rndr::CommandList::DrawIndexedInstanced(PrimitiveTopology Topology,
-                                                 int IndexCount,
-                                                 int InstanceCount,
-                                                 int IndexOffset,
-                                                 int InstanceOffset)
+                                             int IndexCount,
+                                             int InstanceCount,
+                                             int IndexOffset,
+                                             int InstanceOffset)
 {
     DX11DeferredContext->IASetPrimitiveTopology(DX11FromPrimitiveTopology(Topology));
     DX11DeferredContext->DrawIndexedInstanced(IndexCount, InstanceCount, IndexOffset, 0, InstanceOffset);
@@ -268,6 +267,5 @@ void rndr::CommandList::Dispatch(const uint32_t ThreadGroupCountX, const uint32_
 {
     DX11DeferredContext->Dispatch(ThreadGroupCountX, ThreadGroupCountY, ThreadGroupCountZ);
 }
-
 
 #endif  // RNDR_DX11
