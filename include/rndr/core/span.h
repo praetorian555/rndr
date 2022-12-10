@@ -12,30 +12,27 @@ struct Span
 {
     Span() : Data(nullptr), Size(0) {}
     Span(T* Data, size_t Size) : Data(Data), Size(Size) {}
-    explicit Span(const std::vector<T>& Vec) : Data((T*)Vec.data()), Size(Vec.size()) {}
+    explicit Span(const std::vector<T>& Vec) : Data(reinterpret_cast<T*>(Vec.data())), Size(Vec.size()) {}
 
     template <typename U>
     explicit Span(const std::vector<U>& Vec)
     {
-        Data = (T*)Vec.data();
+        Data = reinterpret_cast<T*>(Vec.data());
         Size = Vec.size() * sizeof(U) / sizeof(T);
-        assert(Vec.size() * sizeof(U) % sizeof(T) == 0);
     }
 
     template <typename U>
     explicit Span(const Span<U>& Other)
     {
-        Data = (T*)Other.Data;
+        Data = reinterpret_cast<T*>(Other.Data);
         Size = Other.Size * sizeof(U) / sizeof(T);
-        assert(Other.Size * sizeof(U) % sizeof(T) == 0);
     }
 
     template <typename U>
     explicit Span(const U* Ptr)
     {
-        Data = (T*)Ptr;
+        Data = reinterpret_cast<T*>(Ptr);
         Size = sizeof(U) / sizeof(T);
-        assert(sizeof(U) % sizeof(T) == 0);
     }
 
     operator bool() const { return Data != nullptr && Size != 0; }

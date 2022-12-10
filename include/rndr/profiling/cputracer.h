@@ -24,7 +24,7 @@ private:
 class CpuTrace
 {
 public:
-    CpuTrace(const std::string& Name);
+    explicit CpuTrace(const std::string& Name);
     ~CpuTrace();
 
 private:

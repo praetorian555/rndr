@@ -43,7 +43,7 @@ template <typename Function>
 class Task : public TaskBase
 {
 public:
-    Task(Function F) : m_Function(F) {}
+    explicit Task(Function F) : m_Function(F) {}
 
     virtual void Execute() override
     {
