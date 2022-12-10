@@ -63,14 +63,14 @@ void rndr::InputSystem::Update(real DeltaSeconds)
         const ButtonEvent& Event = g_ButtonEvents.front();
         g_ButtonEvents.pop();
 
-        for (const auto& Mapping : m_Context->Mappings)
+        for (const auto& MappingEntry : m_Context->Mappings)
         {
-            for (const auto& Binding : Mapping.second->Bindings)
+            for (const auto& Binding : MappingEntry.Mapping->Bindings)
             {
                 if (Binding.Primitive == Event.Primitive && Binding.Trigger == Event.Trigger)
                 {
                     const real Value = Binding.Modifier;
-                    Mapping.second->Callback(Event.Primitive, Event.Trigger, Value);
+                    MappingEntry.Mapping->Callback(Event.Primitive, Event.Trigger, Value);
                 }
             }
         }
@@ -89,9 +89,9 @@ void rndr::InputSystem::Update(real DeltaSeconds)
             continue;
         }
 
-        for (const auto& Mapping : m_Context->Mappings)
+        for (const auto& MappingEntry : m_Context->Mappings)
         {
-            for (const auto& Binding : Mapping.second->Bindings)
+            for (const auto& Binding : MappingEntry.Mapping->Bindings)
             {
                 if (Binding.Primitive == InputPrimitive::Mouse_AxisX)
                 {
@@ -104,7 +104,7 @@ void rndr::InputSystem::Update(real DeltaSeconds)
                     {
                         Value = Event.X;
                     }
-                    Mapping.second->Callback(Binding.Primitive, Binding.Trigger, Value);
+                    MappingEntry.Mapping->Callback(Binding.Primitive, Binding.Trigger, Value);
                 }
                 else if (Binding.Primitive == InputPrimitive::Mouse_AxisY)
                 {
@@ -117,7 +117,7 @@ void rndr::InputSystem::Update(real DeltaSeconds)
                     {
                         Value = Event.Y;
                     }
-                    Mapping.second->Callback(Binding.Primitive, Binding.Trigger, Value);
+                    MappingEntry.Mapping->Callback(Binding.Primitive, Binding.Trigger, Value);
                 }
             }
         }
@@ -131,13 +131,13 @@ void rndr::InputSystem::Update(real DeltaSeconds)
         const MouseWheelEvent& Event = g_MouseWheelEvents.front();
         g_MouseWheelEvents.pop();
 
-        for (const auto& Mapping : m_Context->Mappings)
+        for (const auto& MappingEntry : m_Context->Mappings)
         {
-            for (const auto& Binding : Mapping.second->Bindings)
+            for (const auto& Binding : MappingEntry.Mapping->Bindings)
             {
                 if (Binding.Primitive == InputPrimitive::Mouse_AxisWheel)
                 {
-                    Mapping.second->Callback(Binding.Primitive, Binding.Trigger, Event.DeltaWheel);
+                    MappingEntry.Mapping->Callback(Binding.Primitive, Binding.Trigger, Event.DeltaWheel);
                 }
             }
         }
@@ -215,28 +215,42 @@ math::Point2 rndr::InputSystem::GetMousePosition() const
 
 rndr::InputMapping* rndr::InputContext::CreateMapping(const InputAction& Action, InputCallback Callback)
 {
-    const auto& It = Mappings.find(Action);
-    assert(It == Mappings.end());
-
     std::unique_ptr<InputMapping> Mapping = std::make_unique<InputMapping>(Action, Callback);
-    auto& MappingIt = Mappings.insert(std::make_pair(Action, std::move(Mapping)));
 
-    return nullptr;
+    for (Entry& E : Mappings)
+    {
+        if (E.Action == Action)
+        {
+            E.Mapping = std::move(Mapping);
+            return E.Mapping.get();
+        }
+    }
+
+    Mappings.push_back(Entry{Action, std::move(Mapping)});
+    return Mappings.back().Mapping.get();
 }
 
 void rndr::InputContext::AddBinding(const InputAction& Action, InputPrimitive Primitive, InputTrigger Trigger, real Modifier)
 {
-    const auto& It = Mappings.find(Action);
-    assert(It != Mappings.end());
-
-    InputMapping* Mapping = It->second.get();
-
-    // TODO(mkostic): Check for duplicates
-    Mapping->Bindings.push_back(InputBinding{Primitive, Trigger, Modifier});
+    for (const Entry& E : Mappings)
+    {
+        if (E.Action == Action)
+        {
+            InputMapping* Mapping = E.Mapping.get();
+            // TODO(mkostic): Check for duplicates
+            Mapping->Bindings.push_back(InputBinding{Primitive, Trigger, Modifier});
+        }
+    }
 }
 
 const rndr::InputMapping* rndr::InputContext::GetMapping(const InputAction& Action)
 {
-    const auto& It = Mappings.find(Action);
-    return It != Mappings.end() ? It->second.get() : nullptr;
+    for (const Entry& E : Mappings)
+    {
+        if (E.Action == Action)
+        {
+            return E.Mapping.get();
+        }
+    }
+    return nullptr;
 }

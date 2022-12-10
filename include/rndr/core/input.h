@@ -1,7 +1,6 @@
 #pragma once
 
 #include <functional>
-#include <map>
 #include <memory>
 #include <string>
 #include <vector>
@@ -50,7 +49,13 @@ struct InputMapping
  */
 struct InputContext
 {
-    std::map<InputAction, std::unique_ptr<InputMapping>> Mappings;
+    struct Entry
+    {
+        InputAction Action;
+        std::unique_ptr<InputMapping> Mapping;
+    };
+
+    std::vector<Entry> Mappings;
 
     InputMapping* CreateMapping(const InputAction& Action, InputCallback Callback);
     void AddBinding(const InputAction& Action, InputPrimitive Primitive, InputTrigger Trigger, real Modifier = 1.0);
