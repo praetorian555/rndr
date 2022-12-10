@@ -7,6 +7,9 @@
 #include <thread>
 #include <vector>
 
+#undef min
+#undef max
+
 #include "math/point2.h"
 #include "math/vector2.h"
 
