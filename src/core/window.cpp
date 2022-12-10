@@ -66,7 +66,10 @@ rndr::Window::Window(int Width, int Height, const WindowProperties& Props) : m_W
 
 rndr::Window::~Window()
 {
-    Close();
+    if (!IsClosed())
+    {
+        Close();
+    }
 }
 
 void rndr::Window::ProcessEvents()
