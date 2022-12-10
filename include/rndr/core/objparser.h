@@ -1,5 +1,7 @@
 #pragma once
 
+#include <string>
+
 #include "rndr/core/base.h"
 #include "rndr/core/span.h"
 

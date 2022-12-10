@@ -8,6 +8,7 @@
 #include <vector>
 
 #include "math/point2.h"
+#include "math/vector2.h"
 
 #include "rndr/profiling/cputracer.h"
 
@@ -247,7 +248,7 @@ void ParallelFor(const math::Point2 End, int BatchSize, Function F, const math::
 template <typename Function>
 void ParallelFor(const math::Vector2 End, int BatchSize, Function F, const math::Vector2 Start)
 {
-    ParallelFor(Point2i{End.X, End.Y}, BatchSize, F, {Start.X, Start.Y});
+    ParallelFor(math::Point2{End.X, End.Y}, BatchSize, F, math::Point2{Start.X, Start.Y});
 }
 
 }  // namespace rndr

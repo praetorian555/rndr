@@ -4,12 +4,12 @@
 
 #if defined RNDR_DX11
 
-#include <Windows.h>
-#include <d3d.h>
-#include <d3d11.h>
-#include <d3dcompiler.h>
-
 #include "rndr/render/graphicstypes.h"
+
+struct ID3D10Blob;
+struct ID3D11VertexShader;
+struct ID3D11PixelShader;
+struct ID3D11ComputeShader;
 
 namespace rndr
 {
@@ -20,7 +20,7 @@ struct Shader
 {
     ShaderProperties Props;
 
-    ID3DBlob* DX11ShaderBuffer;
+    ID3D10Blob* DX11ShaderBuffer;
     union
     {
         ID3D11VertexShader* DX11VertexShader;

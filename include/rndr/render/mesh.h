@@ -1,5 +1,7 @@
 #pragma once
 
+#include <string>
+
 #include "math/normal3.h"
 #include "math/point2.h"
 #include "math/vector2.h"

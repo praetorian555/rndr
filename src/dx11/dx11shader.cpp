@@ -2,6 +2,8 @@
 
 #if defined RNDR_DX11
 
+#include <d3d11.h>
+
 #include "rndr/core/log.h"
 
 #include "rndr/render/dx11/dx11graphicscontext.h"
