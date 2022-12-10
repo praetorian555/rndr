@@ -36,7 +36,6 @@ if (CMAKE_PROJECT_NAME STREQUAL PROJECT_NAME)
 
   	# Include cmake scripts here
   	include(cmake/clang-format.cmake)
-	include(cmake/cppcheck.cmake)
 
 	# Add project level compiler options
 	# ...
