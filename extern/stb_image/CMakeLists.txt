@@ -5,8 +5,8 @@ add_library(stb_image include/stb_image/stb_image.h src/stb_image.cpp)
 target_include_directories(stb_image PUBLIC include)
 target_include_directories(stb_image PRIVATE src)
 
-# All users of this library will need at least C++17
-target_compile_features(stb_image PUBLIC cxx_std_17)
+# All users of this library will need at least C++20
+target_compile_features(stb_image PUBLIC cxx_std_20)
 
 # Put stb_image project under Extern folder in IDE
 set_target_properties(stb_image PROPERTIES FOLDER Extern)

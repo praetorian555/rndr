@@ -1,6 +1,6 @@
 add_executable(dx11 WIN32 tutorial.cpp)
 
-target_compile_features(dx11 PRIVATE cxx_std_17)
+target_compile_features(dx11 PRIVATE cxx_std_20)
 
 target_link_libraries(dx11 PRIVATE d3d11.lib dxgi.lib d3dcompiler.lib winmm.lib)
 

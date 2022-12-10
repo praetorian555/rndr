@@ -1,6 +1,6 @@
 add_executable(cubes cubes.cpp boxpass.cpp boxpass.h)
 
-target_compile_features(cubes PRIVATE cxx_std_17)
+target_compile_features(cubes PRIVATE cxx_std_20)
 
 target_link_libraries(cubes PRIVATE rndr)
 

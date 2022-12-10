@@ -32,8 +32,8 @@ if (RNDR_UNITY)
 set_target_properties(rndr PROPERTIES UNITY_BUILD TRUE)
 endif()
 
-# All users of this library will need at least C++17
-target_compile_features(rndr PUBLIC cxx_std_17)
+# All users of this library will need at least C++20
+target_compile_features(rndr PUBLIC cxx_std_20)
 
 # Compiler options
 target_compile_options(rndr PRIVATE $<$<CXX_COMPILER_ID:MSVC>:/MP>)

@@ -1,6 +1,6 @@
 add_executable(fendexam1 fendexam1.cpp)
 
-target_compile_features(fendexam1 PRIVATE cxx_std_17)
+target_compile_features(fendexam1 PRIVATE cxx_std_20)
 
 target_link_libraries(fendexam1 PRIVATE rndr)
 

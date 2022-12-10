@@ -1,2 +1,0 @@
-add_subdirectory(modelviewer)
-add_subdirectory(frontendexample1)

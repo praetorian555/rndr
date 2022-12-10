@@ -1,6 +1,6 @@
 add_executable(modelviewer modelviewer.cpp)
 
-target_compile_features(modelviewer PRIVATE cxx_std_17)
+target_compile_features(modelviewer PRIVATE cxx_std_20)
 
 target_link_libraries(modelviewer PRIVATE rndr)
 
