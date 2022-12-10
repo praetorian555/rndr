@@ -41,7 +41,10 @@ public:
     ID3D11DeviceContext* GetDeviceContext();
     D3D_FEATURE_LEVEL GetFeatureLevel();
 
-    SwapChain* CreateSwapChain(void* NativeWindowHandle, int Width, int Height, const SwapChainProperties& Props);
+    SwapChain* CreateSwapChain(NativeWindowHandle WindowHandle,
+                               int Width,
+                               int Height,
+                               const SwapChainProperties& Props = SwapChainProperties{});
     Shader* CreateShader(const ByteSpan& ShaderContents, const ShaderProperties& Props);
     Image* CreateImage(int Width, int Height, const ImageProperties& Props, ByteSpan InitData);
     Image* CreateImageArray(int Width, int Height, int ArraySize, const ImageProperties& Props, Span<ByteSpan> InitData);

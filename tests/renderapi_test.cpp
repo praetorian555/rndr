@@ -886,7 +886,7 @@ TEST_CASE("SwapChain", "RenderAPI")
     rndr::ScopePtr<rndr::Window> Win = RndrCtx->CreateWin(800, 600);
     REQUIRE(Ctx.IsValid());
 
-    void* NativeWinHandle = (void*)Win->GetNativeWindowHandle();
+    rndr::NativeWindowHandle NativeWinHandle = Win->GetNativeWindowHandle();
     rndr::SwapChainProperties SwapProps;
     rndr::ScopePtr<rndr::SwapChain> S = Ctx->CreateSwapChain(NativeWinHandle, Win->GetWidth(), Win->GetHeight(), SwapProps);
     REQUIRE(S.IsValid());

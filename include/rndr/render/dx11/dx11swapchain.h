@@ -26,7 +26,7 @@ struct SwapChain
     ~SwapChain();
 
     bool Init(GraphicsContext* Context,
-              void* NativeWindowHandle,
+              NativeWindowHandle WindowHandle,
               int Width,
               int Height,
               const SwapChainProperties& Props = SwapChainProperties{});

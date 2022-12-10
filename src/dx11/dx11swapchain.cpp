@@ -17,13 +17,13 @@ rndr::SwapChain::~SwapChain()
     RNDR_DELETE(rndr::FrameBuffer, FrameBuffer);
 }
 
-bool rndr::SwapChain::Init(GraphicsContext* Context, void* NativeWindowHandle, int Width, int Height, const SwapChainProperties& Props)
+bool rndr::SwapChain::Init(GraphicsContext* Context, NativeWindowHandle Handle, int Width, int Height, const SwapChainProperties& Props)
 {
     this->Props = Props;
     this->Width = Width;
     this->Height = Height;
 
-    HWND WindowHandle = reinterpret_cast<HWND>(NativeWindowHandle);
+    HWND WindowHandle = reinterpret_cast<HWND>(Handle);
     if (!IsWindow(WindowHandle))
     {
         RNDR_LOG_ERROR("SwapChain::Init: Native window handle is invalid!");

@@ -203,10 +203,10 @@ D3D_FEATURE_LEVEL rndr::GraphicsContext::GetFeatureLevel()
     return m_FeatureLevel;
 }
 
-rndr::SwapChain* rndr::GraphicsContext::CreateSwapChain(void* NativeWindowHandle, int Width, int Height, const SwapChainProperties& Props)
+rndr::SwapChain* rndr::GraphicsContext::CreateSwapChain(NativeWindowHandle WindowHandle, int Width, int Height, const SwapChainProperties& Props)
 {
     SwapChain* S = RNDR_NEW(SwapChain, "rndr::GraphicsContext: SwapChain");
-    if (!S || !S->Init(this, NativeWindowHandle, Width, Height, Props))
+    if (!S || !S->Init(this, WindowHandle, Width, Height, Props))
     {
         RNDR_DELETE(SwapChain, S);
     }
