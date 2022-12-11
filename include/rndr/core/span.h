@@ -15,7 +15,7 @@ struct Span
     explicit Span(const std::vector<T>& Vec) : Data(reinterpret_cast<T*>(Vec.data())), Size(Vec.size()) {}
 
     template <typename U>
-    explicit Span(const std::vector<U>& Vec)
+    explicit Span(std::vector<U>& Vec)
     {
         Data = reinterpret_cast<T*>(Vec.data());
         Size = Vec.size() * sizeof(U) / sizeof(T);
@@ -29,7 +29,7 @@ struct Span
     }
 
     template <typename U>
-    explicit Span(const U* Ptr)
+    explicit Span(U* Ptr)
     {
         Data = reinterpret_cast<T*>(Ptr);
         Size = sizeof(U) / sizeof(T);
