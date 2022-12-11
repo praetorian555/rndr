@@ -9,10 +9,10 @@ if (CLANG_FORMAT)
 		${PROJECT_SOURCE_DIR}/src/*.cpp
 		${PROJECT_SOURCE_DIR}/src/*.h
 		${PROJECT_SOURCE_DIR}/src/*.hpp
-		${PROJECT_SOURCE_DIR}/apps/*.c
-		${PROJECT_SOURCE_DIR}/apps/*.cpp
-		${PROJECT_SOURCE_DIR}/apps/*.h
-		${PROJECT_SOURCE_DIR}/apps/*.hpp)
+		${PROJECT_SOURCE_DIR}/examples/*.c
+		${PROJECT_SOURCE_DIR}/examples/*.cpp
+		${PROJECT_SOURCE_DIR}/examples/*.h
+		${PROJECT_SOURCE_DIR}/examples/*.hpp)
 
 	add_custom_target(
         clang-format
