@@ -275,4 +275,45 @@ rndr::BlendState::~BlendState()
     DX11SafeRelease(DX11BlendState);
 }
 
+bool rndr::Pipeline::Init(GraphicsContext* Context, const PipelineProperties& Props)
+{
+    VertexShader = Context->CreateShader(Props.VertexShaderContents, Props.VertexShader);
+    if (!VertexShader.IsValid())
+    {
+        RNDR_LOG_ERROR("Pipeline::Init: Failed to create vertex shader!");
+        return false;
+    }
+    PixelShader = Context->CreateShader(Props.PixelShaderContents, Props.PixelShader);
+    if (!PixelShader.IsValid())
+    {
+        RNDR_LOG_ERROR("Pipeline::Init: Failed to create pixel shader!");
+        return false;
+    }
+    InputLayout = Context->CreateInputLayout(Props.InputLayout, VertexShader.Get());
+    if (!InputLayout.IsValid())
+    {
+        RNDR_LOG_ERROR("Pipeline::Init: Failed to create input layout!");
+        return false;
+    }
+    Rasterizer = Context->CreateRasterizerState(Props.Rasterizer);
+    if (!Rasterizer.IsValid())
+    {
+        RNDR_LOG_ERROR("Pipeline::Init: Failed to create rasterizer state!");
+        return false;
+    }
+    Blend = Context->CreateBlendState(Props.Blend);
+    if (!Blend.IsValid())
+    {
+        RNDR_LOG_ERROR("Pipeline::Init: Failed to create blend state!");
+        return false;
+    }
+    DepthStencil = Context->CreateDepthStencilState(Props.DepthStencil);
+    if (!DepthStencil.IsValid())
+    {
+        RNDR_LOG_ERROR("Pipeline::Init: Failed to create depth stencil state!");
+        return false;
+    }
+    return true;
+}
+
 #endif  // RNDR_DX11

@@ -362,6 +362,20 @@ struct BlendProperties
     real ConstAlpha = 0.0f;
 };
 
+struct PipelineProperties
+{
+    Span<InputLayoutProperties> InputLayout;
+
+    ShaderProperties VertexShader;
+    ByteSpan VertexShaderContents;
+    ShaderProperties PixelShader;
+    ByteSpan PixelShaderContents;
+
+    RasterizerProperties Rasterizer;
+    BlendProperties Blend;
+    DepthStencilProperties DepthStencil;
+};
+
 // Helper functions
 
 /**

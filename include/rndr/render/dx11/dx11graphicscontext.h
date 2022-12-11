@@ -28,6 +28,7 @@ struct RasterizerState;
 struct DepthStencilState;
 struct BlendState;
 struct SwapChain;
+struct Pipeline;
 
 class GraphicsContext
 {
@@ -54,10 +55,11 @@ public:
     Buffer* CreateBuffer(const BufferProperties& Props, ByteSpan InitialData);
     FrameBuffer* CreateFrameBuffer(int Width, int Height, const FrameBufferProperties& Props);
     FrameBuffer* CreateFrameBufferForSwapChain(int Width, int Height, SwapChain* SwapChain);
-    InputLayout* CreateInputLayout(Span<InputLayoutProperties> Pros, Shader* Shader);
+    InputLayout* CreateInputLayout(Span<InputLayoutProperties> Props, Shader* Shader);
     RasterizerState* CreateRasterizerState(const RasterizerProperties& Props);
     DepthStencilState* CreateDepthStencilState(const DepthStencilProperties& Props);
     BlendState* CreateBlendState(const BlendProperties& Props);
+    Pipeline* CreatePipeline(const PipelineProperties& Props);
     CommandList* CreateCommandList();
 
     void ClearColor(Image* Image, math::Vector4 Color);
@@ -68,12 +70,14 @@ public:
     void BindShader(Shader* Shader);
     void BindImageAsShaderResource(Image* Image, int Slot, Shader* Shader);
     void BindSampler(Sampler* Sampler, int Slot, Shader* Shader);
+    // Split buffer binding for index/vertex buffers and for constant buffers
     void BindBuffer(Buffer* Buffer, int Slot, Shader* Shader = nullptr);
     void BindFrameBuffer(FrameBuffer* FrameBuffer);
     void BindInputLayout(InputLayout* InputLayout);
     void BindRasterizerState(RasterizerState* State);
     void BindDepthStencilState(DepthStencilState* State);
     void BindBlendState(BlendState* State);
+    void BindPipeline(Pipeline* Pipeline);
 
     void DrawIndexed(PrimitiveTopology Topology, int IndicesCount);
     void DrawIndexedInstanced(PrimitiveTopology Topology, int IndexCount, int InstanceCount, int IndexOffset = 0, int InstanceOffset = 0);

@@ -203,7 +203,10 @@ D3D_FEATURE_LEVEL rndr::GraphicsContext::GetFeatureLevel()
     return m_FeatureLevel;
 }
 
-rndr::SwapChain* rndr::GraphicsContext::CreateSwapChain(NativeWindowHandle WindowHandle, int Width, int Height, const SwapChainProperties& Props)
+rndr::SwapChain* rndr::GraphicsContext::CreateSwapChain(NativeWindowHandle WindowHandle,
+                                                        int Width,
+                                                        int Height,
+                                                        const SwapChainProperties& Props)
 {
     SwapChain* S = RNDR_NEW(SwapChain, "rndr::GraphicsContext: SwapChain");
     if (!S || !S->Init(this, WindowHandle, Width, Height, Props))
@@ -345,6 +348,16 @@ rndr::BlendState* rndr::GraphicsContext::CreateBlendState(const BlendProperties&
         RNDR_DELETE(BlendState, State);
     }
     return State;
+}
+
+rndr::Pipeline* rndr::GraphicsContext::CreatePipeline(const PipelineProperties& Props)
+{
+    Pipeline* Pipeline = RNDR_NEW(rndr::Pipeline, "rndr::GraphicsContext: Pipeline");
+    if (!Pipeline || !Pipeline->Init(this, Props))
+    {
+        RNDR_DELETE(rndr::Pipeline, Pipeline);
+    }
+    return Pipeline;
 }
 
 rndr::CommandList* rndr::GraphicsContext::CreateCommandList()
@@ -553,6 +566,16 @@ void rndr::GraphicsContext::BindDepthStencilState(DepthStencilState* State)
 void rndr::GraphicsContext::BindBlendState(BlendState* State)
 {
     m_DeviceContext->OMSetBlendState(State->DX11BlendState, nullptr, 0xFFFFFFFF);
+}
+
+void rndr::GraphicsContext::BindPipeline(Pipeline* Pipeline)
+{
+    BindShader(Pipeline->VertexShader.Get());
+    BindShader(Pipeline->PixelShader.Get());
+    BindInputLayout(Pipeline->InputLayout.Get());
+    BindRasterizerState(Pipeline->Rasterizer.Get());
+    BindBlendState(Pipeline->Blend.Get());
+    BindDepthStencilState(Pipeline->DepthStencil.Get());
 }
 
 void rndr::GraphicsContext::DrawIndexed(PrimitiveTopology Topology, int IndicesCount)

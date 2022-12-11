@@ -3,10 +3,12 @@
 #include <map>
 
 #include "rndr/core/base.h"
+#include "rndr/core/memory.h"
 
 #if defined RNDR_DX11
 
 #include "rndr/render/graphicstypes.h"
+#include "rndr/render/shader.h"
 
 struct ID3D11RasterizerState;
 struct ID3D11DepthStencilState;
@@ -17,7 +19,6 @@ namespace rndr
 {
 
 class GraphicsContext;
-struct Shader;
 
 struct InputLayoutBuilder
 {
@@ -85,6 +86,21 @@ struct BlendState
     ~BlendState();
 
     bool Init(GraphicsContext* Context, const BlendProperties& Props);
+};
+
+struct Pipeline
+{
+    ScopePtr<Shader> VertexShader;
+    ScopePtr<Shader> PixelShader;
+    ScopePtr<InputLayout> InputLayout;
+    ScopePtr<RasterizerState> Rasterizer;
+    ScopePtr<BlendState> Blend;
+    ScopePtr<DepthStencilState> DepthStencil;
+
+    Pipeline() = default;
+    ~Pipeline() = default;
+
+    bool Init(GraphicsContext* Context, const PipelineProperties& Props);
 };
 
 }  // namespace rndr
