@@ -31,4 +31,4 @@ source_group(
   PREFIX "App"
   FILES ${SOURCE_LIST})
 
-target_compile_definitions(basic2D PUBLIC BASIC2D_ASSET_DIR="${CMAKE_CURRENT_SOURCE_DIR}/../assets")
+target_compile_definitions(basic2D PUBLIC BASIC2D_ASSET_DIR="${CMAKE_CURRENT_SOURCE_DIR}/assets")
