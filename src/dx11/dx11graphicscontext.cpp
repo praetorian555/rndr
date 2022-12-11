@@ -520,7 +520,8 @@ void rndr::GraphicsContext::BindFrameBuffer(FrameBuffer* FrameBuffer)
         return;
     }
 
-    ID3D11DepthStencilView* DepthStencilView = FrameBuffer->DepthStencilBuffer->DX11DepthStencilView;
+    ID3D11DepthStencilView* DepthStencilView =
+        FrameBuffer->DepthStencilBuffer ? FrameBuffer->DepthStencilBuffer->DX11DepthStencilView : nullptr;
     std::vector<ID3D11RenderTargetView*> RenderTargetViews;
     const int RenderTargetCount = FrameBuffer->ColorBuffers.Size;
     RenderTargetViews.resize(RenderTargetCount);
