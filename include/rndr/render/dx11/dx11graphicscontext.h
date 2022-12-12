@@ -51,7 +51,7 @@ public:
     Image* CreateImageArray(int Width, int Height, int ArraySize, const ImageProperties& Props, Span<ByteSpan> InitData);
     Image* CreateCubeMap(int Width, int Height, const ImageProperties& Props, Span<ByteSpan> InitData);
     Image* CreateImageForSwapChain(SwapChain* SwapChain, int BufferIndex);
-    Sampler* CreateSampler(const SamplerProperties& Props);
+    Sampler* CreateSampler(const SamplerProperties& Props = SamplerProperties{});
     Buffer* CreateBuffer(const BufferProperties& Props, ByteSpan InitialData);
     FrameBuffer* CreateFrameBuffer(int Width, int Height, const FrameBufferProperties& Props);
     FrameBuffer* CreateFrameBufferForSwapChain(int Width, int Height, SwapChain* SwapChain);
