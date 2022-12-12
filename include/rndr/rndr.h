@@ -19,6 +19,7 @@
 #include "rndr/render/graphicstypes.h"
 #include "rndr/render/image.h"
 #include "rndr/render/pipeline.h"
+#include "rndr/render/sampler.h"
 #include "rndr/render/shader.h"
 
 // Profiling API
