@@ -18,8 +18,11 @@ public:
         math::Vector2 ScreenSize;
     };
 
+    static constexpr float AtlasWidth = 1024.0f;
+    static constexpr float AtlasHeight = 1024.0f;
+
 public:
-    Renderer(rndr::GraphicsContext* Ctx, int32_t MaxInstances, const math::Vector2& ScreenSize)
+    Renderer(rndr::GraphicsContext* Ctx, int32_t MaxInstances, int32_t MaxAtlasCount, const math::Vector2& ScreenSize)
         : m_Ctx(Ctx), m_MaxInstances(MaxInstances), m_ScreenSize(ScreenSize)
     {
         const std::string VertexShaderPath = BASIC2D_ASSET_DIR "/basic2Dvertex.hlsl";
@@ -70,6 +73,15 @@ public:
         m_IndexBuffer = m_Ctx->CreateBuffer(BufferProps, rndr::ByteSpan{Indices});
         assert(m_IndexBuffer.IsValid());
 
+        rndr::ImageProperties AtlasProps;
+        AtlasProps.PixelFormat = rndr::PixelFormat::R8G8B8A8_UNORM;
+        AtlasProps.ImageBindFlags = rndr::ImageBindFlags::ShaderResource;
+        m_TextureAtlas = m_Ctx->CreateImageArray(AtlasWidth, AtlasHeight, MaxAtlasCount, AtlasProps, {});
+        assert(m_TextureAtlas.IsValid());
+
+        m_TextureAtlasSampler = m_Ctx->CreateSampler();
+        assert(m_TextureAtlasSampler.IsValid());
+
         m_Instances.reserve(m_MaxInstances);
     }
 
@@ -114,6 +126,8 @@ private:
     rndr::ScopePtr<rndr::Buffer> m_InstanceBuffer;
     rndr::ScopePtr<rndr::Buffer> m_ConstantBuffer;
     rndr::ScopePtr<rndr::Buffer> m_IndexBuffer;
+    rndr::ScopePtr<rndr::Image> m_TextureAtlas;
+    rndr::ScopePtr<rndr::Sampler> m_TextureAtlasSampler;
 
     const int m_MaxInstances;
     math::Vector2 m_ScreenSize;
@@ -123,6 +137,10 @@ private:
 
 class App
 {
+public:
+    constexpr static int MaxInstancesCount = 100;
+    constexpr static int MaxAtlasCount = 2;
+
 public:
     App(int WindowWidth, int WindowHeight) : m_WindowWidth(WindowWidth), m_WindowHeight(WindowHeight)
     {
@@ -137,7 +155,7 @@ public:
         m_SwapChain = m_GraphicsCtx->CreateSwapChain(Handle, m_WindowWidth, m_WindowHeight);
         assert(m_SwapChain.IsValid());
 
-        m_Renderer = std::make_unique<Renderer>(m_GraphicsCtx.Get(), 100, GetScreenSize());
+        m_Renderer = std::make_unique<Renderer>(m_GraphicsCtx.Get(), MaxInstancesCount, MaxAtlasCount, GetScreenSize());
         assert(m_Renderer.get());
     }
 
