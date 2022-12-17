@@ -1,5 +1,156 @@
 #include "rndr/rndr.h"
 
+struct IntPoint
+{
+    int X = 0;
+    int Y = 0;
+};
+
+class AtlasPacker
+{
+public:
+    struct RectIn
+    {
+        IntPoint Size;
+        uintptr_t UserData;
+    };
+
+    struct RectOut
+    {
+        IntPoint BottomLeft;
+        IntPoint Size;
+        uintptr_t UserData = 0;
+    };
+
+    enum class SortCriteria
+    {
+        Height,
+        Width,
+        Area,
+        PathologicalMultiplier  // max(w, h) / min(w, h) * w * h
+    };
+
+public:
+    AtlasPacker(const int AtlasWidth, const int AtlasHeight, SortCriteria SortCrit)
+        : m_AtlasSize{AtlasWidth, AtlasHeight}, m_SortCriteria(SortCrit)
+    {
+    }
+
+    static float PathologicMult(const RectIn& R)
+    {
+        return std::max(R.Size.X, R.Size.Y) / std::min(R.Size.X, R.Size.Y) * R.Size.X * R.Size.Y;
+    }
+
+    bool Compare(const RectIn& A, const RectIn& B) const
+    {
+        switch (m_SortCriteria)
+        {
+            case SortCriteria::Height:
+            {
+                return A.Size.Y < B.Size.Y;
+            }
+            case SortCriteria::Width:
+            {
+                return A.Size.X < B.Size.X;
+            }
+            case SortCriteria::Area:
+            {
+                return A.Size.X * A.Size.Y < B.Size.X * B.Size.Y;
+            }
+            case SortCriteria::PathologicalMultiplier:
+            {
+                return PathologicMult(A) < PathologicMult(B);
+            }
+        }
+        assert(false);
+        return true;
+    }
+
+    bool Compare(const RectOut& A, const RectOut& B)
+    {
+        RectIn AA{A.Size};
+        RectIn BB{B.Size};
+        return Compare(AA, BB);
+    }
+
+    std::vector<RectOut> Pack(std::vector<RectIn>& InRects)
+    {
+        // Sort input rectangles based on the sorting criteria
+        std::sort(InRects.begin(), InRects.end(), [this](const RectIn& A, const RectIn& B) { return Compare(A, B); });
+
+        // Initialize array of free slots and populate it by one slot which has the size of the whole atlas
+        std::vector<RectOut> Slots;
+        RectOut StartSlot{IntPoint{0, 0}, m_AtlasSize, 0};
+        Slots.push_back(StartSlot);
+
+        std::vector<RectOut> OutRects;
+        for (const RectIn& InRect : InRects)
+        {
+            // No more free space left
+            if (Slots.empty())
+            {
+                break;
+            }
+
+            // Go through free space slots, from smaller to bigger
+            for (int i = Slots.size() - 1; i >= 0; i--)
+            {
+                RectOut& Slot = Slots[i];
+
+                // This slot is too small, skip it
+                if (Slot.Size.X < InRect.Size.X || Slot.Size.Y < InRect.Size.Y)
+                {
+                    continue;
+                }
+
+                // We found a free slot for the input rect, add info the output rect list
+                RectOut OutRect;
+                OutRect.BottomLeft = Slot.BottomLeft;
+                OutRect.Size = InRect.Size;
+                OutRect.UserData = InRect.UserData;
+                OutRects.push_back(OutRect);
+
+                const int DiffX = Slot.Size.X - InRect.Size.X;
+                const int DiffY = Slot.Size.Y - InRect.Size.Y;
+
+                RectOut SmallerSlot;
+                SmallerSlot.BottomLeft = IntPoint{Slot.BottomLeft.X + Slot.Size.X, Slot.BottomLeft.Y};
+                SmallerSlot.Size = IntPoint{Slot.Size.X - InRect.Size.X, InRect.Size.Y};
+
+                RectOut BiggerSlot;
+                BiggerSlot.BottomLeft = IntPoint{Slot.BottomLeft.X, InRect.Size.Y};
+                BiggerSlot.Size = IntPoint{Slot.Size.X, Slot.Size.Y - InRect.Size.Y};
+
+                if (Compare(BiggerSlot, SmallerSlot))
+                {
+                    std::swap(SmallerSlot, BiggerSlot);
+                }
+
+                // Move the current slot to the back and remove it from the list
+                std::swap(Slot, Slots.back());
+                Slots.pop_back();
+
+                if (BiggerSlot.Size.X == 0 || BiggerSlot.Size.Y == 0)
+                {
+                    Slots.push_back(BiggerSlot);
+                }
+                if (SmallerSlot.Size.X == 0 || SmallerSlot.Size.Y == 0)
+                {
+                    Slots.push_back(SmallerSlot);
+                }
+
+                break;
+            }
+        }
+
+        return OutRects;
+    }
+
+private:
+    IntPoint m_AtlasSize;
+    SortCriteria m_SortCriteria;
+};
+
 class Renderer
 {
 public:
