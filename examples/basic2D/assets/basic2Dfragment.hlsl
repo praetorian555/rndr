@@ -6,7 +6,11 @@ struct InData
     float AtlasIndex : PSIZE;
 };
 
+Texture2DArray Images;
+SamplerState Sampler;
+
 float4 Main(InData In) : SV_TARGET0
 {
-    return In.Color;
+    float4 Sample = Images.Sample(Sampler, float3(In.TexCoords, In.AtlasIndex));
+    return In.Color * Sample;
 }

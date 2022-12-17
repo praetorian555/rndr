@@ -158,8 +158,8 @@ public:
     {
         math::Point2 BottomLeft;
         math::Point2 TopRight;
-        math::Point2 TexBottomLeft;
-        math::Point2 TexTopRight;
+        math::Point2 TexBottomLeft = math::Point2{0.0f, 0.0f};
+        math::Point2 TexTopRight = math::Point2{1.0f, 1.0f};
         math::Vector4 Color;
         float AtlasIndex;
     };
@@ -227,7 +227,16 @@ public:
         rndr::ImageProperties AtlasProps;
         AtlasProps.PixelFormat = rndr::PixelFormat::R8G8B8A8_UNORM;
         AtlasProps.ImageBindFlags = rndr::ImageBindFlags::ShaderResource;
-        m_TextureAtlas = m_Ctx->CreateImageArray(AtlasWidth, AtlasHeight, MaxAtlasCount, AtlasProps, {});
+        std::vector<uint8_t> WhiteTextureData(AtlasWidth * AtlasHeight * rndr::GetPixelSize(AtlasProps.PixelFormat));
+        memset(WhiteTextureData.data(), 0xFF, WhiteTextureData.size());
+        std::vector<rndr::ByteSpan> InitData(MaxAtlasCount);
+        for (rndr::ByteSpan& S : InitData)
+        {
+            S.Data = WhiteTextureData.data();
+            S.Size = WhiteTextureData.size();
+        }
+        rndr::Span<rndr::ByteSpan> InitDataSpan(InitData);
+        m_TextureAtlas = m_Ctx->CreateImageArray(AtlasWidth, AtlasHeight, MaxAtlasCount, AtlasProps, InitDataSpan);
         assert(m_TextureAtlas.IsValid());
 
         m_TextureAtlasSampler = m_Ctx->CreateSampler();
@@ -249,6 +258,7 @@ public:
             .BottomLeft = BottomLeft,
             .TopRight = BottomLeft + Size,
             .Color = Color,
+            .AtlasIndex = 0
         };
 
         m_Instances.push_back(Data);
@@ -261,6 +271,9 @@ public:
         m_Ctx->BindBuffer(m_InstanceBuffer.Get(), 0);
         m_Ctx->BindBuffer(m_ConstantBuffer.Get(), 0, m_Pipeline->VertexShader.Get());
         m_Ctx->BindBuffer(m_IndexBuffer.Get(), 0);
+        // Should we merge image and sampler binding into one call? Maybe even one class
+        m_Ctx->BindImageAsShaderResource(m_TextureAtlas.Get(), 0, m_Pipeline->PixelShader.Get());
+        m_Ctx->BindSampler(m_TextureAtlasSampler.Get(), 0, m_Pipeline->PixelShader.Get());
         m_Ctx->BindPipeline(m_Pipeline.Get());
         m_Ctx->BindFrameBuffer(FrameBuffer);
 
