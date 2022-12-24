@@ -21,8 +21,9 @@ ByteSpan ReadEntireFile(const std::string& FilePath);
 
 struct CPUImage
 {
-    int Width, Height;
-    PixelFormat Format;
+    int Width = 0;
+    int Height = 0;
+    PixelFormat Format = PixelFormat::R8G8B8A8_TYPELESS;
     ByteSpan Data;
 };
 
