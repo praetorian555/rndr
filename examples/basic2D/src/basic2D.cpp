@@ -1,5 +1,7 @@
 #include "rndr/rndr.h"
 
+#include "stb_truetype/stb_truetype.h"
+
 struct IntPoint
 {
     int X = 0;
@@ -172,6 +174,42 @@ public:
     static constexpr float AtlasWidth = 1024.0f;
     static constexpr float AtlasHeight = 1024.0f;
 
+    static constexpr int InvalidSpriteId = 0;
+    static constexpr int InvalidFontId = 0;
+
+private:
+    struct Sprite
+    {
+        int Id = InvalidSpriteId;
+        math::Point2 TexBottomLeft;
+        math::Point2 TexTopRight;
+        int AtlasIndex = 0;
+        rndr::CPUImage ImageData;
+    };
+
+    struct Glyph
+    {
+        int SpriteId = InvalidSpriteId;
+
+        float ScaledYOffset = 0.0f;
+        float ScaledWidth = 0.0f;
+        float ScaledHeight = 0.0f;
+        float ScaledAdvanceWidth = 0.0f;
+        float ScaledLeftSideBearing = 0.0f;
+    };
+
+    struct Font
+    {
+        int Id = InvalidFontId;
+        std::vector<Glyph> Glyphs;
+
+        stbtt_fontinfo StbFontInfo;
+        float Scale = 0.0f;
+        float ScaledAscent = 0.0f;
+        float ScaledDescent = 0.0f;
+        float ScaledLineGap = 0.0f;
+    };
+
 public:
     Renderer(rndr::GraphicsContext* Ctx, int32_t MaxInstances, int32_t MaxAtlasCount, const math::Vector2& ScreenSize)
         : m_Ctx(Ctx), m_MaxInstances(MaxInstances), m_ScreenSize(ScreenSize)
@@ -247,6 +285,72 @@ public:
 
     ~Renderer() = default;
 
+    // In production code this would be done offline
+    int RegisterSprite(const std::string& AssetPath)
+    {
+        rndr::CPUImage Im = rndr::ReadEntireImage(AssetPath);
+        if (!Im.Data)
+        {
+            return InvalidSpriteId;
+        }
+
+        Sprite S;
+        S.Id = m_Sprites.size();
+        S.ImageData = Im;
+        m_Sprites.push_back(S);
+    }
+
+    int RegisterFont(const std::string& FontPath, int FontSizeInPixels)
+    {
+        rndr::ByteSpan Contents = rndr::ReadEntireFile(FontPath);
+        if (!Contents)
+        {
+            return InvalidFontId;
+        }
+
+        int Offset = stbtt_GetFontOffsetForIndex(Contents.Data, 0);
+
+        Font F;
+        if (!stbtt_InitFont(&F.StbFontInfo, Contents.Data, Offset))
+        {
+            return InvalidFontId;
+        }
+
+        F.Scale = stbtt_ScaleForPixelHeight(&F.StbFontInfo, FontSizeInPixels);
+        int Ascent, Descent, LineGap;
+        stbtt_GetFontVMetrics(&F.StbFontInfo, &Ascent, &Descent, &LineGap);
+        F.ScaledAscent = roundf(F.Scale * Ascent);
+        F.ScaledDescent = roundf(F.Scale * Descent);
+        F.ScaledLineGap = roundf(F.Scale * LineGap);
+
+        constexpr int ASCIICodePointStart = 33;
+        constexpr int ASCIICodePointEnd = 127;
+        for (int CodePoint = ASCIICodePointStart; CodePoint < ASCIICodePointEnd; CodePoint++)
+        {
+            Glyph G;
+
+            int AdvanceWidth, LeftSideBearing;
+            stbtt_GetCodepointHMetrics(&F.StbFontInfo, CodePoint, &AdvanceWidth, &LeftSideBearing);
+            G.ScaledAdvanceWidth = roundf(AdvanceWidth * F.Scale);
+            G.ScaledLeftSideBearing = roundf(LeftSideBearing * F.Scale);
+
+            int x0, x1;
+            int y0, y1;
+            stbtt_GetCodepointBitmapBox(&F.StbFontInfo, CodePoint, F.Scale, F.Scale, &x0, &y0, &x1, &y1);
+            G.ScaledYOffset = F.ScaledAscent + y0;
+            G.ScaledWidth = x1 - x0;
+            G.ScaledHeight = y1 - y0;
+
+            F.Glyphs.push_back(G);
+        }
+
+        m_Fonts.push_back(F);
+
+        return true;
+    }
+
+    void PackSprites() {}
+
     bool AddElement(const math::Point2& BottomLeft, const math::Vector2& Size, const math::Vector4& Color)
     {
         if (m_Instances.size() == m_MaxInstances)
@@ -254,12 +358,7 @@ public:
             return false;
         }
 
-        InstanceData Data{
-            .BottomLeft = BottomLeft,
-            .TopRight = BottomLeft + Size,
-            .Color = Color,
-            .AtlasIndex = 0
-        };
+        InstanceData Data{.BottomLeft = BottomLeft, .TopRight = BottomLeft + Size, .Color = Color, .AtlasIndex = 0};
 
         m_Instances.push_back(Data);
         return true;
@@ -297,6 +396,11 @@ private:
     math::Vector2 m_ScreenSize;
 
     std::vector<InstanceData> m_Instances;
+    std::vector<Sprite> m_Sprites;
+    std::vector<Font> m_Fonts;
+
+    int m_SpriteIdGenerator = 1;
+    int m_FontIdGenerator = 1;
 };
 
 class App
@@ -321,6 +425,8 @@ public:
 
         m_Renderer = std::make_unique<Renderer>(m_GraphicsCtx.Get(), MaxInstancesCount, MaxAtlasCount, GetScreenSize());
         assert(m_Renderer.get());
+
+        m_Renderer->RegisterFont(BASIC2D_ASSET_DIR "/yumin.ttf", 16);
     }
 
     ~App() = default;
