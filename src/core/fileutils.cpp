@@ -3,27 +3,12 @@
 #include <filesystem>
 
 #include "stb_image/stb_image.h"
+#include "stb_image/stb_image_write.h"
 
 #include "rndr/core/log.h"
+#include "rndr/core/memory.h"
 
-rndr::ImageFileFormat rndr::GetImageFileFormat(const std::string& FilePathStr)
-{
-    static const char* SupportedExtensions[] = {".bmp", ".png", ".jpg"};
-    static const int ExtensionCount = sizeof(SupportedExtensions) / sizeof(const char*);
-
-    const std::filesystem::path FilePath(FilePathStr);
-    for (int i = 0; i < ExtensionCount; i++)
-    {
-        if (FilePath.extension().string() == SupportedExtensions[i])
-        {
-            return (ImageFileFormat)i;
-        }
-    }
-
-    return ImageFileFormat::NotSupported;
-}
-
-rndr::ByteSpan rndr::ReadEntireFile(const std::string& FilePath)
+rndr::ByteSpan rndr::file::ReadEntireFile(const std::string& FilePath)
 {
     FILE* File = fopen(FilePath.c_str(), "rb");
     if (!File)
@@ -38,7 +23,7 @@ rndr::ByteSpan rndr::ReadEntireFile(const std::string& FilePath)
 
     ByteSpan Contents;
     Contents.Size = ContentsSize;
-    Contents.Data = new uint8_t[ContentsSize];
+    Contents.Data = RNDR_NEW_ARRAY(uint8_t, ContentsSize, "");
     int ReadBytes = fread(Contents.Data, 1, Contents.Size, File);
     assert(ReadBytes == ContentsSize);
 
@@ -47,7 +32,7 @@ rndr::ByteSpan rndr::ReadEntireFile(const std::string& FilePath)
     return Contents;
 }
 
-rndr::CPUImage rndr::ReadEntireImage(const std::string& FilePath)
+rndr::CPUImage rndr::file::ReadEntireImage(const std::string& FilePath)
 {
     int ChannelsInFile;
     CPUImage Image;
@@ -58,7 +43,16 @@ rndr::CPUImage rndr::ReadEntireImage(const std::string& FilePath)
     return Image;
 }
 
-void rndr::FreeImage(const CPUImage& Image)
+void rndr::file::FreeImage(const CPUImage& Image)
 {
     stbi_image_free(Image.Data.Data);
+}
+
+bool rndr::file::SaveImage(const CPUImage& Image, const std::string& FilePath)
+{
+    const int Channels = rndr::GetPixelSize(Image.Format);
+    const int Status = stbi_write_png(FilePath.c_str(), Image.Width, Image.Height, Channels,
+                                      Image.Data.Data, Image.Width * Channels);
+
+    return Status == 1;
 }

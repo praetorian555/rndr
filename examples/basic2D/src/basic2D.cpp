@@ -217,9 +217,9 @@ public:
         const std::string VertexShaderPath = BASIC2D_ASSET_DIR "/basic2Dvertex.hlsl";
         const std::string FragmentShaderPath = BASIC2D_ASSET_DIR "/basic2Dfragment.hlsl";
 
-        const rndr::ByteSpan VertexShaderContents = rndr::ReadEntireFile(VertexShaderPath);
+        const rndr::ByteSpan VertexShaderContents = rndr::file::ReadEntireFile(VertexShaderPath);
         assert(VertexShaderContents);
-        const rndr::ByteSpan FragmentShaderContents = rndr::ReadEntireFile(FragmentShaderPath);
+        const rndr::ByteSpan FragmentShaderContents = rndr::file::ReadEntireFile(FragmentShaderPath);
         assert(FragmentShaderContents);
 
         rndr::PipelineProperties PipelineProps{
@@ -288,7 +288,7 @@ public:
     // In production code this would be done offline
     int RegisterSprite(const std::string& AssetPath)
     {
-        rndr::CPUImage Im = rndr::ReadEntireImage(AssetPath);
+        rndr::CPUImage Im = rndr::file::ReadEntireImage(AssetPath);
         if (!Im.Data)
         {
             return InvalidSpriteId;
@@ -302,7 +302,7 @@ public:
 
     int RegisterFont(const std::string& FontPath, int FontSizeInPixels)
     {
-        rndr::ByteSpan Contents = rndr::ReadEntireFile(FontPath);
+        rndr::ByteSpan Contents = rndr::file::ReadEntireFile(FontPath);
         if (!Contents)
         {
             return InvalidFontId;
