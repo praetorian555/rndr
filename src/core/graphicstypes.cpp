@@ -4,6 +4,10 @@ int rndr::GetPixelSize(PixelFormat Format)
 {
     switch (Format)
     {
+        case PixelFormat::R8_UNORM:
+        {
+            return 1;
+        }
         case PixelFormat::R8G8B8A8_TYPELESS:
         case PixelFormat::R8G8B8A8_UNORM:
         case PixelFormat::R8G8B8A8_UNORM_SRGB:

@@ -30,6 +30,7 @@ struct GraphicsConstants
 enum class PixelFormat
 {
     R8G8B8A8_TYPELESS,
+    R8_UNORM,
     R8G8B8A8_UNORM,
     R8G8B8A8_UNORM_SRGB,
     B8G8R8A8_UNORM,

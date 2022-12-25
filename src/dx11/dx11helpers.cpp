@@ -8,6 +8,8 @@ DXGI_FORMAT rndr::DX11FromPixelFormat(PixelFormat Format)
     {
         case PixelFormat::R8G8B8A8_TYPELESS:
             return DXGI_FORMAT_R8G8B8A8_TYPELESS;
+        case PixelFormat::R8_UNORM:
+            return DXGI_FORMAT_R8_UNORM;
         case PixelFormat::R8G8B8A8_UNORM:
             return DXGI_FORMAT_R8G8B8A8_UNORM;
         case PixelFormat::R8G8B8A8_UNORM_SRGB:
@@ -41,6 +43,8 @@ rndr::PixelFormat rndr::DX11ToPixelFormat(DXGI_FORMAT Format)
     {
         case DXGI_FORMAT_R8G8B8A8_TYPELESS:
             return PixelFormat::R8G8B8A8_TYPELESS;
+        case DXGI_FORMAT_R8_UNORM:
+            return PixelFormat::R8_UNORM;
         case DXGI_FORMAT_R8G8B8A8_UNORM:
             return PixelFormat::R8G8B8A8_UNORM;
         case DXGI_FORMAT_R8G8B8A8_UNORM_SRGB:
