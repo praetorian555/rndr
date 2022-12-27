@@ -11,6 +11,8 @@ SamplerState Sampler;
 
 float4 Main(InData In) : SV_TARGET0
 {
-    float4 Sample = Images.Sample(Sampler, float3(In.TexCoords, In.AtlasIndex));
-    return In.Color * Sample;
+    float Sample = Images.Sample(Sampler, float3(In.TexCoords, In.AtlasIndex));
+    float4 Color = In.Color;
+    Color.a *= smoothstep(0.6, 0.7, Sample);
+    return Color;
 }
