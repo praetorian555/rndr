@@ -18,6 +18,7 @@ struct Colors
     static const math::Vector4 Green;
     static const math::Vector4 Blue;
     static const math::Vector4 Pink;
+    static const math::Vector4 Yellow;
 };
 
 }  // namespace rndr
