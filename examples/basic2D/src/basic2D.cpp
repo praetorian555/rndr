@@ -28,6 +28,7 @@ public:
         assert(m_Renderer.get());
 
         m_Renderer->AddFont("Liberation Sans", BASIC2D_ASSET_DIR "/LiberationSans-Regular.ttf");
+        m_Renderer->AddFont("Yu Mincho", BASIC2D_ASSET_DIR "/yumin.ttf");
     }
 
     ~App() = default;
@@ -38,12 +39,20 @@ public:
         {
             m_Window->ProcessEvents();
 
-            math::Vector4 ClearColor{0.2f, 0.5f, 0.4f, 1.0f};
+            math::Vector4 ClearColor{55 / 255.0f, 67 / 255.0f, 90 / 255.0f, 1.0f};
             rndr::FrameBuffer* DefaultFB = m_SwapChain->FrameBuffer;
             m_GraphicsCtx->ClearColor(DefaultFB->ColorBuffers[0], ClearColor);
 
-            m_Renderer->RenderText("Warning: This is a [DEBUG] build, performance will be slow!", "Liberation Sans", 16, {100, 300}, {1, 1, 0, 1});
-            
+            TextProperties Props;
+            Props.Color = rndr::Colors::Yellow;
+            Props.Smoothness = 0.1f;
+            m_Renderer->RenderText("Warning: This is a [DEBUG] build, performance will be slow!",
+                                   "Liberation Sans", 16, {100, 300}, Props);
+
+            Props.Color = rndr::Colors::Black;
+            Props.Smoothness = 0.1f;
+            m_Renderer->RenderText("FPS: 60", "Yu Mincho", 24, {10, 550}, Props);
+
             m_Renderer->Present(m_SwapChain->FrameBuffer);
             m_GraphicsCtx->Present(m_SwapChain.Get(), true);
         }

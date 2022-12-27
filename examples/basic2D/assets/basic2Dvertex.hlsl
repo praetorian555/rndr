@@ -5,7 +5,8 @@ struct InstanceData
     float2 TexBottomLeft : TEXCOORD0;
     float2 TexTopRight : TEXCOORD1;
     float4 Color : COLOR;
-    float AtlasIndex : PSIZE;
+    float SDFThresholdBottom : PSIZE0;
+    float SDFThresholdTop : PSIZE1;
     uint VertexIndex : SV_VERTEXID;
 };
 
@@ -14,7 +15,8 @@ struct OutData
     float4 Position : SV_POSITION;
     float4 Color : COLOR;
     float2 TexCoords : TEXCOORD0;
-    float AtlasIndex : PSIZE;
+    float SDFThresholdBottom : PSIZE0;
+    float SDFThresholdTop : PSIZE1;
 };
 
 cbuffer Constants
@@ -59,7 +61,8 @@ OutData Main(InstanceData In)
     );
     Out.Color = In.Color;
     Out.TexCoords = TexCoords;
-    Out.AtlasIndex = In.AtlasIndex;
+    Out.SDFThresholdBottom = In.SDFThresholdBottom;
+    Out.SDFThresholdTop = In.SDFThresholdTop;
 
     return Out;
 }

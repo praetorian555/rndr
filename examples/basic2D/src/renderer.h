@@ -5,6 +5,13 @@
 #include "atlaspacker.h"
 #include "font.h"
 
+struct TextProperties
+{
+    math::Vector4 Color;
+    float Bolden = 0.0f;      // Value between [0, 1].
+    float Smoothness = 0.0f;  // Value between [0, 1].
+};
+
 class Renderer
 {
 public:
@@ -15,7 +22,8 @@ public:
         math::Point2 TexBottomLeft = math::Point2{0.0f, 0.0f};
         math::Point2 TexTopRight = math::Point2{1.0f, 1.0f};
         math::Vector4 Color;
-        float AtlasIndex;
+        float SDFThresholdBottom;
+        float SDFThresholdTop;
     };
 
     RNDR_ALIGN(16) struct ConstantData
@@ -41,7 +49,7 @@ public:
                     const std::string& FontName,
                     int FontSize,
                     const math::Point2 BaseLineStart,
-                    const math::Vector4& Color);
+                    const TextProperties& Props);
 
     bool Present(rndr::FrameBuffer* FrameBuffer);
 

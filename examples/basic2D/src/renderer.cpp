@@ -1,5 +1,12 @@
 #include "renderer.h"
 
+namespace SDF
+{
+constexpr int Padding = 5;
+constexpr uint8_t OneEdgeValue = 180;
+constexpr float PixelDistScale = static_cast<float>(OneEdgeValue) / static_cast<float>(Padding);
+}  // namespace SDF
+
 Renderer::Renderer(rndr::GraphicsContext* Ctx,
                    int32_t MaxInstances,
                    int32_t MaxAtlasCount,
@@ -28,6 +35,7 @@ Renderer::Renderer(rndr::GraphicsContext* Ctx,
                            .AppendElement(0, "TEXCOORD", rndr::PixelFormat::R32G32_FLOAT)
                            .AppendElement(0, "TEXCOORD", rndr::PixelFormat::R32G32_FLOAT)
                            .AppendElement(0, "COLOR", rndr::PixelFormat::R32G32B32A32_FLOAT)
+                           .AppendElement(0, "PSIZE", rndr::PixelFormat::R32_FLOAT)
                            .AppendElement(0, "PSIZE", rndr::PixelFormat::R32_FLOAT)
                            .Build(),
         .VertexShader = {.Type = rndr::ShaderType::Vertex, .EntryPoint = "Main"},
@@ -63,21 +71,18 @@ Renderer::Renderer(rndr::GraphicsContext* Ctx,
     rndr::ImageProperties AtlasProps;
     AtlasProps.PixelFormat = rndr::PixelFormat::R8_UNORM;
     AtlasProps.ImageBindFlags = rndr::ImageBindFlags::ShaderResource;
-    std::vector<uint8_t> WhiteTextureData(AtlasWidth * AtlasHeight *
-                                          rndr::GetPixelSize(AtlasProps.PixelFormat));
-    memset(WhiteTextureData.data(), 0xFF, WhiteTextureData.size());
+    std::vector<uint8_t> InitTextureData(AtlasWidth * AtlasHeight *
+                                         rndr::GetPixelSize(AtlasProps.PixelFormat));
+    memset(InitTextureData.data(), 0x00, InitTextureData.size());
     std::vector<rndr::ByteSpan> InitData(MaxAtlasCount);
-    for (rndr::ByteSpan& S : InitData)
-    {
-        S.Data = WhiteTextureData.data();
-        S.Size = WhiteTextureData.size();
-    }
-    rndr::Span<rndr::ByteSpan> InitDataSpan(InitData);
     m_TextureAtlas =
-        m_Ctx->CreateImageArray(AtlasWidth, AtlasHeight, MaxAtlasCount, AtlasProps, InitDataSpan);
+        m_Ctx->CreateImage(AtlasWidth, AtlasHeight, AtlasProps, rndr::ByteSpan(InitTextureData));
     assert(m_TextureAtlas.IsValid());
 
-    m_TextureAtlasSampler = m_Ctx->CreateSampler();
+    rndr::SamplerProperties SamplerProps;
+    //SamplerProps.AddressingU = rndr::ImageAddressing::Clamp;
+    //SamplerProps.AddressingV = rndr::ImageAddressing::Clamp;
+    m_TextureAtlasSampler = m_Ctx->CreateSampler(SamplerProps);
     assert(m_TextureAtlasSampler.IsValid());
 
     m_Instances.reserve(m_MaxInstances);
@@ -100,7 +105,7 @@ void Renderer::RenderText(const std::string& Text,
                           const std::string& FontName,
                           int FontSize,
                           const math::Point2 BaseLineStart,
-                          const math::Vector4& Color)
+                          const TextProperties& Props)
 {
     if (Text.empty())
     {
@@ -141,13 +146,14 @@ void Renderer::RenderText(const std::string& Text,
         stbtt_GetCodepointHMetrics(&F->TTInfo, CodePoint, &AdvanceWidth, &LSB);
 
         InstanceData Quad;
-        Quad.AtlasIndex = 1;
-        Quad.Color = Color;
+        Quad.SDFThresholdTop =
+            math::Lerp(Props.Bolden, static_cast<float>(SDF::OneEdgeValue) / 255.0f, 0.0f);
+        Quad.SDFThresholdBottom = math::Lerp(Props.Smoothness, Quad.SDFThresholdTop, 0.0f);
+        Quad.Color = Props.Color;
         Quad.TexBottomLeft = G.TexBottomLeft;
         Quad.TexTopRight = G.TexTopRight;
         Quad.BottomLeft =
-            Cursor + math::Vector2{static_cast<float>(G.OffsetX),
-                                   static_cast<float>(G.OffsetY)};
+            Cursor + math::Vector2{static_cast<float>(G.OffsetX), static_cast<float>(G.OffsetY)};
         Quad.TopRight = Quad.BottomLeft +
                         math::Vector2{static_cast<float>(G.Width), static_cast<float>(G.Height)};
         m_Instances.push_back(Quad);
@@ -164,6 +170,7 @@ bool Renderer::Present(rndr::FrameBuffer* FrameBuffer)
     m_InstanceBuffer->Update(m_Ctx, rndr::ByteSpan{m_Instances});
     m_Ctx->BindBuffer(m_InstanceBuffer.Get(), 0);
     m_Ctx->BindBuffer(m_ConstantBuffer.Get(), 0, m_Pipeline->VertexShader.Get());
+    m_Ctx->BindBuffer(m_ConstantBuffer.Get(), 0, m_Pipeline->PixelShader.Get());
     m_Ctx->BindBuffer(m_IndexBuffer.Get(), 0);
     // Should we merge image and sampler binding into one call? Maybe even one class
     m_Ctx->BindImageAsShaderResource(m_TextureAtlas.Get(), 0, m_Pipeline->PixelShader.Get());
@@ -185,12 +192,6 @@ bool Renderer::IsGlyphSupported(int CodePoint, Font* F, int FontSize)
 
 void Renderer::UpdateAtlas(int CodePointStart, int CodePointEnd, Font* F, int FontSize)
 {
-    // TODO: Make this configurable in the renderer
-    const int SDFPadding = 5;
-    const uint8_t SDFOneEdgeValue = 180;
-    const float SDFPixelDistScale =
-        static_cast<float>(SDFOneEdgeValue) / static_cast<float>(SDFPadding);
-
     std::vector<AtlasPacker::RectIn> InRects;
 
     const float Scale = stbtt_ScaleForPixelHeight(&F->TTInfo, FontSize);
@@ -203,8 +204,8 @@ void Renderer::UpdateAtlas(int CodePointStart, int CodePointEnd, Font* F, int Fo
         G.Scale = Scale;
 
         uint8_t* Data =
-            stbtt_GetCodepointSDF(&F->TTInfo, Scale, CodePoint, SDFPadding, SDFOneEdgeValue,
-                                  SDFPixelDistScale, &G.Width, &G.Height, &G.OffsetX, &G.OffsetY);
+            stbtt_GetCodepointSDF(&F->TTInfo, Scale, CodePoint, SDF::Padding, SDF::OneEdgeValue,
+                                  SDF::PixelDistScale, &G.Width, &G.Height, &G.OffsetX, &G.OffsetY);
         G.SDF.Size = G.Width * G.Height;
         G.SDF.Data = new uint8_t[G.SDF.Size];
         memcpy(G.SDF.Data, Data, G.SDF.Size);
@@ -238,7 +239,7 @@ void Renderer::UpdateAtlas(int CodePointStart, int CodePointEnd, Font* F, int Fo
         G.TexTopRight.Y = (B.BottomLeft.Y + B.Size.Y) / AtlasHeight;
     }
 
-    m_TextureAtlas->Update(m_Ctx, 1, {0, 0}, {AtlasWidth, AtlasHeight}, rndr::ByteSpan(m_Atlas));
+    m_TextureAtlas->Update(m_Ctx, 0, {0, 0}, {AtlasWidth, AtlasHeight}, rndr::ByteSpan(m_Atlas));
 }
 
 void Renderer::WriteToAtlas(const Bitmap& B)
