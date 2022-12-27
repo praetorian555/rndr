@@ -81,7 +81,7 @@ bool rndr::Buffer::Update(GraphicsContext* Context, ByteSpan Data, int StartOffs
         if (Context->WindowsHasFailed(Result))
         {
             std::string ErrorMessage = Context->WindowsGetErrorMessage(Result);
-            RNDR_LOG_ERROR("%s", ErrorMessage.c_str());
+            RNDR_LOG_ERROR("Buffer::Update: %s", ErrorMessage.c_str());
             return false;
         }
 
@@ -91,7 +91,7 @@ bool rndr::Buffer::Update(GraphicsContext* Context, ByteSpan Data, int StartOffs
         if (Context->WindowsHasFailed())
         {
             std::string ErrorMessage = Context->WindowsGetErrorMessage();
-            RNDR_LOG_ERROR("%s", ErrorMessage.c_str());
+            RNDR_LOG_ERROR("Buffer::Update: %s", ErrorMessage.c_str());
             return false;
         }
 
@@ -99,20 +99,23 @@ bool rndr::Buffer::Update(GraphicsContext* Context, ByteSpan Data, int StartOffs
     }
 
     D3D11_BOX* DestRegionPtr = nullptr;
-    D3D11_BOX DestRegion;
-    DestRegion.left = StartOffset;
-    DestRegion.right = StartOffset + Data.Size;
-    DestRegion.top = 0;
-    DestRegion.bottom = 1;
-    DestRegion.front = 0;
-    DestRegion.back = 1;
-    DestRegionPtr = &DestRegion;
+    if (Props.Type != BufferType::Constant)
+    {
+        D3D11_BOX DestRegion;
+        DestRegion.left = StartOffset;
+        DestRegion.right = StartOffset + Data.Size;
+        DestRegion.top = 0;
+        DestRegion.bottom = 1;
+        DestRegion.front = 0;
+        DestRegion.back = 1;
+        DestRegionPtr = &DestRegion;
+    }
 
     DeviceContext->UpdateSubresource(DX11Buffer, 0, DestRegionPtr, Data.Data, Data.Size, 0);
     if (Context->WindowsHasFailed())
     {
         std::string ErrorMessage = Context->WindowsGetErrorMessage();
-        RNDR_LOG_ERROR("%s", ErrorMessage.c_str());
+        RNDR_LOG_ERROR("Buffer::Update: %s", ErrorMessage.c_str());
         return false;
     }
 
