@@ -18,8 +18,8 @@ Renderer::Renderer(rndr::GraphicsContext* Ctx,
     m_Atlas.resize(AtlasWidth * AtlasHeight);
     memset(m_Atlas.data(), 0, m_Atlas.size());
 
-    const std::string VertexShaderPath = BASIC2D_ASSET_DIR "/basic2Dvertex.hlsl";
-    const std::string FragmentShaderPath = BASIC2D_ASSET_DIR "/basic2Dfragment.hlsl";
+    const std::string VertexShaderPath = BASIC2D_ASSET_DIR "/textvert.hlsl";
+    const std::string FragmentShaderPath = BASIC2D_ASSET_DIR "/textfrag.hlsl";
 
     const rndr::ByteSpan VertexShaderContents = rndr::file::ReadEntireFile(VertexShaderPath);
     assert(VertexShaderContents);

@@ -11,11 +11,11 @@ struct TextProperties
 
     math::Vector4 Color;
     float Threshold = 0.7f;  // Value in range [0, 1]. Higher value means skinnier text.
-    
+
     bool bShadow = true;
     math::Vector4 ShadowColor = {0, 0, 0, 0x64 / 255.0f};
     float ShadowThresholdBottom = 0.4f;  // Value in range [0, 1].
-    float ShadowThresholdTop = 0.7f; // Value in range [0, 1].
+    float ShadowThresholdTop = 0.7f;     // Value in range [0, 1].
 };
 
 class Renderer
