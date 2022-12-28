@@ -24,7 +24,11 @@ rndr::StdAsyncLogger::~StdAsyncLogger()
     spdlog::drop(m_ImplLogger->name());
 }
 
-void rndr::StdAsyncLogger::Log(const char* File, int Line, const char* Function, rndr::LogLevel LogLevel, const char* Message)
+void rndr::StdAsyncLogger::Log(const char* File,
+                               int Line,
+                               const char* Function,
+                               rndr::LogLevel LogLevel,
+                               const char* Message)
 {
     spdlog::source_loc SourceInfo(File, Line, Function);
 
@@ -58,7 +62,12 @@ void rndr::StdAsyncLogger::Log(const char* File, int Line, const char* Function,
     }
 }
 
-void rndr::Log(const char* File, int Line, const char* Function, rndr::LogLevel LogLevel, const char* Format, ...)
+void rndr::Log(const char* File,
+               int Line,
+               const char* Function,
+               rndr::LogLevel LogLevel,
+               const char* Format,
+               ...)
 {
     constexpr int MESSAGE_SIZE = 4096;
     char Message[MESSAGE_SIZE] = {};

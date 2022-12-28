@@ -72,7 +72,8 @@ void rndr::CommandList::ClearDepth(Image* Image, real Depth)
         RNDR_LOG_ERROR("CommandList::ClearDepth: Invalid image!");
         return;
     }
-    DX11DeferredContext->ClearDepthStencilView(Image->DX11DepthStencilView, D3D11_CLEAR_DEPTH, Depth, 0);
+    DX11DeferredContext->ClearDepthStencilView(Image->DX11DepthStencilView, D3D11_CLEAR_DEPTH,
+                                               Depth, 0);
 }
 
 void rndr::CommandList::ClearStencil(Image* Image, uint8_t Stencil)
@@ -82,7 +83,8 @@ void rndr::CommandList::ClearStencil(Image* Image, uint8_t Stencil)
         RNDR_LOG_ERROR("CommandList::ClearStencil: Invalid image!");
         return;
     }
-    DX11DeferredContext->ClearDepthStencilView(Image->DX11DepthStencilView, D3D11_CLEAR_STENCIL, 0, Stencil);
+    DX11DeferredContext->ClearDepthStencilView(Image->DX11DepthStencilView, D3D11_CLEAR_STENCIL, 0,
+                                               Stencil);
 }
 
 void rndr::CommandList::ClearDepthStencil(Image* Image, real Depth, uint8_t Stencil)
@@ -92,7 +94,8 @@ void rndr::CommandList::ClearDepthStencil(Image* Image, real Depth, uint8_t Sten
         RNDR_LOG_ERROR("CommandList::ClearDepthStencil: Invalid image!");
         return;
     }
-    DX11DeferredContext->ClearDepthStencilView(Image->DX11DepthStencilView, D3D11_CLEAR_DEPTH | D3D11_CLEAR_STENCIL, Depth, Stencil);
+    DX11DeferredContext->ClearDepthStencilView(
+        Image->DX11DepthStencilView, D3D11_CLEAR_DEPTH | D3D11_CLEAR_STENCIL, Depth, Stencil);
 }
 
 void rndr::CommandList::BindShader(Shader* Shader)
@@ -194,7 +197,8 @@ void rndr::CommandList::BindBuffer(Buffer* Buffer, int Slot, Shader* Shader)
     if (Buffer->Props.Type == BufferType::Index)
     {
         assert(Buffer->Props.Stride == 4 || Buffer->Props.Stride == 2);
-        DXGI_FORMAT Format = Buffer->Props.Stride == 4 ? DXGI_FORMAT_R32_UINT : DXGI_FORMAT_R16_UINT;
+        DXGI_FORMAT Format =
+            Buffer->Props.Stride == 4 ? DXGI_FORMAT_R32_UINT : DXGI_FORMAT_R16_UINT;
         DX11DeferredContext->IASetIndexBuffer(Buffer->DX11Buffer, Format, 0);
     }
     else
@@ -213,7 +217,8 @@ void rndr::CommandList::BindFrameBuffer(FrameBuffer* FrameBuffer)
         return;
     }
 
-    ID3D11DepthStencilView* DepthStencilView = FrameBuffer->DepthStencilBuffer->DX11DepthStencilView;
+    ID3D11DepthStencilView* DepthStencilView =
+        FrameBuffer->DepthStencilBuffer->DX11DepthStencilView;
     std::vector<ID3D11RenderTargetView*> RenderTargetViews;
     const int RenderTargetCount = FrameBuffer->ColorBuffers.Size;
     RenderTargetViews.resize(RenderTargetCount);
@@ -223,7 +228,8 @@ void rndr::CommandList::BindFrameBuffer(FrameBuffer* FrameBuffer)
         RenderTargetViews[i] = FrameBuffer->ColorBuffers[i]->DX11RenderTargetView;
     }
 
-    DX11DeferredContext->OMSetRenderTargets(RenderTargetCount, RenderTargetViews.data(), DepthStencilView);
+    DX11DeferredContext->OMSetRenderTargets(RenderTargetCount, RenderTargetViews.data(),
+                                            DepthStencilView);
     DX11DeferredContext->RSSetViewports(1, &FrameBuffer->DX11Viewport);
 }
 
@@ -239,7 +245,8 @@ void rndr::CommandList::BindRasterizerState(RasterizerState* State)
 
 void rndr::CommandList::BindDepthStencilState(DepthStencilState* State)
 {
-    DX11DeferredContext->OMSetDepthStencilState(State->DX11DepthStencilState, State->Props.StencilRefValue);
+    DX11DeferredContext->OMSetDepthStencilState(State->DX11DepthStencilState,
+                                                State->Props.StencilRefValue);
 }
 
 void rndr::CommandList::BindBlendState(BlendState* State)
@@ -260,10 +267,13 @@ void rndr::CommandList::DrawIndexedInstanced(PrimitiveTopology Topology,
                                              int InstanceOffset)
 {
     DX11DeferredContext->IASetPrimitiveTopology(DX11FromPrimitiveTopology(Topology));
-    DX11DeferredContext->DrawIndexedInstanced(IndexCount, InstanceCount, IndexOffset, 0, InstanceOffset);
+    DX11DeferredContext->DrawIndexedInstanced(IndexCount, InstanceCount, IndexOffset, 0,
+                                              InstanceOffset);
 }
 
-void rndr::CommandList::Dispatch(const uint32_t ThreadGroupCountX, const uint32_t ThreadGroupCountY, const uint32_t ThreadGroupCountZ)
+void rndr::CommandList::Dispatch(const uint32_t ThreadGroupCountX,
+                                 const uint32_t ThreadGroupCountY,
+                                 const uint32_t ThreadGroupCountZ)
 {
     DX11DeferredContext->Dispatch(ThreadGroupCountX, ThreadGroupCountY, ThreadGroupCountZ);
 }

@@ -2,7 +2,8 @@
 
 #include "math/projections.h"
 
-rndr::ProjectionCamera::ProjectionCamera(const math::Transform& WorldToCamera, const ProjectionCameraProperties& Props)
+rndr::ProjectionCamera::ProjectionCamera(const math::Transform& WorldToCamera,
+                                         const ProjectionCameraProperties& Props)
     : m_WorldToCamera(WorldToCamera), m_Props(Props)
 {
     m_CameraToWorld = m_WorldToCamera.GetInverse();
@@ -59,17 +60,21 @@ math::Transform rndr::ProjectionCamera::GetProjectionTransform() const
         const real Width = m_Props.OrtographicWidth;
         const real Height = Width / AspectRatio;
 #if RNDR_LEFT_HANDED
-        return (math::Transform)math::Orhographic_LH_N0(-Width / 2, Width / 2, -Height / 2, Height / 2, m_Props.Near, m_Props.Far);
+        return (math::Transform)math::Orhographic_LH_N0(-Width / 2, Width / 2, -Height / 2,
+                                                        Height / 2, m_Props.Near, m_Props.Far);
 #else
-        return (math::Transform)math::Orhographic_RH_N0(-Width / 2, Width / 2, -Height / 2, Height / 2, m_Props.Near, m_Props.Far);
+        return (math::Transform)math::Orhographic_RH_N0(-Width / 2, Width / 2, -Height / 2,
+                                                        Height / 2, m_Props.Near, m_Props.Far);
 #endif
     }
     else
     {
 #if RNDR_LEFT_HANDED
-        return (math::Transform)math::Perspective_LH_N0(m_Props.VerticalFOV, AspectRatio, m_Props.Near, m_Props.Far);
+        return (math::Transform)math::Perspective_LH_N0(m_Props.VerticalFOV, AspectRatio,
+                                                        m_Props.Near, m_Props.Far);
 #else
-        return (math::Transform)math::Perspective_RH_N0(m_Props.VerticalFOV, AspectRatio, m_Props.Near, m_Props.Far);
+        return (math::Transform)math::Perspective_RH_N0(m_Props.VerticalFOV, AspectRatio,
+                                                        m_Props.Near, m_Props.Far);
 #endif
     }
 }

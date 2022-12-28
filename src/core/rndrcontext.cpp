@@ -70,7 +70,8 @@ rndr::Window* rndr::RndrContext::CreateWin(int Width, int Height, const WindowPr
     return W;
 }
 
-rndr::GraphicsContext* rndr::RndrContext::CreateGraphicsContext(const GraphicsContextProperties& Props)
+rndr::GraphicsContext* rndr::RndrContext::CreateGraphicsContext(
+    const GraphicsContextProperties& Props)
 {
     if (!bInitialized)
     {
@@ -142,8 +143,8 @@ void rndr::RndrContext::Run()
         m_GraphicsContext->Present(m_SwapChain, false);
 
         auto FrameEnd = std::chrono::high_resolution_clock().now();
-        FrameDuration = std::chrono::duration_cast<std::chrono::microseconds>(FrameEnd - FrameStart).count();
-        FrameDuration /= 1'000'000;
-        FrameDuration = math::Clamp(FrameDuration, 0, 0.05);
+        FrameDuration = std::chrono::duration_cast<std::chrono::microseconds>(FrameEnd -
+    FrameStart).count(); FrameDuration /= 1'000'000; FrameDuration = math::Clamp(FrameDuration, 0,
+    0.05);
     }*/
 }

@@ -98,7 +98,8 @@ void rndr::InputSystem::Update(real DeltaSeconds)
                     real Value = 0;
                     if (Binding.Trigger == InputTrigger::AxisChangedRelative)
                     {
-                        Value = Binding.Modifier * ((Event.X - m_X) / (real)Event.OriginWindow->GetWidth());
+                        Value = Binding.Modifier *
+                                ((Event.X - m_X) / (real)Event.OriginWindow->GetWidth());
                     }
                     else if (Binding.Trigger == InputTrigger::AxisChangedAbsolute)
                     {
@@ -111,7 +112,8 @@ void rndr::InputSystem::Update(real DeltaSeconds)
                     real Value = 0;
                     if (Binding.Trigger == InputTrigger::AxisChangedRelative)
                     {
-                        real Value = Binding.Modifier * ((Event.Y - m_Y) / (real)Event.OriginWindow->GetHeight());
+                        real Value = Binding.Modifier *
+                                     ((Event.Y - m_Y) / (real)Event.OriginWindow->GetHeight());
                     }
                     else if (Binding.Trigger == InputTrigger::AxisChangedAbsolute)
                     {
@@ -137,7 +139,8 @@ void rndr::InputSystem::Update(real DeltaSeconds)
             {
                 if (Binding.Primitive == InputPrimitive::Mouse_AxisWheel)
                 {
-                    MappingEntry.Mapping->Callback(Binding.Primitive, Binding.Trigger, Event.DeltaWheel);
+                    MappingEntry.Mapping->Callback(Binding.Primitive, Binding.Trigger,
+                                                   Event.DeltaWheel);
                 }
             }
         }
@@ -166,7 +169,8 @@ bool rndr::InputSystem::IsButton(InputPrimitive Primitive) const
 
 bool rndr::InputSystem::IsMouseButton(InputPrimitive Primitive) const
 {
-    if (Primitive == InputPrimitive::Mouse_LeftButton || Primitive == InputPrimitive::Mouse_RightButton ||
+    if (Primitive == InputPrimitive::Mouse_LeftButton ||
+        Primitive == InputPrimitive::Mouse_RightButton ||
         Primitive == InputPrimitive::Mouse_MiddleButton)
     {
         return true;
@@ -213,7 +217,8 @@ math::Point2 rndr::InputSystem::GetMousePosition() const
 
 // InputContext ///////////////////////////////////////////////////////////////////////////////////
 
-rndr::InputMapping* rndr::InputContext::CreateMapping(const InputAction& Action, InputCallback Callback)
+rndr::InputMapping* rndr::InputContext::CreateMapping(const InputAction& Action,
+                                                      InputCallback Callback)
 {
     std::unique_ptr<InputMapping> Mapping = std::make_unique<InputMapping>(Action, Callback);
 
@@ -230,7 +235,10 @@ rndr::InputMapping* rndr::InputContext::CreateMapping(const InputAction& Action,
     return Mappings.back().Mapping.get();
 }
 
-void rndr::InputContext::AddBinding(const InputAction& Action, InputPrimitive Primitive, InputTrigger Trigger, real Modifier)
+void rndr::InputContext::AddBinding(const InputAction& Action,
+                                    InputPrimitive Primitive,
+                                    InputTrigger Trigger,
+                                    real Modifier)
 {
     for (const Entry& E : Mappings)
     {

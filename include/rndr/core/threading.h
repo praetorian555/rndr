@@ -149,10 +149,16 @@ template <typename Function>
 void ParallelFor(int End, int BatchSize, Function F, int Start = 0);
 
 template <typename Function>
-void ParallelFor(const math::Point2 End, int BatchSize, Function F, const math::Point2 Start = {0, 0});
+void ParallelFor(const math::Point2 End,
+                 int BatchSize,
+                 Function F,
+                 const math::Point2 Start = {0, 0});
 
 template <typename Function>
-void ParallelFor(const math::Vector2 End, int BatchSize, Function F, const math::Vector2 Start = {0, 0});
+void ParallelFor(const math::Vector2 End,
+                 int BatchSize,
+                 Function F,
+                 const math::Vector2 Start = {0, 0});
 
 // Implementation /////////////////////////////////////////////////////////////////////////////////
 
@@ -211,7 +217,8 @@ void ParallelFor(const math::Point2 End, int BatchSize, Function F, const math::
         for (int X = Start.X; X < End.X; X += BatchSize)
         {
             TaskBaseSP Task = MakeTask(
-                [StartX = X, StartY = Y, EndX = std::min(X + BatchSize, End.X), EndY = std::min(Y + BatchSize, End.Y), F]
+                [StartX = X, StartY = Y, EndX = std::min(X + BatchSize, End.X),
+                 EndY = std::min(Y + BatchSize, End.Y), F]
                 {
                     RNDR_CPU_TRACE("Parallel For 2D");
 

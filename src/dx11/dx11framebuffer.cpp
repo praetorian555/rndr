@@ -17,14 +17,18 @@ rndr::FrameBuffer::~FrameBuffer()
     Clear();
 }
 
-bool rndr::FrameBuffer::Init(GraphicsContext* Context, int Width, int Height, const FrameBufferProperties& Props)
+bool rndr::FrameBuffer::Init(GraphicsContext* Context,
+                             int Width,
+                             int Height,
+                             const FrameBufferProperties& Props)
 {
     if (Width == 0 || Height == 0)
     {
         RNDR_LOG_ERROR("FrameBuffer::Init: Invalid width or height!");
         return false;
     }
-    if (Props.ColorBufferCount <= 0 || Props.ColorBufferCount > GraphicsConstants::MaxFrameBufferColorBuffers)
+    if (Props.ColorBufferCount <= 0 ||
+        Props.ColorBufferCount > GraphicsConstants::MaxFrameBufferColorBuffers)
     {
         RNDR_LOG_ERROR("FrameBuffer::Init: Invalid number of color buffers!");
         return false;
@@ -37,7 +41,10 @@ bool rndr::FrameBuffer::Init(GraphicsContext* Context, int Width, int Height, co
     return InitInternal(Context);
 }
 
-bool rndr::FrameBuffer::InitForSwapChain(rndr::GraphicsContext* Context, int Width, int Height, rndr::SwapChain* SwapChain)
+bool rndr::FrameBuffer::InitForSwapChain(rndr::GraphicsContext* Context,
+                                         int Width,
+                                         int Height,
+                                         rndr::SwapChain* SwapChain)
 {
     if (!Context)
     {
@@ -70,7 +77,8 @@ bool rndr::FrameBuffer::InitForSwapChain(rndr::GraphicsContext* Context, int Wid
         RNDR_LOG_ERROR("FrameBuffer::InitForSwapChain: Invalid width or height!");
         return false;
     }
-    if (Props.ColorBufferCount <= 0 || Props.ColorBufferCount > GraphicsConstants::MaxFrameBufferColorBuffers)
+    if (Props.ColorBufferCount <= 0 ||
+        Props.ColorBufferCount > GraphicsConstants::MaxFrameBufferColorBuffers)
     {
         RNDR_LOG_ERROR("FrameBuffer::InitForSwapChain: Invalid number of color buffers!");
         return false;
@@ -92,7 +100,11 @@ bool rndr::FrameBuffer::Resize(rndr::GraphicsContext* Context, int Width, int He
     return InitInternal(Context);
 }
 
-bool rndr::FrameBuffer::UpdateViewport(float Width, float Height, const math::Point2& TopLeft, float MinDepth, float MaxDepth)
+bool rndr::FrameBuffer::UpdateViewport(float Width,
+                                       float Height,
+                                       const math::Point2& TopLeft,
+                                       float MinDepth,
+                                       float MaxDepth)
 {
     if (Width == 0 || Height == 0)
     {
@@ -150,7 +162,8 @@ bool rndr::FrameBuffer::InitInternal(GraphicsContext* Context, SwapChain* SwapCh
     {
         if (!SwapChain)
         {
-            ColorBuffers[i] = Context->CreateImage(Width, Height, Props.ColorBufferProperties[i], EmptyData);
+            ColorBuffers[i] =
+                Context->CreateImage(Width, Height, Props.ColorBufferProperties[i], EmptyData);
         }
         else
         {
@@ -164,7 +177,8 @@ bool rndr::FrameBuffer::InitInternal(GraphicsContext* Context, SwapChain* SwapCh
     }
     if (Props.bUseDepthStencil)
     {
-        DepthStencilBuffer = Context->CreateImage(Width, Height, Props.DepthStencilBufferProperties, EmptyData);
+        DepthStencilBuffer =
+            Context->CreateImage(Width, Height, Props.DepthStencilBufferProperties, EmptyData);
         if (!DepthStencilBuffer)
         {
             RNDR_LOG_ERROR("FrameBuffer::InitInternal: Failed to create depth stencil image!");

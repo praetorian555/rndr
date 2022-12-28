@@ -31,7 +31,8 @@ void rndr::CpuTracer::Init()
     ss << std::put_time(std::localtime(&in_time_t), "%d-%m-%Y-%Hh%Mm%Ss");
     const std::string OutputName = "cputrace/cputrace-" + ss.str() + ".log";
 
-    s_SpdLogger = spdlog::create_async<spdlog::sinks::basic_file_sink_mt>("async_cputrace_logger", OutputName);
+    s_SpdLogger = spdlog::create_async<spdlog::sinks::basic_file_sink_mt>("async_cputrace_logger",
+                                                                          OutputName);
 
     s_SpdLogger->set_pattern("%v");
 
@@ -42,8 +43,10 @@ void rndr::CpuTracer::ShutDown()
 {
     char Trace[4196] = {};
     const auto Timestamp = std::chrono::high_resolution_clock::now();
-    const int64_t StartUS = std::chrono::duration_cast<std::chrono::microseconds>(Timestamp.time_since_epoch()).count();
-    const uint32_t ThreadId = GetCurrentThreadId();  // TODO(mkostic): Hide this behind platform-agnostic API
+    const int64_t StartUS =
+        std::chrono::duration_cast<std::chrono::microseconds>(Timestamp.time_since_epoch()).count();
+    const uint32_t ThreadId =
+        GetCurrentThreadId();  // TODO(mkostic): Hide this behind platform-agnostic API
     const int64_t DurationUS = 0;
     sprintf(Trace,
             "{\"name\":\"%s\", \"cat\":\"\", \"ph\":\"X\", \"ts\": %I64d, \"dur\": %I64d, "
@@ -58,7 +61,8 @@ void rndr::CpuTracer::ShutDown()
 void rndr::CpuTracer::AddTrace(const std::string& Name, int64_t StartUS, int64_t EndUS)
 {
     const int64_t Duration = EndUS - StartUS;
-    const uint32_t ThreadId = GetCurrentThreadId();  // TODO(mkostic): Hide this behind platform-agnostic API
+    const uint32_t ThreadId =
+        GetCurrentThreadId();  // TODO(mkostic): Hide this behind platform-agnostic API
     char Trace[4196] = {};
     sprintf(Trace,
             "{\"name\":\"%s\", \"cat\":\"\", \"ph\":\"X\", \"ts\": %I64d, \"dur\": %I64d, "
@@ -74,13 +78,15 @@ rndr::CpuTrace::CpuTrace(const std::string& Name)
     const auto Timestamp = std::chrono::high_resolution_clock::now();
 
     m_Name = Name;
-    m_StartUS = std::chrono::duration_cast<std::chrono::microseconds>(Timestamp.time_since_epoch()).count();
+    m_StartUS =
+        std::chrono::duration_cast<std::chrono::microseconds>(Timestamp.time_since_epoch()).count();
 }
 
 rndr::CpuTrace::~CpuTrace()
 {
     const auto Timestamp = std::chrono::high_resolution_clock::now();
-    const int64_t EndUS = std::chrono::duration_cast<std::chrono::microseconds>(Timestamp.time_since_epoch()).count();
+    const int64_t EndUS =
+        std::chrono::duration_cast<std::chrono::microseconds>(Timestamp.time_since_epoch()).count();
 
     CpuTracer::Get()->AddTrace(m_Name, m_StartUS, EndUS);
 }

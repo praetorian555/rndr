@@ -15,7 +15,9 @@ rndr::Buffer::~Buffer()
     DX11SafeRelease(DX11Buffer);
 }
 
-bool rndr::Buffer::Init(GraphicsContext* Context, const BufferProperties& Props, ByteSpan InitialData)
+bool rndr::Buffer::Init(GraphicsContext* Context,
+                        const BufferProperties& Props,
+                        ByteSpan InitialData)
 {
     if (Props.Stride == 0)
     {
@@ -77,7 +79,8 @@ bool rndr::Buffer::Update(GraphicsContext* Context, ByteSpan Data, int StartOffs
     if (Props.Usage == Usage::Dynamic)
     {
         D3D11_MAPPED_SUBRESOURCE Subresource;
-        HRESULT Result = DeviceContext->Map(DX11Buffer, 0, D3D11_MAP_WRITE_DISCARD, 0, &Subresource);
+        HRESULT Result =
+            DeviceContext->Map(DX11Buffer, 0, D3D11_MAP_WRITE_DISCARD, 0, &Subresource);
         if (Context->WindowsHasFailed(Result))
         {
             std::string ErrorMessage = Context->WindowsGetErrorMessage(Result);

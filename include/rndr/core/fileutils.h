@@ -55,7 +55,7 @@ void FreeImage(const CPUImage& Image);
  * @param Image Image in the CPU memory to saved to the disc.
  * @param FilePath Absolute or relative path to the file on the disc. Should include both the file
  * name and extension. Extension is used to figure out the format.
- * 
+ *
  * @return Returns true in case of a success, false otherwise.
  */
 bool SaveImage(const CPUImage& Image, const std::string& FilePath);

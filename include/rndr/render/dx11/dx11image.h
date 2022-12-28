@@ -38,20 +38,46 @@ struct Image
 
     Image() = default;
 
-    bool Init(GraphicsContext* Context, int Width, int Height, const ImageProperties& Props, ByteSpan InitData);
-    bool InitArray(GraphicsContext* Context, int Width, int Height, int ArraySize, const ImageProperties& Props, Span<ByteSpan> InitData);
-    bool InitCubeMap(GraphicsContext* Context, int Width, int Height, const ImageProperties& Props, Span<ByteSpan> InitData);
-    bool InitSwapchainBackBuffer(GraphicsContext* Context, rndr::SwapChain* SwapChain, int BufferIndex);
+    bool Init(GraphicsContext* Context,
+              int Width,
+              int Height,
+              const ImageProperties& Props,
+              ByteSpan InitData);
+    bool InitArray(GraphicsContext* Context,
+                   int Width,
+                   int Height,
+                   int ArraySize,
+                   const ImageProperties& Props,
+                   Span<ByteSpan> InitData);
+    bool InitCubeMap(GraphicsContext* Context,
+                     int Width,
+                     int Height,
+                     const ImageProperties& Props,
+                     Span<ByteSpan> InitData);
+    bool InitSwapchainBackBuffer(GraphicsContext* Context,
+                                 rndr::SwapChain* SwapChain,
+                                 int BufferIndex);
 
     ~Image();
 
-    bool Update(GraphicsContext* Context, int ArrayIndex, const math::Point2& Start, const math::Vector2& Size, ByteSpan Contents) const;
-    bool Read(GraphicsContext* Context, int ArrayIndex, const math::Point2& Start, const math::Vector2& Size, ByteSpan OutContents) const;
+    bool Update(GraphicsContext* Context,
+                int ArrayIndex,
+                const math::Point2& Start,
+                const math::Vector2& Size,
+                ByteSpan Contents) const;
+    bool Read(GraphicsContext* Context,
+              int ArrayIndex,
+              const math::Point2& Start,
+              const math::Vector2& Size,
+              ByteSpan OutContents) const;
 
     static bool Copy(GraphicsContext* Context, Image* Src, Image* Dest);
 
 private:
-    bool InitInternal(GraphicsContext* Context, Span<ByteSpan> InitData, bool bCubeMap = false, rndr::SwapChain* SwapChain = nullptr);
+    bool InitInternal(GraphicsContext* Context,
+                      Span<ByteSpan> InitData,
+                      bool bCubeMap = false,
+                      rndr::SwapChain* SwapChain = nullptr);
 };
 
 }  // namespace rndr

@@ -90,7 +90,9 @@ static const char* GetShaderModel(D3D_FEATURE_LEVEL FeatureLevel, rndr::ShaderTy
     return "";
 }
 
-bool rndr::Shader::Init(GraphicsContext* Context, const ByteSpan& ShaderContents, const ShaderProperties& Props)
+bool rndr::Shader::Init(GraphicsContext* Context,
+                        const ByteSpan& ShaderContents,
+                        const ShaderProperties& Props)
 {
     if (!ShaderContents)
     {
@@ -121,8 +123,9 @@ bool rndr::Shader::Init(GraphicsContext* Context, const ByteSpan& ShaderContents
         }
     }
 
-    HRESULT Result = D3DCompile(ShaderContents.Data, ShaderContents.Size, nullptr, Macros, nullptr, Props.EntryPoint.c_str(), Model, Flags,
-                                0, &DX11ShaderBuffer, &ErrorMessage);
+    HRESULT Result =
+        D3DCompile(ShaderContents.Data, ShaderContents.Size, nullptr, Macros, nullptr,
+                   Props.EntryPoint.c_str(), Model, Flags, 0, &DX11ShaderBuffer, &ErrorMessage);
     if (Context->WindowsHasFailed(Result))
     {
         const std::string Message = Context->WindowsGetErrorMessage(Result);
@@ -137,15 +140,18 @@ bool rndr::Shader::Init(GraphicsContext* Context, const ByteSpan& ShaderContents
     switch (Props.Type)
     {
         case ShaderType::Vertex:
-            Result = Device->CreateVertexShader(DX11ShaderBuffer->GetBufferPointer(), DX11ShaderBuffer->GetBufferSize(), nullptr,
+            Result = Device->CreateVertexShader(DX11ShaderBuffer->GetBufferPointer(),
+                                                DX11ShaderBuffer->GetBufferSize(), nullptr,
                                                 &DX11VertexShader);
             break;
         case ShaderType::Fragment:
-            Result = Device->CreatePixelShader(DX11ShaderBuffer->GetBufferPointer(), DX11ShaderBuffer->GetBufferSize(), nullptr,
+            Result = Device->CreatePixelShader(DX11ShaderBuffer->GetBufferPointer(),
+                                               DX11ShaderBuffer->GetBufferSize(), nullptr,
                                                &DX11FragmentShader);
             break;
         case ShaderType::Compute:
-            Result = Device->CreateComputeShader(DX11ShaderBuffer->GetBufferPointer(), DX11ShaderBuffer->GetBufferSize(), nullptr,
+            Result = Device->CreateComputeShader(DX11ShaderBuffer->GetBufferPointer(),
+                                                 DX11ShaderBuffer->GetBufferSize(), nullptr,
                                                  &DX11ComputeShader);
             break;
         default:

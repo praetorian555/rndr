@@ -30,7 +30,8 @@ struct InputBinding
     real Modifier = 1.0;
 };
 
-using InputCallback = std::function<void(InputPrimitive Primitive, InputTrigger Trigger, real Value)>;
+using InputCallback =
+    std::function<void(InputPrimitive Primitive, InputTrigger Trigger, real Value)>;
 
 /**
  * Maps a user-defined action to the array of input bindings and callback function.
@@ -41,7 +42,10 @@ struct InputMapping
     std::vector<InputBinding> Bindings;
     InputCallback Callback;
 
-    InputMapping(const InputAction& Action, InputCallback Callback) : Action(Action), Callback(Callback) {}
+    InputMapping(const InputAction& Action, InputCallback Callback)
+        : Action(Action), Callback(Callback)
+    {
+    }
 };
 
 /**
@@ -58,7 +62,10 @@ struct InputContext
     std::vector<Entry> Mappings;
 
     InputMapping* CreateMapping(const InputAction& Action, InputCallback Callback);
-    void AddBinding(const InputAction& Action, InputPrimitive Primitive, InputTrigger Trigger, real Modifier = 1.0);
+    void AddBinding(const InputAction& Action,
+                    InputPrimitive Primitive,
+                    InputTrigger Trigger,
+                    real Modifier = 1.0);
 
     const InputMapping* GetMapping(const InputAction& Action);
 };

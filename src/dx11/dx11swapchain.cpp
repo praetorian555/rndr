@@ -17,7 +17,11 @@ rndr::SwapChain::~SwapChain()
     RNDR_DELETE(rndr::FrameBuffer, FrameBuffer);
 }
 
-bool rndr::SwapChain::Init(GraphicsContext* Context, NativeWindowHandle Handle, int Width, int Height, const SwapChainProperties& Props)
+bool rndr::SwapChain::Init(GraphicsContext* Context,
+                           NativeWindowHandle Handle,
+                           int Width,
+                           int Height,
+                           const SwapChainProperties& Props)
 {
     this->Props = Props;
     this->Width = Width;
@@ -45,7 +49,8 @@ bool rndr::SwapChain::Init(GraphicsContext* Context, NativeWindowHandle Handle, 
     SwapChainDesc.SampleDesc.Quality = 0;
 
     IDXGIDevice* DXGIDevice = nullptr;
-    HRESULT Result = Context->GetDevice()->QueryInterface(__uuidof(IDXGIDevice), (void**)&DXGIDevice);
+    HRESULT Result =
+        Context->GetDevice()->QueryInterface(__uuidof(IDXGIDevice), (void**)&DXGIDevice);
     if (Context->WindowsHasFailed(Result))
     {
         std::string ErrorMessage = Context->WindowsGetErrorMessage(Result);

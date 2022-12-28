@@ -48,8 +48,15 @@ public:
                                const SwapChainProperties& Props = SwapChainProperties{});
     Shader* CreateShader(const ByteSpan& ShaderContents, const ShaderProperties& Props);
     Image* CreateImage(int Width, int Height, const ImageProperties& Props, ByteSpan InitData);
-    Image* CreateImageArray(int Width, int Height, int ArraySize, const ImageProperties& Props, Span<ByteSpan> InitData);
-    Image* CreateCubeMap(int Width, int Height, const ImageProperties& Props, Span<ByteSpan> InitData);
+    Image* CreateImageArray(int Width,
+                            int Height,
+                            int ArraySize,
+                            const ImageProperties& Props,
+                            Span<ByteSpan> InitData);
+    Image* CreateCubeMap(int Width,
+                         int Height,
+                         const ImageProperties& Props,
+                         Span<ByteSpan> InitData);
     Image* CreateImageForSwapChain(SwapChain* SwapChain, int BufferIndex);
     Sampler* CreateSampler(const SamplerProperties& Props = SamplerProperties{});
     Buffer* CreateBuffer(const BufferProperties& Props, ByteSpan InitialData);
@@ -80,9 +87,15 @@ public:
     void BindPipeline(Pipeline* Pipeline);
 
     void DrawIndexed(PrimitiveTopology Topology, int IndicesCount);
-    void DrawIndexedInstanced(PrimitiveTopology Topology, int IndexCount, int InstanceCount, int IndexOffset = 0, int InstanceOffset = 0);
+    void DrawIndexedInstanced(PrimitiveTopology Topology,
+                              int IndexCount,
+                              int InstanceCount,
+                              int IndexOffset = 0,
+                              int InstanceOffset = 0);
 
-    void Dispatch(const uint32_t ThreadGroupCountX, const uint32_t ThreadGroupCountY, const uint32_t ThreadGroupCountZ);
+    void Dispatch(const uint32_t ThreadGroupCountX,
+                  const uint32_t ThreadGroupCountY,
+                  const uint32_t ThreadGroupCountZ);
 
     bool SubmitCommandList(CommandList* List);
 

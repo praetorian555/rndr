@@ -22,19 +22,21 @@ struct ProjectionCameraProperties
 
     int OrtographicWidth = 10;
 
-    // Position of the near plane along z axis. Always positive value. In case of a perspective projection it can't be 0.
+    // Position of the near plane along z axis. Always positive value. In case of a perspective
+    // projection it can't be 0.
     real Near = 0.01;
 
     // Position of the near plane along z axis. Always positive value.
     real Far = 100.0;
 
-    // Vertical field of view angle. Larger the value more things you can see. Too large values will cause distortion. This value is used
-    // only for perspective projection.
+    // Vertical field of view angle. Larger the value more things you can see. Too large values will
+    // cause distortion. This value is used only for perspective projection.
     real VerticalFOV = 45.0;
 };
 
 /**
- * Represents user's point of view in the 3D world. It provides transforms from world space to normalized device coordinate (NDC) space.
+ * Represents user's point of view in the 3D world. It provides transforms from world space to
+ * normalized device coordinate (NDC) space.
  */
 class ProjectionCamera
 {

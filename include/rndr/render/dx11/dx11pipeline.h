@@ -26,8 +26,11 @@ struct InputLayoutBuilder
     ~InputLayoutBuilder();
 
     InputLayoutBuilder& AddBuffer(int BufferIndex, DataRepetition Repetition, int PerInstanceRate);
-    // If the same SemanticName is used twice in one builder instance this will increment underlying semantic index
-    InputLayoutBuilder& AppendElement(int BufferIndex, const std::string& SemanticName, PixelFormat Format);
+    // If the same SemanticName is used twice in one builder instance this will increment underlying
+    // semantic index
+    InputLayoutBuilder& AppendElement(int BufferIndex,
+                                      const std::string& SemanticName,
+                                      PixelFormat Format);
 
     Span<InputLayoutProperties> Build();
 

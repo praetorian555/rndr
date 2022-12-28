@@ -21,7 +21,9 @@ rndr::InputLayoutBuilder::~InputLayoutBuilder()
     delete[] m_Props.Data;
 }
 
-rndr::InputLayoutBuilder& rndr::InputLayoutBuilder::AddBuffer(int BufferIndex, DataRepetition Repetition, int PerInstanceRate)
+rndr::InputLayoutBuilder& rndr::InputLayoutBuilder::AddBuffer(int BufferIndex,
+                                                              DataRepetition Repetition,
+                                                              int PerInstanceRate)
 {
     auto It = m_Buffers.find(BufferIndex);
     if (It == m_Buffers.end())
@@ -30,23 +32,29 @@ rndr::InputLayoutBuilder& rndr::InputLayoutBuilder::AddBuffer(int BufferIndex, D
     }
     else
     {
-        RNDR_LOG_ERROR("InputLayoutBuilder::AddBuffer: Failed since the buffer index is already in use!");
+        RNDR_LOG_ERROR(
+            "InputLayoutBuilder::AddBuffer: Failed since the buffer index is already in use!");
     }
 
     return *this;
 }
 
-rndr::InputLayoutBuilder& rndr::InputLayoutBuilder::AppendElement(int BufferIndex, const std::string& SemanticName, PixelFormat Format)
+rndr::InputLayoutBuilder& rndr::InputLayoutBuilder::AppendElement(int BufferIndex,
+                                                                  const std::string& SemanticName,
+                                                                  PixelFormat Format)
 {
     auto BufferIt = m_Buffers.find(BufferIndex);
     if (BufferIt == m_Buffers.end())
     {
-        RNDR_LOG_ERROR("InputLayoutBuilder::AppendElement: Failed since the buffer index is not present, call AddBuffer!");
+        RNDR_LOG_ERROR(
+            "InputLayoutBuilder::AppendElement: Failed since the buffer index is not present, call "
+            "AddBuffer!");
         return *this;
     }
     if (m_Props.Size == GraphicsConstants::MaxInputLayoutEntries)
     {
-        RNDR_LOG_ERROR("InputLayoutBuilder::AppendElement: Failed since there are no more slots available!");
+        RNDR_LOG_ERROR(
+            "InputLayoutBuilder::AppendElement: Failed since there are no more slots available!");
         return *this;
     }
 
@@ -92,7 +100,9 @@ rndr::Span<rndr::InputLayoutProperties> rndr::InputLayoutBuilder::Build()
     return Rtn;
 }
 
-bool rndr::InputLayout::Init(GraphicsContext* Context, Span<InputLayoutProperties> Props, rndr::Shader* Shader)
+bool rndr::InputLayout::Init(GraphicsContext* Context,
+                             Span<InputLayoutProperties> Props,
+                             rndr::Shader* Shader)
 {
     if (!Context)
     {
@@ -127,16 +137,18 @@ bool rndr::InputLayout::Init(GraphicsContext* Context, Span<InputLayoutPropertie
         InputDescriptors[i].SemanticName = Props[i].SemanticName.c_str();
         InputDescriptors[i].SemanticIndex = Props[i].SemanticIndex;
         InputDescriptors[i].Format = DX11FromPixelFormat(Props[i].Format);
-        InputDescriptors[i].AlignedByteOffset =
-            Props[i].OffsetInVertex == AppendAlignedElement ? D3D11_APPEND_ALIGNED_ELEMENT : Props[i].OffsetInVertex;
+        InputDescriptors[i].AlignedByteOffset = Props[i].OffsetInVertex == AppendAlignedElement
+                                                    ? D3D11_APPEND_ALIGNED_ELEMENT
+                                                    : Props[i].OffsetInVertex;
         InputDescriptors[i].InputSlot = Props[i].InputSlot;
         InputDescriptors[i].InputSlotClass = DX11FromDataRepetition(Props[i].Repetition);
         InputDescriptors[i].InstanceDataStepRate = Props[i].InstanceStepRate;
     }
 
     ID3D11Device* Device = Context->GetDevice();
-    HRESULT Result = Device->CreateInputLayout(InputDescriptors, Props.Size, Shader->DX11ShaderBuffer->GetBufferPointer(),
-                                               Shader->DX11ShaderBuffer->GetBufferSize(), &DX11InputLayout);
+    HRESULT Result = Device->CreateInputLayout(
+        InputDescriptors, Props.Size, Shader->DX11ShaderBuffer->GetBufferPointer(),
+        Shader->DX11ShaderBuffer->GetBufferSize(), &DX11InputLayout);
     if (Context->WindowsHasFailed(Result))
     {
         const std::string ErrorMessage = Context->WindowsGetErrorMessage(Result);
@@ -213,12 +225,16 @@ bool rndr::DepthStencilState::Init(GraphicsContext* Context, const DepthStencilP
     DepthStencilDesc.StencilWriteMask = Props.StencilWriteMask;
     DepthStencilDesc.BackFace.StencilFunc = DX11FromComparator(Props.StencilBackFaceComparator);
     DepthStencilDesc.BackFace.StencilFailOp = DX11FromStencilOperation(Props.StencilBackFaceFailOp);
-    DepthStencilDesc.BackFace.StencilDepthFailOp = DX11FromStencilOperation(Props.StencilBackFaceDepthFailOp);
+    DepthStencilDesc.BackFace.StencilDepthFailOp =
+        DX11FromStencilOperation(Props.StencilBackFaceDepthFailOp);
     DepthStencilDesc.BackFace.StencilPassOp = DX11FromStencilOperation(Props.StencilBackFacePassOp);
     DepthStencilDesc.FrontFace.StencilFunc = DX11FromComparator(Props.StencilFrontFaceComparator);
-    DepthStencilDesc.FrontFace.StencilFailOp = DX11FromStencilOperation(Props.StencilFrontFaceFailOp);
-    DepthStencilDesc.FrontFace.StencilDepthFailOp = DX11FromStencilOperation(Props.StencilFrontFaceDepthFailOp);
-    DepthStencilDesc.FrontFace.StencilPassOp = DX11FromStencilOperation(Props.StencilFrontFacePassOp);
+    DepthStencilDesc.FrontFace.StencilFailOp =
+        DX11FromStencilOperation(Props.StencilFrontFaceFailOp);
+    DepthStencilDesc.FrontFace.StencilDepthFailOp =
+        DX11FromStencilOperation(Props.StencilFrontFaceDepthFailOp);
+    DepthStencilDesc.FrontFace.StencilPassOp =
+        DX11FromStencilOperation(Props.StencilFrontFacePassOp);
     ID3D11Device* Device = Context->GetDevice();
     HRESULT Result = Device->CreateDepthStencilState(&DepthStencilDesc, &DX11DepthStencilState);
     if (Context->WindowsHasFailed(Result))

@@ -27,8 +27,8 @@ std::string rndr::GraphicsContext::WindowsGetErrorMessage(HRESULT ErrorCode)
     {
         constexpr DWORD BufferSize = 1024;
         char Buffer[BufferSize] = {};
-        FormatMessage(FORMAT_MESSAGE_FROM_SYSTEM, nullptr, ErrorCode, MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT), Buffer, BufferSize,
-                      nullptr);
+        FormatMessage(FORMAT_MESSAGE_FROM_SYSTEM, nullptr, ErrorCode,
+                      MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT), Buffer, BufferSize, nullptr);
         Rtn += Buffer;
     }
     else
@@ -156,13 +156,16 @@ bool rndr::GraphicsContext::Init(GraphicsContextProperties Props)
         Flags |= D3D11_CREATE_DEVICE_SINGLETHREADED;
     }
     // These are the feature levels that we will accept.
-    D3D_FEATURE_LEVEL FeatureLevels[] = {D3D_FEATURE_LEVEL_11_1, D3D_FEATURE_LEVEL_11_0, D3D_FEATURE_LEVEL_10_1, D3D_FEATURE_LEVEL_10_0,
-                                         D3D_FEATURE_LEVEL_9_3,  D3D_FEATURE_LEVEL_9_2,  D3D_FEATURE_LEVEL_9_1};
+    D3D_FEATURE_LEVEL FeatureLevels[] = {D3D_FEATURE_LEVEL_11_1, D3D_FEATURE_LEVEL_11_0,
+                                         D3D_FEATURE_LEVEL_10_1, D3D_FEATURE_LEVEL_10_0,
+                                         D3D_FEATURE_LEVEL_9_3,  D3D_FEATURE_LEVEL_9_2,
+                                         D3D_FEATURE_LEVEL_9_1};
     // This will be the feature level that is used to create our device and swap chain.
     IDXGIAdapter* Adapter = nullptr;  // Use default adapter
     HMODULE SoftwareRasterizerModule = nullptr;
-    HRESULT Result = D3D11CreateDevice(Adapter, D3D_DRIVER_TYPE_HARDWARE, SoftwareRasterizerModule, Flags, FeatureLevels,
-                                       _countof(FeatureLevels), D3D11_SDK_VERSION, &m_Device, &m_FeatureLevel, &m_DeviceContext);
+    HRESULT Result = D3D11CreateDevice(
+        Adapter, D3D_DRIVER_TYPE_HARDWARE, SoftwareRasterizerModule, Flags, FeatureLevels,
+        _countof(FeatureLevels), D3D11_SDK_VERSION, &m_Device, &m_FeatureLevel, &m_DeviceContext);
     if (WindowsHasFailed(Result))
     {
         std::string ErrorMessage = WindowsGetErrorMessage(Result);
@@ -216,7 +219,8 @@ rndr::SwapChain* rndr::GraphicsContext::CreateSwapChain(NativeWindowHandle Windo
     return S;
 }
 
-rndr::Shader* rndr::GraphicsContext::CreateShader(const ByteSpan& ShaderContents, const ShaderProperties& Props)
+rndr::Shader* rndr::GraphicsContext::CreateShader(const ByteSpan& ShaderContents,
+                                                  const ShaderProperties& Props)
 {
     Shader* S = RNDR_NEW(Shader, "rndr::GraphicsContext: Shader");
     if (!S || !S->Init(this, ShaderContents, Props))
@@ -226,7 +230,10 @@ rndr::Shader* rndr::GraphicsContext::CreateShader(const ByteSpan& ShaderContents
     return S;
 }
 
-rndr::Image* rndr::GraphicsContext::CreateImage(int Width, int Height, const ImageProperties& Props, ByteSpan InitData)
+rndr::Image* rndr::GraphicsContext::CreateImage(int Width,
+                                                int Height,
+                                                const ImageProperties& Props,
+                                                ByteSpan InitData)
 {
     Image* Im = RNDR_NEW(Image, "rndr::GraphicsContext: Image");
     if (!Im || !Im->Init(this, Width, Height, Props, InitData))
@@ -250,7 +257,10 @@ rndr::Image* rndr::GraphicsContext::CreateImageArray(int Width,
     return Im;
 }
 
-rndr::Image* rndr::GraphicsContext::CreateCubeMap(int Width, int Height, const ImageProperties& Props, Span<ByteSpan> InitData)
+rndr::Image* rndr::GraphicsContext::CreateCubeMap(int Width,
+                                                  int Height,
+                                                  const ImageProperties& Props,
+                                                  Span<ByteSpan> InitData)
 {
     Image* Im = RNDR_NEW(Image, "rndr::GraphicsContext: CubeMap");
     if (!Im || !Im->InitCubeMap(this, Width, Height, Props, InitData))
@@ -280,7 +290,8 @@ rndr::Sampler* rndr::GraphicsContext::CreateSampler(const SamplerProperties& Pro
     return S;
 }
 
-rndr::Buffer* rndr::GraphicsContext::CreateBuffer(const BufferProperties& Props, ByteSpan InitialData)
+rndr::Buffer* rndr::GraphicsContext::CreateBuffer(const BufferProperties& Props,
+                                                  ByteSpan InitialData)
 {
     Buffer* Buff = RNDR_NEW(Buffer, "rndr::GraphicsContext: Buffer");
     if (!Buff || !Buff->Init(this, Props, InitialData))
@@ -290,7 +301,9 @@ rndr::Buffer* rndr::GraphicsContext::CreateBuffer(const BufferProperties& Props,
     return Buff;
 }
 
-rndr::FrameBuffer* rndr::GraphicsContext::CreateFrameBuffer(int Width, int Height, const FrameBufferProperties& Props)
+rndr::FrameBuffer* rndr::GraphicsContext::CreateFrameBuffer(int Width,
+                                                            int Height,
+                                                            const FrameBufferProperties& Props)
 {
     FrameBuffer* FB = RNDR_NEW(FrameBuffer, "rndr::GraphicsContext: FrameBuffer");
     if (!FB || !FB->Init(this, Width, Height, Props))
@@ -300,7 +313,9 @@ rndr::FrameBuffer* rndr::GraphicsContext::CreateFrameBuffer(int Width, int Heigh
     return FB;
 }
 
-rndr::FrameBuffer* rndr::GraphicsContext::CreateFrameBufferForSwapChain(int Width, int Height, SwapChain* SwapChain)
+rndr::FrameBuffer* rndr::GraphicsContext::CreateFrameBufferForSwapChain(int Width,
+                                                                        int Height,
+                                                                        SwapChain* SwapChain)
 {
     FrameBuffer* FB = RNDR_NEW(FrameBuffer, "rndr::GraphicsContext: FrameBuffer");
     if (!FB || !FB->InitForSwapChain(this, Width, Height, SwapChain))
@@ -310,7 +325,8 @@ rndr::FrameBuffer* rndr::GraphicsContext::CreateFrameBufferForSwapChain(int Widt
     return FB;
 }
 
-rndr::InputLayout* rndr::GraphicsContext::CreateInputLayout(Span<InputLayoutProperties> Props, Shader* Shader)
+rndr::InputLayout* rndr::GraphicsContext::CreateInputLayout(Span<InputLayoutProperties> Props,
+                                                            Shader* Shader)
 {
     InputLayout* Layout = RNDR_NEW(InputLayout, "rndr::GraphicsContext: InputLayout");
     if (!Layout || !Layout->Init(this, Props, Shader))
@@ -320,7 +336,8 @@ rndr::InputLayout* rndr::GraphicsContext::CreateInputLayout(Span<InputLayoutProp
     return Layout;
 }
 
-rndr::RasterizerState* rndr::GraphicsContext::CreateRasterizerState(const RasterizerProperties& Props)
+rndr::RasterizerState* rndr::GraphicsContext::CreateRasterizerState(
+    const RasterizerProperties& Props)
 {
     RasterizerState* State = RNDR_NEW(RasterizerState, "rndr::GraphicsContext: RasterizerState");
     if (!State || !State->Init(this, Props))
@@ -330,9 +347,11 @@ rndr::RasterizerState* rndr::GraphicsContext::CreateRasterizerState(const Raster
     return State;
 }
 
-rndr::DepthStencilState* rndr::GraphicsContext::CreateDepthStencilState(const DepthStencilProperties& Props)
+rndr::DepthStencilState* rndr::GraphicsContext::CreateDepthStencilState(
+    const DepthStencilProperties& Props)
 {
-    DepthStencilState* State = RNDR_NEW(DepthStencilState, "rndr::GraphicsContext: DepthStencilState");
+    DepthStencilState* State =
+        RNDR_NEW(DepthStencilState, "rndr::GraphicsContext: DepthStencilState");
     if (!State || !State->Init(this, Props))
     {
         RNDR_DELETE(DepthStencilState, State);
@@ -392,7 +411,8 @@ void rndr::GraphicsContext::ClearDepth(Image* Image, real Depth)
         RNDR_LOG_ERROR("GraphicsContext::ClearDepth: Invalid image!");
         return;
     }
-    m_DeviceContext->ClearDepthStencilView(Image->DX11DepthStencilView, D3D11_CLEAR_DEPTH, Depth, 0);
+    m_DeviceContext->ClearDepthStencilView(Image->DX11DepthStencilView, D3D11_CLEAR_DEPTH, Depth,
+                                           0);
 }
 
 void rndr::GraphicsContext::ClearStencil(Image* Image, uint8_t Stencil)
@@ -402,7 +422,8 @@ void rndr::GraphicsContext::ClearStencil(Image* Image, uint8_t Stencil)
         RNDR_LOG_ERROR("GraphicsContext::ClearStencil: Invalid image!");
         return;
     }
-    m_DeviceContext->ClearDepthStencilView(Image->DX11DepthStencilView, D3D11_CLEAR_STENCIL, 0, Stencil);
+    m_DeviceContext->ClearDepthStencilView(Image->DX11DepthStencilView, D3D11_CLEAR_STENCIL, 0,
+                                           Stencil);
 }
 
 void rndr::GraphicsContext::ClearDepthStencil(Image* Image, real Depth, uint8_t Stencil)
@@ -412,7 +433,8 @@ void rndr::GraphicsContext::ClearDepthStencil(Image* Image, real Depth, uint8_t 
         RNDR_LOG_ERROR("GraphicsContext::ClearDepthStencil: Invalid image!");
         return;
     }
-    m_DeviceContext->ClearDepthStencilView(Image->DX11DepthStencilView, D3D11_CLEAR_DEPTH | D3D11_CLEAR_STENCIL, Depth, Stencil);
+    m_DeviceContext->ClearDepthStencilView(Image->DX11DepthStencilView,
+                                           D3D11_CLEAR_DEPTH | D3D11_CLEAR_STENCIL, Depth, Stencil);
 }
 
 void rndr::GraphicsContext::BindShader(Shader* Shader)
@@ -514,7 +536,8 @@ void rndr::GraphicsContext::BindBuffer(Buffer* Buffer, int Slot, Shader* Shader)
     if (Buffer->Props.Type == BufferType::Index)
     {
         assert(Buffer->Props.Stride == 4 || Buffer->Props.Stride == 2);
-        DXGI_FORMAT Format = Buffer->Props.Stride == 4 ? DXGI_FORMAT_R32_UINT : DXGI_FORMAT_R16_UINT;
+        DXGI_FORMAT Format =
+            Buffer->Props.Stride == 4 ? DXGI_FORMAT_R32_UINT : DXGI_FORMAT_R16_UINT;
         m_DeviceContext->IASetIndexBuffer(Buffer->DX11Buffer, Format, 0);
     }
     else
@@ -534,7 +557,8 @@ void rndr::GraphicsContext::BindFrameBuffer(FrameBuffer* FrameBuffer)
     }
 
     ID3D11DepthStencilView* DepthStencilView =
-        FrameBuffer->DepthStencilBuffer ? FrameBuffer->DepthStencilBuffer->DX11DepthStencilView : nullptr;
+        FrameBuffer->DepthStencilBuffer ? FrameBuffer->DepthStencilBuffer->DX11DepthStencilView
+                                        : nullptr;
     std::vector<ID3D11RenderTargetView*> RenderTargetViews;
     const int RenderTargetCount = FrameBuffer->ColorBuffers.Size;
     RenderTargetViews.resize(RenderTargetCount);
@@ -544,7 +568,8 @@ void rndr::GraphicsContext::BindFrameBuffer(FrameBuffer* FrameBuffer)
         RenderTargetViews[i] = FrameBuffer->ColorBuffers[i]->DX11RenderTargetView;
     }
 
-    m_DeviceContext->OMSetRenderTargets(RenderTargetCount, RenderTargetViews.data(), DepthStencilView);
+    m_DeviceContext->OMSetRenderTargets(RenderTargetCount, RenderTargetViews.data(),
+                                        DepthStencilView);
     m_DeviceContext->RSSetViewports(1, &FrameBuffer->DX11Viewport);
 }
 
@@ -560,7 +585,8 @@ void rndr::GraphicsContext::BindRasterizerState(RasterizerState* State)
 
 void rndr::GraphicsContext::BindDepthStencilState(DepthStencilState* State)
 {
-    m_DeviceContext->OMSetDepthStencilState(State->DX11DepthStencilState, State->Props.StencilRefValue);
+    m_DeviceContext->OMSetDepthStencilState(State->DX11DepthStencilState,
+                                            State->Props.StencilRefValue);
 }
 
 void rndr::GraphicsContext::BindBlendState(BlendState* State)
@@ -591,10 +617,13 @@ void rndr::GraphicsContext::DrawIndexedInstanced(PrimitiveTopology Topology,
                                                  int InstanceOffset)
 {
     m_DeviceContext->IASetPrimitiveTopology(DX11FromPrimitiveTopology(Topology));
-    m_DeviceContext->DrawIndexedInstanced(IndexCount, InstanceCount, IndexOffset, 0, InstanceOffset);
+    m_DeviceContext->DrawIndexedInstanced(IndexCount, InstanceCount, IndexOffset, 0,
+                                          InstanceOffset);
 }
 
-void rndr::GraphicsContext::Dispatch(const uint32_t ThreadGroupCountX, const uint32_t ThreadGroupCountY, const uint32_t ThreadGroupCountZ)
+void rndr::GraphicsContext::Dispatch(const uint32_t ThreadGroupCountX,
+                                     const uint32_t ThreadGroupCountY,
+                                     const uint32_t ThreadGroupCountZ)
 {
     m_DeviceContext->Dispatch(ThreadGroupCountX, ThreadGroupCountY, ThreadGroupCountZ);
 }
@@ -607,7 +636,9 @@ bool rndr::GraphicsContext::SubmitCommandList(CommandList* List)
     }
     if (!List->IsFinished())
     {
-        RNDR_LOG_ERROR("GraphicsContext::SubmitCommandList: User didn't call Finish on the CommandList object!");
+        RNDR_LOG_ERROR(
+            "GraphicsContext::SubmitCommandList: User didn't call Finish on the CommandList "
+            "object!");
         return false;
     }
     m_DeviceContext->ExecuteCommandList(List->DX11CommandList, false);

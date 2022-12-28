@@ -116,8 +116,12 @@ private:
 
 }  // namespace rndr
 
-#define RNDR_NEW(Type, Tag, ...) rndr::New<Type>(rndr::GRndrContext->GetAllocator(), Tag, __FILE__, __LINE__, __VA_ARGS__)
-#define RNDR_NEW_ARRAY(Type, Count, Tag, ...) rndr::NewArray<Type>(rndr::GRndrContext->GetAllocator(), Count, Tag, __FILE__, __LINE__)
+#define RNDR_NEW(Type, Tag, ...) \
+    rndr::New<Type>(rndr::GRndrContext->GetAllocator(), Tag, __FILE__, __LINE__, __VA_ARGS__)
+#define RNDR_NEW_ARRAY(Type, Count, Tag, ...) \
+    rndr::NewArray<Type>(rndr::GRndrContext->GetAllocator(), Count, Tag, __FILE__, __LINE__)
 
-#define RNDR_DELETE(Type, Ptr) rndr::Delete<Type>(rndr::GRndrContext->GetAllocator(), Ptr), Ptr = nullptr
-#define RNDR_DELETE_ARRAY(Type, Ptr, Count) rndr::DeleteArray<Type>(rndr::GRndrContext->GetAllocator(), Ptr, Count), Ptr = nullptr
+#define RNDR_DELETE(Type, Ptr) \
+    rndr::Delete<Type>(rndr::GRndrContext->GetAllocator(), Ptr), Ptr = nullptr
+#define RNDR_DELETE_ARRAY(Type, Ptr, Count) \
+    rndr::DeleteArray<Type>(rndr::GRndrContext->GetAllocator(), Ptr, Count), Ptr = nullptr

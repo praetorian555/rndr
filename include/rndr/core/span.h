@@ -12,7 +12,10 @@ struct Span
 {
     Span() : Data(nullptr), Size(0) {}
     Span(T* Data, size_t Size) : Data(Data), Size(Size) {}
-    explicit Span(const std::vector<T>& Vec) : Data(reinterpret_cast<T*>(Vec.data())), Size(Vec.size()) {}
+    explicit Span(const std::vector<T>& Vec)
+        : Data(reinterpret_cast<T*>(Vec.data())), Size(Vec.size())
+    {
+    }
 
     template <typename U>
     explicit Span(std::vector<U>& Vec)

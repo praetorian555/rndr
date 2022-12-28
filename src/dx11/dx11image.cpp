@@ -18,7 +18,11 @@
 #include "rndr/render/dx11/dx11helpers.h"
 #include "rndr/render/dx11/dx11swapchain.h"
 
-bool rndr::Image::Init(GraphicsContext* Context, int Width, int Height, const ImageProperties& Props, ByteSpan InitData)
+bool rndr::Image::Init(GraphicsContext* Context,
+                       int Width,
+                       int Height,
+                       const ImageProperties& Props,
+                       ByteSpan InitData)
 {
     this->Props = Props;
     this->Width = Width;
@@ -55,7 +59,8 @@ bool rndr::Image::InitArray(GraphicsContext* Context,
     }
     if (InitData && InitData.Size != ArraySize)
     {
-        RNDR_LOG_ERROR("Image::InitArray: There is init data but the size doesn't match the array size!");
+        RNDR_LOG_ERROR(
+            "Image::InitArray: There is init data but the size doesn't match the array size!");
         return false;
     }
     if (Width == 0 || Height == 0)
@@ -67,7 +72,11 @@ bool rndr::Image::InitArray(GraphicsContext* Context,
     return InitInternal(Context, InitData);
 }
 
-bool rndr::Image::InitCubeMap(GraphicsContext* Context, int Width, int Height, const ImageProperties& Props, Span<ByteSpan> InitData)
+bool rndr::Image::InitCubeMap(GraphicsContext* Context,
+                              int Width,
+                              int Height,
+                              const ImageProperties& Props,
+                              Span<ByteSpan> InitData)
 {
     this->Props = Props;
     this->Width = Width;
@@ -76,7 +85,8 @@ bool rndr::Image::InitCubeMap(GraphicsContext* Context, int Width, int Height, c
 
     if (InitData && InitData.Size != this->ArraySize)
     {
-        RNDR_LOG_ERROR("Image::InitCubeMap: There is init data but the size doesn't match the array size!");
+        RNDR_LOG_ERROR(
+            "Image::InitCubeMap: There is init data but the size doesn't match the array size!");
         return false;
     }
     if (Width == 0 || Height == 0)
@@ -88,7 +98,9 @@ bool rndr::Image::InitCubeMap(GraphicsContext* Context, int Width, int Height, c
     return InitInternal(Context, InitData, true);
 }
 
-bool rndr::Image::InitSwapchainBackBuffer(GraphicsContext* Context, rndr::SwapChain* SwapChain, int BufferIndex)
+bool rndr::Image::InitSwapchainBackBuffer(GraphicsContext* Context,
+                                          rndr::SwapChain* SwapChain,
+                                          int BufferIndex)
 {
     this->Props.bUseMips = false;
     this->Props.SampleCount = 1;
@@ -103,7 +115,10 @@ bool rndr::Image::InitSwapchainBackBuffer(GraphicsContext* Context, rndr::SwapCh
     return InitInternal(Context, Span<ByteSpan>{}, false, SwapChain);
 }
 
-bool rndr::Image::InitInternal(GraphicsContext* Context, Span<ByteSpan> InitData, bool bCubeMap, SwapChain* SwapChain)
+bool rndr::Image::InitInternal(GraphicsContext* Context,
+                               Span<ByteSpan> InitData,
+                               bool bCubeMap,
+                               SwapChain* SwapChain)
 {
     D3D11_TEXTURE2D_DESC Desc;
     ZeroMemory(&Desc, sizeof(D3D11_TEXTURE2D_DESC));
@@ -150,7 +165,8 @@ bool rndr::Image::InitInternal(GraphicsContext* Context, Span<ByteSpan> InitData
     }
     else
     {
-        Result = SwapChain->DX11SwapChain->GetBuffer(BackBufferIndex, __uuidof(ID3D11Texture2D), (LPVOID*)&DX11Texture);
+        Result = SwapChain->DX11SwapChain->GetBuffer(BackBufferIndex, __uuidof(ID3D11Texture2D),
+                                                     (LPVOID*)&DX11Texture);
         if (Context->WindowsHasFailed(Result))
         {
             const std::string ErrorMessage = Context->WindowsGetErrorMessage(Result);
@@ -198,7 +214,8 @@ bool rndr::Image::InitInternal(GraphicsContext* Context, Span<ByteSpan> InitData
             ResourceDesc.ViewDimension = D3D11_SRV_DIMENSION_TEXTURECUBE;
             ResourceDesc.TextureCube.MipLevels = Props.bUseMips ? -1 : 1;
         }
-        Result = Device->CreateShaderResourceView(DX11Texture, &ResourceDesc, &DX11ShaderResourceView);
+        Result =
+            Device->CreateShaderResourceView(DX11Texture, &ResourceDesc, &DX11ShaderResourceView);
         if (Context->WindowsHasFailed(Result))
         {
             std::string ErrorMessage = Context->WindowsGetErrorMessage(Result);
@@ -336,7 +353,8 @@ bool rndr::Image::Update(GraphicsContext* Context,
     if (Props.Usage == Usage::Dynamic)
     {
         D3D11_MAPPED_SUBRESOURCE Subresource;
-        HRESULT Result = DeviceContext->Map(DX11Texture, SubresourceIndex, D3D11_MAP_WRITE_DISCARD, 0, &Subresource);
+        HRESULT Result = DeviceContext->Map(DX11Texture, SubresourceIndex, D3D11_MAP_WRITE_DISCARD,
+                                            0, &Subresource);
         if (Context->WindowsHasFailed(Result))
         {
             std::string ErrorMessage = Context->WindowsGetErrorMessage(Result);
@@ -346,8 +364,8 @@ bool rndr::Image::Update(GraphicsContext* Context,
 
         for (int i = 0; i < Size.Y; i++)
         {
-            memcpy((uint8_t*)Subresource.pData + i * Subresource.RowPitch, Contents.Data + i * (int)Size.X * PixelSize,
-                   (int)Size.X * PixelSize);
+            memcpy((uint8_t*)Subresource.pData + i * Subresource.RowPitch,
+                   Contents.Data + i * (int)Size.X * PixelSize, (int)Size.X * PixelSize);
         }
 
         DeviceContext->Unmap(DX11Texture, ArrayIndex);
@@ -374,7 +392,8 @@ bool rndr::Image::Update(GraphicsContext* Context,
     DestRegionPtr = &DestRegion;
     const int BoxWidth = End.X - Start.X;
 
-    DeviceContext->UpdateSubresource(DX11Texture, SubresourceIndex, DestRegionPtr, Contents.Data, BoxWidth * PixelSize, 0);
+    DeviceContext->UpdateSubresource(DX11Texture, SubresourceIndex, DestRegionPtr, Contents.Data,
+                                     BoxWidth * PixelSize, 0);
     if (Context->WindowsHasFailed())
     {
         std::string ErrorMessage = Context->WindowsGetErrorMessage();
@@ -435,7 +454,8 @@ bool rndr::Image::Read(GraphicsContext* Context,
     }
 
     D3D11_MAPPED_SUBRESOURCE Subresource;
-    HRESULT Result = DeviceContext->Map(DX11Texture, SubresourceIndex, D3D11_MAP_READ, 0, &Subresource);
+    HRESULT Result =
+        DeviceContext->Map(DX11Texture, SubresourceIndex, D3D11_MAP_READ, 0, &Subresource);
     if (Context->WindowsHasFailed(Result))
     {
         std::string ErrorMessage = Context->WindowsGetErrorMessage(Result);
@@ -445,8 +465,8 @@ bool rndr::Image::Read(GraphicsContext* Context,
 
     for (int i = 0; i < Size.Y; i++)
     {
-        memcpy(OutContents.Data + i * (int)Size.X * PixelSize, (uint8_t*)Subresource.pData + i * Subresource.RowPitch,
-               (int)Size.X * PixelSize);
+        memcpy(OutContents.Data + i * (int)Size.X * PixelSize,
+               (uint8_t*)Subresource.pData + i * Subresource.RowPitch, (int)Size.X * PixelSize);
     }
 
     DeviceContext->Unmap(DX11Texture, ArrayIndex);

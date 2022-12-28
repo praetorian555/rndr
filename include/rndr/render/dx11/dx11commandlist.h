@@ -54,9 +54,15 @@ public:
     void BindBlendState(BlendState* State);
 
     void DrawIndexed(PrimitiveTopology Topology, int IndicesCount);
-    void DrawIndexedInstanced(PrimitiveTopology Topology, int IndexCount, int InstanceCount, int IndexOffset = 0, int InstanceOffset = 0);
+    void DrawIndexedInstanced(PrimitiveTopology Topology,
+                              int IndexCount,
+                              int InstanceCount,
+                              int IndexOffset = 0,
+                              int InstanceOffset = 0);
 
-    void Dispatch(const uint32_t ThreadGroupCountX, const uint32_t ThreadGroupCountY, const uint32_t ThreadGroupCountZ);
+    void Dispatch(const uint32_t ThreadGroupCountX,
+                  const uint32_t ThreadGroupCountY,
+                  const uint32_t ThreadGroupCountZ);
 };
 
 }  // namespace rndr
