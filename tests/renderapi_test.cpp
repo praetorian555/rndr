@@ -87,7 +87,7 @@ TEST_CASE("Image", "RenderAPI")
     SECTION("Use as depth stencil texture")
     {
         rndr::ImageProperties ImageProps;
-        ImageProps.PixelFormat = rndr::PixelFormat::DEPTH24_STENCIL8;
+        ImageProps.PixelFormat = rndr::PixelFormat::D24_UNORM_S8_UINT;
         ImageProps.ImageBindFlags = rndr::ImageBindFlags::DepthStencil;
         rndr::ScopePtr<rndr::Image> Image = Ctx->CreateImage(100, 400, ImageProps, rndr::ByteSpan{});
         REQUIRE(Image.IsValid());
@@ -140,7 +140,7 @@ TEST_CASE("Image", "RenderAPI")
     {
         rndr::ImageProperties ImageProps;
         ImageProps.SampleCount = 8;
-        ImageProps.PixelFormat = rndr::PixelFormat::DEPTH24_STENCIL8;
+        ImageProps.PixelFormat = rndr::PixelFormat::D24_UNORM_S8_UINT;
         ImageProps.ImageBindFlags = rndr::ImageBindFlags::DepthStencil;
         rndr::ScopePtr<rndr::Image> Image = Ctx->CreateImage(100, 400, ImageProps, rndr::ByteSpan{});
         REQUIRE(Image.IsValid());
@@ -199,7 +199,7 @@ TEST_CASE("ImageArray", "RenderAPI")
     SECTION("Use as depth stencil texture")
     {
         rndr::ImageProperties ImageProps;
-        ImageProps.PixelFormat = rndr::PixelFormat::DEPTH24_STENCIL8;
+        ImageProps.PixelFormat = rndr::PixelFormat::D24_UNORM_S8_UINT;
         ImageProps.ImageBindFlags = rndr::ImageBindFlags::DepthStencil;
         rndr::ScopePtr<rndr::Image> Image = Ctx->CreateImageArray(Width, Height, ArraySize, ImageProps, EmptyData);
         REQUIRE(Image.IsValid());
@@ -245,7 +245,7 @@ TEST_CASE("ImageArray", "RenderAPI")
     {
         rndr::ImageProperties ImageProps;
         ImageProps.SampleCount = 8;
-        ImageProps.PixelFormat = rndr::PixelFormat::DEPTH24_STENCIL8;
+        ImageProps.PixelFormat = rndr::PixelFormat::D24_UNORM_S8_UINT;
         ImageProps.ImageBindFlags = rndr::ImageBindFlags::DepthStencil;
         rndr::ScopePtr<rndr::Image> Image = Ctx->CreateImageArray(Width, Height, ArraySize, ImageProps, EmptyData);
         REQUIRE(Image.IsValid());
@@ -298,7 +298,7 @@ TEST_CASE("CubeMap", "RenderAPI")
     SECTION("Use as depth stencil texture")
     {
         rndr::ImageProperties ImageProps;
-        ImageProps.PixelFormat = rndr::PixelFormat::DEPTH24_STENCIL8;
+        ImageProps.PixelFormat = rndr::PixelFormat::D24_UNORM_S8_UINT;
         ImageProps.ImageBindFlags = rndr::ImageBindFlags::DepthStencil;
         rndr::ScopePtr<rndr::Image> Image = Ctx->CreateCubeMap(Width, Height, ImageProps, EmptyData);
         REQUIRE(Image.IsValid());
@@ -321,7 +321,7 @@ TEST_CASE("CubeMap", "RenderAPI")
     SECTION("Unordered Access")
     {
         rndr::ImageProperties ImageProps;
-        ImageProps.PixelFormat = rndr::PixelFormat::R8G8B8A8_TYPELESS;
+        ImageProps.PixelFormat = rndr::PixelFormat::R32_TYPELESS;
         ImageProps.ImageBindFlags = rndr::ImageBindFlags::UnorderedAccess;
         rndr::ScopePtr<rndr::Image> Image = Ctx->CreateCubeMap(Width, Height, ImageProps, EmptyData);
         REQUIRE(Image.IsValid());

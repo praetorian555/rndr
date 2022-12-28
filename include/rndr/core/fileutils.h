@@ -13,7 +13,7 @@ struct CPUImage
 {
     int Width = 0;
     int Height = 0;
-    PixelFormat Format = PixelFormat::R8G8B8A8_TYPELESS;
+    PixelFormat Format = PixelFormat::R32_TYPELESS;
     ByteSpan Data;
 };
 

@@ -4,72 +4,47 @@
 
 DXGI_FORMAT rndr::DX11FromPixelFormat(PixelFormat Format)
 {
-    switch (Format)
-    {
-        case PixelFormat::R8G8B8A8_TYPELESS:
-            return DXGI_FORMAT_R8G8B8A8_TYPELESS;
-        case PixelFormat::R8_UNORM:
-            return DXGI_FORMAT_R8_UNORM;
-        case PixelFormat::R8G8B8A8_UNORM:
-            return DXGI_FORMAT_R8G8B8A8_UNORM;
-        case PixelFormat::R8G8B8A8_UNORM_SRGB:
-            return DXGI_FORMAT_R8G8B8A8_UNORM_SRGB;
-        case PixelFormat::B8G8R8A8_UNORM:
-            return DXGI_FORMAT_B8G8R8A8_UNORM;
-        case PixelFormat::B8G8R8A8_UNORM_SRGB:
-            return DXGI_FORMAT_B8G8R8A8_UNORM_SRGB;
-        case PixelFormat::DEPTH24_STENCIL8:
-            return DXGI_FORMAT_D24_UNORM_S8_UINT;
-        case PixelFormat::R32G32B32A32_FLOAT:
-            return DXGI_FORMAT_R32G32B32A32_FLOAT;
-        case PixelFormat::R32G32B32_FLOAT:
-            return DXGI_FORMAT_R32G32B32_FLOAT;
-        case PixelFormat::R32G32_FLOAT:
-            return DXGI_FORMAT_R32G32_FLOAT;
-        case PixelFormat::R32_FLOAT:
-            return DXGI_FORMAT_R32_FLOAT;
-        default:
-        {
-            assert(false);
-        }
-    }
+    // clang-format off
+    static DXGI_FORMAT s_Array[] = {
+        DXGI_FORMAT_R8G8B8A8_UNORM,
+        DXGI_FORMAT_R8G8B8A8_UNORM_SRGB,
+        DXGI_FORMAT_R8G8B8A8_UINT,
+        DXGI_FORMAT_R8G8B8A8_SNORM,
+        DXGI_FORMAT_R8G8B8A8_SINT,
+        DXGI_FORMAT_B8G8R8A8_UNORM,
+        DXGI_FORMAT_B8G8R8A8_UNORM_SRGB,
 
-    return DXGI_FORMAT_R8G8B8A8_UNORM;
-}
+        DXGI_FORMAT_D24_UNORM_S8_UINT,
 
-rndr::PixelFormat rndr::DX11ToPixelFormat(DXGI_FORMAT Format)
-{
-    switch (Format)
-    {
-        case DXGI_FORMAT_R8G8B8A8_TYPELESS:
-            return PixelFormat::R8G8B8A8_TYPELESS;
-        case DXGI_FORMAT_R8_UNORM:
-            return PixelFormat::R8_UNORM;
-        case DXGI_FORMAT_R8G8B8A8_UNORM:
-            return PixelFormat::R8G8B8A8_UNORM;
-        case DXGI_FORMAT_R8G8B8A8_UNORM_SRGB:
-            return PixelFormat::R8G8B8A8_UNORM_SRGB;
-        case DXGI_FORMAT_B8G8R8A8_UNORM:
-            return PixelFormat::B8G8R8A8_UNORM;
-        case DXGI_FORMAT_B8G8R8A8_UNORM_SRGB:
-            return PixelFormat::B8G8R8A8_UNORM_SRGB;
-        case DXGI_FORMAT_D24_UNORM_S8_UINT:
-            return PixelFormat::DEPTH24_STENCIL8;
-        case DXGI_FORMAT_R32G32B32A32_FLOAT:
-            return PixelFormat::R32G32B32A32_FLOAT;
-        case DXGI_FORMAT_R32G32B32_FLOAT:
-            return PixelFormat::R32G32B32_FLOAT;
-        case DXGI_FORMAT_R32G32_FLOAT:
-            return PixelFormat::R32G32_FLOAT;
-        case DXGI_FORMAT_R32_FLOAT:
-            return PixelFormat::R32_FLOAT;
-        default:
-        {
-            assert(false);
-        }
-    }
+        DXGI_FORMAT_R8_UNORM,
+        DXGI_FORMAT_R8_UINT,
+        DXGI_FORMAT_R8_SNORM,
+        DXGI_FORMAT_R8_SINT,
 
-    return PixelFormat::R8G8B8A8_UNORM;
+        DXGI_FORMAT_R32G32B32A32_FLOAT,
+        DXGI_FORMAT_R32G32B32A32_UINT,
+        DXGI_FORMAT_R32G32B32A32_SINT,
+
+        DXGI_FORMAT_R32G32B32_FLOAT,
+        DXGI_FORMAT_R32G32B32_UINT,
+        DXGI_FORMAT_R32G32B32_SINT,
+
+        DXGI_FORMAT_R32G32_FLOAT,
+        DXGI_FORMAT_R32G32_UINT,
+        DXGI_FORMAT_R32G32_SINT,
+
+        DXGI_FORMAT_R32_FLOAT,
+        DXGI_FORMAT_R32_UINT,
+        DXGI_FORMAT_R32_SINT,
+
+        DXGI_FORMAT_R32_TYPELESS,
+        DXGI_FORMAT_R16_TYPELESS,
+    };
+    // clang-format on
+
+    static_assert(sizeof(s_Array) / sizeof(DXGI_FORMAT) == static_cast<size_t>(PixelFormat::Count));
+
+    return s_Array[static_cast<int>(Format)];
 }
 
 uint32_t rndr::DX11FromUsageToCPUAccess(rndr::Usage Usage)
@@ -384,12 +359,12 @@ D3D11_BLEND_OP rndr::DX11FromBlendOperator(BlendOperator Op)
 
 bool rndr::IsRenderTarget(PixelFormat Format)
 {
-    return Format != PixelFormat::DEPTH24_STENCIL8;
+    return Format != PixelFormat::D24_UNORM_S8_UINT;
 }
 
 bool rndr::IsDepthStencil(PixelFormat Format)
 {
-    return Format == PixelFormat::DEPTH24_STENCIL8;
+    return Format == PixelFormat::D24_UNORM_S8_UINT;
 }
 
 #endif  // RNDR_DX11
