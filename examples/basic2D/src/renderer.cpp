@@ -35,6 +35,7 @@ Renderer::Renderer(rndr::GraphicsContext* Ctx,
                            .AppendElement(0, "TEXCOORD", rndr::PixelFormat::R32G32_FLOAT)
                            .AppendElement(0, "COLOR", rndr::PixelFormat::R32G32B32A32_FLOAT)
                            .AppendElement(0, "PSIZE", rndr::PixelFormat::R32_FLOAT)
+                           .AppendElement(0, "PSIZE", rndr::PixelFormat::R32_FLOAT)
                            .Build(),
         .VertexShader = {.Type = rndr::ShaderType::Vertex, .EntryPoint = "Main"},
         .VertexShaderContents = VertexShaderContents,
@@ -51,6 +52,12 @@ Renderer::Renderer(rndr::GraphicsContext* Ctx,
     BufferProps.Type = rndr::BufferType::Vertex;
     m_InstanceBuffer = m_Ctx->CreateBuffer(BufferProps, rndr::ByteSpan{});
     assert(m_InstanceBuffer.IsValid());
+
+    BufferProps.Size = m_MaxInstances * sizeof(InstanceData);
+    BufferProps.Stride = sizeof(InstanceData);
+    BufferProps.Type = rndr::BufferType::Vertex;
+    m_ShadowBuffer = m_Ctx->CreateBuffer(BufferProps, rndr::ByteSpan{});
+    assert(m_ShadowBuffer.IsValid());
 
     ConstantData ConstData{m_ScreenSize};
     BufferProps.Size = sizeof(ConstantData);
@@ -144,15 +151,25 @@ void Renderer::RenderText(const std::string& Text,
         int LSB;
         stbtt_GetCodepointHMetrics(&F->TTInfo, CodePoint, &AdvanceWidth, &LSB);
 
-        InstanceData Quad;
-        Quad.Threshold = Props.Threshold;
-        Quad.Color = Props.Color;
-        Quad.TexBottomLeft = G.TexBottomLeft;
-        Quad.TexTopRight = G.TexTopRight;
-        Quad.BottomLeft =
+        InstanceData ShadowQuad;
+        ShadowQuad.ThresholdBottom = Props.ShadowThresholdBottom;
+        ShadowQuad.ThresholdTop = Props.ShadowThresholdTop;
+        ShadowQuad.Color = Props.ShadowColor;
+        ShadowQuad.TexBottomLeft = G.TexBottomLeft;
+        ShadowQuad.TexTopRight = G.TexTopRight;
+        ShadowQuad.BottomLeft =
             Cursor + math::Vector2{static_cast<float>(G.OffsetX), static_cast<float>(G.OffsetY)};
-        Quad.TopRight = Quad.BottomLeft +
-                        math::Vector2{static_cast<float>(G.Width), static_cast<float>(G.Height)};
+        ShadowQuad.TopRight = ShadowQuad.BottomLeft + math::Vector2{static_cast<float>(G.Width),
+                                                                    static_cast<float>(G.Height)};
+        if (Props.bShadow)
+        {
+            m_Shadows.push_back(ShadowQuad);
+        }
+
+        InstanceData Quad = ShadowQuad;
+        Quad.ThresholdBottom = Props.Threshold;
+        Quad.ThresholdTop = Props.Threshold;
+        Quad.Color = Props.Color;
         m_Instances.push_back(Quad);
 
         Cursor.X += std::roundf(G.Scale * AdvanceWidth);
@@ -165,7 +182,8 @@ void Renderer::RenderText(const std::string& Text,
 bool Renderer::Present(rndr::FrameBuffer* FrameBuffer)
 {
     m_InstanceBuffer->Update(m_Ctx, rndr::ByteSpan{m_Instances});
-    m_Ctx->BindBuffer(m_InstanceBuffer.Get(), 0);
+    m_ShadowBuffer->Update(m_Ctx, rndr::ByteSpan{m_Shadows});
+
     m_Ctx->BindBuffer(m_ConstantBuffer.Get(), 0, m_Pipeline->VertexShader.Get());
     m_Ctx->BindBuffer(m_ConstantBuffer.Get(), 0, m_Pipeline->PixelShader.Get());
     m_Ctx->BindBuffer(m_IndexBuffer.Get(), 0);
@@ -175,9 +193,14 @@ bool Renderer::Present(rndr::FrameBuffer* FrameBuffer)
     m_Ctx->BindPipeline(m_Pipeline.Get());
     m_Ctx->BindFrameBuffer(FrameBuffer);
 
+    m_Ctx->BindBuffer(m_ShadowBuffer.Get(), 0);
+    m_Ctx->DrawIndexedInstanced(rndr::PrimitiveTopology::TriangleList, 6, m_Shadows.size());
+
+    m_Ctx->BindBuffer(m_InstanceBuffer.Get(), 0);
     m_Ctx->DrawIndexedInstanced(rndr::PrimitiveTopology::TriangleList, 6, m_Instances.size());
 
     m_Instances.clear();
+    m_Shadows.clear();
     return true;
 }
 

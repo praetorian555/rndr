@@ -8,7 +8,12 @@
 struct TextProperties
 {
     math::Vector4 Color;
-    float Threshold = 0.7f;  // Value between [0, 1]. Higher value means skinnier text.
+    float Threshold = 0.7f;  // Value in range [0, 1]. Higher value means skinnier text.
+    
+    bool bShadow = true;
+    math::Vector4 ShadowColor = {0, 0, 0, 0x64 / 255.0f};
+    float ShadowThresholdBottom = 0.4f;  // Value in range [0, 1].
+    float ShadowThresholdTop = 0.7f; // Value in range [0, 1].
 };
 
 class Renderer
@@ -21,7 +26,8 @@ public:
         math::Point2 TexBottomLeft = math::Point2{0.0f, 0.0f};
         math::Point2 TexTopRight = math::Point2{1.0f, 1.0f};
         math::Vector4 Color;
-        float Threshold;
+        float ThresholdBottom;
+        float ThresholdTop;
     };
 
     RNDR_ALIGN(16) struct ConstantData
@@ -35,9 +41,7 @@ public:
     static constexpr int InvalidFontId = 0;
 
 public:
-    Renderer(rndr::GraphicsContext* Ctx,
-             int32_t MaxInstances,
-             const math::Vector2& ScreenSize);
+    Renderer(rndr::GraphicsContext* Ctx, int32_t MaxInstances, const math::Vector2& ScreenSize);
     ~Renderer() = default;
 
     bool AddFont(const std::string& FontName, const std::string& AssetPath);
@@ -67,6 +71,7 @@ private:
 
     rndr::ScopePtr<rndr::Pipeline> m_Pipeline;
     rndr::ScopePtr<rndr::Buffer> m_InstanceBuffer;
+    rndr::ScopePtr<rndr::Buffer> m_ShadowBuffer;
     rndr::ScopePtr<rndr::Buffer> m_ConstantBuffer;
     rndr::ScopePtr<rndr::Buffer> m_IndexBuffer;
     rndr::ScopePtr<rndr::Image> m_TextureAtlas;
@@ -76,6 +81,7 @@ private:
     math::Vector2 m_ScreenSize;
 
     std::vector<InstanceData> m_Instances;
+    std::vector<InstanceData> m_Shadows;
 
     std::unordered_map<std::string, Font> m_Fonts;
     std::unordered_map<int, Font> m_IdToFonts;

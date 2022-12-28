@@ -5,7 +5,8 @@ struct InstanceData
     float2 TexBottomLeft : TEXCOORD0;
     float2 TexTopRight : TEXCOORD1;
     float4 Color : COLOR;
-    float Threshold : PSIZE0;
+    float ThresholdBottom : PSIZE0;
+    float ThresholdTop : PSIZE1;
     uint VertexIndex : SV_VERTEXID;
 };
 
@@ -14,7 +15,8 @@ struct OutData
     float4 Position : SV_POSITION;
     float4 Color : COLOR;
     float2 TexCoords : TEXCOORD0;
-    float Threshold : PSIZE0;
+    float ThresholdBottom : PSIZE0;
+    float ThresholdTop : PSIZE1;
 };
 
 cbuffer Constants
@@ -59,7 +61,8 @@ OutData Main(InstanceData In)
     );
     Out.Color = In.Color;
     Out.TexCoords = TexCoords;
-    Out.Threshold = In.Threshold;
+    Out.ThresholdBottom = In.ThresholdBottom;
+    Out.ThresholdTop = In.ThresholdTop;
 
     return Out;
 }

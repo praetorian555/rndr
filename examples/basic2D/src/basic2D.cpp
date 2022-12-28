@@ -47,6 +47,11 @@ public:
             m_Renderer->RenderText("Liberation Sans, 16px!", "Liberation Sans", 16, {10, 300},
                                    Props);
 
+            Props.bShadow = false;
+            m_Renderer->RenderText("Liberation Sans, 16px!", "Liberation Sans", 16, {10, 270},
+                                   Props);
+            Props.bShadow = true;
+
             Props.Color = rndr::Colors::Blue;
             m_Renderer->RenderText("Liberation Sans, 24px!", "Liberation Sans", 24, {10, 250},
                                    Props);
@@ -55,7 +60,8 @@ public:
             m_Renderer->RenderText("Liberation Sans, 32px!", "Liberation Sans", 32, {10, 200},
                                    Props);
 
-            Props.Threshold = 0.67f;
+            Props.bShadow = true;
+            Props.Threshold = 0.68f;
             Props.Color = rndr::Colors::Yellow;
             m_Renderer->RenderText("Yu Mincho, 16px!", "Yu Mincho", 16, {10, 550}, Props);
 
