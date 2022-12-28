@@ -5,8 +5,7 @@
 class App
 {
 public:
-    constexpr static int MaxInstancesCount = 100;
-    constexpr static int MaxAtlasCount = 2;
+    constexpr static int MaxInstancesCount = 1000;
 
 public:
     App(int WindowWidth, int WindowHeight)
@@ -23,8 +22,8 @@ public:
         m_SwapChain = m_GraphicsCtx->CreateSwapChain(Handle, m_WindowWidth, m_WindowHeight);
         assert(m_SwapChain.IsValid());
 
-        m_Renderer = std::make_unique<Renderer>(m_GraphicsCtx.Get(), MaxInstancesCount,
-                                                MaxAtlasCount, GetScreenSize());
+        m_Renderer =
+            std::make_unique<Renderer>(m_GraphicsCtx.Get(), MaxInstancesCount, GetScreenSize());
         assert(m_Renderer.get());
 
         m_Renderer->AddFont("Liberation Sans", BASIC2D_ASSET_DIR "/LiberationSans-Regular.ttf");
@@ -45,13 +44,26 @@ public:
 
             TextProperties Props;
             Props.Color = rndr::Colors::Yellow;
-            Props.Smoothness = 0.1f;
-            m_Renderer->RenderText("Warning: This is a [DEBUG] build, performance will be slow!",
-                                   "Liberation Sans", 16, {100, 300}, Props);
+            m_Renderer->RenderText("Liberation Sans, 16px!", "Liberation Sans", 16, {10, 300},
+                                   Props);
 
-            Props.Color = rndr::Colors::Black;
-            Props.Smoothness = 0.1f;
-            m_Renderer->RenderText("FPS: 60", "Yu Mincho", 24, {10, 550}, Props);
+            Props.Color = rndr::Colors::Blue;
+            m_Renderer->RenderText("Liberation Sans, 24px!", "Liberation Sans", 24, {10, 250},
+                                   Props);
+
+            Props.Color = rndr::Colors::White;
+            m_Renderer->RenderText("Liberation Sans, 32px!", "Liberation Sans", 32, {10, 200},
+                                   Props);
+
+            Props.Threshold = 0.67f;
+            Props.Color = rndr::Colors::Yellow;
+            m_Renderer->RenderText("Yu Mincho, 16px!", "Yu Mincho", 16, {10, 550}, Props);
+
+            Props.Color = rndr::Colors::Yellow;
+            m_Renderer->RenderText("Yu Mincho, 24px!", "Yu Mincho", 24, {10, 500}, Props);
+
+            Props.Color = rndr::Colors::Yellow;
+            m_Renderer->RenderText("Yu Mincho, 32px!", "Yu Mincho", 32, {10, 450}, Props);
 
             m_Renderer->Present(m_SwapChain->FrameBuffer);
             m_GraphicsCtx->Present(m_SwapChain.Get(), true);

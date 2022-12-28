@@ -9,7 +9,6 @@ constexpr float PixelDistScale = static_cast<float>(OneEdgeValue) / static_cast<
 
 Renderer::Renderer(rndr::GraphicsContext* Ctx,
                    int32_t MaxInstances,
-                   int32_t MaxAtlasCount,
                    const math::Vector2& ScreenSize)
     : m_Ctx(Ctx),
       m_MaxInstances(MaxInstances),
@@ -35,7 +34,6 @@ Renderer::Renderer(rndr::GraphicsContext* Ctx,
                            .AppendElement(0, "TEXCOORD", rndr::PixelFormat::R32G32_FLOAT)
                            .AppendElement(0, "TEXCOORD", rndr::PixelFormat::R32G32_FLOAT)
                            .AppendElement(0, "COLOR", rndr::PixelFormat::R32G32B32A32_FLOAT)
-                           .AppendElement(0, "PSIZE", rndr::PixelFormat::R32_FLOAT)
                            .AppendElement(0, "PSIZE", rndr::PixelFormat::R32_FLOAT)
                            .Build(),
         .VertexShader = {.Type = rndr::ShaderType::Vertex, .EntryPoint = "Main"},
@@ -74,14 +72,15 @@ Renderer::Renderer(rndr::GraphicsContext* Ctx,
     std::vector<uint8_t> InitTextureData(AtlasWidth * AtlasHeight *
                                          rndr::GetPixelSize(AtlasProps.PixelFormat));
     memset(InitTextureData.data(), 0x00, InitTextureData.size());
-    std::vector<rndr::ByteSpan> InitData(MaxAtlasCount);
     m_TextureAtlas =
         m_Ctx->CreateImage(AtlasWidth, AtlasHeight, AtlasProps, rndr::ByteSpan(InitTextureData));
     assert(m_TextureAtlas.IsValid());
 
     rndr::SamplerProperties SamplerProps;
-    //SamplerProps.AddressingU = rndr::ImageAddressing::Clamp;
-    //SamplerProps.AddressingV = rndr::ImageAddressing::Clamp;
+    SamplerProps.AddressingU = rndr::ImageAddressing::Clamp;
+    SamplerProps.AddressingV = rndr::ImageAddressing::Clamp;
+    SamplerProps.AddressingW = rndr::ImageAddressing::Clamp;
+    SamplerProps.Filter = rndr::ImageFiltering::MinMagMipLinear;
     m_TextureAtlasSampler = m_Ctx->CreateSampler(SamplerProps);
     assert(m_TextureAtlasSampler.IsValid());
 
@@ -146,9 +145,7 @@ void Renderer::RenderText(const std::string& Text,
         stbtt_GetCodepointHMetrics(&F->TTInfo, CodePoint, &AdvanceWidth, &LSB);
 
         InstanceData Quad;
-        Quad.SDFThresholdTop =
-            math::Lerp(Props.Bolden, static_cast<float>(SDF::OneEdgeValue) / 255.0f, 0.0f);
-        Quad.SDFThresholdBottom = math::Lerp(Props.Smoothness, Quad.SDFThresholdTop, 0.0f);
+        Quad.Threshold = Props.Threshold;
         Quad.Color = Props.Color;
         Quad.TexBottomLeft = G.TexBottomLeft;
         Quad.TexTopRight = G.TexTopRight;

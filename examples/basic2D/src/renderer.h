@@ -8,8 +8,7 @@
 struct TextProperties
 {
     math::Vector4 Color;
-    float Bolden = 0.0f;      // Value between [0, 1].
-    float Smoothness = 0.0f;  // Value between [0, 1].
+    float Threshold = 0.7f;  // Value between [0, 1]. Higher value means skinnier text.
 };
 
 class Renderer
@@ -22,8 +21,7 @@ public:
         math::Point2 TexBottomLeft = math::Point2{0.0f, 0.0f};
         math::Point2 TexTopRight = math::Point2{1.0f, 1.0f};
         math::Vector4 Color;
-        float SDFThresholdBottom;
-        float SDFThresholdTop;
+        float Threshold;
     };
 
     RNDR_ALIGN(16) struct ConstantData
@@ -39,7 +37,6 @@ public:
 public:
     Renderer(rndr::GraphicsContext* Ctx,
              int32_t MaxInstances,
-             int32_t MaxAtlasCount,
              const math::Vector2& ScreenSize);
     ~Renderer() = default;
 
