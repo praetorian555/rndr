@@ -152,9 +152,10 @@ void AtlasPacker::Test()
     {
         AtlasPacker P(100, 100, SortCriteria::Height);
         std::vector<RectIn> InRects;
+        InRects.resize(16);
         for (int i = 0; i < 16; i++)
         {
-            InRects.push_back({{25, 25}, 0});
+            InRects[i] = {{25, 25}, 0};
         }
 
         std::vector<RectOut> OutRects = P.Pack(InRects);

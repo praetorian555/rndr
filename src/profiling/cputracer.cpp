@@ -73,11 +73,10 @@ void rndr::CpuTracer::AddTrace(const std::string& Name, int64_t StartUS, int64_t
     s_SpdLogger->info("{}", Trace);
 }
 
-rndr::CpuTrace::CpuTrace(const std::string& Name)
+rndr::CpuTrace::CpuTrace(const std::string& Name) : m_Name(Name)
 {
     const auto Timestamp = std::chrono::high_resolution_clock::now();
 
-    m_Name = Name;
     m_StartUS =
         std::chrono::duration_cast<std::chrono::microseconds>(Timestamp.time_since_epoch()).count();
 }

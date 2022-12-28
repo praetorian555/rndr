@@ -11,15 +11,36 @@
 #include "rndr/core/input.h"
 #include "rndr/core/log.h"
 
+// Missing virtual keys in the Windows API
+static enum WindowsVirtualKey : uint32_t {
+    VK_A = 0x41,
+    VK_W = 0x57,
+    VK_S = 0x53,
+    VK_E = 0x45,
+    VK_Q = 0x51,
+    VK_D = 0x44,
+    VK_I = 0x49,
+    VK_J = 0x4A,
+    VK_K = 0x4B,
+    VK_L = 0x4C,
+};
+
 static std::map<uint32_t, rndr::InputPrimitive> g_PrimitiveMapping = {
-    {0x41, rndr::InputPrimitive::Keyboard_A},   {0x57, rndr::InputPrimitive::Keyboard_W},
-    {0x53, rndr::InputPrimitive::Keyboard_S},   {0x45, rndr::InputPrimitive::Keyboard_E},
-    {0x51, rndr::InputPrimitive::Keyboard_Q},   {0x44, rndr::InputPrimitive::Keyboard_D},
-    {0x49, rndr::InputPrimitive::Keyboard_I},   {0x4A, rndr::InputPrimitive::Keyboard_J},
-    {0x4B, rndr::InputPrimitive::Keyboard_K},   {0x4C, rndr::InputPrimitive::Keyboard_L},
-    {0x1B, rndr::InputPrimitive::Keyboard_Esc}, {0x25, rndr::InputPrimitive::Keyboard_Left},
-    {0x26, rndr::InputPrimitive::Keyboard_Up},  {0x27, rndr::InputPrimitive::Keyboard_Right},
-    {0x28, rndr::InputPrimitive::Keyboard_Down}};
+    {VK_A, rndr::InputPrimitive::Keyboard_A},
+    {VK_W, rndr::InputPrimitive::Keyboard_W},
+    {VK_S, rndr::InputPrimitive::Keyboard_S},
+    {VK_E, rndr::InputPrimitive::Keyboard_E},
+    {VK_Q, rndr::InputPrimitive::Keyboard_Q},
+    {VK_D, rndr::InputPrimitive::Keyboard_D},
+    {VK_I, rndr::InputPrimitive::Keyboard_I},
+    {VK_J, rndr::InputPrimitive::Keyboard_J},
+    {VK_K, rndr::InputPrimitive::Keyboard_K},
+    {VK_L, rndr::InputPrimitive::Keyboard_L},
+    {VK_ESCAPE, rndr::InputPrimitive::Keyboard_Esc},
+    {VK_LEFT, rndr::InputPrimitive::Keyboard_Left},
+    {VK_UP, rndr::InputPrimitive::Keyboard_Up},
+    {VK_RIGHT, rndr::InputPrimitive::Keyboard_Right},
+    {VK_DOWN, rndr::InputPrimitive::Keyboard_Down}};
 
 // Defining window deleages
 

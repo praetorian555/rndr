@@ -31,17 +31,20 @@ int Font::MakeGlyphHash(int CodePoint, int SizeInPixels, int FontId)
 
 int Font::GetCodePointFromHash(int Hash)
 {
-    return (Hash & 0xFFFF0000) >> 16;
+    constexpr int CodePointMask = 0xFFFF0000;
+    return (Hash & CodePointMask) >> 16;
 }
 
 int Font::GetSizeInPixelsFromHash(int Hash)
 {
-    return (Hash & 0x0000FFC0) >> 6;
+    constexpr int SizeMask = 0x0000FFC0;
+    return (Hash & SizeMask) >> 6;
 }
 
 int Font::GetFontIdFromHash(int Hash)
 {
-    return Hash & 0x0000003F;
+    constexpr int FontIdMask = 0x0000003F;
+    return Hash & FontIdMask;
 }
 
 int Font::GenerateId()

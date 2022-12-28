@@ -4,9 +4,8 @@
 
 rndr::ProjectionCamera::ProjectionCamera(const math::Transform& WorldToCamera,
                                          const ProjectionCameraProperties& Props)
-    : m_WorldToCamera(WorldToCamera), m_Props(Props)
+    : m_WorldToCamera(WorldToCamera), m_CameraToWorld(m_WorldToCamera.GetInverse()), m_Props(Props)
 {
-    m_CameraToWorld = m_WorldToCamera.GetInverse();
     SetProperties(m_Props);
 }
 
