@@ -157,10 +157,11 @@ void Renderer::RenderText(const std::string& Text,
         ShadowQuad.Color = Props.ShadowColor;
         ShadowQuad.TexBottomLeft = G.TexBottomLeft;
         ShadowQuad.TexTopRight = G.TexTopRight;
-        ShadowQuad.BottomLeft =
-            Cursor + math::Vector2{static_cast<float>(G.OffsetX), static_cast<float>(G.OffsetY)};
-        ShadowQuad.TopRight = ShadowQuad.BottomLeft + math::Vector2{static_cast<float>(G.Width),
-                                                                    static_cast<float>(G.Height)};
+        ShadowQuad.BottomLeft = Cursor + math::Vector2{static_cast<float>(G.OffsetX) * Props.Scale,
+                                                       static_cast<float>(G.OffsetY) * Props.Scale};
+        ShadowQuad.TopRight =
+            ShadowQuad.BottomLeft + math::Vector2{static_cast<float>(G.Width) * Props.Scale,
+                                                  static_cast<float>(G.Height) * Props.Scale};
         if (Props.bShadow)
         {
             m_Shadows.push_back(ShadowQuad);
@@ -172,10 +173,10 @@ void Renderer::RenderText(const std::string& Text,
         Quad.Color = Props.Color;
         m_Instances.push_back(Quad);
 
-        Cursor.X += std::roundf(G.Scale * AdvanceWidth);
+        Cursor.X += std::roundf(G.Scale * AdvanceWidth * Props.Scale);
 
         int Kern = stbtt_GetCodepointKernAdvance(&F->TTInfo, CodePoint, Text[i + 1]);
-        Cursor.X += std::roundf(G.Scale * Kern);
+        Cursor.X += std::roundf(G.Scale * Kern * Props.Scale);
     }
 }
 

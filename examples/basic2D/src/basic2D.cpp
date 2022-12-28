@@ -44,26 +44,32 @@ public:
 
             TextProperties Props;
             Props.Color = rndr::Colors::Yellow;
-            m_Renderer->RenderText("Liberation Sans with shadow, 16px!", "Liberation Sans", 16, {10, 300},
-                                   Props);
+            m_Renderer->RenderText("Liberation Sans with shadow, 16px!", "Liberation Sans", 16,
+                                   {10, 300}, Props);
+
+            Props.Scale = 0.5f;
+            m_Renderer->RenderText("Liberation Sans with shadow, 32px, 0.5 scale!",
+                                   "Liberation Sans", 32, {10, 280}, Props);
+            Props.Scale = 1.0f;
 
             Props.bShadow = false;
-            m_Renderer->RenderText("Liberation Sans no shadow, 16px!", "Liberation Sans", 16, {10, 270},
-                                   Props);
+            m_Renderer->RenderText("Liberation Sans no shadow, 16px!", "Liberation Sans", 16,
+                                   {10, 260}, Props);
             Props.bShadow = true;
 
             Props.Color = rndr::Colors::Green;
-            m_Renderer->RenderText("Liberation Sans with shadow, 24px!", "Liberation Sans", 24, {10, 230},
-                                   Props);
+            m_Renderer->RenderText("Liberation Sans with shadow, 24px!", "Liberation Sans", 24,
+                                   {10, 200}, Props);
 
             Props.Color = rndr::Colors::White;
-            m_Renderer->RenderText("Liberation Sans with shadow, 32px!", "Liberation Sans", 32, {10, 200},
-                                   Props);
+            m_Renderer->RenderText("Liberation Sans with shadow, 32px!", "Liberation Sans", 32,
+                                   {10, 170}, Props);
 
             Props.bShadow = true;
             Props.Threshold = 0.68f;
             Props.Color = rndr::Colors::Yellow;
-            m_Renderer->RenderText("Yu Mincho with shadow, 16px!", "Yu Mincho", 16, {10, 550}, Props);
+            m_Renderer->RenderText("Yu Mincho with shadow, 16px!", "Yu Mincho", 16, {10, 550},
+                                   Props);
 
             Props.bShadow = false;
             Props.Color = rndr::Colors::Yellow;
@@ -71,7 +77,8 @@ public:
             Props.bShadow = true;
 
             Props.Color = rndr::Colors::Yellow;
-            m_Renderer->RenderText("Yu Mincho with shadow, 32px!", "Yu Mincho", 32, {10, 450}, Props);
+            m_Renderer->RenderText("Yu Mincho with shadow, 32px!", "Yu Mincho", 32, {10, 450},
+                                   Props);
 
             m_Renderer->Present(m_SwapChain->FrameBuffer);
             m_GraphicsCtx->Present(m_SwapChain.Get(), true);

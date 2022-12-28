@@ -7,6 +7,8 @@
 
 struct TextProperties
 {
+    float Scale = 1.0f;
+
     math::Vector4 Color;
     float Threshold = 0.7f;  // Value in range [0, 1]. Higher value means skinnier text.
     
