@@ -257,6 +257,16 @@ LRESULT CALLBACK WindowProc(HWND WindowHandle, UINT MsgCode, WPARAM ParamW, LPAR
 
             rndr::WindowDelegates::OnMousePositionDelegate.Execute(Window, X, Y);
 
+            // Notify the input system
+            rndr::InputSystem* IS = rndr::GRndrContext->GetInputSystem();
+            if (IS != nullptr)
+            {
+                const math::Point2 AbsolutePosition(X, Y);
+                const math::Vector2 ScreenSize(Window->GetWidth(), Window->GetHeight());
+                IS->SubmitMousePositionEvent(Window->GetNativeWindowHandle(), AbsolutePosition,
+                                             ScreenSize);
+            }
+
             if (Window->IsInfiniteCursor())
             {
                 RECT WindowRect;
@@ -274,54 +284,135 @@ LRESULT CALLBACK WindowProc(HWND WindowHandle, UINT MsgCode, WPARAM ParamW, LPAR
         {
             rndr::WindowDelegates::OnButtonDelegate.Execute(
                 Window, rndr::InputPrimitive::Mouse_LeftButton, rndr::InputTrigger::DoubleClick);
+
+            rndr::InputSystem* IS = rndr::GRndrContext->GetInputSystem();
+            if (IS != nullptr)
+            {
+                IS->SubmitButtonEvent(Window->GetNativeWindowHandle(),
+                                      rndr::InputPrimitive::Mouse_LeftButton,
+                                      rndr::InputTrigger::DoubleClick);
+            }
+
             break;
         }
         case WM_RBUTTONDBLCLK:
         {
             rndr::WindowDelegates::OnButtonDelegate.Execute(
                 Window, rndr::InputPrimitive::Mouse_RightButton, rndr::InputTrigger::DoubleClick);
+
+            rndr::InputSystem* IS = rndr::GRndrContext->GetInputSystem();
+            if (IS != nullptr)
+            {
+                IS->SubmitButtonEvent(Window->GetNativeWindowHandle(),
+                                      rndr::InputPrimitive::Mouse_RightButton,
+                                      rndr::InputTrigger::DoubleClick);
+            }
+
             break;
         }
         case WM_MBUTTONDBLCLK:
         {
             rndr::WindowDelegates::OnButtonDelegate.Execute(
                 Window, rndr::InputPrimitive::Mouse_MiddleButton, rndr::InputTrigger::DoubleClick);
+
+            rndr::InputSystem* IS = rndr::GRndrContext->GetInputSystem();
+            if (IS != nullptr)
+            {
+                IS->SubmitButtonEvent(Window->GetNativeWindowHandle(),
+                                      rndr::InputPrimitive::Mouse_MiddleButton,
+                                      rndr::InputTrigger::DoubleClick);
+            }
+
             break;
         }
         case WM_LBUTTONDOWN:
         {
             rndr::WindowDelegates::OnButtonDelegate.Execute(
                 Window, rndr::InputPrimitive::Mouse_LeftButton, rndr::InputTrigger::ButtonDown);
+
+            rndr::InputSystem* IS = rndr::GRndrContext->GetInputSystem();
+            if (IS != nullptr)
+            {
+                IS->SubmitButtonEvent(Window->GetNativeWindowHandle(),
+                                      rndr::InputPrimitive::Mouse_LeftButton,
+                                      rndr::InputTrigger::ButtonDown);
+            }
+
             break;
         }
         case WM_LBUTTONUP:
         {
             rndr::WindowDelegates::OnButtonDelegate.Execute(
                 Window, rndr::InputPrimitive::Mouse_LeftButton, rndr::InputTrigger::ButtonUp);
+
+            rndr::InputSystem* IS = rndr::GRndrContext->GetInputSystem();
+            if (IS != nullptr)
+            {
+                IS->SubmitButtonEvent(Window->GetNativeWindowHandle(),
+                                      rndr::InputPrimitive::Mouse_LeftButton,
+                                      rndr::InputTrigger::ButtonUp);
+            }
+
             break;
         }
         case WM_RBUTTONDOWN:
         {
             rndr::WindowDelegates::OnButtonDelegate.Execute(
                 Window, rndr::InputPrimitive::Mouse_RightButton, rndr::InputTrigger::ButtonDown);
+
+            rndr::InputSystem* IS = rndr::GRndrContext->GetInputSystem();
+            if (IS != nullptr)
+            {
+                IS->SubmitButtonEvent(Window->GetNativeWindowHandle(),
+                                      rndr::InputPrimitive::Mouse_RightButton,
+                                      rndr::InputTrigger::ButtonDown);
+            }
+
             break;
         }
         case WM_RBUTTONUP:
         {
             rndr::WindowDelegates::OnButtonDelegate.Execute(
                 Window, rndr::InputPrimitive::Mouse_RightButton, rndr::InputTrigger::ButtonUp);
+
+            rndr::InputSystem* IS = rndr::GRndrContext->GetInputSystem();
+            if (IS != nullptr)
+            {
+                IS->SubmitButtonEvent(Window->GetNativeWindowHandle(),
+                                      rndr::InputPrimitive::Mouse_RightButton,
+                                      rndr::InputTrigger::ButtonUp);
+            }
+
             break;
         }
         case WM_MBUTTONDOWN:
         {
             rndr::WindowDelegates::OnButtonDelegate.Execute(
                 Window, rndr::InputPrimitive::Mouse_MiddleButton, rndr::InputTrigger::ButtonDown);
+
+            rndr::InputSystem* IS = rndr::GRndrContext->GetInputSystem();
+            if (IS != nullptr)
+            {
+                IS->SubmitButtonEvent(Window->GetNativeWindowHandle(),
+                                      rndr::InputPrimitive::Mouse_MiddleButton,
+                                      rndr::InputTrigger::ButtonDown);
+            }
+
             break;
         }
         case WM_MBUTTONUP:
         {
             rndr::WindowDelegates::OnButtonDelegate.Execute(
                 Window, rndr::InputPrimitive::Mouse_MiddleButton, rndr::InputTrigger::ButtonUp);
+
+            rndr::InputSystem* IS = rndr::GRndrContext->GetInputSystem();
+            if (IS != nullptr)
+            {
+                IS->SubmitButtonEvent(Window->GetNativeWindowHandle(),
+                                      rndr::InputPrimitive::Mouse_MiddleButton,
+                                      rndr::InputTrigger::ButtonUp);
+            }
+
             break;
         }
         case WM_KEYDOWN:
@@ -337,12 +428,26 @@ LRESULT CALLBACK WindowProc(HWND WindowHandle, UINT MsgCode, WPARAM ParamW, LPAR
                                                    ? rndr::InputTrigger::ButtonDown
                                                    : rndr::InputTrigger::ButtonUp;
             rndr::WindowDelegates::OnButtonDelegate.Execute(Window, Primitive, Trigger);
+
+            rndr::InputSystem* IS = rndr::GRndrContext->GetInputSystem();
+            if (IS != nullptr)
+            {
+                IS->SubmitButtonEvent(Window->GetNativeWindowHandle(), Primitive, Trigger);
+            }
+
             break;
         }
         case WM_MOUSEWHEEL:
         {
             int DeltaWheel = GET_WHEEL_DELTA_WPARAM(ParamW);
             rndr::WindowDelegates::OnMouseWheelMovedDelegate.Execute(Window, DeltaWheel);
+
+            rndr::InputSystem* IS = rndr::GRndrContext->GetInputSystem();
+            if (IS != nullptr)
+            {
+                IS->SubmitMouseWheelEvent(Window->GetNativeWindowHandle(), DeltaWheel);
+            }
+
             break;
         }
     }

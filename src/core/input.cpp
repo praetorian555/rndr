@@ -1,54 +1,13 @@
 #include "rndr/core/input.h"
 
-#include <queue>
-
 #include "rndr/core/memory.h"
-#include "rndr/core/window.h"
 
 // InputSystem ////////////////////////////////////////////////////////////////////////////////////
-
-struct ButtonEvent
-{
-    rndr::Window* OriginWindow = nullptr;
-    rndr::InputPrimitive Primitive;
-    rndr::InputTrigger Trigger;
-};
-
-struct MousePositionEvent
-{
-    rndr::Window* OriginWindow = nullptr;
-    int X, Y;
-};
-
-struct MouseWheelEvent
-{
-    rndr::Window* OriginWindow = nullptr;
-    int DeltaWheel;
-};
-
-static std::queue<ButtonEvent> g_ButtonEvents;
-static std::queue<MousePositionEvent> g_MousePositionEvents;
-static std::queue<MouseWheelEvent> g_MouseWheelEvents;
 
 rndr::InputSystem::InputSystem()
 {
     assert(!m_Context);
     m_Context = RNDR_NEW(InputContext, "InputSystem: Default InputContext");
-
-    rndr::WindowDelegates::OnButtonDelegate.Add(
-        [this](rndr::Window* Win, rndr::InputPrimitive Primitive, rndr::InputTrigger Trigger) {
-            g_ButtonEvents.push(ButtonEvent{Win, Primitive, Trigger});
-        });
-
-    rndr::WindowDelegates::OnMousePositionDelegate.Add(
-        [this](rndr::Window* Win, int X, int Y) {
-            g_MousePositionEvents.push(MousePositionEvent{Win, X, Y});
-        });
-
-    rndr::WindowDelegates::OnMouseWheelMovedDelegate.Add(
-        [this](rndr::Window* Win, int DeltaWheel) {
-            g_MouseWheelEvents.push(MouseWheelEvent{Win, DeltaWheel});
-        });
 }
 
 rndr::InputSystem::~InputSystem()
@@ -56,92 +15,122 @@ rndr::InputSystem::~InputSystem()
     RNDR_DELETE(InputContext, m_Context);
 }
 
+void rndr::InputSystem::SubmitButtonEvent(NativeWindowHandle Window,
+                                          InputPrimitive Primitive,
+                                          InputTrigger Trigger)
+{
+    Event Evt{Window, ButtonEvent{Primitive, Trigger}};
+    m_Events.push(Evt);
+}
+
+void rndr::InputSystem::SubmitMousePositionEvent(NativeWindowHandle Window,
+                                                 const math::Point2& Position,
+                                                 const math::Vector2& ScreenSize)
+{
+    assert(ScreenSize.X != 0 && ScreenSize.Y != 0);
+    Event Evt{Window, MousePositionEvent{Position, ScreenSize}};
+    m_Events.push(Evt);
+}
+
+void rndr::InputSystem::SubmitMouseWheelEvent(NativeWindowHandle Window, int DeltaWheel)
+{
+    Event Evt{Window, MouseWheelEvent{DeltaWheel}};
+    m_Events.push(Evt);
+}
+
 void rndr::InputSystem::Update(real DeltaSeconds)
 {
-    while (!g_ButtonEvents.empty())
+    while (!m_Events.empty())
     {
-        const ButtonEvent& Event = g_ButtonEvents.front();
-        g_ButtonEvents.pop();
+        Event Evt = m_Events.front();
+        m_Events.pop();
 
-        for (const auto& MappingEntry : m_Context->Mappings)
+        switch (Evt.Data.index())
         {
-            for (const auto& Binding : MappingEntry.Mapping->Bindings)
+            case 0:
+                continue;
+            case 1:
+                ProcessEvent(std::get<ButtonEvent>(Evt.Data));
+                continue;
+            case 2:
+                ProcessEvent(std::get<MousePositionEvent>(Evt.Data));
+                continue;
+            case 3:
+                ProcessEvent(std::get<MouseWheelEvent>(Evt.Data));
+                continue;
+        }
+    }
+}
+
+void rndr::InputSystem::ProcessEvent(const ButtonEvent& Event)
+{
+    for (const auto& MappingEntry : m_Context->Mappings)
+    {
+        for (const auto& Binding : MappingEntry.Mapping->Bindings)
+        {
+            if (Binding.Primitive == Event.Primitive && Binding.Trigger == Event.Trigger)
             {
-                if (Binding.Primitive == Event.Primitive && Binding.Trigger == Event.Trigger)
+                const real Value = Binding.Modifier;
+                MappingEntry.Mapping->Callback(Event.Primitive, Event.Trigger, Value);
+            }
+        }
+    }
+}
+
+void rndr::InputSystem::ProcessEvent(const MousePositionEvent& Event)
+{
+    for (const auto& MappingEntry : m_Context->Mappings)
+    {
+        for (const auto& Binding : MappingEntry.Mapping->Bindings)
+        {
+            if (Binding.Primitive == InputPrimitive::Mouse_AxisX)
+            {
+                real Value = 0;
+                if (Binding.Trigger == InputTrigger::AxisChangedRelative &&
+                    m_AbsolutePosition.has_value())
                 {
-                    const real Value = Binding.Modifier;
-                    MappingEntry.Mapping->Callback(Event.Primitive, Event.Trigger, Value);
+                    Value =
+                        ((Event.Position.X - m_AbsolutePosition.value().X) / Event.ScreenSize.X);
+                    Value *= Binding.Modifier;
                 }
+                else if (Binding.Trigger == InputTrigger::AxisChangedAbsolute)
+                {
+                    Value = Binding.Modifier * Event.Position.X;
+                }
+                MappingEntry.Mapping->Callback(Binding.Primitive, Binding.Trigger, Value);
+            }
+            else if (Binding.Primitive == InputPrimitive::Mouse_AxisY)
+            {
+                real Value = 0;
+                if (Binding.Trigger == InputTrigger::AxisChangedRelative &&
+                    m_AbsolutePosition.has_value())
+                {
+                    Value =
+                        ((Event.Position.Y - m_AbsolutePosition.value().Y) / Event.ScreenSize.Y);
+                    Value *= Binding.Modifier;
+                }
+                else if (Binding.Trigger == InputTrigger::AxisChangedAbsolute)
+                {
+                    Value = Binding.Modifier * Event.Position.Y;
+                }
+                MappingEntry.Mapping->Callback(Binding.Primitive, Binding.Trigger, Value);
             }
         }
     }
 
-    while (!g_MousePositionEvents.empty())
+    m_AbsolutePosition = Event.Position;
+}
+
+void rndr::InputSystem::ProcessEvent(const MouseWheelEvent& Event)
+{
+    for (const auto& MappingEntry : m_Context->Mappings)
     {
-        const MousePositionEvent& Event = g_MousePositionEvents.front();
-        g_MousePositionEvents.pop();
-
-        if (m_FirstTime)
+        for (const auto& Binding : MappingEntry.Mapping->Bindings)
         {
-            m_FirstTime = false;
-            m_X = Event.X;
-            m_Y = Event.Y;
-            continue;
-        }
-
-        for (const auto& MappingEntry : m_Context->Mappings)
-        {
-            for (const auto& Binding : MappingEntry.Mapping->Bindings)
+            if (Binding.Primitive == InputPrimitive::Mouse_AxisWheel)
             {
-                if (Binding.Primitive == InputPrimitive::Mouse_AxisX)
-                {
-                    real Value = 0;
-                    if (Binding.Trigger == InputTrigger::AxisChangedRelative)
-                    {
-                        Value = Binding.Modifier *
-                                ((Event.X - m_X) / (real)Event.OriginWindow->GetWidth());
-                    }
-                    else if (Binding.Trigger == InputTrigger::AxisChangedAbsolute)
-                    {
-                        Value = Event.X;
-                    }
-                    MappingEntry.Mapping->Callback(Binding.Primitive, Binding.Trigger, Value);
-                }
-                else if (Binding.Primitive == InputPrimitive::Mouse_AxisY)
-                {
-                    real Value = 0;
-                    if (Binding.Trigger == InputTrigger::AxisChangedRelative)
-                    {
-                        real Value = Binding.Modifier *
-                                     ((Event.Y - m_Y) / (real)Event.OriginWindow->GetHeight());
-                    }
-                    else if (Binding.Trigger == InputTrigger::AxisChangedAbsolute)
-                    {
-                        Value = Event.Y;
-                    }
-                    MappingEntry.Mapping->Callback(Binding.Primitive, Binding.Trigger, Value);
-                }
-            }
-        }
-
-        m_X = Event.X;
-        m_Y = Event.Y;
-    }
-
-    while (!g_MouseWheelEvents.empty())
-    {
-        const MouseWheelEvent& Event = g_MouseWheelEvents.front();
-        g_MouseWheelEvents.pop();
-
-        for (const auto& MappingEntry : m_Context->Mappings)
-        {
-            for (const auto& Binding : MappingEntry.Mapping->Bindings)
-            {
-                if (Binding.Primitive == InputPrimitive::Mouse_AxisWheel)
-                {
-                    MappingEntry.Mapping->Callback(Binding.Primitive, Binding.Trigger,
-                                                   Event.DeltaWheel);
-                }
+                MappingEntry.Mapping->Callback(Binding.Primitive, Binding.Trigger,
+                                               Event.DeltaWheel);
             }
         }
     }
@@ -212,7 +201,8 @@ bool rndr::InputSystem::IsMouseAxis(InputPrimitive Primitive) const
 
 math::Point2 rndr::InputSystem::GetMousePosition() const
 {
-    return math::Point2(m_X, m_Y);
+    assert(m_AbsolutePosition.has_value());
+    return m_AbsolutePosition.value();
 }
 
 // InputContext ///////////////////////////////////////////////////////////////////////////////////

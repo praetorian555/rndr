@@ -2,14 +2,16 @@
 
 #include <functional>
 #include <memory>
+#include <optional>
+#include <queue>
 #include <string>
+#include <variant>
 #include <vector>
 
 #include "math/point2.h"
 
 #include "rndr/core/base.h"
 #include "rndr/core/inputprimitives.h"
-#include "rndr/core/window.h"
 
 namespace rndr
 {
@@ -19,9 +21,6 @@ namespace rndr
  */
 using InputAction = std::string;
 
-/**
- *
- */
 struct InputBinding
 {
     InputPrimitive Primitive;
@@ -76,6 +75,14 @@ public:
     InputSystem();
     ~InputSystem();
 
+    void SubmitButtonEvent(NativeWindowHandle Window,
+                           InputPrimitive Primitive,
+                           InputTrigger Trigger);
+    void SubmitMousePositionEvent(NativeWindowHandle Window,
+                                  const math::Point2& Position,
+                                  const math::Vector2& ScreenSize);
+    void SubmitMouseWheelEvent(NativeWindowHandle Window, int DeltaWheel);
+
     void Update(real DeltaSeconds);
 
     InputContext* GetContext();
@@ -90,9 +97,39 @@ public:
     math::Point2 GetMousePosition() const;
 
 private:
+    struct ButtonEvent
+    {
+        rndr::InputPrimitive Primitive;
+        rndr::InputTrigger Trigger;
+    };
+
+    struct MousePositionEvent
+    {
+        math::Point2 Position;
+        math::Vector2 ScreenSize;
+    };
+
+    struct MouseWheelEvent
+    {
+        int DeltaWheel = 0;
+    };
+
+    struct Event
+    {
+        NativeWindowHandle WindowHandle;
+        std::variant<ButtonEvent, MousePositionEvent, MouseWheelEvent> Data;
+    };
+
+private:
+    void ProcessEvent(const ButtonEvent& Event);
+    void ProcessEvent(const MousePositionEvent& Event);
+    void ProcessEvent(const MouseWheelEvent& Event);
+
+private:
     InputContext* m_Context = nullptr;
-    int m_X = 0, m_Y = 0;
-    bool m_FirstTime = true;
+    std::optional<math::Point2> m_AbsolutePosition;
+
+    std::queue<Event> m_Events;
 };
 
 #define RNDR_BIND_INPUT_CALLBACK(FuncPtr, This) RNDR_BIND_THREE_PARAM(This, FuncPtr)
