@@ -10,9 +10,11 @@
 
 #include "rndr/core/input.h"
 #include "rndr/core/log.h"
+#include "rndr/core/rndrcontext.h"
 
 // Missing virtual keys in the Windows API
-static enum WindowsVirtualKey : uint32_t {
+enum WindowsVirtualKey : uint32_t
+{
     VK_A = 0x41,
     VK_W = 0x57,
     VK_S = 0x53,
@@ -204,7 +206,7 @@ LRESULT CALLBACK WindowProc(HWND WindowHandle, UINT MsgCode, WPARAM ParamW, LPAR
             CREATESTRUCT* CreateStruct = reinterpret_cast<CREATESTRUCT*>(ParamL);
             rndr::Window* Window = reinterpret_cast<rndr::Window*>(CreateStruct->lpCreateParams);
 
-            SetWindowLongPtr(WindowHandle, GWLP_USERDATA, (LONG_PTR)Window);
+            SetWindowLongPtr(WindowHandle, GWLP_USERDATA, reinterpret_cast<LONG_PTR>(Window));
 
             break;
         }

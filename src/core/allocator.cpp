@@ -5,7 +5,8 @@
 void* rndr::DefaultAllocator::Allocate(int Size, const char* Tag, const char* File, int Line)
 {
 #if RNDR_WINDOWS
-    return _aligned_malloc(Size, 16);
+    constexpr int AlignmentInBytes = 16;
+    return _aligned_malloc(Size, AlignmentInBytes);
 #else
 #error "Platform missing default allocator implementation!"
     return nullptr;

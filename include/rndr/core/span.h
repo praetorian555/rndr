@@ -11,7 +11,7 @@ template <typename T>
 struct Span
 {
     Span() : Data(nullptr), Size(0) {}
-    Span(T* Data, size_t Size) : Data(Data), Size(Size) {}
+    Span(T* Data, uint64_t Size) : Data(Data), Size(Size) {}
     explicit Span(const std::vector<T>& Vec)
         : Data(reinterpret_cast<T*>(Vec.data())), Size(Vec.size())
     {
@@ -44,7 +44,7 @@ struct Span
     const T& operator[](int Index) const { return Data[Index]; }
 
     T* Data;
-    size_t Size;
+    uint64_t Size;
 };
 
 using ByteSpan = Span<uint8_t>;

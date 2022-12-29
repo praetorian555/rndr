@@ -11,8 +11,10 @@
 
 #include "rndr/render/graphicstypes.h"
 
-// Forward declarations
-struct math::Vector4;
+namespace math
+{
+struct Vector4;
+}
 
 namespace rndr
 {

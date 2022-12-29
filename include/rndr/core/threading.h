@@ -46,7 +46,7 @@ template <typename Function>
 class Task : public TaskBase
 {
 public:
-    explicit Task(Function F) : m_Function(F) {}
+    explicit Task(Function F) : m_Function(F), m_bDone(false) {}
 
     virtual void Execute() override
     {
@@ -72,7 +72,7 @@ public:
 
 private:
     Function m_Function;
-    std::atomic<bool> m_bDone = false;
+    std::atomic<bool> m_bDone;
 };
 
 /**
@@ -84,14 +84,14 @@ class ThreadSafeQueue
 public:
     void Push(const T& Value)
     {
-        auto Lock = std::unique_lock(m_Guard);
+        auto Lock = std::unique_lock<std::mutex>(m_Guard);
         m_Queue.push(Value);
         m_Signal.notify_one();
     }
 
     T Pop()
     {
-        auto Lock = std::unique_lock(m_Guard);
+        auto Lock = std::unique_lock<std::mutex>(m_Guard);
         m_Signal.wait(Lock, [this] { return !m_Queue.empty(); });
         T Value = m_Queue.front();
         m_Queue.pop();

@@ -15,7 +15,7 @@ public:
     void Init();
     void ShutDown();
 
-    void AddTrace(const std::string& Name, int64_t StartMicroseconds, int64_t EndMicroseconds);
+    void AddTrace(const std::string& Name, int64_t StartMicroSeconds, int64_t EndMicroSeconds);
 
 private:
     static std::unique_ptr<CpuTracer> s_Tracer;
@@ -29,7 +29,7 @@ public:
 
 private:
     std::string m_Name;
-    int64_t m_StartUS;
+    int64_t m_StartUS = 0;
 };
 
 #define RNDR_CPU_TRACE(Name) rndr::CpuTrace CpuTrace_Var{Name};

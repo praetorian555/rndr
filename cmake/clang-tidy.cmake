@@ -3,18 +3,14 @@ find_program(CLANG_TIDY "clang-tidy")
 if (CLANG_TIDY)
 
 	file(GLOB_RECURSE FILES_TO_FORMAT
-		${PROJECT_SOURCE_DIR}/include/*.h
-		${PROJECT_SOURCE_DIR}/include/*.hpp
 		${PROJECT_SOURCE_DIR}/src/*.c
-		${PROJECT_SOURCE_DIR}/src/*.cpp
-		${PROJECT_SOURCE_DIR}/src/*.h
-		${PROJECT_SOURCE_DIR}/src/*.hpp)
+		${PROJECT_SOURCE_DIR}/src/*.cpp)
 
 	add_custom_target(
         clang-tidy
         COMMAND clang-tidy
         -p ${PROJECT_SOURCE_DIR}/build 
-        -checks=-*,clang-analyzer-*,concurrency-*,cppcoreguidelines-*,modernize-*,performance-*,readability-*
+        -checks=-*,clang-analyzer-*,concurrency-*,cppcoreguidelines-*,modernize-*,performance-*,readability-*,-modernize-use-trailing-return-type,-cppcoreguidelines-pro-type-union-access,-modernize-avoid-bind
         ${FILES_TO_FORMAT}
         --
         -I${PROJECT_SOURCE_DIR}/include

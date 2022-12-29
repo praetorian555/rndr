@@ -11,7 +11,7 @@
 rndr::ByteSpan rndr::file::ReadEntireFile(const std::string& FilePath)
 {
     FILE* File = fopen(FilePath.c_str(), "rb");
-    if (!File)
+    if (File == nullptr)
     {
         RNDR_LOG_ERROR("Failed to open file %s", FilePath.c_str());
         return ByteSpan{};
@@ -24,7 +24,7 @@ rndr::ByteSpan rndr::file::ReadEntireFile(const std::string& FilePath)
     ByteSpan Contents;
     Contents.Size = ContentsSize;
     Contents.Data = RNDR_NEW_ARRAY(uint8_t, ContentsSize, "");
-    int ReadBytes = fread(Contents.Data, 1, Contents.Size, File);
+    size_t ReadBytes = fread(Contents.Data, 1, Contents.Size, File);
     assert(ReadBytes == ContentsSize);
 
     fclose(File);
@@ -34,7 +34,7 @@ rndr::ByteSpan rndr::file::ReadEntireFile(const std::string& FilePath)
 
 rndr::CPUImage rndr::file::ReadEntireImage(const std::string& FilePath)
 {
-    int ChannelsInFile;
+    int ChannelsInFile = 0;
     CPUImage Image;
     Image.Format = PixelFormat::R8G8B8A8_UNORM_SRGB;
     Image.Data.Data = stbi_load(FilePath.c_str(), &Image.Width, &Image.Height, &ChannelsInFile, 4);

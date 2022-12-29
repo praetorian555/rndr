@@ -11,7 +11,10 @@
 #include "rndr/render/graphicstypes.h"
 #include "rndr/render/image.h"
 
-class math::Point2;
+namespace math
+{
+class Point2;
+}
 
 namespace rndr
 {

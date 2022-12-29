@@ -58,9 +58,11 @@ void rndr::CpuTracer::ShutDown()
     s_SpdLogger->info("]");
 }
 
-void rndr::CpuTracer::AddTrace(const std::string& Name, int64_t StartUS, int64_t EndUS)
+void rndr::CpuTracer::AddTrace(const std::string& Name,
+                               int64_t StartMicroSeconds,
+                               int64_t EndMicroSeconds)
 {
-    const int64_t Duration = EndUS - StartUS;
+    const int64_t Duration = StartMicroSeconds - EndMicroSeconds;
     const uint32_t ThreadId =
         GetCurrentThreadId();  // TODO(mkostic): Hide this behind platform-agnostic API
     char Trace[4196] = {};
@@ -68,7 +70,7 @@ void rndr::CpuTracer::AddTrace(const std::string& Name, int64_t StartUS, int64_t
             "{\"name\":\"%s\", \"cat\":\"\", \"ph\":\"X\", \"ts\": %I64d, \"dur\": %I64d, "
             "\"pid\": "
             "0, \"tid\": %u},",
-            Name.c_str(), StartUS, Duration, ThreadId);
+            Name.c_str(), StartMicroSeconds, Duration, ThreadId);
 
     s_SpdLogger->info("{}", Trace);
 }

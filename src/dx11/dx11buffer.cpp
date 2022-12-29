@@ -88,7 +88,8 @@ bool rndr::Buffer::Update(GraphicsContext* Context, ByteSpan Data, int StartOffs
             return false;
         }
 
-        memcpy((uint8_t*)Subresource.pData + StartOffset, Data.Data, Data.Size);
+        uint8_t* SubresourceData = reinterpret_cast<uint8_t*>(Subresource.pData);
+        memcpy(&SubresourceData[StartOffset], Data.Data, Data.Size);
 
         DeviceContext->Unmap(DX11Buffer, 0);
         if (Context->WindowsHasFailed())
@@ -158,7 +159,8 @@ bool rndr::Buffer::Read(rndr::GraphicsContext* Context, ByteSpan OutData, int Re
         return false;
     }
 
-    memcpy(OutData.Data, (uint8_t*)Subresource.pData + ReadOffset, OutData.Size);
+    uint8_t* SubresourceData = reinterpret_cast<uint8_t*>(Subresource.pData);
+    memcpy(OutData.Data, &SubresourceData[ReadOffset], OutData.Size);
 
     DeviceContext->Unmap(DX11Buffer, 0);
     if (Context->WindowsHasFailed())

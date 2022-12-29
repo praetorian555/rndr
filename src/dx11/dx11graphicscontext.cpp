@@ -179,7 +179,8 @@ bool rndr::GraphicsContext::Init(GraphicsContextProperties Props)
     }
 
 #if RNDR_DEBUG
-    Result = m_Device->QueryInterface(__uuidof(ID3D11InfoQueue), (void**)&m_DebugInfoQueue);
+    Result = m_Device->QueryInterface(__uuidof(ID3D11InfoQueue),
+                                      reinterpret_cast<void**>(&m_DebugInfoQueue));
     if (WindowsHasFailed(Result))
     {
         std::string ErrorMessage = WindowsGetErrorMessage(Result);

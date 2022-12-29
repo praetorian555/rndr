@@ -49,8 +49,8 @@ bool rndr::SwapChain::Init(GraphicsContext* Context,
     SwapChainDesc.SampleDesc.Quality = 0;
 
     IDXGIDevice* DXGIDevice = nullptr;
-    HRESULT Result =
-        Context->GetDevice()->QueryInterface(__uuidof(IDXGIDevice), (void**)&DXGIDevice);
+    HRESULT Result = Context->GetDevice()->QueryInterface(__uuidof(IDXGIDevice),
+                                                          reinterpret_cast<void**>(&DXGIDevice));
     if (Context->WindowsHasFailed(Result))
     {
         std::string ErrorMessage = Context->WindowsGetErrorMessage(Result);
@@ -68,7 +68,7 @@ bool rndr::SwapChain::Init(GraphicsContext* Context,
     }
 
     IDXGIFactory* DXGIFactory = nullptr;
-    Result = DXGIAdapter->GetParent(__uuidof(IDXGIFactory), (void**)&DXGIFactory);
+    Result = DXGIAdapter->GetParent(__uuidof(IDXGIFactory), reinterpret_cast<void**>(&DXGIFactory));
     if (FAILED(Result))
     {
         std::string ErrorMessage = Context->WindowsGetErrorMessage(Result);

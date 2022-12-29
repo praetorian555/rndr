@@ -166,7 +166,7 @@ bool rndr::Image::InitInternal(GraphicsContext* Context,
     else
     {
         Result = SwapChain->DX11SwapChain->GetBuffer(BackBufferIndex, __uuidof(ID3D11Texture2D),
-                                                     (LPVOID*)&DX11Texture);
+                                                     reinterpret_cast<LPVOID*>(&DX11Texture));
         if (Context->WindowsHasFailed(Result))
         {
             const std::string ErrorMessage = Context->WindowsGetErrorMessage(Result);
@@ -364,7 +364,7 @@ bool rndr::Image::Update(GraphicsContext* Context,
 
         for (int i = 0; i < Size.Y; i++)
         {
-            memcpy((uint8_t*)Subresource.pData + i * Subresource.RowPitch,
+            memcpy(reinterpret_cast<uint8_t*>(Subresource.pData) + i * Subresource.RowPitch,
                    Contents.Data + i * (int)Size.X * PixelSize, (int)Size.X * PixelSize);
         }
 
@@ -466,7 +466,8 @@ bool rndr::Image::Read(GraphicsContext* Context,
     for (int i = 0; i < Size.Y; i++)
     {
         memcpy(OutContents.Data + i * (int)Size.X * PixelSize,
-               (uint8_t*)Subresource.pData + i * Subresource.RowPitch, (int)Size.X * PixelSize);
+               reinterpret_cast<uint8_t*>(Subresource.pData) + i * Subresource.RowPitch,
+               (int)Size.X * PixelSize);
     }
 
     DeviceContext->Unmap(DX11Texture, ArrayIndex);
