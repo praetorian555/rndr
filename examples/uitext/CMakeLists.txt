@@ -7,22 +7,8 @@ add_executable(uitext ${SOURCE_LIST})
 # We need this directory, and users of our library will need it too
 target_include_directories(uitext PRIVATE ${PROJECT_SOURCE_DIR}/examples/uitext/src)
 
-# Setup graphics API to use
-if (RNDR_DX11)
-target_compile_definitions(uitext PUBLIC RNDR_DX11)
-endif()
-
 # Setup library dependencies
 target_link_libraries(uitext PRIVATE rndr)
-
-# All users of this library will need at least C++20
-target_compile_features(uitext PUBLIC cxx_std_20)
-
-# Compiler options
-target_compile_options(uitext PRIVATE $<$<CXX_COMPILER_ID:MSVC>:/MP>)
-if (RNDR_SANITIZER)
-  target_compile_options(uitext PRIVATE $<$<CXX_COMPILER_ID:MSVC>:/fsanitize=address>)
-endif()
 
 # IDEs should put the headers in a nice place
 set_target_properties(uitext PROPERTIES FOLDER Examples)

@@ -28,20 +28,6 @@ if (RNDR_DX11)
 target_link_libraries(rndr PUBLIC d3d11.lib dxgi.lib d3dcompiler.lib)
 endif()
 
-# Enable unity build
-if (RNDR_UNITY)
-set_target_properties(rndr PROPERTIES UNITY_BUILD TRUE)
-endif()
-
-# All users of this library will need at least C++20
-target_compile_features(rndr PUBLIC cxx_std_20)
-
-# Compiler options
-target_compile_options(rndr PRIVATE $<$<CXX_COMPILER_ID:MSVC>:/MP>)
-if (RNDR_SANITIZER)
-  target_compile_options(rndr PRIVATE $<$<CXX_COMPILER_ID:MSVC>:/fsanitize=address>)
-endif()
-
 # IDEs should put the headers in a nice place
 set_target_properties(rndr PROPERTIES FOLDER RNDR)
 source_group(
