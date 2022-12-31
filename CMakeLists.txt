@@ -13,13 +13,11 @@ include(cmake/utils.cmake)
 option(RNDR_UNITY "Enable unity builds" ON)
 option(RNDR_SANITIZER "Enable address sanitizer" ON)
 option(RNDR_DX11 "Use DX11 API" ON)
-option(RNDR_HANDMADE "Use handmade software rendering pipeline" OFF)
 option(RNDR_SPDLOG "Use spdlog external library to implement default logging" ON)
 
 message(STATUS "RNDR_UNITY ${RNDR_UNITY}")
 message(STATUS "RNDR_SANITIZER ${RNDR_SANITIZER}")
 message(STATUS "RNDR_DX11 ${RNDR_DX11}")
-message(STATUS "RNDR_HANDMADE ${RNDR_HANDMADE}")
 message(STATUS "RNDR_SPDLOG ${RNDR_SPDLOG}")
 
 # Only do these if this is the main project, and not if it is included through add_subdirectory

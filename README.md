@@ -53,5 +53,4 @@ The library currently offers following options for configuration:
 
  * RNDR_UNITY - Enables unity build of the library. By default OFF.
  * RNDR_SANITIZER - Enables address sanitizer in the build. By default OFF.
- * RNDR_HANDMADE - Use software implementation of the rendering API. By default OFF. Currently not building so don't use!
  * RNDR_DX11 - Use DX11 as the implementation of the rendering API. By default ON.
