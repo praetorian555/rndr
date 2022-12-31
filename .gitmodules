@@ -1,7 +1,4 @@
 
-[submodule "extern/spdlog"]
-	path = extern/spdlog
-	url = https://github.com/gabime/spdlog.git
 [submodule "extern/math"]
 	path = extern/math
 	url = https://github.com/praetorian555/math.git
