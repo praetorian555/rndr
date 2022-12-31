@@ -2,14 +2,17 @@
 
 #include <cstdarg>
 
+#ifdef RNDR_SPDLOG
 #include "spdlog/async.h"
 #include "spdlog/sinks/stdout_color_sinks.h"
 #include "spdlog/spdlog.h"
+#endif // RNDR_SPDLOG
 
 #include "rndr/core/rndrcontext.h"
 
 rndr::StdAsyncLogger::StdAsyncLogger()
 {
+#ifdef RNDR_SPDLOG
     spdlog::set_level(spdlog::level::debug);
     spdlog::set_level(spdlog::level::trace);
     spdlog::set_pattern("[%H:%M:%S:%e][%P][%t][%^%l%$][%@] %v");
@@ -17,11 +20,14 @@ rndr::StdAsyncLogger::StdAsyncLogger()
     spdlog::init_thread_pool(8192, 1);  // queue with 8k items and 1 backing thread.
 
     m_ImplLogger = spdlog::create<spdlog::sinks::stdout_color_sink_st>("stdout_logger");
+#endif  // RNDR_SPDLOG
 }
 
 rndr::StdAsyncLogger::~StdAsyncLogger()
 {
+#ifdef RNDR_SPDLOG
     spdlog::drop(m_ImplLogger->name());
+#endif  // RNDR_SPDLOG
 }
 
 void rndr::StdAsyncLogger::Log(const char* File,
@@ -30,6 +36,7 @@ void rndr::StdAsyncLogger::Log(const char* File,
                                rndr::LogLevel LogLevel,
                                const char* Message)
 {
+#ifdef RNDR_SPDLOG
     spdlog::source_loc SourceInfo(File, Line, Function);
 
     switch (LogLevel)
@@ -60,6 +67,7 @@ void rndr::StdAsyncLogger::Log(const char* File,
             break;
         }
     }
+#endif  // RNDR_SPDLOG
 }
 
 void rndr::Log(const char* File,

@@ -18,8 +18,12 @@ if (RNDR_HANDMADE)
 target_compile_definitions(rndr PUBLIC RNDR_HANDMADE)
 endif()
 
-# Setup library dependencies
+if (RNDR_SPDLOG)
+target_compile_definitions(rndr PUBLIC RNDR_SPDLOG)
 target_link_libraries(rndr PUBLIC spdlog::spdlog)
+endif()
+
+# Setup library dependencies
 target_link_libraries(rndr PUBLIC stb_image)
 target_link_libraries(rndr PUBLIC stb_truetype)
 target_link_libraries(rndr PUBLIC math)

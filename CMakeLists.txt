@@ -14,11 +14,13 @@ option(RNDR_UNITY "Enable unity builds" ON)
 option(RNDR_SANITIZER "Enable address sanitizer" ON)
 option(RNDR_DX11 "Use DX11 API" ON)
 option(RNDR_HANDMADE "Use handmade software rendering pipeline" OFF)
+option(RNDR_SPDLOG "Use spdlog external library to implement default logging" ON)
 
 message(STATUS "RNDR_UNITY ${RNDR_UNITY}")
 message(STATUS "RNDR_SANITIZER ${RNDR_SANITIZER}")
 message(STATUS "RNDR_DX11 ${RNDR_DX11}")
 message(STATUS "RNDR_HANDMADE ${RNDR_HANDMADE}")
+message(STATUS "RNDR_SPDLOG ${RNDR_SPDLOG}")
 
 # Only do these if this is the main project, and not if it is included through add_subdirectory
 if (CMAKE_PROJECT_NAME STREQUAL PROJECT_NAME)
@@ -41,6 +43,23 @@ if (CMAKE_PROJECT_NAME STREQUAL PROJECT_NAME)
 	# Add project level compiler options
 	# ...
 endif()
+
+	include(FetchContent)
+
+	# Include spdlog only if it is not already present
+	if (NOT TARGET spdlog::spdlog AND RNDR_SPDLOG)
+		FetchContent_Declare(
+			spdlog
+			GIT_REPOSITORY https://github.com/gabime/spdlog
+			GIT_TAG        ad0e89cbfb4d0c1ce4d097e134eb7be67baebb36 # release-1.11.0
+		)
+		FetchContent_MakeAvailable(spdlog)
+		set_target_properties(spdlog PROPERTIES FOLDER Extern)
+		target_compile_features(spdlog PRIVATE cxx_std_20)
+		if (RNDR_SANITIZER)
+			target_compile_options(spdlog PRIVATE $<$<AND:$<CXX_COMPILER_ID:MSVC>,$<NOT:$<CONFIG:Release>>>:/fsanitize=address>)
+		endif()
+	endif()
 
 	# Adds external dependencies
 	add_subdirectory(extern)

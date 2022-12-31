@@ -2,10 +2,12 @@
 
 #include "rndr/core/base.h"
 
+#ifdef RNDR_SPDLOG
 namespace spdlog
 {
 class logger;
 }
+#endif // RNDR_SPDLOG
 
 namespace rndr
 {
@@ -44,7 +46,9 @@ public:
                      const char* Message) override;
 
 private:
+#ifdef RNDR_SPDLOG
     std::shared_ptr<spdlog::logger> m_ImplLogger = nullptr;
+#endif  // RNDR_SPDLOG
 };
 
 void Log(const char* File,
