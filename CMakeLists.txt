@@ -38,10 +38,6 @@ if (CMAKE_PROJECT_NAME STREQUAL PROJECT_NAME)
   	include(cmake/clang-format.cmake)
   	include(cmake/clang-tidy.cmake)
 
-	# Add project level compiler options
-	# ...
-endif()
-
 	# Global compiler configuration
 	if (MSVC)
 		# Treat warnings as errors and highest warning level
@@ -53,46 +49,48 @@ endif()
 			add_compile_options($<$<NOT:$<CONFIG:Release>>:/fsanitize=address>)
 		endif()
 	endif()
-	# Enable unity build
-	if (RNDR_UNITY)
-		set(CMAKE_UNITY_BUILD TRUE)
-	endif()
 	# Use C++ 20 and make it required
 	set(CMAKE_CXX_STANDARD 20)
 	set(CMAKE_CXX_STANDARD_REQUIRED ON)
+endif()
 
-	include(FetchContent)
+# Enable unity build
+if (RNDR_UNITY)
+	set(CMAKE_UNITY_BUILD TRUE)
+endif()
 
-	# Include spdlog only if it is not already present
-	if (NOT TARGET spdlog::spdlog AND RNDR_SPDLOG)
-		FetchContent_Declare(
-			spdlog
-			GIT_REPOSITORY https://github.com/gabime/spdlog
-			GIT_TAG        ad0e89cbfb4d0c1ce4d097e134eb7be67baebb36 # release-1.11.0
-		)
-		FetchContent_MakeAvailable(spdlog)
-		set_target_properties(spdlog PROPERTIES FOLDER Extern)
-	endif()
+include(FetchContent)
 
-	if (NOT TARGET Catch2)
-		FetchContent_Declare(
-			Catch2
-			GIT_REPOSITORY https://github.com/catchorg/Catch2
-			GIT_TAG        ab6c7375be9a8e71ee84c6f8537113f9f47daf99 # release-3.2.1
-		)
-		FetchContent_MakeAvailable(Catch2)
-		set_target_properties(Catch2 PROPERTIES FOLDER Extern)
-		set_target_properties(Catch2WithMain PROPERTIES FOLDER Extern)
-	endif()
+# Include spdlog only if it is not already present
+if (NOT TARGET spdlog::spdlog AND RNDR_SPDLOG)
+	FetchContent_Declare(
+		spdlog
+		GIT_REPOSITORY https://github.com/gabime/spdlog
+		GIT_TAG        ad0e89cbfb4d0c1ce4d097e134eb7be67baebb36 # release-1.11.0
+	)
+	FetchContent_MakeAvailable(spdlog)
+	set_target_properties(spdlog PROPERTIES FOLDER Extern)
+endif()
 
-	# Adds external dependencies
-	add_subdirectory(extern)
+if (NOT TARGET Catch2)
+	FetchContent_Declare(
+		Catch2
+		GIT_REPOSITORY https://github.com/catchorg/Catch2
+		GIT_TAG        ab6c7375be9a8e71ee84c6f8537113f9f47daf99 # release-3.2.1
+	)
+	FetchContent_MakeAvailable(Catch2)
+	set_target_properties(Catch2 PROPERTIES FOLDER Extern)
+	set_target_properties(Catch2WithMain PROPERTIES FOLDER Extern)
+endif()
 
-  	# The compiled library code is here
-	add_subdirectory(src)
+# Adds external dependencies
+add_subdirectory(extern)
 
-	# Tests
-	add_subdirectory(tests)
+# The compiled library code is here
+add_subdirectory(src)
+
+# Tests
+add_subdirectory(tests)
 
 if (CMAKE_PROJECT_NAME STREQUAL PROJECT_NAME)
 
