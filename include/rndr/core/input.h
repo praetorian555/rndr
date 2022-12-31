@@ -9,6 +9,7 @@
 #include <vector>
 
 #include "math/point2.h"
+#include "math/vector2.h"
 
 #include "rndr/core/base.h"
 #include "rndr/core/inputprimitives.h"

@@ -56,7 +56,7 @@ void rndr::CpuTracer::ShutDown()
             "0, \"tid\": %u}",
             "", StartUS, DurationUS, ThreadId);
 
-    s_SpdLogger->info("{}", Trace);
+    s_SpdLogger->info("{}", Trace.data());
     s_SpdLogger->info("]");
 }
 
