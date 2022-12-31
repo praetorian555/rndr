@@ -43,15 +43,23 @@ if (CMAKE_PROJECT_NAME STREQUAL PROJECT_NAME)
 endif()
 
 	# Global compiler configuration
-	add_compile_options($<$<CXX_COMPILER_ID:MSVC>:/MP>)
-	if (RNDR_SANITIZER)
-		add_compile_options($<$<AND:$<CXX_COMPILER_ID:MSVC>,$<NOT:$<CONFIG:Release>>>:/fsanitize=address>)
+	if (MSVC)
+		# Treat warnings as errors and highest warning level
+		# add_compile_options(/W4 /WX)
+		# Multiprocessor compilation
+		add_compile_options(/MP)
+		# Turn on address sanitizer unless its Release build
+		if (RNDR_SANITIZER)
+			add_compile_options($<$<NOT:$<CONFIG:Release>>:/fsanitize=address>)
+		endif()
 	endif()
+	# Enable unity build
 	if (RNDR_UNITY)
-		set_property(GLOBAL PROPERTY UNITY_BUILD TRUE)
+		set(CMAKE_UNITY_BUILD TRUE)
 	endif()
-	set (CMAKE_CXX_STANDARD 20)
-	set (CMAKE_CXX_STANDARD_REQUIRED ON)
+	# Use C++ 20 and make it required
+	set(CMAKE_CXX_STANDARD 20)
+	set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 	include(FetchContent)
 
