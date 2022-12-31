@@ -18,3 +18,11 @@ source_group(
   FILES ${SOURCE_LIST})
 
 target_compile_definitions(uitext PUBLIC BASIC2D_ASSET_DIR="${CMAKE_CURRENT_SOURCE_DIR}/assets")
+
+file(GLOB_RECURSE UNITY_SOURCE_LIST CONFIGURE_DEPENDS "${PROJECT_BINARY_DIR}/examples/uitext/*.cxx")
+if (RNDR_UNITY)
+  source_group(
+    TREE "${PROJECT_BINARY_DIR}/examples/uitext/CMakeFiles/uitext.dir/Unity"
+    PREFIX "Unity"
+    FILES ${UNITY_SOURCE_LIST})
+endif()
