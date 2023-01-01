@@ -1,4 +1,0 @@
-
-[submodule "extern/math"]
-	path = extern/math
-	url = https://github.com/praetorian555/math.git

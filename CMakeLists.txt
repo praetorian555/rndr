@@ -72,6 +72,19 @@ if (NOT TARGET spdlog::spdlog AND RNDR_SPDLOG)
 	set_target_properties(spdlog PROPERTIES FOLDER Extern)
 endif()
 
+# Include math only if it is not already present
+if (NOT TARGET math)
+	FetchContent_Declare(
+		math
+		GIT_REPOSITORY https://github.com/praetorian555/math
+		GIT_TAG        c473de8e4e98558663145b7eab7e728e0acef7e0
+	)
+	FetchContent_MakeAvailable(math)
+	set_target_properties(math PROPERTIES FOLDER Extern)
+	set(MATH_UNITY ${RNDR_UNITY} CACHE BOOL "" FORCE)
+	set(MATH_SANITIZER ${RNDR_SANITIZER} CACHE BOOL "" FORCE)
+endif()
+
 # Adds external dependencies
 add_subdirectory(extern)
 
