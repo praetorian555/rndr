@@ -72,27 +72,27 @@ if (NOT TARGET spdlog::spdlog AND RNDR_SPDLOG)
 	set_target_properties(spdlog PROPERTIES FOLDER Extern)
 endif()
 
-if (NOT TARGET Catch2)
-	FetchContent_Declare(
-		Catch2
-		GIT_REPOSITORY https://github.com/catchorg/Catch2
-		GIT_TAG        ab6c7375be9a8e71ee84c6f8537113f9f47daf99 # release-3.2.1
-	)
-	FetchContent_MakeAvailable(Catch2)
-	set_target_properties(Catch2 PROPERTIES FOLDER Extern)
-	set_target_properties(Catch2WithMain PROPERTIES FOLDER Extern)
-endif()
-
 # Adds external dependencies
 add_subdirectory(extern)
 
 # The compiled library code is here
 add_subdirectory(src)
 
-# Tests
-add_subdirectory(tests)
-
 if (CMAKE_PROJECT_NAME STREQUAL PROJECT_NAME)
+	# Add catch2 dependency
+	if (NOT TARGET Catch2)
+		FetchContent_Declare(
+			Catch2
+			GIT_REPOSITORY https://github.com/catchorg/Catch2
+			GIT_TAG        ab6c7375be9a8e71ee84c6f8537113f9f47daf99 # release-3.2.1
+		)
+		FetchContent_MakeAvailable(Catch2)
+		set_target_properties(Catch2 PROPERTIES FOLDER Extern)
+		set_target_properties(Catch2WithMain PROPERTIES FOLDER Extern)
+	endif()
+
+	# Tests
+	add_subdirectory(tests)
 
 	# The executable code is here
 	add_subdirectory(examples/uitext)
