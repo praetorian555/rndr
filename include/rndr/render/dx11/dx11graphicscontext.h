@@ -13,7 +13,7 @@
 
 namespace math
 {
-struct Vector4;
+class Vector4;
 }
 
 namespace rndr
@@ -90,10 +90,10 @@ public:
 
     void DrawIndexed(PrimitiveTopology Topology, int IndicesCount);
     void DrawIndexedInstanced(PrimitiveTopology Topology,
-                              int IndexCount,
-                              int InstanceCount,
-                              int IndexOffset = 0,
-                              int InstanceOffset = 0);
+                              uint32_t IndexCount,
+                              uint32_t InstanceCount,
+                              uint32_t IndexOffset = 0,
+                              uint32_t InstanceOffset = 0);
 
     void Dispatch(const uint32_t ThreadGroupCountX,
                   const uint32_t ThreadGroupCountY,

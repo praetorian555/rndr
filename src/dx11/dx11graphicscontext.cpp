@@ -561,7 +561,7 @@ void rndr::GraphicsContext::BindFrameBuffer(FrameBuffer* FrameBuffer)
         FrameBuffer->DepthStencilBuffer ? FrameBuffer->DepthStencilBuffer->DX11DepthStencilView
                                         : nullptr;
     std::vector<ID3D11RenderTargetView*> RenderTargetViews;
-    const int RenderTargetCount = FrameBuffer->ColorBuffers.Size;
+    const int RenderTargetCount = static_cast<int>(FrameBuffer->ColorBuffers.Size);
     RenderTargetViews.resize(RenderTargetCount);
 
     for (int i = 0; i < RenderTargetCount; i++)
@@ -612,10 +612,10 @@ void rndr::GraphicsContext::DrawIndexed(PrimitiveTopology Topology, int IndicesC
 }
 
 void rndr::GraphicsContext::DrawIndexedInstanced(PrimitiveTopology Topology,
-                                                 int IndexCount,
-                                                 int InstanceCount,
-                                                 int IndexOffset,
-                                                 int InstanceOffset)
+                                                 uint32_t IndexCount,
+                                                 uint32_t InstanceCount,
+                                                 uint32_t IndexOffset,
+                                                 uint32_t InstanceOffset)
 {
     m_DeviceContext->IASetPrimitiveTopology(DX11FromPrimitiveTopology(Topology));
     m_DeviceContext->DrawIndexedInstanced(IndexCount, InstanceCount, IndexOffset, 0,

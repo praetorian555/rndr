@@ -24,14 +24,14 @@ struct ProjectionCameraProperties
 
     // Position of the near plane along z axis. Always positive value. In case of a perspective
     // projection it can't be 0.
-    real Near = 0.01;
+    real Near = 0.01f;
 
     // Position of the near plane along z axis. Always positive value.
-    real Far = 100.0;
+    real Far = 100.0f;
 
     // Vertical field of view angle. Larger the value more things you can see. Too large values will
     // cause distortion. This value is used only for perspective projection.
-    real VerticalFOV = 45.0;
+    real VerticalFOV = 45.0f;
 };
 
 /**

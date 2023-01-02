@@ -30,15 +30,17 @@ public:
         math::Vector4 Color;
         float ThresholdBottom;
         float ThresholdTop;
+        float Padding[2];
     };
 
     RNDR_ALIGN(16) struct ConstantData
     {
         math::Vector2 ScreenSize;
+        float Padding[2];
     };
 
-    static constexpr float AtlasWidth = 1024.0f;
-    static constexpr float AtlasHeight = 1024.0f;
+    static constexpr int AtlasWidth = 1024;
+    static constexpr int AtlasHeight = 1024;
 
     static constexpr int InvalidFontId = 0;
 

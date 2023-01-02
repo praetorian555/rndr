@@ -41,7 +41,7 @@ if (CMAKE_PROJECT_NAME STREQUAL PROJECT_NAME)
 	# Global compiler configuration
 	if (MSVC)
 		# Treat warnings as errors and highest warning level
-		# add_compile_options(/W4 /WX)
+		add_compile_options(/W4 /WX /wd4201)
 		# Multiprocessor compilation
 		add_compile_options(/MP)
 		# Turn on address sanitizer unless its Release build

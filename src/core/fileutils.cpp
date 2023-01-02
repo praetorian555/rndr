@@ -10,7 +10,8 @@
 
 rndr::ByteSpan rndr::file::ReadEntireFile(const std::string& FilePath)
 {
-    FILE* File = fopen(FilePath.c_str(), "rb");
+    FILE* File = nullptr;
+    fopen_s(&File, FilePath.c_str(), "rb");
     if (File == nullptr)
     {
         RNDR_LOG_ERROR("Failed to open file %s", FilePath.c_str());

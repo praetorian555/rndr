@@ -4,6 +4,10 @@
 
 void* rndr::DefaultAllocator::Allocate(int Size, const char* Tag, const char* File, int Line)
 {
+    RNDR_UNUSED(Tag);
+    RNDR_UNUSED(File);
+    RNDR_UNUSED(Line);
+
 #if RNDR_WINDOWS
     constexpr int AlignmentInBytes = 16;
     return _aligned_malloc(Size, AlignmentInBytes);

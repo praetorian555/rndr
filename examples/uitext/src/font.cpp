@@ -2,10 +2,10 @@
 
 #include "rndr/core/fileutils.h"
 
-bool Font::Init(const std::string& Name, const std::string& AssetPath)
+bool Font::Init(const std::string& InName, const std::string& AssetPath)
 {
-    this->Name = Name;
-    this->Id = GenerateId();
+    Name = InName;
+    Id = GenerateId();
 
     rndr::ByteSpan Contents = rndr::file::ReadEntireFile(AssetPath);
     if (!Contents)

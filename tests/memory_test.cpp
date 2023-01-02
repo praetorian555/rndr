@@ -32,7 +32,11 @@ TEST_CASE("SingleObject", "Memory")
         int a = 0;
         double b = 0;
 
-        AggregateType2(int aa) { a = 10; }
+        AggregateType2(int aa)
+        {
+            RNDR_UNUSED(aa);
+            a = 10;
+        }
     };
     AggregateType2* B = RNDR_NEW(AggregateType2, "", 20);
     REQUIRE(B->a == 10);

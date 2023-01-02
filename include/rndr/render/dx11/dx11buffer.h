@@ -26,8 +26,8 @@ struct Buffer
               const BufferProperties& Props = BufferProperties{},
               ByteSpan InitialData = ByteSpan{});
 
-    bool Update(rndr::GraphicsContext* Context, ByteSpan Data, int StartOffset = 0) const;
-    bool Read(rndr::GraphicsContext* Context, ByteSpan OutData, int ReadOffset = 0) const;
+    bool Update(rndr::GraphicsContext* Context, ByteSpan Data, uint32_t StartOffset = 0) const;
+    bool Read(rndr::GraphicsContext* Context, ByteSpan OutData, uint32_t ReadOffset = 0) const;
 };
 
 }  // namespace rndr

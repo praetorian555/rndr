@@ -86,7 +86,10 @@ public:
     }
 
     rndr::GraphicsContext* GetGraphicsContext() { return m_GraphicsCtx.Get(); }
-    math::Vector2 GetScreenSize() const { return math::Vector2{m_WindowWidth, m_WindowHeight}; }
+    math::Vector2 GetScreenSize() const
+    {
+        return math::Vector2{static_cast<float>(m_WindowWidth), static_cast<float>(m_WindowHeight)};
+    }
 
 private:
     std::unique_ptr<rndr::RndrContext> m_RndrCtx;
@@ -97,8 +100,8 @@ private:
 
     std::unique_ptr<Renderer> m_Renderer;
 
-    float m_WindowWidth = 800.0f;
-    float m_WindowHeight = 600.0f;
+    int m_WindowWidth = 800;
+    int m_WindowHeight = 600;
 };
 
 int main()

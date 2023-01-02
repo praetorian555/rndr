@@ -72,7 +72,7 @@ rndr::InputLayoutBuilder& rndr::InputLayoutBuilder::AppendElement(int BufferInde
     }
 
     BufferInfo& Info = BufferIt->second;
-    int Idx = m_Props.Size++;
+    int Idx = static_cast<int>(m_Props.Size++);
     m_Props[Idx].InputSlot = BufferIndex;
     m_Props[Idx].Repetition = Info.Repetiton;
     m_Props[Idx].InstanceStepRate = Info.PerInstanceRate;
@@ -101,7 +101,7 @@ rndr::Span<rndr::InputLayoutProperties> rndr::InputLayoutBuilder::Build()
 }
 
 bool rndr::InputLayout::Init(GraphicsContext* Context,
-                             Span<InputLayoutProperties> Props,
+                             Span<InputLayoutProperties> InProps,
                              rndr::Shader* Shader)
 {
     if (!Context)
@@ -109,12 +109,12 @@ bool rndr::InputLayout::Init(GraphicsContext* Context,
         RNDR_LOG_ERROR("InputLayout::Init: Invalid graphics context!");
         return false;
     }
-    if (!Props)
+    if (!InProps)
     {
         RNDR_LOG_ERROR("InputLayout::Init: No entries!");
         return false;
     }
-    if (Props.Size > GraphicsConstants::MaxInputLayoutEntries)
+    if (InProps.Size > GraphicsConstants::MaxInputLayoutEntries)
     {
         RNDR_LOG_ERROR("InputLayout::Init: Too many entries!");
         return false;
@@ -125,10 +125,10 @@ bool rndr::InputLayout::Init(GraphicsContext* Context,
         return false;
     }
 
-    this->Props = Span<InputLayoutProperties>(new InputLayoutProperties[Props.Size], Props.Size);
-    for (int i = 0; i < Props.Size; i++)
+    Props = Span<InputLayoutProperties>(new InputLayoutProperties[InProps.Size], InProps.Size);
+    for (int i = 0; i < InProps.Size; i++)
     {
-        this->Props.Data[i] = Props.Data[i];
+        Props.Data[i] = InProps.Data[i];
     }
 
     D3D11_INPUT_ELEMENT_DESC InputDescriptors[GraphicsConstants::MaxInputLayoutEntries] = {};
@@ -146,9 +146,10 @@ bool rndr::InputLayout::Init(GraphicsContext* Context,
     }
 
     ID3D11Device* Device = Context->GetDevice();
-    HRESULT Result = Device->CreateInputLayout(
-        InputDescriptors, Props.Size, Shader->DX11ShaderBuffer->GetBufferPointer(),
-        Shader->DX11ShaderBuffer->GetBufferSize(), &DX11InputLayout);
+    HRESULT Result =
+        Device->CreateInputLayout(InputDescriptors, static_cast<uint32_t>(Props.Size),
+                                  Shader->DX11ShaderBuffer->GetBufferPointer(),
+                                  Shader->DX11ShaderBuffer->GetBufferSize(), &DX11InputLayout);
     if (Context->WindowsHasFailed(Result))
     {
         const std::string ErrorMessage = Context->WindowsGetErrorMessage(Result);
@@ -168,7 +169,7 @@ rndr::InputLayout::~InputLayout()
     DX11SafeRelease(DX11InputLayout);
 }
 
-bool rndr::RasterizerState::Init(GraphicsContext* Context, const RasterizerProperties& Props)
+bool rndr::RasterizerState::Init(GraphicsContext* Context, const RasterizerProperties& InProps)
 {
     if (!Context)
     {
@@ -176,7 +177,7 @@ bool rndr::RasterizerState::Init(GraphicsContext* Context, const RasterizerPrope
         return false;
     }
 
-    this->Props = Props;
+    Props = InProps;
 
     D3D11_RASTERIZER_DESC RasterizerDesc;
     RasterizerDesc.FillMode = DX11FromFillMode(Props.FillMode);
@@ -206,7 +207,7 @@ rndr::RasterizerState::~RasterizerState()
     DX11SafeRelease(DX11RasterizerState);
 }
 
-bool rndr::DepthStencilState::Init(GraphicsContext* Context, const DepthStencilProperties& Props)
+bool rndr::DepthStencilState::Init(GraphicsContext* Context, const DepthStencilProperties& InProps)
 {
     if (!Context)
     {
@@ -214,7 +215,7 @@ bool rndr::DepthStencilState::Init(GraphicsContext* Context, const DepthStencilP
         return false;
     }
 
-    this->Props = Props;
+    Props = InProps;
 
     D3D11_DEPTH_STENCIL_DESC DepthStencilDesc;
     DepthStencilDesc.DepthEnable = Props.bDepthEnable;
@@ -252,7 +253,7 @@ rndr::DepthStencilState::~DepthStencilState()
     DX11SafeRelease(DX11DepthStencilState);
 }
 
-bool rndr::BlendState::Init(GraphicsContext* Context, const BlendProperties& Props)
+bool rndr::BlendState::Init(GraphicsContext* Context, const BlendProperties& InProps)
 {
     if (!Context)
     {
@@ -260,7 +261,7 @@ bool rndr::BlendState::Init(GraphicsContext* Context, const BlendProperties& Pro
         return false;
     }
 
-    this->Props = Props;
+    Props = InProps;
 
     D3D11_BLEND_DESC BlendDesc;
     ZeroMemory(&BlendDesc, sizeof(D3D11_BLEND_DESC));

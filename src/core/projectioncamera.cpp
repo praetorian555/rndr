@@ -56,7 +56,7 @@ math::Transform rndr::ProjectionCamera::GetProjectionTransform() const
     const real AspectRatio = GetAspectRatio();
     if (m_Props.Projection == ProjectionType::Orthographic)
     {
-        const real Width = m_Props.OrtographicWidth;
+        const real Width = static_cast<real>(m_Props.OrtographicWidth);
         const real Height = Width / AspectRatio;
 #if RNDR_LEFT_HANDED
         return (math::Transform)math::Orhographic_LH_N0(-Width / 2, Width / 2, -Height / 2,

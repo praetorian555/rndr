@@ -14,7 +14,8 @@ AtlasPacker::AtlasPacker(const int AtlasWidth, const int AtlasHeight, SortCriter
 
 float AtlasPacker::PathologicMult(const RectIn& R)
 {
-    return std::max(R.Size.X, R.Size.Y) / std::min(R.Size.X, R.Size.Y) * R.Size.X * R.Size.Y;
+    return (std::max(R.Size.X, R.Size.Y) / static_cast<float>(std::min(R.Size.X, R.Size.Y))) *
+           R.Size.X * R.Size.Y;
 }
 
 // Returns true if A is greater than B
@@ -66,7 +67,7 @@ std::vector<AtlasPacker::RectOut> AtlasPacker::Pack(std::vector<RectIn>& InRects
         }
 
         // Go through free space slots, from smaller to bigger
-        for (int i = m_FreeSlots.size() - 1; i >= 0; i--)
+        for (uint64_t i = m_FreeSlots.size() - 1; i >= 0; i--)
         {
             RectOut& Slot = m_FreeSlots[i];
 
@@ -82,9 +83,6 @@ std::vector<AtlasPacker::RectOut> AtlasPacker::Pack(std::vector<RectIn>& InRects
             OutRect.Size = InRect.Size;
             OutRect.UserData = InRect.UserData;
             OutRects.push_back(OutRect);
-
-            const int DiffX = Slot.Size.X - InRect.Size.X;
-            const int DiffY = Slot.Size.Y - InRect.Size.Y;
 
             RectOut SmallerSlot;
             SmallerSlot.BottomLeft = IntPoint{Slot.BottomLeft.X + InRect.Size.X, Slot.BottomLeft.Y};

@@ -9,9 +9,9 @@
 #include "rndr/render/dx11/dx11graphicscontext.h"
 #include "rndr/render/dx11/dx11helpers.h"
 
-bool rndr::Sampler::Init(GraphicsContext* Context, const SamplerProperties& Props)
+bool rndr::Sampler::Init(GraphicsContext* Context, const SamplerProperties& InProps)
 {
-    this->Props = Props;
+    Props = InProps;
 
     ID3D11Device* Device = Context->GetDevice();
 

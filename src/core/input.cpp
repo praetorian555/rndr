@@ -40,6 +40,8 @@ void rndr::InputSystem::SubmitMouseWheelEvent(NativeWindowHandle Window, int Del
 
 void rndr::InputSystem::Update(real DeltaSeconds)
 {
+    RNDR_UNUSED(DeltaSeconds);
+
     while (!m_Events.empty())
     {
         Event Evt = m_Events.front();
@@ -130,7 +132,7 @@ void rndr::InputSystem::ProcessEvent(const MouseWheelEvent& Event)
             if (Binding.Primitive == InputPrimitive::Mouse_AxisWheel)
             {
                 MappingEntry.Mapping->Callback(Binding.Primitive, Binding.Trigger,
-                                               Event.DeltaWheel);
+                                               static_cast<float>(Event.DeltaWheel));
             }
         }
     }

@@ -92,7 +92,7 @@ static const char* GetShaderModel(D3D_FEATURE_LEVEL FeatureLevel, rndr::ShaderTy
 
 bool rndr::Shader::Init(GraphicsContext* Context,
                         const ByteSpan& ShaderContents,
-                        const ShaderProperties& Props)
+                        const ShaderProperties& InProps)
 {
     if (!ShaderContents)
     {
@@ -100,7 +100,7 @@ bool rndr::Shader::Init(GraphicsContext* Context,
         return false;
     }
 
-    this->Props = Props;
+    Props = InProps;
 
     ID3DBlob* ErrorMessage = nullptr;
     const char* Model = GetShaderModel(Context->GetFeatureLevel(), Props.Type);
@@ -113,7 +113,7 @@ bool rndr::Shader::Init(GraphicsContext* Context,
     D3D_SHADER_MACRO* Macros = nullptr;
     if (!Props.Macros.empty())
     {
-        const int Size = Props.Macros.size() + 1;
+        const size_t Size = Props.Macros.size() + 1;
         Macros = new D3D_SHADER_MACRO[Size];
         memset(Macros, 0, sizeof(D3D_SHADER_MACRO) * Size);
         for (int i = 0; i < Size - 1; i++)

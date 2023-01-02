@@ -251,9 +251,9 @@ struct BufferProperties
     BufferType Type = BufferType::Constant;
     Usage Usage = Usage::Default;
     // Total size of a buffer
-    int Size = 0;
+    uint32_t Size = 0;
     // Size of one element, in bytes, in an array of elements
-    int Stride = 0;
+    uint32_t Stride = 0;
 };
 
 struct ImageProperties

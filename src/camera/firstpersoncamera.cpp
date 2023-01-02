@@ -94,6 +94,7 @@ void rndr::FirstPersonCamera::HandleLookVert(rndr::InputPrimitive Primitive,
                                              rndr::InputTrigger Trigger,
                                              real AxisValue)
 {
+    RNDR_UNUSED(Primitive);
     using IT = rndr::InputTrigger;
     m_DeltaAngles.Roll = Trigger == IT::ButtonDown ? m_RotationSpeed * AxisValue : 0;
 }
@@ -102,6 +103,7 @@ void rndr::FirstPersonCamera::HandleLookHorz(rndr::InputPrimitive Primitive,
                                              rndr::InputTrigger Trigger,
                                              real AxisValue)
 {
+    RNDR_UNUSED(Primitive);
     using IT = rndr::InputTrigger;
     m_DeltaAngles.Yaw = Trigger == IT::ButtonDown ? m_RotationSpeed * AxisValue : 0;
 }
@@ -110,6 +112,7 @@ void rndr::FirstPersonCamera::HandleMoveForward(rndr::InputPrimitive Primitive,
                                                 rndr::InputTrigger Trigger,
                                                 real Value)
 {
+    RNDR_UNUSED(Primitive);
     using IT = rndr::InputTrigger;
     m_DeltaPosition.X = Trigger == IT::ButtonDown ? Value : 0;
 }
@@ -118,6 +121,7 @@ void rndr::FirstPersonCamera::HandleMoveRight(rndr::InputPrimitive Primitive,
                                               rndr::InputTrigger Trigger,
                                               real Value)
 {
+    RNDR_UNUSED(Primitive);
     using IT = rndr::InputTrigger;
     m_DeltaPosition.Y = Trigger == IT::ButtonDown ? Value : 0;
 }

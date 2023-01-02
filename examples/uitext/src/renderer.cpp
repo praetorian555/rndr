@@ -67,7 +67,7 @@ Renderer::Renderer(rndr::GraphicsContext* Ctx,
     assert(m_ConstantBuffer.IsValid());
 
     std::vector Indices{0, 1, 2, 1, 3, 2};
-    BufferProps.Size = Indices.size() * sizeof(int32_t);
+    BufferProps.Size = static_cast<uint32_t>(Indices.size() * sizeof(int32_t));
     BufferProps.Stride = sizeof(int32_t);
     BufferProps.Type = rndr::BufferType::Index;
     m_IndexBuffer = m_Ctx->CreateBuffer(BufferProps, rndr::ByteSpan{Indices});
@@ -195,10 +195,10 @@ bool Renderer::Present(rndr::FrameBuffer* FrameBuffer)
     m_Ctx->BindFrameBuffer(FrameBuffer);
 
     m_Ctx->BindBuffer(m_ShadowBuffer.Get(), 0);
-    m_Ctx->DrawIndexedInstanced(rndr::PrimitiveTopology::TriangleList, 6, m_Shadows.size());
+    m_Ctx->DrawIndexedInstanced(rndr::PrimitiveTopology::TriangleList, 6, static_cast<uint32_t>(m_Shadows.size()));
 
     m_Ctx->BindBuffer(m_InstanceBuffer.Get(), 0);
-    m_Ctx->DrawIndexedInstanced(rndr::PrimitiveTopology::TriangleList, 6, m_Instances.size());
+    m_Ctx->DrawIndexedInstanced(rndr::PrimitiveTopology::TriangleList, 6, static_cast<uint32_t>(m_Instances.size()));
 
     m_Instances.clear();
     m_Shadows.clear();
@@ -215,8 +215,7 @@ void Renderer::UpdateAtlas(int CodePointStart, int CodePointEnd, Font* F, int Fo
 {
     std::vector<AtlasPacker::RectIn> InRects;
 
-    const float Scale = stbtt_ScaleForPixelHeight(&F->TTInfo, FontSize);
-    const float ScaledAscent = std::roundf(F->Ascent * Scale);
+    const float Scale = stbtt_ScaleForPixelHeight(&F->TTInfo, static_cast<float>(FontSize));
     for (int CodePoint = CodePointStart; CodePoint < CodePointEnd; CodePoint++)
     {
         const int GlyphHash = Font::MakeGlyphHash(CodePoint, FontSize, F->Id);
@@ -242,6 +241,7 @@ void Renderer::UpdateAtlas(int CodePointStart, int CodePointEnd, Font* F, int Fo
     std::vector<AtlasPacker::RectOut> OutRects = m_Packer.Pack(InRects);
     assert(OutRects.size() == InRects.size());
 
+    math::Vector2 AtlasSize(static_cast<float>(AtlasWidth), static_cast<float>(AtlasHeight));
     for (const AtlasPacker::RectOut& OutRect : OutRects)
     {
         const int GlyphHash = static_cast<int>(OutRect.UserData);
@@ -254,13 +254,13 @@ void Renderer::UpdateAtlas(int CodePointStart, int CodePointEnd, Font* F, int Fo
 
         WriteToAtlas(B);
 
-        G.TexBottomLeft.X = B.BottomLeft.X / AtlasWidth;
-        G.TexBottomLeft.Y = B.BottomLeft.Y / AtlasHeight;
-        G.TexTopRight.X = (B.BottomLeft.X + B.Size.X) / AtlasWidth;
-        G.TexTopRight.Y = (B.BottomLeft.Y + B.Size.Y) / AtlasHeight;
+        G.TexBottomLeft.X = B.BottomLeft.X / AtlasSize.X;
+        G.TexBottomLeft.Y = B.BottomLeft.Y / AtlasSize.Y;
+        G.TexTopRight.X = (B.BottomLeft.X + B.Size.X) / AtlasSize.X;
+        G.TexTopRight.Y = (B.BottomLeft.Y + B.Size.Y) / AtlasSize.Y;
     }
 
-    m_TextureAtlas->Update(m_Ctx, 0, {0, 0}, {AtlasWidth, AtlasHeight}, rndr::ByteSpan(m_Atlas));
+    m_TextureAtlas->Update(m_Ctx, 0, {0, 0}, AtlasSize, rndr::ByteSpan(m_Atlas));
 }
 
 void Renderer::WriteToAtlas(const Bitmap& B)

@@ -13,7 +13,7 @@ namespace rndr
 {
 
 class InputSystem;
-class InputContext;
+struct InputContext;
 
 using TickDelegate = MultiDelegate<real /* DeltaSeconds */>;
 

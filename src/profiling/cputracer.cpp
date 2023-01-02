@@ -4,6 +4,7 @@
 #include <chrono>
 #include <iomanip>
 #include <sstream>
+#include <cstdio>
 
 #ifdef RNDR_SPDLOG
 #include "spdlog/async.h"
@@ -35,7 +36,9 @@ void rndr::CpuTracer::Init()
     auto in_time_t = std::chrono::system_clock::to_time_t(now);
 
     std::stringstream ss;
-    ss << std::put_time(std::localtime(&in_time_t), "%d-%m-%Y-%Hh%Mm%Ss");
+    tm time;
+    localtime_s(&time, &in_time_t);
+    ss << std::put_time(&time, "%d-%m-%Y-%Hh%Mm%Ss");
     const std::string OutputName = "cputrace/cputrace-" + ss.str() + ".log";
 
 #ifdef RNDR_SPDLOG
@@ -56,7 +59,7 @@ void rndr::CpuTracer::ShutDown()
     const uint32_t ThreadId =
         GetCurrentThreadId();  // TODO(mkostic): Hide this behind platform-agnostic API
     const int64_t DurationUS = 0;
-    sprintf(Trace.data(),
+    sprintf_s(Trace.data(), StackStringSize,
             "{\"name\":\"%s\", \"cat\":\"\", \"ph\":\"X\", \"ts\": %I64d, \"dur\": %I64d, "
             "\"pid\": "
             "0, \"tid\": %u}",
@@ -76,7 +79,7 @@ void rndr::CpuTracer::AddTrace(const std::string& Name,
     const uint32_t ThreadId =
         GetCurrentThreadId();  // TODO(mkostic): Hide this behind platform-agnostic API
     char Trace[4196] = {};
-    sprintf(Trace,
+    sprintf_s(Trace,
             "{\"name\":\"%s\", \"cat\":\"\", \"ph\":\"X\", \"ts\": %I64d, \"dur\": %I64d, "
             "\"pid\": "
             "0, \"tid\": %u},",

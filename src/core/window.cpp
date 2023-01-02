@@ -173,6 +173,7 @@ void rndr::Window::ActivateInfiniteCursor(bool Activate)
 
 void rndr::Window::ButtonEvent(Window* Window, InputPrimitive Primitive, InputTrigger Trigger)
 {
+    RNDR_UNUSED(Window);
     if (Primitive == InputPrimitive::Keyboard_Esc && Trigger == InputTrigger::ButtonDown)
     {
         Close();
@@ -192,8 +193,6 @@ void rndr::Window::Resize(Window* Window, int Width, int Height)
 
 LRESULT CALLBACK WindowProc(HWND WindowHandle, UINT MsgCode, WPARAM ParamW, LPARAM ParamL)
 {
-    LRESULT Result = 0;
-
     LONG_PTR WindowPtr = GetWindowLongPtr(WindowHandle, GWLP_USERDATA);
     rndr::Window* Window = reinterpret_cast<rndr::Window*>(WindowPtr);
 
@@ -204,7 +203,7 @@ LRESULT CALLBACK WindowProc(HWND WindowHandle, UINT MsgCode, WPARAM ParamW, LPAR
             RNDR_LOG_INFO("WindowProc: Event WM_CREATE");
 
             CREATESTRUCT* CreateStruct = reinterpret_cast<CREATESTRUCT*>(ParamL);
-            rndr::Window* Window = reinterpret_cast<rndr::Window*>(CreateStruct->lpCreateParams);
+            Window = reinterpret_cast<rndr::Window*>(CreateStruct->lpCreateParams);
 
             SetWindowLongPtr(WindowHandle, GWLP_USERDATA, reinterpret_cast<LONG_PTR>(Window));
 
@@ -261,8 +260,9 @@ LRESULT CALLBACK WindowProc(HWND WindowHandle, UINT MsgCode, WPARAM ParamW, LPAR
             rndr::InputSystem* IS = rndr::GRndrContext->GetInputSystem();
             if (IS != nullptr)
             {
-                const math::Point2 AbsolutePosition(X, Y);
-                const math::Vector2 ScreenSize(Window->GetWidth(), Window->GetHeight());
+                const math::Point2 AbsolutePosition(static_cast<float>(X), static_cast<float>(Y));
+                const math::Vector2 ScreenSize(static_cast<float>(Window->GetWidth()),
+                                               static_cast<float>(Window->GetHeight()));
                 IS->SubmitMousePositionEvent(Window->GetNativeWindowHandle(), AbsolutePosition,
                                              ScreenSize);
             }
@@ -418,7 +418,7 @@ LRESULT CALLBACK WindowProc(HWND WindowHandle, UINT MsgCode, WPARAM ParamW, LPAR
         case WM_KEYDOWN:
         case WM_KEYUP:
         {
-            const auto Iter = g_PrimitiveMapping.find(ParamW);
+            const auto Iter = g_PrimitiveMapping.find(static_cast<uint32_t>(ParamW));
             if (Iter == g_PrimitiveMapping.end())
             {
                 break;

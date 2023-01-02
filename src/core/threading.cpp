@@ -52,6 +52,7 @@ void rndr::Scheduler::ShutDown()
     TaskBaseSP KillTask{nullptr};
     for (const auto& Thread : m_Threads)
     {
+        RNDR_UNUSED(Thread);
         m_Queue.Push(KillTask);
     }
 

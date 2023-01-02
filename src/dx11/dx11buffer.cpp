@@ -16,16 +16,16 @@ rndr::Buffer::~Buffer()
 }
 
 bool rndr::Buffer::Init(GraphicsContext* Context,
-                        const BufferProperties& Props,
+                        const BufferProperties& InProps,
                         ByteSpan InitialData)
 {
-    if (Props.Stride == 0)
+    if (InProps.Stride == 0)
     {
         RNDR_LOG_ERROR("Buffer::Init: Stride can't be 0!");
         return false;
     }
 
-    this->Props = Props;
+    Props = InProps;
 
     D3D11_BUFFER_DESC Desc;
     Desc.BindFlags = DX11FromBufferTypeToBindFlag(Props.Type);
@@ -52,7 +52,7 @@ bool rndr::Buffer::Init(GraphicsContext* Context,
     return true;
 }
 
-bool rndr::Buffer::Update(GraphicsContext* Context, ByteSpan Data, int StartOffset) const
+bool rndr::Buffer::Update(GraphicsContext* Context, ByteSpan Data, uint32_t StartOffset) const
 {
     if (Props.Usage == Usage::Readback)
     {
@@ -103,11 +103,12 @@ bool rndr::Buffer::Update(GraphicsContext* Context, ByteSpan Data, int StartOffs
     }
 
     D3D11_BOX* DestRegionPtr = nullptr;
+    uint32_t DataSize = static_cast<uint32_t>(Data.Size);
     if (Props.Type != BufferType::Constant)
     {
         D3D11_BOX DestRegion;
         DestRegion.left = StartOffset;
-        DestRegion.right = StartOffset + Data.Size;
+        DestRegion.right = StartOffset + DataSize;
         DestRegion.top = 0;
         DestRegion.bottom = 1;
         DestRegion.front = 0;
@@ -115,7 +116,7 @@ bool rndr::Buffer::Update(GraphicsContext* Context, ByteSpan Data, int StartOffs
         DestRegionPtr = &DestRegion;
     }
 
-    DeviceContext->UpdateSubresource(DX11Buffer, 0, DestRegionPtr, Data.Data, Data.Size, 0);
+    DeviceContext->UpdateSubresource(DX11Buffer, 0, DestRegionPtr, Data.Data, DataSize, 0);
     if (Context->WindowsHasFailed())
     {
         std::string ErrorMessage = Context->WindowsGetErrorMessage();
@@ -126,7 +127,7 @@ bool rndr::Buffer::Update(GraphicsContext* Context, ByteSpan Data, int StartOffs
     return true;
 }
 
-bool rndr::Buffer::Read(rndr::GraphicsContext* Context, ByteSpan OutData, int ReadOffset) const
+bool rndr::Buffer::Read(rndr::GraphicsContext* Context, ByteSpan OutData, uint32_t ReadOffset) const
 {
     if (Props.Usage != Usage::Readback)
     {

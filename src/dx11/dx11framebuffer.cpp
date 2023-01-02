@@ -18,32 +18,32 @@ rndr::FrameBuffer::~FrameBuffer()
 }
 
 bool rndr::FrameBuffer::Init(GraphicsContext* Context,
-                             int Width,
-                             int Height,
-                             const FrameBufferProperties& Props)
+                             int InWidth,
+                             int InHeight,
+                             const FrameBufferProperties& InProps)
 {
-    if (Width == 0 || Height == 0)
+    if (InWidth == 0 || InHeight == 0)
     {
         RNDR_LOG_ERROR("FrameBuffer::Init: Invalid width or height!");
         return false;
     }
-    if (Props.ColorBufferCount <= 0 ||
-        Props.ColorBufferCount > GraphicsConstants::MaxFrameBufferColorBuffers)
+    if (InProps.ColorBufferCount <= 0 ||
+        InProps.ColorBufferCount > GraphicsConstants::MaxFrameBufferColorBuffers)
     {
         RNDR_LOG_ERROR("FrameBuffer::Init: Invalid number of color buffers!");
         return false;
     }
 
-    this->Props = Props;
-    this->Width = Width;
-    this->Height = Height;
+    Props = InProps;
+    Width = InWidth;
+    Height = InHeight;
 
     return InitInternal(Context);
 }
 
 bool rndr::FrameBuffer::InitForSwapChain(rndr::GraphicsContext* Context,
-                                         int Width,
-                                         int Height,
+                                         int InWidth,
+                                         int InHeight,
                                          rndr::SwapChain* SwapChain)
 {
     if (!Context)
@@ -57,20 +57,20 @@ bool rndr::FrameBuffer::InitForSwapChain(rndr::GraphicsContext* Context,
         return false;
     }
 
-    this->Props.ColorBufferCount = 1;
-    this->Props.ColorBufferProperties[0].bUseMips = false;
-    this->Props.ColorBufferProperties[0].SampleCount = 1;
-    this->Props.ColorBufferProperties[0].PixelFormat = SwapChain->Props.ColorFormat;
-    this->Props.ColorBufferProperties[0].Usage = Usage::Default;
-    this->Props.ColorBufferProperties[0].ImageBindFlags = ImageBindFlags::RenderTarget;
-    this->Props.bUseDepthStencil = SwapChain->Props.bUseDepthStencil;
-    this->Props.DepthStencilBufferProperties.bUseMips = false;
-    this->Props.DepthStencilBufferProperties.SampleCount = 1;
-    this->Props.DepthStencilBufferProperties.PixelFormat = SwapChain->Props.DepthStencilFormat;
-    this->Props.DepthStencilBufferProperties.Usage = Usage::Default;
-    this->Props.DepthStencilBufferProperties.ImageBindFlags = ImageBindFlags::DepthStencil;
-    this->Width = Width;
-    this->Height = Height;
+    Props.ColorBufferCount = 1;
+    Props.ColorBufferProperties[0].bUseMips = false;
+    Props.ColorBufferProperties[0].SampleCount = 1;
+    Props.ColorBufferProperties[0].PixelFormat = SwapChain->Props.ColorFormat;
+    Props.ColorBufferProperties[0].Usage = Usage::Default;
+    Props.ColorBufferProperties[0].ImageBindFlags = ImageBindFlags::RenderTarget;
+    Props.bUseDepthStencil = SwapChain->Props.bUseDepthStencil;
+    Props.DepthStencilBufferProperties.bUseMips = false;
+    Props.DepthStencilBufferProperties.SampleCount = 1;
+    Props.DepthStencilBufferProperties.PixelFormat = SwapChain->Props.DepthStencilFormat;
+    Props.DepthStencilBufferProperties.Usage = Usage::Default;
+    Props.DepthStencilBufferProperties.ImageBindFlags = ImageBindFlags::DepthStencil;
+    Width = InWidth;
+    Height = InHeight;
 
     if (Width == 0 || Height == 0)
     {
@@ -87,9 +87,9 @@ bool rndr::FrameBuffer::InitForSwapChain(rndr::GraphicsContext* Context,
     return InitInternal(Context, SwapChain);
 }
 
-bool rndr::FrameBuffer::Resize(rndr::GraphicsContext* Context, int Width, int Height)
+bool rndr::FrameBuffer::Resize(rndr::GraphicsContext* Context, int InWidth, int InHeight)
 {
-    if (Width == 0 || Height == 0)
+    if (InWidth == 0 || InHeight == 0)
     {
         RNDR_LOG_ERROR("FrameBuffer::Resize: Invalid width or height!");
         return false;
@@ -97,16 +97,19 @@ bool rndr::FrameBuffer::Resize(rndr::GraphicsContext* Context, int Width, int He
 
     Clear();
 
+    Width = InWidth;
+    Height = InHeight;
+
     return InitInternal(Context);
 }
 
-bool rndr::FrameBuffer::UpdateViewport(float Width,
-                                       float Height,
+bool rndr::FrameBuffer::UpdateViewport(float InWidth,
+                                       float InHeight,
                                        const math::Point2& TopLeft,
                                        float MinDepth,
                                        float MaxDepth)
 {
-    if (Width == 0 || Height == 0)
+    if (InWidth == 0 || InHeight == 0)
     {
         RNDR_LOG_ERROR("FrameBuffer::UpdateViewport: Invalid width or height!");
         return false;
@@ -119,8 +122,8 @@ bool rndr::FrameBuffer::UpdateViewport(float Width,
     MinDepth = math::Clamp(MinDepth, 0.0f, 1.0f);
     MaxDepth = math::Clamp(MaxDepth, 0.0f, 1.0f);
 
-    DX11Viewport.Width = Width;
-    DX11Viewport.Height = Height;
+    DX11Viewport.Width = InWidth;
+    DX11Viewport.Height = InHeight;
     DX11Viewport.TopLeftX = TopLeft.X;
     DX11Viewport.TopLeftY = TopLeft.Y;
     DX11Viewport.MinDepth = MinDepth;
@@ -186,8 +189,8 @@ bool rndr::FrameBuffer::InitInternal(GraphicsContext* Context, SwapChain* SwapCh
         }
     }
 
-    DX11Viewport.Width = Width;
-    DX11Viewport.Height = Height;
+    DX11Viewport.Width = static_cast<float>(Width);
+    DX11Viewport.Height = static_cast<float>(Height);
     DX11Viewport.TopLeftX = 0;
     DX11Viewport.TopLeftY = 0;
     DX11Viewport.MinDepth = 0.0;

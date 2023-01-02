@@ -19,14 +19,14 @@
 #include "rndr/render/dx11/dx11swapchain.h"
 
 bool rndr::Image::Init(GraphicsContext* Context,
-                       int Width,
-                       int Height,
-                       const ImageProperties& Props,
-                       ByteSpan InitData)
+                       int InWidth,
+                       int InHeight,
+                       const ImageProperties& InProps,
+                       ByteSpan InInitData)
 {
-    this->Props = Props;
-    this->Width = Width;
-    this->Height = Height;
+    this->Props = InProps;
+    this->Width = InWidth;
+    this->Height = InHeight;
     this->ArraySize = 1;
 
     if (Width == 0 || Height == 0)
@@ -35,22 +35,22 @@ bool rndr::Image::Init(GraphicsContext* Context,
         return false;
     }
 
-    ByteSpan DataArray[1] = {InitData};
+    ByteSpan DataArray[1] = {InInitData};
     Span<ByteSpan> Data{DataArray, 1};
-    return InitInternal(Context, InitData ? Data : Span<ByteSpan>{});
+    return InitInternal(Context, InInitData ? Data : Span<ByteSpan>{});
 }
 
 bool rndr::Image::InitArray(GraphicsContext* Context,
-                            int Width,
-                            int Height,
-                            int ArraySize,
-                            const ImageProperties& Props,
+                            int InWidth,
+                            int InHeight,
+                            int InArraySize,
+                            const ImageProperties& InProps,
                             Span<ByteSpan> InitData)
 {
-    this->Props = Props;
-    this->Width = Width;
-    this->Height = Height;
-    this->ArraySize = ArraySize;
+    this->Props = InProps;
+    this->Width = InWidth;
+    this->Height = InHeight;
+    this->ArraySize = InArraySize;
 
     if (ArraySize <= 1)
     {
@@ -73,14 +73,14 @@ bool rndr::Image::InitArray(GraphicsContext* Context,
 }
 
 bool rndr::Image::InitCubeMap(GraphicsContext* Context,
-                              int Width,
-                              int Height,
-                              const ImageProperties& Props,
+                              int InWidth,
+                              int InHeight,
+                              const ImageProperties& InProps,
                               Span<ByteSpan> InitData)
 {
-    this->Props = Props;
-    this->Width = Width;
-    this->Height = Height;
+    this->Props = InProps;
+    this->Width = InWidth;
+    this->Height = InHeight;
     this->ArraySize = 6;
 
     if (InitData && InitData.Size != this->ArraySize)
@@ -383,14 +383,14 @@ bool rndr::Image::Update(GraphicsContext* Context,
 
     D3D11_BOX* DestRegionPtr = nullptr;
     D3D11_BOX DestRegion;
-    DestRegion.left = Start.X;
-    DestRegion.right = End.X;
-    DestRegion.top = Start.Y;
-    DestRegion.bottom = End.Y;
+    DestRegion.left = static_cast<uint32_t>(Start.X);
+    DestRegion.right = static_cast<uint32_t>(End.X);
+    DestRegion.top = static_cast<uint32_t>(Start.Y);
+    DestRegion.bottom = static_cast<uint32_t>(End.Y);
     DestRegion.front = 0;
     DestRegion.back = 1;
     DestRegionPtr = &DestRegion;
-    const int BoxWidth = End.X - Start.X;
+    const int BoxWidth = static_cast<int>(End.X - Start.X);
 
     DeviceContext->UpdateSubresource(DX11Texture, SubresourceIndex, DestRegionPtr, Contents.Data,
                                      BoxWidth * PixelSize, 0);

@@ -19,13 +19,13 @@ rndr::SwapChain::~SwapChain()
 
 bool rndr::SwapChain::Init(GraphicsContext* Context,
                            NativeWindowHandle Handle,
-                           int Width,
-                           int Height,
-                           const SwapChainProperties& Props)
+                           int InWidth,
+                           int InHeight,
+                           const SwapChainProperties& InProps)
 {
-    this->Props = Props;
-    this->Width = Width;
-    this->Height = Height;
+    Props = InProps;
+    Width = InWidth;
+    Height = InHeight;
 
     HWND WindowHandle = reinterpret_cast<HWND>(Handle);
     if (!IsWindow(WindowHandle))

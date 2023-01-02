@@ -69,6 +69,8 @@ using real = double;
 
 #define RNDR_ENUM_TO_TYPE(EnumType, Value) static_cast<std::underlying_type_t<EnumType>>(Value)
 
+#define RNDR_UNUSED(Expr) (void)(Expr)
+
 namespace rndr
 {
 

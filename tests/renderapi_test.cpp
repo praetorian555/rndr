@@ -268,7 +268,6 @@ TEST_CASE("CubeMap", "RenderAPI")
     const rndr::Span<rndr::ByteSpan> EmptyData;
     const int Width = 400;
     const int Height = 400;
-    const int ArraySize = 6;
     SECTION("Default Props with Invalid Width or Height")
     {
         rndr::ImageProperties ImageProps;
@@ -396,7 +395,6 @@ TEST_CASE("ImageRead", "RenderAPI")
     const rndr::ByteSpan EmptyData;
     const int Width = 400;
     const int Height = 100;
-    const int ArraySize = 8;
     const math::Point2 Start;
     const math::Point2 BadStart{200, 500};
     const math::Vector2 Size{50, 50};
@@ -444,7 +442,6 @@ TEST_CASE("ImageCopy", "RenderAPI")
     const rndr::ByteSpan EmptyData;
     const int Width = 400;
     const int Height = 100;
-    const int ArraySize = 8;
     const math::Point2 Start;
     const math::Point2 BadStart{200, 500};
     const math::Vector2 Size{50, 50};
