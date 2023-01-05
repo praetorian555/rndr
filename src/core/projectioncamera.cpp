@@ -59,21 +59,21 @@ math::Transform rndr::ProjectionCamera::GetProjectionTransform() const
         const real Width = static_cast<real>(m_Props.OrtographicWidth);
         const real Height = Width / AspectRatio;
 #if RNDR_LEFT_HANDED
-        return (math::Transform)math::Orhographic_LH_N0(-Width / 2, Width / 2, -Height / 2,
-                                                        Height / 2, m_Props.Near, m_Props.Far);
+        return math::Transform{math::Orhographic_LH_N0(-Width / 2, Width / 2, -Height / 2,
+                                                       Height / 2, m_Props.Near, m_Props.Far)};
 #else
-        return (math::Transform)math::Orhographic_RH_N0(-Width / 2, Width / 2, -Height / 2,
-                                                        Height / 2, m_Props.Near, m_Props.Far);
+        return math::Transform{math::Orhographic_RH_N0(-Width / 2, Width / 2, -Height / 2,
+                                                       Height / 2, m_Props.Near, m_Props.Far)};
 #endif
     }
     else
     {
 #if RNDR_LEFT_HANDED
-        return (math::Transform)math::Perspective_LH_N0(m_Props.VerticalFOV, AspectRatio,
-                                                        m_Props.Near, m_Props.Far);
+        return math::Transform{
+            math::Perspective_LH_N0(m_Props.VerticalFOV, AspectRatio, m_Props.Near, m_Props.Far)};
 #else
-        return (math::Transform)math::Perspective_RH_N0(m_Props.VerticalFOV, AspectRatio,
-                                                        m_Props.Near, m_Props.Far);
+        return math::Transform{
+            math::Perspective_RH_N0(m_Props.VerticalFOV, AspectRatio, m_Props.Near, m_Props.Far)};
 #endif
     }
 }
@@ -84,5 +84,5 @@ real rndr::ProjectionCamera::GetAspectRatio() const
     {
         return 1;
     }
-    return (real)m_Props.ScreenWidth / m_Props.ScreenHeight;
+    return static_cast<real>(m_Props.ScreenWidth) / static_cast<real>(m_Props.ScreenHeight);
 }

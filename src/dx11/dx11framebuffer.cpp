@@ -46,12 +46,12 @@ bool rndr::FrameBuffer::InitForSwapChain(rndr::GraphicsContext* Context,
                                          int InHeight,
                                          rndr::SwapChain* SwapChain)
 {
-    if (!Context)
+    if (Context == nullptr)
     {
         RNDR_LOG_ERROR("FrameBuffer::InitForSwapChain: Invalid graphics context!");
         return false;
     }
-    if (!SwapChain)
+    if (SwapChain == nullptr)
     {
         RNDR_LOG_ERROR("FrameBuffer::InitForSwapChain: Invalid swapchain!");
         return false;

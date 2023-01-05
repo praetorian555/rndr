@@ -55,7 +55,7 @@ struct InputLayout
 
     ~InputLayout();
 
-    bool Init(GraphicsContext* Context, Span<InputLayoutProperties> Props, rndr::Shader* Shader);
+    bool Init(GraphicsContext* Context, Span<InputLayoutProperties> InProps, rndr::Shader* Shader);
 };
 
 struct RasterizerState
@@ -66,7 +66,7 @@ struct RasterizerState
 
     ~RasterizerState();
 
-    bool Init(GraphicsContext* Context, const RasterizerProperties& Props);
+    bool Init(GraphicsContext* Context, const RasterizerProperties& InProps);
 };
 
 struct DepthStencilState
@@ -77,7 +77,7 @@ struct DepthStencilState
 
     ~DepthStencilState();
 
-    bool Init(GraphicsContext* Context, const DepthStencilProperties& Props);
+    bool Init(GraphicsContext* Context, const DepthStencilProperties& InProps);
 };
 
 struct BlendState
@@ -88,7 +88,7 @@ struct BlendState
 
     ~BlendState();
 
-    bool Init(GraphicsContext* Context, const BlendProperties& Props);
+    bool Init(GraphicsContext* Context, const BlendProperties& InProps);
 };
 
 struct Pipeline

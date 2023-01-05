@@ -5,8 +5,8 @@
 // Should be kept in line with rndr::PixelFormat
 // clang-format off
 
-static constexpr size_t PixelSizesCount = static_cast<size_t>(rndr::PixelFormat::Count);
-static const std::array<int, PixelSizesCount> s_PixelSizes
+static constexpr size_t kPixelSizesCount = static_cast<size_t>(rndr::PixelFormat::Count);
+static const std::array<int, kPixelSizesCount> GPixelSizes
 {
     // clang-tidy off
     4,
@@ -49,6 +49,6 @@ static const std::array<int, PixelSizesCount> s_PixelSizes
 int rndr::GetPixelSize(PixelFormat Format)
 {
     const int Index = static_cast<int>(Format);
-    assert(Index >= 0 || Index < s_PixelSizes.size());
-    return s_PixelSizes[Index];
+    assert(Index >= 0 && Index < GPixelSizes.size());
+    return GPixelSizes[Index];
 }

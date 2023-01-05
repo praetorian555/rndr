@@ -9,8 +9,8 @@ void* rndr::DefaultAllocator::Allocate(int Size, const char* Tag, const char* Fi
     RNDR_UNUSED(Line);
 
 #if RNDR_WINDOWS
-    constexpr int AlignmentInBytes = 16;
-    return _aligned_malloc(Size, AlignmentInBytes);
+    constexpr int kAlignmentInBytes = 16;
+    return _aligned_malloc(Size, kAlignmentInBytes);
 #else
 #error "Platform missing default allocator implementation!"
     return nullptr;

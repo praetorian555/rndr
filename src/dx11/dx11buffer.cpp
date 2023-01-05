@@ -41,7 +41,7 @@ bool rndr::Buffer::Init(GraphicsContext* Context,
     DescData.SysMemSlicePitch = 0;
     D3D11_SUBRESOURCE_DATA* DescDataPtr = InitialData ? &DescData : nullptr;
     ID3D11Device* Device = Context->GetDevice();
-    HRESULT Result = Device->CreateBuffer(&Desc, DescDataPtr, &DX11Buffer);
+    const HRESULT Result = Device->CreateBuffer(&Desc, DescDataPtr, &DX11Buffer);
     if (Context->WindowsHasFailed(Result))
     {
         const std::string ErrorMessage = Context->WindowsGetErrorMessage();
@@ -79,11 +79,11 @@ bool rndr::Buffer::Update(GraphicsContext* Context, ByteSpan Data, uint32_t Star
     if (Props.Usage == Usage::Dynamic)
     {
         D3D11_MAPPED_SUBRESOURCE Subresource;
-        HRESULT Result =
+        const HRESULT Result =
             DeviceContext->Map(DX11Buffer, 0, D3D11_MAP_WRITE_DISCARD, 0, &Subresource);
         if (Context->WindowsHasFailed(Result))
         {
-            std::string ErrorMessage = Context->WindowsGetErrorMessage(Result);
+            const std::string ErrorMessage = Context->WindowsGetErrorMessage(Result);
             RNDR_LOG_ERROR("Buffer::Update: %s", ErrorMessage.c_str());
             return false;
         }
@@ -94,7 +94,7 @@ bool rndr::Buffer::Update(GraphicsContext* Context, ByteSpan Data, uint32_t Star
         DeviceContext->Unmap(DX11Buffer, 0);
         if (Context->WindowsHasFailed())
         {
-            std::string ErrorMessage = Context->WindowsGetErrorMessage();
+            const std::string ErrorMessage = Context->WindowsGetErrorMessage();
             RNDR_LOG_ERROR("Buffer::Update: %s", ErrorMessage.c_str());
             return false;
         }
@@ -103,7 +103,7 @@ bool rndr::Buffer::Update(GraphicsContext* Context, ByteSpan Data, uint32_t Star
     }
 
     D3D11_BOX* DestRegionPtr = nullptr;
-    uint32_t DataSize = static_cast<uint32_t>(Data.Size);
+    const uint32_t DataSize = static_cast<uint32_t>(Data.Size);
     if (Props.Type != BufferType::Constant)
     {
         D3D11_BOX DestRegion;
@@ -119,7 +119,7 @@ bool rndr::Buffer::Update(GraphicsContext* Context, ByteSpan Data, uint32_t Star
     DeviceContext->UpdateSubresource(DX11Buffer, 0, DestRegionPtr, Data.Data, DataSize, 0);
     if (Context->WindowsHasFailed())
     {
-        std::string ErrorMessage = Context->WindowsGetErrorMessage();
+        const std::string ErrorMessage = Context->WindowsGetErrorMessage();
         RNDR_LOG_ERROR("Buffer::Update: %s", ErrorMessage.c_str());
         return false;
     }
@@ -152,10 +152,10 @@ bool rndr::Buffer::Read(rndr::GraphicsContext* Context, ByteSpan OutData, uint32
 
     ID3D11DeviceContext* DeviceContext = Context->GetDeviceContext();
     D3D11_MAPPED_SUBRESOURCE Subresource;
-    HRESULT Result = DeviceContext->Map(DX11Buffer, 0, D3D11_MAP_READ, 0, &Subresource);
+    const HRESULT Result = DeviceContext->Map(DX11Buffer, 0, D3D11_MAP_READ, 0, &Subresource);
     if (Context->WindowsHasFailed(Result))
     {
-        std::string ErrorMessage = Context->WindowsGetErrorMessage(Result);
+        const std::string ErrorMessage = Context->WindowsGetErrorMessage(Result);
         RNDR_LOG_ERROR("%s", ErrorMessage.c_str());
         return false;
     }
@@ -166,7 +166,7 @@ bool rndr::Buffer::Read(rndr::GraphicsContext* Context, ByteSpan OutData, uint32
     DeviceContext->Unmap(DX11Buffer, 0);
     if (Context->WindowsHasFailed())
     {
-        std::string ErrorMessage = Context->WindowsGetErrorMessage();
+        const std::string ErrorMessage = Context->WindowsGetErrorMessage();
         RNDR_LOG_ERROR("%s", ErrorMessage.c_str());
         return false;
     }

@@ -39,20 +39,20 @@ struct Image
     Image() = default;
 
     bool Init(GraphicsContext* Context,
-              int Width,
-              int Height,
-              const ImageProperties& Props,
+              int InWidth,
+              int InHeight,
+              const ImageProperties& InProps,
               ByteSpan InitData);
     bool InitArray(GraphicsContext* Context,
-                   int Width,
-                   int Height,
-                   int ArraySize,
-                   const ImageProperties& Props,
+                   int InWidth,
+                   int InHeight,
+                   int InArraySize,
+                   const ImageProperties& InProps,
                    Span<ByteSpan> InitData);
     bool InitCubeMap(GraphicsContext* Context,
-                     int Width,
-                     int Height,
-                     const ImageProperties& Props,
+                     int InWidth,
+                     int InHeight,
+                     const ImageProperties& InProps,
                      Span<ByteSpan> InitData);
     bool InitSwapchainBackBuffer(GraphicsContext* Context,
                                  rndr::SwapChain* SwapChain,

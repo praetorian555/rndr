@@ -22,12 +22,12 @@ bool rndr::Image::Init(GraphicsContext* Context,
                        int InWidth,
                        int InHeight,
                        const ImageProperties& InProps,
-                       ByteSpan InInitData)
+                       ByteSpan InitData)
 {
-    this->Props = InProps;
-    this->Width = InWidth;
-    this->Height = InHeight;
-    this->ArraySize = 1;
+    Props = InProps;
+    Width = InWidth;
+    Height = InHeight;
+    ArraySize = 1;
 
     if (Width == 0 || Height == 0)
     {
@@ -35,9 +35,9 @@ bool rndr::Image::Init(GraphicsContext* Context,
         return false;
     }
 
-    ByteSpan DataArray[1] = {InInitData};
+    ByteSpan DataArray[1] = {InitData};
     Span<ByteSpan> Data{DataArray, 1};
-    return InitInternal(Context, InInitData ? Data : Span<ByteSpan>{});
+    return InitInternal(Context, InitData ? Data : Span<ByteSpan>{});
 }
 
 bool rndr::Image::InitArray(GraphicsContext* Context,

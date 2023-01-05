@@ -36,17 +36,17 @@ struct FrameBuffer
     ~FrameBuffer();
 
     bool Init(rndr::GraphicsContext* Context,
-              int Width,
-              int Height,
-              const FrameBufferProperties& Props = FrameBufferProperties{});
+              int InWidth,
+              int InHeight,
+              const FrameBufferProperties& InProps = FrameBufferProperties{});
     bool InitForSwapChain(rndr::GraphicsContext* Context,
-                          int Width,
-                          int Height,
+                          int InWidth,
+                          int InHeight,
                           rndr::SwapChain* SwapChain);
 
-    bool Resize(rndr::GraphicsContext* Context, int Width, int Height);
-    bool UpdateViewport(float Width,
-                        float Height,
+    bool Resize(rndr::GraphicsContext* Context, int InWidth, int InHeight);
+    bool UpdateViewport(float InWidth,
+                        float InHeight,
                         const math::Point2& TopLeft,
                         float MinDepth,
                         float MaxDepth);

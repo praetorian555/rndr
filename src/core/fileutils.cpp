@@ -19,13 +19,13 @@ rndr::ByteSpan rndr::file::ReadEntireFile(const std::string& FilePath)
     }
 
     fseek(File, 0, SEEK_END);
-    int ContentsSize = ftell(File);
+    const int ContentsSize = ftell(File);
     fseek(File, 0, SEEK_SET);
 
     ByteSpan Contents;
     Contents.Size = ContentsSize;
     Contents.Data = RNDR_NEW_ARRAY(uint8_t, ContentsSize, "");
-    size_t ReadBytes = fread(Contents.Data, 1, Contents.Size, File);
+    const size_t ReadBytes = fread(Contents.Data, 1, Contents.Size, File);
     assert(ReadBytes == ContentsSize);
 
     fclose(File);

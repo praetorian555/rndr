@@ -21,7 +21,7 @@ struct Sampler
 
     ~Sampler();
 
-    bool Init(rndr::GraphicsContext* Context, const SamplerProperties& Props = SamplerProperties{});
+    bool Init(rndr::GraphicsContext* Context, const SamplerProperties& InProps = SamplerProperties{});
 };
 
 }  // namespace rndr

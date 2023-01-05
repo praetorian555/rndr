@@ -27,7 +27,7 @@ enum WindowsVirtualKey : uint32_t
     VK_L = 0x4C,
 };
 
-static std::map<uint32_t, rndr::InputPrimitive> g_PrimitiveMapping = {
+static std::map<uint32_t, rndr::InputPrimitive> GPrimitiveMapping = {
     {VK_A, rndr::InputPrimitive::Keyboard_A},
     {VK_W, rndr::InputPrimitive::Keyboard_W},
     {VK_S, rndr::InputPrimitive::Keyboard_S},
@@ -53,7 +53,7 @@ rndr::WindowDelegates::MouseWheelDelegate rndr::WindowDelegates::OnMouseWheelMov
 
 // Window
 
-LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam);
+LRESULT CALLBACK WindowProc(HWND WindowHandle, UINT MsgCode, WPARAM ParamW, LPARAM ParamL);
 
 rndr::Window::Window(int Width, int Height, const WindowProperties& Props)
     : m_Width(Width), m_Height(Height), m_Props(Props)
@@ -74,7 +74,7 @@ rndr::Window::Window(int Width, int Height, const WindowProperties& Props)
         WindowClass.lpfnWndProc = WindowProc;
         WindowClass.style = CS_OWNDC | CS_HREDRAW | CS_VREDRAW;
 
-        ATOM Atom = RegisterClass(&WindowClass);
+        const ATOM Atom = RegisterClass(&WindowClass);
         assert(Atom != 0);
     }
 
@@ -85,7 +85,7 @@ rndr::Window::Window(int Width, int Height, const WindowProperties& Props)
         CreateWindowEx(0, ClassName, m_Props.Name.c_str(), WS_OVERLAPPEDWINDOW, CW_USEDEFAULT,
                        CW_USEDEFAULT, WindowRect.right - WindowRect.left,
                        WindowRect.bottom - WindowRect.top, nullptr, nullptr, Instance, this);
-    assert(WindowHandle != NULL);
+    assert(WindowHandle != nullptr);
 
     ShowWindow(WindowHandle, SW_SHOW);
 
@@ -100,15 +100,15 @@ rndr::Window::~Window()
     }
 }
 
-void rndr::Window::ProcessEvents()
+void rndr::Window::ProcessEvents() const
 {
     HWND WindowHandle = reinterpret_cast<HWND>(m_NativeWindowHandle);
-    MSG msg{};
+    MSG Msg{};
 
-    while (PeekMessage(&msg, WindowHandle, 0, 0, PM_REMOVE))
+    while (PeekMessage(&Msg, WindowHandle, 0, 0, PM_REMOVE))
     {
-        TranslateMessage(&msg);
-        DispatchMessage(&msg);
+        TranslateMessage(&Msg);
+        DispatchMessage(&Msg);
     }
 }
 
@@ -120,7 +120,7 @@ bool rndr::Window::IsClosed() const
 void rndr::Window::Close()
 {
     HWND WindowHandle = reinterpret_cast<HWND>(m_NativeWindowHandle);
-    bool Result = DestroyWindow(WindowHandle);
+    const bool Result = DestroyWindow(WindowHandle) > 0;
     assert(Result);
     m_NativeWindowHandle = 0;
 }
@@ -145,7 +145,7 @@ bool rndr::Window::IsWindowMinimized() const
     return m_Width == 0 || m_Height == 0;
 }
 
-void rndr::Window::LockCursor(bool ShouldLock)
+void rndr::Window::LockCursor(bool ShouldLock) const
 {
     if (ShouldLock)
     {
@@ -156,7 +156,7 @@ void rndr::Window::LockCursor(bool ShouldLock)
     }
     else
     {
-        ClipCursor(NULL);
+        ClipCursor(nullptr);
     }
 }
 
@@ -168,7 +168,7 @@ void rndr::Window::ActivateInfiniteCursor(bool Activate)
     }
 
     m_InifiniteCursor = Activate;
-    ShowCursor(!m_InifiniteCursor);
+    ShowCursor(static_cast<int>(!m_InifiniteCursor));
 }
 
 void rndr::Window::ButtonEvent(Window* Window, InputPrimitive Primitive, InputTrigger Trigger)
@@ -193,7 +193,7 @@ void rndr::Window::Resize(Window* Window, int Width, int Height)
 
 LRESULT CALLBACK WindowProc(HWND WindowHandle, UINT MsgCode, WPARAM ParamW, LPARAM ParamL)
 {
-    LONG_PTR WindowPtr = GetWindowLongPtr(WindowHandle, GWLP_USERDATA);
+    const LONG_PTR WindowPtr = GetWindowLongPtr(WindowHandle, GWLP_USERDATA);
     rndr::Window* Window = reinterpret_cast<rndr::Window*>(WindowPtr);
 
     switch (MsgCode)
@@ -211,8 +211,8 @@ LRESULT CALLBACK WindowProc(HWND WindowHandle, UINT MsgCode, WPARAM ParamW, LPAR
         }
         case WM_SIZE:
         {
-            UINT Width = LOWORD(ParamL);
-            UINT Height = HIWORD(ParamL);
+            const uint32_t Width = LOWORD(ParamL);
+            const uint32_t Height = HIWORD(ParamL);
 
             RNDR_LOG_INFO("WindowProc: Event WM_SIZE (%d, %d)", Width, Height);
 
@@ -242,15 +242,15 @@ LRESULT CALLBACK WindowProc(HWND WindowHandle, UINT MsgCode, WPARAM ParamW, LPAR
         }
         case WM_MOUSEMOVE:
         {
-            static bool CursorPositionChanged = false;
+            static bool s_CursorPositionChanged = false;
 
             const int X = GET_X_LPARAM(ParamL);
             // In RNDR y grows from bottom to up
             const int Y = Window->GetHeight() - GET_Y_LPARAM(ParamL);
 
-            if (Window->IsInfiniteCursor() && CursorPositionChanged)
+            if (Window->IsInfiniteCursor() && s_CursorPositionChanged)
             {
-                CursorPositionChanged = false;
+                s_CursorPositionChanged = false;
                 break;
             }
 
@@ -275,7 +275,7 @@ LRESULT CALLBACK WindowProc(HWND WindowHandle, UINT MsgCode, WPARAM ParamW, LPAR
                 NewCursorPosition.x = WindowRect.left + Window->GetWidth() / 2;
                 NewCursorPosition.y = WindowRect.top + Window->GetHeight() / 2;
                 SetCursorPos(NewCursorPosition.x, NewCursorPosition.y);
-                CursorPositionChanged = true;
+                s_CursorPositionChanged = true;
             }
 
             break;
@@ -418,8 +418,8 @@ LRESULT CALLBACK WindowProc(HWND WindowHandle, UINT MsgCode, WPARAM ParamW, LPAR
         case WM_KEYDOWN:
         case WM_KEYUP:
         {
-            const auto Iter = g_PrimitiveMapping.find(static_cast<uint32_t>(ParamW));
-            if (Iter == g_PrimitiveMapping.end())
+            const auto Iter = GPrimitiveMapping.find(static_cast<uint32_t>(ParamW));
+            if (Iter == GPrimitiveMapping.end())
             {
                 break;
             }
@@ -439,7 +439,7 @@ LRESULT CALLBACK WindowProc(HWND WindowHandle, UINT MsgCode, WPARAM ParamW, LPAR
         }
         case WM_MOUSEWHEEL:
         {
-            int DeltaWheel = GET_WHEEL_DELTA_WPARAM(ParamW);
+            const int DeltaWheel = GET_WHEEL_DELTA_WPARAM(ParamW);
             rndr::WindowDelegates::OnMouseWheelMovedDelegate.Execute(Window, DeltaWheel);
 
             rndr::InputSystem* IS = rndr::GRndrContext->GetInputSystem();

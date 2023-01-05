@@ -26,10 +26,10 @@ struct SwapChain
     ~SwapChain();
 
     bool Init(GraphicsContext* Context,
-              NativeWindowHandle WindowHandle,
-              int Width,
-              int Height,
-              const SwapChainProperties& Props = SwapChainProperties{});
+              NativeWindowHandle Handle,
+              int InWidth,
+              int InHeight,
+              const SwapChainProperties& InProps = SwapChainProperties{});
 };
 
 }  // namespace rndr

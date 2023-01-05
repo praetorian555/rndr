@@ -69,7 +69,7 @@ void rndr::FirstPersonCamera::Update(real DeltaSeconds)
     m_Position += m_MovementSpeed * DeltaSeconds * m_DeltaPosition.Y * m_RightVector;
 
     const math::Transform CameraToWorld =
-        math::Translate((math::Vector3)m_Position) * math::Rotate(math::Rotator(m_DirectionAngles));
+        math::Translate(math::Vector3{m_Position}) * math::Rotate(math::Rotator(m_DirectionAngles));
     const math::Transform WorldToCamera(CameraToWorld.GetInverse());
 
     m_ProjectionCamera->SetWorldToCamera(WorldToCamera);

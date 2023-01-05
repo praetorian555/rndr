@@ -32,7 +32,7 @@ struct Shader
 
     bool Init(GraphicsContext* Context,
               const ByteSpan& ShaderContents,
-              const ShaderProperties& Props = ShaderProperties{});
+              const ShaderProperties& InProps = ShaderProperties{});
 };
 
 }  // namespace rndr

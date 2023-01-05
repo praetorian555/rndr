@@ -19,7 +19,7 @@ void rndr::InputSystem::SubmitButtonEvent(NativeWindowHandle Window,
                                           InputPrimitive Primitive,
                                           InputTrigger Trigger)
 {
-    Event Evt{Window, ButtonEvent{Primitive, Trigger}};
+    const Event Evt{Window, ButtonEvent{Primitive, Trigger}};
     m_Events.push(Evt);
 }
 
@@ -28,13 +28,13 @@ void rndr::InputSystem::SubmitMousePositionEvent(NativeWindowHandle Window,
                                                  const math::Vector2& ScreenSize)
 {
     assert(ScreenSize.X != 0 && ScreenSize.Y != 0);
-    Event Evt{Window, MousePositionEvent{Position, ScreenSize}};
+    const Event Evt{Window, MousePositionEvent{Position, ScreenSize}};
     m_Events.push(Evt);
 }
 
 void rndr::InputSystem::SubmitMouseWheelEvent(NativeWindowHandle Window, int DeltaWheel)
 {
-    Event Evt{Window, MouseWheelEvent{DeltaWheel}};
+    const Event Evt{Window, MouseWheelEvent{DeltaWheel}};
     m_Events.push(Evt);
 }
 
@@ -143,62 +143,32 @@ rndr::InputContext* rndr::InputSystem::GetContext()
     return m_Context;
 }
 
-bool rndr::InputSystem::IsButton(InputPrimitive Primitive) const
+bool rndr::InputSystem::IsButton(InputPrimitive Primitive)
 {
-    if (IsKeyboardButton(Primitive))
-    {
-        return true;
-    }
-
-    if (IsMouseButton(Primitive))
-    {
-        return true;
-    }
-
-    return false;
+    return IsKeyboardButton(Primitive) || IsMouseButton(Primitive);
 }
 
-bool rndr::InputSystem::IsMouseButton(InputPrimitive Primitive) const
+bool rndr::InputSystem::IsMouseButton(InputPrimitive Primitive)
 {
-    if (Primitive == InputPrimitive::Mouse_LeftButton ||
-        Primitive == InputPrimitive::Mouse_RightButton ||
-        Primitive == InputPrimitive::Mouse_MiddleButton)
-    {
-        return true;
-    }
-
-    return false;
+    return Primitive == InputPrimitive::Mouse_LeftButton ||
+           Primitive == InputPrimitive::Mouse_RightButton ||
+           Primitive == InputPrimitive::Mouse_MiddleButton;
 }
 
-bool rndr::InputSystem::IsKeyboardButton(InputPrimitive Primitive) const
+bool rndr::InputSystem::IsKeyboardButton(InputPrimitive Primitive)
 {
-    if (Primitive > InputPrimitive::_KeyboardStart && Primitive < InputPrimitive::_KeyboardEnd)
-    {
-        return true;
-    }
-
-    return false;
+    return Primitive > InputPrimitive::_KeyboardStart && Primitive < InputPrimitive::_KeyboardEnd;
 }
 
-bool rndr::InputSystem::IsAxis(InputPrimitive Primitive) const
+bool rndr::InputSystem::IsAxis(InputPrimitive Primitive)
 {
-    if (IsMouseAxis(Primitive))
-    {
-        return true;
-    }
-
-    return false;
+    return IsMouseAxis(Primitive);
 }
 
-bool rndr::InputSystem::IsMouseAxis(InputPrimitive Primitive) const
+bool rndr::InputSystem::IsMouseAxis(InputPrimitive Primitive)
 {
-    if (Primitive == InputPrimitive::Mouse_AxisX || Primitive == InputPrimitive::Mouse_AxisY ||
-        Primitive == InputPrimitive::Mouse_AxisWheel)
-    {
-        return true;
-    }
-
-    return false;
+    return Primitive == InputPrimitive::Mouse_AxisX || Primitive == InputPrimitive::Mouse_AxisY ||
+           Primitive == InputPrimitive::Mouse_AxisWheel;
 }
 
 math::Point2 rndr::InputSystem::GetMousePosition() const
@@ -210,7 +180,7 @@ math::Point2 rndr::InputSystem::GetMousePosition() const
 // InputContext ///////////////////////////////////////////////////////////////////////////////////
 
 rndr::InputMapping* rndr::InputContext::CreateMapping(const InputAction& Action,
-                                                      InputCallback Callback)
+                                                      const InputCallback& Callback)
 {
     std::unique_ptr<InputMapping> Mapping = std::make_unique<InputMapping>(Action, Callback);
 

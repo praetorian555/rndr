@@ -33,10 +33,10 @@ void rndr::Scheduler::Init()
     };
 
 #if RNDR_ENABLE_MULTITHREADING
-    const int ThreadCount = std::thread::hardware_concurrency();
-    RNDR_LOG_INFO("rndr::Scheduler: Using %d threads", ThreadCount);
+    const uint32_t ThreadCount = std::thread::hardware_concurrency();
+    RNDR_LOG_INFO("rndr::Scheduler: Using %u threads", ThreadCount);
 #else
-    const int ThreadCount = 1;
+    const uint32_t ThreadCount = 1;
     RNDR_LOG_INFO("rndr::Scheduler: Using only Game thread");
 #endif  // RNDR_ENABLE_MULTITHREADING
 
@@ -49,7 +49,7 @@ void rndr::Scheduler::Init()
 
 void rndr::Scheduler::ShutDown()
 {
-    TaskBaseSP KillTask{nullptr};
+    const TaskBaseSP KillTask{nullptr};
     for (const auto& Thread : m_Threads)
     {
         RNDR_UNUSED(Thread);

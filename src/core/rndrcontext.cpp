@@ -6,20 +6,19 @@
 #include "rndr/core/input.h"
 #include "rndr/core/log.h"
 #include "rndr/core/memory.h"
-#include "rndr/core/rndrcontext.h"
 
 #include "rndr/profiling/cputracer.h"
 
 #include "rndr/render/graphicscontext.h"
 #include "rndr/render/image.h"
 
-static rndr::DefaultAllocator g_DefaultAllocator;
+static rndr::DefaultAllocator GDefaultAllocator;
 
 rndr::RndrContext* rndr::GRndrContext = nullptr;
 
 rndr::RndrContext::RndrContext(const RndrContextProperties& Props)
 {
-    if (GRndrContext)
+    if (GRndrContext != nullptr)
     {
         RNDR_LOG_ERROR("RndrContext already created, there can be only one!");
         bInitialized = false;
@@ -29,15 +28,15 @@ rndr::RndrContext::RndrContext(const RndrContextProperties& Props)
     GRndrContext = this;
 
     m_Props = Props;
-    if (Props.UserAllocator)
+    if (Props.UserAllocator != nullptr)
     {
         m_Allocator = Props.UserAllocator;
     }
     else
     {
-        m_Allocator = &g_DefaultAllocator;
+        m_Allocator = &GDefaultAllocator;
     }
-    m_Logger = Props.UserLogger ? Props.UserLogger : RNDR_NEW(StdAsyncLogger, "Logger");
+    m_Logger = Props.UserLogger != nullptr ? Props.UserLogger : RNDR_NEW(StdAsyncLogger, "Logger");
 
     m_InputSystem = RNDR_NEW(InputSystem, "InputSystem");
 
@@ -50,7 +49,7 @@ rndr::RndrContext::~RndrContext()
     {
         RNDR_DELETE(InputSystem, m_InputSystem);
 
-        if (!m_Props.UserLogger)
+        if (m_Props.UserLogger == nullptr)
         {
             RNDR_DELETE(Logger, m_Logger);
         }
@@ -58,7 +57,7 @@ rndr::RndrContext::~RndrContext()
     }
 }
 
-rndr::Window* rndr::RndrContext::CreateWin(int Width, int Height, const WindowProperties& Props)
+rndr::Window* rndr::RndrContext::CreateWin(int Width, int Height, const WindowProperties& Props) const
 {
     if (!bInitialized)
     {
@@ -71,7 +70,7 @@ rndr::Window* rndr::RndrContext::CreateWin(int Width, int Height, const WindowPr
 }
 
 rndr::GraphicsContext* rndr::RndrContext::CreateGraphicsContext(
-    const GraphicsContextProperties& Props)
+    const GraphicsContextProperties& Props) const
 {
     if (!bInitialized)
     {
@@ -80,7 +79,7 @@ rndr::GraphicsContext* rndr::RndrContext::CreateGraphicsContext(
     }
 
     GraphicsContext* GC = RNDR_NEW(GraphicsContext, "rndr::RndrContext: GraphicsContext");
-    if (!GC || !GC->Init(Props))
+    if (GC == nullptr || !GC->Init(Props))
     {
         RNDR_DELETE(GraphicsContext, GC);
     }

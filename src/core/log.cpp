@@ -17,7 +17,9 @@ rndr::StdAsyncLogger::StdAsyncLogger()
     spdlog::set_level(spdlog::level::trace);
     spdlog::set_pattern("[%H:%M:%S:%e][%P][%t][%^%l%$][%@] %v");
 
-    spdlog::init_thread_pool(8192, 1);  // queue with 8k items and 1 backing thread.
+    constexpr int kMaxMessageCount = 8192;
+    constexpr int kBackingThreadCount = 1;
+    spdlog::init_thread_pool(kMaxMessageCount, kBackingThreadCount);
 
     m_ImplLogger = spdlog::create<spdlog::sinks::stdout_color_sink_st>("stdout_logger");
 #endif  // RNDR_SPDLOG
@@ -37,7 +39,7 @@ void rndr::StdAsyncLogger::Log(const char* File,
                                const char* Message)
 {
 #ifdef RNDR_SPDLOG
-    spdlog::source_loc SourceInfo(File, Line, Function);
+    const spdlog::source_loc SourceInfo(File, Line, Function);
 
     switch (LogLevel)
     {
@@ -77,17 +79,17 @@ void rndr::Log(const char* File,
                const char* Format,
                ...)
 {
-    constexpr int MESSAGE_SIZE = 4096;
-    char Message[MESSAGE_SIZE] = {};
+    constexpr int kMessageSize = 4096;
+    std::array<char, kMessageSize> Message;
+    memset(Message.data(), 0, kMessageSize);
 
-    va_list Args;
+    va_list Args = nullptr;
     va_start(Args, Format);
-    vsprintf_s(Message, MESSAGE_SIZE, Format, Args);
+    vsprintf_s(Message.data(), kMessageSize, Format, Args);
     va_end(Args);
 
-    Logger* L = GRndrContext->GetLogger();
-    if (L)
+    if (Logger* L = GRndrContext->GetLogger())
     {
-        L->Log(File, Line, Function, LogLevel, Message);
+        L->Log(File, Line, Function, LogLevel, Message.data());
     }
 }

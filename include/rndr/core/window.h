@@ -31,7 +31,7 @@ public:
     /**
      * Processes events that occured in the window such as event closing or button press.
      */
-    void ProcessEvents();
+    void ProcessEvents() const;
 
     bool IsClosed() const;
     void Close();
@@ -44,7 +44,7 @@ public:
     /**
      * If true the cursor will be limited to this window.
      */
-    void LockCursor(bool ShouldLock);
+    void LockCursor(bool ShouldLock) const;
 
     /**
      * When activated the cursor will be hidden and you can move inifinitely in any direction.

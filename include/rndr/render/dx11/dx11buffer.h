@@ -23,7 +23,7 @@ struct Buffer
     ~Buffer();
 
     bool Init(rndr::GraphicsContext* Context,
-              const BufferProperties& Props = BufferProperties{},
+              const BufferProperties& InProps = BufferProperties{},
               ByteSpan InitialData = ByteSpan{});
 
     bool Update(rndr::GraphicsContext* Context, ByteSpan Data, uint32_t StartOffset = 0) const;

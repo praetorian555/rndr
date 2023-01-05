@@ -61,7 +61,7 @@ struct InputContext
 
     std::vector<Entry> Mappings;
 
-    InputMapping* CreateMapping(const InputAction& Action, InputCallback Callback);
+    InputMapping* CreateMapping(const InputAction& Action, const InputCallback& Callback);
     void AddBinding(const InputAction& Action,
                     InputPrimitive Primitive,
                     InputTrigger Trigger,
@@ -88,12 +88,12 @@ public:
 
     InputContext* GetContext();
 
-    bool IsButton(InputPrimitive Primitive) const;
-    bool IsMouseButton(InputPrimitive Primitive) const;
-    bool IsKeyboardButton(InputPrimitive Primitive) const;
+    static bool IsButton(InputPrimitive Primitive);
+    static bool IsMouseButton(InputPrimitive Primitive);
+    static bool IsKeyboardButton(InputPrimitive Primitive);
 
-    bool IsAxis(InputPrimitive Primitive) const;
-    bool IsMouseAxis(InputPrimitive Primitive) const;
+    static bool IsAxis(InputPrimitive Primitive);
+    static bool IsMouseAxis(InputPrimitive Primitive);
 
     math::Point2 GetMousePosition() const;
 

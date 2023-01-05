@@ -20,7 +20,7 @@ class ProjectionCamera;
 class FirstPersonCamera
 {
 public:
-    explicit FirstPersonCamera(RndrContext* Context,
+    explicit FirstPersonCamera(RndrContext* RndrContext,
                                ProjectionCamera* ProjectionCamera,
                                math::Point3 StartingPosition = math::Point3(),
                                real MovementSpeed = 1.0,
