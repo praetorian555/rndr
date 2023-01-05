@@ -1,0 +1,42 @@
+Checks: '-*,
+         clang-analyzer-*,
+         concurrency-*,
+         cppcoreguidelines-*,
+         -cppcoreguidelines-pro-type-union-access,
+         -cppcoreguidelines-pro-bounds-constant-array-index,
+         -cppcoreguidelines-pro-type-member-init,
+         -cppcoreguidelines-pro-bounds-array-to-pointer-decay,
+         -cppcoreguidelines-pro-type-vararg,
+         -cppcoreguidelines-owning-memory,
+         -cppcoreguidelines-avoid-non-const-global-variables,
+         -cppcoreguidelines-pro-type-reinterpret-cast,
+         modernize-*,
+         -modernize-use-trailing-return-type,
+         -modernize-avoid-bind,
+         -modernize-use-auto,
+         performance-*,
+         readability-*,
+         -readability-identifier-length,
+         -readability-uppercase-literal-suffix,
+         -readability-function-cognitive-complexity,
+         misc-*,
+         google-*'
+CheckOptions:
+    readability-identifier-naming.LocalVariableCase: 'CamelCase'
+    readability-identifier-naming.PrivateMemberCase: 'CamelCase'
+    readability-identifier-naming.PrivateMemberPrefix: 'm_'
+    readability-identifier-naming.ProtectedMemberCase: 'CamelCase'
+    readability-identifier-naming.ProtectedMemberPrefix: 'm_'
+    readability-identifier-naming.PublicMemberCase: 'CamelCase'
+    readability-identifier-naming.ConstexprVariableCase: 'CamelCase'
+    readability-identifier-naming.ConstexprVariablePrefix: 'k'
+    readability-identifier-naming.StaticVariableCase: 'CamelCase'
+    readability-identifier-naming.StaticVariablePrefix: 's_'
+    readability-identifier-naming.GlobalVariableCase: 'CamelCase'
+    readability-identifier-naming.GlobalVariablePrefix: 'G'
+    readability-identifier-naming.ClassCase: 'CamelCase'
+    readability-identifier-naming.ClassMethodCase: 'CamelCase'
+    readability-identifier-naming.StructCase: 'CamelCase'
+    readability-identifier-naming.StructMethodCase: 'CamelCase'
+    readability-identifier-naming.ParameterCase: 'CamelCase'
+    readability-inconsistent-declaration-parameter-name.Strict: 'true'

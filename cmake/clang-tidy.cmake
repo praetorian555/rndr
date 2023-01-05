@@ -6,18 +6,26 @@ if (CLANG_TIDY)
 		${PROJECT_SOURCE_DIR}/src/*.c
 		${PROJECT_SOURCE_DIR}/src/*.cpp)
 
+    
+    if (WIN32)
+    endif()
+
 	add_custom_target(
         clang-tidy
         COMMAND clang-tidy
-        -p ${PROJECT_SOURCE_DIR}/build 
-        -checks=-*,clang-analyzer-*,concurrency-*,cppcoreguidelines-*,modernize-*,performance-*,readability-*,-modernize-use-trailing-return-type,-cppcoreguidelines-pro-type-union-access,-modernize-avoid-bind
+        -config-file=../.clang-tidy
         ${FILES_TO_FORMAT}
         --
         -I${PROJECT_SOURCE_DIR}/include
 		-I${PROJECT_SOURCE_DIR}/src
-        -I${PROJECT_SOURCE_DIR}/extern/math/include
-        -DRNDR_DX11
+        -I${PROJECT_SOURCE_DIR}/build/_deps/math-src/include
+        -I${PROJECT_SOURCE_DIR}/build/_deps/spdlog-src/include
+        -I${PROJECT_SOURCE_DIR}/extern/stb_image/include
         -DWIN32
+        -DRNDR_DX11
+        -DRNDR_SPDLOG
+        -DRNDR_ASSET_DIR="C:/dev/rndr/src/../assets"
+        -std=c++20
     )
 	set_target_properties(clang-tidy PROPERTIES FOLDER CustomCommands)
 
