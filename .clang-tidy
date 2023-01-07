@@ -10,17 +10,21 @@ Checks: '-*,
          -cppcoreguidelines-owning-memory,
          -cppcoreguidelines-avoid-non-const-global-variables,
          -cppcoreguidelines-pro-type-reinterpret-cast,
+         -cppcoreguidelines-macro-usage,
          modernize-*,
          -modernize-use-trailing-return-type,
          -modernize-avoid-bind,
          -modernize-use-auto,
+         -modernize-macro-to-enum,
          performance-*,
          readability-*,
          -readability-identifier-length,
          -readability-uppercase-literal-suffix,
          -readability-function-cognitive-complexity,
          misc-*,
+         -misc-non-private-member-variables-in-classes,
          google-*'
+HeaderFilterRegex: 'rndr/.*\.h'
 CheckOptions:
     readability-identifier-naming.LocalVariableCase: 'CamelCase'
     readability-identifier-naming.PrivateMemberCase: 'CamelCase'
