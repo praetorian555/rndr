@@ -39,11 +39,11 @@ public:
             m_Window->ProcessEvents();
 
             math::Vector4 ClearColor{55 / 255.0f, 67 / 255.0f, 90 / 255.0f, 1.0f};
-            rndr::FrameBuffer* DefaultFB = m_SwapChain->FrameBuffer;
-            m_GraphicsCtx->ClearColor(DefaultFB->ColorBuffers[0], ClearColor);
+            rndr::FrameBuffer* DefaultFB = m_SwapChain->FrameBuffer.Get();
+            m_GraphicsCtx->ClearColor(DefaultFB->ColorBuffers[0].Get(), ClearColor);
 
             TextProperties Props;
-            Props.Color = rndr::Colors::Yellow;
+            Props.Color = rndr::Colors::kYellow;
             m_Renderer->RenderText("Liberation Sans with shadow, 16px!", "Liberation Sans", 16,
                                    {10, 300}, Props);
 
@@ -57,30 +57,30 @@ public:
                                    {10, 260}, Props);
             Props.bShadow = true;
 
-            Props.Color = rndr::Colors::Green;
+            Props.Color = rndr::Colors::kGreen;
             m_Renderer->RenderText("Liberation Sans with shadow, 24px!", "Liberation Sans", 24,
                                    {10, 200}, Props);
 
-            Props.Color = rndr::Colors::White;
+            Props.Color = rndr::Colors::kWhite;
             m_Renderer->RenderText("Liberation Sans with shadow, 32px!", "Liberation Sans", 32,
                                    {10, 170}, Props);
 
             Props.bShadow = true;
             Props.Threshold = 0.68f;
-            Props.Color = rndr::Colors::Yellow;
+            Props.Color = rndr::Colors::kYellow;
             m_Renderer->RenderText("Yu Mincho with shadow, 16px!", "Yu Mincho", 16, {10, 550},
                                    Props);
 
             Props.bShadow = false;
-            Props.Color = rndr::Colors::Yellow;
+            Props.Color = rndr::Colors::kYellow;
             m_Renderer->RenderText("Yu Mincho no shadow, 24px!", "Yu Mincho", 24, {10, 500}, Props);
             Props.bShadow = true;
 
-            Props.Color = rndr::Colors::Yellow;
+            Props.Color = rndr::Colors::kYellow;
             m_Renderer->RenderText("Yu Mincho with shadow, 32px!", "Yu Mincho", 32, {10, 450},
                                    Props);
 
-            m_Renderer->Present(m_SwapChain->FrameBuffer);
+            m_Renderer->Present(m_SwapChain->FrameBuffer.Get());
             m_GraphicsCtx->Present(m_SwapChain.Get(), true);
         }
     }

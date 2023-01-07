@@ -2,6 +2,8 @@
 
 #if defined RNDR_DX11
 
+#include <array>
+
 #include <Windows.h>
 
 #include "rndr/core/log.h"
@@ -25,40 +27,42 @@ std::string rndr::GraphicsContext::WindowsGetErrorMessage(HRESULT ErrorCode)
 #if RNDR_DEBUG
     if (ErrorCode != S_OK)
     {
-        constexpr DWORD BufferSize = 1024;
-        char Buffer[BufferSize] = {};
+        constexpr DWORD kBufferSize = 1024;
+        std::array<char, kBufferSize> Buffer{};
         FormatMessage(FORMAT_MESSAGE_FROM_SYSTEM, nullptr, ErrorCode,
-                      MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT), Buffer, BufferSize, nullptr);
-        Rtn += Buffer;
+                      MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT), Buffer.data(), kBufferSize,
+                      nullptr);
+        Rtn += Buffer.data();
     }
     else
     {
         Rtn += "Error occurred in debug layer.\n";
     }
 
-    if (!m_DebugInfoQueue)
+    if (m_DebugInfoQueue == nullptr)
     {
         return Rtn;
     }
 
-    bool bAddNewLine = false;
-    UINT64 MessageCount = m_DebugInfoQueue->GetNumStoredMessages();
-    for (UINT64 i = 0; i < MessageCount; i++)
+    bool AddNewLine = false;
+    const uint64_t MessageCount = m_DebugInfoQueue->GetNumStoredMessages();
+    for (uint64_t MsgIndex = 0; MsgIndex < MessageCount; MsgIndex++)
     {
         SIZE_T MessageSize = 0;
-        m_DebugInfoQueue->GetMessage(i, nullptr, &MessageSize);
-        D3D11_MESSAGE* Message = (D3D11_MESSAGE*)malloc(MessageSize);
-        HRESULT Result = m_DebugInfoQueue->GetMessage(i, Message, &MessageSize);
+        m_DebugInfoQueue->GetMessage(MsgIndex, nullptr, &MessageSize);
+        D3D11_MESSAGE* Message = static_cast<D3D11_MESSAGE*>(malloc(MessageSize));
+        HRESULT const Result = m_DebugInfoQueue->GetMessage(MsgIndex, Message, &MessageSize);
         assert(!FAILED(Result));
-        if (!Message)
+        if (Message == nullptr)
         {
             continue;
         }
-        bool bShouldLog = Message->Severity == D3D11_MESSAGE_SEVERITY_ERROR;
-        bShouldLog |= m_Props.bFailWarning && Message->Severity == D3D11_MESSAGE_SEVERITY_WARNING;
-        if (bShouldLog)
+        bool BShouldLog = Message->Severity == D3D11_MESSAGE_SEVERITY_ERROR;
+        BShouldLog |=
+            m_Props.ShouldFailWarning && Message->Severity == D3D11_MESSAGE_SEVERITY_WARNING;
+        if (BShouldLog)
         {
-            bAddNewLine = true;
+            AddNewLine = true;
             Rtn += "\n\t";
             Rtn += Message->pDescription;
         }
@@ -66,7 +70,7 @@ std::string rndr::GraphicsContext::WindowsGetErrorMessage(HRESULT ErrorCode)
         free(Message);
     }
 
-    if (bAddNewLine)
+    if (AddNewLine)
     {
         Rtn += "\n";
     }
@@ -85,36 +89,37 @@ bool rndr::GraphicsContext::WindowsHasFailed(HRESULT ErrorCode)
     }
 
 #if RNDR_DEBUG
-    if (!m_DebugInfoQueue)
+    if (m_DebugInfoQueue == nullptr)
     {
         return false;
     }
 
-    bool bStatus = false;
-    UINT64 MessageCount = m_DebugInfoQueue->GetNumStoredMessages();
-    for (UINT64 i = 0; i < MessageCount; i++)
+    bool BStatus = false;
+    UINT64 const MessageCount = m_DebugInfoQueue->GetNumStoredMessages();
+    for (UINT64 I = 0; I < MessageCount; I++)
     {
         SIZE_T MessageSize = 0;
-        m_DebugInfoQueue->GetMessage(i, nullptr, &MessageSize);
-        D3D11_MESSAGE* Message = (D3D11_MESSAGE*)malloc(MessageSize);
-        HRESULT Result = m_DebugInfoQueue->GetMessage(i, Message, &MessageSize);
+        m_DebugInfoQueue->GetMessage(I, nullptr, &MessageSize);
+        D3D11_MESSAGE* Message = static_cast<D3D11_MESSAGE*>(malloc(MessageSize));
+        HRESULT const Result = m_DebugInfoQueue->GetMessage(I, Message, &MessageSize);
         assert(!FAILED(Result));
-        if (!Message)
+        if (Message == nullptr)
         {
             continue;
         }
 
-        bool bShouldFail = Message->Severity == D3D11_MESSAGE_SEVERITY_ERROR;
-        bShouldFail |= m_Props.bFailWarning && Message->Severity == D3D11_MESSAGE_SEVERITY_WARNING;
-        if (bShouldFail)
+        bool BShouldFail = Message->Severity == D3D11_MESSAGE_SEVERITY_ERROR;
+        BShouldFail |=
+            m_Props.ShouldFailWarning && Message->Severity == D3D11_MESSAGE_SEVERITY_WARNING;
+        if (BShouldFail)
         {
-            bStatus = true;
+            BStatus = true;
         }
 
         free(Message);
     }
 
-    return bStatus;
+    return BStatus;
 #else
     return false;
 #endif  // RNDR_DEBUG
@@ -129,7 +134,7 @@ rndr::GraphicsContext::~GraphicsContext()
     DX11SafeRelease(m_DeviceContext);
 
 #if RNDR_DEBUG
-    if (m_DebugInfoQueue)
+    if (m_DebugInfoQueue != nullptr)
     {
         DX11SafeRelease(m_DebugInfoQueue);
     }
@@ -142,16 +147,16 @@ bool rndr::GraphicsContext::Init(GraphicsContextProperties Props)
 
     UINT Flags = 0;
 #if RNDR_DEBUG
-    if (m_Props.bEnableDebugLayer)
+    if (m_Props.EnableDebugLayer)
     {
         Flags |= D3D11_CREATE_DEVICE_DEBUG;
     }
 #endif
-    if (m_Props.bDisableGPUTimeout)
+    if (m_Props.DisableGpuTimeout)
     {
         Flags |= D3D11_CREATE_DEVICE_DISABLE_GPU_TIMEOUT;
     }
-    if (!m_Props.bMakeThreadSafe)
+    if (!m_Props.IsThreadSafe)
     {
         Flags |= D3D11_CREATE_DEVICE_SINGLETHREADED;
     }
@@ -168,12 +173,12 @@ bool rndr::GraphicsContext::Init(GraphicsContextProperties Props)
         _countof(FeatureLevels), D3D11_SDK_VERSION, &m_Device, &m_FeatureLevel, &m_DeviceContext);
     if (WindowsHasFailed(Result))
     {
-        std::string ErrorMessage = WindowsGetErrorMessage(Result);
+        std::string const ErrorMessage = WindowsGetErrorMessage(Result);
         RNDR_LOG_ERROR("%s", ErrorMessage.c_str());
         return false;
     }
 
-    if (!m_Props.bEnableDebugLayer)
+    if (!m_Props.EnableDebugLayer)
     {
         return true;
     }
@@ -183,7 +188,7 @@ bool rndr::GraphicsContext::Init(GraphicsContextProperties Props)
                                       reinterpret_cast<void**>(&m_DebugInfoQueue));
     if (WindowsHasFailed(Result))
     {
-        std::string ErrorMessage = WindowsGetErrorMessage(Result);
+        std::string const ErrorMessage = WindowsGetErrorMessage(Result);
         RNDR_LOG_ERROR("%s", ErrorMessage.c_str());
         return false;
     }
@@ -207,192 +212,137 @@ D3D_FEATURE_LEVEL rndr::GraphicsContext::GetFeatureLevel()
     return m_FeatureLevel;
 }
 
-rndr::SwapChain* rndr::GraphicsContext::CreateSwapChain(NativeWindowHandle WindowHandle,
-                                                        int Width,
-                                                        int Height,
-                                                        const SwapChainProperties& Props)
+template <typename GraphicsObjectType, typename... Args>
+static rndr::ScopePtr<GraphicsObjectType> CreateGraphicsObject(std::string_view MemoryTag,
+                                                               Args&&... Arguments)
 {
-    SwapChain* S = RNDR_NEW(SwapChain, "rndr::GraphicsContext: SwapChain");
-    if (!S || !S->Init(this, WindowHandle, Width, Height, Props))
+    rndr::ScopePtr<GraphicsObjectType> Object = rndr::CreateScoped<GraphicsObjectType>(MemoryTag);
+    if (Object.IsValid() && Object->Init(std::forward<Args>(Arguments)...))
     {
-        RNDR_DELETE(SwapChain, S);
+        return Object;
     }
-    return S;
+    return {};
 }
 
-rndr::Shader* rndr::GraphicsContext::CreateShader(const ByteSpan& ShaderContents,
-                                                  const ShaderProperties& Props)
+rndr::ScopePtr<rndr::SwapChain> rndr::GraphicsContext::CreateSwapChain(
+    NativeWindowHandle WindowHandle,
+    int Width,
+    int Height,
+    const SwapChainProperties& Props)
 {
-    Shader* S = RNDR_NEW(Shader, "rndr::GraphicsContext: Shader");
-    if (!S || !S->Init(this, ShaderContents, Props))
-    {
-        RNDR_DELETE(Shader, S);
-    }
-    return S;
+    return CreateGraphicsObject<SwapChain>("rndr::GraphicsContext: SwapChain", this, WindowHandle,
+                                           Width, Height, Props);
 }
 
-rndr::Image* rndr::GraphicsContext::CreateImage(int Width,
-                                                int Height,
-                                                const ImageProperties& Props,
-                                                ByteSpan InitData)
+rndr::ScopePtr<rndr::Shader> rndr::GraphicsContext::CreateShader(const ByteSpan& ShaderContents,
+                                                                 const ShaderProperties& Props)
 {
-    Image* Im = RNDR_NEW(Image, "rndr::GraphicsContext: Image");
-    if (!Im || !Im->Init(this, Width, Height, Props, InitData))
-    {
-        RNDR_DELETE(Image, Im);
-    }
-    return Im;
+    return CreateGraphicsObject<Shader>("rndr::GraphicsContext: Shader", this, ShaderContents,
+                                        Props);
 }
 
-rndr::Image* rndr::GraphicsContext::CreateImageArray(int Width,
-                                                     int Height,
-                                                     int ArraySize,
-                                                     const ImageProperties& Props,
-                                                     Span<ByteSpan> InitData)
+rndr::ScopePtr<rndr::Image> rndr::GraphicsContext::CreateImage(int Width,
+                                                               int Height,
+                                                               const ImageProperties& Props,
+                                                               ByteSpan InitData)
 {
-    Image* Im = RNDR_NEW(Image, "rndr::GraphicsContext: ImageArray");
-    if (!Im || !Im->InitArray(this, Width, Height, ArraySize, Props, InitData))
-    {
-        RNDR_DELETE(Image, Im);
-    }
-    return Im;
+    return CreateGraphicsObject<Image>("rndr::GraphicsContext: Image", this, Width, Height, Props,
+                                       InitData);
 }
 
-rndr::Image* rndr::GraphicsContext::CreateCubeMap(int Width,
-                                                  int Height,
-                                                  const ImageProperties& Props,
-                                                  Span<ByteSpan> InitData)
+rndr::ScopePtr<rndr::Image> rndr::GraphicsContext::CreateImageArray(int Width,
+                                                                    int Height,
+                                                                    int ArraySize,
+                                                                    const ImageProperties& Props,
+                                                                    Span<ByteSpan> InitData)
 {
-    Image* Im = RNDR_NEW(Image, "rndr::GraphicsContext: CubeMap");
-    if (!Im || !Im->InitCubeMap(this, Width, Height, Props, InitData))
-    {
-        RNDR_DELETE(Image, Im);
-    }
-    return Im;
+    return CreateGraphicsObject<Image>("rndr::GraphicsContext: ImageArray", this, Width, Height,
+                                       ArraySize, Props, InitData);
 }
 
-rndr::Image* rndr::GraphicsContext::CreateImageForSwapChain(SwapChain* SwapChain, int BufferIndex)
+rndr::ScopePtr<rndr::Image> rndr::GraphicsContext::CreateCubeMap(int Width,
+                                                                 int Height,
+                                                                 const ImageProperties& Props,
+                                                                 Span<ByteSpan> InitData)
 {
-    Image* Im = RNDR_NEW(Image, "rndr::GraphicsContext: ImageSwapChain");
-    if (!Im || !Im->InitSwapchainBackBuffer(this, SwapChain, BufferIndex))
-    {
-        RNDR_DELETE(Image, Im);
-    }
-    return Im;
+    return CreateGraphicsObject<Image>("rndr::GraphicsContext: CubeMap", this, Width, Height, Props,
+                                       InitData);
 }
 
-rndr::Sampler* rndr::GraphicsContext::CreateSampler(const SamplerProperties& Props)
+rndr::ScopePtr<rndr::Image> rndr::GraphicsContext::CreateImageForSwapChain(SwapChain* SwapChain,
+                                                                           int BufferIndex)
 {
-    Sampler* S = RNDR_NEW(Sampler, "rndr::GraphicsContext: Sampler");
-    if (!S || !S->Init(this, Props))
-    {
-        RNDR_DELETE(Sampler, S);
-    }
-    return S;
+    return CreateGraphicsObject<Image>("rndr::GraphicsContext: ImageSwapChain", this, SwapChain,
+                                       BufferIndex);
 }
 
-rndr::Buffer* rndr::GraphicsContext::CreateBuffer(const BufferProperties& Props,
-                                                  ByteSpan InitialData)
+rndr::ScopePtr<rndr::Sampler> rndr::GraphicsContext::CreateSampler(const SamplerProperties& Props)
 {
-    Buffer* Buff = RNDR_NEW(Buffer, "rndr::GraphicsContext: Buffer");
-    if (!Buff || !Buff->Init(this, Props, InitialData))
-    {
-        RNDR_DELETE(Buffer, Buff);
-    }
-    return Buff;
+    return CreateGraphicsObject<Sampler>("rndr::GraphicsContext: Sampler", this, Props);
 }
 
-rndr::FrameBuffer* rndr::GraphicsContext::CreateFrameBuffer(int Width,
-                                                            int Height,
-                                                            const FrameBufferProperties& Props)
+rndr::ScopePtr<rndr::Buffer> rndr::GraphicsContext::CreateBuffer(const BufferProperties& Props,
+                                                                 ByteSpan InitialData)
 {
-    FrameBuffer* FB = RNDR_NEW(FrameBuffer, "rndr::GraphicsContext: FrameBuffer");
-    if (!FB || !FB->Init(this, Width, Height, Props))
-    {
-        RNDR_DELETE(FrameBuffer, FB);
-    }
-    return FB;
+    return CreateGraphicsObject<Buffer>("rndr::GraphicsContext: Buffer", this, Props, InitialData);
 }
 
-rndr::FrameBuffer* rndr::GraphicsContext::CreateFrameBufferForSwapChain(int Width,
-                                                                        int Height,
-                                                                        SwapChain* SwapChain)
+rndr::ScopePtr<rndr::FrameBuffer>
+rndr::GraphicsContext::CreateFrameBuffer(int Width, int Height, const FrameBufferProperties& Props)
 {
-    FrameBuffer* FB = RNDR_NEW(FrameBuffer, "rndr::GraphicsContext: FrameBuffer");
-    if (!FB || !FB->InitForSwapChain(this, Width, Height, SwapChain))
-    {
-        RNDR_DELETE(FrameBuffer, FB);
-    }
-    return FB;
+    return CreateGraphicsObject<FrameBuffer>("rndr::GraphicsContext: FrameBuffer", this, Width,
+                                             Height, Props);
 }
 
-rndr::InputLayout* rndr::GraphicsContext::CreateInputLayout(Span<InputLayoutProperties> Props,
-                                                            Shader* Shader)
+rndr::ScopePtr<rndr::FrameBuffer>
+rndr::GraphicsContext::CreateFrameBufferForSwapChain(int Width, int Height, SwapChain* SwapChain)
 {
-    InputLayout* Layout = RNDR_NEW(InputLayout, "rndr::GraphicsContext: InputLayout");
-    if (!Layout || !Layout->Init(this, Props, Shader))
-    {
-        RNDR_DELETE(InputLayout, Layout);
-    }
-    return Layout;
+    return CreateGraphicsObject<FrameBuffer>("rndr::GraphicsContext: FrameBuffer SwapChain", this,
+                                             Width, Height, SwapChain);
 }
 
-rndr::RasterizerState* rndr::GraphicsContext::CreateRasterizerState(
+rndr::ScopePtr<rndr::InputLayout> rndr::GraphicsContext::CreateInputLayout(
+    Span<InputLayoutProperties> Props,
+    Shader* Shader)
+{
+    return CreateGraphicsObject<InputLayout>("rndr::GraphicsContext: InputLayout", this, Props,
+                                             Shader);
+}
+
+rndr::ScopePtr<rndr::RasterizerState> rndr::GraphicsContext::CreateRasterizerState(
     const RasterizerProperties& Props)
 {
-    RasterizerState* State = RNDR_NEW(RasterizerState, "rndr::GraphicsContext: RasterizerState");
-    if (!State || !State->Init(this, Props))
-    {
-        RNDR_DELETE(RasterizerState, State);
-    }
-    return State;
+    return CreateGraphicsObject<RasterizerState>("rndr::GraphicsContext: RasterizerState", this,
+                                                 Props);
 }
 
-rndr::DepthStencilState* rndr::GraphicsContext::CreateDepthStencilState(
+rndr::ScopePtr<rndr::DepthStencilState> rndr::GraphicsContext::CreateDepthStencilState(
     const DepthStencilProperties& Props)
 {
-    DepthStencilState* State =
-        RNDR_NEW(DepthStencilState, "rndr::GraphicsContext: DepthStencilState");
-    if (!State || !State->Init(this, Props))
-    {
-        RNDR_DELETE(DepthStencilState, State);
-    }
-    return State;
+    return CreateGraphicsObject<DepthStencilState>("rndr::GraphicsContext: DepthStencilState", this,
+                                                   Props);
 }
 
-rndr::BlendState* rndr::GraphicsContext::CreateBlendState(const BlendProperties& Props)
+rndr::ScopePtr<rndr::BlendState> rndr::GraphicsContext::CreateBlendState(
+    const BlendProperties& Props)
 {
-    BlendState* State = RNDR_NEW(BlendState, "rndr::GraphicsContext: BlendState");
-    if (!State || !State->Init(this, Props))
-    {
-        RNDR_DELETE(BlendState, State);
-    }
-    return State;
+    return CreateGraphicsObject<BlendState>("rndr::GraphicsContext: BlendState", this, Props);
 }
 
-rndr::Pipeline* rndr::GraphicsContext::CreatePipeline(const PipelineProperties& Props)
+rndr::ScopePtr<rndr::Pipeline> rndr::GraphicsContext::CreatePipeline(
+    const PipelineProperties& Props)
 {
-    Pipeline* Pipeline = RNDR_NEW(rndr::Pipeline, "rndr::GraphicsContext: Pipeline");
-    if (!Pipeline || !Pipeline->Init(this, Props))
-    {
-        RNDR_DELETE(rndr::Pipeline, Pipeline);
-    }
-    return Pipeline;
+    return CreateGraphicsObject<Pipeline>("rndr::GraphicsContext: Pipeline", this, Props);
 }
 
-rndr::CommandList* rndr::GraphicsContext::CreateCommandList()
+rndr::ScopePtr<rndr::CommandList> rndr::GraphicsContext::CreateCommandList()
 {
-    CommandList* CL = RNDR_NEW(CommandList, "rndr::GrapcsContext: CommandList");
-    if (!CL || !CL->Init(this))
-    {
-        RNDR_DELETE(CommandList, CL);
-    }
-    return CL;
+    return CreateGraphicsObject<CommandList>("rndr::GraphicsContext: CommandList", this);
 }
 
 void rndr::GraphicsContext::ClearColor(Image* Image, math::Vector4 Color)
 {
-    if (!Image || !Image->DX11RenderTargetView)
+    if ((Image == nullptr) || (Image->DX11RenderTargetView == nullptr))
     {
         RNDR_LOG_ERROR("GraphicsContext::ClearColor: Invalid image!");
         return;
@@ -407,7 +357,7 @@ void rndr::GraphicsContext::ClearColor(Image* Image, math::Vector4 Color)
 
 void rndr::GraphicsContext::ClearDepth(Image* Image, real Depth)
 {
-    if (!Image || !Image->DX11DepthStencilView)
+    if ((Image == nullptr) || (Image->DX11DepthStencilView == nullptr))
     {
         RNDR_LOG_ERROR("GraphicsContext::ClearDepth: Invalid image!");
         return;
@@ -418,7 +368,7 @@ void rndr::GraphicsContext::ClearDepth(Image* Image, real Depth)
 
 void rndr::GraphicsContext::ClearStencil(Image* Image, uint8_t Stencil)
 {
-    if (!Image || !Image->DX11DepthStencilView)
+    if ((Image == nullptr) || (Image->DX11DepthStencilView == nullptr))
     {
         RNDR_LOG_ERROR("GraphicsContext::ClearStencil: Invalid image!");
         return;
@@ -429,7 +379,7 @@ void rndr::GraphicsContext::ClearStencil(Image* Image, uint8_t Stencil)
 
 void rndr::GraphicsContext::ClearDepthStencil(Image* Image, real Depth, uint8_t Stencil)
 {
-    if (!Image || !Image->DX11DepthStencilView)
+    if ((Image == nullptr) || (Image->DX11DepthStencilView == nullptr))
     {
         RNDR_LOG_ERROR("GraphicsContext::ClearDepthStencil: Invalid image!");
         return;
@@ -512,7 +462,7 @@ void rndr::GraphicsContext::BindSampler(Sampler* Sampler, int Slot, Shader* Shad
 
 void rndr::GraphicsContext::BindBuffer(Buffer* Buffer, int Slot, Shader* Shader)
 {
-    if (Shader)
+    if (Shader != nullptr)
     {
         switch (Shader->Props.Type)
         {
@@ -537,7 +487,7 @@ void rndr::GraphicsContext::BindBuffer(Buffer* Buffer, int Slot, Shader* Shader)
     if (Buffer->Props.Type == BufferType::Index)
     {
         assert(Buffer->Props.Stride == 4 || Buffer->Props.Stride == 2);
-        DXGI_FORMAT Format =
+        DXGI_FORMAT const Format =
             Buffer->Props.Stride == 4 ? DXGI_FORMAT_R32_UINT : DXGI_FORMAT_R16_UINT;
         m_DeviceContext->IASetIndexBuffer(Buffer->DX11Buffer, Format, 0);
     }
@@ -551,22 +501,23 @@ void rndr::GraphicsContext::BindBuffer(Buffer* Buffer, int Slot, Shader* Shader)
 
 void rndr::GraphicsContext::BindFrameBuffer(FrameBuffer* FrameBuffer)
 {
-    if (!FrameBuffer)
+    if (FrameBuffer == nullptr)
     {
         RNDR_LOG_ERROR("GraphicsContext::BindFrameBuffer: Invalid framebuffer!");
         return;
     }
 
     ID3D11DepthStencilView* DepthStencilView =
-        FrameBuffer->DepthStencilBuffer ? FrameBuffer->DepthStencilBuffer->DX11DepthStencilView
-                                        : nullptr;
+        FrameBuffer->DepthStencilBuffer.IsValid()
+            ? FrameBuffer->DepthStencilBuffer->DX11DepthStencilView
+            : nullptr;
     std::vector<ID3D11RenderTargetView*> RenderTargetViews;
     const int RenderTargetCount = static_cast<int>(FrameBuffer->ColorBuffers.Size);
     RenderTargetViews.resize(RenderTargetCount);
 
-    for (int i = 0; i < RenderTargetCount; i++)
+    for (int I = 0; I < RenderTargetCount; I++)
     {
-        RenderTargetViews[i] = FrameBuffer->ColorBuffers[i]->DX11RenderTargetView;
+        RenderTargetViews[I] = FrameBuffer->ColorBuffers[I]->DX11RenderTargetView;
     }
 
     m_DeviceContext->OMSetRenderTargets(RenderTargetCount, RenderTargetViews.data(),
@@ -631,7 +582,7 @@ void rndr::GraphicsContext::Dispatch(const uint32_t ThreadGroupCountX,
 
 bool rndr::GraphicsContext::SubmitCommandList(CommandList* List)
 {
-    if (!List)
+    if (List == nullptr)
     {
         return false;
     }
@@ -642,7 +593,7 @@ bool rndr::GraphicsContext::SubmitCommandList(CommandList* List)
             "object!");
         return false;
     }
-    m_DeviceContext->ExecuteCommandList(List->DX11CommandList, false);
+    m_DeviceContext->ExecuteCommandList(List->DX11CommandList, 0);
     if (WindowsHasFailed())
     {
         const std::string ErrorMessage = WindowsGetErrorMessage();
@@ -652,11 +603,11 @@ bool rndr::GraphicsContext::SubmitCommandList(CommandList* List)
     return true;
 }
 
-void rndr::GraphicsContext::Present(SwapChain* SwapChain, bool bVSync)
+void rndr::GraphicsContext::Present(SwapChain* SwapChain, bool BVSync)
 {
-    // TODO: Look into ALLOW_TEARING
+    // TODO(Marko): Look into ALLOW_TEARING
     const uint32_t Flags = 0;
-    const HRESULT Result = SwapChain->DX11SwapChain->Present(bVSync, Flags);
+    const HRESULT Result = SwapChain->DX11SwapChain->Present(static_cast<UINT>(BVSync), Flags);
     if (WindowsHasFailed(Result))
     {
         const std::string ErrorMessage = WindowsGetErrorMessage(Result);

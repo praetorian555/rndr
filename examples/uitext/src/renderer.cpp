@@ -41,7 +41,7 @@ Renderer::Renderer(rndr::GraphicsContext* Ctx,
         .VertexShaderContents = VertexShaderContents,
         .PixelShader = {.Type = rndr::ShaderType::Fragment, .EntryPoint = "Main"},
         .PixelShaderContents = FragmentShaderContents,
-        .DepthStencil = {.bDepthEnable = false, .bStencilEnable = false},
+        .DepthStencil = {.DepthEnable = false, .StencilEnable = false},
     };
     m_Pipeline = m_Ctx->CreatePipeline(PipelineProps);
     assert(m_Pipeline.IsValid());

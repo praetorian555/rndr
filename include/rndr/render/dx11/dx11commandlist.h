@@ -29,14 +29,14 @@ public:
     ID3D11DeviceContext* DX11DeferredContext = nullptr;
     ID3D11CommandList* DX11CommandList = nullptr;
 
-public:
+
     CommandList() = default;
     ~CommandList();
 
     bool Init(GraphicsContext* Context);
     bool Finish(GraphicsContext* Context);
 
-    bool IsFinished() const;
+    [[nodiscard]] bool IsFinished() const;
 
     void ClearColor(Image* Image, math::Vector4 Color) const;
     void ClearDepth(Image* Image, real Depth) const;
@@ -60,9 +60,9 @@ public:
                               int IndexOffset = 0,
                               int InstanceOffset = 0) const;
 
-    void Dispatch(const uint32_t ThreadGroupCountX,
-                  const uint32_t ThreadGroupCountY,
-                  const uint32_t ThreadGroupCountZ) const;
+    void Dispatch(uint32_t ThreadGroupCountX,
+                  uint32_t ThreadGroupCountY,
+                  uint32_t ThreadGroupCountZ) const;
 };
 
 }  // namespace rndr

@@ -13,7 +13,7 @@
 rndr::InputLayoutBuilder::InputLayoutBuilder()
 {
     m_Props.Size = 0;
-    m_Props.Data = new InputLayoutProperties[GraphicsConstants::MaxInputLayoutEntries];
+    m_Props.Data = new InputLayoutProperties[GraphicsConstants::kMaxInputLayoutEntries];
 }
 
 rndr::InputLayoutBuilder::~InputLayoutBuilder()
@@ -51,7 +51,7 @@ rndr::InputLayoutBuilder& rndr::InputLayoutBuilder::AppendElement(int BufferInde
             "AddBuffer!");
         return *this;
     }
-    if (m_Props.Size == GraphicsConstants::MaxInputLayoutEntries)
+    if (m_Props.Size == GraphicsConstants::kMaxInputLayoutEntries)
     {
         RNDR_LOG_ERROR(
             "InputLayoutBuilder::AppendElement: Failed since there are no more slots available!");
@@ -79,7 +79,7 @@ rndr::InputLayoutBuilder& rndr::InputLayoutBuilder::AppendElement(int BufferInde
     m_Props[Idx].SemanticName = NameIt->first.c_str();
     m_Props[Idx].SemanticIndex = SemanticIndex;
     m_Props[Idx].Format = Format;
-    m_Props[Idx].OffsetInVertex = Info.EntriesCount == 0 ? 0 : AppendAlignedElement;
+    m_Props[Idx].OffsetInVertex = Info.EntriesCount == 0 ? 0 : kAppendAlignedElement;
     Info.EntriesCount++;
 
     return *this;
@@ -114,7 +114,7 @@ bool rndr::InputLayout::Init(GraphicsContext* Context,
         RNDR_LOG_ERROR("InputLayout::Init: No entries!");
         return false;
     }
-    if (InProps.Size > GraphicsConstants::MaxInputLayoutEntries)
+    if (InProps.Size > GraphicsConstants::kMaxInputLayoutEntries)
     {
         RNDR_LOG_ERROR("InputLayout::Init: Too many entries!");
         return false;
@@ -131,13 +131,13 @@ bool rndr::InputLayout::Init(GraphicsContext* Context,
         Props.Data[i] = InProps.Data[i];
     }
 
-    D3D11_INPUT_ELEMENT_DESC InputDescriptors[GraphicsConstants::MaxInputLayoutEntries] = {};
+    D3D11_INPUT_ELEMENT_DESC InputDescriptors[GraphicsConstants::kMaxInputLayoutEntries] = {};
     for (int i = 0; i < Props.Size; i++)
     {
         InputDescriptors[i].SemanticName = Props[i].SemanticName.c_str();
         InputDescriptors[i].SemanticIndex = Props[i].SemanticIndex;
         InputDescriptors[i].Format = DX11FromPixelFormat(Props[i].Format);
-        InputDescriptors[i].AlignedByteOffset = Props[i].OffsetInVertex == AppendAlignedElement
+        InputDescriptors[i].AlignedByteOffset = Props[i].OffsetInVertex == kAppendAlignedElement
                                                     ? D3D11_APPEND_ALIGNED_ELEMENT
                                                     : Props[i].OffsetInVertex;
         InputDescriptors[i].InputSlot = Props[i].InputSlot;
@@ -185,11 +185,11 @@ bool rndr::RasterizerState::Init(GraphicsContext* Context, const RasterizerPrope
     RasterizerDesc.FrontCounterClockwise = Props.FrontFaceWindingOrder == WindingOrder::CCW;
     RasterizerDesc.DepthBias = Props.DepthBias;
     RasterizerDesc.DepthBiasClamp = Props.DepthBiasClamp;
-    RasterizerDesc.DepthClipEnable = Props.bDepthClipEnable;
+    RasterizerDesc.DepthClipEnable = Props.DepthClipEnable;
     RasterizerDesc.SlopeScaledDepthBias = Props.SlopeScaledDepthBias;
-    RasterizerDesc.AntialiasedLineEnable = Props.bAntialiasedLineEnable;
-    RasterizerDesc.ScissorEnable = Props.bScissorEnable;
-    RasterizerDesc.MultisampleEnable = Props.bScissorEnable;
+    RasterizerDesc.AntialiasedLineEnable = Props.AntialiasedLineEnable;
+    RasterizerDesc.ScissorEnable = Props.ScissorEnable;
+    RasterizerDesc.MultisampleEnable = Props.ScissorEnable;
     ID3D11Device* Device = Context->GetDevice();
     HRESULT Result = Device->CreateRasterizerState(&RasterizerDesc, &DX11RasterizerState);
     if (Context->WindowsHasFailed(Result))
@@ -218,10 +218,10 @@ bool rndr::DepthStencilState::Init(GraphicsContext* Context, const DepthStencilP
     Props = InProps;
 
     D3D11_DEPTH_STENCIL_DESC DepthStencilDesc;
-    DepthStencilDesc.DepthEnable = Props.bDepthEnable;
+    DepthStencilDesc.DepthEnable = Props.DepthEnable;
     DepthStencilDesc.DepthFunc = DX11FromComparator(Props.DepthComparator);
     DepthStencilDesc.DepthWriteMask = DX11FromDepthMask(Props.DepthMask);
-    DepthStencilDesc.StencilEnable = Props.bStencilEnable;
+    DepthStencilDesc.StencilEnable = Props.StencilEnable;
     DepthStencilDesc.StencilReadMask = Props.StencilReadMask;
     DepthStencilDesc.StencilWriteMask = Props.StencilWriteMask;
     DepthStencilDesc.BackFace.StencilFunc = DX11FromComparator(Props.StencilBackFaceComparator);
@@ -267,7 +267,7 @@ bool rndr::BlendState::Init(GraphicsContext* Context, const BlendProperties& InP
     ZeroMemory(&BlendDesc, sizeof(D3D11_BLEND_DESC));
     BlendDesc.AlphaToCoverageEnable = false;
     BlendDesc.IndependentBlendEnable = false;
-    BlendDesc.RenderTarget[0].BlendEnable = Props.bBlendEnable;
+    BlendDesc.RenderTarget[0].BlendEnable = Props.BlendEnable;
     BlendDesc.RenderTarget[0].RenderTargetWriteMask = D3D11_COLOR_WRITE_ENABLE_ALL;
     BlendDesc.RenderTarget[0].SrcBlend = DX11FromBlendFactor(Props.SrcColorFactor);
     BlendDesc.RenderTarget[0].DestBlend = DX11FromBlendFactor(Props.DstColorFactor);

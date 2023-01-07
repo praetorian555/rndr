@@ -40,12 +40,12 @@ bool rndr::Image::Init(GraphicsContext* Context,
     return InitInternal(Context, InitData ? Data : Span<ByteSpan>{});
 }
 
-bool rndr::Image::InitArray(GraphicsContext* Context,
-                            int InWidth,
-                            int InHeight,
-                            int InArraySize,
-                            const ImageProperties& InProps,
-                            Span<ByteSpan> InitData)
+bool rndr::Image::Init(GraphicsContext* Context,
+                       int InWidth,
+                       int InHeight,
+                       int InArraySize,
+                       const ImageProperties& InProps,
+                       Span<ByteSpan> InitData)
 {
     this->Props = InProps;
     this->Width = InWidth;
@@ -72,11 +72,11 @@ bool rndr::Image::InitArray(GraphicsContext* Context,
     return InitInternal(Context, InitData);
 }
 
-bool rndr::Image::InitCubeMap(GraphicsContext* Context,
-                              int InWidth,
-                              int InHeight,
-                              const ImageProperties& InProps,
-                              Span<ByteSpan> InitData)
+bool rndr::Image::Init(GraphicsContext* Context,
+                       int InWidth,
+                       int InHeight,
+                       const ImageProperties& InProps,
+                       Span<ByteSpan> InitData)
 {
     this->Props = InProps;
     this->Width = InWidth;
@@ -98,11 +98,9 @@ bool rndr::Image::InitCubeMap(GraphicsContext* Context,
     return InitInternal(Context, InitData, true);
 }
 
-bool rndr::Image::InitSwapchainBackBuffer(GraphicsContext* Context,
-                                          rndr::SwapChain* SwapChain,
-                                          int BufferIndex)
+bool rndr::Image::Init(GraphicsContext* Context, rndr::SwapChain* SwapChain, int BufferIndex)
 {
-    this->Props.bUseMips = false;
+    this->Props.UseMips = false;
     this->Props.SampleCount = 1;
     this->Props.ImageBindFlags = ImageBindFlags::RenderTarget;
     this->Props.Usage = Usage::Default;
@@ -129,7 +127,7 @@ bool rndr::Image::InitInternal(GraphicsContext* Context,
     Desc.Width = Width;
     Desc.Height = Height;
     Desc.ArraySize = ArraySize;
-    Desc.MipLevels = Props.bUseMips ? 0 : 1;
+    Desc.MipLevels = Props.UseMips ? 0 : 1;
     Desc.MiscFlags = bCubeMap ? D3D11_RESOURCE_MISC_TEXTURECUBE : 0;
     Desc.SampleDesc.Count = Props.SampleCount;
     Desc.SampleDesc.Quality = Props.SampleCount > 1 ? D3D11_STANDARD_MULTISAMPLE_PATTERN : 0;
@@ -191,7 +189,7 @@ bool rndr::Image::InitInternal(GraphicsContext* Context,
                 else
                 {
                     ResourceDesc.ViewDimension = D3D11_SRV_DIMENSION_TEXTURE2D;
-                    ResourceDesc.Texture2D.MipLevels = Props.bUseMips ? -1 : 1;
+                    ResourceDesc.Texture2D.MipLevels = Props.UseMips ? -1 : 1;
                 }
             }
             else
@@ -204,7 +202,7 @@ bool rndr::Image::InitInternal(GraphicsContext* Context,
                 else
                 {
                     ResourceDesc.ViewDimension = D3D11_SRV_DIMENSION_TEXTURE2DARRAY;
-                    ResourceDesc.Texture2DArray.MipLevels = Props.bUseMips ? -1 : 1;
+                    ResourceDesc.Texture2DArray.MipLevels = Props.UseMips ? -1 : 1;
                     ResourceDesc.Texture2DArray.ArraySize = ArraySize;
                 }
             }
@@ -212,7 +210,7 @@ bool rndr::Image::InitInternal(GraphicsContext* Context,
         else
         {
             ResourceDesc.ViewDimension = D3D11_SRV_DIMENSION_TEXTURECUBE;
-            ResourceDesc.TextureCube.MipLevels = Props.bUseMips ? -1 : 1;
+            ResourceDesc.TextureCube.MipLevels = Props.UseMips ? -1 : 1;
         }
         Result =
             Device->CreateShaderResourceView(DX11Texture, &ResourceDesc, &DX11ShaderResourceView);
@@ -313,7 +311,7 @@ bool rndr::Image::Update(GraphicsContext* Context,
         RNDR_LOG_ERROR("Image::Update: Can't update readback image!");
         return false;
     }
-    if (Props.bUseMips)
+    if (Props.UseMips)
     {
         RNDR_LOG_ERROR("Image::Update: Update of image with mips not supported!");
         return false;
@@ -415,7 +413,7 @@ bool rndr::Image::Read(GraphicsContext* Context,
         RNDR_LOG_ERROR("Image::Read: Only image with readback usage can be read from!");
         return false;
     }
-    if (Props.bUseMips)
+    if (Props.UseMips)
     {
         RNDR_LOG_ERROR("Image::Read: Update of image with mips not supported!");
         return false;

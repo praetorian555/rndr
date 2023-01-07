@@ -32,6 +32,9 @@ struct BlendState;
 struct SwapChain;
 struct Pipeline;
 
+template <typename T>
+class ScopePtr;
+
 class GraphicsContext
 {
 public:
@@ -44,32 +47,32 @@ public:
     ID3D11DeviceContext* GetDeviceContext();
     D3D_FEATURE_LEVEL GetFeatureLevel();
 
-    SwapChain* CreateSwapChain(NativeWindowHandle WindowHandle,
+    ScopePtr<SwapChain> CreateSwapChain(NativeWindowHandle WindowHandle,
                                int Width,
                                int Height,
                                const SwapChainProperties& Props = SwapChainProperties{});
-    Shader* CreateShader(const ByteSpan& ShaderContents, const ShaderProperties& Props);
-    Image* CreateImage(int Width, int Height, const ImageProperties& Props, ByteSpan InitData);
-    Image* CreateImageArray(int Width,
+    ScopePtr<Shader> CreateShader(const ByteSpan& ShaderContents, const ShaderProperties& Props);
+    ScopePtr<Image> CreateImage(int Width, int Height, const ImageProperties& Props, ByteSpan InitData);
+    ScopePtr<Image> CreateImageArray(int Width,
                             int Height,
                             int ArraySize,
                             const ImageProperties& Props,
                             Span<ByteSpan> InitData);
-    Image* CreateCubeMap(int Width,
+    ScopePtr<Image> CreateCubeMap(int Width,
                          int Height,
                          const ImageProperties& Props,
                          Span<ByteSpan> InitData);
-    Image* CreateImageForSwapChain(SwapChain* SwapChain, int BufferIndex);
-    Sampler* CreateSampler(const SamplerProperties& Props = SamplerProperties{});
-    Buffer* CreateBuffer(const BufferProperties& Props, ByteSpan InitialData);
-    FrameBuffer* CreateFrameBuffer(int Width, int Height, const FrameBufferProperties& Props);
-    FrameBuffer* CreateFrameBufferForSwapChain(int Width, int Height, SwapChain* SwapChain);
-    InputLayout* CreateInputLayout(Span<InputLayoutProperties> Props, Shader* Shader);
-    RasterizerState* CreateRasterizerState(const RasterizerProperties& Props);
-    DepthStencilState* CreateDepthStencilState(const DepthStencilProperties& Props);
-    BlendState* CreateBlendState(const BlendProperties& Props);
-    Pipeline* CreatePipeline(const PipelineProperties& Props);
-    CommandList* CreateCommandList();
+    ScopePtr<Image> CreateImageForSwapChain(SwapChain* SwapChain, int BufferIndex);
+    ScopePtr<Sampler> CreateSampler(const SamplerProperties& Props = SamplerProperties{});
+    ScopePtr<Buffer> CreateBuffer(const BufferProperties& Props, ByteSpan InitialData);
+    ScopePtr<FrameBuffer> CreateFrameBuffer(int Width, int Height, const FrameBufferProperties& Props);
+    ScopePtr<FrameBuffer> CreateFrameBufferForSwapChain(int Width, int Height, SwapChain* SwapChain);
+    ScopePtr<InputLayout> CreateInputLayout(Span<InputLayoutProperties> Props, Shader* Shader);
+    ScopePtr<RasterizerState> CreateRasterizerState(const RasterizerProperties& Props);
+    ScopePtr<DepthStencilState> CreateDepthStencilState(const DepthStencilProperties& Props);
+    ScopePtr<BlendState> CreateBlendState(const BlendProperties& Props);
+    ScopePtr<Pipeline> CreatePipeline(const PipelineProperties& Props);
+    ScopePtr<CommandList> CreateCommandList();
 
     void ClearColor(Image* Image, math::Vector4 Color);
     void ClearDepth(Image* Image, real Depth);
@@ -95,13 +98,13 @@ public:
                               uint32_t IndexOffset = 0,
                               uint32_t InstanceOffset = 0);
 
-    void Dispatch(const uint32_t ThreadGroupCountX,
-                  const uint32_t ThreadGroupCountY,
-                  const uint32_t ThreadGroupCountZ);
+    void Dispatch(uint32_t ThreadGroupCountX,
+                  uint32_t ThreadGroupCountY,
+                  uint32_t ThreadGroupCountZ);
 
     bool SubmitCommandList(CommandList* List);
 
-    void Present(SwapChain* SwapChain, bool bVSync);
+    void Present(SwapChain* SwapChain, bool BVSync);
 
     std::string WindowsGetErrorMessage(HRESULT ErrorCode = S_OK);
     bool WindowsHasFailed(HRESULT ErrorCode = S_OK);

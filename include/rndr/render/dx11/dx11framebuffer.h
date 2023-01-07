@@ -27,8 +27,8 @@ struct FrameBuffer
     int Width, Height;
     FrameBufferProperties Props;
 
-    Span<Image*> ColorBuffers;
-    Image* DepthStencilBuffer = nullptr;
+    Span<ScopePtr<Image>> ColorBuffers;
+    ScopePtr<Image> DepthStencilBuffer;
 
     D3D11_VIEWPORT DX11Viewport;
 
@@ -39,10 +39,10 @@ struct FrameBuffer
               int InWidth,
               int InHeight,
               const FrameBufferProperties& InProps = FrameBufferProperties{});
-    bool InitForSwapChain(rndr::GraphicsContext* Context,
-                          int InWidth,
-                          int InHeight,
-                          rndr::SwapChain* SwapChain);
+    bool Init(rndr::GraphicsContext* Context,
+              int InWidth,
+              int InHeight,
+              rndr::SwapChain* SwapChain);
 
     bool Resize(rndr::GraphicsContext* Context, int InWidth, int InHeight);
     bool UpdateViewport(float InWidth,

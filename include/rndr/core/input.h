@@ -42,7 +42,7 @@ struct InputMapping
     std::vector<InputBinding> Bindings;
     InputCallback Callback;
 
-    InputMapping(const InputAction& Action, InputCallback Callback)
+    InputMapping(const InputAction& Action, const InputCallback& Callback)
         : Action(Action), Callback(Callback)
     {
     }
@@ -76,6 +76,12 @@ public:
     InputSystem();
     ~InputSystem();
 
+    InputSystem(const InputSystem& Other) = delete;
+    InputSystem& operator=(const InputSystem& Other) = delete;
+    
+    InputSystem(InputSystem&& Other) = delete;
+    InputSystem& operator=(InputSystem&& Other) = delete;
+
     void SubmitButtonEvent(NativeWindowHandle Window,
                            InputPrimitive Primitive,
                            InputTrigger Trigger);
@@ -95,9 +101,12 @@ public:
     static bool IsAxis(InputPrimitive Primitive);
     static bool IsMouseAxis(InputPrimitive Primitive);
 
-    math::Point2 GetMousePosition() const;
+    [[nodiscard]] math::Point2 GetMousePosition() const;
 
 private:
+
+    // Private types
+
     struct ButtonEvent
     {
         rndr::InputPrimitive Primitive;
@@ -121,12 +130,14 @@ private:
         std::variant<ButtonEvent, MousePositionEvent, MouseWheelEvent> Data;
     };
 
-private:
+    // Private methods
+
     void ProcessEvent(const ButtonEvent& Event);
     void ProcessEvent(const MousePositionEvent& Event);
     void ProcessEvent(const MouseWheelEvent& Event);
 
-private:
+    // Private fields
+
     InputContext* m_Context = nullptr;
     std::optional<math::Point2> m_AbsolutePosition;
 

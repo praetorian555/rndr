@@ -12,10 +12,11 @@
 namespace rndr
 {
 
+template <typename T>
+class ScopePtr;
+
 class InputSystem;
 struct InputContext;
-
-using TickDelegate = MultiDelegate<real /* DeltaSeconds */>;
 
 struct RndrContextProperties
 {
@@ -29,8 +30,14 @@ struct RndrContextProperties
 class RndrContext
 {
 public:
-    RndrContext(const RndrContextProperties& Props = RndrContextProperties{});
+    explicit RndrContext(const RndrContextProperties& Props = RndrContextProperties{});
     ~RndrContext();
+
+    RndrContext(const RndrContext& Other) = delete;
+    RndrContext& operator=(const RndrContext& Other) = delete;
+
+    RndrContext(RndrContext&& Other) = delete;
+    RndrContext& operator=(RndrContext&& Other) = delete;
 
     Allocator* GetAllocator();
     Logger* GetLogger();
@@ -38,21 +45,15 @@ public:
     InputSystem* GetInputSystem();
     InputContext* GetInputContext();
 
-    Window* CreateWin(int Width,
-                      int Height,
-                      const WindowProperties& Props = WindowProperties{}) const;
-    GraphicsContext* CreateGraphicsContext(
+    [[nodiscard]] ScopePtr<Window>
+    CreateWin(int Width, int Height, const WindowProperties& Props = WindowProperties{}) const;
+
+    [[nodiscard]] ScopePtr<GraphicsContext> CreateGraphicsContext(
         const GraphicsContextProperties& Props = GraphicsContextProperties{}) const;
-
-    // Run render loop.
-    void Run();
-
-public:
-    TickDelegate OnTickDelegate;
 
 private:
     RndrContextProperties m_Props;
-    bool bInitialized = false;
+    bool m_IsInitialized = false;
 
     Allocator* m_Allocator = nullptr;
     Logger* m_Logger = nullptr;

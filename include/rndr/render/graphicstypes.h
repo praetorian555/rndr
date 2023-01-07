@@ -15,10 +15,10 @@ namespace rndr
 
 struct GraphicsConstants
 {
-    static constexpr int MaxFrameBufferColorBuffers = 4;
-    static constexpr int MaxInputLayoutEntries = 32;
-    static constexpr int MaxShaderResourceBindSlots = 128;
-    static constexpr int MaxConstantBuffers = 16;
+    static constexpr int kMaxFrameBufferColorBuffers = 4;
+    static constexpr int kMaxInputLayoutEntries = 32;
+    static constexpr int kMaxShaderResourceBindSlots = 128;
+    static constexpr int kMaxConstantBuffers = 16;
 };
 
 /**
@@ -260,7 +260,7 @@ struct ImageProperties
 {
     PixelFormat PixelFormat = PixelFormat::R8G8B8A8_UNORM_SRGB;
     Usage Usage = Usage::Default;
-    bool bUseMips = false;
+    bool UseMips = false;
     uint32_t ImageBindFlags = ImageBindFlags::ShaderResource;
     uint32_t SampleCount = 1;
 };
@@ -268,28 +268,28 @@ struct ImageProperties
 struct FrameBufferProperties
 {
     int ColorBufferCount = 1;
-    ImageProperties ColorBufferProperties[GraphicsConstants::MaxFrameBufferColorBuffers];
+    ImageProperties ColorBufferProperties[GraphicsConstants::kMaxFrameBufferColorBuffers];
 
-    bool bUseDepthStencil = false;
+    bool UseDepthStencil = false;
     ImageProperties DepthStencilBufferProperties;
 };
 
 struct GraphicsContextProperties
 {
-    bool bEnableDebugLayer = true;
-    bool bFailWarning = true;
+    bool EnableDebugLayer = true;
+    bool ShouldFailWarning = true;
 
-    bool bMakeThreadSafe = true;
+    bool IsThreadSafe = true;
     // In case of workloads that last more then 2 seconds don't trigger a timeout
-    bool bDisableGPUTimeout = false;
+    bool DisableGpuTimeout = false;
 };
 
 struct SwapChainProperties
 {
     PixelFormat ColorFormat = PixelFormat::R8G8B8A8_UNORM;
     PixelFormat DepthStencilFormat = PixelFormat::D24_UNORM_S8_UINT;
-    bool bUseDepthStencil = false;
-    bool bWindowed = true;
+    bool UseDepthStencil = false;
+    bool IsWindowed = true;
 };
 
 struct SamplerProperties
@@ -298,7 +298,7 @@ struct SamplerProperties
     ImageAddressing AddressingV = ImageAddressing::Repeat;
     ImageAddressing AddressingW = ImageAddressing::Repeat;
 
-    math::Vector4 WrapBorderColor = Colors::Pink;
+    math::Vector4 WrapBorderColor = Colors::kPink;
 
     ImageFiltering Filter = ImageFiltering::MinMagMipLinear;
 
@@ -322,10 +322,10 @@ struct ShaderProperties
 
     std::string EntryPoint;
     std::vector<ShaderMacro> Macros;
-    // TODO: Add support for include files
+    // TODO(Marko): Add support for include files
 };
 
-constexpr int AppendAlignedElement = -1;
+constexpr int kAppendAlignedElement = -1;
 struct InputLayoutProperties
 {
     std::string SemanticName;
@@ -347,19 +347,19 @@ struct RasterizerProperties
     int DepthBias = 0;
     real DepthBiasClamp = 0.0;
     real SlopeScaledDepthBias = 0.0;
-    bool bDepthClipEnable = true;
-    bool bScissorEnable = false;
-    bool bMultisampleEnable = false;
-    bool bAntialiasedLineEnable = false;
+    bool DepthClipEnable = true;
+    bool ScissorEnable = false;
+    bool MultisampleEnable = false;
+    bool AntialiasedLineEnable = false;
 };
 
 struct DepthStencilProperties
 {
-    bool bDepthEnable = false;
+    bool DepthEnable = false;
     Comparator DepthComparator = Comparator::Less;
     DepthMask DepthMask = DepthMask::All;
 
-    bool bStencilEnable = false;
+    bool StencilEnable = false;
     uint8_t StencilReadMask = 0xFF;
     uint8_t StencilWriteMask = 0xFF;
     uint32_t StencilRefValue = 0;
@@ -377,7 +377,7 @@ struct DepthStencilProperties
 
 struct BlendProperties
 {
-    bool bBlendEnable = true;
+    bool BlendEnable = true;
     BlendFactor SrcColorFactor = BlendFactor::SrcAlpha;
     BlendFactor DstColorFactor = BlendFactor::InvSrcAlpha;
     BlendOperator ColorOperator = BlendOperator::Add;

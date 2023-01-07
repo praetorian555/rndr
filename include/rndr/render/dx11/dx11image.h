@@ -43,20 +43,18 @@ struct Image
               int InHeight,
               const ImageProperties& InProps,
               ByteSpan InitData);
-    bool InitArray(GraphicsContext* Context,
-                   int InWidth,
-                   int InHeight,
-                   int InArraySize,
-                   const ImageProperties& InProps,
-                   Span<ByteSpan> InitData);
-    bool InitCubeMap(GraphicsContext* Context,
-                     int InWidth,
-                     int InHeight,
-                     const ImageProperties& InProps,
-                     Span<ByteSpan> InitData);
-    bool InitSwapchainBackBuffer(GraphicsContext* Context,
-                                 rndr::SwapChain* SwapChain,
-                                 int BufferIndex);
+    bool Init(GraphicsContext* Context,
+              int InWidth,
+              int InHeight,
+              int InArraySize,
+              const ImageProperties& InProps,
+              Span<ByteSpan> InitData);
+    bool Init(GraphicsContext* Context,
+              int InWidth,
+              int InHeight,
+              const ImageProperties& InProps,
+              Span<ByteSpan> InitData);
+    bool Init(GraphicsContext* Context, rndr::SwapChain* SwapChain, int BufferIndex);
 
     ~Image();
 
@@ -76,7 +74,7 @@ struct Image
 private:
     bool InitInternal(GraphicsContext* Context,
                       Span<ByteSpan> InitData,
-                      bool bCubeMap = false,
+                      bool BCubeMap = false,
                       rndr::SwapChain* SwapChain = nullptr);
 };
 

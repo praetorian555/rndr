@@ -12,13 +12,13 @@ namespace rndr
  */
 struct Colors
 {
-    static const math::Vector4 Black;
-    static const math::Vector4 White;
-    static const math::Vector4 Red;
-    static const math::Vector4 Green;
-    static const math::Vector4 Blue;
-    static const math::Vector4 Pink;
-    static const math::Vector4 Yellow;
+    static constexpr math::Vector4 kBlack = {0, 0, 0, 1};
+    static constexpr math::Vector4 kWhite = {1, 1, 1, 1};
+    static constexpr math::Vector4 kRed = {1, 0, 0, 1};
+    static constexpr math::Vector4 kGreen = {0, 1, 0, 1};
+    static constexpr math::Vector4 kBlue = {0, 0, 1, 1};
+    static constexpr math::Vector4 kPink = {1, 0x69 / 255.0f, 0xB4 / 255.0f, 1};
+    static constexpr math::Vector4 kYellow = {1, 1, 0, 1};
 };
 
 }  // namespace rndr

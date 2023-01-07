@@ -5,7 +5,7 @@
 
 using DelegateHandle = int;
 
-static constexpr DelegateHandle InvalidDelegateHandle = -1;
+static constexpr DelegateHandle kInvalidDelegateHandle = -1;
 
 template <typename... Args>
 struct Delegate
@@ -40,7 +40,7 @@ struct MultiDelegate
 
     void Remove(DelegateHandle Handle)
     {
-        if (Handle == InvalidDelegateHandle)
+        if (Handle == kInvalidDelegateHandle)
         {
             return;
         }

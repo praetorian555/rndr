@@ -31,15 +31,18 @@ public:
     ProjectionCamera* GetProjectionCamera();
     void SetProjectionCamera(ProjectionCamera* ProjectionCamera);
 
-    math::Point3 GetPosition() const;
+    [[nodiscard]] math::Point3 GetPosition() const;
 
 private:
+    // Private methods
+
     void HandleLookVert(InputPrimitive Primitive, InputTrigger Trigger, real AxisValue);
     void HandleLookHorz(InputPrimitive Primitive, InputTrigger Trigger, real AxisValue);
-    void HandleMoveForward(InputPrimitive Primitive, InputTrigger Trigger, real);
-    void HandleMoveRight(InputPrimitive Primitive, InputTrigger Trigger, real);
+    void HandleMoveForward(InputPrimitive Primitive, InputTrigger Trigger, real Value);
+    void HandleMoveRight(InputPrimitive Primitive, InputTrigger Trigger, real Value);
 
-private:
+    // Private fields
+
     ProjectionCamera* m_ProjectionCamera = nullptr;
 
     math::Point3 m_Position;
@@ -53,8 +56,6 @@ private:
 
     real m_MovementSpeed;
     real m_RotationSpeed;
-
-    bool m_bDirectionChanged = false;
 };
 
 }  // namespace rndr

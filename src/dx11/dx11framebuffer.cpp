@@ -28,7 +28,7 @@ bool rndr::FrameBuffer::Init(GraphicsContext* Context,
         return false;
     }
     if (InProps.ColorBufferCount <= 0 ||
-        InProps.ColorBufferCount > GraphicsConstants::MaxFrameBufferColorBuffers)
+        InProps.ColorBufferCount > GraphicsConstants::kMaxFrameBufferColorBuffers)
     {
         RNDR_LOG_ERROR("FrameBuffer::Init: Invalid number of color buffers!");
         return false;
@@ -41,10 +41,10 @@ bool rndr::FrameBuffer::Init(GraphicsContext* Context,
     return InitInternal(Context);
 }
 
-bool rndr::FrameBuffer::InitForSwapChain(rndr::GraphicsContext* Context,
-                                         int InWidth,
-                                         int InHeight,
-                                         rndr::SwapChain* SwapChain)
+bool rndr::FrameBuffer::Init(rndr::GraphicsContext* Context,
+                             int InWidth,
+                             int InHeight,
+                             rndr::SwapChain* SwapChain)
 {
     if (Context == nullptr)
     {
@@ -58,13 +58,13 @@ bool rndr::FrameBuffer::InitForSwapChain(rndr::GraphicsContext* Context,
     }
 
     Props.ColorBufferCount = 1;
-    Props.ColorBufferProperties[0].bUseMips = false;
+    Props.ColorBufferProperties[0].UseMips = false;
     Props.ColorBufferProperties[0].SampleCount = 1;
     Props.ColorBufferProperties[0].PixelFormat = SwapChain->Props.ColorFormat;
     Props.ColorBufferProperties[0].Usage = Usage::Default;
     Props.ColorBufferProperties[0].ImageBindFlags = ImageBindFlags::RenderTarget;
-    Props.bUseDepthStencil = SwapChain->Props.bUseDepthStencil;
-    Props.DepthStencilBufferProperties.bUseMips = false;
+    Props.UseDepthStencil = SwapChain->Props.UseDepthStencil;
+    Props.DepthStencilBufferProperties.UseMips = false;
     Props.DepthStencilBufferProperties.SampleCount = 1;
     Props.DepthStencilBufferProperties.PixelFormat = SwapChain->Props.DepthStencilFormat;
     Props.DepthStencilBufferProperties.Usage = Usage::Default;
@@ -78,7 +78,7 @@ bool rndr::FrameBuffer::InitForSwapChain(rndr::GraphicsContext* Context,
         return false;
     }
     if (Props.ColorBufferCount <= 0 ||
-        Props.ColorBufferCount > GraphicsConstants::MaxFrameBufferColorBuffers)
+        Props.ColorBufferCount > GraphicsConstants::kMaxFrameBufferColorBuffers)
     {
         RNDR_LOG_ERROR("FrameBuffer::InitForSwapChain: Invalid number of color buffers!");
         return false;
@@ -136,53 +136,45 @@ void rndr::FrameBuffer::Clear()
 {
     if (ColorBuffers)
     {
-        for (int i = 0; i < ColorBuffers.Size; i++)
+        for (int Index = 0; Index < ColorBuffers.Size; Index++)
         {
-            RNDR_DELETE(Image, ColorBuffers[i]);
+            ColorBuffers[Index].Reset();
         }
-        RNDR_DELETE(Image*, ColorBuffers.Data);
+        RNDR_DELETE_ARRAY(ScopePtr<Image>, ColorBuffers.Data, static_cast<int>(ColorBuffers.Size));
         ColorBuffers.Data = nullptr;
         ColorBuffers.Size = 0;
-    }
-    if (DepthStencilBuffer)
-    {
-        RNDR_DELETE(Image, DepthStencilBuffer);
     }
 }
 
 bool rndr::FrameBuffer::InitInternal(GraphicsContext* Context, SwapChain* SwapChain)
 {
-    ColorBuffers.Data = RNDR_NEW_ARRAY(Image*, Props.ColorBufferCount, "rndr::FrameBuffer: Image");
+    ColorBuffers.Data =
+        RNDR_NEW_ARRAY(ScopePtr<Image>, Props.ColorBufferCount, "rndr::FrameBuffer: Image");
     ColorBuffers.Size = Props.ColorBufferCount;
-    for (int i = 0; i < Props.ColorBufferCount; i++)
-    {
-        ColorBuffers[i] = nullptr;
-    }
-    DepthStencilBuffer = nullptr;
 
-    ByteSpan EmptyData;
-    for (int i = 0; i < Props.ColorBufferCount; i++)
+    const ByteSpan EmptyData;
+    for (int Index = 0; Index < Props.ColorBufferCount; Index++)
     {
-        if (!SwapChain)
+        if (SwapChain == nullptr)
         {
-            ColorBuffers[i] =
-                Context->CreateImage(Width, Height, Props.ColorBufferProperties[i], EmptyData);
+            const ImageProperties& BufferProps = Props.ColorBufferProperties[Index];
+            ColorBuffers[Index] = Context->CreateImage(Width, Height, BufferProps, EmptyData);
         }
         else
         {
-            ColorBuffers[i] = Context->CreateImageForSwapChain(SwapChain, i);
+            ColorBuffers[Index] = Context->CreateImageForSwapChain(SwapChain, Index);
         }
-        if (!ColorBuffers[i])
+        if (!ColorBuffers[Index].IsValid())
         {
             RNDR_LOG_ERROR("FrameBuffer::InitInternal: Failed to create color image!");
             return false;
         }
     }
-    if (Props.bUseDepthStencil)
+    if (Props.UseDepthStencil)
     {
         DepthStencilBuffer =
             Context->CreateImage(Width, Height, Props.DepthStencilBufferProperties, EmptyData);
-        if (!DepthStencilBuffer)
+        if (!DepthStencilBuffer.IsValid())
         {
             RNDR_LOG_ERROR("FrameBuffer::InitInternal: Failed to create depth stencil image!");
             return false;

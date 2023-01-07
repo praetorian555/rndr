@@ -25,21 +25,28 @@ struct WindowProperties
 class Window
 {
 public:
-    Window(int Width = 1024, int Height = 768, const WindowProperties& Props = WindowProperties());
+    explicit Window(int Width = 1024, int Height = 768, const WindowProperties& Props = WindowProperties());
     ~Window();
+
+    Window(const Window& Other) = delete;
+    Window& operator=(const Window& Other) = delete;
+
+    Window(Window&& Other) = delete;
+    Window& operator=(Window&& Other) = delete;
 
     /**
      * Processes events that occured in the window such as event closing or button press.
      */
     void ProcessEvents() const;
 
-    bool IsClosed() const;
     void Close();
 
-    NativeWindowHandle GetNativeWindowHandle() const;
-    int GetWidth() const;
-    int GetHeight() const;
-    bool IsWindowMinimized() const;
+    [[nodiscard]] NativeWindowHandle GetNativeWindowHandle() const;
+    [[nodiscard]] int GetWidth() const;
+    [[nodiscard]] int GetHeight() const;
+
+    [[nodiscard]] bool IsWindowMinimized() const;
+    [[nodiscard]] bool IsClosed() const;
 
     /**
      * If true the cursor will be limited to this window.
@@ -52,13 +59,13 @@ public:
      */
     void ActivateInfiniteCursor(bool Activate);
 
-    bool IsInfiniteCursor() const { return m_InifiniteCursor; }
+    [[nodiscard]] bool IsInfiniteCursor() const { return m_InifiniteCursor; }
 
 private:
     void Resize(Window* Window, int Width, int Height);
     void ButtonEvent(Window* Window, InputPrimitive Primitive, InputTrigger Trigger);
 
-private:
+
     WindowProperties m_Props;
     NativeWindowHandle m_NativeWindowHandle;
 

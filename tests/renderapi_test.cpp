@@ -22,10 +22,10 @@ TEST_CASE("GraphicsContext", "RenderAPI")
     std::unique_ptr<rndr::RndrContext> RndrCtx = std::make_unique<rndr::RndrContext>();
 
     rndr::GraphicsContextProperties Props;
-    Props.bDisableGPUTimeout = false;
-    Props.bEnableDebugLayer = true;
-    Props.bFailWarning = true;
-    Props.bMakeThreadSafe = true;
+    Props.DisableGpuTimeout = false;
+    Props.EnableDebugLayer = true;
+    Props.ShouldFailWarning = true;
+    Props.IsThreadSafe = true;
 
     SECTION("Default")
     {
@@ -34,19 +34,19 @@ TEST_CASE("GraphicsContext", "RenderAPI")
     }
     SECTION("Disable GPU Timeout")
     {
-        Props.bDisableGPUTimeout = true;
+        Props.DisableGpuTimeout = true;
         rndr::ScopePtr<rndr::GraphicsContext> Ctx = RndrCtx->CreateGraphicsContext(Props);
         REQUIRE(Ctx.IsValid());
     }
     SECTION("No Debug Layer")
     {
-        Props.bEnableDebugLayer = false;
+        Props.EnableDebugLayer = false;
         rndr::ScopePtr<rndr::GraphicsContext> Ctx = RndrCtx->CreateGraphicsContext(Props);
         REQUIRE(Ctx.IsValid());
     }
     SECTION("Not Thread Safe")
     {
-        Props.bMakeThreadSafe = false;
+        Props.IsThreadSafe = false;
         rndr::ScopePtr<rndr::GraphicsContext> Ctx = RndrCtx->CreateGraphicsContext(Props);
         REQUIRE(Ctx.IsValid());
     }
@@ -73,7 +73,7 @@ TEST_CASE("Image", "RenderAPI")
     SECTION("Generate Mips")
     {
         rndr::ImageProperties ImageProps;
-        ImageProps.bUseMips = true;
+        ImageProps.UseMips = true;
         rndr::ScopePtr<rndr::Image> Image = Ctx->CreateImage(100, 400, ImageProps, rndr::ByteSpan{});
         REQUIRE(Image.IsValid());
     }
@@ -185,7 +185,7 @@ TEST_CASE("ImageArray", "RenderAPI")
     SECTION("Generate Mips")
     {
         rndr::ImageProperties ImageProps;
-        ImageProps.bUseMips = true;
+        ImageProps.UseMips = true;
         rndr::ScopePtr<rndr::Image> Image = Ctx->CreateImageArray(Width, Height, ArraySize, ImageProps, EmptyData);
         REQUIRE(Image.IsValid());
     }
@@ -283,7 +283,7 @@ TEST_CASE("CubeMap", "RenderAPI")
     SECTION("Generate Mips")
     {
         rndr::ImageProperties ImageProps;
-        ImageProps.bUseMips = true;
+        ImageProps.UseMips = true;
         rndr::ScopePtr<rndr::Image> Image = Ctx->CreateCubeMap(Width, Height, ImageProps, EmptyData);
         REQUIRE(Image.IsValid());
     }
@@ -501,8 +501,8 @@ TEST_CASE("FrameBuffer", "RenderAPI")
     SECTION("All On")
     {
         rndr::FrameBufferProperties Props;
-        Props.bUseDepthStencil = true;
-        Props.ColorBufferCount = rndr::GraphicsConstants::MaxFrameBufferColorBuffers;
+        Props.UseDepthStencil = true;
+        Props.ColorBufferCount = rndr::GraphicsConstants::kMaxFrameBufferColorBuffers;
         rndr::ScopePtr<rndr::FrameBuffer> FB = Ctx->CreateFrameBuffer(100, 400, Props);
         REQUIRE(FB.IsValid());
     }
@@ -696,7 +696,7 @@ TEST_CASE("InputLayout", "RenderAPI")
         LayoutProps[1].SemanticName = "NORMAL";
         LayoutProps[1].SemanticIndex = 0;
         LayoutProps[1].InputSlot = 0;
-        LayoutProps[1].OffsetInVertex = rndr::AppendAlignedElement;
+        LayoutProps[1].OffsetInVertex = rndr::kAppendAlignedElement;
         LayoutProps[1].Repetition = rndr::DataRepetition::PerVertex;
         LayoutProps[1].Format = rndr::PixelFormat::R32G32B32_FLOAT;
         rndr::Span<rndr::InputLayoutProperties> PackedProps(LayoutProps, 2);
@@ -742,7 +742,7 @@ TEST_CASE("InputLayoutBuilder", "RenderAPI")
         REQUIRE(LayoutProps[1].SemanticName == "NORMAL");
         REQUIRE(LayoutProps[1].SemanticIndex == 0);
         REQUIRE(LayoutProps[1].InputSlot == 0);
-        REQUIRE(LayoutProps[1].OffsetInVertex == rndr::AppendAlignedElement);
+        REQUIRE(LayoutProps[1].OffsetInVertex == rndr::kAppendAlignedElement);
         REQUIRE(LayoutProps[1].Repetition == rndr::DataRepetition::PerVertex);
         REQUIRE(LayoutProps[1].Format == rndr::PixelFormat::R32G32B32_FLOAT);
 
@@ -776,56 +776,56 @@ TEST_CASE("InputLayoutBuilder", "RenderAPI")
         REQUIRE(LayoutProps[1].SemanticIndex == 1);
         REQUIRE(LayoutProps[1].InputSlot == 0);
         REQUIRE(LayoutProps[1].Format == rndr::PixelFormat::R32G32_FLOAT);
-        REQUIRE(LayoutProps[1].OffsetInVertex == rndr::AppendAlignedElement);
+        REQUIRE(LayoutProps[1].OffsetInVertex == rndr::kAppendAlignedElement);
         REQUIRE(LayoutProps[1].Repetition == rndr::DataRepetition::PerInstance);
         REQUIRE(LayoutProps[1].InstanceStepRate == 1);
         REQUIRE(LayoutProps[2].SemanticName == "TEXCOORD");
         REQUIRE(LayoutProps[2].SemanticIndex == 0);
         REQUIRE(LayoutProps[2].InputSlot == 0);
         REQUIRE(LayoutProps[2].Format == rndr::PixelFormat::R32G32_FLOAT);
-        REQUIRE(LayoutProps[2].OffsetInVertex == rndr::AppendAlignedElement);
+        REQUIRE(LayoutProps[2].OffsetInVertex == rndr::kAppendAlignedElement);
         REQUIRE(LayoutProps[2].Repetition == rndr::DataRepetition::PerInstance);
         REQUIRE(LayoutProps[2].InstanceStepRate == 1);
         REQUIRE(LayoutProps[3].SemanticName == "TEXCOORD");
         REQUIRE(LayoutProps[3].SemanticIndex == 1);
         REQUIRE(LayoutProps[3].InputSlot == 0);
         REQUIRE(LayoutProps[3].Format == rndr::PixelFormat::R32G32_FLOAT);
-        REQUIRE(LayoutProps[3].OffsetInVertex == rndr::AppendAlignedElement);
+        REQUIRE(LayoutProps[3].OffsetInVertex == rndr::kAppendAlignedElement);
         REQUIRE(LayoutProps[3].Repetition == rndr::DataRepetition::PerInstance);
         REQUIRE(LayoutProps[3].InstanceStepRate == 1);
         REQUIRE(LayoutProps[4].SemanticName == "COLOR");
         REQUIRE(LayoutProps[4].SemanticIndex == 0);
         REQUIRE(LayoutProps[4].InputSlot == 0);
         REQUIRE(LayoutProps[4].Format == rndr::PixelFormat::R32G32B32A32_FLOAT);
-        REQUIRE(LayoutProps[4].OffsetInVertex == rndr::AppendAlignedElement);
+        REQUIRE(LayoutProps[4].OffsetInVertex == rndr::kAppendAlignedElement);
         REQUIRE(LayoutProps[4].Repetition == rndr::DataRepetition::PerInstance);
         REQUIRE(LayoutProps[4].InstanceStepRate == 1);
         REQUIRE(LayoutProps[5].SemanticName == "BLENDINDICES");
         REQUIRE(LayoutProps[5].SemanticIndex == 0);
         REQUIRE(LayoutProps[5].InputSlot == 0);
         REQUIRE(LayoutProps[5].Format == rndr::PixelFormat::R32_FLOAT);
-        REQUIRE(LayoutProps[5].OffsetInVertex == rndr::AppendAlignedElement);
+        REQUIRE(LayoutProps[5].OffsetInVertex == rndr::kAppendAlignedElement);
         REQUIRE(LayoutProps[5].Repetition == rndr::DataRepetition::PerInstance);
         REQUIRE(LayoutProps[5].InstanceStepRate == 1);
         REQUIRE(LayoutProps[6].SemanticName == "BLENDINDICES");
         REQUIRE(LayoutProps[6].SemanticIndex == 1);
         REQUIRE(LayoutProps[6].InputSlot == 0);
         REQUIRE(LayoutProps[6].Format == rndr::PixelFormat::R32_FLOAT);
-        REQUIRE(LayoutProps[6].OffsetInVertex == rndr::AppendAlignedElement);
+        REQUIRE(LayoutProps[6].OffsetInVertex == rndr::kAppendAlignedElement);
         REQUIRE(LayoutProps[6].Repetition == rndr::DataRepetition::PerInstance);
         REQUIRE(LayoutProps[6].InstanceStepRate == 1);
         REQUIRE(LayoutProps[7].SemanticName == "BLENDINDICES");
         REQUIRE(LayoutProps[7].SemanticIndex == 2);
         REQUIRE(LayoutProps[7].InputSlot == 0);
         REQUIRE(LayoutProps[7].Format == rndr::PixelFormat::R32_FLOAT);
-        REQUIRE(LayoutProps[7].OffsetInVertex == rndr::AppendAlignedElement);
+        REQUIRE(LayoutProps[7].OffsetInVertex == rndr::kAppendAlignedElement);
         REQUIRE(LayoutProps[7].Repetition == rndr::DataRepetition::PerInstance);
         REQUIRE(LayoutProps[7].InstanceStepRate == 1);
         REQUIRE(LayoutProps[8].SemanticName == "BLENDINDICES");
         REQUIRE(LayoutProps[8].SemanticIndex == 3);
         REQUIRE(LayoutProps[8].InputSlot == 0);
         REQUIRE(LayoutProps[8].Format == rndr::PixelFormat::R32_FLOAT);
-        REQUIRE(LayoutProps[8].OffsetInVertex == rndr::AppendAlignedElement);
+        REQUIRE(LayoutProps[8].OffsetInVertex == rndr::kAppendAlignedElement);
         REQUIRE(LayoutProps[8].Repetition == rndr::DataRepetition::PerInstance);
         REQUIRE(LayoutProps[8].InstanceStepRate == 1);
     }
@@ -834,18 +834,15 @@ TEST_CASE("InputLayoutBuilder", "RenderAPI")
 TEST_CASE("RasterizerState", "RenderAPI")
 {
     std::unique_ptr<rndr::RndrContext> RndrCtx = std::make_unique<rndr::RndrContext>();
-    rndr::GraphicsContext* Ctx = RndrCtx->CreateGraphicsContext();
-    REQUIRE(Ctx != nullptr);
+    rndr::ScopePtr<rndr::GraphicsContext> Ctx = RndrCtx->CreateGraphicsContext();
+    REQUIRE(Ctx.IsValid());
 
     SECTION("Default")
     {
         rndr::RasterizerProperties Props;
-        rndr::RasterizerState* S = Ctx->CreateRasterizerState(Props);
-        REQUIRE(S != nullptr);
-        RNDR_DELETE(rndr::RasterizerState, S);
+        rndr::ScopePtr<rndr::RasterizerState> S = Ctx->CreateRasterizerState(Props);
+        REQUIRE(S.IsValid());
     }
-
-    RNDR_DELETE(rndr::GraphicsContext, Ctx);
 }
 
 TEST_CASE("DepthStencilState", "RenderAPI")
@@ -888,9 +885,9 @@ TEST_CASE("SwapChain", "RenderAPI")
     rndr::ScopePtr<rndr::SwapChain> S = Ctx->CreateSwapChain(NativeWinHandle, Win->GetWidth(), Win->GetHeight(), SwapProps);
     REQUIRE(S.IsValid());
 
-    Ctx->ClearColor(S->FrameBuffer->ColorBuffers[0], math::Vector4{1, 1, 1, 1});
+    Ctx->ClearColor(S->FrameBuffer->ColorBuffers[0].Get(), math::Vector4{1, 1, 1, 1});
     Ctx->Present(S.Get(), true);
-    Ctx->ClearColor(S->FrameBuffer->ColorBuffers[0], math::Vector4{1, 1, 0.5, 1});
+    Ctx->ClearColor(S->FrameBuffer->ColorBuffers[0].Get(), math::Vector4{1, 1, 0.5, 1});
     Ctx->Present(S.Get(), true);
 }
 

@@ -40,7 +40,7 @@ rndr::CommandList::~CommandList()
 
 bool rndr::CommandList::Finish(GraphicsContext* Context)
 {
-    const int kRestoreDeferredContextState = 0;
+    constexpr int kRestoreDeferredContextState = 0;
     const HRESULT Result =
         DX11DeferredContext->FinishCommandList(kRestoreDeferredContextState, &DX11CommandList);
     if (Context->WindowsHasFailed(Result))
@@ -213,7 +213,7 @@ void rndr::CommandList::BindBuffer(Buffer* Buffer, int Slot, Shader* Shader) con
 
 void rndr::CommandList::BindFrameBuffer(FrameBuffer* FrameBuffer) const
 {
-    if (!FrameBuffer)
+    if (FrameBuffer == nullptr)
     {
         RNDR_LOG_ERROR("GraphicsContext::BindFrameBuffer: Invalid framebuffer!");
         return;

@@ -21,7 +21,7 @@ rndr::RndrContext::RndrContext(const RndrContextProperties& Props)
     if (GRndrContext != nullptr)
     {
         RNDR_LOG_ERROR("RndrContext already created, there can be only one!");
-        bInitialized = false;
+        m_IsInitialized = false;
         return;
     }
 
@@ -40,12 +40,12 @@ rndr::RndrContext::RndrContext(const RndrContextProperties& Props)
 
     m_InputSystem = RNDR_NEW(InputSystem, "InputSystem");
 
-    bInitialized = true;
+    m_IsInitialized = true;
 }
 
 rndr::RndrContext::~RndrContext()
 {
-    if (bInitialized)
+    if (m_IsInitialized)
     {
         RNDR_DELETE(InputSystem, m_InputSystem);
 
@@ -57,25 +57,37 @@ rndr::RndrContext::~RndrContext()
     }
 }
 
-rndr::Window* rndr::RndrContext::CreateWin(int Width, int Height, const WindowProperties& Props) const
+rndr::ScopePtr<rndr::Window> rndr::RndrContext::CreateWin(int Width,
+                                                          int Height,
+                                                          const WindowProperties& Props) const
 {
-    if (!bInitialized)
+    rndr::ScopePtr<rndr::Window> Ptr;
+
+    if (!m_IsInitialized)
     {
         RNDR_LOG_ERROR("RndrContext instance didn't initialize properly!");
-        return nullptr;
+        return Ptr;
     }
 
     Window* W = RNDR_NEW(Window, "rndr::RndrContext: Window", Width, Height, Props);
-    return W;
+    if (W == nullptr)
+    {
+        RNDR_LOG_ERROR("RndrContext::CreateWin: Failed to allocate Window object!");
+        return Ptr;
+    }
+    Ptr.Reset(W);
+    return Ptr;
 }
 
-rndr::GraphicsContext* rndr::RndrContext::CreateGraphicsContext(
+rndr::ScopePtr<rndr::GraphicsContext> rndr::RndrContext::CreateGraphicsContext(
     const GraphicsContextProperties& Props) const
 {
-    if (!bInitialized)
+    ScopePtr<GraphicsContext> Ptr;
+
+    if (!m_IsInitialized)
     {
         RNDR_LOG_ERROR("RndrContext instance didn't initialize properly!");
-        return nullptr;
+        return Ptr;
     }
 
     GraphicsContext* GC = RNDR_NEW(GraphicsContext, "rndr::RndrContext: GraphicsContext");
@@ -83,7 +95,8 @@ rndr::GraphicsContext* rndr::RndrContext::CreateGraphicsContext(
     {
         RNDR_DELETE(GraphicsContext, GC);
     }
-    return GC;
+    Ptr.Reset(GC);
+    return Ptr;
 }
 
 rndr::Logger* rndr::RndrContext::GetLogger()
@@ -98,7 +111,7 @@ rndr::Allocator* rndr::RndrContext::GetAllocator()
 
 rndr::InputSystem* rndr::RndrContext::GetInputSystem()
 {
-    if (!bInitialized)
+    if (!m_IsInitialized)
     {
         RNDR_LOG_ERROR("RndrContext instance didn't initialize properly!");
         return nullptr;
@@ -109,7 +122,7 @@ rndr::InputSystem* rndr::RndrContext::GetInputSystem()
 
 rndr::InputContext* rndr::RndrContext::GetInputContext()
 {
-    if (!bInitialized)
+    if (!m_IsInitialized)
     {
         RNDR_LOG_ERROR("RndrContext instance didn't initialize properly!");
         return nullptr;
@@ -118,32 +131,7 @@ rndr::InputContext* rndr::RndrContext::GetInputContext()
     return m_InputSystem->GetContext();
 }
 
-void rndr::RndrContext::Run()
+rndr::Allocator* rndr::GetAllocator()
 {
-    /*real FrameDuration = 0;
-
-    while (!m_Window->IsClosed())
-    {
-        RNDR_CPU_TRACE("Main Loop");
-
-        auto FrameStart = std::chrono::high_resolution_clock().now();
-
-        m_Window->ProcessEvents();
-
-        if (m_Window->IsWindowMinimized())
-        {
-            continue;
-        }
-
-        rndr::InputSystem::Get()->Update(FrameDuration);
-
-        OnTickDelegate.Execute(FrameDuration);
-
-        m_GraphicsContext->Present(m_SwapChain, false);
-
-        auto FrameEnd = std::chrono::high_resolution_clock().now();
-        FrameDuration = std::chrono::duration_cast<std::chrono::microseconds>(FrameEnd -
-    FrameStart).count(); FrameDuration /= 1'000'000; FrameDuration = math::Clamp(FrameDuration, 0,
-    0.05);
-    }*/
+    return GRndrContext->GetAllocator();
 }

@@ -7,7 +7,7 @@ namespace spdlog
 {
 class logger;
 }
-#endif // RNDR_SPDLOG
+#endif  // RNDR_SPDLOG
 
 namespace rndr
 {
@@ -24,7 +24,14 @@ enum class LogLevel
 class Logger
 {
 public:
+    Logger() = default;
     virtual ~Logger() = default;
+
+    Logger(const Logger& Other) = delete;
+    Logger& operator=(const Logger& Other) = delete;
+
+    Logger(Logger&& Other) = delete;
+    Logger& operator=(Logger&& Other) = delete;
 
     virtual void Log(const char* File,
                      int Line,
@@ -37,13 +44,19 @@ class StdAsyncLogger : public Logger
 {
 public:
     StdAsyncLogger();
-    ~StdAsyncLogger();
+    ~StdAsyncLogger() final;
 
-    virtual void Log(const char* File,
-                     int Line,
-                     const char* Function,
-                     rndr::LogLevel LogLevel,
-                     const char* Message) override;
+    StdAsyncLogger(const StdAsyncLogger& Other) = delete;
+    StdAsyncLogger& operator=(const StdAsyncLogger& Other) = delete;
+
+    StdAsyncLogger(StdAsyncLogger&& Other) = delete;
+    StdAsyncLogger& operator=(StdAsyncLogger&& Other) = delete;
+
+    void Log(const char* File,
+             int Line,
+             const char* Function,
+             rndr::LogLevel LogLevel,
+             const char* Message) override;
 
 private:
 #ifdef RNDR_SPDLOG

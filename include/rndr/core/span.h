@@ -38,7 +38,7 @@ struct Span
         Size = sizeof(U) / sizeof(T);
     }
 
-    operator bool() const { return Data != nullptr && Size != 0; }
+    explicit operator bool() const { return Data != nullptr && Size != 0; }
 
     T& operator[](int Index) { return Data[Index]; }
     const T& operator[](int Index) const { return Data[Index]; }

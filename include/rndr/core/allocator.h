@@ -8,7 +8,14 @@ namespace rndr
 class Allocator
 {
 public:
-    virtual ~Allocator() {}
+    Allocator() = default;
+    virtual ~Allocator() = default;
+
+    Allocator(const Allocator& Other) = delete;
+    Allocator& operator=(const Allocator& Other) = delete;
+
+    Allocator(Allocator&& Other) = delete;
+    Allocator& operator=(Allocator&& Other) = delete;
 
     virtual void* Allocate(int Size, const char* Tag, const char* File, int Line) = 0;
     virtual void Deallocate(void* Ptr) = 0;
@@ -16,8 +23,12 @@ public:
 
 class DefaultAllocator : public Allocator
 {
-    virtual void* Allocate(int Size, const char* Tag, const char* File, int Line) override;
-    virtual void Deallocate(void* Ptr) override;
+public:
+    DefaultAllocator() = default;
+    ~DefaultAllocator() final = default;
+
+    void* Allocate(int Size, const char* Tag, const char* File, int Line) override;
+    void Deallocate(void* Ptr) override;
 };
 
 }  // namespace rndr

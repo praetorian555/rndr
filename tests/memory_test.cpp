@@ -80,19 +80,19 @@ TEST_CASE("ScopePtr", "Memory")
     std::unique_ptr<rndr::RndrContext> Ctx = std::make_unique<rndr::RndrContext>();
 
     {
-        rndr::ScopePtr<int> Data = RNDR_NEW(int, "", 5);
+        rndr::ScopePtr<int> Data = rndr::CreateScoped<int>("", 5);
         REQUIRE(*Data == 5);
     }
 
     {
-        rndr::ScopePtr<int> Data1 = RNDR_NEW(int, "", 5);
+        rndr::ScopePtr<int> Data1 = rndr::CreateScoped<int>("", 5);
         REQUIRE(*Data1 == 5);
 
         rndr::ScopePtr<int> Data2 = std::move(Data1);
         REQUIRE(*Data2 == 5);
         REQUIRE(Data1.Get() == nullptr);
 
-        rndr::ScopePtr<int> Data3 = RNDR_NEW(int, "", 10);
+        rndr::ScopePtr<int> Data3 = rndr::CreateScoped<int>("", 10);
         REQUIRE(*Data3 == 10);
 
         Data3 = std::move(Data2);
@@ -106,7 +106,7 @@ TEST_CASE("ScopePtr", "Memory")
             int a;
         };
 
-        rndr::ScopePtr<MyData> Data = RNDR_NEW(MyData, "", 5);
+        rndr::ScopePtr<MyData> Data = rndr::CreateScoped<MyData>("", 5);
         REQUIRE(Data->a == 5);
     }
 }

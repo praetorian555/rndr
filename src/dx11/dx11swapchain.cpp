@@ -14,7 +14,6 @@
 rndr::SwapChain::~SwapChain()
 {
     DX11SafeRelease(DX11SwapChain);
-    RNDR_DELETE(rndr::FrameBuffer, FrameBuffer);
 }
 
 bool rndr::SwapChain::Init(GraphicsContext* Context,
@@ -43,7 +42,7 @@ bool rndr::SwapChain::Init(GraphicsContext* Context,
     SwapChainDesc.BufferCount = 2;
     SwapChainDesc.BufferUsage = DXGI_USAGE_RENDER_TARGET_OUTPUT;
     SwapChainDesc.SwapEffect = DXGI_SWAP_EFFECT_FLIP_DISCARD;
-    SwapChainDesc.Windowed = Props.bWindowed;
+    SwapChainDesc.Windowed = Props.IsWindowed;
     SwapChainDesc.OutputWindow = WindowHandle;
     SwapChainDesc.SampleDesc.Count = 1;
     SwapChainDesc.SampleDesc.Quality = 0;
@@ -85,7 +84,7 @@ bool rndr::SwapChain::Init(GraphicsContext* Context,
     }
 
     FrameBuffer = Context->CreateFrameBufferForSwapChain(Width, Height, this);
-    if (!FrameBuffer)
+    if (!FrameBuffer.IsValid())
     {
         RNDR_LOG_ERROR("Failed to create a framebuffer for swapchain!");
         return false;
