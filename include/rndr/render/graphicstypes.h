@@ -68,20 +68,6 @@ enum class PixelFormat
     Count
 };
 
-enum class GammaSpace
-{
-    GammaCorrected,
-    Linear
-};
-
-enum class ImageFileFormat
-{
-    BMP = 0,
-    PNG,
-    JPEG,
-    NotSupported
-};
-
 enum class ImageFiltering
 {
     MinMagMipPoint = 0,
@@ -139,20 +125,7 @@ enum class PrimitiveTopology
     TriangleStrip
 };
 
-// TODO(mkostic): Probably merge DepthTest and StencilComparator in a single enum
 enum class Comparator
-{
-    Never,
-    Always,
-    Less,
-    Greater,
-    Equal,
-    NotEqual,
-    LessEqual,
-    GreaterEqual
-};
-
-enum class StencilComparator
 {
     Never,
     Always,
@@ -212,6 +185,7 @@ enum class BufferType
     UnorderedAccess
 };
 
+// TODO(Marko): Add support for bit operations in enum class 
 namespace ImageBindFlags
 {
 enum : uint32_t

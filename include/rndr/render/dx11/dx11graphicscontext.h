@@ -87,6 +87,8 @@ public:
     ScopePtr<Pipeline> CreatePipeline(const PipelineProperties& Props);
     ScopePtr<CommandList> CreateCommandList();
 
+    // TODO(Marko): Instead of taking raw pointers these API calls should take a reference in order
+    // to remove the need for null checks
     void ClearColor(Image* Image, math::Vector4 Color);
     void ClearDepth(Image* Image, real Depth);
     void ClearStencil(Image* Image, uint8_t Stencil);

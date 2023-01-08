@@ -72,11 +72,11 @@ rndr::InputLayoutBuilder& rndr::InputLayoutBuilder::AppendElement(int BufferInde
     }
 
     BufferInfo& Info = BufferIt->second;
-    int Idx = static_cast<int>(m_Props.Size++);
+    const int Idx = static_cast<int>(m_Props.Size++);
     m_Props[Idx].InputSlot = BufferIndex;
     m_Props[Idx].Repetition = Info.Repetiton;
     m_Props[Idx].InstanceStepRate = Info.PerInstanceRate;
-    m_Props[Idx].SemanticName = NameIt->first.c_str();
+    m_Props[Idx].SemanticName = NameIt->first;
     m_Props[Idx].SemanticIndex = SemanticIndex;
     m_Props[Idx].Format = Format;
     m_Props[Idx].OffsetInVertex = Info.EntriesCount == 0 ? 0 : kAppendAlignedElement;
@@ -104,7 +104,7 @@ bool rndr::InputLayout::Init(GraphicsContext* Context,
                              Span<InputLayoutProperties> InProps,
                              rndr::Shader* Shader)
 {
-    if (!Context)
+    if (Context == nullptr)
     {
         RNDR_LOG_ERROR("InputLayout::Init: Invalid graphics context!");
         return false;
@@ -119,35 +119,38 @@ bool rndr::InputLayout::Init(GraphicsContext* Context,
         RNDR_LOG_ERROR("InputLayout::Init: Too many entries!");
         return false;
     }
-    if (!Shader)
+    if (Shader == nullptr)
     {
         RNDR_LOG_ERROR("InputLayout::Init: Invalid shader!");
         return false;
     }
 
     Props = Span<InputLayoutProperties>(new InputLayoutProperties[InProps.Size], InProps.Size);
-    for (int i = 0; i < InProps.Size; i++)
+    for (int Index = 0; Index < InProps.Size; Index++)
     {
-        Props.Data[i] = InProps.Data[i];
+        Props.Data[Index] = InProps.Data[Index];
     }
 
-    D3D11_INPUT_ELEMENT_DESC InputDescriptors[GraphicsConstants::kMaxInputLayoutEntries] = {};
-    for (int i = 0; i < Props.Size; i++)
+    StackArray<D3D11_INPUT_ELEMENT_DESC, GraphicsConstants::kMaxInputLayoutEntries>
+        InputDescriptors;
+    for (int DescIndex = 0; DescIndex < Props.Size; DescIndex++)
     {
-        InputDescriptors[i].SemanticName = Props[i].SemanticName.c_str();
-        InputDescriptors[i].SemanticIndex = Props[i].SemanticIndex;
-        InputDescriptors[i].Format = DX11FromPixelFormat(Props[i].Format);
-        InputDescriptors[i].AlignedByteOffset = Props[i].OffsetInVertex == kAppendAlignedElement
-                                                    ? D3D11_APPEND_ALIGNED_ELEMENT
-                                                    : Props[i].OffsetInVertex;
-        InputDescriptors[i].InputSlot = Props[i].InputSlot;
-        InputDescriptors[i].InputSlotClass = DX11FromDataRepetition(Props[i].Repetition);
-        InputDescriptors[i].InstanceDataStepRate = Props[i].InstanceStepRate;
+        InputDescriptors[DescIndex].SemanticName = Props[DescIndex].SemanticName.c_str();
+        InputDescriptors[DescIndex].SemanticIndex = Props[DescIndex].SemanticIndex;
+        InputDescriptors[DescIndex].Format = DX11FromPixelFormat(Props[DescIndex].Format);
+        InputDescriptors[DescIndex].AlignedByteOffset =
+            Props[DescIndex].OffsetInVertex == kAppendAlignedElement
+                ? D3D11_APPEND_ALIGNED_ELEMENT
+                : Props[DescIndex].OffsetInVertex;
+        InputDescriptors[DescIndex].InputSlot = Props[DescIndex].InputSlot;
+        InputDescriptors[DescIndex].InputSlotClass =
+            DX11FromDataRepetition(Props[DescIndex].Repetition);
+        InputDescriptors[DescIndex].InstanceDataStepRate = Props[DescIndex].InstanceStepRate;
     }
 
     ID3D11Device* Device = Context->GetDevice();
-    HRESULT Result =
-        Device->CreateInputLayout(InputDescriptors, static_cast<uint32_t>(Props.Size),
+    const HRESULT Result =
+        Device->CreateInputLayout(InputDescriptors.data(), static_cast<uint32_t>(Props.Size),
                                   Shader->DX11ShaderBuffer->GetBufferPointer(),
                                   Shader->DX11ShaderBuffer->GetBufferSize(), &DX11InputLayout);
     if (Context->WindowsHasFailed(Result))
@@ -171,7 +174,7 @@ rndr::InputLayout::~InputLayout()
 
 bool rndr::RasterizerState::Init(GraphicsContext* Context, const RasterizerProperties& InProps)
 {
-    if (!Context)
+    if (Context == nullptr)
     {
         RNDR_LOG_ERROR("RasterizerState::Init: Invalid graphics context!");
         return false;
@@ -182,16 +185,17 @@ bool rndr::RasterizerState::Init(GraphicsContext* Context, const RasterizerPrope
     D3D11_RASTERIZER_DESC RasterizerDesc;
     RasterizerDesc.FillMode = DX11FromFillMode(Props.FillMode);
     RasterizerDesc.CullMode = DX11FromFace(Props.CullFace);
-    RasterizerDesc.FrontCounterClockwise = Props.FrontFaceWindingOrder == WindingOrder::CCW;
+    RasterizerDesc.FrontCounterClockwise =
+        static_cast<int>(Props.FrontFaceWindingOrder == WindingOrder::CCW);
     RasterizerDesc.DepthBias = Props.DepthBias;
     RasterizerDesc.DepthBiasClamp = Props.DepthBiasClamp;
-    RasterizerDesc.DepthClipEnable = Props.DepthClipEnable;
+    RasterizerDesc.DepthClipEnable = static_cast<int>(Props.DepthClipEnable);
     RasterizerDesc.SlopeScaledDepthBias = Props.SlopeScaledDepthBias;
-    RasterizerDesc.AntialiasedLineEnable = Props.AntialiasedLineEnable;
-    RasterizerDesc.ScissorEnable = Props.ScissorEnable;
-    RasterizerDesc.MultisampleEnable = Props.ScissorEnable;
+    RasterizerDesc.AntialiasedLineEnable = static_cast<int>(Props.AntialiasedLineEnable);
+    RasterizerDesc.ScissorEnable = static_cast<int>(Props.ScissorEnable);
+    RasterizerDesc.MultisampleEnable = static_cast<int>(Props.ScissorEnable);
     ID3D11Device* Device = Context->GetDevice();
-    HRESULT Result = Device->CreateRasterizerState(&RasterizerDesc, &DX11RasterizerState);
+    const HRESULT Result = Device->CreateRasterizerState(&RasterizerDesc, &DX11RasterizerState);
     if (Context->WindowsHasFailed(Result))
     {
         const std::string ErrorMessage = Context->WindowsGetErrorMessage(Result);
@@ -209,7 +213,7 @@ rndr::RasterizerState::~RasterizerState()
 
 bool rndr::DepthStencilState::Init(GraphicsContext* Context, const DepthStencilProperties& InProps)
 {
-    if (!Context)
+    if (Context == nullptr)
     {
         RNDR_LOG_ERROR("DepthStencilState::Init: Invalid graphics context!");
         return false;
@@ -218,10 +222,10 @@ bool rndr::DepthStencilState::Init(GraphicsContext* Context, const DepthStencilP
     Props = InProps;
 
     D3D11_DEPTH_STENCIL_DESC DepthStencilDesc;
-    DepthStencilDesc.DepthEnable = Props.DepthEnable;
+    DepthStencilDesc.DepthEnable = static_cast<int>(Props.DepthEnable);
     DepthStencilDesc.DepthFunc = DX11FromComparator(Props.DepthComparator);
     DepthStencilDesc.DepthWriteMask = DX11FromDepthMask(Props.DepthMask);
-    DepthStencilDesc.StencilEnable = Props.StencilEnable;
+    DepthStencilDesc.StencilEnable = static_cast<int>(Props.StencilEnable);
     DepthStencilDesc.StencilReadMask = Props.StencilReadMask;
     DepthStencilDesc.StencilWriteMask = Props.StencilWriteMask;
     DepthStencilDesc.BackFace.StencilFunc = DX11FromComparator(Props.StencilBackFaceComparator);
@@ -237,7 +241,8 @@ bool rndr::DepthStencilState::Init(GraphicsContext* Context, const DepthStencilP
     DepthStencilDesc.FrontFace.StencilPassOp =
         DX11FromStencilOperation(Props.StencilFrontFacePassOp);
     ID3D11Device* Device = Context->GetDevice();
-    HRESULT Result = Device->CreateDepthStencilState(&DepthStencilDesc, &DX11DepthStencilState);
+    const HRESULT Result =
+        Device->CreateDepthStencilState(&DepthStencilDesc, &DX11DepthStencilState);
     if (Context->WindowsHasFailed(Result))
     {
         const std::string ErrorMessage = Context->WindowsGetErrorMessage(Result);
@@ -255,7 +260,7 @@ rndr::DepthStencilState::~DepthStencilState()
 
 bool rndr::BlendState::Init(GraphicsContext* Context, const BlendProperties& InProps)
 {
-    if (!Context)
+    if (Context == nullptr)
     {
         RNDR_LOG_ERROR("BlendState::Init: Invalid graphics context!");
         return false;
@@ -265,9 +270,9 @@ bool rndr::BlendState::Init(GraphicsContext* Context, const BlendProperties& InP
 
     D3D11_BLEND_DESC BlendDesc;
     ZeroMemory(&BlendDesc, sizeof(D3D11_BLEND_DESC));
-    BlendDesc.AlphaToCoverageEnable = false;
-    BlendDesc.IndependentBlendEnable = false;
-    BlendDesc.RenderTarget[0].BlendEnable = Props.BlendEnable;
+    BlendDesc.AlphaToCoverageEnable = 0;
+    BlendDesc.IndependentBlendEnable = 0;
+    BlendDesc.RenderTarget[0].BlendEnable = static_cast<int>(Props.BlendEnable);
     BlendDesc.RenderTarget[0].RenderTargetWriteMask = D3D11_COLOR_WRITE_ENABLE_ALL;
     BlendDesc.RenderTarget[0].SrcBlend = DX11FromBlendFactor(Props.SrcColorFactor);
     BlendDesc.RenderTarget[0].DestBlend = DX11FromBlendFactor(Props.DstColorFactor);
@@ -276,7 +281,7 @@ bool rndr::BlendState::Init(GraphicsContext* Context, const BlendProperties& InP
     BlendDesc.RenderTarget[0].DestBlendAlpha = DX11FromBlendFactor(Props.DstAlphaFactor);
     BlendDesc.RenderTarget[0].BlendOpAlpha = DX11FromBlendOperator(Props.AlphaOperator);
     ID3D11Device* Device = Context->GetDevice();
-    HRESULT Result = Device->CreateBlendState(&BlendDesc, &DX11BlendState);
+    const HRESULT Result = Device->CreateBlendState(&BlendDesc, &DX11BlendState);
     if (Context->WindowsHasFailed(Result))
     {
         const std::string ErrorMessage = Context->WindowsGetErrorMessage(Result);

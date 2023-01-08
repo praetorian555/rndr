@@ -30,7 +30,7 @@ bool rndr::Sampler::Init(GraphicsContext* Context, const SamplerProperties& InPr
     Desc.MinLOD = Props.MinLOD;
     Desc.MaxLOD = Props.MaxLOD;
 
-    HRESULT Result = Device->CreateSamplerState(&Desc, &DX11State);
+    const HRESULT Result = Device->CreateSamplerState(&Desc, &DX11State);
     if (Context->WindowsHasFailed(Result))
     {
         const std::string ErrorMessage = Context->WindowsGetErrorMessage(Result);

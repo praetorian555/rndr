@@ -6,13 +6,15 @@
 
 #include "rndr/core/log.h"
 
+#include "rndr/utility/array.h"
+
 #include "rndr/render/dx11/dx11graphicscontext.h"
 #include "rndr/render/dx11/dx11helpers.h"
 #include "rndr/render/dx11/dx11image.h"
 #include "rndr/render/dx11/dx11sampler.h"
 #include "rndr/render/graphicstypes.h"
 
-// TODO(mkostic): Add support for different shader models and move this to dx11helpers
+// TODO(Marko): Add support for different shader models and move this to dx11helpers
 static const char* GetShaderModel(D3D_FEATURE_LEVEL FeatureLevel, rndr::ShaderType Type)
 {
     switch (Type)
@@ -110,21 +112,22 @@ bool rndr::Shader::Init(GraphicsContext* Context,
     Flags |= D3DCOMPILE_DEBUG;
 #endif
 
-    D3D_SHADER_MACRO* Macros = nullptr;
+    Array<D3D_SHADER_MACRO> Macros;
     if (!Props.Macros.empty())
     {
-        const size_t Size = Props.Macros.size() + 1;
-        Macros = new D3D_SHADER_MACRO[Size];
-        memset(Macros, 0, sizeof(D3D_SHADER_MACRO) * Size);
-        for (int i = 0; i < Size - 1; i++)
+        Macros.resize(Props.Macros.size() + 1);
+        for (int Index = 0; Index < Macros.size() - 1; Index++)
         {
-            Macros[i].Name = Props.Macros[i].Name.c_str();
-            Macros[i].Definition = Props.Macros[i].Definition.c_str();
+            Macros[Index].Name = Props.Macros[Index].Name.c_str();
+            Macros[Index].Definition = Props.Macros[Index].Definition.c_str();
         }
+        // Leave the last one empty to signify that the list is done
+        Macros.back().Name = "";
+        Macros.back().Definition = "";
     }
 
     HRESULT Result =
-        D3DCompile(ShaderContents.Data, ShaderContents.Size, nullptr, Macros, nullptr,
+        D3DCompile(ShaderContents.Data, ShaderContents.Size, nullptr, Macros.data(), nullptr,
                    Props.EntryPoint.c_str(), Model, Flags, 0, &DX11ShaderBuffer, &ErrorMessage);
     if (Context->WindowsHasFailed(Result))
     {
@@ -133,8 +136,6 @@ bool rndr::Shader::Init(GraphicsContext* Context,
         RNDR_LOG_ERROR("rndr::Shader::Init: %s", ErrorMessage->GetBufferPointer());
         return false;
     }
-
-    delete[] Macros;
 
     ID3D11Device* Device = Context->GetDevice();
     switch (Props.Type)

@@ -19,7 +19,14 @@ struct Sampler
 
     ID3D11SamplerState* DX11State;
 
+    Sampler() = default;
     ~Sampler();
+
+    Sampler(const Sampler& Other) = delete;
+    Sampler& operator=(const Sampler& Other) = delete;
+
+    Sampler(Sampler&& Other) = delete;
+    Sampler& operator=(Sampler&& Other) = delete;
 
     bool Init(rndr::GraphicsContext* Context, const SamplerProperties& InProps = SamplerProperties{});
 };

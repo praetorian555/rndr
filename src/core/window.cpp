@@ -72,11 +72,13 @@ bool rndr::Window::Init(int Width, int Height, const WindowProperties& Props)
     rndr::WindowDelegates::OnResize.Add(RNDR_BIND_THREE_PARAM(this, &Window::Resize));
     rndr::WindowDelegates::OnButtonDelegate.Add(RNDR_BIND_THREE_PARAM(this, &Window::ButtonEvent));
 
-    // TODO(mkostic): This will get the handle to the exe, should pass in the name of this dll if we
+    // TODO(Marko): This will get the handle to the exe, should pass in the name of this dll if we
     // use dynamic linking
     HMODULE Instance = GetModuleHandle(nullptr);
     const char* ClassName = "RndrWindowClass";
 
+    // TODO(Marko): Expand window functionality to provide more control to the user when creating
+    // one
     WNDCLASS WindowClass{};
     if (!GetClassInfo(Instance, ClassName, &WindowClass))
     {

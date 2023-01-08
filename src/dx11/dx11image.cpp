@@ -35,8 +35,8 @@ bool rndr::Image::Init(GraphicsContext* Context,
         return false;
     }
 
-    ByteSpan DataArray[1] = {InitData};
-    Span<ByteSpan> Data{DataArray, 1};
+    StackArray<ByteSpan, 1> DataArray = {InitData};
+    const Span<ByteSpan> Data{DataArray.data(), 1};
     return InitInternal(Context, InitData ? Data : Span<ByteSpan>{});
 }
 
@@ -78,10 +78,12 @@ bool rndr::Image::Init(GraphicsContext* Context,
                        const ImageProperties& InProps,
                        Span<ByteSpan> InitData)
 {
-    this->Props = InProps;
-    this->Width = InWidth;
-    this->Height = InHeight;
-    this->ArraySize = 6;
+    constexpr int kCubeImageCount = 6;
+
+    Props = InProps;
+    Width = InWidth;
+    Height = InHeight;
+    ArraySize = kCubeImageCount;
 
     if (InitData && InitData.Size != this->ArraySize)
     {
@@ -115,7 +117,7 @@ bool rndr::Image::Init(GraphicsContext* Context, rndr::SwapChain* SwapChain, int
 
 bool rndr::Image::InitInternal(GraphicsContext* Context,
                                Span<ByteSpan> InitData,
-                               bool bCubeMap,
+                               bool IsCubeMap,
                                SwapChain* SwapChain)
 {
     D3D11_TEXTURE2D_DESC Desc;
@@ -128,7 +130,7 @@ bool rndr::Image::InitInternal(GraphicsContext* Context,
     Desc.Height = Height;
     Desc.ArraySize = ArraySize;
     Desc.MipLevels = Props.UseMips ? 0 : 1;
-    Desc.MiscFlags = bCubeMap ? D3D11_RESOURCE_MISC_TEXTURECUBE : 0;
+    Desc.MiscFlags = IsCubeMap ? D3D11_RESOURCE_MISC_TEXTURECUBE : 0;
     Desc.SampleDesc.Count = Props.SampleCount;
     Desc.SampleDesc.Quality = Props.SampleCount > 1 ? D3D11_STANDARD_MULTISAMPLE_PATTERN : 0;
 
@@ -139,24 +141,24 @@ bool rndr::Image::InitInternal(GraphicsContext* Context,
     if (InitData)
     {
         InitialDataPtr = new D3D11_SUBRESOURCE_DATA[ArraySize];
-        for (int i = 0; i < ArraySize; i++)
+        for (int Index = 0; Index < ArraySize; Index++)
         {
-            ZeroMemory(&InitialDataPtr[i], sizeof(D3D11_SUBRESOURCE_DATA));
-            InitialDataPtr[i].pSysMem = InitData[i].Data;
-            InitialDataPtr[i].SysMemPitch = PitchSize;
+            ZeroMemory(&InitialDataPtr[Index], sizeof(D3D11_SUBRESOURCE_DATA));
+            InitialDataPtr[Index].pSysMem = InitData[Index].Data;
+            InitialDataPtr[Index].SysMemPitch = PitchSize;
         }
     }
 
     ID3D11Device* Device = Context->GetDevice();
-    HRESULT Result;
+    HRESULT Result = S_OK;
 
-    if (!SwapChain)
+    if (SwapChain == nullptr)
     {
         Result = Device->CreateTexture2D(&Desc, InitialDataPtr, &DX11Texture);
         delete[] InitialDataPtr;
         if (Context->WindowsHasFailed(Result))
         {
-            std::string ErrorMessage = Context->WindowsGetErrorMessage(Result);
+            const std::string ErrorMessage = Context->WindowsGetErrorMessage(Result);
             RNDR_LOG_ERROR("Image::InitInternal: %s", ErrorMessage.c_str());
             return false;
         }
@@ -173,12 +175,12 @@ bool rndr::Image::InitInternal(GraphicsContext* Context,
         }
     }
 
-    if (Props.ImageBindFlags & ImageBindFlags::ShaderResource)
+    if ((Props.ImageBindFlags & ImageBindFlags::ShaderResource) != 0)
     {
         D3D11_SHADER_RESOURCE_VIEW_DESC ResourceDesc;
         ZeroMemory(&ResourceDesc, sizeof(ResourceDesc));
         ResourceDesc.Format = DX11FromPixelFormat(Props.PixelFormat);
-        if (!bCubeMap)
+        if (!IsCubeMap)
         {
             if (ArraySize == 1)
             {
@@ -216,12 +218,12 @@ bool rndr::Image::InitInternal(GraphicsContext* Context,
             Device->CreateShaderResourceView(DX11Texture, &ResourceDesc, &DX11ShaderResourceView);
         if (Context->WindowsHasFailed(Result))
         {
-            std::string ErrorMessage = Context->WindowsGetErrorMessage(Result);
+            const std::string ErrorMessage = Context->WindowsGetErrorMessage(Result);
             RNDR_LOG_ERROR("%s", ErrorMessage.c_str());
             return false;
         }
     }
-    if (Props.ImageBindFlags & ImageBindFlags::RenderTarget)
+    if ((Props.ImageBindFlags & ImageBindFlags::RenderTarget) != 0)
     {
         D3D11_RENDER_TARGET_VIEW_DESC ResourceDesc;
         ZeroMemory(&ResourceDesc, sizeof(ResourceDesc));
@@ -253,12 +255,12 @@ bool rndr::Image::InitInternal(GraphicsContext* Context,
         Result = Device->CreateRenderTargetView(DX11Texture, &ResourceDesc, &DX11RenderTargetView);
         if (Context->WindowsHasFailed(Result))
         {
-            std::string ErrorMessage = Context->WindowsGetErrorMessage(Result);
+            const std::string ErrorMessage = Context->WindowsGetErrorMessage(Result);
             RNDR_LOG_ERROR("%s", ErrorMessage.c_str());
             return false;
         }
     }
-    if (Props.ImageBindFlags & ImageBindFlags::DepthStencil)
+    if ((Props.ImageBindFlags & ImageBindFlags::DepthStencil) != 0)
     {
         D3D11_DEPTH_STENCIL_VIEW_DESC ResourceDesc;
         ZeroMemory(&ResourceDesc, sizeof(ResourceDesc));
@@ -290,7 +292,7 @@ bool rndr::Image::InitInternal(GraphicsContext* Context,
         Result = Device->CreateDepthStencilView(DX11Texture, &ResourceDesc, &DX11DepthStencilView);
         if (Context->WindowsHasFailed(Result))
         {
-            std::string ErrorMessage = Context->WindowsGetErrorMessage(Result);
+            const std::string ErrorMessage = Context->WindowsGetErrorMessage(Result);
             RNDR_LOG_ERROR("%s", ErrorMessage.c_str());
             return false;
         }
@@ -321,7 +323,8 @@ bool rndr::Image::Update(GraphicsContext* Context,
         RNDR_LOG_ERROR("Image::Update: Invalid image index!");
         return false;
     }
-    const math::Bounds2 ImageBounds({0, 0}, {(float)Width, (float)Height});
+    const math::Point2 ImageSize{static_cast<float>(Width), static_cast<float>(Height)};
+    const math::Bounds2 ImageBounds({0, 0}, ImageSize);
     const math::Point2 End = Start + Size;
     if (!math::InsideInclusive(Start, ImageBounds))
     {
@@ -334,7 +337,9 @@ bool rndr::Image::Update(GraphicsContext* Context,
         return false;
     }
     const int PixelSize = GetPixelSize(Props.PixelFormat);
-    if (!Contents || Contents.Size != Size.X * Size.Y * PixelSize)
+    const int SizeX = static_cast<int>(Size.X);
+    const int SizeY = static_cast<int>(Size.Y);
+    if (!Contents || Contents.Size != SizeX * SizeY * PixelSize)
     {
         RNDR_LOG_ERROR("Image::Update: Invalid contents!");
         return false;
@@ -344,32 +349,32 @@ bool rndr::Image::Update(GraphicsContext* Context,
     const uint32_t SubresourceIndex = D3D11CalcSubresource(0, ArrayIndex, 1);
     if (Context->WindowsHasFailed())
     {
-        std::string ErrorMessage = Context->WindowsGetErrorMessage();
+        const std::string ErrorMessage = Context->WindowsGetErrorMessage();
         RNDR_LOG_ERROR("%s", ErrorMessage.c_str());
         return false;
     }
     if (Props.Usage == Usage::Dynamic)
     {
         D3D11_MAPPED_SUBRESOURCE Subresource;
-        HRESULT Result = DeviceContext->Map(DX11Texture, SubresourceIndex, D3D11_MAP_WRITE_DISCARD,
-                                            0, &Subresource);
+        const HRESULT Result = DeviceContext->Map(DX11Texture, SubresourceIndex,
+                                                  D3D11_MAP_WRITE_DISCARD, 0, &Subresource);
         if (Context->WindowsHasFailed(Result))
         {
-            std::string ErrorMessage = Context->WindowsGetErrorMessage(Result);
+            const std::string ErrorMessage = Context->WindowsGetErrorMessage(Result);
             RNDR_LOG_ERROR("%s", ErrorMessage.c_str());
             return false;
         }
 
-        for (int i = 0; i < Size.Y; i++)
+        for (int Row = 0; Row < SizeY; Row++)
         {
-            memcpy(reinterpret_cast<uint8_t*>(Subresource.pData) + i * Subresource.RowPitch,
-                   Contents.Data + i * (int)Size.X * PixelSize, (int)Size.X * PixelSize);
+            memcpy(reinterpret_cast<uint8_t*>(Subresource.pData) + Row * Subresource.RowPitch,
+                   Contents.Data + Row * SizeX * PixelSize, SizeX * PixelSize);
         }
 
         DeviceContext->Unmap(DX11Texture, ArrayIndex);
         if (Context->WindowsHasFailed())
         {
-            std::string ErrorMessage = Context->WindowsGetErrorMessage();
+            const std::string ErrorMessage = Context->WindowsGetErrorMessage();
             RNDR_LOG_ERROR("%s", ErrorMessage.c_str());
             return false;
         }
@@ -394,7 +399,7 @@ bool rndr::Image::Update(GraphicsContext* Context,
                                      BoxWidth * PixelSize, 0);
     if (Context->WindowsHasFailed())
     {
-        std::string ErrorMessage = Context->WindowsGetErrorMessage();
+        const std::string ErrorMessage = Context->WindowsGetErrorMessage();
         RNDR_LOG_ERROR("%s", ErrorMessage.c_str());
         return false;
     }
@@ -423,8 +428,8 @@ bool rndr::Image::Read(GraphicsContext* Context,
         RNDR_LOG_ERROR("Image::Read: Invalid image index!");
         return false;
     }
-    const math::Bounds2 ImageBounds({0, 0}, {(float)Width, (float)Height});
-    const math::Point2 End = Start + Size;
+    const math::Point2 ImageSize{static_cast<float>(Width), static_cast<float>(Height)};
+    const math::Bounds2 ImageBounds({0, 0}, ImageSize);
     if (!math::InsideInclusive(Start, ImageBounds))
     {
         RNDR_LOG_ERROR("Image::Read: Invalid Start point!");
@@ -436,7 +441,9 @@ bool rndr::Image::Read(GraphicsContext* Context,
         return false;
     }
     const int PixelSize = GetPixelSize(Props.PixelFormat);
-    if (!OutContents || OutContents.Size != Size.X * Size.Y * PixelSize)
+    const int SizeX = static_cast<int>(Size.X);
+    const int SizeY = static_cast<int>(Size.Y);
+    if (!OutContents || OutContents.Size != SizeX * SizeY * PixelSize)
     {
         RNDR_LOG_ERROR("Image::Read: Invalid contents!");
         return false;
@@ -446,32 +453,32 @@ bool rndr::Image::Read(GraphicsContext* Context,
     const uint32_t SubresourceIndex = D3D11CalcSubresource(0, ArrayIndex, 1);
     if (Context->WindowsHasFailed())
     {
-        std::string ErrorMessage = Context->WindowsGetErrorMessage();
+        const std::string ErrorMessage = Context->WindowsGetErrorMessage();
         RNDR_LOG_ERROR("%s", ErrorMessage.c_str());
         return false;
     }
 
     D3D11_MAPPED_SUBRESOURCE Subresource;
-    HRESULT Result =
+    const HRESULT Result =
         DeviceContext->Map(DX11Texture, SubresourceIndex, D3D11_MAP_READ, 0, &Subresource);
     if (Context->WindowsHasFailed(Result))
     {
-        std::string ErrorMessage = Context->WindowsGetErrorMessage(Result);
+        const std::string ErrorMessage = Context->WindowsGetErrorMessage(Result);
         RNDR_LOG_ERROR("%s", ErrorMessage.c_str());
         return false;
     }
 
-    for (int i = 0; i < Size.Y; i++)
+    for (int Row = 0; Row < SizeY; Row++)
     {
-        memcpy(OutContents.Data + i * (int)Size.X * PixelSize,
-               reinterpret_cast<uint8_t*>(Subresource.pData) + i * Subresource.RowPitch,
-               (int)Size.X * PixelSize);
+        memcpy(OutContents.Data + Row * SizeX * PixelSize,
+               reinterpret_cast<uint8_t*>(Subresource.pData) + Row * Subresource.RowPitch,
+               SizeX * PixelSize);
     }
 
     DeviceContext->Unmap(DX11Texture, ArrayIndex);
     if (Context->WindowsHasFailed())
     {
-        std::string ErrorMessage = Context->WindowsGetErrorMessage();
+        const std::string ErrorMessage = Context->WindowsGetErrorMessage();
         RNDR_LOG_ERROR("%s", ErrorMessage.c_str());
         return false;
     }
@@ -479,15 +486,15 @@ bool rndr::Image::Read(GraphicsContext* Context,
     return true;
 }
 
-// TODO: Check if we can do this with CommandList
+// TODO(Marko): Check if we can do this with CommandList
 bool rndr::Image::Copy(GraphicsContext* Context, Image* Src, Image* Dest)
 {
-    if (!Src)
+    if (Src == nullptr)
     {
         RNDR_LOG_ERROR("Image::Copy: Source image is invalid!");
         return false;
     }
-    if (!Dest)
+    if (Dest == nullptr)
     {
         RNDR_LOG_ERROR("Image::Copy: Destination image is invalid!");
         return false;
@@ -497,7 +504,7 @@ bool rndr::Image::Copy(GraphicsContext* Context, Image* Src, Image* Dest)
     DeviceContext->CopyResource(Dest->DX11Texture, Src->DX11Texture);
     if (Context->WindowsHasFailed())
     {
-        std::string ErrorMessage = Context->WindowsGetErrorMessage();
+        const std::string ErrorMessage = Context->WindowsGetErrorMessage();
         RNDR_LOG_ERROR("%s", ErrorMessage.c_str());
         return false;
     }

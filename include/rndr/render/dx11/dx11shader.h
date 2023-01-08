@@ -28,7 +28,14 @@ struct Shader
         ID3D11ComputeShader* DX11ComputeShader;
     };
 
+    Shader() = default;
     ~Shader();
+
+    Shader(const Shader& Other) = delete;
+    Shader& operator=(const Shader& Other) = delete;
+
+    Shader(Shader&& Other) = delete;
+    Shader& operator=(Shader&& Other) = delete;
 
     bool Init(GraphicsContext* Context,
               const ByteSpan& ShaderContents,

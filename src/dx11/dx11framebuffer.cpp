@@ -134,9 +134,9 @@ bool rndr::FrameBuffer::UpdateViewport(float InWidth,
 
 void rndr::FrameBuffer::Clear()
 {
-    for (int Index = 0; Index < ColorBuffers.size(); Index++)
+    for (auto& Buffer : ColorBuffers)
     {
-        ColorBuffers[Index].Reset();
+        Buffer.Reset();
     }
 }
 

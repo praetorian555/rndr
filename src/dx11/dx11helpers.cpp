@@ -1,11 +1,13 @@
 #include "rndr/render/dx11/dx11helpers.h"
 
+#include "rndr/utility/stackarray.h"
+
 #if defined RNDR_DX11
 
 DXGI_FORMAT rndr::DX11FromPixelFormat(PixelFormat Format)
 {
     // clang-format off
-    static DXGI_FORMAT s_Array[] = {
+    static const StackArray<DXGI_FORMAT, static_cast<size_t>(PixelFormat::Count)> s_Array = {
         DXGI_FORMAT_R8G8B8A8_UNORM,
         DXGI_FORMAT_R8G8B8A8_UNORM_SRGB,
         DXGI_FORMAT_R8G8B8A8_UINT,
@@ -42,7 +44,7 @@ DXGI_FORMAT rndr::DX11FromPixelFormat(PixelFormat Format)
     };
     // clang-format on
 
-    static_assert(sizeof(s_Array) / sizeof(DXGI_FORMAT) == static_cast<size_t>(PixelFormat::Count));
+    static_assert(s_Array.size() == static_cast<size_t>(PixelFormat::Count));
 
     return s_Array[static_cast<int>(Format)];
 }
@@ -168,10 +170,12 @@ D3D11_TEXTURE_ADDRESS_MODE rndr::DX11FromImageAddressing(ImageAddressing Address
 uint32_t rndr::DX11FromImageBindFlags(uint32_t ImageBindFlags)
 {
     uint32_t Result = 0;
-    Result |= ImageBindFlags & ImageBindFlags::RenderTarget ? D3D11_BIND_RENDER_TARGET : 0;
-    Result |= ImageBindFlags & ImageBindFlags::DepthStencil ? D3D11_BIND_DEPTH_STENCIL : 0;
-    Result |= ImageBindFlags & ImageBindFlags::ShaderResource ? D3D11_BIND_SHADER_RESOURCE : 0;
-    Result |= ImageBindFlags & ImageBindFlags::UnorderedAccess ? D3D11_BIND_UNORDERED_ACCESS : 0;
+    Result |= (ImageBindFlags & ImageBindFlags::RenderTarget) != 0 ? D3D11_BIND_RENDER_TARGET : 0;
+    Result |= (ImageBindFlags & ImageBindFlags::DepthStencil) != 0 ? D3D11_BIND_DEPTH_STENCIL : 0;
+    Result |=
+        (ImageBindFlags & ImageBindFlags::ShaderResource) != 0 ? D3D11_BIND_SHADER_RESOURCE : 0;
+    Result |=
+        (ImageBindFlags & ImageBindFlags::UnorderedAccess) != 0 ? D3D11_BIND_UNORDERED_ACCESS : 0;
     return Result;
 }
 

@@ -29,9 +29,14 @@ public:
     ID3D11DeviceContext* DX11DeferredContext = nullptr;
     ID3D11CommandList* DX11CommandList = nullptr;
 
-
     CommandList() = default;
     ~CommandList();
+
+    CommandList(const CommandList& Other) = delete;
+    CommandList& operator=(const CommandList& Other) = delete;
+
+    CommandList(CommandList&& Other) = delete;
+    CommandList& operator=(CommandList&& Other) = delete;
 
     bool Init(GraphicsContext* Context);
     bool Finish(GraphicsContext* Context);

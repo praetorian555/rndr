@@ -80,7 +80,7 @@ struct Image
 private:
     bool InitInternal(GraphicsContext* Context,
                       Span<ByteSpan> InitData,
-                      bool BCubeMap = false,
+                      bool IsCubeMap = false,
                       rndr::SwapChain* SwapChain = nullptr);
 };
 

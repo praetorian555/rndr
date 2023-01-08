@@ -17,10 +17,16 @@ struct Buffer
 {
     BufferProperties Props;
 
-    ID3D11Buffer* DX11Buffer;
+    ID3D11Buffer* DX11Buffer = nullptr;
 
     Buffer() = default;
     ~Buffer();
+
+    Buffer(const Buffer& Other) = delete;
+    Buffer& operator=(const Buffer& Other) = delete;
+
+    Buffer(Buffer&& Other) = delete;
+    Buffer& operator=(Buffer&& Other) = delete;
 
     bool Init(rndr::GraphicsContext* Context,
               const BufferProperties& InProps = BufferProperties{},

@@ -10,6 +10,8 @@
 #include "rndr/core/memory.h"
 #include "rndr/core/rndrcontext.h"
 
+#include "rndr/utility/stackarray.h"
+
 #include "rndr/render/dx11/dx11buffer.h"
 #include "rndr/render/dx11/dx11commandlist.h"
 #include "rndr/render/dx11/dx11framebuffer.h"
@@ -50,8 +52,9 @@ std::string rndr::GraphicsContext::WindowsGetErrorMessage(HRESULT ErrorCode)
     {
         SIZE_T MessageSize = 0;
         m_DebugInfoQueue->GetMessage(MsgIndex, nullptr, &MessageSize);
-        D3D11_MESSAGE* Message = static_cast<D3D11_MESSAGE*>(malloc(MessageSize));
-        HRESULT const Result = m_DebugInfoQueue->GetMessage(MsgIndex, Message, &MessageSize);
+        std::unique_ptr<D3D11_MESSAGE> Message;
+        Message.reset(static_cast<D3D11_MESSAGE*>(malloc(MessageSize)));  // NOLINT
+        HRESULT const Result = m_DebugInfoQueue->GetMessage(MsgIndex, Message.get(), &MessageSize);
         assert(!FAILED(Result));
         if (Message == nullptr)
         {
@@ -66,8 +69,6 @@ std::string rndr::GraphicsContext::WindowsGetErrorMessage(HRESULT ErrorCode)
             Rtn += "\n\t";
             Rtn += Message->pDescription;
         }
-
-        free(Message);
     }
 
     if (AddNewLine)
@@ -102,8 +103,9 @@ bool rndr::GraphicsContext::WindowsHasFailed(HRESULT ErrorCode)
     {
         SIZE_T MessageSize = 0;
         m_DebugInfoQueue->GetMessage(I, nullptr, &MessageSize);
-        D3D11_MESSAGE* Message = static_cast<D3D11_MESSAGE*>(malloc(MessageSize));
-        HRESULT const Result = m_DebugInfoQueue->GetMessage(I, Message, &MessageSize);
+        std::unique_ptr<D3D11_MESSAGE> Message;
+        Message.reset(static_cast<D3D11_MESSAGE*>(malloc(MessageSize)));  // NOLINT
+        HRESULT const Result = m_DebugInfoQueue->GetMessage(I, Message.get(), &MessageSize);
         assert(!FAILED(Result));
         if (Message == nullptr)
         {
@@ -117,8 +119,6 @@ bool rndr::GraphicsContext::WindowsHasFailed(HRESULT ErrorCode)
         {
             BStatus = true;
         }
-
-        free(Message);
     }
 
     return BStatus;
@@ -163,16 +163,14 @@ bool rndr::GraphicsContext::Init(GraphicsContextProperties Props)
         Flags |= D3D11_CREATE_DEVICE_SINGLETHREADED;
     }
     // These are the feature levels that we will accept.
-    D3D_FEATURE_LEVEL FeatureLevels[] = {D3D_FEATURE_LEVEL_11_1, D3D_FEATURE_LEVEL_11_0,
-                                         D3D_FEATURE_LEVEL_10_1, D3D_FEATURE_LEVEL_10_0,
-                                         D3D_FEATURE_LEVEL_9_3,  D3D_FEATURE_LEVEL_9_2,
-                                         D3D_FEATURE_LEVEL_9_1};
+    StackArray<D3D_FEATURE_LEVEL, 1> FeatureLevels = {D3D_FEATURE_LEVEL_11_1};
     // This will be the feature level that is used to create our device and swap chain.
     IDXGIAdapter* Adapter = nullptr;  // Use default adapter
     HMODULE SoftwareRasterizerModule = nullptr;
-    HRESULT Result = D3D11CreateDevice(
-        Adapter, D3D_DRIVER_TYPE_HARDWARE, SoftwareRasterizerModule, Flags, FeatureLevels,
-        _countof(FeatureLevels), D3D11_SDK_VERSION, &m_Device, &m_FeatureLevel, &m_DeviceContext);
+    HRESULT Result =
+        D3D11CreateDevice(Adapter, D3D_DRIVER_TYPE_HARDWARE, SoftwareRasterizerModule, Flags,
+                          FeatureLevels.data(), static_cast<uint32_t>(FeatureLevels.size()),
+                          D3D11_SDK_VERSION, &m_Device, &m_FeatureLevel, &m_DeviceContext);
     if (WindowsHasFailed(Result))
     {
         std::string const ErrorMessage = WindowsGetErrorMessage(Result);
@@ -545,7 +543,8 @@ void rndr::GraphicsContext::BindDepthStencilState(DepthStencilState* State)
 
 void rndr::GraphicsContext::BindBlendState(BlendState* State)
 {
-    m_DeviceContext->OMSetBlendState(State->DX11BlendState, nullptr, 0xFFFFFFFF);
+    constexpr uint32_t kUpdateAllSamples = 0xFFFFFFFF;
+    m_DeviceContext->OMSetBlendState(State->DX11BlendState, nullptr, kUpdateAllSamples);
 }
 
 void rndr::GraphicsContext::BindPipeline(Pipeline* Pipeline)

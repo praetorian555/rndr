@@ -26,8 +26,8 @@ bool rndr::SwapChain::Init(GraphicsContext* Context,
     Width = InWidth;
     Height = InHeight;
 
-    HWND WindowHandle = reinterpret_cast<HWND>(Handle);
-    if (!IsWindow(WindowHandle))
+    HWND WindowHandle = reinterpret_cast<HWND>(Handle); // NOLINT
+    if (IsWindow(WindowHandle) == 0)
     {
         RNDR_LOG_ERROR("SwapChain::Init: Native window handle is invalid!");
         return false;
@@ -42,7 +42,7 @@ bool rndr::SwapChain::Init(GraphicsContext* Context,
     SwapChainDesc.BufferCount = 2;
     SwapChainDesc.BufferUsage = DXGI_USAGE_RENDER_TARGET_OUTPUT;
     SwapChainDesc.SwapEffect = DXGI_SWAP_EFFECT_FLIP_DISCARD;
-    SwapChainDesc.Windowed = Props.IsWindowed;
+    SwapChainDesc.Windowed = static_cast<int>(Props.IsWindowed);
     SwapChainDesc.OutputWindow = WindowHandle;
     SwapChainDesc.SampleDesc.Count = 1;
     SwapChainDesc.SampleDesc.Quality = 0;
@@ -52,7 +52,7 @@ bool rndr::SwapChain::Init(GraphicsContext* Context,
                                                           reinterpret_cast<void**>(&DXGIDevice));
     if (Context->WindowsHasFailed(Result))
     {
-        std::string ErrorMessage = Context->WindowsGetErrorMessage(Result);
+        const std::string ErrorMessage = Context->WindowsGetErrorMessage(Result);
         RNDR_LOG_ERROR("SwapChain::Init: %s", ErrorMessage.c_str());
         return false;
     }
@@ -61,7 +61,7 @@ bool rndr::SwapChain::Init(GraphicsContext* Context,
     Result = DXGIDevice->GetAdapter(&DXGIAdapter);
     if (FAILED(Result))
     {
-        std::string ErrorMessage = Context->WindowsGetErrorMessage(Result);
+        const std::string ErrorMessage = Context->WindowsGetErrorMessage(Result);
         RNDR_LOG_ERROR("SwapChain::Init: %s", ErrorMessage.c_str());
         return false;
     }
@@ -70,7 +70,7 @@ bool rndr::SwapChain::Init(GraphicsContext* Context,
     Result = DXGIAdapter->GetParent(__uuidof(IDXGIFactory), reinterpret_cast<void**>(&DXGIFactory));
     if (FAILED(Result))
     {
-        std::string ErrorMessage = Context->WindowsGetErrorMessage(Result);
+        const std::string ErrorMessage = Context->WindowsGetErrorMessage(Result);
         RNDR_LOG_ERROR("SwapChain::Init: %s", ErrorMessage.c_str());
         return false;
     }
@@ -78,7 +78,7 @@ bool rndr::SwapChain::Init(GraphicsContext* Context,
     Result = DXGIFactory->CreateSwapChain(Context->GetDevice(), &SwapChainDesc, &DX11SwapChain);
     if (FAILED(Result))
     {
-        std::string ErrorMessage = Context->WindowsGetErrorMessage(Result);
+        const std::string ErrorMessage = Context->WindowsGetErrorMessage(Result);
         RNDR_LOG_ERROR("SwapChain::Init: %s", ErrorMessage.c_str());
         return false;
     }

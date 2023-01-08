@@ -25,6 +25,12 @@ struct InputLayoutBuilder
     InputLayoutBuilder();
     ~InputLayoutBuilder();
 
+    InputLayoutBuilder(const InputLayoutBuilder& Other) = default;
+    InputLayoutBuilder& operator=(const InputLayoutBuilder& Other) = default;
+    
+    InputLayoutBuilder(InputLayoutBuilder&& Other) = default;
+    InputLayoutBuilder& operator=(InputLayoutBuilder&& Other) = default;
+
     InputLayoutBuilder& AddBuffer(int BufferIndex, DataRepetition Repetition, int PerInstanceRate);
     // If the same SemanticName is used twice in one builder instance this will increment underlying
     // semantic index
@@ -53,7 +59,14 @@ struct InputLayout
 
     ID3D11InputLayout* DX11InputLayout;
 
+    InputLayout() = default;
     ~InputLayout();
+
+    InputLayout(const InputLayout& Other) = delete;
+    InputLayout& operator=(const InputLayout& Other) = delete;
+
+    InputLayout(InputLayout&& Other) = delete;
+    InputLayout& operator=(InputLayout&& Other) = delete;
 
     bool Init(GraphicsContext* Context, Span<InputLayoutProperties> InProps, rndr::Shader* Shader);
 };
@@ -64,7 +77,14 @@ struct RasterizerState
 
     ID3D11RasterizerState* DX11RasterizerState;
 
+    RasterizerState() = default;
     ~RasterizerState();
+
+    RasterizerState(const RasterizerState& Other) = delete;
+    RasterizerState& operator=(const RasterizerState& Other) = delete;
+
+    RasterizerState(RasterizerState&& Other) = delete;
+    RasterizerState& operator=(RasterizerState&& Other) = delete;
 
     bool Init(GraphicsContext* Context, const RasterizerProperties& InProps);
 };
@@ -74,8 +94,15 @@ struct DepthStencilState
     DepthStencilProperties Props;
 
     ID3D11DepthStencilState* DX11DepthStencilState;
-
+    
+    DepthStencilState() = default;
     ~DepthStencilState();
+
+    DepthStencilState(const DepthStencilState& Other) = delete;
+    DepthStencilState& operator=(const DepthStencilState& Other) = delete;
+
+    DepthStencilState(DepthStencilState&& Other) = delete;
+    DepthStencilState& operator=(DepthStencilState&& Other) = delete;
 
     bool Init(GraphicsContext* Context, const DepthStencilProperties& InProps);
 };
@@ -86,7 +113,14 @@ struct BlendState
 
     ID3D11BlendState* DX11BlendState;
 
+    BlendState() = default;
     ~BlendState();
+
+    BlendState(const BlendState& Other) = delete;
+    BlendState& operator=(const BlendState& Other) = delete;
+
+    BlendState(BlendState&& Other) = delete;
+    BlendState& operator=(BlendState&& Other) = delete;
 
     bool Init(GraphicsContext* Context, const BlendProperties& InProps);
 };
@@ -102,6 +136,12 @@ struct Pipeline
 
     Pipeline() = default;
     ~Pipeline() = default;
+
+    Pipeline(const Pipeline& Other) = delete;
+    Pipeline& operator=(const Pipeline& Other) = delete;
+
+    Pipeline(Pipeline&& Other) = delete;
+    Pipeline& operator=(Pipeline&& Other) = delete;
 
     bool Init(GraphicsContext* Context, const PipelineProperties& Props);
 };

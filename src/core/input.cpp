@@ -1,5 +1,6 @@
 #include "rndr/core/input.h"
 
+#include "rndr/core/log.h"
 #include "rndr/core/memory.h"
 
 // InputSystem ////////////////////////////////////////////////////////////////////////////////////
@@ -182,19 +183,23 @@ math::Point2 rndr::InputSystem::GetMousePosition() const
 rndr::InputMapping* rndr::InputContext::CreateMapping(const InputAction& Action,
                                                       const InputCallback& Callback)
 {
-    std::unique_ptr<InputMapping> Mapping = std::make_unique<InputMapping>(Action, Callback);
+    std::unique_ptr<InputMapping> NewMapping = std::make_unique<InputMapping>(Action, Callback);
 
-    for (Entry& E : Mappings)
+    const auto FindMappingByAction = [&](const InputContext::Entry& Entry)
+    { return Entry.Action == Action; };
+
+    auto EntryIt = std::find_if(Mappings.begin(), Mappings.end(), FindMappingByAction);
+    if (EntryIt == Mappings.end())
     {
-        if (E.Action == Action)
-        {
-            E.Mapping = std::move(Mapping);
-            return E.Mapping.get();
-        }
+        Mappings.push_back(Entry{Action, std::move(NewMapping)});
+        return Mappings.back().Mapping.get();
     }
-
-    Mappings.push_back(Entry{Action, std::move(Mapping)});
-    return Mappings.back().Mapping.get();
+    else
+    {
+        RNDR_LOG_WARNING("InputContext::CreateMapping: Overriding existing mapping entry!");
+        EntryIt->Mapping = std::move(NewMapping);
+        return EntryIt->Mapping.get();
+    }
 }
 
 void rndr::InputContext::AddBinding(const InputAction& Action,
@@ -202,25 +207,39 @@ void rndr::InputContext::AddBinding(const InputAction& Action,
                                     InputTrigger Trigger,
                                     real Modifier)
 {
-    for (const Entry& E : Mappings)
+    const auto FindMappingByAction = [&](const InputContext::Entry& Entry)
+    { return Entry.Action == Action; };
+
+    auto EntryIt = std::find_if(Mappings.begin(), Mappings.end(), FindMappingByAction);
+    if (EntryIt == Mappings.end())
     {
-        if (E.Action == Action)
-        {
-            InputMapping* Mapping = E.Mapping.get();
-            // TODO(mkostic): Check for duplicates
-            Mapping->Bindings.push_back(InputBinding{Primitive, Trigger, Modifier});
-        }
+        RNDR_LOG_ERROR("InputContext::AddBinding: Failed to find mapping based on action %s",
+                       Action.c_str());
+        return;
+    }
+
+    InputMapping* Mapping = EntryIt->Mapping.get();
+
+    const auto FindBindingMatch = [&](const InputBinding& Binding)
+    { return Binding.Primitive == Primitive && Binding.Trigger == Trigger; };
+
+    auto BindingIt =
+        std::find_if(Mapping->Bindings.begin(), Mapping->Bindings.end(), FindBindingMatch);
+    if (BindingIt == Mapping->Bindings.end())
+    {
+        Mapping->Bindings.push_back(InputBinding{Primitive, Trigger, Modifier});
+    }
+    else
+    {
+        *BindingIt = {Primitive, Trigger, Modifier};
     }
 }
 
 const rndr::InputMapping* rndr::InputContext::GetMapping(const InputAction& Action)
 {
-    for (const Entry& E : Mappings)
-    {
-        if (E.Action == Action)
-        {
-            return E.Mapping.get();
-        }
-    }
-    return nullptr;
+    const auto FindMappingByAction = [&](const InputContext::Entry& Entry)
+    { return Entry.Action == Action; };
+
+    auto EntryIt = std::find_if(Mappings.begin(), Mappings.end(), FindMappingByAction);
+    return EntryIt != Mappings.end() ? EntryIt->Mapping.get() : nullptr;
 }
