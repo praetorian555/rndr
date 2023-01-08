@@ -2,11 +2,9 @@
 
 #include "rndr/core/base.h"
 
-void* rndr::DefaultAllocator::Allocate(int Size, const char* Tag, const char* File, int Line)
+void* rndr::DefaultAllocator::Allocate(int Size, std::string_view Tag)
 {
     RNDR_UNUSED(Tag);
-    RNDR_UNUSED(File);
-    RNDR_UNUSED(Line);
 
 #if RNDR_WINDOWS
     constexpr int kAlignmentInBytes = 16;

@@ -1,5 +1,7 @@
 #pragma once
 
+#include <string_view>
+
 #include "rndr/core/base.h"
 
 namespace rndr
@@ -17,7 +19,7 @@ public:
     Allocator(Allocator&& Other) = delete;
     Allocator& operator=(Allocator&& Other) = delete;
 
-    virtual void* Allocate(int Size, const char* Tag, const char* File, int Line) = 0;
+    virtual void* Allocate(int Size, std::string_view Tag) = 0;
     virtual void Deallocate(void* Ptr) = 0;
 };
 
@@ -27,7 +29,7 @@ public:
     DefaultAllocator() = default;
     ~DefaultAllocator() final = default;
 
-    void* Allocate(int Size, const char* Tag, const char* File, int Line) override;
+    void* Allocate(int Size, std::string_view Tag) override;
     void Deallocate(void* Ptr) override;
 };
 

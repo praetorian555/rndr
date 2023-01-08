@@ -8,15 +8,17 @@
 namespace rndr
 {
 
-// TODO(Marko): Remove File nad Line from this API
+// Decalartion
+Allocator* GetAllocator();
+
 template <typename T, typename... Args>
-T* New(Allocator* Alloc, const char* Tag, const char* File, int Line, Args&&... Arguments)
+T* New(Allocator* Alloc, std::string_view Tag, Args&&... Arguments)
 {
     if (!Alloc)
     {
         return nullptr;
     }
-    void* Memory = Alloc->Allocate(sizeof(T), Tag, File, Line);
+    void* Memory = Alloc->Allocate(sizeof(T), Tag);
     if (!Memory)
     {
         return nullptr;
@@ -39,28 +41,43 @@ void Delete(Allocator* Alloc, T* Ptr)
     Alloc->Deallocate(Ptr);
 }
 
-Allocator* GetAllocator();
+template <typename T, typename... Args>
+T* New(std::string_view Tag, Args&&... Arguments)
+{
+    Allocator* Alloc = GetAllocator();
+    assert(Alloc);
+    return New<T>(Alloc, Tag, std::forward<Args>(Arguments)...);
+}
+
+template <typename T>
+void Delete(T* Ptr)
+{
+    Allocator* Alloc = GetAllocator();
+    assert(Alloc);
+    Delete(Alloc, Ptr);
+}
+
 template <typename T>
 class ScopePtr
 {
 public:
     ScopePtr() : m_Data(nullptr) {}
     explicit ScopePtr(T* Data) : m_Data(Data) {}
-    ~ScopePtr() { Delete<T>(GetAllocator(), m_Data); }
+    ~ScopePtr() { Delete(m_Data); }
 
     ScopePtr(const ScopePtr& Other) = delete;
     ScopePtr<T>& operator=(const ScopePtr& Other) = delete;
 
     ScopePtr(ScopePtr&& Other) noexcept
     {
-        Delete<T>(GetAllocator(), m_Data);
+        Delete(m_Data);
         m_Data = Other.m_Data;
         Other.m_Data = nullptr;
     }
 
     ScopePtr<T>& operator=(ScopePtr&& Other) noexcept
     {
-        Delete<T>(GetAllocator(), m_Data);
+        Delete(m_Data);
         m_Data = Other.m_Data;
         Other.m_Data = nullptr;
         return *this;
@@ -75,7 +92,7 @@ public:
 
     void Reset(T* NewData = nullptr)
     {
-        Delete<T>(GetAllocator(), m_Data);
+        Delete(m_Data);
         m_Data = NewData;
     }
 
@@ -86,8 +103,7 @@ private:
 template <typename T, typename... Args>
 ScopePtr<T> CreateScoped(std::string_view Tag, Args&&... Arguments)
 {
-    return ScopePtr<T>{rndr::New<T>(rndr::GetAllocator(), Tag.data(), __FILE__, __LINE__,
-                                    std::forward<Args>(Arguments)...)};
+    return ScopePtr<T>{rndr::New<T>(Tag, std::forward<Args>(Arguments)...)};
 }
 
 template <typename T>
@@ -109,8 +125,8 @@ public:
     T* allocate(size_t Count)
     {
         Allocator* Alloc = rndr::GetAllocator();
-        void* Addr = Alloc->Allocate(static_cast<int>(Count) * sizeof(T),
-                                     "StandardAllocatorWrapper", __FILE__, __LINE__);
+        void* Addr =
+            Alloc->Allocate(static_cast<int>(Count) * sizeof(T), "StandardAllocatorWrapper");
         return static_cast<T*>(Addr);
     }
 
@@ -124,6 +140,5 @@ public:
 
 }  // namespace rndr
 
-#define RNDR_NEW(Type, Tag, ...) \
-    rndr::New<Type>(rndr::GetAllocator(), Tag, __FILE__, __LINE__, __VA_ARGS__)
-#define RNDR_DELETE(Type, Ptr) rndr::Delete<Type>(rndr::GetAllocator(), Ptr), Ptr = nullptr
+#define RNDR_NEW(Type, Tag, ...) rndr::New<Type>(Tag, __VA_ARGS__)
+#define RNDR_DELETE(Type, Ptr) rndr::Delete(Ptr), Ptr = nullptr
