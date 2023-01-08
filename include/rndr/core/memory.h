@@ -44,7 +44,6 @@ T* NewArray(Allocator* Alloc, int Count, const char* Tag, const char* File, int 
     return new (Memory) T[Count]{};
 }
 
-
 template <typename T>
 void Delete(Allocator* Alloc, T* Ptr)
 {
@@ -134,6 +133,38 @@ ScopePtr<T> CreateScoped(std::string_view Tag, Args&&... Arguments)
     return ScopePtr<T>{rndr::New<T>(rndr::GetAllocator(), Tag.data(), __FILE__, __LINE__,
                                     std::forward<Args>(Arguments)...)};
 }
+
+template <typename T>
+class StandardAllocatorWrapper
+{
+public:
+    using value_type = T;
+    using size_type = std::size_t;
+    using difference_type = std::ptrdiff_t;
+
+    StandardAllocatorWrapper() = default;
+
+    template <class U>
+    constexpr StandardAllocatorWrapper(const StandardAllocatorWrapper<U>& Other) noexcept
+    {
+        RNDR_UNUSED(Other);
+    }
+
+    T* allocate(size_t Count)
+    {
+        Allocator* Alloc = rndr::GetAllocator();
+        void* Addr = Alloc->Allocate(static_cast<int>(Count) * sizeof(T),
+                                     "StandardAllocatorWrapper", __FILE__, __LINE__);
+        return static_cast<T*>(Addr);
+    }
+
+    void deallocate(T* Ptr, size_t Count)
+    {
+        RNDR_UNUSED(Count);
+        Allocator* Alloc = rndr::GetAllocator();
+        Alloc->Deallocate(Ptr);
+    }
+};
 
 }  // namespace rndr
 
