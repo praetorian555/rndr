@@ -25,7 +25,7 @@ struct WindowProperties
 class Window
 {
 public:
-    explicit Window(int Width = 1024, int Height = 768, const WindowProperties& Props = WindowProperties());
+    Window() = default;
     ~Window();
 
     Window(const Window& Other) = delete;
@@ -33,6 +33,10 @@ public:
 
     Window(Window&& Other) = delete;
     Window& operator=(Window&& Other) = delete;
+
+    bool Init(int Width = 1024,
+              int Height = 768,
+              const WindowProperties& Props = WindowProperties());
 
     /**
      * Processes events that occured in the window such as event closing or button press.

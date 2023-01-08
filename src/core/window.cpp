@@ -55,9 +55,20 @@ rndr::WindowDelegates::MouseWheelDelegate rndr::WindowDelegates::OnMouseWheelMov
 
 LRESULT CALLBACK WindowProc(HWND WindowHandle, UINT MsgCode, WPARAM ParamW, LPARAM ParamL);
 
-rndr::Window::Window(int Width, int Height, const WindowProperties& Props)
-    : m_Width(Width), m_Height(Height), m_Props(Props)
+rndr::Window::~Window()
 {
+    if (!IsClosed())
+    {
+        Close();
+    }
+}
+
+bool rndr::Window::Init(int Width, int Height, const WindowProperties& Props)
+{
+    m_Width = Width;
+    m_Height = Height;
+    m_Props = Props;
+
     rndr::WindowDelegates::OnResize.Add(RNDR_BIND_THREE_PARAM(this, &Window::Resize));
     rndr::WindowDelegates::OnButtonDelegate.Add(RNDR_BIND_THREE_PARAM(this, &Window::ButtonEvent));
 
@@ -75,7 +86,11 @@ rndr::Window::Window(int Width, int Height, const WindowProperties& Props)
         WindowClass.style = CS_OWNDC | CS_HREDRAW | CS_VREDRAW;
 
         const ATOM Atom = RegisterClass(&WindowClass);
-        assert(Atom != 0);
+        if (Atom == 0)
+        {
+            RNDR_LOG_ERROR("Window::Init: Failed to register window class!");
+            return false;
+        }
     }
 
     RECT WindowRect = {0, 0, m_Width, m_Height};
@@ -85,19 +100,17 @@ rndr::Window::Window(int Width, int Height, const WindowProperties& Props)
         CreateWindowEx(0, ClassName, m_Props.Name.c_str(), WS_OVERLAPPEDWINDOW, CW_USEDEFAULT,
                        CW_USEDEFAULT, WindowRect.right - WindowRect.left,
                        WindowRect.bottom - WindowRect.top, nullptr, nullptr, Instance, this);
-    assert(WindowHandle != nullptr);
+    if (WindowHandle == nullptr)
+    {
+        RNDR_LOG_ERROR("Window::Init: CreateWindowEx failed!");
+        return false;
+    }
 
     ShowWindow(WindowHandle, SW_SHOW);
 
     m_NativeWindowHandle = reinterpret_cast<uintptr_t>(WindowHandle);
-}
 
-rndr::Window::~Window()
-{
-    if (!IsClosed())
-    {
-        Close();
-    }
+    return true;
 }
 
 void rndr::Window::ProcessEvents() const
@@ -121,7 +134,10 @@ void rndr::Window::Close()
 {
     HWND WindowHandle = reinterpret_cast<HWND>(m_NativeWindowHandle);
     const bool Result = DestroyWindow(WindowHandle) > 0;
-    assert(Result);
+    if (!Result)
+    {
+        RNDR_LOG_WARNING("Window::Close: Failed to destroy the native window!");
+    }
     m_NativeWindowHandle = 0;
 }
 

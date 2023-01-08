@@ -3,6 +3,8 @@
 #include <algorithm>
 #include <cassert>
 
+#include "rndr/core/base.h"
+
 AtlasPacker::AtlasPacker(const int AtlasWidth, const int AtlasHeight, SortCriteria SortCrit)
     : m_AtlasSize{AtlasWidth, AtlasHeight}, m_SortCriteria(SortCrit)
 {
@@ -166,6 +168,7 @@ void AtlasPacker::Test()
                 int Index = i * 4 + j;
                 assert(OutRects[Index].BottomLeft.X == j * 25);
                 assert(OutRects[Index].BottomLeft.Y == i * 25);
+                RNDR_UNUSED(Index);
             }
         }
     }

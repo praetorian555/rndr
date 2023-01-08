@@ -69,10 +69,16 @@ rndr::ScopePtr<rndr::Window> rndr::RndrContext::CreateWin(int Width,
         return Ptr;
     }
 
-    Window* W = RNDR_NEW(Window, "rndr::RndrContext: Window", Width, Height, Props);
+    Window* W = RNDR_NEW(Window, "rndr::RndrContext: Window");
     if (W == nullptr)
     {
         RNDR_LOG_ERROR("RndrContext::CreateWin: Failed to allocate Window object!");
+        return Ptr;
+    }
+    if (!W->Init(Width, Height, Props))
+    {
+        RNDR_DELETE(Window, W);
+        RNDR_LOG_ERROR("RndrContext::CreateWin: Failed to initialize Window object!");
         return Ptr;
     }
     Ptr.Reset(W);

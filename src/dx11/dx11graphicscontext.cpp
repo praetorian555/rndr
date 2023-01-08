@@ -76,6 +76,8 @@ std::string rndr::GraphicsContext::WindowsGetErrorMessage(HRESULT ErrorCode)
     }
 
     m_DebugInfoQueue->ClearStoredMessages();
+#else
+    RNDR_UNUSED(ErrorCode);
 #endif  // RNDR_DEBUG
 
     return Rtn;

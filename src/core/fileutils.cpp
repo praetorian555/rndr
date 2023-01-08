@@ -26,7 +26,10 @@ rndr::ByteSpan rndr::file::ReadEntireFile(const std::string& FilePath)
     Contents.Size = ContentsSize;
     Contents.Data = RNDR_NEW_ARRAY(uint8_t, ContentsSize, "");
     const size_t ReadBytes = fread(Contents.Data, 1, Contents.Size, File);
-    assert(ReadBytes == ContentsSize);
+    if (ReadBytes != ContentsSize)
+    {
+        RNDR_LOG_WARNING("Failed to read all bytes from the file!");
+    }
 
     fclose(File);
 

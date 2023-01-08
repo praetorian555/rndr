@@ -5,12 +5,5 @@ add_library(stb_truetype include/stb_truetype/stb_truetype.h src/stb_truetype.cp
 target_include_directories(stb_truetype PUBLIC include)
 target_include_directories(stb_truetype PRIVATE src)
 
-# All users of this library will need at least C++20
-target_compile_features(stb_truetype PUBLIC cxx_std_20)
-
 # Put stb_truetype project under Extern folder in IDE
 set_target_properties(stb_truetype PROPERTIES FOLDER Extern)
-
-if (RNDR_SANITIZER)
-    target_compile_options(stb_truetype PRIVATE $<$<CXX_COMPILER_ID:MSVC>:/fsanitize=address>)
-endif()
