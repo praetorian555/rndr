@@ -8,9 +8,23 @@
 namespace rndr
 {
 
-// Decalartion
+// Declartion, defined in rndrcontext.cpp
 Allocator* GetAllocator();
 
+/**
+ * Allocates the memory for an object of type T and invokes his constuctor.
+ *
+ * @note Which constructor is called depened on the variable list of arguments at the end of the
+ * function.
+ *
+ * @tparam T Type of object to allocate.
+ * @tparam Args Variadic list of types representing the data to be passed to the constructor.
+ * @param Alloc Allocator to be used to allocate memory.
+ * @param Tag String potentially used for debugging purposes.
+ * @param Arguments Variadic list of arguments to be forwaded to the constructor.
+ *
+ * @return Returns the initialized object on success, or nullptr if the allocator is out of memory.
+ */
 template <typename T, typename... Args>
 T* New(Allocator* Alloc, std::string_view Tag, Args&&... Arguments)
 {
@@ -26,6 +40,13 @@ T* New(Allocator* Alloc, std::string_view Tag, Args&&... Arguments)
     return new (Memory) T{std::forward<Args>(Arguments)...};
 }
 
+/**
+ * Invokes the destructor on the Ptr object and deallocates the memory.
+ *
+ * @tparam T Type of the object to be destroyed.
+ * @param Alloc Allocator to be used to deallocate the memory.
+ * @param Ptr Object to destroy.
+ */
 template <typename T>
 void Delete(Allocator* Alloc, T* Ptr)
 {
@@ -41,6 +62,20 @@ void Delete(Allocator* Alloc, T* Ptr)
     Alloc->Deallocate(Ptr);
 }
 
+/**
+ * Allocates the memory for an object of type T and invokes his constuctor. It uses the allocator
+ * from global RndrContext object.
+ *
+ * @note Which constructor is called depened on the variable list of arguments at the end of the
+ * function.
+ *
+ * @tparam T Type of object to allocate.
+ * @tparam Args Variadic list of types representing the data to be passed to the constructor.
+ * @param Tag String potentially used for debugging purposes.
+ * @param Arguments Variadic list of arguments to be forwaded to the constructor.
+ *
+ * @return Returns the initialized object on success, or nullptr if the allocator is out of memory.
+ */
 template <typename T, typename... Args>
 T* New(std::string_view Tag, Args&&... Arguments)
 {
@@ -49,6 +84,13 @@ T* New(std::string_view Tag, Args&&... Arguments)
     return New<T>(Alloc, Tag, std::forward<Args>(Arguments)...);
 }
 
+/**
+ * Invokes the destructor on the Ptr object and deallocates the memory. It uses the allocator
+ * from global RndrContext object.
+ *
+ * @tparam T Type of the object to be destroyed.
+ * @param Ptr Object to destroy.
+ */
 template <typename T>
 void Delete(T* Ptr)
 {
@@ -57,6 +99,13 @@ void Delete(T* Ptr)
     Delete(Alloc, Ptr);
 }
 
+/**
+ * Helper class that implements the RAII memory management for all objects allocated using the
+ * allocator in the global RndrContext object. Similar to std::unique_ptr. Once created ScopePtr
+ * can't be copied but it can be moved. It is used to represent the ownership of specific object.
+ *
+ * @note Use CreateScoped to create objects wrapped in ScopePtr.
+ */
 template <typename T>
 class ScopePtr
 {
@@ -100,12 +149,28 @@ private:
     T* m_Data = nullptr;
 };
 
+/**
+ * Helper function used to create objects using the allocator in the global RndrContext object and
+ * wrapping them into ScopePtr.
+ *
+ * @tparam T Type of object to allocate.
+ * @tparam Args Variadic list of types representing the data to be passed to the constructor.
+ * @param Tag String potentially used for debugging purposes.
+ * @param Arguments Variadic list of arguments to be forwaded to the constructor.
+ *
+ * @return Returns the ScopePtr object with the initialized object inside in case of a succes.
+ * Otherwise it returns an invalid ScopePtr object.
+ */
 template <typename T, typename... Args>
 ScopePtr<T> CreateScoped(std::string_view Tag, Args&&... Arguments)
 {
     return ScopePtr<T>{rndr::New<T>(Tag, std::forward<Args>(Arguments)...)};
 }
 
+/**
+ * Helper class representing the allocator API compatible with standard library. It simply wraps
+ * calls to the allocator stored in the global RndrContext object.
+ */
 template <typename T>
 class StandardAllocatorWrapper
 {
