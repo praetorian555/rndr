@@ -38,6 +38,12 @@ struct Image
 
     Image() = default;
 
+    Image(const Image& Other) = delete;
+    Image& operator=(const Image& Other) = delete;
+
+    Image(Image&& Other) = delete;
+    Image& operator=(Image&& Other) = delete;
+
     bool Init(GraphicsContext* Context,
               int InWidth,
               int InHeight,

@@ -1,6 +1,7 @@
 #pragma once
 
 #include <string>
+#include <memory>
 
 #include "rndr/core/base.h"
 
@@ -10,28 +11,34 @@ namespace rndr
 class CpuTracer
 {
 public:
-    static CpuTracer* Get();
-
     void Init();
     void ShutDown();
 
     void AddTrace(const std::string& Name, int64_t StartMicroSeconds, int64_t EndMicroSeconds);
 
 private:
-    static std::unique_ptr<CpuTracer> s_Tracer;
+#if RNDR_SPDLOG
+    std::shared_ptr<spdlog::logger> m_Logger = nullptr;
+#endif  // RNDR_SPDLOG
 };
 
 class CpuTrace
 {
 public:
-    explicit CpuTrace(const std::string& Name);
+    explicit CpuTrace(CpuTracer* Tracer, const std::string& Name);
     ~CpuTrace();
+
+    CpuTrace(const CpuTrace& Other) = default;
+    CpuTrace& operator=(const CpuTrace& Other) = default;
+
+    CpuTrace(CpuTrace&& Other) = default;
+    CpuTrace& operator=(CpuTrace&& Other) = default;
 
 private:
     std::string m_Name;
     int64_t m_StartUS = 0;
-};
 
-#define RNDR_CPU_TRACE(Name) rndr::CpuTrace CpuTrace_Var{Name};
+    CpuTracer* m_Tracer;
+};
 
 }  // namespace rndr

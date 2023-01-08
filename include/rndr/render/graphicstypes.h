@@ -8,6 +8,8 @@
 #include "rndr/core/base.h"
 #include "rndr/core/span.h"
 
+#include "rndr/utility/stackarray.h"
+
 #include "rndr/render/colors.h"
 
 namespace rndr
@@ -268,7 +270,8 @@ struct ImageProperties
 struct FrameBufferProperties
 {
     int ColorBufferCount = 1;
-    ImageProperties ColorBufferProperties[GraphicsConstants::kMaxFrameBufferColorBuffers];
+    StackArray<ImageProperties, GraphicsConstants::kMaxFrameBufferColorBuffers>
+        ColorBufferProperties;
 
     bool UseDepthStencil = false;
     ImageProperties DepthStencilBufferProperties;
@@ -355,13 +358,15 @@ struct RasterizerProperties
 
 struct DepthStencilProperties
 {
+    static constexpr uint8_t kMaskAll = 0xFF;
+
     bool DepthEnable = false;
     Comparator DepthComparator = Comparator::Less;
     DepthMask DepthMask = DepthMask::All;
 
     bool StencilEnable = false;
-    uint8_t StencilReadMask = 0xFF;
-    uint8_t StencilWriteMask = 0xFF;
+    uint8_t StencilReadMask = kMaskAll;
+    uint8_t StencilWriteMask = kMaskAll;
     uint32_t StencilRefValue = 0;
 
     StencilOperation StencilFrontFaceFailOp = StencilOperation::Keep;

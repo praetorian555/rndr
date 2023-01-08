@@ -41,6 +41,12 @@ public:
     GraphicsContext() = default;
     ~GraphicsContext();
 
+    GraphicsContext(const GraphicsContext& Other) = delete;
+    GraphicsContext& operator=(const GraphicsContext& Other) = delete;
+
+    GraphicsContext(GraphicsContext&& Other) = delete;
+    GraphicsContext& operator=(GraphicsContext&& Other) = delete;
+
     bool Init(GraphicsContextProperties Props = GraphicsContextProperties{});
 
     ID3D11Device* GetDevice();
@@ -48,25 +54,32 @@ public:
     D3D_FEATURE_LEVEL GetFeatureLevel();
 
     ScopePtr<SwapChain> CreateSwapChain(NativeWindowHandle WindowHandle,
-                               int Width,
-                               int Height,
-                               const SwapChainProperties& Props = SwapChainProperties{});
+                                        int Width,
+                                        int Height,
+                                        const SwapChainProperties& Props = SwapChainProperties{});
     ScopePtr<Shader> CreateShader(const ByteSpan& ShaderContents, const ShaderProperties& Props);
-    ScopePtr<Image> CreateImage(int Width, int Height, const ImageProperties& Props, ByteSpan InitData);
+    ScopePtr<Image> CreateImage(int Width,
+                                int Height,
+                                const ImageProperties& Props,
+                                ByteSpan InitData);
     ScopePtr<Image> CreateImageArray(int Width,
-                            int Height,
-                            int ArraySize,
-                            const ImageProperties& Props,
-                            Span<ByteSpan> InitData);
+                                     int Height,
+                                     int ArraySize,
+                                     const ImageProperties& Props,
+                                     Span<ByteSpan> InitData);
     ScopePtr<Image> CreateCubeMap(int Width,
-                         int Height,
-                         const ImageProperties& Props,
-                         Span<ByteSpan> InitData);
+                                  int Height,
+                                  const ImageProperties& Props,
+                                  Span<ByteSpan> InitData);
     ScopePtr<Image> CreateImageForSwapChain(SwapChain* SwapChain, int BufferIndex);
     ScopePtr<Sampler> CreateSampler(const SamplerProperties& Props = SamplerProperties{});
     ScopePtr<Buffer> CreateBuffer(const BufferProperties& Props, ByteSpan InitialData);
-    ScopePtr<FrameBuffer> CreateFrameBuffer(int Width, int Height, const FrameBufferProperties& Props);
-    ScopePtr<FrameBuffer> CreateFrameBufferForSwapChain(int Width, int Height, SwapChain* SwapChain);
+    ScopePtr<FrameBuffer> CreateFrameBuffer(int Width,
+                                            int Height,
+                                            const FrameBufferProperties& Props);
+    ScopePtr<FrameBuffer> CreateFrameBufferForSwapChain(int Width,
+                                                        int Height,
+                                                        SwapChain* SwapChain);
     ScopePtr<InputLayout> CreateInputLayout(Span<InputLayoutProperties> Props, Shader* Shader);
     ScopePtr<RasterizerState> CreateRasterizerState(const RasterizerProperties& Props);
     ScopePtr<DepthStencilState> CreateDepthStencilState(const DepthStencilProperties& Props);

@@ -8,7 +8,6 @@
 #include "rndr/core/projectioncamera.h"
 #include "rndr/core/rndrcontext.h"
 #include "rndr/core/span.h"
-#include "rndr/core/threading.h"
 #include "rndr/core/window.h"
 
 // Rendering API

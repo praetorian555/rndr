@@ -117,10 +117,8 @@ public:
     ScopePtr(const ScopePtr& Other) = delete;
     ScopePtr<T>& operator=(const ScopePtr& Other) = delete;
 
-    ScopePtr(ScopePtr&& Other) noexcept
+    ScopePtr(ScopePtr&& Other) noexcept : m_Data(Other.m_Data)
     {
-        Delete(m_Data);
-        m_Data = Other.m_Data;
         Other.m_Data = nullptr;
     }
 
@@ -182,7 +180,7 @@ public:
     StandardAllocatorWrapper() = default;
 
     template <class U>
-    constexpr StandardAllocatorWrapper(const StandardAllocatorWrapper<U>& Other) noexcept
+    explicit constexpr StandardAllocatorWrapper(const StandardAllocatorWrapper<U>& Other) noexcept
     {
         RNDR_UNUSED(Other);
     }

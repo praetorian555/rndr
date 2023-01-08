@@ -29,6 +29,12 @@ public:
     DefaultAllocator() = default;
     ~DefaultAllocator() final = default;
 
+    DefaultAllocator(const DefaultAllocator& Other) = delete;
+    DefaultAllocator& operator=(const DefaultAllocator& Other) = delete;
+
+    DefaultAllocator(DefaultAllocator&& Other) = delete;
+    DefaultAllocator& operator=(DefaultAllocator&& Other) = delete;
+
     void* Allocate(int Size, std::string_view Tag) override;
     void Deallocate(void* Ptr) override;
 };

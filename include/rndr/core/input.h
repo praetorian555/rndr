@@ -42,8 +42,8 @@ struct InputMapping
     std::vector<InputBinding> Bindings;
     InputCallback Callback;
 
-    InputMapping(const InputAction& Action, const InputCallback& Callback)
-        : Action(Action), Callback(Callback)
+    InputMapping(InputAction Action, InputCallback Callback)
+        : Action(std::move(Action)), Callback(std::move(Callback))
     {
     }
 };

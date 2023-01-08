@@ -16,6 +16,9 @@ namespace rndr
  */
 struct WindowProperties
 {
+    static constexpr int kDefaultWindowWidth = 1024;
+    static constexpr int kDefaultWindowHeight = 768;
+
     std::string Name = "Default Window";
 };
 
@@ -34,8 +37,8 @@ public:
     Window(Window&& Other) = delete;
     Window& operator=(Window&& Other) = delete;
 
-    bool Init(int Width = 1024,
-              int Height = 768,
+    bool Init(int Width = WindowProperties::kDefaultWindowWidth,
+              int Height = WindowProperties::kDefaultWindowHeight,
               const WindowProperties& Props = WindowProperties());
 
     /**

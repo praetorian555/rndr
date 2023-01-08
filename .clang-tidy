@@ -37,7 +37,6 @@ CheckOptions:
     readability-identifier-naming.StaticVariableCase: 'CamelCase'
     readability-identifier-naming.StaticVariablePrefix: 's_'
     readability-identifier-naming.GlobalVariableCase: 'CamelCase'
-    readability-identifier-naming.GlobalVariablePrefix: 'G'
     readability-identifier-naming.ClassCase: 'CamelCase'
     readability-identifier-naming.ClassMethodCase: 'CamelCase'
     readability-identifier-naming.StructCase: 'CamelCase'

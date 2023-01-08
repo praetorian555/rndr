@@ -1,12 +1,12 @@
 #include "rndr/render/graphicstypes.h"
 
-#include <array>
+#include "rndr/utility/stackarray.h"
 
 // Should be kept in line with rndr::PixelFormat
 // clang-format off
 
 static constexpr size_t kPixelSizesCount = static_cast<size_t>(rndr::PixelFormat::Count);
-static const std::array<int, kPixelSizesCount> GPixelSizes
+static const rndr::StackArray<int, kPixelSizesCount> GPixelSizes
 {
     // clang-tidy off
     4,

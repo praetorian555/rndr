@@ -29,6 +29,12 @@ struct SwapChain
     SwapChain() = default;
     ~SwapChain();
 
+    SwapChain(const SwapChain& Other) = delete;
+    SwapChain& operator=(const SwapChain& Other) = delete;
+
+    SwapChain(SwapChain&& Other) = delete;
+    SwapChain& operator=(SwapChain&& Other) = delete;
+
     bool Init(GraphicsContext* Context,
               NativeWindowHandle Handle,
               int InWidth,

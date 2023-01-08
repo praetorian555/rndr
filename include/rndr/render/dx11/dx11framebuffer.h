@@ -37,6 +37,12 @@ struct FrameBuffer
     FrameBuffer() = default;
     ~FrameBuffer();
 
+    FrameBuffer(const FrameBuffer& Other) = delete;
+    FrameBuffer& operator=(const FrameBuffer& Other) = delete;
+
+    FrameBuffer(FrameBuffer&& Other) = delete;
+    FrameBuffer& operator=(FrameBuffer&& Other) = delete;
+
     bool Init(rndr::GraphicsContext* Context,
               int InWidth,
               int InHeight,
