@@ -36,9 +36,9 @@ rndr::RndrContext::RndrContext(const RndrContextProperties& Props)
     {
         m_Allocator = &GDefaultAllocator;
     }
-    m_Logger = Props.UserLogger != nullptr ? Props.UserLogger : RNDR_NEW(StdAsyncLogger, "Logger");
+    m_Logger = Props.UserLogger != nullptr ? Props.UserLogger : New<StdAsyncLogger>("Logger");
 
-    m_InputSystem = RNDR_NEW(InputSystem, "InputSystem");
+    m_InputSystem = New<InputSystem>("InputSystem");
 
     m_IsInitialized = true;
 }
@@ -47,11 +47,11 @@ rndr::RndrContext::~RndrContext()
 {
     if (m_IsInitialized)
     {
-        RNDR_DELETE(InputSystem, m_InputSystem);
+        Delete(m_InputSystem);
 
         if (m_Props.UserLogger == nullptr)
         {
-            RNDR_DELETE(Logger, m_Logger);
+            Delete(m_Logger);
         }
         GRndrContext = nullptr;
     }
@@ -69,7 +69,7 @@ rndr::ScopePtr<rndr::Window> rndr::RndrContext::CreateWin(int Width,
         return Ptr;
     }
 
-    Window* W = RNDR_NEW(Window, "rndr::RndrContext: Window");
+    Window* W = New<Window>("rndr::RndrContext: Window");
     if (W == nullptr)
     {
         RNDR_LOG_ERROR("RndrContext::CreateWin: Failed to allocate Window object!");
@@ -77,7 +77,7 @@ rndr::ScopePtr<rndr::Window> rndr::RndrContext::CreateWin(int Width,
     }
     if (!W->Init(Width, Height, Props))
     {
-        RNDR_DELETE(Window, W);
+        Delete(W);
         RNDR_LOG_ERROR("RndrContext::CreateWin: Failed to initialize Window object!");
         return Ptr;
     }
@@ -96,10 +96,10 @@ rndr::ScopePtr<rndr::GraphicsContext> rndr::RndrContext::CreateGraphicsContext(
         return Ptr;
     }
 
-    GraphicsContext* GC = RNDR_NEW(GraphicsContext, "rndr::RndrContext: GraphicsContext");
+    GraphicsContext* GC = New<GraphicsContext>("rndr::RndrContext: GraphicsContext");
     if (GC == nullptr || !GC->Init(Props))
     {
-        RNDR_DELETE(GraphicsContext, GC);
+        Delete(GC);
     }
     Ptr.Reset(GC);
     return Ptr;

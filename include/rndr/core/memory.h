@@ -139,6 +139,3 @@ public:
 };
 
 }  // namespace rndr
-
-#define RNDR_NEW(Type, Tag, ...) rndr::New<Type>(Tag, __VA_ARGS__)
-#define RNDR_DELETE(Type, Ptr) rndr::Delete(Ptr), Ptr = nullptr

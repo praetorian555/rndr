@@ -7,12 +7,12 @@
 rndr::InputSystem::InputSystem()
 {
     assert(!m_Context);
-    m_Context = RNDR_NEW(InputContext, "InputSystem: Default InputContext");
+    m_Context = New<InputContext>("InputSystem: Default InputContext");
 }
 
 rndr::InputSystem::~InputSystem()
 {
-    RNDR_DELETE(InputContext, m_Context);
+    Delete(m_Context);
 }
 
 void rndr::InputSystem::SubmitButtonEvent(NativeWindowHandle Window,

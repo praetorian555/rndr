@@ -10,7 +10,7 @@ TEST_CASE("SingleObject", "Memory")
     rndr::RndrContext* App = new rndr::RndrContext();
     REQUIRE(App != nullptr);
 
-    int* MyInt = RNDR_NEW(int, "My Int", 5);
+    int* MyInt = rndr::New<int>("My Int", 5);
     REQUIRE(*MyInt == 5);
 
     struct AggregateType
@@ -19,13 +19,13 @@ TEST_CASE("SingleObject", "Memory")
         double b;
     };
 
-    RNDR_DELETE(int, MyInt);
+    rndr::Delete(MyInt);
 
-    AggregateType* A = RNDR_NEW(AggregateType, "", 10, 15.2);
+    AggregateType* A = rndr::New<AggregateType>("", 10, 15.2);
     REQUIRE(A->a == 10);
     REQUIRE(A->b == 15.2);
 
-    RNDR_DELETE(AggregateType, A);
+    rndr::Delete(A);
 
     struct AggregateType2
     {
@@ -38,10 +38,10 @@ TEST_CASE("SingleObject", "Memory")
             a = 10;
         }
     };
-    AggregateType2* B = RNDR_NEW(AggregateType2, "", 20);
+    AggregateType2* B = rndr::New<AggregateType2>("", 20);
     REQUIRE(B->a == 10);
 
-    RNDR_DELETE(AggregateType2, B);
+    rndr::Delete(B);
 
     delete App;
 }
