@@ -8,6 +8,7 @@
 namespace rndr
 {
 
+// TODO(Marko): Remove File nad Line from this API
 template <typename T, typename... Args>
 T* New(Allocator* Alloc, const char* Tag, const char* File, int Line, Args&&... Arguments)
 {
@@ -23,6 +24,7 @@ T* New(Allocator* Alloc, const char* Tag, const char* File, int Line, Args&&... 
     return new (Memory) T{std::forward<Args>(Arguments)...};
 }
 
+// TODO(Marko): Remove this API
 template <typename T>
 T* NewArray(Allocator* Alloc, int Count, const char* Tag, const char* File, int Line)
 {
@@ -42,6 +44,7 @@ T* NewArray(Allocator* Alloc, int Count, const char* Tag, const char* File, int 
     return new (Memory) T[Count]{};
 }
 
+
 template <typename T>
 void Delete(Allocator* Alloc, T* Ptr)
 {
@@ -57,6 +60,7 @@ void Delete(Allocator* Alloc, T* Ptr)
     Alloc->Deallocate(Ptr);
 }
 
+// TODO(Marko): Remove this API
 template <typename T>
 void DeleteArray(Allocator* Alloc, T* Ptr, int Count)
 {
@@ -133,6 +137,7 @@ ScopePtr<T> CreateScoped(std::string_view Tag, Args&&... Arguments)
 
 }  // namespace rndr
 
+// TODO(Marko): Remove the array variants of these macros
 #define RNDR_NEW(Type, Tag, ...) \
     rndr::New<Type>(rndr::GetAllocator(), Tag, __FILE__, __LINE__, __VA_ARGS__)
 #define RNDR_NEW_ARRAY(Type, Count, Tag, ...) \
