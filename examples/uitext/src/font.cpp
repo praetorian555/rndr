@@ -7,13 +7,13 @@ bool Font::Init(const std::string& InName, const std::string& AssetPath)
     Name = InName;
     Id = GenerateId();
 
-    rndr::ByteSpan Contents = rndr::file::ReadEntireFile(AssetPath);
-    if (!Contents)
+    FontFileContents = rndr::file::ReadEntireFile(AssetPath);
+    if (FontFileContents.empty())
     {
         return false;
     }
-    const int Offset = stbtt_GetFontOffsetForIndex(Contents.Data, 0);
-    if (!stbtt_InitFont(&TTInfo, Contents.Data, Offset))
+    const int Offset = stbtt_GetFontOffsetForIndex(FontFileContents.data(), 0);
+    if (!stbtt_InitFont(&TTInfo, FontFileContents.data(), Offset))
     {
         return false;
     }

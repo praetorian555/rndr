@@ -47,4 +47,6 @@ struct Font
 
 private:
     static int GenerateId();
+
+    rndr::ByteArray FontFileContents;
 };

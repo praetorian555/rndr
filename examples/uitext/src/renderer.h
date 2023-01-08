@@ -87,8 +87,8 @@ private:
     std::vector<InstanceData> m_Instances;
     std::vector<InstanceData> m_Shadows;
 
-    std::unordered_map<std::string, Font> m_Fonts;
-    std::unordered_map<int, Font> m_IdToFonts;
+    std::unordered_map<std::string, Font*> m_Fonts;
+    std::unordered_map<int, Font*> m_IdToFonts;
 
     std::unordered_map<int, Glyph> m_Glyphs;
 

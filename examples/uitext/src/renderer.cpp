@@ -21,12 +21,12 @@ Renderer::Renderer(rndr::GraphicsContext* Ctx,
     const std::string VertexShaderPath = BASIC2D_ASSET_DIR "/textvert.hlsl";
     const std::string FragmentShaderPath = BASIC2D_ASSET_DIR "/textfrag.hlsl";
 
-    const rndr::ByteSpan VertexShaderContents = rndr::file::ReadEntireFile(VertexShaderPath);
-    assert(VertexShaderContents);
-    const rndr::ByteSpan FragmentShaderContents = rndr::file::ReadEntireFile(FragmentShaderPath);
-    assert(FragmentShaderContents);
+    rndr::ByteArray VertexShaderContents = rndr::file::ReadEntireFile(VertexShaderPath);
+    assert(!VertexShaderContents.empty());
+    rndr::ByteArray FragmentShaderContents = rndr::file::ReadEntireFile(FragmentShaderPath);
+    assert(!FragmentShaderContents.empty());
 
-    rndr::PipelineProperties PipelineProps{
+    const rndr::PipelineProperties PipelineProps{
         .InputLayout = rndr::InputLayoutBuilder()
                            .AddBuffer(0, rndr::DataRepetition::PerInstance, 1)
                            .AppendElement(0, "POSITION", rndr::PixelFormat::R32G32_FLOAT)
@@ -38,9 +38,9 @@ Renderer::Renderer(rndr::GraphicsContext* Ctx,
                            .AppendElement(0, "PSIZE", rndr::PixelFormat::R32_FLOAT)
                            .Build(),
         .VertexShader = {.Type = rndr::ShaderType::Vertex, .EntryPoint = "Main"},
-        .VertexShaderContents = VertexShaderContents,
+        .VertexShaderContents = rndr::ByteSpan(VertexShaderContents),
         .PixelShader = {.Type = rndr::ShaderType::Fragment, .EntryPoint = "Main"},
-        .PixelShaderContents = FragmentShaderContents,
+        .PixelShaderContents = rndr::ByteSpan(FragmentShaderContents),
         .DepthStencil = {.DepthEnable = false, .StencilEnable = false},
     };
     m_Pipeline = m_Ctx->CreatePipeline(PipelineProps);
@@ -96,13 +96,13 @@ Renderer::Renderer(rndr::GraphicsContext* Ctx,
 
 bool Renderer::AddFont(const std::string& FontName, const std::string& AssetPath)
 {
-    Font NewFont;
-    if (!NewFont.Init(FontName, AssetPath))
+    Font* NewFont = new Font{};
+    if (!NewFont->Init(FontName, AssetPath))
     {
         return false;
     }
     m_Fonts.insert(std::make_pair(FontName, NewFont));
-    m_IdToFonts.insert(std::make_pair(NewFont.Id, NewFont));
+    m_IdToFonts.insert(std::make_pair(NewFont->Id, NewFont));
 
     return true;
 }
@@ -130,7 +130,7 @@ void Renderer::RenderText(const std::string& Text,
         return;
     }
 
-    Font* F = &FontIter->second;
+    Font* F = FontIter->second;
 
     if (!IsGlyphSupported(Text[0], F, FontSize))
     {

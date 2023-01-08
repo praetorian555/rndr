@@ -4,6 +4,8 @@
 
 #include "rndr/core/base.h"
 
+#include "rndr/utility/array.h"
+
 namespace rndr
 {
 
@@ -16,6 +18,8 @@ struct Span
         : Data(reinterpret_cast<T*>(Vec.data())), Size(Vec.size())
     {
     }
+
+    explicit Span(Array<T>& Vec) : Data(Vec.data()), Size(Vec.size()) {}
 
     template <typename U>
     explicit Span(std::vector<U>& Vec)

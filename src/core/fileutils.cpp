@@ -8,24 +8,22 @@
 #include "rndr/core/log.h"
 #include "rndr/core/memory.h"
 
-rndr::ByteSpan rndr::file::ReadEntireFile(const std::string& FilePath)
+rndr::Array<uint8_t> rndr::file::ReadEntireFile(const std::string& FilePath)
 {
     FILE* File = nullptr;
     fopen_s(&File, FilePath.c_str(), "rb");
     if (File == nullptr)
     {
         RNDR_LOG_ERROR("Failed to open file %s", FilePath.c_str());
-        return ByteSpan{};
+        return {};
     }
 
     fseek(File, 0, SEEK_END);
     const int ContentsSize = ftell(File);
     fseek(File, 0, SEEK_SET);
 
-    ByteSpan Contents;
-    Contents.Size = ContentsSize;
-    Contents.Data = RNDR_NEW_ARRAY(uint8_t, ContentsSize, "");
-    const size_t ReadBytes = fread(Contents.Data, 1, Contents.Size, File);
+    Array<uint8_t> Contents(ContentsSize);
+    const size_t ReadBytes = fread(Contents.data(), 1, Contents.size(), File);
     if (ReadBytes != ContentsSize)
     {
         RNDR_LOG_WARNING("Failed to read all bytes from the file!");
@@ -41,22 +39,19 @@ rndr::CPUImage rndr::file::ReadEntireImage(const std::string& FilePath)
     int ChannelsInFile = 0;
     CPUImage Image;
     Image.Format = PixelFormat::R8G8B8A8_UNORM_SRGB;
-    Image.Data.Data = stbi_load(FilePath.c_str(), &Image.Width, &Image.Height, &ChannelsInFile, 4);
-    Image.Data.Size = 4 * Image.Width * Image.Height;
-
+    uint8_t* TmpData = stbi_load(FilePath.c_str(), &Image.Width, &Image.Height, &ChannelsInFile, 4);
+    const int DataSize = 4 * Image.Width * Image.Height;
+    Image.Data.resize(DataSize);
+    memcpy(Image.Data.data(), TmpData, DataSize);
+    stbi_image_free(TmpData);
     return Image;
-}
-
-void rndr::file::FreeImage(const CPUImage& Image)
-{
-    stbi_image_free(Image.Data.Data);
 }
 
 bool rndr::file::SaveImage(const CPUImage& Image, const std::string& FilePath)
 {
     const int Channels = rndr::GetPixelSize(Image.Format);
     const int Status = stbi_write_png(FilePath.c_str(), Image.Width, Image.Height, Channels,
-                                      Image.Data.Data, Image.Width * Channels);
+                                      Image.Data.data(), Image.Width * Channels);
 
     return Status == 1;
 }
