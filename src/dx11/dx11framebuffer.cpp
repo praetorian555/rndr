@@ -134,23 +134,15 @@ bool rndr::FrameBuffer::UpdateViewport(float InWidth,
 
 void rndr::FrameBuffer::Clear()
 {
-    if (ColorBuffers)
+    for (int Index = 0; Index < ColorBuffers.size(); Index++)
     {
-        for (int Index = 0; Index < ColorBuffers.Size; Index++)
-        {
-            ColorBuffers[Index].Reset();
-        }
-        RNDR_DELETE_ARRAY(ScopePtr<Image>, ColorBuffers.Data, static_cast<int>(ColorBuffers.Size));
-        ColorBuffers.Data = nullptr;
-        ColorBuffers.Size = 0;
+        ColorBuffers[Index].Reset();
     }
 }
 
 bool rndr::FrameBuffer::InitInternal(GraphicsContext* Context, SwapChain* SwapChain)
 {
-    ColorBuffers.Data =
-        RNDR_NEW_ARRAY(ScopePtr<Image>, Props.ColorBufferCount, "rndr::FrameBuffer: Image");
-    ColorBuffers.Size = Props.ColorBufferCount;
+    ColorBuffers.resize(Props.ColorBufferCount);
 
     const ByteSpan EmptyData;
     for (int Index = 0; Index < Props.ColorBufferCount; Index++)

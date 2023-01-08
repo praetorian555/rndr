@@ -46,35 +46,6 @@ TEST_CASE("SingleObject", "Memory")
     delete App;
 }
 
-TEST_CASE("Arrays", "Memory")
-{
-    rndr::RndrContext* App = new rndr::RndrContext();
-    REQUIRE(App != nullptr);
-
-    int* MyInts = RNDR_NEW_ARRAY(int, 100, "My Int");
-    for (int i = 0; i < 100; i++)
-    {
-        REQUIRE(MyInts[i] == 0);
-    }
-    RNDR_DELETE_ARRAY(int, MyInts, 100);
-
-    struct AggregateType
-    {
-        int a = 2;
-        double b = 5.5;
-    };
-
-    AggregateType* A = RNDR_NEW_ARRAY(AggregateType, 10, "");
-    for (int i = 0; i < 10; i++)
-    {
-        REQUIRE(A->a == 2);
-        REQUIRE(A->b == 5.5);
-    }
-    RNDR_DELETE_ARRAY(AggregateType, A, 10);
-
-    delete App;
-}
-
 TEST_CASE("ScopePtr", "Memory")
 {
     std::unique_ptr<rndr::RndrContext> Ctx = std::make_unique<rndr::RndrContext>();

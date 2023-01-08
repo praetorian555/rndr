@@ -11,6 +11,8 @@
 #include "rndr/render/graphicstypes.h"
 #include "rndr/render/image.h"
 
+#include "rndr/utility/array.h"
+
 namespace math
 {
 class Point2;
@@ -27,7 +29,7 @@ struct FrameBuffer
     int Width, Height;
     FrameBufferProperties Props;
 
-    Span<ScopePtr<Image>> ColorBuffers;
+    Array<ScopePtr<Image>> ColorBuffers;
     ScopePtr<Image> DepthStencilBuffer;
 
     D3D11_VIEWPORT DX11Viewport;
