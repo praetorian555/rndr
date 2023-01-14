@@ -491,6 +491,8 @@ TEST_CASE("ImageRead", "RenderAPI")
             REQUIRE(PixelData[i] == SecondPixelPattern);
         }
     }
+
+    // TODO(Marko): Write test to read from image array.
 }
 
 // TODO(Marko): Move this to a separate test file
@@ -521,9 +523,11 @@ TEST_CASE("ImageUpdate", "RenderAPI")
 
         SECTION("Update")
         {
+            // TODO(Marko): Verify the bytes on the CPU side.
             const bool Result = Image->Update(Ctx.Get(), 0, Start, Size, UpdateData);
             REQUIRE(Result == true);
         }
+        // TODO(Marko): Move this to separate thing, doesn't really care if its Default or Dynamic usage.
         SECTION("Invalid Update")
         {
             bool Result;
@@ -546,14 +550,19 @@ TEST_CASE("ImageUpdate", "RenderAPI")
 
         SECTION("Update")
         {
+            // TODO(Marko): Verify the bytes on the CPU side.
             const bool Result = Image->Update(Ctx.Get(), 0, Start, Size, UpdateData);
             REQUIRE(Result == true);
         }
+
+        // TODO(Marko): Write a test that does a partial update from zero start.
+        // TODO(Marko): Write a test that does a partial update from random, non-zero start.
     }
 
     delete[] UpdateData.Data;
 }
 
+// TODO(Marko): Move this to separate test file.
 TEST_CASE("ImageCopy", "RenderAPI")
 {
     std::unique_ptr<rndr::RndrContext> RndrCtx = std::make_unique<rndr::RndrContext>();
@@ -606,6 +615,9 @@ TEST_CASE("ImageCopy", "RenderAPI")
         delete[] ReadContents.Data;
     }
 
+    // TODO(Marko): Write a test for full copy.
+    // TODO(Marko): Write a test for partial copy from non-zero start.
+
     delete[] InitData.Data;
 }
 
@@ -641,6 +653,7 @@ TEST_CASE("FrameBuffer", "RenderAPI")
         rndr::ScopePtr<rndr::FrameBuffer> FB = Ctx->CreateFrameBuffer(100, 400, Props);
         REQUIRE(FB.IsValid());
 
+        // TODO(Marko): Move resize tests to other file.
         bool ResizeStatus = FB->Resize(Ctx.Get(), 500, 500);
         REQUIRE(ResizeStatus == true);
 
@@ -649,6 +662,8 @@ TEST_CASE("FrameBuffer", "RenderAPI")
     }
 }
 
+// TODO(Marko): Move non-creation tests to other file.
+// TODO(Marko): Implement proper tests for read, copy and update same as for the images.
 TEST_CASE("Buffer", "RenderAPI")
 {
     std::unique_ptr<rndr::RndrContext> RndrCtx = std::make_unique<rndr::RndrContext>();
