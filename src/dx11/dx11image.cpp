@@ -407,6 +407,7 @@ bool rndr::Image::Update(GraphicsContext* Context,
     return true;
 }
 
+// TODO(Marko): Move this to GraphicsContext.
 bool rndr::Image::Read(GraphicsContext* Context,
                        int ArrayIndex,
                        const math::Point2& Start,
@@ -435,7 +436,7 @@ bool rndr::Image::Read(GraphicsContext* Context,
         RNDR_LOG_ERROR("Image::Read: Invalid Start point!");
         return false;
     }
-    if (!math::InsideInclusive(Start, ImageBounds))
+    if (!math::InsideInclusive(ImageSize, ImageBounds))
     {
         RNDR_LOG_ERROR("Image::Read: Invalid End point!");
         return false;
@@ -443,6 +444,8 @@ bool rndr::Image::Read(GraphicsContext* Context,
     const int PixelSize = GetPixelSize(Props.PixelFormat);
     const int SizeX = static_cast<int>(Size.X);
     const int SizeY = static_cast<int>(Size.Y);
+    const int StartX = static_cast<int>(Start.X);
+    const int StartY = static_cast<int>(Start.Y);
     if (!OutContents || OutContents.Size != SizeX * SizeY * PixelSize)
     {
         RNDR_LOG_ERROR("Image::Read: Invalid contents!");
@@ -454,7 +457,7 @@ bool rndr::Image::Read(GraphicsContext* Context,
     if (Context->WindowsHasFailed())
     {
         const std::string ErrorMessage = Context->WindowsGetErrorMessage();
-        RNDR_LOG_ERROR("%s", ErrorMessage.c_str());
+        RNDR_LOG_ERROR("Image::Read: %s", ErrorMessage.c_str());
         return false;
     }
 
@@ -464,22 +467,24 @@ bool rndr::Image::Read(GraphicsContext* Context,
     if (Context->WindowsHasFailed(Result))
     {
         const std::string ErrorMessage = Context->WindowsGetErrorMessage(Result);
-        RNDR_LOG_ERROR("%s", ErrorMessage.c_str());
+        RNDR_LOG_ERROR("Image::Read: %s", ErrorMessage.c_str());
         return false;
     }
 
-    for (int Row = 0; Row < SizeY; Row++)
+    uint8_t* SrcData = reinterpret_cast<uint8_t*>(Subresource.pData);
+    for (int Row = StartY; Row < StartY + SizeY; Row++)
     {
-        memcpy(OutContents.Data + Row * SizeX * PixelSize,
-               reinterpret_cast<uint8_t*>(Subresource.pData) + Row * Subresource.RowPitch,
-               SizeX * PixelSize);
+        const int ReadSize = SizeX * PixelSize;
+        const int DstOffset = (Row - StartY) * SizeX * PixelSize;
+        const int SrcOffset = Row * Subresource.RowPitch + StartX * PixelSize;
+        memcpy(OutContents.Data + DstOffset, SrcData + SrcOffset, ReadSize);
     }
 
     DeviceContext->Unmap(DX11Texture, ArrayIndex);
     if (Context->WindowsHasFailed())
     {
         const std::string ErrorMessage = Context->WindowsGetErrorMessage();
-        RNDR_LOG_ERROR("%s", ErrorMessage.c_str());
+        RNDR_LOG_ERROR("Image::Read: %s", ErrorMessage.c_str());
         return false;
     }
 
