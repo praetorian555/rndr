@@ -21,32 +21,37 @@ TEST_CASE("GraphicsContext", "RenderAPI")
 {
     std::unique_ptr<rndr::RndrContext> RndrCtx = std::make_unique<rndr::RndrContext>();
 
-    rndr::GraphicsContextProperties Props;
-    Props.DisableGpuTimeout = false;
-    Props.EnableDebugLayer = true;
-    Props.ShouldFailWarning = true;
-    Props.IsThreadSafe = true;
-
     SECTION("Default")
     {
+        rndr::GraphicsContextProperties Props;
         rndr::ScopePtr<rndr::GraphicsContext> Ctx = RndrCtx->CreateGraphicsContext(Props);
         REQUIRE(Ctx.IsValid());
     }
     SECTION("Disable GPU Timeout")
     {
+        rndr::GraphicsContextProperties Props;
         Props.DisableGpuTimeout = true;
         rndr::ScopePtr<rndr::GraphicsContext> Ctx = RndrCtx->CreateGraphicsContext(Props);
         REQUIRE(Ctx.IsValid());
     }
     SECTION("No Debug Layer")
     {
+        rndr::GraphicsContextProperties Props;
         Props.EnableDebugLayer = false;
         rndr::ScopePtr<rndr::GraphicsContext> Ctx = RndrCtx->CreateGraphicsContext(Props);
         REQUIRE(Ctx.IsValid());
     }
-    SECTION("Not Thread Safe")
+    SECTION("No Warnings as Errors")
     {
-        Props.IsThreadSafe = false;
+        rndr::GraphicsContextProperties Props;
+        Props.ShouldFailWarning = false;
+        rndr::ScopePtr<rndr::GraphicsContext> Ctx = RndrCtx->CreateGraphicsContext(Props);
+        REQUIRE(Ctx.IsValid());
+    }
+    SECTION("Single-threaded")
+    {
+        rndr::GraphicsContextProperties Props;
+        Props.IsResourceCreationThreadSafe = false;
         rndr::ScopePtr<rndr::GraphicsContext> Ctx = RndrCtx->CreateGraphicsContext(Props);
         REQUIRE(Ctx.IsValid());
     }

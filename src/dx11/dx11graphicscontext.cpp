@@ -158,10 +158,11 @@ bool rndr::GraphicsContext::Init(GraphicsContextProperties Props)
     {
         Flags |= D3D11_CREATE_DEVICE_DISABLE_GPU_TIMEOUT;
     }
-    if (!m_Props.IsThreadSafe)
+    if (!m_Props.IsResourceCreationThreadSafe)
     {
         Flags |= D3D11_CREATE_DEVICE_SINGLETHREADED;
     }
+
     // These are the feature levels that we will accept.
     StackArray<D3D_FEATURE_LEVEL, 1> FeatureLevels = {D3D_FEATURE_LEVEL_11_1};
     // This will be the feature level that is used to create our device and swap chain.

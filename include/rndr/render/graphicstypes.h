@@ -185,7 +185,7 @@ enum class BufferType
     UnorderedAccess
 };
 
-// TODO(Marko): Add support for bit operations in enum class 
+// TODO(Marko): Add support for bit operations in enum class
 namespace ImageBindFlags
 {
 enum : uint32_t
@@ -222,14 +222,21 @@ enum class FillMode
     Wireframe
 };
 
-struct BufferProperties
+struct GraphicsContextProperties
 {
-    BufferType Type = BufferType::Constant;
-    Usage Usage = Usage::Default;
-    // Total size of a buffer
-    uint32_t Size = 0;
-    // Size of one element, in bytes, in an array of elements
-    uint32_t Stride = 0;
+    // Controls the debug layer of the underlying render API. Ignored in all configurations except
+    // Debug.
+    bool EnableDebugLayer = true;
+    // Controls if the *HasFailed methods will report an API call fail if the warning message is
+    // received from the debug layer. Ignored in all configurations except Debug.
+    bool ShouldFailWarning = true;
+    // In case of workloads that last more then 2 seconds on the GPU side control if the timeout is
+    // triggered or not.
+    bool DisableGpuTimeout = false;
+    // Controls if the underlying API for creating resources is thread-safe. If this is set to false
+    // the creation needs to be synchronized manually between threads. Also it is not possible to
+    // create commands lists if this is set to false.
+    bool IsResourceCreationThreadSafe = true;
 };
 
 struct ImageProperties
@@ -241,6 +248,16 @@ struct ImageProperties
     uint32_t SampleCount = 1;
 };
 
+struct BufferProperties
+{
+    BufferType Type = BufferType::Constant;
+    Usage Usage = Usage::Default;
+    // Total size of a buffer
+    uint32_t Size = 0;
+    // Size of one element, in bytes, in an array of elements
+    uint32_t Stride = 0;
+};
+
 struct FrameBufferProperties
 {
     int ColorBufferCount = 1;
@@ -249,16 +266,6 @@ struct FrameBufferProperties
 
     bool UseDepthStencil = false;
     ImageProperties DepthStencilBufferProperties;
-};
-
-struct GraphicsContextProperties
-{
-    bool EnableDebugLayer = true;
-    bool ShouldFailWarning = true;
-
-    bool IsThreadSafe = true;
-    // In case of workloads that last more then 2 seconds don't trigger a timeout
-    bool DisableGpuTimeout = false;
 };
 
 struct SwapChainProperties
