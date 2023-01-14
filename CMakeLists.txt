@@ -106,6 +106,8 @@ if (CMAKE_PROJECT_NAME STREQUAL PROJECT_NAME)
 
 	# Tests
 	add_subdirectory(tests)
+	enable_testing()
+	add_test(NAME main COMMAND rndr_tests)
 
 	# The executable code is here
 	add_subdirectory(examples/uitext)
