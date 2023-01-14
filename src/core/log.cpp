@@ -69,6 +69,12 @@ void rndr::StdAsyncLogger::Log(const char* File,
             break;
         }
     }
+#else
+    RNDR_UNUSED(File);
+    RNDR_UNUSED(Line);
+    RNDR_UNUSED(Function);
+    RNDR_UNUSED(LogLevel);
+    RNDR_UNUSED(Message);
 #endif  // RNDR_SPDLOG
 }
 
