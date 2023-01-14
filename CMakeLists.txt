@@ -77,7 +77,7 @@ if (NOT TARGET math)
 	FetchContent_Declare(
 		math
 		GIT_REPOSITORY https://github.com/praetorian555/math
-		GIT_TAG        e59692ff186b6ab300c6e1d42ee5796c8817bf93
+		GIT_TAG        cadf02be7873adf18ea0764a0f516ae6391fed2e
 	)
 	FetchContent_MakeAvailable(math)
 	set_target_properties(math PROPERTIES FOLDER Extern)
