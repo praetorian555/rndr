@@ -13,7 +13,7 @@ bool rndr::Sampler::Init(GraphicsContext* Context, const SamplerProperties& InPr
 {
     Props = InProps;
 
-    ID3D11Device* Device = Context->GetDevice();
+    ID3D11Device* Device = Context->DX11Device;
 
     D3D11_SAMPLER_DESC Desc;
     Desc.AddressU = DX11FromImageAddressing(Props.AddressingU);

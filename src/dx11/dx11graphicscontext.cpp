@@ -41,20 +41,21 @@ std::string rndr::GraphicsContext::WindowsGetErrorMessage(HRESULT ErrorCode)
         Rtn += "Error occurred in debug layer.\n";
     }
 
-    if (m_DebugInfoQueue == nullptr)
+    if (DX11DebugInfoQueue == nullptr)
     {
         return Rtn;
     }
 
     bool AddNewLine = false;
-    const uint64_t MessageCount = m_DebugInfoQueue->GetNumStoredMessages();
+    const uint64_t MessageCount = DX11DebugInfoQueue->GetNumStoredMessages();
     for (uint64_t MsgIndex = 0; MsgIndex < MessageCount; MsgIndex++)
     {
         SIZE_T MessageSize = 0;
-        m_DebugInfoQueue->GetMessage(MsgIndex, nullptr, &MessageSize);
+        DX11DebugInfoQueue->GetMessage(MsgIndex, nullptr, &MessageSize);
         std::unique_ptr<D3D11_MESSAGE> Message;
         Message.reset(static_cast<D3D11_MESSAGE*>(malloc(MessageSize)));  // NOLINT
-        HRESULT const Result = m_DebugInfoQueue->GetMessage(MsgIndex, Message.get(), &MessageSize);
+        HRESULT const Result =
+            DX11DebugInfoQueue->GetMessage(MsgIndex, Message.get(), &MessageSize);
         assert(!FAILED(Result));
         if (Message == nullptr)
         {
@@ -76,7 +77,7 @@ std::string rndr::GraphicsContext::WindowsGetErrorMessage(HRESULT ErrorCode)
         Rtn += "\n";
     }
 
-    m_DebugInfoQueue->ClearStoredMessages();
+    DX11DebugInfoQueue->ClearStoredMessages();
 #else
     RNDR_UNUSED(ErrorCode);
 #endif  // RNDR_DEBUG
@@ -92,20 +93,20 @@ bool rndr::GraphicsContext::WindowsHasFailed(HRESULT ErrorCode)
     }
 
 #if RNDR_DEBUG
-    if (m_DebugInfoQueue == nullptr)
+    if (DX11DebugInfoQueue == nullptr)
     {
         return false;
     }
 
     bool BStatus = false;
-    UINT64 const MessageCount = m_DebugInfoQueue->GetNumStoredMessages();
+    UINT64 const MessageCount = DX11DebugInfoQueue->GetNumStoredMessages();
     for (UINT64 I = 0; I < MessageCount; I++)
     {
         SIZE_T MessageSize = 0;
-        m_DebugInfoQueue->GetMessage(I, nullptr, &MessageSize);
+        DX11DebugInfoQueue->GetMessage(I, nullptr, &MessageSize);
         std::unique_ptr<D3D11_MESSAGE> Message;
         Message.reset(static_cast<D3D11_MESSAGE*>(malloc(MessageSize)));  // NOLINT
-        HRESULT const Result = m_DebugInfoQueue->GetMessage(I, Message.get(), &MessageSize);
+        HRESULT const Result = DX11DebugInfoQueue->GetMessage(I, Message.get(), &MessageSize);
         assert(!FAILED(Result));
         if (Message == nullptr)
         {
@@ -129,16 +130,16 @@ bool rndr::GraphicsContext::WindowsHasFailed(HRESULT ErrorCode)
 
 rndr::GraphicsContext::~GraphicsContext()
 {
-    m_DeviceContext->ClearState();
-    m_DeviceContext->Flush();
+    DX11DeviceContext->ClearState();
+    DX11DeviceContext->Flush();
 
-    DX11SafeRelease(m_Device);
-    DX11SafeRelease(m_DeviceContext);
+    DX11SafeRelease(DX11Device);
+    DX11SafeRelease(DX11DeviceContext);
 
 #if RNDR_DEBUG
-    if (m_DebugInfoQueue != nullptr)
+    if (DX11DebugInfoQueue != nullptr)
     {
-        DX11SafeRelease(m_DebugInfoQueue);
+        DX11SafeRelease(DX11DebugInfoQueue);
     }
 #endif  // RNDR_DEBUG
 }
@@ -171,7 +172,7 @@ bool rndr::GraphicsContext::Init(GraphicsContextProperties Props)
     HRESULT Result =
         D3D11CreateDevice(Adapter, D3D_DRIVER_TYPE_HARDWARE, SoftwareRasterizerModule, Flags,
                           FeatureLevels.data(), static_cast<uint32_t>(FeatureLevels.size()),
-                          D3D11_SDK_VERSION, &m_Device, &m_FeatureLevel, &m_DeviceContext);
+                          D3D11_SDK_VERSION, &DX11Device, &DX11FeatureLevel, &DX11DeviceContext);
     if (WindowsHasFailed(Result))
     {
         std::string const ErrorMessage = WindowsGetErrorMessage(Result);
@@ -179,14 +180,14 @@ bool rndr::GraphicsContext::Init(GraphicsContextProperties Props)
         return false;
     }
 
-    if (!m_Props.EnableDebugLayer)
+    if (!Props.EnableDebugLayer)
     {
         return true;
     }
 
 #if RNDR_DEBUG
-    Result = m_Device->QueryInterface(__uuidof(ID3D11InfoQueue),
-                                      reinterpret_cast<void**>(&m_DebugInfoQueue));
+    Result = DX11Device->QueryInterface(__uuidof(ID3D11InfoQueue),
+                                        reinterpret_cast<void**>(&DX11DebugInfoQueue));
     if (WindowsHasFailed(Result))
     {
         std::string const ErrorMessage = WindowsGetErrorMessage(Result);
@@ -196,21 +197,6 @@ bool rndr::GraphicsContext::Init(GraphicsContextProperties Props)
 #endif  // RNDR_DEBUG
 
     return true;
-}
-
-ID3D11Device* rndr::GraphicsContext::GetDevice()
-{
-    return m_Device;
-}
-
-ID3D11DeviceContext* rndr::GraphicsContext::GetDeviceContext()
-{
-    return m_DeviceContext;
-}
-
-D3D_FEATURE_LEVEL rndr::GraphicsContext::GetFeatureLevel()
-{
-    return m_FeatureLevel;
 }
 
 template <typename GraphicsObjectType, typename... Args>
@@ -348,7 +334,7 @@ void rndr::GraphicsContext::ClearColor(Image* Image, math::Vector4 Color)
         RNDR_LOG_ERROR("GraphicsContext::ClearColor: Invalid image!");
         return;
     }
-    m_DeviceContext->ClearRenderTargetView(Image->DX11RenderTargetView, Color.Data);
+    DX11DeviceContext->ClearRenderTargetView(Image->DX11RenderTargetView, Color.Data);
     if (WindowsHasFailed())
     {
         const std::string ErrorMessage = WindowsGetErrorMessage();
@@ -363,8 +349,8 @@ void rndr::GraphicsContext::ClearDepth(Image* Image, real Depth)
         RNDR_LOG_ERROR("GraphicsContext::ClearDepth: Invalid image!");
         return;
     }
-    m_DeviceContext->ClearDepthStencilView(Image->DX11DepthStencilView, D3D11_CLEAR_DEPTH, Depth,
-                                           0);
+    DX11DeviceContext->ClearDepthStencilView(Image->DX11DepthStencilView, D3D11_CLEAR_DEPTH, Depth,
+                                             0);
 }
 
 void rndr::GraphicsContext::ClearStencil(Image* Image, uint8_t Stencil)
@@ -374,8 +360,8 @@ void rndr::GraphicsContext::ClearStencil(Image* Image, uint8_t Stencil)
         RNDR_LOG_ERROR("GraphicsContext::ClearStencil: Invalid image!");
         return;
     }
-    m_DeviceContext->ClearDepthStencilView(Image->DX11DepthStencilView, D3D11_CLEAR_STENCIL, 0,
-                                           Stencil);
+    DX11DeviceContext->ClearDepthStencilView(Image->DX11DepthStencilView, D3D11_CLEAR_STENCIL, 0,
+                                             Stencil);
 }
 
 void rndr::GraphicsContext::ClearDepthStencil(Image* Image, real Depth, uint8_t Stencil)
@@ -385,8 +371,8 @@ void rndr::GraphicsContext::ClearDepthStencil(Image* Image, real Depth, uint8_t 
         RNDR_LOG_ERROR("GraphicsContext::ClearDepthStencil: Invalid image!");
         return;
     }
-    m_DeviceContext->ClearDepthStencilView(Image->DX11DepthStencilView,
-                                           D3D11_CLEAR_DEPTH | D3D11_CLEAR_STENCIL, Depth, Stencil);
+    DX11DeviceContext->ClearDepthStencilView(
+        Image->DX11DepthStencilView, D3D11_CLEAR_DEPTH | D3D11_CLEAR_STENCIL, Depth, Stencil);
 }
 
 void rndr::GraphicsContext::BindShader(Shader* Shader)
@@ -395,16 +381,16 @@ void rndr::GraphicsContext::BindShader(Shader* Shader)
     {
         case ShaderType::Vertex:
         {
-            m_DeviceContext->VSSetShader(Shader->DX11VertexShader, nullptr, 0);
+            DX11DeviceContext->VSSetShader(Shader->DX11VertexShader, nullptr, 0);
             break;
         }
         case ShaderType::Fragment:
         {
-            m_DeviceContext->PSSetShader(Shader->DX11FragmentShader, nullptr, 0);
+            DX11DeviceContext->PSSetShader(Shader->DX11FragmentShader, nullptr, 0);
             break;
         }
         case ShaderType::Compute:
-            m_DeviceContext->CSSetShader(Shader->DX11ComputeShader, nullptr, 0);
+            DX11DeviceContext->CSSetShader(Shader->DX11ComputeShader, nullptr, 0);
             break;
         default:
         {
@@ -422,12 +408,12 @@ void rndr::GraphicsContext::BindImageAsShaderResource(Image* Image, int Slot, Sh
     {
         case ShaderType::Vertex:
         {
-            m_DeviceContext->VSSetShaderResources(Slot, 1, &Image->DX11ShaderResourceView);
+            DX11DeviceContext->VSSetShaderResources(Slot, 1, &Image->DX11ShaderResourceView);
             break;
         }
         case ShaderType::Fragment:
         {
-            m_DeviceContext->PSSetShaderResources(Slot, 1, &Image->DX11ShaderResourceView);
+            DX11DeviceContext->PSSetShaderResources(Slot, 1, &Image->DX11ShaderResourceView);
             break;
         }
         default:
@@ -446,12 +432,12 @@ void rndr::GraphicsContext::BindSampler(Sampler* Sampler, int Slot, Shader* Shad
     {
         case ShaderType::Vertex:
         {
-            m_DeviceContext->VSSetSamplers(Slot, 1, &Sampler->DX11State);
+            DX11DeviceContext->VSSetSamplers(Slot, 1, &Sampler->DX11State);
             break;
         }
         case ShaderType::Fragment:
         {
-            m_DeviceContext->PSSetSamplers(Slot, 1, &Sampler->DX11State);
+            DX11DeviceContext->PSSetSamplers(Slot, 1, &Sampler->DX11State);
             break;
         }
         default:
@@ -469,12 +455,12 @@ void rndr::GraphicsContext::BindBuffer(Buffer* Buffer, int Slot, Shader* Shader)
         {
             case ShaderType::Vertex:
             {
-                m_DeviceContext->VSSetConstantBuffers(Slot, 1, &Buffer->DX11Buffer);
+                DX11DeviceContext->VSSetConstantBuffers(Slot, 1, &Buffer->DX11Buffer);
                 break;
             }
             case ShaderType::Fragment:
             {
-                m_DeviceContext->PSSetConstantBuffers(Slot, 1, &Buffer->DX11Buffer);
+                DX11DeviceContext->PSSetConstantBuffers(Slot, 1, &Buffer->DX11Buffer);
                 break;
             }
             default:
@@ -490,13 +476,13 @@ void rndr::GraphicsContext::BindBuffer(Buffer* Buffer, int Slot, Shader* Shader)
         assert(Buffer->Props.Stride == 4 || Buffer->Props.Stride == 2);
         DXGI_FORMAT const Format =
             Buffer->Props.Stride == 4 ? DXGI_FORMAT_R32_UINT : DXGI_FORMAT_R16_UINT;
-        m_DeviceContext->IASetIndexBuffer(Buffer->DX11Buffer, Format, 0);
+        DX11DeviceContext->IASetIndexBuffer(Buffer->DX11Buffer, Format, 0);
     }
     else
     {
         const uint32_t Stride = Buffer->Props.Stride;
         const uint32_t Offset = 0;
-        m_DeviceContext->IASetVertexBuffers(Slot, 1, &Buffer->DX11Buffer, &Stride, &Offset);
+        DX11DeviceContext->IASetVertexBuffers(Slot, 1, &Buffer->DX11Buffer, &Stride, &Offset);
     }
 }
 
@@ -521,31 +507,31 @@ void rndr::GraphicsContext::BindFrameBuffer(FrameBuffer* FrameBuffer)
         RenderTargetViews[I] = FrameBuffer->ColorBuffers[I]->DX11RenderTargetView;
     }
 
-    m_DeviceContext->OMSetRenderTargets(RenderTargetCount, RenderTargetViews.data(),
-                                        DepthStencilView);
-    m_DeviceContext->RSSetViewports(1, &FrameBuffer->DX11Viewport);
+    DX11DeviceContext->OMSetRenderTargets(RenderTargetCount, RenderTargetViews.data(),
+                                          DepthStencilView);
+    DX11DeviceContext->RSSetViewports(1, &FrameBuffer->DX11Viewport);
 }
 
 void rndr::GraphicsContext::BindInputLayout(InputLayout* InputLayout)
 {
-    m_DeviceContext->IASetInputLayout(InputLayout->DX11InputLayout);
+    DX11DeviceContext->IASetInputLayout(InputLayout->DX11InputLayout);
 }
 
 void rndr::GraphicsContext::BindRasterizerState(RasterizerState* State)
 {
-    m_DeviceContext->RSSetState(State->DX11RasterizerState);
+    DX11DeviceContext->RSSetState(State->DX11RasterizerState);
 }
 
 void rndr::GraphicsContext::BindDepthStencilState(DepthStencilState* State)
 {
-    m_DeviceContext->OMSetDepthStencilState(State->DX11DepthStencilState,
-                                            State->Props.StencilRefValue);
+    DX11DeviceContext->OMSetDepthStencilState(State->DX11DepthStencilState,
+                                              State->Props.StencilRefValue);
 }
 
 void rndr::GraphicsContext::BindBlendState(BlendState* State)
 {
     constexpr uint32_t kUpdateAllSamples = 0xFFFFFFFF;
-    m_DeviceContext->OMSetBlendState(State->DX11BlendState, nullptr, kUpdateAllSamples);
+    DX11DeviceContext->OMSetBlendState(State->DX11BlendState, nullptr, kUpdateAllSamples);
 }
 
 void rndr::GraphicsContext::BindPipeline(Pipeline* Pipeline)
@@ -560,8 +546,8 @@ void rndr::GraphicsContext::BindPipeline(Pipeline* Pipeline)
 
 void rndr::GraphicsContext::DrawIndexed(PrimitiveTopology Topology, int IndicesCount)
 {
-    m_DeviceContext->IASetPrimitiveTopology(DX11FromPrimitiveTopology(Topology));
-    m_DeviceContext->DrawIndexed(IndicesCount, 0, 0);
+    DX11DeviceContext->IASetPrimitiveTopology(DX11FromPrimitiveTopology(Topology));
+    DX11DeviceContext->DrawIndexed(IndicesCount, 0, 0);
 }
 
 void rndr::GraphicsContext::DrawIndexedInstanced(PrimitiveTopology Topology,
@@ -570,16 +556,16 @@ void rndr::GraphicsContext::DrawIndexedInstanced(PrimitiveTopology Topology,
                                                  uint32_t IndexOffset,
                                                  uint32_t InstanceOffset)
 {
-    m_DeviceContext->IASetPrimitiveTopology(DX11FromPrimitiveTopology(Topology));
-    m_DeviceContext->DrawIndexedInstanced(IndexCount, InstanceCount, IndexOffset, 0,
-                                          InstanceOffset);
+    DX11DeviceContext->IASetPrimitiveTopology(DX11FromPrimitiveTopology(Topology));
+    DX11DeviceContext->DrawIndexedInstanced(IndexCount, InstanceCount, IndexOffset, 0,
+                                            InstanceOffset);
 }
 
 void rndr::GraphicsContext::Dispatch(const uint32_t ThreadGroupCountX,
                                      const uint32_t ThreadGroupCountY,
                                      const uint32_t ThreadGroupCountZ)
 {
-    m_DeviceContext->Dispatch(ThreadGroupCountX, ThreadGroupCountY, ThreadGroupCountZ);
+    DX11DeviceContext->Dispatch(ThreadGroupCountX, ThreadGroupCountY, ThreadGroupCountZ);
 }
 
 bool rndr::GraphicsContext::SubmitCommandList(CommandList* List)
@@ -595,7 +581,7 @@ bool rndr::GraphicsContext::SubmitCommandList(CommandList* List)
             "object!");
         return false;
     }
-    m_DeviceContext->ExecuteCommandList(List->DX11CommandList, 0);
+    DX11DeviceContext->ExecuteCommandList(List->DX11CommandList, 0);
     if (WindowsHasFailed())
     {
         const std::string ErrorMessage = WindowsGetErrorMessage();

@@ -28,7 +28,8 @@ struct Sampler
     Sampler(Sampler&& Other) = delete;
     Sampler& operator=(Sampler&& Other) = delete;
 
-    bool Init(rndr::GraphicsContext* Context, const SamplerProperties& InProps = SamplerProperties{});
+    bool Init(rndr::GraphicsContext* Context,
+              const SamplerProperties& InProps = SamplerProperties{});
 };
 
 }  // namespace rndr

@@ -105,7 +105,7 @@ bool rndr::Shader::Init(GraphicsContext* Context,
     Props = InProps;
 
     ID3DBlob* ErrorMessage = nullptr;
-    const char* Model = GetShaderModel(Context->GetFeatureLevel(), Props.Type);
+    const char* Model = GetShaderModel(Context->DX11FeatureLevel, Props.Type);
 
     UINT Flags = D3DCOMPILE_ENABLE_STRICTNESS;
 #if RNDR_DEBUG
@@ -137,7 +137,7 @@ bool rndr::Shader::Init(GraphicsContext* Context,
         return false;
     }
 
-    ID3D11Device* Device = Context->GetDevice();
+    ID3D11Device* Device = Context->DX11Device;
     switch (Props.Type)
     {
         case ShaderType::Vertex:

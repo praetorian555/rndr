@@ -149,7 +149,7 @@ bool rndr::Image::InitInternal(GraphicsContext* Context,
         }
     }
 
-    ID3D11Device* Device = Context->GetDevice();
+    ID3D11Device* Device = Context->DX11Device;
     HRESULT Result = S_OK;
 
     if (SwapChain == nullptr)
@@ -345,7 +345,7 @@ bool rndr::Image::Update(GraphicsContext* Context,
         return false;
     }
 
-    ID3D11DeviceContext* DeviceContext = Context->GetDeviceContext();
+    ID3D11DeviceContext* DeviceContext = Context->DX11DeviceContext;
     const uint32_t SubresourceIndex = D3D11CalcSubresource(0, ArrayIndex, 1);
     if (Context->WindowsHasFailed())
     {
@@ -452,7 +452,7 @@ bool rndr::Image::Read(GraphicsContext* Context,
         return false;
     }
 
-    ID3D11DeviceContext* DeviceContext = Context->GetDeviceContext();
+    ID3D11DeviceContext* DeviceContext = Context->DX11DeviceContext;
     const uint32_t SubresourceIndex = D3D11CalcSubresource(0, ArrayIndex, 1);
     if (Context->WindowsHasFailed())
     {
@@ -505,7 +505,7 @@ bool rndr::Image::Copy(GraphicsContext* Context, Image* Src, Image* Dest)
         return false;
     }
 
-    ID3D11DeviceContext* DeviceContext = Context->GetDeviceContext();
+    ID3D11DeviceContext* DeviceContext = Context->DX11DeviceContext;
     DeviceContext->CopyResource(Dest->DX11Texture, Src->DX11Texture);
     if (Context->WindowsHasFailed())
     {

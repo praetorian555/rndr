@@ -5,8 +5,8 @@
 
 #if RNDR_DX11
 
-#include "rndr/render/graphicstypes.h"
 #include "rndr/render/framebuffer.h"
+#include "rndr/render/graphicstypes.h"
 
 struct IDXGISwapChain;
 

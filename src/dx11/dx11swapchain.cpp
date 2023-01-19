@@ -26,7 +26,7 @@ bool rndr::SwapChain::Init(GraphicsContext* Context,
     Width = InWidth;
     Height = InHeight;
 
-    HWND WindowHandle = reinterpret_cast<HWND>(Handle); // NOLINT
+    HWND WindowHandle = reinterpret_cast<HWND>(Handle);  // NOLINT
     if (IsWindow(WindowHandle) == 0)
     {
         RNDR_LOG_ERROR("SwapChain::Init: Native window handle is invalid!");
@@ -48,8 +48,8 @@ bool rndr::SwapChain::Init(GraphicsContext* Context,
     SwapChainDesc.SampleDesc.Quality = 0;
 
     IDXGIDevice* DXGIDevice = nullptr;
-    HRESULT Result = Context->GetDevice()->QueryInterface(__uuidof(IDXGIDevice),
-                                                          reinterpret_cast<void**>(&DXGIDevice));
+    HRESULT Result = Context->DX11Device->QueryInterface(__uuidof(IDXGIDevice),
+                                                         reinterpret_cast<void**>(&DXGIDevice));
     if (Context->WindowsHasFailed(Result))
     {
         const std::string ErrorMessage = Context->WindowsGetErrorMessage(Result);
@@ -75,7 +75,7 @@ bool rndr::SwapChain::Init(GraphicsContext* Context,
         return false;
     }
 
-    Result = DXGIFactory->CreateSwapChain(Context->GetDevice(), &SwapChainDesc, &DX11SwapChain);
+    Result = DXGIFactory->CreateSwapChain(Context->DX11Device, &SwapChainDesc, &DX11SwapChain);
     if (FAILED(Result))
     {
         const std::string ErrorMessage = Context->WindowsGetErrorMessage(Result);

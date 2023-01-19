@@ -40,8 +40,7 @@ bool rndr::Buffer::Init(GraphicsContext* Context,
     DescData.SysMemPitch = 0;
     DescData.SysMemSlicePitch = 0;
     D3D11_SUBRESOURCE_DATA* DescDataPtr = InitialData ? &DescData : nullptr;
-    ID3D11Device* Device = Context->GetDevice();
-    const HRESULT Result = Device->CreateBuffer(&Desc, DescDataPtr, &DX11Buffer);
+    const HRESULT Result = Context->DX11Device->CreateBuffer(&Desc, DescDataPtr, &DX11Buffer);
     if (Context->WindowsHasFailed(Result))
     {
         const std::string ErrorMessage = Context->WindowsGetErrorMessage();
@@ -75,7 +74,7 @@ bool rndr::Buffer::Update(GraphicsContext* Context, ByteSpan Data, uint32_t Star
         return false;
     }
 
-    ID3D11DeviceContext* DeviceContext = Context->GetDeviceContext();
+    ID3D11DeviceContext* DeviceContext = Context->DX11DeviceContext;
     if (Props.Usage == Usage::Dynamic)
     {
         D3D11_MAPPED_SUBRESOURCE Subresource;
@@ -150,7 +149,7 @@ bool rndr::Buffer::Read(rndr::GraphicsContext* Context, ByteSpan OutData, uint32
         return false;
     }
 
-    ID3D11DeviceContext* DeviceContext = Context->GetDeviceContext();
+    ID3D11DeviceContext* DeviceContext = Context->DX11DeviceContext;
     D3D11_MAPPED_SUBRESOURCE Subresource;
     const HRESULT Result = DeviceContext->Map(DX11Buffer, 0, D3D11_MAP_READ, 0, &Subresource);
     if (Context->WindowsHasFailed(Result))

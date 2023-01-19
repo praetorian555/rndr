@@ -148,7 +148,7 @@ bool rndr::InputLayout::Init(GraphicsContext* Context,
         InputDescriptors[DescIndex].InstanceDataStepRate = Props[DescIndex].InstanceStepRate;
     }
 
-    ID3D11Device* Device = Context->GetDevice();
+    ID3D11Device* Device = Context->DX11Device;
     const HRESULT Result =
         Device->CreateInputLayout(InputDescriptors.data(), static_cast<uint32_t>(Props.Size),
                                   Shader->DX11ShaderBuffer->GetBufferPointer(),
@@ -194,7 +194,7 @@ bool rndr::RasterizerState::Init(GraphicsContext* Context, const RasterizerPrope
     RasterizerDesc.AntialiasedLineEnable = static_cast<int>(Props.AntialiasedLineEnable);
     RasterizerDesc.ScissorEnable = static_cast<int>(Props.ScissorEnable);
     RasterizerDesc.MultisampleEnable = static_cast<int>(Props.ScissorEnable);
-    ID3D11Device* Device = Context->GetDevice();
+    ID3D11Device* Device = Context->DX11Device;
     const HRESULT Result = Device->CreateRasterizerState(&RasterizerDesc, &DX11RasterizerState);
     if (Context->WindowsHasFailed(Result))
     {
@@ -240,7 +240,7 @@ bool rndr::DepthStencilState::Init(GraphicsContext* Context, const DepthStencilP
         DX11FromStencilOperation(Props.StencilFrontFaceDepthFailOp);
     DepthStencilDesc.FrontFace.StencilPassOp =
         DX11FromStencilOperation(Props.StencilFrontFacePassOp);
-    ID3D11Device* Device = Context->GetDevice();
+    ID3D11Device* Device = Context->DX11Device;
     const HRESULT Result =
         Device->CreateDepthStencilState(&DepthStencilDesc, &DX11DepthStencilState);
     if (Context->WindowsHasFailed(Result))
@@ -280,7 +280,7 @@ bool rndr::BlendState::Init(GraphicsContext* Context, const BlendProperties& InP
     BlendDesc.RenderTarget[0].SrcBlendAlpha = DX11FromBlendFactor(Props.SrcAlphaFactor);
     BlendDesc.RenderTarget[0].DestBlendAlpha = DX11FromBlendFactor(Props.DstAlphaFactor);
     BlendDesc.RenderTarget[0].BlendOpAlpha = DX11FromBlendOperator(Props.AlphaOperator);
-    ID3D11Device* Device = Context->GetDevice();
+    ID3D11Device* Device = Context->DX11Device;
     const HRESULT Result = Device->CreateBlendState(&BlendDesc, &DX11BlendState);
     if (Context->WindowsHasFailed(Result))
     {

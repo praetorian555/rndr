@@ -18,7 +18,7 @@
 
 bool rndr::CommandList::Init(GraphicsContext* Context)
 {
-    ID3D11Device* DX11Device = Context->GetDevice();
+    ID3D11Device* DX11Device = Context->DX11Device;
     assert(DX11Device);
 
     const HRESULT Result = DX11Device->CreateDeferredContext(0, &DX11DeferredContext);

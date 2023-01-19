@@ -27,7 +27,7 @@ struct InputLayoutBuilder
 
     InputLayoutBuilder(const InputLayoutBuilder& Other) = default;
     InputLayoutBuilder& operator=(const InputLayoutBuilder& Other) = default;
-    
+
     InputLayoutBuilder(InputLayoutBuilder&& Other) = default;
     InputLayoutBuilder& operator=(InputLayoutBuilder&& Other) = default;
 
@@ -94,7 +94,7 @@ struct DepthStencilState
     DepthStencilProperties Props;
 
     ID3D11DepthStencilState* DX11DepthStencilState;
-    
+
     DepthStencilState() = default;
     ~DepthStencilState();
 

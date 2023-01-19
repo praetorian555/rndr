@@ -38,6 +38,16 @@ class ScopePtr;
 class GraphicsContext
 {
 public:
+    ID3D11Device* DX11Device = nullptr;
+    ID3D11DeviceContext* DX11DeviceContext = nullptr;
+    D3D_FEATURE_LEVEL DX11FeatureLevel;
+
+#if RNDR_DEBUG
+    ID3D11InfoQueue* DX11DebugInfoQueue = nullptr;
+    int DX11DebugLastMessageId = 0;
+#endif  // RNDR_DEBUG
+
+public:
     GraphicsContext() = default;
     ~GraphicsContext();
 
@@ -48,10 +58,6 @@ public:
     GraphicsContext& operator=(GraphicsContext&& Other) = delete;
 
     bool Init(GraphicsContextProperties Props = GraphicsContextProperties{});
-
-    ID3D11Device* GetDevice();
-    ID3D11DeviceContext* GetDeviceContext();
-    D3D_FEATURE_LEVEL GetFeatureLevel();
 
     ScopePtr<SwapChain> CreateSwapChain(NativeWindowHandle WindowHandle,
                                         int Width,
@@ -126,15 +132,6 @@ public:
 
 private:
     GraphicsContextProperties m_Props;
-
-    ID3D11Device* m_Device = nullptr;
-    ID3D11DeviceContext* m_DeviceContext = nullptr;
-    D3D_FEATURE_LEVEL m_FeatureLevel;
-
-#if RNDR_DEBUG
-    ID3D11InfoQueue* m_DebugInfoQueue = nullptr;
-    int m_DebugLastMessageId = 0;
-#endif  // RNDR_DEBUG
 };
 
 }  // namespace rndr
