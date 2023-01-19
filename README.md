@@ -13,7 +13,7 @@ To setup this project you will need:
 * _CMake_ version 3.20 or heigher.
 * Any version of _Visual Studio_ and _MSVC_ compiler.
 
-Optionally you should install _clang-format_ and _clang-tidy_ and add them to the path.
+Optionally you should install _clang-format_ and add it to the path.
 
 ## Setup ##
 
@@ -34,14 +34,13 @@ To build project using the cmake from command line:
 
 	cmake --build <path_to_build_dir> --config <config_name>
 
-If you installed the _clang-format_ and _clang-tidy_ tools you will have access to clang-format and clang-tidy targets. They can be run either by building them in IDE or with following directive in command-line:
+If you installed the _clang-format_ tool you will have access to _clang-format_ and target. It can be run either by building it in IDE or with following directive in command-line:
 
 	cmake --build <build_dir> --target clang-format
-	cmake --build <build_dir> --target clang-tidy
 
-The clang-format target will apply formatting to all files under apps, include and src folders. To see the rules applied take a look at .clang-format file at the project's root.
+The _clang-format_ target will apply formatting to all files under apps, include and src folders. To see the rules applied take a look at .clang-format file at the project's root.
 
-The clang-tidy target will apply static-code analysis on all cpp and c files in the src folder. This part is still in development and the final set of rules to be used is not determined. 
+Project also has .clang-tidy file to be used with _clang-tidy_ tool in your favourite IDE. 
 
 If you are using MSVC compiler you can use address sanitizer tool by setting the RNDR_SANITIZER flag when invoking the cmake command:
 
