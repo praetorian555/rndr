@@ -28,6 +28,9 @@ public:
 
         m_Renderer->AddFont("Liberation Sans", BASIC2D_ASSET_DIR "/LiberationSans-Regular.ttf");
         m_Renderer->AddFont("Yu Mincho", BASIC2D_ASSET_DIR "/yumin.ttf");
+
+        m_ImGui.Reset(rndr::New<rndr::ImGuiWrapper>("ImGuiWrapper"));
+        m_ImGui->Init(m_Window.GetRef(), m_GraphicsCtx.GetRef());
     }
 
     ~App() = default;
@@ -81,6 +84,10 @@ public:
                                    Props);
 
             m_Renderer->Present(m_SwapChain->FrameBuffer.Get());
+
+            m_ImGui->StartFrame();
+            m_ImGui->Render();
+
             m_GraphicsCtx->Present(m_SwapChain.Get(), true);
         }
     }
@@ -97,6 +104,7 @@ private:
     rndr::ScopePtr<rndr::GraphicsContext> m_GraphicsCtx;
     rndr::ScopePtr<rndr::Window> m_Window;
     rndr::ScopePtr<rndr::SwapChain> m_SwapChain;
+    rndr::ScopePtr<rndr::ImGuiWrapper> m_ImGui;
 
     std::unique_ptr<Renderer> m_Renderer;
 

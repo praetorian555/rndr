@@ -6,19 +6,18 @@ project(
 	DESCRIPTION "Example C++ Project using CMake"
 	LANGUAGES CXX)
 
-# Include utils script
-include(cmake/utils.cmake)
-
 # Library options
 option(RNDR_UNITY "Enable unity builds" ON)
 option(RNDR_SANITIZER "Enable address sanitizer" ON)
 option(RNDR_DX11 "Use DX11 API" ON)
 option(RNDR_SPDLOG "Use spdlog external library to implement default logging" ON)
+option(RNDR_IMGUI "Add imgui wrapper which can be used for development GUI" ON)
 
 message(STATUS "RNDR_UNITY ${RNDR_UNITY}")
 message(STATUS "RNDR_SANITIZER ${RNDR_SANITIZER}")
 message(STATUS "RNDR_DX11 ${RNDR_DX11}")
 message(STATUS "RNDR_SPDLOG ${RNDR_SPDLOG}")
+message(STATUS "RNDR_IMGUI ${RNDR_IMGUI}")
 
 # Only do these if this is the main project, and not if it is included through add_subdirectory
 if (CMAKE_PROJECT_NAME STREQUAL PROJECT_NAME)

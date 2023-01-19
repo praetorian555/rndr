@@ -20,6 +20,11 @@ target_compile_definitions(rndr PUBLIC RNDR_SPDLOG)
 target_link_libraries(rndr PUBLIC spdlog::spdlog)
 endif()
 
+if (RNDR_IMGUI)
+target_compile_definitions(rndr PUBLIC RNDR_IMGUI)
+target_link_libraries(rndr PUBLIC imgui)
+endif()
+
 # Setup library dependencies
 target_link_libraries(rndr PUBLIC stb_image)
 target_link_libraries(rndr PUBLIC stb_truetype)
