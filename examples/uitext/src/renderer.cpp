@@ -195,10 +195,12 @@ bool Renderer::Present(rndr::FrameBuffer* FrameBuffer)
     m_Ctx->BindFrameBuffer(FrameBuffer);
 
     m_Ctx->BindBuffer(m_ShadowBuffer.Get(), 0);
-    m_Ctx->DrawIndexedInstanced(rndr::PrimitiveTopology::TriangleList, 6, static_cast<uint32_t>(m_Shadows.size()));
+    m_Ctx->DrawIndexedInstanced(rndr::PrimitiveTopology::TriangleList, 6,
+                                static_cast<uint32_t>(m_Shadows.size()));
 
     m_Ctx->BindBuffer(m_InstanceBuffer.Get(), 0);
-    m_Ctx->DrawIndexedInstanced(rndr::PrimitiveTopology::TriangleList, 6, static_cast<uint32_t>(m_Instances.size()));
+    m_Ctx->DrawIndexedInstanced(rndr::PrimitiveTopology::TriangleList, 6,
+                                static_cast<uint32_t>(m_Instances.size()));
 
     m_Instances.clear();
     m_Shadows.clear();

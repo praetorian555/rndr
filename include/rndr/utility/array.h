@@ -13,4 +13,4 @@ using Array = std::vector<T, StandardAllocatorWrapper<T>>;
 
 using ByteArray = Array<uint8_t>;
 
-}
+}  // namespace rndr

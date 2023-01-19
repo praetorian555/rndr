@@ -6,7 +6,7 @@
 #include "spdlog/async.h"
 #include "spdlog/sinks/stdout_color_sinks.h"
 #include "spdlog/spdlog.h"
-#endif // RNDR_SPDLOG
+#endif  // RNDR_SPDLOG
 
 #include "rndr/core/rndrcontext.h"
 

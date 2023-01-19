@@ -64,7 +64,6 @@ public:
     [[nodiscard]] const ProjectionCameraProperties& GetProperties() const { return m_Props; }
 
 private:
-
     // Private methods
 
     [[nodiscard]] math::Transform GetProjectionTransform() const;

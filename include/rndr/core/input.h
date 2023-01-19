@@ -78,7 +78,7 @@ public:
 
     InputSystem(const InputSystem& Other) = delete;
     InputSystem& operator=(const InputSystem& Other) = delete;
-    
+
     InputSystem(InputSystem&& Other) = delete;
     InputSystem& operator=(InputSystem&& Other) = delete;
 
@@ -104,7 +104,6 @@ public:
     [[nodiscard]] math::Point2 GetMousePosition() const;
 
 private:
-
     // Private types
 
     struct ButtonEvent
