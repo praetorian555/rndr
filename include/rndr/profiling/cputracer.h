@@ -1,9 +1,16 @@
 #pragma once
 
-#include <string>
 #include <memory>
+#include <string>
 
 #include "rndr/core/base.h"
+
+#ifdef RNDR_SPDLOG
+namespace spdlog
+{
+class logger;
+}
+#endif
 
 namespace rndr
 {
