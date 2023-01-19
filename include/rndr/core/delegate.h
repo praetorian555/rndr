@@ -7,25 +7,32 @@ using DelegateHandle = int;
 
 static constexpr DelegateHandle kInvalidDelegateHandle = -1;
 
-template <typename... Args>
-struct Delegate
+template <typename ReturnType, typename... Args>
+struct Delegate;
+
+template <typename ReturnType, typename... Args>
+struct Delegate<ReturnType(Args...)>
 {
-    using Function = std::function<void(Args...)>;
+    using Function = std::function<ReturnType(Args...)>;
 
     void Set(Function Functor) { m_Functor = Functor; }
 
-    void Execute(Args&&... Arguments)
+    template <typename... ExecArgs>
+    ReturnType Execute(ExecArgs&&... Arguments)
     {
         if (m_Functor)
         {
-            m_Functor(std::forward<Args>(Arguments)...);
+            return m_Functor(std::forward<ExecArgs>(Arguments)...);
         }
+
+        return ReturnType{};
     }
 
 private:
     Function m_Functor;
 };
 
+// TODO(Marko): Create partial specialization like for the Delegate template
 template <typename... Args>
 struct MultiDelegate
 {
@@ -52,12 +59,12 @@ struct MultiDelegate
         }
     }
 
-    template <typename... Args2>
-    void Execute(Args2&&... Arguments)
+    template <typename... ExecArgs>
+    void Execute(ExecArgs&&... Arguments)
     {
         for (auto& Pair : m_Functors)
         {
-            Pair.second(std::forward<Args2>(Arguments)...);
+            Pair.second(std::forward<ExecArgs>(Arguments)...);
         }
     }
 
