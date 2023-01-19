@@ -214,6 +214,15 @@ LRESULT CALLBACK WindowProc(HWND WindowHandle, UINT MsgCode, WPARAM ParamW, LPAR
     const LONG_PTR WindowPtr = GetWindowLongPtr(WindowHandle, GWLP_USERDATA);
     rndr::Window* Window = reinterpret_cast<rndr::Window*>(WindowPtr);
 
+    if (Window != nullptr)
+    {
+        rndr::Window::NativeWindowEventDelegate Delegate = Window->GetNativeWindowEventDelegate();
+        if (Delegate.Execute(Window->GetNativeWindowHandle(), MsgCode, ParamW, ParamL))
+        {
+            return true;
+        }
+    }
+
     switch (MsgCode)
     {
         case WM_CREATE:

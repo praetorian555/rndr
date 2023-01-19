@@ -28,6 +28,9 @@ struct WindowProperties
 class Window
 {
 public:
+    using NativeWindowEventDelegate = Delegate<bool(NativeWindowHandle, uint32_t, uint64_t, int64_t)>;
+
+public:
     Window() = default;
     ~Window();
 
@@ -68,13 +71,19 @@ public:
 
     [[nodiscard]] bool IsInfiniteCursor() const { return m_InifiniteCursor; }
 
+    void SetNativeWindowEventDelegate(const NativeWindowEventDelegate& Delegate)
+    {
+        m_OnNativeEvent = Delegate;
+    }
+    NativeWindowEventDelegate& GetNativeWindowEventDelegate() { return m_OnNativeEvent; }
+
 private:
     void Resize(Window* Window, int Width, int Height);
     void ButtonEvent(Window* Window, InputPrimitive Primitive, InputTrigger Trigger);
 
-
     WindowProperties m_Props;
     NativeWindowHandle m_NativeWindowHandle;
+    NativeWindowEventDelegate m_OnNativeEvent;
 
     int m_Width = 0, m_Height = 0;
     bool m_InifiniteCursor = false;
