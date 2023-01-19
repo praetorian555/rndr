@@ -117,10 +117,7 @@ public:
     ScopePtr(const ScopePtr& Other) = delete;
     ScopePtr<T>& operator=(const ScopePtr& Other) = delete;
 
-    ScopePtr(ScopePtr&& Other) noexcept : m_Data(Other.m_Data)
-    {
-        Other.m_Data = nullptr;
-    }
+    ScopePtr(ScopePtr&& Other) noexcept : m_Data(Other.m_Data) { Other.m_Data = nullptr; }
 
     ScopePtr<T>& operator=(ScopePtr&& Other) noexcept
     {
@@ -131,6 +128,7 @@ public:
     }
 
     T* Get() { return m_Data; }
+    T& GetRef() { return *m_Data; }
 
     T& operator*() { return *m_Data; }
     T* operator->() { return m_Data; }
