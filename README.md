@@ -50,7 +50,8 @@ If you are using MSVC compiler you can use address sanitizer tool by setting the
 
 The library currently offers following options for configuration:
 
- * RNDR_UNITY - Enables unity build of the library. By default ON.
- * RNDR_SANITIZER - Enables address sanitizer in the build. By default ON.
- * RNDR_DX11 - Use DX11 as the implementation of the rendering API. By default ON.
- * RNDR_SPDLOG - Use spdlog library as a default logger implementation if user doesn't provide the log callback. By default ON.
+ * _RNDR_UNITY_ - Enables unity build of the library. By default ON.
+ * _RNDR_SANITIZER_ - Enables address sanitizer in the build. By default ON.
+ * _RNDR_DX11_ - Use DX11 as the implementation of the rendering API. By default ON.
+ * _RNDR_SPDLOG_ - Use spdlog library as a default logger implementation if user doesn't provide the log callback. By default ON.
+ * _RNDR_IMGUI_ - Enables ImGuiWrapper class which can be used to render imgui UI. By default ON.
