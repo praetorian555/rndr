@@ -1,5 +1,7 @@
 #include "rndr/utility/imguiwrapper.h"
 
+#ifdef RNDR_IMGUI
+
 #include "backends/imgui_impl_dx11.h"
 #include "backends/imgui_impl_win32.h"
 #include "imgui.h"
@@ -58,14 +60,14 @@ bool rndr::ImGuiWrapper::Init(Window& Window,
     Window.SetNativeWindowEventDelegate(Delegate);
 
     // Setup Platform/Renderer backends
-    const NativeWindowHandle WindowHandle = Window.GetNativeWindowHandle(); // NOLINT
+    const NativeWindowHandle WindowHandle = Window.GetNativeWindowHandle();  // NOLINT
     ImGui_ImplWin32_Init(reinterpret_cast<void*>(WindowHandle));
     ImGui_ImplDX11_Init(Context.DX11Device, Context.DX11DeviceContext);
 
     return true;
 }
 
-bool rndr::ImGuiWrapper::ShutDown() // NOLINT
+bool rndr::ImGuiWrapper::ShutDown()  // NOLINT
 {
     ImGui_ImplDX11_Shutdown();
     ImGui_ImplWin32_Shutdown();
@@ -105,3 +107,5 @@ void rndr::ImGuiWrapper::EndFrame()
     ImGui::Render();
     ImGui_ImplDX11_RenderDrawData(ImGui::GetDrawData());
 }
+
+#endif  // RNDR_IMGUI

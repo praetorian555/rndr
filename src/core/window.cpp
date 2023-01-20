@@ -212,7 +212,7 @@ void rndr::Window::Resize(Window* Window, int Width, int Height)
 LRESULT CALLBACK WindowProc(HWND WindowHandle, UINT MsgCode, WPARAM ParamW, LPARAM ParamL)
 {
     const LONG_PTR WindowPtr = GetWindowLongPtr(WindowHandle, GWLP_USERDATA);
-    rndr::Window* Window = reinterpret_cast<rndr::Window*>(WindowPtr); // NOLINT
+    rndr::Window* Window = reinterpret_cast<rndr::Window*>(WindowPtr);  // NOLINT
 
     if (Window != nullptr)
     {
@@ -229,7 +229,7 @@ LRESULT CALLBACK WindowProc(HWND WindowHandle, UINT MsgCode, WPARAM ParamW, LPAR
         {
             RNDR_LOG_INFO("WindowProc: Event WM_CREATE");
 
-            CREATESTRUCT* CreateStruct = reinterpret_cast<CREATESTRUCT*>(ParamL); // NOLINT
+            CREATESTRUCT* CreateStruct = reinterpret_cast<CREATESTRUCT*>(ParamL);  // NOLINT
             Window = reinterpret_cast<rndr::Window*>(CreateStruct->lpCreateParams);
 
             SetWindowLongPtr(WindowHandle, GWLP_USERDATA, reinterpret_cast<LONG_PTR>(Window));
