@@ -2,9 +2,7 @@
 
 ## About ##
 
-Basic wrapper around different render APIs. Currently supported APIs are:
-
-* DX11
+Basic wrapper around different render APIs. Currently, only __DX11__ is supported.
 
 ## Requirements ##
 
@@ -38,11 +36,11 @@ If you installed the _clang-format_ tool you will have access to _clang-format_ 
 
 	cmake --build <build_dir> --target clang-format
 
-The _clang-format_ target will apply formatting to all files under apps, include and src folders. To see the rules applied take a look at .clang-format file at the project's root.
+The _clang-format_ target will apply formatting to all files under apps, include and src folders. To see the rules applied take a look at _.clang-format_ file at the project's root.
 
-Project also has .clang-tidy file to be used with _clang-tidy_ tool in your favourite IDE. 
+Project also has _.clang-tidy_ file to be used with _clang-tidy_ tool in your favourite IDE. 
 
-If you are using MSVC compiler you can use address sanitizer tool by setting the RNDR_SANITIZER flag when invoking the cmake command:
+If you are using MSVC compiler you can use address sanitizer tool by setting the __RNDR_SANITIZER__ flag when invoking the cmake command:
 
 	cmake -S <path_to_lib_root> -B <build_dir> -DRNDR_SANITIZER=ON
 
@@ -50,8 +48,8 @@ If you are using MSVC compiler you can use address sanitizer tool by setting the
 
 The library currently offers following options for configuration:
 
- * _RNDR_UNITY_ - Enables unity build of the library. By default ON.
- * _RNDR_SANITIZER_ - Enables address sanitizer in the build. By default ON.
- * _RNDR_DX11_ - Use DX11 as the implementation of the rendering API. By default ON.
- * _RNDR_SPDLOG_ - Use spdlog library as a default logger implementation if user doesn't provide the log callback. By default ON.
- * _RNDR_IMGUI_ - Enables ImGuiWrapper class which can be used to render imgui UI. By default ON.
+ * __RNDR_UNITY__ - Enables unity build of the library. By default ON.
+ * __RNDR_SANITIZER__ - Enables address sanitizer in the build. By default ON.
+ * __RNDR_DX11__ - Use DX11 as the implementation of the rendering API. By default ON.
+ * __RNDR_SPDLOG__ - Use spdlog library as a default logger implementation if user doesn't provide the log callback. By default ON.
+ * __RNDR_IMGUI__ - Enables ImGuiWrapper class which can be used to render imgui UI. By default ON.
