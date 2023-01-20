@@ -194,12 +194,10 @@ rndr::InputMapping* rndr::InputContext::CreateMapping(const InputAction& Action,
         Mappings.push_back(Entry{Action, std::move(NewMapping)});
         return Mappings.back().Mapping.get();
     }
-    else
-    {
-        RNDR_LOG_WARNING("InputContext::CreateMapping: Overriding existing mapping entry!");
-        EntryIt->Mapping = std::move(NewMapping);
-        return EntryIt->Mapping.get();
-    }
+
+    RNDR_LOG_WARNING("InputContext::CreateMapping: Overriding existing mapping entry!");
+    EntryIt->Mapping = std::move(NewMapping);
+    return EntryIt->Mapping.get();
 }
 
 void rndr::InputContext::AddBinding(const InputAction& Action,

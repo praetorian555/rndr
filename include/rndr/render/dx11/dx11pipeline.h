@@ -18,7 +18,7 @@ struct ID3D11InputLayout;
 namespace rndr
 {
 
-class GraphicsContext;
+struct GraphicsContext;
 
 struct InputLayoutBuilder
 {

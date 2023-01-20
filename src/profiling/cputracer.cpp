@@ -28,14 +28,14 @@ static uint32_t GetThreadId()
 
 void rndr::CpuTracer::Init()
 {
-    auto now = std::chrono::system_clock::now();
-    auto in_time_t = std::chrono::system_clock::to_time_t(now);
+    auto Now = std::chrono::system_clock::now();
+    auto NowTime = std::chrono::system_clock::to_time_t(Now);
 
-    std::stringstream ss;
-    tm time;
-    localtime_s(&time, &in_time_t);
-    ss << std::put_time(&time, "%d-%m-%Y-%Hh%Mm%Ss");
-    const std::string OutputName = "cputrace/cputrace-" + ss.str() + ".log";
+    std::stringstream Buffer;
+    tm NowTm;
+    localtime_s(&NowTm, &NowTime);
+    Buffer << std::put_time(&NowTm, "%d-%m-%Y-%Hh%Mm%Ss");
+    const std::string OutputName = "cputrace/cputrace-" + Buffer.str() + ".log";
 
 #ifdef RNDR_SPDLOG
     m_Logger = spdlog::create_async<spdlog::sinks::basic_file_sink_mt>("async_cputrace_logger",
@@ -47,14 +47,14 @@ void rndr::CpuTracer::Init()
 
 void rndr::CpuTracer::ShutDown()
 {
-    constexpr int StackStringSize = 4 * 1024;
-    StackArray<char, StackStringSize> Trace;
+    constexpr int kStackStringSize = 4 * 1024;
+    StackArray<char, kStackStringSize> Trace;
     const auto Timestamp = std::chrono::high_resolution_clock::now();
     const int64_t StartUS =
         std::chrono::duration_cast<std::chrono::microseconds>(Timestamp.time_since_epoch()).count();
     const uint32_t ThreadId = GetThreadId();
     const int64_t DurationUS = 0;
-    sprintf_s(Trace.data(), StackStringSize,
+    sprintf_s(Trace.data(), kStackStringSize,
               "{\"name\":\"%s\", \"cat\":\"\", \"ph\":\"X\", \"ts\": %I64d, \"dur\": %I64d, "
               "\"pid\": "
               "0, \"tid\": %u}",
@@ -85,8 +85,8 @@ void rndr::CpuTracer::AddTrace(const std::string& Name,
 #endif  // RNDR_SPDLOG
 }
 
-rndr::CpuTrace::CpuTrace(CpuTracer* Tracer, const std::string& Name)
-    : m_Name(Name), m_Tracer(Tracer)
+rndr::CpuTrace::CpuTrace(CpuTracer* Tracer, std::string Name)
+    : m_Name(std::move(Name)), m_Tracer(Tracer)
 {
     const auto Timestamp = std::chrono::high_resolution_clock::now();
 

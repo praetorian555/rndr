@@ -110,7 +110,7 @@ bool rndr::Window::Init(int Width, int Height, const WindowProperties& Props)
 
     ShowWindow(WindowHandle, SW_SHOW);
 
-    m_NativeWindowHandle = reinterpret_cast<uintptr_t>(WindowHandle);
+    m_NativeWindowHandle = reinterpret_cast<void*>(WindowHandle);
 
     return true;
 }
@@ -129,7 +129,7 @@ void rndr::Window::ProcessEvents() const
 
 bool rndr::Window::IsClosed() const
 {
-    return m_NativeWindowHandle == 0;
+    return m_NativeWindowHandle == nullptr;
 }
 
 void rndr::Window::Close()
@@ -140,7 +140,7 @@ void rndr::Window::Close()
     {
         RNDR_LOG_WARNING("Window::Close: Failed to destroy the native window!");
     }
-    m_NativeWindowHandle = 0;
+    m_NativeWindowHandle = nullptr;
 }
 
 rndr::NativeWindowHandle rndr::Window::GetNativeWindowHandle() const
@@ -212,14 +212,14 @@ void rndr::Window::Resize(Window* Window, int Width, int Height)
 LRESULT CALLBACK WindowProc(HWND WindowHandle, UINT MsgCode, WPARAM ParamW, LPARAM ParamL)
 {
     const LONG_PTR WindowPtr = GetWindowLongPtr(WindowHandle, GWLP_USERDATA);
-    rndr::Window* Window = reinterpret_cast<rndr::Window*>(WindowPtr);
+    rndr::Window* Window = reinterpret_cast<rndr::Window*>(WindowPtr); // NOLINT
 
     if (Window != nullptr)
     {
         rndr::Window::NativeWindowEventDelegate Delegate = Window->GetNativeWindowEventDelegate();
         if (Delegate.Execute(Window->GetNativeWindowHandle(), MsgCode, ParamW, ParamL))
         {
-            return true;
+            return TRUE;
         }
     }
 
@@ -229,7 +229,7 @@ LRESULT CALLBACK WindowProc(HWND WindowHandle, UINT MsgCode, WPARAM ParamW, LPAR
         {
             RNDR_LOG_INFO("WindowProc: Event WM_CREATE");
 
-            CREATESTRUCT* CreateStruct = reinterpret_cast<CREATESTRUCT*>(ParamL);
+            CREATESTRUCT* CreateStruct = reinterpret_cast<CREATESTRUCT*>(ParamL); // NOLINT
             Window = reinterpret_cast<rndr::Window*>(CreateStruct->lpCreateParams);
 
             SetWindowLongPtr(WindowHandle, GWLP_USERDATA, reinterpret_cast<LONG_PTR>(Window));
@@ -251,7 +251,10 @@ LRESULT CALLBACK WindowProc(HWND WindowHandle, UINT MsgCode, WPARAM ParamW, LPAR
         {
             RNDR_LOG_INFO("WindowProc: Event WM_CLOSE");
 
-            Window->Close();
+            if (Window != nullptr)
+            {
+                Window->Close();
+            }
 
             break;
         }
@@ -270,6 +273,11 @@ LRESULT CALLBACK WindowProc(HWND WindowHandle, UINT MsgCode, WPARAM ParamW, LPAR
         case WM_MOUSEMOVE:
         {
             static bool s_CursorPositionChanged = false;
+
+            if (Window == nullptr)
+            {
+                break;
+            }
 
             const int X = GET_X_LPARAM(ParamL);
             // In RNDR y grows from bottom to up
@@ -309,6 +317,11 @@ LRESULT CALLBACK WindowProc(HWND WindowHandle, UINT MsgCode, WPARAM ParamW, LPAR
         }
         case WM_LBUTTONDBLCLK:
         {
+            if (Window == nullptr)
+            {
+                break;
+            }
+
             rndr::WindowDelegates::OnButtonDelegate.Execute(
                 Window, rndr::InputPrimitive::Mouse_LeftButton, rndr::InputTrigger::DoubleClick);
 
@@ -324,6 +337,11 @@ LRESULT CALLBACK WindowProc(HWND WindowHandle, UINT MsgCode, WPARAM ParamW, LPAR
         }
         case WM_RBUTTONDBLCLK:
         {
+            if (Window == nullptr)
+            {
+                break;
+            }
+
             rndr::WindowDelegates::OnButtonDelegate.Execute(
                 Window, rndr::InputPrimitive::Mouse_RightButton, rndr::InputTrigger::DoubleClick);
 
@@ -339,6 +357,11 @@ LRESULT CALLBACK WindowProc(HWND WindowHandle, UINT MsgCode, WPARAM ParamW, LPAR
         }
         case WM_MBUTTONDBLCLK:
         {
+            if (Window == nullptr)
+            {
+                break;
+            }
+
             rndr::WindowDelegates::OnButtonDelegate.Execute(
                 Window, rndr::InputPrimitive::Mouse_MiddleButton, rndr::InputTrigger::DoubleClick);
 
@@ -354,6 +377,11 @@ LRESULT CALLBACK WindowProc(HWND WindowHandle, UINT MsgCode, WPARAM ParamW, LPAR
         }
         case WM_LBUTTONDOWN:
         {
+            if (Window == nullptr)
+            {
+                break;
+            }
+
             rndr::WindowDelegates::OnButtonDelegate.Execute(
                 Window, rndr::InputPrimitive::Mouse_LeftButton, rndr::InputTrigger::ButtonDown);
 
@@ -369,6 +397,11 @@ LRESULT CALLBACK WindowProc(HWND WindowHandle, UINT MsgCode, WPARAM ParamW, LPAR
         }
         case WM_LBUTTONUP:
         {
+            if (Window == nullptr)
+            {
+                break;
+            }
+
             rndr::WindowDelegates::OnButtonDelegate.Execute(
                 Window, rndr::InputPrimitive::Mouse_LeftButton, rndr::InputTrigger::ButtonUp);
 
@@ -384,6 +417,11 @@ LRESULT CALLBACK WindowProc(HWND WindowHandle, UINT MsgCode, WPARAM ParamW, LPAR
         }
         case WM_RBUTTONDOWN:
         {
+            if (Window == nullptr)
+            {
+                break;
+            }
+
             rndr::WindowDelegates::OnButtonDelegate.Execute(
                 Window, rndr::InputPrimitive::Mouse_RightButton, rndr::InputTrigger::ButtonDown);
 
@@ -399,6 +437,11 @@ LRESULT CALLBACK WindowProc(HWND WindowHandle, UINT MsgCode, WPARAM ParamW, LPAR
         }
         case WM_RBUTTONUP:
         {
+            if (Window == nullptr)
+            {
+                break;
+            }
+
             rndr::WindowDelegates::OnButtonDelegate.Execute(
                 Window, rndr::InputPrimitive::Mouse_RightButton, rndr::InputTrigger::ButtonUp);
 
@@ -414,6 +457,11 @@ LRESULT CALLBACK WindowProc(HWND WindowHandle, UINT MsgCode, WPARAM ParamW, LPAR
         }
         case WM_MBUTTONDOWN:
         {
+            if (Window == nullptr)
+            {
+                break;
+            }
+
             rndr::WindowDelegates::OnButtonDelegate.Execute(
                 Window, rndr::InputPrimitive::Mouse_MiddleButton, rndr::InputTrigger::ButtonDown);
 
@@ -429,6 +477,11 @@ LRESULT CALLBACK WindowProc(HWND WindowHandle, UINT MsgCode, WPARAM ParamW, LPAR
         }
         case WM_MBUTTONUP:
         {
+            if (Window == nullptr)
+            {
+                break;
+            }
+
             rndr::WindowDelegates::OnButtonDelegate.Execute(
                 Window, rndr::InputPrimitive::Mouse_MiddleButton, rndr::InputTrigger::ButtonUp);
 
@@ -445,6 +498,11 @@ LRESULT CALLBACK WindowProc(HWND WindowHandle, UINT MsgCode, WPARAM ParamW, LPAR
         case WM_KEYDOWN:
         case WM_KEYUP:
         {
+            if (Window == nullptr)
+            {
+                break;
+            }
+
             const auto Iter = GPrimitiveMapping.find(static_cast<uint32_t>(ParamW));
             if (Iter == GPrimitiveMapping.end())
             {
@@ -466,6 +524,11 @@ LRESULT CALLBACK WindowProc(HWND WindowHandle, UINT MsgCode, WPARAM ParamW, LPAR
         }
         case WM_MOUSEWHEEL:
         {
+            if (Window == nullptr)
+            {
+                break;
+            }
+
             const int DeltaWheel = GET_WHEEL_DELTA_WPARAM(ParamW);
             rndr::WindowDelegates::OnMouseWheelMovedDelegate.Execute(Window, DeltaWheel);
 

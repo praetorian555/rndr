@@ -35,9 +35,8 @@ struct Pipeline;
 template <typename T>
 class ScopePtr;
 
-class GraphicsContext
+struct GraphicsContext
 {
-public:
     ID3D11Device* DX11Device = nullptr;
     ID3D11DeviceContext* DX11DeviceContext = nullptr;
     D3D_FEATURE_LEVEL DX11FeatureLevel;
@@ -47,7 +46,6 @@ public:
     int DX11DebugLastMessageId = 0;
 #endif  // RNDR_DEBUG
 
-public:
     GraphicsContext() = default;
     ~GraphicsContext();
 
@@ -95,40 +93,40 @@ public:
 
     // TODO(Marko): Instead of taking raw pointers these API calls should take a reference in order
     // to remove the need for null checks
-    void ClearColor(Image* Image, math::Vector4 Color);
-    void ClearDepth(Image* Image, real Depth);
-    void ClearStencil(Image* Image, uint8_t Stencil);
-    void ClearDepthStencil(Image* Image, real Depth, uint8_t Stencil);
+    void ClearColor(Image* Image, math::Vector4 Color) const;
+    void ClearDepth(Image* Image, real Depth) const;
+    void ClearStencil(Image* Image, uint8_t Stencil) const;
+    void ClearDepthStencil(Image* Image, real Depth, uint8_t Stencil) const;
 
-    void BindShader(Shader* Shader);
-    void BindImageAsShaderResource(Image* Image, int Slot, Shader* Shader);
-    void BindSampler(Sampler* Sampler, int Slot, Shader* Shader);
+    void BindShader(Shader* Shader) const;
+    void BindImageAsShaderResource(Image* Image, int Slot, Shader* Shader) const;
+    void BindSampler(Sampler* Sampler, int Slot, Shader* Shader) const;
     // Split buffer binding for index/vertex buffers and for constant buffers
-    void BindBuffer(Buffer* Buffer, int Slot, Shader* Shader = nullptr);
-    void BindFrameBuffer(FrameBuffer* FrameBuffer);
-    void BindInputLayout(InputLayout* InputLayout);
-    void BindRasterizerState(RasterizerState* State);
-    void BindDepthStencilState(DepthStencilState* State);
-    void BindBlendState(BlendState* State);
-    void BindPipeline(Pipeline* Pipeline);
+    void BindBuffer(Buffer* Buffer, int Slot, Shader* Shader = nullptr) const;
+    void BindFrameBuffer(FrameBuffer* FrameBuffer) const;
+    void BindInputLayout(InputLayout* InputLayout) const;
+    void BindRasterizerState(RasterizerState* State) const;
+    void BindDepthStencilState(DepthStencilState* State) const;
+    void BindBlendState(BlendState* State) const;
+    void BindPipeline(Pipeline* Pipeline) const;
 
-    void DrawIndexed(PrimitiveTopology Topology, int IndicesCount);
+    void DrawIndexed(PrimitiveTopology Topology, int IndicesCount) const;
     void DrawIndexedInstanced(PrimitiveTopology Topology,
                               uint32_t IndexCount,
                               uint32_t InstanceCount,
                               uint32_t IndexOffset = 0,
-                              uint32_t InstanceOffset = 0);
+                              uint32_t InstanceOffset = 0) const;
 
     void Dispatch(uint32_t ThreadGroupCountX,
                   uint32_t ThreadGroupCountY,
-                  uint32_t ThreadGroupCountZ);
+                  uint32_t ThreadGroupCountZ) const;
 
-    bool SubmitCommandList(CommandList* List);
+    bool SubmitCommandList(CommandList* List) const;
 
-    void Present(SwapChain* SwapChain, bool BVSync);
+    void Present(SwapChain* SwapChain, bool ActivateVSync) const;
 
-    std::string WindowsGetErrorMessage(HRESULT ErrorCode = S_OK);
-    bool WindowsHasFailed(HRESULT ErrorCode = S_OK);
+    [[nodiscard]] std::string WindowsGetErrorMessage(HRESULT ErrorCode = S_OK) const;
+    [[nodiscard]] bool WindowsHasFailed(HRESULT ErrorCode = S_OK) const;
 
 private:
     GraphicsContextProperties m_Props;

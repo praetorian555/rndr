@@ -58,8 +58,7 @@ bool rndr::ImGuiWrapper::Init(Window& Window,
     Window.SetNativeWindowEventDelegate(Delegate);
 
     // Setup Platform/Renderer backends
-    // NOLINT
-    const NativeWindowHandle const WindowHandle = Window.GetNativeWindowHandle();
+    const NativeWindowHandle WindowHandle = Window.GetNativeWindowHandle(); // NOLINT
     ImGui_ImplWin32_Init(reinterpret_cast<void*>(WindowHandle));
     ImGui_ImplDX11_Init(Context.DX11Device, Context.DX11DeviceContext);
 

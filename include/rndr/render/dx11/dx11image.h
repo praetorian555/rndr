@@ -20,7 +20,7 @@ class Vector2;
 namespace rndr
 {
 
-class GraphicsContext;
+struct GraphicsContext;
 struct SwapChain;
 
 struct Image

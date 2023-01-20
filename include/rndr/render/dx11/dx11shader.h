@@ -14,7 +14,7 @@ struct ID3D11ComputeShader;
 namespace rndr
 {
 
-class GraphicsContext;
+struct GraphicsContext;
 
 struct Shader
 {

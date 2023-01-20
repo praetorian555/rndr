@@ -21,7 +21,7 @@ struct InputLayout;
 struct RasterizerState;
 struct DepthStencilState;
 struct BlendState;
-class GraphicsContext;
+struct GraphicsContext;
 
 struct CommandList
 {

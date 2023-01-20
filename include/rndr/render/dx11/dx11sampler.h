@@ -11,7 +11,7 @@ struct ID3D11SamplerState;
 namespace rndr
 {
 
-class GraphicsContext;
+struct GraphicsContext;
 
 struct Sampler
 {

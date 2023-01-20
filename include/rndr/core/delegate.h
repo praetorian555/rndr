@@ -40,7 +40,7 @@ struct MultiDelegate
 
     DelegateHandle Add(Function Functor)
     {
-        DelegateHandle Handle = m_HandleGenerator++;
+        const DelegateHandle Handle = m_HandleGenerator++;
         m_Functors.insert(std::make_pair(Handle, Functor));
         return Handle;
     }

@@ -22,7 +22,7 @@
 #include "rndr/render/dx11/dx11shader.h"
 #include "rndr/render/dx11/dx11swapchain.h"
 
-std::string rndr::GraphicsContext::WindowsGetErrorMessage(HRESULT ErrorCode)
+std::string rndr::GraphicsContext::WindowsGetErrorMessage(HRESULT ErrorCode) const
 {
     std::string Rtn;
 
@@ -85,7 +85,7 @@ std::string rndr::GraphicsContext::WindowsGetErrorMessage(HRESULT ErrorCode)
     return Rtn;
 }
 
-bool rndr::GraphicsContext::WindowsHasFailed(HRESULT ErrorCode)
+bool rndr::GraphicsContext::WindowsHasFailed(HRESULT ErrorCode) const
 {
     if (FAILED(ErrorCode))
     {
@@ -327,7 +327,7 @@ rndr::ScopePtr<rndr::CommandList> rndr::GraphicsContext::CreateCommandList()
     return CreateGraphicsObject<CommandList>("rndr::GraphicsContext: CommandList", this);
 }
 
-void rndr::GraphicsContext::ClearColor(Image* Image, math::Vector4 Color)
+void rndr::GraphicsContext::ClearColor(Image* Image, math::Vector4 Color) const
 {
     if ((Image == nullptr) || (Image->DX11RenderTargetView == nullptr))
     {
@@ -342,7 +342,7 @@ void rndr::GraphicsContext::ClearColor(Image* Image, math::Vector4 Color)
     }
 }
 
-void rndr::GraphicsContext::ClearDepth(Image* Image, real Depth)
+void rndr::GraphicsContext::ClearDepth(Image* Image, real Depth) const
 {
     if ((Image == nullptr) || (Image->DX11DepthStencilView == nullptr))
     {
@@ -353,7 +353,7 @@ void rndr::GraphicsContext::ClearDepth(Image* Image, real Depth)
                                              0);
 }
 
-void rndr::GraphicsContext::ClearStencil(Image* Image, uint8_t Stencil)
+void rndr::GraphicsContext::ClearStencil(Image* Image, uint8_t Stencil) const
 {
     if ((Image == nullptr) || (Image->DX11DepthStencilView == nullptr))
     {
@@ -364,7 +364,7 @@ void rndr::GraphicsContext::ClearStencil(Image* Image, uint8_t Stencil)
                                              Stencil);
 }
 
-void rndr::GraphicsContext::ClearDepthStencil(Image* Image, real Depth, uint8_t Stencil)
+void rndr::GraphicsContext::ClearDepthStencil(Image* Image, real Depth, uint8_t Stencil) const
 {
     if ((Image == nullptr) || (Image->DX11DepthStencilView == nullptr))
     {
@@ -375,7 +375,7 @@ void rndr::GraphicsContext::ClearDepthStencil(Image* Image, real Depth, uint8_t 
         Image->DX11DepthStencilView, D3D11_CLEAR_DEPTH | D3D11_CLEAR_STENCIL, Depth, Stencil);
 }
 
-void rndr::GraphicsContext::BindShader(Shader* Shader)
+void rndr::GraphicsContext::BindShader(Shader* Shader) const
 {
     switch (Shader->Props.Type)
     {
@@ -399,7 +399,7 @@ void rndr::GraphicsContext::BindShader(Shader* Shader)
     }
 }
 
-void rndr::GraphicsContext::BindImageAsShaderResource(Image* Image, int Slot, Shader* Shader)
+void rndr::GraphicsContext::BindImageAsShaderResource(Image* Image, int Slot, Shader* Shader) const
 {
     assert(Shader);
     assert(Image);
@@ -423,7 +423,7 @@ void rndr::GraphicsContext::BindImageAsShaderResource(Image* Image, int Slot, Sh
     }
 }
 
-void rndr::GraphicsContext::BindSampler(Sampler* Sampler, int Slot, Shader* Shader)
+void rndr::GraphicsContext::BindSampler(Sampler* Sampler, int Slot, Shader* Shader) const
 {
     assert(Shader);
     assert(Sampler);
@@ -447,7 +447,7 @@ void rndr::GraphicsContext::BindSampler(Sampler* Sampler, int Slot, Shader* Shad
     }
 }
 
-void rndr::GraphicsContext::BindBuffer(Buffer* Buffer, int Slot, Shader* Shader)
+void rndr::GraphicsContext::BindBuffer(Buffer* Buffer, int Slot, Shader* Shader) const
 {
     if (Shader != nullptr)
     {
@@ -486,7 +486,7 @@ void rndr::GraphicsContext::BindBuffer(Buffer* Buffer, int Slot, Shader* Shader)
     }
 }
 
-void rndr::GraphicsContext::BindFrameBuffer(FrameBuffer* FrameBuffer)
+void rndr::GraphicsContext::BindFrameBuffer(FrameBuffer* FrameBuffer) const
 {
     if (FrameBuffer == nullptr)
     {
@@ -512,29 +512,29 @@ void rndr::GraphicsContext::BindFrameBuffer(FrameBuffer* FrameBuffer)
     DX11DeviceContext->RSSetViewports(1, &FrameBuffer->DX11Viewport);
 }
 
-void rndr::GraphicsContext::BindInputLayout(InputLayout* InputLayout)
+void rndr::GraphicsContext::BindInputLayout(InputLayout* InputLayout) const
 {
     DX11DeviceContext->IASetInputLayout(InputLayout->DX11InputLayout);
 }
 
-void rndr::GraphicsContext::BindRasterizerState(RasterizerState* State)
+void rndr::GraphicsContext::BindRasterizerState(RasterizerState* State) const
 {
     DX11DeviceContext->RSSetState(State->DX11RasterizerState);
 }
 
-void rndr::GraphicsContext::BindDepthStencilState(DepthStencilState* State)
+void rndr::GraphicsContext::BindDepthStencilState(DepthStencilState* State) const
 {
     DX11DeviceContext->OMSetDepthStencilState(State->DX11DepthStencilState,
                                               State->Props.StencilRefValue);
 }
 
-void rndr::GraphicsContext::BindBlendState(BlendState* State)
+void rndr::GraphicsContext::BindBlendState(BlendState* State) const
 {
     constexpr uint32_t kUpdateAllSamples = 0xFFFFFFFF;
     DX11DeviceContext->OMSetBlendState(State->DX11BlendState, nullptr, kUpdateAllSamples);
 }
 
-void rndr::GraphicsContext::BindPipeline(Pipeline* Pipeline)
+void rndr::GraphicsContext::BindPipeline(Pipeline* Pipeline) const
 {
     BindShader(Pipeline->VertexShader.Get());
     BindShader(Pipeline->PixelShader.Get());
@@ -544,7 +544,7 @@ void rndr::GraphicsContext::BindPipeline(Pipeline* Pipeline)
     BindDepthStencilState(Pipeline->DepthStencil.Get());
 }
 
-void rndr::GraphicsContext::DrawIndexed(PrimitiveTopology Topology, int IndicesCount)
+void rndr::GraphicsContext::DrawIndexed(PrimitiveTopology Topology, int IndicesCount) const
 {
     DX11DeviceContext->IASetPrimitiveTopology(DX11FromPrimitiveTopology(Topology));
     DX11DeviceContext->DrawIndexed(IndicesCount, 0, 0);
@@ -554,7 +554,7 @@ void rndr::GraphicsContext::DrawIndexedInstanced(PrimitiveTopology Topology,
                                                  uint32_t IndexCount,
                                                  uint32_t InstanceCount,
                                                  uint32_t IndexOffset,
-                                                 uint32_t InstanceOffset)
+                                                 uint32_t InstanceOffset) const
 {
     DX11DeviceContext->IASetPrimitiveTopology(DX11FromPrimitiveTopology(Topology));
     DX11DeviceContext->DrawIndexedInstanced(IndexCount, InstanceCount, IndexOffset, 0,
@@ -563,12 +563,12 @@ void rndr::GraphicsContext::DrawIndexedInstanced(PrimitiveTopology Topology,
 
 void rndr::GraphicsContext::Dispatch(const uint32_t ThreadGroupCountX,
                                      const uint32_t ThreadGroupCountY,
-                                     const uint32_t ThreadGroupCountZ)
+                                     const uint32_t ThreadGroupCountZ) const
 {
     DX11DeviceContext->Dispatch(ThreadGroupCountX, ThreadGroupCountY, ThreadGroupCountZ);
 }
 
-bool rndr::GraphicsContext::SubmitCommandList(CommandList* List)
+bool rndr::GraphicsContext::SubmitCommandList(CommandList* List) const
 {
     if (List == nullptr)
     {
@@ -591,11 +591,12 @@ bool rndr::GraphicsContext::SubmitCommandList(CommandList* List)
     return true;
 }
 
-void rndr::GraphicsContext::Present(SwapChain* SwapChain, bool BVSync)
+void rndr::GraphicsContext::Present(SwapChain* SwapChain, bool ActivateVSync) const
 {
     // TODO(Marko): Look into ALLOW_TEARING
     const uint32_t Flags = 0;
-    const HRESULT Result = SwapChain->DX11SwapChain->Present(static_cast<UINT>(BVSync), Flags);
+    const HRESULT Result =
+        SwapChain->DX11SwapChain->Present(static_cast<UINT>(ActivateVSync), Flags);
     if (WindowsHasFailed(Result))
     {
         const std::string ErrorMessage = WindowsGetErrorMessage(Result);

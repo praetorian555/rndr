@@ -32,7 +32,7 @@ private:
 class CpuTrace
 {
 public:
-    explicit CpuTrace(CpuTracer* Tracer, const std::string& Name);
+    explicit CpuTrace(CpuTracer* Tracer, std::string Name);
     ~CpuTrace();
 
     CpuTrace(const CpuTrace& Other) = default;

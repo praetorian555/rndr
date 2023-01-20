@@ -30,6 +30,7 @@ struct RndrContextProperties
 class RndrContext
 {
 public:
+    // TODO(Marko): Move creation to a static factory method
     explicit RndrContext(const RndrContextProperties& Props = RndrContextProperties{});
     ~RndrContext();
 
@@ -45,9 +46,11 @@ public:
     InputSystem* GetInputSystem();
     InputContext* GetInputContext();
 
+    // TODO(Marko): Move this to a static method in Window class
     [[nodiscard]] ScopePtr<Window>
     CreateWin(int Width, int Height, const WindowProperties& Props = WindowProperties{}) const;
 
+    // TODO(Marko): Move this to a static method in GraphicsContext class
     [[nodiscard]] ScopePtr<GraphicsContext> CreateGraphicsContext(
         const GraphicsContextProperties& Props = GraphicsContextProperties{}) const;
 

@@ -474,9 +474,10 @@ bool rndr::Image::Read(GraphicsContext* Context,
     uint8_t* SrcData = reinterpret_cast<uint8_t*>(Subresource.pData);
     for (int Row = StartY; Row < StartY + SizeY; Row++)
     {
+        const int RowPitch = static_cast<int>(Subresource.RowPitch);
         const int ReadSize = SizeX * PixelSize;
         const int DstOffset = (Row - StartY) * SizeX * PixelSize;
-        const int SrcOffset = Row * Subresource.RowPitch + StartX * PixelSize;
+        const int SrcOffset = Row * RowPitch + StartX * PixelSize;
         memcpy(OutContents.Data + DstOffset, SrcData + SrcOffset, ReadSize);
     }
 

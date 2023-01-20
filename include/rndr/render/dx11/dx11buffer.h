@@ -11,7 +11,7 @@ struct ID3D11Buffer;
 namespace rndr
 {
 
-class GraphicsContext;
+struct GraphicsContext;
 
 struct Buffer
 {

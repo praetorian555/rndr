@@ -21,7 +21,7 @@ class Point2;
 namespace rndr
 {
 
-class GraphicsContext;
+struct GraphicsContext;
 struct SwapChain;
 
 struct FrameBuffer

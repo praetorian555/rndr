@@ -31,7 +31,6 @@ public:
     using NativeWindowEventDelegate =
         Delegate<bool(NativeWindowHandle, uint32_t, uint64_t, int64_t)>;
 
-public:
     Window() = default;
     ~Window();
 

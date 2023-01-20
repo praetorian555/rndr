@@ -77,6 +77,6 @@ namespace rndr
 /**
  * Opaque type that represents an OS window handle.
  */
-using NativeWindowHandle = uintptr_t;
+using NativeWindowHandle = void*;
 
 }  // namespace rndr

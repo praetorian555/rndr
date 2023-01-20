@@ -13,7 +13,7 @@ struct IDXGISwapChain;
 namespace rndr
 {
 
-class GraphicsContext;
+struct GraphicsContext;
 
 template <typename T>
 class ScopePtr;
