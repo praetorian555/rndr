@@ -29,8 +29,8 @@ public:
         m_Renderer->AddFont("Liberation Sans", BASIC2D_ASSET_DIR "/LiberationSans-Regular.ttf");
         m_Renderer->AddFont("Yu Mincho", BASIC2D_ASSET_DIR "/yumin.ttf");
 
-        m_ImGui.Reset(rndr::New<rndr::ImGuiWrapper>("ImGuiWrapper"));
-        m_ImGui->Init(m_Window.GetRef(), m_GraphicsCtx.GetRef());
+        m_ImGui = rndr::ImGuiWrapper::Create(m_Window.GetRef(), m_GraphicsCtx.GetRef());
+        assert(m_ImGui.IsValid());
     }
 
     ~App() = default;
@@ -86,7 +86,7 @@ public:
             m_Renderer->Present(m_SwapChain->FrameBuffer.Get());
 
             m_ImGui->StartFrame();
-            m_ImGui->Render();
+            m_ImGui->EndFrame();
 
             m_GraphicsCtx->Present(m_SwapChain.Get(), true);
         }
