@@ -60,7 +60,7 @@ public:
             m_GraphicsCtx->ClearDepth(DefaultFB->DepthStencilBuffer.Get(), 1.0f);
 
 #ifdef RNDR_ASSIMP
-            math::Transform ObjectToWorld = math::Translate({0.0f, 0.0f, m_ObjectDepth});
+            math::Transform ObjectToWorld = math::Translate({0.0f, 0.0f, m_ObjectDepth}) * math::RotateX(m_Orientation);
             m_Renderer->RenderModel(m_SphereModel.GetRef(),
                                     rndr::Span<math::Transform>{&ObjectToWorld});
 #endif
@@ -70,6 +70,7 @@ public:
 
             ImGui::Begin("Menu");
             ImGui::SliderFloat("Depth", &m_ObjectDepth, 2.0f, 100.0f);
+            ImGui::SliderFloat("Orientation", &m_Orientation, -90.0f, 90.0f);
             ImGui::End();
 
             m_ImGui->EndFrame();
@@ -106,6 +107,7 @@ private:
     int m_WindowHeight = 600;
 
     float m_ObjectDepth = 5.0f;
+    float m_Orientation = 0.0f;
 };
 
 int main()
