@@ -27,6 +27,9 @@ struct Model
 {
     Array<math::Point3> Positions;
     Array<int> Indices;
+    Array<math::Normal3> Normals;
+    Array<math::Vector3> Tangents;
+    Array<math::Vector3> Bitangents;
 };
 
 class ModelLoader

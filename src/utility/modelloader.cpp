@@ -38,11 +38,30 @@ rndr::ScopePtr<rndr::Model> rndr::ModelLoader::Load(std::string ModelPath)
     ScopePtr<Model> OutModel = CreateScoped<Model>(ModelPath.c_str());
     OutModel->Positions.resize(AiMesh->mNumVertices);
     OutModel->Indices.resize(AiMesh->mNumFaces * 3);
+    OutModel->Normals.resize(AiMesh->mNumVertices);
+    OutModel->Tangents.resize(AiMesh->mNumVertices);
+    OutModel->Bitangents.resize(AiMesh->mNumVertices);
 
     for (int VertexIndex = 0; VertexIndex < OutModel->Positions.size(); VertexIndex++)
     {
-        const aiVector3D AiVec = AiMesh->mVertices[VertexIndex];
-        OutModel->Positions[VertexIndex] = math::Point3{AiVec.x, AiVec.y, AiVec.z};
+        const aiVector3D AiPosition = AiMesh->mVertices[VertexIndex];
+        OutModel->Positions[VertexIndex] = math::Point3{AiPosition.x, AiPosition.y, AiPosition.z};
+        if (AiMesh->mNormals != nullptr)
+        {
+            const aiVector3D AiNormal = AiMesh->mNormals[VertexIndex];
+            OutModel->Normals[VertexIndex] = math::Normal3{AiNormal.x, AiNormal.y, AiNormal.z};
+        }
+        if (AiMesh->mTangents != nullptr)
+        {
+            const aiVector3D AiTangent = AiMesh->mTangents[VertexIndex];
+            OutModel->Tangents[VertexIndex] = math::Vector3{AiTangent.x, AiTangent.y, AiTangent.z};
+        }
+        if (AiMesh->mBitangents != nullptr)
+        {
+            const aiVector3D AiBitangent = AiMesh->mBitangents[VertexIndex];
+            OutModel->Bitangents[VertexIndex] =
+                math::Vector3{AiBitangent.x, AiBitangent.y, AiBitangent.z};
+        }
     }
     for (uint32_t FaceIndex = 0; FaceIndex < AiMesh->mNumFaces; FaceIndex++)
     {
