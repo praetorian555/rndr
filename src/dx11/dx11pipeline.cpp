@@ -75,7 +75,8 @@ rndr::InputLayoutBuilder& rndr::InputLayoutBuilder::AppendElement(int BufferInde
     const int Idx = static_cast<int>(m_Props.Size++);
     m_Props[Idx].InputSlot = BufferIndex;
     m_Props[Idx].Repetition = Info.Repetiton;
-    m_Props[Idx].InstanceStepRate = Info.PerInstanceRate;
+    m_Props[Idx].InstanceStepRate =
+        Info.Repetiton == DataRepetition::PerVertex ? 0 : Info.PerInstanceRate;
     m_Props[Idx].SemanticName = NameIt->first;
     m_Props[Idx].SemanticIndex = SemanticIndex;
     m_Props[Idx].Format = Format;
