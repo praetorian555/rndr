@@ -22,9 +22,6 @@ struct ProjectionCameraProperties
 
     ProjectionType Projection = ProjectionType::Perspective;
 
-    int ScreenWidth = 0;
-    int ScreenHeight = 0;
-
     int OrtographicWidth = kDefaultOrtographicWidth;
 
     // Position of the near plane along z axis. Always positive value. In case of a perspective
@@ -47,7 +44,10 @@ class ProjectionCamera
 {
 
 public:
-    ProjectionCamera(const math::Transform& WorldToCamera, const ProjectionCameraProperties& Props);
+    ProjectionCamera(const math::Transform& WorldToCamera,
+                     int ScreenWidth,
+                     int ScreenHeight,
+                     const ProjectionCameraProperties& Props);
 
     [[nodiscard]] const math::Transform& FromWorldToCamera() const { return m_WorldToCamera; }
     [[nodiscard]] const math::Transform& FromCameraToWorld() const { return m_CameraToWorld; }
@@ -78,6 +78,8 @@ private:
     math::Transform m_WorldToNDC;
     math::Transform m_NDCToWorld;
 
+    int m_ScreenWidth;
+    int m_ScreenHeight;
     ProjectionCameraProperties m_Props;
 };
 

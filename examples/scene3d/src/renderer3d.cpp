@@ -14,7 +14,7 @@ Renderer::Renderer(rndr::GraphicsContext* Ctx,
       m_MaxInstances(MaxInstances),
       m_ScreenWidth(ScreenWidth),
       m_ScreenHeight(ScreenHeight),
-      m_Camera(math::Transform{}, rndr::ProjectionCameraProperties{})
+      m_Camera(math::Transform{}, ScreenWidth, ScreenHeight, rndr::ProjectionCameraProperties{})
 {
     assert(m_MaxVertices > 0);
     assert(m_MaxFaces > 0);

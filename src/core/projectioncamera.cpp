@@ -3,8 +3,14 @@
 #include "math/projections.h"
 
 rndr::ProjectionCamera::ProjectionCamera(const math::Transform& WorldToCamera,
+                                         int ScreenWidth,
+                                         int ScreenHeight,
                                          const ProjectionCameraProperties& Props)
-    : m_WorldToCamera(WorldToCamera), m_CameraToWorld(m_WorldToCamera.GetInverse()), m_Props(Props)
+    : m_WorldToCamera(WorldToCamera),
+      m_CameraToWorld(m_WorldToCamera.GetInverse()),
+      m_ScreenWidth(ScreenWidth),
+      m_ScreenHeight(ScreenHeight),
+      m_Props(Props)
 {
     SetProperties(m_Props);
 }
@@ -12,8 +18,8 @@ rndr::ProjectionCamera::ProjectionCamera(const math::Transform& WorldToCamera,
 void rndr::ProjectionCamera::SetScreenSize(int ScreenWidth, int ScreenHeight)
 {
     ProjectionCameraProperties Props = m_Props;
-    Props.ScreenWidth = ScreenWidth;
-    Props.ScreenHeight = ScreenHeight;
+    m_ScreenWidth = ScreenWidth;
+    m_ScreenHeight = ScreenHeight;
     SetProperties(Props);
 }
 
@@ -80,9 +86,9 @@ math::Transform rndr::ProjectionCamera::GetProjectionTransform() const
 
 real rndr::ProjectionCamera::GetAspectRatio() const
 {
-    if (m_Props.ScreenHeight == 0)
+    if (m_ScreenHeight == 0)
     {
         return 1;
     }
-    return static_cast<real>(m_Props.ScreenWidth) / static_cast<real>(m_Props.ScreenHeight);
+    return static_cast<real>(m_ScreenWidth) / static_cast<real>(m_ScreenHeight);
 }
