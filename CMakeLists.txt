@@ -12,12 +12,14 @@ option(RNDR_SANITIZER "Enable address sanitizer" ON)
 option(RNDR_DX11 "Use DX11 API" ON)
 option(RNDR_SPDLOG "Use spdlog external library to implement default logging" ON)
 option(RNDR_IMGUI "Add imgui wrapper which can be used for development GUI" ON)
+option(RNDR_ASSIMP "Add wrapper around assimp library that can be used to import 3D models" ON)
 
 message(STATUS "RNDR_UNITY ${RNDR_UNITY}")
 message(STATUS "RNDR_SANITIZER ${RNDR_SANITIZER}")
 message(STATUS "RNDR_DX11 ${RNDR_DX11}")
 message(STATUS "RNDR_SPDLOG ${RNDR_SPDLOG}")
 message(STATUS "RNDR_IMGUI ${RNDR_IMGUI}")
+message(STATUS "RNDR_ASSIMP ${RNDR_ASSIMP}")
 
 # Only do these if this is the main project, and not if it is included through add_subdirectory
 if (CMAKE_PROJECT_NAME STREQUAL PROJECT_NAME)
@@ -81,6 +83,24 @@ if (NOT TARGET math)
 	set_target_properties(math PROPERTIES FOLDER Extern)
 	set(MATH_UNITY ${RNDR_UNITY} CACHE BOOL "" FORCE)
 	set(MATH_SANITIZER ${RNDR_SANITIZER} CACHE BOOL "" FORCE)
+endif()
+
+if (NOT TARGET assimp AND RNDR_ASSIMP)
+	FetchContent_Declare(
+		assimp
+		GIT_REPOSITORY https://github.com/assimp/assimp
+		GIT_TAG        9519a62dd20799c5493c638d1ef5a6f484e5faf1 # release-5.2.5
+	)
+	FetchContent_MakeAvailable(assimp)
+	set_target_properties(assimp PROPERTIES FOLDER Extern)
+	set(BUILD_SHARED_LIBS OFF CACHE BOOL "" FORCE)
+	set(ASSIMP_BUILD_TESTS OFF CACHE BOOL "" FORCE)
+	set(ASSIMP_INSTALL OFF CACHE BOOL "" FORCE)
+	set(ASSIMP_INJECT_DEBUG_POSTFIX OFF CACHE BOOL "" FORCE)
+	set_target_properties(assimp PROPERTIES UNITY_BUILD FALSE)
+	set_target_properties(zlibstatic PROPERTIES FOLDER Extern)
+	set_target_properties(zlibstatic PROPERTIES UNITY_BUILD FALSE)
+	set_target_properties(UpdateAssimpLibsDebugSymbolsAndDLLs PROPERTIES FOLDER Extern)
 endif()
 
 # Adds external dependencies
