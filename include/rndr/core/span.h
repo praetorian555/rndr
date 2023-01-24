@@ -29,6 +29,13 @@ struct Span
     }
 
     template <typename U>
+    explicit Span(Array<U>& Vec)
+    {
+        Data = reinterpret_cast<T*>(Vec.data());
+        Size = Vec.size() * sizeof(U) / sizeof(T);
+    }
+
+    template <typename U>
     explicit Span(const Span<U>& Other)
     {
         Data = reinterpret_cast<T*>(Other.Data);
