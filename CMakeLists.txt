@@ -79,10 +79,10 @@ if (NOT TARGET math)
 		GIT_REPOSITORY https://github.com/praetorian555/math
 		GIT_TAG        cadf02be7873adf18ea0764a0f516ae6391fed2e
 	)
-	FetchContent_MakeAvailable(math)
-	set_target_properties(math PROPERTIES FOLDER Extern)
 	set(MATH_UNITY ${RNDR_UNITY} CACHE BOOL "" FORCE)
 	set(MATH_SANITIZER ${RNDR_SANITIZER} CACHE BOOL "" FORCE)
+	FetchContent_MakeAvailable(math)
+	set_target_properties(math PROPERTIES FOLDER Extern)
 endif()
 
 if (NOT TARGET assimp AND RNDR_ASSIMP)
@@ -91,12 +91,12 @@ if (NOT TARGET assimp AND RNDR_ASSIMP)
 		GIT_REPOSITORY https://github.com/assimp/assimp
 		GIT_TAG        9519a62dd20799c5493c638d1ef5a6f484e5faf1 # release-5.2.5
 	)
-	FetchContent_MakeAvailable(assimp)
-	set_target_properties(assimp PROPERTIES FOLDER Extern)
 	set(BUILD_SHARED_LIBS OFF CACHE BOOL "" FORCE)
 	set(ASSIMP_BUILD_TESTS OFF CACHE BOOL "" FORCE)
 	set(ASSIMP_INSTALL OFF CACHE BOOL "" FORCE)
 	set(ASSIMP_INJECT_DEBUG_POSTFIX OFF CACHE BOOL "" FORCE)
+	FetchContent_MakeAvailable(assimp)
+	set_target_properties(assimp PROPERTIES FOLDER Extern)
 	set_target_properties(assimp PROPERTIES UNITY_BUILD FALSE)
 	set_target_properties(zlibstatic PROPERTIES FOLDER Extern)
 	set_target_properties(zlibstatic PROPERTIES UNITY_BUILD FALSE)
