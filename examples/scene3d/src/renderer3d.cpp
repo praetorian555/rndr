@@ -34,6 +34,11 @@ Renderer::Renderer(rndr::GraphicsContext* Ctx,
                            .AddBuffer(1, rndr::DataRepetition::PerInstance, 1)
                            .AppendElement(0, "POSITION", rndr::PixelFormat::R32G32B32A32_FLOAT)
                            .AppendElement(0, "COLOR", rndr::PixelFormat::R32G32B32A32_FLOAT)
+                           .AppendElement(0, "NORMAL", rndr::PixelFormat::R32G32B32_FLOAT)
+                           .AppendElement(1, "ROWX", rndr::PixelFormat::R32G32B32A32_FLOAT)
+                           .AppendElement(1, "ROWY", rndr::PixelFormat::R32G32B32A32_FLOAT)
+                           .AppendElement(1, "ROWZ", rndr::PixelFormat::R32G32B32A32_FLOAT)
+                           .AppendElement(1, "ROWW", rndr::PixelFormat::R32G32B32A32_FLOAT)
                            .AppendElement(1, "ROWX", rndr::PixelFormat::R32G32B32A32_FLOAT)
                            .AppendElement(1, "ROWY", rndr::PixelFormat::R32G32B32A32_FLOAT)
                            .AppendElement(1, "ROWZ", rndr::PixelFormat::R32G32B32A32_FLOAT)
@@ -43,7 +48,8 @@ Renderer::Renderer(rndr::GraphicsContext* Ctx,
         .VertexShaderContents = rndr::ByteSpan(VertexShaderContents),
         .PixelShader = {.Type = rndr::ShaderType::Fragment, .EntryPoint = "Main"},
         .PixelShaderContents = rndr::ByteSpan(FragmentShaderContents),
-        .Rasterizer = {.FrontFaceWindingOrder = rndr::WindingOrder::CCW, .CullFace = rndr::Face::None},
+        .Rasterizer = {.FrontFaceWindingOrder = rndr::WindingOrder::CCW,
+                       .CullFace = rndr::Face::None},
         .DepthStencil = {.DepthEnable = true, .StencilEnable = false},
     };
     m_Pipeline = m_Ctx->CreatePipeline(PipelineProps);
@@ -104,15 +110,20 @@ void Renderer::RenderModel(rndr::Model& Model, const rndr::Span<math::Transform>
     {
         Vertices[VertexIndex].Position = math::Point4{Model.Positions[VertexIndex]};
         Vertices[VertexIndex].Color = rndr::Colors::kRed;
+        Vertices[VertexIndex].Normal = Model.Normals[VertexIndex];
     }
     m_VertexBuffer->Update(m_Ctx, rndr::ByteSpan{Vertices});
 
     m_IndexBuffer->Update(m_Ctx, rndr::ByteSpan{Model.Indices});
 
-    rndr::Array<math::Transform> InstancesTransposed(Instances.Size);
+    rndr::Array<InstanceData> InstancesTransposed(Instances.Size);
     for (int InstanceIndex = 0; InstanceIndex < Instances.Size; InstanceIndex++)
     {
-        InstancesTransposed[InstanceIndex] = math::Transpose(Instances[InstanceIndex]);
+        InstancesTransposed[InstanceIndex].ObjectToWorld =
+            math::Transpose(Instances[InstanceIndex]);
+        // Here we need to do a transpose of transpose of inverse, but two transposes cancel each
+        // other
+        InstancesTransposed[InstanceIndex].NormalTransform = Instances[InstanceIndex].GetInverse();
     }
     m_InstanceBuffer->Update(m_Ctx, rndr::ByteSpan{InstancesTransposed});
 

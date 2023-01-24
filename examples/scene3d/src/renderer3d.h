@@ -2,6 +2,7 @@
 
 #include "rndr/rndr.h"
 
+#include "math/normal3.h"
 #include "math/point4.h"
 #include "math/transform.h"
 #include "math/vector4.h"
@@ -13,11 +14,14 @@ public:
     {
         math::Point4 Position;
         math::Vector4 Color;
+        math::Normal3 Normal;
+        float Padding;
     };
 
     RNDR_ALIGN(16) struct InstanceData
     {
         math::Transform ObjectToWorld;
+        math::Transform NormalTransform;
     };
 
     RNDR_ALIGN(16) struct ConstantData
