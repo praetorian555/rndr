@@ -20,13 +20,15 @@ public:
 
     RNDR_ALIGN(16) struct InstanceData
     {
-        math::Transform ObjectToWorld;
-        math::Transform NormalTransform;
+        math::Matrix4x4 ObjectToWorld;
+        math::Matrix4x4 NormalTransform;
     };
 
     RNDR_ALIGN(16) struct ConstantData
     {
-        math::Transform WorldToNDC;
+        math::Matrix4x4 WorldToNDC;
+        math::Point3 CameraPositionWorld;
+        float Shininess;
     };
 
 public:
@@ -40,6 +42,7 @@ public:
 
     void SetScreenSize(int Width, int Height);
     void SetRenderTarget(rndr::FrameBuffer& Target);
+    void SetShininess(float Shininess);
 
     void RenderModel(rndr::Model& Model, const rndr::Span<math::Transform>& Instances);
 
@@ -60,4 +63,5 @@ private:
     int m_ScreenWidth;
     int m_ScreenHeight;
     rndr::ProjectionCamera m_Camera;
+    float m_Shininess = 8.0f;
 };

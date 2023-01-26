@@ -69,7 +69,9 @@ Renderer::Renderer(rndr::GraphicsContext* Ctx,
 
     m_Camera.SetScreenSize(m_ScreenWidth, m_ScreenHeight);
     ConstantData ConstData;
-    ConstData.WorldToNDC = math::Transpose(m_Camera.FromWorldToNDC());
+    ConstData.WorldToNDC = math::Transpose(m_Camera.FromWorldToNDC()).GetMatrix();
+    ConstData.CameraPositionWorld = math::Point3{};
+    ConstData.Shininess = m_Shininess;
     BufferProps.Size = sizeof(ConstantData);
     BufferProps.Stride = sizeof(ConstantData);
     BufferProps.Type = rndr::BufferType::Constant;
@@ -90,13 +92,26 @@ void Renderer::SetScreenSize(int Width, int Height)
     m_Camera.SetScreenSize(Width, Height);
 
     ConstantData ConstData;
-    ConstData.WorldToNDC = math::Transpose(m_Camera.FromWorldToNDC());
+    ConstData.WorldToNDC = math::Transpose(m_Camera.FromWorldToNDC()).GetMatrix();
+    ConstData.CameraPositionWorld = math::Point3{0, 0, 0};
+    ConstData.Shininess = m_Shininess;
     m_ConstantBuffer->Update(m_Ctx, rndr::ByteSpan{&ConstData});
 }
 
 void Renderer::SetRenderTarget(rndr::FrameBuffer& Target)
 {
     m_Target = &Target;
+}
+
+void Renderer::SetShininess(float Shininess)
+{
+    m_Shininess = Shininess;
+
+    ConstantData ConstData;
+    ConstData.WorldToNDC = math::Transpose(m_Camera.FromWorldToNDC()).GetMatrix();
+    ConstData.CameraPositionWorld = math::Point3{0, 0, 0};
+    ConstData.Shininess = m_Shininess;
+    m_ConstantBuffer->Update(m_Ctx, rndr::ByteSpan{&ConstData});
 }
 
 void Renderer::RenderModel(rndr::Model& Model, const rndr::Span<math::Transform>& Instances)
@@ -120,7 +135,7 @@ void Renderer::RenderModel(rndr::Model& Model, const rndr::Span<math::Transform>
     for (int InstanceIndex = 0; InstanceIndex < Instances.Size; InstanceIndex++)
     {
         InstancesTransposed[InstanceIndex].ObjectToWorld =
-            math::Transpose(Instances[InstanceIndex]);
+            math::Transpose(Instances[InstanceIndex]).GetMatrix();
         // Here we need to do a transpose of transpose of inverse, but two transposes cancel each
         // other
         InstancesTransposed[InstanceIndex].NormalTransform = Instances[InstanceIndex].GetInverse();
@@ -128,6 +143,7 @@ void Renderer::RenderModel(rndr::Model& Model, const rndr::Span<math::Transform>
     m_InstanceBuffer->Update(m_Ctx, rndr::ByteSpan{InstancesTransposed});
 
     m_Ctx->BindBuffer(m_ConstantBuffer.Get(), 0, m_Pipeline->VertexShader.Get());
+    m_Ctx->BindBuffer(m_ConstantBuffer.Get(), 0, m_Pipeline->PixelShader.Get());
     m_Ctx->BindBuffer(m_VertexBuffer.Get(), 0);
     m_Ctx->BindBuffer(m_InstanceBuffer.Get(), 1);
     m_Ctx->BindBuffer(m_IndexBuffer.Get(), 0);

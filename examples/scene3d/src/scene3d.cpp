@@ -71,9 +71,12 @@ public:
             ImGui::Begin("Menu");
             ImGui::SliderFloat("Depth", &m_ObjectDepth, 2.0f, 100.0f);
             ImGui::SliderFloat("Orientation", &m_Orientation, -90.0f, 90.0f);
+            ImGui::SliderFloat("Shininess", &m_Shininess, 2, 256);
             ImGui::End();
 
             m_ImGui->EndFrame();
+
+            m_Renderer->SetShininess(m_Shininess);
 #endif
 
             m_GraphicsCtx->Present(m_SwapChain.Get(), true);
@@ -108,6 +111,7 @@ private:
 
     float m_ObjectDepth = 5.0f;
     float m_Orientation = 0.0f;
+    float m_Shininess = 8.0f;
 };
 
 int main()

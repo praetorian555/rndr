@@ -21,12 +21,15 @@ struct OutVertex
 {
     float4 Position : SV_POSITION;
     float4 Color : COLOR;
-    float3 Normal : NORMAL;
+    float3 Normal : NORMAL0;
+    float3 ViewDirection : NORMAL1;
 };
 
 cbuffer Constants
 {
     row_major matrix FromWorldToNDC;
+    float3 CameraPositionWorld;
+    float Shininess;
 };
 
 OutVertex Main(InVertex In)
@@ -35,11 +38,13 @@ OutVertex Main(InVertex In)
     matrix NormalTransform = float4x4(In.NormalRowX, In.NormalRowY, In.NormalRowZ, In.NormalRowW);
 
     OutVertex Out;
-    Out.Position = mul(float4(In.Position.xyz, 1.0f), FromModelToWorld);
-    Out.Position = mul(Out.Position, FromWorldToNDC);
+    float4 PositionWorld = mul(float4(In.Position.xyz, 1.0f), FromModelToWorld);
+    Out.Position = mul(PositionWorld, FromWorldToNDC);
     Out.Color = In.Color;
     Out.Normal = mul(In.Normal, (float3x3) NormalTransform);
     Out.Normal = normalize(Out.Normal);
+    Out.ViewDirection = CameraPositionWorld.xyz - PositionWorld.xyz;
+    Out.ViewDirection = normalize(Out.ViewDirection);
 
     return Out;
 }
