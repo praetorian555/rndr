@@ -70,7 +70,7 @@ bool rndr::Window::Init(int Width, int Height, const WindowProperties& Props)
     m_Props = Props;
 
     rndr::WindowDelegates::OnResize.Add(RNDR_BIND_THREE_PARAM(this, &Window::Resize));
-    rndr::WindowDelegates::OnButtonDelegate.Add(RNDR_BIND_THREE_PARAM(this, &Window::ButtonEvent));
+    rndr::WindowDelegates::OnButtonDelegate.Add(RNDR_BIND_THREE_PARAM(this, &Window::HandleButtonEvent));
 
     // TODO(Marko): This will get the handle to the exe, should pass in the name of this dll if we
     // use dynamic linking
@@ -189,7 +189,7 @@ void rndr::Window::ActivateInfiniteCursor(bool Activate)
     ShowCursor(static_cast<int>(!m_InifiniteCursor));
 }
 
-void rndr::Window::ButtonEvent(Window* Window, InputPrimitive Primitive, InputTrigger Trigger)
+void rndr::Window::HandleButtonEvent(Window* Window, InputPrimitive Primitive, InputTrigger Trigger)
 {
     RNDR_UNUSED(Window);
     if (Primitive == InputPrimitive::Keyboard_Esc && Trigger == InputTrigger::ButtonDown)

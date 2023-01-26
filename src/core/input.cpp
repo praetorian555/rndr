@@ -51,14 +51,12 @@ void rndr::InputSystem::Update(real DeltaSeconds)
         switch (Evt.Data.index())
         {
             case 0:
-                continue;
-            case 1:
                 ProcessEvent(std::get<ButtonEvent>(Evt.Data));
                 continue;
-            case 2:
+            case 1:
                 ProcessEvent(std::get<MousePositionEvent>(Evt.Data));
                 continue;
-            case 3:
+            case 2:
                 ProcessEvent(std::get<MouseWheelEvent>(Evt.Data));
                 continue;
         }

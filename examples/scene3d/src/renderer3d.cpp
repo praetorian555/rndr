@@ -13,8 +13,7 @@ Renderer::Renderer(rndr::GraphicsContext* Ctx,
       m_MaxFaces(MaxFaces),
       m_MaxInstances(MaxInstances),
       m_ScreenWidth(ScreenWidth),
-      m_ScreenHeight(ScreenHeight),
-      m_Camera(math::Transform{}, ScreenWidth, ScreenHeight, rndr::ProjectionCameraProperties{})
+      m_ScreenHeight(ScreenHeight)
 {
     assert(m_MaxVertices > 0);
     assert(m_MaxFaces > 0);
@@ -67,15 +66,10 @@ Renderer::Renderer(rndr::GraphicsContext* Ctx,
     m_InstanceBuffer = m_Ctx->CreateBuffer(BufferProps, rndr::ByteSpan{});
     assert(m_InstanceBuffer.IsValid());
 
-    m_Camera.SetScreenSize(m_ScreenWidth, m_ScreenHeight);
-    ConstantData ConstData;
-    ConstData.WorldToNDC = math::Transpose(m_Camera.FromWorldToNDC()).GetMatrix();
-    ConstData.CameraPositionWorld = math::Point3{};
-    ConstData.Shininess = m_Shininess;
     BufferProps.Size = sizeof(ConstantData);
     BufferProps.Stride = sizeof(ConstantData);
     BufferProps.Type = rndr::BufferType::Constant;
-    m_ConstantBuffer = m_Ctx->CreateBuffer(BufferProps, rndr::ByteSpan{&ConstData});
+    m_ConstantBuffer = m_Ctx->CreateBuffer(BufferProps, rndr::ByteSpan{});
     assert(m_ConstantBuffer.IsValid());
 
     BufferProps.Size = m_MaxFaces * 3 * sizeof(int32_t);
@@ -89,10 +83,10 @@ void Renderer::SetScreenSize(int Width, int Height)
 {
     m_ScreenWidth = Width;
     m_ScreenHeight = Height;
-    m_Camera.SetScreenSize(Width, Height);
+    m_Camera->SetScreenSize(Width, Height);
 
     ConstantData ConstData;
-    ConstData.WorldToNDC = math::Transpose(m_Camera.FromWorldToNDC()).GetMatrix();
+    ConstData.WorldToNDC = math::Transpose(m_Camera->FromWorldToNDC()).GetMatrix();
     ConstData.CameraPositionWorld = math::Point3{0, 0, 0};
     ConstData.Shininess = m_Shininess;
     m_ConstantBuffer->Update(m_Ctx, rndr::ByteSpan{&ConstData});
@@ -108,7 +102,18 @@ void Renderer::SetShininess(float Shininess)
     m_Shininess = Shininess;
 
     ConstantData ConstData;
-    ConstData.WorldToNDC = math::Transpose(m_Camera.FromWorldToNDC()).GetMatrix();
+    ConstData.WorldToNDC = math::Transpose(m_Camera->FromWorldToNDC()).GetMatrix();
+    ConstData.CameraPositionWorld = math::Point3{0, 0, 0};
+    ConstData.Shininess = m_Shininess;
+    m_ConstantBuffer->Update(m_Ctx, rndr::ByteSpan{&ConstData});
+}
+
+void Renderer::SetProjectionCamera(rndr::ProjectionCamera* Camera)
+{
+    m_Camera = Camera;
+
+    ConstantData ConstData;
+    ConstData.WorldToNDC = math::Transpose(m_Camera->FromWorldToNDC()).GetMatrix();
     ConstData.CameraPositionWorld = math::Point3{0, 0, 0};
     ConstData.Shininess = m_Shininess;
     m_ConstantBuffer->Update(m_Ctx, rndr::ByteSpan{&ConstData});

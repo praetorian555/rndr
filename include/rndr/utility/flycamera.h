@@ -14,17 +14,17 @@ namespace rndr
 class ProjectionCamera;
 
 /**
- * Wrapper for movement of the camera from the first person point of view. Used to acquire world to
- * camera transform for projection cameras.
+ * Represents camera in the world space. It can be moved using W, A, S and D keys and can look
+ * around using the mouse.
  */
-class FirstPersonCamera
+class FlyCamera
 {
 public:
-    explicit FirstPersonCamera(RndrContext* RndrContext,
-                               ProjectionCamera* ProjectionCamera,
-                               math::Point3 StartingPosition = math::Point3(),
-                               real MovementSpeed = 1.0,
-                               real RotationSpeed = 1.0);
+    explicit FlyCamera(RndrContext* RndrContext,
+                       ProjectionCamera* ProjectionCamera,
+                       math::Point3 StartingPosition = math::Point3(),
+                       real MovementSpeed = 1.0,
+                       real RotationSpeed = 1.0);
 
     void Update(real DeltaSeconds);
 
@@ -32,6 +32,7 @@ public:
     void SetProjectionCamera(ProjectionCamera* ProjectionCamera);
 
     [[nodiscard]] math::Point3 GetPosition() const;
+    void SetPosition(const math::Point3& Position);
 
 private:
     // Private methods

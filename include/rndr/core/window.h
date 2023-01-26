@@ -79,7 +79,7 @@ public:
 
 private:
     void Resize(Window* Window, int Width, int Height);
-    void ButtonEvent(Window* Window, InputPrimitive Primitive, InputTrigger Trigger);
+    void HandleButtonEvent(Window* Window, InputPrimitive Primitive, InputTrigger Trigger);
 
     WindowProperties m_Props;
     NativeWindowHandle m_NativeWindowHandle;

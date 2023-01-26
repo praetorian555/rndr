@@ -1,5 +1,7 @@
 #include "rndr/rndr.h"
 
+#include <chrono>
+
 #include "imgui.h"
 
 #include "renderer3d.h"
@@ -30,9 +32,16 @@ public:
 
         // TODO(Marko): Handle window resizing
 
+        m_ProjectionCamera = rndr::CreateScoped<rndr::ProjectionCamera>(
+            "Projection Camera", math::Transform{}, m_WindowWidth, m_WindowHeight,
+            rndr::ProjectionCameraProperties{});
+        m_FlyCamera = rndr::CreateScoped<rndr::FlyCamera>("FlyCamera", m_RndrCtx.get(),
+                                                          m_ProjectionCamera.Get());
+
         m_Renderer = std::make_unique<Renderer>(m_GraphicsCtx.Get(), kMaxVertexCount, kMaxFaceCount,
                                                 kMaxInstanceCount, m_WindowWidth, m_WindowHeight);
         m_Renderer->SetRenderTarget(m_SwapChain->FrameBuffer.GetRef());
+        m_Renderer->SetProjectionCamera(m_ProjectionCamera.Get());
 
 #ifdef RNDR_IMGUI
         m_ImGui = rndr::ImGuiWrapper::Create(m_Window.GetRef(), m_GraphicsCtx.GetRef(),
@@ -48,19 +57,37 @@ public:
 
     ~App() = default;
 
+    float GetTimestamp()
+    {
+        const auto Timestamp = std::chrono::high_resolution_clock::now();
+        const int64_t ResultInt =
+            std::chrono::duration_cast<std::chrono::microseconds>(Timestamp.time_since_epoch())
+                .count();
+
+        return static_cast<float>(ResultInt) / 1'000'000.0f;
+    }
+
     void RunLoop()
     {
+        float StartSeconds = 0.0f;
+        float EndSeconds = 0.0f;
+        float FrameDuration = 0.0f;
         while (!m_Window->IsClosed())
         {
-            m_Window->ProcessEvents();
+            StartSeconds = GetTimestamp();
 
-            math::Vector4 ClearColor{55 / 255.0f, 67 / 255.0f, 90 / 255.0f, 1.0f};
+            m_Window->ProcessEvents();
+            m_RndrCtx->GetInputSystem()->Update(FrameDuration);
+            m_FlyCamera->Update(FrameDuration);
+
+                math::Vector4 ClearColor{55 / 255.0f, 67 / 255.0f, 90 / 255.0f, 1.0f};
             rndr::FrameBuffer* DefaultFB = m_SwapChain->FrameBuffer.Get();
             m_GraphicsCtx->ClearColor(DefaultFB->ColorBuffers[0].Get(), ClearColor);
             m_GraphicsCtx->ClearDepth(DefaultFB->DepthStencilBuffer.Get(), 1.0f);
 
 #ifdef RNDR_ASSIMP
-            math::Transform ObjectToWorld = math::Translate({0.0f, 0.0f, m_ObjectDepth}) * math::RotateX(m_Orientation);
+            math::Transform ObjectToWorld =
+                math::Translate({0.0f, 0.0f, m_ObjectDepth}) * math::RotateX(m_Orientation);
             m_Renderer->RenderModel(m_SphereModel.GetRef(),
                                     rndr::Span<math::Transform>{&ObjectToWorld});
 #endif
@@ -80,6 +107,9 @@ public:
 #endif
 
             m_GraphicsCtx->Present(m_SwapChain.Get(), true);
+
+            EndSeconds = GetTimestamp();
+            FrameDuration = EndSeconds - StartSeconds;
         }
     }
 
@@ -105,6 +135,9 @@ private:
 #ifdef RNDR_ASSIMP
     rndr::ScopePtr<rndr::Model> m_SphereModel;
 #endif
+
+    rndr::ScopePtr<rndr::ProjectionCamera> m_ProjectionCamera;
+    rndr::ScopePtr<rndr::FlyCamera> m_FlyCamera;
 
     int m_WindowWidth = 800;
     int m_WindowHeight = 600;

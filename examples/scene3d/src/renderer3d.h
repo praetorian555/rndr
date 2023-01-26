@@ -43,6 +43,7 @@ public:
     void SetScreenSize(int Width, int Height);
     void SetRenderTarget(rndr::FrameBuffer& Target);
     void SetShininess(float Shininess);
+    void SetProjectionCamera(rndr::ProjectionCamera* Camera);
 
     void RenderModel(rndr::Model& Model, const rndr::Span<math::Transform>& Instances);
 
@@ -62,6 +63,6 @@ private:
 
     int m_ScreenWidth;
     int m_ScreenHeight;
-    rndr::ProjectionCamera m_Camera;
+    rndr::ProjectionCamera* m_Camera;
     float m_Shininess = 8.0f;
 };

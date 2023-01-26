@@ -24,11 +24,9 @@
 // Profiling API
 #include "rndr/profiling/cputracer.h"
 
-// Camera API
-#include "rndr/camera/firstpersoncamera.h"
-
 // Utility API
 #include "rndr/utility/array.h"
+#include "rndr/utility/flycamera.h"
 #include "rndr/utility/imguiwrapper.h"
 #include "rndr/utility/modelloader.h"
 #include "rndr/utility/stackarray.h"

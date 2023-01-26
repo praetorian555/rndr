@@ -1,4 +1,4 @@
-#include "rndr/camera/firstpersoncamera.h"
+#include "rndr/utility/flycamera.h"
 
 #include "math/transform.h"
 
@@ -6,11 +6,11 @@
 #include "rndr/core/projectioncamera.h"
 #include "rndr/core/rndrcontext.h"
 
-rndr::FirstPersonCamera::FirstPersonCamera(rndr::RndrContext* RndrContext,
-                                           rndr::ProjectionCamera* ProjectionCamera,
-                                           math::Point3 StartingPosition,
-                                           real MovementSpeed,
-                                           real RotationSpeed)
+rndr::FlyCamera::FlyCamera(rndr::RndrContext* RndrContext,
+                           rndr::ProjectionCamera* ProjectionCamera,
+                           math::Point3 StartingPosition,
+                           real MovementSpeed,
+                           real RotationSpeed)
     : m_ProjectionCamera(ProjectionCamera),
       m_Position(StartingPosition),
       m_MovementSpeed(MovementSpeed),
@@ -23,35 +23,35 @@ rndr::FirstPersonCamera::FirstPersonCamera(rndr::RndrContext* RndrContext,
     using IT = rndr::InputTrigger;
 
     Context->CreateMapping("MoveForward",
-                           RNDR_BIND_INPUT_CALLBACK(&FirstPersonCamera::HandleMoveForward, this));
+                           RNDR_BIND_INPUT_CALLBACK(&FlyCamera::HandleMoveForward, this));
     Context->AddBinding("MoveForward", IP::Keyboard_W, IT::ButtonDown);
     Context->AddBinding("MoveForward", IP::Keyboard_W, IT::ButtonUp);
     Context->AddBinding("MoveForward", IP::Keyboard_S, IT::ButtonDown, -1);
     Context->AddBinding("MoveForward", IP::Keyboard_S, IT::ButtonUp, -1);
 
     Context->CreateMapping("MoveRight",
-                           RNDR_BIND_INPUT_CALLBACK(&FirstPersonCamera::HandleMoveRight, this));
+                           RNDR_BIND_INPUT_CALLBACK(&FlyCamera::HandleMoveRight, this));
     Context->AddBinding("MoveRight", IP::Keyboard_A, IT::ButtonDown, -1);
     Context->AddBinding("MoveRight", IP::Keyboard_A, IT::ButtonUp, -1);
     Context->AddBinding("MoveRight", IP::Keyboard_D, IT::ButtonDown);
     Context->AddBinding("MoveRight", IP::Keyboard_D, IT::ButtonUp);
 
     Context->CreateMapping("LookAroundVert",
-                           RNDR_BIND_INPUT_CALLBACK(&FirstPersonCamera::HandleLookVert, this));
+                           RNDR_BIND_INPUT_CALLBACK(&FlyCamera::HandleLookVert, this));
     Context->AddBinding("LookAroundVert", IP::Keyboard_Up, IT::ButtonDown);
     Context->AddBinding("LookAroundVert", IP::Keyboard_Up, IT::ButtonUp);
     Context->AddBinding("LookAroundVert", IP::Keyboard_Down, IT::ButtonDown, -1);
     Context->AddBinding("LookAroundVert", IP::Keyboard_Down, IT::ButtonUp, -1);
 
     Context->CreateMapping("LookAroundHorz",
-                           RNDR_BIND_INPUT_CALLBACK(&FirstPersonCamera::HandleLookHorz, this));
+                           RNDR_BIND_INPUT_CALLBACK(&FlyCamera::HandleLookHorz, this));
     Context->AddBinding("LookAroundHorz", IP::Keyboard_Right, IT::ButtonDown, -1);
     Context->AddBinding("LookAroundHorz", IP::Keyboard_Right, IT::ButtonUp, -1);
     Context->AddBinding("LookAroundHorz", IP::Keyboard_Left, IT::ButtonDown, 1);
     Context->AddBinding("LookAroundHorz", IP::Keyboard_Left, IT::ButtonUp, 1);
 }
 
-void rndr::FirstPersonCamera::Update(real DeltaSeconds)
+void rndr::FlyCamera::Update(real DeltaSeconds)
 {
 #if defined RNDR_LEFT_HANDED
     const real HandednessMultiplier = -1;
@@ -75,51 +75,51 @@ void rndr::FirstPersonCamera::Update(real DeltaSeconds)
     m_ProjectionCamera->SetWorldToCamera(WorldToCamera);
 }
 
-rndr::ProjectionCamera* rndr::FirstPersonCamera::GetProjectionCamera()
+rndr::ProjectionCamera* rndr::FlyCamera::GetProjectionCamera()
 {
     return m_ProjectionCamera;
 }
 
-void rndr::FirstPersonCamera::SetProjectionCamera(rndr::ProjectionCamera* ProjectionCamera)
+void rndr::FlyCamera::SetProjectionCamera(rndr::ProjectionCamera* ProjectionCamera)
 {
     m_ProjectionCamera = ProjectionCamera;
 }
 
-math::Point3 rndr::FirstPersonCamera::GetPosition() const
+math::Point3 rndr::FlyCamera::GetPosition() const
 {
     return m_Position;
 }
 
-void rndr::FirstPersonCamera::HandleLookVert(rndr::InputPrimitive Primitive,
-                                             rndr::InputTrigger Trigger,
-                                             real AxisValue)
+void rndr::FlyCamera::HandleLookVert(rndr::InputPrimitive Primitive,
+                                     rndr::InputTrigger Trigger,
+                                     real AxisValue)
 {
     RNDR_UNUSED(Primitive);
     using IT = rndr::InputTrigger;
     m_DeltaAngles.Roll = Trigger == IT::ButtonDown ? m_RotationSpeed * AxisValue : 0;
 }
 
-void rndr::FirstPersonCamera::HandleLookHorz(rndr::InputPrimitive Primitive,
-                                             rndr::InputTrigger Trigger,
-                                             real AxisValue)
+void rndr::FlyCamera::HandleLookHorz(rndr::InputPrimitive Primitive,
+                                     rndr::InputTrigger Trigger,
+                                     real AxisValue)
 {
     RNDR_UNUSED(Primitive);
     using IT = rndr::InputTrigger;
     m_DeltaAngles.Yaw = Trigger == IT::ButtonDown ? m_RotationSpeed * AxisValue : 0;
 }
 
-void rndr::FirstPersonCamera::HandleMoveForward(rndr::InputPrimitive Primitive,
-                                                rndr::InputTrigger Trigger,
-                                                real Value)
+void rndr::FlyCamera::HandleMoveForward(rndr::InputPrimitive Primitive,
+                                        rndr::InputTrigger Trigger,
+                                        real Value)
 {
     RNDR_UNUSED(Primitive);
     using IT = rndr::InputTrigger;
     m_DeltaPosition.X = Trigger == IT::ButtonDown ? Value : 0;
 }
 
-void rndr::FirstPersonCamera::HandleMoveRight(rndr::InputPrimitive Primitive,
-                                              rndr::InputTrigger Trigger,
-                                              real Value)
+void rndr::FlyCamera::HandleMoveRight(rndr::InputPrimitive Primitive,
+                                      rndr::InputTrigger Trigger,
+                                      real Value)
 {
     RNDR_UNUSED(Primitive);
     using IT = rndr::InputTrigger;
