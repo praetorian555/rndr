@@ -5,34 +5,36 @@
 #include "math/vector3.h"
 
 #include "rndr/core/base.h"
+#include "rndr/core/projectioncamera.h"
 #include "rndr/core/input.h"
-#include "rndr/core/rndrcontext.h"
 
 namespace rndr
 {
 
-class ProjectionCamera;
+struct FlyCameraProperties
+{
+    math::Vector3 StartPosition;
+    math::Rotator StartRotation;
+    real MovementSpeed = RNDR_REALC(1.0);
+    real RotationSpeed = RNDR_REALC(2.0);
+    ProjectionCameraProperties ProjectionProps;
+};
 
 /**
  * Represents camera in the world space. It can be moved using W, A, S and D keys and can look
  * around using the mouse.
  */
-class FlyCamera
+class FlyCamera : public ProjectionCamera
 {
 public:
-    explicit FlyCamera(RndrContext* RndrContext,
-                       ProjectionCamera* ProjectionCamera,
-                       math::Point3 StartingPosition = math::Point3(),
-                       real MovementSpeed = 1.0,
-                       real RotationSpeed = 1.0);
+    explicit FlyCamera(InputContext* InputContext,
+                       int ScreenWidth,
+                       int ScreenHeight,
+                       const FlyCameraProperties& Props = FlyCameraProperties{});
 
     void Update(real DeltaSeconds);
 
-    ProjectionCamera* GetProjectionCamera();
-    void SetProjectionCamera(ProjectionCamera* ProjectionCamera);
-
     [[nodiscard]] math::Point3 GetPosition() const;
-    void SetPosition(const math::Point3& Position);
 
 private:
     // Private methods
@@ -44,7 +46,8 @@ private:
 
     // Private fields
 
-    ProjectionCamera* m_ProjectionCamera = nullptr;
+    InputContext* m_InputContext;
+    FlyCameraProperties m_Props;
 
     math::Point3 m_Position;
     math::Rotator m_DirectionAngles;
@@ -54,9 +57,6 @@ private:
 
     math::Vector3 m_DirectionVector;
     math::Vector3 m_RightVector;
-
-    real m_MovementSpeed;
-    real m_RotationSpeed;
 };
 
 }  // namespace rndr

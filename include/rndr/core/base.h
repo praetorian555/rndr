@@ -37,8 +37,10 @@
 // Defines precision for floating-point type.
 #if !defined(RNDR_REAL_AS_DOUBLE)
 using real = float;
+#define RNDR_REALC(X) X##f
 #else
 using real = double;
+#define RNDR_REALC(X) X
 #endif  // !defined(RNDR_REAL_AS_DOUBLE)
 
 #if RNDR_WINDOWS

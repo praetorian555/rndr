@@ -32,16 +32,13 @@ public:
 
         // TODO(Marko): Handle window resizing
 
-        m_ProjectionCamera = rndr::CreateScoped<rndr::ProjectionCamera>(
-            "Projection Camera", math::Transform{}, m_WindowWidth, m_WindowHeight,
-            rndr::ProjectionCameraProperties{});
-        m_FlyCamera = rndr::CreateScoped<rndr::FlyCamera>("FlyCamera", m_RndrCtx.get(),
-                                                          m_ProjectionCamera.Get());
+        m_FlyCamera = rndr::CreateScoped<rndr::FlyCamera>("FlyCamera", DefaultInputContext,
+                                                          m_WindowWidth, m_WindowHeight);
 
         m_Renderer = std::make_unique<Renderer>(m_GraphicsCtx.Get(), kMaxVertexCount, kMaxFaceCount,
                                                 kMaxInstanceCount, m_WindowWidth, m_WindowHeight);
         m_Renderer->SetRenderTarget(m_SwapChain->FrameBuffer.GetRef());
-        m_Renderer->SetProjectionCamera(m_ProjectionCamera.Get());
+        m_Renderer->SetProjectionCamera(m_FlyCamera.Get());
 
 #ifdef RNDR_IMGUI
         m_ImGui = rndr::ImGuiWrapper::Create(m_Window.GetRef(), m_GraphicsCtx.GetRef(),
@@ -80,7 +77,7 @@ public:
             m_RndrCtx->GetInputSystem()->Update(FrameDuration);
             m_FlyCamera->Update(FrameDuration);
 
-                math::Vector4 ClearColor{55 / 255.0f, 67 / 255.0f, 90 / 255.0f, 1.0f};
+            math::Vector4 ClearColor{55 / 255.0f, 67 / 255.0f, 90 / 255.0f, 1.0f};
             rndr::FrameBuffer* DefaultFB = m_SwapChain->FrameBuffer.Get();
             m_GraphicsCtx->ClearColor(DefaultFB->ColorBuffers[0].Get(), ClearColor);
             m_GraphicsCtx->ClearDepth(DefaultFB->DepthStencilBuffer.Get(), 1.0f);
@@ -136,7 +133,6 @@ private:
     rndr::ScopePtr<rndr::Model> m_SphereModel;
 #endif
 
-    rndr::ScopePtr<rndr::ProjectionCamera> m_ProjectionCamera;
     rndr::ScopePtr<rndr::FlyCamera> m_FlyCamera;
 
     int m_WindowWidth = 800;
