@@ -43,7 +43,7 @@ static std::map<uint32_t, rndr::InputPrimitive> GPrimitiveMapping = {
     {VK_RIGHT, rndr::InputPrimitive::Keyboard_Right},
     {VK_DOWN, rndr::InputPrimitive::Keyboard_Down}};
 
-// Defining window deleages
+// Defining window delegates
 
 rndr::WindowDelegates::ResizeDelegate rndr::WindowDelegates::OnResize;
 rndr::WindowDelegates::ButtonDelegate rndr::WindowDelegates::OnButtonDelegate;
@@ -110,12 +110,14 @@ bool rndr::Window::Init(int Width, int Height, const WindowProperties& Props)
         return false;
     }
 
-    RAWINPUTDEVICE Rid[1];
-    Rid[0].usUsagePage = static_cast<USHORT>(0x01);  // HID_USAGE_PAGE_GENERIC
-    Rid[0].usUsage = static_cast<USHORT>(0x02);      // HID_USAGE_GENERIC_MOUSE
-    Rid[0].dwFlags = RIDEV_INPUTSINK;
-    Rid[0].hwndTarget = WindowHandle;
-    RegisterRawInputDevices(Rid, 1, sizeof(Rid[0]));
+    constexpr uint16_t kHIDUsagePageGeneric = 0x01;
+    constexpr uint16_t kHIDUsageGenericMouse = 0x02;
+    StackArray<RAWINPUTDEVICE, 1> RawDevices;
+    RawDevices[0].usUsagePage = kHIDUsagePageGeneric;
+    RawDevices[0].usUsage = kHIDUsageGenericMouse;
+    RawDevices[0].dwFlags = RIDEV_INPUTSINK;
+    RawDevices[0].hwndTarget = WindowHandle;
+    RegisterRawInputDevices(RawDevices.data(), 1, sizeof(RawDevices[0]));
 
     ShowWindow(WindowHandle, SW_SHOW);
 
@@ -260,28 +262,6 @@ math::Vector2 rndr::Window::GetSize() const
     return {static_cast<float>(m_Width), static_cast<float>(m_Height)};
 }
 
-struct InfCursorData
-{
-    POINT RefPosition;
-};
-
-static std::unordered_map<rndr::Window*, InfCursorData> GInfCursorMap;
-
-static POINT GetScreenPointFromWindowPoint(rndr::Window* Window, int X, int Y)
-{
-    HWND WindowHandle = reinterpret_cast<HWND>(Window->GetNativeWindowHandle());
-    POINT Point = {X, Window->GetHeight() - Y};
-    ClientToScreen(WindowHandle, &Point);
-    return Point;
-}
-
-bool IsMidPoint(rndr::Window* Window, int X, int Y)
-{
-    const POINT MidPoint = GetWindowMidPointInScreenSpace(Window);
-    const POINT ScreenPoint = GetScreenPointFromWindowPoint(Window, X, Y);
-    return MidPoint.x == ScreenPoint.x && MidPoint.y == ScreenPoint.y;
-}
-
 static void HandleMouseMove(rndr::Window* Window, int X, int Y)
 {
     if (Window == nullptr)
@@ -414,21 +394,30 @@ LRESULT CALLBACK WindowProc(HWND WindowHandle, UINT MsgCode, WPARAM ParamW, LPAR
                 break;
             }
 
-            // https://docs.microsoft.com/en-us/windows/win32/api/winuser/ns-winuser-rawmouse
-            UINT dwSize = sizeof(RAWINPUT);
-            static BYTE lpb[sizeof(RAWINPUT)];
+            UINT StructSize = sizeof(RAWINPUT);
+            rndr::StackArray<uint8_t, sizeof(RAWINPUT)> DataBuffer;
 
-            GetRawInputData((HRAWINPUT)ParamL, RID_INPUT, lpb, &dwSize, sizeof(RAWINPUTHEADER));
+            // NOLINTNEXTLINE
+            GetRawInputData(reinterpret_cast<HRAWINPUT>(ParamL), RID_INPUT, DataBuffer.data(),
+                            &StructSize, sizeof(RAWINPUTHEADER));
 
-            RAWINPUT* raw = (RAWINPUT*)lpb;
+            RAWINPUT* RawData = reinterpret_cast<RAWINPUT*>(DataBuffer.data());
 
-            if (raw->header.dwType == RIM_TYPEMOUSE)
+            if (RawData->header.dwType == RIM_TYPEMOUSE)
             {
-                rndr::GRndrContext->GetInputSystem()->SubmitRelativeMousePositionEvent(
-                    Window->GetNativeWindowHandle(),
-                    math::Vector2(static_cast<float>(raw->data.mouse.lLastX / Window->GetSize().X),
-                                  static_cast<float>(raw->data.mouse.lLastY / Window->GetSize().Y)),
-                    Window->GetSize());
+
+                rndr::WindowDelegates::OnRelativeMousePositionDelegate.Execute(
+                    Window, RawData->data.mouse.lLastX, RawData->data.mouse.lLastY);
+
+                rndr::InputSystem* InputSystem = rndr::GRndrContext->GetInputSystem();
+                if (InputSystem != nullptr)
+                {
+                    const math::Vector2 Delta{
+                        static_cast<float>(RawData->data.mouse.lLastX) / Window->GetSize().X,
+                        static_cast<float>(RawData->data.mouse.lLastY) / Window->GetSize().Y};
+                    InputSystem->SubmitRelativeMousePositionEvent(Window->GetNativeWindowHandle(),
+                                                                  Delta, Window->GetSize());
+                }
             }
             break;
         }
