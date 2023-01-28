@@ -73,7 +73,8 @@ public:
 
     ~App() = default;
 
-    int64_t GetTimestamp()
+    // TODO(Marko): Move to a utility/time.h
+    static int64_t GetTimestamp()
     {
         const auto Timestamp = std::chrono::high_resolution_clock::now();
         const int64_t ResultInt =
@@ -85,8 +86,8 @@ public:
 
     void RunLoop()
     {
-        int64_t StartSeconds;
-        int64_t EndSeconds;
+        int64_t StartSeconds = 0;
+        int64_t EndSeconds = 0;
         float FrameDuration = 0.0f;
         while (!m_Window->IsClosed())
         {
@@ -111,8 +112,15 @@ public:
 #ifdef RNDR_IMGUI
             m_ImGui->StartFrame();
 
+            ImGui::SetNextWindowPos(ImVec2(0, 0));
+            ImGui::SetNextWindowSize(ImVec2(300, 200));
+
+            // Increase transparency of the next imgui window.
+            ImGui::PushStyleVar(ImGuiStyleVar_Alpha, 0.7f);
+
             ImGui::Begin("Menu");
             ImGui::Text("FPS: %.6f", 1.0f / FrameDuration);
+            ImGui::Text("Cycle through cursor modes with Q");
             switch (m_CursorMode)
             {
                 case rndr::CursorMode::Normal:
@@ -134,6 +142,8 @@ public:
             ImGui::SliderFloat("Depth", &m_ObjectDepth, 2.0f, 100.0f);
             ImGui::SliderFloat("Orientation", &m_Orientation, -90.0f, 90.0f);
             ImGui::SliderFloat("Shininess", &m_Shininess, 2, 256);
+
+            ImGui::PopStyleVar();
             ImGui::End();
 
             m_ImGui->EndFrame();
