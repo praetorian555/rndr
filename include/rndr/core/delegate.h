@@ -32,9 +32,11 @@ private:
     Function m_Functor;
 };
 
-// TODO(Marko): Create partial specialization like for the Delegate template
 template <typename... Args>
-struct MultiDelegate
+struct MultiDelegate;
+
+template <typename... Args>
+struct MultiDelegate<void(Args...)>
 {
     using Function = std::function<void(Args...)>;
 
