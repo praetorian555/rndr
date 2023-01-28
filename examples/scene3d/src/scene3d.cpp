@@ -54,20 +54,20 @@ public:
 
     ~App() = default;
 
-    float GetTimestamp()
+    int64_t GetTimestamp()
     {
         const auto Timestamp = std::chrono::high_resolution_clock::now();
         const int64_t ResultInt =
             std::chrono::duration_cast<std::chrono::microseconds>(Timestamp.time_since_epoch())
                 .count();
 
-        return static_cast<float>(ResultInt) / 1'000'000.0f;
+        return ResultInt;
     }
 
     void RunLoop()
     {
-        float StartSeconds = 0.0f;
-        float EndSeconds = 0.0f;
+        int64_t StartSeconds;
+        int64_t EndSeconds;
         float FrameDuration = 0.0f;
         while (!m_Window->IsClosed())
         {
@@ -103,15 +103,16 @@ public:
             m_Renderer->SetShininess(m_Shininess);
 #endif
 
-            m_GraphicsCtx->Present(m_SwapChain.Get(), true);
+            m_GraphicsCtx->Present(m_SwapChain.Get(), false);
 
             EndSeconds = GetTimestamp();
-            FrameDuration = EndSeconds - StartSeconds;
+            FrameDuration = static_cast<float>(EndSeconds - StartSeconds) / 1000000.0f;
+            assert(FrameDuration > 0.0f);
         }
     }
 
     rndr::GraphicsContext* GetGraphicsContext() { return m_GraphicsCtx.Get(); }
-    math::Vector2 GetScreenSize() const
+    [[nodiscard]] math::Vector2 GetScreenSize() const
     {
         return math::Vector2{static_cast<float>(m_WindowWidth), static_cast<float>(m_WindowHeight)};
     }
