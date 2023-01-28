@@ -24,8 +24,27 @@ public:
         m_Window = m_RndrCtx->CreateWin(m_WindowWidth, m_WindowHeight);
         assert(m_Window.IsValid());
 
+        rndr::InputContext* DefaultInputContext = m_RndrCtx->GetInputContext();
+        DefaultInputContext->CreateMapping(
+            "InfCursor",
+            [this](rndr::InputPrimitive Primitive, rndr::InputTrigger Trigger, real Value)
+            {
+                RNDR_UNUSED(Primitive);
+                RNDR_UNUSED(Value);
+                static int s_ModeCounter = 0;
+                if (rndr::InputTrigger::ButtonUp == Trigger)
+                {
+                    s_ModeCounter++;
+                    s_ModeCounter %= 3;
+                    m_CursorMode = static_cast<rndr::CursorMode>(s_ModeCounter);
+                    m_Window->SetCursorMode(m_CursorMode);
+                }
+            });
+        DefaultInputContext->AddBinding("InfCursor", rndr::InputPrimitive::Keyboard_Q,
+                                        rndr::InputTrigger::ButtonUp);
+
         rndr::NativeWindowHandle Handle = m_Window->GetNativeWindowHandle();
-        rndr::SwapChainProperties SwapChainProps{.UseDepthStencil = true};
+        const rndr::SwapChainProperties SwapChainProps{.UseDepthStencil = true};
         m_SwapChain =
             m_GraphicsCtx->CreateSwapChain(Handle, m_WindowWidth, m_WindowHeight, SwapChainProps);
         assert(m_SwapChain.IsValid());
@@ -93,6 +112,25 @@ public:
             m_ImGui->StartFrame();
 
             ImGui::Begin("Menu");
+            ImGui::Text("FPS: %.6f", 1.0f / FrameDuration);
+            switch (m_CursorMode)
+            {
+                case rndr::CursorMode::Normal:
+                {
+                    ImGui::Text("CursorMode: Normal");
+                    break;
+                }
+                case rndr::CursorMode::Hidden:
+                {
+                    ImGui::Text("CursorMode: Hidden");
+                    break;
+                }
+                case rndr::CursorMode::Infinite:
+                {
+                    ImGui::Text("CursorMode: Infinite");
+                    break;
+                }
+            }
             ImGui::SliderFloat("Depth", &m_ObjectDepth, 2.0f, 100.0f);
             ImGui::SliderFloat("Orientation", &m_Orientation, -90.0f, 90.0f);
             ImGui::SliderFloat("Shininess", &m_Shininess, 2, 256);
@@ -142,6 +180,7 @@ private:
     float m_ObjectDepth = 5.0f;
     float m_Orientation = 0.0f;
     float m_Shininess = 8.0f;
+    rndr::CursorMode m_CursorMode = rndr::CursorMode::Normal;
 };
 
 int main()

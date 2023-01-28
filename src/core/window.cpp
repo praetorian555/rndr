@@ -1,11 +1,10 @@
 #include "rndr/core/window.h"
 
-#include <cassert>
 #include <map>
 
 #if defined RNDR_WINDOWS
-#include <Windows.h>
 #include <windowsx.h>
+#include <winuser.h>
 #endif  // RNDR_WINDOWS
 
 #include "rndr/core/input.h"
@@ -49,6 +48,8 @@ static std::map<uint32_t, rndr::InputPrimitive> GPrimitiveMapping = {
 rndr::WindowDelegates::ResizeDelegate rndr::WindowDelegates::OnResize;
 rndr::WindowDelegates::ButtonDelegate rndr::WindowDelegates::OnButtonDelegate;
 rndr::WindowDelegates::MousePositionDelegate rndr::WindowDelegates::OnMousePositionDelegate;
+rndr::WindowDelegates::RelativeMousePositionDelegate
+    rndr::WindowDelegates::OnRelativeMousePositionDelegate;
 rndr::WindowDelegates::MouseWheelDelegate rndr::WindowDelegates::OnMouseWheelMovedDelegate;
 
 // Window
@@ -70,7 +71,8 @@ bool rndr::Window::Init(int Width, int Height, const WindowProperties& Props)
     m_Props = Props;
 
     rndr::WindowDelegates::OnResize.Add(RNDR_BIND_THREE_PARAM(this, &Window::Resize));
-    rndr::WindowDelegates::OnButtonDelegate.Add(RNDR_BIND_THREE_PARAM(this, &Window::HandleButtonEvent));
+    rndr::WindowDelegates::OnButtonDelegate.Add(
+        RNDR_BIND_THREE_PARAM(this, &Window::HandleButtonEvent));
 
     // TODO(Marko): This will get the handle to the exe, should pass in the name of this dll if we
     // use dynamic linking
@@ -107,6 +109,13 @@ bool rndr::Window::Init(int Width, int Height, const WindowProperties& Props)
         RNDR_LOG_ERROR("Window::Init: CreateWindowEx failed!");
         return false;
     }
+
+    RAWINPUTDEVICE Rid[1];
+    Rid[0].usUsagePage = static_cast<USHORT>(0x01);  // HID_USAGE_PAGE_GENERIC
+    Rid[0].usUsage = static_cast<USHORT>(0x02);      // HID_USAGE_GENERIC_MOUSE
+    Rid[0].dwFlags = RIDEV_INPUTSINK;
+    Rid[0].hwndTarget = WindowHandle;
+    RegisterRawInputDevices(Rid, 1, sizeof(Rid[0]));
 
     ShowWindow(WindowHandle, SW_SHOW);
 
@@ -163,32 +172,6 @@ bool rndr::Window::IsWindowMinimized() const
     return m_Width == 0 || m_Height == 0;
 }
 
-void rndr::Window::LockCursor(bool ShouldLock) const
-{
-    if (ShouldLock)
-    {
-        RECT WindowRect;
-        HWND WindowHandle = reinterpret_cast<HWND>(m_NativeWindowHandle);
-        GetWindowRect(WindowHandle, &WindowRect);
-        ClipCursor(&WindowRect);
-    }
-    else
-    {
-        ClipCursor(nullptr);
-    }
-}
-
-void rndr::Window::ActivateInfiniteCursor(bool Activate)
-{
-    if (m_InifiniteCursor == Activate)
-    {
-        return;
-    }
-
-    m_InifiniteCursor = Activate;
-    ShowCursor(static_cast<int>(!m_InifiniteCursor));
-}
-
 void rndr::Window::HandleButtonEvent(Window* Window, InputPrimitive Primitive, InputTrigger Trigger)
 {
     RNDR_UNUSED(Window);
@@ -207,6 +190,133 @@ void rndr::Window::Resize(Window* Window, int Width, int Height)
 
     m_Width = Width;
     m_Height = Height;
+}
+
+static POINT GetWindowMidPointInScreenSpace(rndr::Window* Window)
+{
+    HWND WindowHandle = reinterpret_cast<HWND>(Window->GetNativeWindowHandle());
+    RECT WindowRect;
+    GetWindowRect(WindowHandle, &WindowRect);
+    const int Width = WindowRect.right - WindowRect.left;
+    const int Height = WindowRect.bottom - WindowRect.top;
+    const int MidX = WindowRect.left + Width / 2;
+    const int MidY = WindowRect.top + Height / 2;
+    return {MidX, MidY};
+}
+
+static bool IsCursorHidden()
+{
+    CURSORINFO CursorInfo;
+    CursorInfo.cbSize = sizeof(CURSORINFO);
+    GetCursorInfo(&CursorInfo);
+    return CursorInfo.flags != CURSOR_SHOWING;
+}
+
+bool rndr::Window::SetCursorMode(rndr::CursorMode Mode)
+{
+    m_CursorMode = Mode;
+
+    switch (Mode)
+    {
+        case CursorMode::Normal:
+        {
+            ClipCursor(nullptr);
+            if (IsCursorHidden())
+            {
+                ShowCursor(TRUE);
+            }
+            break;
+        }
+        case CursorMode::Hidden:
+        {
+            ClipCursor(nullptr);
+            if (!IsCursorHidden())
+            {
+                ShowCursor(FALSE);
+            }
+            break;
+        }
+        case CursorMode::Infinite:
+        {
+            RECT WindowRect;
+            HWND WindowHandle = reinterpret_cast<HWND>(m_NativeWindowHandle);
+            GetWindowRect(WindowHandle, &WindowRect);
+            ClipCursor(&WindowRect);
+            if (!IsCursorHidden())
+            {
+                ShowCursor(FALSE);
+            }
+            const POINT MidPoint = GetWindowMidPointInScreenSpace(this);
+            SetCursorPos(MidPoint.x, MidPoint.y);
+            break;
+        }
+    }
+
+    return true;
+}
+
+math::Vector2 rndr::Window::GetSize() const
+{
+    return {static_cast<float>(m_Width), static_cast<float>(m_Height)};
+}
+
+struct InfCursorData
+{
+    POINT RefPosition;
+};
+
+static std::unordered_map<rndr::Window*, InfCursorData> GInfCursorMap;
+
+static POINT GetScreenPointFromWindowPoint(rndr::Window* Window, int X, int Y)
+{
+    HWND WindowHandle = reinterpret_cast<HWND>(Window->GetNativeWindowHandle());
+    POINT Point = {X, Window->GetHeight() - Y};
+    ClientToScreen(WindowHandle, &Point);
+    return Point;
+}
+
+bool IsMidPoint(rndr::Window* Window, int X, int Y)
+{
+    const POINT MidPoint = GetWindowMidPointInScreenSpace(Window);
+    const POINT ScreenPoint = GetScreenPointFromWindowPoint(Window, X, Y);
+    return MidPoint.x == ScreenPoint.x && MidPoint.y == ScreenPoint.y;
+}
+
+static void HandleMouseMove(rndr::Window* Window, int X, int Y)
+{
+    if (Window == nullptr)
+    {
+        return;
+    }
+
+    // We need to flip Y since the engine expects Y to grow from bottom to top
+    Y = Window->GetHeight() - Y;
+
+    const rndr::CursorMode Mode = Window->GetCursorMode();
+    switch (Mode)
+    {
+        case rndr::CursorMode::Normal:
+        case rndr::CursorMode::Hidden:
+        {
+            rndr::WindowDelegates::OnMousePositionDelegate.Execute(Window, X, Y);
+
+            // Notify the input system
+            rndr::InputSystem* IS = rndr::GRndrContext->GetInputSystem();
+            if (IS != nullptr)
+            {
+                const math::Point2 AbsolutePosition(static_cast<float>(X), static_cast<float>(Y));
+                IS->SubmitMousePositionEvent(Window->GetNativeWindowHandle(), AbsolutePosition,
+                                             Window->GetSize());
+            }
+            break;
+        }
+        case rndr::CursorMode::Infinite:
+        {
+            const POINT MidPoint = GetWindowMidPointInScreenSpace(Window);
+            SetCursorPos(MidPoint.x, MidPoint.y);
+            break;
+        }
+    }
 }
 
 LRESULT CALLBACK WindowProc(HWND WindowHandle, UINT MsgCode, WPARAM ParamW, LPARAM ParamL)
@@ -272,47 +382,9 @@ LRESULT CALLBACK WindowProc(HWND WindowHandle, UINT MsgCode, WPARAM ParamW, LPAR
         }
         case WM_MOUSEMOVE:
         {
-            static bool s_CursorPositionChanged = false;
-
-            if (Window == nullptr)
-            {
-                break;
-            }
-
             const int X = GET_X_LPARAM(ParamL);
-            // In RNDR y grows from bottom to up
-            const int Y = Window->GetHeight() - GET_Y_LPARAM(ParamL);
-
-            if (Window->IsInfiniteCursor() && s_CursorPositionChanged)
-            {
-                s_CursorPositionChanged = false;
-                break;
-            }
-
-            rndr::WindowDelegates::OnMousePositionDelegate.Execute(Window, X, Y);
-
-            // Notify the input system
-            rndr::InputSystem* IS = rndr::GRndrContext->GetInputSystem();
-            if (IS != nullptr)
-            {
-                const math::Point2 AbsolutePosition(static_cast<float>(X), static_cast<float>(Y));
-                const math::Vector2 ScreenSize(static_cast<float>(Window->GetWidth()),
-                                               static_cast<float>(Window->GetHeight()));
-                IS->SubmitMousePositionEvent(Window->GetNativeWindowHandle(), AbsolutePosition,
-                                             ScreenSize);
-            }
-
-            if (Window->IsInfiniteCursor())
-            {
-                RECT WindowRect;
-                GetWindowRect(WindowHandle, &WindowRect);
-                POINT NewCursorPosition;
-                NewCursorPosition.x = WindowRect.left + Window->GetWidth() / 2;
-                NewCursorPosition.y = WindowRect.top + Window->GetHeight() / 2;
-                SetCursorPos(NewCursorPosition.x, NewCursorPosition.y);
-                s_CursorPositionChanged = true;
-            }
-
+            const int Y = GET_Y_LPARAM(ParamL);
+            HandleMouseMove(Window, X, Y);
             break;
         }
         case WM_LBUTTONDBLCLK:
@@ -333,6 +405,31 @@ LRESULT CALLBACK WindowProc(HWND WindowHandle, UINT MsgCode, WPARAM ParamW, LPAR
                                       rndr::InputTrigger::DoubleClick);
             }
 
+            break;
+        }
+        case WM_INPUT:
+        {
+            if (Window->GetCursorMode() != rndr::CursorMode::Infinite)
+            {
+                break;
+            }
+
+            // https://docs.microsoft.com/en-us/windows/win32/api/winuser/ns-winuser-rawmouse
+            UINT dwSize = sizeof(RAWINPUT);
+            static BYTE lpb[sizeof(RAWINPUT)];
+
+            GetRawInputData((HRAWINPUT)ParamL, RID_INPUT, lpb, &dwSize, sizeof(RAWINPUTHEADER));
+
+            RAWINPUT* raw = (RAWINPUT*)lpb;
+
+            if (raw->header.dwType == RIM_TYPEMOUSE)
+            {
+                rndr::GRndrContext->GetInputSystem()->SubmitRelativeMousePositionEvent(
+                    Window->GetNativeWindowHandle(),
+                    math::Vector2(static_cast<float>(raw->data.mouse.lLastX / Window->GetSize().X),
+                                  static_cast<float>(raw->data.mouse.lLastY / Window->GetSize().Y)),
+                    Window->GetSize());
+            }
             break;
         }
         case WM_RBUTTONDBLCLK:

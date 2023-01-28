@@ -88,6 +88,9 @@ public:
     void SubmitMousePositionEvent(NativeWindowHandle Window,
                                   const math::Point2& Position,
                                   const math::Vector2& ScreenSize);
+    void SubmitRelativeMousePositionEvent(NativeWindowHandle Window,
+                                          const math::Vector2& DeltaPosition,
+                                          const math::Vector2& ScreenSize);
     void SubmitMouseWheelEvent(NativeWindowHandle Window, int DeltaWheel);
 
     void Update(real DeltaSeconds);
@@ -118,21 +121,30 @@ private:
         math::Vector2 ScreenSize;
     };
 
+    struct RelativeMousePositionEvent
+    {
+        math::Vector2 Position;
+        math::Vector2 ScreenSize;
+    };
+
     struct MouseWheelEvent
     {
         int DeltaWheel = 0;
     };
 
+    using EventVariant =
+        std::variant<ButtonEvent, MousePositionEvent, RelativeMousePositionEvent, MouseWheelEvent>;
     struct Event
     {
         NativeWindowHandle WindowHandle;
-        std::variant<ButtonEvent, MousePositionEvent, MouseWheelEvent> Data;
+        EventVariant Data;
     };
 
     // Private methods
 
     void ProcessEvent(const ButtonEvent& Event);
     void ProcessEvent(const MousePositionEvent& Event);
+    void ProcessEvent(const RelativeMousePositionEvent& Event);
     void ProcessEvent(const MouseWheelEvent& Event);
 
     // Private fields

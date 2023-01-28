@@ -16,7 +16,7 @@ struct FlyCameraProperties
     math::Vector3 StartPosition;
     math::Rotator StartRotation;
     real MovementSpeed = RNDR_REALC(1.0);
-    real RotationSpeed = RNDR_REALC(2.0);
+    real RotationSpeed = RNDR_REALC(8000.0);
     ProjectionCameraProperties ProjectionProps;
 };
 

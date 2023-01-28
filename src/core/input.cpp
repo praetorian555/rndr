@@ -33,6 +33,15 @@ void rndr::InputSystem::SubmitMousePositionEvent(NativeWindowHandle Window,
     m_Events.push(Evt);
 }
 
+void rndr::InputSystem::SubmitRelativeMousePositionEvent(rndr::NativeWindowHandle Window,
+                                                         const math::Vector2& DeltaPosition,
+                                                         const math::Vector2& ScreenSize)
+{
+    assert(ScreenSize.X != 0 && ScreenSize.Y != 0);
+    const Event Evt{Window, RelativeMousePositionEvent{DeltaPosition, ScreenSize}};
+    m_Events.push(Evt);
+}
+
 void rndr::InputSystem::SubmitMouseWheelEvent(NativeWindowHandle Window, int DeltaWheel)
 {
     const Event Evt{Window, MouseWheelEvent{DeltaWheel}};
@@ -57,6 +66,9 @@ void rndr::InputSystem::Update(real DeltaSeconds)
                 ProcessEvent(std::get<MousePositionEvent>(Evt.Data));
                 continue;
             case 2:
+                ProcessEvent(std::get<RelativeMousePositionEvent>(Evt.Data));
+                continue;
+            case 3:
                 ProcessEvent(std::get<MouseWheelEvent>(Evt.Data));
                 continue;
         }
@@ -86,40 +98,48 @@ void rndr::InputSystem::ProcessEvent(const MousePositionEvent& Event)
         {
             if (Binding.Primitive == InputPrimitive::Mouse_AxisX)
             {
-                real Value = 0;
-                if (Binding.Trigger == InputTrigger::AxisChangedRelative &&
-                    m_AbsolutePosition.has_value())
+                if (Binding.Trigger == InputTrigger::AxisChangedAbsolute)
                 {
-                    Value =
-                        ((Event.Position.X - m_AbsolutePosition.value().X) / Event.ScreenSize.X);
-                    Value *= Binding.Modifier;
+                    const real Value = Binding.Modifier * Event.Position.X;
+                    MappingEntry.Mapping->Callback(Binding.Primitive, Binding.Trigger, Value);
                 }
-                else if (Binding.Trigger == InputTrigger::AxisChangedAbsolute)
-                {
-                    Value = Binding.Modifier * Event.Position.X;
-                }
-                MappingEntry.Mapping->Callback(Binding.Primitive, Binding.Trigger, Value);
             }
             else if (Binding.Primitive == InputPrimitive::Mouse_AxisY)
             {
-                real Value = 0;
-                if (Binding.Trigger == InputTrigger::AxisChangedRelative &&
-                    m_AbsolutePosition.has_value())
+                if (Binding.Trigger == InputTrigger::AxisChangedAbsolute)
                 {
-                    Value =
-                        ((Event.Position.Y - m_AbsolutePosition.value().Y) / Event.ScreenSize.Y);
-                    Value *= Binding.Modifier;
+                    const real Value = Binding.Modifier * Event.Position.Y;
+                    MappingEntry.Mapping->Callback(Binding.Primitive, Binding.Trigger, Value);
                 }
-                else if (Binding.Trigger == InputTrigger::AxisChangedAbsolute)
-                {
-                    Value = Binding.Modifier * Event.Position.Y;
-                }
-                MappingEntry.Mapping->Callback(Binding.Primitive, Binding.Trigger, Value);
             }
         }
     }
+}
 
-    m_AbsolutePosition = Event.Position;
+void rndr::InputSystem::ProcessEvent(const rndr::InputSystem::RelativeMousePositionEvent& Event)
+{
+    for (const auto& MappingEntry : m_Context->Mappings)
+    {
+        for (const auto& Binding : MappingEntry.Mapping->Bindings)
+        {
+            if (Binding.Primitive == InputPrimitive::Mouse_AxisX)
+            {
+                if (Binding.Trigger == InputTrigger::AxisChangedRelative)
+                {
+                    const real Value = Binding.Modifier * (Event.Position.X / Event.ScreenSize.X);
+                    MappingEntry.Mapping->Callback(Binding.Primitive, Binding.Trigger, Value);
+                }
+            }
+            else if (Binding.Primitive == InputPrimitive::Mouse_AxisY)
+            {
+                if (Binding.Trigger == InputTrigger::AxisChangedRelative)
+                {
+                    const real Value = Binding.Modifier * (Event.Position.Y / Event.ScreenSize.Y);
+                    MappingEntry.Mapping->Callback(Binding.Primitive, Binding.Trigger, Value);
+                }
+            }
+        }
+    }
 }
 
 void rndr::InputSystem::ProcessEvent(const MouseWheelEvent& Event)

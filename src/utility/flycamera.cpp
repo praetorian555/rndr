@@ -40,6 +40,7 @@ rndr::FlyCamera::FlyCamera(InputContext* InputContext,
     m_InputContext->AddBinding("LookAroundVert", IP::Keyboard_Up, IT::ButtonUp);
     m_InputContext->AddBinding("LookAroundVert", IP::Keyboard_Down, IT::ButtonDown, -1);
     m_InputContext->AddBinding("LookAroundVert", IP::Keyboard_Down, IT::ButtonUp, -1);
+    m_InputContext->AddBinding("LookAroundVert", IP::Mouse_AxisY, IT::AxisChangedRelative, -1);
 
     m_InputContext->CreateMapping("LookAroundHorz",
                                   RNDR_BIND_INPUT_CALLBACK(&FlyCamera::HandleLookHorz, this));
@@ -47,6 +48,7 @@ rndr::FlyCamera::FlyCamera(InputContext* InputContext,
     m_InputContext->AddBinding("LookAroundHorz", IP::Keyboard_Right, IT::ButtonUp, -1);
     m_InputContext->AddBinding("LookAroundHorz", IP::Keyboard_Left, IT::ButtonDown, 1);
     m_InputContext->AddBinding("LookAroundHorz", IP::Keyboard_Left, IT::ButtonUp, 1);
+    m_InputContext->AddBinding("LookAroundHorz", IP::Mouse_AxisX, IT::AxisChangedRelative, -1);
 }
 
 void rndr::FlyCamera::Update(real DeltaSeconds)
@@ -58,13 +60,15 @@ void rndr::FlyCamera::Update(real DeltaSeconds)
 #endif
 
     m_DirectionVector = math::Vector3{0, 0, -1};
-    m_DirectionAngles += HandednessMultiplier * m_DeltaAngles * m_Props.RotationSpeed;
+    m_DirectionAngles += DeltaSeconds * HandednessMultiplier * m_DeltaAngles * m_Props.RotationSpeed;
     m_DirectionVector = math::Rotate(m_DirectionAngles)(m_DirectionVector);
     m_RightVector = math::Cross(m_DirectionVector, math::Vector3{0, 1, 0});
 
     m_Position += HandednessMultiplier * m_Props.MovementSpeed * DeltaSeconds * m_DeltaPosition.X *
                   m_DirectionVector;
     m_Position += m_Props.MovementSpeed * DeltaSeconds * m_DeltaPosition.Y * m_RightVector;
+
+    m_DirectionAngles.Roll = math::Clamp(m_DirectionAngles.Roll, -90.0f, 90.0f);
 
     const math::Transform CameraToWorld =
         math::Translate(math::Vector3{m_Position}) * math::Rotate(math::Rotator(m_DirectionAngles));
@@ -84,18 +88,30 @@ void rndr::FlyCamera::HandleLookVert(rndr::InputPrimitive Primitive,
                                      rndr::InputTrigger Trigger,
                                      real AxisValue)
 {
-    RNDR_UNUSED(Primitive);
     using IT = rndr::InputTrigger;
-    m_DeltaAngles.Roll = Trigger == IT::ButtonDown ? m_Props.RotationSpeed * AxisValue : 0;
+    if (Primitive == rndr::InputPrimitive::Mouse_AxisY)
+    {
+        m_DeltaAngles.Roll = m_Props.RotationSpeed * AxisValue;
+    }
+    else
+    {
+        m_DeltaAngles.Roll = Trigger == IT::ButtonDown ? m_Props.RotationSpeed * AxisValue : 0;
+    }
 }
 
 void rndr::FlyCamera::HandleLookHorz(rndr::InputPrimitive Primitive,
                                      rndr::InputTrigger Trigger,
                                      real AxisValue)
 {
-    RNDR_UNUSED(Primitive);
     using IT = rndr::InputTrigger;
-    m_DeltaAngles.Yaw = Trigger == IT::ButtonDown ? m_Props.RotationSpeed * AxisValue : 0;
+    if (Primitive == rndr::InputPrimitive::Mouse_AxisX)
+    {
+        m_DeltaAngles.Yaw = m_Props.RotationSpeed * AxisValue;
+    }
+    else
+    {
+        m_DeltaAngles.Yaw = Trigger == IT::ButtonDown ? m_Props.RotationSpeed * AxisValue : 0;
+    }
 }
 
 void rndr::FlyCamera::HandleMoveForward(rndr::InputPrimitive Primitive,

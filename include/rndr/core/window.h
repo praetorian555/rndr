@@ -22,6 +22,13 @@ struct WindowProperties
     std::string Name = "Default Window";
 };
 
+enum class CursorMode
+{
+    Normal,
+    Hidden,
+    Infinite
+};
+
 /**
  * Represents a window on the screen and provides a Surface object for rendering.
  */
@@ -45,7 +52,7 @@ public:
               const WindowProperties& Props = WindowProperties());
 
     /**
-     * Processes events that occured in the window such as event closing or button press.
+     * Processes events that occurred in the window such as event closing or button press.
      */
     void ProcessEvents() const;
 
@@ -54,22 +61,13 @@ public:
     [[nodiscard]] NativeWindowHandle GetNativeWindowHandle() const;
     [[nodiscard]] int GetWidth() const;
     [[nodiscard]] int GetHeight() const;
+    [[nodiscard]] math::Vector2 GetSize() const;
 
     [[nodiscard]] bool IsWindowMinimized() const;
     [[nodiscard]] bool IsClosed() const;
 
-    /**
-     * If true the cursor will be limited to this window.
-     */
-    void LockCursor(bool ShouldLock) const;
-
-    /**
-     * When activated the cursor will be hidden and you can move inifinitely in any direction.
-     * Cursor will also be limited to this window.
-     */
-    void ActivateInfiniteCursor(bool Activate);
-
-    [[nodiscard]] bool IsInfiniteCursor() const { return m_InifiniteCursor; }
+    bool SetCursorMode(CursorMode Mode);
+    CursorMode GetCursorMode() const { return m_CursorMode; }
 
     void SetNativeWindowEventDelegate(const NativeWindowEventDelegate& Delegate)
     {
@@ -85,8 +83,9 @@ private:
     NativeWindowHandle m_NativeWindowHandle;
     NativeWindowEventDelegate m_OnNativeEvent;
 
-    int m_Width = 0, m_Height = 0;
-    bool m_InifiniteCursor = false;
+    int m_Width = 0;
+    int m_Height = 0;
+    CursorMode m_CursorMode = CursorMode::Normal;
 };
 
 /**
@@ -94,10 +93,11 @@ private:
  */
 struct WindowDelegates
 {
-    using ResizeDelegate = MultiDelegate<Window*, int, int>;
-    using ButtonDelegate = MultiDelegate<Window*, InputPrimitive, InputTrigger>;
-    using MousePositionDelegate = MultiDelegate<Window*, int, int>;
-    using MouseWheelDelegate = MultiDelegate<Window*, int>;
+    using ResizeDelegate = MultiDelegate<void(Window*, int, int)>;
+    using ButtonDelegate = MultiDelegate<void(Window*, InputPrimitive, InputTrigger)>;
+    using MousePositionDelegate = MultiDelegate<void(Window*, int, int)>;
+    using RelativeMousePositionDelegate = MultiDelegate<void(Window*, int, int)>;
+    using MouseWheelDelegate = MultiDelegate<void(Window*, int)>;
 
     /**
      * This delegate is executed when the size of the window's client area is changed.
@@ -110,9 +110,14 @@ struct WindowDelegates
     static ButtonDelegate OnButtonDelegate;
 
     /**
-     * This delegate is executed when the mouse is moved.
+     * This delegate is executed when the mouse is moved. The window needs to be in Normal or Hidden cursor mode.
      */
     static MousePositionDelegate OnMousePositionDelegate;
+
+    /**
+     * Triggered only if the window is in the Infinite cursor mode.
+     */
+    static RelativeMousePositionDelegate OnRelativeMousePositionDelegate;
 
     /**
      * This delegate is executed when the mouse wheel is moved. The value is positive if the wheel
