@@ -14,15 +14,15 @@ target_link_libraries(scene3d PRIVATE rndr)
 # IDEs should put the headers in a nice place
 set_target_properties(scene3d PROPERTIES FOLDER Examples)
 source_group(
-  TREE "${PROJECT_SOURCE_DIR}/examples/scene3d/src"
-  PREFIX "App"
-  FILES ${SOURCE_LIST})
+        TREE "${PROJECT_SOURCE_DIR}/examples/scene3d/src"
+        PREFIX "App"
+        FILES ${SOURCE_LIST})
 
-target_compile_definitions(scene3d PUBLIC SCENE3D_ASSET_DIR="${CMAKE_CURRENT_SOURCE_DIR}/assets")
+target_compile_definitions(scene3d PUBLIC SCENE3D_ASSET_DIR= "${CMAKE_CURRENT_SOURCE_DIR}/assets")
 
 if (RNDR_UNITY)
-  source_group(
-    TREE "${PROJECT_BINARY_DIR}/examples/scene3d/CMakeFiles/scene3d.dir/Unity"
-    PREFIX "Unity"
-    FILES ${UNITY_SOURCE_LIST})
-endif()
+    source_group(
+            TREE "${PROJECT_BINARY_DIR}/examples/scene3d/CMakeFiles/scene3d.dir/Unity"
+            PREFIX "Unity"
+            FILES ${UNITY_SOURCE_LIST})
+endif ()

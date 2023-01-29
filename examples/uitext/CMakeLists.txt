@@ -13,16 +13,16 @@ target_link_libraries(uitext PRIVATE rndr)
 # IDEs should put the headers in a nice place
 set_target_properties(uitext PROPERTIES FOLDER Examples)
 source_group(
-  TREE "${PROJECT_SOURCE_DIR}/examples/uitext/src"
-  PREFIX "App"
-  FILES ${SOURCE_LIST})
+        TREE "${PROJECT_SOURCE_DIR}/examples/uitext/src"
+        PREFIX "App"
+        FILES ${SOURCE_LIST})
 
-target_compile_definitions(uitext PUBLIC BASIC2D_ASSET_DIR="${CMAKE_CURRENT_SOURCE_DIR}/assets")
+target_compile_definitions(uitext PUBLIC BASIC2D_ASSET_DIR= "${CMAKE_CURRENT_SOURCE_DIR}/assets")
 
 file(GLOB_RECURSE UNITY_SOURCE_LIST CONFIGURE_DEPENDS "${PROJECT_BINARY_DIR}/examples/uitext/*.cxx")
 if (RNDR_UNITY)
-  source_group(
-    TREE "${PROJECT_BINARY_DIR}/examples/uitext/CMakeFiles/uitext.dir/Unity"
-    PREFIX "Unity"
-    FILES ${UNITY_SOURCE_LIST})
-endif()
+    source_group(
+            TREE "${PROJECT_BINARY_DIR}/examples/uitext/CMakeFiles/uitext.dir/Unity"
+            PREFIX "Unity"
+            FILES ${UNITY_SOURCE_LIST})
+endif ()

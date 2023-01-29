@@ -12,46 +12,46 @@ target_include_directories(rndr PRIVATE ${PROJECT_SOURCE_DIR}/src)
 
 # Setup graphics API to use
 if (RNDR_DX11)
-target_compile_definitions(rndr PUBLIC RNDR_DX11)
-endif()
+    target_compile_definitions(rndr PUBLIC RNDR_DX11)
+endif ()
 
 if (RNDR_SPDLOG)
-target_compile_definitions(rndr PUBLIC RNDR_SPDLOG)
-target_link_libraries(rndr PUBLIC spdlog::spdlog)
-endif()
+    target_compile_definitions(rndr PUBLIC RNDR_SPDLOG)
+    target_link_libraries(rndr PUBLIC spdlog::spdlog)
+endif ()
 
 if (RNDR_IMGUI)
-target_compile_definitions(rndr PUBLIC RNDR_IMGUI)
-target_link_libraries(rndr PUBLIC imgui)
-endif()
+    target_compile_definitions(rndr PUBLIC RNDR_IMGUI)
+    target_link_libraries(rndr PUBLIC imgui)
+endif ()
 
 # Setup library dependencies
 target_link_libraries(rndr PUBLIC stb_image)
 target_link_libraries(rndr PUBLIC stb_truetype)
 target_link_libraries(rndr PUBLIC math)
 if (RNDR_DX11)
-target_link_libraries(rndr PUBLIC d3d11.lib dxgi.lib d3dcompiler.lib User32.lib)
-endif()
+    target_link_libraries(rndr PUBLIC d3d11.lib dxgi.lib d3dcompiler.lib User32.lib)
+endif ()
 if (RNDR_ASSIMP)
-  target_compile_definitions(rndr PUBLIC RNDR_ASSIMP)
-  target_link_libraries(rndr PUBLIC assimp)
-endif()
+    target_compile_definitions(rndr PUBLIC RNDR_ASSIMP)
+    target_link_libraries(rndr PUBLIC assimp)
+endif ()
 
 # IDEs should put the headers in a nice place
 set_target_properties(rndr PROPERTIES FOLDER RNDR)
 source_group(
-  TREE "${PROJECT_SOURCE_DIR}/include"
-  PREFIX "API"
-  FILES ${PUBLIC_SOURCE_LIST})
+        TREE "${PROJECT_SOURCE_DIR}/include"
+        PREFIX "API"
+        FILES ${PUBLIC_SOURCE_LIST})
 source_group(
-  TREE "${PROJECT_SOURCE_DIR}/src"
-  PREFIX "Implementation"
-  FILES ${PRIVATE_SOURCE_LIST})
+        TREE "${PROJECT_SOURCE_DIR}/src"
+        PREFIX "Implementation"
+        FILES ${PRIVATE_SOURCE_LIST})
 if (RNDR_UNITY)
-  source_group(
-    TREE "${PROJECT_BINARY_DIR}/src/CMakeFiles/rndr.dir/Unity"
-    PREFIX "Unity"
-    FILES ${UNITY_SOURCE_LIST})
-endif()
+    source_group(
+            TREE "${PROJECT_BINARY_DIR}/src/CMakeFiles/rndr.dir/Unity"
+            PREFIX "Unity"
+            FILES ${UNITY_SOURCE_LIST})
+endif ()
 
-target_compile_definitions(rndr PUBLIC RNDR_ASSET_DIR="${CMAKE_CURRENT_SOURCE_DIR}/../assets")
+target_compile_definitions(rndr PUBLIC RNDR_ASSET_DIR= "${CMAKE_CURRENT_SOURCE_DIR}/../assets")
