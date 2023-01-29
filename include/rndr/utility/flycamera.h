@@ -13,7 +13,7 @@ namespace rndr
 
 struct FlyCameraProperties
 {
-    math::Vector3 StartPosition;
+    math::Point3 StartPosition;
     math::Rotator StartRotation;
     real MovementSpeed = RNDR_REALC(1.0);
     real RotationSpeed = RNDR_REALC(8000.0);
@@ -34,8 +34,6 @@ public:
 
     void Update(real DeltaSeconds);
 
-    [[nodiscard]] math::Point3 GetPosition() const;
-
 private:
     // Private methods
 
@@ -49,10 +47,7 @@ private:
     InputContext* m_InputContext;
     FlyCameraProperties m_Props;
 
-    math::Point3 m_Position;
-    math::Rotator m_DirectionAngles;
-
-    math::Rotator m_DeltaAngles;
+    math::Rotator m_DeltaRotation;
     math::Vector3 m_DeltaPosition;
 
     math::Vector3 m_DirectionVector;

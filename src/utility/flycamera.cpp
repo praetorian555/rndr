@@ -10,13 +10,14 @@ rndr::FlyCamera::FlyCamera(InputContext* InputContext,
                            int ScreenWidth,
                            int ScreenHeight,
                            const FlyCameraProperties& Props)
-    : ProjectionCamera({}, ScreenWidth, ScreenHeight, Props.ProjectionProps),
+    : ProjectionCamera(Props.StartPosition,
+                       Props.StartRotation,
+                       ScreenWidth,
+                       ScreenHeight,
+                       Props.ProjectionProps),
       m_InputContext(InputContext),
-      m_Props(Props),
-      m_DirectionAngles(Props.StartRotation)
+      m_Props(Props)
 {
-    m_Position += Props.StartPosition;
-
     using IP = rndr::InputPrimitive;
     using IT = rndr::InputTrigger;
 
@@ -53,35 +54,22 @@ rndr::FlyCamera::FlyCamera(InputContext* InputContext,
 
 void rndr::FlyCamera::Update(real DeltaSeconds)
 {
-#if defined RNDR_LEFT_HANDED
-    const real HandednessMultiplier = -1;
-#else
-    const real HandednessMultiplier = 1;
-#endif
-
-    m_DirectionVector = math::Vector3{0, 0, -1};
-    m_DirectionAngles += DeltaSeconds * HandednessMultiplier * m_DeltaAngles * m_Props.RotationSpeed;
-    m_DirectionVector = math::Rotate(m_DirectionAngles)(m_DirectionVector);
+    m_DirectionVector = math::Vector3{0, 0, 1};  // Left-handed
+    math::Rotator Rotation = GetRotation();
+    Rotation += DeltaSeconds * m_Props.RotationSpeed * m_DeltaRotation;
+    m_DirectionVector = math::Rotate(Rotation)(m_DirectionVector);
     m_RightVector = math::Cross(m_DirectionVector, math::Vector3{0, 1, 0});
 
-    m_Position += HandednessMultiplier * m_Props.MovementSpeed * DeltaSeconds * m_DeltaPosition.X *
-                  m_DirectionVector;
-    m_Position += m_Props.MovementSpeed * DeltaSeconds * m_DeltaPosition.Y * m_RightVector;
+    constexpr real kMaxRoll = 89.0f;
+    Rotation.Roll = math::Clamp(Rotation.Roll, -kMaxRoll, kMaxRoll);
 
-    m_DirectionAngles.Roll = math::Clamp(m_DirectionAngles.Roll, -90.0f, 90.0f);
+    math::Point3 Position = GetPosition();
+    Position += m_Props.MovementSpeed * DeltaSeconds * m_DeltaPosition.X * m_DirectionVector;
+    Position += m_Props.MovementSpeed * DeltaSeconds * m_DeltaPosition.Y * m_RightVector;
 
-    const math::Transform CameraToWorld =
-        math::Translate(math::Vector3{m_Position}) * math::Rotate(math::Rotator(m_DirectionAngles));
-    const math::Transform WorldToCamera(CameraToWorld.GetInverse());
+    SetPositionAndRotation(Position, Rotation);
 
-    SetWorldToCamera(WorldToCamera);
-
-    m_DeltaAngles = math::Rotator{};
-}
-
-math::Point3 rndr::FlyCamera::GetPosition() const
-{
-    return m_Position;
+    m_DeltaRotation = math::Rotator{};
 }
 
 void rndr::FlyCamera::HandleLookVert(rndr::InputPrimitive Primitive,
@@ -91,11 +79,11 @@ void rndr::FlyCamera::HandleLookVert(rndr::InputPrimitive Primitive,
     using IT = rndr::InputTrigger;
     if (Primitive == rndr::InputPrimitive::Mouse_AxisY)
     {
-        m_DeltaAngles.Roll = m_Props.RotationSpeed * AxisValue;
+        m_DeltaRotation.Roll = m_Props.RotationSpeed * AxisValue;
     }
     else
     {
-        m_DeltaAngles.Roll = Trigger == IT::ButtonDown ? m_Props.RotationSpeed * AxisValue : 0;
+        m_DeltaRotation.Roll = Trigger == IT::ButtonDown ? m_Props.RotationSpeed * AxisValue : 0;
     }
 }
 
@@ -106,11 +94,11 @@ void rndr::FlyCamera::HandleLookHorz(rndr::InputPrimitive Primitive,
     using IT = rndr::InputTrigger;
     if (Primitive == rndr::InputPrimitive::Mouse_AxisX)
     {
-        m_DeltaAngles.Yaw = m_Props.RotationSpeed * AxisValue;
+        m_DeltaRotation.Yaw = m_Props.RotationSpeed * AxisValue;
     }
     else
     {
-        m_DeltaAngles.Yaw = Trigger == IT::ButtonDown ? m_Props.RotationSpeed * AxisValue : 0;
+        m_DeltaRotation.Yaw = Trigger == IT::ButtonDown ? m_Props.RotationSpeed * AxisValue : 0;
     }
 }
 

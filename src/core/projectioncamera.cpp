@@ -12,37 +12,75 @@ rndr::ProjectionCamera::ProjectionCamera(const math::Transform& WorldToCamera,
       m_ScreenHeight(ScreenHeight),
       m_Props(Props)
 {
-    SetProperties(m_Props);
+    UpdateTransforms();
+}
+
+rndr::ProjectionCamera::ProjectionCamera(const math::Point3& Position,
+                                         const math::Rotator& Rotation,
+                                         int ScreenWidth,
+                                         int ScreenHeight,
+                                         const rndr::ProjectionCameraProperties& Props)
+    : m_Position(Position),
+      m_Rotation(Rotation),
+      m_ScreenWidth(ScreenWidth),
+      m_ScreenHeight(ScreenHeight),
+      m_Props(Props)
+{
+    // TODO(Marko): Replace this with math::FromPositionAndRotation
+    m_CameraToWorld = math::Translate(m_Position - math::Point3{}) * math::Rotate(m_Rotation);
+    m_WorldToCamera = m_CameraToWorld.GetInverse();
+    UpdateTransforms();
+}
+
+void rndr::ProjectionCamera::SetPosition(const math::Point3& Position)
+{
+    m_Position = Position;
+    m_CameraToWorld = math::Translate(m_Position - math::Point3{}) * math::Rotate(m_Rotation);
+    m_WorldToCamera = m_CameraToWorld.GetInverse();
+    UpdateTransforms();
+}
+
+void rndr::ProjectionCamera::SetRotation(const math::Rotator& Rotation)
+{
+    m_Rotation = Rotation;
+    m_CameraToWorld = math::Translate(m_Position - math::Point3{}) * math::Rotate(m_Rotation);
+    m_WorldToCamera = m_CameraToWorld.GetInverse();
+    UpdateTransforms();
+}
+
+void rndr::ProjectionCamera::SetPositionAndRotation(const math::Point3& Position,
+                                                    const math::Rotator& Rotation)
+{
+    m_Position = Position;
+    m_Rotation = Rotation;
+    m_CameraToWorld = math::Translate(m_Position - math::Point3{}) * math::Rotate(m_Rotation);
+    m_WorldToCamera = m_CameraToWorld.GetInverse();
+    UpdateTransforms();
 }
 
 void rndr::ProjectionCamera::SetScreenSize(int ScreenWidth, int ScreenHeight)
 {
-    ProjectionCameraProperties Props = m_Props;
     m_ScreenWidth = ScreenWidth;
     m_ScreenHeight = ScreenHeight;
-    SetProperties(Props);
+    UpdateTransforms();
 }
 
 void rndr::ProjectionCamera::SetNearAndFar(real Near, real Far)
 {
-    ProjectionCameraProperties Props = m_Props;
-    Props.Near = Near;
-    Props.Far = Far;
-    SetProperties(Props);
+    m_Props.Near = Near;
+    m_Props.Far = Far;
+    UpdateTransforms();
 }
 
 void rndr::ProjectionCamera::SetVerticalFOV(real FOV)
 {
     assert(m_Props.Projection == ProjectionType::Perspective);
-    ProjectionCameraProperties Props = m_Props;
-    Props.VerticalFOV = FOV;
-    SetProperties(Props);
+    m_Props.VerticalFOV = FOV;
+    UpdateTransforms();
 }
 
-void rndr::ProjectionCamera::SetProperties(const ProjectionCameraProperties& Props)
+void rndr::ProjectionCamera::UpdateTransforms()
 {
-    m_Props = Props;
-
     m_CameraToNDC = GetProjectionTransform();
     m_NDCToCamera = m_CameraToNDC.GetInverse();
 
@@ -54,7 +92,7 @@ void rndr::ProjectionCamera::SetWorldToCamera(const math::Transform& WorldToCame
 {
     m_WorldToCamera = WorldToCameraTransform;
     m_CameraToWorld = m_WorldToCamera.GetInverse();
-    SetProperties(m_Props);
+    UpdateTransforms();
 }
 
 math::Transform rndr::ProjectionCamera::GetProjectionTransform() const
@@ -62,7 +100,7 @@ math::Transform rndr::ProjectionCamera::GetProjectionTransform() const
     const real AspectRatio = GetAspectRatio();
     if (m_Props.Projection == ProjectionType::Orthographic)
     {
-        const real Width = static_cast<real>(m_Props.OrtographicWidth);
+        const real Width = static_cast<real>(m_Props.OrthographicWidth);
         const real Height = Width / AspectRatio;
 #if RNDR_LEFT_HANDED
         return math::Transform{math::Orhographic_LH_N0(-Width / 2, Width / 2, -Height / 2,
