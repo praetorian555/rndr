@@ -130,8 +130,11 @@ bool rndr::GraphicsContext::WindowsHasFailed(HRESULT ErrorCode) const
 
 rndr::GraphicsContext::~GraphicsContext()
 {
-    DX11DeviceContext->ClearState();
-    DX11DeviceContext->Flush();
+    if (DX11DeviceContext != nullptr)
+    {
+        DX11DeviceContext->ClearState();
+        DX11DeviceContext->Flush();
+    }
 
     DX11SafeRelease(DX11Device);
     DX11SafeRelease(DX11DeviceContext);
