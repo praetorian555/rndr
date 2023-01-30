@@ -61,48 +61,43 @@ rndr::ScopePtr<rndr::Window> rndr::RndrContext::CreateWin(int Width,
                                                           int Height,
                                                           const WindowProperties& Props) const
 {
-    rndr::ScopePtr<rndr::Window> Ptr;
-
     if (!m_IsInitialized)
     {
         RNDR_LOG_ERROR("RndrContext instance didn't initialize properly!");
-        return Ptr;
+        return {};
     }
 
     Window* W = New<Window>("rndr::RndrContext: Window");
     if (W == nullptr)
     {
         RNDR_LOG_ERROR("RndrContext::CreateWin: Failed to allocate Window object!");
-        return Ptr;
+        return {};
     }
     if (!W->Init(Width, Height, Props))
     {
         Delete(W);
         RNDR_LOG_ERROR("RndrContext::CreateWin: Failed to initialize Window object!");
-        return Ptr;
+        return {};
     }
-    Ptr.Reset(W);
-    return Ptr;
+    return ScopePtr{W};
 }
 
 rndr::ScopePtr<rndr::GraphicsContext> rndr::RndrContext::CreateGraphicsContext(
     const GraphicsContextProperties& Props) const
 {
-    ScopePtr<GraphicsContext> Ptr;
-
     if (!m_IsInitialized)
     {
         RNDR_LOG_ERROR("RndrContext instance didn't initialize properly!");
-        return Ptr;
+        return {};
     }
 
     GraphicsContext* GC = New<GraphicsContext>("rndr::RndrContext: GraphicsContext");
     if (GC == nullptr || !GC->Init(Props))
     {
         Delete(GC);
+        return {};
     }
-    Ptr.Reset(GC);
-    return Ptr;
+    return ScopePtr{GC};
 }
 
 rndr::Logger* rndr::RndrContext::GetLogger()
