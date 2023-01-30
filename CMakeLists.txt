@@ -77,7 +77,7 @@ if (NOT TARGET math)
     FetchContent_Declare(
             math
             GIT_REPOSITORY https://github.com/praetorian555/math
-            GIT_TAG cadf02be7873adf18ea0764a0f516ae6391fed2e
+            GIT_TAG main
     )
     set(MATH_UNITY ${RNDR_UNITY} CACHE BOOL "" FORCE)
     set(MATH_SANITIZER ${RNDR_SANITIZER} CACHE BOOL "" FORCE)
