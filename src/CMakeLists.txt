@@ -54,4 +54,6 @@ if (RNDR_UNITY)
             FILES ${UNITY_SOURCE_LIST})
 endif ()
 
-target_compile_definitions(rndr PUBLIC RNDR_ASSET_DIR= "${CMAKE_CURRENT_SOURCE_DIR}/../assets")
+# @formatter:off
+target_compile_definitions(rndr PUBLIC RNDR_ASSET_DIR="${CMAKE_CURRENT_SOURCE_DIR}/../assets")
+# @formatter:on

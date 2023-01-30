@@ -18,7 +18,9 @@ source_group(
         PREFIX "App"
         FILES ${SOURCE_LIST})
 
-target_compile_definitions(scene3d PUBLIC SCENE3D_ASSET_DIR= "${CMAKE_CURRENT_SOURCE_DIR}/assets")
+# @formatter:off
+target_compile_definitions(scene3d PUBLIC SCENE3D_ASSET_DIR="${CMAKE_CURRENT_SOURCE_DIR}/assets")
+# @formatter:on
 
 if (RNDR_UNITY)
     source_group(

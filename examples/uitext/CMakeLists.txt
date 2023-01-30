@@ -17,7 +17,9 @@ source_group(
         PREFIX "App"
         FILES ${SOURCE_LIST})
 
-target_compile_definitions(uitext PUBLIC BASIC2D_ASSET_DIR= "${CMAKE_CURRENT_SOURCE_DIR}/assets")
+# @formatter:off
+target_compile_definitions(uitext PUBLIC BASIC2D_ASSET_DIR="${CMAKE_CURRENT_SOURCE_DIR}/assets")
+# @formatter:on
 
 file(GLOB_RECURSE UNITY_SOURCE_LIST CONFIGURE_DEPENDS "${PROJECT_BINARY_DIR}/examples/uitext/*.cxx")
 if (RNDR_UNITY)
