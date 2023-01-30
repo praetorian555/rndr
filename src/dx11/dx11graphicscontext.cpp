@@ -168,8 +168,8 @@ bool rndr::GraphicsContext::Init(GraphicsContextProperties Props)
     }
 
     // These are the feature levels that we will accept.
-    StackArray<D3D_FEATURE_LEVEL, 1> FeatureLevels = {D3D_FEATURE_LEVEL_11_1};
-    // This will be the feature level that is used to create our device and swap chain.
+    StackArray<D3D_FEATURE_LEVEL, 2> FeatureLevels = {D3D_FEATURE_LEVEL_11_1,
+                                                      D3D_FEATURE_LEVEL_11_0};
     IDXGIAdapter* Adapter = nullptr;  // Use default adapter
     HMODULE SoftwareRasterizerModule = nullptr;
     HRESULT Result =
