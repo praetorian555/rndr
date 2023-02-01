@@ -104,7 +104,8 @@ public:
 
 #ifdef RNDR_ASSIMP
             math::Transform ObjectToWorld =
-                math::Translate({0.0f, 0.0f, m_ObjectDepth}) * math::RotateX(m_Orientation);
+                math::Translate(math::Vector3{0.0f, 0.0f, m_ObjectDepth}) *
+                math::RotateX(m_Orientation);
             m_Renderer->RenderModel(m_SphereModel.GetRef(),
                                     rndr::Span<math::Transform>{&ObjectToWorld});
 #endif

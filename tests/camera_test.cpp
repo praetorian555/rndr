@@ -71,7 +71,7 @@ TEST_CASE("Orthographic", "ProjectionCamera")
 
     const float HalfWidth = kOrthographicWidth / 2.0f;
     const float HalfHeight = HalfWidth / kAspectRatio;
-    REQUIRE(Camera.FromCameraToNDC().GetMatrix() == math::Orhographic_LH_N0(-HalfWidth, HalfWidth,
+    REQUIRE(Camera.FromCameraToNDC().GetMatrix() == math::Orthographic_LH_N0(-HalfWidth, HalfWidth,
                                                                             -HalfHeight, HalfHeight,
                                                                             kNearPlane, kFarPlane));
 

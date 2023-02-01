@@ -103,10 +103,10 @@ math::Transform rndr::ProjectionCamera::GetProjectionTransform() const
         const real Width = static_cast<real>(m_Props.OrthographicWidth);
         const real Height = Width / AspectRatio;
 #if RNDR_LEFT_HANDED
-        return math::Transform{math::Orhographic_LH_N0(-Width / 2, Width / 2, -Height / 2,
+        return math::Transform{math::Orthographic_LH_N0(-Width / 2, Width / 2, -Height / 2,
                                                        Height / 2, m_Props.Near, m_Props.Far)};
 #else
-        return math::Transform{math::Orhographic_RH_N0(-Width / 2, Width / 2, -Height / 2,
+        return math::Transform{math::Orthographic_RH_N0(-Width / 2, Width / 2, -Height / 2,
                                                        Height / 2, m_Props.Near, m_Props.Far)};
 #endif
     }
