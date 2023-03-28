@@ -248,7 +248,9 @@ void rndr::GraphicsContext::Present(rndr::SwapChain* swap_chain, bool activate_v
 {
     RNDR_UNUSED(swap_chain);
     RNDR_UNUSED(activate_vsync);
+    SwapBuffers(reinterpret_cast<HDC>(gl_device_context));
 }
+
 void rndr::GraphicsContext::ClearColor(rndr::Image* image, math::Vector4 color) const
 {
     RNDR_UNUSED(image);
