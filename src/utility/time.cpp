@@ -11,7 +11,7 @@ rndr::Timestamp rndr::GetTimestamp()
     return result_int;
 }
 
-real GetDuration(rndr::Timestamp start, rndr::Timestamp end)
+real rndr::GetDuration(rndr::Timestamp start, rndr::Timestamp end)
 {
     return static_cast<real>(end - start) / MATH_REALC(1'000'000.0);
 }
