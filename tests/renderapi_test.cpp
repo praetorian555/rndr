@@ -6,7 +6,6 @@
 #include "rndr/core/memory.h"
 #include "rndr/core/rndrcontext.h"
 #include "rndr/core/window.h"
-
 #include "rndr/render/buffer.h"
 #include "rndr/render/commandlist.h"
 #include "rndr/render/framebuffer.h"
@@ -16,6 +15,7 @@
 #include "rndr/render/sampler.h"
 #include "rndr/render/shader.h"
 #include "rndr/render/swapchain.h"
+#include "rndr/utility/input-layout-builder.h"
 
 TEST_CASE("GraphicsContext", "RenderAPI")
 {
@@ -1036,8 +1036,8 @@ TEST_CASE("SwapChain", "RenderAPI")
         Ctx->CreateSwapChain(NativeWinHandle, Win->GetWidth(), Win->GetHeight(), SwapProps);
     REQUIRE(S.IsValid());
 
-    Ctx->ClearColor(S->FrameBuffer->ColorBuffers[0].Get(), math::Vector4{1, 1, 1, 1});
+    Ctx->ClearColor(S->frame_buffer->color_buffers[0].Get(), math::Vector4{1, 1, 1, 1});
     Ctx->Present(S.Get(), true);
-    Ctx->ClearColor(S->FrameBuffer->ColorBuffers[0].Get(), math::Vector4{1, 1, 0.5, 1});
+    Ctx->ClearColor(S->frame_buffer->color_buffers[0].Get(), math::Vector4{1, 1, 0.5, 1});
     Ctx->Present(S.Get(), true);
 }

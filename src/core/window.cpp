@@ -3,6 +3,7 @@
 #include <map>
 
 #if defined RNDR_WINDOWS
+#include <windows.h>
 #include <windowsx.h>
 #include <winuser.h>
 #endif  // RNDR_WINDOWS

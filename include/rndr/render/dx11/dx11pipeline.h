@@ -20,57 +20,6 @@ namespace rndr
 
 struct GraphicsContext;
 
-struct InputLayoutBuilder
-{
-    InputLayoutBuilder();
-    ~InputLayoutBuilder();
-
-    InputLayoutBuilder(const InputLayoutBuilder& Other) = default;
-    InputLayoutBuilder& operator=(const InputLayoutBuilder& Other) = default;
-
-    InputLayoutBuilder(InputLayoutBuilder&& Other) = default;
-    InputLayoutBuilder& operator=(InputLayoutBuilder&& Other) = default;
-
-    InputLayoutBuilder& AddBuffer(int BufferIndex, DataRepetition Repetition, int PerInstanceRate);
-    // If the same SemanticName is used twice in one builder instance this will increment underlying
-    // semantic index
-    InputLayoutBuilder& AppendElement(int BufferIndex,
-                                      const std::string& SemanticName,
-                                      PixelFormat Format);
-
-    Span<InputLayoutProperties> Build();
-
-private:
-    struct BufferInfo
-    {
-        DataRepetition Repetiton;
-        int PerInstanceRate;
-        int EntriesCount = 0;
-    };
-
-    std::map<int, BufferInfo> m_Buffers;
-    std::map<std::string, int> m_Names;
-    rndr::Span<InputLayoutProperties> m_Props;
-};
-
-struct InputLayout
-{
-    Span<InputLayoutProperties> Props;
-
-    ID3D11InputLayout* DX11InputLayout;
-
-    InputLayout() = default;
-    ~InputLayout();
-
-    InputLayout(const InputLayout& Other) = delete;
-    InputLayout& operator=(const InputLayout& Other) = delete;
-
-    InputLayout(InputLayout&& Other) = delete;
-    InputLayout& operator=(InputLayout&& Other) = delete;
-
-    bool Init(GraphicsContext* Context, Span<InputLayoutProperties> InProps, rndr::Shader* Shader);
-};
-
 struct RasterizerState
 {
     RasterizerProperties Props;

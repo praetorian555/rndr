@@ -237,6 +237,11 @@ struct GraphicsContextProperties
     // the creation needs to be synchronized manually between threads. Also it is not possible to
     // create commands lists if this is set to false.
     bool IsResourceCreationThreadSafe = true;
+
+    /**
+     * Optional parameter representing a window handle in OS needed by some graphics API for creation of the graphics context (e.g. OpenGL).
+     */
+    NativeWindowHandle window_handle = nullptr;
 };
 
 struct ImageProperties
@@ -270,6 +275,8 @@ struct FrameBufferProperties
 
 struct SwapChainProperties
 {
+    int width = 0;
+    int height = 0;
     PixelFormat ColorFormat = PixelFormat::R8G8B8A8_UNORM;
     PixelFormat DepthStencilFormat = PixelFormat::D24_UNORM_S8_UINT;
     bool UseDepthStencil = false;

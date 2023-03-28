@@ -6,6 +6,8 @@
 #include <memory>
 #include <type_traits>
 
+#include "math/math.h"
+
 #if WIN32
 #define RNDR_WINDOWS 1
 #endif  // WIN32
@@ -73,12 +75,20 @@ using real = double;
 
 #define RNDR_UNUSED(Expr) (void)(Expr)
 
+#define RNDR_DEFAULT_BODY(Class)             \
+    Class() = default;                       \
+    Class(const Class&) = delete;            \
+    Class& operator=(const Class&) = delete; \
+    Class(Class&&) = delete;                 \
+    Class& operator=(Class&&) = delete;      \
+                                             \
+
 namespace rndr
 {
 
-/**
- * Opaque type that represents an OS window handle.
- */
-using NativeWindowHandle = void*;
+    /**
+     * Opaque type that represents an OS window handle.
+     */
+    using NativeWindowHandle = void*;
 
 }  // namespace rndr

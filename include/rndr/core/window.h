@@ -2,6 +2,8 @@
 
 #include <string>
 
+#include "math/vector2.h"
+
 #include "rndr/core/base.h"
 #include "rndr/core/delegate.h"
 #include "rndr/core/inputprimitives.h"

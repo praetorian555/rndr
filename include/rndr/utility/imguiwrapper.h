@@ -12,37 +12,37 @@ struct GraphicsContext;
 
 struct ImGuiProperties
 {
-    bool EnableKeyboardNavigation = false;
-    bool EnableGamepadNavigation = false;
-    bool DisplayDemoWindow = true;
+    bool enable_keyboard_navigation = false;
+    bool enable_gamepad_navigation = false;
+    bool display_demo_window = true;
 };
 
 class ImGuiWrapper
 {
 public:
     [[nodiscard]] static ScopePtr<ImGuiWrapper> Create(
-        Window& Window,
-        GraphicsContext& Context,
-        const ImGuiProperties& Props = ImGuiProperties{});
+        Window& window,
+        GraphicsContext& context,
+        const ImGuiProperties& props = ImGuiProperties{});
 
-    bool Init(Window& Window,
-              GraphicsContext& Context,
-              const ImGuiProperties& Props = ImGuiProperties{});
+    bool Init(Window& window,
+              GraphicsContext& context,
+              const ImGuiProperties& props = ImGuiProperties{});
     bool ShutDown();
 
     void StartFrame();
     void EndFrame();
 
-    [[nodiscard]] const ImGuiProperties& GetProps() const { return m_Props; }
+    [[nodiscard]] const ImGuiProperties& GetProps() const { return m_props; }
 
 private:
-    Window* m_Window;
-    GraphicsContext* m_Context;
-    ImGuiProperties m_Props;
+    Window* m_window;
+    GraphicsContext* m_context;
+    ImGuiProperties m_props;
 
-    bool m_FrameStarted = false;
+    bool m_frame_started = false;
 
-    bool m_DemoWindowOpened = true;
+    bool m_demo_window_opened = true;
 };
 }  // namespace rndr
 
