@@ -164,5 +164,6 @@ if (CMAKE_PROJECT_NAME STREQUAL PROJECT_NAME)
     # The executable code is here
     add_subdirectory(examples/uitext)
     add_subdirectory(examples/scene3d)
+    add_subdirectory(examples/opengl)
 
 endif ()

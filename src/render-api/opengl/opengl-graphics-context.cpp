@@ -7,6 +7,7 @@
 #if defined RNDR_OPENGL
 
 #include <glad/glad.h>
+#include <glad/glad_wgl.h>
 
 #include "rndr/core/log.h"
 #include "rndr/core/memory.h"
@@ -69,12 +70,52 @@ bool rndr::GraphicsContext::Init(rndr::GraphicsContextProperties props)
         RNDR_LOG_ERROR("GraphicsContext::Init: Failed to create OpenGL graphics context!");
         return false;
     }
-    gl_graphics_context = reinterpret_cast<void*>(graphics_context);
 
     status = wglMakeCurrent(device_context, graphics_context);
     if (status == 0)
     {
         RNDR_LOG_ERROR("GraphicsContext::Init: Failed to make OpenGL graphics context current!");
+        return false;
+    }
+
+    status = gladLoadWGL(device_context);
+    if (status == 0)
+    {
+        RNDR_LOG_ERROR("GraphicsContext::Init: Failed to load WGL functions!");
+        return false;
+    }
+
+    const int attribute_list[] = {
+        WGL_CONTEXT_MAJOR_VERSION_ARB,
+        4,
+        WGL_CONTEXT_MINOR_VERSION_ARB,
+        6,
+        WGL_CONTEXT_FLAGS_ARB,
+        WGL_CONTEXT_FORWARD_COMPATIBLE_BIT_ARB | WGL_CONTEXT_DEBUG_BIT_ARB,
+        WGL_CONTEXT_PROFILE_MASK_ARB,
+        WGL_CONTEXT_CORE_PROFILE_BIT_ARB,
+        0  // End of the attribute list
+    };
+    HGLRC old_graphics_context = graphics_context;
+    graphics_context = wglCreateContextAttribsARB(device_context, graphics_context, attribute_list);
+    if (graphics_context == nullptr)
+    {
+        RNDR_LOG_ERROR(
+            "GraphicsContext::Init: Failed to make OpenGL graphics context with attribute list!");
+        return false;
+    }
+
+    status = wglMakeCurrent(device_context, graphics_context);
+    if (status == 0)
+    {
+        RNDR_LOG_ERROR("GraphicsContext::Init: Failed to make OpenGL graphics context current!");
+        return false;
+    }
+
+    status = wglDeleteContext(old_graphics_context);
+    if (status == 0)
+    {
+        RNDR_LOG_ERROR("GraphicsContext::Init: Failed to delete temporary graphics context!");
         return false;
     }
 
@@ -84,6 +125,9 @@ bool rndr::GraphicsContext::Init(rndr::GraphicsContextProperties props)
         RNDR_LOG_ERROR("GraphicsContext::Init: Failed to load OpenGL functions!");
         return false;
     }
+
+    gl_graphics_context = reinterpret_cast<void*>(graphics_context);
+
     return true;
 #else
     assert(false && "OS not supported!");
