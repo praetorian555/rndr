@@ -20,6 +20,39 @@
 #include "rndr/render/shader.h"
 #include "rndr/render/swapchain.h"
 
+namespace
+{
+void APIENTRY DebugOutputCallback(GLenum source,
+                                  GLenum type,
+                                  unsigned int id,
+                                  GLenum severity,
+                                  GLsizei length,
+                                  const char* message,
+                                  const void* user_param)
+{
+    RNDR_UNUSED(source);
+    RNDR_UNUSED(type);
+    RNDR_UNUSED(id);
+    RNDR_UNUSED(length);
+    RNDR_UNUSED(user_param);
+    switch (severity)
+    {
+        case GL_DEBUG_SEVERITY_HIGH:
+            RNDR_LOG_ERROR("OpenGL: %s", message);
+            break;
+        case GL_DEBUG_SEVERITY_MEDIUM:
+            RNDR_LOG_WARNING("OpenGL: %s", message);
+            break;
+        case GL_DEBUG_SEVERITY_LOW:
+            RNDR_LOG_INFO("OpenGL: %s", message);
+            break;
+        case GL_DEBUG_SEVERITY_NOTIFICATION:
+            RNDR_LOG_TRACE("OpenGL: %s", message);
+            break;
+    }
+}
+}  // namespace
+
 bool rndr::GraphicsContext::Init(rndr::GraphicsContextProperties props)
 {
     properties = props;
@@ -127,6 +160,11 @@ bool rndr::GraphicsContext::Init(rndr::GraphicsContextProperties props)
     }
 
     gl_graphics_context = reinterpret_cast<void*>(graphics_context);
+
+    glEnable(GL_DEBUG_OUTPUT);
+    glEnable(GL_DEBUG_OUTPUT_SYNCHRONOUS);
+    glDebugMessageCallback(&DebugOutputCallback, nullptr);
+    glDebugMessageControl(GL_DONT_CARE, GL_DONT_CARE, GL_DONT_CARE, 0, nullptr, GL_TRUE);
 
     return true;
 #else
