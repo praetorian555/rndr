@@ -8,3 +8,6 @@ UseTab: Never
 KeepEmptyLinesAtTheStartOfBlocks: 'true'
 AccessModifierOffset: '-4'
 SortIncludes: 'true'
+BinPackArguments: 'false'
+BreakBeforeBinaryOperators: NonAssignment
+AllowAllArgumentsOnNextLine: 'false'
