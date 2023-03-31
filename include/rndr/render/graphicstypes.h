@@ -224,9 +224,12 @@ enum class FillMode
 
 struct GraphicsContextProperties
 {
-    // Controls the debug layer of the underlying render API. Ignored in all configurations except
-    // Debug.
-    bool EnableDebugLayer = true;
+    /**
+     * Controls the debug layer of the underlying render API. Ignored in all configurations except
+     * Debug.
+     */
+    bool enable_debug_layer = true;
+
     // Controls if the *HasFailed methods will report an API call fail if the warning message is
     // received from the debug layer. Ignored in all configurations except Debug.
     bool ShouldFailWarning = true;
@@ -239,9 +242,16 @@ struct GraphicsContextProperties
     bool IsResourceCreationThreadSafe = true;
 
     /**
-     * Optional parameter representing a window handle in OS needed by some graphics API for creation of the graphics context (e.g. OpenGL).
+     * Optional parameter representing a window handle in OS needed by some graphics API for
+     * creation of the graphics context (e.g. OpenGL).
      */
     NativeWindowHandle window_handle = nullptr;
+
+    /** OpenGL specific option. Major version of OpenGL used. */
+    int gl_major_version = 4;
+
+    /** OpenGL specific option. Minor version of OpenGL used. */
+    int gl_minor_version = 6;
 };
 
 struct ImageProperties

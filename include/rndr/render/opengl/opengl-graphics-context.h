@@ -34,6 +34,8 @@ struct GraphicsContext
     bool Init(GraphicsContextProperties props = GraphicsContextProperties{});
     ~GraphicsContext();
 
+    bool OpenGL_HasError();
+
     ScopePtr<SwapChain> CreateSwapChain(NativeWindowHandle window_handle,
                                         int width,
                                         int height,

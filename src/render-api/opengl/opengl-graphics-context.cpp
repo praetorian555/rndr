@@ -118,19 +118,25 @@ bool rndr::GraphicsContext::Init(rndr::GraphicsContextProperties props)
         return false;
     }
 
-    const int attribute_list[] = {
+    int arb_flags = WGL_CONTEXT_FORWARD_COMPATIBLE_BIT_ARB;
+    if (props.enable_debug_layer)
+    {
+        arb_flags |= WGL_CONTEXT_DEBUG_BIT_ARB;
+    }
+    const StackArray<int, 9> attribute_list = {
         WGL_CONTEXT_MAJOR_VERSION_ARB,
-        4,
+        props.gl_major_version,
         WGL_CONTEXT_MINOR_VERSION_ARB,
-        6,
+        props.gl_minor_version,
         WGL_CONTEXT_FLAGS_ARB,
-        WGL_CONTEXT_FORWARD_COMPATIBLE_BIT_ARB | WGL_CONTEXT_DEBUG_BIT_ARB,
+        arb_flags,
         WGL_CONTEXT_PROFILE_MASK_ARB,
         WGL_CONTEXT_CORE_PROFILE_BIT_ARB,
         0  // End of the attribute list
     };
     HGLRC old_graphics_context = graphics_context;
-    graphics_context = wglCreateContextAttribsARB(device_context, graphics_context, attribute_list);
+    graphics_context =
+        wglCreateContextAttribsARB(device_context, graphics_context, attribute_list.data());
     if (graphics_context == nullptr)
     {
         RNDR_LOG_ERROR(
@@ -185,6 +191,12 @@ rndr::GraphicsContext::~GraphicsContext()
     }
 #endif  // RNDR_WINDOWS
 }
+
+bool rndr::GraphicsContext::OpenGL_HasError()
+{
+    return glGetError() != GL_NO_ERROR;
+}
+
 rndr::ScopePtr<rndr::SwapChain> rndr::GraphicsContext::CreateSwapChain(
     rndr::NativeWindowHandle window_handle,
     int width,
