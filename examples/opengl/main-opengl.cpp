@@ -53,6 +53,8 @@ int main()
     glLinkProgram(shader_program);
     glUseProgram(shader_program);
 
+    rndr::ImGuiWrapper::Init(window.GetRef(), graphics_context.GetRef());
+
     while (!window->IsClosed())
     {
         window->ProcessEvents();
@@ -62,6 +64,9 @@ int main()
         glClear(GL_COLOR_BUFFER_BIT);
         glClearColor(0.2f, 0.3f, 0.3f, 1.0f);
         glDrawArrays(GL_TRIANGLES, 0, 3);
+
+        rndr::ImGuiWrapper::StartFrame();
+        rndr::ImGuiWrapper::EndFrame();
 
         graphics_context->Present(nullptr, false);
     }

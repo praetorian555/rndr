@@ -1,7 +1,6 @@
 #pragma once
 
 #include "rndr/core/base.h"
-#include "rndr/core/memory.h"
 
 #ifdef RNDR_IMGUI
 
@@ -19,29 +18,53 @@ struct ImGuiProperties
 
 class ImGuiWrapper
 {
+    RNDR_DEFAULT_BODY(ImGuiWrapper);
+
+    // TODO(Marko): Make this part of the RNDR_DEFAULT_BODY macro.
+    ~ImGuiWrapper() = default;
+
 public:
-    [[nodiscard]] static ScopePtr<ImGuiWrapper> Create(
-        Window& window,
-        GraphicsContext& context,
-        const ImGuiProperties& props = ImGuiProperties{});
+    /**
+     * Initializes ImGui backend.
+     * @param window Window to attach to.
+     * @param context Graphics context to attach to.
+     * @param props ImGui properties.
+     * @return True if initialization was successful.
+     */
+    static bool Init(Window& window,
+                     GraphicsContext& context,
+                     const ImGuiProperties& props = ImGuiProperties{});
 
-    bool Init(Window& window,
-              GraphicsContext& context,
-              const ImGuiProperties& props = ImGuiProperties{});
-    bool ShutDown();
+    /**
+     * Shuts down ImGui backend.
+     * @return True if shutdown was successful.
+     */
+    static bool ShutDown();
 
-    void StartFrame();
-    void EndFrame();
+    /**
+     * Starts a new ImGui frame.
+     */
+    static void StartFrame();
 
-    [[nodiscard]] const ImGuiProperties& GetProps() const { return m_props; }
+    /**
+     * Ends the current ImGui frame.
+     */
+    static void EndFrame();
+
+    /**
+     * Returns the ImGui properties.
+     * @return ImGui properties.
+     */
+    [[nodiscard]] static const ImGuiProperties& GetProps();
 
 private:
-    Window* m_window;
-    GraphicsContext* m_context;
+    static ImGuiWrapper& Get();
+
+    Window* m_window = nullptr;
+    GraphicsContext* m_context = nullptr;
     ImGuiProperties m_props;
 
     bool m_frame_started = false;
-
     bool m_demo_window_opened = true;
 };
 }  // namespace rndr

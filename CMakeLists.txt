@@ -98,21 +98,45 @@ if (NOT TARGET imgui AND RNDR_IMGUI)
     FetchContent_MakeAvailable(imgui)
 
     FetchContent_GetProperties(imgui SOURCE_DIR SOURCE_PATH)
-    add_library(imgui ${SOURCE_PATH}/imgui.cpp
-            ${SOURCE_PATH}/imgui.h
-            ${SOURCE_PATH}/imconfig.h
-            ${SOURCE_PATH}/imgui_internal.h
-            ${SOURCE_PATH}/imstb_rectpack.h
-            ${SOURCE_PATH}/imstb_truetype.h
-            ${SOURCE_PATH}/imstb_textedit.h
-            ${SOURCE_PATH}/imgui_draw.cpp
-            ${SOURCE_PATH}/imgui_demo.cpp
-            ${SOURCE_PATH}/imgui_tables.cpp
-            ${SOURCE_PATH}/imgui_widgets.cpp
+
+    set(IMGUI_SOURCE_FILES
+        ${SOURCE_PATH}/imgui.cpp
+        ${SOURCE_PATH}/imgui.h
+        ${SOURCE_PATH}/imconfig.h
+        ${SOURCE_PATH}/imgui_internal.h
+        ${SOURCE_PATH}/imstb_rectpack.h
+        ${SOURCE_PATH}/imstb_truetype.h
+        ${SOURCE_PATH}/imstb_textedit.h
+        ${SOURCE_PATH}/imgui_draw.cpp
+        ${SOURCE_PATH}/imgui_demo.cpp
+        ${SOURCE_PATH}/imgui_tables.cpp
+        ${SOURCE_PATH}/imgui_widgets.cpp)
+
+    if (MSVC)
+        set(IMGUI_WINDOWS_SOURCE_FILES
             ${SOURCE_PATH}/backends/imgui_impl_win32.cpp
-            ${SOURCE_PATH}/backends/imgui_impl_win32.h
+            ${SOURCE_PATH}/backends/imgui_impl_win32.h)
+    else ()
+        set(IMGUI_WINDOWS_SOURCE_FILES)
+    endif ()
+
+    if (RNDR_DX11)
+        set(IMGUI_DX11_SOURCE_FILES
             ${SOURCE_PATH}/backends/imgui_impl_dx11.cpp
             ${SOURCE_PATH}/backends/imgui_impl_dx11.h)
+        set(IMGUI_OPENGL_SOURCE_FILES)
+    else ()
+        set(IMGUI_DX11_SOURCE_FILES)
+        set(IMGUI_OPENGL_SOURCE_FILES
+            ${SOURCE_PATH}/backends/imgui_impl_opengl3.cpp
+            ${SOURCE_PATH}/backends/imgui_impl_opengl3.h)
+    endif ()
+
+    add_library(imgui
+                ${IMGUI_SOURCE_FILES}
+                ${IMGUI_WINDOWS_SOURCE_FILES}
+                ${IMGUI_DX11_SOURCE_FILES}
+                ${IMGUI_OPENGL_SOURCE_FILES})
 
     target_include_directories(imgui PUBLIC ${SOURCE_PATH})
 
