@@ -1,5 +1,6 @@
 #include <catch2/catch_test_macros.hpp>
 
+#include "rndr/core/delegate.h"
 #include "rndr/core/init.h"
 
 bool CustomAllocInit(rndr::OpaquePtr init_data, rndr::OpaquePtr* allocator_data)
@@ -138,5 +139,193 @@ TEST_CASE("Allocate and free", "[memory]")
         REQUIRE(ptr != nullptr);
         rndr::Free(ptr);
         REQUIRE(rndr::Destroy());
+    }
+}
+
+void FuncNoReturn(int a)
+{
+    REQUIRE(a == 1);
+}
+
+int FuncReturn(int a)
+{
+    REQUIRE(a == 1);
+    return a + 1;
+}
+
+void FuncNoReturnNoArgs()
+{
+    REQUIRE(true);
+}
+
+TEST_CASE("Delegate", "[delegate]")
+{
+    SECTION("Lambda")
+    {
+        SECTION("No return")
+        {
+            rndr::Delegate<void(int)> delegate;
+            delegate.Bind([](int a) { REQUIRE(a == 1); });
+            delegate.Execute(1);
+        }
+        SECTION("No return no args")
+        {
+            rndr::Delegate<void()> delegate;
+            delegate.Bind([]() { REQUIRE(true); });
+            delegate.Execute();
+        }
+        SECTION("Return")
+        {
+            rndr::Delegate<int(int)> delegate;
+            delegate.Bind(
+                [](int a)
+                {
+                    REQUIRE(a == 1);
+                    return a + 1;
+                });
+            REQUIRE(delegate.Execute(1) == 2);
+        }
+    }
+    SECTION("Functor")
+    {
+        SECTION("No return")
+        {
+            struct Functor
+            {
+                void operator()(int a) const
+                {
+                    REQUIRE(a == 1);
+                }
+            };
+            rndr::Delegate<void(int)> delegate;
+            delegate.Bind(Functor());
+            delegate.Execute(1);
+        }
+        SECTION("No return no args")
+        {
+            struct Functor
+            {
+                void operator()() const
+                {
+                    REQUIRE(true);
+                }
+            };
+            rndr::Delegate<void()> delegate;
+            delegate.Bind(Functor());
+            delegate.Execute();
+        }
+        SECTION("Return")
+        {
+            struct Functor
+            {
+                int operator()(int a) const
+                {
+                    REQUIRE(a == 1);
+                    return a + 1;
+                }
+            };
+            rndr::Delegate<int(int)> delegate;
+            delegate.Bind(Functor());
+            REQUIRE(delegate.Execute(1) == 2);
+        }
+    }
+    SECTION("Function")
+    {
+        SECTION("No return")
+        {
+            rndr::Delegate<void(int)> delegate;
+            delegate.Bind(&FuncNoReturn);
+            delegate.Execute(1);
+        }
+        SECTION("No return no args")
+        {
+            rndr::Delegate<void()> delegate;
+            delegate.Bind(&FuncNoReturnNoArgs);
+            delegate.Execute();
+        }
+        SECTION("Return")
+        {
+            rndr::Delegate<int(int)> delegate;
+            delegate.Bind(&FuncReturn);
+            REQUIRE(delegate.Execute(1) == 2);
+        }
+    }
+    SECTION("Is bound")
+    {
+        rndr::Delegate<void(int)> delegate;
+        REQUIRE(!delegate.IsBound());
+        delegate.Bind(&FuncNoReturn);
+        REQUIRE(delegate.IsBound());
+        delegate.Unbind();
+        REQUIRE(!delegate.IsBound());
+    }
+}
+
+TEST_CASE("Multi delegate", "[delegate]")
+{
+    SECTION("Lambda")
+    {
+        SECTION("No return")
+        {
+            rndr::MultiDelegate<void(int)> delegate;
+            delegate.Bind([](int a) { REQUIRE(a == 1); });
+            delegate.Bind([](int a) { REQUIRE(a == 1); });
+            delegate.Execute(1);
+        }
+        SECTION("No return no args")
+        {
+            rndr::MultiDelegate<void()> delegate;
+            delegate.Bind([]() { REQUIRE(true); });
+            delegate.Bind([]() { REQUIRE(true); });
+            delegate.Execute();
+        }
+    }
+    SECTION("Functor")
+    {
+        SECTION("No return")
+        {
+            struct Functor
+            {
+                void operator()(int a) const
+                {
+                    REQUIRE(a == 1);
+                }
+            };
+            rndr::MultiDelegate<void(int)> delegate;
+            delegate.Bind(Functor());
+            delegate.Bind(Functor());
+            delegate.Execute(1);
+        }
+        SECTION("No return no args")
+        {
+            struct Functor
+            {
+                void operator()() const
+                {
+                    REQUIRE(true);
+                }
+            };
+            rndr::MultiDelegate<void()> delegate;
+            delegate.Bind(Functor());
+            delegate.Bind(Functor());
+            delegate.Execute();
+        }
+    }
+    SECTION("Function")
+    {
+        SECTION("No return")
+        {
+            rndr::MultiDelegate<void(int)> delegate;
+            delegate.Bind(&FuncNoReturn);
+            delegate.Bind(&FuncNoReturn);
+            delegate.Execute(1);
+        }
+        SECTION("No return no args")
+        {
+            rndr::MultiDelegate<void()> delegate;
+            delegate.Bind(&FuncNoReturnNoArgs);
+            delegate.Bind(&FuncNoReturnNoArgs);
+            delegate.Execute();
+        }
     }
 }
