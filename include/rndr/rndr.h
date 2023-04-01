@@ -2,11 +2,11 @@
 
 // Core utilities
 #include "rndr/core/fileutils.h"
+#include "rndr/core/init.h"
 #include "rndr/core/input.h"
 #include "rndr/core/log.h"
 #include "rndr/core/memory.h"
 #include "rndr/core/projectioncamera.h"
-#include "rndr/core/rndrcontext.h"
 #include "rndr/core/span.h"
 #include "rndr/core/window.h"
 
