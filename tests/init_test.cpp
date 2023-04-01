@@ -128,3 +128,15 @@ TEST_CASE("Init", "[init]")
         REQUIRE(rndr::Destroy());
     }
 }
+
+TEST_CASE("Allocate and free", "[memory]")
+{
+    SECTION("Default allocate and free")
+    {
+        REQUIRE(rndr::Create());
+        rndr::OpaquePtr ptr = rndr::Allocate(1, "test");
+        REQUIRE(ptr != nullptr);
+        rndr::Free(ptr);
+        REQUIRE(rndr::Destroy());
+    }
+}
