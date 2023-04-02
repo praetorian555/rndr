@@ -3,6 +3,7 @@
 #file(GLOB_RECURSE PRIVATE_SOURCE_LIST CONFIGURE_DEPENDS "${PROJECT_SOURCE_DIR}/src/*[.h|.c|.cpp]")
 file(GLOB_RECURSE UNITY_SOURCE_LIST CONFIGURE_DEPENDS "${PROJECT_BINARY_DIR}/src/*.cxx")
 set(PUBLIC_SOURCE_LIST
+    "${PROJECT_SOURCE_DIR}/include/rndr/rndr.h"
     "${PROJECT_SOURCE_DIR}/include/rndr/core/definitions.h"
     "${PROJECT_SOURCE_DIR}/include/rndr/core/base.h"
     "${PROJECT_SOURCE_DIR}/include/rndr/core/delegate.h"
