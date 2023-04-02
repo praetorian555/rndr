@@ -328,4 +328,15 @@ TEST_CASE("Multi delegate", "[delegate]")
             delegate.Execute();
         }
     }
+    SECTION("Is bound and unbind")
+    {
+        rndr::MultiDelegate<void(int)> delegate;
+        REQUIRE(!delegate.IsAnyBound());
+        rndr::DelegateHandle handle = delegate.Bind(&FuncNoReturn);
+        REQUIRE(delegate.IsBound(handle));
+        REQUIRE(delegate.IsAnyBound());
+        delegate.Unbind(handle);
+        REQUIRE(!delegate.IsBound(handle));
+        REQUIRE(!delegate.IsAnyBound());
+    }
 }
