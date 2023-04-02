@@ -1,7 +1,7 @@
 #include <catch2/catch_test_macros.hpp>
 
+#include "rndr/core/base.h"
 #include "rndr/core/delegate.h"
-#include "rndr/core/init.h"
 
 bool CustomAllocInit(rndr::OpaquePtr init_data, rndr::OpaquePtr* allocator_data)
 {

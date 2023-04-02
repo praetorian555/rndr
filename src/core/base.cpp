@@ -1,4 +1,4 @@
-#include "rndr/core/init.h"
+#include "rndr/core/base.h"
 
 #include <cstdarg>
 
