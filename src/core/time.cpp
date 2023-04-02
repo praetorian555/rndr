@@ -1,4 +1,4 @@
-#include "rndr/utility/time.h"
+#include "rndr/core/time.h"
 
 #include <chrono>
 
@@ -11,12 +11,12 @@ rndr::Timestamp rndr::GetTimestamp()
     return result_int;
 }
 
-real rndr::GetDuration(rndr::Timestamp start, rndr::Timestamp end)
+rndr::real rndr::GetDuration(rndr::Timestamp start, rndr::Timestamp end)
 {
     return static_cast<real>(end - start) / MATH_REALC(1'000'000.0);
 }
 
-real rndr::GetSystemTime()
+rndr::real rndr::GetSystemTime()
 {
     return GetDuration(0, GetTimestamp());
 }
