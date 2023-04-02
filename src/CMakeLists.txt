@@ -9,6 +9,7 @@ set(PUBLIC_SOURCE_LIST
     "${PROJECT_SOURCE_DIR}/include/rndr/core/std-allocator.h"
     "${PROJECT_SOURCE_DIR}/include/rndr/core/span.h"
     "${PROJECT_SOURCE_DIR}/include/rndr/core/array.h"
+    "${PROJECT_SOURCE_DIR}/include/rndr/core/stack-array.h"
     "${PROJECT_SOURCE_DIR}/include/rndr/core/time.h")
 set(PRIVATE_SOURCE_LIST
     "${PROJECT_SOURCE_DIR}/src/core/base.cpp"
