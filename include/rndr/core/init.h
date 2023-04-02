@@ -110,13 +110,27 @@ bool IsValid(const Logger& logger);
  * Gets the library's allocator.
  * @return Library's allocator.
  */
-Allocator* GetAllocator();
+const Allocator& GetAllocator();
+
+/**
+ * Sets the library's allocator.
+ * @param allocator Allocator to set.
+ * @return True if the allocator was set successfully.
+ */
+bool SetAllocator(const Allocator& allocator);
 
 /**
  * Gets the library's logger.
  * @return Library's logger.
  */
-Logger* GetLogger();
+const Logger& GetLogger();
+
+/**
+ * Sets the library's logger.
+ * @param logger Logger to set.
+ * @return True if the logger was set successfully.
+ */
+bool SetLogger(const Logger& logger);
 
 /**
  * Allocates memory using the user specified allocator. If no allocator is provided, the default

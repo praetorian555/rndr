@@ -112,14 +112,40 @@ bool rndr::IsValid(const rndr::Logger& logger)
     return logger.log != nullptr;
 }
 
-rndr::Allocator* rndr::GetAllocator()
+const rndr::Allocator& rndr::GetAllocator()
 {
-    return &g_allocator;
+    assert(g_is_initialized);
+    return g_allocator;
 }
 
-rndr::Logger* rndr::GetLogger()
+bool rndr::SetAllocator(const rndr::Allocator& allocator)
 {
-    return &g_logger;
+    assert(g_is_initialized);
+    if (IsValid(allocator))
+    {
+        RNDR_LOG_ERROR("Allocator is not valid!");
+        return false;
+    }
+    g_allocator = allocator;
+    return true;
+}
+
+const rndr::Logger& rndr::GetLogger()
+{
+    assert(g_is_initialized);
+    return g_logger;
+}
+
+bool rndr::SetLogger(const rndr::Logger& logger)
+{
+    assert(g_is_initialized);
+    if (IsValid(logger))
+    {
+        RNDR_LOG_ERROR("Logger is invalid!");
+        return false;
+    }
+    g_logger = logger;
+    return true;
 }
 
 bool rndr::DefaultLogger::Init(OpaquePtr init_data, OpaquePtr* logger_data)
@@ -201,6 +227,18 @@ void rndr::DefaultLogger::Log(OpaquePtr logger_data,
 #endif  // RNDR_SPDLOG
 }
 
+rndr::OpaquePtr rndr::Allocate(uint64_t size, const char* tag)
+{
+    assert(g_is_initialized);
+    return g_allocator.allocate(g_allocator.allocator_data, size, tag);
+}
+
+void rndr::Free(rndr::OpaquePtr ptr)
+{
+    assert(g_is_initialized);
+    g_allocator.free(g_allocator.allocator_data, ptr);
+}
+
 void rndr::Log(const char* file,
                int line,
                const char* function,
@@ -219,16 +257,4 @@ void rndr::Log(const char* file,
     vsprintf_s(message.data(), k_message_size, format, args);
     va_end(args);
     g_logger.log(g_logger.logger_data, file, line, function, log_level, message.data());
-}
-
-rndr::OpaquePtr rndr::Allocate(uint64_t size, const char* tag)
-{
-    assert(g_is_initialized);
-    return g_allocator.allocate(g_allocator.allocator_data, size, tag);
-}
-
-void rndr::Free(rndr::OpaquePtr ptr)
-{
-    assert(g_is_initialized);
-    g_allocator.free(g_allocator.allocator_data, ptr);
 }

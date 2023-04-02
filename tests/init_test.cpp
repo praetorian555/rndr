@@ -63,19 +63,19 @@ TEST_CASE("Init", "[init]")
     SECTION("Default create and destroy")
     {
         REQUIRE(rndr::Create());
-        rndr::Allocator* allocator = rndr::GetAllocator();
-        REQUIRE(allocator != nullptr);
-        REQUIRE(allocator->allocator_data == nullptr);
-        REQUIRE(allocator->init == nullptr);
-        REQUIRE(allocator->destroy == nullptr);
-        REQUIRE(allocator->allocate == &rndr::DefaultAllocator::Allocate);
-        REQUIRE(allocator->free == &rndr::DefaultAllocator::Free);
-        rndr::Logger* logger = rndr::GetLogger();
-        REQUIRE(logger != nullptr);
-        REQUIRE(logger->logger_data != nullptr);
-        REQUIRE(logger->init == &rndr::DefaultLogger::Init);
-        REQUIRE(logger->destroy == &rndr::DefaultLogger::Destroy);
-        REQUIRE(logger->log == &rndr::DefaultLogger::Log);
+        const rndr::Allocator& allocator = rndr::GetAllocator();
+        REQUIRE(IsValid(allocator));
+        REQUIRE(allocator.allocator_data == nullptr);
+        REQUIRE(allocator.init == nullptr);
+        REQUIRE(allocator.destroy == nullptr);
+        REQUIRE(allocator.allocate == &rndr::DefaultAllocator::Allocate);
+        REQUIRE(allocator.free == &rndr::DefaultAllocator::Free);
+        const rndr::Logger& logger = rndr::GetLogger();
+        REQUIRE(IsValid(logger));
+        REQUIRE(logger.logger_data != nullptr);
+        REQUIRE(logger.init == &rndr::DefaultLogger::Init);
+        REQUIRE(logger.destroy == &rndr::DefaultLogger::Destroy);
+        REQUIRE(logger.log == &rndr::DefaultLogger::Log);
         REQUIRE(rndr::Destroy());
     }
     constexpr uint64_t k_test_allocator_data = 0xdeadbeefdeadbaaf;
@@ -88,20 +88,20 @@ TEST_CASE("Init", "[init]")
         allocator.allocate = &CustomAllocate;
         allocator.free = &CustomFree;
         REQUIRE(rndr::Create({.user_allocator = allocator}));
-        rndr::Allocator* rndr_allocator = rndr::GetAllocator();
-        REQUIRE(rndr_allocator != nullptr);
-        REQUIRE(rndr_allocator->allocator_data
+        const rndr::Allocator& rndr_allocator = rndr::GetAllocator();
+        REQUIRE(IsValid(rndr_allocator));
+        REQUIRE(rndr_allocator.allocator_data
                 == reinterpret_cast<rndr::OpaquePtr>(k_test_allocator_data));
-        REQUIRE(rndr_allocator->init == &CustomAllocInit);
-        REQUIRE(rndr_allocator->destroy == &CustomAllocDestroy);
-        REQUIRE(rndr_allocator->allocate == &CustomAllocate);
-        REQUIRE(rndr_allocator->free == &CustomFree);
-        rndr::Logger* logger = rndr::GetLogger();
-        REQUIRE(logger != nullptr);
-        REQUIRE(logger->logger_data != nullptr);
-        REQUIRE(logger->init == &rndr::DefaultLogger::Init);
-        REQUIRE(logger->destroy == &rndr::DefaultLogger::Destroy);
-        REQUIRE(logger->log == &rndr::DefaultLogger::Log);
+        REQUIRE(rndr_allocator.init == &CustomAllocInit);
+        REQUIRE(rndr_allocator.destroy == &CustomAllocDestroy);
+        REQUIRE(rndr_allocator.allocate == &CustomAllocate);
+        REQUIRE(rndr_allocator.free == &CustomFree);
+        const rndr::Logger& logger = rndr::GetLogger();
+        REQUIRE(IsValid(logger));
+        REQUIRE(logger.logger_data != nullptr);
+        REQUIRE(logger.init == &rndr::DefaultLogger::Init);
+        REQUIRE(logger.destroy == &rndr::DefaultLogger::Destroy);
+        REQUIRE(logger.log == &rndr::DefaultLogger::Log);
         REQUIRE(rndr::Destroy());
     }
     SECTION("Create with custom logger")
@@ -112,20 +112,20 @@ TEST_CASE("Init", "[init]")
         logger.destroy = &CustomLogDestroy;
         logger.log = &CustomLog;
         REQUIRE(rndr::Create({.user_logger = logger}));
-        rndr::Allocator* allocator = rndr::GetAllocator();
-        REQUIRE(allocator != nullptr);
-        REQUIRE(allocator->allocator_data == nullptr);
-        REQUIRE(allocator->init == nullptr);
-        REQUIRE(allocator->destroy == nullptr);
-        REQUIRE(allocator->allocate == &rndr::DefaultAllocator::Allocate);
-        REQUIRE(allocator->free == &rndr::DefaultAllocator::Free);
-        rndr::Logger* rndr_logger = rndr::GetLogger();
-        REQUIRE(rndr_logger != nullptr);
-        REQUIRE(rndr_logger->logger_data
+        const rndr::Allocator& allocator = rndr::GetAllocator();
+        REQUIRE(IsValid(allocator));
+        REQUIRE(allocator.allocator_data == nullptr);
+        REQUIRE(allocator.init == nullptr);
+        REQUIRE(allocator.destroy == nullptr);
+        REQUIRE(allocator.allocate == &rndr::DefaultAllocator::Allocate);
+        REQUIRE(allocator.free == &rndr::DefaultAllocator::Free);
+        const rndr::Logger& rndr_logger = rndr::GetLogger();
+        REQUIRE(IsValid(rndr_logger));
+        REQUIRE(rndr_logger.logger_data
                 == reinterpret_cast<rndr::OpaquePtr>(k_test_allocator_data));
-        REQUIRE(rndr_logger->init == &CustomLogInit);
-        REQUIRE(rndr_logger->destroy == &CustomLogDestroy);
-        REQUIRE(rndr_logger->log == &CustomLog);
+        REQUIRE(rndr_logger.init == &CustomLogInit);
+        REQUIRE(rndr_logger.destroy == &CustomLogDestroy);
+        REQUIRE(rndr_logger.log == &CustomLog);
         REQUIRE(rndr::Destroy());
     }
 }
