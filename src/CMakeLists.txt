@@ -5,7 +5,10 @@ file(GLOB_RECURSE UNITY_SOURCE_LIST CONFIGURE_DEPENDS "${PROJECT_BINARY_DIR}/src
 set(PUBLIC_SOURCE_LIST
     "${PROJECT_SOURCE_DIR}/include/rndr/core/definitions.h"
     "${PROJECT_SOURCE_DIR}/include/rndr/core/base.h"
-    "${PROJECT_SOURCE_DIR}/include/rndr/core/delegate.h")
+    "${PROJECT_SOURCE_DIR}/include/rndr/core/delegate.h"
+    "${PROJECT_SOURCE_DIR}/include/rndr/core/std-allocator.h"
+    "${PROJECT_SOURCE_DIR}/include/rndr/core/span.h"
+    "${PROJECT_SOURCE_DIR}/include/rndr/core/array.h")
 set(PRIVATE_SOURCE_LIST "${PROJECT_SOURCE_DIR}/src/core/base.cpp")
 
 # Make an automatic library - will be static or dynamic based on user setting
