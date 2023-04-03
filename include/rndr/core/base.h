@@ -172,11 +172,10 @@ void Log(const char* file,
     new (RNDR_ALLOC(type, tag)) type {}
 #define RNDR_FREE(ptr) rndr::Free(ptr)
 #define RNDR_DELETE(type, ptr) \
-    do                                 \
-    {                                  \
-        ptr->~type();                  \
-        RNDR_FREE(ptr);                \
-    } while (0)
+    {                          \
+        (ptr)->~type();        \
+        RNDR_FREE(ptr);        \
+    }
 
 #define RNDR_LOG_ERROR(format, ...) \
     rndr::Log(__FILE__, __LINE__, __func__, rndr::LogLevel::Error, format, __VA_ARGS__)

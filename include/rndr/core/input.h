@@ -73,25 +73,20 @@ struct InputContext
 class InputSystem
 {
 public:
-    InputSystem();
-    ~InputSystem();
+    static InputSystem* Get();
 
-    InputSystem(const InputSystem& Other) = delete;
-    InputSystem& operator=(const InputSystem& Other) = delete;
+    RNDR_NO_CONSTRCUTORS_AND_DESTRUCTOR(InputSystem);
 
-    InputSystem(InputSystem&& Other) = delete;
-    InputSystem& operator=(InputSystem&& Other) = delete;
-
-    void SubmitButtonEvent(NativeWindowHandle Window,
+    void SubmitButtonEvent(OpaquePtr Window,
                            InputPrimitive Primitive,
                            InputTrigger Trigger);
-    void SubmitMousePositionEvent(NativeWindowHandle Window,
+    void SubmitMousePositionEvent(OpaquePtr Window,
                                   const math::Point2& Position,
                                   const math::Vector2& ScreenSize);
-    void SubmitRelativeMousePositionEvent(NativeWindowHandle Window,
+    void SubmitRelativeMousePositionEvent(OpaquePtr Window,
                                           const math::Vector2& DeltaPosition,
                                           const math::Vector2& ScreenSize);
-    void SubmitMouseWheelEvent(NativeWindowHandle Window, int DeltaWheel);
+    void SubmitMouseWheelEvent(OpaquePtr Window, int DeltaWheel);
 
     void Update(real DeltaSeconds);
 
@@ -136,7 +131,7 @@ private:
         std::variant<ButtonEvent, MousePositionEvent, RelativeMousePositionEvent, MouseWheelEvent>;
     struct Event
     {
-        NativeWindowHandle WindowHandle;
+        OpaquePtr WindowHandle;
         EventVariant Data;
     };
 

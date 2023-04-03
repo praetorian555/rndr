@@ -1,22 +1,8 @@
 #include "rndr/core/input.h"
 
-#include "rndr/core/log.h"
-#include "rndr/core/memory.h"
-
 // InputSystem ////////////////////////////////////////////////////////////////////////////////////
 
-rndr::InputSystem::InputSystem()
-{
-    assert(!m_Context);
-    m_Context = New<InputContext>("InputSystem: Default InputContext");
-}
-
-rndr::InputSystem::~InputSystem()
-{
-    Delete(m_Context);
-}
-
-void rndr::InputSystem::SubmitButtonEvent(NativeWindowHandle Window,
+void rndr::InputSystem::SubmitButtonEvent(OpaquePtr Window,
                                           InputPrimitive Primitive,
                                           InputTrigger Trigger)
 {
@@ -24,7 +10,7 @@ void rndr::InputSystem::SubmitButtonEvent(NativeWindowHandle Window,
     m_Events.push(Evt);
 }
 
-void rndr::InputSystem::SubmitMousePositionEvent(NativeWindowHandle Window,
+void rndr::InputSystem::SubmitMousePositionEvent(OpaquePtr Window,
                                                  const math::Point2& Position,
                                                  const math::Vector2& ScreenSize)
 {
@@ -33,7 +19,7 @@ void rndr::InputSystem::SubmitMousePositionEvent(NativeWindowHandle Window,
     m_Events.push(Evt);
 }
 
-void rndr::InputSystem::SubmitRelativeMousePositionEvent(rndr::NativeWindowHandle Window,
+void rndr::InputSystem::SubmitRelativeMousePositionEvent(OpaquePtr Window,
                                                          const math::Vector2& DeltaPosition,
                                                          const math::Vector2& ScreenSize)
 {
@@ -42,7 +28,7 @@ void rndr::InputSystem::SubmitRelativeMousePositionEvent(rndr::NativeWindowHandl
     m_Events.push(Evt);
 }
 
-void rndr::InputSystem::SubmitMouseWheelEvent(NativeWindowHandle Window, int DeltaWheel)
+void rndr::InputSystem::SubmitMouseWheelEvent(OpaquePtr Window, int DeltaWheel)
 {
     const Event Evt{Window, MouseWheelEvent{DeltaWheel}};
     m_Events.push(Evt);
@@ -258,4 +244,9 @@ const rndr::InputMapping* rndr::InputContext::GetMapping(const InputAction& Acti
 
     auto EntryIt = std::find_if(Mappings.begin(), Mappings.end(), FindMappingByAction);
     return EntryIt != Mappings.end() ? EntryIt->Mapping.get() : nullptr;
+}
+rndr::InputSystem* rndr::InputSystem::Get()
+{
+    static InputSystem s_input_system;
+    return &s_input_system;
 }
