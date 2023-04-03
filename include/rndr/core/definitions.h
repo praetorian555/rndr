@@ -29,3 +29,11 @@ using real = math::real;
 #endif  // RNDR_WINDOWS
 
 #define RNDR_UNUSED(Expr) (void)(Expr)
+
+#define RNDR_NO_CONSTRCUTORS_AND_DESTRUCTOR(class) \
+    class() = default;                             \
+    ~class() = default;                            \
+    class(const class&) = delete;                  \
+    class(class&&) = delete;                       \
+    class& operator=(const class&) = delete;       \
+    class& operator=(class&&) = delete;
