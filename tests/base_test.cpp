@@ -19,15 +19,14 @@ bool CustomAllocDestroy(rndr::OpaquePtr allocator_data)
 rndr::OpaquePtr CustomAllocate(rndr::OpaquePtr allocator_data, uint64_t size, const char* tag)
 {
     RNDR_UNUSED(allocator_data);
-    RNDR_UNUSED(size);
     RNDR_UNUSED(tag);
-    return nullptr;
+    return malloc(size);
 }
 
 void CustomFree(rndr::OpaquePtr allocator_data, rndr::OpaquePtr ptr)
 {
     RNDR_UNUSED(allocator_data);
-    RNDR_UNUSED(ptr);
+    free(ptr);
 }
 
 bool CustomLogInit(rndr::OpaquePtr init_data, rndr::OpaquePtr* logger_data)

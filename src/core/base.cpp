@@ -10,10 +10,11 @@
 
 namespace
 {
+// TODO(Marko): Add unique identifier to the start so that we can confirm this is indeed this type.
 struct DefaultLoggerData
 {
     std::shared_ptr<spdlog::logger> logger;
-} g_default_logger_data;
+};
 
 rndr::Allocator g_allocator;
 rndr::Logger g_logger;
@@ -48,7 +49,11 @@ bool rndr::Create(const rndr::RndrDesc& desc)
         g_logger.init = &rndr::DefaultLogger::Init;
         g_logger.destroy = &rndr::DefaultLogger::Destroy;
         g_logger.log = &rndr::DefaultLogger::Log;
-        g_logger.logger_data = &g_default_logger_data;
+        g_logger.logger_data = nullptr;
+        if (!g_logger.init(nullptr, &g_logger.logger_data))
+        {
+            return false;
+        }
     }
 
     g_is_initialized = true;
@@ -64,10 +69,19 @@ bool rndr::Destroy()
     }
     if (g_allocator.destroy != nullptr)
     {
-        const bool result = g_allocator.destroy(&g_allocator);
+        const bool result = g_allocator.destroy(g_allocator.allocator_data);
         if (!result)
         {
             RNDR_LOG_ERROR("Failed to destroy the allocator!");
+            return false;
+        }
+    }
+    if (g_logger.destroy != nullptr)
+    {
+        const bool result = g_logger.destroy(g_logger.logger_data);
+        if (!result)
+        {
+            RNDR_LOG_ERROR("Failed to destroy the logger!");
             return false;
         }
     }
@@ -151,7 +165,6 @@ bool rndr::SetLogger(const rndr::Logger& logger)
 bool rndr::DefaultLogger::Init(OpaquePtr init_data, OpaquePtr* logger_data)
 {
     RNDR_UNUSED(init_data);
-    RNDR_UNUSED(logger_data);
 
 #ifdef RNDR_SPDLOG
     spdlog::set_level(spdlog::level::debug);
@@ -162,9 +175,11 @@ bool rndr::DefaultLogger::Init(OpaquePtr init_data, OpaquePtr* logger_data)
     constexpr int k_backing_thread_count = 1;
     spdlog::init_thread_pool(k_max_message_count, k_backing_thread_count);
 
-    g_default_logger_data.logger =
+    DefaultLoggerData* default_logger_data =
+        RNDR_DEFAULT_NEW(DefaultLoggerData, "Default Logger Data");
+    *logger_data = default_logger_data;
+    default_logger_data->logger =
         spdlog::create<spdlog::sinks::stdout_color_sink_st>("stdout_logger");
-    *logger_data = &g_default_logger_data;
 #endif  // RNDR_SPDLOG
 
     return true;
@@ -174,7 +189,11 @@ bool rndr::DefaultLogger::Destroy(OpaquePtr logger_data)
 {
     DefaultLoggerData* data = static_cast<DefaultLoggerData*>(logger_data);
 #ifdef RNDR_SPDLOG
-    spdlog::drop(data->logger->name());
+    if (data != nullptr)
+    {
+        spdlog::drop(data->logger->name());
+        RNDR_DELETE(DefaultLoggerData, data);
+    }
 #endif  // RNDR_SPDLOG
     return true;
 }
@@ -229,13 +248,13 @@ void rndr::DefaultLogger::Log(OpaquePtr logger_data,
 
 rndr::OpaquePtr rndr::Allocate(uint64_t size, const char* tag)
 {
-    assert(g_is_initialized);
+    assert(IsValid(g_allocator));
     return g_allocator.allocate(g_allocator.allocator_data, size, tag);
 }
 
 void rndr::Free(rndr::OpaquePtr ptr)
 {
-    assert(g_is_initialized);
+    assert(IsValid(g_allocator));
     g_allocator.free(g_allocator.allocator_data, ptr);
 }
 
@@ -246,7 +265,7 @@ void rndr::Log(const char* file,
                const char* format,
                ...)
 {
-    assert(g_is_initialized);
+    assert(IsValid(g_logger));
 
     constexpr int k_message_size = 4096;
     std::array<char, k_message_size> message;
