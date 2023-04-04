@@ -5,6 +5,8 @@
 namespace rndr
 {
 
+// Types ///////////////////////////////////////////////////////////////////////////////////////////
+
 using OpaquePtr = void*;
 
 /**
@@ -78,6 +80,8 @@ struct RndrDesc
     // User specified logger. If no logger is provided, the default logger is used.
     Logger user_logger;
 };
+
+// API /////////////////////////////////////////////////////////////////////////////////////////////
 
 /**
  * Creates the Rndr library instance. There can be only one.
@@ -166,6 +170,8 @@ void Log(const char* file,
          ...);
 
 }  // namespace rndr
+
+// Helper macros ///////////////////////////////////////////////////////////////////////////////////
 
 #define RNDR_ALLOC(type, tag) static_cast<type*>(rndr::Allocate(sizeof(type), tag))
 #define RNDR_DEFAULT_NEW(type, tag) \
