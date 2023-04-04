@@ -89,7 +89,7 @@ public:
      * Closes the window. This does not destroy the window.
      * @return True if the window was closed successfully.
      */
-    [[nodiscard]] bool Close() const;
+    void Close() const;
 
     /**
      * Checks if the window is closed.
@@ -129,7 +129,7 @@ public:
      * @note Window::GetWidth and Window::GetHeight will be updated only after the next call to
      * Window::ProcessEvents.
      */
-    [[nodiscard]] bool Resize(int width, int height) const;
+    bool Resize(int width, int height) const;
 
     /**
      * Set if the window is minimized.
@@ -137,7 +137,7 @@ public:
      * @note Window::IsWindowMinimized will be updated only after the next call to
      * Window::ProcessEvents.
      */
-    void SetMinimized(bool is_minimized) const;
+    void SetMinimized(bool should_minimize) const;
 
     /**
      * Checks if the window is minimized.
@@ -151,7 +151,7 @@ public:
      * @note Window::IsWindowMaximized will be updated only after the next call to
      * Window::ProcessEvents.
      */
-    void SetMaximized(bool is_maximized) const;
+    void SetMaximized(bool should_maximize) const;
 
     /**
      * Checks if the window is maximized.
