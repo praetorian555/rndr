@@ -1,6 +1,4 @@
-#include "rndr/core/window.h"
-
-#include <map>
+#include "rndr/core/definitions.h"
 
 #if defined RNDR_WINDOWS
 #include <windows.h>
@@ -8,14 +6,14 @@
 #include <winuser.h>
 #endif  // RNDR_WINDOWS
 
+#include <map>
+
 #include "rndr/core/input.h"
 #include "rndr/core/stack-array.h"
+#include "rndr/core/window.h"
 
 namespace
 {
-// Function declarations
-LRESULT CALLBACK WindowProc(HWND window_handle, UINT msg_code, WPARAM param_w, LPARAM param_l);
-
 // Missing virtual keys in the Windows API
 enum WindowsVirtualKey : uint32_t
 {
@@ -48,29 +46,28 @@ std::map<uint32_t, rndr::InputPrimitive> g_primitive_mapping = {
     {VK_RIGHT, rndr::InputPrimitive::Keyboard_Right},
     {VK_DOWN, rndr::InputPrimitive::Keyboard_Down}};
 
-struct WindowData
-{
-    rndr::WindowDesc desc;
-    HWND handle = nullptr;
-    bool is_closed = false;
-    bool is_minimized = false;
-    bool is_maximized = false;
-    bool is_visible = true;
-    rndr::Window* window = nullptr;
-};
 }  // namespace
 
-rndr::Window* rndr::Window::Create(const WindowDesc& desc)
+rndr::Window::Window(const WindowDesc& desc)
 {
+    // Invalid window by default
+    m_desc.height = 0;
+    m_desc.width = 0;
+    m_desc.name = nullptr;
+    m_desc.resizable = false;
+    m_desc.start_maximized = false;
+    m_desc.start_minimized = false;
+    m_desc.start_visible = false;
+
     if (desc.width == 0 || desc.height == 0)
     {
         RNDR_LOG_ERROR("Window width and height must be greater than 0.");
-        return nullptr;
+        return;
     }
     if (desc.start_minimized && desc.start_maximized)
     {
         RNDR_LOG_ERROR("Window cannot be both minimized and maximized at the same time.");
-        return nullptr;
+        return;
     }
 
     // TODO(Marko): This will get the handle to the exe, should pass in the name of this dll if we
@@ -85,14 +82,14 @@ rndr::Window* rndr::Window::Create(const WindowDesc& desc)
     {
         window_class.lpszClassName = class_name;
         window_class.hInstance = instance;
-        window_class.lpfnWndProc = WindowProc;
+        window_class.lpfnWndProc = rndr::WindowPrivate::WindowProc;
         window_class.style = CS_OWNDC | CS_HREDRAW | CS_VREDRAW;
 
         const ATOM atom = RegisterClass(&window_class);
         if (atom == 0)
         {
             RNDR_LOG_ERROR("Failed to register window class!");
-            return {};
+            return;
         }
     }
 
@@ -116,8 +113,6 @@ rndr::Window* rndr::Window::Create(const WindowDesc& desc)
     }
 
     AdjustWindowRect(&window_rect, window_style, FALSE);
-    WindowData* window_data = RNDR_DEFAULT_NEW(WindowData, desc.name);
-    assert(window_data != nullptr && "Failed to allocate window data!");
     HWND window_handle = CreateWindowEx(0,
                                         class_name,
                                         desc.name,
@@ -129,12 +124,11 @@ rndr::Window* rndr::Window::Create(const WindowDesc& desc)
                                         nullptr,
                                         nullptr,
                                         instance,
-                                        window_data);
+                                        this);
     if (window_handle == nullptr)
     {
-        Free(window_data);
         RNDR_LOG_ERROR("CreateWindowEx failed!");
-        return {};
+        return;
     }
 
     // Setup raw input
@@ -147,48 +141,90 @@ rndr::Window* rndr::Window::Create(const WindowDesc& desc)
     raw_devices[0].hwndTarget = window_handle;
     RegisterRawInputDevices(raw_devices.data(), 1, sizeof(raw_devices[0]));
 
-    Window* window = RNDR_DEFAULT_NEW(Window, desc.name);
-    window->m_window_data = reinterpret_cast<OpaquePtr>(window_data);
-    window_data->window = window;
-    window_data->desc = desc;
-    window_data->handle = window_handle;
-    window_data->is_visible = desc.start_visible;
-    window_data->is_minimized = desc.start_minimized;
-    window_data->is_maximized = desc.start_maximized;
-
-    window->SetCursorMode(desc.cursor_mode);
-
-    return window;
-}
-
-bool rndr::Window::Destroy(rndr::Window& window)
-{
-    WindowData* window_data = reinterpret_cast<WindowData*>(window.m_window_data);
-    if (window_data->handle != nullptr)
+    m_handle = window_handle;
+    if (!SetCursorMode(desc.cursor_mode))
     {
-        const BOOL status = DestroyWindow(window_data->handle);
-        if (status == 0)
-        {
-            RNDR_LOG_ERROR("Failed to destroy window!");
-            return false;
-        }
+        DestroyWindow(m_handle);
+        m_handle = k_invalid_window_handle;
+        RNDR_LOG_ERROR("Failed to set cursor mode!");
+        return;
     }
-    RNDR_DELETE(WindowData, window_data);
-    RNDR_DELETE(Window, &window);
-    return true;
+
+    // At this point we have a valid window
+    m_desc = desc;
+    m_handle = window_handle;
+    m_is_visible = desc.start_visible;
+    m_is_minimized = desc.start_minimized;
+    m_is_maximized = desc.start_maximized;
+    m_is_closed = false;
+    RNDR_LOG_INFO("Window created successfully!");
 }
 
-bool rndr::Window::IsValid(const rndr::Window& window)
+rndr::Window::~Window()
 {
-    return window.m_window_data != nullptr;
+    if (m_handle == k_invalid_window_handle)
+    {
+        return;
+    }
+    const BOOL status = DestroyWindow(m_handle);
+    if (status == 0)
+    {
+        RNDR_LOG_ERROR("Failed to destroy window!");
+    }
+}
+
+rndr::Window::Window(rndr::Window&& other) noexcept
+    : m_desc(other.m_desc),
+      m_handle(other.m_handle),
+      m_is_visible(other.m_is_visible),
+      m_is_minimized(other.m_is_minimized),
+      m_is_maximized(other.m_is_maximized),
+      m_is_closed(other.m_is_closed)
+{
+    if (this == &other)
+    {
+        return;
+    }
+    other.m_handle = k_invalid_window_handle;
+    other.m_is_closed = true;
+}
+
+rndr::Window& rndr::Window::operator=(rndr::Window&& other) noexcept
+{
+    if (this != &other)
+    {
+        if (m_handle != k_invalid_window_handle)
+        {
+            const BOOL status = DestroyWindow(m_handle);
+            if (status == 0)
+            {
+                RNDR_LOG_ERROR("Failed to destroy window!");
+            }
+        }
+
+        m_desc = other.m_desc;
+        m_handle = other.m_handle;
+        m_is_visible = other.m_is_visible;
+        m_is_minimized = other.m_is_minimized;
+        m_is_maximized = other.m_is_maximized;
+        m_is_closed = other.m_is_closed;
+
+        other.m_handle = k_invalid_window_handle;
+        other.m_is_closed = true;
+    }
+    return *this;
 }
 
 void rndr::Window::ProcessEvents() const
 {
-    WindowData* window_data = reinterpret_cast<WindowData*>(m_window_data);
-    MSG msg{};
+    if (m_handle == k_invalid_window_handle)
+    {
+        RNDR_LOG_WARNING("This window can't process events since it is not valid!");
+        return;
+    }
 
-    while (PeekMessage(&msg, window_data->handle, 0, 0, PM_REMOVE))
+    MSG msg;
+    while (PeekMessage(&msg, m_handle, 0, 0, PM_REMOVE))
     {
         TranslateMessage(&msg);
         DispatchMessage(&msg);
@@ -197,40 +233,37 @@ void rndr::Window::ProcessEvents() const
 
 void rndr::Window::Close() const
 {
-    WindowData* window_data = reinterpret_cast<WindowData*>(m_window_data);
-    PostMessage(window_data->handle, WM_CLOSE, 0, 0);
+    if (!m_is_closed)
+    {
+        PostMessage(m_handle, WM_CLOSE, 0, 0);
+    }
 }
 
 bool rndr::Window::IsClosed() const
 {
-    WindowData* window_data = reinterpret_cast<WindowData*>(m_window_data);
-    return window_data->is_closed;
+    return m_is_closed;
 }
 
-rndr::OpaquePtr rndr::Window::GetNativeWindowHandle() const
+rndr::NativeWindowHandle rndr::Window::GetNativeWindowHandle() const
 {
-    WindowData* window_data = reinterpret_cast<WindowData*>(m_window_data);
-    return reinterpret_cast<OpaquePtr>(window_data->handle);
+    return m_handle;
 }
 
 int rndr::Window::GetWidth() const
 {
-    WindowData* window_data = reinterpret_cast<WindowData*>(m_window_data);
-    return window_data->desc.width;
+    return m_desc.width;
 }
 
 int rndr::Window::GetHeight() const
 {
-    WindowData* window_data = reinterpret_cast<WindowData*>(m_window_data);
-    return window_data->desc.height;
+    return m_desc.height;
 }
 
 math::Vector2 rndr::Window::GetSize() const
 {
-    WindowData* window_data = reinterpret_cast<WindowData*>(m_window_data);
     math::Vector2 size;
-    size.X = static_cast<real>(window_data->desc.width);
-    size.Y = static_cast<real>(window_data->desc.height);
+    size.X = static_cast<real>(m_desc.width);
+    size.Y = static_cast<real>(m_desc.height);
     return size;
 }
 
@@ -241,15 +274,19 @@ bool rndr::Window::Resize(int width, int height) const
         RNDR_LOG_ERROR("Invalid window size!");
         return false;
     }
+    if (m_handle == k_invalid_window_handle)
+    {
+        RNDR_LOG_ERROR("Invalid window handle!");
+        return false;
+    }
 
-    WindowData* window_data = reinterpret_cast<WindowData*>(m_window_data);
     // Define the desired client area size
-    RECT rc = { 0, 0, width, height };
+    RECT rc = {0, 0, width, height};
 
     // Calculate the required window size, including the frame and borders
-    DWORD const dw_style = GetWindowLong(window_data->handle, GWL_STYLE);
-    DWORD const dw_ex_style = GetWindowLong(window_data->handle, GWL_EXSTYLE);
-    BOOL const has_menu = static_cast<const BOOL>(GetMenu(window_data->handle) != nullptr);
+    DWORD const dw_style = GetWindowLong(m_handle, GWL_STYLE);
+    DWORD const dw_ex_style = GetWindowLong(m_handle, GWL_EXSTYLE);
+    BOOL const has_menu = static_cast<const BOOL>(GetMenu(m_handle) != nullptr);
     BOOL status = AdjustWindowRectEx(&rc, dw_style, has_menu, dw_ex_style);
     if (status == 0)
     {
@@ -263,7 +300,7 @@ bool rndr::Window::Resize(int width, int height) const
 
     // Set the window size without changing its position
     const UINT flags = SWP_NOZORDER | SWP_NOMOVE;
-    status = SetWindowPos(window_data->handle, nullptr, 0, 0, new_width, new_height, flags);
+    status = SetWindowPos(m_handle, nullptr, 0, 0, new_width, new_height, flags);
     if (status == 0)
     {
         RNDR_LOG_ERROR("Failed to set window position!");
@@ -274,52 +311,59 @@ bool rndr::Window::Resize(int width, int height) const
 
 bool rndr::Window::IsWindowMinimized() const
 {
-    WindowData* window_data = reinterpret_cast<WindowData*>(m_window_data);
-    return window_data->is_minimized;
+    return m_is_minimized;
 }
 
 void rndr::Window::SetMinimized(bool should_minimize) const
 {
-    WindowData* window_data = reinterpret_cast<WindowData*>(m_window_data);
-    PostMessage(window_data->handle, WM_SYSCOMMAND, should_minimize ? SC_MINIMIZE : SC_RESTORE, 0);
-}
-
-void rndr::Window::SetMaximized(bool should_maximize) const
-{
-    WindowData* window_data = reinterpret_cast<WindowData*>(m_window_data);
-    PostMessage(window_data->handle, WM_SYSCOMMAND, should_maximize ? SC_MAXIMIZE : SC_RESTORE, 0);
+    if (m_handle == k_invalid_window_handle)
+    {
+        RNDR_LOG_ERROR("Invalid window handle!");
+        return;
+    }
+    PostMessage(m_handle, WM_SYSCOMMAND, should_minimize ? SC_MINIMIZE : SC_RESTORE, 0);
 }
 
 bool rndr::Window::IsWindowMaximized() const
 {
-    WindowData* window_data = reinterpret_cast<WindowData*>(m_window_data);
-    return window_data->is_maximized;
+    return m_is_maximized;
 }
 
-void rndr::Window::SetVisible(bool visible) const
+void rndr::Window::SetMaximized(bool should_maximize) const
 {
-    WindowData* window_data = reinterpret_cast<WindowData*>(m_window_data);
-    ShowWindow(window_data->handle, visible ? SW_SHOW : SW_HIDE);
-    window_data->is_visible = visible;
+    if (m_handle == k_invalid_window_handle)
+    {
+        RNDR_LOG_ERROR("Invalid window handle!");
+        return;
+    }
+    PostMessage(m_handle, WM_SYSCOMMAND, should_maximize ? SC_MAXIMIZE : SC_RESTORE, 0);
+}
+
+void rndr::Window::SetVisible(bool visible)
+{
+    if (m_handle == k_invalid_window_handle)
+    {
+        RNDR_LOG_ERROR("Invalid window handle!");
+        return;
+    }
+    ShowWindow(m_handle, visible ? SW_SHOW : SW_HIDE);
+    m_is_visible = visible;
 }
 
 bool rndr::Window::IsVisible() const
 {
-    WindowData* window_data = reinterpret_cast<WindowData*>(m_window_data);
-    return window_data->is_visible && !window_data->is_minimized;
+    return m_is_visible && !m_is_minimized;
 }
 
 namespace
 {
 bool IsCursorHidden();
-POINT GetWindowMidPointInScreenSpace(WindowData* window_data);
+POINT GetWindowMidPointInScreenSpace(HWND window_handle);
 }  // namespace
 
-bool rndr::Window::SetCursorMode(CursorMode mode) const
+bool rndr::Window::SetCursorMode(CursorMode mode)
 {
-    WindowData* window_data = reinterpret_cast<WindowData*>(m_window_data);
-    window_data->desc.cursor_mode = mode;
-
+    m_desc.cursor_mode = mode;
     switch (mode)
     {
         case CursorMode::Normal:
@@ -343,13 +387,13 @@ bool rndr::Window::SetCursorMode(CursorMode mode) const
         case CursorMode::Infinite:
         {
             RECT window_rect;
-            GetWindowRect(window_data->handle, &window_rect);
+            GetWindowRect(m_handle, &window_rect);
             ClipCursor(&window_rect);
             if (!IsCursorHidden())
             {
                 ShowCursor(FALSE);
             }
-            const POINT mid_point = GetWindowMidPointInScreenSpace(window_data);
+            const POINT mid_point = GetWindowMidPointInScreenSpace(m_handle);
             SetCursorPos(mid_point.x, mid_point.y);
             break;
         }
@@ -360,8 +404,7 @@ bool rndr::Window::SetCursorMode(CursorMode mode) const
 
 rndr::CursorMode rndr::Window::GetCursorMode() const
 {
-    WindowData* window_data = reinterpret_cast<WindowData*>(m_window_data);
-    return window_data->desc.cursor_mode;
+    return m_desc.cursor_mode;
 }
 
 namespace
@@ -374,51 +417,15 @@ bool IsCursorHidden()
     return cursor_info.flags != CURSOR_SHOWING;
 }
 
-POINT GetWindowMidPointInScreenSpace(WindowData* window_data)
+POINT GetWindowMidPointInScreenSpace(HWND window_handle)
 {
     RECT window_rect;
-    GetWindowRect(window_data->handle, &window_rect);
+    GetWindowRect(window_handle, &window_rect);
     const int width = window_rect.right - window_rect.left;
     const int height = window_rect.bottom - window_rect.top;
     const int mid_x = window_rect.left + width / 2;
     const int mid_y = window_rect.top + height / 2;
     return {mid_x, mid_y};
-}
-
-void HandleMouseMove(WindowData* window_data, int x, int y)
-{
-    if (window_data == nullptr)
-    {
-        return;
-    }
-
-    // We need to flip Y since the engine expects Y to grow from bottom to top
-    y = window_data->desc.height - y;
-
-    const rndr::CursorMode mode = window_data->desc.cursor_mode;
-    switch (mode)
-    {
-        case rndr::CursorMode::Normal:
-        case rndr::CursorMode::Hidden:
-        {
-            // Notify the input system
-            rndr::InputSystem* input_system = rndr::InputSystem::Get();
-            if (input_system != nullptr)
-            {
-                const math::Point2 absolute_position(static_cast<float>(x), static_cast<float>(y));
-                input_system->SubmitMousePositionEvent(window_data->handle,
-                                                       absolute_position,
-                                                       window_data->window->GetSize());
-            }
-            break;
-        }
-        case rndr::CursorMode::Infinite:
-        {
-            const POINT mid_point = GetWindowMidPointInScreenSpace(window_data);
-            SetCursorPos(mid_point.x, mid_point.y);
-            break;
-        }
-    }
 }
 
 rndr::InputPrimitive GetPrimitive(UINT msg_code)
@@ -474,12 +481,51 @@ rndr::InputTrigger GetTrigger(UINT msg_code)
     }
     return rndr::InputTrigger::ButtonDown;
 }
+}  // namespace
+
+namespace rndr::WindowPrivate
+{
+void HandleMouseMove(rndr::Window* window, int x, int y)
+{
+    if (window == nullptr)
+    {
+        return;
+    }
+
+    // We need to flip Y since the engine expects Y to grow from bottom to top
+    y = window->m_desc.height - y;
+
+    const rndr::CursorMode mode = window->m_desc.cursor_mode;
+    switch (mode)
+    {
+        case rndr::CursorMode::Normal:
+        case rndr::CursorMode::Hidden:
+        {
+            // Notify the input system
+            rndr::InputSystem* input_system = rndr::InputSystem::Get();
+            if (input_system != nullptr)
+            {
+                const math::Point2 absolute_position(static_cast<float>(x), static_cast<float>(y));
+                input_system->SubmitMousePositionEvent(window->m_handle,
+                                                       absolute_position,
+                                                       window->GetSize());
+            }
+            break;
+        }
+        case rndr::CursorMode::Infinite:
+        {
+            const POINT mid_point = GetWindowMidPointInScreenSpace(window->m_handle);
+            SetCursorPos(mid_point.x, mid_point.y);
+            break;
+        }
+    }
+}
 
 LRESULT CALLBACK WindowProc(HWND window_handle, UINT msg_code, WPARAM param_w, LPARAM param_l)
 {
-    const LONG_PTR window_data_ptr = GetWindowLongPtr(window_handle, GWLP_USERDATA);
+    LONG_PTR const window_ptr = GetWindowLongPtr(window_handle, GWLP_USERDATA);
     // Before window is created this will be nullptr
-    WindowData* window_data = reinterpret_cast<WindowData*>(window_data_ptr);  // NOLINT
+    rndr::Window* window = reinterpret_cast<rndr::Window*>(window_ptr);  // NOLINT
 
     //    if (Window != nullptr)
     //    {
@@ -495,65 +541,65 @@ LRESULT CALLBACK WindowProc(HWND window_handle, UINT msg_code, WPARAM param_w, L
     {
         case WM_CREATE:
         {
-            RNDR_LOG_INFO("WindowProc: Event WM_CREATE");
+            RNDR_LOG_DEBUG("WindowProc: Event WM_CREATE");
             CREATESTRUCT* CreateStruct = reinterpret_cast<CREATESTRUCT*>(param_l);  // NOLINT
-            window_data = reinterpret_cast<WindowData*>(CreateStruct->lpCreateParams);
-            SetWindowLongPtr(window_handle, GWLP_USERDATA, reinterpret_cast<LONG_PTR>(window_data));
+            window = reinterpret_cast<rndr::Window*>(CreateStruct->lpCreateParams);
+            SetWindowLongPtr(window_handle, GWLP_USERDATA, reinterpret_cast<LONG_PTR>(window));
             break;
         }
         case WM_SIZE:
         {
-            if (window_data == nullptr || window_data->window == nullptr)
+            if (window == nullptr)
             {
                 break;
             }
             const int32_t width = static_cast<int32_t>(LOWORD(param_l));
             const int32_t height = static_cast<int32_t>(HIWORD(param_l));
-            RNDR_LOG_INFO("WindowProc: Event WM_SIZE (%d, %d)", width, height);
-            window_data->desc.width = width;
-            window_data->desc.height = height;
-            window_data->window->on_resize.Execute(width, height);
+            RNDR_LOG_DEBUG("WindowProc: Event WM_SIZE (%d, %d)", width, height);
+            window->m_desc.width = width;
+            window->m_desc.height = height;
+            window->on_resize.Execute(width, height);
             break;
         }
         case WM_CLOSE:
         {
-            RNDR_LOG_INFO("WindowProc: Event WM_CLOSE");
-            window_data->is_closed = true;
+            RNDR_LOG_DEBUG("WindowProc: Event WM_CLOSE");
+            window->m_is_closed = true;
             break;
         }
         case WM_DESTROY:
         {
-            RNDR_LOG_INFO("WindowProc: Event WM_DESTROY");
-            window_data->handle = nullptr;
+            RNDR_LOG_DEBUG("WindowProc: Event WM_DESTROY");
+            window->m_handle = nullptr;
             break;
         }
         case WM_QUIT:
         {
-            RNDR_LOG_INFO("WindowProc: Event WM_QUIT");
+            RNDR_LOG_DEBUG("WindowProc: Event WM_QUIT");
             break;
         }
         case WM_SYSCOMMAND:
         {
-            uint16_t mask = param_w & 0xFFF0;
+            const uint16_t mask = param_w & 0xFFF0;
             if (mask == SC_MINIMIZE)
             {
-                RNDR_LOG_INFO("WindowProc: Event SC_MINIMIZE");
-                window_data->is_minimized = true;
-                window_data->is_maximized = false;
+                RNDR_LOG_DEBUG("WindowProc: Event SC_MINIMIZE");
+                window->m_is_minimized = true;
+                window->m_is_maximized = false;
                 break;
             }
             if (mask == SC_MAXIMIZE)
             {
-                RNDR_LOG_INFO("WindowProc: Event SC_MAXIMIZE");
-                window_data->is_minimized = false;
-                window_data->is_maximized = true;
+                RNDR_LOG_DEBUG("WindowProc: Event SC_MAXIMIZE");
+                window->m_is_minimized = false;
+                window->m_is_maximized = true;
                 break;
             }
             if (mask == SC_RESTORE)
             {
-                RNDR_LOG_INFO("WindowProc: Event SC_RESTORE");
-                window_data->is_minimized = false;
-                window_data->is_maximized = false;
+                RNDR_LOG_DEBUG("WindowProc: Event SC_RESTORE");
+                window->m_is_minimized = false;
+                window->m_is_maximized = false;
                 break;
             }
             break;
@@ -562,13 +608,13 @@ LRESULT CALLBACK WindowProc(HWND window_handle, UINT msg_code, WPARAM param_w, L
         {
             const int x = GET_X_LPARAM(param_l);
             const int y = GET_Y_LPARAM(param_l);
-            HandleMouseMove(window_data, x, y);
+            HandleMouseMove(window, x, y);
             break;
         }
         case WM_INPUT:
         {
             // Handling infinite mouse cursor mode
-            if (window_data->desc.cursor_mode != rndr::CursorMode::Infinite)
+            if (window->m_desc.cursor_mode != rndr::CursorMode::Infinite)
             {
                 break;
             }
@@ -590,13 +636,11 @@ LRESULT CALLBACK WindowProc(HWND window_handle, UINT msg_code, WPARAM param_w, L
                 rndr::InputSystem* input_system = rndr::InputSystem::Get();
                 if (input_system != nullptr)
                 {
-                    const math::Vector2 size = window_data->window->GetSize();
+                    const math::Vector2 size = window->GetSize();
                     const math::Vector2 delta{
                         static_cast<float>(raw_data->data.mouse.lLastX) / size.X,
                         static_cast<float>(raw_data->data.mouse.lLastY) / size.Y};
-                    input_system->SubmitRelativeMousePositionEvent(window_data->handle,
-                                                                   delta,
-                                                                   size);
+                    input_system->SubmitRelativeMousePositionEvent(window->m_handle, delta, size);
                 }
             }
             break;
@@ -611,17 +655,17 @@ LRESULT CALLBACK WindowProc(HWND window_handle, UINT msg_code, WPARAM param_w, L
         case WM_MBUTTONDOWN:
         case WM_MBUTTONUP:
         {
-            if (window_data == nullptr)
+            if (window == nullptr)
             {
                 break;
             }
 
-            rndr::InputPrimitive primitive = GetPrimitive(msg_code);
-            rndr::InputTrigger trigger = GetTrigger(msg_code);
+            const rndr::InputPrimitive primitive = GetPrimitive(msg_code);
+            const rndr::InputTrigger trigger = GetTrigger(msg_code);
             rndr::InputSystem* is = rndr::InputSystem::Get();
             if (is != nullptr)
             {
-                is->SubmitButtonEvent(window_data->handle, primitive, trigger);
+                is->SubmitButtonEvent(window->m_handle, primitive, trigger);
             }
 
             break;
@@ -629,7 +673,10 @@ LRESULT CALLBACK WindowProc(HWND window_handle, UINT msg_code, WPARAM param_w, L
         case WM_KEYDOWN:
         case WM_KEYUP:
         {
-            assert(window_data);
+            if (window == nullptr)
+            {
+                break;
+            }
             const auto iter = g_primitive_mapping.find(static_cast<uint32_t>(param_w));
             if (iter == g_primitive_mapping.end())
             {
@@ -643,20 +690,23 @@ LRESULT CALLBACK WindowProc(HWND window_handle, UINT msg_code, WPARAM param_w, L
             rndr::InputSystem* is = rndr::InputSystem::Get();
             if (is != nullptr)
             {
-                is->SubmitButtonEvent(window_data->handle, primitive, trigger);
+                is->SubmitButtonEvent(window->m_handle, primitive, trigger);
             }
 
             break;
         }
         case WM_MOUSEWHEEL:
         {
-            assert(window_data);
+            if (window == nullptr)
+            {
+                break;
+            }
             const int delta_wheel = GET_WHEEL_DELTA_WPARAM(param_w);
 
             rndr::InputSystem* is = rndr::InputSystem::Get();
             if (is != nullptr)
             {
-                is->SubmitMouseWheelEvent(window_data->handle, delta_wheel);
+                is->SubmitMouseWheelEvent(window->m_handle, delta_wheel);
             }
 
             break;
@@ -665,4 +715,4 @@ LRESULT CALLBACK WindowProc(HWND window_handle, UINT msg_code, WPARAM param_w, L
 
     return DefWindowProc(window_handle, msg_code, param_w, param_l);
 }
-}  // namespace
+}  // namespace rndr::WindowPrivate

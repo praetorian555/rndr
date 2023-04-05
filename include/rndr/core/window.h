@@ -3,8 +3,39 @@
 #include "rndr/core/base.h"
 #include "rndr/core/delegate.h"
 
+// Forward declarations.
+// TODO(Marko): Move this to separate header
+#ifndef _WINDEF_
+struct HWND__
+{
+    int unused;
+};
+typedef struct HWND__* HWND;
+
+using UINT = unsigned int;
+using WPARAM = unsigned __int64;
+using LPARAM = __int64;
+using LRESULT = __int64;
+
+#define CALLBACK __stdcall
+#endif  // _WINDEF_
+
 namespace rndr
 {
+
+#if RNDR_WINDOWS
+/**
+ * Represents a native window handle. Underlying type changes with the OS.
+ */
+using NativeWindowHandle = HWND;
+
+/**
+ * Represents an invalid window handle.
+ */
+constexpr NativeWindowHandle k_invalid_window_handle = NULL;
+#else
+#error "NativeWindowHandle not implemented for this platform."
+#endif
 
 /**
  * Represents how the cursor should be displayed and behave.
@@ -43,6 +74,16 @@ struct WindowDesc
 };
 
 /**
+ * Private functions used to interface with the OS.
+ */
+class Window;
+namespace WindowPrivate
+{
+void HandleMouseMove(class rndr::Window* window, int x, int y);
+LRESULT CALLBACK WindowProc(HWND window_handle, UINT msg_code, WPARAM param_w, LPARAM param_l);
+}  // namespace WindowPrivate
+
+/**
  * Represents a window on the screen.
  */
 // TODO(Marko): Add support for multiple monitors.
@@ -51,8 +92,6 @@ struct WindowDesc
 class Window
 {
 public:
-    RNDR_NO_CONSTRCUTORS_AND_DESTRUCTOR(Window);
-
     /**
      * Called when the window is resized.
      */
@@ -60,25 +99,34 @@ public:
     ResizeDelegate on_resize;
 
     /**
-     * Creates a new window.
+     * Creates a new window. If a window failed to create any method will return false.
      * @param desc The description of the window.
-     * @return The created window. If the window could not be created, the returned window will be
-     * invalid. Use Window::IsValid to check if the window is valid.
      */
-    static Window* Create(const WindowDesc& desc = WindowDesc{});
+    explicit Window(const WindowDesc& desc = WindowDesc{});
 
     /**
      * Destroys the window.
-     * @param window The window to destroy.
      */
-    static bool Destroy(Window& window);
+    ~Window();
 
     /**
-     * Checks if the window is valid.
-     * @param window The window to check.
-     * @return True if the window is valid, false otherwise.
+     * Copying is not allowed.
      */
-    static bool IsValid(const Window& window);
+    Window(const Window& other) = delete;
+    Window& operator=(const Window& other) = delete;
+
+    /**
+     * Move constructor.
+     * @param other The other window to move from. It will be invalid window after this.
+     */
+    Window(Window&& other) noexcept;
+
+    /**
+     * Move assignment operator.
+     * @param other The other window to move from. It will be invalid window after this.
+     * @return Reference to this window.
+     */
+    Window& operator=(Window&& other) noexcept;
 
     /**
      * Processes OS events regarding this window.
@@ -101,7 +149,7 @@ public:
      * Get the native window handle.
      * @return The native window handle.
      */
-    [[nodiscard]] OpaquePtr GetNativeWindowHandle() const;
+    [[nodiscard]] NativeWindowHandle GetNativeWindowHandle() const;
 
     /**
      * Gets the width of the window.
@@ -164,7 +212,7 @@ public:
      * @param is_visible True if the window should be visible, false otherwise.
      * @note Window::IsVisible will be updated only after the next call to Window::ProcessEvents.
      */
-    void SetVisible(bool is_visible) const;
+    void SetVisible(bool is_visible);
 
     /**
      * Checks if the window is visible.
@@ -177,7 +225,7 @@ public:
      * @param mode The cursor mode to set.
      * @return True if the cursor mode was set successfully.
      */
-    bool SetCursorMode(CursorMode mode) const;
+    bool SetCursorMode(CursorMode mode);
 
     /**
      * Gets the cursor mode.
@@ -186,7 +234,19 @@ public:
     [[nodiscard]] CursorMode GetCursorMode() const;
 
 private:
-    rndr::OpaquePtr m_window_data = nullptr;
+    WindowDesc m_desc;
+    NativeWindowHandle m_handle = k_invalid_window_handle;
+    bool m_is_closed = true;
+    bool m_is_minimized = false;
+    bool m_is_maximized = false;
+    bool m_is_visible = false;
+
+    // Implementation details //////////////////////////////////////////////////////////////////////
+    friend void WindowPrivate::HandleMouseMove(rndr::Window* window, int x, int y);
+    friend LRESULT CALLBACK WindowPrivate::WindowProc(HWND window_handle,
+                                                      UINT msg_code,
+                                                      WPARAM param_w,
+                                                      LPARAM param_l);
 };
 
 }  // namespace rndr
