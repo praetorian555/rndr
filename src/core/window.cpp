@@ -501,15 +501,10 @@ void HandleMouseMove(rndr::Window* window, int x, int y)
         case rndr::CursorMode::Normal:
         case rndr::CursorMode::Hidden:
         {
-            // Notify the input system
-            rndr::InputSystem* input_system = rndr::InputSystem::Get();
-            if (input_system != nullptr)
-            {
-                const math::Point2 absolute_position(static_cast<float>(x), static_cast<float>(y));
-                input_system->SubmitMousePositionEvent(window->m_handle,
-                                                       absolute_position,
-                                                       window->GetSize());
-            }
+            const math::Point2 absolute_position(static_cast<float>(x), static_cast<float>(y));
+            rndr::InputSystem::SubmitMousePositionEvent(window->m_handle,
+                                                        absolute_position,
+                                                        window->GetSize());
             break;
         }
         case rndr::CursorMode::Infinite:
@@ -633,15 +628,10 @@ LRESULT CALLBACK WindowProc(HWND window_handle, UINT msg_code, WPARAM param_w, L
 
             if (raw_data->header.dwType == RIM_TYPEMOUSE)
             {
-                rndr::InputSystem* input_system = rndr::InputSystem::Get();
-                if (input_system != nullptr)
-                {
-                    const math::Vector2 size = window->GetSize();
-                    const math::Vector2 delta{
-                        static_cast<float>(raw_data->data.mouse.lLastX) / size.X,
-                        static_cast<float>(raw_data->data.mouse.lLastY) / size.Y};
-                    input_system->SubmitRelativeMousePositionEvent(window->m_handle, delta, size);
-                }
+                const math::Vector2 size = window->GetSize();
+                const math::Vector2 delta{static_cast<float>(raw_data->data.mouse.lLastX) / size.X,
+                                          static_cast<float>(raw_data->data.mouse.lLastY) / size.Y};
+                rndr::InputSystem::SubmitRelativeMousePositionEvent(window->m_handle, delta, size);
             }
             break;
         }
@@ -662,12 +652,7 @@ LRESULT CALLBACK WindowProc(HWND window_handle, UINT msg_code, WPARAM param_w, L
 
             const rndr::InputPrimitive primitive = GetPrimitive(msg_code);
             const rndr::InputTrigger trigger = GetTrigger(msg_code);
-            rndr::InputSystem* is = rndr::InputSystem::Get();
-            if (is != nullptr)
-            {
-                is->SubmitButtonEvent(window->m_handle, primitive, trigger);
-            }
-
+            rndr::InputSystem::SubmitButtonEvent(window->m_handle, primitive, trigger);
             break;
         }
         case WM_KEYDOWN:
@@ -686,13 +671,7 @@ LRESULT CALLBACK WindowProc(HWND window_handle, UINT msg_code, WPARAM param_w, L
             const rndr::InputTrigger trigger = msg_code == WM_KEYDOWN
                                                    ? rndr::InputTrigger::ButtonDown
                                                    : rndr::InputTrigger::ButtonUp;
-
-            rndr::InputSystem* is = rndr::InputSystem::Get();
-            if (is != nullptr)
-            {
-                is->SubmitButtonEvent(window->m_handle, primitive, trigger);
-            }
-
+            rndr::InputSystem::SubmitButtonEvent(window->m_handle, primitive, trigger);
             break;
         }
         case WM_MOUSEWHEEL:
@@ -702,13 +681,7 @@ LRESULT CALLBACK WindowProc(HWND window_handle, UINT msg_code, WPARAM param_w, L
                 break;
             }
             const int delta_wheel = GET_WHEEL_DELTA_WPARAM(param_w);
-
-            rndr::InputSystem* is = rndr::InputSystem::Get();
-            if (is != nullptr)
-            {
-                is->SubmitMouseWheelEvent(window->m_handle, delta_wheel);
-            }
-
+            rndr::InputSystem::SubmitMouseWheelEvent(window->m_handle, delta_wheel);
             break;
         }
     }
