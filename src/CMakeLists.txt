@@ -13,7 +13,9 @@ set(PUBLIC_SOURCE_LIST
     "${PROJECT_SOURCE_DIR}/include/rndr/core/stack-array.h"
     "${PROJECT_SOURCE_DIR}/include/rndr/core/time.h"
     "${PROJECT_SOURCE_DIR}/include/rndr/core/window.h"
-    "${PROJECT_SOURCE_DIR}/include/rndr/core/input.h")
+    "${PROJECT_SOURCE_DIR}/include/rndr/core/input.h"
+    "${PROJECT_SOURCE_DIR}/include/rndr/core/string.h"
+    "${PROJECT_SOURCE_DIR}/include/rndr/core/hash-map.h")
 set(PRIVATE_SOURCE_LIST
     "${PROJECT_SOURCE_DIR}/src/core/base.cpp"
     "${PROJECT_SOURCE_DIR}/src/core/time.cpp"
