@@ -21,7 +21,7 @@ rndr::Logger g_logger;
 bool g_is_initialized = false;
 }  // namespace
 
-bool rndr::Create(const rndr::RndrDesc& desc)
+bool rndr::Init(const RndrDesc& desc)
 {
     if (g_is_initialized)
     {
@@ -85,6 +85,8 @@ bool rndr::Destroy()
             return false;
         }
     }
+    g_allocator = {};
+    g_logger = {};
     g_is_initialized = false;
     return true;
 }

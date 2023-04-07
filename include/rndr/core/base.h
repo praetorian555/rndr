@@ -84,11 +84,11 @@ struct RndrDesc
 // API /////////////////////////////////////////////////////////////////////////////////////////////
 
 /**
- * Creates the Rndr library instance. There can be only one.
+ * Initializes the Rndr library instance. There can be only one.
  * @param desc Configuration for the library.
  * @return True if the library was initialized successfully.
  */
-bool Create(const RndrDesc& desc = RndrDesc{});
+bool Init(const RndrDesc& desc = RndrDesc{});
 
 /**
  * Destroys the Rndr library instance.

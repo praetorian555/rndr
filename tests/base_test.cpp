@@ -61,7 +61,7 @@ TEST_CASE("Init", "[init]")
 {
     SECTION("Default create and destroy")
     {
-        REQUIRE(rndr::Create());
+        REQUIRE(rndr::Init());
         const rndr::Allocator& allocator = rndr::GetAllocator();
         REQUIRE(IsValid(allocator));
         REQUIRE(allocator.allocator_data == nullptr);
@@ -86,7 +86,7 @@ TEST_CASE("Init", "[init]")
         allocator.destroy = &CustomAllocDestroy;
         allocator.allocate = &CustomAllocate;
         allocator.free = &CustomFree;
-        REQUIRE(rndr::Create({.user_allocator = allocator}));
+        REQUIRE(rndr::Init({.user_allocator = allocator}));
         const rndr::Allocator& rndr_allocator = rndr::GetAllocator();
         REQUIRE(IsValid(rndr_allocator));
         REQUIRE(rndr_allocator.allocator_data
@@ -110,7 +110,7 @@ TEST_CASE("Init", "[init]")
         logger.init = &CustomLogInit;
         logger.destroy = &CustomLogDestroy;
         logger.log = &CustomLog;
-        REQUIRE(rndr::Create({.user_logger = logger}));
+        REQUIRE(rndr::Init({.user_logger = logger}));
         const rndr::Allocator& allocator = rndr::GetAllocator();
         REQUIRE(IsValid(allocator));
         REQUIRE(allocator.allocator_data == nullptr);
@@ -133,7 +133,7 @@ TEST_CASE("Allocate and free", "[memory]")
 {
     SECTION("Default allocate and free")
     {
-        REQUIRE(rndr::Create());
+        REQUIRE(rndr::Init());
         rndr::OpaquePtr ptr = rndr::Allocate(1, "test");
         REQUIRE(ptr != nullptr);
         rndr::Free(ptr);

@@ -4,7 +4,7 @@
 
 TEST_CASE("Creating a window", "[window]")
 {
-    REQUIRE(rndr::Create());
+    REQUIRE(rndr::Init());
     SECTION("Default window")
     {
         rndr::Window window;
@@ -82,7 +82,7 @@ TEST_CASE("Creating a window", "[window]")
 
 TEST_CASE("Moving a window", "[window]")
 {
-    REQUIRE(rndr::Create());
+    REQUIRE(rndr::Init());
     SECTION("Moving default window")
     {
         rndr::Window first_window;
@@ -115,7 +115,7 @@ TEST_CASE("Moving a window", "[window]")
 
 TEST_CASE("Resizing the window", "[window]")
 {
-    REQUIRE(rndr::Create());
+    REQUIRE(rndr::Init());
     SECTION("Create default window")
     {
         rndr::Window window;
@@ -157,7 +157,7 @@ TEST_CASE("Resizing the window", "[window]")
 
 TEST_CASE("Closing the window", "[window]")
 {
-    REQUIRE(rndr::Create());
+    REQUIRE(rndr::Init());
     rndr::Window window;
     window.ProcessEvents();
     REQUIRE(!window.IsClosed());
@@ -175,7 +175,7 @@ TEST_CASE("Closing the window", "[window]")
 
 TEST_CASE("Changing cursor mode", "[window]")
 {
-    REQUIRE(rndr::Create());
+    REQUIRE(rndr::Init());
     SECTION("Create default window")
     {
         rndr::Window window;
