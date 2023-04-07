@@ -15,4 +15,4 @@ namespace rndr
 template <typename Key, typename Value, typename Hash>
 using HashMap = std::
     unordered_map<Key, Value, Hash, std::equal_to<Key>, StdAllocator<std::pair<const Key, Value>>>;
-}
+}  // namespace rndr
