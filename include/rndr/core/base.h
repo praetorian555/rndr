@@ -176,6 +176,11 @@ void Log(const char* file,
 #define RNDR_ALLOC(type, tag) static_cast<type*>(rndr::Allocate(sizeof(type), tag))
 #define RNDR_DEFAULT_NEW(type, tag) \
     new (RNDR_ALLOC(type, tag)) type {}
+#define RNDR_NEW(type, tag, ...)     \
+    new (RNDR_ALLOC(type, tag)) type \
+    {                                \
+        __VA_ARGS__                  \
+    }
 #define RNDR_FREE(ptr) rndr::Free(ptr)
 #define RNDR_DELETE(type, ptr) \
     {                          \
