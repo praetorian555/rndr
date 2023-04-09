@@ -62,6 +62,15 @@ struct InputBinding
 using InputCallback =
     std::function<void(InputPrimitive primitive, InputTrigger trigger, real value)>;
 
+// Forward declaration.
+class InputContext;
+namespace InputSystem
+{
+bool Init();
+InputContext& GetCurrentContext();
+bool PushContext(const InputContext& context);
+}
+
 /**
  * Represents a collection of mappings between input actions and input bindings and callbacks.
  */
@@ -161,8 +170,29 @@ public:
 private:
     OpaquePtr m_context_data = nullptr;
     String m_name;
+
+    // Implementation details. ////////////////////////////////////////////////////////////////////
+    friend bool InputSystem::Init();
+    friend InputContext& InputSystem::GetCurrentContext();
+    friend bool InputSystem::PushContext(const InputContext& context);
 };
 
+/**
+ * Represents a system that handles input events.
+ *
+ * The input system's lifetime is controlled using the Init and Destroy functions. The input system
+ * is initialized by the rndr::Init function and destroyed by the rndr::Destroy function. In case
+ * that the input system is not initialized all functions will return false.
+ *
+ * The input system is a stack based system. Each input context is pushed to the top of the stack
+ * and becomes the active input context. Only the context on top of the stack will process the input
+ * event. The input context lifetime is not managed by the input system.
+ *
+ * Events are queued using the Submit*Event family of functions. The events are queued, and
+ * processed when the ProcessEvents function is called.
+ *
+ * The system is not thread-safe.
+ */
 namespace InputSystem
 {
 /**
@@ -188,18 +218,18 @@ InputContext& GetCurrentContext();
  * @param context Context to be pushed to the top of the stack.
  * @note The input context lifetime is not managed by the input system.
  */
-void PushContext(const InputContext& context);
+bool PushContext(const InputContext& context);
 
 /**
  * Pops the input context from the top of the stack. This does not destroy the context.
  */
-void PopContext();
+bool PopContext();
 
 /**
  * Processes all pending input events.
  * @param delta_seconds Time elapsed since the last frame.
  */
-void ProcessEvents(real delta_seconds);
+bool ProcessEvents(real delta_seconds);
 
 /**
  * Submits a button event to the input system.
@@ -208,7 +238,7 @@ void ProcessEvents(real delta_seconds);
  * @param trigger Input trigger detected. For buttons this is InputTrigger::ButtonDown,
  * InputTrigger::ButtonUp or InputTrigger::DoubleClick.
  */
-void SubmitButtonEvent(OpaquePtr window, InputPrimitive primitive, InputTrigger trigger);
+bool SubmitButtonEvent(OpaquePtr window, InputPrimitive primitive, InputTrigger trigger);
 
 /**
  * Submits a mouse position event to the input system.
@@ -217,7 +247,7 @@ void SubmitButtonEvent(OpaquePtr window, InputPrimitive primitive, InputTrigger 
  * corner.
  * @param screen_size Size of the screen in pixels.
  */
-void SubmitMousePositionEvent(OpaquePtr window,
+bool SubmitMousePositionEvent(OpaquePtr window,
                               const math::Point2& position,
                               const math::Vector2& screen_size);
 
@@ -229,7 +259,7 @@ void SubmitMousePositionEvent(OpaquePtr window,
  * position. Positive values mean the mouse moved to the right or up.
  * @param screen_size Size of the screen in pixels.
  */
-void SubmitRelativeMousePositionEvent(OpaquePtr window,
+bool SubmitRelativeMousePositionEvent(OpaquePtr window,
                                       const math::Vector2& delta_position,
                                       const math::Vector2& screen_size);
 
@@ -239,7 +269,7 @@ void SubmitRelativeMousePositionEvent(OpaquePtr window,
  * @param delta_wheel Number of ticks the mouse wheel was rotated. Positive values mean the wheel
  * was rotated forward, away from the user.
  */
-void SubmitMouseWheelEvent(OpaquePtr window, int delta_wheel);
+bool SubmitMouseWheelEvent(OpaquePtr window, int delta_wheel);
 
 /**
  * Helper function to check if the primitive is a button.

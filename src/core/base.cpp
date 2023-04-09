@@ -8,6 +8,8 @@
 #include "spdlog/spdlog.h"
 #endif  // RNDR_SPDLOG
 
+#include "rndr/core/input.h"
+
 namespace
 {
 // TODO(Marko): Add unique identifier to the start so that we can confirm this is indeed this type.
@@ -56,6 +58,12 @@ bool rndr::Init(const RndrDesc& desc)
         }
     }
 
+    if (!InputSystem::Init())
+    {
+        RNDR_LOG_ERROR("Failed to initialize the input system!");
+        return false;
+    }
+
     g_is_initialized = true;
     return true;
 }
@@ -66,6 +74,11 @@ bool rndr::Destroy()
     {
         RNDR_LOG_WARNING("Rndr library is not initialized!");
         return true;
+    }
+    if (!InputSystem::Destroy())
+    {
+        RNDR_LOG_ERROR("Failed to destroy the input system!");
+        return false;
     }
     if (g_allocator.destroy != nullptr)
     {

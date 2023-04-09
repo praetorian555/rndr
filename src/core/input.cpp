@@ -1,5 +1,6 @@
 #include <unordered_map>
 #include <utility>
+#include <variant>
 
 #include "rndr/core/array.h"
 #include "rndr/core/hash-map.h"
@@ -38,38 +39,50 @@ struct ContextData
     rndr::HashMap<InputAction, InputCallback, ActionHash> callbacks;
     rndr::HashMap<InputAction, Array<InputBinding>, ActionHash> bindings;
     BindingMap binding_to_actions;
+    InputContext* context = nullptr;
 };
+
+struct ButtonData
+{
+    InputPrimitive primitive;
+    InputTrigger trigger;
+};
+
+struct MousePositionData
+{
+    math::Point2 position;
+    math::Vector2 screen_size;
+};
+
+struct RelativeMousePositionData
+{
+    math::Vector2 delta_position;
+    math::Vector2 screen_size;
+};
+
+struct MouseWheelData
+{
+    int32_t delta_wheel;
+};
+
+using EventData =
+    std::variant<ButtonData, MousePositionData, RelativeMousePositionData, MouseWheelData>;
+
+struct Event
+{
+    OpaquePtr native_window;
+    EventData data;
+};
+
+struct SystemData
+{
+    InputContext default_context = InputContext("Default");
+    Array<ContextData*> contexts;
+    Array<Event> events;
+};
+
+SystemData* g_system_data;
 }  // namespace rndr::InputPrivate
-void rndr::InputSystem::SubmitButtonEvent(rndr::OpaquePtr window,
-                                          rndr::InputPrimitive primitive,
-                                          rndr::InputTrigger trigger)
-{
-    RNDR_UNUSED(window);
-    RNDR_UNUSED(primitive);
-    RNDR_UNUSED(trigger);
-}
-void rndr::InputSystem::SubmitMousePositionEvent(rndr::OpaquePtr window,
-                                                 const math::Point2& position,
-                                                 const math::Vector2& screen_size)
-{
-    RNDR_UNUSED(window);
-    RNDR_UNUSED(position);
-    RNDR_UNUSED(screen_size);
-}
-void rndr::InputSystem::SubmitRelativeMousePositionEvent(rndr::OpaquePtr window,
-                                                         const math::Vector2& delta_position,
-                                                         const math::Vector2& screen_size)
-{
-    RNDR_UNUSED(window);
-    RNDR_UNUSED(delta_position);
-    RNDR_UNUSED(screen_size);
-}
-void rndr::InputSystem::SubmitMouseWheelEvent(rndr::OpaquePtr window, int delta_wheel)
-{
-    RNDR_UNUSED(window);
-    RNDR_UNUSED(delta_wheel);
-}
-// namespace rndr::InputPrivate
 
 // InputAction /////////////////////////////////////////////////////////////////////////////////////
 
@@ -114,6 +127,7 @@ rndr::InputContext::InputContext(String name) : m_name(std::move(name))
     InputPrivate::ContextData* data = RNDR_DEFAULT_NEW(InputPrivate::ContextData, "Context data");
     assert(data != nullptr);
     m_context_data = data;
+    data->context = this;
 }
 
 rndr::InputContext::~InputContext()
@@ -145,6 +159,7 @@ rndr::InputContext::InputContext(const rndr::InputContext& other)
     new_data->callbacks = data->callbacks;
     new_data->bindings = data->bindings;
     new_data->binding_to_actions = data->binding_to_actions;
+    new_data->context = this;
     m_context_data = new_data;
     m_name = other.m_name;
 }
@@ -174,6 +189,7 @@ rndr::InputContext& rndr::InputContext::operator=(const rndr::InputContext& othe
     new_data->callbacks = other_data->callbacks;
     new_data->bindings = other_data->bindings;
     new_data->binding_to_actions = other_data->binding_to_actions;
+    new_data->context = this;
     m_context_data = new_data;
     return *this;
 }
@@ -185,6 +201,11 @@ rndr::InputContext::InputContext(rndr::InputContext&& other) noexcept
         return;
     }
     m_context_data = other.m_context_data;
+    InputPrivate::ContextData* data = static_cast<InputPrivate::ContextData*>(m_context_data);
+    if (data != nullptr)
+    {
+        data->context = this;
+    }
     m_name = other.m_name;
     other.m_context_data = nullptr;
     other.m_name = "";
@@ -205,6 +226,10 @@ rndr::InputContext& rndr::InputContext::operator=(rndr::InputContext&& other) no
     }
     m_context_data = other.m_context_data;
     m_name = other.m_name;
+    if (data != nullptr)
+    {
+        data->context = this;
+    }
     other.m_context_data = nullptr;
     other.m_name = "";
     return *this;
@@ -378,39 +403,102 @@ rndr::Span<rndr::InputBinding> rndr::InputContext::GetActionBindings(
 }
 
 // InputSystem ////////////////////////////////////////////////////////////////////////////////////
-//
-// void rndr::InputSystem::SubmitButtonEvent(OpaquePtr Window,
-//                                          InputPrimitive Primitive,
-//                                          InputTrigger Trigger)
-//{
-//    const Event Evt{Window, ButtonEvent{Primitive, Trigger}};
-//    m_Events.push(Evt);
-//}
-//
-// void rndr::InputSystem::SubmitMousePositionEvent(OpaquePtr Window,
-//                                                 const math::Point2& Position,
-//                                                 const math::Vector2& ScreenSize)
-//{
-//    assert(ScreenSize.X != 0 && ScreenSize.Y != 0);
-//    const Event Evt{Window, MousePositionEvent{Position, ScreenSize}};
-//    m_Events.push(Evt);
-//}
-//
-// void rndr::InputSystem::SubmitRelativeMousePositionEvent(OpaquePtr Window,
-//                                                         const math::Vector2& DeltaPosition,
-//                                                         const math::Vector2& ScreenSize)
-//{
-//    assert(ScreenSize.X != 0 && ScreenSize.Y != 0);
-//    const Event Evt{Window, RelativeMousePositionEvent{DeltaPosition, ScreenSize}};
-//    m_Events.push(Evt);
-//}
-//
-// void rndr::InputSystem::SubmitMouseWheelEvent(OpaquePtr Window, int DeltaWheel)
-//{
-//    const Event Evt{Window, MouseWheelEvent{DeltaWheel}};
-//    m_Events.push(Evt);
-//}
-//
+
+bool rndr::InputSystem::Init()
+{
+    using namespace InputPrivate;
+    if (g_system_data != nullptr)
+    {
+        return true;
+    }
+    g_system_data = RNDR_NEW(SystemData, "Input system");
+    ContextData* data = static_cast<ContextData*>(g_system_data->default_context.m_context_data);
+    g_system_data->contexts.push_back(data);
+    return true;
+}
+
+bool rndr::InputSystem::Destroy()
+{
+    using namespace InputPrivate;
+    if (g_system_data == nullptr)
+    {
+        return true;
+    }
+    g_system_data->contexts.clear();
+    RNDR_DELETE(SystemData, g_system_data);
+    g_system_data = nullptr;
+    return true;
+}
+
+rndr::InputContext& rndr::InputSystem::GetCurrentContext()
+{
+    assert(InputPrivate::g_system_data != nullptr);
+    return *InputPrivate::g_system_data->contexts.back()->context;
+}
+
+bool rndr::InputSystem::PushContext(const rndr::InputContext& context)
+{
+    assert(InputPrivate::g_system_data != nullptr);
+    InputPrivate::ContextData* data =
+        static_cast<InputPrivate::ContextData*>(context.m_context_data);
+    InputPrivate::g_system_data->contexts.push_back(data);
+    return true;
+}
+
+bool rndr::InputSystem::PopContext()
+{
+    assert(InputPrivate::g_system_data != nullptr);
+    InputPrivate::g_system_data->contexts.pop_back();
+    return true;
+}
+
+bool rndr::InputSystem::SubmitButtonEvent(OpaquePtr window,
+                                          InputPrimitive primitive,
+                                          InputTrigger trigger)
+{
+    assert(InputPrivate::g_system_data != nullptr);
+    const InputPrivate::Event event{window, InputPrivate::ButtonData{primitive, trigger}};
+    InputPrivate::g_system_data->events.push_back(event);
+    return true;
+}
+
+bool rndr::InputSystem::SubmitMousePositionEvent(OpaquePtr window,
+                                                 const math::Point2& position,
+                                                 const math::Vector2& screen_size)
+{
+    assert(InputPrivate::g_system_data != nullptr);
+    if (screen_size.X != 0 && screen_size.Y != 0)
+    {
+        return false;
+    }
+    const InputPrivate::Event event{window, InputPrivate::MousePositionData{position, screen_size}};
+    InputPrivate::g_system_data->events.push_back(event);
+    return true;
+}
+
+bool rndr::InputSystem::SubmitRelativeMousePositionEvent(OpaquePtr window,
+                                                         const math::Vector2& delta_position,
+                                                         const math::Vector2& screen_size)
+{
+    assert(InputPrivate::g_system_data != nullptr);
+    if (screen_size.X != 0 && screen_size.Y != 0)
+    {
+        return false;
+    }
+    const InputPrivate::Event event{
+        window,
+        InputPrivate::RelativeMousePositionData{delta_position, screen_size}};
+    InputPrivate::g_system_data->events.push_back(event);
+    return true;
+}
+
+bool rndr::InputSystem::SubmitMouseWheelEvent(OpaquePtr window, int32_t delta_wheel)
+{
+    const InputPrivate::Event event{window, InputPrivate::MouseWheelData{delta_wheel}};
+    InputPrivate::g_system_data->events.push_back(event);
+    return true;
+}
+
 // void rndr::InputSystem::Update(real DeltaSeconds)
 //{
 //    RNDR_UNUSED(DeltaSeconds);
