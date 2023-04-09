@@ -109,7 +109,7 @@ bool rndr::InputBinding::operator!=(const rndr::InputBinding& other) const
 
 // InputContext ////////////////////////////////////////////////////////////////////////////////////
 
-rndr::InputContext::InputContext()
+rndr::InputContext::InputContext(String name) : m_name(std::move(name))
 {
     InputPrivate::ContextData* data = RNDR_DEFAULT_NEW(InputPrivate::ContextData, "Context data");
     assert(data != nullptr);
@@ -146,6 +146,7 @@ rndr::InputContext::InputContext(const rndr::InputContext& other)
     new_data->bindings = data->bindings;
     new_data->binding_to_actions = data->binding_to_actions;
     m_context_data = new_data;
+    m_name = other.m_name;
 }
 
 rndr::InputContext& rndr::InputContext::operator=(const rndr::InputContext& other)
@@ -162,6 +163,7 @@ rndr::InputContext& rndr::InputContext::operator=(const rndr::InputContext& othe
         RNDR_DELETE(ContextData, data);
         data = nullptr;
     }
+    m_name = other.m_name;
     if (other_data == nullptr)
     {
         m_context_data = nullptr;
@@ -183,7 +185,9 @@ rndr::InputContext::InputContext(rndr::InputContext&& other) noexcept
         return;
     }
     m_context_data = other.m_context_data;
+    m_name = other.m_name;
     other.m_context_data = nullptr;
+    other.m_name = "";
 }
 
 rndr::InputContext& rndr::InputContext::operator=(rndr::InputContext&& other) noexcept
@@ -200,8 +204,15 @@ rndr::InputContext& rndr::InputContext::operator=(rndr::InputContext&& other) no
         data = nullptr;
     }
     m_context_data = other.m_context_data;
+    m_name = other.m_name;
     other.m_context_data = nullptr;
+    other.m_name = "";
     return *this;
+}
+
+const rndr::String& rndr::InputContext::GetName() const
+{
+    return m_name;
 }
 
 bool rndr::InputContext::AddAction(const rndr::InputAction& action,

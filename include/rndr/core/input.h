@@ -41,7 +41,18 @@ struct InputBinding
     InputTrigger trigger;
     real modifier = MATH_REALC(1.0);
 
+    /**
+     * Compares two input bindings. The modifier is not considered.
+     * @param other The other input binding to compare.
+     * @return Returns true if the input bindings are equal, false otherwise.
+     */
     bool operator==(const InputBinding& other) const;
+
+    /**
+     * Compares two input bindings. The modifier is not considered.
+     * @param other The other input binding to compare.
+     * @return Returns true if the input bindings are not equal, false otherwise.
+     */
     bool operator!=(const InputBinding& other) const;
 };
 
@@ -57,28 +68,99 @@ using InputCallback =
 class InputContext
 {
 public:
-    InputContext();
+    /**
+     * Creates a new input context.
+     * @param name Name of the input context.
+     */
+    explicit InputContext(String name);
+
+    /**
+     * Destroys the input context.
+     */
     ~InputContext();
 
-    InputContext(const InputContext&);
-    InputContext& operator=(const InputContext&);
+    /**
+     * Create a copy of the input context.
+     * @param other The input context to copy.
+     */
+    InputContext(const InputContext& other);
 
-    InputContext(InputContext&&) noexcept;
-    InputContext& operator=(InputContext&&) noexcept;
+    /**
+     * Assigns the input context to another input context.
+     * @param other The input context to assign.
+     * @return Returns a reference to the input context.
+     */
+    InputContext& operator=(const InputContext& other);
 
+    /**
+     * Move constructs the input context.
+     * @param other The input context to move.
+     */
+    InputContext(InputContext&& other) noexcept;
+
+    /**
+     * Move assigns the input context.
+     * @param other The input context to move.
+     * @return Returns a reference to the input context.
+     */
+    InputContext& operator=(InputContext&& other) noexcept;
+
+    /**
+     * Returns the name of the input context.
+     * @return Returns the name of the input context.
+     */
+    [[nodiscard]] const String& GetName() const;
+
+    /**
+     * Adds an input action to the input context.
+     * @param action The input action to add.
+     * @param callback The callback to invoke when the input action is triggered.
+     * @param bindings The input bindings to bind to the input action.
+     * @return Returns true if the input action was successfully added.
+     */
     bool AddAction(const InputAction& action,
                    const InputCallback& callback,
                    const Span<InputBinding>& bindings);
 
+    /**
+     * Add an input binding to an input action.
+     * @param action Action to add the binding to.
+     * @param binding Binding to add to the action.
+     * @return Returns true if the binding was successfully added.
+     */
     bool AddBindingToAction(const InputAction& action, const InputBinding& binding);
+
+    /**
+     * Removes an input action from the input context.
+     * @param action The input action to remove.
+     * @return Returns true if the input action was successfully removed.
+     */
     bool RemoveBindingFromAction(const InputAction& action, const InputBinding& binding);
 
+    /**
+     * Checks if the input context contains an input action.
+     * @param action The input action to check.
+     * @return Returns true if the input context contains the input action.
+     */
     [[nodiscard]] bool ContainsAction(const InputAction& action) const;
+
+    /**
+     * Returns the callback associated with an input action.
+     * @param action The input action to get the callback for.
+     * @return Returns the callback associated with the input action.
+     */
     [[nodiscard]] InputCallback GetActionCallback(const InputAction& action) const;
+
+    /**
+     * Returns the input bindings associated with an input action.
+     * @param action The input action to get the bindings for.
+     * @return Returns the input bindings associated with the input action.
+     */
     [[nodiscard]] Span<InputBinding> GetActionBindings(const InputAction& action) const;
 
 private:
     OpaquePtr m_context_data = nullptr;
+    String m_name;
 };
 
 namespace InputSystem
