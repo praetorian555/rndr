@@ -62,6 +62,17 @@ struct InputBinding
 using InputCallback =
     std::function<void(InputPrimitive primitive, InputTrigger trigger, real value)>;
 
+/**
+ * Helper struct to initialize an input action in the input context.
+ */
+struct InputActionData
+{
+    InputCallback callback = nullptr;
+    /** If null, callback will be called for any window triggering one of the bindings. */
+    OpaquePtr native_window = nullptr;
+    Span<InputBinding> bindings;
+};
+
 // Forward declaration.
 class InputContext;
 namespace InputSystem
@@ -69,7 +80,7 @@ namespace InputSystem
 bool Init();
 InputContext& GetCurrentContext();
 bool PushContext(const InputContext& context);
-}
+}  // namespace InputSystem
 
 /**
  * Represents a collection of mappings between input actions and input bindings and callbacks.
@@ -123,13 +134,10 @@ public:
     /**
      * Adds an input action to the input context.
      * @param action The input action to add.
-     * @param callback The callback to invoke when the input action is triggered.
-     * @param bindings The input bindings to bind to the input action.
+     * @param data The data associated with the input action. The callback can't be null.
      * @return Returns true if the input action was successfully added.
      */
-    bool AddAction(const InputAction& action,
-                   const InputCallback& callback,
-                   const Span<InputBinding>& bindings);
+    bool AddAction(const InputAction& action, const InputActionData& data);
 
     /**
      * Add an input binding to an input action.
@@ -193,6 +201,7 @@ private:
  *
  * The system is not thread-safe.
  */
+// TODO(Marko): Provide testing of input bindings to make sure they make sense.
 namespace InputSystem
 {
 /**
