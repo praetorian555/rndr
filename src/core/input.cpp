@@ -448,6 +448,11 @@ bool rndr::InputSystem::PushContext(const rndr::InputContext& context)
 bool rndr::InputSystem::PopContext()
 {
     assert(InputPrivate::g_system_data != nullptr);
+    if (InputPrivate::g_system_data->contexts.size() == 1)
+    {
+        RNDR_LOG_ERROR("Cannot pop default context");
+        return false;
+    }
     InputPrivate::g_system_data->contexts.pop_back();
     return true;
 }
@@ -467,7 +472,7 @@ bool rndr::InputSystem::SubmitMousePositionEvent(OpaquePtr window,
                                                  const math::Vector2& screen_size)
 {
     assert(InputPrivate::g_system_data != nullptr);
-    if (screen_size.X != 0 && screen_size.Y != 0)
+    if (screen_size.X == 0 || screen_size.Y == 0)
     {
         return false;
     }
@@ -481,7 +486,7 @@ bool rndr::InputSystem::SubmitRelativeMousePositionEvent(OpaquePtr window,
                                                          const math::Vector2& screen_size)
 {
     assert(InputPrivate::g_system_data != nullptr);
-    if (screen_size.X != 0 && screen_size.Y != 0)
+    if (screen_size.X == 0 || screen_size.Y == 0)
     {
         return false;
     }

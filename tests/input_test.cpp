@@ -126,3 +126,47 @@ TEST_CASE("Input context", "[input]")
     }
     REQUIRE(rndr::Destroy());
 }
+
+TEST_CASE("Input system", "[input]")
+{
+    REQUIRE(rndr::Init());
+
+    SECTION("Default context")
+    {
+        const rndr::InputContext& context = rndr::InputSystem::GetCurrentContext();
+        REQUIRE(context.GetName() == "Default");
+    }
+    SECTION("Push context")
+    {
+        const rndr::InputContext context("TestContext");
+        REQUIRE(rndr::InputSystem::PushContext(context));
+        REQUIRE(rndr::InputSystem::GetCurrentContext().GetName() == "TestContext");
+        SECTION("Pop context")
+        {
+            rndr::InputSystem::PopContext();
+            REQUIRE(rndr::InputSystem::GetCurrentContext().GetName() == "Default");
+        }
+    }
+    SECTION("Pop default context")
+    {
+        REQUIRE(!rndr::InputSystem::PopContext());
+        REQUIRE(rndr::InputSystem::GetCurrentContext().GetName() == "Default");
+    }
+    SECTION("Submit events")
+    {
+        REQUIRE(rndr::InputSystem::SubmitButtonEvent(nullptr,
+                                                     rndr::InputPrimitive::Keyboard_A,
+                                                     rndr::InputTrigger::ButtonDown));
+        REQUIRE(rndr::InputSystem::SubmitMousePositionEvent(nullptr, {100, 100}, {1024, 768}));
+        REQUIRE(rndr::InputSystem::SubmitMouseWheelEvent(nullptr, 1));
+        REQUIRE(
+            rndr::InputSystem::SubmitRelativeMousePositionEvent(nullptr, {100, 100}, {1024, 768}));
+    }
+    SECTION("Submit invalid events")
+    {
+        REQUIRE(!rndr::InputSystem::SubmitMousePositionEvent(nullptr, {100, 100}, {0, 0}));
+        REQUIRE(!rndr::InputSystem::SubmitRelativeMousePositionEvent(nullptr, {100, 100}, {0, 0}));
+    }
+
+    REQUIRE(rndr::Destroy());
+}
