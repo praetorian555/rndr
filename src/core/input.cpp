@@ -22,7 +22,7 @@ struct InputContextData
     rndr::Array<ActionData> actions;
     rndr::Ref<rndr::InputContext> context;
 
-    ~InputContextData() {}
+    ~InputContextData() = default;
 };
 
 struct ButtonData
@@ -160,19 +160,21 @@ bool rndr::InputContext::AddBindingToAction(const rndr::InputAction& action,
 
     for (ActionData& action_data : m_context_data->actions)
     {
-        if (action_data.action == action)
+        if (action_data.action != action)
         {
-            for (InputBinding& existing_binding : action_data.bindings)
+            continue;
+        }
+        for (InputBinding& existing_binding : action_data.bindings)
+        {
+            if (existing_binding != binding)
             {
-                if (existing_binding == binding)
-                {
-                    existing_binding = binding;
-                    return true;
-                }
+                continue;
             }
-            action_data.bindings.push_back(binding);
+            existing_binding = binding;
             return true;
         }
+        action_data.bindings.push_back(binding);
+        return true;
     }
     RNDR_LOG_ERROR("Action does not exist");
     return false;
@@ -492,112 +494,31 @@ void rndr::InputEventProcessor::operator()(const MouseWheelData& event) const
         }
     }
 }
-//
-// rndr::InputContext* rndr::InputSystem::GetContext()
-//{
-//    return m_Context;
-//}
-//
-// bool rndr::InputSystem::IsButton(InputPrimitive Primitive)
-//{
-//    return IsKeyboardButton(Primitive) || IsMouseButton(Primitive);
-//}
-//
-// bool rndr::InputSystem::IsMouseButton(InputPrimitive Primitive)
-//{
-//    return Primitive == InputPrimitive::Mouse_LeftButton
-//           || Primitive == InputPrimitive::Mouse_RightButton
-//           || Primitive == InputPrimitive::Mouse_MiddleButton;
-//}
-//
-// bool rndr::InputSystem::IsKeyboardButton(InputPrimitive Primitive)
-//{
-//    return Primitive > InputPrimitive::_KeyboardStart && Primitive < InputPrimitive::_KeyboardEnd;
-//}
-//
-// bool rndr::InputSystem::IsAxis(InputPrimitive Primitive)
-//{
-//    return IsMouseAxis(Primitive);
-//}
-//
-// bool rndr::InputSystem::IsMouseAxis(InputPrimitive Primitive)
-//{
-//    return Primitive == InputPrimitive::Mouse_AxisX || Primitive == InputPrimitive::Mouse_AxisY
-//           || Primitive == InputPrimitive::Mouse_AxisWheel;
-//}
-//
-// math::Point2 rndr::InputSystem::GetMousePosition() const
-//{
-//    assert(m_AbsolutePosition.has_value());
-//    return m_AbsolutePosition.value();
-//}
-//
-//// InputContext
-//////////////////////////////////////////////////////////////////////////////////////
-//
-// rndr::InputMapping* rndr::InputContext::CreateMapping(const InputAction& Action,
-//                                                      const InputCallback& Callback)
-//{
-//    std::unique_ptr<InputMapping> NewMapping = std::make_unique<InputMapping>(Action, Callback);
-//
-//    const auto FindMappingByAction = [&](const InputContext::Entry& Entry)
-//    { return Entry.Action == Action; };
-//
-//    auto EntryIt = std::find_if(Mappings.begin(), Mappings.end(), FindMappingByAction);
-//    if (EntryIt == Mappings.end())
-//    {
-//        Mappings.push_back(Entry{Action, std::move(NewMapping)});
-//        return Mappings.back().Mapping.get();
-//    }
-//
-//    RNDR_LOG_WARNING("InputContext::CreateMapping: Overriding existing mapping entry!");
-//    EntryIt->Mapping = std::move(NewMapping);
-//    return EntryIt->Mapping.get();
-//}
-//
-// void rndr::InputContext::AddBinding(const InputAction& Action,
-//                                    InputPrimitive Primitive,
-//                                    InputTrigger Trigger,
-//                                    real Modifier)
-//{
-//    const auto FindMappingByAction = [&](const InputContext::Entry& Entry)
-//    { return Entry.Action == Action; };
-//
-//    auto EntryIt = std::find_if(Mappings.begin(), Mappings.end(), FindMappingByAction);
-//    if (EntryIt == Mappings.end())
-//    {
-//        RNDR_LOG_ERROR("InputContext::AddBinding: Failed to find mapping based on action %s",
-//                       Action.c_str());
-//        return;
-//    }
-//
-//    InputMapping* Mapping = EntryIt->Mapping.get();
-//
-//    const auto FindBindingMatch = [&](const InputBinding& Binding)
-//    { return Binding.Primitive == Primitive && Binding.Trigger == Trigger; };
-//
-//    auto BindingIt =
-//        std::find_if(Mapping->Bindings.begin(), Mapping->Bindings.end(), FindBindingMatch);
-//    if (BindingIt == Mapping->Bindings.end())
-//    {
-//        Mapping->Bindings.push_back(InputBinding{Primitive, Trigger, Modifier});
-//    }
-//    else
-//    {
-//        *BindingIt = {Primitive, Trigger, Modifier};
-//    }
-//}
-//
-// const rndr::InputMapping* rndr::InputContext::GetMapping(const InputAction& Action)
-//{
-//    const auto FindMappingByAction = [&](const InputContext::Entry& Entry)
-//    { return Entry.Action == Action; };
-//
-//    auto EntryIt = std::find_if(Mappings.begin(), Mappings.end(), FindMappingByAction);
-//    return EntryIt != Mappings.end() ? EntryIt->Mapping.get() : nullptr;
-//}
-// rndr::InputSystem* rndr::InputSystem::Get()
-//{
-//    static InputSystem s_input_system;
-//    return &s_input_system;
-//}
+
+bool rndr::InputSystem::IsButton(InputPrimitive primitive)
+{
+    return IsKeyboardButton(primitive) || IsMouseButton(primitive);
+}
+
+bool rndr::InputSystem::IsMouseButton(InputPrimitive primitive)
+{
+    using enum rndr::InputPrimitive;
+    return primitive == Mouse_LeftButton || primitive == Mouse_RightButton
+           || primitive == Mouse_MiddleButton;
+}
+
+bool rndr::InputSystem::IsKeyboardButton(InputPrimitive primitive)
+
+{
+    return primitive > InputPrimitive::_KeyboardStart && primitive < InputPrimitive::_KeyboardEnd;
+}
+
+bool rndr::InputSystem::IsAxis(InputPrimitive primitive)
+{
+    return primitive == InputPrimitive::Mouse_AxisX || primitive == InputPrimitive::Mouse_AxisY;
+}
+
+bool rndr::InputSystem::IsMouseWheel(rndr::InputPrimitive primitive)
+{
+    return primitive == InputPrimitive::Mouse_AxisWheel;
+}

@@ -271,6 +271,13 @@ public:
      */
     static bool IsAxis(InputPrimitive primitive);
 
+    /**
+     * Helper function to check if the primitive is a mouse wheel.
+     * @param primitive Input primitive to check.
+     * @return Returns true if the primitive is a mouse wheel.
+     */
+    static bool IsMouseWheel(InputPrimitive primitive);
+
 private:
     static ScopePtr<struct InputSystemData> g_system_data;
 };
