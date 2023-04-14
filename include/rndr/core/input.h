@@ -7,8 +7,10 @@
 
 #include "rndr/core/base.h"
 #include "rndr/core/inputprimitives.h"
+#include "rndr/core/scope-ptr.h"
 #include "rndr/core/span.h"
 #include "rndr/core/string.h"
+#include "rndr/core/ref.h"
 
 namespace rndr
 {
@@ -25,8 +27,7 @@ public:
     [[nodiscard]] const String& GetName() const;
     [[nodiscard]] bool IsValid() const;
 
-    bool operator==(const InputAction& other) const;
-    bool operator!=(const InputAction& other) const;
+    bool operator==(const InputAction& other) const = default;
 
 private:
     String m_name;
@@ -47,13 +48,6 @@ struct InputBinding
      * @return Returns true if the input bindings are equal, false otherwise.
      */
     bool operator==(const InputBinding& other) const;
-
-    /**
-     * Compares two input bindings. The modifier is not considered.
-     * @param other The other input binding to compare.
-     * @return Returns true if the input bindings are not equal, false otherwise.
-     */
-    bool operator!=(const InputBinding& other) const;
 };
 
 /**
@@ -73,15 +67,6 @@ struct InputActionData
     Span<InputBinding> bindings;
 };
 
-// Forward declaration.
-class InputContext;
-namespace InputSystem
-{
-bool Init();
-InputContext& GetCurrentContext();
-bool PushContext(const InputContext& context);
-}  // namespace InputSystem
-
 /**
  * Represents a collection of mappings between input actions and input bindings and callbacks.
  */
@@ -89,41 +74,20 @@ class InputContext
 {
 public:
     /**
+     * Creates a new input context with an empty name.
+     */
+    InputContext();
+
+    /**
      * Creates a new input context.
      * @param name Name of the input context.
      */
     explicit InputContext(String name);
 
     /**
-     * Destroys the input context.
+     * Default destructor.
      */
     ~InputContext();
-
-    /**
-     * Create a copy of the input context.
-     * @param other The input context to copy.
-     */
-    InputContext(const InputContext& other);
-
-    /**
-     * Assigns the input context to another input context.
-     * @param other The input context to assign.
-     * @return Returns a reference to the input context.
-     */
-    InputContext& operator=(const InputContext& other);
-
-    /**
-     * Move constructs the input context.
-     * @param other The input context to move.
-     */
-    InputContext(InputContext&& other) noexcept;
-
-    /**
-     * Move assigns the input context.
-     * @param other The input context to move.
-     * @return Returns a reference to the input context.
-     */
-    InputContext& operator=(InputContext&& other) noexcept;
 
     /**
      * Returns the name of the input context.
@@ -176,13 +140,11 @@ public:
     [[nodiscard]] Span<InputBinding> GetActionBindings(const InputAction& action) const;
 
 private:
-    OpaquePtr m_context_data = nullptr;
+    ScopePtr<struct InputContextData> m_context_data;
     String m_name;
 
     // Implementation details. ////////////////////////////////////////////////////////////////////
-    friend bool InputSystem::Init();
-    friend InputContext& InputSystem::GetCurrentContext();
-    friend bool InputSystem::PushContext(const InputContext& context);
+    friend class InputSystem;
 };
 
 /**
@@ -202,113 +164,116 @@ private:
  * The system is not thread-safe.
  */
 // TODO(Marko): Provide testing of input bindings to make sure they make sense.
-namespace InputSystem
+class InputSystem
 {
-/**
- * Initializes the input system.
- * @return Returns true if the input system was successfully initialized.
- */
-bool Init();
+public:
+    /**
+     * Initializes the input system.
+     * @return Returns true if the input system was successfully initialized.
+     */
+    static bool Init();
 
-/**
- * Destroys the input system.
- * @return Returns true if the input system was successfully destroyed.
- */
-bool Destroy();
+    /**
+     * Destroys the input system.
+     * @return Returns true if the input system was successfully destroyed.
+     */
+    static bool Destroy();
 
-/**
- * Returns the currently active input context.
- * @return Returns the input context on top of the stack.
- */
-InputContext& GetCurrentContext();
+    /**
+     * Returns the currently active input context.
+     * @return Returns the input context on top of the stack.
+     */
+    static InputContext& GetCurrentContext();
 
-/**
- * Pushes a new input context to the top of the stack making it the active context.
- * @param context Context to be pushed to the top of the stack.
- * @note The input context lifetime is not managed by the input system.
- */
-bool PushContext(const InputContext& context);
+    /**
+     * Pushes a new input context to the top of the stack making it the active context.
+     * @param context Context to be pushed to the top of the stack.
+     * @note The input context lifetime is not managed by the input system.
+     */
+    static bool PushContext(const InputContext& context);
 
-/**
- * Pops the input context from the top of the stack. This does not destroy the context.
- */
-bool PopContext();
+    /**
+     * Pops the input context from the top of the stack. This does not destroy the context.
+     */
+    static bool PopContext();
 
-/**
- * Processes all pending input events.
- * @param delta_seconds Time elapsed since the last frame.
- */
-bool ProcessEvents(real delta_seconds);
+    /**
+     * Processes all pending input events.
+     * @param delta_seconds Time elapsed since the last frame.
+     */
+    static bool ProcessEvents(real delta_seconds);
 
-/**
- * Submits a button event to the input system.
- * @param window Native window handle in which the event was detected.
- * @param primitive Input primitive that was triggered.
- * @param trigger Input trigger detected. For buttons this is InputTrigger::ButtonDown,
- * InputTrigger::ButtonUp or InputTrigger::DoubleClick.
- */
-bool SubmitButtonEvent(OpaquePtr window, InputPrimitive primitive, InputTrigger trigger);
+    /**
+     * Submits a button event to the input system.
+     * @param window Native window handle in which the event was detected.
+     * @param primitive Input primitive that was triggered.
+     * @param trigger Input trigger detected. For buttons this is InputTrigger::ButtonDown,
+     * InputTrigger::ButtonUp or InputTrigger::DoubleClick.
+     */
+    static bool SubmitButtonEvent(OpaquePtr window, InputPrimitive primitive, InputTrigger trigger);
 
-/**
- * Submits a mouse position event to the input system.
- * @param window Native window handle in which the event was detected.
- * @param position Mouse position in screen coordinates, where the origin is in the bottom left
- * corner.
- * @param screen_size Size of the screen in pixels.
- */
-bool SubmitMousePositionEvent(OpaquePtr window,
-                              const math::Point2& position,
-                              const math::Vector2& screen_size);
+    /**
+     * Submits a mouse position event to the input system.
+     * @param window Native window handle in which the event was detected.
+     * @param position Mouse position in screen coordinates, where the origin is in the bottom left
+     * corner.
+     * @param screen_size Size of the screen in pixels.
+     */
+    static bool SubmitMousePositionEvent(OpaquePtr window,
+                                         const math::Point2& position,
+                                         const math::Vector2& screen_size);
 
-/**
- * Submits a relative mouse position event to the input system. Used in case of infinite cursor
- * mode.
- * @param window Native window handle in which the event was detected.
- * @param delta_position Relative mouse position in screen coordinates, relative to the last mouse
- * position. Positive values mean the mouse moved to the right or up.
- * @param screen_size Size of the screen in pixels.
- */
-bool SubmitRelativeMousePositionEvent(OpaquePtr window,
-                                      const math::Vector2& delta_position,
-                                      const math::Vector2& screen_size);
+    /**
+     * Submits a relative mouse position event to the input system. Used in case of infinite cursor
+     * mode.
+     * @param window Native window handle in which the event was detected.
+     * @param delta_position Relative mouse position in screen coordinates, relative to the last
+     * mouse position. Positive values mean the mouse moved to the right or up.
+     * @param screen_size Size of the screen in pixels.
+     */
+    static bool SubmitRelativeMousePositionEvent(OpaquePtr window,
+                                                 const math::Vector2& delta_position,
+                                                 const math::Vector2& screen_size);
 
-/**
- * Submits a mouse wheel event to the input system.
- * @param window Native window handle in which the event was detected.
- * @param delta_wheel Number of ticks the mouse wheel was rotated. Positive values mean the wheel
- * was rotated forward, away from the user.
- */
-bool SubmitMouseWheelEvent(OpaquePtr window, int delta_wheel);
+    /**
+     * Submits a mouse wheel event to the input system.
+     * @param window Native window handle in which the event was detected.
+     * @param delta_wheel Number of ticks the mouse wheel was rotated. Positive values mean the
+     * wheel was rotated forward, away from the user.
+     */
+    static bool SubmitMouseWheelEvent(OpaquePtr window, int delta_wheel);
 
-/**
- * Helper function to check if the primitive is a button.
- * @param primitive Input primitive to check.
- * @return Returns true if the primitive is a button.
- */
-bool IsButton(InputPrimitive primitive);
+    /**
+     * Helper function to check if the primitive is a button.
+     * @param primitive Input primitive to check.
+     * @return Returns true if the primitive is a button.
+     */
+    static bool IsButton(InputPrimitive primitive);
 
-/**
- * Helper function to check if the primitive is a mouse button.
- * @param primitive Input primitive to check.
- * @return Returns true if the primitive is a mouse button.
- */
-bool IsMouseButton(InputPrimitive primitive);
+    /**
+     * Helper function to check if the primitive is a mouse button.
+     * @param primitive Input primitive to check.
+     * @return Returns true if the primitive is a mouse button.
+     */
+    static bool IsMouseButton(InputPrimitive primitive);
 
-/**
- * Helper function to check if the primitive is a keyboard button.
- * @param primitive Input primitive to check.
- * @return Returns true if the primitive is a keyboard button.
- */
-bool IsKeyboardButton(InputPrimitive primitive);
+    /**
+     * Helper function to check if the primitive is a keyboard button.
+     * @param primitive Input primitive to check.
+     * @return Returns true if the primitive is a keyboard button.
+     */
+    static bool IsKeyboardButton(InputPrimitive primitive);
 
-/**
- * Helper function to check if the primitive is an axis.
- * @param primitive Input primitive to check.
- * @return Returns true if the primitive is an axis.
- */
-bool IsAxis(InputPrimitive primitive);
+    /**
+     * Helper function to check if the primitive is an axis.
+     * @param primitive Input primitive to check.
+     * @return Returns true if the primitive is an axis.
+     */
+    static bool IsAxis(InputPrimitive primitive);
 
-}  // namespace InputSystem
+private:
+    static ScopePtr<struct InputSystemData> g_system_data;
+};
 
 /**
  * Helper macro to bind a member function to an input callback.

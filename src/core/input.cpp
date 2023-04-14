@@ -3,11 +3,11 @@
 #include <variant>
 
 #include "rndr/core/array.h"
-#include "rndr/core/hash-map.h"
 #include "rndr/core/input.h"
+#include "rndr/core/ref.h"
 #include "rndr/core/stack-array.h"
 
-namespace rndr::InputPrivate
+namespace rndr
 {
 struct ActionData
 {
@@ -17,16 +17,18 @@ struct ActionData
     rndr::Array<rndr::InputBinding> bindings;
 };
 
-struct ContextData
+struct InputContextData
 {
     rndr::Array<ActionData> actions;
-    InputContext* context = nullptr;
+    rndr::Ref<rndr::InputContext> context;
+
+    ~InputContextData() {}
 };
 
 struct ButtonData
 {
-    InputPrimitive primitive;
-    InputTrigger trigger;
+    rndr::InputPrimitive primitive;
+    rndr::InputTrigger trigger;
 };
 
 struct MousePositionData
@@ -51,21 +53,21 @@ using EventData =
 
 struct Event
 {
-    OpaquePtr native_window;
+    rndr::OpaquePtr native_window;
     EventData data;
 };
 
 using EventQueue = std::queue<Event>;
 
-struct SystemData
+struct InputSystemData
 {
-    InputContext default_context = InputContext("Default");
-    Array<ContextData*> contexts;
+    rndr::InputContext default_context = rndr::InputContext("Default");
+    rndr::Array<Ref<InputContextData>> contexts;
     EventQueue events;
-};
 
-SystemData* g_system_data;
-}  // namespace rndr::InputPrivate
+    ~InputSystemData() = default;
+};
+}  // namespace rndr
 
 // InputAction /////////////////////////////////////////////////////////////////////////////////////
 
@@ -81,139 +83,26 @@ bool rndr::InputAction::IsValid() const
     return !m_name.empty();
 }
 
-bool rndr::InputAction::operator==(const rndr::InputAction& other) const
-{
-    return m_name == other.m_name;
-}
-
-bool rndr::InputAction::operator!=(const rndr::InputAction& other) const
-{
-    return m_name != other.m_name;
-}
-
-// InputBinding ////////////////////////////////////////////////////////////////////////////////////
+// InputBinding ////////////////////////////////////////////////////////////////////////////////
 
 bool rndr::InputBinding::operator==(const rndr::InputBinding& other) const
 {
     return primitive == other.primitive && trigger == other.trigger;
 }
 
-bool rndr::InputBinding::operator!=(const rndr::InputBinding& other) const
-{
-    return !(*this == other);
-}
-
 // InputContext ////////////////////////////////////////////////////////////////////////////////////
+
+rndr::InputContext::InputContext()
+{
+    m_context_data = RNDR_MAKE_SCOPED(InputContextData, {}, *this);
+}
 
 rndr::InputContext::InputContext(String name) : m_name(std::move(name))
 {
-    InputPrivate::ContextData* data = RNDR_DEFAULT_NEW(InputPrivate::ContextData, "Context data");
-    assert(data != nullptr);
-    m_context_data = data;
-    data->context = this;
+    m_context_data = RNDR_MAKE_SCOPED(InputContextData, {}, *this);
 }
 
-rndr::InputContext::~InputContext()
-{
-    using namespace InputPrivate;
-    if (m_context_data != nullptr)
-    {
-        ContextData* data = static_cast<ContextData*>(m_context_data);
-        RNDR_DELETE(ContextData, data);
-        m_context_data = nullptr;
-    }
-}
-
-rndr::InputContext::InputContext(const rndr::InputContext& other)
-{
-    using namespace InputPrivate;
-    if (this == &other)
-    {
-        return;
-    }
-    ContextData* context_data = static_cast<ContextData*>(other.m_context_data);
-    if (context_data == nullptr)
-    {
-        m_context_data = nullptr;
-        return;
-    }
-    ContextData* new_context_data = RNDR_DEFAULT_NEW(ContextData, "Context data");
-    assert(new_context_data != nullptr);
-    new_context_data->actions = context_data->actions;
-    new_context_data->context = this;
-    m_context_data = new_context_data;
-    m_name = other.m_name;
-}
-
-rndr::InputContext& rndr::InputContext::operator=(const rndr::InputContext& other)
-{
-    using namespace InputPrivate;
-    if (this == &other)
-    {
-        return *this;
-    }
-    ContextData* other_context_data = static_cast<ContextData*>(other.m_context_data);
-    ContextData* context_data = static_cast<ContextData*>(m_context_data);
-    if (context_data != nullptr)
-    {
-        RNDR_DELETE(ContextData, context_data);
-        context_data = nullptr;
-    }
-    m_name = other.m_name;
-    if (other_context_data == nullptr)
-    {
-        m_context_data = nullptr;
-        return *this;
-    }
-    ContextData* new_context_data = RNDR_DEFAULT_NEW(ContextData, "Context data");
-    assert(new_context_data != nullptr);
-    new_context_data->actions = other_context_data->actions;
-    new_context_data->context = this;
-    m_context_data = new_context_data;
-    return *this;
-}
-
-rndr::InputContext::InputContext(rndr::InputContext&& other) noexcept
-{
-    using namespace InputPrivate;
-    if (this == &other)
-    {
-        return;
-    }
-    m_context_data = other.m_context_data;
-    ContextData* context_data = static_cast<InputPrivate::ContextData*>(m_context_data);
-    if (context_data != nullptr)
-    {
-        context_data->context = this;
-    }
-    m_name = other.m_name;
-    other.m_context_data = nullptr;
-    other.m_name = "";
-}
-
-rndr::InputContext& rndr::InputContext::operator=(rndr::InputContext&& other) noexcept
-{
-    if (this == &other)
-    {
-        return *this;
-    }
-    using namespace InputPrivate;
-    ContextData* context_data = static_cast<ContextData*>(m_context_data);
-    if (context_data != nullptr)
-    {
-        RNDR_DELETE(ContextData, context_data);
-        context_data = nullptr;
-    }
-    m_context_data = other.m_context_data;
-    m_name = other.m_name;
-    if (context_data != nullptr)
-    {
-        context_data->context = this;
-    }
-    other.m_context_data = nullptr;
-    other.m_name = "";
-    return *this;
-}
+rndr::InputContext::~InputContext() = default;
 
 const rndr::String& rndr::InputContext::GetName() const
 {
@@ -238,9 +127,7 @@ bool rndr::InputContext::AddAction(const rndr::InputAction& action,
         RNDR_LOG_ERROR("Invalid callback");
         return false;
     }
-    using namespace InputPrivate;
-    ContextData* context_data = static_cast<ContextData*>(m_context_data);
-    for (const ActionData& action_data : context_data->actions)
+    for (const ActionData& action_data : m_context_data->actions)
     {
         if (action_data.action == action)
         {
@@ -253,7 +140,7 @@ bool rndr::InputContext::AddAction(const rndr::InputAction& action,
     action_data.callback = data.callback;
     action_data.native_window = data.native_window;
     action_data.bindings.assign(data.bindings.begin(), data.bindings.end());
-    context_data->actions.push_back(action_data);
+    m_context_data->actions.push_back(action_data);
     return true;
 }
 
@@ -271,9 +158,7 @@ bool rndr::InputContext::AddBindingToAction(const rndr::InputAction& action,
         return false;
     }
 
-    using namespace InputPrivate;
-    ContextData* context_data = static_cast<ContextData*>(m_context_data);
-    for (ActionData& action_data : context_data->actions)
+    for (ActionData& action_data : m_context_data->actions)
     {
         if (action_data.action == action)
         {
@@ -307,9 +192,7 @@ bool rndr::InputContext::RemoveBindingFromAction(const rndr::InputAction& action
         return false;
     }
 
-    using namespace InputPrivate;
-    ContextData* context_data = static_cast<ContextData*>(m_context_data);
-    for (ActionData& action_data : context_data->actions)
+    for (ActionData& action_data : m_context_data->actions)
     {
         if (action_data.action == action)
         {
@@ -335,9 +218,7 @@ bool rndr::InputContext::ContainsAction(const rndr::InputAction& action) const
         RNDR_LOG_ERROR("Invalid action");
         return false;
     }
-    using namespace InputPrivate;
-    ContextData* context_data = static_cast<ContextData*>(m_context_data);
-    return std::ranges::any_of(context_data->actions,
+    return std::ranges::any_of(m_context_data->actions,
                                [&action](const auto& action_data)
                                { return action_data.action == action; });
 }
@@ -354,12 +235,10 @@ rndr::InputCallback rndr::InputContext::GetActionCallback(const rndr::InputActio
         RNDR_LOG_ERROR("Invalid action");
         return nullptr;
     }
-    using namespace InputPrivate;
-    ContextData* context_data = static_cast<ContextData*>(m_context_data);
-    const auto& action_iter = std::ranges::find_if(context_data->actions,
+    const auto& action_iter = std::ranges::find_if(m_context_data->actions,
                                                    [&action](const auto& action_data)
                                                    { return action_data.action == action; });
-    return action_iter != context_data->actions.end() ? action_iter->callback : nullptr;
+    return action_iter != m_context_data->actions.end() ? action_iter->callback : nullptr;
 }
 
 rndr::Span<rndr::InputBinding> rndr::InputContext::GetActionBindings(
@@ -375,67 +254,71 @@ rndr::Span<rndr::InputBinding> rndr::InputContext::GetActionBindings(
         RNDR_LOG_ERROR("Invalid action");
         return {};
     }
-    using namespace InputPrivate;
-    ContextData* context_data = static_cast<ContextData*>(m_context_data);
-    const auto& action_iter = std::ranges::find_if(context_data->actions,
+    const auto& action_iter = std::ranges::find_if(m_context_data->actions,
                                                    [&action](const auto& action_data)
                                                    { return action_data.action == action; });
-    return action_iter != context_data->actions.end() ? action_iter->bindings
-                                                      : Span<InputBinding>{};
+    return action_iter != m_context_data->actions.end() ? action_iter->bindings
+                                                        : Span<InputBinding>{};
 }
 
 // InputSystem ////////////////////////////////////////////////////////////////////////////////////
 
+namespace
+{
+inline rndr::InputSystem& GetInputSystem()
+{
+    static rndr::InputSystem s_input_system;
+    return s_input_system;
+}
+}  // namespace
+
+rndr::ScopePtr<rndr::InputSystemData> rndr::InputSystem::g_system_data;
+
 bool rndr::InputSystem::Init()
 {
-    using namespace InputPrivate;
-    if (g_system_data != nullptr)
+    if (g_system_data)
     {
         return true;
     }
-    g_system_data = RNDR_NEW(SystemData, "Input system");
-    ContextData* data = static_cast<ContextData*>(g_system_data->default_context.m_context_data);
-    g_system_data->contexts.push_back(data);
+    g_system_data = RNDR_MAKE_SCOPED(InputSystemData);
+    const Ref<InputContextData> default_context_data =
+        *g_system_data->default_context.m_context_data.get();
+    g_system_data->contexts.push_back(default_context_data);
     return true;
 }
 
 bool rndr::InputSystem::Destroy()
 {
-    using namespace InputPrivate;
-    if (g_system_data == nullptr)
+    if (!g_system_data)
     {
         return true;
     }
-    g_system_data->contexts.clear();
-    RNDR_DELETE(SystemData, g_system_data);
-    g_system_data = nullptr;
+    g_system_data.reset();
     return true;
 }
 
 rndr::InputContext& rndr::InputSystem::GetCurrentContext()
 {
-    assert(InputPrivate::g_system_data != nullptr);
-    return *InputPrivate::g_system_data->contexts.back()->context;
+    assert(g_system_data != nullptr);
+    return g_system_data->contexts.back().get().context;
 }
 
 bool rndr::InputSystem::PushContext(const rndr::InputContext& context)
 {
-    assert(InputPrivate::g_system_data != nullptr);
-    InputPrivate::ContextData* data =
-        static_cast<InputPrivate::ContextData*>(context.m_context_data);
-    InputPrivate::g_system_data->contexts.push_back(data);
+    assert(g_system_data != nullptr);
+    g_system_data->contexts.emplace_back(*context.m_context_data.get());
     return true;
 }
 
 bool rndr::InputSystem::PopContext()
 {
-    assert(InputPrivate::g_system_data != nullptr);
-    if (InputPrivate::g_system_data->contexts.size() == 1)
+    assert(g_system_data != nullptr);
+    if (g_system_data->contexts.size() == 1)
     {
         RNDR_LOG_ERROR("Cannot pop default context");
         return false;
     }
-    InputPrivate::g_system_data->contexts.pop_back();
+    g_system_data->contexts.pop_back();
     return true;
 }
 
@@ -443,9 +326,9 @@ bool rndr::InputSystem::SubmitButtonEvent(OpaquePtr window,
                                           InputPrimitive primitive,
                                           InputTrigger trigger)
 {
-    assert(InputPrivate::g_system_data != nullptr);
-    const InputPrivate::Event event{window, InputPrivate::ButtonData{primitive, trigger}};
-    InputPrivate::g_system_data->events.push(event);
+    assert(g_system_data != nullptr);
+    const Event event{window, ButtonData{primitive, trigger}};
+    g_system_data->events.push(event);
     return true;
 }
 
@@ -453,13 +336,13 @@ bool rndr::InputSystem::SubmitMousePositionEvent(OpaquePtr window,
                                                  const math::Point2& position,
                                                  const math::Vector2& screen_size)
 {
-    assert(InputPrivate::g_system_data != nullptr);
+    assert(g_system_data != nullptr);
     if (screen_size.X == 0 || screen_size.Y == 0)
     {
         return false;
     }
-    const InputPrivate::Event event{window, InputPrivate::MousePositionData{position, screen_size}};
-    InputPrivate::g_system_data->events.push(event);
+    const Event event{window, MousePositionData{position, screen_size}};
+    g_system_data->events.push(event);
     return true;
 }
 
@@ -467,81 +350,57 @@ bool rndr::InputSystem::SubmitRelativeMousePositionEvent(OpaquePtr window,
                                                          const math::Vector2& delta_position,
                                                          const math::Vector2& screen_size)
 {
-    assert(InputPrivate::g_system_data != nullptr);
+    assert(g_system_data != nullptr);
     if (screen_size.X == 0 || screen_size.Y == 0)
     {
         return false;
     }
-    const InputPrivate::Event event{
-        window,
-        InputPrivate::RelativeMousePositionData{delta_position, screen_size}};
-    InputPrivate::g_system_data->events.push(event);
+    const Event event{window, RelativeMousePositionData{delta_position, screen_size}};
+    g_system_data->events.push(event);
     return true;
 }
 
 bool rndr::InputSystem::SubmitMouseWheelEvent(OpaquePtr window, int32_t delta_wheel)
 {
-    const InputPrivate::Event event{window, InputPrivate::MouseWheelData{delta_wheel}};
-    InputPrivate::g_system_data->events.push(event);
+    const Event event{window, MouseWheelData{delta_wheel}};
+    g_system_data->events.push(event);
     return true;
 }
 
-namespace rndr::InputPrivate
+namespace rndr
 {
-void ProcessEvent(const ContextData& context, OpaquePtr native_window, const ButtonData& event);
-void ProcessEvent(const ContextData& context,
-                  OpaquePtr native_window,
-                  const MousePositionData& event);
-void ProcessEvent(const ContextData& context,
-                  OpaquePtr native_window,
-                  const RelativeMousePositionData& event);
-void ProcessEvent(const ContextData& context, OpaquePtr native_window, const MouseWheelData& event);
-}  // namespace rndr::InputPrivate
+struct InputEventProcessor
+{
+    Ref<const InputContextData> context;
+    OpaquePtr native_window;
+
+    void operator()(const ButtonData& event) const;
+    void operator()(const MousePositionData& event) const;
+    void operator()(const RelativeMousePositionData& event) const;
+    void operator()(const MouseWheelData& event) const;
+};
+
+}  // namespace rndr
 
 bool rndr::InputSystem::ProcessEvents(real delta_seconds)
 {
     RNDR_UNUSED(delta_seconds);
 
-    assert(InputPrivate::g_system_data != nullptr);
-    InputPrivate::EventQueue& events = InputPrivate::g_system_data->events;
-    const InputPrivate::ContextData& context = *InputPrivate::g_system_data->contexts.back();
+    assert(g_system_data != nullptr);
+    EventQueue& events = g_system_data->events;
+    const InputContextData& context = g_system_data->contexts.back();
     while (!events.empty())
     {
-        InputPrivate::Event event = events.front();
+        Event event = events.front();
         events.pop();
-
-        switch (event.data.index())
-        {
-            case 0:
-                ProcessEvent(context,
-                             event.native_window,
-                             std::get<InputPrivate::ButtonData>(event.data));
-                continue;
-            case 1:
-                ProcessEvent(context,
-                             event.native_window,
-                             std::get<InputPrivate::MousePositionData>(event.data));
-                continue;
-            case 2:
-                ProcessEvent(context,
-                             event.native_window,
-                             std::get<InputPrivate::RelativeMousePositionData>(event.data));
-                continue;
-            case 3:
-                ProcessEvent(context,
-                             event.native_window,
-                             std::get<InputPrivate::MouseWheelData>(event.data));
-                continue;
-        }
+        std::visit(InputEventProcessor{context, event.native_window}, event.data);
     }
     return true;
 }
 
-void rndr::InputPrivate::ProcessEvent(const ContextData& context,
-                                      OpaquePtr native_window,
-                                      const ButtonData& event)
+void rndr::InputEventProcessor::operator()(const ButtonData& event) const
 {
-    for (const ActionData& action_data : context.actions)
+    for (const ActionData& action_data : context.get().actions)
     {
         if (action_data.native_window != nullptr && action_data.native_window != native_window)
         {
@@ -558,14 +417,12 @@ void rndr::InputPrivate::ProcessEvent(const ContextData& context,
     }
 }
 
-void rndr::InputPrivate::ProcessEvent(const ContextData& context,
-                                      OpaquePtr native_window,
-                                      const MousePositionData& event)
+void rndr::InputEventProcessor::operator()(const MousePositionData& event) const
 {
     const StackArray<InputPrimitive, 2> axes = {InputPrimitive::Mouse_AxisX,
                                                 InputPrimitive::Mouse_AxisY};
     const InputTrigger trigger = InputTrigger::AxisChangedAbsolute;
-    for (const ActionData& action_data : context.actions)
+    for (const ActionData& action_data : context.get().actions)
     {
         if (action_data.native_window != nullptr && action_data.native_window != native_window)
         {
@@ -587,14 +444,12 @@ void rndr::InputPrivate::ProcessEvent(const ContextData& context,
     }
 }
 
-void rndr::InputPrivate::ProcessEvent(const ContextData& context,
-                                      OpaquePtr native_window,
-                                      const RelativeMousePositionData& event)
+void rndr::InputEventProcessor::operator()(const RelativeMousePositionData& event) const
 {
     const StackArray<InputPrimitive, 2> axes = {InputPrimitive::Mouse_AxisX,
                                                 InputPrimitive::Mouse_AxisY};
     const InputTrigger trigger = InputTrigger::AxisChangedRelative;
-    for (const ActionData& action_data : context.actions)
+    for (const ActionData& action_data : context.get().actions)
     {
         if (action_data.native_window != nullptr && action_data.native_window != native_window)
         {
@@ -616,13 +471,11 @@ void rndr::InputPrivate::ProcessEvent(const ContextData& context,
     }
 }
 
-void rndr::InputPrivate::ProcessEvent(const ContextData& context,
-                                      OpaquePtr native_window,
-                                      const MouseWheelData& event)
+void rndr::InputEventProcessor::operator()(const MouseWheelData& event) const
 {
     const InputPrimitive primitive = InputPrimitive::Mouse_AxisWheel;
     const InputTrigger trigger = InputTrigger::AxisChangedRelative;
-    for (const ActionData& action_data : context.actions)
+    for (const ActionData& action_data : context.get().actions)
     {
         if (action_data.native_window != nullptr && action_data.native_window != native_window)
         {
