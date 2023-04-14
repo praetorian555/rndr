@@ -6,8 +6,7 @@
 #include <winuser.h>
 #endif  // RNDR_WINDOWS
 
-#include <map>
-
+#include "rndr/core/hash-map.h"
 #include "rndr/core/input.h"
 #include "rndr/core/stack-array.h"
 #include "rndr/core/window.h"
@@ -29,22 +28,129 @@ enum WindowsVirtualKey : uint32_t
     VK_L = 0x4C,
 };
 
-std::map<uint32_t, rndr::InputPrimitive> g_primitive_mapping = {
-    {VK_A, rndr::InputPrimitive::Keyboard_A},
-    {VK_W, rndr::InputPrimitive::Keyboard_W},
-    {VK_S, rndr::InputPrimitive::Keyboard_S},
-    {VK_E, rndr::InputPrimitive::Keyboard_E},
-    {VK_Q, rndr::InputPrimitive::Keyboard_Q},
-    {VK_D, rndr::InputPrimitive::Keyboard_D},
-    {VK_I, rndr::InputPrimitive::Keyboard_I},
-    {VK_J, rndr::InputPrimitive::Keyboard_J},
-    {VK_K, rndr::InputPrimitive::Keyboard_K},
-    {VK_L, rndr::InputPrimitive::Keyboard_L},
+const rndr::HashMap<rndr::InputPrimitive, uint32_t> g_primitive_to_vk = {
+    {rndr::InputPrimitive::Keyboard_A, 0x41},
+    {rndr::InputPrimitive::Keyboard_B, 0x42},
+    {rndr::InputPrimitive::Keyboard_C, 0x43},
+    {rndr::InputPrimitive::Keyboard_D, 0x44},
+    {rndr::InputPrimitive::Keyboard_E, 0x45},
+    {rndr::InputPrimitive::Keyboard_F, 0x46},
+    {rndr::InputPrimitive::Keyboard_G, 0x47},
+    {rndr::InputPrimitive::Keyboard_H, 0x48},
+    {rndr::InputPrimitive::Keyboard_I, 0x49},
+    {rndr::InputPrimitive::Keyboard_J, 0x4A},
+    {rndr::InputPrimitive::Keyboard_K, 0x4B},
+    {rndr::InputPrimitive::Keyboard_L, 0x4C},
+    {rndr::InputPrimitive::Keyboard_M, 0x4D},
+    {rndr::InputPrimitive::Keyboard_N, 0x4E},
+    {rndr::InputPrimitive::Keyboard_O, 0x4F},
+    {rndr::InputPrimitive::Keyboard_P, 0x50},
+    {rndr::InputPrimitive::Keyboard_Q, 0x51},
+    {rndr::InputPrimitive::Keyboard_R, 0x52},
+    {rndr::InputPrimitive::Keyboard_S, 0x53},
+    {rndr::InputPrimitive::Keyboard_T, 0x54},
+    {rndr::InputPrimitive::Keyboard_U, 0x55},
+    {rndr::InputPrimitive::Keyboard_V, 0x56},
+    {rndr::InputPrimitive::Keyboard_W, 0x57},
+    {rndr::InputPrimitive::Keyboard_X, 0x58},
+    {rndr::InputPrimitive::Keyboard_Y, 0x59},
+    {rndr::InputPrimitive::Keyboard_Z, 0x5A},
+    {rndr::InputPrimitive::Keyboard_0, 0x30},
+    {rndr::InputPrimitive::Keyboard_1, 0x31},
+    {rndr::InputPrimitive::Keyboard_2, 0x32},
+    {rndr::InputPrimitive::Keyboard_3, 0x33},
+    {rndr::InputPrimitive::Keyboard_4, 0x34},
+    {rndr::InputPrimitive::Keyboard_5, 0x35},
+    {rndr::InputPrimitive::Keyboard_6, 0x36},
+    {rndr::InputPrimitive::Keyboard_7, 0x37},
+    {rndr::InputPrimitive::Keyboard_8, 0x38},
+    {rndr::InputPrimitive::Keyboard_9, 0x39},
+    {rndr::InputPrimitive::Keyboard_F1, VK_F1},
+    {rndr::InputPrimitive::Keyboard_F2, VK_F2},
+    {rndr::InputPrimitive::Keyboard_F3, VK_F3},
+    {rndr::InputPrimitive::Keyboard_F4, VK_F4},
+    {rndr::InputPrimitive::Keyboard_F5, VK_F5},
+    {rndr::InputPrimitive::Keyboard_F6, VK_F6},
+    {rndr::InputPrimitive::Keyboard_F7, VK_F7},
+    {rndr::InputPrimitive::Keyboard_F8, VK_F8},
+    {rndr::InputPrimitive::Keyboard_F9, VK_F9},
+    {rndr::InputPrimitive::Keyboard_F10, VK_F10},
+    {rndr::InputPrimitive::Keyboard_F11, VK_F11},
+    {rndr::InputPrimitive::Keyboard_F12, VK_F12},
+    {rndr::InputPrimitive::Keyboard_LeftShift, VK_LSHIFT},
+    {rndr::InputPrimitive::Keyboard_RightShift, VK_RSHIFT},
+    {rndr::InputPrimitive::Keyboard_LeftAlt, VK_LMENU},
+    {rndr::InputPrimitive::Keyboard_RightAlt, VK_RMENU},
+    {rndr::InputPrimitive::Keyboard_LeftControl, VK_LCONTROL},
+    {rndr::InputPrimitive::Keyboard_RightControl, VK_RCONTROL},
+    {rndr::InputPrimitive::Keyboard_LeftArrow, VK_LEFT},
+    {rndr::InputPrimitive::Keyboard_RightArrow, VK_RIGHT},
+    {rndr::InputPrimitive::Keyboard_UpArrow, VK_UP},
+    {rndr::InputPrimitive::Keyboard_DownArrow, VK_DOWN},
+    {rndr::InputPrimitive::Keyboard_Esc, VK_ESCAPE},
+    {rndr::InputPrimitive::Keyboard_Space, VK_SPACE}};
+
+const rndr::HashMap<uint32_t, rndr::InputPrimitive> g_vk_to_primitive = {
+    {0x41, rndr::InputPrimitive::Keyboard_A},
+    {0x42, rndr::InputPrimitive::Keyboard_B},
+    {0x43, rndr::InputPrimitive::Keyboard_C},
+    {0x44, rndr::InputPrimitive::Keyboard_D},
+    {0x45, rndr::InputPrimitive::Keyboard_E},
+    {0x46, rndr::InputPrimitive::Keyboard_F},
+    {0x47, rndr::InputPrimitive::Keyboard_G},
+    {0x48, rndr::InputPrimitive::Keyboard_H},
+    {0x49, rndr::InputPrimitive::Keyboard_I},
+    {0x4A, rndr::InputPrimitive::Keyboard_J},
+    {0x4B, rndr::InputPrimitive::Keyboard_K},
+    {0x4C, rndr::InputPrimitive::Keyboard_L},
+    {0x4D, rndr::InputPrimitive::Keyboard_M},
+    {0x4E, rndr::InputPrimitive::Keyboard_N},
+    {0x4F, rndr::InputPrimitive::Keyboard_O},
+    {0x50, rndr::InputPrimitive::Keyboard_P},
+    {0x51, rndr::InputPrimitive::Keyboard_Q},
+    {0x52, rndr::InputPrimitive::Keyboard_R},
+    {0x53, rndr::InputPrimitive::Keyboard_S},
+    {0x54, rndr::InputPrimitive::Keyboard_T},
+    {0x55, rndr::InputPrimitive::Keyboard_U},
+    {0x56, rndr::InputPrimitive::Keyboard_V},
+    {0x57, rndr::InputPrimitive::Keyboard_W},
+    {0x58, rndr::InputPrimitive::Keyboard_X},
+    {0x59, rndr::InputPrimitive::Keyboard_Y},
+    {0x5A, rndr::InputPrimitive::Keyboard_Z},
+    {0x30, rndr::InputPrimitive::Keyboard_0},
+    {0x31, rndr::InputPrimitive::Keyboard_1},
+    {0x32, rndr::InputPrimitive::Keyboard_2},
+    {0x33, rndr::InputPrimitive::Keyboard_3},
+    {0x34, rndr::InputPrimitive::Keyboard_4},
+    {0x35, rndr::InputPrimitive::Keyboard_5},
+    {0x36, rndr::InputPrimitive::Keyboard_6},
+    {0x37, rndr::InputPrimitive::Keyboard_7},
+    {0x38, rndr::InputPrimitive::Keyboard_8},
+    {0x39, rndr::InputPrimitive::Keyboard_9},
+    {VK_F1, rndr::InputPrimitive::Keyboard_F1},
+    {VK_F2, rndr::InputPrimitive::Keyboard_F2},
+    {VK_F3, rndr::InputPrimitive::Keyboard_F3},
+    {VK_F4, rndr::InputPrimitive::Keyboard_F4},
+    {VK_F5, rndr::InputPrimitive::Keyboard_F5},
+    {VK_F6, rndr::InputPrimitive::Keyboard_F6},
+    {VK_F7, rndr::InputPrimitive::Keyboard_F7},
+    {VK_F8, rndr::InputPrimitive::Keyboard_F8},
+    {VK_F9, rndr::InputPrimitive::Keyboard_F9},
+    {VK_F10, rndr::InputPrimitive::Keyboard_F10},
+    {VK_F11, rndr::InputPrimitive::Keyboard_F11},
+    {VK_F12, rndr::InputPrimitive::Keyboard_F12},
+    {VK_LSHIFT, rndr::InputPrimitive::Keyboard_LeftShift},
+    {VK_RSHIFT, rndr::InputPrimitive::Keyboard_RightShift},
+    {VK_LMENU, rndr::InputPrimitive::Keyboard_LeftAlt},
+    {VK_RMENU, rndr::InputPrimitive::Keyboard_RightAlt},
+    {VK_LCONTROL, rndr::InputPrimitive::Keyboard_LeftControl},
+    {VK_RCONTROL, rndr::InputPrimitive::Keyboard_RightControl},
+    {VK_LEFT, rndr::InputPrimitive::Keyboard_LeftArrow},
+    {VK_RIGHT, rndr::InputPrimitive::Keyboard_RightArrow},
+    {VK_UP, rndr::InputPrimitive::Keyboard_UpArrow},
+    {VK_DOWN, rndr::InputPrimitive::Keyboard_DownArrow},
     {VK_ESCAPE, rndr::InputPrimitive::Keyboard_Esc},
-    {VK_LEFT, rndr::InputPrimitive::Keyboard_Left},
-    {VK_UP, rndr::InputPrimitive::Keyboard_Up},
-    {VK_RIGHT, rndr::InputPrimitive::Keyboard_Right},
-    {VK_DOWN, rndr::InputPrimitive::Keyboard_Down}};
+    {VK_SPACE, rndr::InputPrimitive::Keyboard_Space}};
 
 }  // namespace
 
@@ -662,8 +768,8 @@ LRESULT CALLBACK WindowProc(HWND window_handle, UINT msg_code, WPARAM param_w, L
             {
                 break;
             }
-            const auto iter = g_primitive_mapping.find(static_cast<uint32_t>(param_w));
-            if (iter == g_primitive_mapping.end())
+            const auto iter = g_vk_to_primitive.find(static_cast<uint32_t>(param_w));
+            if (iter == g_vk_to_primitive.end())
             {
                 break;
             }

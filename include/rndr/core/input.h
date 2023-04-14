@@ -6,11 +6,11 @@
 #include "math/vector2.h"
 
 #include "rndr/core/base.h"
-#include "rndr/core/inputprimitives.h"
+#include "rndr/core/input-primitives.h"
+#include "rndr/core/ref.h"
 #include "rndr/core/scope-ptr.h"
 #include "rndr/core/span.h"
 #include "rndr/core/string.h"
-#include "rndr/core/ref.h"
 
 namespace rndr
 {

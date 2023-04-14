@@ -13,6 +13,7 @@ set(PUBLIC_SOURCE_LIST
     "${PROJECT_SOURCE_DIR}/include/rndr/core/time.h"
     "${PROJECT_SOURCE_DIR}/include/rndr/core/window.h"
     "${PROJECT_SOURCE_DIR}/include/rndr/core/input.h"
+    "${PROJECT_SOURCE_DIR}/include/rndr/core/input-primitives.h"
     "${PROJECT_SOURCE_DIR}/include/rndr/core/string.h"
     "${PROJECT_SOURCE_DIR}/include/rndr/core/hash-map.h"
     "${PROJECT_SOURCE_DIR}/include/rndr/core/ref.h"
