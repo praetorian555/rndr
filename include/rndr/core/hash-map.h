@@ -2,7 +2,7 @@
 
 #include <unordered_map>
 
-#include "rndr/core/std-allocator.h"
+#include "rndr/core/definitions.h"
 
 namespace rndr
 {
@@ -13,6 +13,5 @@ namespace rndr
  * @tparam Hash The hash function.
  */
 template <typename Key, typename Value, typename Hash>
-using HashMap = std::
-    unordered_map<Key, Value, Hash, std::equal_to<Key>, StdAllocator<std::pair<const Key, Value>>>;
+using HashMap = std::unordered_map<Key, Value, Hash>;
 }  // namespace rndr

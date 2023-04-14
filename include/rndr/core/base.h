@@ -173,20 +173,13 @@ void Log(const char* file,
 
 // Helper macros ///////////////////////////////////////////////////////////////////////////////////
 
-#define RNDR_ALLOC(type, tag) static_cast<type*>(rndr::Allocate(sizeof(type), tag))
-#define RNDR_DEFAULT_NEW(type, tag) \
-    new (RNDR_ALLOC(type, tag)) type {}
-#define RNDR_NEW(type, tag, ...)     \
-    new (RNDR_ALLOC(type, tag)) type \
-    {                                \
-        __VA_ARGS__                  \
+#define RNDR_NEW(type, ...) \
+    new type                \
+    {                       \
+        __VA_ARGS__         \
     }
-#define RNDR_FREE(ptr) rndr::Free(ptr)
-#define RNDR_DELETE(type, ptr) \
-    {                          \
-        (ptr)->~type();        \
-        RNDR_FREE(ptr);        \
-    }
+#define RNDR_DELETE(type, ptr) delete ptr
+#define RNDR_DELETE_ARRAY(type, ptr) delete[] ptr
 
 #define RNDR_LOG_ERROR(format, ...) \
     rndr::Log(__FILE__, __LINE__, __func__, rndr::LogLevel::Error, format, __VA_ARGS__)

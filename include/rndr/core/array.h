@@ -2,7 +2,7 @@
 
 #include <vector>
 
-#include "rndr/core/std-allocator.h"
+#include "rndr/core/definitions.h"
 
 namespace rndr
 {
@@ -11,7 +11,7 @@ namespace rndr
  * A dynamic array allocated on the heap.
  */
 template <typename T>
-using Array = std::vector<T, StdAllocator<T>>;
+using Array = std::vector<T>;
 
 using ByteArray = Array<uint8_t>;
 

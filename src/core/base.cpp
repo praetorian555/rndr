@@ -190,8 +190,7 @@ bool rndr::DefaultLogger::Init(OpaquePtr init_data, OpaquePtr* logger_data)
     constexpr int k_backing_thread_count = 1;
     spdlog::init_thread_pool(k_max_message_count, k_backing_thread_count);
 
-    DefaultLoggerData* default_logger_data =
-        RNDR_DEFAULT_NEW(DefaultLoggerData, "Default Logger Data");
+    DefaultLoggerData* default_logger_data = RNDR_NEW(DefaultLoggerData);
     *logger_data = default_logger_data;
     default_logger_data->logger =
         spdlog::create<spdlog::sinks::stdout_color_sink_st>("stdout_logger");

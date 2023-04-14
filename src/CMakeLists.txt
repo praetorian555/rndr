@@ -7,7 +7,6 @@ set(PUBLIC_SOURCE_LIST
     "${PROJECT_SOURCE_DIR}/include/rndr/core/definitions.h"
     "${PROJECT_SOURCE_DIR}/include/rndr/core/base.h"
     "${PROJECT_SOURCE_DIR}/include/rndr/core/delegate.h"
-    "${PROJECT_SOURCE_DIR}/include/rndr/core/std-allocator.h"
     "${PROJECT_SOURCE_DIR}/include/rndr/core/span.h"
     "${PROJECT_SOURCE_DIR}/include/rndr/core/array.h"
     "${PROJECT_SOURCE_DIR}/include/rndr/core/stack-array.h"
