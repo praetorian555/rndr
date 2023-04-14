@@ -12,6 +12,6 @@ namespace rndr
  * @tparam Value The value type.
  * @tparam Hash The hash function.
  */
-template <typename Key, typename Value, typename Hash>
+template <typename Key, typename Value, typename Hash = std::hash<Key>>
 using HashMap = std::unordered_map<Key, Value, Hash>;
 }  // namespace rndr
