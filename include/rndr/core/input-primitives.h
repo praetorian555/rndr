@@ -1,6 +1,6 @@
 #pragma once
 
-namespace rndr
+namespace Rndr
 {
 
 /**
@@ -92,4 +92,4 @@ enum class InputTrigger
     AxisChangedAbsolute
 };
 
-}  // namespace rndr
+}  // namespace Rndr

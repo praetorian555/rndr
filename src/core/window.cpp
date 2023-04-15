@@ -28,133 +28,133 @@ enum WindowsVirtualKey : uint32_t
     VK_L = 0x4C,
 };
 
-const rndr::HashMap<rndr::InputPrimitive, uint32_t> g_primitive_to_vk = {
-    {rndr::InputPrimitive::Keyboard_A, 0x41},
-    {rndr::InputPrimitive::Keyboard_B, 0x42},
-    {rndr::InputPrimitive::Keyboard_C, 0x43},
-    {rndr::InputPrimitive::Keyboard_D, 0x44},
-    {rndr::InputPrimitive::Keyboard_E, 0x45},
-    {rndr::InputPrimitive::Keyboard_F, 0x46},
-    {rndr::InputPrimitive::Keyboard_G, 0x47},
-    {rndr::InputPrimitive::Keyboard_H, 0x48},
-    {rndr::InputPrimitive::Keyboard_I, 0x49},
-    {rndr::InputPrimitive::Keyboard_J, 0x4A},
-    {rndr::InputPrimitive::Keyboard_K, 0x4B},
-    {rndr::InputPrimitive::Keyboard_L, 0x4C},
-    {rndr::InputPrimitive::Keyboard_M, 0x4D},
-    {rndr::InputPrimitive::Keyboard_N, 0x4E},
-    {rndr::InputPrimitive::Keyboard_O, 0x4F},
-    {rndr::InputPrimitive::Keyboard_P, 0x50},
-    {rndr::InputPrimitive::Keyboard_Q, 0x51},
-    {rndr::InputPrimitive::Keyboard_R, 0x52},
-    {rndr::InputPrimitive::Keyboard_S, 0x53},
-    {rndr::InputPrimitive::Keyboard_T, 0x54},
-    {rndr::InputPrimitive::Keyboard_U, 0x55},
-    {rndr::InputPrimitive::Keyboard_V, 0x56},
-    {rndr::InputPrimitive::Keyboard_W, 0x57},
-    {rndr::InputPrimitive::Keyboard_X, 0x58},
-    {rndr::InputPrimitive::Keyboard_Y, 0x59},
-    {rndr::InputPrimitive::Keyboard_Z, 0x5A},
-    {rndr::InputPrimitive::Keyboard_0, 0x30},
-    {rndr::InputPrimitive::Keyboard_1, 0x31},
-    {rndr::InputPrimitive::Keyboard_2, 0x32},
-    {rndr::InputPrimitive::Keyboard_3, 0x33},
-    {rndr::InputPrimitive::Keyboard_4, 0x34},
-    {rndr::InputPrimitive::Keyboard_5, 0x35},
-    {rndr::InputPrimitive::Keyboard_6, 0x36},
-    {rndr::InputPrimitive::Keyboard_7, 0x37},
-    {rndr::InputPrimitive::Keyboard_8, 0x38},
-    {rndr::InputPrimitive::Keyboard_9, 0x39},
-    {rndr::InputPrimitive::Keyboard_F1, VK_F1},
-    {rndr::InputPrimitive::Keyboard_F2, VK_F2},
-    {rndr::InputPrimitive::Keyboard_F3, VK_F3},
-    {rndr::InputPrimitive::Keyboard_F4, VK_F4},
-    {rndr::InputPrimitive::Keyboard_F5, VK_F5},
-    {rndr::InputPrimitive::Keyboard_F6, VK_F6},
-    {rndr::InputPrimitive::Keyboard_F7, VK_F7},
-    {rndr::InputPrimitive::Keyboard_F8, VK_F8},
-    {rndr::InputPrimitive::Keyboard_F9, VK_F9},
-    {rndr::InputPrimitive::Keyboard_F10, VK_F10},
-    {rndr::InputPrimitive::Keyboard_F11, VK_F11},
-    {rndr::InputPrimitive::Keyboard_F12, VK_F12},
-    {rndr::InputPrimitive::Keyboard_LeftShift, VK_LSHIFT},
-    {rndr::InputPrimitive::Keyboard_RightShift, VK_RSHIFT},
-    {rndr::InputPrimitive::Keyboard_LeftAlt, VK_LMENU},
-    {rndr::InputPrimitive::Keyboard_RightAlt, VK_RMENU},
-    {rndr::InputPrimitive::Keyboard_LeftControl, VK_LCONTROL},
-    {rndr::InputPrimitive::Keyboard_RightControl, VK_RCONTROL},
-    {rndr::InputPrimitive::Keyboard_LeftArrow, VK_LEFT},
-    {rndr::InputPrimitive::Keyboard_RightArrow, VK_RIGHT},
-    {rndr::InputPrimitive::Keyboard_UpArrow, VK_UP},
-    {rndr::InputPrimitive::Keyboard_DownArrow, VK_DOWN},
-    {rndr::InputPrimitive::Keyboard_Esc, VK_ESCAPE},
-    {rndr::InputPrimitive::Keyboard_Space, VK_SPACE}};
+const Rndr::HashMap<Rndr::InputPrimitive, uint32_t> g_primitive_to_vk = {
+    {Rndr::InputPrimitive::Keyboard_A, 0x41},
+    {Rndr::InputPrimitive::Keyboard_B, 0x42},
+    {Rndr::InputPrimitive::Keyboard_C, 0x43},
+    {Rndr::InputPrimitive::Keyboard_D, 0x44},
+    {Rndr::InputPrimitive::Keyboard_E, 0x45},
+    {Rndr::InputPrimitive::Keyboard_F, 0x46},
+    {Rndr::InputPrimitive::Keyboard_G, 0x47},
+    {Rndr::InputPrimitive::Keyboard_H, 0x48},
+    {Rndr::InputPrimitive::Keyboard_I, 0x49},
+    {Rndr::InputPrimitive::Keyboard_J, 0x4A},
+    {Rndr::InputPrimitive::Keyboard_K, 0x4B},
+    {Rndr::InputPrimitive::Keyboard_L, 0x4C},
+    {Rndr::InputPrimitive::Keyboard_M, 0x4D},
+    {Rndr::InputPrimitive::Keyboard_N, 0x4E},
+    {Rndr::InputPrimitive::Keyboard_O, 0x4F},
+    {Rndr::InputPrimitive::Keyboard_P, 0x50},
+    {Rndr::InputPrimitive::Keyboard_Q, 0x51},
+    {Rndr::InputPrimitive::Keyboard_R, 0x52},
+    {Rndr::InputPrimitive::Keyboard_S, 0x53},
+    {Rndr::InputPrimitive::Keyboard_T, 0x54},
+    {Rndr::InputPrimitive::Keyboard_U, 0x55},
+    {Rndr::InputPrimitive::Keyboard_V, 0x56},
+    {Rndr::InputPrimitive::Keyboard_W, 0x57},
+    {Rndr::InputPrimitive::Keyboard_X, 0x58},
+    {Rndr::InputPrimitive::Keyboard_Y, 0x59},
+    {Rndr::InputPrimitive::Keyboard_Z, 0x5A},
+    {Rndr::InputPrimitive::Keyboard_0, 0x30},
+    {Rndr::InputPrimitive::Keyboard_1, 0x31},
+    {Rndr::InputPrimitive::Keyboard_2, 0x32},
+    {Rndr::InputPrimitive::Keyboard_3, 0x33},
+    {Rndr::InputPrimitive::Keyboard_4, 0x34},
+    {Rndr::InputPrimitive::Keyboard_5, 0x35},
+    {Rndr::InputPrimitive::Keyboard_6, 0x36},
+    {Rndr::InputPrimitive::Keyboard_7, 0x37},
+    {Rndr::InputPrimitive::Keyboard_8, 0x38},
+    {Rndr::InputPrimitive::Keyboard_9, 0x39},
+    {Rndr::InputPrimitive::Keyboard_F1, VK_F1},
+    {Rndr::InputPrimitive::Keyboard_F2, VK_F2},
+    {Rndr::InputPrimitive::Keyboard_F3, VK_F3},
+    {Rndr::InputPrimitive::Keyboard_F4, VK_F4},
+    {Rndr::InputPrimitive::Keyboard_F5, VK_F5},
+    {Rndr::InputPrimitive::Keyboard_F6, VK_F6},
+    {Rndr::InputPrimitive::Keyboard_F7, VK_F7},
+    {Rndr::InputPrimitive::Keyboard_F8, VK_F8},
+    {Rndr::InputPrimitive::Keyboard_F9, VK_F9},
+    {Rndr::InputPrimitive::Keyboard_F10, VK_F10},
+    {Rndr::InputPrimitive::Keyboard_F11, VK_F11},
+    {Rndr::InputPrimitive::Keyboard_F12, VK_F12},
+    {Rndr::InputPrimitive::Keyboard_LeftShift, VK_LSHIFT},
+    {Rndr::InputPrimitive::Keyboard_RightShift, VK_RSHIFT},
+    {Rndr::InputPrimitive::Keyboard_LeftAlt, VK_LMENU},
+    {Rndr::InputPrimitive::Keyboard_RightAlt, VK_RMENU},
+    {Rndr::InputPrimitive::Keyboard_LeftControl, VK_LCONTROL},
+    {Rndr::InputPrimitive::Keyboard_RightControl, VK_RCONTROL},
+    {Rndr::InputPrimitive::Keyboard_LeftArrow, VK_LEFT},
+    {Rndr::InputPrimitive::Keyboard_RightArrow, VK_RIGHT},
+    {Rndr::InputPrimitive::Keyboard_UpArrow, VK_UP},
+    {Rndr::InputPrimitive::Keyboard_DownArrow, VK_DOWN},
+    {Rndr::InputPrimitive::Keyboard_Esc, VK_ESCAPE},
+    {Rndr::InputPrimitive::Keyboard_Space, VK_SPACE}};
 
-const rndr::HashMap<uint32_t, rndr::InputPrimitive> g_vk_to_primitive = {
-    {0x41, rndr::InputPrimitive::Keyboard_A},
-    {0x42, rndr::InputPrimitive::Keyboard_B},
-    {0x43, rndr::InputPrimitive::Keyboard_C},
-    {0x44, rndr::InputPrimitive::Keyboard_D},
-    {0x45, rndr::InputPrimitive::Keyboard_E},
-    {0x46, rndr::InputPrimitive::Keyboard_F},
-    {0x47, rndr::InputPrimitive::Keyboard_G},
-    {0x48, rndr::InputPrimitive::Keyboard_H},
-    {0x49, rndr::InputPrimitive::Keyboard_I},
-    {0x4A, rndr::InputPrimitive::Keyboard_J},
-    {0x4B, rndr::InputPrimitive::Keyboard_K},
-    {0x4C, rndr::InputPrimitive::Keyboard_L},
-    {0x4D, rndr::InputPrimitive::Keyboard_M},
-    {0x4E, rndr::InputPrimitive::Keyboard_N},
-    {0x4F, rndr::InputPrimitive::Keyboard_O},
-    {0x50, rndr::InputPrimitive::Keyboard_P},
-    {0x51, rndr::InputPrimitive::Keyboard_Q},
-    {0x52, rndr::InputPrimitive::Keyboard_R},
-    {0x53, rndr::InputPrimitive::Keyboard_S},
-    {0x54, rndr::InputPrimitive::Keyboard_T},
-    {0x55, rndr::InputPrimitive::Keyboard_U},
-    {0x56, rndr::InputPrimitive::Keyboard_V},
-    {0x57, rndr::InputPrimitive::Keyboard_W},
-    {0x58, rndr::InputPrimitive::Keyboard_X},
-    {0x59, rndr::InputPrimitive::Keyboard_Y},
-    {0x5A, rndr::InputPrimitive::Keyboard_Z},
-    {0x30, rndr::InputPrimitive::Keyboard_0},
-    {0x31, rndr::InputPrimitive::Keyboard_1},
-    {0x32, rndr::InputPrimitive::Keyboard_2},
-    {0x33, rndr::InputPrimitive::Keyboard_3},
-    {0x34, rndr::InputPrimitive::Keyboard_4},
-    {0x35, rndr::InputPrimitive::Keyboard_5},
-    {0x36, rndr::InputPrimitive::Keyboard_6},
-    {0x37, rndr::InputPrimitive::Keyboard_7},
-    {0x38, rndr::InputPrimitive::Keyboard_8},
-    {0x39, rndr::InputPrimitive::Keyboard_9},
-    {VK_F1, rndr::InputPrimitive::Keyboard_F1},
-    {VK_F2, rndr::InputPrimitive::Keyboard_F2},
-    {VK_F3, rndr::InputPrimitive::Keyboard_F3},
-    {VK_F4, rndr::InputPrimitive::Keyboard_F4},
-    {VK_F5, rndr::InputPrimitive::Keyboard_F5},
-    {VK_F6, rndr::InputPrimitive::Keyboard_F6},
-    {VK_F7, rndr::InputPrimitive::Keyboard_F7},
-    {VK_F8, rndr::InputPrimitive::Keyboard_F8},
-    {VK_F9, rndr::InputPrimitive::Keyboard_F9},
-    {VK_F10, rndr::InputPrimitive::Keyboard_F10},
-    {VK_F11, rndr::InputPrimitive::Keyboard_F11},
-    {VK_F12, rndr::InputPrimitive::Keyboard_F12},
-    {VK_LSHIFT, rndr::InputPrimitive::Keyboard_LeftShift},
-    {VK_RSHIFT, rndr::InputPrimitive::Keyboard_RightShift},
-    {VK_LMENU, rndr::InputPrimitive::Keyboard_LeftAlt},
-    {VK_RMENU, rndr::InputPrimitive::Keyboard_RightAlt},
-    {VK_LCONTROL, rndr::InputPrimitive::Keyboard_LeftControl},
-    {VK_RCONTROL, rndr::InputPrimitive::Keyboard_RightControl},
-    {VK_LEFT, rndr::InputPrimitive::Keyboard_LeftArrow},
-    {VK_RIGHT, rndr::InputPrimitive::Keyboard_RightArrow},
-    {VK_UP, rndr::InputPrimitive::Keyboard_UpArrow},
-    {VK_DOWN, rndr::InputPrimitive::Keyboard_DownArrow},
-    {VK_ESCAPE, rndr::InputPrimitive::Keyboard_Esc},
-    {VK_SPACE, rndr::InputPrimitive::Keyboard_Space}};
+const Rndr::HashMap<uint32_t, Rndr::InputPrimitive> g_vk_to_primitive = {
+    {0x41, Rndr::InputPrimitive::Keyboard_A},
+    {0x42, Rndr::InputPrimitive::Keyboard_B},
+    {0x43, Rndr::InputPrimitive::Keyboard_C},
+    {0x44, Rndr::InputPrimitive::Keyboard_D},
+    {0x45, Rndr::InputPrimitive::Keyboard_E},
+    {0x46, Rndr::InputPrimitive::Keyboard_F},
+    {0x47, Rndr::InputPrimitive::Keyboard_G},
+    {0x48, Rndr::InputPrimitive::Keyboard_H},
+    {0x49, Rndr::InputPrimitive::Keyboard_I},
+    {0x4A, Rndr::InputPrimitive::Keyboard_J},
+    {0x4B, Rndr::InputPrimitive::Keyboard_K},
+    {0x4C, Rndr::InputPrimitive::Keyboard_L},
+    {0x4D, Rndr::InputPrimitive::Keyboard_M},
+    {0x4E, Rndr::InputPrimitive::Keyboard_N},
+    {0x4F, Rndr::InputPrimitive::Keyboard_O},
+    {0x50, Rndr::InputPrimitive::Keyboard_P},
+    {0x51, Rndr::InputPrimitive::Keyboard_Q},
+    {0x52, Rndr::InputPrimitive::Keyboard_R},
+    {0x53, Rndr::InputPrimitive::Keyboard_S},
+    {0x54, Rndr::InputPrimitive::Keyboard_T},
+    {0x55, Rndr::InputPrimitive::Keyboard_U},
+    {0x56, Rndr::InputPrimitive::Keyboard_V},
+    {0x57, Rndr::InputPrimitive::Keyboard_W},
+    {0x58, Rndr::InputPrimitive::Keyboard_X},
+    {0x59, Rndr::InputPrimitive::Keyboard_Y},
+    {0x5A, Rndr::InputPrimitive::Keyboard_Z},
+    {0x30, Rndr::InputPrimitive::Keyboard_0},
+    {0x31, Rndr::InputPrimitive::Keyboard_1},
+    {0x32, Rndr::InputPrimitive::Keyboard_2},
+    {0x33, Rndr::InputPrimitive::Keyboard_3},
+    {0x34, Rndr::InputPrimitive::Keyboard_4},
+    {0x35, Rndr::InputPrimitive::Keyboard_5},
+    {0x36, Rndr::InputPrimitive::Keyboard_6},
+    {0x37, Rndr::InputPrimitive::Keyboard_7},
+    {0x38, Rndr::InputPrimitive::Keyboard_8},
+    {0x39, Rndr::InputPrimitive::Keyboard_9},
+    {VK_F1, Rndr::InputPrimitive::Keyboard_F1},
+    {VK_F2, Rndr::InputPrimitive::Keyboard_F2},
+    {VK_F3, Rndr::InputPrimitive::Keyboard_F3},
+    {VK_F4, Rndr::InputPrimitive::Keyboard_F4},
+    {VK_F5, Rndr::InputPrimitive::Keyboard_F5},
+    {VK_F6, Rndr::InputPrimitive::Keyboard_F6},
+    {VK_F7, Rndr::InputPrimitive::Keyboard_F7},
+    {VK_F8, Rndr::InputPrimitive::Keyboard_F8},
+    {VK_F9, Rndr::InputPrimitive::Keyboard_F9},
+    {VK_F10, Rndr::InputPrimitive::Keyboard_F10},
+    {VK_F11, Rndr::InputPrimitive::Keyboard_F11},
+    {VK_F12, Rndr::InputPrimitive::Keyboard_F12},
+    {VK_LSHIFT, Rndr::InputPrimitive::Keyboard_LeftShift},
+    {VK_RSHIFT, Rndr::InputPrimitive::Keyboard_RightShift},
+    {VK_LMENU, Rndr::InputPrimitive::Keyboard_LeftAlt},
+    {VK_RMENU, Rndr::InputPrimitive::Keyboard_RightAlt},
+    {VK_LCONTROL, Rndr::InputPrimitive::Keyboard_LeftControl},
+    {VK_RCONTROL, Rndr::InputPrimitive::Keyboard_RightControl},
+    {VK_LEFT, Rndr::InputPrimitive::Keyboard_LeftArrow},
+    {VK_RIGHT, Rndr::InputPrimitive::Keyboard_RightArrow},
+    {VK_UP, Rndr::InputPrimitive::Keyboard_UpArrow},
+    {VK_DOWN, Rndr::InputPrimitive::Keyboard_DownArrow},
+    {VK_ESCAPE, Rndr::InputPrimitive::Keyboard_Esc},
+    {VK_SPACE, Rndr::InputPrimitive::Keyboard_Space}};
 
 }  // namespace
 
-rndr::Window::Window(const WindowDesc& desc)
+Rndr::Window::Window(const WindowDesc& desc)
 {
     // Invalid window by default
     m_desc.height = 0;
@@ -188,7 +188,7 @@ rndr::Window::Window(const WindowDesc& desc)
     {
         window_class.lpszClassName = class_name;
         window_class.hInstance = instance;
-        window_class.lpfnWndProc = rndr::WindowPrivate::WindowProc;
+        window_class.lpfnWndProc = Rndr::WindowPrivate::WindowProc;
         window_class.style = CS_OWNDC | CS_HREDRAW | CS_VREDRAW;
 
         const ATOM atom = RegisterClass(&window_class);
@@ -266,7 +266,7 @@ rndr::Window::Window(const WindowDesc& desc)
     RNDR_LOG_INFO("Window created successfully!");
 }
 
-rndr::Window::~Window()
+Rndr::Window::~Window()
 {
     if (m_handle == k_invalid_window_handle)
     {
@@ -279,7 +279,7 @@ rndr::Window::~Window()
     }
 }
 
-rndr::Window::Window(rndr::Window&& other) noexcept
+Rndr::Window::Window(Rndr::Window&& other) noexcept
     : m_desc(other.m_desc),
       m_handle(other.m_handle),
       m_is_visible(other.m_is_visible),
@@ -295,7 +295,7 @@ rndr::Window::Window(rndr::Window&& other) noexcept
     other.m_is_closed = true;
 }
 
-rndr::Window& rndr::Window::operator=(rndr::Window&& other) noexcept
+Rndr::Window& Rndr::Window::operator=(Rndr::Window&& other) noexcept
 {
     if (this != &other)
     {
@@ -321,7 +321,7 @@ rndr::Window& rndr::Window::operator=(rndr::Window&& other) noexcept
     return *this;
 }
 
-void rndr::Window::ProcessEvents() const
+void Rndr::Window::ProcessEvents() const
 {
     if (m_handle == k_invalid_window_handle)
     {
@@ -337,7 +337,7 @@ void rndr::Window::ProcessEvents() const
     }
 }
 
-void rndr::Window::Close() const
+void Rndr::Window::Close() const
 {
     if (!m_is_closed)
     {
@@ -345,27 +345,27 @@ void rndr::Window::Close() const
     }
 }
 
-bool rndr::Window::IsClosed() const
+bool Rndr::Window::IsClosed() const
 {
     return m_is_closed;
 }
 
-rndr::NativeWindowHandle rndr::Window::GetNativeWindowHandle() const
+Rndr::NativeWindowHandle Rndr::Window::GetNativeWindowHandle() const
 {
     return m_handle;
 }
 
-int rndr::Window::GetWidth() const
+int Rndr::Window::GetWidth() const
 {
     return m_desc.width;
 }
 
-int rndr::Window::GetHeight() const
+int Rndr::Window::GetHeight() const
 {
     return m_desc.height;
 }
 
-math::Vector2 rndr::Window::GetSize() const
+math::Vector2 Rndr::Window::GetSize() const
 {
     math::Vector2 size;
     size.X = static_cast<real>(m_desc.width);
@@ -373,7 +373,7 @@ math::Vector2 rndr::Window::GetSize() const
     return size;
 }
 
-bool rndr::Window::Resize(int width, int height) const
+bool Rndr::Window::Resize(int width, int height) const
 {
     if (width <= 0 || height <= 0)
     {
@@ -415,12 +415,12 @@ bool rndr::Window::Resize(int width, int height) const
     return true;
 }
 
-bool rndr::Window::IsWindowMinimized() const
+bool Rndr::Window::IsWindowMinimized() const
 {
     return m_is_minimized;
 }
 
-void rndr::Window::SetMinimized(bool should_minimize) const
+void Rndr::Window::SetMinimized(bool should_minimize) const
 {
     if (m_handle == k_invalid_window_handle)
     {
@@ -430,12 +430,12 @@ void rndr::Window::SetMinimized(bool should_minimize) const
     PostMessage(m_handle, WM_SYSCOMMAND, should_minimize ? SC_MINIMIZE : SC_RESTORE, 0);
 }
 
-bool rndr::Window::IsWindowMaximized() const
+bool Rndr::Window::IsWindowMaximized() const
 {
     return m_is_maximized;
 }
 
-void rndr::Window::SetMaximized(bool should_maximize) const
+void Rndr::Window::SetMaximized(bool should_maximize) const
 {
     if (m_handle == k_invalid_window_handle)
     {
@@ -445,7 +445,7 @@ void rndr::Window::SetMaximized(bool should_maximize) const
     PostMessage(m_handle, WM_SYSCOMMAND, should_maximize ? SC_MAXIMIZE : SC_RESTORE, 0);
 }
 
-void rndr::Window::SetVisible(bool visible)
+void Rndr::Window::SetVisible(bool visible)
 {
     if (m_handle == k_invalid_window_handle)
     {
@@ -456,7 +456,7 @@ void rndr::Window::SetVisible(bool visible)
     m_is_visible = visible;
 }
 
-bool rndr::Window::IsVisible() const
+bool Rndr::Window::IsVisible() const
 {
     return m_is_visible && !m_is_minimized;
 }
@@ -467,7 +467,7 @@ bool IsCursorHidden();
 POINT GetWindowMidPointInScreenSpace(HWND window_handle);
 }  // namespace
 
-bool rndr::Window::SetCursorMode(CursorMode mode)
+bool Rndr::Window::SetCursorMode(CursorMode mode)
 {
     m_desc.cursor_mode = mode;
     switch (mode)
@@ -508,7 +508,7 @@ bool rndr::Window::SetCursorMode(CursorMode mode)
     return true;
 }
 
-rndr::CursorMode rndr::Window::GetCursorMode() const
+Rndr::CursorMode Rndr::Window::GetCursorMode() const
 {
     return m_desc.cursor_mode;
 }
@@ -534,7 +534,7 @@ POINT GetWindowMidPointInScreenSpace(HWND window_handle)
     return {mid_x, mid_y};
 }
 
-rndr::InputPrimitive GetPrimitive(UINT msg_code)
+Rndr::InputPrimitive GetPrimitive(UINT msg_code)
 {
     switch (msg_code)
     {
@@ -543,24 +543,24 @@ rndr::InputPrimitive GetPrimitive(UINT msg_code)
         case WM_LBUTTONUP:
             [[fallthrough]];
         case WM_LBUTTONDBLCLK:
-            return rndr::InputPrimitive::Mouse_LeftButton;
+            return Rndr::InputPrimitive::Mouse_LeftButton;
         case WM_RBUTTONDOWN:
             [[fallthrough]];
         case WM_RBUTTONUP:
             [[fallthrough]];
         case WM_RBUTTONDBLCLK:
-            return rndr::InputPrimitive::Mouse_RightButton;
+            return Rndr::InputPrimitive::Mouse_RightButton;
         case WM_MBUTTONDOWN:
         case WM_MBUTTONUP:
         case WM_MBUTTONDBLCLK:
-            return rndr::InputPrimitive::Mouse_MiddleButton;
+            return Rndr::InputPrimitive::Mouse_MiddleButton;
         default:
             assert(false);
     }
-    return rndr::InputPrimitive::Count;
+    return Rndr::InputPrimitive::Count;
 }
 
-rndr::InputTrigger GetTrigger(UINT msg_code)
+Rndr::InputTrigger GetTrigger(UINT msg_code)
 {
     switch (msg_code)
     {
@@ -569,29 +569,29 @@ rndr::InputTrigger GetTrigger(UINT msg_code)
         case WM_RBUTTONDOWN:
             [[fallthrough]];
         case WM_MBUTTONDOWN:
-            return rndr::InputTrigger::ButtonPressed;
+            return Rndr::InputTrigger::ButtonPressed;
         case WM_LBUTTONUP:
             [[fallthrough]];
         case WM_RBUTTONUP:
             [[fallthrough]];
         case WM_MBUTTONUP:
-            return rndr::InputTrigger::ButtonReleased;
+            return Rndr::InputTrigger::ButtonReleased;
         case WM_LBUTTONDBLCLK:
             [[fallthrough]];
         case WM_RBUTTONDBLCLK:
             [[fallthrough]];
         case WM_MBUTTONDBLCLK:
-            return rndr::InputTrigger::ButtonDoubleClick;
+            return Rndr::InputTrigger::ButtonDoubleClick;
         default:
             assert(false);
     }
-    return rndr::InputTrigger::ButtonPressed;
+    return Rndr::InputTrigger::ButtonPressed;
 }
 }  // namespace
 
-namespace rndr::WindowPrivate
+namespace Rndr::WindowPrivate
 {
-void HandleMouseMove(rndr::Window* window, int x, int y)
+void HandleMouseMove(Rndr::Window* window, int x, int y)
 {
     if (window == nullptr)
     {
@@ -601,19 +601,19 @@ void HandleMouseMove(rndr::Window* window, int x, int y)
     // We need to flip Y since the engine expects Y to grow from bottom to top
     y = window->m_desc.height - y;
 
-    const rndr::CursorMode mode = window->m_desc.cursor_mode;
+    const Rndr::CursorMode mode = window->m_desc.cursor_mode;
     switch (mode)
     {
-        case rndr::CursorMode::Normal:
-        case rndr::CursorMode::Hidden:
+        case Rndr::CursorMode::Normal:
+        case Rndr::CursorMode::Hidden:
         {
             const math::Point2 absolute_position(static_cast<float>(x), static_cast<float>(y));
-            rndr::InputSystem::SubmitMousePositionEvent(window->m_handle,
+            Rndr::InputSystem::SubmitMousePositionEvent(window->m_handle,
                                                         absolute_position,
                                                         window->GetSize());
             break;
         }
-        case rndr::CursorMode::Infinite:
+        case Rndr::CursorMode::Infinite:
         {
             const POINT mid_point = GetWindowMidPointInScreenSpace(window->m_handle);
             SetCursorPos(mid_point.x, mid_point.y);
@@ -626,7 +626,7 @@ LRESULT CALLBACK WindowProc(HWND window_handle, UINT msg_code, WPARAM param_w, L
 {
     LONG_PTR const window_ptr = GetWindowLongPtr(window_handle, GWLP_USERDATA);
     // Before window is created this will be nullptr
-    rndr::Window* window = reinterpret_cast<rndr::Window*>(window_ptr);  // NOLINT
+    Rndr::Window* window = reinterpret_cast<Rndr::Window*>(window_ptr);  // NOLINT
 
     //    if (Window != nullptr)
     //    {
@@ -644,7 +644,7 @@ LRESULT CALLBACK WindowProc(HWND window_handle, UINT msg_code, WPARAM param_w, L
         {
             RNDR_LOG_DEBUG("WindowProc: Event WM_CREATE");
             CREATESTRUCT* CreateStruct = reinterpret_cast<CREATESTRUCT*>(param_l);  // NOLINT
-            window = reinterpret_cast<rndr::Window*>(CreateStruct->lpCreateParams);
+            window = reinterpret_cast<Rndr::Window*>(CreateStruct->lpCreateParams);
             SetWindowLongPtr(window_handle, GWLP_USERDATA, reinterpret_cast<LONG_PTR>(window));
             break;
         }
@@ -715,13 +715,13 @@ LRESULT CALLBACK WindowProc(HWND window_handle, UINT msg_code, WPARAM param_w, L
         case WM_INPUT:
         {
             // Handling infinite mouse cursor mode
-            if (window->m_desc.cursor_mode != rndr::CursorMode::Infinite)
+            if (window->m_desc.cursor_mode != Rndr::CursorMode::Infinite)
             {
                 break;
             }
 
             UINT struct_size = sizeof(RAWINPUT);
-            rndr::StackArray<uint8_t, sizeof(RAWINPUT)> data_buffer;
+            Rndr::StackArray<uint8_t, sizeof(RAWINPUT)> data_buffer;
 
             // NOLINTNEXTLINE
             GetRawInputData(reinterpret_cast<HRAWINPUT>(param_l),
@@ -737,7 +737,7 @@ LRESULT CALLBACK WindowProc(HWND window_handle, UINT msg_code, WPARAM param_w, L
                 const math::Vector2 size = window->GetSize();
                 const math::Vector2 delta{static_cast<float>(raw_data->data.mouse.lLastX) / size.X,
                                           static_cast<float>(raw_data->data.mouse.lLastY) / size.Y};
-                rndr::InputSystem::SubmitRelativeMousePositionEvent(window->m_handle, delta, size);
+                Rndr::InputSystem::SubmitRelativeMousePositionEvent(window->m_handle, delta, size);
             }
             break;
         }
@@ -756,9 +756,9 @@ LRESULT CALLBACK WindowProc(HWND window_handle, UINT msg_code, WPARAM param_w, L
                 break;
             }
 
-            const rndr::InputPrimitive primitive = GetPrimitive(msg_code);
-            const rndr::InputTrigger trigger = GetTrigger(msg_code);
-            rndr::InputSystem::SubmitButtonEvent(window->m_handle, primitive, trigger);
+            const Rndr::InputPrimitive primitive = GetPrimitive(msg_code);
+            const Rndr::InputTrigger trigger = GetTrigger(msg_code);
+            Rndr::InputSystem::SubmitButtonEvent(window->m_handle, primitive, trigger);
             break;
         }
         case WM_KEYDOWN:
@@ -773,11 +773,11 @@ LRESULT CALLBACK WindowProc(HWND window_handle, UINT msg_code, WPARAM param_w, L
             {
                 break;
             }
-            const rndr::InputPrimitive primitive = iter->second;
-            const rndr::InputTrigger trigger = msg_code == WM_KEYDOWN
-                                                   ? rndr::InputTrigger::ButtonPressed
-                                                   : rndr::InputTrigger::ButtonReleased;
-            rndr::InputSystem::SubmitButtonEvent(window->m_handle, primitive, trigger);
+            const Rndr::InputPrimitive primitive = iter->second;
+            const Rndr::InputTrigger trigger = msg_code == WM_KEYDOWN
+                                                   ? Rndr::InputTrigger::ButtonPressed
+                                                   : Rndr::InputTrigger::ButtonReleased;
+            Rndr::InputSystem::SubmitButtonEvent(window->m_handle, primitive, trigger);
             break;
         }
         case WM_MOUSEWHEEL:
@@ -787,7 +787,7 @@ LRESULT CALLBACK WindowProc(HWND window_handle, UINT msg_code, WPARAM param_w, L
                 break;
             }
             const int delta_wheel = GET_WHEEL_DELTA_WPARAM(param_w);
-            rndr::InputSystem::SubmitMouseWheelEvent(window->m_handle, delta_wheel);
+            Rndr::InputSystem::SubmitMouseWheelEvent(window->m_handle, delta_wheel);
             break;
         }
     }

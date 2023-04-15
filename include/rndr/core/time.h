@@ -2,7 +2,7 @@
 
 #include "rndr/core/base.h"
 
-namespace rndr
+namespace Rndr
 {
 
 using Timestamp = int64_t;
@@ -27,4 +27,4 @@ real GetDuration(Timestamp start, Timestamp end);
  */
 real GetSystemTime();
 
-}  // namespace rndr
+}  // namespace Rndr

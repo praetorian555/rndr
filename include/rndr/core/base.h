@@ -2,7 +2,7 @@
 
 #include "rndr/core/definitions.h"
 
-namespace rndr
+namespace Rndr
 {
 
 // Types ///////////////////////////////////////////////////////////////////////////////////////////
@@ -44,7 +44,7 @@ struct Logger
                 const char* file,
                 int line,
                 const char* function,
-                rndr::LogLevel log_level,
+                Rndr::LogLevel log_level,
                 const char* message) = nullptr;
 };
 
@@ -53,7 +53,7 @@ struct Logger
  */
 namespace DefaultAllocator
 {
-rndr::OpaquePtr Allocate(OpaquePtr allocator_data, uint64_t size, const char* tag);
+Rndr::OpaquePtr Allocate(OpaquePtr allocator_data, uint64_t size, const char* tag);
 void Free(OpaquePtr allocator_data, OpaquePtr ptr);
 }  // namespace DefaultAllocator
 
@@ -69,7 +69,7 @@ void Log(OpaquePtr logger_data,
          const char* file,
          int line,
          const char* function,
-         rndr::LogLevel log_level,
+         Rndr::LogLevel log_level,
          const char* message);
 }  // namespace DefaultLogger
 
@@ -165,11 +165,11 @@ void Free(OpaquePtr ptr);
 void Log(const char* file,
          int line,
          const char* function_name,
-         rndr::LogLevel log_level,
+         Rndr::LogLevel log_level,
          const char* format,
          ...);
 
-}  // namespace rndr
+}  // namespace Rndr
 
 // Helper macros ///////////////////////////////////////////////////////////////////////////////////
 
@@ -182,12 +182,12 @@ void Log(const char* file,
 #define RNDR_DELETE_ARRAY(type, ptr) delete[] ptr
 
 #define RNDR_LOG_ERROR(format, ...) \
-    rndr::Log(__FILE__, __LINE__, __func__, rndr::LogLevel::Error, format, __VA_ARGS__)
+    Rndr::Log(__FILE__, __LINE__, __func__, Rndr::LogLevel::Error, format, __VA_ARGS__)
 #define RNDR_LOG_WARNING(format, ...) \
-    rndr::Log(__FILE__, __LINE__, __func__, rndr::LogLevel::Warning, format, __VA_ARGS__)
+    Rndr::Log(__FILE__, __LINE__, __func__, Rndr::LogLevel::Warning, format, __VA_ARGS__)
 #define RNDR_LOG_DEBUG(format, ...) \
-    rndr::Log(__FILE__, __LINE__, __func__, rndr::LogLevel::Debug, format, __VA_ARGS__)
+    Rndr::Log(__FILE__, __LINE__, __func__, Rndr::LogLevel::Debug, format, __VA_ARGS__)
 #define RNDR_LOG_INFO(format, ...) \
-    rndr::Log(__FILE__, __LINE__, __func__, rndr::LogLevel::Info, format, __VA_ARGS__)
+    Rndr::Log(__FILE__, __LINE__, __func__, Rndr::LogLevel::Info, format, __VA_ARGS__)
 #define RNDR_LOG_TRACE(format, ...) \
-    rndr::Log(__FILE__, __LINE__, __func__, rndr::LogLevel::Trace, format, __VA_ARGS__)
+    Rndr::Log(__FILE__, __LINE__, __func__, Rndr::LogLevel::Trace, format, __VA_ARGS__)

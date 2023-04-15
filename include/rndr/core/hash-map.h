@@ -4,7 +4,7 @@
 
 #include "rndr/core/definitions.h"
 
-namespace rndr
+namespace Rndr
 {
 /**
  * A hash map allocated on the heap.
@@ -14,4 +14,4 @@ namespace rndr
  */
 template <typename Key, typename Value, typename Hash = std::hash<Key>>
 using HashMap = std::unordered_map<Key, Value, Hash>;
-}  // namespace rndr
+}  // namespace Rndr

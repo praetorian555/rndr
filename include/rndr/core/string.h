@@ -4,10 +4,10 @@
 
 #include "rndr/core/definitions.h"
 
-namespace rndr
+namespace Rndr
 {
 /**
  * A dynamic string allocated on the heap using ASCII characters.
  */
 using String = std::basic_string<char, std::char_traits<char>>;
-}  // namespace rndr
+}  // namespace Rndr

@@ -4,7 +4,7 @@
 
 #include "rndr/core/base.h"
 
-namespace rndr
+namespace Rndr
 {
 
 /**
@@ -13,4 +13,4 @@ namespace rndr
 template <typename T, size_t N>
 using StackArray = std::array<T, N>;
 
-}  // namespace rndr
+}  // namespace Rndr

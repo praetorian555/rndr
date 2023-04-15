@@ -7,7 +7,7 @@
 
 #include "rndr/utility/array.h"
 
-namespace rndr
+namespace Rndr
 {
 
 // Helper struct to store image data in the CPU memory and loaded from a file.

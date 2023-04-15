@@ -17,10 +17,10 @@
 #define RNDR_DEBUG 1
 #endif  // !NDEBUG
 
-namespace rndr
+namespace Rndr
 {
 using real = math::real;
-}
+} // namespace Rndr
 
 #if RNDR_WINDOWS
 #define RNDR_OPTIMIZE_OFF __pragma(optimize("", off))

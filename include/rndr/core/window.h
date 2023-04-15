@@ -20,7 +20,7 @@ using LRESULT = __int64;
 #define CALLBACK __stdcall
 #endif  // _WINDEF_
 
-namespace rndr
+namespace Rndr
 {
 
 #if RNDR_WINDOWS
@@ -79,7 +79,7 @@ struct WindowDesc
 class Window;
 namespace WindowPrivate
 {
-void HandleMouseMove(class rndr::Window* window, int x, int y);
+void HandleMouseMove(class Rndr::Window* window, int x, int y);
 LRESULT CALLBACK WindowProc(HWND window_handle, UINT msg_code, WPARAM param_w, LPARAM param_l);
 }  // namespace WindowPrivate
 
@@ -242,11 +242,11 @@ private:
     bool m_is_visible = false;
 
     // Implementation details //////////////////////////////////////////////////////////////////////
-    friend void WindowPrivate::HandleMouseMove(rndr::Window* window, int x, int y);
+    friend void WindowPrivate::HandleMouseMove(Rndr::Window* window, int x, int y);
     friend LRESULT CALLBACK WindowPrivate::WindowProc(HWND window_handle,
                                                       UINT msg_code,
                                                       WPARAM param_w,
                                                       LPARAM param_l);
 };
 
-}  // namespace rndr
+}  // namespace Rndr

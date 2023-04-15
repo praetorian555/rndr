@@ -7,28 +7,28 @@
 #include "rndr/core/ref.h"
 #include "rndr/core/stack-array.h"
 
-namespace rndr
+namespace Rndr
 {
 struct ActionData
 {
-    rndr::InputAction action;
-    rndr::InputCallback callback;
-    rndr::OpaquePtr native_window;
-    rndr::Array<rndr::InputBinding> bindings;
+    Rndr::InputAction action;
+    Rndr::InputCallback callback;
+    Rndr::OpaquePtr native_window;
+    Rndr::Array<Rndr::InputBinding> bindings;
 };
 
 struct InputContextData
 {
-    rndr::Array<ActionData> actions;
-    rndr::Ref<rndr::InputContext> context;
+    Rndr::Array<ActionData> actions;
+    Rndr::Ref<Rndr::InputContext> context;
 
     ~InputContextData() = default;
 };
 
 struct ButtonData
 {
-    rndr::InputPrimitive primitive;
-    rndr::InputTrigger trigger;
+    Rndr::InputPrimitive primitive;
+    Rndr::InputTrigger trigger;
 };
 
 struct MousePositionData
@@ -53,7 +53,7 @@ using EventData =
 
 struct Event
 {
-    rndr::OpaquePtr native_window;
+    Rndr::OpaquePtr native_window;
     EventData data;
 };
 
@@ -61,8 +61,8 @@ using EventQueue = std::queue<Event>;
 
 struct InputSystemData
 {
-    rndr::InputContext default_context = rndr::InputContext("Default");
-    rndr::Array<Ref<InputContextData>> contexts;
+    Rndr::InputContext default_context = Rndr::InputContext("Default");
+    Rndr::Array<Ref<InputContextData>> contexts;
     EventQueue events;
 
     ~InputSystemData() = default;
@@ -71,46 +71,46 @@ struct InputSystemData
 
 // InputAction /////////////////////////////////////////////////////////////////////////////////////
 
-rndr::InputAction::InputAction(String name) : m_name(std::move(name)) {}
+Rndr::InputAction::InputAction(String name) : m_name(std::move(name)) {}
 
-const rndr::String& rndr::InputAction::GetName() const
+const Rndr::String& Rndr::InputAction::GetName() const
 {
     return m_name;
 }
 
-bool rndr::InputAction::IsValid() const
+bool Rndr::InputAction::IsValid() const
 {
     return !m_name.empty();
 }
 
 // InputBinding ////////////////////////////////////////////////////////////////////////////////
 
-bool rndr::InputBinding::operator==(const rndr::InputBinding& other) const
+bool Rndr::InputBinding::operator==(const Rndr::InputBinding& other) const
 {
     return primitive == other.primitive && trigger == other.trigger;
 }
 
 // InputContext ////////////////////////////////////////////////////////////////////////////////////
 
-rndr::InputContext::InputContext()
+Rndr::InputContext::InputContext()
 {
     m_context_data = RNDR_MAKE_SCOPED(InputContextData, {}, *this);
 }
 
-rndr::InputContext::InputContext(String name) : m_name(std::move(name))
+Rndr::InputContext::InputContext(String name) : m_name(std::move(name))
 {
     m_context_data = RNDR_MAKE_SCOPED(InputContextData, {}, *this);
 }
 
-rndr::InputContext::~InputContext() = default;
+Rndr::InputContext::~InputContext() = default;
 
-const rndr::String& rndr::InputContext::GetName() const
+const Rndr::String& Rndr::InputContext::GetName() const
 {
     return m_name;
 }
 
-bool rndr::InputContext::AddAction(const rndr::InputAction& action,
-                                   const rndr::InputActionData& data)
+bool Rndr::InputContext::AddAction(const Rndr::InputAction& action,
+                                   const Rndr::InputActionData& data)
 {
     if (m_context_data == nullptr)
     {
@@ -127,7 +127,7 @@ bool rndr::InputContext::AddAction(const rndr::InputAction& action,
         RNDR_LOG_ERROR("Invalid callback");
         return false;
     }
-    for (const rndr::InputBinding& binding : data.bindings)
+    for (const Rndr::InputBinding& binding : data.bindings)
     {
         if (!InputSystem::IsBindingValid(binding))
         {
@@ -152,8 +152,8 @@ bool rndr::InputContext::AddAction(const rndr::InputAction& action,
     return true;
 }
 
-bool rndr::InputContext::AddBindingToAction(const rndr::InputAction& action,
-                                            const rndr::InputBinding& binding)
+bool Rndr::InputContext::AddBindingToAction(const Rndr::InputAction& action,
+                                            const Rndr::InputBinding& binding)
 {
     if (m_context_data == nullptr)
     {
@@ -193,8 +193,8 @@ bool rndr::InputContext::AddBindingToAction(const rndr::InputAction& action,
     return false;
 }
 
-bool rndr::InputContext::RemoveBindingFromAction(const rndr::InputAction& action,
-                                                 const rndr::InputBinding& binding)
+bool Rndr::InputContext::RemoveBindingFromAction(const Rndr::InputAction& action,
+                                                 const Rndr::InputBinding& binding)
 {
     if (m_context_data == nullptr)
     {
@@ -221,7 +221,7 @@ bool rndr::InputContext::RemoveBindingFromAction(const rndr::InputAction& action
     return false;
 }
 
-bool rndr::InputContext::ContainsAction(const rndr::InputAction& action) const
+bool Rndr::InputContext::ContainsAction(const Rndr::InputAction& action) const
 {
     if (m_context_data == nullptr)
     {
@@ -238,7 +238,7 @@ bool rndr::InputContext::ContainsAction(const rndr::InputAction& action) const
                                { return action_data.action == action; });
 }
 
-rndr::InputCallback rndr::InputContext::GetActionCallback(const rndr::InputAction& action) const
+Rndr::InputCallback Rndr::InputContext::GetActionCallback(const Rndr::InputAction& action) const
 {
     if (m_context_data == nullptr)
     {
@@ -256,8 +256,8 @@ rndr::InputCallback rndr::InputContext::GetActionCallback(const rndr::InputActio
     return action_iter != m_context_data->actions.end() ? action_iter->callback : nullptr;
 }
 
-rndr::Span<rndr::InputBinding> rndr::InputContext::GetActionBindings(
-    const rndr::InputAction& action) const
+Rndr::Span<Rndr::InputBinding> Rndr::InputContext::GetActionBindings(
+    const Rndr::InputAction& action) const
 {
     if (m_context_data == nullptr)
     {
@@ -280,16 +280,16 @@ rndr::Span<rndr::InputBinding> rndr::InputContext::GetActionBindings(
 
 namespace
 {
-inline rndr::InputSystem& GetInputSystem()
+inline Rndr::InputSystem& GetInputSystem()
 {
-    static rndr::InputSystem s_input_system;
+    static Rndr::InputSystem s_input_system;
     return s_input_system;
 }
 }  // namespace
 
-rndr::ScopePtr<rndr::InputSystemData> rndr::InputSystem::g_system_data;
+Rndr::ScopePtr<Rndr::InputSystemData> Rndr::InputSystem::g_system_data;
 
-bool rndr::InputSystem::Init()
+bool Rndr::InputSystem::Init()
 {
     if (g_system_data)
     {
@@ -302,7 +302,7 @@ bool rndr::InputSystem::Init()
     return true;
 }
 
-bool rndr::InputSystem::Destroy()
+bool Rndr::InputSystem::Destroy()
 {
     if (!g_system_data)
     {
@@ -312,20 +312,20 @@ bool rndr::InputSystem::Destroy()
     return true;
 }
 
-rndr::InputContext& rndr::InputSystem::GetCurrentContext()
+Rndr::InputContext& Rndr::InputSystem::GetCurrentContext()
 {
     assert(g_system_data != nullptr);
     return g_system_data->contexts.back().get().context;
 }
 
-bool rndr::InputSystem::PushContext(const rndr::InputContext& context)
+bool Rndr::InputSystem::PushContext(const Rndr::InputContext& context)
 {
     assert(g_system_data != nullptr);
     g_system_data->contexts.emplace_back(*context.m_context_data.get());
     return true;
 }
 
-bool rndr::InputSystem::PopContext()
+bool Rndr::InputSystem::PopContext()
 {
     assert(g_system_data != nullptr);
     if (g_system_data->contexts.size() == 1)
@@ -337,7 +337,7 @@ bool rndr::InputSystem::PopContext()
     return true;
 }
 
-bool rndr::InputSystem::SubmitButtonEvent(OpaquePtr window,
+bool Rndr::InputSystem::SubmitButtonEvent(OpaquePtr window,
                                           InputPrimitive primitive,
                                           InputTrigger trigger)
 {
@@ -347,7 +347,7 @@ bool rndr::InputSystem::SubmitButtonEvent(OpaquePtr window,
     return true;
 }
 
-bool rndr::InputSystem::SubmitMousePositionEvent(OpaquePtr window,
+bool Rndr::InputSystem::SubmitMousePositionEvent(OpaquePtr window,
                                                  const math::Point2& position,
                                                  const math::Vector2& screen_size)
 {
@@ -361,7 +361,7 @@ bool rndr::InputSystem::SubmitMousePositionEvent(OpaquePtr window,
     return true;
 }
 
-bool rndr::InputSystem::SubmitRelativeMousePositionEvent(OpaquePtr window,
+bool Rndr::InputSystem::SubmitRelativeMousePositionEvent(OpaquePtr window,
                                                          const math::Vector2& delta_position,
                                                          const math::Vector2& screen_size)
 {
@@ -375,14 +375,14 @@ bool rndr::InputSystem::SubmitRelativeMousePositionEvent(OpaquePtr window,
     return true;
 }
 
-bool rndr::InputSystem::SubmitMouseWheelEvent(OpaquePtr window, int32_t delta_wheel)
+bool Rndr::InputSystem::SubmitMouseWheelEvent(OpaquePtr window, int32_t delta_wheel)
 {
     const Event event{window, MouseWheelData{delta_wheel}};
     g_system_data->events.push(event);
     return true;
 }
 
-namespace rndr
+namespace Rndr
 {
 struct InputEventProcessor
 {
@@ -397,7 +397,7 @@ struct InputEventProcessor
 
 }  // namespace rndr
 
-bool rndr::InputSystem::ProcessEvents(real delta_seconds)
+bool Rndr::InputSystem::ProcessEvents(real delta_seconds)
 {
     RNDR_UNUSED(delta_seconds);
 
@@ -413,7 +413,7 @@ bool rndr::InputSystem::ProcessEvents(real delta_seconds)
     return true;
 }
 
-void rndr::InputEventProcessor::operator()(const ButtonData& event) const
+void Rndr::InputEventProcessor::operator()(const ButtonData& event) const
 {
     for (const ActionData& action_data : context.get().actions)
     {
@@ -432,7 +432,7 @@ void rndr::InputEventProcessor::operator()(const ButtonData& event) const
     }
 }
 
-void rndr::InputEventProcessor::operator()(const MousePositionData& event) const
+void Rndr::InputEventProcessor::operator()(const MousePositionData& event) const
 {
     const StackArray<InputPrimitive, 2> axes = {InputPrimitive::Mouse_AxisX,
                                                 InputPrimitive::Mouse_AxisY};
@@ -459,7 +459,7 @@ void rndr::InputEventProcessor::operator()(const MousePositionData& event) const
     }
 }
 
-void rndr::InputEventProcessor::operator()(const RelativeMousePositionData& event) const
+void Rndr::InputEventProcessor::operator()(const RelativeMousePositionData& event) const
 {
     const StackArray<InputPrimitive, 2> axes = {InputPrimitive::Mouse_AxisX,
                                                 InputPrimitive::Mouse_AxisY};
@@ -486,7 +486,7 @@ void rndr::InputEventProcessor::operator()(const RelativeMousePositionData& even
     }
 }
 
-void rndr::InputEventProcessor::operator()(const MouseWheelData& event) const
+void Rndr::InputEventProcessor::operator()(const MouseWheelData& event) const
 {
     const InputPrimitive primitive = InputPrimitive::Mouse_AxisWheel;
     const InputTrigger trigger = InputTrigger::AxisChangedRelative;
@@ -508,38 +508,38 @@ void rndr::InputEventProcessor::operator()(const MouseWheelData& event) const
     }
 }
 
-bool rndr::InputSystem::IsButton(InputPrimitive primitive)
+bool Rndr::InputSystem::IsButton(InputPrimitive primitive)
 {
     return IsKeyboardButton(primitive) || IsMouseButton(primitive);
 }
 
-bool rndr::InputSystem::IsMouseButton(InputPrimitive primitive)
+bool Rndr::InputSystem::IsMouseButton(InputPrimitive primitive)
 {
-    using enum rndr::InputPrimitive;
+    using enum Rndr::InputPrimitive;
     return primitive == Mouse_LeftButton || primitive == Mouse_RightButton
            || primitive == Mouse_MiddleButton;
 }
 
-bool rndr::InputSystem::IsKeyboardButton(InputPrimitive primitive)
+bool Rndr::InputSystem::IsKeyboardButton(InputPrimitive primitive)
 
 {
     return primitive > InputPrimitive::_KeyboardStart && primitive < InputPrimitive::_KeyboardEnd;
 }
 
-bool rndr::InputSystem::IsAxis(InputPrimitive primitive)
+bool Rndr::InputSystem::IsAxis(InputPrimitive primitive)
 {
     return primitive == InputPrimitive::Mouse_AxisX || primitive == InputPrimitive::Mouse_AxisY
            || IsMouseWheelAxis(primitive);
 }
 
-bool rndr::InputSystem::IsMouseWheelAxis(rndr::InputPrimitive primitive)
+bool Rndr::InputSystem::IsMouseWheelAxis(Rndr::InputPrimitive primitive)
 {
     return primitive == InputPrimitive::Mouse_AxisWheel;
 }
 
-bool rndr::InputSystem::IsBindingValid(const rndr::InputBinding& binding)
+bool Rndr::InputSystem::IsBindingValid(const Rndr::InputBinding& binding)
 {
-    using enum rndr::InputTrigger;
+    using enum Rndr::InputTrigger;
     if (IsButton(binding.primitive))
     {
         return binding.trigger == ButtonPressed || binding.trigger == ButtonReleased

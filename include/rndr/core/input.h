@@ -12,7 +12,7 @@
 #include "rndr/core/span.h"
 #include "rndr/core/string.h"
 
-namespace rndr
+namespace Rndr
 {
 
 /**
@@ -300,4 +300,4 @@ private:
               std::placeholders::_2,                                   \
               std::placeholders::_3)
 
-}  // namespace rndr
+}  // namespace Rndr

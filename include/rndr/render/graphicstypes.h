@@ -12,7 +12,7 @@
 
 #include "rndr/render/colors.h"
 
-namespace rndr
+namespace Rndr
 {
 
 struct GraphicsConstants

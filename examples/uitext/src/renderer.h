@@ -45,7 +45,7 @@ public:
     static constexpr int InvalidFontId = 0;
 
 public:
-    Renderer(rndr::GraphicsContext* Ctx, int32_t MaxInstances, const math::Vector2& ScreenSize);
+    Renderer(Rndr::GraphicsContext* Ctx, int32_t MaxInstances, const math::Vector2& ScreenSize);
     ~Renderer() = default;
 
     bool AddFont(const std::string& FontName, const std::string& AssetPath);
@@ -56,14 +56,14 @@ public:
                     const math::Point2 BaseLineStart,
                     const TextProperties& Props);
 
-    bool Present(rndr::FrameBuffer* FrameBuffer);
+    bool Present(Rndr::FrameBuffer* FrameBuffer);
 
 private:
     struct Bitmap
     {
         IntPoint BottomLeft;
         IntPoint Size;
-        rndr::ByteSpan Data;
+        Rndr::ByteSpan Data;
     };
 
     bool IsGlyphSupported(int CodePoint, Font* F, int FontSize);
@@ -71,15 +71,15 @@ private:
     void WriteToAtlas(const Bitmap& Bitmap);
 
 private:
-    rndr::GraphicsContext* m_Ctx;
+    Rndr::GraphicsContext* m_Ctx;
 
-    rndr::ScopePtr<rndr::Pipeline> m_Pipeline;
-    rndr::ScopePtr<rndr::Buffer> m_InstanceBuffer;
-    rndr::ScopePtr<rndr::Buffer> m_ShadowBuffer;
-    rndr::ScopePtr<rndr::Buffer> m_ConstantBuffer;
-    rndr::ScopePtr<rndr::Buffer> m_IndexBuffer;
-    rndr::ScopePtr<rndr::Image> m_TextureAtlas;
-    rndr::ScopePtr<rndr::Sampler> m_TextureAtlasSampler;
+    Rndr::ScopePtr<Rndr::Pipeline> m_Pipeline;
+    Rndr::ScopePtr<Rndr::Buffer> m_InstanceBuffer;
+    Rndr::ScopePtr<Rndr::Buffer> m_ShadowBuffer;
+    Rndr::ScopePtr<Rndr::Buffer> m_ConstantBuffer;
+    Rndr::ScopePtr<Rndr::Buffer> m_IndexBuffer;
+    Rndr::ScopePtr<Rndr::Image> m_TextureAtlas;
+    Rndr::ScopePtr<Rndr::Sampler> m_TextureAtlasSampler;
 
     const int m_MaxInstances;
     math::Vector2 m_ScreenSize;

@@ -4,7 +4,7 @@
 
 #include "rndr/core/base.h"
 
-namespace rndr
+namespace Rndr
 {
 
 /**

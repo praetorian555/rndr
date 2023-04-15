@@ -4,13 +4,13 @@
 
 TEST_CASE("Creating a window", "[window]")
 {
-    REQUIRE(rndr::Init());
+    REQUIRE(Rndr::Init());
     SECTION("Default window")
     {
-        rndr::Window window;
+        Rndr::Window window;
         window.ProcessEvents();
         REQUIRE(!window.IsClosed());
-        REQUIRE(window.GetCursorMode() == rndr::CursorMode::Normal);
+        REQUIRE(window.GetCursorMode() == Rndr::CursorMode::Normal);
         REQUIRE(window.GetWidth() == 1024);
         REQUIRE(window.GetHeight() == 768);
         REQUIRE(!window.IsWindowMaximized());
@@ -43,10 +43,10 @@ TEST_CASE("Creating a window", "[window]")
     }
     SECTION("Hidden window")
     {
-        rndr::Window window{{.start_visible = false}};
+        Rndr::Window window{{.start_visible = false}};
         window.ProcessEvents();
         REQUIRE(!window.IsClosed());
-        REQUIRE(window.GetCursorMode() == rndr::CursorMode::Normal);
+        REQUIRE(window.GetCursorMode() == Rndr::CursorMode::Normal);
         REQUIRE(window.GetWidth() == 1024);
         REQUIRE(window.GetHeight() == 768);
         REQUIRE(!window.IsWindowMaximized());
@@ -55,10 +55,10 @@ TEST_CASE("Creating a window", "[window]")
     }
     SECTION("Minimized window")
     {
-        rndr::Window window{{.start_minimized = true}};
+        Rndr::Window window{{.start_minimized = true}};
         window.ProcessEvents();
         REQUIRE(!window.IsClosed());
-        REQUIRE(window.GetCursorMode() == rndr::CursorMode::Normal);
+        REQUIRE(window.GetCursorMode() == Rndr::CursorMode::Normal);
         REQUIRE(window.GetWidth() == 1024);
         REQUIRE(window.GetHeight() == 768);
         REQUIRE(!window.IsWindowMaximized());
@@ -67,61 +67,61 @@ TEST_CASE("Creating a window", "[window]")
     }
     SECTION("Maximized window")
     {
-        rndr::Window window{{.start_maximized = true}};
+        Rndr::Window window{{.start_maximized = true}};
         window.ProcessEvents();
         REQUIRE(!window.IsClosed());
-        REQUIRE(window.GetCursorMode() == rndr::CursorMode::Normal);
+        REQUIRE(window.GetCursorMode() == Rndr::CursorMode::Normal);
         REQUIRE(window.GetWidth() == 1024);
         REQUIRE(window.GetHeight() == 768);
         REQUIRE(window.IsWindowMaximized());
         REQUIRE(!window.IsWindowMinimized());
         REQUIRE(window.IsVisible());
     }
-    REQUIRE(rndr::Destroy());
+    REQUIRE(Rndr::Destroy());
 }
 
 TEST_CASE("Moving a window", "[window]")
 {
-    REQUIRE(rndr::Init());
+    REQUIRE(Rndr::Init());
     SECTION("Moving default window")
     {
-        rndr::Window first_window;
+        Rndr::Window first_window;
         REQUIRE(!first_window.IsClosed());
-        rndr::NativeWindowHandle handle = first_window.GetNativeWindowHandle();
-        REQUIRE(handle != rndr::k_invalid_window_handle);
-        rndr::Window second_window(std::move(first_window));
+        Rndr::NativeWindowHandle handle = first_window.GetNativeWindowHandle();
+        REQUIRE(handle != Rndr::k_invalid_window_handle);
+        Rndr::Window second_window(std::move(first_window));
         REQUIRE(first_window.IsClosed());
-        REQUIRE(first_window.GetNativeWindowHandle() == rndr::k_invalid_window_handle);
+        REQUIRE(first_window.GetNativeWindowHandle() == Rndr::k_invalid_window_handle);
         REQUIRE(!second_window.IsClosed());
         REQUIRE(second_window.GetNativeWindowHandle() == handle);
     }
     SECTION("Replacing existing window")
     {
-        rndr::Window first_window;
+        Rndr::Window first_window;
         REQUIRE(!first_window.IsClosed());
-        rndr::NativeWindowHandle handle = first_window.GetNativeWindowHandle();
-        REQUIRE(handle != rndr::k_invalid_window_handle);
-        rndr::Window second_window;
+        Rndr::NativeWindowHandle handle = first_window.GetNativeWindowHandle();
+        REQUIRE(handle != Rndr::k_invalid_window_handle);
+        Rndr::Window second_window;
         REQUIRE(!second_window.IsClosed());
         REQUIRE(second_window.GetNativeWindowHandle() != handle);
         second_window = std::move(first_window);
         REQUIRE(first_window.IsClosed());
-        REQUIRE(first_window.GetNativeWindowHandle() == rndr::k_invalid_window_handle);
+        REQUIRE(first_window.GetNativeWindowHandle() == Rndr::k_invalid_window_handle);
         REQUIRE(!second_window.IsClosed());
         REQUIRE(second_window.GetNativeWindowHandle() == handle);
     }
-    REQUIRE(rndr::Destroy());
+    REQUIRE(Rndr::Destroy());
 }
 
 TEST_CASE("Resizing the window", "[window]")
 {
-    REQUIRE(rndr::Init());
+    REQUIRE(Rndr::Init());
     SECTION("Create default window")
     {
-        rndr::Window window;
+        Rndr::Window window;
         window.ProcessEvents();
         REQUIRE(!window.IsClosed());
-        REQUIRE(window.GetCursorMode() == rndr::CursorMode::Normal);
+        REQUIRE(window.GetCursorMode() == Rndr::CursorMode::Normal);
         REQUIRE(window.GetWidth() == 1024);
         REQUIRE(window.GetHeight() == 768);
         REQUIRE(!window.IsWindowMaximized());
@@ -152,16 +152,16 @@ TEST_CASE("Resizing the window", "[window]")
             REQUIRE(window.GetSize() == math::Vector2(1024, 768));
         }
     }
-    REQUIRE(rndr::Destroy());
+    REQUIRE(Rndr::Destroy());
 }
 
 TEST_CASE("Closing the window", "[window]")
 {
-    REQUIRE(rndr::Init());
-    rndr::Window window;
+    REQUIRE(Rndr::Init());
+    Rndr::Window window;
     window.ProcessEvents();
     REQUIRE(!window.IsClosed());
-    REQUIRE(window.GetCursorMode() == rndr::CursorMode::Normal);
+    REQUIRE(window.GetCursorMode() == Rndr::CursorMode::Normal);
     REQUIRE(window.GetWidth() == 1024);
     REQUIRE(window.GetHeight() == 768);
     REQUIRE(!window.IsWindowMaximized());
@@ -170,35 +170,35 @@ TEST_CASE("Closing the window", "[window]")
     window.Close();
     window.ProcessEvents();
     REQUIRE(window.IsClosed());
-    REQUIRE(rndr::Destroy());
+    REQUIRE(Rndr::Destroy());
 }
 
 TEST_CASE("Changing cursor mode", "[window]")
 {
-    REQUIRE(rndr::Init());
+    REQUIRE(Rndr::Init());
     SECTION("Create default window")
     {
-        rndr::Window window;
+        Rndr::Window window;
         window.ProcessEvents();
         REQUIRE(!window.IsClosed());
         SECTION("Set to hidden")
         {
-            window.SetCursorMode(rndr::CursorMode::Hidden);
+            window.SetCursorMode(Rndr::CursorMode::Hidden);
             window.ProcessEvents();
-            REQUIRE(window.GetCursorMode() == rndr::CursorMode::Hidden);
+            REQUIRE(window.GetCursorMode() == Rndr::CursorMode::Hidden);
         }
         SECTION("Set to infinite")
         {
-            window.SetCursorMode(rndr::CursorMode::Infinite);
+            window.SetCursorMode(Rndr::CursorMode::Infinite);
             window.ProcessEvents();
-            REQUIRE(window.GetCursorMode() == rndr::CursorMode::Infinite);
+            REQUIRE(window.GetCursorMode() == Rndr::CursorMode::Infinite);
         }
         SECTION("Set to normal")
         {
-            window.SetCursorMode(rndr::CursorMode::Normal);
+            window.SetCursorMode(Rndr::CursorMode::Normal);
             window.ProcessEvents();
-            REQUIRE(window.GetCursorMode() == rndr::CursorMode::Normal);
+            REQUIRE(window.GetCursorMode() == Rndr::CursorMode::Normal);
         }
     }
-    REQUIRE(rndr::Destroy());
+    REQUIRE(Rndr::Destroy());
 }

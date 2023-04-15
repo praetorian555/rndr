@@ -23,7 +23,7 @@ struct Glyph
     math::Point2 TexBottomLeft;
     math::Point2 TexTopRight;
 
-    rndr::ByteSpan SDF;
+    Rndr::ByteSpan SDF;
 };
 
 struct Font
@@ -48,5 +48,5 @@ struct Font
 private:
     static int GenerateId();
 
-    rndr::ByteArray FontFileContents;
+    Rndr::ByteArray FontFileContents;
 };

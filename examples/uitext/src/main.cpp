@@ -11,14 +11,14 @@ public:
     App(int WindowWidth, int WindowHeight)
         : m_WindowWidth(WindowWidth), m_WindowHeight(WindowHeight)
     {
-        m_RndrCtx = std::make_unique<rndr::RndrContext>();
+        m_RndrCtx = std::make_unique<Rndr::RndrContext>();
         assert(m_RndrCtx.get());
         m_GraphicsCtx = m_RndrCtx->CreateGraphicsContext();
         assert(m_GraphicsCtx.IsValid());
         m_Window = m_RndrCtx->CreateWin(m_WindowWidth, m_WindowHeight);
         assert(m_Window.IsValid());
 
-        rndr::NativeWindowHandle Handle = m_Window->GetNativeWindowHandle();
+        Rndr::NativeWindowHandle Handle = m_Window->GetNativeWindowHandle();
         m_SwapChain = m_GraphicsCtx->CreateSwapChain(Handle, m_WindowWidth, m_WindowHeight);
         assert(m_SwapChain.IsValid());
 
@@ -44,11 +44,11 @@ public:
             m_Window->ProcessEvents();
 
             math::Vector4 ClearColor{55 / 255.0f, 67 / 255.0f, 90 / 255.0f, 1.0f};
-            rndr::FrameBuffer* DefaultFB = m_SwapChain->FrameBuffer.Get();
+            Rndr::FrameBuffer* DefaultFB = m_SwapChain->FrameBuffer.Get();
             m_GraphicsCtx->ClearColor(DefaultFB->ColorBuffers[0].Get(), ClearColor);
 
             TextProperties Props;
-            Props.Color = rndr::Colors::kYellow;
+            Props.Color = Rndr::Colors::kYellow;
             m_Renderer->RenderText("Liberation Sans with shadow, 16px!", "Liberation Sans", 16,
                                    {10, 300}, Props);
 
@@ -62,26 +62,26 @@ public:
                                    {10, 260}, Props);
             Props.bShadow = true;
 
-            Props.Color = rndr::Colors::kGreen;
+            Props.Color = Rndr::Colors::kGreen;
             m_Renderer->RenderText("Liberation Sans with shadow, 24px!", "Liberation Sans", 24,
                                    {10, 200}, Props);
 
-            Props.Color = rndr::Colors::kWhite;
+            Props.Color = Rndr::Colors::kWhite;
             m_Renderer->RenderText("Liberation Sans with shadow, 32px!", "Liberation Sans", 32,
                                    {10, 170}, Props);
 
             Props.bShadow = true;
             Props.Threshold = 0.68f;
-            Props.Color = rndr::Colors::kYellow;
+            Props.Color = Rndr::Colors::kYellow;
             m_Renderer->RenderText("Yu Mincho with shadow, 16px!", "Yu Mincho", 16, {10, 550},
                                    Props);
 
             Props.bShadow = false;
-            Props.Color = rndr::Colors::kYellow;
+            Props.Color = Rndr::Colors::kYellow;
             m_Renderer->RenderText("Yu Mincho no shadow, 24px!", "Yu Mincho", 24, {10, 500}, Props);
             Props.bShadow = true;
 
-            Props.Color = rndr::Colors::kYellow;
+            Props.Color = Rndr::Colors::kYellow;
             m_Renderer->RenderText("Yu Mincho with shadow, 32px!", "Yu Mincho", 32, {10, 450},
                                    Props);
 
@@ -96,20 +96,20 @@ public:
         }
     }
 
-    rndr::GraphicsContext* GetGraphicsContext() { return m_GraphicsCtx.Get(); }
+    Rndr::GraphicsContext* GetGraphicsContext() { return m_GraphicsCtx.Get(); }
     math::Vector2 GetScreenSize() const
     {
         return math::Vector2{static_cast<float>(m_WindowWidth), static_cast<float>(m_WindowHeight)};
     }
 
 private:
-    std::unique_ptr<rndr::RndrContext> m_RndrCtx;
+    std::unique_ptr<Rndr::RndrContext> m_RndrCtx;
 
-    rndr::ScopePtr<rndr::GraphicsContext> m_GraphicsCtx;
-    rndr::ScopePtr<rndr::Window> m_Window;
-    rndr::ScopePtr<rndr::SwapChain> m_SwapChain;
+    Rndr::ScopePtr<Rndr::GraphicsContext> m_GraphicsCtx;
+    Rndr::ScopePtr<Rndr::Window> m_Window;
+    Rndr::ScopePtr<Rndr::SwapChain> m_SwapChain;
 #ifdef RNDR_IMGUI
-    rndr::ScopePtr<rndr::ImGuiWrapper> m_ImGui;
+    Rndr::ScopePtr<Rndr::ImGuiWrapper> m_ImGui;
 #endif
 
     std::unique_ptr<Renderer> m_Renderer;

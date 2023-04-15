@@ -4,7 +4,7 @@
 
 #include "rndr/core/base.h"
 
-namespace rndr
+namespace Rndr
 {
 
 /**
@@ -13,9 +13,9 @@ namespace rndr
 template <typename T>
 using ScopePtr = std::unique_ptr<T>;
 
-}  // namespace rndr
+}  // namespace Rndr
 
 /**
  * Helper macro to create a new object of type T on the heap and store it in a ScopePtr.
  */
-#define RNDR_MAKE_SCOPED(type, ...) rndr::ScopePtr<type>(RNDR_NEW(type, __VA_ARGS__))
+#define RNDR_MAKE_SCOPED(type, ...) Rndr::ScopePtr<type>(RNDR_NEW(type, __VA_ARGS__))

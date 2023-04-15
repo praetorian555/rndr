@@ -4,7 +4,7 @@
 
 #include "rndr/core/definitions.h"
 
-namespace rndr
+namespace Rndr
 {
 
 /**
@@ -16,4 +16,4 @@ using Span = std::span<T>;
 using ByteSpan = Span<uint8_t>;
 using IntSpan = Span<int>;
 
-}  // namespace rndr
+}  // namespace Rndr

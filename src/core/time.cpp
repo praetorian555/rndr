@@ -2,7 +2,7 @@
 
 #include <chrono>
 
-rndr::Timestamp rndr::GetTimestamp()
+Rndr::Timestamp Rndr::GetTimestamp()
 {
     using namespace std::chrono;
     const auto timestamp = high_resolution_clock::now();
@@ -11,12 +11,12 @@ rndr::Timestamp rndr::GetTimestamp()
     return result_int;
 }
 
-rndr::real rndr::GetDuration(rndr::Timestamp start, rndr::Timestamp end)
+Rndr::real Rndr::GetDuration(Rndr::Timestamp start, Rndr::Timestamp end)
 {
     return static_cast<real>(end - start) / MATH_REALC(1'000'000.0);
 }
 
-rndr::real rndr::GetSystemTime()
+Rndr::real Rndr::GetSystemTime()
 {
     return GetDuration(0, GetTimestamp());
 }

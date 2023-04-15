@@ -4,9 +4,9 @@
 
 int main()
 {
-    const rndr::RndrContext rndr_context;
-    rndr::ScopePtr<rndr::Window> window = rndr_context.CreateWin(800, 600);
-    rndr::ScopePtr<rndr::GraphicsContext> graphics_context =
+    const Rndr::RndrContext rndr_context;
+    Rndr::ScopePtr<Rndr::Window> window = rndr_context.CreateWin(800, 600);
+    Rndr::ScopePtr<Rndr::GraphicsContext> graphics_context =
         rndr_context.CreateGraphicsContext({.window_handle = window->GetNativeWindowHandle()});
 
     GLuint vao;
@@ -53,7 +53,7 @@ int main()
     glLinkProgram(shader_program);
     glUseProgram(shader_program);
 
-    rndr::ImGuiWrapper::Init(window.GetRef(), graphics_context.GetRef());
+    Rndr::ImGuiWrapper::Init(window.GetRef(), graphics_context.GetRef());
 
     while (!window->IsClosed())
     {
@@ -65,8 +65,8 @@ int main()
         glClearColor(0.2f, 0.3f, 0.3f, 1.0f);
         glDrawArrays(GL_TRIANGLES, 0, 3);
 
-        rndr::ImGuiWrapper::StartFrame();
-        rndr::ImGuiWrapper::EndFrame();
+        Rndr::ImGuiWrapper::StartFrame();
+        Rndr::ImGuiWrapper::EndFrame();
 
         graphics_context->Present(nullptr, false);
     }

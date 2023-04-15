@@ -4,7 +4,7 @@
 
 #include "rndr/core/definitions.h"
 
-namespace rndr
+namespace Rndr
 {
 
 /**
@@ -15,4 +15,4 @@ using Array = std::vector<T>;
 
 using ByteArray = Array<uint8_t>;
 
-}  // namespace rndr
+}  // namespace Rndr

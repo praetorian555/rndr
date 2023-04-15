@@ -7,7 +7,7 @@ constexpr uint8_t OneEdgeValue = 180;
 constexpr float PixelDistScale = static_cast<float>(OneEdgeValue) / static_cast<float>(Padding);
 }  // namespace SDF
 
-Renderer::Renderer(rndr::GraphicsContext* Ctx,
+Renderer::Renderer(Rndr::GraphicsContext* Ctx,
                    int32_t MaxInstances,
                    const math::Vector2& ScreenSize)
     : m_Ctx(Ctx),
@@ -21,73 +21,72 @@ Renderer::Renderer(rndr::GraphicsContext* Ctx,
     const std::string VertexShaderPath = BASIC2D_ASSET_DIR "/textvert.hlsl";
     const std::string FragmentShaderPath = BASIC2D_ASSET_DIR "/textfrag.hlsl";
 
-    rndr::ByteArray VertexShaderContents = rndr::file::ReadEntireFile(VertexShaderPath);
+    Rndr::ByteArray VertexShaderContents = Rndr::file::ReadEntireFile(VertexShaderPath);
     assert(!VertexShaderContents.empty());
-    rndr::ByteArray FragmentShaderContents = rndr::file::ReadEntireFile(FragmentShaderPath);
+    Rndr::ByteArray FragmentShaderContents = Rndr::file::ReadEntireFile(FragmentShaderPath);
     assert(!FragmentShaderContents.empty());
 
-    const rndr::PipelineProperties PipelineProps{
-        .InputLayout = rndr::InputLayoutBuilder()
-                           .AddBuffer(0, rndr::DataRepetition::PerInstance, 1)
-                           .AppendElement(0, "POSITION", rndr::PixelFormat::R32G32_FLOAT)
-                           .AppendElement(0, "POSITION", rndr::PixelFormat::R32G32_FLOAT)
-                           .AppendElement(0, "TEXCOORD", rndr::PixelFormat::R32G32_FLOAT)
-                           .AppendElement(0, "TEXCOORD", rndr::PixelFormat::R32G32_FLOAT)
-                           .AppendElement(0, "COLOR", rndr::PixelFormat::R32G32B32A32_FLOAT)
-                           .AppendElement(0, "PSIZE", rndr::PixelFormat::R32_FLOAT)
-                           .AppendElement(0, "PSIZE", rndr::PixelFormat::R32_FLOAT)
+    const Rndr::PipelineProperties PipelineProps{
+        .InputLayout = Rndr::InputLayoutBuilder()
+                           .AddBuffer(0, Rndr::DataRepetition::PerInstance, 1)
+                           .AppendElement(0, "POSITION", Rndr::PixelFormat::R32G32_FLOAT)
+                           .AppendElement(0, "POSITION", Rndr::PixelFormat::R32G32_FLOAT)
+                           .AppendElement(0, "TEXCOORD", Rndr::PixelFormat::R32G32_FLOAT)
+                           .AppendElement(0, "TEXCOORD", Rndr::PixelFormat::R32G32_FLOAT)
+                           .AppendElement(0, "COLOR", Rndr::PixelFormat::R32G32B32A32_FLOAT)
+                           .AppendElement(0, "PSIZE", Rndr::PixelFormat::R32_FLOAT)
+                           .AppendElement(0, "PSIZE", Rndr::PixelFormat::R32_FLOAT)
                            .Build(),
-        .VertexShader = {.Type = rndr::ShaderType::Vertex, .EntryPoint = "Main"},
-        .VertexShaderContents = rndr::ByteSpan(VertexShaderContents),
-        .PixelShader = {.Type = rndr::ShaderType::Fragment, .EntryPoint = "Main"},
-        .PixelShaderContents = rndr::ByteSpan(FragmentShaderContents),
+        .VertexShader = {.Type = Rndr::ShaderType::Vertex, .EntryPoint = "Main"},
+        .VertexShaderContents = Rndr::ByteSpan(VertexShaderContents),
+        .PixelShader = {.Type = Rndr::ShaderType::Fragment, .EntryPoint = "Main"},
+        .PixelShaderContents = Rndr::ByteSpan(FragmentShaderContents),
         .DepthStencil = {.DepthEnable = false, .StencilEnable = false},
     };
     m_Pipeline = m_Ctx->CreatePipeline(PipelineProps);
     assert(m_Pipeline.IsValid());
 
-    rndr::BufferProperties BufferProps;
+    Rndr::BufferProperties BufferProps;
     BufferProps.Size = m_MaxInstances * sizeof(InstanceData);
     BufferProps.Stride = sizeof(InstanceData);
-    BufferProps.Type = rndr::BufferType::Vertex;
-    m_InstanceBuffer = m_Ctx->CreateBuffer(BufferProps, rndr::ByteSpan{});
+    BufferProps.Type = Rndr::BufferType::Vertex;
+    m_InstanceBuffer = m_Ctx->CreateBuffer(BufferProps, Rndr::ByteSpan{});
     assert(m_InstanceBuffer.IsValid());
 
     BufferProps.Size = m_MaxInstances * sizeof(InstanceData);
     BufferProps.Stride = sizeof(InstanceData);
-    BufferProps.Type = rndr::BufferType::Vertex;
-    m_ShadowBuffer = m_Ctx->CreateBuffer(BufferProps, rndr::ByteSpan{});
+    BufferProps.Type = Rndr::BufferType::Vertex;
+    m_ShadowBuffer = m_Ctx->CreateBuffer(BufferProps, Rndr::ByteSpan{});
     assert(m_ShadowBuffer.IsValid());
 
     ConstantData ConstData{m_ScreenSize};
     BufferProps.Size = sizeof(ConstantData);
     BufferProps.Stride = sizeof(ConstantData);
-    BufferProps.Type = rndr::BufferType::Constant;
-    m_ConstantBuffer = m_Ctx->CreateBuffer(BufferProps, rndr::ByteSpan{&ConstData});
+    BufferProps.Type = Rndr::BufferType::Constant;
+    m_ConstantBuffer = m_Ctx->CreateBuffer(BufferProps, Rndr::ByteSpan{&ConstData});
     assert(m_ConstantBuffer.IsValid());
 
     std::vector Indices{0, 1, 2, 1, 3, 2};
     BufferProps.Size = static_cast<uint32_t>(Indices.size() * sizeof(int32_t));
     BufferProps.Stride = sizeof(int32_t);
-    BufferProps.Type = rndr::BufferType::Index;
-    m_IndexBuffer = m_Ctx->CreateBuffer(BufferProps, rndr::ByteSpan{Indices});
+    BufferProps.Type = Rndr::BufferType::Index;
+    m_IndexBuffer = m_Ctx->CreateBuffer(BufferProps, Rndr::ByteSpan{Indices});
     assert(m_IndexBuffer.IsValid());
 
-    rndr::ImageProperties AtlasProps;
-    AtlasProps.PixelFormat = rndr::PixelFormat::R8_UNORM;
-    AtlasProps.ImageBindFlags = rndr::ImageBindFlags::ShaderResource;
-    std::vector<uint8_t> InitTextureData(AtlasWidth * AtlasHeight *
-                                         rndr::GetPixelSize(AtlasProps.PixelFormat));
+    Rndr::ImageProperties AtlasProps;
+    AtlasProps.PixelFormat = Rndr::PixelFormat::R8_UNORM;
+    AtlasProps.ImageBindFlags = Rndr::ImageBindFlags::ShaderResource;
+    std::vector<uint8_t> InitTextureData(AtlasWidth * AtlasHeight * Rndr::GetPixelSize(AtlasProps.PixelFormat));
     memset(InitTextureData.data(), 0x00, InitTextureData.size());
     m_TextureAtlas =
-        m_Ctx->CreateImage(AtlasWidth, AtlasHeight, AtlasProps, rndr::ByteSpan(InitTextureData));
+        m_Ctx->CreateImage(AtlasWidth, AtlasHeight, AtlasProps, Rndr::ByteSpan(InitTextureData));
     assert(m_TextureAtlas.IsValid());
 
-    rndr::SamplerProperties SamplerProps;
-    SamplerProps.AddressingU = rndr::ImageAddressing::Clamp;
-    SamplerProps.AddressingV = rndr::ImageAddressing::Clamp;
-    SamplerProps.AddressingW = rndr::ImageAddressing::Clamp;
-    SamplerProps.Filter = rndr::ImageFiltering::MinMagMipLinear;
+    Rndr::SamplerProperties SamplerProps;
+    SamplerProps.AddressingU = Rndr::ImageAddressing::Clamp;
+    SamplerProps.AddressingV = Rndr::ImageAddressing::Clamp;
+    SamplerProps.AddressingW = Rndr::ImageAddressing::Clamp;
+    SamplerProps.Filter = Rndr::ImageFiltering::MinMagMipLinear;
     m_TextureAtlasSampler = m_Ctx->CreateSampler(SamplerProps);
     assert(m_TextureAtlasSampler.IsValid());
 
@@ -180,10 +179,10 @@ void Renderer::RenderText(const std::string& Text,
     }
 }
 
-bool Renderer::Present(rndr::FrameBuffer* FrameBuffer)
+bool Renderer::Present(Rndr::FrameBuffer* FrameBuffer)
 {
-    m_InstanceBuffer->Update(m_Ctx, rndr::ByteSpan{m_Instances});
-    m_ShadowBuffer->Update(m_Ctx, rndr::ByteSpan{m_Shadows});
+    m_InstanceBuffer->Update(m_Ctx, Rndr::ByteSpan{m_Instances});
+    m_ShadowBuffer->Update(m_Ctx, Rndr::ByteSpan{m_Shadows});
 
     m_Ctx->BindBuffer(m_ConstantBuffer.Get(), 0, m_Pipeline->VertexShader.Get());
     m_Ctx->BindBuffer(m_ConstantBuffer.Get(), 0, m_Pipeline->PixelShader.Get());
@@ -195,11 +194,11 @@ bool Renderer::Present(rndr::FrameBuffer* FrameBuffer)
     m_Ctx->BindFrameBuffer(FrameBuffer);
 
     m_Ctx->BindBuffer(m_ShadowBuffer.Get(), 0);
-    m_Ctx->DrawIndexedInstanced(rndr::PrimitiveTopology::TriangleList, 6,
+    m_Ctx->DrawIndexedInstanced(Rndr::PrimitiveTopology::TriangleList, 6,
                                 static_cast<uint32_t>(m_Shadows.size()));
 
     m_Ctx->BindBuffer(m_InstanceBuffer.Get(), 0);
-    m_Ctx->DrawIndexedInstanced(rndr::PrimitiveTopology::TriangleList, 6,
+    m_Ctx->DrawIndexedInstanced(Rndr::PrimitiveTopology::TriangleList, 6,
                                 static_cast<uint32_t>(m_Instances.size()));
 
     m_Instances.clear();
@@ -262,7 +261,7 @@ void Renderer::UpdateAtlas(int CodePointStart, int CodePointEnd, Font* F, int Fo
         G.TexTopRight.Y = (B.BottomLeft.Y + B.Size.Y) / AtlasSize.Y;
     }
 
-    m_TextureAtlas->Update(m_Ctx, 0, {0, 0}, AtlasSize, rndr::ByteSpan(m_Atlas));
+    m_TextureAtlas->Update(m_Ctx, 0, {0, 0}, AtlasSize, Rndr::ByteSpan(m_Atlas));
 }
 
 void Renderer::WriteToAtlas(const Bitmap& B)

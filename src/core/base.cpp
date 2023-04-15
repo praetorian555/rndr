@@ -18,12 +18,12 @@ struct DefaultLoggerData
     std::shared_ptr<spdlog::logger> logger;
 };
 
-rndr::Allocator g_allocator;
-rndr::Logger g_logger;
+Rndr::Allocator g_allocator;
+Rndr::Logger g_logger;
 bool g_is_initialized = false;
 }  // namespace
 
-bool rndr::Init(const RndrDesc& desc)
+bool Rndr::Init(const RndrDesc& desc)
 {
     if (g_is_initialized)
     {
@@ -38,8 +38,8 @@ bool rndr::Init(const RndrDesc& desc)
     {
         g_allocator.init = nullptr;
         g_allocator.destroy = nullptr;
-        g_allocator.allocate = &rndr::DefaultAllocator::Allocate;
-        g_allocator.free = &rndr::DefaultAllocator::Free;
+        g_allocator.allocate = &Rndr::DefaultAllocator::Allocate;
+        g_allocator.free = &Rndr::DefaultAllocator::Free;
         g_allocator.allocator_data = nullptr;
     }
     if (IsValid(desc.user_logger))
@@ -48,9 +48,9 @@ bool rndr::Init(const RndrDesc& desc)
     }
     else
     {
-        g_logger.init = &rndr::DefaultLogger::Init;
-        g_logger.destroy = &rndr::DefaultLogger::Destroy;
-        g_logger.log = &rndr::DefaultLogger::Log;
+        g_logger.init = &Rndr::DefaultLogger::Init;
+        g_logger.destroy = &Rndr::DefaultLogger::Destroy;
+        g_logger.log = &Rndr::DefaultLogger::Log;
         g_logger.logger_data = nullptr;
         if (!g_logger.init(nullptr, &g_logger.logger_data))
         {
@@ -68,7 +68,7 @@ bool rndr::Init(const RndrDesc& desc)
     return true;
 }
 
-bool rndr::Destroy()
+bool Rndr::Destroy()
 {
     if (!g_is_initialized)
     {
@@ -104,7 +104,7 @@ bool rndr::Destroy()
     return true;
 }
 
-rndr::OpaquePtr rndr::DefaultAllocator::Allocate(OpaquePtr allocator_data,
+Rndr::OpaquePtr Rndr::DefaultAllocator::Allocate(OpaquePtr allocator_data,
                                                  uint64_t size,
                                                  const char* tag)
 {
@@ -120,7 +120,7 @@ rndr::OpaquePtr rndr::DefaultAllocator::Allocate(OpaquePtr allocator_data,
 #endif
 }
 
-void rndr::DefaultAllocator::Free(OpaquePtr ptr, OpaquePtr allocator_data)
+void Rndr::DefaultAllocator::Free(OpaquePtr ptr, OpaquePtr allocator_data)
 {
     RNDR_UNUSED(allocator_data);
 
@@ -131,23 +131,23 @@ void rndr::DefaultAllocator::Free(OpaquePtr ptr, OpaquePtr allocator_data)
 #endif
 }
 
-bool rndr::IsValid(const rndr::Allocator& allocator)
+bool Rndr::IsValid(const Rndr::Allocator& allocator)
 {
     return allocator.allocate != nullptr && allocator.free != nullptr;
 }
 
-bool rndr::IsValid(const rndr::Logger& logger)
+bool Rndr::IsValid(const Rndr::Logger& logger)
 {
     return logger.log != nullptr;
 }
 
-const rndr::Allocator& rndr::GetAllocator()
+const Rndr::Allocator& Rndr::GetAllocator()
 {
     assert(g_is_initialized);
     return g_allocator;
 }
 
-bool rndr::SetAllocator(const rndr::Allocator& allocator)
+bool Rndr::SetAllocator(const Rndr::Allocator& allocator)
 {
     assert(g_is_initialized);
     if (IsValid(allocator))
@@ -159,13 +159,13 @@ bool rndr::SetAllocator(const rndr::Allocator& allocator)
     return true;
 }
 
-const rndr::Logger& rndr::GetLogger()
+const Rndr::Logger& Rndr::GetLogger()
 {
     assert(g_is_initialized);
     return g_logger;
 }
 
-bool rndr::SetLogger(const rndr::Logger& logger)
+bool Rndr::SetLogger(const Rndr::Logger& logger)
 {
     assert(g_is_initialized);
     if (IsValid(logger))
@@ -177,7 +177,7 @@ bool rndr::SetLogger(const rndr::Logger& logger)
     return true;
 }
 
-bool rndr::DefaultLogger::Init(OpaquePtr init_data, OpaquePtr* logger_data)
+bool Rndr::DefaultLogger::Init(OpaquePtr init_data, OpaquePtr* logger_data)
 {
     RNDR_UNUSED(init_data);
 
@@ -199,7 +199,7 @@ bool rndr::DefaultLogger::Init(OpaquePtr init_data, OpaquePtr* logger_data)
     return true;
 }
 
-bool rndr::DefaultLogger::Destroy(OpaquePtr logger_data)
+bool Rndr::DefaultLogger::Destroy(OpaquePtr logger_data)
 {
     DefaultLoggerData* data = static_cast<DefaultLoggerData*>(logger_data);
 #ifdef RNDR_SPDLOG
@@ -212,11 +212,11 @@ bool rndr::DefaultLogger::Destroy(OpaquePtr logger_data)
     return true;
 }
 
-void rndr::DefaultLogger::Log(OpaquePtr logger_data,
+void Rndr::DefaultLogger::Log(OpaquePtr logger_data,
                               const char* file,
                               int line,
                               const char* function,
-                              rndr::LogLevel log_level,
+                              Rndr::LogLevel log_level,
                               const char* message)
 {
 #ifdef RNDR_SPDLOG
@@ -225,27 +225,27 @@ void rndr::DefaultLogger::Log(OpaquePtr logger_data,
 
     switch (log_level)
     {
-        case rndr::LogLevel::Error:
+        case Rndr::LogLevel::Error:
         {
             data->logger->log(source_info, spdlog::level::level_enum::err, message);
             break;
         }
-        case rndr::LogLevel::Warning:
+        case Rndr::LogLevel::Warning:
         {
             data->logger->log(source_info, spdlog::level::level_enum::warn, message);
             break;
         }
-        case rndr::LogLevel::Debug:
+        case Rndr::LogLevel::Debug:
         {
             data->logger->log(source_info, spdlog::level::level_enum::debug, message);
             break;
         }
-        case rndr::LogLevel::Info:
+        case Rndr::LogLevel::Info:
         {
             data->logger->log(source_info, spdlog::level::level_enum::info, message);
             break;
         }
-        case rndr::LogLevel::Trace:
+        case Rndr::LogLevel::Trace:
         {
             data->logger->log(source_info, spdlog::level::level_enum::trace, message);
             break;
@@ -260,22 +260,22 @@ void rndr::DefaultLogger::Log(OpaquePtr logger_data,
 #endif  // RNDR_SPDLOG
 }
 
-rndr::OpaquePtr rndr::Allocate(uint64_t size, const char* tag)
+Rndr::OpaquePtr Rndr::Allocate(uint64_t size, const char* tag)
 {
     assert(IsValid(g_allocator));
     return g_allocator.allocate(g_allocator.allocator_data, size, tag);
 }
 
-void rndr::Free(rndr::OpaquePtr ptr)
+void Rndr::Free(Rndr::OpaquePtr ptr)
 {
     assert(IsValid(g_allocator));
     g_allocator.free(g_allocator.allocator_data, ptr);
 }
 
-void rndr::Log(const char* file,
+void Rndr::Log(const char* file,
                int line,
                const char* function,
-               rndr::LogLevel log_level,
+               Rndr::LogLevel log_level,
                const char* format,
                ...)
 {

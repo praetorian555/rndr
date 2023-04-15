@@ -2,7 +2,7 @@
 
 #include "math/projections.h"
 
-Renderer::Renderer(rndr::GraphicsContext* Ctx,
+Renderer::Renderer(Rndr::GraphicsContext* Ctx,
                    int32_t MaxVertices,
                    int32_t MaxFaces,
                    int32_t MaxInstances,
@@ -22,60 +22,60 @@ Renderer::Renderer(rndr::GraphicsContext* Ctx,
     const std::string VertexShaderPath = SCENE3D_ASSET_DIR "/scene3dvert.hlsl";
     const std::string FragmentShaderPath = SCENE3D_ASSET_DIR "/scene3dfrag.hlsl";
 
-    rndr::ByteArray VertexShaderContents = rndr::file::ReadEntireFile(VertexShaderPath);
+    Rndr::ByteArray VertexShaderContents = Rndr::file::ReadEntireFile(VertexShaderPath);
     assert(!VertexShaderContents.empty());
-    rndr::ByteArray FragmentShaderContents = rndr::file::ReadEntireFile(FragmentShaderPath);
+    Rndr::ByteArray FragmentShaderContents = Rndr::file::ReadEntireFile(FragmentShaderPath);
     assert(!FragmentShaderContents.empty());
 
-    const rndr::PipelineProperties PipelineProps{
-        .InputLayout = rndr::InputLayoutBuilder()
-                           .AddBuffer(0, rndr::DataRepetition::PerVertex, 1)
-                           .AddBuffer(1, rndr::DataRepetition::PerInstance, 1)
-                           .AppendElement(0, "POSITION", rndr::PixelFormat::R32G32B32A32_FLOAT)
-                           .AppendElement(0, "COLOR", rndr::PixelFormat::R32G32B32A32_FLOAT)
-                           .AppendElement(0, "NORMAL", rndr::PixelFormat::R32G32B32_FLOAT)
-                           .AppendElement(1, "ROWX", rndr::PixelFormat::R32G32B32A32_FLOAT)
-                           .AppendElement(1, "ROWY", rndr::PixelFormat::R32G32B32A32_FLOAT)
-                           .AppendElement(1, "ROWZ", rndr::PixelFormat::R32G32B32A32_FLOAT)
-                           .AppendElement(1, "ROWW", rndr::PixelFormat::R32G32B32A32_FLOAT)
-                           .AppendElement(1, "ROWX", rndr::PixelFormat::R32G32B32A32_FLOAT)
-                           .AppendElement(1, "ROWY", rndr::PixelFormat::R32G32B32A32_FLOAT)
-                           .AppendElement(1, "ROWZ", rndr::PixelFormat::R32G32B32A32_FLOAT)
-                           .AppendElement(1, "ROWW", rndr::PixelFormat::R32G32B32A32_FLOAT)
+    const Rndr::PipelineProperties PipelineProps{
+        .InputLayout = Rndr::InputLayoutBuilder()
+                           .AddBuffer(0, Rndr::DataRepetition::PerVertex, 1)
+                           .AddBuffer(1, Rndr::DataRepetition::PerInstance, 1)
+                           .AppendElement(0, "POSITION", Rndr::PixelFormat::R32G32B32A32_FLOAT)
+                           .AppendElement(0, "COLOR", Rndr::PixelFormat::R32G32B32A32_FLOAT)
+                           .AppendElement(0, "NORMAL", Rndr::PixelFormat::R32G32B32_FLOAT)
+                           .AppendElement(1, "ROWX", Rndr::PixelFormat::R32G32B32A32_FLOAT)
+                           .AppendElement(1, "ROWY", Rndr::PixelFormat::R32G32B32A32_FLOAT)
+                           .AppendElement(1, "ROWZ", Rndr::PixelFormat::R32G32B32A32_FLOAT)
+                           .AppendElement(1, "ROWW", Rndr::PixelFormat::R32G32B32A32_FLOAT)
+                           .AppendElement(1, "ROWX", Rndr::PixelFormat::R32G32B32A32_FLOAT)
+                           .AppendElement(1, "ROWY", Rndr::PixelFormat::R32G32B32A32_FLOAT)
+                           .AppendElement(1, "ROWZ", Rndr::PixelFormat::R32G32B32A32_FLOAT)
+                           .AppendElement(1, "ROWW", Rndr::PixelFormat::R32G32B32A32_FLOAT)
                            .Build(),
-        .VertexShader = {.Type = rndr::ShaderType::Vertex, .EntryPoint = "Main"},
-        .VertexShaderContents = rndr::ByteSpan(VertexShaderContents),
-        .PixelShader = {.Type = rndr::ShaderType::Fragment, .EntryPoint = "Main"},
-        .PixelShaderContents = rndr::ByteSpan(FragmentShaderContents),
-        .Rasterizer = {.FrontFaceWindingOrder = rndr::WindingOrder::CCW,
-                       .CullFace = rndr::Face::None},
+        .VertexShader = {.Type = Rndr::ShaderType::Vertex, .EntryPoint = "Main"},
+        .VertexShaderContents = Rndr::ByteSpan(VertexShaderContents),
+        .PixelShader = {.Type = Rndr::ShaderType::Fragment, .EntryPoint = "Main"},
+        .PixelShaderContents = Rndr::ByteSpan(FragmentShaderContents),
+        .Rasterizer = {.FrontFaceWindingOrder = Rndr::WindingOrder::CCW,
+                       .CullFace = Rndr::Face::None},
         .DepthStencil = {.DepthEnable = true, .StencilEnable = false},
     };
     m_Pipeline = m_Ctx->CreatePipeline(PipelineProps);
     assert(m_Pipeline.IsValid());
 
-    rndr::BufferProperties BufferProps;
+    Rndr::BufferProperties BufferProps;
     BufferProps.Size = m_MaxVertices * sizeof(VertexData);
     BufferProps.Stride = sizeof(VertexData);
-    BufferProps.Type = rndr::BufferType::Vertex;
-    m_VertexBuffer = m_Ctx->CreateBuffer(BufferProps, rndr::ByteSpan{});
+    BufferProps.Type = Rndr::BufferType::Vertex;
+    m_VertexBuffer = m_Ctx->CreateBuffer(BufferProps, Rndr::ByteSpan{});
 
     BufferProps.Size = m_MaxInstances * sizeof(InstanceData);
     BufferProps.Stride = sizeof(InstanceData);
-    BufferProps.Type = rndr::BufferType::Vertex;
-    m_InstanceBuffer = m_Ctx->CreateBuffer(BufferProps, rndr::ByteSpan{});
+    BufferProps.Type = Rndr::BufferType::Vertex;
+    m_InstanceBuffer = m_Ctx->CreateBuffer(BufferProps, Rndr::ByteSpan{});
     assert(m_InstanceBuffer.IsValid());
 
     BufferProps.Size = sizeof(ConstantData);
     BufferProps.Stride = sizeof(ConstantData);
-    BufferProps.Type = rndr::BufferType::Constant;
-    m_ConstantBuffer = m_Ctx->CreateBuffer(BufferProps, rndr::ByteSpan{});
+    BufferProps.Type = Rndr::BufferType::Constant;
+    m_ConstantBuffer = m_Ctx->CreateBuffer(BufferProps, Rndr::ByteSpan{});
     assert(m_ConstantBuffer.IsValid());
 
     BufferProps.Size = m_MaxFaces * 3 * sizeof(int32_t);
     BufferProps.Stride = sizeof(int32_t);
-    BufferProps.Type = rndr::BufferType::Index;
-    m_IndexBuffer = m_Ctx->CreateBuffer(BufferProps, rndr::ByteSpan{});
+    BufferProps.Type = Rndr::BufferType::Index;
+    m_IndexBuffer = m_Ctx->CreateBuffer(BufferProps, Rndr::ByteSpan{});
     assert(m_IndexBuffer.IsValid());
 }
 
@@ -89,10 +89,10 @@ void Renderer::SetScreenSize(int Width, int Height)
     ConstData.WorldToNDC = math::Transpose(m_Camera->FromWorldToNDC()).GetMatrix();
     ConstData.CameraPositionWorld = math::Point3{0, 0, 0};
     ConstData.Shininess = m_Shininess;
-    m_ConstantBuffer->Update(m_Ctx, rndr::ByteSpan{&ConstData});
+    m_ConstantBuffer->Update(m_Ctx, Rndr::ByteSpan{&ConstData});
 }
 
-void Renderer::SetRenderTarget(rndr::FrameBuffer& Target)
+void Renderer::SetRenderTarget(Rndr::FrameBuffer& Target)
 {
     m_Target = &Target;
 }
@@ -105,10 +105,10 @@ void Renderer::SetShininess(float Shininess)
     ConstData.WorldToNDC = math::Transpose(m_Camera->FromWorldToNDC()).GetMatrix();
     ConstData.CameraPositionWorld = math::Point3{0, 0, 0};
     ConstData.Shininess = m_Shininess;
-    m_ConstantBuffer->Update(m_Ctx, rndr::ByteSpan{&ConstData});
+    m_ConstantBuffer->Update(m_Ctx, Rndr::ByteSpan{&ConstData});
 }
 
-void Renderer::SetProjectionCamera(rndr::ProjectionCamera* Camera)
+void Renderer::SetProjectionCamera(Rndr::ProjectionCamera* Camera)
 {
     m_Camera = Camera;
 
@@ -116,27 +116,27 @@ void Renderer::SetProjectionCamera(rndr::ProjectionCamera* Camera)
     ConstData.WorldToNDC = math::Transpose(m_Camera->FromWorldToNDC()).GetMatrix();
     ConstData.CameraPositionWorld = math::Point3{0, 0, 0};
     ConstData.Shininess = m_Shininess;
-    m_ConstantBuffer->Update(m_Ctx, rndr::ByteSpan{&ConstData});
+    m_ConstantBuffer->Update(m_Ctx, Rndr::ByteSpan{&ConstData});
 }
 
-void Renderer::RenderModel(rndr::Model& Model, const rndr::Span<math::Transform>& Instances)
+void Renderer::RenderModel(Rndr::Model& Model, const Rndr::Span<math::Transform>& Instances)
 {
     assert(Model.Positions.size() <= m_MaxVertices);
     assert(Model.Indices.size() <= m_MaxFaces * 3);
     assert(Instances.Size <= m_MaxInstances);
 
-    rndr::Array<VertexData> Vertices(Model.Positions.size());
+    Rndr::Array<VertexData> Vertices(Model.Positions.size());
     for (int VertexIndex = 0; VertexIndex < Model.Positions.size(); VertexIndex++)
     {
         Vertices[VertexIndex].Position = math::Point4{Model.Positions[VertexIndex]};
-        Vertices[VertexIndex].Color = rndr::Colors::kRed;
+        Vertices[VertexIndex].Color = Rndr::Colors::kRed;
         Vertices[VertexIndex].Normal = Model.Normals[VertexIndex];
     }
-    m_VertexBuffer->Update(m_Ctx, rndr::ByteSpan{Vertices});
+    m_VertexBuffer->Update(m_Ctx, Rndr::ByteSpan{Vertices});
 
-    m_IndexBuffer->Update(m_Ctx, rndr::ByteSpan{Model.Indices});
+    m_IndexBuffer->Update(m_Ctx, Rndr::ByteSpan{Model.Indices});
 
-    rndr::Array<InstanceData> InstancesTransposed(Instances.Size);
+    Rndr::Array<InstanceData> InstancesTransposed(Instances.Size);
     for (int InstanceIndex = 0; InstanceIndex < Instances.Size; InstanceIndex++)
     {
         InstancesTransposed[InstanceIndex].ObjectToWorld =
@@ -145,7 +145,7 @@ void Renderer::RenderModel(rndr::Model& Model, const rndr::Span<math::Transform>
         // other
         InstancesTransposed[InstanceIndex].NormalTransform = Instances[InstanceIndex].GetInverse();
     }
-    m_InstanceBuffer->Update(m_Ctx, rndr::ByteSpan{InstancesTransposed});
+    m_InstanceBuffer->Update(m_Ctx, Rndr::ByteSpan{InstancesTransposed});
 
     m_Ctx->BindBuffer(m_ConstantBuffer.Get(), 0, m_Pipeline->VertexShader.Get());
     m_Ctx->BindBuffer(m_ConstantBuffer.Get(), 0, m_Pipeline->PixelShader.Get());
@@ -157,5 +157,5 @@ void Renderer::RenderModel(rndr::Model& Model, const rndr::Span<math::Transform>
 
     const int32_t IndexCount = static_cast<int32_t>(Model.Indices.size());
     const int32_t InstanceCount = static_cast<int32_t>(Instances.Size);
-    m_Ctx->DrawIndexedInstanced(rndr::PrimitiveTopology::TriangleList, IndexCount, InstanceCount);
+    m_Ctx->DrawIndexedInstanced(Rndr::PrimitiveTopology::TriangleList, IndexCount, InstanceCount);
 }

@@ -7,7 +7,7 @@ bool Font::Init(const std::string& InName, const std::string& AssetPath)
     Name = InName;
     Id = GenerateId();
 
-    FontFileContents = rndr::file::ReadEntireFile(AssetPath);
+    FontFileContents = Rndr::file::ReadEntireFile(AssetPath);
     if (FontFileContents.empty())
     {
         return false;

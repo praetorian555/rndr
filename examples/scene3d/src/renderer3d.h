@@ -32,7 +32,7 @@ public:
     };
 
 public:
-    Renderer(rndr::GraphicsContext* Ctx,
+    Renderer(Rndr::GraphicsContext* Ctx,
              int32_t MaxVertices,
              int32_t MaxFaces,
              int32_t MaxInstances,
@@ -41,21 +41,21 @@ public:
     ~Renderer() = default;
 
     void SetScreenSize(int Width, int Height);
-    void SetRenderTarget(rndr::FrameBuffer& Target);
+    void SetRenderTarget(Rndr::FrameBuffer& Target);
     void SetShininess(float Shininess);
-    void SetProjectionCamera(rndr::ProjectionCamera* Camera);
+    void SetProjectionCamera(Rndr::ProjectionCamera* Camera);
 
-    void RenderModel(rndr::Model& Model, const rndr::Span<math::Transform>& Instances);
+    void RenderModel(Rndr::Model& Model, const Rndr::Span<math::Transform>& Instances);
 
 private:
-    rndr::GraphicsContext* m_Ctx;
+    Rndr::GraphicsContext* m_Ctx;
 
-    rndr::ScopePtr<rndr::Pipeline> m_Pipeline;
-    rndr::ScopePtr<rndr::Buffer> m_VertexBuffer;
-    rndr::ScopePtr<rndr::Buffer> m_InstanceBuffer;
-    rndr::ScopePtr<rndr::Buffer> m_ConstantBuffer;
-    rndr::ScopePtr<rndr::Buffer> m_IndexBuffer;
-    rndr::FrameBuffer* m_Target;
+    Rndr::ScopePtr<Rndr::Pipeline> m_Pipeline;
+    Rndr::ScopePtr<Rndr::Buffer> m_VertexBuffer;
+    Rndr::ScopePtr<Rndr::Buffer> m_InstanceBuffer;
+    Rndr::ScopePtr<Rndr::Buffer> m_ConstantBuffer;
+    Rndr::ScopePtr<Rndr::Buffer> m_IndexBuffer;
+    Rndr::FrameBuffer* m_Target;
 
     const int m_MaxVertices;
     const int m_MaxFaces;
@@ -63,6 +63,6 @@ private:
 
     int m_ScreenWidth;
     int m_ScreenHeight;
-    rndr::ProjectionCamera* m_Camera;
+    Rndr::ProjectionCamera* m_Camera;
     float m_Shininess = 8.0f;
 };

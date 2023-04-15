@@ -4,7 +4,7 @@
 // TODO(Marko): Remove this once we have custom containers
 #include <map>
 
-namespace rndr
+namespace Rndr
 {
 
 using DelegateHandle = int;
@@ -91,4 +91,4 @@ private:
     DelegateHandle m_handle_generator = 0;
 };
 
-}  // namespace rndr
+}  // namespace Rndr
