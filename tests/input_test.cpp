@@ -48,29 +48,29 @@ TEST_CASE("Input binding", "[input]")
     {
         rndr::InputBinding binding;
         binding.primitive = rndr::InputPrimitive::Keyboard_A;
-        binding.trigger = rndr::InputTrigger::ButtonDown;
+        binding.trigger = rndr::InputTrigger::ButtonPressed;
         binding.modifier = 1.0f;
         REQUIRE(binding.primitive == rndr::InputPrimitive::Keyboard_A);
-        REQUIRE(binding.trigger == rndr::InputTrigger::ButtonDown);
+        REQUIRE(binding.trigger == rndr::InputTrigger::ButtonPressed);
         REQUIRE(binding.modifier == 1.0f);
     }
     SECTION("Compare bindings")
     {
         rndr::InputBinding binding1;
         binding1.primitive = rndr::InputPrimitive::Keyboard_A;
-        binding1.trigger = rndr::InputTrigger::ButtonDown;
+        binding1.trigger = rndr::InputTrigger::ButtonPressed;
         binding1.modifier = 1.0f;
         rndr::InputBinding binding2;
         binding2.primitive = rndr::InputPrimitive::Mouse_RightButton;
-        binding2.trigger = rndr::InputTrigger::ButtonDown;
+        binding2.trigger = rndr::InputTrigger::ButtonPressed;
         binding2.modifier = 0.5f;
         rndr::InputBinding binding3;
         binding3.primitive = rndr::InputPrimitive::Keyboard_A;
-        binding3.trigger = rndr::InputTrigger::ButtonUp;
+        binding3.trigger = rndr::InputTrigger::ButtonReleased;
         binding3.modifier = 1.0f;
         rndr::InputBinding binding4;
         binding4.primitive = rndr::InputPrimitive::Keyboard_A;
-        binding4.trigger = rndr::InputTrigger::ButtonDown;
+        binding4.trigger = rndr::InputTrigger::ButtonPressed;
         binding4.modifier = 1.0f;
         REQUIRE(binding1 != binding3);
         REQUIRE(binding1 != binding2);
@@ -93,7 +93,7 @@ TEST_CASE("Input context", "[input]")
         REQUIRE(context.GetName() == "TestContext");
         const rndr::InputAction action("TestAction");
         rndr::InputBinding bindings[] = {{.primitive = rndr::InputPrimitive::Keyboard_A,
-                                          .trigger = rndr::InputTrigger::ButtonDown,
+                                          .trigger = rndr::InputTrigger::ButtonPressed,
                                           .modifier = 1.0f}};
         const rndr::InputCallback callback =
             [](rndr::InputPrimitive primitive, rndr::InputTrigger trigger, rndr::real value)
@@ -109,7 +109,7 @@ TEST_CASE("Input context", "[input]")
         SECTION("Add additional binding")
         {
             rndr::InputBinding binding{.primitive = rndr::InputPrimitive::Keyboard_D,
-                                       .trigger = rndr::InputTrigger::ButtonDown,
+                                       .trigger = rndr::InputTrigger::ButtonPressed,
                                        .modifier = 1.0f};
             REQUIRE(context.AddBindingToAction(action, binding));
             rndr::Span<rndr::InputBinding> reg_bindings = context.GetActionBindings(action);
@@ -167,7 +167,7 @@ TEST_CASE("Input system", "[input]")
     {
         REQUIRE(rndr::InputSystem::SubmitButtonEvent(nullptr,
                                                      rndr::InputPrimitive::Keyboard_A,
-                                                     rndr::InputTrigger::ButtonDown));
+                                                     rndr::InputTrigger::ButtonPressed));
         REQUIRE(rndr::InputSystem::SubmitMousePositionEvent(nullptr, {100, 100}, {1024, 768}));
         REQUIRE(rndr::InputSystem::SubmitMouseWheelEvent(nullptr, 1));
         REQUIRE(
@@ -184,7 +184,7 @@ TEST_CASE("Input system", "[input]")
         const rndr::InputAction action1("TestAction1");
         const rndr::InputAction action2("TestAction2");
         rndr::InputBinding bindings[] = {{.primitive = rndr::InputPrimitive::Keyboard_A,
-                                          .trigger = rndr::InputTrigger::ButtonDown,
+                                          .trigger = rndr::InputTrigger::ButtonPressed,
                                           .modifier = 2.0f}};
         rndr::real value1 = 0;
         rndr::real value2 = 0;
@@ -209,25 +209,25 @@ TEST_CASE("Input system", "[input]")
         REQUIRE(rndr::InputSystem::PushContext(context));
         REQUIRE(rndr::InputSystem::SubmitButtonEvent(nullptr,
                                                      rndr::InputPrimitive::Keyboard_A,
-                                                     rndr::InputTrigger::ButtonDown));
+                                                     rndr::InputTrigger::ButtonPressed));
         REQUIRE(rndr::InputSystem::ProcessEvents(1));
         REQUIRE(value1 == MATH_REALC(2.0));
         REQUIRE(value2 == MATH_REALC(-2.0));
         REQUIRE(rndr::InputSystem::SubmitButtonEvent(nullptr,
                                                      rndr::InputPrimitive::Keyboard_A,
-                                                     rndr::InputTrigger::ButtonUp));
+                                                     rndr::InputTrigger::ButtonReleased));
         REQUIRE(rndr::InputSystem::ProcessEvents(1));
         REQUIRE(value1 == MATH_REALC(2.0));
         REQUIRE(value2 == MATH_REALC(-2.0));
         REQUIRE(rndr::InputSystem::SubmitButtonEvent(nullptr,
                                                      rndr::InputPrimitive::Keyboard_D,
-                                                     rndr::InputTrigger::ButtonDown));
+                                                     rndr::InputTrigger::ButtonPressed));
         REQUIRE(rndr::InputSystem::ProcessEvents(1));
         REQUIRE(value1 == MATH_REALC(2.0));
         REQUIRE(value2 == MATH_REALC(-2.0));
         REQUIRE(rndr::InputSystem::SubmitButtonEvent(nullptr,
                                                      rndr::InputPrimitive::Keyboard_A,
-                                                     rndr::InputTrigger::ButtonDown));
+                                                     rndr::InputTrigger::ButtonPressed));
         REQUIRE(rndr::InputSystem::ProcessEvents(1));
         REQUIRE(value1 == MATH_REALC(4.0));
         REQUIRE(value2 == MATH_REALC(-4.0));
@@ -350,7 +350,7 @@ TEST_CASE("Input system", "[input]")
         rndr::InputContext context("TestContext");
         const rndr::InputAction action("TestAction");
         rndr::InputBinding bindings[] = {{.primitive = rndr::InputPrimitive::Mouse_LeftButton,
-                                          .trigger = rndr::InputTrigger::ButtonDown}};
+                                          .trigger = rndr::InputTrigger::ButtonPressed}};
         rndr::real value1 = 0;
         const rndr::InputCallback callback =
             [&value1](rndr::InputPrimitive primitive, rndr::InputTrigger trigger, rndr::real val)
@@ -367,17 +367,17 @@ TEST_CASE("Input system", "[input]")
         REQUIRE(rndr::InputSystem::PushContext(context));
         REQUIRE(rndr::InputSystem::SubmitButtonEvent(handle,
                                                      rndr::InputPrimitive::Mouse_LeftButton,
-                                                     rndr::InputTrigger::ButtonDown));
+                                                     rndr::InputTrigger::ButtonPressed));
         REQUIRE(rndr::InputSystem::ProcessEvents(1));
         REQUIRE(value1 == MATH_REALC(1.0));
         REQUIRE(rndr::InputSystem::SubmitButtonEvent(handle,
                                                      rndr::InputPrimitive::Mouse_LeftButton,
-                                                     rndr::InputTrigger::ButtonDown));
+                                                     rndr::InputTrigger::ButtonPressed));
         REQUIRE(rndr::InputSystem::ProcessEvents(1));
         REQUIRE(value1 == MATH_REALC(2.0));
         REQUIRE(rndr::InputSystem::SubmitButtonEvent(bad_handle,
                                                      rndr::InputPrimitive::Mouse_LeftButton,
-                                                     rndr::InputTrigger::ButtonDown));
+                                                     rndr::InputTrigger::ButtonPressed));
         REQUIRE(rndr::InputSystem::ProcessEvents(1));
         REQUIRE(value1 == MATH_REALC(2.0));
     }
@@ -431,7 +431,7 @@ TEST_CASE("Input system", "[input]")
     SECTION("Is binding valid")
     {
         rndr::InputBinding binding = {.primitive = rndr::InputPrimitive::Mouse_LeftButton,
-                                      .trigger = rndr::InputTrigger::ButtonDown};
+                                      .trigger = rndr::InputTrigger::ButtonPressed};
         REQUIRE(rndr::InputSystem::IsBindingValid(binding));
         binding.primitive = rndr::InputPrimitive::Mouse_AxisX;
         REQUIRE(!rndr::InputSystem::IsBindingValid(binding));
@@ -451,7 +451,7 @@ TEST_CASE("Input system", "[input]")
         REQUIRE(rndr::InputSystem::IsBindingValid(binding));
         binding.trigger = rndr::InputTrigger::AxisChangedAbsolute;
         REQUIRE(!rndr::InputSystem::IsBindingValid(binding));
-        binding.trigger = rndr::InputTrigger::ButtonDown;
+        binding.trigger = rndr::InputTrigger::ButtonPressed;
         REQUIRE(!rndr::InputSystem::IsBindingValid(binding));
 
         binding.primitive = rndr::InputPrimitive::Mouse_AxisX;
@@ -459,11 +459,11 @@ TEST_CASE("Input system", "[input]")
         REQUIRE(rndr::InputSystem::IsBindingValid(binding));
         binding.trigger = rndr::InputTrigger::AxisChangedAbsolute;
         REQUIRE(rndr::InputSystem::IsBindingValid(binding));
-        binding.trigger = rndr::InputTrigger::ButtonDown;
+        binding.trigger = rndr::InputTrigger::ButtonPressed;
         REQUIRE(!rndr::InputSystem::IsBindingValid(binding));
-        binding.trigger = rndr::InputTrigger::ButtonUp;
+        binding.trigger = rndr::InputTrigger::ButtonReleased;
         REQUIRE(!rndr::InputSystem::IsBindingValid(binding));
-        binding.trigger = rndr::InputTrigger::DoubleClick;
+        binding.trigger = rndr::InputTrigger::ButtonDoubleClick;
         REQUIRE(!rndr::InputSystem::IsBindingValid(binding));
 
         binding.primitive = rndr::InputPrimitive::Mouse_AxisY;
@@ -471,11 +471,11 @@ TEST_CASE("Input system", "[input]")
         REQUIRE(rndr::InputSystem::IsBindingValid(binding));
         binding.trigger = rndr::InputTrigger::AxisChangedAbsolute;
         REQUIRE(rndr::InputSystem::IsBindingValid(binding));
-        binding.trigger = rndr::InputTrigger::ButtonDown;
+        binding.trigger = rndr::InputTrigger::ButtonPressed;
         REQUIRE(!rndr::InputSystem::IsBindingValid(binding));
-        binding.trigger = rndr::InputTrigger::ButtonUp;
+        binding.trigger = rndr::InputTrigger::ButtonReleased;
         REQUIRE(!rndr::InputSystem::IsBindingValid(binding));
-        binding.trigger = rndr::InputTrigger::DoubleClick;
+        binding.trigger = rndr::InputTrigger::ButtonDoubleClick;
         REQUIRE(!rndr::InputSystem::IsBindingValid(binding));
     }
 

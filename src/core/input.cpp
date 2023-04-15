@@ -542,8 +542,8 @@ bool rndr::InputSystem::IsBindingValid(const rndr::InputBinding& binding)
     using enum rndr::InputTrigger;
     if (IsButton(binding.primitive))
     {
-        return binding.trigger == ButtonDown || binding.trigger == ButtonUp
-               || binding.trigger == DoubleClick;
+        return binding.trigger == ButtonPressed || binding.trigger == ButtonReleased
+               || binding.trigger == ButtonDoubleClick;
     }
     if (IsMouseWheelAxis(binding.primitive))
     {

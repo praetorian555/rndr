@@ -569,23 +569,23 @@ rndr::InputTrigger GetTrigger(UINT msg_code)
         case WM_RBUTTONDOWN:
             [[fallthrough]];
         case WM_MBUTTONDOWN:
-            return rndr::InputTrigger::ButtonDown;
+            return rndr::InputTrigger::ButtonPressed;
         case WM_LBUTTONUP:
             [[fallthrough]];
         case WM_RBUTTONUP:
             [[fallthrough]];
         case WM_MBUTTONUP:
-            return rndr::InputTrigger::ButtonUp;
+            return rndr::InputTrigger::ButtonReleased;
         case WM_LBUTTONDBLCLK:
             [[fallthrough]];
         case WM_RBUTTONDBLCLK:
             [[fallthrough]];
         case WM_MBUTTONDBLCLK:
-            return rndr::InputTrigger::DoubleClick;
+            return rndr::InputTrigger::ButtonDoubleClick;
         default:
             assert(false);
     }
-    return rndr::InputTrigger::ButtonDown;
+    return rndr::InputTrigger::ButtonPressed;
 }
 }  // namespace
 
@@ -775,8 +775,8 @@ LRESULT CALLBACK WindowProc(HWND window_handle, UINT msg_code, WPARAM param_w, L
             }
             const rndr::InputPrimitive primitive = iter->second;
             const rndr::InputTrigger trigger = msg_code == WM_KEYDOWN
-                                                   ? rndr::InputTrigger::ButtonDown
-                                                   : rndr::InputTrigger::ButtonUp;
+                                                   ? rndr::InputTrigger::ButtonPressed
+                                                   : rndr::InputTrigger::ButtonReleased;
             rndr::InputSystem::SubmitButtonEvent(window->m_handle, primitive, trigger);
             break;
         }

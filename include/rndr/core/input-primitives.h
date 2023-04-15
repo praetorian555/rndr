@@ -85,9 +85,9 @@ enum class InputPrimitive
 
 enum class InputTrigger
 {
-    ButtonDown,
-    ButtonUp,
-    DoubleClick,
+    ButtonPressed,
+    ButtonReleased,
+    ButtonDoubleClick,
     AxisChangedRelative,
     AxisChangedAbsolute
 };
