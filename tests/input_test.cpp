@@ -372,6 +372,53 @@ TEST_CASE("Input system", "[input]")
         REQUIRE(rndr::InputSystem::ProcessEvents(1));
         REQUIRE(value1 == MATH_REALC(2.0));
     }
+    SECTION("Check is primitive a button")
+    {
+        REQUIRE(rndr::InputSystem::IsButton(rndr::InputPrimitive::Keyboard_A));
+        REQUIRE(rndr::InputSystem::IsButton(rndr::InputPrimitive::Keyboard_B));
+        REQUIRE(rndr::InputSystem::IsButton(rndr::InputPrimitive::Keyboard_Esc));
+        REQUIRE(rndr::InputSystem::IsButton(rndr::InputPrimitive::Mouse_LeftButton));
+        REQUIRE(rndr::InputSystem::IsButton(rndr::InputPrimitive::Mouse_MiddleButton));
+        REQUIRE(rndr::InputSystem::IsButton(rndr::InputPrimitive::Mouse_RightButton));
+        REQUIRE(!rndr::InputSystem::IsButton(rndr::InputPrimitive::Mouse_AxisX));
+        REQUIRE(rndr::InputSystem::IsKeyboardButton(rndr::InputPrimitive::Keyboard_A));
+        REQUIRE(rndr::InputSystem::IsKeyboardButton(rndr::InputPrimitive::Keyboard_B));
+        REQUIRE(rndr::InputSystem::IsKeyboardButton(rndr::InputPrimitive::Keyboard_Esc));
+        REQUIRE(!rndr::InputSystem::IsKeyboardButton(rndr::InputPrimitive::Mouse_LeftButton));
+        REQUIRE(!rndr::InputSystem::IsKeyboardButton(rndr::InputPrimitive::Mouse_MiddleButton));
+        REQUIRE(!rndr::InputSystem::IsKeyboardButton(rndr::InputPrimitive::Mouse_RightButton));
+        REQUIRE(!rndr::InputSystem::IsKeyboardButton(rndr::InputPrimitive::Mouse_AxisX));
+        REQUIRE(rndr::InputSystem::IsMouseButton(rndr::InputPrimitive::Mouse_LeftButton));
+        REQUIRE(rndr::InputSystem::IsMouseButton(rndr::InputPrimitive::Mouse_MiddleButton));
+        REQUIRE(rndr::InputSystem::IsMouseButton(rndr::InputPrimitive::Mouse_RightButton));
+        REQUIRE(!rndr::InputSystem::IsMouseButton(rndr::InputPrimitive::Keyboard_A));
+        REQUIRE(!rndr::InputSystem::IsMouseButton(rndr::InputPrimitive::Keyboard_B));
+        REQUIRE(!rndr::InputSystem::IsMouseButton(rndr::InputPrimitive::Keyboard_Esc));
+    }
+    SECTION("Is primitive axis")
+    {
+        REQUIRE(rndr::InputSystem::IsAxis(rndr::InputPrimitive::Mouse_AxisX));
+        REQUIRE(rndr::InputSystem::IsAxis(rndr::InputPrimitive::Mouse_AxisY));
+        REQUIRE(rndr::InputSystem::IsAxis(rndr::InputPrimitive::Mouse_AxisWheel));
+        REQUIRE(!rndr::InputSystem::IsAxis(rndr::InputPrimitive::Keyboard_A));
+        REQUIRE(!rndr::InputSystem::IsAxis(rndr::InputPrimitive::Keyboard_B));
+        REQUIRE(!rndr::InputSystem::IsAxis(rndr::InputPrimitive::Keyboard_Esc));
+        REQUIRE(!rndr::InputSystem::IsAxis(rndr::InputPrimitive::Mouse_LeftButton));
+        REQUIRE(!rndr::InputSystem::IsAxis(rndr::InputPrimitive::Mouse_MiddleButton));
+        REQUIRE(!rndr::InputSystem::IsAxis(rndr::InputPrimitive::Mouse_RightButton));
+    }
+    SECTION("Is primitive mouse wheel axis")
+    {
+        REQUIRE(rndr::InputSystem::IsMouseWheelAxis(rndr::InputPrimitive::Mouse_AxisWheel));
+        REQUIRE(!rndr::InputSystem::IsMouseWheelAxis(rndr::InputPrimitive::Mouse_AxisX));
+        REQUIRE(!rndr::InputSystem::IsMouseWheelAxis(rndr::InputPrimitive::Mouse_AxisY));
+        REQUIRE(!rndr::InputSystem::IsMouseWheelAxis(rndr::InputPrimitive::Keyboard_A));
+        REQUIRE(!rndr::InputSystem::IsMouseWheelAxis(rndr::InputPrimitive::Keyboard_B));
+        REQUIRE(!rndr::InputSystem::IsMouseWheelAxis(rndr::InputPrimitive::Keyboard_Esc));
+        REQUIRE(!rndr::InputSystem::IsMouseWheelAxis(rndr::InputPrimitive::Mouse_LeftButton));
+        REQUIRE(!rndr::InputSystem::IsMouseWheelAxis(rndr::InputPrimitive::Mouse_MiddleButton));
+        REQUIRE(!rndr::InputSystem::IsMouseWheelAxis(rndr::InputPrimitive::Mouse_RightButton));
+    }
 
     REQUIRE(rndr::Destroy());
 }
