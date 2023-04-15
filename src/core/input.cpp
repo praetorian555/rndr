@@ -515,10 +515,11 @@ bool rndr::InputSystem::IsKeyboardButton(InputPrimitive primitive)
 
 bool rndr::InputSystem::IsAxis(InputPrimitive primitive)
 {
-    return primitive == InputPrimitive::Mouse_AxisX || primitive == InputPrimitive::Mouse_AxisY;
+    return primitive == InputPrimitive::Mouse_AxisX || primitive == InputPrimitive::Mouse_AxisY
+           || IsMouseWheelAxis(primitive);
 }
 
-bool rndr::InputSystem::IsMouseWheel(rndr::InputPrimitive primitive)
+bool rndr::InputSystem::IsMouseWheelAxis(rndr::InputPrimitive primitive)
 {
     return primitive == InputPrimitive::Mouse_AxisWheel;
 }
