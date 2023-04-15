@@ -5,8 +5,8 @@
 #include "math/vector3.h"
 
 #include "rndr/core/base.h"
-#include "rndr/core/projectioncamera.h"
 #include "rndr/core/input.h"
+#include "rndr/core/projection-camera.h"
 
 namespace rndr
 {

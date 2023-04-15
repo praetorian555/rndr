@@ -4,7 +4,7 @@
 
 #include "math/math.h"
 
-#include "rndr/core/projectioncamera.h"
+#include "rndr/core/projection-camera.h"
 
 TEST_CASE("Perspective", "ProjectionCamera")
 {

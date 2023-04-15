@@ -17,12 +17,14 @@ set(PUBLIC_SOURCE_LIST
     "${PROJECT_SOURCE_DIR}/include/rndr/core/string.h"
     "${PROJECT_SOURCE_DIR}/include/rndr/core/hash-map.h"
     "${PROJECT_SOURCE_DIR}/include/rndr/core/ref.h"
-    "${PROJECT_SOURCE_DIR}/include/rndr/core/scope-ptr.h")
+    "${PROJECT_SOURCE_DIR}/include/rndr/core/scope-ptr.h"
+    "${PROJECT_SOURCE_DIR}/include/rndr/core/projection-camera.h")
 set(PRIVATE_SOURCE_LIST
     "${PROJECT_SOURCE_DIR}/src/core/base.cpp"
     "${PROJECT_SOURCE_DIR}/src/core/time.cpp"
     "${PROJECT_SOURCE_DIR}/src/core/window.cpp"
-    "${PROJECT_SOURCE_DIR}/src/core/input.cpp")
+    "${PROJECT_SOURCE_DIR}/src/core/input.cpp"
+    "${PROJECT_SOURCE_DIR}/src/core/projection-camera.cpp")
 
 # Make an automatic library - will be static or dynamic based on user setting
 add_library(rndr ${PRIVATE_SOURCE_LIST} ${PUBLIC_SOURCE_LIST})

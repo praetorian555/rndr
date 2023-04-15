@@ -4,7 +4,7 @@
 
 #include "rndr/core/input.h"
 #include "rndr/core/log.h"
-#include "rndr/core/projectioncamera.h"
+#include "rndr/core/projection-camera.h"
 
 rndr::FlyCamera::FlyCamera(InputContext* InputContext,
                            int ScreenWidth,
