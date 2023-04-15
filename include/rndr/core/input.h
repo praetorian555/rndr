@@ -278,6 +278,14 @@ public:
      */
     static bool IsMouseWheelAxis(InputPrimitive primitive);
 
+    /**
+     * Helper function to check if the given binding has a valid combination of primitives and
+     * triggers.
+     * @param binding Input binding to check.
+     * @return Returns true if the binding is valid.
+     */
+    static bool IsBindingValid(const InputBinding& binding);
+
 private:
     static ScopePtr<struct InputSystemData> g_system_data;
 };

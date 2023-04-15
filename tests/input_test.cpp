@@ -124,6 +124,16 @@ TEST_CASE("Input context", "[input]")
                 REQUIRE(reg_bindings[0] == binding);
             }
         }
+        SECTION("Add invalid binding")
+        {
+            rndr::InputBinding binding{.primitive = rndr::InputPrimitive::Keyboard_D,
+                                       .trigger = rndr::InputTrigger::AxisChangedRelative,
+                                       .modifier = 1.0f};
+            REQUIRE(!context.AddBindingToAction(action, binding));
+            rndr::Span<rndr::InputBinding> reg_bindings = context.GetActionBindings(action);
+            REQUIRE(reg_bindings.size() == 1);
+            REQUIRE(reg_bindings[0] == bindings[0]);
+        }
     }
     REQUIRE(rndr::Destroy());
 }
@@ -306,7 +316,6 @@ TEST_CASE("Input system", "[input]")
         REQUIRE(value1 == MATH_REALC(400.0));
         REQUIRE(value2 == MATH_REALC(800.0));
     }
-
     SECTION("Process mouse wheel event")
     {
         rndr::InputContext context("TestContext");
@@ -418,6 +427,56 @@ TEST_CASE("Input system", "[input]")
         REQUIRE(!rndr::InputSystem::IsMouseWheelAxis(rndr::InputPrimitive::Mouse_LeftButton));
         REQUIRE(!rndr::InputSystem::IsMouseWheelAxis(rndr::InputPrimitive::Mouse_MiddleButton));
         REQUIRE(!rndr::InputSystem::IsMouseWheelAxis(rndr::InputPrimitive::Mouse_RightButton));
+    }
+    SECTION("Is binding valid")
+    {
+        rndr::InputBinding binding = {.primitive = rndr::InputPrimitive::Mouse_LeftButton,
+                                      .trigger = rndr::InputTrigger::ButtonDown};
+        REQUIRE(rndr::InputSystem::IsBindingValid(binding));
+        binding.primitive = rndr::InputPrimitive::Mouse_AxisX;
+        REQUIRE(!rndr::InputSystem::IsBindingValid(binding));
+        binding.primitive = rndr::InputPrimitive::Mouse_AxisY;
+        REQUIRE(!rndr::InputSystem::IsBindingValid(binding));
+        binding.primitive = rndr::InputPrimitive::Mouse_AxisWheel;
+        REQUIRE(!rndr::InputSystem::IsBindingValid(binding));
+        binding.primitive = rndr::InputPrimitive::Keyboard_A;
+        REQUIRE(rndr::InputSystem::IsBindingValid(binding));
+        binding.primitive = rndr::InputPrimitive::Keyboard_B;
+        REQUIRE(rndr::InputSystem::IsBindingValid(binding));
+        binding.primitive = rndr::InputPrimitive::Keyboard_Esc;
+        REQUIRE(rndr::InputSystem::IsBindingValid(binding));
+
+        binding.primitive = rndr::InputPrimitive::Mouse_AxisWheel;
+        binding.trigger = rndr::InputTrigger::AxisChangedRelative;
+        REQUIRE(rndr::InputSystem::IsBindingValid(binding));
+        binding.trigger = rndr::InputTrigger::AxisChangedAbsolute;
+        REQUIRE(!rndr::InputSystem::IsBindingValid(binding));
+        binding.trigger = rndr::InputTrigger::ButtonDown;
+        REQUIRE(!rndr::InputSystem::IsBindingValid(binding));
+
+        binding.primitive = rndr::InputPrimitive::Mouse_AxisX;
+        binding.trigger = rndr::InputTrigger::AxisChangedRelative;
+        REQUIRE(rndr::InputSystem::IsBindingValid(binding));
+        binding.trigger = rndr::InputTrigger::AxisChangedAbsolute;
+        REQUIRE(rndr::InputSystem::IsBindingValid(binding));
+        binding.trigger = rndr::InputTrigger::ButtonDown;
+        REQUIRE(!rndr::InputSystem::IsBindingValid(binding));
+        binding.trigger = rndr::InputTrigger::ButtonUp;
+        REQUIRE(!rndr::InputSystem::IsBindingValid(binding));
+        binding.trigger = rndr::InputTrigger::DoubleClick;
+        REQUIRE(!rndr::InputSystem::IsBindingValid(binding));
+
+        binding.primitive = rndr::InputPrimitive::Mouse_AxisY;
+        binding.trigger = rndr::InputTrigger::AxisChangedRelative;
+        REQUIRE(rndr::InputSystem::IsBindingValid(binding));
+        binding.trigger = rndr::InputTrigger::AxisChangedAbsolute;
+        REQUIRE(rndr::InputSystem::IsBindingValid(binding));
+        binding.trigger = rndr::InputTrigger::ButtonDown;
+        REQUIRE(!rndr::InputSystem::IsBindingValid(binding));
+        binding.trigger = rndr::InputTrigger::ButtonUp;
+        REQUIRE(!rndr::InputSystem::IsBindingValid(binding));
+        binding.trigger = rndr::InputTrigger::DoubleClick;
+        REQUIRE(!rndr::InputSystem::IsBindingValid(binding));
     }
 
     REQUIRE(rndr::Destroy());

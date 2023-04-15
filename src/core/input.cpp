@@ -127,6 +127,14 @@ bool rndr::InputContext::AddAction(const rndr::InputAction& action,
         RNDR_LOG_ERROR("Invalid callback");
         return false;
     }
+    for (const rndr::InputBinding& binding : data.bindings)
+    {
+        if (!InputSystem::IsBindingValid(binding))
+        {
+            RNDR_LOG_ERROR("Invalid binding");
+            return false;
+        }
+    }
     for (const ActionData& action_data : m_context_data->actions)
     {
         if (action_data.action == action)
@@ -155,6 +163,11 @@ bool rndr::InputContext::AddBindingToAction(const rndr::InputAction& action,
     if (!action.IsValid())
     {
         RNDR_LOG_ERROR("Invalid action");
+        return false;
+    }
+    if (!InputSystem::IsBindingValid(binding))
+    {
+        RNDR_LOG_ERROR("Invalid binding");
         return false;
     }
 
@@ -522,4 +535,23 @@ bool rndr::InputSystem::IsAxis(InputPrimitive primitive)
 bool rndr::InputSystem::IsMouseWheelAxis(rndr::InputPrimitive primitive)
 {
     return primitive == InputPrimitive::Mouse_AxisWheel;
+}
+
+bool rndr::InputSystem::IsBindingValid(const rndr::InputBinding& binding)
+{
+    using enum rndr::InputTrigger;
+    if (IsButton(binding.primitive))
+    {
+        return binding.trigger == ButtonDown || binding.trigger == ButtonUp
+               || binding.trigger == DoubleClick;
+    }
+    if (IsMouseWheelAxis(binding.primitive))
+    {
+        return binding.trigger == AxisChangedRelative;
+    }
+    if (IsAxis(binding.primitive))
+    {
+        return binding.trigger == AxisChangedAbsolute || binding.trigger == AxisChangedRelative;
+    }
+    return false;
 }
