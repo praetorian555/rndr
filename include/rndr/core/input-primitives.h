@@ -78,7 +78,6 @@ enum class InputPrimitive
     Mouse_AxisX,
     Mouse_AxisY,
     Mouse_AxisWheel,
-    Mouse_Position,
     _MouseEnd,
 
     Count
