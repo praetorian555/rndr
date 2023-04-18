@@ -186,8 +186,9 @@ if (CMAKE_PROJECT_NAME STREQUAL PROJECT_NAME)
     add_test(NAME main COMMAND rndr_test)
 
     # The executable code is here
-    add_subdirectory(examples/uitext)
-    add_subdirectory(examples/scene3d)
-    add_subdirectory(examples/opengl)
+#    add_subdirectory(examples/uitext)
+#    add_subdirectory(examples/scene3d)
+#    add_subdirectory(examples/opengl)
+    add_subdirectory(examples/01-triangle)
 
 endif ()
