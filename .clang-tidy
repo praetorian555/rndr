@@ -23,6 +23,7 @@ Checks: '-*,
          -readability-identifier-length,
          -readability-uppercase-literal-suffix,
          -readability-function-cognitive-complexity,
+         -readability-redundant-preprocessor,
          misc-*,
          -misc-non-private-member-variables-in-classes,
          google-*'
