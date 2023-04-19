@@ -2,40 +2,10 @@
 
 #include "rndr/core/base.h"
 #include "rndr/core/delegate.h"
-
-// Forward declarations.
-// TODO(Marko): Move this to separate header
-#ifndef _WINDEF_
-struct HWND__
-{
-    int unused;
-};
-typedef struct HWND__* HWND;
-
-using UINT = unsigned int;
-using WPARAM = unsigned __int64;
-using LPARAM = __int64;
-using LRESULT = __int64;
-
-#define CALLBACK __stdcall
-#endif  // _WINDEF_
+#include "rndr/core/forward-def-windows.h"
 
 namespace Rndr
 {
-
-#if RNDR_WINDOWS
-/**
- * Represents a native window handle. Underlying type changes with the OS.
- */
-using NativeWindowHandle = HWND;
-
-/**
- * Represents an invalid window handle.
- */
-constexpr NativeWindowHandle k_invalid_window_handle = NULL;
-#else
-#error "NativeWindowHandle not implemented for this platform."
-#endif
 
 /**
  * Represents how the cursor should be displayed and behave.
