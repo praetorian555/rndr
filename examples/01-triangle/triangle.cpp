@@ -14,4 +14,11 @@ int main()
     Rndr::Destroy();
 }
 
-void Run() {}
+void Run()
+{
+    const Rndr::Window window({.width = 800, .height = 600, .name = "Triangle"});
+    while (!window.IsClosed())
+    {
+        window.ProcessEvents();
+    }
+}
