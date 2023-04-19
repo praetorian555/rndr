@@ -3,7 +3,7 @@
 #include <map>
 
 #include "rndr/core/base.h"
-#include "rndr/render/graphicstypes.h"
+#include "rndr/core/graphics-types.h"
 
 namespace rndr
 {

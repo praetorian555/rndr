@@ -1,15 +1,14 @@
 #pragma once
 
-#include <string>
-
 #include "math/vector3.h"
 #include "math/vector4.h"
 
 #include "rndr/core/base.h"
 #include "rndr/core/span.h"
-
-#include "rndr/utility/stackarray.h"
-
+#include "rndr/core/stack-array.h"
+#include "rndr/core/string.h"
+#include "rndr/core/array.h"
+#include "rndr/core/forward-def-windows.h"
 #include "rndr/render/colors.h"
 
 namespace Rndr
@@ -222,7 +221,7 @@ enum class FillMode
     Wireframe
 };
 
-struct GraphicsContextProperties
+struct GraphicsContextDesc
 {
     /**
      * Controls the debug layer of the underlying render API. Ignored in all configurations except
@@ -230,16 +229,24 @@ struct GraphicsContextProperties
      */
     bool enable_debug_layer = true;
 
-    // Controls if the *HasFailed methods will report an API call fail if the warning message is
-    // received from the debug layer. Ignored in all configurations except Debug.
-    bool ShouldFailWarning = true;
-    // In case of workloads that last more then 2 seconds on the GPU side control if the timeout is
-    // triggered or not.
-    bool DisableGpuTimeout = false;
-    // Controls if the underlying API for creating resources is thread-safe. If this is set to false
-    // the creation needs to be synchronized manually between threads. Also it is not possible to
-    // create commands lists if this is set to false.
-    bool IsResourceCreationThreadSafe = true;
+    /**
+     * Controls if the *HasFailed methods will report an API call fail if the warning message is
+     * received from the debug layer. Ignored in all configurations except Debug.
+     */
+    bool should_fail_warning = true;
+
+    /**
+     * In case of workloads that last more then 2 seconds on the GPU side control if the timeout is
+     * triggered or not.
+     */
+    bool disable_gpu_timeout = false;
+
+    /**
+     * Controls if the underlying API for creating resources is thread-safe. If this is set to false
+     * the creation needs to be synchronized manually between threads. Also it is not possible to
+     * create commands lists if this is set to false.
+     */
+    bool is_resource_creation_thread_safe = true;
 
     /**
      * Optional parameter representing a window handle in OS needed by some graphics API for
@@ -283,14 +290,14 @@ struct FrameBufferProperties
     ImageProperties DepthStencilBufferProperties;
 };
 
-struct SwapChainProperties
+struct SwapChainDesc
 {
-    int width = 0;
-    int height = 0;
-    PixelFormat ColorFormat = PixelFormat::R8G8B8A8_UNORM;
-    PixelFormat DepthStencilFormat = PixelFormat::D24_UNORM_S8_UINT;
-    bool UseDepthStencil = false;
-    bool IsWindowed = true;
+    int32_t width = 0;
+    int32_t height = 0;
+    PixelFormat color_format = PixelFormat::R8G8B8A8_UNORM;
+    PixelFormat depth_stencil_format = PixelFormat::D24_UNORM_S8_UINT;
+    bool use_depth_stencil = false;
+    bool is_windowed = true;
 };
 
 struct SamplerProperties
@@ -321,8 +328,8 @@ struct ShaderProperties
 {
     ShaderType Type;
 
-    std::string EntryPoint;
-    std::vector<ShaderMacro> Macros;
+    String EntryPoint;
+    Array<ShaderMacro> Macros;
     // TODO(Marko): Add support for include files
 };
 
@@ -414,4 +421,4 @@ struct PipelineProperties
  */
 int GetPixelSize(PixelFormat Format);
 
-}  // namespace rndr
+}  // namespace Rndr

@@ -4,7 +4,7 @@
 
 #if RNDR_OPENGL
 
-#include "rndr/render/graphicstypes.h"
+#include "rndr/core/graphics-types.h"
 
 namespace rndr
 {

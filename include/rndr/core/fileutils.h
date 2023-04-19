@@ -2,8 +2,8 @@
 
 #include <string>
 
+#include "graphics-types.h"
 #include "rndr/core/base.h"
-#include "rndr/render/graphicstypes.h"
 
 #include "rndr/utility/array.h"
 
