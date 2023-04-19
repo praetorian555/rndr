@@ -18,16 +18,33 @@ set(PUBLIC_SOURCE_LIST
     "${PROJECT_SOURCE_DIR}/include/rndr/core/hash-map.h"
     "${PROJECT_SOURCE_DIR}/include/rndr/core/ref.h"
     "${PROJECT_SOURCE_DIR}/include/rndr/core/scope-ptr.h"
-    "${PROJECT_SOURCE_DIR}/include/rndr/core/projection-camera.h")
+    "${PROJECT_SOURCE_DIR}/include/rndr/core/projection-camera.h"
+    "${PROJECT_SOURCE_DIR}/include/rndr/core/forward-def-windows.h"
+    "${PROJECT_SOURCE_DIR}/include/rndr/core/forward-def-opengl.h"
+    "${PROJECT_SOURCE_DIR}/include/rndr/render-api/render-api.h")
 set(PRIVATE_SOURCE_LIST
     "${PROJECT_SOURCE_DIR}/src/core/base.cpp"
     "${PROJECT_SOURCE_DIR}/src/core/time.cpp"
     "${PROJECT_SOURCE_DIR}/src/core/window.cpp"
     "${PROJECT_SOURCE_DIR}/src/core/input.cpp"
     "${PROJECT_SOURCE_DIR}/src/core/projection-camera.cpp")
+if (RNDR_DX11)
+    set(DX11_SOURCE_LIST
+        "${PROJECT_SOURCE_DIR}/include/rndr/render-api/dx11-render-api.h"
+        "${PROJECT_SOURCE_DIR}/src/render-api/dx11-render-api.cpp")
+else ()
+    set(DX11_SOURCE_LIST)
+endif ()
+if (RNDR_OPENGL)
+    set(OPENGL_SOURCE_LIST
+        "${PROJECT_SOURCE_DIR}/include/rndr/render-api/opengl-render-api.h"
+        "${PROJECT_SOURCE_DIR}/src/render-api/opengl-render-api.cpp")
+else ()
+    set(OPENGL_SOURCE_LIST)
+endif ()
 
 # Make an automatic library - will be static or dynamic based on user setting
-add_library(rndr ${PRIVATE_SOURCE_LIST} ${PUBLIC_SOURCE_LIST})
+add_library(rndr ${PRIVATE_SOURCE_LIST} ${PUBLIC_SOURCE_LIST} ${DX11_SOURCE_LIST} ${OPENGL_SOURCE_LIST})
 
 # We need this directory, and users of our library will need it too
 target_include_directories(rndr PUBLIC ${PROJECT_SOURCE_DIR}/include)
