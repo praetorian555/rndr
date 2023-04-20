@@ -27,7 +27,9 @@ set(PRIVATE_SOURCE_LIST
     "${PROJECT_SOURCE_DIR}/src/core/time.cpp"
     "${PROJECT_SOURCE_DIR}/src/core/window.cpp"
     "${PROJECT_SOURCE_DIR}/src/core/input.cpp"
-    "${PROJECT_SOURCE_DIR}/src/core/projection-camera.cpp")
+    "${PROJECT_SOURCE_DIR}/src/core/projection-camera.cpp"
+    "${PROJECT_SOURCE_DIR}/src/render-api/opengl-helpers.h"
+    "${PROJECT_SOURCE_DIR}/src/render-api/opengl-helpers.cpp")
 if (RNDR_DX11)
     set(DX11_SOURCE_LIST
         "${PROJECT_SOURCE_DIR}/include/rndr/render-api/dx11-render-api.h"
