@@ -9,6 +9,7 @@
 #include <glad/glad.h>
 #include <glad/glad_wgl.h>
 
+#include "render-api/opengl-helpers.h"
 #include "rndr/core/stack-array.h"
 #include "rndr/render-api/opengl-render-api.h"
 
@@ -245,6 +246,41 @@ bool Rndr::GraphicsContext::Bind(const Rndr::SwapChain& swap_chain)
     return true;
 }
 
+bool Rndr::GraphicsContext::Bind(const Pipeline& pipeline)
+{
+    const GLuint shader_program = pipeline.GetNativeShaderProgram();
+    glUseProgram(shader_program);
+    if (glGetError() != GL_NO_ERROR)
+    {
+        RNDR_LOG_ERROR("Failed to bind pipeline's shader program!");
+        return false;
+    }
+    const GLuint vertex_array = pipeline.GetNativeVertexArray();
+    glBindVertexArray(vertex_array);
+    if (glGetError() != GL_NO_ERROR)
+    {
+        RNDR_LOG_ERROR("Failed to bind pipeline's vertex array!");
+        return false;
+    }
+    // TODO(Marko): Configure pipeline state here based on the pipeline desc.
+    return true;
+}
+
+bool Rndr::GraphicsContext::Draw(uint32_t vertex_count,
+                                 uint32_t instance_count,
+                                 uint32_t first_vertex,
+                                 uint32_t first_instance)
+{
+    RNDR_UNUSED(first_instance);
+    glDrawArraysInstanced(GL_TRIANGLES, first_vertex, vertex_count, instance_count);
+    if (glGetError() != GL_NO_ERROR)
+    {
+        RNDR_LOG_ERROR("Failed to draw!");
+        return false;
+    }
+    return true;
+}
+
 Rndr::SwapChain::SwapChain(const Rndr::GraphicsContext& graphics_context,
                            const Rndr::SwapChainDesc& desc)
     : m_desc(desc)
@@ -272,6 +308,220 @@ bool Rndr::SwapChain::SetSize(int32_t width, int32_t height)
     m_desc.width = width;
     m_desc.height = height;
     return true;
+}
+
+Rndr::Shader::Shader(const GraphicsContext& graphics_context, const ShaderDesc& desc) : m_desc(desc)
+{
+    RNDR_UNUSED(graphics_context);
+    const GLenum shader_type = Rndr::FromShaderTypeToOpenGL(desc.type);
+    m_native_shader = glCreateShader(shader_type);
+    if (m_native_shader == k_invalid_opengl_object)
+    {
+        return;
+    }
+    const char* source = desc.source.c_str();
+    glShaderSource(m_native_shader, 1, &source, nullptr);
+    if (glGetError() != GL_NO_ERROR)
+    {
+        RNDR_LOG_ERROR("Failed to set shader source!");
+        Destroy();
+        return;
+    }
+    glCompileShader(m_native_shader);
+    if (glGetError() != GL_NO_ERROR)
+    {
+        RNDR_LOG_ERROR("Failed to compile shader source!");
+        Destroy();
+        return;
+    }
+}
+
+Rndr::Shader::~Shader()
+{
+    Destroy();
+}
+
+Rndr::Shader::Shader(Rndr::Shader&& other) noexcept : m_native_shader(other.m_native_shader)
+{
+    other.m_native_shader = k_invalid_opengl_object;
+}
+
+Rndr::Shader& Rndr::Shader::operator=(Rndr::Shader&& other) noexcept
+{
+    if (this != &other)
+    {
+        Destroy();
+        m_native_shader = other.m_native_shader;
+        other.m_native_shader = k_invalid_opengl_object;
+    }
+    return *this;
+}
+
+void Rndr::Shader::Destroy()
+{
+    if (m_native_shader != k_invalid_opengl_object)
+    {
+        glDeleteShader(m_native_shader);
+        m_native_shader = k_invalid_opengl_object;
+    }
+}
+
+bool Rndr::Shader::IsValid() const
+{
+    return m_native_shader != k_invalid_opengl_object;
+}
+
+const Rndr::ShaderDesc& Rndr::Shader::GetDesc() const
+{
+    return m_desc;
+}
+const GLuint Rndr::Shader::GetNativeShader() const
+{
+    return m_native_shader;
+}
+
+Rndr::Pipeline::Pipeline(const GraphicsContext& graphics_context, const PipelineDesc& desc)
+    : m_desc(desc)
+{
+    RNDR_UNUSED(graphics_context);
+    m_native_shader_program = glCreateProgram();
+    if (glGetError() != GL_NO_ERROR)
+    {
+        RNDR_LOG_ERROR("Failed to create shader program!");
+        return;
+    }
+
+    if (desc.vertex_shader != nullptr)
+    {
+        glAttachShader(m_native_shader_program, desc.vertex_shader->GetNativeShader());
+        if (glGetError() != GL_NO_ERROR)
+        {
+            RNDR_LOG_ERROR("Failed to attach vertex shader!");
+            Destroy();
+            return;
+        }
+    }
+    if (desc.pixel_shader != nullptr)
+    {
+        glAttachShader(m_native_shader_program, desc.pixel_shader->GetNativeShader());
+        if (glGetError() != GL_NO_ERROR)
+        {
+            RNDR_LOG_ERROR("Failed to attach pixel shader!");
+            Destroy();
+            return;
+        }
+    }
+    if (desc.geometry_shader != nullptr)
+    {
+        glAttachShader(m_native_shader_program, desc.geometry_shader->GetNativeShader());
+        if (glGetError() != GL_NO_ERROR)
+        {
+            RNDR_LOG_ERROR("Failed to attach geometry shader!");
+            Destroy();
+            return;
+        }
+    }
+    if (desc.tesselation_control_shader != nullptr)
+    {
+        glAttachShader(m_native_shader_program, desc.tesselation_control_shader->GetNativeShader());
+        if (glGetError() != GL_NO_ERROR)
+        {
+            RNDR_LOG_ERROR("Failed to attach tesselation control shader!");
+            Destroy();
+            return;
+        }
+    }
+    if (desc.tesselation_evaluation_shader != nullptr)
+    {
+        glAttachShader(m_native_shader_program,
+                       desc.tesselation_evaluation_shader->GetNativeShader());
+        if (glGetError() != GL_NO_ERROR)
+        {
+            RNDR_LOG_ERROR("Failed to attach tesselation evaluation shader!");
+            Destroy();
+            return;
+        }
+    }
+    if (desc.compute_shader != nullptr)
+    {
+        glAttachShader(m_native_shader_program, desc.compute_shader->GetNativeShader());
+        if (glGetError() != GL_NO_ERROR)
+        {
+            RNDR_LOG_ERROR("Failed to attach compute shader!");
+            Destroy();
+            return;
+        }
+    }
+    glLinkProgram(m_native_shader_program);
+    if (glGetError() != GL_NO_ERROR)
+    {
+        RNDR_LOG_ERROR("Failed to link shader program!");
+        Destroy();
+        return;
+    }
+    glCreateVertexArrays(1, &m_native_vertex_array);
+    if (glGetError() != GL_NO_ERROR)
+    {
+        RNDR_LOG_ERROR("Failed to create vertex array!");
+        Destroy();
+        return;
+    }
+}
+
+Rndr::Pipeline::~Pipeline()
+{
+    Destroy();
+}
+
+Rndr::Pipeline::Pipeline(Pipeline&& other) noexcept
+    : m_native_shader_program(other.m_native_shader_program)
+{
+    other.m_native_shader_program = k_invalid_opengl_object;
+}
+
+Rndr::Pipeline& Rndr::Pipeline::operator=(Pipeline&& other) noexcept
+{
+    if (this != &other)
+    {
+        Destroy();
+        m_native_shader_program = other.m_native_shader_program;
+        other.m_native_shader_program = k_invalid_opengl_object;
+    }
+    return *this;
+}
+
+void Rndr::Pipeline::Destroy()
+{
+    if (m_native_shader_program != k_invalid_opengl_object)
+    {
+        glDeleteProgram(m_native_shader_program);
+        m_native_shader_program = k_invalid_opengl_object;
+    }
+    if (m_native_vertex_array != k_invalid_opengl_object)
+    {
+        glDeleteVertexArrays(1, &m_native_vertex_array);
+        m_native_vertex_array = k_invalid_opengl_object;
+    }
+}
+
+bool Rndr::Pipeline::IsValid() const
+{
+    return m_native_shader_program != k_invalid_opengl_object;
+}
+
+const Rndr::PipelineDesc& Rndr::Pipeline::GetDesc() const
+{
+    return m_desc;
+}
+
+GLuint Rndr::Pipeline::GetNativeShaderProgram() const
+{
+    return m_native_shader_program;
+}
+
+GLuint Rndr::Pipeline::GetNativeVertexArray() const
+{
+    return m_native_vertex_array;
 }
 
 #endif  // RNDR_OPENGL

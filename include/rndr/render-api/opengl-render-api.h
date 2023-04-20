@@ -11,6 +11,9 @@ namespace Rndr
 {
 
 class SwapChain;
+class Shader;
+class Pipeline;
+class InputLayout;
 
 /**
  * Represents a graphics context. This is the main entry point for the graphics API. It is used to
@@ -31,10 +34,16 @@ public:
     [[nodiscard]] const GraphicsContextDesc& GetDesc() const;
 
     bool Bind(const SwapChain& swap_chain);
+    bool Bind(const Pipeline& pipeline);
 
     bool Present(const SwapChain& swap_chain, bool vertical_sync);
 
     bool ClearColor(const math::Vector4& color);
+
+    bool Draw(uint32_t vertex_count,
+              uint32_t instance_count,
+              uint32_t first_vertex = 0,
+              uint32_t first_instance = 0);
 
 private:
     GraphicsContextDesc m_desc;
@@ -64,6 +73,59 @@ public:
 
 private:
     SwapChainDesc m_desc;
+};
+
+/**
+ * Represents a program to be executed on a GPU.
+ */
+class Shader
+{
+public:
+    Shader(const GraphicsContext& graphics_context, const ShaderDesc& desc);
+    ~Shader();
+    Shader(const Shader&) = delete;
+    Shader& operator=(const Shader&) = delete;
+    Shader(Shader&& other) noexcept;
+    Shader& operator=(Shader&& other) noexcept;
+
+    void Destroy();
+
+    [[nodiscard]] bool IsValid() const;
+
+    [[nodiscard]] const ShaderDesc& GetDesc() const;
+    [[nodiscard]] const GLuint GetNativeShader() const;
+
+private:
+    ShaderDesc m_desc;
+    GLuint m_native_shader = k_invalid_opengl_object;
+};
+
+/**
+ * Represents a state of the graphics pipeline. This includes the shaders, input layout, rasterizer
+ * state, blend state, depth stencil state, and frame buffer.
+ */
+class Pipeline
+{
+public:
+    Pipeline(const GraphicsContext& graphics_context, const PipelineDesc& desc);
+    ~Pipeline();
+    Pipeline(const Pipeline&) = delete;
+    Pipeline& operator=(const Pipeline&) = delete;
+    Pipeline(Pipeline&& other) noexcept;
+    Pipeline& operator=(Pipeline&& other) noexcept;
+
+    void Destroy();
+
+    [[nodiscard]] bool IsValid() const;
+
+    [[nodiscard]] const PipelineDesc& GetDesc() const;
+    [[nodiscard]] GLuint GetNativeShaderProgram() const;
+    [[nodiscard]] GLuint GetNativeVertexArray() const;
+
+private:
+    PipelineDesc m_desc;
+    GLuint m_native_shader_program = k_invalid_opengl_object;
+    GLuint m_native_vertex_array = k_invalid_opengl_object;
 };
 
 }  // namespace Rndr
