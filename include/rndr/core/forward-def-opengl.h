@@ -5,6 +5,7 @@
 #if RNDR_OPENGL
 
 using GLuint = unsigned int;
+using GLenum = unsigned int;
 
 namespace Rndr
 {
