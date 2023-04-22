@@ -21,6 +21,7 @@ set(PUBLIC_SOURCE_LIST
     "${PROJECT_SOURCE_DIR}/include/rndr/core/projection-camera.h"
     "${PROJECT_SOURCE_DIR}/include/rndr/core/forward-def-windows.h"
     "${PROJECT_SOURCE_DIR}/include/rndr/core/forward-def-opengl.h"
+    "${PROJECT_SOURCE_DIR}/include/rndr/core/file.h"
     "${PROJECT_SOURCE_DIR}/include/rndr/render-api/render-api.h")
 set(PRIVATE_SOURCE_LIST
     "${PROJECT_SOURCE_DIR}/src/core/base.cpp"
@@ -28,6 +29,7 @@ set(PRIVATE_SOURCE_LIST
     "${PROJECT_SOURCE_DIR}/src/core/window.cpp"
     "${PROJECT_SOURCE_DIR}/src/core/input.cpp"
     "${PROJECT_SOURCE_DIR}/src/core/projection-camera.cpp"
+    "${PROJECT_SOURCE_DIR}/src/core/file.cpp"
     "${PROJECT_SOURCE_DIR}/src/render-api/opengl-helpers.h"
     "${PROJECT_SOURCE_DIR}/src/render-api/opengl-helpers.cpp")
 if (RNDR_DX11)
