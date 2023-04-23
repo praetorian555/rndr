@@ -10,6 +10,12 @@ namespace Rndr
 {
 
 GLenum FromShaderTypeToOpenGL(ShaderType type);
+GLenum FromUsageToOpenGL(Usage usage);
+GLenum FromBufferTypeToOpenGL(BufferType type);
+GLenum FromComparatorToOpenGL(Comparator comparator);
+GLenum FromStencilOpToOpenGL(StencilOperation op);
+GLenum FromBlendFactorToOpenGL(BlendFactor factor);
+GLenum FromBlendOperationToOpenGL(BlendOperation op);
 
 }
 
