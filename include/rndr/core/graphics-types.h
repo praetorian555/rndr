@@ -444,6 +444,57 @@ struct GraphicsContextDesc
     int gl_minor_version = 6;
 };
 
+struct SwapChainDesc
+{
+    /** Width of the swap chain. The 0 is invalid value. */
+    int32_t width = 0;
+
+    /** Height of the swap chain. The 0 is invalid value. */
+    int32_t height = 0;
+
+    /** Pixel format of the color buffer. */
+    PixelFormat color_format = PixelFormat::R8G8B8A8_UNORM;
+
+    /** Pixel format of the depth stencil buffer. */
+    PixelFormat depth_stencil_format = PixelFormat::D24_UNORM_S8_UINT;
+
+    /** Signals if the depth stencil buffer should be used. */
+    bool use_depth_stencil = false;
+
+    /** Signals if the swap chain should be created in windowed mode. */
+    bool is_windowed = true;
+};
+
+struct ShaderDesc
+{
+    /** Type of the shader. */
+    ShaderType type;
+
+    /** Source code of the shader. */
+    String source;
+
+    /**
+     * Name of the function that represents the entry point of the shader. Can be empty for
+     * OpenGL.
+     */
+    String entry_point;
+};
+
+struct BufferDesc
+{
+    /** Type of the buffer. */
+    BufferType type = BufferType::Constant;
+
+    /** Defines how the buffer should be used by the GPU. */
+    Usage usage = Usage::Default;
+
+    /** Total size of a buffer in bytes. */
+    uint32_t size = 0;
+
+    /** Size of one element, in bytes, in an array of elements. */
+    uint32_t stride = 0;
+};
+
 struct SamplerDesc
 {
     /** Filtering mode used when sampling the image when polygon size is smaller then the image. */
@@ -516,21 +567,6 @@ struct ImageDesc
     SamplerDesc sampler;
 };
 
-struct BufferDesc
-{
-    /** Type of the buffer. */
-    BufferType type = BufferType::Constant;
-
-    /** Defines how the buffer should be used by the GPU. */
-    Usage usage = Usage::Default;
-
-    /** Total size of a buffer in bytes. */
-    uint32_t size = 0;
-
-    /** Size of one element, in bytes, in an array of elements. */
-    uint32_t stride = 0;
-};
-
 struct FrameBufferProperties
 {
     int ColorBufferCount = 1;
@@ -539,42 +575,6 @@ struct FrameBufferProperties
 
     bool UseDepthStencil = false;
     ImageDesc DepthStencilBufferProperties;
-};
-
-struct SwapChainDesc
-{
-    /** Width of the swap chain. The 0 is invalid value. */
-    int32_t width = 0;
-
-    /** Height of the swap chain. The 0 is invalid value. */
-    int32_t height = 0;
-
-    /** Pixel format of the color buffer. */
-    PixelFormat color_format = PixelFormat::R8G8B8A8_UNORM;
-
-    /** Pixel format of the depth stencil buffer. */
-    PixelFormat depth_stencil_format = PixelFormat::D24_UNORM_S8_UINT;
-
-    /** Signals if the depth stencil buffer should be used. */
-    bool use_depth_stencil = false;
-
-    /** Signals if the swap chain should be created in windowed mode. */
-    bool is_windowed = true;
-};
-
-struct ShaderDesc
-{
-    /** Type of the shader. */
-    ShaderType type;
-
-    /** Source code of the shader. */
-    String source;
-
-    /**
-     * Name of the function that represents the entry point of the shader. Can be empty for
-     * OpenGL.
-     */
-    String entry_point;
 };
 
 constexpr int kAppendAlignedElement = -1;
