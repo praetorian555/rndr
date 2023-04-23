@@ -16,4 +16,10 @@ using Span = std::span<T>;
 using ByteSpan = Span<uint8_t>;
 using IntSpan = Span<int>;
 
+template <typename T>
+ByteSpan ToByteSpan(T& object)
+{
+    return {reinterpret_cast<uint8_t*>(&object), sizeof(T)};
+}
+
 }  // namespace Rndr
