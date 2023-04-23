@@ -24,6 +24,13 @@ struct GraphicsConstants
     static constexpr int kMaxConstantBuffers = 16;
 };
 
+enum class ImageType
+{
+    Image2D,
+    Image2DArray,
+    CubeMap
+};
+
 /**
  * Exact positions of channels and their size in bits.
  *
@@ -69,26 +76,54 @@ enum class PixelFormat
     Count
 };
 
-enum class ImageFiltering
+/**
+ * Represents the filtering used to resolve the value of the image when it is sampled.
+ */
+enum class ImageFilter
 {
-    MinMagMipPoint = 0,
-    MinMagMipLinear,
-    MinMagPoint_MipLinear,
-    MinPoint_MagLinear_MipPoint,
-    MinPoint_MagMipLinear,
-    MinLinear_MagMipPoint,
-    MinLinear_MagPoint_MipLinear,
-    MinMagLinear_MipPoint,
-    Anisotropic,
+    /** Returns the value of the texture element that is nearest to image coordinate. */
+    Nearest = 0,
+
+    /**
+     * Returns the average of the four texture elements that are closest to the specified texture
+     * coordinates.
+     */
+    Linear,
+
+    /** Represents number of elements in the enum. */
+    EnumCount
 };
 
-enum class ImageAddressing
+/**
+ * Specifies how to handle image coordinate being outside the [0, 1] range.
+ */
+enum class ImageAddressMode
 {
-    Repeat,
-    MirrorRepeat,
-    Clamp,
+    /** Coordinate is clamped to the range [0, 1]. */
+    Clamp = 0,
+
+    /**
+     * Similar to Clamp, but the coordinates that are clamped are resolved to the specified border
+     * color.
+     */
     Border,
-    MirrorOnce
+
+    /** Integer part of the coordinate is ignored. */
+    Repeat,
+
+    /**
+     * The coordinate is equal to the fractional part of the coordinate if the integer part is
+     * even. If its odd the coordinate is equal to 1 minus fractional part of the coordinate.
+     */
+    MirrorRepeat,
+
+    /**
+     * Similar to MirrorRepeat, but after one repetition Clamp is used.
+     */
+    MirrorOnce,
+
+    /** Represents number of elements in the enum. */
+    EnumCount
 };
 
 /**
@@ -409,13 +444,76 @@ struct GraphicsContextDesc
     int gl_minor_version = 6;
 };
 
-struct ImageProperties
+struct SamplerDesc
 {
-    PixelFormat PixelFormat = PixelFormat::R8G8B8A8_UNORM_SRGB;
-    Usage Usage = Usage::Default;
-    bool UseMips = false;
-    uint32_t ImageBindFlags = ImageBindFlags::ShaderResource;
-    uint32_t SampleCount = 1;
+    /** Filtering mode used when sampling the image when polygon size is smaller then the image. */
+    ImageFilter min_filter = ImageFilter::Linear;
+
+    /** Filtering mode used when sampling the image when polygon size is larger then the image. */
+    ImageFilter mag_filter = ImageFilter::Linear;
+
+    /** Filtering mode used when figuring out which mip map level to use. */
+    ImageFilter mip_map_filter = ImageFilter::Linear;
+
+    /**
+     * Maximum anisotropy level to use. If larger then 1 the anisotropic filtering is active. This
+     * filter can be used in combination with the min and mag filters.
+     */
+    uint32_t max_anisotropy = 1;
+
+    /** Address mode used for the u image coordinate. */
+    ImageAddressMode address_mode_u = ImageAddressMode::Repeat;
+
+    /** Address mode used for the v image coordinate. */
+    ImageAddressMode address_mode_v = ImageAddressMode::Repeat;
+
+    /** Address mode used for the w image coordinate. */
+    ImageAddressMode address_mode_w = ImageAddressMode::Repeat;
+
+    /** Border color used when address mode is set to Border. */
+    math::Vector4 border_color = Colors::kPink;
+
+    /**
+     * Bias to be added to the mip level before sampling. Add to shader-supplied bias, if any is
+     * supplied.
+     */
+    float lod_bias = 0;
+
+    /** Minimum mip level to use. */
+    float base_mip_level = 0;
+
+    /** Maximum mip level to use. */
+    float max_mip_level = 1'000;
+
+    /** Minimum LOD level to use. This value will resolve to base_mip_level value. */
+    real min_lod = 0;
+
+    /** Maximum LOD level to use. This value can't be larger then max_mip_level. */
+    real max_lod = 1'000;
+};
+
+struct ImageDesc
+{
+    /** Width of the image in pixels. */
+    int32_t width = 0;
+
+    /** Height of the image in pixels. */
+    int32_t height = 0;
+
+    /** Number of images in the array. Ignored for ImageType::Image2D and ImageType::CubeMap. */
+    int32_t array_size = 1;
+
+    /** Type of the image. */
+    ImageType type;
+
+    /** Image pixel format. */
+    PixelFormat pixel_format = PixelFormat::R8G8B8A8_UNORM_SRGB;
+
+    /** If image should have mip maps. */
+    bool use_mips = false;
+
+    /** Sampling parameters for the image. */
+    SamplerDesc sampler;
 };
 
 struct BufferDesc
@@ -436,11 +534,11 @@ struct BufferDesc
 struct FrameBufferProperties
 {
     int ColorBufferCount = 1;
-    StackArray<ImageProperties, GraphicsConstants::kMaxFrameBufferColorBuffers>
+    StackArray<ImageDesc, GraphicsConstants::kMaxFrameBufferColorBuffers>
         ColorBufferProperties;
 
     bool UseDepthStencil = false;
-    ImageProperties DepthStencilBufferProperties;
+    ImageDesc DepthStencilBufferProperties;
 };
 
 struct SwapChainDesc
@@ -462,24 +560,6 @@ struct SwapChainDesc
 
     /** Signals if the swap chain should be created in windowed mode. */
     bool is_windowed = true;
-};
-
-struct SamplerProperties
-{
-    ImageAddressing AddressingU = ImageAddressing::Repeat;
-    ImageAddressing AddressingV = ImageAddressing::Repeat;
-    ImageAddressing AddressingW = ImageAddressing::Repeat;
-
-    math::Vector4 WrapBorderColor = Colors::kPink;
-
-    ImageFiltering Filter = ImageFiltering::MinMagMipLinear;
-
-    real LODBias = 0;
-    real MinLOD = 0;
-    real MaxLOD = math::kLargestReal;
-    Comparator Comp = Comparator::Never;
-
-    uint32_t MaxAnisotropy = 0;
 };
 
 struct ShaderDesc
