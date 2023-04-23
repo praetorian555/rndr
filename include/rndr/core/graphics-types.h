@@ -91,15 +91,25 @@ enum class ImageAddressing
     MirrorOnce
 };
 
+/**
+ * Represents different ways the GPU resource can be used.
+ */
 enum class Usage
 {
-    // Use this when you need to update the resource from the CPU side sparingly and mostly it is
-    // only processed or used by GPU
+    /**
+     * Use this when you need to update the resource from the CPU side sparingly and mostly it is
+     * only processed or used by GPU.
+     */
     Default = 0,
-    // Used when we need to update resource every frame, such as constant buffers
+
+    /** Used when we need to update resource every frame, such as constant buffers. */
     Dynamic,
-    // Used when we need to move data from the GPU to the CPU side, for example after rendering
-    ReadBack
+
+    /** Used when we need to move data from the GPU to the CPU side, for example after rendering. */
+    ReadBack,
+
+    /** Represents number of elements in the enum. */
+    EnumCount
 };
 
 /**
@@ -167,7 +177,10 @@ enum class Comparator
     LessEqual,
 
     /** Passes the test if the incoming value is greater than or equal to the stored value. */
-    GreaterEqual
+    GreaterEqual,
+
+    /** Represents the number of elements in the enum. */
+    EnumCount
 };
 
 /**
@@ -177,9 +190,6 @@ enum class StencilOperation
 {
     /** Keeps the current value. */
     Keep = 0,
-
-    /** Bitwise inverts the current value. */
-    Invert,
 
     /** Sets the stencil buffer value to 0. */
     Zero,
@@ -203,7 +213,13 @@ enum class StencilOperation
      * Decrements the current value and wraps it to the maximum representable unsigned value when
      * decrementing a value of 0.
      */
-    DecrementWrap
+    DecrementWrap,
+
+    /** Bitwise inverts the current value. */
+    Invert,
+
+    /** Represents the number of elements in the enum. */
+    EnumCount
 };
 
 /**
@@ -252,14 +268,17 @@ enum class BlendFactor
     ConstAlpha,
 
     /** Factor is the inverse of the constant alpha specified in the BlendDesc. */
-    InvConstAlpha
+    InvConstAlpha,
+
+    /** Represents the number of valid entries in this enum. */
+    EnumCount
 };
 
 /**
  * Represents a blend operation that is performed on a render target. The operation is performed
  * between the source and destination color.
  */
-enum class BlendOperator
+enum class BlendOperation
 {
     /** Adds the source and destination colors. */
     Add = 0,
@@ -274,16 +293,29 @@ enum class BlendOperator
     Min,
 
     /** Maximum of the source and destination colors. */
-    Max
+    Max,
+
+    /** Represents the number of valid entries in this enum. */
+    EnumCount
 };
 
+/**
+ * Represents what type of data is stored in a buffer. This is used to determine how the buffer
+ * will be used.
+ */
 enum class BufferType
 {
-    ReadBack,
+    /** Buffer contains vertex data. */
     Vertex,
+
+    /** Buffer contains index data. */
     Index,
+
+    /** Buffer contains constant (uniform) data. */
     Constant,
-    UnorderedAccess
+
+    /** Represents the number of valid entries in this enum. */
+    EnumCount
 };
 
 // TODO(Marko): Add support for bit operations in enum class
@@ -312,7 +344,7 @@ enum class ShaderType : size_t
     TessellationControl,
     TessellationEvaluation,
     Compute,
-    Max
+    EnumCount
 };
 
 /** Controls what portion of the depth buffer is written to. */
@@ -386,14 +418,19 @@ struct ImageProperties
     uint32_t SampleCount = 1;
 };
 
-struct BufferProperties
+struct BufferDesc
 {
-    BufferType Type = BufferType::Constant;
-    Usage Usage = Usage::Default;
-    // Total size of a buffer
-    uint32_t Size = 0;
-    // Size of one element, in bytes, in an array of elements
-    uint32_t Stride = 0;
+    /** Type of the buffer. */
+    BufferType type = BufferType::Constant;
+
+    /** Defines how the buffer should be used by the GPU. */
+    Usage usage = Usage::Default;
+
+    /** Total size of a buffer in bytes. */
+    uint32_t size = 0;
+
+    /** Size of one element, in bytes, in an array of elements. */
+    uint32_t stride = 0;
 };
 
 struct FrameBufferProperties
@@ -485,13 +522,20 @@ struct RasterizerDesc
     /** Specifies the face that should be culled. */
     Face cull_face = Face::Back;
 
+    /** Multiplier of the smallest value guaranteed to produce a resolvable offset. */
     real depth_bias = 0;
+
+    /** A multiplier of the change of depth relative to the screen area of the polygon. */
     real slope_scaled_depth_bias = 0.0;
-    real depth_bias_clamp = 0.0;
-    bool depth_clip_enable = true;
-    bool scissor_enable = false;
-    bool multi_sample_enable = false;
-    bool anti_aliased_line_enable = false;
+
+    /** Bottom left point of a rectangle that defines the scissor test. */
+    math::Point2 scissor_bottom_left;
+
+    /**
+     * Size of a rectangle that defines the scissor test. If width or height is zero the scissor
+     * test is disabled.
+     */
+    math::Vector2 scissor_size;
 };
 
 struct DepthStencilDesc
@@ -518,7 +562,7 @@ struct DepthStencilDesc
     uint8_t stencil_write_mask = k_stencil_mask_all;
 
     /** Reference value used for the stencil test. */
-    uint32_t stencil_ref_value = 0;
+    int32_t stencil_ref_value = 0;
 
     /** Operation to perform when the stencil test fails for the front face. */
     StencilOperation stencil_front_face_fail_op = StencilOperation::Keep;
@@ -569,7 +613,7 @@ struct BlendDesc
     BlendFactor dst_color_factor = BlendFactor::InvSrcAlpha;
 
     /** Operation used to combine the source and destination colors to get resulting color. */
-    BlendOperator color_operator = BlendOperator::Add;
+    BlendOperation color_operation = BlendOperation::Add;
 
     /** Value used to multiply the source alpha. */
     BlendFactor src_alpha_factor = BlendFactor::One;
@@ -578,7 +622,7 @@ struct BlendDesc
     BlendFactor dst_alpha_factor = BlendFactor::InvSrcAlpha;
 
     /** Operation used to combine the source and destination alpha to get resulting alpha. */
-    BlendOperator alpha_operator = BlendOperator::Add;
+    BlendOperation alpha_operation = BlendOperation::Add;
 
     /** Const color value used in the blend operation. */
     math::Vector3 const_color;
