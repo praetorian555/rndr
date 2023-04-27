@@ -628,15 +628,18 @@ LRESULT CALLBACK WindowProc(HWND window_handle, UINT msg_code, WPARAM param_w, L
     // Before window is created this will be nullptr
     Rndr::Window* window = reinterpret_cast<Rndr::Window*>(window_ptr);  // NOLINT
 
-    //    if (Window != nullptr)
-    //    {
-    //        rndr::Window::NativeWindowEventDelegate Delegate =
-    //        Window->GetNativeWindowEventDelegate(); if
-    //        (Delegate.Execute(Window->GetNativeWindowHandle(), msg_code, param_w, param_l))
-    //        {
-    //            return TRUE;
-    //        }
-    //    }
+    if (window != nullptr)
+    {
+        if (window->on_native_event.IsBound())
+        {
+            const bool status =
+                window->on_native_event.Execute(window_handle, msg_code, param_w, param_l);
+            if (status)
+            {
+                return DefWindowProc(window_handle, msg_code, param_w, param_l);
+            }
+        }
+    }
 
     switch (msg_code)
     {
@@ -794,4 +797,4 @@ LRESULT CALLBACK WindowProc(HWND window_handle, UINT msg_code, WPARAM param_w, L
 
     return DefWindowProc(window_handle, msg_code, param_w, param_l);
 }
-}  // namespace rndr::WindowPrivate
+}  // namespace Rndr::WindowPrivate

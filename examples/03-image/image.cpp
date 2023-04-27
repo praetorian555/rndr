@@ -130,6 +130,8 @@ void Run()
                                  Rndr::InputBinding{.primitive = Rndr::InputPrimitive::Keyboard_F9,
                                                     .trigger = Rndr::InputTrigger::ButtonReleased});
 
+    Rndr::ImGuiWrapper::Init(window, graphics_context, {.display_demo_window = true});
+
     while (!window.IsClosed())
     {
         window.ProcessEvents();
@@ -153,6 +155,11 @@ void Run()
         graphics_context.ClearColor(k_clear_color);
         graphics_context.Draw(3, 1);
 
+        Rndr::ImGuiWrapper::StartFrame();
+        Rndr::ImGuiWrapper::EndFrame();
+
         graphics_context.Present(swap_chain, true);
     }
+
+    Rndr::ImGuiWrapper::Destroy();
 }

@@ -2,44 +2,39 @@
 
 #include "rndr/core/base.h"
 
-#ifdef RNDR_IMGUI
-
-namespace rndr
+namespace Rndr
 {
-class Window;
-struct GraphicsContext;
-
-struct ImGuiProperties
+struct ImGuiDesc
 {
     bool enable_keyboard_navigation = false;
     bool enable_gamepad_navigation = false;
     bool display_demo_window = true;
 };
 
+/**
+ * Provides an easy way to configure imgui. This class is a singleton. Use StartFrame() and
+ * EndFrame() to start and end a new ImGui frame. Between these two calls you can use ImGui
+ * functions as usual.
+ */
 class ImGuiWrapper
 {
-    RNDR_DEFAULT_BODY(ImGuiWrapper);
-
-    // TODO(Marko): Make this part of the RNDR_DEFAULT_BODY macro.
-    ~ImGuiWrapper() = default;
-
 public:
     /**
      * Initializes ImGui backend.
      * @param window Window to attach to.
      * @param context Graphics context to attach to.
-     * @param props ImGui properties.
+     * @param desc ImGui properties.
      * @return True if initialization was successful.
      */
-    static bool Init(Window& window,
-                     GraphicsContext& context,
-                     const ImGuiProperties& props = ImGuiProperties{});
+    static bool Init(class Window& window,
+                     class GraphicsContext& context,
+                     const ImGuiDesc& desc = ImGuiDesc{});
 
     /**
      * Shuts down ImGui backend.
      * @return True if shutdown was successful.
      */
-    static bool ShutDown();
+    static bool Destroy();
 
     /**
      * Starts a new ImGui frame.
@@ -55,18 +50,16 @@ public:
      * Returns the ImGui properties.
      * @return ImGui properties.
      */
-    [[nodiscard]] static const ImGuiProperties& GetProps();
+    [[nodiscard]] static const ImGuiDesc& GetProps();
 
 private:
     static ImGuiWrapper& Get();
 
-    Window* m_window = nullptr;
-    GraphicsContext* m_context = nullptr;
-    ImGuiProperties m_props;
+    class Window* m_window = nullptr;
+    class GraphicsContext* m_context = nullptr;
+    ImGuiDesc m_desc;
 
     bool m_frame_started = false;
     bool m_demo_window_opened = true;
 };
-}  // namespace rndr
-
-#endif
+}  // namespace Rndr

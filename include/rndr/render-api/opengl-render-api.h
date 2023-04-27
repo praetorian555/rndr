@@ -114,7 +114,7 @@ public:
      * @param swap_chain The swap chain to read.
      * @return Returns the image data.
      */
-    CPUImage ReadSwapChain(const SwapChain& swap_chain);
+    [[nodiscard]] struct CPUImage ReadSwapChain(const SwapChain& swap_chain);
 
 private:
     GraphicsContextDesc m_desc;
@@ -251,7 +251,7 @@ public:
      * @param sampler_desc The sampler description to use for the image.
      */
     Image(const GraphicsContext& graphics_context,
-          CPUImage& cpu_image,
+          struct CPUImage& cpu_image,
           bool use_mips,
           const SamplerDesc& sampler_desc);
 

@@ -69,6 +69,14 @@ public:
     ResizeDelegate on_resize;
 
     /**
+     * Called when the native window event occurs, before the window processes it.
+     * @return True if the event was handled and window should not handle it, false otherwise.
+     */
+    using NativeEventDelegate = Delegate<
+        bool(HWND /*window_handle*/, UINT /*msg_code*/, WPARAM /*param_w*/, LPARAM /*param_l*/)>;
+    NativeEventDelegate on_native_event;
+
+    /**
      * Creates a new window. If a window failed to create any method will return false.
      * @param desc The description of the window.
      */

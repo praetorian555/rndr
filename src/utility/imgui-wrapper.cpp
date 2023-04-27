@@ -1,4 +1,4 @@
-#include "rndr/utility/imguiwrapper.h"
+#include "Rndr/utility/imgui-wrapper.h"
 
 #ifdef RNDR_IMGUI
 
@@ -14,9 +14,9 @@
 #include "backends/imgui_impl_opengl3.h"
 #endif
 
-#include "rndr/core/log.h"
-#include "rndr/core/window.h"
-#include "rndr/render/graphicscontext.h"
+#include "Rndr/core/base.h"
+#include "Rndr/core/window.h"
+#include "Rndr/render-api/render-api.h"
 
 // Forward declare message handler from imgui_impl_win32.cpp
 extern IMGUI_IMPL_API LRESULT ImGui_ImplWin32_WndProcHandler(HWND handle,
@@ -24,15 +24,15 @@ extern IMGUI_IMPL_API LRESULT ImGui_ImplWin32_WndProcHandler(HWND handle,
                                                              WPARAM param_w,
                                                              LPARAM param_l);
 
-rndr::ImGuiWrapper& rndr::ImGuiWrapper::Get()
+Rndr::ImGuiWrapper& Rndr::ImGuiWrapper::Get()
 {
     static ImGuiWrapper s_wrapper;
     return s_wrapper;
 }
 
-bool rndr::ImGuiWrapper::Init(Window& window,
+bool Rndr::ImGuiWrapper::Init(Window& window,
                               GraphicsContext& context,
-                              const ImGuiProperties& props)
+                              const ImGuiDesc& desc)
 {
     ImGuiWrapper& wrapper = Get();
 
@@ -44,16 +44,16 @@ bool rndr::ImGuiWrapper::Init(Window& window,
 
     wrapper.m_window = &window;
     wrapper.m_context = &context;
-    wrapper.m_props = props;
+    wrapper.m_desc = desc;
 
     // Setup Dear ImGui context
     IMGUI_CHECKVERSION();
     ImGui::CreateContext();
     ImGuiIO& io = ImGui::GetIO();
-    io.ConfigFlags |= wrapper.m_props.enable_keyboard_navigation
+    io.ConfigFlags |= wrapper.m_desc.enable_keyboard_navigation
                           ? ImGuiConfigFlags_NavEnableKeyboard
                           : ImGuiConfigFlags_None;
-    io.ConfigFlags |= wrapper.m_props.enable_gamepad_navigation ? ImGuiConfigFlags_NavEnableGamepad
+    io.ConfigFlags |= wrapper.m_desc.enable_gamepad_navigation ? ImGuiConfigFlags_NavEnableGamepad
                                                                 : ImGuiConfigFlags_None;
 
     // Setup Dear ImGui style
@@ -62,21 +62,16 @@ bool rndr::ImGuiWrapper::Init(Window& window,
     auto lambda_callback =
         [](NativeWindowHandle handle, uint32_t msg_code, uint64_t param_w, int64_t param_l)
     {
-        return ImGui_ImplWin32_WndProcHandler(reinterpret_cast<HWND>(handle),
+        return ImGui_ImplWin32_WndProcHandler(handle,
                                               msg_code,
                                               param_w,
                                               param_l);
     };
-    Window::NativeWindowEventDelegate delegate;
-    delegate.Set(lambda_callback);
-    window.SetNativeWindowEventDelegate(delegate);
+    window.on_native_event.Bind(lambda_callback);
 
     // Setup Platform/Renderer backends
-    const NativeWindowHandle WindowHandle = window.GetNativeWindowHandle();  // NOLINT
-    ImGui_ImplWin32_Init(reinterpret_cast<void*>(WindowHandle));
-#if RNDR_DX11
-    ImGui_ImplDX11_Init(context.DX11Device, context.DX11DeviceContext);
-#elif RNDR_OPENGL
+    ImGui_ImplWin32_Init(window.GetNativeWindowHandle());
+#if RNDR_OPENGL
     ImGui_ImplOpenGL3_Init("#version 330");
 #else
     assert(false && "Unsupported graphics context!");
@@ -84,13 +79,11 @@ bool rndr::ImGuiWrapper::Init(Window& window,
     return true;
 }
 
-bool rndr::ImGuiWrapper::ShutDown()  // NOLINT
+bool Rndr::ImGuiWrapper::Destroy()  // NOLINT
 {
     ImGuiWrapper& wrapper = Get();
 
-#if RNDR_DX11
-    ImGui_ImplDX11_Shutdown();
-#elif RNDR_OPENGL
+#if  RNDR_OPENGL
     ImGui_ImplOpenGL3_Shutdown();
 #endif
 
@@ -103,7 +96,7 @@ bool rndr::ImGuiWrapper::ShutDown()  // NOLINT
     return true;
 }
 
-void rndr::ImGuiWrapper::StartFrame()
+void Rndr::ImGuiWrapper::StartFrame()
 {
     ImGuiWrapper& wrapper = Get();
 
@@ -114,22 +107,20 @@ void rndr::ImGuiWrapper::StartFrame()
     }
     wrapper.m_frame_started = true;
 
-#if RNDR_DX11
-    ImGui_ImplDX11_NewFrame();
-#elif RNDR_OPENGL
+#if RNDR_OPENGL
     ImGui_ImplOpenGL3_NewFrame();
 #endif
 
     ImGui_ImplWin32_NewFrame();
     ImGui::NewFrame();
 
-    if (wrapper.m_props.display_demo_window && wrapper.m_demo_window_opened)
+    if (wrapper.m_desc.display_demo_window && wrapper.m_demo_window_opened)
     {
         ImGui::ShowDemoWindow(&wrapper.m_demo_window_opened);
     }
 }
 
-void rndr::ImGuiWrapper::EndFrame()
+void Rndr::ImGuiWrapper::EndFrame()
 {
     ImGuiWrapper& wrapper = Get();
 
@@ -142,16 +133,14 @@ void rndr::ImGuiWrapper::EndFrame()
 
     ImGui::Render();
 
-#if RNDR_DX11
-    ImGui_ImplDX11_RenderDrawData(ImGui::GetDrawData());
-#elif RNDR_OPENGL
+#if RNDR_OPENGL
     ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
 #endif
 }
 
-const rndr::ImGuiProperties& rndr::ImGuiWrapper::GetProps()
+const Rndr::ImGuiDesc& Rndr::ImGuiWrapper::GetProps()
 {
-    return Get().m_props;
+    return Get().m_desc;
 }
 
 #endif  // RNDR_IMGUI
