@@ -14,5 +14,5 @@
 #include "rndr/core/string.h"
 #include "rndr/core/time.h"
 #include "rndr/core/window.h"
-
+#include "rndr/core/file.h"
 #include "rndr/render-api/render-api.h"

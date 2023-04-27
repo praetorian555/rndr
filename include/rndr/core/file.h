@@ -17,6 +17,8 @@ struct CPUImage
     int height = 0;
     PixelFormat pixel_format = PixelFormat::R32_TYPELESS;
     Array<uint8_t> data;
+
+    [[nodiscard]] bool IsValid() const { return !data.empty(); }
 };
 
 namespace File
@@ -38,8 +40,9 @@ namespace File
  * @param file_path Absolute or relative path to the file on the disc.
  *
  * @return Returns a valid CPUImage object containing the image info and data in the CPU memory. You
- * can check for CPUImage validity by checking the validity of Data field. In case of an error
- * returned object will be invalid. To release the memory use FreeImage API.
+ * can check for CPUImage validity by calling IsValid on it.
+ * @note Currently this supports regular image formats, not HDR. It will store pixels as RGBA in
+ * gamma correct space (SRGB).
  */
 [[nodiscard]] CPUImage ReadEntireImage(const String& file_path);
 
