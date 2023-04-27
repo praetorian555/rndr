@@ -10,6 +10,7 @@
 #include <glad/glad_wgl.h>
 
 #include "render-api/opengl-helpers.h"
+#include "rndr/core/file.h"
 #include "rndr/core/stack-array.h"
 #include "rndr/render-api/opengl-render-api.h"
 
@@ -468,6 +469,18 @@ bool Rndr::GraphicsContext::Bind(const Buffer& buffer, int32_t binding_index)
     return false;
 }
 
+bool Rndr::GraphicsContext::Bind(const Image& image)
+{
+    const GLuint native_texture = image.GetNativeTexture();
+    glBindTextures(0, 1, &native_texture);
+    if (glGetError() != GL_NO_ERROR)
+    {
+        RNDR_LOG_ERROR("Failed to bind image!");
+        return false;
+    }
+    return true;
+}
+
 bool Rndr::GraphicsContext::Draw(uint32_t vertex_count,
                                  uint32_t instance_count,
                                  uint32_t first_vertex,
@@ -805,6 +818,142 @@ const Rndr::BufferDesc& Rndr::Buffer::GetDesc() const
 GLuint Rndr::Buffer::GetNativeBuffer() const
 {
     return m_native_buffer;
+}
+
+Rndr::Image::Image(const GraphicsContext& graphics_context,
+                   const ImageDesc& desc,
+                   const ByteSpan& init_data)
+    : m_desc(desc)
+{
+    RNDR_UNUSED(graphics_context);
+    assert(desc.type == ImageType::Image2D);
+
+    const GLenum target = FromImageInfoToTarget(desc.type, desc.use_mips);
+    glCreateTextures(target, 1, &m_native_texture);
+    const GLint min_filter = desc.use_mips ? FromImageFilterToMinFilter(desc.sampler.min_filter,
+                                                                        desc.sampler.mip_map_filter)
+                                           : FromImageFilterToOpenGL(desc.sampler.min_filter);
+    const GLint mag_filter = FromImageFilterToOpenGL(desc.sampler.mag_filter);
+    glTextureParameteri(m_native_texture, GL_TEXTURE_MIN_FILTER, min_filter);
+    glTextureParameteri(m_native_texture, GL_TEXTURE_MAG_FILTER, mag_filter);
+    glTextureParameterf(m_native_texture, GL_TEXTURE_MAX_ANISOTROPY, desc.sampler.max_anisotropy);
+    const GLint address_mode_u = FromImageAddressModeToOpenGL(desc.sampler.address_mode_u);
+    const GLint address_mode_v = FromImageAddressModeToOpenGL(desc.sampler.address_mode_v);
+    const GLint address_mode_w = FromImageAddressModeToOpenGL(desc.sampler.address_mode_w);
+    glTextureParameteri(m_native_texture, GL_TEXTURE_WRAP_S, address_mode_u);
+    glTextureParameteri(m_native_texture, GL_TEXTURE_WRAP_T, address_mode_v);
+    glTextureParameteri(m_native_texture, GL_TEXTURE_WRAP_R, address_mode_w);
+    glTextureParameterfv(m_native_texture, GL_TEXTURE_BORDER_COLOR, desc.sampler.border_color.Data);
+    glTextureParameteri(m_native_texture, GL_TEXTURE_BASE_LEVEL, desc.sampler.base_mip_level);
+    glTextureParameteri(m_native_texture, GL_TEXTURE_MAX_LEVEL, desc.sampler.max_mip_level);
+    glTextureParameterf(m_native_texture, GL_TEXTURE_LOD_BIAS, desc.sampler.lod_bias);
+    glTextureParameterf(m_native_texture, GL_TEXTURE_MIN_LOD, desc.sampler.min_lod);
+    glTextureParameterf(m_native_texture, GL_TEXTURE_MAX_LOD, desc.sampler.max_lod);
+    // TODO(Marko): Left to handle GL_DEPTH_STENCIL_TEXTURE_MODE, GL_TEXTURE_COMPARE_FUNC,
+    // GL_TEXTURE_COMPARE_MODE
+
+    math::Vector2 size{static_cast<math::real>(desc.width), static_cast<math::real>(desc.height)};
+    int mip_map_levels = 1;
+    if (desc.use_mips)
+    {
+        mip_map_levels += static_cast<int>(math::Floor(math::Log2(math::Max(size.X, size.Y))));
+    }
+    if (desc.type == ImageType::Image2D)
+    {
+        const GLenum internal_format = FromPixelFormatToInternalFormat(desc.pixel_format);
+        const GLenum format = FromPixelFormatToFormat(desc.pixel_format);
+        const GLenum data_type = FromPixelFormatToDataType(desc.pixel_format);
+        glTextureStorage2D(m_native_texture,
+                           mip_map_levels,
+                           internal_format,
+                           desc.width,
+                           desc.height);
+        glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
+        constexpr int32_t k_mip_level = 0;
+        constexpr int32_t k_x_offset = 0;
+        constexpr int32_t k_y_offset = 0;
+        glTextureSubImage2D(m_native_texture,
+                            k_mip_level,
+                            k_x_offset,
+                            k_y_offset,
+                            desc.width,
+                            desc.height,
+                            format,
+                            data_type,
+                            init_data.data());
+    }
+    else
+    {
+        assert(false && "Not implemented yet!");
+    }
+    if (glGetError() != GL_NO_ERROR)
+    {
+        RNDR_LOG_ERROR("Failed to initialize image!");
+        Destroy();
+        return;
+    }
+}
+
+Rndr::Image::Image(const GraphicsContext& graphics_context,
+                   CPUImage& cpu_image,
+                   bool use_mips,
+                   const SamplerDesc& sampler_desc)
+    : Image(graphics_context,
+            ImageDesc{.width = cpu_image.width,
+                      .height = cpu_image.height,
+                      .type = ImageType::Image2D,
+                      .pixel_format = cpu_image.pixel_format,
+                      .use_mips = use_mips,
+                      .sampler = sampler_desc},
+            ByteSpan(cpu_image.data))
+{
+}
+
+Rndr::Image::~Image()
+{
+    Destroy();
+}
+
+Rndr::Image::Image(Image&& other) noexcept
+    : m_desc(other.m_desc), m_native_texture(other.m_native_texture)
+{
+    other.m_native_texture = k_invalid_opengl_object;
+}
+
+Rndr::Image& Rndr::Image::operator=(Image&& other) noexcept
+{
+    if (this != &other)
+    {
+        Destroy();
+        m_desc = other.m_desc;
+        m_native_texture = other.m_native_texture;
+        other.m_native_texture = k_invalid_opengl_object;
+    }
+    return *this;
+}
+
+void Rndr::Image::Destroy()
+{
+    if (m_native_texture != k_invalid_opengl_object)
+    {
+        glDeleteTextures(1, &m_native_texture);
+        m_native_texture = k_invalid_opengl_object;
+    }
+}
+
+bool Rndr::Image::IsValid() const
+{
+    return m_native_texture != k_invalid_opengl_object;
+}
+
+const Rndr::ImageDesc& Rndr::Image::GetDesc() const
+{
+    return m_desc;
+}
+
+GLuint Rndr::Image::GetNativeTexture() const
+{
+    return m_native_texture;
 }
 
 #endif  // RNDR_OPENGL

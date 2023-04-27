@@ -15,6 +15,7 @@ class Shader;
 class Pipeline;
 class InputLayout;
 class Buffer;
+class Image;
 
 /**
  * Represents a graphics context. This is the main entry point for the graphics API. It is used to
@@ -55,6 +56,13 @@ public:
      * @return Returns true if the buffer was bound successfully, false otherwise.
      */
     bool Bind(const Buffer& buffer, int32_t binding_index);
+
+    /**
+     * Binds an image to the graphics pipeline.
+     * @param image The image to bind.
+     * @return Returns true if the image was bound successfully, false otherwise.
+     */
+    bool Bind(const Image& image);
 
     /**
      * Swaps the front and back buffers of the swap chain.
@@ -209,6 +217,53 @@ public:
 private:
     BufferDesc m_desc;
     GLuint m_native_buffer = k_invalid_opengl_object;
+};
+
+/**
+ * Represents a texture on the GPU.
+ */
+class Image
+{
+public:
+    /**
+     * Creates a new image. Only creates Image2D so any other type will result in invalid image.
+     * @param graphics_context The graphics context to create the image with.
+     * @param desc The description of the image to create.
+     * @param init_data The initial data to fill the image with. Default is empty.
+     */
+    Image(const GraphicsContext& graphics_context,
+          const ImageDesc& desc,
+          const ByteSpan& init_data = ByteSpan{});
+
+    /**
+     * Creates a new image from a CPU image. Only creates Image2D so any other type will result in
+     * invalid image.
+     * @param graphics_context The graphics context to create the image with.
+     * @param cpu_image The CPU image to create the image with.
+     * @param use_mips Whether or not to use mips for the image.
+     * @param sampler_desc The sampler description to use for the image.
+     */
+    Image(const GraphicsContext& graphics_context,
+          CPUImage& cpu_image,
+          bool use_mips,
+          const SamplerDesc& sampler_desc);
+
+    ~Image();
+    Image(const Image&) = delete;
+    Image& operator=(const Image&) = delete;
+    Image(Image&& other) noexcept;
+    Image& operator=(Image&& other) noexcept;
+
+    void Destroy();
+
+    [[nodiscard]] bool IsValid() const;
+
+    [[nodiscard]] const ImageDesc& GetDesc() const;
+    [[nodiscard]] GLuint GetNativeTexture() const;
+
+private:
+    ImageDesc m_desc;
+    GLuint m_native_texture = k_invalid_opengl_object;
 };
 
 }  // namespace Rndr

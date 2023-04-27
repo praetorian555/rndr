@@ -73,7 +73,8 @@ enum class PixelFormat
     R32_TYPELESS,
     R16_TYPELESS,
 
-    Count
+    /** Represents number of elements in the enum. */
+    EnumCount
 };
 
 /**
@@ -510,7 +511,7 @@ struct SamplerDesc
      * Maximum anisotropy level to use. If larger then 1 the anisotropic filtering is active. This
      * filter can be used in combination with the min and mag filters.
      */
-    uint32_t max_anisotropy = 1;
+    float max_anisotropy = 1.0f;
 
     /** Address mode used for the u image coordinate. */
     ImageAddressMode address_mode_u = ImageAddressMode::Repeat;
@@ -531,16 +532,16 @@ struct SamplerDesc
     float lod_bias = 0;
 
     /** Minimum mip level to use. */
-    float base_mip_level = 0;
+    int32_t base_mip_level = 0;
 
     /** Maximum mip level to use. */
-    float max_mip_level = 1'000;
+    int32_t max_mip_level = 0;
 
     /** Minimum LOD level to use. This value will resolve to base_mip_level value. */
-    real min_lod = 0;
+    float min_lod = 0.0f;
 
     /** Maximum LOD level to use. This value can't be larger then max_mip_level. */
-    real max_lod = 1'000;
+    float max_lod = 0.0f;
 };
 
 struct ImageDesc
@@ -555,7 +556,7 @@ struct ImageDesc
     int32_t array_size = 1;
 
     /** Type of the image. */
-    ImageType type;
+    ImageType type = ImageType::Image2D;
 
     /** Image pixel format. */
     PixelFormat pixel_format = PixelFormat::R8G8B8A8_UNORM_SRGB;
@@ -729,10 +730,10 @@ struct PipelineDesc
 // Helper functions
 
 /**
- * Get size of a pixel in bytes based on the layout.
- * @param Layout Specifies the order of channels and their size.
- * @return Returns the size of a pixel in bytes.
+ * Returns the size of a pixel in bytes.
+ * @param format Pixel format.
+ * @return Size of a pixel in bytes.
  */
-int GetPixelSize(PixelFormat Format);
+int32_t GetPixelSize(PixelFormat format);
 
 }  // namespace Rndr
