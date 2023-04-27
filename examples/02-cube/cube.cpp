@@ -2,6 +2,10 @@
 
 void Run();
 
+/**
+ * Shows how to use a data buffer to change GPU data per frame. Shows how to use math transformations.
+ * Shows how to render 3D objects as well as their wireframes.
+ */
 int main()
 {
     Rndr::Init();
