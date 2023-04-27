@@ -109,6 +109,13 @@ public:
      */
     bool Update(Buffer& buffer, const ByteSpan& data, uint32_t offset = 0);
 
+    /**
+     * Reads the contents of a swap chain color image.
+     * @param swap_chain The swap chain to read.
+     * @return Returns the image data.
+     */
+    CPUImage ReadSwapChain(const SwapChain& swap_chain);
+
 private:
     GraphicsContextDesc m_desc;
     NativeDeviceContextHandle m_native_device_context = k_invalid_device_context_handle;

@@ -508,6 +508,21 @@ bool Rndr::GraphicsContext::Update(Buffer& buffer, const ByteSpan& data, uint32_
     return true;
 }
 
+Rndr::CPUImage Rndr::GraphicsContext::ReadSwapChain(const SwapChain& swap_chain)
+{
+    const int32_t width = swap_chain.GetDesc().width;
+    const int32_t height = swap_chain.GetDesc().height;
+    const int32_t size = width * height * 4;
+    ByteArray data(size);
+    glReadPixels(0, 0, width, height, GL_RGBA, GL_UNSIGNED_BYTE, data.data());
+    if (glGetError() != GL_NO_ERROR)
+    {
+        RNDR_LOG_ERROR("Failed to read swap chain!");
+        return {};
+    }
+    return CPUImage{width, height, PixelFormat::R8G8B8A8_UNORM_SRGB, data};
+}
+
 Rndr::SwapChain::SwapChain(const Rndr::GraphicsContext& graphics_context,
                            const Rndr::SwapChainDesc& desc)
     : m_desc(desc)
