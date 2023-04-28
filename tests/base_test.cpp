@@ -3,128 +3,30 @@
 #include "rndr/core/base.h"
 #include "rndr/core/delegate.h"
 
-bool CustomAllocInit(Rndr::OpaquePtr init_data, Rndr::OpaquePtr* allocator_data)
+class CustomLogger : public Rndr::Logger
 {
-    RNDR_UNUSED(init_data);
-    RNDR_UNUSED(allocator_data);
-    return true;
-}
-
-bool CustomAllocDestroy(Rndr::OpaquePtr allocator_data)
-{
-    RNDR_UNUSED(allocator_data);
-    return true;
-}
-
-Rndr::OpaquePtr CustomAllocate(Rndr::OpaquePtr allocator_data, uint64_t size, const char* tag)
-{
-    RNDR_UNUSED(allocator_data);
-    RNDR_UNUSED(tag);
-    return malloc(size);
-}
-
-void CustomFree(Rndr::OpaquePtr allocator_data, Rndr::OpaquePtr ptr)
-{
-    RNDR_UNUSED(allocator_data);
-    free(ptr);
-}
-
-bool CustomLogInit(Rndr::OpaquePtr init_data, Rndr::OpaquePtr* logger_data)
-{
-    RNDR_UNUSED(init_data);
-    RNDR_UNUSED(logger_data);
-    return true;
-}
-
-bool CustomLogDestroy(Rndr::OpaquePtr logger_data)
-{
-    RNDR_UNUSED(logger_data);
-    return true;
-}
-
-void CustomLog(Rndr::OpaquePtr logger_data,
-               const char* file,
-               int line,
-               const char* function,
-               Rndr::LogLevel log_level,
-               const char* message)
-{
-    RNDR_UNUSED(logger_data);
-    RNDR_UNUSED(file);
-    RNDR_UNUSED(line);
-    RNDR_UNUSED(function);
-    RNDR_UNUSED(log_level);
-    RNDR_UNUSED(message);
-}
+    void Log(const std::source_location& source_location,
+             Rndr::LogLevel log_level,
+             const char* message)
+    {
+        RNDR_UNUSED(source_location);
+        RNDR_UNUSED(log_level);
+        RNDR_UNUSED(message);
+    }
+};
 
 TEST_CASE("Init", "[init]")
 {
     SECTION("Default create and destroy")
     {
         REQUIRE(Rndr::Init());
-        const Rndr::Allocator& allocator = Rndr::GetAllocator();
-        REQUIRE(IsValid(allocator));
-        REQUIRE(allocator.allocator_data == nullptr);
-        REQUIRE(allocator.init == nullptr);
-        REQUIRE(allocator.destroy == nullptr);
-        REQUIRE(allocator.allocate == &Rndr::DefaultAllocator::Allocate);
-        REQUIRE(allocator.free == &Rndr::DefaultAllocator::Free);
-        const Rndr::Logger& logger = Rndr::GetLogger();
-        REQUIRE(IsValid(logger));
-        REQUIRE(logger.logger_data != nullptr);
-        REQUIRE(logger.init == &Rndr::DefaultLogger::Init);
-        REQUIRE(logger.destroy == &Rndr::DefaultLogger::Destroy);
-        REQUIRE(logger.log == &Rndr::DefaultLogger::Log);
-        REQUIRE(Rndr::Destroy());
-    }
-    constexpr uint64_t k_test_allocator_data = 0xdeadbeefdeadbaaf;
-    SECTION("Create with custom allocator")
-    {
-        Rndr::Allocator allocator;
-        allocator.allocator_data = reinterpret_cast<Rndr::OpaquePtr>(k_test_allocator_data);
-        allocator.init = &CustomAllocInit;
-        allocator.destroy = &CustomAllocDestroy;
-        allocator.allocate = &CustomAllocate;
-        allocator.free = &CustomFree;
-        REQUIRE(Rndr::Init({.user_allocator = allocator}));
-        const Rndr::Allocator& rndr_allocator = Rndr::GetAllocator();
-        REQUIRE(IsValid(rndr_allocator));
-        REQUIRE(rndr_allocator.allocator_data
-                == reinterpret_cast<Rndr::OpaquePtr>(k_test_allocator_data));
-        REQUIRE(rndr_allocator.init == &CustomAllocInit);
-        REQUIRE(rndr_allocator.destroy == &CustomAllocDestroy);
-        REQUIRE(rndr_allocator.allocate == &CustomAllocate);
-        REQUIRE(rndr_allocator.free == &CustomFree);
-        const Rndr::Logger& logger = Rndr::GetLogger();
-        REQUIRE(IsValid(logger));
-        REQUIRE(logger.logger_data != nullptr);
-        REQUIRE(logger.init == &Rndr::DefaultLogger::Init);
-        REQUIRE(logger.destroy == &Rndr::DefaultLogger::Destroy);
-        REQUIRE(logger.log == &Rndr::DefaultLogger::Log);
         REQUIRE(Rndr::Destroy());
     }
     SECTION("Create with custom logger")
     {
-        Rndr::Logger logger;
-        logger.logger_data = reinterpret_cast<Rndr::OpaquePtr>(k_test_allocator_data);
-        logger.init = &CustomLogInit;
-        logger.destroy = &CustomLogDestroy;
-        logger.log = &CustomLog;
-        REQUIRE(Rndr::Init({.user_logger = logger}));
-        const Rndr::Allocator& allocator = Rndr::GetAllocator();
-        REQUIRE(IsValid(allocator));
-        REQUIRE(allocator.allocator_data == nullptr);
-        REQUIRE(allocator.init == nullptr);
-        REQUIRE(allocator.destroy == nullptr);
-        REQUIRE(allocator.allocate == &Rndr::DefaultAllocator::Allocate);
-        REQUIRE(allocator.free == &Rndr::DefaultAllocator::Free);
-        const Rndr::Logger& rndr_logger = Rndr::GetLogger();
-        REQUIRE(IsValid(rndr_logger));
-        REQUIRE(rndr_logger.logger_data
-                == reinterpret_cast<Rndr::OpaquePtr>(k_test_allocator_data));
-        REQUIRE(rndr_logger.init == &CustomLogInit);
-        REQUIRE(rndr_logger.destroy == &CustomLogDestroy);
-        REQUIRE(rndr_logger.log == &CustomLog);
+        Rndr::Logger* custom_logger = RNDR_NEW(CustomLogger);
+        REQUIRE(Rndr::Init({.user_logger = custom_logger}));
+        REQUIRE(&Rndr::GetLogger() == custom_logger);
         REQUIRE(Rndr::Destroy());
     }
 }
@@ -134,9 +36,10 @@ TEST_CASE("Allocate and free", "[memory]")
     SECTION("Default allocate and free")
     {
         REQUIRE(Rndr::Init());
-        Rndr::OpaquePtr ptr = Rndr::Allocate(1, "test");
+        int* ptr = RNDR_NEW(int, 1);
         REQUIRE(ptr != nullptr);
-        Rndr::Free(ptr);
+        REQUIRE(*ptr == 1);
+        RNDR_DELETE(int, ptr);
         REQUIRE(Rndr::Destroy());
     }
 }
@@ -191,10 +94,7 @@ TEST_CASE("Delegate", "[delegate]")
         {
             struct Functor
             {
-                void operator()(int a) const
-                {
-                    REQUIRE(a == 1);
-                }
+                void operator()(int a) const { REQUIRE(a == 1); }
             };
             Rndr::Delegate<void(int)> delegate;
             delegate.Bind(Functor());
@@ -204,10 +104,7 @@ TEST_CASE("Delegate", "[delegate]")
         {
             struct Functor
             {
-                void operator()() const
-                {
-                    REQUIRE(true);
-                }
+                void operator()() const { REQUIRE(true); }
             };
             Rndr::Delegate<void()> delegate;
             delegate.Bind(Functor());
@@ -285,10 +182,7 @@ TEST_CASE("Multi delegate", "[delegate]")
         {
             struct Functor
             {
-                void operator()(int a) const
-                {
-                    REQUIRE(a == 1);
-                }
+                void operator()(int a) const { REQUIRE(a == 1); }
             };
             Rndr::MultiDelegate<void(int)> delegate;
             delegate.Bind(Functor());
@@ -299,10 +193,7 @@ TEST_CASE("Multi delegate", "[delegate]")
         {
             struct Functor
             {
-                void operator()() const
-                {
-                    REQUIRE(true);
-                }
+                void operator()() const { REQUIRE(true); }
             };
             Rndr::MultiDelegate<void()> delegate;
             delegate.Bind(Functor());

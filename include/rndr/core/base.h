@@ -1,5 +1,7 @@
 #pragma once
 
+#include <source_location>
+
 #include "rndr/core/definitions.h"
 
 namespace Rndr
@@ -8,19 +10,6 @@ namespace Rndr
 // Types ///////////////////////////////////////////////////////////////////////////////////////////
 
 using OpaquePtr = void*;
-
-/**
- * Allocator interface.
- */
-struct Allocator
-{
-    OpaquePtr allocator_data = nullptr;
-
-    bool (*init)(OpaquePtr init_data, OpaquePtr* allocator_data) = nullptr;
-    bool (*destroy)(OpaquePtr allocator_data) = nullptr;
-    OpaquePtr (*allocate)(OpaquePtr allocator_data, uint64_t size, const char* tag) = nullptr;
-    void (*free)(OpaquePtr allocator_data, OpaquePtr ptr) = nullptr;
-};
 
 enum class LogLevel
 {
@@ -36,49 +25,20 @@ enum class LogLevel
  */
 struct Logger
 {
-    OpaquePtr logger_data = nullptr;
+    virtual ~Logger() = default;
 
-    bool (*init)(OpaquePtr init_data, OpaquePtr* logger_data) = nullptr;
-    bool (*destroy)(OpaquePtr logger_data) = nullptr;
-    void (*log)(OpaquePtr logger_data,
-                const char* file,
-                int line,
-                const char* function,
-                Rndr::LogLevel log_level,
-                const char* message) = nullptr;
+    virtual void Log(const std::source_location& source_location,
+                     LogLevel log_level,
+                     const char* message) = 0;
 };
-
-/**
- * Default allocator. Uses malloc and free to allocate and free memory.
- */
-namespace DefaultAllocator
-{
-Rndr::OpaquePtr Allocate(OpaquePtr allocator_data, uint64_t size, const char* tag);
-void Free(OpaquePtr allocator_data, OpaquePtr ptr);
-}  // namespace DefaultAllocator
-
-/**
- * Default logger. Uses spdlog to log messages. Log is sent to standard output using the background
- * thread.
- */
-namespace DefaultLogger
-{
-bool Init(OpaquePtr init_data, OpaquePtr* logger_data);
-bool Destroy(OpaquePtr logger_data);
-void Log(OpaquePtr logger_data,
-         const char* file,
-         int line,
-         const char* function,
-         Rndr::LogLevel log_level,
-         const char* message);
-}  // namespace DefaultLogger
 
 struct RndrDesc
 {
-    // User specified allocator. If no allocator is provided, the default allocator is used.
-    Allocator user_allocator;
-    // User specified logger. If no logger is provided, the default logger is used.
-    Logger user_logger;
+    /** User specified logger. If no logger is provided, the default logger is used. */
+    Logger* user_logger = nullptr;
+
+    /** If we should enable the input system. Defaults to no. */
+    bool enable_input_system = false;
 };
 
 // API /////////////////////////////////////////////////////////////////////////////////////////////
@@ -97,13 +57,6 @@ bool Init(const RndrDesc& desc = RndrDesc{});
 bool Destroy();
 
 /**
- * Checks if the allocator is valid.
- * @param allocator Allocator to check.
- * @return True if the allocator is valid.
- */
-bool IsValid(const Allocator& allocator);
-
-/**
  * Checks if the logger is valid.
  * @param logger Logger to check.
  * @return True if the logger is valid.
@@ -111,46 +64,10 @@ bool IsValid(const Allocator& allocator);
 bool IsValid(const Logger& logger);
 
 /**
- * Gets the library's allocator.
- * @return Library's allocator.
- */
-const Allocator& GetAllocator();
-
-/**
- * Sets the library's allocator.
- * @param allocator Allocator to set.
- * @return True if the allocator was set successfully.
- */
-bool SetAllocator(const Allocator& allocator);
-
-/**
  * Gets the library's logger.
  * @return Library's logger.
  */
 const Logger& GetLogger();
-
-/**
- * Sets the library's logger.
- * @param logger Logger to set.
- * @return True if the logger was set successfully.
- */
-bool SetLogger(const Logger& logger);
-
-/**
- * Allocates memory using the user specified allocator. If no allocator is provided, the default
- * allocator is used.
- * @param size Size of the memory to allocate.
- * @param tag Tag for the memory.
- * @return Pointer to the allocated memory.
- */
-OpaquePtr Allocate(uint64_t size, const char* tag);
-
-/**
- * Frees memory using the user specified allocator. If no allocator is provided, the default
- * allocator is used.
- * @param ptr Pointer to the memory to free.
- */
-void Free(OpaquePtr ptr);
 
 /**
  * Logs a message using the user specified logger. If no logger is provided, the default logger is
@@ -162,9 +79,7 @@ void Free(OpaquePtr ptr);
  * @param format Format string for the message.
  * @param ... Arguments for the format string.
  */
-void Log(const char* file,
-         int line,
-         const char* function_name,
+void Log(const std::source_location& source_location,
          Rndr::LogLevel log_level,
          const char* format,
          ...);
@@ -173,21 +88,41 @@ void Log(const char* file,
 
 // Helper macros ///////////////////////////////////////////////////////////////////////////////////
 
+/**
+ * Helper macro to allocate and create a new object.
+ * @param type Type of the object to create.
+ * @param ... Arguments for the object's constructor.
+ */
 #define RNDR_NEW(type, ...) \
     new type                \
     {                       \
         __VA_ARGS__         \
     }
+
+/**
+ * Helper macro to invoke destructor and to deallocate memory.
+ * @param type Type of the object to delete.
+ * @param ptr Pointer to the object to delete.
+ */
 #define RNDR_DELETE(type, ptr) delete ptr
+
+/**
+ * Helper macro to invoke destructor and to deallocate memory for an array.
+ * @param type Type of the elements of the array to delete.
+ * @param ptr Pointer to the start of the array to delete.
+ */
 #define RNDR_DELETE_ARRAY(type, ptr) delete[] ptr
 
+/**
+ * Helper macros to log messages.
+ */
 #define RNDR_LOG_ERROR(format, ...) \
-    Rndr::Log(__FILE__, __LINE__, __func__, Rndr::LogLevel::Error, format, __VA_ARGS__)
+    Rndr::Log(std::source_location::current(), Rndr::LogLevel::Error, format, __VA_ARGS__)
 #define RNDR_LOG_WARNING(format, ...) \
-    Rndr::Log(__FILE__, __LINE__, __func__, Rndr::LogLevel::Warning, format, __VA_ARGS__)
+    Rndr::Log(std::source_location::current(), Rndr::LogLevel::Warning, format, __VA_ARGS__)
 #define RNDR_LOG_DEBUG(format, ...) \
-    Rndr::Log(__FILE__, __LINE__, __func__, Rndr::LogLevel::Debug, format, __VA_ARGS__)
+    Rndr::Log(std::source_location::current(), Rndr::LogLevel::Debug, format, __VA_ARGS__)
 #define RNDR_LOG_INFO(format, ...) \
-    Rndr::Log(__FILE__, __LINE__, __func__, Rndr::LogLevel::Info, format, __VA_ARGS__)
+    Rndr::Log(std::source_location::current(), Rndr::LogLevel::Info, format, __VA_ARGS__)
 #define RNDR_LOG_TRACE(format, ...) \
-    Rndr::Log(__FILE__, __LINE__, __func__, Rndr::LogLevel::Trace, format, __VA_ARGS__)
+    Rndr::Log(std::source_location::current(), Rndr::LogLevel::Trace, format, __VA_ARGS__)

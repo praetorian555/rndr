@@ -140,7 +140,7 @@ TEST_CASE("Input context", "[input]")
 
 TEST_CASE("Input system", "[input]")
 {
-    REQUIRE(Rndr::Init());
+    REQUIRE(Rndr::Init({.enable_input_system = true}));
 
     SECTION("Default context")
     {

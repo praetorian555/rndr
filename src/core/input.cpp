@@ -320,14 +320,20 @@ Rndr::InputContext& Rndr::InputSystem::GetCurrentContext()
 
 bool Rndr::InputSystem::PushContext(const Rndr::InputContext& context)
 {
-    assert(g_system_data != nullptr);
+    if (g_system_data == nullptr)
+    {
+        return false;
+    }
     g_system_data->contexts.emplace_back(*context.m_context_data.get());
     return true;
 }
 
 bool Rndr::InputSystem::PopContext()
 {
-    assert(g_system_data != nullptr);
+    if (g_system_data == nullptr)
+    {
+        return false;
+    }
     if (g_system_data->contexts.size() == 1)
     {
         RNDR_LOG_ERROR("Cannot pop default context");
@@ -341,7 +347,10 @@ bool Rndr::InputSystem::SubmitButtonEvent(OpaquePtr window,
                                           InputPrimitive primitive,
                                           InputTrigger trigger)
 {
-    assert(g_system_data != nullptr);
+    if (g_system_data == nullptr)
+    {
+        return false;
+    }
     const Event event{window, ButtonData{primitive, trigger}};
     g_system_data->events.push(event);
     return true;
@@ -351,7 +360,10 @@ bool Rndr::InputSystem::SubmitMousePositionEvent(OpaquePtr window,
                                                  const math::Point2& position,
                                                  const math::Vector2& screen_size)
 {
-    assert(g_system_data != nullptr);
+    if (g_system_data == nullptr)
+    {
+        return false;
+    }
     if (screen_size.X == 0 || screen_size.Y == 0)
     {
         return false;
@@ -365,7 +377,10 @@ bool Rndr::InputSystem::SubmitRelativeMousePositionEvent(OpaquePtr window,
                                                          const math::Vector2& delta_position,
                                                          const math::Vector2& screen_size)
 {
-    assert(g_system_data != nullptr);
+    if (g_system_data == nullptr)
+    {
+        return false;
+    }
     if (screen_size.X == 0 || screen_size.Y == 0)
     {
         return false;
@@ -377,6 +392,10 @@ bool Rndr::InputSystem::SubmitRelativeMousePositionEvent(OpaquePtr window,
 
 bool Rndr::InputSystem::SubmitMouseWheelEvent(OpaquePtr window, int32_t delta_wheel)
 {
+    if (g_system_data == nullptr)
+    {
+        return false;
+    }
     const Event event{window, MouseWheelData{delta_wheel}};
     g_system_data->events.push(event);
     return true;
@@ -401,7 +420,10 @@ bool Rndr::InputSystem::ProcessEvents(real delta_seconds)
 {
     RNDR_UNUSED(delta_seconds);
 
-    assert(g_system_data != nullptr);
+    if (g_system_data == nullptr)
+    {
+        return false;
+    }
     EventQueue& events = g_system_data->events;
     const InputContextData& context = g_system_data->contexts.back();
     while (!events.empty())
