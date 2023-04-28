@@ -23,6 +23,8 @@ GLint FromImageAddressModeToOpenGL(ImageAddressMode wrap);
 GLenum FromPixelFormatToInternalFormat(PixelFormat format);
 GLenum FromPixelFormatToFormat(PixelFormat format);
 GLenum FromPixelFormatToDataType(PixelFormat format);
+GLint FromPixelFormatToComponentCount(PixelFormat format);
+GLenum FromPixelFormatToComponentType(PixelFormat format);
 
 
 } // namespace Rndr

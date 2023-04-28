@@ -165,6 +165,8 @@ constexpr Rndr::StackArray<GLenum, k_max_pixel_format> k_to_opengl_pixel_type = 
     GL_UNSIGNED_SHORT};
 constexpr Rndr::StackArray<int32_t, k_max_pixel_format> k_to_pixel_size = {
     4, 4, 4, 4, 4, 4, 4, 4, 1, 1, 1, 1, 16, 16, 16, 12, 12, 12, 8, 8, 8, 4, 4, 4, 4, 2};
+constexpr Rndr::StackArray<GLint, k_max_pixel_format> k_to_component_count = {
+    4, 4, 4, 4, 4, 4, 4, 2, 1, 1, 1, 1, 4, 4, 4, 3, 3, 3, 2, 2, 2, 1, 1, 1, 1, 1};
 
 GLenum Rndr::FromShaderTypeToOpenGL(ShaderType type)
 {
@@ -287,5 +289,11 @@ int32_t Rndr::GetPixelSize(PixelFormat format)
 {
     return k_to_pixel_size[static_cast<size_t>(format)];
 }
+
+GLint Rndr::FromPixelFormatToComponentCount(PixelFormat format)
+{
+    return k_to_component_count[static_cast<size_t>(format)];
+}
+
 
 #endif  // RNDR_OPENGL
