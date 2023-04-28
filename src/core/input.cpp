@@ -13,7 +13,7 @@ struct ActionData
 {
     Rndr::InputAction action;
     Rndr::InputCallback callback;
-    Rndr::OpaquePtr native_window;
+    Rndr::NativeWindowHandle native_window;
     Rndr::Array<Rndr::InputBinding> bindings;
 };
 
@@ -53,7 +53,7 @@ using EventData =
 
 struct Event
 {
-    Rndr::OpaquePtr native_window;
+    Rndr::NativeWindowHandle native_window;
     EventData data;
 };
 
@@ -343,7 +343,7 @@ bool Rndr::InputSystem::PopContext()
     return true;
 }
 
-bool Rndr::InputSystem::SubmitButtonEvent(OpaquePtr window,
+bool Rndr::InputSystem::SubmitButtonEvent(NativeWindowHandle window,
                                           InputPrimitive primitive,
                                           InputTrigger trigger)
 {
@@ -356,7 +356,7 @@ bool Rndr::InputSystem::SubmitButtonEvent(OpaquePtr window,
     return true;
 }
 
-bool Rndr::InputSystem::SubmitMousePositionEvent(OpaquePtr window,
+bool Rndr::InputSystem::SubmitMousePositionEvent(NativeWindowHandle window,
                                                  const math::Point2& position,
                                                  const math::Vector2& screen_size)
 {
@@ -373,7 +373,7 @@ bool Rndr::InputSystem::SubmitMousePositionEvent(OpaquePtr window,
     return true;
 }
 
-bool Rndr::InputSystem::SubmitRelativeMousePositionEvent(OpaquePtr window,
+bool Rndr::InputSystem::SubmitRelativeMousePositionEvent(NativeWindowHandle window,
                                                          const math::Vector2& delta_position,
                                                          const math::Vector2& screen_size)
 {
@@ -390,7 +390,7 @@ bool Rndr::InputSystem::SubmitRelativeMousePositionEvent(OpaquePtr window,
     return true;
 }
 
-bool Rndr::InputSystem::SubmitMouseWheelEvent(OpaquePtr window, int32_t delta_wheel)
+bool Rndr::InputSystem::SubmitMouseWheelEvent(NativeWindowHandle window, int32_t delta_wheel)
 {
     if (g_system_data == nullptr)
     {
@@ -406,7 +406,7 @@ namespace Rndr
 struct InputEventProcessor
 {
     Ref<const InputContextData> context;
-    OpaquePtr native_window;
+    NativeWindowHandle native_window;
 
     void operator()(const ButtonData& event) const;
     void operator()(const MousePositionData& event) const;

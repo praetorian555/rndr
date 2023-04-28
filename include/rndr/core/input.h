@@ -11,6 +11,7 @@
 #include "rndr/core/scope-ptr.h"
 #include "rndr/core/span.h"
 #include "rndr/core/string.h"
+#include "rndr/core/forward-def-windows.h"
 
 namespace Rndr
 {
@@ -63,7 +64,7 @@ struct InputActionData
 {
     InputCallback callback = nullptr;
     /** If null, callback will be called for any window triggering one of the bindings. */
-    OpaquePtr native_window = nullptr;
+    NativeWindowHandle native_window = nullptr;
     Span<InputBinding> bindings;
 };
 
@@ -210,7 +211,7 @@ public:
      * @param trigger Input trigger detected. For buttons this is InputTrigger::ButtonDown,
      * InputTrigger::ButtonUp or InputTrigger::DoubleClick.
      */
-    static bool SubmitButtonEvent(OpaquePtr window, InputPrimitive primitive, InputTrigger trigger);
+    static bool SubmitButtonEvent(NativeWindowHandle window, InputPrimitive primitive, InputTrigger trigger);
 
     /**
      * Submits a mouse position event to the input system.
@@ -219,7 +220,7 @@ public:
      * corner.
      * @param screen_size Size of the screen in pixels.
      */
-    static bool SubmitMousePositionEvent(OpaquePtr window,
+    static bool SubmitMousePositionEvent(NativeWindowHandle window,
                                          const math::Point2& position,
                                          const math::Vector2& screen_size);
 
@@ -231,7 +232,7 @@ public:
      * mouse position. Positive values mean the mouse moved to the right or up.
      * @param screen_size Size of the screen in pixels.
      */
-    static bool SubmitRelativeMousePositionEvent(OpaquePtr window,
+    static bool SubmitRelativeMousePositionEvent(NativeWindowHandle window,
                                                  const math::Vector2& delta_position,
                                                  const math::Vector2& screen_size);
 
@@ -241,7 +242,7 @@ public:
      * @param delta_wheel Number of ticks the mouse wheel was rotated. Positive values mean the
      * wheel was rotated forward, away from the user.
      */
-    static bool SubmitMouseWheelEvent(OpaquePtr window, int delta_wheel);
+    static bool SubmitMouseWheelEvent(NativeWindowHandle window, int delta_wheel);
 
     /**
      * Helper function to check if the primitive is a button.
