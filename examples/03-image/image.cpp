@@ -8,10 +8,8 @@ void Run();
  */
 int main()
 {
-    Rndr::Init();
-    Rndr::InputSystem::Init();
+    Rndr::Init({.enable_input_system = true});
     Run();
-    Rndr::InputSystem::Destroy();
     Rndr::Destroy();
 }
 
