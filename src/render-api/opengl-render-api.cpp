@@ -708,6 +708,43 @@ Rndr::Pipeline::Pipeline(const GraphicsContext& graphics_context, const Pipeline
         Destroy();
         return;
     }
+    glBindVertexArray(m_native_vertex_array);
+    for (int i = 0; i < desc.input_layout.buffers.size(); i++)
+    {
+        const Buffer& buffer = desc.input_layout.buffers[i].get();
+        const int32_t binding_index = desc.input_layout.buffer_binding_indices[i];
+        glVertexArrayVertexBuffer(m_native_vertex_array,
+                                  binding_index,
+                                  buffer.GetNativeBuffer(),
+                                  0,
+                                  buffer.GetDesc().stride);
+    }
+    for (int i = 0; i < desc.input_layout.elements.size(); i++)
+    {
+        const InputLayoutElement& element = desc.input_layout.elements[i];
+        const int32_t attribute_index = i;
+        constexpr GLboolean k_should_normalize_data = GL_FALSE;
+        glEnableVertexArrayAttrib(m_native_vertex_array, attribute_index);
+        glVertexArrayAttribFormat(m_native_vertex_array,
+                                  attribute_index,
+                                  FromPixelFormatToComponentCount(element.format),
+                                  FromPixelFormatToDataType(element.format),
+                                  k_should_normalize_data,
+                                  element.offset_in_vertex);
+        glVertexArrayAttribBinding(m_native_vertex_array, attribute_index, element.binding_index);
+        if (element.repetition == DataRepetition::PerInstance)
+        {
+            glVertexArrayBindingDivisor(m_native_vertex_array,
+                                        element.binding_index,
+                                        element.instance_step_rate);
+        }
+        if (glGetError() != GL_NO_ERROR)
+        {
+            RNDR_LOG_ERROR("Failed to set vertex array attribute!");
+            Destroy();
+            return;
+        }
+    }
 }
 
 Rndr::Pipeline::~Pipeline()

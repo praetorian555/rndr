@@ -6,6 +6,7 @@
 #include "rndr/core/array.h"
 #include "rndr/core/base.h"
 #include "rndr/core/forward-def-windows.h"
+#include "rndr/core/ref.h"
 #include "rndr/core/span.h"
 #include "rndr/core/stack-array.h"
 #include "rndr/core/string.h"
@@ -571,25 +572,51 @@ struct ImageDesc
 struct FrameBufferProperties
 {
     int ColorBufferCount = 1;
-    StackArray<ImageDesc, GraphicsConstants::kMaxFrameBufferColorBuffers>
-        ColorBufferProperties;
+    StackArray<ImageDesc, GraphicsConstants::kMaxFrameBufferColorBuffers> ColorBufferProperties;
 
     bool UseDepthStencil = false;
     ImageDesc DepthStencilBufferProperties;
 };
 
-constexpr int kAppendAlignedElement = -1;
+/**
+ * Describes a single element in the input layout. Input layout is a description of the vertex
+ * and instance buffer data. It tells the graphics API how to interpret the data in the buffers.
+ *
+ * For example, vertex data consists of position, normal and texture coordinates. Each of these is
+ * represented by one element in the input layout.
+ */
+struct InputLayoutElement
+{
+    /** Data format of the element. */
+    PixelFormat format = PixelFormat::R32G32B32_FLOAT;
+
+    /**
+     * Offset of the element in bytes from the start of the element group. You can use
+     * k_append_element to set offset where the previous element ends.
+     */
+    int32_t offset_in_vertex = 0;
+
+    /** Slot at which the containing vertex buffer is bound. */
+    int32_t binding_index = 0;
+
+    /** Is this element present for each vertex or each instance. */
+    DataRepetition repetition = DataRepetition::PerVertex;
+
+    /** In case data is repeated on instance level this allows us to skip some instances. */
+    int32_t instance_step_rate = 0;
+};
+
+/**
+ * Describes the input layout of a pipeline. Input layout is a description of the vertex
+ * and instance buffer data. It tells the graphics API how to interpret the data in the buffers.
+ * It contains data description for all buffers used by the pipeline.
+ */
+class Buffer;
 struct InputLayoutDesc
 {
-    std::string SemanticName;
-    int SemanticIndex = 0;
-    PixelFormat Format = PixelFormat::R32G32B32_FLOAT;
-    int OffsetInVertex = 0;  // Use AppendAlignedElement to align it to the previous element
-    // Corresponds to the index of a vertex buffer in a mesh
-    int InputSlot = 0;
-    DataRepetition Repetition = DataRepetition::PerVertex;
-    // In case data is repeated on instance level this allows us to skip some instances
-    int InstanceStepRate = 0;
+    Array<Ref<Buffer>> buffers;
+    Array<int32_t> buffer_binding_indices;
+    Array<InputLayoutElement> elements;
 };
 
 struct RasterizerDesc
