@@ -2,7 +2,7 @@
 
 #include <span>
 
-#include "rndr/core/definitions.h"
+#include "rndr/core/array.h"
 
 namespace Rndr
 {
@@ -20,6 +20,12 @@ template <typename T>
 ByteSpan ToByteSpan(T& object)
 {
     return {reinterpret_cast<uint8_t*>(&object), sizeof(T)};
+}
+
+template <typename T>
+ByteSpan ToByteSpan(Array<T>& array)
+{
+    return {reinterpret_cast<uint8_t*>(array.data()), sizeof(T) * array.size()};
 }
 
 }  // namespace Rndr
