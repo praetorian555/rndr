@@ -13,6 +13,7 @@ option(RNDR_DX11 "Use DX11 API" ON)
 option(RNDR_SPDLOG "Use spdlog external library to implement default logging" ON)
 option(RNDR_IMGUI "Add imgui wrapper which can be used for development GUI" ON)
 option(RNDR_ASSIMP "Add wrapper around assimp library that can be used to import 3D models" ON)
+option(RNDR_ETC2COMP "Add wrapper around etc2comp library that can be used to compress textures" ON)
 
 message(STATUS "RNDR_UNITY ${RNDR_UNITY}")
 message(STATUS "RNDR_SANITIZER ${RNDR_SANITIZER}")
@@ -20,6 +21,7 @@ message(STATUS "RNDR_DX11 ${RNDR_DX11}")
 message(STATUS "RNDR_SPDLOG ${RNDR_SPDLOG}")
 message(STATUS "RNDR_IMGUI ${RNDR_IMGUI}")
 message(STATUS "RNDR_ASSIMP ${RNDR_ASSIMP}")
+message(STATUS "RNDR_ETC2COMP ${RNDR_ETC2COMP}")
 
 if (NOT RNDR_DX11)
     set(RNDR_OPENGL ON)
@@ -162,6 +164,33 @@ if (NOT TARGET assimp AND RNDR_ASSIMP)
     set_target_properties(zlibstatic PROPERTIES FOLDER Extern)
     set_target_properties(zlibstatic PROPERTIES UNITY_BUILD FALSE)
     set_target_properties(UpdateAssimpLibsDebugSymbolsAndDLLs PROPERTIES FOLDER Extern)
+endif ()
+
+if (NOT TARGET etc2comp AND RNDR_ETC2COMP)
+    FetchContent_Declare(
+            etc2comp
+            GIT_REPOSITORY https://github.com/google/etc2comp
+            GIT_TAG 39422c1aa2f4889d636db5790af1d0be6ff3a226
+    )
+    FetchContent_Populate(etc2comp)
+    FetchContent_GetProperties(etc2comp SOURCE_DIR ETC2COMP_SOURCE_PATH)
+    file(GLOB_RECURSE ETC2COMP_SOURCES CONFIGURE_DEPENDS
+         ${ETC2COMP_SOURCE_PATH}/EtcLib/Etc/*.h
+         ${ETC2COMP_SOURCE_PATH}/EtcLib/EtcCodec/*.h
+         ${ETC2COMP_SOURCE_PATH}/EtcLib/Etc/*.cpp
+         ${ETC2COMP_SOURCE_PATH}/EtcLib/EtcCodec/*.cpp)
+    message(STATUS "ETC2COMP_SOURCES: ${ETC2COMP_SOURCES}")
+    add_library(etc2comp ${ETC2COMP_SOURCES}
+                ${ETC2COMP_SOURCE_PATH}/EtcTool/EtcFile.h
+                ${ETC2COMP_SOURCE_PATH}/EtcTool/EtcFile.cpp
+                ${ETC2COMP_SOURCE_PATH}/EtcTool/EtcFileHeader.h
+                ${ETC2COMP_SOURCE_PATH}/EtcTool/EtcFileHeader.cpp)
+    target_include_directories(etc2comp PUBLIC ${ETC2COMP_SOURCE_PATH})
+    target_include_directories(etc2comp PUBLIC ${ETC2COMP_SOURCE_PATH}/EtcLib/Etc
+                               ${ETC2COMP_SOURCE_PATH}/EtcLib/EtcCodec
+                               ${ETC2COMP_SOURCE_PATH}/EtcTool)
+    target_compile_options(etc2comp PRIVATE /W1)
+    set_target_properties(etc2comp PROPERTIES FOLDER Extern)
 endif ()
 
 # Adds external dependencies
