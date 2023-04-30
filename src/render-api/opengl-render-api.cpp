@@ -520,6 +520,18 @@ Rndr::CPUImage Rndr::GraphicsContext::ReadSwapChain(const SwapChain& swap_chain)
         RNDR_LOG_ERROR("Failed to read swap chain!");
         return {};
     }
+    for (int32_t i = 0; i < height / 2; i++)
+    {
+        for (int32_t j = 0; j < width; j++)
+        {
+            const int32_t index1 = i * width * 4 + j * 4;
+            const int32_t index2 = (height - i - 1) * width * 4 + j * 4;
+            std::swap(data[index1], data[index2]);
+            std::swap(data[index1 + 1], data[index2 + 1]);
+            std::swap(data[index1 + 2], data[index2 + 2]);
+            std::swap(data[index1 + 3], data[index2 + 3]);
+        }
+    }
     return CPUImage{width, height, PixelFormat::R8G8B8A8_UNORM_SRGB, data};
 }
 
