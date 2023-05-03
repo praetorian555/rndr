@@ -88,17 +88,31 @@ public:
     bool ClearColorAndDepth(const math::Vector4& color, real depth = MATH_REALC(1.0));
 
     /**
-     * Draws triangles.
+     * Draws primitives without use of index buffer. It will behave as if indices were specified
+     * sequentially starting from 0.
+     * @param topology The primitive topology to draw.
      * @param vertex_count The number of vertices to draw.
-     * @param instance_count The number of instances to draw.
-     * @param first_vertex The index of the first vertex to draw.
-     * @param first_instance The index of the first instance to draw.
+     * @param instance_count The number of instances to draw. By default this is 1.
+     * @param first_vertex The index of the first vertex to draw. By default this is 0.
      * @return Returns true if the draw call was successful, false otherwise.
      */
-    bool Draw(uint32_t vertex_count,
-              uint32_t instance_count,
-              uint32_t first_vertex = 0,
-              uint32_t first_instance = 0);
+    bool DrawVertices(PrimitiveTopology topology,
+                      int32_t vertex_count,
+                      int32_t instance_count = 1,
+                      int32_t first_vertex = 0);
+
+    /**
+     * Draws primitives using an index buffer.
+     * @param topology The primitive topology to draw.
+     * @param index_count The number of indices to draw.
+     * @param instance_count The number of instances to draw. By default this is 1.
+     * @param first_index The index of the first index to draw. By default this is 0.
+     * @return Returns true if the draw call was successful, false otherwise.
+     */
+    bool DrawIndices(PrimitiveTopology topology,
+                     int32_t index_count,
+                     int32_t instance_count = 1,
+                     int32_t first_index = 0);
 
     /**
      * Updates the contents of a buffer.
@@ -120,6 +134,8 @@ private:
     GraphicsContextDesc m_desc;
     NativeDeviceContextHandle m_native_device_context = k_invalid_device_context_handle;
     NativeGraphicsContextHandle m_native_graphics_context = k_invalid_graphics_context_handle;
+
+    const Pipeline* m_bound_pipeline = nullptr;
 };
 
 /**
@@ -192,6 +208,8 @@ public:
     [[nodiscard]] const PipelineDesc& GetDesc() const;
     [[nodiscard]] GLuint GetNativeShaderProgram() const;
     [[nodiscard]] GLuint GetNativeVertexArray() const;
+    [[nodiscard]] bool IsIndexBufferBound() const;
+    [[nodiscard]] uint32_t GetIndexBufferElementSize() const;
 
 private:
     PipelineDesc m_desc;

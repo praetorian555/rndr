@@ -51,7 +51,7 @@ void Run()
         )"});
     assert(pixel_shader.IsValid());
     const Rndr::Pipeline pipeline(graphics_context,
-                            {.vertex_shader = &vertex_shader, .pixel_shader = &pixel_shader});
+                                  {.vertex_shader = &vertex_shader, .pixel_shader = &pixel_shader});
     assert(pipeline.IsValid());
     constexpr math::Vector4 k_clear_color{MATH_REALC(0.0),
                                           MATH_REALC(0.0),
@@ -68,7 +68,7 @@ void Run()
         graphics_context.Bind(swap_chain);
         graphics_context.Bind(pipeline);
         graphics_context.ClearColor(k_clear_color);
-        graphics_context.Draw(3, 1);
+        graphics_context.DrawVertices(Rndr::PrimitiveTopology::Triangle, 3);
 
         graphics_context.Present(swap_chain, true);
     }

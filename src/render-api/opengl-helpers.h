@@ -25,6 +25,8 @@ GLenum FromPixelFormatToFormat(PixelFormat format);
 GLenum FromPixelFormatToDataType(PixelFormat format);
 GLint FromPixelFormatToComponentCount(PixelFormat format);
 GLenum FromPixelFormatToComponentType(PixelFormat format);
+GLenum FromPrimitiveTopologyToOpenGL(PrimitiveTopology topology);
+GLenum FromIndexSizeToOpenGL(uint32_t index_size);
 
 
 } // namespace Rndr

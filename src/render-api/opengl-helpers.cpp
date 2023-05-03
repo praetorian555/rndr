@@ -168,6 +168,10 @@ constexpr Rndr::StackArray<int32_t, k_max_pixel_format> k_to_pixel_size = {
 constexpr Rndr::StackArray<GLint, k_max_pixel_format> k_to_component_count = {
     4, 4, 4, 4, 4, 4, 4, 2, 1, 1, 1, 1, 4, 4, 4, 3, 3, 3, 2, 2, 2, 1, 1, 1, 1, 1};
 
+constexpr size_t k_max_primitive_topology = static_cast<size_t>(Rndr::PrimitiveTopology::EnumCount);
+constexpr Rndr::StackArray<GLenum, k_max_primitive_topology> k_to_opengl_primitive_topology =
+    {GL_POINTS, GL_LINES, GL_LINE_STRIP, GL_TRIANGLES, GL_TRIANGLE_STRIP};
+
 GLenum Rndr::FromShaderTypeToOpenGL(ShaderType type)
 {
     return k_to_opengl_shader_type[static_cast<size_t>(type)];
@@ -295,5 +299,25 @@ GLint Rndr::FromPixelFormatToComponentCount(PixelFormat format)
     return k_to_component_count[static_cast<size_t>(format)];
 }
 
+GLenum Rndr::FromPrimitiveTopologyToOpenGL(PrimitiveTopology topology)
+{
+    return k_to_opengl_primitive_topology[static_cast<size_t>(topology)];
+}
+
+GLenum Rndr::FromIndexSizeToOpenGL(uint32_t index_size)
+{
+    switch (index_size)
+    {
+        case 1:
+            return GL_UNSIGNED_BYTE;
+        case 2:
+            return GL_UNSIGNED_SHORT;
+        case 4:
+            return GL_UNSIGNED_INT;
+        default:
+            assert(false && "Unsupported index size");
+            return GL_UNSIGNED_INT;
+    }
+}
 
 #endif  // RNDR_OPENGL

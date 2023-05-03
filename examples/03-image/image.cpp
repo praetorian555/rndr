@@ -194,7 +194,7 @@ void Run()
         graphics_context.Bind(per_frame_buffer, 0);
         graphics_context.Bind(image);
         graphics_context.ClearColor(k_clear_color);
-        graphics_context.Draw(3, 1);
+        graphics_context.DrawVertices(Rndr::PrimitiveTopology::Triangle, 3);
 
         Rndr::ImGuiWrapper::StartFrame();
         Rndr::ImGuiWrapper::EndFrame();

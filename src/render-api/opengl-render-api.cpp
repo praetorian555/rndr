@@ -447,6 +447,15 @@ bool Rndr::GraphicsContext::Bind(const Pipeline& pipeline)
             return false;
         }
     }
+    if (pipeline.GetDesc().input_layout.index_buffer != nullptr)
+    {
+        if (!Bind(*pipeline.GetDesc().input_layout.index_buffer, 0))
+        {
+            RNDR_LOG_ERROR("Failed to bind index buffer!");
+            return false;
+        }
+    }
+    m_bound_pipeline = &pipeline;
     return true;
 }
 
@@ -491,13 +500,35 @@ bool Rndr::GraphicsContext::Bind(const Image& image)
     return true;
 }
 
-bool Rndr::GraphicsContext::Draw(uint32_t vertex_count,
-                                 uint32_t instance_count,
-                                 uint32_t first_vertex,
-                                 uint32_t first_instance)
+bool Rndr::GraphicsContext::DrawVertices(PrimitiveTopology topology,
+                                         int32_t vertex_count,
+                                         int32_t instance_count,
+                                         int32_t first_vertex)
 {
-    RNDR_UNUSED(first_instance);
-    glDrawArraysInstanced(GL_TRIANGLES, first_vertex, vertex_count, instance_count);
+    const GLenum primitive = FromPrimitiveTopologyToOpenGL(topology);
+    glDrawArraysInstanced(primitive, first_vertex, vertex_count, instance_count);
+    if (glGetError() != GL_NO_ERROR)
+    {
+        RNDR_LOG_ERROR("Failed to draw!");
+        return false;
+    }
+    return true;
+}
+
+bool Rndr::GraphicsContext::DrawIndices(PrimitiveTopology topology,
+                                        int32_t index_count,
+                                        int32_t instance_count,
+                                        int32_t first_index)
+{
+    assert(m_bound_pipeline != nullptr);
+    assert(m_bound_pipeline->IsIndexBufferBound());
+
+    const uint32_t index_size = m_bound_pipeline->GetIndexBufferElementSize();
+    const GLenum index_size_enum = FromIndexSizeToOpenGL(index_size);
+    const size_t index_offset = index_size * first_index;
+    void* index_start = reinterpret_cast<void*>(index_offset);
+    const GLenum primitive = FromPrimitiveTopologyToOpenGL(topology);
+    glDrawElementsInstanced(primitive, index_count, index_size_enum, index_start, instance_count);
     if (glGetError() != GL_NO_ERROR)
     {
         RNDR_LOG_ERROR("Failed to draw!");
@@ -731,13 +762,13 @@ Rndr::Pipeline::Pipeline(const GraphicsContext& graphics_context, const Pipeline
         return;
     }
     glBindVertexArray(m_native_vertex_array);
-    for (int i = 0; i < desc.input_layout.buffers.size(); i++)
+    for (int i = 0; i < desc.input_layout.vertex_buffers.size(); i++)
     {
-        const Buffer& buffer = desc.input_layout.buffers[i].get();
+        const Buffer& buffer = desc.input_layout.vertex_buffers[i].get();
         const BufferDesc& buffer_desc = buffer.GetDesc();
         if (buffer_desc.type == BufferType::Vertex)
         {
-            const int32_t binding_index = desc.input_layout.buffer_binding_indices[i];
+            const int32_t binding_index = desc.input_layout.vertex_buffer_binding_slots[i];
             glVertexArrayVertexBuffer(m_native_vertex_array,
                                       binding_index,
                                       buffer.GetNativeBuffer(),
@@ -827,6 +858,19 @@ GLuint Rndr::Pipeline::GetNativeShaderProgram() const
 GLuint Rndr::Pipeline::GetNativeVertexArray() const
 {
     return m_native_vertex_array;
+}
+
+bool Rndr::Pipeline::IsIndexBufferBound() const
+{
+    return m_desc.input_layout.index_buffer != nullptr;
+}
+
+uint32_t Rndr::Pipeline::GetIndexBufferElementSize() const
+{
+    assert(IsIndexBufferBound());
+    const Buffer& index_buffer = *m_desc.input_layout.index_buffer;
+    const BufferDesc& index_buffer_desc = index_buffer.GetDesc();
+    return index_buffer_desc.stride;
 }
 
 Rndr::Buffer::Buffer(const GraphicsContext& graphics_context,

@@ -177,13 +177,35 @@ enum class Face : uint32_t
     Back
 };
 
+/**
+ * Represents the type of a primitive topology. This is used to determine how the vertices are
+ * interpreted.
+ */
 enum class PrimitiveTopology
 {
-    PointList,
-    LineList,
+    /** Each vertex represents one point. */
+    Point = 0,
+
+    /** Use two vertices two form a line. */
+    Line,
+
+    /**
+     * Use two vertices to form a line, where the second vertex is the first vertex of the next
+     * line.
+     */
     LineStrip,
-    TriangleList,
-    TriangleStrip
+
+    /** Use three vertices to form a triangle. */
+    Triangle,
+
+    /**
+     * Use three vertices to form a triangle, where the second and third vertices are the first
+     * two vertices of the next triangle.
+     */
+    TriangleStrip,
+
+    /** Represents number of elements in the enum. */
+    EnumCount
 };
 
 /**

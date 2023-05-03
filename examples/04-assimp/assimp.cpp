@@ -95,7 +95,7 @@ void Run()
     assert(vertex_buffer.IsValid());
     Rndr::InputLayoutBuilder builder;
     const Rndr::InputLayoutDesc input_layout_desc =
-        builder.AddBuffer(vertex_buffer, 0, Rndr::DataRepetition::PerVertex)
+        builder.AddVertexBuffer(vertex_buffer, 0, Rndr::DataRepetition::PerVertex)
             .AppendElement(0, Rndr::PixelFormat::R32G32B32_FLOAT)
             .Build();
 
@@ -128,7 +128,7 @@ void Run()
     window.on_resize.Bind([&swap_chain](int32_t width, int32_t height)
                           { swap_chain.SetSize(width, height); });
 
-    const uint32_t vertex_count = static_cast<uint32_t>(positions.size());
+    const int32_t vertex_count = static_cast<int32_t>(positions.size());
     while (!window.IsClosed())
     {
         window.ProcessEvents();
@@ -150,12 +150,12 @@ void Run()
         graphics_context.Bind(swap_chain);
         graphics_context.Bind(solid_pipeline);
         graphics_context.Bind(per_frame_buffer, 0);
-        graphics_context.Draw(vertex_count, 1);
+        graphics_context.DrawVertices(Rndr::PrimitiveTopology::Triangle, vertex_count);
 
         graphics_context.Bind(wireframe_pipeline);
         per_frame_data.is_wire_frame = 1;
         graphics_context.Update(per_frame_buffer, Rndr::ToByteSpan(per_frame_data));
-        graphics_context.Draw(vertex_count, 1);
+        graphics_context.DrawVertices(Rndr::PrimitiveTopology::Triangle, vertex_count);
 
         graphics_context.Present(swap_chain, true);
     }

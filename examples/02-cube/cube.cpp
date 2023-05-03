@@ -3,8 +3,8 @@
 void Run();
 
 /**
- * Shows how to use a data buffer to change GPU data per frame. Shows how to use math transformations.
- * Shows how to render 3D objects as well as their wireframes.
+ * Shows how to use a data buffer to change GPU data per frame. Shows how to use math
+ * transformations. Shows how to render 3D objects as well as their wireframes.
  */
 int main()
 {
@@ -84,12 +84,13 @@ void Run()
                                          .rasterizer = {.fill_mode = Rndr::FillMode::Solid},
                                          .depth_stencil = {.is_depth_enabled = true}});
     assert(solid_pipeline.IsValid());
-    const Rndr::Pipeline wireframe_pipeline(
-        graphics_context,
-        {.vertex_shader = &vertex_shader,
-         .pixel_shader = &pixel_shader,
-         .rasterizer = {.fill_mode = Rndr::FillMode::Wireframe, .depth_bias = -1.0, .slope_scaled_depth_bias = -1.0},
-         .depth_stencil = {.is_depth_enabled = true}});
+    const Rndr::Pipeline wireframe_pipeline(graphics_context,
+                                            {.vertex_shader = &vertex_shader,
+                                             .pixel_shader = &pixel_shader,
+                                             .rasterizer = {.fill_mode = Rndr::FillMode::Wireframe,
+                                                            .depth_bias = -1.0,
+                                                            .slope_scaled_depth_bias = -1.0},
+                                             .depth_stencil = {.is_depth_enabled = true}});
     assert(wireframe_pipeline.IsValid());
     Rndr::Buffer per_frame_buffer(graphics_context,
                                   {.type = Rndr::BufferType::Constant,
@@ -120,16 +121,17 @@ void Run()
 
         graphics_context.Update(per_frame_buffer, Rndr::ToByteSpan(per_frame_data));
 
+        constexpr int32_t k_index_count = 36;
         graphics_context.ClearColorAndDepth(k_clear_color);
         graphics_context.Bind(swap_chain);
         graphics_context.Bind(solid_pipeline);
         graphics_context.Bind(per_frame_buffer, 0);
-        graphics_context.Draw(36, 1);
+        graphics_context.DrawVertices(Rndr::PrimitiveTopology::Triangle, k_index_count);
 
         graphics_context.Bind(wireframe_pipeline);
         per_frame_data.is_wire_frame = 1;
         graphics_context.Update(per_frame_buffer, Rndr::ToByteSpan(per_frame_data));
-        graphics_context.Draw(36, 1);
+        graphics_context.DrawVertices(Rndr::PrimitiveTopology::Triangle, k_index_count);
 
         graphics_context.Present(swap_chain, true);
     }
