@@ -135,7 +135,7 @@ private:
     NativeDeviceContextHandle m_native_device_context = k_invalid_device_context_handle;
     NativeGraphicsContextHandle m_native_graphics_context = k_invalid_graphics_context_handle;
 
-    const Pipeline* m_bound_pipeline = nullptr;
+    Ref<const Pipeline> m_bound_pipeline;
 };
 
 /**

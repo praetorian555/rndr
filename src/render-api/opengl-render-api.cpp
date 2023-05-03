@@ -520,7 +520,7 @@ bool Rndr::GraphicsContext::DrawIndices(PrimitiveTopology topology,
                                         int32_t instance_count,
                                         int32_t first_index)
 {
-    assert(m_bound_pipeline != nullptr);
+    assert(m_bound_pipeline.IsValid());
     assert(m_bound_pipeline->IsIndexBufferBound());
 
     const uint32_t index_size = m_bound_pipeline->GetIndexBufferElementSize();
