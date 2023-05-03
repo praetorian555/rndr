@@ -96,7 +96,7 @@ void Run()
     Rndr::InputLayoutBuilder builder;
     const Rndr::InputLayoutDesc input_layout_desc =
         builder.AddBuffer(vertex_buffer, 0, Rndr::DataRepetition::PerVertex)
-            .AppendElement(0, Rndr::PixelFormat::R32G32B32A32_FLOAT)
+            .AppendElement(0, Rndr::PixelFormat::R32G32B32_FLOAT)
             .Build();
 
     const Rndr::Pipeline solid_pipeline(graphics_context,
