@@ -495,6 +495,9 @@ struct BufferDesc
 
     /** Size of one element, in bytes, in an array of elements. */
     uint32_t stride = 0;
+
+    /** Offset, in bytes, from the beginning of the buffer to the first element to use. */
+    uint32_t offset = 0;
 };
 
 struct SamplerDesc

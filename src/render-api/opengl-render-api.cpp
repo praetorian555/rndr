@@ -724,12 +724,16 @@ Rndr::Pipeline::Pipeline(const GraphicsContext& graphics_context, const Pipeline
     for (int i = 0; i < desc.input_layout.buffers.size(); i++)
     {
         const Buffer& buffer = desc.input_layout.buffers[i].get();
-        const int32_t binding_index = desc.input_layout.buffer_binding_indices[i];
-        glVertexArrayVertexBuffer(m_native_vertex_array,
-                                  binding_index,
-                                  buffer.GetNativeBuffer(),
-                                  0,
-                                  buffer.GetDesc().stride);
+        const BufferDesc& buffer_desc = buffer.GetDesc();
+        if (buffer_desc.type == BufferType::Vertex)
+        {
+            const int32_t binding_index = desc.input_layout.buffer_binding_indices[i];
+            glVertexArrayVertexBuffer(m_native_vertex_array,
+                                      binding_index,
+                                      buffer.GetNativeBuffer(),
+                                      buffer_desc.offset,
+                                      buffer_desc.stride);
+        }
     }
     for (int i = 0; i < desc.input_layout.elements.size(); i++)
     {
