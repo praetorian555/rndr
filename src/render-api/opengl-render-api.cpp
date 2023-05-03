@@ -460,7 +460,17 @@ bool Rndr::GraphicsContext::Bind(const Buffer& buffer, int32_t binding_index)
         glBindBufferRange(GL_UNIFORM_BUFFER, binding_index, native_buffer, 0, desc.size);
         if (glGetError() != GL_NO_ERROR)
         {
-            RNDR_LOG_ERROR("Failed to bind buffer!");
+            RNDR_LOG_ERROR("Failed to bind uniform buffer!");
+            return false;
+        }
+        return true;
+    }
+    if (target == GL_ELEMENT_ARRAY_BUFFER)
+    {
+        glBindBuffer(target, native_buffer);
+        if (glGetError() != GL_NO_ERROR)
+        {
+            RNDR_LOG_ERROR("Failed to bind index buffer!");
             return false;
         }
         return true;
