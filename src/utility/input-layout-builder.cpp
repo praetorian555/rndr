@@ -1,12 +1,12 @@
 #include "Rndr/utility/input-layout-builder.h"
 #include "rndr/render-api/render-api.h"
 
-Rndr::InputLayoutBuilder& Rndr::InputLayoutBuilder::AddVertexBuffer(const Ref<Buffer>& buffer,
+Rndr::InputLayoutBuilder& Rndr::InputLayoutBuilder::AddVertexBuffer(const Buffer& buffer,
                                                                     int32_t buffer_index,
                                                                     DataRepetition repetition,
                                                                     int32_t per_instance_rate)
 {
-    m_buffers.try_emplace(buffer_index, buffer, repetition, per_instance_rate);
+    m_buffers.try_emplace(buffer_index, Ref(buffer), repetition, per_instance_rate);
     return *this;
 }
 
@@ -45,15 +45,15 @@ Rndr::InputLayoutBuilder& Rndr::InputLayoutBuilder::AppendElement(int buffer_ind
     return *this;
 }
 
-Rndr::InputLayoutBuilder& Rndr::InputLayoutBuilder::AddIndexBuffer(const Ref<Buffer>& buffer)
+Rndr::InputLayoutBuilder& Rndr::InputLayoutBuilder::AddIndexBuffer(const Buffer& buffer)
 {
-    m_index_buffer = &buffer.get();
+    m_index_buffer = buffer;
     return *this;
 }
 
 Rndr::InputLayoutDesc Rndr::InputLayoutBuilder::Build()
 {
-    Array<Ref<Buffer>> buffers;
+    Array<Ref<const Buffer>> buffers;
     Array<int32_t> buffer_binding_slots;
     buffers.reserve(m_buffers.size());
     for (auto const& [binding_index, buffer_info] : m_buffers)

@@ -29,7 +29,7 @@ struct InputLayoutBuilder
      * @param per_instance_rate How often the data is repeated per instance. Default is 0.
      * @return This builder.
      */
-    InputLayoutBuilder& AddVertexBuffer(const Ref<Buffer>& buffer,
+    InputLayoutBuilder& AddVertexBuffer(const Buffer& buffer,
                                         int32_t buffer_index,
                                         DataRepetition repetition,
                                         int32_t per_instance_rate = 0);
@@ -40,7 +40,7 @@ struct InputLayoutBuilder
      * @param buffer The index buffer.
      * @return This builder.
      */
-    InputLayoutBuilder& AddIndexBuffer(const Ref<Buffer>& buffer);
+    InputLayoutBuilder& AddIndexBuffer(const Buffer& buffer);
 
     /**
      * Appends an element to the input layout.
@@ -59,14 +59,14 @@ struct InputLayoutBuilder
 private:
     struct BufferInfo
     {
-        Ref<Buffer> buffer;
+        Ref<const Buffer> buffer;
         DataRepetition repetition = DataRepetition::PerVertex;
         int per_instance_rate = 0;
         int entries_count = 0;
         int offset = 0;
     };
 
-    Buffer* m_index_buffer = nullptr;
+    Ref<const Buffer> m_index_buffer;
     HashMap<int, BufferInfo> m_buffers;
     HashMap<String, int> m_names;
     Array<InputLayoutElement> m_elements;

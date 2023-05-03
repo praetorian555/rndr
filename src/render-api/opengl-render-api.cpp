@@ -447,7 +447,7 @@ bool Rndr::GraphicsContext::Bind(const Pipeline& pipeline)
             return false;
         }
     }
-    if (pipeline.GetDesc().input_layout.index_buffer != nullptr)
+    if (pipeline.GetDesc().input_layout.index_buffer.IsValid())
     {
         if (!Bind(*pipeline.GetDesc().input_layout.index_buffer, 0))
         {
@@ -764,7 +764,7 @@ Rndr::Pipeline::Pipeline(const GraphicsContext& graphics_context, const Pipeline
     glBindVertexArray(m_native_vertex_array);
     for (int i = 0; i < desc.input_layout.vertex_buffers.size(); i++)
     {
-        const Buffer& buffer = desc.input_layout.vertex_buffers[i].get();
+        const Buffer& buffer = desc.input_layout.vertex_buffers[i].Get();
         const BufferDesc& buffer_desc = buffer.GetDesc();
         if (buffer_desc.type == BufferType::Vertex)
         {
@@ -862,7 +862,7 @@ GLuint Rndr::Pipeline::GetNativeVertexArray() const
 
 bool Rndr::Pipeline::IsIndexBufferBound() const
 {
-    return m_desc.input_layout.index_buffer != nullptr;
+    return m_desc.input_layout.index_buffer.IsValid();
 }
 
 uint32_t Rndr::Pipeline::GetIndexBufferElementSize() const

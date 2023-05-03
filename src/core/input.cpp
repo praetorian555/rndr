@@ -67,7 +67,7 @@ struct InputSystemData
 
     ~InputSystemData() = default;
 };
-}  // namespace rndr
+}  // namespace Rndr
 
 // InputAction /////////////////////////////////////////////////////////////////////////////////////
 
@@ -94,12 +94,12 @@ bool Rndr::InputBinding::operator==(const Rndr::InputBinding& other) const
 
 Rndr::InputContext::InputContext()
 {
-    m_context_data = RNDR_MAKE_SCOPED(InputContextData, {}, *this);
+    m_context_data = RNDR_MAKE_SCOPED(InputContextData, {});
 }
 
 Rndr::InputContext::InputContext(String name) : m_name(std::move(name))
 {
-    m_context_data = RNDR_MAKE_SCOPED(InputContextData, {}, *this);
+    m_context_data = RNDR_MAKE_SCOPED(InputContextData, {});
 }
 
 Rndr::InputContext::~InputContext() = default;
@@ -297,7 +297,7 @@ bool Rndr::InputSystem::Init()
     }
     g_system_data = RNDR_MAKE_SCOPED(InputSystemData);
     const Ref<InputContextData> default_context_data =
-        *g_system_data->default_context.m_context_data.get();
+        Ref{g_system_data->default_context.m_context_data.get()};
     g_system_data->contexts.push_back(default_context_data);
     return true;
 }
@@ -315,7 +315,7 @@ bool Rndr::InputSystem::Destroy()
 Rndr::InputContext& Rndr::InputSystem::GetCurrentContext()
 {
     assert(g_system_data != nullptr);
-    return g_system_data->contexts.back().get().context;
+    return g_system_data->contexts.back()->context.Get();
 }
 
 bool Rndr::InputSystem::PushContext(const Rndr::InputContext& context)
@@ -414,7 +414,7 @@ struct InputEventProcessor
     void operator()(const MouseWheelData& event) const;
 };
 
-}  // namespace rndr
+}  // namespace Rndr
 
 bool Rndr::InputSystem::ProcessEvents(real delta_seconds)
 {
@@ -430,14 +430,14 @@ bool Rndr::InputSystem::ProcessEvents(real delta_seconds)
     {
         Event event = events.front();
         events.pop();
-        std::visit(InputEventProcessor{context, event.native_window}, event.data);
+        std::visit(InputEventProcessor{Ref(context), event.native_window}, event.data);
     }
     return true;
 }
 
 void Rndr::InputEventProcessor::operator()(const ButtonData& event) const
 {
-    for (const ActionData& action_data : context.get().actions)
+    for (const ActionData& action_data : context->actions)
     {
         if (action_data.native_window != nullptr && action_data.native_window != native_window)
         {
@@ -459,7 +459,7 @@ void Rndr::InputEventProcessor::operator()(const MousePositionData& event) const
     const StackArray<InputPrimitive, 2> axes = {InputPrimitive::Mouse_AxisX,
                                                 InputPrimitive::Mouse_AxisY};
     const InputTrigger trigger = InputTrigger::AxisChangedAbsolute;
-    for (const ActionData& action_data : context.get().actions)
+    for (const ActionData& action_data : context->actions)
     {
         if (action_data.native_window != nullptr && action_data.native_window != native_window)
         {
@@ -486,7 +486,7 @@ void Rndr::InputEventProcessor::operator()(const RelativeMousePositionData& even
     const StackArray<InputPrimitive, 2> axes = {InputPrimitive::Mouse_AxisX,
                                                 InputPrimitive::Mouse_AxisY};
     const InputTrigger trigger = InputTrigger::AxisChangedRelative;
-    for (const ActionData& action_data : context.get().actions)
+    for (const ActionData& action_data : context->actions)
     {
         if (action_data.native_window != nullptr && action_data.native_window != native_window)
         {
@@ -512,7 +512,7 @@ void Rndr::InputEventProcessor::operator()(const MouseWheelData& event) const
 {
     const InputPrimitive primitive = InputPrimitive::Mouse_AxisWheel;
     const InputTrigger trigger = InputTrigger::AxisChangedRelative;
-    for (const ActionData& action_data : context.get().actions)
+    for (const ActionData& action_data : context->actions)
     {
         if (action_data.native_window != nullptr && action_data.native_window != native_window)
         {
