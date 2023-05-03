@@ -617,8 +617,16 @@ struct InputLayoutElement
 class Buffer;
 struct InputLayoutDesc
 {
-    Array<Ref<Buffer>> buffers;
-    Array<int32_t> buffer_binding_indices;
+    /** Index buffer used by the pipeline. If it is set to null you have to use DrawVertices. */
+    Buffer* index_buffer = nullptr;
+
+    /** List of vertex buffers used by the pipeline. */
+    Array<Ref<Buffer>> vertex_buffers;
+
+    /** List of binding slots to which the corresponding vertex buffer is bound. */
+    Array<int32_t> vertex_buffer_binding_slots;
+
+    /** List of input layout elements for the data in the vertex buffers. */
     Array<InputLayoutElement> elements;
 };
 

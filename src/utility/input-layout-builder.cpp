@@ -1,10 +1,10 @@
 #include "Rndr/utility/input-layout-builder.h"
 #include "rndr/render-api/render-api.h"
 
-Rndr::InputLayoutBuilder& Rndr::InputLayoutBuilder::AddBuffer(const Ref<Buffer>& buffer,
-                                                              int buffer_index,
-                                                              DataRepetition repetition,
-                                                              int per_instance_rate)
+Rndr::InputLayoutBuilder& Rndr::InputLayoutBuilder::AddVertexBuffer(const Ref<Buffer>& buffer,
+                                                                    int32_t buffer_index,
+                                                                    DataRepetition repetition,
+                                                                    int32_t per_instance_rate)
 {
     m_buffers.try_emplace(buffer_index, buffer, repetition, per_instance_rate);
     return *this;
@@ -16,7 +16,7 @@ Rndr::InputLayoutBuilder& Rndr::InputLayoutBuilder::AppendElement(int buffer_ind
     auto buffer_it = m_buffers.find(buffer_index);
     if (buffer_it == m_buffers.end())
     {
-        RNDR_LOG_ERROR("Failed since the buffer index is not present, call AddBuffer first!");
+        RNDR_LOG_ERROR("Failed since the buffer index is not present, call AddVertexBuffer first!");
         return *this;
     }
     if (m_elements.size() == GraphicsConstants::kMaxInputLayoutEntries)
@@ -45,17 +45,24 @@ Rndr::InputLayoutBuilder& Rndr::InputLayoutBuilder::AppendElement(int buffer_ind
     return *this;
 }
 
+Rndr::InputLayoutBuilder& Rndr::InputLayoutBuilder::AddIndexBuffer(const Ref<Buffer>& buffer)
+{
+    m_index_buffer = &buffer.get();
+    return *this;
+}
+
 Rndr::InputLayoutDesc Rndr::InputLayoutBuilder::Build()
 {
     Array<Ref<Buffer>> buffers;
-    Array<int32_t> buffer_binding_indices;
+    Array<int32_t> buffer_binding_slots;
     buffers.reserve(m_buffers.size());
     for (auto const& [binding_index, buffer_info] : m_buffers)
     {
         buffers.push_back(buffer_info.buffer);
-        buffer_binding_indices.push_back(binding_index);
+        buffer_binding_slots.push_back(binding_index);
     }
-    return InputLayoutDesc{.buffers = buffers,
-                           .buffer_binding_indices = buffer_binding_indices,
+    return InputLayoutDesc{.index_buffer = m_index_buffer,
+                           .vertex_buffers = buffers,
+                           .vertex_buffer_binding_slots = buffer_binding_slots,
                            .elements = m_elements};
 }

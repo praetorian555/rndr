@@ -23,16 +23,24 @@ struct InputLayoutBuilder
     InputLayoutBuilder& operator=(InputLayoutBuilder&& other) = default;
 
     /**
-     * Adds a buffer to the input layout.
+     * Adds a vertex buffer to the input layout.
      * @param buffer_index Slot at which the buffer is bound.
      * @param repetition How often the data is repeated.
      * @param per_instance_rate How often the data is repeated per instance. Default is 0.
      * @return This builder.
      */
-    InputLayoutBuilder& AddBuffer(const Ref<Buffer>& buffer,
-                                  int32_t buffer_index,
-                                  DataRepetition repetition,
-                                  int32_t per_instance_rate = 0);
+    InputLayoutBuilder& AddVertexBuffer(const Ref<Buffer>& buffer,
+                                        int32_t buffer_index,
+                                        DataRepetition repetition,
+                                        int32_t per_instance_rate = 0);
+
+    /**
+     * Adds an index buffer to the input layout. There can be only one. It is ok to not have it.
+     * If you call this function twice the second call will override the first one.
+     * @param buffer The index buffer.
+     * @return This builder.
+     */
+    InputLayoutBuilder& AddIndexBuffer(const Ref<Buffer>& buffer);
 
     /**
      * Appends an element to the input layout.
@@ -58,6 +66,7 @@ private:
         int offset = 0;
     };
 
+    Buffer* m_index_buffer = nullptr;
     HashMap<int, BufferInfo> m_buffers;
     HashMap<String, int> m_names;
     Array<InputLayoutElement> m_elements;
