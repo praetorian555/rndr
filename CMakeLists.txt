@@ -14,6 +14,7 @@ option(RNDR_SPDLOG "Use spdlog external library to implement default logging" ON
 option(RNDR_IMGUI "Add imgui wrapper which can be used for development GUI" ON)
 option(RNDR_ASSIMP "Add wrapper around assimp library that can be used to import 3D models" ON)
 option(RNDR_ETC2COMP "Add wrapper around etc2comp library that can be used to compress textures" ON)
+option(RNDR_MESHOPTIMIZER "Add wrapper around meshoptimizer library that can be used to optimize meshes" ON)
 
 message(STATUS "RNDR_UNITY ${RNDR_UNITY}")
 message(STATUS "RNDR_SANITIZER ${RNDR_SANITIZER}")
@@ -22,6 +23,7 @@ message(STATUS "RNDR_SPDLOG ${RNDR_SPDLOG}")
 message(STATUS "RNDR_IMGUI ${RNDR_IMGUI}")
 message(STATUS "RNDR_ASSIMP ${RNDR_ASSIMP}")
 message(STATUS "RNDR_ETC2COMP ${RNDR_ETC2COMP}")
+message(STATUS "RNDR_MESHOPTIMIZER ${RNDR_MESHOPTIMIZER}")
 
 if (NOT RNDR_DX11)
     set(RNDR_OPENGL ON)
@@ -191,6 +193,16 @@ if (NOT TARGET etc2comp AND RNDR_ETC2COMP)
                                ${ETC2COMP_SOURCE_PATH}/EtcTool)
     target_compile_options(etc2comp PRIVATE /W1)
     set_target_properties(etc2comp PROPERTIES FOLDER Extern)
+endif ()
+
+if (NOT TARGET meshoptimizer AND RNDR_MESHOPTIMIZER)
+    FetchContent_Declare(
+            meshoptimizer
+            GIT_REPOSITORY https://github.com/zeux/meshoptimizer
+            GIT_TAG fbe26ff91317bd89c67c3890e038965d55f3e354 # release 0.19
+    )
+    FetchContent_MakeAvailable(meshoptimizer)
+    set_target_properties(meshoptimizer PROPERTIES FOLDER Extern)
 endif ()
 
 # Adds external dependencies

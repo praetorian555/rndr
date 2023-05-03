@@ -95,6 +95,10 @@ if (RNDR_ETC2COMP)
     target_compile_definitions(rndr PUBLIC RNDR_ETC2COMP)
     target_link_libraries(rndr PUBLIC etc2comp)
 endif ()
+if (RNDR_MESHOPTIMIZER)
+    target_compile_definitions(rndr PUBLIC RNDR_MESHOPTIMIZER)
+    target_link_libraries(rndr PUBLIC meshoptimizer)
+endif ()
 
 # IDEs should put the headers in a nice place
 set_target_properties(rndr PROPERTIES FOLDER RNDR)
