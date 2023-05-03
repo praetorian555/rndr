@@ -234,5 +234,6 @@ if (CMAKE_PROJECT_NAME STREQUAL PROJECT_NAME)
     add_subdirectory(examples/02-cube)
     add_subdirectory(examples/03-image)
     add_subdirectory(examples/04-assimp)
+    add_subdirectory(examples/05-mesh-optimizer)
 
 endif ()
