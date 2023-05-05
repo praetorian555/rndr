@@ -786,8 +786,7 @@ Rndr::Pipeline::Pipeline(const GraphicsContext& graphics_context, const Pipeline
     if (input_layout_desc.index_buffer.IsValid())
     {
         const Buffer& buffer = input_layout_desc.index_buffer.Get();
-        const BufferDesc& buffer_desc = buffer.GetDesc();
-        assert(buffer_desc.type == BufferType::Index);
+        assert(buffer.GetDesc().type == BufferType::Index);
         glVertexArrayElementBuffer(m_native_vertex_array, buffer.GetNativeBuffer());
         if (glGetError() != GL_NO_ERROR)
         {
