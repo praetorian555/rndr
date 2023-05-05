@@ -19,9 +19,10 @@ struct ActionData
 
 struct InputContextData
 {
-    Rndr::Array<ActionData> actions;
     Rndr::Ref<Rndr::InputContext> context;
+    Rndr::Array<ActionData> actions;
 
+    InputContextData(InputContext& ctx) : context(ctx) {}
     ~InputContextData() = default;
 };
 
@@ -94,12 +95,12 @@ bool Rndr::InputBinding::operator==(const Rndr::InputBinding& other) const
 
 Rndr::InputContext::InputContext()
 {
-    m_context_data = RNDR_MAKE_SCOPED(InputContextData, {});
+    m_context_data = RNDR_MAKE_SCOPED(InputContextData, *this);
 }
 
 Rndr::InputContext::InputContext(String name) : m_name(std::move(name))
 {
-    m_context_data = RNDR_MAKE_SCOPED(InputContextData, {});
+    m_context_data = RNDR_MAKE_SCOPED(InputContextData, *this);
 }
 
 Rndr::InputContext::~InputContext() = default;
