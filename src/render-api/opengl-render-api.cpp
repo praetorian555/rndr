@@ -447,19 +447,11 @@ bool Rndr::GraphicsContext::Bind(const Pipeline& pipeline)
             return false;
         }
     }
-    if (pipeline.GetDesc().input_layout.index_buffer.IsValid())
-    {
-        if (!Bind(*pipeline.GetDesc().input_layout.index_buffer, 0))
-        {
-            RNDR_LOG_ERROR("Failed to bind index buffer!");
-            return false;
-        }
-    }
     m_bound_pipeline = &pipeline;
     return true;
 }
 
-bool Rndr::GraphicsContext::Bind(const Buffer& buffer, int32_t binding_index)
+bool Rndr::GraphicsContext::BindUniform(const Buffer& buffer, int32_t binding_index)
 {
     const GLuint native_buffer = buffer.GetNativeBuffer();
     const BufferDesc& desc = buffer.GetDesc();
@@ -470,16 +462,6 @@ bool Rndr::GraphicsContext::Bind(const Buffer& buffer, int32_t binding_index)
         if (glGetError() != GL_NO_ERROR)
         {
             RNDR_LOG_ERROR("Failed to bind uniform buffer!");
-            return false;
-        }
-        return true;
-    }
-    if (target == GL_ELEMENT_ARRAY_BUFFER)
-    {
-        glBindBuffer(target, native_buffer);
-        if (glGetError() != GL_NO_ERROR)
-        {
-            RNDR_LOG_ERROR("Failed to bind index buffer!");
             return false;
         }
         return true;
@@ -762,23 +744,22 @@ Rndr::Pipeline::Pipeline(const GraphicsContext& graphics_context, const Pipeline
         return;
     }
     glBindVertexArray(m_native_vertex_array);
-    for (int i = 0; i < desc.input_layout.vertex_buffers.size(); i++)
+    const InputLayoutDesc& input_layout_desc = m_desc.input_layout;
+    for (int i = 0; i < input_layout_desc.vertex_buffers.size(); i++)
     {
-        const Buffer& buffer = desc.input_layout.vertex_buffers[i].Get();
+        const Buffer& buffer = input_layout_desc.vertex_buffers[i].Get();
         const BufferDesc& buffer_desc = buffer.GetDesc();
-        if (buffer_desc.type == BufferType::Vertex)
-        {
-            const int32_t binding_index = desc.input_layout.vertex_buffer_binding_slots[i];
-            glVertexArrayVertexBuffer(m_native_vertex_array,
-                                      binding_index,
-                                      buffer.GetNativeBuffer(),
-                                      buffer_desc.offset,
-                                      buffer_desc.stride);
-        }
+        assert(buffer_desc.type == BufferType::Vertex);
+        const int32_t binding_index = input_layout_desc.vertex_buffer_binding_slots[i];
+        glVertexArrayVertexBuffer(m_native_vertex_array,
+                                  binding_index,
+                                  buffer.GetNativeBuffer(),
+                                  buffer_desc.offset,
+                                  buffer_desc.stride);
     }
-    for (int i = 0; i < desc.input_layout.elements.size(); i++)
+    for (int i = 0; i < input_layout_desc.elements.size(); i++)
     {
-        const InputLayoutElement& element = desc.input_layout.elements[i];
+        const InputLayoutElement& element = input_layout_desc.elements[i];
         const int32_t attribute_index = i;
         constexpr GLboolean k_should_normalize_data = GL_FALSE;
         glEnableVertexArrayAttrib(m_native_vertex_array, attribute_index);
@@ -798,6 +779,19 @@ Rndr::Pipeline::Pipeline(const GraphicsContext& graphics_context, const Pipeline
         if (glGetError() != GL_NO_ERROR)
         {
             RNDR_LOG_ERROR("Failed to set vertex array attribute!");
+            Destroy();
+            return;
+        }
+    }
+    if (input_layout_desc.index_buffer.IsValid())
+    {
+        const Buffer& buffer = input_layout_desc.index_buffer.Get();
+        const BufferDesc& buffer_desc = buffer.GetDesc();
+        assert(buffer_desc.type == BufferType::Index);
+        glVertexArrayElementBuffer(m_native_vertex_array, buffer.GetNativeBuffer());
+        if (glGetError() != GL_NO_ERROR)
+        {
+            RNDR_LOG_ERROR("Failed to set vertex array index buffer!");
             Destroy();
             return;
         }

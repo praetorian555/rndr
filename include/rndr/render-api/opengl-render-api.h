@@ -55,7 +55,7 @@ public:
      * @param binding_index The binding index to bind the buffer to.
      * @return Returns true if the buffer was bound successfully, false otherwise.
      */
-    bool Bind(const Buffer& buffer, int32_t binding_index);
+    bool BindUniform(const Buffer& buffer, int32_t binding_index);
 
     /**
      * Binds an image to the graphics pipeline.
