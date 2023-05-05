@@ -40,6 +40,9 @@ if (CMAKE_PROJECT_NAME STREQUAL PROJECT_NAME)
     # Configuration types
     SET(CMAKE_CONFIGURATION_TYPES "Debug;OptimizedDebug;Release" CACHE STRING "Choose configuration: Debug OptimizedDebug Release" FORCE)
 
+    # Build only static libraries
+    set(BUILD_SHARED_LIBS OFF)
+
     # Let's nicely support folders in IDEs
     set_property(GLOBAL PROPERTY USE_FOLDERS ON)
 
