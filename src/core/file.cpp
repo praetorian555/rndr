@@ -45,6 +45,12 @@ Rndr::CPUImage Rndr::File::ReadEntireImage(const String& file_path)
     return image;
 }
 
+Rndr::String Rndr::File::ReadEntireTextFile(const Rndr::String& file_path)
+{
+    ByteArray contents = ReadEntireFile(file_path);
+    return {contents.begin(), contents.end()};
+}
+
 bool Rndr::File::SaveImage(const CPUImage& image, const String& file_path)
 {
     const int channels = Rndr::GetPixelSize(image.pixel_format);

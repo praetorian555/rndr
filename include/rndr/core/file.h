@@ -29,10 +29,16 @@ namespace File
  *
  * @param file_path Absolute or relative path to the file on the disc.
  *
- * @return Returns a valid ByteSpan object containing the array of bytes representing the file
- * contents. If the ByteSpan object is invalid then there was an error reading the file.
+ * @return Returns a valid ByteArray object containing the file contents.
  */
 [[nodiscard]] ByteArray ReadEntireFile(const String& file_path);
+
+/**
+ * Reads the contents of the entire file in the text form.
+ * @param file_path Absolute or relative path to the file on the disc.
+ * @return Returns a valid String object containing the text representing the file contents.
+ */
+[[nodiscard]] String ReadEntireTextFile(const String& file_path);
 
 /**
  * Reads the contents of the entire image file into CPU memory.
