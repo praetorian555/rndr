@@ -373,6 +373,9 @@ enum class BufferType
     /** Buffer contains constant (uniform) data. */
     Constant,
 
+    /** Buffer contains shader storage data. */
+    ShaderStorage,
+
     /** Represents the number of valid entries in this enum. */
     EnumCount
 };

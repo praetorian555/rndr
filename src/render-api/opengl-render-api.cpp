@@ -749,13 +749,29 @@ Rndr::Pipeline::Pipeline(const GraphicsContext& graphics_context, const Pipeline
     {
         const Buffer& buffer = input_layout_desc.vertex_buffers[i].Get();
         const BufferDesc& buffer_desc = buffer.GetDesc();
-        assert(buffer_desc.type == BufferType::Vertex);
         const int32_t binding_index = input_layout_desc.vertex_buffer_binding_slots[i];
-        glVertexArrayVertexBuffer(m_native_vertex_array,
-                                  binding_index,
-                                  buffer.GetNativeBuffer(),
-                                  buffer_desc.offset,
-                                  buffer_desc.stride);
+        if (buffer_desc.type == BufferType::Vertex)
+        {
+            glVertexArrayVertexBuffer(m_native_vertex_array,
+                                      binding_index,
+                                      buffer.GetNativeBuffer(),
+                                      buffer_desc.offset,
+                                      buffer_desc.stride);
+        }
+        else if (buffer_desc.type == BufferType::ShaderStorage)
+        {
+            glBindBufferRange(GL_SHADER_STORAGE_BUFFER,
+                              binding_index,
+                              buffer.GetNativeBuffer(),
+                              0,
+                              buffer_desc.size);
+        }
+        else
+        {
+            RNDR_LOG_ERROR("Invalid buffer type!");
+            Destroy();
+            return;
+        }
     }
     for (int i = 0; i < input_layout_desc.elements.size(); i++)
     {
