@@ -9,6 +9,7 @@
 #endif  // RNDR_SPDLOG
 
 #include "rndr/core/input.h"
+#include "rndr/utility/cpu-tracer.h"
 
 namespace
 {
@@ -108,6 +109,12 @@ bool Rndr::Init(const RndrDesc& desc)
         return false;
     }
 
+    if (g_desc.enable_cpu_tracer && !CpuTracer::Init())
+    {
+        RNDR_LOG_ERROR("Failed to initialize the CPU tracer!");
+        return false;
+    }
+
     g_is_initialized = true;
     return true;
 }
@@ -118,6 +125,11 @@ bool Rndr::Destroy()
     {
         RNDR_LOG_WARNING("Rndr library is not initialized!");
         return true;
+    }
+    if (g_desc.enable_cpu_tracer && !CpuTracer::Destroy())
+    {
+        RNDR_LOG_ERROR("Failed to destroy the CPU tracer!");
+        return false;
     }
     if (g_desc.enable_input_system && !InputSystem::Destroy())
     {

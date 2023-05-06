@@ -17,7 +17,7 @@ void Run();
  */
 int main()
 {
-    Rndr::Init();
+    Rndr::Init({.enable_cpu_tracer = true});
     Run();
     Rndr::Destroy();
 }
@@ -251,7 +251,11 @@ void Run()
     graphics_context.BindUniform(per_frame_buffer, 0);
     while (!window.IsClosed())
     {
+        RNDR_TRACE_SCOPED(Main_loop);
+
+        RNDR_TRACE_START(Process_events);
         window.ProcessEvents();
+        RNDR_TRACE_END(Process_events);
 
         const float ratio = static_cast<Rndr::real>(window.GetWidth())
                             / static_cast<Rndr::real>(window.GetHeight());

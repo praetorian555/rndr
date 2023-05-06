@@ -37,6 +37,9 @@ struct RndrDesc
 
     /** If we should enable the input system. Defaults to no. */
     bool enable_input_system = false;
+
+    /** If we should enable the CPU tracer. Defaults to no. */
+    bool enable_cpu_tracer = false;
 };
 
 // API /////////////////////////////////////////////////////////////////////////////////////////////
