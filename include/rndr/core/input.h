@@ -164,7 +164,6 @@ private:
  *
  * The system is not thread-safe.
  */
-// TODO(Marko): Provide testing of input bindings to make sure they make sense.
 class InputSystem
 {
 public:
