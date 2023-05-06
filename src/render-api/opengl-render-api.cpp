@@ -470,10 +470,10 @@ bool Rndr::GraphicsContext::BindUniform(const Buffer& buffer, int32_t binding_in
     return false;
 }
 
-bool Rndr::GraphicsContext::Bind(const Image& image)
+bool Rndr::GraphicsContext::Bind(const Image& image, int32_t binding_index)
 {
     const GLuint native_texture = image.GetNativeTexture();
-    glBindTextures(0, 1, &native_texture);
+    glBindTextures(binding_index, 1, &native_texture);
     if (glGetError() != GL_NO_ERROR)
     {
         RNDR_LOG_ERROR("Failed to bind image!");

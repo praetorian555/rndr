@@ -60,9 +60,10 @@ public:
     /**
      * Binds an image to the graphics pipeline.
      * @param image The image to bind.
+     * @param binding_index The binding index to bind the image to.
      * @return Returns true if the image was bound successfully, false otherwise.
      */
-    bool Bind(const Image& image);
+    bool Bind(const Image& image, int32_t binding_index);
 
     /**
      * Swaps the front and back buffers of the swap chain.
