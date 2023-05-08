@@ -124,12 +124,12 @@
   "buffers": [
     {
       "byteLength": 405312,
-      "uri": "scene.bin"
+      "uri": "duck.bin"
     }
   ],
   "images": [
     {
-      "uri": "textures/Duck_baseColor.png"
+      "uri": "textures/duck-base-color.png"
     }
   ],
   "materials": [

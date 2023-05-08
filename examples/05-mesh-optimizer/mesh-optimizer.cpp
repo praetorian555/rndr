@@ -95,7 +95,7 @@ void Run()
     Rndr::Array<uint32_t> indices;
     Rndr::Array<uint32_t> indices_lod;
     const bool success =
-        LoadMeshAndGenerateLOD(ASSET_DIR "/scene.gltf", positions, indices, indices_lod);
+        LoadMeshAndGenerateLOD(ASSETS_DIR "duck.gltf", positions, indices, indices_lod);
     assert(success);
 
     Rndr::Window window({.width = 1024, .height = 768, .name = "Mesh Optimizer Example"});

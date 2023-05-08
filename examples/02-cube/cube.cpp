@@ -68,7 +68,7 @@ constexpr size_t k_per_frame_size = sizeof(PerFrameData);
 
 void Run()
 {
-    Rndr::Window window({.width = 800, .height = 600, .name = "Cube"});
+    Rndr::Window window({.width = 800, .height = 600, .name = "Cube Example"});
     Rndr::GraphicsContext graphics_context({.window_handle = window.GetNativeWindowHandle()});
     assert(graphics_context.IsValid());
     Rndr::SwapChain swap_chain(graphics_context,

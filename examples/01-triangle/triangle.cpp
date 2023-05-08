@@ -22,7 +22,7 @@ int main()
 
 void Run()
 {
-    Rndr::Window window({.width = 800, .height = 600, .name = "Triangle"});
+    Rndr::Window window({.width = 800, .height = 600, .name = "Triangle Example"});
     Rndr::GraphicsContext graphics_context({.window_handle = window.GetNativeWindowHandle()});
     assert(graphics_context.IsValid());
     Rndr::SwapChain swap_chain(graphics_context,

@@ -57,9 +57,14 @@ constexpr size_t k_per_frame_size = sizeof(PerFrameData);
 
 void Run()
 {
-    const Rndr::String file_path = ASSET_DIR "/scene.gltf";
+    const Rndr::String file_path = ASSETS_DIR "duck.gltf";
     const aiScene* scene = aiImportFile(file_path.c_str(), aiProcess_Triangulate);
-    assert(scene);
+    if (scene == nullptr || !scene->HasMeshes())
+    {
+        RNDR_LOG_ERROR("Failed to load mesh from file with error: %s", aiGetErrorString());
+        assert(false);
+        return;
+    }
     assert(scene->HasMeshes());
     const aiMesh* mesh = scene->mMeshes[0];
     Rndr::Array<math::Point3> positions;
@@ -75,7 +80,7 @@ void Run()
     }
     aiReleaseImport(scene);
 
-    Rndr::Window window({.width = 800, .height = 600, .name = "Assimp"});
+    Rndr::Window window({.width = 800, .height = 600, .name = "Assimp Example"});
     Rndr::GraphicsContext graphics_context({.window_handle = window.GetNativeWindowHandle()});
     assert(graphics_context.IsValid());
     Rndr::SwapChain swap_chain(graphics_context,

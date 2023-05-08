@@ -68,7 +68,7 @@ struct PerFrameData
 
 void Run()
 {
-    Rndr::Window window({.width = 800, .height = 600, .name = "Triangle"});
+    Rndr::Window window({.width = 800, .height = 600, .name = "Image Example"});
     Rndr::GraphicsContext graphics_context({.window_handle = window.GetNativeWindowHandle()});
     assert(graphics_context.IsValid());
     Rndr::SwapChain swap_chain(graphics_context,
@@ -97,7 +97,7 @@ void Run()
                                    .stride = k_per_frame_size});
     assert(per_frame_buffer.IsValid());
 
-    Rndr::CPUImage cpu_image = Rndr::File::ReadEntireImage(IMAGE_DIR "/ch2_sample3_stb.jpg");
+    Rndr::CPUImage cpu_image = Rndr::File::ReadEntireImage(ASSETS_DIR "brick-wall.jpg");
     assert(cpu_image.IsValid());
     constexpr bool k_use_mips = false;
     const Rndr::Image image(graphics_context, cpu_image, k_use_mips, {});

@@ -41,7 +41,7 @@ void Run()
 {
     Rndr::Array<VertexData> vertices;
     Rndr::Array<uint32_t> indices;
-    if (!LoadMesh(MESH_DIR "/scene.gltf", vertices, indices))
+    if (!LoadMesh(ASSETS_DIR "duck.gltf", vertices, indices))
     {
         return;
     }
@@ -58,11 +58,11 @@ void Run()
 
     // Read shaders from files.
     const Rndr::String vertex_shader_code =
-        Rndr::File::ReadEntireTextFile(SHADER_DIR "/vertex-pulling.vert");
+        Rndr::File::ReadEntireTextFile(ASSETS_DIR "vertex-pulling.vert");
     const Rndr::String pixel_shader_code =
-        Rndr::File::ReadEntireTextFile(SHADER_DIR "/vertex-pulling.frag");
+        Rndr::File::ReadEntireTextFile(ASSETS_DIR "vertex-pulling.frag");
     const Rndr::String geometry_shader_code =
-        Rndr::File::ReadEntireTextFile(SHADER_DIR "/vertex-pulling.geom");
+        Rndr::File::ReadEntireTextFile(ASSETS_DIR "vertex-pulling.geom");
 
     // Create shaders.
     Rndr::Shader vertex_shader(graphics_context,
@@ -112,7 +112,7 @@ void Run()
     assert(solid_pipeline.IsValid());
 
     // Load mesh albedo texture.
-    Rndr::CPUImage mesh_image = Rndr::File::ReadEntireImage(SHADER_DIR "/Duck_baseColor.png");
+    Rndr::CPUImage mesh_image = Rndr::File::ReadEntireImage(ASSETS_DIR "duck-base-color.png");
     assert(mesh_image.IsValid());
     constexpr bool k_use_mips = false;
     const Rndr::Image mesh_albedo(graphics_context, mesh_image, k_use_mips, {});
