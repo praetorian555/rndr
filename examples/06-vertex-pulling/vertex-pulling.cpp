@@ -13,6 +13,7 @@ void Run();
  *      1. Load a mesh from a file using Assimp.
  *      2. Create a shader from a file.
  *      3. Render a mesh using vertex pulling technique.
+ *      4. Controlling vertical sync using imgui.
  */
 int main()
 {
@@ -47,7 +48,7 @@ void Run()
 
     bool vertical_sync = false;
 
-    Rndr::Window window({.width = 800, .height = 600, .name = "Assimp"});
+    Rndr::Window window({.width = 800, .height = 600, .name = "Vertex Pulling Example"});
     Rndr::GraphicsContext graphics_context({.window_handle = window.GetNativeWindowHandle()});
     assert(graphics_context.IsValid());
     Rndr::SwapChain swap_chain(
@@ -165,6 +166,8 @@ void Run()
         graphics_context.DrawIndices(Rndr::PrimitiveTopology::Triangle, index_count);
 
         Rndr::ImGuiWrapper::StartFrame();
+        const ImVec2 window_size(150, 75);
+        ImGui::SetNextWindowSize(window_size, ImGuiCond_Always);
         ImGui::Begin("Info");
         ImGui::Text("FPS: %f", ImGui::GetIO().Framerate);
         if (ImGui::Checkbox("Vertical Sync", &vertical_sync))
