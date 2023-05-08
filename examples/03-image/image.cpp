@@ -4,7 +4,6 @@
 
 #if RNDR_ETC2COMP
 #include "EtcLib/Etc/Etc.h"
-#include "EtcLib/Etc/EtcFilter.h"
 #include "EtcLib/Etc/EtcImage.h"
 #include "EtcTool/EtcFile.h"
 #endif
@@ -12,8 +11,13 @@
 void Run();
 
 /**
- * Shows how to use a texture which is called image in this library. It also shows how to use
- * the input system.
+ * In this example you will learn how to:
+ *    1. Load a texture from a file.
+ *    2. Render a textured triangle.
+ *    3. Use the input system.
+ *    4. Save image to a file.
+ *    5. Compress image using ETC2.
+ *    6. Use ImGui.
  */
 int main()
 {
@@ -22,7 +26,7 @@ int main()
     Rndr::Destroy();
 }
 
-static const char* g_vertex_shader_source = R"(
+static const char* const g_vertex_shader_source = R"(
 #version 460 core
 layout(std140, binding = 0) uniform PerFrameData
 {
@@ -46,7 +50,7 @@ void main()
 }
 )";
 
-static const char* g_pixel_shader_source = R"(
+static const char* const g_pixel_shader_source = R"(
 #version 460 core
 layout (location=0) in vec2 uv;
 layout (location=0) out vec4 out_FragColor;
@@ -96,7 +100,7 @@ void Run()
     Rndr::CPUImage cpu_image = Rndr::File::ReadEntireImage(IMAGE_DIR "/ch2_sample3_stb.jpg");
     assert(cpu_image.IsValid());
     constexpr bool k_use_mips = false;
-    Rndr::Image image(graphics_context, cpu_image, k_use_mips, {});
+    const Rndr::Image image(graphics_context, cpu_image, k_use_mips, {});
     assert(image.IsValid());
 
     constexpr math::Vector4 k_clear_color{MATH_REALC(0.0),
@@ -180,7 +184,7 @@ void Run()
 
         const float ratio = static_cast<Rndr::real>(window.GetWidth())
                             / static_cast<Rndr::real>(window.GetHeight());
-        const Rndr::real angle = std::fmod(10 * Rndr::GetSystemTime(), 360.0f);
+        const float angle = std::fmod(10 * Rndr::GetSystemTime(), 360.0f);
         const math::Transform t = math::Rotate(angle, math::Vector3(0.0f, 0.0f, 1.0f));
         const math::Matrix4x4 p = math::Orthographic_RH_N1(-ratio, ratio, -1.0f, 1.0f, -1.0f, 1.0f);
         math::Matrix4x4 mvp = math::Multiply(p, t.GetMatrix());
