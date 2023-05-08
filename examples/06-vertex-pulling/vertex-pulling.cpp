@@ -4,6 +4,8 @@
 #include <assimp/postprocess.h>
 #include <assimp/scene.h>
 
+#include <imgui.h>
+
 void Run();
 
 /**
@@ -43,11 +45,14 @@ void Run()
         return;
     }
 
+    bool vertical_sync = false;
+
     Rndr::Window window({.width = 800, .height = 600, .name = "Assimp"});
     Rndr::GraphicsContext graphics_context({.window_handle = window.GetNativeWindowHandle()});
     assert(graphics_context.IsValid());
-    Rndr::SwapChain swap_chain(graphics_context,
-                               {.width = window.GetWidth(), .height = window.GetHeight()});
+    Rndr::SwapChain swap_chain(
+        graphics_context,
+        {.width = window.GetWidth(), .height = window.GetHeight(), .enable_vsync = vertical_sync});
     assert(swap_chain.IsValid());
 
     // Read shaders from files.
@@ -133,6 +138,8 @@ void Run()
     graphics_context.BindUniform(per_frame_buffer, 0);
     graphics_context.Bind(mesh_albedo, 0);
 
+    Rndr::ImGuiWrapper::Init(window, graphics_context);
+
     const int32_t index_count = static_cast<int32_t>(indices.size());
     while (!window.IsClosed())
     {
@@ -157,8 +164,19 @@ void Run()
         graphics_context.ClearColorAndDepth(k_clear_color, 1);
         graphics_context.DrawIndices(Rndr::PrimitiveTopology::Triangle, index_count);
 
-        graphics_context.Present(swap_chain, true);
+        Rndr::ImGuiWrapper::StartFrame();
+        ImGui::Begin("Info");
+        ImGui::Text("FPS: %f", ImGui::GetIO().Framerate);
+        if (ImGui::Checkbox("Vertical Sync", &vertical_sync))
+        {
+            swap_chain.SetVerticalSync(vertical_sync);
+        }
+        ImGui::End();
+        Rndr::ImGuiWrapper::EndFrame();
+
+        graphics_context.Present(swap_chain);
     }
+    Rndr::ImGuiWrapper::Destroy();
 }
 
 bool LoadMesh(const Rndr::String& file_path,

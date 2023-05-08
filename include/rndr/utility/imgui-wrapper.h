@@ -8,7 +8,7 @@ struct ImGuiDesc
 {
     bool enable_keyboard_navigation = false;
     bool enable_gamepad_navigation = false;
-    bool display_demo_window = true;
+    bool display_demo_window = false;
 };
 
 /**

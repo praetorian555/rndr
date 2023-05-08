@@ -218,10 +218,9 @@ const Rndr::GraphicsContextDesc& Rndr::GraphicsContext::GetDesc() const
     return m_desc;
 }
 
-bool Rndr::GraphicsContext::Present(const Rndr::SwapChain& swap_chain, bool vertical_sync)
+bool Rndr::GraphicsContext::Present(const Rndr::SwapChain& swap_chain)
 {
     RNDR_UNUSED(swap_chain);
-    RNDR_UNUSED(vertical_sync);
     const BOOL status = SwapBuffers(m_native_device_context);
     return status == TRUE;
 }
@@ -563,6 +562,7 @@ Rndr::SwapChain::SwapChain(const Rndr::GraphicsContext& graphics_context,
     : m_desc(desc)
 {
     RNDR_UNUSED(graphics_context);
+    wglSwapIntervalEXT(desc.enable_vsync ? 1 : 0);
 }
 
 const Rndr::SwapChainDesc& Rndr::SwapChain::GetDesc() const
@@ -584,6 +584,13 @@ bool Rndr::SwapChain::SetSize(int32_t width, int32_t height)
     }
     m_desc.width = width;
     m_desc.height = height;
+    return true;
+}
+
+bool Rndr::SwapChain::SetVerticalSync(bool vertical_sync)
+{
+    m_desc.enable_vsync = vertical_sync;
+    wglSwapIntervalEXT(vertical_sync ? 1 : 0);
     return true;
 }
 

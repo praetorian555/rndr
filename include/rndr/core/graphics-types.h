@@ -490,6 +490,9 @@ struct SwapChainDesc
 
     /** Signals if the swap chain should be created in windowed mode. */
     bool is_windowed = true;
+
+    /** Signals if the swap chain should be created with vsync enabled. */
+    bool enable_vsync = true;
 };
 
 struct ShaderDesc

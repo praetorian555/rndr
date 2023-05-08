@@ -286,6 +286,6 @@ void Run()
                                      1,
                                      static_cast<int32_t>(indices.size()));
 
-        graphics_context.Present(swap_chain, true);
+        graphics_context.Present(swap_chain);
     }
 }

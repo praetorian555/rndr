@@ -70,6 +70,6 @@ void Run()
         graphics_context.ClearColor(k_clear_color);
         graphics_context.DrawVertices(Rndr::PrimitiveTopology::Triangle, 3);
 
-        graphics_context.Present(swap_chain, true);
+        graphics_context.Present(swap_chain);
     }
 }

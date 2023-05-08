@@ -68,10 +68,9 @@ public:
     /**
      * Swaps the front and back buffers of the swap chain.
      * @param swap_chain The swap chain to present.
-     * @param vertical_sync Whether to wait for the vertical blank before presenting.
      * @return Returns true if the swap chain was presented successfully, false otherwise.
      */
-    bool Present(const SwapChain& swap_chain, bool vertical_sync);
+    bool Present(const SwapChain& swap_chain);
 
     /**
      * Clears the color image in the bound frame buffer.
@@ -158,6 +157,7 @@ public:
     [[nodiscard]] const SwapChainDesc& GetDesc() const;
 
     bool SetSize(int32_t width, int32_t height);
+    bool SetVerticalSync(bool vertical_sync);
 
 private:
     SwapChainDesc m_desc;

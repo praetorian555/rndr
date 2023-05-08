@@ -157,6 +157,6 @@ void Run()
         graphics_context.Update(per_frame_buffer, Rndr::ToByteSpan(per_frame_data));
         graphics_context.DrawVertices(Rndr::PrimitiveTopology::Triangle, vertex_count);
 
-        graphics_context.Present(swap_chain, true);
+        graphics_context.Present(swap_chain);
     }
 }
