@@ -3,17 +3,16 @@
 #include <assimp/cimport.h>
 #include <assimp/postprocess.h>
 #include <assimp/scene.h>
-#include <assimp/version.h>
 #include <meshoptimizer.h>
 
 void Run();
 
 /**
- * In this example you can learn how to:
- * - Create a data buffer to change data on the GPU per frame.
- * - Use math transformations.
- * - Render 3D objects, both filled and using wireframe.
- * - Use mesh optimizer to optimize the mesh data.
+ * In this example you will learn how to:
+ *      1. Use mesh optimizer library to optimize the mesh.
+ *      2. Use mesh optimizer library to create an LOD mesh.
+ *      3. Use geometry shader to draw wireframe.
+ *      4. Use RNDR_TRACE functionality to track performance.
  */
 int main()
 {
@@ -22,7 +21,7 @@ int main()
     Rndr::Destroy();
 }
 
-const char* g_shader_code_vertex = R"(
+const char* const g_shader_code_vertex = R"(
 #version 460 core
 layout(std140, binding = 0) uniform PerFrameData
 {
@@ -37,7 +36,7 @@ void main()
 }
 )";
 
-static const char* g_shader_code_geometry = R"(
+static const char* const g_shader_code_geometry = R"(
 #version 460 core
 layout( triangles ) in;
 layout( triangle_strip, max_vertices = 3 ) out;
@@ -63,7 +62,7 @@ void main()
 }
 )";
 
-const char* g_shader_code_fragment = R"(
+const char* const g_shader_code_fragment = R"(
 #version 460 core
 layout (location=0) in vec3 colors;
 layout (location=1) in vec3 barycoords;
@@ -85,93 +84,19 @@ struct PerFrameData
 };
 constexpr size_t k_per_frame_size = sizeof(PerFrameData);
 
+bool LoadMeshAndGenerateLOD(const Rndr::String& file_path,
+                            Rndr::Array<math::Point3>& vertices,
+                            Rndr::Array<uint32_t>& indices,
+                            Rndr::Array<uint32_t>& lod_indices);
+
 void Run()
 {
-    const aiScene* scene = aiImportFile(ASSET_DIR "/scene.gltf", aiProcess_Triangulate);
-    assert(scene != nullptr && scene->HasMeshes());
-    const aiMesh* mesh = scene->mMeshes[0];
     Rndr::Array<math::Point3> positions;
-    for (unsigned i = 0; i != mesh->mNumVertices; i++)
-    {
-        const aiVector3D v = mesh->mVertices[i];
-        positions.emplace_back(v.x, v.y, v.z);
-    }
     Rndr::Array<uint32_t> indices;
-    for (uint32_t i = 0; i != mesh->mNumFaces; i++)
-    {
-        for (uint32_t j = 0; j != 3; j++)
-        {
-            indices.push_back(mesh->mFaces[i].mIndices[j]);
-        }
-    }
-    aiReleaseImport(scene);
-
     Rndr::Array<uint32_t> indices_lod;
-    {
-        // Reindex the vertex buffer so that we remove redundant vertices.
-        Rndr::Array<uint32_t> remap(indices.size());
-        const size_t vertex_count = meshopt_generateVertexRemap(remap.data(),
-                                                                indices.data(),
-                                                                indices.size(),
-                                                                positions.data(),
-                                                                indices.size(),
-                                                                sizeof(math::Point3));
-        Rndr::Array<uint32_t> remapped_indices(indices.size());
-        Rndr::Array<math::Point3> remapped_vertices(vertex_count);
-        meshopt_remapIndexBuffer(remapped_indices.data(),
-                                 indices.data(),
-                                 indices.size(),
-                                 remap.data());
-        meshopt_remapVertexBuffer(remapped_vertices.data(),
-                                  positions.data(),
-                                  positions.size(),
-                                  sizeof(math::Point3),
-                                  remap.data());
-
-        // Optimize the vertex cache by organizing the vertex data for same triangles to be close to
-        // each other.
-        meshopt_optimizeVertexCache(remapped_indices.data(),
-                                    remapped_indices.data(),
-                                    indices.size(),
-                                    vertex_count);
-
-        // Reduce overdraw to reduce for how many fragments we need to call fragment shader.
-        meshopt_optimizeOverdraw(remapped_indices.data(),
-                                 remapped_indices.data(),
-                                 indices.size(),
-                                 reinterpret_cast<float*>(remapped_vertices.data()),
-                                 vertex_count,
-                                 sizeof(math::Point3),
-                                 1.05f);
-
-        // Optimize vertex fetches by reordering the vertex buffer.
-        meshopt_optimizeVertexFetch(remapped_vertices.data(),
-                                    remapped_indices.data(),
-                                    indices.size(),
-                                    remapped_vertices.data(),
-                                    vertex_count,
-                                    sizeof(math::Point3));
-
-        // Generate lower level LOD.
-        constexpr float k_threshold = 0.2f;
-        const size_t target_index_count =
-            static_cast<size_t>(static_cast<float>(remapped_indices.size()) * k_threshold);
-        constexpr float k_target_error = 1e-2f;
-        indices_lod.resize(remapped_indices.size());
-        indices_lod.resize(meshopt_simplify(indices_lod.data(),
-                                            remapped_indices.data(),
-                                            remapped_indices.size(),
-                                            reinterpret_cast<float*>(remapped_vertices.data()),
-                                            vertex_count,
-                                            sizeof(math::Point3),
-                                            target_index_count,
-                                            k_target_error,
-                                            0,
-                                            nullptr));
-
-        indices = remapped_indices;
-        positions = remapped_vertices;
-    }
+    const bool success =
+        LoadMeshAndGenerateLOD(ASSET_DIR "/scene.gltf", positions, indices, indices_lod);
+    assert(success);
 
     Rndr::Window window({.width = 1024, .height = 768, .name = "Mesh Optimizer Example"});
     Rndr::GraphicsContext graphics_context({.window_handle = window.GetNativeWindowHandle()});
@@ -197,15 +122,14 @@ void Run()
     const uint32_t size_vertices = static_cast<uint32_t>(sizeof(math::Point3) * positions.size());
     const uint32_t start_indices = 0;
     const uint32_t start_indices_lod = size_indices;
-    //    const uint32_t start_vertices = size_indices + size_indices_lod;
 
-    Rndr::Buffer vertex_buffer(graphics_context,
-                               {.type = Rndr::BufferType::Vertex,
-                                .usage = Rndr::Usage::Dynamic,
-                                .size = size_vertices,
-                                .stride = sizeof(math::Point3),
-                                .offset = 0},
-                               Rndr::ToByteSpan(positions));
+    const Rndr::Buffer vertex_buffer(graphics_context,
+                                     {.type = Rndr::BufferType::Vertex,
+                                      .usage = Rndr::Usage::Dynamic,
+                                      .size = size_vertices,
+                                      .stride = sizeof(math::Point3),
+                                      .offset = 0},
+                                     Rndr::ToByteSpan(positions));
     assert(vertex_buffer.IsValid());
 
     Rndr::Buffer index_buffer(graphics_context,
@@ -288,4 +212,92 @@ void Run()
 
         graphics_context.Present(swap_chain);
     }
+}
+
+bool LoadMeshAndGenerateLOD(const Rndr::String& file_path,
+                            Rndr::Array<math::Point3>& positions,
+                            Rndr::Array<uint32_t>& indices,
+                            Rndr::Array<uint32_t>& lod_indices)
+{
+    const aiScene* scene = aiImportFile(file_path.c_str(), aiProcess_Triangulate);
+    if (scene == nullptr || !scene->HasMeshes())
+    {
+        return false;
+    }
+    const aiMesh* mesh = scene->mMeshes[0];
+    for (unsigned i = 0; i != mesh->mNumVertices; i++)
+    {
+        const aiVector3D v = mesh->mVertices[i];
+        positions.emplace_back(v.x, v.y, v.z);
+    }
+    for (uint32_t i = 0; i != mesh->mNumFaces; i++)
+    {
+        for (uint32_t j = 0; j != 3; j++)
+        {
+            indices.push_back(mesh->mFaces[i].mIndices[j]);
+        }
+    }
+    aiReleaseImport(scene);
+
+    // Reindex the vertex buffer so that we remove redundant vertices.
+    Rndr::Array<uint32_t> remap(indices.size());
+    const size_t vertex_count = meshopt_generateVertexRemap(remap.data(),
+                                                            indices.data(),
+                                                            indices.size(),
+                                                            positions.data(),
+                                                            indices.size(),
+                                                            sizeof(math::Point3));
+    Rndr::Array<uint32_t> remapped_indices(indices.size());
+    Rndr::Array<math::Point3> remapped_vertices(vertex_count);
+    meshopt_remapIndexBuffer(remapped_indices.data(), indices.data(), indices.size(), remap.data());
+    meshopt_remapVertexBuffer(remapped_vertices.data(),
+                              positions.data(),
+                              positions.size(),
+                              sizeof(math::Point3),
+                              remap.data());
+
+    // Optimize the vertex cache by organizing the vertex data for same triangles to be close to
+    // each other.
+    meshopt_optimizeVertexCache(remapped_indices.data(),
+                                remapped_indices.data(),
+                                indices.size(),
+                                vertex_count);
+
+    // Reduce overdraw to reduce for how many fragments we need to call fragment shader.
+    meshopt_optimizeOverdraw(remapped_indices.data(),
+                             remapped_indices.data(),
+                             indices.size(),
+                             reinterpret_cast<float*>(remapped_vertices.data()),
+                             vertex_count,
+                             sizeof(math::Point3),
+                             1.05f);
+
+    // Optimize vertex fetches by reordering the vertex buffer.
+    meshopt_optimizeVertexFetch(remapped_vertices.data(),
+                                remapped_indices.data(),
+                                indices.size(),
+                                remapped_vertices.data(),
+                                vertex_count,
+                                sizeof(math::Point3));
+
+    // Generate lower level LOD.
+    constexpr float k_threshold = 0.2f;
+    const size_t target_index_count =
+        static_cast<size_t>(static_cast<float>(remapped_indices.size()) * k_threshold);
+    constexpr float k_target_error = 1e-2f;
+    lod_indices.resize(remapped_indices.size());
+    lod_indices.resize(meshopt_simplify(lod_indices.data(),
+                                        remapped_indices.data(),
+                                        remapped_indices.size(),
+                                        reinterpret_cast<float*>(remapped_vertices.data()),
+                                        vertex_count,
+                                        sizeof(math::Point3),
+                                        target_index_count,
+                                        k_target_error,
+                                        0,
+                                        nullptr));
+
+    indices = remapped_indices;
+    positions = remapped_vertices;
+    return true;
 }
