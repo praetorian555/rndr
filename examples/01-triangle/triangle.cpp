@@ -3,9 +3,15 @@
 void Run();
 
 /**
- * Basic example on how to use the Rndr library. This example creates a window, initializes a
- * graphics context and a swap chain, sets up a simple vertex and pixel shader, and a pipeline state
- * object. It then draws a triangle to the screen.
+ * In this example you will learn how to:
+ *      1. How to setup a Rndr library.
+ *      2. How to create a window.
+ *      3. How to create a graphics context.
+ *      4. How to create a swap chain.
+ *      5. How to create a shader.
+ *      6. How to create a pipeline.
+ *      7. How to clear the screen.
+ *      8. How to draw a triangle.
  */
 int main()
 {

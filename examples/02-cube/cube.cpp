@@ -3,8 +3,11 @@
 void Run();
 
 /**
- * Shows how to use a data buffer to change GPU data per frame. Shows how to use math
- * transformations. Shows how to render 3D objects as well as their wireframes.
+ * In this example you will learn how to:
+ *      1. Update a data buffer per frame.
+ *      2. Render a mesh using just vertices, with no index buffers.
+ *      3. Render wireframes.
+ *      4. Use math transformations.
  */
 int main()
 {
@@ -13,7 +16,7 @@ int main()
     Rndr::Destroy();
 }
 
-const char* g_shader_code_vertex = R"(
+const char* const g_shader_code_vertex = R"(
         #version 460 core
         layout(std140, binding = 0) uniform PerFrameData {
           uniform mat4 MVP;
@@ -47,7 +50,7 @@ const char* g_shader_code_vertex = R"(
         }
     )";
 
-const char* g_shader_code_fragment = R"(
+const char* const g_shader_code_fragment = R"(
         #version 460 core
         layout (location=0) in vec3 color;
         layout (location=0) out vec4 out_FragColor;
@@ -111,7 +114,7 @@ void Run()
 
         const float ratio = static_cast<Rndr::real>(window.GetWidth())
                             / static_cast<Rndr::real>(window.GetHeight());
-        Rndr::real angle = std::fmod(10 * Rndr::GetSystemTime(), 360.0f);
+        const float angle = std::fmod(10 * Rndr::GetSystemTime(), 360.0f);
         const math::Transform t = math::Translate(math::Vector3(0.0f, 0.0f, -3.5f))
                                   * math::Rotate(angle, math::Vector3(1.0f, 1.0f, 1.0f));
         const math::Matrix4x4 p = math::Perspective_RH_N1(45.0f, ratio, 0.1f, 1000.0f);
