@@ -37,12 +37,6 @@ void APIENTRY DebugOutputCallback(GLenum source,
         case GL_DEBUG_SEVERITY_MEDIUM:
             RNDR_LOG_WARNING("[OpenGL] %s", message);
             break;
-        case GL_DEBUG_SEVERITY_LOW:
-            RNDR_LOG_INFO("[OpenGL] %s", message);
-            break;
-        case GL_DEBUG_SEVERITY_NOTIFICATION:
-            RNDR_LOG_TRACE("[OpenGL] %s", message);
-            break;
         default:
             break;
     }
