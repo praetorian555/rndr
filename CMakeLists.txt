@@ -7,9 +7,9 @@ project(
         LANGUAGES CXX)
 
 # Library options
-option(RNDR_UNITY "Enable unity builds" ON)
-option(RNDR_SANITIZER "Enable address sanitizer" ON)
-option(RNDR_DX11 "Use DX11 API" ON)
+option(RNDR_UNITY "Enable unity builds" OFF)
+option(RNDR_SANITIZER "Enable address sanitizer" OFF)
+option(RNDR_DX11 "Use DX11 API" OFF)
 option(RNDR_SPDLOG "Use spdlog external library to implement default logging" ON)
 option(RNDR_IMGUI "Add imgui wrapper which can be used for development GUI" ON)
 option(RNDR_ASSIMP "Add wrapper around assimp library that can be used to import 3D models" ON)
