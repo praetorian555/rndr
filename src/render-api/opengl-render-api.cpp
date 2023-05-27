@@ -173,14 +173,6 @@ Rndr::GraphicsContext::~GraphicsContext()
             RNDR_LOG_ERROR("Failed to destroy OpenGL graphics context!");
         }
     }
-    if (m_native_device_context != k_invalid_device_context_handle)
-    {
-        const BOOL status = ReleaseDC(m_desc.window_handle, m_native_device_context);
-        if (status == 0)
-        {
-            RNDR_LOG_ERROR("Failed to release device context!");
-        }
-    }
 #endif  // RNDR_WINDOWS
 }
 
