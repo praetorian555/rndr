@@ -38,7 +38,7 @@ Rndr::InputLayoutBuilder& Rndr::InputLayoutBuilder::AppendElement(int buffer_ind
                                      .repetition = info.repetition,
                                      .instance_step_rate = instance_rate};
 
-    info.offset += GetPixelSize(format);
+    info.offset += FromPixelFormatToPixelSize(format);
     info.entries_count++;
     m_elements.push_back(element);
 

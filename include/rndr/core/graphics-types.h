@@ -50,7 +50,20 @@ enum class PixelFormat
 
     D24_UNORM_S8_UINT,
 
+    R8G8B8_UNORM,
+    R8G8B8_UNORM_SRGB,
+    R8G8B8_UINT,
+    R8G8B8_SNORM,
+    R8G8B8_SINT,
+
+    R8G8_UNORM,
+    R8G8_UNORM_SRGB,
+    R8G8_UINT,
+    R8G8_SNORM,
+    R8G8_SINT,
+
     R8_UNORM,
+    R8_UNORM_SRGB,
     R8_UINT,
     R8_SNORM,
     R8_SINT,
@@ -796,10 +809,31 @@ struct PipelineDesc
 // Helper functions
 
 /**
- * Returns the size of a pixel in bytes.
+ * Returns the size of a pixel in a given pixel format in bytes.
  * @param format Pixel format.
  * @return Size of a pixel in bytes.
  */
-int32_t GetPixelSize(PixelFormat format);
+int32_t FromPixelFormatToPixelSize(PixelFormat format);
+
+/**
+ * Returns the number of components in a given pixel format.
+ * @param format Pixel format.
+ * @return Number of components in a given pixel format.
+ */
+int32_t FromPixelFormatToComponentCount(PixelFormat format);
+
+/**
+ * Check if for given pixel format components are stored in one byte.
+ * @param format Pixel format.
+ * @return True if for given pixel format components are stored in one byte.
+ */
+bool IsComponentLowPrecision(PixelFormat format);
+
+/**
+ * Check if for given pixel format components are stored in 4 bytes.
+ * @param format Pixel format.
+ * @return True if for given pixel format components are stored in 4 bytes.
+ */
+bool IsComponentHighPrecision(PixelFormat format);
 
 }  // namespace Rndr

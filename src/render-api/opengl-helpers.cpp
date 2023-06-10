@@ -73,6 +73,19 @@ constexpr Rndr::StackArray<GLenum, k_max_pixel_format> k_to_opengl_internal_pixe
 
     GL_DEPTH24_STENCIL8,
 
+    GL_RGB8,
+    GL_RGB8,
+    GL_RGB8UI,
+    GL_RGB8_SNORM,
+    GL_RGB8I,
+
+    GL_RG8,
+    GL_RG8,
+    GL_RG8UI,
+    GL_RG8_SNORM,
+    GL_RG8I,
+
+    GL_R8,
     GL_R8,
     GL_R8UI,
     GL_R8_SNORM,
@@ -106,6 +119,19 @@ constexpr Rndr::StackArray<GLenum, k_max_pixel_format> k_to_opengl_pixel_format 
 
                                                                                    GL_DEPTH_STENCIL,
 
+                                                                                   GL_RGB,
+                                                                                   GL_RGB,
+                                                                                   GL_RGB,
+                                                                                   GL_RGB,
+                                                                                   GL_RGB,
+
+                                                                                   GL_RG,
+                                                                                   GL_RG,
+                                                                                   GL_RG,
+                                                                                   GL_RG,
+                                                                                   GL_RG,
+
+                                                                                   GL_RED,
                                                                                    GL_RED,
                                                                                    GL_RED,
                                                                                    GL_RED,
@@ -142,6 +168,19 @@ constexpr Rndr::StackArray<GLenum, k_max_pixel_format> k_to_opengl_pixel_type = 
 
     GL_UNSIGNED_BYTE,
     GL_UNSIGNED_BYTE,
+    GL_UNSIGNED_BYTE,
+    GL_BYTE,
+    GL_BYTE,
+
+    GL_UNSIGNED_BYTE,
+    GL_UNSIGNED_BYTE,
+    GL_UNSIGNED_BYTE,
+    GL_BYTE,
+    GL_BYTE,
+
+    GL_UNSIGNED_BYTE,
+    GL_UNSIGNED_BYTE,
+    GL_UNSIGNED_BYTE,
     GL_BYTE,
     GL_BYTE,
 
@@ -164,9 +203,11 @@ constexpr Rndr::StackArray<GLenum, k_max_pixel_format> k_to_opengl_pixel_type = 
     GL_FLOAT,
     GL_UNSIGNED_SHORT};
 constexpr Rndr::StackArray<int32_t, k_max_pixel_format> k_to_pixel_size = {
-    4, 4, 4, 4, 4, 4, 4, 4, 1, 1, 1, 1, 16, 16, 16, 12, 12, 12, 8, 8, 8, 4, 4, 4, 4, 2};
+    4, 4, 4, 4, 4,  4,  4,  4,  3,  3,  3, 3, 3, 2, 2, 2, 2, 2, 1,
+    1, 1, 1, 1, 16, 16, 16, 12, 12, 12, 8, 8, 8, 4, 4, 4, 4, 2};
 constexpr Rndr::StackArray<GLint, k_max_pixel_format> k_to_component_count = {
-    4, 4, 4, 4, 4, 4, 4, 2, 1, 1, 1, 1, 4, 4, 4, 3, 3, 3, 2, 2, 2, 1, 1, 1, 1, 1};
+    4, 4, 4, 4, 4, 4, 4, 2, 3, 3, 3, 3, 3, 2, 2, 2, 2, 2, 1,
+    1, 1, 1, 1, 4, 4, 4, 3, 3, 3, 2, 2, 2, 1, 1, 1, 1, 1};
 
 constexpr size_t k_max_primitive_topology = static_cast<size_t>(Rndr::PrimitiveTopology::EnumCount);
 constexpr Rndr::StackArray<GLenum, k_max_primitive_topology> k_to_opengl_primitive_topology =
@@ -289,7 +330,7 @@ GLenum Rndr::FromPixelFormatToDataType(PixelFormat format)
     return k_to_opengl_pixel_type[static_cast<size_t>(format)];
 }
 
-int32_t Rndr::GetPixelSize(PixelFormat format)
+int32_t Rndr::FromPixelFormatToPixelSize(PixelFormat format)
 {
     return k_to_pixel_size[static_cast<size_t>(format)];
 }
@@ -318,6 +359,18 @@ GLenum Rndr::FromIndexSizeToOpenGL(uint32_t index_size)
             assert(false && "Unsupported index size");
             return GL_UNSIGNED_INT;
     }
+}
+
+bool Rndr::IsComponentLowPrecision(PixelFormat format)
+{
+    const GLenum data_type = FromPixelFormatToDataType(format);
+    return data_type == GL_UNSIGNED_BYTE || data_type == GL_BYTE;
+}
+
+bool Rndr::IsComponentHighPrecision(PixelFormat format)
+{
+    const GLenum data_type = FromPixelFormatToDataType(format);
+    return data_type == GL_FLOAT;
 }
 
 #endif  // RNDR_OPENGL

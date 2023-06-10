@@ -53,7 +53,7 @@ Rndr::String Rndr::File::ReadEntireTextFile(const Rndr::String& file_path)
 
 bool Rndr::File::SaveImage(const CPUImage& image, const String& file_path)
 {
-    const int channels = Rndr::GetPixelSize(image.pixel_format);
+    const int channels = Rndr::FromPixelFormatToPixelSize(image.pixel_format);
     const int status = stbi_write_png(file_path.c_str(),
                                       image.width,
                                       image.height,
