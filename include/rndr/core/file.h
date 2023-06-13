@@ -29,7 +29,8 @@ namespace File
 [[nodiscard]] String ReadEntireTextFile(const String& file_path);
 
 /**
- * Reads the contents of the entire image file into CPU memory.
+ * Reads the contents of the entire image file into CPU memory. The data is stored from top to
+ * bottom, left to right, row by row.
  *
  * @param file_path Absolute or relative path to the file on the disc.
  * @param desired_format Format in which the image should be read. If the format is not supported,
@@ -42,7 +43,7 @@ namespace File
 [[nodiscard]] Bitmap ReadEntireImage(const String& file_path, PixelFormat desired_format);
 
 /**
- * Save bitmap to the disc.
+ * Save bitmap to the disc. The data is stored from top to bottom, left to right, row by row.
  *
  * @param bitmap Image in the CPU memory to save to the disc.
  * @param file_path Absolute or relative path to the file on the disc. Should include both the file
