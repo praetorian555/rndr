@@ -62,12 +62,16 @@ int Rndr::Bitmap::GetPixelSize() const
 
 math::Vector4 Rndr::Bitmap::GetPixel(int x, int y) const
 {
+    assert(x >= 0 && x < m_width);
+    assert(y >= 0 && y < m_height);
     assert(m_get_pixel_func != nullptr);
     return (*this.*m_get_pixel_func)(x, y);
 }
 
 void Rndr::Bitmap::SetPixel(int x, int y, const math::Vector4& pixel)
 {
+    assert(x >= 0 && x < m_width);
+    assert(y >= 0 && y < m_height);
     assert(m_set_pixel_func != nullptr);
     (*this.*m_set_pixel_func)(x, y, pixel);
 }
