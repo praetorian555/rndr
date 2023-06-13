@@ -4,22 +4,10 @@
 #include "rndr/core/base.h"
 #include "rndr/core/array.h"
 #include "rndr/core/string.h"
+#include "rndr/core/bitmap.h"
 
 namespace Rndr
 {
-
-/**
- * Helper struct to store image data in the CPU memory.
- */
-struct CPUImage
-{
-    int width = 0;
-    int height = 0;
-    PixelFormat pixel_format = PixelFormat::R32_TYPELESS;
-    Array<uint8_t> data;
-
-    [[nodiscard]] bool IsValid() const { return !data.empty(); }
-};
 
 namespace File
 {
@@ -44,24 +32,25 @@ namespace File
  * Reads the contents of the entire image file into CPU memory.
  *
  * @param file_path Absolute or relative path to the file on the disc.
+ * @param desired_format Format in which the image should be read. If the format is not supported,
+ * the function will fail. Please use Bitmap::IsPixelFormatSupported to check if the format is
+ * supported.
  *
  * @return Returns a valid CPUImage object containing the image info and data in the CPU memory. You
  * can check for CPUImage validity by calling IsValid on it.
- * @note Currently this supports regular image formats, not HDR. It will store pixels as RGBA in
- * gamma correct space (SRGB).
  */
-[[nodiscard]] CPUImage ReadEntireImage(const String& file_path);
+[[nodiscard]] Bitmap ReadEntireImage(const String& file_path, PixelFormat desired_format);
 
 /**
- * Save image to the disc.
+ * Save bitmap to the disc.
  *
- * @param image Image in the CPU memory to saved to the disc.
+ * @param bitmap Image in the CPU memory to save to the disc.
  * @param file_path Absolute or relative path to the file on the disc. Should include both the file
  * name and extension. Extension is used to figure out the format.
  *
  * @return Returns true in case of a success, false otherwise.
  */
-bool SaveImage(const CPUImage& image, const String& file_path);
+bool SaveImage(const Bitmap& bitmap, const String& file_path);
 
 }  // namespace File
 

@@ -112,7 +112,8 @@ void Run()
     assert(solid_pipeline.IsValid());
 
     // Load mesh albedo texture.
-    Rndr::CPUImage mesh_image = Rndr::File::ReadEntireImage(ASSETS_DIR "duck-base-color.png");
+    Rndr::Bitmap mesh_image = Rndr::File::ReadEntireImage(ASSETS_DIR "duck-base-color.png",
+                                                            Rndr::PixelFormat::R8G8B8_UNORM_SRGB);
     assert(mesh_image.IsValid());
     constexpr bool k_use_mips = false;
     const Rndr::Image mesh_albedo(graphics_context, mesh_image, k_use_mips, {});

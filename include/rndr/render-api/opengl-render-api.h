@@ -6,6 +6,7 @@
 
 #include "rndr/core/forward-def-opengl.h"
 #include "rndr/core/graphics-types.h"
+#include "rndr/core/bitmap.h"
 
 namespace Rndr
 {
@@ -128,7 +129,7 @@ public:
      * @param swap_chain The swap chain to read.
      * @return Returns the image data.
      */
-    [[nodiscard]] struct CPUImage ReadSwapChain(const SwapChain& swap_chain);
+    [[nodiscard]] Bitmap ReadSwapChain(const SwapChain& swap_chain);
 
 private:
     GraphicsContextDesc m_desc;
@@ -265,12 +266,12 @@ public:
      * Creates a new image from a CPU image. Only creates Image2D so any other type will result in
      * invalid image.
      * @param graphics_context The graphics context to create the image with.
-     * @param cpu_image The CPU image to create the image with.
+     * @param Bitmap The CPU bitmap to create the image with.
      * @param use_mips Whether or not to use mips for the image.
      * @param sampler_desc The sampler description to use for the image.
      */
     Image(const GraphicsContext& graphics_context,
-          struct CPUImage& cpu_image,
+          Bitmap& bitmap,
           bool use_mips,
           const SamplerDesc& sampler_desc);
 

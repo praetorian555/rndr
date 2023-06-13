@@ -516,8 +516,10 @@ bool Rndr::GraphicsContext::Update(Buffer& buffer, const ByteSpan& data, uint32_
     return true;
 }
 
-Rndr::CPUImage Rndr::GraphicsContext::ReadSwapChain(const SwapChain& swap_chain)
+Rndr::Bitmap Rndr::GraphicsContext::ReadSwapChain(const SwapChain& swap_chain)
 {
+    Bitmap invalid_bitmap{-1, -1, PixelFormat::R8G8B8_UNORM_SRGB};
+
     const int32_t width = swap_chain.GetDesc().width;
     const int32_t height = swap_chain.GetDesc().height;
     const int32_t size = width * height * 4;
@@ -526,7 +528,7 @@ Rndr::CPUImage Rndr::GraphicsContext::ReadSwapChain(const SwapChain& swap_chain)
     if (glGetError() != GL_NO_ERROR)
     {
         RNDR_LOG_ERROR("Failed to read swap chain!");
-        return {};
+        return invalid_bitmap;
     }
     for (int32_t i = 0; i < height / 2; i++)
     {
@@ -540,7 +542,7 @@ Rndr::CPUImage Rndr::GraphicsContext::ReadSwapChain(const SwapChain& swap_chain)
             std::swap(data[index1 + 3], data[index2 + 3]);
         }
     }
-    return CPUImage{width, height, PixelFormat::R8G8B8A8_UNORM_SRGB, data};
+    return Bitmap{width, height, PixelFormat::R8G8B8A8_UNORM_SRGB, data.data()};
 }
 
 Rndr::SwapChain::SwapChain(const Rndr::GraphicsContext& graphics_context,
@@ -1019,17 +1021,17 @@ Rndr::Image::Image(const GraphicsContext& graphics_context,
 }
 
 Rndr::Image::Image(const GraphicsContext& graphics_context,
-                   CPUImage& cpu_image,
+                   Bitmap& bitmap,
                    bool use_mips,
                    const SamplerDesc& sampler_desc)
     : Image(graphics_context,
-            ImageDesc{.width = cpu_image.width,
-                      .height = cpu_image.height,
+            ImageDesc{.width = bitmap.GetWidth(),
+                      .height = bitmap.GetHeight(),
                       .type = ImageType::Image2D,
-                      .pixel_format = cpu_image.pixel_format,
+                      .pixel_format = bitmap.GetPixelFormat(),
                       .use_mips = use_mips,
                       .sampler = sampler_desc},
-            ByteSpan(cpu_image.data))
+            ByteSpan(bitmap.GetData(), bitmap.GetSize()))
 {
 }
 

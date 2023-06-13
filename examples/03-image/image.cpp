@@ -97,10 +97,11 @@ void Run()
                                    .stride = k_per_frame_size});
     assert(per_frame_buffer.IsValid());
 
-    Rndr::CPUImage cpu_image = Rndr::File::ReadEntireImage(ASSETS_DIR "brick-wall.jpg");
-    assert(cpu_image.IsValid());
+    Rndr::Bitmap bitmap = Rndr::File::ReadEntireImage(ASSETS_DIR "brick-wall.jpg",
+                                                           Rndr::PixelFormat::R8G8B8_UNORM_SRGB);
+    assert(bitmap.IsValid());
     constexpr bool k_use_mips = false;
-    const Rndr::Image image(graphics_context, cpu_image, k_use_mips, {});
+    const Rndr::Image image(graphics_context, bitmap, k_use_mips, {});
     assert(image.IsValid());
 
     constexpr math::Vector4 k_clear_color{MATH_REALC(0.0),
@@ -134,21 +135,21 @@ void Run()
         RNDR_UNUSED(primitive);
         RNDR_UNUSED(trigger);
         RNDR_UNUSED(value);
-        const Rndr::CPUImage image_to_save = graphics_context.ReadSwapChain(swap_chain);
+        const Rndr::Bitmap image_to_save = graphics_context.ReadSwapChain(swap_chain);
         Rndr::File::SaveImage(image_to_save, "screenshot.png");
 
 #if RNDR_ETC2COMP
-        Rndr::Array<float> image_to_save_float(image_to_save.data.size());
-        for (size_t i = 0; i < image_to_save.data.size(); ++i)
+        Rndr::Array<float> image_to_save_float(image_to_save.GetSize());
+        for (size_t i = 0; i < image_to_save.GetSize(); ++i)
         {
-            image_to_save_float[i] = static_cast<float>(image_to_save.data[i]) / 255.0f;
+            image_to_save_float[i] = static_cast<float>(image_to_save.GetData()[i]) / 255.0f;
         }
 
         const Etc::Image::Format etc_format = Etc::Image::Format::RGB8;
         const auto error_metric = Etc::ErrorMetric::BT709;
         Etc::Image image(image_to_save_float.data(),
-                         image_to_save.width,
-                         image_to_save.height,
+                         image_to_save.GetWidth(),
+                         image_to_save.GetHeight(),
                          error_metric);
 
         image.Encode(etc_format,
@@ -158,14 +159,14 @@ void Run()
                      1024);
 
         Etc::File etc_file("screenshot.ktx",
-                          Etc::File::Format::KTX,
-                          etc_format,
-                          image.GetEncodingBits(),
-                          image.GetEncodingBitsBytes(),
-                          image.GetSourceWidth(),
-                          image.GetSourceHeight(),
-                          image.GetExtendedWidth(),
-                          image.GetExtendedHeight());
+                           Etc::File::Format::KTX,
+                           etc_format,
+                           image.GetEncodingBits(),
+                           image.GetEncodingBitsBytes(),
+                           image.GetSourceWidth(),
+                           image.GetSourceHeight(),
+                           image.GetExtendedWidth(),
+                           image.GetExtendedHeight());
         etc_file.Write();
 #endif
     };

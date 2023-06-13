@@ -46,6 +46,7 @@ public:
     [[nodiscard]] int GetWidth() const { return m_width; }
     [[nodiscard]] int GetHeight() const { return m_height; }
     [[nodiscard]] int GetDepth() const { return m_depth; }
+    [[nodiscard]] PixelFormat GetPixelFormat() const { return m_pixel_format; }
 
     /**
      * Get number of components per pixel.
