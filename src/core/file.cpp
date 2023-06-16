@@ -82,11 +82,29 @@ Rndr::String Rndr::File::ReadEntireTextFile(const Rndr::String& file_path)
 
 bool Rndr::File::SaveImage(const Bitmap& bitmap, const String& file_path)
 {
-    const int status = stbi_write_png(file_path.c_str(),
-                                      bitmap.GetWidth(),
-                                      bitmap.GetHeight(),
-                                      bitmap.GetComponentCount(),
-                                      bitmap.GetData(),
-                                      bitmap.GetRowSize());
+    int status = 0;
+    const PixelFormat pixel_format = bitmap.GetPixelFormat();
+    if (IsComponentLowPrecision(pixel_format))
+    {
+        status = stbi_write_png(file_path.c_str(),
+                                bitmap.GetWidth(),
+                                bitmap.GetHeight(),
+                                bitmap.GetComponentCount(),
+                                bitmap.GetData(),
+                                bitmap.GetRowSize());
+    }
+    else if (IsComponentHighPrecision(pixel_format))
+    {
+        const float* data = reinterpret_cast<const float*>(bitmap.GetData());
+        status = stbi_write_hdr(file_path.c_str(),
+                                bitmap.GetWidth(),
+                                bitmap.GetHeight(),
+                                bitmap.GetComponentCount(),
+                                data);
+    }
+    else
+    {
+        RNDR_LOG_ERROR("Unsupported pixel format!");
+    }
     return status == 1;
 }
