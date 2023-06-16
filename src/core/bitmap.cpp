@@ -127,7 +127,7 @@ void Rndr::Bitmap::SetPixelUnsignedByte(int x, int y, const math::Vector4& pixel
 math::Vector4 Rndr::Bitmap::GetPixelFloat(int x, int y) const
 {
     const int offset = (y * m_width + x) * m_comp_count;
-    const float* pixel = reinterpret_cast<const float*>(m_data.data() + offset);
+    const float* pixel = reinterpret_cast<const float*>(m_data.data()) + offset;
     math::Vector4 result;
     if (m_comp_count > 0)
     {
@@ -151,7 +151,7 @@ math::Vector4 Rndr::Bitmap::GetPixelFloat(int x, int y) const
 void Rndr::Bitmap::SetPixelFloat(int x, int y, const math::Vector4& pixel)
 {
     const int offset = (y * m_width + x) * m_comp_count;
-    float* pixel_ptr = reinterpret_cast<float*>(m_data.data() + offset);
+    float* pixel_ptr = reinterpret_cast<float*>(m_data.data()) + offset;
     if (m_comp_count > 0)
     {
         pixel_ptr[0] = pixel.X;

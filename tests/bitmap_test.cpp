@@ -140,20 +140,20 @@ TEST_CASE("Bitmap set", "[set]")
     {
         const float data[8] = {1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f, 7.0f, 8.0f};
         const uint8_t* byte_data = reinterpret_cast<const uint8_t*>(data);
-        Rndr::Bitmap bitmap(1, 1, Rndr::PixelFormat::R32G32B32A32_FLOAT, byte_data);
+        Rndr::Bitmap bitmap(2, 1, Rndr::PixelFormat::R32G32B32A32_FLOAT, byte_data);
         REQUIRE(bitmap.IsValid());
-        REQUIRE(bitmap.GetWidth() == 1);
+        REQUIRE(bitmap.GetWidth() == 2);
         REQUIRE(bitmap.GetHeight() == 1);
         REQUIRE(bitmap.GetComponentCount() == 4);
         REQUIRE(bitmap.GetPixelSize() == 16);
-        REQUIRE(bitmap.GetRowSize() == 16);
-        REQUIRE(bitmap.GetSize() == 16);
+        REQUIRE(bitmap.GetRowSize() == 32);
+        REQUIRE(bitmap.GetSize() == 32);
         REQUIRE(bitmap.GetData() != nullptr);
-        const math::Vector4 ref_pixel{1.0f, 2.0f, 3.0f, 4.0f};
-        REQUIRE(math::IsEqual(bitmap.GetPixel(0, 0), ref_pixel, 0.000001f) == true);
-        const math::Vector4 new_pixel{5.0f, 6.0f, 7.0f, 8.0f};
-        bitmap.SetPixel(0, 0, new_pixel);
-        REQUIRE(math::IsEqual(bitmap.GetPixel(0, 0), new_pixel, 0.000001f) == true);
+        const math::Vector4 ref_pixel{5.0f, 6.0f, 7.0f, 8.0f};
+        REQUIRE(math::IsEqual(bitmap.GetPixel(1, 0), ref_pixel, 0.000001f) == true);
+        const math::Vector4 new_pixel{1.0f, 2.0f, 3.0f, 4.0f};
+        bitmap.SetPixel(1, 0, new_pixel);
+        REQUIRE(math::IsEqual(bitmap.GetPixel(1, 0), new_pixel, 0.000001f) == true);
     }
 }
 
