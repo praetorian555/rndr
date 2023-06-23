@@ -1,24 +1,7 @@
 //
 #version 460 core
 
-layout(std140, binding = 0) uniform PerFrameData
-{
-    mat4 model;
-    mat4 MVP;
-    vec4 cameraPos;
-};
-
-struct Vertex
-{
-    float p[3];
-    float n[3];
-    float tc[2];
-};
-
-layout(std430, binding = 1) restrict readonly buffer Vertices
-{
-    Vertex in_Vertices[];
-};
+#include "cube-map-common.h"
 
 vec3 getLocalPosition(int i)
 {
