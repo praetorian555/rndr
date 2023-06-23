@@ -6,10 +6,7 @@
 #include "rndr/core/string.h"
 #include "rndr/core/bitmap.h"
 
-namespace Rndr
-{
-
-namespace File
+namespace Rndr::File
 {
 
 /**
@@ -23,10 +20,30 @@ namespace File
 
 /**
  * Reads the contents of the entire file in the text form.
+ *
  * @param file_path Absolute or relative path to the file on the disc.
+ *
  * @return Returns a valid String object containing the text representing the file contents.
  */
 [[nodiscard]] String ReadEntireTextFile(const String& file_path);
+
+/**
+ * Reads the contents of the text file that contains a shader. The function will also resolve the includes
+ * in the shader file.
+ *
+ * @param ref_path Reference path compared to which both shader_path and include paths will be resolved.
+ * @param shader_path Path relative to the ref_path to the shader file.
+ *
+ * @return Returns a valid String object containing the text representing the shader contents. Returns empty string in case of an error.
+ */
+[[nodiscard]] String ReadShader(const String& ref_path, const String& shader_path);
+
+/**
+ * Prints the shader contents to the console.
+ *
+ * @param shader_contents String containing the shader contents.
+ */
+void PrintShader(const String& shader_contents);
 
 /**
  * Reads the contents of the entire image file into CPU memory. The data is stored from top to
@@ -53,6 +70,4 @@ namespace File
  */
 bool SaveImage(const Bitmap& bitmap, const String& file_path);
 
-}  // namespace File
-
-}  // namespace Rndr
+}  // namespace Rndr::File
