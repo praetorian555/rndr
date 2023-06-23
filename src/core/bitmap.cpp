@@ -8,7 +8,6 @@ Rndr::Bitmap::Bitmap(int width, int height, Rndr::PixelFormat pixel_format, cons
         m_data.clear();
         m_width = 0;
         m_height = 0;
-        m_depth = 0;
         m_comp_count = 0;
         return;
     }
@@ -34,25 +33,6 @@ Rndr::Bitmap::Bitmap(int width, int height, Rndr::PixelFormat pixel_format, cons
     {
         assert(false);
     }
-}
-
-Rndr::Bitmap::Bitmap(int width,
-                     int height,
-                     int depth,
-                     Rndr::PixelFormat pixel_format,
-                     const uint8_t* data)
-    : Bitmap(width, height, pixel_format, data)
-{
-    if (depth <= 0)
-    {
-        m_data.clear();
-        m_width = 0;
-        m_height = 0;
-        m_depth = 0;
-        m_comp_count = 0;
-        return;
-    }
-    m_depth = depth;
 }
 
 int Rndr::Bitmap::GetPixelSize() const
@@ -172,14 +152,10 @@ void Rndr::Bitmap::SetPixelFloat(int x, int y, const math::Vector4& pixel)
 
 bool Rndr::Bitmap::IsPixelFormatSupported(Rndr::PixelFormat pixel_format)
 {
-    return pixel_format == PixelFormat::R8G8B8A8_UNORM
-           || pixel_format == PixelFormat::R8G8B8A8_UNORM_SRGB
-           || pixel_format == PixelFormat::R8G8B8_UNORM
-           || pixel_format == PixelFormat::R8G8B8_UNORM_SRGB
-           || pixel_format == PixelFormat::R8G8_UNORM
-           || pixel_format == PixelFormat::R8G8_UNORM_SRGB || pixel_format == PixelFormat::R8_UNORM
-           || pixel_format == PixelFormat::R8_UNORM_SRGB || pixel_format == PixelFormat::R32_FLOAT
-           || pixel_format == PixelFormat::R32G32_FLOAT
-           || pixel_format == PixelFormat::R32G32B32_FLOAT
+    return pixel_format == PixelFormat::R8G8B8A8_UNORM || pixel_format == PixelFormat::R8G8B8A8_UNORM_SRGB
+           || pixel_format == PixelFormat::R8G8B8_UNORM || pixel_format == PixelFormat::R8G8B8_UNORM_SRGB
+           || pixel_format == PixelFormat::R8G8_UNORM || pixel_format == PixelFormat::R8G8_UNORM_SRGB
+           || pixel_format == PixelFormat::R8_UNORM || pixel_format == PixelFormat::R8_UNORM_SRGB || pixel_format == PixelFormat::R32_FLOAT
+           || pixel_format == PixelFormat::R32G32_FLOAT || pixel_format == PixelFormat::R32G32B32_FLOAT
            || pixel_format == PixelFormat::R32G32B32A32_FLOAT;
 }

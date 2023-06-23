@@ -23,29 +23,13 @@ public:
     Bitmap(int width, int height, PixelFormat pixel_format, const uint8_t* data = nullptr);
 
     /**
-     * Create a bitmap with the specified width, height, depth, pixel format and optional data.
-     * @param width Width of the bitmap. Must be greater than 0.
-     * @param height Height of the bitmap. Must be greater than 0.
-     * @param depth Depth of the bitmap. Must be greater than 0.
-     * @param pixel_format Pixel format of the bitmap. Must be supported.
-     * @param data Optional data to initialize the bitmap with. If not specified, the bitmap will be
-     * initialized with zeros.
-     */
-    Bitmap(int width,
-           int height,
-           int depth,
-           PixelFormat pixel_format,
-           const uint8_t* data = nullptr);
-
-    /**
      * Check if bitmap is valid.
      * @return Returns true if bitmap is valid, false otherwise.
      */
-    [[nodiscard]] bool IsValid() const { return m_width > 0 && m_height > 0 && m_depth > 0; }
+    [[nodiscard]] bool IsValid() const { return m_width > 0 && m_height > 0; }
 
     [[nodiscard]] int GetWidth() const { return m_width; }
     [[nodiscard]] int GetHeight() const { return m_height; }
-    [[nodiscard]] int GetDepth() const { return m_depth; }
     [[nodiscard]] PixelFormat GetPixelFormat() const { return m_pixel_format; }
 
     /**
@@ -97,7 +81,6 @@ private:
 
     int m_width = 0;
     int m_height = 0;
-    int m_depth = 1;
     int m_comp_count = 0;
     PixelFormat m_pixel_format = PixelFormat::R32_TYPELESS;
     Array<uint8_t> m_data;
