@@ -39,4 +39,4 @@ void main()
     vec4 colorRefr = texture(texture1, refraction);
     color = color * mix(colorRefl, colorRefr, Rtheta);
     out_FragColor = color;
-};
+}
