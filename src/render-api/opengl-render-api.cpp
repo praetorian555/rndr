@@ -37,6 +37,12 @@ void APIENTRY DebugOutputCallback(GLenum source,
         case GL_DEBUG_SEVERITY_MEDIUM:
             RNDR_LOG_WARNING("[OpenGL] %s", message);
             break;
+        case GL_DEBUG_SEVERITY_LOW:
+            RNDR_LOG_INFO("[OpenGL] %s", message);
+            break;
+        case GL_DEBUG_SEVERITY_NOTIFICATION:
+            RNDR_LOG_DEBUG("[OpenGL] %s", message);
+            break;
         default:
             break;
     }
@@ -728,6 +734,28 @@ Rndr::Pipeline::Pipeline(const GraphicsContext& graphics_context, const Pipeline
     if (glGetError() != GL_NO_ERROR)
     {
         RNDR_LOG_ERROR("Failed to link shader program!");
+        Destroy();
+        return;
+    }
+    GLint success = GL_FALSE;
+    glGetProgramiv(m_native_shader_program, GL_LINK_STATUS, &success);
+    if(success == GL_FALSE)
+    {
+        constexpr size_t k_error_log_size = 1024;
+        GLchar error_log[k_error_log_size] = {0};
+        glGetProgramInfoLog(m_native_shader_program, k_error_log_size, nullptr, error_log);
+        RNDR_LOG_ERROR("Failed to link shader program: %s", error_log);
+        Destroy();
+        return;
+    }
+    glValidateProgram(m_native_shader_program);
+    glGetProgramiv(m_native_shader_program, GL_VALIDATE_STATUS, &success);
+    if(success == GL_FALSE)
+    {
+        constexpr size_t k_error_log_size = 1024;
+        GLchar error_log[k_error_log_size] = {0};
+        glGetProgramInfoLog(m_native_shader_program, k_error_log_size, nullptr, error_log);
+        RNDR_LOG_ERROR("Failed to link shader program: %s", error_log);
         Destroy();
         return;
     }
