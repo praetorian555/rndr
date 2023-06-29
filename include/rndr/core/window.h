@@ -1,129 +1,230 @@
 #pragma once
 
-#include <string>
-
 #include "rndr/core/base.h"
 #include "rndr/core/delegate.h"
-#include "rndr/core/inputprimitives.h"
+#include "rndr/core/forward-def-windows.h"
 
-#include "rndr/render/graphicscontext.h"
-
-namespace rndr
+namespace Rndr
 {
 
 /**
- * Configuration of the window.
+ * Represents how the cursor should be displayed and behave.
  */
-struct WindowProperties
-{
-    static constexpr int kDefaultWindowWidth = 1024;
-    static constexpr int kDefaultWindowHeight = 768;
-
-    std::string Name = "Default Window";
-};
-
 enum class CursorMode
 {
+    /**
+     * The cursor is visible and his position is represented relative to the window origin. This is
+     * the default mode.
+     */
     Normal,
+    /**
+     * The cursor is not visible and his position is represented relative to the window origin.
+     */
     Hidden,
+    /**
+     * The cursor is hidden and his position is represented as a delta relative to the last cursor
+     * position. This is useful for first person camera controls.
+     */
     Infinite
 };
 
 /**
- * Represents a window on the screen and provides a Surface object for rendering.
+ * Window description.
  */
-class Window
+struct WindowDesc
 {
-public:
-    using NativeWindowEventDelegate =
-        Delegate<bool(NativeWindowHandle, uint32_t, uint64_t, int64_t)>;
-
-    Window() = default;
-    ~Window();
-
-    Window(const Window& Other) = delete;
-    Window& operator=(const Window& Other) = delete;
-
-    Window(Window&& Other) = delete;
-    Window& operator=(Window&& Other) = delete;
-
-    bool Init(int Width = WindowProperties::kDefaultWindowWidth,
-              int Height = WindowProperties::kDefaultWindowHeight,
-              const WindowProperties& Props = WindowProperties());
-
-    /**
-     * Processes events that occurred in the window such as event closing or button press.
-     */
-    void ProcessEvents() const;
-
-    void Close();
-
-    [[nodiscard]] NativeWindowHandle GetNativeWindowHandle() const;
-    [[nodiscard]] int GetWidth() const;
-    [[nodiscard]] int GetHeight() const;
-    [[nodiscard]] math::Vector2 GetSize() const;
-
-    [[nodiscard]] bool IsWindowMinimized() const;
-    [[nodiscard]] bool IsClosed() const;
-
-    bool SetCursorMode(CursorMode Mode);
-    CursorMode GetCursorMode() const { return m_CursorMode; }
-
-    void SetNativeWindowEventDelegate(const NativeWindowEventDelegate& Delegate)
-    {
-        m_OnNativeEvent = Delegate;
-    }
-    NativeWindowEventDelegate& GetNativeWindowEventDelegate() { return m_OnNativeEvent; }
-
-private:
-    void Resize(Window* Window, int Width, int Height);
-    void HandleButtonEvent(Window* Window, InputPrimitive Primitive, InputTrigger Trigger);
-
-    WindowProperties m_Props;
-    NativeWindowHandle m_NativeWindowHandle;
-    NativeWindowEventDelegate m_OnNativeEvent;
-
-    int m_Width = 0;
-    int m_Height = 0;
-    CursorMode m_CursorMode = CursorMode::Normal;
+    int width = 1024;
+    int height = 768;
+    const char* name = "Default Window";
+    CursorMode cursor_mode = CursorMode::Normal;
+    bool resizable = true;
+    bool start_minimized = false;
+    bool start_maximized = false;
+    bool start_visible = true;
 };
 
 /**
- * Collection of delegates related to window events.
+ * Private functions used to interface with the OS.
  */
-struct WindowDelegates
+class Window;
+namespace WindowPrivate
 {
-    using ResizeDelegate = MultiDelegate<void(Window*, int, int)>;
-    using ButtonDelegate = MultiDelegate<void(Window*, InputPrimitive, InputTrigger)>;
-    using MousePositionDelegate = MultiDelegate<void(Window*, int, int)>;
-    using RelativeMousePositionDelegate = MultiDelegate<void(Window*, int, int)>;
-    using MouseWheelDelegate = MultiDelegate<void(Window*, int)>;
+void HandleMouseMove(class Rndr::Window* window, int x, int y);
+LRESULT CALLBACK WindowProc(HWND window_handle, UINT msg_code, WPARAM param_w, LPARAM param_l);
+}  // namespace WindowPrivate
+
+/**
+ * Represents a window on the screen.
+ */
+// TODO(Marko): Add support for multiple monitors.
+// TODO(Marko): Add support for fullscreen.
+// TODO(Marko): Add support for mouse hover and mouse leave.
+class Window
+{
+public:
+    /**
+     * Called when the window is resized.
+     */
+    using ResizeDelegate = MultiDelegate<void(int /*width*/, int /*height*/)>;
+    ResizeDelegate on_resize;
 
     /**
-     * This delegate is executed when the size of the window's client area is changed.
+     * Called when the native window event occurs, before the window processes it.
+     * @return True if the event was handled and window should not handle it, false otherwise.
      */
-    static ResizeDelegate OnResize;
+    using NativeEventDelegate = Delegate<
+        bool(HWND /*window_handle*/, UINT /*msg_code*/, WPARAM /*param_w*/, LPARAM /*param_l*/)>;
+    NativeEventDelegate on_native_event;
 
     /**
-     * This delegate is executed when the key on keyboard or mouse is pressed or released.
+     * Creates a new window. If a window failed to create any method will return false.
+     * @param desc The description of the window.
      */
-    static ButtonDelegate OnButtonDelegate;
+    explicit Window(const WindowDesc& desc = WindowDesc{});
 
     /**
-     * This delegate is executed when the mouse is moved. The window needs to be in Normal or Hidden cursor mode.
+     * Destroys the window.
      */
-    static MousePositionDelegate OnMousePositionDelegate;
+    ~Window();
 
     /**
-     * Triggered only if the window is in the Infinite cursor mode.
+     * Copying is not allowed.
      */
-    static RelativeMousePositionDelegate OnRelativeMousePositionDelegate;
+    Window(const Window& other) = delete;
+    Window& operator=(const Window& other) = delete;
 
     /**
-     * This delegate is executed when the mouse wheel is moved. The value is positive if the wheel
-     * is moved away from the user.
+     * Move constructor.
+     * @param other The other window to move from. It will be invalid window after this.
      */
-    static MouseWheelDelegate OnMouseWheelMovedDelegate;
+    Window(Window&& other) noexcept;
+
+    /**
+     * Move assignment operator.
+     * @param other The other window to move from. It will be invalid window after this.
+     * @return Reference to this window.
+     */
+    Window& operator=(Window&& other) noexcept;
+
+    /**
+     * Processes OS events regarding this window.
+     */
+    void ProcessEvents() const;
+
+    /**
+     * Closes the window. This does not destroy the window.
+     * @return True if the window was closed successfully.
+     */
+    void Close() const;
+
+    /**
+     * Checks if the window is closed.
+     * @return True if the window is closed, false otherwise.
+     */
+    [[nodiscard]] bool IsClosed() const;
+
+    /**
+     * Get the native window handle.
+     * @return The native window handle.
+     */
+    [[nodiscard]] NativeWindowHandle GetNativeWindowHandle() const;
+
+    /**
+     * Gets the width of the window.
+     * @return The width of the window.
+     */
+    [[nodiscard]] int GetWidth() const;
+
+    /**
+     * Gets the height of the window.
+     * @return The height of the window.
+     */
+    [[nodiscard]] int GetHeight() const;
+
+    /**
+     * Gets the size of the window.
+     * @return The size of the window as floating-point values.
+     */
+    [[nodiscard]] math::Vector2 GetSize() const;
+
+    /**
+     * Resizes the window.
+     * @param width The new width of the window.
+     * @param height The new height of the window.
+     * @return True if the window was resized successfully.
+     * @note Window::GetWidth and Window::GetHeight will be updated only after the next call to
+     * Window::ProcessEvents.
+     */
+    bool Resize(int width, int height) const;
+
+    /**
+     * Set if the window is minimized.
+     * @param Minimized True if the window should be minimized, false otherwise.
+     * @note Window::IsWindowMinimized will be updated only after the next call to
+     * Window::ProcessEvents.
+     */
+    void SetMinimized(bool should_minimize) const;
+
+    /**
+     * Checks if the window is minimized.
+     * @return True if the window is minimized, false otherwise.
+     */
+    [[nodiscard]] bool IsWindowMinimized() const;
+
+    /**
+     * Set if the window is maximized.
+     * @param Maximized True if the window should be maximized, false otherwise.
+     * @note Window::IsWindowMaximized will be updated only after the next call to
+     * Window::ProcessEvents.
+     */
+    void SetMaximized(bool should_maximize) const;
+
+    /**
+     * Checks if the window is maximized.
+     * @return True if the window is maximized, false otherwise.
+     */
+    [[nodiscard]] bool IsWindowMaximized() const;
+
+    /**
+     * Set if the window is visible.
+     * @param is_visible True if the window should be visible, false otherwise.
+     * @note Window::IsVisible will be updated only after the next call to Window::ProcessEvents.
+     */
+    void SetVisible(bool is_visible);
+
+    /**
+     * Checks if the window is visible.
+     * @return True if the window is visible, false otherwise.
+     */
+    [[nodiscard]] bool IsVisible() const;
+
+    /**
+     * Set the cursor mode.
+     * @param mode The cursor mode to set.
+     * @return True if the cursor mode was set successfully.
+     */
+    bool SetCursorMode(CursorMode mode);
+
+    /**
+     * Gets the cursor mode.
+     * @return The cursor mode.
+     */
+    [[nodiscard]] CursorMode GetCursorMode() const;
+
+private:
+    WindowDesc m_desc;
+    NativeWindowHandle m_handle = k_invalid_window_handle;
+    bool m_is_closed = true;
+    bool m_is_minimized = false;
+    bool m_is_maximized = false;
+    bool m_is_visible = false;
+
+    // Implementation details //////////////////////////////////////////////////////////////////////
+    friend void WindowPrivate::HandleMouseMove(Rndr::Window* window, int x, int y);
+    friend LRESULT CALLBACK WindowPrivate::WindowProc(HWND window_handle,
+                                                      UINT msg_code,
+                                                      WPARAM param_w,
+                                                      LPARAM param_l);
 };
 
-}  // namespace rndr
+}  // namespace Rndr

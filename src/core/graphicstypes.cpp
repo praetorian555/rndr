@@ -1,4 +1,4 @@
-#include "rndr/render/graphicstypes.h"
+#include "rndr/core/graphics-types.h"
 
 #include "rndr/utility/stackarray.h"
 

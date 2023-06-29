@@ -1,16 +1,18 @@
-#include "rndr/core/window.h"
-
-#include <map>
+#include "rndr/core/definitions.h"
 
 #if defined RNDR_WINDOWS
+#include <windows.h>
 #include <windowsx.h>
 #include <winuser.h>
 #endif  // RNDR_WINDOWS
 
+#include "rndr/core/hash-map.h"
 #include "rndr/core/input.h"
-#include "rndr/core/log.h"
-#include "rndr/core/rndrcontext.h"
+#include "rndr/core/stack-array.h"
+#include "rndr/core/window.h"
 
+namespace
+{
 // Missing virtual keys in the Windows API
 enum WindowsVirtualKey : uint32_t
 {
@@ -26,199 +28,449 @@ enum WindowsVirtualKey : uint32_t
     VK_L = 0x4C,
 };
 
-static std::map<uint32_t, rndr::InputPrimitive> GPrimitiveMapping = {
-    {VK_A, rndr::InputPrimitive::Keyboard_A},
-    {VK_W, rndr::InputPrimitive::Keyboard_W},
-    {VK_S, rndr::InputPrimitive::Keyboard_S},
-    {VK_E, rndr::InputPrimitive::Keyboard_E},
-    {VK_Q, rndr::InputPrimitive::Keyboard_Q},
-    {VK_D, rndr::InputPrimitive::Keyboard_D},
-    {VK_I, rndr::InputPrimitive::Keyboard_I},
-    {VK_J, rndr::InputPrimitive::Keyboard_J},
-    {VK_K, rndr::InputPrimitive::Keyboard_K},
-    {VK_L, rndr::InputPrimitive::Keyboard_L},
-    {VK_ESCAPE, rndr::InputPrimitive::Keyboard_Esc},
-    {VK_LEFT, rndr::InputPrimitive::Keyboard_Left},
-    {VK_UP, rndr::InputPrimitive::Keyboard_Up},
-    {VK_RIGHT, rndr::InputPrimitive::Keyboard_Right},
-    {VK_DOWN, rndr::InputPrimitive::Keyboard_Down}};
+const Rndr::HashMap<Rndr::InputPrimitive, uint32_t> g_primitive_to_vk = {
+    {Rndr::InputPrimitive::Keyboard_A, 0x41},
+    {Rndr::InputPrimitive::Keyboard_B, 0x42},
+    {Rndr::InputPrimitive::Keyboard_C, 0x43},
+    {Rndr::InputPrimitive::Keyboard_D, 0x44},
+    {Rndr::InputPrimitive::Keyboard_E, 0x45},
+    {Rndr::InputPrimitive::Keyboard_F, 0x46},
+    {Rndr::InputPrimitive::Keyboard_G, 0x47},
+    {Rndr::InputPrimitive::Keyboard_H, 0x48},
+    {Rndr::InputPrimitive::Keyboard_I, 0x49},
+    {Rndr::InputPrimitive::Keyboard_J, 0x4A},
+    {Rndr::InputPrimitive::Keyboard_K, 0x4B},
+    {Rndr::InputPrimitive::Keyboard_L, 0x4C},
+    {Rndr::InputPrimitive::Keyboard_M, 0x4D},
+    {Rndr::InputPrimitive::Keyboard_N, 0x4E},
+    {Rndr::InputPrimitive::Keyboard_O, 0x4F},
+    {Rndr::InputPrimitive::Keyboard_P, 0x50},
+    {Rndr::InputPrimitive::Keyboard_Q, 0x51},
+    {Rndr::InputPrimitive::Keyboard_R, 0x52},
+    {Rndr::InputPrimitive::Keyboard_S, 0x53},
+    {Rndr::InputPrimitive::Keyboard_T, 0x54},
+    {Rndr::InputPrimitive::Keyboard_U, 0x55},
+    {Rndr::InputPrimitive::Keyboard_V, 0x56},
+    {Rndr::InputPrimitive::Keyboard_W, 0x57},
+    {Rndr::InputPrimitive::Keyboard_X, 0x58},
+    {Rndr::InputPrimitive::Keyboard_Y, 0x59},
+    {Rndr::InputPrimitive::Keyboard_Z, 0x5A},
+    {Rndr::InputPrimitive::Keyboard_0, 0x30},
+    {Rndr::InputPrimitive::Keyboard_1, 0x31},
+    {Rndr::InputPrimitive::Keyboard_2, 0x32},
+    {Rndr::InputPrimitive::Keyboard_3, 0x33},
+    {Rndr::InputPrimitive::Keyboard_4, 0x34},
+    {Rndr::InputPrimitive::Keyboard_5, 0x35},
+    {Rndr::InputPrimitive::Keyboard_6, 0x36},
+    {Rndr::InputPrimitive::Keyboard_7, 0x37},
+    {Rndr::InputPrimitive::Keyboard_8, 0x38},
+    {Rndr::InputPrimitive::Keyboard_9, 0x39},
+    {Rndr::InputPrimitive::Keyboard_F1, VK_F1},
+    {Rndr::InputPrimitive::Keyboard_F2, VK_F2},
+    {Rndr::InputPrimitive::Keyboard_F3, VK_F3},
+    {Rndr::InputPrimitive::Keyboard_F4, VK_F4},
+    {Rndr::InputPrimitive::Keyboard_F5, VK_F5},
+    {Rndr::InputPrimitive::Keyboard_F6, VK_F6},
+    {Rndr::InputPrimitive::Keyboard_F7, VK_F7},
+    {Rndr::InputPrimitive::Keyboard_F8, VK_F8},
+    {Rndr::InputPrimitive::Keyboard_F9, VK_F9},
+    {Rndr::InputPrimitive::Keyboard_F10, VK_F10},
+    {Rndr::InputPrimitive::Keyboard_F11, VK_F11},
+    {Rndr::InputPrimitive::Keyboard_F12, VK_F12},
+    {Rndr::InputPrimitive::Keyboard_LeftShift, VK_LSHIFT},
+    {Rndr::InputPrimitive::Keyboard_RightShift, VK_RSHIFT},
+    {Rndr::InputPrimitive::Keyboard_LeftAlt, VK_LMENU},
+    {Rndr::InputPrimitive::Keyboard_RightAlt, VK_RMENU},
+    {Rndr::InputPrimitive::Keyboard_LeftControl, VK_LCONTROL},
+    {Rndr::InputPrimitive::Keyboard_RightControl, VK_RCONTROL},
+    {Rndr::InputPrimitive::Keyboard_LeftArrow, VK_LEFT},
+    {Rndr::InputPrimitive::Keyboard_RightArrow, VK_RIGHT},
+    {Rndr::InputPrimitive::Keyboard_UpArrow, VK_UP},
+    {Rndr::InputPrimitive::Keyboard_DownArrow, VK_DOWN},
+    {Rndr::InputPrimitive::Keyboard_Esc, VK_ESCAPE},
+    {Rndr::InputPrimitive::Keyboard_Space, VK_SPACE}};
 
-// Defining window delegates
+const Rndr::HashMap<uint32_t, Rndr::InputPrimitive> g_vk_to_primitive = {
+    {0x41, Rndr::InputPrimitive::Keyboard_A},
+    {0x42, Rndr::InputPrimitive::Keyboard_B},
+    {0x43, Rndr::InputPrimitive::Keyboard_C},
+    {0x44, Rndr::InputPrimitive::Keyboard_D},
+    {0x45, Rndr::InputPrimitive::Keyboard_E},
+    {0x46, Rndr::InputPrimitive::Keyboard_F},
+    {0x47, Rndr::InputPrimitive::Keyboard_G},
+    {0x48, Rndr::InputPrimitive::Keyboard_H},
+    {0x49, Rndr::InputPrimitive::Keyboard_I},
+    {0x4A, Rndr::InputPrimitive::Keyboard_J},
+    {0x4B, Rndr::InputPrimitive::Keyboard_K},
+    {0x4C, Rndr::InputPrimitive::Keyboard_L},
+    {0x4D, Rndr::InputPrimitive::Keyboard_M},
+    {0x4E, Rndr::InputPrimitive::Keyboard_N},
+    {0x4F, Rndr::InputPrimitive::Keyboard_O},
+    {0x50, Rndr::InputPrimitive::Keyboard_P},
+    {0x51, Rndr::InputPrimitive::Keyboard_Q},
+    {0x52, Rndr::InputPrimitive::Keyboard_R},
+    {0x53, Rndr::InputPrimitive::Keyboard_S},
+    {0x54, Rndr::InputPrimitive::Keyboard_T},
+    {0x55, Rndr::InputPrimitive::Keyboard_U},
+    {0x56, Rndr::InputPrimitive::Keyboard_V},
+    {0x57, Rndr::InputPrimitive::Keyboard_W},
+    {0x58, Rndr::InputPrimitive::Keyboard_X},
+    {0x59, Rndr::InputPrimitive::Keyboard_Y},
+    {0x5A, Rndr::InputPrimitive::Keyboard_Z},
+    {0x30, Rndr::InputPrimitive::Keyboard_0},
+    {0x31, Rndr::InputPrimitive::Keyboard_1},
+    {0x32, Rndr::InputPrimitive::Keyboard_2},
+    {0x33, Rndr::InputPrimitive::Keyboard_3},
+    {0x34, Rndr::InputPrimitive::Keyboard_4},
+    {0x35, Rndr::InputPrimitive::Keyboard_5},
+    {0x36, Rndr::InputPrimitive::Keyboard_6},
+    {0x37, Rndr::InputPrimitive::Keyboard_7},
+    {0x38, Rndr::InputPrimitive::Keyboard_8},
+    {0x39, Rndr::InputPrimitive::Keyboard_9},
+    {VK_F1, Rndr::InputPrimitive::Keyboard_F1},
+    {VK_F2, Rndr::InputPrimitive::Keyboard_F2},
+    {VK_F3, Rndr::InputPrimitive::Keyboard_F3},
+    {VK_F4, Rndr::InputPrimitive::Keyboard_F4},
+    {VK_F5, Rndr::InputPrimitive::Keyboard_F5},
+    {VK_F6, Rndr::InputPrimitive::Keyboard_F6},
+    {VK_F7, Rndr::InputPrimitive::Keyboard_F7},
+    {VK_F8, Rndr::InputPrimitive::Keyboard_F8},
+    {VK_F9, Rndr::InputPrimitive::Keyboard_F9},
+    {VK_F10, Rndr::InputPrimitive::Keyboard_F10},
+    {VK_F11, Rndr::InputPrimitive::Keyboard_F11},
+    {VK_F12, Rndr::InputPrimitive::Keyboard_F12},
+    {VK_LSHIFT, Rndr::InputPrimitive::Keyboard_LeftShift},
+    {VK_RSHIFT, Rndr::InputPrimitive::Keyboard_RightShift},
+    {VK_LMENU, Rndr::InputPrimitive::Keyboard_LeftAlt},
+    {VK_RMENU, Rndr::InputPrimitive::Keyboard_RightAlt},
+    {VK_LCONTROL, Rndr::InputPrimitive::Keyboard_LeftControl},
+    {VK_RCONTROL, Rndr::InputPrimitive::Keyboard_RightControl},
+    {VK_LEFT, Rndr::InputPrimitive::Keyboard_LeftArrow},
+    {VK_RIGHT, Rndr::InputPrimitive::Keyboard_RightArrow},
+    {VK_UP, Rndr::InputPrimitive::Keyboard_UpArrow},
+    {VK_DOWN, Rndr::InputPrimitive::Keyboard_DownArrow},
+    {VK_ESCAPE, Rndr::InputPrimitive::Keyboard_Esc},
+    {VK_SPACE, Rndr::InputPrimitive::Keyboard_Space}};
 
-rndr::WindowDelegates::ResizeDelegate rndr::WindowDelegates::OnResize;
-rndr::WindowDelegates::ButtonDelegate rndr::WindowDelegates::OnButtonDelegate;
-rndr::WindowDelegates::MousePositionDelegate rndr::WindowDelegates::OnMousePositionDelegate;
-rndr::WindowDelegates::RelativeMousePositionDelegate
-    rndr::WindowDelegates::OnRelativeMousePositionDelegate;
-rndr::WindowDelegates::MouseWheelDelegate rndr::WindowDelegates::OnMouseWheelMovedDelegate;
+}  // namespace
 
-// Window
-
-LRESULT CALLBACK WindowProc(HWND WindowHandle, UINT MsgCode, WPARAM ParamW, LPARAM ParamL);
-
-rndr::Window::~Window()
+Rndr::Window::Window(const WindowDesc& desc)
 {
-    if (!IsClosed())
+    // Invalid window by default
+    m_desc.height = 0;
+    m_desc.width = 0;
+    m_desc.name = nullptr;
+    m_desc.resizable = false;
+    m_desc.start_maximized = false;
+    m_desc.start_minimized = false;
+    m_desc.start_visible = false;
+
+    if (desc.width == 0 || desc.height == 0)
     {
-        Close();
+        RNDR_LOG_ERROR("Window width and height must be greater than 0.");
+        return;
     }
-}
-
-bool rndr::Window::Init(int Width, int Height, const WindowProperties& Props)
-{
-    m_Width = Width;
-    m_Height = Height;
-    m_Props = Props;
-
-    rndr::WindowDelegates::OnResize.Add(RNDR_BIND_THREE_PARAM(this, &Window::Resize));
-    rndr::WindowDelegates::OnButtonDelegate.Add(
-        RNDR_BIND_THREE_PARAM(this, &Window::HandleButtonEvent));
-
-    // TODO(Marko): This will get the handle to the exe, should pass in the name of this dll if we
-    // use dynamic linking
-    HMODULE Instance = GetModuleHandle(nullptr);
-    const char* ClassName = "RndrWindowClass";
-
-    // TODO(Marko): Expand window functionality to provide more control to the user when creating
-    // one
-    WNDCLASS WindowClass{};
-    if (!GetClassInfo(Instance, ClassName, &WindowClass))
+    if (desc.start_minimized && desc.start_maximized)
     {
-        WindowClass.lpszClassName = ClassName;
-        WindowClass.hInstance = Instance;
-        WindowClass.lpfnWndProc = WindowProc;
-        WindowClass.style = CS_OWNDC | CS_HREDRAW | CS_VREDRAW;
-
-        const ATOM Atom = RegisterClass(&WindowClass);
-        if (Atom == 0)
-        {
-            RNDR_LOG_ERROR("Window::Init: Failed to register window class!");
-            return false;
-        }
-    }
-
-    RECT WindowRect = {0, 0, m_Width, m_Height};
-    AdjustWindowRect(&WindowRect, WS_OVERLAPPEDWINDOW, FALSE);
-
-    HWND WindowHandle =
-        CreateWindowEx(0, ClassName, m_Props.Name.c_str(), WS_OVERLAPPEDWINDOW, CW_USEDEFAULT,
-                       CW_USEDEFAULT, WindowRect.right - WindowRect.left,
-                       WindowRect.bottom - WindowRect.top, nullptr, nullptr, Instance, this);
-    if (WindowHandle == nullptr)
-    {
-        RNDR_LOG_ERROR("Window::Init: CreateWindowEx failed!");
-        return false;
-    }
-
-    constexpr uint16_t kHIDUsagePageGeneric = 0x01;
-    constexpr uint16_t kHIDUsageGenericMouse = 0x02;
-    StackArray<RAWINPUTDEVICE, 1> RawDevices;
-    RawDevices[0].usUsagePage = kHIDUsagePageGeneric;
-    RawDevices[0].usUsage = kHIDUsageGenericMouse;
-    RawDevices[0].dwFlags = RIDEV_INPUTSINK;
-    RawDevices[0].hwndTarget = WindowHandle;
-    RegisterRawInputDevices(RawDevices.data(), 1, sizeof(RawDevices[0]));
-
-    ShowWindow(WindowHandle, SW_SHOW);
-
-    m_NativeWindowHandle = reinterpret_cast<void*>(WindowHandle);
-
-    return true;
-}
-
-void rndr::Window::ProcessEvents() const
-{
-    HWND WindowHandle = reinterpret_cast<HWND>(m_NativeWindowHandle);
-    MSG Msg{};
-
-    while (PeekMessage(&Msg, WindowHandle, 0, 0, PM_REMOVE))
-    {
-        TranslateMessage(&Msg);
-        DispatchMessage(&Msg);
-    }
-}
-
-bool rndr::Window::IsClosed() const
-{
-    return m_NativeWindowHandle == nullptr;
-}
-
-void rndr::Window::Close()
-{
-    HWND WindowHandle = reinterpret_cast<HWND>(m_NativeWindowHandle);
-    const bool Result = DestroyWindow(WindowHandle) > 0;
-    if (!Result)
-    {
-        RNDR_LOG_WARNING("Window::Close: Failed to destroy the native window!");
-    }
-    m_NativeWindowHandle = nullptr;
-}
-
-rndr::NativeWindowHandle rndr::Window::GetNativeWindowHandle() const
-{
-    return m_NativeWindowHandle;
-}
-
-int rndr::Window::GetWidth() const
-{
-    return m_Width;
-}
-
-int rndr::Window::GetHeight() const
-{
-    return m_Height;
-}
-
-bool rndr::Window::IsWindowMinimized() const
-{
-    return m_Width == 0 || m_Height == 0;
-}
-
-void rndr::Window::HandleButtonEvent(Window* Window, InputPrimitive Primitive, InputTrigger Trigger)
-{
-    RNDR_UNUSED(Window);
-    if (Primitive == InputPrimitive::Keyboard_Esc && Trigger == InputTrigger::ButtonDown)
-    {
-        Close();
-    }
-}
-
-void rndr::Window::Resize(Window* Window, int Width, int Height)
-{
-    if (Window != this)
-    {
+        RNDR_LOG_ERROR("Window cannot be both minimized and maximized at the same time.");
         return;
     }
 
-    m_Width = Width;
-    m_Height = Height;
+    // TODO(Marko): This will get the handle to the exe, should pass in the name of this dll if we
+    // use dynamic linking
+    HMODULE instance = GetModuleHandle(nullptr);
+    const char* class_name = "RndrWindowClass";
+
+    // TODO(Marko): Expand window functionality to provide more control to the user when creating
+    // one
+    WNDCLASS window_class{};
+    if (!GetClassInfo(instance, class_name, &window_class))
+    {
+        window_class.lpszClassName = class_name;
+        window_class.hInstance = instance;
+        window_class.lpfnWndProc = Rndr::WindowPrivate::WindowProc;
+        window_class.style = CS_OWNDC | CS_HREDRAW | CS_VREDRAW;
+
+        const ATOM atom = RegisterClass(&window_class);
+        if (atom == 0)
+        {
+            RNDR_LOG_ERROR("Failed to register window class!");
+            return;
+        }
+    }
+
+    RECT window_rect = {0, 0, desc.width, desc.height};
+    DWORD window_style = WS_CAPTION | WS_SYSMENU | WS_MINIMIZEBOX | WS_MAXIMIZEBOX;
+    if (desc.resizable)
+    {
+        window_style |= WS_THICKFRAME;
+    }
+    if (desc.start_minimized)
+    {
+        window_style |= WS_MINIMIZE;
+    }
+    if (desc.start_maximized)
+    {
+        window_style |= WS_MAXIMIZE;
+    }
+    if (desc.start_visible)
+    {
+        window_style |= WS_VISIBLE;
+    }
+
+    AdjustWindowRect(&window_rect, window_style, FALSE);
+    HWND window_handle = CreateWindowEx(0,
+                                        class_name,
+                                        desc.name,
+                                        window_style,
+                                        CW_USEDEFAULT,
+                                        CW_USEDEFAULT,
+                                        window_rect.right - window_rect.left,
+                                        window_rect.bottom - window_rect.top,
+                                        nullptr,
+                                        nullptr,
+                                        instance,
+                                        this);
+    if (window_handle == nullptr)
+    {
+        RNDR_LOG_ERROR("CreateWindowEx failed!");
+        return;
+    }
+
+    // Setup raw input
+    constexpr uint16_t k_hid_usage_page_generic = 0x01;
+    constexpr uint16_t k_hid_usage_generic_mouse = 0x02;
+    StackArray<RAWINPUTDEVICE, 1> raw_devices;
+    raw_devices[0].usUsagePage = k_hid_usage_page_generic;
+    raw_devices[0].usUsage = k_hid_usage_generic_mouse;
+    raw_devices[0].dwFlags = RIDEV_INPUTSINK;
+    raw_devices[0].hwndTarget = window_handle;
+    RegisterRawInputDevices(raw_devices.data(), 1, sizeof(raw_devices[0]));
+
+    m_handle = window_handle;
+    if (!SetCursorMode(desc.cursor_mode))
+    {
+        DestroyWindow(m_handle);
+        m_handle = k_invalid_window_handle;
+        RNDR_LOG_ERROR("Failed to set cursor mode!");
+        return;
+    }
+
+    // At this point we have a valid window
+    m_desc = desc;
+    m_handle = window_handle;
+    m_is_visible = desc.start_visible;
+    m_is_minimized = desc.start_minimized;
+    m_is_maximized = desc.start_maximized;
+    m_is_closed = false;
+    RNDR_LOG_INFO("Window created successfully!");
 }
 
-static POINT GetWindowMidPointInScreenSpace(rndr::Window* Window)
+Rndr::Window::~Window()
 {
-    HWND WindowHandle = reinterpret_cast<HWND>(Window->GetNativeWindowHandle());
-    RECT WindowRect;
-    GetWindowRect(WindowHandle, &WindowRect);
-    const int Width = WindowRect.right - WindowRect.left;
-    const int Height = WindowRect.bottom - WindowRect.top;
-    const int MidX = WindowRect.left + Width / 2;
-    const int MidY = WindowRect.top + Height / 2;
-    return {MidX, MidY};
+    if (m_handle == k_invalid_window_handle)
+    {
+        return;
+    }
+    const BOOL status = DestroyWindow(m_handle);
+    if (status == 0)
+    {
+        RNDR_LOG_ERROR("Failed to destroy window!");
+    }
 }
 
-static bool IsCursorHidden()
+Rndr::Window::Window(Rndr::Window&& other) noexcept
+    : m_desc(other.m_desc),
+      m_handle(other.m_handle),
+      m_is_visible(other.m_is_visible),
+      m_is_minimized(other.m_is_minimized),
+      m_is_maximized(other.m_is_maximized),
+      m_is_closed(other.m_is_closed)
 {
-    CURSORINFO CursorInfo;
-    CursorInfo.cbSize = sizeof(CURSORINFO);
-    GetCursorInfo(&CursorInfo);
-    return CursorInfo.flags != CURSOR_SHOWING;
+    if (this == &other)
+    {
+        return;
+    }
+    other.m_handle = k_invalid_window_handle;
+    other.m_is_closed = true;
 }
 
-bool rndr::Window::SetCursorMode(rndr::CursorMode Mode)
+Rndr::Window& Rndr::Window::operator=(Rndr::Window&& other) noexcept
 {
-    m_CursorMode = Mode;
+    if (this != &other)
+    {
+        if (m_handle != k_invalid_window_handle)
+        {
+            const BOOL status = DestroyWindow(m_handle);
+            if (status == 0)
+            {
+                RNDR_LOG_ERROR("Failed to destroy window!");
+            }
+        }
 
-    switch (Mode)
+        m_desc = other.m_desc;
+        m_handle = other.m_handle;
+        m_is_visible = other.m_is_visible;
+        m_is_minimized = other.m_is_minimized;
+        m_is_maximized = other.m_is_maximized;
+        m_is_closed = other.m_is_closed;
+
+        other.m_handle = k_invalid_window_handle;
+        other.m_is_closed = true;
+    }
+    return *this;
+}
+
+void Rndr::Window::ProcessEvents() const
+{
+    if (m_handle == k_invalid_window_handle)
+    {
+        RNDR_LOG_WARNING("This window can't process events since it is not valid!");
+        return;
+    }
+
+    MSG msg;
+    while (PeekMessage(&msg, m_handle, 0, 0, PM_REMOVE))
+    {
+        TranslateMessage(&msg);
+        DispatchMessage(&msg);
+    }
+}
+
+void Rndr::Window::Close() const
+{
+    if (!m_is_closed)
+    {
+        PostMessage(m_handle, WM_CLOSE, 0, 0);
+    }
+}
+
+bool Rndr::Window::IsClosed() const
+{
+    return m_is_closed;
+}
+
+Rndr::NativeWindowHandle Rndr::Window::GetNativeWindowHandle() const
+{
+    return m_handle;
+}
+
+int Rndr::Window::GetWidth() const
+{
+    return m_desc.width;
+}
+
+int Rndr::Window::GetHeight() const
+{
+    return m_desc.height;
+}
+
+math::Vector2 Rndr::Window::GetSize() const
+{
+    math::Vector2 size;
+    size.X = static_cast<real>(m_desc.width);
+    size.Y = static_cast<real>(m_desc.height);
+    return size;
+}
+
+bool Rndr::Window::Resize(int width, int height) const
+{
+    if (width <= 0 || height <= 0)
+    {
+        RNDR_LOG_ERROR("Invalid window size!");
+        return false;
+    }
+    if (m_handle == k_invalid_window_handle)
+    {
+        RNDR_LOG_ERROR("Invalid window handle!");
+        return false;
+    }
+
+    // Define the desired client area size
+    RECT rc = {0, 0, width, height};
+
+    // Calculate the required window size, including the frame and borders
+    DWORD const dw_style = GetWindowLong(m_handle, GWL_STYLE);
+    DWORD const dw_ex_style = GetWindowLong(m_handle, GWL_EXSTYLE);
+    BOOL const has_menu = static_cast<const BOOL>(GetMenu(m_handle) != nullptr);
+    BOOL status = AdjustWindowRectEx(&rc, dw_style, has_menu, dw_ex_style);
+    if (status == 0)
+    {
+        RNDR_LOG_ERROR("Failed to adjust window rect!");
+        return false;
+    }
+
+    // Calculate the new window width and height
+    int const new_width = rc.right - rc.left;
+    int const new_height = rc.bottom - rc.top;
+
+    // Set the window size without changing its position
+    const UINT flags = SWP_NOZORDER | SWP_NOMOVE;
+    status = SetWindowPos(m_handle, nullptr, 0, 0, new_width, new_height, flags);
+    if (status == 0)
+    {
+        RNDR_LOG_ERROR("Failed to set window position!");
+        return false;
+    }
+    return true;
+}
+
+bool Rndr::Window::IsWindowMinimized() const
+{
+    return m_is_minimized;
+}
+
+void Rndr::Window::SetMinimized(bool should_minimize) const
+{
+    if (m_handle == k_invalid_window_handle)
+    {
+        RNDR_LOG_ERROR("Invalid window handle!");
+        return;
+    }
+    PostMessage(m_handle, WM_SYSCOMMAND, should_minimize ? SC_MINIMIZE : SC_RESTORE, 0);
+}
+
+bool Rndr::Window::IsWindowMaximized() const
+{
+    return m_is_maximized;
+}
+
+void Rndr::Window::SetMaximized(bool should_maximize) const
+{
+    if (m_handle == k_invalid_window_handle)
+    {
+        RNDR_LOG_ERROR("Invalid window handle!");
+        return;
+    }
+    PostMessage(m_handle, WM_SYSCOMMAND, should_maximize ? SC_MAXIMIZE : SC_RESTORE, 0);
+}
+
+void Rndr::Window::SetVisible(bool visible)
+{
+    if (m_handle == k_invalid_window_handle)
+    {
+        RNDR_LOG_ERROR("Invalid window handle!");
+        return;
+    }
+    ShowWindow(m_handle, visible ? SW_SHOW : SW_HIDE);
+    m_is_visible = visible;
+}
+
+bool Rndr::Window::IsVisible() const
+{
+    return m_is_visible && !m_is_minimized;
+}
+
+namespace
+{
+bool IsCursorHidden();
+POINT GetWindowMidPointInScreenSpace(HWND window_handle);
+}  // namespace
+
+bool Rndr::Window::SetCursorMode(CursorMode mode)
+{
+    m_desc.cursor_mode = mode;
+    switch (mode)
     {
         case CursorMode::Normal:
         {
@@ -240,16 +492,15 @@ bool rndr::Window::SetCursorMode(rndr::CursorMode Mode)
         }
         case CursorMode::Infinite:
         {
-            RECT WindowRect;
-            HWND WindowHandle = reinterpret_cast<HWND>(m_NativeWindowHandle);
-            GetWindowRect(WindowHandle, &WindowRect);
-            ClipCursor(&WindowRect);
+            RECT window_rect;
+            GetWindowRect(m_handle, &window_rect);
+            ClipCursor(&window_rect);
             if (!IsCursorHidden())
             {
                 ShowCursor(FALSE);
             }
-            const POINT MidPoint = GetWindowMidPointInScreenSpace(this);
-            SetCursorPos(MidPoint.x, MidPoint.y);
+            const POINT mid_point = GetWindowMidPointInScreenSpace(m_handle);
+            SetCursorPos(mid_point.x, mid_point.y);
             break;
         }
     }
@@ -257,376 +508,293 @@ bool rndr::Window::SetCursorMode(rndr::CursorMode Mode)
     return true;
 }
 
-math::Vector2 rndr::Window::GetSize() const
+Rndr::CursorMode Rndr::Window::GetCursorMode() const
 {
-    return {static_cast<float>(m_Width), static_cast<float>(m_Height)};
+    return m_desc.cursor_mode;
 }
 
-static void HandleMouseMove(rndr::Window* Window, int X, int Y)
+namespace
 {
-    if (Window == nullptr)
+bool IsCursorHidden()
+{
+    CURSORINFO cursor_info;
+    cursor_info.cbSize = sizeof(CURSORINFO);
+    GetCursorInfo(&cursor_info);
+    return cursor_info.flags != CURSOR_SHOWING;
+}
+
+POINT GetWindowMidPointInScreenSpace(HWND window_handle)
+{
+    RECT window_rect;
+    GetWindowRect(window_handle, &window_rect);
+    const int width = window_rect.right - window_rect.left;
+    const int height = window_rect.bottom - window_rect.top;
+    const int mid_x = window_rect.left + width / 2;
+    const int mid_y = window_rect.top + height / 2;
+    return {mid_x, mid_y};
+}
+
+Rndr::InputPrimitive GetPrimitive(UINT msg_code)
+{
+    switch (msg_code)
+    {
+        case WM_LBUTTONDOWN:
+            [[fallthrough]];
+        case WM_LBUTTONUP:
+            [[fallthrough]];
+        case WM_LBUTTONDBLCLK:
+            return Rndr::InputPrimitive::Mouse_LeftButton;
+        case WM_RBUTTONDOWN:
+            [[fallthrough]];
+        case WM_RBUTTONUP:
+            [[fallthrough]];
+        case WM_RBUTTONDBLCLK:
+            return Rndr::InputPrimitive::Mouse_RightButton;
+        case WM_MBUTTONDOWN:
+        case WM_MBUTTONUP:
+        case WM_MBUTTONDBLCLK:
+            return Rndr::InputPrimitive::Mouse_MiddleButton;
+        default:
+            assert(false);
+    }
+    return Rndr::InputPrimitive::Count;
+}
+
+Rndr::InputTrigger GetTrigger(UINT msg_code)
+{
+    switch (msg_code)
+    {
+        case WM_LBUTTONDOWN:
+            [[fallthrough]];
+        case WM_RBUTTONDOWN:
+            [[fallthrough]];
+        case WM_MBUTTONDOWN:
+            return Rndr::InputTrigger::ButtonPressed;
+        case WM_LBUTTONUP:
+            [[fallthrough]];
+        case WM_RBUTTONUP:
+            [[fallthrough]];
+        case WM_MBUTTONUP:
+            return Rndr::InputTrigger::ButtonReleased;
+        case WM_LBUTTONDBLCLK:
+            [[fallthrough]];
+        case WM_RBUTTONDBLCLK:
+            [[fallthrough]];
+        case WM_MBUTTONDBLCLK:
+            return Rndr::InputTrigger::ButtonDoubleClick;
+        default:
+            assert(false);
+    }
+    return Rndr::InputTrigger::ButtonPressed;
+}
+}  // namespace
+
+namespace Rndr::WindowPrivate
+{
+void HandleMouseMove(Rndr::Window* window, int x, int y)
+{
+    if (window == nullptr)
     {
         return;
     }
 
     // We need to flip Y since the engine expects Y to grow from bottom to top
-    Y = Window->GetHeight() - Y;
+    y = window->m_desc.height - y;
 
-    const rndr::CursorMode Mode = Window->GetCursorMode();
-    switch (Mode)
+    const Rndr::CursorMode mode = window->m_desc.cursor_mode;
+    switch (mode)
     {
-        case rndr::CursorMode::Normal:
-        case rndr::CursorMode::Hidden:
+        case Rndr::CursorMode::Normal:
+        case Rndr::CursorMode::Hidden:
         {
-            rndr::WindowDelegates::OnMousePositionDelegate.Execute(Window, X, Y);
-
-            // Notify the input system
-            rndr::InputSystem* IS = rndr::GRndrContext->GetInputSystem();
-            if (IS != nullptr)
-            {
-                const math::Point2 AbsolutePosition(static_cast<float>(X), static_cast<float>(Y));
-                IS->SubmitMousePositionEvent(Window->GetNativeWindowHandle(), AbsolutePosition,
-                                             Window->GetSize());
-            }
+            const math::Point2 absolute_position(static_cast<float>(x), static_cast<float>(y));
+            Rndr::InputSystem::SubmitMousePositionEvent(window->m_handle,
+                                                        absolute_position,
+                                                        window->GetSize());
             break;
         }
-        case rndr::CursorMode::Infinite:
+        case Rndr::CursorMode::Infinite:
         {
-            const POINT MidPoint = GetWindowMidPointInScreenSpace(Window);
-            SetCursorPos(MidPoint.x, MidPoint.y);
+            const POINT mid_point = GetWindowMidPointInScreenSpace(window->m_handle);
+            SetCursorPos(mid_point.x, mid_point.y);
             break;
         }
     }
 }
 
-LRESULT CALLBACK WindowProc(HWND WindowHandle, UINT MsgCode, WPARAM ParamW, LPARAM ParamL)
+LRESULT CALLBACK WindowProc(HWND window_handle, UINT msg_code, WPARAM param_w, LPARAM param_l)
 {
-    const LONG_PTR WindowPtr = GetWindowLongPtr(WindowHandle, GWLP_USERDATA);
-    rndr::Window* Window = reinterpret_cast<rndr::Window*>(WindowPtr);  // NOLINT
+    LONG_PTR const window_ptr = GetWindowLongPtr(window_handle, GWLP_USERDATA);
+    // Before window is created this will be nullptr
+    Rndr::Window* window = reinterpret_cast<Rndr::Window*>(window_ptr);  // NOLINT
 
-    if (Window != nullptr)
+    if (window != nullptr)
     {
-        rndr::Window::NativeWindowEventDelegate Delegate = Window->GetNativeWindowEventDelegate();
-        if (Delegate.Execute(Window->GetNativeWindowHandle(), MsgCode, ParamW, ParamL))
+        if (window->on_native_event.IsBound())
         {
-            return TRUE;
+            const bool status =
+                window->on_native_event.Execute(window_handle, msg_code, param_w, param_l);
+            if (status)
+            {
+                return DefWindowProc(window_handle, msg_code, param_w, param_l);
+            }
         }
     }
 
-    switch (MsgCode)
+    switch (msg_code)
     {
         case WM_CREATE:
         {
-            RNDR_LOG_INFO("WindowProc: Event WM_CREATE");
-
-            CREATESTRUCT* CreateStruct = reinterpret_cast<CREATESTRUCT*>(ParamL);  // NOLINT
-            Window = reinterpret_cast<rndr::Window*>(CreateStruct->lpCreateParams);
-
-            SetWindowLongPtr(WindowHandle, GWLP_USERDATA, reinterpret_cast<LONG_PTR>(Window));
-
+            RNDR_LOG_DEBUG("WindowProc: Event WM_CREATE");
+            CREATESTRUCT* CreateStruct = reinterpret_cast<CREATESTRUCT*>(param_l);  // NOLINT
+            window = reinterpret_cast<Rndr::Window*>(CreateStruct->lpCreateParams);
+            SetWindowLongPtr(window_handle, GWLP_USERDATA, reinterpret_cast<LONG_PTR>(window));
             break;
         }
         case WM_SIZE:
         {
-            const uint32_t Width = LOWORD(ParamL);
-            const uint32_t Height = HIWORD(ParamL);
-
-            RNDR_LOG_INFO("WindowProc: Event WM_SIZE (%d, %d)", Width, Height);
-
-            rndr::WindowDelegates::OnResize.Execute(Window, Width, Height);
-
+            if (window == nullptr)
+            {
+                break;
+            }
+            const int32_t width = static_cast<int32_t>(LOWORD(param_l));
+            const int32_t height = static_cast<int32_t>(HIWORD(param_l));
+            RNDR_LOG_DEBUG("WindowProc: Event WM_SIZE (%d, %d)", width, height);
+            window->m_desc.width = width;
+            window->m_desc.height = height;
+            window->on_resize.Execute(width, height);
             break;
         }
         case WM_CLOSE:
         {
-            RNDR_LOG_INFO("WindowProc: Event WM_CLOSE");
-
-            if (Window != nullptr)
-            {
-                Window->Close();
-            }
-
+            RNDR_LOG_DEBUG("WindowProc: Event WM_CLOSE");
+            window->m_is_closed = true;
             break;
         }
         case WM_DESTROY:
         {
-            RNDR_LOG_INFO("WindowProc: Event WM_DESTROY");
-
+            RNDR_LOG_DEBUG("WindowProc: Event WM_DESTROY");
+            window->m_handle = nullptr;
             break;
         }
         case WM_QUIT:
         {
-            RNDR_LOG_INFO("WindowProc: Event WM_QUIT");
-
+            RNDR_LOG_DEBUG("WindowProc: Event WM_QUIT");
+            break;
+        }
+        case WM_SYSCOMMAND:
+        {
+            const uint16_t mask = param_w & 0xFFF0;
+            if (mask == SC_MINIMIZE)
+            {
+                RNDR_LOG_DEBUG("WindowProc: Event SC_MINIMIZE");
+                window->m_is_minimized = true;
+                window->m_is_maximized = false;
+                break;
+            }
+            if (mask == SC_MAXIMIZE)
+            {
+                RNDR_LOG_DEBUG("WindowProc: Event SC_MAXIMIZE");
+                window->m_is_minimized = false;
+                window->m_is_maximized = true;
+                break;
+            }
+            if (mask == SC_RESTORE)
+            {
+                RNDR_LOG_DEBUG("WindowProc: Event SC_RESTORE");
+                window->m_is_minimized = false;
+                window->m_is_maximized = false;
+                break;
+            }
             break;
         }
         case WM_MOUSEMOVE:
         {
-            const int X = GET_X_LPARAM(ParamL);
-            const int Y = GET_Y_LPARAM(ParamL);
-            HandleMouseMove(Window, X, Y);
-            break;
-        }
-        case WM_LBUTTONDBLCLK:
-        {
-            if (Window == nullptr)
-            {
-                break;
-            }
-
-            rndr::WindowDelegates::OnButtonDelegate.Execute(
-                Window, rndr::InputPrimitive::Mouse_LeftButton, rndr::InputTrigger::DoubleClick);
-
-            rndr::InputSystem* IS = rndr::GRndrContext->GetInputSystem();
-            if (IS != nullptr)
-            {
-                IS->SubmitButtonEvent(Window->GetNativeWindowHandle(),
-                                      rndr::InputPrimitive::Mouse_LeftButton,
-                                      rndr::InputTrigger::DoubleClick);
-            }
-
+            const int x = GET_X_LPARAM(param_l);
+            const int y = GET_Y_LPARAM(param_l);
+            HandleMouseMove(window, x, y);
             break;
         }
         case WM_INPUT:
         {
-            if (Window->GetCursorMode() != rndr::CursorMode::Infinite)
+            // Handling infinite mouse cursor mode
+            if (window->m_desc.cursor_mode != Rndr::CursorMode::Infinite)
             {
                 break;
             }
 
-            UINT StructSize = sizeof(RAWINPUT);
-            rndr::StackArray<uint8_t, sizeof(RAWINPUT)> DataBuffer;
+            UINT struct_size = sizeof(RAWINPUT);
+            Rndr::StackArray<uint8_t, sizeof(RAWINPUT)> data_buffer;
 
             // NOLINTNEXTLINE
-            GetRawInputData(reinterpret_cast<HRAWINPUT>(ParamL), RID_INPUT, DataBuffer.data(),
-                            &StructSize, sizeof(RAWINPUTHEADER));
+            GetRawInputData(reinterpret_cast<HRAWINPUT>(param_l),
+                            RID_INPUT,
+                            data_buffer.data(),
+                            &struct_size,
+                            sizeof(RAWINPUTHEADER));
 
-            RAWINPUT* RawData = reinterpret_cast<RAWINPUT*>(DataBuffer.data());
+            RAWINPUT* raw_data = reinterpret_cast<RAWINPUT*>(data_buffer.data());
 
-            if (RawData->header.dwType == RIM_TYPEMOUSE)
+            if (raw_data->header.dwType == RIM_TYPEMOUSE)
             {
-
-                rndr::WindowDelegates::OnRelativeMousePositionDelegate.Execute(
-                    Window, RawData->data.mouse.lLastX, RawData->data.mouse.lLastY);
-
-                rndr::InputSystem* InputSystem = rndr::GRndrContext->GetInputSystem();
-                if (InputSystem != nullptr)
-                {
-                    const math::Vector2 Delta{
-                        static_cast<float>(RawData->data.mouse.lLastX) / Window->GetSize().X,
-                        static_cast<float>(RawData->data.mouse.lLastY) / Window->GetSize().Y};
-                    InputSystem->SubmitRelativeMousePositionEvent(Window->GetNativeWindowHandle(),
-                                                                  Delta, Window->GetSize());
-                }
+                const math::Vector2 size = window->GetSize();
+                const math::Vector2 delta{static_cast<float>(raw_data->data.mouse.lLastX) / size.X,
+                                          static_cast<float>(raw_data->data.mouse.lLastY) / size.Y};
+                Rndr::InputSystem::SubmitRelativeMousePositionEvent(window->m_handle, delta, size);
             }
             break;
         }
+        case WM_LBUTTONDBLCLK:
         case WM_RBUTTONDBLCLK:
-        {
-            if (Window == nullptr)
-            {
-                break;
-            }
-
-            rndr::WindowDelegates::OnButtonDelegate.Execute(
-                Window, rndr::InputPrimitive::Mouse_RightButton, rndr::InputTrigger::DoubleClick);
-
-            rndr::InputSystem* IS = rndr::GRndrContext->GetInputSystem();
-            if (IS != nullptr)
-            {
-                IS->SubmitButtonEvent(Window->GetNativeWindowHandle(),
-                                      rndr::InputPrimitive::Mouse_RightButton,
-                                      rndr::InputTrigger::DoubleClick);
-            }
-
-            break;
-        }
         case WM_MBUTTONDBLCLK:
-        {
-            if (Window == nullptr)
-            {
-                break;
-            }
-
-            rndr::WindowDelegates::OnButtonDelegate.Execute(
-                Window, rndr::InputPrimitive::Mouse_MiddleButton, rndr::InputTrigger::DoubleClick);
-
-            rndr::InputSystem* IS = rndr::GRndrContext->GetInputSystem();
-            if (IS != nullptr)
-            {
-                IS->SubmitButtonEvent(Window->GetNativeWindowHandle(),
-                                      rndr::InputPrimitive::Mouse_MiddleButton,
-                                      rndr::InputTrigger::DoubleClick);
-            }
-
-            break;
-        }
         case WM_LBUTTONDOWN:
-        {
-            if (Window == nullptr)
-            {
-                break;
-            }
-
-            rndr::WindowDelegates::OnButtonDelegate.Execute(
-                Window, rndr::InputPrimitive::Mouse_LeftButton, rndr::InputTrigger::ButtonDown);
-
-            rndr::InputSystem* IS = rndr::GRndrContext->GetInputSystem();
-            if (IS != nullptr)
-            {
-                IS->SubmitButtonEvent(Window->GetNativeWindowHandle(),
-                                      rndr::InputPrimitive::Mouse_LeftButton,
-                                      rndr::InputTrigger::ButtonDown);
-            }
-
-            break;
-        }
         case WM_LBUTTONUP:
-        {
-            if (Window == nullptr)
-            {
-                break;
-            }
-
-            rndr::WindowDelegates::OnButtonDelegate.Execute(
-                Window, rndr::InputPrimitive::Mouse_LeftButton, rndr::InputTrigger::ButtonUp);
-
-            rndr::InputSystem* IS = rndr::GRndrContext->GetInputSystem();
-            if (IS != nullptr)
-            {
-                IS->SubmitButtonEvent(Window->GetNativeWindowHandle(),
-                                      rndr::InputPrimitive::Mouse_LeftButton,
-                                      rndr::InputTrigger::ButtonUp);
-            }
-
-            break;
-        }
         case WM_RBUTTONDOWN:
-        {
-            if (Window == nullptr)
-            {
-                break;
-            }
-
-            rndr::WindowDelegates::OnButtonDelegate.Execute(
-                Window, rndr::InputPrimitive::Mouse_RightButton, rndr::InputTrigger::ButtonDown);
-
-            rndr::InputSystem* IS = rndr::GRndrContext->GetInputSystem();
-            if (IS != nullptr)
-            {
-                IS->SubmitButtonEvent(Window->GetNativeWindowHandle(),
-                                      rndr::InputPrimitive::Mouse_RightButton,
-                                      rndr::InputTrigger::ButtonDown);
-            }
-
-            break;
-        }
         case WM_RBUTTONUP:
-        {
-            if (Window == nullptr)
-            {
-                break;
-            }
-
-            rndr::WindowDelegates::OnButtonDelegate.Execute(
-                Window, rndr::InputPrimitive::Mouse_RightButton, rndr::InputTrigger::ButtonUp);
-
-            rndr::InputSystem* IS = rndr::GRndrContext->GetInputSystem();
-            if (IS != nullptr)
-            {
-                IS->SubmitButtonEvent(Window->GetNativeWindowHandle(),
-                                      rndr::InputPrimitive::Mouse_RightButton,
-                                      rndr::InputTrigger::ButtonUp);
-            }
-
-            break;
-        }
         case WM_MBUTTONDOWN:
-        {
-            if (Window == nullptr)
-            {
-                break;
-            }
-
-            rndr::WindowDelegates::OnButtonDelegate.Execute(
-                Window, rndr::InputPrimitive::Mouse_MiddleButton, rndr::InputTrigger::ButtonDown);
-
-            rndr::InputSystem* IS = rndr::GRndrContext->GetInputSystem();
-            if (IS != nullptr)
-            {
-                IS->SubmitButtonEvent(Window->GetNativeWindowHandle(),
-                                      rndr::InputPrimitive::Mouse_MiddleButton,
-                                      rndr::InputTrigger::ButtonDown);
-            }
-
-            break;
-        }
         case WM_MBUTTONUP:
         {
-            if (Window == nullptr)
+            if (window == nullptr)
             {
                 break;
             }
 
-            rndr::WindowDelegates::OnButtonDelegate.Execute(
-                Window, rndr::InputPrimitive::Mouse_MiddleButton, rndr::InputTrigger::ButtonUp);
-
-            rndr::InputSystem* IS = rndr::GRndrContext->GetInputSystem();
-            if (IS != nullptr)
-            {
-                IS->SubmitButtonEvent(Window->GetNativeWindowHandle(),
-                                      rndr::InputPrimitive::Mouse_MiddleButton,
-                                      rndr::InputTrigger::ButtonUp);
-            }
-
+            const Rndr::InputPrimitive primitive = GetPrimitive(msg_code);
+            const Rndr::InputTrigger trigger = GetTrigger(msg_code);
+            Rndr::InputSystem::SubmitButtonEvent(window->m_handle, primitive, trigger);
             break;
         }
         case WM_KEYDOWN:
         case WM_KEYUP:
         {
-            if (Window == nullptr)
+            if (window == nullptr)
             {
                 break;
             }
-
-            const auto Iter = GPrimitiveMapping.find(static_cast<uint32_t>(ParamW));
-            if (Iter == GPrimitiveMapping.end())
+            const auto iter = g_vk_to_primitive.find(static_cast<uint32_t>(param_w));
+            if (iter == g_vk_to_primitive.end())
             {
                 break;
             }
-            const rndr::InputPrimitive Primitive = Iter->second;
-            const rndr::InputTrigger Trigger = MsgCode == WM_KEYDOWN
-                                                   ? rndr::InputTrigger::ButtonDown
-                                                   : rndr::InputTrigger::ButtonUp;
-            rndr::WindowDelegates::OnButtonDelegate.Execute(Window, Primitive, Trigger);
-
-            rndr::InputSystem* IS = rndr::GRndrContext->GetInputSystem();
-            if (IS != nullptr)
-            {
-                IS->SubmitButtonEvent(Window->GetNativeWindowHandle(), Primitive, Trigger);
-            }
-
+            const Rndr::InputPrimitive primitive = iter->second;
+            const Rndr::InputTrigger trigger = msg_code == WM_KEYDOWN
+                                                   ? Rndr::InputTrigger::ButtonPressed
+                                                   : Rndr::InputTrigger::ButtonReleased;
+            Rndr::InputSystem::SubmitButtonEvent(window->m_handle, primitive, trigger);
             break;
         }
         case WM_MOUSEWHEEL:
         {
-            if (Window == nullptr)
+            if (window == nullptr)
             {
                 break;
             }
-
-            const int DeltaWheel = GET_WHEEL_DELTA_WPARAM(ParamW);
-            rndr::WindowDelegates::OnMouseWheelMovedDelegate.Execute(Window, DeltaWheel);
-
-            rndr::InputSystem* IS = rndr::GRndrContext->GetInputSystem();
-            if (IS != nullptr)
-            {
-                IS->SubmitMouseWheelEvent(Window->GetNativeWindowHandle(), DeltaWheel);
-            }
-
+            const int delta_wheel = GET_WHEEL_DELTA_WPARAM(param_w);
+            Rndr::InputSystem::SubmitMouseWheelEvent(window->m_handle, delta_wheel);
             break;
         }
     }
 
-    return DefWindowProc(WindowHandle, MsgCode, ParamW, ParamL);
+    return DefWindowProc(window_handle, msg_code, param_w, param_l);
 }
+}  // namespace Rndr::WindowPrivate

@@ -1,261 +1,580 @@
-#include "rndr/core/input.h"
+#include <queue>
+#include <utility>
+#include <variant>
 
-#include "rndr/core/log.h"
-#include "rndr/core/memory.h"
+#include "rndr/core/array.h"
+#include "rndr/core/input.h"
+#include "rndr/core/ref.h"
+#include "rndr/core/stack-array.h"
+
+namespace Rndr
+{
+struct ActionData
+{
+    Rndr::InputAction action;
+    Rndr::InputCallback callback;
+    Rndr::NativeWindowHandle native_window;
+    Rndr::Array<Rndr::InputBinding> bindings;
+};
+
+struct InputContextData
+{
+    Rndr::Ref<Rndr::InputContext> context;
+    Rndr::Array<ActionData> actions;
+
+    InputContextData(InputContext& ctx) : context(ctx) {}
+    ~InputContextData() = default;
+};
+
+struct ButtonData
+{
+    Rndr::InputPrimitive primitive;
+    Rndr::InputTrigger trigger;
+};
+
+struct MousePositionData
+{
+    math::Point2 position;
+    math::Vector2 screen_size;
+};
+
+struct RelativeMousePositionData
+{
+    math::Vector2 delta_position;
+    math::Vector2 screen_size;
+};
+
+struct MouseWheelData
+{
+    int32_t delta_wheel;
+};
+
+using EventData =
+    std::variant<ButtonData, MousePositionData, RelativeMousePositionData, MouseWheelData>;
+
+struct Event
+{
+    Rndr::NativeWindowHandle native_window;
+    EventData data;
+};
+
+using EventQueue = std::queue<Event>;
+
+struct InputSystemData
+{
+    Rndr::InputContext default_context = Rndr::InputContext("Default");
+    Rndr::Array<Ref<InputContextData>> contexts;
+    EventQueue events;
+
+    ~InputSystemData() = default;
+};
+}  // namespace Rndr
+
+// InputAction /////////////////////////////////////////////////////////////////////////////////////
+
+Rndr::InputAction::InputAction(String name) : m_name(std::move(name)) {}
+
+const Rndr::String& Rndr::InputAction::GetName() const
+{
+    return m_name;
+}
+
+bool Rndr::InputAction::IsValid() const
+{
+    return !m_name.empty();
+}
+
+// InputBinding ////////////////////////////////////////////////////////////////////////////////
+
+bool Rndr::InputBinding::operator==(const Rndr::InputBinding& other) const
+{
+    return primitive == other.primitive && trigger == other.trigger;
+}
+
+// InputContext ////////////////////////////////////////////////////////////////////////////////////
+
+Rndr::InputContext::InputContext()
+{
+    m_context_data = RNDR_MAKE_SCOPED(InputContextData, *this);
+}
+
+Rndr::InputContext::InputContext(String name) : m_name(std::move(name))
+{
+    m_context_data = RNDR_MAKE_SCOPED(InputContextData, *this);
+}
+
+Rndr::InputContext::~InputContext() = default;
+
+const Rndr::String& Rndr::InputContext::GetName() const
+{
+    return m_name;
+}
+
+bool Rndr::InputContext::AddAction(const Rndr::InputAction& action,
+                                   const Rndr::InputActionData& data)
+{
+    if (m_context_data == nullptr)
+    {
+        RNDR_LOG_ERROR("Invalid context data");
+        return false;
+    }
+    if (!action.IsValid())
+    {
+        RNDR_LOG_ERROR("Invalid action");
+        return false;
+    }
+    if (data.callback == nullptr)
+    {
+        RNDR_LOG_ERROR("Invalid callback");
+        return false;
+    }
+    for (const Rndr::InputBinding& binding : data.bindings)
+    {
+        if (!InputSystem::IsBindingValid(binding))
+        {
+            RNDR_LOG_ERROR("Invalid binding");
+            return false;
+        }
+    }
+    for (const ActionData& action_data : m_context_data->actions)
+    {
+        if (action_data.action == action)
+        {
+            RNDR_LOG_ERROR("Action already exists");
+            return false;
+        }
+    }
+    ActionData action_data;
+    action_data.action = action;
+    action_data.callback = data.callback;
+    action_data.native_window = data.native_window;
+    action_data.bindings.assign(data.bindings.begin(), data.bindings.end());
+    m_context_data->actions.push_back(action_data);
+    return true;
+}
+
+bool Rndr::InputContext::AddBindingToAction(const Rndr::InputAction& action,
+                                            const Rndr::InputBinding& binding)
+{
+    if (m_context_data == nullptr)
+    {
+        RNDR_LOG_ERROR("Invalid context data");
+        return false;
+    }
+    if (!action.IsValid())
+    {
+        RNDR_LOG_ERROR("Invalid action");
+        return false;
+    }
+    if (!InputSystem::IsBindingValid(binding))
+    {
+        RNDR_LOG_ERROR("Invalid binding");
+        return false;
+    }
+
+    for (ActionData& action_data : m_context_data->actions)
+    {
+        if (action_data.action != action)
+        {
+            continue;
+        }
+        for (InputBinding& existing_binding : action_data.bindings)
+        {
+            if (existing_binding != binding)
+            {
+                continue;
+            }
+            existing_binding = binding;
+            return true;
+        }
+        action_data.bindings.push_back(binding);
+        return true;
+    }
+    RNDR_LOG_ERROR("Action does not exist");
+    return false;
+}
+
+bool Rndr::InputContext::RemoveBindingFromAction(const Rndr::InputAction& action,
+                                                 const Rndr::InputBinding& binding)
+{
+    if (m_context_data == nullptr)
+    {
+        RNDR_LOG_ERROR("Invalid context data");
+        return false;
+    }
+    if (!action.IsValid())
+    {
+        RNDR_LOG_ERROR("Invalid action");
+        return false;
+    }
+
+    for (ActionData& action_data : m_context_data->actions)
+    {
+        if (action_data.action == action)
+        {
+            std::erase_if(action_data.bindings,
+                          [&binding](const InputBinding& existing_binding)
+                          { return existing_binding == binding; });
+            return true;
+        }
+    }
+    RNDR_LOG_ERROR("Action does not exist");
+    return false;
+}
+
+bool Rndr::InputContext::ContainsAction(const Rndr::InputAction& action) const
+{
+    if (m_context_data == nullptr)
+    {
+        RNDR_LOG_ERROR("Invalid context data");
+        return false;
+    }
+    if (!action.IsValid())
+    {
+        RNDR_LOG_ERROR("Invalid action");
+        return false;
+    }
+    return std::ranges::any_of(m_context_data->actions,
+                               [&action](const auto& action_data)
+                               { return action_data.action == action; });
+}
+
+Rndr::InputCallback Rndr::InputContext::GetActionCallback(const Rndr::InputAction& action) const
+{
+    if (m_context_data == nullptr)
+    {
+        RNDR_LOG_ERROR("Invalid context data");
+        return nullptr;
+    }
+    if (!action.IsValid())
+    {
+        RNDR_LOG_ERROR("Invalid action");
+        return nullptr;
+    }
+    const auto& action_iter = std::ranges::find_if(m_context_data->actions,
+                                                   [&action](const auto& action_data)
+                                                   { return action_data.action == action; });
+    return action_iter != m_context_data->actions.end() ? action_iter->callback : nullptr;
+}
+
+Rndr::Span<Rndr::InputBinding> Rndr::InputContext::GetActionBindings(
+    const Rndr::InputAction& action) const
+{
+    if (m_context_data == nullptr)
+    {
+        RNDR_LOG_ERROR("Invalid context data");
+        return {};
+    }
+    if (!action.IsValid())
+    {
+        RNDR_LOG_ERROR("Invalid action");
+        return {};
+    }
+    const auto& action_iter = std::ranges::find_if(m_context_data->actions,
+                                                   [&action](const auto& action_data)
+                                                   { return action_data.action == action; });
+    return action_iter != m_context_data->actions.end() ? action_iter->bindings
+                                                        : Span<InputBinding>{};
+}
 
 // InputSystem ////////////////////////////////////////////////////////////////////////////////////
 
-rndr::InputSystem::InputSystem()
+namespace
 {
-    assert(!m_Context);
-    m_Context = New<InputContext>("InputSystem: Default InputContext");
+inline Rndr::InputSystem& GetInputSystem()
+{
+    static Rndr::InputSystem s_input_system;
+    return s_input_system;
 }
+}  // namespace
 
-rndr::InputSystem::~InputSystem()
+Rndr::ScopePtr<Rndr::InputSystemData> Rndr::InputSystem::g_system_data;
+
+bool Rndr::InputSystem::Init()
 {
-    Delete(m_Context);
-}
-
-void rndr::InputSystem::SubmitButtonEvent(NativeWindowHandle Window,
-                                          InputPrimitive Primitive,
-                                          InputTrigger Trigger)
-{
-    const Event Evt{Window, ButtonEvent{Primitive, Trigger}};
-    m_Events.push(Evt);
-}
-
-void rndr::InputSystem::SubmitMousePositionEvent(NativeWindowHandle Window,
-                                                 const math::Point2& Position,
-                                                 const math::Vector2& ScreenSize)
-{
-    assert(ScreenSize.X != 0 && ScreenSize.Y != 0);
-    const Event Evt{Window, MousePositionEvent{Position, ScreenSize}};
-    m_Events.push(Evt);
-}
-
-void rndr::InputSystem::SubmitRelativeMousePositionEvent(rndr::NativeWindowHandle Window,
-                                                         const math::Vector2& DeltaPosition,
-                                                         const math::Vector2& ScreenSize)
-{
-    assert(ScreenSize.X != 0 && ScreenSize.Y != 0);
-    const Event Evt{Window, RelativeMousePositionEvent{DeltaPosition, ScreenSize}};
-    m_Events.push(Evt);
-}
-
-void rndr::InputSystem::SubmitMouseWheelEvent(NativeWindowHandle Window, int DeltaWheel)
-{
-    const Event Evt{Window, MouseWheelEvent{DeltaWheel}};
-    m_Events.push(Evt);
-}
-
-void rndr::InputSystem::Update(real DeltaSeconds)
-{
-    RNDR_UNUSED(DeltaSeconds);
-
-    while (!m_Events.empty())
+    if (g_system_data)
     {
-        Event Evt = m_Events.front();
-        m_Events.pop();
+        return true;
+    }
+    g_system_data = RNDR_MAKE_SCOPED(InputSystemData);
+    const Ref<InputContextData> default_context_data =
+        Ref{g_system_data->default_context.m_context_data.get()};
+    g_system_data->contexts.push_back(default_context_data);
+    return true;
+}
 
-        switch (Evt.Data.index())
+bool Rndr::InputSystem::Destroy()
+{
+    if (!g_system_data)
+    {
+        return true;
+    }
+    g_system_data.reset();
+    return true;
+}
+
+Rndr::InputContext& Rndr::InputSystem::GetCurrentContext()
+{
+    assert(g_system_data != nullptr);
+    return g_system_data->contexts.back()->context.Get();
+}
+
+bool Rndr::InputSystem::PushContext(const Rndr::InputContext& context)
+{
+    if (g_system_data == nullptr)
+    {
+        return false;
+    }
+    g_system_data->contexts.emplace_back(*context.m_context_data.get());
+    return true;
+}
+
+bool Rndr::InputSystem::PopContext()
+{
+    if (g_system_data == nullptr)
+    {
+        return false;
+    }
+    if (g_system_data->contexts.size() == 1)
+    {
+        RNDR_LOG_ERROR("Cannot pop default context");
+        return false;
+    }
+    g_system_data->contexts.pop_back();
+    return true;
+}
+
+bool Rndr::InputSystem::SubmitButtonEvent(NativeWindowHandle window,
+                                          InputPrimitive primitive,
+                                          InputTrigger trigger)
+{
+    if (g_system_data == nullptr)
+    {
+        return false;
+    }
+    const Event event{window, ButtonData{primitive, trigger}};
+    g_system_data->events.push(event);
+    return true;
+}
+
+bool Rndr::InputSystem::SubmitMousePositionEvent(NativeWindowHandle window,
+                                                 const math::Point2& position,
+                                                 const math::Vector2& screen_size)
+{
+    if (g_system_data == nullptr)
+    {
+        return false;
+    }
+    if (screen_size.X == 0 || screen_size.Y == 0)
+    {
+        return false;
+    }
+    const Event event{window, MousePositionData{position, screen_size}};
+    g_system_data->events.push(event);
+    return true;
+}
+
+bool Rndr::InputSystem::SubmitRelativeMousePositionEvent(NativeWindowHandle window,
+                                                         const math::Vector2& delta_position,
+                                                         const math::Vector2& screen_size)
+{
+    if (g_system_data == nullptr)
+    {
+        return false;
+    }
+    if (screen_size.X == 0 || screen_size.Y == 0)
+    {
+        return false;
+    }
+    const Event event{window, RelativeMousePositionData{delta_position, screen_size}};
+    g_system_data->events.push(event);
+    return true;
+}
+
+bool Rndr::InputSystem::SubmitMouseWheelEvent(NativeWindowHandle window, int32_t delta_wheel)
+{
+    if (g_system_data == nullptr)
+    {
+        return false;
+    }
+    const Event event{window, MouseWheelData{delta_wheel}};
+    g_system_data->events.push(event);
+    return true;
+}
+
+namespace Rndr
+{
+struct InputEventProcessor
+{
+    Ref<const InputContextData> context;
+    NativeWindowHandle native_window;
+
+    void operator()(const ButtonData& event) const;
+    void operator()(const MousePositionData& event) const;
+    void operator()(const RelativeMousePositionData& event) const;
+    void operator()(const MouseWheelData& event) const;
+};
+
+}  // namespace Rndr
+
+bool Rndr::InputSystem::ProcessEvents(real delta_seconds)
+{
+    RNDR_UNUSED(delta_seconds);
+
+    if (g_system_data == nullptr)
+    {
+        return false;
+    }
+    EventQueue& events = g_system_data->events;
+    const InputContextData& context = g_system_data->contexts.back();
+    while (!events.empty())
+    {
+        Event event = events.front();
+        events.pop();
+        std::visit(InputEventProcessor{Ref(context), event.native_window}, event.data);
+    }
+    return true;
+}
+
+void Rndr::InputEventProcessor::operator()(const ButtonData& event) const
+{
+    for (const ActionData& action_data : context->actions)
+    {
+        if (action_data.native_window != nullptr && action_data.native_window != native_window)
         {
-            case 0:
-                ProcessEvent(std::get<ButtonEvent>(Evt.Data));
-                continue;
-            case 1:
-                ProcessEvent(std::get<MousePositionEvent>(Evt.Data));
-                continue;
-            case 2:
-                ProcessEvent(std::get<RelativeMousePositionEvent>(Evt.Data));
-                continue;
-            case 3:
-                ProcessEvent(std::get<MouseWheelEvent>(Evt.Data));
-                continue;
+            continue;
+        }
+        for (const InputBinding& binding : action_data.bindings)
+        {
+            if (binding.primitive == event.primitive && binding.trigger == event.trigger)
+            {
+                action_data.callback(event.primitive, event.trigger, binding.modifier);
+                break;
+            }
         }
     }
 }
 
-void rndr::InputSystem::ProcessEvent(const ButtonEvent& Event)
+void Rndr::InputEventProcessor::operator()(const MousePositionData& event) const
 {
-    for (const auto& MappingEntry : m_Context->Mappings)
+    const StackArray<InputPrimitive, 2> axes = {InputPrimitive::Mouse_AxisX,
+                                                InputPrimitive::Mouse_AxisY};
+    const InputTrigger trigger = InputTrigger::AxisChangedAbsolute;
+    for (const ActionData& action_data : context->actions)
     {
-        for (const auto& Binding : MappingEntry.Mapping->Bindings)
+        if (action_data.native_window != nullptr && action_data.native_window != native_window)
         {
-            if (Binding.Primitive == Event.Primitive && Binding.Trigger == Event.Trigger)
+            continue;
+        }
+        for (const InputBinding& binding : action_data.bindings)
+        {
+            if (binding.primitive == axes[0] && binding.trigger == trigger)
             {
-                const real Value = Binding.Modifier;
-                MappingEntry.Mapping->Callback(Event.Primitive, Event.Trigger, Value);
+                const real value = binding.modifier * event.position[0];
+                action_data.callback(axes[0], trigger, value);
+            }
+            if (binding.primitive == axes[1] && binding.trigger == trigger)
+            {
+                const real value = binding.modifier * event.position[1];
+                action_data.callback(axes[1], trigger, value);
             }
         }
     }
 }
 
-void rndr::InputSystem::ProcessEvent(const MousePositionEvent& Event)
+void Rndr::InputEventProcessor::operator()(const RelativeMousePositionData& event) const
 {
-    for (const auto& MappingEntry : m_Context->Mappings)
+    const StackArray<InputPrimitive, 2> axes = {InputPrimitive::Mouse_AxisX,
+                                                InputPrimitive::Mouse_AxisY};
+    const InputTrigger trigger = InputTrigger::AxisChangedRelative;
+    for (const ActionData& action_data : context->actions)
     {
-        for (const auto& Binding : MappingEntry.Mapping->Bindings)
+        if (action_data.native_window != nullptr && action_data.native_window != native_window)
         {
-            if (Binding.Primitive == InputPrimitive::Mouse_AxisX)
+            continue;
+        }
+        for (const InputBinding& binding : action_data.bindings)
+        {
+            if (binding.primitive == axes[0] && binding.trigger == trigger)
             {
-                if (Binding.Trigger == InputTrigger::AxisChangedAbsolute)
-                {
-                    const real Value = Binding.Modifier * Event.Position.X;
-                    MappingEntry.Mapping->Callback(Binding.Primitive, Binding.Trigger, Value);
-                }
+                const real value = binding.modifier * event.delta_position[0];
+                action_data.callback(axes[0], trigger, value);
             }
-            else if (Binding.Primitive == InputPrimitive::Mouse_AxisY)
+            if (binding.primitive == axes[1] && binding.trigger == trigger)
             {
-                if (Binding.Trigger == InputTrigger::AxisChangedAbsolute)
-                {
-                    const real Value = Binding.Modifier * Event.Position.Y;
-                    MappingEntry.Mapping->Callback(Binding.Primitive, Binding.Trigger, Value);
-                }
+                const real value = binding.modifier * event.delta_position[1];
+                action_data.callback(axes[1], trigger, value);
             }
         }
     }
 }
 
-void rndr::InputSystem::ProcessEvent(const rndr::InputSystem::RelativeMousePositionEvent& Event)
+void Rndr::InputEventProcessor::operator()(const MouseWheelData& event) const
 {
-    for (const auto& MappingEntry : m_Context->Mappings)
+    const InputPrimitive primitive = InputPrimitive::Mouse_AxisWheel;
+    const InputTrigger trigger = InputTrigger::AxisChangedRelative;
+    for (const ActionData& action_data : context->actions)
     {
-        for (const auto& Binding : MappingEntry.Mapping->Bindings)
+        if (action_data.native_window != nullptr && action_data.native_window != native_window)
         {
-            if (Binding.Primitive == InputPrimitive::Mouse_AxisX)
+            continue;
+        }
+        for (const InputBinding& binding : action_data.bindings)
+        {
+            if (binding.primitive == primitive && binding.trigger == trigger)
             {
-                if (Binding.Trigger == InputTrigger::AxisChangedRelative)
-                {
-                    const real Value = Binding.Modifier * (Event.Position.X / Event.ScreenSize.X);
-                    MappingEntry.Mapping->Callback(Binding.Primitive, Binding.Trigger, Value);
-                }
-            }
-            else if (Binding.Primitive == InputPrimitive::Mouse_AxisY)
-            {
-                if (Binding.Trigger == InputTrigger::AxisChangedRelative)
-                {
-                    const real Value = Binding.Modifier * (Event.Position.Y / Event.ScreenSize.Y);
-                    MappingEntry.Mapping->Callback(Binding.Primitive, Binding.Trigger, Value);
-                }
+                const real value = binding.modifier * static_cast<real>(event.delta_wheel);
+                action_data.callback(primitive, trigger, value);
+                break;
             }
         }
     }
 }
 
-void rndr::InputSystem::ProcessEvent(const MouseWheelEvent& Event)
+bool Rndr::InputSystem::IsButton(InputPrimitive primitive)
 {
-    for (const auto& MappingEntry : m_Context->Mappings)
+    return IsKeyboardButton(primitive) || IsMouseButton(primitive);
+}
+
+bool Rndr::InputSystem::IsMouseButton(InputPrimitive primitive)
+{
+    using enum Rndr::InputPrimitive;
+    return primitive == Mouse_LeftButton || primitive == Mouse_RightButton
+           || primitive == Mouse_MiddleButton;
+}
+
+bool Rndr::InputSystem::IsKeyboardButton(InputPrimitive primitive)
+
+{
+    return primitive > InputPrimitive::_KeyboardStart && primitive < InputPrimitive::_KeyboardEnd;
+}
+
+bool Rndr::InputSystem::IsAxis(InputPrimitive primitive)
+{
+    return primitive == InputPrimitive::Mouse_AxisX || primitive == InputPrimitive::Mouse_AxisY
+           || IsMouseWheelAxis(primitive);
+}
+
+bool Rndr::InputSystem::IsMouseWheelAxis(Rndr::InputPrimitive primitive)
+{
+    return primitive == InputPrimitive::Mouse_AxisWheel;
+}
+
+bool Rndr::InputSystem::IsBindingValid(const Rndr::InputBinding& binding)
+{
+    using enum Rndr::InputTrigger;
+    if (IsButton(binding.primitive))
     {
-        for (const auto& Binding : MappingEntry.Mapping->Bindings)
-        {
-            if (Binding.Primitive == InputPrimitive::Mouse_AxisWheel)
-            {
-                MappingEntry.Mapping->Callback(Binding.Primitive, Binding.Trigger,
-                                               static_cast<float>(Event.DeltaWheel));
-            }
-        }
+        return binding.trigger == ButtonPressed || binding.trigger == ButtonReleased
+               || binding.trigger == ButtonDoubleClick;
     }
-}
-
-rndr::InputContext* rndr::InputSystem::GetContext()
-{
-    return m_Context;
-}
-
-bool rndr::InputSystem::IsButton(InputPrimitive Primitive)
-{
-    return IsKeyboardButton(Primitive) || IsMouseButton(Primitive);
-}
-
-bool rndr::InputSystem::IsMouseButton(InputPrimitive Primitive)
-{
-    return Primitive == InputPrimitive::Mouse_LeftButton ||
-           Primitive == InputPrimitive::Mouse_RightButton ||
-           Primitive == InputPrimitive::Mouse_MiddleButton;
-}
-
-bool rndr::InputSystem::IsKeyboardButton(InputPrimitive Primitive)
-{
-    return Primitive > InputPrimitive::_KeyboardStart && Primitive < InputPrimitive::_KeyboardEnd;
-}
-
-bool rndr::InputSystem::IsAxis(InputPrimitive Primitive)
-{
-    return IsMouseAxis(Primitive);
-}
-
-bool rndr::InputSystem::IsMouseAxis(InputPrimitive Primitive)
-{
-    return Primitive == InputPrimitive::Mouse_AxisX || Primitive == InputPrimitive::Mouse_AxisY ||
-           Primitive == InputPrimitive::Mouse_AxisWheel;
-}
-
-math::Point2 rndr::InputSystem::GetMousePosition() const
-{
-    assert(m_AbsolutePosition.has_value());
-    return m_AbsolutePosition.value();
-}
-
-// InputContext ///////////////////////////////////////////////////////////////////////////////////
-
-rndr::InputMapping* rndr::InputContext::CreateMapping(const InputAction& Action,
-                                                      const InputCallback& Callback)
-{
-    std::unique_ptr<InputMapping> NewMapping = std::make_unique<InputMapping>(Action, Callback);
-
-    const auto FindMappingByAction = [&](const InputContext::Entry& Entry)
-    { return Entry.Action == Action; };
-
-    auto EntryIt = std::find_if(Mappings.begin(), Mappings.end(), FindMappingByAction);
-    if (EntryIt == Mappings.end())
+    if (IsMouseWheelAxis(binding.primitive))
     {
-        Mappings.push_back(Entry{Action, std::move(NewMapping)});
-        return Mappings.back().Mapping.get();
+        return binding.trigger == AxisChangedRelative;
     }
-
-    RNDR_LOG_WARNING("InputContext::CreateMapping: Overriding existing mapping entry!");
-    EntryIt->Mapping = std::move(NewMapping);
-    return EntryIt->Mapping.get();
-}
-
-void rndr::InputContext::AddBinding(const InputAction& Action,
-                                    InputPrimitive Primitive,
-                                    InputTrigger Trigger,
-                                    real Modifier)
-{
-    const auto FindMappingByAction = [&](const InputContext::Entry& Entry)
-    { return Entry.Action == Action; };
-
-    auto EntryIt = std::find_if(Mappings.begin(), Mappings.end(), FindMappingByAction);
-    if (EntryIt == Mappings.end())
+    if (IsAxis(binding.primitive))
     {
-        RNDR_LOG_ERROR("InputContext::AddBinding: Failed to find mapping based on action %s",
-                       Action.c_str());
-        return;
+        return binding.trigger == AxisChangedAbsolute || binding.trigger == AxisChangedRelative;
     }
-
-    InputMapping* Mapping = EntryIt->Mapping.get();
-
-    const auto FindBindingMatch = [&](const InputBinding& Binding)
-    { return Binding.Primitive == Primitive && Binding.Trigger == Trigger; };
-
-    auto BindingIt =
-        std::find_if(Mapping->Bindings.begin(), Mapping->Bindings.end(), FindBindingMatch);
-    if (BindingIt == Mapping->Bindings.end())
-    {
-        Mapping->Bindings.push_back(InputBinding{Primitive, Trigger, Modifier});
-    }
-    else
-    {
-        *BindingIt = {Primitive, Trigger, Modifier};
-    }
-}
-
-const rndr::InputMapping* rndr::InputContext::GetMapping(const InputAction& Action)
-{
-    const auto FindMappingByAction = [&](const InputContext::Entry& Entry)
-    { return Entry.Action == Action; };
-
-    auto EntryIt = std::find_if(Mappings.begin(), Mappings.end(), FindMappingByAction);
-    return EntryIt != Mappings.end() ? EntryIt->Mapping.get() : nullptr;
+    return false;
 }

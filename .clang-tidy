@@ -23,24 +23,28 @@ Checks: '-*,
          -readability-identifier-length,
          -readability-uppercase-literal-suffix,
          -readability-function-cognitive-complexity,
+         -readability-redundant-preprocessor,
          misc-*,
          -misc-non-private-member-variables-in-classes,
          google-*'
 HeaderFilterRegex: 'rndr/.*\.h'
 CheckOptions:
-    readability-identifier-naming.LocalVariableCase: 'CamelCase'
-    readability-identifier-naming.PrivateMemberCase: 'CamelCase'
+    readability-identifier-naming.LocalVariableCase: 'lower_case'
+    readability-identifier-naming.PrivateMemberCase: 'lower_case'
     readability-identifier-naming.PrivateMemberPrefix: 'm_'
-    readability-identifier-naming.ProtectedMemberCase: 'CamelCase'
+    readability-identifier-naming.ProtectedMemberCase: 'lower_case'
     readability-identifier-naming.ProtectedMemberPrefix: 'm_'
-    readability-identifier-naming.PublicMemberCase: 'CamelCase'
-    readability-identifier-naming.ConstexprVariableCase: 'CamelCase'
-    readability-identifier-naming.ConstexprVariablePrefix: 'k'
-    readability-identifier-naming.StaticVariableCase: 'CamelCase'
+    readability-identifier-naming.PublicMemberCase: 'lower_case'
+    readability-identifier-naming.ConstexprVariableCase: 'lower_case'
+    readability-identifier-naming.ConstexprVariablePrefix: 'k_'
+    readability-identifier-naming.StaticVariableCase: 'lower_case'
     readability-identifier-naming.StaticVariablePrefix: 's_'
-    readability-identifier-naming.GlobalVariableCase: 'CamelCase'
+    readability-identifier-naming.GlobalVariableCase: 'lower_case'
+    readability-identifier-naming.GlobalVariablePrefix: 'g_'
+    readability-identifier-naming.ParameterCase: "lower_case"
+    readability-identifier-naming.PointerParameterCase: "lower_case"
+    readability-identifier-naming.NamespaceCase: 'CamelCase'
     readability-identifier-naming.ClassCase: 'CamelCase'
     readability-identifier-naming.ClassMethodCase: 'CamelCase'
     readability-identifier-naming.StructCase: 'CamelCase'
-    readability-identifier-naming.ParameterCase: 'CamelCase'
     readability-inconsistent-declaration-parameter-name.Strict: 'true'

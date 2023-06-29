@@ -11,7 +11,7 @@
 #include "math/point2.h"
 #include "math/vector2.h"
 
-#include "rndr/core/fileutils.h"
+#include "rndr/core/file.h"
 #include "rndr/core/log.h"
 
 #include "rndr/render/dx11/dx11graphicscontext.h"

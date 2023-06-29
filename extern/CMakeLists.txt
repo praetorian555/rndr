@@ -7,3 +7,7 @@ endif ()
 if (NOT TARGET stb_truetype)
     add_subdirectory(stb_truetype)
 endif ()
+
+if (NOT TARGET glad)
+    add_subdirectory(glad)
+endif ()

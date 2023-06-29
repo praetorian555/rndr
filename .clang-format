@@ -1,6 +1,6 @@
 BasedOnStyle: Chromium
 BreakBeforeBraces: Allman
-ColumnLimit: '100'
+ColumnLimit: '140'
 IndentWidth: '4'
 Language: Cpp
 TabWidth: '4'
@@ -8,3 +8,6 @@ UseTab: Never
 KeepEmptyLinesAtTheStartOfBlocks: 'true'
 AccessModifierOffset: '-4'
 SortIncludes: 'true'
+BinPackArguments: 'false'
+BreakBeforeBinaryOperators: NonAssignment
+AllowAllArgumentsOnNextLine: 'false'

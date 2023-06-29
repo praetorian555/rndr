@@ -16,31 +16,29 @@ jobs:
       fail-fast: false
       matrix:
         config:
-        - name: "MSVC Debug"
+        - name: "MSVC Debug OpenGL"
           os: windows-latest
           build_type: "Debug"
-          unity: OFF
-        - name: "MSVC Debug Unity"
-          os: windows-latest
-          build_type: "Debug"
-          unity: ON
-        - name: "MSVC Release"
+        - name: "MSVC Release OpenGL"
           os: windows-latest
           build_type: "Release"
-          unity: OFF
-        - name: "MSVC Release Unity"
-          os: windows-latest
-          build_type: "Release"
-          unity: ON
     name: ${{matrix.config.name}}
     runs-on: ${{matrix.config.os}}
     steps:
     - uses: actions/checkout@v3
+    - uses: GuillaumeFalourd/setup-windows10-sdk-action@v1.11
+      with:
+        sdk-version: 22621
 
+    - name: Build new SDK
+      shell: bash
+      run: |
+        cmake -DCMAKE_SYSTEM_VERSION=10.0.20348.0
+        cmake --build .
     - name: Configure CMake
       # Configure CMake in a 'build' subdirectory. `CMAKE_BUILD_TYPE` is only required if you are using a single-configuration generator such as make.
       # See https://cmake.org/cmake/help/latest/variable/CMAKE_BUILD_TYPE.html?highlight=cmake_build_type
-      run: cmake -B ${{github.workspace}}/build -DRNDR_UNITY=${{matrix.config.unity}} -DRNDR_SANITIZER=OFF -DRNDR_SPDLOG=ON -DRNDR_DX11=ON
+      run: cmake -B ${{github.workspace}}/build -DRNDR_UNITY=OFF -DRNDR_SANITIZER=OFF -DRNDR_DX11=OFF
 
     - name: Build
       # Build your program with the given configuration
@@ -49,5 +47,4 @@ jobs:
     - name: Test
       working-directory: ${{github.workspace}}/build
       # Execute tests defined by the CMake configuration.
-      # See https://cmake.org/cmake/help/latest/manual/ctest.1.html for more detail
-      run: ctest -C ${{matrix.config.build_type}}
+      run: ctest -C ${{matrix.config.build_type}} --output-on-failure

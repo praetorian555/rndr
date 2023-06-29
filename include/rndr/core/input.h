@@ -1,160 +1,303 @@
 #pragma once
 
 #include <functional>
-#include <memory>
-#include <optional>
-#include <queue>
-#include <string>
-#include <variant>
-#include <vector>
 
 #include "math/point2.h"
 #include "math/vector2.h"
 
 #include "rndr/core/base.h"
-#include "rndr/core/inputprimitives.h"
+#include "rndr/core/input-primitives.h"
+#include "rndr/core/ref.h"
+#include "rndr/core/scope-ptr.h"
+#include "rndr/core/span.h"
+#include "rndr/core/string.h"
+#include "rndr/core/forward-def-windows.h"
 
-namespace rndr
+namespace Rndr
 {
 
 /**
  * User defined input action.
  */
-using InputAction = std::string;
+struct InputAction
+{
+public:
+    InputAction() = default;
+    explicit InputAction(String name);
 
+    [[nodiscard]] const String& GetName() const;
+    [[nodiscard]] bool IsValid() const;
+
+    bool operator==(const InputAction& other) const = default;
+
+private:
+    String m_name;
+};
+
+/**
+ * Represents an input event that can be bound to an input action.
+ */
 struct InputBinding
 {
-    InputPrimitive Primitive;
-    InputTrigger Trigger;
+    InputPrimitive primitive;
+    InputTrigger trigger;
+    real modifier = MATH_REALC(1.0);
 
-    real Modifier = 1.0;
+    /**
+     * Compares two input bindings. The modifier is not considered.
+     * @param other The other input binding to compare.
+     * @return Returns true if the input bindings are equal, false otherwise.
+     */
+    bool operator==(const InputBinding& other) const;
 };
 
+/**
+ * Represents a callback that is invoked when an input action is triggered.
+ */
 using InputCallback =
-    std::function<void(InputPrimitive Primitive, InputTrigger Trigger, real Value)>;
+    std::function<void(InputPrimitive primitive, InputTrigger trigger, real value)>;
 
 /**
- * Maps a user-defined action to the array of input bindings and callback function.
+ * Helper struct to initialize an input action in the input context.
  */
-struct InputMapping
+struct InputActionData
 {
-    InputAction Action;
-    std::vector<InputBinding> Bindings;
-    InputCallback Callback;
-
-    InputMapping(InputAction Action, InputCallback Callback)
-        : Action(std::move(Action)), Callback(std::move(Callback))
-    {
-    }
+    InputCallback callback = nullptr;
+    /** If null, callback will be called for any window triggering one of the bindings. */
+    NativeWindowHandle native_window = nullptr;
+    Span<InputBinding> bindings;
 };
 
 /**
- * Represents a collection of input mappings that can be used to handle input events.
+ * Represents a collection of mappings between input actions and input bindings and callbacks.
  */
-struct InputContext
+class InputContext
 {
-    struct Entry
-    {
-        InputAction Action;
-        std::unique_ptr<InputMapping> Mapping;
-    };
+public:
+    /**
+     * Creates a new input context with an empty name.
+     */
+    InputContext();
 
-    std::vector<Entry> Mappings;
+    /**
+     * Creates a new input context.
+     * @param name Name of the input context.
+     */
+    explicit InputContext(String name);
 
-    InputMapping* CreateMapping(const InputAction& Action, const InputCallback& Callback);
-    void AddBinding(const InputAction& Action,
-                    InputPrimitive Primitive,
-                    InputTrigger Trigger,
-                    real Modifier = 1.0);
+    /**
+     * Default destructor.
+     */
+    ~InputContext();
 
-    const InputMapping* GetMapping(const InputAction& Action);
+    /**
+     * Returns the name of the input context.
+     * @return Returns the name of the input context.
+     */
+    [[nodiscard]] const String& GetName() const;
+
+    /**
+     * Adds an input action to the input context.
+     * @param action The input action to add.
+     * @param data The data associated with the input action. The callback can't be null.
+     * @return Returns true if the input action was successfully added.
+     */
+    bool AddAction(const InputAction& action, const InputActionData& data);
+
+    /**
+     * Add an input binding to an input action.
+     * @param action Action to add the binding to.
+     * @param binding Binding to add to the action.
+     * @return Returns true if the binding was successfully added.
+     */
+    bool AddBindingToAction(const InputAction& action, const InputBinding& binding);
+
+    /**
+     * Removes an input action from the input context.
+     * @param action The input action to remove.
+     * @return Returns true if the input action was successfully removed.
+     */
+    bool RemoveBindingFromAction(const InputAction& action, const InputBinding& binding);
+
+    /**
+     * Checks if the input context contains an input action.
+     * @param action The input action to check.
+     * @return Returns true if the input context contains the input action.
+     */
+    [[nodiscard]] bool ContainsAction(const InputAction& action) const;
+
+    /**
+     * Returns the callback associated with an input action.
+     * @param action The input action to get the callback for.
+     * @return Returns the callback associated with the input action.
+     */
+    [[nodiscard]] InputCallback GetActionCallback(const InputAction& action) const;
+
+    /**
+     * Returns the input bindings associated with an input action.
+     * @param action The input action to get the bindings for.
+     * @return Returns the input bindings associated with the input action.
+     */
+    [[nodiscard]] Span<InputBinding> GetActionBindings(const InputAction& action) const;
+
+private:
+    ScopePtr<struct InputContextData> m_context_data;
+    String m_name;
+
+    // Implementation details. ////////////////////////////////////////////////////////////////////
+    friend class InputSystem;
 };
 
+/**
+ * Represents a system that handles input events.
+ *
+ * The input system's lifetime is controlled using the Init and Destroy functions. The input system
+ * is initialized by the rndr::Init function and destroyed by the rndr::Destroy function. In case
+ * that the input system is not initialized all functions will return false.
+ *
+ * The input system is a stack based system. Each input context is pushed to the top of the stack
+ * and becomes the active input context. Only the context on top of the stack will process the input
+ * event. The input context lifetime is not managed by the input system.
+ *
+ * Events are queued using the Submit*Event family of functions. The events are queued, and
+ * processed when the ProcessEvents function is called.
+ *
+ * The system is not thread-safe.
+ */
 class InputSystem
 {
 public:
-    InputSystem();
-    ~InputSystem();
+    /**
+     * Initializes the input system.
+     * @return Returns true if the input system was successfully initialized.
+     */
+    static bool Init();
 
-    InputSystem(const InputSystem& Other) = delete;
-    InputSystem& operator=(const InputSystem& Other) = delete;
+    /**
+     * Destroys the input system.
+     * @return Returns true if the input system was successfully destroyed.
+     */
+    static bool Destroy();
 
-    InputSystem(InputSystem&& Other) = delete;
-    InputSystem& operator=(InputSystem&& Other) = delete;
+    /**
+     * Returns the currently active input context.
+     * @return Returns the input context on top of the stack.
+     */
+    static InputContext& GetCurrentContext();
 
-    void SubmitButtonEvent(NativeWindowHandle Window,
-                           InputPrimitive Primitive,
-                           InputTrigger Trigger);
-    void SubmitMousePositionEvent(NativeWindowHandle Window,
-                                  const math::Point2& Position,
-                                  const math::Vector2& ScreenSize);
-    void SubmitRelativeMousePositionEvent(NativeWindowHandle Window,
-                                          const math::Vector2& DeltaPosition,
-                                          const math::Vector2& ScreenSize);
-    void SubmitMouseWheelEvent(NativeWindowHandle Window, int DeltaWheel);
+    /**
+     * Pushes a new input context to the top of the stack making it the active context.
+     * @param context Context to be pushed to the top of the stack.
+     * @note The input context lifetime is not managed by the input system.
+     */
+    static bool PushContext(const InputContext& context);
 
-    void Update(real DeltaSeconds);
+    /**
+     * Pops the input context from the top of the stack. This does not destroy the context.
+     */
+    static bool PopContext();
 
-    InputContext* GetContext();
+    /**
+     * Processes all pending input events.
+     * @param delta_seconds Time elapsed since the last frame.
+     */
+    static bool ProcessEvents(real delta_seconds);
 
-    static bool IsButton(InputPrimitive Primitive);
-    static bool IsMouseButton(InputPrimitive Primitive);
-    static bool IsKeyboardButton(InputPrimitive Primitive);
+    /**
+     * Submits a button event to the input system.
+     * @param window Native window handle in which the event was detected.
+     * @param primitive Input primitive that was triggered.
+     * @param trigger Input trigger detected. For buttons this is InputTrigger::ButtonDown,
+     * InputTrigger::ButtonUp or InputTrigger::DoubleClick.
+     */
+    static bool SubmitButtonEvent(NativeWindowHandle window, InputPrimitive primitive, InputTrigger trigger);
 
-    static bool IsAxis(InputPrimitive Primitive);
-    static bool IsMouseAxis(InputPrimitive Primitive);
+    /**
+     * Submits a mouse position event to the input system.
+     * @param window Native window handle in which the event was detected.
+     * @param position Mouse position in screen coordinates, where the origin is in the bottom left
+     * corner.
+     * @param screen_size Size of the screen in pixels.
+     */
+    static bool SubmitMousePositionEvent(NativeWindowHandle window,
+                                         const math::Point2& position,
+                                         const math::Vector2& screen_size);
 
-    [[nodiscard]] math::Point2 GetMousePosition() const;
+    /**
+     * Submits a relative mouse position event to the input system. Used in case of infinite cursor
+     * mode.
+     * @param window Native window handle in which the event was detected.
+     * @param delta_position Relative mouse position in screen coordinates, relative to the last
+     * mouse position. Positive values mean the mouse moved to the right or up.
+     * @param screen_size Size of the screen in pixels.
+     */
+    static bool SubmitRelativeMousePositionEvent(NativeWindowHandle window,
+                                                 const math::Vector2& delta_position,
+                                                 const math::Vector2& screen_size);
+
+    /**
+     * Submits a mouse wheel event to the input system.
+     * @param window Native window handle in which the event was detected.
+     * @param delta_wheel Number of ticks the mouse wheel was rotated. Positive values mean the
+     * wheel was rotated forward, away from the user.
+     */
+    static bool SubmitMouseWheelEvent(NativeWindowHandle window, int delta_wheel);
+
+    /**
+     * Helper function to check if the primitive is a button.
+     * @param primitive Input primitive to check.
+     * @return Returns true if the primitive is a button.
+     */
+    static bool IsButton(InputPrimitive primitive);
+
+    /**
+     * Helper function to check if the primitive is a mouse button.
+     * @param primitive Input primitive to check.
+     * @return Returns true if the primitive is a mouse button.
+     */
+    static bool IsMouseButton(InputPrimitive primitive);
+
+    /**
+     * Helper function to check if the primitive is a keyboard button.
+     * @param primitive Input primitive to check.
+     * @return Returns true if the primitive is a keyboard button.
+     */
+    static bool IsKeyboardButton(InputPrimitive primitive);
+
+    /**
+     * Helper function to check if the primitive is an axis.
+     * @param primitive Input primitive to check.
+     * @return Returns true if the primitive is an axis.
+     */
+    static bool IsAxis(InputPrimitive primitive);
+
+    /**
+     * Helper function to check if the primitive is a mouse wheel.
+     * @param primitive Input primitive to check.
+     * @return Returns true if the primitive is a mouse wheel.
+     */
+    static bool IsMouseWheelAxis(InputPrimitive primitive);
+
+    /**
+     * Helper function to check if the given binding has a valid combination of primitives and
+     * triggers.
+     * @param binding Input binding to check.
+     * @return Returns true if the binding is valid.
+     */
+    static bool IsBindingValid(const InputBinding& binding);
 
 private:
-    // Private types
-
-    struct ButtonEvent
-    {
-        rndr::InputPrimitive Primitive;
-        rndr::InputTrigger Trigger;
-    };
-
-    struct MousePositionEvent
-    {
-        math::Point2 Position;
-        math::Vector2 ScreenSize;
-    };
-
-    struct RelativeMousePositionEvent
-    {
-        math::Vector2 Position;
-        math::Vector2 ScreenSize;
-    };
-
-    struct MouseWheelEvent
-    {
-        int DeltaWheel = 0;
-    };
-
-    using EventVariant =
-        std::variant<ButtonEvent, MousePositionEvent, RelativeMousePositionEvent, MouseWheelEvent>;
-    struct Event
-    {
-        NativeWindowHandle WindowHandle;
-        EventVariant Data;
-    };
-
-    // Private methods
-
-    void ProcessEvent(const ButtonEvent& Event);
-    void ProcessEvent(const MousePositionEvent& Event);
-    void ProcessEvent(const RelativeMousePositionEvent& Event);
-    void ProcessEvent(const MouseWheelEvent& Event);
-
-    // Private fields
-
-    InputContext* m_Context = nullptr;
-    std::optional<math::Point2> m_AbsolutePosition;
-
-    std::queue<Event> m_Events;
+    static ScopePtr<struct InputSystemData> g_system_data;
 };
 
-#define RNDR_BIND_INPUT_CALLBACK(FuncPtr, This) RNDR_BIND_THREE_PARAM(This, FuncPtr)
+/**
+ * Helper macro to bind a member function to an input callback.
+ */
+#define RNDR_BIND_INPUT_CALLBACK(this, func_ptr)                       \
+    std::bind(&std::remove_reference<decltype(*this)>::type::func_ptr, \
+              this,                                                    \
+              std::placeholders::_1,                                   \
+              std::placeholders::_2,                                   \
+              std::placeholders::_3)
 
-}  // namespace rndr
+}  // namespace Rndr

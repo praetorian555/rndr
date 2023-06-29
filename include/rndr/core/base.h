@@ -1,84 +1,129 @@
 #pragma once
 
-#include <cassert>
-#include <cstdint>
-#include <functional>
-#include <memory>
-#include <type_traits>
+#include <source_location>
 
-#if WIN32
-#define RNDR_WINDOWS 1
-#endif  // WIN32
+#include "rndr/core/definitions.h"
 
-#if !RNDR_WINDOWS
-#error "Platform not supported!"
-#endif  // !RNDR_WINDOWS
-
-#if RNDR_WINDOWS
-#define RNDR_LITTLE_ENDIAN 1
-#else
-#define RNDR_BIG_ENDIAN 1
-#endif  // RNDR_WINDOWS
-
-#if !NDEBUG
-#define RNDR_DEBUG 1
-#endif  // !NDEBUG
-
-#if !RNDR_RASTER && !RNDR_OPENGL && !RNDR_DX11 && !RNDR_VULKAN && !RNDR_METAL
-#define RNDR_RASTER
-#endif
-
-#if defined RNDR_DX11
-#define RNDR_LEFT_HANDED 1
-#else
-#define RNDR_RIGHT_HANDED 1
-#endif
-
-// Defines precision for floating-point type.
-#if !defined(RNDR_REAL_AS_DOUBLE)
-using real = float;
-#define RNDR_REALC(X) X##f
-#else
-using real = double;
-#define RNDR_REALC(X) X
-#endif  // !defined(RNDR_REAL_AS_DOUBLE)
-
-#if RNDR_WINDOWS
-#define RNDR_OPTIMIZE_OFF __pragma(optimize("", off))
-#define RNDR_OPTIMIZE_ON __pragma(optimize("", on))
-#define RNDR_ALIGN(Amount) __declspec(align(Amount))
-#endif  // RNDR_WINDOWS
-
-/**
- * Default gamma value.
- */
-#define RNDR_GAMMA (2.4)
-
-// Converts methods in the classes to the std::function
-
-#define RNDR_BIND_NO_PARAMS(This, FuncPtr) std::bind(FuncPtr, This)
-#define RNDR_BIND_ONE_PARAM(This, FuncPtr) std::bind(FuncPtr, This, std::placeholders::_1)
-#define RNDR_BIND_TWO_PARAM(This, FuncPtr) \
-    std::bind(FuncPtr, This, std::placeholders::_1, std::placeholders::_2)
-#define RNDR_BIND_THREE_PARAM(This, FuncPtr) \
-    std::bind(FuncPtr, This, std::placeholders::_1, std::placeholders::_2, std::placeholders::_3)
-#define RNDR_BIND_FOUR_PARAM(This, FuncPtr)                                                       \
-    std::bind(FuncPtr, This, std::placeholders::_1, std::placeholders::_2, std::placeholders::_3, \
-              std::placeholders::_4)
-#define RNDR_BIND_FIVE_PARAM(This, FuncPtr)                                                       \
-    std::bind(FuncPtr, This, std::placeholders::_1, std::placeholders::_2, std::placeholders::_3, \
-              std::placeholders::_4, std::placeholders::_5)
-
-#define RNDR_ENUM_TO_TYPE(EnumType, Value) static_cast<std::underlying_type_t<EnumType>>(Value)
-
-#define RNDR_UNUSED(Expr) (void)(Expr)
-
-namespace rndr
+namespace Rndr
 {
 
-/**
- * Opaque type that represents an OS window handle.
- */
-using NativeWindowHandle = void*;
+// Types ///////////////////////////////////////////////////////////////////////////////////////////
 
-}  // namespace rndr
+enum class LogLevel
+{
+    Error,
+    Warning,
+    Debug,
+    Info,
+    Trace
+};
+
+/**
+ * Logger interface.
+ */
+struct Logger
+{
+    virtual ~Logger() = default;
+
+    virtual void Log(const std::source_location& source_location,
+                     LogLevel log_level,
+                     const char* message) = 0;
+};
+
+struct RndrDesc
+{
+    /** User specified logger. If no logger is provided, the default logger is used. */
+    Logger* user_logger = nullptr;
+
+    /** If we should enable the input system. Defaults to no. */
+    bool enable_input_system = false;
+
+    /** If we should enable the CPU tracer. Defaults to no. */
+    bool enable_cpu_tracer = false;
+};
+
+// API /////////////////////////////////////////////////////////////////////////////////////////////
+
+/**
+ * Initializes the Rndr library instance. There can be only one.
+ * @param desc Configuration for the library.
+ * @return True if the library was initialized successfully.
+ */
+bool Init(const RndrDesc& desc = RndrDesc{});
+
+/**
+ * Destroys the Rndr library instance.
+ * @return True if the library was destroyed successfully.
+ */
+bool Destroy();
+
+/**
+ * Checks if the logger is valid.
+ * @param logger Logger to check.
+ * @return True if the logger is valid.
+ */
+bool IsValid(const Logger& logger);
+
+/**
+ * Gets the library's logger.
+ * @return Library's logger.
+ */
+const Logger& GetLogger();
+
+/**
+ * Logs a message using the user specified logger. If no logger is provided, the default logger is
+ * used.
+ * @param file File where the log was called.
+ * @param line Line where the log was called.
+ * @param function_name Function where the log was called.
+ * @param log_level Log level of the message.
+ * @param format Format string for the message.
+ * @param ... Arguments for the format string.
+ */
+void Log(const std::source_location& source_location,
+         Rndr::LogLevel log_level,
+         const char* format,
+         ...);
+
+}  // namespace Rndr
+
+// Helper macros ///////////////////////////////////////////////////////////////////////////////////
+
+/**
+ * Helper macro to allocate and create a new object.
+ * @param type Type of the object to create.
+ * @param ... Arguments for the object's constructor.
+ */
+#define RNDR_NEW(type, ...) \
+    new type                \
+    {                       \
+        __VA_ARGS__         \
+    }
+
+/**
+ * Helper macro to invoke destructor and to deallocate memory.
+ * @param type Type of the object to delete.
+ * @param ptr Pointer to the object to delete.
+ */
+#define RNDR_DELETE(type, ptr) delete ptr
+
+/**
+ * Helper macro to invoke destructor and to deallocate memory for an array.
+ * @param type Type of the elements of the array to delete.
+ * @param ptr Pointer to the start of the array to delete.
+ */
+#define RNDR_DELETE_ARRAY(type, ptr) delete[] ptr
+
+/**
+ * Helper macros to log messages.
+ */
+#define RNDR_LOG_ERROR(format, ...) \
+    Rndr::Log(std::source_location::current(), Rndr::LogLevel::Error, format, __VA_ARGS__)
+#define RNDR_LOG_WARNING(format, ...) \
+    Rndr::Log(std::source_location::current(), Rndr::LogLevel::Warning, format, __VA_ARGS__)
+#define RNDR_LOG_DEBUG(format, ...) \
+    Rndr::Log(std::source_location::current(), Rndr::LogLevel::Debug, format, __VA_ARGS__)
+#define RNDR_LOG_INFO(format, ...) \
+    Rndr::Log(std::source_location::current(), Rndr::LogLevel::Info, format, __VA_ARGS__)
+#define RNDR_LOG_TRACE(format, ...) \
+    Rndr::Log(std::source_location::current(), Rndr::LogLevel::Trace, format, __VA_ARGS__)

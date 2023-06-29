@@ -1,11 +1,14 @@
 #pragma once
 
 #include <functional>
+// TODO(Marko): Remove this once we have custom containers
 #include <map>
 
-using DelegateHandle = int;
+namespace Rndr
+{
 
-static constexpr DelegateHandle kInvalidDelegateHandle = -1;
+using DelegateHandle = int;
+static constexpr DelegateHandle k_invalid_delegate_handle = -1;
 
 template <typename ReturnType, typename... Args>
 struct Delegate;
@@ -15,21 +18,24 @@ struct Delegate<ReturnType(Args...)>
 {
     using Function = std::function<ReturnType(Args...)>;
 
-    void Set(Function Functor) { m_Functor = Functor; }
+    void Bind(Function functor) { m_functor = functor; }
+    void Unbind() { m_functor = nullptr; }
+
+    [[nodiscard]] bool IsBound() const { return m_functor != nullptr; }
 
     template <typename... ExecArgs>
-    ReturnType Execute(ExecArgs&&... Arguments)
+    ReturnType Execute(ExecArgs&&... arguments)
     {
-        if (m_Functor)
+        if (m_functor)
         {
-            return m_Functor(std::forward<ExecArgs>(Arguments)...);
+            return m_functor(std::forward<ExecArgs>(arguments)...);
         }
 
         return ReturnType{};
     }
 
 private:
-    Function m_Functor;
+    Function m_functor;
 };
 
 template <typename... Args>
@@ -40,37 +46,49 @@ struct MultiDelegate<void(Args...)>
 {
     using Function = std::function<void(Args...)>;
 
-    DelegateHandle Add(Function Functor)
+    DelegateHandle Bind(Function functor)
     {
-        const DelegateHandle Handle = m_HandleGenerator++;
-        m_Functors.insert(std::make_pair(Handle, Functor));
-        return Handle;
+        const DelegateHandle handle = m_handle_generator++;
+        m_functors.insert(std::make_pair(handle, functor));
+        return handle;
     }
 
-    void Remove(DelegateHandle Handle)
+    void Unbind(DelegateHandle handle)
     {
-        if (Handle == kInvalidDelegateHandle)
+        if (handle == k_invalid_delegate_handle)
         {
             return;
         }
 
-        auto Iterator = m_Functors.find(Handle);
-        if (Iterator != m_Functors.end())
+        auto iterator = m_functors.find(handle);
+        if (iterator != m_functors.end())
         {
-            m_Functors.erase(Iterator);
+            m_functors.erase(iterator);
         }
     }
 
-    template <typename... ExecArgs>
-    void Execute(ExecArgs&&... Arguments)
+    [[nodiscard]] bool IsBound(DelegateHandle handle) const
     {
-        for (auto& Pair : m_Functors)
+        return m_functors.find(handle) != m_functors.end();
+    }
+
+    [[nodiscard]] bool IsAnyBound() const
+    {
+        return !m_functors.empty();
+    }
+
+    template <typename... ExecArgs>
+    void Execute(ExecArgs&&... arguments)
+    {
+        for (auto& pair : m_functors)
         {
-            Pair.second(std::forward<ExecArgs>(Arguments)...);
+            pair.second(std::forward<ExecArgs>(arguments)...);
         }
     }
 
 private:
-    std::map<DelegateHandle, Function> m_Functors;
-    DelegateHandle m_HandleGenerator = 0;
+    std::map<DelegateHandle, Function> m_functors;
+    DelegateHandle m_handle_generator = 0;
 };
+
+}  // namespace Rndr
