@@ -980,7 +980,6 @@ Rndr::Image::Image(const GraphicsContext& graphics_context,
     : m_desc(desc)
 {
     RNDR_UNUSED(graphics_context);
-    assert(desc.type == ImageType::Image2D);
 
     const GLenum target = FromImageInfoToTarget(desc.type, desc.use_mips);
     glCreateTextures(target, 1, &m_native_texture);
@@ -1035,6 +1034,39 @@ Rndr::Image::Image(const GraphicsContext& graphics_context,
                             format,
                             data_type,
                             init_data.data());
+    }
+    else if (desc.type == ImageType::CubeMap)
+    {
+        glEnable(GL_TEXTURE_CUBE_MAP_SEAMLESS);
+        const GLenum internal_format = FromPixelFormatToInternalFormat(desc.pixel_format);
+        const GLenum format = FromPixelFormatToFormat(desc.pixel_format);
+        const GLenum data_type = FromPixelFormatToDataType(desc.pixel_format);
+        glTextureStorage2D(m_native_texture,
+                           mip_map_levels,
+                           internal_format,
+                           desc.width,
+                           desc.height);
+        constexpr int k_face_count = 6;
+        for (int i = 0; i < k_face_count; i++)
+        {
+            constexpr int32_t k_mip_level = 0;
+            constexpr int32_t k_x_offset = 0;
+            constexpr int32_t k_y_offset = 0;
+            constexpr int32_t k_depth = 1;
+            const int32_t z_offset = i;
+            const uint8_t* data = init_data.data() + i * desc.width * desc.height * FromPixelFormatToPixelSize(desc.pixel_format);
+            glTextureSubImage3D(m_native_texture,
+                                k_mip_level,
+                                k_x_offset,
+                                k_y_offset,
+                                z_offset,
+                                desc.width,
+                                desc.height,
+                                k_depth,
+                                format,
+                                data_type,
+                                data);
+        }
     }
     else
     {
