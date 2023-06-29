@@ -139,8 +139,8 @@ void Run()
         Rndr::File::SaveImage(image_to_save, "screenshot.png");
 
 #if RNDR_ETC2COMP
-        Rndr::Array<float> image_to_save_float(image_to_save.GetSize());
-        for (size_t i = 0; i < image_to_save.GetSize(); ++i)
+        Rndr::Array<float> image_to_save_float(image_to_save.GetSize2D());
+        for (size_t i = 0; i < image_to_save.GetSize2D(); ++i)
         {
             image_to_save_float[i] = static_cast<float>(image_to_save.GetData()[i]) / 255.0f;
         }

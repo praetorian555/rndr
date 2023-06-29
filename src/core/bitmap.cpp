@@ -1,19 +1,20 @@
 #include "rndr/core/bitmap.h"
 
-Rndr::Bitmap::Bitmap(int width, int height, Rndr::PixelFormat pixel_format, const uint8_t* data)
-    : m_width(width), m_height(height), m_pixel_format(pixel_format)
+Rndr::Bitmap::Bitmap(int width, int height, int depth, Rndr::PixelFormat pixel_format, const uint8_t* data)
+    : m_width(width), m_height(height), m_depth(depth), m_pixel_format(pixel_format)
 {
-    if (width <= 0 || height <= 0 || !IsPixelFormatSupported(pixel_format))
+    if (width <= 0 || height <= 0 || depth <= 0 || !IsPixelFormatSupported(pixel_format))
     {
         m_data.clear();
         m_width = 0;
         m_height = 0;
+        m_depth = 0;
         m_comp_count = 0;
         return;
     }
 
     m_comp_count = FromPixelFormatToComponentCount(pixel_format);
-    const int buffer_size = GetSize();
+    const int buffer_size = GetSize3D();
     m_data.resize(buffer_size);
     if (data != nullptr)
     {
@@ -40,25 +41,27 @@ int Rndr::Bitmap::GetPixelSize() const
     return FromPixelFormatToPixelSize(m_pixel_format);
 }
 
-math::Vector4 Rndr::Bitmap::GetPixel(int x, int y) const
+math::Vector4 Rndr::Bitmap::GetPixel(int x, int y, int z) const
 {
     assert(x >= 0 && x < m_width);
     assert(y >= 0 && y < m_height);
+    assert(z >= 0 && z < m_depth);
     assert(m_get_pixel_func != nullptr);
-    return (*this.*m_get_pixel_func)(x, y);
+    return (*this.*m_get_pixel_func)(x, y, z);
 }
 
-void Rndr::Bitmap::SetPixel(int x, int y, const math::Vector4& pixel)
+void Rndr::Bitmap::SetPixel(int x, int y, int z, const math::Vector4& pixel)
 {
     assert(x >= 0 && x < m_width);
     assert(y >= 0 && y < m_height);
+    assert(z >= 0 && z < m_depth);
     assert(m_set_pixel_func != nullptr);
-    (*this.*m_set_pixel_func)(x, y, pixel);
+    (*this.*m_set_pixel_func)(x, y, z, pixel);
 }
 
-math::Vector4 Rndr::Bitmap::GetPixelUnsignedByte(int x, int y) const
+math::Vector4 Rndr::Bitmap::GetPixelUnsignedByte(int x, int y, int z) const
 {
-    const int offset = (y * m_width + x) * m_comp_count;
+    const int offset = (z * m_width * m_height + y * m_width + x) * m_comp_count;
     const uint8_t* pixel = m_data.data() + offset;
     math::Vector4 result;
     constexpr float k_inv_255 = 1.0f / 255.0f;
@@ -81,9 +84,9 @@ math::Vector4 Rndr::Bitmap::GetPixelUnsignedByte(int x, int y) const
     return result;
 }
 
-void Rndr::Bitmap::SetPixelUnsignedByte(int x, int y, const math::Vector4& pixel)
+void Rndr::Bitmap::SetPixelUnsignedByte(int x, int y, int z, const math::Vector4& pixel)
 {
-    const int offset = (y * m_width + x) * m_comp_count;
+    const int offset = (z * m_width * m_height + y * m_width + x) * m_comp_count;
     uint8_t* pixel_ptr = m_data.data() + offset;
     constexpr float k_255 = 255.0f;
     if (m_comp_count > 0)
@@ -104,9 +107,9 @@ void Rndr::Bitmap::SetPixelUnsignedByte(int x, int y, const math::Vector4& pixel
     }
 }
 
-math::Vector4 Rndr::Bitmap::GetPixelFloat(int x, int y) const
+math::Vector4 Rndr::Bitmap::GetPixelFloat(int x, int y, int z) const
 {
-    const int offset = (y * m_width + x) * m_comp_count;
+    const int offset = (z * m_width * m_height + y * m_width + x) * m_comp_count;
     const float* pixel = reinterpret_cast<const float*>(m_data.data()) + offset;
     math::Vector4 result;
     if (m_comp_count > 0)
@@ -128,9 +131,9 @@ math::Vector4 Rndr::Bitmap::GetPixelFloat(int x, int y) const
     return result;
 }
 
-void Rndr::Bitmap::SetPixelFloat(int x, int y, const math::Vector4& pixel)
+void Rndr::Bitmap::SetPixelFloat(int x, int y, int z, const math::Vector4& pixel)
 {
-    const int offset = (y * m_width + x) * m_comp_count;
+    const int offset = (z * m_width * m_height + y * m_width + x) * m_comp_count;
     float* pixel_ptr = reinterpret_cast<float*>(m_data.data()) + offset;
     if (m_comp_count > 0)
     {

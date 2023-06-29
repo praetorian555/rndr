@@ -118,7 +118,7 @@ void Rndr::File::PrintShader(const Rndr::String& shader_contents)
 
 Rndr::Bitmap Rndr::File::ReadEntireImage(const String& file_path, PixelFormat desired_format)
 {
-    Bitmap invalid_bitmap = {-1, -1, PixelFormat::R8G8B8A8_UNORM_SRGB, {}};
+    Bitmap invalid_bitmap = {-1, -1, -1, PixelFormat::R8G8B8A8_UNORM_SRGB, {}};
     if (!Bitmap::IsPixelFormatSupported(desired_format))
     {
         RNDR_LOG_ERROR("Desired pixel format is not supported!");
@@ -149,7 +149,7 @@ Rndr::Bitmap Rndr::File::ReadEntireImage(const String& file_path, PixelFormat de
         }
         tmp_data = reinterpret_cast<uint8_t*>(tmp_data_float);
     }
-    Bitmap bitmap{width, height, desired_format, tmp_data};
+    Bitmap bitmap{width, height, 1, desired_format, tmp_data};
     stbi_image_free(tmp_data);
     return bitmap;
 }

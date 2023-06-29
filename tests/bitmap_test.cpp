@@ -13,7 +13,7 @@ TEST_CASE("Bitmap init", "[init]")
         REQUIRE(bitmap.GetComponentCount() == 4);
         REQUIRE(bitmap.GetPixelSize() == 4);
         REQUIRE(bitmap.GetRowSize() == 4);
-        REQUIRE(bitmap.GetSize() == 4);
+        REQUIRE(bitmap.GetSize2D() == 4);
         REQUIRE(bitmap.GetData() != nullptr);
     }
     SECTION("Default create and destroy with data")
@@ -26,7 +26,7 @@ TEST_CASE("Bitmap init", "[init]")
         REQUIRE(bitmap.GetComponentCount() == 4);
         REQUIRE(bitmap.GetPixelSize() == 4);
         REQUIRE(bitmap.GetRowSize() == 4);
-        REQUIRE(bitmap.GetSize() == 4);
+        REQUIRE(bitmap.GetSize2D() == 4);
         REQUIRE(bitmap.GetData() != nullptr);
         REQUIRE(bitmap.GetData()[0] == 1);
         REQUIRE(bitmap.GetData()[1] == 2);
@@ -43,7 +43,7 @@ TEST_CASE("Bitmap init", "[init]")
         REQUIRE(bitmap.GetComponentCount() == 4);
         REQUIRE(bitmap.GetPixelSize() == 4);
         REQUIRE(bitmap.GetRowSize() == 4);
-        REQUIRE(bitmap.GetSize() == 4);
+        REQUIRE(bitmap.GetSize2D() == 4);
         REQUIRE(bitmap.GetData() != nullptr);
     }
     SECTION("Create with depth param different then 1 and data")
@@ -57,7 +57,7 @@ TEST_CASE("Bitmap init", "[init]")
         REQUIRE(bitmap.GetComponentCount() == 4);
         REQUIRE(bitmap.GetPixelSize() == 4);
         REQUIRE(bitmap.GetRowSize() == 4);
-        REQUIRE(bitmap.GetSize() == 4);
+        REQUIRE(bitmap.GetSize2D() == 4);
         REQUIRE(bitmap.GetData() != nullptr);
         REQUIRE(bitmap.GetData()[0] == 1);
         REQUIRE(bitmap.GetData()[1] == 2);
@@ -93,7 +93,7 @@ TEST_CASE("Bitmap get", "[get]")
         REQUIRE(bitmap.GetComponentCount() == 4);
         REQUIRE(bitmap.GetPixelSize() == 4);
         REQUIRE(bitmap.GetRowSize() == 4);
-        REQUIRE(bitmap.GetSize() == 4);
+        REQUIRE(bitmap.GetSize2D() == 4);
         REQUIRE(bitmap.GetData() != nullptr);
         const math::Vector4 ref_pixel{1 / 255.0f, 2 / 255.0f, 3 / 255.0f, 4 / 255.0f};
         REQUIRE(math::IsEqual(bitmap.GetPixel(0, 0), ref_pixel, 0.000001f) == true);
@@ -109,7 +109,7 @@ TEST_CASE("Bitmap get", "[get]")
         REQUIRE(bitmap.GetComponentCount() == 4);
         REQUIRE(bitmap.GetPixelSize() == 16);
         REQUIRE(bitmap.GetRowSize() == 16);
-        REQUIRE(bitmap.GetSize() == 16);
+        REQUIRE(bitmap.GetSize2D() == 16);
         REQUIRE(bitmap.GetData() != nullptr);
         const math::Vector4 ref_pixel{1.0f, 2.0f, 3.0f, 4.0f};
         REQUIRE(math::IsEqual(bitmap.GetPixel(0, 0), ref_pixel, 0.000001f) == true);
@@ -128,7 +128,7 @@ TEST_CASE("Bitmap set", "[set]")
         REQUIRE(bitmap.GetComponentCount() == 4);
         REQUIRE(bitmap.GetPixelSize() == 4);
         REQUIRE(bitmap.GetRowSize() == 4);
-        REQUIRE(bitmap.GetSize() == 4);
+        REQUIRE(bitmap.GetSize2D() == 4);
         REQUIRE(bitmap.GetData() != nullptr);
         const math::Vector4 ref_pixel{1 / 255.0f, 2 / 255.0f, 3 / 255.0f, 4 / 255.0f};
         REQUIRE(math::IsEqual(bitmap.GetPixel(0, 0), ref_pixel, 0.000001f) == true);
@@ -147,7 +147,7 @@ TEST_CASE("Bitmap set", "[set]")
         REQUIRE(bitmap.GetComponentCount() == 4);
         REQUIRE(bitmap.GetPixelSize() == 16);
         REQUIRE(bitmap.GetRowSize() == 32);
-        REQUIRE(bitmap.GetSize() == 32);
+        REQUIRE(bitmap.GetSize2D() == 32);
         REQUIRE(bitmap.GetData() != nullptr);
         const math::Vector4 ref_pixel{5.0f, 6.0f, 7.0f, 8.0f};
         REQUIRE(math::IsEqual(bitmap.GetPixel(1, 0), ref_pixel, 0.000001f) == true);
