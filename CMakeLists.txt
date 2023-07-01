@@ -7,7 +7,6 @@ project(
         LANGUAGES CXX)
 
 # Library options
-option(RNDR_UNITY "Enable unity builds" OFF)
 option(RNDR_SANITIZER "Enable address sanitizer" OFF)
 option(RNDR_OPENGL "Use OpenGL API" ON)
 option(RNDR_SPDLOG "Use spdlog external library to implement default logging" ON)
@@ -16,7 +15,6 @@ option(RNDR_ASSIMP "Add wrapper around assimp library that can be used to import
 option(RNDR_ETC2COMP "Add wrapper around etc2comp library that can be used to compress textures" ON)
 option(RNDR_MESHOPTIMIZER "Add wrapper around meshoptimizer library that can be used to optimize meshes" ON)
 
-message(STATUS "RNDR_UNITY ${RNDR_UNITY}")
 message(STATUS "RNDR_SANITIZER ${RNDR_SANITIZER}")
 message(STATUS "RNDR_OPENGL ${RNDR_OPENGL}")
 message(STATUS "RNDR_SPDLOG ${RNDR_SPDLOG}")
@@ -65,11 +63,6 @@ if (CMAKE_PROJECT_NAME STREQUAL PROJECT_NAME)
     set(CMAKE_CXX_STANDARD_REQUIRED ON)
 endif ()
 
-# Enable unity build
-if (RNDR_UNITY)
-    set(CMAKE_UNITY_BUILD TRUE)
-endif ()
-
 include(FetchContent)
 
 # Include spdlog only if it is not already present
@@ -90,7 +83,6 @@ if (NOT TARGET math)
             GIT_REPOSITORY https://github.com/praetorian555/math
             GIT_TAG main
     )
-    set(MATH_UNITY ${RNDR_UNITY} CACHE BOOL "" FORCE)
     set(MATH_SANITIZER ${RNDR_SANITIZER} CACHE BOOL "" FORCE)
     FetchContent_MakeAvailable(math)
     set_target_properties(math PROPERTIES FOLDER Extern)

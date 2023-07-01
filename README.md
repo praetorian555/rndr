@@ -15,15 +15,6 @@ Optionally you should install _clang-format_ and add it to the path.
 
 ## Setup ##
 
-To clone the project and include all submodulues:
-
-	git clone --recurse-submodules <project_url>
-
-If you already cloned the project but forgot the --recurse-submodules you can use the following commands:
-
-	git submodule init
-	git submodule update
-
 To generate a build system go to the root of a project and use:
 
 	cmake -S <path_to_lib_root> -B <path_to_build_dir>
@@ -48,7 +39,6 @@ If you are using MSVC compiler you can use address sanitizer tool by setting the
 
 The library currently offers following options for configuration:
 
- * __RNDR_UNITY__ - Enables unity build of the library. By default OFF.
  * __RNDR_SANITIZER__ - Enables address sanitizer in the build. By default OFF.
  * __RNDR_OPENGL__ - Use OpenGL for the implementation of the rendering API. By default ON.
  * __RNDR_SPDLOG__ - Use spdlog library as a default logger implementation if user doesn't provide the log callback. By default ON.

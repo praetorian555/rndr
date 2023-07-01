@@ -1,8 +1,3 @@
-# Collect all header files so that we can add them to the IDE later
-#file(GLOB_RECURSE PUBLIC_SOURCE_LIST CONFIGURE_DEPENDS "${PROJECT_SOURCE_DIR}/include/*.h")
-#file(GLOB_RECURSE PRIVATE_SOURCE_LIST CONFIGURE_DEPENDS "${PROJECT_SOURCE_DIR}/src/*[.h|.c|.cpp]")
-file(GLOB_RECURSE UNITY_SOURCE_LIST CONFIGURE_DEPENDS "${PROJECT_BINARY_DIR}/src/*.cxx")
-
 # Platform independent source and header files
 set(SOURCE_LIST
         "${PROJECT_SOURCE_DIR}/include/rndr/rndr.h"
@@ -101,12 +96,6 @@ source_group(
         TREE "${PROJECT_SOURCE_DIR}/src"
         PREFIX "Implementation"
         FILES ${PRIVATE_SOURCE_LIST})
-if (RNDR_UNITY)
-    source_group(
-            TREE "${PROJECT_BINARY_DIR}/src/CMakeFiles/rndr.dir/Unity"
-            PREFIX "Unity"
-            FILES ${UNITY_SOURCE_LIST})
-endif ()
 
 # @formatter:off
 target_compile_definitions(rndr PUBLIC RNDR_ASSET_DIR="${CMAKE_CURRENT_SOURCE_DIR}/../assets")
