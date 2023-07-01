@@ -2,7 +2,9 @@
 #file(GLOB_RECURSE PUBLIC_SOURCE_LIST CONFIGURE_DEPENDS "${PROJECT_SOURCE_DIR}/include/*.h")
 #file(GLOB_RECURSE PRIVATE_SOURCE_LIST CONFIGURE_DEPENDS "${PROJECT_SOURCE_DIR}/src/*[.h|.c|.cpp]")
 file(GLOB_RECURSE UNITY_SOURCE_LIST CONFIGURE_DEPENDS "${PROJECT_BINARY_DIR}/src/*.cxx")
-set(PUBLIC_SOURCE_LIST
+
+# Platform independent source and header files
+set(SOURCE_LIST
         "${PROJECT_SOURCE_DIR}/include/rndr/rndr.h"
         "${PROJECT_SOURCE_DIR}/include/rndr/core/definitions.h"
         "${PROJECT_SOURCE_DIR}/include/rndr/core/base.h"
@@ -26,8 +28,7 @@ set(PUBLIC_SOURCE_LIST
         "${PROJECT_SOURCE_DIR}/include/rndr/render-api/render-api.h"
         "${PROJECT_SOURCE_DIR}/include/rndr/utility/imgui-wrapper.h"
         "${PROJECT_SOURCE_DIR}/include/rndr/utility/input-layout-builder.h"
-        "${PROJECT_SOURCE_DIR}/include/rndr/utility/cpu-tracer.h")
-set(PRIVATE_SOURCE_LIST
+        "${PROJECT_SOURCE_DIR}/include/rndr/utility/cpu-tracer.h"
         "${PROJECT_SOURCE_DIR}/src/core/base.cpp"
         "${PROJECT_SOURCE_DIR}/src/core/time.cpp"
         "${PROJECT_SOURCE_DIR}/src/core/window.cpp"
@@ -40,16 +41,15 @@ set(PRIVATE_SOURCE_LIST
         "${PROJECT_SOURCE_DIR}/src/utility/imgui-wrapper.cpp"
         "${PROJECT_SOURCE_DIR}/src/utility/input-layout-builder.cpp"
         "${PROJECT_SOURCE_DIR}/src/utility/cpu-tracer.cpp")
+
 if (RNDR_OPENGL)
-    set(OPENGL_SOURCE_LIST
+    list(APPEND SOURCE_LIST
             "${PROJECT_SOURCE_DIR}/include/rndr/render-api/opengl-render-api.h"
             "${PROJECT_SOURCE_DIR}/src/render-api/opengl-render-api.cpp")
-else ()
-    set(OPENGL_SOURCE_LIST)
 endif ()
 
 # Make an automatic library - will be static or dynamic based on user setting
-add_library(rndr ${PRIVATE_SOURCE_LIST} ${PUBLIC_SOURCE_LIST} ${DX11_SOURCE_LIST} ${OPENGL_SOURCE_LIST})
+add_library(rndr ${SOURCE_LIST})
 
 # We need this directory, and users of our library will need it too
 target_include_directories(rndr PUBLIC ${PROJECT_SOURCE_DIR}/include)
