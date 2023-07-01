@@ -47,4 +47,4 @@ jobs:
     - name: Test
       working-directory: ${{github.workspace}}/build
       # Execute tests defined by the CMake configuration.
-      run: ctest -C ${{matrix.config.build_type}} --output-on-failure
+      run: ctest -C ${{matrix.config.build_type}} --output-on-failure --verbose
