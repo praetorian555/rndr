@@ -40,13 +40,6 @@ set(PRIVATE_SOURCE_LIST
         "${PROJECT_SOURCE_DIR}/src/utility/imgui-wrapper.cpp"
         "${PROJECT_SOURCE_DIR}/src/utility/input-layout-builder.cpp"
         "${PROJECT_SOURCE_DIR}/src/utility/cpu-tracer.cpp")
-if (RNDR_DX11)
-    set(DX11_SOURCE_LIST
-            "${PROJECT_SOURCE_DIR}/include/rndr/render-api/dx11-render-api.h"
-            "${PROJECT_SOURCE_DIR}/src/render-api/dx11-render-api.cpp")
-else ()
-    set(DX11_SOURCE_LIST)
-endif ()
 if (RNDR_OPENGL)
     set(OPENGL_SOURCE_LIST
             "${PROJECT_SOURCE_DIR}/include/rndr/render-api/opengl-render-api.h"
@@ -63,9 +56,6 @@ target_include_directories(rndr PUBLIC ${PROJECT_SOURCE_DIR}/include)
 target_include_directories(rndr PRIVATE ${PROJECT_SOURCE_DIR}/src)
 
 # Setup graphics API to use
-if (RNDR_DX11)
-    target_compile_definitions(rndr PUBLIC RNDR_DX11)
-endif ()
 if (RNDR_OPENGL)
     target_compile_definitions(rndr PUBLIC RNDR_OPENGL)
 endif ()
@@ -84,9 +74,6 @@ endif ()
 target_link_libraries(rndr PUBLIC stb_image)
 target_link_libraries(rndr PUBLIC stb_truetype)
 target_link_libraries(rndr PUBLIC math)
-if (RNDR_DX11)
-    target_link_libraries(rndr PUBLIC d3d11.lib dxgi.lib d3dcompiler.lib User32.lib)
-endif ()
 if (RNDR_OPENGL)
     target_link_libraries(rndr PUBLIC opengl32.lib User32.lib)
     target_link_libraries(rndr PUBLIC glad)

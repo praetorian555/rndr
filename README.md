@@ -2,7 +2,7 @@
 
 ## About ##
 
-Basic wrapper around different render APIs. Currently, only __DX11__ is supported.
+Basic wrapper around different render APIs. Currently, only __OpenGL__ is supported.
 
 ## Requirements ##
 
@@ -48,8 +48,8 @@ If you are using MSVC compiler you can use address sanitizer tool by setting the
 
 The library currently offers following options for configuration:
 
- * __RNDR_UNITY__ - Enables unity build of the library. By default ON.
- * __RNDR_SANITIZER__ - Enables address sanitizer in the build. By default ON.
- * __RNDR_DX11__ - Use DX11 as the implementation of the rendering API. By default ON.
+ * __RNDR_UNITY__ - Enables unity build of the library. By default OFF.
+ * __RNDR_SANITIZER__ - Enables address sanitizer in the build. By default OFF.
+ * __RNDR_OPENGL__ - Use OpenGL for the implementation of the rendering API. By default ON.
  * __RNDR_SPDLOG__ - Use spdlog library as a default logger implementation if user doesn't provide the log callback. By default ON.
  * __RNDR_IMGUI__ - Enables ImGuiWrapper class which can be used to render imgui UI. By default ON.

@@ -9,7 +9,7 @@ project(
 # Library options
 option(RNDR_UNITY "Enable unity builds" OFF)
 option(RNDR_SANITIZER "Enable address sanitizer" OFF)
-option(RNDR_DX11 "Use DX11 API" OFF)
+option(RNDR_OPENGL "Use OpenGL API" ON)
 option(RNDR_SPDLOG "Use spdlog external library to implement default logging" ON)
 option(RNDR_IMGUI "Add imgui wrapper which can be used for development GUI" ON)
 option(RNDR_ASSIMP "Add wrapper around assimp library that can be used to import 3D models" ON)
@@ -18,14 +18,14 @@ option(RNDR_MESHOPTIMIZER "Add wrapper around meshoptimizer library that can be 
 
 message(STATUS "RNDR_UNITY ${RNDR_UNITY}")
 message(STATUS "RNDR_SANITIZER ${RNDR_SANITIZER}")
-message(STATUS "RNDR_DX11 ${RNDR_DX11}")
+message(STATUS "RNDR_OPENGL ${RNDR_OPENGL}")
 message(STATUS "RNDR_SPDLOG ${RNDR_SPDLOG}")
 message(STATUS "RNDR_IMGUI ${RNDR_IMGUI}")
 message(STATUS "RNDR_ASSIMP ${RNDR_ASSIMP}")
 message(STATUS "RNDR_ETC2COMP ${RNDR_ETC2COMP}")
 message(STATUS "RNDR_MESHOPTIMIZER ${RNDR_MESHOPTIMIZER}")
 
-if (NOT RNDR_DX11)
+if (NOT RNDR_OPENGL)
     set(RNDR_OPENGL ON)
 endif ()
 
@@ -127,13 +127,7 @@ if (NOT TARGET imgui AND RNDR_IMGUI)
         set(IMGUI_WINDOWS_SOURCE_FILES)
     endif ()
 
-    if (RNDR_DX11)
-        set(IMGUI_DX11_SOURCE_FILES
-            ${SOURCE_PATH}/backends/imgui_impl_dx11.cpp
-            ${SOURCE_PATH}/backends/imgui_impl_dx11.h)
-        set(IMGUI_OPENGL_SOURCE_FILES)
-    else ()
-        set(IMGUI_DX11_SOURCE_FILES)
+    if (RNDR_OPENGL)
         set(IMGUI_OPENGL_SOURCE_FILES
             ${SOURCE_PATH}/backends/imgui_impl_opengl3.cpp
             ${SOURCE_PATH}/backends/imgui_impl_opengl3.h)
@@ -142,7 +136,6 @@ if (NOT TARGET imgui AND RNDR_IMGUI)
     add_library(imgui
                 ${IMGUI_SOURCE_FILES}
                 ${IMGUI_WINDOWS_SOURCE_FILES}
-                ${IMGUI_DX11_SOURCE_FILES}
                 ${IMGUI_OPENGL_SOURCE_FILES})
 
     target_include_directories(imgui PUBLIC ${SOURCE_PATH})
