@@ -453,35 +453,10 @@ struct GraphicsContextDesc
     bool enable_debug_layer = true;
 
     /**
-     * Controls if the *HasFailed methods will report an API call fail if the warning message is
-     * received from the debug layer. Ignored in all configurations except Debug.
-     */
-    bool should_fail_warning = true;
-
-    /**
-     * In case of workloads that last more then 2 seconds on the GPU side control if the timeout is
-     * triggered or not.
-     */
-    bool disable_gpu_timeout = false;
-
-    /**
-     * Controls if the underlying API for creating resources is thread-safe. If this is set to false
-     * the creation needs to be synchronized manually between threads. Also it is not possible to
-     * create commands lists if this is set to false.
-     */
-    bool is_resource_creation_thread_safe = true;
-
-    /**
      * Optional parameter representing a window handle in OS needed by some graphics API for
      * creation of the graphics context (e.g. OpenGL).
      */
     NativeWindowHandle window_handle = nullptr;
-
-    /** OpenGL specific option. Major version of OpenGL used. */
-    int gl_major_version = 4;
-
-    /** OpenGL specific option. Minor version of OpenGL used. */
-    int gl_minor_version = 6;
 };
 
 struct SwapChainDesc

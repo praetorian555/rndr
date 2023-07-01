@@ -1,4 +1,4 @@
-add_executable(rndr_test base_test.cpp window_test.cpp input_test.cpp bitmap_test.cpp)
+add_executable(rndr_test base_test.cpp window_test.cpp input_test.cpp bitmap_test.cpp render-api-test.cpp)
 
 target_link_libraries(rndr_test PRIVATE Catch2WithMain rndr)
 set_target_properties(rndr_test PROPERTIES FOLDER RNDR)

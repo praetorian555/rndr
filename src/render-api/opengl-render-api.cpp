@@ -111,15 +111,17 @@ Rndr::GraphicsContext::GraphicsContext(const Rndr::GraphicsContextDesc& desc) : 
     }
 
     int arb_flags = WGL_CONTEXT_FORWARD_COMPATIBLE_BIT_ARB;
+#if RNDR_DEBUG
     if (m_desc.enable_debug_layer)
     {
         arb_flags |= WGL_CONTEXT_DEBUG_BIT_ARB;
     }
+#endif
     const StackArray<int, 9> attribute_list = {
         WGL_CONTEXT_MAJOR_VERSION_ARB,
-        m_desc.gl_major_version,
+        4,
         WGL_CONTEXT_MINOR_VERSION_ARB,
-        m_desc.gl_minor_version,
+        6,
         WGL_CONTEXT_FLAGS_ARB,
         arb_flags,
         WGL_CONTEXT_PROFILE_MASK_ARB,
