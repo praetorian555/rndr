@@ -232,7 +232,7 @@ if (CMAKE_PROJECT_NAME STREQUAL PROJECT_NAME)
     # Tests
     add_subdirectory(tests)
     enable_testing()
-    add_test(NAME main COMMAND rndr_test)
+    add_test(NAME all_tests_no_window COMMAND rndr_test "~[window]")
 
     # The executable code is here
     add_subdirectory(examples/01-triangle)
