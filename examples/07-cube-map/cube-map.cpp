@@ -350,7 +350,7 @@ Rndr::Bitmap ConvertVerticalCrossToCubeMapFaces(const Rndr::Bitmap& in_bitmap)
     Rndr::Bitmap cube_map_bitmap(face_width, face_height, k_face_count, in_bitmap.GetPixelFormat());
 
     const uint8_t* src = in_bitmap.GetData();
-    const int pixel_size = in_bitmap.GetPixelSize();
+    const size_t pixel_size = in_bitmap.GetPixelSize();
     uint8_t* dst = cube_map_bitmap.GetData();
     for (int face = 0; face < k_face_count; ++face)
     {

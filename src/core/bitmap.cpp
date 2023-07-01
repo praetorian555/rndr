@@ -1,6 +1,6 @@
 #include "rndr/core/bitmap.h"
 
-Rndr::Bitmap::Bitmap(int width, int height, int depth, Rndr::PixelFormat pixel_format, const uint8_t* data)
+Rndr::Bitmap::Bitmap(int width, int height, int depth, Rndr::PixelFormat pixel_format, const ByteSpan& data)
     : m_width(width), m_height(height), m_depth(depth), m_pixel_format(pixel_format)
 {
     if (width <= 0 || height <= 0 || depth <= 0 || !IsPixelFormatSupported(pixel_format))
@@ -14,11 +14,12 @@ Rndr::Bitmap::Bitmap(int width, int height, int depth, Rndr::PixelFormat pixel_f
     }
 
     m_comp_count = FromPixelFormatToComponentCount(pixel_format);
-    const int buffer_size = GetSize3D();
+    const size_t buffer_size = GetSize3D();
     m_data.resize(buffer_size);
-    if (data != nullptr)
+    const size_t size_to_copy = std::min(data.size(), buffer_size);
+    if (size_to_copy > 0)
     {
-        memcpy(m_data.data(), data, buffer_size);
+        memcpy(m_data.data(), data.data(), size_to_copy);
     }
     if (IsComponentLowPrecision(pixel_format))
     {
@@ -36,7 +37,7 @@ Rndr::Bitmap::Bitmap(int width, int height, int depth, Rndr::PixelFormat pixel_f
     }
 }
 
-int Rndr::Bitmap::GetPixelSize() const
+size_t Rndr::Bitmap::GetPixelSize() const
 {
     return FromPixelFormatToPixelSize(m_pixel_format);
 }

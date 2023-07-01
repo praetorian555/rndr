@@ -548,7 +548,7 @@ Rndr::Bitmap Rndr::GraphicsContext::ReadSwapChain(const SwapChain& swap_chain)
             std::swap(data[index1 + 3], data[index2 + 3]);
         }
     }
-    return Bitmap{width, height, 1, PixelFormat::R8G8B8A8_UNORM_SRGB, data.data()};
+    return Bitmap{width, height, 1, PixelFormat::R8G8B8A8_UNORM_SRGB, data};
 }
 
 Rndr::SwapChain::SwapChain(const Rndr::GraphicsContext& graphics_context,

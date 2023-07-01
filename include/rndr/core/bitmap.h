@@ -21,7 +21,7 @@ public:
      * @param data Optional data to initialize the bitmap with. If not specified, the bitmap will be
      * initialized with zeros.
      */
-    Bitmap(int width, int height, int depth, PixelFormat pixel_format, const uint8_t* data = nullptr);
+    Bitmap(int width, int height, int depth, PixelFormat pixel_format, const ByteSpan& data = ByteSpan());
 
     /**
      * Check if bitmap is valid.
@@ -44,25 +44,25 @@ public:
      * Get size of pixel in bytes.
      * @return Returns size of pixel in bytes.
      */
-    [[nodiscard]] int GetPixelSize() const;
+    [[nodiscard]] size_t GetPixelSize() const;
 
     /**
      * Get size of row in bytes.
      * @return Returns size of row in bytes.
      */
-    [[nodiscard]] int GetRowSize() const { return m_width * GetPixelSize(); }
+    [[nodiscard]] size_t GetRowSize() const { return m_width * GetPixelSize(); }
 
     /**
      * Get size of the bitmap in bytes but only of the first plane.
      * @return Returns size in bytes.
      */
-    [[nodiscard]] int GetSize2D() const { return m_width * m_height * GetPixelSize(); }
+    [[nodiscard]] size_t GetSize2D() const { return m_width * m_height * GetPixelSize(); }
 
     /**
      * Get size of the bitmap in bytes including depth.
      * @return Returns size in bytes.
      */
-    [[nodiscard]] int GetSize3D() const { return m_width * m_height * m_depth * GetPixelSize(); }
+    [[nodiscard]] size_t GetSize3D() const { return m_width * m_height * m_depth * GetPixelSize(); }
 
     [[nodiscard]] uint8_t* GetData() { return m_data.data(); }
     [[nodiscard]] const uint8_t* GetData() const { return m_data.data(); }

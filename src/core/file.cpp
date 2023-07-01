@@ -149,7 +149,8 @@ Rndr::Bitmap Rndr::File::ReadEntireImage(const String& file_path, PixelFormat de
         }
         tmp_data = reinterpret_cast<uint8_t*>(tmp_data_float);
     }
-    Bitmap bitmap{width, height, 1, desired_format, tmp_data};
+    const size_t pixel_size = FromPixelFormatToPixelSize(desired_format);
+    Bitmap bitmap{width, height, 1, desired_format, {tmp_data, width * height * pixel_size}};
     stbi_image_free(tmp_data);
     return bitmap;
 }
@@ -165,7 +166,7 @@ bool Rndr::File::SaveImage(const Bitmap& bitmap, const String& file_path)
                                 bitmap.GetHeight(),
                                 bitmap.GetComponentCount(),
                                 bitmap.GetData(),
-                                bitmap.GetRowSize());
+                                static_cast<int>(bitmap.GetRowSize()));
     }
     else if (IsComponentHighPrecision(pixel_format))
     {
