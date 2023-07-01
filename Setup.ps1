@@ -1,0 +1,66 @@
+# Check if the script is run as an administrator
+if (-NOT ([Security.Principal.WindowsPrincipal] [Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole] "Administrator")) {
+    Write-Error "You must run this script as an Administrator. Start Windows PowerShell with the 'Run as administrator' option."
+    pause
+    Break
+}
+
+# Specify your desired version here
+$desiredVersion = [Version]"3.26.4"
+$installed = $false
+
+# Check if cmake is installed
+try {
+    $output = cmake --version
+    $installed = $true
+}
+catch {
+    Write-Output "CMake not found. Will proceed with the installation."
+}
+
+# Check cmake version if it's installed
+if ($installed) {
+    $output = $output -split "`n"
+    $installedVersion = $output[0] -replace "cmake version ", ""
+    if ([Version]$installedVersion -lt $desiredVersion) {
+        Write-Output "CMake version is lower than desired. Will proceed with the installation of the desired version."
+        $installed = $false
+    }
+    else {
+        Write-Output "CMake of version $installedVersion or higher is already installed."
+        pause
+    }
+}
+
+# Install cmake if not installed or the installed version is lower than desired
+if (-NOT $installed) {
+    $installerName = "cmake-$($desiredVersion.Major).$($desiredVersion.Minor).$($desiredVersion.Build)-windows-x86_64.msi"
+    $url = "https://cmake.org/files/v$($desiredVersion.Major).$($desiredVersion.Minor)/$installerName"
+    $outputDir = "$env:TEMP"
+
+    # Download the installer
+    Write-Output "Downloading CMake installer from $url"
+    Invoke-WebRequest -Uri $url -OutFile "$outputDir\$installerName"
+    Write-Output "Download complete."
+
+    # Compute the SHA-256 hash of the downloaded file
+    Write-Output "Validating the downloaded file..."
+    $hash = (Get-FileHash -Path "$outputDir\$installerName" -Algorithm SHA256).Hash
+    $knownGoodHash = "566fed3fa51a274609677717d0a0f38ba69ab0b3d987df53c05392a13fc211c4"
+    if ($hash -ne $knownGoodHash) {
+        Write-Error "SHA-256 hash does not match the known good hash. The file might be corrupted or tampered with."
+        Break
+    }
+    Write-Output "Validation complete."
+
+    # Install cmake
+    Write-Output "Installing CMake..."
+    Start-Process -FilePath "msiexec.exe" -ArgumentList "/i `"$outputDir\$installerName`" /quiet /norestart ADD_CMAKE_TO_PATH=System" -Wait
+    Write-Output "CMake of version $desiredVersion has been installed."
+
+    # Clean up
+    Remove-Item -Path "$outputDir\$installerName"
+    Write-Output "Clean up complete."
+
+    pause
+}

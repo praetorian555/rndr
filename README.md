@@ -4,16 +4,13 @@
 
 Basic wrapper around different render APIs. Currently, only __OpenGL__ is supported.
 
-## Requirements ##
-
-To setup this project you will need:
-
-* _CMake_ version 3.20 or heigher.
-* Any version of _Visual Studio_ and _MSVC_ compiler.
-
-Optionally you should install _clang-format_ and add it to the path.
-
 ## Setup ##
+
+To install all necessary tools you will need to run Setup.ps1 PowerShell script:
+
+* Start a PowerShell as an administrator and navigate to the root of the project.
+* Enable execution of scripts by running `Set-ExecutionPolicy -ExecutionPolicy Bypass -Scope Process`.
+* Run `.\Setup.ps1` script.
 
 To generate a build system go to the root of a project and use:
 
