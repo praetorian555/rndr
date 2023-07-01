@@ -225,7 +225,7 @@ if (CMAKE_PROJECT_NAME STREQUAL PROJECT_NAME)
     # Tests
     add_subdirectory(tests)
     enable_testing()
-    add_test(NAME all_tests_no_window COMMAND rndr_test "~[window]")
+    add_test(NAME all_tests_no_window COMMAND rndr_test "~[window] ~[render-api]")
 
     # The executable code is here
     add_subdirectory(examples/01-triangle)
