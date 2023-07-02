@@ -28,7 +28,6 @@ if ($installed) {
     }
     else {
         Write-Output "CMake of version $installedVersion or higher is already installed."
-        pause
     }
 }
 
@@ -61,6 +60,39 @@ if (-NOT $installed) {
     # Clean up
     Remove-Item -Path "$outputDir\$installerName"
     Write-Output "Clean up complete."
-
-    pause
 }
+
+# Define the URL to download the installer and the known SHA-256 checksum for that installer
+$installerUrl = "https://aka.ms/vs/17/release/vs_Community.exe"
+
+# Define the path where to download the installer
+$installerPath = "${Env:TEMP}\vs_Community.exe"
+
+# Download the installer
+Write-Output "Downloading Visual Studio 2022 Community installer from $installerUrl"
+Invoke-WebRequest -Uri $installerUrl -OutFile $installerPath
+Write-Output "Download complete."
+
+
+# Define the components to install
+# Replace these component IDs with the ones you want to install
+$components = @(
+    "--add Microsoft.VisualStudio.Component.CoreEditor"
+    "--add Microsoft.VisualStudio.Workload.CoreEditor"
+    "--add Microsoft.VisualStudio.Component.Roslyn.Compiler"
+    "--add Microsoft.Component.MSBuild"
+    "--add Microsoft.VisualStudio.Component.TextTemplating"
+    "--add Microsoft.VisualStudio.Component.VC.CoreIde"
+    "--add Microsoft.VisualStudio.Component.VC.Tools.x86.x64"
+    "--add Microsoft.VisualStudio.Component.VC.ATL"
+    "--add Microsoft.VisualStudio.Component.VC.Redist.14.Latest"
+    "--add Microsoft.VisualStudio.ComponentGroup.NativeDesktop.Core"
+    "--add Microsoft.VisualStudio.Component.VC.ASAN"
+    "--add Microsoft.VisualStudio.Component.Windows10SDK.20348"
+    "--add Microsoft.VisualStudio.Workload.NativeDesktop")
+$components = $components -join " "
+
+# Install Visual Studio 2022 Community along with the specified components
+Write-Output "Installing Visual Studio 2022 Community..."
+Start-Process -FilePath $installerPath -ArgumentList "$components --quiet --norestart --wait" -Wait
+Write-Output "Visual Studio 2022 Community has been installed."
