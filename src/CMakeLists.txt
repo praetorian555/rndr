@@ -73,11 +73,6 @@ if (RNDR_DEFAULT_LOGGER)
     target_link_libraries(rndr PUBLIC spdlog::spdlog)
 endif ()
 
-if (RNDR_SPDLOG)
-    target_compile_definitions(rndr PUBLIC RNDR_SPDLOG)
-    target_link_libraries(rndr PUBLIC spdlog::spdlog)
-endif ()
-
 if (RNDR_IMGUI)
     target_compile_definitions(rndr PUBLIC RNDR_IMGUI)
     target_link_libraries(rndr PUBLIC imgui)

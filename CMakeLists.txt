@@ -11,7 +11,6 @@ option(RNDR_OPENGL "Use OpenGL API" ON)
 option(RNDR_SANITIZER "Enable address sanitizer" OFF)
 option(RNDR_TRACER "Use built in profiler" ON)
 option(RNDR_DEFAULT_LOGGER "Use default logger" ON)
-option(RNDR_SPDLOG "Use spdlog external library to implement default logging" ON)
 option(RNDR_IMGUI "Add imgui wrapper which can be used for development GUI" ON)
 option(RNDR_ASSIMP "Add wrapper around assimp library that can be used to import 3D models" ON)
 option(RNDR_ETC2COMP "Add wrapper around etc2comp library that can be used to compress textures" ON)
@@ -21,7 +20,6 @@ message(STATUS "RNDR_OPENGL ${RNDR_OPENGL}")
 message(STATUS "RNDR_SANITIZER ${RNDR_SANITIZER}")
 message(STATUS "RNDR_TRACER ${RNDR_TRACER}")
 message(STATUS "RNDR_DEFAULT_LOGGER ${RNDR_DEFAULT_LOGGER}")
-message(STATUS "RNDR_SPDLOG ${RNDR_SPDLOG}")
 message(STATUS "RNDR_IMGUI ${RNDR_IMGUI}")
 message(STATUS "RNDR_ASSIMP ${RNDR_ASSIMP}")
 message(STATUS "RNDR_ETC2COMP ${RNDR_ETC2COMP}")
@@ -70,7 +68,7 @@ endif ()
 include(FetchContent)
 
 # Include spdlog only if it is not already present
-if (NOT TARGET spdlog::spdlog AND RNDR_SPDLOG)
+if (NOT TARGET spdlog::spdlog AND (RNDR_DEFAULT_LOGGER OR RNDR_TRACER))
     FetchContent_Declare(
             spdlog
             GIT_REPOSITORY https://github.com/gabime/spdlog
