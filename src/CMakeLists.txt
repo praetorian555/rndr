@@ -24,6 +24,7 @@ set(SOURCE_LIST
         "${PROJECT_SOURCE_DIR}/include/rndr/utility/imgui-wrapper.h"
         "${PROJECT_SOURCE_DIR}/include/rndr/utility/input-layout-builder.h"
         "${PROJECT_SOURCE_DIR}/include/rndr/utility/cpu-tracer.h"
+        "${PROJECT_SOURCE_DIR}/include/rndr/utility/default-logger.h"
         "${PROJECT_SOURCE_DIR}/src/core/base.cpp"
         "${PROJECT_SOURCE_DIR}/src/core/time.cpp"
         "${PROJECT_SOURCE_DIR}/src/core/window.cpp"
@@ -46,6 +47,10 @@ if (RNDR_TRACER)
     list(APPEND SOURCE_LIST "${PROJECT_SOURCE_DIR}/src/utility/cpu-tracer.cpp")
 endif ()
 
+if (RNDR_DEFAULT_LOGGER)
+    list(APPEND SOURCE_LIST "${PROJECT_SOURCE_DIR}/src/utility/default-logger.cpp")
+endif ()
+
 # Make an automatic library - will be static or dynamic based on user setting
 add_library(rndr ${SOURCE_LIST})
 
@@ -60,6 +65,11 @@ endif ()
 
 if (RNDR_TRACER)
     target_compile_definitions(rndr PUBLIC RNDR_TRACER)
+    target_link_libraries(rndr PUBLIC spdlog::spdlog)
+endif ()
+
+if (RNDR_DEFAULT_LOGGER)
+    target_compile_definitions(rndr PUBLIC RNDR_DEFAULT_LOGGER)
     target_link_libraries(rndr PUBLIC spdlog::spdlog)
 endif ()
 

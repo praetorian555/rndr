@@ -10,6 +10,7 @@ project(
 option(RNDR_OPENGL "Use OpenGL API" ON)
 option(RNDR_SANITIZER "Enable address sanitizer" OFF)
 option(RNDR_TRACER "Use built in profiler" ON)
+option(RNDR_DEFAULT_LOGGER "Use default logger" ON)
 option(RNDR_SPDLOG "Use spdlog external library to implement default logging" ON)
 option(RNDR_IMGUI "Add imgui wrapper which can be used for development GUI" ON)
 option(RNDR_ASSIMP "Add wrapper around assimp library that can be used to import 3D models" ON)
@@ -19,6 +20,7 @@ option(RNDR_MESHOPTIMIZER "Add wrapper around meshoptimizer library that can be 
 message(STATUS "RNDR_OPENGL ${RNDR_OPENGL}")
 message(STATUS "RNDR_SANITIZER ${RNDR_SANITIZER}")
 message(STATUS "RNDR_TRACER ${RNDR_TRACER}")
+message(STATUS "RNDR_DEFAULT_LOGGER ${RNDR_DEFAULT_LOGGER}")
 message(STATUS "RNDR_SPDLOG ${RNDR_SPDLOG}")
 message(STATUS "RNDR_IMGUI ${RNDR_IMGUI}")
 message(STATUS "RNDR_ASSIMP ${RNDR_ASSIMP}")
@@ -124,7 +126,7 @@ if (NOT TARGET imgui AND RNDR_IMGUI)
     if (RNDR_OPENGL)
         set(IMGUI_OPENGL_SOURCE_FILES
             ${SOURCE_PATH}/backends/imgui_impl_opengl3.cpp
-            ${SOURCE_PATH}/backends/imgui_impl_opengl3.h)
+            ${SOURCE_PATH}/backends/imgui_impl_opengl3.h include/rndr/utility/default-logger.h)
     endif ()
 
     add_library(imgui

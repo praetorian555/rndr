@@ -2,88 +2,12 @@
 
 #include <cstdarg>
 
-#ifdef RNDR_SPDLOG
-#include "spdlog/async.h"
-#include "spdlog/sinks/stdout_color_sinks.h"
-#include "spdlog/spdlog.h"
-#endif  // RNDR_SPDLOG
-
 #include "rndr/core/input.h"
 #include "rndr/utility/cpu-tracer.h"
+#include "rndr/utility/default-logger.h"
 
 namespace
 {
-struct DefaultLogger : public Rndr::Logger
-{
-    DefaultLogger()
-    {
-#ifdef RNDR_SPDLOG
-        spdlog::set_level(spdlog::level::debug);
-        spdlog::set_level(spdlog::level::trace);
-        spdlog::set_pattern("[%H:%M:%S:%e][%P][%t][%^%l%$][%@] %v");
-
-        constexpr int k_max_message_count = 8192;
-        constexpr int k_backing_thread_count = 1;
-        spdlog::init_thread_pool(k_max_message_count, k_backing_thread_count);
-
-        logger = spdlog::create<spdlog::sinks::stdout_color_sink_st>("stdout_logger");
-#endif  // RNDR_SPDLOG
-    }
-
-    ~DefaultLogger() override
-    {
-#ifdef RNDR_SPDLOG
-        spdlog::drop(logger->name());
-#endif  // RNDR_SPDLOG
-    }
-
-    void Log(const std::source_location& source_location,
-             Rndr::LogLevel log_level,
-             const char* message)
-    {
-#ifdef RNDR_SPDLOG
-        const spdlog::source_loc source_info(source_location.file_name(),
-                                             static_cast<int32_t>(source_location.line()),
-                                             source_location.function_name());
-
-        switch (log_level)
-        {
-            case Rndr::LogLevel::Error:
-            {
-                logger->log(source_info, spdlog::level::level_enum::err, message);
-                break;
-            }
-            case Rndr::LogLevel::Warning:
-            {
-                logger->log(source_info, spdlog::level::level_enum::warn, message);
-                break;
-            }
-            case Rndr::LogLevel::Debug:
-            {
-                logger->log(source_info, spdlog::level::level_enum::debug, message);
-                break;
-            }
-            case Rndr::LogLevel::Info:
-            {
-                logger->log(source_info, spdlog::level::level_enum::info, message);
-                break;
-            }
-            case Rndr::LogLevel::Trace:
-            {
-                logger->log(source_info, spdlog::level::level_enum::trace, message);
-                break;
-            }
-        }
-#else
-        RNDR_UNUSED(source_location);
-        RNDR_UNUSED(log_level);
-        RNDR_UNUSED(message);
-#endif  // RNDR_SPDLOG
-    }
-
-    std::shared_ptr<spdlog::logger> logger;
-};
-
 Rndr::RndrDesc g_desc;
 bool g_is_initialized = false;
 }  // namespace
@@ -98,10 +22,12 @@ bool Rndr::Init(const RndrDesc& desc)
 
     g_desc = desc;
 
+#if RNDR_DEFAULT_LOGGER
     if (g_desc.user_logger == nullptr)
     {
         g_desc.user_logger = RNDR_NEW(DefaultLogger);
     }
+#endif // RNDR_DEFAULT_LOGGER
 
     if (g_desc.enable_input_system && !InputSystem::Init())
     {
@@ -115,7 +41,7 @@ bool Rndr::Init(const RndrDesc& desc)
         RNDR_LOG_ERROR("Failed to initialize the CPU tracer!");
         return false;
     }
-#endif // RNDR_TRACER
+#endif  // RNDR_TRACER
 
     g_is_initialized = true;
     return true;
@@ -134,7 +60,7 @@ bool Rndr::Destroy()
         RNDR_LOG_ERROR("Failed to destroy the CPU tracer!");
         return false;
     }
-#endif // RNDR_TRACER
+#endif  // RNDR_TRACER
     if (g_desc.enable_input_system && !InputSystem::Destroy())
     {
         RNDR_LOG_ERROR("Failed to destroy the input system!");
@@ -155,12 +81,12 @@ const Rndr::Logger& Rndr::GetLogger()
     return *g_desc.user_logger;
 }
 
-void Rndr::Log(const std::source_location& source_location,
-               Rndr::LogLevel log_level,
-               const char* format,
-               ...)
+void Rndr::Log(const std::source_location& source_location, Rndr::LogLevel log_level, const char* format, ...)
 {
-    assert(g_desc.user_logger);
+    if (g_desc.user_logger == nullptr)
+    {
+        return;
+    }
 
     constexpr int k_message_size = 4096;
     std::array<char, k_message_size> message;
