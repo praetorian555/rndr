@@ -42,72 +42,77 @@ Start-Process -FilePath $installerPath -ArgumentList "$components --quiet --nore
 Remove-Item $installerPath
 Write-Output "Visual Studio 2022 Community has been installed."
 
-Write-Output "Adding path to the address sanitizer dll to the system path..."
+# Will search under X:\Program Files\Microsoft Visual Studio and X:\Program Files (x86)\Microsoft Visual Studio for
+# the specified file. If found, the folder containing the file will be added to the system path if its not already
+# there. It will only search local drives.
+function AddToSystemPath{
+    param(
+        [Parameter(Mandatory=$true)]
+        [string]$FileToFind,
 
-# User-specified DLL file
-$specifiedDLL = "clang_rt.asan_dynamic-x86_64.dll"
-$specifiedFolder = "Hostx64"
+        [Parameter(Mandatory=$true)]
+        [string]$FolderRegex
+    )
 
-# Get the logical disk objects using WMI
-$drives = Get-WmiObject -Class Win32_LogicalDisk
-$dllPath = $null
+    Write-Output "Adding folder that contains $FileToFind to the system path, trying to match $FolderRegex pattern..."
 
-foreach ($drive in $drives)
-{
-    # Only search on drives of type 3, i.e., local disks
-    if ($drive.DriveType -ne 3)
+    # Get the logical disk objects using WMI
+    $drives = Get-WmiObject -Class Win32_LogicalDisk
+    $filePath = $null
+
+    foreach ($drive in $drives)
     {
-        continue
-    }
-
-    $pathsToSearch = @("\Program Files\Microsoft Visual Studio\2022\Community", "\Program Files (x86)\Microsoft Visual Studio\2022\Community")
-
-    foreach ($pathToSearch in $pathsToSearch)
-    {
-        # Try/Catch block for any errors (like access denied)
-        try
+        # Only search on drives of type 3, i.e., local disks
+        if ($drive.DriveType -ne 3)
         {
-            $pathToSearch = $drive.DeviceID + $pathToSearch
-            # Find the folder
-            $folderPath = (Get-ChildItem -Path $pathToSearch -Recurse -ErrorAction Stop -Filter $specifiedFolder -Directory).FullName
+            continue
+        }
 
-            # If the folder exists, search for the DLL within it
-            if ($folderPath)
+        $pathsToSearch = @("\Program Files\Microsoft Visual Studio", "\Program Files (x86)\Microsoft Visual Studio")
+
+        foreach ($pathToSearch in $pathsToSearch)
+        {
+            # Try/Catch block for any errors (like access denied)
+            try
             {
-                $dllPath = Get-ChildItem -Path $folderPath -Recurse -ErrorAction Stop -Filter $specifiedDLL
-                if ($dllPath)
+                $pathToSearch = $drive.DeviceID + $pathToSearch
+                $filePath = Get-ChildItem -Path $pathToSearch -Recurse -ErrorAction Stop -File | Where-Object { ($_.Name -eq $FileToFind) -and ($_.Directory -match $FolderRegex) }
+                if ($filePath)
                 {
                     break
                 }
             }
+            catch
+            {
+                Write-Host "Error searching drive $( $drive.DeviceID ): $( $_.Exception.Message )"
+            }
         }
-        catch
-        {
-            Write-Host "Error searching drive $( $drive.DeviceID ): $( $_.Exception.Message )"
+
+        # Check if file was found
+        if ($filePath -ne $null) {
+            break
         }
     }
 
-    # Check if DLL was found
-    if ($dllPath -ne $null) {
-        break
+    # Check if file was found
+    if ($filePath -eq $null) {
+        Write-Host "File $FileToFind not found!"
+        return
+    }
+    $filePath = (Get-Item $($filePath.FullName)).DirectoryName
+    # Get the current system path
+    $systemPath = [Environment]::GetEnvironmentVariable("Path", "Machine")
+
+    # Check if the exe path is already in the system path
+    if ($systemPath -notlike "*$filePath*") {
+        # Add the DLL path to the system path
+        $newPath = $systemPath + ";" + $filePath
+        [Environment]::SetEnvironmentVariable("Path", $newPath, "Machine")
+        Write-Host "Add path $filePath to system path"
+    } else {
+        Write-Host "Path $filePath is already in the system path"
     }
 }
 
-# Check if DLL was found
-if ($dllPath -eq $null) {
-    Write-Host "Specified DLL not found"
-    return
-}
-$dllPath = (Get-Item $($dllPath.FullName)).DirectoryName
-# Get the current system path
-$systemPath = [Environment]::GetEnvironmentVariable("Path", "Machine")
-
-# Check if the DLL path is already in the system path
-if ($systemPath -notlike "*$dllPath*") {
-    # Add the DLL path to the system path
-    $newPath = $systemPath + ";" + $dllPath
-    [Environment]::SetEnvironmentVariable("Path", $newPath, "Machine")
-    Write-Host "Add path $dllPath to system path"
-} else {
-    Write-Host "Path $dllPath is already in the system path"
-}
+AddToSystemPath -FileToFind "clang_rt.asan_dynamic-x86_64.dll" -FolderRegex ".*bin.*Hostx64.*x64.*"
+AddToSystemPath -FileToFind "clang-format.exe" -FolderRegex ".*Llvm.*x64.*bin.*"
