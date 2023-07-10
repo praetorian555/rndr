@@ -1,5 +1,7 @@
 #pragma once
 
+#if RNDR_TRACER
+
 #include <memory>
 
 #include "rndr/core/base.h"
@@ -78,3 +80,11 @@ private:
  * Macro that ends a CpuTrace object.
  */
 #define RNDR_TRACE_END(name) __trace_##name.End()
+
+#else
+
+#define RNDR_TRACE_SCOPED(name)
+#define RNDR_TRACE_START(name)
+#define RNDR_TRACE_END(name)
+
+#endif // RNDR_TRACER

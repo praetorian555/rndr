@@ -109,11 +109,13 @@ bool Rndr::Init(const RndrDesc& desc)
         return false;
     }
 
+#if RNDR_TRACER
     if (g_desc.enable_cpu_tracer && !CpuTracer::Init())
     {
         RNDR_LOG_ERROR("Failed to initialize the CPU tracer!");
         return false;
     }
+#endif // RNDR_TRACER
 
     g_is_initialized = true;
     return true;
@@ -126,11 +128,13 @@ bool Rndr::Destroy()
         RNDR_LOG_WARNING("Rndr library is not initialized!");
         return true;
     }
+#if RNDR_TRACER
     if (g_desc.enable_cpu_tracer && !CpuTracer::Destroy())
     {
         RNDR_LOG_ERROR("Failed to destroy the CPU tracer!");
         return false;
     }
+#endif // RNDR_TRACER
     if (g_desc.enable_input_system && !InputSystem::Destroy())
     {
         RNDR_LOG_ERROR("Failed to destroy the input system!");

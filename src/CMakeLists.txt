@@ -34,13 +34,16 @@ set(SOURCE_LIST
         "${PROJECT_SOURCE_DIR}/src/render-api/opengl-helpers.h"
         "${PROJECT_SOURCE_DIR}/src/render-api/opengl-helpers.cpp"
         "${PROJECT_SOURCE_DIR}/src/utility/imgui-wrapper.cpp"
-        "${PROJECT_SOURCE_DIR}/src/utility/input-layout-builder.cpp"
-        "${PROJECT_SOURCE_DIR}/src/utility/cpu-tracer.cpp")
+        "${PROJECT_SOURCE_DIR}/src/utility/input-layout-builder.cpp")
 
 if (RNDR_OPENGL)
     list(APPEND SOURCE_LIST
             "${PROJECT_SOURCE_DIR}/include/rndr/render-api/opengl-render-api.h"
             "${PROJECT_SOURCE_DIR}/src/render-api/opengl-render-api.cpp")
+endif ()
+
+if (RNDR_TRACER)
+    list(APPEND SOURCE_LIST "${PROJECT_SOURCE_DIR}/src/utility/cpu-tracer.cpp")
 endif ()
 
 # Make an automatic library - will be static or dynamic based on user setting
@@ -53,6 +56,11 @@ target_include_directories(rndr PRIVATE ${PROJECT_SOURCE_DIR}/src)
 # Setup graphics API to use
 if (RNDR_OPENGL)
     target_compile_definitions(rndr PUBLIC RNDR_OPENGL)
+endif ()
+
+if (RNDR_TRACER)
+    target_compile_definitions(rndr PUBLIC RNDR_TRACER)
+    target_link_libraries(rndr PUBLIC spdlog::spdlog)
 endif ()
 
 if (RNDR_SPDLOG)

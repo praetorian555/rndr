@@ -9,11 +9,9 @@
 #include "Windows.h"
 #endif
 
-#ifdef RNDR_SPDLOG
 #include "spdlog/async.h"
 #include "spdlog/sinks/basic_file_sink.h"
 #include "spdlog/spdlog.h"
-#endif  // RNDR_SPDLOG
 
 #include "rndr/core/stack-array.h"
 #include "rndr/core/time.h"
@@ -34,9 +32,7 @@ namespace Rndr
 {
 struct CpuTracerData
 {
-#ifdef RNDR_SPDLOG
     std::shared_ptr<spdlog::logger> logger;
-#endif  // RNDR_SPDLOG
 };
 }  // namespace Rndr
 
@@ -54,13 +50,9 @@ bool Rndr::CpuTracer::Init()
     const String output_name = "cputrace/cputrace-" + buffer.str() + ".log";
 
     g_data = RNDR_MAKE_SCOPED(CpuTracerData);
-#ifdef RNDR_SPDLOG
-    g_data->logger =
-        spdlog::create_async<spdlog::sinks::basic_file_sink_mt>("async_cputrace_logger",
-                                                                output_name);
+    g_data->logger = spdlog::create_async<spdlog::sinks::basic_file_sink_mt>("async_cputrace_logger", output_name);
     g_data->logger->set_pattern("%v");
     g_data->logger->info("[");
-#endif  // Rndr_SPDLOG
 
     return true;
 }
@@ -83,10 +75,8 @@ bool Rndr::CpuTracer::Destroy()
               duration_us,
               thread_id);
 
-#ifdef RNDR_SPDLOG
     g_data->logger->info("{}", trace.data());
     g_data->logger->info("]");
-#endif  // Rndr_SPDLOG
     return true;
 }
 
@@ -106,15 +96,10 @@ void Rndr::CpuTracer::AddTrace(const String& name, int64_t start_us, int64_t end
               duration,
               thread_id);
 
-#ifdef RNDR_SPDLOG
     g_data->logger->info("{}", trace.data());
-#endif  // Rndr_SPDLOG
 }
 
-Rndr::CpuTraceScoped::CpuTraceScoped(String name)
-    : m_name(std::move(name)), m_start_us(GetTimestamp())
-{
-}
+Rndr::CpuTraceScoped::CpuTraceScoped(String name) : m_name(std::move(name)), m_start_us(GetTimestamp()) {}
 
 Rndr::CpuTraceScoped::~CpuTraceScoped()
 {
