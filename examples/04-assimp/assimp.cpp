@@ -144,7 +144,7 @@ void Run()
 
         const float ratio = static_cast<Rndr::real>(window.GetWidth())
                             / static_cast<Rndr::real>(window.GetHeight());
-        const float angle = std::fmod(10 * Rndr::GetSystemTime(), 360.0f);
+        const float angle = static_cast<float>(std::fmod(10 * Rndr::GetSystemTime(), 360.0));
         const math::Transform t = math::Translate(math::Vector3(0.0f, -0.5f, -1.5f))
                                   * math::Rotate(angle, math::Vector3(0.0f, 1.0f, 0.0f))
                                   * math::RotateX(-90);

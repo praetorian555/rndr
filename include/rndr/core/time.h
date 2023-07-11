@@ -19,12 +19,12 @@ Timestamp GetTimestamp();
  * @param end The end timestamp.
  * @return The duration between the two timestamps in seconds.
  */
-real GetDuration(Timestamp start, Timestamp end);
+double GetDuration(Timestamp start, Timestamp end);
 
 /**
  * @brief Get the current time in seconds.
  * @return The current time in seconds.
  */
-real GetSystemTime();
+double GetSystemTime();
 
 }  // namespace Rndr

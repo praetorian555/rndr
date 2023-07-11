@@ -11,12 +11,12 @@ Rndr::Timestamp Rndr::GetTimestamp()
     return result_int;
 }
 
-Rndr::real Rndr::GetDuration(Rndr::Timestamp start, Rndr::Timestamp end)
+double Rndr::GetDuration(Rndr::Timestamp start, Rndr::Timestamp end)
 {
-    return static_cast<real>(end - start) / MATH_REALC(1'000'000.0);
+    return static_cast<double>(end - start) / MATH_REALC(1'000'000.0);
 }
 
-Rndr::real Rndr::GetSystemTime()
+double Rndr::GetSystemTime()
 {
     return GetDuration(0, GetTimestamp());
 }
