@@ -26,6 +26,7 @@ set(SOURCE_LIST
         "${PROJECT_SOURCE_DIR}/include/rndr/utility/input-layout-builder.h"
         "${PROJECT_SOURCE_DIR}/include/rndr/utility/cpu-tracer.h"
         "${PROJECT_SOURCE_DIR}/include/rndr/utility/default-logger.h"
+        "${PROJECT_SOURCE_DIR}/include/rndr/utility/frames-per-second-counter.h"
         "${PROJECT_SOURCE_DIR}/src/core/base.cpp"
         "${PROJECT_SOURCE_DIR}/src/core/time.cpp"
         "${PROJECT_SOURCE_DIR}/src/core/window.cpp"
@@ -37,7 +38,8 @@ set(SOURCE_LIST
         "${PROJECT_SOURCE_DIR}/src/render-api/opengl-helpers.h"
         "${PROJECT_SOURCE_DIR}/src/render-api/opengl-helpers.cpp"
         "${PROJECT_SOURCE_DIR}/src/utility/imgui-wrapper.cpp"
-        "${PROJECT_SOURCE_DIR}/src/utility/input-layout-builder.cpp")
+        "${PROJECT_SOURCE_DIR}/src/utility/input-layout-builder.cpp"
+        "${PROJECT_SOURCE_DIR}/src/utility/frames-per-second-counter.cpp")
 
 if (RNDR_OPENGL)
     list(APPEND SOURCE_LIST
