@@ -1,4 +1,4 @@
-#include "rndr/utility/flycamera.h"
+#include "rndr/utility/fly-camera.h"
 
 #include "math/transform.h"
 
