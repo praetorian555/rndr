@@ -12,7 +12,7 @@ void Rndr::FramesPerSecondCounter::Update(float delta_time)
 
     if (m_time_since_last_update >= m_update_interval)
     {
-        m_frames_per_second = static_cast<float>(m_frames_since_last_update) / m_update_interval;
+        m_frames_per_second = static_cast<float>(m_frames_since_last_update) / m_time_since_last_update;
         m_frames_since_last_update = 0;
         m_time_since_last_update = 0.0f;
     }
