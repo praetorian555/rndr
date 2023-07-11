@@ -100,6 +100,13 @@ public:
     bool RemoveRenderer(const String& name);
 
     /**
+     * Gets the index of the renderer with the given name.
+     * @param name Name of the renderer.
+     * @return Index of the renderer or -1 if the renderer was not found.
+     */
+    [[nodiscard]] int32_t GetRendererIndex(const String& name);
+
+    /**
      * Renders all renderers in the manager.
      * @return True if all renderers were rendered successfully.
      */

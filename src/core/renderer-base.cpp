@@ -81,6 +81,18 @@ bool Rndr::RendererManager::RemoveRenderer(const Rndr::String& name)
     return false;
 }
 
+int32_t Rndr::RendererManager::GetRendererIndex(const String& name)
+{
+    for (size_t i = 0; i < m_renderers.size(); ++i)
+    {
+        if (m_renderers[i]->GetName() == name)
+        {
+            return static_cast<int32_t>(i);
+        }
+    }
+    return -1;
+}
+
 bool Rndr::RendererManager::Render()
 {
     for (auto& renderer : m_renderers)
