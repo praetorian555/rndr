@@ -35,7 +35,7 @@ protected:
 class ClearRenderer : public RendererBase
 {
 public:
-    ClearRenderer(const String& name, const RendererBaseDesc& desc, const math::Vector4& color, float depth, uint32_t stencil);
+    ClearRenderer(const String& name, const RendererBaseDesc& desc, const math::Vector4& color, float depth = 1.0f, uint32_t stencil = 0);
 
     bool Render() override;
 
