@@ -1,5 +1,7 @@
 #include "rndr/core/renderer-base.h"
 
+#include "rndr/utility/cpu-tracer.h"
+
 Rndr::RendererBase::RendererBase(const Rndr::String& name, const Rndr::RendererBaseDesc& desc) : m_name(name), m_desc(desc) {}
 
 Rndr::ClearRenderer::ClearRenderer(const Rndr::String& name,
@@ -13,6 +15,7 @@ Rndr::ClearRenderer::ClearRenderer(const Rndr::String& name,
 
 bool Rndr::ClearRenderer::Render()
 {
+    RNDR_TRACE_SCOPED(ClearRenderer::Render);
     return m_desc.graphics_context->ClearColorAndDepth(m_color, m_depth);
 }
 
@@ -20,6 +23,7 @@ Rndr::PresentRenderer::PresentRenderer(const Rndr::String& name, const Rndr::Ren
 
 bool Rndr::PresentRenderer::Render()
 {
+    RNDR_TRACE_SCOPED(PresentRenderer::Render);
     return m_desc.graphics_context->Present(m_desc.swap_chain);
 }
 
