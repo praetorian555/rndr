@@ -82,6 +82,11 @@ bool Rndr::CpuTracer::Destroy()
 
 void Rndr::CpuTracer::AddTrace(const String& name, int64_t start_us, int64_t end_us)
 {
+    if (g_data == nullptr)
+    {
+        return;
+    }
+
     const int64_t duration = end_us - start_us;
     const uint32_t thread_id = GetThreadId();
     constexpr int k_trace_size = 4 * 1024;
