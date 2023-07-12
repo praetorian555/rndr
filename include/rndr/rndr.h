@@ -21,3 +21,4 @@
 #include "rndr/utility/frames-per-second-counter.h"
 #include "rndr/utility/imgui-wrapper.h"
 #include "rndr/utility/input-layout-builder.h"
+#include "rndr/utility/line-renderer.h"

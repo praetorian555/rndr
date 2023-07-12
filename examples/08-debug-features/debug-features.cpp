@@ -174,11 +174,13 @@ void Run()
     const Rndr::ScopePtr<Rndr::RendererBase> present_renderer =
         RNDR_MAKE_SCOPED(Rndr::PresentRenderer, "Present the back buffer", renderer_desc);
     const Rndr::ScopePtr<Rndr::RendererBase> mesh_renderer = RNDR_MAKE_SCOPED(MeshRenderer, "Render a mesh", renderer_desc);
+    const Rndr::ScopePtr<Rndr::LineRenderer> line_renderer = RNDR_MAKE_SCOPED(Rndr::LineRenderer, "Debug renderer", renderer_desc);
 
     Rndr::RendererManager renderer_manager;
     renderer_manager.AddRenderer(clear_renderer.get());
     renderer_manager.AddRenderer(mesh_renderer.get());
     renderer_manager.AddRenderer(present_renderer.get());
+    renderer_manager.AddRendererBefore(line_renderer.get(), "Present the back buffer");
 
     Rndr::FramesPerSecondCounter fps_counter(0.1f);
     float delta_seconds = 0.033f;
@@ -191,6 +193,9 @@ void Run()
         fps_counter.Update(delta_seconds);
 
         window.ProcessEvents();
+
+        line_renderer->AddLine(math::Point3(-1.0f, -0.5f, -0.5f), math::Point3(1.0f, 0.5f, -0.5f), math::Vector4(1.0f, 0.0f, 0.0f, 1.0f));
+
         renderer_manager.Render();
 
         const Rndr::Timestamp end_time = Rndr::GetTimestamp();
