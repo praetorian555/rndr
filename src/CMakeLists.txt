@@ -115,5 +115,5 @@ source_group(
         FILES ${PRIVATE_SOURCE_LIST})
 
 # @formatter:off
-target_compile_definitions(rndr PUBLIC RNDR_ASSET_DIR="${CMAKE_CURRENT_SOURCE_DIR}/../assets")
+target_compile_definitions(rndr PUBLIC RNDR_CORE_ASSETS_DIR="${CMAKE_CURRENT_SOURCE_DIR}/../assets")
 # @formatter:on
