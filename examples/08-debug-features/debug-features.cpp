@@ -17,7 +17,7 @@ void Run();
  */
 int main()
 {
-    Rndr::Init();
+    Rndr::Init({.enable_cpu_tracer = true});
     Run();
     Rndr::Destroy();
 }
@@ -120,12 +120,13 @@ public:
 
     bool Render() override
     {
+        RNDR_TRACE_SCOPED(Mesh rendering);
+
         // Rotate the mesh
         const float width = static_cast<float>(m_desc.swap_chain->GetDesc().width);
         const float height = static_cast<float>(m_desc.swap_chain->GetDesc().height);
         const float ratio = width / height;
         const float angle = static_cast<float>(std::fmod(10 * Rndr::GetSystemTime(), 360.0));
-        RNDR_LOG_INFO("angle: %f", angle);
         const math::Transform t =
             math::Translate(math::Vector3(0.0f, -0.5f, -1.5f)) * math::Rotate(angle, math::Vector3(0.0f, 1.0f, 0.0f)) * math::RotateX(-90);
         const math::Matrix4x4 p = math::Perspective_RH_N1(45.0f, ratio, 0.1f, 1000.0f);
@@ -179,9 +180,20 @@ void Run()
     renderer_manager.AddRenderer(mesh_renderer.get());
     renderer_manager.AddRenderer(present_renderer.get());
 
+    Rndr::FramesPerSecondCounter fps_counter(0.1f);
+    float delta_seconds = 0.033f;
     while (!window.IsClosed())
     {
+        RNDR_TRACE_SCOPED(Frame);
+
+        const Rndr::Timestamp start_time = Rndr::GetTimestamp();
+
+        fps_counter.Update(delta_seconds);
+
         window.ProcessEvents();
         renderer_manager.Render();
+
+        const Rndr::Timestamp end_time = Rndr::GetTimestamp();
+        delta_seconds = static_cast<float>(Rndr::GetDuration(start_time, end_time));
     }
 }
