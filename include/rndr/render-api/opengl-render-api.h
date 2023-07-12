@@ -14,7 +14,6 @@ namespace Rndr
 class SwapChain;
 class Shader;
 class Pipeline;
-class InputLayout;
 class Buffer;
 class Image;
 
