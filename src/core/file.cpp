@@ -39,7 +39,7 @@ Rndr::String Rndr::File::ReadEntireTextFile(const Rndr::String& file_path)
 
 Rndr::String Rndr::File::ReadShader(const Rndr::String& ref_path, const Rndr::String& shader_path)
 {
-    const std::filesystem::path full_shader_path = std::filesystem::path(ref_path).parent_path() / shader_path;
+    const std::filesystem::path full_shader_path = std::filesystem::path(ref_path) / shader_path;
     if (!std::filesystem::exists(full_shader_path))
     {
         RNDR_LOG_ERROR("Shader file %s does not exist!", full_shader_path.string().c_str());
@@ -85,8 +85,7 @@ Rndr::String Rndr::File::ReadShader(const Rndr::String& ref_path, const Rndr::St
             RNDR_LOG_ERROR("Invalid include statement %s", include_line.c_str());
             return {};
         }
-        const std::filesystem::path full_include_path = std::filesystem::path(ref_path).parent_path() / include_path;
-        const String include_contents = ReadShader(full_shader_path.string(), include_path);
+        const String include_contents = ReadShader(full_shader_path.parent_path().string(), include_path);
         shader_contents.replace(include_start, include_length, include_contents);
     }
 
