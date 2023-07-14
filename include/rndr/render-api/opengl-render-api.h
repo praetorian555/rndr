@@ -121,7 +121,6 @@ public:
      * @param offset The offset into the buffer to update.
      * @return Returns true if the buffer was updated successfully, false otherwise.
      */
-    bool Update(Buffer& buffer, const ByteSpan& data, uint32_t offset = 0);
     bool Update(Buffer& buffer, const ConstByteSpan& data, uint32_t offset = 0);
 
     /**
@@ -227,7 +226,7 @@ class Buffer
 public:
     Buffer(const GraphicsContext& graphics_context,
            const BufferDesc& desc,
-           const ByteSpan& init_data = ByteSpan{});
+           const ConstByteSpan& init_data = ConstByteSpan{});
     ~Buffer();
     Buffer(const Buffer&) = delete;
     Buffer& operator=(const Buffer&) = delete;
@@ -260,7 +259,7 @@ public:
      */
     Image(const GraphicsContext& graphics_context,
           const ImageDesc& desc,
-          const ByteSpan& init_data = ByteSpan{});
+          const ConstByteSpan& init_data = ConstByteSpan{});
 
     /**
      * Creates a new image from a CPU image. Only creates Image2D so any other type will result in

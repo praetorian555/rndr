@@ -512,18 +512,6 @@ bool Rndr::GraphicsContext::DrawIndices(PrimitiveTopology topology,
     return true;
 }
 
-bool Rndr::GraphicsContext::Update(Buffer& buffer, const ByteSpan& data, uint32_t offset)
-{
-    const GLuint native_buffer = buffer.GetNativeBuffer();
-    glNamedBufferSubData(native_buffer, offset, static_cast<GLsizeiptr>(data.size()), data.data());
-    if (glGetError() != GL_NO_ERROR)
-    {
-        RNDR_LOG_ERROR("Failed to update buffer!");
-        return false;
-    }
-    return true;
-}
-
 bool Rndr::GraphicsContext::Update(Buffer& buffer, const ConstByteSpan& data, uint32_t offset)
 {
     const GLuint native_buffer = buffer.GetNativeBuffer();
@@ -921,7 +909,7 @@ uint32_t Rndr::Pipeline::GetIndexBufferElementSize() const
 
 Rndr::Buffer::Buffer(const GraphicsContext& graphics_context,
                      const BufferDesc& desc,
-                     const ByteSpan& init_data)
+                     const ConstByteSpan& init_data)
     : m_desc(desc)
 {
     RNDR_UNUSED(graphics_context);
@@ -990,7 +978,7 @@ GLuint Rndr::Buffer::GetNativeBuffer() const
 
 Rndr::Image::Image(const GraphicsContext& graphics_context,
                    const ImageDesc& desc,
-                   const ByteSpan& init_data)
+                   const ConstByteSpan& init_data)
     : m_desc(desc)
 {
     RNDR_UNUSED(graphics_context);
