@@ -1,121 +1,123 @@
-#include "rndr/utility/fly-camera.h"
+#include "Rndr/utility/fly-camera.h"
 
 #include "math/transform.h"
 
-#include "rndr/core/input.h"
-#include "rndr/core/log.h"
-#include "rndr/core/projection-camera.h"
+#include "rndr/core/window.h"
 
-rndr::FlyCamera::FlyCamera(InputContext* InputContext,
-                           int ScreenWidth,
-                           int ScreenHeight,
-                           const FlyCameraProperties& Props)
-    : ProjectionCamera(Props.StartPosition,
-                       Props.StartRotation,
-                       ScreenWidth,
-                       ScreenHeight,
-                       Props.ProjectionProps),
-      m_InputContext(InputContext),
-      m_Props(Props)
+Rndr::FlyCamera::FlyCamera(Window* window, InputContext* input_context, const FlyCameraDesc& desc)
+    : ProjectionCamera(desc.start_position, desc.start_rotation, window->GetWidth(), window->GetHeight(), desc.projection_desc),
+      m_window(window),
+      m_input_context(input_context),
+      m_desc(desc),
+      m_prev_cursor_mode(m_window->GetCursorMode())
 {
-    using IP = rndr::InputPrimitive;
-    using IT = rndr::InputTrigger;
+    using IP = Rndr::InputPrimitive;
+    using IT = Rndr::InputTrigger;
 
-    m_InputContext->CreateMapping("MoveForward",
-                                  RNDR_BIND_INPUT_CALLBACK(&FlyCamera::HandleMoveForward, this));
-    m_InputContext->AddBinding("MoveForward", IP::Keyboard_W, IT::ButtonDown);
-    m_InputContext->AddBinding("MoveForward", IP::Keyboard_W, IT::ButtonUp);
-    m_InputContext->AddBinding("MoveForward", IP::Keyboard_S, IT::ButtonDown, -1);
-    m_InputContext->AddBinding("MoveForward", IP::Keyboard_S, IT::ButtonUp, -1);
+    m_window_resize_handle = m_window->on_resize.Bind([this](int width, int height) { this->SetScreenSize(width, height); });
+    m_window->SetCursorMode(CursorMode::Infinite);
 
-    m_InputContext->CreateMapping("MoveRight",
-                                  RNDR_BIND_INPUT_CALLBACK(&FlyCamera::HandleMoveRight, this));
-    m_InputContext->AddBinding("MoveRight", IP::Keyboard_A, IT::ButtonDown, -1);
-    m_InputContext->AddBinding("MoveRight", IP::Keyboard_A, IT::ButtonUp, -1);
-    m_InputContext->AddBinding("MoveRight", IP::Keyboard_D, IT::ButtonDown);
-    m_InputContext->AddBinding("MoveRight", IP::Keyboard_D, IT::ButtonUp);
+    Array<InputBinding> forward_bindings;
+    forward_bindings.push_back(InputBinding{.primitive = IP::Keyboard_W, .trigger = IT::ButtonPressed, .modifier = -1});
+    forward_bindings.push_back(InputBinding{.primitive = IP::Keyboard_W, .trigger = IT::ButtonReleased});
+    forward_bindings.push_back(InputBinding{.primitive = IP::Keyboard_S, .trigger = IT::ButtonPressed});
+    forward_bindings.push_back(InputBinding{.primitive = IP::Keyboard_S, .trigger = IT::ButtonReleased});
+    m_input_context->AddAction(
+        InputAction("MoveForward"),
+        InputActionData{.callback = RNDR_BIND_INPUT_CALLBACK(this, FlyCamera::HandleMoveForward), .bindings = forward_bindings});
 
-    m_InputContext->CreateMapping("LookAroundVert",
-                                  RNDR_BIND_INPUT_CALLBACK(&FlyCamera::HandleLookVert, this));
-    m_InputContext->AddBinding("LookAroundVert", IP::Keyboard_Up, IT::ButtonDown);
-    m_InputContext->AddBinding("LookAroundVert", IP::Keyboard_Up, IT::ButtonUp);
-    m_InputContext->AddBinding("LookAroundVert", IP::Keyboard_Down, IT::ButtonDown, -1);
-    m_InputContext->AddBinding("LookAroundVert", IP::Keyboard_Down, IT::ButtonUp, -1);
-    m_InputContext->AddBinding("LookAroundVert", IP::Mouse_AxisY, IT::AxisChangedRelative, -1);
+    Array<InputBinding> right_bindings;
+    right_bindings.push_back(InputBinding{.primitive = IP::Keyboard_A, .trigger = IT::ButtonPressed});
+    right_bindings.push_back(InputBinding{.primitive = IP::Keyboard_A, .trigger = IT::ButtonReleased});
+    right_bindings.push_back(InputBinding{.primitive = IP::Keyboard_D, .trigger = IT::ButtonPressed, .modifier = -1});
+    right_bindings.push_back(InputBinding{.primitive = IP::Keyboard_D, .trigger = IT::ButtonReleased});
+    m_input_context->AddAction(
+        InputAction("MoveRight"),
+        InputActionData{.callback = RNDR_BIND_INPUT_CALLBACK(this, FlyCamera::HandleMoveRight), .bindings = right_bindings});
 
-    m_InputContext->CreateMapping("LookAroundHorz",
-                                  RNDR_BIND_INPUT_CALLBACK(&FlyCamera::HandleLookHorz, this));
-    m_InputContext->AddBinding("LookAroundHorz", IP::Keyboard_Right, IT::ButtonDown, -1);
-    m_InputContext->AddBinding("LookAroundHorz", IP::Keyboard_Right, IT::ButtonUp, -1);
-    m_InputContext->AddBinding("LookAroundHorz", IP::Keyboard_Left, IT::ButtonDown, 1);
-    m_InputContext->AddBinding("LookAroundHorz", IP::Keyboard_Left, IT::ButtonUp, 1);
-    m_InputContext->AddBinding("LookAroundHorz", IP::Mouse_AxisX, IT::AxisChangedRelative, -1);
+    Array<InputBinding> vert_bindings;
+    vert_bindings.push_back(InputBinding{.primitive = IP::Keyboard_UpArrow, .trigger = IT::ButtonPressed});
+    vert_bindings.push_back(InputBinding{.primitive = IP::Keyboard_UpArrow, .trigger = IT::ButtonReleased});
+    vert_bindings.push_back(InputBinding{.primitive = IP::Keyboard_DownArrow, .trigger = IT::ButtonPressed, .modifier = -1});
+    vert_bindings.push_back(InputBinding{.primitive = IP::Keyboard_DownArrow, .trigger = IT::ButtonReleased, .modifier = -1});
+    vert_bindings.push_back(InputBinding{.primitive = IP::Mouse_AxisY, .trigger = IT::AxisChangedRelative, .modifier = -1});
+    m_input_context->AddAction(
+        InputAction("LookAroundVert"),
+        InputActionData{.callback = RNDR_BIND_INPUT_CALLBACK(this, FlyCamera::HandleLookVert), .bindings = vert_bindings});
+
+    Array<InputBinding> horz_bindings;
+    horz_bindings.push_back(InputBinding{.primitive = IP::Keyboard_RightArrow, .trigger = IT::ButtonPressed, .modifier = -1});
+    horz_bindings.push_back(InputBinding{.primitive = IP::Keyboard_RightArrow, .trigger = IT::ButtonReleased, .modifier = -1});
+    horz_bindings.push_back(InputBinding{.primitive = IP::Keyboard_LeftArrow, .trigger = IT::ButtonPressed});
+    horz_bindings.push_back(InputBinding{.primitive = IP::Keyboard_LeftArrow, .trigger = IT::ButtonReleased});
+    horz_bindings.push_back(InputBinding{.primitive = IP::Mouse_AxisX, .trigger = IT::AxisChangedRelative, .modifier = -1});
+    m_input_context->AddAction(
+        InputAction("LookAroundHorz"),
+        InputActionData{.callback = RNDR_BIND_INPUT_CALLBACK(this, FlyCamera::HandleLookHorz), .bindings = horz_bindings});
 }
 
-void rndr::FlyCamera::Update(real DeltaSeconds)
+Rndr::FlyCamera::~FlyCamera()
 {
-    m_DirectionVector = math::Vector3{0, 0, 1};  // Left-handed
-    math::Rotator Rotation = GetRotation();
-    Rotation += DeltaSeconds * m_Props.RotationSpeed * m_DeltaRotation;
-    m_DirectionVector = math::Rotate(Rotation)(m_DirectionVector);
-    m_RightVector = math::Cross(m_DirectionVector, math::Vector3{0, 1, 0});
-
-    constexpr real kMaxRoll = 89.0f;
-    Rotation.Roll = math::Clamp(Rotation.Roll, -kMaxRoll, kMaxRoll);
-
-    math::Point3 Position = GetPosition();
-    Position += m_Props.MovementSpeed * DeltaSeconds * m_DeltaPosition.X * m_DirectionVector;
-    Position += m_Props.MovementSpeed * DeltaSeconds * m_DeltaPosition.Y * m_RightVector;
-
-    SetPositionAndRotation(Position, Rotation);
-
-    m_DeltaRotation = math::Rotator{};
+    m_window->on_resize.Unbind(m_window_resize_handle);
+    m_window->SetCursorMode(m_prev_cursor_mode);
 }
 
-void rndr::FlyCamera::HandleLookVert(rndr::InputPrimitive Primitive,
-                                     rndr::InputTrigger Trigger,
-                                     real AxisValue)
+void Rndr::FlyCamera::Update(real delta_seconds)
 {
-    using IT = rndr::InputTrigger;
-    if (Primitive == rndr::InputPrimitive::Mouse_AxisY)
+    m_direction_vector = math::Vector3{0, 0, 1};  // Left-handed
+    math::Rotator rotation = GetRotation();
+    rotation += delta_seconds * m_desc.rotation_speed * m_delta_rotation;
+    m_direction_vector = math::Rotate(rotation)(m_direction_vector);
+    m_right_vector = math::Cross(m_direction_vector, math::Vector3{0, 1, 0});
+
+    constexpr real k_max_roll = 89.0f;
+    rotation.Roll = math::Clamp(rotation.Roll, -k_max_roll, k_max_roll);
+
+    math::Point3 position = GetPosition();
+    position += m_desc.movement_speed * delta_seconds * m_delta_position.X * m_direction_vector;
+    position += m_desc.movement_speed * delta_seconds * m_delta_position.Y * m_right_vector;
+
+    SetPositionAndRotation(position, rotation);
+
+    m_delta_rotation = math::Rotator{};
+}
+
+void Rndr::FlyCamera::HandleLookVert(Rndr::InputPrimitive primitive, Rndr::InputTrigger trigger, real axis_value)
+{
+    using IT = Rndr::InputTrigger;
+    if (primitive == Rndr::InputPrimitive::Mouse_AxisY)
     {
-        m_DeltaRotation.Roll = m_Props.RotationSpeed * AxisValue;
+        m_delta_rotation.Roll = m_desc.rotation_speed * axis_value;
     }
     else
     {
-        m_DeltaRotation.Roll = Trigger == IT::ButtonDown ? m_Props.RotationSpeed * AxisValue : 0;
+        m_delta_rotation.Roll = trigger == IT::ButtonPressed ? m_desc.rotation_speed * axis_value : 0;
     }
 }
 
-void rndr::FlyCamera::HandleLookHorz(rndr::InputPrimitive Primitive,
-                                     rndr::InputTrigger Trigger,
-                                     real AxisValue)
+void Rndr::FlyCamera::HandleLookHorz(Rndr::InputPrimitive primitive, Rndr::InputTrigger trigger, real axis_value)
 {
-    using IT = rndr::InputTrigger;
-    if (Primitive == rndr::InputPrimitive::Mouse_AxisX)
+    using IT = Rndr::InputTrigger;
+    if (primitive == Rndr::InputPrimitive::Mouse_AxisX)
     {
-        m_DeltaRotation.Yaw = m_Props.RotationSpeed * AxisValue;
+        m_delta_rotation.Yaw = m_desc.rotation_speed * axis_value;
     }
     else
     {
-        m_DeltaRotation.Yaw = Trigger == IT::ButtonDown ? m_Props.RotationSpeed * AxisValue : 0;
+        m_delta_rotation.Yaw = trigger == IT::ButtonPressed ? m_desc.rotation_speed * axis_value : 0;
     }
 }
 
-void rndr::FlyCamera::HandleMoveForward(rndr::InputPrimitive Primitive,
-                                        rndr::InputTrigger Trigger,
-                                        real Value)
+void Rndr::FlyCamera::HandleMoveForward(Rndr::InputPrimitive primitive, Rndr::InputTrigger trigger, real value)
 {
-    RNDR_UNUSED(Primitive);
-    using IT = rndr::InputTrigger;
-    m_DeltaPosition.X = Trigger == IT::ButtonDown ? Value : 0;
+    RNDR_UNUSED(primitive);
+    using IT = Rndr::InputTrigger;
+    m_delta_position.X = trigger == IT::ButtonPressed ? value : 0;
 }
 
-void rndr::FlyCamera::HandleMoveRight(rndr::InputPrimitive Primitive,
-                                      rndr::InputTrigger Trigger,
-                                      real Value)
+void Rndr::FlyCamera::HandleMoveRight(Rndr::InputPrimitive primitive, Rndr::InputTrigger trigger, real value)
 {
-    RNDR_UNUSED(Primitive);
-    using IT = rndr::InputTrigger;
-    m_DeltaPosition.Y = Trigger == IT::ButtonDown ? Value : 0;
+    RNDR_UNUSED(primitive);
+    using IT = Rndr::InputTrigger;
+    m_delta_position.Y = trigger == IT::ButtonPressed ? value : 0;
 }

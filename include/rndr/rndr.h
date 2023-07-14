@@ -22,3 +22,4 @@
 #include "rndr/utility/imgui-wrapper.h"
 #include "rndr/utility/input-layout-builder.h"
 #include "rndr/utility/line-renderer.h"
+#include "rndr/utility/fly-camera.h"

@@ -28,6 +28,7 @@ set(SOURCE_LIST
         "${PROJECT_SOURCE_DIR}/include/rndr/utility/default-logger.h"
         "${PROJECT_SOURCE_DIR}/include/rndr/utility/frames-per-second-counter.h"
         "${PROJECT_SOURCE_DIR}/include/rndr/utility/line-renderer.h"
+        "${PROJECT_SOURCE_DIR}/include/rndr/utility/fly-camera.h"
         "${PROJECT_SOURCE_DIR}/src/core/base.cpp"
         "${PROJECT_SOURCE_DIR}/src/core/time.cpp"
         "${PROJECT_SOURCE_DIR}/src/core/window.cpp"
@@ -41,7 +42,8 @@ set(SOURCE_LIST
         "${PROJECT_SOURCE_DIR}/src/utility/imgui-wrapper.cpp"
         "${PROJECT_SOURCE_DIR}/src/utility/input-layout-builder.cpp"
         "${PROJECT_SOURCE_DIR}/src/utility/frames-per-second-counter.cpp"
-        "${PROJECT_SOURCE_DIR}/src/utility/line-renderer.cpp")
+        "${PROJECT_SOURCE_DIR}/src/utility/line-renderer.cpp"
+        "${PROJECT_SOURCE_DIR}/src/utility/fly-camera.cpp")
 
 if (RNDR_OPENGL)
     list(APPEND SOURCE_LIST

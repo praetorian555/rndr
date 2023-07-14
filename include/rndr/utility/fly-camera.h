@@ -1,23 +1,23 @@
 #pragma once
 
-#include "math/point3.h"
-#include "math/rotator.h"
-#include "math/vector3.h"
-
 #include "rndr/core/base.h"
+#include "rndr/core/delegate.h"
 #include "rndr/core/input.h"
 #include "rndr/core/projection-camera.h"
 
-namespace rndr
+namespace Rndr
 {
 
-struct FlyCameraProperties
+class Window;
+enum class CursorMode;
+
+struct FlyCameraDesc
 {
-    math::Point3 StartPosition;
-    math::Rotator StartRotation;
-    real MovementSpeed = RNDR_REALC(1.0);
-    real RotationSpeed = RNDR_REALC(8000.0);
-    ProjectionCameraProperties ProjectionProps;
+    math::Point3 start_position;
+    math::Rotator start_rotation;
+    float movement_speed = 1.0f;
+    float rotation_speed = 8000.0f;
+    ProjectionCameraDesc projection_desc;
 };
 
 /**
@@ -27,31 +27,32 @@ struct FlyCameraProperties
 class FlyCamera : public ProjectionCamera
 {
 public:
-    explicit FlyCamera(InputContext* InputContext,
-                       int ScreenWidth,
-                       int ScreenHeight,
-                       const FlyCameraProperties& Props = FlyCameraProperties{});
+    explicit FlyCamera(Window* window, InputContext* input_context, const FlyCameraDesc& desc = FlyCameraDesc{});
+    ~FlyCamera();
 
-    void Update(real DeltaSeconds);
+    void Update(real delta_seconds);
 
 private:
     // Private methods
 
-    void HandleLookVert(InputPrimitive Primitive, InputTrigger Trigger, real AxisValue);
-    void HandleLookHorz(InputPrimitive Primitive, InputTrigger Trigger, real AxisValue);
-    void HandleMoveForward(InputPrimitive Primitive, InputTrigger Trigger, real Value);
-    void HandleMoveRight(InputPrimitive Primitive, InputTrigger Trigger, real Value);
+    void HandleLookVert(InputPrimitive primitive, InputTrigger trigger, real axis_value);
+    void HandleLookHorz(InputPrimitive primitive, InputTrigger trigger, real axis_value);
+    void HandleMoveForward(InputPrimitive primitive, InputTrigger trigger, real value);
+    void HandleMoveRight(InputPrimitive primitive, InputTrigger trigger, real value);
 
     // Private fields
 
-    InputContext* m_InputContext;
-    FlyCameraProperties m_Props;
+    Window* m_window = nullptr;
+    InputContext* m_input_context = nullptr;
+    FlyCameraDesc m_desc;
 
-    math::Rotator m_DeltaRotation;
-    math::Vector3 m_DeltaPosition;
+    math::Rotator m_delta_rotation;
+    math::Vector3 m_delta_position;
 
-    math::Vector3 m_DirectionVector;
-    math::Vector3 m_RightVector;
+    math::Vector3 m_direction_vector;
+    math::Vector3 m_right_vector;
+    DelegateHandle m_window_resize_handle;
+    CursorMode m_prev_cursor_mode;
 };
 
-}  // namespace rndr
+}  // namespace Rndr
