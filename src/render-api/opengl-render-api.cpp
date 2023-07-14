@@ -524,6 +524,18 @@ bool Rndr::GraphicsContext::Update(Buffer& buffer, const ByteSpan& data, uint32_
     return true;
 }
 
+bool Rndr::GraphicsContext::Update(Buffer& buffer, const ConstByteSpan& data, uint32_t offset)
+{
+    const GLuint native_buffer = buffer.GetNativeBuffer();
+    glNamedBufferSubData(native_buffer, offset, static_cast<GLsizeiptr>(data.size()), data.data());
+    if (glGetError() != GL_NO_ERROR)
+    {
+        RNDR_LOG_ERROR("Failed to update buffer!");
+        return false;
+    }
+    return true;
+}
+
 Rndr::Bitmap Rndr::GraphicsContext::ReadSwapChain(const SwapChain& swap_chain)
 {
     Bitmap invalid_bitmap{-1, -1, -1, PixelFormat::R8G8B8_UNORM_SRGB};

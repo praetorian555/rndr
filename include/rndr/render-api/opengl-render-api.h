@@ -122,6 +122,7 @@ public:
      * @return Returns true if the buffer was updated successfully, false otherwise.
      */
     bool Update(Buffer& buffer, const ByteSpan& data, uint32_t offset = 0);
+    bool Update(Buffer& buffer, const ConstByteSpan& data, uint32_t offset = 0);
 
     /**
      * Reads the contents of a swap chain color image.
