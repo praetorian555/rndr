@@ -78,9 +78,9 @@ void Rndr::LineRenderer::AddLine(const math::Point3& start, const math::Point3& 
     m_vertex_data.push_back({end, color});
 }
 
-void Rndr::LineRenderer::UpdateMVP(math::Matrix4x4& matrix)
+void Rndr::LineRenderer::SetCameraTransform(const math::Transform& transform)
 {
-    m_desc.graphics_context->Update(*m_constant_buffer, Rndr::ToByteSpan(matrix));
+    m_desc.graphics_context->Update(*m_constant_buffer, Rndr::ToByteSpan(transform.GetMatrix()));
 }
 
 bool Rndr::LineRenderer::Render()

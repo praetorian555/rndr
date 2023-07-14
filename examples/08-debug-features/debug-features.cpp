@@ -208,6 +208,7 @@ void Run()
         mesh_renderer->SetCameraTransform(fly_camera.FromWorldToNDC());
 
         line_renderer->AddLine(math::Point3(-1.0f, -0.5f, -0.5f), math::Point3(1.0f, 0.5f, -0.5f), math::Vector4(1.0f, 0.0f, 0.0f, 1.0f));
+        line_renderer->SetCameraTransform(math::Transpose(fly_camera.FromWorldToNDC()));
 
         renderer_manager.Render();
 

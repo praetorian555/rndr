@@ -17,7 +17,7 @@ public:
 
     void AddLine(const math::Point3& start, const math::Point3& end, const math::Vector4& color);
 
-    void UpdateMVP(math::Matrix4x4& matrix);
+    void SetCameraTransform(const math::Transform& transform);
 
     bool Render() override;
 
