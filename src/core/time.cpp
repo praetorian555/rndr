@@ -13,7 +13,7 @@ Rndr::Timestamp Rndr::GetTimestamp()
 
 double Rndr::GetDuration(Rndr::Timestamp start, Rndr::Timestamp end)
 {
-    return static_cast<double>(end - start) / MATH_REALC(1'000'000.0);
+    return static_cast<double>(end - start) / 1'000'000.0;
 }
 
 double Rndr::GetSystemTime()

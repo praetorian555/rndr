@@ -1,8 +1,8 @@
 #pragma once
 
-#include "rndr/core/base.h"
 #include "rndr/core/delegate.h"
 #include "rndr/core/input.h"
+#include "rndr/core/math.h"
 #include "rndr/core/projection-camera.h"
 
 namespace Rndr
@@ -13,8 +13,8 @@ enum class CursorMode;
 
 struct FlyCameraDesc
 {
-    math::Point3 start_position;
-    math::Rotator start_rotation;
+    Point3f start_position = Point3f::Zero();
+    Rotatorf start_rotation = Rotatorf::Zero();
     float movement_speed = 1.0f;
     float rotation_speed = 8000.0f;
     ProjectionCameraDesc projection_desc;
@@ -30,15 +30,15 @@ public:
     explicit FlyCamera(Window* window, InputContext* input_context, const FlyCameraDesc& desc = FlyCameraDesc{});
     ~FlyCamera();
 
-    void Update(real delta_seconds);
+    void Update(float delta_seconds);
 
 private:
     // Private methods
 
-    void HandleLookVert(InputPrimitive primitive, InputTrigger trigger, real axis_value);
-    void HandleLookHorz(InputPrimitive primitive, InputTrigger trigger, real axis_value);
-    void HandleMoveForward(InputPrimitive primitive, InputTrigger trigger, real value);
-    void HandleMoveRight(InputPrimitive primitive, InputTrigger trigger, real value);
+    void HandleLookVert(InputPrimitive primitive, InputTrigger trigger, float axis_value);
+    void HandleLookHorz(InputPrimitive primitive, InputTrigger trigger, float axis_value);
+    void HandleMoveForward(InputPrimitive primitive, InputTrigger trigger, float value);
+    void HandleMoveRight(InputPrimitive primitive, InputTrigger trigger, float value);
 
     // Private fields
 
@@ -46,11 +46,11 @@ private:
     InputContext* m_input_context = nullptr;
     FlyCameraDesc m_desc;
 
-    math::Rotator m_delta_rotation;
-    math::Vector3 m_delta_position;
+    Rotatorf m_delta_rotation = Rotatorf::Zero();
+    Vector3f m_delta_position = Vector3f::Zero();
 
-    math::Vector3 m_direction_vector;
-    math::Vector3 m_right_vector;
+    Vector3f m_direction_vector = Vector3f::Zero();
+    Vector3f m_right_vector = Vector3f::Zero();
     DelegateHandle m_window_resize_handle;
     CursorMode m_prev_cursor_mode;
 };

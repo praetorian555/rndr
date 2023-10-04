@@ -1,8 +1,8 @@
 #pragma once
 
-#include "rndr/core/base.h"
 #include "rndr/core/delegate.h"
 #include "rndr/core/forward-def-windows.h"
+#include "rndr/core/math.h"
 
 namespace Rndr
 {
@@ -72,8 +72,7 @@ public:
      * Called when the native window event occurs, before the window processes it.
      * @return True if the event was handled and window should not handle it, false otherwise.
      */
-    using NativeEventDelegate = Delegate<
-        bool(HWND /*window_handle*/, UINT /*msg_code*/, WPARAM /*param_w*/, LPARAM /*param_l*/)>;
+    using NativeEventDelegate = Delegate<bool(HWND /*window_handle*/, UINT /*msg_code*/, WPARAM /*param_w*/, LPARAM /*param_l*/)>;
     NativeEventDelegate on_native_event;
 
     /**
@@ -145,7 +144,7 @@ public:
      * Gets the size of the window.
      * @return The size of the window as floating-point values.
      */
-    [[nodiscard]] math::Vector2 GetSize() const;
+    [[nodiscard]] Vector2f GetSize() const;
 
     /**
      * Resizes the window.
@@ -221,10 +220,7 @@ private:
 
     // Implementation details //////////////////////////////////////////////////////////////////////
     friend void WindowPrivate::HandleMouseMove(Rndr::Window* window, int x, int y);
-    friend LRESULT CALLBACK WindowPrivate::WindowProc(HWND window_handle,
-                                                      UINT msg_code,
-                                                      WPARAM param_w,
-                                                      LPARAM param_l);
+    friend LRESULT CALLBACK WindowPrivate::WindowProc(HWND window_handle, UINT msg_code, WPARAM param_w, LPARAM param_l);
 };
 
 }  // namespace Rndr

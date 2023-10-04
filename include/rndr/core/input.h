@@ -2,16 +2,13 @@
 
 #include <functional>
 
-#include "math/point2.h"
-#include "math/vector2.h"
-
-#include "rndr/core/base.h"
+#include "rndr/core/forward-def-windows.h"
 #include "rndr/core/input-primitives.h"
+#include "rndr/core/math.h"
 #include "rndr/core/ref.h"
 #include "rndr/core/scope-ptr.h"
 #include "rndr/core/span.h"
 #include "rndr/core/string.h"
-#include "rndr/core/forward-def-windows.h"
 
 namespace Rndr
 {
@@ -41,7 +38,7 @@ struct InputBinding
 {
     InputPrimitive primitive;
     InputTrigger trigger;
-    real modifier = MATH_REALC(1.0);
+    float modifier = 1.0f;
 
     /**
      * Compares two input bindings. The modifier is not considered.
@@ -54,8 +51,7 @@ struct InputBinding
 /**
  * Represents a callback that is invoked when an input action is triggered.
  */
-using InputCallback =
-    std::function<void(InputPrimitive primitive, InputTrigger trigger, real value)>;
+using InputCallback = std::function<void(InputPrimitive primitive, InputTrigger trigger, float value)>;
 
 /**
  * Helper struct to initialize an input action in the input context.
@@ -201,7 +197,7 @@ public:
      * Processes all pending input events.
      * @param delta_seconds Time elapsed since the last frame.
      */
-    static bool ProcessEvents(real delta_seconds);
+    static bool ProcessEvents(float delta_seconds);
 
     /**
      * Submits a button event to the input system.
@@ -219,9 +215,7 @@ public:
      * corner.
      * @param screen_size Size of the screen in pixels.
      */
-    static bool SubmitMousePositionEvent(NativeWindowHandle window,
-                                         const math::Point2& position,
-                                         const math::Vector2& screen_size);
+    static bool SubmitMousePositionEvent(NativeWindowHandle window, const Point2f& position, const Vector2f& screen_size);
 
     /**
      * Submits a relative mouse position event to the input system. Used in case of infinite cursor
@@ -231,9 +225,8 @@ public:
      * mouse position. Positive values mean the mouse moved to the right or up.
      * @param screen_size Size of the screen in pixels.
      */
-    static bool SubmitRelativeMousePositionEvent(NativeWindowHandle window,
-                                                 const math::Vector2& delta_position,
-                                                 const math::Vector2& screen_size);
+    static bool SubmitRelativeMousePositionEvent(NativeWindowHandle window, const Vector2f& delta_position,
+                                                 const Vector2f& screen_size);
 
     /**
      * Submits a mouse wheel event to the input system.
@@ -293,11 +286,8 @@ private:
 /**
  * Helper macro to bind a member function to an input callback.
  */
-#define RNDR_BIND_INPUT_CALLBACK(this, func_ptr)                       \
-    std::bind(&std::remove_reference<decltype(*this)>::type::func_ptr, \
-              this,                                                    \
-              std::placeholders::_1,                                   \
-              std::placeholders::_2,                                   \
+#define RNDR_BIND_INPUT_CALLBACK(this, func_ptr)                                                                           \
+    std::bind(&std::remove_reference<decltype(*this)>::type::func_ptr, this, std::placeholders::_1, std::placeholders::_2, \
               std::placeholders::_3)
 
 }  // namespace Rndr

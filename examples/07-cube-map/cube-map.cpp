@@ -25,15 +25,15 @@ int main()
 
 struct PerFrameData
 {
-    math::Matrix4x4 model;
-    math::Matrix4x4 mvp;
-    math::Vector4 camera_pos;
+    Rndr::Matrix4x4f model;
+    Rndr::Matrix4x4f mvp;
+    Rndr::Vector4f camera_pos;
 };
 struct VertexData
 {
-    math::Point3 pos;
-    math::Normal3 normal;
-    math::Point2 tc;
+    Rndr::Point3f pos;
+    Rndr::Normal3f normal;
+    Rndr::Point2f tc;
 };
 constexpr size_t k_per_frame_size = sizeof(PerFrameData);
 
@@ -89,12 +89,11 @@ void Run()
         builder.AddVertexBuffer(model_vertex_buffer, 1, Rndr::DataRepetition::PerVertex).AddIndexBuffer(model_index_buffer).Build();
 
     // Configure the pipeline.
-    const Rndr::Pipeline model_pipeline(graphics_context,
-                                        {.vertex_shader = &model_vertex_shader,
-                                         .pixel_shader = &model_pixel_shader,
-                                         .input_layout = input_layout_desc,
-                                         .rasterizer = {.fill_mode = Rndr::FillMode::Solid},
-                                         .depth_stencil = {.is_depth_enabled = true}});
+    const Rndr::Pipeline model_pipeline(graphics_context, {.vertex_shader = &model_vertex_shader,
+                                                           .pixel_shader = &model_pixel_shader,
+                                                           .input_layout = input_layout_desc,
+                                                           .rasterizer = {.fill_mode = Rndr::FillMode::Solid},
+                                                           .depth_stencil = {.is_depth_enabled = true}});
     assert(model_pipeline.IsValid());
 
     // Load model albedo texture.
@@ -108,7 +107,7 @@ void Run()
     Rndr::Buffer per_frame_buffer(
         graphics_context,
         {.type = Rndr::BufferType::Constant, .usage = Rndr::Usage::Dynamic, .size = k_per_frame_size, .stride = k_per_frame_size});
-    constexpr math::Vector4 k_clear_color{MATH_REALC(1.0), MATH_REALC(1.0), MATH_REALC(1.0), MATH_REALC(1.0)};
+    constexpr Rndr::Vector4f k_clear_color = Rndr::Colors::k_white;
 
     // Handle window resizing.
     window.on_resize.Bind([&swap_chain](int32_t width, int32_t height) { swap_chain.SetSize(width, height); });
@@ -168,13 +167,13 @@ void Run()
         graphics_context.ClearColorAndDepth(k_clear_color, 1);
 
         // Setup transform that rotates the model around the Y axis.
-        const float ratio = static_cast<Rndr::real>(window.GetWidth()) / static_cast<Rndr::real>(window.GetHeight());
+        const float ratio = static_cast<float>(window.GetWidth()) / static_cast<float>(window.GetHeight());
         const float angle = static_cast<float>(std::fmod(10 * Rndr::GetSystemTime(), 360.0));
-        const math::Transform t =
-            math::Translate(math::Vector3(0.0f, -0.5f, -1.5f)) * math::Rotate(angle, math::Vector3(0.0f, 1.0f, 0.0f)) * math::RotateX(-90);
-        const math::Matrix4x4 p = math::Perspective_RH_N1(45.0f, ratio, 0.1f, 1000.0f);
-        math::Matrix4x4 mvp = math::Multiply(p, t.GetMatrix());
-        mvp = mvp.Transpose();
+        const Rndr::Matrix4x4f t = Math::Translate(Rndr::Vector3f(0.0f, -0.5f, -1.5f)) *
+                                   Math::Rotate(angle, Rndr::Vector3f(0.0f, 1.0f, 0.0f)) * Math::RotateX(-90.0f);
+        const Rndr::Matrix4x4f p = Math::Perspective_RH_N1(45.0f, ratio, 0.1f, 1000.0f);
+        Rndr::Matrix4x4f mvp = p * t;
+        mvp = Math::Transpose(mvp);
         PerFrameData per_frame_data = {.mvp = mvp};
 
         // Draw the model.
@@ -183,11 +182,11 @@ void Run()
         graphics_context.DrawIndices(Rndr::PrimitiveTopology::Triangle, index_count);
 
         // Draw cube map.
-        const math::Matrix4x4 cube_map_model = math::Scale(2.0f).GetMatrix();
-        const math::Matrix4x4 cube_map_mvp = math::Multiply(p, cube_map_model).Transpose();
+        const Rndr::Matrix4x4f cube_map_model = Math::Scale(2.0f);
+        const Rndr::Matrix4x4f cube_map_mvp = Math::Transpose(p * cube_map_model);
         per_frame_data.mvp = cube_map_mvp;
         per_frame_data.model = cube_map_model;
-        per_frame_data.camera_pos = math::Vector4();
+        per_frame_data.camera_pos = Rndr::Vector4f();
         graphics_context.Update(per_frame_buffer, Rndr::ToByteSpan(per_frame_data));
         graphics_context.Bind(cube_map_pipeline);
         graphics_context.DrawVertices(Rndr::PrimitiveTopology::Triangle, 36);
@@ -211,7 +210,7 @@ bool LoadMesh(const Rndr::String& file_path, Rndr::Array<VertexData>& vertices, 
         const aiVector3D v = mesh->mVertices[i];
         const aiVector3D n = mesh->mNormals[i];
         const aiVector3D t = mesh->mTextureCoords[0][i];
-        vertices.push_back({.pos = math::Point3(v.x, v.y, v.z), .normal = math::Normal3(n.x, n.y, n.z), .tc = math::Point2(t.x, t.y)});
+        vertices.push_back({.pos = Rndr::Point3f(v.x, v.y, v.z), .normal = Rndr::Normal3f(n.x, n.y, n.z), .tc = Rndr::Point2f(t.x, t.y)});
     }
     for (unsigned i = 0; i != mesh->mNumFaces; i++)
     {
@@ -236,7 +235,7 @@ enum class CubeMapFace
     EnumCount
 };
 
-math::Vector3 FaceCoordinatesToXYZ(int x_result, int y_result, CubeMapFace face_id, int face_size)
+Rndr::Vector3f FaceCoordinatesToXYZ(int x_result, int y_result, CubeMapFace face_id, int face_size)
 {
     const float inv_face_size = 1.0f / static_cast<float>(face_size);
     const float x = 2.0f * static_cast<float>(x_result) * inv_face_size;
@@ -293,12 +292,9 @@ Rndr::Bitmap ConvertEquirectangularMapToVerticalCross(const Rndr::Bitmap& input_
 
     using Vector2i = std::pair<int, int>;
     constexpr int k_face_count = static_cast<int>(CubeMapFace::EnumCount);
-    const Rndr::StackArray<Vector2i, k_face_count> k_face_offsets = {Vector2i(2 * face_size, face_size),
-                                                                     Vector2i(0, face_size),
-                                                                     Vector2i(face_size, 0),
-                                                                     Vector2i(face_size, 2 * face_size),
-                                                                     Vector2i(face_size, 3 * face_size),
-                                                                     Vector2i(face_size, face_size)};
+    const Rndr::StackArray<Vector2i, k_face_count> k_face_offsets = {
+        Vector2i(2 * face_size, face_size), Vector2i(0, face_size),        Vector2i(face_size, 0), Vector2i(face_size, 2 * face_size),
+        Vector2i(face_size, 3 * face_size), Vector2i(face_size, face_size)};
 
     const int clamp_w = input_bitmap.GetWidth() - 1;
     const int clamp_h = input_bitmap.GetHeight() - 1;
@@ -310,29 +306,29 @@ Rndr::Bitmap ConvertEquirectangularMapToVerticalCross(const Rndr::Bitmap& input_
             for (int y_result = 0; y_result < face_size; y_result++)
             {
                 const CubeMapFace face_id = static_cast<CubeMapFace>(face);
-                const math::Vector3 point = FaceCoordinatesToXYZ(x_result, y_result, face_id, face_size);
-                const float plane_distance = math::Sqrt(point.X * point.X + point.Y * point.Y);
-                const float theta = std::atan2(point.Y, point.X);
-                const float phi = std::atan2(point.Z, plane_distance);
+                const Rndr::Vector3f point = FaceCoordinatesToXYZ(x_result, y_result, face_id, face_size);
+                const float plane_distance = Math::Sqrt(point.x * point.x + point.y * point.y);
+                const float theta = std::atan2(point.y, point.x);
+                const float phi = std::atan2(point.z, plane_distance);
                 //	float point source coordinates
                 const float face_size_float = static_cast<float>(face_size);
-                const float uf = 2.0f * face_size_float * (theta + math::kPi) / math::kPi;
-                const float vf = 2.0f * face_size_float * (math::kPi / 2.0f - phi) / math::kPi;
+                const float uf = 2.0f * face_size_float * (theta + Math::k_pi_float) / Math::k_pi_float;
+                const float vf = 2.0f * face_size_float * (Math::k_pi_float / 2.0f - phi) / Math::k_pi_float;
                 // 4-samples for bilinear interpolation
-                const int32_t u1 = std::clamp(static_cast<int32_t>(math::Floor(uf)), 0, clamp_w);
-                const int32_t v1 = std::clamp(static_cast<int32_t>(math::Floor(vf)), 0, clamp_h);
+                const int32_t u1 = std::clamp(static_cast<int32_t>(Math::Floor(uf)), 0, clamp_w);
+                const int32_t v1 = std::clamp(static_cast<int32_t>(Math::Floor(vf)), 0, clamp_h);
                 const int32_t u2 = std::clamp(u1 + 1, 0, clamp_w);
                 const int32_t v2 = std::clamp(v1 + 1, 0, clamp_h);
                 // fractional part
                 const float s = uf - static_cast<float>(u1);
                 const float t = vf - static_cast<float>(v1);
                 // fetch 4-samples
-                const math::Vector4 a = input_bitmap.GetPixel(u1, v1);
-                const math::Vector4 b = input_bitmap.GetPixel(u2, v1);
-                const math::Vector4 c = input_bitmap.GetPixel(u1, v2);
-                const math::Vector4 d = input_bitmap.GetPixel(u2, v2);
+                const Rndr::Vector4f a = input_bitmap.GetPixel(u1, v1);
+                const Rndr::Vector4f b = input_bitmap.GetPixel(u2, v1);
+                const Rndr::Vector4f c = input_bitmap.GetPixel(u1, v2);
+                const Rndr::Vector4f d = input_bitmap.GetPixel(u2, v2);
                 // bilinear interpolation
-                const math::Vector4 color = a * (1 - s) * (1 - t) + b * (s) * (1 - t) + c * (1 - s) * t + d * (s) * (t);
+                const Rndr::Vector4f color = a * (1 - s) * (1 - t) + b * (s) * (1 - t) + c * (1 - s) * t + d * (s) * (t);
                 result.SetPixel(x_result + k_face_offsets[face].first, y_result + k_face_offsets[face].second, 0, color);
             }
         };

@@ -59,10 +59,7 @@ void Run()
     const Rndr::Pipeline pipeline(graphics_context,
                                   {.vertex_shader = &vertex_shader, .pixel_shader = &pixel_shader});
     assert(pipeline.IsValid());
-    constexpr math::Vector4 k_clear_color{MATH_REALC(0.0),
-                                          MATH_REALC(0.0),
-                                          MATH_REALC(0.0),
-                                          MATH_REALC(1.0)};
+    constexpr Rndr::Vector4f k_clear_color = Rndr::Colors::k_black;
 
     window.on_resize.Bind([&swap_chain](int32_t width, int32_t height)
                           { swap_chain.SetSize(width, height); });

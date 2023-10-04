@@ -80,18 +80,16 @@ void main()
 
 struct PerFrameData
 {
-    math::Matrix4x4 mvp;
+    Rndr::Matrix4x4f mvp;
 };
 constexpr size_t k_per_frame_size = sizeof(PerFrameData);
 
-bool LoadMeshAndGenerateLOD(const Rndr::String& file_path,
-                            Rndr::Array<math::Point3>& vertices,
-                            Rndr::Array<uint32_t>& indices,
+bool LoadMeshAndGenerateLOD(const Rndr::String& file_path, Rndr::Array<Rndr::Point3f>& vertices, Rndr::Array<uint32_t>& indices,
                             Rndr::Array<uint32_t>& lod_indices);
 
 void Run()
 {
-    Rndr::Array<math::Point3> positions;
+    Rndr::Array<Rndr::Point3f> positions;
     Rndr::Array<uint32_t> indices;
     Rndr::Array<uint32_t> indices_lod;
     [[maybe_unused]] const bool success = LoadMeshAndGenerateLOD(ASSETS_DIR "duck.gltf", positions, indices, indices_lod);
@@ -112,7 +110,7 @@ void Run()
 
     const uint32_t size_indices = static_cast<uint32_t>(sizeof(uint32_t) * indices.size());
     const uint32_t size_indices_lod = static_cast<uint32_t>(sizeof(uint32_t) * indices_lod.size());
-    const uint32_t size_vertices = static_cast<uint32_t>(sizeof(math::Point3) * positions.size());
+    const uint32_t size_vertices = static_cast<uint32_t>(sizeof(Rndr::Point3f) * positions.size());
     const uint32_t start_indices = 0;
     const uint32_t start_indices_lod = size_indices;
 
@@ -120,17 +118,16 @@ void Run()
                                      {.type = Rndr::BufferType::Vertex,
                                       .usage = Rndr::Usage::Dynamic,
                                       .size = size_vertices,
-                                      .stride = sizeof(math::Point3),
+                                      .stride = sizeof(Rndr::Point3f),
                                       .offset = 0},
                                      Rndr::ToByteSpan(positions));
     assert(vertex_buffer.IsValid());
 
-    Rndr::Buffer index_buffer(graphics_context,
-                              {.type = Rndr::BufferType::Index,
-                               .usage = Rndr::Usage::Dynamic,
-                               .size = size_indices + size_indices_lod,
-                               .stride = sizeof(uint32_t),
-                               .offset = 0});
+    Rndr::Buffer index_buffer(graphics_context, {.type = Rndr::BufferType::Index,
+                                                 .usage = Rndr::Usage::Dynamic,
+                                                 .size = size_indices + size_indices_lod,
+                                                 .stride = sizeof(uint32_t),
+                                                 .offset = 0});
     assert(index_buffer.IsValid());
     graphics_context.Update(index_buffer, Rndr::ToByteSpan(indices), start_indices);
     graphics_context.Update(index_buffer, Rndr::ToByteSpan(indices_lod), start_indices_lod);
@@ -141,18 +138,17 @@ void Run()
                                                         .AddIndexBuffer(index_buffer)
                                                         .Build();
 
-    const Rndr::Pipeline solid_pipeline(graphics_context,
-                                        {.vertex_shader = &vertex_shader,
-                                         .pixel_shader = &pixel_shader,
-                                         .geometry_shader = &geometry_shader,
-                                         .input_layout = input_layout_desc,
-                                         .rasterizer = {.fill_mode = Rndr::FillMode::Solid},
-                                         .depth_stencil = {.is_depth_enabled = true}});
+    const Rndr::Pipeline solid_pipeline(graphics_context, {.vertex_shader = &vertex_shader,
+                                                           .pixel_shader = &pixel_shader,
+                                                           .geometry_shader = &geometry_shader,
+                                                           .input_layout = input_layout_desc,
+                                                           .rasterizer = {.fill_mode = Rndr::FillMode::Solid},
+                                                           .depth_stencil = {.is_depth_enabled = true}});
     assert(solid_pipeline.IsValid());
     Rndr::Buffer per_frame_buffer(
         graphics_context,
         {.type = Rndr::BufferType::Constant, .usage = Rndr::Usage::Dynamic, .size = k_per_frame_size, .stride = k_per_frame_size});
-    constexpr math::Vector4 k_clear_color{MATH_REALC(0.2), MATH_REALC(0.3), MATH_REALC(0.4), MATH_REALC(1.0)};
+    constexpr Rndr::Vector4f k_clear_color = Rndr::Colors::k_white;
 
     window.on_resize.Bind([&swap_chain](int32_t width, int32_t height) { swap_chain.SetSize(width, height); });
 
@@ -167,17 +163,17 @@ void Run()
         window.ProcessEvents();
         RNDR_TRACE_END(Process_events);
 
-        const float ratio = static_cast<Rndr::real>(window.GetWidth()) / static_cast<Rndr::real>(window.GetHeight());
+        const float ratio = static_cast<float>(window.GetWidth()) / static_cast<float>(window.GetHeight());
         const float angle = static_cast<float>(std::fmod(10 * Rndr::GetSystemTime(), 360.0));
-        const math::Transform t1 =
-            math::Translate(math::Vector3(-0.5f, -0.5f, -1.5f)) * math::Rotate(angle, math::Vector3(0.0f, 1.0f, 0.0f)) * math::RotateX(-90);
-        const math::Transform t2 =
-            math::Translate(math::Vector3(0.5f, -0.5f, -1.5f)) * math::Rotate(angle, math::Vector3(0.0f, 1.0f, 0.0f)) * math::RotateX(-90);
-        const math::Matrix4x4 p = math::Perspective_RH_N1(45.0f, ratio, 0.1f, 1000.0f);
-        math::Matrix4x4 mvp1 = math::Multiply(p, t1.GetMatrix());
-        mvp1 = mvp1.Transpose();
-        math::Matrix4x4 mvp2 = math::Multiply(p, t2.GetMatrix());
-        mvp2 = mvp2.Transpose();
+        const Rndr::Matrix4x4f t1 = Math::Translate(Rndr::Vector3f(-0.5f, -0.5f, -1.5f)) *
+                                    Math::Rotate(angle, Rndr::Vector3f(0.0f, 1.0f, 0.0f)) * Math::RotateX(-90.0f);
+        const Rndr::Matrix4x4f t2 = Math::Translate(Rndr::Vector3f(0.5f, -0.5f, -1.5f)) *
+                                    Math::Rotate(angle, Rndr::Vector3f(0.0f, 1.0f, 0.0f)) * Math::RotateX(-90.0f);
+        const Rndr::Matrix4x4f p = Math::Perspective_RH_N1(45.0f, ratio, 0.1f, 1000.0f);
+        Rndr::Matrix4x4f mvp1 = p * t1;
+        mvp1 = Math::Transpose(mvp1);
+        Rndr::Matrix4x4f mvp2 = p * t2;
+        mvp2 = Math::Transpose(mvp2);
 
         graphics_context.ClearColorAndDepth(k_clear_color, 1);
 
@@ -187,18 +183,14 @@ void Run()
 
         per_frame_data.mvp = mvp2;
         graphics_context.Update(per_frame_buffer, Rndr::ToByteSpan(per_frame_data));
-        graphics_context.DrawIndices(Rndr::PrimitiveTopology::Triangle,
-                                     static_cast<int32_t>(indices_lod.size()),
-                                     1,
+        graphics_context.DrawIndices(Rndr::PrimitiveTopology::Triangle, static_cast<int32_t>(indices_lod.size()), 1,
                                      static_cast<int32_t>(indices.size()));
 
         graphics_context.Present(swap_chain);
     }
 }
 
-bool LoadMeshAndGenerateLOD(const Rndr::String& file_path,
-                            Rndr::Array<math::Point3>& positions,
-                            Rndr::Array<uint32_t>& indices,
+bool LoadMeshAndGenerateLOD(const Rndr::String& file_path, Rndr::Array<Rndr::Point3f>& positions, Rndr::Array<uint32_t>& indices,
                             Rndr::Array<uint32_t>& lod_indices)
 {
     const aiScene* scene = aiImportFile(file_path.c_str(), aiProcess_Triangulate);
@@ -224,48 +216,32 @@ bool LoadMeshAndGenerateLOD(const Rndr::String& file_path,
     // Reindex the vertex buffer so that we remove redundant vertices.
     Rndr::Array<uint32_t> remap(indices.size());
     const size_t vertex_count =
-        meshopt_generateVertexRemap(remap.data(), indices.data(), indices.size(), positions.data(), indices.size(), sizeof(math::Point3));
+        meshopt_generateVertexRemap(remap.data(), indices.data(), indices.size(), positions.data(), indices.size(), sizeof(Rndr::Point3f));
     Rndr::Array<uint32_t> remapped_indices(indices.size());
-    Rndr::Array<math::Point3> remapped_vertices(vertex_count);
+    Rndr::Array<Rndr::Point3f> remapped_vertices(vertex_count);
     meshopt_remapIndexBuffer(remapped_indices.data(), indices.data(), indices.size(), remap.data());
-    meshopt_remapVertexBuffer(remapped_vertices.data(), positions.data(), positions.size(), sizeof(math::Point3), remap.data());
+    meshopt_remapVertexBuffer(remapped_vertices.data(), positions.data(), positions.size(), sizeof(Rndr::Point3f), remap.data());
 
     // Optimize the vertex cache by organizing the vertex data for same triangles to be close to
     // each other.
     meshopt_optimizeVertexCache(remapped_indices.data(), remapped_indices.data(), indices.size(), vertex_count);
 
     // Reduce overdraw to reduce for how many fragments we need to call fragment shader.
-    meshopt_optimizeOverdraw(remapped_indices.data(),
-                             remapped_indices.data(),
-                             indices.size(),
-                             reinterpret_cast<float*>(remapped_vertices.data()),
-                             vertex_count,
-                             sizeof(math::Point3),
-                             1.05f);
+    meshopt_optimizeOverdraw(remapped_indices.data(), remapped_indices.data(), indices.size(),
+                             reinterpret_cast<float*>(remapped_vertices.data()), vertex_count, sizeof(Rndr::Point3f), 1.05f);
 
     // Optimize vertex fetches by reordering the vertex buffer.
-    meshopt_optimizeVertexFetch(remapped_vertices.data(),
-                                remapped_indices.data(),
-                                indices.size(),
-                                remapped_vertices.data(),
-                                vertex_count,
-                                sizeof(math::Point3));
+    meshopt_optimizeVertexFetch(remapped_vertices.data(), remapped_indices.data(), indices.size(), remapped_vertices.data(), vertex_count,
+                                sizeof(Rndr::Point3f));
 
     // Generate lower level LOD.
     constexpr float k_threshold = 0.2f;
     const size_t target_index_count = static_cast<size_t>(static_cast<float>(remapped_indices.size()) * k_threshold);
     constexpr float k_target_error = 1e-2f;
     lod_indices.resize(remapped_indices.size());
-    lod_indices.resize(meshopt_simplify(lod_indices.data(),
-                                        remapped_indices.data(),
-                                        remapped_indices.size(),
-                                        reinterpret_cast<float*>(remapped_vertices.data()),
-                                        vertex_count,
-                                        sizeof(math::Point3),
-                                        target_index_count,
-                                        k_target_error,
-                                        0,
-                                        nullptr));
+    lod_indices.resize(meshopt_simplify(lod_indices.data(), remapped_indices.data(), remapped_indices.size(),
+                                        reinterpret_cast<float*>(remapped_vertices.data()), vertex_count, sizeof(Rndr::Point3f),
+                                        target_index_count, k_target_error, 0, nullptr));
 
     indices = remapped_indices;
     positions = remapped_vertices;

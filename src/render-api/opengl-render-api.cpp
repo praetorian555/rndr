@@ -4,6 +4,11 @@
 
 #if RNDR_WINDOWS
 #include <Windows.h>
+
+#undef min
+#undef max
+#undef near
+#undef far
 #endif  // RNDR_WINDOWS
 
 #include <glad/glad.h>
@@ -16,12 +21,7 @@
 
 namespace
 {
-void APIENTRY DebugOutputCallback(GLenum source,
-                                  GLenum type,
-                                  unsigned int id,
-                                  GLenum severity,
-                                  GLsizei length,
-                                  const char* message,
+void APIENTRY DebugOutputCallback(GLenum source, GLenum type, unsigned int id, GLenum severity, GLsizei length, const char* message,
                                   const void* user_param)
 {
     RNDR_UNUSED(source);
@@ -129,9 +129,7 @@ Rndr::GraphicsContext::GraphicsContext(const Rndr::GraphicsContextDesc& desc) : 
         0  // End of the attribute list
     };
     HGLRC old_graphics_context = graphics_context;
-    graphics_context = wglCreateContextAttribsARB(m_native_device_context,
-                                                  graphics_context,
-                                                  attribute_list.data());
+    graphics_context = wglCreateContextAttribsARB(m_native_device_context, graphics_context, attribute_list.data());
     if (graphics_context == nullptr)
     {
         RNDR_LOG_ERROR("Failed to make OpenGL graphics context with attribute list!");
@@ -221,13 +219,12 @@ bool Rndr::GraphicsContext::Present(const Rndr::SwapChain& swap_chain)
 
 bool Rndr::GraphicsContext::IsValid() const
 {
-    return m_native_device_context != k_invalid_device_context_handle
-           && m_native_graphics_context != k_invalid_graphics_context_handle;
+    return m_native_device_context != k_invalid_device_context_handle && m_native_graphics_context != k_invalid_graphics_context_handle;
 }
 
-bool Rndr::GraphicsContext::ClearColor(const math::Vector4& color)
+bool Rndr::GraphicsContext::ClearColor(const Vector4f& color)
 {
-    glClearColor(color.X, color.Y, color.Z, color.W);
+    glClearColor(color.x, color.y, color.z, color.w);
     if (glGetError() != GL_NO_ERROR)
     {
         RNDR_LOG_ERROR("Failed to set clear color!");
@@ -242,9 +239,9 @@ bool Rndr::GraphicsContext::ClearColor(const math::Vector4& color)
     return true;
 }
 
-bool Rndr::GraphicsContext::ClearColorAndDepth(const math::Vector4& color, real depth)
+bool Rndr::GraphicsContext::ClearColorAndDepth(const Vector4f& color, float depth)
 {
-    glClearColor(color.X, color.Y, color.Z, color.W);
+    glClearColor(color.x, color.y, color.z, color.w);
     if (glGetError() != GL_NO_ERROR)
     {
         RNDR_LOG_ERROR("Failed to set clear color!");
@@ -321,38 +318,18 @@ bool Rndr::GraphicsContext::Bind(const Pipeline& pipeline)
         constexpr uint32_t k_mask_all_enabled = 0xFFFFFFFF;
         glEnable(GL_STENCIL_TEST);
         glStencilMask(desc.depth_stencil.stencil_write_mask);
-        const GLenum front_face_stencil_func =
-            FromComparatorToOpenGL(desc.depth_stencil.stencil_front_face_comparator);
-        glStencilFuncSeparate(GL_FRONT,
-                              front_face_stencil_func,
-                              desc.depth_stencil.stencil_ref_value,
-                              k_mask_all_enabled);
-        const GLenum back_face_stencil_func =
-            FromComparatorToOpenGL(desc.depth_stencil.stencil_back_face_comparator);
-        glStencilFuncSeparate(GL_BACK,
-                              back_face_stencil_func,
-                              desc.depth_stencil.stencil_ref_value,
-                              k_mask_all_enabled);
-        const GLenum front_face_stencil_fail_op =
-            FromStencilOpToOpenGL(desc.depth_stencil.stencil_front_face_fail_op);
-        const GLenum front_face_stencil_depth_fail_op =
-            FromStencilOpToOpenGL(desc.depth_stencil.stencil_front_face_depth_fail_op);
-        const GLenum front_face_stencil_pass_op =
-            FromStencilOpToOpenGL(desc.depth_stencil.stencil_front_face_pass_op);
-        glStencilOpSeparate(GL_FRONT,
-                            front_face_stencil_fail_op,
-                            front_face_stencil_depth_fail_op,
-                            front_face_stencil_pass_op);
-        const GLenum back_face_stencil_fail_op =
-            FromStencilOpToOpenGL(desc.depth_stencil.stencil_back_face_fail_op);
-        const GLenum back_face_stencil_depth_fail_op =
-            FromStencilOpToOpenGL(desc.depth_stencil.stencil_back_face_depth_fail_op);
-        const GLenum back_face_stencil_pass_op =
-            FromStencilOpToOpenGL(desc.depth_stencil.stencil_back_face_pass_op);
-        glStencilOpSeparate(GL_BACK,
-                            back_face_stencil_fail_op,
-                            back_face_stencil_depth_fail_op,
-                            back_face_stencil_pass_op);
+        const GLenum front_face_stencil_func = FromComparatorToOpenGL(desc.depth_stencil.stencil_front_face_comparator);
+        glStencilFuncSeparate(GL_FRONT, front_face_stencil_func, desc.depth_stencil.stencil_ref_value, k_mask_all_enabled);
+        const GLenum back_face_stencil_func = FromComparatorToOpenGL(desc.depth_stencil.stencil_back_face_comparator);
+        glStencilFuncSeparate(GL_BACK, back_face_stencil_func, desc.depth_stencil.stencil_ref_value, k_mask_all_enabled);
+        const GLenum front_face_stencil_fail_op = FromStencilOpToOpenGL(desc.depth_stencil.stencil_front_face_fail_op);
+        const GLenum front_face_stencil_depth_fail_op = FromStencilOpToOpenGL(desc.depth_stencil.stencil_front_face_depth_fail_op);
+        const GLenum front_face_stencil_pass_op = FromStencilOpToOpenGL(desc.depth_stencil.stencil_front_face_pass_op);
+        glStencilOpSeparate(GL_FRONT, front_face_stencil_fail_op, front_face_stencil_depth_fail_op, front_face_stencil_pass_op);
+        const GLenum back_face_stencil_fail_op = FromStencilOpToOpenGL(desc.depth_stencil.stencil_back_face_fail_op);
+        const GLenum back_face_stencil_depth_fail_op = FromStencilOpToOpenGL(desc.depth_stencil.stencil_back_face_depth_fail_op);
+        const GLenum back_face_stencil_pass_op = FromStencilOpToOpenGL(desc.depth_stencil.stencil_back_face_pass_op);
+        glStencilOpSeparate(GL_BACK, back_face_stencil_fail_op, back_face_stencil_depth_fail_op, back_face_stencil_pass_op);
         if (glGetError() != GL_NO_ERROR)
         {
             RNDR_LOG_ERROR("Failed to set stencil test state!");
@@ -379,10 +356,7 @@ bool Rndr::GraphicsContext::Bind(const Pipeline& pipeline)
         const GLenum alpha_op = FromBlendOperationToOpenGL(desc.blend.alpha_operation);
         glBlendFuncSeparate(src_color_factor, dst_color_factor, src_alpha_factor, dst_alpha_factor);
         glBlendEquationSeparate(color_op, alpha_op);
-        glBlendColor(desc.blend.const_color.R,
-                     desc.blend.const_color.G,
-                     desc.blend.const_color.B,
-                     desc.blend.const_alpha);
+        glBlendColor(desc.blend.const_color.r, desc.blend.const_color.g, desc.blend.const_color.b, desc.blend.const_alpha);
         if (glGetError() != GL_NO_ERROR)
         {
             RNDR_LOG_ERROR("Failed to set blending state!");
@@ -400,8 +374,7 @@ bool Rndr::GraphicsContext::Bind(const Pipeline& pipeline)
     }
     // Rasterizer configuration
     {
-        glPolygonMode(GL_FRONT_AND_BACK,
-                      desc.rasterizer.fill_mode == FillMode::Solid ? GL_FILL : GL_LINE);
+        glPolygonMode(GL_FRONT_AND_BACK, desc.rasterizer.fill_mode == FillMode::Solid ? GL_FILL : GL_LINE);
         if (desc.rasterizer.cull_face != Face::None)
         {
             glEnable(GL_CULL_FACE);
@@ -412,8 +385,7 @@ bool Rndr::GraphicsContext::Bind(const Pipeline& pipeline)
             glDisable(GL_CULL_FACE);
         }
         glFrontFace(desc.rasterizer.front_face_winding_order == WindingOrder::CW ? GL_CW : GL_CCW);
-        if (desc.rasterizer.depth_bias != MATH_REALC(0.0)
-            || desc.rasterizer.slope_scaled_depth_bias != MATH_REALC(0.0))
+        if (desc.rasterizer.depth_bias != 0.0f || desc.rasterizer.slope_scaled_depth_bias != 0.0f)
         {
             glEnable(GL_POLYGON_OFFSET_LINE);
             glPolygonOffset(desc.rasterizer.slope_scaled_depth_bias, desc.rasterizer.depth_bias);
@@ -422,13 +394,12 @@ bool Rndr::GraphicsContext::Bind(const Pipeline& pipeline)
         {
             glDisable(GL_POLYGON_OFFSET_LINE);
         }
-        if (desc.rasterizer.scissor_size.X > 0 && desc.rasterizer.scissor_size.Y > 0)
+        if (desc.rasterizer.scissor_size.x > 0 && desc.rasterizer.scissor_size.y > 0)
         {
             glEnable(GL_SCISSOR_TEST);
-            glScissor(static_cast<int32_t>(desc.rasterizer.scissor_bottom_left.X),
-                      static_cast<int32_t>(desc.rasterizer.scissor_bottom_left.Y),
-                      static_cast<int32_t>(desc.rasterizer.scissor_size.X),
-                      static_cast<int32_t>(desc.rasterizer.scissor_size.Y));
+            glScissor(static_cast<int32_t>(desc.rasterizer.scissor_bottom_left.x),
+                      static_cast<int32_t>(desc.rasterizer.scissor_bottom_left.y), static_cast<int32_t>(desc.rasterizer.scissor_size.x),
+                      static_cast<int32_t>(desc.rasterizer.scissor_size.y));
         }
         else
         {
@@ -475,10 +446,7 @@ bool Rndr::GraphicsContext::Bind(const Image& image, int32_t binding_index)
     return true;
 }
 
-bool Rndr::GraphicsContext::DrawVertices(PrimitiveTopology topology,
-                                         int32_t vertex_count,
-                                         int32_t instance_count,
-                                         int32_t first_vertex)
+bool Rndr::GraphicsContext::DrawVertices(PrimitiveTopology topology, int32_t vertex_count, int32_t instance_count, int32_t first_vertex)
 {
     const GLenum primitive = FromPrimitiveTopologyToOpenGL(topology);
     glDrawArraysInstanced(primitive, first_vertex, vertex_count, instance_count);
@@ -490,10 +458,7 @@ bool Rndr::GraphicsContext::DrawVertices(PrimitiveTopology topology,
     return true;
 }
 
-bool Rndr::GraphicsContext::DrawIndices(PrimitiveTopology topology,
-                                        int32_t index_count,
-                                        int32_t instance_count,
-                                        int32_t first_index)
+bool Rndr::GraphicsContext::DrawIndices(PrimitiveTopology topology, int32_t index_count, int32_t instance_count, int32_t first_index)
 {
     assert(m_bound_pipeline.IsValid());
     assert(m_bound_pipeline->IsIndexBufferBound());
@@ -553,9 +518,7 @@ Rndr::Bitmap Rndr::GraphicsContext::ReadSwapChain(const SwapChain& swap_chain)
     return Bitmap{width, height, 1, PixelFormat::R8G8B8A8_UNORM_SRGB, data};
 }
 
-Rndr::SwapChain::SwapChain(const Rndr::GraphicsContext& graphics_context,
-                           const Rndr::SwapChainDesc& desc)
-    : m_desc(desc)
+Rndr::SwapChain::SwapChain(const Rndr::GraphicsContext& graphics_context, const Rndr::SwapChainDesc& desc) : m_desc(desc)
 {
     RNDR_UNUSED(graphics_context);
     wglSwapIntervalEXT(desc.enable_vsync ? 1 : 0);
@@ -660,8 +623,7 @@ const GLuint Rndr::Shader::GetNativeShader() const
     return m_native_shader;
 }
 
-Rndr::Pipeline::Pipeline(const GraphicsContext& graphics_context, const PipelineDesc& desc)
-    : m_desc(desc)
+Rndr::Pipeline::Pipeline(const GraphicsContext& graphics_context, const PipelineDesc& desc) : m_desc(desc)
 {
     RNDR_UNUSED(graphics_context);
     m_native_shader_program = glCreateProgram();
@@ -713,8 +675,7 @@ Rndr::Pipeline::Pipeline(const GraphicsContext& graphics_context, const Pipeline
     }
     if (desc.tesselation_evaluation_shader != nullptr)
     {
-        glAttachShader(m_native_shader_program,
-                       desc.tesselation_evaluation_shader->GetNativeShader());
+        glAttachShader(m_native_shader_program, desc.tesselation_evaluation_shader->GetNativeShader());
         if (glGetError() != GL_NO_ERROR)
         {
             RNDR_LOG_ERROR("Failed to attach tesselation evaluation shader!");
@@ -741,7 +702,7 @@ Rndr::Pipeline::Pipeline(const GraphicsContext& graphics_context, const Pipeline
     }
     GLint success = GL_FALSE;
     glGetProgramiv(m_native_shader_program, GL_LINK_STATUS, &success);
-    if(success == GL_FALSE)
+    if (success == GL_FALSE)
     {
         constexpr size_t k_error_log_size = 1024;
         GLchar error_log[k_error_log_size] = {0};
@@ -752,7 +713,7 @@ Rndr::Pipeline::Pipeline(const GraphicsContext& graphics_context, const Pipeline
     }
     glValidateProgram(m_native_shader_program);
     glGetProgramiv(m_native_shader_program, GL_VALIDATE_STATUS, &success);
-    if(success == GL_FALSE)
+    if (success == GL_FALSE)
     {
         constexpr size_t k_error_log_size = 1024;
         GLchar error_log[k_error_log_size] = {0};
@@ -777,19 +738,12 @@ Rndr::Pipeline::Pipeline(const GraphicsContext& graphics_context, const Pipeline
         const int32_t binding_index = input_layout_desc.vertex_buffer_binding_slots[i];
         if (buffer_desc.type == BufferType::Vertex)
         {
-            glVertexArrayVertexBuffer(m_native_vertex_array,
-                                      binding_index,
-                                      buffer.GetNativeBuffer(),
-                                      buffer_desc.offset,
+            glVertexArrayVertexBuffer(m_native_vertex_array, binding_index, buffer.GetNativeBuffer(), buffer_desc.offset,
                                       buffer_desc.stride);
         }
         else if (buffer_desc.type == BufferType::ShaderStorage)
         {
-            glBindBufferRange(GL_SHADER_STORAGE_BUFFER,
-                              binding_index,
-                              buffer.GetNativeBuffer(),
-                              0,
-                              buffer_desc.size);
+            glBindBufferRange(GL_SHADER_STORAGE_BUFFER, binding_index, buffer.GetNativeBuffer(), 0, buffer_desc.size);
         }
         else
         {
@@ -804,18 +758,12 @@ Rndr::Pipeline::Pipeline(const GraphicsContext& graphics_context, const Pipeline
         const int32_t attribute_index = i;
         constexpr GLboolean k_should_normalize_data = GL_FALSE;
         glEnableVertexArrayAttrib(m_native_vertex_array, attribute_index);
-        glVertexArrayAttribFormat(m_native_vertex_array,
-                                  attribute_index,
-                                  FromPixelFormatToComponentCount(element.format),
-                                  FromPixelFormatToDataType(element.format),
-                                  k_should_normalize_data,
-                                  element.offset_in_vertex);
+        glVertexArrayAttribFormat(m_native_vertex_array, attribute_index, FromPixelFormatToComponentCount(element.format),
+                                  FromPixelFormatToDataType(element.format), k_should_normalize_data, element.offset_in_vertex);
         glVertexArrayAttribBinding(m_native_vertex_array, attribute_index, element.binding_index);
         if (element.repetition == DataRepetition::PerInstance)
         {
-            glVertexArrayBindingDivisor(m_native_vertex_array,
-                                        element.binding_index,
-                                        element.instance_step_rate);
+            glVertexArrayBindingDivisor(m_native_vertex_array, element.binding_index, element.instance_step_rate);
         }
         if (glGetError() != GL_NO_ERROR)
         {
@@ -843,8 +791,7 @@ Rndr::Pipeline::~Pipeline()
     Destroy();
 }
 
-Rndr::Pipeline::Pipeline(Pipeline&& other) noexcept
-    : m_native_shader_program(other.m_native_shader_program)
+Rndr::Pipeline::Pipeline(Pipeline&& other) noexcept : m_native_shader_program(other.m_native_shader_program)
 {
     other.m_native_shader_program = k_invalid_opengl_object;
 }
@@ -907,10 +854,7 @@ uint32_t Rndr::Pipeline::GetIndexBufferElementSize() const
     return index_buffer_desc.stride;
 }
 
-Rndr::Buffer::Buffer(const GraphicsContext& graphics_context,
-                     const BufferDesc& desc,
-                     const ConstByteSpan& init_data)
-    : m_desc(desc)
+Rndr::Buffer::Buffer(const GraphicsContext& graphics_context, const BufferDesc& desc, const ConstByteSpan& init_data) : m_desc(desc)
 {
     RNDR_UNUSED(graphics_context);
     glCreateBuffers(1, &m_native_buffer);
@@ -934,8 +878,7 @@ Rndr::Buffer::~Buffer()
     Destroy();
 }
 
-Rndr::Buffer::Buffer(Buffer&& other) noexcept
-    : m_desc(other.m_desc), m_native_buffer(other.m_native_buffer)
+Rndr::Buffer::Buffer(Buffer&& other) noexcept : m_desc(other.m_desc), m_native_buffer(other.m_native_buffer)
 {
     other.m_native_buffer = k_invalid_opengl_object;
 }
@@ -976,17 +919,13 @@ GLuint Rndr::Buffer::GetNativeBuffer() const
     return m_native_buffer;
 }
 
-Rndr::Image::Image(const GraphicsContext& graphics_context,
-                   const ImageDesc& desc,
-                   const ConstByteSpan& init_data)
-    : m_desc(desc)
+Rndr::Image::Image(const GraphicsContext& graphics_context, const ImageDesc& desc, const ConstByteSpan& init_data) : m_desc(desc)
 {
     RNDR_UNUSED(graphics_context);
 
     const GLenum target = FromImageInfoToTarget(desc.type, desc.use_mips);
     glCreateTextures(target, 1, &m_native_texture);
-    const GLint min_filter = desc.use_mips ? FromImageFilterToMinFilter(desc.sampler.min_filter,
-                                                                        desc.sampler.mip_map_filter)
+    const GLint min_filter = desc.use_mips ? FromImageFilterToMinFilter(desc.sampler.min_filter, desc.sampler.mip_map_filter)
                                            : FromImageFilterToOpenGL(desc.sampler.min_filter);
     const GLint mag_filter = FromImageFilterToOpenGL(desc.sampler.mag_filter);
     glTextureParameteri(m_native_texture, GL_TEXTURE_MIN_FILTER, min_filter);
@@ -998,7 +937,7 @@ Rndr::Image::Image(const GraphicsContext& graphics_context,
     glTextureParameteri(m_native_texture, GL_TEXTURE_WRAP_S, address_mode_u);
     glTextureParameteri(m_native_texture, GL_TEXTURE_WRAP_T, address_mode_v);
     glTextureParameteri(m_native_texture, GL_TEXTURE_WRAP_R, address_mode_w);
-    glTextureParameterfv(m_native_texture, GL_TEXTURE_BORDER_COLOR, desc.sampler.border_color.Data);
+    glTextureParameterfv(m_native_texture, GL_TEXTURE_BORDER_COLOR, desc.sampler.border_color.data);
     glTextureParameteri(m_native_texture, GL_TEXTURE_BASE_LEVEL, desc.sampler.base_mip_level);
     glTextureParameteri(m_native_texture, GL_TEXTURE_MAX_LEVEL, desc.sampler.max_mip_level);
     glTextureParameterf(m_native_texture, GL_TEXTURE_LOD_BIAS, desc.sampler.lod_bias);
@@ -1007,34 +946,23 @@ Rndr::Image::Image(const GraphicsContext& graphics_context,
     // TODO(Marko): Left to handle GL_DEPTH_STENCIL_TEXTURE_MODE, GL_TEXTURE_COMPARE_FUNC,
     // GL_TEXTURE_COMPARE_MODE
 
-    math::Vector2 size{static_cast<math::real>(desc.width), static_cast<math::real>(desc.height)};
+    const Vector2f size{static_cast<float>(desc.width), static_cast<float>(desc.height)};
     int mip_map_levels = 1;
     if (desc.use_mips)
     {
-        mip_map_levels += static_cast<int>(math::Floor(math::Log2(math::Max(size.X, size.Y))));
+        mip_map_levels += static_cast<int>(Math::Floor(Math::Log2(Math::Max(size.x, size.y))));
     }
     if (desc.type == ImageType::Image2D)
     {
         const GLenum internal_format = FromPixelFormatToInternalFormat(desc.pixel_format);
         const GLenum format = FromPixelFormatToFormat(desc.pixel_format);
         const GLenum data_type = FromPixelFormatToDataType(desc.pixel_format);
-        glTextureStorage2D(m_native_texture,
-                           mip_map_levels,
-                           internal_format,
-                           desc.width,
-                           desc.height);
+        glTextureStorage2D(m_native_texture, mip_map_levels, internal_format, desc.width, desc.height);
         glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
         constexpr int32_t k_mip_level = 0;
         constexpr int32_t k_x_offset = 0;
         constexpr int32_t k_y_offset = 0;
-        glTextureSubImage2D(m_native_texture,
-                            k_mip_level,
-                            k_x_offset,
-                            k_y_offset,
-                            desc.width,
-                            desc.height,
-                            format,
-                            data_type,
+        glTextureSubImage2D(m_native_texture, k_mip_level, k_x_offset, k_y_offset, desc.width, desc.height, format, data_type,
                             init_data.data());
     }
     else if (desc.type == ImageType::CubeMap)
@@ -1043,11 +971,7 @@ Rndr::Image::Image(const GraphicsContext& graphics_context,
         const GLenum internal_format = FromPixelFormatToInternalFormat(desc.pixel_format);
         const GLenum format = FromPixelFormatToFormat(desc.pixel_format);
         const GLenum data_type = FromPixelFormatToDataType(desc.pixel_format);
-        glTextureStorage2D(m_native_texture,
-                           mip_map_levels,
-                           internal_format,
-                           desc.width,
-                           desc.height);
+        glTextureStorage2D(m_native_texture, mip_map_levels, internal_format, desc.width, desc.height);
         constexpr int k_face_count = 6;
         for (int i = 0; i < k_face_count; i++)
         {
@@ -1057,17 +981,8 @@ Rndr::Image::Image(const GraphicsContext& graphics_context,
             constexpr int32_t k_depth = 1;
             const int32_t z_offset = i;
             const uint8_t* data = init_data.data() + i * desc.width * desc.height * FromPixelFormatToPixelSize(desc.pixel_format);
-            glTextureSubImage3D(m_native_texture,
-                                k_mip_level,
-                                k_x_offset,
-                                k_y_offset,
-                                z_offset,
-                                desc.width,
-                                desc.height,
-                                k_depth,
-                                format,
-                                data_type,
-                                data);
+            glTextureSubImage3D(m_native_texture, k_mip_level, k_x_offset, k_y_offset, z_offset, desc.width, desc.height, k_depth, format,
+                                data_type, data);
         }
     }
     else
@@ -1082,10 +997,7 @@ Rndr::Image::Image(const GraphicsContext& graphics_context,
     }
 }
 
-Rndr::Image::Image(const GraphicsContext& graphics_context,
-                   Bitmap& bitmap,
-                   bool use_mips,
-                   const SamplerDesc& sampler_desc)
+Rndr::Image::Image(const GraphicsContext& graphics_context, Bitmap& bitmap, bool use_mips, const SamplerDesc& sampler_desc)
     : Image(graphics_context,
             ImageDesc{.width = bitmap.GetWidth(),
                       .height = bitmap.GetHeight(),
@@ -1102,8 +1014,7 @@ Rndr::Image::~Image()
     Destroy();
 }
 
-Rndr::Image::Image(Image&& other) noexcept
-    : m_desc(other.m_desc), m_native_texture(other.m_native_texture)
+Rndr::Image::Image(Image&& other) noexcept : m_desc(other.m_desc), m_native_texture(other.m_native_texture)
 {
     other.m_native_texture = k_invalid_opengl_object;
 }

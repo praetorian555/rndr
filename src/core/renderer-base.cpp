@@ -6,7 +6,7 @@ Rndr::RendererBase::RendererBase(const Rndr::String& name, const Rndr::RendererB
 
 Rndr::ClearRenderer::ClearRenderer(const Rndr::String& name,
                                    const Rndr::RendererBaseDesc& desc,
-                                   const math::Vector4& color,
+                                   const Vector4f& color,
                                    float depth,
                                    uint32_t stencil)
     : RendererBase(name, desc), m_color(color), m_depth(depth), m_stencil(stencil)

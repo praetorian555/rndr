@@ -24,18 +24,16 @@ int main()
 
 struct PerFrameData
 {
-    math::Matrix4x4 mvp;
+    Rndr::Matrix4x4f mvp;
 };
 struct VertexData
 {
-    math::Point3 pos;
-    math::Point2 tc;
+    Rndr::Point3f pos;
+    Rndr::Point2f tc;
 };
 constexpr size_t k_per_frame_size = sizeof(PerFrameData);
 
-bool LoadMesh(const Rndr::String& file_path,
-              Rndr::Array<VertexData>& vertices,
-              Rndr::Array<uint32_t>& indices);
+bool LoadMesh(const Rndr::String& file_path, Rndr::Array<VertexData>& vertices, Rndr::Array<uint32_t>& indices);
 
 void Run()
 {
@@ -51,88 +49,66 @@ void Run()
     Rndr::Window window({.width = 800, .height = 600, .name = "Vertex Pulling Example"});
     Rndr::GraphicsContext graphics_context({.window_handle = window.GetNativeWindowHandle()});
     assert(graphics_context.IsValid());
-    Rndr::SwapChain swap_chain(
-        graphics_context,
-        {.width = window.GetWidth(), .height = window.GetHeight(), .enable_vsync = vertical_sync});
+    Rndr::SwapChain swap_chain(graphics_context, {.width = window.GetWidth(), .height = window.GetHeight(), .enable_vsync = vertical_sync});
     assert(swap_chain.IsValid());
 
     // Read shaders from files.
-    const Rndr::String vertex_shader_code =
-        Rndr::File::ReadEntireTextFile(ASSETS_DIR "vertex-pulling.vert");
-    const Rndr::String pixel_shader_code =
-        Rndr::File::ReadEntireTextFile(ASSETS_DIR "vertex-pulling.frag");
-    const Rndr::String geometry_shader_code =
-        Rndr::File::ReadEntireTextFile(ASSETS_DIR "vertex-pulling.geom");
+    const Rndr::String vertex_shader_code = Rndr::File::ReadEntireTextFile(ASSETS_DIR "vertex-pulling.vert");
+    const Rndr::String pixel_shader_code = Rndr::File::ReadEntireTextFile(ASSETS_DIR "vertex-pulling.frag");
+    const Rndr::String geometry_shader_code = Rndr::File::ReadEntireTextFile(ASSETS_DIR "vertex-pulling.geom");
 
     // Create shaders.
-    Rndr::Shader vertex_shader(graphics_context,
-                               {.type = Rndr::ShaderType::Vertex, .source = vertex_shader_code});
+    Rndr::Shader vertex_shader(graphics_context, {.type = Rndr::ShaderType::Vertex, .source = vertex_shader_code});
     assert(vertex_shader.IsValid());
-    Rndr::Shader pixel_shader(graphics_context,
-                              {.type = Rndr::ShaderType::Fragment, .source = pixel_shader_code});
+    Rndr::Shader pixel_shader(graphics_context, {.type = Rndr::ShaderType::Fragment, .source = pixel_shader_code});
     assert(pixel_shader.IsValid());
-    Rndr::Shader geometry_shader(
-        graphics_context,
-        {.type = Rndr::ShaderType::Geometry, .source = geometry_shader_code});
+    Rndr::Shader geometry_shader(graphics_context, {.type = Rndr::ShaderType::Geometry, .source = geometry_shader_code});
     assert(geometry_shader.IsValid());
 
     // Setup vertex buffer.
     constexpr size_t k_stride = sizeof(VertexData);
-    const Rndr::Buffer vertex_buffer(graphics_context,
-                                     {.type = Rndr::BufferType::ShaderStorage,
-                                      .size = static_cast<uint32_t>(k_stride * vertices.size()),
-                                      .stride = k_stride},
-                                     Rndr::ToByteSpan(vertices));
+    const Rndr::Buffer vertex_buffer(
+        graphics_context,
+        {.type = Rndr::BufferType::ShaderStorage, .size = static_cast<uint32_t>(k_stride * vertices.size()), .stride = k_stride},
+        Rndr::ToByteSpan(vertices));
     assert(vertex_buffer.IsValid());
 
     // Setup index buffer.
     const Rndr::Buffer index_buffer(
         graphics_context,
-        {.type = Rndr::BufferType::Index,
-         .size = static_cast<uint32_t>(sizeof(uint32_t) * indices.size()),
-         .stride = sizeof(uint32_t)},
+        {.type = Rndr::BufferType::Index, .size = static_cast<uint32_t>(sizeof(uint32_t) * indices.size()), .stride = sizeof(uint32_t)},
         Rndr::ToByteSpan(indices));
     assert(index_buffer.IsValid());
 
     // Configure input layout.
     Rndr::InputLayoutBuilder builder;
     const Rndr::InputLayoutDesc input_layout_desc =
-        builder.AddVertexBuffer(vertex_buffer, 1, Rndr::DataRepetition::PerVertex)
-            .AddIndexBuffer(index_buffer)
-            .Build();
+        builder.AddVertexBuffer(vertex_buffer, 1, Rndr::DataRepetition::PerVertex).AddIndexBuffer(index_buffer).Build();
 
     // Configure the pipeline.
-    const Rndr::Pipeline solid_pipeline(graphics_context,
-                                        {.vertex_shader = &vertex_shader,
-                                         .pixel_shader = &pixel_shader,
-                                         .geometry_shader = &geometry_shader,
-                                         .input_layout = input_layout_desc,
-                                         .rasterizer = {.fill_mode = Rndr::FillMode::Solid},
-                                         .depth_stencil = {.is_depth_enabled = true}});
+    const Rndr::Pipeline solid_pipeline(graphics_context, {.vertex_shader = &vertex_shader,
+                                                           .pixel_shader = &pixel_shader,
+                                                           .geometry_shader = &geometry_shader,
+                                                           .input_layout = input_layout_desc,
+                                                           .rasterizer = {.fill_mode = Rndr::FillMode::Solid},
+                                                           .depth_stencil = {.is_depth_enabled = true}});
     assert(solid_pipeline.IsValid());
 
     // Load mesh albedo texture.
-    Rndr::Bitmap mesh_image = Rndr::File::ReadEntireImage(ASSETS_DIR "duck-base-color.png",
-                                                            Rndr::PixelFormat::R8G8B8_UNORM_SRGB);
+    Rndr::Bitmap mesh_image = Rndr::File::ReadEntireImage(ASSETS_DIR "duck-base-color.png", Rndr::PixelFormat::R8G8B8_UNORM_SRGB);
     assert(mesh_image.IsValid());
     constexpr bool k_use_mips = false;
     const Rndr::Image mesh_albedo(graphics_context, mesh_image, k_use_mips, {});
     assert(mesh_albedo.IsValid());
 
     // Create a buffer to store per-frame data.
-    Rndr::Buffer per_frame_buffer(graphics_context,
-                                  {.type = Rndr::BufferType::Constant,
-                                   .usage = Rndr::Usage::Dynamic,
-                                   .size = k_per_frame_size,
-                                   .stride = k_per_frame_size});
-    constexpr math::Vector4 k_clear_color{MATH_REALC(1.0),
-                                          MATH_REALC(1.0),
-                                          MATH_REALC(1.0),
-                                          MATH_REALC(1.0)};
+    Rndr::Buffer per_frame_buffer(
+        graphics_context,
+        {.type = Rndr::BufferType::Constant, .usage = Rndr::Usage::Dynamic, .size = k_per_frame_size, .stride = k_per_frame_size});
+    constexpr Rndr::Vector4f k_clear_color = Rndr::Colors::k_white;
 
     // Handle window resizing.
-    window.on_resize.Bind([&swap_chain](int32_t width, int32_t height)
-                          { swap_chain.SetSize(width, height); });
+    window.on_resize.Bind([&swap_chain](int32_t width, int32_t height) { swap_chain.SetSize(width, height); });
 
     // Bind stuff that stay the same across the frames.
     graphics_context.Bind(swap_chain);
@@ -148,15 +124,13 @@ void Run()
         window.ProcessEvents();
 
         // Setup transform that rotates the mesh around the Y axis.
-        const float ratio = static_cast<Rndr::real>(window.GetWidth())
-                            / static_cast<Rndr::real>(window.GetHeight());
+        const float ratio = static_cast<float>(window.GetWidth()) / static_cast<float>(window.GetHeight());
         const float angle = static_cast<float>(std::fmod(10 * Rndr::GetSystemTime(), 360.0));
-        const math::Transform t = math::Translate(math::Vector3(0.0f, -0.5f, -1.5f))
-                                  * math::Rotate(angle, math::Vector3(0.0f, 1.0f, 0.0f))
-                                  * math::RotateX(-90);
-        const math::Matrix4x4 p = math::Perspective_RH_N1(45.0f, ratio, 0.1f, 1000.0f);
-        math::Matrix4x4 mvp = math::Multiply(p, t.GetMatrix());
-        mvp = mvp.Transpose();
+        const Rndr::Matrix4x4f t = Math::Translate(Rndr::Vector3f(0.0f, -0.5f, -1.5f)) *
+                                   Math::Rotate(angle, Rndr::Vector3f(0.0f, 1.0f, 0.0f)) * Math::RotateX(-90.0f);
+        const Rndr::Matrix4x4f p = Math::Perspective_RH_N1(45.0f, ratio, 0.1f, 1000.0f);
+        Rndr::Matrix4x4f mvp = p * t;
+        mvp = Math::Transpose(mvp);
         PerFrameData per_frame_data = {.mvp = mvp};
 
         // Send transform to the GPU each frame.
@@ -183,9 +157,7 @@ void Run()
     Rndr::ImGuiWrapper::Destroy();
 }
 
-bool LoadMesh(const Rndr::String& file_path,
-              Rndr::Array<VertexData>& vertices,
-              Rndr::Array<uint32_t>& indices)
+bool LoadMesh(const Rndr::String& file_path, Rndr::Array<VertexData>& vertices, Rndr::Array<uint32_t>& indices)
 {
     const aiScene* scene = aiImportFile(file_path.c_str(), aiProcess_Triangulate);
     if ((scene == nullptr) || !scene->HasMeshes())
@@ -199,7 +171,7 @@ bool LoadMesh(const Rndr::String& file_path,
     {
         const aiVector3D v = mesh->mVertices[i];
         const aiVector3D t = mesh->mTextureCoords[0][i];
-        vertices.push_back({.pos = math::Point3(v.x, v.y, v.z), .tc = math::Point2(t.x, t.y)});
+        vertices.push_back({.pos = Rndr::Point3f(v.x, v.y, v.z), .tc = Rndr::Point2f(t.x, t.y)});
     }
     for (unsigned i = 0; i != mesh->mNumFaces; i++)
     {

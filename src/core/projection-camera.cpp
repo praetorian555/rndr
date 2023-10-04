@@ -2,12 +2,10 @@
 
 #include "math/projections.h"
 
-Rndr::ProjectionCamera::ProjectionCamera(const math::Transform& world_to_camera,
-                                         int screen_width,
-                                         int screen_height,
+Rndr::ProjectionCamera::ProjectionCamera(const Matrix4x4f& world_to_camera, int screen_width, int screen_height,
                                          const ProjectionCameraDesc& desc)
     : m_world_to_camera(world_to_camera),
-      m_camera_to_world(world_to_camera.GetInverse()),
+      m_camera_to_world(Math::Inverse(world_to_camera)),
       m_screen_width(screen_width),
       m_screen_height(screen_height),
       m_desc(desc)
@@ -15,45 +13,37 @@ Rndr::ProjectionCamera::ProjectionCamera(const math::Transform& world_to_camera,
     UpdateTransforms();
 }
 
-Rndr::ProjectionCamera::ProjectionCamera(const math::Point3& position,
-                                         const math::Rotator& rotation,
-                                         int screen_width,
-                                         int screen_height,
+Rndr::ProjectionCamera::ProjectionCamera(const Point3f& position, const Rotatorf& rotation, int screen_width, int screen_height,
                                          const ProjectionCameraDesc& desc)
-    : m_position(position),
-      m_rotation(rotation),
-      m_screen_width(screen_width),
-      m_screen_height(screen_height),
-      m_desc(desc)
+    : m_position(position), m_rotation(rotation), m_screen_width(screen_width), m_screen_height(screen_height), m_desc(desc)
 {
-    m_camera_to_world = math::RotateAndTranslate(m_rotation, m_position);
-    m_world_to_camera = m_camera_to_world.GetInverse();
+    m_camera_to_world = Math::RotateAndTranslate(m_rotation, m_position);
+    m_world_to_camera = Math::Inverse(m_camera_to_world);
     UpdateTransforms();
 }
 
-void Rndr::ProjectionCamera::SetPosition(const math::Point3& position)
+void Rndr::ProjectionCamera::SetPosition(const Point3f& position)
 {
     m_position = position;
-    m_camera_to_world = math::RotateAndTranslate(m_rotation, m_position);
-    m_world_to_camera = m_camera_to_world.GetInverse();
+    m_camera_to_world = Math::RotateAndTranslate(m_rotation, m_position);
+    m_world_to_camera = Math::Inverse(m_camera_to_world);
     UpdateTransforms();
 }
 
-void Rndr::ProjectionCamera::SetRotation(const math::Rotator& rotation)
+void Rndr::ProjectionCamera::SetRotation(const Rotatorf& rotation)
 {
     m_rotation = rotation;
-    m_camera_to_world = math::RotateAndTranslate(m_rotation, m_position);
-    m_world_to_camera = m_camera_to_world.GetInverse();
+    m_camera_to_world = Math::RotateAndTranslate(m_rotation, m_position);
+    m_world_to_camera = Math::Inverse(m_camera_to_world);
     UpdateTransforms();
 }
 
-void Rndr::ProjectionCamera::SetPositionAndRotation(const math::Point3& position,
-                                                    const math::Rotator& rotation)
+void Rndr::ProjectionCamera::SetPositionAndRotation(const Point3f& position, const Rotatorf& rotation)
 {
     m_position = position;
     m_rotation = rotation;
-    m_camera_to_world = math::RotateAndTranslate(m_rotation, m_position);
-    m_world_to_camera = m_camera_to_world.GetInverse();
+    m_camera_to_world = Math::RotateAndTranslate(m_rotation, m_position);
+    m_world_to_camera = Math::Inverse(m_camera_to_world);
     UpdateTransforms();
 }
 
@@ -64,14 +54,14 @@ void Rndr::ProjectionCamera::SetScreenSize(int screen_width, int screen_height)
     UpdateTransforms();
 }
 
-void Rndr::ProjectionCamera::SetNearAndFar(real near, real far)
+void Rndr::ProjectionCamera::SetNearAndFar(float near, float far)
 {
     m_desc.near = near;
     m_desc.far = far;
     UpdateTransforms();
 }
 
-void Rndr::ProjectionCamera::SetVerticalFOV(real fov)
+void Rndr::ProjectionCamera::SetVerticalFOV(float fov)
 {
     assert(m_desc.projection == ProjectionType::Perspective);
     m_desc.vertical_fov = fov;
@@ -81,40 +71,30 @@ void Rndr::ProjectionCamera::SetVerticalFOV(real fov)
 void Rndr::ProjectionCamera::UpdateTransforms()
 {
     m_camera_to_ndc = GetProjectionTransform();
-    m_ndc_to_camera = m_camera_to_ndc.GetInverse();
+    m_ndc_to_camera = Math::Inverse(m_camera_to_ndc);
 
     m_world_to_ndc = m_camera_to_ndc * m_world_to_camera;
-    m_ndc_to_world = m_world_to_ndc.GetInverse();
+    m_ndc_to_world = Math::Inverse(m_world_to_ndc);
 }
 
-void Rndr::ProjectionCamera::SetWorldToCamera(const math::Transform& world_to_camera)
+void Rndr::ProjectionCamera::SetWorldToCamera(const Matrix4x4f& world_to_camera)
 {
     m_world_to_camera = world_to_camera;
-    m_camera_to_world = m_world_to_camera.GetInverse();
+    m_camera_to_world = Math::Inverse(m_world_to_camera);
     UpdateTransforms();
 }
 
-math::Transform Rndr::ProjectionCamera::GetProjectionTransform() const
+Rndr::Matrix4x4f Rndr::ProjectionCamera::GetProjectionTransform() const
 {
-    const real aspect_ratio = GetAspectRatio();
+    const float aspect_ratio = GetAspectRatio();
     if (m_desc.projection == ProjectionType::Orthographic)
     {
-        const real width = static_cast<real>(m_desc.orthographic_width);
-        const real height = width / aspect_ratio;
+        const float width = static_cast<float>(m_desc.orthographic_width);
+        const float height = width / aspect_ratio;
 #if RNDR_DX11
-        return math::Transform{math::Orthographic_LH_N0(-width / 2,
-                                                        width / 2,
-                                                        -height / 2,
-                                                        height / 2,
-                                                        m_desc.near,
-                                                        m_desc.far)};
+        return Matrix4x4f{Math::Orthographic_LH_N0(-width / 2, width / 2, -height / 2, height / 2, m_desc.near, m_desc.far)};
 #elif RNDR_OPENGL
-        return math::Transform{math::Orthographic_RH_N1(-width / 2,
-                                                        width / 2,
-                                                        -height / 2,
-                                                        height / 2,
-                                                        m_desc.near,
-                                                        m_desc.far)};
+        return Matrix4x4f{Math::Orthographic_RH_N1(-width / 2, width / 2, -height / 2, height / 2, m_desc.near, m_desc.far)};
 #else
 #error "Unknown render API"
 #endif
@@ -122,22 +102,20 @@ math::Transform Rndr::ProjectionCamera::GetProjectionTransform() const
     else
     {
 #if RNDR_DX11
-        return math::Transform{
-            math::Perspective_LH_N0(m_desc.vertical_fov, aspect_ratio, m_desc.near, m_desc.far)};
+        return Matrix4x4f{Math::Perspective_LH_N0(m_desc.vertical_fov, aspect_ratio, m_desc.near, m_desc.far)};
 #elif RNDR_OPENGL
-        return math::Transform{
-            math::Perspective_RH_N1(m_desc.vertical_fov, aspect_ratio, m_desc.near, m_desc.far)};
+        return Matrix4x4f{Math::Perspective_RH_N1(m_desc.vertical_fov, aspect_ratio, m_desc.near, m_desc.far)};
 #else
 #error "Unknown render API"
 #endif
     }
 }
 
-Rndr::real Rndr::ProjectionCamera::GetAspectRatio() const
+float Rndr::ProjectionCamera::GetAspectRatio() const
 {
     [[unlikely]] if (m_screen_height == 0)
     {
         return 1;
     }
-    return static_cast<real>(m_screen_width) / static_cast<real>(m_screen_height);
+    return static_cast<float>(m_screen_width) / static_cast<float>(m_screen_height);
 }

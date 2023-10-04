@@ -1,5 +1,6 @@
 #pragma once
 
+#include "rndr/core/math.h"
 #include "rndr/render-api/render-api.h"
 
 namespace Rndr
@@ -35,12 +36,12 @@ protected:
 class ClearRenderer : public RendererBase
 {
 public:
-    ClearRenderer(const String& name, const RendererBaseDesc& desc, const math::Vector4& color, float depth = 1.0f, uint32_t stencil = 0);
+    ClearRenderer(const String& name, const RendererBaseDesc& desc, const Vector4f& color, float depth = 1.0f, uint32_t stencil = 0);
 
     bool Render() override;
 
 protected:
-    math::Vector4 m_color;
+    Vector4f m_color;
     float m_depth;
     uint32_t m_stencil;
 };
@@ -116,4 +117,4 @@ private:
     Array<RendererBase*> m_renderers;
 };
 
-}
+}  // namespace Rndr

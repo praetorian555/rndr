@@ -1,8 +1,6 @@
 #pragma once
 
-#include "math/vector4.h"
-
-#include "rndr/core/base.h"
+#include "rndr/core/math.h"
 
 namespace Rndr
 {
@@ -12,13 +10,13 @@ namespace Rndr
  */
 struct Colors
 {
-    static constexpr math::Vector4 kBlack = {0, 0, 0, 1};
-    static constexpr math::Vector4 kWhite = {1, 1, 1, 1};
-    static constexpr math::Vector4 kRed = {1, 0, 0, 1};
-    static constexpr math::Vector4 kGreen = {0, 1, 0, 1};
-    static constexpr math::Vector4 kBlue = {0, 0, 1, 1};
-    static constexpr math::Vector4 kPink = {1, 0x69 / 255.0f, 0xB4 / 255.0f, 1};
-    static constexpr math::Vector4 kYellow = {1, 1, 0, 1};
+    static constexpr Vector4f k_black = {0, 0, 0, 1};
+    static constexpr Vector4f k_white = {1, 1, 1, 1};
+    static constexpr Vector4f k_red = {1, 0, 0, 1};
+    static constexpr Vector4f k_green = {0, 1, 0, 1};
+    static constexpr Vector4f k_blue = {0, 0, 1, 1};
+    static constexpr Vector4f k_pink = {1, 0x69 / 255.0f, 0xB4 / 255.0f, 1};
+    static constexpr Vector4f k_yellow = {1, 1, 0, 1};
 };
 
-}  // namespace rndr
+}  // namespace Rndr

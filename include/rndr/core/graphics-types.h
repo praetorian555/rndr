@@ -1,11 +1,8 @@
 #pragma once
 
-#include "math/vector3.h"
-#include "math/vector4.h"
-
 #include "rndr/core/array.h"
-#include "rndr/core/base.h"
 #include "rndr/core/forward-def-windows.h"
+#include "rndr/core/math.h"
 #include "rndr/core/ref.h"
 #include "rndr/core/span.h"
 #include "rndr/core/stack-array.h"
@@ -19,10 +16,10 @@ class Shader;
 
 struct GraphicsConstants
 {
-    static constexpr int kMaxFrameBufferColorBuffers = 4;
-    static constexpr int kMaxInputLayoutEntries = 32;
-    static constexpr int kMaxShaderResourceBindSlots = 128;
-    static constexpr int kMaxConstantBuffers = 16;
+    static constexpr int k_max_frame_buffer_color_buffers = 4;
+    static constexpr int k_max_input_layout_entries = 32;
+    static constexpr int k_max_shader_resource_bind_slots = 128;
+    static constexpr int k_max_constant_buffers = 16;
 };
 
 enum class ImageType
@@ -543,7 +540,7 @@ struct SamplerDesc
     ImageAddressMode address_mode_w = ImageAddressMode::Repeat;
 
     /** Border color used when address mode is set to Border. */
-    math::Vector4 border_color = Colors::kPink;
+    Vector4f border_color = Colors::k_pink;
 
     /**
      * Bias to be added to the mip level before sampling. Add to shader-supplied bias, if any is
@@ -590,11 +587,11 @@ struct ImageDesc
 
 struct FrameBufferProperties
 {
-    int ColorBufferCount = 1;
-    StackArray<ImageDesc, GraphicsConstants::kMaxFrameBufferColorBuffers> ColorBufferProperties;
+    int color_buffer_count = 1;
+    StackArray<ImageDesc, GraphicsConstants::k_max_frame_buffer_color_buffers> color_buffer_properties;
 
-    bool UseDepthStencil = false;
-    ImageDesc DepthStencilBufferProperties;
+    bool use_depth_stencil = false;
+    ImageDesc depth_stencil_buffer_properties;
 };
 
 /**
@@ -658,19 +655,19 @@ struct RasterizerDesc
     Face cull_face = Face::Back;
 
     /** Multiplier of the smallest value guaranteed to produce a resolvable offset. */
-    real depth_bias = 0;
+    float depth_bias = 0;
 
     /** A multiplier of the change of depth relative to the screen area of the polygon. */
-    real slope_scaled_depth_bias = 0.0;
+    float slope_scaled_depth_bias = 0.0;
 
     /** Bottom left point of a rectangle that defines the scissor test. */
-    math::Point2 scissor_bottom_left;
+    Point2f scissor_bottom_left;
 
     /**
      * Size of a rectangle that defines the scissor test. If width or height is zero the scissor
      * test is disabled.
      */
-    math::Vector2 scissor_size;
+    Vector2f scissor_size;
 };
 
 struct DepthStencilDesc
@@ -760,10 +757,10 @@ struct BlendDesc
     BlendOperation alpha_operation = BlendOperation::Add;
 
     /** Const color value used in the blend operation. */
-    math::Vector3 const_color;
+    Vector3f const_color;
 
     /** Const alpha value used in the blend operation. */
-    real const_alpha = MATH_REALC(0.0);
+    float const_alpha = 0.0f;
 };
 
 struct PipelineDesc

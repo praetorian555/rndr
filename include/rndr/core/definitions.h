@@ -3,8 +3,6 @@
 #include <cassert>
 #include <cstdint>
 
-#include "math/math.h"
-
 #if WIN32
 #define RNDR_WINDOWS 1
 #endif  // WIN32
@@ -16,11 +14,6 @@
 #if !NDEBUG
 #define RNDR_DEBUG 1
 #endif  // !NDEBUG
-
-namespace Rndr
-{
-using real = math::real;
-} // namespace Rndr
 
 #if RNDR_WINDOWS
 #define RNDR_OPTIMIZE_OFF __pragma(optimize("", off))

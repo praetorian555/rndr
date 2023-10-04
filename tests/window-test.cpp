@@ -133,7 +133,7 @@ TEST_CASE("Resizing the window", "[window]")
             window.ProcessEvents();
             REQUIRE(window.GetWidth() == 800);
             REQUIRE(window.GetHeight() == 600);
-            REQUIRE(window.GetSize() == math::Vector2(800, 600));
+            REQUIRE(window.GetSize() == Rndr::Vector2f(800, 600));
         }
         SECTION("Resize to 1280x720")
         {
@@ -141,7 +141,7 @@ TEST_CASE("Resizing the window", "[window]")
             window.ProcessEvents();
             REQUIRE(window.GetWidth() == 1280);
             REQUIRE(window.GetHeight() == 720);
-            REQUIRE(window.GetSize() == math::Vector2(1280, 720));
+            REQUIRE(window.GetSize() == Rndr::Vector2f(1280, 720));
         }
         SECTION("Resize to invalid")
         {
@@ -149,7 +149,7 @@ TEST_CASE("Resizing the window", "[window]")
             window.ProcessEvents();
             REQUIRE(window.GetWidth() == 1024);
             REQUIRE(window.GetHeight() == 768);
-            REQUIRE(window.GetSize() == math::Vector2(1024, 768));
+            REQUIRE(window.GetSize() == Rndr::Vector2f(1024, 768));
         }
     }
     REQUIRE(Rndr::Destroy());

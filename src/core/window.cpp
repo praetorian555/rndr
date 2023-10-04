@@ -4,6 +4,11 @@
 #include <windows.h>
 #include <windowsx.h>
 #include <winuser.h>
+
+#undef min
+#undef max
+#undef near
+#undef far
 #endif  // RNDR_WINDOWS
 
 #include "rndr/core/hash-map.h"
@@ -368,11 +373,11 @@ int Rndr::Window::GetHeight() const
     return m_desc.height;
 }
 
-math::Vector2 Rndr::Window::GetSize() const
+Rndr::Vector2f Rndr::Window::GetSize() const
 {
-    math::Vector2 size;
-    size.X = static_cast<real>(m_desc.width);
-    size.Y = static_cast<real>(m_desc.height);
+    Vector2f size;
+    size.x = static_cast<float>(m_desc.width);
+    size.y = static_cast<float>(m_desc.height);
     return size;
 }
 
@@ -610,7 +615,7 @@ void HandleMouseMove(Rndr::Window* window, int x, int y)
         case Rndr::CursorMode::Normal:
         case Rndr::CursorMode::Hidden:
         {
-            const math::Point2 absolute_position(static_cast<float>(x), static_cast<float>(y));
+            const Point2f absolute_position(static_cast<float>(x), static_cast<float>(y));
             Rndr::InputSystem::SubmitMousePositionEvent(window->m_handle,
                                                         absolute_position,
                                                         window->GetSize());
@@ -740,9 +745,9 @@ LRESULT CALLBACK WindowProc(HWND window_handle, UINT msg_code, WPARAM param_w, L
 
             if (raw_data->header.dwType == RIM_TYPEMOUSE)
             {
-                const math::Vector2 size = window->GetSize();
-                const math::Vector2 delta{static_cast<float>(raw_data->data.mouse.lLastX) / size.X,
-                                          static_cast<float>(raw_data->data.mouse.lLastY) / size.Y};
+                const Vector2f size = window->GetSize();
+                const Vector2f delta{static_cast<float>(raw_data->data.mouse.lLastX) / size.x,
+                                          static_cast<float>(raw_data->data.mouse.lLastY) / size.y};
                 Rndr::InputSystem::SubmitRelativeMousePositionEvent(window->m_handle, delta, size);
             }
             break;

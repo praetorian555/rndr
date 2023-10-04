@@ -19,7 +19,7 @@ Rndr::InputLayoutBuilder& Rndr::InputLayoutBuilder::AppendElement(int buffer_ind
         RNDR_LOG_ERROR("Failed since the buffer index is not present, call AddVertexBuffer first!");
         return *this;
     }
-    if (m_elements.size() == GraphicsConstants::kMaxInputLayoutEntries)
+    if (m_elements.size() == GraphicsConstants::k_max_input_layout_entries)
     {
         RNDR_LOG_ERROR("Failed since there are no more slots available!");
         return *this;

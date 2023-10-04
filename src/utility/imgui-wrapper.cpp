@@ -4,6 +4,11 @@
 
 #if RNDR_WINDOWS
 #include <windows.h>
+
+#undef min
+#undef max
+#undef near
+#undef far
 #endif
 
 #include "backends/imgui_impl_win32.h"

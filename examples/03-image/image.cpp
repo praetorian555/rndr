@@ -63,7 +63,7 @@ void main()
 
 struct PerFrameData
 {
-    math::Matrix4x4 mvp;
+    Rndr::Matrix4x4f mvp;
 };
 
 void Run()
@@ -71,49 +71,35 @@ void Run()
     Rndr::Window window({.width = 800, .height = 600, .name = "Image Example"});
     Rndr::GraphicsContext graphics_context({.window_handle = window.GetNativeWindowHandle()});
     assert(graphics_context.IsValid());
-    Rndr::SwapChain swap_chain(graphics_context,
-                               {.width = window.GetWidth(), .height = window.GetHeight()});
+    Rndr::SwapChain swap_chain(graphics_context, {.width = window.GetWidth(), .height = window.GetHeight()});
     assert(swap_chain.IsValid());
-    window.on_resize.Bind([&swap_chain](int32_t width, int32_t height)
-                          { swap_chain.SetSize(width, height); });
+    window.on_resize.Bind([&swap_chain](int32_t width, int32_t height) { swap_chain.SetSize(width, height); });
 
-    Rndr::Shader vertex_shader(
-        graphics_context,
-        {.type = Rndr::ShaderType::Vertex, .source = g_vertex_shader_source});
+    Rndr::Shader vertex_shader(graphics_context, {.type = Rndr::ShaderType::Vertex, .source = g_vertex_shader_source});
     assert(vertex_shader.IsValid());
-    Rndr::Shader pixel_shader(
-        graphics_context,
-        {.type = Rndr::ShaderType::Fragment, .source = g_pixel_shader_source});
+    Rndr::Shader pixel_shader(graphics_context, {.type = Rndr::ShaderType::Fragment, .source = g_pixel_shader_source});
     assert(pixel_shader.IsValid());
-    const Rndr::Pipeline pipeline(graphics_context,
-                                  {.vertex_shader = &vertex_shader, .pixel_shader = &pixel_shader});
+    const Rndr::Pipeline pipeline(graphics_context, {.vertex_shader = &vertex_shader, .pixel_shader = &pixel_shader});
     assert(pipeline.IsValid());
 
     constexpr int32_t k_per_frame_size = sizeof(PerFrameData);
-    Rndr::Buffer per_frame_buffer(graphics_context,
-                                  {.type = Rndr::BufferType::Constant,
-                                   .usage = Rndr::Usage::Dynamic,
-                                   .size = k_per_frame_size,
-                                   .stride = k_per_frame_size});
+    Rndr::Buffer per_frame_buffer(
+        graphics_context,
+        {.type = Rndr::BufferType::Constant, .usage = Rndr::Usage::Dynamic, .size = k_per_frame_size, .stride = k_per_frame_size});
     assert(per_frame_buffer.IsValid());
 
-    Rndr::Bitmap bitmap = Rndr::File::ReadEntireImage(ASSETS_DIR "brick-wall.jpg",
-                                                           Rndr::PixelFormat::R8G8B8_UNORM_SRGB);
+    Rndr::Bitmap bitmap = Rndr::File::ReadEntireImage(ASSETS_DIR "brick-wall.jpg", Rndr::PixelFormat::R8G8B8_UNORM_SRGB);
     assert(bitmap.IsValid());
     constexpr bool k_use_mips = false;
     const Rndr::Image image(graphics_context, bitmap, k_use_mips, {});
     assert(image.IsValid());
 
-    constexpr math::Vector4 k_clear_color{MATH_REALC(0.0),
-                                          MATH_REALC(0.0),
-                                          MATH_REALC(0.0),
-                                          MATH_REALC(1.0)};
+    constexpr Rndr::Vector4f k_clear_color = Rndr::Colors::k_white;
 
     Rndr::InputContext& input_ctx = Rndr::InputSystem::GetCurrentContext();
     const Rndr::InputAction exit_action{"exit"};
     Rndr::InputActionData exit_action_data;
-    exit_action_data.callback =
-        [&window](Rndr::InputPrimitive primitive, Rndr::InputTrigger trigger, Rndr::real value)
+    exit_action_data.callback = [&window](Rndr::InputPrimitive primitive, Rndr::InputTrigger trigger, float value)
     {
         RNDR_UNUSED(primitive);
         RNDR_UNUSED(trigger);
@@ -122,15 +108,13 @@ void Run()
     };
     exit_action_data.native_window = window.GetNativeWindowHandle();
     input_ctx.AddAction(exit_action, exit_action_data);
-    input_ctx.AddBindingToAction(exit_action,
-                                 Rndr::InputBinding{.primitive = Rndr::InputPrimitive::Keyboard_Esc,
-                                                    .trigger = Rndr::InputTrigger::ButtonReleased});
+    input_ctx.AddBindingToAction(
+        exit_action, Rndr::InputBinding{.primitive = Rndr::InputPrimitive::Keyboard_Esc, .trigger = Rndr::InputTrigger::ButtonReleased});
 
     const Rndr::InputAction screenshot_action{"screenshot"};
     Rndr::InputActionData screenshot_action_data;
     screenshot_action_data.callback =
-        [&graphics_context,
-         &swap_chain](Rndr::InputPrimitive primitive, Rndr::InputTrigger trigger, Rndr::real value)
+        [&graphics_context, &swap_chain](Rndr::InputPrimitive primitive, Rndr::InputTrigger trigger, float value)
     {
         RNDR_UNUSED(primitive);
         RNDR_UNUSED(trigger);
@@ -147,34 +131,19 @@ void Run()
 
         const Etc::Image::Format etc_format = Etc::Image::Format::RGB8;
         const auto error_metric = Etc::ErrorMetric::BT709;
-        Etc::Image image(image_to_save_float.data(),
-                         image_to_save.GetWidth(),
-                         image_to_save.GetHeight(),
-                         error_metric);
+        Etc::Image image(image_to_save_float.data(), image_to_save.GetWidth(), image_to_save.GetHeight(), error_metric);
 
-        image.Encode(etc_format,
-                     error_metric,
-                     ETCCOMP_DEFAULT_EFFORT_LEVEL,
-                     std::thread::hardware_concurrency(),
-                     1024);
+        image.Encode(etc_format, error_metric, ETCCOMP_DEFAULT_EFFORT_LEVEL, std::thread::hardware_concurrency(), 1024);
 
-        Etc::File etc_file("screenshot.ktx",
-                           Etc::File::Format::KTX,
-                           etc_format,
-                           image.GetEncodingBits(),
-                           image.GetEncodingBitsBytes(),
-                           image.GetSourceWidth(),
-                           image.GetSourceHeight(),
-                           image.GetExtendedWidth(),
-                           image.GetExtendedHeight());
+        Etc::File etc_file("screenshot.ktx", Etc::File::Format::KTX, etc_format, image.GetEncodingBits(), image.GetEncodingBitsBytes(),
+                           image.GetSourceWidth(), image.GetSourceHeight(), image.GetExtendedWidth(), image.GetExtendedHeight());
         etc_file.Write();
 #endif
     };
     screenshot_action_data.native_window = window.GetNativeWindowHandle();
     input_ctx.AddAction(screenshot_action, screenshot_action_data);
-    input_ctx.AddBindingToAction(screenshot_action,
-                                 Rndr::InputBinding{.primitive = Rndr::InputPrimitive::Keyboard_F9,
-                                                    .trigger = Rndr::InputTrigger::ButtonReleased});
+    input_ctx.AddBindingToAction(screenshot_action, Rndr::InputBinding{.primitive = Rndr::InputPrimitive::Keyboard_F9,
+                                                                       .trigger = Rndr::InputTrigger::ButtonReleased});
 
     Rndr::ImGuiWrapper::Init(window, graphics_context, {.display_demo_window = true});
 
@@ -183,13 +152,12 @@ void Run()
         window.ProcessEvents();
         Rndr::InputSystem::ProcessEvents(0);
 
-        const float ratio = static_cast<Rndr::real>(window.GetWidth())
-                            / static_cast<Rndr::real>(window.GetHeight());
+        const float ratio = static_cast<float>(window.GetWidth()) / static_cast<float>(window.GetHeight());
         const float angle = static_cast<float>(std::fmod(10 * Rndr::GetSystemTime(), 360.0));
-        const math::Transform t = math::Rotate(angle, math::Vector3(0.0f, 0.0f, 1.0f));
-        const math::Matrix4x4 p = math::Orthographic_RH_N1(-ratio, ratio, -1.0f, 1.0f, -1.0f, 1.0f);
-        math::Matrix4x4 mvp = math::Multiply(p, t.GetMatrix());
-        mvp = mvp.Transpose();
+        const Rndr::Matrix4x4f t = Math::Rotate(angle, Rndr::Vector3f(0.0f, 0.0f, 1.0f));
+        const Rndr::Matrix4x4f p = Math::Orthographic_RH_N1(-ratio, ratio, -1.0f, 1.0f, -1.0f, 1.0f);
+        Rndr::Matrix4x4f mvp = p * t;
+        mvp = Math::Transpose(mvp);
         PerFrameData per_frame_data = {.mvp = mvp};
 
         graphics_context.Update(per_frame_buffer, Rndr::ToByteSpan(per_frame_data));

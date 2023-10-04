@@ -50,7 +50,7 @@ void main()
 
 struct PerFrameData
 {
-    math::Matrix4x4 mvp;
+    Rndr::Matrix4x4f mvp;
     int is_wire_frame;
 };
 
@@ -69,7 +69,7 @@ public:
         }
         assert(scene->HasMeshes());
         const aiMesh* mesh = scene->mMeshes[0];
-        Rndr::Array<math::Point3> positions;
+        Rndr::Array<Rndr::Point3f> positions;
         for (unsigned int i = 0; i != mesh->mNumFaces; i++)
         {
             const aiFace& face = mesh->mFaces[i];
@@ -77,7 +77,7 @@ public:
             for (int j = 0; j != 3; j++)
             {
                 const aiVector3D v = mesh->mVertices[idx[j]];
-                positions.emplace_back(math::Point3(v.x, v.y, v.z));  // NOLINT
+                positions.emplace_back(Rndr::Point3f(v.x, v.y, v.z));  // NOLINT
             }
         }
         aiReleaseImport(scene);
@@ -90,7 +90,7 @@ public:
                                           Rndr::ShaderDesc{.type = Rndr::ShaderType::Fragment, .source = g_shader_code_fragment});
         assert(m_pixel_shader->IsValid());
 
-        constexpr size_t k_stride = sizeof(math::Point3);
+        constexpr size_t k_stride = sizeof(Rndr::Point3f);
         m_vertex_buffer = RNDR_MAKE_SCOPED(Rndr::Buffer, m_desc.graphics_context,
                                            {.type = Rndr::BufferType::Vertex,
                                             .usage = Rndr::Usage::Default,
@@ -124,10 +124,10 @@ public:
 
         // Rotate the mesh
         const float angle = static_cast<float>(std::fmod(10 * Rndr::GetSystemTime(), 360.0));
-        const math::Transform t =
-            math::Translate(math::Vector3(0.0f, -0.5f, -1.5f)) * math::Rotate(angle, math::Vector3(0.0f, 1.0f, 0.0f)) * math::RotateX(-90);
-        math::Matrix4x4 mvp = math::Multiply(m_camera_transform.GetMatrix(), t.GetMatrix());
-        mvp = mvp.Transpose();
+        const Rndr::Matrix4x4f t = Math::Translate(Rndr::Vector3f(0.0f, -0.5f, -1.5f)) *
+                                   Math::Rotate(angle, Rndr::Vector3f(0.0f, 1.0f, 0.0f)) * Math::RotateX(-90.0f);
+        Rndr::Matrix4x4f mvp = m_camera_transform * t;
+        mvp = Math::Transpose(mvp);
         PerFrameData per_frame_data = {.mvp = mvp, .is_wire_frame = 0};
         m_desc.graphics_context->Update(*m_per_frame_buffer, Rndr::ToByteSpan(per_frame_data));
 
@@ -142,7 +142,7 @@ public:
         return true;
     }
 
-    void SetCameraTransform(const math::Transform& transform) { m_camera_transform = transform; }
+    void SetCameraTransform(const Rndr::Matrix4x4f& transform) { m_camera_transform = transform; }
 
 private:
     Rndr::ScopePtr<Rndr::Shader> m_vertex_shader;
@@ -152,7 +152,7 @@ private:
     Rndr::ScopePtr<Rndr::Buffer> m_per_frame_buffer;
 
     int32_t m_vertex_count = 0;
-    math::Transform m_camera_transform;
+    Rndr::Matrix4x4f m_camera_transform;
 };
 
 void Run()
@@ -170,12 +170,12 @@ void Run()
     Rndr::InputSystem::GetCurrentContext().AddAction(
         Rndr::InputAction("Exit"),
         Rndr::InputActionData{.callback = [&window](Rndr::InputPrimitive, Rndr::InputTrigger, float) { window.Close(); },
-         .native_window = window.GetNativeWindowHandle(),
-         .bindings = exit_bindings});
+                              .native_window = window.GetNativeWindowHandle(),
+                              .bindings = exit_bindings});
 
     const Rndr::RendererBaseDesc renderer_desc = {.graphics_context = Rndr::Ref{graphics_context}, .swap_chain = Rndr::Ref{swap_chain}};
 
-    constexpr math::Vector4 k_clear_color{MATH_REALC(1.0), MATH_REALC(1.0), MATH_REALC(1.0), MATH_REALC(1.0)};
+    constexpr Rndr::Vector4f k_clear_color = Rndr::Colors::k_white;
     const Rndr::ScopePtr<Rndr::RendererBase> clear_renderer =
         RNDR_MAKE_SCOPED(Rndr::ClearRenderer, "Clear the screen", renderer_desc, k_clear_color);
     const Rndr::ScopePtr<Rndr::RendererBase> present_renderer =
@@ -183,7 +183,8 @@ void Run()
     const Rndr::ScopePtr<MeshRenderer> mesh_renderer = RNDR_MAKE_SCOPED(MeshRenderer, "Render a mesh", renderer_desc);
     const Rndr::ScopePtr<Rndr::LineRenderer> line_renderer = RNDR_MAKE_SCOPED(Rndr::LineRenderer, "Debug renderer", renderer_desc);
 
-    Rndr::FlyCamera fly_camera(&window, &Rndr::InputSystem::GetCurrentContext(), {.rotation_speed = 200, .projection_desc = {.near = 0.1f, .far = 1000.0f}});
+    Rndr::FlyCamera fly_camera(&window, &Rndr::InputSystem::GetCurrentContext(),
+                               {.rotation_speed = 200, .projection_desc = {.near = 0.1f, .far = 1000.0f}});
 
     Rndr::RendererManager renderer_manager;
     renderer_manager.AddRenderer(clear_renderer.get());
@@ -207,8 +208,9 @@ void Run()
         fly_camera.Update(delta_seconds);
         mesh_renderer->SetCameraTransform(fly_camera.FromWorldToNDC());
 
-        line_renderer->AddLine(math::Point3(-1.0f, -0.5f, -0.5f), math::Point3(1.0f, 0.5f, -0.5f), math::Vector4(1.0f, 0.0f, 0.0f, 1.0f));
-        line_renderer->SetCameraTransform(math::Transpose(fly_camera.FromWorldToNDC()));
+        line_renderer->AddLine(Rndr::Point3f(-1.0f, -0.5f, -0.5f), Rndr::Point3f(1.0f, 0.5f, -0.5f),
+                               Rndr::Vector4f(1.0f, 0.0f, 0.0f, 1.0f));
+        line_renderer->SetCameraTransform(Math::Transpose(fly_camera.FromWorldToNDC()));
 
         renderer_manager.Render();
 

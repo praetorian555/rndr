@@ -67,8 +67,8 @@ public:
     [[nodiscard]] uint8_t* GetData() { return m_data.data(); }
     [[nodiscard]] const uint8_t* GetData() const { return m_data.data(); }
 
-    [[nodiscard]] math::Vector4 GetPixel(int x, int y, int z = 0) const;
-    void SetPixel(int x, int y, int z, const math::Vector4& pixel);
+    [[nodiscard]] Vector4f GetPixel(int x, int y, int z = 0) const;
+    void SetPixel(int x, int y, int z, const Vector4f& pixel);
 
     /**
      * Helper function used to check if given pixel format can be used for creating a bitmap.
@@ -78,14 +78,14 @@ public:
     [[nodiscard]] static bool IsPixelFormatSupported(PixelFormat pixel_format);
 
 private:
-    [[nodiscard]] math::Vector4 GetPixelUnsignedByte(int x, int y, int z) const;
-    void SetPixelUnsignedByte(int x, int y, int z, const math::Vector4& pixel);
+    [[nodiscard]] Vector4f GetPixelUnsignedByte(int x, int y, int z) const;
+    void SetPixelUnsignedByte(int x, int y, int z, const Vector4f& pixel);
 
-    [[nodiscard]] math::Vector4 GetPixelFloat(int x, int y, int z) const;
-    void SetPixelFloat(int x, int y, int z, const math::Vector4& pixel);
+    [[nodiscard]] Vector4f GetPixelFloat(int x, int y, int z) const;
+    void SetPixelFloat(int x, int y, int z, const Vector4f& pixel);
 
-    using GetPixelFunc = math::Vector4 (Bitmap::*)(int x, int y, int z) const;
-    using SetPixelFunc = void (Bitmap::*)(int x, int y, int z, const math::Vector4& pixel);
+    using GetPixelFunc = Vector4f (Bitmap::*)(int x, int y, int z) const;
+    using SetPixelFunc = void (Bitmap::*)(int x, int y, int z, const Vector4f& pixel);
 
     int m_width = 0;
     int m_height = 0;

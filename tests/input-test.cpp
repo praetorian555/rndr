@@ -96,7 +96,7 @@ TEST_CASE("Input context", "[input]")
                                           .trigger = Rndr::InputTrigger::ButtonPressed,
                                           .modifier = 1.0f}};
         const Rndr::InputCallback callback =
-            [](Rndr::InputPrimitive primitive, Rndr::InputTrigger trigger, Rndr::real value)
+            [](Rndr::InputPrimitive primitive, Rndr::InputTrigger trigger, float value)
         {
             (void)primitive;
             (void)trigger;
@@ -186,10 +186,10 @@ TEST_CASE("Input system", "[input]")
         Rndr::InputBinding bindings[] = {{.primitive = Rndr::InputPrimitive::Keyboard_A,
                                           .trigger = Rndr::InputTrigger::ButtonPressed,
                                           .modifier = 2.0f}};
-        Rndr::real value1 = 0;
-        Rndr::real value2 = 0;
+        float value1 = 0;
+        float value2 = 0;
         const Rndr::InputCallback callback1 =
-            [&value1](Rndr::InputPrimitive primitive, Rndr::InputTrigger trigger, Rndr::real val)
+            [&value1](Rndr::InputPrimitive primitive, Rndr::InputTrigger trigger, float val)
         {
             (void)primitive;
             (void)trigger;
@@ -197,7 +197,7 @@ TEST_CASE("Input system", "[input]")
             value1 += val;
         };
         const Rndr::InputCallback callback2 =
-            [&value2](Rndr::InputPrimitive primitive, Rndr::InputTrigger trigger, Rndr::real val)
+            [&value2](Rndr::InputPrimitive primitive, Rndr::InputTrigger trigger, float val)
         {
             (void)primitive;
             (void)trigger;
@@ -211,26 +211,26 @@ TEST_CASE("Input system", "[input]")
                                                      Rndr::InputPrimitive::Keyboard_A,
                                                      Rndr::InputTrigger::ButtonPressed));
         REQUIRE(Rndr::InputSystem::ProcessEvents(1));
-        REQUIRE(value1 == MATH_REALC(2.0));
-        REQUIRE(value2 == MATH_REALC(-2.0));
+        REQUIRE(value1 == 2.0f);
+        REQUIRE(value2 == -2.0f);
         REQUIRE(Rndr::InputSystem::SubmitButtonEvent(nullptr,
                                                      Rndr::InputPrimitive::Keyboard_A,
                                                      Rndr::InputTrigger::ButtonReleased));
         REQUIRE(Rndr::InputSystem::ProcessEvents(1));
-        REQUIRE(value1 == MATH_REALC(2.0));
-        REQUIRE(value2 == MATH_REALC(-2.0));
+        REQUIRE(value1 == 2.0f);
+        REQUIRE(value2 == -2.0f);
         REQUIRE(Rndr::InputSystem::SubmitButtonEvent(nullptr,
                                                      Rndr::InputPrimitive::Keyboard_D,
                                                      Rndr::InputTrigger::ButtonPressed));
         REQUIRE(Rndr::InputSystem::ProcessEvents(1));
-        REQUIRE(value1 == MATH_REALC(2.0));
-        REQUIRE(value2 == MATH_REALC(-2.0));
+        REQUIRE(value1 == 2.0f);
+        REQUIRE(value2 == -2.0f);
         REQUIRE(Rndr::InputSystem::SubmitButtonEvent(nullptr,
                                                      Rndr::InputPrimitive::Keyboard_A,
                                                      Rndr::InputTrigger::ButtonPressed));
         REQUIRE(Rndr::InputSystem::ProcessEvents(1));
-        REQUIRE(value1 == MATH_REALC(4.0));
-        REQUIRE(value2 == MATH_REALC(-4.0));
+        REQUIRE(value1 == 4.0f);
+        REQUIRE(value2 == -4.0f);
     }
     SECTION("Process mouse position events")
     {
@@ -242,11 +242,11 @@ TEST_CASE("Input system", "[input]")
                                          {.primitive = Rndr::InputPrimitive::Mouse_AxisY,
                                           .trigger = Rndr::InputTrigger::AxisChangedAbsolute,
                                           .modifier = 2.0f}};
-        Rndr::real value1 = 0;
-        Rndr::real value2 = 0;
+        float value1 = 0;
+        float value2 = 0;
         const Rndr::InputCallback callback = [&value1, &value2](Rndr::InputPrimitive primitive,
                                                                 Rndr::InputTrigger trigger,
-                                                                Rndr::real val)
+                                                                float val)
         {
             (void)trigger;
             if (primitive == Rndr::InputPrimitive::Mouse_AxisX)
@@ -262,16 +262,16 @@ TEST_CASE("Input system", "[input]")
         REQUIRE(Rndr::InputSystem::PushContext(context));
         REQUIRE(Rndr::InputSystem::SubmitMousePositionEvent(nullptr, {100, 200}, {1024, 768}));
         REQUIRE(Rndr::InputSystem::ProcessEvents(1));
-        REQUIRE(value1 == MATH_REALC(200.0));
-        REQUIRE(value2 == MATH_REALC(400.0));
+        REQUIRE(value1 == 200.0f);
+        REQUIRE(value2 == 400.0f);
         REQUIRE(Rndr::InputSystem::SubmitMousePositionEvent(nullptr, {100, 200}, {1024, 768}));
         REQUIRE(Rndr::InputSystem::ProcessEvents(1));
-        REQUIRE(value1 == MATH_REALC(400.0));
-        REQUIRE(value2 == MATH_REALC(800.0));
+        REQUIRE(value1 == 400.0f);
+        REQUIRE(value2 == 800.0f);
         REQUIRE(!Rndr::InputSystem::SubmitMousePositionEvent(nullptr, {100, 200}, {0, 0}));
         REQUIRE(Rndr::InputSystem::ProcessEvents(1));
-        REQUIRE(value1 == MATH_REALC(400.0));
-        REQUIRE(value2 == MATH_REALC(800.0));
+        REQUIRE(value1 == 400.0f);
+        REQUIRE(value2 == 800.0f);
     }
     SECTION("Process relative mouse event")
     {
@@ -283,11 +283,11 @@ TEST_CASE("Input system", "[input]")
                                          {.primitive = Rndr::InputPrimitive::Mouse_AxisY,
                                           .trigger = Rndr::InputTrigger::AxisChangedRelative,
                                           .modifier = 2.0f}};
-        Rndr::real value1 = 0;
-        Rndr::real value2 = 0;
+        float value1 = 0;
+        float value2 = 0;
         const Rndr::InputCallback callback = [&value1, &value2](Rndr::InputPrimitive primitive,
                                                                 Rndr::InputTrigger trigger,
-                                                                Rndr::real val)
+                                                                float val)
         {
             (void)trigger;
             if (primitive == Rndr::InputPrimitive::Mouse_AxisX)
@@ -304,17 +304,17 @@ TEST_CASE("Input system", "[input]")
         REQUIRE(
             Rndr::InputSystem::SubmitRelativeMousePositionEvent(nullptr, {100, 200}, {1024, 768}));
         REQUIRE(Rndr::InputSystem::ProcessEvents(1));
-        REQUIRE(value1 == MATH_REALC(200.0));
-        REQUIRE(value2 == MATH_REALC(400.0));
+        REQUIRE(value1 == 200.0f);
+        REQUIRE(value2 == 400.0f);
         REQUIRE(
             Rndr::InputSystem::SubmitRelativeMousePositionEvent(nullptr, {100, 200}, {1024, 768}));
         REQUIRE(Rndr::InputSystem::ProcessEvents(1));
-        REQUIRE(value1 == MATH_REALC(400.0));
-        REQUIRE(value2 == MATH_REALC(800.0));
+        REQUIRE(value1 == 400.0f);
+        REQUIRE(value2 == 800.0f);
         REQUIRE(!Rndr::InputSystem::SubmitRelativeMousePositionEvent(nullptr, {100, 200}, {0, 0}));
         REQUIRE(Rndr::InputSystem::ProcessEvents(1));
-        REQUIRE(value1 == MATH_REALC(400.0));
-        REQUIRE(value2 == MATH_REALC(800.0));
+        REQUIRE(value1 == 400.0f);
+        REQUIRE(value2 == 800.0f);
     }
     SECTION("Process mouse wheel event")
     {
@@ -323,9 +323,9 @@ TEST_CASE("Input system", "[input]")
         Rndr::InputBinding bindings[] = {{.primitive = Rndr::InputPrimitive::Mouse_AxisWheel,
                                           .trigger = Rndr::InputTrigger::AxisChangedRelative,
                                           .modifier = 2.0f}};
-        Rndr::real value1 = 0;
+        float value1 = 0;
         const Rndr::InputCallback callback =
-            [&value1](Rndr::InputPrimitive primitive, Rndr::InputTrigger trigger, Rndr::real val)
+            [&value1](Rndr::InputPrimitive primitive, Rndr::InputTrigger trigger, float val)
         {
             (void)trigger;
             if (primitive == Rndr::InputPrimitive::Mouse_AxisWheel)
@@ -337,13 +337,13 @@ TEST_CASE("Input system", "[input]")
         REQUIRE(Rndr::InputSystem::PushContext(context));
         REQUIRE(Rndr::InputSystem::SubmitMouseWheelEvent(nullptr, 100));
         REQUIRE(Rndr::InputSystem::ProcessEvents(1));
-        REQUIRE(value1 == MATH_REALC(200.0));
+        REQUIRE(value1 == 200.0f);
         REQUIRE(Rndr::InputSystem::SubmitMouseWheelEvent(nullptr, 100));
         REQUIRE(Rndr::InputSystem::ProcessEvents(1));
-        REQUIRE(value1 == MATH_REALC(400.0));
+        REQUIRE(value1 == 400.0f);
         REQUIRE(Rndr::InputSystem::SubmitMouseWheelEvent(nullptr, -100));
         REQUIRE(Rndr::InputSystem::ProcessEvents(1));
-        REQUIRE(value1 == MATH_REALC(200.0));
+        REQUIRE(value1 == 200.0f);
     }
     SECTION("Process button event but filter with native window handle")
     {
@@ -351,9 +351,9 @@ TEST_CASE("Input system", "[input]")
         const Rndr::InputAction action("TestAction");
         Rndr::InputBinding bindings[] = {{.primitive = Rndr::InputPrimitive::Mouse_LeftButton,
                                           .trigger = Rndr::InputTrigger::ButtonPressed}};
-        Rndr::real value1 = 0;
+        float value1 = 0;
         const Rndr::InputCallback callback =
-            [&value1](Rndr::InputPrimitive primitive, Rndr::InputTrigger trigger, Rndr::real val)
+            [&value1](Rndr::InputPrimitive primitive, Rndr::InputTrigger trigger, float val)
         {
             (void)trigger;
             if (primitive == Rndr::InputPrimitive::Mouse_LeftButton)
@@ -369,17 +369,17 @@ TEST_CASE("Input system", "[input]")
                                                      Rndr::InputPrimitive::Mouse_LeftButton,
                                                      Rndr::InputTrigger::ButtonPressed));
         REQUIRE(Rndr::InputSystem::ProcessEvents(1));
-        REQUIRE(value1 == MATH_REALC(1.0));
+        REQUIRE(value1 == 1.0f);
         REQUIRE(Rndr::InputSystem::SubmitButtonEvent(handle,
                                                      Rndr::InputPrimitive::Mouse_LeftButton,
                                                      Rndr::InputTrigger::ButtonPressed));
         REQUIRE(Rndr::InputSystem::ProcessEvents(1));
-        REQUIRE(value1 == MATH_REALC(2.0));
+        REQUIRE(value1 == 2.0f);
         REQUIRE(Rndr::InputSystem::SubmitButtonEvent(bad_handle,
                                                      Rndr::InputPrimitive::Mouse_LeftButton,
                                                      Rndr::InputTrigger::ButtonPressed));
         REQUIRE(Rndr::InputSystem::ProcessEvents(1));
-        REQUIRE(value1 == MATH_REALC(2.0));
+        REQUIRE(value1 == 2.0f);
     }
     SECTION("Check is primitive a button")
     {

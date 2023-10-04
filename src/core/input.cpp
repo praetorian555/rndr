@@ -34,14 +34,14 @@ struct ButtonData
 
 struct MousePositionData
 {
-    math::Point2 position;
-    math::Vector2 screen_size;
+    Point2f position;
+    Vector2f screen_size;
 };
 
 struct RelativeMousePositionData
 {
-    math::Vector2 delta_position;
-    math::Vector2 screen_size;
+    Vector2f delta_position;
+    Vector2f screen_size;
 };
 
 struct MouseWheelData
@@ -358,14 +358,14 @@ bool Rndr::InputSystem::SubmitButtonEvent(NativeWindowHandle window,
 }
 
 bool Rndr::InputSystem::SubmitMousePositionEvent(NativeWindowHandle window,
-                                                 const math::Point2& position,
-                                                 const math::Vector2& screen_size)
+                                                 const Point2f& position,
+                                                 const Vector2f& screen_size)
 {
     if (g_system_data == nullptr)
     {
         return false;
     }
-    if (screen_size.X == 0 || screen_size.Y == 0)
+    if (screen_size.x == 0 || screen_size.y == 0)
     {
         return false;
     }
@@ -375,14 +375,14 @@ bool Rndr::InputSystem::SubmitMousePositionEvent(NativeWindowHandle window,
 }
 
 bool Rndr::InputSystem::SubmitRelativeMousePositionEvent(NativeWindowHandle window,
-                                                         const math::Vector2& delta_position,
-                                                         const math::Vector2& screen_size)
+                                                         const Vector2f& delta_position,
+                                                         const Vector2f& screen_size)
 {
     if (g_system_data == nullptr)
     {
         return false;
     }
-    if (screen_size.X == 0 || screen_size.Y == 0)
+    if (screen_size.x == 0 || screen_size.y == 0)
     {
         return false;
     }
@@ -417,7 +417,7 @@ struct InputEventProcessor
 
 }  // namespace Rndr
 
-bool Rndr::InputSystem::ProcessEvents(real delta_seconds)
+bool Rndr::InputSystem::ProcessEvents(float delta_seconds)
 {
     RNDR_UNUSED(delta_seconds);
 
@@ -470,12 +470,12 @@ void Rndr::InputEventProcessor::operator()(const MousePositionData& event) const
         {
             if (binding.primitive == axes[0] && binding.trigger == trigger)
             {
-                const real value = binding.modifier * event.position[0];
+                const float value = binding.modifier * event.position[0];
                 action_data.callback(axes[0], trigger, value);
             }
             if (binding.primitive == axes[1] && binding.trigger == trigger)
             {
-                const real value = binding.modifier * event.position[1];
+                const float value = binding.modifier * event.position[1];
                 action_data.callback(axes[1], trigger, value);
             }
         }
@@ -497,12 +497,12 @@ void Rndr::InputEventProcessor::operator()(const RelativeMousePositionData& even
         {
             if (binding.primitive == axes[0] && binding.trigger == trigger)
             {
-                const real value = binding.modifier * event.delta_position[0];
+                const float value = binding.modifier * event.delta_position[0];
                 action_data.callback(axes[0], trigger, value);
             }
             if (binding.primitive == axes[1] && binding.trigger == trigger)
             {
-                const real value = binding.modifier * event.delta_position[1];
+                const float value = binding.modifier * event.delta_position[1];
                 action_data.callback(axes[1], trigger, value);
             }
         }
@@ -523,7 +523,7 @@ void Rndr::InputEventProcessor::operator()(const MouseWheelData& event) const
         {
             if (binding.primitive == primitive && binding.trigger == trigger)
             {
-                const real value = binding.modifier * static_cast<real>(event.delta_wheel);
+                const float value = binding.modifier * static_cast<float>(event.delta_wheel);
                 action_data.callback(primitive, trigger, value);
                 break;
             }

@@ -77,7 +77,7 @@ public:
      * @param color The color to clear the image to.
      * @return Returns true if the image was cleared successfully, false otherwise.
      */
-    bool ClearColor(const math::Vector4& color);
+    bool ClearColor(const Vector4f& color);
 
     /**
      * Clears the color and depth images in the bound frame buffer.
@@ -85,7 +85,7 @@ public:
      * @param depth Depth value to clear the depth image to. Default is 1.
      * @return Returns true if the images were cleared successfully, false otherwise.
      */
-    bool ClearColorAndDepth(const math::Vector4& color, real depth = MATH_REALC(1.0));
+    bool ClearColorAndDepth(const Vector4f& color, float depth = 1.0f);
 
     /**
      * Draws primitives without use of index buffer. It will behave as if indices were specified

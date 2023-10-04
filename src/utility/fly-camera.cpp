@@ -62,62 +62,62 @@ Rndr::FlyCamera::~FlyCamera()
     m_window->SetCursorMode(m_prev_cursor_mode);
 }
 
-void Rndr::FlyCamera::Update(real delta_seconds)
+void Rndr::FlyCamera::Update(float delta_seconds)
 {
-    m_direction_vector = math::Vector3{0, 0, 1};  // Left-handed
-    math::Rotator rotation = GetRotation();
+    m_direction_vector = Vector3f{0, 0, 1};  // Left-handed
+    Rotatorf rotation = GetRotation();
     rotation += delta_seconds * m_desc.rotation_speed * m_delta_rotation;
-    m_direction_vector = math::Rotate(rotation)(m_direction_vector);
-    m_right_vector = math::Cross(m_direction_vector, math::Vector3{0, 1, 0});
+    m_direction_vector = Math::Rotate(rotation) * m_direction_vector;
+    m_right_vector = Math::Cross(m_direction_vector, Vector3f{0, 1, 0});
 
-    constexpr real k_max_roll = 89.0f;
-    rotation.Roll = math::Clamp(rotation.Roll, -k_max_roll, k_max_roll);
+    constexpr float k_max_roll = 89.0f;
+    rotation.roll = Math::Clamp(rotation.roll, -k_max_roll, k_max_roll);
 
-    math::Point3 position = GetPosition();
-    position += m_desc.movement_speed * delta_seconds * m_delta_position.X * m_direction_vector;
-    position += m_desc.movement_speed * delta_seconds * m_delta_position.Y * m_right_vector;
+    Point3f position = GetPosition();
+    position += m_desc.movement_speed * delta_seconds * m_delta_position.x * m_direction_vector;
+    position += m_desc.movement_speed * delta_seconds * m_delta_position.y * m_right_vector;
 
     SetPositionAndRotation(position, rotation);
 
-    m_delta_rotation = math::Rotator{};
+    m_delta_rotation = Rotatorf::Zero();
 }
 
-void Rndr::FlyCamera::HandleLookVert(Rndr::InputPrimitive primitive, Rndr::InputTrigger trigger, real axis_value)
+void Rndr::FlyCamera::HandleLookVert(Rndr::InputPrimitive primitive, Rndr::InputTrigger trigger, float axis_value)
 {
     using IT = Rndr::InputTrigger;
     if (primitive == Rndr::InputPrimitive::Mouse_AxisY)
     {
-        m_delta_rotation.Roll = m_desc.rotation_speed * axis_value;
+        m_delta_rotation.roll = m_desc.rotation_speed * axis_value;
     }
     else
     {
-        m_delta_rotation.Roll = trigger == IT::ButtonPressed ? m_desc.rotation_speed * axis_value : 0;
+        m_delta_rotation.roll = trigger == IT::ButtonPressed ? m_desc.rotation_speed * axis_value : 0;
     }
 }
 
-void Rndr::FlyCamera::HandleLookHorz(Rndr::InputPrimitive primitive, Rndr::InputTrigger trigger, real axis_value)
+void Rndr::FlyCamera::HandleLookHorz(Rndr::InputPrimitive primitive, Rndr::InputTrigger trigger, float axis_value)
 {
     using IT = Rndr::InputTrigger;
     if (primitive == Rndr::InputPrimitive::Mouse_AxisX)
     {
-        m_delta_rotation.Yaw = m_desc.rotation_speed * axis_value;
+        m_delta_rotation.yaw = m_desc.rotation_speed * axis_value;
     }
     else
     {
-        m_delta_rotation.Yaw = trigger == IT::ButtonPressed ? m_desc.rotation_speed * axis_value : 0;
+        m_delta_rotation.yaw = trigger == IT::ButtonPressed ? m_desc.rotation_speed * axis_value : 0;
     }
 }
 
-void Rndr::FlyCamera::HandleMoveForward(Rndr::InputPrimitive primitive, Rndr::InputTrigger trigger, real value)
+void Rndr::FlyCamera::HandleMoveForward(Rndr::InputPrimitive primitive, Rndr::InputTrigger trigger, float value)
 {
     RNDR_UNUSED(primitive);
     using IT = Rndr::InputTrigger;
-    m_delta_position.X = trigger == IT::ButtonPressed ? value : 0;
+    m_delta_position.x = trigger == IT::ButtonPressed ? value : 0;
 }
 
-void Rndr::FlyCamera::HandleMoveRight(Rndr::InputPrimitive primitive, Rndr::InputTrigger trigger, real value)
+void Rndr::FlyCamera::HandleMoveRight(Rndr::InputPrimitive primitive, Rndr::InputTrigger trigger, float value)
 {
     RNDR_UNUSED(primitive);
     using IT = Rndr::InputTrigger;
-    m_delta_position.Y = trigger == IT::ButtonPressed ? value : 0;
+    m_delta_position.y = trigger == IT::ButtonPressed ? value : 0;
 }

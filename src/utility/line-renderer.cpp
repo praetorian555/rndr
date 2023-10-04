@@ -50,12 +50,12 @@ Rndr::LineRenderer::LineRenderer(const Rndr::String& name, const Rndr::RendererB
         return;
     }
 
-    math::Matrix4x4 identity_matrix;
+    Matrix4x4f identity_matrix;
     m_constant_buffer = RNDR_MAKE_SCOPED(Buffer, m_desc.graphics_context,
                                          {.type = Rndr::BufferType::Constant,
                                           .usage = Rndr::Usage::Dynamic,
-                                          .size = sizeof(math::Matrix4x4),
-                                          .stride = sizeof(math::Matrix4x4)},
+                                          .size = sizeof(Matrix4x4f),
+                                          .stride = sizeof(Matrix4x4f)},
                                          Rndr::ToByteSpan(identity_matrix));
     if (!m_constant_buffer->IsValid())
     {
@@ -66,7 +66,7 @@ Rndr::LineRenderer::LineRenderer(const Rndr::String& name, const Rndr::RendererB
     m_vertex_data.reserve(k_max_lines_count * 2);
 }
 
-void Rndr::LineRenderer::AddLine(const math::Point3& start, const math::Point3& end, const math::Vector4& color)
+void Rndr::LineRenderer::AddLine(const Point3f& start, const Point3f& end, const Vector4f& color)
 {
     if (m_vertex_data.size() >= k_max_lines_count * 2)
     {
@@ -78,9 +78,9 @@ void Rndr::LineRenderer::AddLine(const math::Point3& start, const math::Point3& 
     m_vertex_data.push_back({end, color});
 }
 
-void Rndr::LineRenderer::SetCameraTransform(const math::Transform& transform)
+void Rndr::LineRenderer::SetCameraTransform(const Matrix4x4f& transform)
 {
-    m_desc.graphics_context->Update(*m_constant_buffer, Rndr::ToByteSpan(transform.GetMatrix()));
+    m_desc.graphics_context->Update(*m_constant_buffer, Rndr::ToByteSpan(transform));
 }
 
 bool Rndr::LineRenderer::Render()

@@ -15,17 +15,17 @@ public:
     LineRenderer(const String& name, const RendererBaseDesc& desc);
     ~LineRenderer() override = default;
 
-    void AddLine(const math::Point3& start, const math::Point3& end, const math::Vector4& color);
+    void AddLine(const Point3f& start, const Point3f& end, const Vector4f& color);
 
-    void SetCameraTransform(const math::Transform& transform);
+    void SetCameraTransform(const Matrix4x4f& transform);
 
     bool Render() override;
 
 protected:
     struct VertexData
     {
-        math::Point3 position;
-        math::Vector4 color;
+        Point3f position;
+        Vector4f color;
     };
 
     Array<VertexData> m_vertex_data;
