@@ -738,6 +738,8 @@ Rndr::Pipeline::Pipeline(const GraphicsContext& graphics_context, const Pipeline
         const int32_t binding_index = input_layout_desc.vertex_buffer_binding_slots[i];
         if (buffer_desc.type == BufferType::Vertex)
         {
+            RNDR_LOG_DEBUG("Binding vertex buffer %d to binding index %d, offset: %d, stride: %d", i, binding_index, buffer_desc.offset,
+                           buffer_desc.stride);
             glVertexArrayVertexBuffer(m_native_vertex_array, binding_index, buffer.GetNativeBuffer(), buffer_desc.offset,
                                       buffer_desc.stride);
         }
@@ -756,10 +758,15 @@ Rndr::Pipeline::Pipeline(const GraphicsContext& graphics_context, const Pipeline
     {
         const InputLayoutElement& element = input_layout_desc.elements[i];
         const int32_t attribute_index = i;
-        constexpr GLboolean k_should_normalize_data = GL_FALSE;
+        const GLenum should_normalize_data = FromPixelFormatToShouldNormalizeData(element.format);
+        const GLint component_count = FromPixelFormatToComponentCount(element.format);
+        const GLenum data_type = FromPixelFormatToDataType(element.format);
+        RNDR_LOG_DEBUG("Attribute index: %d, component count: %d, data type: %s, should normalize data: %s, offset in vertex: %d",
+                       attribute_index, component_count, FromOpenGLDataTypeToString(data_type).c_str(),
+                       should_normalize_data ? "GL_TRUE" : "GL_FALSE", element.offset_in_vertex);
         glEnableVertexArrayAttrib(m_native_vertex_array, attribute_index);
-        glVertexArrayAttribFormat(m_native_vertex_array, attribute_index, FromPixelFormatToComponentCount(element.format),
-                                  FromPixelFormatToDataType(element.format), k_should_normalize_data, element.offset_in_vertex);
+        glVertexArrayAttribFormat(m_native_vertex_array, attribute_index, component_count, data_type,
+                                  static_cast<GLboolean>(should_normalize_data), element.offset_in_vertex);
         glVertexArrayAttribBinding(m_native_vertex_array, attribute_index, element.binding_index);
         if (element.repetition == DataRepetition::PerInstance)
         {

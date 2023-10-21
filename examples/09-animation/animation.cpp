@@ -36,7 +36,8 @@ layout(std140, binding = 0) uniform PerFrameData
 layout (location=0) in vec3 pos;
 layout (location=1) in ivec4 bone_ids;
 layout (location=2) in vec4 bone_weights;
-layout (location=0) out vec3 color;
+layout (location=3) in vec2 tex_coords;
+layout (location=0) out vec2 out_tex_coords;
 void main()
 {
     vec4 position = vec4(0.0);
@@ -51,17 +52,19 @@ void main()
     }
 	//gl_Position = mvp * position;
     gl_Position = mvp * vec4(pos, 1.0);
-	color = vec3(0.1, 0.2, 0.5);
+	out_tex_coords = tex_coords;
 }
 )";
 
 const char* const g_shader_code_fragment = R"(
 #version 460 core
-layout (location=0) in vec3 color;
-layout (location=0) out vec4 out_FragColor;
+layout (location=0) in vec2 tex_coords;
+layout (location=0) out vec4 out_frag_color;
+uniform sampler2D diffuse_texture;
 void main()
 {
-	out_FragColor = vec4(color, 1.0);
+	out_frag_color = texture(diffuse_texture, tex_coords);
+    out_frag_color.a = 1.0;
 };
 )";
 
@@ -80,8 +83,9 @@ struct VertexData
     constexpr static size_t k_max_bone_influence_count = 4;
 
     Rndr::Point3f position;
-    int32_t bone_ids[k_max_bone_influence_count];
-    float bone_weights[k_max_bone_influence_count];
+    Rndr::StackArray<int32_t, k_max_bone_influence_count> bone_ids;
+    Rndr::StackArray<float, k_max_bone_influence_count> bone_weights;
+    Rndr::Point2f tex_coords;
 };
 
 struct Mesh
@@ -89,6 +93,8 @@ struct Mesh
     std::vector<VertexData> vertex_data;
     std::vector<int32_t> indices;
     BoneMap bone_name_to_bone_info;
+
+    Rndr::String diffuse_texture_path;
 };
 
 struct PerFrameData
@@ -96,7 +102,7 @@ struct PerFrameData
     constexpr static size_t k_max_bone_count = 100;
 
     Rndr::Matrix4x4f mvp;
-    Rndr::Matrix4x4f final_bone_transforms[k_max_bone_count];
+    Rndr::StackArray<Rndr::Matrix4x4f, k_max_bone_count> final_bone_transforms;
 };
 
 Rndr::Matrix4x4f AssimpMatrixToMatrix4x4(const aiMatrix4x4& ai_matrix)
@@ -141,6 +147,7 @@ public:
                                                             .AppendElement(0, Rndr::PixelFormat::R32G32B32_FLOAT)
                                                             .AppendElement(0, Rndr::PixelFormat::R32G32B32A32_SINT)
                                                             .AppendElement(0, Rndr::PixelFormat::R32G32B32A32_FLOAT)
+                                                            .AppendElement(0, Rndr::PixelFormat::R32G32_FLOAT)
                                                             .AddIndexBuffer(*m_index_buffer)
                                                             .Build();
 
@@ -151,6 +158,15 @@ public:
                                                          .rasterizer = {.fill_mode = Rndr::FillMode::Solid},
                                                          .depth_stencil = {.is_depth_enabled = true}});
         assert(m_pipeline->IsValid());
+
+        if (!m_mesh.diffuse_texture_path.empty())
+        {
+            const Rndr::String file_path = Rndr::String(ASSETS_DIR) + "/" + m_mesh.diffuse_texture_path;
+            Rndr::Bitmap diffuse_bitmap = Rndr::File::ReadEntireImage(file_path, Rndr::PixelFormat::R8G8B8A8_UNORM_SRGB, true);
+            assert(diffuse_bitmap.IsValid());
+            m_diffuse_image = RNDR_MAKE_SCOPED(Rndr::Image, m_desc.graphics_context, diffuse_bitmap, false, {});
+            assert(m_diffuse_image->IsValid());
+        }
 
         constexpr size_t k_per_frame_size = sizeof(PerFrameData);
         m_per_frame_buffer = RNDR_MAKE_SCOPED(
@@ -173,7 +189,13 @@ public:
         for (uint32_t i = 0; i < mesh->mNumVertices; i++)
         {
             const aiVector3D v = mesh->mVertices[i];
-            const VertexData vertex_data{Rndr::Point3f(v.x, v.y, v.z), {-1, -1, -1, -1}, {0.0f, 0.0f, 0.0f, 0.0f}};
+            Rndr::Point2f tex_coords{0.0f, 0.0f};
+            if (mesh->HasTextureCoords(0))
+            {
+                tex_coords.x = mesh->mTextureCoords[0][i].x;
+                tex_coords.y = mesh->mTextureCoords[0][i].y;
+            }
+            const VertexData vertex_data{Rndr::Point3f(v.x, v.y, v.z), {-1, -1, -1, -1}, {0.0f, 0.0f, 0.0f, 0.0f}, tex_coords};
             out_mesh.vertex_data.emplace_back(vertex_data);
         }
         for (uint32_t i = 0; i != mesh->mNumFaces; i++)
@@ -207,6 +229,11 @@ public:
                 }
             }
         }
+        assert(scene->HasMaterials());
+        const aiMaterial* material = scene->mMaterials[mesh->mMaterialIndex];
+        aiString texture_path;
+        material->GetTexture(aiTextureType_DIFFUSE, 0, &texture_path);
+        out_mesh.diffuse_texture_path = texture_path.C_Str();
         aiReleaseImport(scene);
         return true;
     }
@@ -217,14 +244,13 @@ public:
 
         // Rotate the mesh
         const float angle = static_cast<float>(std::fmod(10 * Rndr::GetSystemTime(), 360.0));
-        const Rndr::Matrix4x4f t = Math::Translate(Rndr::Vector3f(0.0f, 0.0f, -100.5f)) *
+        const Rndr::Matrix4x4f t = Math::Translate(Rndr::Vector3f(0.0f, -10.0f, -50.f)) *
                                    Math::Rotate(angle, Rndr::Vector3f(0.0f, 1.0f, 0.0f)) * Math::Scale(0.1f);
         Rndr::Matrix4x4f mvp = m_camera_transform * t;
         mvp = Math::Transpose(mvp);
         PerFrameData per_frame_data = {.mvp = mvp};
-        for (const auto& p : m_mesh.bone_name_to_bone_info)
+        for (const auto& [bone_name, bone_info] : m_mesh.bone_name_to_bone_info)
         {
-            const BoneInfo& bone_info = p.second;
             const Rndr::Matrix4x4f bone_transform = mvp * bone_info.inverse_bind_pose_transform;
             per_frame_data.final_bone_transforms[bone_info.id] = bone_transform;
         }
@@ -234,6 +260,10 @@ public:
         m_desc.graphics_context->Bind(*m_desc.swap_chain);
         m_desc.graphics_context->Bind(*m_pipeline);
         m_desc.graphics_context->BindUniform(*m_per_frame_buffer, 0);
+        if (m_diffuse_image->IsValid())
+        {
+            m_desc.graphics_context->Bind(*m_diffuse_image, 0);
+        }
 
         // Draw
         m_desc.graphics_context->DrawIndices(Rndr::PrimitiveTopology::Triangle, m_index_count);
@@ -250,6 +280,7 @@ private:
     Rndr::ScopePtr<Rndr::Buffer> m_index_buffer;
     Rndr::ScopePtr<Rndr::Pipeline> m_pipeline;
     Rndr::ScopePtr<Rndr::Buffer> m_per_frame_buffer;
+    Rndr::ScopePtr<Rndr::Image> m_diffuse_image;
 
     int32_t m_index_count = 0;
     Rndr::Matrix4x4f m_camera_transform;
