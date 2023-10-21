@@ -231,5 +231,6 @@ if (CMAKE_PROJECT_NAME STREQUAL PROJECT_NAME)
     add_subdirectory(examples/06-vertex-pulling)
     add_subdirectory(examples/07-cube-map)
     add_subdirectory(examples/08-debug-features)
+    add_subdirectory(examples/09-animation)
 
 endif ()
