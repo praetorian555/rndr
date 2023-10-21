@@ -4,6 +4,7 @@
 
 #include "render-api/opengl-helpers.h"
 #include "rndr/core/stack-array.h"
+#include "rndr/core/graphics-types.h"
 
 constexpr size_t k_max_shader_type = static_cast<size_t>(Rndr::ShaderType::EnumCount);
 constexpr Rndr::StackArray<GLenum, k_max_shader_type> k_to_opengl_shader_type = {
@@ -364,6 +365,24 @@ bool Rndr::IsComponentHighPrecision(PixelFormat format)
     return data_type == GL_FLOAT;
 }
 
+Rndr::String Rndr::FromBufferTypeToString(Rndr::BufferType type)
+{
+    switch (type)
+    {
+        case BufferType::Vertex:
+            return "Vertex";
+        case BufferType::Index:
+            return "Index";
+        case BufferType::Constant:
+            return "Constant";
+        case BufferType::ShaderStorage:
+            return "Storage";
+        default:
+            assert(false);
+    }
+    return "";
+}
+
 Rndr::String Rndr::FromOpenGLDataTypeToString(GLenum value)
 {
     switch (value)
@@ -386,6 +405,22 @@ Rndr::String Rndr::FromOpenGLDataTypeToString(GLenum value)
             return "GL_SHORT";
         case GL_INT:
             return "GL_INT";
+        default:
+            assert(false);
+    }
+    return "";
+}
+
+Rndr::String Rndr::FromOpenGLUsageToString(GLenum value)
+{
+    switch (value)
+    {
+        case GL_MAP_WRITE_BIT:
+            return "GL_MAP_WRITE_BIT";
+        case GL_DYNAMIC_STORAGE_BIT:
+            return "GL_DYNAMIC_STORAGE_BIT";
+        case GL_MAP_READ_BIT:
+            return "GL_MAP_READ_BIT";
         default:
             assert(false);
     }

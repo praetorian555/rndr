@@ -808,4 +808,11 @@ bool IsComponentLowPrecision(PixelFormat format);
  */
 bool IsComponentHighPrecision(PixelFormat format);
 
+/**
+ * Returns the name of the enum field in BufferType enum as a string.
+ * @param type Buffer type.
+ * @return Name of the enum field in BufferType enum as a string or empty string if the value is not supported.
+ */
+Rndr::String FromBufferTypeToString(BufferType type);
+
 }  // namespace Rndr

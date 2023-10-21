@@ -738,10 +738,10 @@ Rndr::Pipeline::Pipeline(const GraphicsContext& graphics_context, const Pipeline
         const int32_t binding_index = input_layout_desc.vertex_buffer_binding_slots[i];
         if (buffer_desc.type == BufferType::Vertex)
         {
-            RNDR_LOG_DEBUG("Binding vertex buffer %d to binding index %d, offset: %d, stride: %d", i, binding_index, buffer_desc.offset,
-                           buffer_desc.stride);
             glVertexArrayVertexBuffer(m_native_vertex_array, binding_index, buffer.GetNativeBuffer(), buffer_desc.offset,
                                       buffer_desc.stride);
+            RNDR_LOG_DEBUG("Added vertex buffer %u to pipeline's vertex array buffer %u, binding index: %d, offset: %d, stride: %d",
+                           buffer.GetNativeBuffer(), m_native_vertex_array, binding_index, buffer_desc.offset, buffer_desc.stride);
         }
         else if (buffer_desc.type == BufferType::ShaderStorage)
         {
@@ -761,9 +761,6 @@ Rndr::Pipeline::Pipeline(const GraphicsContext& graphics_context, const Pipeline
         const GLenum should_normalize_data = FromPixelFormatToShouldNormalizeData(element.format);
         const GLint component_count = FromPixelFormatToComponentCount(element.format);
         const GLenum data_type = FromPixelFormatToDataType(element.format);
-        RNDR_LOG_DEBUG("Attribute index: %d, component count: %d, data type: %s, should normalize data: %s, offset in vertex: %d",
-                       attribute_index, component_count, FromOpenGLDataTypeToString(data_type).c_str(),
-                       should_normalize_data ? "GL_TRUE" : "GL_FALSE", element.offset_in_vertex);
         glEnableVertexArrayAttrib(m_native_vertex_array, attribute_index);
         glVertexArrayAttribFormat(m_native_vertex_array, attribute_index, component_count, data_type,
                                   static_cast<GLboolean>(should_normalize_data), element.offset_in_vertex);
@@ -778,6 +775,11 @@ Rndr::Pipeline::Pipeline(const GraphicsContext& graphics_context, const Pipeline
             Destroy();
             return;
         }
+        RNDR_LOG_DEBUG(
+            "Added attribute at index %d to vertex array buffer %u, binding index: %d, component count: %d, data type: %s, should "
+            "normalize data: %s, offset in vertex: %d",
+            attribute_index, m_native_vertex_array, element.binding_index, component_count, FromOpenGLDataTypeToString(data_type).c_str(),
+            should_normalize_data ? "GL_TRUE" : "GL_FALSE", element.offset_in_vertex);
     }
     if (input_layout_desc.index_buffer.IsValid())
     {
@@ -790,6 +792,7 @@ Rndr::Pipeline::Pipeline(const GraphicsContext& graphics_context, const Pipeline
             Destroy();
             return;
         }
+        RNDR_LOG_DEBUG("Added index buffer %u to vertex array buffer %u", buffer.GetNativeBuffer(), m_native_vertex_array);
     }
 }
 
@@ -878,6 +881,8 @@ Rndr::Buffer::Buffer(const GraphicsContext& graphics_context, const BufferDesc& 
         Destroy();
         return;
     }
+    RNDR_LOG_DEBUG("Created %s buffer %u, size: %d, stride: %d, usage %s", FromBufferTypeToString(m_desc.type).c_str(), m_native_buffer,
+                   desc.size, m_desc.stride, FromOpenGLUsageToString(buffer_usage).c_str());
 }
 
 Rndr::Buffer::~Buffer()

@@ -28,6 +28,7 @@ GLenum FromPrimitiveTopologyToOpenGL(PrimitiveTopology topology);
 GLenum FromIndexSizeToOpenGL(uint32_t index_size);
 
 Rndr::String FromOpenGLDataTypeToString(GLenum value);
+Rndr::String FromOpenGLUsageToString(GLenum value);
 
 } // namespace Rndr
 
