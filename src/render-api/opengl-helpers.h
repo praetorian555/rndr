@@ -16,8 +16,8 @@ GLenum FromComparatorToOpenGL(Comparator comparator);
 GLenum FromStencilOpToOpenGL(StencilOperation op);
 GLenum FromBlendFactorToOpenGL(BlendFactor factor);
 GLenum FromBlendOperationToOpenGL(BlendOperation op);
-GLenum FromImageInfoToTarget(ImageType image_type, bool use_mips);
-GLint FromImageFilterToMinFilter(ImageFilter min_filter, ImageFilter mip_filter);
+GLenum FromImageInfoToTarget(ImageType image_type, bool is_multi_sample);
+GLint FromMinAndMipFiltersToOpenGL(ImageFilter min_filter, ImageFilter mip_filter);
 GLint FromImageFilterToOpenGL(ImageFilter filter);
 GLint FromImageAddressModeToOpenGL(ImageAddressMode wrap);
 GLenum FromPixelFormatToInternalFormat(PixelFormat format);
@@ -26,8 +26,8 @@ GLenum FromPixelFormatToDataType(PixelFormat format);
 GLenum FromPixelFormatToShouldNormalizeData(PixelFormat format);
 GLenum FromPrimitiveTopologyToOpenGL(PrimitiveTopology topology);
 GLenum FromIndexSizeToOpenGL(uint32_t index_size);
-Rndr::String FromOpenGLDataTypeToString(GLenum value);
 
+Rndr::String FromOpenGLDataTypeToString(GLenum value);
 
 } // namespace Rndr
 

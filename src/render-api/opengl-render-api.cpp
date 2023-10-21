@@ -930,9 +930,11 @@ Rndr::Image::Image(const GraphicsContext& graphics_context, const ImageDesc& des
 {
     RNDR_UNUSED(graphics_context);
 
-    const GLenum target = FromImageInfoToTarget(desc.type, desc.use_mips);
+    // TODO: Add support for multi sample images
+    constexpr bool k_is_multi_sample = false;
+    const GLenum target = FromImageInfoToTarget(desc.type, k_is_multi_sample);
     glCreateTextures(target, 1, &m_native_texture);
-    const GLint min_filter = desc.use_mips ? FromImageFilterToMinFilter(desc.sampler.min_filter, desc.sampler.mip_map_filter)
+    const GLint min_filter = desc.use_mips ? FromMinAndMipFiltersToOpenGL(desc.sampler.min_filter, desc.sampler.mip_map_filter)
                                            : FromImageFilterToOpenGL(desc.sampler.min_filter);
     const GLint mag_filter = FromImageFilterToOpenGL(desc.sampler.mag_filter);
     glTextureParameteri(m_native_texture, GL_TEXTURE_MIN_FILTER, min_filter);

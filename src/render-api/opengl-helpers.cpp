@@ -14,7 +14,8 @@ constexpr Rndr::StackArray<GLenum, k_max_usage> k_to_opengl_usage = {GL_MAP_WRIT
 
 constexpr size_t k_max_buffer_type = static_cast<size_t>(Rndr::BufferType::EnumCount);
 constexpr Rndr::StackArray<GLenum, k_max_buffer_type> k_to_opengl_buffer_type = {GL_ARRAY_BUFFER, GL_ELEMENT_ARRAY_BUFFER,
-                                                                                 GL_UNIFORM_BUFFER};
+                                                                                 GL_UNIFORM_BUFFER, GL_SHADER_STORAGE_BUFFER};
+
 
 constexpr size_t k_max_comparator = static_cast<size_t>(Rndr::Comparator::EnumCount);
 constexpr Rndr::StackArray<GLenum, k_max_comparator> k_to_opengl_comparator = {GL_NEVER, GL_ALWAYS,   GL_LESS,   GL_GREATER,
@@ -50,17 +51,17 @@ constexpr Rndr::StackArray<GLint, k_max_image_address_mode> k_to_opengl_image_ad
 
 constexpr size_t k_max_pixel_format = static_cast<size_t>(Rndr::PixelFormat::EnumCount);
 constexpr Rndr::StackArray<GLenum, k_max_pixel_format> k_to_opengl_internal_pixel_format = {GL_RGBA8,
-                                                                                            GL_RGBA8,
+                                                                                            GL_SRGB8_ALPHA8,
                                                                                             GL_RGBA8UI,
                                                                                             GL_RGBA8_SNORM,
                                                                                             GL_RGBA8I,
                                                                                             GL_RGBA8,
-                                                                                            GL_RGBA8,
+                                                                                            GL_SRGB8_ALPHA8,
 
                                                                                             GL_DEPTH24_STENCIL8,
 
                                                                                             GL_RGB8,
-                                                                                            GL_RGB8,
+                                                                                            GL_SRGB8,
                                                                                             GL_RGB8UI,
                                                                                             GL_RGB8_SNORM,
                                                                                             GL_RGB8I,
@@ -235,16 +236,16 @@ GLenum Rndr::FromBlendOperationToOpenGL(BlendOperation op)
     return k_to_opengl_blend_op[static_cast<size_t>(op)];
 }
 
-GLenum Rndr::FromImageInfoToTarget(ImageType image_type, bool use_mips)
+GLenum Rndr::FromImageInfoToTarget(ImageType image_type, bool is_multi_sample)
 {
     GLenum target = GL_TEXTURE_2D;
     switch (image_type)
     {
         case ImageType::Image2D:
-            target = use_mips ? GL_TEXTURE_2D_MULTISAMPLE : GL_TEXTURE_2D;
+            target = is_multi_sample ? GL_TEXTURE_2D_MULTISAMPLE : GL_TEXTURE_2D;
             break;
         case ImageType::Image2DArray:
-            target = use_mips ? GL_TEXTURE_2D_MULTISAMPLE_ARRAY : GL_TEXTURE_2D_ARRAY;
+            target = is_multi_sample ? GL_TEXTURE_2D_MULTISAMPLE_ARRAY : GL_TEXTURE_2D_ARRAY;
             break;
         case ImageType::CubeMap:
             target = GL_TEXTURE_CUBE_MAP;
@@ -257,7 +258,7 @@ GLenum Rndr::FromImageInfoToTarget(ImageType image_type, bool use_mips)
     return target;
 }
 
-GLint Rndr::FromImageFilterToMinFilter(ImageFilter min_filter, ImageFilter mip_filter)
+GLint Rndr::FromMinAndMipFiltersToOpenGL(ImageFilter min_filter, ImageFilter mip_filter)
 {
     GLint gl_filter = GL_LINEAR;
     switch (min_filter)
@@ -350,6 +351,19 @@ GLenum Rndr::FromIndexSizeToOpenGL(uint32_t index_size)
             return GL_UNSIGNED_INT;
     }
 }
+
+bool Rndr::IsComponentLowPrecision(PixelFormat format)
+{
+    const GLenum data_type = FromPixelFormatToDataType(format);
+    return data_type == GL_UNSIGNED_BYTE || data_type == GL_BYTE;
+}
+
+bool Rndr::IsComponentHighPrecision(PixelFormat format)
+{
+    const GLenum data_type = FromPixelFormatToDataType(format);
+    return data_type == GL_FLOAT;
+}
+
 Rndr::String Rndr::FromOpenGLDataTypeToString(GLenum value)
 {
     switch (value)
@@ -376,18 +390,6 @@ Rndr::String Rndr::FromOpenGLDataTypeToString(GLenum value)
             assert(false);
     }
     return "";
-}
-
-bool Rndr::IsComponentLowPrecision(PixelFormat format)
-{
-    const GLenum data_type = FromPixelFormatToDataType(format);
-    return data_type == GL_UNSIGNED_BYTE || data_type == GL_BYTE;
-}
-
-bool Rndr::IsComponentHighPrecision(PixelFormat format)
-{
-    const GLenum data_type = FromPixelFormatToDataType(format);
-    return data_type == GL_FLOAT;
 }
 
 #endif  // RNDR_OPENGL
