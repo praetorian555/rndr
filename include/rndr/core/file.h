@@ -53,11 +53,12 @@ void PrintShader(const String& shader_contents);
  * @param desired_format Format in which the image should be read. If the format is not supported,
  * the function will fail. Please use Bitmap::IsPixelFormatSupported to check if the format is
  * supported.
+ * @param flip_vertically If true, the image will be flipped vertically.
  *
  * @return Returns a valid CPUImage object containing the image info and data in the CPU memory. You
  * can check for CPUImage validity by calling IsValid on it.
  */
-[[nodiscard]] Bitmap ReadEntireImage(const String& file_path, PixelFormat desired_format);
+[[nodiscard]] Bitmap ReadEntireImage(const String& file_path, PixelFormat desired_format, bool flip_vertically = false);
 
 /**
  * Save bitmap to the disc. The data is stored from top to bottom, left to right, row by row.

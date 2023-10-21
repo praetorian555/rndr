@@ -115,7 +115,7 @@ void Rndr::File::PrintShader(const Rndr::String& shader_contents)
     }
 }
 
-Rndr::Bitmap Rndr::File::ReadEntireImage(const String& file_path, PixelFormat desired_format)
+Rndr::Bitmap Rndr::File::ReadEntireImage(const String& file_path, PixelFormat desired_format, bool flip_vertically)
 {
     Bitmap invalid_bitmap = {-1, -1, -1, PixelFormat::R8G8B8A8_UNORM_SRGB, {}};
     if (!Bitmap::IsPixelFormatSupported(desired_format))
@@ -129,6 +129,7 @@ Rndr::Bitmap Rndr::File::ReadEntireImage(const String& file_path, PixelFormat de
     int width = 0;
     int height = 0;
     uint8_t* tmp_data = nullptr;
+    stbi_set_flip_vertically_on_load(static_cast<int>(flip_vertically));
     if (Rndr::IsComponentLowPrecision(desired_format))
     {
         tmp_data = stbi_load(file_path.c_str(), &width, &height, &channels_in_file, desired_channel_count);
