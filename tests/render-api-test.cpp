@@ -1,6 +1,14 @@
 #include <catch2/catch_test_macros.hpp>
 
+#if RNDR_OPENGL
+#include <glad/glad.h>
+#endif
+
 #include "rndr/rndr.h"
+
+#if RNDR_OPENGL
+#include "render-api/opengl-helpers.h"
+#endif
 
 TEST_CASE("Graphics context", "[render-api][graphics-context]")
 {
@@ -36,6 +44,174 @@ TEST_CASE("Graphics context", "[render-api][graphics-context]")
 
     Rndr::Destroy();
 }
+
+#if RNDR_OPENGL
+
+TEST_CASE("Conversion of Rndr::PixelFormat to OpenGL component count")
+{
+    REQUIRE(Rndr::FromPixelFormatToComponentCount(Rndr::PixelFormat::R8_UNORM) == 1);
+    REQUIRE(Rndr::FromPixelFormatToComponentCount(Rndr::PixelFormat::R8_UNORM_SRGB) == 1);
+    REQUIRE(Rndr::FromPixelFormatToComponentCount(Rndr::PixelFormat::R8_SNORM) == 1);
+    REQUIRE(Rndr::FromPixelFormatToComponentCount(Rndr::PixelFormat::R8_UINT) == 1);
+    REQUIRE(Rndr::FromPixelFormatToComponentCount(Rndr::PixelFormat::R8_SINT) == 1);
+    REQUIRE(Rndr::FromPixelFormatToComponentCount(Rndr::PixelFormat::R8G8_UNORM) == 2);
+    REQUIRE(Rndr::FromPixelFormatToComponentCount(Rndr::PixelFormat::R8G8_UNORM_SRGB) == 2);
+    REQUIRE(Rndr::FromPixelFormatToComponentCount(Rndr::PixelFormat::R8G8_SNORM) == 2);
+    REQUIRE(Rndr::FromPixelFormatToComponentCount(Rndr::PixelFormat::R8G8_UINT) == 2);
+    REQUIRE(Rndr::FromPixelFormatToComponentCount(Rndr::PixelFormat::R8G8_SINT) == 2);
+    REQUIRE(Rndr::FromPixelFormatToComponentCount(Rndr::PixelFormat::R8G8B8_UNORM) == 3);
+    REQUIRE(Rndr::FromPixelFormatToComponentCount(Rndr::PixelFormat::R8G8B8_UNORM_SRGB) == 3);
+    REQUIRE(Rndr::FromPixelFormatToComponentCount(Rndr::PixelFormat::R8G8B8_SNORM) == 3);
+    REQUIRE(Rndr::FromPixelFormatToComponentCount(Rndr::PixelFormat::R8G8B8_UINT) == 3);
+    REQUIRE(Rndr::FromPixelFormatToComponentCount(Rndr::PixelFormat::R8G8B8_SINT) == 3);
+    REQUIRE(Rndr::FromPixelFormatToComponentCount(Rndr::PixelFormat::R8G8B8A8_UNORM) == 4);
+    REQUIRE(Rndr::FromPixelFormatToComponentCount(Rndr::PixelFormat::R8G8B8A8_UNORM_SRGB) == 4);
+    REQUIRE(Rndr::FromPixelFormatToComponentCount(Rndr::PixelFormat::R8G8B8A8_SNORM) == 4);
+    REQUIRE(Rndr::FromPixelFormatToComponentCount(Rndr::PixelFormat::R8G8B8A8_UINT) == 4);
+    REQUIRE(Rndr::FromPixelFormatToComponentCount(Rndr::PixelFormat::R8G8B8A8_SINT) == 4);
+    REQUIRE(Rndr::FromPixelFormatToComponentCount(Rndr::PixelFormat::B8G8R8A8_UNORM) == 4);
+    REQUIRE(Rndr::FromPixelFormatToComponentCount(Rndr::PixelFormat::B8G8R8A8_UNORM_SRGB) == 4);
+    REQUIRE(Rndr::FromPixelFormatToComponentCount(Rndr::PixelFormat::D24_UNORM_S8_UINT) == 2);
+    REQUIRE(Rndr::FromPixelFormatToComponentCount(Rndr::PixelFormat::R16_TYPELESS) == 1);
+    REQUIRE(Rndr::FromPixelFormatToComponentCount(Rndr::PixelFormat::R32_TYPELESS) == 1);
+    REQUIRE(Rndr::FromPixelFormatToComponentCount(Rndr::PixelFormat::R32_FLOAT) == 1);
+    REQUIRE(Rndr::FromPixelFormatToComponentCount(Rndr::PixelFormat::R32_UINT) == 1);
+    REQUIRE(Rndr::FromPixelFormatToComponentCount(Rndr::PixelFormat::R32_SINT) == 1);
+    REQUIRE(Rndr::FromPixelFormatToComponentCount(Rndr::PixelFormat::R32G32_FLOAT) == 2);
+    REQUIRE(Rndr::FromPixelFormatToComponentCount(Rndr::PixelFormat::R32G32_UINT) == 2);
+    REQUIRE(Rndr::FromPixelFormatToComponentCount(Rndr::PixelFormat::R32G32_SINT) == 2);
+    REQUIRE(Rndr::FromPixelFormatToComponentCount(Rndr::PixelFormat::R32G32B32_FLOAT) == 3);
+    REQUIRE(Rndr::FromPixelFormatToComponentCount(Rndr::PixelFormat::R32G32B32_UINT) == 3);
+    REQUIRE(Rndr::FromPixelFormatToComponentCount(Rndr::PixelFormat::R32G32B32_SINT) == 3);
+    REQUIRE(Rndr::FromPixelFormatToComponentCount(Rndr::PixelFormat::R32G32B32A32_FLOAT) == 4);
+    REQUIRE(Rndr::FromPixelFormatToComponentCount(Rndr::PixelFormat::R32G32B32A32_UINT) == 4);
+    REQUIRE(Rndr::FromPixelFormatToComponentCount(Rndr::PixelFormat::R32G32B32A32_SINT) == 4);
+}
+
+TEST_CASE("Conversion of Rndr::PixelFormat to OpenGL pixel size")
+{
+    REQUIRE(Rndr::FromPixelFormatToPixelSize(Rndr::PixelFormat::R8_UNORM) == 1);
+    REQUIRE(Rndr::FromPixelFormatToPixelSize(Rndr::PixelFormat::R8_UNORM_SRGB) == 1);
+    REQUIRE(Rndr::FromPixelFormatToPixelSize(Rndr::PixelFormat::R8_SNORM) == 1);
+    REQUIRE(Rndr::FromPixelFormatToPixelSize(Rndr::PixelFormat::R8_UINT) == 1);
+    REQUIRE(Rndr::FromPixelFormatToPixelSize(Rndr::PixelFormat::R8_SINT) == 1);
+    REQUIRE(Rndr::FromPixelFormatToPixelSize(Rndr::PixelFormat::R8G8_UNORM) == 2);
+    REQUIRE(Rndr::FromPixelFormatToPixelSize(Rndr::PixelFormat::R8G8_UNORM_SRGB) == 2);
+    REQUIRE(Rndr::FromPixelFormatToPixelSize(Rndr::PixelFormat::R8G8_SNORM) == 2);
+    REQUIRE(Rndr::FromPixelFormatToPixelSize(Rndr::PixelFormat::R8G8_UINT) == 2);
+    REQUIRE(Rndr::FromPixelFormatToPixelSize(Rndr::PixelFormat::R8G8_SINT) == 2);
+    REQUIRE(Rndr::FromPixelFormatToPixelSize(Rndr::PixelFormat::R8G8B8_UNORM) == 3);
+    REQUIRE(Rndr::FromPixelFormatToPixelSize(Rndr::PixelFormat::R8G8B8_UNORM_SRGB) == 3);
+    REQUIRE(Rndr::FromPixelFormatToPixelSize(Rndr::PixelFormat::R8G8B8_SNORM) == 3);
+    REQUIRE(Rndr::FromPixelFormatToPixelSize(Rndr::PixelFormat::R8G8B8_UINT) == 3);
+    REQUIRE(Rndr::FromPixelFormatToPixelSize(Rndr::PixelFormat::R8G8B8_SINT) == 3);
+    REQUIRE(Rndr::FromPixelFormatToPixelSize(Rndr::PixelFormat::R8G8B8A8_UNORM) == 4);
+    REQUIRE(Rndr::FromPixelFormatToPixelSize(Rndr::PixelFormat::R8G8B8A8_UNORM_SRGB) == 4);
+    REQUIRE(Rndr::FromPixelFormatToPixelSize(Rndr::PixelFormat::R8G8B8A8_SNORM) == 4);
+    REQUIRE(Rndr::FromPixelFormatToPixelSize(Rndr::PixelFormat::R8G8B8A8_UINT) == 4);
+    REQUIRE(Rndr::FromPixelFormatToPixelSize(Rndr::PixelFormat::R8G8B8A8_SINT) == 4);
+    REQUIRE(Rndr::FromPixelFormatToPixelSize(Rndr::PixelFormat::B8G8R8A8_UNORM) == 4);
+    REQUIRE(Rndr::FromPixelFormatToPixelSize(Rndr::PixelFormat::B8G8R8A8_UNORM_SRGB) == 4);
+    REQUIRE(Rndr::FromPixelFormatToPixelSize(Rndr::PixelFormat::D24_UNORM_S8_UINT) == 4);
+    REQUIRE(Rndr::FromPixelFormatToPixelSize(Rndr::PixelFormat::R16_TYPELESS) == 2);
+    REQUIRE(Rndr::FromPixelFormatToPixelSize(Rndr::PixelFormat::R32_TYPELESS) == 4);
+    REQUIRE(Rndr::FromPixelFormatToPixelSize(Rndr::PixelFormat::R32_FLOAT) == 4);
+    REQUIRE(Rndr::FromPixelFormatToPixelSize(Rndr::PixelFormat::R32_UINT) == 4);
+    REQUIRE(Rndr::FromPixelFormatToPixelSize(Rndr::PixelFormat::R32_SINT) == 4);
+    REQUIRE(Rndr::FromPixelFormatToPixelSize(Rndr::PixelFormat::R32G32_FLOAT) == 8);
+    REQUIRE(Rndr::FromPixelFormatToPixelSize(Rndr::PixelFormat::R32G32_UINT) == 8);
+    REQUIRE(Rndr::FromPixelFormatToPixelSize(Rndr::PixelFormat::R32G32_SINT) == 8);
+    REQUIRE(Rndr::FromPixelFormatToPixelSize(Rndr::PixelFormat::R32G32B32_FLOAT) == 12);
+    REQUIRE(Rndr::FromPixelFormatToPixelSize(Rndr::PixelFormat::R32G32B32_UINT) == 12);
+    REQUIRE(Rndr::FromPixelFormatToPixelSize(Rndr::PixelFormat::R32G32B32_SINT) == 12);
+    REQUIRE(Rndr::FromPixelFormatToPixelSize(Rndr::PixelFormat::R32G32B32A32_FLOAT) == 16);
+    REQUIRE(Rndr::FromPixelFormatToPixelSize(Rndr::PixelFormat::R32G32B32A32_UINT) == 16);
+    REQUIRE(Rndr::FromPixelFormatToPixelSize(Rndr::PixelFormat::R32G32B32A32_SINT) == 16);
+}
+
+TEST_CASE("Conversion of Rndr::PixelFormat to OpenGL component data type")
+{
+    using namespace Rndr;
+    REQUIRE(FromPixelFormatToDataType(PixelFormat::R8_UNORM) == GL_UNSIGNED_BYTE);
+    REQUIRE(FromPixelFormatToDataType(PixelFormat::R8_UNORM_SRGB) == GL_UNSIGNED_BYTE);
+    REQUIRE(FromPixelFormatToDataType(PixelFormat::R8_SNORM) == GL_BYTE);
+    REQUIRE(FromPixelFormatToDataType(PixelFormat::R8_UINT) == GL_UNSIGNED_BYTE);
+    REQUIRE(FromPixelFormatToDataType(PixelFormat::R8_SINT) == GL_BYTE);
+    REQUIRE(FromPixelFormatToDataType(PixelFormat::R8G8_UNORM) == GL_UNSIGNED_BYTE);
+    REQUIRE(FromPixelFormatToDataType(PixelFormat::R8G8_UNORM_SRGB) == GL_UNSIGNED_BYTE);
+    REQUIRE(FromPixelFormatToDataType(PixelFormat::R8G8_SNORM) == GL_BYTE);
+    REQUIRE(FromPixelFormatToDataType(PixelFormat::R8G8_UINT) == GL_UNSIGNED_BYTE);
+    REQUIRE(FromPixelFormatToDataType(PixelFormat::R8G8_SINT) == GL_BYTE);
+    REQUIRE(FromPixelFormatToDataType(PixelFormat::R8G8B8_UNORM) == GL_UNSIGNED_BYTE);
+    REQUIRE(FromPixelFormatToDataType(PixelFormat::R8G8B8_UNORM_SRGB) == GL_UNSIGNED_BYTE);
+    REQUIRE(FromPixelFormatToDataType(PixelFormat::R8G8B8_SNORM) == GL_BYTE);
+    REQUIRE(FromPixelFormatToDataType(PixelFormat::R8G8B8_UINT) == GL_UNSIGNED_BYTE);
+    REQUIRE(FromPixelFormatToDataType(PixelFormat::R8G8B8_SINT) == GL_BYTE);
+    REQUIRE(FromPixelFormatToDataType(PixelFormat::R8G8B8A8_UNORM) == GL_UNSIGNED_BYTE);
+    REQUIRE(FromPixelFormatToDataType(PixelFormat::R8G8B8A8_UNORM_SRGB) == GL_UNSIGNED_BYTE);
+    REQUIRE(FromPixelFormatToDataType(PixelFormat::R8G8B8A8_SNORM) == GL_BYTE);
+    REQUIRE(FromPixelFormatToDataType(PixelFormat::R8G8B8A8_UINT) == GL_UNSIGNED_BYTE);
+    REQUIRE(FromPixelFormatToDataType(PixelFormat::R8G8B8A8_SINT) == GL_BYTE);
+    REQUIRE(FromPixelFormatToDataType(PixelFormat::B8G8R8A8_UNORM) == GL_UNSIGNED_BYTE);
+    REQUIRE(FromPixelFormatToDataType(PixelFormat::B8G8R8A8_UNORM_SRGB) == GL_UNSIGNED_BYTE);
+    REQUIRE(FromPixelFormatToDataType(PixelFormat::R16_TYPELESS) == GL_HALF_FLOAT);
+    REQUIRE(FromPixelFormatToDataType(PixelFormat::R32_TYPELESS) == GL_FLOAT);
+    REQUIRE(FromPixelFormatToDataType(PixelFormat::R32_FLOAT) == GL_FLOAT);
+    REQUIRE(FromPixelFormatToDataType(PixelFormat::R32_UINT) == GL_UNSIGNED_INT);
+    REQUIRE(FromPixelFormatToDataType(PixelFormat::R32_SINT) == GL_INT);
+    REQUIRE(FromPixelFormatToDataType(PixelFormat::R32G32_FLOAT) == GL_FLOAT);
+    REQUIRE(FromPixelFormatToDataType(PixelFormat::R32G32_UINT) == GL_UNSIGNED_INT);
+    REQUIRE(FromPixelFormatToDataType(PixelFormat::R32G32_SINT) == GL_INT);
+    REQUIRE(FromPixelFormatToDataType(PixelFormat::R32G32B32_FLOAT) == GL_FLOAT);
+    REQUIRE(FromPixelFormatToDataType(PixelFormat::R32G32B32_UINT) == GL_UNSIGNED_INT);
+    REQUIRE(FromPixelFormatToDataType(PixelFormat::R32G32B32_SINT) == GL_INT);
+    REQUIRE(FromPixelFormatToDataType(PixelFormat::R32G32B32A32_FLOAT) == GL_FLOAT);
+    REQUIRE(FromPixelFormatToDataType(PixelFormat::R32G32B32A32_UINT) == GL_UNSIGNED_INT);
+    REQUIRE(FromPixelFormatToDataType(PixelFormat::R32G32B32A32_SINT) == GL_INT);
+}
+
+TEST_CASE("Conversion of Rndr::PixelFormat to OpenGL should normalize data")
+{
+    using namespace Rndr;
+    REQUIRE(FromPixelFormatToShouldNormalizeData(PixelFormat::R8_UNORM) == GL_TRUE);
+    REQUIRE(FromPixelFormatToShouldNormalizeData(PixelFormat::R8_UNORM_SRGB) == GL_TRUE);
+    REQUIRE(FromPixelFormatToShouldNormalizeData(PixelFormat::R8_SNORM) == GL_TRUE);
+    REQUIRE(FromPixelFormatToShouldNormalizeData(PixelFormat::R8_UINT) == GL_FALSE);
+    REQUIRE(FromPixelFormatToShouldNormalizeData(PixelFormat::R8_SINT) == GL_FALSE);
+    REQUIRE(FromPixelFormatToShouldNormalizeData(PixelFormat::R8G8_UNORM) == GL_TRUE);
+    REQUIRE(FromPixelFormatToShouldNormalizeData(PixelFormat::R8G8_UNORM_SRGB) == GL_TRUE);
+    REQUIRE(FromPixelFormatToShouldNormalizeData(PixelFormat::R8G8_SNORM) == GL_TRUE);
+    REQUIRE(FromPixelFormatToShouldNormalizeData(PixelFormat::R8G8_UINT) == GL_FALSE);
+    REQUIRE(FromPixelFormatToShouldNormalizeData(PixelFormat::R8G8_SINT) == GL_FALSE);
+    REQUIRE(FromPixelFormatToShouldNormalizeData(PixelFormat::R8G8B8_UNORM) == GL_TRUE);
+    REQUIRE(FromPixelFormatToShouldNormalizeData(PixelFormat::R8G8B8_UNORM_SRGB) == GL_TRUE);
+    REQUIRE(FromPixelFormatToShouldNormalizeData(PixelFormat::R8G8B8_SNORM) == GL_TRUE);
+    REQUIRE(FromPixelFormatToShouldNormalizeData(PixelFormat::R8G8B8_UINT) == GL_FALSE);
+    REQUIRE(FromPixelFormatToShouldNormalizeData(PixelFormat::R8G8B8_SINT) == GL_FALSE);
+    REQUIRE(FromPixelFormatToShouldNormalizeData(PixelFormat::R8G8B8A8_UNORM) == GL_TRUE);
+    REQUIRE(FromPixelFormatToShouldNormalizeData(PixelFormat::R8G8B8A8_UNORM_SRGB) == GL_TRUE);
+    REQUIRE(FromPixelFormatToShouldNormalizeData(PixelFormat::R8G8B8A8_SNORM) == GL_TRUE);
+    REQUIRE(FromPixelFormatToShouldNormalizeData(PixelFormat::R8G8B8A8_UINT) == GL_FALSE);
+    REQUIRE(FromPixelFormatToShouldNormalizeData(PixelFormat::R8G8B8A8_SINT) == GL_FALSE);
+    REQUIRE(FromPixelFormatToShouldNormalizeData(PixelFormat::B8G8R8A8_UNORM) == GL_TRUE);
+    REQUIRE(FromPixelFormatToShouldNormalizeData(PixelFormat::B8G8R8A8_UNORM_SRGB) == GL_TRUE);
+    REQUIRE(FromPixelFormatToShouldNormalizeData(PixelFormat::R16_TYPELESS) == GL_FALSE);
+    REQUIRE(FromPixelFormatToShouldNormalizeData(PixelFormat::R32_TYPELESS) == GL_FALSE);
+    REQUIRE(FromPixelFormatToShouldNormalizeData(PixelFormat::R32_FLOAT) == GL_FALSE);
+    REQUIRE(FromPixelFormatToShouldNormalizeData(PixelFormat::R32_UINT) == GL_FALSE);
+    REQUIRE(FromPixelFormatToShouldNormalizeData(PixelFormat::R32_SINT) == GL_FALSE);
+    REQUIRE(FromPixelFormatToShouldNormalizeData(PixelFormat::R32G32_FLOAT) == GL_FALSE);
+    REQUIRE(FromPixelFormatToShouldNormalizeData(PixelFormat::R32G32_UINT) == GL_FALSE);
+    REQUIRE(FromPixelFormatToShouldNormalizeData(PixelFormat::R32G32_SINT) == GL_FALSE);
+    REQUIRE(FromPixelFormatToShouldNormalizeData(PixelFormat::R32G32B32_FLOAT) == GL_FALSE);
+    REQUIRE(FromPixelFormatToShouldNormalizeData(PixelFormat::R32G32B32_UINT) == GL_FALSE);
+    REQUIRE(FromPixelFormatToShouldNormalizeData(PixelFormat::R32G32B32_SINT) == GL_FALSE);
+    REQUIRE(FromPixelFormatToShouldNormalizeData(PixelFormat::R32G32B32A32_FLOAT) == GL_FALSE);
+    REQUIRE(FromPixelFormatToShouldNormalizeData(PixelFormat::R32G32B32A32_UINT) == GL_FALSE);
+    REQUIRE(FromPixelFormatToShouldNormalizeData(PixelFormat::R32G32B32A32_SINT) == GL_FALSE);
+}
+
+#endif
 
 // TEST_CASE("CommandList", "RenderAPI")
 //{

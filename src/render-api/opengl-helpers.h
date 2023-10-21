@@ -23,9 +23,10 @@ GLint FromImageAddressModeToOpenGL(ImageAddressMode wrap);
 GLenum FromPixelFormatToInternalFormat(PixelFormat format);
 GLenum FromPixelFormatToFormat(PixelFormat format);
 GLenum FromPixelFormatToDataType(PixelFormat format);
-GLenum FromPixelFormatToComponentType(PixelFormat format);
+GLenum FromPixelFormatToShouldNormalizeData(PixelFormat format);
 GLenum FromPrimitiveTopologyToOpenGL(PrimitiveTopology topology);
 GLenum FromIndexSizeToOpenGL(uint32_t index_size);
+Rndr::String FromOpenGLDataTypeToString(GLenum value);
 
 
 } // namespace Rndr
