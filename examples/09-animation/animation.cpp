@@ -118,6 +118,7 @@ public:
     {
         const bool is_model_loaded = LoadModel(m_mesh);
         assert(is_model_loaded);
+        RNDR_UNUSED(is_model_loaded);
         m_index_count = static_cast<int32_t>(m_mesh.indices.size());
 
         m_vertex_shader = RNDR_MAKE_SCOPED(Rndr::Shader, m_desc.graphics_context,
