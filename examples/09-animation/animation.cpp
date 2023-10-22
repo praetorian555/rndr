@@ -238,10 +238,8 @@ public:
         aiReleaseImport(scene);
         return true;
     }
-
-    static bool LoadBoneAnimationData()
-
-        bool Render() override
+    
+    bool Render() override
     {
         RNDR_TRACE_SCOPED(Mesh rendering);
 
