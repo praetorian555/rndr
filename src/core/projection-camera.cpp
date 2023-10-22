@@ -91,9 +91,7 @@ Rndr::Matrix4x4f Rndr::ProjectionCamera::GetProjectionTransform() const
     {
         const float width = static_cast<float>(m_desc.orthographic_width);
         const float height = width / aspect_ratio;
-#if RNDR_DX11
-        return Matrix4x4f{Math::Orthographic_LH_N0(-width / 2, width / 2, -height / 2, height / 2, m_desc.near, m_desc.far)};
-#elif RNDR_OPENGL
+#if RNDR_OPENGL
         return Matrix4x4f{Math::Orthographic_RH_N1(-width / 2, width / 2, -height / 2, height / 2, m_desc.near, m_desc.far)};
 #else
 #error "Unknown render API"
@@ -101,9 +99,7 @@ Rndr::Matrix4x4f Rndr::ProjectionCamera::GetProjectionTransform() const
     }
     else
     {
-#if RNDR_DX11
-        return Matrix4x4f{Math::Perspective_LH_N0(m_desc.vertical_fov, aspect_ratio, m_desc.near, m_desc.far)};
-#elif RNDR_OPENGL
+#if RNDR_OPENGL
         return Matrix4x4f{Math::Perspective_RH_N1(m_desc.vertical_fov, aspect_ratio, m_desc.near, m_desc.far)};
 #else
 #error "Unknown render API"

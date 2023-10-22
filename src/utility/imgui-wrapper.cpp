@@ -11,11 +11,13 @@
 #undef far
 #endif
 
+#if RNDR_WINDOWS
 #include "backends/imgui_impl_win32.h"
+#endif
+
 #include "imgui.h"
-#if RNDR_DX11
-#include "backends/imgui_impl_dx11.h"
-#elif RNDR_OPENGL
+
+#if RNDR_OPENGL
 #include "backends/imgui_impl_opengl3.h"
 #endif
 

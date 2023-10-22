@@ -1,13 +1,13 @@
 #pragma once
 
 #include "rndr/core/array.h"
+#include "rndr/core/colors.h"
 #include "rndr/core/forward-def-windows.h"
 #include "rndr/core/math.h"
 #include "rndr/core/ref.h"
 #include "rndr/core/span.h"
 #include "rndr/core/stack-array.h"
 #include "rndr/core/string.h"
-#include "rndr/render/colors.h"
 
 namespace Rndr
 {
@@ -54,13 +54,13 @@ enum class PixelFormat
     R8G8B8_SINT,
 
     R8G8_UNORM,
-    R8G8_UNORM_SRGB, // TODO: This format can probably be removed
+    R8G8_UNORM_SRGB,  // TODO: This format can probably be removed
     R8G8_UINT,
     R8G8_SNORM,
     R8G8_SINT,
 
     R8_UNORM,
-    R8_UNORM_SRGB, // TODO: This format can probably be removed
+    R8_UNORM_SRGB,  // TODO: This format can probably be removed
     R8_UINT,
     R8_SNORM,
     R8_SINT,
