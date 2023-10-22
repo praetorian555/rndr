@@ -48,4 +48,4 @@ CheckOptions:
     readability-identifier-naming.ClassCase: 'CamelCase'
     readability-identifier-naming.ClassMethodCase: 'CamelCase'
     readability-identifier-naming.StructCase: 'CamelCase'
-    readability-inconsistent-declaration-parameter-name.Strict: 'true'
+    readability-inconsistent-declaration-parameter-name.Strict: true
