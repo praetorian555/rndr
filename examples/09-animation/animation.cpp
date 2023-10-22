@@ -76,7 +76,7 @@ struct BoneInfo
     Rndr::Matrix4x4f inverse_bind_pose_transform;
 };
 
-using BoneMap = std::unordered_map<Rndr::String, BoneInfo>;
+using BoneMap = Rndr::HashMap<Rndr::String, BoneInfo>;
 
 struct VertexData
 {
@@ -239,7 +239,9 @@ public:
         return true;
     }
 
-    bool Render() override
+    static bool LoadBoneAnimationData()
+
+        bool Render() override
     {
         RNDR_TRACE_SCOPED(Mesh rendering);
 
