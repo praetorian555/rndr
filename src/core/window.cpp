@@ -19,9 +19,9 @@
 
 #endif  // RNDR_WINDOWS
 
-#include "rndr/core/hash-map.h"
+#include "rndr/core/containers/hash-map.h"
+#include "rndr/core/containers/stack-array.h"
 #include "rndr/core/input.h"
-#include "rndr/core/stack-array.h"
 #include "rndr/core/window.h"
 #include "rndr/utility/cpu-tracer.h"
 

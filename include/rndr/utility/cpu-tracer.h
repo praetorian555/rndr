@@ -5,8 +5,8 @@
 #include <memory>
 
 #include "rndr/core/base.h"
-#include "rndr/core/scope-ptr.h"
-#include "rndr/core/string.h"
+#include "rndr/core/containers/scope-ptr.h"
+#include "rndr/core/containers/string.h"
 #include "rndr/core/time.h"
 
 namespace Rndr

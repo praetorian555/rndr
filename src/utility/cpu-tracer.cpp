@@ -13,7 +13,7 @@
 #include "spdlog/sinks/basic_file_sink.h"
 #include "spdlog/spdlog.h"
 
-#include "rndr/core/stack-array.h"
+#include "rndr/core/containers/stack-array.h"
 #include "rndr/core/time.h"
 
 namespace

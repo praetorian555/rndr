@@ -3,7 +3,7 @@
 #include <glad/glad.h>
 
 #include "render-api/opengl-helpers.h"
-#include "rndr/core/stack-array.h"
+#include "rndr/core/containers/stack-array.h"
 #include "rndr/core/graphics-types.h"
 
 constexpr size_t k_max_shader_type = static_cast<size_t>(Rndr::ShaderType::EnumCount);

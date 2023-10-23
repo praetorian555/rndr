@@ -1,7 +1,7 @@
 #pragma once
 
+#include "rndr/core/containers/scope-ptr.h"
 #include "rndr/core/renderer-base.h"
-#include "rndr/core/scope-ptr.h"
 
 namespace Rndr
 {

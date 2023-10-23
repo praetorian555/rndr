@@ -2,10 +2,10 @@
 #include <utility>
 #include <variant>
 
-#include "rndr/core/array.h"
+#include "rndr/core/containers/array.h"
+#include "rndr/core/containers/ref.h"
+#include "rndr/core/containers/stack-array.h"
 #include "rndr/core/input.h"
-#include "rndr/core/ref.h"
-#include "rndr/core/stack-array.h"
 
 namespace Rndr
 {

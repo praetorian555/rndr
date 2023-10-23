@@ -1,13 +1,13 @@
 #pragma once
 
-#include "rndr/core/array.h"
 #include "rndr/core/colors.h"
+#include "rndr/core/containers/array.h"
+#include "rndr/core/containers/ref.h"
+#include "rndr/core/containers/span.h"
+#include "rndr/core/containers/stack-array.h"
+#include "rndr/core/containers/string.h"
 #include "rndr/core/math.h"
 #include "rndr/core/platform/forward-def-windows.h"
-#include "rndr/core/ref.h"
-#include "rndr/core/span.h"
-#include "rndr/core/stack-array.h"
-#include "rndr/core/string.h"
 
 namespace Rndr
 {

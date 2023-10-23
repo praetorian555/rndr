@@ -23,8 +23,8 @@
 #include <glad/glad_wgl.h>
 
 #include "render-api/opengl-helpers.h"
+#include "rndr/core/containers/stack-array.h"
 #include "rndr/core/file.h"
-#include "rndr/core/stack-array.h"
 #include "rndr/render-api/opengl-render-api.h"
 
 namespace

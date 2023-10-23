@@ -1,10 +1,10 @@
 #pragma once
 
-#include "rndr/core/graphics-types.h"
 #include "rndr/core/base.h"
-#include "rndr/core/array.h"
-#include "rndr/core/string.h"
 #include "rndr/core/bitmap.h"
+#include "rndr/core/containers/array.h"
+#include "rndr/core/graphics-types.h"
+#include "rndr/core/containers/string.h"
 
 namespace Rndr::File
 {

@@ -1,7 +1,7 @@
 #pragma once
 
+#include "rndr/core/containers/hash-map.h"
 #include "rndr/core/graphics-types.h"
-#include "rndr/core/hash-map.h"
 
 namespace Rndr
 {

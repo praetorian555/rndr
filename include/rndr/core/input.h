@@ -2,13 +2,13 @@
 
 #include <functional>
 
+#include "rndr/core/containers/ref.h"
+#include "rndr/core/containers/scope-ptr.h"
+#include "rndr/core/containers/span.h"
+#include "rndr/core/containers/string.h"
 #include "rndr/core/input-primitives.h"
 #include "rndr/core/math.h"
 #include "rndr/core/platform/forward-def-windows.h"
-#include "rndr/core/ref.h"
-#include "rndr/core/scope-ptr.h"
-#include "rndr/core/span.h"
-#include "rndr/core/string.h"
 
 namespace Rndr
 {
@@ -225,8 +225,7 @@ public:
      * mouse position. Positive values mean the mouse moved to the right or up.
      * @param screen_size Size of the screen in pixels.
      */
-    static bool SubmitRelativeMousePositionEvent(NativeWindowHandle window, const Vector2f& delta_position,
-                                                 const Vector2f& screen_size);
+    static bool SubmitRelativeMousePositionEvent(NativeWindowHandle window, const Vector2f& delta_position, const Vector2f& screen_size);
 
     /**
      * Submits a mouse wheel event to the input system.

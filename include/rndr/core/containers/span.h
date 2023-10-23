@@ -2,7 +2,7 @@
 
 #include <span>
 
-#include "rndr/core/array.h"
+#include "rndr/core/containers/array.h"
 
 namespace Rndr
 {
