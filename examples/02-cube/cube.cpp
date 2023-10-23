@@ -70,24 +70,24 @@ void Run()
 {
     Rndr::Window window({.width = 800, .height = 600, .name = "Cube Example"});
     Rndr::GraphicsContext graphics_context({.window_handle = window.GetNativeWindowHandle()});
-    assert(graphics_context.IsValid());
+    RNDR_ASSERT(graphics_context.IsValid());
     Rndr::SwapChain swap_chain(graphics_context, {.width = window.GetWidth(), .height = window.GetHeight()});
-    assert(swap_chain.IsValid());
+    RNDR_ASSERT(swap_chain.IsValid());
     Rndr::Shader vertex_shader(graphics_context, {.type = Rndr::ShaderType::Vertex, .source = g_shader_code_vertex});
-    assert(vertex_shader.IsValid());
+    RNDR_ASSERT(vertex_shader.IsValid());
     Rndr::Shader pixel_shader(graphics_context, {.type = Rndr::ShaderType::Fragment, .source = g_shader_code_fragment});
-    assert(pixel_shader.IsValid());
+    RNDR_ASSERT(pixel_shader.IsValid());
     const Rndr::Pipeline solid_pipeline(graphics_context, {.vertex_shader = &vertex_shader,
                                                            .pixel_shader = &pixel_shader,
                                                            .rasterizer = {.fill_mode = Rndr::FillMode::Solid},
                                                            .depth_stencil = {.is_depth_enabled = true}});
-    assert(solid_pipeline.IsValid());
+    RNDR_ASSERT(solid_pipeline.IsValid());
     const Rndr::Pipeline wireframe_pipeline(
         graphics_context, {.vertex_shader = &vertex_shader,
                            .pixel_shader = &pixel_shader,
                            .rasterizer = {.fill_mode = Rndr::FillMode::Wireframe, .depth_bias = -1.0, .slope_scaled_depth_bias = -1.0},
                            .depth_stencil = {.is_depth_enabled = true}});
-    assert(wireframe_pipeline.IsValid());
+    RNDR_ASSERT(wireframe_pipeline.IsValid());
     Rndr::Buffer per_frame_buffer(
         graphics_context,
         {.type = Rndr::BufferType::Constant, .usage = Rndr::Usage::Dynamic, .size = k_per_frame_size, .stride = k_per_frame_size});

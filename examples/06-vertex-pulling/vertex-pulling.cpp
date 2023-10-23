@@ -48,9 +48,9 @@ void Run()
 
     Rndr::Window window({.width = 800, .height = 600, .name = "Vertex Pulling Example"});
     Rndr::GraphicsContext graphics_context({.window_handle = window.GetNativeWindowHandle()});
-    assert(graphics_context.IsValid());
+    RNDR_ASSERT(graphics_context.IsValid());
     Rndr::SwapChain swap_chain(graphics_context, {.width = window.GetWidth(), .height = window.GetHeight(), .enable_vsync = vertical_sync});
-    assert(swap_chain.IsValid());
+    RNDR_ASSERT(swap_chain.IsValid());
 
     // Read shaders from files.
     const Rndr::String vertex_shader_code = Rndr::File::ReadEntireTextFile(ASSETS_DIR "vertex-pulling.vert");
@@ -59,11 +59,11 @@ void Run()
 
     // Create shaders.
     Rndr::Shader vertex_shader(graphics_context, {.type = Rndr::ShaderType::Vertex, .source = vertex_shader_code});
-    assert(vertex_shader.IsValid());
+    RNDR_ASSERT(vertex_shader.IsValid());
     Rndr::Shader pixel_shader(graphics_context, {.type = Rndr::ShaderType::Fragment, .source = pixel_shader_code});
-    assert(pixel_shader.IsValid());
+    RNDR_ASSERT(pixel_shader.IsValid());
     Rndr::Shader geometry_shader(graphics_context, {.type = Rndr::ShaderType::Geometry, .source = geometry_shader_code});
-    assert(geometry_shader.IsValid());
+    RNDR_ASSERT(geometry_shader.IsValid());
 
     // Setup vertex buffer.
     constexpr size_t k_stride = sizeof(VertexData);
@@ -71,14 +71,14 @@ void Run()
         graphics_context,
         {.type = Rndr::BufferType::ShaderStorage, .size = static_cast<uint32_t>(k_stride * vertices.size()), .stride = k_stride},
         Rndr::ToByteSpan(vertices));
-    assert(vertex_buffer.IsValid());
+    RNDR_ASSERT(vertex_buffer.IsValid());
 
     // Setup index buffer.
     const Rndr::Buffer index_buffer(
         graphics_context,
         {.type = Rndr::BufferType::Index, .size = static_cast<uint32_t>(sizeof(uint32_t) * indices.size()), .stride = sizeof(uint32_t)},
         Rndr::ToByteSpan(indices));
-    assert(index_buffer.IsValid());
+    RNDR_ASSERT(index_buffer.IsValid());
 
     // Configure input layout.
     Rndr::InputLayoutBuilder builder;
@@ -92,14 +92,14 @@ void Run()
                                                            .input_layout = input_layout_desc,
                                                            .rasterizer = {.fill_mode = Rndr::FillMode::Solid},
                                                            .depth_stencil = {.is_depth_enabled = true}});
-    assert(solid_pipeline.IsValid());
+    RNDR_ASSERT(solid_pipeline.IsValid());
 
     // Load mesh albedo texture.
     Rndr::Bitmap mesh_image = Rndr::File::ReadEntireImage(ASSETS_DIR "duck-base-color.png", Rndr::PixelFormat::R8G8B8_UNORM_SRGB);
-    assert(mesh_image.IsValid());
+    RNDR_ASSERT(mesh_image.IsValid());
     constexpr bool k_use_mips = false;
     const Rndr::Image mesh_albedo(graphics_context, mesh_image, k_use_mips, {});
-    assert(mesh_albedo.IsValid());
+    RNDR_ASSERT(mesh_albedo.IsValid());
 
     // Create a buffer to store per-frame data.
     Rndr::Buffer per_frame_buffer(

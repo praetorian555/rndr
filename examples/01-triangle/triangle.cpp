@@ -24,10 +24,10 @@ void Run()
 {
     Rndr::Window window({.width = 800, .height = 600, .name = "Triangle Example"});
     Rndr::GraphicsContext graphics_context({.window_handle = window.GetNativeWindowHandle()});
-    assert(graphics_context.IsValid());
+    RNDR_ASSERT(graphics_context.IsValid());
     Rndr::SwapChain swap_chain(graphics_context,
                                {.width = window.GetWidth(), .height = window.GetHeight()});
-    assert(swap_chain.IsValid());
+    RNDR_ASSERT(swap_chain.IsValid());
     Rndr::Shader vertex_shader(graphics_context, {.type = Rndr::ShaderType::Vertex, .source = R"(
         #version 460 core
         layout (location=0) out vec3 color;
@@ -46,7 +46,7 @@ void Run()
           color = col[gl_VertexID];
         }
         )"});
-    assert(vertex_shader.IsValid());
+    RNDR_ASSERT(vertex_shader.IsValid());
     Rndr::Shader pixel_shader(graphics_context, {.type = Rndr::ShaderType::Fragment, .source = R"(
         #version 460 core
         layout (location=0) in vec3 color;
@@ -55,10 +55,10 @@ void Run()
           out_FragColor = vec4(color, 1.0);
         };
         )"});
-    assert(pixel_shader.IsValid());
+    RNDR_ASSERT(pixel_shader.IsValid());
     const Rndr::Pipeline pipeline(graphics_context,
                                   {.vertex_shader = &vertex_shader, .pixel_shader = &pixel_shader});
-    assert(pipeline.IsValid());
+    RNDR_ASSERT(pipeline.IsValid());
     constexpr Rndr::Vector4f k_clear_color = Rndr::Colors::k_black;
 
     window.on_resize.Bind([&swap_chain](int32_t width, int32_t height)

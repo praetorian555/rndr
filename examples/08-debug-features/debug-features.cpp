@@ -64,10 +64,10 @@ public:
         if (scene == nullptr || !scene->HasMeshes())
         {
             RNDR_LOG_ERROR("Failed to load mesh from file with error: %s", aiGetErrorString());
-            assert(false);
+            RNDR_ASSERT(false);
             return;
         }
-        assert(scene->HasMeshes());
+        RNDR_ASSERT(scene->HasMeshes());
         const aiMesh* mesh = scene->mMeshes[0];
         Rndr::Array<Rndr::Point3f> positions;
         for (unsigned int i = 0; i != mesh->mNumFaces; i++)
@@ -85,10 +85,10 @@ public:
 
         m_vertex_shader = RNDR_MAKE_SCOPED(Rndr::Shader, m_desc.graphics_context,
                                            Rndr::ShaderDesc{.type = Rndr::ShaderType::Vertex, .source = g_shader_code_vertex});
-        assert(m_vertex_shader->IsValid());
+        RNDR_ASSERT(m_vertex_shader->IsValid());
         m_pixel_shader = RNDR_MAKE_SCOPED(Rndr::Shader, m_desc.graphics_context,
                                           Rndr::ShaderDesc{.type = Rndr::ShaderType::Fragment, .source = g_shader_code_fragment});
-        assert(m_pixel_shader->IsValid());
+        RNDR_ASSERT(m_pixel_shader->IsValid());
 
         constexpr size_t k_stride = sizeof(Rndr::Point3f);
         m_vertex_buffer = RNDR_MAKE_SCOPED(Rndr::Buffer, m_desc.graphics_context,
@@ -97,7 +97,7 @@ public:
                                             .size = static_cast<uint32_t>(k_stride * positions.size()),
                                             .stride = k_stride},
                                            Rndr::ToByteSpan(positions));
-        assert(m_vertex_buffer->IsValid());
+        RNDR_ASSERT(m_vertex_buffer->IsValid());
         Rndr::InputLayoutBuilder builder;
         const Rndr::InputLayoutDesc input_layout_desc = builder.AddVertexBuffer(*m_vertex_buffer, 0, Rndr::DataRepetition::PerVertex)
                                                             .AppendElement(0, Rndr::PixelFormat::R32G32B32_FLOAT)
@@ -109,13 +109,13 @@ public:
                                                          .input_layout = input_layout_desc,
                                                          .rasterizer = {.fill_mode = Rndr::FillMode::Solid},
                                                          .depth_stencil = {.is_depth_enabled = true}});
-        assert(m_pipeline->IsValid());
+        RNDR_ASSERT(m_pipeline->IsValid());
 
         constexpr size_t k_per_frame_size = sizeof(PerFrameData);
         m_per_frame_buffer = RNDR_MAKE_SCOPED(
             Rndr::Buffer, m_desc.graphics_context,
             {.type = Rndr::BufferType::Constant, .usage = Rndr::Usage::Dynamic, .size = k_per_frame_size, .stride = k_per_frame_size});
-        assert(m_per_frame_buffer->IsValid());
+        RNDR_ASSERT(m_per_frame_buffer->IsValid());
     }
 
     bool Render() override
@@ -159,9 +159,9 @@ void Run()
 {
     Rndr::Window window({.width = 800, .height = 600, .name = "Debug Features Example"});
     Rndr::GraphicsContext graphics_context({.window_handle = window.GetNativeWindowHandle()});
-    assert(graphics_context.IsValid());
+    RNDR_ASSERT(graphics_context.IsValid());
     Rndr::SwapChain swap_chain(graphics_context, {.width = window.GetWidth(), .height = window.GetHeight(), .enable_vsync = false});
-    assert(swap_chain.IsValid());
+    RNDR_ASSERT(swap_chain.IsValid());
 
     window.on_resize.Bind([&swap_chain](int32_t width, int32_t height) { swap_chain.SetSize(width, height); });
 

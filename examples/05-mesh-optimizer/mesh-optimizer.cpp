@@ -93,20 +93,20 @@ void Run()
     Rndr::Array<uint32_t> indices;
     Rndr::Array<uint32_t> indices_lod;
     [[maybe_unused]] const bool success = LoadMeshAndGenerateLOD(ASSETS_DIR "duck.gltf", positions, indices, indices_lod);
-    assert(success);
+    RNDR_ASSERT(success);
 
     Rndr::Window window({.width = 1024, .height = 768, .name = "Mesh Optimizer Example"});
     Rndr::GraphicsContext graphics_context({.window_handle = window.GetNativeWindowHandle()});
-    assert(graphics_context.IsValid());
+    RNDR_ASSERT(graphics_context.IsValid());
     Rndr::SwapChain swap_chain(graphics_context, {.width = window.GetWidth(), .height = window.GetHeight()});
-    assert(swap_chain.IsValid());
+    RNDR_ASSERT(swap_chain.IsValid());
 
     Rndr::Shader vertex_shader(graphics_context, {.type = Rndr::ShaderType::Vertex, .source = g_shader_code_vertex});
-    assert(vertex_shader.IsValid());
+    RNDR_ASSERT(vertex_shader.IsValid());
     Rndr::Shader geometry_shader(graphics_context, {.type = Rndr::ShaderType::Geometry, .source = g_shader_code_geometry});
-    assert(geometry_shader.IsValid());
+    RNDR_ASSERT(geometry_shader.IsValid());
     Rndr::Shader pixel_shader(graphics_context, {.type = Rndr::ShaderType::Fragment, .source = g_shader_code_fragment});
-    assert(pixel_shader.IsValid());
+    RNDR_ASSERT(pixel_shader.IsValid());
 
     const uint32_t size_indices = static_cast<uint32_t>(sizeof(uint32_t) * indices.size());
     const uint32_t size_indices_lod = static_cast<uint32_t>(sizeof(uint32_t) * indices_lod.size());
@@ -121,14 +121,14 @@ void Run()
                                       .stride = sizeof(Rndr::Point3f),
                                       .offset = 0},
                                      Rndr::ToByteSpan(positions));
-    assert(vertex_buffer.IsValid());
+    RNDR_ASSERT(vertex_buffer.IsValid());
 
     Rndr::Buffer index_buffer(graphics_context, {.type = Rndr::BufferType::Index,
                                                  .usage = Rndr::Usage::Dynamic,
                                                  .size = size_indices + size_indices_lod,
                                                  .stride = sizeof(uint32_t),
                                                  .offset = 0});
-    assert(index_buffer.IsValid());
+    RNDR_ASSERT(index_buffer.IsValid());
     graphics_context.Update(index_buffer, Rndr::ToByteSpan(indices), start_indices);
     graphics_context.Update(index_buffer, Rndr::ToByteSpan(indices_lod), start_indices_lod);
 
@@ -144,7 +144,7 @@ void Run()
                                                            .input_layout = input_layout_desc,
                                                            .rasterizer = {.fill_mode = Rndr::FillMode::Solid},
                                                            .depth_stencil = {.is_depth_enabled = true}});
-    assert(solid_pipeline.IsValid());
+    RNDR_ASSERT(solid_pipeline.IsValid());
     Rndr::Buffer per_frame_buffer(
         graphics_context,
         {.type = Rndr::BufferType::Constant, .usage = Rndr::Usage::Dynamic, .size = k_per_frame_size, .stride = k_per_frame_size});

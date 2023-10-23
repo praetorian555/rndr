@@ -54,9 +54,9 @@ void Run()
 
     Rndr::Window window({.width = 1024, .height = 768, .name = "Cube Map Example"});
     Rndr::GraphicsContext graphics_context({.window_handle = window.GetNativeWindowHandle()});
-    assert(graphics_context.IsValid());
+    RNDR_ASSERT(graphics_context.IsValid());
     Rndr::SwapChain swap_chain(graphics_context, {.width = window.GetWidth(), .height = window.GetHeight(), .enable_vsync = vertical_sync});
-    assert(swap_chain.IsValid());
+    RNDR_ASSERT(swap_chain.IsValid());
 
     // Read shaders for duck model from files.
     const Rndr::String model_vertex_shader_code = Rndr::File::ReadShader(ASSETS_DIR, "cube-map-duck.vert");
@@ -64,9 +64,9 @@ void Run()
 
     // Create shaders for a model.
     Rndr::Shader model_vertex_shader(graphics_context, {.type = Rndr::ShaderType::Vertex, .source = model_vertex_shader_code});
-    assert(model_vertex_shader.IsValid());
+    RNDR_ASSERT(model_vertex_shader.IsValid());
     Rndr::Shader model_pixel_shader(graphics_context, {.type = Rndr::ShaderType::Fragment, .source = model_pixel_shader_code});
-    assert(model_pixel_shader.IsValid());
+    RNDR_ASSERT(model_pixel_shader.IsValid());
 
     // Setup vertex buffer for the model.
     constexpr size_t k_stride = sizeof(VertexData);
@@ -74,14 +74,14 @@ void Run()
         graphics_context,
         {.type = Rndr::BufferType::ShaderStorage, .size = static_cast<uint32_t>(k_stride * vertices.size()), .stride = k_stride},
         Rndr::ToByteSpan(vertices));
-    assert(model_vertex_buffer.IsValid());
+    RNDR_ASSERT(model_vertex_buffer.IsValid());
 
     // Setup index buffer.
     const Rndr::Buffer model_index_buffer(
         graphics_context,
         {.type = Rndr::BufferType::Index, .size = static_cast<uint32_t>(sizeof(uint32_t) * indices.size()), .stride = sizeof(uint32_t)},
         Rndr::ToByteSpan(indices));
-    assert(model_index_buffer.IsValid());
+    RNDR_ASSERT(model_index_buffer.IsValid());
 
     // Configure input layout.
     Rndr::InputLayoutBuilder builder;
@@ -94,14 +94,14 @@ void Run()
                                                            .input_layout = input_layout_desc,
                                                            .rasterizer = {.fill_mode = Rndr::FillMode::Solid},
                                                            .depth_stencil = {.is_depth_enabled = true}});
-    assert(model_pipeline.IsValid());
+    RNDR_ASSERT(model_pipeline.IsValid());
 
     // Load model albedo texture.
     Rndr::Bitmap model_image = Rndr::File::ReadEntireImage(ASSETS_DIR "duck-base-color.png", Rndr::PixelFormat::R8G8B8_UNORM_SRGB);
-    assert(model_image.IsValid());
+    RNDR_ASSERT(model_image.IsValid());
     constexpr bool k_use_mips = false;
     const Rndr::Image mesh_albedo(graphics_context, model_image, k_use_mips, {});
-    assert(mesh_albedo.IsValid());
+    RNDR_ASSERT(mesh_albedo.IsValid());
 
     // Create a buffer to store per-frame data.
     Rndr::Buffer per_frame_buffer(
@@ -115,14 +115,14 @@ void Run()
     // Equirectangular image to vertical cross
     const Rndr::Bitmap equirectangular_image =
         Rndr::File::ReadEntireImage(ASSETS_DIR "piazza_bologni_1k.hdr", Rndr::PixelFormat::R32G32B32_FLOAT);
-    assert(equirectangular_image.IsValid());
+    RNDR_ASSERT(equirectangular_image.IsValid());
     const Rndr::Bitmap vertical_cross_image = ConvertEquirectangularMapToVerticalCross(equirectangular_image);
-    assert(vertical_cross_image.IsValid());
+    RNDR_ASSERT(vertical_cross_image.IsValid());
     Rndr::File::SaveImage(vertical_cross_image, "vertical_cross.hdr");
 
     // Vertical cross to array of 6 cube map faces in the GPU memory
     Rndr::Bitmap cube_map_bitmap = ConvertVerticalCrossToCubeMapFaces(vertical_cross_image);
-    assert(cube_map_bitmap.IsValid());
+    RNDR_ASSERT(cube_map_bitmap.IsValid());
     Rndr::File::SaveImage(cube_map_bitmap, "cube_map.hdr");
     const Rndr::ByteSpan cube_map_data{cube_map_bitmap.GetData(), static_cast<size_t>(cube_map_bitmap.GetSize3D())};
     const Rndr::Image cube_map_image{graphics_context,
@@ -135,14 +135,14 @@ void Run()
                                                   .address_mode_v = Rndr::ImageAddressMode::Clamp,
                                                   .address_mode_w = Rndr::ImageAddressMode::Clamp}},
                                      cube_map_data};
-    assert(cube_map_image.IsValid());
+    RNDR_ASSERT(cube_map_image.IsValid());
 
     const Rndr::String cube_map_vertex_shader_code = Rndr::File::ReadShader(ASSETS_DIR, "cube-map.vert");
     const Rndr::String cube_map_pixel_shader_code = Rndr::File::ReadShader(ASSETS_DIR, "cube-map.frag");
     Rndr::Shader cube_map_vertex_shader{graphics_context, {.type = Rndr::ShaderType::Vertex, .source = cube_map_vertex_shader_code}};
     Rndr::Shader cube_map_pixel_shader{graphics_context, {.type = Rndr::ShaderType::Fragment, .source = cube_map_pixel_shader_code}};
-    assert(cube_map_vertex_shader.IsValid());
-    assert(cube_map_pixel_shader.IsValid());
+    RNDR_ASSERT(cube_map_vertex_shader.IsValid());
+    RNDR_ASSERT(cube_map_pixel_shader.IsValid());
 
     // Setup pipeline for rendering the cube map.
     const Rndr::Pipeline cube_map_pipeline{graphics_context,
@@ -150,7 +150,7 @@ void Run()
                                             .pixel_shader = &cube_map_pixel_shader,
                                             .rasterizer = {.fill_mode = Rndr::FillMode::Solid, .cull_face = Rndr::Face::None},
                                             .depth_stencil = {.is_depth_enabled = true}}};
-    assert(cube_map_pipeline.IsValid());
+    RNDR_ASSERT(cube_map_pipeline.IsValid());
 
     // Bind stuff that stay the same across the frames.
     graphics_context.Bind(swap_chain);
@@ -255,7 +255,7 @@ Rndr::Vector3f FaceCoordinatesToXYZ(int x_result, int y_result, CubeMapFace face
         case CubeMapFace::NegativeZ:
             return {1.0f, x - 1.0f, 1.0f - y};
         default:
-            assert(false);
+            RNDR_ASSERT(false);
             break;
     }
     return {};

@@ -70,29 +70,29 @@ void Run()
 {
     Rndr::Window window({.width = 800, .height = 600, .name = "Image Example"});
     Rndr::GraphicsContext graphics_context({.window_handle = window.GetNativeWindowHandle()});
-    assert(graphics_context.IsValid());
+    RNDR_ASSERT(graphics_context.IsValid());
     Rndr::SwapChain swap_chain(graphics_context, {.width = window.GetWidth(), .height = window.GetHeight()});
-    assert(swap_chain.IsValid());
+    RNDR_ASSERT(swap_chain.IsValid());
     window.on_resize.Bind([&swap_chain](int32_t width, int32_t height) { swap_chain.SetSize(width, height); });
 
     Rndr::Shader vertex_shader(graphics_context, {.type = Rndr::ShaderType::Vertex, .source = g_vertex_shader_source});
-    assert(vertex_shader.IsValid());
+    RNDR_ASSERT(vertex_shader.IsValid());
     Rndr::Shader pixel_shader(graphics_context, {.type = Rndr::ShaderType::Fragment, .source = g_pixel_shader_source});
-    assert(pixel_shader.IsValid());
+    RNDR_ASSERT(pixel_shader.IsValid());
     const Rndr::Pipeline pipeline(graphics_context, {.vertex_shader = &vertex_shader, .pixel_shader = &pixel_shader});
-    assert(pipeline.IsValid());
+    RNDR_ASSERT(pipeline.IsValid());
 
     constexpr int32_t k_per_frame_size = sizeof(PerFrameData);
     Rndr::Buffer per_frame_buffer(
         graphics_context,
         {.type = Rndr::BufferType::Constant, .usage = Rndr::Usage::Dynamic, .size = k_per_frame_size, .stride = k_per_frame_size});
-    assert(per_frame_buffer.IsValid());
+    RNDR_ASSERT(per_frame_buffer.IsValid());
 
     Rndr::Bitmap bitmap = Rndr::File::ReadEntireImage(ASSETS_DIR "brick-wall.jpg", Rndr::PixelFormat::R8G8B8_UNORM_SRGB);
-    assert(bitmap.IsValid());
+    RNDR_ASSERT(bitmap.IsValid());
     constexpr bool k_use_mips = false;
     const Rndr::Image image(graphics_context, bitmap, k_use_mips, {});
-    assert(image.IsValid());
+    RNDR_ASSERT(image.IsValid());
 
     constexpr Rndr::Vector4f k_clear_color = Rndr::Colors::k_white;
 

@@ -117,16 +117,16 @@ public:
     MeshRenderer(const Rndr::String& name, const Rndr::RendererBaseDesc& desc) : Rndr::RendererBase(name, desc)
     {
         const bool is_model_loaded = LoadModel(m_mesh);
-        assert(is_model_loaded);
+        RNDR_ASSERT(is_model_loaded);
         RNDR_UNUSED(is_model_loaded);
         m_index_count = static_cast<int32_t>(m_mesh.indices.size());
 
         m_vertex_shader = RNDR_MAKE_SCOPED(Rndr::Shader, m_desc.graphics_context,
                                            Rndr::ShaderDesc{.type = Rndr::ShaderType::Vertex, .source = g_shader_code_vertex});
-        assert(m_vertex_shader->IsValid());
+        RNDR_ASSERT(m_vertex_shader->IsValid());
         m_pixel_shader = RNDR_MAKE_SCOPED(Rndr::Shader, m_desc.graphics_context,
                                           Rndr::ShaderDesc{.type = Rndr::ShaderType::Fragment, .source = g_shader_code_fragment});
-        assert(m_pixel_shader->IsValid());
+        RNDR_ASSERT(m_pixel_shader->IsValid());
 
         constexpr size_t k_stride = sizeof(VertexData);
         m_vertex_buffer = RNDR_MAKE_SCOPED(Rndr::Buffer, m_desc.graphics_context,
@@ -135,7 +135,7 @@ public:
                                             .size = static_cast<uint32_t>(k_stride * m_mesh.vertex_data.size()),
                                             .stride = k_stride},
                                            Rndr::ToByteSpan(m_mesh.vertex_data));
-        assert(m_vertex_buffer->IsValid());
+        RNDR_ASSERT(m_vertex_buffer->IsValid());
         m_index_buffer = RNDR_MAKE_SCOPED(Rndr::Buffer, m_desc.graphics_context,
                                           {.type = Rndr::BufferType::Index,
                                            .usage = Rndr::Usage::Default,
@@ -158,22 +158,22 @@ public:
                                                          .input_layout = input_layout_desc,
                                                          .rasterizer = {.fill_mode = Rndr::FillMode::Solid},
                                                          .depth_stencil = {.is_depth_enabled = true}});
-        assert(m_pipeline->IsValid());
+        RNDR_ASSERT(m_pipeline->IsValid());
 
         if (!m_mesh.diffuse_texture_path.empty())
         {
             const Rndr::String file_path = Rndr::String(ASSETS_DIR) + "/" + m_mesh.diffuse_texture_path;
             Rndr::Bitmap diffuse_bitmap = Rndr::File::ReadEntireImage(file_path, Rndr::PixelFormat::R8G8B8A8_UNORM_SRGB, true);
-            assert(diffuse_bitmap.IsValid());
+            RNDR_ASSERT(diffuse_bitmap.IsValid());
             m_diffuse_image = RNDR_MAKE_SCOPED(Rndr::Image, m_desc.graphics_context, diffuse_bitmap, false, {});
-            assert(m_diffuse_image->IsValid());
+            RNDR_ASSERT(m_diffuse_image->IsValid());
         }
 
         constexpr size_t k_per_frame_size = sizeof(PerFrameData);
         m_per_frame_buffer = RNDR_MAKE_SCOPED(
             Rndr::Buffer, m_desc.graphics_context,
             {.type = Rndr::BufferType::Constant, .usage = Rndr::Usage::Dynamic, .size = k_per_frame_size, .stride = k_per_frame_size});
-        assert(m_per_frame_buffer->IsValid());
+        RNDR_ASSERT(m_per_frame_buffer->IsValid());
     }
 
     static bool LoadModel(Mesh& out_mesh)
@@ -185,7 +185,7 @@ public:
             RNDR_LOG_ERROR("Failed to load mesh from file with error: %s", aiGetErrorString());
             return false;
         }
-        assert(scene->HasMeshes());
+        RNDR_ASSERT(scene->HasMeshes());
         const aiMesh* mesh = scene->mMeshes[0];
         for (uint32_t i = 0; i < mesh->mNumVertices; i++)
         {
@@ -212,7 +212,7 @@ public:
         {
             const aiBone* bone = mesh->mBones[bone_index];
             const Rndr::String bone_name = bone->mName.C_Str();
-            assert(out_mesh.bone_name_to_bone_info.find(bone_name) == out_mesh.bone_name_to_bone_info.end());
+            RNDR_ASSERT(out_mesh.bone_name_to_bone_info.find(bone_name) == out_mesh.bone_name_to_bone_info.end());
             const BoneInfo bone_info{bone_index, AssimpMatrixToMatrix4x4(bone->mOffsetMatrix)};
             out_mesh.bone_name_to_bone_info[bone_name] = bone_info;
             for (uint32_t weight_index = 0; weight_index < bone->mNumWeights; weight_index++)
@@ -230,7 +230,7 @@ public:
                 }
             }
         }
-        assert(scene->HasMaterials());
+        RNDR_ASSERT(scene->HasMaterials());
         const aiMaterial* material = scene->mMaterials[mesh->mMaterialIndex];
         aiString texture_path;
         material->GetTexture(aiTextureType_DIFFUSE, 0, &texture_path);
@@ -292,9 +292,9 @@ void Run()
 {
     Rndr::Window window({.width = 800, .height = 600, .name = "Animation Example"});
     Rndr::GraphicsContext graphics_context({.window_handle = window.GetNativeWindowHandle()});
-    assert(graphics_context.IsValid());
+    RNDR_ASSERT(graphics_context.IsValid());
     Rndr::SwapChain swap_chain(graphics_context, {.width = window.GetWidth(), .height = window.GetHeight(), .enable_vsync = false});
-    assert(swap_chain.IsValid());
+    RNDR_ASSERT(swap_chain.IsValid());
 
     window.on_resize.Bind([&swap_chain](int32_t width, int32_t height) { swap_chain.SetSize(width, height); });
 
