@@ -1,8 +1,8 @@
 #pragma once
 
 #include "rndr/core/delegate.h"
-#include "rndr/core/forward-def-windows.h"
 #include "rndr/core/math.h"
+#include "rndr/core/platform/forward-def-windows.h"
 
 namespace Rndr
 {

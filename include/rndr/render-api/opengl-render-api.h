@@ -4,9 +4,9 @@
 
 #if RNDR_OPENGL
 
-#include "rndr/core/forward-def-opengl.h"
-#include "rndr/core/graphics-types.h"
 #include "rndr/core/bitmap.h"
+#include "rndr/core/graphics-types.h"
+#include "rndr/core/platform/forward-def-opengl.h"
 
 namespace Rndr
 {

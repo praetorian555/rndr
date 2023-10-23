@@ -2,9 +2,9 @@
 
 #include <functional>
 
-#include "rndr/core/forward-def-windows.h"
 #include "rndr/core/input-primitives.h"
 #include "rndr/core/math.h"
+#include "rndr/core/platform/forward-def-windows.h"
 #include "rndr/core/ref.h"
 #include "rndr/core/scope-ptr.h"
 #include "rndr/core/span.h"

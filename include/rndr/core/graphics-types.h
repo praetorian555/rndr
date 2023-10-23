@@ -2,8 +2,8 @@
 
 #include "rndr/core/array.h"
 #include "rndr/core/colors.h"
-#include "rndr/core/forward-def-windows.h"
 #include "rndr/core/math.h"
+#include "rndr/core/platform/forward-def-windows.h"
 #include "rndr/core/ref.h"
 #include "rndr/core/span.h"
 #include "rndr/core/stack-array.h"
