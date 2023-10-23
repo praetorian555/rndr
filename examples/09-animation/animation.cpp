@@ -6,6 +6,9 @@
 #include <assimp/postprocess.h>
 #include <assimp/scene.h>
 #include <assimp/version.h>
+#include <assimp/matrix4x4.h>
+
+#include "animator.h"
 
 void Run();
 
@@ -34,7 +37,7 @@ layout(std140, binding = 0) uniform PerFrameData
     uniform mat4 bone_transforms[k_max_bones];
 };
 layout (location=0) in vec3 pos;
-layout (location=1) in ivec4 bone_ids;
+layout (location=1) in vec4 bone_ids;
 layout (location=2) in vec4 bone_weights;
 layout (location=3) in vec2 tex_coords;
 layout (location=0) out vec2 out_tex_coords;
@@ -47,11 +50,16 @@ void main()
         {
             continue;
         }
-        const mat4 bone_transform = bone_transforms[bone_ids[i]];
+        if(bone_ids[i] >= k_max_bones)
+        {
+            position = vec4(pos, 1.0f);
+            break;
+        }
+        const mat4 bone_transform = bone_transforms[int(bone_ids[i])];
         position += (bone_transform * vec4(pos, 1.0)) * bone_weights[i];
     }
-	//gl_Position = mvp * position;
-    gl_Position = mvp * vec4(pos, 1.0);
+	gl_Position = mvp * position;
+    //gl_Position = mvp * vec4(pos, 1.0);
 	out_tex_coords = tex_coords;
 }
 )";
@@ -68,22 +76,12 @@ void main()
 };
 )";
 
-struct BoneInfo
-{
-    int32_t id;
-    // This transform is used to move vertex from object space of the mesh to the local space of the
-    // bone while the skeleton is in the bind pose.
-    Rndr::Matrix4x4f inverse_bind_pose_transform;
-};
-
-using BoneMap = Rndr::HashMap<Rndr::String, BoneInfo>;
-
 struct VertexData
 {
     constexpr static size_t k_max_bone_influence_count = 4;
 
     Rndr::Point3f position;
-    Rndr::StackArray<int32_t, k_max_bone_influence_count> bone_ids;
+    Rndr::StackArray<float, k_max_bone_influence_count> bone_ids;
     Rndr::StackArray<float, k_max_bone_influence_count> bone_weights;
     Rndr::Point2f tex_coords;
 };
@@ -92,7 +90,7 @@ struct Mesh
 {
     std::vector<VertexData> vertex_data;
     std::vector<int32_t> indices;
-    BoneMap bone_name_to_bone_info;
+    BoneInfoMap bone_name_to_bone_info;
 
     Rndr::String diffuse_texture_path;
 };
@@ -105,12 +103,6 @@ struct PerFrameData
     Rndr::StackArray<Rndr::Matrix4x4f, k_max_bone_count> final_bone_transforms;
 };
 
-Rndr::Matrix4x4f AssimpMatrixToMatrix4x4(const aiMatrix4x4& ai_matrix)
-{
-    return {ai_matrix.a1, ai_matrix.a2, ai_matrix.a3, ai_matrix.a4, ai_matrix.b1, ai_matrix.b2, ai_matrix.b3, ai_matrix.b4,
-            ai_matrix.c1, ai_matrix.c2, ai_matrix.c3, ai_matrix.c4, ai_matrix.d1, ai_matrix.d2, ai_matrix.d3, ai_matrix.d4};
-}
-
 class MeshRenderer : public Rndr::RendererBase
 {
 public:
@@ -119,6 +111,13 @@ public:
         const bool is_model_loaded = LoadModel(m_mesh);
         RNDR_ASSERT(is_model_loaded);
         RNDR_UNUSED(is_model_loaded);
+
+        const bool is_animation_loaded = LoadAnimation(m_animation, m_mesh);
+        RNDR_ASSERT(is_animation_loaded);
+        RNDR_UNUSED(is_animation_loaded);
+
+        StartAnimation(m_animator, m_animation);
+
         m_index_count = static_cast<int32_t>(m_mesh.indices.size());
 
         m_vertex_shader = RNDR_MAKE_SCOPED(Rndr::Shader, m_desc.graphics_context,
@@ -146,7 +145,7 @@ public:
         Rndr::InputLayoutBuilder builder;
         const Rndr::InputLayoutDesc input_layout_desc = builder.AddVertexBuffer(*m_vertex_buffer, 0, Rndr::DataRepetition::PerVertex)
                                                             .AppendElement(0, Rndr::PixelFormat::R32G32B32_FLOAT)
-                                                            .AppendElement(0, Rndr::PixelFormat::R32G32B32A32_SINT)
+                                                            .AppendElement(0, Rndr::PixelFormat::R32G32B32A32_FLOAT)
                                                             .AppendElement(0, Rndr::PixelFormat::R32G32B32A32_FLOAT)
                                                             .AppendElement(0, Rndr::PixelFormat::R32G32_FLOAT)
                                                             .AddIndexBuffer(*m_index_buffer)
@@ -185,7 +184,6 @@ public:
             RNDR_LOG_ERROR("Failed to load mesh from file with error: %s", aiGetErrorString());
             return false;
         }
-        RNDR_ASSERT(scene->HasMeshes());
         const aiMesh* mesh = scene->mMeshes[0];
         for (uint32_t i = 0; i < mesh->mNumVertices; i++)
         {
@@ -223,7 +221,7 @@ public:
                 {
                     if (vertex_data.bone_ids[influence_index] == -1)
                     {
-                        vertex_data.bone_ids[influence_index] = bone_index;
+                        vertex_data.bone_ids[influence_index] = static_cast<float>(bone_index);
                         vertex_data.bone_weights[influence_index] = weight.mWeight;
                         break;
                     }
@@ -238,6 +236,18 @@ public:
         aiReleaseImport(scene);
         return true;
     }
+
+    static bool LoadAnimation(Animation& out_animation, Mesh& mesh)
+    {
+        const Rndr::String file_path = ASSETS_DIR "vampire-dancing.dae";
+        const aiScene* scene = aiImportFile(file_path.c_str(), aiProcess_Triangulate);
+        if (scene == nullptr || !scene->HasAnimations())
+        {
+            RNDR_LOG_ERROR("Failed to load animation from file with error: %s", aiGetErrorString());
+            return false;
+        }
+        return LoadAnimationFromAssimp(out_animation, scene, 0, mesh.bone_name_to_bone_info);
+    }
     
     bool Render() override
     {
@@ -250,11 +260,8 @@ public:
         Rndr::Matrix4x4f mvp = m_camera_transform * t;
         mvp = Math::Transpose(mvp);
         PerFrameData per_frame_data = {.mvp = mvp};
-        for (const auto& [bone_name, bone_info] : m_mesh.bone_name_to_bone_info)
-        {
-            const Rndr::Matrix4x4f bone_transform = mvp * bone_info.inverse_bind_pose_transform;
-            per_frame_data.final_bone_transforms[bone_info.id] = bone_transform;
-        }
+        Rndr::Span<Rndr::Matrix4x4f> final_bone_transforms{per_frame_data.final_bone_transforms};
+        UpdateAnimator(final_bone_transforms, m_animator, m_delta_seconds);
         m_desc.graphics_context->Update(*m_per_frame_buffer, Rndr::ToByteSpan(per_frame_data));
 
         // Bind resources
@@ -274,6 +281,8 @@ public:
 
     void SetCameraTransform(const Rndr::Matrix4x4f& transform) { m_camera_transform = transform; }
 
+    void SetDeltaSeconds(float delta_seconds) { m_delta_seconds = delta_seconds; }
+
 private:
     Rndr::ScopePtr<Rndr::Shader> m_vertex_shader;
     Rndr::ScopePtr<Rndr::Shader> m_pixel_shader;
@@ -286,6 +295,9 @@ private:
     int32_t m_index_count = 0;
     Rndr::Matrix4x4f m_camera_transform;
     Mesh m_mesh;
+    Animation m_animation;
+    Animator m_animator;
+    float m_delta_seconds;
 };
 
 void Run()
@@ -331,6 +343,8 @@ void Run()
         RNDR_TRACE_SCOPED(Frame);
 
         const Rndr::Timestamp start_time = Rndr::GetTimestamp();
+
+        mesh_renderer->SetDeltaSeconds(delta_seconds);
 
         fps_counter.Update(delta_seconds);
 
