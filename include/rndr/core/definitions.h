@@ -19,14 +19,20 @@
 #define RNDR_OPTIMIZE_OFF __pragma(optimize("", off))
 #define RNDR_OPTIMIZE_ON __pragma(optimize("", on))
 #define RNDR_ALIGN(Amount) __declspec(align(Amount))
+#define RNDR_FORCE_INLINE __forceinline
+#define RNDR_DEBUG_BREAK __debugbreak()
+#else
+#error "Platfrom not supported!"
 #endif  // RNDR_WINDOWS
 
-#define RNDR_UNUSED(Expr) (void)(Expr)
+#if RNDR_DEBUG
+#define RNDR_STATIC_ASSERT(expr, msg) static_assert(expr, msg)
+#define RNDR_ASSERT(expr) do { if (!(expr)) { RNDR_DEBUG_BREAK; } } while (0)
+#define RNDR_HALT(msg) do { RNDR_DEBUG_BREAK; } while (0)
+#else
+#define RNDR_STATIC_ASSERT(expr, msg)
+#define RNDR_ASSERT(expr)
+#define RNDR_HALT(msg)
+#endif  // RNDR_DEBUG
 
-#define RNDR_NO_CONSTRCUTORS_AND_DESTRUCTOR(class) \
-    class() = default;                             \
-    ~class() = default;                            \
-    class(const class&) = delete;                  \
-    class(class&&) = delete;                       \
-    class& operator=(const class&) = delete;       \
-    class& operator=(class&&) = delete;
+#define RNDR_UNUSED(Expr) (void)(Expr)

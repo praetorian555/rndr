@@ -1,14 +1,22 @@
 #include "rndr/core/definitions.h"
 
 #if defined RNDR_WINDOWS
+
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
+
+#ifndef WIN32_LEAN_AND_MEAN
+#define WIN32_LEAN_AND_MEAN
+#endif
+
 #include <windows.h>
 #include <windowsx.h>
 #include <winuser.h>
 
-#undef min
-#undef max
 #undef near
 #undef far
+
 #endif  // RNDR_WINDOWS
 
 #include "rndr/core/hash-map.h"
@@ -563,7 +571,7 @@ Rndr::InputPrimitive GetPrimitive(UINT msg_code)
         case WM_MBUTTONDBLCLK:
             return Rndr::InputPrimitive::Mouse_MiddleButton;
         default:
-            assert(false);
+            RNDR_ASSERT(false);
     }
     return Rndr::InputPrimitive::Count;
 }
@@ -591,7 +599,7 @@ Rndr::InputTrigger GetTrigger(UINT msg_code)
         case WM_MBUTTONDBLCLK:
             return Rndr::InputTrigger::ButtonDoubleClick;
         default:
-            assert(false);
+            RNDR_ASSERT(false);
     }
     return Rndr::InputTrigger::ButtonPressed;
 }

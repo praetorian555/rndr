@@ -3,12 +3,20 @@
 #ifdef RNDR_IMGUI
 
 #if RNDR_WINDOWS
+
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
+
+#ifndef WIN32_LEAN_AND_MEAN
+#define WIN32_LEAN_AND_MEAN
+#endif
+
 #include <windows.h>
 
-#undef min
-#undef max
 #undef near
 #undef far
+
 #endif
 
 #if RNDR_WINDOWS
@@ -81,7 +89,7 @@ bool Rndr::ImGuiWrapper::Init(Window& window,
 #if RNDR_OPENGL
     ImGui_ImplOpenGL3_Init("#version 330");
 #else
-    assert(false && "Unsupported graphics context!");
+    RNDR_ASSERT(false && "Unsupported graphics context!");
 #endif
     return true;
 }

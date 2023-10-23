@@ -3,12 +3,20 @@
 #if RNDR_OPENGL
 
 #if RNDR_WINDOWS
+
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
+
+#ifndef WIN32_LEAN_AND_MEAN
+#define WIN32_LEAN_AND_MEAN
+#endif
+
 #include <Windows.h>
 
-#undef min
-#undef max
 #undef near
 #undef far
+
 #endif  // RNDR_WINDOWS
 
 #include <glad/glad.h>

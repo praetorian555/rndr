@@ -77,7 +77,7 @@ bool Rndr::Destroy()
 
 const Rndr::Logger& Rndr::GetLogger()
 {
-    assert(g_is_initialized);
+    RNDR_ASSERT(g_is_initialized);
     return *g_desc.user_logger;
 }
 

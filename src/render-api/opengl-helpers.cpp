@@ -252,7 +252,7 @@ GLenum Rndr::FromImageInfoToTarget(ImageType image_type, bool is_multi_sample)
             target = GL_TEXTURE_CUBE_MAP;
             break;
         default:
-            assert(false && "Unsupported image type");
+            RNDR_HALT("Unsupported image type");
             break;
     }
 
@@ -271,7 +271,7 @@ GLint Rndr::FromMinAndMipFiltersToOpenGL(ImageFilter min_filter, ImageFilter mip
             gl_filter = mip_filter == ImageFilter::Nearest ? GL_LINEAR_MIPMAP_NEAREST : GL_LINEAR_MIPMAP_LINEAR;
             break;
         default:
-            assert(false && "Unsupported image filter");
+            RNDR_HALT("Unsupported image filter");
             break;
     }
 
@@ -290,7 +290,7 @@ GLint Rndr::FromImageFilterToOpenGL(ImageFilter filter)
             gl_filter = GL_LINEAR;
             break;
         default:
-            assert(false && "Unsupported image filter");
+            RNDR_HALT("Unsupported image filter");
             break;
     }
 
@@ -348,7 +348,7 @@ GLenum Rndr::FromIndexSizeToOpenGL(uint32_t index_size)
         case 4:
             return GL_UNSIGNED_INT;
         default:
-            assert(false && "Unsupported index size");
+            RNDR_HALT("Unsupported index size");
             return GL_UNSIGNED_INT;
     }
 }
@@ -378,7 +378,7 @@ Rndr::String Rndr::FromBufferTypeToString(Rndr::BufferType type)
         case BufferType::ShaderStorage:
             return "Storage";
         default:
-            assert(false);
+            RNDR_HALT("Invalid buffer type");
     }
     return "";
 }
@@ -406,7 +406,7 @@ Rndr::String Rndr::FromOpenGLDataTypeToString(GLenum value)
         case GL_INT:
             return "GL_INT";
         default:
-            assert(false);
+            RNDR_HALT("Unsupported data type");
     }
     return "";
 }
@@ -422,7 +422,7 @@ Rndr::String Rndr::FromOpenGLUsageToString(GLenum value)
         case GL_MAP_READ_BIT:
             return "GL_MAP_READ_BIT";
         default:
-            assert(false);
+            RNDR_HALT("Unsupported usage");
     }
     return "";
 }

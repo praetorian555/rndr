@@ -63,7 +63,7 @@ void Rndr::ProjectionCamera::SetNearAndFar(float near, float far)
 
 void Rndr::ProjectionCamera::SetVerticalFOV(float fov)
 {
-    assert(m_desc.projection == ProjectionType::Perspective);
+    RNDR_ASSERT(m_desc.projection == ProjectionType::Perspective);
     m_desc.vertical_fov = fov;
     UpdateTransforms();
 }

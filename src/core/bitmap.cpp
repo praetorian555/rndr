@@ -33,7 +33,7 @@ Rndr::Bitmap::Bitmap(int width, int height, int depth, Rndr::PixelFormat pixel_f
     }
     else
     {
-        assert(false);
+        RNDR_ASSERT(false);
     }
 }
 
@@ -44,19 +44,19 @@ size_t Rndr::Bitmap::GetPixelSize() const
 
 Rndr::Vector4f Rndr::Bitmap::GetPixel(int x, int y, int z) const
 {
-    assert(x >= 0 && x < m_width);
-    assert(y >= 0 && y < m_height);
-    assert(z >= 0 && z < m_depth);
-    assert(m_get_pixel_func != nullptr);
+    RNDR_ASSERT(x >= 0 && x < m_width);
+    RNDR_ASSERT(y >= 0 && y < m_height);
+    RNDR_ASSERT(z >= 0 && z < m_depth);
+    RNDR_ASSERT(m_get_pixel_func != nullptr);
     return (*this.*m_get_pixel_func)(x, y, z);
 }
 
 void Rndr::Bitmap::SetPixel(int x, int y, int z, const Vector4f& pixel)
 {
-    assert(x >= 0 && x < m_width);
-    assert(y >= 0 && y < m_height);
-    assert(z >= 0 && z < m_depth);
-    assert(m_set_pixel_func != nullptr);
+    RNDR_ASSERT(x >= 0 && x < m_width);
+    RNDR_ASSERT(y >= 0 && y < m_height);
+    RNDR_ASSERT(z >= 0 && z < m_depth);
+    RNDR_ASSERT(m_set_pixel_func != nullptr);
     (*this.*m_set_pixel_func)(x, y, z, pixel);
 }
 

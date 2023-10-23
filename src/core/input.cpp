@@ -315,7 +315,7 @@ bool Rndr::InputSystem::Destroy()
 
 Rndr::InputContext& Rndr::InputSystem::GetCurrentContext()
 {
-    assert(g_system_data != nullptr);
+    RNDR_ASSERT(g_system_data != nullptr);
     return g_system_data->contexts.back()->context.Get();
 }
 
