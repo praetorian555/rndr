@@ -24,6 +24,7 @@ GLenum FromPixelFormatToInternalFormat(PixelFormat format);
 GLenum FromPixelFormatToFormat(PixelFormat format);
 GLenum FromPixelFormatToDataType(PixelFormat format);
 GLenum FromPixelFormatToShouldNormalizeData(PixelFormat format);
+bool IsPixelFormatInteger(PixelFormat format);
 GLenum FromPrimitiveTopologyToOpenGL(PrimitiveTopology topology);
 GLenum FromIndexSizeToOpenGL(uint32_t index_size);
 

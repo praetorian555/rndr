@@ -770,8 +770,15 @@ Rndr::Pipeline::Pipeline(const GraphicsContext& graphics_context, const Pipeline
         const GLint component_count = FromPixelFormatToComponentCount(element.format);
         const GLenum data_type = FromPixelFormatToDataType(element.format);
         glEnableVertexArrayAttrib(m_native_vertex_array, attribute_index);
-        glVertexArrayAttribFormat(m_native_vertex_array, attribute_index, component_count, data_type,
-                                  static_cast<GLboolean>(should_normalize_data), element.offset_in_vertex);
+        if (IsPixelFormatInteger(element.format))
+        {
+            glVertexArrayAttribIFormat(m_native_vertex_array, attribute_index, component_count, data_type, element.offset_in_vertex);
+        }
+        else
+        {
+            glVertexArrayAttribFormat(m_native_vertex_array, attribute_index, component_count, data_type,
+                                      static_cast<GLboolean>(should_normalize_data), element.offset_in_vertex);
+        }
         glVertexArrayAttribBinding(m_native_vertex_array, attribute_index, element.binding_index);
         if (element.repetition == DataRepetition::PerInstance)
         {

@@ -17,7 +17,6 @@ constexpr size_t k_max_buffer_type = static_cast<size_t>(Rndr::BufferType::EnumC
 constexpr Rndr::StackArray<GLenum, k_max_buffer_type> k_to_opengl_buffer_type = {GL_ARRAY_BUFFER, GL_ELEMENT_ARRAY_BUFFER,
                                                                                  GL_UNIFORM_BUFFER, GL_SHADER_STORAGE_BUFFER};
 
-
 constexpr size_t k_max_comparator = static_cast<size_t>(Rndr::Comparator::EnumCount);
 constexpr Rndr::StackArray<GLenum, k_max_comparator> k_to_opengl_comparator = {GL_NEVER, GL_ALWAYS,   GL_LESS,   GL_GREATER,
                                                                                GL_EQUAL, GL_NOTEQUAL, GL_LEQUAL, GL_GEQUAL};
@@ -198,6 +197,10 @@ constexpr Rndr::StackArray<GLenum, k_max_pixel_format> k_to_should_normalize_dat
     GL_TRUE,  GL_TRUE,  GL_FALSE, GL_TRUE,  GL_FALSE, GL_TRUE,  GL_TRUE,  GL_FALSE, GL_TRUE,  GL_FALSE, GL_FALSE, GL_FALSE, GL_FALSE,
     GL_FALSE, GL_FALSE, GL_FALSE, GL_FALSE, GL_FALSE, GL_FALSE, GL_FALSE, GL_FALSE, GL_FALSE, GL_FALSE, GL_FALSE};
 
+constexpr Rndr::StackArray<bool, k_max_pixel_format> k_is_integer = {
+    false, false, true,  false, true,  false, false, false, false, false, true,  false, true, false, false, true, false, true, false,
+    false, true,  false, true,  false, true,  true,  false, true,  true,  false, true,  true, false, true,  true, false, false};
+
 constexpr size_t k_max_primitive_topology = static_cast<size_t>(Rndr::PrimitiveTopology::EnumCount);
 constexpr Rndr::StackArray<GLenum, k_max_primitive_topology> k_to_opengl_primitive_topology = {GL_POINTS, GL_LINES, GL_LINE_STRIP,
                                                                                                GL_TRIANGLES, GL_TRIANGLE_STRIP};
@@ -330,6 +333,11 @@ GLint Rndr::FromPixelFormatToComponentCount(PixelFormat format)
 GLenum Rndr::FromPixelFormatToShouldNormalizeData(Rndr::PixelFormat format)
 {
     return k_to_should_normalize_data[static_cast<size_t>(format)];
+}
+
+bool Rndr::IsPixelFormatInteger(Rndr::PixelFormat format)
+{
+    return k_is_integer[static_cast<size_t>(format)];
 }
 
 GLenum Rndr::FromPrimitiveTopologyToOpenGL(PrimitiveTopology topology)

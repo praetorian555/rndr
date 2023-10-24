@@ -37,7 +37,7 @@ layout(std140, binding = 0) uniform PerFrameData
     uniform mat4 bone_transforms[k_max_bones];
 };
 layout (location=0) in vec3 pos;
-layout (location=1) in vec4 bone_ids;
+layout (location=1) in ivec4 bone_ids;
 layout (location=2) in vec4 bone_weights;
 layout (location=3) in vec2 tex_coords;
 layout (location=0) out vec2 out_tex_coords;
@@ -55,7 +55,7 @@ void main()
             position = vec4(pos, 1.0f);
             break;
         }
-        const mat4 bone_transform = bone_transforms[int(bone_ids[i])];
+        const mat4 bone_transform = bone_transforms[bone_ids[i]];
         position += (bone_transform * vec4(pos, 1.0)) * bone_weights[i];
     }
 	gl_Position = mvp * position;
@@ -81,7 +81,7 @@ struct VertexData
     constexpr static size_t k_max_bone_influence_count = 4;
 
     Rndr::Point3f position;
-    Rndr::StackArray<float, k_max_bone_influence_count> bone_ids;
+    Rndr::StackArray<int32_t, k_max_bone_influence_count> bone_ids;
     Rndr::StackArray<float, k_max_bone_influence_count> bone_weights;
     Rndr::Point2f tex_coords;
 };
@@ -145,7 +145,7 @@ public:
         Rndr::InputLayoutBuilder builder;
         const Rndr::InputLayoutDesc input_layout_desc = builder.AddVertexBuffer(*m_vertex_buffer, 0, Rndr::DataRepetition::PerVertex)
                                                             .AppendElement(0, Rndr::PixelFormat::R32G32B32_FLOAT)
-                                                            .AppendElement(0, Rndr::PixelFormat::R32G32B32A32_FLOAT)
+                                                            .AppendElement(0, Rndr::PixelFormat::R32G32B32A32_SINT)
                                                             .AppendElement(0, Rndr::PixelFormat::R32G32B32A32_FLOAT)
                                                             .AppendElement(0, Rndr::PixelFormat::R32G32_FLOAT)
                                                             .AddIndexBuffer(*m_index_buffer)
@@ -221,7 +221,7 @@ public:
                 {
                     if (vertex_data.bone_ids[influence_index] == -1)
                     {
-                        vertex_data.bone_ids[influence_index] = static_cast<float>(bone_index);
+                        vertex_data.bone_ids[influence_index] = bone_index;
                         vertex_data.bone_weights[influence_index] = weight.mWeight;
                         break;
                     }
