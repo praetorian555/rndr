@@ -135,8 +135,9 @@ Rndr::Vector3f InterpolateScales(double in_animation_time, const Rndr::Array<Key
 }
 
 void LoadBoneHierarchy(BoneNode& out_bone_node, const aiNode* in_node);
+void FixKeyTimeStamps(Bone& in_out_bone_node, double in_animation_ticks_per_second);
 
-}; // namespace
+};  // namespace
 
 bool LoadAnimationFromAssimp(Animation& out_animation, const aiScene* ai_scene, int32_t ai_animation_index, BoneInfoMap& bone_info_map)
 {
@@ -176,6 +177,7 @@ bool LoadAnimationFromAssimp(Animation& out_animation, const aiScene* ai_scene, 
         }
         Bone bone;
         const bool is_loaded = LoadBoneFromAssimp(bone, bone_name, bone_id, node);
+        FixKeyTimeStamps(bone, out_animation.ticks_per_second);
         assert(is_loaded);
         RNDR_UNUSED(is_loaded);
         out_animation.bones.push_back(std::move(bone));
@@ -216,13 +218,13 @@ bool StartAnimation(Animator& out_animator, Animation& animation)
 namespace
 {
 
-void CalculateBoneTransforms(std::span<Rndr::Matrix4x4f>& out_final_transforms, BoneNode& in_bone_node, Animator& in_animator,
+void CalculateBoneTransforms(Rndr::Span<Rndr::Matrix4x4f>& out_final_transforms, BoneNode& in_bone_node, Animator& in_animator,
                              const Rndr::Matrix4x4f& in_parent_transform);
 Bone* GetBone(Animation& in_animation, const Rndr::String& in_bone_name);
 
 }  // namespace
 
-void UpdateAnimator(std::span<Rndr::Matrix4x4f>& out_final_transforms, Animator& in_animator, double in_delta_time)
+void UpdateAnimator(Rndr::Span<Rndr::Matrix4x4f>& out_final_transforms, Animator& in_animator, double in_delta_time)
 {
     if (!in_animator.animation.IsValid() || in_delta_time <= 0.0)
     {
@@ -238,7 +240,7 @@ void UpdateAnimator(std::span<Rndr::Matrix4x4f>& out_final_transforms, Animator&
 namespace
 {
 
-void CalculateBoneTransforms(std::span<Rndr::Matrix4x4f>& out_final_transforms, BoneNode& in_bone_node, Animator& in_animator,
+void CalculateBoneTransforms(Rndr::Span<Rndr::Matrix4x4f>& out_final_transforms, BoneNode& in_bone_node, Animator& in_animator,
                              const Rndr::Matrix4x4f& in_parent_transform)
 {
     Bone* bone = GetBone(in_animator.animation, in_bone_node.name);
@@ -254,6 +256,7 @@ void CalculateBoneTransforms(std::span<Rndr::Matrix4x4f>& out_final_transforms, 
     {
         const BoneInfo& bone_info = it->second;
         out_final_transforms[bone_info.id] = global_transform * bone_info.inverse_bind_pose_transform;
+        out_final_transforms[bone_info.id] = Math::Transpose(out_final_transforms[bone_info.id]);
     }
     for (BoneNode& child_bone_node : in_bone_node.children)
     {
@@ -263,8 +266,26 @@ void CalculateBoneTransforms(std::span<Rndr::Matrix4x4f>& out_final_transforms, 
 
 Bone* GetBone(Animation& in_animation, const Rndr::String& in_bone_name)
 {
-    const auto it = in_animation.bone_name_to_bone_info->find(in_bone_name);
-    return it != in_animation.bone_name_to_bone_info->end() ? &in_animation.bones[it->second.id] : nullptr;
+    auto it = std::find_if(in_animation.bones.begin(), in_animation.bones.end(), [&in_bone_name](const Bone& bone) {
+        return bone.name == in_bone_name;
+    });
+    return it != in_animation.bones.end() ? &(*it) : nullptr;
+}
+
+void FixKeyTimeStamps(Bone& in_out_bone, double in_animation_ticks_per_second)
+{
+    for (KeyPosition& key_position : in_out_bone.key_positions)
+    {
+        key_position.time_stamp /= in_animation_ticks_per_second;
+    }
+    for (KeyRotation& key_rotation : in_out_bone.key_rotations)
+    {
+        key_rotation.time_stamp /= in_animation_ticks_per_second;
+    }
+    for (KeyScale& key_scale : in_out_bone.key_scales)
+    {
+        key_scale.time_stamp /= in_animation_ticks_per_second;
+    }
 }
 
 }  // namespace
