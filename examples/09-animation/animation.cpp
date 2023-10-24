@@ -253,10 +253,7 @@ public:
     {
         RNDR_TRACE_SCOPED(Mesh rendering);
 
-        // Rotate the mesh
-        const float angle = static_cast<float>(std::fmod(10 * Rndr::GetSystemTime(), 360.0));
-        const Rndr::Matrix4x4f t = Math::Translate(Rndr::Vector3f(0.0f, -10.0f, -50.f)) *
-                                   Math::Rotate(angle, Rndr::Vector3f(0.0f, 1.0f, 0.0f)) * Math::Scale(0.1f);
+        const Rndr::Matrix4x4f t = Math::Translate(Rndr::Vector3f(0.0f, -1.0f, -5.f));
         Rndr::Matrix4x4f mvp = m_camera_transform * t;
         mvp = Math::Transpose(mvp);
         PerFrameData per_frame_data = {.mvp = mvp};
