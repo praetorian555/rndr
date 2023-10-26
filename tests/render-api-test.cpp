@@ -515,7 +515,7 @@ TEST_CASE("Is pixel format high precision")
 
 #endif
 
-TEST_CASE("Creating different types of buffers")
+TEST_CASE("Creating different types of buffers", "[render-api]")
 {
     Rndr::Init();
     const Rndr::Window hidden_window({.start_visible = false});
@@ -597,7 +597,7 @@ TEST_CASE("Creating different types of buffers")
     Rndr::Destroy();
 }
 
-TEST_CASE("Reading from GPU buffers")
+TEST_CASE("Reading from GPU buffers", "[render-api]")
 {
     constexpr int32_t k_buffer_size = 1024;
     const Rndr::StackArray<uint8_t, k_buffer_size> data = {0xAB};
