@@ -600,7 +600,11 @@ TEST_CASE("Creating different types of buffers", "[render-api]")
 TEST_CASE("Reading from GPU buffers", "[render-api]")
 {
     constexpr int32_t k_buffer_size = 1024;
-    const Rndr::StackArray<uint8_t, k_buffer_size> data = {0xAB};
+    Rndr::StackArray<uint8_t, k_buffer_size> data;
+    for (int i = 0; i < k_buffer_size; ++i)
+    {
+        data[i] = 0xAB;
+    }
 
     Rndr::Init();
     const Rndr::Window hidden_window({.start_visible = false});
@@ -798,7 +802,11 @@ TEST_CASE("Reading from GPU buffers", "[render-api]")
 TEST_CASE("Update the GPU buffer contents", "[render-api]")
 {
     constexpr int32_t k_buffer_size = 1024;
-    const Rndr::StackArray<uint8_t, k_buffer_size> data = {0xAB};
+    Rndr::StackArray<uint8_t, k_buffer_size> data;
+    for (int i = 0; i < k_buffer_size; ++i)
+    {
+        data[i] = 0xAB;
+    }
 
     Rndr::Init();
     const Rndr::Window hidden_window({.start_visible = false});
@@ -822,7 +830,6 @@ TEST_CASE("Update the GPU buffer contents", "[render-api]")
 
         const bool result = graphics_context.Update(buffer, Rndr::ConstByteSpan(data));
         REQUIRE(result);
-
     }
     SECTION("Update contents of the vertex buffer with read back usage")
     {
@@ -851,7 +858,6 @@ TEST_CASE("Update the GPU buffer contents", "[render-api]")
 
         const bool result = graphics_context.Update(buffer, Rndr::ConstByteSpan(data));
         REQUIRE(result);
-
     }
     SECTION("Update contents of the index buffer with read back usage")
     {
@@ -880,7 +886,6 @@ TEST_CASE("Update the GPU buffer contents", "[render-api]")
 
         const bool result = graphics_context.Update(buffer, Rndr::ConstByteSpan(data));
         REQUIRE(result);
-
     }
     SECTION("Update contents of the constant buffer with read back usage")
     {
@@ -909,7 +914,6 @@ TEST_CASE("Update the GPU buffer contents", "[render-api]")
 
         const bool result = graphics_context.Update(buffer, Rndr::ConstByteSpan(data));
         REQUIRE(result);
-
     }
     SECTION("Update contents of the shader storage buffer with read back usage")
     {
