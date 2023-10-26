@@ -525,23 +525,6 @@ bool Rndr::GraphicsContext::Read(const Buffer& buffer, ByteSpan& out_data, int32
     }
 
     const GLuint native_buffer = buffer.GetNativeBuffer();
-    const GLenum target = FromBufferTypeToOpenGL(desc.type);
-
-    constexpr int32_t k_binding_index = 0;  // Doesn't matter where we bind it, only used in this function
-    if (target == GL_SHADER_STORAGE_BUFFER || target == GL_UNIFORM_BUFFER)
-    {
-        glBindBufferRange(target, k_binding_index, native_buffer, desc.offset, desc.size);
-    }
-    else
-    {
-        glBindBuffer(target, native_buffer);
-    }
-    if (glGetError() != GL_NO_ERROR)
-    {
-        RNDR_LOG_ERROR("Failed to bind buffer for read");
-        return false;
-    }
-
     uint8_t* gpu_data = static_cast<uint8_t*>(glMapNamedBufferRange(native_buffer, desc.offset, desc.size, GL_MAP_READ_BIT));
     if (glGetError() != GL_NO_ERROR || gpu_data == nullptr)
     {
