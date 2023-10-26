@@ -563,6 +563,53 @@ bool Rndr::GraphicsContext::Read(const Buffer& buffer, ByteSpan& out_data, int32
     return true;
 }
 
+bool Rndr::GraphicsContext::Copy(const Rndr::Buffer& dst_buffer, const Rndr::Buffer& src_buffer, int32_t dst_offset, int32_t src_offset,
+                                 int32_t size)
+{
+    if (!dst_buffer.IsValid())
+    {
+        RNDR_LOG_ERROR("Copy of the buffer failed since the destination buffer is invalid!");
+        return false;
+    }
+    if (!src_buffer.IsValid())
+    {
+        RNDR_LOG_ERROR("Copy of the buffer failed since the source buffer is invalid!");
+        return false;
+    }
+
+    const BufferDesc& dst_desc = dst_buffer.GetDesc();
+    const BufferDesc& src_desc = src_buffer.GetDesc();
+
+    if (size == 0)
+    {
+        size = static_cast<int32_t>(dst_desc.size) - src_offset;
+    }
+
+    if (dst_offset < 0 || dst_offset >= static_cast<int32_t>(dst_desc.size))
+    {
+        RNDR_LOG_ERROR("Copy of the buffer failed since the destination offset is invalid!");
+        return false;
+    }
+    if (src_offset < 0 || src_offset >= static_cast<int32_t>(src_desc.size))
+    {
+        RNDR_LOG_ERROR("Copy of the buffer failed since the source offset is invalid!");
+        return false;
+    }
+    if (size <= 0 || dst_offset + size > static_cast<int32_t>(dst_desc.size) || src_offset + size > static_cast<int32_t>(src_desc.size))
+    {
+        RNDR_LOG_ERROR("Copy of the buffer failed since the size is invalid!");
+        return false;
+    }
+
+    glCopyNamedBufferSubData(src_buffer.GetNativeBuffer(), dst_buffer.GetNativeBuffer(), src_offset, dst_offset, size);
+    if (glGetError() != GL_NO_ERROR)
+    {
+        RNDR_LOG_ERROR("Failed to copy buffer!");
+        return false;
+    }
+    return true;
+}
+
 Rndr::Bitmap Rndr::GraphicsContext::ReadSwapChain(const SwapChain& swap_chain)
 {
     Bitmap invalid_bitmap{-1, -1, -1, PixelFormat::R8G8B8_UNORM_SRGB};

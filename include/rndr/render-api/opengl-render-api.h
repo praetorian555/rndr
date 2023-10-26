@@ -134,6 +134,18 @@ public:
     bool Read(const Buffer& buffer, ByteSpan& out_data, int32_t offset = 0, int32_t size = 0) const;
 
     /**
+     * Copies the contents of one buffer to another.
+     * @param dst_buffer Buffer to copy to.
+     * @param src_buffer Buffer to copy from.
+     * @param dst_offset Offset into the destination buffer to copy to. Default is 0. Must be between 0 and destination buffer size.
+     * @param src_offset Offset into the source buffer to copy from. Default is 0. Must be between 0 and source buffer size.
+     * @param size How many bytes to copy. If 0, copies the whole source buffer. Default is 0. Must be between 0 and the minimum of
+     * destination and source buffer sizes.
+     * @return Returns true if the copy was successful, false otherwise.
+     */
+    bool Copy(const Buffer& dst_buffer, const Buffer& src_buffer, int32_t dst_offset = 0, int32_t src_offset = 0, int32_t size = 0);
+
+    /**
      * Reads the contents of a swap chain color image.
      * @param swap_chain The swap chain to read.
      * @return Returns the image data.

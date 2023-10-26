@@ -923,3 +923,173 @@ TEST_CASE("Update the GPU buffer contents", "[render-api]")
 
     Rndr::Destroy();
 }
+
+TEST_CASE("Copy of buffers", "[render-api]")
+{
+    constexpr int32_t k_buffer_size = 1024;
+    Rndr::StackArray<uint8_t, k_buffer_size> data;
+    for (int i = 0; i < k_buffer_size; ++i)
+    {
+        data[i] = 0xAB;
+    }
+
+    Rndr::Init();
+    const Rndr::Window hidden_window({.start_visible = false});
+    const Rndr::GraphicsContextDesc gc_desc{.window_handle = hidden_window.GetNativeWindowHandle()};
+    Rndr::GraphicsContext graphics_context(gc_desc);
+
+    SECTION("Copy vertex buffer")
+    {
+        const Rndr::BufferDesc desc{.type = Rndr::BufferType::Vertex, .usage = Rndr::Usage::Default, .size = 1024};
+        const Rndr::Buffer src_buffer(graphics_context, desc, Rndr::ConstByteSpan(data));
+        REQUIRE(src_buffer.IsValid());
+
+        const Rndr::BufferDesc desc2{.type = Rndr::BufferType::Vertex, .usage = Rndr::Usage::ReadBack, .size = 1024};
+        const Rndr::Buffer dst_buffer(graphics_context, desc2);
+        REQUIRE(dst_buffer.IsValid());
+
+        bool result = false;
+        result = graphics_context.Copy(dst_buffer, src_buffer);
+        REQUIRE(result);
+
+        Rndr::StackArray<uint8_t, k_buffer_size> read_data_storage = {0};
+        Rndr::ByteSpan read_data{read_data_storage};
+        result = graphics_context.Read(dst_buffer, read_data);
+        REQUIRE(result);
+
+        for (int i = 0; i < k_buffer_size; ++i)
+        {
+            REQUIRE(read_data[i] == data[i]);
+        }
+    }
+    SECTION("Copy shader storage buffer")
+    {
+        const Rndr::BufferDesc desc{.type = Rndr::BufferType::ShaderStorage, .usage = Rndr::Usage::Default, .size = 1024};
+        const Rndr::Buffer src_buffer(graphics_context, desc, Rndr::ConstByteSpan(data));
+        REQUIRE(src_buffer.IsValid());
+
+        const Rndr::BufferDesc desc2{.type = Rndr::BufferType::ShaderStorage, .usage = Rndr::Usage::ReadBack, .size = 1024};
+        const Rndr::Buffer dst_buffer(graphics_context, desc2);
+        REQUIRE(dst_buffer.IsValid());
+
+        bool result = false;
+        result = graphics_context.Copy(dst_buffer, src_buffer);
+        REQUIRE(result);
+
+        Rndr::StackArray<uint8_t, k_buffer_size> read_data_storage = {0};
+        Rndr::ByteSpan read_data{read_data_storage};
+        result = graphics_context.Read(dst_buffer, read_data);
+        REQUIRE(result);
+
+        for (int i = 0; i < k_buffer_size; ++i)
+        {
+            REQUIRE(read_data[i] == data[i]);
+        }
+    }
+
+    SECTION("Copy between different types of buffers")
+    {
+        const Rndr::BufferDesc desc{.type = Rndr::BufferType::Vertex, .usage = Rndr::Usage::Default, .size = 1024};
+        const Rndr::Buffer src_buffer(graphics_context, desc, Rndr::ConstByteSpan(data));
+        REQUIRE(src_buffer.IsValid());
+
+        const Rndr::BufferDesc desc2{.type = Rndr::BufferType::ShaderStorage, .usage = Rndr::Usage::ReadBack, .size = 1024};
+        const Rndr::Buffer dst_buffer(graphics_context, desc2);
+        REQUIRE(dst_buffer.IsValid());
+
+        bool result = false;
+        result = graphics_context.Copy(dst_buffer, src_buffer);
+        REQUIRE(result);
+
+        Rndr::StackArray<uint8_t, k_buffer_size> read_data_storage = {0};
+        Rndr::ByteSpan read_data{read_data_storage};
+        result = graphics_context.Read(dst_buffer, read_data);
+        REQUIRE(result);
+
+        for (int i = 0; i < k_buffer_size; ++i)
+        {
+            REQUIRE(read_data[i] == data[i]);
+        }
+    }
+
+    SECTION("Copy with bad parameters")
+    {
+        const Rndr::BufferDesc desc{.type = Rndr::BufferType::Vertex, .usage = Rndr::Usage::Default, .size = 1024};
+        const Rndr::Buffer src_buffer(graphics_context, desc, Rndr::ConstByteSpan(data));
+        REQUIRE(src_buffer.IsValid());
+
+        const Rndr::BufferDesc desc2{.type = Rndr::BufferType::ShaderStorage, .usage = Rndr::Usage::ReadBack, .size = 1024};
+        const Rndr::Buffer dst_buffer(graphics_context, desc2);
+        REQUIRE(dst_buffer.IsValid());
+
+        bool result = false;
+        result = graphics_context.Copy(dst_buffer, src_buffer);
+        REQUIRE(result);
+
+        SECTION("Copy with invalid source buffer")
+        {
+            const Rndr::Buffer invalid_src_buffer;
+            result = graphics_context.Copy(dst_buffer, invalid_src_buffer);
+            REQUIRE(!result);
+        }
+        SECTION("Copy with invalid destination buffer")
+        {
+            const Rndr::Buffer invalid_dst_buffer;
+            result = graphics_context.Copy(invalid_dst_buffer, src_buffer);
+            REQUIRE(!result);
+        }
+        SECTION("Copy with bad offset")
+        {
+            result = graphics_context.Copy(dst_buffer, src_buffer, -1, 512);
+            REQUIRE(!result);
+            result = graphics_context.Copy(dst_buffer, src_buffer, 1024, 512);
+            REQUIRE(!result);
+            result = graphics_context.Copy(dst_buffer, src_buffer, 1050, 512);
+            REQUIRE(!result);
+            result = graphics_context.Copy(dst_buffer, src_buffer, 512, -1);
+            REQUIRE(!result);
+            result = graphics_context.Copy(dst_buffer, src_buffer, 512, 1024);
+            REQUIRE(!result);
+            result = graphics_context.Copy(dst_buffer, src_buffer, 512, 1050);
+            REQUIRE(!result);
+        }
+        SECTION("Copy with bad size")
+        {
+            result = graphics_context.Copy(dst_buffer, src_buffer, 0, 0 - 1);
+            REQUIRE(!result);
+            result = graphics_context.Copy(dst_buffer, src_buffer, 0, 0, 1025);
+            REQUIRE(!result);
+        }
+    }
+
+    SECTION("Copy partial array")
+    {
+        const Rndr::BufferDesc desc{.type = Rndr::BufferType::Vertex, .usage = Rndr::Usage::Default, .size = 1024};
+        const Rndr::Buffer src_buffer(graphics_context, desc, Rndr::ConstByteSpan(data));
+        REQUIRE(src_buffer.IsValid());
+
+        const Rndr::BufferDesc desc2{.type = Rndr::BufferType::ShaderStorage, .usage = Rndr::Usage::ReadBack, .size = 1024};
+        const Rndr::Buffer dst_buffer(graphics_context, desc2);
+        REQUIRE(dst_buffer.IsValid());
+
+        bool result = false;
+        result = graphics_context.Copy(dst_buffer, src_buffer, 0, k_buffer_size / 2);
+        REQUIRE(result);
+
+        Rndr::StackArray<uint8_t, k_buffer_size> read_data_storage = {0};
+        Rndr::ByteSpan read_data{read_data_storage};
+        result = graphics_context.Read(dst_buffer, read_data);
+        REQUIRE(result);
+
+        for (int i = 0; i < k_buffer_size / 2; ++i)
+        {
+            REQUIRE(read_data[i] == data[i]);
+        }
+        for (int i = k_buffer_size / 2; i < k_buffer_size; ++i)
+        {
+            REQUIRE(read_data[i] == 0);
+        }
+    }
+
+    Rndr::Destroy();
+}
