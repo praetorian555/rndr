@@ -164,7 +164,7 @@ void Run()
 
         graphics_context.Bind(swap_chain);
         graphics_context.Bind(pipeline);
-        graphics_context.BindUniform(per_frame_buffer, 0);
+        graphics_context.Bind(per_frame_buffer, 0);
         graphics_context.Bind(image, 0);
         graphics_context.ClearColor(k_clear_color);
         graphics_context.DrawVertices(Rndr::PrimitiveTopology::Triangle, 3);

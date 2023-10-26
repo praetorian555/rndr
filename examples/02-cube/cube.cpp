@@ -114,7 +114,7 @@ void Run()
         graphics_context.ClearColorAndDepth(k_clear_color);
         graphics_context.Bind(swap_chain);
         graphics_context.Bind(solid_pipeline);
-        graphics_context.BindUniform(per_frame_buffer, 0);
+        graphics_context.Bind(per_frame_buffer, 0);
         graphics_context.DrawVertices(Rndr::PrimitiveTopology::Triangle, k_index_count);
 
         graphics_context.Bind(wireframe_pipeline);

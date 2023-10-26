@@ -134,7 +134,7 @@ public:
         // Bind resources
         m_desc.graphics_context->Bind(*m_desc.swap_chain);
         m_desc.graphics_context->Bind(*m_pipeline);
-        m_desc.graphics_context->BindUniform(*m_per_frame_buffer, 0);
+        m_desc.graphics_context->Bind(*m_per_frame_buffer, 0);
 
         // Draw
         m_desc.graphics_context->DrawVertices(Rndr::PrimitiveTopology::Triangle, m_vertex_count);

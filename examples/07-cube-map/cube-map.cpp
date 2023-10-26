@@ -154,7 +154,7 @@ void Run()
 
     // Bind stuff that stay the same across the frames.
     graphics_context.Bind(swap_chain);
-    graphics_context.BindUniform(per_frame_buffer, 0);
+    graphics_context.Bind(per_frame_buffer, 0);
     graphics_context.Bind(mesh_albedo, 0);
     graphics_context.Bind(cube_map_image, 1);
 

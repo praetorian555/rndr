@@ -423,23 +423,25 @@ bool Rndr::GraphicsContext::Bind(const Pipeline& pipeline)
     return true;
 }
 
-bool Rndr::GraphicsContext::BindUniform(const Buffer& buffer, int32_t binding_index)
+bool Rndr::GraphicsContext::Bind(const Buffer& buffer, int32_t binding_index)
 {
     const GLuint native_buffer = buffer.GetNativeBuffer();
     const BufferDesc& desc = buffer.GetDesc();
     const GLenum target = FromBufferTypeToOpenGL(desc.type);
-    if (target == GL_UNIFORM_BUFFER)
+    if (target == GL_UNIFORM_BUFFER || target == GL_SHADER_STORAGE_BUFFER)
     {
         glBindBufferRange(GL_UNIFORM_BUFFER, binding_index, native_buffer, 0, desc.size);
-        if (glGetError() != GL_NO_ERROR)
-        {
-            RNDR_LOG_ERROR("Failed to bind uniform buffer!");
-            return false;
-        }
-        return true;
     }
-    assert(false && "Unsupported buffer type!");
-    return false;
+    else
+    {
+        glBindBuffer(target, native_buffer);
+    }
+    if (glGetError() != GL_NO_ERROR)
+    {
+        RNDR_LOG_ERROR("Failed to bind uniform buffer!");
+        return false;
+    }
+    return true;
 }
 
 bool Rndr::GraphicsContext::Bind(const Image& image, int32_t binding_index)

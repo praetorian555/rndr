@@ -94,7 +94,7 @@ bool Rndr::LineRenderer::Render()
 
     m_desc.graphics_context->Bind(*m_desc.swap_chain);
     m_desc.graphics_context->Bind(*m_pipeline);
-    m_desc.graphics_context->BindUniform(*m_constant_buffer, 0);
+    m_desc.graphics_context->Bind(*m_constant_buffer, 0);
 
     m_desc.graphics_context->Update(*m_vertex_buffer, Rndr::ToByteSpan(m_vertex_data));
     const int32_t vertex_count = static_cast<int32_t>(m_vertex_data.size());

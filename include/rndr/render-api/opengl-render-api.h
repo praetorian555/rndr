@@ -52,10 +52,10 @@ public:
     /**
      * Binds a buffer to the graphics pipeline.
      * @param buffer The buffer to bind.
-     * @param binding_index The binding index to bind the buffer to.
+     * @param binding_index The binding index to bind the buffer to. Only relevant for constant and shader storage buffer. Default value is -1.
      * @return Returns true if the buffer was bound successfully, false otherwise.
      */
-    bool BindUniform(const Buffer& buffer, int32_t binding_index);
+    bool Bind(const Buffer& buffer, int32_t binding_index = -1);
 
     /**
      * Binds an image to the graphics pipeline.

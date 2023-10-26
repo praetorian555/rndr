@@ -154,7 +154,7 @@ void Run()
 
     graphics_context.Bind(swap_chain);
     graphics_context.Bind(solid_pipeline);
-    graphics_context.BindUniform(per_frame_buffer, 0);
+    graphics_context.Bind(per_frame_buffer, 0);
     while (!window.IsClosed())
     {
         RNDR_TRACE_SCOPED(Main_loop);
