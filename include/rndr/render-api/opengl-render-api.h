@@ -121,7 +121,7 @@ public:
      * @param offset The offset into the buffer to update.
      * @return Returns true if the buffer was updated successfully, false otherwise.
      */
-    bool Update(Buffer& buffer, const ConstByteSpan& data, uint32_t offset = 0);
+    bool Update(const Buffer& buffer, const ConstByteSpan& data, int32_t offset = 0);
 
     /**
      * Reads the contents of a buffer.

@@ -487,13 +487,32 @@ bool Rndr::GraphicsContext::DrawIndices(PrimitiveTopology topology, int32_t inde
     return true;
 }
 
-bool Rndr::GraphicsContext::Update(Buffer& buffer, const ConstByteSpan& data, uint32_t offset)
+bool Rndr::GraphicsContext::Update(const Buffer& buffer, const ConstByteSpan& data, int32_t offset)
 {
+    if (!buffer.IsValid())
+    {
+        RNDR_LOG_ERROR("Update of the buffer failed since the buffer is invalid!");
+        return false;
+    }
+
+    const BufferDesc desc = buffer.GetDesc();
+
+    if (offset < 0 || offset >= static_cast<int32_t>(desc.size))
+    {
+        RNDR_LOG_ERROR("Update of the buffer failed since the offset is invalid!");
+        return false;
+    }
+    if (data.empty() || offset + static_cast<int32_t>(data.size()) > static_cast<int32_t>(desc.size))
+    {
+        RNDR_LOG_ERROR("Update of the buffer failed since the data size is invalid!");
+        return false;
+    }
+
     const GLuint native_buffer = buffer.GetNativeBuffer();
     glNamedBufferSubData(native_buffer, offset, static_cast<GLsizeiptr>(data.size()), data.data());
     if (glGetError() != GL_NO_ERROR)
     {
-        RNDR_LOG_ERROR("Failed to update buffer!");
+        RNDR_LOG_ERROR("Failed to update buffer contents!");
         return false;
     }
     return true;

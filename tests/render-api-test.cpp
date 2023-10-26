@@ -794,3 +794,132 @@ TEST_CASE("Reading from GPU buffers", "[render-api]")
 
     Rndr::Destroy();
 }
+
+TEST_CASE("Update the GPU buffer contents", "[render-api]")
+{
+    constexpr int32_t k_buffer_size = 1024;
+    const Rndr::StackArray<uint8_t, k_buffer_size> data = {0xAB};
+
+    Rndr::Init();
+    const Rndr::Window hidden_window({.start_visible = false});
+    const Rndr::GraphicsContextDesc gc_desc{.window_handle = hidden_window.GetNativeWindowHandle()};
+    Rndr::GraphicsContext graphics_context(gc_desc);
+
+    SECTION("Update contents of the vertex buffer with default usage")
+    {
+        const Rndr::BufferDesc desc{.type = Rndr::BufferType::Vertex, .usage = Rndr::Usage::Default, .size = 1024};
+        const Rndr::Buffer buffer(graphics_context, desc);
+        REQUIRE(buffer.IsValid());
+
+        const bool result = graphics_context.Update(buffer, Rndr::ConstByteSpan(data));
+        REQUIRE(!result);
+    }
+    SECTION("Update contents of the vertex buffer with dynamic usage")
+    {
+        const Rndr::BufferDesc desc{.type = Rndr::BufferType::Vertex, .usage = Rndr::Usage::Dynamic, .size = 1024};
+        const Rndr::Buffer buffer(graphics_context, desc);
+        REQUIRE(buffer.IsValid());
+
+        const bool result = graphics_context.Update(buffer, Rndr::ConstByteSpan(data));
+        REQUIRE(result);
+
+    }
+    SECTION("Update contents of the vertex buffer with read back usage")
+    {
+        const Rndr::BufferDesc desc{.type = Rndr::BufferType::Vertex, .usage = Rndr::Usage::ReadBack, .size = 1024};
+        const Rndr::Buffer buffer(graphics_context, desc);
+        REQUIRE(buffer.IsValid());
+
+        const bool result = graphics_context.Update(buffer, Rndr::ConstByteSpan(data));
+        REQUIRE(!result);
+    }
+
+    SECTION("Update contents of the index buffer with default usage")
+    {
+        const Rndr::BufferDesc desc{.type = Rndr::BufferType::Index, .usage = Rndr::Usage::Default, .size = 1024};
+        const Rndr::Buffer buffer(graphics_context, desc);
+        REQUIRE(buffer.IsValid());
+
+        const bool result = graphics_context.Update(buffer, Rndr::ConstByteSpan(data));
+        REQUIRE(!result);
+    }
+    SECTION("Update contents of the index buffer with dynamic usage")
+    {
+        const Rndr::BufferDesc desc{.type = Rndr::BufferType::Index, .usage = Rndr::Usage::Dynamic, .size = 1024};
+        const Rndr::Buffer buffer(graphics_context, desc);
+        REQUIRE(buffer.IsValid());
+
+        const bool result = graphics_context.Update(buffer, Rndr::ConstByteSpan(data));
+        REQUIRE(result);
+
+    }
+    SECTION("Update contents of the index buffer with read back usage")
+    {
+        const Rndr::BufferDesc desc{.type = Rndr::BufferType::Index, .usage = Rndr::Usage::ReadBack, .size = 1024};
+        const Rndr::Buffer buffer(graphics_context, desc);
+        REQUIRE(buffer.IsValid());
+
+        const bool result = graphics_context.Update(buffer, Rndr::ConstByteSpan(data));
+        REQUIRE(!result);
+    }
+
+    SECTION("Update contents of the constant buffer with default usage")
+    {
+        const Rndr::BufferDesc desc{.type = Rndr::BufferType::Constant, .usage = Rndr::Usage::Default, .size = 1024};
+        const Rndr::Buffer buffer(graphics_context, desc);
+        REQUIRE(buffer.IsValid());
+
+        const bool result = graphics_context.Update(buffer, Rndr::ConstByteSpan(data));
+        REQUIRE(!result);
+    }
+    SECTION("Update contents of the constant buffer with dynamic usage")
+    {
+        const Rndr::BufferDesc desc{.type = Rndr::BufferType::Constant, .usage = Rndr::Usage::Dynamic, .size = 1024};
+        const Rndr::Buffer buffer(graphics_context, desc);
+        REQUIRE(buffer.IsValid());
+
+        const bool result = graphics_context.Update(buffer, Rndr::ConstByteSpan(data));
+        REQUIRE(result);
+
+    }
+    SECTION("Update contents of the constant buffer with read back usage")
+    {
+        const Rndr::BufferDesc desc{.type = Rndr::BufferType::Constant, .usage = Rndr::Usage::ReadBack, .size = 1024};
+        const Rndr::Buffer buffer(graphics_context, desc);
+        REQUIRE(buffer.IsValid());
+
+        const bool result = graphics_context.Update(buffer, Rndr::ConstByteSpan(data));
+        REQUIRE(!result);
+    }
+
+    SECTION("Update contents of the shader storage buffer with default usage")
+    {
+        const Rndr::BufferDesc desc{.type = Rndr::BufferType::ShaderStorage, .usage = Rndr::Usage::Default, .size = 1024};
+        const Rndr::Buffer buffer(graphics_context, desc);
+        REQUIRE(buffer.IsValid());
+
+        const bool result = graphics_context.Update(buffer, Rndr::ConstByteSpan(data));
+        REQUIRE(!result);
+    }
+    SECTION("Update contents of the shader storage buffer with dynamic usage")
+    {
+        const Rndr::BufferDesc desc{.type = Rndr::BufferType::ShaderStorage, .usage = Rndr::Usage::Dynamic, .size = 1024};
+        const Rndr::Buffer buffer(graphics_context, desc);
+        REQUIRE(buffer.IsValid());
+
+        const bool result = graphics_context.Update(buffer, Rndr::ConstByteSpan(data));
+        REQUIRE(result);
+
+    }
+    SECTION("Update contents of the shader storage buffer with read back usage")
+    {
+        const Rndr::BufferDesc desc{.type = Rndr::BufferType::ShaderStorage, .usage = Rndr::Usage::ReadBack, .size = 1024};
+        const Rndr::Buffer buffer(graphics_context, desc);
+        REQUIRE(buffer.IsValid());
+
+        const bool result = graphics_context.Update(buffer, Rndr::ConstByteSpan(data));
+        REQUIRE(!result);
+    }
+
+    Rndr::Destroy();
+}
