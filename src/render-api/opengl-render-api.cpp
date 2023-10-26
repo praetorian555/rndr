@@ -529,7 +529,7 @@ bool Rndr::GraphicsContext::Read(const Buffer& buffer, ByteSpan& out_data, int32
     const BufferDesc& desc = buffer.GetDesc();
     if (size == 0)
     {
-        size = static_cast<int32_t>(desc.size);
+        size = static_cast<int32_t>(desc.size) - offset;
     }
 
     if (offset < 0 || offset >= static_cast<int32_t>(desc.size))
