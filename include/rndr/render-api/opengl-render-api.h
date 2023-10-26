@@ -234,6 +234,7 @@ private:
 class Buffer
 {
 public:
+    Buffer() = default;
     Buffer(const GraphicsContext& graphics_context,
            const BufferDesc& desc,
            const ConstByteSpan& init_data = ConstByteSpan{});
