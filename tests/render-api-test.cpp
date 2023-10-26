@@ -514,3 +514,283 @@ TEST_CASE("Is pixel format high precision")
 }
 
 #endif
+
+TEST_CASE("Creating different types of buffers")
+{
+    Rndr::Init();
+    const Rndr::Window hidden_window({.start_visible = false});
+    const Rndr::GraphicsContextDesc gc_desc{.window_handle = hidden_window.GetNativeWindowHandle()};
+    const Rndr::GraphicsContext graphics_context(gc_desc);
+
+    SECTION("Create vertex buffer use for writing and rarely")
+    {
+        const Rndr::BufferDesc desc{.type = Rndr::BufferType::Vertex, .usage = Rndr::Usage::Default, .size = 1024};
+        const Rndr::Buffer vertex_buffer(graphics_context, desc);
+        REQUIRE(vertex_buffer.IsValid());
+    }
+    SECTION("Create vertex buffer used for writing often")
+    {
+        const Rndr::BufferDesc desc{.type = Rndr::BufferType::Vertex, .usage = Rndr::Usage::Dynamic, .size = 1024};
+        const Rndr::Buffer vertex_buffer(graphics_context, desc);
+        REQUIRE(vertex_buffer.IsValid());
+    }
+    SECTION("Create vertex buffer used for reading")
+    {
+        const Rndr::BufferDesc desc{.type = Rndr::BufferType::Vertex, .usage = Rndr::Usage::ReadBack, .size = 1024};
+        const Rndr::Buffer vertex_buffer(graphics_context, desc);
+        REQUIRE(vertex_buffer.IsValid());
+    }
+    SECTION("Create index buffer used for rare writes only")
+    {
+        const Rndr::BufferDesc desc{.type = Rndr::BufferType::Index, .usage = Rndr::Usage::Default, .size = 1024};
+        const Rndr::Buffer index_buffer(graphics_context, desc);
+        REQUIRE(index_buffer.IsValid());
+    }
+    SECTION("Create index buffer used for writing often")
+    {
+        const Rndr::BufferDesc desc{.type = Rndr::BufferType::Index, .usage = Rndr::Usage::Dynamic, .size = 1024};
+        const Rndr::Buffer index_buffer(graphics_context, desc);
+        REQUIRE(index_buffer.IsValid());
+    }
+    SECTION("Create index buffer used for reading")
+    {
+        const Rndr::BufferDesc desc{.type = Rndr::BufferType::Index, .usage = Rndr::Usage::ReadBack, .size = 1024};
+        const Rndr::Buffer index_buffer(graphics_context, desc);
+        REQUIRE(index_buffer.IsValid());
+    }
+    SECTION("Create constant buffer used for rare writes only")
+    {
+        const Rndr::BufferDesc desc{.type = Rndr::BufferType::Constant, .usage = Rndr::Usage::Default, .size = 1024};
+        const Rndr::Buffer constant_buffer(graphics_context, desc);
+        REQUIRE(constant_buffer.IsValid());
+    }
+    SECTION("Create constant buffer used for writing often")
+    {
+        const Rndr::BufferDesc desc{.type = Rndr::BufferType::Constant, .usage = Rndr::Usage::Dynamic, .size = 1024};
+        const Rndr::Buffer constant_buffer(graphics_context, desc);
+        REQUIRE(constant_buffer.IsValid());
+    }
+    SECTION("Create constant buffer used for reading")
+    {
+        const Rndr::BufferDesc desc{.type = Rndr::BufferType::Constant, .usage = Rndr::Usage::ReadBack, .size = 1024};
+        const Rndr::Buffer constant_buffer(graphics_context, desc);
+        REQUIRE(constant_buffer.IsValid());
+    }
+    SECTION("Create shader storage buffer used for rare writes only")
+    {
+        const Rndr::BufferDesc desc{.type = Rndr::BufferType::ShaderStorage, .usage = Rndr::Usage::Default, .size = 1024};
+        const Rndr::Buffer ss_buffer(graphics_context, desc);
+        REQUIRE(ss_buffer.IsValid());
+    }
+    SECTION("Create shader storage buffer used for writing often")
+    {
+        const Rndr::BufferDesc desc{.type = Rndr::BufferType::ShaderStorage, .usage = Rndr::Usage::Dynamic, .size = 1024};
+        const Rndr::Buffer ss_buffer(graphics_context, desc);
+        REQUIRE(ss_buffer.IsValid());
+    }
+    SECTION("Create shader storage buffer used for reading")
+    {
+        const Rndr::BufferDesc desc{.type = Rndr::BufferType::ShaderStorage, .usage = Rndr::Usage::ReadBack, .size = 1024};
+        const Rndr::Buffer ss_buffer(graphics_context, desc);
+        REQUIRE(ss_buffer.IsValid());
+    }
+    Rndr::Destroy();
+}
+
+TEST_CASE("Reading from GPU buffers")
+{
+    constexpr int32_t k_buffer_size = 1024;
+    const Rndr::StackArray<uint8_t, k_buffer_size> data = {0xAB};
+
+    Rndr::Init();
+    const Rndr::Window hidden_window({.start_visible = false});
+    const Rndr::GraphicsContextDesc gc_desc{.window_handle = hidden_window.GetNativeWindowHandle()};
+    const Rndr::GraphicsContext graphics_context(gc_desc);
+
+    SECTION("Reading from write only vertex buffer")
+    {
+        const Rndr::BufferDesc desc{.type = Rndr::BufferType::Vertex, .usage = Rndr::Usage::Default, .size = 1024};
+        const Rndr::Buffer vertex_buffer(graphics_context, desc, Rndr::ConstByteSpan(data));
+        REQUIRE(vertex_buffer.IsValid());
+
+        Rndr::StackArray<uint8_t, k_buffer_size> read_data_storage = {0};
+        Rndr::ByteSpan read_data{read_data_storage};
+        const bool result = graphics_context.Read(vertex_buffer, read_data);
+        REQUIRE(!result);
+    }
+    SECTION("Reading from dynamic vertex buffer")
+    {
+        const Rndr::BufferDesc desc{.type = Rndr::BufferType::Vertex, .usage = Rndr::Usage::Dynamic, .size = 1024};
+        const Rndr::Buffer vertex_buffer(graphics_context, desc, Rndr::ConstByteSpan(data));
+        REQUIRE(vertex_buffer.IsValid());
+
+        Rndr::StackArray<uint8_t, k_buffer_size> read_data_storage = {0};
+        Rndr::ByteSpan read_data{read_data_storage};
+        const bool result = graphics_context.Read(vertex_buffer, read_data);
+        REQUIRE(!result);
+    }
+    SECTION("Reading from read back vertex buffer")
+    {
+        const Rndr::BufferDesc desc{.type = Rndr::BufferType::Vertex, .usage = Rndr::Usage::ReadBack, .size = 1024};
+        const Rndr::Buffer vertex_buffer(graphics_context, desc, Rndr::ConstByteSpan(data));
+        REQUIRE(vertex_buffer.IsValid());
+
+        Rndr::StackArray<uint8_t, k_buffer_size> read_data_storage = {0};
+        Rndr::ByteSpan read_data{read_data_storage};
+        const bool result = graphics_context.Read(vertex_buffer, read_data);
+        REQUIRE(result);
+        for (int i = 0; i < k_buffer_size; ++i)
+        {
+            REQUIRE(read_data_storage[i] == data[i]);
+        }
+    }
+
+    SECTION("Reading from write only index buffer")
+    {
+        const Rndr::BufferDesc desc{.type = Rndr::BufferType::Index, .usage = Rndr::Usage::Default, .size = 1024};
+        const Rndr::Buffer index_buffer(graphics_context, desc, Rndr::ConstByteSpan(data));
+        REQUIRE(index_buffer.IsValid());
+
+        Rndr::StackArray<uint8_t, k_buffer_size> read_data_storage = {0};
+        Rndr::ByteSpan read_data{read_data_storage};
+        const bool result = graphics_context.Read(index_buffer, read_data);
+        REQUIRE(!result);
+    }
+    SECTION("Reading from dynamic index buffer")
+    {
+        const Rndr::BufferDesc desc{.type = Rndr::BufferType::Index, .usage = Rndr::Usage::Dynamic, .size = 1024};
+        const Rndr::Buffer index_buffer(graphics_context, desc, Rndr::ConstByteSpan(data));
+        REQUIRE(index_buffer.IsValid());
+
+        Rndr::StackArray<uint8_t, k_buffer_size> read_data_storage = {0};
+        Rndr::ByteSpan read_data{read_data_storage};
+        const bool result = graphics_context.Read(index_buffer, read_data);
+        REQUIRE(!result);
+    }
+    SECTION("Reading from read back index buffer")
+    {
+        const Rndr::BufferDesc desc{.type = Rndr::BufferType::Index, .usage = Rndr::Usage::ReadBack, .size = 1024};
+        const Rndr::Buffer index_buffer(graphics_context, desc, Rndr::ConstByteSpan(data));
+        REQUIRE(index_buffer.IsValid());
+
+        Rndr::StackArray<uint8_t, k_buffer_size> read_data_storage = {0};
+        Rndr::ByteSpan read_data{read_data_storage};
+        const bool result = graphics_context.Read(index_buffer, read_data);
+        REQUIRE(result);
+        for (int i = 0; i < k_buffer_size; ++i)
+        {
+            REQUIRE(read_data_storage[i] == data[i]);
+        }
+    }
+
+    SECTION("Reading from write only constant buffer")
+    {
+        const Rndr::BufferDesc desc{.type = Rndr::BufferType::Constant, .usage = Rndr::Usage::Default, .size = 1024};
+        const Rndr::Buffer const_buffer(graphics_context, desc, Rndr::ConstByteSpan(data));
+        REQUIRE(const_buffer.IsValid());
+
+        Rndr::StackArray<uint8_t, k_buffer_size> read_data_storage = {0};
+        Rndr::ByteSpan read_data{read_data_storage};
+        const bool result = graphics_context.Read(const_buffer, read_data);
+        REQUIRE(!result);
+    }
+    SECTION("Reading from dynamic constant buffer")
+    {
+        const Rndr::BufferDesc desc{.type = Rndr::BufferType::Constant, .usage = Rndr::Usage::Dynamic, .size = 1024};
+        const Rndr::Buffer const_buffer(graphics_context, desc, Rndr::ConstByteSpan(data));
+        REQUIRE(const_buffer.IsValid());
+
+        Rndr::StackArray<uint8_t, k_buffer_size> read_data_storage = {0};
+        Rndr::ByteSpan read_data{read_data_storage};
+        const bool result = graphics_context.Read(const_buffer, read_data);
+        REQUIRE(!result);
+    }
+    SECTION("Reading from read back constant buffer")
+    {
+        const Rndr::BufferDesc desc{.type = Rndr::BufferType::Constant, .usage = Rndr::Usage::ReadBack, .size = 1024};
+        const Rndr::Buffer const_buffer(graphics_context, desc, Rndr::ConstByteSpan(data));
+        REQUIRE(const_buffer.IsValid());
+
+        Rndr::StackArray<uint8_t, k_buffer_size> read_data_storage = {0};
+        Rndr::ByteSpan read_data{read_data_storage};
+        const bool result = graphics_context.Read(const_buffer, read_data);
+        REQUIRE(result);
+        for (int i = 0; i < k_buffer_size; ++i)
+        {
+            REQUIRE(read_data_storage[i] == data[i]);
+        }
+    }
+
+    SECTION("Reading from write only shader store buffer")
+    {
+        const Rndr::BufferDesc desc{.type = Rndr::BufferType::ShaderStorage, .usage = Rndr::Usage::Default, .size = 1024};
+        const Rndr::Buffer ss_buffer(graphics_context, desc, Rndr::ConstByteSpan(data));
+        REQUIRE(ss_buffer.IsValid());
+
+        Rndr::StackArray<uint8_t, k_buffer_size> read_data_storage = {0};
+        Rndr::ByteSpan read_data{read_data_storage};
+        const bool result = graphics_context.Read(ss_buffer, read_data);
+        REQUIRE(!result);
+    }
+    SECTION("Reading from dynamic shader store buffer")
+    {
+        const Rndr::BufferDesc desc{.type = Rndr::BufferType::ShaderStorage, .usage = Rndr::Usage::Dynamic, .size = 1024};
+        const Rndr::Buffer ss_buffer(graphics_context, desc, Rndr::ConstByteSpan(data));
+        REQUIRE(ss_buffer.IsValid());
+
+        Rndr::StackArray<uint8_t, k_buffer_size> read_data_storage = {0};
+        Rndr::ByteSpan read_data{read_data_storage};
+        const bool result = graphics_context.Read(ss_buffer, read_data);
+        REQUIRE(!result);
+    }
+    SECTION("Reading from read back shader store buffer")
+    {
+        const Rndr::BufferDesc desc{.type = Rndr::BufferType::ShaderStorage, .usage = Rndr::Usage::ReadBack, .size = 1024};
+        const Rndr::Buffer ss_buffer(graphics_context, desc, Rndr::ConstByteSpan(data));
+        REQUIRE(ss_buffer.IsValid());
+
+        Rndr::StackArray<uint8_t, k_buffer_size> read_data_storage = {0};
+        Rndr::ByteSpan read_data{read_data_storage};
+        const bool result = graphics_context.Read(ss_buffer, read_data);
+        REQUIRE(result);
+        for (int i = 0; i < k_buffer_size; ++i)
+        {
+            REQUIRE(read_data_storage[i] == data[i]);
+        }
+    }
+
+    SECTION("Read from a buffer with invalid offset or size")
+    {
+        const Rndr::BufferDesc desc{.type = Rndr::BufferType::ShaderStorage, .usage = Rndr::Usage::ReadBack, .size = 1024};
+        const Rndr::Buffer ss_buffer(graphics_context, desc, Rndr::ConstByteSpan(data));
+        REQUIRE(ss_buffer.IsValid());
+
+        SECTION("Invalid offset")
+        {
+            Rndr::StackArray<uint8_t, k_buffer_size> read_data_storage = {0};
+            Rndr::ByteSpan read_data{read_data_storage};
+            REQUIRE(!graphics_context.Read(ss_buffer, read_data, -1, 512));
+            REQUIRE(!graphics_context.Read(ss_buffer, read_data, 1024, 512));
+            REQUIRE(!graphics_context.Read(ss_buffer, read_data, 1050, 512));
+        }
+        SECTION("Invalid size")
+        {
+            Rndr::StackArray<uint8_t, k_buffer_size> read_data_storage = {0};
+            Rndr::ByteSpan read_data{read_data_storage};
+            REQUIRE(!graphics_context.Read(ss_buffer, read_data, 0, -1));
+            REQUIRE(!graphics_context.Read(ss_buffer, read_data, 0, 1025));
+            REQUIRE(graphics_context.Read(ss_buffer, read_data, 0, 1024));
+        }
+        SECTION("Invalid combo of offset and size")
+        {
+            Rndr::StackArray<uint8_t, k_buffer_size> read_data_storage = {0};
+            Rndr::ByteSpan read_data{read_data_storage};
+            REQUIRE(graphics_context.Read(ss_buffer, read_data, 0, 1024));
+            REQUIRE(!graphics_context.Read(ss_buffer, read_data, 0, 1025));
+            REQUIRE(!graphics_context.Read(ss_buffer, read_data, 512, 1025));
+            REQUIRE(graphics_context.Read(ss_buffer, read_data, 1023, 1));
+        }
+    }
+
+    Rndr::Destroy();
+}

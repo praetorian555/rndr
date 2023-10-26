@@ -497,6 +497,68 @@ bool Rndr::GraphicsContext::Update(Buffer& buffer, const ConstByteSpan& data, ui
     return true;
 }
 
+bool Rndr::GraphicsContext::Read(const Buffer& buffer, ByteSpan& out_data, int32_t offset, int32_t size) const
+{
+    if (!buffer.IsValid())
+    {
+        RNDR_LOG_ERROR("Read of the buffer failed since the buffer is invalid!");
+        return false;
+    }
+
+    const BufferDesc& desc = buffer.GetDesc();
+    if (size == 0)
+    {
+        size = static_cast<int32_t>(desc.size);
+    }
+
+    if (offset < 0 || offset >= static_cast<int32_t>(desc.size))
+    {
+        RNDR_LOG_ERROR("Read of the buffer failed since the offset is invalid!");
+        return false;
+    }
+    if (size <= 0 || offset + size > static_cast<int32_t>(desc.size))
+    {
+        RNDR_LOG_ERROR("Read of the buffer failed since the size is invalid!");
+        return false;
+    }
+
+    const GLuint native_buffer = buffer.GetNativeBuffer();
+    const GLenum target = FromBufferTypeToOpenGL(desc.type);
+
+    constexpr int32_t k_binding_index = 0;  // Doesn't matter where we bind it, only used in this function
+    if (target == GL_SHADER_STORAGE_BUFFER || target == GL_UNIFORM_BUFFER)
+    {
+        glBindBufferRange(target, k_binding_index, native_buffer, desc.offset, desc.size);
+    }
+    else
+    {
+        glBindBuffer(target, native_buffer);
+    }
+    if (glGetError() != GL_NO_ERROR)
+    {
+        RNDR_LOG_ERROR("Failed to bind buffer for read");
+        return false;
+    }
+
+    uint8_t* gpu_data = static_cast<uint8_t*>(glMapNamedBufferRange(native_buffer, desc.offset, desc.size, GL_MAP_READ_BIT));
+    if (glGetError() != GL_NO_ERROR || gpu_data == nullptr)
+    {
+        RNDR_LOG_ERROR("Failed to map buffer for read");
+        return false;
+    }
+
+    memcpy(out_data.data(), gpu_data + offset, size);
+
+    glUnmapNamedBuffer(native_buffer);
+    if (glGetError() != GL_NO_ERROR)
+    {
+        RNDR_LOG_ERROR("Failed to unmap buffer for read");
+        return false;
+    }
+
+    return true;
+}
+
 Rndr::Bitmap Rndr::GraphicsContext::ReadSwapChain(const SwapChain& swap_chain)
 {
     Bitmap invalid_bitmap{-1, -1, -1, PixelFormat::R8G8B8_UNORM_SRGB};

@@ -124,6 +124,16 @@ public:
     bool Update(Buffer& buffer, const ConstByteSpan& data, uint32_t offset = 0);
 
     /**
+     * Reads the contents of a buffer.
+     * @param buffer The buffer to read.
+     * @param out_data Where to store read data.
+     * @param offset From which byte to start reading. Default is 0. Offset should be between 0 and buffer size.
+     * @param size How many bytes to read. If 0, reads the whole buffer. Default is 0. Size should be between 0 and buffer size.
+     * @return
+     */
+    bool Read(const Buffer& buffer, ByteSpan& out_data, int32_t offset = 0, int32_t size = 0) const;
+
+    /**
      * Reads the contents of a swap chain color image.
      * @param swap_chain The swap chain to read.
      * @return Returns the image data.
