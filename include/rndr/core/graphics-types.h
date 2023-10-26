@@ -143,16 +143,13 @@ enum class ImageAddressMode
  */
 enum class Usage
 {
-    /**
-     * Use this when you need to update the resource from the CPU side sparingly and mostly it is
-     * only processed or used by GPU.
-     */
+    /**  Use this when you don't need to update the resource after creation. Does not allow reading. */
     Default = 0,
 
-    /** Used when we need to update resource every frame, such as constant buffers. */
+    /** Used when we need to update resource frequently, such as constant buffers that store a view matrix. Does not allow reading. */
     Dynamic,
 
-    /** Used when we need to move data from the GPU to the CPU side, for example after rendering. */
+    /** Used when we need to move data from the GPU to the CPU side. These buffers can only be written to on creation. */
     ReadBack,
 
     /** Represents number of elements in the enum. */
