@@ -14,11 +14,8 @@ void Run();
 
 /**
  * In this example you will learn how to:
- *     1. Load a mesh from a file using Assimp.
- *     2. Render a mesh using just vertices, with no index buffers.
- *     3. Update uniform buffers per frame.
- *     4. Render wireframes.
- *     5. Use math transformations.
+ *     1. Load a mesh and an animation from a file.
+ *     2. Render a mesh with applied animation.
  */
 int main()
 {
