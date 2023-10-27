@@ -167,7 +167,18 @@ private:
 class SwapChain
 {
 public:
+    /**
+     * Default constructor. Creates an invalid swap chain.
+     */
+    SwapChain() = default;
+
+    /**
+     * Creates a new swap chain.
+     * @param graphics_context The graphics context to create the swap chain with.
+     * @param desc The description of the swap chain to create.
+     */
     SwapChain(const GraphicsContext& graphics_context, const SwapChainDesc& desc);
+
     ~SwapChain() = default;
     SwapChain(const SwapChain&) = delete;
     SwapChain& operator=(const SwapChain&) = delete;
@@ -191,7 +202,18 @@ private:
 class Shader
 {
 public:
+    /**
+     * Default constructor. Creates an invalid shader.
+     */
+    Shader() = default;
+
+    /**
+     * Creates a new shader.
+     * @param graphics_context The graphics context to create the shader with.
+     * @param desc The description of the shader to create.
+     */
     Shader(const GraphicsContext& graphics_context, const ShaderDesc& desc);
+
     ~Shader();
     Shader(const Shader&) = delete;
     Shader& operator=(const Shader&) = delete;
@@ -217,7 +239,18 @@ private:
 class Pipeline
 {
 public:
+    /**
+     * Default constructor. Creates an invalid pipeline.
+     */
+    Pipeline() = default;
+
+    /**
+     * Creates a new pipeline.
+     * @param graphics_context The graphics context to create the pipeline with.
+     * @param desc The description of the pipeline to create.
+     */
     Pipeline(const GraphicsContext& graphics_context, const PipelineDesc& desc);
+
     ~Pipeline();
     Pipeline(const Pipeline&) = delete;
     Pipeline& operator=(const Pipeline&) = delete;
@@ -246,10 +279,21 @@ private:
 class Buffer
 {
 public:
+    /**
+     * Default constructor. Creates an invalid buffer.
+     */
     Buffer() = default;
+
+    /**
+     * Create a new buffer.
+     * @param graphics_context The graphics context to create the buffer with.
+     * @param desc The description of the buffer to create.
+     * @param init_data The initial data to fill the buffer with. If empty, the buffer will be filled with zeros. Default is empty.
+     */
     Buffer(const GraphicsContext& graphics_context,
            const BufferDesc& desc,
            const ConstByteSpan& init_data = ConstByteSpan{});
+
     ~Buffer();
     Buffer(const Buffer&) = delete;
     Buffer& operator=(const Buffer&) = delete;
@@ -274,6 +318,11 @@ private:
 class Image
 {
 public:
+    /**
+     * Default constructor. Creates an invalid image.
+     */
+    Image() = default;
+
     /**
      * Creates a new image. Only creates Image2D so any other type will result in invalid image.
      * @param graphics_context The graphics context to create the image with.
