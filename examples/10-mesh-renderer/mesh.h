@@ -45,4 +45,14 @@ struct MeshData
     Rndr::Array<uint8_t> index_buffer_data;
 };
 
-bool ReadMeshData(const struct aiScene& ai_scene, MeshData& out_mesh_data);
+enum MeshAttributesToLoad
+{
+    k_load_positions = 1 << 0,
+    k_load_normals = 1 << 1,
+    k_load_uvs = 1 << 2,
+    k_load_tangents = 1 << 3,
+    k_load_bitangents = 1 << 4,
+    k_load_all = k_load_positions | k_load_normals | k_load_uvs | k_load_tangents | k_load_bitangents
+};
+
+bool ReadMeshData(MeshData& out_mesh_data, const struct aiScene& ai_scene, uint32_t attributes_to_load = k_load_positions);

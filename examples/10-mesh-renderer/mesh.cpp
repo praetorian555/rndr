@@ -11,7 +11,7 @@ namespace
 
 }
 
-bool ReadMeshData(const aiScene& ai_scene, MeshData& out_mesh_data)
+bool ReadMeshData(MeshData& out_mesh_data, const struct aiScene& ai_scene, uint32_t attributes_to_load)
 {
     if (!ai_scene.HasMeshes())
     {
@@ -23,11 +23,10 @@ bool ReadMeshData(const aiScene& ai_scene, MeshData& out_mesh_data)
     {
         aiMesh* ai_mesh = ai_scene.mMeshes[mesh_index];
         MeshDescription mesh_desc;
-        Rndr::Array<Rndr::Point3f> positions;
-        Rndr::Array<Rndr::Normal3f> normals;
-        Rndr::Array<Rndr::Point2f> uvs;
         Rndr::Array<uint32_t> indices;
-        uint32_t stream_count = 1; // Positions are always guaranteed to be present.
+
+        const bool has_normals = ai_mesh->HasNormals() && static_cast<bool>(attributes_to_load & k_load_normals);
+        const bool has_uvs = ai_mesh->HasTextureCoords(0) && static_cast<bool>(attributes_to_load & k_load_uvs);
 
         uint32_t stream_offset_base = 0;
         if (!out_mesh_data.vertex_buffer_data.empty())
@@ -37,49 +36,38 @@ bool ReadMeshData(const aiScene& ai_scene, MeshData& out_mesh_data)
 
         for (uint32_t i = 0; i < ai_mesh->mNumVertices; ++i)
         {
-            positions.emplace_back(ai_mesh->mVertices[i].x, ai_mesh->mVertices[i].y, ai_mesh->mVertices[i].z);
-        }
-        mesh_desc.stream_element_size[stream_count - 1] = sizeof(Rndr::Point3f);
-        mesh_desc.stream_offsets[stream_count - 1] = stream_offset_base;
-        out_mesh_data.vertex_buffer_data.insert(out_mesh_data.vertex_buffer_data.end(),
-                                                reinterpret_cast<uint8_t*>(positions.data()),
-                                                reinterpret_cast<uint8_t*>(positions.data() + positions.size()));
-        stream_offset_base += static_cast<uint32_t>(positions.size() * sizeof(Rndr::Point3f));
+            Rndr::Point3f position(ai_mesh->mVertices[i].x, ai_mesh->mVertices[i].y, ai_mesh->mVertices[i].z);
+            out_mesh_data.vertex_buffer_data.insert(out_mesh_data.vertex_buffer_data.end(), reinterpret_cast<uint8_t*>(position.data),
+                                                    reinterpret_cast<uint8_t*>(position.data + sizeof(position)));
+            stream_offset_base += sizeof(position);
 
-        if (ai_mesh->HasNormals())
-        {
-            for (uint32_t i = 0; i < ai_mesh->mNumVertices; ++i)
+            if (has_normals)
             {
-                normals.emplace_back(ai_mesh->mNormals[i].x, ai_mesh->mNormals[i].y, ai_mesh->mNormals[i].z);
+                Rndr::Normal3f normal(ai_mesh->mNormals[i].x, ai_mesh->mNormals[i].y, ai_mesh->mNormals[i].z);
+                out_mesh_data.vertex_buffer_data.insert(out_mesh_data.vertex_buffer_data.end(), reinterpret_cast<uint8_t*>(normal.data),
+                                                        reinterpret_cast<uint8_t*>(normal.data + sizeof(normal)));
+                stream_offset_base += sizeof(normal);
             }
-            ++stream_count;
-            mesh_desc.stream_element_size[stream_count - 1] = sizeof(Rndr::Normal3f);
-            mesh_desc.stream_offsets[stream_count - 1] = stream_offset_base;
-            out_mesh_data.vertex_buffer_data.insert(out_mesh_data.vertex_buffer_data.end(),
-                                                    reinterpret_cast<uint8_t*>(normals.data()),
-                                                    reinterpret_cast<uint8_t*>(normals.data() + normals.size()));
-            stream_offset_base += static_cast<uint32_t>(normals.size() * sizeof(Rndr::Normal3f));
-        }
-
-        if (ai_mesh->HasTextureCoords(0))
-        {
-            for (uint32_t i = 0; i < ai_mesh->mNumVertices; ++i)
+            if (has_uvs)
             {
-                uvs.emplace_back(ai_mesh->mTextureCoords[0][i].x, ai_mesh->mTextureCoords[0][i].y);
+                Rndr::Point2f uv(ai_mesh->mTextureCoords[0][i].x, ai_mesh->mTextureCoords[0][i].y);
+                out_mesh_data.vertex_buffer_data.insert(out_mesh_data.vertex_buffer_data.end(), reinterpret_cast<uint8_t*>(uv.data),
+                                                        reinterpret_cast<uint8_t*>(uv.data + sizeof(uv)));
+                stream_offset_base += sizeof(uv);
             }
-            ++stream_count;
-            mesh_desc.stream_element_size[stream_count - 1] = sizeof(Rndr::Point2f);
-            mesh_desc.stream_offsets[stream_count - 1] = stream_offset_base;
-            out_mesh_data.vertex_buffer_data.insert(out_mesh_data.vertex_buffer_data.end(),
-                                                    reinterpret_cast<uint8_t*>(uvs.data()),
-                                                    reinterpret_cast<uint8_t*>(uvs.data() + uvs.size()));
-            stream_offset_base += static_cast<uint32_t>(uvs.size() * sizeof(Rndr::Point2f));
         }
+        mesh_desc.stream_element_size[0] = sizeof(Rndr::Point3f);
+        if (has_normals)
+        {
+            mesh_desc.stream_element_size[0] += sizeof(Rndr::Normal3f);
+        }
+        if (has_uvs)
+        {
+            mesh_desc.stream_element_size[0] += sizeof(Rndr::Point2f);
+        }
+        mesh_desc.stream_offsets[1] = stream_offset_base;
 
-        // Once we are done with placing streams, we have to add the end offset of the last stream.
-        mesh_desc.stream_offsets[stream_count] = stream_offset_base;
-
-        mesh_desc.stream_count = stream_count;
+        mesh_desc.stream_count = 1;
         mesh_desc.vertex_count = ai_mesh->mNumVertices;
 
         uint32_t lod_offset_base = 0;
@@ -100,8 +88,7 @@ bool ReadMeshData(const aiScene& ai_scene, MeshData& out_mesh_data)
         uint32_t lod_count = 0;
 
         mesh_desc.lod_offsets[lod_count] = lod_offset_base;
-        out_mesh_data.index_buffer_data.insert(out_mesh_data.index_buffer_data.end(),
-                                               reinterpret_cast<uint8_t*>(indices.data()),
+        out_mesh_data.index_buffer_data.insert(out_mesh_data.index_buffer_data.end(), reinterpret_cast<uint8_t*>(indices.data()),
                                                reinterpret_cast<uint8_t*>(indices.data() + indices.size()));
         lod_offset_base += static_cast<uint32_t>(indices.size() * sizeof(int32_t));
         lod_count++;
@@ -114,7 +101,7 @@ bool ReadMeshData(const aiScene& ai_scene, MeshData& out_mesh_data)
         mesh_desc.m_lod_count = lod_count;
 
         // Calculates total size in bytes of the mesh vertex buffer and index buffer.
-        mesh_desc.mesh_size = mesh_desc.stream_offsets[stream_count] + mesh_desc.lod_offsets[lod_count];
+        mesh_desc.mesh_size = mesh_desc.stream_offsets[1] + mesh_desc.lod_offsets[lod_count];
 
         // TODO: Add material info
 
