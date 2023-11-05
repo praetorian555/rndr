@@ -22,7 +22,7 @@ public:
 
     uint32_t stream_count = 0; // Number of streams in the vertex buffer.
     uint32_t vertex_count = 0; // Total number of vertices stored in the vertex buffer.
-    Rndr::StackArray<uint32_t, k_max_streams> stream_offsets; // Sizes of the streams in the vertex buffer.
+    Rndr::StackArray<uint32_t, k_max_streams> stream_offsets; // Positions of the streams in the vertex buffer.
     Rndr::StackArray<uint32_t, k_max_streams> stream_element_size; // Sizes of the elements in the streams in the vertex buffer.
 
     uint32_t m_lod_count = 0; // Number of LODs in the index buffer.
@@ -30,7 +30,7 @@ public:
 
     RNDR_FORCE_INLINE uint32_t GetLodIndicesCount(uint32_t lod) const
     {
-        RNDR_ASSERT(lod < m_lod_count - 1);
+        RNDR_ASSERT(lod < m_lod_count);
         return lod_offsets[lod + 1] - lod_offsets[lod];
     }
 };

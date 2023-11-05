@@ -15,7 +15,13 @@ Rndr::FlyCamera::FlyCamera(Window* window, InputContext* input_context, const Fl
     using IT = Rndr::InputTrigger;
 
     m_window_resize_handle = m_window->on_resize.Bind([this](int width, int height) { this->SetScreenSize(width, height); });
-    m_window->SetCursorMode(CursorMode::Infinite);
+
+    Array<InputBinding> activate_bindings;
+    activate_bindings.push_back(InputBinding{.primitive = IP::Mouse_RightButton, .trigger = IT::ButtonPressed});
+    activate_bindings.push_back(InputBinding{.primitive = IP::Mouse_RightButton, .trigger = IT::ButtonReleased});
+    m_input_context->AddAction(
+        InputAction("ActivateCamera"),
+        InputActionData{.callback = RNDR_BIND_INPUT_CALLBACK(this, FlyCamera::HandleActivate), .bindings = activate_bindings});
 
     Array<InputBinding> forward_bindings;
     forward_bindings.push_back(InputBinding{.primitive = IP::Keyboard_W, .trigger = IT::ButtonPressed, .modifier = -1});
@@ -59,11 +65,15 @@ Rndr::FlyCamera::FlyCamera(Window* window, InputContext* input_context, const Fl
 Rndr::FlyCamera::~FlyCamera()
 {
     m_window->on_resize.Unbind(m_window_resize_handle);
-    m_window->SetCursorMode(m_prev_cursor_mode);
 }
 
 void Rndr::FlyCamera::Update(float delta_seconds)
 {
+    if (!m_is_active)
+    {
+        return;
+    }
+
     m_direction_vector = Vector3f{0, 0, 1};  // Left-handed
     Rotatorf rotation = GetRotation();
     rotation += delta_seconds * m_desc.rotation_speed * m_delta_rotation;
@@ -80,6 +90,27 @@ void Rndr::FlyCamera::Update(float delta_seconds)
     SetPositionAndRotation(position, rotation);
 
     m_delta_rotation = Rotatorf::Zero();
+}
+
+void Rndr::FlyCamera::HandleActivate(InputPrimitive primitive, InputTrigger trigger, float value)
+{
+    RNDR_UNUSED(primitive);
+    RNDR_UNUSED(value);
+    using IT = Rndr::InputTrigger;
+    const bool new_is_active = trigger == IT::ButtonPressed;
+    if (new_is_active != m_is_active)
+    {
+        if (new_is_active)
+        {
+            m_prev_cursor_mode = m_window->GetCursorMode();
+            m_window->SetCursorMode(CursorMode::Infinite);
+        }
+        else
+        {
+            m_window->SetCursorMode(m_prev_cursor_mode);
+        }
+        m_is_active = new_is_active;
+    }
 }
 
 void Rndr::FlyCamera::HandleLookVert(Rndr::InputPrimitive primitive, Rndr::InputTrigger trigger, float axis_value)

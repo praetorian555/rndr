@@ -33,26 +33,27 @@ bool ReadMeshData(MeshData& out_mesh_data, const struct aiScene& ai_scene, uint3
         {
             stream_offset_base = static_cast<uint32_t>(out_mesh_data.vertex_buffer_data.size());
         }
+        mesh_desc.stream_offsets[0] = stream_offset_base;
 
         for (uint32_t i = 0; i < ai_mesh->mNumVertices; ++i)
         {
             Rndr::Point3f position(ai_mesh->mVertices[i].x, ai_mesh->mVertices[i].y, ai_mesh->mVertices[i].z);
             out_mesh_data.vertex_buffer_data.insert(out_mesh_data.vertex_buffer_data.end(), reinterpret_cast<uint8_t*>(position.data),
-                                                    reinterpret_cast<uint8_t*>(position.data + sizeof(position)));
+                                                    reinterpret_cast<uint8_t*>(position.data) + sizeof(position));
             stream_offset_base += sizeof(position);
 
             if (has_normals)
             {
                 Rndr::Normal3f normal(ai_mesh->mNormals[i].x, ai_mesh->mNormals[i].y, ai_mesh->mNormals[i].z);
                 out_mesh_data.vertex_buffer_data.insert(out_mesh_data.vertex_buffer_data.end(), reinterpret_cast<uint8_t*>(normal.data),
-                                                        reinterpret_cast<uint8_t*>(normal.data + sizeof(normal)));
+                                                        reinterpret_cast<uint8_t*>(normal.data) + sizeof(normal));
                 stream_offset_base += sizeof(normal);
             }
             if (has_uvs)
             {
                 Rndr::Point2f uv(ai_mesh->mTextureCoords[0][i].x, ai_mesh->mTextureCoords[0][i].y);
                 out_mesh_data.vertex_buffer_data.insert(out_mesh_data.vertex_buffer_data.end(), reinterpret_cast<uint8_t*>(uv.data),
-                                                        reinterpret_cast<uint8_t*>(uv.data + sizeof(uv)));
+                                                        reinterpret_cast<uint8_t*>(uv.data) + sizeof(uv));
                 stream_offset_base += sizeof(uv);
             }
         }
@@ -89,7 +90,7 @@ bool ReadMeshData(MeshData& out_mesh_data, const struct aiScene& ai_scene, uint3
 
         mesh_desc.lod_offsets[lod_count] = lod_offset_base;
         out_mesh_data.index_buffer_data.insert(out_mesh_data.index_buffer_data.end(), reinterpret_cast<uint8_t*>(indices.data()),
-                                               reinterpret_cast<uint8_t*>(indices.data() + indices.size()));
+                                               reinterpret_cast<uint8_t*>(indices.data()) + indices.size() * sizeof(uint32_t));
         lod_offset_base += static_cast<uint32_t>(indices.size() * sizeof(int32_t));
         lod_count++;
 

@@ -775,6 +775,23 @@ struct PipelineDesc
     DepthStencilDesc depth_stencil;
 };
 
+struct DrawVerticesData
+{
+    uint32_t vertex_count;
+    uint32_t instance_count;
+    uint32_t first_vertex;
+    uint32_t base_instance;
+};
+
+struct DrawIndicesData
+{
+    uint32_t index_count;
+    uint32_t instance_count;
+    uint32_t first_index;
+    uint32_t base_vertex;
+    uint32_t base_instance;
+};
+
 // Helper functions
 
 /**

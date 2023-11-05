@@ -35,6 +35,7 @@ public:
 private:
     // Private methods
 
+    void HandleActivate(InputPrimitive primitive, InputTrigger trigger, float value);
     void HandleLookVert(InputPrimitive primitive, InputTrigger trigger, float axis_value);
     void HandleLookHorz(InputPrimitive primitive, InputTrigger trigger, float axis_value);
     void HandleMoveForward(InputPrimitive primitive, InputTrigger trigger, float value);
@@ -53,6 +54,8 @@ private:
     Vector3f m_right_vector = Vector3f::Zero();
     DelegateHandle m_window_resize_handle;
     CursorMode m_prev_cursor_mode;
+
+    bool m_is_active = false;
 };
 
 }  // namespace Rndr

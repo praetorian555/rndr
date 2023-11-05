@@ -5,6 +5,8 @@
 #include <assimp/scene.h>
 #include <assimp/version.h>
 
+#include "mesh.h"
+
 void Run();
 
 int main()
@@ -19,14 +21,13 @@ const char* const g_shader_code_vertex = R"(
 layout(std140, binding = 0) uniform PerFrameData
 {
 	uniform mat4 MVP;
-	uniform int isWireframe;
 };
 layout (location=0) in vec3 pos;
 layout (location=0) out vec3 color;
 void main()
 {
 	gl_Position = MVP * vec4(pos, 1.0);
-	color = isWireframe > 0 ? vec3(0.0f) : pos.xyz;
+    color = pos.xyz;
 }
 )";
 
@@ -43,71 +44,104 @@ void main()
 struct PerFrameData
 {
     Rndr::Matrix4x4f mvp;
-    int is_wire_frame;
 };
 
 class MeshRenderer : public Rndr::RendererBase
 {
+    struct DrawElementsIndirectCommand
+    {
+        uint32_t index_count;
+        uint32_t instance_count;
+        uint32_t first_index;
+        uint32_t base_vertex;
+        uint32_t base_instance;
+    };
+
 public:
     MeshRenderer(const Rndr::String& name, const Rndr::RendererBaseDesc& desc) : Rndr::RendererBase(name, desc)
     {
-        const Rndr::String file_path = ASSETS_DIR "duck.gltf";
-        const aiScene* scene = aiImportFile(file_path.c_str(), aiProcess_Triangulate);
+        constexpr uint32_t k_ai_process_flags = aiProcess_JoinIdenticalVertices | aiProcess_Triangulate | aiProcess_GenSmoothNormals |
+                                                aiProcess_LimitBoneWeights | aiProcess_SplitLargeMeshes | aiProcess_ImproveCacheLocality |
+                                                aiProcess_RemoveRedundantMaterials | aiProcess_FindDegenerates | aiProcess_FindInvalidData |
+                                                aiProcess_GenUVCoords;
+
+        const Rndr::String file_path = "C:/Users/Marko/Downloads/Bistro_v5_2/BistroExterior.fbx";
+        const aiScene* scene = aiImportFile(file_path.c_str(), k_ai_process_flags);
         if (scene == nullptr || !scene->HasMeshes())
         {
             RNDR_LOG_ERROR("Failed to load mesh from file with error: %s", aiGetErrorString());
             RNDR_ASSERT(false);
             return;
         }
-        RNDR_ASSERT(scene->HasMeshes());
-        const aiMesh* mesh = scene->mMeshes[0];
-        Rndr::Array<Rndr::Point3f> positions;
-        for (unsigned int i = 0; i != mesh->mNumFaces; i++)
+
+        const bool is_data_loaded = ReadMeshData(m_mesh_data, *scene, k_load_positions);
+        if (!is_data_loaded)
         {
-            const aiFace& face = mesh->mFaces[i];
-            Rndr::StackArray<size_t, 3> idx{face.mIndices[0], face.mIndices[1], face.mIndices[2]};
-            for (int j = 0; j != 3; j++)
-            {
-                const aiVector3D v = mesh->mVertices[idx[j]];
-                positions.emplace_back(Rndr::Point3f(v.x, v.y, v.z));  // NOLINT
-            }
+            RNDR_LOG_ERROR("Failed to load mesh data from file: %s", file_path.c_str());
+            RNDR_ASSERT(false);
+            return;
         }
         aiReleaseImport(scene);
-        m_vertex_count = static_cast<int32_t>(positions.size());
 
-        m_vertex_shader = RNDR_MAKE_SCOPED(Rndr::Shader, m_desc.graphics_context,
-                                           Rndr::ShaderDesc{.type = Rndr::ShaderType::Vertex, .source = g_shader_code_vertex});
-        RNDR_ASSERT(m_vertex_shader->IsValid());
-        m_pixel_shader = RNDR_MAKE_SCOPED(Rndr::Shader, m_desc.graphics_context,
-                                          Rndr::ShaderDesc{.type = Rndr::ShaderType::Fragment, .source = g_shader_code_fragment});
-        RNDR_ASSERT(m_pixel_shader->IsValid());
+        m_vertex_shader = Rndr::Shader(m_desc.graphics_context, {.type = Rndr::ShaderType::Vertex, .source = g_shader_code_vertex});
+        RNDR_ASSERT(m_vertex_shader.IsValid());
+        m_pixel_shader = Rndr::Shader(m_desc.graphics_context, {.type = Rndr::ShaderType::Fragment, .source = g_shader_code_fragment});
+        RNDR_ASSERT(m_pixel_shader.IsValid());
+
+        m_index_buffer = Rndr::Buffer(m_desc.graphics_context,
+                                      {.type = Rndr::BufferType::Index,
+                                       .usage = Rndr::Usage::Default,
+                                       .size = static_cast<uint32_t>(m_mesh_data.index_buffer_data.size()),
+                                       .stride = sizeof(uint32_t)},
+                                      Rndr::ToByteSpan(m_mesh_data.index_buffer_data));
+        RNDR_ASSERT(m_index_buffer.IsValid());
 
         constexpr size_t k_stride = sizeof(Rndr::Point3f);
-        m_vertex_buffer = RNDR_MAKE_SCOPED(Rndr::Buffer, m_desc.graphics_context,
-                                           {.type = Rndr::BufferType::Vertex,
-                                            .usage = Rndr::Usage::Default,
-                                            .size = static_cast<uint32_t>(k_stride * positions.size()),
-                                            .stride = k_stride},
-                                           Rndr::ToByteSpan(positions));
-        RNDR_ASSERT(m_vertex_buffer->IsValid());
+        m_vertex_buffer = Rndr::Buffer(m_desc.graphics_context,
+                                       {.type = Rndr::BufferType::Vertex,
+                                        .usage = Rndr::Usage::Default,
+                                        .size = static_cast<uint32_t>(m_mesh_data.vertex_buffer_data.size()),
+                                        .stride = k_stride},
+                                       Rndr::ToByteSpan(m_mesh_data.vertex_buffer_data));
+        RNDR_ASSERT(m_vertex_buffer.IsValid());
+
         Rndr::InputLayoutBuilder builder;
-        const Rndr::InputLayoutDesc input_layout_desc = builder.AddVertexBuffer(*m_vertex_buffer, 0, Rndr::DataRepetition::PerVertex)
+        const Rndr::InputLayoutDesc input_layout_desc = builder.AddVertexBuffer(m_vertex_buffer, 0, Rndr::DataRepetition::PerVertex)
                                                             .AppendElement(0, Rndr::PixelFormat::R32G32B32_FLOAT)
+                                                            .AddIndexBuffer(m_index_buffer)
                                                             .Build();
 
-        m_pipeline = RNDR_MAKE_SCOPED(Rndr::Pipeline, m_desc.graphics_context,
-                                      Rndr::PipelineDesc{.vertex_shader = m_vertex_shader.get(),
-                                                         .pixel_shader = m_pixel_shader.get(),
-                                                         .input_layout = input_layout_desc,
-                                                         .rasterizer = {.fill_mode = Rndr::FillMode::Solid},
-                                                         .depth_stencil = {.is_depth_enabled = true}});
-        RNDR_ASSERT(m_pipeline->IsValid());
+        m_pipeline = Rndr::Pipeline(m_desc.graphics_context, Rndr::PipelineDesc{.vertex_shader = &m_vertex_shader,
+                                                                                .pixel_shader = &m_pixel_shader,
+                                                                                .input_layout = input_layout_desc,
+                                                                                .rasterizer = {.fill_mode = Rndr::FillMode::Solid},
+                                                                                .depth_stencil = {.is_depth_enabled = true}});
+        RNDR_ASSERT(m_pipeline.IsValid());
 
         constexpr size_t k_per_frame_size = sizeof(PerFrameData);
-        m_per_frame_buffer = RNDR_MAKE_SCOPED(
-            Rndr::Buffer, m_desc.graphics_context,
+        m_per_frame_buffer = Rndr::Buffer(
+            m_desc.graphics_context,
             {.type = Rndr::BufferType::Constant, .usage = Rndr::Usage::Dynamic, .size = k_per_frame_size, .stride = k_per_frame_size});
-        RNDR_ASSERT(m_per_frame_buffer->IsValid());
+        RNDR_ASSERT(m_per_frame_buffer.IsValid());
+
+        Rndr::Array<Rndr::DrawIndicesData> draw_commands;
+        draw_commands.resize(m_mesh_data.meshes.size());
+        for (int i = 0; i < draw_commands.size(); i++)
+        {
+            const MeshDescription& mesh_desc = m_mesh_data.meshes[i];
+            draw_commands[i] = {.index_count = mesh_desc.GetLodIndicesCount(0),
+                                .instance_count = 1,
+                                .first_index = mesh_desc.lod_offsets[0],
+                                .base_vertex = mesh_desc.stream_offsets[0],
+                                .base_instance = 0};
+        }
+        const Rndr::Span<Rndr::DrawIndicesData> draw_commands_span(draw_commands);
+
+        m_command_list = Rndr::CommandList(m_desc.graphics_context);
+        m_command_list.Bind(*m_desc.swap_chain);
+        m_command_list.Bind(m_pipeline);
+        m_command_list.BindConstantBuffer(m_per_frame_buffer, 0);
+        m_command_list.DrawIndicesMulti(m_pipeline, Rndr::PrimitiveTopology::Triangle, draw_commands_span);
     }
 
     bool Render() override
@@ -115,21 +149,13 @@ public:
         RNDR_TRACE_SCOPED(Mesh rendering);
 
         // Rotate the mesh
-        const float angle = static_cast<float>(std::fmod(10 * Rndr::GetSystemTime(), 360.0));
-        const Rndr::Matrix4x4f t = Math::Translate(Rndr::Vector3f(0.0f, -0.5f, -1.5f)) *
-                                   Math::Rotate(angle, Rndr::Vector3f(0.0f, 1.0f, 0.0f)) * Math::RotateX(-90.0f);
+        const Rndr::Matrix4x4f t = Math::RotateX(-90.0f);
         Rndr::Matrix4x4f mvp = m_camera_transform * t;
         mvp = Math::Transpose(mvp);
-        PerFrameData per_frame_data = {.mvp = mvp, .is_wire_frame = 0};
-        m_desc.graphics_context->Update(*m_per_frame_buffer, Rndr::ToByteSpan(per_frame_data));
+        PerFrameData per_frame_data = {.mvp = mvp};
+        m_desc.graphics_context->Update(m_per_frame_buffer, Rndr::ToByteSpan(per_frame_data));
 
-        // Bind resources
-        m_desc.graphics_context->Bind(*m_desc.swap_chain);
-        m_desc.graphics_context->Bind(*m_pipeline);
-        m_desc.graphics_context->Bind(*m_per_frame_buffer, 0);
-
-        // Draw
-        m_desc.graphics_context->DrawVertices(Rndr::PrimitiveTopology::Triangle, m_vertex_count);
+        m_command_list.Submit();
 
         return true;
     }
@@ -137,13 +163,15 @@ public:
     void SetCameraTransform(const Rndr::Matrix4x4f& transform) { m_camera_transform = transform; }
 
 private:
-    Rndr::ScopePtr<Rndr::Shader> m_vertex_shader;
-    Rndr::ScopePtr<Rndr::Shader> m_pixel_shader;
-    Rndr::ScopePtr<Rndr::Buffer> m_vertex_buffer;
-    Rndr::ScopePtr<Rndr::Pipeline> m_pipeline;
-    Rndr::ScopePtr<Rndr::Buffer> m_per_frame_buffer;
+    Rndr::Shader m_vertex_shader;
+    Rndr::Shader m_pixel_shader;
+    Rndr::Buffer m_vertex_buffer;
+    Rndr::Buffer m_index_buffer;
+    Rndr::Pipeline m_pipeline;
+    Rndr::Buffer m_per_frame_buffer;
+    Rndr::CommandList m_command_list;
 
-    int32_t m_vertex_count = 0;
+    MeshData m_mesh_data;
     Rndr::Matrix4x4f m_camera_transform;
 };
 
@@ -173,16 +201,14 @@ void Run()
     const Rndr::ScopePtr<Rndr::RendererBase> present_renderer =
         RNDR_MAKE_SCOPED(Rndr::PresentRenderer, "Present the back buffer", renderer_desc);
     const Rndr::ScopePtr<MeshRenderer> mesh_renderer = RNDR_MAKE_SCOPED(MeshRenderer, "Render a mesh", renderer_desc);
-    const Rndr::ScopePtr<Rndr::LineRenderer> line_renderer = RNDR_MAKE_SCOPED(Rndr::LineRenderer, "Debug renderer", renderer_desc);
 
     Rndr::FlyCamera fly_camera(&window, &Rndr::InputSystem::GetCurrentContext(),
-                               {.rotation_speed = 200, .projection_desc = {.near = 0.1f, .far = 1000.0f}});
+                               {.start_position = Rndr::Point3f(0.0f, 10.0f, 100.0f), .rotation_speed = 200, .projection_desc = {.near = 0.1f, .far = 1000.0f}});
 
     Rndr::RendererManager renderer_manager;
     renderer_manager.AddRenderer(clear_renderer.get());
     renderer_manager.AddRenderer(mesh_renderer.get());
     renderer_manager.AddRenderer(present_renderer.get());
-    renderer_manager.AddRendererBefore(line_renderer.get(), "Present the back buffer");
 
     Rndr::FramesPerSecondCounter fps_counter(0.1f);
     float delta_seconds = 0.033f;
@@ -199,10 +225,6 @@ void Run()
 
         fly_camera.Update(delta_seconds);
         mesh_renderer->SetCameraTransform(fly_camera.FromWorldToNDC());
-
-        line_renderer->AddLine(Rndr::Point3f(-1.0f, -0.5f, -0.5f), Rndr::Point3f(1.0f, 0.5f, -0.5f),
-                               Rndr::Vector4f(1.0f, 0.0f, 0.0f, 1.0f));
-        line_renderer->SetCameraTransform(Math::Transpose(fly_camera.FromWorldToNDC()));
 
         renderer_manager.Render();
 

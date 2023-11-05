@@ -23,9 +23,11 @@
 #include <glad/glad_wgl.h>
 
 #include "render-api/opengl-helpers.h"
+#include "rndr/core/containers/scope-ptr.h"
 #include "rndr/core/containers/stack-array.h"
 #include "rndr/core/file.h"
 #include "rndr/render-api/opengl-render-api.h"
+#include "rndr/utility/cpu-tracer.h"
 
 namespace
 {
@@ -40,6 +42,7 @@ void APIENTRY DebugOutputCallback(GLenum source, GLenum type, unsigned int id, G
     switch (severity)
     {
         case GL_DEBUG_SEVERITY_HIGH:
+            //            RNDR_HALT("Fatal error in OpenGL!");
             RNDR_LOG_ERROR("[OpenGL] %s", message);
             break;
         case GL_DEBUG_SEVERITY_MEDIUM:
@@ -285,6 +288,8 @@ bool Rndr::GraphicsContext::Bind(const Rndr::SwapChain& swap_chain)
 
 bool Rndr::GraphicsContext::Bind(const Pipeline& pipeline)
 {
+    RNDR_TRACE_SCOPED(Bind Pipeline);
+
     const GLuint shader_program = pipeline.GetNativeShaderProgram();
     glUseProgram(shader_program);
     if (glGetError() != GL_NO_ERROR)
@@ -639,6 +644,8 @@ Rndr::Bitmap Rndr::GraphicsContext::ReadSwapChain(const SwapChain& swap_chain)
     return Bitmap{width, height, 1, PixelFormat::R8G8B8A8_UNORM_SRGB, data};
 }
 
+///////////////////////////////////////////////////////////////////////////////////////////////////
+
 Rndr::SwapChain::SwapChain(const Rndr::GraphicsContext& graphics_context, const Rndr::SwapChainDesc& desc) : m_desc(desc)
 {
     RNDR_UNUSED(graphics_context);
@@ -674,6 +681,8 @@ bool Rndr::SwapChain::SetVerticalSync(bool vertical_sync)
     return true;
 }
 
+///////////////////////////////////////////////////////////////////////////////////////////////////
+
 Rndr::Shader::Shader(const GraphicsContext& graphics_context, const ShaderDesc& desc) : m_desc(desc)
 {
     RNDR_UNUSED(graphics_context);
@@ -705,7 +714,7 @@ Rndr::Shader::~Shader()
     Destroy();
 }
 
-Rndr::Shader::Shader(Rndr::Shader&& other) noexcept : m_native_shader(other.m_native_shader)
+Rndr::Shader::Shader(Rndr::Shader&& other) noexcept : m_desc(std::move(other.m_desc)), m_native_shader(other.m_native_shader)
 {
     other.m_native_shader = k_invalid_opengl_object;
 }
@@ -715,6 +724,7 @@ Rndr::Shader& Rndr::Shader::operator=(Rndr::Shader&& other) noexcept
     if (this != &other)
     {
         Destroy();
+        m_desc = other.m_desc;
         m_native_shader = other.m_native_shader;
         other.m_native_shader = k_invalid_opengl_object;
     }
@@ -744,8 +754,12 @@ const GLuint Rndr::Shader::GetNativeShader() const
     return m_native_shader;
 }
 
+///////////////////////////////////////////////////////////////////////////////////////////////////
+
 Rndr::Pipeline::Pipeline(const GraphicsContext& graphics_context, const PipelineDesc& desc) : m_desc(desc)
 {
+    RNDR_TRACE_SCOPED(Create Pipeline);
+
     RNDR_UNUSED(graphics_context);
     m_native_shader_program = glCreateProgram();
     if (glGetError() != GL_NO_ERROR)
@@ -929,9 +943,11 @@ Rndr::Pipeline::~Pipeline()
     Destroy();
 }
 
-Rndr::Pipeline::Pipeline(Pipeline&& other) noexcept : m_native_shader_program(other.m_native_shader_program)
+Rndr::Pipeline::Pipeline(Pipeline&& other) noexcept
+    : m_desc(std::move(other.m_desc)), m_native_shader_program(other.m_native_shader_program), m_native_vertex_array(other.m_native_vertex_array)
 {
     other.m_native_shader_program = k_invalid_opengl_object;
+    other.m_native_vertex_array = k_invalid_opengl_object;
 }
 
 Rndr::Pipeline& Rndr::Pipeline::operator=(Pipeline&& other) noexcept
@@ -939,8 +955,11 @@ Rndr::Pipeline& Rndr::Pipeline::operator=(Pipeline&& other) noexcept
     if (this != &other)
     {
         Destroy();
+        m_desc = other.m_desc;
         m_native_shader_program = other.m_native_shader_program;
+        m_native_vertex_array = other.m_native_vertex_array;
         other.m_native_shader_program = k_invalid_opengl_object;
+        other.m_native_vertex_array = k_invalid_opengl_object;
     }
     return *this;
 }
@@ -961,7 +980,7 @@ void Rndr::Pipeline::Destroy()
 
 bool Rndr::Pipeline::IsValid() const
 {
-    return m_native_shader_program != k_invalid_opengl_object;
+    return m_native_shader_program != k_invalid_opengl_object && m_native_vertex_array != k_invalid_opengl_object;
 }
 
 const Rndr::PipelineDesc& Rndr::Pipeline::GetDesc() const
@@ -991,6 +1010,8 @@ uint32_t Rndr::Pipeline::GetIndexBufferElementSize() const
     const BufferDesc& index_buffer_desc = index_buffer.GetDesc();
     return index_buffer_desc.stride;
 }
+
+///////////////////////////////////////////////////////////////////////////////////////////////////
 
 Rndr::Buffer::Buffer(const GraphicsContext& graphics_context, const BufferDesc& desc, const ConstByteSpan& init_data) : m_desc(desc)
 {
@@ -1058,6 +1079,8 @@ GLuint Rndr::Buffer::GetNativeBuffer() const
 {
     return m_native_buffer;
 }
+
+///////////////////////////////////////////////////////////////////////////////////////////////////
 
 Rndr::Image::Image(const GraphicsContext& graphics_context, const ImageDesc& desc, const ConstByteSpan& init_data) : m_desc(desc)
 {
@@ -1195,6 +1218,120 @@ const Rndr::ImageDesc& Rndr::Image::GetDesc() const
 GLuint Rndr::Image::GetNativeTexture() const
 {
     return m_native_texture;
+}
+
+///////////////////////////////////////////////////////////////////////////////////////////////////
+
+struct CommandExecutor
+{
+    Rndr::Ref<Rndr::GraphicsContext> graphics_context;
+
+    void operator()(const Rndr::BindSwapChainCommand& command) const { graphics_context->Bind(command.swap_chain); }
+
+    void operator()(const Rndr::BindPipelineCommand& command) const { graphics_context->Bind(command.pipeline); }
+
+    void operator()(const Rndr::BindConstantBufferCommand& command) const
+    {
+        graphics_context->Bind(command.constant_buffer, command.binding_index);
+    }
+
+    void operator()(const Rndr::BindImageCommand& command) const { graphics_context->Bind(command.image, command.binding_index); }
+
+    void operator()(const Rndr::DrawVerticesCommand& command) const
+    {
+        graphics_context->DrawVertices(command.primitive_topology, command.vertex_count, command.instance_count, command.first_vertex);
+    }
+
+    void operator()(const Rndr::DrawIndicesCommand& command) const
+    {
+        graphics_context->DrawIndices(command.primitive_topology, command.index_count, command.instance_count, command.first_index);
+    }
+
+    void operator()(const Rndr::DrawVerticesMultiCommand& command) const
+    {
+        glBindBuffer(GL_DRAW_INDIRECT_BUFFER, command.buffer_handle);
+        const GLenum topology = FromPrimitiveTopologyToOpenGL(command.primitive_topology);
+        glMultiDrawArraysIndirect(topology, nullptr, static_cast<int32_t>(command.draw_count), sizeof(Rndr::DrawVerticesData));
+    }
+
+    void operator()(const Rndr::DrawIndicesMultiCommand& command) const
+    {
+        const GLenum topology = FromPrimitiveTopologyToOpenGL(command.primitive_topology);
+        glMultiDrawElementsIndirect(topology, GL_UNSIGNED_INT, nullptr, static_cast<int32_t>(command.draw_count),
+                                    sizeof(Rndr::DrawIndicesData));
+    }
+};
+
+Rndr::CommandList::CommandList(Rndr::GraphicsContext& graphics_context) : m_graphics_context(graphics_context) {}
+
+void Rndr::CommandList::Bind(const Rndr::SwapChain& swap_chain)
+{
+    m_commands.emplace_back(BindSwapChainCommand{.swap_chain = Ref<const SwapChain>(swap_chain)});
+}
+
+void Rndr::CommandList::Bind(const Rndr::Pipeline& pipeline)
+{
+    m_commands.emplace_back(BindPipelineCommand{.pipeline = Ref<const Pipeline>(pipeline)});
+}
+
+void Rndr::CommandList::BindConstantBuffer(const Rndr::Buffer& buffer, int32_t binding_index)
+{
+    m_commands.emplace_back(BindConstantBufferCommand{.constant_buffer = Ref<const Buffer>(buffer), .binding_index = binding_index});
+}
+
+void Rndr::CommandList::Bind(const Rndr::Image& image, int32_t binding_index)
+{
+    m_commands.emplace_back(BindImageCommand{.image = Ref<const Image>(image), .binding_index = binding_index});
+}
+
+void Rndr::CommandList::DrawVertices(Rndr::PrimitiveTopology topology, int32_t vertex_count, int32_t instance_count, int32_t first_vertex)
+{
+    m_commands.emplace_back(DrawVerticesCommand{
+        .primitive_topology = topology, .vertex_count = vertex_count, .instance_count = instance_count, .first_vertex = first_vertex});
+}
+
+void Rndr::CommandList::DrawIndices(Rndr::PrimitiveTopology topology, int32_t index_count, int32_t instance_count, int32_t first_index)
+{
+    m_commands.emplace_back(DrawIndicesCommand{
+        .primitive_topology = topology, .index_count = index_count, .instance_count = instance_count, .first_index = first_index});
+}
+
+void Rndr::CommandList::DrawVerticesMulti(const Rndr::Pipeline& pipeline, Rndr::PrimitiveTopology topology,
+                                          const Rndr::Span<Rndr::DrawVerticesData>& draws)
+{
+    GLuint buffer_handle = 0;
+    glCreateBuffers(1, &buffer_handle);
+    RNDR_ASSERT(glGetError() == GL_NO_ERROR);
+    glNamedBufferStorage(buffer_handle, draws.size() * sizeof(DrawVerticesData), draws.data(), GL_DYNAMIC_STORAGE_BIT);
+    RNDR_ASSERT(glGetError() == GL_NO_ERROR);
+
+    Bind(pipeline);
+    m_commands.emplace_back(DrawVerticesMultiCommand(topology, buffer_handle, static_cast<uint32_t>(draws.size())));
+}
+
+void Rndr::CommandList::DrawIndicesMulti(const Rndr::Pipeline& pipeline, Rndr::PrimitiveTopology topology,
+                                         const Rndr::Span<Rndr::DrawIndicesData>& draws)
+{
+    m_graphics_context->Bind(pipeline);
+
+    GLuint buffer_handle = 0;
+    glCreateBuffers(1, &buffer_handle);
+    RNDR_ASSERT(glGetError() == GL_NO_ERROR);
+    glNamedBufferStorage(buffer_handle, draws.size() * sizeof(DrawIndicesData), draws.data(), GL_DYNAMIC_STORAGE_BIT);
+    RNDR_ASSERT(glGetError() == GL_NO_ERROR);
+    glBindBuffer(GL_DRAW_INDIRECT_BUFFER, buffer_handle);
+    RNDR_ASSERT(glGetError() == GL_NO_ERROR);
+
+    Bind(pipeline);
+    m_commands.emplace_back(DrawIndicesMultiCommand(topology, buffer_handle, static_cast<uint32_t>(draws.size())));
+}
+
+void Rndr::CommandList::Submit()
+{
+    for (const auto& command : m_commands)
+    {
+        std::visit(CommandExecutor{m_graphics_context}, command);
+    }
 }
 
 #endif  // RNDR_OPENGL
