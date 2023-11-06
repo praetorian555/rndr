@@ -11,29 +11,42 @@
  */
 struct MeshDescription final
 {
-private:
+public:
     static constexpr const uint32_t k_max_lods = 8;
     static constexpr const uint32_t k_max_streams = 8;
 
-public:
     uint32_t material_id = 0;
 
-    uint32_t mesh_size = 0; // Total size of the mesh in bytes. Total size of index buffer and vertex buffer in bytes.
+    /** Total size of the mesh data in bytes. Equal to sum of all vertices and all indices. */
+    uint32_t mesh_size = 0;
 
-    uint32_t vertex_offset = 0; // Offset of the mesh in the vertex buffer in vertices.
-    uint32_t index_offset = 0; // Offset of the mesh in the index buffer in indices.
+    /** Number of streams in this mesh. */
+    uint32_t stream_count = 0;
 
-    uint32_t stream_count = 0; // Number of streams in the vertex buffer.
-    uint32_t vertex_count = 0; // Total number of vertices stored in the vertex buffer.
-    Rndr::StackArray<uint32_t, k_max_streams> stream_offsets; // Positions of the streams in the vertex buffer.
-    Rndr::StackArray<uint32_t, k_max_streams> stream_element_size; // Sizes of the elements in the streams in the vertex buffer.
+    /** Number of vertices belonging to this mesh in the vertex buffer. */
+    uint32_t vertex_count = 0;
 
-    uint32_t m_lod_count = 0; // Number of LODs in the index buffer.
-    Rndr::StackArray<uint32_t, k_max_lods> lod_offsets; // Positions of the LODs in the index buffer.
+    /** Offset of the mesh in the vertex buffer in vertices. */
+    uint32_t vertex_offset = 0;
 
-    RNDR_FORCE_INLINE uint32_t GetLodIndicesCount(uint32_t lod) const
+    /** Offset of the mesh in the index buffer in indices. */
+    uint32_t index_offset = 0;
+
+    /** Offset of the mesh's streams in the vertex buffer in bytes. */
+    Rndr::StackArray<uint32_t, k_max_streams> stream_offsets = {};
+
+    /** Sizes of the streams in bytes. */
+    Rndr::StackArray<uint32_t, k_max_streams> stream_element_size = {};
+
+    /** Number of LODs of this mesh. */
+    uint32_t lod_count = 0;
+
+    /** Offsets of the LODs in indices starting from 0. First index is reserved for most detailed version of the mesh. */
+    Rndr::StackArray<uint32_t, k_max_lods> lod_offsets = {};
+
+    [[nodiscard]] RNDR_FORCE_INLINE uint32_t GetLodIndicesCount(uint32_t lod) const
     {
-        RNDR_ASSERT(lod < m_lod_count);
+        RNDR_ASSERT(lod < lod_count);
         return lod_offsets[lod + 1] - lod_offsets[lod];
     }
 };

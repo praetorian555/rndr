@@ -19,102 +19,84 @@ bool ReadMeshData(MeshData& out_mesh_data, const struct aiScene& ai_scene, uint3
         return false;
     }
 
+    const bool should_load_normals = attributes_to_load & k_load_normals;
+    const bool should_load_uvs = attributes_to_load & k_load_uvs;
+    uint32_t vertex_size = sizeof(Rndr::Point3f);
+    if (should_load_normals)
+    {
+        vertex_size += sizeof(Rndr::Normal3f);
+    }
+    if (should_load_uvs)
+    {
+        vertex_size += sizeof(Rndr::Point2f);
+    }
+
     uint32_t vertex_offset = 0;
     uint32_t index_offset = 0;
     for (uint32_t mesh_index = 0; mesh_index < ai_scene.mNumMeshes; ++mesh_index)
     {
         aiMesh* ai_mesh = ai_scene.mMeshes[mesh_index];
-        MeshDescription mesh_desc;
-        Rndr::Array<uint32_t> indices;
-
-        const bool has_normals = ai_mesh->HasNormals() && static_cast<bool>(attributes_to_load & k_load_normals);
-        const bool has_uvs = ai_mesh->HasTextureCoords(0) && static_cast<bool>(attributes_to_load & k_load_uvs);
-
-        uint32_t stream_offset_base = 0;
-        if (!out_mesh_data.vertex_buffer_data.empty())
-        {
-            stream_offset_base = static_cast<uint32_t>(out_mesh_data.vertex_buffer_data.size());
-        }
-        mesh_desc.stream_offsets[0] = stream_offset_base;
 
         for (uint32_t i = 0; i < ai_mesh->mNumVertices; ++i)
         {
             Rndr::Point3f position(ai_mesh->mVertices[i].x, ai_mesh->mVertices[i].y, ai_mesh->mVertices[i].z);
             out_mesh_data.vertex_buffer_data.insert(out_mesh_data.vertex_buffer_data.end(), reinterpret_cast<uint8_t*>(position.data),
                                                     reinterpret_cast<uint8_t*>(position.data) + sizeof(position));
-            stream_offset_base += sizeof(position);
 
-            if (has_normals)
+            if (should_load_normals)
             {
+                RNDR_ASSERT(ai_mesh->HasNormals());
                 Rndr::Normal3f normal(ai_mesh->mNormals[i].x, ai_mesh->mNormals[i].y, ai_mesh->mNormals[i].z);
                 out_mesh_data.vertex_buffer_data.insert(out_mesh_data.vertex_buffer_data.end(), reinterpret_cast<uint8_t*>(normal.data),
                                                         reinterpret_cast<uint8_t*>(normal.data) + sizeof(normal));
-                stream_offset_base += sizeof(normal);
             }
-            if (has_uvs)
+            if (should_load_uvs)
             {
+                RNDR_ASSERT(ai_mesh->HasTextureCoords(0));
                 Rndr::Point2f uv(ai_mesh->mTextureCoords[0][i].x, ai_mesh->mTextureCoords[0][i].y);
                 out_mesh_data.vertex_buffer_data.insert(out_mesh_data.vertex_buffer_data.end(), reinterpret_cast<uint8_t*>(uv.data),
                                                         reinterpret_cast<uint8_t*>(uv.data) + sizeof(uv));
-                stream_offset_base += sizeof(uv);
             }
         }
-        mesh_desc.stream_element_size[0] = sizeof(Rndr::Point3f);
-        if (has_normals)
-        {
-            mesh_desc.stream_element_size[0] += sizeof(Rndr::Normal3f);
-        }
-        if (has_uvs)
-        {
-            mesh_desc.stream_element_size[0] += sizeof(Rndr::Point2f);
-        }
-        mesh_desc.stream_offsets[1] = stream_offset_base;
 
-        mesh_desc.stream_count = 1;
-        mesh_desc.vertex_count = ai_mesh->mNumVertices;
-
-        uint32_t lod_offset_base = 0;
-        if (!out_mesh_data.index_buffer_data.empty())
-        {
-            lod_offset_base = static_cast<uint32_t>(out_mesh_data.index_buffer_data.size());
-        }
-
+        Rndr::Array<Rndr::Array<uint32_t>> lods(MeshDescription::k_max_lods);
         for (uint32_t i = 0; i < ai_mesh->mNumFaces; ++i)
         {
             const aiFace& face = ai_mesh->mFaces[i];
+            if (face.mNumIndices != 3)
+            {
+                continue;
+            }
             for (uint32_t j = 0; j < face.mNumIndices; ++j)
             {
-                indices.emplace_back(face.mIndices[j]);
+                lods[0].emplace_back(face.mIndices[j]);
             }
         }
 
-        uint32_t lod_count = 0;
-
-        mesh_desc.lod_offsets[lod_count] = lod_offset_base;
-        out_mesh_data.index_buffer_data.insert(out_mesh_data.index_buffer_data.end(), reinterpret_cast<uint8_t*>(indices.data()),
-                                               reinterpret_cast<uint8_t*>(indices.data()) + indices.size() * sizeof(uint32_t));
-        lod_offset_base += static_cast<uint32_t>(indices.size() * sizeof(int32_t));
-        lod_count++;
+        out_mesh_data.index_buffer_data.insert(out_mesh_data.index_buffer_data.end(), reinterpret_cast<uint8_t*>(lods[0].data()),
+                                               reinterpret_cast<uint8_t*>(lods[0].data()) + lods[0].size() * sizeof(uint32_t));
 
         // TODO: Generate LODs
 
-        // Once we are done with placing LODs, we have to add the end offset of the last LOD.
-        mesh_desc.lod_offsets[lod_count] = lod_offset_base;
-
-        mesh_desc.m_lod_count = lod_count;
-
+        MeshDescription mesh_desc;
+        mesh_desc.stream_count = 1;
+        mesh_desc.vertex_count = ai_mesh->mNumVertices;
         mesh_desc.vertex_offset = vertex_offset;
         mesh_desc.index_offset = index_offset;
-
-        vertex_offset += mesh_desc.vertex_count;
-        index_offset += static_cast<uint32_t>(indices.size());
-
-        // Calculates total size in bytes of the mesh vertex buffer and index buffer.
-        mesh_desc.mesh_size = mesh_desc.stream_offsets[1] + mesh_desc.lod_offsets[lod_count];
+        mesh_desc.stream_offsets[0] = vertex_offset * vertex_size;
+        mesh_desc.stream_offsets[1] = (vertex_offset + ai_mesh->mNumVertices) * vertex_size;
+        mesh_desc.stream_element_size[0] = vertex_size;
+        mesh_desc.lod_count = 1;
+        mesh_desc.lod_offsets[0] = 0;
+        mesh_desc.lod_offsets[1] = static_cast<uint32_t>(lods[0].size());
+        mesh_desc.mesh_size = ai_mesh->mNumVertices * vertex_size + static_cast<uint32_t>(lods[0].size()) * sizeof(uint32_t);
 
         // TODO: Add material info
 
         out_mesh_data.meshes.emplace_back(mesh_desc);
+
+        vertex_offset += ai_mesh->mNumVertices;
+        index_offset += static_cast<uint32_t>(lods[0].size());
     }
 
     return true;
