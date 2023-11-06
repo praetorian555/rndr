@@ -7,12 +7,19 @@
 
 #include "mesh.h"
 
-void Run();
+void Run(const char* mesh_path);
 
-int main()
+int main(int argc, char** argv)
 {
+    if (argc < 2)
+    {
+        RNDR_LOG_ERROR("No mesh file provided!");
+        RNDR_HALT("No mesh file provided!");
+        return 1;
+    }
+
     Rndr::Init({.enable_input_system = true, .enable_cpu_tracer = true});
-    Run();
+    Run(argv[1]);
     Rndr::Destroy();
 }
 
@@ -60,15 +67,14 @@ class MeshRenderer : public Rndr::RendererBase
     };
 
 public:
-    MeshRenderer(const Rndr::String& name, const Rndr::RendererBaseDesc& desc) : Rndr::RendererBase(name, desc)
+    MeshRenderer(const Rndr::String& name, const Rndr::RendererBaseDesc& desc, const Rndr::String& mesh_path) : Rndr::RendererBase(name, desc)
     {
         constexpr uint32_t k_ai_process_flags = aiProcess_JoinIdenticalVertices | aiProcess_Triangulate | aiProcess_GenSmoothNormals |
                                                 aiProcess_LimitBoneWeights | aiProcess_SplitLargeMeshes | aiProcess_ImproveCacheLocality |
                                                 aiProcess_RemoveRedundantMaterials | aiProcess_FindDegenerates | aiProcess_FindInvalidData |
                                                 aiProcess_GenUVCoords;
 
-        const Rndr::String file_path = "C:/Users/Korisnik/Downloads/Bistro_v5_2/BistroExterior.fbx";
-        const aiScene* scene = aiImportFile(file_path.c_str(), k_ai_process_flags);
+        const aiScene* scene = aiImportFile(mesh_path.c_str(), k_ai_process_flags);
         if (scene == nullptr || !scene->HasMeshes())
         {
             RNDR_LOG_ERROR("Failed to load mesh from file with error: %s", aiGetErrorString());
@@ -79,7 +85,7 @@ public:
         const bool is_data_loaded = ReadMeshData(m_mesh_data, *scene, k_load_positions);
         if (!is_data_loaded)
         {
-            RNDR_LOG_ERROR("Failed to load mesh data from file: %s", file_path.c_str());
+            RNDR_LOG_ERROR("Failed to load mesh data from file: %s", mesh_path.c_str());
             RNDR_HALT("Failed  to load mesh data!");
             return;
         }
@@ -195,7 +201,7 @@ private:
     Rndr::Matrix4x4f m_camera_transform;
 };
 
-void Run()
+void Run(const char* mesh_path)
 {
     Rndr::Window window({.width = 1600, .height = 1200, .name = "Mesh Renderer Example"});
     Rndr::GraphicsContext graphics_context({.window_handle = window.GetNativeWindowHandle()});
@@ -220,7 +226,7 @@ void Run()
         RNDR_MAKE_SCOPED(Rndr::ClearRenderer, "Clear the screen", renderer_desc, k_clear_color);
     const Rndr::ScopePtr<Rndr::RendererBase> present_renderer =
         RNDR_MAKE_SCOPED(Rndr::PresentRenderer, "Present the back buffer", renderer_desc);
-    const Rndr::ScopePtr<MeshRenderer> mesh_renderer = RNDR_MAKE_SCOPED(MeshRenderer, "Render a mesh", renderer_desc);
+    const Rndr::ScopePtr<MeshRenderer> mesh_renderer = RNDR_MAKE_SCOPED(MeshRenderer, "Render a mesh", renderer_desc, mesh_path);
 
     Rndr::FlyCamera fly_camera(&window, &Rndr::InputSystem::GetCurrentContext(),
                                {.start_position = Rndr::Point3f(0.0f, 500.0f, 0.0f),
