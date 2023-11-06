@@ -19,6 +19,8 @@ bool ReadMeshData(MeshData& out_mesh_data, const struct aiScene& ai_scene, uint3
         return false;
     }
 
+    uint32_t vertex_offset = 0;
+    uint32_t index_offset = 0;
     for (uint32_t mesh_index = 0; mesh_index < ai_scene.mNumMeshes; ++mesh_index)
     {
         aiMesh* ai_mesh = ai_scene.mMeshes[mesh_index];
@@ -100,6 +102,12 @@ bool ReadMeshData(MeshData& out_mesh_data, const struct aiScene& ai_scene, uint3
         mesh_desc.lod_offsets[lod_count] = lod_offset_base;
 
         mesh_desc.m_lod_count = lod_count;
+
+        mesh_desc.vertex_offset = vertex_offset;
+        mesh_desc.index_offset = index_offset;
+
+        vertex_offset += mesh_desc.vertex_count;
+        index_offset += static_cast<uint32_t>(indices.size());
 
         // Calculates total size in bytes of the mesh vertex buffer and index buffer.
         mesh_desc.mesh_size = mesh_desc.stream_offsets[1] + mesh_desc.lod_offsets[lod_count];

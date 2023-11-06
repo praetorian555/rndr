@@ -20,6 +20,9 @@ public:
 
     uint32_t mesh_size = 0; // Total size of the mesh in bytes. Total size of index buffer and vertex buffer in bytes.
 
+    uint32_t vertex_offset = 0; // Offset of the mesh in the vertex buffer in vertices.
+    uint32_t index_offset = 0; // Offset of the mesh in the index buffer in indices.
+
     uint32_t stream_count = 0; // Number of streams in the vertex buffer.
     uint32_t vertex_count = 0; // Total number of vertices stored in the vertex buffer.
     Rndr::StackArray<uint32_t, k_max_streams> stream_offsets; // Positions of the streams in the vertex buffer.
