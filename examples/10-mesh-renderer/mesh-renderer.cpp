@@ -21,13 +21,14 @@ const char* const g_shader_code_vertex = R"(
 layout(std140, binding = 0) uniform PerFrameData
 {
 	uniform mat4 MVP;
+    int is_wire_frame;
 };
 layout (location=0) in vec3 pos;
 layout (location=0) out vec3 color;
 void main()
 {
 	gl_Position = MVP * vec4(pos, 1.0);
-    color = pos.xyz;
+    color = is_wire_frame > 0 ? vec3(0.0, 0.0, 0.0) : pos.xyz;
 }
 )";
 
@@ -44,6 +45,7 @@ void main()
 struct PerFrameData
 {
     Rndr::Matrix4x4f mvp;
+    int is_wire_frame;
 };
 
 class MeshRenderer : public Rndr::RendererBase
@@ -65,12 +67,12 @@ public:
                                                 aiProcess_RemoveRedundantMaterials | aiProcess_FindDegenerates | aiProcess_FindInvalidData |
                                                 aiProcess_GenUVCoords;
 
-        const Rndr::String file_path = "C:/Users/Marko/Downloads/Bistro_v5_2/BistroExterior.fbx";
+        const Rndr::String file_path = "C:/Users/Korisnik/Downloads/Bistro_v5_2/BistroExterior.fbx";
         const aiScene* scene = aiImportFile(file_path.c_str(), k_ai_process_flags);
         if (scene == nullptr || !scene->HasMeshes())
         {
             RNDR_LOG_ERROR("Failed to load mesh from file with error: %s", aiGetErrorString());
-            RNDR_ASSERT(false);
+            RNDR_HALT("Invalid mesh file!");
             return;
         }
 
@@ -78,7 +80,7 @@ public:
         if (!is_data_loaded)
         {
             RNDR_LOG_ERROR("Failed to load mesh data from file: %s", file_path.c_str());
-            RNDR_ASSERT(false);
+            RNDR_HALT("Failed  to load mesh data!");
             return;
         }
         aiReleaseImport(scene);
@@ -116,7 +118,14 @@ public:
                                                                                 .input_layout = input_layout_desc,
                                                                                 .rasterizer = {.fill_mode = Rndr::FillMode::Solid},
                                                                                 .depth_stencil = {.is_depth_enabled = true}});
-        RNDR_ASSERT(m_pipeline.IsValid());
+        m_wireframe_pipeline = Rndr::Pipeline(
+            m_desc.graphics_context,
+            Rndr::PipelineDesc{.vertex_shader = &m_vertex_shader,
+                               .pixel_shader = &m_pixel_shader,
+                               .input_layout = input_layout_desc,
+                               .rasterizer = {.fill_mode = Rndr::FillMode::Wireframe, .depth_bias = -1.0, .slope_scaled_depth_bias = -1.0},
+                               .depth_stencil = {.is_depth_enabled = true}});
+        RNDR_ASSERT(m_wireframe_pipeline.IsValid());
 
         constexpr size_t k_per_frame_size = sizeof(PerFrameData);
         m_per_frame_buffer = Rndr::Buffer(
@@ -131,8 +140,8 @@ public:
             const MeshDescription& mesh_desc = m_mesh_data.meshes[i];
             draw_commands[i] = {.index_count = mesh_desc.GetLodIndicesCount(0),
                                 .instance_count = 1,
-                                .first_index = mesh_desc.lod_offsets[0],
-                                .base_vertex = mesh_desc.stream_offsets[0],
+                                .first_index = mesh_desc.index_offset,
+                                .base_vertex = mesh_desc.vertex_offset,
                                 .base_instance = 0};
         }
         const Rndr::Span<Rndr::DrawIndicesData> draw_commands_span(draw_commands);
@@ -142,6 +151,11 @@ public:
         m_command_list.Bind(m_pipeline);
         m_command_list.BindConstantBuffer(m_per_frame_buffer, 0);
         m_command_list.DrawIndicesMulti(m_pipeline, Rndr::PrimitiveTopology::Triangle, draw_commands_span);
+
+        m_wireframe_command_list = Rndr::CommandList(m_desc.graphics_context);
+        m_wireframe_command_list.Bind(m_wireframe_pipeline);
+        m_wireframe_command_list.BindConstantBuffer(m_per_frame_buffer, 0);
+        m_wireframe_command_list.DrawIndicesMulti(m_wireframe_pipeline, Rndr::PrimitiveTopology::Triangle, draw_commands_span);
     }
 
     bool Render() override
@@ -152,10 +166,14 @@ public:
         const Rndr::Matrix4x4f t = Math::RotateX(-90.0f);
         Rndr::Matrix4x4f mvp = m_camera_transform * t;
         mvp = Math::Transpose(mvp);
-        PerFrameData per_frame_data = {.mvp = mvp};
+        PerFrameData per_frame_data = {.mvp = mvp, .is_wire_frame = 0};
         m_desc.graphics_context->Update(m_per_frame_buffer, Rndr::ToByteSpan(per_frame_data));
 
         m_command_list.Submit();
+
+        per_frame_data.is_wire_frame = 1;
+        m_desc.graphics_context->Update(m_per_frame_buffer, Rndr::ToByteSpan(per_frame_data));
+        m_wireframe_command_list.Submit();
 
         return true;
     }
@@ -168,8 +186,10 @@ private:
     Rndr::Buffer m_vertex_buffer;
     Rndr::Buffer m_index_buffer;
     Rndr::Pipeline m_pipeline;
+    Rndr::Pipeline m_wireframe_pipeline;
     Rndr::Buffer m_per_frame_buffer;
     Rndr::CommandList m_command_list;
+    Rndr::CommandList m_wireframe_command_list;
 
     MeshData m_mesh_data;
     Rndr::Matrix4x4f m_camera_transform;
@@ -177,7 +197,7 @@ private:
 
 void Run()
 {
-    Rndr::Window window({.width = 800, .height = 600, .name = "Debug Features Example"});
+    Rndr::Window window({.width = 1600, .height = 1200, .name = "Mesh Renderer Example"});
     Rndr::GraphicsContext graphics_context({.window_handle = window.GetNativeWindowHandle()});
     RNDR_ASSERT(graphics_context.IsValid());
     Rndr::SwapChain swap_chain(graphics_context, {.width = window.GetWidth(), .height = window.GetHeight(), .enable_vsync = false});
@@ -203,7 +223,10 @@ void Run()
     const Rndr::ScopePtr<MeshRenderer> mesh_renderer = RNDR_MAKE_SCOPED(MeshRenderer, "Render a mesh", renderer_desc);
 
     Rndr::FlyCamera fly_camera(&window, &Rndr::InputSystem::GetCurrentContext(),
-                               {.start_position = Rndr::Point3f(0.0f, 10.0f, 100.0f), .rotation_speed = 200, .projection_desc = {.near = 0.1f, .far = 1000.0f}});
+                               {.start_position = Rndr::Point3f(0.0f, 500.0f, 0.0f),
+                                .movement_speed = 100,
+                                .rotation_speed = 200,
+                                .projection_desc = {.near = 0.5f, .far = 5000.0f}});
 
     Rndr::RendererManager renderer_manager;
     renderer_manager.AddRenderer(clear_renderer.get());
