@@ -62,6 +62,8 @@ void APIENTRY DebugOutputCallback(GLenum source, GLenum type, unsigned int id, G
 
 Rndr::GraphicsContext::GraphicsContext(const Rndr::GraphicsContextDesc& desc) : m_desc(desc)
 {
+    RNDR_TRACE_SCOPED(Create Graphics Context);
+
 #if RNDR_WINDOWS
     if (m_desc.window_handle == nullptr)
     {
@@ -223,6 +225,8 @@ const Rndr::GraphicsContextDesc& Rndr::GraphicsContext::GetDesc() const
 
 bool Rndr::GraphicsContext::Present(const Rndr::SwapChain& swap_chain)
 {
+    RNDR_TRACE_SCOPED(Present);
+
     RNDR_UNUSED(swap_chain);
     const BOOL status = SwapBuffers(m_native_device_context);
     return status == TRUE;
@@ -235,6 +239,8 @@ bool Rndr::GraphicsContext::IsValid() const
 
 bool Rndr::GraphicsContext::ClearColor(const Vector4f& color)
 {
+    RNDR_TRACE_SCOPED(Clear Color);
+
     glClearColor(color.x, color.y, color.z, color.w);
     if (glGetError() != GL_NO_ERROR)
     {
@@ -252,6 +258,8 @@ bool Rndr::GraphicsContext::ClearColor(const Vector4f& color)
 
 bool Rndr::GraphicsContext::ClearColorAndDepth(const Vector4f& color, float depth)
 {
+    RNDR_TRACE_SCOPED(Clear Color And Depth);
+
     glClearColor(color.x, color.y, color.z, color.w);
     if (glGetError() != GL_NO_ERROR)
     {
@@ -275,6 +283,8 @@ bool Rndr::GraphicsContext::ClearColorAndDepth(const Vector4f& color, float dept
 
 bool Rndr::GraphicsContext::Bind(const Rndr::SwapChain& swap_chain)
 {
+    RNDR_TRACE_SCOPED(Bind SwapChain);
+
     RNDR_UNUSED(swap_chain);
     const SwapChainDesc& desc = swap_chain.GetDesc();
     glViewport(0, 0, desc.width, desc.height);
@@ -430,6 +440,8 @@ bool Rndr::GraphicsContext::Bind(const Pipeline& pipeline)
 
 bool Rndr::GraphicsContext::Bind(const Buffer& buffer, int32_t binding_index)
 {
+    RNDR_TRACE_SCOPED(Bind Buffer);
+
     const GLuint native_buffer = buffer.GetNativeBuffer();
     const BufferDesc& desc = buffer.GetDesc();
     const GLenum target = FromBufferTypeToOpenGL(desc.type);
@@ -451,6 +463,8 @@ bool Rndr::GraphicsContext::Bind(const Buffer& buffer, int32_t binding_index)
 
 bool Rndr::GraphicsContext::Bind(const Image& image, int32_t binding_index)
 {
+    RNDR_TRACE_SCOPED(Bind Image);
+
     const GLuint native_texture = image.GetNativeTexture();
     glBindTextures(binding_index, 1, &native_texture);
     if (glGetError() != GL_NO_ERROR)
@@ -463,6 +477,8 @@ bool Rndr::GraphicsContext::Bind(const Image& image, int32_t binding_index)
 
 bool Rndr::GraphicsContext::DrawVertices(PrimitiveTopology topology, int32_t vertex_count, int32_t instance_count, int32_t first_vertex)
 {
+    RNDR_TRACE_SCOPED(Draw Vertices);
+
     const GLenum primitive = FromPrimitiveTopologyToOpenGL(topology);
     glDrawArraysInstanced(primitive, first_vertex, vertex_count, instance_count);
     if (glGetError() != GL_NO_ERROR)
@@ -475,6 +491,8 @@ bool Rndr::GraphicsContext::DrawVertices(PrimitiveTopology topology, int32_t ver
 
 bool Rndr::GraphicsContext::DrawIndices(PrimitiveTopology topology, int32_t index_count, int32_t instance_count, int32_t first_index)
 {
+    RNDR_TRACE_SCOPED(Draw Indices);
+
     assert(m_bound_pipeline.IsValid());
     assert(m_bound_pipeline->IsIndexBufferBound());
 
@@ -494,6 +512,8 @@ bool Rndr::GraphicsContext::DrawIndices(PrimitiveTopology topology, int32_t inde
 
 bool Rndr::GraphicsContext::Update(const Buffer& buffer, const ConstByteSpan& data, int32_t offset)
 {
+    RNDR_TRACE_SCOPED(Update Buffer Contents);
+
     if (!buffer.IsValid())
     {
         RNDR_LOG_ERROR("Update of the buffer failed since the buffer is invalid!");
@@ -525,6 +545,8 @@ bool Rndr::GraphicsContext::Update(const Buffer& buffer, const ConstByteSpan& da
 
 bool Rndr::GraphicsContext::Read(const Buffer& buffer, ByteSpan& out_data, int32_t offset, int32_t size) const
 {
+    RNDR_TRACE_SCOPED(Read Buffer Contents);
+
     if (!buffer.IsValid())
     {
         RNDR_LOG_ERROR("Read of the buffer failed since the buffer is invalid!");
@@ -571,6 +593,8 @@ bool Rndr::GraphicsContext::Read(const Buffer& buffer, ByteSpan& out_data, int32
 bool Rndr::GraphicsContext::Copy(const Rndr::Buffer& dst_buffer, const Rndr::Buffer& src_buffer, int32_t dst_offset, int32_t src_offset,
                                  int32_t size)
 {
+    RNDR_TRACE_SCOPED(Copy Buffer Contents);
+
     if (!dst_buffer.IsValid())
     {
         RNDR_LOG_ERROR("Copy of the buffer failed since the destination buffer is invalid!");
@@ -617,6 +641,8 @@ bool Rndr::GraphicsContext::Copy(const Rndr::Buffer& dst_buffer, const Rndr::Buf
 
 Rndr::Bitmap Rndr::GraphicsContext::ReadSwapChain(const SwapChain& swap_chain)
 {
+    RNDR_TRACE_SCOPED(Read SwapChain);
+
     Bitmap invalid_bitmap{-1, -1, -1, PixelFormat::R8G8B8_UNORM_SRGB};
 
     const int32_t width = swap_chain.GetDesc().width;
@@ -685,6 +711,8 @@ bool Rndr::SwapChain::SetVerticalSync(bool vertical_sync)
 
 Rndr::Shader::Shader(const GraphicsContext& graphics_context, const ShaderDesc& desc) : m_desc(desc)
 {
+    RNDR_TRACE_SCOPED(Create Shader);
+
     RNDR_UNUSED(graphics_context);
     const GLenum shader_type = Rndr::FromShaderTypeToOpenGL(desc.type);
     m_native_shader = glCreateShader(shader_type);
@@ -1015,6 +1043,8 @@ uint32_t Rndr::Pipeline::GetIndexBufferElementSize() const
 
 Rndr::Buffer::Buffer(const GraphicsContext& graphics_context, const BufferDesc& desc, const ConstByteSpan& init_data) : m_desc(desc)
 {
+    RNDR_TRACE_SCOPED(Create Buffer);
+
     RNDR_UNUSED(graphics_context);
     glCreateBuffers(1, &m_native_buffer);
     if (glGetError() != GL_NO_ERROR)
@@ -1084,6 +1114,8 @@ GLuint Rndr::Buffer::GetNativeBuffer() const
 
 Rndr::Image::Image(const GraphicsContext& graphics_context, const ImageDesc& desc, const ConstByteSpan& init_data) : m_desc(desc)
 {
+    RNDR_TRACE_SCOPED(Create Image);
+
     RNDR_UNUSED(graphics_context);
 
     // TODO: Add support for multi sample images
@@ -1328,6 +1360,8 @@ void Rndr::CommandList::DrawIndicesMulti(const Rndr::Pipeline& pipeline, Rndr::P
 
 void Rndr::CommandList::Submit()
 {
+    RNDR_TRACE_SCOPED(Submit Command List);
+
     for (const auto& command : m_commands)
     {
         std::visit(CommandExecutor{m_graphics_context}, command);
