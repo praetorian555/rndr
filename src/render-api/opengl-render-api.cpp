@@ -447,7 +447,7 @@ bool Rndr::GraphicsContext::Bind(const Buffer& buffer, int32_t binding_index)
     const GLenum target = FromBufferTypeToOpenGL(desc.type);
     if (target == GL_UNIFORM_BUFFER || target == GL_SHADER_STORAGE_BUFFER)
     {
-        glBindBufferRange(GL_UNIFORM_BUFFER, binding_index, native_buffer, 0, desc.size);
+        glBindBufferRange(target, binding_index, native_buffer, 0, desc.size);
     }
     else
     {
@@ -972,7 +972,9 @@ Rndr::Pipeline::~Pipeline()
 }
 
 Rndr::Pipeline::Pipeline(Pipeline&& other) noexcept
-    : m_desc(std::move(other.m_desc)), m_native_shader_program(other.m_native_shader_program), m_native_vertex_array(other.m_native_vertex_array)
+    : m_desc(std::move(other.m_desc)),
+      m_native_shader_program(other.m_native_shader_program),
+      m_native_vertex_array(other.m_native_vertex_array)
 {
     other.m_native_shader_program = k_invalid_opengl_object;
     other.m_native_vertex_array = k_invalid_opengl_object;
