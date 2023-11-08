@@ -1097,3 +1097,65 @@ TEST_CASE("Copy of buffers", "[render-api]")
 
     Rndr::Destroy();
 }
+
+TEST_CASE("Running a compute shader", "[render-api]")
+{
+    Rndr::Init();
+    const Rndr::Window hidden_window({.start_visible = false});
+    const Rndr::GraphicsContextDesc gc_desc{.window_handle = hidden_window.GetNativeWindowHandle()};
+    Rndr::GraphicsContext graphics_context(gc_desc);
+
+    constexpr int32_t k_buffer_size = 1024;
+    Rndr::StackArray<float, k_buffer_size> data;
+    for (int i = 0; i < k_buffer_size; ++i)
+    {
+        data[i] = static_cast<float>(i);
+    }
+
+    const Rndr::BufferDesc desc{.type = Rndr::BufferType::ShaderStorage, .usage = Rndr::Usage::Default, .size = k_buffer_size * sizeof(float)};
+    const Rndr::Buffer src_buffer(graphics_context, desc, Rndr::ToByteSpan(data));
+    REQUIRE(src_buffer.IsValid());
+
+    const Rndr::BufferDesc desc2{.type = Rndr::BufferType::ShaderStorage, .usage = Rndr::Usage::ReadBack, .size = k_buffer_size * sizeof(float)};
+    const Rndr::Buffer dst_buffer(graphics_context, desc2);
+    REQUIRE(dst_buffer.IsValid());
+
+    const char* compute_shader_code = R"(
+        #version 460 core
+        layout(std430, binding = 0) buffer Data
+        {
+            float data[];
+        };
+        layout(std430, binding = 1) buffer OutData
+        {
+            float out_data[];
+        };
+        layout(local_size_x = 64, local_size_y = 1, local_size_z = 1) in;
+        void main()
+        {
+            const uint index = gl_GlobalInvocationID.x;
+            out_data[index] = data[index] * 2.0f;
+        }
+    )";
+
+    Rndr::Shader compute_shader(graphics_context, Rndr::ShaderDesc{.type = Rndr::ShaderType::Compute, .source = compute_shader_code});
+    REQUIRE(compute_shader.IsValid());
+    const Rndr::Pipeline compute_pipeline(graphics_context, Rndr::PipelineDesc{.compute_shader = &compute_shader});
+    REQUIRE(compute_pipeline.IsValid());
+
+    graphics_context.Bind(compute_pipeline);
+    graphics_context.Bind(src_buffer, 0);
+    graphics_context.Bind(dst_buffer, 1);
+    graphics_context.DispatchCompute(k_buffer_size / 64, 1, 1);
+
+    Rndr::Array<float> read_data_storage(k_buffer_size);
+    Rndr::ByteSpan read_data = Rndr::ToByteSpan(read_data_storage);
+    const bool result = graphics_context.Read(dst_buffer, read_data);
+    REQUIRE(result);
+    for (int i = 0; i < k_buffer_size; ++i)
+    {
+        REQUIRE(read_data_storage[i] == data[i] * 2.0f);
+    }
+
+    Rndr::Destroy();
+}

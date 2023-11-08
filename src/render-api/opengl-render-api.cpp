@@ -510,6 +510,27 @@ bool Rndr::GraphicsContext::DrawIndices(PrimitiveTopology topology, int32_t inde
     return true;
 }
 
+bool Rndr::GraphicsContext::DispatchCompute(uint32_t block_count_x, uint32_t block_count_y, uint32_t block_count_z,
+                                            bool wait_for_completion)
+{
+    glDispatchCompute(block_count_x, block_count_y, block_count_z);
+    if (glGetError() != GL_NO_ERROR)
+    {
+        RNDR_LOG_ERROR("Failed to dispatch compute!");
+        return false;
+    }
+    if (wait_for_completion)
+    {
+        glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
+        if (glGetError() != GL_NO_ERROR)
+        {
+            RNDR_LOG_ERROR("Failed to wait for compute completion!");
+            return false;
+        }
+    }
+    return true;
+}
+
 bool Rndr::GraphicsContext::Update(const Buffer& buffer, const ConstByteSpan& data, int32_t offset)
 {
     RNDR_TRACE_SCOPED(Update Buffer Contents);

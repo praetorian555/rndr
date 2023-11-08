@@ -111,6 +111,16 @@ public:
     bool DrawIndices(PrimitiveTopology topology, int32_t index_count, int32_t instance_count = 1, int32_t first_index = 0);
 
     /**
+     * Dispatches a compute shader.
+     * @param block_count_x Number of blocks in the x dimension.
+     * @param block_count_y Number of blocks in the y dimension.
+     * @param block_count_z Number of blocks in the z dimension.
+     * @param wait_for_completion Whether or not to wait for the compute shader to finish executing before returning. Default is true.
+     * @return Returns true if the dispatch was successful, false otherwise.
+     */
+    bool DispatchCompute(uint32_t block_count_x, uint32_t block_count_y, uint32_t block_count_z, bool wait_for_completion = true);
+
+    /**
      * Updates the contents of a buffer.
      * @param buffer The buffer to update.
      * @param data The data to update the buffer with.
