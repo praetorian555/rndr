@@ -20,6 +20,7 @@ GLenum FromImageInfoToTarget(ImageType image_type, bool is_multi_sample);
 GLint FromMinAndMipFiltersToOpenGL(ImageFilter min_filter, ImageFilter mip_filter);
 GLint FromImageFilterToOpenGL(ImageFilter filter);
 GLint FromImageAddressModeToOpenGL(ImageAddressMode wrap);
+GLint FromImageAccessToOpenGL(ImageAccess access);
 GLenum FromPixelFormatToInternalFormat(PixelFormat format);
 GLenum FromPixelFormatToFormat(PixelFormat format);
 GLenum FromPixelFormatToDataType(PixelFormat format);

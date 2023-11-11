@@ -360,6 +360,21 @@ GLenum Rndr::FromIndexSizeToOpenGL(uint32_t index_size)
             return GL_UNSIGNED_INT;
     }
 }
+GLint Rndr::FromImageAccessToOpenGL(Rndr::ImageAccess access)
+{
+    switch (access)
+    {
+        case Rndr::ImageAccess::Read:
+            return GL_READ_ONLY;
+        case Rndr::ImageAccess::Write:
+            return GL_WRITE_ONLY;
+        case Rndr::ImageAccess::ReadWrite:
+            return GL_READ_WRITE;
+        default:
+            RNDR_HALT("Unsupported image access");
+            return GL_READ_WRITE;
+    }
+}
 
 bool Rndr::IsComponentLowPrecision(PixelFormat format)
 {

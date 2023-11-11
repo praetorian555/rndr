@@ -399,6 +399,16 @@ enum : uint32_t
 };
 }
 
+/**
+ * Represents how image can be accessed from the shader.
+ */
+enum class ImageAccess
+{
+    Read,
+    Write,
+    ReadWrite
+};
+
 enum class DataRepetition
 {
     PerVertex,
