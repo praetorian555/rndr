@@ -19,4 +19,7 @@ using Matrix4x4f = Math::Matrix4x4<float>;
 using Rotatorf = Math::Rotator<float>;
 using Quaternionf = Math::Quaternion<float>;
 
+using Point2i = Math::Point2<int32_t>;
+using Vector2i = Math::Vector2<int32_t>;
+
 } // namespace Rndr
