@@ -21,6 +21,7 @@ set(SOURCE_LIST
     "${PROJECT_SOURCE_DIR}/include/rndr/core/file.h"
     "${PROJECT_SOURCE_DIR}/include/rndr/core/bitmap.h"
     "${PROJECT_SOURCE_DIR}/include/rndr/core/renderer-base.h"
+    "${PROJECT_SOURCE_DIR}/include/rndr/core/enum-flags.h"
     "${PROJECT_SOURCE_DIR}/include/rndr/render-api/render-api.h"
     "${PROJECT_SOURCE_DIR}/include/rndr/utility/imgui-wrapper.h"
     "${PROJECT_SOURCE_DIR}/include/rndr/utility/input-layout-builder.h"
