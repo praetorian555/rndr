@@ -68,6 +68,16 @@ public:
     bool Bind(const Image& image, int32_t binding_index);
 
     /**
+     * Binds one level of the image to the compute pipeline.
+     * @param image The image to bind.
+     * @param binding_index The binding index to bind the image to.
+     * @param image_level The image level to bind.
+     * @param access How the image will be accessed in the compute shader.
+     * @return Returns true if the image was bound successfully, false otherwise.
+     */
+    bool BindImageForCompute(const Image& image, int32_t binding_index, int32_t image_level, ImageAccess access);
+
+    /**
      * Swaps the front and back buffers of the swap chain.
      * @param swap_chain The swap chain to present.
      * @return Returns true if the swap chain was presented successfully, false otherwise.
@@ -138,6 +148,14 @@ public:
      * @return
      */
     bool Read(const Buffer& buffer, ByteSpan& out_data, int32_t offset = 0, int32_t size = 0) const;
+
+    /**
+     * Read the contents of an image.
+     * @param image The image to read.
+     * @param out_data Where to store read data.
+     * @param level Which mip level to read. Default is 0.
+     */
+    bool Read(const Image& image, Bitmap& out_data, int32_t level = 0) const;
 
     /**
      * Copies the contents of one buffer to another.

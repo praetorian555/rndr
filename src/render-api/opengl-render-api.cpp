@@ -475,6 +475,19 @@ bool Rndr::GraphicsContext::Bind(const Image& image, int32_t binding_index)
     return true;
 }
 
+bool Rndr::GraphicsContext::BindImageForCompute(const Rndr::Image& image, int32_t binding_index, int32_t image_level,
+                                                Rndr::ImageAccess access)
+{
+    glBindImageTexture(binding_index, image.GetNativeTexture(), image_level, GL_FALSE, 0, FromImageAccessToOpenGL(access),
+                       FromPixelFormatToInternalFormat(image.GetDesc().pixel_format));
+    if (glGetError() != GL_NO_ERROR)
+    {
+        RNDR_LOG_ERROR("Failed to bind image for compute!");
+        return false;
+    }
+    return false;
+}
+
 bool Rndr::GraphicsContext::DrawVertices(PrimitiveTopology topology, int32_t vertex_count, int32_t instance_count, int32_t first_vertex)
 {
     RNDR_TRACE_SCOPED(Draw Vertices);
@@ -521,7 +534,7 @@ bool Rndr::GraphicsContext::DispatchCompute(uint32_t block_count_x, uint32_t blo
     }
     if (wait_for_completion)
     {
-        glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
+        glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT | GL_SHADER_IMAGE_ACCESS_BARRIER_BIT);
         if (glGetError() != GL_NO_ERROR)
         {
             RNDR_LOG_ERROR("Failed to wait for compute completion!");
@@ -608,6 +621,30 @@ bool Rndr::GraphicsContext::Read(const Buffer& buffer, ByteSpan& out_data, int32
         return false;
     }
 
+    return true;
+}
+
+bool Rndr::GraphicsContext::Read(const Rndr::Image& image, Rndr::Bitmap& out_data, int32_t level) const
+{
+    if (!image.IsValid())
+    {
+        RNDR_LOG_ERROR("Read of the image failed since the image is invalid!");
+        return false;
+    }
+
+    const ImageDesc& desc = image.GetDesc();
+    const GLenum format = FromPixelFormatToFormat(desc.pixel_format);
+    const GLenum data_type = FromPixelFormatToDataType(desc.pixel_format);
+    const int32_t pixel_size = FromPixelFormatToPixelSize(desc.pixel_format);
+    Array<uint8_t> tmp_data(pixel_size * desc.width * desc.height);
+    glGetTextureImage(image.GetNativeTexture(), level, format, data_type, pixel_size * desc.width * desc.height, tmp_data.data());
+    if (glGetError() != GL_NO_ERROR)
+    {
+        RNDR_LOG_ERROR("Failed to read image!");
+        return false;
+    }
+
+    out_data = Bitmap(desc.width, desc.height, 1, desc.pixel_format, tmp_data);
     return true;
 }
 
@@ -1163,8 +1200,7 @@ Rndr::Image::Image(const GraphicsContext& graphics_context, const ImageDesc& des
     glTextureParameterf(m_native_texture, GL_TEXTURE_LOD_BIAS, desc.sampler.lod_bias);
     glTextureParameterf(m_native_texture, GL_TEXTURE_MIN_LOD, desc.sampler.min_lod);
     glTextureParameterf(m_native_texture, GL_TEXTURE_MAX_LOD, desc.sampler.max_lod);
-    // TODO(Marko): Left to handle GL_DEPTH_STENCIL_TEXTURE_MODE, GL_TEXTURE_COMPARE_FUNC,
-    // GL_TEXTURE_COMPARE_MODE
+    // TODO(Marko): Left to handle GL_DEPTH_STENCIL_TEXTURE_MODE, GL_TEXTURE_COMPARE_FUNC, GL_TEXTURE_COMPARE_MODE
 
     const Vector2f size{static_cast<float>(desc.width), static_cast<float>(desc.height)};
     int mip_map_levels = 1;
@@ -1182,8 +1218,11 @@ Rndr::Image::Image(const GraphicsContext& graphics_context, const ImageDesc& des
         constexpr int32_t k_mip_level = 0;
         constexpr int32_t k_x_offset = 0;
         constexpr int32_t k_y_offset = 0;
-        glTextureSubImage2D(m_native_texture, k_mip_level, k_x_offset, k_y_offset, desc.width, desc.height, format, data_type,
-                            init_data.data());
+        if (!init_data.empty())
+        {
+            glTextureSubImage2D(m_native_texture, k_mip_level, k_x_offset, k_y_offset, desc.width, desc.height, format, data_type,
+                                init_data.data());
+        }
     }
     else if (desc.type == ImageType::CubeMap)
     {
