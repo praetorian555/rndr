@@ -13,6 +13,11 @@ class Bitmap
 {
 public:
     /**
+     * Create an empty bitmap.
+     */
+    Bitmap() = default;
+
+    /**
      * Create a bitmap with the specified width, height, pixel format and optional data.
      * @param width Width of the bitmap. Must be greater than 0.
      * @param height Height of the bitmap. Must be greater than 0.
