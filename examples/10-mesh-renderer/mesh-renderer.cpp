@@ -1,52 +1,41 @@
 #include "rndr/rndr.h"
 
-#include <assimp/cimport.h>
-#include <assimp/postprocess.h>
-#include <assimp/scene.h>
-#include <assimp/version.h>
-
 #include "mesh.h"
 
-void Run(const char* mesh_path);
+void Run();
 
-int main(int argc, char** argv)
+int main()
 {
-    if (argc < 2)
-    {
-        RNDR_LOG_ERROR("No mesh file provided!");
-        RNDR_HALT("No mesh file provided!");
-        return 1;
-    }
-
     Rndr::Init({.enable_input_system = true, .enable_cpu_tracer = true});
-    Run(argv[1]);
+    Run();
     Rndr::Destroy();
+    return 0;
 }
 
 const char* const g_shader_code_vertex = R"(
-#version 460 core
-layout(std140, binding = 0) uniform PerFrameData
-{
-	uniform mat4 MVP;
-    int is_wire_frame;
-};
-layout (location=0) in vec3 pos;
-layout (location=0) out vec3 color;
-void main()
-{
-	gl_Position = MVP * vec4(pos, 1.0);
-    color = is_wire_frame > 0 ? vec3(0.0, 0.0, 0.0) : pos.xyz;
-}
+    #version 460 core
+    layout(std140, binding = 0) uniform PerFrameData
+    {
+        uniform mat4 MVP;
+        int is_wire_frame;
+    };
+    layout (location=0) in vec3 pos;
+    layout (location=0) out vec3 color;
+    void main()
+    {
+        gl_Position = MVP * vec4(pos, 1.0);
+        color = is_wire_frame > 0 ? vec3(0.0, 0.0, 0.0) : pos.xyz;
+    }
 )";
 
 const char* const g_shader_code_fragment = R"(
-#version 460 core
-layout (location=0) in vec3 color;
-layout (location=0) out vec4 out_FragColor;
-void main()
-{
-	out_FragColor = vec4(color, 1.0);
-};
+    #version 460 core
+    layout (location=0) in vec3 color;
+    layout (location=0) out vec4 out_FragColor;
+    void main()
+    {
+        out_FragColor = vec4(color, 1.0);
+    };
 )";
 
 struct PerFrameData
@@ -57,39 +46,16 @@ struct PerFrameData
 
 class MeshRenderer : public Rndr::RendererBase
 {
-    struct DrawElementsIndirectCommand
-    {
-        uint32_t index_count;
-        uint32_t instance_count;
-        uint32_t first_index;
-        uint32_t base_vertex;
-        uint32_t base_instance;
-    };
-
 public:
-    MeshRenderer(const Rndr::String& name, const Rndr::RendererBaseDesc& desc, const Rndr::String& mesh_path) : Rndr::RendererBase(name, desc)
+    MeshRenderer(const Rndr::String& name, const Rndr::RendererBaseDesc& desc) : Rndr::RendererBase(name, desc)
     {
-        constexpr uint32_t k_ai_process_flags = aiProcess_JoinIdenticalVertices | aiProcess_Triangulate | aiProcess_GenSmoothNormals |
-                                                aiProcess_LimitBoneWeights | aiProcess_SplitLargeMeshes | aiProcess_ImproveCacheLocality |
-                                                aiProcess_RemoveRedundantMaterials | aiProcess_FindDegenerates | aiProcess_FindInvalidData |
-                                                aiProcess_GenUVCoords;
-
-        const aiScene* scene = aiImportFile(mesh_path.c_str(), k_ai_process_flags);
-        if (scene == nullptr || !scene->HasMeshes())
-        {
-            RNDR_LOG_ERROR("Failed to load mesh from file with error: %s", aiGetErrorString());
-            RNDR_HALT("Invalid mesh file!");
-            return;
-        }
-
-        const bool is_data_loaded = ReadMeshData(m_mesh_data, *scene, k_load_positions);
+        const bool is_data_loaded = ReadMeshData(m_mesh_data, ASSETS_DIR "bistro-exterior.rndr");
         if (!is_data_loaded)
         {
-            RNDR_LOG_ERROR("Failed to load mesh data from file: %s", mesh_path.c_str());
+            RNDR_LOG_ERROR("Failed to load mesh data from file!");
             RNDR_HALT("Failed  to load mesh data!");
             return;
         }
-        aiReleaseImport(scene);
 
         m_vertex_shader = Rndr::Shader(m_desc.graphics_context, {.type = Rndr::ShaderType::Vertex, .source = g_shader_code_vertex});
         RNDR_ASSERT(m_vertex_shader.IsValid());
@@ -201,7 +167,7 @@ private:
     Rndr::Matrix4x4f m_camera_transform;
 };
 
-void Run(const char* mesh_path)
+void Run()
 {
     Rndr::Window window({.width = 1600, .height = 1200, .name = "Mesh Renderer Example"});
     Rndr::GraphicsContext graphics_context({.window_handle = window.GetNativeWindowHandle()});
@@ -226,7 +192,7 @@ void Run(const char* mesh_path)
         RNDR_MAKE_SCOPED(Rndr::ClearRenderer, "Clear the screen", renderer_desc, k_clear_color);
     const Rndr::ScopePtr<Rndr::RendererBase> present_renderer =
         RNDR_MAKE_SCOPED(Rndr::PresentRenderer, "Present the back buffer", renderer_desc);
-    const Rndr::ScopePtr<MeshRenderer> mesh_renderer = RNDR_MAKE_SCOPED(MeshRenderer, "Render a mesh", renderer_desc, mesh_path);
+    const Rndr::ScopePtr<MeshRenderer> mesh_renderer = RNDR_MAKE_SCOPED(MeshRenderer, "Render a mesh", renderer_desc);
 
     Rndr::FlyCamera fly_camera(&window, &Rndr::InputSystem::GetCurrentContext(),
                                {.start_position = Rndr::Point3f(0.0f, 500.0f, 0.0f),
