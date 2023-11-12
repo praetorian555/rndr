@@ -49,7 +49,7 @@ class MeshRenderer : public Rndr::RendererBase
 public:
     MeshRenderer(const Rndr::String& name, const Rndr::RendererBaseDesc& desc) : Rndr::RendererBase(name, desc)
     {
-        const bool is_data_loaded = ReadMeshData(m_mesh_data, ASSETS_DIR "bistro-exterior.rndr");
+        const bool is_data_loaded = ReadMeshData(m_mesh_data, ASSETS_DIR "example-mesh.rndr");
         if (!is_data_loaded)
         {
             RNDR_LOG_ERROR("Failed to load mesh data from file!");
