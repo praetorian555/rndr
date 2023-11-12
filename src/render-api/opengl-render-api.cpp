@@ -200,6 +200,7 @@ Rndr::GraphicsContext::GraphicsContext(Rndr::GraphicsContext&& other) noexcept
       m_native_device_context(other.m_native_device_context),
       m_native_graphics_context(other.m_native_graphics_context)
 {
+    m_bound_pipeline = std::move(other.m_bound_pipeline);
     other.m_native_device_context = nullptr;
     other.m_native_graphics_context = nullptr;
 }
@@ -212,6 +213,7 @@ Rndr::GraphicsContext& Rndr::GraphicsContext::operator=(Rndr::GraphicsContext&& 
         this->~GraphicsContext();
         m_native_device_context = other.m_native_device_context;
         m_native_graphics_context = other.m_native_graphics_context;
+        m_bound_pipeline = std::move(other.m_bound_pipeline);
         other.m_native_device_context = nullptr;
         other.m_native_graphics_context = nullptr;
     }
