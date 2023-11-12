@@ -1,8 +1,9 @@
 #pragma once
 
 #include "rndr/core/base.h"
-#include "rndr/core/containers/stack-array.h"
 #include "rndr/core/containers/array.h"
+#include "rndr/core/containers/stack-array.h"
+#include "rndr/core/containers/string.h"
 
 /**
  * Mesh is a collection of vertex and index buffers. It is used to represent a single renderable object. All vertex attributes are stored in
@@ -61,6 +62,19 @@ struct MeshData
     Rndr::Array<uint8_t> index_buffer_data;
 };
 
+/**
+ * Header of the mesh file.
+ */
+struct MeshFileHeader
+{
+    uint32_t magic;
+    uint32_t version;
+    uint32_t mesh_count;
+    uint32_t data_offset;
+    uint32_t vertex_buffer_size;
+    uint32_t index_buffer_size;
+};
+
 enum MeshAttributesToLoad
 {
     k_load_positions = 1 << 0,
@@ -72,3 +86,6 @@ enum MeshAttributesToLoad
 };
 
 bool ReadMeshData(MeshData& out_mesh_data, const struct aiScene& ai_scene, uint32_t attributes_to_load = k_load_positions);
+
+bool WriteMeshData(const MeshData& mesh_data, const Rndr::String& file_path);
+bool ReadMeshData(MeshData& out_mesh_data, const Rndr::String& file_path);
