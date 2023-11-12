@@ -1,12 +1,10 @@
-#define NOMINMAX
-#include <windows.h>
-#include <commdlg.h>
-#undef near
-#undef far
+#include <filesystem>
 
 #include <imgui.h>
 
-#include <filesystem>
+#include <assimp/cimport.h>
+#include <assimp/postprocess.h>
+#include <assimp/scene.h>
 
 #include "rndr/core/containers/scope-ptr.h"
 #include "rndr/core/containers/string.h"
@@ -14,6 +12,8 @@
 #include "rndr/core/window.h"
 #include "rndr/render-api/render-api.h"
 #include "rndr/utility/imgui-wrapper.h"
+
+#include "../10-mesh-renderer/mesh.h"
 
 class UIRenderer : public Rndr::RendererBase
 {
@@ -26,6 +26,10 @@ public:
     [[nodiscard]] Rndr::String GetOutputFilePath() const { return m_output_file_path; }
 
 private:
+    void RenderMeshConverterTool();
+
+    void ProcessMesh();
+
     Rndr::String m_selected_file_path;
     Rndr::String m_output_file_path;
 };
@@ -85,7 +89,13 @@ UIRenderer::~UIRenderer()
 bool UIRenderer::Render()
 {
     Rndr::ImGuiWrapper::StartFrame();
+    RenderMeshConverterTool();
+    Rndr::ImGuiWrapper::EndFrame();
+    return true;
+}
 
+void UIRenderer::RenderMeshConverterTool()
+{
     ImGui::Begin("Mesh Converter Tool");
     if (ImGui::Button("Select file to convert..."))
     {
@@ -95,27 +105,43 @@ bool UIRenderer::Render()
     }
     ImGui::Text("Selected file: %s", !m_selected_file_path.empty() ? m_selected_file_path.c_str() : "None");
     ImGui::Text("Output file: %s", !m_output_file_path.empty() ? m_output_file_path.c_str() : "None");
-    ImGui::Button("Convert");
+    if (ImGui::Button("Convert"))
+    {
+        ProcessMesh();
+    }
     ImGui::End();
-
-    Rndr::ImGuiWrapper::EndFrame();
-    return true;
 }
 
-Rndr::String OpenFileDialog()
+void UIRenderer::ProcessMesh()
 {
-    OPENFILENAME ofn;
-    char fileName[MAX_PATH] = "";
-    ZeroMemory(&ofn, sizeof(ofn));
+    constexpr uint32_t k_ai_process_flags = aiProcess_JoinIdenticalVertices | aiProcess_Triangulate | aiProcess_GenSmoothNormals |
+                                            aiProcess_LimitBoneWeights | aiProcess_SplitLargeMeshes | aiProcess_ImproveCacheLocality |
+                                            aiProcess_RemoveRedundantMaterials | aiProcess_FindDegenerates | aiProcess_FindInvalidData |
+                                            aiProcess_GenUVCoords;
 
-    ofn.lStructSize = sizeof(OPENFILENAME);
-    ofn.hwndOwner = NULL;  // If you have a window to center over, put its HANDLE here
-    ofn.lpstrFilter = "Any File\0*.*\0";
-    ofn.lpstrFile = fileName;
-    ofn.nMaxFile = MAX_PATH;
-    ofn.lpstrTitle = "Select a File";
-    ofn.Flags = OFN_DONTADDTORECENT | OFN_FILEMUSTEXIST;
+    const aiScene* scene = aiImportFile(m_selected_file_path.c_str(), k_ai_process_flags);
+    if (scene == nullptr || !scene->HasMeshes())
+    {
+        RNDR_LOG_ERROR("Failed to load mesh from file with error: %s", aiGetErrorString());
+        RNDR_HALT("Invalid mesh file!");
+        return;
+    }
 
-    GetOpenFileName(&ofn);
-    return fileName;
+    MeshData mesh_data;
+    const bool is_data_loaded = ReadMeshData(mesh_data, *scene, k_load_positions);
+    if (!is_data_loaded)
+    {
+        RNDR_LOG_ERROR("Failed to load mesh data from file: %s", m_selected_file_path.c_str());
+        RNDR_HALT("Failed  to load mesh data!");
+        return;
+    }
+    aiReleaseImport(scene);
+
+    const bool is_data_written = WriteMeshData(mesh_data, m_output_file_path);
+    if (!is_data_written)
+    {
+        RNDR_LOG_ERROR("Failed to write mesh data to file: %s", m_output_file_path.c_str());
+        RNDR_HALT("Failed to write mesh data!");
+        return;
+    }
 }
