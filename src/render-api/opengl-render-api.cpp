@@ -480,6 +480,8 @@ bool Rndr::GraphicsContext::Bind(const Image& image, int32_t binding_index)
 bool Rndr::GraphicsContext::BindImageForCompute(const Rndr::Image& image, int32_t binding_index, int32_t image_level,
                                                 Rndr::ImageAccess access)
 {
+    RNDR_TRACE_SCOPED(Bind Image For Compute);
+
     glBindImageTexture(binding_index, image.GetNativeTexture(), image_level, GL_FALSE, 0, FromImageAccessToOpenGL(access),
                        FromPixelFormatToInternalFormat(image.GetDesc().pixel_format));
     if (glGetError() != GL_NO_ERROR)
@@ -528,6 +530,8 @@ bool Rndr::GraphicsContext::DrawIndices(PrimitiveTopology topology, int32_t inde
 bool Rndr::GraphicsContext::DispatchCompute(uint32_t block_count_x, uint32_t block_count_y, uint32_t block_count_z,
                                             bool wait_for_completion)
 {
+    RNDR_TRACE_SCOPED(Dispatch Compute);
+
     glDispatchCompute(block_count_x, block_count_y, block_count_z);
     if (glGetError() != GL_NO_ERROR)
     {
@@ -628,6 +632,8 @@ bool Rndr::GraphicsContext::Read(const Buffer& buffer, ByteSpan& out_data, int32
 
 bool Rndr::GraphicsContext::Read(const Rndr::Image& image, Rndr::Bitmap& out_data, int32_t level) const
 {
+    RNDR_TRACE_SCOPED(Read Image Contents);
+
     if (!image.IsValid())
     {
         RNDR_LOG_ERROR("Read of the image failed since the image is invalid!");
