@@ -11,6 +11,33 @@
 namespace Rndr
 {
 
+struct PresentCommand
+{
+    Ref<const class SwapChain> swap_chain;
+};
+
+struct ClearColorCommand
+{
+    Vector4f color;
+};
+
+struct ClearDepthCommand
+{
+    float depth;
+};
+
+struct ClearStencilCommand
+{
+    int32_t stencil;
+};
+
+struct ClearAllCommand
+{
+    Vector4f color;
+    float depth;
+    int32_t stencil;
+};
+
 struct BindSwapChainCommand
 {
     Ref<const class SwapChain> swap_chain;
@@ -83,7 +110,8 @@ struct DrawIndicesMultiCommand
     DrawIndicesMultiCommand& operator=(DrawIndicesMultiCommand&& other) noexcept;
 };
 
-using Command = std::variant<BindSwapChainCommand, BindPipelineCommand, BindConstantBufferCommand, BindImageCommand, DrawVerticesCommand,
+using Command = std::variant<PresentCommand, ClearColorCommand, ClearDepthCommand, ClearStencilCommand, ClearAllCommand,
+                             BindSwapChainCommand, BindPipelineCommand, BindConstantBufferCommand, BindImageCommand, DrawVerticesCommand,
                              DrawIndicesCommand, DrawVerticesMultiCommand, DrawIndicesMultiCommand>;
 
 }  // namespace Rndr

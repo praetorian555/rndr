@@ -1362,6 +1362,19 @@ struct CommandExecutor
 {
     Rndr::Ref<Rndr::GraphicsContext> graphics_context;
 
+    void operator()(const Rndr::PresentCommand& command) const { graphics_context->Present(command.swap_chain); }
+
+    void operator()(const Rndr::ClearColorCommand& command) const { graphics_context->ClearColor(command.color); }
+
+    void operator()(const Rndr::ClearDepthCommand& command) const { graphics_context->ClearDepth(command.depth); }
+
+    void operator()(const Rndr::ClearStencilCommand& command) const { graphics_context->ClearStencil(command.stencil); }
+
+    void operator()(const Rndr::ClearAllCommand& command) const
+    {
+        graphics_context->ClearAll(command.color, command.depth, command.stencil);
+    }
+
     void operator()(const Rndr::BindSwapChainCommand& command) const { graphics_context->Bind(command.swap_chain); }
 
     void operator()(const Rndr::BindPipelineCommand& command) const { graphics_context->Bind(command.pipeline); }
@@ -1399,6 +1412,36 @@ struct CommandExecutor
 };
 
 Rndr::CommandList::CommandList(Rndr::GraphicsContext& graphics_context) : m_graphics_context(graphics_context) {}
+
+bool Rndr::CommandList::Present(const SwapChain& swap_chain)
+{
+    m_commands.emplace_back(PresentCommand{.swap_chain = Ref<const SwapChain>(swap_chain)});
+    return true;
+}
+
+bool Rndr::CommandList::ClearColor(const Vector4f& color)
+{
+    m_commands.emplace_back(ClearColorCommand{.color = color});
+    return true;
+}
+
+bool Rndr::CommandList::ClearDepth(float depth)
+{
+    m_commands.emplace_back(ClearDepthCommand{.depth = depth});
+    return true;
+}
+
+bool Rndr::CommandList::ClearStencil(int32_t stencil)
+{
+    m_commands.emplace_back(ClearStencilCommand{.stencil = stencil});
+    return true;
+}
+
+bool Rndr::CommandList::ClearAll(const Rndr::Vector4f& color, float depth, int32_t stencil)
+{
+    m_commands.emplace_back(ClearAllCommand{.color = color, .depth = depth, .stencil = stencil});
+    return true;
+}
 
 void Rndr::CommandList::Bind(const Rndr::SwapChain& swap_chain)
 {

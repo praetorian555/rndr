@@ -412,6 +412,43 @@ public:
     CommandList& operator=(CommandList&& other) noexcept = default;
 
     /**
+     * Swaps the front and back buffers of the swap chain.
+     * @param swap_chain The swap chain to present.
+     * @return Returns true if the swap chain was presented successfully, false otherwise.
+     */
+    bool Present(const SwapChain& swap_chain);
+
+    /**
+     * Clears the color image in the bound frame buffer.
+     * @param color The color to clear the image to.
+     * @return Returns true if the image was cleared successfully, false otherwise.
+     */
+    bool ClearColor(const Vector4f& color);
+
+    /**
+     * Clears the depth image in the bound frame buffer.
+     * @param depth The depth value to clear the image to.
+     * @return Returns true if the image was cleared successfully, false otherwise.
+     */
+    bool ClearDepth(float depth);
+
+    /**
+     * Clears the stencil image in the bound frame buffer.
+     * @param stencil The stencil value to clear the image to.
+     * @return Returns true if the image was cleared successfully, false otherwise.
+     */
+    bool ClearStencil(int32_t stencil);
+
+    /**
+     * Clears the color and depth images in the bound frame buffer.
+     * @param color Color to clear the color image to.
+     * @param depth Depth value to clear the depth image to. Default is 1.
+     * @param stencil Stencil value to clear the stencil image to. Default is 0.
+     * @return Returns true if the images were cleared successfully, false otherwise.
+     */
+    bool ClearAll(const Vector4f& color, float depth = 1.0f, int32_t stencil = 0);
+
+    /**
      * Binds a swap chain to the graphics pipeline.
      * @param swap_chain The swap chain to bind.
      * @return Returns true if the swap chain was bound successfully, false otherwise.
@@ -440,6 +477,16 @@ public:
      * @return Returns true if the image was bound successfully, false otherwise.
      */
     void Bind(const Image& image, int32_t binding_index);
+
+    /**
+     * Binds one level of the image to the compute pipeline.
+     * @param image The image to bind.
+     * @param binding_index The binding index to bind the image to.
+     * @param image_level The image level to bind.
+     * @param access How the image will be accessed in the compute shader.
+     * @return Returns true if the image was bound successfully, false otherwise.
+     */
+    bool BindImageForCompute(const Image& image, int32_t binding_index, int32_t image_level, ImageAccess access);
 
     /**
      * Draws primitives without use of index buffer. It will behave as if indices were specified
@@ -477,6 +524,16 @@ public:
      * @param draws The draw indices data.
      */
     void DrawIndicesMulti(const Pipeline& pipeline, PrimitiveTopology topology, const Span<DrawIndicesData>& draws);
+
+    /**
+     * Dispatches a compute shader.
+     * @param block_count_x Number of blocks in the x dimension.
+     * @param block_count_y Number of blocks in the y dimension.
+     * @param block_count_z Number of blocks in the z dimension.
+     * @param wait_for_completion Whether or not to wait for the compute shader to finish executing before returning. Default is true.
+     * @return Returns true if the dispatch was successful, false otherwise.
+     */
+    bool DispatchCompute(uint32_t block_count_x, uint32_t block_count_y, uint32_t block_count_z, bool wait_for_completion = true);
 
     /**
      * Submits the command list to the GPU.
