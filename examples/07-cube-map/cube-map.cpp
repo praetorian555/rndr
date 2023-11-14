@@ -164,7 +164,8 @@ void Run()
         window.ProcessEvents();
 
         // Clear the screen and draw the mesh.
-        graphics_context.ClearColorAndDepth(k_clear_color, 1);
+        graphics_context.ClearColor(k_clear_color);
+        graphics_context.ClearDepth(1.0f);
 
         // Setup transform that rotates the model around the Y axis.
         const float ratio = static_cast<float>(window.GetWidth()) / static_cast<float>(window.GetHeight());

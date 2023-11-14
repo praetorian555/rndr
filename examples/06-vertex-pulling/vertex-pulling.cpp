@@ -137,7 +137,8 @@ void Run()
         graphics_context.Update(per_frame_buffer, Rndr::ToByteSpan(per_frame_data));
 
         // Clear the screen and draw the mesh.
-        graphics_context.ClearColorAndDepth(k_clear_color, 1);
+        graphics_context.ClearColor(k_clear_color);
+        graphics_context.ClearDepth(1.0f);
         graphics_context.DrawIndices(Rndr::PrimitiveTopology::Triangle, index_count);
 
         Rndr::ImGuiWrapper::StartFrame();

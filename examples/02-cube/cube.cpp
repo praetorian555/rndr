@@ -111,7 +111,8 @@ void Run()
         graphics_context.Update(per_frame_buffer, Rndr::ToByteSpan(per_frame_data));
 
         constexpr int32_t k_index_count = 36;
-        graphics_context.ClearColorAndDepth(k_clear_color);
+        graphics_context.ClearColor(k_clear_color);
+        graphics_context.ClearDepth(1.0f);
         graphics_context.Bind(swap_chain);
         graphics_context.Bind(solid_pipeline);
         graphics_context.Bind(per_frame_buffer, 0);

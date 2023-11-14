@@ -175,7 +175,8 @@ void Run()
         Rndr::Matrix4x4f mvp2 = p * t2;
         mvp2 = Math::Transpose(mvp2);
 
-        graphics_context.ClearColorAndDepth(k_clear_color, 1);
+        graphics_context.ClearColor(k_clear_color);
+        graphics_context.ClearDepth(1.0f);
 
         PerFrameData per_frame_data = {.mvp = mvp1};
         graphics_context.Update(per_frame_buffer, Rndr::ToByteSpan(per_frame_data));

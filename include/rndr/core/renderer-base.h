@@ -36,14 +36,14 @@ protected:
 class ClearRenderer : public RendererBase
 {
 public:
-    ClearRenderer(const String& name, const RendererBaseDesc& desc, const Vector4f& color, float depth = 1.0f, uint32_t stencil = 0);
+    ClearRenderer(const String& name, const RendererBaseDesc& desc, const Vector4f& color, float depth = 1.0f, int32_t stencil = 0);
 
     bool Render() override;
 
 protected:
     Vector4f m_color;
     float m_depth;
-    uint32_t m_stencil;
+    int32_t m_stencil;
 };
 
 /**

@@ -258,26 +258,60 @@ bool Rndr::GraphicsContext::ClearColor(const Vector4f& color)
     return true;
 }
 
-bool Rndr::GraphicsContext::ClearColorAndDepth(const Vector4f& color, float depth)
+bool Rndr::GraphicsContext::ClearDepth(float depth)
 {
-    RNDR_TRACE_SCOPED(Clear Color And Depth);
+    RNDR_TRACE_SCOPED(Clear Depth);
 
-    glClearColor(color.x, color.y, color.z, color.w);
-    if (glGetError() != GL_NO_ERROR)
-    {
-        RNDR_LOG_ERROR("Failed to set clear color!");
-        return false;
-    }
     glClearDepth(depth);
     if (glGetError() != GL_NO_ERROR)
     {
         RNDR_LOG_ERROR("Failed to set clear depth!");
         return false;
     }
-    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+    glClear(GL_DEPTH_BUFFER_BIT);
     if (glGetError() != GL_NO_ERROR)
     {
-        RNDR_LOG_ERROR("Failed to clear color and depth buffers!");
+        RNDR_LOG_ERROR("Failed to clear depth buffer!");
+        return false;
+    }
+    return true;
+}
+
+bool Rndr::GraphicsContext::ClearStencil(int32_t stencil)
+{
+    RNDR_TRACE_SCOPED(Clear Stencil);
+
+    glClearStencil(stencil);
+    if (glGetError() != GL_NO_ERROR)
+    {
+        RNDR_LOG_ERROR("Failed to set clear stencil!");
+        return false;
+    }
+    glClear(GL_STENCIL_BUFFER_BIT);
+    if (glGetError() != GL_NO_ERROR)
+    {
+        RNDR_LOG_ERROR("Failed to clear stencil buffer!");
+        return false;
+    }
+    return true;
+}
+
+bool Rndr::GraphicsContext::ClearAll(const Vector4f& color, float depth, int32_t stencil)
+{
+    RNDR_TRACE_SCOPED(Clear All);
+
+    glClearColor(color.x, color.y, color.z, color.w);
+    glClearDepth(depth);
+    glClearStencil(stencil);
+    if (glGetError() != GL_NO_ERROR)
+    {
+        RNDR_LOG_ERROR("Failed to set clear color, depth and stencil!");
+        return false;
+    }
+    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT | GL_STENCIL_BUFFER_BIT);
+    if (glGetError() != GL_NO_ERROR)
+    {
+        RNDR_LOG_ERROR("Failed to clear color, depth and stencil buffers!");
         return false;
     }
     return true;

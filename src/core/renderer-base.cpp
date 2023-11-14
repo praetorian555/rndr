@@ -8,7 +8,7 @@ Rndr::ClearRenderer::ClearRenderer(const Rndr::String& name,
                                    const Rndr::RendererBaseDesc& desc,
                                    const Vector4f& color,
                                    float depth,
-                                   uint32_t stencil)
+                                   int32_t stencil)
     : RendererBase(name, desc), m_color(color), m_depth(depth), m_stencil(stencil)
 {
 }
@@ -16,7 +16,7 @@ Rndr::ClearRenderer::ClearRenderer(const Rndr::String& name,
 bool Rndr::ClearRenderer::Render()
 {
     RNDR_TRACE_SCOPED(ClearRenderer::Render);
-    return m_desc.graphics_context->ClearColorAndDepth(m_color, m_depth);
+    return m_desc.graphics_context->ClearAll(m_color, m_depth, m_stencil);
 }
 
 Rndr::PresentRenderer::PresentRenderer(const Rndr::String& name, const Rndr::RendererBaseDesc& desc) : RendererBase(name, desc) {}
