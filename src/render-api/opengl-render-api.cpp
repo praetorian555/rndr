@@ -739,11 +739,9 @@ bool Rndr::GraphicsContext::Copy(const Rndr::Buffer& dst_buffer, const Rndr::Buf
     return true;
 }
 
-Rndr::Bitmap Rndr::GraphicsContext::ReadSwapChain(const SwapChain& swap_chain)
+bool Rndr::GraphicsContext::ReadSwapChainColor(const SwapChain& swap_chain, Bitmap& out_bitmap)
 {
     RNDR_TRACE_SCOPED(Read SwapChain);
-
-    Bitmap invalid_bitmap{-1, -1, -1, PixelFormat::R8G8B8_UNORM_SRGB};
 
     const int32_t width = swap_chain.GetDesc().width;
     const int32_t height = swap_chain.GetDesc().height;
@@ -753,7 +751,7 @@ Rndr::Bitmap Rndr::GraphicsContext::ReadSwapChain(const SwapChain& swap_chain)
     if (glGetError() != GL_NO_ERROR)
     {
         RNDR_LOG_ERROR("Failed to read swap chain!");
-        return invalid_bitmap;
+        return false;
     }
     for (int32_t i = 0; i < height / 2; i++)
     {
@@ -767,7 +765,27 @@ Rndr::Bitmap Rndr::GraphicsContext::ReadSwapChain(const SwapChain& swap_chain)
             std::swap(data[index1 + 3], data[index2 + 3]);
         }
     }
-    return Bitmap{width, height, 1, PixelFormat::R8G8B8A8_UNORM_SRGB, data};
+    out_bitmap = Bitmap{width, height, 1, PixelFormat::R8G8B8A8_UNORM_SRGB, data};
+    return true;
+}
+
+bool Rndr::GraphicsContext::ReadSwapChainDepthStencil(const SwapChain& swap_chain, Bitmap& out_bitmap)
+{
+    RNDR_TRACE_SCOPED(Read SwapChain);
+
+    const int32_t width = swap_chain.GetDesc().width;
+    const int32_t height = swap_chain.GetDesc().height;
+    const int32_t size = width * height;
+    Array<uint32_t> data(size);
+    glReadPixels(0, 0, width, height, GL_DEPTH_STENCIL, GL_UNSIGNED_INT_24_8, data.data());
+    if (glGetError() != GL_NO_ERROR)
+    {
+        RNDR_LOG_ERROR("Failed to read swap chain!");
+        return false;
+    }
+    const ByteSpan byte_data(reinterpret_cast<uint8_t*>(data.data()), size * sizeof(uint32_t));
+    out_bitmap = Bitmap{width, height, 1, PixelFormat::D24_UNORM_S8_UINT, byte_data};
+    return true;
 }
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////

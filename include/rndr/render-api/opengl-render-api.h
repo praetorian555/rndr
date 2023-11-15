@@ -185,11 +185,20 @@ public:
     bool Copy(const Buffer& dst_buffer, const Buffer& src_buffer, int32_t dst_offset = 0, int32_t src_offset = 0, int32_t size = 0);
 
     /**
-     * Reads the contents of a swap chain color image.
+     * Read the contents of a swap chain color buffer.
      * @param swap_chain The swap chain to read.
-     * @return Returns the image data.
+     * @param out_bitmap Where to store read data.
+     * @return Returns true if the read was successful, false otherwise.
      */
-    [[nodiscard]] Bitmap ReadSwapChain(const SwapChain& swap_chain);
+    [[nodiscard]] bool ReadSwapChainColor(const SwapChain& swap_chain, Bitmap& out_bitmap);
+
+    /**
+     * Read the contents of a swap chain depth stencil buffer.
+     * @param swap_chain The swap chain to read.
+     * @param out_bitmap Where to store read data.
+     * @return Returns true if the read was successful, false otherwise.
+     */
+    [[nodiscard]] bool ReadSwapChainDepthStencil(const SwapChain& swap_chain, Bitmap& out_bitmap);
 
 private:
     GraphicsContextDesc m_desc;

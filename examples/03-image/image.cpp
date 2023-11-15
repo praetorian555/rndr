@@ -119,7 +119,10 @@ void Run()
         RNDR_UNUSED(primitive);
         RNDR_UNUSED(trigger);
         RNDR_UNUSED(value);
-        const Rndr::Bitmap image_to_save = graphics_context.ReadSwapChain(swap_chain);
+        Rndr::Bitmap image_to_save;
+        const bool is_read = graphics_context.ReadSwapChainColor(swap_chain, image_to_save);
+        RNDR_ASSERT(is_read);
+        RNDR_UNUSED(is_read);
         Rndr::File::SaveImage(image_to_save, "screenshot.png");
 
 #if RNDR_ETC2COMP
