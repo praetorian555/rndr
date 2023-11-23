@@ -31,6 +31,7 @@ set(SOURCE_LIST
     "${PROJECT_SOURCE_DIR}/include/rndr/utility/line-renderer.h"
     "${PROJECT_SOURCE_DIR}/include/rndr/utility/fly-camera.h"
     "${PROJECT_SOURCE_DIR}/include/rndr/utility/mesh.h"
+    "${PROJECT_SOURCE_DIR}/include/rndr/utility/material.h"
     "${PROJECT_SOURCE_DIR}/src/core/base.cpp"
     "${PROJECT_SOURCE_DIR}/src/core/time.cpp"
     "${PROJECT_SOURCE_DIR}/src/core/window.cpp"
