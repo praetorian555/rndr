@@ -12,8 +12,7 @@
 #include "rndr/core/window.h"
 #include "rndr/render-api/render-api.h"
 #include "rndr/utility/imgui-wrapper.h"
-
-#include "../10-mesh-renderer/mesh.h"
+#include "rndr/utility/mesh.h"
 
 class UIRenderer : public Rndr::RendererBase
 {
@@ -127,8 +126,8 @@ void UIRenderer::ProcessMesh()
         return;
     }
 
-    MeshData mesh_data;
-    const bool is_data_loaded = ReadMeshData(mesh_data, *scene, k_load_positions);
+    Rndr::MeshData mesh_data;
+    const bool is_data_loaded = ReadMeshData(mesh_data, *scene, Rndr::MeshAttributesToLoad::LoadPositions);
     if (!is_data_loaded)
     {
         RNDR_LOG_ERROR("Failed to load mesh data from file: %s", m_selected_file_path.c_str());

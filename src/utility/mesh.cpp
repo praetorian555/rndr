@@ -1,4 +1,4 @@
-#include "mesh.h"
+#include "rndr/utility/mesh.h"
 
 #include <assimp/cimport.h>
 #include <assimp/postprocess.h>
@@ -11,7 +11,7 @@ namespace
     constexpr uint32_t k_magic = 0x89ABCDEF;
 }
 
-bool ReadMeshData(MeshData& out_mesh_data, const struct aiScene& ai_scene, uint32_t attributes_to_load)
+bool Rndr::ReadMeshData(MeshData& out_mesh_data, const aiScene& ai_scene, MeshAttributesToLoad attributes_to_load)
 {
     if (!ai_scene.HasMeshes())
     {
@@ -19,8 +19,8 @@ bool ReadMeshData(MeshData& out_mesh_data, const struct aiScene& ai_scene, uint3
         return false;
     }
 
-    const bool should_load_normals = attributes_to_load & k_load_normals;
-    const bool should_load_uvs = attributes_to_load & k_load_uvs;
+    const bool should_load_normals = static_cast<bool>(attributes_to_load & MeshAttributesToLoad::LoadNormals);
+    const bool should_load_uvs = static_cast<bool>(attributes_to_load & MeshAttributesToLoad::LoadUvs);
     uint32_t vertex_size = sizeof(Rndr::Point3f);
     if (should_load_normals)
     {
@@ -102,7 +102,7 @@ bool ReadMeshData(MeshData& out_mesh_data, const struct aiScene& ai_scene, uint3
     return true;
 }
 
-bool WriteMeshData(const MeshData& mesh_data, const Rndr::String& file_path)
+bool Rndr::WriteMeshData(const MeshData& mesh_data, const Rndr::String& file_path)
 {
     FILE* f = nullptr;
     fopen_s(&f, file_path.c_str(), "wb");
@@ -129,7 +129,7 @@ bool WriteMeshData(const MeshData& mesh_data, const Rndr::String& file_path)
     return true;
 }
 
-bool ReadMeshData(MeshData& out_mesh_data, const Rndr::String& file_path)
+bool Rndr::ReadMeshData(MeshData& out_mesh_data, const Rndr::String& file_path)
 {
     FILE* f = nullptr;
     fopen_s(&f,file_path.c_str(), "rb");

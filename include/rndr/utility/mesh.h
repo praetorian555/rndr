@@ -4,11 +4,16 @@
 #include "rndr/core/containers/array.h"
 #include "rndr/core/containers/stack-array.h"
 #include "rndr/core/containers/string.h"
+#include "rndr/core/enum-flags.h"
+
+struct aiScene;
+
+namespace Rndr
+{
 
 /**
- * Mesh is a collection of vertex and index buffers. It is used to represent a single renderable object. All vertex attributes are stored in
- * separate streams in the vertex buffer. Each stream has a different size and element size. The index buffer contains indices for all LODs
- * of the mesh. Each LOD is stored in a separate part of the index buffer.
+ * Description of a single mesh. It contains information about the mesh's streams and LODs. It does not contain the actual
+ * mesh data. Mesh data is stored in MeshData.
  */
 struct MeshDescription final
 {
@@ -53,7 +58,7 @@ public:
 };
 
 /**
- * Collection of multiple meshes all stored in single vertex and index buffers.
+ * Collection of multiple meshes all stored in single vertex and index buffers. It also contains descriptions of all meshes.
  */
 struct MeshData
 {
@@ -75,17 +80,39 @@ struct MeshFileHeader
     uint32_t index_buffer_size;
 };
 
-enum MeshAttributesToLoad
+enum class MeshAttributesToLoad
 {
-    k_load_positions = 1 << 0,
-    k_load_normals = 1 << 1,
-    k_load_uvs = 1 << 2,
-    k_load_tangents = 1 << 3,
-    k_load_bitangents = 1 << 4,
-    k_load_all = k_load_positions | k_load_normals | k_load_uvs | k_load_tangents | k_load_bitangents
+    LoadPositions = 1 << 0,
+    LoadNormals = 1 << 1,
+    LoadUvs = 1 << 2,
+    LoadAll = LoadPositions | LoadNormals | LoadUvs,
 };
+RNDR_ENUM_CLASS_FLAGS(MeshAttributesToLoad)
 
-bool ReadMeshData(MeshData& out_mesh_data, const struct aiScene& ai_scene, uint32_t attributes_to_load = k_load_positions);
+/**
+ * Reads mesh data from the Assimp scene.
+ * @param out_mesh_data Destination mesh data.
+ * @param ai_scene Assimp scene.
+ * @param attributes_to_load Attributes to load from the Assimp scene.
+ * @return True if mesh data was read successfully, false otherwise.
+ */
+bool ReadMeshData(MeshData& out_mesh_data, const aiScene& ai_scene,
+                  MeshAttributesToLoad attributes_to_load = MeshAttributesToLoad::LoadPositions);
 
-bool WriteMeshData(const MeshData& mesh_data, const Rndr::String& file_path);
+/**
+ * Reads mesh data from a file containing custom mesh data format.
+ * @param out_mesh_data Destination mesh data.
+ * @param file_path Path to the file.
+ * @return True if mesh data was read successfully, false otherwise.
+ */
 bool ReadMeshData(MeshData& out_mesh_data, const Rndr::String& file_path);
+
+/**
+ * Writes mesh data to a file containing custom mesh data format.
+ * @param mesh_data Mesh data to write.
+ * @param file_path Path to the file.
+ * @return True if mesh data was written successfully, false otherwise.
+ */
+bool WriteMeshData(const MeshData& mesh_data, const Rndr::String& file_path);
+
+}  // namespace Rndr

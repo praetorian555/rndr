@@ -1,7 +1,5 @@
 #include "rndr/rndr.h"
 
-#include "mesh.h"
-
 void Run();
 
 int main()
@@ -109,7 +107,7 @@ public:
         draw_commands.resize(m_mesh_data.meshes.size());
         for (int i = 0; i < draw_commands.size(); i++)
         {
-            const MeshDescription& mesh_desc = m_mesh_data.meshes[i];
+            const Rndr::MeshDescription& mesh_desc = m_mesh_data.meshes[i];
             draw_commands[i] = {.index_count = mesh_desc.GetLodIndicesCount(0),
                                 .instance_count = 1,
                                 .first_index = mesh_desc.index_offset,
@@ -163,7 +161,7 @@ private:
     Rndr::CommandList m_command_list;
     Rndr::CommandList m_wireframe_command_list;
 
-    MeshData m_mesh_data;
+    Rndr::MeshData m_mesh_data;
     Rndr::Matrix4x4f m_camera_transform;
 };
 
