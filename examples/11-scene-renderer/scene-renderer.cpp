@@ -167,7 +167,7 @@ private:
 
 void Run()
 {
-    Rndr::Window window({.width = 1600, .height = 1200, .name = "Mesh Renderer Example"});
+    Rndr::Window window({.width = 1600, .height = 1200, .name = "Scene Renderer Example"});
     Rndr::GraphicsContext graphics_context({.window_handle = window.GetNativeWindowHandle()});
     RNDR_ASSERT(graphics_context.IsValid());
     Rndr::SwapChain swap_chain(graphics_context, {.width = window.GetWidth(), .height = window.GetHeight(), .enable_vsync = false});
