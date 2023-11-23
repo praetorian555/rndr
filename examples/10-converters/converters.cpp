@@ -47,7 +47,7 @@ int main()
 void Run()
 {
     Rndr::WindowDesc window_desc;
-    window_desc.name = "Mesh Converter";
+    window_desc.name = "Converters";
     window_desc.width = 1280;
     window_desc.height = 720;
 
