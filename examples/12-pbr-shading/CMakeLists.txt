@@ -1,0 +1,4 @@
+add_executable(12-pbr-shading pbr-shading.cpp)
+target_link_libraries(12-pbr-shading PUBLIC rndr)
+set_target_properties(12-pbr-shading PROPERTIES FOLDER Examples)
+target_compile_definitions(12-pbr-shading PUBLIC -DASSETS_DIR="${CMAKE_CURRENT_SOURCE_DIR}/../assets/")
