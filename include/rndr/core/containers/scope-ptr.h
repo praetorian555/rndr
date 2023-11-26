@@ -13,9 +13,16 @@ namespace Rndr
 template <typename T>
 using ScopePtr = std::unique_ptr<T>;
 
+template <typename T, typename... Args>
+RNDR_FORCE_INLINE Rndr::ScopePtr<T> MakeScoped(Args&&... args)
+{
+    return Rndr::ScopePtr<T>{RNDR_NEW(T, std::forward<Args>(args)...)};
+}
+
 }  // namespace Rndr
 
 /**
  * Helper macro to create a new object of type T on the heap and store it in a ScopePtr.
  */
+ // TODO: Remove this macro.
 #define RNDR_MAKE_SCOPED(type, ...) Rndr::ScopePtr<type>(RNDR_NEW(type, __VA_ARGS__))
