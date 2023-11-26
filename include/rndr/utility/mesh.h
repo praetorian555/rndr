@@ -100,19 +100,19 @@ bool ReadMeshData(MeshData& out_mesh_data, const aiScene& ai_scene,
                   MeshAttributesToLoad attributes_to_load = MeshAttributesToLoad::LoadPositions);
 
 /**
- * Reads mesh data from a file containing custom mesh data format.
+ * Reads mesh data from a file containing optimized rndr mesh data format.
  * @param out_mesh_data Destination mesh data.
  * @param file_path Path to the file.
  * @return True if mesh data was read successfully, false otherwise.
  */
-bool ReadMeshData(MeshData& out_mesh_data, const Rndr::String& file_path);
+bool ReadOptimizedMeshData(MeshData& out_mesh_data, const Rndr::String& file_path);
 
 /**
- * Writes mesh data to a file containing custom mesh data format.
+ * Writes mesh data to a file containing optimized rndr mesh data format.
  * @param mesh_data Mesh data to write.
  * @param file_path Path to the file.
  * @return True if mesh data was written successfully, false otherwise.
  */
-bool WriteMeshData(const MeshData& mesh_data, const Rndr::String& file_path);
+bool WriteOptimizedMeshData(const MeshData& mesh_data, const Rndr::String& file_path);
 
 }  // namespace Rndr

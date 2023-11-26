@@ -136,7 +136,7 @@ void UIRenderer::ProcessMesh()
     }
     aiReleaseImport(scene);
 
-    const bool is_data_written = WriteMeshData(mesh_data, m_output_file_path);
+    const bool is_data_written = WriteOptimizedMeshData(mesh_data, m_output_file_path);
     if (!is_data_written)
     {
         RNDR_LOG_ERROR("Failed to write mesh data to file: %s", m_output_file_path.c_str());

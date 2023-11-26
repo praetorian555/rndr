@@ -102,34 +102,7 @@ bool Rndr::ReadMeshData(MeshData& out_mesh_data, const aiScene& ai_scene, MeshAt
     return true;
 }
 
-bool Rndr::WriteMeshData(const MeshData& mesh_data, const Rndr::String& file_path)
-{
-    FILE* f = nullptr;
-    fopen_s(&f, file_path.c_str(), "wb");
-    if (f == nullptr)
-    {
-        RNDR_LOG_ERROR("Failed to open file %s!", file_path.c_str());
-        return false;
-    }
-
-    MeshFileHeader header;
-    header.magic = k_magic;
-    header.version = 1;
-    header.mesh_count = static_cast<uint32_t>(mesh_data.meshes.size());
-    header.data_offset = sizeof(MeshFileHeader) + header.mesh_count * sizeof(MeshDescription);
-    header.vertex_buffer_size = static_cast<uint32_t>(mesh_data.vertex_buffer_data.size());
-    header.index_buffer_size = static_cast<uint32_t>(mesh_data.index_buffer_data.size());
-
-    fwrite(&header, 1, sizeof(MeshFileHeader), f);
-    fwrite(mesh_data.meshes.data(), 1, header.mesh_count * sizeof(MeshDescription), f);
-    fwrite(mesh_data.vertex_buffer_data.data(), 1, mesh_data.vertex_buffer_data.size(), f);
-    fwrite(mesh_data.index_buffer_data.data(), 1, mesh_data.index_buffer_data.size(), f);
-
-    fclose(f);
-    return true;
-}
-
-bool Rndr::ReadMeshData(MeshData& out_mesh_data, const Rndr::String& file_path)
+bool Rndr::ReadOptimizedMeshData(MeshData& out_mesh_data, const Rndr::String& file_path)
 {
     FILE* f = nullptr;
     fopen_s(&f,file_path.c_str(), "rb");
@@ -176,6 +149,33 @@ bool Rndr::ReadMeshData(MeshData& out_mesh_data, const Rndr::String& file_path)
         fclose(f);
         return false;
     }
+
+    fclose(f);
+    return true;
+}
+
+bool Rndr::WriteOptimizedMeshData(const MeshData& mesh_data, const Rndr::String& file_path)
+{
+    FILE* f = nullptr;
+    fopen_s(&f, file_path.c_str(), "wb");
+    if (f == nullptr)
+    {
+        RNDR_LOG_ERROR("Failed to open file %s!", file_path.c_str());
+        return false;
+    }
+
+    MeshFileHeader header;
+    header.magic = k_magic;
+    header.version = 1;
+    header.mesh_count = static_cast<uint32_t>(mesh_data.meshes.size());
+    header.data_offset = sizeof(MeshFileHeader) + header.mesh_count * sizeof(MeshDescription);
+    header.vertex_buffer_size = static_cast<uint32_t>(mesh_data.vertex_buffer_data.size());
+    header.index_buffer_size = static_cast<uint32_t>(mesh_data.index_buffer_data.size());
+
+    fwrite(&header, 1, sizeof(MeshFileHeader), f);
+    fwrite(mesh_data.meshes.data(), 1, header.mesh_count * sizeof(MeshDescription), f);
+    fwrite(mesh_data.vertex_buffer_data.data(), 1, mesh_data.vertex_buffer_data.size(), f);
+    fwrite(mesh_data.index_buffer_data.data(), 1, mesh_data.index_buffer_data.size(), f);
 
     fclose(f);
     return true;
