@@ -234,6 +234,6 @@ if (CMAKE_PROJECT_NAME STREQUAL PROJECT_NAME)
     add_subdirectory(examples/08-debug-features)
     add_subdirectory(examples/09-animation)
     add_subdirectory(examples/10-converters)
-    add_subdirectory(examples/11-scene-renderer)
+    add_subdirectory(examples/11-mesh-renderer)
 
 endif ()
