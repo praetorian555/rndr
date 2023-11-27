@@ -1,6 +1,7 @@
 #include "rndr/core/base.h"
 #include "rndr/core/containers/scope-ptr.h"
 #include "rndr/core/containers/string.h"
+#include "rndr/core/file.h"
 #include "rndr/core/input.h"
 #include "rndr/core/renderer-base.h"  // TODO: Rename renderer-base.h to renderer-manager.h
 #include "rndr/core/time.h"
@@ -30,12 +31,22 @@ public:
     PbrRenderer(const Rndr::String& name, const Rndr::RendererBaseDesc& desc, const Rndr::String& asset_path)
         : Rndr::RendererBase(name, desc), m_asset_path(asset_path)
     {
+        using namespace Rndr;
+        const String vertex_shader_code = Rndr::File::ReadShader(ASSETS_DIR, "basic-pbr.vert");
+        const String fragment_shader_code = Rndr::File::ReadShader(ASSETS_DIR, "basic-pbr.frag");
+        m_vertex_shader = Shader(desc.graphics_context, {.type = ShaderType::Vertex, .source = vertex_shader_code});
+        RNDR_ASSERT(m_vertex_shader.IsValid());
+        m_fragment_shader = Shader(desc.graphics_context, {.type = ShaderType::Fragment, .source = fragment_shader_code});
+        RNDR_ASSERT(m_fragment_shader.IsValid());
     }
 
     bool Render() override { return true; }
 
 private:
     Rndr::String m_asset_path;
+
+    Rndr::Shader m_vertex_shader;
+    Rndr::Shader m_fragment_shader;
 };
 
 void Run(const Rndr::String& asset_path)
