@@ -11,13 +11,15 @@ void Run(const Rndr::String& asset_path);
 
 int main(int argc, char* argv[])
 {
-    if (argc < 2)
-    {
-        RNDR_LOG_ERROR("No asset path provided");
-        return 1;
-    }
     Rndr::Init({.enable_input_system = true});
-    Run(argv[1]);
+    if (argc > 1)
+    {
+        Run(argv[1]);
+    }
+    else
+    {
+        RNDR_LOG_ERROR("No asset path provided!");
+    }
     Rndr::Destroy();
     return 0;
 }
