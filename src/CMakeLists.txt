@@ -45,7 +45,8 @@ set(SOURCE_LIST
     "${PROJECT_SOURCE_DIR}/src/utility/frames-per-second-counter.cpp"
     "${PROJECT_SOURCE_DIR}/src/utility/line-renderer.cpp"
     "${PROJECT_SOURCE_DIR}/src/utility/fly-camera.cpp"
-    "${PROJECT_SOURCE_DIR}/src/utility/mesh.cpp")
+    "${PROJECT_SOURCE_DIR}/src/utility/mesh.cpp"
+    "${PROJECT_SOURCE_DIR}/src/utility/material.cpp")
 
 if (RNDR_OPENGL)
     list(APPEND SOURCE_LIST
