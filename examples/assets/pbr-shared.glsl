@@ -183,8 +183,15 @@ vec3 CalculatePBRLightContribution(inout PbrInfo pbr_inputs, vec3 light_directio
 	return color;
 }
 
-// http://www.thetenthplanet.de/archives/1180
-// modified to fix handedness of the resulting cotangent frame
+/**
+ * Calculates a transform that will convert a normal from the normal map space to the world space
+ * oriented according to the normal of the surface.
+ * @param normal The surface normal in world space. This is the geometry normal, not the normal from the normal map.
+ * @param position A vector from the pixel on the surface to the camera in world space.
+ * @param uv The texture coordinates of the pixel.
+ * @return A matrix that will convert a normal from the normal map space to the world space.
+ * @note Explanation for the algorithm can be found at: http://www.thetenthplanet.de/archives/1180
+ */
 mat3 CotangentFrame(vec3 normal, vec3 position, vec2 uv)
 {
 	// get edge vectors of the pixel triangle
@@ -211,9 +218,18 @@ mat3 CotangentFrame(vec3 normal, vec3 position, vec2 uv)
 	return mat3(T * invmax, B * invmax, normal);
 }
 
+/**
+ * Perturbs a normal using a normal map. This means that normal from the normal map is converted
+ * from the normal map space to the world space.
+ * @param n The surface normal in world space. This is the geometry normal, not the normal from the normal map.
+ * @param v A vector from the pixel on the surface to the camera in world space.
+ * @param normal_sample The normal from the normal map in the normal map space.
+ * @param uv The texture coordinates of the pixel.
+ * @return The perturbed normal in world space.
+ */
 vec3 PerturbNormal(vec3 n, vec3 v, vec3 normal_sample, vec2 uv)
 {
-	vec3 map = normalize( 2.0 * normal_sample - vec3(1.0) );
+	vec3 map = normalize(2.0 * normal_sample - vec3(1.0));
 	mat3 tbn = CotangentFrame(n, v, uv);
 	return normalize(tbn * map);
 }
