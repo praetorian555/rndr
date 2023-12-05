@@ -27,7 +27,7 @@ public:
 private:
     void RenderMeshConverterTool();
 
-    void ProcessMesh();
+    void ProcessMesh(Rndr::MeshAttributesToLoad attributes_to_load);
 
     Rndr::String m_selected_file_path;
     Rndr::String m_output_file_path;
@@ -104,14 +104,28 @@ void UIRenderer::RenderMeshConverterTool()
     }
     ImGui::Text("Selected file: %s", !m_selected_file_path.empty() ? m_selected_file_path.c_str() : "None");
     ImGui::Text("Output file: %s", !m_output_file_path.empty() ? m_output_file_path.c_str() : "None");
+
+    Rndr::MeshAttributesToLoad attributes_to_load = Rndr::MeshAttributesToLoad::LoadPositions;
+    static bool s_should_load_normals = false;
+    static bool s_should_load_uvs = false;
+    ImGui::Checkbox("Load Normals", &s_should_load_normals);
+    ImGui::Checkbox("Load Uvs", &s_should_load_uvs);
+    if (s_should_load_normals)
+    {
+        attributes_to_load |= Rndr::MeshAttributesToLoad::LoadNormals;
+    }
+    if (s_should_load_uvs)
+    {
+        attributes_to_load |= Rndr::MeshAttributesToLoad::LoadUvs;
+    }
     if (ImGui::Button("Convert"))
     {
-        ProcessMesh();
+        ProcessMesh(attributes_to_load);
     }
     ImGui::End();
 }
 
-void UIRenderer::ProcessMesh()
+void UIRenderer::ProcessMesh(Rndr::MeshAttributesToLoad attributes_to_load)
 {
     constexpr uint32_t k_ai_process_flags = aiProcess_JoinIdenticalVertices | aiProcess_Triangulate | aiProcess_GenSmoothNormals |
                                             aiProcess_LimitBoneWeights | aiProcess_SplitLargeMeshes | aiProcess_ImproveCacheLocality |
@@ -127,7 +141,7 @@ void UIRenderer::ProcessMesh()
     }
 
     Rndr::MeshData mesh_data;
-    const bool is_data_loaded = ReadMeshData(mesh_data, *scene, Rndr::MeshAttributesToLoad::LoadPositions);
+    const bool is_data_loaded = ReadMeshData(mesh_data, *scene, attributes_to_load);
     if (!is_data_loaded)
     {
         RNDR_LOG_ERROR("Failed to load mesh data from file: %s", m_selected_file_path.c_str());
