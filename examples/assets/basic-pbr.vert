@@ -2,8 +2,7 @@
 
 layout(std140, binding = 0) uniform PerFrameData
 {
-    mat4 view_matrix;
-    mat4 projection_matrix;
+    mat4 view_projection_matrix;
     vec4 camera_position_world;
 };
 
@@ -54,7 +53,7 @@ void main()
     mat4 model_matrix = instances[gl_DrawID].model_matrix;
     mat3 normal_matrix = mat3(instances[gl_DrawID].normal_matrix);
 
-    mat4 mvp = projection_matrix * view_matrix * model_matrix;
+    mat4 mvp = view_projection_matrix * model_matrix;
     vec3 pos = GetPosition(gl_VertexID);
     gl_Position = mvp * vec4(pos, 1.0);
 

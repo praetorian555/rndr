@@ -3,14 +3,13 @@
 
 layout(std140, binding = 0) uniform PerFrameData
 {
-    mat4 view;
-    mat4 proj;
+    mat4 view_projection_matrix;
     vec4 camera_position_world;
 };
 
-layout (location=0) in vec2 tex_coords;
-layout (location=1) in vec3 normal;
-layout (location=2) in vec3 world_position;
+layout (location=0) in vec3 normal;
+layout (location=1) in vec2 tex_coords;
+layout (location=2) in vec3 position_world;
 
 layout (location=0) out vec4 out_frag_color;
 
@@ -39,14 +38,14 @@ void main()
     vec3 normal_sample = texture(tex_normal, tex_coords).xyz;
 
     // normal mapping
-    n = perturbNormal(n, normalize(camera_position_world.xyz - world_position), normal_sample, tex_coords);
+    n = PerturbNormal(n, normalize(camera_position_world.xyz - position_world), normal_sample, tex_coords);
 
     vec4 mr_sample = texture(tex_metal_roughness, tex_coords);
 
     PbrInfo pbr_inputs;
     ke.rgb = SrgbToLinear(ke).rgb;
     // image-based lighting
-    vec3 color = CalculatePBRInputsMetallicRoughness(kd, n, camera_position_world.xyz, world_position, mr_sample, pbr_inputs);
+    vec3 color = CalculatePBRInputsMetallicRoughness(kd, n, camera_position_world.xyz, position_world, mr_sample, pbr_inputs);
     // one hardcoded light source
     color += CalculatePBRLightContribution( pbr_inputs, normalize(vec3(-1.0, -1.0, -1.0)), vec3(1.0) );
     // ambient occlusion

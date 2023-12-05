@@ -146,7 +146,7 @@ vec3 CalculatePBRInputsMetallicRoughness(vec4 albedo, vec3 normal, vec3 camera_p
 	pbr_inputs.vec_from_surface_to_camera = v;
 
 	// Calculate lighting contribution from image based lighting source (IBL)
-	vec3 color = GetIblContribution(pbr_inputs, n, reflection);
+	vec3 color = GetIblContribution(pbr_inputs, n, reflection, tex_env_map, tex_env_map_irradiance, tex_brdf_lut);
 
 	return color;
 }
