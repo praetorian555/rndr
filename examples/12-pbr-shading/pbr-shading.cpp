@@ -10,6 +10,7 @@
 #include "rndr/utility/fly-camera.h"
 #include "rndr/utility/input-layout-builder.h"
 #include "rndr/utility/mesh.h"
+#include "rndr/utility/cube-map.h"
 
 void Run(const Rndr::String& asset_path);
 
@@ -74,21 +75,41 @@ public:
                                        .stride = sizeof(uint32_t)},
                                       m_mesh_data.index_buffer_data);
         RNDR_ASSERT(m_index_buffer.IsValid());
-
         m_instance_buffer = Rndr::Buffer(desc.graphics_context,
                                          {.type = Rndr::BufferType::Vertex, .usage = Rndr::Usage::Dynamic, .size = sizeof(InstanceData)});
         RNDR_ASSERT(m_instance_buffer.IsValid());
-
+        const Rndr::Matrix4x4f model_transform(1.0f);
+        InstanceData instance_data = {.model = model_transform, .normal = model_transform};
+        m_desc.graphics_context->Update(m_instance_buffer, Rndr::ToByteSpan(instance_data));
         m_per_frame_buffer = Rndr::Buffer(
             desc.graphics_context, {.type = Rndr::BufferType::Constant, .usage = Rndr::Usage::Dynamic, .size = sizeof(PerFrameData)});
         RNDR_ASSERT(m_per_frame_buffer.IsValid());
+
+        const Rndr::String albedo_image_path = m_asset_path + "/Default_albedo.jpg";
+        m_albedo_image = LoadImage(Rndr::ImageType::Image2D, albedo_image_path);
+        RNDR_ASSERT(m_albedo_image.IsValid());
+
+        const Rndr::String normal_image_path = m_asset_path + "/Default_normal.jpg";
+        m_normal_image = LoadImage(Rndr::ImageType::Image2D, normal_image_path);
+        RNDR_ASSERT(m_normal_image.IsValid());
+
+        const Rndr::String metallic_roughness_image_path = m_asset_path + "/Default_metalRoughness.jpg";
+        m_metallic_roughness_image = LoadImage(Rndr::ImageType::Image2D, metallic_roughness_image_path);
+        RNDR_ASSERT(m_metallic_roughness_image.IsValid());
+
+        const Rndr::String ao_image_path = m_asset_path + "/Default_ao.jpg";
+        m_ao_image = LoadImage(Rndr::ImageType::Image2D, ao_image_path);
+        RNDR_ASSERT(m_ao_image.IsValid());
+
+        const Rndr::String emissive_image_path = m_asset_path + "/Default_emissive.jpg";
+        m_emissive_image = LoadImage(Rndr::ImageType::Image2D, emissive_image_path);
+        RNDR_ASSERT(m_emissive_image.IsValid());
 
         const Rndr::InputLayoutDesc input_layout_desc = Rndr::InputLayoutBuilder()
                                                             .AddVertexBuffer(m_vertex_buffer, 1, Rndr::DataRepetition::PerVertex)
                                                             .AddVertexBuffer(m_instance_buffer, 2, Rndr::DataRepetition::PerInstance, 1)
                                                             .AddIndexBuffer(m_index_buffer)
                                                             .Build();
-
         m_pipeline = Rndr::Pipeline(desc.graphics_context, {.vertex_shader = &m_vertex_shader,
                                                             .pixel_shader = &m_fragment_shader,
                                                             .input_layout = input_layout_desc,
@@ -96,12 +117,13 @@ public:
                                                             .depth_stencil = {.is_depth_enabled = true}});
         RNDR_ASSERT(m_pipeline.IsValid());
 
-        const Rndr::Matrix4x4f model_transform(1.0f);
-        InstanceData instance_data = {.model = model_transform, .normal = model_transform};
-        m_desc.graphics_context->Update(m_instance_buffer, Rndr::ToByteSpan(instance_data));
-
         m_command_list = Rndr::CommandList(desc.graphics_context);
         m_command_list.BindConstantBuffer(m_per_frame_buffer, 0);
+        m_command_list.Bind(m_ao_image, 0);
+        m_command_list.Bind(m_emissive_image, 1);
+        m_command_list.Bind(m_albedo_image, 2);
+        m_command_list.Bind(m_metallic_roughness_image, 3);
+        m_command_list.Bind(m_normal_image, 4);
         m_command_list.Bind(m_pipeline);
         m_command_list.DrawIndices(Rndr::PrimitiveTopology::Triangle, static_cast<int32_t>(m_mesh_data.index_buffer_data.size()));
     }
@@ -122,16 +144,81 @@ public:
         m_camera_position = position;
     }
 
+    Rndr::Image LoadImage(Rndr::ImageType image_type, const Rndr::String& image_path)
+    {
+        using namespace Rndr;
+        constexpr bool k_flip_vertically = true;
+        if (image_type == ImageType::Image2D)
+        {
+            Bitmap bitmap = Rndr::File::ReadEntireImage(image_path, PixelFormat::R8G8B8A8_UNORM_SRGB, k_flip_vertically);
+            RNDR_ASSERT(bitmap.IsValid());
+            const ImageDesc image_desc{.width = bitmap.GetWidth(),
+                                       .height = bitmap.GetHeight(),
+                                       .array_size = 1,
+                                       .type = image_type,
+                                       .pixel_format = bitmap.GetPixelFormat(),
+                                       .use_mips = true,
+                                       .sampler = {.max_anisotropy = 16.0f}};
+            const ConstByteSpan bitmap_data{bitmap.GetData(), bitmap.GetSize3D()};
+            return {m_desc.graphics_context, image_desc, bitmap_data};
+        }
+        if (image_type == ImageType::CubeMap)
+        {
+            const Bitmap equirectangular_bitmap = Rndr::File::ReadEntireImage(image_path, PixelFormat::R32G32B32_FLOAT, k_flip_vertically);
+            RNDR_ASSERT(equirectangular_bitmap.IsValid());
+            const bool is_equirectangular = equirectangular_bitmap.GetWidth() == 2 * equirectangular_bitmap.GetHeight();
+            Bitmap vertical_cross_bitmap;
+            if (is_equirectangular)
+            {
+                if (!Rndr::CubeMap::ConvertEquirectangularMapToVerticalCross(equirectangular_bitmap, vertical_cross_bitmap))
+                {
+                    RNDR_HALT("Failed to convert equirectangular map to vertical cross!");
+                    return {};
+                }
+            }
+            else
+            {
+                vertical_cross_bitmap = equirectangular_bitmap;
+            }
+            Bitmap cube_map_bitmap;
+            if (!Rndr::CubeMap::ConvertVerticalCrossToCubeMapFaces(vertical_cross_bitmap, cube_map_bitmap))
+            {
+                RNDR_HALT("Failed to convert vertical cross to cube map faces!");
+                return {};
+            }
+            const ImageDesc image_desc{.width = cube_map_bitmap.GetWidth(),
+                                       .height = cube_map_bitmap.GetHeight(),
+                                       .array_size = cube_map_bitmap.GetDepth(),
+                                       .type = image_type,
+                                       .pixel_format = cube_map_bitmap.GetPixelFormat(),
+                                       .use_mips = true,
+                                       .sampler = {.address_mode_u = ImageAddressMode::Clamp,
+                                                   .address_mode_v = ImageAddressMode::Clamp,
+                                                   .address_mode_w = ImageAddressMode::Clamp}};
+            const ConstByteSpan bitmap_data{cube_map_bitmap.GetData(), cube_map_bitmap.GetSize3D()};
+            return {m_desc.graphics_context, image_desc, bitmap_data};
+        }
+        return {};
+    }
+
 private:
     Rndr::String m_asset_path;
 
     Rndr::Shader m_vertex_shader;
     Rndr::Shader m_fragment_shader;
+
     Rndr::MeshData m_mesh_data;
     Rndr::Buffer m_vertex_buffer;
     Rndr::Buffer m_index_buffer;
     Rndr::Buffer m_instance_buffer;
     Rndr::Buffer m_per_frame_buffer;
+
+    Rndr::Image m_albedo_image;
+    Rndr::Image m_normal_image;
+    Rndr::Image m_metallic_roughness_image;
+    Rndr::Image m_ao_image;
+    Rndr::Image m_emissive_image;
+
     Rndr::Pipeline m_pipeline;
     Rndr::CommandList m_command_list;
 
