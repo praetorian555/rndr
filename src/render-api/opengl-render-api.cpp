@@ -1268,6 +1268,10 @@ Rndr::Image::Image(const GraphicsContext& graphics_context, const ImageDesc& des
     {
         mip_map_levels += static_cast<int>(Math::Floor(Math::Log2(Math::Max(size.x, size.y))));
     }
+    if (desc.sampler.max_mip_level == 0 && desc.use_mips)
+    {
+        glTextureParameteri(m_native_texture, GL_TEXTURE_MAX_LEVEL, mip_map_levels - 1);
+    }
     if (desc.type == ImageType::Image2D)
     {
         const GLenum internal_format = FromPixelFormatToInternalFormat(desc.pixel_format);
@@ -1283,6 +1287,10 @@ Rndr::Image::Image(const GraphicsContext& graphics_context, const ImageDesc& des
             glTextureSubImage2D(m_native_texture, k_mip_level, k_x_offset, k_y_offset, desc.width, desc.height, format, data_type,
                                 init_data.data());
         }
+        if (desc.use_mips)
+        {
+            glGenerateTextureMipmap(m_native_texture);
+        }
     }
     else if (desc.type == ImageType::CubeMap)
     {
@@ -1291,6 +1299,7 @@ Rndr::Image::Image(const GraphicsContext& graphics_context, const ImageDesc& des
         const GLenum format = FromPixelFormatToFormat(desc.pixel_format);
         const GLenum data_type = FromPixelFormatToDataType(desc.pixel_format);
         glTextureStorage2D(m_native_texture, mip_map_levels, internal_format, desc.width, desc.height);
+        glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
         constexpr int k_face_count = 6;
         for (int i = 0; i < k_face_count; i++)
         {
@@ -1302,6 +1311,10 @@ Rndr::Image::Image(const GraphicsContext& graphics_context, const ImageDesc& des
             const uint8_t* data = init_data.data() + i * desc.width * desc.height * FromPixelFormatToPixelSize(desc.pixel_format);
             glTextureSubImage3D(m_native_texture, k_mip_level, k_x_offset, k_y_offset, z_offset, desc.width, desc.height, k_depth, format,
                                 data_type, data);
+        }
+        if (desc.use_mips)
+        {
+            glGenerateTextureMipmap(m_native_texture);
         }
     }
     else

@@ -558,7 +558,10 @@ struct SamplerDesc
     /** Minimum mip level to use. */
     int32_t base_mip_level = 0;
 
-    /** Maximum mip level to use. */
+    /**
+     * Maximum mip level to use. If use_mips in ImageDesc is set to true and this value is 0 it will be overridden by number of mip map
+     * levels - 1.
+     */
     int32_t max_mip_level = 0;
 
     /** Minimum LOD level to use. This value will resolve to base_mip_level value. */
