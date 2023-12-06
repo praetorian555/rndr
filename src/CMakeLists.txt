@@ -32,6 +32,7 @@ set(SOURCE_LIST
     "${PROJECT_SOURCE_DIR}/include/rndr/utility/fly-camera.h"
     "${PROJECT_SOURCE_DIR}/include/rndr/utility/mesh.h"
     "${PROJECT_SOURCE_DIR}/include/rndr/utility/material.h"
+    "${PROJECT_SOURCE_DIR}/include/rndr/utility/cube-map.h"
     "${PROJECT_SOURCE_DIR}/src/core/base.cpp"
     "${PROJECT_SOURCE_DIR}/src/core/time.cpp"
     "${PROJECT_SOURCE_DIR}/src/core/window.cpp"
@@ -46,7 +47,8 @@ set(SOURCE_LIST
     "${PROJECT_SOURCE_DIR}/src/utility/line-renderer.cpp"
     "${PROJECT_SOURCE_DIR}/src/utility/fly-camera.cpp"
     "${PROJECT_SOURCE_DIR}/src/utility/mesh.cpp"
-    "${PROJECT_SOURCE_DIR}/src/utility/material.cpp")
+    "${PROJECT_SOURCE_DIR}/src/utility/material.cpp"
+    "${PROJECT_SOURCE_DIR}/src/utility/cube-map.cpp")
 
 if (RNDR_OPENGL)
     list(APPEND SOURCE_LIST
