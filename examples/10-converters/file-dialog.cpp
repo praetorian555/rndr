@@ -1,5 +1,6 @@
 #include <windows.h>
 #include <commdlg.h>
+#include <shlobj.h>
 
 #include "rndr/core/containers/string.h"
 
@@ -19,4 +20,31 @@ Rndr::String OpenFileDialog()
 
     GetOpenFileName(&ofn);
     return fileName;
+}
+
+Rndr::String OpenFolderDialog()
+{
+    BROWSEINFO bi = { 0 };
+    bi.lpszTitle = "Browse for folder...";
+    LPITEMIDLIST pidl = SHBrowseForFolder(&bi);
+    Rndr::String ret;
+    if (pidl != 0)
+    {
+        // get the name of the folder
+        char path[MAX_PATH];
+        if (SHGetPathFromIDList(pidl, path))
+        {
+            ret = path;
+        }
+
+        // free memory used
+        IMalloc *imalloc = 0;
+        if (SUCCEEDED(SHGetMalloc(&imalloc)))
+        {
+            imalloc->Free(pidl);
+            imalloc->Release();
+        }
+    }
+
+    return ret;
 }

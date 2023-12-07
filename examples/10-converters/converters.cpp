@@ -26,8 +26,10 @@ public:
 
 private:
     void RenderMeshConverterTool();
+    void RenderComputeBrdfLutTool();
 
     void ProcessMesh(Rndr::MeshAttributesToLoad attributes_to_load);
+    void ComputeBrdfLut(const Rndr::String& output_path);
 
     Rndr::String m_selected_file_path;
     Rndr::String m_output_file_path;
@@ -35,6 +37,7 @@ private:
 
 void Run();
 Rndr::String OpenFileDialog();
+Rndr::String OpenFolderDialog();
 
 int main()
 {
@@ -89,6 +92,7 @@ bool UIRenderer::Render()
 {
     Rndr::ImGuiWrapper::StartFrame();
     RenderMeshConverterTool();
+    RenderComputeBrdfLutTool();
     Rndr::ImGuiWrapper::EndFrame();
     return true;
 }
@@ -125,6 +129,31 @@ void UIRenderer::RenderMeshConverterTool()
     ImGui::End();
 }
 
+void UIRenderer::RenderComputeBrdfLutTool() {
+    ImGui::Begin("Compute BRDF LUT Tool");
+    static Rndr::String s_selected_file_path;
+    if (ImGui::Button("Select output path..."))
+    {
+        s_selected_file_path = OpenFolderDialog();
+    }
+    ImGui::Text("Output file: %s", !s_selected_file_path.empty() ? (s_selected_file_path + "/brdflut.brdf").c_str() : "None");
+    static Rndr::String s_status = "Idle";
+    if (ImGui::Button("Compute BRDF"))
+    {
+        if (s_selected_file_path.empty())
+        {
+            s_status = "No output path selected!";
+        }
+        else
+        {
+            ComputeBrdfLut(s_selected_file_path);
+            s_status = "Done";
+        }
+    }
+    ImGui::Text("Status: %s", s_status.c_str());
+    ImGui::End();
+}
+
 void UIRenderer::ProcessMesh(Rndr::MeshAttributesToLoad attributes_to_load)
 {
     constexpr uint32_t k_ai_process_flags = aiProcess_JoinIdenticalVertices | aiProcess_Triangulate | aiProcess_GenSmoothNormals |
@@ -157,4 +186,9 @@ void UIRenderer::ProcessMesh(Rndr::MeshAttributesToLoad attributes_to_load)
         RNDR_HALT("Failed to write mesh data!");
         return;
     }
+}
+
+void UIRenderer::ComputeBrdfLut(const Rndr::String& output_path)
+{
+    RNDR_UNUSED(output_path);
 }
