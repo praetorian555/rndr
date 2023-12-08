@@ -6,8 +6,13 @@
 #include <assimp/postprocess.h>
 #include <assimp/scene.h>
 
+#include <gli/gli.hpp>
+#include <gli/load_ktx.hpp>
+#include <gli/texture2d.hpp>
+
 #include "rndr/core/containers/scope-ptr.h"
 #include "rndr/core/containers/string.h"
+#include "rndr/core/file.h"
 #include "rndr/core/renderer-base.h"
 #include "rndr/core/window.h"
 #include "rndr/render-api/render-api.h"
@@ -29,10 +34,16 @@ private:
     void RenderComputeBrdfLutTool();
 
     void ProcessMesh(Rndr::MeshAttributesToLoad attributes_to_load);
-    void ComputeBrdfLut(const Rndr::String& output_path);
+    void ComputeBrdfLut(const Rndr::String& output_path, Rndr::String& status);
 
     Rndr::String m_selected_file_path;
     Rndr::String m_output_file_path;
+
+    Rndr::Buffer m_brdf_lut_buffer;
+    Rndr::Shader m_brdf_lut_shader;
+    Rndr::Pipeline m_brdf_lut_pipeline;
+    int32_t m_brdf_lut_width = 256;
+    int32_t m_brdf_lut_height = 256;
 };
 
 void Run();
@@ -81,6 +92,17 @@ void Run()
 UIRenderer::UIRenderer(const Rndr::String& name, Rndr::Window& window, const Rndr::RendererBaseDesc& desc) : RendererBase(name, desc)
 {
     Rndr::ImGuiWrapper::Init(window, *desc.graphics_context, {.display_demo_window = true});
+
+    const uint32_t buffer_size = m_brdf_lut_width * m_brdf_lut_height * sizeof(float) * 2;
+    m_brdf_lut_buffer =
+        Rndr::Buffer(desc.graphics_context,
+                     Rndr::BufferDesc{.type = Rndr::BufferType::ShaderStorage, .usage = Rndr::Usage::ReadBack, .size = buffer_size});
+    RNDR_ASSERT(m_brdf_lut_buffer.IsValid());
+    const Rndr::String shader_source = Rndr::File::ReadShader(ASSETS_DIR, "compute-brdf.glsl");
+    m_brdf_lut_shader = Rndr::Shader(desc.graphics_context, Rndr::ShaderDesc{.type = Rndr::ShaderType::Compute, .source = shader_source});
+    RNDR_ASSERT(m_brdf_lut_shader.IsValid());
+    m_brdf_lut_pipeline = Rndr::Pipeline(desc.graphics_context, Rndr::PipelineDesc{.compute_shader = &m_brdf_lut_shader});
+    RNDR_ASSERT(m_brdf_lut_pipeline.IsValid());
 }
 
 UIRenderer::~UIRenderer()
@@ -129,14 +151,16 @@ void UIRenderer::RenderMeshConverterTool()
     ImGui::End();
 }
 
-void UIRenderer::RenderComputeBrdfLutTool() {
+void UIRenderer::RenderComputeBrdfLutTool()
+{
     ImGui::Begin("Compute BRDF LUT Tool");
     static Rndr::String s_selected_file_path;
     if (ImGui::Button("Select output path..."))
     {
         s_selected_file_path = OpenFolderDialog();
     }
-    ImGui::Text("Output file: %s", !s_selected_file_path.empty() ? (s_selected_file_path + "/brdflut.brdf").c_str() : "None");
+    Rndr::String output_file_path = !s_selected_file_path.empty() ? (s_selected_file_path + "\\brdflut.ktx") : "None";
+    ImGui::Text("Output file: %s", output_file_path.c_str());
     static Rndr::String s_status = "Idle";
     if (ImGui::Button("Compute BRDF"))
     {
@@ -146,8 +170,7 @@ void UIRenderer::RenderComputeBrdfLutTool() {
         }
         else
         {
-            ComputeBrdfLut(s_selected_file_path);
-            s_status = "Done";
+            ComputeBrdfLut(output_file_path, s_status);
         }
     }
     ImGui::Text("Status: %s", s_status.c_str());
@@ -188,7 +211,43 @@ void UIRenderer::ProcessMesh(Rndr::MeshAttributesToLoad attributes_to_load)
     }
 }
 
-void UIRenderer::ComputeBrdfLut(const Rndr::String& output_path)
+void UIRenderer::ComputeBrdfLut(const Rndr::String& output_path, Rndr::String& status)
 {
     RNDR_UNUSED(output_path);
+    m_desc.graphics_context->Bind(m_brdf_lut_buffer, 0);
+    m_desc.graphics_context->Bind(m_brdf_lut_pipeline);
+    if (!m_desc.graphics_context->DispatchCompute(m_brdf_lut_width, m_brdf_lut_height, 1))
+    {
+        status = "Failed to dispatch compute shader!";
+        return;
+    }
+
+    Rndr::Array<float> read_data_storage(m_brdf_lut_width * m_brdf_lut_height * 2);
+    Rndr::ByteSpan read_data = Rndr::ToByteSpan(read_data_storage);
+    if (!m_desc.graphics_context->Read(m_brdf_lut_buffer, read_data))
+    {
+        status = "Failed to read buffer data!";
+        return;
+    }
+
+    gli::texture lut_texture = gli::texture2d(gli::FORMAT_RG16_SFLOAT_PACK16, gli::extent2d(m_brdf_lut_width, m_brdf_lut_height), 1);
+
+    for (int y = 0; y < m_brdf_lut_height; y++)
+    {
+        for (int x = 0; x < m_brdf_lut_width; x++)
+        {
+            const int ofs = y * m_brdf_lut_width + x;
+            const gli::vec2 value(read_data_storage[ofs * 2 + 0], read_data_storage[ofs * 2 + 1]);
+            const gli::texture::extent_type uv = { x, y, 0 };
+            lut_texture.store<glm::uint32>(uv, 0, 0, 0, gli::packHalf2x16(value));
+        }
+    }
+
+    if (!gli::save_ktx(lut_texture, output_path))
+    {
+        status = "Failed to save BRDF LUT to file!";
+        return;
+    }
+
+    status = "BRDF LUT computed successfully!";
 }

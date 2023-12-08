@@ -3,10 +3,9 @@
 
 layout (local_size_x = 1, local_size_y = 1, local_size_z = 1) in;
 
-layout (constant_id = 0) const uint NUM_SAMPLES = 1024u;
+layout(std430, binding = 0) buffer DST { float out_data[]; };
 
-layout (set = 0, binding = 0) buffer DST { float data[]; } dst;
-
+const uint NUM_SAMPLES = 1024u;
 const uint BRDF_W = 256;
 const uint BRDF_H = 256;
 
@@ -98,10 +97,10 @@ void main()
     uv.x = (float(gl_GlobalInvocationID.x) + 0.5) / float(BRDF_W);
     uv.y = (float(gl_GlobalInvocationID.y) + 0.5) / float(BRDF_H);
 
-    vec2 v = BRDF(uv.x, uv.y);
+    vec2 v = BRDF(uv.x, 1.0 - uv.y);
 
     uint offset = gl_GlobalInvocationID.y * BRDF_W + gl_GlobalInvocationID.x;
 
-    dst.data[offset * 2 + 0] = v.x;
-    dst.data[offset * 2 + 1] = v.y;
+    out_data[offset * 2 + 0] = v.x;
+    out_data[offset * 2 + 1] = v.y;
 }
