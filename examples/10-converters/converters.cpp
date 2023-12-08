@@ -16,6 +16,7 @@
 #include "rndr/core/renderer-base.h"
 #include "rndr/core/window.h"
 #include "rndr/render-api/render-api.h"
+#include "rndr/utility/cube-map.h"
 #include "rndr/utility/imgui-wrapper.h"
 #include "rndr/utility/mesh.h"
 
@@ -32,9 +33,11 @@ public:
 private:
     void RenderMeshConverterTool();
     void RenderComputeBrdfLutTool();
+    void RenderComputeEnvironmentMapTool();
 
     void ProcessMesh(Rndr::MeshAttributesToLoad attributes_to_load);
     void ComputeBrdfLut(const Rndr::String& output_path, Rndr::String& status);
+    void ComputeEnvironmentMap(const Rndr::String& input_path, const Rndr::String& output_path, Rndr::String& status);
 
     Rndr::String m_selected_file_path;
     Rndr::String m_output_file_path;
@@ -115,6 +118,7 @@ bool UIRenderer::Render()
     Rndr::ImGuiWrapper::StartFrame();
     RenderMeshConverterTool();
     RenderComputeBrdfLutTool();
+    RenderComputeEnvironmentMapTool();
     Rndr::ImGuiWrapper::EndFrame();
     return true;
 }
@@ -171,6 +175,40 @@ void UIRenderer::RenderComputeBrdfLutTool()
         else
         {
             ComputeBrdfLut(output_file_path, s_status);
+        }
+    }
+    ImGui::Text("Status: %s", s_status.c_str());
+    ImGui::End();
+}
+
+void UIRenderer::RenderComputeEnvironmentMapTool()
+{
+    ImGui::Begin("Compute Environment Map Tool");
+    static Rndr::String s_selected_file = "None";
+    static Rndr::String s_output_file = "None";
+    if (ImGui::Button("Select input environment map..."))
+    {
+        s_selected_file = OpenFileDialog();
+        std::filesystem::path path(s_selected_file);
+        Rndr::String selected_directory = path.parent_path().string();
+        Rndr::String selected_file_name = path.stem().string();
+        Rndr::String selected_file_extension = path.extension().string();
+        s_output_file = selected_directory + "\\" + selected_file_name + "_irradience" + selected_file_extension;
+    }
+
+    ImGui::Text("Input file: %s", s_selected_file.c_str());
+    ImGui::Text("Output file: %s", s_output_file.c_str());
+
+    static Rndr::String s_status = "Idle";
+    if (ImGui::Button("Convolve"))
+    {
+        if (s_output_file.empty())
+        {
+            s_status = "No output path selected!";
+        }
+        else
+        {
+            ComputeEnvironmentMap(s_selected_file, s_output_file, s_status);
         }
     }
     ImGui::Text("Status: %s", s_status.c_str());
@@ -238,7 +276,7 @@ void UIRenderer::ComputeBrdfLut(const Rndr::String& output_path, Rndr::String& s
         {
             const int ofs = y * m_brdf_lut_width + x;
             const gli::vec2 value(read_data_storage[ofs * 2 + 0], read_data_storage[ofs * 2 + 1]);
-            const gli::texture::extent_type uv = { x, y, 0 };
+            const gli::texture::extent_type uv = {x, y, 0};
             lut_texture.store<glm::uint32>(uv, 0, 0, 0, gli::packHalf2x16(value));
         }
     }
@@ -250,4 +288,39 @@ void UIRenderer::ComputeBrdfLut(const Rndr::String& output_path, Rndr::String& s
     }
 
     status = "BRDF LUT computed successfully!";
+}
+
+void UIRenderer::ComputeEnvironmentMap(const Rndr::String& input_path, const Rndr::String& output_path, Rndr::String& status)
+{
+    Rndr::Bitmap input_bitmap = Rndr::File::ReadEntireImage(input_path, Rndr::PixelFormat::R32G32B32_FLOAT);
+    if (!input_bitmap.IsValid())
+    {
+        status = "Failed to read input image!";
+        return;
+    }
+
+    const int32_t input_width = input_bitmap.GetWidth();
+    const int32_t input_height = input_bitmap.GetHeight();
+    Rndr::Vector3f* input_data = reinterpret_cast<Rndr::Vector3f*>(input_bitmap.GetData());
+
+    const int32_t output_width = 256;
+    const int32_t output_height = 128;
+    Rndr::Array<Rndr::Vector3f> output_data(output_width * output_height);
+
+    constexpr int32_t k_nb_monte_carlo_samples = 1024;
+    if (!Rndr::CubeMap::ConvolveDiffuse(input_data, input_width, input_height, output_width, output_height, output_data.data(),
+                                        k_nb_monte_carlo_samples))
+    {
+        status = "Failed to convolve input image!";
+        return;
+    }
+
+    Rndr::Bitmap output_bitmap(output_width, output_height, 1, Rndr::PixelFormat::R32G32B32_FLOAT, Rndr::ToByteSpan(output_data));
+    if (!Rndr::File::SaveImage(output_bitmap, output_path))
+    {
+        status = "Failed to save output image!";
+        return;
+    }
+
+    status = "Environment map convolved successfully!";
 }
