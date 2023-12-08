@@ -199,6 +199,18 @@ if (NOT TARGET meshoptimizer AND RNDR_MESHOPTIMIZER)
     set_target_properties(meshoptimizer PROPERTIES FOLDER Extern)
 endif ()
 
+FetchContent_Declare(
+        gli
+        GIT_REPOSITORY https://github.com/g-truc/gli
+        GIT_TAG 30808550a20ca53a255e6e1e77070493eda7b736 # 0.8.2
+)
+FetchContent_Populate(gli)
+FetchContent_GetProperties(gli SOURCE_DIR GLI_SOURCE_PATH)
+add_library(gli INTERFACE)
+target_include_directories(gli INTERFACE ${GLI_SOURCE_PATH})
+target_include_directories(gli INTERFACE ${GLI_SOURCE_PATH}/external/glm)
+set_target_properties(gli PROPERTIES FOLDER Extern)
+
 # Adds external dependencies
 add_subdirectory(extern)
 

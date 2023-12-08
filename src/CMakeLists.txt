@@ -116,6 +116,8 @@ if (RNDR_MESHOPTIMIZER)
     target_link_libraries(rndr PUBLIC meshoptimizer)
 endif ()
 
+target_link_libraries(rndr PUBLIC gli)
+
 # IDEs should put the headers in a nice place
 set_target_properties(rndr PROPERTIES FOLDER RNDR)
 source_group(
