@@ -2,6 +2,8 @@
 
 #include "rndr/core/math.h"
 
+#include "stb_image/stb_image_resize2.h"
+
 // Represents faces in a resulting image.
 enum class CubeMapFace
 {
@@ -182,5 +184,75 @@ bool Rndr::CubeMap::ConvertVerticalCrossToCubeMapFaces(const Rndr::Bitmap& in_bi
         }
     }
 
+    return true;
+}
+
+namespace
+{
+// From Henry J. Warren's "Hacker's Delight"
+float RadicalInverse_VdC(uint32_t bits)
+{
+    bits = (bits << 16u) | (bits >> 16u);
+    bits = ((bits & 0x55555555u) << 1u) | ((bits & 0xAAAAAAAAu) >> 1u);
+    bits = ((bits & 0x33333333u) << 2u) | ((bits & 0xCCCCCCCCu) >> 2u);
+    bits = ((bits & 0x0F0F0F0Fu) << 4u) | ((bits & 0xF0F0F0F0u) >> 4u);
+    bits = ((bits & 0x00FF00FFu) << 8u) | ((bits & 0xFF00FF00u) >> 8u);
+    return float(bits) * 2.3283064365386963e-10f;  // / 0x100000000
+}
+
+// The i-th point is then computed by
+// From http://holger.dammertz.org/stuff/notes_HammersleyOnHemisphere.html
+Rndr::Vector2f Hammersley2d(uint32_t i, uint32_t num_samples)
+{
+    return {static_cast<float>(i) / static_cast<float>(num_samples), RadicalInverse_VdC(i)};
+}
+}  // namespace
+
+bool Rndr::CubeMap::ConvolveDiffuse(const Vector3f* in_data, int in_width, int in_height, int out_width, int out_height, Vector3f* out_data,
+                                    int nb_monte_carlo_samples)
+{
+    // only equirectangular maps are supported
+    assert(in_width == 2 * in_height);
+    if (in_width != 2 * in_height)
+    {
+        return false;
+    }
+
+    Array<Vector3f> tmp(out_width * out_height);
+
+    stbir_resize(reinterpret_cast<const float*>(in_data), in_width, in_height, 0, reinterpret_cast<float*>(tmp.data()), out_width,
+                 out_height, 0, STBIR_RGB, STBIR_TYPE_FLOAT, STBIR_EDGE_CLAMP, STBIR_FILTER_CUBICBSPLINE);
+
+    const Vector3f* scratch = tmp.data();
+    in_width = out_width;
+    in_height = out_height;
+
+    for (int y = 0; y != out_height; y++)
+    {
+        const float theta1 = static_cast<float>(y) / static_cast<float>(out_height) * Math::k_pi_float;
+        for (int x = 0; x != out_width; x++)
+        {
+            const float phi1 = static_cast<float>(x) / static_cast<float>(out_width) * 2 * Math::k_pi_float;
+            const Vector3f v1 = Vector3f(sin(theta1) * cos(phi1), sin(theta1) * sin(phi1), cos(theta1));
+            Vector3f color = Vector3f(0.0f);
+            float weight = 0.0f;
+            for (int i = 0; i != nb_monte_carlo_samples; i++)
+            {
+                const Vector2f h = Hammersley2d(i, nb_monte_carlo_samples);
+                const int x1 = static_cast<int32_t>(floor(h.x * static_cast<float>(in_width)));
+                const int y1 = static_cast<int32_t>(floor(h.y * static_cast<float>(in_height)));
+                const float theta2 = static_cast<float>(y1) / static_cast<float>(in_height) * Math::k_pi_float;
+                const float phi2 = static_cast<float>(x1) / static_cast<float>(in_width) * 2 * Math::k_pi_float;
+                const Vector3f v2 = Vector3f(sin(theta2) * cos(phi2), sin(theta2) * sin(phi2), cos(theta2));
+                const float d = std::max(0.0f, Math::Dot(v1, v2));
+                if (d > 0.01f)
+                {
+                    color += scratch[y1 * in_width + x1] * d;
+                    weight += d;
+                }
+            }
+            out_data[y * out_width + x] = color / weight;
+        }
+    }
     return true;
 }

@@ -1,6 +1,7 @@
-#include "rndr/core/definitions.h"
+#pragma once
 
 #include "rndr/core/bitmap.h"
+#include "rndr/core/math.h"
 
 namespace Rndr
 {
@@ -30,6 +31,20 @@ bool ConvertEquirectangularMapToVerticalCross(const Bitmap& in_bitmap, Bitmap& o
  * @return Returns true if conversion was successful, false otherwise.
  */
 bool ConvertVerticalCrossToCubeMapFaces(const Rndr::Bitmap& in_bitmap, Bitmap& out_bitmap);
+
+/**
+ * Convolve an equirectangular environment map with the GGX distribution of gltf shading model.
+ * @param in_data Input equirectangular environment map.
+ * @param in_width Input equirectangular environment map width.
+ * @param in_height Input equirectangular environment map height.
+ * @param out_width Output environment map width.
+ * @param out_height Output environment map height.
+ * @param out_data Output environment map.
+ * @param nb_monte_carlo_samples Number of monte carlo samples to use for the convolution.
+ * @return Returns true if convolution was successful, false otherwise.
+ */
+bool ConvolveDiffuse(const Rndr::Vector3f* in_data, int in_width, int in_height, int out_width, int out_height, Rndr::Vector3f* out_data,
+                     int nb_monte_carlo_samples);
 
 }  // namespace CubeMap
 }  // namespace Rndr
