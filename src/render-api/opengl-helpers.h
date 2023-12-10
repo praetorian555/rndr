@@ -22,7 +22,7 @@ GLint FromImageFilterToOpenGL(ImageFilter filter);
 GLint FromImageAddressModeToOpenGL(ImageAddressMode wrap);
 GLint FromImageAccessToOpenGL(ImageAccess access);
 GLenum FromPixelFormatToInternalFormat(PixelFormat format);
-GLenum FromPixelFormatToFormat(PixelFormat format);
+GLenum FromPixelFormatToExternalFormat(PixelFormat format);
 GLenum FromPixelFormatToDataType(PixelFormat format);
 GLenum FromPixelFormatToShouldNormalizeData(PixelFormat format);
 bool IsPixelFormatInteger(PixelFormat format);

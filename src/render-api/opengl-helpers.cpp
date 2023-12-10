@@ -95,53 +95,57 @@ constexpr Rndr::StackArray<GLenum, k_max_pixel_format> k_to_opengl_internal_pixe
                                                                                             GL_R32I,
 
                                                                                             GL_R32F,
-                                                                                            GL_R16F};
-constexpr Rndr::StackArray<GLenum, k_max_pixel_format> k_to_opengl_pixel_format = {GL_RGBA,
-                                                                                   GL_RGBA,
-                                                                                   GL_RGBA,
-                                                                                   GL_RGBA,
-                                                                                   GL_RGBA,
-                                                                                   GL_BGRA,
-                                                                                   GL_BGRA,
+                                                                                            GL_R16F,
 
-                                                                                   GL_DEPTH_STENCIL,
+                                                                                            GL_RG16F};
+constexpr Rndr::StackArray<GLenum, k_max_pixel_format> k_to_opengl_external_pixel_format = {GL_RGBA,
+                                                                                            GL_RGBA,
+                                                                                            GL_RGBA,
+                                                                                            GL_RGBA,
+                                                                                            GL_RGBA,
+                                                                                            GL_BGRA,
+                                                                                            GL_BGRA,
 
-                                                                                   GL_RGB,
-                                                                                   GL_RGB,
-                                                                                   GL_RGB,
-                                                                                   GL_RGB,
-                                                                                   GL_RGB,
+                                                                                            GL_DEPTH_STENCIL,
 
-                                                                                   GL_RG,
-                                                                                   GL_RG,
-                                                                                   GL_RG,
-                                                                                   GL_RG,
-                                                                                   GL_RG,
+                                                                                            GL_RGB,
+                                                                                            GL_RGB,
+                                                                                            GL_RGB,
+                                                                                            GL_RGB,
+                                                                                            GL_RGB,
 
-                                                                                   GL_RED,
-                                                                                   GL_RED,
-                                                                                   GL_RED,
-                                                                                   GL_RED,
-                                                                                   GL_RED,
+                                                                                            GL_RG,
+                                                                                            GL_RG,
+                                                                                            GL_RG,
+                                                                                            GL_RG,
+                                                                                            GL_RG,
 
-                                                                                   GL_RGBA,
-                                                                                   GL_RGBA,
-                                                                                   GL_RGBA,
+                                                                                            GL_RED,
+                                                                                            GL_RED,
+                                                                                            GL_RED,
+                                                                                            GL_RED,
+                                                                                            GL_RED,
 
-                                                                                   GL_RGB,
-                                                                                   GL_RGB,
-                                                                                   GL_RGB,
+                                                                                            GL_RGBA,
+                                                                                            GL_RGBA,
+                                                                                            GL_RGBA,
 
-                                                                                   GL_RG,
-                                                                                   GL_RG,
-                                                                                   GL_RG,
+                                                                                            GL_RGB,
+                                                                                            GL_RGB,
+                                                                                            GL_RGB,
 
-                                                                                   GL_RED,
-                                                                                   GL_RED,
-                                                                                   GL_RED,
+                                                                                            GL_RG,
+                                                                                            GL_RG,
+                                                                                            GL_RG,
 
-                                                                                   GL_RED,
-                                                                                   GL_RED};
+                                                                                            GL_RED,
+                                                                                            GL_RED,
+                                                                                            GL_RED,
+
+                                                                                            GL_RED,
+                                                                                            GL_RED,
+
+                                                                                            GL_RG};
 constexpr Rndr::StackArray<GLenum, k_max_pixel_format> k_to_opengl_pixel_type = {GL_UNSIGNED_BYTE,
                                                                                  GL_UNSIGNED_BYTE,
                                                                                  GL_UNSIGNED_BYTE,
@@ -187,19 +191,21 @@ constexpr Rndr::StackArray<GLenum, k_max_pixel_format> k_to_opengl_pixel_type = 
                                                                                  GL_INT,
 
                                                                                  GL_FLOAT,
+                                                                                 GL_HALF_FLOAT,
+
                                                                                  GL_HALF_FLOAT};
 constexpr Rndr::StackArray<int32_t, k_max_pixel_format> k_to_pixel_size = {4, 4, 4, 4, 4,  4,  4,  4,  3,  3,  3, 3, 3, 2, 2, 2, 2, 2, 1,
-                                                                           1, 1, 1, 1, 16, 16, 16, 12, 12, 12, 8, 8, 8, 4, 4, 4, 4, 2};
+                                                                           1, 1, 1, 1, 16, 16, 16, 12, 12, 12, 8, 8, 8, 4, 4, 4, 4, 2, 4};
 constexpr Rndr::StackArray<GLint, k_max_pixel_format> k_to_component_count = {4, 4, 4, 4, 4, 4, 4, 2, 3, 3, 3, 3, 3, 2, 2, 2, 2, 2, 1,
-                                                                              1, 1, 1, 1, 4, 4, 4, 3, 3, 3, 2, 2, 2, 1, 1, 1, 1, 1};
+                                                                              1, 1, 1, 1, 4, 4, 4, 3, 3, 3, 2, 2, 2, 1, 1, 1, 1, 1, 2};
 constexpr Rndr::StackArray<GLenum, k_max_pixel_format> k_to_should_normalize_data = {
     GL_TRUE,  GL_TRUE,  GL_FALSE, GL_TRUE,  GL_FALSE, GL_TRUE,  GL_TRUE,  GL_FALSE, GL_TRUE,  GL_TRUE,  GL_FALSE, GL_TRUE,  GL_FALSE,
     GL_TRUE,  GL_TRUE,  GL_FALSE, GL_TRUE,  GL_FALSE, GL_TRUE,  GL_TRUE,  GL_FALSE, GL_TRUE,  GL_FALSE, GL_FALSE, GL_FALSE, GL_FALSE,
-    GL_FALSE, GL_FALSE, GL_FALSE, GL_FALSE, GL_FALSE, GL_FALSE, GL_FALSE, GL_FALSE, GL_FALSE, GL_FALSE, GL_FALSE};
+    GL_FALSE, GL_FALSE, GL_FALSE, GL_FALSE, GL_FALSE, GL_FALSE, GL_FALSE, GL_FALSE, GL_FALSE, GL_FALSE, GL_FALSE, GL_FALSE};
 
 constexpr Rndr::StackArray<bool, k_max_pixel_format> k_is_integer = {
     false, false, true,  false, true,  false, false, false, false, false, true,  false, true, false, false, true, false, true, false,
-    false, true,  false, true,  false, true,  true,  false, true,  true,  false, true,  true, false, true,  true, false, false};
+    false, true,  false, true,  false, true,  true,  false, true,  true,  false, true,  true, false, true,  true, false, false, false};
 
 constexpr size_t k_max_primitive_topology = static_cast<size_t>(Rndr::PrimitiveTopology::EnumCount);
 constexpr Rndr::StackArray<GLenum, k_max_primitive_topology> k_to_opengl_primitive_topology = {GL_POINTS, GL_LINES, GL_LINE_STRIP,
@@ -310,9 +316,9 @@ GLenum Rndr::FromPixelFormatToInternalFormat(PixelFormat format)
     return k_to_opengl_internal_pixel_format[static_cast<size_t>(format)];
 }
 
-GLenum Rndr::FromPixelFormatToFormat(PixelFormat format)
+GLenum Rndr::FromPixelFormatToExternalFormat(PixelFormat format)
 {
-    return k_to_opengl_pixel_format[static_cast<size_t>(format)];
+    return k_to_opengl_external_pixel_format[static_cast<size_t>(format)];
 }
 
 GLenum Rndr::FromPixelFormatToDataType(PixelFormat format)

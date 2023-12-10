@@ -675,7 +675,7 @@ bool Rndr::GraphicsContext::Read(const Rndr::Image& image, Rndr::Bitmap& out_dat
     }
 
     const ImageDesc& desc = image.GetDesc();
-    const GLenum format = FromPixelFormatToFormat(desc.pixel_format);
+    const GLenum format = FromPixelFormatToExternalFormat(desc.pixel_format);
     const GLenum data_type = FromPixelFormatToDataType(desc.pixel_format);
     const int32_t pixel_size = FromPixelFormatToPixelSize(desc.pixel_format);
     Array<uint8_t> tmp_data(pixel_size * desc.width * desc.height);
@@ -1275,7 +1275,7 @@ Rndr::Image::Image(const GraphicsContext& graphics_context, const ImageDesc& des
     if (desc.type == ImageType::Image2D)
     {
         const GLenum internal_format = FromPixelFormatToInternalFormat(desc.pixel_format);
-        const GLenum format = FromPixelFormatToFormat(desc.pixel_format);
+        const GLenum format = FromPixelFormatToExternalFormat(desc.pixel_format);
         const GLenum data_type = FromPixelFormatToDataType(desc.pixel_format);
         glTextureStorage2D(m_native_texture, mip_map_levels, internal_format, desc.width, desc.height);
         glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
@@ -1296,7 +1296,7 @@ Rndr::Image::Image(const GraphicsContext& graphics_context, const ImageDesc& des
     {
         glEnable(GL_TEXTURE_CUBE_MAP_SEAMLESS);
         const GLenum internal_format = FromPixelFormatToInternalFormat(desc.pixel_format);
-        const GLenum format = FromPixelFormatToFormat(desc.pixel_format);
+        const GLenum format = FromPixelFormatToExternalFormat(desc.pixel_format);
         const GLenum data_type = FromPixelFormatToDataType(desc.pixel_format);
         glTextureStorage2D(m_native_texture, mip_map_levels, internal_format, desc.width, desc.height);
         glPixelStorei(GL_UNPACK_ALIGNMENT, 1);

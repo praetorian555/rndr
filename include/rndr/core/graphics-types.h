@@ -84,6 +84,8 @@ enum class PixelFormat
     R32_TYPELESS,
     R16_TYPELESS,
 
+    R16G16_FLOAT,
+
     /** Represents number of elements in the enum. */
     EnumCount
 };
