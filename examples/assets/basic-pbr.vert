@@ -8,9 +8,9 @@ layout(std140, binding = 0) uniform PerFrameData
 
 struct Vertex
 {
-    vec3 position;
-    vec3 normal;
-    vec2 tex_coord;
+    float position[3];
+    float normal[3];
+    float tex_coord[2];
 };
 
 layout(std430, binding = 1) restrict readonly buffer Vertices
@@ -31,17 +31,17 @@ layout(std430, binding = 2) restrict readonly buffer Instances
 
 vec3 GetPosition(int i)
 {
-    return vertices[i].position;
+    return vec3(vertices[i].position[0], vertices[i].position[1], vertices[i].position[2]);
 }
 
 vec3 GetNormal(int i)
 {
-    return vertices[i].normal;
+    return vec3(vertices[i].normal[0], vertices[i].normal[1], vertices[i].normal[2]);
 }
 
 vec2 GetTexCoord(int i)
 {
-    return vertices[i].tex_coord;
+    return vec2(vertices[i].tex_coord[0], vertices[i].tex_coord[1]);
 }
 
 layout (location = 0) out vec3 out_normal;
