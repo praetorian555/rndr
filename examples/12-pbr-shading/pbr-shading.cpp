@@ -1,3 +1,7 @@
+#include <filesystem>
+
+#include <gli/gli.hpp>
+
 #include "rndr/core/base.h"
 #include "rndr/core/containers/scope-ptr.h"
 #include "rndr/core/containers/string.h"
@@ -7,10 +11,10 @@
 #include "rndr/core/time.h"
 #include "rndr/core/window.h"
 #include "rndr/render-api/render-api.h"
+#include "rndr/utility/cube-map.h"
 #include "rndr/utility/fly-camera.h"
 #include "rndr/utility/input-layout-builder.h"
 #include "rndr/utility/mesh.h"
-#include "rndr/utility/cube-map.h"
 
 void Run(const Rndr::String& asset_path);
 
@@ -63,7 +67,7 @@ public:
         }
 
         m_vertex_buffer = Rndr::Buffer(desc.graphics_context,
-                                       {.type = Rndr::BufferType::Vertex,
+                                       {.type = Rndr::BufferType::ShaderStorage,
                                         .usage = Rndr::Usage::Default,
                                         .size = static_cast<uint32_t>(m_mesh_data.vertex_buffer_data.size())},
                                        m_mesh_data.vertex_buffer_data);
@@ -76,9 +80,10 @@ public:
                                       m_mesh_data.index_buffer_data);
         RNDR_ASSERT(m_index_buffer.IsValid());
         m_instance_buffer = Rndr::Buffer(desc.graphics_context,
-                                         {.type = Rndr::BufferType::Vertex, .usage = Rndr::Usage::Dynamic, .size = sizeof(InstanceData)});
+                                         {.type = Rndr::BufferType::ShaderStorage, .usage = Rndr::Usage::Dynamic, .size = sizeof(InstanceData)});
         RNDR_ASSERT(m_instance_buffer.IsValid());
-        const Rndr::Matrix4x4f model_transform(1.0f);
+        Rndr::Matrix4x4f model_transform = Math::Translate(Rndr::Vector3f(0.0f, 0.0f, 0.0f)) * Math::RotateX(90.0f) * Math::Scale(1.0f);
+        model_transform = Math::Transpose(model_transform);
         InstanceData instance_data = {.model = model_transform, .normal = model_transform};
         m_desc.graphics_context->Update(m_instance_buffer, Rndr::ToByteSpan(instance_data));
         m_per_frame_buffer = Rndr::Buffer(
@@ -105,6 +110,17 @@ public:
         m_emissive_image = LoadImage(Rndr::ImageType::Image2D, emissive_image_path);
         RNDR_ASSERT(m_emissive_image.IsValid());
 
+        const Rndr::String env_map_image_path = ASSETS_DIR "/piazza_bologni_1k.hdr";
+        m_env_map_image = LoadImage(Rndr::ImageType::CubeMap, env_map_image_path);
+        RNDR_ASSERT(m_env_map_image.IsValid());
+
+        const Rndr::String irradiance_map_image_path = ASSETS_DIR "/piazza_bologni_1k_irradience.hdr";
+        m_irradiance_map_image = LoadImage(Rndr::ImageType::CubeMap, irradiance_map_image_path);
+        RNDR_ASSERT(m_irradiance_map_image.IsValid());
+
+        const Rndr::String brdf_lut_image_path = ASSETS_DIR "/brdf-lut.ktx";
+        m_brdf_lut_image = LoadImage(Rndr::ImageType::Image2D, brdf_lut_image_path);
+
         const Rndr::InputLayoutDesc input_layout_desc = Rndr::InputLayoutBuilder()
                                                             .AddVertexBuffer(m_vertex_buffer, 1, Rndr::DataRepetition::PerVertex)
                                                             .AddVertexBuffer(m_instance_buffer, 2, Rndr::DataRepetition::PerInstance, 1)
@@ -124,8 +140,12 @@ public:
         m_command_list.Bind(m_albedo_image, 2);
         m_command_list.Bind(m_metallic_roughness_image, 3);
         m_command_list.Bind(m_normal_image, 4);
+        m_command_list.Bind(m_env_map_image, 5);
+        m_command_list.Bind(m_irradiance_map_image, 6);
+        m_command_list.Bind(m_brdf_lut_image, 7);
         m_command_list.Bind(m_pipeline);
-        m_command_list.DrawIndices(Rndr::PrimitiveTopology::Triangle, static_cast<int32_t>(m_mesh_data.index_buffer_data.size()));
+        const MeshDescription mesh_desc = m_mesh_data.meshes[0];
+        m_command_list.DrawIndices(Rndr::PrimitiveTopology::Triangle, mesh_desc.GetLodIndicesCount(0), 1, mesh_desc.index_offset);
     }
 
     bool Render() override
@@ -134,6 +154,8 @@ public:
         PerFrameData per_frame_data = {.view_projection = view_projection_transform, .camera_position = m_camera_position};
         m_desc.graphics_context->Update(m_per_frame_buffer, Rndr::ToByteSpan(per_frame_data));
 
+//        m_desc.graphics_context->Bind(m_vertex_buffer, 1);
+//        m_desc.graphics_context->Bind(m_instance_buffer, 2);
         m_command_list.Submit();
         return true;
     }
@@ -148,6 +170,26 @@ public:
     {
         using namespace Rndr;
         constexpr bool k_flip_vertically = true;
+
+        const std::filesystem::path path(image_path);
+        const bool is_ktx = path.extension() == ".ktx";
+
+        if (is_ktx)
+        {
+            gli::texture texture = gli::load_ktx(image_path);
+            const ImageDesc image_desc{.width = texture.extent().x,
+                                       .height = texture.extent().y,
+                                       .array_size = 1,
+                                       .type = image_type,
+                                       .pixel_format = Rndr::PixelFormat::R16G16_FLOAT,  // TODO: Fix this!
+                                       .use_mips = true,
+                                       .sampler = {.max_anisotropy = 16.0f,
+                                                   .address_mode_u = ImageAddressMode::Clamp,
+                                                   .address_mode_v = ImageAddressMode::Clamp,
+                                                   .address_mode_w = ImageAddressMode::Clamp}};
+            const ConstByteSpan texture_data{static_cast<uint8_t*>(texture.data(0, 0, 0)), texture.size()};
+            return {m_desc.graphics_context, image_desc, texture_data};
+        }
         if (image_type == ImageType::Image2D)
         {
             Bitmap bitmap = Rndr::File::ReadEntireImage(image_path, PixelFormat::R8G8B8A8_UNORM_SRGB, k_flip_vertically);
@@ -219,6 +261,10 @@ private:
     Rndr::Image m_ao_image;
     Rndr::Image m_emissive_image;
 
+    Rndr::Image m_env_map_image;
+    Rndr::Image m_irradiance_map_image;
+    Rndr::Image m_brdf_lut_image;
+
     Rndr::Pipeline m_pipeline;
     Rndr::CommandList m_command_list;
 
@@ -229,14 +275,14 @@ private:
 void Run(const Rndr::String& asset_path)
 {
     using namespace Rndr;
-    Window window({.width = 1280, .height = 720, .name = "PBR Shading"});
+    Window window({.width = 1920, .height = 1080, .name = "PBR Shading"});
     GraphicsContext graphics_context({.window_handle = window.GetNativeWindowHandle()});
 
     FlyCamera fly_camera(&window, &InputSystem::GetCurrentContext(),
-                         {.start_position = Point3f(0.0f, 500.0f, 0.0f),
-                          .movement_speed = 100,
-                          .rotation_speed = 200,
-                          .projection_desc = {.near = 0.5f, .far = 5000.0f}});
+                         {.start_position = Point3f(0.0f, 0.0f, 5.0f),
+                          .movement_speed = 10,
+                          .rotation_speed = 100,
+                          .projection_desc = {.near = 0.05f, .far = 5000.0f}});
 
     SwapChain swap_chain(graphics_context, {.width = window.GetWidth(), .height = window.GetHeight()});
     const RendererBaseDesc renderer_desc{.graphics_context = Ref{graphics_context}, .swap_chain = Ref{swap_chain}};
