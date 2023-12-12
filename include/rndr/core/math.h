@@ -18,6 +18,8 @@ using Normal3f = Math::Normal3<float>;
 using Matrix4x4f = Math::Matrix4x4<float>;
 using Rotatorf = Math::Rotator<float>;
 using Quaternionf = Math::Quaternion<float>;
+using Bounds2f = Math::Bounds2<float>;
+using Bounds3f = Math::Bounds3<float>;
 
 using Point2i = Math::Point2<int32_t>;
 using Vector2i = Math::Vector2<int32_t>;
