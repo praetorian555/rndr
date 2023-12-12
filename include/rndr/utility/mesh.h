@@ -1,9 +1,11 @@
 #pragma once
 
 #include "rndr/core/base.h"
+#include "rndr/core/math.h"
 #include "rndr/core/containers/array.h"
 #include "rndr/core/containers/stack-array.h"
 #include "rndr/core/containers/string.h"
+#include "rndr/core/containers/span.h"
 #include "rndr/core/enum-flags.h"
 
 struct aiScene;
@@ -26,29 +28,23 @@ public:
     /** Total size of the mesh data in bytes. Equal to sum of all vertices and all indices. */
     uint32_t mesh_size = 0;
 
-    /** Number of streams in this mesh. */
-    uint32_t stream_count = 0;
-
     /** Number of vertices belonging to this mesh in the vertex buffer. */
     uint32_t vertex_count = 0;
 
     /** Offset of the mesh in the vertex buffer in vertices. */
     uint32_t vertex_offset = 0;
 
+    /** Sizes of the vertex in bytes. */
+    uint32_t vertex_size = 0;
+
     /** Offset of the mesh in the index buffer in indices. */
     uint32_t index_offset = 0;
-
-    /** Offset of the mesh's streams in the vertex buffer in bytes. */
-    Rndr::StackArray<uint32_t, k_max_streams> stream_offsets = {};
-
-    /** Sizes of the streams in bytes. */
-    Rndr::StackArray<uint32_t, k_max_streams> stream_element_size = {};
 
     /** Number of LODs of this mesh. */
     uint32_t lod_count = 0;
 
     /** Offsets of the LODs in indices starting from 0. First index is reserved for most detailed version of the mesh. */
-    Rndr::StackArray<uint32_t, k_max_lods> lod_offsets = {};
+    StackArray<uint32_t, k_max_lods> lod_offsets = {};
 
     [[nodiscard]] RNDR_FORCE_INLINE uint32_t GetLodIndicesCount(uint32_t lod) const
     {
@@ -62,9 +58,10 @@ public:
  */
 struct MeshData
 {
-    Rndr::Array<MeshDescription> meshes;
-    Rndr::Array<uint8_t> vertex_buffer_data;
-    Rndr::Array<uint8_t> index_buffer_data;
+    Array<MeshDescription> meshes;
+    Array<uint8_t> vertex_buffer_data;
+    Array<uint8_t> index_buffer_data;
+    Array<Bounds3f> bounding_boxes;
 };
 
 /**
@@ -118,6 +115,12 @@ bool ReadOptimizedData(MeshData& out_mesh_data, const String& file_path);
  */
 bool WriteOptimizedData(const MeshData& mesh_data, const String& file_path);
 
+/**
+ * Updates bounding boxes of all meshes in the mesh data.
+ * @param mesh_data Mesh data to update.
+ * @return True if bounding boxes were updated successfully, false otherwise.
+ */
+bool UpdateBoundingBoxes(MeshData& mesh_data);
 
 }  // namespace Mesh
 

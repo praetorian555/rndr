@@ -79,13 +79,10 @@ bool Rndr::Mesh::ReadData(MeshData& out_mesh_data, const aiScene& ai_scene, Mesh
         // TODO: Generate LODs
 
         MeshDescription mesh_desc;
-        mesh_desc.stream_count = 1;
         mesh_desc.vertex_count = ai_mesh->mNumVertices;
         mesh_desc.vertex_offset = vertex_offset;
+        mesh_desc.vertex_size = vertex_size;
         mesh_desc.index_offset = index_offset;
-        mesh_desc.stream_offsets[0] = vertex_offset * vertex_size;
-        mesh_desc.stream_offsets[1] = (vertex_offset + ai_mesh->mNumVertices) * vertex_size;
-        mesh_desc.stream_element_size[0] = vertex_size;
         mesh_desc.lod_count = 1;
         mesh_desc.lod_offsets[0] = 0;
         mesh_desc.lod_offsets[1] = static_cast<uint32_t>(lods[0].size());
@@ -98,6 +95,8 @@ bool Rndr::Mesh::ReadData(MeshData& out_mesh_data, const aiScene& ai_scene, Mesh
         vertex_offset += ai_mesh->mNumVertices;
         index_offset += static_cast<uint32_t>(lods[0].size());
     }
+
+    UpdateBoundingBoxes(out_mesh_data);
 
     return true;
 }
@@ -150,6 +149,14 @@ bool Rndr::Mesh::ReadOptimizedData(MeshData& out_mesh_data, const Rndr::String& 
         return false;
     }
 
+    out_mesh_data.bounding_boxes.resize(header.mesh_count);
+    if (fread(out_mesh_data.bounding_boxes.data(), 1, header.mesh_count * sizeof(Bounds3f), f) != header.mesh_count * sizeof(Bounds3f))
+    {
+        RNDR_LOG_ERROR("Failed to read bounding boxes!");
+        fclose(f);
+        return false;
+    }
+
     fclose(f);
     return true;
 }
@@ -176,7 +183,37 @@ bool Rndr::Mesh::WriteOptimizedData(const MeshData& mesh_data, const Rndr::Strin
     fwrite(mesh_data.meshes.data(), 1, header.mesh_count * sizeof(MeshDescription), f);
     fwrite(mesh_data.vertex_buffer_data.data(), 1, mesh_data.vertex_buffer_data.size(), f);
     fwrite(mesh_data.index_buffer_data.data(), 1, mesh_data.index_buffer_data.size(), f);
+    fwrite(mesh_data.bounding_boxes.data(), 1, mesh_data.bounding_boxes.size() * sizeof(Bounds3f), f);
 
     fclose(f);
     return true;
+}
+
+bool Rndr::Mesh::UpdateBoundingBoxes(Rndr::MeshData& mesh_data)
+{
+    mesh_data.bounding_boxes.clear();
+    mesh_data.bounding_boxes.resize(mesh_data.meshes.size());
+
+    for (size_t i = 0; i < mesh_data.meshes.size(); ++i)
+    {
+        const MeshDescription& mesh_desc = mesh_data.meshes[i];
+        const uint32_t index_count = mesh_desc.GetLodIndicesCount(0);
+
+        Point3f min(Math::k_largest_float);
+        Point3f max(Math::k_smallest_float);
+
+        uint32_t* index_buffer = reinterpret_cast<uint32_t*>(mesh_data.index_buffer_data.data());
+        float* vertex_buffer = reinterpret_cast<float*>(mesh_data.vertex_buffer_data.data());
+        for (uint32_t j = 0; j < index_count; ++j)
+        {
+            const uint32_t vertex_offset = mesh_desc.vertex_offset + index_buffer[mesh_desc.index_offset + j];
+            const float* vertex = vertex_buffer + vertex_offset * (mesh_desc.vertex_size / sizeof(float));
+            min = Math::Min(min, Point3f(vertex[0], vertex[1], vertex[2]));
+            max = Math::Max(max, Point3f(vertex[0], vertex[1], vertex[2]));
+        }
+
+        mesh_data.bounding_boxes[i] = Bounds3f(min, max);
+    }
+
+    return false;
 }
