@@ -60,7 +60,7 @@ public:
         RNDR_ASSERT(m_fragment_shader.IsValid());
 
         const Rndr::String mesh_path = m_asset_path + "/DamagedHelmet.rndr";
-        if (!Rndr::ReadOptimizedMeshData(m_mesh_data, mesh_path))
+        if (!Rndr::Mesh::ReadOptimizedData(m_mesh_data, mesh_path))
         {
             RNDR_LOG_ERROR("Failed to load mesh data from file: %s", mesh_path.c_str());
             exit(1);

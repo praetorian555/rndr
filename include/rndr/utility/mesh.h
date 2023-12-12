@@ -80,7 +80,7 @@ struct MeshFileHeader
     uint32_t index_buffer_size;
 };
 
-enum class MeshAttributesToLoad
+enum class MeshAttributesToLoad : uint8_t
 {
     LoadPositions = 1 << 0,
     LoadNormals = 1 << 1,
@@ -89,6 +89,9 @@ enum class MeshAttributesToLoad
 };
 RNDR_ENUM_CLASS_FLAGS(MeshAttributesToLoad)
 
+namespace Mesh
+{
+
 /**
  * Reads mesh data from the Assimp scene.
  * @param out_mesh_data Destination mesh data.
@@ -96,7 +99,7 @@ RNDR_ENUM_CLASS_FLAGS(MeshAttributesToLoad)
  * @param attributes_to_load Attributes to load from the Assimp scene.
  * @return True if mesh data was read successfully, false otherwise.
  */
-bool ReadMeshData(MeshData& out_mesh_data, const aiScene& ai_scene,
+bool ReadData(MeshData& out_mesh_data, const aiScene& ai_scene,
                   MeshAttributesToLoad attributes_to_load = MeshAttributesToLoad::LoadPositions);
 
 /**
@@ -105,7 +108,7 @@ bool ReadMeshData(MeshData& out_mesh_data, const aiScene& ai_scene,
  * @param file_path Path to the file.
  * @return True if mesh data was read successfully, false otherwise.
  */
-bool ReadOptimizedMeshData(MeshData& out_mesh_data, const Rndr::String& file_path);
+bool ReadOptimizedData(MeshData& out_mesh_data, const String& file_path);
 
 /**
  * Writes mesh data to a file containing optimized rndr mesh data format.
@@ -113,6 +116,9 @@ bool ReadOptimizedMeshData(MeshData& out_mesh_data, const Rndr::String& file_pat
  * @param file_path Path to the file.
  * @return True if mesh data was written successfully, false otherwise.
  */
-bool WriteOptimizedMeshData(const MeshData& mesh_data, const Rndr::String& file_path);
+bool WriteOptimizedData(const MeshData& mesh_data, const String& file_path);
+
+
+}  // namespace Mesh
 
 }  // namespace Rndr

@@ -11,7 +11,7 @@ namespace
     constexpr uint32_t k_magic = 0x89ABCDEF;
 }
 
-bool Rndr::ReadMeshData(MeshData& out_mesh_data, const aiScene& ai_scene, MeshAttributesToLoad attributes_to_load)
+bool Rndr::Mesh::ReadData(MeshData& out_mesh_data, const aiScene& ai_scene, MeshAttributesToLoad attributes_to_load)
 {
     if (!ai_scene.HasMeshes())
     {
@@ -102,7 +102,7 @@ bool Rndr::ReadMeshData(MeshData& out_mesh_data, const aiScene& ai_scene, MeshAt
     return true;
 }
 
-bool Rndr::ReadOptimizedMeshData(MeshData& out_mesh_data, const Rndr::String& file_path)
+bool Rndr::Mesh::ReadOptimizedData(MeshData& out_mesh_data, const Rndr::String& file_path)
 {
     FILE* f = nullptr;
     fopen_s(&f,file_path.c_str(), "rb");
@@ -154,7 +154,7 @@ bool Rndr::ReadOptimizedMeshData(MeshData& out_mesh_data, const Rndr::String& fi
     return true;
 }
 
-bool Rndr::WriteOptimizedMeshData(const MeshData& mesh_data, const Rndr::String& file_path)
+bool Rndr::Mesh::WriteOptimizedData(const MeshData& mesh_data, const Rndr::String& file_path)
 {
     FILE* f = nullptr;
     fopen_s(&f, file_path.c_str(), "wb");

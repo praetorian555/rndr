@@ -231,7 +231,7 @@ void UIRenderer::ProcessMesh(Rndr::MeshAttributesToLoad attributes_to_load)
     }
 
     Rndr::MeshData mesh_data;
-    const bool is_data_loaded = ReadMeshData(mesh_data, *scene, attributes_to_load);
+    const bool is_data_loaded = Rndr::Mesh::ReadData(mesh_data, *scene, attributes_to_load);
     if (!is_data_loaded)
     {
         RNDR_LOG_ERROR("Failed to load mesh data from file: %s", m_selected_file_path.c_str());
@@ -240,7 +240,7 @@ void UIRenderer::ProcessMesh(Rndr::MeshAttributesToLoad attributes_to_load)
     }
     aiReleaseImport(scene);
 
-    const bool is_data_written = WriteOptimizedMeshData(mesh_data, m_output_file_path);
+    const bool is_data_written = Rndr::Mesh::WriteOptimizedData(mesh_data, m_output_file_path);
     if (!is_data_written)
     {
         RNDR_LOG_ERROR("Failed to write mesh data to file: %s", m_output_file_path.c_str());
