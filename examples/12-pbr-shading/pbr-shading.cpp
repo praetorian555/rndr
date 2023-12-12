@@ -192,7 +192,7 @@ public:
         }
         if (image_type == ImageType::Image2D)
         {
-            Bitmap bitmap = Rndr::File::ReadEntireImage(image_path, PixelFormat::R8G8B8A8_UNORM_SRGB, k_flip_vertically);
+            Bitmap bitmap = Rndr::File::ReadEntireImage(image_path, PixelFormat::R8G8B8A8_UNORM, k_flip_vertically);
             RNDR_ASSERT(bitmap.IsValid());
             const ImageDesc image_desc{.width = bitmap.GetWidth(),
                                        .height = bitmap.GetHeight(),
@@ -206,7 +206,7 @@ public:
         }
         if (image_type == ImageType::CubeMap)
         {
-            const Bitmap equirectangular_bitmap = Rndr::File::ReadEntireImage(image_path, PixelFormat::R32G32B32_FLOAT, k_flip_vertically);
+            const Bitmap equirectangular_bitmap = Rndr::File::ReadEntireImage(image_path, PixelFormat::R32G32B32_FLOAT);
             RNDR_ASSERT(equirectangular_bitmap.IsValid());
             const bool is_equirectangular = equirectangular_bitmap.GetWidth() == 2 * equirectangular_bitmap.GetHeight();
             Bitmap vertical_cross_bitmap;

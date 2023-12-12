@@ -39,7 +39,7 @@ void main()
 
     // normal mapping
     vec3 view_vector = normalize(camera_position_world.xyz - position_world);
-//    n = PerturbNormal(n, view_vector, normal_sample, tex_coords);
+    n = PerturbNormal(n, view_vector, normal_sample, tex_coords);
 
     vec4 mr_sample = texture(tex_metal_roughness, tex_coords);
 
