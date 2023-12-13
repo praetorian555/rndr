@@ -8,7 +8,7 @@
 
 namespace
 {
-    constexpr uint32_t k_magic = 0x89ABCDEF;
+constexpr uint32_t k_magic = 0x89ABCDEF;
 }
 
 bool Rndr::Mesh::ReadData(MeshData& out_mesh_data, const aiScene& ai_scene, MeshAttributesToLoad attributes_to_load)
@@ -104,7 +104,7 @@ bool Rndr::Mesh::ReadData(MeshData& out_mesh_data, const aiScene& ai_scene, Mesh
 bool Rndr::Mesh::ReadOptimizedData(MeshData& out_mesh_data, const Rndr::String& file_path)
 {
     FILE* f = nullptr;
-    fopen_s(&f,file_path.c_str(), "rb");
+    fopen_s(&f, file_path.c_str(), "rb");
     if (f == nullptr)
     {
         RNDR_LOG_ERROR("Failed to open file %s!", file_path.c_str());
@@ -126,7 +126,8 @@ bool Rndr::Mesh::ReadOptimizedData(MeshData& out_mesh_data, const Rndr::String& 
     }
 
     out_mesh_data.meshes.resize(header.mesh_count);
-    if (fread(out_mesh_data.meshes.data(), 1, header.mesh_count * sizeof(MeshDescription), f) != header.mesh_count * sizeof(MeshDescription))
+    if (fread(out_mesh_data.meshes.data(), 1, header.mesh_count * sizeof(MeshDescription), f) !=
+        header.mesh_count * sizeof(MeshDescription))
     {
         RNDR_LOG_ERROR("Failed to read mesh descriptions!");
         fclose(f);
@@ -216,4 +217,40 @@ bool Rndr::Mesh::UpdateBoundingBoxes(Rndr::MeshData& mesh_data)
     }
 
     return false;
+}
+
+bool Rndr::Mesh::Merge(MeshData& out_mesh_data, const Span<MeshData>& mesh_data)
+{
+    if (mesh_data.empty())
+    {
+        return false;
+    }
+
+    uint32_t vertex_offset = 0;
+    uint32_t index_offset = 0;
+    for (const MeshData& mesh : mesh_data)
+    {
+        for (const MeshDescription& mesh_desc : mesh.meshes)
+        {
+            MeshDescription new_mesh_desc = mesh_desc;
+            new_mesh_desc.vertex_offset += vertex_offset;
+            new_mesh_desc.index_offset += index_offset;
+            out_mesh_data.meshes.emplace_back(new_mesh_desc);
+
+            vertex_offset += mesh_desc.vertex_count;
+            for (uint32_t i = 0; i < mesh_desc.lod_count; ++i)
+            {
+                index_offset += mesh_desc.GetLodIndicesCount(i);
+            }
+        }
+
+        out_mesh_data.vertex_buffer_data.insert(out_mesh_data.vertex_buffer_data.end(), mesh.vertex_buffer_data.begin(),
+                                                mesh.vertex_buffer_data.end());
+        out_mesh_data.index_buffer_data.insert(out_mesh_data.index_buffer_data.end(), mesh.index_buffer_data.begin(),
+                                               mesh.index_buffer_data.end());
+    }
+
+    UpdateBoundingBoxes(out_mesh_data);
+
+    return true;
 }

@@ -1,12 +1,12 @@
 #pragma once
 
 #include "rndr/core/base.h"
-#include "rndr/core/math.h"
 #include "rndr/core/containers/array.h"
+#include "rndr/core/containers/span.h"
 #include "rndr/core/containers/stack-array.h"
 #include "rndr/core/containers/string.h"
-#include "rndr/core/containers/span.h"
 #include "rndr/core/enum-flags.h"
+#include "rndr/core/math.h"
 
 struct aiScene;
 
@@ -97,7 +97,7 @@ namespace Mesh
  * @return True if mesh data was read successfully, false otherwise.
  */
 bool ReadData(MeshData& out_mesh_data, const aiScene& ai_scene,
-                  MeshAttributesToLoad attributes_to_load = MeshAttributesToLoad::LoadPositions);
+              MeshAttributesToLoad attributes_to_load = MeshAttributesToLoad::LoadPositions);
 
 /**
  * Reads mesh data from a file containing optimized rndr mesh data format.
@@ -121,6 +121,15 @@ bool WriteOptimizedData(const MeshData& mesh_data, const String& file_path);
  * @return True if bounding boxes were updated successfully, false otherwise.
  */
 bool UpdateBoundingBoxes(MeshData& mesh_data);
+
+/**
+ * Merges multiple mesh data into single mesh data. All meshes are stored in single vertex and index buffers. Mesh descriptions are updated
+ * accordingly.
+ * @param out_mesh_data Destination mesh data.
+ * @param mesh_data Mesh data to merge.
+ * @return True if mesh data was merged successfully, false otherwise.
+ */
+bool Merge(MeshData& out_mesh_data, const Span<MeshData>& mesh_data);
 
 }  // namespace Mesh
 
