@@ -10,3 +10,4 @@ AccessModifierOffset: -4
 SortIncludes: 'CaseSensitive'
 BinPackParameters: true
 BinPackArguments: true
+ReflowComments: true
