@@ -7,10 +7,10 @@
 #include "rndr/core/containers/string.h"
 #include "rndr/core/file.h"
 #include "rndr/core/input.h"
+#include "rndr/core/render-api.h"
 #include "rndr/core/renderer-base.h"  // TODO: Rename renderer-base.h to renderer-manager.h
 #include "rndr/core/time.h"
 #include "rndr/core/window.h"
-#include "rndr/render-api/render-api.h"
 #include "rndr/utility/cube-map.h"
 #include "rndr/utility/fly-camera.h"
 #include "rndr/utility/input-layout-builder.h"
@@ -79,8 +79,8 @@ public:
                                        .stride = sizeof(uint32_t)},
                                       m_mesh_data.index_buffer_data);
         RNDR_ASSERT(m_index_buffer.IsValid());
-        m_instance_buffer = Rndr::Buffer(desc.graphics_context,
-                                         {.type = Rndr::BufferType::ShaderStorage, .usage = Rndr::Usage::Dynamic, .size = sizeof(InstanceData)});
+        m_instance_buffer = Rndr::Buffer(
+            desc.graphics_context, {.type = Rndr::BufferType::ShaderStorage, .usage = Rndr::Usage::Dynamic, .size = sizeof(InstanceData)});
         RNDR_ASSERT(m_instance_buffer.IsValid());
         Rndr::Matrix4x4f model_transform = Math::Translate(Rndr::Vector3f(0.0f, 0.0f, 0.0f)) * Math::RotateX(90.0f) * Math::Scale(1.0f);
         model_transform = Math::Transpose(model_transform);
@@ -154,8 +154,8 @@ public:
         PerFrameData per_frame_data = {.view_projection = view_projection_transform, .camera_position = m_camera_position};
         m_desc.graphics_context->Update(m_per_frame_buffer, Rndr::ToByteSpan(per_frame_data));
 
-//        m_desc.graphics_context->Bind(m_vertex_buffer, 1);
-//        m_desc.graphics_context->Bind(m_instance_buffer, 2);
+        //        m_desc.graphics_context->Bind(m_vertex_buffer, 1);
+        //        m_desc.graphics_context->Bind(m_instance_buffer, 2);
         m_command_list.Submit();
         return true;
     }

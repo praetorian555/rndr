@@ -1,7 +1,7 @@
 #pragma once
 
 #include "rndr/core/math.h"
-#include "rndr/render-api/render-api.h"
+#include "rndr/core/render-api.h"
 
 namespace Rndr
 {

@@ -1,5 +1,5 @@
 #include "Rndr/utility/input-layout-builder.h"
-#include "rndr/render-api/render-api.h"
+#include "rndr/core/render-api.h"
 
 Rndr::InputLayoutBuilder& Rndr::InputLayoutBuilder::AddVertexBuffer(const Buffer& buffer,
                                                                     int32_t buffer_index,

@@ -22,7 +22,7 @@ set(SOURCE_LIST
     "${PROJECT_SOURCE_DIR}/include/rndr/core/bitmap.h"
     "${PROJECT_SOURCE_DIR}/include/rndr/core/renderer-base.h"
     "${PROJECT_SOURCE_DIR}/include/rndr/core/enum-flags.h"
-    "${PROJECT_SOURCE_DIR}/include/rndr/render-api/render-api.h"
+    "${PROJECT_SOURCE_DIR}/include/rndr/core/render-api.h"
     "${PROJECT_SOURCE_DIR}/include/rndr/utility/imgui-wrapper.h"
     "${PROJECT_SOURCE_DIR}/include/rndr/utility/input-layout-builder.h"
     "${PROJECT_SOURCE_DIR}/include/rndr/utility/cpu-tracer.h"
@@ -51,12 +51,12 @@ set(SOURCE_LIST
     "${PROJECT_SOURCE_DIR}/src/utility/cube-map.cpp")
 
 list(APPEND SOURCE_LIST
-     "${PROJECT_SOURCE_DIR}/include/rndr/render-api/opengl-render-api.h"
-     "${PROJECT_SOURCE_DIR}/include/rndr/render-api/opengl-command-list.h"
-     "${PROJECT_SOURCE_DIR}/src/render-api/opengl-helpers.h"
-     "${PROJECT_SOURCE_DIR}/src/render-api/opengl-render-api.cpp"
-     "${PROJECT_SOURCE_DIR}/src/render-api/opengl-helpers.cpp"
-     "${PROJECT_SOURCE_DIR}/src/render-api/opengl-command-list.cpp")
+     "${PROJECT_SOURCE_DIR}/include/rndr/core/platform/opengl-render-api.h"
+     "${PROJECT_SOURCE_DIR}/include/rndr/core/platform/opengl-command-list.h"
+     "${PROJECT_SOURCE_DIR}/src/core/platform/opengl-helpers.h"
+     "${PROJECT_SOURCE_DIR}/src/core/platform/opengl-render-api.cpp"
+     "${PROJECT_SOURCE_DIR}/src/core/platform/opengl-helpers.cpp"
+     "${PROJECT_SOURCE_DIR}/src/core/platform/opengl-command-list.cpp")
 
 if (RNDR_TRACER)
     list(APPEND SOURCE_LIST "${PROJECT_SOURCE_DIR}/src/utility/cpu-tracer.cpp")

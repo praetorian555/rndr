@@ -7,7 +7,7 @@
 #include "rndr/rndr.h"
 
 #if RNDR_OPENGL
-#include "render-api/opengl-helpers.h"
+#include "core/platform/opengl-helpers.h"
 #endif
 
 TEST_CASE("Graphics context", "[render-api][graphics-context]")

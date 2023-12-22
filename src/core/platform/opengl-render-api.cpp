@@ -22,11 +22,11 @@
 #include <glad/glad.h>
 #include <glad/glad_wgl.h>
 
-#include "render-api/opengl-helpers.h"
+#include "core/platform/opengl-helpers.h"
 #include "rndr/core/containers/scope-ptr.h"
 #include "rndr/core/containers/stack-array.h"
 #include "rndr/core/file.h"
-#include "rndr/render-api/opengl-render-api.h"
+#include "rndr/core/platform/opengl-render-api.h"
 #include "rndr/utility/cpu-tracer.h"
 
 namespace
