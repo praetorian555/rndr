@@ -1,5 +1,5 @@
 add_executable(10-converters converters.cpp file-dialog.cpp)
 target_link_libraries(10-converters PRIVATE rndr)
+target_link_libraries(10-converters PRIVATE rndr_options)
 set_target_properties(10-converters PROPERTIES FOLDER Examples)
-target_compile_options(10-converters PRIVATE /W1)
 target_compile_definitions(10-converters PUBLIC -DASSETS_DIR="${CMAKE_CURRENT_SOURCE_DIR}/../assets/")

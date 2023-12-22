@@ -3,7 +3,7 @@ cmake_minimum_required(VERSION 3.20)
 project(
         RNDR
         VERSION 0.1
-        DESCRIPTION "Example C++ Project using CMake"
+        DESCRIPTION "Rendering library"
         LANGUAGES CXX)
 
 # Library options
@@ -49,17 +49,14 @@ if (CMAKE_PROJECT_NAME STREQUAL PROJECT_NAME)
     # Include cmake scripts here
     include(cmake/clang-format.cmake)
 
-    # Global compiler configuration
-    if (MSVC)
-        # Treat warnings as errors and highest warning level
-        add_compile_options(/W4 /WX /wd4201)
-        # Multiprocessor compilation
-        add_compile_options(/MP)
-        # Turn on address sanitizer unless its Release build
-        if (RNDR_SANITIZER)
-            add_compile_options($<$<NOT:$<CONFIG:Release>>:/fsanitize=address>)
-        endif ()
-    endif ()
+    # Setup compiler warnings and options
+    include(cmake/compiler-warnings.cmake)
+    include(cmake/compiler-options.cmake)
+    add_library(rndr_warnings INTERFACE)
+    add_library(rndr_options INTERFACE)
+    rndr_setup_compiler_warnings(rndr_warnings)
+    rndr_setup_compiler_options(rndr_options)
+
     # Use C++ 20 and make it required
     set(CMAKE_CXX_STANDARD 20)
     set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -79,9 +76,9 @@ if (PROJECT_IS_TOP_LEVEL)
     # Tests
     add_subdirectory(tests)
     enable_testing()
-    add_test(NAME all_tests_no_window COMMAND rndr_test "~[window] ~[render-api]")
+    add_test(NAME all_tests_no_window_no_render_api COMMAND rndr_test "~[window] ~[render-api]")
 
-    # The executable code is here
+    # Examples
     add_subdirectory(examples/01-triangle)
     add_subdirectory(examples/02-cube)
     add_subdirectory(examples/03-image)

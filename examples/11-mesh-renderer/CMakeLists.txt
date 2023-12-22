@@ -1,4 +1,5 @@
 add_executable(11-mesh-renderer mesh-renderer.cpp)
 target_link_libraries(11-mesh-renderer PUBLIC rndr)
+target_link_libraries(11-mesh-renderer PRIVATE rndr_options rndr_warnings)
 set_target_properties(11-mesh-renderer PROPERTIES FOLDER Examples)
 target_compile_definitions(11-mesh-renderer PUBLIC -DASSETS_DIR="${CMAKE_CURRENT_SOURCE_DIR}/../assets/")

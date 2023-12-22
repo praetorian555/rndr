@@ -1,4 +1,5 @@
 add_executable(03-image image.cpp)
 target_link_libraries(03-image PUBLIC rndr)
+target_link_libraries(03-image PRIVATE rndr_options rndr_warnings)
 set_target_properties(03-image PROPERTIES FOLDER Examples)
 target_compile_definitions(03-image PUBLIC -DASSETS_DIR="${CMAKE_CURRENT_SOURCE_DIR}/../assets/")

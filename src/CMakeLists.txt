@@ -70,6 +70,8 @@ endif ()
 
 # Make an automatic library - will be static or dynamic based on user setting
 add_library(rndr ${SOURCE_LIST})
+target_link_libraries(rndr PRIVATE rndr_warnings)
+target_link_libraries(rndr PRIVATE rndr_options)
 
 # We need this directory, and users of our library will need it too
 target_include_directories(rndr PUBLIC ${PROJECT_SOURCE_DIR}/include)

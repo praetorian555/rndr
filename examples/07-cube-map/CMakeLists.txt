@@ -1,4 +1,5 @@
 add_executable(07-cube-map cube-map.cpp)
 target_link_libraries(07-cube-map PUBLIC rndr)
+target_link_libraries(07-cube-map PRIVATE rndr_options rndr_warnings)
 set_target_properties(07-cube-map PROPERTIES FOLDER Examples)
 target_compile_definitions(07-cube-map PUBLIC -DASSETS_DIR="${CMAKE_CURRENT_SOURCE_DIR}/../assets/")
