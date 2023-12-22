@@ -65,30 +65,10 @@ if (CMAKE_PROJECT_NAME STREQUAL PROJECT_NAME)
     set(CMAKE_CXX_STANDARD_REQUIRED ON)
 endif ()
 
+include(cmake/dependencies.cmake)
+setup_dependencies()
+
 include(FetchContent)
-
-# Include spdlog only if it is not already present
-if (NOT TARGET spdlog::spdlog AND (RNDR_DEFAULT_LOGGER OR RNDR_TRACER))
-    FetchContent_Declare(
-            spdlog
-            GIT_REPOSITORY https://github.com/gabime/spdlog
-            GIT_TAG ad0e89cbfb4d0c1ce4d097e134eb7be67baebb36 # release-1.11.0
-    )
-    FetchContent_MakeAvailable(spdlog)
-    set_target_properties(spdlog PROPERTIES FOLDER Extern)
-endif ()
-
-# Include math only if it is not already present
-if (NOT TARGET math)
-    FetchContent_Declare(
-            math
-            GIT_REPOSITORY https://github.com/praetorian555/math
-            GIT_TAG main
-    )
-    set(MATH_SANITIZER ${RNDR_SANITIZER} CACHE BOOL "" FORCE)
-    FetchContent_MakeAvailable(math)
-    set_target_properties(math PROPERTIES FOLDER Extern)
-endif ()
 
 if (NOT TARGET imgui AND RNDR_IMGUI)
     FetchContent_Declare(
@@ -137,31 +117,6 @@ if (NOT TARGET imgui AND RNDR_IMGUI)
     set_target_properties(imgui PROPERTIES FOLDER Extern)
 endif ()
 
-if (NOT TARGET assimp AND RNDR_ASSIMP)
-    FetchContent_Declare(
-            assimp
-            GIT_REPOSITORY https://github.com/assimp/assimp
-            GIT_TAG 9519a62dd20799c5493c638d1ef5a6f484e5faf1 # release-5.2.5
-    )
-    set(ASSIMP_NO_EXPORT ON CACHE BOOL "")
-    set(ASSIMP_BUILD_ASSIMP_TOOLS OFF CACHE BOOL "")
-    set(ASSIMP_BUILD_TESTS OFF CACHE BOOL "")
-    set(ASSIMP_INSTALL_PDB OFF CACHE BOOL "")
-    set(ASSIMP_BUILD_ALL_IMPORTERS_BY_DEFAULT OFF CACHE BOOL "")
-    set(ASSIMP_BUILD_OBJ_IMPORTER ON CACHE BOOL "")
-    set(ASSIMP_BUILD_GLTF_IMPORTER ON CACHE BOOL "")
-    set(ASSIMP_BUILD_COLLADA_IMPORTER ON CACHE BOOL "")
-    set(ASSIMP_BUILD_FBX_IMPORTER ON CACHE BOOL "")
-    set(BUILD_SHARED_LIBS OFF CACHE BOOL "")
-    set(USE_STATIC_CRT OFF CACHE BOOL "")
-    FetchContent_MakeAvailable(assimp)
-    set_target_properties(assimp PROPERTIES FOLDER Extern)
-    set_target_properties(assimp PROPERTIES UNITY_BUILD FALSE)
-    set_target_properties(zlibstatic PROPERTIES FOLDER Extern)
-    set_target_properties(zlibstatic PROPERTIES UNITY_BUILD FALSE)
-    set_target_properties(UpdateAssimpLibsDebugSymbolsAndDLLs PROPERTIES FOLDER Extern)
-endif ()
-
 if (NOT TARGET etc2comp AND RNDR_ETC2COMP)
     FetchContent_Declare(
             etc2comp
@@ -189,16 +144,6 @@ if (NOT TARGET etc2comp AND RNDR_ETC2COMP)
     set_target_properties(etc2comp PROPERTIES FOLDER Extern)
 endif ()
 
-if (NOT TARGET meshoptimizer AND RNDR_MESHOPTIMIZER)
-    FetchContent_Declare(
-            meshoptimizer
-            GIT_REPOSITORY https://github.com/zeux/meshoptimizer
-            GIT_TAG fbe26ff91317bd89c67c3890e038965d55f3e354 # release 0.19
-    )
-    FetchContent_MakeAvailable(meshoptimizer)
-    set_target_properties(meshoptimizer PROPERTIES FOLDER Extern)
-endif ()
-
 FetchContent_Declare(
         gli
         GIT_REPOSITORY https://github.com/g-truc/gli
@@ -217,18 +162,7 @@ add_subdirectory(extern)
 # The compiled library code is here
 add_subdirectory(src)
 
-if (CMAKE_PROJECT_NAME STREQUAL PROJECT_NAME)
-    # Add catch2 dependency
-    if (NOT TARGET Catch2)
-        FetchContent_Declare(
-                Catch2
-                GIT_REPOSITORY https://github.com/catchorg/Catch2
-                GIT_TAG ab6c7375be9a8e71ee84c6f8537113f9f47daf99 # release-3.2.1
-        )
-        FetchContent_MakeAvailable(Catch2)
-        set_target_properties(Catch2 PROPERTIES FOLDER Extern)
-        set_target_properties(Catch2WithMain PROPERTIES FOLDER Extern)
-    endif ()
+if (PROJECT_IS_TOP_LEVEL)
 
     # Tests
     add_subdirectory(tests)
