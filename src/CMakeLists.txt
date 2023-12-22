@@ -50,15 +50,13 @@ set(SOURCE_LIST
     "${PROJECT_SOURCE_DIR}/src/utility/material.cpp"
     "${PROJECT_SOURCE_DIR}/src/utility/cube-map.cpp")
 
-if (RNDR_OPENGL)
-    list(APPEND SOURCE_LIST
-         "${PROJECT_SOURCE_DIR}/include/rndr/render-api/opengl-render-api.h"
-         "${PROJECT_SOURCE_DIR}/include/rndr/render-api/opengl-command-list.h"
-         "${PROJECT_SOURCE_DIR}/src/render-api/opengl-helpers.h"
-         "${PROJECT_SOURCE_DIR}/src/render-api/opengl-render-api.cpp"
-         "${PROJECT_SOURCE_DIR}/src/render-api/opengl-helpers.cpp"
-         "${PROJECT_SOURCE_DIR}/src/render-api/opengl-command-list.cpp")
-endif ()
+list(APPEND SOURCE_LIST
+     "${PROJECT_SOURCE_DIR}/include/rndr/render-api/opengl-render-api.h"
+     "${PROJECT_SOURCE_DIR}/include/rndr/render-api/opengl-command-list.h"
+     "${PROJECT_SOURCE_DIR}/src/render-api/opengl-helpers.h"
+     "${PROJECT_SOURCE_DIR}/src/render-api/opengl-render-api.cpp"
+     "${PROJECT_SOURCE_DIR}/src/render-api/opengl-helpers.cpp"
+     "${PROJECT_SOURCE_DIR}/src/render-api/opengl-command-list.cpp")
 
 if (RNDR_TRACER)
     list(APPEND SOURCE_LIST "${PROJECT_SOURCE_DIR}/src/utility/cpu-tracer.cpp")
@@ -78,9 +76,7 @@ target_include_directories(rndr PUBLIC ${PROJECT_SOURCE_DIR}/include)
 target_include_directories(rndr PRIVATE ${PROJECT_SOURCE_DIR}/src)
 
 # Setup graphics API to use
-if (RNDR_OPENGL)
-    target_compile_definitions(rndr PUBLIC RNDR_OPENGL)
-endif ()
+target_compile_definitions(rndr PUBLIC RNDR_OPENGL)
 
 if (RNDR_TRACER)
     target_compile_definitions(rndr PUBLIC RNDR_TRACER)
@@ -92,32 +88,20 @@ if (RNDR_DEFAULT_LOGGER)
     target_link_libraries(rndr PUBLIC spdlog::spdlog)
 endif ()
 
-if (RNDR_IMGUI)
-    target_compile_definitions(rndr PUBLIC RNDR_IMGUI)
-    target_link_libraries(rndr PUBLIC imgui)
-endif ()
-
 # Setup library dependencies
 target_link_libraries(rndr PUBLIC stb_image)
 target_link_libraries(rndr PUBLIC stb_truetype)
 target_link_libraries(rndr PUBLIC math)
-if (RNDR_OPENGL)
-    target_link_libraries(rndr PUBLIC opengl32.lib User32.lib)
-    target_link_libraries(rndr PUBLIC glad)
-endif ()
-if (RNDR_ASSIMP)
-    target_compile_definitions(rndr PUBLIC RNDR_ASSIMP)
-    target_link_libraries(rndr PUBLIC assimp)
-endif ()
-if (RNDR_ETC2COMP)
-    target_compile_definitions(rndr PUBLIC RNDR_ETC2COMP)
-    target_link_libraries(rndr PUBLIC etc2comp)
-endif ()
-if (RNDR_MESHOPTIMIZER)
-    target_compile_definitions(rndr PUBLIC RNDR_MESHOPTIMIZER)
-    target_link_libraries(rndr PUBLIC meshoptimizer)
-endif ()
-
+target_compile_definitions(rndr PUBLIC RNDR_IMGUI)
+target_link_libraries(rndr PUBLIC imgui)
+target_link_libraries(rndr PUBLIC opengl32.lib User32.lib)
+target_link_libraries(rndr PUBLIC glad)
+target_compile_definitions(rndr PUBLIC RNDR_ASSIMP)
+target_link_libraries(rndr PUBLIC assimp)
+target_compile_definitions(rndr PUBLIC RNDR_ETC2COMP)
+target_link_libraries(rndr PUBLIC etc2comp)
+target_compile_definitions(rndr PUBLIC RNDR_MESHOPTIMIZER)
+target_link_libraries(rndr PUBLIC meshoptimizer)
 target_link_libraries(rndr PUBLIC gli)
 
 # IDEs should put the headers in a nice place

@@ -36,7 +36,7 @@ function(setup_dependencies)
                 GIT_TAG
                 "main"
                 OPTIONS
-                "MATH_SANITIZER ${RNDR_SANITIZER}"
+                "MATH_SANITIZER ${RNDR_HARDENED}"
         )
         SET_TARGET_PROPERTIES(math PROPERTIES FOLDER Extern)
     endif ()
@@ -82,7 +82,7 @@ function(setup_dependencies)
 
     include(FetchContent)
 
-    if (NOT TARGET imgui AND RNDR_IMGUI)
+    if (NOT TARGET imgui)
         FetchContent_Declare(
                 imgui
                 GIT_REPOSITORY https://github.com/ocornut/imgui
@@ -113,11 +113,9 @@ function(setup_dependencies)
             set(IMGUI_WINDOWS_SOURCE_FILES)
         endif ()
 
-        if (RNDR_OPENGL)
-            set(IMGUI_OPENGL_SOURCE_FILES
-                ${SOURCE_PATH}/backends/imgui_impl_opengl3.cpp
-                ${SOURCE_PATH}/backends/imgui_impl_opengl3.h include/rndr/utility/default-logger.h)
-        endif ()
+        set(IMGUI_OPENGL_SOURCE_FILES
+            ${SOURCE_PATH}/backends/imgui_impl_opengl3.cpp
+            ${SOURCE_PATH}/backends/imgui_impl_opengl3.h include/rndr/utility/default-logger.h)
 
         add_library(imgui
                     ${IMGUI_SOURCE_FILES}
@@ -129,7 +127,7 @@ function(setup_dependencies)
         set_target_properties(imgui PROPERTIES FOLDER Extern)
     endif ()
 
-    if (NOT TARGET etc2comp AND RNDR_ETC2COMP)
+    if (NOT TARGET etc2comp)
         FetchContent_Declare(
                 etc2comp
                 GIT_REPOSITORY https://github.com/google/etc2comp

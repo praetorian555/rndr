@@ -7,30 +7,20 @@ project(
         LANGUAGES CXX)
 
 # Library options
-option(RNDR_OPENGL "Use OpenGL API" ON)
-option(RNDR_SANITIZER "Enable address sanitizer" OFF)
+option(RNDR_HARDENED "Enable hardened mode" OFF)
 option(RNDR_TRACER "Use built in profiler" ON)
 option(RNDR_DEFAULT_LOGGER "Use default logger" ON)
-option(RNDR_IMGUI "Include ImGUI library as a dependency that can be used to create UI features" ON)
-option(RNDR_ASSIMP "Include assimp library as a dependency that can be used to import 3D models" ON)
-option(RNDR_ETC2COMP "Include etc2comp library as a dependency that can be used to compress textures" ON)
-option(RNDR_MESHOPTIMIZER "Include meshoptimizer library as a dependency that can be used to optimize meshes" ON)
 
-message(STATUS "RNDR_OPENGL ${RNDR_OPENGL}")
-message(STATUS "RNDR_SANITIZER ${RNDR_SANITIZER}")
+message(STATUS "RNDR_HARDENED ${RNDR_SANITIZER}")
 message(STATUS "RNDR_TRACER ${RNDR_TRACER}")
 message(STATUS "RNDR_DEFAULT_LOGGER ${RNDR_DEFAULT_LOGGER}")
-message(STATUS "RNDR_IMGUI ${RNDR_IMGUI}")
-message(STATUS "RNDR_ASSIMP ${RNDR_ASSIMP}")
-message(STATUS "RNDR_ETC2COMP ${RNDR_ETC2COMP}")
-message(STATUS "RNDR_MESHOPTIMIZER ${RNDR_MESHOPTIMIZER}")
 
-if (NOT RNDR_OPENGL)
-    set(RNDR_OPENGL ON)
+if (NOT CMAKE_CXX_STANDARD)
+    set(CMAKE_CXX_STANDARD 20)
 endif ()
 
 # Only do these if this is the main project, and not if it is included through add_subdirectory
-if (CMAKE_PROJECT_NAME STREQUAL PROJECT_NAME)
+if (PROJECT_IS_TOP_LEVEL)
 
     # Let's ensure -std=c++xx instead of -std=g++xx
     set(CMAKE_CXX_EXTENSIONS OFF)
@@ -48,19 +38,15 @@ if (CMAKE_PROJECT_NAME STREQUAL PROJECT_NAME)
 
     # Include cmake scripts here
     include(cmake/clang-format.cmake)
-
-    # Setup compiler warnings and options
-    include(cmake/compiler-warnings.cmake)
-    include(cmake/compiler-options.cmake)
-    add_library(rndr_warnings INTERFACE)
-    add_library(rndr_options INTERFACE)
-    rndr_setup_compiler_warnings(rndr_warnings)
-    rndr_setup_compiler_options(rndr_options)
-
-    # Use C++ 20 and make it required
-    set(CMAKE_CXX_STANDARD 20)
-    set(CMAKE_CXX_STANDARD_REQUIRED ON)
 endif ()
+
+# Setup compiler warnings and options
+include(cmake/compiler-warnings.cmake)
+include(cmake/compiler-options.cmake)
+add_library(rndr_warnings INTERFACE)
+add_library(rndr_options INTERFACE)
+rndr_setup_compiler_warnings(rndr_warnings)
+rndr_setup_compiler_options(rndr_options)
 
 include(cmake/dependencies.cmake)
 setup_dependencies()
