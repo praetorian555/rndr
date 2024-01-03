@@ -29,9 +29,9 @@
 #include "backends/imgui_impl_opengl3.h"
 #endif
 
-#include "Rndr/core/base.h"
-#include "Rndr/core/window.h"
-#include "Rndr/render-api/render-api.h"
+#include "rndr/core/base.h"
+#include "rndr/core/window.h"
+#include "rndr/core/render-api.h"
 
 // Forward declare message handler from imgui_impl_win32.cpp
 extern IMGUI_IMPL_API LRESULT ImGui_ImplWin32_WndProcHandler(HWND handle,
