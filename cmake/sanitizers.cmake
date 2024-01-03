@@ -1,0 +1,5 @@
+function(rndr_setup_sanitizers project_options)
+    target_compile_options(${project_options} INTERFACE /fsanitize=address /Zi /INCREMENTAL:NO)
+    target_compile_definitions(${project_options} INTERFACE _DISABLE_VECTOR_ANNOTATION _DISABLE_STRING_ANNOTATION)
+    target_link_options(${project_options} INTERFACE /INCREMENTAL:NO)
+endfunction()

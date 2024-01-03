@@ -11,7 +11,7 @@ option(RNDR_HARDENED "Enable hardened mode" OFF)
 option(RNDR_TRACER "Use built in profiler" ON)
 option(RNDR_DEFAULT_LOGGER "Use default logger" ON)
 
-message(STATUS "RNDR_HARDENED ${RNDR_SANITIZER}")
+message(STATUS "RNDR_HARDENED ${RNDR_HARDENED}")
 message(STATUS "RNDR_TRACER ${RNDR_TRACER}")
 message(STATUS "RNDR_DEFAULT_LOGGER ${RNDR_DEFAULT_LOGGER}")
 
@@ -47,6 +47,12 @@ add_library(rndr_warnings INTERFACE)
 add_library(rndr_options INTERFACE)
 rndr_setup_compiler_warnings(rndr_warnings)
 rndr_setup_compiler_options(rndr_options)
+
+# Setup sanitizer options
+include(cmake/sanitizers.cmake)
+if (RNDR_HARDENED)
+    rndr_setup_sanitizers(rndr_options)
+endif ()
 
 include(cmake/dependencies.cmake)
 setup_dependencies()
