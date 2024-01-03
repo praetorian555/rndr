@@ -11,10 +11,20 @@ $installerUrl = "https://aka.ms/vs/17/release/vs_Community.exe"
 # Define the path where to download the installer
 $installerPath = "${Env:TEMP}\vs_Community.exe"
 
+$skipInstallVs = $false
+if ($args.length -gt 0 -and $args[0] -eq '-noinstallvs')
+{
+    Write-Output "Skipping Visual Studio 2022 Community installation."
+    $skipInstallVs = $true
+}
+
 # Download the installer
-Write-Output "Downloading Visual Studio 2022 Community installer from $installerUrl"
-Invoke-WebRequest -Uri $installerUrl -OutFile $installerPath
-Write-Output "Download complete."
+if (-not $skipInstallVs)
+{
+    Write-Output "Downloading Visual Studio 2022 Community installer from $installerUrl"
+    Invoke-WebRequest -Uri $installerUrl -OutFile $installerPath
+    Write-Output "Download complete."
+}
 
 # Define the components to install
 # Replace these component IDs with the ones you want to install
@@ -37,10 +47,13 @@ $components = @(
 $components = $components -join " "
 
 # Install Visual Studio 2022 Community along with the specified components
-Write-Output "Installing Visual Studio 2022 Community..."
-Start-Process -FilePath $installerPath -ArgumentList "$components --quiet --norestart --wait" -Wait
-Remove-Item $installerPath
-Write-Output "Visual Studio 2022 Community has been installed."
+if (-not $skipInstallVs)
+{
+    Write-Output "Installing Visual Studio 2022 Community..."
+    Start-Process -FilePath $installerPath -ArgumentList "$components --quiet --norestart --wait" -Wait
+    Remove-Item $installerPath
+    Write-Output "Visual Studio 2022 Community has been installed."
+}
 
 # Will search under X:\Program Files\Microsoft Visual Studio and X:\Program Files (x86)\Microsoft Visual Studio for
 # the specified file. If found, the folder containing the file will be added to the system path if its not already
@@ -57,17 +70,11 @@ function AddToSystemPath{
     Write-Output "Adding folder that contains $FileToFind to the system path, trying to match $FolderRegex pattern..."
 
     # Get the logical disk objects using WMI
-    $drives = Get-WmiObject -Class Win32_LogicalDisk
+    $drives = Get-PSDrive -PSProvider 'FileSystem'
     $filePath = $null
 
     foreach ($drive in $drives)
     {
-        # Only search on drives of type 3, i.e., local disks
-        if ($drive.DriveType -ne 3)
-        {
-            continue
-        }
-
         $pathsToSearch = @("\Program Files\Microsoft Visual Studio", "\Program Files (x86)\Microsoft Visual Studio")
 
         foreach ($pathToSearch in $pathsToSearch)
@@ -76,6 +83,7 @@ function AddToSystemPath{
             try
             {
                 $pathToSearch = $drive.DeviceID + $pathToSearch
+                Write-Debug "Searching $pathToSearch for $FileToFind"
                 $filePath = Get-ChildItem -Path $pathToSearch -Recurse -ErrorAction Stop -File | Where-Object { ($_.Name -eq $FileToFind) -and ($_.Directory -match $FolderRegex) }
                 if ($filePath)
                 {
@@ -89,17 +97,18 @@ function AddToSystemPath{
         }
 
         # Check if file was found
-        if ($filePath -ne $null) {
+        if ($null -eq $filePath) {
             break
         }
     }
 
     # Check if file was found
-    if ($filePath -eq $null) {
+    if ($null -eq $filePath) {
         Write-Host "File $FileToFind not found!"
         return
     }
     $filePath = (Get-Item $($filePath.FullName)).DirectoryName
+    Write-Host "File $FileToFind found in $filePath"
     # Get the current system path
     $systemPath = [Environment]::GetEnvironmentVariable("Path", "Machine")
 
