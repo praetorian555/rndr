@@ -48,6 +48,9 @@ struct MaterialDescription final
     ImageId opacity_map = k_invalid_image_id;
 };
 
+namespace Material
+{
+
 /**
  * Reads material description from the Assimp material.
  * @param out_description Material description to be filled. Note that texture maps will not contain the handles to actual texture data on
@@ -57,10 +60,16 @@ struct MaterialDescription final
  * @param ai_material Assimp material to read from.
  * @return True if the material description was successfully read, false otherwise.
  */
-bool ReadMaterialDescription(MaterialDescription& out_description, Array<String>& out_texture_paths, Array<String>& out_opacity_maps,
-                             const aiMaterial& ai_material);
+bool ReadDescription(MaterialDescription& out_description, Array<String>& out_texture_paths, Array<String>& out_opacity_maps,
+                     const aiMaterial& ai_material);
 
-bool ConvertAndDownscaleTextures(const std::vector<MaterialDescription>& materials, const String& base_path,
-                                 Array<String>& texture_paths, const Array<String>& opacity_maps);
+bool ConvertAndDownscaleTextures(const std::vector<MaterialDescription>& materials, const String& base_path, Array<String>& texture_paths,
+                                 const Array<String>& opacity_maps);
+
+bool WriteOptimizedData(const Array<MaterialDescription>& materials, const Array<String>& texture_paths, const String& file_path);
+
+bool ReadOptimizedData(Array<MaterialDescription>& out_materials, Array<String>& out_texture_paths, const String& file_path);
+
+}  // namespace Material
 
 }  // namespace Rndr

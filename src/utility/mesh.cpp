@@ -35,7 +35,7 @@ bool Rndr::Mesh::ReadData(MeshData& out_mesh_data, const aiScene& ai_scene, Mesh
     uint32_t index_offset = 0;
     for (uint32_t mesh_index = 0; mesh_index < ai_scene.mNumMeshes; ++mesh_index)
     {
-        aiMesh* ai_mesh = ai_scene.mMeshes[mesh_index];
+        const aiMesh* const ai_mesh = ai_scene.mMeshes[mesh_index];
 
         for (uint32_t i = 0; i < ai_mesh->mNumVertices; ++i)
         {

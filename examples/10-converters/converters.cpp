@@ -13,11 +13,12 @@
 #include "rndr/core/containers/scope-ptr.h"
 #include "rndr/core/containers/string.h"
 #include "rndr/core/file.h"
+#include "rndr/core/render-api.h"
 #include "rndr/core/renderer-base.h"
 #include "rndr/core/window.h"
-#include "rndr/core/render-api.h"
 #include "rndr/utility/cube-map.h"
 #include "rndr/utility/imgui-wrapper.h"
+#include "rndr/utility/material.h"
 #include "rndr/utility/mesh.h"
 
 class UIRenderer : public Rndr::RendererBase
@@ -28,19 +29,15 @@ public:
 
     bool Render() override;
 
-    [[nodiscard]] Rndr::String GetOutputFilePath() const { return m_output_file_path; }
-
 private:
     void RenderMeshConverterTool();
     void RenderComputeBrdfLutTool();
     void RenderComputeEnvironmentMapTool();
 
-    void ProcessMesh(Rndr::MeshAttributesToLoad attributes_to_load);
+    void ProcessMesh(const Rndr::String& in_mesh_path, const Rndr::String& out_mesh_path, const Rndr::String& out_material_path,
+                     Rndr::MeshAttributesToLoad attributes_to_load, Rndr::String& out_status);
     void ComputeBrdfLut(const Rndr::String& output_path, Rndr::String& status);
     void ComputeEnvironmentMap(const Rndr::String& input_path, const Rndr::String& output_path, Rndr::String& status);
-
-    Rndr::String m_selected_file_path;
-    Rndr::String m_output_file_path;
 
     Rndr::Buffer m_brdf_lut_buffer;
     Rndr::Shader m_brdf_lut_shader;
@@ -94,7 +91,7 @@ void Run()
 
 UIRenderer::UIRenderer(const Rndr::String& name, Rndr::Window& window, const Rndr::RendererBaseDesc& desc) : RendererBase(name, desc)
 {
-    Rndr::ImGuiWrapper::Init(window, *desc.graphics_context, {.display_demo_window = true});
+    Rndr::ImGuiWrapper::Init(window, *desc.graphics_context, {.display_demo_window = false});
 
     const uint32_t buffer_size = m_brdf_lut_width * m_brdf_lut_height * sizeof(float) * 2;
     m_brdf_lut_buffer =
@@ -125,21 +122,30 @@ bool UIRenderer::Render()
 
 void UIRenderer::RenderMeshConverterTool()
 {
-    ImGui::Begin("Mesh Converter Tool");
+    static Rndr::String s_selected_file_path;
+    static Rndr::String s_mesh_file_path;
+    static Rndr::String s_material_file_path;
+
+    ImGui::SetNextWindowPos(ImVec2(10.0f, 10.0f));
+
+    ImGui::Begin("Mesh Converter Tool", nullptr, ImGuiWindowFlags_AlwaysAutoResize);
     if (ImGui::Button("Select file to convert..."))
     {
-        m_selected_file_path = OpenFileDialog();
-        const std::filesystem::path path(m_selected_file_path);
-        m_output_file_path = path.parent_path().string() + "\\" + path.stem().string() + ".rndr";
+        s_selected_file_path = OpenFileDialog();
+        const std::filesystem::path path(s_selected_file_path);
+        s_mesh_file_path = path.parent_path().string() + "\\" + path.stem().string() + ".rndrmesh";
+        s_material_file_path = path.parent_path().string() + "\\" + path.stem().string() + ".rndrmat";
     }
-    ImGui::Text("Selected file: %s", !m_selected_file_path.empty() ? m_selected_file_path.c_str() : "None");
-    ImGui::Text("Output file: %s", !m_output_file_path.empty() ? m_output_file_path.c_str() : "None");
+    ImGui::Text("Selected file: %s", !s_selected_file_path.empty() ? s_selected_file_path.c_str() : "None");
+    ImGui::Text("Output mesh file: %s", !s_mesh_file_path.empty() ? s_mesh_file_path.c_str() : "None");
+    ImGui::Text("Output material file: %s", !s_material_file_path.empty() ? s_material_file_path.c_str() : "None");
 
     Rndr::MeshAttributesToLoad attributes_to_load = Rndr::MeshAttributesToLoad::LoadPositions;
-    static bool s_should_load_normals = false;
-    static bool s_should_load_uvs = false;
-    ImGui::Checkbox("Load Normals", &s_should_load_normals);
-    ImGui::Checkbox("Load Uvs", &s_should_load_uvs);
+    static bool s_should_load_normals = true;
+    static bool s_should_load_uvs = true;
+    static Rndr::String s_status = "Idle";
+    ImGui::Checkbox("Use Normals", &s_should_load_normals);
+    ImGui::Checkbox("Use Uvs", &s_should_load_uvs);
     if (s_should_load_normals)
     {
         attributes_to_load |= Rndr::MeshAttributesToLoad::LoadNormals;
@@ -150,14 +156,17 @@ void UIRenderer::RenderMeshConverterTool()
     }
     if (ImGui::Button("Convert"))
     {
-        ProcessMesh(attributes_to_load);
+        ProcessMesh(s_selected_file_path, s_mesh_file_path, s_material_file_path, attributes_to_load, s_status);
     }
+    ImGui::Text("Status: %s", s_status.c_str());
     ImGui::End();
 }
 
 void UIRenderer::RenderComputeBrdfLutTool()
 {
-    ImGui::Begin("Compute BRDF LUT Tool");
+    ImGui::SetNextWindowPos(ImVec2(10.0f, 250.0f));
+
+    ImGui::Begin("Compute BRDF LUT Tool", nullptr, ImGuiWindowFlags_AlwaysAutoResize);
     static Rndr::String s_selected_file_path;
     if (ImGui::Button("Select output path..."))
     {
@@ -183,17 +192,19 @@ void UIRenderer::RenderComputeBrdfLutTool()
 
 void UIRenderer::RenderComputeEnvironmentMapTool()
 {
-    ImGui::Begin("Compute Environment Map Tool");
+    ImGui::SetNextWindowPos(ImVec2(10.0f, 400.0f));
+
+    ImGui::Begin("Compute Environment Map Tool", nullptr, ImGuiWindowFlags_AlwaysAutoResize);
     static Rndr::String s_selected_file = "None";
     static Rndr::String s_output_file = "None";
     if (ImGui::Button("Select input environment map..."))
     {
         s_selected_file = OpenFileDialog();
-        std::filesystem::path path(s_selected_file);
-        Rndr::String selected_directory = path.parent_path().string();
-        Rndr::String selected_file_name = path.stem().string();
-        Rndr::String selected_file_extension = path.extension().string();
-        s_output_file = selected_directory + "\\" + selected_file_name + "_irradience" + selected_file_extension;
+        const std::filesystem::path path(s_selected_file);
+        const Rndr::String selected_directory = path.parent_path().string();
+        const Rndr::String selected_file_name = path.stem().string();
+        const Rndr::String selected_file_extension = path.extension().string();
+        s_output_file = selected_directory + "\\" + selected_file_name + "_irradiance" + selected_file_extension;
     }
 
     ImGui::Text("Input file: %s", s_selected_file.c_str());
@@ -215,38 +226,72 @@ void UIRenderer::RenderComputeEnvironmentMapTool()
     ImGui::End();
 }
 
-void UIRenderer::ProcessMesh(Rndr::MeshAttributesToLoad attributes_to_load)
+void UIRenderer::ProcessMesh(const Rndr::String& in_mesh_path, const Rndr::String& out_mesh_path, const Rndr::String& out_material_path,
+                             Rndr::MeshAttributesToLoad attributes_to_load, Rndr::String& out_status)
 {
     constexpr uint32_t k_ai_process_flags = aiProcess_JoinIdenticalVertices | aiProcess_Triangulate | aiProcess_GenSmoothNormals |
                                             aiProcess_LimitBoneWeights | aiProcess_SplitLargeMeshes | aiProcess_ImproveCacheLocality |
                                             aiProcess_RemoveRedundantMaterials | aiProcess_FindDegenerates | aiProcess_FindInvalidData |
                                             aiProcess_GenUVCoords;
 
-    const aiScene* scene = aiImportFile(m_selected_file_path.c_str(), k_ai_process_flags);
+    const aiScene* scene = aiImportFile(in_mesh_path.c_str(), k_ai_process_flags);
     if (scene == nullptr || !scene->HasMeshes())
     {
         RNDR_LOG_ERROR("Failed to load mesh from file with error: %s", aiGetErrorString());
-        RNDR_HALT("Invalid mesh file!");
+        out_status = "Failed";
         return;
     }
 
     Rndr::MeshData mesh_data;
-    const bool is_data_loaded = Rndr::Mesh::ReadData(mesh_data, *scene, attributes_to_load);
-    if (!is_data_loaded)
+    if (!Rndr::Mesh::ReadData(mesh_data, *scene, attributes_to_load))
     {
-        RNDR_LOG_ERROR("Failed to load mesh data from file: %s", m_selected_file_path.c_str());
-        RNDR_HALT("Failed  to load mesh data!");
+        RNDR_LOG_ERROR("Failed to load mesh data from file: %s", in_mesh_path.c_str());
+        out_status = "Failed";
         return;
+    }
+
+    Rndr::Array<Rndr::MaterialDescription> materials(scene->mNumMaterials);
+    Rndr::Array<Rndr::String> texture_paths;
+    Rndr::Array<Rndr::String> opacity_maps;
+    for (int i = 0; i < scene->mNumMaterials; i++)
+    {
+        if (!Rndr::Material::ReadDescription(materials[i], texture_paths, opacity_maps, *scene->mMaterials[i]))
+        {
+            RNDR_LOG_ERROR("Failed to read material description from file: %s", in_mesh_path.c_str());
+            out_status = "Failed";
+            return;
+        }
     }
     aiReleaseImport(scene);
 
-    const bool is_data_written = Rndr::Mesh::WriteOptimizedData(mesh_data, m_output_file_path);
-    if (!is_data_written)
+    const std::filesystem::path in_path(in_mesh_path);
+    const Rndr::String base_path = in_path.parent_path().string();
+    if (!Rndr::Material::ConvertAndDownscaleTextures(materials, base_path, texture_paths, opacity_maps))
     {
-        RNDR_LOG_ERROR("Failed to write mesh data to file: %s", m_output_file_path.c_str());
-        RNDR_HALT("Failed to write mesh data!");
+        RNDR_LOG_ERROR("Failed to convert and downscale textures!");
+        out_status = "Failed";
         return;
     }
+
+    for (const Rndr::String& texture_path : texture_paths)
+    {
+        RNDR_LOG_INFO("Texture path: %s", texture_path.c_str());
+    }
+
+    if (!Rndr::Material::WriteOptimizedData(materials, texture_paths, out_material_path))
+    {
+        RNDR_LOG_ERROR("Failed to write material data to file: %s", out_material_path.c_str());
+        out_status = "Failed";
+        return;
+    }
+
+    if (!Rndr::Mesh::WriteOptimizedData(mesh_data, out_mesh_path))
+    {
+        RNDR_LOG_ERROR("Failed to write mesh data to file: %s", out_mesh_path.c_str());
+        out_status = "Failed";
+        return;
+    }
+    out_status = "Success";
 }
 
 void UIRenderer::ComputeBrdfLut(const Rndr::String& output_path, Rndr::String& status)
