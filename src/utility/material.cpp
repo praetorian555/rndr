@@ -1,6 +1,7 @@
 #include "rndr/utility/material.h"
 #include "rndr/core/containers/hash-map.h"
 #include "rndr/core/containers/stack-array.h"
+#include "rndr/core/file.h"
 #include "stb_image/stb_image.h"
 #include "stb_image/stb_image_resize2.h"
 #include "stb_image/stb_image_write.h"
@@ -299,11 +300,75 @@ bool Rndr::Material::ReadOptimizedData(Rndr::Array<Rndr::MaterialDescription>& o
     return true;
 }
 
-bool Rndr::Material::SetupMaterial(Rndr::MaterialDescription& in_out_material, const Rndr::Array<Rndr::String>& in_texture_paths)
+namespace
 {
-    RNDR_UNUSED(in_out_material);
-    RNDR_UNUSED(in_texture_paths);
-    return false;
+Rndr::Image LoadTexture(const Rndr::GraphicsContext& graphics_context, const Rndr::String& texture_path);
+}
+
+bool Rndr::Material::SetupMaterial(Rndr::MaterialDescription& in_out_material, Rndr::Array<Rndr::Image>& out_textures,
+                                   const Rndr::GraphicsContext& graphics_context, const Rndr::Array<Rndr::String>& in_texture_paths)
+{
+    if (in_out_material.albedo_map != k_invalid_image_id)
+    {
+        const Rndr::String& albedo_map_path = in_texture_paths[static_cast<size_t>(in_out_material.albedo_map)];
+        Rndr::Image albedo_map = LoadTexture(graphics_context, albedo_map_path);
+        if (!albedo_map.IsValid())
+        {
+            RNDR_LOG_ERROR("Failed to load albedo map: %s", albedo_map_path.c_str());
+            return false;
+        }
+        in_out_material.albedo_map = albedo_map.GetBindlessHandle();
+        out_textures.emplace_back(std::move(albedo_map));
+    }
+    if (in_out_material.metallic_roughness_map != k_invalid_image_id)
+    {
+        const Rndr::String& metallic_roughness_map_path = in_texture_paths[static_cast<size_t>(in_out_material.metallic_roughness_map)];
+        Rndr::Image metallic_roughness_map = LoadTexture(graphics_context, metallic_roughness_map_path);
+        if (!metallic_roughness_map.IsValid())
+        {
+            RNDR_LOG_ERROR("Failed to load metallic roughness map: %s", metallic_roughness_map_path.c_str());
+            return false;
+        }
+        in_out_material.metallic_roughness_map = metallic_roughness_map.GetBindlessHandle();
+        out_textures.emplace_back(std::move(metallic_roughness_map));
+    }
+    if (in_out_material.normal_map != k_invalid_image_id)
+    {
+        const Rndr::String& normal_map_path = in_texture_paths[static_cast<size_t>(in_out_material.normal_map)];
+        Rndr::Image normal_map = LoadTexture(graphics_context, normal_map_path);
+        if (!normal_map.IsValid())
+        {
+            RNDR_LOG_ERROR("Failed to load normal map: %s", normal_map_path.c_str());
+            return false;
+        }
+        in_out_material.normal_map = normal_map.GetBindlessHandle();
+        out_textures.emplace_back(std::move(normal_map));
+    }
+    if (in_out_material.ambient_occlusion_map != k_invalid_image_id)
+    {
+        const Rndr::String& ambient_occlusion_map_path = in_texture_paths[static_cast<size_t>(in_out_material.ambient_occlusion_map)];
+        Rndr::Image ambient_occlusion_map = LoadTexture(graphics_context, ambient_occlusion_map_path);
+        if (!ambient_occlusion_map.IsValid())
+        {
+            RNDR_LOG_ERROR("Failed to load ambient occlusion map: %s", ambient_occlusion_map_path.c_str());
+            return false;
+        }
+        in_out_material.ambient_occlusion_map = ambient_occlusion_map.GetBindlessHandle();
+        out_textures.emplace_back(std::move(ambient_occlusion_map));
+    }
+    if (in_out_material.emissive_map != k_invalid_image_id)
+    {
+        const Rndr::String& emissive_map_path = in_texture_paths[static_cast<size_t>(in_out_material.emissive_map)];
+        Rndr::Image emissive_map = LoadTexture(graphics_context, emissive_map_path);
+        if (!emissive_map.IsValid())
+        {
+            RNDR_LOG_ERROR("Failed to load emissive map: %s", emissive_map_path.c_str());
+            return false;
+        }
+        in_out_material.emissive_map = emissive_map.GetBindlessHandle();
+        out_textures.emplace_back(std::move(emissive_map));
+    }
+    return true;
 }
 
 namespace
@@ -408,4 +473,26 @@ cleanup:
 
     return relative_dst_file;
 }
+
+Rndr::Image LoadTexture(const Rndr::GraphicsContext& graphics_context, const Rndr::String& texture_path)
+{
+    constexpr bool k_flip_vertically = true;
+    Rndr::Bitmap bitmap = Rndr::File::ReadEntireImage(texture_path, Rndr::PixelFormat::R8G8B8A8_UNORM, k_flip_vertically);
+    if (!bitmap.IsValid())
+    {
+        RNDR_LOG_ERROR("Failed to load texture from file: %s", texture_path.c_str());
+        return {};
+    }
+    const Rndr::ImageDesc image_desc{.width = bitmap.GetWidth(),
+                                     .height = bitmap.GetHeight(),
+                                     .array_size = 1,
+                                     .type = Rndr::ImageType::Image2D,
+                                     .pixel_format = bitmap.GetPixelFormat(),
+                                     .use_mips = true,
+                                     .is_bindless = true,
+                                     .sampler = {.max_anisotropy = 16.0f, .border_color = Rndr::Colors::k_white}};
+    const Rndr::ConstByteSpan bitmap_data{bitmap.GetData(), bitmap.GetSize3D()};
+    return {graphics_context, image_desc, bitmap_data};
+}
+
 }  // namespace

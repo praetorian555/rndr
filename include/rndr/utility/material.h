@@ -2,6 +2,7 @@
 #include "rndr/core/containers/string.h"
 #include "rndr/core/enum-flags.h"
 #include "rndr/core/math.h"
+#include "rndr/core/render-api.h"
 
 struct aiMaterial;
 
@@ -32,19 +33,30 @@ constexpr ImageId k_invalid_image_id = 0xFFFFFFFFFFFFFFFF;
  */
 struct MaterialDescription final
 {
+    // Used only if emissive map is missing.
     Rndr::Vector4f emissive_color = Rndr::Vector4f(0.0f, 0.0f, 0.0f, 0.0f);
+    // Used only if albedo map is missing.
     Rndr::Vector4f albedo_color = Rndr::Vector4f(1.0f, 1.0f, 1.0f, 1.0f);
-    // Roughness of the surface, for anisotropic materials use the x and y while for isotropic materials use only x.
+    // Roughness of the surface, for anisotropic materials use the x and y while for isotropic materials the same value will be stored in
+    // x and y. Used only if metallic_roughness_map is missing.
     Rndr::Vector4f roughness = Rndr::Vector4f(1.0f, 1.0f, 0.0f, 0.0f);
+
     float transparency_factor = 1.0f;
     float alpha_test = 0.0f;
+    // Used only if metallic_roughness_map is missing.
     float metallic_factor = 0.0f;
+
     MaterialFlags flags = MaterialFlags::NoFlags;
+
     ImageId ambient_occlusion_map = k_invalid_image_id;
+    // Emissive color.
     ImageId emissive_map = k_invalid_image_id;
+    // Base color is stored in the RGB channels and opacity in the A channel.
     ImageId albedo_map = k_invalid_image_id;
+    // Roughness is stored in the G channel and metallic in the B channel.
     ImageId metallic_roughness_map = k_invalid_image_id;
     ImageId normal_map = k_invalid_image_id;
+    // Not used in a cooked material. In cooked material opacity data will be in the alpha channel of the albedo map.
     ImageId opacity_map = k_invalid_image_id;
 };
 
@@ -83,10 +95,13 @@ bool ReadOptimizedData(Array<MaterialDescription>& out_materials, Array<String>&
  * Sets up the material description with the given texture paths. This includes loading the textures and setting up the material
  * description with the handles to the textures on the GPU.
  * @param in_out_material Material description to be set up.
+ * @param out_textures Array that should store created textures.
+ * @param graphics_context Graphics context used to perform GPU related operations.
  * @param in_texture_paths Array of texture paths.
  * @return True if the material was successfully set up, false otherwise.
  */
-bool SetupMaterial(MaterialDescription& in_out_material, const Array<String>& in_texture_paths);
+bool SetupMaterial(MaterialDescription& in_out_material, Array<Image>& out_textures, const GraphicsContext& graphics_context,
+                   const Array<String>& in_texture_paths);
 
 }  // namespace Material
 
