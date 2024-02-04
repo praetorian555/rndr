@@ -1321,6 +1321,13 @@ Rndr::Image::Image(const GraphicsContext& graphics_context, const ImageDesc& des
     {
         assert(false && "Not implemented yet!");
     }
+
+    if (m_desc.is_bindless)
+    {
+        m_bindless_handle = glGetTextureHandleARB(m_native_texture);
+        glMakeTextureHandleResidentARB(m_bindless_handle);
+    }
+
     if (glGetError() != GL_NO_ERROR)
     {
         RNDR_LOG_ERROR("Failed to initialize image!");
@@ -1385,6 +1392,11 @@ const Rndr::ImageDesc& Rndr::Image::GetDesc() const
 GLuint Rndr::Image::GetNativeTexture() const
 {
     return m_native_texture;
+}
+
+uint64_t Rndr::Image::GetBindlessHandle() const
+{
+    return m_bindless_handle;
 }
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////

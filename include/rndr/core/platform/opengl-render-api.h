@@ -399,10 +399,12 @@ public:
 
     [[nodiscard]] const ImageDesc& GetDesc() const;
     [[nodiscard]] GLuint GetNativeTexture() const;
+    [[nodiscard]] uint64_t GetBindlessHandle() const;
 
 private:
     ImageDesc m_desc;
     GLuint m_native_texture = k_invalid_opengl_object;
+    uint64_t m_bindless_handle = k_invalid_opengl_object;
 };
 
 /**

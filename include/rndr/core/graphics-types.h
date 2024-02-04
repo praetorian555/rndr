@@ -593,6 +593,9 @@ struct ImageDesc
     /** If image should have mip maps. */
     bool use_mips = false;
 
+    /** If image should be made bindless. */
+    bool is_bindless = false;
+
     /** Sampling parameters for the image. */
     SamplerDesc sampler;
 };
