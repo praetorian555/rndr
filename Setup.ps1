@@ -75,14 +75,14 @@ function AddToSystemPath{
 
     foreach ($drive in $drives)
     {
-        $pathsToSearch = @("\Program Files\Microsoft Visual Studio", "\Program Files (x86)\Microsoft Visual Studio")
+        $pathsToSearch = @("Program Files\Microsoft Visual Studio", "Program Files (x86)\Microsoft Visual Studio")
 
         foreach ($pathToSearch in $pathsToSearch)
         {
             # Try/Catch block for any errors (like access denied)
             try
             {
-                $pathToSearch = $drive.DeviceID + $pathToSearch
+                $pathToSearch = $drive.Root + $pathToSearch
                 Write-Debug "Searching $pathToSearch for $FileToFind"
                 $filePath = Get-ChildItem -Path $pathToSearch -Recurse -ErrorAction Stop -File | Where-Object { ($_.Name -eq $FileToFind) -and ($_.Directory -match $FolderRegex) }
                 if ($filePath)
@@ -92,19 +92,20 @@ function AddToSystemPath{
             }
             catch
             {
-                Write-Host "Error searching drive $( $drive.DeviceID ): $( $_.Exception.Message )"
+                Write-Debug "Error searching drive $( $drive.DeviceID ): $( $_.Exception.Message )"
             }
         }
 
         # Check if file was found
-        if ($null -eq $filePath) {
+        if (-not $null -eq $filePath)
+        {
             break
         }
     }
 
     # Check if file was found
     if ($null -eq $filePath) {
-        Write-Host "File $FileToFind not found!"
+        Write-Host "File $FileToFind not found!" -ForegroundColor Red
         return
     }
     $filePath = (Get-Item $($filePath.FullName)).DirectoryName
@@ -117,9 +118,9 @@ function AddToSystemPath{
         # Add the DLL path to the system path
         $newPath = $systemPath + ";" + $filePath
         [Environment]::SetEnvironmentVariable("Path", $newPath, "Machine")
-        Write-Host "Add path $filePath to system path"
+        Write-Host "Added path $filePath to system path" -ForegroundColor Green
     } else {
-        Write-Host "Path $filePath is already in the system path"
+        Write-Host "Path $filePath is already in the system path" -ForegroundColor Yellow
     }
 }
 
