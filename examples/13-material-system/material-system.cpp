@@ -76,7 +76,7 @@ public:
         }
         m_material_data = material_descriptions[0];
         // TODO: Implement this function
-        if (!Rndr::Material::SetupMaterial(m_material_data, texture_paths))
+        if (!Rndr::Material::SetupMaterial(m_material_data, m_material_textures, m_desc.graphics_context, texture_paths))
         {
             RNDR_LOG_ERROR("Failed to setup material data!");
             exit(1);
@@ -95,6 +95,7 @@ public:
                                        .stride = sizeof(uint32_t)},
                                       m_mesh_data.index_buffer_data);
         RNDR_ASSERT(m_index_buffer.IsValid());
+
         m_instance_buffer = Rndr::Buffer(
             desc.graphics_context, {.type = Rndr::BufferType::ShaderStorage, .usage = Rndr::Usage::Dynamic, .size = sizeof(InstanceData)});
         RNDR_ASSERT(m_instance_buffer.IsValid());
@@ -102,6 +103,11 @@ public:
         model_transform = Math::Transpose(model_transform);
         InstanceData instance_data = {.model = model_transform, .normal = model_transform};
         m_desc.graphics_context->Update(m_instance_buffer, Rndr::ToByteSpan(instance_data));
+
+        m_material_buffer = Rndr::Buffer(desc.graphics_context, {.type = Rndr::BufferType::ShaderStorage, .usage = Rndr::Usage::Dynamic, .size = sizeof(MaterialDescription)});
+        RNDR_ASSERT(m_material_buffer.IsValid());
+        m_desc.graphics_context->Update(m_material_buffer, Rndr::ToByteSpan(m_material_data));
+
         m_per_frame_buffer = Rndr::Buffer(
             desc.graphics_context, {.type = Rndr::BufferType::Constant, .usage = Rndr::Usage::Dynamic, .size = sizeof(PerFrameData)});
         RNDR_ASSERT(m_per_frame_buffer.IsValid());
@@ -145,8 +151,7 @@ public:
         PerFrameData per_frame_data = {.view_projection = view_projection_transform, .camera_position = m_camera_position};
         m_desc.graphics_context->Update(m_per_frame_buffer, Rndr::ToByteSpan(per_frame_data));
 
-        //        m_desc.graphics_context->Bind(m_vertex_buffer, 1);
-        //        m_desc.graphics_context->Bind(m_instance_buffer, 2);
+        m_desc.graphics_context->Bind(m_material_buffer, 3);
         m_command_list.Submit();
         return true;
     }
@@ -246,7 +251,9 @@ private:
     Rndr::Buffer m_vertex_buffer;
     Rndr::Buffer m_index_buffer;
     Rndr::Buffer m_instance_buffer;
+    Rndr::Buffer m_material_buffer;
     Rndr::Buffer m_per_frame_buffer;
+    Rndr::Array<Rndr::Image> m_material_textures;
 
     Rndr::Image m_env_map_image;
     Rndr::Image m_irradiance_map_image;

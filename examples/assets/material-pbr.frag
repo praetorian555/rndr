@@ -5,20 +5,19 @@
 
 #include "material-data.glsl"
 
-layout(std140, location = 0) uniform PerFrameData
+layout(std140, binding = 0) uniform PerFrameData
 {
-    mat4 view_transform;
-    mat4 projection_transform;
+    mat4 view_projection_transform;
     vec3 camera_position_world;
 };
 
-layout(std430, binding = 2) restrict readonly buffer Materials
+layout(std430, binding = 3) restrict readonly buffer Materials
 {
     MaterialData in_materials[];
 };
 
-layout (location = 0) in vec2 in_tex_coords;
-layout (location = 1) in vec3 in_normal_world;
+layout (location = 0) in vec3 in_normal_world;
+layout (location = 1) in vec2 in_tex_coords;
 layout (location = 2) in vec3 in_position_world;
 layout (location = 3) in flat uint in_material_index;
 
@@ -59,10 +58,37 @@ void main()
         normal_world = PerturbNormal(normal_world, normalize(camera_position_world - in_position_world), normal_sample, in_tex_coords);
     }
 
-    // Hardcoded directional light
-    vec3 light_direction = normalize(vec3(-1.0, 1.0, 0.1));
+    vec4 metal_roughness_sample = mtl.roughness;
+    metal_roughness_sample.b = mtl.metallic_factor;
+    if (mtl.metallic_roughness_map > 0)
+    {
+        metal_roughness_sample = texture(sampler2D(unpackUint2x32(mtl.metallic_roughness_map)), in_tex_coords);
+    }
 
-    float n_dot_l = clamp(dot(normal_world, light_direction), 0.3, 1.0);
+    // Ambient occlusion factor
+    vec4 kao = vec4(0.0, 0.0, 0.0, 0.0);
+    if (mtl.ambient_occlusion_map > 0)
+    {
+        kao = texture(sampler2D(unpackUint2x32(mtl.ambient_occlusion_map)), in_tex_coords);
+    }
 
-    out_frag_color = vec4(albedo.rgb * n_dot_l, albedo.a);
+    // Emissive color factor
+    vec4 ke  = mtl.emissive_color;
+    if (mtl.emissive_map > 0)
+    {
+        ke = texture(sampler2D(unpackUint2x32(mtl.emissive_map)), in_tex_coords);
+    }
+    ke.rgb = SrgbToLinear(ke).rgb;
+
+    PbrInfo pbr_inputs;
+    // image-based lighting
+    vec3 color = CalculatePBRInputsMetallicRoughness(albedo, normal_world, camera_position_world.xyz, in_position_world, metal_roughness_sample, pbr_inputs);
+    // one hardcoded light source
+    color += CalculatePBRLightContribution(pbr_inputs, normalize(vec3(-1.0, -1.0, -1.0)), vec3(1.0));
+    // ambient occlusion
+    color = color * (kao.r < 0.01 ? 1.0 : kao.r);
+    // emissive
+    color = pow(ke.rgb + color, vec3(1.0 / 2.2));
+
+    out_frag_color = vec4(color, albedo.a);
 }
