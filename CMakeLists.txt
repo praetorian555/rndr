@@ -83,5 +83,6 @@ if (PROJECT_IS_TOP_LEVEL)
     add_subdirectory(examples/10-converters)
     add_subdirectory(examples/11-mesh-renderer)
     add_subdirectory(examples/12-pbr-shading)
+    add_subdirectory(examples/13-material-system)
 
 endif ()
