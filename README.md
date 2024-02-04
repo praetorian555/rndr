@@ -11,6 +11,7 @@ To install all necessary tools you will need to run Setup.ps1 PowerShell script:
 * Start a PowerShell as an administrator and navigate to the root of the project.
 * Enable execution of scripts by running `Set-ExecutionPolicy -ExecutionPolicy Bypass -Scope Process`.
 * Run `.\Setup.ps1` script. It will install Visual Studio Community 2022 as well as all necessary tools and libraries. It will also update PATH environment variable with locations of clang-format and address sanitizer. If you want to skip the installation just use `-noinstallvs` flag.
+  * If there are any problems when running the script, set the `$DebugPreference` variable to `Continue` and run the script again. It will provide more information about the errors. To disable debug output set the variable to `Ignore`.
 
 To generate a build system go to the root of a project and use:
 
