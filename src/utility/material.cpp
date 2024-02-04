@@ -5,7 +5,6 @@
 #include "stb_image/stb_image_resize2.h"
 #include "stb_image/stb_image_write.h"
 
-#include <algorithm>
 #include <execution>
 
 #include <assimp/material.h>
@@ -118,8 +117,9 @@ bool Rndr::Material::ReadDescription(MaterialDescription& out_description, Array
             out_description.flags |= MaterialFlags::Transparent;
         }
     }
-    if (aiGetMaterialTexture(&ai_material, AI_MATKEY_GLTF_PBRMETALLICROUGHNESS_METALLICROUGHNESS_TEXTURE, &out_texture_path, &out_texture_mapping, &out_uv_index, &out_blend,
-                             &out_texture_op, out_texture_mode.data(), &out_texture_flags) == AI_SUCCESS)
+    if (aiGetMaterialTexture(&ai_material, AI_MATKEY_GLTF_PBRMETALLICROUGHNESS_METALLICROUGHNESS_TEXTURE, &out_texture_path,
+                             &out_texture_mapping, &out_uv_index, &out_blend, &out_texture_op, out_texture_mode.data(),
+                             &out_texture_flags) == AI_SUCCESS)
     {
         out_description.metallic_roughness_map = AddUnique(out_texture_paths, out_texture_path.C_Str());
     }
@@ -176,15 +176,15 @@ bool Rndr::Material::ReadDescription(MaterialDescription& out_description, Array
     }
 
     RNDR_LOG_DEBUG("Texture paths: %d", out_texture_paths.size());
-    for (int i = 0; i < out_texture_paths.size(); i++)
+    for (const String& texture_path : out_texture_paths)
     {
-        RNDR_LOG_DEBUG("\t%s", out_texture_paths[i].c_str());
+        RNDR_LOG_DEBUG("\t%s", texture_path.c_str());
     }
 
     RNDR_LOG_DEBUG("Opacity maps: %d", out_opacity_maps.size());
-    for (int i = 0; i < out_opacity_maps.size(); i++)
+    for (const String& out_opacity_map : out_opacity_maps)
     {
-        RNDR_LOG_DEBUG("\t%s", out_opacity_maps[i].c_str());
+        RNDR_LOG_DEBUG("\t%s", out_opacity_map.c_str());
     }
 
     return true;
@@ -256,6 +256,7 @@ bool Rndr::Material::ReadOptimizedData(Rndr::Array<Rndr::MaterialDescription>& o
     }
 
     std::filesystem::path base_path(file_path);
+    base_path = base_path.parent_path();
     out_texture_paths.resize(texture_paths_count);
     for (uint32_t i = 0; i < texture_paths_count; ++i)
     {
@@ -296,6 +297,13 @@ bool Rndr::Material::ReadOptimizedData(Rndr::Array<Rndr::MaterialDescription>& o
 
     fclose(f);
     return true;
+}
+
+bool Rndr::Material::SetupMaterial(Rndr::MaterialDescription& in_out_material, const Rndr::Array<Rndr::String>& in_texture_paths)
+{
+    RNDR_UNUSED(in_out_material);
+    RNDR_UNUSED(in_texture_paths);
+    return false;
 }
 
 namespace
@@ -379,8 +387,8 @@ Rndr::String ConvertTexture(const Rndr::String& texture_path, const Rndr::String
     const int dst_width = std::min(src_width, k_max_new_width);
     const int dst_height = std::min(src_height, k_max_new_height);
 
-    if (stbir_resize_uint8_linear(src_data, src_width, src_height, 0, dst, dst_width, dst_height, 0, (stbir_pixel_layout)src_channels) ==
-        nullptr)
+    if (stbir_resize_uint8_linear(src_data, src_width, src_height, 0, dst, dst_width, dst_height, 0,
+                                  static_cast<stbir_pixel_layout>(src_channels)) == nullptr)
     {
         RNDR_LOG_ERROR("ConvertTexture: Failed to resize [%s] texture", src_file.c_str());
         goto cleanup;
