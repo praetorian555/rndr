@@ -54,8 +54,10 @@ if (RNDR_HARDENED)
     rndr_setup_sanitizers(rndr_options)
 endif ()
 
+set(GLTF_ASSETS_DIR "")
 include(cmake/dependencies.cmake)
-setup_dependencies()
+setup_dependencies(GLTF_ASSETS_DIR)
+message(STATUS "Path to sample assets: ${GLTF_ASSETS_DIR}")
 
 # Adds external dependencies
 add_subdirectory(extern)

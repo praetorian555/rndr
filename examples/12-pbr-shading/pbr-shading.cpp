@@ -21,14 +21,7 @@ void Run(const Rndr::String& asset_path);
 int main(int argc, char* argv[])
 {
     Rndr::Init({.enable_input_system = true});
-    if (argc > 1)
-    {
-        Run(argv[1]);
-    }
-    else
-    {
-        RNDR_LOG_ERROR("No asset path provided!");
-    }
+    Run(GLTF_SAMPLE_ASSETS_DIR "DamagedHelmet/glTF/");
     Rndr::Destroy();
     return 0;
 }
@@ -59,7 +52,7 @@ public:
         m_fragment_shader = Shader(desc.graphics_context, {.type = ShaderType::Fragment, .source = fragment_shader_code});
         RNDR_ASSERT(m_fragment_shader.IsValid());
 
-        const Rndr::String mesh_path = m_asset_path + "/DamagedHelmet.rndr";
+        const Rndr::String mesh_path = m_asset_path + "DamagedHelmet.rndrmesh";
         if (!Rndr::Mesh::ReadOptimizedData(m_mesh_data, mesh_path))
         {
             RNDR_LOG_ERROR("Failed to load mesh data from file: %s", mesh_path.c_str());

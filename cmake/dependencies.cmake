@@ -1,6 +1,6 @@
 include(cmake/cpm.cmake)
 
-function(setup_dependencies)
+function(setup_dependencies GLTF_SAMPLE_ASSETS)
     message(STATUS "Setting up dependencies...")
 
     if (NOT TARGET fmtlib::fmtlib)
@@ -79,6 +79,18 @@ function(setup_dependencies)
         )
         SET_TARGET_PROPERTIES(meshoptimizer PROPERTIES FOLDER Extern)
     endif ()
+
+    cpmaddpackage(
+            NAME
+            sampleassets
+            GITHUB_REPOSITORY
+            "KhronosGroup/glTF-Sample-Assets"
+            GIT_TAG
+            "main"
+            DOWNLOAD_ONLY
+    )
+    message(STATUS "sampleassets_SOURCE_DIR: ${sampleassets_SOURCE_DIR}")
+    set(${GLTF_SAMPLE_ASSETS} "${sampleassets_SOURCE_DIR}/Models" PARENT_SCOPE)
 
     include(FetchContent)
 

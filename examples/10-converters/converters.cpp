@@ -122,9 +122,9 @@ bool UIRenderer::Render()
 
 void UIRenderer::RenderMeshConverterTool()
 {
-    static Rndr::String s_selected_file_path;
-    static Rndr::String s_mesh_file_path;
-    static Rndr::String s_material_file_path;
+    static Rndr::String s_selected_file_path = GLTF_SAMPLE_ASSETS_DIR "DamagedHelmet/glTF/DamagedHelmet.gltf";
+    static Rndr::String s_mesh_file_path = GLTF_SAMPLE_ASSETS_DIR "DamagedHelmet/glTF/DamagedHelmet.rndrmesh";
+    static Rndr::String s_material_file_path = GLTF_SAMPLE_ASSETS_DIR "DamagedHelmet/glTF/DamagedHelmet.rndrmat";
 
     ImGui::SetNextWindowPos(ImVec2(10.0f, 10.0f));
 
@@ -133,8 +133,8 @@ void UIRenderer::RenderMeshConverterTool()
     {
         s_selected_file_path = OpenFileDialog();
         const std::filesystem::path path(s_selected_file_path);
-        s_mesh_file_path = path.parent_path().string() + "\\" + path.stem().string() + ".rndrmesh";
-        s_material_file_path = path.parent_path().string() + "\\" + path.stem().string() + ".rndrmat";
+        s_mesh_file_path = path.parent_path().string() + "/" + path.stem().string() + ".rndrmesh";
+        s_material_file_path = path.parent_path().string() + "/" + path.stem().string() + ".rndrmat";
     }
     ImGui::Text("Selected file: %s", !s_selected_file_path.empty() ? s_selected_file_path.c_str() : "None");
     ImGui::Text("Output mesh file: %s", !s_mesh_file_path.empty() ? s_mesh_file_path.c_str() : "None");
