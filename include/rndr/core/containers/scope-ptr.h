@@ -10,7 +10,7 @@ namespace Rndr
 /**
  * Represents a unique pointer to an object of type T. It can't be copied but can be moved.
  */
-template <typename T>
+template <typename T, typename Deleter = std::default_delete<T>>
 using ScopePtr = std::unique_ptr<T>;
 
 template <typename T, typename... Args>

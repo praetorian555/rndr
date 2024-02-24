@@ -5,6 +5,14 @@
 
 #include "rndr/core/file.h"
 
+void Rndr::FileDeleter::operator()(FILE* file) const
+{
+    if (file != nullptr)
+    {
+        fclose(file);
+    }
+}
+
 Rndr::ByteArray Rndr::File::ReadEntireFile(const String& file_path)
 {
     FILE* file = nullptr;
@@ -161,11 +169,7 @@ bool Rndr::File::SaveImage(const Bitmap& bitmap, const String& file_path)
     const PixelFormat pixel_format = bitmap.GetPixelFormat();
     if (IsComponentLowPrecision(pixel_format))
     {
-        status = stbi_write_png(file_path.c_str(),
-                                bitmap.GetWidth(),
-                                bitmap.GetHeight(),
-                                bitmap.GetComponentCount(),
-                                bitmap.GetData(),
+        status = stbi_write_png(file_path.c_str(), bitmap.GetWidth(), bitmap.GetHeight(), bitmap.GetComponentCount(), bitmap.GetData(),
                                 static_cast<int>(bitmap.GetRowSize()));
     }
     else if (IsComponentHighPrecision(pixel_format))

@@ -1,12 +1,25 @@
 #pragma once
 
+//#include <cstdio>
+
 #include "rndr/core/base.h"
 #include "rndr/core/bitmap.h"
 #include "rndr/core/containers/array.h"
-#include "rndr/core/graphics-types.h"
+#include "rndr/core/containers/scope-ptr.h"
 #include "rndr/core/containers/string.h"
+#include "rndr/core/graphics-types.h"
 
-namespace Rndr::File
+namespace Rndr
+{
+
+struct FileDeleter
+{
+    void operator()(FILE* file) const;
+};
+
+using ScopeFilePtr = ScopePtr<FILE, FileDeleter>;
+
+namespace File
 {
 
 /**
@@ -70,5 +83,7 @@ void PrintShader(const String& shader_contents);
  * @return Returns true in case of a success, false otherwise.
  */
 bool SaveImage(const Bitmap& bitmap, const String& file_path);
+
+}  // namespace File
 
 }  // namespace Rndr::File
