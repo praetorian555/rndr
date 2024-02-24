@@ -20,6 +20,7 @@
 #include "rndr/utility/imgui-wrapper.h"
 #include "rndr/utility/material.h"
 #include "rndr/utility/mesh.h"
+#include "rndr/utility/assimp-helpers.h"
 
 class UIRenderer : public Rndr::RendererBase
 {
@@ -243,7 +244,7 @@ void UIRenderer::ProcessMesh(const Rndr::String& in_mesh_path, const Rndr::Strin
     }
 
     Rndr::MeshData mesh_data;
-    if (!Rndr::Mesh::ReadData(mesh_data, *scene, attributes_to_load))
+    if (!Rndr::AssimpHelpers::ReadMeshData(mesh_data, *scene, attributes_to_load))
     {
         RNDR_LOG_ERROR("Failed to load mesh data from file: %s", in_mesh_path.c_str());
         out_status = "Failed";
@@ -255,7 +256,7 @@ void UIRenderer::ProcessMesh(const Rndr::String& in_mesh_path, const Rndr::Strin
     Rndr::Array<Rndr::String> opacity_maps;
     for (int i = 0; i < scene->mNumMaterials; i++)
     {
-        if (!Rndr::Material::ReadDescription(materials[i], texture_paths, opacity_maps, *scene->mMaterials[i]))
+        if (!Rndr::AssimpHelpers::ReadMaterialDescription(materials[i], texture_paths, opacity_maps, *scene->mMaterials[i]))
         {
             RNDR_LOG_ERROR("Failed to read material description from file: %s", in_mesh_path.c_str());
             out_status = "Failed";
@@ -278,14 +279,14 @@ void UIRenderer::ProcessMesh(const Rndr::String& in_mesh_path, const Rndr::Strin
         RNDR_LOG_INFO("Texture path: %s", texture_path.c_str());
     }
 
-    if (!Rndr::Material::WriteOptimizedData(materials, texture_paths, out_material_path))
+    if (!Rndr::Material::WriteData(materials, texture_paths, out_material_path))
     {
         RNDR_LOG_ERROR("Failed to write material data to file: %s", out_material_path.c_str());
         out_status = "Failed";
         return;
     }
 
-    if (!Rndr::Mesh::WriteOptimizedData(mesh_data, out_mesh_path))
+    if (!Rndr::Mesh::WriteData(mesh_data, out_mesh_path))
     {
         RNDR_LOG_ERROR("Failed to write mesh data to file: %s", out_mesh_path.c_str());
         out_status = "Failed";

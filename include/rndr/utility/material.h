@@ -4,8 +4,6 @@
 #include "rndr/core/math.h"
 #include "rndr/core/render-api.h"
 
-struct aiMaterial;
-
 namespace Rndr
 {
 
@@ -48,60 +46,53 @@ struct MaterialDescription final
 
     MaterialFlags flags = MaterialFlags::NoFlags;
 
-    ImageId ambient_occlusion_map = k_invalid_image_id;
+    ImageId ambient_occlusion_texture = k_invalid_image_id;
     // Emissive color.
-    ImageId emissive_map = k_invalid_image_id;
+    ImageId emissive_texture = k_invalid_image_id;
     // Base color is stored in the RGB channels and opacity in the A channel.
-    ImageId albedo_map = k_invalid_image_id;
+    ImageId albedo_texture = k_invalid_image_id;
     // Roughness is stored in the G channel and metallic in the B channel.
-    ImageId metallic_roughness_map = k_invalid_image_id;
-    ImageId normal_map = k_invalid_image_id;
+    ImageId metallic_roughness_texture = k_invalid_image_id;
+    ImageId normal_texture = k_invalid_image_id;
     // Not used in a cooked material. In cooked material opacity data will be in the alpha channel of the albedo map.
-    ImageId opacity_map = k_invalid_image_id;
+    ImageId opacity_texture = k_invalid_image_id;
 };
 
 namespace Material
 {
 
 /**
- * Reads material description from the Assimp material.
- * @param out_description Material description to be filled. Note that texture maps will not contain the handles to actual texture data on
- * the GPU but rather index of a texture path in the array of texture paths.
- * @param out_texture_paths Array of texture paths. The indices of the texture paths in this array are stored in the material description.
- * @param out_opacity_maps Array of paths to opacity maps.
- * @param ai_material Assimp material to read from.
- * @return True if the material description was successfully read, false otherwise.
+ * Rescales textures to 512x512, puts opacity data into the alpha channel of the albedo map and saves the textures as pngs with '_rescaled'
+ * name suffix.
+ * @param materials List of materials that use specified textures. Used to determine which opacity textures correspond to which albedo
+ * textures.
+ * @param base_path Path to the directory where the textures are located.
+ * @param texture_paths List of texture paths relative to the base path.
+ * @param opacity_textures List of paths to opacity textures relative to the base path.
+ * @return True if the textures were successfully converted and downscaled, false otherwise.
  */
-// TODO: This function should be moved to a separate file.
-bool ReadDescription(MaterialDescription& out_description, Array<String>& out_texture_paths, Array<String>& out_opacity_maps,
-                     const aiMaterial& ai_material);
-
-bool ConvertAndDownscaleTextures(const std::vector<MaterialDescription>& materials, const String& base_path, Array<String>& texture_paths,
-                                 const Array<String>& opacity_maps);
-
-bool WriteOptimizedData(const Array<MaterialDescription>& materials, const Array<String>& texture_paths, const String& file_path);
+bool ConvertAndDownscaleTextures(const Array<MaterialDescription>& materials, const String& base_path, Array<String>& texture_paths,
+                                 const Array<String>& opacity_textures);
 
 /**
- * Reads optimized material data from the file. The optimized data contains the material descriptions and the texture paths. The textures
- * are not loaded at this point and the material descriptions contain only the indices of the texture paths in the array of texture paths.
- * @param out_materials Material descriptions to be filled.
- * @param out_texture_paths Array of texture paths to be filled. These will be full paths to the textures.
- * @param file_path Path to the file containing the optimized data.
- * @return True if the optimized data was successfully read, false otherwise.
+ * Writes the material data to a file.
+ * @param materials List of material descriptions to write.
+ * @param texture_paths List of texture paths to write.
+ * @param file_path Path to the file.
+ * @return True if the material data was written successfully, false otherwise.
  */
-bool ReadOptimizedData(Array<MaterialDescription>& out_materials, Array<String>& out_texture_paths, const String& file_path);
+bool WriteData(const Array<MaterialDescription>& materials, const Array<String>& texture_paths, const String& file_path);
 
 /**
- * Sets up the material description with the given texture paths. This includes loading the textures and setting up the material
- * description with the handles to the textures on the GPU.
- * @param in_out_material Material description to be set up.
- * @param out_textures Array that should store created textures.
- * @param graphics_context Graphics context used to perform GPU related operations.
- * @param in_texture_paths Array of texture paths.
- * @return True if the material was successfully set up, false otherwise.
+ * Reads the material data from a file and loads textures to the GPU.
+ * @param out_materials Destination material descriptions.
+ * @param out_textures Destination textures.
+ * @param file_path Path to the file.
+ * @param graphics_context Graphics context used to load the textures to the GPU.
+ * @return True if the material data was read successfully and the textures were loaded to the GPU, false otherwise.
  */
-bool SetupMaterial(MaterialDescription& in_out_material, Array<Image>& out_textures, const GraphicsContext& graphics_context,
-                   const Array<String>& in_texture_paths);
+bool ReadDataLoadTextures(Array<MaterialDescription>& out_materials, Array<Image>& out_textures, const String& file_path,
+                          const GraphicsContext& graphics_context);
 
 }  // namespace Material
 

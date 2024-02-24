@@ -30,10 +30,10 @@ TEST_CASE("Single mesh", "[mesh]")
     memcpy(mesh_data.index_buffer_data.data(), indices.data(), indices.size() * sizeof(uint32_t));
 
     const String file_path = "test.rndrmesh";
-    CHECK(Mesh::WriteOptimizedData(mesh_data, file_path));
+    CHECK(Mesh::WriteData(mesh_data, file_path));
 
     MeshData out_mesh_data;
-    CHECK(Mesh::ReadOptimizedData(out_mesh_data, file_path));
+    CHECK(Mesh::ReadData(out_mesh_data, file_path));
 
     CHECK(out_mesh_data.meshes.size() == 1);
     CHECK(out_mesh_data.meshes[0].material_id == 5);
@@ -88,10 +88,10 @@ TEST_CASE("Single mesh multiple lods", "[mesh]")
     memcpy(mesh_data.index_buffer_data.data(), indices.data(), indices.size() * sizeof(uint32_t));
 
     const String file_path = "test.rndrmesh";
-    CHECK(Mesh::WriteOptimizedData(mesh_data, file_path));
+    CHECK(Mesh::WriteData(mesh_data, file_path));
 
     MeshData out_mesh_data;
-    CHECK(Mesh::ReadOptimizedData(out_mesh_data, file_path));
+    CHECK(Mesh::ReadData(out_mesh_data, file_path));
 
     CHECK(out_mesh_data.meshes.size() == 1);
     CHECK(out_mesh_data.meshes[0].material_id == 5);
@@ -161,10 +161,10 @@ TEST_CASE("Multiple meshes", "[mesh]")
     memcpy(mesh_data.index_buffer_data.data(), indices.data(), indices.size() * sizeof(uint32_t));
 
     const String file_path = "test.rndrmesh";
-    CHECK(Mesh::WriteOptimizedData(mesh_data, file_path));
+    CHECK(Mesh::WriteData(mesh_data, file_path));
 
     MeshData out_mesh_data;
-    CHECK(Mesh::ReadOptimizedData(out_mesh_data, file_path));
+    CHECK(Mesh::ReadData(out_mesh_data, file_path));
 
     CHECK(out_mesh_data.meshes.size() == 2);
     CHECK(out_mesh_data.meshes[0].material_id == 5);

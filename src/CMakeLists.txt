@@ -33,6 +33,7 @@ set(SOURCE_LIST
     "${PROJECT_SOURCE_DIR}/include/rndr/utility/mesh.h"
     "${PROJECT_SOURCE_DIR}/include/rndr/utility/material.h"
     "${PROJECT_SOURCE_DIR}/include/rndr/utility/cube-map.h"
+    "${PROJECT_SOURCE_DIR}/include/rndr/utility/assimp-helpers.h"
     "${PROJECT_SOURCE_DIR}/src/core/base.cpp"
     "${PROJECT_SOURCE_DIR}/src/core/time.cpp"
     "${PROJECT_SOURCE_DIR}/src/core/window.cpp"
@@ -48,7 +49,8 @@ set(SOURCE_LIST
     "${PROJECT_SOURCE_DIR}/src/utility/fly-camera.cpp"
     "${PROJECT_SOURCE_DIR}/src/utility/mesh.cpp"
     "${PROJECT_SOURCE_DIR}/src/utility/material.cpp"
-    "${PROJECT_SOURCE_DIR}/src/utility/cube-map.cpp")
+    "${PROJECT_SOURCE_DIR}/src/utility/cube-map.cpp"
+    "${PROJECT_SOURCE_DIR}/src/utility/assimp-helpers.cpp")
 
 list(APPEND SOURCE_LIST
      "${PROJECT_SOURCE_DIR}/include/rndr/core/platform/opengl-render-api.h"

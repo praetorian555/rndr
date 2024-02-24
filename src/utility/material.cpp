@@ -1,381 +1,209 @@
 #include "rndr/utility/material.h"
+
+#include <execution>
+#include <filesystem>
+
 #include "rndr/core/containers/hash-map.h"
-#include "rndr/core/containers/stack-array.h"
 #include "rndr/core/file.h"
+
 #include "stb_image/stb_image.h"
 #include "stb_image/stb_image_resize2.h"
 #include "stb_image/stb_image_write.h"
 
-#include <execution>
-
-#include <assimp/material.h>
-#include <assimp/pbrmaterial.h>
-#include <filesystem>
-
 namespace
 {
-Rndr::ImageId AddUnique(Rndr::Array<Rndr::String>& files, const char* path)
-{
-    for (uint32_t i = 0; i < files.size(); ++i)
-    {
-        if (files[i] == path)
-        {
-            return i;
-        }
-    }
-    files.emplace_back(path);
-    return files.size() - 1;
-}
-
 Rndr::String ConvertTexture(const Rndr::String& texture_path, const Rndr::String& base_path,
-                            Rndr::HashMap<Rndr::String, uint64_t>& albedo_map_path_to_opacity_map_index,
-                            const Rndr::Array<Rndr::String>& opacity_maps);
-
+                            Rndr::HashMap<Rndr::String, uint64_t>& albedo_texture_path_to_opacity_texture_index,
+                            const Rndr::Array<Rndr::String>& opacity_textures);
+bool SetupMaterial(Rndr::MaterialDescription& in_out_material, Rndr::Array<Rndr::Image>& out_textures,
+                   const Rndr::GraphicsContext& graphics_context, const Rndr::Array<Rndr::String>& in_texture_paths);
+Rndr::Image LoadTexture(const Rndr::GraphicsContext& graphics_context, const Rndr::String& texture_path);
 }  // namespace
 
-bool Rndr::Material::ReadDescription(MaterialDescription& out_description, Array<String>& out_texture_paths,
-                                     Array<String>& out_opacity_maps, const aiMaterial& ai_material)
-{
-    aiColor4D ai_color;
-    if (aiGetMaterialColor(&ai_material, AI_MATKEY_COLOR_AMBIENT, &ai_color) == AI_SUCCESS)
-    {
-        out_description.emissive_color = Vector4f(ai_color.r, ai_color.g, ai_color.b, ai_color.a);
-        out_description.emissive_color.a = Math::Clamp(out_description.emissive_color.a, 0.0f, 1.0f);
-    }
-    if (aiGetMaterialColor(&ai_material, AI_MATKEY_COLOR_EMISSIVE, &ai_color) == AI_SUCCESS)
-    {
-        out_description.emissive_color.r += ai_color.r;
-        out_description.emissive_color.g += ai_color.g;
-        out_description.emissive_color.b += ai_color.b;
-        out_description.emissive_color.a += ai_color.a;
-        out_description.emissive_color.a = Math::Clamp(out_description.emissive_color.a, 0.0f, 1.0f);
-    }
-    if (aiGetMaterialColor(&ai_material, AI_MATKEY_COLOR_DIFFUSE, &ai_color) == AI_SUCCESS)
-    {
-        out_description.albedo_color = Vector4f(ai_color.r, ai_color.g, ai_color.b, ai_color.a);
-        out_description.albedo_color.a = Math::Clamp(out_description.albedo_color.a, 0.0f, 1.0f);
-    }
-
-    // Read opacity factor from the AI material and convert it to transparency factor. If opacity is 95% or more, the material is considered
-    // opaque.
-    constexpr float k_opaqueness_threshold = 0.05f;
-    float opacity = 1.0f;
-    if (aiGetMaterialFloat(&ai_material, AI_MATKEY_OPACITY, &opacity) == AI_SUCCESS)
-    {
-        out_description.transparency_factor = 1.0f - opacity;
-        out_description.transparency_factor = Math::Clamp(out_description.transparency_factor, 0.0f, 1.0f);
-        if (out_description.transparency_factor >= 1.0f - k_opaqueness_threshold)
-        {
-            out_description.transparency_factor = 0.0f;
-        }
-    }
-
-    // If AI material contains transparency factor as an RGB value, it will take precedence over the opacity factor.
-    if (aiGetMaterialColor(&ai_material, AI_MATKEY_COLOR_TRANSPARENT, &ai_color) == AI_SUCCESS)
-    {
-        opacity = Math::Max(Math::Max(ai_color.r, ai_color.g), ai_color.b);
-        out_description.transparency_factor = Math::Clamp(opacity, 0.0f, 1.0f);
-        if (out_description.transparency_factor >= 1.0f - k_opaqueness_threshold)
-        {
-            out_description.transparency_factor = 0.0f;
-        }
-        out_description.alpha_test = 0.5f;
-    }
-
-    // Read roughness and metallic factors from the AI material.
-    float factor = 1.0f;
-    if (aiGetMaterialFloat(&ai_material, AI_MATKEY_GLTF_PBRMETALLICROUGHNESS_METALLIC_FACTOR, &factor) == AI_SUCCESS)
-    {
-        out_description.metallic_factor = factor;
-    }
-    if (aiGetMaterialFloat(&ai_material, AI_MATKEY_GLTF_PBRMETALLICROUGHNESS_ROUGHNESS_FACTOR, &factor) == AI_SUCCESS)
-    {
-        out_description.roughness = Vector4f(factor, factor, 0.0f, 0.0f);
-    }
-
-    // Get info about the texture file paths, store them in the out_texture_paths array and set the corresponding image ids in the material
-    // description.
-    aiString out_texture_path;
-    aiTextureMapping out_texture_mapping = aiTextureMapping_UV;
-    unsigned int out_uv_index = 0;
-    float out_blend = 1.0f;
-    aiTextureOp out_texture_op = aiTextureOp_Add;
-    StackArray<aiTextureMapMode, 2> out_texture_mode = {aiTextureMapMode_Wrap, aiTextureMapMode_Wrap};
-    unsigned int out_texture_flags = 0;
-    if (aiGetMaterialTexture(&ai_material, aiTextureType_EMISSIVE, 0, &out_texture_path, &out_texture_mapping, &out_uv_index, &out_blend,
-                             &out_texture_op, out_texture_mode.data(), &out_texture_flags) == AI_SUCCESS)
-    {
-        out_description.emissive_map = AddUnique(out_texture_paths, out_texture_path.C_Str());
-    }
-    if (aiGetMaterialTexture(&ai_material, aiTextureType_DIFFUSE, 0, &out_texture_path, &out_texture_mapping, &out_uv_index, &out_blend,
-                             &out_texture_op, out_texture_mode.data(), &out_texture_flags) == AI_SUCCESS)
-    {
-        out_description.albedo_map = AddUnique(out_texture_paths, out_texture_path.C_Str());
-        // Some material heuristics
-        const String albedo_map_path = out_texture_path.C_Str();
-        if (albedo_map_path.find("grey_30") != String::npos)
-        {
-            out_description.flags |= MaterialFlags::Transparent;
-        }
-    }
-    if (aiGetMaterialTexture(&ai_material, AI_MATKEY_GLTF_PBRMETALLICROUGHNESS_METALLICROUGHNESS_TEXTURE, &out_texture_path,
-                             &out_texture_mapping, &out_uv_index, &out_blend, &out_texture_op, out_texture_mode.data(),
-                             &out_texture_flags) == AI_SUCCESS)
-    {
-        out_description.metallic_roughness_map = AddUnique(out_texture_paths, out_texture_path.C_Str());
-    }
-    if (aiGetMaterialTexture(&ai_material, aiTextureType_LIGHTMAP, 0, &out_texture_path, &out_texture_mapping, &out_uv_index, &out_blend,
-                             &out_texture_op, out_texture_mode.data(), &out_texture_flags) == AI_SUCCESS)
-    {
-        out_description.ambient_occlusion_map = AddUnique(out_texture_paths, out_texture_path.C_Str());
-    }
-    if (aiGetMaterialTexture(&ai_material, aiTextureType_NORMALS, 0, &out_texture_path, &out_texture_mapping, &out_uv_index, &out_blend,
-                             &out_texture_op, out_texture_mode.data(), &out_texture_flags) == AI_SUCCESS)
-    {
-        out_description.normal_map = AddUnique(out_texture_paths, out_texture_path.C_Str());
-    }
-    // In case that there is no normal map, try to read the height map that can be later converted into a normal map.
-    if (out_description.normal_map == k_invalid_image_id)
-    {
-        if (aiGetMaterialTexture(&ai_material, aiTextureType_HEIGHT, 0, &out_texture_path, &out_texture_mapping, &out_uv_index, &out_blend,
-                                 &out_texture_op, out_texture_mode.data(), &out_texture_flags) == AI_SUCCESS)
-        {
-            out_description.normal_map = AddUnique(out_texture_paths, out_texture_path.C_Str());
-        }
-    }
-    if (aiGetMaterialTexture(&ai_material, aiTextureType_OPACITY, 0, &out_texture_path, &out_texture_mapping, &out_uv_index, &out_blend,
-                             &out_texture_op, out_texture_mode.data(), &out_texture_flags) == AI_SUCCESS)
-    {
-        // Opacity info will later be stored in the alpha channel of the albedo map.
-        out_description.opacity_map = AddUnique(out_opacity_maps, out_texture_path.C_Str());
-        out_description.alpha_test = 0.5f;
-    }
-
-    // Material heuristics, modify material parameters based on the texture name so that it looks better.
-    aiString ai_material_name;
-    String material_name;
-    if (aiGetMaterialString(&ai_material, AI_MATKEY_NAME, &ai_material_name) == AI_SUCCESS)
-    {
-        material_name = ai_material_name.C_Str();
-    }
-    if ((material_name.find("Glass") != String::npos) || (material_name.find("Vespa_Headlight") != String::npos))
-    {
-        out_description.alpha_test = 0.75f;
-        out_description.transparency_factor = 0.1f;
-        out_description.flags |= MaterialFlags::Transparent;
-    }
-    else if (material_name.find("Bottle") != String::npos)
-    {
-        out_description.alpha_test = 0.54f;
-        out_description.transparency_factor = 0.4f;
-        out_description.flags |= MaterialFlags::Transparent;
-    }
-    else if (material_name.find("Metal") != String::npos)
-    {
-        out_description.metallic_factor = 1.0f;
-        out_description.roughness = Vector4f(0.1f, 0.1f, 0.0f, 0.0f);
-    }
-
-    RNDR_LOG_DEBUG("Texture paths: %d", out_texture_paths.size());
-    for (const String& texture_path : out_texture_paths)
-    {
-        RNDR_LOG_DEBUG("\t%s", texture_path.c_str());
-    }
-
-    RNDR_LOG_DEBUG("Opacity maps: %d", out_opacity_maps.size());
-    for (const String& out_opacity_map : out_opacity_maps)
-    {
-        RNDR_LOG_DEBUG("\t%s", out_opacity_map.c_str());
-    }
-
-    return true;
-}
-
 bool Rndr::Material::ConvertAndDownscaleTextures(const Array<MaterialDescription>& materials, const String& base_path,
-                                                 Array<String>& texture_paths, const Array<String>& opacity_maps)
+                                                 Array<String>& texture_paths, const Array<String>& opacity_textures)
 {
     HashMap<String, uint64_t> albedo_map_path_to_opacity_map_index(texture_paths.size());
     for (const MaterialDescription& mat_desc : materials)
     {
-        if (mat_desc.opacity_map != k_invalid_image_id && mat_desc.albedo_map != k_invalid_image_id)
+        if (mat_desc.opacity_texture != k_invalid_image_id && mat_desc.albedo_texture != k_invalid_image_id)
         {
-            albedo_map_path_to_opacity_map_index[texture_paths[static_cast<size_t>(mat_desc.albedo_map)]] = mat_desc.opacity_map;
+            albedo_map_path_to_opacity_map_index[texture_paths[static_cast<size_t>(mat_desc.albedo_texture)]] = mat_desc.opacity_texture;
         }
     }
 
-    auto converter = [&](const String& s) { return ConvertTexture(s, base_path, albedo_map_path_to_opacity_map_index, opacity_maps); };
+    auto converter = [&](const String& s) { return ConvertTexture(s, base_path, albedo_map_path_to_opacity_map_index, opacity_textures); };
 
     std::transform(std::execution::par, texture_paths.cbegin(), texture_paths.cend(), texture_paths.begin(), converter);
     return true;
 }
 
-bool Rndr::Material::WriteOptimizedData(const Rndr::Array<Rndr::MaterialDescription>& materials,
-                                        const Rndr::Array<Rndr::String>& texture_paths, const Rndr::String& file_path)
+bool Rndr::Material::WriteData(const Rndr::Array<Rndr::MaterialDescription>& materials, const Rndr::Array<Rndr::String>& texture_paths,
+                               const Rndr::String& file_path)
 {
-    FILE* f = nullptr;
-    fopen_s(&f, file_path.c_str(), "wb");
-    if (f == nullptr)
+    FILE* ff = nullptr;
+    fopen_s(&ff, file_path.c_str(), "wb");
+    if (ff == nullptr)
     {
         RNDR_LOG_ERROR("Failed to open file %s!", file_path.c_str());
         return false;
     }
+    ScopeFilePtr f(ff);
 
     uint32_t texture_paths_count = static_cast<uint32_t>(texture_paths.size());
-    fwrite(&texture_paths_count, 1, sizeof(uint32_t), f);
+    fwrite(&texture_paths_count, 1, sizeof(uint32_t), f.get());
     for (const String& texture_path : texture_paths)
     {
         uint32_t texture_path_length = static_cast<uint32_t>(texture_path.size());
-        fwrite(&texture_path_length, 1, sizeof(uint32_t), f);
-        fwrite(texture_path.c_str(), 1, texture_path_length, f);
+        fwrite(&texture_path_length, 1, sizeof(uint32_t), f.get());
+        fwrite(texture_path.c_str(), 1, texture_path_length, f.get());
     }
 
     const uint32_t materials_count = static_cast<uint32_t>(materials.size());
-    fwrite(&materials_count, 1, sizeof(uint32_t), f);
-    fwrite(materials.data(), sizeof(MaterialDescription), materials_count, f);
+    fwrite(&materials_count, 1, sizeof(uint32_t), f.get());
+    fwrite(materials.data(), sizeof(MaterialDescription), materials_count, f.get());
 
-    fclose(f);
     return true;
 }
 
-bool Rndr::Material::ReadOptimizedData(Rndr::Array<Rndr::MaterialDescription>& out_materials, Rndr::Array<Rndr::String>& out_texture_paths,
-                                       const Rndr::String& file_path)
+bool Rndr::Material::ReadDataLoadTextures(Array<Rndr::MaterialDescription>& out_materials, Array<Rndr::Image>& out_textures,
+                                          const Rndr::String& file_path, const Rndr::GraphicsContext& graphics_context)
 {
-    FILE* f = nullptr;
-    fopen_s(&f, file_path.c_str(), "rb");
-    if (f == nullptr)
+    FILE* ff = nullptr;
+    fopen_s(&ff, file_path.c_str(), "rb");
+    if (ff == nullptr)
     {
         RNDR_LOG_ERROR("Failed to open file %s!", file_path.c_str());
         return false;
     }
+    ScopeFilePtr f(ff);
 
     uint32_t texture_paths_count = 0;
-    if (fread(&texture_paths_count, 1, sizeof(uint32_t), f) != sizeof(uint32_t))
+    if (fread(&texture_paths_count, 1, sizeof(uint32_t), f.get()) != sizeof(uint32_t))
     {
         RNDR_LOG_ERROR("Failed to read texture paths count!");
-        fclose(f);
         return false;
     }
 
     std::filesystem::path base_path(file_path);
     base_path = base_path.parent_path();
-    out_texture_paths.resize(texture_paths_count);
+    Array<String> texture_paths(texture_paths_count);
     for (uint32_t i = 0; i < texture_paths_count; ++i)
     {
         uint32_t texture_path_length = 0;
-        if (fread(&texture_path_length, 1, sizeof(uint32_t), f) != sizeof(uint32_t))
+        if (fread(&texture_path_length, 1, sizeof(uint32_t), f.get()) != sizeof(uint32_t))
         {
             RNDR_LOG_ERROR("Failed to read texture path length!");
-            fclose(f);
             return false;
         }
 
-        out_texture_paths[i].resize(texture_path_length);
-        if (fread(out_texture_paths[i].data(), 1, texture_path_length, f) != texture_path_length)
+        texture_paths[i].resize(texture_path_length);
+        if (fread(texture_paths[i].data(), 1, texture_path_length, f.get()) != texture_path_length)
         {
             RNDR_LOG_ERROR("Failed to read texture path!");
-            fclose(f);
             return false;
         }
 
-        out_texture_paths[i] = base_path.string() + "\\" + out_texture_paths[i];
+        texture_paths[i] = base_path.string() + "\\" + texture_paths[i];
     }
 
     uint32_t materials_count = 0;
-    if (fread(&materials_count, 1, sizeof(uint32_t), f) != sizeof(uint32_t))
+    if (fread(&materials_count, 1, sizeof(uint32_t), f.get()) != sizeof(uint32_t))
     {
         RNDR_LOG_ERROR("Failed to read materials count!");
-        fclose(f);
         return false;
     }
 
     out_materials.resize(materials_count);
-    if (fread(out_materials.data(), sizeof(MaterialDescription), materials_count, f) != materials_count)
+    if (fread(out_materials.data(), sizeof(MaterialDescription), materials_count, f.get()) != materials_count)
     {
         RNDR_LOG_ERROR("Failed to read materials!");
-        fclose(f);
         return false;
     }
 
-    fclose(f);
+    for (MaterialDescription& material : out_materials)
+    {
+        if (!SetupMaterial(material, out_textures, graphics_context, texture_paths))
+        {
+            RNDR_LOG_ERROR("Failed to setup material!");
+            return false;
+        }
+    }
+
     return true;
 }
 
 namespace
 {
-Rndr::Image LoadTexture(const Rndr::GraphicsContext& graphics_context, const Rndr::String& texture_path);
-}
-
-bool Rndr::Material::SetupMaterial(Rndr::MaterialDescription& in_out_material, Rndr::Array<Rndr::Image>& out_textures,
-                                   const Rndr::GraphicsContext& graphics_context, const Rndr::Array<Rndr::String>& in_texture_paths)
+bool SetupMaterial(Rndr::MaterialDescription& in_out_material, Rndr::Array<Rndr::Image>& out_textures,
+                   const Rndr::GraphicsContext& graphics_context, const Rndr::Array<Rndr::String>& in_texture_paths)
 {
-    if (in_out_material.albedo_map != k_invalid_image_id)
+    if (in_out_material.albedo_texture != Rndr::k_invalid_image_id)
     {
-        const Rndr::String& albedo_map_path = in_texture_paths[static_cast<size_t>(in_out_material.albedo_map)];
+        const Rndr::String& albedo_map_path = in_texture_paths[static_cast<size_t>(in_out_material.albedo_texture)];
         Rndr::Image albedo_map = LoadTexture(graphics_context, albedo_map_path);
         if (!albedo_map.IsValid())
         {
             RNDR_LOG_ERROR("Failed to load albedo map: %s", albedo_map_path.c_str());
             return false;
         }
-        in_out_material.albedo_map = albedo_map.GetBindlessHandle();
+        in_out_material.albedo_texture = albedo_map.GetBindlessHandle();
         out_textures.emplace_back(std::move(albedo_map));
     }
-    if (in_out_material.metallic_roughness_map != k_invalid_image_id)
+    if (in_out_material.metallic_roughness_texture != Rndr::k_invalid_image_id)
     {
-        const Rndr::String& metallic_roughness_map_path = in_texture_paths[static_cast<size_t>(in_out_material.metallic_roughness_map)];
+        const Rndr::String& metallic_roughness_map_path = in_texture_paths[static_cast<size_t>(in_out_material.metallic_roughness_texture)];
         Rndr::Image metallic_roughness_map = LoadTexture(graphics_context, metallic_roughness_map_path);
         if (!metallic_roughness_map.IsValid())
         {
             RNDR_LOG_ERROR("Failed to load metallic roughness map: %s", metallic_roughness_map_path.c_str());
             return false;
         }
-        in_out_material.metallic_roughness_map = metallic_roughness_map.GetBindlessHandle();
+        in_out_material.metallic_roughness_texture = metallic_roughness_map.GetBindlessHandle();
         out_textures.emplace_back(std::move(metallic_roughness_map));
     }
-    if (in_out_material.normal_map != k_invalid_image_id)
+    if (in_out_material.normal_texture != Rndr::k_invalid_image_id)
     {
-        const Rndr::String& normal_map_path = in_texture_paths[static_cast<size_t>(in_out_material.normal_map)];
+        const Rndr::String& normal_map_path = in_texture_paths[static_cast<size_t>(in_out_material.normal_texture)];
         Rndr::Image normal_map = LoadTexture(graphics_context, normal_map_path);
         if (!normal_map.IsValid())
         {
             RNDR_LOG_ERROR("Failed to load normal map: %s", normal_map_path.c_str());
             return false;
         }
-        in_out_material.normal_map = normal_map.GetBindlessHandle();
+        in_out_material.normal_texture = normal_map.GetBindlessHandle();
         out_textures.emplace_back(std::move(normal_map));
     }
-    if (in_out_material.ambient_occlusion_map != k_invalid_image_id)
+    if (in_out_material.ambient_occlusion_texture != Rndr::k_invalid_image_id)
     {
-        const Rndr::String& ambient_occlusion_map_path = in_texture_paths[static_cast<size_t>(in_out_material.ambient_occlusion_map)];
+        const Rndr::String& ambient_occlusion_map_path = in_texture_paths[static_cast<size_t>(in_out_material.ambient_occlusion_texture)];
         Rndr::Image ambient_occlusion_map = LoadTexture(graphics_context, ambient_occlusion_map_path);
         if (!ambient_occlusion_map.IsValid())
         {
             RNDR_LOG_ERROR("Failed to load ambient occlusion map: %s", ambient_occlusion_map_path.c_str());
             return false;
         }
-        in_out_material.ambient_occlusion_map = ambient_occlusion_map.GetBindlessHandle();
+        in_out_material.ambient_occlusion_texture = ambient_occlusion_map.GetBindlessHandle();
         out_textures.emplace_back(std::move(ambient_occlusion_map));
     }
-    if (in_out_material.emissive_map != k_invalid_image_id)
+    if (in_out_material.emissive_texture != Rndr::k_invalid_image_id)
     {
-        const Rndr::String& emissive_map_path = in_texture_paths[static_cast<size_t>(in_out_material.emissive_map)];
+        const Rndr::String& emissive_map_path = in_texture_paths[static_cast<size_t>(in_out_material.emissive_texture)];
         Rndr::Image emissive_map = LoadTexture(graphics_context, emissive_map_path);
         if (!emissive_map.IsValid())
         {
             RNDR_LOG_ERROR("Failed to load emissive map: %s", emissive_map_path.c_str());
             return false;
         }
-        in_out_material.emissive_map = emissive_map.GetBindlessHandle();
+        in_out_material.emissive_texture = emissive_map.GetBindlessHandle();
         out_textures.emplace_back(std::move(emissive_map));
     }
     return true;
 }
 
-namespace
-{
 Rndr::String ConvertTexture(const Rndr::String& texture_path, const Rndr::String& base_path,
-                            Rndr::HashMap<Rndr::String, uint64_t>& albedo_map_path_to_opacity_map_index,
-                            const Rndr::Array<Rndr::String>& opacity_maps)
+                            Rndr::HashMap<Rndr::String, uint64_t>& albedo_texture_path_to_opacity_texture_index,
+                            const Rndr::Array<Rndr::String>& opacity_textures)
 {
     constexpr int32_t k_max_new_width = 512;
     constexpr int32_t k_max_new_height = 512;
@@ -408,10 +236,10 @@ Rndr::String ConvertTexture(const Rndr::String& texture_path, const Rndr::String
 
     // Check if there is an opacity map for this texture and if there is put the opacity values into the alpha channel
     // of this image.
-    if (albedo_map_path_to_opacity_map_index.contains(texture_path))
+    if (albedo_texture_path_to_opacity_texture_index.contains(texture_path))
     {
-        const uint64_t opacity_map_index = albedo_map_path_to_opacity_map_index[texture_path];
-        const Rndr::String opacity_map_file = base_path + opacity_maps[opacity_map_index];
+        const uint64_t opacity_map_index = albedo_texture_path_to_opacity_texture_index[texture_path];
+        const Rndr::String opacity_map_file = base_path + opacity_textures[opacity_map_index];
         int32_t opacity_width = 0;
         int32_t opacity_height = 0;
         stbi_uc* opacity_pixels = stbi_load(opacity_map_file.c_str(), &opacity_width, &opacity_height, nullptr, 1);

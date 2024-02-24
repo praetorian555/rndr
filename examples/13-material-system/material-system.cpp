@@ -54,7 +54,7 @@ public:
         RNDR_ASSERT(m_fragment_shader.IsValid());
 
         const Rndr::String mesh_path = m_asset_path + "DamagedHelmet.rndrmesh";
-        if (!Rndr::Mesh::ReadOptimizedData(m_mesh_data, mesh_path))
+        if (!Rndr::Mesh::ReadData(m_mesh_data, mesh_path))
         {
             RNDR_LOG_ERROR("Failed to load mesh data from file: %s", mesh_path.c_str());
             exit(1);
@@ -62,18 +62,12 @@ public:
         const Rndr::String material_path = m_asset_path + "DamagedHelmet.rndrmat";
         Rndr::Array<Rndr::MaterialDescription> material_descriptions;
         Rndr::Array<Rndr::String> texture_paths;
-        if (!Rndr::Material::ReadOptimizedData(material_descriptions, texture_paths, material_path))
+        if (!Rndr::Material::ReadDataLoadTextures(material_descriptions, m_material_textures, material_path, m_desc.graphics_context))
         {
             RNDR_LOG_ERROR("Failed to load material data from file: %s", material_path.c_str());
             exit(1);
         }
         m_material_data = material_descriptions[0];
-        // TODO: Implement this function
-        if (!Rndr::Material::SetupMaterial(m_material_data, m_material_textures, m_desc.graphics_context, texture_paths))
-        {
-            RNDR_LOG_ERROR("Failed to setup material data!");
-            exit(1);
-        }
 
         m_vertex_buffer = Rndr::Buffer(desc.graphics_context,
                                        {.type = Rndr::BufferType::ShaderStorage,

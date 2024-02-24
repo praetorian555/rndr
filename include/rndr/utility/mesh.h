@@ -65,6 +65,19 @@ struct MeshData
 };
 
 /**
+ * Used to create indirect draw commands for rendering meshes.
+ */
+struct MeshDrawData
+{
+    uint32_t mesh_index;
+    uint32_t material_index;
+    uint32_t lod;
+    uint32_t vertex_buffer_offset;
+    uint32_t index_buffer_offset;
+    uint32_t transform_index;
+};
+
+/**
  * Header of the mesh file.
  */
 struct MeshFileHeader
@@ -90,22 +103,12 @@ namespace Mesh
 {
 
 /**
- * Reads mesh data from the Assimp scene.
- * @param out_mesh_data Destination mesh data.
- * @param ai_scene Assimp scene.
- * @param attributes_to_load Attributes to load from the Assimp scene.
- * @return True if mesh data was read successfully, false otherwise.
- */
-bool ReadData(MeshData& out_mesh_data, const aiScene& ai_scene,
-              MeshAttributesToLoad attributes_to_load = MeshAttributesToLoad::LoadPositions);
-
-/**
  * Reads mesh data from a file containing optimized rndr mesh data format.
  * @param out_mesh_data Destination mesh data.
  * @param file_path Path to the file.
  * @return True if mesh data was read successfully, false otherwise.
  */
-bool ReadOptimizedData(MeshData& out_mesh_data, const String& file_path);
+bool ReadData(MeshData& out_mesh_data, const String& file_path);
 
 /**
  * Writes mesh data to a file containing optimized rndr mesh data format.
@@ -113,7 +116,7 @@ bool ReadOptimizedData(MeshData& out_mesh_data, const String& file_path);
  * @param file_path Path to the file.
  * @return True if mesh data was written successfully, false otherwise.
  */
-bool WriteOptimizedData(const MeshData& mesh_data, const String& file_path);
+bool WriteData(const MeshData& mesh_data, const String& file_path);
 
 /**
  * Updates bounding boxes of all meshes in the mesh data.
