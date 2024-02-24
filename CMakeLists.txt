@@ -72,6 +72,8 @@ if (PROJECT_IS_TOP_LEVEL)
     enable_testing()
     add_test(NAME all_tests_no_window_no_render_api COMMAND rndr_test "~[window] ~[render-api]")
 
+    setup_bistro_scene_assets("${GLTF_ASSETS_DIR}/Bistro")
+
     # Examples
     add_subdirectory(examples/01-triangle)
     add_subdirectory(examples/02-cube)

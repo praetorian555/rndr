@@ -179,3 +179,48 @@ function(setup_dependencies GLTF_SAMPLE_ASSETS)
     set_target_properties(gli PROPERTIES FOLDER Extern)
 
 endfunction()
+
+function(setup_bistro_scene_assets destination)
+    set(URLS
+            "https://casual-effects.com/g3d/data10/research/model/bistro/PropTextures"
+            "https://casual-effects.com/g3d/data10/research/model/bistro/OtherTextures"
+            "https://casual-effects.com/g3d/data10/research/model/bistro/BuildingTextures"
+            "https://casual-effects.com/g3d/data10/research/model/bistro/Interior.zip"
+            "https://casual-effects.com/g3d/data10/research/model/bistro/Exterior.zip"
+    )
+
+    foreach(URL ${URLS})
+        get_filename_component(FILENAME ${URL} NAME_WE)
+        set(DOWNLOAD_PATH "${CMAKE_CURRENT_BINARY_DIR}/${FILENAME}")
+        set(EXTRACT_PATH "${destination}/${FILENAME}")
+
+        message(STATUS "Downloading ${FILENAME} to ${DOWNLOAD_PATH}")
+
+        # If the filename ends with "Textures", extract to a Textures sub folder
+
+        # Download the file
+        file(DOWNLOAD ${URL} ${DOWNLOAD_PATH} SHOW_PROGRESS STATUS download_status)
+        list(GET download_status 0 download_status_code)
+        if (NOT download_status_code EQUAL 0)
+            message(FATAL_ERROR "Failed to download ${FILENAME} from ${URL}")
+            return()
+        endif()
+
+        message(STATUS "Extracting ${FILENAME} to ${EXTRACT_PATH}")
+
+        # Check if the extraction directory exists and create it if it does not
+        if(NOT EXISTS ${EXTRACT_PATH})
+            file(MAKE_DIRECTORY ${EXTRACT_PATH})
+        endif()
+
+        # Unzip the file
+        execute_process(COMMAND ${CMAKE_COMMAND} -E tar xrzf ${DOWNLOAD_PATH} WORKING_DIRECTORY ${EXTRACT_PATH} RESULT_VARIABLE unzip_status OUTPUT_VARIABLE unzip_output ERROR_VARIABLE unzip_output)
+        if (NOT unzip_status EQUAL 0)
+            message(FATAL_ERROR "Failed to extract ${FILENAME} to ${EXTRACT_PATH} with error: ${unzip_output}")
+            return()
+        endif()
+
+        # Delete the downloaded file
+        file(REMOVE ${DOWNLOAD_PATH})
+    endforeach()
+endfunction()
