@@ -38,3 +38,5 @@ The library currently offers following options for compile-time configuration:
 * __RNDR_HARDENED__ Use hardened version of the library. Will enable address sanitizer. Default is OFF.
 * __RNDR_TRACER__ Use built-in frame-time profiler. Will pull in spdlog library as a dependency. Default is ON.
 * __RNDR_DEFAULT_LOGGER__ Use default logger implementation. Will pull in spdlog library as a dependency. Default is ON.
+* __RNDR_BUILD_TESTS__ Build tests. Will pull in Catch2 library as a dependency. Default is ON. If this is a top level project, tests will be included and the option will be ignored.
+* __RNDR_BUILD_EXAMPLES__ Build examples. Default is ON. If this is a top level project, examples will be included and the option will be ignored.

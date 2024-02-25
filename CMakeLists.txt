@@ -10,6 +10,8 @@ project(
 option(RNDR_HARDENED "Enable hardened mode" OFF)
 option(RNDR_TRACER "Use built in profiler" ON)
 option(RNDR_DEFAULT_LOGGER "Use default logger" ON)
+option(RNDR_BUILD_EXAMPLES "Build examples" ON)
+option(RNDR_BUILD_TESTS "Build tests" ON)
 
 message(STATUS "RNDR_HARDENED ${RNDR_HARDENED}")
 message(STATUS "RNDR_TRACER ${RNDR_TRACER}")
@@ -54,10 +56,8 @@ if (RNDR_HARDENED)
     rndr_setup_sanitizers(rndr_options)
 endif ()
 
-set(GLTF_ASSETS_DIR "")
 include(cmake/dependencies.cmake)
-setup_dependencies(GLTF_ASSETS_DIR)
-message(STATUS "Path to sample assets: ${GLTF_ASSETS_DIR}")
+setup_required_dependencies()
 
 # Adds external dependencies
 add_subdirectory(extern)
@@ -65,14 +65,17 @@ add_subdirectory(extern)
 # The compiled library code is here
 add_subdirectory(src)
 
-if (PROJECT_IS_TOP_LEVEL)
-
-    # Tests
+if (PROJECT_IS_TOP_LEVEL OR RNDR_BUILD_TESTS)
+    setup_test_dependencies()
     add_subdirectory(tests)
     enable_testing()
     add_test(NAME all_tests_no_window_no_render_api COMMAND rndr_test "~[window] ~[render-api]")
+endif()
 
-    setup_bistro_scene_assets("${GLTF_ASSETS_DIR}/Bistro")
+if (PROJECT_IS_TOP_LEVEL OR RNDR_BUILD_EXAMPLES)
+    # Download and extract example assets
+    set(GLTF_ASSETS_DIR "")
+    setup_example_assets(GLTF_ASSETS_DIR)
 
     # Examples
     add_subdirectory(examples/01-triangle)
@@ -88,5 +91,4 @@ if (PROJECT_IS_TOP_LEVEL)
     add_subdirectory(examples/11-mesh-renderer)
     add_subdirectory(examples/12-pbr-shading)
     add_subdirectory(examples/13-material-system)
-
 endif ()

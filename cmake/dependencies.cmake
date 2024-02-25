@@ -1,7 +1,7 @@
 include(cmake/cpm.cmake)
 
-function(setup_dependencies GLTF_SAMPLE_ASSETS)
-    message(STATUS "Setting up dependencies...")
+function(setup_required_dependencies)
+    message(STATUS "Setting up required dependencies...")
 
     if (NOT TARGET fmtlib::fmtlib)
         cpmaddpackage("gh:fmtlib/fmt#10.1.1")
@@ -19,12 +19,6 @@ function(setup_dependencies GLTF_SAMPLE_ASSETS)
                 OPTIONS
                 "SPDLOG_FMT_EXTERNAL ON")
         set_target_properties(spdlog PROPERTIES FOLDER Extern)
-    endif ()
-
-    if (NOT TARGET Catch2::Catch2WithMain AND PROJECT_IS_TOP_LEVEL)
-        cpmaddpackage("gh:catchorg/Catch2@3.3.2")
-        set_target_properties(Catch2WithMain PROPERTIES FOLDER Extern)
-        set_target_properties(Catch2 PROPERTIES FOLDER Extern)
     endif ()
 
     if (NOT TARGET math)
@@ -79,18 +73,6 @@ function(setup_dependencies GLTF_SAMPLE_ASSETS)
         )
         SET_TARGET_PROPERTIES(meshoptimizer PROPERTIES FOLDER Extern)
     endif ()
-
-    cpmaddpackage(
-            NAME
-            sampleassets
-            GITHUB_REPOSITORY
-            "KhronosGroup/glTF-Sample-Assets"
-            GIT_TAG
-            "main"
-            DOWNLOAD_ONLY
-    )
-    message(STATUS "sampleassets_SOURCE_DIR: ${sampleassets_SOURCE_DIR}")
-    set(${GLTF_SAMPLE_ASSETS} "${sampleassets_SOURCE_DIR}/Models" PARENT_SCOPE)
 
     include(FetchContent)
 
@@ -180,7 +162,29 @@ function(setup_dependencies GLTF_SAMPLE_ASSETS)
 
 endfunction()
 
-function(setup_bistro_scene_assets destination)
+function(setup_test_dependencies)
+    message(STATUS "Setting up test dependencies...")
+    if (NOT TARGET Catch2::Catch2WithMain)
+        cpmaddpackage("gh:catchorg/Catch2@3.3.2")
+        set_target_properties(Catch2WithMain PROPERTIES FOLDER Extern)
+        set_target_properties(Catch2 PROPERTIES FOLDER Extern)
+    endif ()
+endfunction()
+
+function(setup_example_assets OUT_GLTF_SAMPLE_ASSETS)
+    message(STATUS "Setting up examples dependencies...")
+    cpmaddpackage(
+            NAME
+            sampleassets
+            GITHUB_REPOSITORY
+            "KhronosGroup/glTF-Sample-Assets"
+            GIT_TAG
+            "main"
+            DOWNLOAD_ONLY
+    )
+    set(${OUT_GLTF_SAMPLE_ASSETS} "${sampleassets_SOURCE_DIR}/Models" PARENT_SCOPE)
+    message(STATUS "Example sample assets are located at ${OUT_GLTF_SAMPLE_ASSETS}")
+
     set(URLS
             "https://casual-effects.com/g3d/data10/research/model/bistro/PropTextures"
             "https://casual-effects.com/g3d/data10/research/model/bistro/OtherTextures"
@@ -189,10 +193,16 @@ function(setup_bistro_scene_assets destination)
             "https://casual-effects.com/g3d/data10/research/model/bistro/Exterior.zip"
     )
 
+    set(BISTRO_DESTINATION "${sampleassets_SOURCE_DIR}/Models/Bistro")
+    if(EXISTS ${BISTRO_DESTINATION})
+        message(STATUS "Bistro scene assets already exist at ${BISTRO_DESTINATION}. If you want to re-download, delete the directory and re-run the build.")
+        return()
+    endif()
+
     foreach(URL ${URLS})
         get_filename_component(FILENAME ${URL} NAME_WE)
         set(DOWNLOAD_PATH "${CMAKE_CURRENT_BINARY_DIR}/${FILENAME}")
-        set(EXTRACT_PATH "${destination}/${FILENAME}")
+        set(EXTRACT_PATH "${BISTRO_DESTINATION}/${FILENAME}")
 
         message(STATUS "Downloading ${FILENAME} to ${DOWNLOAD_PATH}")
 
