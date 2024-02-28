@@ -43,6 +43,7 @@ if (PROJECT_IS_TOP_LEVEL)
 endif ()
 
 # Setup compiler warnings and options
+message(STATUS "Compiler: ${CMAKE_CXX_COMPILER_ID} ${CMAKE_CXX_COMPILER_VERSION}")
 include(cmake/compiler-warnings.cmake)
 include(cmake/compiler-options.cmake)
 add_library(rndr_warnings INTERFACE)

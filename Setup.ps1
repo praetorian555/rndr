@@ -11,11 +11,30 @@ $installerUrl = "https://aka.ms/vs/17/release/vs_Community.exe"
 # Define the path where to download the installer
 $installerPath = "${Env:TEMP}\vs_Community.exe"
 
+$installLocation = ""
 $skipInstallVs = $false
-if ($args.length -gt 0 -and $args[0] -eq '-noinstallvs')
+foreach ($arg in $args)
 {
-    Write-Output "Skipping Visual Studio 2022 Community installation."
-    $skipInstallVs = $true
+    if ($arg -eq '-noinstallvs')
+    {
+        Write-Output "Skipping Visual Studio 2022 Community installation."
+        $skipInstallVs = $true
+    }
+    if ($arg -like '-installLocation=*')
+    {
+        $installLocation = $arg -replace '-installLocation=', ''
+    }
+}
+
+if (-not $skipInstallVs)
+{
+    if ($installLocation -eq "")
+    {
+        Write-Host "Installation location not specified!" -ForegroundColor Red
+        Write-Output "Usage: Setup.ps1 [-noinstallvs] [-installLocation=<path>]"
+        return
+    }
+    Write-Output "Visual Studio 2022 Community will be installed to $installLocation"
 }
 
 # Download the installer
@@ -25,6 +44,11 @@ if (-not $skipInstallVs)
     Invoke-WebRequest -Uri $installerUrl -OutFile $installerPath
     Write-Output "Download complete."
 }
+
+$compilerVersionLong = "14.38.17.8"
+$compilerVersionShort = "14.38"
+
+Write-Output "Installing compiler version $compilerVersionShort"
 
 # Define the components to install
 # Replace these component IDs with the ones you want to install
@@ -38,19 +62,26 @@ $components = @(
     "--add Microsoft.VisualStudio.Component.VC.Tools.x86.x64"
     "--add Microsoft.VisualStudio.Component.VC.ATL"
     "--add Microsoft.VisualStudio.Component.VC.Redist.14.Latest"
+    "--add Microsoft.VisualStudio.Component.VC.${compilerVersionLong}.x86.x64"
+    "--add Microsoft.VisualStudio.Component.VC.${compilerVersionLong}.MFC"
+    "--add Microsoft.VisualStudio.Component.VC.${compilerVersionLong}.ATL"
+    "--add Microsoft.VisualStudio.Component.VC.${compilerVersionLong}.CLI.Support"
     "--add Microsoft.VisualStudio.ComponentGroup.NativeDesktop.Core"
     "--add Microsoft.VisualStudio.ComponentGroup.WebToolsExtensions.CMake"
     "--add Microsoft.VisualStudio.Component.VC.CMake.Project"
     "--add Microsoft.VisualStudio.Component.VC.ASAN"
     "--add Microsoft.VisualStudio.Component.Windows11SDK.22000"
-    "--add Microsoft.VisualStudio.Workload.NativeDesktop")
+    "--add Microsoft.VisualStudio.Workload.NativeDesktop"
+    "--add Microsoft.VisualStudio.Component.VC.Llvm.ClangToolset")
 $components = $components -join " "
 
 # Install Visual Studio 2022 Community along with the specified components
 if (-not $skipInstallVs)
 {
     Write-Output "Installing Visual Studio 2022 Community..."
-    Start-Process -FilePath $installerPath -ArgumentList "$components --quiet --norestart --wait" -Wait
+    $arguments = "--quiet --norestart --wait --installPath `"$installLocation`" $components"
+    Write-Output "$installerPath $arguments"
+    Start-Process -FilePath $installerPath -ArgumentList $arguments -Wait
     Remove-Item $installerPath
     Write-Output "Visual Studio 2022 Community has been installed."
 }
@@ -79,6 +110,8 @@ function AddToSystemPath{
 
         foreach ($pathToSearch in $pathsToSearch)
         {
+            $filePath = $null
+
             # Try/Catch block for any errors (like access denied)
             try
             {
@@ -124,5 +157,5 @@ function AddToSystemPath{
     }
 }
 
-AddToSystemPath -FileToFind "clang_rt.asan_dynamic-x86_64.dll" -FolderRegex ".*bin.*Hostx64.*x64.*"
+AddToSystemPath -FileToFind "clang_rt.asan_dynamic-x86_64.dll" -FolderRegex ".*${compilerVersionShort}.*bin.*Hostx64.*x64.*"
 AddToSystemPath -FileToFind "clang-format.exe" -FolderRegex ".*Llvm.*x64.*bin.*"
