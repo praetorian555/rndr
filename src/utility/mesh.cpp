@@ -1,5 +1,6 @@
 #include "rndr/utility/mesh.h"
 
+#include "rndr/core/file.h"
 #include "rndr/core/math.h"
 
 namespace
@@ -9,70 +10,60 @@ constexpr uint32_t k_magic = 0x89ABCDEF;
 
 bool Rndr::Mesh::ReadData(MeshData& out_mesh_data, const Rndr::String& file_path)
 {
-    FILE* f = nullptr;
-    fopen_s(&f, file_path.c_str(), "rb");
-    if (f == nullptr)
+    Rndr::FileHandler f(file_path.c_str(), "rb");
+    if (!f.IsValid())
     {
         RNDR_LOG_ERROR("Failed to open file %s!", file_path.c_str());
         return false;
     }
 
     MeshFileHeader header;
-    if (fread(&header, 1, sizeof(MeshFileHeader), f) != sizeof(MeshFileHeader))
+    if (!f.Read(&header, sizeof(MeshFileHeader), 1))
     {
         RNDR_LOG_ERROR("Failed to read mesh file header!");
-        fclose(f);
         return false;
     }
     if (header.magic != k_magic)
     {
         RNDR_LOG_ERROR("Invalid mesh file magic!");
-        fclose(f);
         return false;
     }
 
     out_mesh_data.meshes.resize(header.mesh_count);
-    if (fread(out_mesh_data.meshes.data(), 1, header.mesh_count * sizeof(MeshDescription), f) !=
-        header.mesh_count * sizeof(MeshDescription))
+    if (!f.Read(out_mesh_data.meshes.data(), sizeof(MeshDescription), header.mesh_count))
     {
         RNDR_LOG_ERROR("Failed to read mesh descriptions!");
-        fclose(f);
         return false;
     }
 
     out_mesh_data.vertex_buffer_data.resize(header.vertex_buffer_size);
-    if (fread(out_mesh_data.vertex_buffer_data.data(), 1, header.vertex_buffer_size, f) != header.vertex_buffer_size)
+    if (!f.Read(out_mesh_data.vertex_buffer_data.data(), 1, header.vertex_buffer_size))
     {
         RNDR_LOG_ERROR("Failed to read vertex buffer data!");
-        fclose(f);
         return false;
     }
 
     out_mesh_data.index_buffer_data.resize(header.index_buffer_size);
-    if (fread(out_mesh_data.index_buffer_data.data(), 1, header.index_buffer_size, f) != header.index_buffer_size)
+    if (!f.Read(out_mesh_data.index_buffer_data.data(), 1, header.index_buffer_size))
     {
         RNDR_LOG_ERROR("Failed to read index buffer data!");
-        fclose(f);
         return false;
     }
 
     out_mesh_data.bounding_boxes.resize(header.mesh_count);
-    if (fread(out_mesh_data.bounding_boxes.data(), 1, header.mesh_count * sizeof(Bounds3f), f) != header.mesh_count * sizeof(Bounds3f))
+    if (!f.Read(out_mesh_data.bounding_boxes.data(), sizeof(Bounds3f), header.mesh_count))
     {
         RNDR_LOG_ERROR("Failed to read bounding boxes!");
-        fclose(f);
         return false;
     }
 
-    fclose(f);
     return true;
 }
 
 bool Rndr::Mesh::WriteData(const MeshData& mesh_data, const String& file_path)
 {
-    FILE* f = nullptr;
-    fopen_s(&f, file_path.c_str(), "wb");
-    if (f == nullptr)
+    Rndr::FileHandler f(file_path.c_str(), "wb");
+    if (!f.IsValid())
     {
         RNDR_LOG_ERROR("Failed to open file %s!", file_path.c_str());
         return false;
@@ -86,13 +77,12 @@ bool Rndr::Mesh::WriteData(const MeshData& mesh_data, const String& file_path)
     header.vertex_buffer_size = static_cast<uint32_t>(mesh_data.vertex_buffer_data.size());
     header.index_buffer_size = static_cast<uint32_t>(mesh_data.index_buffer_data.size());
 
-    fwrite(&header, 1, sizeof(MeshFileHeader), f);
-    fwrite(mesh_data.meshes.data(), 1, header.mesh_count * sizeof(MeshDescription), f);
-    fwrite(mesh_data.vertex_buffer_data.data(), 1, mesh_data.vertex_buffer_data.size(), f);
-    fwrite(mesh_data.index_buffer_data.data(), 1, mesh_data.index_buffer_data.size(), f);
-    fwrite(mesh_data.bounding_boxes.data(), 1, mesh_data.bounding_boxes.size() * sizeof(Bounds3f), f);
+    f.Write(&header, sizeof(MeshFileHeader), 1);
+    f.Write(mesh_data.meshes.data(), sizeof(MeshDescription), mesh_data.meshes.size());
+    f.Write(mesh_data.vertex_buffer_data.data(), 1, mesh_data.vertex_buffer_data.size());
+    f.Write(mesh_data.index_buffer_data.data(), 1, mesh_data.index_buffer_data.size());
+    f.Write(mesh_data.bounding_boxes.data(), sizeof(Bounds3f), mesh_data.bounding_boxes.size());
 
-    fclose(f);
     return true;
 }
 

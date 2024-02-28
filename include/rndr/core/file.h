@@ -5,19 +5,32 @@
 #include "rndr/core/base.h"
 #include "rndr/core/bitmap.h"
 #include "rndr/core/containers/array.h"
-#include "rndr/core/containers/scope-ptr.h"
 #include "rndr/core/containers/string.h"
 #include "rndr/core/graphics-types.h"
 
 namespace Rndr
 {
 
-struct FileDeleter
+class FileHandler
 {
-    void operator()(FILE* file) const;
-};
+public:
+    FileHandler(const char* file_path, const char* mode);
+    ~FileHandler();
 
-using ScopeFilePtr = ScopePtr<FILE, FileDeleter>;
+    FileHandler(const FileHandler&) = delete;
+    FileHandler& operator=(const FileHandler&) = delete;
+
+    FileHandler(FileHandler&&) = delete;
+    FileHandler&& operator=(FileHandler&&) = delete;
+
+    [[nodiscard]] bool IsValid() const;
+
+    bool Read(void* buffer, size_t element_size, size_t element_count);
+    bool Write(const void* buffer, size_t element_size, size_t element_count);
+
+private:
+    struct _iobuf* m_file_handle = 0;
+};
 
 namespace File
 {

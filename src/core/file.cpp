@@ -5,12 +5,36 @@
 
 #include "rndr/core/file.h"
 
-void Rndr::FileDeleter::operator()(FILE* file) const
+Rndr::FileHandler::FileHandler(const char* file_path, const char* mode)
 {
-    if (file != nullptr)
+    fopen_s(&m_file_handle, file_path, mode);
+}
+
+Rndr::FileHandler::~FileHandler()
+{
+    if (m_file_handle != 0)
     {
-        fclose(file);
+        fclose(m_file_handle);
     }
+}
+
+bool Rndr::FileHandler::IsValid() const
+{
+    return m_file_handle != 0;
+}
+
+bool Rndr::FileHandler::Read(void* buffer, size_t element_size, size_t element_count)
+{
+    const size_t read_elements = fread(buffer, element_size, element_count, m_file_handle);
+    RNDR_ASSERT(read_elements == element_count);
+    return read_elements == element_count;
+}
+
+bool Rndr::FileHandler::Write(const void* buffer, size_t element_size, size_t element_count)
+{
+    const size_t written_elements = fwrite(buffer, element_size, element_count, m_file_handle);
+    RNDR_ASSERT(written_elements == element_count);
+    return written_elements == element_count;
 }
 
 Rndr::ByteArray Rndr::File::ReadEntireFile(const String& file_path)

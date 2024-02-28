@@ -41,27 +41,25 @@ bool Rndr::Material::ConvertAndDownscaleTextures(const Array<MaterialDescription
 bool Rndr::Material::WriteData(const Rndr::Array<Rndr::MaterialDescription>& materials, const Rndr::Array<Rndr::String>& texture_paths,
                                const Rndr::String& file_path)
 {
-    FILE* ff = nullptr;
-    fopen_s(&ff, file_path.c_str(), "wb");
-    if (ff == nullptr)
+    Rndr::FileHandler f(file_path.c_str(), "wb");
+    if (!f.IsValid())
     {
-        RNDR_LOG_ERROR("Failed to open file %s!", file_path.c_str());
+        RNDR_LOG_ERROR("Failed to open file %s", file_path.c_str());
         return false;
     }
-    ScopeFilePtr f(ff);
 
     uint32_t texture_paths_count = static_cast<uint32_t>(texture_paths.size());
-    fwrite(&texture_paths_count, 1, sizeof(uint32_t), f.get());
+    f.Write(&texture_paths_count, sizeof(uint32_t), 1);
     for (const String& texture_path : texture_paths)
     {
         uint32_t texture_path_length = static_cast<uint32_t>(texture_path.size());
-        fwrite(&texture_path_length, 1, sizeof(uint32_t), f.get());
-        fwrite(texture_path.c_str(), 1, texture_path_length, f.get());
+        f.Write(&texture_path_length, sizeof(uint32_t), 1);
+        f.Write(texture_path.c_str(), sizeof(char), texture_path_length);
     }
 
     const uint32_t materials_count = static_cast<uint32_t>(materials.size());
-    fwrite(&materials_count, 1, sizeof(uint32_t), f.get());
-    fwrite(materials.data(), sizeof(MaterialDescription), materials_count, f.get());
+    f.Write(&materials_count, sizeof(uint32_t), 1);
+    f.Write(materials.data(), sizeof(MaterialDescription), materials_count);
 
     return true;
 }
@@ -69,17 +67,15 @@ bool Rndr::Material::WriteData(const Rndr::Array<Rndr::MaterialDescription>& mat
 bool Rndr::Material::ReadDataLoadTextures(Array<Rndr::MaterialDescription>& out_materials, Array<Rndr::Image>& out_textures,
                                           const Rndr::String& file_path, const Rndr::GraphicsContext& graphics_context)
 {
-    FILE* ff = nullptr;
-    fopen_s(&ff, file_path.c_str(), "rb");
-    if (ff == nullptr)
+    Rndr::FileHandler f(file_path.c_str(), "rb");
+    if (!f.IsValid())
     {
-        RNDR_LOG_ERROR("Failed to open file %s!", file_path.c_str());
+        RNDR_LOG_ERROR("Failed to open file %s", file_path.c_str());
         return false;
     }
-    ScopeFilePtr f(ff);
 
     uint32_t texture_paths_count = 0;
-    if (fread(&texture_paths_count, 1, sizeof(uint32_t), f.get()) != sizeof(uint32_t))
+    if (!f.Read(&texture_paths_count, sizeof(uint32_t), 1))
     {
         RNDR_LOG_ERROR("Failed to read texture paths count!");
         return false;
@@ -91,14 +87,14 @@ bool Rndr::Material::ReadDataLoadTextures(Array<Rndr::MaterialDescription>& out_
     for (uint32_t i = 0; i < texture_paths_count; ++i)
     {
         uint32_t texture_path_length = 0;
-        if (fread(&texture_path_length, 1, sizeof(uint32_t), f.get()) != sizeof(uint32_t))
+        if (!f.Read(&texture_path_length, sizeof(uint32_t), 1))
         {
             RNDR_LOG_ERROR("Failed to read texture path length!");
             return false;
         }
 
         texture_paths[i].resize(texture_path_length);
-        if (fread(texture_paths[i].data(), 1, texture_path_length, f.get()) != texture_path_length)
+        if (!f.Read(texture_paths[i].data(), sizeof(char), texture_path_length))
         {
             RNDR_LOG_ERROR("Failed to read texture path!");
             return false;
@@ -108,14 +104,14 @@ bool Rndr::Material::ReadDataLoadTextures(Array<Rndr::MaterialDescription>& out_
     }
 
     uint32_t materials_count = 0;
-    if (fread(&materials_count, 1, sizeof(uint32_t), f.get()) != sizeof(uint32_t))
+    if (!f.Read(&materials_count, sizeof(uint32_t), 1))
     {
         RNDR_LOG_ERROR("Failed to read materials count!");
         return false;
     }
 
     out_materials.resize(materials_count);
-    if (fread(out_materials.data(), sizeof(MaterialDescription), materials_count, f.get()) != materials_count)
+    if (!f.Read(out_materials.data(), sizeof(MaterialDescription), materials_count))
     {
         RNDR_LOG_ERROR("Failed to read materials!");
         return false;
