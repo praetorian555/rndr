@@ -23,6 +23,11 @@ bool Rndr::FileHandler::IsValid() const
     return m_file_handle != 0;
 }
 
+bool Rndr::FileHandler::IsEOF() const
+{
+    return feof(m_file_handle) != 0;
+}
+
 bool Rndr::FileHandler::Read(void* buffer, size_t element_size, size_t element_count)
 {
     const size_t read_elements = fread(buffer, element_size, element_count, m_file_handle);

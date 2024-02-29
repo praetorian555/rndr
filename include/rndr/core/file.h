@@ -24,6 +24,7 @@ public:
     FileHandler&& operator=(FileHandler&&) = delete;
 
     [[nodiscard]] bool IsValid() const;
+    [[nodiscard]] bool IsEOF() const;
 
     bool Read(void* buffer, size_t element_size, size_t element_count);
     bool Write(const void* buffer, size_t element_size, size_t element_count);
