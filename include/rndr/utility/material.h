@@ -1,3 +1,5 @@
+#pragma once
+
 #include "rndr/core/containers/array.h"
 #include "rndr/core/containers/string.h"
 #include "rndr/core/enum-flags.h"
