@@ -2,29 +2,41 @@
 
 #include "rndr/core/base.h"
 #include "rndr/core/containers/array.h"
+#include "rndr/core/containers/hash-map.h"
 #include "rndr/core/containers/stack-array.h"
 #include "rndr/core/containers/string.h"
-#include "rndr/core/containers/hash-map.h"
 #include "rndr/core/enum-flags.h"
 #include "rndr/core/math.h"
-#include "rndr/utility/mesh.h"
 #include "rndr/utility/material.h"
+#include "rndr/utility/mesh.h"
 
 namespace Rndr
 {
 
-using NodeId = uint32_t;
+namespace Scene
+{
+using NodeId = int32_t;
 
 constexpr int32_t k_max_node_level = 16;
+constexpr NodeId k_invalid_node_id = -1;
 
 struct HierarchyNode
 {
-    NodeId parent;
-    NodeId first_child;
-    NodeId next_sibling;
-    NodeId last_sibling;
-    int32_t level;
+    /** Parent node id or -1 if this is a root node. */
+    NodeId parent = k_invalid_node_id;
+
+    /** First child node id or -1 if this node has no children. */
+    NodeId first_child = k_invalid_node_id;
+
+    /** Next sibling node id or -1 if this node has no siblings left. */
+    NodeId next_sibling = k_invalid_node_id;
+
+    NodeId last_sibling = k_invalid_node_id;
+
+    /** Level of the node in the hierarchy. Root node is at level 0. */
+    int32_t level = 0;
 };
+}  // namespace Scene
 
 /**
  * Describes the scene organization and the transforms of the nodes.
@@ -37,18 +49,26 @@ struct SceneDescription
     /** Transforms relative to the world. */
     Array<Rndr::Matrix4x4f> world_transforms;
 
-    /** List of nodes that are dirty and that need to recalculate their world transform. */
-    Array<NodeId> dirty_nodes[k_max_node_level];
-
     /** Hierarchy of the nodes. */
-    Array<HierarchyNode> hierarchy;
+    Array<Scene::HierarchyNode> hierarchy;
 
-    HashMap<NodeId, uint32_t> node_id_to_mesh_id;
-    HashMap<NodeId, uint32_t> node_id_to_material_id;
-    HashMap<NodeId, uint32_t> node_id_to_name;
+    /** Maps node id to mesh id. */
+    HashMap<Scene::NodeId, uint32_t> node_id_to_mesh_id;
 
+    /** Maps node id to material id. */
+    HashMap<Scene::NodeId, uint32_t> node_id_to_material_id;
+
+    /** Maps node id to node name. */
+    HashMap<Scene::NodeId, uint32_t> node_id_to_name;
+
+    /** List of node names. */
     Array<String> node_names;
+
+    /** List of material names. */
     Array<String> material_names;
+
+    /** List of nodes that are dirty and that need to recalculate their world transform. */
+    Array<Scene::NodeId> dirty_nodes[Scene::k_max_node_level];
 };
 
 /**
@@ -103,6 +123,34 @@ bool WriteSceneDescription(const SceneDescription& scene_description, const char
  * @return True if the scene draw data was successfully written, false otherwise.
  */
 bool WriteScene(const SceneDrawData& scene, const char* scene_file, const char* mesh_file, const char* material_file);
+
+/**
+ * Adds a node to the scene.
+ * @param scene The scene to add the node to.
+ * @param parent The parent node id.
+ * @param level The level of the node in the hierarchy.
+ * @return The id of the new node.
+ */
+NodeId AddNode(SceneDescription& scene, NodeId parent, int32_t level);
+
+/**
+ * Set the debug name of a node.
+ * @param scene The scene to set the node name in.
+ * @param node The node id.
+ * @param name The name to set.
+ */
+void SetNodeName(SceneDescription& scene, NodeId node, const String& name);
+
+void SetNodeMeshId(SceneDescription& scene, NodeId node, uint32_t mesh_id);
+void SetNodeMaterialId(SceneDescription& scene, NodeId node, uint32_t material_id);
+
+/**
+ * Check if a node id is valid in the given scene description.
+ * @param scene The scene description to check the node id in.
+ * @param node The node id to check.
+ * @return True if the node id is valid, false otherwise.
+ */
+bool IsValidNodeId(const SceneDescription& scene, NodeId node);
 
 }  // namespace Scene
 

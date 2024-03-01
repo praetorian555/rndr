@@ -7,6 +7,18 @@
 #include <assimp/scene.h>
 
 #include "rndr/utility/material.h"
+#include "rndr/utility/scene.h"
+
+namespace
+{
+void Traverse(Rndr::SceneDescription& out_scene, const aiScene* ai_scene, const aiNode* ai_node, Rndr::Scene::NodeId parent, int32_t level);
+}
+
+Rndr::Matrix4x4f Rndr::AssimpHelpers::Convert(const aiMatrix4x4& ai_matrix)
+{
+    return {ai_matrix.a1, ai_matrix.a2, ai_matrix.a3, ai_matrix.a4, ai_matrix.b1, ai_matrix.b2, ai_matrix.b3, ai_matrix.b4,
+            ai_matrix.c1, ai_matrix.c2, ai_matrix.c3, ai_matrix.c4, ai_matrix.d1, ai_matrix.d2, ai_matrix.d3, ai_matrix.d4};
+}
 
 bool Rndr::AssimpHelpers::ReadMeshData(MeshData& out_mesh_data, const aiScene& ai_scene, MeshAttributesToLoad attributes_to_load)
 {
@@ -297,3 +309,44 @@ bool Rndr::AssimpHelpers::ReadMaterialDescription(MaterialDescription& out_descr
 
     return true;
 }
+
+bool Rndr::AssimpHelpers::ReadSceneDescription(Rndr::SceneDescription& out_scene_description, const aiScene& ai_scene)
+{
+    Traverse(out_scene_description, &ai_scene, ai_scene.mRootNode, Rndr::Scene::k_invalid_node_id, 0);
+    return true;
+}
+
+namespace
+{
+void Traverse(Rndr::SceneDescription& out_scene, const aiScene* ai_scene, const aiNode* ai_node, Rndr::Scene::NodeId parent, int32_t level)
+{
+    const Rndr::Scene::NodeId new_node_id = Rndr::Scene::AddNode(out_scene, parent, level);
+
+    Rndr::String node_name = ai_node->mName.C_Str();
+    if (node_name.empty())
+    {
+        node_name = "Node_" + std::to_string(new_node_id);
+    }
+    Rndr::Scene::SetNodeName(out_scene, new_node_id, node_name);
+
+    for (uint32_t i = 0; i < ai_node->mNumMeshes; ++i)
+    {
+        const Rndr::Scene::NodeId new_sub_node_id = Rndr::Scene::AddNode(out_scene, new_node_id, level + 1);
+        Rndr::Scene::SetNodeName(out_scene, new_sub_node_id, node_name + "_Mesh_" + std::to_string(i));
+        const uint32_t mesh_id = ai_node->mMeshes[i];
+        Rndr::Scene::SetNodeMeshId(out_scene, new_sub_node_id, mesh_id);
+        Rndr::Scene::SetNodeMaterialId(out_scene, new_sub_node_id, ai_scene->mMeshes[mesh_id]->mMaterialIndex);
+
+        out_scene.local_transforms[new_sub_node_id] = Rndr::Matrix4x4f(1.0f);
+        out_scene.world_transforms[new_sub_node_id] = Rndr::Matrix4x4f(1.0f);
+    }
+
+    out_scene.local_transforms[new_node_id] = Rndr::AssimpHelpers::Convert(ai_node->mTransformation);
+    out_scene.world_transforms[new_node_id] = Rndr::Matrix4x4f(1.0f);
+
+    for (uint32_t i = 0; i < ai_node->mNumChildren; ++i)
+    {
+        Traverse(out_scene, ai_scene, ai_node->mChildren[i], new_node_id, level + 1);
+    }
+}
+} // namespace

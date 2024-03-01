@@ -4,14 +4,27 @@
 #include "rndr/utility/mesh.h"
 
 struct aiMaterial;
+struct aiScene;
+
+template <typename T>
+class aiMatrix4x4t;
+using aiMatrix4x4 = aiMatrix4x4t<float>;
 
 namespace Rndr
 {
 
 struct MaterialDescription;
+struct SceneDescription;
 
 namespace AssimpHelpers
 {
+
+/**
+ * Converts Assimp matrix to Rndr matrix.
+ * @param ai_matrix Assimp matrix to convert.
+ * @return Rndr matrix.
+ */
+Rndr::Matrix4x4f Convert(const aiMatrix4x4& ai_matrix);
 
 /**
  * Reads mesh data from the Assimp scene.
@@ -44,6 +57,14 @@ bool ReadMeshData(MeshData& out_mesh_data, const String& mesh_file_path,
  */
 bool ReadMaterialDescription(MaterialDescription& out_description, Array<String>& out_texture_paths, Array<String>& out_opacity_maps,
                              const aiMaterial& ai_material);
+
+/**
+ * Reads scene description from the Assimp scene.
+ * @param out_scene_description Scene description to be filled.
+ * @param ai_scene Assimp scene to read from.
+ * @return True if the scene description was successfully read, false otherwise.
+ */
+bool ReadSceneDescription(SceneDescription& out_scene_description, const aiScene& ai_scene);
 
 }  // namespace AssimpHelpers
 }  // namespace Rndr
