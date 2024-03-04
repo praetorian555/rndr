@@ -16,11 +16,12 @@
 #include "rndr/core/render-api.h"
 #include "rndr/core/renderer-base.h"
 #include "rndr/core/window.h"
+#include "rndr/utility/assimp-helpers.h"
 #include "rndr/utility/cube-map.h"
 #include "rndr/utility/imgui-wrapper.h"
 #include "rndr/utility/material.h"
 #include "rndr/utility/mesh.h"
-#include "rndr/utility/assimp-helpers.h"
+#include "rndr/utility/scene.h"
 
 class UIRenderer : public Rndr::RendererBase
 {
@@ -35,8 +36,8 @@ private:
     void RenderComputeBrdfLutTool();
     void RenderComputeEnvironmentMapTool();
 
-    void ProcessMesh(const Rndr::String& in_mesh_path, const Rndr::String& out_mesh_path, const Rndr::String& out_material_path,
-                     Rndr::MeshAttributesToLoad attributes_to_load, Rndr::String& out_status);
+    void ProcessScene(const Rndr::String& in_mesh_path, const Rndr::String& out_scene_path, const Rndr::String& out_mesh_path,
+                      const Rndr::String& out_material_path, Rndr::MeshAttributesToLoad attributes_to_load, Rndr::String& out_status);
     void ComputeBrdfLut(const Rndr::String& output_path, Rndr::String& status);
     void ComputeEnvironmentMap(const Rndr::String& input_path, const Rndr::String& output_path, Rndr::String& status);
 
@@ -124,6 +125,7 @@ bool UIRenderer::Render()
 void UIRenderer::RenderMeshConverterTool()
 {
     static Rndr::String s_selected_file_path = GLTF_SAMPLE_ASSETS_DIR "DamagedHelmet/glTF/DamagedHelmet.gltf";
+    static Rndr::String s_scene_file_path = GLTF_SAMPLE_ASSETS_DIR "DamagedHelmet/glTF/DamagedHelmet.rndrscene";
     static Rndr::String s_mesh_file_path = GLTF_SAMPLE_ASSETS_DIR "DamagedHelmet/glTF/DamagedHelmet.rndrmesh";
     static Rndr::String s_material_file_path = GLTF_SAMPLE_ASSETS_DIR "DamagedHelmet/glTF/DamagedHelmet.rndrmat";
 
@@ -134,10 +136,12 @@ void UIRenderer::RenderMeshConverterTool()
     {
         s_selected_file_path = OpenFileDialog();
         const std::filesystem::path path(s_selected_file_path);
+        s_scene_file_path = path.parent_path().string() + "/" + path.stem().string() + ".rndrscene";
         s_mesh_file_path = path.parent_path().string() + "/" + path.stem().string() + ".rndrmesh";
         s_material_file_path = path.parent_path().string() + "/" + path.stem().string() + ".rndrmat";
     }
     ImGui::Text("Selected file: %s", !s_selected_file_path.empty() ? s_selected_file_path.c_str() : "None");
+    ImGui::Text("Output scene file: %s", !s_scene_file_path.empty() ? s_scene_file_path.c_str() : "None");
     ImGui::Text("Output mesh file: %s", !s_mesh_file_path.empty() ? s_mesh_file_path.c_str() : "None");
     ImGui::Text("Output material file: %s", !s_material_file_path.empty() ? s_material_file_path.c_str() : "None");
 
@@ -157,7 +161,7 @@ void UIRenderer::RenderMeshConverterTool()
     }
     if (ImGui::Button("Convert"))
     {
-        ProcessMesh(s_selected_file_path, s_mesh_file_path, s_material_file_path, attributes_to_load, s_status);
+        ProcessScene(s_selected_file_path, s_scene_file_path, s_mesh_file_path, s_material_file_path, attributes_to_load, s_status);
     }
     ImGui::Text("Status: %s", s_status.c_str());
     ImGui::End();
@@ -227,43 +231,51 @@ void UIRenderer::RenderComputeEnvironmentMapTool()
     ImGui::End();
 }
 
-void UIRenderer::ProcessMesh(const Rndr::String& in_mesh_path, const Rndr::String& out_mesh_path, const Rndr::String& out_material_path,
-                             Rndr::MeshAttributesToLoad attributes_to_load, Rndr::String& out_status)
+void UIRenderer::ProcessScene(const Rndr::String& in_mesh_path, const Rndr::String& out_scene_path,  const Rndr::String& out_mesh_path, const Rndr::String& out_material_path,
+                              Rndr::MeshAttributesToLoad attributes_to_load, Rndr::String& out_status)
 {
     constexpr uint32_t k_ai_process_flags = aiProcess_JoinIdenticalVertices | aiProcess_Triangulate | aiProcess_GenSmoothNormals |
                                             aiProcess_LimitBoneWeights | aiProcess_SplitLargeMeshes | aiProcess_ImproveCacheLocality |
                                             aiProcess_RemoveRedundantMaterials | aiProcess_FindDegenerates | aiProcess_FindInvalidData |
                                             aiProcess_GenUVCoords;
 
-    const aiScene* scene = aiImportFile(in_mesh_path.c_str(), k_ai_process_flags);
-    if (scene == nullptr || !scene->HasMeshes())
+    const aiScene* ai_scene = aiImportFile(in_mesh_path.c_str(), k_ai_process_flags);
+    if (ai_scene == nullptr || !ai_scene->HasMeshes())
     {
         RNDR_LOG_ERROR("Failed to load mesh from file with error: %s", aiGetErrorString());
         out_status = "Failed";
         return;
     }
 
+    Rndr::SceneDescription scene_desc;
+    if (!Rndr::AssimpHelpers::ReadSceneDescription(scene_desc, *ai_scene))
+    {
+        RNDR_LOG_ERROR("Failed to load scene description from file: %s", in_mesh_path.c_str());
+        out_status = "Failed";
+        return;
+    }
+
     Rndr::MeshData mesh_data;
-    if (!Rndr::AssimpHelpers::ReadMeshData(mesh_data, *scene, attributes_to_load))
+    if (!Rndr::AssimpHelpers::ReadMeshData(mesh_data, *ai_scene, attributes_to_load))
     {
         RNDR_LOG_ERROR("Failed to load mesh data from file: %s", in_mesh_path.c_str());
         out_status = "Failed";
         return;
     }
 
-    Rndr::Array<Rndr::MaterialDescription> materials(scene->mNumMaterials);
+    Rndr::Array<Rndr::MaterialDescription> materials(ai_scene->mNumMaterials);
     Rndr::Array<Rndr::String> texture_paths;
     Rndr::Array<Rndr::String> opacity_maps;
-    for (int i = 0; i < scene->mNumMaterials; i++)
+    for (int i = 0; i < ai_scene->mNumMaterials; i++)
     {
-        if (!Rndr::AssimpHelpers::ReadMaterialDescription(materials[i], texture_paths, opacity_maps, *scene->mMaterials[i]))
+        if (!Rndr::AssimpHelpers::ReadMaterialDescription(materials[i], texture_paths, opacity_maps, *ai_scene->mMaterials[i]))
         {
             RNDR_LOG_ERROR("Failed to read material description from file: %s", in_mesh_path.c_str());
             out_status = "Failed";
             return;
         }
     }
-    aiReleaseImport(scene);
+    aiReleaseImport(ai_scene);
 
     const std::filesystem::path in_path(in_mesh_path);
     const Rndr::String base_path = in_path.parent_path().string();
@@ -292,6 +304,14 @@ void UIRenderer::ProcessMesh(const Rndr::String& in_mesh_path, const Rndr::Strin
         out_status = "Failed";
         return;
     }
+
+    if (!Rndr::Scene::WriteSceneDescription(scene_desc, out_scene_path))
+    {
+        RNDR_LOG_ERROR("Failed to write scene description to file: %s", out_scene_path.c_str());
+        out_status = "Failed";
+        return;
+    }
+
     out_status = "Success";
 }
 
