@@ -1,5 +1,7 @@
 #include "rndr/utility/scene.h"
 
+#include <stack>
+
 #include "rndr/core/file.h"
 
 namespace
@@ -184,4 +186,45 @@ void Rndr::Scene::SetNodeMaterialId(Rndr::SceneDescription& scene, Rndr::Scene::
 {
     RNDR_ASSERT(IsValidNodeId(scene, node));
     scene.node_id_to_material_id[node] = material_id;
+}
+
+void Rndr::Scene::MarkAsChanged(Rndr::SceneDescription& scene, Rndr::Scene::NodeId node)
+{
+    std::stack<Rndr::Scene::NodeId> stack;
+    stack.push(node);
+
+    while (!stack.empty())
+    {
+        const NodeId node_to_mark = stack.top();
+        RNDR_ASSERT(IsValidNodeId(scene, node_to_mark));
+
+        const int32_t level = scene.hierarchy[node_to_mark].level;
+        scene.dirty_nodes[level].push_back(node_to_mark);
+
+        for (NodeId child = scene.hierarchy[node].first_child; child != k_invalid_node_id; child = scene.hierarchy[child].next_sibling)
+        {
+            stack.push(child);
+        }
+    }
+}
+
+void Rndr::Scene::RecalculateWorldTransforms(Rndr::SceneDescription& scene)
+{
+    // Process root level first
+    if (!scene.dirty_nodes[0].empty())
+    {
+        const NodeId root_node = scene.dirty_nodes[0].back();
+        scene.world_transforms[root_node] = scene.local_transforms[root_node];
+        scene.dirty_nodes[0].clear();
+    }
+
+    for (int i = 1; i < k_max_node_level && !scene.dirty_nodes[i].empty(); ++i)
+    {
+        for (const NodeId node : scene.dirty_nodes[i])
+        {
+            const NodeId parent = scene.hierarchy[node].parent;
+            scene.world_transforms[node] = scene.world_transforms[parent] * scene.local_transforms[node];
+        }
+        scene.dirty_nodes[i].clear();
+    }
 }

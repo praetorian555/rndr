@@ -157,6 +157,20 @@ void SetNodeMaterialId(SceneDescription& scene, NodeId node, uint32_t material_i
  */
 bool IsValidNodeId(const SceneDescription& scene, NodeId node);
 
+/**
+ * Mark a node, as well as his children, as dirty, so that their world transform will be recalculated next time the
+ * RecalculateWorldTransforms is called.
+ * @param scene The scene description to mark the node in.
+ * @param node The node id to mark as dirty.
+ */
+void MarkAsChanged(SceneDescription& scene, NodeId node);
+
+/**
+ * Recalculates the world transforms of the nodes that are marked as dirty.
+ * @param scene The scene description to recalculate the world transforms in.
+ */
+void RecalculateWorldTransforms(SceneDescription& scene);
+
 }  // namespace Scene
 
 }  // namespace Rndr
