@@ -94,7 +94,7 @@ namespace Scene
  * @param scene_file The file to load the scene description from.
  * @return True if the scene description was successfully loaded, false otherwise.
  */
-bool ReadSceneDescription(SceneDescription& out_scene_description, const char* scene_file);
+bool ReadSceneDescription(SceneDescription& out_scene_description, const Rndr::String& scene_file);
 
 /**
  * Loads a scene draw data from a file.
@@ -104,7 +104,7 @@ bool ReadSceneDescription(SceneDescription& out_scene_description, const char* s
  * @param material_file The file to load the material data from.
  * @return True if the scene draw data was successfully loaded, false otherwise.
  */
-bool ReadScene(SceneDrawData& out_scene, const char* scene_file, const char* mesh_file, const char* material_file);
+bool ReadScene(SceneDrawData& out_scene, const char* scene_file, const Rndr::String& mesh_file, const Rndr::String& material_file);
 
 /**
  * Writes a scene description to a file.
@@ -112,7 +112,7 @@ bool ReadScene(SceneDrawData& out_scene, const char* scene_file, const char* mes
  * @param scene_file The file to write the scene description to.
  * @return True if the scene description was successfully written, false otherwise.
  */
-bool WriteSceneDescription(const SceneDescription& scene_description, const char* scene_file);
+bool WriteSceneDescription(const SceneDescription& scene_description, const Rndr::String& scene_file);
 
 /**
  * Writes a scene draw data to a file.
@@ -122,7 +122,12 @@ bool WriteSceneDescription(const SceneDescription& scene_description, const char
  * @param material_file The file to write the material data to.
  * @return True if the scene draw data was successfully written, false otherwise.
  */
-bool WriteScene(const SceneDrawData& scene, const char* scene_file, const char* mesh_file, const char* material_file);
+bool WriteScene(const SceneDrawData& scene, const Rndr::String& scene_file, const Rndr::String& mesh_file,
+                const Rndr::String& material_file);
+
+/******************************************************************************************************************************************/
+/** API for manipulating the scene description. *******************************************************************************************/
+/******************************************************************************************************************************************/
 
 /**
  * Adds a node to the scene.

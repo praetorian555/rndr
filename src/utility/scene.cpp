@@ -67,9 +67,9 @@ bool ReadStringList(Rndr::FileHandler& file, Rndr::Array<Rndr::String>& strings)
 
 };  // namespace
 
-bool Rndr::Scene::ReadSceneDescription(SceneDescription& out_scene_description, const char* scene_file)
+bool Rndr::Scene::ReadSceneDescription(SceneDescription& out_scene_description, const String& scene_file)
 {
-    Rndr::FileHandler file(scene_file, "rb");
+    Rndr::FileHandler file(scene_file.c_str(), "rb");
     if (!file.IsValid())
     {
         return false;
@@ -99,9 +99,9 @@ bool Rndr::Scene::ReadSceneDescription(SceneDescription& out_scene_description, 
     return true;
 }
 
-bool Rndr::Scene::WriteSceneDescription(const Rndr::SceneDescription& scene_description, const char* scene_file)
+bool Rndr::Scene::WriteSceneDescription(const Rndr::SceneDescription& scene_description, const String& scene_file)
 {
-    Rndr::FileHandler file(scene_file, "wb");
+    Rndr::FileHandler file(scene_file.c_str(), "wb");
     if (!file.IsValid())
     {
         return false;
@@ -149,7 +149,8 @@ Rndr::Scene::NodeId Rndr::Scene::AddNode(Rndr::SceneDescription& scene, int32_t 
             {
                 for (last_sibling = parent_first_child; scene.hierarchy[last_sibling].next_sibling != k_invalid_node_id;
                      last_sibling = scene.hierarchy[last_sibling].next_sibling)
-                    ;
+                {
+                }
             }
             scene.hierarchy[last_sibling].next_sibling = node_id;
             scene.hierarchy[parent_first_child].last_sibling = node_id;
