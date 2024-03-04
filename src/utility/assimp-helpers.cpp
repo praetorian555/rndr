@@ -61,8 +61,8 @@ bool Rndr::AssimpHelpers::ReadMeshData(MeshData& out_mesh_data, const aiScene& a
             }
             if (should_load_uvs)
             {
-                RNDR_ASSERT(ai_mesh->HasTextureCoords(0));
-                Rndr::Point2f uv(ai_mesh->mTextureCoords[0][i].x, ai_mesh->mTextureCoords[0][i].y);
+                aiVector3D ai_uv = ai_mesh->HasTextureCoords(0) ? ai_mesh->mTextureCoords[0][i] : aiVector3D();
+                Rndr::Point2f uv(ai_uv.x, ai_uv.y);
                 out_mesh_data.vertex_buffer_data.insert(out_mesh_data.vertex_buffer_data.end(), reinterpret_cast<uint8_t*>(uv.data),
                                                         reinterpret_cast<uint8_t*>(uv.data) + sizeof(uv));
             }
