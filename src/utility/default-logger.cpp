@@ -2,6 +2,7 @@
 
 #include "spdlog/async.h"
 #include "spdlog/sinks/stdout_color_sinks.h"
+#include "spdlog/sinks/basic_file_sink.h"
 #include "spdlog/spdlog.h"
 
 Rndr::DefaultLogger::DefaultLogger()
@@ -14,7 +15,18 @@ Rndr::DefaultLogger::DefaultLogger()
     constexpr int k_backing_thread_count = 1;
     spdlog::init_thread_pool(k_max_message_count, k_backing_thread_count);
 
-    m_logger = spdlog::create<spdlog::sinks::stdout_color_sink_st>("stdout_logger");
+    // create a file path that includes current time and date
+    const auto now = std::chrono::system_clock::now();
+    const auto now_c = std::chrono::system_clock::to_time_t(now);
+    std::tm now_tm;
+    localtime_s(&now_tm, &now_c);
+    char out_filename[64];
+    strftime(out_filename, sizeof(out_filename), "rndr_%Y-%m-%d_%H-%M-%S.log", &now_tm);
+
+    auto file_sink = std::make_shared<spdlog::sinks::basic_file_sink_mt>(out_filename);
+    auto console_sink = std::make_shared<spdlog::sinks::stdout_color_sink_mt>();
+    m_logger = std::make_shared<spdlog::logger>("rndr", spdlog::sinks_init_list{std::move(file_sink), std::move(console_sink)});
+    spdlog::initialize_logger(m_logger);
 }
 
 Rndr::DefaultLogger::~DefaultLogger()
