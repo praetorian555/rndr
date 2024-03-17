@@ -146,6 +146,10 @@ bool SetupMaterial(Rndr::MaterialDescription& in_out_material, Rndr::Array<Rndr:
         in_out_material.albedo_texture = albedo_map.GetBindlessHandle();
         out_textures.emplace_back(std::move(albedo_map));
     }
+    else
+    {
+        in_out_material.albedo_texture = 0;
+    }
     if (in_out_material.metallic_roughness_texture != Rndr::k_invalid_image_id)
     {
         const Rndr::String& metallic_roughness_map_path = in_texture_paths[static_cast<size_t>(in_out_material.metallic_roughness_texture)];
@@ -157,6 +161,10 @@ bool SetupMaterial(Rndr::MaterialDescription& in_out_material, Rndr::Array<Rndr:
         }
         in_out_material.metallic_roughness_texture = metallic_roughness_map.GetBindlessHandle();
         out_textures.emplace_back(std::move(metallic_roughness_map));
+    }
+    else
+    {
+        in_out_material.metallic_roughness_texture = 0;
     }
     if (in_out_material.normal_texture != Rndr::k_invalid_image_id)
     {
@@ -170,6 +178,10 @@ bool SetupMaterial(Rndr::MaterialDescription& in_out_material, Rndr::Array<Rndr:
         in_out_material.normal_texture = normal_map.GetBindlessHandle();
         out_textures.emplace_back(std::move(normal_map));
     }
+    else
+    {
+        in_out_material.normal_texture = 0;
+    }
     if (in_out_material.ambient_occlusion_texture != Rndr::k_invalid_image_id)
     {
         const Rndr::String& ambient_occlusion_map_path = in_texture_paths[static_cast<size_t>(in_out_material.ambient_occlusion_texture)];
@@ -181,6 +193,10 @@ bool SetupMaterial(Rndr::MaterialDescription& in_out_material, Rndr::Array<Rndr:
         }
         in_out_material.ambient_occlusion_texture = ambient_occlusion_map.GetBindlessHandle();
         out_textures.emplace_back(std::move(ambient_occlusion_map));
+    }
+    else
+    {
+        in_out_material.ambient_occlusion_texture = 0;
     }
     if (in_out_material.emissive_texture != Rndr::k_invalid_image_id)
     {
@@ -194,6 +210,13 @@ bool SetupMaterial(Rndr::MaterialDescription& in_out_material, Rndr::Array<Rndr:
         in_out_material.emissive_texture = emissive_map.GetBindlessHandle();
         out_textures.emplace_back(std::move(emissive_map));
     }
+    else
+    {
+        in_out_material.emissive_texture = 0;
+    }
+
+    in_out_material.opacity_texture = 0;
+
     return true;
 }
 
