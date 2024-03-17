@@ -92,7 +92,7 @@ public:
         RNDR_ASSERT(m_material_buffer.IsValid());
         m_desc.graphics_context->Update(m_material_buffer, Rndr::ToByteSpan(m_scene_data.materials));
 
-        // Setup buffer that will be update every frame with camera info
+        // Setup buffer that will be updated every frame with camera info
         constexpr size_t k_per_frame_size = sizeof(PerFrameData);
         m_per_frame_buffer = Rndr::Buffer(
             m_desc.graphics_context,

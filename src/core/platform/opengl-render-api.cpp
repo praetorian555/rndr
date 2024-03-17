@@ -55,7 +55,7 @@ void APIENTRY DebugOutputCallback(GLenum source, GLenum type, unsigned int id, G
 //            break;
 //        case GL_DEBUG_SEVERITY_NOTIFICATION:
 //            RNDR_LOG_DEBUG("[OpenGL] %s", message);
-            break;
+//            break;
         default:
             break;
     }
