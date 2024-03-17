@@ -676,13 +676,13 @@ struct RasterizerDesc
     float slope_scaled_depth_bias = 0.0;
 
     /** Bottom left point of a rectangle that defines the scissor test. */
-    Point2f scissor_bottom_left;
+    Point2f scissor_bottom_left = Point2f(0.0f, 0.0f);
 
     /**
      * Size of a rectangle that defines the scissor test. If width or height is zero the scissor
      * test is disabled.
      */
-    Vector2f scissor_size;
+    Vector2f scissor_size = Vector2f(0.0f, 0.0f);
 };
 
 struct DepthStencilDesc
@@ -772,7 +772,7 @@ struct BlendDesc
     BlendOperation alpha_operation = BlendOperation::Add;
 
     /** Const color value used in the blend operation. */
-    Vector3f const_color;
+    Vector3f const_color = Vector3f(0.0f, 0.0f, 0.0f);
 
     /** Const alpha value used in the blend operation. */
     float const_alpha = 0.0f;
