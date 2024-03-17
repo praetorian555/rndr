@@ -258,7 +258,7 @@ Rndr::String ConvertTexture(const Rndr::String& texture_path, const Rndr::String
     if (albedo_texture_path_to_opacity_texture_index.contains(texture_path))
     {
         const uint64_t opacity_map_index = albedo_texture_path_to_opacity_texture_index[texture_path];
-        const Rndr::String opacity_map_file = base_path + opacity_textures[opacity_map_index];
+        const Rndr::String opacity_map_file = base_path + "\\" + opacity_textures[opacity_map_index];
         int32_t opacity_width = 0;
         int32_t opacity_height = 0;
         stbi_uc* opacity_pixels = stbi_load(opacity_map_file.c_str(), &opacity_width, &opacity_height, nullptr, 1);
