@@ -97,6 +97,14 @@ namespace Scene
 bool ReadSceneDescription(SceneDescription& out_scene_description, const Rndr::String& scene_file);
 
 /**
+ * Writes a scene description to a file.
+ * @param scene_description The scene description to write.
+ * @param scene_file The file to write the scene description to.
+ * @return True if the scene description was successfully written, false otherwise.
+ */
+bool WriteSceneDescription(const SceneDescription& scene_description, const Rndr::String& scene_file);
+
+/**
  * Loads a scene draw data from a file.
  * @param out_scene The scene draw data to fill.
  * @param scene_file The file to load the scene description from.
@@ -104,15 +112,8 @@ bool ReadSceneDescription(SceneDescription& out_scene_description, const Rndr::S
  * @param material_file The file to load the material data from.
  * @return True if the scene draw data was successfully loaded, false otherwise.
  */
-bool ReadScene(SceneDrawData& out_scene, const char* scene_file, const Rndr::String& mesh_file, const Rndr::String& material_file);
-
-/**
- * Writes a scene description to a file.
- * @param scene_description The scene description to write.
- * @param scene_file The file to write the scene description to.
- * @return True if the scene description was successfully written, false otherwise.
- */
-bool WriteSceneDescription(const SceneDescription& scene_description, const Rndr::String& scene_file);
+bool ReadScene(SceneDrawData& out_scene, const Rndr::String& scene_file, const Rndr::String& mesh_file, const Rndr::String& material_file,
+               const Rndr::GraphicsContext& graphics_context);
 
 /**
  * Writes a scene draw data to a file.

@@ -129,6 +129,49 @@ bool Rndr::Scene::WriteSceneDescription(const Rndr::SceneDescription& scene_desc
     return true;
 }
 
+bool Rndr::Scene::ReadScene(Rndr::SceneDrawData& out_scene, const Rndr::String& scene_file, const Rndr::String& mesh_file,
+                            const Rndr::String& material_file, const Rndr::GraphicsContext& graphics_context)
+{
+    if (!ReadSceneDescription(out_scene.scene_description, scene_file))
+    {
+        return false;
+    }
+
+    if (!Rndr::Mesh::ReadData(out_scene.mesh_data, mesh_file))
+    {
+        return false;
+    }
+
+    if (!Rndr::Material::ReadDataLoadTextures(out_scene.materials, out_scene.textures, material_file, graphics_context))
+    {
+        return false;
+    }
+
+    for (const auto& node : out_scene.scene_description.node_id_to_mesh_id)
+    {
+        const Rndr::Scene::NodeId node_id = node.first;
+        const uint32_t mesh_id = node.second;
+        const auto material_iter = out_scene.scene_description.node_id_to_material_id.find(node_id);
+        if (material_iter == out_scene.scene_description.node_id_to_material_id.end())
+        {
+            continue;
+        }
+        const uint32_t material_id = material_iter->second;
+        out_scene.shapes.push_back({.mesh_index = mesh_id,
+                                    .material_index = material_id,
+                                    .lod = 0,
+                                    .vertex_buffer_offset = out_scene.mesh_data.meshes[mesh_id].vertex_offset,
+                                    .index_buffer_offset = out_scene.mesh_data.meshes[mesh_id].index_offset,
+                                    .transform_index = node_id});
+    }
+
+    // Mark root as changed so that whole hierarchy is recalculated
+    Rndr::Scene::MarkAsChanged(out_scene.scene_description, 0);
+    Rndr::Scene::RecalculateWorldTransforms(out_scene.scene_description);
+
+    return true;
+}
+
 Rndr::Scene::NodeId Rndr::Scene::AddNode(Rndr::SceneDescription& scene, int32_t parent, int32_t level)
 {
     const NodeId node_id = static_cast<uint32_t>(scene.hierarchy.size());
@@ -161,7 +204,7 @@ Rndr::Scene::NodeId Rndr::Scene::AddNode(Rndr::SceneDescription& scene, int32_t 
 
     scene.hierarchy[node_id].level = level;
 
-    return 0;
+    return node_id;
 }
 
 void Rndr::Scene::SetNodeName(Rndr::SceneDescription& scene, Rndr::Scene::NodeId node, const String& name)
@@ -196,12 +239,13 @@ void Rndr::Scene::MarkAsChanged(Rndr::SceneDescription& scene, Rndr::Scene::Node
     while (!stack.empty())
     {
         const NodeId node_to_mark = stack.top();
+        stack.pop();
         RNDR_ASSERT(IsValidNodeId(scene, node_to_mark));
 
         const int32_t level = scene.hierarchy[node_to_mark].level;
         scene.dirty_nodes[level].push_back(node_to_mark);
 
-        for (NodeId child = scene.hierarchy[node].first_child; child != k_invalid_node_id; child = scene.hierarchy[child].next_sibling)
+        for (NodeId child = scene.hierarchy[node_to_mark].first_child; child != k_invalid_node_id; child = scene.hierarchy[child].next_sibling)
         {
             stack.push(child);
         }
