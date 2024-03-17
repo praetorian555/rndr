@@ -313,6 +313,13 @@ bool Rndr::AssimpHelpers::ReadMaterialDescription(MaterialDescription& out_descr
 bool Rndr::AssimpHelpers::ReadSceneDescription(Rndr::SceneDescription& out_scene_description, const aiScene& ai_scene)
 {
     Traverse(out_scene_description, &ai_scene, ai_scene.mRootNode, Rndr::Scene::k_invalid_node_id, 0);
+
+    for (uint32_t i = 0; i < ai_scene.mNumMaterials; ++i)
+    {
+        aiMaterial* ai_material = ai_scene.mMaterials[i];
+        out_scene_description.material_names.emplace_back(ai_material->GetName().C_Str());
+    }
+
     return true;
 }
 
