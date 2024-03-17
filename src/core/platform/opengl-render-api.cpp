@@ -29,6 +29,8 @@
 #include "rndr/core/platform/opengl-render-api.h"
 #include "rndr/utility/cpu-tracer.h"
 
+#define RNDR_ASSERT_GL_ERROR() RNDR_ASSERT(glGetError() == GL_NO_ERROR)
+
 namespace
 {
 void APIENTRY DebugOutputCallback(GLenum source, GLenum type, unsigned int id, GLenum severity, GLsizei length, const char* message,
@@ -1286,10 +1288,12 @@ Rndr::Image::Image(const GraphicsContext& graphics_context, const ImageDesc& des
         {
             glTextureSubImage2D(m_native_texture, k_mip_level, k_x_offset, k_y_offset, desc.width, desc.height, format, data_type,
                                 init_data.data());
+            RNDR_ASSERT_GL_ERROR();
         }
         if (desc.use_mips)
         {
             glGenerateTextureMipmap(m_native_texture);
+            RNDR_ASSERT_GL_ERROR();
         }
     }
     else if (desc.type == ImageType::CubeMap)
@@ -1311,10 +1315,12 @@ Rndr::Image::Image(const GraphicsContext& graphics_context, const ImageDesc& des
             const uint8_t* data = init_data.data() + i * desc.width * desc.height * FromPixelFormatToPixelSize(desc.pixel_format);
             glTextureSubImage3D(m_native_texture, k_mip_level, k_x_offset, k_y_offset, z_offset, desc.width, desc.height, k_depth, format,
                                 data_type, data);
+            RNDR_ASSERT_GL_ERROR();
         }
         if (desc.use_mips)
         {
             glGenerateTextureMipmap(m_native_texture);
+            RNDR_ASSERT_GL_ERROR();
         }
     }
     else
@@ -1325,7 +1331,9 @@ Rndr::Image::Image(const GraphicsContext& graphics_context, const ImageDesc& des
     if (m_desc.is_bindless)
     {
         m_bindless_handle = glGetTextureHandleARB(m_native_texture);
+        RNDR_ASSERT_GL_ERROR();
         glMakeTextureHandleResidentARB(m_bindless_handle);
+        RNDR_ASSERT_GL_ERROR();
     }
 
     if (glGetError() != GL_NO_ERROR)
