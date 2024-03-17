@@ -113,6 +113,7 @@ public:
         const Rndr::InputLayoutDesc input_layout_desc = Rndr::InputLayoutBuilder()
                                                             .AddVertexBuffer(m_vertex_buffer, 1, Rndr::DataRepetition::PerVertex)
                                                             .AddVertexBuffer(m_instance_buffer, 2, Rndr::DataRepetition::PerInstance, 1)
+                                                            .AddVertexBuffer(m_material_buffer, 3, Rndr::DataRepetition::PerInstance, 1)
                                                             .AddIndexBuffer(m_index_buffer)
                                                             .Build();
         m_pipeline = Rndr::Pipeline(desc.graphics_context, {.vertex_shader = &m_vertex_shader,
@@ -138,7 +139,6 @@ public:
         PerFrameData per_frame_data = {.view_projection = view_projection_transform, .camera_position = m_camera_position};
         m_desc.graphics_context->Update(m_per_frame_buffer, Rndr::ToByteSpan(per_frame_data));
 
-        m_desc.graphics_context->Bind(m_material_buffer, 3);
         m_command_list.Submit();
         return true;
     }
