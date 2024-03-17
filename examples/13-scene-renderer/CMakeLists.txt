@@ -1,6 +1,6 @@
 add_executable(13-scene-renderer scene-renderer.cpp)
 target_link_libraries(13-scene-renderer PUBLIC rndr)
-target_link_libraries(13-scene-renderer PRIVATE rndr_options rndr_warnings)
+target_link_libraries(13-scene-renderer PRIVATE rndr_options)
 set_target_properties(13-scene-renderer PROPERTIES FOLDER Examples)
 target_compile_definitions(13-scene-renderer PUBLIC -DASSETS_DIR="${CMAKE_CURRENT_SOURCE_DIR}/../assets/")
 target_compile_definitions(13-scene-renderer PUBLIC -DGLTF_SAMPLE_ASSETS_DIR="${GLTF_ASSETS_DIR}/")
