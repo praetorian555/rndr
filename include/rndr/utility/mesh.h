@@ -6,6 +6,7 @@
 #include "rndr/core/containers/stack-array.h"
 #include "rndr/core/containers/string.h"
 #include "rndr/core/enum-flags.h"
+#include "rndr/core/graphics-types.h"
 #include "rndr/core/math.h"
 
 struct aiScene;
@@ -74,7 +75,7 @@ struct MeshDrawData
     uint32_t lod;
     uint32_t vertex_buffer_offset;
     uint32_t index_buffer_offset;
-    uint32_t transform_index;
+    int32_t transform_index;
 };
 
 /**
@@ -133,6 +134,16 @@ bool UpdateBoundingBoxes(MeshData& mesh_data);
  * @return True if mesh data was merged successfully, false otherwise.
  */
 bool Merge(MeshData& out_mesh_data, const Span<MeshData>& mesh_data);
+
+/**
+ * Create draw commands that can be used with DrawIndicesMulti API to render meshes.
+ * @param out_draw_commands Destination draw commands.
+ * @param mesh_draw_data Draw data for all meshes.
+ * @param mesh_data Mesh graphics API buffer data.
+ * @return True if draw commands were created successfully, false otherwise.
+ * @note base_instance field in the DrawIndicesData will store material index. Instance count will be set to 1.
+ */
+bool GetDrawCommands(Array<DrawIndicesData>& out_draw_commands, const Array<MeshDrawData>& mesh_draw_data, const MeshData& mesh_data);
 
 }  // namespace Mesh
 

@@ -150,3 +150,21 @@ bool Rndr::Mesh::Merge(MeshData& out_mesh_data, const Span<MeshData>& mesh_data)
 
     return true;
 }
+
+bool Rndr::Mesh::GetDrawCommands(Rndr::Array<Rndr::DrawIndicesData>& out_draw_commands,
+                                 const Rndr::Array<Rndr::MeshDrawData>& mesh_draw_data, const Rndr::MeshData& mesh_data)
+{
+    out_draw_commands.resize(mesh_draw_data.size());
+    for (int i = 0; i < out_draw_commands.size(); i++)
+    {
+        const uint32_t mesh_idx = mesh_draw_data[i].mesh_index;
+        const uint32_t lod = mesh_draw_data[i].lod;
+        const Rndr::MeshDescription& mesh_desc = mesh_data.meshes[mesh_idx];
+        out_draw_commands[i] = {.index_count = mesh_desc.GetLodIndicesCount(lod),
+                                .instance_count = 1,
+                                .first_index = mesh_draw_data[i].index_buffer_offset,
+                                .base_vertex = mesh_draw_data[i].vertex_buffer_offset,
+                                .base_instance = mesh_draw_data[i].material_index};
+    }
+    return true;
+}
