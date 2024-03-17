@@ -2,6 +2,23 @@
 
 #include <cstdarg>
 
+#if defined RNDR_WINDOWS
+
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
+
+#ifndef WIN32_LEAN_AND_MEAN
+#define WIN32_LEAN_AND_MEAN
+#endif
+
+#include <windows.h>
+
+#undef near
+#undef far
+
+#endif  // RNDR_WINDOWS
+
 #include "rndr/core/input.h"
 #include "rndr/utility/cpu-tracer.h"
 #include "rndr/utility/default-logger.h"
@@ -27,7 +44,7 @@ bool Rndr::Init(const RndrDesc& desc)
     {
         g_desc.user_logger = RNDR_NEW(DefaultLogger);
     }
-#endif // RNDR_DEFAULT_LOGGER
+#endif  // RNDR_DEFAULT_LOGGER
 
     if (g_desc.enable_input_system && !InputSystem::Init())
     {
@@ -97,4 +114,13 @@ void Rndr::Log(const std::source_location& source_location, Rndr::LogLevel log_l
     vsprintf_s(message.data(), k_message_size, format, args);
     va_end(args);
     g_desc.user_logger->Log(source_location, log_level, message.data());
+}
+
+void Rndr::WaitForDebuggerToAttach()
+{
+    while (!IsDebuggerPresent())
+    {
+        Sleep(100);
+    }
+    RNDR_DEBUG_BREAK;
 }

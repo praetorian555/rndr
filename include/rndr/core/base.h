@@ -85,6 +85,8 @@ void Log(const std::source_location& source_location,
          const char* format,
          ...);
 
+void WaitForDebuggerToAttach();
+
 }  // namespace Rndr
 
 // Helper macros ///////////////////////////////////////////////////////////////////////////////////
