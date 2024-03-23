@@ -12,6 +12,7 @@ option(RNDR_TRACER "Use built in profiler" ON)
 option(RNDR_DEFAULT_LOGGER "Use default logger" ON)
 option(RNDR_BUILD_EXAMPLES "Build examples" ON)
 option(RNDR_BUILD_TESTS "Build tests" ON)
+option(RNDR_SYNC_SAMPLES "Sync samples" ON)
 
 message(STATUS "RNDR_HARDENED ${RNDR_HARDENED}")
 message(STATUS "RNDR_TRACER ${RNDR_TRACER}")
@@ -76,7 +77,9 @@ endif()
 if (PROJECT_IS_TOP_LEVEL OR RNDR_BUILD_EXAMPLES)
     # Download and extract example assets
     set(GLTF_ASSETS_DIR "")
-    setup_example_assets(GLTF_ASSETS_DIR)
+    if (RNDR_SYNC_SAMPLES)
+        setup_example_assets(GLTF_ASSETS_DIR)
+    endif()
 
     # Examples
     add_subdirectory(examples/01-triangle)
