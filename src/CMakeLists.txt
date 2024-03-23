@@ -55,17 +55,21 @@ set(SOURCE_LIST
         "${PROJECT_SOURCE_DIR}/src/utility/scene.cpp")
 
 list(APPEND SOURCE_LIST
-        "${PROJECT_SOURCE_DIR}/include/rndr/core/platform/opengl-render-api.h"
         "${PROJECT_SOURCE_DIR}/include/rndr/core/platform/opengl-graphics-context.h"
         "${PROJECT_SOURCE_DIR}/include/rndr/core/platform/opengl-pipeline.h"
         "${PROJECT_SOURCE_DIR}/include/rndr/core/platform/opengl-command-list.h"
         "${PROJECT_SOURCE_DIR}/include/rndr/core/platform/opengl-image.h"
+        "${PROJECT_SOURCE_DIR}/include/rndr/core/platform/opengl-buffer.h"
+        "${PROJECT_SOURCE_DIR}/include/rndr/core/platform/opengl-shader.h"
+        "${PROJECT_SOURCE_DIR}/include/rndr/core/platform/opengl-swap-chain.h"
         "${PROJECT_SOURCE_DIR}/src/core/platform/opengl-helpers.h"
         "${PROJECT_SOURCE_DIR}/src/core/platform/opengl-graphics-context.cpp"
         "${PROJECT_SOURCE_DIR}/src/core/platform/opengl-pipeline.cpp"
         "${PROJECT_SOURCE_DIR}/src/core/platform/opengl-command-list.cpp"
         "${PROJECT_SOURCE_DIR}/src/core/platform/opengl-image.cpp"
-        "${PROJECT_SOURCE_DIR}/src/core/platform/opengl-render-api.cpp"
+        "${PROJECT_SOURCE_DIR}/src/core/platform/opengl-buffer.cpp"
+        "${PROJECT_SOURCE_DIR}/src/core/platform/opengl-shader.cpp"
+        "${PROJECT_SOURCE_DIR}/src/core/platform/opengl-swap-chain.cpp"
         "${PROJECT_SOURCE_DIR}/src/core/platform/opengl-helpers.cpp")
 
 if (RNDR_TRACER)

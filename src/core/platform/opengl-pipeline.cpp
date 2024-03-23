@@ -1,15 +1,12 @@
 #include "rndr/core/platform/opengl-pipeline.h"
 
 #include <glad/glad.h>
-#include <glad/glad_wgl.h>
 
 #include "core/platform/opengl-helpers.h"
 #include "rndr/core/containers/array.h"
-#include "rndr/core/containers/hash-map.h"
 #include "rndr/core/containers/stack-array.h"
-#include "rndr/core/containers/string.h"
-#include "rndr/core/file.h"
-#include "rndr/core/platform/opengl-render-api.h"
+#include "rndr/core/platform/opengl-buffer.h"
+#include "rndr/core/platform/opengl-shader.h"
 #include "rndr/utility/cpu-tracer.h"
 
 Rndr::Pipeline::Pipeline(const GraphicsContext& graphics_context, const PipelineDesc& desc) : m_desc(desc)
@@ -218,4 +215,3 @@ uint32_t Rndr::Pipeline::GetIndexBufferElementSize() const
     const BufferDesc& index_buffer_desc = index_buffer.GetDesc();
     return index_buffer_desc.stride;
 }
-

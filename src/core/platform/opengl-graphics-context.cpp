@@ -9,9 +9,11 @@
 #include "rndr/core/containers/stack-array.h"
 #include "rndr/core/containers/string.h"
 #include "rndr/core/file.h"
+#include "rndr/core/platform/opengl-buffer.h"
 #include "rndr/core/platform/opengl-image.h"
 #include "rndr/core/platform/opengl-pipeline.h"
-#include "rndr/core/platform/opengl-render-api.h"
+#include "rndr/core/platform/opengl-shader.h"
+#include "rndr/core/platform/opengl-swap-chain.h"
 #include "rndr/utility/cpu-tracer.h"
 
 namespace

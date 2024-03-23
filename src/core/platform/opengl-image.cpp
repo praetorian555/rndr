@@ -5,8 +5,8 @@
 #include "core/platform/opengl-helpers.h"
 #include "rndr/core/containers/stack-array.h"
 #include "rndr/core/platform/opengl-graphics-context.h"
-#include "rndr/core/platform/opengl-render-api.h"
 #include "rndr/utility/cpu-tracer.h"
+#include "rndr/core/bitmap.h"
 
 Rndr::Image::Image(const GraphicsContext& graphics_context, const ImageDesc& desc, const ConstByteSpan& init_data) : m_desc(desc)
 {

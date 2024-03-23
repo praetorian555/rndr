@@ -6,7 +6,6 @@
 #include "rndr/core/containers/scope-ptr.h"
 #include "rndr/core/containers/stack-array.h"
 #include "rndr/core/platform/opengl-graphics-context.h"
-#include "rndr/core/platform/opengl-render-api.h"
 #include "rndr/utility/cpu-tracer.h"
 
 Rndr::DrawVerticesMultiCommand::DrawVerticesMultiCommand(PrimitiveTopology primitive_topology, uint32_t buffer_handle, uint32_t draw_count)
