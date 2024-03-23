@@ -453,13 +453,11 @@ bool Rndr::GraphicsContext::Bind(const Buffer& buffer, int32_t binding_index)
     {
         glBindBufferRange(target, binding_index, native_buffer, 0, desc.size);
         RNDR_ASSERT_OPENGL();
+        return true;
     }
-    else
-    {
-        glBindBuffer(target, native_buffer);
-        RNDR_ASSERT_OPENGL();
-    }
-    return true;
+
+    RNDR_LOG_ERROR("Vertex and index buffers should be bound through the use of input layout and pipeline!");
+    return false;
 }
 
 bool Rndr::GraphicsContext::Bind(const Image& image, int32_t binding_index)
