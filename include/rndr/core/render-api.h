@@ -7,6 +7,7 @@
 #include "rndr/core/platform/opengl-pipeline.h"
 #include "rndr/core/platform/opengl-command-list.h"
 #include "rndr/core/platform/opengl-render-api.h"
+#include "rndr/core/platform/opengl-image.h"
 #else
 #error "No render API selected."
 #endif

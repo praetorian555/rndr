@@ -59,10 +59,12 @@ list(APPEND SOURCE_LIST
         "${PROJECT_SOURCE_DIR}/include/rndr/core/platform/opengl-graphics-context.h"
         "${PROJECT_SOURCE_DIR}/include/rndr/core/platform/opengl-pipeline.h"
         "${PROJECT_SOURCE_DIR}/include/rndr/core/platform/opengl-command-list.h"
+        "${PROJECT_SOURCE_DIR}/include/rndr/core/platform/opengl-image.h"
         "${PROJECT_SOURCE_DIR}/src/core/platform/opengl-helpers.h"
         "${PROJECT_SOURCE_DIR}/src/core/platform/opengl-graphics-context.cpp"
         "${PROJECT_SOURCE_DIR}/src/core/platform/opengl-pipeline.cpp"
         "${PROJECT_SOURCE_DIR}/src/core/platform/opengl-command-list.cpp"
+        "${PROJECT_SOURCE_DIR}/src/core/platform/opengl-image.cpp"
         "${PROJECT_SOURCE_DIR}/src/core/platform/opengl-render-api.cpp"
         "${PROJECT_SOURCE_DIR}/src/core/platform/opengl-helpers.cpp")
 

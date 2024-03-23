@@ -1,7 +1,5 @@
 #include "rndr/core/platform/opengl-graphics-context.h"
 
-#include "rndr/core/platform/windows-header.h"
-
 #include <glad/glad.h>
 #include <glad/glad_wgl.h>
 
@@ -11,8 +9,9 @@
 #include "rndr/core/containers/stack-array.h"
 #include "rndr/core/containers/string.h"
 #include "rndr/core/file.h"
-#include "rndr/core/platform/opengl-render-api.h"
+#include "rndr/core/platform/opengl-image.h"
 #include "rndr/core/platform/opengl-pipeline.h"
+#include "rndr/core/platform/opengl-render-api.h"
 #include "rndr/utility/cpu-tracer.h"
 
 namespace
