@@ -40,8 +40,7 @@ public:
         const bool is_data_loaded = Rndr::Scene::ReadScene(m_scene_data, k_scene_path, k_mesh_path, k_mat_path, desc.graphics_context);
         if (!is_data_loaded)
         {
-            RNDR_LOG_ERROR("Failed to load mesh data from file!");
-            RNDR_HALT("Failed  to load mesh data!");
+            RNDR_HALT("Failed to load mesh data from file!");
             return;
         }
 
