@@ -1,15 +1,18 @@
 #pragma once
 
-#include <source_location>
-
 #include "rndr/core/definitions.h"
+
+namespace std
+{
+    struct source_location;
+}
 
 namespace Rndr
 {
 
 // Types ///////////////////////////////////////////////////////////////////////////////////////////
 
-enum class LogLevel
+enum class LogLevel : uint8_t
 {
     Error,
     Warning,

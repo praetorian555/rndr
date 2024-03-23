@@ -6,8 +6,8 @@
 
 #include "rndr/core/bitmap.h"
 #include "rndr/core/graphics-types.h"
-#include "rndr/core/platform/forward-def-opengl.h"
 #include "rndr/core/platform/opengl-command-list.h"
+#include "rndr/core/platform/opengl-forward-def.h"
 
 namespace Rndr
 {

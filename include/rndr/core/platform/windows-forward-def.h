@@ -1,21 +1,25 @@
 #pragma once
 
+#include <cstdint>
+
 #include "rndr/core/definitions.h"
 
 #if RNDR_WINDOWS
 
 #ifndef _WINDEF_
-#define DECLARE_HANDLE(name) struct name##__{int unused;}; typedef struct name##__ *name
-DECLARE_HANDLE(HWND);
-DECLARE_HANDLE(HDC);
-DECLARE_HANDLE(HGLRC);
+
+#define RNDR_DECLARE_HANDLE(name) struct name##__; typedef struct name##__ *name
+RNDR_DECLARE_HANDLE(HWND);
+RNDR_DECLARE_HANDLE(HDC);
+RNDR_DECLARE_HANDLE(HGLRC);
 
 using UINT = unsigned int;
-using WPARAM = unsigned __int64;
+using WPARAM = uint64_t;
 using LPARAM = __int64;
 using LRESULT = __int64;
 
 #define CALLBACK __stdcall
+
 #endif  // _WINDEF_
 
 namespace Rndr

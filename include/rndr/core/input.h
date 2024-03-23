@@ -8,7 +8,7 @@
 #include "rndr/core/containers/string.h"
 #include "rndr/core/input-primitives.h"
 #include "rndr/core/math.h"
-#include "rndr/core/platform/forward-def-windows.h"
+#include "rndr/core/platform/windows-forward-def.h"
 
 namespace Rndr
 {

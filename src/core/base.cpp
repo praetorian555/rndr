@@ -1,25 +1,11 @@
 #include "rndr/core/base.h"
 
 #include <cstdarg>
+#include <source_location>
 
-#if defined RNDR_WINDOWS
-
-#ifndef NOMINMAX
-#define NOMINMAX
-#endif
-
-#ifndef WIN32_LEAN_AND_MEAN
-#define WIN32_LEAN_AND_MEAN
-#endif
-
-#include <windows.h>
-
-#undef near
-#undef far
-
-#endif  // RNDR_WINDOWS
-
+#include "rndr/core/containers/stack-array.h"
 #include "rndr/core/input.h"
+#include "rndr/core/platform/windows-header.h"
 #include "rndr/utility/cpu-tracer.h"
 #include "rndr/utility/default-logger.h"
 
@@ -106,7 +92,7 @@ void Rndr::Log(const std::source_location& source_location, Rndr::LogLevel log_l
     }
 
     constexpr int k_message_size = 4096;
-    std::array<char, k_message_size> message;
+    StackArray<char, k_message_size> message;
     memset(message.data(), 0, k_message_size);
 
     va_list args = nullptr;
@@ -118,7 +104,7 @@ void Rndr::Log(const std::source_location& source_location, Rndr::LogLevel log_l
 
 void Rndr::WaitForDebuggerToAttach()
 {
-    while (!IsDebuggerPresent())
+    while (IsDebuggerPresent() == 0)
     {
         Sleep(100);
     }

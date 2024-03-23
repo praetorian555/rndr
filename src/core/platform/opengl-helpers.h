@@ -2,7 +2,7 @@
 
 #include "rndr/core/base.h"
 #include "rndr/core/graphics-types.h"
-#include "rndr/core/platform/forward-def-opengl.h"
+#include "rndr/core/platform/opengl-forward-def.h"
 
 #if RNDR_OPENGL
 
