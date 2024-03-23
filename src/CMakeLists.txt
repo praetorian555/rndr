@@ -56,11 +56,13 @@ set(SOURCE_LIST
 
 list(APPEND SOURCE_LIST
      "${PROJECT_SOURCE_DIR}/include/rndr/core/platform/opengl-render-api.h"
+     "${PROJECT_SOURCE_DIR}/include/rndr/core/platform/opengl-graphics-context.h"
      "${PROJECT_SOURCE_DIR}/include/rndr/core/platform/opengl-command-list.h"
      "${PROJECT_SOURCE_DIR}/src/core/platform/opengl-helpers.h"
+     "${PROJECT_SOURCE_DIR}/src/core/platform/opengl-graphics-context.cpp"
+     "${PROJECT_SOURCE_DIR}/src/core/platform/opengl-command-list.cpp"
      "${PROJECT_SOURCE_DIR}/src/core/platform/opengl-render-api.cpp"
-     "${PROJECT_SOURCE_DIR}/src/core/platform/opengl-helpers.cpp"
-     "${PROJECT_SOURCE_DIR}/src/core/platform/opengl-command-list.cpp")
+     "${PROJECT_SOURCE_DIR}/src/core/platform/opengl-helpers.cpp")
 
 if (RNDR_TRACER)
     list(APPEND SOURCE_LIST "${PROJECT_SOURCE_DIR}/src/utility/cpu-tracer.cpp")
