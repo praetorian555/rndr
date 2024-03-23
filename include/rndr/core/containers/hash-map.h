@@ -1,6 +1,7 @@
 #pragma once
 
 #include <unordered_map>
+#include <unordered_set>
 
 #include "rndr/core/definitions.h"
 
@@ -14,4 +15,8 @@ namespace Rndr
  */
 template <typename Key, typename Value, typename Hash = std::hash<Key>>
 using HashMap = std::unordered_map<Key, Value, Hash>;
+
+template <typename Key, typename Hash = std::hash<Key>>
+using HashSet = std::unordered_set<Key, Hash>;
+
 }  // namespace Rndr
