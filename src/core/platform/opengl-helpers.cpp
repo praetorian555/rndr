@@ -363,7 +363,6 @@ GLenum Rndr::FromIndexSizeToOpenGL(uint32_t index_size)
             return GL_UNSIGNED_INT;
         default:
             RNDR_HALT("Unsupported index size");
-            return GL_UNSIGNED_INT;
     }
 }
 GLint Rndr::FromImageAccessToOpenGL(Rndr::ImageAccess access)
@@ -378,7 +377,6 @@ GLint Rndr::FromImageAccessToOpenGL(Rndr::ImageAccess access)
             return GL_READ_WRITE;
         default:
             RNDR_HALT("Unsupported image access");
-            return GL_READ_WRITE;
     }
 }
 
