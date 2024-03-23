@@ -32,7 +32,7 @@
 #else
 #define RNDR_STATIC_ASSERT(expr, msg)
 #define RNDR_ASSERT(expr)
-#define RNDR_HALT(msg)
+#define RNDR_HALT(msg) exit(1)
 #endif  // RNDR_DEBUG
 
 #define RNDR_UNUSED(Expr) (void)(Expr)
