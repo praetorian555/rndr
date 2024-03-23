@@ -1,11 +1,8 @@
 #pragma once
 
-#include "rndr/core/definitions.h"
+#include <source_location>
 
-namespace std
-{
-    struct source_location;
-}
+#include "rndr/core/definitions.h"
 
 namespace Rndr
 {
