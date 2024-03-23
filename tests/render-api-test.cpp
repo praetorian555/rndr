@@ -1223,12 +1223,67 @@ TEST_CASE("Running a compute shader", "[render-api][shader]")
     Rndr::Destroy();
 }
 
+TEST_CASE("Creating a image", "[render-api][image]")
+{
+    Rndr::Init();
+    const Rndr::Window hidden_window({.start_visible = false});
+    const Rndr::GraphicsContextDesc gc_desc{.window_handle = hidden_window.GetNativeWindowHandle()};
+    const Rndr::GraphicsContext graphics_context(gc_desc);
+
+    SECTION("Creating a 2D image")
+    {
+        const Rndr::ImageDesc desc{.width = 512, .height = 512, .type = Rndr::ImageType::Image2D, .pixel_format = Rndr::PixelFormat::R8G8B8A8_UINT};
+        const Rndr::Image image(graphics_context, desc);
+        REQUIRE(image.IsValid());
+    }
+    // TODO: Enable once support for Image2DArray is added
+//    SECTION("Creating a 2D array image")
+//    {
+//        const Rndr::ImageDesc desc{.width = 512, .height = 512, .array_size = 3, .type = Rndr::ImageType::Image2DArray, .pixel_format = Rndr::PixelFormat::R8G8B8A8_UINT};
+//        const Rndr::Image image(graphics_context, desc);
+//        REQUIRE(image.IsValid());
+//    }
+    SECTION("Creating cube map")
+    {
+        const Rndr::ImageDesc desc{.width = 512, .height = 512, .array_size = 6, .type = Rndr::ImageType::CubeMap, .pixel_format = Rndr::PixelFormat::R8G8B8A8_UNORM};
+        const Rndr::Image image(graphics_context, desc);
+        REQUIRE(image.IsValid());
+    }
+    SECTION("Creating image from a bitmap")
+    {
+        Rndr::Bitmap bitmap(512, 512, 1, Rndr::PixelFormat::R8G8B8A8_UNORM);
+        const Rndr::Image image(graphics_context, bitmap, false, Rndr::SamplerDesc{});
+        REQUIRE(image.IsValid());
+    }
+    SECTION("Creating image from a bitmap with mipmaps")
+    {
+        Rndr::Bitmap bitmap(512, 512, 1, Rndr::PixelFormat::R8G8B8A8_UNORM);
+        const Rndr::Image image(graphics_context, bitmap, true, Rndr::SamplerDesc{});
+        REQUIRE(image.IsValid());
+    }
+    SECTION("Creating image with invalid width or height")
+    {
+        const Rndr::ImageDesc desc{.width = 0, .height = 512, .type = Rndr::ImageType::Image2D, .pixel_format = Rndr::PixelFormat::R8G8B8A8_UINT};
+        const Rndr::Image image(graphics_context, desc);
+        REQUIRE(!image.IsValid());
+    }
+    // TODO: Enable once support for Image2DArray is added
+//    SECTION("Creating image with invalid array size")
+//    {
+//        const Rndr::ImageDesc desc{.width = 512, .height = 512, .array_size = 0, .type = Rndr::ImageType::Image2DArray, .pixel_format = Rndr::PixelFormat::R8G8B8A8_UINT};
+//        const Rndr::Image image(graphics_context, desc);
+//        REQUIRE(!image.IsValid());
+//    }
+
+    Rndr::Destroy();
+}
+
 TEST_CASE("Creating a frame buffer", "[render-api][framebuffer]")
 {
     Rndr::Init();
     const Rndr::Window hidden_window({.start_visible = false});
     const Rndr::GraphicsContextDesc gc_desc{.window_handle = hidden_window.GetNativeWindowHandle()};
-    Rndr::GraphicsContext graphics_context(gc_desc);
+    const Rndr::GraphicsContext graphics_context(gc_desc);
 
     SECTION("with single color attachment")
     {

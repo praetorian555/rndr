@@ -19,6 +19,11 @@ Rndr::Image::Image(const GraphicsContext& graphics_context, const ImageDesc& des
         RNDR_LOG_ERROR("Image width and height must be greater than 0!");
         return;
     }
+    if (m_desc.type == ImageType::Image2DArray && m_desc.array_size <= 0)
+    {
+        RNDR_LOG_ERROR("Image2DArray must have array size greater than 0!");
+        return;
+    }
 
     // TODO: Add support for multi sample images
     constexpr bool k_is_multi_sample = false;
@@ -95,17 +100,20 @@ Rndr::Image::Image(const GraphicsContext& graphics_context, const ImageDesc& des
         glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
         RNDR_ASSERT_OPENGL();
         constexpr int k_face_count = 6;
-        for (int i = 0; i < k_face_count; i++)
+        if (!init_data.empty())
         {
-            constexpr int32_t k_mip_level = 0;
-            constexpr int32_t k_x_offset = 0;
-            constexpr int32_t k_y_offset = 0;
-            constexpr int32_t k_depth = 1;
-            const int32_t z_offset = i;
-            const uint8_t* data = init_data.data() + i * desc.width * desc.height * FromPixelFormatToPixelSize(desc.pixel_format);
-            glTextureSubImage3D(m_native_texture, k_mip_level, k_x_offset, k_y_offset, z_offset, desc.width, desc.height, k_depth, format,
-                                data_type, data);
-            RNDR_ASSERT_OPENGL();
+            for (int i = 0; i < k_face_count; i++)
+            {
+                constexpr int32_t k_mip_level = 0;
+                constexpr int32_t k_x_offset = 0;
+                constexpr int32_t k_y_offset = 0;
+                constexpr int32_t k_depth = 1;
+                const int32_t z_offset = i;
+                const uint8_t* data = init_data.data() + i * desc.width * desc.height * FromPixelFormatToPixelSize(desc.pixel_format);
+                glTextureSubImage3D(m_native_texture, k_mip_level, k_x_offset, k_y_offset, z_offset, desc.width, desc.height, k_depth,
+                                    format, data_type, data);
+                RNDR_ASSERT_OPENGL();
+            }
         }
         if (desc.use_mips)
         {
@@ -115,6 +123,7 @@ Rndr::Image::Image(const GraphicsContext& graphics_context, const ImageDesc& des
     }
     else
     {
+        // TODO: Add support for 2D array images
         RNDR_HALT("Unsupported image type!");
     }
 
