@@ -47,7 +47,7 @@ TEST_CASE("Graphics context", "[render-api][graphics-context]")
 
 #if RNDR_OPENGL
 
-TEST_CASE("Conversion from Rndr::ShaderType to OpenGL shader type")
+TEST_CASE("Conversion from Rndr::ShaderType to OpenGL shader type", "[misc][opengl]")
 {
     using namespace Rndr;
     REQUIRE(FromShaderTypeToOpenGL(ShaderType::Vertex) == GL_VERTEX_SHADER);
@@ -58,7 +58,7 @@ TEST_CASE("Conversion from Rndr::ShaderType to OpenGL shader type")
     REQUIRE(FromShaderTypeToOpenGL(ShaderType::TessellationEvaluation) == GL_TESS_EVALUATION_SHADER);
 }
 
-TEST_CASE("Conversion from Rndr::Usage to OpenGL enum")
+TEST_CASE("Conversion from Rndr::Usage to OpenGL enum", "[misc][opengl]")
 {
     using namespace Rndr;
     REQUIRE(FromUsageToOpenGL(Usage::Default) == GL_MAP_WRITE_BIT);
@@ -66,7 +66,7 @@ TEST_CASE("Conversion from Rndr::Usage to OpenGL enum")
     REQUIRE(FromUsageToOpenGL(Usage::ReadBack) == GL_MAP_READ_BIT);
 }
 
-TEST_CASE("Conversion from Rndr::Comparator to OpenGL enum")
+TEST_CASE("Conversion from Rndr::Comparator to OpenGL enum", "[misc][opengl]")
 {
     using namespace Rndr;
     REQUIRE(FromComparatorToOpenGL(Comparator::Never) == GL_NEVER);
@@ -79,7 +79,7 @@ TEST_CASE("Conversion from Rndr::Comparator to OpenGL enum")
     REQUIRE(FromComparatorToOpenGL(Comparator::Always) == GL_ALWAYS);
 }
 
-TEST_CASE("Conversion from Rndr::StencilOperation to OpenGL enum")
+TEST_CASE("Conversion from Rndr::StencilOperation to OpenGL enum", "[misc][opengl]")
 {
     using namespace Rndr;
     REQUIRE(FromStencilOpToOpenGL(StencilOperation::Keep) == GL_KEEP);
@@ -92,7 +92,7 @@ TEST_CASE("Conversion from Rndr::StencilOperation to OpenGL enum")
     REQUIRE(FromStencilOpToOpenGL(StencilOperation::DecrementWrap) == GL_DECR_WRAP);
 }
 
-TEST_CASE("Conversion from Rndr::BufferType to OpenGL enum")
+TEST_CASE("Conversion from Rndr::BufferType to OpenGL enum", "[misc][opengl]")
 {
     using namespace Rndr;
     REQUIRE(FromBufferTypeToOpenGL(BufferType::Vertex) == GL_ARRAY_BUFFER);
@@ -101,7 +101,7 @@ TEST_CASE("Conversion from Rndr::BufferType to OpenGL enum")
     REQUIRE(FromBufferTypeToOpenGL(BufferType::ShaderStorage) == GL_SHADER_STORAGE_BUFFER);
 }
 
-TEST_CASE("Conversion from Rndr::BlendFactor to OpenGL enum")
+TEST_CASE("Conversion from Rndr::BlendFactor to OpenGL enum", "[misc][opengl]")
 {
     using namespace Rndr;
     REQUIRE(FromBlendFactorToOpenGL(BlendFactor::Zero) == GL_ZERO);
@@ -120,7 +120,7 @@ TEST_CASE("Conversion from Rndr::BlendFactor to OpenGL enum")
     REQUIRE(FromBlendFactorToOpenGL(BlendFactor::InvConstAlpha) == GL_ONE_MINUS_CONSTANT_ALPHA);
 }
 
-TEST_CASE("Conversion from Rndr::BlendOperation to OpenGL enum")
+TEST_CASE("Conversion from Rndr::BlendOperation to OpenGL enum", "[misc][opengl]")
 {
     using namespace Rndr;
     REQUIRE(FromBlendOperationToOpenGL(BlendOperation::Add) == GL_FUNC_ADD);
@@ -130,7 +130,7 @@ TEST_CASE("Conversion from Rndr::BlendOperation to OpenGL enum")
     REQUIRE(FromBlendOperationToOpenGL(BlendOperation::Max) == GL_MAX);
 }
 
-TEST_CASE("Conversion from image info to OpenGL enum")
+TEST_CASE("Conversion from image info to OpenGL enum", "[misc][opengl]")
 {
     using namespace Rndr;
     REQUIRE(FromImageInfoToTarget(ImageType::Image2D, false) == GL_TEXTURE_2D);
@@ -141,7 +141,7 @@ TEST_CASE("Conversion from image info to OpenGL enum")
     REQUIRE(FromImageInfoToTarget(ImageType::CubeMap, true) == GL_TEXTURE_CUBE_MAP);
 }
 
-TEST_CASE("Conversion from Rndr::ImageFilter to OpenGL enum")
+TEST_CASE("Conversion from Rndr::ImageFilter to OpenGL enum", "[misc][opengl]")
 {
     using namespace Rndr;
     REQUIRE(FromImageFilterToOpenGL(ImageFilter::Nearest) == GL_NEAREST);
@@ -152,7 +152,7 @@ TEST_CASE("Conversion from Rndr::ImageFilter to OpenGL enum")
     REQUIRE(FromMinAndMipFiltersToOpenGL(ImageFilter::Linear, ImageFilter::Linear) == GL_LINEAR_MIPMAP_LINEAR);
 }
 
-TEST_CASE("Conversion from Rndr::ImageAddressMode to OpenGL enum")
+TEST_CASE("Conversion from Rndr::ImageAddressMode to OpenGL enum", "[misc][opengl]")
 {
     using namespace Rndr;
     REQUIRE(FromImageAddressModeToOpenGL(ImageAddressMode::Repeat) == GL_REPEAT);
@@ -161,7 +161,7 @@ TEST_CASE("Conversion from Rndr::ImageAddressMode to OpenGL enum")
     REQUIRE(FromImageAddressModeToOpenGL(ImageAddressMode::Border) == GL_CLAMP_TO_BORDER);
 }
 
-TEST_CASE("Conversion from Rndr::PixelFormat to the internal format")
+TEST_CASE("Conversion from Rndr::PixelFormat to the internal format", "[misc][opengl]")
 {
     using namespace Rndr;
     REQUIRE(FromPixelFormatToInternalFormat(PixelFormat::R8_UNORM) == GL_R8);
@@ -203,7 +203,7 @@ TEST_CASE("Conversion from Rndr::PixelFormat to the internal format")
     REQUIRE(FromPixelFormatToInternalFormat(PixelFormat::R32G32B32A32_SINT) == GL_RGBA32I);
 }
 
-TEST_CASE("Conversion of Rndr::PixelFormat to OpenGL pixel format")
+TEST_CASE("Conversion of Rndr::PixelFormat to OpenGL pixel format", "[misc][opengl]")
 {
     using namespace Rndr;
     REQUIRE(FromPixelFormatToExternalFormat(PixelFormat::R8_UNORM) == GL_RED);
@@ -245,7 +245,7 @@ TEST_CASE("Conversion of Rndr::PixelFormat to OpenGL pixel format")
     REQUIRE(FromPixelFormatToExternalFormat(PixelFormat::R32G32B32A32_SINT) == GL_RGBA);
 }
 
-TEST_CASE("Conversion of Rndr::PixelFormat to OpenGL component count")
+TEST_CASE("Conversion of Rndr::PixelFormat to OpenGL component count", "[misc]")
 {
     using namespace Rndr;
     REQUIRE(FromPixelFormatToComponentCount(PixelFormat::R8_UNORM) == 1);
@@ -287,7 +287,7 @@ TEST_CASE("Conversion of Rndr::PixelFormat to OpenGL component count")
     REQUIRE(FromPixelFormatToComponentCount(PixelFormat::R32G32B32A32_SINT) == 4);
 }
 
-TEST_CASE("Conversion of Rndr::PixelFormat to OpenGL pixel size")
+TEST_CASE("Conversion of Rndr::PixelFormat to OpenGL pixel size", "[misc]")
 {
     using namespace Rndr;
     REQUIRE(FromPixelFormatToPixelSize(PixelFormat::R8_UNORM) == 1);
@@ -329,7 +329,7 @@ TEST_CASE("Conversion of Rndr::PixelFormat to OpenGL pixel size")
     REQUIRE(FromPixelFormatToPixelSize(PixelFormat::R32G32B32A32_SINT) == 16);
 }
 
-TEST_CASE("Conversion of Rndr::PixelFormat to OpenGL component data type")
+TEST_CASE("Conversion of Rndr::PixelFormat to OpenGL component data type", "[misc][opengl]")
 {
     using namespace Rndr;
     REQUIRE(FromPixelFormatToDataType(PixelFormat::R8_UNORM) == GL_UNSIGNED_BYTE);
@@ -370,7 +370,7 @@ TEST_CASE("Conversion of Rndr::PixelFormat to OpenGL component data type")
     REQUIRE(FromPixelFormatToDataType(PixelFormat::R32G32B32A32_SINT) == GL_INT);
 }
 
-TEST_CASE("Conversion of Rndr::PixelFormat to OpenGL should normalize data")
+TEST_CASE("Conversion of Rndr::PixelFormat to OpenGL should normalize data", "[misc][opengl]")
 {
     using namespace Rndr;
     REQUIRE(FromPixelFormatToShouldNormalizeData(PixelFormat::R8_UNORM) == GL_TRUE);
@@ -411,7 +411,7 @@ TEST_CASE("Conversion of Rndr::PixelFormat to OpenGL should normalize data")
     REQUIRE(FromPixelFormatToShouldNormalizeData(PixelFormat::R32G32B32A32_SINT) == GL_FALSE);
 }
 
-TEST_CASE("Conversion from Rndr::PrimitiveTopology to OpenGL enum")
+TEST_CASE("Conversion from Rndr::PrimitiveTopology to OpenGL enum", "[misc][opengl]")
 {
     using namespace Rndr;
     REQUIRE(FromPrimitiveTopologyToOpenGL(PrimitiveTopology::Point) == GL_POINTS);
@@ -421,7 +421,7 @@ TEST_CASE("Conversion from Rndr::PrimitiveTopology to OpenGL enum")
     REQUIRE(FromPrimitiveTopologyToOpenGL(PrimitiveTopology::TriangleStrip) == GL_TRIANGLE_STRIP);
 }
 
-TEST_CASE("Conversion from index size to OpenGL enum")
+TEST_CASE("Conversion from index size to OpenGL enum", "[misc][opengl]")
 {
     using namespace Rndr;
     REQUIRE(FromIndexSizeToOpenGL(1) == GL_UNSIGNED_BYTE);
@@ -429,7 +429,7 @@ TEST_CASE("Conversion from index size to OpenGL enum")
     REQUIRE(FromIndexSizeToOpenGL(4) == GL_UNSIGNED_INT);
 }
 
-TEST_CASE("Is pixel format low precision")
+TEST_CASE("Is pixel format low precision", "[misc]")
 {
     using namespace Rndr;
     REQUIRE(IsComponentLowPrecision(PixelFormat::R8_UNORM) == true);
@@ -471,7 +471,7 @@ TEST_CASE("Is pixel format low precision")
     REQUIRE(IsComponentLowPrecision(PixelFormat::R32G32B32A32_SINT) == false);
 }
 
-TEST_CASE("Is pixel format high precision")
+TEST_CASE("Is pixel format high precision", "[misc]")
 {
     using namespace Rndr;
     REQUIRE(IsComponentHighPrecision(PixelFormat::R8_UNORM) == false);
@@ -515,7 +515,7 @@ TEST_CASE("Is pixel format high precision")
 
 #endif
 
-TEST_CASE("Creating different types of buffers", "[render-api]")
+TEST_CASE("Creating different types of buffers", "[render-api][buffer]")
 {
     Rndr::Init();
     const Rndr::Window hidden_window({.start_visible = false});
@@ -597,7 +597,7 @@ TEST_CASE("Creating different types of buffers", "[render-api]")
     Rndr::Destroy();
 }
 
-TEST_CASE("Reading from GPU buffers", "[render-api]")
+TEST_CASE("Reading from GPU buffers", "[render-api][buffer]")
 {
     constexpr int32_t k_buffer_size = 1024;
     Rndr::StackArray<uint8_t, k_buffer_size> data;
@@ -799,7 +799,7 @@ TEST_CASE("Reading from GPU buffers", "[render-api]")
     Rndr::Destroy();
 }
 
-TEST_CASE("Update the GPU buffer contents", "[render-api]")
+TEST_CASE("Update the GPU buffer contents", "[render-api][buffer]")
 {
     constexpr int32_t k_buffer_size = 1024;
     Rndr::StackArray<uint8_t, k_buffer_size> data;
@@ -928,7 +928,7 @@ TEST_CASE("Update the GPU buffer contents", "[render-api]")
     Rndr::Destroy();
 }
 
-TEST_CASE("Copy of buffers", "[render-api]")
+TEST_CASE("Copy of buffers", "[render-api][buffer]")
 {
     constexpr int32_t k_buffer_size = 1024;
     Rndr::StackArray<uint8_t, k_buffer_size> data;
@@ -1098,7 +1098,7 @@ TEST_CASE("Copy of buffers", "[render-api]")
     Rndr::Destroy();
 }
 
-TEST_CASE("Running a compute shader", "[render-api]")
+TEST_CASE("Running a compute shader", "[render-api][shader]")
 {
     Rndr::Init();
     const Rndr::Window hidden_window({.start_visible = false});
