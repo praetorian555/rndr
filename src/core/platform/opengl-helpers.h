@@ -34,4 +34,6 @@ Rndr::String FromOpenGLUsageToString(GLenum value);
 
 } // namespace Rndr
 
+#define RNDR_ASSERT_OPENGL() if (glGetError() != GL_NO_ERROR) { RNDR_HALT("OpenGL failure!"); }
+
 #endif  // RNDR_OPENGL

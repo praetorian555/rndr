@@ -6,16 +6,14 @@
 #include <glad/glad_wgl.h>
 
 #include "core/platform/opengl-helpers.h"
-#include "rndr/core/containers/scope-ptr.h"
-#include "rndr/core/containers/stack-array.h"
 #include "rndr/core/containers/array.h"
-#include "rndr/core/containers/string.h"
 #include "rndr/core/containers/hash-map.h"
+#include "rndr/core/containers/stack-array.h"
+#include "rndr/core/containers/string.h"
 #include "rndr/core/file.h"
 #include "rndr/core/platform/opengl-render-api.h"
+#include "rndr/core/platform/opengl-pipeline.h"
 #include "rndr/utility/cpu-tracer.h"
-
-#define RNDR_ASSERT_GL_ERROR() RNDR_ASSERT(glGetError() == GL_NO_ERROR)
 
 namespace
 {
@@ -30,18 +28,11 @@ void APIENTRY DebugOutputCallback(GLenum source, GLenum type, unsigned int id, G
     switch (severity)
     {
         case GL_DEBUG_SEVERITY_HIGH:
-            //            RNDR_HALT("Fatal error in OpenGL!");
             RNDR_LOG_ERROR("[OpenGL] %s", message);
             break;
         case GL_DEBUG_SEVERITY_MEDIUM:
             RNDR_LOG_WARNING("[OpenGL] %s", message);
             break;
-            //        case GL_DEBUG_SEVERITY_LOW:
-            //            RNDR_LOG_INFO("[OpenGL] %s", message);
-            //            break;
-            //        case GL_DEBUG_SEVERITY_NOTIFICATION:
-            //            RNDR_LOG_DEBUG("[OpenGL] %s", message);
-            //            break;
         default:
             break;
     }
@@ -51,10 +42,12 @@ bool CheckRequiredExtensions(const Rndr::Array<Rndr::String>& required_extension
 {
     int extension_count = 0;
     glGetIntegerv(GL_NUM_EXTENSIONS, &extension_count);
+    RNDR_ASSERT_OPENGL();
     Rndr::HashSet<Rndr::String> found_extensions;
     for (int i = 0; i < extension_count; i++)
     {
         const char* extension = reinterpret_cast<const char*>(glGetStringi(GL_EXTENSIONS, i));
+        RNDR_ASSERT_OPENGL();
         for (const Rndr::String& required_extension : required_extensions)
         {
             if (required_extension == extension)
@@ -186,24 +179,23 @@ Rndr::GraphicsContext::GraphicsContext(const Rndr::GraphicsContextDesc& desc) : 
     glEnable(GL_DEBUG_OUTPUT_SYNCHRONOUS);
     glDebugMessageCallback(&DebugOutputCallback, nullptr);
     glDebugMessageControl(GL_DONT_CARE, GL_DONT_CARE, GL_DONT_CARE, 0, nullptr, GL_TRUE);
+    RNDR_ASSERT_OPENGL();
 
-    const Array<String> required_extensions = {
-        "ARB_texture_storage",
-        "ARB_multi_draw_indirect",
-        "ARB_buffer_storage",
-        "ARB_enhanced_layouts",
-        "ARB_direct_state_access",
-        "GL_ARB_indirect_parameters",
-        "GL_ARB_shader_draw_parameters",
-        "ARB_gl_spirv"
-    };
+    const Array<String> required_extensions = {"ARB_texture_storage",
+                                               "ARB_multi_draw_indirect",
+                                               "ARB_buffer_storage",
+                                               "ARB_enhanced_layouts",
+                                               "ARB_direct_state_access",
+                                               "GL_ARB_indirect_parameters",
+                                               "GL_ARB_shader_draw_parameters",
+                                               "ARB_gl_spirv"};
 
     if (CheckRequiredExtensions(required_extensions))
     {
         RNDR_HALT("Not all required extensions are available, exiting!");
     }
 #else
-    assert(false && "OS not supported!");
+    RNDR_ASSERT(false && "OS not supported!");
 #endif  // RNDR_WINDOWS
 }
 
@@ -270,17 +262,9 @@ bool Rndr::GraphicsContext::ClearColor(const Vector4f& color)
     RNDR_TRACE_SCOPED(Clear Color);
 
     glClearColor(color.x, color.y, color.z, color.w);
-    if (glGetError() != GL_NO_ERROR)
-    {
-        RNDR_LOG_ERROR("Failed to set clear color!");
-        return false;
-    }
+    RNDR_ASSERT_OPENGL();
     glClear(GL_COLOR_BUFFER_BIT);
-    if (glGetError() != GL_NO_ERROR)
-    {
-        RNDR_LOG_ERROR("Failed to clear color buffer!");
-        return false;
-    }
+    RNDR_ASSERT_OPENGL();
     return true;
 }
 
@@ -289,17 +273,9 @@ bool Rndr::GraphicsContext::ClearDepth(float depth)
     RNDR_TRACE_SCOPED(Clear Depth);
 
     glClearDepth(depth);
-    if (glGetError() != GL_NO_ERROR)
-    {
-        RNDR_LOG_ERROR("Failed to set clear depth!");
-        return false;
-    }
+    RNDR_ASSERT_OPENGL();
     glClear(GL_DEPTH_BUFFER_BIT);
-    if (glGetError() != GL_NO_ERROR)
-    {
-        RNDR_LOG_ERROR("Failed to clear depth buffer!");
-        return false;
-    }
+    RNDR_ASSERT_OPENGL();
     return true;
 }
 
@@ -308,17 +284,9 @@ bool Rndr::GraphicsContext::ClearStencil(int32_t stencil)
     RNDR_TRACE_SCOPED(Clear Stencil);
 
     glClearStencil(stencil);
-    if (glGetError() != GL_NO_ERROR)
-    {
-        RNDR_LOG_ERROR("Failed to set clear stencil!");
-        return false;
-    }
+    RNDR_ASSERT_OPENGL();
     glClear(GL_STENCIL_BUFFER_BIT);
-    if (glGetError() != GL_NO_ERROR)
-    {
-        RNDR_LOG_ERROR("Failed to clear stencil buffer!");
-        return false;
-    }
+    RNDR_ASSERT_OPENGL();
     return true;
 }
 
@@ -327,19 +295,13 @@ bool Rndr::GraphicsContext::ClearAll(const Vector4f& color, float depth, int32_t
     RNDR_TRACE_SCOPED(Clear All);
 
     glClearColor(color.x, color.y, color.z, color.w);
+    RNDR_ASSERT_OPENGL();
     glClearDepth(depth);
+    RNDR_ASSERT_OPENGL();
     glClearStencil(stencil);
-    if (glGetError() != GL_NO_ERROR)
-    {
-        RNDR_LOG_ERROR("Failed to set clear color, depth and stencil!");
-        return false;
-    }
+    RNDR_ASSERT_OPENGL();
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT | GL_STENCIL_BUFFER_BIT);
-    if (glGetError() != GL_NO_ERROR)
-    {
-        RNDR_LOG_ERROR("Failed to clear color, depth and stencil buffers!");
-        return false;
-    }
+    RNDR_ASSERT_OPENGL();
     return true;
 }
 
@@ -350,11 +312,7 @@ bool Rndr::GraphicsContext::Bind(const Rndr::SwapChain& swap_chain)
     RNDR_UNUSED(swap_chain);
     const SwapChainDesc& desc = swap_chain.GetDesc();
     glViewport(0, 0, desc.width, desc.height);
-    if (glGetError() != GL_NO_ERROR)
-    {
-        RNDR_LOG_ERROR("Failed to set viewport!");
-        return false;
-    }
+    RNDR_ASSERT_OPENGL();
     return true;
 }
 
@@ -364,75 +322,59 @@ bool Rndr::GraphicsContext::Bind(const Pipeline& pipeline)
 
     const GLuint shader_program = pipeline.GetNativeShaderProgram();
     glUseProgram(shader_program);
-    if (glGetError() != GL_NO_ERROR)
-    {
-        RNDR_LOG_ERROR("Failed to bind pipeline's shader program!");
-        return false;
-    }
+    RNDR_ASSERT_OPENGL();
     const GLuint vertex_array = pipeline.GetNativeVertexArray();
     glBindVertexArray(vertex_array);
-    if (glGetError() != GL_NO_ERROR)
-    {
-        RNDR_LOG_ERROR("Failed to bind pipeline's vertex array!");
-        return false;
-    }
+    RNDR_ASSERT_OPENGL();
     const Rndr::PipelineDesc desc = pipeline.GetDesc();
     if (desc.depth_stencil.is_depth_enabled)
     {
         glEnable(GL_DEPTH_TEST);
+        RNDR_ASSERT_OPENGL();
         const GLenum depth_func = FromComparatorToOpenGL(desc.depth_stencil.depth_comparator);
         glDepthFunc(depth_func);
+        RNDR_ASSERT_OPENGL();
         glDepthMask(desc.depth_stencil.depth_mask == Rndr::DepthMask::All ? GL_TRUE : GL_FALSE);
-        if (glGetError() != GL_NO_ERROR)
-        {
-            RNDR_LOG_ERROR("Failed to set depth test state!");
-            return false;
-        }
+        RNDR_ASSERT_OPENGL();
     }
     else
     {
         glDisable(GL_DEPTH_TEST);
-        if (glGetError() != GL_NO_ERROR)
-        {
-            RNDR_LOG_ERROR("Failed to disable depth test!");
-            return false;
-        }
+        RNDR_ASSERT_OPENGL();
     }
     if (desc.depth_stencil.is_stencil_enabled)
     {
         constexpr uint32_t k_mask_all_enabled = 0xFFFFFFFF;
         glEnable(GL_STENCIL_TEST);
+        RNDR_ASSERT_OPENGL();
         glStencilMask(desc.depth_stencil.stencil_write_mask);
+        RNDR_ASSERT_OPENGL();
         const GLenum front_face_stencil_func = FromComparatorToOpenGL(desc.depth_stencil.stencil_front_face_comparator);
         glStencilFuncSeparate(GL_FRONT, front_face_stencil_func, desc.depth_stencil.stencil_ref_value, k_mask_all_enabled);
+        RNDR_ASSERT_OPENGL();
         const GLenum back_face_stencil_func = FromComparatorToOpenGL(desc.depth_stencil.stencil_back_face_comparator);
         glStencilFuncSeparate(GL_BACK, back_face_stencil_func, desc.depth_stencil.stencil_ref_value, k_mask_all_enabled);
+        RNDR_ASSERT_OPENGL();
         const GLenum front_face_stencil_fail_op = FromStencilOpToOpenGL(desc.depth_stencil.stencil_front_face_fail_op);
         const GLenum front_face_stencil_depth_fail_op = FromStencilOpToOpenGL(desc.depth_stencil.stencil_front_face_depth_fail_op);
         const GLenum front_face_stencil_pass_op = FromStencilOpToOpenGL(desc.depth_stencil.stencil_front_face_pass_op);
         glStencilOpSeparate(GL_FRONT, front_face_stencil_fail_op, front_face_stencil_depth_fail_op, front_face_stencil_pass_op);
+        RNDR_ASSERT_OPENGL();
         const GLenum back_face_stencil_fail_op = FromStencilOpToOpenGL(desc.depth_stencil.stencil_back_face_fail_op);
         const GLenum back_face_stencil_depth_fail_op = FromStencilOpToOpenGL(desc.depth_stencil.stencil_back_face_depth_fail_op);
         const GLenum back_face_stencil_pass_op = FromStencilOpToOpenGL(desc.depth_stencil.stencil_back_face_pass_op);
         glStencilOpSeparate(GL_BACK, back_face_stencil_fail_op, back_face_stencil_depth_fail_op, back_face_stencil_pass_op);
-        if (glGetError() != GL_NO_ERROR)
-        {
-            RNDR_LOG_ERROR("Failed to set stencil test state!");
-            return false;
-        }
+        RNDR_ASSERT_OPENGL();
     }
     else
     {
         glDisable(GL_STENCIL_TEST);
-        if (glGetError() != GL_NO_ERROR)
-        {
-            RNDR_LOG_ERROR("Failed to disable stencil test!");
-            return false;
-        }
+        RNDR_ASSERT_OPENGL();
     }
     if (desc.blend.is_enabled)
     {
         glEnable(GL_BLEND);
+        RNDR_ASSERT_OPENGL();
         const GLenum src_color_factor = FromBlendFactorToOpenGL(desc.blend.src_color_factor);
         const GLenum dst_color_factor = FromBlendFactorToOpenGL(desc.blend.dst_color_factor);
         const GLenum src_alpha_factor = FromBlendFactorToOpenGL(desc.blend.src_alpha_factor);
@@ -440,60 +382,60 @@ bool Rndr::GraphicsContext::Bind(const Pipeline& pipeline)
         const GLenum color_op = FromBlendOperationToOpenGL(desc.blend.color_operation);
         const GLenum alpha_op = FromBlendOperationToOpenGL(desc.blend.alpha_operation);
         glBlendFuncSeparate(src_color_factor, dst_color_factor, src_alpha_factor, dst_alpha_factor);
+        RNDR_ASSERT_OPENGL();
         glBlendEquationSeparate(color_op, alpha_op);
+        RNDR_ASSERT_OPENGL();
         glBlendColor(desc.blend.const_color.r, desc.blend.const_color.g, desc.blend.const_color.b, desc.blend.const_alpha);
-        if (glGetError() != GL_NO_ERROR)
-        {
-            RNDR_LOG_ERROR("Failed to set blending state!");
-            return false;
-        }
+        RNDR_ASSERT_OPENGL();
     }
     else
     {
         glDisable(GL_BLEND);
-        if (glGetError() != GL_NO_ERROR)
-        {
-            RNDR_LOG_ERROR("Failed to disable blending!");
-            return false;
-        }
+        RNDR_ASSERT_OPENGL();
     }
     // Rasterizer configuration
     {
         glPolygonMode(GL_FRONT_AND_BACK, desc.rasterizer.fill_mode == FillMode::Solid ? GL_FILL : GL_LINE);
+        RNDR_ASSERT_OPENGL();
         if (desc.rasterizer.cull_face != Face::None)
         {
             glEnable(GL_CULL_FACE);
+            RNDR_ASSERT_OPENGL();
             glCullFace(desc.rasterizer.cull_face == Face::Front ? GL_FRONT : GL_BACK);
+            RNDR_ASSERT_OPENGL();
         }
         else
         {
             glDisable(GL_CULL_FACE);
+            RNDR_ASSERT_OPENGL();
         }
         glFrontFace(desc.rasterizer.front_face_winding_order == WindingOrder::CW ? GL_CW : GL_CCW);
+        RNDR_ASSERT_OPENGL();
         if (desc.rasterizer.depth_bias != 0.0f || desc.rasterizer.slope_scaled_depth_bias != 0.0f)
         {
             glEnable(GL_POLYGON_OFFSET_LINE);
+            RNDR_ASSERT_OPENGL();
             glPolygonOffset(desc.rasterizer.slope_scaled_depth_bias, desc.rasterizer.depth_bias);
+            RNDR_ASSERT_OPENGL();
         }
         else
         {
             glDisable(GL_POLYGON_OFFSET_LINE);
+            RNDR_ASSERT_OPENGL();
         }
         if (desc.rasterizer.scissor_size.x > 0 && desc.rasterizer.scissor_size.y > 0)
         {
             glEnable(GL_SCISSOR_TEST);
+            RNDR_ASSERT_OPENGL();
             glScissor(static_cast<int32_t>(desc.rasterizer.scissor_bottom_left.x),
                       static_cast<int32_t>(desc.rasterizer.scissor_bottom_left.y), static_cast<int32_t>(desc.rasterizer.scissor_size.x),
                       static_cast<int32_t>(desc.rasterizer.scissor_size.y));
+            RNDR_ASSERT_OPENGL();
         }
         else
         {
             glDisable(GL_SCISSOR_TEST);
-        }
-        if (glGetError() != GL_NO_ERROR)
-        {
-            RNDR_LOG_ERROR("Failed to set rasterizer state!");
-            return false;
+            RNDR_ASSERT_OPENGL();
         }
     }
     m_bound_pipeline = &pipeline;
@@ -510,15 +452,12 @@ bool Rndr::GraphicsContext::Bind(const Buffer& buffer, int32_t binding_index)
     if (target == GL_UNIFORM_BUFFER || target == GL_SHADER_STORAGE_BUFFER)
     {
         glBindBufferRange(target, binding_index, native_buffer, 0, desc.size);
+        RNDR_ASSERT_OPENGL();
     }
     else
     {
         glBindBuffer(target, native_buffer);
-    }
-    if (glGetError() != GL_NO_ERROR)
-    {
-        RNDR_LOG_ERROR("Failed to bind uniform buffer!");
-        return false;
+        RNDR_ASSERT_OPENGL();
     }
     return true;
 }
@@ -529,11 +468,7 @@ bool Rndr::GraphicsContext::Bind(const Image& image, int32_t binding_index)
 
     const GLuint native_texture = image.GetNativeTexture();
     glBindTextures(binding_index, 1, &native_texture);
-    if (glGetError() != GL_NO_ERROR)
-    {
-        RNDR_LOG_ERROR("Failed to bind image!");
-        return false;
-    }
+    RNDR_ASSERT_OPENGL();
     return true;
 }
 
@@ -544,12 +479,8 @@ bool Rndr::GraphicsContext::BindImageForCompute(const Rndr::Image& image, int32_
 
     glBindImageTexture(binding_index, image.GetNativeTexture(), image_level, GL_FALSE, 0, FromImageAccessToOpenGL(access),
                        FromPixelFormatToInternalFormat(image.GetDesc().pixel_format));
-    if (glGetError() != GL_NO_ERROR)
-    {
-        RNDR_LOG_ERROR("Failed to bind image for compute!");
-        return false;
-    }
-    return false;
+    RNDR_ASSERT_OPENGL();
+    return true;
 }
 
 bool Rndr::GraphicsContext::DrawVertices(PrimitiveTopology topology, int32_t vertex_count, int32_t instance_count, int32_t first_vertex)
@@ -558,11 +489,7 @@ bool Rndr::GraphicsContext::DrawVertices(PrimitiveTopology topology, int32_t ver
 
     const GLenum primitive = FromPrimitiveTopologyToOpenGL(topology);
     glDrawArraysInstanced(primitive, first_vertex, vertex_count, instance_count);
-    if (glGetError() != GL_NO_ERROR)
-    {
-        RNDR_LOG_ERROR("Failed to draw!");
-        return false;
-    }
+    RNDR_ASSERT_OPENGL();
     return true;
 }
 
@@ -570,8 +497,8 @@ bool Rndr::GraphicsContext::DrawIndices(PrimitiveTopology topology, int32_t inde
 {
     RNDR_TRACE_SCOPED(Draw Indices);
 
-    assert(m_bound_pipeline.IsValid());
-    assert(m_bound_pipeline->IsIndexBufferBound());
+    RNDR_ASSERT(m_bound_pipeline.IsValid());
+    RNDR_ASSERT(m_bound_pipeline->IsIndexBufferBound());
 
     const uint32_t index_size = m_bound_pipeline->GetIndexBufferElementSize();
     const GLenum index_size_enum = FromIndexSizeToOpenGL(index_size);
@@ -579,11 +506,7 @@ bool Rndr::GraphicsContext::DrawIndices(PrimitiveTopology topology, int32_t inde
     void* index_start = reinterpret_cast<void*>(index_offset);
     const GLenum primitive = FromPrimitiveTopologyToOpenGL(topology);
     glDrawElementsInstanced(primitive, index_count, index_size_enum, index_start, instance_count);
-    if (glGetError() != GL_NO_ERROR)
-    {
-        RNDR_LOG_ERROR("Failed to draw!");
-        return false;
-    }
+    RNDR_ASSERT_OPENGL();
     return true;
 }
 
@@ -593,19 +516,11 @@ bool Rndr::GraphicsContext::DispatchCompute(uint32_t block_count_x, uint32_t blo
     RNDR_TRACE_SCOPED(Dispatch Compute);
 
     glDispatchCompute(block_count_x, block_count_y, block_count_z);
-    if (glGetError() != GL_NO_ERROR)
-    {
-        RNDR_LOG_ERROR("Failed to dispatch compute!");
-        return false;
-    }
+    RNDR_ASSERT_OPENGL();
     if (wait_for_completion)
     {
         glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT | GL_SHADER_IMAGE_ACCESS_BARRIER_BIT);
-        if (glGetError() != GL_NO_ERROR)
-        {
-            RNDR_LOG_ERROR("Failed to wait for compute completion!");
-            return false;
-        }
+        RNDR_ASSERT_OPENGL();
     }
     return true;
 }
@@ -622,6 +537,12 @@ bool Rndr::GraphicsContext::Update(const Buffer& buffer, const ConstByteSpan& da
 
     const BufferDesc desc = buffer.GetDesc();
 
+    if (desc.usage != Usage::Dynamic)
+    {
+        RNDR_LOG_ERROR("Update of the buffer failed since the buffer is not created with Dynamic usage!");
+        return false;
+    }
+
     if (offset < 0 || offset >= static_cast<int32_t>(desc.size))
     {
         RNDR_LOG_ERROR("Update of the buffer failed since the offset is invalid!");
@@ -635,11 +556,7 @@ bool Rndr::GraphicsContext::Update(const Buffer& buffer, const ConstByteSpan& da
 
     const GLuint native_buffer = buffer.GetNativeBuffer();
     glNamedBufferSubData(native_buffer, offset, static_cast<GLsizeiptr>(data.size()), data.data());
-    if (glGetError() != GL_NO_ERROR)
-    {
-        RNDR_LOG_ERROR("Failed to update buffer contents!");
-        return false;
-    }
+    RNDR_ASSERT_OPENGL();
     return true;
 }
 
@@ -654,6 +571,11 @@ bool Rndr::GraphicsContext::Read(const Buffer& buffer, ByteSpan& out_data, int32
     }
 
     const BufferDesc& desc = buffer.GetDesc();
+    if (desc.usage != Usage::ReadBack)
+    {
+        RNDR_LOG_ERROR("Read of the buffer failed since the buffer is not created with ReadBack usage!");
+        return false;
+    }
     if (size == 0)
     {
         size = static_cast<int32_t>(desc.size) - offset;
@@ -672,7 +594,8 @@ bool Rndr::GraphicsContext::Read(const Buffer& buffer, ByteSpan& out_data, int32
 
     const GLuint native_buffer = buffer.GetNativeBuffer();
     uint8_t* gpu_data = static_cast<uint8_t*>(glMapNamedBufferRange(native_buffer, desc.offset, desc.size, GL_MAP_READ_BIT));
-    if (glGetError() != GL_NO_ERROR || gpu_data == nullptr)
+    RNDR_ASSERT_OPENGL();
+    if (gpu_data == nullptr)
     {
         RNDR_LOG_ERROR("Failed to map buffer for read");
         return false;
@@ -681,11 +604,7 @@ bool Rndr::GraphicsContext::Read(const Buffer& buffer, ByteSpan& out_data, int32
     memcpy(out_data.data(), gpu_data + offset, size);
 
     glUnmapNamedBuffer(native_buffer);
-    if (glGetError() != GL_NO_ERROR)
-    {
-        RNDR_LOG_ERROR("Failed to unmap buffer for read");
-        return false;
-    }
+    RNDR_ASSERT_OPENGL();
 
     return true;
 }
@@ -706,11 +625,7 @@ bool Rndr::GraphicsContext::Read(const Rndr::Image& image, Rndr::Bitmap& out_dat
     const int32_t pixel_size = FromPixelFormatToPixelSize(desc.pixel_format);
     Array<uint8_t> tmp_data(pixel_size * desc.width * desc.height);
     glGetTextureImage(image.GetNativeTexture(), level, format, data_type, pixel_size * desc.width * desc.height, tmp_data.data());
-    if (glGetError() != GL_NO_ERROR)
-    {
-        RNDR_LOG_ERROR("Failed to read image!");
-        return false;
-    }
+    RNDR_ASSERT_OPENGL();
 
     out_data = Bitmap(desc.width, desc.height, 1, desc.pixel_format, tmp_data);
     return true;
@@ -757,11 +672,7 @@ bool Rndr::GraphicsContext::Copy(const Rndr::Buffer& dst_buffer, const Rndr::Buf
     }
 
     glCopyNamedBufferSubData(src_buffer.GetNativeBuffer(), dst_buffer.GetNativeBuffer(), src_offset, dst_offset, size);
-    if (glGetError() != GL_NO_ERROR)
-    {
-        RNDR_LOG_ERROR("Failed to copy buffer!");
-        return false;
-    }
+    RNDR_ASSERT_OPENGL();
     return true;
 }
 
@@ -774,11 +685,7 @@ bool Rndr::GraphicsContext::ReadSwapChainColor(const SwapChain& swap_chain, Bitm
     const int32_t size = width * height * 4;
     ByteArray data(size);
     glReadPixels(0, 0, width, height, GL_RGBA, GL_UNSIGNED_BYTE, data.data());
-    if (glGetError() != GL_NO_ERROR)
-    {
-        RNDR_LOG_ERROR("Failed to read swap chain!");
-        return false;
-    }
+    RNDR_ASSERT_OPENGL();
     for (int32_t i = 0; i < height / 2; i++)
     {
         for (int32_t j = 0; j < width; j++)
@@ -804,11 +711,7 @@ bool Rndr::GraphicsContext::ReadSwapChainDepthStencil(const SwapChain& swap_chai
     const int32_t size = width * height;
     Array<uint32_t> data(size);
     glReadPixels(0, 0, width, height, GL_DEPTH_STENCIL, GL_UNSIGNED_INT_24_8, data.data());
-    if (glGetError() != GL_NO_ERROR)
-    {
-        RNDR_LOG_ERROR("Failed to read swap chain!");
-        return false;
-    }
+    RNDR_ASSERT_OPENGL();
     const ByteSpan byte_data(reinterpret_cast<uint8_t*>(data.data()), size * sizeof(uint32_t));
     out_bitmap = Bitmap{width, height, 1, PixelFormat::D24_UNORM_S8_UINT, byte_data};
     return true;
