@@ -12,6 +12,7 @@ class Pipeline;
 class Buffer;
 class Image;
 class Bitmap;
+class FrameBuffer;
 
 /**
  * Represents a graphics context. This is the main entry point for the graphics API. It is used to
@@ -69,7 +70,7 @@ public:
     bool ClearAll(const Vector4f& color, float depth = 1.0f, int32_t stencil = 0);
 
     /**
-     * Binds a swap chain to the graphics pipeline.
+     * Binds a swap chain to the graphics pipeline. This will activate default frame buffer.
      * @param swap_chain The swap chain to bind.
      * @return Returns true if the swap chain was bound successfully, false otherwise.
      */
@@ -108,6 +109,13 @@ public:
      * @return Returns true if the image was bound successfully, false otherwise.
      */
     bool BindImageForCompute(const Image& image, int32_t binding_index, int32_t image_level, ImageAccess access);
+
+    /**
+     * Binds a frame buffer to the graphics pipeline.
+     * @param frame_buffer The frame buffer to bind.
+     * @return Returns true if the frame buffer was bound successfully, false otherwise.
+     */
+    bool Bind(const FrameBuffer& frame_buffer);
 
     /**
      * Draws primitives without use of index buffer. It will behave as if indices were specified

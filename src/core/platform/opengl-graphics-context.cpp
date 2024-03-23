@@ -14,6 +14,7 @@
 #include "rndr/core/platform/opengl-pipeline.h"
 #include "rndr/core/platform/opengl-shader.h"
 #include "rndr/core/platform/opengl-swap-chain.h"
+#include "rndr/core/platform/opengl-frame-buffer.h"
 #include "rndr/utility/cpu-tracer.h"
 
 namespace
@@ -310,7 +311,8 @@ bool Rndr::GraphicsContext::Bind(const Rndr::SwapChain& swap_chain)
 {
     RNDR_TRACE_SCOPED(Bind SwapChain);
 
-    RNDR_UNUSED(swap_chain);
+    glBindFramebuffer(GL_FRAMEBUFFER, 0);
+    RNDR_ASSERT_OPENGL();
     const SwapChainDesc& desc = swap_chain.GetDesc();
     glViewport(0, 0, desc.width, desc.height);
     RNDR_ASSERT_OPENGL();
@@ -478,6 +480,18 @@ bool Rndr::GraphicsContext::BindImageForCompute(const Rndr::Image& image, int32_
 
     glBindImageTexture(binding_index, image.GetNativeTexture(), image_level, GL_FALSE, 0, FromImageAccessToOpenGL(access),
                        FromPixelFormatToInternalFormat(image.GetDesc().pixel_format));
+    RNDR_ASSERT_OPENGL();
+    return true;
+}
+
+
+bool Rndr::GraphicsContext::Bind(const Rndr::FrameBuffer& frame_buffer)
+{
+    RNDR_TRACE_SCOPED(Bind FrameBuffer);
+    glBindFramebuffer(GL_FRAMEBUFFER, frame_buffer.GetNativeFrameBuffer());
+    RNDR_ASSERT_OPENGL();
+    ImageDesc color_attachment_desc = frame_buffer.GetColorAttachment(0).GetDesc();
+    glViewport(0, 0, color_attachment_desc.width, color_attachment_desc.height);
     RNDR_ASSERT_OPENGL();
     return true;
 }

@@ -62,6 +62,7 @@ list(APPEND SOURCE_LIST
         "${PROJECT_SOURCE_DIR}/include/rndr/core/platform/opengl-buffer.h"
         "${PROJECT_SOURCE_DIR}/include/rndr/core/platform/opengl-shader.h"
         "${PROJECT_SOURCE_DIR}/include/rndr/core/platform/opengl-swap-chain.h"
+        "${PROJECT_SOURCE_DIR}/include/rndr/core/platform/opengl-frame-buffer.h"
         "${PROJECT_SOURCE_DIR}/src/core/platform/opengl-helpers.h"
         "${PROJECT_SOURCE_DIR}/src/core/platform/opengl-graphics-context.cpp"
         "${PROJECT_SOURCE_DIR}/src/core/platform/opengl-pipeline.cpp"
@@ -70,6 +71,7 @@ list(APPEND SOURCE_LIST
         "${PROJECT_SOURCE_DIR}/src/core/platform/opengl-buffer.cpp"
         "${PROJECT_SOURCE_DIR}/src/core/platform/opengl-shader.cpp"
         "${PROJECT_SOURCE_DIR}/src/core/platform/opengl-swap-chain.cpp"
+        "${PROJECT_SOURCE_DIR}/src/core/platform/opengl-frame-buffer.cpp"
         "${PROJECT_SOURCE_DIR}/src/core/platform/opengl-helpers.cpp")
 
 if (RNDR_TRACER)

@@ -793,6 +793,13 @@ struct PipelineDesc
     DepthStencilDesc depth_stencil;
 };
 
+struct FrameBufferDesc
+{
+    Array<ImageDesc> color_attachments;
+    ImageDesc depth_stencil_attachment;
+    bool use_depth_stencil = false;
+};
+
 struct DrawVerticesData
 {
     uint32_t vertex_count;

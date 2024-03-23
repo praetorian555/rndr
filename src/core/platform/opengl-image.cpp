@@ -14,6 +14,12 @@ Rndr::Image::Image(const GraphicsContext& graphics_context, const ImageDesc& des
 
     RNDR_UNUSED(graphics_context);
 
+    if (m_desc.width <= 0 || m_desc.height <= 0)
+    {
+        RNDR_LOG_ERROR("Image width and height must be greater than 0!");
+        return;
+    }
+
     // TODO: Add support for multi sample images
     constexpr bool k_is_multi_sample = false;
     const GLenum target = FromImageInfoToTarget(desc.type, k_is_multi_sample);

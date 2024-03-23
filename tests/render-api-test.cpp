@@ -8,6 +8,7 @@
 
 #if RNDR_OPENGL
 #include "core/platform/opengl-helpers.h"
+#include "rndr/core/platform/opengl-frame-buffer.h"
 #endif
 
 TEST_CASE("Graphics context", "[render-api][graphics-context]")
@@ -1172,15 +1173,16 @@ TEST_CASE("Running a compute shader", "[render-api][shader]")
             data[i] = static_cast<float>(i);
         }
 
-        const Rndr::Image src_image(
-            graphics_context,
-            Rndr::ImageDesc{
-                .width = k_image_width, .height = k_image_height, .type = Rndr::ImageType::Image2D, .pixel_format = Rndr::PixelFormat::R32_FLOAT},
-            Rndr::ToByteSpan(data));
-        const Rndr::Image dst_image(
-            graphics_context,
-            Rndr::ImageDesc{
-                .width = k_image_width, .height = k_image_height, .type = Rndr::ImageType::Image2D, .pixel_format = Rndr::PixelFormat::R32_FLOAT});
+        const Rndr::Image src_image(graphics_context,
+                                    Rndr::ImageDesc{.width = k_image_width,
+                                                    .height = k_image_height,
+                                                    .type = Rndr::ImageType::Image2D,
+                                                    .pixel_format = Rndr::PixelFormat::R32_FLOAT},
+                                    Rndr::ToByteSpan(data));
+        const Rndr::Image dst_image(graphics_context, Rndr::ImageDesc{.width = k_image_width,
+                                                                      .height = k_image_height,
+                                                                      .type = Rndr::ImageType::Image2D,
+                                                                      .pixel_format = Rndr::PixelFormat::R32_FLOAT});
 
         const char* compute_shader_code = R"(
             #version 460 core
@@ -1216,6 +1218,99 @@ TEST_CASE("Running a compute shader", "[render-api][shader]")
                 REQUIRE(dst_bitmap.GetPixel(j, i).x == data[j + i * k_image_width] * 2.0f);
             }
         }
+    }
+
+    Rndr::Destroy();
+}
+
+TEST_CASE("Creating a frame buffer", "[render-api][framebuffer]")
+{
+    Rndr::Init();
+    const Rndr::Window hidden_window({.start_visible = false});
+    const Rndr::GraphicsContextDesc gc_desc{.window_handle = hidden_window.GetNativeWindowHandle()};
+    Rndr::GraphicsContext graphics_context(gc_desc);
+
+    SECTION("with single color attachment")
+    {
+        const Rndr::ImageDesc color_attachment_desc{
+            .width = 512, .height = 512, .type = Rndr::ImageType::Image2D, .pixel_format = Rndr::PixelFormat::R8G8B8A8_UINT};
+        const Rndr::FrameBufferDesc desc{.color_attachments = {color_attachment_desc}};
+        const Rndr::FrameBuffer frame_buffer(graphics_context, desc);
+        REQUIRE(frame_buffer.IsValid());
+        REQUIRE(frame_buffer.GetColorAttachmentCount() == 1);
+        REQUIRE(!frame_buffer.GetDepthStencilAttachment().IsValid());
+    }
+    SECTION("with depth stencil attachment")
+    {
+        const Rndr::ImageDesc color_attachment_desc{
+            .width = 512, .height = 512, .type = Rndr::ImageType::Image2D, .pixel_format = Rndr::PixelFormat::R8G8B8A8_UINT};
+        const Rndr::ImageDesc depth_stencil_attachment_desc{
+            .width = 512, .height = 512, .type = Rndr::ImageType::Image2D, .pixel_format = Rndr::PixelFormat::D24_UNORM_S8_UINT};
+        const Rndr::FrameBufferDesc desc{.color_attachments = {color_attachment_desc},
+                                         .depth_stencil_attachment = depth_stencil_attachment_desc,
+                                         .use_depth_stencil = true};
+        const Rndr::FrameBuffer frame_buffer(graphics_context, desc);
+        REQUIRE(frame_buffer.IsValid());
+        REQUIRE(frame_buffer.GetColorAttachmentCount() == 1);
+        REQUIRE(frame_buffer.GetDepthStencilAttachment().IsValid());
+    }
+    SECTION("with multiple color attachments")
+    {
+        const Rndr::ImageDesc color_attachment_desc{
+            .width = 512, .height = 512, .type = Rndr::ImageType::Image2D, .pixel_format = Rndr::PixelFormat::R8G8B8A8_UINT};
+        const Rndr::ImageDesc color_attachment_desc2{
+            .width = 512, .height = 512, .type = Rndr::ImageType::Image2D, .pixel_format = Rndr::PixelFormat::R8G8B8A8_UINT};
+        const Rndr::FrameBufferDesc desc{.color_attachments = {color_attachment_desc, color_attachment_desc2}};
+        const Rndr::FrameBuffer frame_buffer(graphics_context, desc);
+        REQUIRE(frame_buffer.IsValid());
+        REQUIRE(frame_buffer.GetColorAttachmentCount() == 2);
+        REQUIRE(!frame_buffer.GetDepthStencilAttachment().IsValid());
+    }
+    SECTION("with no attachments")
+    {
+        const Rndr::FrameBufferDesc desc;
+        const Rndr::FrameBuffer frame_buffer(graphics_context, desc);
+        REQUIRE(!frame_buffer.IsValid());
+    }
+    SECTION("with invalid width and height in color attachment")
+    {
+        const Rndr::ImageDesc color_attachment_desc{
+            .width = 0, .height = 512, .type = Rndr::ImageType::Image2D, .pixel_format = Rndr::PixelFormat::R8G8B8A8_UINT};
+        const Rndr::FrameBufferDesc desc{.color_attachments = {color_attachment_desc}};
+        const Rndr::FrameBuffer frame_buffer(graphics_context, desc);
+        REQUIRE(!frame_buffer.IsValid());
+    }
+    SECTION("with invalid width and height in depth stencil attachment")
+    {
+        const Rndr::ImageDesc color_attachment_desc{
+            .width = 512, .height = 512, .type = Rndr::ImageType::Image2D, .pixel_format = Rndr::PixelFormat::R8G8B8A8_UINT};
+        const Rndr::ImageDesc depth_stencil_attachment_desc{
+            .width = 0, .height = 512, .type = Rndr::ImageType::Image2D, .pixel_format = Rndr::PixelFormat::D24_UNORM_S8_UINT};
+        const Rndr::FrameBufferDesc desc{.color_attachments = {color_attachment_desc},
+                                         .depth_stencil_attachment = depth_stencil_attachment_desc,
+                                         .use_depth_stencil = true};
+        const Rndr::FrameBuffer frame_buffer(graphics_context, desc);
+        REQUIRE(!frame_buffer.IsValid());
+    }
+    SECTION("with invalid image type in color attachment")
+    {
+        const Rndr::ImageDesc color_attachment_desc{
+            .width = 512, .height = 512, .type = Rndr::ImageType::CubeMap, .pixel_format = Rndr::PixelFormat::R8G8B8A8_UINT};
+        const Rndr::FrameBufferDesc desc{.color_attachments = {color_attachment_desc}};
+        const Rndr::FrameBuffer frame_buffer(graphics_context, desc);
+        REQUIRE(!frame_buffer.IsValid());
+    }
+    SECTION("with invalid image type in depth stencil attachment")
+    {
+        const Rndr::ImageDesc color_attachment_desc{
+            .width = 512, .height = 512, .type = Rndr::ImageType::Image2D, .pixel_format = Rndr::PixelFormat::R8G8B8A8_UINT};
+        const Rndr::ImageDesc depth_stencil_attachment_desc{
+            .width = 512, .height = 512, .type = Rndr::ImageType::CubeMap, .pixel_format = Rndr::PixelFormat::D24_UNORM_S8_UINT};
+        const Rndr::FrameBufferDesc desc{.color_attachments = {color_attachment_desc},
+                                         .depth_stencil_attachment = depth_stencil_attachment_desc,
+                                         .use_depth_stencil = true};
+        const Rndr::FrameBuffer frame_buffer(graphics_context, desc);
+        REQUIRE(!frame_buffer.IsValid());
     }
 
     Rndr::Destroy();
