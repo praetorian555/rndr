@@ -502,6 +502,9 @@ struct ShaderDesc
      * OpenGL.
      */
     String entry_point;
+
+    /** List of defines that should be added to the shader in a form of DEFINE_NAME VALUE or just DEFINE_NAME. */
+    Array<String> defines;
 };
 
 struct BufferDesc

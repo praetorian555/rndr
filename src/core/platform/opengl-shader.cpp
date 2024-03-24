@@ -7,6 +7,17 @@
 #include "rndr/core/platform/opengl-graphics-context.h"
 #include "rndr/utility/cpu-tracer.h"
 
+namespace
+{
+void GenerateDefinesShaderCode(const Rndr::Array<Rndr::String>& defines, Rndr::String& out_shader_code)
+{
+    for (const Rndr::String& define : defines)
+    {
+        out_shader_code += "#define " + define + "\n";
+    }
+}
+}  // namespace
+
 Rndr::Shader::Shader(const GraphicsContext& graphics_context, const ShaderDesc& desc) : m_desc(desc)
 {
     RNDR_TRACE_SCOPED(Create Shader);
@@ -19,8 +30,19 @@ Rndr::Shader::Shader(const GraphicsContext& graphics_context, const ShaderDesc& 
     {
         return;
     }
-    const char* source = desc.source.c_str();
-    glShaderSource(m_native_shader, 1, &source, nullptr);
+    String defines_shader_code;
+    GenerateDefinesShaderCode(desc.defines, defines_shader_code);
+    String final_shader_code = desc.source;
+    if (!defines_shader_code.empty())
+    {
+        size_t pos = desc.source.find("#version");
+        RNDR_ASSERT(pos != String::npos);
+        pos = desc.source.find('\n', pos);
+        RNDR_ASSERT(pos != String::npos);
+        final_shader_code.insert(pos + 1, defines_shader_code);
+    }
+    const char* final_shader_code_c_str = final_shader_code.c_str();
+    glShaderSource(m_native_shader, 1, &final_shader_code_c_str, nullptr);
     RNDR_ASSERT_OPENGL();
     glCompileShader(m_native_shader);
     RNDR_ASSERT_OPENGL();
