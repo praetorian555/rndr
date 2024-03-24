@@ -49,7 +49,9 @@ public:
         const String fragment_shader_code = Rndr::File::ReadShader(ASSETS_DIR, "material-pbr.frag");
         m_vertex_shader = Shader(desc.graphics_context, {.type = ShaderType::Vertex, .source = vertex_shader_code});
         RNDR_ASSERT(m_vertex_shader.IsValid());
-        m_pixel_shader = Shader(desc.graphics_context, {.type = ShaderType::Fragment, .source = fragment_shader_code});
+        m_pixel_shader = Shader(desc.graphics_context, {.type = ShaderType::Fragment,
+                                                        .source = fragment_shader_code,
+                                                        .defines = {"USE_PBR"}});
         RNDR_ASSERT(m_pixel_shader.IsValid());
 
         // Setup vertex buffer
@@ -85,9 +87,10 @@ public:
                          Rndr::ToByteSpan(model_transforms_data));
         RNDR_ASSERT(m_model_transforms_buffer.IsValid());
 
-        m_material_buffer = Rndr::Buffer(desc.graphics_context, {.type = Rndr::BufferType::ShaderStorage,
-                                                                 .usage = Rndr::Usage::Dynamic,
-                                                                 .size = static_cast<uint32_t>(m_scene_data.materials.size() * sizeof(MaterialDescription))});
+        m_material_buffer = Rndr::Buffer(desc.graphics_context,
+                                         {.type = Rndr::BufferType::ShaderStorage,
+                                          .usage = Rndr::Usage::Dynamic,
+                                          .size = static_cast<uint32_t>(m_scene_data.materials.size() * sizeof(MaterialDescription))});
         RNDR_ASSERT(m_material_buffer.IsValid());
         m_desc.graphics_context->Update(m_material_buffer, Rndr::ToByteSpan(m_scene_data.materials));
 
@@ -264,7 +267,7 @@ private:
 
     Rndr::SceneDrawData m_scene_data;
     Rndr::Matrix4x4f m_camera_transform;
-    Rndr::Point3f  m_camera_position;
+    Rndr::Point3f m_camera_position;
 };
 
 void Run()
