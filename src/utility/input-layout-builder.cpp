@@ -10,6 +10,12 @@ Rndr::InputLayoutBuilder& Rndr::InputLayoutBuilder::AddVertexBuffer(const Buffer
     return *this;
 }
 
+Rndr::InputLayoutBuilder& Rndr::InputLayoutBuilder::AddShaderStorage(const Rndr::Buffer& buffer, int32_t buffer_index)
+{
+    m_buffers.try_emplace(buffer_index, Ref(buffer), DataRepetition::PerInstance, 0);
+    return *this;
+}
+
 Rndr::InputLayoutBuilder& Rndr::InputLayoutBuilder::AppendElement(int buffer_index,
                                                                   PixelFormat format)
 {

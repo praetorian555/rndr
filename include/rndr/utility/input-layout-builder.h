@@ -29,10 +29,16 @@ struct InputLayoutBuilder
      * @param per_instance_rate How often the data is repeated per instance. Default is 0.
      * @return This builder.
      */
-    InputLayoutBuilder& AddVertexBuffer(const Buffer& buffer,
-                                        int32_t buffer_index,
-                                        DataRepetition repetition,
+    InputLayoutBuilder& AddVertexBuffer(const Buffer& buffer, int32_t buffer_index, DataRepetition repetition,
                                         int32_t per_instance_rate = 0);
+
+    /**
+     * Adds a shader storage buffer to the input layout. How these buffers are used is up to the shader.
+     * @param buffer The buffer.
+     * @param buffer_index Slot at which the buffer is bound.
+     * @return This builder.
+     */
+    InputLayoutBuilder& AddShaderStorage(const Buffer& buffer, int32_t buffer_index);
 
     /**
      * Adds an index buffer to the input layout. There can be only one. It is ok to not have it.

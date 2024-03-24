@@ -49,9 +49,8 @@ public:
         const String fragment_shader_code = Rndr::File::ReadShader(ASSETS_DIR, "material-pbr.frag");
         m_vertex_shader = Shader(desc.graphics_context, {.type = ShaderType::Vertex, .source = vertex_shader_code});
         RNDR_ASSERT(m_vertex_shader.IsValid());
-        m_pixel_shader = Shader(desc.graphics_context, {.type = ShaderType::Fragment,
-                                                        .source = fragment_shader_code,
-                                                        .defines = {"USE_PBR"}});
+        m_pixel_shader =
+            Shader(desc.graphics_context, {.type = ShaderType::Fragment, .source = fragment_shader_code, .defines = {"USE_PBR"}});
         RNDR_ASSERT(m_pixel_shader.IsValid());
 
         // Setup vertex buffer
@@ -102,13 +101,12 @@ public:
         RNDR_ASSERT(m_per_frame_buffer.IsValid());
 
         // Describe what buffers are bound to what slots. No need to describe data layout since we are using vertex pulling.
-        const Rndr::InputLayoutDesc input_layout_desc =
-            Rndr::InputLayoutBuilder()
-                .AddVertexBuffer(m_vertex_buffer, 1, Rndr::DataRepetition::PerVertex)
-                .AddVertexBuffer(m_model_transforms_buffer, 2, Rndr::DataRepetition::PerInstance, 1)
-                .AddVertexBuffer(m_material_buffer, 3, Rndr::DataRepetition::PerInstance, 1)
-                .AddIndexBuffer(m_index_buffer)
-                .Build();
+        const Rndr::InputLayoutDesc input_layout_desc = Rndr::InputLayoutBuilder()
+                                                            .AddShaderStorage(m_vertex_buffer, 1)
+                                                            .AddShaderStorage(m_model_transforms_buffer, 2)
+                                                            .AddShaderStorage(m_material_buffer, 3)
+                                                            .AddIndexBuffer(m_index_buffer)
+                                                            .Build();
 
         // Setup pipeline object.
         m_pipeline = Rndr::Pipeline(desc.graphics_context, {.vertex_shader = &m_vertex_shader,
