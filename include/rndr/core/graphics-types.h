@@ -803,20 +803,35 @@ struct FrameBufferDesc
     bool use_depth_stencil = false;
 };
 
+/**
+ * Helper struct to be used for creating indirect draw calls when there is no indices.
+ */
 struct DrawVerticesData
 {
+    /** Number of vertices to draw. */
     uint32_t vertex_count;
+    /** Number of instances to draw. */
     uint32_t instance_count;
+    /** Offset of the first vertex to draw in vertices relative to the vertex buffer. */
     uint32_t first_vertex;
+    /** Offset of the first instance to draw in instances relative to the instance buffer. */
     uint32_t base_instance;
 };
 
+/**
+ * Helper struct to be used for creating indirect draw calls when indices are used.
+ */
 struct DrawIndicesData
 {
+    /** Number of indices to draw. */
     uint32_t index_count;
+    /** Number of instances to draw. */
     uint32_t instance_count;
+    /** Offset of the first index to draw in indices relative to the index buffer. */
     uint32_t first_index;
+    /** Offset of the first vertex to draw in vertices relative to the vertex buffer. */
     uint32_t base_vertex;
+    /** Offset of the first instance to draw in instances relative to the instance buffer. */
     uint32_t base_instance;
 };
 

@@ -76,12 +76,15 @@ struct SceneDescription
  */
 struct SceneDrawData
 {
+    /** Contains all the mesh data like vertex and index buffers. */
     MeshData mesh_data;
+    /** Contains data needed to draw all shapes. */
     Array<MeshDrawData> shapes;
-
+    /** Contains all the materials. */
     Array<MaterialDescription> materials;
+    /** Contains all the textures. */
     Array<Image> textures;
-
+    /** Contains all the scene data, like hierarchy. */
     SceneDescription scene_description;
 };
 

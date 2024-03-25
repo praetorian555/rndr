@@ -24,8 +24,6 @@ public:
     static constexpr const uint32_t k_max_lods = 8;
     static constexpr const uint32_t k_max_streams = 8;
 
-    uint32_t material_id = 0;
-
     /** Total size of the mesh data in bytes. Equal to sum of all vertices and all indices. */
     uint32_t mesh_size = 0;
 
@@ -59,9 +57,13 @@ public:
  */
 struct MeshData
 {
+    /** Descriptions of all meshes. */
     Array<MeshDescription> meshes;
+    /** Vertex buffer data. */
     Array<uint8_t> vertex_buffer_data;
+    /** Index buffer data. */
     Array<uint8_t> index_buffer_data;
+    /** Bounding boxes of all meshes. */
     Array<Bounds3f> bounding_boxes;
 };
 
@@ -70,11 +72,17 @@ struct MeshData
  */
 struct MeshDrawData
 {
+    /** Mesh index in the meshes array in MeshData. */
     uint32_t mesh_index;
+    /** Material index in the materials array in SceneDrawData. */
     uint32_t material_index;
+    /** LOD index in the MeshDescription. */
     uint32_t lod;
+    /** Offset in vertex buffer in vertices. */
     uint32_t vertex_buffer_offset;
+    /** Offset in index buffer in indices. */
     uint32_t index_buffer_offset;
+    /** Transform index in the SceneDescription. */
     int32_t transform_index;
 };
 
@@ -83,11 +91,17 @@ struct MeshDrawData
  */
 struct MeshFileHeader
 {
+    /** Magic number identifying the file format. */
     uint32_t magic;
+    /** Version of the file format. */
     uint32_t version;
+    /** Number of meshes in the file. */
     uint32_t mesh_count;
+    /** Offset of the mesh data in the file. */
     uint32_t data_offset;
+    /** Size of vertex data in the file. */
     uint32_t vertex_buffer_size;
+    /** Size of index data in the file. */
     uint32_t index_buffer_size;
 };
 
