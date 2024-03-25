@@ -42,7 +42,7 @@ public:
     [[nodiscard]] GLuint GetNativeShaderProgram() const;
     [[nodiscard]] GLuint GetNativeVertexArray() const;
     [[nodiscard]] bool IsIndexBufferBound() const;
-    [[nodiscard]] uint32_t GetIndexBufferElementSize() const;
+    [[nodiscard]] int64_t GetIndexBufferElementSize() const;
 
 private:
     PipelineDesc m_desc;

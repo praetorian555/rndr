@@ -351,7 +351,7 @@ GLenum Rndr::FromPrimitiveTopologyToOpenGL(PrimitiveTopology topology)
     return k_to_opengl_primitive_topology[static_cast<size_t>(topology)];
 }
 
-GLenum Rndr::FromIndexSizeToOpenGL(uint32_t index_size)
+GLenum Rndr::FromIndexSizeToOpenGL(int64_t index_size)
 {
     switch (index_size)
     {

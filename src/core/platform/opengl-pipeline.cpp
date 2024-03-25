@@ -84,8 +84,9 @@ Rndr::Pipeline::Pipeline(const GraphicsContext& graphics_context, const Pipeline
         const int32_t binding_index = input_layout_desc.vertex_buffer_binding_slots[i];
         if (buffer_desc.type == BufferType::Vertex)
         {
+            RNDR_ASSERT(buffer_desc.stride > static_cast<int64_t>(INT32_MIN) && buffer_desc.stride < static_cast<int64_t>(INT32_MAX));
             glVertexArrayVertexBuffer(m_native_vertex_array, binding_index, buffer.GetNativeBuffer(), buffer_desc.offset,
-                                      buffer_desc.stride);
+                                      static_cast<int32_t>(buffer_desc.stride));
             RNDR_ASSERT_OPENGL();
             RNDR_LOG_DEBUG("Added vertex buffer %u to pipeline's vertex array buffer %u, binding index: %d, offset: %d, stride: %d",
                            buffer.GetNativeBuffer(), m_native_vertex_array, binding_index, buffer_desc.offset, buffer_desc.stride);
@@ -208,7 +209,7 @@ bool Rndr::Pipeline::IsIndexBufferBound() const
     return m_desc.input_layout.index_buffer.IsValid();
 }
 
-uint32_t Rndr::Pipeline::GetIndexBufferElementSize() const
+int64_t Rndr::Pipeline::GetIndexBufferElementSize() const
 {
     RNDR_ASSERT(IsIndexBufferBound());
     const Buffer& index_buffer = *m_desc.input_layout.index_buffer;

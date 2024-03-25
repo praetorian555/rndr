@@ -513,7 +513,7 @@ bool Rndr::GraphicsContext::DrawIndices(PrimitiveTopology topology, int32_t inde
     RNDR_ASSERT(m_bound_pipeline.IsValid());
     RNDR_ASSERT(m_bound_pipeline->IsIndexBufferBound());
 
-    const uint32_t index_size = m_bound_pipeline->GetIndexBufferElementSize();
+    const int64_t index_size = m_bound_pipeline->GetIndexBufferElementSize();
     const GLenum index_size_enum = FromIndexSizeToOpenGL(index_size);
     const size_t index_offset = index_size * first_index;
     void* index_start = reinterpret_cast<void*>(index_offset);
