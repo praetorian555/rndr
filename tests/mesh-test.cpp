@@ -8,7 +8,6 @@ TEST_CASE("Single mesh", "[mesh]")
 {
     using namespace Rndr;
     MeshDescription mesh_description;
-    mesh_description.material_id = 5;
     mesh_description.vertex_offset = 0;
     mesh_description.vertex_count = 4;
     mesh_description.vertex_size = 3 * sizeof(float);
@@ -36,7 +35,6 @@ TEST_CASE("Single mesh", "[mesh]")
     CHECK(Mesh::ReadData(out_mesh_data, file_path));
 
     CHECK(out_mesh_data.meshes.size() == 1);
-    CHECK(out_mesh_data.meshes[0].material_id == 5);
     CHECK(out_mesh_data.meshes[0].vertex_offset == 0);
     CHECK(out_mesh_data.meshes[0].vertex_count == 4);
     CHECK(out_mesh_data.meshes[0].vertex_size == 3 * sizeof(float));
@@ -64,7 +62,6 @@ TEST_CASE("Single mesh multiple lods", "[mesh]")
 {
     using namespace Rndr;
     MeshDescription mesh_description;
-    mesh_description.material_id = 5;
     mesh_description.vertex_offset = 0;
     mesh_description.vertex_count = 4;
     mesh_description.vertex_size = 3 * sizeof(float);
@@ -94,7 +91,6 @@ TEST_CASE("Single mesh multiple lods", "[mesh]")
     CHECK(Mesh::ReadData(out_mesh_data, file_path));
 
     CHECK(out_mesh_data.meshes.size() == 1);
-    CHECK(out_mesh_data.meshes[0].material_id == 5);
     CHECK(out_mesh_data.meshes[0].vertex_offset == 0);
     CHECK(out_mesh_data.meshes[0].vertex_count == 4);
     CHECK(out_mesh_data.meshes[0].vertex_size == 3 * sizeof(float));
@@ -123,7 +119,6 @@ TEST_CASE("Multiple meshes", "[mesh]")
 {
     using namespace Rndr;
     MeshDescription mesh_description_1;
-    mesh_description_1.material_id = 5;
     mesh_description_1.vertex_offset = 0;
     mesh_description_1.vertex_count = 4;
     mesh_description_1.vertex_size = 3 * sizeof(float);
@@ -134,7 +129,6 @@ TEST_CASE("Multiple meshes", "[mesh]")
     mesh_description_1.mesh_size = 6 * sizeof(uint32_t) + 4 * 3 * sizeof(float);
 
     MeshDescription mesh_description_2;
-    mesh_description_2.material_id = 8;
     mesh_description_2.vertex_offset = 4;
     mesh_description_2.vertex_count = 4;
     mesh_description_2.vertex_size = 3 * sizeof(float);
@@ -167,7 +161,6 @@ TEST_CASE("Multiple meshes", "[mesh]")
     CHECK(Mesh::ReadData(out_mesh_data, file_path));
 
     CHECK(out_mesh_data.meshes.size() == 2);
-    CHECK(out_mesh_data.meshes[0].material_id == 5);
     CHECK(out_mesh_data.meshes[0].vertex_offset == 0);
     CHECK(out_mesh_data.meshes[0].vertex_count == 4);
     CHECK(out_mesh_data.meshes[0].vertex_size == 3 * sizeof(float));
@@ -177,7 +170,6 @@ TEST_CASE("Multiple meshes", "[mesh]")
     CHECK(out_mesh_data.meshes[0].lod_offsets[1] == 6);
     CHECK(out_mesh_data.meshes[0].mesh_size == 6 * sizeof(uint32_t) + 4 * 3 * sizeof(float));
 
-    CHECK(out_mesh_data.meshes[1].material_id == 8);
     CHECK(out_mesh_data.meshes[1].vertex_offset == 4);
     CHECK(out_mesh_data.meshes[1].vertex_count == 4);
     CHECK(out_mesh_data.meshes[1].vertex_size == 3 * sizeof(float));
@@ -206,7 +198,6 @@ TEST_CASE("Calculate bounding box", "[mesh]")
 {
     using namespace Rndr;
     MeshDescription mesh_description;
-    mesh_description.material_id = 5;
     mesh_description.vertex_offset = 0;
     mesh_description.vertex_count = 4;
     mesh_description.vertex_size = 3 * sizeof(float);
@@ -236,7 +227,6 @@ TEST_CASE("Merge three meshes", "[mesh]")
 {
     using namespace Rndr;
     MeshDescription mesh_description_1;
-    mesh_description_1.material_id = 5;
     mesh_description_1.vertex_offset = 0;
     mesh_description_1.vertex_count = 4;
     mesh_description_1.vertex_size = 3 * sizeof(float);
@@ -247,7 +237,6 @@ TEST_CASE("Merge three meshes", "[mesh]")
     mesh_description_1.mesh_size = 6 * sizeof(uint32_t) + 4 * 3 * sizeof(float);
 
     MeshDescription mesh_description_2;
-    mesh_description_2.material_id = 8;
     mesh_description_2.vertex_offset = 0;
     mesh_description_2.vertex_count = 4;
     mesh_description_2.vertex_size = 3 * sizeof(float);
@@ -258,7 +247,6 @@ TEST_CASE("Merge three meshes", "[mesh]")
     mesh_description_2.mesh_size = 6 * sizeof(uint32_t) + 4 * 3 * sizeof(float);
 
     MeshDescription mesh_description_3;
-    mesh_description_3.material_id = 9;
     mesh_description_3.vertex_offset = 0;
     mesh_description_3.vertex_count = 4;
     mesh_description_3.vertex_size = 3 * sizeof(float);
@@ -305,7 +293,6 @@ TEST_CASE("Merge three meshes", "[mesh]")
     REQUIRE(Mesh::Merge(out_mesh_data, mesh_data_span));
 
     CHECK(out_mesh_data.meshes.size() == 3);
-    CHECK(out_mesh_data.meshes[0].material_id == 5);
     CHECK(out_mesh_data.meshes[0].vertex_offset == 0);
     CHECK(out_mesh_data.meshes[0].vertex_count == 4);
     CHECK(out_mesh_data.meshes[0].vertex_size == 3 * sizeof(float));
@@ -315,7 +302,6 @@ TEST_CASE("Merge three meshes", "[mesh]")
     CHECK(out_mesh_data.meshes[0].lod_offsets[1] == 6);
     CHECK(out_mesh_data.meshes[0].mesh_size == 6 * sizeof(uint32_t) + 4 * 3 * sizeof(float));
 
-    CHECK(out_mesh_data.meshes[1].material_id == 8);
     CHECK(out_mesh_data.meshes[1].vertex_offset == 4);
     CHECK(out_mesh_data.meshes[1].vertex_count == 4);
     CHECK(out_mesh_data.meshes[1].vertex_size == 3 * sizeof(float));
@@ -325,7 +311,6 @@ TEST_CASE("Merge three meshes", "[mesh]")
     CHECK(out_mesh_data.meshes[1].lod_offsets[1] == 6);
     CHECK(out_mesh_data.meshes[1].mesh_size == 6 * sizeof(uint32_t) + 4 * 3 * sizeof(float));
 
-    CHECK(out_mesh_data.meshes[2].material_id == 9);
     CHECK(out_mesh_data.meshes[2].vertex_offset == 8);
     CHECK(out_mesh_data.meshes[2].vertex_count == 4);
     CHECK(out_mesh_data.meshes[2].vertex_size == 3 * sizeof(float));
