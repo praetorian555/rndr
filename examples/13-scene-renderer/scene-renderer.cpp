@@ -26,10 +26,10 @@ struct ModelData
     Rndr::Matrix4x4f normal_transform;
 };
 
-class MeshRenderer : public Rndr::RendererBase
+class SceneRenderer : public Rndr::RendererBase
 {
 public:
-    MeshRenderer(const Rndr::String& name, const Rndr::RendererBaseDesc& desc) : Rndr::RendererBase(name, desc)
+    SceneRenderer(const Rndr::String& name, const Rndr::RendererBaseDesc& desc) : Rndr::RendererBase(name, desc)
     {
         using namespace Rndr;
 
@@ -62,16 +62,15 @@ public:
         RNDR_ASSERT(m_vertex_buffer.IsValid());
 
         // Setup index buffer
-        m_index_buffer = Rndr::Buffer(desc.graphics_context,
-                                      {.type = Rndr::BufferType::Index,
-                                       .usage = Rndr::Usage::Default,
-                                       .size = static_cast<uint32_t>(m_scene_data.mesh_data.index_buffer_data.size()),
-                                       .stride = sizeof(uint32_t)},
-                                      m_scene_data.mesh_data.index_buffer_data);
+        m_index_buffer = Buffer(desc.graphics_context,
+                                {.type = BufferType::Index,
+                                 .usage = Usage::Default,
+                                 .size = (uint32_t)m_scene_data.mesh_data.index_buffer_data.size(),
+                                 .stride = sizeof(uint32_t)},
+                                m_scene_data.mesh_data.index_buffer_data);
         RNDR_ASSERT(m_index_buffer.IsValid());
 
         // Setup model transforms buffer
-        const uint32_t model_transforms_buffer_size = static_cast<uint32_t>(m_scene_data.shapes.size() * sizeof(ModelData));
         Array<ModelData> model_transforms_data(m_scene_data.shapes.size());
         for (int i = 0; i < m_scene_data.shapes.size(); i++)
         {
@@ -80,18 +79,12 @@ public:
             const Rndr::Matrix4x4f normal_transform = Math::Transpose(Math::Inverse(model_transform));
             model_transforms_data[i] = {.model_transform = model_transform, .normal_transform = normal_transform};
         }
-        m_model_transforms_buffer =
-            Rndr::Buffer(desc.graphics_context,
-                         {.type = Rndr::BufferType::ShaderStorage, .usage = Rndr::Usage::Dynamic, .size = model_transforms_buffer_size},
-                         Rndr::ToByteSpan(model_transforms_data));
+        m_model_transforms_buffer = Rndr::Buffer(desc.graphics_context, model_transforms_data, BufferType::ShaderStorage, Usage::Dynamic);
         RNDR_ASSERT(m_model_transforms_buffer.IsValid());
 
-        m_material_buffer = Rndr::Buffer(desc.graphics_context,
-                                         {.type = Rndr::BufferType::ShaderStorage,
-                                          .usage = Rndr::Usage::Dynamic,
-                                          .size = static_cast<uint32_t>(m_scene_data.materials.size() * sizeof(MaterialDescription))});
+        m_material_buffer =
+            Rndr::Buffer(desc.graphics_context, m_scene_data.materials, Rndr::BufferType::ShaderStorage, Rndr::Usage::Dynamic);
         RNDR_ASSERT(m_material_buffer.IsValid());
-        m_desc.graphics_context->Update(m_material_buffer, Rndr::ToByteSpan(m_scene_data.materials));
 
         // Setup buffer that will be updated every frame with camera info
         constexpr size_t k_per_frame_size = sizeof(PerFrameData);
@@ -109,23 +102,23 @@ public:
                                                             .Build();
 
         // Setup pipeline object.
-        m_pipeline = Rndr::Pipeline(desc.graphics_context, {.vertex_shader = &m_vertex_shader,
-                                                            .pixel_shader = &m_pixel_shader,
-                                                            .input_layout = input_layout_desc,
-                                                            .rasterizer = {.fill_mode = Rndr::FillMode::Solid},
-                                                            .depth_stencil = {.is_depth_enabled = true}});
+        m_pipeline = Pipeline(desc.graphics_context, {.vertex_shader = &m_vertex_shader,
+                                                      .pixel_shader = &m_pixel_shader,
+                                                      .input_layout = input_layout_desc,
+                                                      .rasterizer = {.fill_mode = FillMode::Solid},
+                                                      .depth_stencil = {.is_depth_enabled = true}});
         RNDR_ASSERT(m_pipeline.IsValid());
 
-        const Rndr::String env_map_image_path = ASSETS_DIR "/piazza_bologni_1k.hdr";
-        m_env_map_image = LoadImage(Rndr::ImageType::CubeMap, env_map_image_path);
+        const String env_map_image_path = ASSETS_DIR "/piazza_bologni_1k.hdr";
+        m_env_map_image = LoadImage(ImageType::CubeMap, env_map_image_path);
         RNDR_ASSERT(m_env_map_image.IsValid());
 
-        const Rndr::String irradiance_map_image_path = ASSETS_DIR "/piazza_bologni_1k_irradience.hdr";
-        m_irradiance_map_image = LoadImage(Rndr::ImageType::CubeMap, irradiance_map_image_path);
+        const String irradiance_map_image_path = ASSETS_DIR "/piazza_bologni_1k_irradience.hdr";
+        m_irradiance_map_image = LoadImage(ImageType::CubeMap, irradiance_map_image_path);
         RNDR_ASSERT(m_irradiance_map_image.IsValid());
 
-        const Rndr::String brdf_lut_image_path = ASSETS_DIR "/brdf-lut.ktx";
-        m_brdf_lut_image = LoadImage(Rndr::ImageType::Image2D, brdf_lut_image_path);
+        const String brdf_lut_image_path = ASSETS_DIR "/brdf-lut.ktx";
+        m_brdf_lut_image = LoadImage(ImageType::Image2D, brdf_lut_image_path);
 
         // Setup draw commands based on the mesh data
         Array<DrawIndicesData> draw_commands;
@@ -293,7 +286,7 @@ void Run()
         RNDR_MAKE_SCOPED(Rndr::ClearRenderer, "Clear the screen", renderer_desc, k_clear_color);
     const Rndr::ScopePtr<Rndr::RendererBase> present_renderer =
         RNDR_MAKE_SCOPED(Rndr::PresentRenderer, "Present the back buffer", renderer_desc);
-    const Rndr::ScopePtr<MeshRenderer> mesh_renderer = RNDR_MAKE_SCOPED(MeshRenderer, "Render a mesh", renderer_desc);
+    const Rndr::ScopePtr<SceneRenderer> mesh_renderer = RNDR_MAKE_SCOPED(SceneRenderer, "Render a mesh", renderer_desc);
 
     Rndr::FlyCamera fly_camera(&window, &Rndr::InputSystem::GetCurrentContext(),
                                {.start_position = Rndr::Point3f(-20.0f, 15.0f, 20.0f),
