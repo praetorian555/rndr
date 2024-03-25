@@ -57,7 +57,7 @@ public:
         m_vertex_buffer = Rndr::Buffer(desc.graphics_context,
                                        {.type = Rndr::BufferType::ShaderStorage,
                                         .usage = Rndr::Usage::Default,
-                                        .size = static_cast<uint32_t>(m_scene_data.mesh_data.vertex_buffer_data.size())},
+                                        .size = m_scene_data.mesh_data.vertex_buffer_data.size()},
                                        m_scene_data.mesh_data.vertex_buffer_data);
         RNDR_ASSERT(m_vertex_buffer.IsValid());
 
@@ -65,7 +65,7 @@ public:
         m_index_buffer = Buffer(desc.graphics_context,
                                 {.type = BufferType::Index,
                                  .usage = Usage::Default,
-                                 .size = (uint32_t)m_scene_data.mesh_data.index_buffer_data.size(),
+                                 .size = m_scene_data.mesh_data.index_buffer_data.size(),
                                  .stride = sizeof(uint32_t)},
                                 m_scene_data.mesh_data.index_buffer_data);
         RNDR_ASSERT(m_index_buffer.IsValid());
@@ -75,15 +75,14 @@ public:
         for (int i = 0; i < m_scene_data.shapes.size(); i++)
         {
             const MeshDrawData& shape = m_scene_data.shapes[i];
-            const Rndr::Matrix4x4f model_transform = m_scene_data.scene_description.world_transforms[shape.transform_index];
-            const Rndr::Matrix4x4f normal_transform = Math::Transpose(Math::Inverse(model_transform));
+            const Matrix4x4f model_transform = m_scene_data.scene_description.world_transforms[shape.transform_index];
+            const Matrix4x4f normal_transform = Math::Transpose(Math::Inverse(model_transform));
             model_transforms_data[i] = {.model_transform = model_transform, .normal_transform = normal_transform};
         }
-        m_model_transforms_buffer = Rndr::Buffer(desc.graphics_context, model_transforms_data, BufferType::ShaderStorage, Usage::Dynamic);
+        m_model_transforms_buffer = Buffer(desc.graphics_context, model_transforms_data, BufferType::ShaderStorage, Usage::Dynamic);
         RNDR_ASSERT(m_model_transforms_buffer.IsValid());
 
-        m_material_buffer =
-            Rndr::Buffer(desc.graphics_context, m_scene_data.materials, Rndr::BufferType::ShaderStorage, Rndr::Usage::Dynamic);
+        m_material_buffer = Buffer(desc.graphics_context, m_scene_data.materials, BufferType::ShaderStorage, Usage::Dynamic);
         RNDR_ASSERT(m_material_buffer.IsValid());
 
         // Setup buffer that will be updated every frame with camera info
