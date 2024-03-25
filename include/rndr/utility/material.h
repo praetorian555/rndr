@@ -22,6 +22,9 @@ RNDR_ENUM_CLASS_FLAGS(MaterialFlags)
  */
 using ImageId = uint64_t;
 
+/**
+ * Invalid image id. This is not used on the GPU but rather as a placeholder for an invalid image id.
+ */
 constexpr ImageId k_invalid_image_id = 0xFFFFFFFFFFFFFFFF;
 
 /**
