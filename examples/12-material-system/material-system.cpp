@@ -50,7 +50,7 @@ public:
         const String fragment_shader_code = Rndr::File::ReadShader(ASSETS_DIR, "material-pbr.frag");
         m_vertex_shader = Shader(desc.graphics_context, {.type = ShaderType::Vertex, .source = vertex_shader_code});
         RNDR_ASSERT(m_vertex_shader.IsValid());
-        m_fragment_shader = Shader(desc.graphics_context, {.type = ShaderType::Fragment, .source = fragment_shader_code});
+        m_fragment_shader = Shader(desc.graphics_context, {.type = ShaderType::Fragment, .source = fragment_shader_code, .defines = {"USE_PBR", "USE_AO", "USE_EMISSIVE"}});
         RNDR_ASSERT(m_fragment_shader.IsValid());
 
         const Rndr::String mesh_path = m_asset_path + "DamagedHelmet.rndrmesh";
