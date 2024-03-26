@@ -1232,20 +1232,24 @@ TEST_CASE("Creating a image", "[render-api][image]")
 
     SECTION("Creating a 2D image")
     {
-        const Rndr::ImageDesc desc{.width = 512, .height = 512, .type = Rndr::ImageType::Image2D, .pixel_format = Rndr::PixelFormat::R8G8B8A8_UINT};
+        const Rndr::ImageDesc desc{
+            .width = 512, .height = 512, .type = Rndr::ImageType::Image2D, .pixel_format = Rndr::PixelFormat::R8G8B8A8_UINT};
         const Rndr::Image image(graphics_context, desc);
         REQUIRE(image.IsValid());
     }
     // TODO: Enable once support for Image2DArray is added
-//    SECTION("Creating a 2D array image")
-//    {
-//        const Rndr::ImageDesc desc{.width = 512, .height = 512, .array_size = 3, .type = Rndr::ImageType::Image2DArray, .pixel_format = Rndr::PixelFormat::R8G8B8A8_UINT};
-//        const Rndr::Image image(graphics_context, desc);
-//        REQUIRE(image.IsValid());
-//    }
+    //    SECTION("Creating a 2D array image")
+    //    {
+    //        const Rndr::ImageDesc desc{.width = 512, .height = 512, .array_size = 3, .type = Rndr::ImageType::Image2DArray, .pixel_format
+    //        = Rndr::PixelFormat::R8G8B8A8_UINT}; const Rndr::Image image(graphics_context, desc); REQUIRE(image.IsValid());
+    //    }
     SECTION("Creating cube map")
     {
-        const Rndr::ImageDesc desc{.width = 512, .height = 512, .array_size = 6, .type = Rndr::ImageType::CubeMap, .pixel_format = Rndr::PixelFormat::R8G8B8A8_UNORM};
+        const Rndr::ImageDesc desc{.width = 512,
+                                   .height = 512,
+                                   .array_size = 6,
+                                   .type = Rndr::ImageType::CubeMap,
+                                   .pixel_format = Rndr::PixelFormat::R8G8B8A8_UNORM};
         const Rndr::Image image(graphics_context, desc);
         REQUIRE(image.IsValid());
     }
@@ -1263,17 +1267,17 @@ TEST_CASE("Creating a image", "[render-api][image]")
     }
     SECTION("Creating image with invalid width or height")
     {
-        const Rndr::ImageDesc desc{.width = 0, .height = 512, .type = Rndr::ImageType::Image2D, .pixel_format = Rndr::PixelFormat::R8G8B8A8_UINT};
+        const Rndr::ImageDesc desc{
+            .width = 0, .height = 512, .type = Rndr::ImageType::Image2D, .pixel_format = Rndr::PixelFormat::R8G8B8A8_UINT};
         const Rndr::Image image(graphics_context, desc);
         REQUIRE(!image.IsValid());
     }
     // TODO: Enable once support for Image2DArray is added
-//    SECTION("Creating image with invalid array size")
-//    {
-//        const Rndr::ImageDesc desc{.width = 512, .height = 512, .array_size = 0, .type = Rndr::ImageType::Image2DArray, .pixel_format = Rndr::PixelFormat::R8G8B8A8_UINT};
-//        const Rndr::Image image(graphics_context, desc);
-//        REQUIRE(!image.IsValid());
-//    }
+    //    SECTION("Creating image with invalid array size")
+    //    {
+    //        const Rndr::ImageDesc desc{.width = 512, .height = 512, .array_size = 0, .type = Rndr::ImageType::Image2DArray, .pixel_format
+    //        = Rndr::PixelFormat::R8G8B8A8_UINT}; const Rndr::Image image(graphics_context, desc); REQUIRE(!image.IsValid());
+    //    }
 
     Rndr::Destroy();
 }
@@ -1366,6 +1370,60 @@ TEST_CASE("Creating a frame buffer", "[render-api][framebuffer]")
                                          .use_depth_stencil = true};
         const Rndr::FrameBuffer frame_buffer(graphics_context, desc);
         REQUIRE(!frame_buffer.IsValid());
+    }
+
+    Rndr::Destroy();
+}
+
+TEST_CASE("Render full screen quad", "[render-api]")
+{
+    Rndr::Init();
+    const Rndr::Window hidden_window({.start_visible = false});
+    const Rndr::GraphicsContextDesc gc_desc{.window_handle = hidden_window.GetNativeWindowHandle()};
+    Rndr::GraphicsContext graphics_context(gc_desc);
+
+    const Rndr::String vertex_shader_code = Rndr::File::ReadShader(RNDR_CORE_ASSETS_DIR, "full-screen-quad.vert");
+    REQUIRE(!vertex_shader_code.empty());
+    Rndr::Shader vertex_shader(graphics_context, Rndr::ShaderDesc{.type = Rndr::ShaderType::Vertex, .source = vertex_shader_code});
+    REQUIRE(vertex_shader.IsValid());
+
+    Rndr::Shader fragment_shader(graphics_context, Rndr::ShaderDesc{.type = Rndr::ShaderType::Fragment, .source = R"(
+        #version 460 core
+        layout(location = 0) out vec4 fragColor;
+        void main()
+        {
+            fragColor = vec4(1.0, 0.0, 0.0, 1.0);
+        }
+    )"});
+    REQUIRE(fragment_shader.IsValid());
+
+    const Rndr::ImageDesc color_attachment_desc{.width = 128, .height = 128};
+    const Rndr::FrameBuffer frame_buffer(graphics_context, Rndr::FrameBufferDesc{.color_attachments = {color_attachment_desc}});
+    REQUIRE(frame_buffer.IsValid());
+
+    const Rndr::PipelineDesc pipeline_desc{.vertex_shader = &vertex_shader, .pixel_shader = &fragment_shader};
+    const Rndr::Pipeline pipeline(graphics_context, pipeline_desc);
+    REQUIRE(pipeline.IsValid());
+
+    graphics_context.ClearColor(Rndr::Vector4f(0.0f, 0.0f, 0.0f, 0.0f));
+
+    graphics_context.Bind(frame_buffer);
+    graphics_context.Bind(pipeline);
+
+    graphics_context.DrawVertices(Rndr::PrimitiveTopology::Triangle, 6);
+
+    Rndr::Bitmap bitmap;
+    graphics_context.Read(frame_buffer.GetColorAttachment(0), bitmap);
+
+    for (int i = 0; i < 128; ++i)
+    {
+        for (int j = 0; j < 128; ++j)
+        {
+            REQUIRE(bitmap.GetPixel(j, i).r == 1.0f);
+            REQUIRE(bitmap.GetPixel(j, i).g == 0);
+            REQUIRE(bitmap.GetPixel(j, i).b == 0);
+            REQUIRE(bitmap.GetPixel(j, i).a == 1.0f);
+        }
     }
 
     Rndr::Destroy();
