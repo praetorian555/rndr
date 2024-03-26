@@ -29,32 +29,44 @@ bool Rndr::Mesh::ReadData(MeshData& out_mesh_data, const Rndr::String& file_path
         return false;
     }
 
-    out_mesh_data.meshes.resize(header.mesh_count);
-    if (!f.Read(out_mesh_data.meshes.data(), sizeof(MeshDescription), header.mesh_count))
+    if (header.mesh_count > 0)
     {
-        RNDR_LOG_ERROR("Failed to read mesh descriptions!");
-        return false;
+        out_mesh_data.meshes.resize(header.mesh_count);
+        if (!f.Read(out_mesh_data.meshes.data(), sizeof(out_mesh_data.meshes[0]), header.mesh_count))
+        {
+            RNDR_LOG_ERROR("Failed to read mesh descriptions!");
+            return false;
+        }
     }
 
-    out_mesh_data.vertex_buffer_data.resize(header.vertex_buffer_size);
-    if (!f.Read(out_mesh_data.vertex_buffer_data.data(), 1, header.vertex_buffer_size))
+    if (header.vertex_buffer_size > 0)
     {
-        RNDR_LOG_ERROR("Failed to read vertex buffer data!");
-        return false;
+        out_mesh_data.vertex_buffer_data.resize(header.vertex_buffer_size);
+        if (!f.Read(out_mesh_data.vertex_buffer_data.data(), sizeof(out_mesh_data.vertex_buffer_data[0]), header.vertex_buffer_size))
+        {
+            RNDR_LOG_ERROR("Failed to read vertex buffer data!");
+            return false;
+        }
     }
 
-    out_mesh_data.index_buffer_data.resize(header.index_buffer_size);
-    if (!f.Read(out_mesh_data.index_buffer_data.data(), 1, header.index_buffer_size))
+    if (header.index_buffer_size > 0)
     {
-        RNDR_LOG_ERROR("Failed to read index buffer data!");
-        return false;
+        out_mesh_data.index_buffer_data.resize(header.index_buffer_size);
+        if (!f.Read(out_mesh_data.index_buffer_data.data(), sizeof(out_mesh_data.index_buffer_data[0]), header.index_buffer_size))
+        {
+            RNDR_LOG_ERROR("Failed to read index buffer data!");
+            return false;
+        }
     }
 
-    out_mesh_data.bounding_boxes.resize(header.mesh_count);
-    if (!f.Read(out_mesh_data.bounding_boxes.data(), sizeof(Bounds3f), header.mesh_count))
+    if (header.mesh_count > 0)
     {
-        RNDR_LOG_ERROR("Failed to read bounding boxes!");
-        return false;
+        out_mesh_data.bounding_boxes.resize(header.mesh_count);
+        if (!f.Read(out_mesh_data.bounding_boxes.data(), sizeof(out_mesh_data.bounding_boxes[0]), header.mesh_count))
+        {
+            RNDR_LOG_ERROR("Failed to read bounding boxes!");
+            return false;
+        }
     }
 
     return true;
@@ -72,16 +84,28 @@ bool Rndr::Mesh::WriteData(const MeshData& mesh_data, const String& file_path)
     MeshFileHeader header;
     header.magic = k_magic;
     header.version = 1;
-    header.mesh_count = static_cast<uint32_t>(mesh_data.meshes.size());
-    header.data_offset = sizeof(MeshFileHeader) + header.mesh_count * sizeof(MeshDescription);
-    header.vertex_buffer_size = static_cast<uint32_t>(mesh_data.vertex_buffer_data.size());
-    header.index_buffer_size = static_cast<uint32_t>(mesh_data.index_buffer_data.size());
+    header.mesh_count = static_cast<int64_t>(mesh_data.meshes.size());
+    header.data_offset = static_cast<int64_t>(header.mesh_count * sizeof(MeshDescription) + sizeof(header));
+    header.vertex_buffer_size = mesh_data.vertex_buffer_data.size();
+    header.index_buffer_size = mesh_data.index_buffer_data.size();
 
-    f.Write(&header, sizeof(MeshFileHeader), 1);
-    f.Write(mesh_data.meshes.data(), sizeof(MeshDescription), mesh_data.meshes.size());
-    f.Write(mesh_data.vertex_buffer_data.data(), 1, mesh_data.vertex_buffer_data.size());
-    f.Write(mesh_data.index_buffer_data.data(), 1, mesh_data.index_buffer_data.size());
-    f.Write(mesh_data.bounding_boxes.data(), sizeof(Bounds3f), mesh_data.bounding_boxes.size());
+    f.Write(&header, sizeof(header), 1);
+    if (header.mesh_count > 0)
+    {
+        f.Write(mesh_data.meshes.data(), sizeof(mesh_data.meshes[0]), mesh_data.meshes.size());
+    }
+    if (header.vertex_buffer_size > 0)
+    {
+        f.Write(mesh_data.vertex_buffer_data.data(), sizeof(mesh_data.vertex_buffer_data[0]), mesh_data.vertex_buffer_data.size());
+    }
+    if (header.index_buffer_size > 0)
+    {
+        f.Write(mesh_data.index_buffer_data.data(), sizeof(mesh_data.index_buffer_data[0]), mesh_data.index_buffer_data.size());
+    }
+    if (header.mesh_count > 0)
+    {
+        f.Write(mesh_data.bounding_boxes.data(), sizeof(mesh_data.bounding_boxes[0]), mesh_data.bounding_boxes.size());
+    }
 
     return true;
 }
@@ -94,16 +118,16 @@ bool Rndr::Mesh::UpdateBoundingBoxes(Rndr::MeshData& mesh_data)
     for (size_t i = 0; i < mesh_data.meshes.size(); ++i)
     {
         const MeshDescription& mesh_desc = mesh_data.meshes[i];
-        const uint32_t index_count = mesh_desc.GetLodIndicesCount(0);
+        const int64_t index_count = mesh_desc.GetLodIndicesCount(0);
 
         Point3f min(Math::k_largest_float);
         Point3f max(Math::k_smallest_float);
 
         uint32_t* index_buffer = reinterpret_cast<uint32_t*>(mesh_data.index_buffer_data.data());
         float* vertex_buffer = reinterpret_cast<float*>(mesh_data.vertex_buffer_data.data());
-        for (uint32_t j = 0; j < index_count; ++j)
+        for (int64_t j = 0; j < index_count; ++j)
         {
-            const uint32_t vertex_offset = mesh_desc.vertex_offset + index_buffer[mesh_desc.index_offset + j];
+            const int64_t vertex_offset = mesh_desc.vertex_offset + index_buffer[mesh_desc.index_offset + j];
             const float* vertex = vertex_buffer + vertex_offset * (mesh_desc.vertex_size / sizeof(float));
             min = Math::Min(min, Point3f(vertex[0], vertex[1], vertex[2]));
             max = Math::Max(max, Point3f(vertex[0], vertex[1], vertex[2]));
@@ -122,8 +146,8 @@ bool Rndr::Mesh::Merge(MeshData& out_mesh_data, const Span<MeshData>& mesh_data)
         return false;
     }
 
-    uint32_t vertex_offset = 0;
-    uint32_t index_offset = 0;
+    int64_t vertex_offset = 0;
+    int64_t index_offset = 0;
     for (const MeshData& mesh : mesh_data)
     {
         for (const MeshDescription& mesh_desc : mesh.meshes)
@@ -134,7 +158,7 @@ bool Rndr::Mesh::Merge(MeshData& out_mesh_data, const Span<MeshData>& mesh_data)
             out_mesh_data.meshes.emplace_back(new_mesh_desc);
 
             vertex_offset += mesh_desc.vertex_count;
-            for (uint32_t i = 0; i < mesh_desc.lod_count; ++i)
+            for (int64_t i = 0; i < mesh_desc.lod_count; ++i)
             {
                 index_offset += mesh_desc.GetLodIndicesCount(i);
             }
@@ -157,14 +181,22 @@ bool Rndr::Mesh::GetDrawCommands(Rndr::Array<Rndr::DrawIndicesData>& out_draw_co
     out_draw_commands.resize(mesh_draw_data.size());
     for (int i = 0; i < out_draw_commands.size(); i++)
     {
-        const uint32_t mesh_idx = mesh_draw_data[i].mesh_index;
-        const uint32_t lod = mesh_draw_data[i].lod;
+        const int64_t mesh_idx = mesh_draw_data[i].mesh_index;
+        const int64_t lod = mesh_draw_data[i].lod;
         const Rndr::MeshDescription& mesh_desc = mesh_data.meshes[mesh_idx];
-        out_draw_commands[i] = {.index_count = mesh_desc.GetLodIndicesCount(lod),
+        const int64_t index_count = mesh_desc.GetLodIndicesCount(lod);
+        RNDR_ASSERT(index_count >= 0 && index_count <= static_cast<int64_t>(std::numeric_limits<uint32_t>::max()));
+        RNDR_ASSERT(mesh_draw_data[i].index_buffer_offset >= 0 &&
+                    mesh_draw_data[i].index_buffer_offset <= static_cast<int64_t>(std::numeric_limits<uint32_t>::max()));
+        RNDR_ASSERT(mesh_draw_data[i].vertex_buffer_offset >= 0 &&
+                    mesh_draw_data[i].vertex_buffer_offset <= static_cast<int64_t>(std::numeric_limits<uint32_t>::max()));
+        RNDR_ASSERT(mesh_draw_data[i].material_index >= 0 &&
+                    mesh_draw_data[i].material_index <= static_cast<int64_t>(std::numeric_limits<uint32_t>::max()));
+        out_draw_commands[i] = {.index_count = static_cast<uint32_t>(mesh_desc.GetLodIndicesCount(lod)),
                                 .instance_count = 1,
-                                .first_index = mesh_draw_data[i].index_buffer_offset,
-                                .base_vertex = mesh_draw_data[i].vertex_buffer_offset,
-                                .base_instance = mesh_draw_data[i].material_index};
+                                .first_index = static_cast<uint32_t>(mesh_draw_data[i].index_buffer_offset),
+                                .base_vertex = static_cast<uint32_t>(mesh_draw_data[i].vertex_buffer_offset),
+                                .base_instance = static_cast<uint32_t>(mesh_draw_data[i].material_index)};
     }
     return true;
 }

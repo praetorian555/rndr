@@ -25,27 +25,27 @@ public:
     static constexpr const uint32_t k_max_streams = 8;
 
     /** Total size of the mesh data in bytes. Equal to sum of all vertices and all indices. */
-    uint32_t mesh_size = 0;
+    size_t mesh_size = 0;
 
     /** Number of vertices belonging to this mesh in the vertex buffer. */
-    uint32_t vertex_count = 0;
+    int64_t vertex_count = 0;
 
     /** Offset of the mesh in the vertex buffer in vertices. */
-    uint32_t vertex_offset = 0;
+    int64_t vertex_offset = 0;
 
     /** Sizes of the vertex in bytes. */
-    uint32_t vertex_size = 0;
+    size_t vertex_size = 0;
 
     /** Offset of the mesh in the index buffer in indices. */
-    uint32_t index_offset = 0;
+    int64_t index_offset = 0;
 
     /** Number of LODs of this mesh. */
-    uint32_t lod_count = 0;
+    int64_t lod_count = 0;
 
     /** Offsets of the LODs in indices starting from 0. First index is reserved for most detailed version of the mesh. */
     StackArray<uint32_t, k_max_lods> lod_offsets = {};
 
-    [[nodiscard]] RNDR_FORCE_INLINE uint32_t GetLodIndicesCount(uint32_t lod) const
+    [[nodiscard]] RNDR_FORCE_INLINE int64_t GetLodIndicesCount(int64_t lod) const
     {
         RNDR_ASSERT(lod < lod_count);
         return lod_offsets[lod + 1] - lod_offsets[lod];
@@ -73,17 +73,17 @@ struct MeshData
 struct MeshDrawData
 {
     /** Mesh index in the meshes array in MeshData. */
-    uint32_t mesh_index;
+    int64_t mesh_index;
     /** Material index in the materials array in SceneDrawData. */
-    uint32_t material_index;
+    int64_t material_index;
     /** LOD index in the MeshDescription. */
-    uint32_t lod;
+    int64_t lod;
     /** Offset in vertex buffer in vertices. */
-    uint32_t vertex_buffer_offset;
+    int64_t vertex_buffer_offset;
     /** Offset in index buffer in indices. */
-    uint32_t index_buffer_offset;
+    int64_t index_buffer_offset;
     /** Transform index in the SceneDescription. */
-    int32_t transform_index;
+    int64_t transform_index;
 };
 
 /**
@@ -96,13 +96,13 @@ struct MeshFileHeader
     /** Version of the file format. */
     uint32_t version;
     /** Number of meshes in the file. */
-    uint32_t mesh_count;
+    int64_t mesh_count;
     /** Offset of the mesh data in the file. */
-    uint32_t data_offset;
+    int64_t data_offset;
     /** Size of vertex data in the file. */
-    uint32_t vertex_buffer_size;
+    size_t vertex_buffer_size;
     /** Size of index data in the file. */
-    uint32_t index_buffer_size;
+    size_t index_buffer_size;
 };
 
 enum class MeshAttributesToLoad : uint8_t
