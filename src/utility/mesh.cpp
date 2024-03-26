@@ -192,7 +192,7 @@ bool Rndr::Mesh::GetDrawCommands(Rndr::Array<Rndr::DrawIndicesData>& out_draw_co
                     mesh_draw_data[i].vertex_buffer_offset <= static_cast<int64_t>(std::numeric_limits<uint32_t>::max()));
         RNDR_ASSERT(mesh_draw_data[i].material_index >= 0 &&
                     mesh_draw_data[i].material_index <= static_cast<int64_t>(std::numeric_limits<uint32_t>::max()));
-        out_draw_commands[i] = {.index_count = static_cast<uint32_t>(mesh_desc.GetLodIndicesCount(lod)),
+        out_draw_commands[i] = {.index_count = static_cast<uint32_t>(index_count),
                                 .instance_count = 1,
                                 .first_index = static_cast<uint32_t>(mesh_draw_data[i].index_buffer_offset),
                                 .base_vertex = static_cast<uint32_t>(mesh_draw_data[i].vertex_buffer_offset),
