@@ -136,6 +136,12 @@ void Rndr::CommandList::DrawIndices(Rndr::PrimitiveTopology topology, int32_t in
 void Rndr::CommandList::DrawVerticesMulti(const Rndr::Pipeline& pipeline, Rndr::PrimitiveTopology topology,
                                           const Rndr::Span<Rndr::DrawVerticesData>& draws)
 {
+    static_assert(sizeof(DrawVerticesData::vertex_count) == 4);
+    static_assert(sizeof(DrawVerticesData::instance_count) == 4);
+    static_assert(sizeof(DrawVerticesData::first_vertex) == 4);
+    static_assert(sizeof(DrawVerticesData::base_instance) == 4);
+    static_assert(sizeof(DrawVerticesData) == 16, "DrawVerticesData size is not 16 bytes");
+
     GLuint buffer_handle = 0;
     glCreateBuffers(1, &buffer_handle);
     RNDR_ASSERT_OPENGL();
@@ -149,6 +155,13 @@ void Rndr::CommandList::DrawVerticesMulti(const Rndr::Pipeline& pipeline, Rndr::
 void Rndr::CommandList::DrawIndicesMulti(const Rndr::Pipeline& pipeline, Rndr::PrimitiveTopology topology,
                                          const Rndr::Span<Rndr::DrawIndicesData>& draws)
 {
+    static_assert(sizeof(DrawIndicesData::index_count) == 4);
+    static_assert(sizeof(DrawIndicesData::instance_count) == 4);
+    static_assert(sizeof(DrawIndicesData::first_index) == 4);
+    static_assert(sizeof(DrawIndicesData::base_vertex) == 4);
+    static_assert(sizeof(DrawIndicesData::base_instance) == 4);
+    static_assert(sizeof(DrawIndicesData) == 20, "DrawIndicesData size is not 20 bytes");
+
     m_graphics_context->Bind(pipeline);
 
     GLuint buffer_handle = 0;
