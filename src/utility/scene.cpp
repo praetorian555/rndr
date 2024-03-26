@@ -17,35 +17,43 @@ bool WriteMap(Rndr::FileHandler& file, const Rndr::HashMap<Rndr::Scene::NodeId, 
         flattened_map.push_back(pair.second);
     }
 
-    const uint32_t flattened_map_size = static_cast<uint32_t>(flattened_map.size());
-    file.Write(&flattened_map_size, sizeof(uint32_t), 1);
-    file.Write(flattened_map.data(), sizeof(uint32_t), flattened_map.size());
+    const size_t flattened_map_size = flattened_map.size();
+    file.Write(&flattened_map_size, sizeof(flattened_map_size), 1);
+    if (flattened_map_size == 0)
+    {
+        return true;
+    }
+
+    file.Write(flattened_map.data(), sizeof(flattened_map[0]), flattened_map.size());
     return true;
 }
 
 bool ReadMap(Rndr::FileHandler& file, Rndr::HashMap<Rndr::Scene::NodeId, uint32_t>& map)
 {
-    uint32_t flattened_map_size = 0;
-    file.Read(&flattened_map_size, sizeof(uint32_t), 1);
+    size_t flattened_map_size = 0;
+    file.Read(&flattened_map_size, sizeof(flattened_map_size), 1);
+    if (flattened_map_size == 0)
+    {
+        return true;
+    }
+
     Rndr::Array<uint32_t> flattened_map(flattened_map_size);
     file.Read(flattened_map.data(), sizeof(uint32_t), flattened_map.size());
-
     for (uint32_t i = 0; i < flattened_map_size; i += 2)
     {
         map[flattened_map[i]] = flattened_map[i + 1];
     }
-
     return true;
 }
 
 bool WriteStringList(Rndr::FileHandler& file, const Rndr::Array<Rndr::String>& strings)
 {
-    const uint32_t string_count = static_cast<uint32_t>(strings.size());
-    file.Write(&string_count, sizeof(uint32_t), 1);
+    const size_t string_count = strings.size();
+    file.Write(&string_count, sizeof(string_count), 1);
     for (const auto& string : strings)
     {
-        const uint32_t string_length = static_cast<uint32_t>(string.size());
-        file.Write(&string_length, sizeof(uint32_t), 1);
+        const size_t string_length = string.size();
+        file.Write(&string_length, sizeof(string_length), 1);
         file.Write(string.c_str(), string_length + 1, 1);
     }
     return true;
@@ -53,13 +61,13 @@ bool WriteStringList(Rndr::FileHandler& file, const Rndr::Array<Rndr::String>& s
 
 bool ReadStringList(Rndr::FileHandler& file, Rndr::Array<Rndr::String>& strings)
 {
-    uint32_t string_count = 0;
-    file.Read(&string_count, sizeof(uint32_t), 1);
+    size_t string_count = 0;
+    file.Read(&string_count, sizeof(string_count), 1);
     strings.resize(string_count);
     for (auto& string : strings)
     {
-        uint32_t string_length = 0;
-        file.Read(&string_length, sizeof(uint32_t), 1);
+        size_t string_length = 0;
+        file.Read(&string_length, sizeof(string_length), 1);
         Rndr::Array<char> in_bytes(string_length + 1);
         file.Read(in_bytes.data(), string_length + 1, 1);
         string = Rndr::String(in_bytes.data());
@@ -77,16 +85,18 @@ bool Rndr::Scene::ReadSceneDescription(SceneDescription& out_scene_description, 
         return false;
     }
 
-    uint32_t node_count = 0;
-    file.Read(&node_count, sizeof(uint32_t), 1);
+    size_t node_count = 0;
+    file.Read(&node_count, sizeof(node_count), 1);
 
-    out_scene_description.local_transforms.resize(node_count);
-    out_scene_description.world_transforms.resize(node_count);
-    out_scene_description.hierarchy.resize(node_count);
-
-    file.Read(out_scene_description.local_transforms.data(), sizeof(Rndr::Matrix4x4f), node_count);
-    file.Read(out_scene_description.world_transforms.data(), sizeof(Rndr::Matrix4x4f), node_count);
-    file.Read(out_scene_description.hierarchy.data(), sizeof(Rndr::Scene::HierarchyNode), node_count);
+    if (node_count != 0)
+    {
+        out_scene_description.local_transforms.resize(node_count);
+        out_scene_description.world_transforms.resize(node_count);
+        out_scene_description.hierarchy.resize(node_count);
+        file.Read(out_scene_description.local_transforms.data(), sizeof(out_scene_description.local_transforms[0]), node_count);
+        file.Read(out_scene_description.world_transforms.data(), sizeof(out_scene_description.world_transforms[0]), node_count);
+        file.Read(out_scene_description.hierarchy.data(), sizeof(out_scene_description.hierarchy[0]), node_count);
+    }
 
     ReadMap(file, out_scene_description.node_id_to_mesh_id);
     ReadMap(file, out_scene_description.node_id_to_material_id);
@@ -109,12 +119,15 @@ bool Rndr::Scene::WriteSceneDescription(const Rndr::SceneDescription& scene_desc
         return false;
     }
 
-    const uint32_t node_count = static_cast<uint32_t>(scene_description.hierarchy.size());
-    file.Write(&node_count, sizeof(uint32_t), 1);
+    const size_t node_count = scene_description.hierarchy.size();
+    file.Write(&node_count, sizeof(node_count), 1);
 
-    file.Write(scene_description.local_transforms.data(), sizeof(Rndr::Matrix4x4f), node_count);
-    file.Write(scene_description.world_transforms.data(), sizeof(Rndr::Matrix4x4f), node_count);
-    file.Write(scene_description.hierarchy.data(), sizeof(Rndr::Scene::HierarchyNode), node_count);
+    if (node_count != 0)
+    {
+        file.Write(scene_description.local_transforms.data(), sizeof(scene_description.local_transforms[0]), node_count);
+        file.Write(scene_description.world_transforms.data(), sizeof(scene_description.world_transforms[0]), node_count);
+        file.Write(scene_description.hierarchy.data(), sizeof(scene_description.hierarchy[0]), node_count);
+    }
 
     WriteMap(file, scene_description.node_id_to_mesh_id);
     WriteMap(file, scene_description.node_id_to_material_id);
@@ -174,14 +187,14 @@ bool Rndr::Scene::ReadScene(Rndr::SceneDrawData& out_scene, const Rndr::String& 
 
 Rndr::Scene::NodeId Rndr::Scene::AddNode(Rndr::SceneDescription& scene, int32_t parent, int32_t level)
 {
-    const NodeId node_id = static_cast<uint32_t>(scene.hierarchy.size());
-    scene.local_transforms.emplace_back(Rndr::Matrix4x4f(1.0f));
-    scene.world_transforms.emplace_back(Rndr::Matrix4x4f(1.0f));
+    const NodeId node_id = static_cast<NodeId>(scene.hierarchy.size());
+    scene.local_transforms.emplace_back(1.0f);
+    scene.world_transforms.emplace_back(1.0f);
     scene.hierarchy.emplace_back(HierarchyNode{.parent = parent, .last_sibling = -1, .level = level});
 
     if (parent > -1)
     {
-        NodeId parent_first_child = scene.hierarchy[parent].first_child;
+        const NodeId parent_first_child = scene.hierarchy[parent].first_child;
         if (parent_first_child == k_invalid_node_id)
         {
             scene.hierarchy[parent].first_child = node_id;
