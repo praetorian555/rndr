@@ -106,6 +106,11 @@ public:
     Window& operator=(Window&& other) noexcept;
 
     /**
+     * Destroys the window.
+     */
+    void Destroy();
+
+    /**
      * Processes OS events regarding this window.
      */
     void ProcessEvents() const;

@@ -28,6 +28,8 @@ public:
     GraphicsContext(GraphicsContext&& other) noexcept;
     GraphicsContext& operator=(GraphicsContext&& other) noexcept;
 
+    void Destroy();
+
     [[nodiscard]] bool IsValid() const;
 
     [[nodiscard]] const GraphicsContextDesc& GetDesc() const;

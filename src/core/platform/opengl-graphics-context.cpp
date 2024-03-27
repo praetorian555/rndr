@@ -10,11 +10,11 @@
 #include "rndr/core/containers/string.h"
 #include "rndr/core/file.h"
 #include "rndr/core/platform/opengl-buffer.h"
+#include "rndr/core/platform/opengl-frame-buffer.h"
 #include "rndr/core/platform/opengl-image.h"
 #include "rndr/core/platform/opengl-pipeline.h"
 #include "rndr/core/platform/opengl-shader.h"
 #include "rndr/core/platform/opengl-swap-chain.h"
-#include "rndr/core/platform/opengl-frame-buffer.h"
 #include "rndr/utility/cpu-tracer.h"
 
 namespace
@@ -203,16 +203,7 @@ Rndr::GraphicsContext::GraphicsContext(const Rndr::GraphicsContextDesc& desc) : 
 
 Rndr::GraphicsContext::~GraphicsContext()
 {
-#if RNDR_WINDOWS
-    if (m_native_graphics_context != k_invalid_graphics_context_handle)
-    {
-        const BOOL status = wglDeleteContext(m_native_graphics_context);
-        if (status == 0)
-        {
-            RNDR_LOG_ERROR("Failed to destroy OpenGL graphics context!");
-        }
-    }
-#endif  // RNDR_WINDOWS
+    Destroy();
 }
 
 Rndr::GraphicsContext::GraphicsContext(Rndr::GraphicsContext&& other) noexcept
@@ -238,6 +229,20 @@ Rndr::GraphicsContext& Rndr::GraphicsContext::operator=(Rndr::GraphicsContext&& 
         other.m_native_graphics_context = nullptr;
     }
     return *this;
+}
+
+void Rndr::GraphicsContext::Destroy()
+{
+#if RNDR_WINDOWS
+    if (m_native_graphics_context != k_invalid_graphics_context_handle)
+    {
+        const BOOL status = wglDeleteContext(m_native_graphics_context);
+        if (status == 0)
+        {
+            RNDR_LOG_ERROR("Failed to destroy OpenGL graphics context!");
+        }
+    }
+#endif  // RNDR_WINDOWS
 }
 
 const Rndr::GraphicsContextDesc& Rndr::GraphicsContext::GetDesc() const
@@ -483,7 +488,6 @@ bool Rndr::GraphicsContext::BindImageForCompute(const Rndr::Image& image, int32_
     RNDR_ASSERT_OPENGL();
     return true;
 }
-
 
 bool Rndr::GraphicsContext::Bind(const Rndr::FrameBuffer& frame_buffer)
 {
