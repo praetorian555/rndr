@@ -519,9 +519,9 @@ TEST_CASE("Is pixel format high precision", "[misc]")
 TEST_CASE("Creating different types of buffers", "[render-api][buffer]")
 {
     Rndr::Init();
-    const Rndr::Window hidden_window({.start_visible = false});
+    Rndr::Window hidden_window({.start_visible = false});
     const Rndr::GraphicsContextDesc gc_desc{.window_handle = hidden_window.GetNativeWindowHandle()};
-    const Rndr::GraphicsContext graphics_context(gc_desc);
+    Rndr::GraphicsContext graphics_context(gc_desc);
 
     SECTION("Create vertex buffer use for writing and rarely")
     {
@@ -595,6 +595,9 @@ TEST_CASE("Creating different types of buffers", "[render-api][buffer]")
         const Rndr::Buffer ss_buffer(graphics_context, desc);
         REQUIRE(ss_buffer.IsValid());
     }
+
+    graphics_context.Destroy();
+    hidden_window.Destroy();
     Rndr::Destroy();
 }
 
@@ -608,9 +611,9 @@ TEST_CASE("Reading from GPU buffers", "[render-api][buffer]")
     }
 
     Rndr::Init();
-    const Rndr::Window hidden_window({.start_visible = false});
+    Rndr::Window hidden_window({.start_visible = false});
     const Rndr::GraphicsContextDesc gc_desc{.window_handle = hidden_window.GetNativeWindowHandle()};
-    const Rndr::GraphicsContext graphics_context(gc_desc);
+    Rndr::GraphicsContext graphics_context(gc_desc);
 
     SECTION("Reading from write only vertex buffer")
     {
@@ -797,6 +800,8 @@ TEST_CASE("Reading from GPU buffers", "[render-api][buffer]")
         }
     }
 
+    graphics_context.Destroy();
+    hidden_window.Destroy();
     Rndr::Destroy();
 }
 
@@ -810,7 +815,7 @@ TEST_CASE("Update the GPU buffer contents", "[render-api][buffer]")
     }
 
     Rndr::Init();
-    const Rndr::Window hidden_window({.start_visible = false});
+    Rndr::Window hidden_window({.start_visible = false});
     const Rndr::GraphicsContextDesc gc_desc{.window_handle = hidden_window.GetNativeWindowHandle()};
     Rndr::GraphicsContext graphics_context(gc_desc);
 
@@ -926,6 +931,8 @@ TEST_CASE("Update the GPU buffer contents", "[render-api][buffer]")
         REQUIRE(!result);
     }
 
+    graphics_context.Destroy();
+    hidden_window.Destroy();
     Rndr::Destroy();
 }
 
@@ -939,7 +946,7 @@ TEST_CASE("Copy of buffers", "[render-api][buffer]")
     }
 
     Rndr::Init();
-    const Rndr::Window hidden_window({.start_visible = false});
+    Rndr::Window hidden_window({.start_visible = false});
     const Rndr::GraphicsContextDesc gc_desc{.window_handle = hidden_window.GetNativeWindowHandle()};
     Rndr::GraphicsContext graphics_context(gc_desc);
 
@@ -1096,13 +1103,15 @@ TEST_CASE("Copy of buffers", "[render-api][buffer]")
         }
     }
 
+    graphics_context.Destroy();
+    hidden_window.Destroy();
     Rndr::Destroy();
 }
 
 TEST_CASE("Running a compute shader", "[render-api][shader]")
 {
     Rndr::Init();
-    const Rndr::Window hidden_window({.start_visible = false});
+    Rndr::Window hidden_window({.start_visible = false});
     const Rndr::GraphicsContextDesc gc_desc{.window_handle = hidden_window.GetNativeWindowHandle()};
     Rndr::GraphicsContext graphics_context(gc_desc);
 
@@ -1220,15 +1229,17 @@ TEST_CASE("Running a compute shader", "[render-api][shader]")
         }
     }
 
+    graphics_context.Destroy();
+    hidden_window.Destroy();
     Rndr::Destroy();
 }
 
 TEST_CASE("Creating a image", "[render-api][image]")
 {
     Rndr::Init();
-    const Rndr::Window hidden_window({.start_visible = false});
+    Rndr::Window hidden_window({.start_visible = false});
     const Rndr::GraphicsContextDesc gc_desc{.window_handle = hidden_window.GetNativeWindowHandle()};
-    const Rndr::GraphicsContext graphics_context(gc_desc);
+    Rndr::GraphicsContext graphics_context(gc_desc);
 
     SECTION("Creating a 2D image")
     {
@@ -1279,15 +1290,17 @@ TEST_CASE("Creating a image", "[render-api][image]")
     //        = Rndr::PixelFormat::R8G8B8A8_UINT}; const Rndr::Image image(graphics_context, desc); REQUIRE(!image.IsValid());
     //    }
 
+    graphics_context.Destroy();
+    hidden_window.Destroy();
     Rndr::Destroy();
 }
 
 TEST_CASE("Creating a frame buffer", "[render-api][framebuffer]")
 {
     Rndr::Init();
-    const Rndr::Window hidden_window({.start_visible = false});
+    Rndr::Window hidden_window({.start_visible = false});
     const Rndr::GraphicsContextDesc gc_desc{.window_handle = hidden_window.GetNativeWindowHandle()};
-    const Rndr::GraphicsContext graphics_context(gc_desc);
+    Rndr::GraphicsContext graphics_context(gc_desc);
 
     SECTION("with single color attachment")
     {
@@ -1372,13 +1385,15 @@ TEST_CASE("Creating a frame buffer", "[render-api][framebuffer]")
         REQUIRE(!frame_buffer.IsValid());
     }
 
+    graphics_context.Destroy();
+    hidden_window.Destroy();
     Rndr::Destroy();
 }
 
 TEST_CASE("Render full screen quad", "[render-api]")
 {
     Rndr::Init();
-    const Rndr::Window hidden_window({.start_visible = false});
+    Rndr::Window hidden_window({.start_visible = false});
     const Rndr::GraphicsContextDesc gc_desc{.window_handle = hidden_window.GetNativeWindowHandle()};
     Rndr::GraphicsContext graphics_context(gc_desc);
 
@@ -1431,5 +1446,7 @@ TEST_CASE("Render full screen quad", "[render-api]")
         }
     }
 
+    graphics_context.Destroy();
+    hidden_window.Destroy();
     Rndr::Destroy();
 }
