@@ -1384,45 +1384,50 @@ TEST_CASE("Render full screen quad", "[render-api]")
 
     const Rndr::String vertex_shader_code = Rndr::File::ReadShader(RNDR_CORE_ASSETS_DIR, "full-screen-quad.vert");
     REQUIRE(!vertex_shader_code.empty());
-    Rndr::Shader vertex_shader(graphics_context, Rndr::ShaderDesc{.type = Rndr::ShaderType::Vertex, .source = vertex_shader_code});
-    REQUIRE(vertex_shader.IsValid());
-
-    Rndr::Shader fragment_shader(graphics_context, Rndr::ShaderDesc{.type = Rndr::ShaderType::Fragment, .source = R"(
+    const Rndr::String fragment_shader_code = R"(
         #version 460 core
         layout(location = 0) out vec4 fragColor;
         void main()
         {
             fragColor = vec4(1.0, 0.0, 0.0, 1.0);
         }
-    )"});
-    REQUIRE(fragment_shader.IsValid());
+    )";
 
-    const Rndr::ImageDesc color_attachment_desc{.width = 128, .height = 128};
-    const Rndr::FrameBuffer frame_buffer(graphics_context, Rndr::FrameBufferDesc{.color_attachments = {color_attachment_desc}});
-    REQUIRE(frame_buffer.IsValid());
-
-    const Rndr::PipelineDesc pipeline_desc{.vertex_shader = &vertex_shader, .pixel_shader = &fragment_shader};
-    const Rndr::Pipeline pipeline(graphics_context, pipeline_desc);
-    REQUIRE(pipeline.IsValid());
-
-    graphics_context.ClearColor(Rndr::Vector4f(0.0f, 0.0f, 0.0f, 0.0f));
-
-    graphics_context.Bind(frame_buffer);
-    graphics_context.Bind(pipeline);
-
-    graphics_context.DrawVertices(Rndr::PrimitiveTopology::Triangle, 6);
-
-    Rndr::Bitmap bitmap;
-    graphics_context.Read(frame_buffer.GetColorAttachment(0), bitmap);
-
-    for (int i = 0; i < 128; ++i)
+    SECTION("Using a screen space rectangle")
     {
-        for (int j = 0; j < 128; ++j)
+        Rndr::Shader vertex_shader(graphics_context, Rndr::ShaderDesc{.type = Rndr::ShaderType::Vertex, .source = vertex_shader_code});
+        REQUIRE(vertex_shader.IsValid());
+
+        Rndr::Shader fragment_shader(graphics_context,
+                                     Rndr::ShaderDesc{.type = Rndr::ShaderType::Fragment, .source = fragment_shader_code});
+        REQUIRE(fragment_shader.IsValid());
+
+        const Rndr::ImageDesc color_attachment_desc{.width = 128, .height = 128};
+        const Rndr::FrameBuffer frame_buffer(graphics_context, Rndr::FrameBufferDesc{.color_attachments = {color_attachment_desc}});
+        REQUIRE(frame_buffer.IsValid());
+
+        const Rndr::PipelineDesc pipeline_desc{.vertex_shader = &vertex_shader, .pixel_shader = &fragment_shader};
+        const Rndr::Pipeline pipeline(graphics_context, pipeline_desc);
+        REQUIRE(pipeline.IsValid());
+
+        graphics_context.Bind(frame_buffer);
+        graphics_context.ClearColor(Rndr::Vector4f(0.0f, 0.0f, 0.0f, 0.0f));
+        graphics_context.Bind(pipeline);
+
+        graphics_context.DrawVertices(Rndr::PrimitiveTopology::Triangle, 6);
+
+        Rndr::Bitmap bitmap;
+        graphics_context.Read(frame_buffer.GetColorAttachment(0), bitmap);
+
+        for (int i = 0; i < 128; ++i)
         {
-            REQUIRE(bitmap.GetPixel(j, i).r == 1.0f);
-            REQUIRE(bitmap.GetPixel(j, i).g == 0);
-            REQUIRE(bitmap.GetPixel(j, i).b == 0);
-            REQUIRE(bitmap.GetPixel(j, i).a == 1.0f);
+            for (int j = 0; j < 128; ++j)
+            {
+                REQUIRE(bitmap.GetPixel(j, i).r == 1.0f);
+                REQUIRE(bitmap.GetPixel(j, i).g == 0);
+                REQUIRE(bitmap.GetPixel(j, i).b == 0);
+                REQUIRE(bitmap.GetPixel(j, i).a == 1.0f);
+            }
         }
     }
 
