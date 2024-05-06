@@ -1,6 +1,6 @@
 #include <filesystem>
 
-#include <catch2/catch_test_macros.hpp>
+#include <catch2/catch2.hpp>
 
 #include "rndr/utility/mesh.h"
 

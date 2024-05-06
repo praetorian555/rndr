@@ -1,45 +1,27 @@
-cmake_minimum_required(VERSION 3.20)
-
-project(
-        RNDR
-        VERSION 0.1
-        DESCRIPTION "Rendering library"
-        LANGUAGES CXX)
+cmake_minimum_required(VERSION 3.28)
+project(RNDR VERSION 0.1.0 LANGUAGES CXX C)
 
 # Library options
-option(RNDR_HARDENED "Enable hardened mode" OFF)
-option(RNDR_TRACER "Use built in profiler" ON)
-option(RNDR_DEFAULT_LOGGER "Use default logger" ON)
-option(RNDR_BUILD_EXAMPLES "Build examples" ON)
 option(RNDR_BUILD_TESTS "Build tests" ON)
-
+message(STATUS "RNDR_BUILD_TESTS ${RNDR_BUILD_TESTS}")
+option(RNDR_SHARED_LIBS "Build shared library" OFF)
+message(STATUS "RNDR_SHARED_LIBS ${RNDR_SHARED_LIBS}")
+option(RNDR_HARDENED "Enable hardened mode" ON)
 message(STATUS "RNDR_HARDENED ${RNDR_HARDENED}")
+option(RNDR_TRACER "Use built in profiler" OFF)
 message(STATUS "RNDR_TRACER ${RNDR_TRACER}")
+option(RNDR_DEFAULT_LOGGER "Use default logger" OFF)
 message(STATUS "RNDR_DEFAULT_LOGGER ${RNDR_DEFAULT_LOGGER}")
 
-if (NOT CMAKE_CXX_STANDARD)
-    set(CMAKE_CXX_STANDARD 20)
+## C++ language configuration boilerplate, hide symbols by default
+if (NOT DEFINED CMAKE_CXX_VISIBILITY_PRESET AND NOT DEFINED CMAKE_VISIBILITY_INLINES_HIDDEN)
+    set(CMAKE_CXX_VISIBILITY_PRESET hidden)
+    set(CMAKE_VISIBILITY_INLINES_HIDDEN YES)
 endif ()
 
-# Only do these if this is the main project, and not if it is included through add_subdirectory
-if (PROJECT_IS_TOP_LEVEL)
-
-    # Let's ensure -std=c++xx instead of -std=g++xx
-    set(CMAKE_CXX_EXTENSIONS OFF)
-
-    include(cmake/optimized-debug.cmake)
-
-    # Configuration types
-    SET(CMAKE_CONFIGURATION_TYPES "Debug;OptimizedDebug;Release" CACHE STRING "Choose configuration: Debug OptimizedDebug Release" FORCE)
-
-    # Build only static libraries
-    set(BUILD_SHARED_LIBS OFF)
-
-    # Let's nicely support folders in IDEs
-    set_property(GLOBAL PROPERTY USE_FOLDERS ON)
-
-    # Include cmake scripts here
-    include(cmake/clang-format.cmake)
+## Let OPAL_SHARED_LIBS override BUILD_SHARED_LIBS
+if (DEFINED RNDR_SHARED_LIBS)
+    set(BUILD_SHARED_LIBS "${RNDR_SHARED_LIBS}")
 endif ()
 
 # Setup compiler warnings and options
@@ -57,39 +39,46 @@ if (RNDR_HARDENED)
     rndr_setup_sanitizers(rndr_options)
 endif ()
 
-include(cmake/dependencies.cmake)
-setup_required_dependencies()
-
-# Adds external dependencies
-add_subdirectory(extern)
+include(FetchContent)
+SET(MATH_BUILD_TESTS OFF)
+SET(MATH_HARDENED ${RNDR_HARDENED})
+FetchContent_Declare(
+        math
+        GIT_REPOSITORY https://github.com/praetorian555/math
+        GIT_TAG        Math-0.1.0
+)
+FetchContent_MakeAvailable(math)
 
 # The compiled library code is here
 add_subdirectory(src)
 
-if (PROJECT_IS_TOP_LEVEL OR RNDR_BUILD_TESTS)
-    setup_test_dependencies()
-    add_subdirectory(tests)
+if (RNDR_BUILD_TESTS)
+    set(RNDR_TEST_FILES
+        test/base-test.cpp
+        test/bitmap-test.cpp
+        test/camera-test.cpp
+        test/frames-per-second-counter-test.cpp
+        test/input-test.cpp
+        test/render-api-test.cpp
+        test/renderer-base-test.cpp
+        test/window-test.cpp
+        extern/catch2/src/catch_amalgamated.cpp)
+    add_executable(rndr_test ${RNDR_TEST_FILES})
+    target_include_directories(rndr_test PRIVATE src)
+    target_include_directories(rndr_test PRIVATE extern/catch2/include)
+    target_include_directories(rndr_test PRIVATE extern/catch2/include/catch2)
+    target_include_directories(rndr_test PRIVATE extern/glad/include)
+    target_link_libraries(rndr_test rndr)
+    target_link_libraries(rndr_test rndr_warnings)
+    target_link_libraries(rndr_test rndr_options)
     enable_testing()
     add_test(NAME all_tests_no_window_no_render_api COMMAND rndr_test "~[window] ~[render-api]")
+
+    # Install the test executable
+    install(TARGETS rndr_test
+            LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
+            ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
+            RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}  # For Windows DLL files
+    )
 endif()
 
-if (PROJECT_IS_TOP_LEVEL OR RNDR_BUILD_EXAMPLES)
-    # Download and extract example assets
-    set(GLTF_ASSETS_DIR "")
-    setup_example_assets(GLTF_ASSETS_DIR)
-
-    # Examples
-    add_subdirectory(examples/01-triangle)
-    add_subdirectory(examples/02-cube)
-    add_subdirectory(examples/03-image)
-    add_subdirectory(examples/04-assimp)
-    add_subdirectory(examples/05-mesh-optimizer)
-    add_subdirectory(examples/06-vertex-pulling)
-    add_subdirectory(examples/07-cube-map)
-    add_subdirectory(examples/08-debug-features)
-    add_subdirectory(examples/09-animation)
-    add_subdirectory(examples/10-converters)
-    add_subdirectory(examples/11-pbr-shading)
-    add_subdirectory(examples/12-material-system)
-    add_subdirectory(examples/13-scene-renderer)
-endif ()

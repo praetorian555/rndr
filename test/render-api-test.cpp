@@ -1,4 +1,4 @@
-#include <catch2/catch_test_macros.hpp>
+#include <catch2/catch2.hpp>
 
 #if RNDR_OPENGL
 #include <glad/glad.h>

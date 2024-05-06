@@ -1,6 +1,5 @@
 #include "rndr/core/platform/opengl-graphics-context.h"
 
-#include <glad/glad.h>
 #include <glad/glad_wgl.h>
 
 #include "core/platform/opengl-helpers.h"

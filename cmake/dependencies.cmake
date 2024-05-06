@@ -28,9 +28,10 @@ function(setup_required_dependencies)
                 GITHUB_REPOSITORY
                 "praetorian555/math"
                 GIT_TAG
-                "main"
+                "Math-0.1.0"
                 OPTIONS
-                "MATH_SANITIZER ${RNDR_HARDENED}"
+                "MATH_BUILD_TESTS OFF"
+                "MATH_HARDENED ${RNDR_HARDENED}"
         )
         SET_TARGET_PROPERTIES(math PROPERTIES FOLDER Extern)
     endif ()
