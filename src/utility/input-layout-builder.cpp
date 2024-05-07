@@ -25,7 +25,7 @@ Rndr::InputLayoutBuilder& Rndr::InputLayoutBuilder::AppendElement(int buffer_ind
         RNDR_LOG_ERROR("Failed since the buffer index is not present, call AddVertexBuffer first!");
         return *this;
     }
-    if (m_elements.size() == GraphicsConstants::k_max_input_layout_entries)
+    if (m_elements.GetSize() == GraphicsConstants::k_max_input_layout_entries)
     {
         RNDR_LOG_ERROR("Failed since there are no more slots available!");
         return *this;
@@ -46,7 +46,7 @@ Rndr::InputLayoutBuilder& Rndr::InputLayoutBuilder::AppendElement(int buffer_ind
 
     info.offset += FromPixelFormatToPixelSize(format);
     info.entries_count++;
-    m_elements.push_back(element);
+    m_elements.PushBack(element);
 
     return *this;
 }
@@ -61,11 +61,11 @@ Rndr::InputLayoutDesc Rndr::InputLayoutBuilder::Build()
 {
     Array<Ref<const Buffer>> buffers;
     Array<int32_t> buffer_binding_slots;
-    buffers.reserve(m_buffers.size());
+    buffers.Reserve(m_buffers.size());
     for (auto const& [binding_index, buffer_info] : m_buffers)
     {
-        buffers.push_back(buffer_info.buffer);
-        buffer_binding_slots.push_back(binding_index);
+        buffers.PushBack(buffer_info.buffer);
+        buffer_binding_slots.PushBack(binding_index);
     }
     return InputLayoutDesc{.index_buffer = m_index_buffer,
                            .vertex_buffers = buffers,

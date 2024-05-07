@@ -29,17 +29,17 @@ bool Rndr::PresentRenderer::Render()
 
 bool Rndr::RendererManager::AddRenderer(Rndr::RendererBase* renderer)
 {
-    m_renderers.push_back(renderer);
+    m_renderers.PushBack(renderer);
     return true;
 }
 
 bool Rndr::RendererManager::AddRendererBefore(Rndr::RendererBase* renderer, const Rndr::String& before_name)
 {
-    for (auto it = m_renderers.begin(); it != m_renderers.end(); ++it)
+    for (auto it = m_renderers.ConstBegin(); it != m_renderers.ConstEnd(); ++it)
     {
         if ((*it)->GetName() == before_name)
         {
-            m_renderers.insert(it, renderer);
+            m_renderers.Insert(it, renderer);
             return true;
         }
     }
@@ -48,11 +48,11 @@ bool Rndr::RendererManager::AddRendererBefore(Rndr::RendererBase* renderer, cons
 
 bool Rndr::RendererManager::AddRendererAfter(Rndr::RendererBase* renderer, const Rndr::String& after_name)
 {
-    for (auto it = m_renderers.begin(); it != m_renderers.end(); ++it)
+    for (auto it = m_renderers.ConstBegin(); it != m_renderers.ConstEnd(); ++it)
     {
         if ((*it)->GetName() == after_name)
         {
-            m_renderers.insert(it + 1, renderer);
+            m_renderers.Insert(it + 1, renderer);
             return true;
         }
     }
@@ -65,7 +65,7 @@ bool Rndr::RendererManager::RemoveRenderer(Rndr::RendererBase* renderer)
     {
         if (*it == renderer)
         {
-            m_renderers.erase(it);
+            m_renderers.Erase(it);
             return true;
         }
     }
@@ -78,7 +78,7 @@ bool Rndr::RendererManager::RemoveRenderer(const Rndr::String& name)
     {
         if ((*it)->GetName() == name)
         {
-            m_renderers.erase(it);
+            m_renderers.Erase(it);
             return true;
         }
     }
@@ -87,7 +87,7 @@ bool Rndr::RendererManager::RemoveRenderer(const Rndr::String& name)
 
 int32_t Rndr::RendererManager::GetRendererIndex(const String& name)
 {
-    for (size_t i = 0; i < m_renderers.size(); ++i)
+    for (size_t i = 0; i < m_renderers.GetSize(); ++i)
     {
         if (m_renderers[i]->GetName() == name)
         {

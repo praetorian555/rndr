@@ -618,7 +618,7 @@ TEST_CASE("Reading from GPU buffers", "[render-api][buffer]")
     SECTION("Reading from write only vertex buffer")
     {
         const Rndr::BufferDesc desc{.type = Rndr::BufferType::Vertex, .usage = Rndr::Usage::Default, .size = 1024};
-        const Rndr::Buffer vertex_buffer(graphics_context, desc, Rndr::ConstByteSpan(data));
+        const Rndr::Buffer vertex_buffer(graphics_context, desc, Rndr::ToConstByteSpan(data));
         REQUIRE(vertex_buffer.IsValid());
 
         Rndr::StackArray<uint8_t, k_buffer_size> read_data_storage = {0};
@@ -629,7 +629,7 @@ TEST_CASE("Reading from GPU buffers", "[render-api][buffer]")
     SECTION("Reading from dynamic vertex buffer")
     {
         const Rndr::BufferDesc desc{.type = Rndr::BufferType::Vertex, .usage = Rndr::Usage::Dynamic, .size = 1024};
-        const Rndr::Buffer vertex_buffer(graphics_context, desc, Rndr::ConstByteSpan(data));
+        const Rndr::Buffer vertex_buffer(graphics_context, desc, Rndr::ToConstByteSpan(data));
         REQUIRE(vertex_buffer.IsValid());
 
         Rndr::StackArray<uint8_t, k_buffer_size> read_data_storage = {0};
@@ -640,7 +640,7 @@ TEST_CASE("Reading from GPU buffers", "[render-api][buffer]")
     SECTION("Reading from read back vertex buffer")
     {
         const Rndr::BufferDesc desc{.type = Rndr::BufferType::Vertex, .usage = Rndr::Usage::ReadBack, .size = 1024};
-        const Rndr::Buffer vertex_buffer(graphics_context, desc, Rndr::ConstByteSpan(data));
+        const Rndr::Buffer vertex_buffer(graphics_context, desc, Rndr::ToConstByteSpan(data));
         REQUIRE(vertex_buffer.IsValid());
 
         Rndr::StackArray<uint8_t, k_buffer_size> read_data_storage = {0};
@@ -656,7 +656,7 @@ TEST_CASE("Reading from GPU buffers", "[render-api][buffer]")
     SECTION("Reading from write only index buffer")
     {
         const Rndr::BufferDesc desc{.type = Rndr::BufferType::Index, .usage = Rndr::Usage::Default, .size = 1024};
-        const Rndr::Buffer index_buffer(graphics_context, desc, Rndr::ConstByteSpan(data));
+        const Rndr::Buffer index_buffer(graphics_context, desc, Rndr::ToConstByteSpan(data));
         REQUIRE(index_buffer.IsValid());
 
         Rndr::StackArray<uint8_t, k_buffer_size> read_data_storage = {0};
@@ -667,7 +667,7 @@ TEST_CASE("Reading from GPU buffers", "[render-api][buffer]")
     SECTION("Reading from dynamic index buffer")
     {
         const Rndr::BufferDesc desc{.type = Rndr::BufferType::Index, .usage = Rndr::Usage::Dynamic, .size = 1024};
-        const Rndr::Buffer index_buffer(graphics_context, desc, Rndr::ConstByteSpan(data));
+        const Rndr::Buffer index_buffer(graphics_context, desc, Rndr::ToConstByteSpan(data));
         REQUIRE(index_buffer.IsValid());
 
         Rndr::StackArray<uint8_t, k_buffer_size> read_data_storage = {0};
@@ -678,7 +678,7 @@ TEST_CASE("Reading from GPU buffers", "[render-api][buffer]")
     SECTION("Reading from read back index buffer")
     {
         const Rndr::BufferDesc desc{.type = Rndr::BufferType::Index, .usage = Rndr::Usage::ReadBack, .size = 1024};
-        const Rndr::Buffer index_buffer(graphics_context, desc, Rndr::ConstByteSpan(data));
+        const Rndr::Buffer index_buffer(graphics_context, desc, Rndr::ToConstByteSpan(data));
         REQUIRE(index_buffer.IsValid());
 
         Rndr::StackArray<uint8_t, k_buffer_size> read_data_storage = {0};
@@ -694,7 +694,7 @@ TEST_CASE("Reading from GPU buffers", "[render-api][buffer]")
     SECTION("Reading from write only constant buffer")
     {
         const Rndr::BufferDesc desc{.type = Rndr::BufferType::Constant, .usage = Rndr::Usage::Default, .size = 1024};
-        const Rndr::Buffer const_buffer(graphics_context, desc, Rndr::ConstByteSpan(data));
+        const Rndr::Buffer const_buffer(graphics_context, desc, Rndr::ToConstByteSpan(data));
         REQUIRE(const_buffer.IsValid());
 
         Rndr::StackArray<uint8_t, k_buffer_size> read_data_storage = {0};
@@ -705,7 +705,7 @@ TEST_CASE("Reading from GPU buffers", "[render-api][buffer]")
     SECTION("Reading from dynamic constant buffer")
     {
         const Rndr::BufferDesc desc{.type = Rndr::BufferType::Constant, .usage = Rndr::Usage::Dynamic, .size = 1024};
-        const Rndr::Buffer const_buffer(graphics_context, desc, Rndr::ConstByteSpan(data));
+        const Rndr::Buffer const_buffer(graphics_context, desc, Rndr::ToConstByteSpan(data));
         REQUIRE(const_buffer.IsValid());
 
         Rndr::StackArray<uint8_t, k_buffer_size> read_data_storage = {0};
@@ -716,7 +716,7 @@ TEST_CASE("Reading from GPU buffers", "[render-api][buffer]")
     SECTION("Reading from read back constant buffer")
     {
         const Rndr::BufferDesc desc{.type = Rndr::BufferType::Constant, .usage = Rndr::Usage::ReadBack, .size = 1024};
-        const Rndr::Buffer const_buffer(graphics_context, desc, Rndr::ConstByteSpan(data));
+        const Rndr::Buffer const_buffer(graphics_context, desc, Rndr::ToConstByteSpan(data));
         REQUIRE(const_buffer.IsValid());
 
         Rndr::StackArray<uint8_t, k_buffer_size> read_data_storage = {0};
@@ -732,7 +732,7 @@ TEST_CASE("Reading from GPU buffers", "[render-api][buffer]")
     SECTION("Reading from write only shader store buffer")
     {
         const Rndr::BufferDesc desc{.type = Rndr::BufferType::ShaderStorage, .usage = Rndr::Usage::Default, .size = 1024};
-        const Rndr::Buffer ss_buffer(graphics_context, desc, Rndr::ConstByteSpan(data));
+        const Rndr::Buffer ss_buffer(graphics_context, desc, Rndr::ToConstByteSpan(data));
         REQUIRE(ss_buffer.IsValid());
 
         Rndr::StackArray<uint8_t, k_buffer_size> read_data_storage = {0};
@@ -743,7 +743,7 @@ TEST_CASE("Reading from GPU buffers", "[render-api][buffer]")
     SECTION("Reading from dynamic shader store buffer")
     {
         const Rndr::BufferDesc desc{.type = Rndr::BufferType::ShaderStorage, .usage = Rndr::Usage::Dynamic, .size = 1024};
-        const Rndr::Buffer ss_buffer(graphics_context, desc, Rndr::ConstByteSpan(data));
+        const Rndr::Buffer ss_buffer(graphics_context, desc, Rndr::ToConstByteSpan(data));
         REQUIRE(ss_buffer.IsValid());
 
         Rndr::StackArray<uint8_t, k_buffer_size> read_data_storage = {0};
@@ -754,7 +754,7 @@ TEST_CASE("Reading from GPU buffers", "[render-api][buffer]")
     SECTION("Reading from read back shader store buffer")
     {
         const Rndr::BufferDesc desc{.type = Rndr::BufferType::ShaderStorage, .usage = Rndr::Usage::ReadBack, .size = 1024};
-        const Rndr::Buffer ss_buffer(graphics_context, desc, Rndr::ConstByteSpan(data));
+        const Rndr::Buffer ss_buffer(graphics_context, desc, Rndr::ToConstByteSpan(data));
         REQUIRE(ss_buffer.IsValid());
 
         Rndr::StackArray<uint8_t, k_buffer_size> read_data_storage = {0};
@@ -770,7 +770,7 @@ TEST_CASE("Reading from GPU buffers", "[render-api][buffer]")
     SECTION("Read from a buffer with invalid offset or size")
     {
         const Rndr::BufferDesc desc{.type = Rndr::BufferType::ShaderStorage, .usage = Rndr::Usage::ReadBack, .size = 1024};
-        const Rndr::Buffer ss_buffer(graphics_context, desc, Rndr::ConstByteSpan(data));
+        const Rndr::Buffer ss_buffer(graphics_context, desc, Rndr::ToConstByteSpan(data));
         REQUIRE(ss_buffer.IsValid());
 
         SECTION("Invalid offset")
@@ -825,7 +825,7 @@ TEST_CASE("Update the GPU buffer contents", "[render-api][buffer]")
         const Rndr::Buffer buffer(graphics_context, desc);
         REQUIRE(buffer.IsValid());
 
-        const bool result = graphics_context.Update(buffer, Rndr::ConstByteSpan(data));
+        const bool result = graphics_context.Update(buffer, Rndr::ToConstByteSpan(data));
         REQUIRE(!result);
     }
     SECTION("Update contents of the vertex buffer with dynamic usage")
@@ -834,7 +834,7 @@ TEST_CASE("Update the GPU buffer contents", "[render-api][buffer]")
         const Rndr::Buffer buffer(graphics_context, desc);
         REQUIRE(buffer.IsValid());
 
-        const bool result = graphics_context.Update(buffer, Rndr::ConstByteSpan(data));
+        const bool result = graphics_context.Update(buffer, Rndr::ToConstByteSpan(data));
         REQUIRE(result);
     }
     SECTION("Update contents of the vertex buffer with read back usage")
@@ -843,7 +843,7 @@ TEST_CASE("Update the GPU buffer contents", "[render-api][buffer]")
         const Rndr::Buffer buffer(graphics_context, desc);
         REQUIRE(buffer.IsValid());
 
-        const bool result = graphics_context.Update(buffer, Rndr::ConstByteSpan(data));
+        const bool result = graphics_context.Update(buffer, Rndr::ToConstByteSpan(data));
         REQUIRE(!result);
     }
 
@@ -853,7 +853,7 @@ TEST_CASE("Update the GPU buffer contents", "[render-api][buffer]")
         const Rndr::Buffer buffer(graphics_context, desc);
         REQUIRE(buffer.IsValid());
 
-        const bool result = graphics_context.Update(buffer, Rndr::ConstByteSpan(data));
+        const bool result = graphics_context.Update(buffer, Rndr::ToConstByteSpan(data));
         REQUIRE(!result);
     }
     SECTION("Update contents of the index buffer with dynamic usage")
@@ -862,7 +862,7 @@ TEST_CASE("Update the GPU buffer contents", "[render-api][buffer]")
         const Rndr::Buffer buffer(graphics_context, desc);
         REQUIRE(buffer.IsValid());
 
-        const bool result = graphics_context.Update(buffer, Rndr::ConstByteSpan(data));
+        const bool result = graphics_context.Update(buffer, Rndr::ToConstByteSpan(data));
         REQUIRE(result);
     }
     SECTION("Update contents of the index buffer with read back usage")
@@ -871,7 +871,7 @@ TEST_CASE("Update the GPU buffer contents", "[render-api][buffer]")
         const Rndr::Buffer buffer(graphics_context, desc);
         REQUIRE(buffer.IsValid());
 
-        const bool result = graphics_context.Update(buffer, Rndr::ConstByteSpan(data));
+        const bool result = graphics_context.Update(buffer, Rndr::ToConstByteSpan(data));
         REQUIRE(!result);
     }
 
@@ -881,7 +881,7 @@ TEST_CASE("Update the GPU buffer contents", "[render-api][buffer]")
         const Rndr::Buffer buffer(graphics_context, desc);
         REQUIRE(buffer.IsValid());
 
-        const bool result = graphics_context.Update(buffer, Rndr::ConstByteSpan(data));
+        const bool result = graphics_context.Update(buffer, Rndr::ToConstByteSpan(data));
         REQUIRE(!result);
     }
     SECTION("Update contents of the constant buffer with dynamic usage")
@@ -890,7 +890,7 @@ TEST_CASE("Update the GPU buffer contents", "[render-api][buffer]")
         const Rndr::Buffer buffer(graphics_context, desc);
         REQUIRE(buffer.IsValid());
 
-        const bool result = graphics_context.Update(buffer, Rndr::ConstByteSpan(data));
+        const bool result = graphics_context.Update(buffer, Rndr::ToConstByteSpan(data));
         REQUIRE(result);
     }
     SECTION("Update contents of the constant buffer with read back usage")
@@ -899,7 +899,7 @@ TEST_CASE("Update the GPU buffer contents", "[render-api][buffer]")
         const Rndr::Buffer buffer(graphics_context, desc);
         REQUIRE(buffer.IsValid());
 
-        const bool result = graphics_context.Update(buffer, Rndr::ConstByteSpan(data));
+        const bool result = graphics_context.Update(buffer, Rndr::ToConstByteSpan(data));
         REQUIRE(!result);
     }
 
@@ -909,7 +909,7 @@ TEST_CASE("Update the GPU buffer contents", "[render-api][buffer]")
         const Rndr::Buffer buffer(graphics_context, desc);
         REQUIRE(buffer.IsValid());
 
-        const bool result = graphics_context.Update(buffer, Rndr::ConstByteSpan(data));
+        const bool result = graphics_context.Update(buffer, Rndr::ToConstByteSpan(data));
         REQUIRE(!result);
     }
     SECTION("Update contents of the shader storage buffer with dynamic usage")
@@ -918,7 +918,7 @@ TEST_CASE("Update the GPU buffer contents", "[render-api][buffer]")
         const Rndr::Buffer buffer(graphics_context, desc);
         REQUIRE(buffer.IsValid());
 
-        const bool result = graphics_context.Update(buffer, Rndr::ConstByteSpan(data));
+        const bool result = graphics_context.Update(buffer, Rndr::ToConstByteSpan(data));
         REQUIRE(result);
     }
     SECTION("Update contents of the shader storage buffer with read back usage")
@@ -927,7 +927,7 @@ TEST_CASE("Update the GPU buffer contents", "[render-api][buffer]")
         const Rndr::Buffer buffer(graphics_context, desc);
         REQUIRE(buffer.IsValid());
 
-        const bool result = graphics_context.Update(buffer, Rndr::ConstByteSpan(data));
+        const bool result = graphics_context.Update(buffer, Rndr::ToConstByteSpan(data));
         REQUIRE(!result);
     }
 
@@ -953,7 +953,7 @@ TEST_CASE("Copy of buffers", "[render-api][buffer]")
     SECTION("Copy vertex buffer")
     {
         const Rndr::BufferDesc desc{.type = Rndr::BufferType::Vertex, .usage = Rndr::Usage::Default, .size = 1024};
-        const Rndr::Buffer src_buffer(graphics_context, desc, Rndr::ConstByteSpan(data));
+        const Rndr::Buffer src_buffer(graphics_context, desc, Rndr::ToConstByteSpan(data));
         REQUIRE(src_buffer.IsValid());
 
         const Rndr::BufferDesc desc2{.type = Rndr::BufferType::Vertex, .usage = Rndr::Usage::ReadBack, .size = 1024};
@@ -977,7 +977,7 @@ TEST_CASE("Copy of buffers", "[render-api][buffer]")
     SECTION("Copy shader storage buffer")
     {
         const Rndr::BufferDesc desc{.type = Rndr::BufferType::ShaderStorage, .usage = Rndr::Usage::Default, .size = 1024};
-        const Rndr::Buffer src_buffer(graphics_context, desc, Rndr::ConstByteSpan(data));
+        const Rndr::Buffer src_buffer(graphics_context, desc, Rndr::ToConstByteSpan(data));
         REQUIRE(src_buffer.IsValid());
 
         const Rndr::BufferDesc desc2{.type = Rndr::BufferType::ShaderStorage, .usage = Rndr::Usage::ReadBack, .size = 1024};
@@ -1002,7 +1002,7 @@ TEST_CASE("Copy of buffers", "[render-api][buffer]")
     SECTION("Copy between different types of buffers")
     {
         const Rndr::BufferDesc desc{.type = Rndr::BufferType::Vertex, .usage = Rndr::Usage::Default, .size = 1024};
-        const Rndr::Buffer src_buffer(graphics_context, desc, Rndr::ConstByteSpan(data));
+        const Rndr::Buffer src_buffer(graphics_context, desc, Rndr::ToConstByteSpan(data));
         REQUIRE(src_buffer.IsValid());
 
         const Rndr::BufferDesc desc2{.type = Rndr::BufferType::ShaderStorage, .usage = Rndr::Usage::ReadBack, .size = 1024};
@@ -1027,7 +1027,7 @@ TEST_CASE("Copy of buffers", "[render-api][buffer]")
     SECTION("Copy with bad parameters")
     {
         const Rndr::BufferDesc desc{.type = Rndr::BufferType::Vertex, .usage = Rndr::Usage::Default, .size = 1024};
-        const Rndr::Buffer src_buffer(graphics_context, desc, Rndr::ConstByteSpan(data));
+        const Rndr::Buffer src_buffer(graphics_context, desc, Rndr::ToConstByteSpan(data));
         REQUIRE(src_buffer.IsValid());
 
         const Rndr::BufferDesc desc2{.type = Rndr::BufferType::ShaderStorage, .usage = Rndr::Usage::ReadBack, .size = 1024};
@@ -1077,7 +1077,7 @@ TEST_CASE("Copy of buffers", "[render-api][buffer]")
     SECTION("Copy partial array")
     {
         const Rndr::BufferDesc desc{.type = Rndr::BufferType::Vertex, .usage = Rndr::Usage::Default, .size = 1024};
-        const Rndr::Buffer src_buffer(graphics_context, desc, Rndr::ConstByteSpan(data));
+        const Rndr::Buffer src_buffer(graphics_context, desc, Rndr::ToConstByteSpan(data));
         REQUIRE(src_buffer.IsValid());
 
         const Rndr::BufferDesc desc2{.type = Rndr::BufferType::ShaderStorage, .usage = Rndr::Usage::ReadBack, .size = 1024};
@@ -1126,7 +1126,7 @@ TEST_CASE("Running a compute shader", "[render-api][shader]")
 
         const Rndr::BufferDesc desc{
             .type = Rndr::BufferType::ShaderStorage, .usage = Rndr::Usage::Default, .size = k_buffer_size * sizeof(float)};
-        const Rndr::Buffer src_buffer(graphics_context, desc, Rndr::ToByteSpan(data));
+        const Rndr::Buffer src_buffer(graphics_context, desc, Rndr::ToConstByteSpan(data));
         REQUIRE(src_buffer.IsValid());
 
         const Rndr::BufferDesc desc2{
@@ -1187,7 +1187,7 @@ TEST_CASE("Running a compute shader", "[render-api][shader]")
                                                     .height = k_image_height,
                                                     .type = Rndr::ImageType::Image2D,
                                                     .pixel_format = Rndr::PixelFormat::R32_FLOAT},
-                                    Rndr::ToByteSpan(data));
+                                    Rndr::ToConstByteSpan(data));
         const Rndr::Image dst_image(graphics_context, Rndr::ImageDesc{.width = k_image_width,
                                                                       .height = k_image_height,
                                                                       .type = Rndr::ImageType::Image2D,

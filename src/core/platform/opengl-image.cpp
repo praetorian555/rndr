@@ -76,10 +76,10 @@ Rndr::Image::Image(const GraphicsContext& graphics_context, const ImageDesc& des
         constexpr int32_t k_mip_level = 0;
         constexpr int32_t k_x_offset = 0;
         constexpr int32_t k_y_offset = 0;
-        if (!init_data.empty())
+        if (!init_data.IsEmpty())
         {
             glTextureSubImage2D(m_native_texture, k_mip_level, k_x_offset, k_y_offset, desc.width, desc.height, format, data_type,
-                                init_data.data());
+                                init_data.GetData());
             RNDR_ASSERT_OPENGL();
         }
         if (desc.use_mips)
@@ -100,7 +100,7 @@ Rndr::Image::Image(const GraphicsContext& graphics_context, const ImageDesc& des
         glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
         RNDR_ASSERT_OPENGL();
         constexpr int k_face_count = 6;
-        if (!init_data.empty())
+        if (!init_data.IsEmpty())
         {
             for (int i = 0; i < k_face_count; i++)
             {
@@ -109,7 +109,7 @@ Rndr::Image::Image(const GraphicsContext& graphics_context, const ImageDesc& des
                 constexpr int32_t k_y_offset = 0;
                 constexpr int32_t k_depth = 1;
                 const int32_t z_offset = i;
-                const uint8_t* data = init_data.data() + i * desc.width * desc.height * FromPixelFormatToPixelSize(desc.pixel_format);
+                const uint8_t* data = init_data.GetData() + i * desc.width * desc.height * FromPixelFormatToPixelSize(desc.pixel_format);
                 glTextureSubImage3D(m_native_texture, k_mip_level, k_x_offset, k_y_offset, z_offset, desc.width, desc.height, k_depth,
                                     format, data_type, data);
                 RNDR_ASSERT_OPENGL();
@@ -144,7 +144,7 @@ Rndr::Image::Image(const GraphicsContext& graphics_context, Bitmap& bitmap, bool
                       .pixel_format = bitmap.GetPixelFormat(),
                       .use_mips = use_mips,
                       .sampler = sampler_desc},
-            ByteSpan(bitmap.GetData(), bitmap.GetSize2D()))
+            ConstByteSpan(bitmap.GetData(), bitmap.GetSize2D()))
 {
 }
 

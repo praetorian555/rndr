@@ -73,63 +73,63 @@ Rndr::CommandList::CommandList(Rndr::GraphicsContext& graphics_context) : m_grap
 
 bool Rndr::CommandList::Present(const SwapChain& swap_chain)
 {
-    m_commands.emplace_back(PresentCommand{.swap_chain = Ref<const SwapChain>(swap_chain)});
+    m_commands.PushBack(PresentCommand{.swap_chain = Ref<const SwapChain>(swap_chain)});
     return true;
 }
 
 bool Rndr::CommandList::ClearColor(const Vector4f& color)
 {
-    m_commands.emplace_back(ClearColorCommand{.color = color});
+    m_commands.PushBack(ClearColorCommand{.color = color});
     return true;
 }
 
 bool Rndr::CommandList::ClearDepth(float depth)
 {
-    m_commands.emplace_back(ClearDepthCommand{.depth = depth});
+    m_commands.PushBack(ClearDepthCommand{.depth = depth});
     return true;
 }
 
 bool Rndr::CommandList::ClearStencil(int32_t stencil)
 {
-    m_commands.emplace_back(ClearStencilCommand{.stencil = stencil});
+    m_commands.PushBack(ClearStencilCommand{.stencil = stencil});
     return true;
 }
 
 bool Rndr::CommandList::ClearAll(const Rndr::Vector4f& color, float depth, int32_t stencil)
 {
-    m_commands.emplace_back(ClearAllCommand{.color = color, .depth = depth, .stencil = stencil});
+    m_commands.PushBack(ClearAllCommand{.color = color, .depth = depth, .stencil = stencil});
     return true;
 }
 
 void Rndr::CommandList::Bind(const Rndr::SwapChain& swap_chain)
 {
-    m_commands.emplace_back(BindSwapChainCommand{.swap_chain = Ref<const SwapChain>(swap_chain)});
+    m_commands.PushBack(BindSwapChainCommand{.swap_chain = Ref<const SwapChain>(swap_chain)});
 }
 
 void Rndr::CommandList::Bind(const Rndr::Pipeline& pipeline)
 {
-    m_commands.emplace_back(BindPipelineCommand{.pipeline = Ref<const Pipeline>(pipeline)});
+    m_commands.PushBack(BindPipelineCommand{.pipeline = Ref<const Pipeline>(pipeline)});
 }
 
 void Rndr::CommandList::BindConstantBuffer(const Rndr::Buffer& buffer, int32_t binding_index)
 {
-    m_commands.emplace_back(BindConstantBufferCommand{.constant_buffer = Ref<const Buffer>(buffer), .binding_index = binding_index});
+    m_commands.PushBack(BindConstantBufferCommand{.constant_buffer = Ref<const Buffer>(buffer), .binding_index = binding_index});
 }
 
 void Rndr::CommandList::Bind(const Rndr::Image& image, int32_t binding_index)
 {
-    m_commands.emplace_back(BindImageCommand{.image = Ref<const Image>(image), .binding_index = binding_index});
+    m_commands.PushBack(BindImageCommand{.image = Ref<const Image>(image), .binding_index = binding_index});
 }
 
 void Rndr::CommandList::DrawVertices(Rndr::PrimitiveTopology topology, int32_t vertex_count, int32_t instance_count, int32_t first_vertex)
 {
-    m_commands.emplace_back(DrawVerticesCommand{
+    m_commands.PushBack(DrawVerticesCommand{
         .primitive_topology = topology, .vertex_count = vertex_count, .instance_count = instance_count, .first_vertex = first_vertex});
 }
 
 void Rndr::CommandList::DrawIndices(Rndr::PrimitiveTopology topology, int32_t index_count, int32_t instance_count, int32_t first_index)
 {
-    m_commands.emplace_back(DrawIndicesCommand{
+    m_commands.PushBack(DrawIndicesCommand{
         .primitive_topology = topology, .index_count = index_count, .instance_count = instance_count, .first_index = first_index});
 }
 
@@ -145,11 +145,11 @@ void Rndr::CommandList::DrawVerticesMulti(const Rndr::Pipeline& pipeline, Rndr::
     GLuint buffer_handle = 0;
     glCreateBuffers(1, &buffer_handle);
     RNDR_ASSERT_OPENGL();
-    glNamedBufferStorage(buffer_handle, draws.size() * sizeof(DrawVerticesData), draws.data(), GL_DYNAMIC_STORAGE_BIT);
+    glNamedBufferStorage(buffer_handle, draws.GetSize() * sizeof(DrawVerticesData), draws.GetData(), GL_DYNAMIC_STORAGE_BIT);
     RNDR_ASSERT_OPENGL();
 
     Bind(pipeline);
-    m_commands.emplace_back(DrawVerticesMultiCommand(topology, buffer_handle, static_cast<uint32_t>(draws.size())));
+    m_commands.PushBack(DrawVerticesMultiCommand(topology, buffer_handle, static_cast<uint32_t>(draws.GetSize())));
 }
 
 void Rndr::CommandList::DrawIndicesMulti(const Rndr::Pipeline& pipeline, Rndr::PrimitiveTopology topology,
@@ -167,13 +167,13 @@ void Rndr::CommandList::DrawIndicesMulti(const Rndr::Pipeline& pipeline, Rndr::P
     GLuint buffer_handle = 0;
     glCreateBuffers(1, &buffer_handle);
     RNDR_ASSERT_OPENGL();
-    glNamedBufferStorage(buffer_handle, draws.size() * sizeof(DrawIndicesData), draws.data(), GL_DYNAMIC_STORAGE_BIT);
+    glNamedBufferStorage(buffer_handle, draws.GetSize() * sizeof(DrawIndicesData), draws.GetData(), GL_DYNAMIC_STORAGE_BIT);
     RNDR_ASSERT_OPENGL();
     glBindBuffer(GL_DRAW_INDIRECT_BUFFER, buffer_handle);
     RNDR_ASSERT_OPENGL();
 
     Bind(pipeline);
-    m_commands.emplace_back(DrawIndicesMultiCommand(topology, buffer_handle, static_cast<uint32_t>(draws.size())));
+    m_commands.PushBack(DrawIndicesMultiCommand(topology, buffer_handle, static_cast<uint32_t>(draws.GetSize())));
 }
 
 struct CommandExecutor

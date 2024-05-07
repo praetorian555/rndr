@@ -15,7 +15,7 @@ Rndr::Buffer::Buffer(const GraphicsContext& graphics_context, const BufferDesc& 
     glCreateBuffers(1, &m_native_buffer);
     RNDR_ASSERT_OPENGL();
     const GLenum buffer_usage = FromUsageToOpenGL(desc.usage);
-    glNamedBufferStorage(m_native_buffer, desc.size, init_data.data(), buffer_usage);
+    glNamedBufferStorage(m_native_buffer, desc.size, init_data.GetData(), buffer_usage);
     RNDR_ASSERT_OPENGL();
     RNDR_LOG_DEBUG("Created %s buffer %u, size: %d, stride: %d, usage %s", FromBufferTypeToString(m_desc.type).c_str(), m_native_buffer,
                    desc.size, m_desc.stride, FromOpenGLUsageToString(buffer_usage).c_str());

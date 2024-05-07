@@ -6,7 +6,7 @@
 
 Rndr::FrameBuffer::FrameBuffer(const Rndr::GraphicsContext& graphics_context, const Rndr::FrameBufferDesc& desc) : m_desc(desc)
 {
-    if (m_desc.color_attachments.size() == 0)
+    if (m_desc.color_attachments.GetSize() == 0)
     {
         RNDR_LOG_ERROR("Frame buffer must have at least one color attachment!");
         return;
@@ -28,7 +28,7 @@ Rndr::FrameBuffer::FrameBuffer(const Rndr::GraphicsContext& graphics_context, co
     glCreateFramebuffers(1, &m_native_frame_buffer);
     RNDR_ASSERT_OPENGL();
 
-    for (int32_t i = 0; i < m_desc.color_attachments.size(); ++i)
+    for (int32_t i = 0; i < m_desc.color_attachments.GetSize(); ++i)
     {
         const Rndr::ImageDesc& color_attachment_desc = m_desc.color_attachments[i];
         Image color_attachment(graphics_context, color_attachment_desc);
@@ -37,7 +37,7 @@ Rndr::FrameBuffer::FrameBuffer(const Rndr::GraphicsContext& graphics_context, co
             RNDR_LOG_ERROR("Failed to create color attachment %d!", i);
             return;
         }
-        m_color_attachments.emplace_back(std::move(color_attachment));
+        m_color_attachments.PushBack(Opal::Move(color_attachment));
         glNamedFramebufferTexture(m_native_frame_buffer, GL_COLOR_ATTACHMENT0 + i, m_color_attachments[i].GetNativeTexture(), 0);
         RNDR_ASSERT_OPENGL();
     }
@@ -102,7 +102,7 @@ bool Rndr::FrameBuffer::IsValid() const
     {
         return false;
     }
-    if (m_color_attachments.empty())
+    if (m_color_attachments.IsEmpty())
     {
         return false;
     }
@@ -127,12 +127,12 @@ const Rndr::FrameBufferDesc& Rndr::FrameBuffer::GetDesc() const
 
 int32_t Rndr::FrameBuffer::GetColorAttachmentCount() const
 {
-    return static_cast<int32_t>(m_color_attachments.size());
+    return static_cast<int32_t>(m_color_attachments.GetSize());
 }
 
 const Rndr::Image& Rndr::FrameBuffer::GetColorAttachment(int32_t index) const
 {
-    RNDR_ASSERT(index >= 0 && index < m_color_attachments.size());
+    RNDR_ASSERT(index >= 0 && index < m_color_attachments.GetSize());
     return m_color_attachments[index];
 }
 

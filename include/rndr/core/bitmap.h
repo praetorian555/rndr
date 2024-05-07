@@ -69,8 +69,8 @@ public:
      */
     [[nodiscard]] size_t GetSize3D() const { return m_width * m_height * m_depth * GetPixelSize(); }
 
-    [[nodiscard]] uint8_t* GetData() { return m_data.data(); }
-    [[nodiscard]] const uint8_t* GetData() const { return m_data.data(); }
+    [[nodiscard]] uint8_t* GetData() { return m_data.GetData(); }
+    [[nodiscard]] const uint8_t* GetData() const { return m_data.GetData(); }
 
     [[nodiscard]] Vector4f GetPixel(int x, int y, int z = 0) const;
     void SetPixel(int x, int y, int z, const Vector4f& pixel);

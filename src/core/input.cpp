@@ -148,8 +148,8 @@ bool Rndr::InputContext::AddAction(const Rndr::InputAction& action,
     action_data.action = action;
     action_data.callback = data.callback;
     action_data.native_window = data.native_window;
-    action_data.bindings.assign(data.bindings.begin(), data.bindings.end());
-    m_context_data->actions.push_back(action_data);
+    action_data.bindings.Assign(data.bindings.begin(), data.bindings.end());
+    m_context_data->actions.PushBack(action_data);
     return true;
 }
 
@@ -187,7 +187,7 @@ bool Rndr::InputContext::AddBindingToAction(const Rndr::InputAction& action,
             existing_binding = binding;
             return true;
         }
-        action_data.bindings.push_back(binding);
+        action_data.bindings.PushBack(binding);
         return true;
     }
     RNDR_LOG_ERROR("Action does not exist");
@@ -212,9 +212,15 @@ bool Rndr::InputContext::RemoveBindingFromAction(const Rndr::InputAction& action
     {
         if (action_data.action == action)
         {
-            std::erase_if(action_data.bindings,
-                          [&binding](const InputBinding& existing_binding)
-                          { return existing_binding == binding; });
+            for (auto it = action_data.bindings.ConstBegin(); it != action_data.bindings.ConstEnd(); ++it)
+            {
+                if (*it != binding)
+                {
+                    continue;
+                }
+                action_data.bindings.Erase(it);
+                return true;
+            }
             return true;
         }
     }
@@ -234,9 +240,14 @@ bool Rndr::InputContext::ContainsAction(const Rndr::InputAction& action) const
         RNDR_LOG_ERROR("Invalid action");
         return false;
     }
-    return std::ranges::any_of(m_context_data->actions,
-                               [&action](const auto& action_data)
-                               { return action_data.action == action; });
+    for (const ActionData& action_data : m_context_data->actions)
+    {
+        if (action_data.action == action)
+        {
+            return true;
+        }
+    }
+    return false;
 }
 
 Rndr::InputCallback Rndr::InputContext::GetActionCallback(const Rndr::InputAction& action) const
@@ -251,10 +262,14 @@ Rndr::InputCallback Rndr::InputContext::GetActionCallback(const Rndr::InputActio
         RNDR_LOG_ERROR("Invalid action");
         return nullptr;
     }
-    const auto& action_iter = std::ranges::find_if(m_context_data->actions,
-                                                   [&action](const auto& action_data)
-                                                   { return action_data.action == action; });
-    return action_iter != m_context_data->actions.end() ? action_iter->callback : nullptr;
+    for (const ActionData& action_data : m_context_data->actions)
+    {
+        if (action_data.action == action)
+        {
+            return action_data.callback;
+        }
+    }
+    return nullptr;
 }
 
 Rndr::Span<Rndr::InputBinding> Rndr::InputContext::GetActionBindings(
@@ -270,11 +285,14 @@ Rndr::Span<Rndr::InputBinding> Rndr::InputContext::GetActionBindings(
         RNDR_LOG_ERROR("Invalid action");
         return {};
     }
-    const auto& action_iter = std::ranges::find_if(m_context_data->actions,
-                                                   [&action](const auto& action_data)
-                                                   { return action_data.action == action; });
-    return action_iter != m_context_data->actions.end() ? action_iter->bindings
-                                                        : Span<InputBinding>{};
+    for (ActionData& action_data : m_context_data->actions)
+    {
+        if (action_data.action == action)
+        {
+            return Span<InputBinding>{action_data.bindings.begin(), action_data.bindings.end()};
+        }
+    }
+    return Span<InputBinding>{};
 }
 
 // InputSystem ////////////////////////////////////////////////////////////////////////////////////
@@ -299,7 +317,7 @@ bool Rndr::InputSystem::Init()
     g_system_data = RNDR_MAKE_SCOPED(InputSystemData);
     const Ref<InputContextData> default_context_data =
         Ref{g_system_data->default_context.m_context_data.get()};
-    g_system_data->contexts.push_back(default_context_data);
+    g_system_data->contexts.PushBack(default_context_data);
     return true;
 }
 
@@ -316,7 +334,7 @@ bool Rndr::InputSystem::Destroy()
 Rndr::InputContext& Rndr::InputSystem::GetCurrentContext()
 {
     RNDR_ASSERT(g_system_data != nullptr);
-    return g_system_data->contexts.back()->context.Get();
+    return g_system_data->contexts.Back().GetValue()->context.Get();
 }
 
 bool Rndr::InputSystem::PushContext(const Rndr::InputContext& context)
@@ -325,7 +343,7 @@ bool Rndr::InputSystem::PushContext(const Rndr::InputContext& context)
     {
         return false;
     }
-    g_system_data->contexts.emplace_back(*context.m_context_data.get());
+    g_system_data->contexts.PushBack(Ref(*context.m_context_data.get()));
     return true;
 }
 
@@ -335,12 +353,12 @@ bool Rndr::InputSystem::PopContext()
     {
         return false;
     }
-    if (g_system_data->contexts.size() == 1)
+    if (g_system_data->contexts.GetSize() == 1)
     {
         RNDR_LOG_ERROR("Cannot pop default context");
         return false;
     }
-    g_system_data->contexts.pop_back();
+    g_system_data->contexts.PopBack();
     return true;
 }
 
@@ -426,7 +444,7 @@ bool Rndr::InputSystem::ProcessEvents(float delta_seconds)
         return false;
     }
     EventQueue& events = g_system_data->events;
-    const InputContextData& context = g_system_data->contexts.back();
+    const InputContextData& context = g_system_data->contexts.Back().GetValue();
     while (!events.empty())
     {
         Event event = events.front();

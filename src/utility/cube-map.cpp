@@ -220,10 +220,10 @@ bool Rndr::CubeMap::ConvolveDiffuse(const Vector3f* in_data, int in_width, int i
 
     Array<Vector3f> tmp(out_width * out_height);
 
-    stbir_resize(reinterpret_cast<const float*>(in_data), in_width, in_height, 0, reinterpret_cast<float*>(tmp.data()), out_width,
+    stbir_resize(reinterpret_cast<const float*>(in_data), in_width, in_height, 0, reinterpret_cast<float*>(tmp.GetData()), out_width,
                  out_height, 0, STBIR_RGB, STBIR_TYPE_FLOAT, STBIR_EDGE_CLAMP, STBIR_FILTER_CUBICBSPLINE);
 
-    const Vector3f* scratch = tmp.data();
+    const Vector3f* scratch = tmp.GetData();
     in_width = out_width;
     in_height = out_height;
 

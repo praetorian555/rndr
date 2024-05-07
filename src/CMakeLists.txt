@@ -83,7 +83,7 @@ target_link_libraries(rndr PRIVATE rndr_options)
 target_compile_features(rndr PRIVATE cxx_std_20)
 
 # We need this directory, and users of our library will need it too
-target_include_directories(rndr PUBLIC ${PROJECT_SOURCE_DIR}/include)
+target_include_directories(rndr PUBLIC $<BUILD_INTERFACE:${PROJECT_SOURCE_DIR}/include>)
 target_include_directories(rndr PRIVATE ${PROJECT_SOURCE_DIR}/src)
 target_include_directories(rndr PRIVATE ${PROJECT_SOURCE_DIR}/extern/glad/include)
 target_include_directories(rndr PRIVATE ${PROJECT_SOURCE_DIR}/extern/stb_image/include)
@@ -93,8 +93,30 @@ target_compile_definitions(rndr PUBLIC RNDR_OPENGL)
 
 # Setup library dependencies
 target_link_libraries(rndr PUBLIC opengl32.lib User32.lib)
-target_link_libraries(rndr PUBLIC math)
+target_link_libraries(rndr PUBLIC math opal)
 
 # @formatter:off
 target_compile_definitions(rndr PUBLIC RNDR_CORE_ASSETS_DIR="${CMAKE_CURRENT_SOURCE_DIR}/../assets")
 # @formatter:on
+
+## Generate the export header for rndr and attach it to the target
+include(GenerateExportHeader)
+generate_export_header(rndr EXPORT_FILE_NAME include/rndr/export.h)
+target_compile_definitions(rndr PUBLIC "$<$<NOT:$<BOOL:${BUILD_SHARED_LIBS}>>:RNDR_STATIC_DEFINE>")
+target_include_directories(rndr PUBLIC "$<BUILD_INTERFACE:${CMAKE_CURRENT_BINARY_DIR}/include>")
+target_include_directories(rndr PUBLIC "$<INSTALL_INTERFACE:include>")
+
+# Install the library
+install(TARGETS rndr
+        LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
+        ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
+        RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}  # For Windows DLL files
+)
+install(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/include/
+        DESTINATION include
+        FILES_MATCHING PATTERN "*.h"
+        PATTERN "*.hpp")
+install(DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/include/
+        DESTINATION include
+        FILES_MATCHING PATTERN "*.h"
+        PATTERN "*.hpp")

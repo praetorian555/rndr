@@ -28,7 +28,7 @@ Rndr::LineRenderer::LineRenderer(const Rndr::String& name, const Rndr::RendererB
     m_vertex_buffer =
         RNDR_MAKE_SCOPED(Buffer, m_desc.graphics_context,
                          {.type = Rndr::BufferType::ShaderStorage, .usage = Usage::Dynamic, .size = k_vertex_data_size, .stride = k_stride},
-                         Rndr::ToByteSpan(m_vertex_data));
+                         ToConstByteSpan(m_vertex_data));
     if (!m_vertex_buffer->IsValid())
     {
         RNDR_LOG_ERROR("Failed to create vertex buffer for LineRenderer");
@@ -56,38 +56,38 @@ Rndr::LineRenderer::LineRenderer(const Rndr::String& name, const Rndr::RendererB
                                           .usage = Rndr::Usage::Dynamic,
                                           .size = sizeof(Matrix4x4f),
                                           .stride = sizeof(Matrix4x4f)},
-                                         Rndr::ToByteSpan(identity_matrix));
+                                         Rndr::ToConstByteSpan(identity_matrix));
     if (!m_constant_buffer->IsValid())
     {
         RNDR_LOG_ERROR("Failed to create constant buffer for LineRenderer");
         return;
     }
 
-    m_vertex_data.reserve(k_max_lines_count * 2);
+    m_vertex_data.Reserve(k_max_lines_count * 2);
 }
 
 void Rndr::LineRenderer::AddLine(const Point3f& start, const Point3f& end, const Vector4f& color)
 {
-    if (m_vertex_data.size() >= k_max_lines_count * 2)
+    if (m_vertex_data.GetSize() >= k_max_lines_count * 2)
     {
         RNDR_LOG_ERROR("LineRenderer reached maximum number of lines");
         return;
     }
 
-    m_vertex_data.push_back({start, color});
-    m_vertex_data.push_back({end, color});
+    m_vertex_data.PushBack({start, color});
+    m_vertex_data.PushBack({end, color});
 }
 
 void Rndr::LineRenderer::SetCameraTransform(const Matrix4x4f& transform)
 {
-    m_desc.graphics_context->Update(*m_constant_buffer, Rndr::ToByteSpan(transform));
+    m_desc.graphics_context->Update(*m_constant_buffer, ToConstByteSpan(transform));
 }
 
 bool Rndr::LineRenderer::Render()
 {
     RNDR_TRACE_SCOPED(LineRenderer::Render);
 
-    if (m_vertex_data.empty())
+    if (m_vertex_data.IsEmpty())
     {
         return true;
     }
@@ -96,10 +96,10 @@ bool Rndr::LineRenderer::Render()
     m_desc.graphics_context->Bind(*m_pipeline);
     m_desc.graphics_context->Bind(*m_constant_buffer, 0);
 
-    m_desc.graphics_context->Update(*m_vertex_buffer, Rndr::ToByteSpan(m_vertex_data));
-    const int32_t vertex_count = static_cast<int32_t>(m_vertex_data.size());
+    m_desc.graphics_context->Update(*m_vertex_buffer, ToConstByteSpan(m_vertex_data));
+    const int32_t vertex_count = static_cast<int32_t>(m_vertex_data.GetSize());
     m_desc.graphics_context->DrawVertices(PrimitiveTopology::Line, vertex_count);
 
-    m_vertex_data.clear();
+    m_vertex_data.Clear();
     return true;
 }

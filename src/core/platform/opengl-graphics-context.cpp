@@ -59,7 +59,7 @@ bool CheckRequiredExtensions(const Rndr::Array<Rndr::String>& required_extension
         }
     }
 
-    const bool success = found_extensions.size() == required_extensions.size();
+    const bool success = found_extensions.size() == required_extensions.GetSize();
     return success;
 }
 }  // namespace
@@ -564,14 +564,14 @@ bool Rndr::GraphicsContext::Update(const Buffer& buffer, const ConstByteSpan& da
         RNDR_LOG_ERROR("Update of the buffer failed since the offset is invalid!");
         return false;
     }
-    if (data.empty() || offset + static_cast<int32_t>(data.size()) > static_cast<int32_t>(desc.size))
+    if (data.IsEmpty() || offset + static_cast<int32_t>(data.GetSize()) > static_cast<int32_t>(desc.size))
     {
         RNDR_LOG_ERROR("Update of the buffer failed since the data size is invalid!");
         return false;
     }
 
     const GLuint native_buffer = buffer.GetNativeBuffer();
-    glNamedBufferSubData(native_buffer, offset, static_cast<GLsizeiptr>(data.size()), data.data());
+    glNamedBufferSubData(native_buffer, offset, static_cast<GLsizeiptr>(data.GetSize()), data.GetData());
     RNDR_ASSERT_OPENGL();
     return true;
 }
@@ -617,7 +617,7 @@ bool Rndr::GraphicsContext::Read(const Buffer& buffer, ByteSpan& out_data, int32
         return false;
     }
 
-    memcpy(out_data.data(), gpu_data + offset, size);
+    memcpy(out_data.GetData(), gpu_data + offset, size);
 
     glUnmapNamedBuffer(native_buffer);
     RNDR_ASSERT_OPENGL();
@@ -640,10 +640,10 @@ bool Rndr::GraphicsContext::Read(const Rndr::Image& image, Rndr::Bitmap& out_dat
     const GLenum data_type = FromPixelFormatToDataType(desc.pixel_format);
     const int32_t pixel_size = FromPixelFormatToPixelSize(desc.pixel_format);
     Array<uint8_t> tmp_data(pixel_size * desc.width * desc.height);
-    glGetTextureImage(image.GetNativeTexture(), level, format, data_type, pixel_size * desc.width * desc.height, tmp_data.data());
+    glGetTextureImage(image.GetNativeTexture(), level, format, data_type, pixel_size * desc.width * desc.height, tmp_data.GetData());
     RNDR_ASSERT_OPENGL();
 
-    out_data = Bitmap(desc.width, desc.height, 1, desc.pixel_format, tmp_data);
+    out_data = Bitmap(desc.width, desc.height, 1, desc.pixel_format, ToByteSpan(tmp_data));
     return true;
 }
 
@@ -700,7 +700,7 @@ bool Rndr::GraphicsContext::ReadSwapChainColor(const SwapChain& swap_chain, Bitm
     const int32_t height = swap_chain.GetDesc().height;
     const int32_t size = width * height * 4;
     ByteArray data(size);
-    glReadPixels(0, 0, width, height, GL_RGBA, GL_UNSIGNED_BYTE, data.data());
+    glReadPixels(0, 0, width, height, GL_RGBA, GL_UNSIGNED_BYTE, data.GetData());
     RNDR_ASSERT_OPENGL();
     for (int32_t i = 0; i < height / 2; i++)
     {
@@ -714,7 +714,7 @@ bool Rndr::GraphicsContext::ReadSwapChainColor(const SwapChain& swap_chain, Bitm
             std::swap(data[index1 + 3], data[index2 + 3]);
         }
     }
-    out_bitmap = Bitmap{width, height, 1, PixelFormat::R8G8B8A8_UNORM_SRGB, data};
+    out_bitmap = Bitmap{width, height, 1, PixelFormat::R8G8B8A8_UNORM_SRGB, ToByteSpan(data)};
     return true;
 }
 
@@ -726,9 +726,9 @@ bool Rndr::GraphicsContext::ReadSwapChainDepthStencil(const SwapChain& swap_chai
     const int32_t height = swap_chain.GetDesc().height;
     const int32_t size = width * height;
     Array<uint32_t> data(size);
-    glReadPixels(0, 0, width, height, GL_DEPTH_STENCIL, GL_UNSIGNED_INT_24_8, data.data());
+    glReadPixels(0, 0, width, height, GL_DEPTH_STENCIL, GL_UNSIGNED_INT_24_8, data.GetData());
     RNDR_ASSERT_OPENGL();
-    const ByteSpan byte_data(reinterpret_cast<uint8_t*>(data.data()), size * sizeof(uint32_t));
+    const ByteSpan byte_data(reinterpret_cast<uint8_t*>(data.GetData()), size * sizeof(uint32_t));
     out_bitmap = Bitmap{width, height, 1, PixelFormat::D24_UNORM_S8_UINT, byte_data};
     return true;
 }

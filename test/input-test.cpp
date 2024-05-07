@@ -113,14 +113,14 @@ TEST_CASE("Input context", "[input]")
                                        .modifier = 1.0f};
             REQUIRE(context.AddBindingToAction(action, binding));
             Rndr::Span<Rndr::InputBinding> reg_bindings = context.GetActionBindings(action);
-            REQUIRE(reg_bindings.size() == 2);
+            REQUIRE(reg_bindings.GetSize() == 2);
             REQUIRE(reg_bindings[0] == bindings[0]);
             REQUIRE(reg_bindings[1] == binding);
             SECTION("Remove binding")
             {
                 REQUIRE(context.RemoveBindingFromAction(action, bindings[0]));
                 reg_bindings = context.GetActionBindings(action);
-                REQUIRE(reg_bindings.size() == 1);
+                REQUIRE(reg_bindings.GetSize() == 1);
                 REQUIRE(reg_bindings[0] == binding);
             }
         }
@@ -131,7 +131,7 @@ TEST_CASE("Input context", "[input]")
                                        .modifier = 1.0f};
             REQUIRE(!context.AddBindingToAction(action, binding));
             Rndr::Span<Rndr::InputBinding> reg_bindings = context.GetActionBindings(action);
-            REQUIRE(reg_bindings.size() == 1);
+            REQUIRE(reg_bindings.GetSize() == 1);
             REQUIRE(reg_bindings[0] == bindings[0]);
         }
     }

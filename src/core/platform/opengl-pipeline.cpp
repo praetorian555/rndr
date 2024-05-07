@@ -77,7 +77,7 @@ Rndr::Pipeline::Pipeline(const GraphicsContext& graphics_context, const Pipeline
     glBindVertexArray(m_native_vertex_array);
     RNDR_ASSERT_OPENGL();
     const InputLayoutDesc& input_layout_desc = m_desc.input_layout;
-    for (int i = 0; i < input_layout_desc.vertex_buffers.size(); i++)
+    for (int i = 0; i < input_layout_desc.vertex_buffers.GetSize(); i++)
     {
         const Buffer& buffer = input_layout_desc.vertex_buffers[i].Get();
         const BufferDesc& buffer_desc = buffer.GetDesc();
@@ -97,7 +97,7 @@ Rndr::Pipeline::Pipeline(const GraphicsContext& graphics_context, const Pipeline
             RNDR_ASSERT_OPENGL();
         }
     }
-    for (int i = 0; i < input_layout_desc.elements.size(); i++)
+    for (int i = 0; i < input_layout_desc.elements.GetSize(); i++)
     {
         const InputLayoutElement& element = input_layout_desc.elements[i];
         const int32_t attribute_index = i;

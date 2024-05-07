@@ -6,8 +6,8 @@ option(RNDR_BUILD_TESTS "Build tests" ON)
 message(STATUS "RNDR_BUILD_TESTS ${RNDR_BUILD_TESTS}")
 option(RNDR_SHARED_LIBS "Build shared library" OFF)
 message(STATUS "RNDR_SHARED_LIBS ${RNDR_SHARED_LIBS}")
-option(RNDR_HARDENED "Enable hardened mode" ON)
-message(STATUS "RNDR_HARDENED ${RNDR_HARDENED}")
+option(RNDR_HARDENING "Enable hardened mode" ON)
+message(STATUS "RNDR_HARDENING ${RNDR_HARDENING}")
 option(RNDR_TRACER "Use built in profiler" OFF)
 message(STATUS "RNDR_TRACER ${RNDR_TRACER}")
 option(RNDR_DEFAULT_LOGGER "Use default logger" OFF)
@@ -20,7 +20,7 @@ if (NOT DEFINED CMAKE_CXX_VISIBILITY_PRESET AND NOT DEFINED CMAKE_VISIBILITY_INL
 endif ()
 
 ## Let OPAL_SHARED_LIBS override BUILD_SHARED_LIBS
-if (DEFINED RNDR_SHARED_LIBS)
+if (RNDR_SHARED_LIBS)
     set(BUILD_SHARED_LIBS "${RNDR_SHARED_LIBS}")
 endif ()
 
@@ -35,19 +35,30 @@ rndr_setup_compiler_options(rndr_options)
 
 # Setup sanitizer options
 include(cmake/sanitizers.cmake)
-if (RNDR_HARDENED)
+if (RNDR_HARDENING)
     rndr_setup_sanitizers(rndr_options)
 endif ()
 
 include(FetchContent)
 SET(MATH_BUILD_TESTS OFF)
-SET(MATH_HARDENED ${RNDR_HARDENED})
+SET(MATH_HARDENED ${RNDR_HARDENING})
+set(MATH_SHARED_LIBS ${RNDR_SHARED_LIBS})
 FetchContent_Declare(
         math
         GIT_REPOSITORY https://github.com/praetorian555/math
         GIT_TAG        Math-0.1.0
 )
 FetchContent_MakeAvailable(math)
+
+SET(OPAL_BUILD_TESTS OFF)
+SET(OPAL_HARDENING ${RNDR_HARDENING})
+set(OPAL_SHARED_LIBS ${RNDR_SHARED_LIBS})
+FetchContent_Declare(
+        opal
+        GIT_REPOSITORY https://github.com/praetorian555/opal
+        GIT_TAG        main
+)
+FetchContent_MakeAvailable(opal)
 
 # The compiled library code is here
 add_subdirectory(src)

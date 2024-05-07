@@ -57,7 +57,7 @@ Rndr::ByteArray Rndr::File::ReadEntireFile(const String& file_path)
     fseek(file, 0, SEEK_SET);
 
     ByteArray contents(contents_size);
-    const size_t read_bytes = fread(contents.data(), 1, contents.size(), file);
+    const size_t read_bytes = fread(contents.GetData(), 1, contents.GetSize(), file);
     if (read_bytes != contents_size)
     {
         RNDR_LOG_WARNING("Failed to read all bytes from the file!");
