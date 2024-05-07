@@ -28,21 +28,21 @@ bool Rndr::FileHandler::IsEOF() const
     return feof(m_file_handle) != 0;
 }
 
-bool Rndr::FileHandler::Read(void* buffer, size_t element_size, size_t element_count)
+bool Rndr::FileHandler::Read(void* buffer, u64 element_size, u64 element_count)
 {
-    const size_t read_elements = fread(buffer, element_size, element_count, m_file_handle);
+    const u64 read_elements = fread(buffer, element_size, element_count, m_file_handle);
     RNDR_ASSERT(read_elements == element_count);
     return read_elements == element_count;
 }
 
-bool Rndr::FileHandler::Write(const void* buffer, size_t element_size, size_t element_count)
+bool Rndr::FileHandler::Write(const void* buffer, u64 element_size, u64 element_count)
 {
-    const size_t written_elements = fwrite(buffer, element_size, element_count, m_file_handle);
+    const u64 written_elements = fwrite(buffer, element_size, element_count, m_file_handle);
     RNDR_ASSERT(written_elements == element_count);
     return written_elements == element_count;
 }
 
-Rndr::ByteArray Rndr::File::ReadEntireFile(const String& file_path)
+Opal::Array<Rndr::u8> Rndr::File::ReadEntireFile(const String& file_path)
 {
     FILE* file = nullptr;
     fopen_s(&file, file_path.c_str(), "rb");
@@ -56,8 +56,8 @@ Rndr::ByteArray Rndr::File::ReadEntireFile(const String& file_path)
     const int contents_size = ftell(file);
     fseek(file, 0, SEEK_SET);
 
-    ByteArray contents(contents_size);
-    const size_t read_bytes = fread(contents.GetData(), 1, contents.GetSize(), file);
+    Opal::Array<u8> contents(contents_size);
+    const u64 read_bytes = fread(contents.GetData(), 1, contents.GetSize(), file);
     if (read_bytes != contents_size)
     {
         RNDR_LOG_WARNING("Failed to read all bytes from the file!");
@@ -70,7 +70,7 @@ Rndr::ByteArray Rndr::File::ReadEntireFile(const String& file_path)
 
 Rndr::String Rndr::File::ReadEntireTextFile(const Rndr::String& file_path)
 {
-    ByteArray contents = ReadEntireFile(file_path);
+    Opal::Array<u8> contents = ReadEntireFile(file_path);
     return {contents.begin(), contents.end()};
 }
 
@@ -98,16 +98,16 @@ Rndr::String Rndr::File::ReadShader(const Rndr::String& ref_path, const Rndr::St
 
     while (shader_contents.find("#include") != String::npos)
     {
-        const size_t include_start = shader_contents.find("#include");
-        const size_t include_end = shader_contents.find_first_of('\n', include_start);
-        const size_t include_length = include_end - include_start;
+        const u64 include_start = shader_contents.find("#include");
+        const u64 include_end = shader_contents.find_first_of('\n', include_start);
+        const u64 include_length = include_end - include_start;
         const String include_line = shader_contents.substr(include_start, include_length);
-        const size_t quote_start = include_line.find_first_of('\"');
-        const size_t quote_end = include_line.find_last_of('\"');
-        const size_t quote_length = quote_end - quote_start;
-        const size_t bracket_start = include_line.find_first_of('<');
-        const size_t bracket_end = include_line.find_last_of('>');
-        const size_t bracket_length = bracket_end - bracket_start;
+        const u64 quote_start = include_line.find_first_of('\"');
+        const u64 quote_end = include_line.find_last_of('\"');
+        const u64 quote_length = quote_end - quote_start;
+        const u64 bracket_start = include_line.find_first_of('<');
+        const u64 bracket_end = include_line.find_last_of('>');
+        const u64 bracket_length = bracket_end - bracket_start;
         String include_path;
         if (quote_start != String::npos)
         {
@@ -186,7 +186,7 @@ Rndr::Bitmap Rndr::File::ReadEntireImage(const String& file_path, PixelFormat de
         }
         tmp_data = reinterpret_cast<uint8_t*>(tmp_data_float);
     }
-    const size_t pixel_size = FromPixelFormatToPixelSize(desired_format);
+    const u64 pixel_size = FromPixelFormatToPixelSize(desired_format);
     Bitmap bitmap{width, height, 1, desired_format, {tmp_data, width * height * pixel_size}};
     stbi_image_free(tmp_data);
     return bitmap;

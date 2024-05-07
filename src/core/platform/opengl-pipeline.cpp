@@ -3,7 +3,7 @@
 #include <glad/glad.h>
 
 #include "core/platform/opengl-helpers.h"
-#include "rndr/core/containers/array.h"
+#include "opal/container/array.h"
 #include "rndr/core/containers/stack-array.h"
 #include "rndr/core/platform/opengl-buffer.h"
 #include "rndr/core/platform/opengl-shader.h"

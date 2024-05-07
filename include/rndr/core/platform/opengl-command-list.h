@@ -5,7 +5,7 @@
 #include "rndr/core/containers/ref.h"
 #include "rndr/core/definitions.h"
 #include "rndr/core/graphics-types.h"
-#include "rndr/core/containers/array.h"
+#include "opal/container/array.h"
 
 #if RNDR_OPENGL
 
@@ -263,7 +263,7 @@ public:
 
 private:
     Ref<GraphicsContext> m_graphics_context;
-    Array<Command> m_commands;
+    Opal::Array<Command> m_commands;
 };
 
 }  // namespace Rndr

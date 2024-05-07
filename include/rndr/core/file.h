@@ -4,7 +4,7 @@
 
 #include "rndr/core/base.h"
 #include "rndr/core/bitmap.h"
-#include "rndr/core/containers/array.h"
+#include "opal/container/array.h"
 #include "rndr/core/containers/string.h"
 #include "rndr/core/graphics-types.h"
 
@@ -43,7 +43,7 @@ namespace File
  *
  * @return Returns a valid ByteArray object containing the file contents.
  */
-[[nodiscard]] ByteArray ReadEntireFile(const String& file_path);
+[[nodiscard]] Opal::Array<u8> ReadEntireFile(const String& file_path);
 
 /**
  * Reads the contents of the entire file in the text form.

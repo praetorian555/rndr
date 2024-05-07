@@ -1,7 +1,6 @@
 #pragma once
 
 #include <cassert>
-#include <cstdint>
 
 #if WIN32
 #define RNDR_WINDOWS 1
@@ -36,3 +35,16 @@
 #endif  // RNDR_DEBUG
 
 #define RNDR_UNUSED(Expr) (void)(Expr)
+
+#include "rndr/export.h"
+
+// disable warnings on extern before template instantiation
+#pragma warning(disable : 4231)
+
+#if defined(RNDR_WINDOWS)
+#if rndr_EXPORTS
+#define RNDR_EXTERN_TEMPLATE
+#else
+#define RNDR_EXTERN_TEMPLATE extern
+#endif
+#endif

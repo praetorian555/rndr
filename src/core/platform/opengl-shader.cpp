@@ -9,7 +9,7 @@
 
 namespace
 {
-void GenerateDefinesShaderCode(const Rndr::Array<Rndr::String>& defines, Rndr::String& out_shader_code)
+void GenerateDefinesShaderCode(const Opal::Array<Rndr::String>& defines, Rndr::String& out_shader_code)
 {
     for (const Rndr::String& define : defines)
     {

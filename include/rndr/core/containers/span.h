@@ -2,7 +2,7 @@
 
 #include "opal/container/span.h"
 
-#include "rndr/core/containers/array.h"
+#include "opal/container/array.h"
 
 namespace Rndr
 {

@@ -7,8 +7,8 @@ Rndr::RendererBase::RendererBase(const Rndr::String& name, const Rndr::RendererB
 Rndr::ClearRenderer::ClearRenderer(const Rndr::String& name,
                                    const Rndr::RendererBaseDesc& desc,
                                    const Vector4f& color,
-                                   float depth,
-                                   int32_t stencil)
+                                   f32 depth,
+                                   i32 stencil)
     : RendererBase(name, desc), m_color(color), m_depth(depth), m_stencil(stencil)
 {
 }
@@ -85,13 +85,13 @@ bool Rndr::RendererManager::RemoveRenderer(const Rndr::String& name)
     return false;
 }
 
-int32_t Rndr::RendererManager::GetRendererIndex(const String& name)
+Rndr::i32 Rndr::RendererManager::GetRendererIndex(const String& name)
 {
     for (size_t i = 0; i < m_renderers.GetSize(); ++i)
     {
         if (m_renderers[i]->GetName() == name)
         {
-            return static_cast<int32_t>(i);
+            return static_cast<i32>(i);
         }
     }
     return -1;

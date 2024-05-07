@@ -3,7 +3,7 @@
 #include <glad/glad_wgl.h>
 
 #include "core/platform/opengl-helpers.h"
-#include "rndr/core/containers/array.h"
+#include "opal/container/array.h"
 #include "rndr/core/containers/hash-map.h"
 #include "rndr/core/containers/stack-array.h"
 #include "rndr/core/containers/string.h"
@@ -39,7 +39,7 @@ void APIENTRY DebugOutputCallback(GLenum source, GLenum type, unsigned int id, G
     }
 }
 
-bool CheckRequiredExtensions(const Rndr::Array<Rndr::String>& required_extensions)
+bool CheckRequiredExtensions(const Opal::Array<Rndr::String>& required_extensions)
 {
     int extension_count = 0;
     glGetIntegerv(GL_NUM_EXTENSIONS, &extension_count);
@@ -182,14 +182,14 @@ Rndr::GraphicsContext::GraphicsContext(const Rndr::GraphicsContextDesc& desc) : 
     glDebugMessageControl(GL_DONT_CARE, GL_DONT_CARE, GL_DONT_CARE, 0, nullptr, GL_TRUE);
     RNDR_ASSERT_OPENGL();
 
-    const Array<String> required_extensions = {"ARB_texture_storage",
-                                               "ARB_multi_draw_indirect",
-                                               "ARB_buffer_storage",
-                                               "ARB_enhanced_layouts",
-                                               "ARB_direct_state_access",
-                                               "GL_ARB_indirect_parameters",
-                                               "GL_ARB_shader_draw_parameters",
-                                               "ARB_gl_spirv"};
+    const Opal::Array<String> required_extensions = {"ARB_texture_storage",
+                                                     "ARB_multi_draw_indirect",
+                                                     "ARB_buffer_storage",
+                                                     "ARB_enhanced_layouts",
+                                                     "ARB_direct_state_access",
+                                                     "GL_ARB_indirect_parameters",
+                                                     "GL_ARB_shader_draw_parameters",
+                                                     "ARB_gl_spirv"};
 
     if (CheckRequiredExtensions(required_extensions))
     {
@@ -285,7 +285,7 @@ bool Rndr::GraphicsContext::ClearDepth(float depth)
     return true;
 }
 
-bool Rndr::GraphicsContext::ClearStencil(int32_t stencil)
+bool Rndr::GraphicsContext::ClearStencil(i32 stencil)
 {
     RNDR_TRACE_SCOPED(Clear Stencil);
 
@@ -296,7 +296,7 @@ bool Rndr::GraphicsContext::ClearStencil(int32_t stencil)
     return true;
 }
 
-bool Rndr::GraphicsContext::ClearAll(const Vector4f& color, float depth, int32_t stencil)
+bool Rndr::GraphicsContext::ClearAll(const Vector4f& color, float depth, i32 stencil)
 {
     RNDR_TRACE_SCOPED(Clear All);
 
@@ -351,7 +351,7 @@ bool Rndr::GraphicsContext::Bind(const Pipeline& pipeline)
     }
     if (desc.depth_stencil.is_stencil_enabled)
     {
-        constexpr uint32_t k_mask_all_enabled = 0xFFFFFFFF;
+        constexpr u32 k_mask_all_enabled = 0xFFFFFFFF;
         glEnable(GL_STENCIL_TEST);
         RNDR_ASSERT_OPENGL();
         glStencilMask(desc.depth_stencil.stencil_write_mask);
@@ -434,9 +434,9 @@ bool Rndr::GraphicsContext::Bind(const Pipeline& pipeline)
         {
             glEnable(GL_SCISSOR_TEST);
             RNDR_ASSERT_OPENGL();
-            glScissor(static_cast<int32_t>(desc.rasterizer.scissor_bottom_left.x),
-                      static_cast<int32_t>(desc.rasterizer.scissor_bottom_left.y), static_cast<int32_t>(desc.rasterizer.scissor_size.x),
-                      static_cast<int32_t>(desc.rasterizer.scissor_size.y));
+            glScissor(static_cast<i32>(desc.rasterizer.scissor_bottom_left.x),
+                      static_cast<i32>(desc.rasterizer.scissor_bottom_left.y), static_cast<i32>(desc.rasterizer.scissor_size.x),
+                      static_cast<i32>(desc.rasterizer.scissor_size.y));
             RNDR_ASSERT_OPENGL();
         }
         else
@@ -449,7 +449,7 @@ bool Rndr::GraphicsContext::Bind(const Pipeline& pipeline)
     return true;
 }
 
-bool Rndr::GraphicsContext::Bind(const Buffer& buffer, int32_t binding_index)
+bool Rndr::GraphicsContext::Bind(const Buffer& buffer, i32 binding_index)
 {
     RNDR_TRACE_SCOPED(Bind Buffer);
 
@@ -467,7 +467,7 @@ bool Rndr::GraphicsContext::Bind(const Buffer& buffer, int32_t binding_index)
     return false;
 }
 
-bool Rndr::GraphicsContext::Bind(const Image& image, int32_t binding_index)
+bool Rndr::GraphicsContext::Bind(const Image& image, i32 binding_index)
 {
     RNDR_TRACE_SCOPED(Bind Image);
 
@@ -477,7 +477,7 @@ bool Rndr::GraphicsContext::Bind(const Image& image, int32_t binding_index)
     return true;
 }
 
-bool Rndr::GraphicsContext::BindImageForCompute(const Rndr::Image& image, int32_t binding_index, int32_t image_level,
+bool Rndr::GraphicsContext::BindImageForCompute(const Rndr::Image& image, i32 binding_index, i32 image_level,
                                                 Rndr::ImageAccess access)
 {
     RNDR_TRACE_SCOPED(Bind Image For Compute);
@@ -499,7 +499,7 @@ bool Rndr::GraphicsContext::Bind(const Rndr::FrameBuffer& frame_buffer)
     return true;
 }
 
-bool Rndr::GraphicsContext::DrawVertices(PrimitiveTopology topology, int32_t vertex_count, int32_t instance_count, int32_t first_vertex)
+bool Rndr::GraphicsContext::DrawVertices(PrimitiveTopology topology, i32 vertex_count, i32 instance_count, i32 first_vertex)
 {
     RNDR_TRACE_SCOPED(Draw Vertices);
 
@@ -509,16 +509,16 @@ bool Rndr::GraphicsContext::DrawVertices(PrimitiveTopology topology, int32_t ver
     return true;
 }
 
-bool Rndr::GraphicsContext::DrawIndices(PrimitiveTopology topology, int32_t index_count, int32_t instance_count, int32_t first_index)
+bool Rndr::GraphicsContext::DrawIndices(PrimitiveTopology topology, i32 index_count, i32 instance_count, i32 first_index)
 {
     RNDR_TRACE_SCOPED(Draw Indices);
 
     RNDR_ASSERT(m_bound_pipeline.IsValid());
     RNDR_ASSERT(m_bound_pipeline->IsIndexBufferBound());
 
-    const int64_t index_size = m_bound_pipeline->GetIndexBufferElementSize();
+    const i64 index_size = m_bound_pipeline->GetIndexBufferElementSize();
     const GLenum index_size_enum = FromIndexSizeToOpenGL(index_size);
-    const size_t index_offset = index_size * first_index;
+    const i64 index_offset = index_size * first_index;
     void* index_start = reinterpret_cast<void*>(index_offset);
     const GLenum primitive = FromPrimitiveTopologyToOpenGL(topology);
     glDrawElementsInstanced(primitive, index_count, index_size_enum, index_start, instance_count);
@@ -526,7 +526,7 @@ bool Rndr::GraphicsContext::DrawIndices(PrimitiveTopology topology, int32_t inde
     return true;
 }
 
-bool Rndr::GraphicsContext::DispatchCompute(uint32_t block_count_x, uint32_t block_count_y, uint32_t block_count_z,
+bool Rndr::GraphicsContext::DispatchCompute(u32 block_count_x, u32 block_count_y, u32 block_count_z,
                                             bool wait_for_completion)
 {
     RNDR_TRACE_SCOPED(Dispatch Compute);
@@ -541,7 +541,7 @@ bool Rndr::GraphicsContext::DispatchCompute(uint32_t block_count_x, uint32_t blo
     return true;
 }
 
-bool Rndr::GraphicsContext::Update(const Buffer& buffer, const ConstByteSpan& data, int32_t offset)
+bool Rndr::GraphicsContext::Update(const Buffer& buffer, const ConstByteSpan& data, i32 offset)
 {
     RNDR_TRACE_SCOPED(Update Buffer Contents);
 
@@ -559,12 +559,12 @@ bool Rndr::GraphicsContext::Update(const Buffer& buffer, const ConstByteSpan& da
         return false;
     }
 
-    if (offset < 0 || offset >= static_cast<int32_t>(desc.size))
+    if (offset < 0 || offset >= static_cast<i32>(desc.size))
     {
         RNDR_LOG_ERROR("Update of the buffer failed since the offset is invalid!");
         return false;
     }
-    if (data.IsEmpty() || offset + static_cast<int32_t>(data.GetSize()) > static_cast<int32_t>(desc.size))
+    if (data.IsEmpty() || offset + static_cast<i32>(data.GetSize()) > static_cast<i32>(desc.size))
     {
         RNDR_LOG_ERROR("Update of the buffer failed since the data size is invalid!");
         return false;
@@ -576,7 +576,7 @@ bool Rndr::GraphicsContext::Update(const Buffer& buffer, const ConstByteSpan& da
     return true;
 }
 
-bool Rndr::GraphicsContext::Read(const Buffer& buffer, ByteSpan& out_data, int32_t offset, int32_t size) const
+bool Rndr::GraphicsContext::Read(const Buffer& buffer, ByteSpan& out_data, i32 offset, i32 size) const
 {
     RNDR_TRACE_SCOPED(Read Buffer Contents);
 
@@ -594,22 +594,22 @@ bool Rndr::GraphicsContext::Read(const Buffer& buffer, ByteSpan& out_data, int32
     }
     if (size == 0)
     {
-        size = static_cast<int32_t>(desc.size) - offset;
+        size = static_cast<i32>(desc.size) - offset;
     }
 
-    if (offset < 0 || offset >= static_cast<int32_t>(desc.size))
+    if (offset < 0 || offset >= static_cast<i32>(desc.size))
     {
         RNDR_LOG_ERROR("Read of the buffer failed since the offset is invalid!");
         return false;
     }
-    if (size <= 0 || offset + size > static_cast<int32_t>(desc.size))
+    if (size <= 0 || offset + size > static_cast<i32>(desc.size))
     {
         RNDR_LOG_ERROR("Read of the buffer failed since the size is invalid!");
         return false;
     }
 
     const GLuint native_buffer = buffer.GetNativeBuffer();
-    uint8_t* gpu_data = static_cast<uint8_t*>(glMapNamedBufferRange(native_buffer, desc.offset, desc.size, GL_MAP_READ_BIT));
+    u8* gpu_data = static_cast<u8*>(glMapNamedBufferRange(native_buffer, desc.offset, desc.size, GL_MAP_READ_BIT));
     RNDR_ASSERT_OPENGL();
     if (gpu_data == nullptr)
     {
@@ -625,7 +625,7 @@ bool Rndr::GraphicsContext::Read(const Buffer& buffer, ByteSpan& out_data, int32
     return true;
 }
 
-bool Rndr::GraphicsContext::Read(const Rndr::Image& image, Rndr::Bitmap& out_data, int32_t level) const
+bool Rndr::GraphicsContext::Read(const Rndr::Image& image, Rndr::Bitmap& out_data, i32 level) const
 {
     RNDR_TRACE_SCOPED(Read Image Contents);
 
@@ -638,8 +638,8 @@ bool Rndr::GraphicsContext::Read(const Rndr::Image& image, Rndr::Bitmap& out_dat
     const ImageDesc& desc = image.GetDesc();
     const GLenum format = FromPixelFormatToExternalFormat(desc.pixel_format);
     const GLenum data_type = FromPixelFormatToDataType(desc.pixel_format);
-    const int32_t pixel_size = FromPixelFormatToPixelSize(desc.pixel_format);
-    Array<uint8_t> tmp_data(pixel_size * desc.width * desc.height);
+    const i32 pixel_size = FromPixelFormatToPixelSize(desc.pixel_format);
+    Opal::Array<u8> tmp_data(pixel_size * desc.width * desc.height);
     glGetTextureImage(image.GetNativeTexture(), level, format, data_type, pixel_size * desc.width * desc.height, tmp_data.GetData());
     RNDR_ASSERT_OPENGL();
 
@@ -647,8 +647,8 @@ bool Rndr::GraphicsContext::Read(const Rndr::Image& image, Rndr::Bitmap& out_dat
     return true;
 }
 
-bool Rndr::GraphicsContext::Copy(const Rndr::Buffer& dst_buffer, const Rndr::Buffer& src_buffer, int32_t dst_offset, int32_t src_offset,
-                                 int32_t size)
+bool Rndr::GraphicsContext::Copy(const Rndr::Buffer& dst_buffer, const Rndr::Buffer& src_buffer, i32 dst_offset, i32 src_offset,
+                                 i32 size)
 {
     RNDR_TRACE_SCOPED(Copy Buffer Contents);
 
@@ -668,20 +668,20 @@ bool Rndr::GraphicsContext::Copy(const Rndr::Buffer& dst_buffer, const Rndr::Buf
 
     if (size == 0)
     {
-        size = static_cast<int32_t>(dst_desc.size) - src_offset;
+        size = static_cast<i32>(dst_desc.size) - src_offset;
     }
 
-    if (dst_offset < 0 || dst_offset >= static_cast<int32_t>(dst_desc.size))
+    if (dst_offset < 0 || dst_offset >= static_cast<i32>(dst_desc.size))
     {
         RNDR_LOG_ERROR("Copy of the buffer failed since the destination offset is invalid!");
         return false;
     }
-    if (src_offset < 0 || src_offset >= static_cast<int32_t>(src_desc.size))
+    if (src_offset < 0 || src_offset >= static_cast<i32>(src_desc.size))
     {
         RNDR_LOG_ERROR("Copy of the buffer failed since the source offset is invalid!");
         return false;
     }
-    if (size <= 0 || dst_offset + size > static_cast<int32_t>(dst_desc.size) || src_offset + size > static_cast<int32_t>(src_desc.size))
+    if (size <= 0 || dst_offset + size > static_cast<i32>(dst_desc.size) || src_offset + size > static_cast<i32>(src_desc.size))
     {
         RNDR_LOG_ERROR("Copy of the buffer failed since the size is invalid!");
         return false;
@@ -696,18 +696,18 @@ bool Rndr::GraphicsContext::ReadSwapChainColor(const SwapChain& swap_chain, Bitm
 {
     RNDR_TRACE_SCOPED(Read SwapChain);
 
-    const int32_t width = swap_chain.GetDesc().width;
-    const int32_t height = swap_chain.GetDesc().height;
-    const int32_t size = width * height * 4;
-    ByteArray data(size);
+    const i32 width = swap_chain.GetDesc().width;
+    const i32 height = swap_chain.GetDesc().height;
+    const i32 size = width * height * 4;
+    Opal::Array<u8> data(size);
     glReadPixels(0, 0, width, height, GL_RGBA, GL_UNSIGNED_BYTE, data.GetData());
     RNDR_ASSERT_OPENGL();
-    for (int32_t i = 0; i < height / 2; i++)
+    for (i32 i = 0; i < height / 2; i++)
     {
-        for (int32_t j = 0; j < width; j++)
+        for (i32 j = 0; j < width; j++)
         {
-            const int32_t index1 = i * width * 4 + j * 4;
-            const int32_t index2 = (height - i - 1) * width * 4 + j * 4;
+            const i32 index1 = i * width * 4 + j * 4;
+            const i32 index2 = (height - i - 1) * width * 4 + j * 4;
             std::swap(data[index1], data[index2]);
             std::swap(data[index1 + 1], data[index2 + 1]);
             std::swap(data[index1 + 2], data[index2 + 2]);
@@ -722,13 +722,13 @@ bool Rndr::GraphicsContext::ReadSwapChainDepthStencil(const SwapChain& swap_chai
 {
     RNDR_TRACE_SCOPED(Read SwapChain);
 
-    const int32_t width = swap_chain.GetDesc().width;
-    const int32_t height = swap_chain.GetDesc().height;
-    const int32_t size = width * height;
-    Array<uint32_t> data(size);
+    const i32 width = swap_chain.GetDesc().width;
+    const i32 height = swap_chain.GetDesc().height;
+    const i32 size = width * height;
+    Opal::Array<u32> data(size);
     glReadPixels(0, 0, width, height, GL_DEPTH_STENCIL, GL_UNSIGNED_INT_24_8, data.GetData());
     RNDR_ASSERT_OPENGL();
-    const ByteSpan byte_data(reinterpret_cast<uint8_t*>(data.GetData()), size * sizeof(uint32_t));
+    const ByteSpan byte_data(reinterpret_cast<u8*>(data.GetData()), size * sizeof(u32));
     out_bitmap = Bitmap{width, height, 1, PixelFormat::D24_UNORM_S8_UINT, byte_data};
     return true;
 }

@@ -1162,7 +1162,7 @@ TEST_CASE("Running a compute shader", "[render-api][shader]")
         graphics_context.Bind(dst_buffer, 1);
         graphics_context.DispatchCompute(k_buffer_size / 64, 1, 1);
 
-        Rndr::Array<float> read_data_storage(k_buffer_size);
+        Opal::Array<float> read_data_storage(k_buffer_size);
         Rndr::ByteSpan read_data = Rndr::ToByteSpan(read_data_storage);
         const bool result = graphics_context.Read(dst_buffer, read_data);
         REQUIRE(result);
@@ -1176,7 +1176,7 @@ TEST_CASE("Running a compute shader", "[render-api][shader]")
     {
         constexpr int32_t k_image_width = 512;
         constexpr int32_t k_image_height = 512;
-        Rndr::Array<float> data(k_image_width * k_image_height);
+        Opal::Array<float> data(k_image_width * k_image_height);
         for (int i = 0; i < k_image_width * k_image_height; ++i)
         {
             data[i] = static_cast<float>(i);

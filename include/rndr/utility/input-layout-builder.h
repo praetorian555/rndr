@@ -29,8 +29,8 @@ struct InputLayoutBuilder
      * @param per_instance_rate How often the data is repeated per instance. Default is 0.
      * @return This builder.
      */
-    InputLayoutBuilder& AddVertexBuffer(const Buffer& buffer, int32_t buffer_index, DataRepetition repetition,
-                                        int32_t per_instance_rate = 0);
+    InputLayoutBuilder& AddVertexBuffer(const Buffer& buffer, i32 buffer_index, DataRepetition repetition,
+                                        i32 per_instance_rate = 0);
 
     /**
      * Adds a shader storage buffer to the input layout. How these buffers are used is up to the shader.
@@ -38,7 +38,7 @@ struct InputLayoutBuilder
      * @param buffer_index Slot at which the buffer is bound.
      * @return This builder.
      */
-    InputLayoutBuilder& AddShaderStorage(const Buffer& buffer, int32_t buffer_index);
+    InputLayoutBuilder& AddShaderStorage(const Buffer& buffer, i32 buffer_index);
 
     /**
      * Adds an index buffer to the input layout. There can be only one. It is ok to not have it.
@@ -54,7 +54,7 @@ struct InputLayoutBuilder
      * @param format Format of the element.
      * @return This builder.
      */
-    InputLayoutBuilder& AppendElement(int buffer_index, PixelFormat format);
+    InputLayoutBuilder& AppendElement(i32 buffer_index, PixelFormat format);
 
     /**
      * Builds the input layout description.
@@ -67,15 +67,15 @@ private:
     {
         Ref<const Buffer> buffer;
         DataRepetition repetition = DataRepetition::PerVertex;
-        int per_instance_rate = 0;
-        int entries_count = 0;
-        int offset = 0;
+        i32 per_instance_rate = 0;
+        i32 entries_count = 0;
+        i32 offset = 0;
     };
 
     Ref<const Buffer> m_index_buffer;
-    HashMap<int, BufferInfo> m_buffers;
-    HashMap<String, int> m_names;
-    Array<InputLayoutElement> m_elements;
+    HashMap<i32, BufferInfo> m_buffers;
+    HashMap<String, i32> m_names;
+    Opal::Array<InputLayoutElement> m_elements;
 };
 
 }  // namespace Rndr

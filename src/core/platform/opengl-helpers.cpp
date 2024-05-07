@@ -6,26 +6,26 @@
 #include "rndr/core/containers/stack-array.h"
 #include "rndr/core/graphics-types.h"
 
-constexpr size_t k_max_shader_type = static_cast<size_t>(Rndr::ShaderType::EnumCount);
+constexpr Rndr::u64 k_max_shader_type = static_cast<Rndr::u64>(Rndr::ShaderType::EnumCount);
 constexpr Rndr::StackArray<GLenum, k_max_shader_type> k_to_opengl_shader_type = {
     GL_VERTEX_SHADER, GL_FRAGMENT_SHADER, GL_GEOMETRY_SHADER, GL_TESS_CONTROL_SHADER, GL_TESS_EVALUATION_SHADER, GL_COMPUTE_SHADER};
 
-constexpr size_t k_max_usage = static_cast<size_t>(Rndr::Usage::EnumCount);
+constexpr Rndr::u64 k_max_usage = static_cast<Rndr::u64>(Rndr::Usage::EnumCount);
 constexpr Rndr::StackArray<GLenum, k_max_usage> k_to_opengl_usage = {GL_MAP_WRITE_BIT, GL_DYNAMIC_STORAGE_BIT, GL_MAP_READ_BIT};
 
-constexpr size_t k_max_buffer_type = static_cast<size_t>(Rndr::BufferType::EnumCount);
+constexpr Rndr::u64 k_max_buffer_type = static_cast<Rndr::u64>(Rndr::BufferType::EnumCount);
 constexpr Rndr::StackArray<GLenum, k_max_buffer_type> k_to_opengl_buffer_type = {GL_ARRAY_BUFFER, GL_ELEMENT_ARRAY_BUFFER,
                                                                                  GL_UNIFORM_BUFFER, GL_SHADER_STORAGE_BUFFER};
 
-constexpr size_t k_max_comparator = static_cast<size_t>(Rndr::Comparator::EnumCount);
+constexpr Rndr::u64 k_max_comparator = static_cast<Rndr::u64>(Rndr::Comparator::EnumCount);
 constexpr Rndr::StackArray<GLenum, k_max_comparator> k_to_opengl_comparator = {GL_NEVER, GL_ALWAYS,   GL_LESS,   GL_GREATER,
                                                                                GL_EQUAL, GL_NOTEQUAL, GL_LEQUAL, GL_GEQUAL};
 
-constexpr size_t k_max_stencil_op = static_cast<size_t>(Rndr::StencilOperation::EnumCount);
+constexpr Rndr::u64 k_max_stencil_op = static_cast<Rndr::u64>(Rndr::StencilOperation::EnumCount);
 constexpr Rndr::StackArray<GLenum, k_max_stencil_op> k_to_opengl_stencil_op = {GL_KEEP,      GL_ZERO, GL_REPLACE,   GL_INCR,
                                                                                GL_INCR_WRAP, GL_DECR, GL_DECR_WRAP, GL_INVERT};
 
-constexpr size_t k_max_blend_factor = static_cast<size_t>(Rndr::BlendFactor::EnumCount);
+constexpr Rndr::u64 k_max_blend_factor = static_cast<Rndr::u64>(Rndr::BlendFactor::EnumCount);
 constexpr Rndr::StackArray<GLenum, k_max_blend_factor> k_to_opengl_blend_factor = {GL_ZERO,
                                                                                    GL_ONE,
                                                                                    GL_SRC_COLOR,
@@ -41,15 +41,15 @@ constexpr Rndr::StackArray<GLenum, k_max_blend_factor> k_to_opengl_blend_factor 
                                                                                    GL_CONSTANT_ALPHA,
                                                                                    GL_ONE_MINUS_CONSTANT_ALPHA};
 
-constexpr size_t k_max_blend_op = static_cast<size_t>(Rndr::BlendOperation::EnumCount);
+constexpr Rndr::u64 k_max_blend_op = static_cast<Rndr::u64>(Rndr::BlendOperation::EnumCount);
 constexpr Rndr::StackArray<GLenum, k_max_blend_op> k_to_opengl_blend_op = {GL_FUNC_ADD, GL_FUNC_SUBTRACT, GL_FUNC_REVERSE_SUBTRACT, GL_MIN,
                                                                            GL_MAX};
 
-constexpr size_t k_max_image_address_mode = static_cast<size_t>(Rndr::ImageAddressMode::EnumCount);
+constexpr Rndr::u64 k_max_image_address_mode = static_cast<Rndr::u64>(Rndr::ImageAddressMode::EnumCount);
 constexpr Rndr::StackArray<GLint, k_max_image_address_mode> k_to_opengl_image_address_mode = {
     GL_CLAMP_TO_EDGE, GL_CLAMP_TO_BORDER, GL_REPEAT, GL_MIRRORED_REPEAT, GL_MIRROR_CLAMP_TO_EDGE};
 
-constexpr size_t k_max_pixel_format = static_cast<size_t>(Rndr::PixelFormat::EnumCount);
+constexpr Rndr::u64 k_max_pixel_format = static_cast<Rndr::u64>(Rndr::PixelFormat::EnumCount);
 constexpr Rndr::StackArray<GLenum, k_max_pixel_format> k_to_opengl_internal_pixel_format = {GL_RGBA8,
                                                                                             GL_SRGB8_ALPHA8,
                                                                                             GL_RGBA8UI,
@@ -207,43 +207,43 @@ constexpr Rndr::StackArray<bool, k_max_pixel_format> k_is_integer = {
     false, false, true,  false, true,  false, false, false, false, false, true,  false, true, false, false, true, false, true, false,
     false, true,  false, true,  false, true,  true,  false, true,  true,  false, true,  true, false, true,  true, false, false, false};
 
-constexpr size_t k_max_primitive_topology = static_cast<size_t>(Rndr::PrimitiveTopology::EnumCount);
+constexpr Rndr::u64 k_max_primitive_topology = static_cast<Rndr::u64>(Rndr::PrimitiveTopology::EnumCount);
 constexpr Rndr::StackArray<GLenum, k_max_primitive_topology> k_to_opengl_primitive_topology = {GL_POINTS, GL_LINES, GL_LINE_STRIP,
                                                                                                GL_TRIANGLES, GL_TRIANGLE_STRIP};
 
 GLenum Rndr::FromShaderTypeToOpenGL(ShaderType type)
 {
-    return k_to_opengl_shader_type[static_cast<size_t>(type)];
+    return k_to_opengl_shader_type[static_cast<Rndr::u64>(type)];
 }
 
 GLenum Rndr::FromUsageToOpenGL(Usage usage)
 {
-    return k_to_opengl_usage[static_cast<size_t>(usage)];
+    return k_to_opengl_usage[static_cast<Rndr::u64>(usage)];
 }
 
 GLenum Rndr::FromBufferTypeToOpenGL(BufferType type)
 {
-    return k_to_opengl_buffer_type[static_cast<size_t>(type)];
+    return k_to_opengl_buffer_type[static_cast<Rndr::u64>(type)];
 }
 
 GLenum Rndr::FromComparatorToOpenGL(Comparator comparator)
 {
-    return k_to_opengl_comparator[static_cast<size_t>(comparator)];
+    return k_to_opengl_comparator[static_cast<Rndr::u64>(comparator)];
 }
 
 GLenum Rndr::FromStencilOpToOpenGL(StencilOperation op)
 {
-    return k_to_opengl_stencil_op[static_cast<size_t>(op)];
+    return k_to_opengl_stencil_op[static_cast<Rndr::u64>(op)];
 }
 
 GLenum Rndr::FromBlendFactorToOpenGL(BlendFactor factor)
 {
-    return k_to_opengl_blend_factor[static_cast<size_t>(factor)];
+    return k_to_opengl_blend_factor[static_cast<Rndr::u64>(factor)];
 }
 
 GLenum Rndr::FromBlendOperationToOpenGL(BlendOperation op)
 {
-    return k_to_opengl_blend_op[static_cast<size_t>(op)];
+    return k_to_opengl_blend_op[static_cast<Rndr::u64>(op)];
 }
 
 GLenum Rndr::FromImageInfoToTarget(ImageType image_type, bool is_multi_sample)
@@ -308,47 +308,47 @@ GLint Rndr::FromImageFilterToOpenGL(ImageFilter filter)
 
 GLint Rndr::FromImageAddressModeToOpenGL(ImageAddressMode address_mode)
 {
-    return k_to_opengl_image_address_mode[static_cast<size_t>(address_mode)];
+    return k_to_opengl_image_address_mode[static_cast<Rndr::u64>(address_mode)];
 }
 
 GLenum Rndr::FromPixelFormatToInternalFormat(PixelFormat format)
 {
-    return k_to_opengl_internal_pixel_format[static_cast<size_t>(format)];
+    return k_to_opengl_internal_pixel_format[static_cast<Rndr::u64>(format)];
 }
 
 GLenum Rndr::FromPixelFormatToExternalFormat(PixelFormat format)
 {
-    return k_to_opengl_external_pixel_format[static_cast<size_t>(format)];
+    return k_to_opengl_external_pixel_format[static_cast<Rndr::u64>(format)];
 }
 
 GLenum Rndr::FromPixelFormatToDataType(PixelFormat format)
 {
-    return k_to_opengl_pixel_type[static_cast<size_t>(format)];
+    return k_to_opengl_pixel_type[static_cast<Rndr::u64>(format)];
 }
 
 int32_t Rndr::FromPixelFormatToPixelSize(PixelFormat format)
 {
-    return k_to_pixel_size[static_cast<size_t>(format)];
+    return k_to_pixel_size[static_cast<Rndr::u64>(format)];
 }
 
 GLint Rndr::FromPixelFormatToComponentCount(PixelFormat format)
 {
-    return k_to_component_count[static_cast<size_t>(format)];
+    return k_to_component_count[static_cast<Rndr::u64>(format)];
 }
 
 GLenum Rndr::FromPixelFormatToShouldNormalizeData(Rndr::PixelFormat format)
 {
-    return k_to_should_normalize_data[static_cast<size_t>(format)];
+    return k_to_should_normalize_data[static_cast<Rndr::u64>(format)];
 }
 
 bool Rndr::IsPixelFormatInteger(Rndr::PixelFormat format)
 {
-    return k_is_integer[static_cast<size_t>(format)];
+    return k_is_integer[static_cast<Rndr::u64>(format)];
 }
 
 GLenum Rndr::FromPrimitiveTopologyToOpenGL(PrimitiveTopology topology)
 {
-    return k_to_opengl_primitive_topology[static_cast<size_t>(topology)];
+    return k_to_opengl_primitive_topology[static_cast<Rndr::u64>(topology)];
 }
 
 GLenum Rndr::FromIndexSizeToOpenGL(int64_t index_size)

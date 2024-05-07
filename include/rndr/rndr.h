@@ -3,7 +3,7 @@
 // Core utilities
 #include "rndr/core/base.h"
 #include "rndr/core/colors.h"
-#include "rndr/core/containers/array.h"
+#include "opal/container/array.h"
 #include "rndr/core/containers/hash-map.h"
 #include "rndr/core/containers/ref.h"
 #include "rndr/core/containers/scope-ptr.h"

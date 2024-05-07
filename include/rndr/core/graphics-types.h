@@ -1,7 +1,8 @@
 #pragma once
 
 #include "rndr/core/colors.h"
-#include "rndr/core/containers/array.h"
+#include "rndr/core/types.h"
+#include "opal/container/array.h"
 #include "rndr/core/containers/ref.h"
 #include "rndr/core/containers/span.h"
 #include "rndr/core/containers/stack-array.h"
@@ -16,10 +17,10 @@ class Shader;
 
 struct GraphicsConstants
 {
-    static constexpr int k_max_frame_buffer_color_buffers = 4;
-    static constexpr int k_max_input_layout_entries = 32;
-    static constexpr int k_max_shader_resource_bind_slots = 128;
-    static constexpr int k_max_constant_buffers = 16;
+    static constexpr i32 k_max_frame_buffer_color_buffers = 4;
+    static constexpr i32 k_max_input_layout_entries = 32;
+    static constexpr i32 k_max_shader_resource_bind_slots = 128;
+    static constexpr i32 k_max_constant_buffers = 16;
 };
 
 enum class ImageType
@@ -32,8 +33,8 @@ enum class ImageType
 /**
  * Exact positions of channels and their size in bits.
  *
- * UNORM - Interpreted by a shader as floating-point value in the range [0, 1].
- * SNORM - Interpreted by a shader as floating-point value in the range [-1, 1].
+ * UNORM - Interpreted by a shader as f32ing-poi32 value in the range [0, 1].
+ * SNORM - Interpreted by a shader as f32ing-poi32 value in the range [-1, 1].
  */
 enum class PixelFormat
 {
@@ -162,7 +163,7 @@ enum class Usage
  * Represents the winding order of a triangle. This is used to determine the front face of a
  * triangle.
  */
-enum class WindingOrder : uint32_t
+enum class WindingOrder : u32
 {
     /** Clockwise winding order. */
     CW = 0,
@@ -174,7 +175,7 @@ enum class WindingOrder : uint32_t
 /**
  * Represents the faces of a triangle that are visible to the camera.
  */
-enum class Face : uint32_t
+enum class Face : u32
 {
     /** Both front and back faces are visible. */
     None = 0,
@@ -392,7 +393,7 @@ enum class BufferType
 // TODO(Marko): Add support for bit operations in enum class
 namespace ImageBindFlags
 {
-enum : uint32_t
+enum : u32
 {
     RenderTarget = 1 << 0,
     DepthStencil = 1 << 1,
@@ -417,7 +418,7 @@ enum class DataRepetition
     PerInstance
 };
 
-enum class ShaderType : size_t
+enum class ShaderType : u8
 {
     Vertex = 0,
     Fragment,
@@ -468,10 +469,10 @@ struct GraphicsContextDesc
 struct SwapChainDesc
 {
     /** Width of the swap chain. The 0 is invalid value. */
-    int32_t width = 0;
+    i32 width = 0;
 
     /** Height of the swap chain. The 0 is invalid value. */
-    int32_t height = 0;
+    i32 height = 0;
 
     /** Pixel format of the color buffer. */
     PixelFormat color_format = PixelFormat::R8G8B8A8_UNORM;
@@ -498,13 +499,13 @@ struct ShaderDesc
     String source;
 
     /**
-     * Name of the function that represents the entry point of the shader. Can be empty for
+     * Name of the function that represents the entry poi32 of the shader. Can be empty for
      * OpenGL.
      */
     String entry_point;
 
     /** List of defines that should be added to the shader in a form of DEFINE_NAME VALUE or just DEFINE_NAME. */
-    Array<String> defines;
+    Opal::Array<String> defines;
 };
 
 struct BufferDesc
@@ -516,13 +517,13 @@ struct BufferDesc
     Usage usage = Usage::Default;
 
     /** Total size of a buffer in bytes. */
-    size_t size = 0;
+    st size = 0;
 
     /** Size of one element, in bytes, in an array of elements. */
-    int64_t stride = 0;
+    i64 stride = 0;
 
     /** Offset, in bytes, from the beginning of the buffer to the first element to use. */
-    int64_t offset = 0;
+    i64 offset = 0;
 };
 
 struct SamplerDesc
@@ -540,7 +541,7 @@ struct SamplerDesc
      * Maximum anisotropy level to use. If larger then 1 the anisotropic filtering is active. This
      * filter can be used in combination with the min and mag filters.
      */
-    float max_anisotropy = 1.0f;
+    f32 max_anisotropy = 1.0f;
 
     /** Address mode used for the u image coordinate. */
     ImageAddressMode address_mode_u = ImageAddressMode::Repeat;
@@ -558,34 +559,34 @@ struct SamplerDesc
      * Bias to be added to the mip level before sampling. Add to shader-supplied bias, if any is
      * supplied.
      */
-    float lod_bias = 0;
+    f32 lod_bias = 0;
 
     /** Minimum mip level to use. */
-    int32_t base_mip_level = 0;
+    i32 base_mip_level = 0;
 
     /**
      * Maximum mip level to use. If use_mips in ImageDesc is set to true and this value is 0 it will be overridden by number of mip map
      * levels - 1.
      */
-    int32_t max_mip_level = 0;
+    i32 max_mip_level = 0;
 
     /** Minimum LOD level to use. This value will resolve to base_mip_level value. */
-    float min_lod = 0.0f;
+    f32 min_lod = 0.0f;
 
     /** Maximum LOD level to use. This value can't be larger then max_mip_level. */
-    float max_lod = 0.0f;
+    f32 max_lod = 0.0f;
 };
 
 struct ImageDesc
 {
     /** Width of the image in pixels. */
-    int32_t width = 0;
+    i32 width = 0;
 
     /** Height of the image in pixels. */
-    int32_t height = 0;
+    i32 height = 0;
 
     /** Number of images in the array. Ignored for ImageType::Image2D and ImageType::CubeMap. */
-    int32_t array_size = 1;
+    i32 array_size = 1;
 
     /** Type of the image. */
     ImageType type = ImageType::Image2D;
@@ -605,7 +606,7 @@ struct ImageDesc
 
 struct FrameBufferProperties
 {
-    int color_buffer_count = 1;
+    i32 color_buffer_count = 1;
     StackArray<ImageDesc, GraphicsConstants::k_max_frame_buffer_color_buffers> color_buffer_properties;
 
     bool use_depth_stencil = false;
@@ -628,16 +629,16 @@ struct InputLayoutElement
      * Offset of the element in bytes from the start of the element group. You can use
      * k_append_element to set offset where the previous element ends.
      */
-    int32_t offset_in_vertex = 0;
+    i32 offset_in_vertex = 0;
 
     /** Slot at which the containing vertex buffer is bound. */
-    int32_t binding_index = 0;
+    i32 binding_index = 0;
 
     /** Is this element present for each vertex or each instance. */
     DataRepetition repetition = DataRepetition::PerVertex;
 
     /** In case data is repeated on instance level this allows us to skip some instances. */
-    int32_t instance_step_rate = 0;
+    i32 instance_step_rate = 0;
 };
 
 /**
@@ -652,13 +653,13 @@ struct InputLayoutDesc
     Ref<const Buffer> index_buffer;
 
     /** List of vertex buffers used by the pipeline. */
-    Array<Ref<const Buffer>> vertex_buffers;
+    Opal::Array<Ref<const Buffer>> vertex_buffers;
 
     /** List of binding slots to which the corresponding vertex buffer is bound. */
-    Array<int32_t> vertex_buffer_binding_slots;
+    Opal::Array<i32> vertex_buffer_binding_slots;
 
     /** List of input layout elements for the data in the vertex buffers. */
-    Array<InputLayoutElement> elements;
+    Opal::Array<InputLayoutElement> elements;
 };
 
 struct RasterizerDesc
@@ -673,12 +674,12 @@ struct RasterizerDesc
     Face cull_face = Face::Back;
 
     /** Multiplier of the smallest value guaranteed to produce a resolvable offset. */
-    float depth_bias = 0;
+    f32 depth_bias = 0;
 
     /** A multiplier of the change of depth relative to the screen area of the polygon. */
-    float slope_scaled_depth_bias = 0.0;
+    f32 slope_scaled_depth_bias = 0.0;
 
-    /** Bottom left point of a rectangle that defines the scissor test. */
+    /** Bottom left poi32 of a rectangle that defines the scissor test. */
     Point2f scissor_bottom_left = Point2f(0.0f, 0.0f);
 
     /**
@@ -691,7 +692,7 @@ struct RasterizerDesc
 struct DepthStencilDesc
 {
     /** Helper constant for the stencil masks that allows all bits to be written or read. */
-    static constexpr uint8_t k_stencil_mask_all = 0xFF;
+    static constexpr u8 k_stencil_mask_all = 0xFF;
 
     /** Controls if the depth test is enabled. */
     bool is_depth_enabled = false;
@@ -706,13 +707,13 @@ struct DepthStencilDesc
     bool is_stencil_enabled = false;
 
     /** Controls which bits of the stencil buffer are read. Not supported in OpenGL. */
-    uint8_t stencil_read_mask = k_stencil_mask_all;
+    u8 stencil_read_mask = k_stencil_mask_all;
 
     /** Controls which bits of the stencil buffer are written. */
-    uint8_t stencil_write_mask = k_stencil_mask_all;
+    u8 stencil_write_mask = k_stencil_mask_all;
 
     /** Reference value used for the stencil test. */
-    int32_t stencil_ref_value = 0;
+    i32 stencil_ref_value = 0;
 
     /** Operation to perform when the stencil test fails for the front face. */
     StencilOperation stencil_front_face_fail_op = StencilOperation::Keep;
@@ -778,7 +779,7 @@ struct BlendDesc
     Vector3f const_color = Vector3f(0.0f, 0.0f, 0.0f);
 
     /** Const alpha value used in the blend operation. */
-    float const_alpha = 0.0f;
+    f32 const_alpha = 0.0f;
 };
 
 struct PipelineDesc
@@ -798,7 +799,7 @@ struct PipelineDesc
 
 struct FrameBufferDesc
 {
-    Array<ImageDesc> color_attachments;
+    Opal::Array<ImageDesc> color_attachments;
     ImageDesc depth_stencil_attachment;
     bool use_depth_stencil = false;
 };
@@ -809,13 +810,13 @@ struct FrameBufferDesc
 struct DrawVerticesData
 {
     /** Number of vertices to draw. */
-    uint32_t vertex_count;
+    u32 vertex_count;
     /** Number of instances to draw. */
-    uint32_t instance_count;
+    u32 instance_count;
     /** Offset of the first vertex to draw in vertices relative to the vertex buffer. */
-    uint32_t first_vertex;
+    u32 first_vertex;
     /** Offset of the first instance to draw in instances relative to the instance buffer. */
-    uint32_t base_instance;
+    u32 base_instance;
 };
 
 /**
@@ -824,15 +825,15 @@ struct DrawVerticesData
 struct DrawIndicesData
 {
     /** Number of indices to draw. */
-    uint32_t index_count;
+    u32 index_count;
     /** Number of instances to draw. */
-    uint32_t instance_count;
+    u32 instance_count;
     /** Offset of the first index to draw in indices relative to the index buffer. */
-    uint32_t first_index;
+    u32 first_index;
     /** Offset of the first vertex to draw in vertices relative to the vertex buffer. */
-    uint32_t base_vertex;
+    u32 base_vertex;
     /** Offset of the first instance to draw in instances relative to the instance buffer. */
-    uint32_t base_instance;
+    u32 base_instance;
 };
 
 // Helper functions
@@ -842,14 +843,14 @@ struct DrawIndicesData
  * @param format Pixel format.
  * @return Size of a pixel in bytes.
  */
-int32_t FromPixelFormatToPixelSize(PixelFormat format);
+i32 FromPixelFormatToPixelSize(PixelFormat format);
 
 /**
  * Returns the number of components in a given pixel format.
  * @param format Pixel format.
  * @return Number of components in a given pixel format.
  */
-int32_t FromPixelFormatToComponentCount(PixelFormat format);
+i32 FromPixelFormatToComponentCount(PixelFormat format);
 
 /**
  * Check if for given pixel format components are stored in one byte.

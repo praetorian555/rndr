@@ -24,7 +24,7 @@ Rndr::LineRenderer::LineRenderer(const Rndr::String& name, const Rndr::RendererB
         return;
     }
 
-    constexpr size_t k_stride = sizeof(VertexData);
+    constexpr u64 k_stride = sizeof(VertexData);
     m_vertex_buffer =
         RNDR_MAKE_SCOPED(Buffer, m_desc.graphics_context,
                          {.type = Rndr::BufferType::ShaderStorage, .usage = Usage::Dynamic, .size = k_vertex_data_size, .stride = k_stride},
@@ -97,7 +97,7 @@ bool Rndr::LineRenderer::Render()
     m_desc.graphics_context->Bind(*m_constant_buffer, 0);
 
     m_desc.graphics_context->Update(*m_vertex_buffer, ToConstByteSpan(m_vertex_data));
-    const int32_t vertex_count = static_cast<int32_t>(m_vertex_data.GetSize());
+    const i32 vertex_count = static_cast<i32>(m_vertex_data.GetSize());
     m_desc.graphics_context->DrawVertices(PrimitiveTopology::Line, vertex_count);
 
     m_vertex_data.Clear();

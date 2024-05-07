@@ -4,6 +4,7 @@
 #include "rndr/core/input.h"
 #include "rndr/core/math.h"
 #include "rndr/core/projection-camera.h"
+#include "rndr/core/types.h"
 
 namespace Rndr
 {
@@ -15,8 +16,8 @@ struct FlyCameraDesc
 {
     Point3f start_position = Point3f::Zero();
     Rotatorf start_rotation = Rotatorf::Zero();
-    float movement_speed = 1.0f;
-    float rotation_speed = 8000.0f;
+    f32 movement_speed = 1.0f;
+    f32 rotation_speed = 8000.0f;
     ProjectionCameraDesc projection_desc;
 };
 
@@ -30,16 +31,16 @@ public:
     explicit FlyCamera(Window* window, InputContext* input_context, const FlyCameraDesc& desc = FlyCameraDesc{});
     ~FlyCamera();
 
-    void Update(float delta_seconds);
+    void Update(f32 delta_seconds);
 
 private:
     // Private methods
 
-    void HandleActivate(InputPrimitive primitive, InputTrigger trigger, float value);
-    void HandleLookVert(InputPrimitive primitive, InputTrigger trigger, float axis_value);
-    void HandleLookHorz(InputPrimitive primitive, InputTrigger trigger, float axis_value);
-    void HandleMoveForward(InputPrimitive primitive, InputTrigger trigger, float value);
-    void HandleMoveRight(InputPrimitive primitive, InputTrigger trigger, float value);
+    void HandleActivate(InputPrimitive primitive, InputTrigger trigger, f32 value);
+    void HandleLookVert(InputPrimitive primitive, InputTrigger trigger, f32 axis_value);
+    void HandleLookHorz(InputPrimitive primitive, InputTrigger trigger, f32 axis_value);
+    void HandleMoveForward(InputPrimitive primitive, InputTrigger trigger, f32 value);
+    void HandleMoveRight(InputPrimitive primitive, InputTrigger trigger, f32 value);
 
     // Private fields
 

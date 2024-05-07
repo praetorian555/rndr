@@ -28,7 +28,7 @@ Rndr::FrameBuffer::FrameBuffer(const Rndr::GraphicsContext& graphics_context, co
     glCreateFramebuffers(1, &m_native_frame_buffer);
     RNDR_ASSERT_OPENGL();
 
-    for (int32_t i = 0; i < m_desc.color_attachments.GetSize(); ++i)
+    for (i32 i = 0; i < m_desc.color_attachments.GetSize(); ++i)
     {
         const Rndr::ImageDesc& color_attachment_desc = m_desc.color_attachments[i];
         Image color_attachment(graphics_context, color_attachment_desc);
@@ -125,12 +125,12 @@ const Rndr::FrameBufferDesc& Rndr::FrameBuffer::GetDesc() const
     return m_desc;
 }
 
-int32_t Rndr::FrameBuffer::GetColorAttachmentCount() const
+Rndr::i32 Rndr::FrameBuffer::GetColorAttachmentCount() const
 {
-    return static_cast<int32_t>(m_color_attachments.GetSize());
+    return static_cast<i32>(m_color_attachments.GetSize());
 }
 
-const Rndr::Image& Rndr::FrameBuffer::GetColorAttachment(int32_t index) const
+const Rndr::Image& Rndr::FrameBuffer::GetColorAttachment(i32 index) const
 {
     RNDR_ASSERT(index >= 0 && index < m_color_attachments.GetSize());
     return m_color_attachments[index];

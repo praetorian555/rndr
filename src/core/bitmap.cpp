@@ -1,6 +1,6 @@
 #include "rndr/core/bitmap.h"
 
-Rndr::Bitmap::Bitmap(int width, int height, int depth, Rndr::PixelFormat pixel_format, const ByteSpan& data)
+Rndr::Bitmap::Bitmap(i32 width, i32 height, i32 depth, Rndr::PixelFormat pixel_format, const ByteSpan& data)
     : m_width(width), m_height(height), m_depth(depth), m_pixel_format(pixel_format)
 {
     if (width <= 0 || height <= 0 || depth <= 0 || !IsPixelFormatSupported(pixel_format))
@@ -14,9 +14,9 @@ Rndr::Bitmap::Bitmap(int width, int height, int depth, Rndr::PixelFormat pixel_f
     }
 
     m_comp_count = FromPixelFormatToComponentCount(pixel_format);
-    const size_t buffer_size = GetSize3D();
+    const u64 buffer_size = GetSize3D();
     m_data.Resize(buffer_size);
-    const size_t size_to_copy = std::min(data.GetSize(), buffer_size);
+    const u64 size_to_copy = std::min(data.GetSize(), buffer_size);
     if (size_to_copy > 0)
     {
         memcpy(m_data.GetData(), data.GetData(), size_to_copy);
@@ -37,12 +37,12 @@ Rndr::Bitmap::Bitmap(int width, int height, int depth, Rndr::PixelFormat pixel_f
     }
 }
 
-size_t Rndr::Bitmap::GetPixelSize() const
+Rndr::u64 Rndr::Bitmap::GetPixelSize() const
 {
     return FromPixelFormatToPixelSize(m_pixel_format);
 }
 
-Rndr::Vector4f Rndr::Bitmap::GetPixel(int x, int y, int z) const
+Rndr::Vector4f Rndr::Bitmap::GetPixel(i32 x, i32 y, i32 z) const
 {
     RNDR_ASSERT(x >= 0 && x < m_width);
     RNDR_ASSERT(y >= 0 && y < m_height);
@@ -51,7 +51,7 @@ Rndr::Vector4f Rndr::Bitmap::GetPixel(int x, int y, int z) const
     return (*this.*m_get_pixel_func)(x, y, z);
 }
 
-void Rndr::Bitmap::SetPixel(int x, int y, int z, const Vector4f& pixel)
+void Rndr::Bitmap::SetPixel(i32 x, i32 y, i32 z, const Vector4f& pixel)
 {
     RNDR_ASSERT(x >= 0 && x < m_width);
     RNDR_ASSERT(y >= 0 && y < m_height);
@@ -60,9 +60,9 @@ void Rndr::Bitmap::SetPixel(int x, int y, int z, const Vector4f& pixel)
     (*this.*m_set_pixel_func)(x, y, z, pixel);
 }
 
-Rndr::Vector4f Rndr::Bitmap::GetPixelUnsignedByte(int x, int y, int z) const
+Rndr::Vector4f Rndr::Bitmap::GetPixelUnsignedByte(i32 x, i32 y, i32 z) const
 {
-    const int offset = (z * m_width * m_height + y * m_width + x) * m_comp_count;
+    const i32 offset = (z * m_width * m_height + y * m_width + x) * m_comp_count;
     const uint8_t* pixel = m_data.GetData() + offset;
     Vector4f result = Vector4f::Zero();
     constexpr float k_inv_255 = 1.0f / 255.0f;
@@ -85,9 +85,9 @@ Rndr::Vector4f Rndr::Bitmap::GetPixelUnsignedByte(int x, int y, int z) const
     return result;
 }
 
-void Rndr::Bitmap::SetPixelUnsignedByte(int x, int y, int z, const Vector4f& pixel)
+void Rndr::Bitmap::SetPixelUnsignedByte(i32 x, i32 y, i32 z, const Vector4f& pixel)
 {
-    const int offset = (z * m_width * m_height + y * m_width + x) * m_comp_count;
+    const i32 offset = (z * m_width * m_height + y * m_width + x) * m_comp_count;
     uint8_t* pixel_ptr = m_data.GetData() + offset;
     constexpr float k_255 = 255.0f;
     if (m_comp_count > 0)
@@ -108,9 +108,9 @@ void Rndr::Bitmap::SetPixelUnsignedByte(int x, int y, int z, const Vector4f& pix
     }
 }
 
-Rndr::Vector4f Rndr::Bitmap::GetPixelFloat(int x, int y, int z) const
+Rndr::Vector4f Rndr::Bitmap::GetPixelFloat(i32 x, i32 y, i32 z) const
 {
-    const int offset = (z * m_width * m_height + y * m_width + x) * m_comp_count;
+    const i32 offset = (z * m_width * m_height + y * m_width + x) * m_comp_count;
     const float* pixel = reinterpret_cast<const float*>(m_data.GetData()) + offset;
     Vector4f result = Vector4f::Zero();
     if (m_comp_count > 0)
@@ -132,9 +132,9 @@ Rndr::Vector4f Rndr::Bitmap::GetPixelFloat(int x, int y, int z) const
     return result;
 }
 
-void Rndr::Bitmap::SetPixelFloat(int x, int y, int z, const Vector4f& pixel)
+void Rndr::Bitmap::SetPixelFloat(i32 x, i32 y, i32 z, const Vector4f& pixel)
 {
-    const int offset = (z * m_width * m_height + y * m_width + x) * m_comp_count;
+    const i32 offset = (z * m_width * m_height + y * m_width + x) * m_comp_count;
     float* pixel_ptr = reinterpret_cast<float*>(m_data.GetData()) + offset;
     if (m_comp_count > 0)
     {

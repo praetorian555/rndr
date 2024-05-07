@@ -2,6 +2,7 @@
 
 #include "math/transform.h"
 
+#include "rndr/core/types.h"
 #include "rndr/core/window.h"
 
 Rndr::FlyCamera::FlyCamera(Window* window, InputContext* input_context, const FlyCameraDesc& desc)
@@ -16,14 +17,14 @@ Rndr::FlyCamera::FlyCamera(Window* window, InputContext* input_context, const Fl
 
     m_window_resize_handle = m_window->on_resize.Bind([this](int width, int height) { this->SetScreenSize(width, height); });
 
-    Array<InputBinding> activate_bindings;
+    Opal::Array<InputBinding> activate_bindings;
     activate_bindings.PushBack(InputBinding{.primitive = IP::Mouse_RightButton, .trigger = IT::ButtonPressed});
     activate_bindings.PushBack(InputBinding{.primitive = IP::Mouse_RightButton, .trigger = IT::ButtonReleased});
     m_input_context->AddAction(
         InputAction("ActivateCamera"),
         InputActionData{.callback = RNDR_BIND_INPUT_CALLBACK(this, FlyCamera::HandleActivate), .bindings = activate_bindings});
 
-    Array<InputBinding> forward_bindings;
+    Opal::Array<InputBinding> forward_bindings;
     forward_bindings.PushBack(InputBinding{.primitive = IP::Keyboard_W, .trigger = IT::ButtonPressed, .modifier = -1});
     forward_bindings.PushBack(InputBinding{.primitive = IP::Keyboard_W, .trigger = IT::ButtonReleased});
     forward_bindings.PushBack(InputBinding{.primitive = IP::Keyboard_S, .trigger = IT::ButtonPressed});
@@ -32,7 +33,7 @@ Rndr::FlyCamera::FlyCamera(Window* window, InputContext* input_context, const Fl
         InputAction("MoveForward"),
         InputActionData{.callback = RNDR_BIND_INPUT_CALLBACK(this, FlyCamera::HandleMoveForward), .bindings = forward_bindings});
 
-    Array<InputBinding> right_bindings;
+    Opal::Array<InputBinding> right_bindings;
     right_bindings.PushBack(InputBinding{.primitive = IP::Keyboard_A, .trigger = IT::ButtonPressed});
     right_bindings.PushBack(InputBinding{.primitive = IP::Keyboard_A, .trigger = IT::ButtonReleased});
     right_bindings.PushBack(InputBinding{.primitive = IP::Keyboard_D, .trigger = IT::ButtonPressed, .modifier = -1});
@@ -41,7 +42,7 @@ Rndr::FlyCamera::FlyCamera(Window* window, InputContext* input_context, const Fl
         InputAction("MoveRight"),
         InputActionData{.callback = RNDR_BIND_INPUT_CALLBACK(this, FlyCamera::HandleMoveRight), .bindings = right_bindings});
 
-    Array<InputBinding> vert_bindings;
+    Opal::Array<InputBinding> vert_bindings;
     vert_bindings.PushBack(InputBinding{.primitive = IP::Keyboard_UpArrow, .trigger = IT::ButtonPressed});
     vert_bindings.PushBack(InputBinding{.primitive = IP::Keyboard_UpArrow, .trigger = IT::ButtonReleased});
     vert_bindings.PushBack(InputBinding{.primitive = IP::Keyboard_DownArrow, .trigger = IT::ButtonPressed, .modifier = -1});
@@ -51,7 +52,7 @@ Rndr::FlyCamera::FlyCamera(Window* window, InputContext* input_context, const Fl
         InputAction("LookAroundVert"),
         InputActionData{.callback = RNDR_BIND_INPUT_CALLBACK(this, FlyCamera::HandleLookVert), .bindings = vert_bindings});
 
-    Array<InputBinding> horz_bindings;
+    Opal::Array<InputBinding> horz_bindings;
     horz_bindings.PushBack(InputBinding{.primitive = IP::Keyboard_RightArrow, .trigger = IT::ButtonPressed, .modifier = -1});
     horz_bindings.PushBack(InputBinding{.primitive = IP::Keyboard_RightArrow, .trigger = IT::ButtonReleased, .modifier = -1});
     horz_bindings.PushBack(InputBinding{.primitive = IP::Keyboard_LeftArrow, .trigger = IT::ButtonPressed});
@@ -67,7 +68,7 @@ Rndr::FlyCamera::~FlyCamera()
     m_window->on_resize.Unbind(m_window_resize_handle);
 }
 
-void Rndr::FlyCamera::Update(float delta_seconds)
+void Rndr::FlyCamera::Update(f32 delta_seconds)
 {
     if (!m_is_active)
     {
@@ -80,7 +81,7 @@ void Rndr::FlyCamera::Update(float delta_seconds)
     m_direction_vector = Math::Rotate(rotation) * m_direction_vector;
     m_right_vector = Math::Cross(m_direction_vector, Vector3f{0, 1, 0});
 
-    constexpr float k_max_roll = 89.0f;
+    constexpr f32 k_max_roll = 89.0f;
     rotation.roll = Math::Clamp(rotation.roll, -k_max_roll, k_max_roll);
 
     Point3f position = GetPosition();
@@ -92,7 +93,7 @@ void Rndr::FlyCamera::Update(float delta_seconds)
     m_delta_rotation = Rotatorf::Zero();
 }
 
-void Rndr::FlyCamera::HandleActivate(InputPrimitive primitive, InputTrigger trigger, float value)
+void Rndr::FlyCamera::HandleActivate(InputPrimitive primitive, InputTrigger trigger, f32 value)
 {
     RNDR_UNUSED(primitive);
     RNDR_UNUSED(value);
@@ -113,7 +114,7 @@ void Rndr::FlyCamera::HandleActivate(InputPrimitive primitive, InputTrigger trig
     }
 }
 
-void Rndr::FlyCamera::HandleLookVert(Rndr::InputPrimitive primitive, Rndr::InputTrigger trigger, float axis_value)
+void Rndr::FlyCamera::HandleLookVert(Rndr::InputPrimitive primitive, Rndr::InputTrigger trigger, f32 axis_value)
 {
     using IT = Rndr::InputTrigger;
     if (primitive == Rndr::InputPrimitive::Mouse_AxisY)
@@ -126,7 +127,7 @@ void Rndr::FlyCamera::HandleLookVert(Rndr::InputPrimitive primitive, Rndr::Input
     }
 }
 
-void Rndr::FlyCamera::HandleLookHorz(Rndr::InputPrimitive primitive, Rndr::InputTrigger trigger, float axis_value)
+void Rndr::FlyCamera::HandleLookHorz(Rndr::InputPrimitive primitive, Rndr::InputTrigger trigger, f32 axis_value)
 {
     using IT = Rndr::InputTrigger;
     if (primitive == Rndr::InputPrimitive::Mouse_AxisX)
@@ -139,14 +140,14 @@ void Rndr::FlyCamera::HandleLookHorz(Rndr::InputPrimitive primitive, Rndr::Input
     }
 }
 
-void Rndr::FlyCamera::HandleMoveForward(Rndr::InputPrimitive primitive, Rndr::InputTrigger trigger, float value)
+void Rndr::FlyCamera::HandleMoveForward(Rndr::InputPrimitive primitive, Rndr::InputTrigger trigger, f32 value)
 {
     RNDR_UNUSED(primitive);
     using IT = Rndr::InputTrigger;
     m_delta_position.x = trigger == IT::ButtonPressed ? value : 0;
 }
 
-void Rndr::FlyCamera::HandleMoveRight(Rndr::InputPrimitive primitive, Rndr::InputTrigger trigger, float value)
+void Rndr::FlyCamera::HandleMoveRight(Rndr::InputPrimitive primitive, Rndr::InputTrigger trigger, f32 value)
 {
     RNDR_UNUSED(primitive);
     using IT = Rndr::InputTrigger;

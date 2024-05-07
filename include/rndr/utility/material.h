@@ -1,6 +1,6 @@
 #pragma once
 
-#include "rndr/core/containers/array.h"
+#include "opal/container/array.h"
 #include "rndr/core/containers/string.h"
 #include "rndr/core/enum-flags.h"
 #include "rndr/core/math.h"
@@ -76,8 +76,8 @@ namespace Material
  * @param opacity_textures List of paths to opacity textures relative to the base path.
  * @return True if the textures were successfully converted and downscaled, false otherwise.
  */
-bool ConvertAndDownscaleTextures(const Array<MaterialDescription>& materials, const String& base_path, Array<String>& texture_paths,
-                                 const Array<String>& opacity_textures);
+bool ConvertAndDownscaleTextures(const Opal::Array<MaterialDescription>& materials, const String& base_path, Opal::Array<String>& texture_paths,
+                                 const Opal::Array<String>& opacity_textures);
 
 /**
  * Writes the material data to a file.
@@ -86,7 +86,7 @@ bool ConvertAndDownscaleTextures(const Array<MaterialDescription>& materials, co
  * @param file_path Path to the file.
  * @return True if the material data was written successfully, false otherwise.
  */
-bool WriteData(const Array<MaterialDescription>& materials, const Array<String>& texture_paths, const String& file_path);
+bool WriteData(const Opal::Array<MaterialDescription>& materials, const Opal::Array<String>& texture_paths, const String& file_path);
 
 /**
  * Reads the material data from a file and loads textures to the GPU.
@@ -96,7 +96,7 @@ bool WriteData(const Array<MaterialDescription>& materials, const Array<String>&
  * @param graphics_context Graphics context used to load the textures to the GPU.
  * @return True if the material data was read successfully and the textures were loaded to the GPU, false otherwise.
  */
-bool ReadDataLoadTextures(Array<MaterialDescription>& out_materials, Array<Image>& out_textures, const String& file_path,
+bool ReadDataLoadTextures(Opal::Array<MaterialDescription>& out_materials, Opal::Array<Image>& out_textures, const String& file_path,
                           const GraphicsContext& graphics_context);
 
 }  // namespace Material

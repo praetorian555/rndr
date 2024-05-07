@@ -1,7 +1,7 @@
 #pragma once
 
 #include "rndr/core/base.h"
-#include "rndr/core/containers/array.h"
+#include "opal/container/array.h"
 #include "rndr/core/containers/span.h"
 #include "rndr/core/containers/stack-array.h"
 #include "rndr/core/containers/string.h"
@@ -58,13 +58,13 @@ public:
 struct MeshData
 {
     /** Descriptions of all meshes. */
-    Array<MeshDescription> meshes;
+    Opal::Array<MeshDescription> meshes;
     /** Vertex buffer data. */
-    Array<uint8_t> vertex_buffer_data;
+    Opal::Array<u8> vertex_buffer_data;
     /** Index buffer data. */
-    Array<uint8_t> index_buffer_data;
+    Opal::Array<u8> index_buffer_data;
     /** Bounding boxes of all meshes. */
-    Array<Bounds3f> bounding_boxes;
+    Opal::Array<Bounds3f> bounding_boxes;
 };
 
 /**
@@ -105,7 +105,7 @@ struct MeshFileHeader
     size_t index_buffer_size;
 };
 
-enum class MeshAttributesToLoad : uint8_t
+enum class MeshAttributesToLoad : u8
 {
     LoadPositions = 1 << 0,
     LoadNormals = 1 << 1,
@@ -157,7 +157,7 @@ bool Merge(MeshData& out_mesh_data, const Span<MeshData>& mesh_data);
  * @return True if draw commands were created successfully, false otherwise.
  * @note base_instance field in the DrawIndicesData will store material index. Instance count will be set to 1.
  */
-bool GetDrawCommands(Array<DrawIndicesData>& out_draw_commands, const Array<MeshDrawData>& mesh_draw_data, const MeshData& mesh_data);
+bool GetDrawCommands(Opal::Array<DrawIndicesData>& out_draw_commands, const Opal::Array<MeshDrawData>& mesh_draw_data, const MeshData& mesh_data);
 
 }  // namespace Mesh
 

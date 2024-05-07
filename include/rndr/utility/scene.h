@@ -1,7 +1,7 @@
 #pragma once
 
 #include "rndr/core/base.h"
-#include "rndr/core/containers/array.h"
+#include "opal/container/array.h"
 #include "rndr/core/containers/hash-map.h"
 #include "rndr/core/containers/stack-array.h"
 #include "rndr/core/containers/string.h"
@@ -44,13 +44,13 @@ struct HierarchyNode
 struct SceneDescription
 {
     /** Transforms relative to the parent node. Transform of the root is relative to the world. */
-    Array<Rndr::Matrix4x4f> local_transforms;
+    Opal::Array<Rndr::Matrix4x4f> local_transforms;
 
     /** Transforms relative to the world. */
-    Array<Rndr::Matrix4x4f> world_transforms;
+    Opal::Array<Rndr::Matrix4x4f> world_transforms;
 
     /** Hierarchy of the nodes. */
-    Array<Scene::HierarchyNode> hierarchy;
+    Opal::Array<Scene::HierarchyNode> hierarchy;
 
     /** Maps node id to mesh id. */
     HashMap<Scene::NodeId, uint32_t> node_id_to_mesh_id;
@@ -62,13 +62,13 @@ struct SceneDescription
     HashMap<Scene::NodeId, uint32_t> node_id_to_name;
 
     /** List of node names. */
-    Array<String> node_names;
+    Opal::Array<String> node_names;
 
     /** List of material names. */
-    Array<String> material_names;
+    Opal::Array<String> material_names;
 
     /** List of nodes that are dirty and that need to recalculate their world transform. */
-    Array<Scene::NodeId> dirty_nodes[Scene::k_max_node_level];
+    Opal::Array<Scene::NodeId> dirty_nodes[Scene::k_max_node_level];
 };
 
 /**
@@ -79,11 +79,11 @@ struct SceneDrawData
     /** Contains all the mesh data like vertex and index buffers. */
     MeshData mesh_data;
     /** Contains data needed to draw all shapes. */
-    Array<MeshDrawData> shapes;
+    Opal::Array<MeshDrawData> shapes;
     /** Contains all the materials. */
-    Array<MaterialDescription> materials;
+    Opal::Array<MaterialDescription> materials;
     /** Contains all the textures. */
-    Array<Image> textures;
+    Opal::Array<Image> textures;
     /** Contains all the scene data, like hierarchy. */
     SceneDescription scene_description;
 };

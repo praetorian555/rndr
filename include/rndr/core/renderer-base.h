@@ -36,14 +36,14 @@ protected:
 class ClearRenderer : public RendererBase
 {
 public:
-    ClearRenderer(const String& name, const RendererBaseDesc& desc, const Vector4f& color, float depth = 1.0f, int32_t stencil = 0);
+    ClearRenderer(const String& name, const RendererBaseDesc& desc, const Vector4f& color, float depth = 1.0f, i32 stencil = 0);
 
     bool Render() override;
 
 protected:
     Vector4f m_color;
     float m_depth;
-    int32_t m_stencil;
+    i32 m_stencil;
 };
 
 /**
@@ -105,7 +105,7 @@ public:
      * @param name Name of the renderer.
      * @return Index of the renderer or -1 if the renderer was not found.
      */
-    [[nodiscard]] int32_t GetRendererIndex(const String& name);
+    [[nodiscard]] i32 GetRendererIndex(const String& name);
 
     /**
      * Renders all renderers in the manager.
@@ -114,7 +114,7 @@ public:
     bool Render();
 
 private:
-    Array<RendererBase*> m_renderers;
+    Opal::Array<RendererBase*> m_renderers;
 };
 
 }  // namespace Rndr

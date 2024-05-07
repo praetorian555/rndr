@@ -2,10 +2,11 @@
 #include <utility>
 #include <variant>
 
-#include "rndr/core/containers/array.h"
+#include "opal/container/array.h"
 #include "rndr/core/containers/ref.h"
 #include "rndr/core/containers/stack-array.h"
 #include "rndr/core/input.h"
+#include "rndr/core/types.h"
 
 namespace Rndr
 {
@@ -14,13 +15,13 @@ struct ActionData
     Rndr::InputAction action;
     Rndr::InputCallback callback;
     Rndr::NativeWindowHandle native_window;
-    Rndr::Array<Rndr::InputBinding> bindings;
+    Opal::Array<Rndr::InputBinding> bindings;
 };
 
 struct InputContextData
 {
     Rndr::Ref<Rndr::InputContext> context;
-    Rndr::Array<ActionData> actions;
+    Opal::Array<ActionData> actions;
 
     InputContextData(InputContext& ctx) : context(ctx) {}
     ~InputContextData() = default;
@@ -46,7 +47,7 @@ struct RelativeMousePositionData
 
 struct MouseWheelData
 {
-    int32_t delta_wheel;
+    i32 delta_wheel;
 };
 
 using EventData =
@@ -63,7 +64,7 @@ using EventQueue = std::queue<Event>;
 struct InputSystemData
 {
     Rndr::InputContext default_context = Rndr::InputContext("Default");
-    Rndr::Array<Ref<InputContextData>> contexts;
+    Opal::Array<Ref<InputContextData>> contexts;
     EventQueue events;
 
     ~InputSystemData() = default;
@@ -409,7 +410,7 @@ bool Rndr::InputSystem::SubmitRelativeMousePositionEvent(NativeWindowHandle wind
     return true;
 }
 
-bool Rndr::InputSystem::SubmitMouseWheelEvent(NativeWindowHandle window, int32_t delta_wheel)
+bool Rndr::InputSystem::SubmitMouseWheelEvent(NativeWindowHandle window, i32 delta_wheel)
 {
     if (g_system_data == nullptr)
     {

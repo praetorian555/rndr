@@ -1,6 +1,6 @@
 #pragma once
 
-#include "rndr/core/containers/array.h"
+#include "opal/container/array.h"
 #include "rndr/core/graphics-types.h"
 #include "rndr/core/platform/opengl-image.h"
 
@@ -26,14 +26,14 @@ public:
     [[nodiscard]] bool IsValid() const;
 
     [[nodiscard]] const FrameBufferDesc& GetDesc() const;
-    [[nodiscard]] int32_t GetColorAttachmentCount() const;
-    [[nodiscard]] const Image& GetColorAttachment(int32_t index) const;
+    [[nodiscard]] i32 GetColorAttachmentCount() const;
+    [[nodiscard]] const Image& GetColorAttachment(i32 index) const;
     [[nodiscard]] const Image& GetDepthStencilAttachment() const;
     [[nodiscard]] GLuint GetNativeFrameBuffer() const;
 
 private:
     FrameBufferDesc m_desc;
-    Array<Image> m_color_attachments;
+    Opal::Array<Image> m_color_attachments;
     Image m_depth_stencil_attachment;
     GLuint m_native_frame_buffer = k_invalid_opengl_object;
 };
