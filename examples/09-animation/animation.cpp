@@ -130,14 +130,14 @@ public:
                                             .usage = Rndr::Usage::Default,
                                             .size = static_cast<uint32_t>(k_stride * m_mesh.vertex_data.size()),
                                             .stride = k_stride},
-                                           Rndr::ToByteSpan(m_mesh.vertex_data));
+                                           Rndr::AsWritableBytes(m_mesh.vertex_data));
         RNDR_ASSERT(m_vertex_buffer->IsValid());
         m_index_buffer = RNDR_MAKE_SCOPED(Rndr::Buffer, m_desc.graphics_context,
                                           {.type = Rndr::BufferType::Index,
                                            .usage = Rndr::Usage::Default,
                                            .size = static_cast<uint32_t>(sizeof(int32_t) * m_mesh.indices.size()),
                                            .stride = sizeof(int32_t)},
-                                          Rndr::ToByteSpan(m_mesh.indices));
+                                          Rndr::AsWritableBytes(m_mesh.indices));
 
         Rndr::InputLayoutBuilder builder;
         const Rndr::InputLayoutDesc input_layout_desc = builder.AddVertexBuffer(*m_vertex_buffer, 0, Rndr::DataRepetition::PerVertex)
@@ -256,7 +256,7 @@ public:
         PerFrameData per_frame_data = {.mvp = mvp};
         Rndr::Span<Rndr::Matrix4x4f> final_bone_transforms{per_frame_data.final_bone_transforms};
         UpdateAnimator(final_bone_transforms, m_animator, m_delta_seconds);
-        m_desc.graphics_context->Update(*m_per_frame_buffer, Rndr::ToByteSpan(per_frame_data));
+        m_desc.graphics_context->Update(*m_per_frame_buffer, Rndr::AsWritableBytes(per_frame_data));
 
         // Bind resources
         m_desc.graphics_context->Bind(*m_desc.swap_chain);

@@ -60,7 +60,7 @@ public:
      * @param stencil The stencil value to clear the image to.
      * @return Returns true if the image was cleared successfully, false otherwise.
      */
-    bool ClearStencil(int32_t stencil);
+    bool ClearStencil(i32 stencil);
 
     /**
      * Clears the color and depth images in the bound frame buffer.
@@ -69,7 +69,7 @@ public:
      * @param stencil Stencil value to clear the stencil image to. Default is 0.
      * @return Returns true if the images were cleared successfully, false otherwise.
      */
-    bool ClearAll(const Vector4f& color, float depth = 1.0f, int32_t stencil = 0);
+    bool ClearAll(const Vector4f& color, float depth = 1.0f, i32 stencil = 0);
 
     /**
      * Binds a swap chain to the graphics pipeline. This will activate default frame buffer.
@@ -92,7 +92,7 @@ public:
      * -1.
      * @return Returns true if the buffer was bound successfully, false otherwise.
      */
-    bool Bind(const Buffer& buffer, int32_t binding_index = -1);
+    bool Bind(const Buffer& buffer, i32 binding_index = -1);
 
     /**
      * Binds an image to the graphics pipeline.
@@ -100,7 +100,7 @@ public:
      * @param binding_index The binding index to bind the image to.
      * @return Returns true if the image was bound successfully, false otherwise.
      */
-    bool Bind(const Image& image, int32_t binding_index);
+    bool Bind(const Image& image, i32 binding_index);
 
     /**
      * Binds one level of the image to the compute pipeline.
@@ -110,7 +110,7 @@ public:
      * @param access How the image will be accessed in the compute shader.
      * @return Returns true if the image was bound successfully, false otherwise.
      */
-    bool BindImageForCompute(const Image& image, int32_t binding_index, int32_t image_level, ImageAccess access);
+    bool BindImageForCompute(const Image& image, i32 binding_index, i32 image_level, ImageAccess access);
 
     /**
      * Binds a frame buffer to the graphics pipeline.
@@ -128,7 +128,7 @@ public:
      * @param first_vertex The index of the first vertex to draw. By default this is 0.
      * @return Returns true if the draw call was successful, false otherwise.
      */
-    bool DrawVertices(PrimitiveTopology topology, int32_t vertex_count, int32_t instance_count = 1, int32_t first_vertex = 0);
+    bool DrawVertices(PrimitiveTopology topology, i32 vertex_count, i32 instance_count = 1, i32 first_vertex = 0);
 
     /**
      * Draws primitives using an index buffer.
@@ -138,7 +138,7 @@ public:
      * @param first_index The index of the first index to draw. By default this is 0.
      * @return Returns true if the draw call was successful, false otherwise.
      */
-    bool DrawIndices(PrimitiveTopology topology, int32_t index_count, int32_t instance_count = 1, int32_t first_index = 0);
+    bool DrawIndices(PrimitiveTopology topology, i32 index_count, i32 instance_count = 1, i32 first_index = 0);
 
     /**
      * Dispatches a compute shader.
@@ -148,7 +148,7 @@ public:
      * @param wait_for_completion Whether or not to wait for the compute shader to finish executing before returning. Default is true.
      * @return Returns true if the dispatch was successful, false otherwise.
      */
-    bool DispatchCompute(uint32_t block_count_x, uint32_t block_count_y, uint32_t block_count_z, bool wait_for_completion = true);
+    bool DispatchCompute(u32 block_count_x, u32 block_count_y, u32 block_count_z, bool wait_for_completion = true);
 
     /**
      * Updates the contents of a buffer.
@@ -157,7 +157,7 @@ public:
      * @param offset The offset into the buffer to update.
      * @return Returns true if the buffer was updated successfully, false otherwise.
      */
-    bool Update(const Buffer& buffer, const ConstByteSpan& data, int32_t offset = 0);
+    bool Update(const Buffer& buffer, const Opal::Span<const u8>& data, i32 offset = 0);
 
     /**
      * Reads the contents of a buffer.
@@ -167,7 +167,7 @@ public:
      * @param size How many bytes to read. If 0, reads the whole buffer. Default is 0. Size should be between 0 and buffer size.
      * @return
      */
-    bool Read(const Buffer& buffer, ByteSpan& out_data, int32_t offset = 0, int32_t size = 0) const;
+    bool Read(const Buffer& buffer, Opal::Span<u8>& out_data, i32 offset = 0, i32 size = 0) const;
 
     /**
      * Read the contents of an image.
@@ -175,7 +175,7 @@ public:
      * @param out_data Where to store read data.
      * @param level Which mip level to read. Default is 0.
      */
-    bool Read(const Image& image, Bitmap& out_data, int32_t level = 0) const;
+    bool Read(const Image& image, Bitmap& out_data, i32 level = 0) const;
 
     /**
      * Copies the contents of one buffer to another.
@@ -187,7 +187,7 @@ public:
      * destination and source buffer sizes.
      * @return Returns true if the copy was successful, false otherwise.
      */
-    bool Copy(const Buffer& dst_buffer, const Buffer& src_buffer, int32_t dst_offset = 0, int32_t src_offset = 0, int32_t size = 0);
+    bool Copy(const Buffer& dst_buffer, const Buffer& src_buffer, i32 dst_offset = 0, i32 src_offset = 0, i32 size = 0);
 
     /**
      * Read the contents of a swap chain color buffer.

@@ -26,7 +26,7 @@ public:
      * @param data Optional data to initialize the bitmap with. If not specified, the bitmap will be
      * initialized with zeros.
      */
-    Bitmap(i32 width, i32 height, i32 depth, PixelFormat pixel_format, const ByteSpan& data = ByteSpan());
+    Bitmap(i32 width, i32 height, i32 depth, PixelFormat pixel_format, const Opal::Span<u8>& data = {});
 
     /**
      * Check if bitmap is valid.

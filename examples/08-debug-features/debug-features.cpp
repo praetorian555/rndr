@@ -96,7 +96,7 @@ public:
                                             .usage = Rndr::Usage::Default,
                                             .size = static_cast<uint32_t>(k_stride * positions.size()),
                                             .stride = k_stride},
-                                           Rndr::ToByteSpan(positions));
+                                           Rndr::AsWritableBytes(positions));
         RNDR_ASSERT(m_vertex_buffer->IsValid());
         Rndr::InputLayoutBuilder builder;
         const Rndr::InputLayoutDesc input_layout_desc = builder.AddVertexBuffer(*m_vertex_buffer, 0, Rndr::DataRepetition::PerVertex)
@@ -129,7 +129,7 @@ public:
         Rndr::Matrix4x4f mvp = m_camera_transform * t;
         mvp = Math::Transpose(mvp);
         PerFrameData per_frame_data = {.mvp = mvp, .is_wire_frame = 0};
-        m_desc.graphics_context->Update(*m_per_frame_buffer, Rndr::ToByteSpan(per_frame_data));
+        m_desc.graphics_context->Update(*m_per_frame_buffer, Rndr::AsWritableBytes(per_frame_data));
 
         // Bind resources
         m_desc.graphics_context->Bind(*m_desc.swap_chain);

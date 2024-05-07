@@ -2,6 +2,8 @@
 
 #include "math/transform.h"
 
+#include "opal/container/array.h"
+
 #include "rndr/core/types.h"
 #include "rndr/core/window.h"
 

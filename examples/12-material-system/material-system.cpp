@@ -89,11 +89,11 @@ public:
         Rndr::Matrix4x4f model_transform = Math::Translate(Rndr::Vector3f(0.0f, 0.0f, 0.0f)) * Math::RotateX(90.0f) * Math::Scale(1.0f);
         model_transform = Math::Transpose(model_transform);
         InstanceData instance_data = {.model = model_transform, .normal = model_transform};
-        m_desc.graphics_context->Update(m_instance_buffer, Rndr::ToByteSpan(instance_data));
+        m_desc.graphics_context->Update(m_instance_buffer, Rndr::AsWritableBytes(instance_data));
 
         m_material_buffer = Rndr::Buffer(desc.graphics_context, {.type = Rndr::BufferType::ShaderStorage, .usage = Rndr::Usage::Dynamic, .size = sizeof(MaterialDescription)});
         RNDR_ASSERT(m_material_buffer.IsValid());
-        m_desc.graphics_context->Update(m_material_buffer, Rndr::ToByteSpan(m_material_data));
+        m_desc.graphics_context->Update(m_material_buffer, Rndr::AsWritableBytes(m_material_data));
 
         m_per_frame_buffer = Rndr::Buffer(
             desc.graphics_context, {.type = Rndr::BufferType::Constant, .usage = Rndr::Usage::Dynamic, .size = sizeof(PerFrameData)});
@@ -137,7 +137,7 @@ public:
     {
         const Rndr::Matrix4x4f view_projection_transform = Math::Transpose(m_camera_transform);
         PerFrameData per_frame_data = {.view_projection = view_projection_transform, .camera_position = m_camera_position};
-        m_desc.graphics_context->Update(m_per_frame_buffer, Rndr::ToByteSpan(per_frame_data));
+        m_desc.graphics_context->Update(m_per_frame_buffer, Rndr::AsWritableBytes(per_frame_data));
 
         m_command_list.Submit();
         return true;

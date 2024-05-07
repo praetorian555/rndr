@@ -236,7 +236,7 @@ public:
      * @param topology The primitive topology to draw.
      * @param draws The draw vertices data.
      */
-    void DrawVerticesMulti(const Pipeline& pipeline, PrimitiveTopology topology, const Span<DrawVerticesData>& draws);
+    void DrawVerticesMulti(const Pipeline& pipeline, PrimitiveTopology topology, const Opal::Span<DrawVerticesData>& draws);
 
     /**
      * Issue multiple draw indices calls.
@@ -244,7 +244,7 @@ public:
      * @param topology The primitive topology to draw.
      * @param draws The draw indices data.
      */
-    void DrawIndicesMulti(const Pipeline& pipeline, PrimitiveTopology topology, const Span<DrawIndicesData>& draws);
+    void DrawIndicesMulti(const Pipeline& pipeline, PrimitiveTopology topology, const Opal::Span<DrawIndicesData>& draws);
 
     /**
      * Dispatches a compute shader.

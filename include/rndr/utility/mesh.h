@@ -2,7 +2,7 @@
 
 #include "rndr/core/base.h"
 #include "opal/container/array.h"
-#include "rndr/core/containers/span.h"
+#include "opal/container/span.h"
 #include "rndr/core/containers/stack-array.h"
 #include "rndr/core/containers/string.h"
 #include "rndr/core/enum-flags.h"
@@ -147,7 +147,7 @@ bool UpdateBoundingBoxes(MeshData& mesh_data);
  * @param mesh_data Mesh data to merge.
  * @return True if mesh data was merged successfully, false otherwise.
  */
-bool Merge(MeshData& out_mesh_data, const Span<MeshData>& mesh_data);
+bool Merge(MeshData& out_mesh_data, const Opal::Span<MeshData>& mesh_data);
 
 /**
  * Create draw commands that can be used with DrawIndicesMulti API to render meshes.

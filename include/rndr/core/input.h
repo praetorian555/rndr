@@ -2,9 +2,10 @@
 
 #include <functional>
 
+#include "opal/container/span.h"
+
 #include "rndr/core/containers/ref.h"
 #include "rndr/core/containers/scope-ptr.h"
-#include "rndr/core/containers/span.h"
 #include "rndr/core/containers/string.h"
 #include "rndr/core/input-primitives.h"
 #include "rndr/core/math.h"
@@ -61,7 +62,7 @@ struct InputActionData
     InputCallback callback = nullptr;
     /** If null, callback will be called for any window triggering one of the bindings. */
     NativeWindowHandle native_window = nullptr;
-    Span<InputBinding> bindings;
+    Opal::Span<InputBinding> bindings;
 };
 
 /**
@@ -134,7 +135,7 @@ public:
      * @param action The input action to get the bindings for.
      * @return Returns the input bindings associated with the input action.
      */
-    [[nodiscard]] Span<InputBinding> GetActionBindings(const InputAction& action) const;
+    [[nodiscard]] Opal::Span<InputBinding> GetActionBindings(const InputAction& action) const;
 
 private:
     ScopePtr<struct InputContextData> m_context_data;

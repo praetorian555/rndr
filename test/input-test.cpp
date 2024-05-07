@@ -112,7 +112,7 @@ TEST_CASE("Input context", "[input]")
                                        .trigger = Rndr::InputTrigger::ButtonPressed,
                                        .modifier = 1.0f};
             REQUIRE(context.AddBindingToAction(action, binding));
-            Rndr::Span<Rndr::InputBinding> reg_bindings = context.GetActionBindings(action);
+            Opal::Span<Rndr::InputBinding> reg_bindings = context.GetActionBindings(action);
             REQUIRE(reg_bindings.GetSize() == 2);
             REQUIRE(reg_bindings[0] == bindings[0]);
             REQUIRE(reg_bindings[1] == binding);
@@ -130,7 +130,7 @@ TEST_CASE("Input context", "[input]")
                                        .trigger = Rndr::InputTrigger::AxisChangedRelative,
                                        .modifier = 1.0f};
             REQUIRE(!context.AddBindingToAction(action, binding));
-            Rndr::Span<Rndr::InputBinding> reg_bindings = context.GetActionBindings(action);
+            Opal::Span<Rndr::InputBinding> reg_bindings = context.GetActionBindings(action);
             REQUIRE(reg_bindings.GetSize() == 1);
             REQUIRE(reg_bindings[0] == bindings[0]);
         }

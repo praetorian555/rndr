@@ -27,7 +27,7 @@ public:
      * @param desc The description of the image to create.
      * @param init_data The initial data to fill the image with. Default is empty.
      */
-    Image(const GraphicsContext& graphics_context, const ImageDesc& desc, const ConstByteSpan& init_data = ConstByteSpan{});
+    Image(const GraphicsContext& graphics_context, const ImageDesc& desc, const Opal::Span<const u8>& init_data = {});
 
     /**
      * Creates a new image from a CPU image. Only creates Image2D so any other type will result in

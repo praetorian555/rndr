@@ -163,7 +163,7 @@ void Run()
         mvp = Math::Transpose(mvp);
         PerFrameData per_frame_data = {.mvp = mvp};
 
-        graphics_context.Update(per_frame_buffer, Rndr::ToByteSpan(per_frame_data));
+        graphics_context.Update(per_frame_buffer, Rndr::AsWritableBytes(per_frame_data));
 
         graphics_context.Bind(swap_chain);
         graphics_context.Bind(pipeline);

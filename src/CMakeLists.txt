@@ -5,7 +5,6 @@ set(SOURCE_LIST
     "${PROJECT_SOURCE_DIR}/include/rndr/core/definitions.h"
     "${PROJECT_SOURCE_DIR}/include/rndr/core/base.h"
     "${PROJECT_SOURCE_DIR}/include/rndr/core/delegate.h"
-    "${PROJECT_SOURCE_DIR}/include/rndr/core/containers/span.h"
     "${PROJECT_SOURCE_DIR}/include/rndr/core/containers/stack-array.h"
     "${PROJECT_SOURCE_DIR}/include/rndr/core/time.h"
     "${PROJECT_SOURCE_DIR}/include/rndr/core/window.h"

@@ -108,7 +108,7 @@ void Run()
         mvp = Math::Transpose(mvp);
         PerFrameData per_frame_data = {.mvp = mvp, .is_wire_frame = 0};
 
-        graphics_context.Update(per_frame_buffer, Rndr::ToByteSpan(per_frame_data));
+        graphics_context.Update(per_frame_buffer, Rndr::AsWritableBytes(per_frame_data));
 
         constexpr int32_t k_index_count = 36;
         graphics_context.ClearColor(k_clear_color);
@@ -120,7 +120,7 @@ void Run()
 
         graphics_context.Bind(wireframe_pipeline);
         per_frame_data.is_wire_frame = 1;
-        graphics_context.Update(per_frame_buffer, Rndr::ToByteSpan(per_frame_data));
+        graphics_context.Update(per_frame_buffer, Rndr::AsWritableBytes(per_frame_data));
         graphics_context.DrawVertices(Rndr::PrimitiveTopology::Triangle, k_index_count);
 
         graphics_context.Present(swap_chain);

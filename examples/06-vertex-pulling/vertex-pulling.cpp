@@ -70,14 +70,14 @@ void Run()
     const Rndr::Buffer vertex_buffer(
         graphics_context,
         {.type = Rndr::BufferType::ShaderStorage, .size = static_cast<uint32_t>(k_stride * vertices.size()), .stride = k_stride},
-        Rndr::ToByteSpan(vertices));
+        Rndr::AsWritableBytes(vertices));
     RNDR_ASSERT(vertex_buffer.IsValid());
 
     // Setup index buffer.
     const Rndr::Buffer index_buffer(
         graphics_context,
         {.type = Rndr::BufferType::Index, .size = static_cast<uint32_t>(sizeof(uint32_t) * indices.size()), .stride = sizeof(uint32_t)},
-        Rndr::ToByteSpan(indices));
+        Rndr::AsWritableBytes(indices));
     RNDR_ASSERT(index_buffer.IsValid());
 
     // Configure input layout.
@@ -134,7 +134,7 @@ void Run()
         PerFrameData per_frame_data = {.mvp = mvp};
 
         // Send transform to the GPU each frame.
-        graphics_context.Update(per_frame_buffer, Rndr::ToByteSpan(per_frame_data));
+        graphics_context.Update(per_frame_buffer, Rndr::AsWritableBytes(per_frame_data));
 
         // Clear the screen and draw the mesh.
         graphics_context.ClearColor(k_clear_color);

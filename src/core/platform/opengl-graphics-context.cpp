@@ -541,7 +541,7 @@ bool Rndr::GraphicsContext::DispatchCompute(u32 block_count_x, u32 block_count_y
     return true;
 }
 
-bool Rndr::GraphicsContext::Update(const Buffer& buffer, const ConstByteSpan& data, i32 offset)
+bool Rndr::GraphicsContext::Update(const Buffer& buffer, const Opal::Span<const u8>& data, i32 offset)
 {
     RNDR_TRACE_SCOPED(Update Buffer Contents);
 
@@ -576,7 +576,7 @@ bool Rndr::GraphicsContext::Update(const Buffer& buffer, const ConstByteSpan& da
     return true;
 }
 
-bool Rndr::GraphicsContext::Read(const Buffer& buffer, ByteSpan& out_data, i32 offset, i32 size) const
+bool Rndr::GraphicsContext::Read(const Buffer& buffer, Opal::Span<u8>& out_data, i32 offset, i32 size) const
 {
     RNDR_TRACE_SCOPED(Read Buffer Contents);
 
@@ -643,7 +643,7 @@ bool Rndr::GraphicsContext::Read(const Rndr::Image& image, Rndr::Bitmap& out_dat
     glGetTextureImage(image.GetNativeTexture(), level, format, data_type, pixel_size * desc.width * desc.height, tmp_data.GetData());
     RNDR_ASSERT_OPENGL();
 
-    out_data = Bitmap(desc.width, desc.height, 1, desc.pixel_format, ToByteSpan(tmp_data));
+    out_data = Bitmap(desc.width, desc.height, 1, desc.pixel_format, AsWritableBytes(tmp_data));
     return true;
 }
 
@@ -714,7 +714,7 @@ bool Rndr::GraphicsContext::ReadSwapChainColor(const SwapChain& swap_chain, Bitm
             std::swap(data[index1 + 3], data[index2 + 3]);
         }
     }
-    out_bitmap = Bitmap{width, height, 1, PixelFormat::R8G8B8A8_UNORM_SRGB, ToByteSpan(data)};
+    out_bitmap = Bitmap{width, height, 1, PixelFormat::R8G8B8A8_UNORM_SRGB, AsWritableBytes(data)};
     return true;
 }
 
@@ -728,7 +728,7 @@ bool Rndr::GraphicsContext::ReadSwapChainDepthStencil(const SwapChain& swap_chai
     Opal::Array<u32> data(size);
     glReadPixels(0, 0, width, height, GL_DEPTH_STENCIL, GL_UNSIGNED_INT_24_8, data.GetData());
     RNDR_ASSERT_OPENGL();
-    const ByteSpan byte_data(reinterpret_cast<u8*>(data.GetData()), size * sizeof(u32));
+    const Opal::Span<u8> byte_data(reinterpret_cast<u8*>(data.GetData()), size * sizeof(u32));
     out_bitmap = Bitmap{width, height, 1, PixelFormat::D24_UNORM_S8_UINT, byte_data};
     return true;
 }

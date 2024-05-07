@@ -8,7 +8,7 @@
 #include "rndr/utility/cpu-tracer.h"
 #include "rndr/core/bitmap.h"
 
-Rndr::Image::Image(const GraphicsContext& graphics_context, const ImageDesc& desc, const ConstByteSpan& init_data) : m_desc(desc)
+Rndr::Image::Image(const GraphicsContext& graphics_context, const ImageDesc& desc, const Opal::Span<const u8>& init_data) : m_desc(desc)
 {
     RNDR_TRACE_SCOPED(Create Image);
 
@@ -144,7 +144,7 @@ Rndr::Image::Image(const GraphicsContext& graphics_context, Bitmap& bitmap, bool
                       .pixel_format = bitmap.GetPixelFormat(),
                       .use_mips = use_mips,
                       .sampler = sampler_desc},
-            ConstByteSpan(bitmap.GetData(), bitmap.GetSize2D()))
+            Opal::Span<const u8>(bitmap.GetData(), bitmap.GetSize2D()))
 {
 }
 

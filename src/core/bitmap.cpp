@@ -1,6 +1,6 @@
 #include "rndr/core/bitmap.h"
 
-Rndr::Bitmap::Bitmap(i32 width, i32 height, i32 depth, Rndr::PixelFormat pixel_format, const ByteSpan& data)
+Rndr::Bitmap::Bitmap(i32 width, i32 height, i32 depth, Rndr::PixelFormat pixel_format, const Opal::Span<u8>& data)
     : m_width(width), m_height(height), m_depth(depth), m_pixel_format(pixel_format)
 {
     if (width <= 0 || height <= 0 || depth <= 0 || !IsPixelFormatSupported(pixel_format))

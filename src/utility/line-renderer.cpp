@@ -28,7 +28,7 @@ Rndr::LineRenderer::LineRenderer(const Rndr::String& name, const Rndr::RendererB
     m_vertex_buffer =
         RNDR_MAKE_SCOPED(Buffer, m_desc.graphics_context,
                          {.type = Rndr::BufferType::ShaderStorage, .usage = Usage::Dynamic, .size = k_vertex_data_size, .stride = k_stride},
-                         ToConstByteSpan(m_vertex_data));
+                         AsBytes(m_vertex_data));
     if (!m_vertex_buffer->IsValid())
     {
         RNDR_LOG_ERROR("Failed to create vertex buffer for LineRenderer");
@@ -56,7 +56,7 @@ Rndr::LineRenderer::LineRenderer(const Rndr::String& name, const Rndr::RendererB
                                           .usage = Rndr::Usage::Dynamic,
                                           .size = sizeof(Matrix4x4f),
                                           .stride = sizeof(Matrix4x4f)},
-                                         Rndr::ToConstByteSpan(identity_matrix));
+                                         Opal::AsBytes(identity_matrix));
     if (!m_constant_buffer->IsValid())
     {
         RNDR_LOG_ERROR("Failed to create constant buffer for LineRenderer");
@@ -80,7 +80,7 @@ void Rndr::LineRenderer::AddLine(const Point3f& start, const Point3f& end, const
 
 void Rndr::LineRenderer::SetCameraTransform(const Matrix4x4f& transform)
 {
-    m_desc.graphics_context->Update(*m_constant_buffer, ToConstByteSpan(transform));
+    m_desc.graphics_context->Update(*m_constant_buffer, Opal::AsBytes(transform));
 }
 
 bool Rndr::LineRenderer::Render()
@@ -96,7 +96,7 @@ bool Rndr::LineRenderer::Render()
     m_desc.graphics_context->Bind(*m_pipeline);
     m_desc.graphics_context->Bind(*m_constant_buffer, 0);
 
-    m_desc.graphics_context->Update(*m_vertex_buffer, ToConstByteSpan(m_vertex_data));
+    m_desc.graphics_context->Update(*m_vertex_buffer, AsBytes(m_vertex_data));
     const i32 vertex_count = static_cast<i32>(m_vertex_data.GetSize());
     m_desc.graphics_context->DrawVertices(PrimitiveTopology::Line, vertex_count);
 

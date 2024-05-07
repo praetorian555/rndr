@@ -73,14 +73,14 @@ void Run()
     const Rndr::Buffer model_vertex_buffer(
         graphics_context,
         {.type = Rndr::BufferType::ShaderStorage, .size = static_cast<uint32_t>(k_stride * vertices.size()), .stride = k_stride},
-        Rndr::ToByteSpan(vertices));
+        Rndr::AsWritableBytes(vertices));
     RNDR_ASSERT(model_vertex_buffer.IsValid());
 
     // Setup index buffer.
     const Rndr::Buffer model_index_buffer(
         graphics_context,
         {.type = Rndr::BufferType::Index, .size = static_cast<uint32_t>(sizeof(uint32_t) * indices.size()), .stride = sizeof(uint32_t)},
-        Rndr::ToByteSpan(indices));
+        Rndr::AsWritableBytes(indices));
     RNDR_ASSERT(model_index_buffer.IsValid());
 
     // Configure input layout.
@@ -178,7 +178,7 @@ void Run()
         PerFrameData per_frame_data = {.mvp = mvp};
 
         // Draw the model.
-        graphics_context.Update(per_frame_buffer, Rndr::ToByteSpan(per_frame_data));
+        graphics_context.Update(per_frame_buffer, Rndr::AsWritableBytes(per_frame_data));
         graphics_context.Bind(model_pipeline);
         graphics_context.DrawIndices(Rndr::PrimitiveTopology::Triangle, index_count);
 
@@ -188,7 +188,7 @@ void Run()
         per_frame_data.mvp = cube_map_mvp;
         per_frame_data.model = cube_map_model;
         per_frame_data.camera_pos = Rndr::Vector4f();
-        graphics_context.Update(per_frame_buffer, Rndr::ToByteSpan(per_frame_data));
+        graphics_context.Update(per_frame_buffer, Rndr::AsWritableBytes(per_frame_data));
         graphics_context.Bind(cube_map_pipeline);
         graphics_context.DrawVertices(Rndr::PrimitiveTopology::Triangle, 36);
 

@@ -327,7 +327,7 @@ void UIRenderer::ComputeBrdfLut(const Rndr::String& output_path, Rndr::String& s
     }
 
     Rndr::Array<float> read_data_storage(m_brdf_lut_width * m_brdf_lut_height * 2);
-    Rndr::ByteSpan read_data = Rndr::ToByteSpan(read_data_storage);
+    Rndr::ByteSpan read_data = Rndr::AsWritableBytes(read_data_storage);
     if (!m_desc.graphics_context->Read(m_brdf_lut_buffer, read_data))
     {
         status = "Failed to read buffer data!";
@@ -381,7 +381,7 @@ void UIRenderer::ComputeEnvironmentMap(const Rndr::String& input_path, const Rnd
         return;
     }
 
-    Rndr::Bitmap output_bitmap(output_width, output_height, 1, Rndr::PixelFormat::R32G32B32_FLOAT, Rndr::ToByteSpan(output_data));
+    Rndr::Bitmap output_bitmap(output_width, output_height, 1, Rndr::PixelFormat::R32G32B32_FLOAT, Rndr::AsWritableBytes(output_data));
     if (!Rndr::File::SaveImage(output_bitmap, output_path))
     {
         status = "Failed to save output image!";

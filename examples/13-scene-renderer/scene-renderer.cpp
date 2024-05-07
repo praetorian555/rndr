@@ -148,7 +148,7 @@ public:
         Rndr::Matrix4x4f mvp = m_camera_transform * t;
         mvp = Math::Transpose(mvp);
         PerFrameData per_frame_data = {.view_projection = mvp, .camera_position_world = m_camera_position};
-        m_desc.graphics_context->Update(m_per_frame_buffer, Rndr::ToByteSpan(per_frame_data));
+        m_desc.graphics_context->Update(m_per_frame_buffer, Rndr::AsWritableBytes(per_frame_data));
 
         m_command_list.Submit();
 

@@ -120,7 +120,7 @@ void Run()
                                       .size = size_vertices,
                                       .stride = sizeof(Rndr::Point3f),
                                       .offset = 0},
-                                     Rndr::ToByteSpan(positions));
+                                     Rndr::AsWritableBytes(positions));
     RNDR_ASSERT(vertex_buffer.IsValid());
 
     Rndr::Buffer index_buffer(graphics_context, {.type = Rndr::BufferType::Index,
@@ -129,8 +129,8 @@ void Run()
                                                  .stride = sizeof(uint32_t),
                                                  .offset = 0});
     RNDR_ASSERT(index_buffer.IsValid());
-    graphics_context.Update(index_buffer, Rndr::ToByteSpan(indices), start_indices);
-    graphics_context.Update(index_buffer, Rndr::ToByteSpan(indices_lod), start_indices_lod);
+    graphics_context.Update(index_buffer, Rndr::AsWritableBytes(indices), start_indices);
+    graphics_context.Update(index_buffer, Rndr::AsWritableBytes(indices_lod), start_indices_lod);
 
     Rndr::InputLayoutBuilder builder;
     const Rndr::InputLayoutDesc input_layout_desc = builder.AddVertexBuffer(vertex_buffer, 0, Rndr::DataRepetition::PerVertex)
@@ -179,11 +179,11 @@ void Run()
         graphics_context.ClearDepth(1.0f);
 
         PerFrameData per_frame_data = {.mvp = mvp1};
-        graphics_context.Update(per_frame_buffer, Rndr::ToByteSpan(per_frame_data));
+        graphics_context.Update(per_frame_buffer, Rndr::AsWritableBytes(per_frame_data));
         graphics_context.DrawIndices(Rndr::PrimitiveTopology::Triangle, static_cast<int32_t>(indices.size()));
 
         per_frame_data.mvp = mvp2;
-        graphics_context.Update(per_frame_buffer, Rndr::ToByteSpan(per_frame_data));
+        graphics_context.Update(per_frame_buffer, Rndr::AsWritableBytes(per_frame_data));
         graphics_context.DrawIndices(Rndr::PrimitiveTopology::Triangle, static_cast<int32_t>(indices_lod.size()), 1,
                                      static_cast<int32_t>(indices.size()));
 

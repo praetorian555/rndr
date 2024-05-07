@@ -7,7 +7,6 @@
 #include "rndr/core/containers/hash-map.h"
 #include "rndr/core/containers/ref.h"
 #include "rndr/core/containers/scope-ptr.h"
-#include "rndr/core/containers/span.h"
 #include "rndr/core/containers/stack-array.h"
 #include "rndr/core/containers/string.h"
 #include "rndr/core/definitions.h"

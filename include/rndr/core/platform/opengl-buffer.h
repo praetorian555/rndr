@@ -26,7 +26,7 @@ public:
      * @param desc The description of the buffer to create.
      * @param init_data The initial data to fill the buffer with. If empty, the buffer will be filled with zeros. Default is empty.
      */
-    Buffer(const GraphicsContext& graphics_context, const BufferDesc& desc, const ConstByteSpan& init_data = ConstByteSpan{});
+    Buffer(const GraphicsContext& graphics_context, const BufferDesc& desc, const Opal::Span<const u8>& init_data = Opal::Span<const u8>{});
 
     /**
      * Create a new buffer with initial data.
@@ -38,7 +38,7 @@ public:
      * @param offset The offset in the buffer to start writing the data. Default is 0.
      */
     template <typename DataType>
-    Buffer(const GraphicsContext& graphics_context, const Span<const DataType>& init_data, BufferType type, Usage usage = Rndr::Usage::Default,
+    Buffer(const GraphicsContext& graphics_context, const Opal::Span<const DataType>& init_data, BufferType type, Usage usage = Rndr::Usage::Default,
            uint32_t offset = 0);
 
     ~Buffer();
@@ -60,7 +60,7 @@ private:
 };
 
 template <typename DataType>
-Rndr::Buffer::Buffer(const Rndr::GraphicsContext& graphics_context, const Rndr::Span<const DataType>& init_data, Rndr::BufferType type,
+Rndr::Buffer::Buffer(const Rndr::GraphicsContext& graphics_context, const Opal::Span<const DataType>& init_data, Rndr::BufferType type,
                      Rndr::Usage usage, uint32_t offset)
     : Buffer(graphics_context,
              BufferDesc{.type = type,
@@ -68,7 +68,7 @@ Rndr::Buffer::Buffer(const Rndr::GraphicsContext& graphics_context, const Rndr::
                         .size = ((uint32_t)init_data.size()) * sizeof(DataType),
                         .stride = sizeof(DataType),
                         .offset = offset * static_cast<uint32_t>(sizeof(DataType))},
-             ToConstByteSpan(init_data))
+             AsBytes(init_data))
 {
 }
 

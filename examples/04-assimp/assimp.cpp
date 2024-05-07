@@ -96,7 +96,7 @@ void Run()
                                       .usage = Rndr::Usage::Default,
                                       .size = static_cast<uint32_t>(k_stride * positions.size()),
                                       .stride = k_stride},
-                                     Rndr::ToByteSpan(positions));
+                                     Rndr::AsWritableBytes(positions));
     RNDR_ASSERT(vertex_buffer.IsValid());
     Rndr::InputLayoutBuilder builder;
     const Rndr::InputLayoutDesc input_layout_desc = builder.AddVertexBuffer(vertex_buffer, 0, Rndr::DataRepetition::PerVertex)
@@ -137,7 +137,7 @@ void Run()
         mvp = Math::Transpose(mvp);
         PerFrameData per_frame_data = {.mvp = mvp, .is_wire_frame = 0};
 
-        graphics_context.Update(per_frame_buffer, Rndr::ToByteSpan(per_frame_data));
+        graphics_context.Update(per_frame_buffer, Rndr::AsWritableBytes(per_frame_data));
 
         graphics_context.ClearColor(k_clear_color);
         graphics_context.ClearDepth(1.0f);
@@ -148,7 +148,7 @@ void Run()
 
         graphics_context.Bind(wireframe_pipeline);
         per_frame_data.is_wire_frame = 1;
-        graphics_context.Update(per_frame_buffer, Rndr::ToByteSpan(per_frame_data));
+        graphics_context.Update(per_frame_buffer, Rndr::AsWritableBytes(per_frame_data));
         graphics_context.DrawVertices(Rndr::PrimitiveTopology::Triangle, vertex_count);
 
         graphics_context.Present(swap_chain);

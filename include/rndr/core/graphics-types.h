@@ -1,14 +1,15 @@
 #pragma once
 
-#include "rndr/core/colors.h"
-#include "rndr/core/types.h"
 #include "opal/container/array.h"
+#include "opal/container/span.h"
+
+#include "rndr/core/colors.h"
 #include "rndr/core/containers/ref.h"
-#include "rndr/core/containers/span.h"
 #include "rndr/core/containers/stack-array.h"
 #include "rndr/core/containers/string.h"
 #include "rndr/core/math.h"
 #include "rndr/core/platform/windows-forward-def.h"
+#include "rndr/core/types.h"
 
 namespace Rndr
 {

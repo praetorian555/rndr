@@ -273,7 +273,7 @@ Rndr::InputCallback Rndr::InputContext::GetActionCallback(const Rndr::InputActio
     return nullptr;
 }
 
-Rndr::Span<Rndr::InputBinding> Rndr::InputContext::GetActionBindings(
+Opal::Span<Rndr::InputBinding> Rndr::InputContext::GetActionBindings(
     const Rndr::InputAction& action) const
 {
     if (m_context_data == nullptr)
@@ -290,10 +290,10 @@ Rndr::Span<Rndr::InputBinding> Rndr::InputContext::GetActionBindings(
     {
         if (action_data.action == action)
         {
-            return Span<InputBinding>{action_data.bindings.begin(), action_data.bindings.end()};
+            return Opal::Span<InputBinding>{action_data.bindings.begin(), action_data.bindings.end()};
         }
     }
-    return Span<InputBinding>{};
+    return Opal::Span<InputBinding>{};
 }
 
 // InputSystem ////////////////////////////////////////////////////////////////////////////////////
