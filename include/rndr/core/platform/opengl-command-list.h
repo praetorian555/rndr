@@ -2,10 +2,10 @@
 
 #include <variant>
 
+#include "opal/container/array.h"
 #include "rndr/core/containers/ref.h"
 #include "rndr/core/definitions.h"
 #include "rndr/core/graphics-types.h"
-#include "opal/container/array.h"
 
 #if RNDR_OPENGL
 
@@ -96,6 +96,13 @@ struct DrawVerticesMultiCommand
     DrawVerticesMultiCommand& operator=(DrawVerticesMultiCommand&& other) noexcept;
 };
 
+struct UpdateBufferCommand
+{
+    Ref<const class Buffer> buffer;
+    Opal::Span<const u8> data;
+    i32 offset;
+};
+
 struct DrawIndicesMultiCommand
 {
     PrimitiveTopology primitive_topology;
@@ -115,7 +122,7 @@ struct DrawIndicesMultiCommand
 
 using Command = std::variant<PresentCommand, ClearColorCommand, ClearDepthCommand, ClearStencilCommand, ClearAllCommand,
                              BindSwapChainCommand, BindPipelineCommand, BindConstantBufferCommand, BindImageCommand, DrawVerticesCommand,
-                             DrawIndicesCommand, DrawVerticesMultiCommand, DrawIndicesMultiCommand>;
+                             DrawIndicesCommand, DrawVerticesMultiCommand, DrawIndicesMultiCommand, UpdateBufferCommand>;
 
 /**
  * Represents a list of commands to be executed on the GPU.
@@ -208,6 +215,15 @@ public:
      * @return Returns true if the image was bound successfully, false otherwise.
      */
     bool BindImageForCompute(const Image& image, int32_t binding_index, int32_t image_level, ImageAccess access);
+
+    /**
+     * Updates the contents of a buffer.
+     * @param buffer The buffer to update.
+     * @param data The data to update the buffer with.
+     * @param offset The offset into the buffer to update.
+     * @return Returns true if the buffer was updated successfully, false otherwise.
+     */
+    bool Update(const Buffer& buffer, const Opal::Span<const u8>& data, i32 offset = 0);
 
     /**
      * Draws primitives without use of index buffer. It will behave as if indices were specified
