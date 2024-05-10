@@ -10,6 +10,7 @@ set(SOURCE_LIST
     "${PROJECT_SOURCE_DIR}/include/rndr/core/window.h"
     "${PROJECT_SOURCE_DIR}/include/rndr/core/input.h"
     "${PROJECT_SOURCE_DIR}/include/rndr/core/input-primitives.h"
+    "${PROJECT_SOURCE_DIR}/include/rndr/core/error-codes.h"
     "${PROJECT_SOURCE_DIR}/include/rndr/core/containers/string.h"
     "${PROJECT_SOURCE_DIR}/include/rndr/core/containers/hash-map.h"
     "${PROJECT_SOURCE_DIR}/include/rndr/core/containers/ref.h"
