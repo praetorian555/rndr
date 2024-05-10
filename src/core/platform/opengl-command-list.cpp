@@ -176,7 +176,7 @@ void Rndr::CommandList::DrawIndicesMulti(const Rndr::Pipeline& pipeline, Rndr::P
     m_commands.PushBack(DrawIndicesMultiCommand(topology, buffer_handle, static_cast<uint32_t>(draws.GetSize())));
 }
 
-bool Rndr::CommandList::Update(const Rndr::Buffer& buffer, const Opal::Span<const u8>& data, Rndr::i32 offset)
+bool Rndr::CommandList::UpdateBuffer(const Rndr::Buffer& buffer, const Opal::Span<const u8>& data, Rndr::i32 offset)
 {
     m_commands.PushBack(UpdateBufferCommand{.buffer = Ref<const Buffer>(buffer), .data = data, .offset = offset});
     return true;
@@ -239,7 +239,7 @@ struct CommandExecutor
 
     void operator()(const Rndr::UpdateBufferCommand& command) const
     {
-        graphics_context->Update(command.buffer, command.data, command.offset);
+        graphics_context->UpdateBuffer(command.buffer, command.data, command.offset);
     }
 };
 

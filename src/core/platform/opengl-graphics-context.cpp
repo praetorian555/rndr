@@ -541,39 +541,48 @@ bool Rndr::GraphicsContext::DispatchCompute(u32 block_count_x, u32 block_count_y
     return true;
 }
 
-bool Rndr::GraphicsContext::Update(const Buffer& buffer, const Opal::Span<const u8>& data, i32 offset)
+Rndr::ErrorCode Rndr::GraphicsContext::UpdateBuffer(const Buffer& buffer, const Opal::Span<const u8>& data, i64 offset)
 {
     RNDR_TRACE_SCOPED(Update Buffer Contents);
 
     if (!buffer.IsValid())
     {
-        RNDR_LOG_ERROR("Update of the buffer failed since the buffer is invalid!");
-        return false;
+        RNDR_LOG_ERROR("UpdateBuffer: Failed, invalid buffer object!");
+        return ErrorCode::InvalidArgument;
     }
-
     const BufferDesc desc = buffer.GetDesc();
-
     if (desc.usage != Usage::Dynamic)
     {
-        RNDR_LOG_ERROR("Update of the buffer failed since the buffer is not created with Dynamic usage!");
-        return false;
+        RNDR_LOG_ERROR("UpdateBuffer: Failed, buffer usage is not Usage::Dynamic!");
+        return ErrorCode::InvalidArgument;
     }
-
-    if (offset < 0 || offset >= static_cast<i32>(desc.size))
+    const i64 buffer_size = static_cast<i64>(desc.size);
+    if (offset < 0 || offset >= buffer_size)
     {
-        RNDR_LOG_ERROR("Update of the buffer failed since the offset is invalid!");
-        return false;
+        RNDR_LOG_ERROR("UpdateBuffer: Failed, offset out of bounds!");
+        return ErrorCode::OutOfBounds;
     }
-    if (data.IsEmpty() || offset + static_cast<i32>(data.GetSize()) > static_cast<i32>(desc.size))
+    const i64 data_size = static_cast<i64>(data.GetSize());
+    if (data_size <= 0 || offset + data_size > buffer_size)
     {
-        RNDR_LOG_ERROR("Update of the buffer failed since the data size is invalid!");
-        return false;
+        RNDR_LOG_ERROR("UpdateBuffer: Failed, data size out of bounds!");
+        return ErrorCode::OutOfBounds;
     }
 
     const GLuint native_buffer = buffer.GetNativeBuffer();
-    glNamedBufferSubData(native_buffer, offset, static_cast<GLsizeiptr>(data.GetSize()), data.GetData());
-    RNDR_ASSERT_OPENGL();
-    return true;
+    glNamedBufferSubData(native_buffer, offset, data_size, data.GetData());
+    const GLenum error_code = glad_glGetError();
+    switch (error_code)
+    {
+        case GL_INVALID_VALUE:
+            RNDR_LOG_ERROR("UpdateBuffer: Failed, offset or data size out of bounds!");
+            return ErrorCode::InvalidArgument;
+        case GL_INVALID_OPERATION:
+            RNDR_LOG_ERROR("UpdateBuffer: Failed, invalid buffer object or buffer usage is not Usage::Dynamic!");
+            return ErrorCode::InvalidArgument;
+        default:
+            return ErrorCode::Success;
+    }
 }
 
 bool Rndr::GraphicsContext::Read(const Buffer& buffer, Opal::Span<u8>& out_data, i32 offset, i32 size) const

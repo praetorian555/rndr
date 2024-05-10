@@ -1,6 +1,7 @@
 #pragma once
 
 #include "rndr/core/definitions.h"
+#include "rndr/core/error-codes.h"
 #include "rndr/core/graphics-types.h"
 
 namespace Rndr
@@ -154,10 +155,12 @@ public:
      * Updates the contents of a buffer.
      * @param buffer The buffer to update.
      * @param data The data to update the buffer with.
-     * @param offset The offset into the buffer to update.
-     * @return Returns true if the buffer was updated successfully, false otherwise.
+     * @param offset The offset into the buffer to update, measured in bytes.
+     * @return In case of a success ErrorCode::Success is returned. If the buffer is not valid or it doesn't have Usage::Dynamic,
+     * ErrorCode::InvalidArgument is returned. If the data is negative, zero or in combination with the offset exceeds the buffer size,
+     * ErrorCode::OutOfBounds is returned. If offset is out of bounds of the buffer, ErrorCode::OutOfBounds is returned.
      */
-    bool Update(const Buffer& buffer, const Opal::Span<const u8>& data, i32 offset = 0);
+    ErrorCode UpdateBuffer(const Buffer& buffer, const Opal::Span<const u8>& data, i64 offset = 0);
 
     /**
      * Reads the contents of a buffer.

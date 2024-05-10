@@ -80,7 +80,7 @@ void Rndr::LineRenderer::AddLine(const Point3f& start, const Point3f& end, const
 
 void Rndr::LineRenderer::SetCameraTransform(const Matrix4x4f& transform)
 {
-    m_desc.graphics_context->Update(*m_constant_buffer, Opal::AsBytes(transform));
+    m_desc.graphics_context->UpdateBuffer(*m_constant_buffer, Opal::AsBytes(transform));
 }
 
 bool Rndr::LineRenderer::Render()
@@ -96,7 +96,7 @@ bool Rndr::LineRenderer::Render()
     m_desc.graphics_context->Bind(*m_pipeline);
     m_desc.graphics_context->Bind(*m_constant_buffer, 0);
 
-    m_desc.graphics_context->Update(*m_vertex_buffer, AsBytes(m_vertex_data));
+    m_desc.graphics_context->UpdateBuffer(*m_vertex_buffer, AsBytes(m_vertex_data));
     const i32 vertex_count = static_cast<i32>(m_vertex_data.GetSize());
     m_desc.graphics_context->DrawVertices(PrimitiveTopology::Line, vertex_count);
 

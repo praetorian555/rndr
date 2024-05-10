@@ -819,116 +819,75 @@ TEST_CASE("Update the GPU buffer contents", "[render-api][buffer]")
     const Rndr::GraphicsContextDesc gc_desc{.window_handle = hidden_window.GetNativeWindowHandle()};
     Rndr::GraphicsContext graphics_context(gc_desc);
 
-    SECTION("Update contents of the vertex buffer with default usage")
+    SECTION("Update contents of an invalid buffer")
+    {
+        const Rndr::Buffer buffer;
+        const Rndr::ErrorCode result = graphics_context.UpdateBuffer(buffer, Opal::AsBytes(data));
+        REQUIRE(result == Rndr::ErrorCode::InvalidArgument);
+    }
+    SECTION("Update contents of a buffer with default usage")
     {
         const Rndr::BufferDesc desc{.type = Rndr::BufferType::Vertex, .usage = Rndr::Usage::Default, .size = 1024};
         const Rndr::Buffer buffer(graphics_context, desc);
         REQUIRE(buffer.IsValid());
-
-        const bool result = graphics_context.Update(buffer, Opal::AsBytes(data));
-        REQUIRE(!result);
+        const Rndr::ErrorCode result = graphics_context.UpdateBuffer(buffer, Opal::AsBytes(data));
+        REQUIRE(result == Rndr::ErrorCode::InvalidArgument);
     }
-    SECTION("Update contents of the vertex buffer with dynamic usage")
-    {
-        const Rndr::BufferDesc desc{.type = Rndr::BufferType::Vertex, .usage = Rndr::Usage::Dynamic, .size = 1024};
-        const Rndr::Buffer buffer(graphics_context, desc);
-        REQUIRE(buffer.IsValid());
-
-        const bool result = graphics_context.Update(buffer, Opal::AsBytes(data));
-        REQUIRE(result);
-    }
-    SECTION("Update contents of the vertex buffer with read back usage")
+    SECTION("Update contents of a buffer with read back usage")
     {
         const Rndr::BufferDesc desc{.type = Rndr::BufferType::Vertex, .usage = Rndr::Usage::ReadBack, .size = 1024};
         const Rndr::Buffer buffer(graphics_context, desc);
         REQUIRE(buffer.IsValid());
-
-        const bool result = graphics_context.Update(buffer, Opal::AsBytes(data));
-        REQUIRE(!result);
+        const Rndr::ErrorCode result = graphics_context.UpdateBuffer(buffer, Opal::AsBytes(data));
+        REQUIRE(result == Rndr::ErrorCode::InvalidArgument);
     }
-
-    SECTION("Update contents of the index buffer with default usage")
+    SECTION("Update buffer with negative offset")
     {
-        const Rndr::BufferDesc desc{.type = Rndr::BufferType::Index, .usage = Rndr::Usage::Default, .size = 1024};
+        const Rndr::BufferDesc desc{.type = Rndr::BufferType::Vertex, .usage = Rndr::Usage::Dynamic, .size = 1024};
         const Rndr::Buffer buffer(graphics_context, desc);
         REQUIRE(buffer.IsValid());
-
-        const bool result = graphics_context.Update(buffer, Opal::AsBytes(data));
-        REQUIRE(!result);
+        const Rndr::ErrorCode result = graphics_context.UpdateBuffer(buffer, Opal::AsBytes(data), -1);
+        REQUIRE(result == Rndr::ErrorCode::OutOfBounds);
     }
-    SECTION("Update contents of the index buffer with dynamic usage")
+    SECTION("Update buffer with offset equal to the size of the buffer")
     {
-        const Rndr::BufferDesc desc{.type = Rndr::BufferType::Index, .usage = Rndr::Usage::Dynamic, .size = 1024};
+        const Rndr::BufferDesc desc{.type = Rndr::BufferType::Vertex, .usage = Rndr::Usage::Dynamic, .size = 1024};
         const Rndr::Buffer buffer(graphics_context, desc);
         REQUIRE(buffer.IsValid());
-
-        const bool result = graphics_context.Update(buffer, Opal::AsBytes(data));
-        REQUIRE(result);
+        const Rndr::ErrorCode result = graphics_context.UpdateBuffer(buffer, Opal::AsBytes(data), 1024);
+        REQUIRE(result == Rndr::ErrorCode::OutOfBounds);
     }
-    SECTION("Update contents of the index buffer with read back usage")
+    SECTION("Update buffer with offset larger then the size of the buffer")
     {
-        const Rndr::BufferDesc desc{.type = Rndr::BufferType::Index, .usage = Rndr::Usage::ReadBack, .size = 1024};
+        const Rndr::BufferDesc desc{.type = Rndr::BufferType::Vertex, .usage = Rndr::Usage::Dynamic, .size = 1024};
         const Rndr::Buffer buffer(graphics_context, desc);
         REQUIRE(buffer.IsValid());
-
-        const bool result = graphics_context.Update(buffer, Opal::AsBytes(data));
-        REQUIRE(!result);
+        const Rndr::ErrorCode result = graphics_context.UpdateBuffer(buffer, Opal::AsBytes(data), 1025);
+        REQUIRE(result == Rndr::ErrorCode::OutOfBounds);
     }
-
-    SECTION("Update contents of the constant buffer with default usage")
+    SECTION("Update buffer with no data")
     {
-        const Rndr::BufferDesc desc{.type = Rndr::BufferType::Constant, .usage = Rndr::Usage::Default, .size = 1024};
+        const Rndr::BufferDesc desc{.type = Rndr::BufferType::Vertex, .usage = Rndr::Usage::Dynamic, .size = 1024};
         const Rndr::Buffer buffer(graphics_context, desc);
         REQUIRE(buffer.IsValid());
-
-        const bool result = graphics_context.Update(buffer, Opal::AsBytes(data));
-        REQUIRE(!result);
+        const Rndr::ErrorCode result = graphics_context.UpdateBuffer(buffer, {});
+        REQUIRE(result == Rndr::ErrorCode::OutOfBounds);
     }
-    SECTION("Update contents of the constant buffer with dynamic usage")
+    SECTION("Update buffer with data and offset that exceed the buffer size")
     {
-        const Rndr::BufferDesc desc{.type = Rndr::BufferType::Constant, .usage = Rndr::Usage::Dynamic, .size = 1024};
+        const Rndr::BufferDesc desc{.type = Rndr::BufferType::Vertex, .usage = Rndr::Usage::Dynamic, .size = 1024};
         const Rndr::Buffer buffer(graphics_context, desc);
         REQUIRE(buffer.IsValid());
-
-        const bool result = graphics_context.Update(buffer, Opal::AsBytes(data));
-        REQUIRE(result);
+        const Rndr::ErrorCode result = graphics_context.UpdateBuffer(buffer, Opal::AsBytes(data), 512);
+        REQUIRE(result == Rndr::ErrorCode::OutOfBounds);
     }
-    SECTION("Update contents of the constant buffer with read back usage")
+    SECTION("Update buffer with dynamic usage and good offset and data")
     {
-        const Rndr::BufferDesc desc{.type = Rndr::BufferType::Constant, .usage = Rndr::Usage::ReadBack, .size = 1024};
+        const Rndr::BufferDesc desc{.type = Rndr::BufferType::Vertex, .usage = Rndr::Usage::Dynamic, .size = 1024};
         const Rndr::Buffer buffer(graphics_context, desc);
         REQUIRE(buffer.IsValid());
-
-        const bool result = graphics_context.Update(buffer, Opal::AsBytes(data));
-        REQUIRE(!result);
-    }
-
-    SECTION("Update contents of the shader storage buffer with default usage")
-    {
-        const Rndr::BufferDesc desc{.type = Rndr::BufferType::ShaderStorage, .usage = Rndr::Usage::Default, .size = 1024};
-        const Rndr::Buffer buffer(graphics_context, desc);
-        REQUIRE(buffer.IsValid());
-
-        const bool result = graphics_context.Update(buffer, Opal::AsBytes(data));
-        REQUIRE(!result);
-    }
-    SECTION("Update contents of the shader storage buffer with dynamic usage")
-    {
-        const Rndr::BufferDesc desc{.type = Rndr::BufferType::ShaderStorage, .usage = Rndr::Usage::Dynamic, .size = 1024};
-        const Rndr::Buffer buffer(graphics_context, desc);
-        REQUIRE(buffer.IsValid());
-
-        const bool result = graphics_context.Update(buffer, Opal::AsBytes(data));
-        REQUIRE(result);
-    }
-    SECTION("Update contents of the shader storage buffer with read back usage")
-    {
-        const Rndr::BufferDesc desc{.type = Rndr::BufferType::ShaderStorage, .usage = Rndr::Usage::ReadBack, .size = 1024};
-        const Rndr::Buffer buffer(graphics_context, desc);
-        REQUIRE(buffer.IsValid());
-
-        const bool result = graphics_context.Update(buffer, Opal::AsBytes(data));
-        REQUIRE(!result);
+        const Rndr::ErrorCode result = graphics_context.UpdateBuffer(buffer, Opal::AsBytes(data));
+        REQUIRE(result == Rndr::ErrorCode::Success);
     }
 
     graphics_context.Destroy();
