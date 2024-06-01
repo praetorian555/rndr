@@ -934,7 +934,6 @@ TEST_CASE("Copy of buffers", "[render-api][buffer]")
 
         const Rndr::ErrorCode error_code = graphics_context.CopyBuffer(buffer, buffer, 511, 0, 512);
         REQUIRE(error_code == Rndr::ErrorCode::InvalidArgument);
-
     }
     SECTION("Source and destination buffers are the same buffer and the ranges don't overlap")
     {
@@ -963,7 +962,7 @@ TEST_CASE("Copy of buffers", "[render-api][buffer]")
             REQUIRE(read_data_storage[i] == data[i - k_buffer_size_int / 2]);
         }
     }
-    
+
     graphics_context.Destroy();
     hidden_window.Destroy();
     Rndr::Destroy();
