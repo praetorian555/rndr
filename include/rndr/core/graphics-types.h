@@ -145,7 +145,7 @@ enum class ImageAddressMode
 /**
  * Represents different ways the GPU resource can be used.
  */
-enum class Usage
+enum class Usage : u8
 {
     /**  Use this when you don't need to update the resource after creation. Does not allow reading. */
     Default = 0,
@@ -373,10 +373,10 @@ enum class BlendOperation
  * Represents what type of data is stored in a buffer. This is used to determine how the buffer
  * will be used.
  */
-enum class BufferType
+enum class BufferType : u8
 {
     /** Buffer contains vertex data. */
-    Vertex,
+    Vertex = 0,
 
     /** Buffer contains index data. */
     Index,
