@@ -168,7 +168,8 @@ public:
      * @param out_data Where to store read data.
      * @param offset From which byte to start reading. Default is 0. Offset should be between 0 and buffer size.
      * @param size How many bytes to read. If 0, reads the whole buffer. Default is 0. Size should be between 0 and buffer size.
-     * @return
+     * @return Returns ErrorCode::Success if the read was successful. Returns ErrorCode::InvalidArgument if the buffer is not valid or the
+     * buffer's usage is not ReadBack. Returns ErrorCode::OutOfBounds if the offset or size is out of bounds of the buffer.
      */
     ErrorCode ReadBuffer(const Buffer& buffer, Opal::Span<u8>& out_data, i32 offset = 0, i32 size = 0) const;
 
