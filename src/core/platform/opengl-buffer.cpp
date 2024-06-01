@@ -10,15 +10,7 @@
 Rndr::Buffer::Buffer(const GraphicsContext& graphics_context, const BufferDesc& desc, const Opal::Span<const u8>& init_data) : m_desc(desc)
 {
     RNDR_TRACE_SCOPED(Create Buffer);
-
-    RNDR_UNUSED(graphics_context);
-    glCreateBuffers(1, &m_native_buffer);
-    RNDR_ASSERT_OPENGL();
-    const GLenum buffer_usage = FromUsageToOpenGL(desc.usage);
-    glNamedBufferStorage(m_native_buffer, desc.size, init_data.GetData(), buffer_usage);
-    RNDR_ASSERT_OPENGL();
-    RNDR_LOG_DEBUG("Created %s buffer %u, size: %d, stride: %d, usage %s", FromBufferTypeToString(m_desc.type).c_str(), m_native_buffer,
-                   desc.size, m_desc.stride, FromOpenGLUsageToString(buffer_usage).c_str());
+    Initialize(graphics_context, desc, init_data);
 }
 
 Rndr::Buffer::~Buffer()
@@ -29,6 +21,61 @@ Rndr::Buffer::~Buffer()
 Rndr::Buffer::Buffer(Buffer&& other) noexcept : m_desc(other.m_desc), m_native_buffer(other.m_native_buffer)
 {
     other.m_native_buffer = k_invalid_opengl_object;
+}
+
+Rndr::ErrorCode Rndr::Buffer::Initialize(const Rndr::GraphicsContext& graphics_context, const Rndr::BufferDesc& desc,
+                                         const Opal::Span<const u8>& init_data)
+{
+    RNDR_UNUSED(graphics_context);
+
+    RNDR_TRACE_SCOPED(Create Buffer);
+
+    if (desc.type >= BufferType::EnumCount)
+    {
+        RNDR_LOG_ERROR("Buffer::Initialize: Failed, invalid buffer type %d!", desc.type);
+        return ErrorCode::InvalidArgument;
+    }
+    if (desc.usage >= Usage::EnumCount)
+    {
+        RNDR_LOG_ERROR("Buffer::Initialize: Failed, invalid buffer usage %d!", desc.usage);
+        return ErrorCode::InvalidArgument;
+    }
+    if (desc.size == 0)
+    {
+        RNDR_LOG_ERROR("Buffer::Initialize: Failed, buffer size is 0!");
+        return ErrorCode::InvalidArgument;
+    }
+    if (desc.offset < 0)
+    {
+        RNDR_LOG_ERROR("Buffer::Initialize: Failed, invalid buffer offset %d!", desc.offset);
+        return ErrorCode::InvalidArgument;
+    }
+    if (desc.stride < 0)
+    {
+        RNDR_LOG_ERROR("Buffer::Initialize: Failed, invalid buffer stride %d!", desc.stride);
+        return ErrorCode::InvalidArgument;
+    }
+
+    glCreateBuffers(1, &m_native_buffer);
+    const GLenum buffer_usage = FromUsageToOpenGL(desc.usage);
+    glNamedBufferStorage(m_native_buffer, static_cast<i64>(desc.size), init_data.GetData(), buffer_usage);
+    const GLenum error_code = glad_glGetError();
+    switch (error_code)
+    {
+        case GL_INVALID_VALUE:
+            RNDR_LOG_ERROR("Buffer::Initialize: Failed, invalid buffer size %d!", desc.size);
+            return ErrorCode::InvalidArgument;
+        case GL_INVALID_OPERATION:
+            RNDR_LOG_ERROR("Buffer::Initialize: Failed, specified buffer is invalid!");
+            return ErrorCode::InvalidArgument;
+        case GL_OUT_OF_MEMORY:
+            RNDR_LOG_ERROR("Buffer::Initialize: Failed, out of memory!");
+            return ErrorCode::OutOfMemory;
+    }
+    RNDR_LOG_DEBUG("Buffer::Initialize: opengl id: %u, type: %s, usage: %s, size: %d, stride: %d, offset: %d", m_native_buffer,
+                   FromBufferTypeToString(m_desc.type).c_str(), FromOpenGLUsageToString(buffer_usage).c_str(), desc.size, m_desc.stride,
+                   m_desc.offset);
+    return ErrorCode::Success;
 }
 
 Rndr::Buffer& Rndr::Buffer::operator=(Buffer&& other) noexcept
@@ -47,8 +94,8 @@ void Rndr::Buffer::Destroy()
 {
     if (m_native_buffer != k_invalid_opengl_object)
     {
+        RNDR_LOG_DEBUG("Buffer::Destroy: opengl id: %u", m_native_buffer);
         glDeleteBuffers(1, &m_native_buffer);
-        RNDR_ASSERT_OPENGL();
         m_native_buffer = k_invalid_opengl_object;
     }
 }
