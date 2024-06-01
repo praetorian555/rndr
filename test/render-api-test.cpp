@@ -816,11 +816,11 @@ TEST_CASE("Update the GPU buffer contents", "[render-api][buffer]")
 
 TEST_CASE("Copy of buffers", "[render-api][buffer]")
 {
-    constexpr Rndr::i32 k_buffer_size = 1024;
-    Rndr::StackArray<uint8_t, k_buffer_size> data;
-    for (Rndr::i32 i = 0; i < k_buffer_size; ++i)
+    constexpr Rndr::i32 k_buffer_size_int = 256;
+    Rndr::StackArray<Rndr::i32, k_buffer_size_int> data;
+    for (Rndr::i32 i = 0; i < k_buffer_size_int; ++i)
     {
-        data[i] = 0xAB;
+        data[i] = i;
     }
 
     Rndr::Init();
@@ -828,159 +828,142 @@ TEST_CASE("Copy of buffers", "[render-api][buffer]")
     const Rndr::GraphicsContextDesc gc_desc{.window_handle = hidden_window.GetNativeWindowHandle()};
     Rndr::GraphicsContext graphics_context(gc_desc);
 
-    SECTION("Copy vertex buffer")
+    SECTION("Copy from invalid buffer")
+    {
+        const Rndr::Buffer invalid_buffer;
+        const Rndr::BufferDesc desc{.type = Rndr::BufferType::Vertex, .usage = Rndr::Usage::Default, .size = 1024};
+        const Rndr::Buffer buffer(graphics_context, desc, Opal::AsBytes(data));
+        REQUIRE(buffer.IsValid());
+
+        const Rndr::ErrorCode error_code = graphics_context.CopyBuffer(invalid_buffer, buffer);
+        REQUIRE(error_code == Rndr::ErrorCode::InvalidArgument);
+    }
+    SECTION("Copy to an invalid buffer")
+    {
+        const Rndr::Buffer invalid_buffer;
+        const Rndr::BufferDesc desc{.type = Rndr::BufferType::Vertex, .usage = Rndr::Usage::Default, .size = 1024};
+        const Rndr::Buffer buffer(graphics_context, desc, Opal::AsBytes(data));
+        REQUIRE(buffer.IsValid());
+
+        const Rndr::ErrorCode error_code = graphics_context.CopyBuffer(buffer, invalid_buffer);
+        REQUIRE(error_code == Rndr::ErrorCode::InvalidArgument);
+    }
+    SECTION("Negative source offset")
     {
         const Rndr::BufferDesc desc{.type = Rndr::BufferType::Vertex, .usage = Rndr::Usage::Default, .size = 1024};
         const Rndr::Buffer src_buffer(graphics_context, desc, Opal::AsBytes(data));
         REQUIRE(src_buffer.IsValid());
 
-        const Rndr::BufferDesc desc2{.type = Rndr::BufferType::Vertex, .usage = Rndr::Usage::ReadBack, .size = 1024};
+        const Rndr::BufferDesc desc2{.type = Rndr::BufferType::Vertex, .usage = Rndr::Usage::Default, .size = 1024};
         const Rndr::Buffer dst_buffer(graphics_context, desc2);
         REQUIRE(dst_buffer.IsValid());
 
-        bool result = false;
-        result = graphics_context.Copy(dst_buffer, src_buffer);
-        REQUIRE(result);
-
-        Rndr::StackArray<uint8_t, k_buffer_size> read_data_storage = {0};
-        Opal::Span<Rndr::u8> read_data{read_data_storage};
-        Rndr::ErrorCode error_code = graphics_context.ReadBuffer(dst_buffer, read_data);
-        REQUIRE(error_code == Rndr::ErrorCode::Success);
-
-        for (Rndr::i32 i = 0; i < k_buffer_size; ++i)
-        {
-            REQUIRE(read_data[i] == data[i]);
-        }
+        const Rndr::ErrorCode error_code = graphics_context.CopyBuffer(dst_buffer, src_buffer, 512, -1);
+        REQUIRE(error_code == Rndr::ErrorCode::OutOfBounds);
     }
-    SECTION("Copy shader storage buffer")
-    {
-        const Rndr::BufferDesc desc{.type = Rndr::BufferType::ShaderStorage, .usage = Rndr::Usage::Default, .size = 1024};
-        const Rndr::Buffer src_buffer(graphics_context, desc, Opal::AsBytes(data));
-        REQUIRE(src_buffer.IsValid());
-
-        const Rndr::BufferDesc desc2{.type = Rndr::BufferType::ShaderStorage, .usage = Rndr::Usage::ReadBack, .size = 1024};
-        const Rndr::Buffer dst_buffer(graphics_context, desc2);
-        REQUIRE(dst_buffer.IsValid());
-
-        bool result = false;
-        result = graphics_context.Copy(dst_buffer, src_buffer);
-        REQUIRE(result);
-
-        Rndr::StackArray<uint8_t, k_buffer_size> read_data_storage = {0};
-        Opal::Span<Rndr::u8> read_data{read_data_storage};
-        Rndr::ErrorCode error_code = graphics_context.ReadBuffer(dst_buffer, read_data);
-        REQUIRE(error_code == Rndr::ErrorCode::Success);
-
-        for (Rndr::i32 i = 0; i < k_buffer_size; ++i)
-        {
-            REQUIRE(read_data[i] == data[i]);
-        }
-    }
-
-    SECTION("Copy between different types of buffers")
+    SECTION("Negative destination offset")
     {
         const Rndr::BufferDesc desc{.type = Rndr::BufferType::Vertex, .usage = Rndr::Usage::Default, .size = 1024};
         const Rndr::Buffer src_buffer(graphics_context, desc, Opal::AsBytes(data));
         REQUIRE(src_buffer.IsValid());
 
-        const Rndr::BufferDesc desc2{.type = Rndr::BufferType::ShaderStorage, .usage = Rndr::Usage::ReadBack, .size = 1024};
+        const Rndr::BufferDesc desc2{.type = Rndr::BufferType::Vertex, .usage = Rndr::Usage::Default, .size = 1024};
         const Rndr::Buffer dst_buffer(graphics_context, desc2);
         REQUIRE(dst_buffer.IsValid());
 
-        bool result = false;
-        result = graphics_context.Copy(dst_buffer, src_buffer);
-        REQUIRE(result);
-
-        Rndr::StackArray<uint8_t, k_buffer_size> read_data_storage = {0};
-        Opal::Span<Rndr::u8> read_data{read_data_storage};
-        Rndr::ErrorCode error_code = graphics_context.ReadBuffer(dst_buffer, read_data);
-        REQUIRE(error_code == Rndr::ErrorCode::Success);
-
-        for (Rndr::i32 i = 0; i < k_buffer_size; ++i)
-        {
-            REQUIRE(read_data[i] == data[i]);
-        }
+        const Rndr::ErrorCode error_code = graphics_context.CopyBuffer(dst_buffer, src_buffer, -1, 512);
+        REQUIRE(error_code == Rndr::ErrorCode::OutOfBounds);
     }
+    SECTION("Out of bounds source offset")
+    {
+        const Rndr::BufferDesc desc{.type = Rndr::BufferType::Vertex, .usage = Rndr::Usage::Default, .size = 512};
+        const Rndr::Buffer src_buffer(graphics_context, desc, Opal::AsBytes(data));
+        REQUIRE(src_buffer.IsValid());
 
-    SECTION("Copy with bad parameters")
+        const Rndr::BufferDesc desc2{.type = Rndr::BufferType::Vertex, .usage = Rndr::Usage::Default, .size = 1024};
+        const Rndr::Buffer dst_buffer(graphics_context, desc2);
+        REQUIRE(dst_buffer.IsValid());
+
+        const Rndr::ErrorCode error_code = graphics_context.CopyBuffer(dst_buffer, src_buffer, 512, 512);
+        REQUIRE(error_code == Rndr::ErrorCode::OutOfBounds);
+    }
+    SECTION("Out of bounds destination offset")
     {
         const Rndr::BufferDesc desc{.type = Rndr::BufferType::Vertex, .usage = Rndr::Usage::Default, .size = 1024};
         const Rndr::Buffer src_buffer(graphics_context, desc, Opal::AsBytes(data));
         REQUIRE(src_buffer.IsValid());
 
-        const Rndr::BufferDesc desc2{.type = Rndr::BufferType::ShaderStorage, .usage = Rndr::Usage::ReadBack, .size = 1024};
+        const Rndr::BufferDesc desc2{.type = Rndr::BufferType::Vertex, .usage = Rndr::Usage::Default, .size = 512};
         const Rndr::Buffer dst_buffer(graphics_context, desc2);
         REQUIRE(dst_buffer.IsValid());
 
-        bool result = false;
-        result = graphics_context.Copy(dst_buffer, src_buffer);
-        REQUIRE(result);
-
-        SECTION("Copy with invalid source buffer")
-        {
-            const Rndr::Buffer invalid_src_buffer;
-            result = graphics_context.Copy(dst_buffer, invalid_src_buffer);
-            REQUIRE(!result);
-        }
-        SECTION("Copy with invalid destination buffer")
-        {
-            const Rndr::Buffer invalid_dst_buffer;
-            result = graphics_context.Copy(invalid_dst_buffer, src_buffer);
-            REQUIRE(!result);
-        }
-        SECTION("Copy with bad offset")
-        {
-            result = graphics_context.Copy(dst_buffer, src_buffer, -1, 512);
-            REQUIRE(!result);
-            result = graphics_context.Copy(dst_buffer, src_buffer, 1024, 512);
-            REQUIRE(!result);
-            result = graphics_context.Copy(dst_buffer, src_buffer, 1050, 512);
-            REQUIRE(!result);
-            result = graphics_context.Copy(dst_buffer, src_buffer, 512, -1);
-            REQUIRE(!result);
-            result = graphics_context.Copy(dst_buffer, src_buffer, 512, 1024);
-            REQUIRE(!result);
-            result = graphics_context.Copy(dst_buffer, src_buffer, 512, 1050);
-            REQUIRE(!result);
-        }
-        SECTION("Copy with bad size")
-        {
-            result = graphics_context.Copy(dst_buffer, src_buffer, 0, 0 - 1);
-            REQUIRE(!result);
-            result = graphics_context.Copy(dst_buffer, src_buffer, 0, 0, 1025);
-            REQUIRE(!result);
-        }
+        const Rndr::ErrorCode error_code = graphics_context.CopyBuffer(dst_buffer, src_buffer, 512, 512);
+        REQUIRE(error_code == Rndr::ErrorCode::OutOfBounds);
     }
+    SECTION("Invalid size for the source buffer")
+    {
+        const Rndr::BufferDesc desc{.type = Rndr::BufferType::Vertex, .usage = Rndr::Usage::Default, .size = 512};
+        const Rndr::Buffer src_buffer(graphics_context, desc, Opal::AsBytes(data));
+        REQUIRE(src_buffer.IsValid());
 
-    SECTION("Copy partial array")
+        const Rndr::BufferDesc desc2{.type = Rndr::BufferType::Vertex, .usage = Rndr::Usage::Default, .size = 1024};
+        const Rndr::Buffer dst_buffer(graphics_context, desc2);
+        REQUIRE(dst_buffer.IsValid());
+
+        const Rndr::ErrorCode error_code = graphics_context.CopyBuffer(dst_buffer, src_buffer, 0, 0, 1024);
+        REQUIRE(error_code == Rndr::ErrorCode::OutOfBounds);
+    }
+    SECTION("Invalid size for the destination buffer")
     {
         const Rndr::BufferDesc desc{.type = Rndr::BufferType::Vertex, .usage = Rndr::Usage::Default, .size = 1024};
         const Rndr::Buffer src_buffer(graphics_context, desc, Opal::AsBytes(data));
         REQUIRE(src_buffer.IsValid());
 
-        const Rndr::BufferDesc desc2{.type = Rndr::BufferType::ShaderStorage, .usage = Rndr::Usage::ReadBack, .size = 1024};
+        const Rndr::BufferDesc desc2{.type = Rndr::BufferType::Vertex, .usage = Rndr::Usage::Default, .size = 512};
         const Rndr::Buffer dst_buffer(graphics_context, desc2);
         REQUIRE(dst_buffer.IsValid());
 
-        bool result = false;
-        result = graphics_context.Copy(dst_buffer, src_buffer, 0, k_buffer_size / 2);
-        REQUIRE(result);
+        const Rndr::ErrorCode error_code = graphics_context.CopyBuffer(dst_buffer, src_buffer, 0, 0, 1024);
+        REQUIRE(error_code == Rndr::ErrorCode::OutOfBounds);
+    }
+    SECTION("Source and destination buffers are the same buffer and the ranges overlap")
+    {
+        const Rndr::BufferDesc desc{.type = Rndr::BufferType::Vertex, .usage = Rndr::Usage::Dynamic, .size = 1024};
+        const Rndr::Buffer buffer(graphics_context, desc, Opal::AsBytes(data));
+        REQUIRE(buffer.IsValid());
 
-        Rndr::StackArray<uint8_t, k_buffer_size> read_data_storage = {0};
-        Opal::Span<Rndr::u8> read_data{read_data_storage};
-        Rndr::ErrorCode error_code = graphics_context.ReadBuffer(dst_buffer, read_data);
+        const Rndr::ErrorCode error_code = graphics_context.CopyBuffer(buffer, buffer, 511, 0, 512);
+        REQUIRE(error_code == Rndr::ErrorCode::InvalidArgument);
+
+    }
+    SECTION("Source and destination buffers are the same buffer and the ranges don't overlap")
+    {
+        const Rndr::BufferDesc desc{.type = Rndr::BufferType::Vertex, .usage = Rndr::Usage::Dynamic, .size = 1024};
+        const Rndr::Buffer buffer(graphics_context, desc, Opal::AsBytes(data));
+        REQUIRE(buffer.IsValid());
+
+        Rndr::ErrorCode error_code = graphics_context.CopyBuffer(buffer, buffer, 512, 0, 512);
         REQUIRE(error_code == Rndr::ErrorCode::Success);
 
-        for (Rndr::i32 i = 0; i < k_buffer_size / 2; ++i)
+        const Rndr::BufferDesc read_desc{.type = Rndr::BufferType::Vertex, .usage = Rndr::Usage::ReadBack, .size = 1024};
+        const Rndr::Buffer read_buffer(graphics_context, read_desc);
+        REQUIRE(read_buffer.IsValid());
+        Rndr::StackArray<Rndr::i32, k_buffer_size_int> read_data_storage = {0};
+        Opal::Span<Rndr::u8> read_data = Opal::AsWritableBytes(read_data_storage);
+        error_code = graphics_context.CopyBuffer(read_buffer, buffer);
+        REQUIRE(error_code == Rndr::ErrorCode::Success);
+        error_code = graphics_context.ReadBuffer(read_buffer, read_data);
+        REQUIRE(error_code == Rndr::ErrorCode::Success);
+        for (Rndr::i32 i = 0; i < k_buffer_size_int / 2; ++i)
         {
-            REQUIRE(read_data[i] == data[i]);
+            REQUIRE(read_data_storage[i] == data[i]);
         }
-        for (Rndr::i32 i = k_buffer_size / 2; i < k_buffer_size; ++i)
+        for (Rndr::i32 i = k_buffer_size_int / 2; i < k_buffer_size_int; ++i)
         {
-            REQUIRE(read_data[i] == 0);
+            REQUIRE(read_data_storage[i] == data[i - k_buffer_size_int / 2]);
         }
     }
-
+    
     graphics_context.Destroy();
     hidden_window.Destroy();
     Rndr::Destroy();

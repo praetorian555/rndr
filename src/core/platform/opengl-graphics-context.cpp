@@ -434,9 +434,8 @@ bool Rndr::GraphicsContext::Bind(const Pipeline& pipeline)
         {
             glEnable(GL_SCISSOR_TEST);
             RNDR_ASSERT_OPENGL();
-            glScissor(static_cast<i32>(desc.rasterizer.scissor_bottom_left.x),
-                      static_cast<i32>(desc.rasterizer.scissor_bottom_left.y), static_cast<i32>(desc.rasterizer.scissor_size.x),
-                      static_cast<i32>(desc.rasterizer.scissor_size.y));
+            glScissor(static_cast<i32>(desc.rasterizer.scissor_bottom_left.x), static_cast<i32>(desc.rasterizer.scissor_bottom_left.y),
+                      static_cast<i32>(desc.rasterizer.scissor_size.x), static_cast<i32>(desc.rasterizer.scissor_size.y));
             RNDR_ASSERT_OPENGL();
         }
         else
@@ -477,8 +476,7 @@ bool Rndr::GraphicsContext::Bind(const Image& image, i32 binding_index)
     return true;
 }
 
-bool Rndr::GraphicsContext::BindImageForCompute(const Rndr::Image& image, i32 binding_index, i32 image_level,
-                                                Rndr::ImageAccess access)
+bool Rndr::GraphicsContext::BindImageForCompute(const Rndr::Image& image, i32 binding_index, i32 image_level, Rndr::ImageAccess access)
 {
     RNDR_TRACE_SCOPED(Bind Image For Compute);
 
@@ -526,8 +524,7 @@ bool Rndr::GraphicsContext::DrawIndices(PrimitiveTopology topology, i32 index_co
     return true;
 }
 
-bool Rndr::GraphicsContext::DispatchCompute(u32 block_count_x, u32 block_count_y, u32 block_count_z,
-                                            bool wait_for_completion)
+bool Rndr::GraphicsContext::DispatchCompute(u32 block_count_x, u32 block_count_y, u32 block_count_z, bool wait_for_completion)
 {
     RNDR_TRACE_SCOPED(Dispatch Compute);
 
@@ -623,7 +620,8 @@ Rndr::ErrorCode Rndr::GraphicsContext::ReadBuffer(const Buffer& buffer, Opal::Sp
     switch (error_code)
     {
         case GL_INVALID_OPERATION:
-            RNDR_LOG_ERROR("ReadBuffer: Failed, either buffer is invalid object, the object is already mapped, or size of the buffer is 0!");
+            RNDR_LOG_ERROR(
+                "ReadBuffer: Failed, either buffer is invalid object, the object is already mapped, or size of the buffer is 0!");
             return ErrorCode::InvalidArgument;
         case GL_INVALID_VALUE:
             RNDR_LOG_ERROR("ReadBuffer: Failed, buffer's offset or size are either negative or result in out of bounds access!");
@@ -639,6 +637,96 @@ Rndr::ErrorCode Rndr::GraphicsContext::ReadBuffer(const Buffer& buffer, Opal::Sp
     {
         case GL_INVALID_OPERATION:
             RNDR_LOG_ERROR("ReadBuffer: Failed, buffer is not a buffer object or the object is not mapped!");
+            return ErrorCode::InvalidArgument;
+        default:
+            return ErrorCode::Success;
+    }
+}
+
+namespace {
+bool Overlap(Rndr::i32 src_offset, Rndr::i32 dst_offset, Rndr::i32 size)
+{
+    if (src_offset < dst_offset)
+    {
+        return src_offset + size > dst_offset;
+    }
+    if (src_offset > dst_offset)
+    {
+        return dst_offset + size > src_offset;
+    }
+    return true;
+}
+}  // namespace
+
+Rndr::ErrorCode Rndr::GraphicsContext::CopyBuffer(const Rndr::Buffer& dst_buffer, const Rndr::Buffer& src_buffer, i32 dst_offset,
+                                                  i32 src_offset, i32 size)
+{
+    RNDR_TRACE_SCOPED(Copy Buffer Contents);
+
+    if (!dst_buffer.IsValid())
+    {
+        RNDR_LOG_ERROR("CopyBuffer: Failed, destination buffer is invalid!");
+        return ErrorCode::InvalidArgument;
+    }
+    if (!src_buffer.IsValid())
+    {
+        RNDR_LOG_ERROR("CopyBuffer: Failed, source buffer is invalid!");
+        return ErrorCode::InvalidArgument;
+    }
+
+    const BufferDesc& dst_desc = dst_buffer.GetDesc();
+    const BufferDesc& src_desc = src_buffer.GetDesc();
+
+    if (src_offset < 0 || src_offset >= static_cast<i32>(src_desc.size))
+    {
+        RNDR_LOG_ERROR("CopyBuffer: Failed, source offset %d is out of bounds [0, %u)!", src_offset, src_desc.size);
+        return ErrorCode::OutOfBounds;
+    }
+    if (dst_offset < 0 || dst_offset >= static_cast<i32>(dst_desc.size))
+    {
+        RNDR_LOG_ERROR("CopyBuffer: Failed, destination offset %d is out of bounds [0, %u)!", dst_offset, dst_desc.size);
+        return ErrorCode::OutOfBounds;
+    }
+
+    if (size == 0)
+    {
+        const i32 src_remaining_size = static_cast<i32>(src_desc.size) - src_offset;
+        const i32 dst_remaining_size = static_cast<i32>(dst_desc.size) - dst_offset;
+        size = std::min(src_remaining_size, dst_remaining_size);
+    }
+    if (size == 0)
+    {
+        RNDR_LOG_ERROR("CopyBuffer: Failed, nothing to copy!");
+        return ErrorCode::InvalidArgument;
+    }
+
+    if (dst_offset + size > static_cast<i32>(dst_desc.size))
+    {
+        RNDR_LOG_ERROR("CopyBuffer: Failed, not enough space in the destination buffer!");
+        return ErrorCode::OutOfBounds;
+    }
+    if (src_offset + size > static_cast<i32>(src_desc.size))
+    {
+        RNDR_LOG_ERROR("CopyBuffer: Failed, not enough data in the source buffer!");
+        return ErrorCode::OutOfBounds;
+    }
+    if (src_buffer.GetNativeBuffer() == dst_buffer.GetNativeBuffer() && Overlap(src_offset, dst_offset, size))
+    {
+        RNDR_LOG_ERROR("CopyBuffer: Failed, source and destination buffers are the same buffer and their ranges overlap!");
+        return ErrorCode::InvalidArgument;
+    }
+
+    glCopyNamedBufferSubData(src_buffer.GetNativeBuffer(), dst_buffer.GetNativeBuffer(), src_offset, dst_offset, size);
+    const GLenum error_code = glad_glGetError();
+    switch (error_code)
+    {
+        case GL_INVALID_VALUE:
+            RNDR_LOG_ERROR("CopyBuffer: Failed, source and destination buffers are the same buffer and their ranges overlap!");
+            return ErrorCode::InvalidArgument;
+        case GL_INVALID_OPERATION:
+            RNDR_LOG_ERROR(
+                "CopyBuffer: Failed, either source or destination buffers are currently mapped to the CPU memory or one of these buffers "
+                "are not valid!");
             return ErrorCode::InvalidArgument;
         default:
             return ErrorCode::Success;
@@ -664,51 +752,6 @@ bool Rndr::GraphicsContext::Read(const Rndr::Image& image, Rndr::Bitmap& out_dat
     RNDR_ASSERT_OPENGL();
 
     out_data = Bitmap(desc.width, desc.height, 1, desc.pixel_format, AsWritableBytes(tmp_data));
-    return true;
-}
-
-bool Rndr::GraphicsContext::Copy(const Rndr::Buffer& dst_buffer, const Rndr::Buffer& src_buffer, i32 dst_offset, i32 src_offset,
-                                 i32 size)
-{
-    RNDR_TRACE_SCOPED(Copy Buffer Contents);
-
-    if (!dst_buffer.IsValid())
-    {
-        RNDR_LOG_ERROR("Copy of the buffer failed since the destination buffer is invalid!");
-        return false;
-    }
-    if (!src_buffer.IsValid())
-    {
-        RNDR_LOG_ERROR("Copy of the buffer failed since the source buffer is invalid!");
-        return false;
-    }
-
-    const BufferDesc& dst_desc = dst_buffer.GetDesc();
-    const BufferDesc& src_desc = src_buffer.GetDesc();
-
-    if (size == 0)
-    {
-        size = static_cast<i32>(dst_desc.size) - src_offset;
-    }
-
-    if (dst_offset < 0 || dst_offset >= static_cast<i32>(dst_desc.size))
-    {
-        RNDR_LOG_ERROR("Copy of the buffer failed since the destination offset is invalid!");
-        return false;
-    }
-    if (src_offset < 0 || src_offset >= static_cast<i32>(src_desc.size))
-    {
-        RNDR_LOG_ERROR("Copy of the buffer failed since the source offset is invalid!");
-        return false;
-    }
-    if (size <= 0 || dst_offset + size > static_cast<i32>(dst_desc.size) || src_offset + size > static_cast<i32>(src_desc.size))
-    {
-        RNDR_LOG_ERROR("Copy of the buffer failed since the size is invalid!");
-        return false;
-    }
-
-    glCopyNamedBufferSubData(src_buffer.GetNativeBuffer(), dst_buffer.GetNativeBuffer(), src_offset, dst_offset, size);
-    RNDR_ASSERT_OPENGL();
     return true;
 }
 

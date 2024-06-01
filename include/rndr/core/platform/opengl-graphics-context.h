@@ -174,24 +174,26 @@ public:
     ErrorCode ReadBuffer(const Buffer& buffer, Opal::Span<u8>& out_data, i32 offset = 0, i32 size = 0) const;
 
     /**
-     * Read the contents of an image.
-     * @param image The image to read.
-     * @param out_data Where to store read data.
-     * @param level Which mip level to read. Default is 0.
-     */
-    bool Read(const Image& image, Bitmap& out_data, i32 level = 0) const;
-
-    /**
-     * Copies the contents of one buffer to another.
+     * Copies the contents of one buffer to another. Source and destination buffers can be the same, but the ranges must not overlap.
      * @param dst_buffer Buffer to copy to.
      * @param src_buffer Buffer to copy from.
      * @param dst_offset Offset into the destination buffer to copy to. Default is 0. Must be between 0 and destination buffer size.
      * @param src_offset Offset into the source buffer to copy from. Default is 0. Must be between 0 and source buffer size.
      * @param size How many bytes to copy. If 0, copies the whole source buffer. Default is 0. Must be between 0 and the minimum of
      * destination and source buffer sizes.
-     * @return Returns true if the copy was successful, false otherwise.
+     * @return Returns ErrorCode::Success if the copy was successful. Returns ErrorCode::InvalidArgument if the source or destination buffer
+     * are not valid. Returns ErrorCode::OutOfBounds if the offsets or size are out of bounds of the source or destination buffer.
      */
-    bool Copy(const Buffer& dst_buffer, const Buffer& src_buffer, i32 dst_offset = 0, i32 src_offset = 0, i32 size = 0);
+    ErrorCode CopyBuffer(const Buffer& dst_buffer, const Buffer& src_buffer, i32 dst_offset = 0, i32 src_offset = 0, i32 size = 0);
+
+
+    /**
+     * Read the contents of an image.
+     * @param image The image to read.
+     * @param out_data Where to store read data.
+     * @param level Which mip level to read. Default is 0.
+     */
+    bool Read(const Image& image, Bitmap& out_data, i32 level = 0) const;
 
     /**
      * Read the contents of a swap chain color buffer.
