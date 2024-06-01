@@ -523,76 +523,47 @@ TEST_CASE("Creating different types of buffers", "[render-api][buffer]")
     const Rndr::GraphicsContextDesc gc_desc{.window_handle = hidden_window.GetNativeWindowHandle()};
     Rndr::GraphicsContext graphics_context(gc_desc);
 
-    SECTION("Create vertex buffer use for writing and rarely")
+    SECTION("Create buffer with bad type")
     {
-        const Rndr::BufferDesc desc{.type = Rndr::BufferType::Vertex, .usage = Rndr::Usage::Default, .size = 1024};
-        const Rndr::Buffer vertex_buffer(graphics_context, desc);
-        REQUIRE(vertex_buffer.IsValid());
+        const Rndr::BufferDesc desc{.type = static_cast<Rndr::BufferType>(10), .usage = Rndr::Usage::Default, .size = 1024};
+        const Rndr::Buffer ss_buffer(graphics_context, desc);
+        REQUIRE(!ss_buffer.IsValid());
     }
-    SECTION("Create vertex buffer used for writing often")
+    SECTION("Create buffer with bad usage")
     {
-        const Rndr::BufferDesc desc{.type = Rndr::BufferType::Vertex, .usage = Rndr::Usage::Dynamic, .size = 1024};
-        const Rndr::Buffer vertex_buffer(graphics_context, desc);
-        REQUIRE(vertex_buffer.IsValid());
+        const Rndr::BufferDesc desc{.type = Rndr::BufferType::ShaderStorage, .usage = static_cast<Rndr::Usage>(10), .size = 1024};
+        const Rndr::Buffer ss_buffer(graphics_context, desc);
+        REQUIRE(!ss_buffer.IsValid());
     }
-    SECTION("Create vertex buffer used for reading")
+    SECTION("Create buffer with zero size")
     {
-        const Rndr::BufferDesc desc{.type = Rndr::BufferType::Vertex, .usage = Rndr::Usage::ReadBack, .size = 1024};
-        const Rndr::Buffer vertex_buffer(graphics_context, desc);
-        REQUIRE(vertex_buffer.IsValid());
+        const Rndr::BufferDesc desc{.type = Rndr::BufferType::ShaderStorage, .usage = Rndr::Usage::Default, .size = 0};
+        const Rndr::Buffer ss_buffer(graphics_context, desc);
+        REQUIRE(!ss_buffer.IsValid());
     }
-    SECTION("Create index buffer used for rare writes only")
+    SECTION("Create buffer with negative offset")
     {
-        const Rndr::BufferDesc desc{.type = Rndr::BufferType::Index, .usage = Rndr::Usage::Default, .size = 1024};
-        const Rndr::Buffer index_buffer(graphics_context, desc);
-        REQUIRE(index_buffer.IsValid());
+        const Rndr::BufferDesc desc{.type = Rndr::BufferType::ShaderStorage, .usage = Rndr::Usage::Default, .size = 1024, .offset = -1};
+        const Rndr::Buffer ss_buffer(graphics_context, desc);
+        REQUIRE(!ss_buffer.IsValid());
     }
-    SECTION("Create index buffer used for writing often")
+    SECTION("Create buffer with negative stride")
     {
-        const Rndr::BufferDesc desc{.type = Rndr::BufferType::Index, .usage = Rndr::Usage::Dynamic, .size = 1024};
-        const Rndr::Buffer index_buffer(graphics_context, desc);
-        REQUIRE(index_buffer.IsValid());
+        const Rndr::BufferDesc desc{.type = Rndr::BufferType::ShaderStorage, .usage = Rndr::Usage::Default, .size = 1024, .stride = -1};
+        const Rndr::Buffer ss_buffer(graphics_context, desc);
+        REQUIRE(!ss_buffer.IsValid());
     }
-    SECTION("Create index buffer used for reading")
-    {
-        const Rndr::BufferDesc desc{.type = Rndr::BufferType::Index, .usage = Rndr::Usage::ReadBack, .size = 1024};
-        const Rndr::Buffer index_buffer(graphics_context, desc);
-        REQUIRE(index_buffer.IsValid());
-    }
-    SECTION("Create constant buffer used for rare writes only")
-    {
-        const Rndr::BufferDesc desc{.type = Rndr::BufferType::Constant, .usage = Rndr::Usage::Default, .size = 1024};
-        const Rndr::Buffer constant_buffer(graphics_context, desc);
-        REQUIRE(constant_buffer.IsValid());
-    }
-    SECTION("Create constant buffer used for writing often")
-    {
-        const Rndr::BufferDesc desc{.type = Rndr::BufferType::Constant, .usage = Rndr::Usage::Dynamic, .size = 1024};
-        const Rndr::Buffer constant_buffer(graphics_context, desc);
-        REQUIRE(constant_buffer.IsValid());
-    }
-    SECTION("Create constant buffer used for reading")
-    {
-        const Rndr::BufferDesc desc{.type = Rndr::BufferType::Constant, .usage = Rndr::Usage::ReadBack, .size = 1024};
-        const Rndr::Buffer constant_buffer(graphics_context, desc);
-        REQUIRE(constant_buffer.IsValid());
-    }
-    SECTION("Create shader storage buffer used for rare writes only")
+    SECTION("Create buffer")
     {
         const Rndr::BufferDesc desc{.type = Rndr::BufferType::ShaderStorage, .usage = Rndr::Usage::Default, .size = 1024};
         const Rndr::Buffer ss_buffer(graphics_context, desc);
         REQUIRE(ss_buffer.IsValid());
     }
-    SECTION("Create shader storage buffer used for writing often")
+    SECTION("Create buffer with special constructor")
     {
-        const Rndr::BufferDesc desc{.type = Rndr::BufferType::ShaderStorage, .usage = Rndr::Usage::Dynamic, .size = 1024};
-        const Rndr::Buffer ss_buffer(graphics_context, desc);
-        REQUIRE(ss_buffer.IsValid());
-    }
-    SECTION("Create shader storage buffer used for reading")
-    {
-        const Rndr::BufferDesc desc{.type = Rndr::BufferType::ShaderStorage, .usage = Rndr::Usage::ReadBack, .size = 1024};
-        const Rndr::Buffer ss_buffer(graphics_context, desc);
+        constexpr Rndr::i32 k_buffer_size = 1024;
+        Rndr::StackArray<uint8_t, k_buffer_size> data;
+        const Rndr::Buffer ss_buffer(graphics_context, Opal::AsBytes(data), Rndr::BufferType::ShaderStorage, Rndr::Usage::Default, 1024);
         REQUIRE(ss_buffer.IsValid());
     }
 
@@ -615,121 +586,17 @@ TEST_CASE("Reading from GPU buffers", "[render-api][buffer]")
     const Rndr::GraphicsContextDesc gc_desc{.window_handle = hidden_window.GetNativeWindowHandle()};
     Rndr::GraphicsContext graphics_context(gc_desc);
 
-    SECTION("Reading from write only vertex buffer")
+    SECTION("Reading from invalid buffer")
     {
-        const Rndr::BufferDesc desc{.type = Rndr::BufferType::Vertex, .usage = Rndr::Usage::Default, .size = 1024};
-        const Rndr::Buffer vertex_buffer(graphics_context, desc, Opal::AsBytes(data));
-        REQUIRE(vertex_buffer.IsValid());
+        const Rndr::Buffer invalid_buffer;
+        REQUIRE(!invalid_buffer.IsValid());
 
         Rndr::StackArray<uint8_t, k_buffer_size> read_data_storage = {0};
         Opal::Span<Rndr::u8> read_data{read_data_storage};
-        const bool result = graphics_context.Read(vertex_buffer, read_data);
-        REQUIRE(!result);
+        const Rndr::ErrorCode result = graphics_context.ReadBuffer(invalid_buffer, read_data);
+        REQUIRE(result == Rndr::ErrorCode::InvalidArgument);
     }
-    SECTION("Reading from dynamic vertex buffer")
-    {
-        const Rndr::BufferDesc desc{.type = Rndr::BufferType::Vertex, .usage = Rndr::Usage::Dynamic, .size = 1024};
-        const Rndr::Buffer vertex_buffer(graphics_context, desc, Opal::AsBytes(data));
-        REQUIRE(vertex_buffer.IsValid());
-
-        Rndr::StackArray<uint8_t, k_buffer_size> read_data_storage = {0};
-        Opal::Span<Rndr::u8> read_data{read_data_storage};
-        const bool result = graphics_context.Read(vertex_buffer, read_data);
-        REQUIRE(!result);
-    }
-    SECTION("Reading from read back vertex buffer")
-    {
-        const Rndr::BufferDesc desc{.type = Rndr::BufferType::Vertex, .usage = Rndr::Usage::ReadBack, .size = 1024};
-        const Rndr::Buffer vertex_buffer(graphics_context, desc, Opal::AsBytes(data));
-        REQUIRE(vertex_buffer.IsValid());
-
-        Rndr::StackArray<uint8_t, k_buffer_size> read_data_storage = {0};
-        Opal::Span<Rndr::u8> read_data{read_data_storage};
-        const bool result = graphics_context.Read(vertex_buffer, read_data);
-        REQUIRE(result);
-        for (Rndr::i32 i = 0; i < k_buffer_size; ++i)
-        {
-            REQUIRE(read_data_storage[i] == data[i]);
-        }
-    }
-
-    SECTION("Reading from write only index buffer")
-    {
-        const Rndr::BufferDesc desc{.type = Rndr::BufferType::Index, .usage = Rndr::Usage::Default, .size = 1024};
-        const Rndr::Buffer index_buffer(graphics_context, desc, Opal::AsBytes(data));
-        REQUIRE(index_buffer.IsValid());
-
-        Rndr::StackArray<uint8_t, k_buffer_size> read_data_storage = {0};
-        Opal::Span<Rndr::u8> read_data{read_data_storage};
-        const bool result = graphics_context.Read(index_buffer, read_data);
-        REQUIRE(!result);
-    }
-    SECTION("Reading from dynamic index buffer")
-    {
-        const Rndr::BufferDesc desc{.type = Rndr::BufferType::Index, .usage = Rndr::Usage::Dynamic, .size = 1024};
-        const Rndr::Buffer index_buffer(graphics_context, desc, Opal::AsBytes(data));
-        REQUIRE(index_buffer.IsValid());
-
-        Rndr::StackArray<uint8_t, k_buffer_size> read_data_storage = {0};
-        Opal::Span<Rndr::u8> read_data{read_data_storage};
-        const bool result = graphics_context.Read(index_buffer, read_data);
-        REQUIRE(!result);
-    }
-    SECTION("Reading from read back index buffer")
-    {
-        const Rndr::BufferDesc desc{.type = Rndr::BufferType::Index, .usage = Rndr::Usage::ReadBack, .size = 1024};
-        const Rndr::Buffer index_buffer(graphics_context, desc, Opal::AsBytes(data));
-        REQUIRE(index_buffer.IsValid());
-
-        Rndr::StackArray<uint8_t, k_buffer_size> read_data_storage = {0};
-        Opal::Span<Rndr::u8> read_data{read_data_storage};
-        const bool result = graphics_context.Read(index_buffer, read_data);
-        REQUIRE(result);
-        for (Rndr::i32 i = 0; i < k_buffer_size; ++i)
-        {
-            REQUIRE(read_data_storage[i] == data[i]);
-        }
-    }
-
-    SECTION("Reading from write only constant buffer")
-    {
-        const Rndr::BufferDesc desc{.type = Rndr::BufferType::Constant, .usage = Rndr::Usage::Default, .size = 1024};
-        const Rndr::Buffer const_buffer(graphics_context, desc, Opal::AsBytes(data));
-        REQUIRE(const_buffer.IsValid());
-
-        Rndr::StackArray<uint8_t, k_buffer_size> read_data_storage = {0};
-        Opal::Span<Rndr::u8> read_data{read_data_storage};
-        const bool result = graphics_context.Read(const_buffer, read_data);
-        REQUIRE(!result);
-    }
-    SECTION("Reading from dynamic constant buffer")
-    {
-        const Rndr::BufferDesc desc{.type = Rndr::BufferType::Constant, .usage = Rndr::Usage::Dynamic, .size = 1024};
-        const Rndr::Buffer const_buffer(graphics_context, desc, Opal::AsBytes(data));
-        REQUIRE(const_buffer.IsValid());
-
-        Rndr::StackArray<uint8_t, k_buffer_size> read_data_storage = {0};
-        Opal::Span<Rndr::u8> read_data{read_data_storage};
-        const bool result = graphics_context.Read(const_buffer, read_data);
-        REQUIRE(!result);
-    }
-    SECTION("Reading from read back constant buffer")
-    {
-        const Rndr::BufferDesc desc{.type = Rndr::BufferType::Constant, .usage = Rndr::Usage::ReadBack, .size = 1024};
-        const Rndr::Buffer const_buffer(graphics_context, desc, Opal::AsBytes(data));
-        REQUIRE(const_buffer.IsValid());
-
-        Rndr::StackArray<uint8_t, k_buffer_size> read_data_storage = {0};
-        Opal::Span<Rndr::u8> read_data{read_data_storage};
-        const bool result = graphics_context.Read(const_buffer, read_data);
-        REQUIRE(result);
-        for (Rndr::i32 i = 0; i < k_buffer_size; ++i)
-        {
-            REQUIRE(read_data_storage[i] == data[i]);
-        }
-    }
-
-    SECTION("Reading from write only shader store buffer")
+    SECTION("Reading from a buffer that doesn't have ReadBack usage")
     {
         const Rndr::BufferDesc desc{.type = Rndr::BufferType::ShaderStorage, .usage = Rndr::Usage::Default, .size = 1024};
         const Rndr::Buffer ss_buffer(graphics_context, desc, Opal::AsBytes(data));
@@ -737,21 +604,43 @@ TEST_CASE("Reading from GPU buffers", "[render-api][buffer]")
 
         Rndr::StackArray<uint8_t, k_buffer_size> read_data_storage = {0};
         Opal::Span<Rndr::u8> read_data{read_data_storage};
-        const bool result = graphics_context.Read(ss_buffer, read_data);
-        REQUIRE(!result);
+        const Rndr::ErrorCode result = graphics_context.ReadBuffer(ss_buffer, read_data);
+        REQUIRE(result == Rndr::ErrorCode::InvalidArgument);
     }
-    SECTION("Reading from dynamic shader store buffer")
+    SECTION("Reading from a buffer with 0 size")
     {
-        const Rndr::BufferDesc desc{.type = Rndr::BufferType::ShaderStorage, .usage = Rndr::Usage::Dynamic, .size = 1024};
+        const Rndr::BufferDesc desc{.type = Rndr::BufferType::ShaderStorage, .usage = Rndr::Usage::ReadBack, .size = 0};
+        const Rndr::Buffer ss_buffer(graphics_context, desc, Opal::AsBytes(data));
+        REQUIRE(!ss_buffer.IsValid());
+
+        Rndr::StackArray<uint8_t, k_buffer_size> read_data_storage = {0};
+        Opal::Span<Rndr::u8> read_data{read_data_storage};
+        const Rndr::ErrorCode result = graphics_context.ReadBuffer(ss_buffer, read_data);
+        REQUIRE(result == Rndr::ErrorCode::InvalidArgument);
+    }
+    SECTION("Reading from a buffer with negative offset")
+    {
+        const Rndr::BufferDesc desc{.type = Rndr::BufferType::ShaderStorage, .usage = Rndr::Usage::ReadBack, .size = 1024, .offset = -1};
+        const Rndr::Buffer ss_buffer(graphics_context, desc, Opal::AsBytes(data));
+        REQUIRE(!ss_buffer.IsValid());
+
+        Rndr::StackArray<uint8_t, k_buffer_size> read_data_storage = {0};
+        Opal::Span<Rndr::u8> read_data{read_data_storage};
+        const Rndr::ErrorCode result = graphics_context.ReadBuffer(ss_buffer, read_data);
+        REQUIRE(result == Rndr::ErrorCode::InvalidArgument);
+    }
+    SECTION("Trying to read from buffer that doesn't have ReadBack usage")
+    {
+        const Rndr::BufferDesc desc{.type = Rndr::BufferType::ShaderStorage, .usage = Rndr::Usage::Default, .size = 1024};
         const Rndr::Buffer ss_buffer(graphics_context, desc, Opal::AsBytes(data));
         REQUIRE(ss_buffer.IsValid());
 
         Rndr::StackArray<uint8_t, k_buffer_size> read_data_storage = {0};
         Opal::Span<Rndr::u8> read_data{read_data_storage};
-        const bool result = graphics_context.Read(ss_buffer, read_data);
-        REQUIRE(!result);
+        const Rndr::ErrorCode result = graphics_context.ReadBuffer(ss_buffer, read_data);
+        REQUIRE(result == Rndr::ErrorCode::InvalidArgument);
     }
-    SECTION("Reading from read back shader store buffer")
+    SECTION("Trying to read from buffer from a negative offset")
     {
         const Rndr::BufferDesc desc{.type = Rndr::BufferType::ShaderStorage, .usage = Rndr::Usage::ReadBack, .size = 1024};
         const Rndr::Buffer ss_buffer(graphics_context, desc, Opal::AsBytes(data));
@@ -759,44 +648,74 @@ TEST_CASE("Reading from GPU buffers", "[render-api][buffer]")
 
         Rndr::StackArray<uint8_t, k_buffer_size> read_data_storage = {0};
         Opal::Span<Rndr::u8> read_data{read_data_storage};
-        const bool result = graphics_context.Read(ss_buffer, read_data);
-        REQUIRE(result);
+        const Rndr::ErrorCode result = graphics_context.ReadBuffer(ss_buffer, read_data, -1, 512);
+        REQUIRE(result == Rndr::ErrorCode::OutOfBounds);
+    }
+    SECTION("Trying to read from a buffer with offset that is out of bounds")
+    {
+        const Rndr::BufferDesc desc{.type = Rndr::BufferType::ShaderStorage, .usage = Rndr::Usage::ReadBack, .size = 1024};
+        const Rndr::Buffer ss_buffer(graphics_context, desc, Opal::AsBytes(data));
+        REQUIRE(ss_buffer.IsValid());
+
+        Rndr::StackArray<uint8_t, k_buffer_size> read_data_storage = {0};
+        Opal::Span<Rndr::u8> read_data{read_data_storage};
+        const Rndr::ErrorCode result = graphics_context.ReadBuffer(ss_buffer, read_data, 1024, 512);
+        REQUIRE(result == Rndr::ErrorCode::OutOfBounds);
+    }
+    SECTION("Trying to read more bytes then the buffer has")
+    {
+        const Rndr::BufferDesc desc{.type = Rndr::BufferType::ShaderStorage, .usage = Rndr::Usage::ReadBack, .size = 1024};
+        const Rndr::Buffer ss_buffer(graphics_context, desc, Opal::AsBytes(data));
+        REQUIRE(ss_buffer.IsValid());
+
+        Rndr::StackArray<uint8_t, k_buffer_size> read_data_storage = {0};
+        Opal::Span<Rndr::u8> read_data{read_data_storage};
+        const Rndr::ErrorCode result = graphics_context.ReadBuffer(ss_buffer, read_data, 0, 1025);
+        REQUIRE(result == Rndr::ErrorCode::OutOfBounds);
+    }
+    SECTION("Reading from a buffer that has data")
+    {
+        const Rndr::BufferDesc desc{.type = Rndr::BufferType::ShaderStorage, .usage = Rndr::Usage::ReadBack, .size = 1024};
+        const Rndr::Buffer ss_buffer(graphics_context, desc, Opal::AsBytes(data));
+        REQUIRE(ss_buffer.IsValid());
+
+        Rndr::StackArray<uint8_t, k_buffer_size> read_data_storage = {0};
+        Opal::Span<Rndr::u8> read_data{read_data_storage};
+        const Rndr::ErrorCode result = graphics_context.ReadBuffer(ss_buffer, read_data);
+        REQUIRE(result == Rndr::ErrorCode::Success);
         for (Rndr::i32 i = 0; i < k_buffer_size; ++i)
         {
             REQUIRE(read_data_storage[i] == data[i]);
         }
     }
-
-    SECTION("Read from a buffer with invalid offset or size")
+    SECTION("Read part of the data")
     {
         const Rndr::BufferDesc desc{.type = Rndr::BufferType::ShaderStorage, .usage = Rndr::Usage::ReadBack, .size = 1024};
         const Rndr::Buffer ss_buffer(graphics_context, desc, Opal::AsBytes(data));
         REQUIRE(ss_buffer.IsValid());
 
-        SECTION("Invalid offset")
+        Rndr::StackArray<uint8_t, k_buffer_size> read_data_storage = {0};
+        Opal::Span<Rndr::u8> read_data{read_data_storage};
+        const Rndr::ErrorCode result = graphics_context.ReadBuffer(ss_buffer, read_data, 0, 512);
+        REQUIRE(result == Rndr::ErrorCode::Success);
+        for (Rndr::i32 i = 0; i < 512; ++i)
         {
-            Rndr::StackArray<uint8_t, k_buffer_size> read_data_storage = {0};
-            Opal::Span<Rndr::u8> read_data{read_data_storage};
-            REQUIRE(!graphics_context.Read(ss_buffer, read_data, -1, 512));
-            REQUIRE(!graphics_context.Read(ss_buffer, read_data, 1024, 512));
-            REQUIRE(!graphics_context.Read(ss_buffer, read_data, 1050, 512));
+            REQUIRE(read_data_storage[i] == data[i]);
         }
-        SECTION("Invalid size")
+    }
+    SECTION("Read chunk of data from the end")
+    {
+        const Rndr::BufferDesc desc{.type = Rndr::BufferType::ShaderStorage, .usage = Rndr::Usage::ReadBack, .size = 1024};
+        const Rndr::Buffer ss_buffer(graphics_context, desc, Opal::AsBytes(data));
+        REQUIRE(ss_buffer.IsValid());
+
+        Rndr::StackArray<uint8_t, k_buffer_size> read_data_storage = {0};
+        Opal::Span<Rndr::u8> read_data{read_data_storage};
+        const Rndr::ErrorCode result = graphics_context.ReadBuffer(ss_buffer, read_data, 512, 512);
+        REQUIRE(result == Rndr::ErrorCode::Success);
+        for (Rndr::i32 i = 0; i < 512; ++i)
         {
-            Rndr::StackArray<uint8_t, k_buffer_size> read_data_storage = {0};
-            Opal::Span<Rndr::u8> read_data{read_data_storage};
-            REQUIRE(!graphics_context.Read(ss_buffer, read_data, 0, -1));
-            REQUIRE(!graphics_context.Read(ss_buffer, read_data, 0, 1025));
-            REQUIRE(graphics_context.Read(ss_buffer, read_data, 0, 1024));
-        }
-        SECTION("Invalid combo of offset and size")
-        {
-            Rndr::StackArray<uint8_t, k_buffer_size> read_data_storage = {0};
-            Opal::Span<Rndr::u8> read_data{read_data_storage};
-            REQUIRE(graphics_context.Read(ss_buffer, read_data, 0, 1024));
-            REQUIRE(!graphics_context.Read(ss_buffer, read_data, 0, 1025));
-            REQUIRE(!graphics_context.Read(ss_buffer, read_data, 512, 1025));
-            REQUIRE(graphics_context.Read(ss_buffer, read_data, 1023, 1));
+            REQUIRE(read_data_storage[i] == data[i + 512]);
         }
     }
 
@@ -925,8 +844,8 @@ TEST_CASE("Copy of buffers", "[render-api][buffer]")
 
         Rndr::StackArray<uint8_t, k_buffer_size> read_data_storage = {0};
         Opal::Span<Rndr::u8> read_data{read_data_storage};
-        result = graphics_context.Read(dst_buffer, read_data);
-        REQUIRE(result);
+        Rndr::ErrorCode error_code = graphics_context.ReadBuffer(dst_buffer, read_data);
+        REQUIRE(error_code == Rndr::ErrorCode::Success);
 
         for (Rndr::i32 i = 0; i < k_buffer_size; ++i)
         {
@@ -949,8 +868,8 @@ TEST_CASE("Copy of buffers", "[render-api][buffer]")
 
         Rndr::StackArray<uint8_t, k_buffer_size> read_data_storage = {0};
         Opal::Span<Rndr::u8> read_data{read_data_storage};
-        result = graphics_context.Read(dst_buffer, read_data);
-        REQUIRE(result);
+        Rndr::ErrorCode error_code = graphics_context.ReadBuffer(dst_buffer, read_data);
+        REQUIRE(error_code == Rndr::ErrorCode::Success);
 
         for (Rndr::i32 i = 0; i < k_buffer_size; ++i)
         {
@@ -974,8 +893,8 @@ TEST_CASE("Copy of buffers", "[render-api][buffer]")
 
         Rndr::StackArray<uint8_t, k_buffer_size> read_data_storage = {0};
         Opal::Span<Rndr::u8> read_data{read_data_storage};
-        result = graphics_context.Read(dst_buffer, read_data);
-        REQUIRE(result);
+        Rndr::ErrorCode error_code = graphics_context.ReadBuffer(dst_buffer, read_data);
+        REQUIRE(error_code == Rndr::ErrorCode::Success);
 
         for (Rndr::i32 i = 0; i < k_buffer_size; ++i)
         {
@@ -1049,8 +968,8 @@ TEST_CASE("Copy of buffers", "[render-api][buffer]")
 
         Rndr::StackArray<uint8_t, k_buffer_size> read_data_storage = {0};
         Opal::Span<Rndr::u8> read_data{read_data_storage};
-        result = graphics_context.Read(dst_buffer, read_data);
-        REQUIRE(result);
+        Rndr::ErrorCode error_code = graphics_context.ReadBuffer(dst_buffer, read_data);
+        REQUIRE(error_code == Rndr::ErrorCode::Success);
 
         for (Rndr::i32 i = 0; i < k_buffer_size / 2; ++i)
         {
@@ -1123,8 +1042,8 @@ TEST_CASE("Running a compute shader", "[render-api][shader]")
 
         Opal::Array<Rndr::f32> read_data_storage(k_buffer_size);
         Opal::Span<Rndr::u8> read_data = Opal::AsWritableBytes(read_data_storage);
-        const bool result = graphics_context.Read(dst_buffer, read_data);
-        REQUIRE(result);
+        const Rndr::ErrorCode result = graphics_context.ReadBuffer(dst_buffer, read_data);
+        REQUIRE(result == Rndr::ErrorCode::Success);
         for (Rndr::i32 i = 0; i < k_buffer_size; ++i)
         {
             REQUIRE(read_data_storage[i] == data[i] * 2.0f);

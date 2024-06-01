@@ -170,7 +170,7 @@ public:
      * @param size How many bytes to read. If 0, reads the whole buffer. Default is 0. Size should be between 0 and buffer size.
      * @return
      */
-    bool Read(const Buffer& buffer, Opal::Span<u8>& out_data, i32 offset = 0, i32 size = 0) const;
+    ErrorCode ReadBuffer(const Buffer& buffer, Opal::Span<u8>& out_data, i32 offset = 0, i32 size = 0) const;
 
     /**
      * Read the contents of an image.

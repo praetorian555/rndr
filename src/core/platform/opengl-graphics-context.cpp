@@ -559,7 +559,7 @@ Rndr::ErrorCode Rndr::GraphicsContext::UpdateBuffer(const Buffer& buffer, const 
     const i64 buffer_size = static_cast<i64>(desc.size);
     if (offset < 0 || offset >= buffer_size)
     {
-        RNDR_LOG_ERROR("UpdateBuffer: Failed, offset out of bounds!");
+        RNDR_LOG_ERROR("UpdateBuffer: Failed, offset %d is out of bounds [0, %u)!", offset, desc.size);
         return ErrorCode::OutOfBounds;
     }
     const i64 data_size = static_cast<i64>(data.GetSize());
@@ -585,53 +585,64 @@ Rndr::ErrorCode Rndr::GraphicsContext::UpdateBuffer(const Buffer& buffer, const 
     }
 }
 
-bool Rndr::GraphicsContext::Read(const Buffer& buffer, Opal::Span<u8>& out_data, i32 offset, i32 size) const
+Rndr::ErrorCode Rndr::GraphicsContext::ReadBuffer(const Buffer& buffer, Opal::Span<u8>& out_data, i32 offset, i32 size) const
 {
     RNDR_TRACE_SCOPED(Read Buffer Contents);
 
     if (!buffer.IsValid())
     {
-        RNDR_LOG_ERROR("Read of the buffer failed since the buffer is invalid!");
-        return false;
+        RNDR_LOG_ERROR("ReadBuffer: Failed, invalid buffer object!");
+        return ErrorCode::InvalidArgument;
     }
-
     const BufferDesc& desc = buffer.GetDesc();
     if (desc.usage != Usage::ReadBack)
     {
-        RNDR_LOG_ERROR("Read of the buffer failed since the buffer is not created with ReadBack usage!");
-        return false;
+        RNDR_LOG_ERROR("ReadBuffer: Failed, buffer usage is not Usage::ReadBack!");
+        return ErrorCode::InvalidArgument;
     }
+
+    // If size is 0, read to the end of the buffer
     if (size == 0)
     {
         size = static_cast<i32>(desc.size) - offset;
     }
-
     if (offset < 0 || offset >= static_cast<i32>(desc.size))
     {
-        RNDR_LOG_ERROR("Read of the buffer failed since the offset is invalid!");
-        return false;
+        RNDR_LOG_ERROR("ReadBuffer: Failed, offset %d is out of bounds [0, %u)!", offset, desc.size);
+        return ErrorCode::OutOfBounds;
     }
-    if (size <= 0 || offset + size > static_cast<i32>(desc.size))
+    if (offset + size > static_cast<i32>(desc.size))
     {
-        RNDR_LOG_ERROR("Read of the buffer failed since the size is invalid!");
-        return false;
+        RNDR_LOG_ERROR("ReadBuffer: Failed, read size %d results in out of bounds access!", size);
+        return ErrorCode::OutOfBounds;
     }
 
     const GLuint native_buffer = buffer.GetNativeBuffer();
-    u8* gpu_data = static_cast<u8*>(glMapNamedBufferRange(native_buffer, desc.offset, desc.size, GL_MAP_READ_BIT));
-    RNDR_ASSERT_OPENGL();
-    if (gpu_data == nullptr)
+    u8* gpu_data = static_cast<u8*>(glMapNamedBufferRange(native_buffer, desc.offset, static_cast<i32>(desc.size), GL_MAP_READ_BIT));
+    const GLenum error_code = glad_glGetError();
+    switch (error_code)
     {
-        RNDR_LOG_ERROR("Failed to map buffer for read");
-        return false;
+        case GL_INVALID_OPERATION:
+            RNDR_LOG_ERROR("ReadBuffer: Failed, either buffer is invalid object, the object is already mapped, or size of the buffer is 0!");
+            return ErrorCode::InvalidArgument;
+        case GL_INVALID_VALUE:
+            RNDR_LOG_ERROR("ReadBuffer: Failed, buffer's offset or size are either negative or result in out of bounds access!");
+            return ErrorCode::InvalidArgument;
     }
 
+    RNDR_ASSERT(gpu_data != nullptr);
     memcpy(out_data.GetData(), gpu_data + offset, size);
 
     glUnmapNamedBuffer(native_buffer);
-    RNDR_ASSERT_OPENGL();
-
-    return true;
+    const GLenum unmap_error_code = glad_glGetError();
+    switch (unmap_error_code)
+    {
+        case GL_INVALID_OPERATION:
+            RNDR_LOG_ERROR("ReadBuffer: Failed, buffer is not a buffer object or the object is not mapped!");
+            return ErrorCode::InvalidArgument;
+        default:
+            return ErrorCode::Success;
+    }
 }
 
 bool Rndr::GraphicsContext::Read(const Rndr::Image& image, Rndr::Bitmap& out_data, i32 level) const
