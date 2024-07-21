@@ -2,10 +2,10 @@
 
 #include <glad/glad_wgl.h>
 
-#include "../../../build/release-opengl/_deps/opal-src/include/opal/container/string-hash.h"
 #include "opal/container/array.h"
 #include "opal/container/hash-set.h"
 #include "opal/container/stack-array.h"
+#include "opal/container/string-hash.h"
 #include "opal/container/string.h"
 
 #include "core/platform/opengl-helpers.h"
