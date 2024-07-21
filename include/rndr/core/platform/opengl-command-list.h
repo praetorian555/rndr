@@ -3,7 +3,8 @@
 #include <variant>
 
 #include "opal/container/array.h"
-#include "rndr/core/containers/ref.h"
+#include "opal/container/ref.h"
+
 #include "rndr/core/definitions.h"
 #include "rndr/core/graphics-types.h"
 
@@ -16,7 +17,7 @@ class GraphicsContext;
 
 struct PresentCommand
 {
-    Ref<const class SwapChain> swap_chain;
+    Opal::Ref<const class SwapChain> swap_chain;
 };
 
 struct ClearColorCommand
@@ -43,23 +44,23 @@ struct ClearAllCommand
 
 struct BindSwapChainCommand
 {
-    Ref<const class SwapChain> swap_chain;
+    Opal::Ref<const class SwapChain> swap_chain;
 };
 
 struct BindPipelineCommand
 {
-    Ref<const class Pipeline> pipeline;
+    Opal::Ref<const class Pipeline> pipeline;
 };
 
 struct BindConstantBufferCommand
 {
-    Ref<const class Buffer> constant_buffer;
+    Opal::Ref<const class Buffer> constant_buffer;
     int32_t binding_index;
 };
 
 struct BindImageCommand
 {
-    Ref<const class Image> image;
+    Opal::Ref<const class Image> image;
     int32_t binding_index;
 };
 
@@ -98,7 +99,7 @@ struct DrawVerticesMultiCommand
 
 struct UpdateBufferCommand
 {
-    Ref<const class Buffer> buffer;
+    Opal::Ref<const class Buffer> buffer;
     Opal::Span<const u8> data;
     i32 offset;
 };
@@ -278,7 +279,7 @@ public:
     void Submit();
 
 private:
-    Ref<GraphicsContext> m_graphics_context;
+    Opal::Ref<GraphicsContext> m_graphics_context;
     Opal::Array<Command> m_commands;
 };
 

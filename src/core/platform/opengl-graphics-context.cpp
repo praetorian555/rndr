@@ -2,11 +2,13 @@
 
 #include <glad/glad_wgl.h>
 
-#include "core/platform/opengl-helpers.h"
+#include "../../../build/release-opengl/_deps/opal-src/include/opal/container/string-hash.h"
 #include "opal/container/array.h"
-#include "rndr/core/containers/hash-map.h"
-#include "rndr/core/containers/stack-array.h"
-#include "rndr/core/containers/string.h"
+#include "opal/container/hash-set.h"
+#include "opal/container/stack-array.h"
+#include "opal/container/string.h"
+
+#include "core/platform/opengl-helpers.h"
 #include "rndr/core/file.h"
 #include "rndr/core/platform/opengl-buffer.h"
 #include "rndr/core/platform/opengl-frame-buffer.h"
@@ -39,19 +41,19 @@ void APIENTRY DebugOutputCallback(GLenum source, GLenum type, unsigned int id, G
     }
 }
 
-bool CheckRequiredExtensions(const Opal::Array<Rndr::String>& required_extensions)
+bool CheckRequiredExtensions(const Opal::Array<Opal::StringUtf8>& required_extensions)
 {
     int extension_count = 0;
     glGetIntegerv(GL_NUM_EXTENSIONS, &extension_count);
     RNDR_ASSERT_OPENGL();
-    Rndr::HashSet<Rndr::String> found_extensions;
+    Opal::HashSet<Opal::StringUtf8, Opal::Hash<Opal::StringUtf8>> found_extensions;
     for (int i = 0; i < extension_count; i++)
     {
-        const char* extension = reinterpret_cast<const char*>(glGetStringi(GL_EXTENSIONS, i));
+        const Rndr::c8* extension = reinterpret_cast<const Rndr::c8*>(glGetStringi(GL_EXTENSIONS, i));
         RNDR_ASSERT_OPENGL();
-        for (const Rndr::String& required_extension : required_extensions)
+        for (const Opal::StringUtf8& required_extension : required_extensions)
         {
-            if (required_extension == extension)
+            if (Opal::Compare(required_extension, 0, required_extension.GetSize(), extension).GetValue() == 0)
             {
                 found_extensions.insert(required_extension);
                 break;
@@ -134,7 +136,7 @@ Rndr::GraphicsContext::GraphicsContext(const Rndr::GraphicsContextDesc& desc) : 
         arb_flags |= WGL_CONTEXT_DEBUG_BIT_ARB;
     }
 #endif
-    const StackArray<int, 9> attribute_list = {
+    const Opal::StackArray<int, 9> attribute_list = {
         WGL_CONTEXT_MAJOR_VERSION_ARB,
         4,
         WGL_CONTEXT_MINOR_VERSION_ARB,
@@ -182,14 +184,14 @@ Rndr::GraphicsContext::GraphicsContext(const Rndr::GraphicsContextDesc& desc) : 
     glDebugMessageControl(GL_DONT_CARE, GL_DONT_CARE, GL_DONT_CARE, 0, nullptr, GL_TRUE);
     RNDR_ASSERT_OPENGL();
 
-    const Opal::Array<String> required_extensions = {"ARB_texture_storage",
-                                                     "ARB_multi_draw_indirect",
-                                                     "ARB_buffer_storage",
-                                                     "ARB_enhanced_layouts",
-                                                     "ARB_direct_state_access",
-                                                     "GL_ARB_indirect_parameters",
-                                                     "GL_ARB_shader_draw_parameters",
-                                                     "ARB_gl_spirv"};
+    const Opal::Array<Opal::StringUtf8> required_extensions = {u8"ARB_texture_storage",
+                                                               u8"ARB_multi_draw_indirect",
+                                                               u8"ARB_buffer_storage",
+                                                               u8"ARB_enhanced_layouts",
+                                                               u8"ARB_direct_state_access",
+                                                               u8"GL_ARB_indirect_parameters",
+                                                               u8"GL_ARB_shader_draw_parameters",
+                                                               u8"ARB_gl_spirv"};
 
     if (CheckRequiredExtensions(required_extensions))
     {
@@ -643,7 +645,8 @@ Rndr::ErrorCode Rndr::GraphicsContext::ReadBuffer(const Buffer& buffer, Opal::Sp
     }
 }
 
-namespace {
+namespace
+{
 bool Overlap(Rndr::i32 src_offset, Rndr::i32 dst_offset, Rndr::i32 size)
 {
     if (src_offset < dst_offset)

@@ -29,8 +29,8 @@ bool IsPixelFormatInteger(PixelFormat format);
 GLenum FromPrimitiveTopologyToOpenGL(PrimitiveTopology topology);
 GLenum FromIndexSizeToOpenGL(int64_t index_size);
 
-Rndr::String FromOpenGLDataTypeToString(GLenum value);
-Rndr::String FromOpenGLUsageToString(GLenum value);
+Opal::StringUtf8 FromOpenGLDataTypeToString(GLenum value);
+Opal::StringUtf8 FromOpenGLUsageToString(GLenum value);
 
 } // namespace Rndr
 

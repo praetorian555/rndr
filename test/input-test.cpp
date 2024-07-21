@@ -8,21 +8,21 @@ TEST_CASE("Input action", "[input]")
     REQUIRE(Rndr::Init());
     SECTION("Create action")
     {
-        Rndr::InputAction action("TestAction");
-        REQUIRE(action.GetName() == "TestAction");
+        Rndr::InputAction action(u8"TestAction");
+        REQUIRE(action.GetName() == u8"TestAction");
         REQUIRE(action.IsValid());
     }
     SECTION("Create invalid action")
     {
         Rndr::InputAction action;
-        REQUIRE(action.GetName() == "");
+        REQUIRE(action.GetName() == u8"");
         REQUIRE(!action.IsValid());
     }
     SECTION("Compare actions")
     {
-        Rndr::InputAction action1("TestAction1");
-        Rndr::InputAction action2("TestAction2");
-        Rndr::InputAction action3("TestAction1");
+        Rndr::InputAction action1(u8"TestAction1");
+        Rndr::InputAction action2(u8"TestAction2");
+        Rndr::InputAction action3(u8"TestAction1");
         REQUIRE(action1 == action3);
         REQUIRE(action1 != action2);
     }
@@ -34,7 +34,7 @@ TEST_CASE("Input action", "[input]")
     }
     SECTION("Compare valid and invalid actions")
     {
-        Rndr::InputAction action1("TestAction");
+        Rndr::InputAction action1(u8"TestAction");
         Rndr::InputAction action2;
         REQUIRE(action1 != action2);
     }
@@ -84,14 +84,14 @@ TEST_CASE("Input context", "[input]")
     REQUIRE(Rndr::Init());
     SECTION("Create context")
     {
-        const Rndr::InputContext context("TestContext");
-        REQUIRE(context.GetName() == "TestContext");
+        const Rndr::InputContext context(u8"TestContext");
+        REQUIRE(context.GetName() == u8"TestContext");
     }
     SECTION("Add action")
     {
-        Rndr::InputContext context("TestContext");
-        REQUIRE(context.GetName() == "TestContext");
-        const Rndr::InputAction action("TestAction");
+        Rndr::InputContext context(u8"TestContext");
+        REQUIRE(context.GetName() == u8"TestContext");
+        const Rndr::InputAction action(u8"TestAction");
         Rndr::InputBinding bindings[] = {{.primitive = Rndr::InputPrimitive::Keyboard_A,
                                           .trigger = Rndr::InputTrigger::ButtonPressed,
                                           .modifier = 1.0f}};
@@ -145,23 +145,23 @@ TEST_CASE("Input system", "[input]")
     SECTION("Default context")
     {
         const Rndr::InputContext& context = Rndr::InputSystem::GetCurrentContext();
-        REQUIRE(context.GetName() == "Default");
+        REQUIRE(context.GetName() == u8"Default");
     }
     SECTION("Push context")
     {
-        const Rndr::InputContext context("TestContext");
+        const Rndr::InputContext context(u8"TestContext");
         REQUIRE(Rndr::InputSystem::PushContext(context));
-        REQUIRE(Rndr::InputSystem::GetCurrentContext().GetName() == "TestContext");
+        REQUIRE(Rndr::InputSystem::GetCurrentContext().GetName() == u8"TestContext");
         SECTION("Pop context")
         {
             Rndr::InputSystem::PopContext();
-            REQUIRE(Rndr::InputSystem::GetCurrentContext().GetName() == "Default");
+            REQUIRE(Rndr::InputSystem::GetCurrentContext().GetName() == u8"Default");
         }
     }
     SECTION("Pop default context")
     {
         REQUIRE(!Rndr::InputSystem::PopContext());
-        REQUIRE(Rndr::InputSystem::GetCurrentContext().GetName() == "Default");
+        REQUIRE(Rndr::InputSystem::GetCurrentContext().GetName() == u8"Default");
     }
     SECTION("Submit events")
     {
@@ -180,9 +180,9 @@ TEST_CASE("Input system", "[input]")
     }
     SECTION("Process button events with same bindings but different actions")
     {
-        Rndr::InputContext context("TestContext");
-        const Rndr::InputAction action1("TestAction1");
-        const Rndr::InputAction action2("TestAction2");
+        Rndr::InputContext context(u8"TestContext");
+        const Rndr::InputAction action1(u8"TestAction1");
+        const Rndr::InputAction action2(u8"TestAction2");
         Rndr::InputBinding bindings[] = {{.primitive = Rndr::InputPrimitive::Keyboard_A,
                                           .trigger = Rndr::InputTrigger::ButtonPressed,
                                           .modifier = 2.0f}};
@@ -234,8 +234,8 @@ TEST_CASE("Input system", "[input]")
     }
     SECTION("Process mouse position events")
     {
-        Rndr::InputContext context("TestContext");
-        const Rndr::InputAction action("TestAction");
+        Rndr::InputContext context(u8"TestContext");
+        const Rndr::InputAction action(u8"TestAction");
         Rndr::InputBinding bindings[] = {{.primitive = Rndr::InputPrimitive::Mouse_AxisX,
                                           .trigger = Rndr::InputTrigger::AxisChangedAbsolute,
                                           .modifier = 2.0f},
@@ -275,8 +275,8 @@ TEST_CASE("Input system", "[input]")
     }
     SECTION("Process relative mouse event")
     {
-        Rndr::InputContext context("TestContext");
-        const Rndr::InputAction action("TestAction");
+        Rndr::InputContext context(u8"TestContext");
+        const Rndr::InputAction action(u8"TestAction");
         Rndr::InputBinding bindings[] = {{.primitive = Rndr::InputPrimitive::Mouse_AxisX,
                                           .trigger = Rndr::InputTrigger::AxisChangedRelative,
                                           .modifier = 2.0f},
@@ -318,8 +318,8 @@ TEST_CASE("Input system", "[input]")
     }
     SECTION("Process mouse wheel event")
     {
-        Rndr::InputContext context("TestContext");
-        const Rndr::InputAction action("TestAction");
+        Rndr::InputContext context(u8"TestContext");
+        const Rndr::InputAction action(u8"TestAction");
         Rndr::InputBinding bindings[] = {{.primitive = Rndr::InputPrimitive::Mouse_AxisWheel,
                                           .trigger = Rndr::InputTrigger::AxisChangedRelative,
                                           .modifier = 2.0f}};
@@ -347,8 +347,8 @@ TEST_CASE("Input system", "[input]")
     }
     SECTION("Process button event but filter with native window handle")
     {
-        Rndr::InputContext context("TestContext");
-        const Rndr::InputAction action("TestAction");
+        Rndr::InputContext context(u8"TestContext");
+        const Rndr::InputAction action(u8"TestAction");
         Rndr::InputBinding bindings[] = {{.primitive = Rndr::InputPrimitive::Mouse_LeftButton,
                                           .trigger = Rndr::InputTrigger::ButtonPressed}};
         float value1 = 0;

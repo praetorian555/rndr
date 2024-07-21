@@ -3,7 +3,6 @@
 #include <glad/glad.h>
 
 #include "core/platform/opengl-helpers.h"
-#include "rndr/core/containers/stack-array.h"
 #include "rndr/core/platform/opengl-graphics-context.h"
 #include "rndr/utility/cpu-tracer.h"
 
@@ -73,7 +72,7 @@ Rndr::ErrorCode Rndr::Buffer::Initialize(const Rndr::GraphicsContext& graphics_c
             return ErrorCode::OutOfMemory;
     }
     RNDR_LOG_DEBUG("Buffer::Initialize: opengl id: %u, type: %s, usage: %s, size: %d, stride: %d, offset: %d", m_native_buffer,
-                   FromBufferTypeToString(m_desc.type).c_str(), FromOpenGLUsageToString(buffer_usage).c_str(), desc.size, m_desc.stride,
+                   FromBufferTypeToString(m_desc.type).GetData(), FromOpenGLUsageToString(buffer_usage).GetData(), desc.size, m_desc.stride,
                    m_desc.offset);
     return ErrorCode::Success;
 }

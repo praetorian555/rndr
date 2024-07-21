@@ -4,9 +4,9 @@
 
 #include "opal/container/span.h"
 
-#include "rndr/core/containers/ref.h"
-#include "rndr/core/containers/scope-ptr.h"
-#include "rndr/core/containers/string.h"
+#include "opal/container/scope-ptr.h"
+#include "opal/container/string.h"
+
 #include "rndr/core/input-primitives.h"
 #include "rndr/core/math.h"
 #include "rndr/core/platform/windows-forward-def.h"
@@ -21,15 +21,15 @@ struct InputAction
 {
 public:
     InputAction() = default;
-    explicit InputAction(String name);
+    explicit InputAction(Opal::StringUtf8 name);
 
-    [[nodiscard]] const String& GetName() const;
+    [[nodiscard]] const Opal::StringUtf8& GetName() const;
     [[nodiscard]] bool IsValid() const;
 
     bool operator==(const InputAction& other) const = default;
 
 private:
-    String m_name;
+    Opal::StringUtf8 m_name;
 };
 
 /**
@@ -80,7 +80,7 @@ public:
      * Creates a new input context.
      * @param name Name of the input context.
      */
-    explicit InputContext(String name);
+    explicit InputContext(Opal::StringUtf8 name);
 
     /**
      * Default destructor.
@@ -91,7 +91,7 @@ public:
      * Returns the name of the input context.
      * @return Returns the name of the input context.
      */
-    [[nodiscard]] const String& GetName() const;
+    [[nodiscard]] const Opal::StringUtf8& GetName() const;
 
     /**
      * Adds an input action to the input context.
@@ -138,8 +138,8 @@ public:
     [[nodiscard]] Opal::Span<InputBinding> GetActionBindings(const InputAction& action) const;
 
 private:
-    ScopePtr<struct InputContextData> m_context_data;
-    String m_name;
+    Opal::ScopePtr<struct InputContextData> m_context_data;
+    Opal::StringUtf8 m_name;
 
     // Implementation details. ////////////////////////////////////////////////////////////////////
     friend class InputSystem;
@@ -280,7 +280,7 @@ public:
     static bool IsBindingValid(const InputBinding& binding);
 
 private:
-    static ScopePtr<struct InputSystemData> g_system_data;
+    static Opal::ScopePtr<struct InputSystemData> g_system_data;
 };
 
 /**

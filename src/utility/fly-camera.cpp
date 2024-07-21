@@ -23,7 +23,7 @@ Rndr::FlyCamera::FlyCamera(Window* window, InputContext* input_context, const Fl
     activate_bindings.PushBack(InputBinding{.primitive = IP::Mouse_RightButton, .trigger = IT::ButtonPressed});
     activate_bindings.PushBack(InputBinding{.primitive = IP::Mouse_RightButton, .trigger = IT::ButtonReleased});
     m_input_context->AddAction(
-        InputAction("ActivateCamera"),
+        InputAction(u8"ActivateCamera"),
         InputActionData{.callback = RNDR_BIND_INPUT_CALLBACK(this, FlyCamera::HandleActivate), .bindings = activate_bindings});
 
     Opal::Array<InputBinding> forward_bindings;
@@ -32,7 +32,7 @@ Rndr::FlyCamera::FlyCamera(Window* window, InputContext* input_context, const Fl
     forward_bindings.PushBack(InputBinding{.primitive = IP::Keyboard_S, .trigger = IT::ButtonPressed});
     forward_bindings.PushBack(InputBinding{.primitive = IP::Keyboard_S, .trigger = IT::ButtonReleased});
     m_input_context->AddAction(
-        InputAction("MoveForward"),
+        InputAction(u8"MoveForward"),
         InputActionData{.callback = RNDR_BIND_INPUT_CALLBACK(this, FlyCamera::HandleMoveForward), .bindings = forward_bindings});
 
     Opal::Array<InputBinding> right_bindings;
@@ -41,7 +41,7 @@ Rndr::FlyCamera::FlyCamera(Window* window, InputContext* input_context, const Fl
     right_bindings.PushBack(InputBinding{.primitive = IP::Keyboard_D, .trigger = IT::ButtonPressed, .modifier = -1});
     right_bindings.PushBack(InputBinding{.primitive = IP::Keyboard_D, .trigger = IT::ButtonReleased});
     m_input_context->AddAction(
-        InputAction("MoveRight"),
+        InputAction(u8"MoveRight"),
         InputActionData{.callback = RNDR_BIND_INPUT_CALLBACK(this, FlyCamera::HandleMoveRight), .bindings = right_bindings});
 
     Opal::Array<InputBinding> vert_bindings;
@@ -51,7 +51,7 @@ Rndr::FlyCamera::FlyCamera(Window* window, InputContext* input_context, const Fl
     vert_bindings.PushBack(InputBinding{.primitive = IP::Keyboard_DownArrow, .trigger = IT::ButtonReleased, .modifier = -1});
     vert_bindings.PushBack(InputBinding{.primitive = IP::Mouse_AxisY, .trigger = IT::AxisChangedRelative, .modifier = -1});
     m_input_context->AddAction(
-        InputAction("LookAroundVert"),
+        InputAction(u8"LookAroundVert"),
         InputActionData{.callback = RNDR_BIND_INPUT_CALLBACK(this, FlyCamera::HandleLookVert), .bindings = vert_bindings});
 
     Opal::Array<InputBinding> horz_bindings;
@@ -61,7 +61,7 @@ Rndr::FlyCamera::FlyCamera(Window* window, InputContext* input_context, const Fl
     horz_bindings.PushBack(InputBinding{.primitive = IP::Keyboard_LeftArrow, .trigger = IT::ButtonReleased});
     horz_bindings.PushBack(InputBinding{.primitive = IP::Mouse_AxisX, .trigger = IT::AxisChangedRelative, .modifier = -1});
     m_input_context->AddAction(
-        InputAction("LookAroundHorz"),
+        InputAction(u8"LookAroundHorz"),
         InputActionData{.callback = RNDR_BIND_INPUT_CALLBACK(this, FlyCamera::HandleLookHorz), .bindings = horz_bindings});
 }
 

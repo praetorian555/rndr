@@ -3,8 +3,9 @@
 #include <variant>
 
 #include "opal/container/array.h"
-#include "rndr/core/containers/ref.h"
-#include "rndr/core/containers/stack-array.h"
+#include "opal/container/ref.h"
+#include "opal/container/stack-array.h"
+
 #include "rndr/core/input.h"
 #include "rndr/core/types.h"
 
@@ -12,18 +13,18 @@ namespace Rndr
 {
 struct ActionData
 {
-    Rndr::InputAction action;
-    Rndr::InputCallback callback;
-    Rndr::NativeWindowHandle native_window;
-    Opal::Array<Rndr::InputBinding> bindings;
+    InputAction action;
+    InputCallback callback;
+    NativeWindowHandle native_window;
+    Opal::Array<InputBinding> bindings;
 };
 
 struct InputContextData
 {
-    Rndr::Ref<Rndr::InputContext> context;
+    Opal::Ref<InputContext> context;
     Opal::Array<ActionData> actions;
 
-    InputContextData(InputContext& ctx) : context(ctx) {}
+    explicit InputContextData(InputContext& ctx) : context(ctx) {}
     ~InputContextData() = default;
 };
 
@@ -50,8 +51,7 @@ struct MouseWheelData
     i32 delta_wheel;
 };
 
-using EventData =
-    std::variant<ButtonData, MousePositionData, RelativeMousePositionData, MouseWheelData>;
+using EventData = std::variant<ButtonData, MousePositionData, RelativeMousePositionData, MouseWheelData>;
 
 struct Event
 {
@@ -63,8 +63,8 @@ using EventQueue = std::queue<Event>;
 
 struct InputSystemData
 {
-    Rndr::InputContext default_context = Rndr::InputContext("Default");
-    Opal::Array<Ref<InputContextData>> contexts;
+    InputContext default_context = InputContext(Opal::StringUtf8(u8"Default"));
+    Opal::Array<Opal::Ref<InputContextData>> contexts;
     EventQueue events;
 
     ~InputSystemData() = default;
@@ -73,16 +73,16 @@ struct InputSystemData
 
 // InputAction /////////////////////////////////////////////////////////////////////////////////////
 
-Rndr::InputAction::InputAction(String name) : m_name(std::move(name)) {}
+Rndr::InputAction::InputAction(Opal::StringUtf8 name) : m_name(std::move(name)) {}
 
-const Rndr::String& Rndr::InputAction::GetName() const
+const Opal::StringUtf8& Rndr::InputAction::GetName() const
 {
     return m_name;
 }
 
 bool Rndr::InputAction::IsValid() const
 {
-    return !m_name.empty();
+    return !m_name.IsEmpty();
 }
 
 // InputBinding ////////////////////////////////////////////////////////////////////////////////
@@ -96,23 +96,22 @@ bool Rndr::InputBinding::operator==(const Rndr::InputBinding& other) const
 
 Rndr::InputContext::InputContext()
 {
-    m_context_data = RNDR_MAKE_SCOPED(InputContextData, *this);
+    m_context_data = Opal::MakeDefaultScoped<InputContextData>(*this);
 }
 
-Rndr::InputContext::InputContext(String name) : m_name(std::move(name))
+Rndr::InputContext::InputContext(Opal::StringUtf8 name) : m_name(std::move(name))
 {
-    m_context_data = RNDR_MAKE_SCOPED(InputContextData, *this);
+    m_context_data = Opal::MakeDefaultScoped<InputContextData>(*this);
 }
 
 Rndr::InputContext::~InputContext() = default;
 
-const Rndr::String& Rndr::InputContext::GetName() const
+const Opal::StringUtf8& Rndr::InputContext::GetName() const
 {
     return m_name;
 }
 
-bool Rndr::InputContext::AddAction(const Rndr::InputAction& action,
-                                   const Rndr::InputActionData& data)
+bool Rndr::InputContext::AddAction(const Rndr::InputAction& action, const Rndr::InputActionData& data)
 {
     if (m_context_data == nullptr)
     {
@@ -154,8 +153,7 @@ bool Rndr::InputContext::AddAction(const Rndr::InputAction& action,
     return true;
 }
 
-bool Rndr::InputContext::AddBindingToAction(const Rndr::InputAction& action,
-                                            const Rndr::InputBinding& binding)
+bool Rndr::InputContext::AddBindingToAction(const Rndr::InputAction& action, const Rndr::InputBinding& binding)
 {
     if (m_context_data == nullptr)
     {
@@ -195,8 +193,7 @@ bool Rndr::InputContext::AddBindingToAction(const Rndr::InputAction& action,
     return false;
 }
 
-bool Rndr::InputContext::RemoveBindingFromAction(const Rndr::InputAction& action,
-                                                 const Rndr::InputBinding& binding)
+bool Rndr::InputContext::RemoveBindingFromAction(const Rndr::InputAction& action, const Rndr::InputBinding& binding)
 {
     if (m_context_data == nullptr)
     {
@@ -273,8 +270,7 @@ Rndr::InputCallback Rndr::InputContext::GetActionCallback(const Rndr::InputActio
     return nullptr;
 }
 
-Opal::Span<Rndr::InputBinding> Rndr::InputContext::GetActionBindings(
-    const Rndr::InputAction& action) const
+Opal::Span<Rndr::InputBinding> Rndr::InputContext::GetActionBindings(const Rndr::InputAction& action) const
 {
     if (m_context_data == nullptr)
     {
@@ -307,7 +303,7 @@ inline Rndr::InputSystem& GetInputSystem()
 }
 }  // namespace
 
-Rndr::ScopePtr<Rndr::InputSystemData> Rndr::InputSystem::g_system_data;
+Opal::ScopePtr<Rndr::InputSystemData> Rndr::InputSystem::g_system_data;
 
 bool Rndr::InputSystem::Init()
 {
@@ -315,9 +311,8 @@ bool Rndr::InputSystem::Init()
     {
         return true;
     }
-    g_system_data = RNDR_MAKE_SCOPED(InputSystemData);
-    const Ref<InputContextData> default_context_data =
-        Ref{g_system_data->default_context.m_context_data.get()};
+    g_system_data = Opal::MakeDefaultScoped<InputSystemData>();
+    const Opal::Ref<InputContextData> default_context_data = Opal::Ref{g_system_data->default_context.m_context_data.get()};
     g_system_data->contexts.PushBack(default_context_data);
     return true;
 }
@@ -344,7 +339,7 @@ bool Rndr::InputSystem::PushContext(const Rndr::InputContext& context)
     {
         return false;
     }
-    g_system_data->contexts.PushBack(Ref(*context.m_context_data.get()));
+    g_system_data->contexts.PushBack(Opal::Ref(*context.m_context_data.get()));
     return true;
 }
 
@@ -363,9 +358,7 @@ bool Rndr::InputSystem::PopContext()
     return true;
 }
 
-bool Rndr::InputSystem::SubmitButtonEvent(NativeWindowHandle window,
-                                          InputPrimitive primitive,
-                                          InputTrigger trigger)
+bool Rndr::InputSystem::SubmitButtonEvent(NativeWindowHandle window, InputPrimitive primitive, InputTrigger trigger)
 {
     if (g_system_data == nullptr)
     {
@@ -376,9 +369,7 @@ bool Rndr::InputSystem::SubmitButtonEvent(NativeWindowHandle window,
     return true;
 }
 
-bool Rndr::InputSystem::SubmitMousePositionEvent(NativeWindowHandle window,
-                                                 const Point2f& position,
-                                                 const Vector2f& screen_size)
+bool Rndr::InputSystem::SubmitMousePositionEvent(NativeWindowHandle window, const Point2f& position, const Vector2f& screen_size)
 {
     if (g_system_data == nullptr)
     {
@@ -393,8 +384,7 @@ bool Rndr::InputSystem::SubmitMousePositionEvent(NativeWindowHandle window,
     return true;
 }
 
-bool Rndr::InputSystem::SubmitRelativeMousePositionEvent(NativeWindowHandle window,
-                                                         const Vector2f& delta_position,
+bool Rndr::InputSystem::SubmitRelativeMousePositionEvent(NativeWindowHandle window, const Vector2f& delta_position,
                                                          const Vector2f& screen_size)
 {
     if (g_system_data == nullptr)
@@ -425,7 +415,7 @@ namespace Rndr
 {
 struct InputEventProcessor
 {
-    Ref<const InputContextData> context;
+    Opal::Ref<const InputContextData> context;
     NativeWindowHandle native_window;
 
     void operator()(const ButtonData& event) const;
@@ -450,7 +440,7 @@ bool Rndr::InputSystem::ProcessEvents(float delta_seconds)
     {
         Event event = events.front();
         events.pop();
-        std::visit(InputEventProcessor{Ref(context), event.native_window}, event.data);
+        std::visit(InputEventProcessor{Opal::Ref(context), event.native_window}, event.data);
     }
     return true;
 }
@@ -476,8 +466,7 @@ void Rndr::InputEventProcessor::operator()(const ButtonData& event) const
 
 void Rndr::InputEventProcessor::operator()(const MousePositionData& event) const
 {
-    const StackArray<InputPrimitive, 2> axes = {InputPrimitive::Mouse_AxisX,
-                                                InputPrimitive::Mouse_AxisY};
+    const Opal::StackArray<InputPrimitive, 2> axes = {InputPrimitive::Mouse_AxisX, InputPrimitive::Mouse_AxisY};
     const InputTrigger trigger = InputTrigger::AxisChangedAbsolute;
     for (const ActionData& action_data : context->actions)
     {
@@ -503,8 +492,7 @@ void Rndr::InputEventProcessor::operator()(const MousePositionData& event) const
 
 void Rndr::InputEventProcessor::operator()(const RelativeMousePositionData& event) const
 {
-    const StackArray<InputPrimitive, 2> axes = {InputPrimitive::Mouse_AxisX,
-                                                InputPrimitive::Mouse_AxisY};
+    const Opal::StackArray<InputPrimitive, 2> axes = {InputPrimitive::Mouse_AxisX, InputPrimitive::Mouse_AxisY};
     const InputTrigger trigger = InputTrigger::AxisChangedRelative;
     for (const ActionData& action_data : context->actions)
     {
@@ -558,8 +546,7 @@ bool Rndr::InputSystem::IsButton(InputPrimitive primitive)
 bool Rndr::InputSystem::IsMouseButton(InputPrimitive primitive)
 {
     using enum Rndr::InputPrimitive;
-    return primitive == Mouse_LeftButton || primitive == Mouse_RightButton
-           || primitive == Mouse_MiddleButton;
+    return primitive == Mouse_LeftButton || primitive == Mouse_RightButton || primitive == Mouse_MiddleButton;
 }
 
 bool Rndr::InputSystem::IsKeyboardButton(InputPrimitive primitive)
@@ -570,8 +557,7 @@ bool Rndr::InputSystem::IsKeyboardButton(InputPrimitive primitive)
 
 bool Rndr::InputSystem::IsAxis(InputPrimitive primitive)
 {
-    return primitive == InputPrimitive::Mouse_AxisX || primitive == InputPrimitive::Mouse_AxisY
-           || IsMouseWheelAxis(primitive);
+    return primitive == InputPrimitive::Mouse_AxisX || primitive == InputPrimitive::Mouse_AxisY || IsMouseWheelAxis(primitive);
 }
 
 bool Rndr::InputSystem::IsMouseWheelAxis(Rndr::InputPrimitive primitive)
@@ -584,8 +570,7 @@ bool Rndr::InputSystem::IsBindingValid(const Rndr::InputBinding& binding)
     using enum Rndr::InputTrigger;
     if (IsButton(binding.primitive))
     {
-        return binding.trigger == ButtonPressed || binding.trigger == ButtonReleased
-               || binding.trigger == ButtonDoubleClick;
+        return binding.trigger == ButtonPressed || binding.trigger == ButtonReleased || binding.trigger == ButtonDoubleClick;
     }
     if (IsMouseWheelAxis(binding.primitive))
     {

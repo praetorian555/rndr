@@ -1,6 +1,8 @@
 #pragma once
 
-#include "rndr/core/containers/hash-map.h"
+#include "opal/container/hash-map.h"
+#include "opal/container/string-hash.h"
+
 #include "rndr/core/graphics-types.h"
 
 namespace Rndr
@@ -65,16 +67,16 @@ struct InputLayoutBuilder
 private:
     struct BufferInfo
     {
-        Ref<const Buffer> buffer;
+        Opal::Ref<const Buffer> buffer;
         DataRepetition repetition = DataRepetition::PerVertex;
         i32 per_instance_rate = 0;
         i32 entries_count = 0;
         i32 offset = 0;
     };
 
-    Ref<const Buffer> m_index_buffer;
-    HashMap<i32, BufferInfo> m_buffers;
-    HashMap<String, i32> m_names;
+    Opal::Ref<const Buffer> m_index_buffer;
+    Opal::HashMap<i32, BufferInfo> m_buffers;
+    Opal::HashMap<Opal::StringUtf8, i32, Opal::Hash<Opal::StringUtf8>> m_names;
     Opal::Array<InputLayoutElement> m_elements;
 };
 

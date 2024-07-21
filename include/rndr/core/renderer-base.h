@@ -8,8 +8,8 @@ namespace Rndr
 
 struct RendererBaseDesc
 {
-    Ref<GraphicsContext> graphics_context;
-    Ref<SwapChain> swap_chain;
+    Opal::Ref<GraphicsContext> graphics_context;
+    Opal::Ref<SwapChain> swap_chain;
 };
 
 /**
@@ -18,15 +18,15 @@ struct RendererBaseDesc
 class RendererBase
 {
 public:
-    RendererBase(const String& name, const RendererBaseDesc& desc);
+    RendererBase(const Opal::StringUtf8& name, const RendererBaseDesc& desc);
     virtual ~RendererBase() = default;
 
     virtual bool Render() = 0;
 
-    [[nodiscard]] const String& GetName() const { return m_name; }
+    [[nodiscard]] const Opal::StringUtf8& GetName() const { return m_name; }
 
 protected:
-    String m_name;
+    Opal::StringUtf8 m_name;
     RendererBaseDesc m_desc;
 };
 
@@ -36,7 +36,7 @@ protected:
 class ClearRenderer : public RendererBase
 {
 public:
-    ClearRenderer(const String& name, const RendererBaseDesc& desc, const Vector4f& color, float depth = 1.0f, i32 stencil = 0);
+    ClearRenderer(const Opal::StringUtf8& name, const RendererBaseDesc& desc, const Vector4f& color, float depth = 1.0f, i32 stencil = 0);
 
     bool Render() override;
 
@@ -52,7 +52,7 @@ protected:
 class PresentRenderer : public RendererBase
 {
 public:
-    PresentRenderer(const String& name, const RendererBaseDesc& desc);
+    PresentRenderer(const Opal::StringUtf8& name, const RendererBaseDesc& desc);
 
     bool Render() override;
 };
@@ -76,7 +76,7 @@ public:
      * @param before_name Name of the renderer before which the new renderer should be added.
      * @return True if the renderer was added successfully.
      */
-    bool AddRendererBefore(RendererBase* renderer, const String& before_name);
+    bool AddRendererBefore(RendererBase* renderer, const Opal::StringUtf8& before_name);
 
     /**
      * Adds a renderer to the manager after the renderer with the given name.
@@ -84,7 +84,7 @@ public:
      * @param after_name Name of the renderer after which the new renderer should be added.
      * @return True if the renderer was added successfully.
      */
-    bool AddRendererAfter(RendererBase* renderer, const String& after_name);
+    bool AddRendererAfter(RendererBase* renderer, const Opal::StringUtf8& after_name);
 
     /**
      * Removes a renderer from the manager.
@@ -98,14 +98,14 @@ public:
      * @param name Name of the renderer to remove.
      * @return True if the renderer was removed successfully.
      */
-    bool RemoveRenderer(const String& name);
+    bool RemoveRenderer(const Opal::StringUtf8& name);
 
     /**
      * Gets the index of the renderer with the given name.
      * @param name Name of the renderer.
      * @return Index of the renderer or -1 if the renderer was not found.
      */
-    [[nodiscard]] i32 GetRendererIndex(const String& name);
+    [[nodiscard]] i32 GetRendererIndex(const Opal::StringUtf8& name);
 
     /**
      * Renders all renderers in the manager.

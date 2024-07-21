@@ -2,10 +2,10 @@
 
 #include "rndr/utility/cpu-tracer.h"
 
-Rndr::RendererBase::RendererBase(const Rndr::String& name, const Rndr::RendererBaseDesc& desc) : m_name(name), m_desc(desc) {}
+Rndr::RendererBase::RendererBase(const Opal::StringUtf8& name, const RendererBaseDesc& desc) : m_name(name), m_desc(desc) {}
 
-Rndr::ClearRenderer::ClearRenderer(const Rndr::String& name,
-                                   const Rndr::RendererBaseDesc& desc,
+Rndr::ClearRenderer::ClearRenderer(const Opal::StringUtf8& name,
+                                   const RendererBaseDesc& desc,
                                    const Vector4f& color,
                                    f32 depth,
                                    i32 stencil)
@@ -19,7 +19,7 @@ bool Rndr::ClearRenderer::Render()
     return m_desc.graphics_context->ClearAll(m_color, m_depth, m_stencil);
 }
 
-Rndr::PresentRenderer::PresentRenderer(const Rndr::String& name, const Rndr::RendererBaseDesc& desc) : RendererBase(name, desc) {}
+Rndr::PresentRenderer::PresentRenderer(const Opal::StringUtf8& name, const Rndr::RendererBaseDesc& desc) : RendererBase(name, desc) {}
 
 bool Rndr::PresentRenderer::Render()
 {
@@ -33,7 +33,7 @@ bool Rndr::RendererManager::AddRenderer(Rndr::RendererBase* renderer)
     return true;
 }
 
-bool Rndr::RendererManager::AddRendererBefore(Rndr::RendererBase* renderer, const Rndr::String& before_name)
+bool Rndr::RendererManager::AddRendererBefore(Rndr::RendererBase* renderer, const Opal::StringUtf8& before_name)
 {
     for (auto it = m_renderers.ConstBegin(); it != m_renderers.ConstEnd(); ++it)
     {
@@ -46,7 +46,7 @@ bool Rndr::RendererManager::AddRendererBefore(Rndr::RendererBase* renderer, cons
     return false;
 }
 
-bool Rndr::RendererManager::AddRendererAfter(Rndr::RendererBase* renderer, const Rndr::String& after_name)
+bool Rndr::RendererManager::AddRendererAfter(Rndr::RendererBase* renderer, const Opal::StringUtf8& after_name)
 {
     for (auto it = m_renderers.ConstBegin(); it != m_renderers.ConstEnd(); ++it)
     {
@@ -72,7 +72,7 @@ bool Rndr::RendererManager::RemoveRenderer(Rndr::RendererBase* renderer)
     return false;
 }
 
-bool Rndr::RendererManager::RemoveRenderer(const Rndr::String& name)
+bool Rndr::RendererManager::RemoveRenderer(const Opal::StringUtf8& name)
 {
     for (auto it = m_renderers.begin(); it != m_renderers.end(); ++it)
     {
@@ -85,7 +85,7 @@ bool Rndr::RendererManager::RemoveRenderer(const Rndr::String& name)
     return false;
 }
 
-Rndr::i32 Rndr::RendererManager::GetRendererIndex(const String& name)
+Rndr::i32 Rndr::RendererManager::GetRendererIndex(const Opal::StringUtf8& name)
 {
     for (size_t i = 0; i < m_renderers.GetSize(); ++i)
     {

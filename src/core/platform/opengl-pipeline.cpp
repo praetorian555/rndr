@@ -2,9 +2,9 @@
 
 #include <glad/glad.h>
 
-#include "core/platform/opengl-helpers.h"
 #include "opal/container/array.h"
-#include "rndr/core/containers/stack-array.h"
+
+#include "core/platform/opengl-helpers.h"
 #include "rndr/core/platform/opengl-buffer.h"
 #include "rndr/core/platform/opengl-shader.h"
 #include "rndr/utility/cpu-tracer.h"
@@ -127,7 +127,7 @@ Rndr::Pipeline::Pipeline(const GraphicsContext& graphics_context, const Pipeline
         RNDR_LOG_DEBUG(
             "Added attribute at index %d to vertex array buffer %u, binding index: %d, component count: %d, data type: %s, should "
             "normalize data: %s, offset in vertex: %d",
-            attribute_index, m_native_vertex_array, element.binding_index, component_count, FromOpenGLDataTypeToString(data_type).c_str(),
+            attribute_index, m_native_vertex_array, element.binding_index, component_count, FromOpenGLDataTypeToString(data_type).GetData(),
             should_normalize_data ? "GL_TRUE" : "GL_FALSE", element.offset_in_vertex);
     }
     if (input_layout_desc.index_buffer.IsValid())

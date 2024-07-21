@@ -3,10 +3,10 @@
 #include <cstdarg>
 #include <source_location>
 
-#include "rndr/core/containers/stack-array.h"
+#include "opal/container/stack-array.h"
+
 #include "rndr/core/input.h"
 #include "rndr/core/platform/windows-header.h"
-#include "rndr/utility/cpu-tracer.h"
 #include "rndr/utility/default-logger.h"
 
 namespace
@@ -92,7 +92,7 @@ void Rndr::Log(const std::source_location& source_location, Rndr::LogLevel log_l
     }
 
     constexpr int k_message_size = 4096;
-    StackArray<char, k_message_size> message;
+    Opal::StackArray<char, k_message_size> message;
     memset(message.data(), 0, k_message_size);
 
     va_list args = nullptr;

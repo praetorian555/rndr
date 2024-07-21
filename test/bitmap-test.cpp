@@ -28,7 +28,7 @@ TEST_CASE("Bitmap", "[bitmap]")
         constexpr int k_height = 2;
         constexpr int k_depth = 3;
         constexpr int k_size = k_width * k_height * k_depth * 4;
-        Rndr::StackArray<uint8_t, k_size> data;
+        Opal::StackArray<uint8_t, k_size> data;
         for (int i = 0; i < k_size; ++i)
         {
             data[i] = static_cast<uint8_t>(i + 1);
@@ -69,12 +69,12 @@ TEST_CASE("Bitmap", "[bitmap]")
         constexpr int k_height = 2;
         constexpr int k_depth = 3;
         constexpr int k_size = k_width * k_height * k_depth * 4;
-        Rndr::StackArray<float, k_size> data_float;
+        Opal::StackArray<float, k_size> data_float;
         for (int i = 0; i < k_size; ++i)
         {
             data_float[i] = static_cast<float>(i + 1);
         }
-        Rndr::StackArray<uint8_t, k_size * sizeof(float)> data;
+        Opal::StackArray<uint8_t, k_size * sizeof(float)> data;
         memcpy(data.data(), data_float.data(), k_size * sizeof(float));
         Rndr::Bitmap bitmap(k_width, k_height, k_depth, Rndr::PixelFormat::R32G32B32A32_FLOAT, data);
         REQUIRE(bitmap.IsValid());
@@ -108,7 +108,7 @@ TEST_CASE("Bitmap", "[bitmap]")
         constexpr int k_height = 2;
         constexpr int k_depth = 3;
         constexpr int k_size = k_width * k_height * k_depth * 4;
-        Rndr::StackArray<uint8_t, k_size / 2> data;
+        Opal::StackArray<uint8_t, k_size / 2> data;
         for (int i = 0; i < k_size / 2; ++i)
         {
             data[i] = static_cast<uint8_t>(i + 1);
@@ -136,7 +136,7 @@ TEST_CASE("Bitmap", "[bitmap]")
         constexpr int k_height = 2;
         constexpr int k_depth = 3;
         constexpr int k_size = k_width * k_height * k_depth * 4;
-        Rndr::StackArray<uint8_t, k_size * 2> data;
+        Opal::StackArray<uint8_t, k_size * 2> data;
         for (int i = 0; i < k_size * 2; ++i)
         {
             data[i] = static_cast<uint8_t>(i + 1);

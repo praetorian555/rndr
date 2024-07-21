@@ -1,23 +1,27 @@
 #include "rndr/utility/line-renderer.h"
 
 #include "rndr/core/file.h"
-#include "rndr/utility/input-layout-builder.h"
 #include "rndr/utility/cpu-tracer.h"
+#include "rndr/utility/input-layout-builder.h"
 
-Rndr::LineRenderer::LineRenderer(const Rndr::String& name, const Rndr::RendererBaseDesc& desc) : RendererBase(name, desc)
+#define TEXT(str) u8## #str
+
+Rndr::LineRenderer::LineRenderer(const Opal::StringUtf8& name, const Rndr::RendererBaseDesc& desc) : RendererBase(name, desc)
 {
     RNDR_TRACE_SCOPED(LineRenderer::LineRenderer);
 
-    const String vertex_shader_code = File::ReadShader(RNDR_CORE_ASSETS_DIR, "lines.vert");
-    const String pixel_shader_code = File::ReadShader(RNDR_CORE_ASSETS_DIR, "lines.frag");
+    const Opal::StringUtf8 vertex_shader_code = File::ReadShader(TEXT(RNDR_CORE_ASSETS_DIR), u8"lines.vert");
+    const Opal::StringUtf8 pixel_shader_code = File::ReadShader(TEXT(RNDR_CORE_ASSETS_DIR), u8"lines.frag");
 
-    m_vertex_shader = RNDR_MAKE_SCOPED(Shader, m_desc.graphics_context, {.type = ShaderType::Vertex, .source = vertex_shader_code});
+    m_vertex_shader =
+        Opal::MakeDefaultScoped<Shader>(m_desc.graphics_context, ShaderDesc{.type = ShaderType::Vertex, .source = vertex_shader_code});
     if (!m_vertex_shader->IsValid())
     {
         RNDR_LOG_ERROR("Failed to create vertex shader for LineRenderer");
         return;
     }
-    m_fragment_shader = RNDR_MAKE_SCOPED(Shader, m_desc.graphics_context, {.type = ShaderType::Fragment, .source = pixel_shader_code});
+    m_fragment_shader =
+        Opal::MakeDefaultScoped<Shader>(m_desc.graphics_context, ShaderDesc{.type = ShaderType::Fragment, .source = pixel_shader_code});
     if (!m_fragment_shader->IsValid())
     {
         RNDR_LOG_ERROR("Failed to create fragment shader for LineRenderer");
@@ -25,10 +29,10 @@ Rndr::LineRenderer::LineRenderer(const Rndr::String& name, const Rndr::RendererB
     }
 
     constexpr u64 k_stride = sizeof(VertexData);
-    m_vertex_buffer =
-        RNDR_MAKE_SCOPED(Buffer, m_desc.graphics_context,
-                         {.type = Rndr::BufferType::ShaderStorage, .usage = Usage::Dynamic, .size = k_vertex_data_size, .stride = k_stride},
-                         AsBytes(m_vertex_data));
+    m_vertex_buffer = Opal::MakeDefaultScoped<Buffer>(
+        m_desc.graphics_context,
+        BufferDesc{.type = Rndr::BufferType::ShaderStorage, .usage = Usage::Dynamic, .size = k_vertex_data_size, .stride = k_stride},
+        AsBytes(m_vertex_data));
     if (!m_vertex_buffer->IsValid())
     {
         RNDR_LOG_ERROR("Failed to create vertex buffer for LineRenderer");
@@ -37,8 +41,8 @@ Rndr::LineRenderer::LineRenderer(const Rndr::String& name, const Rndr::RendererB
 
     InputLayoutBuilder builder;
     const Rndr::InputLayoutDesc input_layout_desc = builder.AddVertexBuffer(*m_vertex_buffer, 1, Rndr::DataRepetition::PerVertex).Build();
-    m_pipeline = RNDR_MAKE_SCOPED(
-        Pipeline, m_desc.graphics_context,
+    m_pipeline = Opal::MakeDefaultScoped<Pipeline>(
+        m_desc.graphics_context,
         PipelineDesc{.vertex_shader = m_vertex_shader.get(),
                      .pixel_shader = m_fragment_shader.get(),
                      .input_layout = input_layout_desc,
@@ -51,12 +55,11 @@ Rndr::LineRenderer::LineRenderer(const Rndr::String& name, const Rndr::RendererB
     }
 
     Matrix4x4f identity_matrix;
-    m_constant_buffer = RNDR_MAKE_SCOPED(Buffer, m_desc.graphics_context,
-                                         {.type = Rndr::BufferType::Constant,
-                                          .usage = Rndr::Usage::Dynamic,
-                                          .size = sizeof(Matrix4x4f),
-                                          .stride = sizeof(Matrix4x4f)},
-                                         Opal::AsBytes(identity_matrix));
+    m_constant_buffer = Opal::MakeDefaultScoped<Buffer>(
+        m_desc.graphics_context,
+        BufferDesc{
+            .type = Rndr::BufferType::Constant, .usage = Rndr::Usage::Dynamic, .size = sizeof(Matrix4x4f), .stride = sizeof(Matrix4x4f)},
+        Opal::AsBytes(identity_matrix));
     if (!m_constant_buffer->IsValid())
     {
         RNDR_LOG_ERROR("Failed to create constant buffer for LineRenderer");

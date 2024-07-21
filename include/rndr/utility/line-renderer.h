@@ -1,6 +1,7 @@
 #pragma once
 
-#include "rndr/core/containers/scope-ptr.h"
+#include "opal/container/scope-ptr.h"
+
 #include "rndr/core/renderer-base.h"
 
 namespace Rndr
@@ -12,7 +13,7 @@ namespace Rndr
 class LineRenderer : public RendererBase
 {
 public:
-    LineRenderer(const String& name, const RendererBaseDesc& desc);
+    LineRenderer(const Opal::StringUtf8& name, const RendererBaseDesc& desc);
     ~LineRenderer() override = default;
 
     void AddLine(const Point3f& start, const Point3f& end, const Vector4f& color);
@@ -30,11 +31,11 @@ protected:
 
     Opal::Array<VertexData> m_vertex_data;
 
-    ScopePtr<Shader> m_vertex_shader;
-    ScopePtr<Shader> m_fragment_shader;
-    ScopePtr<Pipeline> m_pipeline;
-    ScopePtr<Buffer> m_vertex_buffer;
-    ScopePtr<Buffer> m_constant_buffer;
+    Opal::ScopePtr<Shader> m_vertex_shader;
+    Opal::ScopePtr<Shader> m_fragment_shader;
+    Opal::ScopePtr<Pipeline> m_pipeline;
+    Opal::ScopePtr<Buffer> m_vertex_buffer;
+    Opal::ScopePtr<Buffer> m_constant_buffer;
 
     static constexpr i32 k_max_lines_count = 65536;
     static constexpr u64 k_vertex_data_size = sizeof(VertexData) * k_max_lines_count * 2;

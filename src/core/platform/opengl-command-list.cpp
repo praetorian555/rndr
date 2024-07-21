@@ -3,8 +3,6 @@
 #include <glad/glad.h>
 
 #include "core/platform/opengl-helpers.h"
-#include "rndr/core/containers/scope-ptr.h"
-#include "rndr/core/containers/stack-array.h"
 #include "rndr/core/platform/opengl-graphics-context.h"
 #include "rndr/utility/cpu-tracer.h"
 
@@ -73,7 +71,7 @@ Rndr::CommandList::CommandList(Rndr::GraphicsContext& graphics_context) : m_grap
 
 bool Rndr::CommandList::Present(const SwapChain& swap_chain)
 {
-    m_commands.PushBack(PresentCommand{.swap_chain = Ref<const SwapChain>(swap_chain)});
+    m_commands.PushBack(PresentCommand{.swap_chain = Opal::Ref<const SwapChain>(swap_chain)});
     return true;
 }
 
@@ -103,22 +101,22 @@ bool Rndr::CommandList::ClearAll(const Rndr::Vector4f& color, float depth, int32
 
 void Rndr::CommandList::Bind(const Rndr::SwapChain& swap_chain)
 {
-    m_commands.PushBack(BindSwapChainCommand{.swap_chain = Ref<const SwapChain>(swap_chain)});
+    m_commands.PushBack(BindSwapChainCommand{.swap_chain = Opal::Ref<const SwapChain>(swap_chain)});
 }
 
 void Rndr::CommandList::Bind(const Rndr::Pipeline& pipeline)
 {
-    m_commands.PushBack(BindPipelineCommand{.pipeline = Ref<const Pipeline>(pipeline)});
+    m_commands.PushBack(BindPipelineCommand{.pipeline = Opal::Ref<const Pipeline>(pipeline)});
 }
 
 void Rndr::CommandList::BindConstantBuffer(const Rndr::Buffer& buffer, int32_t binding_index)
 {
-    m_commands.PushBack(BindConstantBufferCommand{.constant_buffer = Ref<const Buffer>(buffer), .binding_index = binding_index});
+    m_commands.PushBack(BindConstantBufferCommand{.constant_buffer = Opal::Ref<const Buffer>(buffer), .binding_index = binding_index});
 }
 
 void Rndr::CommandList::Bind(const Rndr::Image& image, int32_t binding_index)
 {
-    m_commands.PushBack(BindImageCommand{.image = Ref<const Image>(image), .binding_index = binding_index});
+    m_commands.PushBack(BindImageCommand{.image = Opal::Ref<const Image>(image), .binding_index = binding_index});
 }
 
 void Rndr::CommandList::DrawVertices(Rndr::PrimitiveTopology topology, int32_t vertex_count, int32_t instance_count, int32_t first_vertex)
@@ -178,13 +176,13 @@ void Rndr::CommandList::DrawIndicesMulti(const Rndr::Pipeline& pipeline, Rndr::P
 
 bool Rndr::CommandList::UpdateBuffer(const Rndr::Buffer& buffer, const Opal::Span<const u8>& data, Rndr::i32 offset)
 {
-    m_commands.PushBack(UpdateBufferCommand{.buffer = Ref<const Buffer>(buffer), .data = data, .offset = offset});
+    m_commands.PushBack(UpdateBufferCommand{.buffer = Opal::Ref<const Buffer>(buffer), .data = data, .offset = offset});
     return true;
 }
 
 struct CommandExecutor
 {
-    Rndr::Ref<Rndr::GraphicsContext> graphics_context;
+    Opal::Ref<Rndr::GraphicsContext> graphics_context;
 
     void operator()(const Rndr::PresentCommand& command) const { graphics_context->Present(command.swap_chain); }
 

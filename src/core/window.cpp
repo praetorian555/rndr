@@ -19,8 +19,9 @@
 
 #endif  // RNDR_WINDOWS
 
-#include "rndr/core/containers/hash-map.h"
-#include "rndr/core/containers/stack-array.h"
+#include "opal/container/hash-map.h"
+#include "opal/container/stack-array.h"
+
 #include "rndr/core/input.h"
 #include "rndr/core/window.h"
 #include "rndr/utility/cpu-tracer.h"
@@ -42,7 +43,7 @@ enum WindowsVirtualKey : uint32_t
     VK_L = 0x4C,
 };
 
-const Rndr::HashMap<Rndr::InputPrimitive, uint32_t> g_primitive_to_vk = {{Rndr::InputPrimitive::Keyboard_A, 0x41},
+const Opal::HashMap<Rndr::InputPrimitive, uint32_t> g_primitive_to_vk = {{Rndr::InputPrimitive::Keyboard_A, 0x41},
                                                                          {Rndr::InputPrimitive::Keyboard_B, 0x42},
                                                                          {Rndr::InputPrimitive::Keyboard_C, 0x43},
                                                                          {Rndr::InputPrimitive::Keyboard_D, 0x44},
@@ -103,7 +104,7 @@ const Rndr::HashMap<Rndr::InputPrimitive, uint32_t> g_primitive_to_vk = {{Rndr::
                                                                          {Rndr::InputPrimitive::Keyboard_Esc, VK_ESCAPE},
                                                                          {Rndr::InputPrimitive::Keyboard_Space, VK_SPACE}};
 
-const Rndr::HashMap<uint32_t, Rndr::InputPrimitive> g_vk_to_primitive = {{0x41, Rndr::InputPrimitive::Keyboard_A},
+const Opal::HashMap<uint32_t, Rndr::InputPrimitive> g_vk_to_primitive = {{0x41, Rndr::InputPrimitive::Keyboard_A},
                                                                          {0x42, Rndr::InputPrimitive::Keyboard_B},
                                                                          {0x43, Rndr::InputPrimitive::Keyboard_C},
                                                                          {0x44, Rndr::InputPrimitive::Keyboard_D},
@@ -243,7 +244,7 @@ Rndr::Window::Window(const WindowDesc& desc)
     // Setup raw input
     constexpr uint16_t k_hid_usage_page_generic = 0x01;
     constexpr uint16_t k_hid_usage_generic_mouse = 0x02;
-    StackArray<RAWINPUTDEVICE, 1> raw_devices;
+    Opal::StackArray<RAWINPUTDEVICE, 1> raw_devices;
     raw_devices[0].usUsagePage = k_hid_usage_page_generic;
     raw_devices[0].usUsage = k_hid_usage_generic_mouse;
     raw_devices[0].dwFlags = RIDEV_INPUTSINK;
@@ -731,7 +732,7 @@ LRESULT CALLBACK WindowProc(HWND window_handle, UINT msg_code, WPARAM param_w, L
             }
 
             UINT struct_size = sizeof(RAWINPUT);
-            Rndr::StackArray<uint8_t, sizeof(RAWINPUT)> data_buffer;
+            Opal::StackArray<uint8_t, sizeof(RAWINPUT)> data_buffer;
 
             // NOLINTNEXTLINE
             GetRawInputData(reinterpret_cast<HRAWINPUT>(param_l), RID_INPUT, data_buffer.data(), &struct_size, sizeof(RAWINPUTHEADER));

@@ -3,17 +3,16 @@
 #include <glad/glad.h>
 
 #include "core/platform/opengl-helpers.h"
-#include "rndr/core/containers/stack-array.h"
 #include "rndr/core/platform/opengl-graphics-context.h"
 #include "rndr/utility/cpu-tracer.h"
 
 namespace
 {
-void GenerateDefinesShaderCode(const Opal::Array<Rndr::String>& defines, Rndr::String& out_shader_code)
+void GenerateDefinesShaderCode(const Opal::Array<Opal::StringUtf8>& defines, Opal::StringUtf8& out_shader_code)
 {
-    for (const Rndr::String& define : defines)
+    for (const Opal::StringUtf8& define : defines)
     {
-        out_shader_code += "#define " + define + "\n";
+        out_shader_code += u8"#define " + define + u8"\n";
     }
 }
 }  // namespace
@@ -30,18 +29,23 @@ Rndr::Shader::Shader(const GraphicsContext& graphics_context, const ShaderDesc& 
     {
         return;
     }
-    String defines_shader_code;
+    Opal::StringUtf8 defines_shader_code;
     GenerateDefinesShaderCode(desc.defines, defines_shader_code);
-    String final_shader_code = desc.source;
-    if (!defines_shader_code.empty())
+    Opal::StringUtf8 final_shader_code = desc.source;
+    if (!defines_shader_code.IsEmpty())
     {
-        size_t pos = desc.source.find("#version");
-        RNDR_ASSERT(pos != String::npos);
-        pos = desc.source.find('\n', pos);
-        RNDR_ASSERT(pos != String::npos);
-        final_shader_code.insert(pos + 1, defines_shader_code);
+        u64 find_result = Opal::Find(desc.source, u8"#version");
+        if (find_result == Opal::StringUtf8::k_npos)
+        {
+            find_result = 0;
+        }
+        else
+        {
+            find_result = Opal::Find(desc.source, '\n', find_result);
+        }
+        final_shader_code.Insert(find_result, defines_shader_code);
     }
-    const char* final_shader_code_c_str = final_shader_code.c_str();
+    const c* final_shader_code_c_str = reinterpret_cast<const c*>(final_shader_code.GetData());
     glShaderSource(m_native_shader, 1, &final_shader_code_c_str, nullptr);
     RNDR_ASSERT_OPENGL();
     glCompileShader(m_native_shader);

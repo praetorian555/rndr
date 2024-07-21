@@ -2,31 +2,32 @@
 
 #include <glad/glad.h>
 
+#include "opal/container/stack-array.h"
+
 #include "core/platform/opengl-helpers.h"
-#include "rndr/core/containers/stack-array.h"
 #include "rndr/core/graphics-types.h"
 
 constexpr Rndr::u64 k_max_shader_type = static_cast<Rndr::u64>(Rndr::ShaderType::EnumCount);
-constexpr Rndr::StackArray<GLenum, k_max_shader_type> k_to_opengl_shader_type = {
+constexpr Opal::StackArray<GLenum, k_max_shader_type> k_to_opengl_shader_type = {
     GL_VERTEX_SHADER, GL_FRAGMENT_SHADER, GL_GEOMETRY_SHADER, GL_TESS_CONTROL_SHADER, GL_TESS_EVALUATION_SHADER, GL_COMPUTE_SHADER};
 
 constexpr Rndr::u64 k_max_usage = static_cast<Rndr::u64>(Rndr::Usage::EnumCount);
-constexpr Rndr::StackArray<GLenum, k_max_usage> k_to_opengl_usage = {GL_MAP_WRITE_BIT, GL_DYNAMIC_STORAGE_BIT, GL_MAP_READ_BIT};
+constexpr Opal::StackArray<GLenum, k_max_usage> k_to_opengl_usage = {GL_MAP_WRITE_BIT, GL_DYNAMIC_STORAGE_BIT, GL_MAP_READ_BIT};
 
 constexpr Rndr::u64 k_max_buffer_type = static_cast<Rndr::u64>(Rndr::BufferType::EnumCount);
-constexpr Rndr::StackArray<GLenum, k_max_buffer_type> k_to_opengl_buffer_type = {GL_ARRAY_BUFFER, GL_ELEMENT_ARRAY_BUFFER,
+constexpr Opal::StackArray<GLenum, k_max_buffer_type> k_to_opengl_buffer_type = {GL_ARRAY_BUFFER, GL_ELEMENT_ARRAY_BUFFER,
                                                                                  GL_UNIFORM_BUFFER, GL_SHADER_STORAGE_BUFFER};
 
 constexpr Rndr::u64 k_max_comparator = static_cast<Rndr::u64>(Rndr::Comparator::EnumCount);
-constexpr Rndr::StackArray<GLenum, k_max_comparator> k_to_opengl_comparator = {GL_NEVER, GL_ALWAYS,   GL_LESS,   GL_GREATER,
+constexpr Opal::StackArray<GLenum, k_max_comparator> k_to_opengl_comparator = {GL_NEVER, GL_ALWAYS,   GL_LESS,   GL_GREATER,
                                                                                GL_EQUAL, GL_NOTEQUAL, GL_LEQUAL, GL_GEQUAL};
 
 constexpr Rndr::u64 k_max_stencil_op = static_cast<Rndr::u64>(Rndr::StencilOperation::EnumCount);
-constexpr Rndr::StackArray<GLenum, k_max_stencil_op> k_to_opengl_stencil_op = {GL_KEEP,      GL_ZERO, GL_REPLACE,   GL_INCR,
+constexpr Opal::StackArray<GLenum, k_max_stencil_op> k_to_opengl_stencil_op = {GL_KEEP,      GL_ZERO, GL_REPLACE,   GL_INCR,
                                                                                GL_INCR_WRAP, GL_DECR, GL_DECR_WRAP, GL_INVERT};
 
 constexpr Rndr::u64 k_max_blend_factor = static_cast<Rndr::u64>(Rndr::BlendFactor::EnumCount);
-constexpr Rndr::StackArray<GLenum, k_max_blend_factor> k_to_opengl_blend_factor = {GL_ZERO,
+constexpr Opal::StackArray<GLenum, k_max_blend_factor> k_to_opengl_blend_factor = {GL_ZERO,
                                                                                    GL_ONE,
                                                                                    GL_SRC_COLOR,
                                                                                    GL_DST_COLOR,
@@ -42,15 +43,15 @@ constexpr Rndr::StackArray<GLenum, k_max_blend_factor> k_to_opengl_blend_factor 
                                                                                    GL_ONE_MINUS_CONSTANT_ALPHA};
 
 constexpr Rndr::u64 k_max_blend_op = static_cast<Rndr::u64>(Rndr::BlendOperation::EnumCount);
-constexpr Rndr::StackArray<GLenum, k_max_blend_op> k_to_opengl_blend_op = {GL_FUNC_ADD, GL_FUNC_SUBTRACT, GL_FUNC_REVERSE_SUBTRACT, GL_MIN,
+constexpr Opal::StackArray<GLenum, k_max_blend_op> k_to_opengl_blend_op = {GL_FUNC_ADD, GL_FUNC_SUBTRACT, GL_FUNC_REVERSE_SUBTRACT, GL_MIN,
                                                                            GL_MAX};
 
 constexpr Rndr::u64 k_max_image_address_mode = static_cast<Rndr::u64>(Rndr::ImageAddressMode::EnumCount);
-constexpr Rndr::StackArray<GLint, k_max_image_address_mode> k_to_opengl_image_address_mode = {
+constexpr Opal::StackArray<GLint, k_max_image_address_mode> k_to_opengl_image_address_mode = {
     GL_CLAMP_TO_EDGE, GL_CLAMP_TO_BORDER, GL_REPEAT, GL_MIRRORED_REPEAT, GL_MIRROR_CLAMP_TO_EDGE};
 
 constexpr Rndr::u64 k_max_pixel_format = static_cast<Rndr::u64>(Rndr::PixelFormat::EnumCount);
-constexpr Rndr::StackArray<GLenum, k_max_pixel_format> k_to_opengl_internal_pixel_format = {GL_RGBA8,
+constexpr Opal::StackArray<GLenum, k_max_pixel_format> k_to_opengl_internal_pixel_format = {GL_RGBA8,
                                                                                             GL_SRGB8_ALPHA8,
                                                                                             GL_RGBA8UI,
                                                                                             GL_RGBA8_SNORM,
@@ -98,7 +99,7 @@ constexpr Rndr::StackArray<GLenum, k_max_pixel_format> k_to_opengl_internal_pixe
                                                                                             GL_R16F,
 
                                                                                             GL_RG16F};
-constexpr Rndr::StackArray<GLenum, k_max_pixel_format> k_to_opengl_external_pixel_format = {GL_RGBA,
+constexpr Opal::StackArray<GLenum, k_max_pixel_format> k_to_opengl_external_pixel_format = {GL_RGBA,
                                                                                             GL_RGBA,
                                                                                             GL_RGBA,
                                                                                             GL_RGBA,
@@ -146,7 +147,7 @@ constexpr Rndr::StackArray<GLenum, k_max_pixel_format> k_to_opengl_external_pixe
                                                                                             GL_RED,
 
                                                                                             GL_RG};
-constexpr Rndr::StackArray<GLenum, k_max_pixel_format> k_to_opengl_pixel_type = {GL_UNSIGNED_BYTE,
+constexpr Opal::StackArray<GLenum, k_max_pixel_format> k_to_opengl_pixel_type = {GL_UNSIGNED_BYTE,
                                                                                  GL_UNSIGNED_BYTE,
                                                                                  GL_UNSIGNED_BYTE,
                                                                                  GL_BYTE,
@@ -194,21 +195,21 @@ constexpr Rndr::StackArray<GLenum, k_max_pixel_format> k_to_opengl_pixel_type = 
                                                                                  GL_HALF_FLOAT,
 
                                                                                  GL_HALF_FLOAT};
-constexpr Rndr::StackArray<int32_t, k_max_pixel_format> k_to_pixel_size = {4, 4, 4, 4, 4,  4,  4,  4,  3,  3,  3, 3, 3, 2, 2, 2, 2, 2, 1,
+constexpr Opal::StackArray<int32_t, k_max_pixel_format> k_to_pixel_size = {4, 4, 4, 4, 4,  4,  4,  4,  3,  3,  3, 3, 3, 2, 2, 2, 2, 2, 1,
                                                                            1, 1, 1, 1, 16, 16, 16, 12, 12, 12, 8, 8, 8, 4, 4, 4, 4, 2, 4};
-constexpr Rndr::StackArray<GLint, k_max_pixel_format> k_to_component_count = {4, 4, 4, 4, 4, 4, 4, 2, 3, 3, 3, 3, 3, 2, 2, 2, 2, 2, 1,
+constexpr Opal::StackArray<GLint, k_max_pixel_format> k_to_component_count = {4, 4, 4, 4, 4, 4, 4, 2, 3, 3, 3, 3, 3, 2, 2, 2, 2, 2, 1,
                                                                               1, 1, 1, 1, 4, 4, 4, 3, 3, 3, 2, 2, 2, 1, 1, 1, 1, 1, 2};
-constexpr Rndr::StackArray<GLenum, k_max_pixel_format> k_to_should_normalize_data = {
+constexpr Opal::StackArray<GLenum, k_max_pixel_format> k_to_should_normalize_data = {
     GL_TRUE,  GL_TRUE,  GL_FALSE, GL_TRUE,  GL_FALSE, GL_TRUE,  GL_TRUE,  GL_FALSE, GL_TRUE,  GL_TRUE,  GL_FALSE, GL_TRUE,  GL_FALSE,
     GL_TRUE,  GL_TRUE,  GL_FALSE, GL_TRUE,  GL_FALSE, GL_TRUE,  GL_TRUE,  GL_FALSE, GL_TRUE,  GL_FALSE, GL_FALSE, GL_FALSE, GL_FALSE,
     GL_FALSE, GL_FALSE, GL_FALSE, GL_FALSE, GL_FALSE, GL_FALSE, GL_FALSE, GL_FALSE, GL_FALSE, GL_FALSE, GL_FALSE, GL_FALSE};
 
-constexpr Rndr::StackArray<bool, k_max_pixel_format> k_is_integer = {
+constexpr Opal::StackArray<bool, k_max_pixel_format> k_is_integer = {
     false, false, true,  false, true,  false, false, false, false, false, true,  false, true, false, false, true, false, true, false,
     false, true,  false, true,  false, true,  true,  false, true,  true,  false, true,  true, false, true,  true, false, false, false};
 
 constexpr Rndr::u64 k_max_primitive_topology = static_cast<Rndr::u64>(Rndr::PrimitiveTopology::EnumCount);
-constexpr Rndr::StackArray<GLenum, k_max_primitive_topology> k_to_opengl_primitive_topology = {GL_POINTS, GL_LINES, GL_LINE_STRIP,
+constexpr Opal::StackArray<GLenum, k_max_primitive_topology> k_to_opengl_primitive_topology = {GL_POINTS, GL_LINES, GL_LINE_STRIP,
                                                                                                GL_TRIANGLES, GL_TRIANGLE_STRIP};
 
 GLenum Rndr::FromShaderTypeToOpenGL(ShaderType type)
@@ -398,66 +399,66 @@ bool Rndr::IsComponentHighPrecision(PixelFormat format)
     return data_type == GL_FLOAT;
 }
 
-Rndr::String Rndr::FromBufferTypeToString(Rndr::BufferType type)
+Opal::StringUtf8 Rndr::FromBufferTypeToString(Rndr::BufferType type)
 {
     switch (type)
     {
         case BufferType::Vertex:
-            return "Vertex";
+            return u8"Vertex";
         case BufferType::Index:
-            return "Index";
+            return u8"Index";
         case BufferType::Constant:
-            return "Constant";
+            return u8"Constant";
         case BufferType::ShaderStorage:
-            return "Storage";
+            return u8"Storage";
         default:
             RNDR_HALT("Invalid buffer type");
     }
-    return "";
+    return u8"";
 }
 
-Rndr::String Rndr::FromOpenGLDataTypeToString(GLenum value)
+Opal::StringUtf8 Rndr::FromOpenGLDataTypeToString(GLenum value)
 {
     switch (value)
     {
         case GL_HALF_FLOAT:
-            return "GL_HALF_FLOAT";
+            return u8"GL_HALF_FLOAT";
         case GL_UNSIGNED_BYTE:
-            return "GL_UNSIGNED_BYTE";
+            return u8"GL_UNSIGNED_BYTE";
         case GL_BYTE:
-            return "GL_BYTE";
+            return u8"GL_BYTE";
         case GL_UNSIGNED_INT_24_8:
-            return "GL_UNSIGNED_INT_24_8";
+            return u8"GL_UNSIGNED_INT_24_8";
         case GL_UNSIGNED_SHORT:
-            return "GL_UNSIGNED_SHORT";
+            return u8"GL_UNSIGNED_SHORT";
         case GL_UNSIGNED_INT:
-            return "GL_UNSIGNED_INT";
+            return u8"GL_UNSIGNED_INT";
         case GL_FLOAT:
-            return "GL_FLOAT";
+            return u8"GL_FLOAT";
         case GL_SHORT:
-            return "GL_SHORT";
+            return u8"GL_SHORT";
         case GL_INT:
-            return "GL_INT";
+            return u8"GL_INT";
         default:
             RNDR_HALT("Unsupported data type");
     }
-    return "";
+    return u8"";
 }
 
-Rndr::String Rndr::FromOpenGLUsageToString(GLenum value)
+Opal::StringUtf8 Rndr::FromOpenGLUsageToString(GLenum value)
 {
     switch (value)
     {
         case GL_MAP_WRITE_BIT:
-            return "GL_MAP_WRITE_BIT";
+            return u8"GL_MAP_WRITE_BIT";
         case GL_DYNAMIC_STORAGE_BIT:
-            return "GL_DYNAMIC_STORAGE_BIT";
+            return u8"GL_DYNAMIC_STORAGE_BIT";
         case GL_MAP_READ_BIT:
-            return "GL_MAP_READ_BIT";
+            return u8"GL_MAP_READ_BIT";
         default:
             RNDR_HALT("Unsupported usage");
     }
-    return "";
+    return u8"";
 }
 
 #endif  // RNDR_OPENGL

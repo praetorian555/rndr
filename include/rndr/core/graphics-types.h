@@ -1,12 +1,11 @@
 #pragma once
 
 #include "opal/container/array.h"
-#include "opal/container/span.h"
+#include "opal/container/ref.h"
+#include "opal/container/stack-array.h"
+#include "opal/container/string.h"
 
 #include "rndr/core/colors.h"
-#include "rndr/core/containers/ref.h"
-#include "rndr/core/containers/stack-array.h"
-#include "rndr/core/containers/string.h"
 #include "rndr/core/math.h"
 #include "rndr/core/platform/windows-forward-def.h"
 #include "rndr/core/types.h"
@@ -497,16 +496,16 @@ struct ShaderDesc
     ShaderType type;
 
     /** Source code of the shader. */
-    String source;
+    Opal::StringUtf8 source;
 
     /**
      * Name of the function that represents the entry poi32 of the shader. Can be empty for
      * OpenGL.
      */
-    String entry_point;
+    Opal::StringUtf8 entry_point;
 
     /** List of defines that should be added to the shader in a form of DEFINE_NAME VALUE or just DEFINE_NAME. */
-    Opal::Array<String> defines;
+    Opal::Array<Opal::StringUtf8> defines;
 };
 
 struct BufferDesc
@@ -608,7 +607,7 @@ struct ImageDesc
 struct FrameBufferProperties
 {
     i32 color_buffer_count = 1;
-    StackArray<ImageDesc, GraphicsConstants::k_max_frame_buffer_color_buffers> color_buffer_properties;
+    Opal::StackArray<ImageDesc, GraphicsConstants::k_max_frame_buffer_color_buffers> color_buffer_properties;
 
     bool use_depth_stencil = false;
     ImageDesc depth_stencil_buffer_properties;
@@ -651,10 +650,10 @@ class Buffer;
 struct InputLayoutDesc
 {
     /** Index buffer used by the pipeline. If it is set to null you have to use DrawVertices. */
-    Ref<const Buffer> index_buffer;
+    Opal::Ref<const Buffer> index_buffer;
 
     /** List of vertex buffers used by the pipeline. */
-    Opal::Array<Ref<const Buffer>> vertex_buffers;
+    Opal::Array<Opal::Ref<const Buffer>> vertex_buffers;
 
     /** List of binding slots to which the corresponding vertex buffer is bound. */
     Opal::Array<i32> vertex_buffer_binding_slots;
@@ -713,7 +712,7 @@ struct DepthStencilDesc
     /** Controls which bits of the stencil buffer are written. */
     u8 stencil_write_mask = k_stencil_mask_all;
 
-    /** Reference value used for the stencil test. */
+    /** Opal::Reference value used for the stencil test. */
     i32 stencil_ref_value = 0;
 
     /** Operation to perform when the stencil test fails for the front face. */
@@ -872,6 +871,6 @@ bool IsComponentHighPrecision(PixelFormat format);
  * @param type Buffer type.
  * @return Name of the enum field in BufferType enum as a string or empty string if the value is not supported.
  */
-Rndr::String FromBufferTypeToString(BufferType type);
+Opal::StringUtf8 FromBufferTypeToString(BufferType type);
 
 }  // namespace Rndr

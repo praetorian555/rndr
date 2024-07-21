@@ -6,13 +6,13 @@ Rndr::InputLayoutBuilder& Rndr::InputLayoutBuilder::AddVertexBuffer(const Buffer
                                                                     DataRepetition repetition,
                                                                     i32 per_instance_rate)
 {
-    m_buffers.try_emplace(buffer_index, Ref(buffer), repetition, per_instance_rate);
+    m_buffers.try_emplace(buffer_index, Opal::Ref(buffer), repetition, per_instance_rate);
     return *this;
 }
 
 Rndr::InputLayoutBuilder& Rndr::InputLayoutBuilder::AddShaderStorage(const Rndr::Buffer& buffer, i32 buffer_index)
 {
-    m_buffers.try_emplace(buffer_index, Ref(buffer), DataRepetition::PerInstance, 0);
+    m_buffers.try_emplace(buffer_index, Opal::Ref(buffer), DataRepetition::PerInstance, 0);
     return *this;
 }
 
@@ -59,7 +59,7 @@ Rndr::InputLayoutBuilder& Rndr::InputLayoutBuilder::AddIndexBuffer(const Buffer&
 
 Rndr::InputLayoutDesc Rndr::InputLayoutBuilder::Build()
 {
-    Opal::Array<Ref<const Buffer>> buffers;
+    Opal::Array<Opal::Ref<const Buffer>> buffers;
     Opal::Array<i32> buffer_binding_slots;
     buffers.Reserve(m_buffers.size());
     for (auto const& [binding_index, buffer_info] : m_buffers)

@@ -5,16 +5,11 @@ set(SOURCE_LIST
     "${PROJECT_SOURCE_DIR}/include/rndr/core/definitions.h"
     "${PROJECT_SOURCE_DIR}/include/rndr/core/base.h"
     "${PROJECT_SOURCE_DIR}/include/rndr/core/delegate.h"
-    "${PROJECT_SOURCE_DIR}/include/rndr/core/containers/stack-array.h"
     "${PROJECT_SOURCE_DIR}/include/rndr/core/time.h"
     "${PROJECT_SOURCE_DIR}/include/rndr/core/window.h"
     "${PROJECT_SOURCE_DIR}/include/rndr/core/input.h"
     "${PROJECT_SOURCE_DIR}/include/rndr/core/input-primitives.h"
     "${PROJECT_SOURCE_DIR}/include/rndr/core/error-codes.h"
-    "${PROJECT_SOURCE_DIR}/include/rndr/core/containers/string.h"
-    "${PROJECT_SOURCE_DIR}/include/rndr/core/containers/hash-map.h"
-    "${PROJECT_SOURCE_DIR}/include/rndr/core/containers/ref.h"
-    "${PROJECT_SOURCE_DIR}/include/rndr/core/containers/scope-ptr.h"
     "${PROJECT_SOURCE_DIR}/include/rndr/core/projection-camera.h"
     "${PROJECT_SOURCE_DIR}/include/rndr/core/platform/windows-forward-def.h"
     "${PROJECT_SOURCE_DIR}/include/rndr/core/platform/opengl-forward-def.h"
@@ -29,7 +24,6 @@ set(SOURCE_LIST
     "${PROJECT_SOURCE_DIR}/include/rndr/utility/frames-per-second-counter.h"
     "${PROJECT_SOURCE_DIR}/include/rndr/utility/line-renderer.h"
     "${PROJECT_SOURCE_DIR}/include/rndr/utility/fly-camera.h"
-    "${PROJECT_SOURCE_DIR}/include/rndr/utility/cube-map.h"
     "${PROJECT_SOURCE_DIR}/src/core/base.cpp"
     "${PROJECT_SOURCE_DIR}/src/core/time.cpp"
     "${PROJECT_SOURCE_DIR}/src/core/window.cpp"
@@ -42,7 +36,7 @@ set(SOURCE_LIST
     "${PROJECT_SOURCE_DIR}/src/utility/frames-per-second-counter.cpp"
     "${PROJECT_SOURCE_DIR}/src/utility/line-renderer.cpp"
     "${PROJECT_SOURCE_DIR}/src/utility/fly-camera.cpp"
-    "${PROJECT_SOURCE_DIR}/src/utility/cube-map.cpp")
+)
 
 list(APPEND SOURCE_LIST
         "${PROJECT_SOURCE_DIR}/include/rndr/core/platform/opengl-graphics-context.h"
@@ -96,7 +90,7 @@ target_link_libraries(rndr PUBLIC opengl32.lib User32.lib)
 target_link_libraries(rndr PUBLIC math opal)
 
 # @formatter:off
-target_compile_definitions(rndr PUBLIC RNDR_CORE_ASSETS_DIR="${CMAKE_CURRENT_SOURCE_DIR}/../assets")
+target_compile_definitions(rndr PUBLIC RNDR_CORE_ASSETS_DIR=u8"${CMAKE_CURRENT_SOURCE_DIR}/../assets")
 # @formatter:on
 
 ## Generate the export header for rndr and attach it to the target

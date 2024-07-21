@@ -562,7 +562,7 @@ TEST_CASE("Creating different types of buffers", "[render-api][buffer]")
     SECTION("Create buffer with special constructor")
     {
         constexpr Rndr::i32 k_buffer_size = 1024;
-        Rndr::StackArray<uint8_t, k_buffer_size> data;
+        Opal::StackArray<uint8_t, k_buffer_size> data;
         const Rndr::Buffer ss_buffer(graphics_context, Opal::AsBytes(data), Rndr::BufferType::ShaderStorage, Rndr::Usage::Default, 1024);
         REQUIRE(ss_buffer.IsValid());
     }
@@ -575,7 +575,7 @@ TEST_CASE("Creating different types of buffers", "[render-api][buffer]")
 TEST_CASE("Reading from GPU buffers", "[render-api][buffer]")
 {
     constexpr Rndr::i32 k_buffer_size = 1024;
-    Rndr::StackArray<uint8_t, k_buffer_size> data;
+    Opal::StackArray<uint8_t, k_buffer_size> data;
     for (Rndr::i32 i = 0; i < k_buffer_size; ++i)
     {
         data[i] = 0xAB;
@@ -591,7 +591,7 @@ TEST_CASE("Reading from GPU buffers", "[render-api][buffer]")
         const Rndr::Buffer invalid_buffer;
         REQUIRE(!invalid_buffer.IsValid());
 
-        Rndr::StackArray<uint8_t, k_buffer_size> read_data_storage = {0};
+        Opal::StackArray<uint8_t, k_buffer_size> read_data_storage = {0};
         Opal::Span<Rndr::u8> read_data{read_data_storage};
         const Rndr::ErrorCode result = graphics_context.ReadBuffer(invalid_buffer, read_data);
         REQUIRE(result == Rndr::ErrorCode::InvalidArgument);
@@ -602,7 +602,7 @@ TEST_CASE("Reading from GPU buffers", "[render-api][buffer]")
         const Rndr::Buffer ss_buffer(graphics_context, desc, Opal::AsBytes(data));
         REQUIRE(ss_buffer.IsValid());
 
-        Rndr::StackArray<uint8_t, k_buffer_size> read_data_storage = {0};
+        Opal::StackArray<uint8_t, k_buffer_size> read_data_storage = {0};
         Opal::Span<Rndr::u8> read_data{read_data_storage};
         const Rndr::ErrorCode result = graphics_context.ReadBuffer(ss_buffer, read_data);
         REQUIRE(result == Rndr::ErrorCode::InvalidArgument);
@@ -613,7 +613,7 @@ TEST_CASE("Reading from GPU buffers", "[render-api][buffer]")
         const Rndr::Buffer ss_buffer(graphics_context, desc, Opal::AsBytes(data));
         REQUIRE(!ss_buffer.IsValid());
 
-        Rndr::StackArray<uint8_t, k_buffer_size> read_data_storage = {0};
+        Opal::StackArray<uint8_t, k_buffer_size> read_data_storage = {0};
         Opal::Span<Rndr::u8> read_data{read_data_storage};
         const Rndr::ErrorCode result = graphics_context.ReadBuffer(ss_buffer, read_data);
         REQUIRE(result == Rndr::ErrorCode::InvalidArgument);
@@ -624,7 +624,7 @@ TEST_CASE("Reading from GPU buffers", "[render-api][buffer]")
         const Rndr::Buffer ss_buffer(graphics_context, desc, Opal::AsBytes(data));
         REQUIRE(!ss_buffer.IsValid());
 
-        Rndr::StackArray<uint8_t, k_buffer_size> read_data_storage = {0};
+        Opal::StackArray<uint8_t, k_buffer_size> read_data_storage = {0};
         Opal::Span<Rndr::u8> read_data{read_data_storage};
         const Rndr::ErrorCode result = graphics_context.ReadBuffer(ss_buffer, read_data);
         REQUIRE(result == Rndr::ErrorCode::InvalidArgument);
@@ -635,7 +635,7 @@ TEST_CASE("Reading from GPU buffers", "[render-api][buffer]")
         const Rndr::Buffer ss_buffer(graphics_context, desc, Opal::AsBytes(data));
         REQUIRE(ss_buffer.IsValid());
 
-        Rndr::StackArray<uint8_t, k_buffer_size> read_data_storage = {0};
+        Opal::StackArray<uint8_t, k_buffer_size> read_data_storage = {0};
         Opal::Span<Rndr::u8> read_data{read_data_storage};
         const Rndr::ErrorCode result = graphics_context.ReadBuffer(ss_buffer, read_data);
         REQUIRE(result == Rndr::ErrorCode::InvalidArgument);
@@ -646,7 +646,7 @@ TEST_CASE("Reading from GPU buffers", "[render-api][buffer]")
         const Rndr::Buffer ss_buffer(graphics_context, desc, Opal::AsBytes(data));
         REQUIRE(ss_buffer.IsValid());
 
-        Rndr::StackArray<uint8_t, k_buffer_size> read_data_storage = {0};
+        Opal::StackArray<uint8_t, k_buffer_size> read_data_storage = {0};
         Opal::Span<Rndr::u8> read_data{read_data_storage};
         const Rndr::ErrorCode result = graphics_context.ReadBuffer(ss_buffer, read_data, -1, 512);
         REQUIRE(result == Rndr::ErrorCode::OutOfBounds);
@@ -657,7 +657,7 @@ TEST_CASE("Reading from GPU buffers", "[render-api][buffer]")
         const Rndr::Buffer ss_buffer(graphics_context, desc, Opal::AsBytes(data));
         REQUIRE(ss_buffer.IsValid());
 
-        Rndr::StackArray<uint8_t, k_buffer_size> read_data_storage = {0};
+        Opal::StackArray<uint8_t, k_buffer_size> read_data_storage = {0};
         Opal::Span<Rndr::u8> read_data{read_data_storage};
         const Rndr::ErrorCode result = graphics_context.ReadBuffer(ss_buffer, read_data, 1024, 512);
         REQUIRE(result == Rndr::ErrorCode::OutOfBounds);
@@ -668,7 +668,7 @@ TEST_CASE("Reading from GPU buffers", "[render-api][buffer]")
         const Rndr::Buffer ss_buffer(graphics_context, desc, Opal::AsBytes(data));
         REQUIRE(ss_buffer.IsValid());
 
-        Rndr::StackArray<uint8_t, k_buffer_size> read_data_storage = {0};
+        Opal::StackArray<uint8_t, k_buffer_size> read_data_storage = {0};
         Opal::Span<Rndr::u8> read_data{read_data_storage};
         const Rndr::ErrorCode result = graphics_context.ReadBuffer(ss_buffer, read_data, 0, 1025);
         REQUIRE(result == Rndr::ErrorCode::OutOfBounds);
@@ -679,7 +679,7 @@ TEST_CASE("Reading from GPU buffers", "[render-api][buffer]")
         const Rndr::Buffer ss_buffer(graphics_context, desc, Opal::AsBytes(data));
         REQUIRE(ss_buffer.IsValid());
 
-        Rndr::StackArray<uint8_t, k_buffer_size> read_data_storage = {0};
+        Opal::StackArray<uint8_t, k_buffer_size> read_data_storage = {0};
         Opal::Span<Rndr::u8> read_data{read_data_storage};
         const Rndr::ErrorCode result = graphics_context.ReadBuffer(ss_buffer, read_data);
         REQUIRE(result == Rndr::ErrorCode::Success);
@@ -694,7 +694,7 @@ TEST_CASE("Reading from GPU buffers", "[render-api][buffer]")
         const Rndr::Buffer ss_buffer(graphics_context, desc, Opal::AsBytes(data));
         REQUIRE(ss_buffer.IsValid());
 
-        Rndr::StackArray<uint8_t, k_buffer_size> read_data_storage = {0};
+        Opal::StackArray<uint8_t, k_buffer_size> read_data_storage = {0};
         Opal::Span<Rndr::u8> read_data{read_data_storage};
         const Rndr::ErrorCode result = graphics_context.ReadBuffer(ss_buffer, read_data, 0, 512);
         REQUIRE(result == Rndr::ErrorCode::Success);
@@ -709,7 +709,7 @@ TEST_CASE("Reading from GPU buffers", "[render-api][buffer]")
         const Rndr::Buffer ss_buffer(graphics_context, desc, Opal::AsBytes(data));
         REQUIRE(ss_buffer.IsValid());
 
-        Rndr::StackArray<uint8_t, k_buffer_size> read_data_storage = {0};
+        Opal::StackArray<uint8_t, k_buffer_size> read_data_storage = {0};
         Opal::Span<Rndr::u8> read_data{read_data_storage};
         const Rndr::ErrorCode result = graphics_context.ReadBuffer(ss_buffer, read_data, 512, 512);
         REQUIRE(result == Rndr::ErrorCode::Success);
@@ -727,7 +727,7 @@ TEST_CASE("Reading from GPU buffers", "[render-api][buffer]")
 TEST_CASE("Update the GPU buffer contents", "[render-api][buffer]")
 {
     constexpr Rndr::i32 k_buffer_size = 1024;
-    Rndr::StackArray<uint8_t, k_buffer_size> data;
+    Opal::StackArray<uint8_t, k_buffer_size> data;
     for (Rndr::i32 i = 0; i < k_buffer_size; ++i)
     {
         data[i] = 0xAB;
@@ -817,7 +817,7 @@ TEST_CASE("Update the GPU buffer contents", "[render-api][buffer]")
 TEST_CASE("Copy of buffers", "[render-api][buffer]")
 {
     constexpr Rndr::i32 k_buffer_size_int = 256;
-    Rndr::StackArray<Rndr::i32, k_buffer_size_int> data;
+    Opal::StackArray<Rndr::i32, k_buffer_size_int> data;
     for (Rndr::i32 i = 0; i < k_buffer_size_int; ++i)
     {
         data[i] = i;
@@ -947,7 +947,7 @@ TEST_CASE("Copy of buffers", "[render-api][buffer]")
         const Rndr::BufferDesc read_desc{.type = Rndr::BufferType::Vertex, .usage = Rndr::Usage::ReadBack, .size = 1024};
         const Rndr::Buffer read_buffer(graphics_context, read_desc);
         REQUIRE(read_buffer.IsValid());
-        Rndr::StackArray<Rndr::i32, k_buffer_size_int> read_data_storage = {0};
+        Opal::StackArray<Rndr::i32, k_buffer_size_int> read_data_storage = {0};
         Opal::Span<Rndr::u8> read_data = Opal::AsWritableBytes(read_data_storage);
         error_code = graphics_context.CopyBuffer(read_buffer, buffer);
         REQUIRE(error_code == Rndr::ErrorCode::Success);
@@ -978,7 +978,7 @@ TEST_CASE("Running a compute shader", "[render-api][shader]")
     SECTION("Use shader storage buffers")
     {
         constexpr Rndr::i32 k_buffer_size = 1024;
-        Rndr::StackArray<Rndr::f32, k_buffer_size> data;
+        Opal::StackArray<Rndr::f32, k_buffer_size> data;
         for (Rndr::i32 i = 0; i < k_buffer_size; ++i)
         {
             data[i] = static_cast<Rndr::f32>(i);
@@ -994,7 +994,7 @@ TEST_CASE("Running a compute shader", "[render-api][shader]")
         const Rndr::Buffer dst_buffer(graphics_context, desc2);
         REQUIRE(dst_buffer.IsValid());
 
-        const char* compute_shader_code = R"(
+        const Rndr::c8 compute_shader_code[] = u8R"(
             #version 460 core
             layout(std430, binding = 0) buffer Data
             {
@@ -1053,7 +1053,7 @@ TEST_CASE("Running a compute shader", "[render-api][shader]")
                                                                       .type = Rndr::ImageType::Image2D,
                                                                       .pixel_format = Rndr::PixelFormat::R32_FLOAT});
 
-        const char* compute_shader_code = R"(
+        const Rndr::c8 compute_shader_code[] = u8R"(
             #version 460 core
             layout(local_size_x = 1, local_size_y = 1, local_size_z = 1) in;
             layout(r32f, binding = 0) uniform image2D in_data;
@@ -1257,9 +1257,9 @@ TEST_CASE("Render full screen quad", "[render-api]")
     const Rndr::GraphicsContextDesc gc_desc{.window_handle = hidden_window.GetNativeWindowHandle()};
     Rndr::GraphicsContext graphics_context(gc_desc);
 
-    const Rndr::String vertex_shader_code = Rndr::File::ReadShader(RNDR_CORE_ASSETS_DIR, "full-screen-quad.vert");
-    REQUIRE(!vertex_shader_code.empty());
-    const Rndr::String fragment_shader_code = R"(
+    const Opal::StringUtf8 vertex_shader_code = Rndr::File::ReadShader(RNDR_CORE_ASSETS_DIR, u8"full-screen-quad.vert");
+    REQUIRE(!vertex_shader_code.IsEmpty());
+    const Opal::StringUtf8 fragment_shader_code = u8R"(
         #version 460 core
         layout(location = 0) out vec4 fragColor;
         void main()
