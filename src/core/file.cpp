@@ -45,9 +45,13 @@ bool Rndr::FileHandler::Write(const void* buffer, u64 element_size, u64 element_
 Opal::Array<Rndr::u8> Rndr::File::ReadEntireFile(const Opal::StringUtf8& file_path)
 {
     Opal::StringLocale file_path_locale;
-    file_path_locale.Resize(4 * 1024);
-    Opal::ErrorCode err = Opal::Transcode(file_path, file_path_locale);
-    RNDR_ASSERT(err == Opal::ErrorCode::Success);
+    file_path_locale.Resize(300);
+    const Opal::ErrorCode err = Opal::Transcode(file_path, file_path_locale);
+    if (err != Opal::ErrorCode::Success)
+    {
+        RNDR_LOG_ERROR("Failed to transcode file path!");
+        return {};
+    }
     FILE* file = nullptr;
     fopen_s(&file, file_path_locale.GetData(), "rb");
     if (file == nullptr)
@@ -82,8 +86,13 @@ Opal::StringUtf8 Rndr::File::ReadShader(const Opal::StringUtf8& ref_path, const 
 {
     const Opal::StringUtf8 full_path = ref_path + u8"/" + shader_path;
     Opal::StringLocale full_path_locale;
-    full_path_locale.Resize(250);
-    Opal::Transcode(full_path, full_path_locale);
+    full_path_locale.Resize(300);
+    const Opal::ErrorCode err = Opal::Transcode(full_path, full_path_locale);
+    if (err != Opal::ErrorCode::Success)
+    {
+        RNDR_LOG_ERROR("Failed to transcode file path!");
+        return {};
+    }
     if (!std::filesystem::exists(full_path_locale.GetData()))
     {
         RNDR_LOG_ERROR("Shader file %s does not exist!", full_path_locale.GetData());
@@ -184,7 +193,13 @@ Rndr::Bitmap Rndr::File::ReadEntireImage(const Opal::StringUtf8& file_path, Pixe
     uint8_t* tmp_data = nullptr;
     stbi_set_flip_vertically_on_load(static_cast<int>(flip_vertically));
     Opal::StringLocale file_path_locale;
-    Opal::Transcode(file_path, file_path_locale);
+    file_path_locale.Resize(300);
+    const Opal::ErrorCode err = Opal::Transcode(file_path, file_path_locale);
+    if (err != Opal::ErrorCode::Success)
+    {
+        RNDR_LOG_ERROR("Failed to transcode file path!");
+        return invalid_bitmap;
+    }
     if (Rndr::IsComponentLowPrecision(desired_format))
     {
         tmp_data = stbi_load(file_path_locale.GetData(), &width, &height, &channels_in_file, desired_channel_count);
@@ -213,7 +228,13 @@ Rndr::Bitmap Rndr::File::ReadEntireImage(const Opal::StringUtf8& file_path, Pixe
 bool Rndr::File::SaveImage(const Bitmap& bitmap, const Opal::StringUtf8& file_path)
 {
     Opal::StringLocale file_path_locale;
-    Opal::Transcode(file_path, file_path_locale);
+    file_path_locale.Resize(300);
+    const Opal::ErrorCode err = Opal::Transcode(file_path, file_path_locale);
+    if (err != Opal::ErrorCode::Success)
+    {
+        RNDR_LOG_ERROR("Failed to transcode file path!");
+        return false;
+    }
     int status = 0;
     const PixelFormat pixel_format = bitmap.GetPixelFormat();
     if (IsComponentLowPrecision(pixel_format))
