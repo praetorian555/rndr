@@ -1,9 +1,9 @@
-#include <filesystem>
+#include "rndr/core/file.h"
 
 #include "stb_image/stb_image.h"
 #include "stb_image/stb_image_write.h"
 
-#include "rndr/core/file.h"
+#include "opal/paths.h"
 
 Rndr::FileHandler::FileHandler(const char* file_path, const char* mode)
 {
@@ -84,25 +84,23 @@ Opal::StringUtf8 Rndr::File::ReadEntireTextFile(const Opal::StringUtf8& file_pat
 
 Opal::StringUtf8 Rndr::File::ReadShader(const Opal::StringUtf8& ref_path, const Opal::StringUtf8& shader_path)
 {
-    const Opal::StringUtf8 full_path = ref_path + u8"/" + shader_path;
-    Opal::StringLocale full_path_locale;
-    full_path_locale.Resize(300);
-    const Opal::ErrorCode err = Opal::Transcode(full_path, full_path_locale);
-    if (err != Opal::ErrorCode::Success)
+    const auto full_path_result = Opal::Paths::Combine(nullptr, ref_path, shader_path);
+    if (!full_path_result.HasValue())
     {
-        RNDR_LOG_ERROR("Failed to transcode file path!");
+        RNDR_LOG_ERROR("Failed to assemble shader path with error %d!", full_path_result.GetError());
         return {};
     }
-    if (!std::filesystem::exists(full_path_locale.GetData()))
+    Opal::StringUtf8 full_path = full_path_result.GetValue();
+    if (!Opal::Paths::Exists(full_path_result.GetValue()))
     {
-        RNDR_LOG_ERROR("Shader file %s does not exist!", full_path_locale.GetData());
+        RNDR_LOG_ERROR("Shader file %s does not exist!", reinterpret_cast<c*>(full_path.GetData()));
         return {};
     }
 
     Opal::StringUtf8 shader_contents = ReadEntireTextFile(full_path);
     if (shader_contents.IsEmpty())
     {
-        RNDR_LOG_ERROR("Failed to read shader file %s!", full_path_locale.GetData());
+        RNDR_LOG_ERROR("Failed to read shader file %s!", reinterpret_cast<c*>(full_path.GetData()));
         return {};
     }
 
@@ -114,7 +112,7 @@ Opal::StringUtf8 Rndr::File::ReadShader(const Opal::StringUtf8& ref_path, const 
 
     while (true)
     {
-        u64 result = Opal::Find(shader_contents, u8"#include");
+        u64 const result = Opal::Find(shader_contents, u8"#include");
         if (result == Opal::StringUtf8::k_npos)
         {
             break;
@@ -144,8 +142,9 @@ Opal::StringUtf8 Rndr::File::ReadShader(const Opal::StringUtf8& ref_path, const 
             RNDR_LOG_ERROR("Invalid include statement %s", include_line.GetData());
             return {};
         }
-        // TODO: Clean this up once we have Paths API in Opal
-        const Opal::StringUtf8 parent_path = Opal::GetSubString(full_path, 0, Opal::ReverseFind(full_path, u8"/")).GetValue();
+        auto parent_path_result = Opal::Paths::GetParentPath(full_path);
+        RNDR_ASSERT(parent_path_result.HasValue());
+        const Opal::StringUtf8 parent_path = parent_path_result.GetValue();
         const Opal::StringUtf8 include_contents = ReadShader(parent_path, include_path);
         shader_contents.Erase(include_start, include_length);
         shader_contents.Insert(include_start, include_contents);

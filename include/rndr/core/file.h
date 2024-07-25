@@ -1,6 +1,6 @@
 #pragma once
 
-//#include <cstdio>
+#include <cstdio>
 
 #include "opal/container/string.h"
 
