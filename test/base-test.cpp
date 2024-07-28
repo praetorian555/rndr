@@ -1,11 +1,12 @@
 #include <catch2/catch2.hpp>
 
 #include "rndr/core/base.h"
+#include "rndr/core/definitions.h"
 #include "rndr/core/delegate.h"
 
 class CustomLogger : public Rndr::Logger
 {
-    void Log(const std::source_location& source_location,
+    void Log(const Opal::SourceLocation& source_location,
              Rndr::LogLevel log_level,
              const char* message)
     {
@@ -24,9 +25,10 @@ TEST_CASE("Init", "[init]")
     }
     SECTION("Create with custom logger")
     {
-        Rndr::Logger* custom_logger = RNDR_NEW(CustomLogger);
-        REQUIRE(Rndr::Init({.user_logger = custom_logger}));
-        REQUIRE(&Rndr::GetLogger() == custom_logger);
+        CustomLogger custom_logger;
+        Rndr::Logger* ptr = &custom_logger;
+        REQUIRE(Rndr::Init({.user_logger = Opal::Ref(ptr)}));
+        REQUIRE(&Rndr::GetLogger() == ptr);
         REQUIRE(Rndr::Destroy());
     }
 }

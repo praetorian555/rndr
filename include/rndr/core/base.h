@@ -1,15 +1,17 @@
 #pragma once
 
-#include <source_location>
+#include "opal/container/ref.h"
+#include "opal/container/scope-ptr.h"
+#include "opal/source-location.h"
 
-#include "rndr/core/definitions.h"
+#include "rndr/core/types.h"
 
 namespace Rndr
 {
 
 // Types ///////////////////////////////////////////////////////////////////////////////////////////
 
-enum class LogLevel : uint8_t
+enum class LogLevel : u8
 {
     Error,
     Warning,
@@ -25,15 +27,21 @@ struct Logger
 {
     virtual ~Logger() = default;
 
-    virtual void Log(const std::source_location& source_location,
-                     LogLevel log_level,
-                     const char* message) = 0;
+    virtual void Log(const Opal::SourceLocation& source_location, LogLevel log_level, const char* message) = 0;
+};
+
+/**
+ * Default logger implementation.
+ */
+struct StdLogger : public Logger
+{
+    void Log(const Opal::SourceLocation& source_location, LogLevel log_level, const char* message) override;
 };
 
 struct RndrDesc
 {
-    /** User specified logger. If no logger is provided, the default logger is used. */
-    Logger* user_logger = nullptr;
+    /** User specified logger. User is responsible for keeping it alive and deallocating it. */
+    Opal::Ref<Logger> user_logger;
 
     /** If we should enable the input system. Defaults to no. */
     bool enable_input_system = false;
@@ -73,17 +81,12 @@ const Logger& GetLogger();
 /**
  * Logs a message using the user specified logger. If no logger is provided, the default logger is
  * used.
- * @param file File where the log was called.
- * @param line Line where the log was called.
- * @param function_name Function where the log was called.
+ * @param source_location Contains information about the source location of the message.
  * @param log_level Log level of the message.
  * @param format Format string for the message.
  * @param ... Arguments for the format string.
  */
-void Log(const std::source_location& source_location,
-         Rndr::LogLevel log_level,
-         const char* format,
-         ...);
+void Log(const Opal::SourceLocation& source_location, Rndr::LogLevel log_level, const char* format, ...);
 
 void WaitForDebuggerToAttach();
 
@@ -119,13 +122,8 @@ void WaitForDebuggerToAttach();
 /**
  * Helper macros to log messages.
  */
-#define RNDR_LOG_ERROR(format, ...) \
-    Rndr::Log(std::source_location::current(), Rndr::LogLevel::Error, format, __VA_ARGS__)
-#define RNDR_LOG_WARNING(format, ...) \
-    Rndr::Log(std::source_location::current(), Rndr::LogLevel::Warning, format, __VA_ARGS__)
-#define RNDR_LOG_DEBUG(format, ...) \
-    Rndr::Log(std::source_location::current(), Rndr::LogLevel::Debug, format, __VA_ARGS__)
-#define RNDR_LOG_INFO(format, ...) \
-    Rndr::Log(std::source_location::current(), Rndr::LogLevel::Info, format, __VA_ARGS__)
-#define RNDR_LOG_TRACE(format, ...) \
-    Rndr::Log(std::source_location::current(), Rndr::LogLevel::Trace, format, __VA_ARGS__)
+#define RNDR_LOG_ERROR(format, ...) Rndr::Log(Opal::CurrentSourceLocation(), Rndr::LogLevel::Error, format, __VA_ARGS__)
+#define RNDR_LOG_WARNING(format, ...) Rndr::Log(Opal::CurrentSourceLocation(), Rndr::LogLevel::Warning, format, __VA_ARGS__)
+#define RNDR_LOG_DEBUG(format, ...) Rndr::Log(Opal::CurrentSourceLocation(), Rndr::LogLevel::Debug, format, __VA_ARGS__)
+#define RNDR_LOG_INFO(format, ...) Rndr::Log(Opal::CurrentSourceLocation(), Rndr::LogLevel::Info, format, __VA_ARGS__)
+#define RNDR_LOG_TRACE(format, ...) Rndr::Log(Opal::CurrentSourceLocation(), Rndr::LogLevel::Trace, format, __VA_ARGS__)

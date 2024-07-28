@@ -2,6 +2,8 @@
 
 #include "math/projections.h"
 
+#include "rndr/core/definitions.h"
+
 Rndr::ProjectionCamera::ProjectionCamera(const Matrix4x4f& world_to_camera, int screen_width, int screen_height,
                                          const ProjectionCameraDesc& desc)
     : m_world_to_camera(world_to_camera),
