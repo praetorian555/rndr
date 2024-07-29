@@ -1,8 +1,8 @@
-#include "rndr/utility/line-renderer.h"
+#include "rndr/core/line-renderer.h"
 
 #include "rndr/core/file.h"
+#include "rndr/core/input-layout-builder.h"
 #include "rndr/utility/cpu-tracer.h"
-#include "rndr/utility/input-layout-builder.h"
 
 #define TEXT(str) u8## #str
 

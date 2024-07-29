@@ -1,4 +1,4 @@
-#include "rndr/utility/frames-per-second-counter.h"
+#include "rndr/core/frames-per-second-counter.h"
 
 Rndr::FramesPerSecondCounter::FramesPerSecondCounter(float update_interval)
     : m_update_interval(update_interval), m_time_since_last_update(0.0f),  m_frames_per_second(0.0f), m_frames_since_last_update(0)

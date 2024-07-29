@@ -1,11 +1,15 @@
 #pragma once
 
 // Core utilities
+#include "core/fly-camera.h"
+#include "core/input-layout-builder.h"
+#include "core/line-renderer.h"
 #include "rndr/core/base.h"
 #include "rndr/core/colors.h"
 #include "rndr/core/definitions.h"
 #include "rndr/core/delegate.h"
 #include "rndr/core/file.h"
+#include "rndr/core/frames-per-second-counter.h"
 #include "rndr/core/graphics-types.h"
 #include "rndr/core/input-primitives.h"
 #include "rndr/core/input.h"
@@ -16,8 +20,3 @@
 #include "rndr/core/time.h"
 #include "rndr/core/window.h"
 #include "rndr/utility/cpu-tracer.h"
-#include "rndr/utility/fly-camera.h"
-#include "rndr/utility/frames-per-second-counter.h"
-#include "rndr/utility/imgui-wrapper.h"
-#include "rndr/utility/input-layout-builder.h"
-#include "rndr/utility/line-renderer.h"
