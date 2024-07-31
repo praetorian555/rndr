@@ -40,30 +40,6 @@ void APIENTRY DebugOutputCallback(GLenum source, GLenum type, unsigned int id, G
             break;
     }
 }
-
-bool CheckRequiredExtensions(const Opal::Array<Opal::StringUtf8>& required_extensions)
-{
-    int extension_count = 0;
-    glGetIntegerv(GL_NUM_EXTENSIONS, &extension_count);
-    RNDR_ASSERT_OPENGL();
-    Opal::HashSet<Opal::StringUtf8, Opal::Hash<Opal::StringUtf8>> found_extensions;
-    for (int i = 0; i < extension_count; i++)
-    {
-        const Rndr::c8* extension = reinterpret_cast<const Rndr::c8*>(glGetStringi(GL_EXTENSIONS, i));
-        RNDR_ASSERT_OPENGL();
-        for (const Opal::StringUtf8& required_extension : required_extensions)
-        {
-            if (Opal::Compare(required_extension, 0, required_extension.GetSize(), extension).GetValue() == 0)
-            {
-                found_extensions.insert(required_extension);
-                break;
-            }
-        }
-    }
-
-    const bool success = found_extensions.size() == required_extensions.GetSize();
-    return success;
-}
 }  // namespace
 
 Rndr::GraphicsContext::GraphicsContext(const Rndr::GraphicsContextDesc& desc) : m_desc(desc)
@@ -184,23 +160,46 @@ Rndr::GraphicsContext::GraphicsContext(const Rndr::GraphicsContextDesc& desc) : 
     glDebugMessageControl(GL_DONT_CARE, GL_DONT_CARE, GL_DONT_CARE, 0, nullptr, GL_TRUE);
     RNDR_ASSERT_OPENGL();
 
-    Opal::Array<Opal::StringUtf8> required_extensions = {u8"ARB_texture_storage",
-                                                         u8"ARB_multi_draw_indirect",
-                                                         u8"ARB_buffer_storage",
-                                                         u8"ARB_enhanced_layouts",
-                                                         u8"ARB_direct_state_access",
-                                                         u8"GL_ARB_indirect_parameters",
-                                                         u8"GL_ARB_shader_draw_parameters",
-                                                         u8"ARB_gl_spirv"};
-
-    if (m_desc.enable_bindless_textures)
+    // Check if the required extensions are supported by the hardware.
+    if (GLAD_GL_ARB_buffer_storage == 0)
     {
-        required_extensions.PushBack(u8"ARB_bindless_texture");
+        RNDR_HALT("ARB_buffer_storage is not supported on this device, exiting!");
     }
-
-    if (CheckRequiredExtensions(required_extensions))
+    if (GLAD_GL_ARB_direct_state_access == 0)
     {
-        RNDR_HALT("Not all required extensions are available, exiting!");
+        RNDR_HALT("ARB_direct_state_access is not supported on this device, exiting!");
+    }
+    if (GLAD_GL_ARB_enhanced_layouts == 0)
+    {
+        RNDR_HALT("ARB_enhanced_layouts is not supported on this device, exiting!");
+    }
+    if (GLAD_GL_ARB_gl_spirv == 0)
+    {
+        RNDR_HALT("ARB_gl_spirv is not supported on this device, exiting!");
+    }
+    if (GLAD_GL_ARB_indirect_parameters == 0)
+    {
+        RNDR_HALT("ARB_indirect_parameters is not supported on this device, exiting!");
+    }
+    if (GLAD_GL_ARB_multi_draw_indirect == 0)
+    {
+        RNDR_HALT("ARB_multi_draw_indirect is not supported on this device, exiting!");
+    }
+    if (GLAD_GL_ARB_shader_draw_parameters == 0)
+    {
+        RNDR_HALT("ARB_shader_draw_parameters is not supported on this device, exiting!");
+    }
+    if (GLAD_GL_ARB_texture_storage == 0)
+    {
+        RNDR_HALT("ARB_texture_storage is not supported on this device, exiting!");
+    }
+    if (m_desc.enable_bindless_textures && GLAD_GL_ARB_gpu_shader_int64 == 0)
+    {
+        RNDR_HALT("ARB_gpu_shader_int64 is not supported on this device, exiting!");
+    }
+    if (m_desc.enable_bindless_textures && GLAD_GL_ARB_bindless_texture == 0)
+    {
+        RNDR_HALT("ARB_bindless_texture is not supported on this device, exiting!");
     }
 #else
     RNDR_ASSERT(false && "OS not supported!");

@@ -468,9 +468,9 @@ struct GraphicsContextDesc
     /**
      * Enable bindless textures. This is a feature that allows the GPU to access textures without
      * binding them to a specific slot. This is a performance optimization. Not all GPUs support
-     * this feature.
+     * this feature. Default is false.
      */
-    bool enable_bindless_textures = true;
+    bool enable_bindless_textures = false;
 };
 
 struct SwapChainDesc
