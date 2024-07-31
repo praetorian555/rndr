@@ -464,6 +464,13 @@ struct GraphicsContextDesc
      * creation of the graphics context (e.g. OpenGL).
      */
     NativeWindowHandle window_handle = nullptr;
+
+    /**
+     * Enable bindless textures. This is a feature that allows the GPU to access textures without
+     * binding them to a specific slot. This is a performance optimization. Not all GPUs support
+     * this feature.
+     */
+    bool enable_bindless_textures = true;
 };
 
 struct SwapChainDesc

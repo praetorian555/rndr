@@ -126,7 +126,7 @@ Rndr::Image::Image(const GraphicsContext& graphics_context, const ImageDesc& des
         RNDR_HALT("Unsupported image type!");
     }
 
-    if (m_desc.is_bindless)
+    if (graphics_context.GetDesc().enable_bindless_textures && m_desc.is_bindless)
     {
         m_bindless_handle = glGetTextureHandleARB(m_native_texture);
         RNDR_ASSERT_OPENGL();

@@ -184,14 +184,19 @@ Rndr::GraphicsContext::GraphicsContext(const Rndr::GraphicsContextDesc& desc) : 
     glDebugMessageControl(GL_DONT_CARE, GL_DONT_CARE, GL_DONT_CARE, 0, nullptr, GL_TRUE);
     RNDR_ASSERT_OPENGL();
 
-    const Opal::Array<Opal::StringUtf8> required_extensions = {u8"ARB_texture_storage",
-                                                               u8"ARB_multi_draw_indirect",
-                                                               u8"ARB_buffer_storage",
-                                                               u8"ARB_enhanced_layouts",
-                                                               u8"ARB_direct_state_access",
-                                                               u8"GL_ARB_indirect_parameters",
-                                                               u8"GL_ARB_shader_draw_parameters",
-                                                               u8"ARB_gl_spirv"};
+    Opal::Array<Opal::StringUtf8> required_extensions = {u8"ARB_texture_storage",
+                                                         u8"ARB_multi_draw_indirect",
+                                                         u8"ARB_buffer_storage",
+                                                         u8"ARB_enhanced_layouts",
+                                                         u8"ARB_direct_state_access",
+                                                         u8"GL_ARB_indirect_parameters",
+                                                         u8"GL_ARB_shader_draw_parameters",
+                                                         u8"ARB_gl_spirv"};
+
+    if (m_desc.enable_bindless_textures)
+    {
+        required_extensions.PushBack(u8"ARB_bindless_texture");
+    }
 
     if (CheckRequiredExtensions(required_extensions))
     {
