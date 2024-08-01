@@ -27,14 +27,14 @@ public:
 
     [[nodiscard]] const FrameBufferDesc& GetDesc() const;
     [[nodiscard]] i32 GetColorAttachmentCount() const;
-    [[nodiscard]] const Image& GetColorAttachment(i32 index) const;
-    [[nodiscard]] const Image& GetDepthStencilAttachment() const;
+    [[nodiscard]] const Texture& GetColorAttachment(i32 index) const;
+    [[nodiscard]] const Texture& GetDepthStencilAttachment() const;
     [[nodiscard]] GLuint GetNativeFrameBuffer() const;
 
 private:
     FrameBufferDesc m_desc;
-    Opal::Array<Image> m_color_attachments;
-    Image m_depth_stencil_attachment;
+    Opal::Array<Texture> m_color_attachments;
+    Texture m_depth_stencil_attachment;
     GLuint m_native_frame_buffer = k_invalid_opengl_object;
 };
 

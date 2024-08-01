@@ -247,18 +247,18 @@ GLenum Rndr::FromBlendOperationToOpenGL(BlendOperation op)
     return k_to_opengl_blend_op[static_cast<Rndr::u64>(op)];
 }
 
-GLenum Rndr::FromImageInfoToTarget(ImageType image_type, bool is_multi_sample)
+GLenum Rndr::FromImageInfoToTarget(TextureType image_type, bool is_multi_sample)
 {
     GLenum target = GL_TEXTURE_2D;
     switch (image_type)
     {
-        case ImageType::Image2D:
+        case TextureType::Texture2D:
             target = is_multi_sample ? GL_TEXTURE_2D_MULTISAMPLE : GL_TEXTURE_2D;
             break;
-        case ImageType::Image2DArray:
+        case TextureType::Texture2DArray:
             target = is_multi_sample ? GL_TEXTURE_2D_MULTISAMPLE_ARRAY : GL_TEXTURE_2D_ARRAY;
             break;
-        case ImageType::CubeMap:
+        case TextureType::CubeMap:
             target = GL_TEXTURE_CUBE_MAP;
             break;
         default:

@@ -60,7 +60,7 @@ struct BindConstantBufferCommand
 
 struct BindImageCommand
 {
-    Opal::Ref<const class Image> image;
+    Opal::Ref<const class Texture> image;
     int32_t binding_index;
 };
 
@@ -205,7 +205,7 @@ public:
      * @param binding_index The binding index to bind the image to.
      * @return Returns true if the image was bound successfully, false otherwise.
      */
-    void Bind(const Image& image, int32_t binding_index);
+    void Bind(const Texture& image, int32_t binding_index);
 
     /**
      * Binds one level of the image to the compute pipeline.
@@ -215,7 +215,7 @@ public:
      * @param access How the image will be accessed in the compute shader.
      * @return Returns true if the image was bound successfully, false otherwise.
      */
-    bool BindImageForCompute(const Image& image, int32_t binding_index, int32_t image_level, ImageAccess access);
+    bool BindImageForCompute(const Texture& image, int32_t binding_index, int32_t image_level, ImageAccess access);
 
     /**
      * Updates the contents of a buffer.

@@ -134,12 +134,12 @@ TEST_CASE("Conversion from Rndr::BlendOperation to OpenGL enum", "[misc][opengl]
 TEST_CASE("Conversion from image info to OpenGL enum", "[misc][opengl]")
 {
     using namespace Rndr;
-    REQUIRE(FromImageInfoToTarget(ImageType::Image2D, false) == GL_TEXTURE_2D);
-    REQUIRE(FromImageInfoToTarget(ImageType::Image2D, true) == GL_TEXTURE_2D_MULTISAMPLE);
-    REQUIRE(FromImageInfoToTarget(ImageType::Image2DArray, false) == GL_TEXTURE_2D_ARRAY);
-    REQUIRE(FromImageInfoToTarget(ImageType::Image2DArray, true) == GL_TEXTURE_2D_MULTISAMPLE_ARRAY);
-    REQUIRE(FromImageInfoToTarget(ImageType::CubeMap, false) == GL_TEXTURE_CUBE_MAP);
-    REQUIRE(FromImageInfoToTarget(ImageType::CubeMap, true) == GL_TEXTURE_CUBE_MAP);
+    REQUIRE(FromImageInfoToTarget(TextureType::Texture2D, false) == GL_TEXTURE_2D);
+    REQUIRE(FromImageInfoToTarget(TextureType::Texture2D, true) == GL_TEXTURE_2D_MULTISAMPLE);
+    REQUIRE(FromImageInfoToTarget(TextureType::Texture2DArray, false) == GL_TEXTURE_2D_ARRAY);
+    REQUIRE(FromImageInfoToTarget(TextureType::Texture2DArray, true) == GL_TEXTURE_2D_MULTISAMPLE_ARRAY);
+    REQUIRE(FromImageInfoToTarget(TextureType::CubeMap, false) == GL_TEXTURE_CUBE_MAP);
+    REQUIRE(FromImageInfoToTarget(TextureType::CubeMap, true) == GL_TEXTURE_CUBE_MAP);
 }
 
 TEST_CASE("Conversion from Rndr::ImageFilter to OpenGL enum", "[misc][opengl]")
@@ -994,7 +994,8 @@ TEST_CASE("Running a compute shader", "[render-api][shader]")
         const Rndr::Buffer dst_buffer(graphics_context, desc2);
         REQUIRE(dst_buffer.IsValid());
 
-        const Rndr::c8 compute_shader_code[] = u8R"(
+        const Rndr::c8 compute_shader_code[] =
+            u8R"(
             #version 460 core
             layout(std430, binding = 0) buffer Data
             {
@@ -1042,18 +1043,21 @@ TEST_CASE("Running a compute shader", "[render-api][shader]")
             data[i] = static_cast<Rndr::f32>(i);
         }
 
-        const Rndr::Image src_image(graphics_context,
-                                    Rndr::ImageDesc{.width = k_image_width,
-                                                    .height = k_image_height,
-                                                    .type = Rndr::ImageType::Image2D,
-                                                    .pixel_format = Rndr::PixelFormat::R32_FLOAT},
-                                    Opal::AsBytes(data));
-        const Rndr::Image dst_image(graphics_context, Rndr::ImageDesc{.width = k_image_width,
-                                                                      .height = k_image_height,
-                                                                      .type = Rndr::ImageType::Image2D,
-                                                                      .pixel_format = Rndr::PixelFormat::R32_FLOAT});
+        const Rndr::Texture src_image(graphics_context,
+                                      Rndr::TextureDesc{.width = k_image_width,
+                                                        .height = k_image_height,
+                                                        .type = Rndr::TextureType::Texture2D,
+                                                        .pixel_format = Rndr::PixelFormat::R32_FLOAT},
+                                      {}, Opal::AsBytes(data));
+        const Rndr::Texture dst_image(graphics_context,
+                                      Rndr::TextureDesc{.width = k_image_width,
+                                                        .height = k_image_height,
+                                                        .type = Rndr::TextureType::Texture2D,
+                                                        .pixel_format = Rndr::PixelFormat::R32_FLOAT},
+                                      {});
 
-        const Rndr::c8 compute_shader_code[] = u8R"(
+        const Rndr::c8 compute_shader_code[] =
+            u8R"(
             #version 460 core
             layout(local_size_x = 1, local_size_y = 1, local_size_z = 1) in;
             layout(r32f, binding = 0) uniform image2D in_data;
@@ -1094,61 +1098,124 @@ TEST_CASE("Running a compute shader", "[render-api][shader]")
     Rndr::Destroy();
 }
 
-TEST_CASE("Creating a image", "[render-api][image]")
+TEST_CASE("Creating a texture", "[render-api][texture]")
 {
     Rndr::Init();
     Rndr::Window hidden_window({.start_visible = false});
     const Rndr::GraphicsContextDesc gc_desc{.window_handle = hidden_window.GetNativeWindowHandle()};
     Rndr::GraphicsContext graphics_context(gc_desc);
 
-    SECTION("Creating a 2D image")
+    SECTION("Texture 2D")
     {
-        const Rndr::ImageDesc desc{
-            .width = 512, .height = 512, .type = Rndr::ImageType::Image2D, .pixel_format = Rndr::PixelFormat::R8G8B8A8_UINT};
-        const Rndr::Image image(graphics_context, desc);
-        REQUIRE(image.IsValid());
+        SECTION("Bad width")
+        {
+            const Rndr::TextureDesc desc{.width = 0, .height = 512};
+            Rndr::Texture texture;
+            const Rndr::ErrorCode err = texture.Initialize(graphics_context, desc);
+            REQUIRE(err == Rndr::ErrorCode::InvalidArgument);
+        }
+        SECTION("Bad height")
+        {
+            const Rndr::TextureDesc desc{.width = 512, .height = 0};
+            Rndr::Texture texture;
+            const Rndr::ErrorCode err = texture.Initialize(graphics_context, desc);
+            REQUIRE(err == Rndr::ErrorCode::InvalidArgument);
+        }
+        SECTION("Regular with no data")
+        {
+            const Rndr::TextureDesc desc{.width = 512, .height = 512};
+            Rndr::Texture texture;
+            const Rndr::ErrorCode err = texture.Initialize(graphics_context, desc);
+            REQUIRE(err == Rndr::ErrorCode::Success);
+        }
+        SECTION("Regular with data")
+        {
+            Opal::Array<Rndr::u8> data(512 * 512 * 4, 5);
+            const Rndr::TextureDesc desc{.width = 512, .height = 512};
+            Rndr::Texture texture;
+            const Rndr::ErrorCode err = texture.Initialize(graphics_context, desc, {}, Opal::AsBytes(data));
+            REQUIRE(err == Rndr::ErrorCode::Success);
+        }
+        SECTION("With mip maps")
+        {
+            const Rndr::TextureDesc desc{.width = 512, .height = 512, .use_mips = true};
+            Rndr::Texture texture;
+            const Rndr::ErrorCode err = texture.Initialize(graphics_context, desc);
+            REQUIRE(err == Rndr::ErrorCode::Success);
+        }
+        SECTION("With mip maps and data")
+        {
+            Opal::Array<Rndr::u8> data(512 * 512 * 4, 5);
+            const Rndr::TextureDesc desc{.width = 512, .height = 512, .use_mips = true};
+            Rndr::Texture texture;
+            const Rndr::ErrorCode err = texture.Initialize(graphics_context, desc, {}, Opal::AsBytes(data));
+            REQUIRE(err == Rndr::ErrorCode::Success);
+        }
+        SECTION("Multisample")
+        {
+            const Rndr::TextureDesc desc{.width = 512, .height = 512, .sample_count = 4};
+            Rndr::Texture texture;
+            const Rndr::ErrorCode err = texture.Initialize(graphics_context, desc);
+            REQUIRE(err == Rndr::ErrorCode::Success);
+        }
+        SECTION("Multisample with data")
+        {
+            Opal::Array<Rndr::u8> data(512 * 512 * 4, 5);
+            const Rndr::TextureDesc desc{.width = 512, .height = 512, .sample_count = 4};
+            Rndr::Texture texture;
+            const Rndr::ErrorCode err = texture.Initialize(graphics_context, desc, {}, Opal::AsBytes(data));
+            REQUIRE(err == Rndr::ErrorCode::Success);
+        }
     }
-    // TODO: Enable once support for Image2DArray is added
-    //    SECTION("Creating a 2D array image")
-    //    {
-    //        const Rndr::ImageDesc desc{.width = 512, .height = 512, .array_size = 3, .type = Rndr::ImageType::Image2DArray, .pixel_format
-    //        = Rndr::PixelFormat::R8G8B8A8_UINT}; const Rndr::Image image(graphics_context, desc); REQUIRE(image.IsValid());
-    //    }
+    SECTION("Texture 2D Array")
+    {
+        SECTION("Bad width")
+        {
+            const Rndr::TextureDesc desc{.width = 0, .height = 512, .array_size = 6};
+            Rndr::Texture texture;
+            const Rndr::ErrorCode err = texture.Initialize(graphics_context, desc);
+            REQUIRE(err == Rndr::ErrorCode::InvalidArgument);
+        }
+        SECTION("Bad height")
+        {
+            const Rndr::TextureDesc desc{.width = 512, .height = 0, .array_size = 6};
+            Rndr::Texture texture;
+            const Rndr::ErrorCode err = texture.Initialize(graphics_context, desc);
+            REQUIRE(err == Rndr::ErrorCode::InvalidArgument);
+        }
+        SECTION("Bad array size")
+        {
+            const Rndr::TextureDesc desc{.width = 512, .height = 512, .array_size = 0, .type = Rndr::TextureType::Texture2DArray};
+            Rndr::Texture texture;
+            const Rndr::ErrorCode err = texture.Initialize(graphics_context, desc);
+            REQUIRE(err == Rndr::ErrorCode::InvalidArgument);
+        }
+        SECTION("Regular with no data")
+        {
+            const Rndr::TextureDesc desc{.width = 512, .height = 512, .array_size = 6, .type = Rndr::TextureType::Texture2DArray};
+            Rndr::Texture texture;
+            const Rndr::ErrorCode err = texture.Initialize(graphics_context, desc);
+            REQUIRE(err == Rndr::ErrorCode::Success);
+        }
+        SECTION("Regular with data")
+        {
+            Opal::Array<Rndr::u8> data(512 * 512 * 4 * 6, 5);
+            const Rndr::TextureDesc desc{.width = 512, .height = 512, .array_size = 6, .type = Rndr::TextureType::Texture2DArray};
+            Rndr::Texture texture;
+            const Rndr::ErrorCode err = texture.Initialize(graphics_context, desc, {}, Opal::AsBytes(data));
+            REQUIRE(err == Rndr::ErrorCode::Success);
+        }
+    }
     SECTION("Creating cube map")
     {
-        const Rndr::ImageDesc desc{.width = 512,
-                                   .height = 512,
-                                   .array_size = 6,
-                                   .type = Rndr::ImageType::CubeMap,
-                                   .pixel_format = Rndr::PixelFormat::R8G8B8A8_UNORM};
-        const Rndr::Image image(graphics_context, desc);
+        const Rndr::TextureDesc desc{.width = 512,
+                                     .height = 512,
+                                     .array_size = 6,
+                                     .type = Rndr::TextureType::CubeMap,
+                                     .pixel_format = Rndr::PixelFormat::R8G8B8A8_UNORM};
+        const Rndr::Texture image(graphics_context, desc, {});
         REQUIRE(image.IsValid());
     }
-    SECTION("Creating image from a bitmap")
-    {
-        Rndr::Bitmap bitmap(512, 512, 1, Rndr::PixelFormat::R8G8B8A8_UNORM);
-        const Rndr::Image image(graphics_context, bitmap, false, Rndr::SamplerDesc{});
-        REQUIRE(image.IsValid());
-    }
-    SECTION("Creating image from a bitmap with mipmaps")
-    {
-        Rndr::Bitmap bitmap(512, 512, 1, Rndr::PixelFormat::R8G8B8A8_UNORM);
-        const Rndr::Image image(graphics_context, bitmap, true, Rndr::SamplerDesc{});
-        REQUIRE(image.IsValid());
-    }
-    SECTION("Creating image with invalid width or height")
-    {
-        const Rndr::ImageDesc desc{
-            .width = 0, .height = 512, .type = Rndr::ImageType::Image2D, .pixel_format = Rndr::PixelFormat::R8G8B8A8_UINT};
-        const Rndr::Image image(graphics_context, desc);
-        REQUIRE(!image.IsValid());
-    }
-    // TODO: Enable once support for Image2DArray is added
-    //    SECTION("Creating image with invalid array size")
-    //    {
-    //        const Rndr::ImageDesc desc{.width = 512, .height = 512, .array_size = 0, .type = Rndr::ImageType::Image2DArray, .pixel_format
-    //        = Rndr::PixelFormat::R8G8B8A8_UINT}; const Rndr::Image image(graphics_context, desc); REQUIRE(!image.IsValid());
-    //    }
 
     graphics_context.Destroy();
     hidden_window.Destroy();
@@ -1164,9 +1231,9 @@ TEST_CASE("Creating a frame buffer", "[render-api][framebuffer]")
 
     SECTION("with single color attachment")
     {
-        const Rndr::ImageDesc color_attachment_desc{
-            .width = 512, .height = 512, .type = Rndr::ImageType::Image2D, .pixel_format = Rndr::PixelFormat::R8G8B8A8_UINT};
-        const Rndr::FrameBufferDesc desc{.color_attachments = {color_attachment_desc}};
+        const Rndr::TextureDesc color_attachment_desc{
+            .width = 512, .height = 512, .type = Rndr::TextureType::Texture2D, .pixel_format = Rndr::PixelFormat::R8G8B8A8_UINT};
+        const Rndr::FrameBufferDesc desc{.color_attachments = {color_attachment_desc}, .color_attachment_samplers = {{}}};
         const Rndr::FrameBuffer frame_buffer(graphics_context, desc);
         REQUIRE(frame_buffer.IsValid());
         REQUIRE(frame_buffer.GetColorAttachmentCount() == 1);
@@ -1174,11 +1241,12 @@ TEST_CASE("Creating a frame buffer", "[render-api][framebuffer]")
     }
     SECTION("with depth stencil attachment")
     {
-        const Rndr::ImageDesc color_attachment_desc{
-            .width = 512, .height = 512, .type = Rndr::ImageType::Image2D, .pixel_format = Rndr::PixelFormat::R8G8B8A8_UINT};
-        const Rndr::ImageDesc depth_stencil_attachment_desc{
-            .width = 512, .height = 512, .type = Rndr::ImageType::Image2D, .pixel_format = Rndr::PixelFormat::D24_UNORM_S8_UINT};
+        const Rndr::TextureDesc color_attachment_desc{
+            .width = 512, .height = 512, .type = Rndr::TextureType::Texture2D, .pixel_format = Rndr::PixelFormat::R8G8B8A8_UINT};
+        const Rndr::TextureDesc depth_stencil_attachment_desc{
+            .width = 512, .height = 512, .type = Rndr::TextureType::Texture2D, .pixel_format = Rndr::PixelFormat::D24_UNORM_S8_UINT};
         const Rndr::FrameBufferDesc desc{.color_attachments = {color_attachment_desc},
+                                         .color_attachment_samplers = {{}},
                                          .depth_stencil_attachment = depth_stencil_attachment_desc,
                                          .use_depth_stencil = true};
         const Rndr::FrameBuffer frame_buffer(graphics_context, desc);
@@ -1188,11 +1256,12 @@ TEST_CASE("Creating a frame buffer", "[render-api][framebuffer]")
     }
     SECTION("with multiple color attachments")
     {
-        const Rndr::ImageDesc color_attachment_desc{
-            .width = 512, .height = 512, .type = Rndr::ImageType::Image2D, .pixel_format = Rndr::PixelFormat::R8G8B8A8_UINT};
-        const Rndr::ImageDesc color_attachment_desc2{
-            .width = 512, .height = 512, .type = Rndr::ImageType::Image2D, .pixel_format = Rndr::PixelFormat::R8G8B8A8_UINT};
-        const Rndr::FrameBufferDesc desc{.color_attachments = {color_attachment_desc, color_attachment_desc2}};
+        const Rndr::TextureDesc color_attachment_desc{
+            .width = 512, .height = 512, .type = Rndr::TextureType::Texture2D, .pixel_format = Rndr::PixelFormat::R8G8B8A8_UINT};
+        const Rndr::TextureDesc color_attachment_desc2{
+            .width = 512, .height = 512, .type = Rndr::TextureType::Texture2D, .pixel_format = Rndr::PixelFormat::R8G8B8A8_UINT};
+        const Rndr::FrameBufferDesc desc{.color_attachments = {color_attachment_desc, color_attachment_desc2},
+                                         .color_attachment_samplers = {{}, {}}};
         const Rndr::FrameBuffer frame_buffer(graphics_context, desc);
         REQUIRE(frame_buffer.IsValid());
         REQUIRE(frame_buffer.GetColorAttachmentCount() == 2);
@@ -1206,19 +1275,20 @@ TEST_CASE("Creating a frame buffer", "[render-api][framebuffer]")
     }
     SECTION("with invalid width and height in color attachment")
     {
-        const Rndr::ImageDesc color_attachment_desc{
-            .width = 0, .height = 512, .type = Rndr::ImageType::Image2D, .pixel_format = Rndr::PixelFormat::R8G8B8A8_UINT};
-        const Rndr::FrameBufferDesc desc{.color_attachments = {color_attachment_desc}};
+        const Rndr::TextureDesc color_attachment_desc{
+            .width = 0, .height = 512, .type = Rndr::TextureType::Texture2D, .pixel_format = Rndr::PixelFormat::R8G8B8A8_UINT};
+        const Rndr::FrameBufferDesc desc{.color_attachments = {color_attachment_desc}, .color_attachment_samplers = {{}}};
         const Rndr::FrameBuffer frame_buffer(graphics_context, desc);
         REQUIRE(!frame_buffer.IsValid());
     }
     SECTION("with invalid width and height in depth stencil attachment")
     {
-        const Rndr::ImageDesc color_attachment_desc{
-            .width = 512, .height = 512, .type = Rndr::ImageType::Image2D, .pixel_format = Rndr::PixelFormat::R8G8B8A8_UINT};
-        const Rndr::ImageDesc depth_stencil_attachment_desc{
-            .width = 0, .height = 512, .type = Rndr::ImageType::Image2D, .pixel_format = Rndr::PixelFormat::D24_UNORM_S8_UINT};
+        const Rndr::TextureDesc color_attachment_desc{
+            .width = 512, .height = 512, .type = Rndr::TextureType::Texture2D, .pixel_format = Rndr::PixelFormat::R8G8B8A8_UINT};
+        const Rndr::TextureDesc depth_stencil_attachment_desc{
+            .width = 0, .height = 512, .type = Rndr::TextureType::Texture2D, .pixel_format = Rndr::PixelFormat::D24_UNORM_S8_UINT};
         const Rndr::FrameBufferDesc desc{.color_attachments = {color_attachment_desc},
+                                         .color_attachment_samplers = {{}},
                                          .depth_stencil_attachment = depth_stencil_attachment_desc,
                                          .use_depth_stencil = true};
         const Rndr::FrameBuffer frame_buffer(graphics_context, desc);
@@ -1226,19 +1296,20 @@ TEST_CASE("Creating a frame buffer", "[render-api][framebuffer]")
     }
     SECTION("with invalid image type in color attachment")
     {
-        const Rndr::ImageDesc color_attachment_desc{
-            .width = 512, .height = 512, .type = Rndr::ImageType::CubeMap, .pixel_format = Rndr::PixelFormat::R8G8B8A8_UINT};
-        const Rndr::FrameBufferDesc desc{.color_attachments = {color_attachment_desc}};
+        const Rndr::TextureDesc color_attachment_desc{
+            .width = 512, .height = 512, .type = Rndr::TextureType::CubeMap, .pixel_format = Rndr::PixelFormat::R8G8B8A8_UINT};
+        const Rndr::FrameBufferDesc desc{.color_attachments = {color_attachment_desc}, .color_attachment_samplers = {{}}};
         const Rndr::FrameBuffer frame_buffer(graphics_context, desc);
         REQUIRE(!frame_buffer.IsValid());
     }
     SECTION("with invalid image type in depth stencil attachment")
     {
-        const Rndr::ImageDesc color_attachment_desc{
-            .width = 512, .height = 512, .type = Rndr::ImageType::Image2D, .pixel_format = Rndr::PixelFormat::R8G8B8A8_UINT};
-        const Rndr::ImageDesc depth_stencil_attachment_desc{
-            .width = 512, .height = 512, .type = Rndr::ImageType::CubeMap, .pixel_format = Rndr::PixelFormat::D24_UNORM_S8_UINT};
+        const Rndr::TextureDesc color_attachment_desc{
+            .width = 512, .height = 512, .type = Rndr::TextureType::Texture2D, .pixel_format = Rndr::PixelFormat::R8G8B8A8_UINT};
+        const Rndr::TextureDesc depth_stencil_attachment_desc{
+            .width = 512, .height = 512, .type = Rndr::TextureType::CubeMap, .pixel_format = Rndr::PixelFormat::D24_UNORM_S8_UINT};
         const Rndr::FrameBufferDesc desc{.color_attachments = {color_attachment_desc},
+                                         .color_attachment_samplers = {{}},
                                          .depth_stencil_attachment = depth_stencil_attachment_desc,
                                          .use_depth_stencil = true};
         const Rndr::FrameBuffer frame_buffer(graphics_context, desc);
@@ -1259,7 +1330,8 @@ TEST_CASE("Render full screen quad", "[render-api]")
 
     const Opal::StringUtf8 vertex_shader_code = Rndr::File::ReadShader(RNDR_CORE_ASSETS_DIR, u8"full-screen-quad.vert");
     REQUIRE(!vertex_shader_code.IsEmpty());
-    const Opal::StringUtf8 fragment_shader_code = u8R"(
+    const Opal::StringUtf8 fragment_shader_code =
+        u8R"(
         #version 460 core
         layout(location = 0) out vec4 fragColor;
         void main()
@@ -1277,8 +1349,9 @@ TEST_CASE("Render full screen quad", "[render-api]")
                                      Rndr::ShaderDesc{.type = Rndr::ShaderType::Fragment, .source = fragment_shader_code});
         REQUIRE(fragment_shader.IsValid());
 
-        const Rndr::ImageDesc color_attachment_desc{.width = 128, .height = 128};
-        const Rndr::FrameBuffer frame_buffer(graphics_context, Rndr::FrameBufferDesc{.color_attachments = {color_attachment_desc}});
+        const Rndr::TextureDesc color_attachment_desc{.width = 128, .height = 128};
+        const Rndr::FrameBuffer frame_buffer(
+            graphics_context, Rndr::FrameBufferDesc{.color_attachments = {color_attachment_desc}, .color_attachment_samplers = {{}}});
         REQUIRE(frame_buffer.IsValid());
 
         const Rndr::PipelineDesc pipeline_desc{.vertex_shader = &vertex_shader, .pixel_shader = &fragment_shader};

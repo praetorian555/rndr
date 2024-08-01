@@ -16,7 +16,7 @@ GLenum FromComparatorToOpenGL(Comparator comparator);
 GLenum FromStencilOpToOpenGL(StencilOperation op);
 GLenum FromBlendFactorToOpenGL(BlendFactor factor);
 GLenum FromBlendOperationToOpenGL(BlendOperation op);
-GLenum FromImageInfoToTarget(ImageType image_type, bool is_multi_sample);
+GLenum FromImageInfoToTarget(TextureType image_type, bool is_multi_sample);
 GLint FromMinAndMipFiltersToOpenGL(ImageFilter min_filter, ImageFilter mip_filter);
 GLint FromImageFilterToOpenGL(ImageFilter filter);
 GLint FromImageAddressModeToOpenGL(ImageAddressMode wrap);
@@ -32,8 +32,22 @@ GLenum FromIndexSizeToOpenGL(int64_t index_size);
 Opal::StringUtf8 FromOpenGLDataTypeToString(GLenum value);
 Opal::StringUtf8 FromOpenGLUsageToString(GLenum value);
 
-} // namespace Rndr
+}  // namespace Rndr
 
-#define RNDR_ASSERT_OPENGL() if (glGetError() != GL_NO_ERROR) { RNDR_HALT("OpenGL failure!"); }
+#define RNDR_ASSERT_OPENGL()          \
+    if (glGetError() != GL_NO_ERROR)  \
+    {                                 \
+        RNDR_HALT("OpenGL failure!"); \
+    }
+
+#define RNDR_GL_VERIFY(message)                                         \
+    {                                                                   \
+        const GLuint gl_err = glGetError();                             \
+        if (gl_err != GL_NO_ERROR)                                      \
+        {                                                               \
+            RNDR_LOG_ERROR("OpenGL error: 0x%x - %s", gl_err, message); \
+            return ErrorCode::GraphicsAPIError;                         \
+        }                                                               \
+    }
 
 #endif  // RNDR_OPENGL

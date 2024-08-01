@@ -1,6 +1,7 @@
 #pragma once
 
 #include "rndr/core/definitions.h"
+#include "rndr/core/error-codes.h"
 #include "rndr/core/graphics-types.h"
 #include "rndr/core/platform/opengl-forward-def.h"
 
@@ -13,50 +14,58 @@ class Bitmap;
 /**
  * Represents a texture on the GPU.
  */
-class Image
+class Texture
 {
 public:
     /**
      * Default constructor. Creates an invalid image.
      */
-    Image() = default;
+    Texture() = default;
 
     /**
-     * Creates a new image. Only creates Image2D so any other type will result in invalid image.
+     * Creates a new image. Only creates Texture2D so any other type will result in invalid image.
      * @param graphics_context The graphics context to create the image with.
-     * @param desc The description of the image to create.
+     * @param texture_desc The description of the image to create.
+     * @param sampler_desc The sampler description to use for the image.
      * @param init_data The initial data to fill the image with. Default is empty.
      */
-    Image(const GraphicsContext& graphics_context, const ImageDesc& desc, const Opal::Span<const u8>& init_data = {});
+    Texture(const GraphicsContext& graphics_context, const TextureDesc& texture_desc, const SamplerDesc& sampler_desc = SamplerDesc{},
+            const Opal::Span<const u8>& init_data = {});
 
     /**
-     * Creates a new image from a CPU image. Only creates Image2D so any other type will result in
-     * invalid image.
+     * Initializes the texture on the GPU.
      * @param graphics_context The graphics context to create the image with.
-     * @param Bitmap The CPU bitmap to create the image with.
-     * @param use_mips Whether or not to use mips for the image.
-     * @param sampler_desc The sampler description to use for the image.
+     * @param texture_desc The description of the texture to create.
+     * @param sampler_desc The sampler description to use for the texture.
+     * @param init_data The initial data to fill the texture with. If empty, the contents of the allocated texture will be undefined.
+     * Default is empty.
+     * @return
      */
-    Image(const GraphicsContext& graphics_context, Bitmap& bitmap, bool use_mips, const SamplerDesc& sampler_desc);
+    ErrorCode Initialize(const GraphicsContext& graphics_context, const TextureDesc& texture_desc,
+                         const SamplerDesc& sampler_desc = SamplerDesc{}, const Opal::Span<const u8>& init_data = {});
 
-    ~Image();
-    Image(const Image&) = delete;
-    Image& operator=(const Image&) = delete;
-    Image(Image&& other) noexcept;
-    Image& operator=(Image&& other) noexcept;
+    ~Texture();
+    Texture(const Texture&) = delete;
+    Texture& operator=(const Texture&) = delete;
+    Texture(Texture&& other) noexcept;
+    Texture& operator=(Texture&& other) noexcept;
 
     void Destroy();
 
     [[nodiscard]] bool IsValid() const;
 
-    [[nodiscard]] const ImageDesc& GetDesc() const;
+    [[nodiscard]] const TextureDesc& GetTextureDesc() const;
+    [[nodiscard]] const SamplerDesc& GetSamplerDesc() const;
     [[nodiscard]] GLuint GetNativeTexture() const;
     [[nodiscard]] uint64_t GetBindlessHandle() const;
 
 private:
-    ImageDesc m_desc;
+    TextureDesc m_texture_desc;
+    SamplerDesc m_sampler_desc;
     GLuint m_native_texture = k_invalid_opengl_object;
     uint64_t m_bindless_handle = k_invalid_opengl_object;
+
+    i32 m_max_mip_levels = 0;
 };
 
 }  // namespace Rndr

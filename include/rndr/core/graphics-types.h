@@ -23,11 +23,12 @@ struct GraphicsConstants
     static constexpr i32 k_max_constant_buffers = 16;
 };
 
-enum class ImageType
+enum class TextureType : u8
 {
-    Image2D,
-    Image2DArray,
-    CubeMap
+    Texture2D,
+    Texture2DArray,
+    CubeMap,
+    EnumCount
 };
 
 /**
@@ -36,7 +37,7 @@ enum class ImageType
  * UNORM - Interpreted by a shader as f32ing-poi32 value in the range [0, 1].
  * SNORM - Interpreted by a shader as f32ing-poi32 value in the range [-1, 1].
  */
-enum class PixelFormat
+enum class PixelFormat : u8
 {
     R8G8B8A8_UNORM = 0,
     R8G8B8A8_UNORM_SRGB,
@@ -564,7 +565,7 @@ struct SamplerDesc
 
     /**
      * Bias to be added to the mip level before sampling. Add to shader-supplied bias, if any is
-     * supplied.
+     * supplied. Positive values will result in larger mips to be picked even when we are far away.
      */
     f32 lod_bias = 0;
 
@@ -584,7 +585,7 @@ struct SamplerDesc
     f32 max_lod = 0.0f;
 };
 
-struct ImageDesc
+struct TextureDesc
 {
     /** Width of the image in pixels. */
     i32 width = 0;
@@ -596,7 +597,7 @@ struct ImageDesc
     i32 array_size = 1;
 
     /** Type of the image. */
-    ImageType type = ImageType::Image2D;
+    TextureType type = TextureType::Texture2D;
 
     /** Image pixel format. */
     PixelFormat pixel_format = PixelFormat::R8G8B8A8_UNORM_SRGB;
@@ -607,17 +608,17 @@ struct ImageDesc
     /** If image should be made bindless. */
     bool is_bindless = false;
 
-    /** Sampling parameters for the image. */
-    SamplerDesc sampler;
+    /** Number of samples per pixel. */
+    i32 sample_count = 1;
 };
 
 struct FrameBufferProperties
 {
     i32 color_buffer_count = 1;
-    Opal::StackArray<ImageDesc, GraphicsConstants::k_max_frame_buffer_color_buffers> color_buffer_properties;
+    Opal::StackArray<TextureDesc, GraphicsConstants::k_max_frame_buffer_color_buffers> color_buffer_properties;
 
     bool use_depth_stencil = false;
-    ImageDesc depth_stencil_buffer_properties;
+    TextureDesc depth_stencil_buffer_properties;
 };
 
 /**
@@ -806,8 +807,10 @@ struct PipelineDesc
 
 struct FrameBufferDesc
 {
-    Opal::Array<ImageDesc> color_attachments;
-    ImageDesc depth_stencil_attachment;
+    Opal::Array<TextureDesc> color_attachments;
+    Opal::Array<SamplerDesc> color_attachment_samplers;
+    TextureDesc depth_stencil_attachment;
+    SamplerDesc depth_stencil_sampler;
     bool use_depth_stencil = false;
 };
 

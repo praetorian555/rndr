@@ -11,17 +11,17 @@ Rndr::FrameBuffer::FrameBuffer(const Rndr::GraphicsContext& graphics_context, co
         RNDR_LOG_ERROR("Frame buffer must have at least one color attachment!");
         return;
     }
-    for (const Rndr::ImageDesc& color_attachment_desc : m_desc.color_attachments)
+    for (const Rndr::TextureDesc& color_attachment_desc : m_desc.color_attachments)
     {
-        if (color_attachment_desc.type != Rndr::ImageType::Image2D)
+        if (color_attachment_desc.type != Rndr::TextureType::Texture2D)
         {
-            RNDR_LOG_ERROR("Color attachment must be of image type Image2D!");
+            RNDR_LOG_ERROR("Color attachment must be of image type Texture2D!");
             return;
         }
     }
-    if (m_desc.use_depth_stencil && m_desc.depth_stencil_attachment.type != Rndr::ImageType::Image2D)
+    if (m_desc.use_depth_stencil && m_desc.depth_stencil_attachment.type != Rndr::TextureType::Texture2D)
     {
-        RNDR_LOG_ERROR("Depth stencil attachment must be of image type Image2D!");
+        RNDR_LOG_ERROR("Depth stencil attachment must be of image type Texture2D!");
         return;
     }
 
@@ -30,8 +30,9 @@ Rndr::FrameBuffer::FrameBuffer(const Rndr::GraphicsContext& graphics_context, co
 
     for (i32 i = 0; i < m_desc.color_attachments.GetSize(); ++i)
     {
-        const Rndr::ImageDesc& color_attachment_desc = m_desc.color_attachments[i];
-        Image color_attachment(graphics_context, color_attachment_desc);
+        const TextureDesc& color_attachment_desc = m_desc.color_attachments[i];
+        const SamplerDesc& sampler_desc = m_desc.color_attachment_samplers[i];
+        Texture color_attachment(graphics_context, color_attachment_desc, sampler_desc);
         if (!color_attachment.IsValid())
         {
             RNDR_LOG_ERROR("Failed to create color attachment %d!", i);
@@ -44,7 +45,7 @@ Rndr::FrameBuffer::FrameBuffer(const Rndr::GraphicsContext& graphics_context, co
 
     if (m_desc.use_depth_stencil)
     {
-        m_depth_stencil_attachment = Image(graphics_context, m_desc.depth_stencil_attachment);
+        m_depth_stencil_attachment = Texture(graphics_context, m_desc.depth_stencil_attachment, m_desc.depth_stencil_sampler);
         if (!m_depth_stencil_attachment.IsValid())
         {
             RNDR_LOG_ERROR("Failed to create depth stencil attachment!");
@@ -89,7 +90,7 @@ void Rndr::FrameBuffer::Destroy()
         RNDR_ASSERT_OPENGL();
         m_native_frame_buffer = k_invalid_opengl_object;
     }
-    for (Image& color_attachment : m_color_attachments)
+    for (Texture& color_attachment : m_color_attachments)
     {
         color_attachment.Destroy();
     }
@@ -106,7 +107,7 @@ bool Rndr::FrameBuffer::IsValid() const
     {
         return false;
     }
-    for (const Image& color_attachment : m_color_attachments)
+    for (const Texture& color_attachment : m_color_attachments)
     {
         if (!color_attachment.IsValid())
         {
@@ -130,13 +131,13 @@ Rndr::i32 Rndr::FrameBuffer::GetColorAttachmentCount() const
     return static_cast<i32>(m_color_attachments.GetSize());
 }
 
-const Rndr::Image& Rndr::FrameBuffer::GetColorAttachment(i32 index) const
+const Rndr::Texture& Rndr::FrameBuffer::GetColorAttachment(i32 index) const
 {
     RNDR_ASSERT(index >= 0 && index < m_color_attachments.GetSize());
     return m_color_attachments[index];
 }
 
-const Rndr::Image& Rndr::FrameBuffer::GetDepthStencilAttachment() const
+const Rndr::Texture& Rndr::FrameBuffer::GetDepthStencilAttachment() const
 {
     return m_depth_stencil_attachment;
 }

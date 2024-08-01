@@ -11,7 +11,7 @@ class SwapChain;
 class Shader;
 class Pipeline;
 class Buffer;
-class Image;
+class Texture;
 class Bitmap;
 class FrameBuffer;
 
@@ -101,7 +101,7 @@ public:
      * @param binding_index The binding index to bind the image to.
      * @return Returns true if the image was bound successfully, false otherwise.
      */
-    bool Bind(const Image& image, i32 binding_index);
+    bool Bind(const Texture& image, i32 binding_index);
 
     /**
      * Binds one level of the image to the compute pipeline.
@@ -111,7 +111,7 @@ public:
      * @param access How the image will be accessed in the compute shader.
      * @return Returns true if the image was bound successfully, false otherwise.
      */
-    bool BindImageForCompute(const Image& image, i32 binding_index, i32 image_level, ImageAccess access);
+    bool BindImageForCompute(const Texture& image, i32 binding_index, i32 image_level, ImageAccess access);
 
     /**
      * Binds a frame buffer to the graphics pipeline.
@@ -193,7 +193,7 @@ public:
      * @param out_data Where to store read data.
      * @param level Which mip level to read. Default is 0.
      */
-    bool Read(const Image& image, Bitmap& out_data, i32 level = 0) const;
+    bool Read(const Texture& image, Bitmap& out_data, i32 level = 0) const;
 
     /**
      * Read the contents of a swap chain color buffer.

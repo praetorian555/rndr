@@ -114,9 +114,9 @@ void Rndr::CommandList::BindConstantBuffer(const Rndr::Buffer& buffer, int32_t b
     m_commands.PushBack(BindConstantBufferCommand{.constant_buffer = Opal::Ref<const Buffer>(buffer), .binding_index = binding_index});
 }
 
-void Rndr::CommandList::Bind(const Rndr::Image& image, int32_t binding_index)
+void Rndr::CommandList::Bind(const Rndr::Texture& image, int32_t binding_index)
 {
-    m_commands.PushBack(BindImageCommand{.image = Opal::Ref<const Image>(image), .binding_index = binding_index});
+    m_commands.PushBack(BindImageCommand{.image = Opal::Ref<const Texture>(image), .binding_index = binding_index});
 }
 
 void Rndr::CommandList::DrawVertices(Rndr::PrimitiveTopology topology, int32_t vertex_count, int32_t instance_count, int32_t first_vertex)

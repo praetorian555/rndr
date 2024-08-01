@@ -472,9 +472,9 @@ bool Rndr::GraphicsContext::Bind(const Buffer& buffer, i32 binding_index)
     return false;
 }
 
-bool Rndr::GraphicsContext::Bind(const Image& image, i32 binding_index)
+bool Rndr::GraphicsContext::Bind(const Texture& image, i32 binding_index)
 {
-    RNDR_CPU_EVENT_SCOPED("Bind Image");
+    RNDR_CPU_EVENT_SCOPED("Bind Texture");
 
     const GLuint native_texture = image.GetNativeTexture();
     glBindTextures(binding_index, 1, &native_texture);
@@ -482,12 +482,12 @@ bool Rndr::GraphicsContext::Bind(const Image& image, i32 binding_index)
     return true;
 }
 
-bool Rndr::GraphicsContext::BindImageForCompute(const Rndr::Image& image, i32 binding_index, i32 image_level, Rndr::ImageAccess access)
+bool Rndr::GraphicsContext::BindImageForCompute(const Rndr::Texture& image, i32 binding_index, i32 image_level, Rndr::ImageAccess access)
 {
-    RNDR_CPU_EVENT_SCOPED("Bind Image For Compute");
+    RNDR_CPU_EVENT_SCOPED("Bind Texture For Compute");
 
     glBindImageTexture(binding_index, image.GetNativeTexture(), image_level, GL_FALSE, 0, FromImageAccessToOpenGL(access),
-                       FromPixelFormatToInternalFormat(image.GetDesc().pixel_format));
+                       FromPixelFormatToInternalFormat(image.GetTextureDesc().pixel_format));
     RNDR_ASSERT_OPENGL();
     return true;
 }
@@ -497,7 +497,7 @@ bool Rndr::GraphicsContext::Bind(const Rndr::FrameBuffer& frame_buffer)
     RNDR_CPU_EVENT_SCOPED("Bind FrameBuffer");
     glBindFramebuffer(GL_FRAMEBUFFER, frame_buffer.GetNativeFrameBuffer());
     RNDR_ASSERT_OPENGL();
-    ImageDesc color_attachment_desc = frame_buffer.GetColorAttachment(0).GetDesc();
+    TextureDesc color_attachment_desc = frame_buffer.GetColorAttachment(0).GetTextureDesc();
     glViewport(0, 0, color_attachment_desc.width, color_attachment_desc.height);
     RNDR_ASSERT_OPENGL();
     return true;
@@ -740,9 +740,9 @@ Rndr::ErrorCode Rndr::GraphicsContext::CopyBuffer(const Rndr::Buffer& dst_buffer
     }
 }
 
-bool Rndr::GraphicsContext::Read(const Rndr::Image& image, Rndr::Bitmap& out_data, i32 level) const
+bool Rndr::GraphicsContext::Read(const Rndr::Texture& image, Rndr::Bitmap& out_data, i32 level) const
 {
-    RNDR_CPU_EVENT_SCOPED("Read Image Contents");
+    RNDR_CPU_EVENT_SCOPED("Read Texture Contents");
 
     if (!image.IsValid())
     {
@@ -750,7 +750,7 @@ bool Rndr::GraphicsContext::Read(const Rndr::Image& image, Rndr::Bitmap& out_dat
         return false;
     }
 
-    const ImageDesc& desc = image.GetDesc();
+    const TextureDesc& desc = image.GetTextureDesc();
     const GLenum format = FromPixelFormatToExternalFormat(desc.pixel_format);
     const GLenum data_type = FromPixelFormatToDataType(desc.pixel_format);
     const i32 pixel_size = FromPixelFormatToPixelSize(desc.pixel_format);
