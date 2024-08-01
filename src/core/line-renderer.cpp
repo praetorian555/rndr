@@ -2,13 +2,13 @@
 
 #include "rndr/core/file.h"
 #include "rndr/core/input-layout-builder.h"
-#include "rndr/utility/cpu-tracer.h"
+#include "rndr/core/trace.h"
 
 #define TEXT(str) u8## #str
 
 Rndr::LineRenderer::LineRenderer(const Opal::StringUtf8& name, const Rndr::RendererBaseDesc& desc) : RendererBase(name, desc)
 {
-    RNDR_TRACE_SCOPED(LineRenderer::LineRenderer);
+    RNDR_CPU_EVENT_SCOPED("LineRenderer::LineRenderer");
 
     const Opal::StringUtf8 vertex_shader_code = File::ReadShader(TEXT(RNDR_CORE_ASSETS_DIR), u8"lines.vert");
     const Opal::StringUtf8 pixel_shader_code = File::ReadShader(TEXT(RNDR_CORE_ASSETS_DIR), u8"lines.frag");
@@ -88,7 +88,7 @@ void Rndr::LineRenderer::SetCameraTransform(const Matrix4x4f& transform)
 
 bool Rndr::LineRenderer::Render()
 {
-    RNDR_TRACE_SCOPED(LineRenderer::Render);
+    RNDR_CPU_EVENT_SCOPED("LineRenderer::Render");
 
     if (m_vertex_data.IsEmpty())
     {

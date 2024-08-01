@@ -5,12 +5,11 @@
 #include "core/platform/opengl-helpers.h"
 #include "rndr/core/bitmap.h"
 #include "rndr/core/platform/opengl-graphics-context.h"
-#include "rndr/utility/cpu-tracer.h"
+#include "rndr/core/trace.h"
 
 Rndr::Image::Image(const GraphicsContext& graphics_context, const ImageDesc& desc, const Opal::Span<const u8>& init_data) : m_desc(desc)
 {
-    RNDR_TRACE_SCOPED(Create Image);
-
+    RNDR_CPU_EVENT_SCOPED("Create Image");
     RNDR_UNUSED(graphics_context);
 
     if (m_desc.width <= 0 || m_desc.height <= 0)

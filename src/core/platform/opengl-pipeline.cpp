@@ -7,13 +7,13 @@
 #include "core/platform/opengl-helpers.h"
 #include "rndr/core/platform/opengl-buffer.h"
 #include "rndr/core/platform/opengl-shader.h"
-#include "rndr/utility/cpu-tracer.h"
+#include "rndr/core/trace.h"
 
 Rndr::Pipeline::Pipeline(const GraphicsContext& graphics_context, const PipelineDesc& desc) : m_desc(desc)
 {
     RNDR_UNUSED(graphics_context);
 
-    RNDR_TRACE_SCOPED(Create Pipeline);
+    RNDR_CPU_EVENT_SCOPED("Create Pipeline");
 
     // Setup shader program
     m_native_shader_program = glCreateProgram();

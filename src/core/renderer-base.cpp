@@ -1,6 +1,6 @@
 #include "rndr/core/renderer-base.h"
 
-#include "rndr/utility/cpu-tracer.h"
+#include "rndr/core/trace.h"
 
 Rndr::RendererBase::RendererBase(const Opal::StringUtf8& name, const RendererBaseDesc& desc) : m_name(name), m_desc(desc) {}
 
@@ -15,7 +15,7 @@ Rndr::ClearRenderer::ClearRenderer(const Opal::StringUtf8& name,
 
 bool Rndr::ClearRenderer::Render()
 {
-    RNDR_TRACE_SCOPED(ClearRenderer::Render);
+    RNDR_CPU_EVENT_SCOPED("ClearRenderer::Render");
     return m_desc.graphics_context->ClearAll(m_color, m_depth, m_stencil);
 }
 
@@ -23,7 +23,7 @@ Rndr::PresentRenderer::PresentRenderer(const Opal::StringUtf8& name, const Rndr:
 
 bool Rndr::PresentRenderer::Render()
 {
-    RNDR_TRACE_SCOPED(PresentRenderer::Render);
+    RNDR_CPU_EVENT_SCOPED("PresentRenderer::Render");
     return m_desc.graphics_context->Present(m_desc.swap_chain);
 }
 

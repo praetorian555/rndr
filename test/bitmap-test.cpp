@@ -33,7 +33,7 @@ TEST_CASE("Bitmap", "[bitmap]")
         {
             data[i] = static_cast<uint8_t>(i + 1);
         }
-        Rndr::Bitmap bitmap(k_width, k_height, k_depth, Rndr::PixelFormat::R8G8B8A8_UNORM, data);
+        Rndr::Bitmap bitmap(k_width, k_height, k_depth, Rndr::PixelFormat::R8G8B8A8_UNORM, Opal::AsWritableBytes(data));
         REQUIRE(bitmap.IsValid());
         REQUIRE(bitmap.GetWidth() == 1);
         REQUIRE(bitmap.GetHeight() == 2);
@@ -76,7 +76,7 @@ TEST_CASE("Bitmap", "[bitmap]")
         }
         Opal::StackArray<uint8_t, k_size * sizeof(float)> data;
         memcpy(data.data(), data_float.data(), k_size * sizeof(float));
-        Rndr::Bitmap bitmap(k_width, k_height, k_depth, Rndr::PixelFormat::R32G32B32A32_FLOAT, data);
+        Rndr::Bitmap bitmap(k_width, k_height, k_depth, Rndr::PixelFormat::R32G32B32A32_FLOAT, Opal::AsWritableBytes(data));
         REQUIRE(bitmap.IsValid());
         REQUIRE(bitmap.GetWidth() == 1);
         REQUIRE(bitmap.GetHeight() == 2);
@@ -113,7 +113,7 @@ TEST_CASE("Bitmap", "[bitmap]")
         {
             data[i] = static_cast<uint8_t>(i + 1);
         }
-        Rndr::Bitmap bitmap(k_width, k_height, k_depth, Rndr::PixelFormat::R8G8B8A8_UNORM, data);
+        Rndr::Bitmap bitmap(k_width, k_height, k_depth, Rndr::PixelFormat::R8G8B8A8_UNORM, Opal::AsWritableBytes(data));
         REQUIRE(bitmap.IsValid());
         REQUIRE(bitmap.GetWidth() == 1);
         REQUIRE(bitmap.GetHeight() == 2);
@@ -141,7 +141,7 @@ TEST_CASE("Bitmap", "[bitmap]")
         {
             data[i] = static_cast<uint8_t>(i + 1);
         }
-        Rndr::Bitmap bitmap(k_width, k_height, k_depth, Rndr::PixelFormat::R8G8B8A8_UNORM, data);
+        Rndr::Bitmap bitmap(k_width, k_height, k_depth, Rndr::PixelFormat::R8G8B8A8_UNORM, Opal::AsWritableBytes(data));
         REQUIRE(bitmap.IsValid());
         REQUIRE(bitmap.GetWidth() == 1);
         REQUIRE(bitmap.GetHeight() == 2);

@@ -16,7 +16,7 @@
 #include "rndr/core/platform/opengl-pipeline.h"
 #include "rndr/core/platform/opengl-shader.h"
 #include "rndr/core/platform/opengl-swap-chain.h"
-#include "rndr/utility/cpu-tracer.h"
+#include "rndr/core/trace.h"
 
 namespace
 {
@@ -44,7 +44,7 @@ void APIENTRY DebugOutputCallback(GLenum source, GLenum type, unsigned int id, G
 
 Rndr::GraphicsContext::GraphicsContext(const Rndr::GraphicsContextDesc& desc) : m_desc(desc)
 {
-    RNDR_TRACE_SCOPED(Create Graphics Context);
+    RNDR_CPU_EVENT_SCOPED("Create Graphics Context");
 
 #if RNDR_WINDOWS
     if (m_desc.window_handle == nullptr)
@@ -257,7 +257,7 @@ const Rndr::GraphicsContextDesc& Rndr::GraphicsContext::GetDesc() const
 
 bool Rndr::GraphicsContext::Present(const Rndr::SwapChain& swap_chain)
 {
-    RNDR_TRACE_SCOPED(Present);
+    RNDR_CPU_EVENT_SCOPED("Present");
 
     RNDR_UNUSED(swap_chain);
     const BOOL status = SwapBuffers(m_native_device_context);
@@ -271,7 +271,7 @@ bool Rndr::GraphicsContext::IsValid() const
 
 bool Rndr::GraphicsContext::ClearColor(const Vector4f& color)
 {
-    RNDR_TRACE_SCOPED(Clear Color);
+    RNDR_CPU_EVENT_SCOPED("Clear Color");
 
     glClearColor(color.x, color.y, color.z, color.w);
     RNDR_ASSERT_OPENGL();
@@ -282,7 +282,7 @@ bool Rndr::GraphicsContext::ClearColor(const Vector4f& color)
 
 bool Rndr::GraphicsContext::ClearDepth(float depth)
 {
-    RNDR_TRACE_SCOPED(Clear Depth);
+    RNDR_CPU_EVENT_SCOPED("Clear Depth");
 
     glClearDepth(depth);
     RNDR_ASSERT_OPENGL();
@@ -293,7 +293,7 @@ bool Rndr::GraphicsContext::ClearDepth(float depth)
 
 bool Rndr::GraphicsContext::ClearStencil(i32 stencil)
 {
-    RNDR_TRACE_SCOPED(Clear Stencil);
+    RNDR_CPU_EVENT_SCOPED("Clear Stencil");
 
     glClearStencil(stencil);
     RNDR_ASSERT_OPENGL();
@@ -304,7 +304,7 @@ bool Rndr::GraphicsContext::ClearStencil(i32 stencil)
 
 bool Rndr::GraphicsContext::ClearAll(const Vector4f& color, float depth, i32 stencil)
 {
-    RNDR_TRACE_SCOPED(Clear All);
+    RNDR_CPU_EVENT_SCOPED("Clear All");
 
     glClearColor(color.x, color.y, color.z, color.w);
     RNDR_ASSERT_OPENGL();
@@ -319,7 +319,7 @@ bool Rndr::GraphicsContext::ClearAll(const Vector4f& color, float depth, i32 ste
 
 bool Rndr::GraphicsContext::Bind(const Rndr::SwapChain& swap_chain)
 {
-    RNDR_TRACE_SCOPED(Bind SwapChain);
+    RNDR_CPU_EVENT_SCOPED("Bind SwapChain");
 
     glBindFramebuffer(GL_FRAMEBUFFER, 0);
     RNDR_ASSERT_OPENGL();
@@ -331,7 +331,7 @@ bool Rndr::GraphicsContext::Bind(const Rndr::SwapChain& swap_chain)
 
 bool Rndr::GraphicsContext::Bind(const Pipeline& pipeline)
 {
-    RNDR_TRACE_SCOPED(Bind Pipeline);
+    RNDR_CPU_EVENT_SCOPED("Bind Pipeline");
 
     const GLuint shader_program = pipeline.GetNativeShaderProgram();
     glUseProgram(shader_program);
@@ -456,7 +456,7 @@ bool Rndr::GraphicsContext::Bind(const Pipeline& pipeline)
 
 bool Rndr::GraphicsContext::Bind(const Buffer& buffer, i32 binding_index)
 {
-    RNDR_TRACE_SCOPED(Bind Buffer);
+    RNDR_CPU_EVENT_SCOPED("Bind Buffer");
 
     const GLuint native_buffer = buffer.GetNativeBuffer();
     const BufferDesc& desc = buffer.GetDesc();
@@ -474,7 +474,7 @@ bool Rndr::GraphicsContext::Bind(const Buffer& buffer, i32 binding_index)
 
 bool Rndr::GraphicsContext::Bind(const Image& image, i32 binding_index)
 {
-    RNDR_TRACE_SCOPED(Bind Image);
+    RNDR_CPU_EVENT_SCOPED("Bind Image");
 
     const GLuint native_texture = image.GetNativeTexture();
     glBindTextures(binding_index, 1, &native_texture);
@@ -484,7 +484,7 @@ bool Rndr::GraphicsContext::Bind(const Image& image, i32 binding_index)
 
 bool Rndr::GraphicsContext::BindImageForCompute(const Rndr::Image& image, i32 binding_index, i32 image_level, Rndr::ImageAccess access)
 {
-    RNDR_TRACE_SCOPED(Bind Image For Compute);
+    RNDR_CPU_EVENT_SCOPED("Bind Image For Compute");
 
     glBindImageTexture(binding_index, image.GetNativeTexture(), image_level, GL_FALSE, 0, FromImageAccessToOpenGL(access),
                        FromPixelFormatToInternalFormat(image.GetDesc().pixel_format));
@@ -494,7 +494,7 @@ bool Rndr::GraphicsContext::BindImageForCompute(const Rndr::Image& image, i32 bi
 
 bool Rndr::GraphicsContext::Bind(const Rndr::FrameBuffer& frame_buffer)
 {
-    RNDR_TRACE_SCOPED(Bind FrameBuffer);
+    RNDR_CPU_EVENT_SCOPED("Bind FrameBuffer");
     glBindFramebuffer(GL_FRAMEBUFFER, frame_buffer.GetNativeFrameBuffer());
     RNDR_ASSERT_OPENGL();
     ImageDesc color_attachment_desc = frame_buffer.GetColorAttachment(0).GetDesc();
@@ -505,7 +505,7 @@ bool Rndr::GraphicsContext::Bind(const Rndr::FrameBuffer& frame_buffer)
 
 bool Rndr::GraphicsContext::DrawVertices(PrimitiveTopology topology, i32 vertex_count, i32 instance_count, i32 first_vertex)
 {
-    RNDR_TRACE_SCOPED(Draw Vertices);
+    RNDR_CPU_EVENT_SCOPED("Draw Vertices");
 
     const GLenum primitive = FromPrimitiveTopologyToOpenGL(topology);
     glDrawArraysInstanced(primitive, first_vertex, vertex_count, instance_count);
@@ -515,7 +515,7 @@ bool Rndr::GraphicsContext::DrawVertices(PrimitiveTopology topology, i32 vertex_
 
 bool Rndr::GraphicsContext::DrawIndices(PrimitiveTopology topology, i32 index_count, i32 instance_count, i32 first_index)
 {
-    RNDR_TRACE_SCOPED(Draw Indices);
+    RNDR_CPU_EVENT_SCOPED("Draw Indices");
 
     RNDR_ASSERT(m_bound_pipeline.IsValid());
     RNDR_ASSERT(m_bound_pipeline->IsIndexBufferBound());
@@ -532,7 +532,7 @@ bool Rndr::GraphicsContext::DrawIndices(PrimitiveTopology topology, i32 index_co
 
 bool Rndr::GraphicsContext::DispatchCompute(u32 block_count_x, u32 block_count_y, u32 block_count_z, bool wait_for_completion)
 {
-    RNDR_TRACE_SCOPED(Dispatch Compute);
+    RNDR_CPU_EVENT_SCOPED("Dispatch Compute");
 
     glDispatchCompute(block_count_x, block_count_y, block_count_z);
     RNDR_ASSERT_OPENGL();
@@ -546,7 +546,7 @@ bool Rndr::GraphicsContext::DispatchCompute(u32 block_count_x, u32 block_count_y
 
 Rndr::ErrorCode Rndr::GraphicsContext::UpdateBuffer(const Buffer& buffer, const Opal::Span<const u8>& data, i64 offset)
 {
-    RNDR_TRACE_SCOPED(Update Buffer Contents);
+    RNDR_CPU_EVENT_SCOPED("Update Buffer Contents");
 
     if (!buffer.IsValid())
     {
@@ -590,7 +590,7 @@ Rndr::ErrorCode Rndr::GraphicsContext::UpdateBuffer(const Buffer& buffer, const 
 
 Rndr::ErrorCode Rndr::GraphicsContext::ReadBuffer(const Buffer& buffer, Opal::Span<u8>& out_data, i32 offset, i32 size) const
 {
-    RNDR_TRACE_SCOPED(Read Buffer Contents);
+    RNDR_CPU_EVENT_SCOPED("Read Buffer Contents");
 
     if (!buffer.IsValid())
     {
@@ -668,7 +668,7 @@ bool Overlap(Rndr::i32 src_offset, Rndr::i32 dst_offset, Rndr::i32 size)
 Rndr::ErrorCode Rndr::GraphicsContext::CopyBuffer(const Rndr::Buffer& dst_buffer, const Rndr::Buffer& src_buffer, i32 dst_offset,
                                                   i32 src_offset, i32 size)
 {
-    RNDR_TRACE_SCOPED(Copy Buffer Contents);
+    RNDR_CPU_EVENT_SCOPED("Copy Buffer Contents");
 
     if (!dst_buffer.IsValid())
     {
@@ -742,7 +742,7 @@ Rndr::ErrorCode Rndr::GraphicsContext::CopyBuffer(const Rndr::Buffer& dst_buffer
 
 bool Rndr::GraphicsContext::Read(const Rndr::Image& image, Rndr::Bitmap& out_data, i32 level) const
 {
-    RNDR_TRACE_SCOPED(Read Image Contents);
+    RNDR_CPU_EVENT_SCOPED("Read Image Contents");
 
     if (!image.IsValid())
     {
@@ -764,7 +764,7 @@ bool Rndr::GraphicsContext::Read(const Rndr::Image& image, Rndr::Bitmap& out_dat
 
 bool Rndr::GraphicsContext::ReadSwapChainColor(const SwapChain& swap_chain, Bitmap& out_bitmap)
 {
-    RNDR_TRACE_SCOPED(Read SwapChain);
+    RNDR_CPU_EVENT_SCOPED("Read SwapChain");
 
     const i32 width = swap_chain.GetDesc().width;
     const i32 height = swap_chain.GetDesc().height;
@@ -790,7 +790,7 @@ bool Rndr::GraphicsContext::ReadSwapChainColor(const SwapChain& swap_chain, Bitm
 
 bool Rndr::GraphicsContext::ReadSwapChainDepthStencil(const SwapChain& swap_chain, Bitmap& out_bitmap)
 {
-    RNDR_TRACE_SCOPED(Read SwapChain);
+    RNDR_CPU_EVENT_SCOPED("Read SwapChain");
 
     const i32 width = swap_chain.GetDesc().width;
     const i32 height = swap_chain.GetDesc().height;

@@ -18,5 +18,5 @@
 #include "rndr/core/render-api.h"
 #include "rndr/core/renderer-base.h"
 #include "rndr/core/time.h"
+#include "rndr/core/trace.h"
 #include "rndr/core/window.h"
-#include "rndr/utility/cpu-tracer.h"

@@ -4,7 +4,7 @@
 
 #include "core/platform/opengl-helpers.h"
 #include "rndr/core/platform/opengl-graphics-context.h"
-#include "rndr/utility/cpu-tracer.h"
+#include "rndr/core/trace.h"
 
 namespace
 {
@@ -19,7 +19,7 @@ void GenerateDefinesShaderCode(const Opal::Array<Opal::StringUtf8>& defines, Opa
 
 Rndr::Shader::Shader(const GraphicsContext& graphics_context, const ShaderDesc& desc) : m_desc(desc)
 {
-    RNDR_TRACE_SCOPED(Create Shader);
+    RNDR_CPU_EVENT_SCOPED("Create Shader");
 
     RNDR_UNUSED(graphics_context);
     const GLenum shader_type = Rndr::FromShaderTypeToOpenGL(desc.type);

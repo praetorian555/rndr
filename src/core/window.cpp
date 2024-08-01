@@ -23,8 +23,8 @@
 #include "opal/container/stack-array.h"
 
 #include "rndr/core/input.h"
+#include "rndr/core/trace.h"
 #include "rndr/core/window.h"
-#include "rndr/utility/cpu-tracer.h"
 
 namespace
 {
@@ -332,7 +332,7 @@ void Rndr::Window::Destroy()
 
 void Rndr::Window::ProcessEvents() const
 {
-    RNDR_TRACE_SCOPED(Window::ProcessEvents);
+    RNDR_CPU_EVENT_SCOPED("Window::ProcessEvents");
 
     if (m_handle == k_invalid_window_handle)
     {

@@ -3,12 +3,12 @@
 #include <glad/glad.h>
 
 #include "core/platform/opengl-helpers.h"
+
 #include "rndr/core/platform/opengl-graphics-context.h"
-#include "rndr/utility/cpu-tracer.h"
+#include "rndr/core/trace.h"
 
 Rndr::Buffer::Buffer(const GraphicsContext& graphics_context, const BufferDesc& desc, const Opal::Span<const u8>& init_data) : m_desc(desc)
 {
-    RNDR_TRACE_SCOPED(Create Buffer);
     Initialize(graphics_context, desc, init_data);
 }
 
@@ -27,7 +27,7 @@ Rndr::ErrorCode Rndr::Buffer::Initialize(const Rndr::GraphicsContext& graphics_c
 {
     RNDR_UNUSED(graphics_context);
 
-    RNDR_TRACE_SCOPED(Create Buffer);
+    RNDR_CPU_EVENT_SCOPED("Create Buffer");
 
     if (desc.type >= BufferType::EnumCount)
     {

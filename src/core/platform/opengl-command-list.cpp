@@ -4,7 +4,7 @@
 
 #include "core/platform/opengl-helpers.h"
 #include "rndr/core/platform/opengl-graphics-context.h"
-#include "rndr/utility/cpu-tracer.h"
+#include "rndr/core/trace.h"
 
 Rndr::DrawVerticesMultiCommand::DrawVerticesMultiCommand(PrimitiveTopology primitive_topology, uint32_t buffer_handle, uint32_t draw_count)
     : primitive_topology(primitive_topology), buffer_handle(buffer_handle), draw_count(draw_count)
@@ -243,7 +243,7 @@ struct CommandExecutor
 
 void Rndr::CommandList::Submit()
 {
-    RNDR_TRACE_SCOPED(Submit Command List);
+    RNDR_CPU_EVENT_SCOPED("Submit Command List");
 
     for (const auto& command : m_commands)
     {
