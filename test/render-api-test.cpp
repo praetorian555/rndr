@@ -1112,6 +1112,7 @@ TEST_CASE("Creating a texture", "[render-api][texture]")
             const Rndr::TextureDesc desc{.width = 0, .height = 512};
             Rndr::Texture texture;
             const Rndr::ErrorCode err = texture.Initialize(graphics_context, desc);
+            REQUIRE(!texture.IsValid());
             REQUIRE(err == Rndr::ErrorCode::InvalidArgument);
         }
         SECTION("Bad height")
@@ -1119,6 +1120,7 @@ TEST_CASE("Creating a texture", "[render-api][texture]")
             const Rndr::TextureDesc desc{.width = 512, .height = 0};
             Rndr::Texture texture;
             const Rndr::ErrorCode err = texture.Initialize(graphics_context, desc);
+            REQUIRE(!texture.IsValid());
             REQUIRE(err == Rndr::ErrorCode::InvalidArgument);
         }
         SECTION("Regular with no data")
@@ -1126,6 +1128,7 @@ TEST_CASE("Creating a texture", "[render-api][texture]")
             const Rndr::TextureDesc desc{.width = 512, .height = 512};
             Rndr::Texture texture;
             const Rndr::ErrorCode err = texture.Initialize(graphics_context, desc);
+            REQUIRE(texture.IsValid());
             REQUIRE(err == Rndr::ErrorCode::Success);
         }
         SECTION("Regular with data")
@@ -1134,6 +1137,7 @@ TEST_CASE("Creating a texture", "[render-api][texture]")
             const Rndr::TextureDesc desc{.width = 512, .height = 512};
             Rndr::Texture texture;
             const Rndr::ErrorCode err = texture.Initialize(graphics_context, desc, {}, Opal::AsBytes(data));
+            REQUIRE(texture.IsValid());
             REQUIRE(err == Rndr::ErrorCode::Success);
         }
         SECTION("With mip maps")
@@ -1141,6 +1145,7 @@ TEST_CASE("Creating a texture", "[render-api][texture]")
             const Rndr::TextureDesc desc{.width = 512, .height = 512, .use_mips = true};
             Rndr::Texture texture;
             const Rndr::ErrorCode err = texture.Initialize(graphics_context, desc);
+            REQUIRE(texture.IsValid());
             REQUIRE(err == Rndr::ErrorCode::Success);
         }
         SECTION("With mip maps and data")
@@ -1149,21 +1154,41 @@ TEST_CASE("Creating a texture", "[render-api][texture]")
             const Rndr::TextureDesc desc{.width = 512, .height = 512, .use_mips = true};
             Rndr::Texture texture;
             const Rndr::ErrorCode err = texture.Initialize(graphics_context, desc, {}, Opal::AsBytes(data));
+            REQUIRE(texture.IsValid());
             REQUIRE(err == Rndr::ErrorCode::Success);
         }
-        SECTION("Multisample")
+        SECTION("Multi-sample")
         {
             const Rndr::TextureDesc desc{.width = 512, .height = 512, .sample_count = 4};
             Rndr::Texture texture;
             const Rndr::ErrorCode err = texture.Initialize(graphics_context, desc);
+            REQUIRE(texture.IsValid());
             REQUIRE(err == Rndr::ErrorCode::Success);
         }
-        SECTION("Multisample with data")
+        SECTION("Multi-sample with data")
         {
             Opal::Array<Rndr::u8> data(512 * 512 * 4, 5);
             const Rndr::TextureDesc desc{.width = 512, .height = 512, .sample_count = 4};
             Rndr::Texture texture;
             const Rndr::ErrorCode err = texture.Initialize(graphics_context, desc, {}, Opal::AsBytes(data));
+            REQUIRE(texture.IsValid());
+            REQUIRE(err == Rndr::ErrorCode::Success);
+        }
+        SECTION("Mips and multi-sample")
+        {
+            const Rndr::TextureDesc desc{.width = 512, .height = 512, .use_mips = true, .sample_count = 4};
+            Rndr::Texture texture;
+            const Rndr::ErrorCode err = texture.Initialize(graphics_context, desc);
+            REQUIRE(texture.IsValid());
+            REQUIRE(err == Rndr::ErrorCode::Success);
+        }
+        SECTION("Mips and multi-sample with data")
+        {
+            Opal::Array<Rndr::u8> data(512 * 512 * 4, 5);
+            const Rndr::TextureDesc desc{.width = 512, .height = 512, .use_mips = true, .sample_count = 4};
+            Rndr::Texture texture;
+            const Rndr::ErrorCode err = texture.Initialize(graphics_context, desc, {}, Opal::AsBytes(data));
+            REQUIRE(texture.IsValid());
             REQUIRE(err == Rndr::ErrorCode::Success);
         }
     }
@@ -1174,6 +1199,7 @@ TEST_CASE("Creating a texture", "[render-api][texture]")
             const Rndr::TextureDesc desc{.width = 0, .height = 512, .array_size = 6};
             Rndr::Texture texture;
             const Rndr::ErrorCode err = texture.Initialize(graphics_context, desc);
+            REQUIRE(!texture.IsValid());
             REQUIRE(err == Rndr::ErrorCode::InvalidArgument);
         }
         SECTION("Bad height")
@@ -1181,6 +1207,7 @@ TEST_CASE("Creating a texture", "[render-api][texture]")
             const Rndr::TextureDesc desc{.width = 512, .height = 0, .array_size = 6};
             Rndr::Texture texture;
             const Rndr::ErrorCode err = texture.Initialize(graphics_context, desc);
+            REQUIRE(!texture.IsValid());
             REQUIRE(err == Rndr::ErrorCode::InvalidArgument);
         }
         SECTION("Bad array size")
@@ -1188,6 +1215,7 @@ TEST_CASE("Creating a texture", "[render-api][texture]")
             const Rndr::TextureDesc desc{.width = 512, .height = 512, .array_size = 0, .type = Rndr::TextureType::Texture2DArray};
             Rndr::Texture texture;
             const Rndr::ErrorCode err = texture.Initialize(graphics_context, desc);
+            REQUIRE(!texture.IsValid());
             REQUIRE(err == Rndr::ErrorCode::InvalidArgument);
         }
         SECTION("Regular with no data")
@@ -1195,6 +1223,7 @@ TEST_CASE("Creating a texture", "[render-api][texture]")
             const Rndr::TextureDesc desc{.width = 512, .height = 512, .array_size = 6, .type = Rndr::TextureType::Texture2DArray};
             Rndr::Texture texture;
             const Rndr::ErrorCode err = texture.Initialize(graphics_context, desc);
+            REQUIRE(texture.IsValid());
             REQUIRE(err == Rndr::ErrorCode::Success);
         }
         SECTION("Regular with data")
@@ -1203,18 +1232,112 @@ TEST_CASE("Creating a texture", "[render-api][texture]")
             const Rndr::TextureDesc desc{.width = 512, .height = 512, .array_size = 6, .type = Rndr::TextureType::Texture2DArray};
             Rndr::Texture texture;
             const Rndr::ErrorCode err = texture.Initialize(graphics_context, desc, {}, Opal::AsBytes(data));
+            REQUIRE(texture.IsValid());
+            REQUIRE(err == Rndr::ErrorCode::Success);
+        }
+        SECTION("With mip maps")
+        {
+            const Rndr::TextureDesc desc{.width = 512, .height = 512, .array_size = 6, .type = Rndr::TextureType::Texture2DArray, .use_mips = true};
+            Rndr::Texture texture;
+            const Rndr::ErrorCode err = texture.Initialize(graphics_context, desc);
+            REQUIRE(texture.IsValid());
+            REQUIRE(err == Rndr::ErrorCode::Success);
+        }
+        SECTION("With mip maps and data")
+        {
+            Opal::Array<Rndr::u8> data(512 * 512 * 4 * 6, 5);
+            const Rndr::TextureDesc desc{.width = 512, .height = 512, .array_size = 6, .type = Rndr::TextureType::Texture2DArray, .use_mips = true};
+            Rndr::Texture texture;
+            const Rndr::ErrorCode err = texture.Initialize(graphics_context, desc, {}, Opal::AsBytes(data));
+            REQUIRE(texture.IsValid());
+            REQUIRE(err == Rndr::ErrorCode::Success);
+        }
+        SECTION("Multi-sample")
+        {
+            const Rndr::TextureDesc desc{.width = 512, .height = 512, .array_size = 6, .type = Rndr::TextureType::Texture2DArray, .sample_count = 4};
+            Rndr::Texture texture;
+            const Rndr::ErrorCode err = texture.Initialize(graphics_context, desc);
+            REQUIRE(texture.IsValid());
+            REQUIRE(err == Rndr::ErrorCode::Success);
+        }
+        SECTION("Multi-sample with data")
+        {
+            Opal::Array<Rndr::u8> data(512 * 512 * 4 * 6, 5);
+            const Rndr::TextureDesc desc{.width = 512, .height = 512, .array_size = 6, .type = Rndr::TextureType::Texture2DArray, .sample_count = 4};
+            Rndr::Texture texture;
+            const Rndr::ErrorCode err = texture.Initialize(graphics_context, desc, {}, Opal::AsBytes(data));
+            REQUIRE(texture.IsValid());
+            REQUIRE(err == Rndr::ErrorCode::Success);
+        }
+        SECTION("Mips and multi-sample")
+        {
+            const Rndr::TextureDesc desc{.width = 512, .height = 512, .array_size = 6, .type = Rndr::TextureType::Texture2DArray, .use_mips = true, .sample_count = 4};
+            Rndr::Texture texture;
+            const Rndr::ErrorCode err = texture.Initialize(graphics_context, desc);
+            REQUIRE(texture.IsValid());
             REQUIRE(err == Rndr::ErrorCode::Success);
         }
     }
     SECTION("Creating cube map")
     {
-        const Rndr::TextureDesc desc{.width = 512,
-                                     .height = 512,
-                                     .array_size = 6,
-                                     .type = Rndr::TextureType::CubeMap,
-                                     .pixel_format = Rndr::PixelFormat::R8G8B8A8_UNORM};
-        const Rndr::Texture image(graphics_context, desc, {});
-        REQUIRE(image.IsValid());
+        SECTION("Bad width")
+        {
+            const Rndr::TextureDesc desc{.width = 0, .height = 512, .array_size = 6, .type = Rndr::TextureType::CubeMap};
+            Rndr::Texture texture;
+            const Rndr::ErrorCode err = texture.Initialize(graphics_context, desc);
+            REQUIRE(!texture.IsValid());
+            REQUIRE(err == Rndr::ErrorCode::InvalidArgument);
+        }
+        SECTION("Bad height")
+        {
+            const Rndr::TextureDesc desc{.width = 512, .height = 0, .array_size = 6, .type = Rndr::TextureType::CubeMap};
+            Rndr::Texture texture;
+            const Rndr::ErrorCode err = texture.Initialize(graphics_context, desc);
+            REQUIRE(!texture.IsValid());
+            REQUIRE(err == Rndr::ErrorCode::InvalidArgument);
+        }
+        SECTION("Regular with no data")
+        {
+            const Rndr::TextureDesc desc{.width = 512, .height = 512, .array_size = 6, .type = Rndr::TextureType::CubeMap};
+            Rndr::Texture texture;
+            const Rndr::ErrorCode err = texture.Initialize(graphics_context, desc);
+            REQUIRE(texture.IsValid());
+            REQUIRE(err == Rndr::ErrorCode::Success);
+        }
+        SECTION("Regular with data")
+        {
+            Opal::Array<Rndr::u8> data(512 * 512 * 4 * 6, 5);
+            const Rndr::TextureDesc desc{.width = 512, .height = 512, .array_size = 6, .type = Rndr::TextureType::CubeMap};
+            Rndr::Texture texture;
+            const Rndr::ErrorCode err = texture.Initialize(graphics_context, desc, {}, Opal::AsBytes(data));
+            REQUIRE(texture.IsValid());
+            REQUIRE(err == Rndr::ErrorCode::Success);
+        }
+        SECTION("With mips")
+        {
+            const Rndr::TextureDesc desc{.width = 512, .height = 512, .array_size = 6, .type = Rndr::TextureType::CubeMap, .use_mips = true};
+            Rndr::Texture texture;
+            const Rndr::ErrorCode err = texture.Initialize(graphics_context, desc);
+            REQUIRE(texture.IsValid());
+            REQUIRE(err == Rndr::ErrorCode::Success);
+        }
+        SECTION("With mips and data")
+        {
+            Opal::Array<Rndr::u8> data(512 * 512 * 4 * 6, 5);
+            const Rndr::TextureDesc desc{.width = 512, .height = 512, .array_size = 6, .type = Rndr::TextureType::CubeMap, .use_mips = true};
+            Rndr::Texture texture;
+            const Rndr::ErrorCode err = texture.Initialize(graphics_context, desc, {}, Opal::AsBytes(data));
+            REQUIRE(texture.IsValid());
+            REQUIRE(err == Rndr::ErrorCode::Success);
+        }
+        SECTION("Multi-sample")
+        {
+            const Rndr::TextureDesc desc{.width = 512, .height = 512, .array_size = 6, .type = Rndr::TextureType::CubeMap, .sample_count = 4};
+            Rndr::Texture texture;
+            const Rndr::ErrorCode err = texture.Initialize(graphics_context, desc);
+            REQUIRE(!texture.IsValid());
+            REQUIRE(err == Rndr::ErrorCode::GraphicsAPIError);
+        }
     }
 
     graphics_context.Destroy();
