@@ -48,3 +48,5 @@
 #define RNDR_EXTERN_TEMPLATE extern
 #endif
 #endif
+
+#define RNDR_NOOP
