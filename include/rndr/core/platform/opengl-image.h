@@ -39,7 +39,10 @@ public:
      * @param sampler_desc The sampler description to use for the texture.
      * @param init_data The initial data to fill the texture with. If empty, the contents of the allocated texture will be undefined.
      * Default is empty.
-     * @return
+     * @return Returns ErrorCode::Success if the texture was successfully created, ErrorCode::GraphicsAPIError if there was an error in one
+     * of the OpenGL calls. ErrorCode::InvalidArgument if the texture description is invalid. ErrorCode::OutOfMemory if there was not enough
+     * memory to allocate the texture.
+     * @note If the setup fails, the internal
      */
     ErrorCode Initialize(const GraphicsContext& graphics_context, const TextureDesc& texture_desc,
                          const SamplerDesc& sampler_desc = SamplerDesc{}, const Opal::Span<const u8>& init_data = {});

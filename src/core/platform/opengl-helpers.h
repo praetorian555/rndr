@@ -40,12 +40,13 @@ Opal::StringUtf8 FromOpenGLUsageToString(GLenum value);
         RNDR_HALT("OpenGL failure!"); \
     }
 
-#define RNDR_GL_VERIFY(message)                                         \
+#define RNDR_GL_VERIFY(message, do_if_fails)                            \
     {                                                                   \
         const GLuint gl_err = glGetError();                             \
         if (gl_err != GL_NO_ERROR)                                      \
         {                                                               \
             RNDR_LOG_ERROR("OpenGL error: 0x%x - %s", gl_err, message); \
+            do_if_fails;                                                \
             return ErrorCode::GraphicsAPIError;                         \
         }                                                               \
     }
