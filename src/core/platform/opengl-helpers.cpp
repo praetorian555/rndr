@@ -365,7 +365,11 @@ GLenum Rndr::FromIndexSizeToOpenGL(int64_t index_size)
         default:
             RNDR_HALT("Unsupported index size");
     }
+#if RNDR_DEBUG
+    return GL_INVALID_ENUM;
+#endif  // RNDR_DEBUG
 }
+
 GLint Rndr::FromImageAccessToOpenGL(Rndr::ImageAccess access)
 {
     switch (access)
@@ -379,6 +383,9 @@ GLint Rndr::FromImageAccessToOpenGL(Rndr::ImageAccess access)
         default:
             RNDR_HALT("Unsupported image access");
     }
+#if RNDR_DEBUG
+    return GL_INVALID_ENUM;
+#endif  // RNDR_DEBUG
 }
 
 bool Rndr::IsComponentLowPrecision(PixelFormat format)
@@ -408,6 +415,9 @@ Opal::StringUtf8 Rndr::FromBufferTypeToString(Rndr::BufferType type)
         default:
             RNDR_HALT("Invalid buffer type");
     }
+#if RNDR_DEBUG
+    return u8"";
+#endif  // RNDR_DEBUG
 }
 
 Opal::StringUtf8 Rndr::FromOpenGLDataTypeToString(GLenum value)
@@ -435,6 +445,9 @@ Opal::StringUtf8 Rndr::FromOpenGLDataTypeToString(GLenum value)
         default:
             RNDR_HALT("Unsupported data type");
     }
+#if RNDR_DEBUG
+    return u8"";
+#endif  // RNDR_DEBUG
 }
 
 Opal::StringUtf8 Rndr::FromOpenGLUsageToString(GLenum value)
@@ -450,6 +463,9 @@ Opal::StringUtf8 Rndr::FromOpenGLUsageToString(GLenum value)
         default:
             RNDR_HALT("Unsupported usage");
     }
+#if RNDR_DEBUG
+    return u8"";
+#endif  // RNDR_DEBUG
 }
 
 #endif  // RNDR_OPENGL
