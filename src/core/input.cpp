@@ -307,12 +307,11 @@ Opal::ScopePtr<Rndr::InputSystemData> Rndr::InputSystem::g_system_data;
 
 bool Rndr::InputSystem::Init()
 {
-    if (g_system_data)
+    if (!g_system_data)
     {
-        return true;
+        g_system_data = Opal::MakeDefaultScoped<InputSystemData>();
     }
-    g_system_data = Opal::MakeDefaultScoped<InputSystemData>();
-    const Opal::Ref<InputContextData> default_context_data = Opal::Ref{g_system_data->default_context.m_context_data.get()};
+    const Opal::Ref<InputContextData> default_context_data = Opal::Ref{g_system_data->default_context.m_context_data.Get()};
     g_system_data->contexts.PushBack(default_context_data);
     return true;
 }
@@ -323,7 +322,7 @@ bool Rndr::InputSystem::Destroy()
     {
         return true;
     }
-    g_system_data.reset();
+    g_system_data.Reset(nullptr);
     return true;
 }
 
@@ -339,7 +338,7 @@ bool Rndr::InputSystem::PushContext(const Rndr::InputContext& context)
     {
         return false;
     }
-    g_system_data->contexts.PushBack(Opal::Ref(*context.m_context_data.get()));
+    g_system_data->contexts.PushBack(Opal::Ref(*context.m_context_data.Get()));
     return true;
 }
 

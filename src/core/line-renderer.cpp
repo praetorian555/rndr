@@ -43,8 +43,8 @@ Rndr::LineRenderer::LineRenderer(const Opal::StringUtf8& name, const Rndr::Rende
     const Rndr::InputLayoutDesc input_layout_desc = builder.AddVertexBuffer(*m_vertex_buffer, 1, Rndr::DataRepetition::PerVertex).Build();
     m_pipeline = Opal::MakeDefaultScoped<Pipeline>(
         m_desc.graphics_context,
-        PipelineDesc{.vertex_shader = m_vertex_shader.get(),
-                     .pixel_shader = m_fragment_shader.get(),
+        PipelineDesc{.vertex_shader = m_vertex_shader.Get(),
+                     .pixel_shader = m_fragment_shader.Get(),
                      .input_layout = input_layout_desc,
                      .rasterizer = {.fill_mode = Rndr::FillMode::Wireframe, .depth_bias = -1.0, .slope_scaled_depth_bias = -1.0},
                      .depth_stencil = {.is_depth_enabled = true}});
