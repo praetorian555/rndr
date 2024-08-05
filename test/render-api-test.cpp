@@ -4,11 +4,15 @@
 #include <glad/glad.h>
 #endif
 
+#include "rndr/bitmap.h"
+#include "rndr/file.h"
+#include "rndr/render-api.h"
 #include "rndr/rndr.h"
+#include "rndr/window.h"
 
 #if RNDR_OPENGL
-#include "core/platform/opengl-helpers.h"
-#include "rndr/core/platform/opengl-frame-buffer.h"
+#include "platform/opengl-helpers.h"
+#include "rndr/platform/opengl-frame-buffer.h"
 #endif
 
 TEST_CASE("Graphics context", "[render-api][graphics-context]")
@@ -1237,7 +1241,8 @@ TEST_CASE("Creating a texture", "[render-api][texture]")
         }
         SECTION("With mip maps")
         {
-            const Rndr::TextureDesc desc{.width = 512, .height = 512, .array_size = 6, .type = Rndr::TextureType::Texture2DArray, .use_mips = true};
+            const Rndr::TextureDesc desc{
+                .width = 512, .height = 512, .array_size = 6, .type = Rndr::TextureType::Texture2DArray, .use_mips = true};
             Rndr::Texture texture;
             const Rndr::ErrorCode err = texture.Initialize(graphics_context, desc);
             REQUIRE(texture.IsValid());
@@ -1246,7 +1251,8 @@ TEST_CASE("Creating a texture", "[render-api][texture]")
         SECTION("With mip maps and data")
         {
             Opal::Array<Rndr::u8> data(512 * 512 * 4 * 6, 5);
-            const Rndr::TextureDesc desc{.width = 512, .height = 512, .array_size = 6, .type = Rndr::TextureType::Texture2DArray, .use_mips = true};
+            const Rndr::TextureDesc desc{
+                .width = 512, .height = 512, .array_size = 6, .type = Rndr::TextureType::Texture2DArray, .use_mips = true};
             Rndr::Texture texture;
             const Rndr::ErrorCode err = texture.Initialize(graphics_context, desc, {}, Opal::AsBytes(data));
             REQUIRE(texture.IsValid());
@@ -1254,7 +1260,8 @@ TEST_CASE("Creating a texture", "[render-api][texture]")
         }
         SECTION("Multi-sample")
         {
-            const Rndr::TextureDesc desc{.width = 512, .height = 512, .array_size = 6, .type = Rndr::TextureType::Texture2DArray, .sample_count = 4};
+            const Rndr::TextureDesc desc{
+                .width = 512, .height = 512, .array_size = 6, .type = Rndr::TextureType::Texture2DArray, .sample_count = 4};
             Rndr::Texture texture;
             const Rndr::ErrorCode err = texture.Initialize(graphics_context, desc);
             REQUIRE(texture.IsValid());
@@ -1263,7 +1270,8 @@ TEST_CASE("Creating a texture", "[render-api][texture]")
         SECTION("Multi-sample with data")
         {
             Opal::Array<Rndr::u8> data(512 * 512 * 4 * 6, 5);
-            const Rndr::TextureDesc desc{.width = 512, .height = 512, .array_size = 6, .type = Rndr::TextureType::Texture2DArray, .sample_count = 4};
+            const Rndr::TextureDesc desc{
+                .width = 512, .height = 512, .array_size = 6, .type = Rndr::TextureType::Texture2DArray, .sample_count = 4};
             Rndr::Texture texture;
             const Rndr::ErrorCode err = texture.Initialize(graphics_context, desc, {}, Opal::AsBytes(data));
             REQUIRE(texture.IsValid());
@@ -1271,7 +1279,12 @@ TEST_CASE("Creating a texture", "[render-api][texture]")
         }
         SECTION("Mips and multi-sample")
         {
-            const Rndr::TextureDesc desc{.width = 512, .height = 512, .array_size = 6, .type = Rndr::TextureType::Texture2DArray, .use_mips = true, .sample_count = 4};
+            const Rndr::TextureDesc desc{.width = 512,
+                                         .height = 512,
+                                         .array_size = 6,
+                                         .type = Rndr::TextureType::Texture2DArray,
+                                         .use_mips = true,
+                                         .sample_count = 4};
             Rndr::Texture texture;
             const Rndr::ErrorCode err = texture.Initialize(graphics_context, desc);
             REQUIRE(texture.IsValid());
@@ -1315,7 +1328,8 @@ TEST_CASE("Creating a texture", "[render-api][texture]")
         }
         SECTION("With mips")
         {
-            const Rndr::TextureDesc desc{.width = 512, .height = 512, .array_size = 6, .type = Rndr::TextureType::CubeMap, .use_mips = true};
+            const Rndr::TextureDesc desc{
+                .width = 512, .height = 512, .array_size = 6, .type = Rndr::TextureType::CubeMap, .use_mips = true};
             Rndr::Texture texture;
             const Rndr::ErrorCode err = texture.Initialize(graphics_context, desc);
             REQUIRE(texture.IsValid());
@@ -1324,7 +1338,8 @@ TEST_CASE("Creating a texture", "[render-api][texture]")
         SECTION("With mips and data")
         {
             Opal::Array<Rndr::u8> data(512 * 512 * 4 * 6, 5);
-            const Rndr::TextureDesc desc{.width = 512, .height = 512, .array_size = 6, .type = Rndr::TextureType::CubeMap, .use_mips = true};
+            const Rndr::TextureDesc desc{
+                .width = 512, .height = 512, .array_size = 6, .type = Rndr::TextureType::CubeMap, .use_mips = true};
             Rndr::Texture texture;
             const Rndr::ErrorCode err = texture.Initialize(graphics_context, desc, {}, Opal::AsBytes(data));
             REQUIRE(texture.IsValid());
@@ -1332,7 +1347,8 @@ TEST_CASE("Creating a texture", "[render-api][texture]")
         }
         SECTION("Multi-sample")
         {
-            const Rndr::TextureDesc desc{.width = 512, .height = 512, .array_size = 6, .type = Rndr::TextureType::CubeMap, .sample_count = 4};
+            const Rndr::TextureDesc desc{
+                .width = 512, .height = 512, .array_size = 6, .type = Rndr::TextureType::CubeMap, .sample_count = 4};
             Rndr::Texture texture;
             const Rndr::ErrorCode err = texture.Initialize(graphics_context, desc);
             REQUIRE(!texture.IsValid());

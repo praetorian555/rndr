@@ -1,6 +1,7 @@
 #include <catch2/catch2.hpp>
 
-#include "rndr/core/window.h"
+#include "rndr/window.h"
+#include "rndr/rndr.h"
 
 TEST_CASE("Creating a window", "[window]")
 {

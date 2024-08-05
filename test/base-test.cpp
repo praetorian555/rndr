@@ -1,8 +1,7 @@
 #include <catch2/catch2.hpp>
 
-#include "rndr/core/base.h"
-#include "rndr/core/definitions.h"
-#include "rndr/core/delegate.h"
+#include "rndr/rndr.h"
+#include "rndr/delegate.h"
 
 class CustomLogger : public Rndr::Logger
 {
@@ -29,19 +28,6 @@ TEST_CASE("Init", "[init]")
         Rndr::Logger* ptr = &custom_logger;
         REQUIRE(Rndr::Init({.user_logger = Opal::Ref(ptr)}));
         REQUIRE(&Rndr::GetLogger() == ptr);
-        REQUIRE(Rndr::Destroy());
-    }
-}
-
-TEST_CASE("Allocate and free", "[memory]")
-{
-    SECTION("Default allocate and free")
-    {
-        REQUIRE(Rndr::Init());
-        int* ptr = RNDR_NEW(int, 1);
-        REQUIRE(ptr != nullptr);
-        REQUIRE(*ptr == 1);
-        RNDR_DELETE(int, ptr);
         REQUIRE(Rndr::Destroy());
     }
 }

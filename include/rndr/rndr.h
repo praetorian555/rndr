@@ -1,22 +1,42 @@
 #pragma once
 
-// Core utilities
-#include "core/fly-camera.h"
-#include "core/input-layout-builder.h"
-#include "core/line-renderer.h"
-#include "rndr/core/base.h"
-#include "rndr/core/colors.h"
-#include "rndr/core/definitions.h"
-#include "rndr/core/delegate.h"
-#include "rndr/core/file.h"
-#include "rndr/core/frames-per-second-counter.h"
-#include "rndr/core/graphics-types.h"
-#include "rndr/core/input-primitives.h"
-#include "rndr/core/input.h"
-#include "rndr/core/math.h"
-#include "rndr/core/projection-camera.h"
-#include "rndr/core/render-api.h"
-#include "rndr/core/renderer-base.h"
-#include "rndr/core/time.h"
-#include "rndr/core/trace.h"
-#include "rndr/core/window.h"
+#include "opal/container/ref.h"
+
+#include "rndr/definitions.h"
+#include "rndr/log.h"
+#include "rndr/types.h"
+
+namespace Rndr
+{
+
+struct RndrDesc
+{
+    /** User specified logger. User is responsible for keeping it alive and deallocating it. */
+    Opal::Ref<Logger> user_logger;
+
+    /** If we should enable the input system. Defaults to no. */
+    bool enable_input_system = false;
+
+    /** If we should enable the CPU tracer. Defaults to no. */
+    bool enable_cpu_tracer = false;
+};
+
+/**
+ * Initializes the Rndr library instance. There can be only one.
+ * @param desc Configuration for the library.
+ * @return True if the library was initialized successfully.
+ */
+bool Init(const RndrDesc& desc = {});
+
+/**
+ * Destroys the Rndr library instance.
+ * @return True if the library was destroyed successfully.
+ */
+bool Destroy();
+
+/**
+ * Waits for the debugger to attach. It will simply loop until the debugger is attached.
+ */
+void WaitForDebuggerToAttach();
+
+}  // namespace Rndr

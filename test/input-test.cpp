@@ -1,7 +1,8 @@
 #include <catch2/catch2.hpp>
 
-#include "rndr/core/input.h"
-#include "rndr/core/window.h"
+#include "rndr/input.h"
+#include "rndr/rndr.h"
+#include "rndr/window.h"
 
 TEST_CASE("Input action", "[input]")
 {
@@ -92,11 +93,9 @@ TEST_CASE("Input context", "[input]")
         Rndr::InputContext context(u8"TestContext");
         REQUIRE(context.GetName() == u8"TestContext");
         const Rndr::InputAction action(u8"TestAction");
-        Rndr::InputBinding bindings[] = {{.primitive = Rndr::InputPrimitive::Keyboard_A,
-                                          .trigger = Rndr::InputTrigger::ButtonPressed,
-                                          .modifier = 1.0f}};
-        const Rndr::InputCallback callback =
-            [](Rndr::InputPrimitive primitive, Rndr::InputTrigger trigger, float value)
+        Rndr::InputBinding bindings[] = {
+            {.primitive = Rndr::InputPrimitive::Keyboard_A, .trigger = Rndr::InputTrigger::ButtonPressed, .modifier = 1.0f}};
+        const Rndr::InputCallback callback = [](Rndr::InputPrimitive primitive, Rndr::InputTrigger trigger, float value)
         {
             (void)primitive;
             (void)trigger;
@@ -108,9 +107,8 @@ TEST_CASE("Input context", "[input]")
         REQUIRE(context.GetActionBindings(action)[0] == bindings[0]);
         SECTION("Add additional binding")
         {
-            Rndr::InputBinding binding{.primitive = Rndr::InputPrimitive::Keyboard_D,
-                                       .trigger = Rndr::InputTrigger::ButtonPressed,
-                                       .modifier = 1.0f};
+            Rndr::InputBinding binding{
+                .primitive = Rndr::InputPrimitive::Keyboard_D, .trigger = Rndr::InputTrigger::ButtonPressed, .modifier = 1.0f};
             REQUIRE(context.AddBindingToAction(action, binding));
             Opal::Span<Rndr::InputBinding> reg_bindings = context.GetActionBindings(action);
             REQUIRE(reg_bindings.GetSize() == 2);
@@ -126,9 +124,8 @@ TEST_CASE("Input context", "[input]")
         }
         SECTION("Add invalid binding")
         {
-            Rndr::InputBinding binding{.primitive = Rndr::InputPrimitive::Keyboard_D,
-                                       .trigger = Rndr::InputTrigger::AxisChangedRelative,
-                                       .modifier = 1.0f};
+            Rndr::InputBinding binding{
+                .primitive = Rndr::InputPrimitive::Keyboard_D, .trigger = Rndr::InputTrigger::AxisChangedRelative, .modifier = 1.0f};
             REQUIRE(!context.AddBindingToAction(action, binding));
             Opal::Span<Rndr::InputBinding> reg_bindings = context.GetActionBindings(action);
             REQUIRE(reg_bindings.GetSize() == 1);
@@ -165,13 +162,10 @@ TEST_CASE("Input system", "[input]")
     }
     SECTION("Submit events")
     {
-        REQUIRE(Rndr::InputSystem::SubmitButtonEvent(nullptr,
-                                                     Rndr::InputPrimitive::Keyboard_A,
-                                                     Rndr::InputTrigger::ButtonPressed));
+        REQUIRE(Rndr::InputSystem::SubmitButtonEvent(nullptr, Rndr::InputPrimitive::Keyboard_A, Rndr::InputTrigger::ButtonPressed));
         REQUIRE(Rndr::InputSystem::SubmitMousePositionEvent(nullptr, {100, 100}, {1024, 768}));
         REQUIRE(Rndr::InputSystem::SubmitMouseWheelEvent(nullptr, 1));
-        REQUIRE(
-            Rndr::InputSystem::SubmitRelativeMousePositionEvent(nullptr, {100, 100}, {1024, 768}));
+        REQUIRE(Rndr::InputSystem::SubmitRelativeMousePositionEvent(nullptr, {100, 100}, {1024, 768}));
     }
     SECTION("Submit invalid events")
     {
@@ -183,21 +177,18 @@ TEST_CASE("Input system", "[input]")
         Rndr::InputContext context(u8"TestContext");
         const Rndr::InputAction action1(u8"TestAction1");
         const Rndr::InputAction action2(u8"TestAction2");
-        Rndr::InputBinding bindings[] = {{.primitive = Rndr::InputPrimitive::Keyboard_A,
-                                          .trigger = Rndr::InputTrigger::ButtonPressed,
-                                          .modifier = 2.0f}};
+        Rndr::InputBinding bindings[] = {
+            {.primitive = Rndr::InputPrimitive::Keyboard_A, .trigger = Rndr::InputTrigger::ButtonPressed, .modifier = 2.0f}};
         float value1 = 0;
         float value2 = 0;
-        const Rndr::InputCallback callback1 =
-            [&value1](Rndr::InputPrimitive primitive, Rndr::InputTrigger trigger, float val)
+        const Rndr::InputCallback callback1 = [&value1](Rndr::InputPrimitive primitive, Rndr::InputTrigger trigger, float val)
         {
             (void)primitive;
             (void)trigger;
             (void)value1;
             value1 += val;
         };
-        const Rndr::InputCallback callback2 =
-            [&value2](Rndr::InputPrimitive primitive, Rndr::InputTrigger trigger, float val)
+        const Rndr::InputCallback callback2 = [&value2](Rndr::InputPrimitive primitive, Rndr::InputTrigger trigger, float val)
         {
             (void)primitive;
             (void)trigger;
@@ -207,27 +198,19 @@ TEST_CASE("Input system", "[input]")
         REQUIRE(context.AddAction(action1, {callback1, nullptr, bindings}));
         REQUIRE(context.AddAction(action2, {callback2, nullptr, bindings}));
         REQUIRE(Rndr::InputSystem::PushContext(context));
-        REQUIRE(Rndr::InputSystem::SubmitButtonEvent(nullptr,
-                                                     Rndr::InputPrimitive::Keyboard_A,
-                                                     Rndr::InputTrigger::ButtonPressed));
+        REQUIRE(Rndr::InputSystem::SubmitButtonEvent(nullptr, Rndr::InputPrimitive::Keyboard_A, Rndr::InputTrigger::ButtonPressed));
         REQUIRE(Rndr::InputSystem::ProcessEvents(1));
         REQUIRE(value1 == 2.0f);
         REQUIRE(value2 == -2.0f);
-        REQUIRE(Rndr::InputSystem::SubmitButtonEvent(nullptr,
-                                                     Rndr::InputPrimitive::Keyboard_A,
-                                                     Rndr::InputTrigger::ButtonReleased));
+        REQUIRE(Rndr::InputSystem::SubmitButtonEvent(nullptr, Rndr::InputPrimitive::Keyboard_A, Rndr::InputTrigger::ButtonReleased));
         REQUIRE(Rndr::InputSystem::ProcessEvents(1));
         REQUIRE(value1 == 2.0f);
         REQUIRE(value2 == -2.0f);
-        REQUIRE(Rndr::InputSystem::SubmitButtonEvent(nullptr,
-                                                     Rndr::InputPrimitive::Keyboard_D,
-                                                     Rndr::InputTrigger::ButtonPressed));
+        REQUIRE(Rndr::InputSystem::SubmitButtonEvent(nullptr, Rndr::InputPrimitive::Keyboard_D, Rndr::InputTrigger::ButtonPressed));
         REQUIRE(Rndr::InputSystem::ProcessEvents(1));
         REQUIRE(value1 == 2.0f);
         REQUIRE(value2 == -2.0f);
-        REQUIRE(Rndr::InputSystem::SubmitButtonEvent(nullptr,
-                                                     Rndr::InputPrimitive::Keyboard_A,
-                                                     Rndr::InputTrigger::ButtonPressed));
+        REQUIRE(Rndr::InputSystem::SubmitButtonEvent(nullptr, Rndr::InputPrimitive::Keyboard_A, Rndr::InputTrigger::ButtonPressed));
         REQUIRE(Rndr::InputSystem::ProcessEvents(1));
         REQUIRE(value1 == 4.0f);
         REQUIRE(value2 == -4.0f);
@@ -236,17 +219,12 @@ TEST_CASE("Input system", "[input]")
     {
         Rndr::InputContext context(u8"TestContext");
         const Rndr::InputAction action(u8"TestAction");
-        Rndr::InputBinding bindings[] = {{.primitive = Rndr::InputPrimitive::Mouse_AxisX,
-                                          .trigger = Rndr::InputTrigger::AxisChangedAbsolute,
-                                          .modifier = 2.0f},
-                                         {.primitive = Rndr::InputPrimitive::Mouse_AxisY,
-                                          .trigger = Rndr::InputTrigger::AxisChangedAbsolute,
-                                          .modifier = 2.0f}};
+        Rndr::InputBinding bindings[] = {
+            {.primitive = Rndr::InputPrimitive::Mouse_AxisX, .trigger = Rndr::InputTrigger::AxisChangedAbsolute, .modifier = 2.0f},
+            {.primitive = Rndr::InputPrimitive::Mouse_AxisY, .trigger = Rndr::InputTrigger::AxisChangedAbsolute, .modifier = 2.0f}};
         float value1 = 0;
         float value2 = 0;
-        const Rndr::InputCallback callback = [&value1, &value2](Rndr::InputPrimitive primitive,
-                                                                Rndr::InputTrigger trigger,
-                                                                float val)
+        const Rndr::InputCallback callback = [&value1, &value2](Rndr::InputPrimitive primitive, Rndr::InputTrigger trigger, float val)
         {
             (void)trigger;
             if (primitive == Rndr::InputPrimitive::Mouse_AxisX)
@@ -277,17 +255,12 @@ TEST_CASE("Input system", "[input]")
     {
         Rndr::InputContext context(u8"TestContext");
         const Rndr::InputAction action(u8"TestAction");
-        Rndr::InputBinding bindings[] = {{.primitive = Rndr::InputPrimitive::Mouse_AxisX,
-                                          .trigger = Rndr::InputTrigger::AxisChangedRelative,
-                                          .modifier = 2.0f},
-                                         {.primitive = Rndr::InputPrimitive::Mouse_AxisY,
-                                          .trigger = Rndr::InputTrigger::AxisChangedRelative,
-                                          .modifier = 2.0f}};
+        Rndr::InputBinding bindings[] = {
+            {.primitive = Rndr::InputPrimitive::Mouse_AxisX, .trigger = Rndr::InputTrigger::AxisChangedRelative, .modifier = 2.0f},
+            {.primitive = Rndr::InputPrimitive::Mouse_AxisY, .trigger = Rndr::InputTrigger::AxisChangedRelative, .modifier = 2.0f}};
         float value1 = 0;
         float value2 = 0;
-        const Rndr::InputCallback callback = [&value1, &value2](Rndr::InputPrimitive primitive,
-                                                                Rndr::InputTrigger trigger,
-                                                                float val)
+        const Rndr::InputCallback callback = [&value1, &value2](Rndr::InputPrimitive primitive, Rndr::InputTrigger trigger, float val)
         {
             (void)trigger;
             if (primitive == Rndr::InputPrimitive::Mouse_AxisX)
@@ -301,13 +274,11 @@ TEST_CASE("Input system", "[input]")
         };
         REQUIRE(context.AddAction(action, {callback, nullptr, bindings}));
         REQUIRE(Rndr::InputSystem::PushContext(context));
-        REQUIRE(
-            Rndr::InputSystem::SubmitRelativeMousePositionEvent(nullptr, {100, 200}, {1024, 768}));
+        REQUIRE(Rndr::InputSystem::SubmitRelativeMousePositionEvent(nullptr, {100, 200}, {1024, 768}));
         REQUIRE(Rndr::InputSystem::ProcessEvents(1));
         REQUIRE(value1 == 200.0f);
         REQUIRE(value2 == 400.0f);
-        REQUIRE(
-            Rndr::InputSystem::SubmitRelativeMousePositionEvent(nullptr, {100, 200}, {1024, 768}));
+        REQUIRE(Rndr::InputSystem::SubmitRelativeMousePositionEvent(nullptr, {100, 200}, {1024, 768}));
         REQUIRE(Rndr::InputSystem::ProcessEvents(1));
         REQUIRE(value1 == 400.0f);
         REQUIRE(value2 == 800.0f);
@@ -320,12 +291,10 @@ TEST_CASE("Input system", "[input]")
     {
         Rndr::InputContext context(u8"TestContext");
         const Rndr::InputAction action(u8"TestAction");
-        Rndr::InputBinding bindings[] = {{.primitive = Rndr::InputPrimitive::Mouse_AxisWheel,
-                                          .trigger = Rndr::InputTrigger::AxisChangedRelative,
-                                          .modifier = 2.0f}};
+        Rndr::InputBinding bindings[] = {
+            {.primitive = Rndr::InputPrimitive::Mouse_AxisWheel, .trigger = Rndr::InputTrigger::AxisChangedRelative, .modifier = 2.0f}};
         float value1 = 0;
-        const Rndr::InputCallback callback =
-            [&value1](Rndr::InputPrimitive primitive, Rndr::InputTrigger trigger, float val)
+        const Rndr::InputCallback callback = [&value1](Rndr::InputPrimitive primitive, Rndr::InputTrigger trigger, float val)
         {
             (void)trigger;
             if (primitive == Rndr::InputPrimitive::Mouse_AxisWheel)
@@ -349,11 +318,10 @@ TEST_CASE("Input system", "[input]")
     {
         Rndr::InputContext context(u8"TestContext");
         const Rndr::InputAction action(u8"TestAction");
-        Rndr::InputBinding bindings[] = {{.primitive = Rndr::InputPrimitive::Mouse_LeftButton,
-                                          .trigger = Rndr::InputTrigger::ButtonPressed}};
+        Rndr::InputBinding bindings[] = {
+            {.primitive = Rndr::InputPrimitive::Mouse_LeftButton, .trigger = Rndr::InputTrigger::ButtonPressed}};
         float value1 = 0;
-        const Rndr::InputCallback callback =
-            [&value1](Rndr::InputPrimitive primitive, Rndr::InputTrigger trigger, float val)
+        const Rndr::InputCallback callback = [&value1](Rndr::InputPrimitive primitive, Rndr::InputTrigger trigger, float val)
         {
             (void)trigger;
             if (primitive == Rndr::InputPrimitive::Mouse_LeftButton)
@@ -365,19 +333,14 @@ TEST_CASE("Input system", "[input]")
         Rndr::NativeWindowHandle bad_handle = reinterpret_cast<Rndr::NativeWindowHandle>(0x5678);
         REQUIRE(context.AddAction(action, {callback, handle, bindings}));
         REQUIRE(Rndr::InputSystem::PushContext(context));
-        REQUIRE(Rndr::InputSystem::SubmitButtonEvent(handle,
-                                                     Rndr::InputPrimitive::Mouse_LeftButton,
-                                                     Rndr::InputTrigger::ButtonPressed));
+        REQUIRE(Rndr::InputSystem::SubmitButtonEvent(handle, Rndr::InputPrimitive::Mouse_LeftButton, Rndr::InputTrigger::ButtonPressed));
         REQUIRE(Rndr::InputSystem::ProcessEvents(1));
         REQUIRE(value1 == 1.0f);
-        REQUIRE(Rndr::InputSystem::SubmitButtonEvent(handle,
-                                                     Rndr::InputPrimitive::Mouse_LeftButton,
-                                                     Rndr::InputTrigger::ButtonPressed));
+        REQUIRE(Rndr::InputSystem::SubmitButtonEvent(handle, Rndr::InputPrimitive::Mouse_LeftButton, Rndr::InputTrigger::ButtonPressed));
         REQUIRE(Rndr::InputSystem::ProcessEvents(1));
         REQUIRE(value1 == 2.0f);
-        REQUIRE(Rndr::InputSystem::SubmitButtonEvent(bad_handle,
-                                                     Rndr::InputPrimitive::Mouse_LeftButton,
-                                                     Rndr::InputTrigger::ButtonPressed));
+        REQUIRE(
+            Rndr::InputSystem::SubmitButtonEvent(bad_handle, Rndr::InputPrimitive::Mouse_LeftButton, Rndr::InputTrigger::ButtonPressed));
         REQUIRE(Rndr::InputSystem::ProcessEvents(1));
         REQUIRE(value1 == 2.0f);
     }
@@ -430,8 +393,7 @@ TEST_CASE("Input system", "[input]")
     }
     SECTION("Is binding valid")
     {
-        Rndr::InputBinding binding = {.primitive = Rndr::InputPrimitive::Mouse_LeftButton,
-                                      .trigger = Rndr::InputTrigger::ButtonPressed};
+        Rndr::InputBinding binding = {.primitive = Rndr::InputPrimitive::Mouse_LeftButton, .trigger = Rndr::InputTrigger::ButtonPressed};
         REQUIRE(Rndr::InputSystem::IsBindingValid(binding));
         binding.primitive = Rndr::InputPrimitive::Mouse_AxisX;
         REQUIRE(!Rndr::InputSystem::IsBindingValid(binding));

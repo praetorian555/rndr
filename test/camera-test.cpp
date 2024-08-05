@@ -1,6 +1,6 @@
 #include <catch2/catch2.hpp>
 
-#include "rndr/core/projection-camera.h"
+#include "rndr/projection-camera.h"
 
 TEST_CASE("Perspective", "ProjectionCamera")
 {

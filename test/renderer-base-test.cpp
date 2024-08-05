@@ -1,6 +1,6 @@
 #include <catch2/catch2.hpp>
 
-#include "rndr/core/renderer-base.h"
+#include "rndr/renderer-base.h"
 
 class TestRenderer : public Rndr::RendererBase
 {

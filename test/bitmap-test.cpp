@@ -1,6 +1,6 @@
 #include <catch2/catch2.hpp>
 
-#include "rndr/core/bitmap.h"
+#include "rndr/bitmap.h"
 
 TEST_CASE("Bitmap", "[bitmap]")
 {

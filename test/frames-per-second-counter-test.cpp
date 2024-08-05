@@ -1,6 +1,6 @@
 #include <catch2/catch2.hpp>
 
-#include "rndr/core/frames-per-second-counter.h"
+#include "rndr/frames-per-second-counter.h"
 
 TEST_CASE("Frames per second counter tests", "[fps]")
 {
