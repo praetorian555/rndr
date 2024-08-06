@@ -47,7 +47,7 @@ void Rndr::SetLogger(Rndr::Logger* logger)
 
 void Rndr::Log(const Opal::SourceLocation& source_location, Rndr::LogLevel log_level, const char* format, ...)
 {
-    constexpr int k_message_size = 4096;
+    constexpr int k_message_size = 16 * 1024;
     Opal::StackArray<char, k_message_size> message;
     memset(message.data(), 0, k_message_size);
 
