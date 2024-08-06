@@ -17,13 +17,15 @@ Rndr::Logger* g_current_logger = &g_default_logger;
 
 void Rndr::StdLogger::Log(const Opal::SourceLocation& source_location, LogLevel log_level, const char* message)
 {
+    static Opal::StringUtf8 s_file_path(300, 0);
     static Opal::StringUtf8 s_file_name(300, 0);
-    static Opal::StringUtf8 s_function_name(300, 0);
     static const char* s_log_level_strings[] = {"ERROR", "WARNING", "DEBUG", "INFO", "TRACE"};
 
     // TODO: This will not work if file name or function name is using UTF-8 characters and the console is not set to UTF-8.
-    s_file_name = reinterpret_cast<const c8*>(source_location.file);
-    s_file_name = Opal::Paths::GetFileName(s_file_name).GetValue();
+    s_file_path.Erase();
+    s_file_path.Assign(reinterpret_cast<const c8*>(source_location.file));
+    s_file_name.Erase();
+    s_file_name.Assign(Opal::Paths::GetFileName(s_file_path).GetValue());
 
     printf("[%s][%s:%d] %s\n", s_log_level_strings[static_cast<u8>(log_level)], s_file_name.GetDataAs<c>(), source_location.line, message);
 }
