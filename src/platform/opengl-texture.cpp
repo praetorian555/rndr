@@ -202,15 +202,6 @@ Rndr::ErrorCode Rndr::Texture::Initialize(const GraphicsContext& graphics_contex
         RNDR_GL_VERIFY("Failed to set texture parameter GL_TEXTURE_MAX_LOD!", Destroy());
     }
 
-    // Create bindless texture on the GPU
-    if (graphics_context.GetDesc().enable_bindless_textures && m_texture_desc.is_bindless)
-    {
-        m_bindless_handle = glGetTextureHandleARB(m_native_texture);
-        RNDR_GL_VERIFY("Failed to get bindless texture handle!", Destroy());
-        glMakeTextureHandleResidentARB(m_bindless_handle);
-        RNDR_GL_VERIFY("Failed to make texture handle resident!", Destroy());
-    }
-
     const GLenum internal_format = FromPixelFormatToInternalFormat(m_texture_desc.pixel_format);
     const GLenum format = FromPixelFormatToExternalFormat(m_texture_desc.pixel_format);
     const GLenum data_type = FromPixelFormatToDataType(m_texture_desc.pixel_format);
@@ -327,6 +318,16 @@ Rndr::ErrorCode Rndr::Texture::Initialize(const GraphicsContext& graphics_contex
             RNDR_LOG_WARNING("Mipmaps are not supported for multi-sample textures!");
         }
     }
+
+    // Create bindless texture on the GPU
+    if (graphics_context.GetDesc().enable_bindless_textures && m_texture_desc.is_bindless)
+    {
+        m_bindless_handle = glGetTextureHandleARB(m_native_texture);
+        RNDR_GL_VERIFY("Failed to get bindless texture handle!", Destroy());
+        glMakeTextureHandleResidentARB(m_bindless_handle);
+        RNDR_GL_VERIFY("Failed to make texture handle resident!", Destroy());
+    }
+
     return ErrorCode::Success;
 }
 
