@@ -1,6 +1,7 @@
 #pragma once
 
 #include "rndr/definitions.h"
+#include "rndr/error-codes.h"
 #include "rndr/graphics-types.h"
 #include "rndr/platform/opengl-forward-def.h"
 
@@ -21,11 +22,21 @@ public:
     Shader() = default;
 
     /**
-     * Creates a new shader.
+     * Creates and compiles the shader.
      * @param graphics_context The graphics context to create the shader with.
      * @param desc The description of the shader to create.
      */
     Shader(const GraphicsContext& graphics_context, const ShaderDesc& desc);
+
+    /**
+     * Creates and compiles the shader.
+     * @param graphics_context The graphics context to create the shader with.
+     * @param desc The description of the shader to create.
+     * @return ErrorCode::Success if the shader was created successfully. ErrorCode::InvalidArgument if the shader description is invalid.
+     * ErrorCode::OutOfMemory if there was an error creating the shader. ErrorCode::GraphicsAPIError if one of the OpenGL calls failed.
+     * ErrorCode::ShaderCompilationError if there was an error compiling the shader.
+     */
+    Rndr::ErrorCode Initialize(const GraphicsContext& graphics_context, const ShaderDesc& desc);
 
     ~Shader();
     Shader(const Shader&) = delete;

@@ -14,6 +14,8 @@ enum class ErrorCode : u8
     OutOfMemory = static_cast<u8>(Opal::ErrorCode::OutOfMemory),
     InvalidArgument = static_cast<u8>(Opal::ErrorCode::BadInput),
     GraphicsAPIError,
+    ShaderCompilationError,
+    ShaderLinkingError,
 };
 
 }  // namespace Rndr

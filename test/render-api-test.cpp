@@ -972,6 +972,61 @@ TEST_CASE("Copy of buffers", "[render-api][buffer]")
     Rndr::Destroy();
 }
 
+TEST_CASE("Creating a shader", "[render-api][shader]")
+{
+    Rndr::Init();
+    Rndr::Window hidden_window({.start_visible = false});
+    const Rndr::GraphicsContextDesc gc_desc{.window_handle = hidden_window.GetNativeWindowHandle()};
+    Rndr::GraphicsContext graphics_context(gc_desc);
+
+
+    SECTION("Invalid shader")
+    {
+        const Rndr::ShaderDesc desc{.type = Rndr::ShaderType::Compute};
+        const Rndr::Shader shader(graphics_context, desc);
+        REQUIRE(!shader.IsValid());
+    }
+    SECTION("Default shader")
+    {
+        Rndr::Shader shader;
+        REQUIRE(!shader.IsValid());
+    }
+    SECTION("Shader with bad shader code")
+    {
+        const Rndr::c8 shader_code[] = u8R"(
+            #version 460 corehhe
+            void main()
+            {
+                gl_Position = vec4(0.0f, 0.0f, 0.0f, 1.0f);
+            }
+        )";
+        const Rndr::ShaderDesc desc{.type = Rndr::ShaderType::Vertex, .source = shader_code};
+        Rndr::Shader shader;
+        Rndr::ErrorCode err = shader.Initialize(graphics_context, desc);
+        REQUIRE(err == Rndr::ErrorCode::ShaderCompilationError);
+        REQUIRE(!shader.IsValid());
+    }
+    SECTION("With defines")
+    {
+        const Rndr::c8 shader_code[] = u8R"(
+            #version 460 core
+            void main()
+            {
+                gl_Position = vec4(0.0f, 0.0f, 0.0f, 1.0f);
+            }
+        )";
+        const Rndr::ShaderDesc desc{.type = Rndr::ShaderType::Vertex, .source = shader_code, .defines = {u8"MY_DEFINE"}};
+        Rndr::Shader shader;
+        Rndr::ErrorCode err = shader.Initialize(graphics_context, desc);
+        REQUIRE(err == Rndr::ErrorCode::Success);
+        REQUIRE(shader.IsValid());
+    }
+
+    graphics_context.Destroy();
+    hidden_window.Destroy();
+    Rndr::Destroy();
+}
+
 TEST_CASE("Running a compute shader", "[render-api][shader]")
 {
     Rndr::Init();
