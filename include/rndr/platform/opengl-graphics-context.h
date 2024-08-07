@@ -211,6 +211,9 @@ public:
      */
     [[nodiscard]] bool ReadSwapChainDepthStencil(const SwapChain& swap_chain, Bitmap& out_bitmap);
 
+    ErrorCode ClearFrameBufferColorAttachment(const FrameBuffer& frame_buffer, i32 color_attachment_index, const Vector4f& color);
+    ErrorCode ClearFrameBufferDepthStencilAttachment(const FrameBuffer& frame_buffer, f32 depth, i32 stencil);
+
 private:
     GraphicsContextDesc m_desc;
     NativeDeviceContextHandle m_native_device_context = k_invalid_device_context_handle;

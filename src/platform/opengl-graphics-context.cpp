@@ -802,3 +802,18 @@ bool Rndr::GraphicsContext::ReadSwapChainDepthStencil(const SwapChain& swap_chai
     out_bitmap = Bitmap{width, height, 1, PixelFormat::D24_UNORM_S8_UINT, byte_data};
     return true;
 }
+
+Rndr::ErrorCode Rndr::GraphicsContext::ClearFrameBufferColorAttachment(const Rndr::FrameBuffer& frame_buffer,
+                                                                       Rndr::i32 color_attachment_index, const Rndr::Vector4f& color)
+{
+    glClearNamedFramebufferfv(frame_buffer.GetNativeFrameBuffer(), GL_COLOR, color_attachment_index, color.data);
+    RNDR_GL_VERIFY("Failed to clear color attachment!", RNDR_NOOP);
+    return ErrorCode::Success;
+}
+
+Rndr::ErrorCode Rndr::GraphicsContext::ClearFrameBufferDepthStencilAttachment(const Rndr::FrameBuffer& frame_buffer, f32 depth, i32 stencil)
+{
+    glClearNamedFramebufferfi(frame_buffer.GetNativeFrameBuffer(), GL_DEPTH, 0, depth, stencil);
+    RNDR_GL_VERIFY("Failed to clear depth attachment!", RNDR_NOOP);
+    return ErrorCode::Success;
+}
