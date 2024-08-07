@@ -612,15 +612,6 @@ struct TextureDesc
     i32 sample_count = 1;
 };
 
-struct FrameBufferProperties
-{
-    i32 color_buffer_count = 1;
-    Opal::StackArray<TextureDesc, GraphicsConstants::k_max_frame_buffer_color_buffers> color_buffer_properties;
-
-    bool use_depth_stencil = false;
-    TextureDesc depth_stencil_buffer_properties;
-};
-
 /**
  * Describes a single element in the input layout. Input layout is a description of the vertex
  * and instance buffer data. It tells the graphics API how to interpret the data in the buffers.
@@ -809,9 +800,9 @@ struct FrameBufferDesc
 {
     Opal::Array<TextureDesc> color_attachments;
     Opal::Array<SamplerDesc> color_attachment_samplers;
+    bool use_depth_stencil = false;
     TextureDesc depth_stencil_attachment;
     SamplerDesc depth_stencil_sampler;
-    bool use_depth_stencil = false;
 };
 
 /**

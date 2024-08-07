@@ -8,27 +8,36 @@
 
 Rndr::FrameBuffer::FrameBuffer(const Rndr::GraphicsContext& graphics_context, const Rndr::FrameBufferDesc& desc) : m_desc(desc)
 {
-    if (m_desc.color_attachments.GetSize() == 0)
+    const ErrorCode err = Initialize(graphics_context, desc);
+    if (err != ErrorCode::Success)
     {
-        RNDR_LOG_ERROR("Frame buffer must have at least one color attachment!");
-        return;
+        RNDR_LOG_ERROR("Failed to create frame buffer!");
     }
+}
+
+Rndr::ErrorCode Rndr::FrameBuffer::Initialize(const Rndr::GraphicsContext& graphics_context, const Rndr::FrameBufferDesc& desc)
+{
+    m_desc = desc;
     for (const Rndr::TextureDesc& color_attachment_desc : m_desc.color_attachments)
     {
         if (color_attachment_desc.type != Rndr::TextureType::Texture2D)
         {
             RNDR_LOG_ERROR("Color attachment must be of image type Texture2D!");
-            return;
+            return ErrorCode::InvalidArgument;
         }
     }
     if (m_desc.use_depth_stencil && m_desc.depth_stencil_attachment.type != Rndr::TextureType::Texture2D)
     {
         RNDR_LOG_ERROR("Depth stencil attachment must be of image type Texture2D!");
-        return;
+        return ErrorCode::InvalidArgument;
     }
 
     glCreateFramebuffers(1, &m_native_frame_buffer);
-    RNDR_ASSERT_OPENGL();
+    if (m_native_frame_buffer == k_invalid_opengl_object)
+    {
+        RNDR_LOG_ERROR("Failed to create frame buffer!");
+        return ErrorCode::OutOfMemory;
+    }
 
     for (i32 i = 0; i < m_desc.color_attachments.GetSize(); ++i)
     {
@@ -38,11 +47,12 @@ Rndr::FrameBuffer::FrameBuffer(const Rndr::GraphicsContext& graphics_context, co
         if (!color_attachment.IsValid())
         {
             RNDR_LOG_ERROR("Failed to create color attachment %d!", i);
-            return;
+            Destroy();
+            return ErrorCode::InvalidArgument;
         }
         m_color_attachments.PushBack(Opal::Move(color_attachment));
         glNamedFramebufferTexture(m_native_frame_buffer, GL_COLOR_ATTACHMENT0 + i, m_color_attachments[i].GetNativeTexture(), 0);
-        RNDR_ASSERT_OPENGL();
+        RNDR_GL_VERIFY("Failed to attach color attachment to frame buffer!", Destroy());
     }
 
     if (m_desc.use_depth_stencil)
@@ -51,17 +61,21 @@ Rndr::FrameBuffer::FrameBuffer(const Rndr::GraphicsContext& graphics_context, co
         if (!m_depth_stencil_attachment.IsValid())
         {
             RNDR_LOG_ERROR("Failed to create depth stencil attachment!");
-            return;
+            Destroy();
+            return ErrorCode::InvalidArgument;
         }
         glNamedFramebufferTexture(m_native_frame_buffer, GL_DEPTH_STENCIL_ATTACHMENT, m_depth_stencil_attachment.GetNativeTexture(), 0);
-        RNDR_ASSERT_OPENGL();
+        RNDR_GL_VERIFY("Failed to attach depth stencil attachment to frame buffer!", Destroy());
     }
 
     const GLenum status = glCheckNamedFramebufferStatus(m_native_frame_buffer, GL_FRAMEBUFFER);
     if (status != GL_FRAMEBUFFER_COMPLETE)
     {
-        RNDR_HALT("Failed to create frame buffer!");
+        RNDR_LOG_ERROR("Failed to create frame buffer!");
+        Destroy();
+        return ErrorCode::InvalidArgument;
     }
+    return ErrorCode::Success;
 }
 
 Rndr::FrameBuffer::~FrameBuffer()

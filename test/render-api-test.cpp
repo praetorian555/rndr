@@ -979,7 +979,6 @@ TEST_CASE("Creating a shader", "[render-api][shader]")
     const Rndr::GraphicsContextDesc gc_desc{.window_handle = hidden_window.GetNativeWindowHandle()};
     Rndr::GraphicsContext graphics_context(gc_desc);
 
-
     SECTION("Invalid shader")
     {
         const Rndr::ShaderDesc desc{.type = Rndr::ShaderType::Compute};
@@ -993,7 +992,8 @@ TEST_CASE("Creating a shader", "[render-api][shader]")
     }
     SECTION("Shader with bad shader code")
     {
-        const Rndr::c8 shader_code[] = u8R"(
+        const Rndr::c8 shader_code[] =
+            u8R"(
             #version 460 corehhe
             void main()
             {
@@ -1008,7 +1008,8 @@ TEST_CASE("Creating a shader", "[render-api][shader]")
     }
     SECTION("With defines")
     {
-        const Rndr::c8 shader_code[] = u8R"(
+        const Rndr::c8 shader_code[] =
+            u8R"(
             #version 460 core
             void main()
             {
@@ -1439,10 +1440,12 @@ TEST_CASE("Creating a frame buffer", "[render-api][framebuffer]")
             .width = 512, .height = 512, .type = Rndr::TextureType::Texture2D, .pixel_format = Rndr::PixelFormat::R8G8B8A8_UINT};
         const Rndr::TextureDesc depth_stencil_attachment_desc{
             .width = 512, .height = 512, .type = Rndr::TextureType::Texture2D, .pixel_format = Rndr::PixelFormat::D24_UNORM_S8_UINT};
-        const Rndr::FrameBufferDesc desc{.color_attachments = {color_attachment_desc},
-                                         .color_attachment_samplers = {{}},
-                                         .depth_stencil_attachment = depth_stencil_attachment_desc,
-                                         .use_depth_stencil = true};
+        const Rndr::FrameBufferDesc desc{
+            .color_attachments = {color_attachment_desc},
+            .color_attachment_samplers = {{}},
+            .use_depth_stencil = true,
+            .depth_stencil_attachment = depth_stencil_attachment_desc,
+        };
         const Rndr::FrameBuffer frame_buffer(graphics_context, desc);
         REQUIRE(frame_buffer.IsValid());
         REQUIRE(frame_buffer.GetColorAttachmentCount() == 1);
@@ -1481,10 +1484,12 @@ TEST_CASE("Creating a frame buffer", "[render-api][framebuffer]")
             .width = 512, .height = 512, .type = Rndr::TextureType::Texture2D, .pixel_format = Rndr::PixelFormat::R8G8B8A8_UINT};
         const Rndr::TextureDesc depth_stencil_attachment_desc{
             .width = 0, .height = 512, .type = Rndr::TextureType::Texture2D, .pixel_format = Rndr::PixelFormat::D24_UNORM_S8_UINT};
-        const Rndr::FrameBufferDesc desc{.color_attachments = {color_attachment_desc},
-                                         .color_attachment_samplers = {{}},
-                                         .depth_stencil_attachment = depth_stencil_attachment_desc,
-                                         .use_depth_stencil = true};
+        const Rndr::FrameBufferDesc desc{
+            .color_attachments = {color_attachment_desc},
+            .color_attachment_samplers = {{}},
+            .use_depth_stencil = true,
+            .depth_stencil_attachment = depth_stencil_attachment_desc,
+        };
         const Rndr::FrameBuffer frame_buffer(graphics_context, desc);
         REQUIRE(!frame_buffer.IsValid());
     }
@@ -1502,10 +1507,12 @@ TEST_CASE("Creating a frame buffer", "[render-api][framebuffer]")
             .width = 512, .height = 512, .type = Rndr::TextureType::Texture2D, .pixel_format = Rndr::PixelFormat::R8G8B8A8_UINT};
         const Rndr::TextureDesc depth_stencil_attachment_desc{
             .width = 512, .height = 512, .type = Rndr::TextureType::CubeMap, .pixel_format = Rndr::PixelFormat::D24_UNORM_S8_UINT};
-        const Rndr::FrameBufferDesc desc{.color_attachments = {color_attachment_desc},
-                                         .color_attachment_samplers = {{}},
-                                         .depth_stencil_attachment = depth_stencil_attachment_desc,
-                                         .use_depth_stencil = true};
+        const Rndr::FrameBufferDesc desc{
+            .color_attachments = {color_attachment_desc},
+            .color_attachment_samplers = {{}},
+            .use_depth_stencil = true,
+            .depth_stencil_attachment = depth_stencil_attachment_desc,
+        };
         const Rndr::FrameBuffer frame_buffer(graphics_context, desc);
         REQUIRE(!frame_buffer.IsValid());
     }
