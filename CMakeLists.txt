@@ -46,7 +46,7 @@ set(MATH_SHARED_LIBS ${RNDR_SHARED_LIBS})
 FetchContent_Declare(
         math
         GIT_REPOSITORY https://github.com/praetorian555/math
-        GIT_TAG        Math-0.1.0
+        GIT_TAG        main
 )
 FetchContent_MakeAvailable(math)
 
