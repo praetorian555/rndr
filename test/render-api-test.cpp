@@ -1516,6 +1516,29 @@ TEST_CASE("Creating a frame buffer", "[render-api][framebuffer]")
         const Rndr::FrameBuffer frame_buffer(graphics_context, desc);
         REQUIRE(!frame_buffer.IsValid());
     }
+    SECTION("with move constructor")
+    {
+        const Rndr::TextureDesc color_attachment_desc{
+            .width = 512, .height = 512, .type = Rndr::TextureType::Texture2D, .pixel_format = Rndr::PixelFormat::R8G8B8A8_UINT};
+        const Rndr::FrameBufferDesc desc{.color_attachments = {color_attachment_desc}, .color_attachment_samplers = {{}}};
+        Rndr::FrameBuffer frame_buffer(graphics_context, desc);
+        REQUIRE(frame_buffer.IsValid());
+        Rndr::FrameBuffer frame_buffer2(std::move(frame_buffer));
+        REQUIRE(frame_buffer2.IsValid());
+        REQUIRE(!frame_buffer.IsValid());
+    }
+    SECTION("with move assignment")
+    {
+        const Rndr::TextureDesc color_attachment_desc{
+            .width = 512, .height = 512, .type = Rndr::TextureType::Texture2D, .pixel_format = Rndr::PixelFormat::R8G8B8A8_UINT};
+        const Rndr::FrameBufferDesc desc{.color_attachments = {color_attachment_desc}, .color_attachment_samplers = {{}}};
+        Rndr::FrameBuffer frame_buffer(graphics_context, desc);
+        REQUIRE(frame_buffer.IsValid());
+        Rndr::FrameBuffer frame_buffer2;
+        frame_buffer2 = std::move(frame_buffer);
+        REQUIRE(frame_buffer2.IsValid());
+        REQUIRE(!frame_buffer.IsValid());
+    }
 
     graphics_context.Destroy();
     hidden_window.Destroy();

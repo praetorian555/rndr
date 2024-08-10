@@ -86,15 +86,20 @@ Rndr::FrameBuffer::~FrameBuffer()
 Rndr::FrameBuffer::FrameBuffer(Rndr::FrameBuffer&& other) noexcept
     : m_desc(std::move(other.m_desc)),
       m_color_attachments(std::move(other.m_color_attachments)),
-      m_depth_stencil_attachment(std::move(other.m_depth_stencil_attachment))
+      m_depth_stencil_attachment(std::move(other.m_depth_stencil_attachment)),
+      m_native_frame_buffer(other.m_native_frame_buffer)
 {
+    other.m_native_frame_buffer = k_invalid_opengl_object;
 }
 
 Rndr::FrameBuffer& Rndr::FrameBuffer::operator=(Rndr::FrameBuffer&& other) noexcept
 {
     m_desc = other.m_desc;
+    Destroy();
     m_color_attachments = std::move(other.m_color_attachments);
     m_depth_stencil_attachment = std::move(other.m_depth_stencil_attachment);
+    m_native_frame_buffer = other.m_native_frame_buffer;
+    other.m_native_frame_buffer = k_invalid_opengl_object;
     return *this;
 }
 
@@ -110,6 +115,7 @@ void Rndr::FrameBuffer::Destroy()
     {
         color_attachment.Destroy();
     }
+    m_color_attachments.Clear();
     m_depth_stencil_attachment.Destroy();
 }
 
