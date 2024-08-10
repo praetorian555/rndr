@@ -8,9 +8,13 @@
 #include "rndr/platform/opengl-graphics-context.h"
 #include "rndr/trace.h"
 
-Rndr::Buffer::Buffer(const GraphicsContext& graphics_context, const BufferDesc& desc, const Opal::Span<const u8>& init_data) : m_desc(desc)
+Rndr::Buffer::Buffer(const GraphicsContext& graphics_context, const BufferDesc& desc, const Opal::Span<const u8>& init_data)
 {
-    Initialize(graphics_context, desc, init_data);
+    const ErrorCode err = Initialize(graphics_context, desc, init_data);
+    if (err != ErrorCode::Success)
+    {
+        Destroy();
+    }
 }
 
 Rndr::Buffer::~Buffer()
@@ -55,6 +59,8 @@ Rndr::ErrorCode Rndr::Buffer::Initialize(const Rndr::GraphicsContext& graphics_c
         RNDR_LOG_ERROR("Buffer::Initialize: Failed, invalid buffer stride %d!", desc.stride);
         return ErrorCode::InvalidArgument;
     }
+
+    m_desc = desc;
 
     glCreateBuffers(1, &m_native_buffer);
     const GLenum buffer_usage = FromUsageToOpenGL(desc.usage);
