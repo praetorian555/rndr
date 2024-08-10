@@ -503,6 +503,14 @@ bool Rndr::GraphicsContext::Bind(const Rndr::FrameBuffer& frame_buffer)
     return true;
 }
 
+bool Rndr::GraphicsContext::BindDefaultFrameBuffer()
+{
+    RNDR_CPU_EVENT_SCOPED("Bind Default FrameBuffer");
+    glBindFramebuffer(GL_FRAMEBUFFER, 0);
+    RNDR_ASSERT_OPENGL();
+    return true;
+}
+
 bool Rndr::GraphicsContext::DrawVertices(PrimitiveTopology topology, i32 vertex_count, i32 instance_count, i32 first_vertex)
 {
     RNDR_CPU_EVENT_SCOPED("Draw Vertices");

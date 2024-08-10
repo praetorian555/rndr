@@ -121,6 +121,12 @@ public:
     bool Bind(const FrameBuffer& frame_buffer);
 
     /**
+     * Bind default frame buffer that represents the screen.
+     * @return Returns true if the default frame buffer was bound successfully, false otherwise.
+     */
+    bool BindDefaultFrameBuffer();
+
+    /**
      * Draws primitives without use of index buffer. It will behave as if indices were specified
      * sequentially starting from 0.
      * @param topology The primitive topology to draw.
