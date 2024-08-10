@@ -814,6 +814,17 @@ bool Rndr::GraphicsContext::ReadSwapChainDepthStencil(const SwapChain& swap_chai
 Rndr::ErrorCode Rndr::GraphicsContext::ClearFrameBufferColorAttachment(const Rndr::FrameBuffer& frame_buffer,
                                                                        Rndr::i32 color_attachment_index, const Rndr::Vector4f& color)
 {
+    if (!frame_buffer.IsValid())
+    {
+        RNDR_LOG_ERROR("ClearFrameBufferColorAttachment: Failed, invalid frame buffer object!");
+        return ErrorCode::InvalidArgument;
+    }
+    if (color_attachment_index < 0 || color_attachment_index >= frame_buffer.GetColorAttachmentCount())
+    {
+        RNDR_LOG_ERROR("ClearFrameBufferColorAttachment: Failed, color attachment index %d is out of bounds [0, %d)!",
+                       color_attachment_index, frame_buffer.GetColorAttachmentCount());
+        return ErrorCode::OutOfBounds;
+    }
     glClearNamedFramebufferfv(frame_buffer.GetNativeFrameBuffer(), GL_COLOR, color_attachment_index, color.data);
     RNDR_GL_VERIFY("Failed to clear color attachment!", RNDR_NOOP);
     return ErrorCode::Success;
@@ -821,7 +832,12 @@ Rndr::ErrorCode Rndr::GraphicsContext::ClearFrameBufferColorAttachment(const Rnd
 
 Rndr::ErrorCode Rndr::GraphicsContext::ClearFrameBufferDepthStencilAttachment(const Rndr::FrameBuffer& frame_buffer, f32 depth, i32 stencil)
 {
-    glClearNamedFramebufferfi(frame_buffer.GetNativeFrameBuffer(), GL_DEPTH, 0, depth, stencil);
+    if (!frame_buffer.IsValid())
+    {
+        RNDR_LOG_ERROR("ClearFrameBufferDepthStencilAttachment: Failed, invalid frame buffer object!");
+        return ErrorCode::InvalidArgument;
+    }
+    glClearNamedFramebufferfi(frame_buffer.GetNativeFrameBuffer(), GL_DEPTH_STENCIL, 0, depth, stencil);
     RNDR_GL_VERIFY("Failed to clear depth attachment!", RNDR_NOOP);
     return ErrorCode::Success;
 }

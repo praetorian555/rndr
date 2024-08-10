@@ -217,7 +217,25 @@ public:
      */
     [[nodiscard]] bool ReadSwapChainDepthStencil(const SwapChain& swap_chain, Bitmap& out_bitmap);
 
+    /**
+     * Clears the specified color attachment with a given color in the given frame buffer.
+     * @param frame_buffer The frame buffer to clear.
+     * @param color_attachment_index The index of the color attachment to clear.
+     * @param color The color to clear the attachment to.
+     * @return Returns ErrorCode::Success if the color attachment was cleared successfully. Returns ErrorCode::InvalidArgument if the frame
+     * buffer is not valid. Returns ErrorCode::OutOfBounds if the color attachment index is out of bounds. Returns ErrorCode::GraphicsAPIError
+     * if OpenGL failed to clear the color attachment.
+     */
     ErrorCode ClearFrameBufferColorAttachment(const FrameBuffer& frame_buffer, i32 color_attachment_index, const Vector4f& color);
+
+    /**
+     * Clears the depth and stencil attachments with given values in the given frame buffer.
+     * @param frame_buffer The frame buffer to clear.
+     * @param depth The depth value to clear the attachment to.
+     * @param stencil The stencil value to clear the attachment to.
+     * @return Returns ErrorCode::Success if the depth and stencil attachments were cleared successfully. Returns ErrorCode::InvalidArgument
+     * if the frame buffer is not valid. Returns ErrorCode::GraphicsAPIError if OpenGL failed to clear the depth and stencil attachments.
+     */
     ErrorCode ClearFrameBufferDepthStencilAttachment(const FrameBuffer& frame_buffer, f32 depth, i32 stencil);
 
 private:
