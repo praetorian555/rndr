@@ -514,6 +514,7 @@ bool Rndr::GraphicsContext::BindDefaultFrameBuffer()
 bool Rndr::GraphicsContext::DrawVertices(PrimitiveTopology topology, i32 vertex_count, i32 instance_count, i32 first_vertex)
 {
     RNDR_CPU_EVENT_SCOPED("Draw Vertices");
+    RNDR_GPU_EVENT_SCOPED("Draw Vertices");
 
     const GLenum primitive = FromPrimitiveTopologyToOpenGL(topology);
     glDrawArraysInstanced(primitive, first_vertex, vertex_count, instance_count);
@@ -524,6 +525,7 @@ bool Rndr::GraphicsContext::DrawVertices(PrimitiveTopology topology, i32 vertex_
 bool Rndr::GraphicsContext::DrawIndices(PrimitiveTopology topology, i32 index_count, i32 instance_count, i32 first_index)
 {
     RNDR_CPU_EVENT_SCOPED("Draw Indices");
+    RNDR_GPU_EVENT_SCOPED("Draw Indices");
 
     RNDR_ASSERT(m_bound_pipeline.IsValid());
     RNDR_ASSERT(m_bound_pipeline->IsIndexBufferBound());

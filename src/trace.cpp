@@ -1,15 +1,44 @@
 #include "rndr/trace.h"
 
-Rndr::Trace::ScopedEvent::ScopedEvent(const char* name) : m_name(name)
+#if RNDR_OPENGL
+#include "glad/glad.h"
+#endif
+
+Rndr::Trace::ScopedCpuEvent::ScopedCpuEvent(const char* name) : m_name(name)
 {
-    BeginEvent(m_name);
+    BeginCpuEvent(m_name);
 }
 
-Rndr::Trace::ScopedEvent::~ScopedEvent()
+Rndr::Trace::ScopedCpuEvent::~ScopedCpuEvent()
 {
-    EndEvent(m_name);
+    EndCpuEvent(m_name);
 }
 
-void Rndr::Trace::BeginEvent(const char*) {}
+void Rndr::Trace::BeginCpuEvent(const char*) {}
 
-void Rndr::Trace::EndEvent(const char*) {}
+void Rndr::Trace::EndCpuEvent(const char*) {}
+
+Rndr::Trace::ScopedGpuEvent::ScopedGpuEvent(const char* name) : m_name(name)
+{
+    BeginGpuEvent(name);
+}
+
+Rndr::Trace::ScopedGpuEvent::~ScopedGpuEvent()
+{
+    EndGpuEvent(m_name);
+}
+
+void Rndr::Trace::BeginGpuEvent(const char* name)
+{
+#if RNDR_OPENGL
+    static GLuint s_group_id = 0;
+    glPushDebugGroup(GL_DEBUG_SOURCE_APPLICATION, s_group_id++, -1, name);
+#endif
+}
+
+void Rndr::Trace::EndGpuEvent(const char*)
+{
+#if RNDR_OPENGL
+    glPopDebugGroup();
+#endif
+}
