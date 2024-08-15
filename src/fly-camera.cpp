@@ -77,7 +77,7 @@ void Rndr::FlyCamera::Update(f32 delta_seconds)
         return;
     }
 
-    m_direction_vector = Vector3f{0, 0, 1};  // Left-handed
+    m_direction_vector = Vector3f{0, 0, -1};
     Rotatorf rotation = GetRotation();
     rotation += delta_seconds * m_desc.rotation_speed * m_delta_rotation;
     m_direction_vector = Math::Rotate(rotation) * m_direction_vector;
@@ -121,7 +121,7 @@ void Rndr::FlyCamera::HandleLookVert(Rndr::InputPrimitive primitive, Rndr::Input
     using IT = Rndr::InputTrigger;
     if (primitive == Rndr::InputPrimitive::Mouse_AxisY)
     {
-        m_delta_rotation.roll = m_desc.rotation_speed * axis_value;
+        m_delta_rotation.roll = -m_desc.rotation_speed * axis_value;
     }
     else
     {
@@ -134,7 +134,7 @@ void Rndr::FlyCamera::HandleLookHorz(Rndr::InputPrimitive primitive, Rndr::Input
     using IT = Rndr::InputTrigger;
     if (primitive == Rndr::InputPrimitive::Mouse_AxisX)
     {
-        m_delta_rotation.yaw = m_desc.rotation_speed * axis_value;
+        m_delta_rotation.yaw = -m_desc.rotation_speed * axis_value;
     }
     else
     {
