@@ -96,9 +96,9 @@ bool Rndr::LineRenderer::Render()
         return true;
     }
 
-    m_desc.graphics_context->Bind(*m_desc.swap_chain);
-    m_desc.graphics_context->Bind(*m_pipeline);
-    m_desc.graphics_context->Bind(*m_constant_buffer, 0);
+    m_desc.graphics_context->BindSwapChainFrameBuffer(*m_desc.swap_chain);
+    m_desc.graphics_context->BindPipeline(*m_pipeline);
+    m_desc.graphics_context->BindBuffer(*m_constant_buffer, 0);
 
     m_desc.graphics_context->UpdateBuffer(*m_vertex_buffer, AsBytes(m_vertex_data));
     const i32 vertex_count = static_cast<i32>(m_vertex_data.GetSize());

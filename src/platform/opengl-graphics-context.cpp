@@ -317,77 +317,65 @@ bool Rndr::GraphicsContext::ClearAll(const Vector4f& color, float depth, i32 ste
     return true;
 }
 
-bool Rndr::GraphicsContext::Bind(const Rndr::SwapChain& swap_chain)
-{
-    RNDR_CPU_EVENT_SCOPED("Bind SwapChain");
-
-    glBindFramebuffer(GL_FRAMEBUFFER, 0);
-    RNDR_ASSERT_OPENGL();
-    const SwapChainDesc& desc = swap_chain.GetDesc();
-    glViewport(0, 0, desc.width, desc.height);
-    RNDR_ASSERT_OPENGL();
-    return true;
-}
-
-bool Rndr::GraphicsContext::Bind(const Pipeline& pipeline)
+Rndr::ErrorCode Rndr::GraphicsContext::BindPipeline(const Pipeline& pipeline)
 {
     RNDR_CPU_EVENT_SCOPED("Bind Pipeline");
 
     const GLuint shader_program = pipeline.GetNativeShaderProgram();
     glUseProgram(shader_program);
-    RNDR_ASSERT_OPENGL();
+    RNDR_GL_VERIFY("Failed to bind shader program!", RNDR_NOOP);
     const GLuint vertex_array = pipeline.GetNativeVertexArray();
     glBindVertexArray(vertex_array);
-    RNDR_ASSERT_OPENGL();
+    RNDR_GL_VERIFY("Failed to bind vertex array object!", RNDR_NOOP);
     const Rndr::PipelineDesc desc = pipeline.GetDesc();
     if (desc.depth_stencil.is_depth_enabled)
     {
         glEnable(GL_DEPTH_TEST);
-        RNDR_ASSERT_OPENGL();
+        RNDR_GL_VERIFY("Failed to enable depth test!", RNDR_NOOP);
         const GLenum depth_func = FromComparatorToOpenGL(desc.depth_stencil.depth_comparator);
         glDepthFunc(depth_func);
-        RNDR_ASSERT_OPENGL();
+        RNDR_GL_VERIFY("Failed to set depth function!", RNDR_NOOP);
         glDepthMask(desc.depth_stencil.depth_mask == Rndr::DepthMask::All ? GL_TRUE : GL_FALSE);
-        RNDR_ASSERT_OPENGL();
+        RNDR_GL_VERIFY("Failed to set depth mask!", RNDR_NOOP);
     }
     else
     {
         glDisable(GL_DEPTH_TEST);
-        RNDR_ASSERT_OPENGL();
+        RNDR_GL_VERIFY("Failed to disable depth test!", RNDR_NOOP);
     }
     if (desc.depth_stencil.is_stencil_enabled)
     {
         constexpr u32 k_mask_all_enabled = 0xFFFFFFFF;
         glEnable(GL_STENCIL_TEST);
-        RNDR_ASSERT_OPENGL();
+        RNDR_GL_VERIFY("Failed to enable stencil test!", RNDR_NOOP);
         glStencilMask(desc.depth_stencil.stencil_write_mask);
-        RNDR_ASSERT_OPENGL();
+        RNDR_GL_VERIFY("Failed to set stencil write mask!", RNDR_NOOP);
         const GLenum front_face_stencil_func = FromComparatorToOpenGL(desc.depth_stencil.stencil_front_face_comparator);
         glStencilFuncSeparate(GL_FRONT, front_face_stencil_func, desc.depth_stencil.stencil_ref_value, k_mask_all_enabled);
-        RNDR_ASSERT_OPENGL();
+        RNDR_GL_VERIFY("Failed to set front face stencil function!", RNDR_NOOP);
         const GLenum back_face_stencil_func = FromComparatorToOpenGL(desc.depth_stencil.stencil_back_face_comparator);
         glStencilFuncSeparate(GL_BACK, back_face_stencil_func, desc.depth_stencil.stencil_ref_value, k_mask_all_enabled);
-        RNDR_ASSERT_OPENGL();
+        RNDR_GL_VERIFY("Failed to set back face stencil function!", RNDR_NOOP);
         const GLenum front_face_stencil_fail_op = FromStencilOpToOpenGL(desc.depth_stencil.stencil_front_face_fail_op);
         const GLenum front_face_stencil_depth_fail_op = FromStencilOpToOpenGL(desc.depth_stencil.stencil_front_face_depth_fail_op);
         const GLenum front_face_stencil_pass_op = FromStencilOpToOpenGL(desc.depth_stencil.stencil_front_face_pass_op);
         glStencilOpSeparate(GL_FRONT, front_face_stencil_fail_op, front_face_stencil_depth_fail_op, front_face_stencil_pass_op);
-        RNDR_ASSERT_OPENGL();
+        RNDR_GL_VERIFY("Failed to set front face stencil operations!", RNDR_NOOP);
         const GLenum back_face_stencil_fail_op = FromStencilOpToOpenGL(desc.depth_stencil.stencil_back_face_fail_op);
         const GLenum back_face_stencil_depth_fail_op = FromStencilOpToOpenGL(desc.depth_stencil.stencil_back_face_depth_fail_op);
         const GLenum back_face_stencil_pass_op = FromStencilOpToOpenGL(desc.depth_stencil.stencil_back_face_pass_op);
         glStencilOpSeparate(GL_BACK, back_face_stencil_fail_op, back_face_stencil_depth_fail_op, back_face_stencil_pass_op);
-        RNDR_ASSERT_OPENGL();
+        RNDR_GL_VERIFY("Failed to set back face stencil operations!", RNDR_NOOP);
     }
     else
     {
         glDisable(GL_STENCIL_TEST);
-        RNDR_ASSERT_OPENGL();
+        RNDR_GL_VERIFY("Failed to disable stencil test!", RNDR_NOOP);
     }
     if (desc.blend.is_enabled)
     {
         glEnable(GL_BLEND);
-        RNDR_ASSERT_OPENGL();
+        RNDR_GL_VERIFY("Failed to enable blending!", RNDR_NOOP);
         const GLenum src_color_factor = FromBlendFactorToOpenGL(desc.blend.src_color_factor);
         const GLenum dst_color_factor = FromBlendFactorToOpenGL(desc.blend.dst_color_factor);
         const GLenum src_alpha_factor = FromBlendFactorToOpenGL(desc.blend.src_alpha_factor);
@@ -395,120 +383,160 @@ bool Rndr::GraphicsContext::Bind(const Pipeline& pipeline)
         const GLenum color_op = FromBlendOperationToOpenGL(desc.blend.color_operation);
         const GLenum alpha_op = FromBlendOperationToOpenGL(desc.blend.alpha_operation);
         glBlendFuncSeparate(src_color_factor, dst_color_factor, src_alpha_factor, dst_alpha_factor);
-        RNDR_ASSERT_OPENGL();
+        RNDR_GL_VERIFY("Failed to set blend factors!", RNDR_NOOP);
         glBlendEquationSeparate(color_op, alpha_op);
-        RNDR_ASSERT_OPENGL();
+        RNDR_GL_VERIFY("Failed to set blend operations!", RNDR_NOOP);
         glBlendColor(desc.blend.const_color.r, desc.blend.const_color.g, desc.blend.const_color.b, desc.blend.const_alpha);
-        RNDR_ASSERT_OPENGL();
+        RNDR_GL_VERIFY("Failed to set blend constant color!", RNDR_NOOP);
     }
     else
     {
         glDisable(GL_BLEND);
-        RNDR_ASSERT_OPENGL();
+        RNDR_GL_VERIFY("Failed to disable blending!", RNDR_NOOP);
     }
     // Rasterizer configuration
     {
         glPolygonMode(GL_FRONT_AND_BACK, desc.rasterizer.fill_mode == FillMode::Solid ? GL_FILL : GL_LINE);
-        RNDR_ASSERT_OPENGL();
+        RNDR_GL_VERIFY("Failed to set polygon mode!", RNDR_NOOP);
         if (desc.rasterizer.cull_face != Face::None)
         {
             glEnable(GL_CULL_FACE);
-            RNDR_ASSERT_OPENGL();
+            RNDR_GL_VERIFY("Failed to enable cull face!", RNDR_NOOP);
             glCullFace(desc.rasterizer.cull_face == Face::Front ? GL_FRONT : GL_BACK);
-            RNDR_ASSERT_OPENGL();
+            RNDR_GL_VERIFY("Failed to set cull face!", RNDR_NOOP);
         }
         else
         {
             glDisable(GL_CULL_FACE);
-            RNDR_ASSERT_OPENGL();
+            RNDR_GL_VERIFY("Failed to disable cull face!", RNDR_NOOP);
         }
         glFrontFace(desc.rasterizer.front_face_winding_order == WindingOrder::CW ? GL_CW : GL_CCW);
-        RNDR_ASSERT_OPENGL();
+        RNDR_GL_VERIFY("Failed to set front face winding order!", RNDR_NOOP);
         if (desc.rasterizer.depth_bias != 0.0f || desc.rasterizer.slope_scaled_depth_bias != 0.0f)
         {
             glEnable(GL_POLYGON_OFFSET_LINE);
-            RNDR_ASSERT_OPENGL();
+            RNDR_GL_VERIFY("Failed to enable polygon offset!", RNDR_NOOP);
             glPolygonOffset(desc.rasterizer.slope_scaled_depth_bias, desc.rasterizer.depth_bias);
-            RNDR_ASSERT_OPENGL();
+            RNDR_GL_VERIFY("Failed to set polygon offset!", RNDR_NOOP);
         }
         else
         {
             glDisable(GL_POLYGON_OFFSET_LINE);
-            RNDR_ASSERT_OPENGL();
+            RNDR_GL_VERIFY("Failed to disable polygon offset!", RNDR_NOOP);
         }
         if (desc.rasterizer.scissor_size.x > 0 && desc.rasterizer.scissor_size.y > 0)
         {
             glEnable(GL_SCISSOR_TEST);
-            RNDR_ASSERT_OPENGL();
+            RNDR_GL_VERIFY("Failed to enable scissor test!", RNDR_NOOP);
             glScissor(static_cast<i32>(desc.rasterizer.scissor_bottom_left.x), static_cast<i32>(desc.rasterizer.scissor_bottom_left.y),
                       static_cast<i32>(desc.rasterizer.scissor_size.x), static_cast<i32>(desc.rasterizer.scissor_size.y));
-            RNDR_ASSERT_OPENGL();
+            RNDR_GL_VERIFY("Failed to set scissor rectangle!", RNDR_NOOP);
         }
         else
         {
             glDisable(GL_SCISSOR_TEST);
-            RNDR_ASSERT_OPENGL();
+            RNDR_GL_VERIFY("Failed to disable scissor test!", RNDR_NOOP);
         }
     }
+
     m_bound_pipeline = &pipeline;
-    return true;
+
+    return ErrorCode::Success;
 }
 
-bool Rndr::GraphicsContext::Bind(const Buffer& buffer, i32 binding_index)
+Rndr::ErrorCode Rndr::GraphicsContext::BindBuffer(const Buffer& buffer, i32 binding_index)
 {
     RNDR_CPU_EVENT_SCOPED("Bind Buffer");
 
+    if (!buffer.IsValid())
+    {
+        RNDR_LOG_ERROR("Invalid buffer object!");
+        return ErrorCode::InvalidArgument;
+    }
     const GLuint native_buffer = buffer.GetNativeBuffer();
     const BufferDesc& desc = buffer.GetDesc();
     const GLenum target = FromBufferTypeToOpenGL(desc.type);
     if (target == GL_UNIFORM_BUFFER || target == GL_SHADER_STORAGE_BUFFER)
     {
         glBindBufferRange(target, binding_index, native_buffer, 0, desc.size);
-        RNDR_ASSERT_OPENGL();
-        return true;
+        RNDR_GL_VERIFY("Failed to bind a buffer!", RNDR_NOOP);
+        return ErrorCode::Success;
     }
-
     RNDR_LOG_ERROR("Vertex and index buffers should be bound through the use of input layout and pipeline!");
-    return false;
+    return ErrorCode::InvalidArgument;
 }
 
-bool Rndr::GraphicsContext::Bind(const Texture& image, i32 binding_index)
+Rndr::ErrorCode Rndr::GraphicsContext::BindTexture(const Texture& texture, i32 binding_index)
 {
     RNDR_CPU_EVENT_SCOPED("Bind Texture");
 
-    const GLuint native_texture = image.GetNativeTexture();
+    if (!texture.IsValid())
+    {
+        RNDR_LOG_ERROR("Invalid texture object!");
+        return ErrorCode::InvalidArgument;
+    }
+    const GLuint native_texture = texture.GetNativeTexture();
     glBindTextures(binding_index, 1, &native_texture);
-    RNDR_ASSERT_OPENGL();
-    return true;
+    RNDR_GL_VERIFY("Failed to bind texture!", RNDR_NOOP);
+    return ErrorCode::Success;
 }
 
-bool Rndr::GraphicsContext::BindImageForCompute(const Rndr::Texture& image, i32 binding_index, i32 image_level, Rndr::ImageAccess access)
+Rndr::ErrorCode Rndr::GraphicsContext::BindTextureForCompute(const Rndr::Texture& texture, i32 binding_index, i32 image_level,
+                                                             Rndr::TextureAccess access)
 {
     RNDR_CPU_EVENT_SCOPED("Bind Texture For Compute");
 
-    glBindImageTexture(binding_index, image.GetNativeTexture(), image_level, GL_FALSE, 0, FromImageAccessToOpenGL(access),
-                       FromPixelFormatToInternalFormat(image.GetTextureDesc().pixel_format));
-    RNDR_ASSERT_OPENGL();
-    return true;
+    if (!texture.IsValid())
+    {
+        RNDR_LOG_ERROR("Invalid texture object!");
+        return ErrorCode::InvalidArgument;
+    }
+    glBindImageTexture(binding_index, texture.GetNativeTexture(), image_level, GL_FALSE, 0, FromImageAccessToOpenGL(access),
+                       FromPixelFormatToInternalFormat(texture.GetTextureDesc().pixel_format));
+    RNDR_GL_VERIFY("Failed to bind texture for compute!", RNDR_NOOP);
+    return ErrorCode::Success;
 }
 
-bool Rndr::GraphicsContext::Bind(const Rndr::FrameBuffer& frame_buffer)
+Rndr::ErrorCode Rndr::GraphicsContext::BindFrameBuffer(const Rndr::FrameBuffer& frame_buffer)
 {
     RNDR_CPU_EVENT_SCOPED("Bind FrameBuffer");
+
+    if (!frame_buffer.IsValid())
+    {
+        RNDR_LOG_ERROR("Invalid frame buffer object!");
+        return ErrorCode::InvalidArgument;
+    }
     glBindFramebuffer(GL_FRAMEBUFFER, frame_buffer.GetNativeFrameBuffer());
-    RNDR_ASSERT_OPENGL();
-    TextureDesc color_attachment_desc = frame_buffer.GetColorAttachment(0).GetTextureDesc();
-    glViewport(0, 0, color_attachment_desc.width, color_attachment_desc.height);
-    RNDR_ASSERT_OPENGL();
-    return true;
+    RNDR_GL_VERIFY("Failed to bind frame buffer!", RNDR_NOOP);
+    TextureDesc attachment_desc;
+    if (frame_buffer.GetColorAttachmentCount() > 0)
+    {
+        attachment_desc = frame_buffer.GetColorAttachment(0).GetTextureDesc();
+    }
+    else
+    {
+        attachment_desc = frame_buffer.GetDepthStencilAttachment().GetTextureDesc();
+    }
+    glViewport(0, 0, attachment_desc.width, attachment_desc.height);
+    RNDR_GL_VERIFY("Failed to set viewport!", RNDR_NOOP);
+    return ErrorCode::Success;
 }
 
-bool Rndr::GraphicsContext::BindDefaultFrameBuffer()
+Rndr::ErrorCode Rndr::GraphicsContext::BindSwapChainFrameBuffer(const Rndr::SwapChain& swap_chain)
 {
-    RNDR_CPU_EVENT_SCOPED("Bind Default FrameBuffer");
+    RNDR_CPU_EVENT_SCOPED("Bind SwapChain FrameBuffer");
+
+    if (!swap_chain.IsValid())
+    {
+        RNDR_LOG_ERROR("Invalid swap chain object!");
+        return ErrorCode::InvalidArgument;
+    }
     glBindFramebuffer(GL_FRAMEBUFFER, 0);
-    RNDR_ASSERT_OPENGL();
-    return true;
+    RNDR_GL_VERIFY("Failed to bind default frame buffer!", RNDR_NOOP);
+    const SwapChainDesc& desc = swap_chain.GetDesc();
+    glViewport(0, 0, desc.width, desc.height);
+    RNDR_GL_VERIFY("Failed to set viewport!", RNDR_NOOP);
+    return ErrorCode::Success;
 }
 
 bool Rndr::GraphicsContext::DrawVertices(PrimitiveTopology topology, i32 vertex_count, i32 instance_count, i32 first_vertex)

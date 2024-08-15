@@ -73,58 +73,57 @@ public:
     bool ClearAll(const Vector4f& color, float depth = 1.0f, i32 stencil = 0);
 
     /**
-     * Binds a swap chain to the graphics pipeline. This will activate default frame buffer.
-     * @param swap_chain The swap chain to bind.
-     * @return Returns true if the swap chain was bound successfully, false otherwise.
-     */
-    bool Bind(const SwapChain& swap_chain);
-
-    /**
      * Binds a pipeline object to the graphics pipeline.
      * @param pipeline The pipeline to bind.
-     * @return Returns true if the pipeline was bound successfully, false otherwise.
+     * @return Returns ErrorCode::Success if the pipeline was bound successfully. Returns ErrorCode::InvalidArgument if the pipeline is not
+     * valid. Returns ErrorCode::GraphicsAPIError if OpenGL failed to bind the pipeline.
      */
-    bool Bind(const Pipeline& pipeline);
+    ErrorCode BindPipeline(const Pipeline& pipeline);
 
     /**
      * Binds a buffer to the graphics pipeline.
      * @param buffer The buffer to bind.
-     * @param binding_index The binding index to bind the buffer to. Only relevant for constant and shader storage buffer. Default value is
-     * -1.
-     * @return Returns true if the buffer was bound successfully, false otherwise.
+     * @param binding_index The binding index to bind the buffer to. Only relevant for constant and shader storage buffer.
+     * @return Returns ErrorCode::Success if the buffer was bound successfully. Returns ErrorCode::InvalidArgument if the buffer is not
+     * valid. Returns ErrorCode::GraphicsAPIError if OpenGL failed to bind the buffer.
      */
-    bool Bind(const Buffer& buffer, i32 binding_index = -1);
+    ErrorCode BindBuffer(const Buffer& buffer, i32 binding_index);
 
     /**
-     * Binds an image to the graphics pipeline.
-     * @param image The image to bind.
-     * @param binding_index The binding index to bind the image to.
-     * @return Returns true if the image was bound successfully, false otherwise.
+     * Binds an texture to the graphics pipeline.
+     * @param texture The texture to bind.
+     * @param binding_index The binding index to bind the texture to.
+     * @return Returns ErrorCode::Success if the texture was bound successfully. Returns ErrorCode::InvalidArgument if the texture is not
+     * valid. Returns ErrorCode::GraphicsAPIError if OpenGL failed to bind the texture.
      */
-    bool Bind(const Texture& image, i32 binding_index);
+    ErrorCode BindTexture(const Texture& image, i32 binding_index);
 
     /**
-     * Binds one level of the image to the compute pipeline.
-     * @param image The image to bind.
-     * @param binding_index The binding index to bind the image to.
-     * @param image_level The image level to bind.
-     * @param access How the image will be accessed in the compute shader.
-     * @return Returns true if the image was bound successfully, false otherwise.
+     * Binds one level of the texture to the compute pipeline.
+     * @param texture The texture to bind.
+     * @param binding_index The binding index to bind the texture to.
+     * @param texture_level The texture level to bind.
+     * @param access How the texture will be accessed in the compute shader.
+     * @return Returns ErrorCode::Success if the texture was bound successfully. Returns ErrorCode::InvalidArgument if the texture is not
+     * valid. Returns ErrorCode::GraphicsAPIError if OpenGL failed to bind the texture.
      */
-    bool BindImageForCompute(const Texture& image, i32 binding_index, i32 image_level, ImageAccess access);
+    ErrorCode BindTextureForCompute(const Texture& texture, i32 binding_index, i32 texture_level, TextureAccess access);
 
     /**
      * Binds a frame buffer to the graphics pipeline.
      * @param frame_buffer The frame buffer to bind.
-     * @return Returns true if the frame buffer was bound successfully, false otherwise.
+     * @return Returns ErrorCode::Success if the frame buffer was bound successfully. Returns ErrorCode::InvalidArgument if the frame buffer
+     * is not valid. Returns ErrorCode::GraphicsAPIError if OpenGL failed to bind the frame buffer.
      */
-    bool Bind(const FrameBuffer& frame_buffer);
+    ErrorCode BindFrameBuffer(const FrameBuffer& frame_buffer);
 
     /**
-     * Bind default frame buffer that represents the screen.
-     * @return Returns true if the default frame buffer was bound successfully, false otherwise.
+     * Binds a swap chain frame buffer to the graphics pipeline. This is a default frame buffer that is created by the swap chain.
+     * @param swap_chain The swap chain to bind.
+     * @return Returns ErrorCode::Success if the swap chain frame buffer was bound successfully. Returns ErrorCode::InvalidArgument if the
+     * swap chain is not valid. Returns ErrorCode::GraphicsAPIError if OpenGL failed to bind the swap chain frame buffer.
      */
-    bool BindDefaultFrameBuffer();
+    ErrorCode BindSwapChainFrameBuffer(const SwapChain& swap_chain);
 
     /**
      * Draws primitives without use of index buffer. It will behave as if indices were specified
@@ -192,7 +191,6 @@ public:
      */
     ErrorCode CopyBuffer(const Buffer& dst_buffer, const Buffer& src_buffer, i32 dst_offset = 0, i32 src_offset = 0, i32 size = 0);
 
-
     /**
      * Read the contents of an image.
      * @param image The image to read.
@@ -223,8 +221,8 @@ public:
      * @param color_attachment_index The index of the color attachment to clear.
      * @param color The color to clear the attachment to.
      * @return Returns ErrorCode::Success if the color attachment was cleared successfully. Returns ErrorCode::InvalidArgument if the frame
-     * buffer is not valid. Returns ErrorCode::OutOfBounds if the color attachment index is out of bounds. Returns ErrorCode::GraphicsAPIError
-     * if OpenGL failed to clear the color attachment.
+     * buffer is not valid. Returns ErrorCode::OutOfBounds if the color attachment index is out of bounds. Returns
+     * ErrorCode::GraphicsAPIError if OpenGL failed to clear the color attachment.
      */
     ErrorCode ClearFrameBufferColorAttachment(const FrameBuffer& frame_buffer, i32 color_attachment_index, const Vector4f& color);
 

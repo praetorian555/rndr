@@ -20,7 +20,7 @@ GLenum FromImageInfoToTarget(TextureType image_type, bool is_multi_sample);
 GLint FromMinAndMipFiltersToOpenGL(ImageFilter min_filter, ImageFilter mip_filter);
 GLint FromImageFilterToOpenGL(ImageFilter filter);
 GLint FromImageAddressModeToOpenGL(ImageAddressMode wrap);
-GLint FromImageAccessToOpenGL(ImageAccess access);
+GLint FromImageAccessToOpenGL(TextureAccess access);
 GLenum FromPixelFormatToInternalFormat(PixelFormat format);
 GLenum FromPixelFormatToExternalFormat(PixelFormat format);
 GLenum FromPixelFormatToDataType(PixelFormat format);

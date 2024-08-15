@@ -404,9 +404,9 @@ enum : u32
 }
 
 /**
- * Represents how image can be accessed from the shader.
+ * Represents how texture can be accessed from the shader.
  */
-enum class ImageAccess
+enum class TextureAccess
 {
     Read,
     Write,

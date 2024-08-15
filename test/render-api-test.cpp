@@ -1078,9 +1078,9 @@ TEST_CASE("Running a compute shader", "[render-api][shader]")
         const Rndr::Pipeline compute_pipeline(graphics_context, Rndr::PipelineDesc{.compute_shader = &compute_shader});
         REQUIRE(compute_pipeline.IsValid());
 
-        graphics_context.Bind(compute_pipeline);
-        graphics_context.Bind(src_buffer, 0);
-        graphics_context.Bind(dst_buffer, 1);
+        graphics_context.BindPipeline(compute_pipeline);
+        graphics_context.BindBuffer(src_buffer, 0);
+        graphics_context.BindBuffer(dst_buffer, 1);
         graphics_context.DispatchCompute(k_buffer_size / 64, 1, 1);
 
         Opal::Array<Rndr::f32> read_data_storage(k_buffer_size);
@@ -1136,9 +1136,9 @@ TEST_CASE("Running a compute shader", "[render-api][shader]")
         const Rndr::Pipeline compute_pipeline(graphics_context, Rndr::PipelineDesc{.compute_shader = &compute_shader});
         REQUIRE(compute_pipeline.IsValid());
 
-        graphics_context.Bind(compute_pipeline);
-        graphics_context.BindImageForCompute(src_image, 0, 0, Rndr::ImageAccess::Read);
-        graphics_context.BindImageForCompute(dst_image, 1, 0, Rndr::ImageAccess::Write);
+        graphics_context.BindPipeline(compute_pipeline);
+        graphics_context.BindTextureForCompute(src_image, 0, 0, Rndr::TextureAccess::Read);
+        graphics_context.BindTextureForCompute(dst_image, 1, 0, Rndr::TextureAccess::Write);
         graphics_context.DispatchCompute(k_image_width, k_image_height, 1);
 
         Rndr::Bitmap dst_bitmap;
@@ -1582,9 +1582,9 @@ TEST_CASE("Render full screen quad", "[render-api]")
         const Rndr::Pipeline pipeline(graphics_context, pipeline_desc);
         REQUIRE(pipeline.IsValid());
 
-        graphics_context.Bind(frame_buffer);
+        graphics_context.BindFrameBuffer(frame_buffer);
         graphics_context.ClearColor(Rndr::Vector4f(0.0f, 0.0f, 0.0f, 0.0f));
-        graphics_context.Bind(pipeline);
+        graphics_context.BindPipeline(pipeline);
 
         graphics_context.DrawVertices(Rndr::PrimitiveTopology::Triangle, 6);
 

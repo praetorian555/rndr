@@ -42,26 +42,39 @@ struct ClearAllCommand
     int32_t stencil;
 };
 
-struct BindSwapChainCommand
-{
-    Opal::Ref<const class SwapChain> swap_chain;
-};
-
 struct BindPipelineCommand
 {
     Opal::Ref<const class Pipeline> pipeline;
 };
 
-struct BindConstantBufferCommand
+struct BindBufferCommand
 {
-    Opal::Ref<const class Buffer> constant_buffer;
+    Opal::Ref<const class Buffer> buffer;
     int32_t binding_index;
 };
 
-struct BindImageCommand
+struct BindTextureCommand
 {
-    Opal::Ref<const class Texture> image;
+    Opal::Ref<const class Texture> texture;
     int32_t binding_index;
+};
+
+struct BindTextureForComputeCommand
+{
+    Opal::Ref<const class Texture> texture;
+    int32_t binding_index;
+    int32_t texture_level;
+    TextureAccess access;
+};
+
+struct BindSwapChainCommand
+{
+    Opal::Ref<const class SwapChain> swap_chain;
+};
+
+struct BindFrameBufferCommand
+{
+    Opal::Ref<const class FrameBuffer> frame_buffer;
 };
 
 struct DrawVerticesCommand
@@ -121,9 +134,10 @@ struct DrawIndicesMultiCommand
     DrawIndicesMultiCommand& operator=(DrawIndicesMultiCommand&& other) noexcept;
 };
 
-using Command = std::variant<PresentCommand, ClearColorCommand, ClearDepthCommand, ClearStencilCommand, ClearAllCommand,
-                             BindSwapChainCommand, BindPipelineCommand, BindConstantBufferCommand, BindImageCommand, DrawVerticesCommand,
-                             DrawIndicesCommand, DrawVerticesMultiCommand, DrawIndicesMultiCommand, UpdateBufferCommand>;
+using Command =
+    std::variant<PresentCommand, ClearColorCommand, ClearDepthCommand, ClearStencilCommand, ClearAllCommand, BindSwapChainCommand,
+                 BindPipelineCommand, BindBufferCommand, BindTextureCommand, BindTextureForComputeCommand, BindFrameBufferCommand,
+                 DrawVerticesCommand, DrawIndicesCommand, DrawVerticesMultiCommand, DrawIndicesMultiCommand, UpdateBufferCommand>;
 
 /**
  * Represents a list of commands to be executed on the GPU.
@@ -148,74 +162,76 @@ public:
     bool Present(const SwapChain& swap_chain);
 
     /**
-     * Clears the color image in the bound frame buffer.
-     * @param color The color to clear the image to.
-     * @return Returns true if the image was cleared successfully, false otherwise.
+     * Clears the color texture in the bound frame buffer.
+     * @param color The color to clear the texture to.
+     * @return Returns true if the texture was cleared successfully, false otherwise.
      */
     bool ClearColor(const Vector4f& color);
 
     /**
-     * Clears the depth image in the bound frame buffer.
-     * @param depth The depth value to clear the image to.
-     * @return Returns true if the image was cleared successfully, false otherwise.
+     * Clears the depth texture in the bound frame buffer.
+     * @param depth The depth value to clear the texture to.
+     * @return Returns true if the texture was cleared successfully, false otherwise.
      */
     bool ClearDepth(float depth);
 
     /**
-     * Clears the stencil image in the bound frame buffer.
-     * @param stencil The stencil value to clear the image to.
-     * @return Returns true if the image was cleared successfully, false otherwise.
+     * Clears the stencil texture in the bound frame buffer.
+     * @param stencil The stencil value to clear the texture to.
+     * @return Returns true if the texture was cleared successfully, false otherwise.
      */
     bool ClearStencil(int32_t stencil);
 
     /**
-     * Clears the color and depth images in the bound frame buffer.
-     * @param color Color to clear the color image to.
-     * @param depth Depth value to clear the depth image to. Default is 1.
-     * @param stencil Stencil value to clear the stencil image to. Default is 0.
-     * @return Returns true if the images were cleared successfully, false otherwise.
+     * Clears the color and depth textures in the bound frame buffer.
+     * @param color Color to clear the color texture to.
+     * @param depth Depth value to clear the depth texture to. Default is 1.
+     * @param stencil Stencil value to clear the stencil texture to. Default is 0.
+     * @return Returns true if the textures were cleared successfully, false otherwise.
      */
     bool ClearAll(const Vector4f& color, float depth = 1.0f, int32_t stencil = 0);
+
+    /**
+     * Binds a pipeline object to the graphics pipeline.
+     * @param pipeline The pipeline to bind.
+     */
+    void BindPipeline(const Pipeline& pipeline);
+
+    /**
+     * Binds a constant buffer to the graphics pipeline on a specified slot.
+     * @param buffer The constant buffer to bind.
+     * @param binding_index The binding index to bind the buffer to.
+     */
+    void BindBuffer(const Buffer& buffer, int32_t binding_index);
+
+    /**
+     * Binds an texture to the graphics pipeline.
+     * @param texture The texture to bind.
+     * @param binding_index The binding index to bind the texture to.
+     */
+    void BindTexture(const Texture& texture, int32_t binding_index);
+
+    /**
+     * Binds one level of the texture to the compute pipeline.
+     * @param texture The texture to bind.
+     * @param binding_index The binding index to bind the texture to.
+     * @param texture_level The texture level to bind.
+     * @param access How the texture will be accessed in the compute shader.
+     */
+    void BindTextureForCompute(const Texture& texture, int32_t binding_index, int32_t texture_level, TextureAccess access);
+
+    /**
+     * Binds a buffer to the graphics pipeline.
+     * @param frame_buffer The frame buffer to bind.
+     */
+    void BindFrameBuffer(const class FrameBuffer& frame_buffer);
 
     /**
      * Binds a swap chain to the graphics pipeline.
      * @param swap_chain The swap chain to bind.
      * @return Returns true if the swap chain was bound successfully, false otherwise.
      */
-    void Bind(const SwapChain& swap_chain);
-
-    /**
-     * Binds a pipeline object to the graphics pipeline.
-     * @param pipeline The pipeline to bind.
-     * @return Returns true if the pipeline was bound successfully, false otherwise.
-     */
-    void Bind(const Pipeline& pipeline);
-
-    /**
-     * Binds a constant buffer to the graphics pipeline on a specified slot.
-     * @param buffer The constant buffer to bind.
-     * @param binding_index The binding index to bind the buffer to.
-     * @return Returns true if the buffer was bound successfully, false otherwise.
-     */
-    void BindConstantBuffer(const Buffer& buffer, int32_t binding_index);
-
-    /**
-     * Binds an image to the graphics pipeline.
-     * @param image The image to bind.
-     * @param binding_index The binding index to bind the image to.
-     * @return Returns true if the image was bound successfully, false otherwise.
-     */
-    void Bind(const Texture& image, int32_t binding_index);
-
-    /**
-     * Binds one level of the image to the compute pipeline.
-     * @param image The image to bind.
-     * @param binding_index The binding index to bind the image to.
-     * @param image_level The image level to bind.
-     * @param access How the image will be accessed in the compute shader.
-     * @return Returns true if the image was bound successfully, false otherwise.
-     */
-    bool BindImageForCompute(const Texture& image, int32_t binding_index, int32_t image_level, ImageAccess access);
+    void BindSwapChainFrameBuffer(const SwapChain& swap_chain);
 
     /**
      * Updates the contents of a buffer.

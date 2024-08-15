@@ -99,24 +99,36 @@ bool Rndr::CommandList::ClearAll(const Rndr::Vector4f& color, float depth, int32
     return true;
 }
 
-void Rndr::CommandList::Bind(const Rndr::SwapChain& swap_chain)
+void Rndr::CommandList::BindSwapChainFrameBuffer(const Rndr::SwapChain& swap_chain)
 {
     m_commands.PushBack(BindSwapChainCommand{.swap_chain = Opal::Ref<const SwapChain>(swap_chain)});
 }
 
-void Rndr::CommandList::Bind(const Rndr::Pipeline& pipeline)
+void Rndr::CommandList::BindFrameBuffer(const class Rndr::FrameBuffer& frame_buffer)
+{
+    m_commands.PushBack(BindFrameBufferCommand{.frame_buffer = Opal::Ref<const FrameBuffer>(frame_buffer)});
+}
+
+void Rndr::CommandList::BindPipeline(const Rndr::Pipeline& pipeline)
 {
     m_commands.PushBack(BindPipelineCommand{.pipeline = Opal::Ref<const Pipeline>(pipeline)});
 }
 
-void Rndr::CommandList::BindConstantBuffer(const Rndr::Buffer& buffer, int32_t binding_index)
+void Rndr::CommandList::BindBuffer(const Rndr::Buffer& buffer, int32_t binding_index)
 {
-    m_commands.PushBack(BindConstantBufferCommand{.constant_buffer = Opal::Ref<const Buffer>(buffer), .binding_index = binding_index});
+    m_commands.PushBack(BindBufferCommand{.buffer = Opal::Ref<const Buffer>(buffer), .binding_index = binding_index});
 }
 
-void Rndr::CommandList::Bind(const Rndr::Texture& image, int32_t binding_index)
+void Rndr::CommandList::BindTexture(const Rndr::Texture& texture, int32_t binding_index)
 {
-    m_commands.PushBack(BindImageCommand{.image = Opal::Ref<const Texture>(image), .binding_index = binding_index});
+    m_commands.PushBack(BindTextureCommand{.texture = Opal::Ref<const Texture>(texture), .binding_index = binding_index});
+}
+
+void Rndr::CommandList::BindTextureForCompute(const Rndr::Texture& texture, int32_t binding_index, int32_t texture_level,
+                                              Rndr::TextureAccess access)
+{
+    m_commands.PushBack(BindTextureForComputeCommand{
+        .texture = Opal::Ref<const Texture>(texture), .binding_index = binding_index, .texture_level = texture_level, .access = access});
 }
 
 void Rndr::CommandList::DrawVertices(Rndr::PrimitiveTopology topology, int32_t vertex_count, int32_t instance_count, int32_t first_vertex)
@@ -146,7 +158,7 @@ void Rndr::CommandList::DrawVerticesMulti(const Rndr::Pipeline& pipeline, Rndr::
     glNamedBufferStorage(buffer_handle, draws.GetSize() * sizeof(DrawVerticesData), draws.GetData(), GL_DYNAMIC_STORAGE_BIT);
     RNDR_ASSERT_OPENGL();
 
-    Bind(pipeline);
+    BindPipeline(pipeline);
     m_commands.PushBack(DrawVerticesMultiCommand(topology, buffer_handle, static_cast<uint32_t>(draws.GetSize())));
 }
 
@@ -160,7 +172,7 @@ void Rndr::CommandList::DrawIndicesMulti(const Rndr::Pipeline& pipeline, Rndr::P
     static_assert(sizeof(DrawIndicesData::base_instance) == 4);
     static_assert(sizeof(DrawIndicesData) == 20, "DrawIndicesData size is not 20 bytes");
 
-    m_graphics_context->Bind(pipeline);
+    m_graphics_context->BindPipeline(pipeline);
 
     GLuint buffer_handle = 0;
     glCreateBuffers(1, &buffer_handle);
@@ -170,7 +182,7 @@ void Rndr::CommandList::DrawIndicesMulti(const Rndr::Pipeline& pipeline, Rndr::P
     glBindBuffer(GL_DRAW_INDIRECT_BUFFER, buffer_handle);
     RNDR_ASSERT_OPENGL();
 
-    Bind(pipeline);
+    BindPipeline(pipeline);
     m_commands.PushBack(DrawIndicesMultiCommand(topology, buffer_handle, static_cast<uint32_t>(draws.GetSize())));
 }
 
@@ -197,16 +209,23 @@ struct CommandExecutor
         graphics_context->ClearAll(command.color, command.depth, command.stencil);
     }
 
-    void operator()(const Rndr::BindSwapChainCommand& command) const { graphics_context->Bind(command.swap_chain); }
+    void operator()(const Rndr::BindSwapChainCommand& command) const { graphics_context->BindSwapChainFrameBuffer(command.swap_chain); }
 
-    void operator()(const Rndr::BindPipelineCommand& command) const { graphics_context->Bind(command.pipeline); }
+    void operator()(const Rndr::BindFrameBufferCommand& command) const { graphics_context->BindFrameBuffer(command.frame_buffer); }
 
-    void operator()(const Rndr::BindConstantBufferCommand& command) const
+    void operator()(const Rndr::BindPipelineCommand& command) const { graphics_context->BindPipeline(command.pipeline); }
+
+    void operator()(const Rndr::BindBufferCommand& command) const { graphics_context->BindBuffer(command.buffer, command.binding_index); }
+
+    void operator()(const Rndr::BindTextureCommand& command) const
     {
-        graphics_context->Bind(command.constant_buffer, command.binding_index);
+        graphics_context->BindTexture(command.texture, command.binding_index);
     }
 
-    void operator()(const Rndr::BindImageCommand& command) const { graphics_context->Bind(command.image, command.binding_index); }
+    void operator()(const Rndr::BindTextureForComputeCommand& command) const
+    {
+        graphics_context->BindTextureForCompute(command.texture, command.binding_index, command.texture_level, command.access);
+    }
 
     void operator()(const Rndr::DrawVerticesCommand& command) const
     {

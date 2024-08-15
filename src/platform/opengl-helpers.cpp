@@ -370,15 +370,15 @@ GLenum Rndr::FromIndexSizeToOpenGL(int64_t index_size)
 #endif  // RNDR_DEBUG
 }
 
-GLint Rndr::FromImageAccessToOpenGL(Rndr::ImageAccess access)
+GLint Rndr::FromImageAccessToOpenGL(Rndr::TextureAccess access)
 {
     switch (access)
     {
-        case Rndr::ImageAccess::Read:
+        case Rndr::TextureAccess::Read:
             return GL_READ_ONLY;
-        case Rndr::ImageAccess::Write:
+        case Rndr::TextureAccess::Write:
             return GL_WRITE_ONLY;
-        case Rndr::ImageAccess::ReadWrite:
+        case Rndr::TextureAccess::ReadWrite:
             return GL_READ_WRITE;
         default:
             RNDR_HALT("Unsupported image access");
