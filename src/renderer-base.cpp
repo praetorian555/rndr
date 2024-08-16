@@ -16,6 +16,7 @@ Rndr::ClearRenderer::ClearRenderer(const Opal::StringUtf8& name,
 bool Rndr::ClearRenderer::Render()
 {
     RNDR_CPU_EVENT_SCOPED("ClearRenderer::Render");
+    RNDR_GPU_EVENT_SCOPED("ClearRenderer::Render");
     return m_desc.graphics_context->ClearAll(m_color, m_depth, m_stencil);
 }
 
@@ -24,6 +25,7 @@ Rndr::PresentRenderer::PresentRenderer(const Opal::StringUtf8& name, const Rndr:
 bool Rndr::PresentRenderer::Render()
 {
     RNDR_CPU_EVENT_SCOPED("PresentRenderer::Render");
+    RNDR_GPU_EVENT_SCOPED("PresentRenderer::Render");
     return m_desc.graphics_context->Present(m_desc.swap_chain);
 }
 

@@ -585,6 +585,7 @@ bool Rndr::GraphicsContext::DispatchCompute(u32 block_count_x, u32 block_count_y
 Rndr::ErrorCode Rndr::GraphicsContext::UpdateBuffer(const Buffer& buffer, const Opal::Span<const u8>& data, i64 offset)
 {
     RNDR_CPU_EVENT_SCOPED("Update Buffer Contents");
+    RNDR_GPU_EVENT_SCOPED("Update Buffer Contents");
 
     if (!buffer.IsValid())
     {
@@ -629,6 +630,7 @@ Rndr::ErrorCode Rndr::GraphicsContext::UpdateBuffer(const Buffer& buffer, const 
 Rndr::ErrorCode Rndr::GraphicsContext::ReadBuffer(const Buffer& buffer, Opal::Span<u8>& out_data, i32 offset, i32 size) const
 {
     RNDR_CPU_EVENT_SCOPED("Read Buffer Contents");
+    RNDR_GPU_EVENT_SCOPED("Read Buffer Contents");
 
     if (!buffer.IsValid())
     {
@@ -707,6 +709,7 @@ Rndr::ErrorCode Rndr::GraphicsContext::CopyBuffer(const Rndr::Buffer& dst_buffer
                                                   i32 src_offset, i32 size)
 {
     RNDR_CPU_EVENT_SCOPED("Copy Buffer Contents");
+    RNDR_GPU_EVENT_SCOPED("Copy Buffer Contents");
 
     if (!dst_buffer.IsValid())
     {
@@ -781,6 +784,7 @@ Rndr::ErrorCode Rndr::GraphicsContext::CopyBuffer(const Rndr::Buffer& dst_buffer
 bool Rndr::GraphicsContext::Read(const Rndr::Texture& image, Rndr::Bitmap& out_data, i32 level) const
 {
     RNDR_CPU_EVENT_SCOPED("Read Texture Contents");
+    RNDR_GPU_EVENT_SCOPED("Read Texture Contents");
 
     if (!image.IsValid())
     {
