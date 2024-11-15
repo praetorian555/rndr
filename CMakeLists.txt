@@ -4,7 +4,7 @@ project(RNDR VERSION 0.1.0 LANGUAGES CXX C)
 # Library options
 option(RNDR_BUILD_TESTS "Build tests" ON)
 message(STATUS "RNDR_BUILD_TESTS ${RNDR_BUILD_TESTS}")
-option(RNDR_SHARED_LIBS "Build shared library" OFF)
+option(RNDR_SHARED_LIBS "Build as a shared library" OFF)
 message(STATUS "RNDR_SHARED_LIBS ${RNDR_SHARED_LIBS}")
 option(RNDR_HARDENING "Enable hardened mode" ON)
 message(STATUS "RNDR_HARDENING ${RNDR_HARDENING}")

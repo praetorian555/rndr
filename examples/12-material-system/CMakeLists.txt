@@ -1,6 +1,0 @@
-add_executable(12-material-system material-system.cpp)
-target_link_libraries(12-material-system PUBLIC rndr)
-target_link_libraries(12-material-system PRIVATE rndr_options)
-set_target_properties(12-material-system PROPERTIES FOLDER Examples)
-target_compile_definitions(12-material-system PUBLIC -DASSETS_DIR="${CMAKE_CURRENT_SOURCE_DIR}/../assets/")
-target_compile_definitions(12-material-system PUBLIC -DGLTF_SAMPLE_ASSETS_DIR="${GLTF_ASSETS_DIR}/")

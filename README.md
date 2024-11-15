@@ -6,13 +6,6 @@ Rendering library that provides window and input management as well as low level
 
 ## Setup ##
 
-To install all necessary tools you will need to run Setup.ps1 PowerShell script:
-
-* Start a PowerShell as an administrator and navigate to the root of the project.
-* Enable execution of scripts by running `Set-ExecutionPolicy -ExecutionPolicy Bypass -Scope Process`.
-* Run `.\Setup.ps1` script. It will install Visual Studio Community 2022 as well as all necessary tools and libraries. It will also update PATH environment variable with locations of clang-format and address sanitizer. You will need to provide path where the Visual Studio will be installed, something like: `-installLocation="F:\Program Files\Microsoft Visual Studio\2022\Community"` If you want to skip the installation just use `-noinstallvs` flag.
-  * If there are any problems when running the script, set the `$DebugPreference` variable to `Continue` and run the script again. It will provide more information about the errors. To disable debug output set the variable to `Ignore`.
-
 To generate a build system go to the root of a project and use:
 
 	cmake -S <path_to_lib_root> -B <path_to_build_dir>
@@ -35,8 +28,8 @@ Project also has _.clang-tidy_ file to be used with _clang-tidy_ tool in your fa
 
 The library currently offers following options for compile-time configuration:
 
-* __RNDR_HARDENED__ Use hardened version of the library. Will enable address sanitizer. Default is OFF.
-* __RNDR_TRACER__ Use built-in frame-time profiler. Will pull in spdlog library as a dependency. Default is ON.
-* __RNDR_DEFAULT_LOGGER__ Use default logger implementation. Will pull in spdlog library as a dependency. Default is ON.
+* __RNDR_HARDENED__ Use hardened version of the library. Will enable address sanitizer. Default is ON.
+* __RNDR_SHARED_LIBS__ Builds the project as a shared library. Default is OFF.
+* __RNDR_TRACER__ Use built-in frame-time profiler. Will pull in spdlog library as a dependency. Default is OFF.
+* __RNDR_DEFAULT_LOGGER__ Use default logger implementation. Will pull in spdlog library as a dependency. Default is OFF.
 * __RNDR_BUILD_TESTS__ Build tests. Will pull in Catch2 library as a dependency. Default is ON. If this is a top level project, tests will be included and the option will be ignored.
-* __RNDR_BUILD_EXAMPLES__ Build examples. Default is ON. If this is a top level project, examples will be included and the option will be ignored.
