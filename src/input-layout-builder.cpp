@@ -57,8 +57,8 @@ Rndr::InputLayoutBuilder& Rndr::InputLayoutBuilder::AddIndexBuffer(const Buffer&
 
 Rndr::InputLayoutDesc Rndr::InputLayoutBuilder::Build()
 {
-    Opal::Array<Opal::Ref<const Buffer>> buffers;
-    Opal::Array<i32> buffer_binding_slots;
+    Opal::DynamicArray<Opal::Ref<const Buffer>> buffers;
+    Opal::DynamicArray<i32> buffer_binding_slots;
     buffers.Reserve(m_buffers.size());
     for (auto const& [binding_index, buffer_info] : m_buffers)
     {

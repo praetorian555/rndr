@@ -2,7 +2,7 @@
 
 #include "glad/glad.h"
 
-#include "opal/container/array.h"
+#include "opal/container/dynamic-array.h"
 
 #include "opengl-helpers.h"
 #include "rndr/log.h"

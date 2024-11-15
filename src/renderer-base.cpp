@@ -37,7 +37,7 @@ bool Rndr::RendererManager::AddRenderer(Rndr::RendererBase* renderer)
 
 bool Rndr::RendererManager::AddRendererBefore(Rndr::RendererBase* renderer, const Opal::StringUtf8& before_name)
 {
-    for (auto it = m_renderers.ConstBegin(); it != m_renderers.ConstEnd(); ++it)
+    for (auto it = m_renderers.cbegin(); it != m_renderers.cend(); ++it)
     {
         if ((*it)->GetName() == before_name)
         {
@@ -50,7 +50,7 @@ bool Rndr::RendererManager::AddRendererBefore(Rndr::RendererBase* renderer, cons
 
 bool Rndr::RendererManager::AddRendererAfter(Rndr::RendererBase* renderer, const Opal::StringUtf8& after_name)
 {
-    for (auto it = m_renderers.ConstBegin(); it != m_renderers.ConstEnd(); ++it)
+    for (auto it = m_renderers.cbegin(); it != m_renderers.cend(); ++it)
     {
         if ((*it)->GetName() == after_name)
         {

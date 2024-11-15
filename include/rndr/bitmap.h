@@ -26,7 +26,7 @@ public:
      * @param data Optional data to initialize the bitmap with. If not specified, the bitmap will be
      * initialized with zeros.
      */
-    Bitmap(i32 width, i32 height, i32 depth, PixelFormat pixel_format, const Opal::Span<u8>& data = {});
+    Bitmap(i32 width, i32 height, i32 depth, PixelFormat pixel_format, const Opal::ArrayView<u8>& data = {});
 
     /**
      * Check if bitmap is valid.
@@ -97,7 +97,7 @@ private:
     i32 m_depth = 0;
     i32 m_comp_count = 0;
     PixelFormat m_pixel_format = PixelFormat::R32_TYPELESS;
-    Opal::Array<u8> m_data;
+    Opal::DynamicArray<u8> m_data;
     GetPixelFunc m_get_pixel_func = nullptr;
     SetPixelFunc m_set_pixel_func = nullptr;
 };

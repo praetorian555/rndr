@@ -19,7 +19,7 @@
 #endif  // RNDR_WINDOWS
 
 #include "opal/container/hash-map.h"
-#include "opal/container/stack-array.h"
+#include "opal/container/in-place-array.h"
 
 #include "rndr/input.h"
 #include "rndr/log.h"
@@ -244,12 +244,12 @@ Rndr::Window::Window(const WindowDesc& desc)
     // Setup raw input
     constexpr uint16_t k_hid_usage_page_generic = 0x01;
     constexpr uint16_t k_hid_usage_generic_mouse = 0x02;
-    Opal::StackArray<RAWINPUTDEVICE, 1> raw_devices;
+    Opal::InPlaceArray<RAWINPUTDEVICE, 1> raw_devices;
     raw_devices[0].usUsagePage = k_hid_usage_page_generic;
     raw_devices[0].usUsage = k_hid_usage_generic_mouse;
     raw_devices[0].dwFlags = RIDEV_INPUTSINK;
     raw_devices[0].hwndTarget = window_handle;
-    RegisterRawInputDevices(raw_devices.data(), 1, sizeof(raw_devices[0]));
+    RegisterRawInputDevices(raw_devices.GetData(), 1, sizeof(raw_devices[0]));
 
     m_handle = window_handle;
     if (!SetCursorMode(desc.cursor_mode))
@@ -732,12 +732,12 @@ LRESULT CALLBACK WindowProc(HWND window_handle, UINT msg_code, WPARAM param_w, L
             }
 
             UINT struct_size = sizeof(RAWINPUT);
-            Opal::StackArray<uint8_t, sizeof(RAWINPUT)> data_buffer;
+            Opal::InPlaceArray<uint8_t, sizeof(RAWINPUT)> data_buffer;
 
             // NOLINTNEXTLINE
-            GetRawInputData(reinterpret_cast<HRAWINPUT>(param_l), RID_INPUT, data_buffer.data(), &struct_size, sizeof(RAWINPUTHEADER));
+            GetRawInputData(reinterpret_cast<HRAWINPUT>(param_l), RID_INPUT, data_buffer.GetData(), &struct_size, sizeof(RAWINPUTHEADER));
 
-            RAWINPUT* raw_data = reinterpret_cast<RAWINPUT*>(data_buffer.data());
+            RAWINPUT* raw_data = reinterpret_cast<RAWINPUT*>(data_buffer.GetData());
 
             if (raw_data->header.dwType == RIM_TYPEMOUSE)
             {

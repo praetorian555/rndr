@@ -77,7 +77,7 @@ private:
     Opal::Ref<const Buffer> m_index_buffer;
     Opal::HashMap<i32, BufferInfo> m_buffers;
     Opal::HashMap<Opal::StringUtf8, i32, Opal::Hash<Opal::StringUtf8>> m_names;
-    Opal::Array<InputLayoutElement> m_elements;
+    Opal::DynamicArray<InputLayoutElement> m_elements;
 };
 
 }  // namespace Rndr

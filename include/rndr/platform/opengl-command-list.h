@@ -2,7 +2,7 @@
 
 #include <variant>
 
-#include "opal/container/array.h"
+#include "opal/container/dynamic-array.h"
 #include "opal/container/ref.h"
 
 #include "rndr/definitions.h"
@@ -113,7 +113,7 @@ struct DrawVerticesMultiCommand
 struct UpdateBufferCommand
 {
     Opal::Ref<const class Buffer> buffer;
-    Opal::Span<const u8> data;
+    Opal::ArrayView<const u8> data;
     i32 offset;
 };
 
@@ -240,7 +240,7 @@ public:
      * @param offset The offset into the buffer to update.
      * @return Returns true if the buffer was updated successfully, false otherwise.
      */
-    bool UpdateBuffer(const Buffer& buffer, const Opal::Span<const u8>& data, i32 offset = 0);
+    bool UpdateBuffer(const Buffer& buffer, const Opal::ArrayView<const u8>& data, i32 offset = 0);
 
     /**
      * Draws primitives without use of index buffer. It will behave as if indices were specified
@@ -269,7 +269,7 @@ public:
      * @param topology The primitive topology to draw.
      * @param draws The draw vertices data.
      */
-    void DrawVerticesMulti(const Pipeline& pipeline, PrimitiveTopology topology, const Opal::Span<DrawVerticesData>& draws);
+    void DrawVerticesMulti(const Pipeline& pipeline, PrimitiveTopology topology, const Opal::ArrayView<DrawVerticesData>& draws);
 
     /**
      * Issue multiple draw indices calls.
@@ -277,7 +277,7 @@ public:
      * @param topology The primitive topology to draw.
      * @param draws The draw indices data.
      */
-    void DrawIndicesMulti(const Pipeline& pipeline, PrimitiveTopology topology, const Opal::Span<DrawIndicesData>& draws);
+    void DrawIndicesMulti(const Pipeline& pipeline, PrimitiveTopology topology, const Opal::ArrayView<DrawIndicesData>& draws);
 
     /**
      * Dispatches a compute shader.
@@ -296,7 +296,7 @@ public:
 
 private:
     Opal::Ref<GraphicsContext> m_graphics_context;
-    Opal::Array<Command> m_commands;
+    Opal::DynamicArray<Command> m_commands;
 };
 
 }  // namespace Rndr

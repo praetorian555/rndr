@@ -165,7 +165,7 @@ public:
      * ErrorCode::InvalidArgument is returned. If the data is negative, zero or in combination with the offset exceeds the buffer size,
      * ErrorCode::OutOfBounds is returned. If offset is out of bounds of the buffer, ErrorCode::OutOfBounds is returned.
      */
-    ErrorCode UpdateBuffer(const Buffer& buffer, const Opal::Span<const u8>& data, i64 offset = 0);
+    ErrorCode UpdateBuffer(const Buffer& buffer, const Opal::ArrayView<const u8>& data, i64 offset = 0);
 
     /**
      * Reads the contents of a buffer.
@@ -176,7 +176,7 @@ public:
      * @return Returns ErrorCode::Success if the read was successful. Returns ErrorCode::InvalidArgument if the buffer is not valid or the
      * buffer's usage is not ReadBack. Returns ErrorCode::OutOfBounds if the offset or size is out of bounds of the buffer.
      */
-    ErrorCode ReadBuffer(const Buffer& buffer, Opal::Span<u8>& out_data, i32 offset = 0, i32 size = 0) const;
+    ErrorCode ReadBuffer(const Buffer& buffer, Opal::ArrayView<u8>& out_data, i32 offset = 0, i32 size = 0) const;
 
     /**
      * Copies the contents of one buffer to another. Source and destination buffers can be the same, but the ranges must not overlap.

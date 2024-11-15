@@ -2,9 +2,9 @@
 
 #include "glad/glad_wgl.h"
 
-#include "opal/container/array.h"
+#include "opal/container/dynamic-array.h"
 #include "opal/container/hash-set.h"
-#include "opal/container/stack-array.h"
+#include "opal/container/in-place-array.h"
 #include "opal/container/string.h"
 
 #include "opengl-helpers.h"
@@ -112,7 +112,7 @@ Rndr::GraphicsContext::GraphicsContext(const Rndr::GraphicsContextDesc& desc) : 
         arb_flags |= WGL_CONTEXT_DEBUG_BIT_ARB;
     }
 #endif
-    const Opal::StackArray<int, 9> attribute_list = {
+    const Opal::InPlaceArray<int, 9> attribute_list = {
         WGL_CONTEXT_MAJOR_VERSION_ARB,
         4,
         WGL_CONTEXT_MINOR_VERSION_ARB,
@@ -124,7 +124,7 @@ Rndr::GraphicsContext::GraphicsContext(const Rndr::GraphicsContextDesc& desc) : 
         0  // End of the attribute list
     };
     HGLRC old_graphics_context = graphics_context;
-    graphics_context = wglCreateContextAttribsARB(m_native_device_context, graphics_context, attribute_list.data());
+    graphics_context = wglCreateContextAttribsARB(m_native_device_context, graphics_context, attribute_list.GetData());
     if (graphics_context == nullptr)
     {
         RNDR_LOG_ERROR("Failed to make OpenGL graphics context with attribute list!");
@@ -582,7 +582,7 @@ bool Rndr::GraphicsContext::DispatchCompute(u32 block_count_x, u32 block_count_y
     return true;
 }
 
-Rndr::ErrorCode Rndr::GraphicsContext::UpdateBuffer(const Buffer& buffer, const Opal::Span<const u8>& data, i64 offset)
+Rndr::ErrorCode Rndr::GraphicsContext::UpdateBuffer(const Buffer& buffer, const Opal::ArrayView<const u8>& data, i64 offset)
 {
     RNDR_CPU_EVENT_SCOPED("Update Buffer Contents");
     RNDR_GPU_EVENT_SCOPED("Update Buffer Contents");
@@ -627,7 +627,7 @@ Rndr::ErrorCode Rndr::GraphicsContext::UpdateBuffer(const Buffer& buffer, const 
     }
 }
 
-Rndr::ErrorCode Rndr::GraphicsContext::ReadBuffer(const Buffer& buffer, Opal::Span<u8>& out_data, i32 offset, i32 size) const
+Rndr::ErrorCode Rndr::GraphicsContext::ReadBuffer(const Buffer& buffer, Opal::ArrayView<u8>& out_data, i32 offset, i32 size) const
 {
     RNDR_CPU_EVENT_SCOPED("Read Buffer Contents");
     RNDR_GPU_EVENT_SCOPED("Read Buffer Contents");
@@ -796,7 +796,7 @@ bool Rndr::GraphicsContext::Read(const Rndr::Texture& image, Rndr::Bitmap& out_d
     const GLenum format = FromPixelFormatToExternalFormat(desc.pixel_format);
     const GLenum data_type = FromPixelFormatToDataType(desc.pixel_format);
     const i32 pixel_size = FromPixelFormatToPixelSize(desc.pixel_format);
-    Opal::Array<u8> tmp_data(pixel_size * desc.width * desc.height);
+    Opal::DynamicArray<u8> tmp_data(pixel_size * desc.width * desc.height);
     glGetTextureImage(image.GetNativeTexture(), level, format, data_type, pixel_size * desc.width * desc.height, tmp_data.GetData());
     RNDR_ASSERT_OPENGL();
 
@@ -811,7 +811,7 @@ bool Rndr::GraphicsContext::ReadSwapChainColor(const SwapChain& swap_chain, Bitm
     const i32 width = swap_chain.GetDesc().width;
     const i32 height = swap_chain.GetDesc().height;
     const i32 size = width * height * 4;
-    Opal::Array<u8> data(size);
+    Opal::DynamicArray<u8> data(size);
     glReadPixels(0, 0, width, height, GL_RGBA, GL_UNSIGNED_BYTE, data.GetData());
     RNDR_ASSERT_OPENGL();
     for (i32 i = 0; i < height / 2; i++)
@@ -837,10 +837,10 @@ bool Rndr::GraphicsContext::ReadSwapChainDepthStencil(const SwapChain& swap_chai
     const i32 width = swap_chain.GetDesc().width;
     const i32 height = swap_chain.GetDesc().height;
     const i32 size = width * height;
-    Opal::Array<u32> data(size);
+    Opal::DynamicArray<u32> data(size);
     glReadPixels(0, 0, width, height, GL_DEPTH_STENCIL, GL_UNSIGNED_INT_24_8, data.GetData());
     RNDR_ASSERT_OPENGL();
-    const Opal::Span<u8> byte_data(reinterpret_cast<u8*>(data.GetData()), size * sizeof(u32));
+    const Opal::ArrayView<u8> byte_data(reinterpret_cast<u8*>(data.GetData()), size * sizeof(u32));
     out_bitmap = Bitmap{width, height, 1, PixelFormat::D24_UNORM_S8_UINT, byte_data};
     return true;
 }

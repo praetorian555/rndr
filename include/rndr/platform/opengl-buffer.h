@@ -28,7 +28,7 @@ public:
      * @param init_data The initial data to fill the buffer with. If empty, the contents of the allocated buffer will be undefined. Default
      * is empty.
      */
-    Buffer(const GraphicsContext& graphics_context, const BufferDesc& desc, const Opal::Span<const u8>& init_data = Opal::Span<const u8>{});
+    Buffer(const GraphicsContext& graphics_context, const BufferDesc& desc, const Opal::ArrayView<const u8>& init_data = Opal::ArrayView<const u8>{});
 
     /**
      * Create a new buffer with initial data.
@@ -40,7 +40,7 @@ public:
      * @param offset The offset in the buffer to start writing the data. Default is 0.
      */
     template <typename DataType>
-    Buffer(const GraphicsContext& graphics_context, const Opal::Span<const DataType>& init_data, BufferType type,
+    Buffer(const GraphicsContext& graphics_context, const Opal::ArrayView<const DataType>& init_data, BufferType type,
            Usage usage = Rndr::Usage::Default, uint32_t offset = 0);
 
     /**
@@ -53,7 +53,7 @@ public:
      * description is invalid. Returns ErrorCode::OutOfMemory if the buffer could not be created.
      */
     ErrorCode Initialize(const GraphicsContext& graphics_context, const BufferDesc& desc,
-                         const Opal::Span<const u8>& init_data = Opal::Span<const u8>{});
+                         const Opal::ArrayView<const u8>& init_data = Opal::ArrayView<const u8>{});
 
     ~Buffer();
     Buffer(const Buffer&) = delete;
@@ -74,7 +74,7 @@ private:
 };
 
 template <typename DataType>
-Rndr::Buffer::Buffer(const Rndr::GraphicsContext& graphics_context, const Opal::Span<const DataType>& init_data, Rndr::BufferType type,
+Rndr::Buffer::Buffer(const Rndr::GraphicsContext& graphics_context, const Opal::ArrayView<const DataType>& init_data, Rndr::BufferType type,
                      Rndr::Usage usage, uint32_t offset)
     : Buffer(graphics_context,
              BufferDesc{.type = type,

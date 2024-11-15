@@ -29,7 +29,7 @@ protected:
         Vector4f color;
     };
 
-    Opal::Array<VertexData> m_vertex_data;
+    Opal::DynamicArray<VertexData> m_vertex_data;
 
     Opal::ScopePtr<Shader> m_vertex_shader;
     Opal::ScopePtr<Shader> m_fragment_shader;

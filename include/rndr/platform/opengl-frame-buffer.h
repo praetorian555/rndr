@@ -1,6 +1,6 @@
 #pragma once
 
-#include "opal/container/array.h"
+#include "opal/container/dynamic-array.h"
 
 #include "rndr/error-codes.h"
 #include "rndr/graphics-types.h"
@@ -37,7 +37,7 @@ public:
 
 private:
     FrameBufferDesc m_desc;
-    Opal::Array<Texture> m_color_attachments;
+    Opal::DynamicArray<Texture> m_color_attachments;
     Texture m_depth_stencil_attachment;
     GLuint m_native_frame_buffer = k_invalid_opengl_object;
 };

@@ -56,7 +56,7 @@ set(OPAL_SHARED_LIBS ${RNDR_SHARED_LIBS})
 FetchContent_Declare(
         opal
         GIT_REPOSITORY https://github.com/praetorian555/opal
-        GIT_TAG        opal-0.1.0
+        GIT_TAG        main
 )
 FetchContent_MakeAvailable(opal)
 

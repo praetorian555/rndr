@@ -2,6 +2,8 @@
 
 #include "glad/glad.h"
 
+#include "opal/container/in-place-array.h"
+
 #include "opengl-helpers.h"
 #include "rndr/log.h"
 #include "rndr/platform/opengl-graphics-context.h"
@@ -9,11 +11,11 @@
 
 namespace
 {
-void GenerateDefinesShaderCode(const Opal::Array<Opal::StringUtf8>& defines, Opal::StringUtf8& out_shader_code)
+void GenerateDefinesShaderCode(const Opal::DynamicArray<Opal::StringUtf8>& defines, Opal::StringUtf8& out_shader_code)
 {
     for (const Opal::StringUtf8& define : defines)
     {
-        out_shader_code += u8"#define " + define + u8"\n";
+        out_shader_code += "#define " + define + "\n";
     }
 }
 }  // namespace
@@ -64,7 +66,7 @@ Rndr::ErrorCode Rndr::Shader::Initialize(const Rndr::GraphicsContext& graphics_c
     {
         Opal::StringUtf8 defines_shader_code;
         GenerateDefinesShaderCode(desc.defines, defines_shader_code);
-        u64 find_result = Opal::Find(desc.source, u8"#version");
+        u64 find_result = Opal::Find(desc.source, "#version");
         if (find_result == Opal::StringUtf8::k_npos)
         {
             find_result = 0;
@@ -78,7 +80,7 @@ Rndr::ErrorCode Rndr::Shader::Initialize(const Rndr::GraphicsContext& graphics_c
         final_shader_code.Insert(find_result, defines_shader_code);
     }
 
-    const c* final_shader_code_c_str = reinterpret_cast<const c*>(final_shader_code.GetData());
+    const char8* final_shader_code_c_str = reinterpret_cast<const char8*>(final_shader_code.GetData());
     glShaderSource(m_native_shader, 1, &final_shader_code_c_str, nullptr);
     RNDR_GL_VERIFY("Failed to set shader source!", Destroy());
     glCompileShader(m_native_shader);
@@ -88,10 +90,10 @@ Rndr::ErrorCode Rndr::Shader::Initialize(const Rndr::GraphicsContext& graphics_c
     if (is_compiled == GL_FALSE)
     {
         constexpr size_t k_error_log_size = 1024;
-        Opal::StackArray<GLchar, k_error_log_size> error_log;
+        Opal::InPlaceArray<GLchar, k_error_log_size> error_log;
         GLint log_length = 0;
         glGetShaderiv(m_native_shader, GL_INFO_LOG_LENGTH, &log_length);
-        glGetShaderInfoLog(m_native_shader, log_length, &log_length, error_log.data());
+        glGetShaderInfoLog(m_native_shader, log_length, &log_length, error_log.GetData());
         RNDR_LOG_ERROR("Failed to compile shader:\n%s", error_log);
         Destroy();
         return ErrorCode::ShaderCompilationError;

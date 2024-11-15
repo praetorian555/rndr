@@ -144,7 +144,7 @@ void Rndr::CommandList::DrawIndices(Rndr::PrimitiveTopology topology, int32_t in
 }
 
 void Rndr::CommandList::DrawVerticesMulti(const Rndr::Pipeline& pipeline, Rndr::PrimitiveTopology topology,
-                                          const Opal::Span<Rndr::DrawVerticesData>& draws)
+                                          const Opal::ArrayView<Rndr::DrawVerticesData>& draws)
 {
     static_assert(sizeof(DrawVerticesData::vertex_count) == 4);
     static_assert(sizeof(DrawVerticesData::instance_count) == 4);
@@ -163,7 +163,7 @@ void Rndr::CommandList::DrawVerticesMulti(const Rndr::Pipeline& pipeline, Rndr::
 }
 
 void Rndr::CommandList::DrawIndicesMulti(const Rndr::Pipeline& pipeline, Rndr::PrimitiveTopology topology,
-                                         const Opal::Span<Rndr::DrawIndicesData>& draws)
+                                         const Opal::ArrayView<Rndr::DrawIndicesData>& draws)
 {
     static_assert(sizeof(DrawIndicesData::index_count) == 4);
     static_assert(sizeof(DrawIndicesData::instance_count) == 4);
@@ -186,7 +186,7 @@ void Rndr::CommandList::DrawIndicesMulti(const Rndr::Pipeline& pipeline, Rndr::P
     m_commands.PushBack(DrawIndicesMultiCommand(topology, buffer_handle, static_cast<uint32_t>(draws.GetSize())));
 }
 
-bool Rndr::CommandList::UpdateBuffer(const Rndr::Buffer& buffer, const Opal::Span<const u8>& data, Rndr::i32 offset)
+bool Rndr::CommandList::UpdateBuffer(const Rndr::Buffer& buffer, const Opal::ArrayView<const u8>& data, Rndr::i32 offset)
 {
     m_commands.PushBack(UpdateBufferCommand{.buffer = Opal::Ref<const Buffer>(buffer), .data = data, .offset = offset});
     return true;

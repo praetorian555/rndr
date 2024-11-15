@@ -2,7 +2,7 @@
 
 #include "math/transform.h"
 
-#include "opal/container/array.h"
+#include "opal/container/dynamic-array.h"
 
 #include "rndr/types.h"
 #include "rndr/window.h"
@@ -19,49 +19,49 @@ Rndr::FlyCamera::FlyCamera(Window* window, InputContext* input_context, const Fl
 
     m_window_resize_handle = m_window->on_resize.Bind([this](int width, int height) { this->SetScreenSize(width, height); });
 
-    Opal::Array<InputBinding> activate_bindings;
+    Opal::DynamicArray<InputBinding> activate_bindings;
     activate_bindings.PushBack(InputBinding{.primitive = IP::Mouse_RightButton, .trigger = IT::ButtonPressed});
     activate_bindings.PushBack(InputBinding{.primitive = IP::Mouse_RightButton, .trigger = IT::ButtonReleased});
     m_input_context->AddAction(
-        InputAction(u8"ActivateCamera"),
+        InputAction("ActivateCamera"),
         InputActionData{.callback = RNDR_BIND_INPUT_CALLBACK(this, FlyCamera::HandleActivate), .bindings = activate_bindings});
 
-    Opal::Array<InputBinding> forward_bindings;
+    Opal::DynamicArray<InputBinding> forward_bindings;
     forward_bindings.PushBack(InputBinding{.primitive = IP::Keyboard_W, .trigger = IT::ButtonPressed});
     forward_bindings.PushBack(InputBinding{.primitive = IP::Keyboard_W, .trigger = IT::ButtonReleased});
     forward_bindings.PushBack(InputBinding{.primitive = IP::Keyboard_S, .trigger = IT::ButtonPressed, .modifier = -1});
     forward_bindings.PushBack(InputBinding{.primitive = IP::Keyboard_S, .trigger = IT::ButtonReleased});
     m_input_context->AddAction(
-        InputAction(u8"MoveForward"),
+        InputAction("MoveForward"),
         InputActionData{.callback = RNDR_BIND_INPUT_CALLBACK(this, FlyCamera::HandleMoveForward), .bindings = forward_bindings});
 
-    Opal::Array<InputBinding> right_bindings;
+    Opal::DynamicArray<InputBinding> right_bindings;
     right_bindings.PushBack(InputBinding{.primitive = IP::Keyboard_A, .trigger = IT::ButtonPressed, .modifier = -1});
     right_bindings.PushBack(InputBinding{.primitive = IP::Keyboard_A, .trigger = IT::ButtonReleased});
     right_bindings.PushBack(InputBinding{.primitive = IP::Keyboard_D, .trigger = IT::ButtonPressed});
     right_bindings.PushBack(InputBinding{.primitive = IP::Keyboard_D, .trigger = IT::ButtonReleased});
     m_input_context->AddAction(
-        InputAction(u8"MoveRight"),
+        InputAction("MoveRight"),
         InputActionData{.callback = RNDR_BIND_INPUT_CALLBACK(this, FlyCamera::HandleMoveRight), .bindings = right_bindings});
 
-    Opal::Array<InputBinding> vert_bindings;
+    Opal::DynamicArray<InputBinding> vert_bindings;
     vert_bindings.PushBack(InputBinding{.primitive = IP::Keyboard_UpArrow, .trigger = IT::ButtonPressed});
     vert_bindings.PushBack(InputBinding{.primitive = IP::Keyboard_UpArrow, .trigger = IT::ButtonReleased});
     vert_bindings.PushBack(InputBinding{.primitive = IP::Keyboard_DownArrow, .trigger = IT::ButtonPressed});
     vert_bindings.PushBack(InputBinding{.primitive = IP::Keyboard_DownArrow, .trigger = IT::ButtonReleased});
     vert_bindings.PushBack(InputBinding{.primitive = IP::Mouse_AxisY, .trigger = IT::AxisChangedRelative});
     m_input_context->AddAction(
-        InputAction(u8"LookAroundVert"),
+        InputAction("LookAroundVert"),
         InputActionData{.callback = RNDR_BIND_INPUT_CALLBACK(this, FlyCamera::HandleLookVert), .bindings = vert_bindings});
 
-    Opal::Array<InputBinding> horz_bindings;
+    Opal::DynamicArray<InputBinding> horz_bindings;
     horz_bindings.PushBack(InputBinding{.primitive = IP::Keyboard_RightArrow, .trigger = IT::ButtonPressed});
     horz_bindings.PushBack(InputBinding{.primitive = IP::Keyboard_RightArrow, .trigger = IT::ButtonReleased});
     horz_bindings.PushBack(InputBinding{.primitive = IP::Keyboard_LeftArrow, .trigger = IT::ButtonPressed});
     horz_bindings.PushBack(InputBinding{.primitive = IP::Keyboard_LeftArrow, .trigger = IT::ButtonReleased});
     horz_bindings.PushBack(InputBinding{.primitive = IP::Mouse_AxisX, .trigger = IT::AxisChangedRelative});
     m_input_context->AddAction(
-        InputAction(u8"LookAroundHorz"),
+        InputAction("LookAroundHorz"),
         InputActionData{.callback = RNDR_BIND_INPUT_CALLBACK(this, FlyCamera::HandleLookHorz), .bindings = horz_bindings});
 }
 

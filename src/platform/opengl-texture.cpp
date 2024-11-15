@@ -2,6 +2,8 @@
 
 #include "glad/glad.h"
 
+#include "opal/container/in-place-array.h"
+
 #include "opengl-helpers.h"
 #include "rndr/bitmap.h"
 #include "rndr/log.h"
@@ -9,7 +11,7 @@
 #include "rndr/trace.h"
 
 Rndr::Texture::Texture(const GraphicsContext& graphics_context, const TextureDesc& texture_desc, const SamplerDesc& sampler_desc,
-                       const Opal::Span<const u8>& init_data)
+                       const Opal::ArrayView<const u8>& init_data)
 {
     const ErrorCode err = Initialize(graphics_context, texture_desc, sampler_desc, init_data);
     if (err != ErrorCode::Success)
@@ -99,7 +101,7 @@ Rndr::ErrorCode CheckSamplerDesc(const Rndr::GraphicsContext& graphics_context, 
     }
     if (graphics_context.GetDesc().enable_bindless_textures)
     {
-        constexpr Opal::StackArray<Rndr::Vector4f, 4> k_allowed_border_colors = {
+        constexpr Opal::InPlaceArray<Rndr::Vector4f, 4> k_allowed_border_colors = {
             Rndr::Vector4f{0.0f, 0.0f, 0.0f, 0.0f}, Rndr::Vector4f{1.0f, 1.0f, 1.0f, 1.0f}, Rndr::Vector4f{0.0f, 0.0f, 0.0f, 1.0f},
             Rndr::Vector4f{1.0f, 1.0f, 1.0f, 0.0f}};
         bool found_border_color = false;
@@ -132,7 +134,7 @@ Rndr::ErrorCode CheckSamplerDesc(const Rndr::GraphicsContext& graphics_context, 
 }  // namespace
 
 Rndr::ErrorCode Rndr::Texture::Initialize(const GraphicsContext& graphics_context, const TextureDesc& texture_desc,
-                                          const SamplerDesc& sampler_desc, const Opal::Span<const u8>& init_data)
+                                          const SamplerDesc& sampler_desc, const Opal::ArrayView<const u8>& init_data)
 {
     RNDR_CPU_EVENT_SCOPED("Create Texture");
 

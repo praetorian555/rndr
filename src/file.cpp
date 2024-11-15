@@ -44,7 +44,7 @@ bool Rndr::FileHandler::Write(const void* buffer, u64 element_size, u64 element_
     return written_elements == element_count;
 }
 
-Opal::Array<Rndr::u8> Rndr::File::ReadEntireFile(const Opal::StringUtf8& file_path)
+Opal::DynamicArray<Rndr::u8> Rndr::File::ReadEntireFile(const Opal::StringUtf8& file_path)
 {
     Opal::StringLocale file_path_locale;
     file_path_locale.Resize(300);
@@ -66,7 +66,7 @@ Opal::Array<Rndr::u8> Rndr::File::ReadEntireFile(const Opal::StringUtf8& file_pa
     const int contents_size = ftell(file);
     fseek(file, 0, SEEK_SET);
 
-    Opal::Array<u8> contents(contents_size);
+    Opal::DynamicArray<u8> contents(contents_size);
     const u64 read_bytes = fread(contents.GetData(), 1, contents.GetSize(), file);
     if (read_bytes != contents_size)
     {
@@ -80,8 +80,8 @@ Opal::Array<Rndr::u8> Rndr::File::ReadEntireFile(const Opal::StringUtf8& file_pa
 
 Opal::StringUtf8 Rndr::File::ReadEntireTextFile(const Opal::StringUtf8& file_path)
 {
-    Opal::Array<u8> contents = ReadEntireFile(file_path);
-    return {reinterpret_cast<c8*>(contents.GetData()), contents.GetSize()};
+    Opal::DynamicArray<u8> contents = ReadEntireFile(file_path);
+    return {reinterpret_cast<char8*>(contents.GetData()), contents.GetSize()};
 }
 
 Opal::StringUtf8 Rndr::File::ReadShader(const Opal::StringUtf8& ref_path, const Opal::StringUtf8& shader_path)
@@ -95,14 +95,14 @@ Opal::StringUtf8 Rndr::File::ReadShader(const Opal::StringUtf8& ref_path, const 
     Opal::StringUtf8 full_path = full_path_result.GetValue();
     if (!Opal::Paths::Exists(full_path_result.GetValue()))
     {
-        RNDR_LOG_ERROR("Shader file %s does not exist!", reinterpret_cast<c*>(full_path.GetData()));
+        RNDR_LOG_ERROR("Shader file %s does not exist!", full_path.GetData());
         return {};
     }
 
     Opal::StringUtf8 shader_contents = ReadEntireTextFile(full_path);
     if (shader_contents.IsEmpty())
     {
-        RNDR_LOG_ERROR("Failed to read shader file %s!", reinterpret_cast<c*>(full_path.GetData()));
+        RNDR_LOG_ERROR("Failed to read shader file %s!", full_path.GetData());
         return {};
     }
 
@@ -114,14 +114,14 @@ Opal::StringUtf8 Rndr::File::ReadShader(const Opal::StringUtf8& ref_path, const 
 
     while (true)
     {
-        u64 const result = Opal::Find(shader_contents, u8"#include");
+        u64 const result = Opal::Find(shader_contents, "#include");
         if (result == Opal::StringUtf8::k_npos)
         {
             break;
         }
 
-        const u64 include_start = Opal::Find(shader_contents, u8"#include");
-        const u64 include_end = Opal::Find(shader_contents, u8"\n", include_start);
+        const u64 include_start = Opal::Find(shader_contents, "#include");
+        const u64 include_end = Opal::Find(shader_contents, "\n", include_start);
         const u64 include_length = include_end - include_start;
         const Opal::StringUtf8 include_line = Opal::GetSubString(shader_contents, include_start, include_length).GetValue();
         const u64 quote_start = Opal::Find(include_line, '\"');
@@ -212,13 +212,13 @@ Rndr::Bitmap Rndr::File::ReadEntireImage(const Opal::StringUtf8& file_path, Pixe
     }
     else
     {
-        float* tmp_data_float = stbi_loadf(file_path_locale.GetData(), &width, &height, &channels_in_file, desired_channel_count);
+        f32* tmp_data_float = stbi_loadf(file_path_locale.GetData(), &width, &height, &channels_in_file, desired_channel_count);
         if (tmp_data_float == nullptr)
         {
             RNDR_LOG_ERROR("Failed to load image %s", file_path_locale.GetData());
             return invalid_bitmap;
         }
-        tmp_data = reinterpret_cast<uint8_t*>(tmp_data_float);
+        tmp_data = reinterpret_cast<u8*>(tmp_data_float);
     }
     const u64 pixel_size = FromPixelFormatToPixelSize(desired_format);
     Bitmap bitmap{width, height, 1, desired_format, {tmp_data, width * height * pixel_size}};
@@ -245,7 +245,7 @@ bool Rndr::File::SaveImage(const Bitmap& bitmap, const Opal::StringUtf8& file_pa
     }
     else if (IsComponentHighPrecision(pixel_format))
     {
-        const float* data = reinterpret_cast<const float*>(bitmap.GetData());
+        const f32* data = reinterpret_cast<const f32*>(bitmap.GetData());
         status = stbi_write_hdr(file_path_locale.GetData(), bitmap.GetWidth(), bitmap.GetHeight(), bitmap.GetComponentCount(), data);
     }
     else

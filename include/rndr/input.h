@@ -3,7 +3,7 @@
 #include <functional>
 
 #include "opal/container/scope-ptr.h"
-#include "opal/container/span.h"
+#include "opal/container/array-view.h"
 #include "opal/container/string.h"
 
 #include "rndr/input-primitives.h"
@@ -61,7 +61,7 @@ struct InputActionData
     InputCallback callback = nullptr;
     /** If null, callback will be called for any window triggering one of the bindings. */
     NativeWindowHandle native_window = nullptr;
-    Opal::Span<InputBinding> bindings;
+    Opal::ArrayView<InputBinding> bindings;
 };
 
 /**
@@ -134,7 +134,7 @@ public:
      * @param action The input action to get the bindings for.
      * @return Returns the input bindings associated with the input action.
      */
-    [[nodiscard]] Opal::Span<InputBinding> GetActionBindings(const InputAction& action) const;
+    [[nodiscard]] Opal::ArrayView<InputBinding> GetActionBindings(const InputAction& action) const;
 
 private:
     Opal::ScopePtr<struct InputContextData> m_context_data;

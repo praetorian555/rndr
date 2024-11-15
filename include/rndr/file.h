@@ -3,7 +3,7 @@
 #include <cstdio>
 
 #include "opal/container/string.h"
-#include "opal/container/array.h"
+#include "opal/container/dynamic-array.h"
 
 #include "rndr/bitmap.h"
 #include "rndr/graphics-types.h"
@@ -43,7 +43,7 @@ namespace File
  *
  * @return Returns a valid ByteArray object containing the file contents.
  */
-[[nodiscard]] Opal::Array<u8> ReadEntireFile(const Opal::StringUtf8& file_path);
+[[nodiscard]] Opal::DynamicArray<u8> ReadEntireFile(const Opal::StringUtf8& file_path);
 
 /**
  * Reads the contents of the entire file in the text form.

@@ -5,14 +5,12 @@
 #include "rndr/log.h"
 #include "rndr/trace.h"
 
-#define TEXT(str) u8## #str
-
 Rndr::LineRenderer::LineRenderer(const Opal::StringUtf8& name, const Rndr::RendererBaseDesc& desc) : RendererBase(name, desc)
 {
     RNDR_CPU_EVENT_SCOPED("LineRenderer::LineRenderer");
 
-    const Opal::StringUtf8 vertex_shader_code = File::ReadShader(TEXT(RNDR_CORE_ASSETS_DIR), u8"lines.vert");
-    const Opal::StringUtf8 pixel_shader_code = File::ReadShader(TEXT(RNDR_CORE_ASSETS_DIR), u8"lines.frag");
+    const Opal::StringUtf8 vertex_shader_code = File::ReadShader(RNDR_CORE_ASSETS_DIR, "lines.vert");
+    const Opal::StringUtf8 pixel_shader_code = File::ReadShader(RNDR_CORE_ASSETS_DIR, "lines.frag");
 
     m_vertex_shader =
         Opal::MakeDefaultScoped<Shader>(m_desc.graphics_context, ShaderDesc{.type = ShaderType::Vertex, .source = vertex_shader_code});

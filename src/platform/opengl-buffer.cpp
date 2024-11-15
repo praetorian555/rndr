@@ -8,7 +8,7 @@
 #include "rndr/platform/opengl-graphics-context.h"
 #include "rndr/trace.h"
 
-Rndr::Buffer::Buffer(const GraphicsContext& graphics_context, const BufferDesc& desc, const Opal::Span<const u8>& init_data)
+Rndr::Buffer::Buffer(const GraphicsContext& graphics_context, const BufferDesc& desc, const Opal::ArrayView<const u8>& init_data)
 {
     const ErrorCode err = Initialize(graphics_context, desc, init_data);
     if (err != ErrorCode::Success)
@@ -28,7 +28,7 @@ Rndr::Buffer::Buffer(Buffer&& other) noexcept : m_desc(other.m_desc), m_native_b
 }
 
 Rndr::ErrorCode Rndr::Buffer::Initialize(const Rndr::GraphicsContext& graphics_context, const Rndr::BufferDesc& desc,
-                                         const Opal::Span<const u8>& init_data)
+                                         const Opal::ArrayView<const u8>& init_data)
 {
     RNDR_UNUSED(graphics_context);
 

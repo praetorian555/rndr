@@ -114,7 +114,7 @@ public:
     bool Render();
 
 private:
-    Opal::Array<RendererBase*> m_renderers;
+    Opal::DynamicArray<RendererBase*> m_renderers;
 };
 
 }  // namespace Rndr

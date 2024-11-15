@@ -1,8 +1,7 @@
 #pragma once
 
-#include "opal/container/array.h"
+#include "opal/container/dynamic-array.h"
 #include "opal/container/ref.h"
-#include "opal/container/stack-array.h"
 #include "opal/container/string.h"
 
 #include "rndr/colors.h"
@@ -513,7 +512,7 @@ struct ShaderDesc
     Opal::StringUtf8 entry_point;
 
     /** List of defines that should be added to the shader in a form of DEFINE_NAME VALUE or just DEFINE_NAME. */
-    Opal::Array<Opal::StringUtf8> defines;
+    Opal::DynamicArray<Opal::StringUtf8> defines;
 };
 
 struct BufferDesc
@@ -525,7 +524,7 @@ struct BufferDesc
     Usage usage = Usage::Default;
 
     /** Total size of a buffer in bytes. */
-    st size = 0;
+    u64 size = 0;
 
     /** Size of one element, in bytes, in an array of elements. */
     i64 stride = 0;
@@ -652,13 +651,13 @@ struct InputLayoutDesc
     Opal::Ref<const Buffer> index_buffer;
 
     /** List of vertex buffers used by the pipeline. */
-    Opal::Array<Opal::Ref<const Buffer>> vertex_buffers;
+    Opal::DynamicArray<Opal::Ref<const Buffer>> vertex_buffers;
 
     /** List of binding slots to which the corresponding vertex buffer is bound. */
-    Opal::Array<i32> vertex_buffer_binding_slots;
+    Opal::DynamicArray<i32> vertex_buffer_binding_slots;
 
     /** List of input layout elements for the data in the vertex buffers. */
-    Opal::Array<InputLayoutElement> elements;
+    Opal::DynamicArray<InputLayoutElement> elements;
 };
 
 struct RasterizerDesc
@@ -798,8 +797,8 @@ struct PipelineDesc
 
 struct FrameBufferDesc
 {
-    Opal::Array<TextureDesc> color_attachments;
-    Opal::Array<SamplerDesc> color_attachment_samplers;
+    Opal::DynamicArray<TextureDesc> color_attachments;
+    Opal::DynamicArray<SamplerDesc> color_attachment_samplers;
     bool use_depth_stencil = false;
     TextureDesc depth_stencil_attachment;
     SamplerDesc depth_stencil_sampler;

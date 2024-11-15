@@ -2,9 +2,9 @@
 #include <utility>
 #include <variant>
 
-#include "opal/container/array.h"
+#include "opal/container/dynamic-array.h"
 #include "opal/container/ref.h"
-#include "opal/container/stack-array.h"
+#include "opal/container/in-place-array.h"
 
 #include "rndr/input.h"
 #include "rndr/log.h"
@@ -17,13 +17,13 @@ struct ActionData
     InputAction action;
     InputCallback callback;
     NativeWindowHandle native_window;
-    Opal::Array<InputBinding> bindings;
+    Opal::DynamicArray<InputBinding> bindings;
 };
 
 struct InputContextData
 {
     Opal::Ref<InputContext> context;
-    Opal::Array<ActionData> actions;
+    Opal::DynamicArray<ActionData> actions;
 
     explicit InputContextData(InputContext& ctx) : context(ctx) {}
     ~InputContextData() = default;
@@ -64,8 +64,8 @@ using EventQueue = std::queue<Event>;
 
 struct InputSystemData
 {
-    InputContext default_context = InputContext(Opal::StringUtf8(u8"Default"));
-    Opal::Array<Opal::Ref<InputContextData>> contexts;
+    InputContext default_context = InputContext(Opal::StringUtf8("Default"));
+    Opal::DynamicArray<Opal::Ref<InputContextData>> contexts;
     EventQueue events;
 
     ~InputSystemData() = default;
@@ -211,7 +211,7 @@ bool Rndr::InputContext::RemoveBindingFromAction(const Rndr::InputAction& action
     {
         if (action_data.action == action)
         {
-            for (auto it = action_data.bindings.ConstBegin(); it != action_data.bindings.ConstEnd(); ++it)
+            for (auto it = action_data.bindings.cbegin(); it != action_data.bindings.cend(); ++it)
             {
                 if (*it != binding)
                 {
@@ -271,7 +271,7 @@ Rndr::InputCallback Rndr::InputContext::GetActionCallback(const Rndr::InputActio
     return nullptr;
 }
 
-Opal::Span<Rndr::InputBinding> Rndr::InputContext::GetActionBindings(const Rndr::InputAction& action) const
+Opal::ArrayView<Rndr::InputBinding> Rndr::InputContext::GetActionBindings(const Rndr::InputAction& action) const
 {
     if (m_context_data == nullptr)
     {
@@ -287,10 +287,10 @@ Opal::Span<Rndr::InputBinding> Rndr::InputContext::GetActionBindings(const Rndr:
     {
         if (action_data.action == action)
         {
-            return Opal::Span<InputBinding>{action_data.bindings.begin(), action_data.bindings.end()};
+            return Opal::ArrayView<InputBinding>{action_data.bindings.begin(), action_data.bindings.end()};
         }
     }
-    return Opal::Span<InputBinding>{};
+    return Opal::ArrayView<InputBinding>{};
 }
 
 // InputSystem ////////////////////////////////////////////////////////////////////////////////////
@@ -466,7 +466,7 @@ void Rndr::InputEventProcessor::operator()(const ButtonData& event) const
 
 void Rndr::InputEventProcessor::operator()(const MousePositionData& event) const
 {
-    const Opal::StackArray<InputPrimitive, 2> axes = {InputPrimitive::Mouse_AxisX, InputPrimitive::Mouse_AxisY};
+    const Opal::InPlaceArray<InputPrimitive, 2> axes = {InputPrimitive::Mouse_AxisX, InputPrimitive::Mouse_AxisY};
     const InputTrigger trigger = InputTrigger::AxisChangedAbsolute;
     for (const ActionData& action_data : context->actions)
     {
@@ -492,7 +492,7 @@ void Rndr::InputEventProcessor::operator()(const MousePositionData& event) const
 
 void Rndr::InputEventProcessor::operator()(const RelativeMousePositionData& event) const
 {
-    const Opal::StackArray<InputPrimitive, 2> axes = {InputPrimitive::Mouse_AxisX, InputPrimitive::Mouse_AxisY};
+    const Opal::InPlaceArray<InputPrimitive, 2> axes = {InputPrimitive::Mouse_AxisX, InputPrimitive::Mouse_AxisY};
     const InputTrigger trigger = InputTrigger::AxisChangedRelative;
     for (const ActionData& action_data : context->actions)
     {

@@ -30,7 +30,7 @@ public:
      * @param init_data The initial data to fill the image with. Default is empty.
      */
     Texture(const GraphicsContext& graphics_context, const TextureDesc& texture_desc, const SamplerDesc& sampler_desc = SamplerDesc{},
-            const Opal::Span<const u8>& init_data = {});
+            const Opal::ArrayView<const u8>& init_data = {});
 
     /**
      * Initializes the texture on the GPU.
@@ -45,7 +45,7 @@ public:
      * @note If the setup fails, the internal
      */
     ErrorCode Initialize(const GraphicsContext& graphics_context, const TextureDesc& texture_desc,
-                         const SamplerDesc& sampler_desc = SamplerDesc{}, const Opal::Span<const u8>& init_data = {});
+                         const SamplerDesc& sampler_desc = SamplerDesc{}, const Opal::ArrayView<const u8>& init_data = {});
 
     ~Texture();
     Texture(const Texture&) = delete;
