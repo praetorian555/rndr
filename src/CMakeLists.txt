@@ -23,6 +23,7 @@ set(SOURCE_LIST
         "${PROJECT_SOURCE_DIR}/include/rndr/line-renderer.h"
         "${PROJECT_SOURCE_DIR}/include/rndr/fly-camera.h"
         "${PROJECT_SOURCE_DIR}/include/rndr/trace.h"
+        "${PROJECT_SOURCE_DIR}/include/rndr/projections.h"
         "${PROJECT_SOURCE_DIR}/src/rndr.cpp"
         "${PROJECT_SOURCE_DIR}/src/log.cpp"
         "${PROJECT_SOURCE_DIR}/src/time.cpp"
@@ -37,6 +38,7 @@ set(SOURCE_LIST
         "${PROJECT_SOURCE_DIR}/src/frames-per-second-counter.cpp"
         "${PROJECT_SOURCE_DIR}/src/line-renderer.cpp"
         "${PROJECT_SOURCE_DIR}/src/trace.cpp"
+        "${PROJECT_SOURCE_DIR}/src/projections.cpp"
 )
 
 list(APPEND SOURCE_LIST
