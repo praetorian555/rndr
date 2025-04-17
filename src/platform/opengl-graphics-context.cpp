@@ -2,6 +2,7 @@
 
 #include "glad/glad_wgl.h"
 
+#include "opal/common.h"
 #include "opal/container/dynamic-array.h"
 #include "opal/container/hash-set.h"
 #include "opal/container/in-place-array.h"
@@ -740,7 +741,7 @@ Rndr::ErrorCode Rndr::GraphicsContext::CopyBuffer(const Rndr::Buffer& dst_buffer
     {
         const i32 src_remaining_size = static_cast<i32>(src_desc.size) - src_offset;
         const i32 dst_remaining_size = static_cast<i32>(dst_desc.size) - dst_offset;
-        size = std::min(src_remaining_size, dst_remaining_size);
+        size = Opal::Min(src_remaining_size, dst_remaining_size);
     }
     if (size == 0)
     {
@@ -820,10 +821,10 @@ bool Rndr::GraphicsContext::ReadSwapChainColor(const SwapChain& swap_chain, Bitm
         {
             const i32 index1 = i * width * 4 + j * 4;
             const i32 index2 = (height - i - 1) * width * 4 + j * 4;
-            std::swap(data[index1], data[index2]);
-            std::swap(data[index1 + 1], data[index2 + 1]);
-            std::swap(data[index1 + 2], data[index2 + 2]);
-            std::swap(data[index1 + 3], data[index2 + 3]);
+            Opal::Swap(data[index1], data[index2]);
+            Opal::Swap(data[index1 + 1], data[index2 + 1]);
+            Opal::Swap(data[index1 + 2], data[index2 + 2]);
+            Opal::Swap(data[index1 + 3], data[index2 + 3]);
         }
     }
     out_bitmap = Bitmap{width, height, 1, PixelFormat::R8G8B8A8_UNORM_SRGB, AsWritableBytes(data)};

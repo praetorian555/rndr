@@ -54,15 +54,15 @@ TEST_CASE("Bitmap", "[bitmap]")
         SECTION("Get pixel")
         {
             const Rndr::Vector4f ref_pixel{21 / 255.0f, 22 / 255.0f, 23 / 255.0f, 24 / 255.0f};
-            REQUIRE(Math::IsEqual(bitmap.GetPixel(0, 1, 2), ref_pixel, 0.000001f) == true);
+            REQUIRE(Opal::IsEqual(bitmap.GetPixel(0, 1, 2), ref_pixel, 0.000001f) == true);
         }
         SECTION("Set pixel")
         {
             const Rndr::Vector4f ref_pixel{21 / 255.0f, 22 / 255.0f, 23 / 255.0f, 24 / 255.0f};
-            REQUIRE(Math::IsEqual(bitmap.GetPixel(0, 1, 2), ref_pixel, 0.000001f) == true);
+            REQUIRE(Opal::IsEqual(bitmap.GetPixel(0, 1, 2), ref_pixel, 0.000001f) == true);
             const Rndr::Vector4f new_pixel{5 / 255.0f, 6 / 255.0f, 7 / 255.0f, 8 / 255.0f};
             bitmap.SetPixel(0, 1, 2, new_pixel);
-            REQUIRE(Math::IsEqual(bitmap.GetPixel(0, 1, 2), new_pixel, 0.000001f) == true);
+            REQUIRE(Opal::IsEqual(bitmap.GetPixel(0, 1, 2), new_pixel, 0.000001f) == true);
         }
     }
     SECTION("Create with custom data that fit and high precision components")
@@ -93,15 +93,15 @@ TEST_CASE("Bitmap", "[bitmap]")
         SECTION("Get pixel")
         {
             const Rndr::Vector4f ref_pixel{21.0f, 22.0f, 23.0f, 24.0f};
-            REQUIRE(Math::IsEqual(bitmap.GetPixel(0, 1, 2), ref_pixel, 0.000001f) == true);
+            REQUIRE(Opal::IsEqual(bitmap.GetPixel(0, 1, 2), ref_pixel, 0.000001f) == true);
         }
         SECTION("Set pixel")
         {
             const Rndr::Vector4f ref_pixel{21.0f, 22.0f, 23.0f, 24.0f};
-            REQUIRE(Math::IsEqual(bitmap.GetPixel(0, 1, 2), ref_pixel, 0.000001f) == true);
+            REQUIRE(Opal::IsEqual(bitmap.GetPixel(0, 1, 2), ref_pixel, 0.000001f) == true);
             const Rndr::Vector4f new_pixel{1.0f, 2.0f, 3.0f, 4.0f};
             bitmap.SetPixel(0, 1, 2, new_pixel);
-            REQUIRE(Math::IsEqual(bitmap.GetPixel(0, 1, 2), new_pixel, 0.000001f) == true);
+            REQUIRE(Opal::IsEqual(bitmap.GetPixel(0, 1, 2), new_pixel, 0.000001f) == true);
         }
     }
     SECTION("Create with custom data that is smaller then the bitmap")

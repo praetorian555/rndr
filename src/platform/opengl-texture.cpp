@@ -156,7 +156,7 @@ Rndr::ErrorCode Rndr::Texture::Initialize(const GraphicsContext& graphics_contex
     m_max_mip_levels = 1;
     if (m_texture_desc.use_mips)
     {
-        m_max_mip_levels += static_cast<i32>(Math::Floor(Math::Log2(Math::Max(size.x, size.y))));
+        m_max_mip_levels += static_cast<i32>(Opal::Floor(Opal::Log2(Opal::Max(size.x, size.y))));
     }
 
     const GLenum target = FromImageInfoToTarget(m_texture_desc.type, m_texture_desc.sample_count > 1);

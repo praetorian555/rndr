@@ -16,7 +16,7 @@ Rndr::Bitmap::Bitmap(i32 width, i32 height, i32 depth, Rndr::PixelFormat pixel_f
     m_comp_count = FromPixelFormatToComponentCount(pixel_format);
     const u64 buffer_size = GetSize3D();
     m_data.Resize(buffer_size);
-    const u64 size_to_copy = std::min(data.GetSize(), buffer_size);
+    const u64 size_to_copy = Opal::Min(data.GetSize(), buffer_size);
     if (size_to_copy > 0)
     {
         memcpy(m_data.GetData(), data.GetData(), size_to_copy);

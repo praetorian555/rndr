@@ -40,16 +40,6 @@ if (RNDR_HARDENING)
 endif ()
 
 include(FetchContent)
-SET(MATH_BUILD_TESTS OFF)
-SET(MATH_HARDENED ${RNDR_HARDENING})
-set(MATH_SHARED_LIBS ${RNDR_SHARED_LIBS})
-FetchContent_Declare(
-        math
-        GIT_REPOSITORY https://github.com/praetorian555/math
-        GIT_TAG        main
-)
-FetchContent_MakeAvailable(math)
-
 SET(OPAL_BUILD_TESTS OFF)
 SET(OPAL_HARDENING ${RNDR_HARDENING})
 set(OPAL_SHARED_LIBS ${RNDR_SHARED_LIBS})

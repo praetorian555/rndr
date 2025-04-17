@@ -90,7 +90,7 @@ target_compile_definitions(rndr PUBLIC RNDR_OPENGL)
 
 # Setup library dependencies
 target_link_libraries(rndr PUBLIC opengl32.lib User32.lib)
-target_link_libraries(rndr PUBLIC math opal)
+target_link_libraries(rndr PUBLIC opal)
 
 # @formatter:off
 target_compile_definitions(rndr PUBLIC RNDR_CORE_ASSETS_DIR="${CMAKE_CURRENT_SOURCE_DIR}/../assets")

@@ -1,7 +1,6 @@
 #include "rndr/fly-camera.h"
 
-#include "math/transform.h"
-
+#include "opal/math/transform.h"
 #include "opal/container/dynamic-array.h"
 
 #include "rndr/types.h"
@@ -80,11 +79,11 @@ void Rndr::FlyCamera::Update(f32 delta_seconds)
     m_direction_vector = Vector3f{0, 0, -1};
     Rotatorf rotation = GetRotation();
     rotation += delta_seconds * m_desc.rotation_speed * m_delta_rotation;
-    m_direction_vector = Math::Rotate(rotation) * m_direction_vector;
-    m_right_vector = Math::Cross(m_direction_vector, Vector3f{0, 1, 0});
+    m_direction_vector = Opal::Rotate(rotation) * m_direction_vector;
+    m_right_vector = Opal::Cross(m_direction_vector, Vector3f{0, 1, 0});
 
     constexpr f32 k_max_roll = 89.0f;
-    rotation.roll = Math::Clamp(rotation.roll, -k_max_roll, k_max_roll);
+    rotation.roll = Opal::Clamp(rotation.roll, -k_max_roll, k_max_roll);
 
     Point3f position = GetPosition();
     position += m_desc.movement_speed * delta_seconds * m_delta_position.x * m_direction_vector;

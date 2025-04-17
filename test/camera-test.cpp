@@ -1,6 +1,7 @@
 #include <catch2/catch2.hpp>
 
 #include "rndr/projection-camera.h"
+#include "rndr/projections.h"
 
 TEST_CASE("Perspective", "ProjectionCamera")
 {
@@ -24,7 +25,7 @@ TEST_CASE("Perspective", "ProjectionCamera")
     REQUIRE(camera.GetDesc().near == k_near_plane);
     REQUIRE(camera.GetDesc().far == k_far_plane);
 
-    REQUIRE(camera.FromCameraToNDC() == Math::Perspective_RH_N1(k_vertical_fov, k_aspect_ratio, k_near_plane, k_far_plane));
+    REQUIRE(camera.FromCameraToNDC() == Rndr::PerspectiveOpenGL(k_vertical_fov, k_aspect_ratio, k_near_plane, k_far_plane));
 
     camera.SetPositionAndRotation(Rndr::Point3f{1.0f, 2.0f, 3.0f}, Rndr::Rotatorf{1.0f, 2.0f, 3.0f});
     REQUIRE(camera.GetPosition() == Rndr::Point3f{1.0f, 2.0f, 3.0f});
@@ -59,13 +60,13 @@ TEST_CASE("Orthographic", "ProjectionCamera")
     const float half_width = k_orthographic_width / 2.0f;
     const float half_height = half_width / k_aspect_ratio;
     REQUIRE(camera.FromCameraToNDC() ==
-            Math::Orthographic_RH_N1(-half_width, half_width, -half_height, half_height, k_near_plane, k_far_plane));
+            Rndr::OrthographicOpenGL(-half_width, half_width, -half_height, half_height, k_near_plane, k_far_plane));
 
     camera.SetPositionAndRotation(Rndr::Point3f{1.0f, 2.0f, 3.0f}, Rndr::Rotatorf{1.0f, 2.0f, 3.0f});
     REQUIRE(camera.GetPosition() == Rndr::Point3f{1.0f, 2.0f, 3.0f});
     REQUIRE(camera.GetRotation() == Rndr::Rotatorf{1.0f, 2.0f, 3.0f});
 
-    const Rndr::Matrix4x4f ref = Math::Translate(Rndr::Vector3f{1.0f, 2.0f, 3.0f}) * Math::Rotate(Rndr::Rotatorf{1.0f, 2.0f, 3.0f});
+    const Rndr::Matrix4x4f ref = Opal::Translate(Rndr::Vector3f{1.0f, 2.0f, 3.0f}) * Opal::Rotate(Rndr::Rotatorf{1.0f, 2.0f, 3.0f});
     REQUIRE(camera.FromCameraToWorld() == ref);
-    REQUIRE(camera.FromWorldToCamera() == Math::Inverse(ref));
+    REQUIRE(camera.FromWorldToCamera() == Opal::Inverse(ref));
 }
