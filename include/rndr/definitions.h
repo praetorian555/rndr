@@ -1,18 +1,16 @@
 #pragma once
 
-#include <cassert>
+#include "opal/defines.h"
 
-#if WIN32
+#if defined(OPAL_PLATFORM_WINDOWS)
 #define RNDR_WINDOWS 1
-#endif  // WIN32
+#elif defined(OPAL_PLATFORM_LINUX)
+#define RNDR_LINUX 1
+#endif
 
-#if !RNDR_WINDOWS
-#error "Platform not supported!"
-#endif  // !RNDR_WINDOWS
-
-#if !NDEBUG
+#if defined(OPAL_DEBUG)
 #define RNDR_DEBUG 1
-#endif  // !NDEBUG
+#endif
 
 #if RNDR_WINDOWS
 #define RNDR_OPTIMIZE_OFF __pragma(optimize("", off))
