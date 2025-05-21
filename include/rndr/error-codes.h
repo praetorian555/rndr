@@ -16,6 +16,9 @@ enum class ErrorCode : u8
     GraphicsAPIError,
     ShaderCompilationError,
     ShaderLinkingError,
+    WindowAlreadyClosed,
+    PlatformError,
+    FeatureNotSupported,
 };
 
 }  // namespace Rndr

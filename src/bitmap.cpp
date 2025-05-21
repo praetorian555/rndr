@@ -33,7 +33,7 @@ Rndr::Bitmap::Bitmap(i32 width, i32 height, i32 depth, Rndr::PixelFormat pixel_f
     }
     else
     {
-        RNDR_ASSERT(false);
+        RNDR_ASSERT(false, "Pixel format is neither low precision nor high precision!");
     }
 }
 
@@ -44,19 +44,19 @@ Rndr::u64 Rndr::Bitmap::GetPixelSize() const
 
 Rndr::Vector4f Rndr::Bitmap::GetPixel(i32 x, i32 y, i32 z) const
 {
-    RNDR_ASSERT(x >= 0 && x < m_width);
-    RNDR_ASSERT(y >= 0 && y < m_height);
-    RNDR_ASSERT(z >= 0 && z < m_depth);
-    RNDR_ASSERT(m_get_pixel_func != nullptr);
+    RNDR_ASSERT(x >= 0 && x < m_width, "X out of bounds!");
+    RNDR_ASSERT(y >= 0 && y < m_height, "Y out of bounds!");
+    RNDR_ASSERT(z >= 0 && z < m_depth, "Z out of bounds!");
+    RNDR_ASSERT(m_get_pixel_func != nullptr, "Get pixel function unavailable!");
     return (*this.*m_get_pixel_func)(x, y, z);
 }
 
 void Rndr::Bitmap::SetPixel(i32 x, i32 y, i32 z, const Vector4f& pixel)
 {
-    RNDR_ASSERT(x >= 0 && x < m_width);
-    RNDR_ASSERT(y >= 0 && y < m_height);
-    RNDR_ASSERT(z >= 0 && z < m_depth);
-    RNDR_ASSERT(m_set_pixel_func != nullptr);
+    RNDR_ASSERT(x >= 0 && x < m_width, "X out of bounds!");
+    RNDR_ASSERT(y >= 0 && y < m_height, "Y out of bounds!");
+    RNDR_ASSERT(z >= 0 && z < m_depth, "Z out of bounds!");
+    RNDR_ASSERT(m_set_pixel_func != nullptr, "Set pixel function unavailable!");
     (*this.*m_set_pixel_func)(x, y, z, pixel);
 }
 

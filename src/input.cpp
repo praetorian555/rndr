@@ -329,7 +329,7 @@ bool Rndr::InputSystem::Destroy()
 
 Rndr::InputContext& Rndr::InputSystem::GetCurrentContext()
 {
-    RNDR_ASSERT(g_system_data != nullptr);
+    RNDR_ASSERT(g_system_data != nullptr, "No system data!");
     return g_system_data->contexts.Back().GetValue()->context.Get();
 }
 

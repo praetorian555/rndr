@@ -155,7 +155,7 @@ Rndr::i32 Rndr::FrameBuffer::GetColorAttachmentCount() const
 
 const Rndr::Texture& Rndr::FrameBuffer::GetColorAttachment(i32 index) const
 {
-    RNDR_ASSERT(index >= 0 && index < m_color_attachments.GetSize());
+    RNDR_ASSERT(index >= 0 && index < m_color_attachments.GetSize(), "Color attachment index out of range!");
     return m_color_attachments[index];
 }
 

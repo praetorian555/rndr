@@ -54,7 +54,7 @@ Rndr::GraphicsContext::GraphicsContext(const Rndr::GraphicsContextDesc& desc) : 
         return;
     }
 
-    m_native_device_context = GetDC(m_desc.window_handle);
+    m_native_device_context = GetDC(reinterpret_cast<HWND>(m_desc.window_handle));
     if (m_native_device_context == nullptr)
     {
         RNDR_LOG_ERROR("Failed to get device context from a native window!");
@@ -246,6 +246,10 @@ void Rndr::GraphicsContext::Destroy()
         if (status == 0)
         {
             RNDR_LOG_ERROR("Failed to destroy OpenGL graphics context!");
+        }
+        else
+        {
+            m_native_graphics_context = k_invalid_graphics_context_handle;
         }
     }
 #endif  // RNDR_WINDOWS
@@ -556,8 +560,8 @@ bool Rndr::GraphicsContext::DrawIndices(PrimitiveTopology topology, i32 index_co
     RNDR_CPU_EVENT_SCOPED("Draw Indices");
     RNDR_GPU_EVENT_SCOPED("Draw Indices");
 
-    RNDR_ASSERT(m_bound_pipeline.IsValid());
-    RNDR_ASSERT(m_bound_pipeline->IsIndexBufferBound());
+    RNDR_ASSERT(m_bound_pipeline.IsValid(), "No pipeline is bound!");
+    RNDR_ASSERT(m_bound_pipeline->IsIndexBufferBound(), "No index buffer is bound!");
 
     const i64 index_size = m_bound_pipeline->GetIndexBufferElementSize();
     const GLenum index_size_enum = FromIndexSizeToOpenGL(index_size);
@@ -675,7 +679,7 @@ Rndr::ErrorCode Rndr::GraphicsContext::ReadBuffer(const Buffer& buffer, Opal::Ar
             return ErrorCode::InvalidArgument;
     }
 
-    RNDR_ASSERT(gpu_data != nullptr);
+    RNDR_ASSERT(gpu_data != nullptr, "Mapping of GPU memory failed!");
     memcpy(out_data.GetData(), gpu_data + offset, size);
 
     glUnmapNamedBuffer(native_buffer);

@@ -74,7 +74,7 @@ Rndr::ErrorCode Rndr::Shader::Initialize(const Rndr::GraphicsContext& graphics_c
         else
         {
             find_result = Opal::Find(desc.source, '\n', find_result);
-            RNDR_ASSERT(find_result != Opal::StringUtf8::k_npos);
+            RNDR_ASSERT(find_result != Opal::StringUtf8::k_npos, "There are no more new lines in the shader file!");
             find_result += 1;
         }
         final_shader_code.Insert(find_result, defines_shader_code);

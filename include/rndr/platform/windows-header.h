@@ -16,5 +16,7 @@
 
 #undef near
 #undef far
+#undef IsMaximized
+#undef IsMinimized
 
 #endif // RNDR_WINDOWS

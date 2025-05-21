@@ -1,12 +1,14 @@
 #include <catch2/catch2.hpp>
 
 #include "rndr/input.h"
-#include "rndr/rndr.h"
+
+#include "rndr/application.hpp"
 #include "rndr/window.h"
 
 TEST_CASE("Input action", "[input]")
 {
-    REQUIRE(Rndr::Init());
+    Rndr::Application* app = Rndr::Application::Create();
+    REQUIRE(app != nullptr);
     SECTION("Create action")
     {
         Rndr::InputAction action("TestAction");
@@ -39,12 +41,13 @@ TEST_CASE("Input action", "[input]")
         Rndr::InputAction action2;
         REQUIRE(action1 != action2);
     }
-    REQUIRE(Rndr::Destroy());
+    Rndr::Application::Destroy();
 }
 
 TEST_CASE("Input binding", "[input]")
 {
-    REQUIRE(Rndr::Init());
+    Rndr::Application* app = Rndr::Application::Create();
+    REQUIRE(app != nullptr);
     SECTION("Create binding")
     {
         Rndr::InputBinding binding;
@@ -77,12 +80,13 @@ TEST_CASE("Input binding", "[input]")
         REQUIRE(binding1 != binding2);
         REQUIRE(binding1 == binding4);
     }
-    REQUIRE(Rndr::Destroy());
+    Rndr::Application::Destroy();
 }
 
 TEST_CASE("Input context", "[input]")
 {
-    REQUIRE(Rndr::Init());
+    Rndr::Application* app = Rndr::Application::Create();
+    REQUIRE(app != nullptr);
     SECTION("Create context")
     {
         const Rndr::InputContext context("TestContext");
@@ -132,12 +136,14 @@ TEST_CASE("Input context", "[input]")
             REQUIRE(reg_bindings[0] == bindings[0]);
         }
     }
-    REQUIRE(Rndr::Destroy());
+    Rndr::Application::Destroy();
 }
 
 TEST_CASE("Input system", "[input]")
 {
-    REQUIRE(Rndr::Init({.enable_input_system = true}));
+    Rndr::ApplicationDesc app_desc{.enable_input_system = true};
+    Rndr::Application* app = Rndr::Application::Create(app_desc);
+    REQUIRE(app != nullptr);
 
     SECTION("Default context")
     {
@@ -440,6 +446,5 @@ TEST_CASE("Input system", "[input]")
         binding.trigger = Rndr::InputTrigger::ButtonDoubleClick;
         REQUIRE(!Rndr::InputSystem::IsBindingValid(binding));
     }
-
-    REQUIRE(Rndr::Destroy());
+    Rndr::Application::Destroy();
 }

@@ -1,30 +1,15 @@
 #include "rndr/definitions.h"
 
-#if defined RNDR_WINDOWS
-
-#ifndef NOMINMAX
-#define NOMINMAX
-#endif
-
-#ifndef WIN32_LEAN_AND_MEAN
-#define WIN32_LEAN_AND_MEAN
-#endif
-
-#include <Windows.h>
-#include <windowsx.h>
-
-#undef near
-#undef far
-
-#endif  // RNDR_WINDOWS
-
 #include "opal/container/hash-map.h"
 #include "opal/container/in-place-array.h"
 
 #include "rndr/input.h"
 #include "rndr/log.h"
+#include "rndr/platform/windows-header.h"
 #include "rndr/trace.h"
 #include "rndr/window.h"
+
+#include <Windowsx.h>
 
 namespace
 {
@@ -251,18 +236,18 @@ Rndr::Window::Window(const WindowDesc& desc)
     raw_devices[0].hwndTarget = window_handle;
     RegisterRawInputDevices(raw_devices.GetData(), 1, sizeof(raw_devices[0]));
 
-    m_handle = window_handle;
+    m_handle = reinterpret_cast<NativeWindowHandle>(window_handle);
     if (!SetCursorMode(desc.cursor_mode))
     {
-        DestroyWindow(m_handle);
-        m_handle = k_invalid_window_handle;
+        DestroyWindow(window_handle);
+        m_handle = nullptr;
         RNDR_LOG_ERROR("Failed to set cursor mode!");
         return;
     }
 
     // At this point we have a valid window
     m_desc = desc;
-    m_handle = window_handle;
+    m_handle = reinterpret_cast<NativeWindowHandle>(window_handle);
     m_is_visible = desc.start_visible;
     m_is_minimized = desc.start_minimized;
     m_is_maximized = desc.start_maximized;
@@ -287,7 +272,7 @@ Rndr::Window::Window(Rndr::Window&& other) noexcept
     {
         return;
     }
-    other.m_handle = k_invalid_window_handle;
+    other.m_handle = nullptr;
     other.m_is_closed = true;
 }
 
@@ -295,9 +280,9 @@ Rndr::Window& Rndr::Window::operator=(Rndr::Window&& other) noexcept
 {
     if (this != &other)
     {
-        if (m_handle != k_invalid_window_handle)
+        if (m_handle != nullptr)
         {
-            const BOOL status = DestroyWindow(m_handle);
+            const BOOL status = DestroyWindow(reinterpret_cast<HWND>(m_handle));
             if (status == 0)
             {
                 RNDR_LOG_ERROR("Failed to destroy window!");
@@ -311,7 +296,7 @@ Rndr::Window& Rndr::Window::operator=(Rndr::Window&& other) noexcept
         m_is_maximized = other.m_is_maximized;
         m_is_closed = other.m_is_closed;
 
-        other.m_handle = k_invalid_window_handle;
+        other.m_handle = nullptr;
         other.m_is_closed = true;
     }
     return *this;
@@ -319,11 +304,11 @@ Rndr::Window& Rndr::Window::operator=(Rndr::Window&& other) noexcept
 
 void Rndr::Window::Destroy()
 {
-    if (m_handle == k_invalid_window_handle)
+    if (m_handle == nullptr)
     {
         return;
     }
-    const BOOL status = DestroyWindow(m_handle);
+    const BOOL status = DestroyWindow(reinterpret_cast<HWND>(m_handle));
     if (status == 0)
     {
         RNDR_LOG_ERROR("Failed to destroy window!");
@@ -334,14 +319,14 @@ void Rndr::Window::ProcessEvents() const
 {
     RNDR_CPU_EVENT_SCOPED("Window::ProcessEvents");
 
-    if (m_handle == k_invalid_window_handle)
+    if (m_handle == nullptr)
     {
         RNDR_LOG_WARNING("This window can't process events since it is not valid!");
         return;
     }
 
     MSG msg;
-    while (PeekMessage(&msg, m_handle, 0, 0, PM_REMOVE))
+    while (PeekMessage(&msg, reinterpret_cast<HWND>(m_handle), 0, 0, PM_REMOVE))
     {
         TranslateMessage(&msg);
         DispatchMessage(&msg);
@@ -352,7 +337,7 @@ void Rndr::Window::Close() const
 {
     if (!m_is_closed)
     {
-        PostMessage(m_handle, WM_CLOSE, 0, 0);
+        PostMessage(reinterpret_cast<HWND>(m_handle), WM_CLOSE, 0, 0);
     }
 }
 
@@ -391,7 +376,7 @@ bool Rndr::Window::Resize(int width, int height) const
         RNDR_LOG_ERROR("Invalid window size!");
         return false;
     }
-    if (m_handle == k_invalid_window_handle)
+    if (m_handle == nullptr)
     {
         RNDR_LOG_ERROR("Invalid window handle!");
         return false;
@@ -401,9 +386,9 @@ bool Rndr::Window::Resize(int width, int height) const
     RECT rc = {0, 0, width, height};
 
     // Calculate the required window size, including the frame and borders
-    DWORD const dw_style = GetWindowLong(m_handle, GWL_STYLE);
-    DWORD const dw_ex_style = GetWindowLong(m_handle, GWL_EXSTYLE);
-    BOOL const has_menu = static_cast<const BOOL>(GetMenu(m_handle) != nullptr);
+    DWORD const dw_style = GetWindowLong(reinterpret_cast<HWND>(m_handle), GWL_STYLE);
+    DWORD const dw_ex_style = GetWindowLong(reinterpret_cast<HWND>(m_handle), GWL_EXSTYLE);
+    BOOL const has_menu = static_cast<const BOOL>(GetMenu(reinterpret_cast<HWND>(m_handle)) != nullptr);
     BOOL status = AdjustWindowRectEx(&rc, dw_style, has_menu, dw_ex_style);
     if (status == 0)
     {
@@ -417,7 +402,7 @@ bool Rndr::Window::Resize(int width, int height) const
 
     // Set the window size without changing its position
     const UINT flags = SWP_NOZORDER | SWP_NOMOVE;
-    status = SetWindowPos(m_handle, nullptr, 0, 0, new_width, new_height, flags);
+    status = SetWindowPos(reinterpret_cast<HWND>(m_handle), nullptr, 0, 0, new_width, new_height, flags);
     if (status == 0)
     {
         RNDR_LOG_ERROR("Failed to set window position!");
@@ -433,12 +418,12 @@ bool Rndr::Window::IsWindowMinimized() const
 
 void Rndr::Window::SetMinimized(bool should_minimize) const
 {
-    if (m_handle == k_invalid_window_handle)
+    if (m_handle == nullptr)
     {
         RNDR_LOG_ERROR("Invalid window handle!");
         return;
     }
-    PostMessage(m_handle, WM_SYSCOMMAND, should_minimize ? SC_MINIMIZE : SC_RESTORE, 0);
+    PostMessage(reinterpret_cast<HWND>(m_handle), WM_SYSCOMMAND, should_minimize ? SC_MINIMIZE : SC_RESTORE, 0);
 }
 
 bool Rndr::Window::IsWindowMaximized() const
@@ -448,22 +433,22 @@ bool Rndr::Window::IsWindowMaximized() const
 
 void Rndr::Window::SetMaximized(bool should_maximize) const
 {
-    if (m_handle == k_invalid_window_handle)
+    if (m_handle == nullptr)
     {
         RNDR_LOG_ERROR("Invalid window handle!");
         return;
     }
-    PostMessage(m_handle, WM_SYSCOMMAND, should_maximize ? SC_MAXIMIZE : SC_RESTORE, 0);
+    PostMessage(reinterpret_cast<HWND>(m_handle), WM_SYSCOMMAND, should_maximize ? SC_MAXIMIZE : SC_RESTORE, 0);
 }
 
 void Rndr::Window::SetVisible(bool visible)
 {
-    if (m_handle == k_invalid_window_handle)
+    if (m_handle == nullptr)
     {
         RNDR_LOG_ERROR("Invalid window handle!");
         return;
     }
-    ShowWindow(m_handle, visible ? SW_SHOW : SW_HIDE);
+    ShowWindow(reinterpret_cast<HWND>(m_handle), visible ? SW_SHOW : SW_HIDE);
     m_is_visible = visible;
 }
 
@@ -504,13 +489,13 @@ bool Rndr::Window::SetCursorMode(CursorMode mode)
         case CursorMode::Infinite:
         {
             RECT window_rect;
-            GetWindowRect(m_handle, &window_rect);
+            GetWindowRect(reinterpret_cast<HWND>(m_handle), &window_rect);
             ClipCursor(&window_rect);
             if (!IsCursorHidden())
             {
                 ShowCursor(FALSE);
             }
-            const POINT mid_point = GetWindowMidPointInScreenSpace(m_handle);
+            const POINT mid_point = GetWindowMidPointInScreenSpace(reinterpret_cast<HWND>(m_handle));
             SetCursorPos(mid_point.x, mid_point.y);
             break;
         }
@@ -566,7 +551,7 @@ Rndr::InputPrimitive GetPrimitive(UINT msg_code)
         case WM_MBUTTONDBLCLK:
             return Rndr::InputPrimitive::Mouse_MiddleButton;
         default:
-            RNDR_ASSERT(false);
+            RNDR_ASSERT(false, "Unsupported message code!");
     }
     return Rndr::InputPrimitive::Count;
 }
@@ -594,7 +579,7 @@ Rndr::InputTrigger GetTrigger(UINT msg_code)
         case WM_MBUTTONDBLCLK:
             return Rndr::InputTrigger::ButtonDoubleClick;
         default:
-            RNDR_ASSERT(false);
+            RNDR_ASSERT(false, "Unsupported message code!");
     }
     return Rndr::InputTrigger::ButtonPressed;
 }
@@ -624,7 +609,7 @@ void HandleMouseMove(Rndr::Window* window, int x, int y)
         }
         case Rndr::CursorMode::Infinite:
         {
-            const POINT mid_point = GetWindowMidPointInScreenSpace(window->m_handle);
+            const POINT mid_point = GetWindowMidPointInScreenSpace(reinterpret_cast<HWND>(window->m_handle));
             SetCursorPos(mid_point.x, mid_point.y);
             break;
         }

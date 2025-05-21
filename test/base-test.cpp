@@ -1,7 +1,7 @@
 #include <catch2/catch2.hpp>
 
-#include "rndr/rndr.h"
 #include "rndr/delegate.h"
+#include "rndr/log.h"
 
 class CustomLogger : public Rndr::Logger
 {
@@ -19,16 +19,19 @@ TEST_CASE("Init", "[init]")
 {
     SECTION("Default create and destroy")
     {
-        REQUIRE(Rndr::Init());
-        REQUIRE(Rndr::Destroy());
+        Rndr::Application* app = Rndr::Application::Create();
+        REQUIRE(app != nullptr);
+        Rndr::Application::Destroy();
     }
     SECTION("Create with custom logger")
     {
         CustomLogger custom_logger;
         Rndr::Logger* ptr = &custom_logger;
-        REQUIRE(Rndr::Init({.user_logger = Opal::Ref(ptr)}));
-        REQUIRE(&Rndr::GetLogger() == ptr);
-        REQUIRE(Rndr::Destroy());
+        Rndr::ApplicationDesc desc = { .user_logger = ptr };
+        Rndr::Application* app = Rndr::Application::Create(desc);
+        REQUIRE(app != nullptr);
+        REQUIRE(&app->GetLoggerChecked() == ptr);
+        Rndr::Application::Destroy();
     }
 }
 

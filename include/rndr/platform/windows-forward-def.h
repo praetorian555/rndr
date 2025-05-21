@@ -8,7 +8,10 @@
 
 #ifndef _WINDEF_
 
+#ifndef RNDR_DECLARE_HANDLE
 #define RNDR_DECLARE_HANDLE(name) struct name##__; typedef struct name##__ *name
+#endif
+
 RNDR_DECLARE_HANDLE(HWND);
 RNDR_DECLARE_HANDLE(HDC);
 RNDR_DECLARE_HANDLE(HGLRC);
@@ -24,16 +27,6 @@ using LRESULT = __int64;
 
 namespace Rndr
 {
-
-/**
- * Represents a native window handle. Underlying type changes with the OS.
- */
-using NativeWindowHandle = HWND;
-
-/**
- * Represents an invalid window handle.
- */
-constexpr NativeWindowHandle k_invalid_window_handle = NULL;
 
 /**
  * Represents a native device context handle. Underlying type changes with the OS.

@@ -2,6 +2,8 @@
 
 #include "opal/types.h"
 
+#include "rndr/definitions.h"
+
 namespace Rndr
 {
 
@@ -23,5 +25,7 @@ using f64 = Opal::f64;
 using char8 = Opal::char8;
 using char16 = Opal::char16;
 using uchar32 = Opal::uchar32;
+
+RNDR_DECLARE_HANDLE(NativeWindowHandle);
 
 }  // namespace Rndr

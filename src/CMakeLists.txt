@@ -1,6 +1,8 @@
 # Platform independent source and header files
 set(SOURCE_LIST
-        "${PROJECT_SOURCE_DIR}/include/rndr/rndr.h"
+        "${PROJECT_SOURCE_DIR}/include/rndr/application.hpp"
+        "${PROJECT_SOURCE_DIR}/include/rndr/generic-window.hpp"
+        "${PROJECT_SOURCE_DIR}/include/rndr/platform-application.hpp"
         "${PROJECT_SOURCE_DIR}/include/rndr/log.h"
         "${PROJECT_SOURCE_DIR}/include/rndr/types.h"
         "${PROJECT_SOURCE_DIR}/include/rndr/definitions.h"
@@ -24,7 +26,6 @@ set(SOURCE_LIST
         "${PROJECT_SOURCE_DIR}/include/rndr/fly-camera.h"
         "${PROJECT_SOURCE_DIR}/include/rndr/trace.h"
         "${PROJECT_SOURCE_DIR}/include/rndr/projections.h"
-        "${PROJECT_SOURCE_DIR}/src/rndr.cpp"
         "${PROJECT_SOURCE_DIR}/src/log.cpp"
         "${PROJECT_SOURCE_DIR}/src/time.cpp"
         "${PROJECT_SOURCE_DIR}/src/window.cpp"
@@ -39,6 +40,8 @@ set(SOURCE_LIST
         "${PROJECT_SOURCE_DIR}/src/line-renderer.cpp"
         "${PROJECT_SOURCE_DIR}/src/trace.cpp"
         "${PROJECT_SOURCE_DIR}/src/projections.cpp"
+        "${PROJECT_SOURCE_DIR}/src/application.cpp"
+        "${PROJECT_SOURCE_DIR}/src/platform-application.cpp"
 )
 
 list(APPEND SOURCE_LIST
@@ -71,6 +74,13 @@ list(APPEND SOURCE_LIST
 list(APPEND SOURCE_LIST
         "${PROJECT_SOURCE_DIR}/extern/stb_image/include/stb_image/stb_image.h"
         "${PROJECT_SOURCE_DIR}/extern/stb_image/src/stb_image.cpp"
+)
+
+list(APPEND SOURCE_LIST
+        "${PROJECT_SOURCE_DIR}/include/rndr/platform/windows-application.hpp"
+        "${PROJECT_SOURCE_DIR}/include/rndr/platform/windows-window.hpp"
+        "${PROJECT_SOURCE_DIR}/src/platform/windows-application.cpp"
+        "${PROJECT_SOURCE_DIR}/src/platform/windows-window.cpp"
 )
 
 # Make an automatic library - will be static or dynamic based on user setting

@@ -7,14 +7,6 @@
 #include "opal/container/string.h"
 #include "opal/paths.h"
 
-#include "rndr/definitions.h"
-
-namespace
-{
-Rndr::StdLogger g_default_logger;
-Rndr::Logger* g_current_logger = &g_default_logger;
-}  // namespace
-
 void Rndr::StdLogger::Log(const Opal::SourceLocation& source_location, LogLevel log_level, const char* message)
 {
     static Opal::StringUtf8 s_file_path(300, 0);
@@ -30,22 +22,7 @@ void Rndr::StdLogger::Log(const Opal::SourceLocation& source_location, LogLevel 
     printf("[%s][%s:%d] %s\n", s_log_level_strings[static_cast<u8>(log_level)], s_file_name.GetData(), source_location.line, message);
 }
 
-const Rndr::Logger& Rndr::GetLogger()
-{
-    return *g_current_logger;
-}
-
-void Rndr::SetLogger(Rndr::Logger* logger)
-{
-    if (logger == nullptr)
-    {
-        g_current_logger = &g_default_logger;
-        return;
-    }
-    g_current_logger = logger;
-}
-
-void Rndr::Log(const Opal::SourceLocation& source_location, Rndr::LogLevel log_level, const char* format, ...)
+void Rndr::Log(Logger& logger, const Opal::SourceLocation& source_location, Rndr::LogLevel log_level, const char* format, ...)
 {
     constexpr int k_message_size = 16 * 1024;
     Opal::InPlaceArray<char8, k_message_size> message;
@@ -55,5 +32,5 @@ void Rndr::Log(const Opal::SourceLocation& source_location, Rndr::LogLevel log_l
     va_start(args, format);
     vsprintf_s(message.GetData(), k_message_size, format, args);
     va_end(args);
-    g_current_logger->Log(source_location, log_level, message.GetData());
+    logger.Log(source_location, log_level, message.GetData());
 }

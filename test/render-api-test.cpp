@@ -9,7 +9,8 @@
 #include "rndr/bitmap.h"
 #include "rndr/file.h"
 #include "rndr/render-api.h"
-#include "rndr/rndr.h"
+
+#include "rndr/application.hpp"
 #include "rndr/window.h"
 
 #if RNDR_OPENGL
@@ -17,9 +18,31 @@
 #include "rndr/platform/opengl-frame-buffer.h"
 #endif
 
+TEST_CASE("App", "[app]")
+{
+    Rndr::Application* app = Rndr::Application::Create();
+    REQUIRE(app != nullptr);
+
+    Rndr::GenericWindow* window = app->CreateGenericWindow();
+
+    const Rndr::GraphicsContextDesc desc{.window_handle = window->GetNativeHandle()};
+    Rndr::GraphicsContext graphics_context(desc);
+    Rndr::SwapChainDesc const sc_desc;
+    Rndr::SwapChain const swap_chain(graphics_context, sc_desc);
+    while (!window->IsClosed())
+    {
+        app->ProcessSystemEvents();
+        app->ProcessDeferredMessages(0.016f);
+        graphics_context.ClearColor({1, 0, 0, 1});
+        graphics_context.Present(swap_chain);
+    }
+    app->DestroyGenericWindow(window);
+}
+
 TEST_CASE("Graphics context", "[render-api][graphics-context]")
 {
-    Rndr::Init();
+    Rndr::Application* app = Rndr::Application::Create();
+    REQUIRE(app != nullptr);
 
     SECTION("Default")
     {
@@ -49,7 +72,7 @@ TEST_CASE("Graphics context", "[render-api][graphics-context]")
         REQUIRE(graphics_context.GetDesc().window_handle == nullptr);
     }
 
-    Rndr::Destroy();
+    Rndr::Application::Destroy();
 }
 
 #if RNDR_OPENGL
@@ -524,7 +547,8 @@ TEST_CASE("Is pixel format high precision", "[misc]")
 
 TEST_CASE("Creating different types of buffers", "[render-api][buffer]")
 {
-    Rndr::Init();
+    Rndr::Application* app = Rndr::Application::Create();
+    REQUIRE(app != nullptr);
     Rndr::Window hidden_window({.start_visible = false});
     const Rndr::GraphicsContextDesc gc_desc{.window_handle = hidden_window.GetNativeWindowHandle()};
     Rndr::GraphicsContext graphics_context(gc_desc);
@@ -575,7 +599,7 @@ TEST_CASE("Creating different types of buffers", "[render-api][buffer]")
 
     graphics_context.Destroy();
     hidden_window.Destroy();
-    Rndr::Destroy();
+    Rndr::Application::Destroy();
 }
 
 TEST_CASE("Reading from GPU buffers", "[render-api][buffer]")
@@ -587,7 +611,8 @@ TEST_CASE("Reading from GPU buffers", "[render-api][buffer]")
         data[i] = 0xAB;
     }
 
-    Rndr::Init();
+    Rndr::Application* app = Rndr::Application::Create();
+    REQUIRE(app != nullptr);
     Rndr::Window hidden_window({.start_visible = false});
     const Rndr::GraphicsContextDesc gc_desc{.window_handle = hidden_window.GetNativeWindowHandle()};
     Rndr::GraphicsContext graphics_context(gc_desc);
@@ -727,7 +752,7 @@ TEST_CASE("Reading from GPU buffers", "[render-api][buffer]")
 
     graphics_context.Destroy();
     hidden_window.Destroy();
-    Rndr::Destroy();
+    Rndr::Application::Destroy();
 }
 
 TEST_CASE("Update the GPU buffer contents", "[render-api][buffer]")
@@ -739,7 +764,8 @@ TEST_CASE("Update the GPU buffer contents", "[render-api][buffer]")
         data[i] = 0xAB;
     }
 
-    Rndr::Init();
+    Rndr::Application* app = Rndr::Application::Create();
+    REQUIRE(app != nullptr);
     Rndr::Window hidden_window({.start_visible = false});
     const Rndr::GraphicsContextDesc gc_desc{.window_handle = hidden_window.GetNativeWindowHandle()};
     Rndr::GraphicsContext graphics_context(gc_desc);
@@ -817,7 +843,7 @@ TEST_CASE("Update the GPU buffer contents", "[render-api][buffer]")
 
     graphics_context.Destroy();
     hidden_window.Destroy();
-    Rndr::Destroy();
+    Rndr::Application::Destroy();
 }
 
 TEST_CASE("Copy of buffers", "[render-api][buffer]")
@@ -829,7 +855,8 @@ TEST_CASE("Copy of buffers", "[render-api][buffer]")
         data[i] = i;
     }
 
-    Rndr::Init();
+    Rndr::Application* app = Rndr::Application::Create();
+    REQUIRE(app != nullptr);
     Rndr::Window hidden_window({.start_visible = false});
     const Rndr::GraphicsContextDesc gc_desc{.window_handle = hidden_window.GetNativeWindowHandle()};
     Rndr::GraphicsContext graphics_context(gc_desc);
@@ -971,12 +998,13 @@ TEST_CASE("Copy of buffers", "[render-api][buffer]")
 
     graphics_context.Destroy();
     hidden_window.Destroy();
-    Rndr::Destroy();
+    Rndr::Application::Destroy();
 }
 
 TEST_CASE("Creating a shader", "[render-api][shader]")
 {
-    Rndr::Init();
+    Rndr::Application* app = Rndr::Application::Create();
+    REQUIRE(app != nullptr);
     Rndr::Window hidden_window({.start_visible = false});
     const Rndr::GraphicsContextDesc gc_desc{.window_handle = hidden_window.GetNativeWindowHandle()};
     Rndr::GraphicsContext graphics_context(gc_desc);
@@ -1027,12 +1055,13 @@ TEST_CASE("Creating a shader", "[render-api][shader]")
 
     graphics_context.Destroy();
     hidden_window.Destroy();
-    Rndr::Destroy();
+    Rndr::Application::Destroy();
 }
 
 TEST_CASE("Running a compute shader", "[render-api][shader]")
 {
-    Rndr::Init();
+    Rndr::Application* app = Rndr::Application::Create();
+    REQUIRE(app != nullptr);
     Rndr::Window hidden_window({.start_visible = false});
     const Rndr::GraphicsContextDesc gc_desc{.window_handle = hidden_window.GetNativeWindowHandle()};
     Rndr::GraphicsContext graphics_context(gc_desc);
@@ -1157,12 +1186,13 @@ TEST_CASE("Running a compute shader", "[render-api][shader]")
 
     graphics_context.Destroy();
     hidden_window.Destroy();
-    Rndr::Destroy();
+    Rndr::Application::Destroy();
 }
 
 TEST_CASE("Creating a texture", "[render-api][texture]")
 {
-    Rndr::Init();
+    Rndr::Application* app = Rndr::Application::Create();
+    REQUIRE(app != nullptr);
     Rndr::Window hidden_window({.start_visible = false});
     const Rndr::GraphicsContextDesc gc_desc{.window_handle = hidden_window.GetNativeWindowHandle()};
     Rndr::GraphicsContext graphics_context(gc_desc);
@@ -1416,12 +1446,13 @@ TEST_CASE("Creating a texture", "[render-api][texture]")
 
     graphics_context.Destroy();
     hidden_window.Destroy();
-    Rndr::Destroy();
+    Rndr::Application::Destroy();
 }
 
 TEST_CASE("Creating a frame buffer", "[render-api][framebuffer]")
 {
-    Rndr::Init();
+    Rndr::Application* app = Rndr::Application::Create();
+    REQUIRE(app != nullptr);
     Rndr::Window hidden_window({.start_visible = false});
     const Rndr::GraphicsContextDesc gc_desc{.window_handle = hidden_window.GetNativeWindowHandle()};
     Rndr::GraphicsContext graphics_context(gc_desc);
@@ -1544,12 +1575,13 @@ TEST_CASE("Creating a frame buffer", "[render-api][framebuffer]")
 
     graphics_context.Destroy();
     hidden_window.Destroy();
-    Rndr::Destroy();
+    Rndr::Application::Destroy();
 }
 
 TEST_CASE("Render full screen quad", "[render-api]")
 {
-    Rndr::Init();
+    Rndr::Application* app = Rndr::Application::Create();
+    REQUIRE(app != nullptr);
     Rndr::Window hidden_window({.start_visible = false});
     const Rndr::GraphicsContextDesc gc_desc{.window_handle = hidden_window.GetNativeWindowHandle()};
     Rndr::GraphicsContext graphics_context(gc_desc);
@@ -1607,5 +1639,5 @@ TEST_CASE("Render full screen quad", "[render-api]")
 
     graphics_context.Destroy();
     hidden_window.Destroy();
-    Rndr::Destroy();
+    Rndr::Application::Destroy();
 }

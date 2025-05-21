@@ -217,7 +217,7 @@ public:
 
 private:
     WindowDesc m_desc;
-    NativeWindowHandle m_handle = k_invalid_window_handle;
+    NativeWindowHandle m_handle = nullptr;
     bool m_is_closed = true;
     bool m_is_minimized = false;
     bool m_is_maximized = false;

@@ -85,7 +85,8 @@ Rndr::Pipeline::Pipeline(const GraphicsContext& graphics_context, const Pipeline
         const int32_t binding_index = input_layout_desc.vertex_buffer_binding_slots[i];
         if (buffer_desc.type == BufferType::Vertex)
         {
-            RNDR_ASSERT(buffer_desc.stride > static_cast<int64_t>(INT32_MIN) && buffer_desc.stride < static_cast<int64_t>(INT32_MAX));
+            RNDR_ASSERT(buffer_desc.stride > static_cast<int64_t>(INT32_MIN) && buffer_desc.stride < static_cast<int64_t>(INT32_MAX),
+                "Buffer stride is out of range!");
             glVertexArrayVertexBuffer(m_native_vertex_array, binding_index, buffer.GetNativeBuffer(), buffer_desc.offset,
                                       static_cast<int32_t>(buffer_desc.stride));
             RNDR_ASSERT_OPENGL();
@@ -134,7 +135,7 @@ Rndr::Pipeline::Pipeline(const GraphicsContext& graphics_context, const Pipeline
     if (input_layout_desc.index_buffer.IsValid())
     {
         const Buffer& buffer = input_layout_desc.index_buffer.Get();
-        RNDR_ASSERT(buffer.GetDesc().type == BufferType::Index);
+        RNDR_ASSERT(buffer.GetDesc().type == BufferType::Index, "Buffer is not an index buffer!");
         glVertexArrayElementBuffer(m_native_vertex_array, buffer.GetNativeBuffer());
         RNDR_ASSERT_OPENGL();
         RNDR_LOG_DEBUG("Added index buffer %u to vertex array buffer %u", buffer.GetNativeBuffer(), m_native_vertex_array);
@@ -212,7 +213,7 @@ bool Rndr::Pipeline::IsIndexBufferBound() const
 
 int64_t Rndr::Pipeline::GetIndexBufferElementSize() const
 {
-    RNDR_ASSERT(IsIndexBufferBound());
+    RNDR_ASSERT(IsIndexBufferBound(), "Index buffer is not bound!");
     const Buffer& index_buffer = *m_desc.input_layout.index_buffer;
     const BufferDesc& index_buffer_desc = index_buffer.GetDesc();
     return index_buffer_desc.stride;

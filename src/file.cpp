@@ -33,14 +33,14 @@ bool Rndr::FileHandler::IsEOF() const
 bool Rndr::FileHandler::Read(void* buffer, u64 element_size, u64 element_count)
 {
     const u64 read_elements = fread(buffer, element_size, element_count, m_file_handle);
-    RNDR_ASSERT(read_elements == element_count);
+    RNDR_ASSERT(read_elements == element_count, "Expected to read element_count elements!");
     return read_elements == element_count;
 }
 
 bool Rndr::FileHandler::Write(const void* buffer, u64 element_size, u64 element_count)
 {
     const u64 written_elements = fwrite(buffer, element_size, element_count, m_file_handle);
-    RNDR_ASSERT(written_elements == element_count);
+    RNDR_ASSERT(written_elements == element_count, "Expected to write element_count elements!");
     return written_elements == element_count;
 }
 
@@ -145,7 +145,7 @@ Opal::StringUtf8 Rndr::File::ReadShader(const Opal::StringUtf8& ref_path, const 
             return {};
         }
         auto parent_path_result = Opal::Paths::GetParentPath(full_path);
-        RNDR_ASSERT(parent_path_result.HasValue());
+        RNDR_ASSERT(parent_path_result.HasValue(), "Shader parent directory path is empty!");
         const Opal::StringUtf8 parent_path = parent_path_result.GetValue();
         const Opal::StringUtf8 include_contents = ReadShader(parent_path, include_path);
         shader_contents.Erase(include_start, include_length);

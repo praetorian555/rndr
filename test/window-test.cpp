@@ -1,11 +1,12 @@
 #include <catch2/catch2.hpp>
 
 #include "rndr/window.h"
-#include "rndr/rndr.h"
+#include "rndr/application.hpp"
 
 TEST_CASE("Creating a window", "[window]")
 {
-    REQUIRE(Rndr::Init());
+    Rndr::Application* app = Rndr::Application::Create();
+    REQUIRE(app != nullptr);
     SECTION("Default window")
     {
         Rndr::Window window;
@@ -78,21 +79,22 @@ TEST_CASE("Creating a window", "[window]")
         REQUIRE(!window.IsWindowMinimized());
         REQUIRE(window.IsVisible());
     }
-    REQUIRE(Rndr::Destroy());
+    Rndr::Application::Destroy();
 }
 
 TEST_CASE("Moving a window", "[window]")
 {
-    REQUIRE(Rndr::Init());
+    Rndr::Application* app = Rndr::Application::Create();
+    REQUIRE(app != nullptr);
     SECTION("Moving default window")
     {
         Rndr::Window first_window;
         REQUIRE(!first_window.IsClosed());
         Rndr::NativeWindowHandle handle = first_window.GetNativeWindowHandle();
-        REQUIRE(handle != Rndr::k_invalid_window_handle);
+        REQUIRE(handle != nullptr);
         Rndr::Window second_window(std::move(first_window));
         REQUIRE(first_window.IsClosed());
-        REQUIRE(first_window.GetNativeWindowHandle() == Rndr::k_invalid_window_handle);
+        REQUIRE(first_window.GetNativeWindowHandle() == nullptr);
         REQUIRE(!second_window.IsClosed());
         REQUIRE(second_window.GetNativeWindowHandle() == handle);
     }
@@ -101,22 +103,23 @@ TEST_CASE("Moving a window", "[window]")
         Rndr::Window first_window;
         REQUIRE(!first_window.IsClosed());
         Rndr::NativeWindowHandle handle = first_window.GetNativeWindowHandle();
-        REQUIRE(handle != Rndr::k_invalid_window_handle);
+        REQUIRE(handle != nullptr);
         Rndr::Window second_window;
         REQUIRE(!second_window.IsClosed());
         REQUIRE(second_window.GetNativeWindowHandle() != handle);
         second_window = std::move(first_window);
         REQUIRE(first_window.IsClosed());
-        REQUIRE(first_window.GetNativeWindowHandle() == Rndr::k_invalid_window_handle);
+        REQUIRE(first_window.GetNativeWindowHandle() == nullptr);
         REQUIRE(!second_window.IsClosed());
         REQUIRE(second_window.GetNativeWindowHandle() == handle);
     }
-    REQUIRE(Rndr::Destroy());
+    Rndr::Application::Destroy();
 }
 
 TEST_CASE("Resizing the window", "[window]")
 {
-    REQUIRE(Rndr::Init());
+    Rndr::Application* app = Rndr::Application::Create();
+    REQUIRE(app != nullptr);
     SECTION("Create default window")
     {
         Rndr::Window window;
@@ -153,12 +156,13 @@ TEST_CASE("Resizing the window", "[window]")
             REQUIRE(window.GetSize() == Rndr::Vector2f(1024, 768));
         }
     }
-    REQUIRE(Rndr::Destroy());
+    Rndr::Application::Destroy();
 }
 
 TEST_CASE("Closing the window", "[window]")
 {
-    REQUIRE(Rndr::Init());
+    Rndr::Application* app = Rndr::Application::Create();
+    REQUIRE(app != nullptr);
     Rndr::Window window;
     window.ProcessEvents();
     REQUIRE(!window.IsClosed());
@@ -171,12 +175,13 @@ TEST_CASE("Closing the window", "[window]")
     window.Close();
     window.ProcessEvents();
     REQUIRE(window.IsClosed());
-    REQUIRE(Rndr::Destroy());
+    Rndr::Application::Destroy();
 }
 
 TEST_CASE("Changing cursor mode", "[window]")
 {
-    REQUIRE(Rndr::Init());
+    Rndr::Application* app = Rndr::Application::Create();
+    REQUIRE(app != nullptr);
     SECTION("Create default window")
     {
         Rndr::Window window;
@@ -201,5 +206,5 @@ TEST_CASE("Changing cursor mode", "[window]")
             REQUIRE(window.GetCursorMode() == Rndr::CursorMode::Normal);
         }
     }
-    REQUIRE(Rndr::Destroy());
+    Rndr::Application::Destroy();
 }
