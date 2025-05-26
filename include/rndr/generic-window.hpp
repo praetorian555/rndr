@@ -43,7 +43,7 @@ public:
     virtual ~GenericWindow() = default;
 
     /**
-     * Requests closing of the window. Should trigger Application::on_window_close as if user pressed x in the UI.
+     * Requests closing of the window. Should trigger Application::on_window_close as if the user pressed x in the UI.
      */
     virtual ErrorCode RequestClose() = 0;
 

@@ -12,6 +12,8 @@ option(RNDR_TRACER "Use built in profiler" OFF)
 message(STATUS "RNDR_TRACER ${RNDR_TRACER}")
 option(RNDR_DEFAULT_LOGGER "Use default logger" OFF)
 message(STATUS "RNDR_DEFAULT_LOGGER ${RNDR_DEFAULT_LOGGER}")
+option(RNDR_BUILD_SAMPLES "Builds sample executables" ON)
+message(STATUS "RNDR_BUILD_SAMPLES ${RNDR_BUILD_SAMPLES}")
 
 ## C++ language configuration boilerplate, hide symbols by default
 if (NOT DEFINED CMAKE_CXX_VISIBILITY_PRESET AND NOT DEFINED CMAKE_VISIBILITY_INLINES_HIDDEN)
@@ -46,7 +48,7 @@ set(OPAL_SHARED_LIBS ${RNDR_SHARED_LIBS})
 FetchContent_Declare(
         opal
         GIT_REPOSITORY https://github.com/praetorian555/opal
-        GIT_TAG        main
+        GIT_TAG main
 )
 FetchContent_MakeAvailable(opal)
 
@@ -55,15 +57,15 @@ add_subdirectory(src)
 
 if (RNDR_BUILD_TESTS)
     set(RNDR_TEST_FILES
-        test/base-test.cpp
-        test/bitmap-test.cpp
-        test/camera-test.cpp
-        test/frames-per-second-counter-test.cpp
-        test/input-test.cpp
-        test/render-api-test.cpp
-        test/renderer-base-test.cpp
-        test/window-test.cpp
-        extern/catch2/src/catch_amalgamated.cpp)
+            test/base-test.cpp
+            test/bitmap-test.cpp
+            test/camera-test.cpp
+            test/frames-per-second-counter-test.cpp
+            test/input-test.cpp
+            test/render-api-test.cpp
+            test/renderer-base-test.cpp
+            test/window-test.cpp
+            extern/catch2/src/catch_amalgamated.cpp)
     add_executable(rndr_test ${RNDR_TEST_FILES})
     target_include_directories(rndr_test PRIVATE src)
     target_include_directories(rndr_test PRIVATE extern/catch2/include)
@@ -81,5 +83,49 @@ if (RNDR_BUILD_TESTS)
             ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
             RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}  # For Windows DLL files
     )
-endif()
+endif ()
+
+if (RNDR_BUILD_SAMPLES)
+
+    # Setup IMGUI ######################################################################
+    FetchContent_Declare(
+            imgui
+            GIT_REPOSITORY https://github.com/ocornut/imgui
+            GIT_TAG c6e0284ac58b3f205c95365478888f7b53b077e2 # release-1.89.9
+    )
+    FetchContent_MakeAvailable(imgui)
+    FetchContent_GetProperties(imgui SOURCE_DIR SOURCE_PATH)
+    set(IMGUI_SOURCE_FILES
+            ${SOURCE_PATH}/imgui.cpp
+            ${SOURCE_PATH}/imgui.h
+            ${SOURCE_PATH}/imconfig.h
+            ${SOURCE_PATH}/imgui_internal.h
+            ${SOURCE_PATH}/imstb_rectpack.h
+            ${SOURCE_PATH}/imstb_truetype.h
+            ${SOURCE_PATH}/imstb_textedit.h
+            ${SOURCE_PATH}/imgui_draw.cpp
+            ${SOURCE_PATH}/imgui_demo.cpp
+            ${SOURCE_PATH}/imgui_tables.cpp
+            ${SOURCE_PATH}/imgui_widgets.cpp)
+    # Use Win32 backhand for Windows
+    if (MSVC)
+        set(IMGUI_WINDOWS_SOURCE_FILES
+                ${SOURCE_PATH}/backends/imgui_impl_win32.cpp
+                ${SOURCE_PATH}/backends/imgui_impl_win32.h)
+    else ()
+        set(IMGUI_WINDOWS_SOURCE_FILES)
+    endif ()
+    set(IMGUI_OPENGL_SOURCE_FILES
+            ${SOURCE_PATH}/backends/imgui_impl_opengl3.cpp
+            ${SOURCE_PATH}/backends/imgui_impl_opengl3.h)
+    add_library(imgui
+            ${IMGUI_SOURCE_FILES}
+            ${IMGUI_WINDOWS_SOURCE_FILES}
+            ${IMGUI_OPENGL_SOURCE_FILES})
+    target_include_directories(imgui PUBLIC ${SOURCE_PATH})
+
+    add_executable(window-sample samples/window/window-sample.cpp)
+    target_link_libraries(window-sample PUBLIC opal rndr imgui)
+
+endif ()
 
