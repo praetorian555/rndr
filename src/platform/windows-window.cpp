@@ -41,8 +41,16 @@ Rndr::WindowsWindow::WindowsWindow(const GenericWindowDesc& desc, Opal::Allocato
         }
     }
 
-    DWORD window_style = GetWindowedStyle(desc);
-    HWND window_handle = CreateWindowEx(0, class_name, desc.name, window_style, desc.start_x, desc.start_y, desc.width, desc.height,
+    const DWORD window_style = GetWindowedStyle(desc);
+
+    // Since the user specifies the size of the client area but CreateWindowEx expects the size of the whole window,
+    // we will ask OS how big should the window be for the desired client area.
+    RECT rc = {0, 0, desc.width, desc.height};
+    ::AdjustWindowRectEx(&rc, window_style, FALSE, 0);
+    const i32 real_width = rc.right - rc.left;
+    const i32 real_height = rc.bottom - rc.top;
+
+    HWND window_handle = CreateWindowEx(0, class_name, desc.name, window_style, desc.start_x, desc.start_y, real_width, real_height,
                                         nullptr, nullptr, instance, this);
     if (window_handle == nullptr)
     {
@@ -425,14 +433,22 @@ Rndr::ErrorCode Rndr::WindowsWindow::GetPositionAndSize(i32& pos_x, i32& pos_y, 
     {
         return ErrorCode::WindowAlreadyClosed;
     }
+    // We use the position of the whole window (not only the client area)
     RECT window_rect = {};
-    const BOOL rtn = GetWindowRect(RNDR_TO_HWND(m_native_window_handle), &window_rect);
+    BOOL rtn = GetWindowRect(RNDR_TO_HWND(m_native_window_handle), &window_rect);
     if (rtn == 0)
     {
         return ErrorCode::PlatformError;
     }
     pos_x = window_rect.left;
     pos_y = window_rect.top;
+
+    // We use the size of the client area only
+    rtn = ::GetClientRect(RNDR_TO_HWND(m_native_window_handle), &window_rect);
+    if (rtn == 0)
+    {
+        return ErrorCode::PlatformError;
+    }
     width = window_rect.right - window_rect.left;
     height = window_rect.bottom - window_rect.top;
     return ErrorCode::Success;
