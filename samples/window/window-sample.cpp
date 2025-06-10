@@ -42,7 +42,6 @@ int main()
         const Rndr::f64 start_seconds = Opal::GetSeconds();
 
         app->ProcessSystemEvents();
-        app->ProcessDeferredMessages(delta_seconds);
 
         gc.ClearAll(Rndr::Vector4f(0.0f, 0.0f, 0.0f, 1.0f));
         gc.Present(swap_chain);

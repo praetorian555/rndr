@@ -95,11 +95,6 @@ void Rndr::Application::ProcessSystemEvents()
     m_platform_application->ProcessSystemEvents();
 }
 
-void Rndr::Application::ProcessDeferredMessages(f32 delta_seconds)
-{
-    m_platform_application->ProcessDeferredMessages(delta_seconds);
-}
-
 void Rndr::Application::OnWindowClose(GenericWindow* window)
 {
     const bool is_handled = on_window_close.Execute(window);
@@ -112,4 +107,26 @@ void Rndr::Application::OnWindowClose(GenericWindow* window)
 void Rndr::Application::OnWindowSizeChanged(GenericWindow* window, i32 width, i32 height)
 {
     on_window_resize.Execute(window, width, height);
+}
+
+bool Rndr::Application::OnButtonDown(InputPrimitive key_code, bool is_repeated)
+{
+    RNDR_LOG_DEBUG("ButtonDown Key=0x%x, IsRepeated=%s", key_code, is_repeated ? "true" : "false");
+    return true;
+}
+
+bool Rndr::Application::OnButtonUp(InputPrimitive key_code, bool is_repeated)
+{
+    RNDR_LOG_DEBUG("ButtonUp Key=0x%x, IsRepeated=%s", key_code, is_repeated ? "true" : "false");
+    return true;
+}
+
+bool Rndr::Application::OnCharacter(uchar32 character, bool is_repeated)
+{
+    Opal::StringUtf32 in;
+    in.Append(character);
+    Opal::StringUtf8 out(10, 0);
+    Opal::Transcode(in, out);
+    RNDR_LOG_DEBUG("Character Char=%s, IsRepeated=%s", out.GetData(), is_repeated ? "true" : "false");
+    return true;
 }

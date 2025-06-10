@@ -552,7 +552,7 @@ bool Rndr::InputSystem::IsMouseButton(InputPrimitive primitive)
 bool Rndr::InputSystem::IsKeyboardButton(InputPrimitive primitive)
 
 {
-    return primitive > InputPrimitive::_KeyboardStart && primitive < InputPrimitive::_KeyboardEnd;
+    return primitive >= InputPrimitive::Backspace && primitive <= InputPrimitive::Apostrophe;
 }
 
 bool Rndr::InputSystem::IsAxis(InputPrimitive primitive)

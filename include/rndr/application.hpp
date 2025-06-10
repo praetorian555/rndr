@@ -52,10 +52,13 @@ public:
     [[nodiscard]] struct Logger& GetLoggerChecked() const;
 
     void ProcessSystemEvents();
-    void ProcessDeferredMessages(f32 delta_seconds);
 
     void OnWindowClose(GenericWindow* window) override;
     void OnWindowSizeChanged(GenericWindow* window, i32 width, i32 height) override;
+
+    bool OnButtonDown(InputPrimitive key_code, bool is_repeated) override;
+    bool OnButtonUp(InputPrimitive key_code, bool is_repeated) override;
+    bool OnCharacter(uchar32 character, bool is_repeated) override;
 
 private:
     Application(const ApplicationDesc& desc);

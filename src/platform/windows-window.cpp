@@ -1,5 +1,7 @@
 #include "rndr/platform/windows-window.hpp"
 
+#include "opal/container/string.h"
+
 #include "rndr/platform/windows-application.hpp"
 #include "rndr/platform/windows-header.h"
 
@@ -23,7 +25,7 @@ Rndr::WindowsWindow::WindowsWindow(const GenericWindowDesc& desc, Opal::Allocato
     // TODO(Marko): This will get the handle to the exe, should pass in the name of this dll if we
     // use dynamic linking
     HMODULE instance = GetModuleHandle(nullptr);
-    const char* class_name = "RndrWindowClass";
+    const char16* class_name = L"RndrWindowClass";
 
     WNDCLASS window_class{};
     if (!GetClassInfo(instance, class_name, &window_class))
@@ -50,7 +52,10 @@ Rndr::WindowsWindow::WindowsWindow(const GenericWindowDesc& desc, Opal::Allocato
     const i32 real_width = rc.right - rc.left;
     const i32 real_height = rc.bottom - rc.top;
 
-    HWND window_handle = CreateWindowEx(0, class_name, desc.name, window_style, desc.start_x, desc.start_y, real_width, real_height,
+    Opal::StringUtf8 name = desc.name;
+    Opal::StringWide wide_name(name.GetSize() + 1, 0);
+    Opal::Transcode(name, wide_name);
+    HWND window_handle = CreateWindowEx(0, class_name, wide_name.GetData(), window_style, desc.start_x, desc.start_y, real_width, real_height,
                                         nullptr, nullptr, instance, this);
     if (window_handle == nullptr)
     {
