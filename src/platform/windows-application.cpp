@@ -1,5 +1,7 @@
 #include "rndr/platform/windows-application.hpp"
 
+#include <Windowsx.h>
+
 #include "glad/glad_wgl.h"
 
 #include "opal/container/in-place-array.h"
@@ -82,6 +84,130 @@ Rndr::i32 Rndr::WindowsApplication::ProcessMessage(HWND window_handle, UINT msg_
             encoding.DecodeOne(input_view, utf32_char);
             const bool is_repeated = (param_l & 0x40000000) == 0;
             m_message_handler->OnCharacter(window_checked, utf32_char, is_repeated);
+            return 0;
+        }
+        case WM_LBUTTONDOWN:
+        case WM_LBUTTONDBLCLK:
+        case WM_LBUTTONUP:
+        case WM_RBUTTONDOWN:
+        case WM_RBUTTONDBLCLK:
+        case WM_RBUTTONUP:
+        case WM_MBUTTONDOWN:
+        case WM_MBUTTONDBLCLK:
+        case WM_MBUTTONUP:
+        case WM_XBUTTONDOWN:
+        case WM_XBUTTONDBLCLK:
+        case WM_XBUTTONUP:
+        {
+            POINT cursor_pos_window;
+            cursor_pos_window.x = GET_X_LPARAM(param_l);
+            cursor_pos_window.y = GET_Y_LPARAM(param_l);
+            ClientToScreen(window_handle, &cursor_pos_window);
+            const Vector2i cursor_pos(cursor_pos_window.x, cursor_pos_window.y);
+
+            InputPrimitive primitive = InputPrimitive::A;
+            bool mouse_up = false;
+            bool double_click = false;
+            switch (msg_code)
+            {
+                case WM_LBUTTONDOWN:
+                {
+                    primitive = InputPrimitive::Mouse_LeftButton;
+                    break;
+                }
+                case WM_LBUTTONDBLCLK:
+                {
+                    primitive = InputPrimitive::Mouse_LeftButton;
+                    double_click = true;
+                    break;
+                }
+                case WM_LBUTTONUP:
+                {
+                    primitive = InputPrimitive::Mouse_LeftButton;
+                    mouse_up = true;
+                    break;
+                }
+                case WM_RBUTTONDOWN:
+                {
+                    primitive = InputPrimitive::Mouse_RightButton;
+                    break;
+                }
+                case WM_RBUTTONDBLCLK:
+                {
+                    primitive = InputPrimitive::Mouse_RightButton;
+                    double_click = true;
+                    break;
+                }
+                case WM_RBUTTONUP:
+                {
+                    primitive = InputPrimitive::Mouse_RightButton;
+                    mouse_up = true;
+                    break;
+                }
+                case WM_MBUTTONDOWN:
+                {
+                    primitive = InputPrimitive::Mouse_MiddleButton;
+                    break;
+                }
+                case WM_MBUTTONDBLCLK:
+                {
+                    primitive = InputPrimitive::Mouse_MiddleButton;
+                    double_click = true;
+                    break;
+                }
+                case WM_MBUTTONUP:
+                {
+                    primitive = InputPrimitive::Mouse_MiddleButton;
+                    mouse_up = true;
+                    break;
+                }
+                case WM_XBUTTONDOWN:
+                {
+                    primitive = (HIWORD(param_w) & XBUTTON1) != 0 ? InputPrimitive::Mouse_XButton1 : InputPrimitive::Mouse_XButton2;
+                    break;
+                }
+                case WM_XBUTTONDBLCLK:
+                {
+                    primitive = (HIWORD(param_w) & XBUTTON1) != 0 ? InputPrimitive::Mouse_XButton1 : InputPrimitive::Mouse_XButton2;
+                    double_click = true;
+                    break;
+                }
+                case WM_XBUTTONUP:
+                {
+                    primitive = (HIWORD(param_w) & XBUTTON1) != 0 ? InputPrimitive::Mouse_XButton1 : InputPrimitive::Mouse_XButton2;
+                    mouse_up = true;
+                    break;
+                }
+                default:
+                {
+                    RNDR_ASSERT(false, "This should never be reached!");
+                }
+            }
+            if (mouse_up)
+            {
+                m_message_handler->OnMouseButtonUp(window_checked, primitive, cursor_pos);
+            }
+            else if (double_click)
+            {
+                m_message_handler->OnMouseDoubleClick(window_checked, primitive, cursor_pos);
+            }
+            else
+            {
+                m_message_handler->OnMouseButtonDown(window_checked, primitive, cursor_pos);
+            }
+            return 0;
+        }
+        case WM_MOUSEWHEEL:
+        {
+            POINT cursor_pos_window;
+            cursor_pos_window.x = GET_X_LPARAM(param_l);
+            cursor_pos_window.y = GET_Y_LPARAM(param_l);
+            ClientToScreen(window_handle, &cursor_pos_window);
+            const Vector2i cursor_pos(cursor_pos_window.x, cursor_pos_window.y);
+
+            const i16 wheel_delta = GET_WHEEL_DELTA_WPARAM(param_w);
+            constexpr f32 k_rotation_constant = 1 / 120.0f;
+            m_message_handler->OnMouseWheel(window_checked, static_cast<f32>(wheel_delta) * k_rotation_constant, cursor_pos);
             return 0;
         }
     }

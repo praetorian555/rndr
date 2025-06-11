@@ -130,3 +130,27 @@ bool Rndr::Application::OnCharacter(const GenericWindow&, uchar32 character, boo
     RNDR_LOG_DEBUG("Character Char=%s, IsRepeated=%s", out.GetData(), is_repeated ? "true" : "false");
     return true;
 }
+
+bool Rndr::Application::OnMouseButtonDown(const GenericWindow&, InputPrimitive primitive, const Vector2i& cursor_position)
+{
+    RNDR_LOG_DEBUG("MouseButtonDown Key=0x%x, CursorPosition=(x=%d, y=%d)", primitive, cursor_position.x, cursor_position.y);
+    return true;
+}
+
+bool Rndr::Application::OnMouseButtonUp(const GenericWindow&, InputPrimitive primitive, const Vector2i& cursor_position)
+{
+    RNDR_LOG_DEBUG("MouseButtonUp Key=0x%x, CursorPosition=(x=%d, y=%d)", primitive, cursor_position.x, cursor_position.y);
+    return true;
+}
+
+bool Rndr::Application::OnMouseDoubleClick(const GenericWindow&, InputPrimitive primitive, const Vector2i& cursor_position)
+{
+    RNDR_LOG_DEBUG("MouseDoubleClick Key=0x%x, CursorPosition=(x=%d, y=%d)", primitive, cursor_position.x, cursor_position.y);
+    return true;
+}
+
+bool Rndr::Application::OnMouseWheel(const GenericWindow&, f32 wheel_delta, const Vector2i& cursor_position)
+{
+    RNDR_LOG_DEBUG("MouseWheel Delta=%f, CursorPosition=(x=%d, y=%d)", wheel_delta, cursor_position.x, cursor_position.y);
+    return true;
+}

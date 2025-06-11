@@ -2,6 +2,7 @@
 
 #include "rndr/generic-window.hpp"
 #include "rndr/input-primitives.h"
+#include "rndr/math.h"
 #include "rndr/types.h"
 
 namespace Rndr
@@ -16,5 +17,10 @@ struct SystemMessageHandler
     virtual bool OnButtonDown(const GenericWindow& window, InputPrimitive key_code, bool is_repeated) = 0;
     virtual bool OnButtonUp(const GenericWindow& window, InputPrimitive key_code, bool is_repeated) = 0;
     virtual bool OnCharacter(const GenericWindow& window, uchar32 character, bool is_repeated) = 0;
+
+    virtual bool OnMouseButtonDown(const GenericWindow& window, InputPrimitive primitive, const Vector2i& cursor_position) = 0;
+    virtual bool OnMouseButtonUp(const GenericWindow& window, InputPrimitive primitive, const Vector2i& cursor_position) = 0;
+    virtual bool OnMouseDoubleClick(const GenericWindow& window, InputPrimitive primitive, const Vector2i& cursor_position) = 0;
+    virtual bool OnMouseWheel(const GenericWindow& window, f32 wheel_delta, const Vector2i& cursor_position) = 0;
 };
 }  // namespace Rndr

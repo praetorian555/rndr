@@ -60,6 +60,11 @@ public:
     bool OnButtonUp(const GenericWindow& window, InputPrimitive key_code, bool is_repeated) override;
     bool OnCharacter(const GenericWindow& window, uchar32 character, bool is_repeated) override;
 
+    bool OnMouseButtonDown(const GenericWindow& window, InputPrimitive primitive, const Vector2i& cursor_position) override;
+    bool OnMouseButtonUp(const GenericWindow& window, InputPrimitive primitive, const Vector2i& cursor_position) override;
+    bool OnMouseDoubleClick(const GenericWindow& window, InputPrimitive primitive, const Vector2i& cursor_position) override;
+    bool OnMouseWheel(const GenericWindow& window, f32 wheel_delta, const Vector2i& cursor_position) override;
+
 private:
     Application(const ApplicationDesc& desc);
 
