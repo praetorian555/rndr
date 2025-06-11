@@ -95,33 +95,33 @@ void Rndr::Application::ProcessSystemEvents()
     m_platform_application->ProcessSystemEvents();
 }
 
-void Rndr::Application::OnWindowClose(GenericWindow* window)
+void Rndr::Application::OnWindowClose(GenericWindow& window)
 {
     const bool is_handled = on_window_close.Execute(window);
     if (!is_handled)
     {
-        window->ForceClose();
+        window.ForceClose();
     }
 }
 
-void Rndr::Application::OnWindowSizeChanged(GenericWindow* window, i32 width, i32 height)
+void Rndr::Application::OnWindowSizeChanged(const GenericWindow& window, i32 width, i32 height)
 {
     on_window_resize.Execute(window, width, height);
 }
 
-bool Rndr::Application::OnButtonDown(InputPrimitive key_code, bool is_repeated)
+bool Rndr::Application::OnButtonDown(const GenericWindow&, InputPrimitive key_code, bool is_repeated)
 {
     RNDR_LOG_DEBUG("ButtonDown Key=0x%x, IsRepeated=%s", key_code, is_repeated ? "true" : "false");
     return true;
 }
 
-bool Rndr::Application::OnButtonUp(InputPrimitive key_code, bool is_repeated)
+bool Rndr::Application::OnButtonUp(const GenericWindow&, InputPrimitive key_code, bool is_repeated)
 {
     RNDR_LOG_DEBUG("ButtonUp Key=0x%x, IsRepeated=%s", key_code, is_repeated ? "true" : "false");
     return true;
 }
 
-bool Rndr::Application::OnCharacter(uchar32 character, bool is_repeated)
+bool Rndr::Application::OnCharacter(const GenericWindow&, uchar32 character, bool is_repeated)
 {
     Opal::StringUtf32 in;
     in.Append(character);

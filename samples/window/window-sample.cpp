@@ -31,9 +31,12 @@ int main()
     const Rndr::SwapChainDesc swap_chain_desc{.width = width, .height = height};
     Rndr::SwapChain swap_chain{gc, swap_chain_desc};
 
-    app->on_window_resize.Bind([&swap_chain](Rndr::GenericWindow*, Rndr::i32 width, Rndr::i32 height)
+    app->on_window_resize.Bind([&swap_chain, window](const Rndr::GenericWindow& w, Rndr::i32 width, Rndr::i32 height)
     {
-        swap_chain.SetSize(width, height);
+        if (window == &w)
+        {
+            swap_chain.SetSize(width, height);
+        }
     });
 
     Rndr::f32 delta_seconds = 0.016f;

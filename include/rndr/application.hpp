@@ -34,10 +34,10 @@ struct ApplicationDesc
 class Application : public SystemMessageHandler
 {
 public:
-    using WindowCloseDelegate = Delegate<bool(GenericWindow* /*window*/)>;
+    using WindowCloseDelegate = Delegate<bool(const GenericWindow& /*window*/)>;
     WindowCloseDelegate on_window_close;
 
-    using WindowResizeDelegate = MultiDelegate<void(GenericWindow* /*window*/, int /*width*/, int /*height*/)>;
+    using WindowResizeDelegate = MultiDelegate<void(const GenericWindow& window /*window*/, int /*width*/, int /*height*/)>;
     WindowResizeDelegate on_window_resize;
 
     static Application* Create(const ApplicationDesc& desc = ApplicationDesc{});
@@ -53,12 +53,12 @@ public:
 
     void ProcessSystemEvents();
 
-    void OnWindowClose(GenericWindow* window) override;
-    void OnWindowSizeChanged(GenericWindow* window, i32 width, i32 height) override;
+    void OnWindowClose(GenericWindow& window) override;
+    void OnWindowSizeChanged(const GenericWindow& window, i32 width, i32 height) override;
 
-    bool OnButtonDown(InputPrimitive key_code, bool is_repeated) override;
-    bool OnButtonUp(InputPrimitive key_code, bool is_repeated) override;
-    bool OnCharacter(uchar32 character, bool is_repeated) override;
+    bool OnButtonDown(const GenericWindow& window, InputPrimitive key_code, bool is_repeated) override;
+    bool OnButtonUp(const GenericWindow& window, InputPrimitive key_code, bool is_repeated) override;
+    bool OnCharacter(const GenericWindow& window, uchar32 character, bool is_repeated) override;
 
 private:
     Application(const ApplicationDesc& desc);

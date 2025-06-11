@@ -30,18 +30,19 @@ Rndr::i32 Rndr::WindowsApplication::ProcessMessage(HWND window_handle, UINT msg_
     {
         return static_cast<i32>(DefWindowProc(window_handle, msg_code, param_w, param_l));
     }
+    GenericWindow& window_checked = *window;
     switch (msg_code)
     {
         case WM_CLOSE:
         {
-            m_message_handler->OnWindowClose(window);
+            m_message_handler->OnWindowClose(window_checked);
             return 0;
         }
         case WM_SIZE:
         {
             const i32 width = LOWORD(param_l);
             const i32 height = HIWORD(param_l);
-            m_message_handler->OnWindowSizeChanged(window, width, height);
+            m_message_handler->OnWindowSizeChanged(window_checked, width, height);
             return 0;
         }
         case WM_SYSKEYDOWN:
@@ -55,7 +56,7 @@ Rndr::i32 Rndr::WindowsApplication::ProcessMessage(HWND window_handle, UINT msg_
                 return 0;
             }
             const bool is_repeated = (param_l & 0x40000000) != 0;
-            m_message_handler->OnButtonDown(primitive, is_repeated);
+            m_message_handler->OnButtonDown(window_checked, primitive, is_repeated);
             return 0;
         }
         case WM_SYSKEYUP:
@@ -69,7 +70,7 @@ Rndr::i32 Rndr::WindowsApplication::ProcessMessage(HWND window_handle, UINT msg_
                 return 0;
             }
             const bool is_repeated = (param_l & 0x40000000) == 0;
-            m_message_handler->OnButtonUp(primitive, is_repeated);
+            m_message_handler->OnButtonUp(window_checked, primitive, is_repeated);
             return 0;
         }
         case WM_CHAR:
@@ -80,7 +81,7 @@ Rndr::i32 Rndr::WindowsApplication::ProcessMessage(HWND window_handle, UINT msg_
             Opal::ArrayView<const char16> input_view{&character, &character + 1};
             encoding.DecodeOne(input_view, utf32_char);
             const bool is_repeated = (param_l & 0x40000000) == 0;
-            m_message_handler->OnCharacter(utf32_char, is_repeated);
+            m_message_handler->OnCharacter(window_checked, utf32_char, is_repeated);
             return 0;
         }
     }
