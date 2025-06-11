@@ -95,6 +95,11 @@ void Rndr::Application::ProcessSystemEvents()
     m_platform_application->ProcessSystemEvents();
 }
 
+void Rndr::Application::EnableHighPrecisionCursorMode(bool enable, GenericWindow& window)
+{
+    m_platform_application->EnableHighPrecisionCursorMode(enable, window);
+}
+
 void Rndr::Application::OnWindowClose(GenericWindow& window)
 {
     const bool is_handled = on_window_close.Execute(window);
@@ -152,5 +157,11 @@ bool Rndr::Application::OnMouseDoubleClick(const GenericWindow&, InputPrimitive 
 bool Rndr::Application::OnMouseWheel(const GenericWindow&, f32 wheel_delta, const Vector2i& cursor_position)
 {
     RNDR_LOG_DEBUG("MouseWheel Delta=%f, CursorPosition=(x=%d, y=%d)", wheel_delta, cursor_position.x, cursor_position.y);
+    return true;
+}
+
+bool Rndr::Application::OnMouseMove(const GenericWindow&, f32 delta_x, f32 delta_y)
+{
+    RNDR_LOG_DEBUG("MouseMove DeltaX=%f, DeltaY=%f", delta_x, delta_y);
     return true;
 }

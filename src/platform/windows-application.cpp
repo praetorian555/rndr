@@ -17,7 +17,6 @@ Rndr::WindowsApplication::WindowsApplication(SystemMessageHandler* message_handl
     : PlatformApplication(message_handler, allocator), m_deferred_messages(m_allocator)
 {
     g_windows_app = this;
-    // TODO: Iterate over connected devices using raw input API
 }
 
 LRESULT RndrPrivate::WindowProc(HWND window_handle, UINT msg_code, WPARAM param_w, LPARAM param_l)
@@ -210,6 +209,25 @@ Rndr::i32 Rndr::WindowsApplication::ProcessMessage(HWND window_handle, UINT msg_
             m_message_handler->OnMouseWheel(window_checked, static_cast<f32>(wheel_delta) * k_rotation_constant, cursor_pos);
             return 0;
         }
+        case WM_INPUT:
+        {
+            UINT struct_size = sizeof(RAWINPUT);
+            Opal::InPlaceArray<uint8_t, sizeof(RAWINPUT)> data_buffer;
+
+            // NOLINTNEXTLINE
+            GetRawInputData(reinterpret_cast<HRAWINPUT>(param_l), RID_INPUT, data_buffer.GetData(), &struct_size, sizeof(RAWINPUTHEADER));
+
+            RAWINPUT* raw_data = reinterpret_cast<RAWINPUT*>(data_buffer.GetData());
+
+            if (raw_data->header.dwType == RIM_TYPEMOUSE)
+            {
+                [[maybe_unused]] const bool is_absolute_input = (raw_data->data.mouse.usFlags & MOUSE_MOVE_ABSOLUTE) == MOUSE_MOVE_ABSOLUTE;
+                RNDR_ASSERT(!is_absolute_input, "This is coming from a tablet or a virtual desktop which is not supported!");
+                m_message_handler->OnMouseMove(window_checked, static_cast<float>(raw_data->data.mouse.lLastX),
+                                               static_cast<float>(raw_data->data.mouse.lLastY));
+            }
+            return 0;
+        }
     }
     return static_cast<i32>(DefWindowProc(window_handle, msg_code, param_w, param_l));
 }
@@ -226,6 +244,24 @@ void Rndr::WindowsApplication::ProcessSystemEvents()
         }
     }
 }
+void Rndr::WindowsApplication::EnableHighPrecisionCursorMode(bool enable, const GenericWindow& window)
+{
+    HWND window_handle = nullptr;
+    if (enable)
+    {
+        window_handle = reinterpret_cast<HWND>(window.GetNativeHandle());
+    }
+
+    constexpr uint16_t k_hid_usage_page_generic = 0x01;
+    constexpr uint16_t k_hid_usage_generic_mouse = 0x02;
+    Opal::InPlaceArray<RAWINPUTDEVICE, 1> raw_devices;
+    raw_devices[0].usUsagePage = k_hid_usage_page_generic;
+    raw_devices[0].usUsage = k_hid_usage_generic_mouse;
+    raw_devices[0].dwFlags = RIDEV_INPUTSINK;
+    raw_devices[0].hwndTarget = window_handle;
+    RegisterRawInputDevices(raw_devices.GetData(), 1, sizeof(raw_devices[0]));
+}
+
 Rndr::i32 Rndr::WindowsApplication::TranslateKey(i32 win_key, i32 desc)
 {
     switch (win_key)

@@ -22,5 +22,6 @@ struct SystemMessageHandler
     virtual bool OnMouseButtonUp(const GenericWindow& window, InputPrimitive primitive, const Vector2i& cursor_position) = 0;
     virtual bool OnMouseDoubleClick(const GenericWindow& window, InputPrimitive primitive, const Vector2i& cursor_position) = 0;
     virtual bool OnMouseWheel(const GenericWindow& window, f32 wheel_delta, const Vector2i& cursor_position) = 0;
+    virtual bool OnMouseMove(const GenericWindow& window, f32 delta_x, f32 delta_y) = 0;
 };
 }  // namespace Rndr

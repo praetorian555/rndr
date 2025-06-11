@@ -30,6 +30,7 @@ public:
     i32 ProcessMessage(HWND window_handle, UINT msg_code, WPARAM param_w, LPARAM param_l);
 
     void ProcessSystemEvents() override;
+    void EnableHighPrecisionCursorMode(bool enable, const GenericWindow& window) override;
 
 private:
     i32 TranslateKey(i32 win_key, i32 desc);

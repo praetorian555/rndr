@@ -38,6 +38,7 @@ public:
     void DestroyGenericWindow(GenericWindow* window);
 
     virtual void ProcessSystemEvents() = 0;
+    virtual void EnableHighPrecisionCursorMode(bool enable, const GenericWindow& window) = 0;
 
     class GenericWindow* GetGenericWindowByNativeHandle(NativeWindowHandle handle);
 

@@ -26,6 +26,8 @@ int main()
     window->GetPositionAndSize(x, y, width, height);
     window->SetTitle("Window Sample");
 
+    app->EnableHighPrecisionCursorMode(true, *window);
+
     const Rndr::GraphicsContextDesc gc_desc{.window_handle = window->GetNativeHandle()};
     Rndr::GraphicsContext gc{gc_desc};
     const Rndr::SwapChainDesc swap_chain_desc{.width = width, .height = height};
