@@ -156,41 +156,47 @@ private:
 class InputSystem : public SystemMessageHandler
 {
 public:
+    static InputSystem* Get();
+    static InputSystem& GetChecked();
+
     /**
      * Initializes the input system.
      * @return Returns true if the input system was successfully initialized.
      */
-    static bool Init();
+    bool Init();
 
     /**
      * Destroys the input system.
      * @return Returns true if the input system was successfully destroyed.
      */
-    static bool Destroy();
+    bool Destroy();
+
+    Opal::DynamicArray<Opal::Ref<InputContext>>& GetInputContexts();
+    const Opal::DynamicArray<Opal::Ref<InputContext>>& GetInputContexts() const;
 
     /**
      * Returns the currently active input context.
      * @return Returns the input context on top of the stack.
      */
-    static InputContext& GetCurrentContext();
+    InputContext& GetCurrentContext();
 
     /**
      * Pushes a new input context to the top of the stack making it the active context.
      * @param context Context to be pushed to the top of the stack.
      * @note The input system does not manage the input context lifetime.
      */
-    static bool PushContext(const Opal::Ref<InputContext>& context);
+    bool PushContext(const Opal::Ref<InputContext>& context);
 
     /**
      * Pops the input context from the top of the stack. This does not destroy the context.
      */
-    static bool PopContext();
+    bool PopContext();
 
     /**
      * Processes all pending input events.
      * @param delta_seconds Time that has elapsed since the last frame.
      */
-    static bool ProcessEvents(float delta_seconds);
+    bool ProcessEvents(float delta_seconds);
 
     void OnWindowClose(GenericWindow&) override {}
     void OnWindowSizeChanged(const GenericWindow&, i32, i32) override {}
@@ -239,7 +245,8 @@ public:
     static bool IsMouseWheelAxis(InputPrimitive primitive);
 
 private:
-    static Opal::ScopePtr<struct InputSystemData> g_system_data;
+    InputContext m_default_context;
+    Opal::DynamicArray<Opal::Ref<InputContext>> m_contexts;
 };
 
 /**

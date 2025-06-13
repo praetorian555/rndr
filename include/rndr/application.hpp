@@ -1,6 +1,7 @@
 #pragma once
 
 #include "delegate.h"
+#include "input.h"
 #include "opal/allocator.h"
 #include "opal/container/dynamic-array.h"
 #include "opal/container/ref.h"
@@ -50,6 +51,7 @@ public:
     void DestroyGenericWindow(GenericWindow* window);
 
     [[nodiscard]] struct Logger& GetLoggerChecked() const;
+    [[nodiscard]] InputSystem& GetInputSystemChecked() const;
 
     void ProcessSystemEvents();
 
@@ -78,6 +80,7 @@ private:
     Opal::Ref<PlatformApplication> m_platform_application;
     struct Logger* m_logger = nullptr;
     Opal::AllocatorBase* m_allocator = nullptr;
+    InputSystem* m_input_system = nullptr;
 };
 
 }  // namespace Rndr

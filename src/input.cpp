@@ -256,64 +256,71 @@ const Opal::DynamicArray<Rndr::InputAction>& Rndr::InputContext::GetActions() co
 
 namespace
 {
-inline Rndr::InputSystem& GetInputSystem()
-{
-    static Rndr::InputSystem s_input_system;
-    return s_input_system;
+Opal::ScopePtr<Rndr::InputSystem> g_input_system;
+Rndr::EventQueue g_event_queue;
 }
-}  // namespace
 
-Opal::ScopePtr<Rndr::InputSystemData> Rndr::InputSystem::g_system_data;
+Rndr::InputSystem* Rndr::InputSystem::Get()
+{
+    if (!g_input_system.IsValid())
+    {
+        g_input_system = Opal::MakeDefaultScoped<InputSystem>();
+    }
+    return g_input_system.Get();
+}
+
+Rndr::InputSystem& Rndr::InputSystem::GetChecked()
+{
+    if (!g_input_system.IsValid())
+    {
+        g_input_system = Opal::MakeDefaultScoped<InputSystem>();
+    }
+    RNDR_ASSERT(g_input_system.IsValid(), "Rndr::InputSystem::GetChecked()");
+    return *g_input_system;
+}
 
 bool Rndr::InputSystem::Init()
 {
-    if (!g_system_data)
-    {
-        g_system_data = Opal::MakeDefaultScoped<InputSystemData>();
-    }
-    const Opal::Ref<InputContext> default_context_data = Opal::Ref{g_system_data->default_context};
-    g_system_data->contexts.PushBack(default_context_data);
+    m_default_context = InputContext("Default Input Context");
+    m_contexts.PushBack(Opal::Ref{&m_default_context});
     return true;
 }
 
 bool Rndr::InputSystem::Destroy()
 {
-    if (!g_system_data)
-    {
-        return true;
-    }
-    g_system_data.Reset(nullptr);
+    m_contexts.Clear();
     return true;
+}
+
+Opal::DynamicArray<Opal::Ref<Rndr::InputContext>>& Rndr::InputSystem::GetInputContexts()
+{
+    return m_contexts;
+}
+
+const Opal::DynamicArray<Opal::Ref<Rndr::InputContext>>& Rndr::InputSystem::GetInputContexts() const
+{
+    return m_contexts;
 }
 
 Rndr::InputContext& Rndr::InputSystem::GetCurrentContext()
 {
-    RNDR_ASSERT(g_system_data != nullptr, "No system data!");
-    return g_system_data->contexts.Back().GetValue().Get();
+    return m_contexts.Back().GetValue().Get();
 }
 
 bool Rndr::InputSystem::PushContext(const Opal::Ref<InputContext>& context)
 {
-    if (g_system_data == nullptr)
-    {
-        return false;
-    }
-    g_system_data->contexts.PushBack(context);
+    m_contexts.PushBack(context);
     return true;
 }
 
 bool Rndr::InputSystem::PopContext()
 {
-    if (g_system_data == nullptr)
-    {
-        return false;
-    }
-    if (g_system_data->contexts.GetSize() == 1)
+    if (m_contexts.GetSize() == 1)
     {
         RNDR_LOG_ERROR("Cannot pop default context");
         return false;
     }
-    g_system_data->contexts.PopBack();
+    m_contexts.PopBack();
     return true;
 }
 
@@ -321,7 +328,7 @@ bool Rndr::InputSystem::OnButtonDown(const GenericWindow& window, InputPrimitive
 {
     const Event event{.window = &window,
                       .data = ButtonData{.primitive = key_code, .trigger = InputTrigger::ButtonPressed, .is_repeated = is_repeated}};
-    g_system_data->events.push(event);
+    g_event_queue.push(event);
     return true;
 }
 
@@ -329,14 +336,14 @@ bool Rndr::InputSystem::OnButtonUp(const GenericWindow& window, InputPrimitive k
 {
     const Event event{.window = &window,
                       .data = ButtonData{.primitive = key_code, .trigger = InputTrigger::ButtonReleased, .is_repeated = is_repeated}};
-    g_system_data->events.push(event);
+    g_event_queue.push(event);
     return true;
 }
 
 bool Rndr::InputSystem::OnCharacter(const GenericWindow& window, uchar32 character, bool)
 {
     const Event event{.window = &window, .data = CharacterData{.character = character}};
-    g_system_data->events.push(event);
+    g_event_queue.push(event);
     return true;
 }
 
@@ -345,7 +352,7 @@ bool Rndr::InputSystem::OnMouseButtonDown(const GenericWindow& window, InputPrim
     const Event event{
         .window = &window,
         .data = MouseButtonData{.primitive = primitive, .trigger = InputTrigger::ButtonPressed, .cursor_position = cursor_position}};
-    g_system_data->events.push(event);
+    g_event_queue.push(event);
     return true;
 }
 
@@ -354,7 +361,7 @@ bool Rndr::InputSystem::OnMouseButtonUp(const GenericWindow& window, InputPrimit
     const Event event{
         .window = &window,
         .data = MouseButtonData{.primitive = primitive, .trigger = InputTrigger::ButtonReleased, .cursor_position = cursor_position}};
-    g_system_data->events.push(event);
+    g_event_queue.push(event);
     return true;
 }
 
@@ -363,21 +370,21 @@ bool Rndr::InputSystem::OnMouseDoubleClick(const GenericWindow& window, InputPri
     const Event event{
         .window = &window,
         .data = MouseButtonData{.primitive = primitive, .trigger = InputTrigger::ButtonDoubleClick, .cursor_position = cursor_position}};
-    g_system_data->events.push(event);
+    g_event_queue.push(event);
     return true;
 }
 
 bool Rndr::InputSystem::OnMouseWheel(const GenericWindow& window, f32 wheel_delta, const Vector2i& cursor_position)
 {
     const Event event{.window = &window, .data = MouseWheelData{.delta_wheel = wheel_delta, .cursor_position = cursor_position}};
-    g_system_data->events.push(event);
+    g_event_queue.push(event);
     return true;
 }
 
 bool Rndr::InputSystem::OnMouseMove(const GenericWindow& window, f32 delta_x, f32 delta_y)
 {
     const Event event{.window = &window, .data = MousePositionData{Vector2f{delta_x, delta_y}}};
-    g_system_data->events.push(event);
+    g_event_queue.push(event);
     return true;
 }
 
@@ -401,16 +408,11 @@ bool Rndr::InputSystem::ProcessEvents(float delta_seconds)
 {
     RNDR_UNUSED(delta_seconds);
 
-    if (g_system_data == nullptr)
+    while (!g_event_queue.empty())
     {
-        return false;
-    }
-    EventQueue& events = g_system_data->events;
-    while (!events.empty())
-    {
-        auto [window, data] = events.front();
-        events.pop();
-        for (auto it = g_system_data->contexts.end() - 1; it != g_system_data->contexts.begin() - 1; --it)
+        auto [window, data] = g_event_queue.front();
+        g_event_queue.pop();
+        for (auto it = m_contexts.end() - 1; it != m_contexts.begin() - 1; --it)
         {
             const Opal::Ref<InputContext>& context = *it;
             if (std::visit(InputEventProcessor{.context = Opal::Ref(context), .window = window}, data))

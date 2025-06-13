@@ -55,7 +55,8 @@ Rndr::Application::Application(const ApplicationDesc& desc)
 #error "Platform not supported!"
 #endif
 
-    if (desc.enable_input_system && !InputSystem::Init())
+    m_input_system = InputSystem::Get();
+    if (desc.enable_input_system && !m_input_system->Init())
     {
         RNDR_LOG_ERROR("Failed to initialize the input system!");
         return;
@@ -66,7 +67,8 @@ Rndr::Application::~Application()
 {
     if (m_desc.enable_input_system)
     {
-        InputSystem::Destroy();
+        InputSystem& input_system = InputSystem::GetChecked();
+        input_system.Destroy();
     }
     if (m_platform_application.IsValid())
     {
@@ -88,6 +90,12 @@ Rndr::Logger& Rndr::Application::GetLoggerChecked() const
 {
     RNDR_ASSERT(m_logger != nullptr, "There is no logger!");
     return *m_logger;
+}
+
+Rndr::InputSystem& Rndr::Application::GetInputSystemChecked() const
+{
+    RNDR_ASSERT(m_desc.enable_input_system, "Input system not enabled!");
+    return *m_input_system;
 }
 
 void Rndr::Application::ProcessSystemEvents()
@@ -114,54 +122,61 @@ void Rndr::Application::OnWindowSizeChanged(const GenericWindow& window, i32 wid
     on_window_resize.Execute(window, width, height);
 }
 
-bool Rndr::Application::OnButtonDown(const GenericWindow&, InputPrimitive key_code, bool is_repeated)
+bool Rndr::Application::OnButtonDown(const GenericWindow& window, InputPrimitive key_code, bool is_repeated)
 {
     RNDR_LOG_DEBUG("ButtonDown Key=0x%x, IsRepeated=%s", key_code, is_repeated ? "true" : "false");
+    m_input_system->OnButtonDown(window, key_code, is_repeated);
     return true;
 }
 
-bool Rndr::Application::OnButtonUp(const GenericWindow&, InputPrimitive key_code, bool is_repeated)
+bool Rndr::Application::OnButtonUp(const GenericWindow& window, InputPrimitive key_code, bool is_repeated)
 {
     RNDR_LOG_DEBUG("ButtonUp Key=0x%x, IsRepeated=%s", key_code, is_repeated ? "true" : "false");
+    m_input_system->OnButtonUp(window, key_code, is_repeated);
     return true;
 }
 
-bool Rndr::Application::OnCharacter(const GenericWindow&, uchar32 character, bool is_repeated)
+bool Rndr::Application::OnCharacter(const GenericWindow& window, uchar32 character, bool is_repeated)
 {
     Opal::StringUtf32 in;
     in.Append(character);
     Opal::StringUtf8 out(10, 0);
     Opal::Transcode(in, out);
     RNDR_LOG_DEBUG("Character Char=%s, IsRepeated=%s", out.GetData(), is_repeated ? "true" : "false");
+    m_input_system->OnCharacter(window, character, is_repeated);
     return true;
 }
 
-bool Rndr::Application::OnMouseButtonDown(const GenericWindow&, InputPrimitive primitive, const Vector2i& cursor_position)
+bool Rndr::Application::OnMouseButtonDown(const GenericWindow& window, InputPrimitive primitive, const Vector2i& cursor_position)
 {
     RNDR_LOG_DEBUG("MouseButtonDown Key=0x%x, CursorPosition=(x=%d, y=%d)", primitive, cursor_position.x, cursor_position.y);
+    m_input_system->OnMouseButtonDown(window, primitive, cursor_position);
     return true;
 }
 
-bool Rndr::Application::OnMouseButtonUp(const GenericWindow&, InputPrimitive primitive, const Vector2i& cursor_position)
+bool Rndr::Application::OnMouseButtonUp(const GenericWindow& window, InputPrimitive primitive, const Vector2i& cursor_position)
 {
     RNDR_LOG_DEBUG("MouseButtonUp Key=0x%x, CursorPosition=(x=%d, y=%d)", primitive, cursor_position.x, cursor_position.y);
+    m_input_system->OnMouseButtonUp(window, primitive, cursor_position);
     return true;
 }
 
-bool Rndr::Application::OnMouseDoubleClick(const GenericWindow&, InputPrimitive primitive, const Vector2i& cursor_position)
+bool Rndr::Application::OnMouseDoubleClick(const GenericWindow& window, InputPrimitive primitive, const Vector2i& cursor_position)
 {
     RNDR_LOG_DEBUG("MouseDoubleClick Key=0x%x, CursorPosition=(x=%d, y=%d)", primitive, cursor_position.x, cursor_position.y);
+    m_input_system->OnMouseDoubleClick(window, primitive, cursor_position);
     return true;
 }
 
-bool Rndr::Application::OnMouseWheel(const GenericWindow&, f32 wheel_delta, const Vector2i& cursor_position)
+bool Rndr::Application::OnMouseWheel(const GenericWindow& window, f32 wheel_delta, const Vector2i& cursor_position)
 {
     RNDR_LOG_DEBUG("MouseWheel Delta=%f, CursorPosition=(x=%d, y=%d)", wheel_delta, cursor_position.x, cursor_position.y);
+    m_input_system->OnMouseWheel(window, wheel_delta, cursor_position);
     return true;
 }
 
-bool Rndr::Application::OnMouseMove(const GenericWindow&, f32 delta_x, f32 delta_y)
+bool Rndr::Application::OnMouseMove(const GenericWindow& window, f32 delta_x, f32 delta_y)
 {
-    RNDR_LOG_DEBUG("MouseMove DeltaX=%f, DeltaY=%f", delta_x, delta_y);
+    m_input_system->OnMouseMove(window, delta_x, delta_y);
     return true;
 }
