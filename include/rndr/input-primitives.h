@@ -139,15 +139,17 @@ enum class InputPrimitive : u16
     Mouse_AxisX = 0xE0,
     Mouse_AxisY = 0xE1,
     Mouse_AxisWheel = 0xE2,
+
+    Invalid = 0xFFFF
 };
 
-enum class InputTrigger
+enum class InputTrigger : u8
 {
     ButtonPressed,
     ButtonReleased,
     ButtonDoubleClick,
     AxisChangedRelative,
-    AxisChangedAbsolute
+    TextCharacter
 };
 
 }  // namespace Rndr

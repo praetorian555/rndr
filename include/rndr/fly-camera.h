@@ -36,11 +36,13 @@ public:
 private:
     // Private methods
 
-    void HandleActivate(InputPrimitive primitive, InputTrigger trigger, f32 value);
-    void HandleLookVert(InputPrimitive primitive, InputTrigger trigger, f32 axis_value);
-    void HandleLookHorz(InputPrimitive primitive, InputTrigger trigger, f32 axis_value);
-    void HandleMoveForward(InputPrimitive primitive, InputTrigger trigger, f32 value);
-    void HandleMoveRight(InputPrimitive primitive, InputTrigger trigger, f32 value);
+    void HandleActivate(InputPrimitive primitive, InputTrigger trigger, f32 value, const Vector2i& position);
+    void HandleLookVertical(InputPrimitive primitive, f32 axis_value);
+    void HandleLookVerticalButton(InputPrimitive primitive, InputTrigger trigger, f32 value, bool is_repeated);
+    void HandleLookHorizontal(InputPrimitive primitive, f32 axis_value);
+    void HandleLookHorizontalButton(InputPrimitive primitive, InputTrigger trigger, f32 value, bool is_repeated);
+    void HandleMoveForward(InputPrimitive primitive, InputTrigger trigger, f32 value, bool is_repeated);
+    void HandleMoveRight(InputPrimitive primitive, InputTrigger trigger, f32 value, bool is_repeated);
 
     // Private fields
 

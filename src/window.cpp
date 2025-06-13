@@ -587,7 +587,7 @@ Rndr::InputTrigger GetTrigger(UINT msg_code)
 
 namespace Rndr::WindowPrivate
 {
-void HandleMouseMove(Rndr::Window* window, int x, int y)
+void HandleMouseMove(Rndr::Window* window, int, int y)
 {
     if (window == nullptr)
     {
@@ -603,8 +603,6 @@ void HandleMouseMove(Rndr::Window* window, int x, int y)
         case Rndr::CursorMode::Normal:
         case Rndr::CursorMode::Hidden:
         {
-            const Point2f absolute_position(static_cast<float>(x), static_cast<float>(y));
-            Rndr::InputSystem::SubmitMousePositionEvent(window->m_handle, absolute_position, window->GetSize());
             break;
         }
         case Rndr::CursorMode::Infinite:
@@ -726,10 +724,6 @@ LRESULT CALLBACK WindowProc(HWND window_handle, UINT msg_code, WPARAM param_w, L
 
             if (raw_data->header.dwType == RIM_TYPEMOUSE)
             {
-                const Vector2f size = window->GetSize();
-                const Vector2f delta{static_cast<float>(raw_data->data.mouse.lLastX) / size.x,
-                                     static_cast<float>(raw_data->data.mouse.lLastY) / size.y};
-                Rndr::InputSystem::SubmitRelativeMousePositionEvent(window->m_handle, delta, size);
             }
             break;
         }
@@ -748,9 +742,6 @@ LRESULT CALLBACK WindowProc(HWND window_handle, UINT msg_code, WPARAM param_w, L
                 break;
             }
 
-            const Rndr::InputPrimitive primitive = GetPrimitive(msg_code);
-            const Rndr::InputTrigger trigger = GetTrigger(msg_code);
-            Rndr::InputSystem::SubmitButtonEvent(window->m_handle, primitive, trigger);
             break;
         }
         case WM_KEYDOWN:
@@ -765,10 +756,6 @@ LRESULT CALLBACK WindowProc(HWND window_handle, UINT msg_code, WPARAM param_w, L
             {
                 break;
             }
-            const Rndr::InputPrimitive primitive = iter->second;
-            const Rndr::InputTrigger trigger =
-                msg_code == WM_KEYDOWN ? Rndr::InputTrigger::ButtonPressed : Rndr::InputTrigger::ButtonReleased;
-            Rndr::InputSystem::SubmitButtonEvent(window->m_handle, primitive, trigger);
             break;
         }
         case WM_MOUSEWHEEL:
@@ -777,8 +764,6 @@ LRESULT CALLBACK WindowProc(HWND window_handle, UINT msg_code, WPARAM param_w, L
             {
                 break;
             }
-            const int delta_wheel = GET_WHEEL_DELTA_WPARAM(param_w);
-            Rndr::InputSystem::SubmitMouseWheelEvent(window->m_handle, delta_wheel);
             break;
         }
     }

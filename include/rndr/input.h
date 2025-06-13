@@ -2,43 +2,58 @@
 
 #include <functional>
 
+#include "opal/container/dynamic-array.h"
 #include "opal/container/scope-ptr.h"
-#include "opal/container/array-view.h"
 #include "opal/container/string.h"
+#include "system-message-handler.hpp"
 
 #include "rndr/input-primitives.h"
 #include "rndr/math.h"
-#include "rndr/platform/windows-forward-def.h"
 
 namespace Rndr
 {
 
 /**
- * User defined input action.
+ * Represents a callback that is invoked when an input action is triggered.
  */
-struct InputAction
-{
-public:
-    InputAction() = default;
-    explicit InputAction(Opal::StringUtf8 name);
-
-    [[nodiscard]] const Opal::StringUtf8& GetName() const;
-    [[nodiscard]] bool IsValid() const;
-
-    bool operator==(const InputAction& other) const = default;
-
-private:
-    Opal::StringUtf8 m_name;
-};
+using InputButtonCallback = std::function<void(InputPrimitive primitive, InputTrigger trigger, f32 value, bool is_repeated)>;
+using InputMouseButtonCallback =
+    std::function<void(InputPrimitive primitive, InputTrigger trigger, f32 value, const Vector2i& cursor_position)>;
+using InputTextCallback = std::function<void(uchar32 character)>;
+using InputMousePositionCallback = std::function<void(InputPrimitive primitive, f32 delta)>;
+using InputMouseWheelCallback = std::function<void(f32 delta)>;
 
 /**
  * Represents an input event that can be bound to an input action.
  */
-struct InputBinding
+class InputBinding
 {
-    InputPrimitive primitive;
-    InputTrigger trigger;
-    float modifier = 1.0f;
+public:
+    InputPrimitive primitive = InputPrimitive::Invalid;
+    InputTrigger trigger = InputTrigger::ButtonPressed;
+    f32 modifier = 1.0f;
+    union
+    {
+        InputButtonCallback button_callback = nullptr;
+        InputMouseButtonCallback mouse_button_callback;
+        InputMouseWheelCallback mouse_wheel_callback;
+        InputMousePositionCallback mouse_position_callback;
+        InputTextCallback text_callback;
+    };
+
+    InputBinding() {}
+    InputBinding(const InputBinding& other);
+    InputBinding& operator=(const InputBinding& other);
+
+    ~InputBinding() {}
+
+    static InputBinding CreateKeyboardButtonBinding(InputPrimitive button_primitive, InputTrigger trigger, InputButtonCallback callback,
+                                                    f32 modifier = 1.0f);
+    static InputBinding CreateMouseButtonBinding(InputPrimitive button_primitive, InputTrigger trigger, InputMouseButtonCallback callback,
+                                                 f32 modifier = 1.0f);
+    static InputBinding CreateTextBinding(InputTextCallback callback);
+    static InputBinding CreateMouseWheelBinding(InputMouseWheelCallback callback, f32 modifier = 1.0f);
+    static InputBinding CreateMousePositionBinding(InputPrimitive mouse_axis, InputMousePositionCallback callback, f32 modifier = 1.0f);
 
     /**
      * Compares two input bindings. The modifier is not considered.
@@ -49,19 +64,25 @@ struct InputBinding
 };
 
 /**
- * Represents a callback that is invoked when an input action is triggered.
+ * User defined input action.
  */
-using InputCallback = std::function<void(InputPrimitive primitive, InputTrigger trigger, float value)>;
-
-/**
- * Helper struct to initialize an input action in the input context.
- */
-struct InputActionData
+struct InputAction
 {
-    InputCallback callback = nullptr;
-    /** If null, callback will be called for any window triggering one of the bindings. */
-    NativeWindowHandle native_window = nullptr;
-    Opal::ArrayView<InputBinding> bindings;
+public:
+    InputAction() = default;
+    explicit InputAction(Opal::StringUtf8 name, const Opal::DynamicArray<InputBinding>& bindings, const GenericWindow* window = nullptr);
+
+    [[nodiscard]] const Opal::StringUtf8& GetName() const;
+    [[nodiscard]] const GenericWindow* GetWindow() const;
+    [[nodiscard]] const Opal::DynamicArray<InputBinding>& GetBindings() const;
+    [[nodiscard]] bool IsValid() const;
+
+    bool operator==(const InputAction& other) const = default;
+
+private:
+    Opal::StringUtf8 m_name;
+    const GenericWindow* m_window = nullptr;
+    Opal::DynamicArray<InputBinding> m_bindings;
 };
 
 /**
@@ -73,7 +94,7 @@ public:
     /**
      * Creates a new input context with an empty name.
      */
-    InputContext();
+    InputContext() = default;
 
     /**
      * Creates a new input context.
@@ -92,53 +113,25 @@ public:
      */
     [[nodiscard]] const Opal::StringUtf8& GetName() const;
 
-    /**
-     * Adds an input action to the input context.
-     * @param action The input action to add.
-     * @param data The data associated with the input action. The callback can't be null.
-     * @return Returns true if the input action was successfully added.
-     */
-    bool AddAction(const InputAction& action, const InputActionData& data);
+    bool AddAction(const InputAction& action);
 
-    /**
-     * Add an input binding to an input action.
-     * @param action Action to add the binding to.
-     * @param binding Binding to add to the action.
-     * @return Returns true if the binding was successfully added.
-     */
-    bool AddBindingToAction(const InputAction& action, const InputBinding& binding);
-
-    /**
-     * Removes an input action from the input context.
-     * @param action The input action to remove.
-     * @return Returns true if the input action was successfully removed.
-     */
-    bool RemoveBindingFromAction(const InputAction& action, const InputBinding& binding);
+    bool AddAction(const Opal::StringUtf8& name, const Opal::DynamicArray<InputBinding>& bindings, const GenericWindow* window = nullptr);
 
     /**
      * Checks if the input context contains an input action.
-     * @param action The input action to check.
+     * @param name The input action's name to check.
      * @return Returns true if the input context contains the input action.
      */
-    [[nodiscard]] bool ContainsAction(const InputAction& action) const;
+    [[nodiscard]] bool ContainsAction(const Opal::StringUtf8& name) const;
 
-    /**
-     * Returns the callback associated with an input action.
-     * @param action The input action to get the callback for.
-     * @return Returns the callback associated with the input action.
-     */
-    [[nodiscard]] InputCallback GetActionCallback(const InputAction& action) const;
+    InputAction& GetAction(const Opal::StringUtf8& name);
+    [[nodiscard]] const InputAction& GetAction(const Opal::StringUtf8& name) const;
 
-    /**
-     * Returns the input bindings associated with an input action.
-     * @param action The input action to get the bindings for.
-     * @return Returns the input bindings associated with the input action.
-     */
-    [[nodiscard]] Opal::ArrayView<InputBinding> GetActionBindings(const InputAction& action) const;
+    const Opal::DynamicArray<InputAction>& GetActions() const;
 
 private:
-    Opal::ScopePtr<struct InputContextData> m_context_data;
     Opal::StringUtf8 m_name;
+    Opal::DynamicArray<InputAction> m_actions;
 
     // Implementation details. ////////////////////////////////////////////////////////////////////
     friend class InputSystem;
@@ -160,7 +153,7 @@ private:
  *
  * The system is not thread-safe.
  */
-class InputSystem
+class InputSystem : public SystemMessageHandler
 {
 public:
     /**
@@ -184,9 +177,9 @@ public:
     /**
      * Pushes a new input context to the top of the stack making it the active context.
      * @param context Context to be pushed to the top of the stack.
-     * @note The input context lifetime is not managed by the input system.
+     * @note The input system does not manage the input context lifetime.
      */
-    static bool PushContext(const InputContext& context);
+    static bool PushContext(const Opal::Ref<InputContext>& context);
 
     /**
      * Pops the input context from the top of the stack. This does not destroy the context.
@@ -195,45 +188,20 @@ public:
 
     /**
      * Processes all pending input events.
-     * @param delta_seconds Time elapsed since the last frame.
+     * @param delta_seconds Time that has elapsed since the last frame.
      */
     static bool ProcessEvents(float delta_seconds);
 
-    /**
-     * Submits a button event to the input system.
-     * @param window Native window handle in which the event was detected.
-     * @param primitive Input primitive that was triggered.
-     * @param trigger Input trigger detected. For buttons this is InputTrigger::ButtonDown,
-     * InputTrigger::ButtonUp or InputTrigger::DoubleClick.
-     */
-    static bool SubmitButtonEvent(NativeWindowHandle window, InputPrimitive primitive, InputTrigger trigger);
-
-    /**
-     * Submits a mouse position event to the input system.
-     * @param window Native window handle in which the event was detected.
-     * @param position Mouse position in screen coordinates, where the origin is in the bottom left
-     * corner.
-     * @param screen_size Size of the screen in pixels.
-     */
-    static bool SubmitMousePositionEvent(NativeWindowHandle window, const Point2f& position, const Vector2f& screen_size);
-
-    /**
-     * Submits a relative mouse position event to the input system. Used in case of infinite cursor
-     * mode.
-     * @param window Native window handle in which the event was detected.
-     * @param delta_position Relative mouse position in screen coordinates, relative to the last
-     * mouse position. Positive values mean the mouse moved to the right or up.
-     * @param screen_size Size of the screen in pixels.
-     */
-    static bool SubmitRelativeMousePositionEvent(NativeWindowHandle window, const Vector2f& delta_position, const Vector2f& screen_size);
-
-    /**
-     * Submits a mouse wheel event to the input system.
-     * @param window Native window handle in which the event was detected.
-     * @param delta_wheel Number of ticks the mouse wheel was rotated. Positive values mean the
-     * wheel was rotated forward, away from the user.
-     */
-    static bool SubmitMouseWheelEvent(NativeWindowHandle window, int delta_wheel);
+    void OnWindowClose(GenericWindow&) override {}
+    void OnWindowSizeChanged(const GenericWindow&, i32, i32) override {}
+    bool OnButtonDown(const GenericWindow& window, InputPrimitive key_code, bool is_repeated) override;
+    bool OnButtonUp(const GenericWindow& window, InputPrimitive key_code, bool is_repeated) override;
+    bool OnCharacter(const GenericWindow& window, uchar32 character, bool is_repeated) override;
+    bool OnMouseButtonDown(const GenericWindow& window, InputPrimitive primitive, const Vector2i& cursor_position) override;
+    bool OnMouseButtonUp(const GenericWindow& window, InputPrimitive primitive, const Vector2i& cursor_position) override;
+    bool OnMouseDoubleClick(const GenericWindow& window, InputPrimitive primitive, const Vector2i& cursor_position) override;
+    bool OnMouseWheel(const GenericWindow& window, f32 wheel_delta, const Vector2i& cursor_position) override;
+    bool OnMouseMove(const GenericWindow& window, f32 delta_x, f32 delta_y) override;
 
     /**
      * Helper function to check if the primitive is a button.
@@ -270,14 +238,6 @@ public:
      */
     static bool IsMouseWheelAxis(InputPrimitive primitive);
 
-    /**
-     * Helper function to check if the given binding has a valid combination of primitives and
-     * triggers.
-     * @param binding Input binding to check.
-     * @return Returns true if the binding is valid.
-     */
-    static bool IsBindingValid(const InputBinding& binding);
-
 private:
     static Opal::ScopePtr<struct InputSystemData> g_system_data;
 };
@@ -285,8 +245,21 @@ private:
 /**
  * Helper macro to bind a member function to an input callback.
  */
-#define RNDR_BIND_INPUT_CALLBACK(this, func_ptr)                                                                           \
+#define RNDR_BIND_INPUT_BUTTON_CALLBACK(this, func_ptr)                                                                    \
     std::bind(&std::remove_reference<decltype(*this)>::type::func_ptr, this, std::placeholders::_1, std::placeholders::_2, \
-              std::placeholders::_3)
+              std::placeholders::_3, std::placeholders::_4)
+
+#define RNDR_BIND_INPUT_MOUSE_BUTTON_CALLBACK(this, func_ptr)                                                              \
+    std::bind(&std::remove_reference<decltype(*this)>::type::func_ptr, this, std::placeholders::_1, std::placeholders::_2, \
+              std::placeholders::_3, std::placeholders::_4)
+
+#define RNDR_BIND_INPUT_TEXT_CALLBACK(this, func_ptr) \
+    std::bind(&std::remove_reference<decltype(*this)>::type::func_ptr, this, std::placeholders::_1)
+
+#define RNDR_BIND_INPUT_MOUSE_POSITION_CALLBACK(this, func_ptr) \
+    std::bind(&std::remove_reference<decltype(*this)>::type::func_ptr, this, std::placeholders::_1, std::placeholders::_2)
+
+#define RNDR_BIND_INPUT_MOUSE_WHEEL_CALLBACK(this, func_ptr) \
+    std::bind(&std::remove_reference<decltype(*this)>::type::func_ptr, this, std::placeholders::_1)
 
 }  // namespace Rndr
