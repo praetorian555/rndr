@@ -50,15 +50,15 @@ class ProjectionCamera
 public:
     ProjectionCamera(const Matrix4x4f& world_to_camera, int screen_width, int screen_height, const ProjectionCameraDesc& desc);
 
-    ProjectionCamera(const Point3f& position, const Rotatorf& rotation, int screen_width, int screen_height,
+    ProjectionCamera(const Point3f& position, const Quaternionf& rotation, int screen_width, int screen_height,
                      const ProjectionCameraDesc& desc);
 
     void SetPosition(const Point3f& position);
-    void SetRotation(const Rotatorf& rotation);
-    void SetPositionAndRotation(const Point3f& position, const Rotatorf& rotation);
+    void SetRotation(const Quaternionf& rotation);
+    void SetPositionAndRotation(const Point3f& position, const Quaternionf& rotation);
 
     [[nodiscard]] Point3f GetPosition() const { return m_position; }
-    [[nodiscard]] Rotatorf GetRotation() const { return m_rotation; }
+    [[nodiscard]] Quaternionf GetRotation() const { return m_rotation; }
 
     [[nodiscard]] const Matrix4x4f& FromCameraToNDC() const { return m_camera_to_ndc; }
     [[nodiscard]] const Matrix4x4f& FromNDCToCamera() const { return m_ndc_to_camera; }
@@ -93,7 +93,7 @@ private:
     Matrix4x4f m_ndc_to_world = Opal::Identity<f32>();
 
     Point3f m_position = Point3f::Zero();
-    Rotatorf m_rotation = Rotatorf::Zero();
+    Quaternionf m_rotation = Quaternionf::Identity();
 
     int m_screen_width;
     int m_screen_height;

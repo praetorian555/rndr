@@ -16,11 +16,11 @@ Rndr::ProjectionCamera::ProjectionCamera(const Matrix4x4f& world_to_camera, int 
     UpdateTransforms();
 }
 
-Rndr::ProjectionCamera::ProjectionCamera(const Point3f& position, const Rotatorf& rotation, int screen_width, int screen_height,
+Rndr::ProjectionCamera::ProjectionCamera(const Point3f& position, const Quaternionf& rotation, int screen_width, int screen_height,
                                          const ProjectionCameraDesc& desc)
     : m_position(position), m_rotation(rotation), m_screen_width(screen_width), m_screen_height(screen_height), m_desc(desc)
 {
-    m_camera_to_world = Opal::RotateAndTranslate(m_rotation, m_position);
+    m_camera_to_world = Opal::Translate(m_position) * Opal::Rotate(m_rotation);
     m_world_to_camera = Opal::Inverse(m_camera_to_world);
     UpdateTransforms();
 }
@@ -28,24 +28,24 @@ Rndr::ProjectionCamera::ProjectionCamera(const Point3f& position, const Rotatorf
 void Rndr::ProjectionCamera::SetPosition(const Point3f& position)
 {
     m_position = position;
-    m_camera_to_world = Opal::RotateAndTranslate(m_rotation, m_position);
+    m_camera_to_world = Opal::Translate(m_position) * Opal::Rotate(m_rotation);
     m_world_to_camera = Opal::Inverse(m_camera_to_world);
     UpdateTransforms();
 }
 
-void Rndr::ProjectionCamera::SetRotation(const Rotatorf& rotation)
+void Rndr::ProjectionCamera::SetRotation(const Quaternionf& rotation)
 {
     m_rotation = rotation;
-    m_camera_to_world = Opal::RotateAndTranslate(m_rotation, m_position);
+    m_camera_to_world = Opal::Translate(m_position) * Opal::Rotate(m_rotation);
     m_world_to_camera = Opal::Inverse(m_camera_to_world);
     UpdateTransforms();
 }
 
-void Rndr::ProjectionCamera::SetPositionAndRotation(const Point3f& position, const Rotatorf& rotation)
+void Rndr::ProjectionCamera::SetPositionAndRotation(const Point3f& position, const Quaternionf& rotation)
 {
     m_position = position;
     m_rotation = rotation;
-    m_camera_to_world = Opal::RotateAndTranslate(m_rotation, m_position);
+    m_camera_to_world = Opal::Translate(m_position) * Opal::Rotate(m_rotation);
     m_world_to_camera = Opal::Inverse(m_camera_to_world);
     UpdateTransforms();
 }

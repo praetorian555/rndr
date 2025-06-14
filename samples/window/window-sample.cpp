@@ -4,6 +4,7 @@
 
 #include "rndr/application.hpp"
 #include "rndr/file.h"
+#include "rndr/fly-camera.h"
 #include "rndr/log.h"
 #include "rndr/projections.h"
 #include "rndr/render-api.h"
@@ -16,9 +17,12 @@ struct RNDR_ALIGN(16) Uniforms
     Rndr::Vector3f position;
 };
 
+void SetupFlyCameraControls(Rndr::Application& app, Rndr::FlyCamera& camera);
+
 int main()
 {
-    Rndr::Application* app = Rndr::Application::Create();
+    const Rndr::ApplicationDesc app_desc{.enable_input_system = true};
+    Rndr::Application* app = Rndr::Application::Create(app_desc);
     if (app == nullptr)
     {
         RNDR_LOG_ERROR("Failed to create app!");
@@ -76,23 +80,32 @@ int main()
         pipeline = Rndr::Pipeline(gc, desc);
     }
 
+    const Rndr::FlyCameraDesc fly_camera_desc;
+    Rndr::FlyCamera camera(width, height, fly_camera_desc);
+    SetupFlyCameraControls(*app, camera);
+    app->on_window_resize.Bind(
+        [&camera, window](const Rndr::GenericWindow& w, Rndr::i32 width, Rndr::i32 height)
+        {
+            if (window == &w)
+            {
+                camera.SetScreenSize(width, height);
+            }
+        });
+
     Rndr::f64 check_change_time = 0.0;
     Rndr::f32 delta_seconds = 0.016f;
     while (!window->IsClosed())
     {
         const Rndr::f64 start_seconds = Opal::GetSeconds();
 
-        app->ProcessSystemEvents();
+        app->ProcessSystemEvents(delta_seconds);
 
         gc.BindSwapChainFrameBuffer(swap_chain);
         gc.ClearAll(Rndr::Colors::k_black);
 
         Uniforms uniforms;
-        uniforms.view =
-            Opal::LookAt_RH(Rndr::Point3f(0.0f, 1.0f, 0.0f), Rndr::Point3f(100.0f, 0.0f, -100.0f), Rndr::Vector3f(0.0f, 1.0f, 0.0f));
-        uniforms.projection = Rndr::PerspectiveOpenGL(45.0f, static_cast<Rndr::f32>(width) / static_cast<Rndr::f32>(height), 0.1f, 1000.0f);
-        uniforms.view = Opal::Transpose(uniforms.view);
-        uniforms.projection = Opal::Transpose(uniforms.projection);
+        uniforms.view = Opal::Transpose(camera.FromWorldToCamera());
+        uniforms.projection = Opal::Transpose(camera.FromCameraToNDC());
         gc.BindBuffer(uniform_buffer, 0);
         gc.UpdateBuffer(uniform_buffer, Opal::AsBytes(uniforms));
 
@@ -153,4 +166,100 @@ int main()
     app->DestroyGenericWindow(window);
     Rndr::Application::Destroy();
     return 0;
+}
+
+static Rndr::FlyCamera* g_camera;
+static Rndr::f32 g_camera_rotation_yaw_speed = 0.005f;
+static Rndr::f32 g_camera_rotation_roll_speed = 0.002f;
+static Rndr::f32 g_camera_move_speed = 0.5f;
+static Rndr::InputContext g_camera_movement_context("Camera Movement Context");
+
+void HandleLookVertical(Rndr::InputPrimitive, Rndr::f32 axis_value);
+void HandleLookVerticalButton(Rndr::InputPrimitive, Rndr::InputTrigger trigger, Rndr::f32 value, bool);
+void HandleLookHorizontal(Rndr::InputPrimitive, Rndr::f32 axis_value);
+void HandleLookHorizontalButton(Rndr::InputPrimitive, Rndr::InputTrigger trigger, Rndr::f32 value, bool);
+void HandleMoveForward(Rndr::InputPrimitive, Rndr::InputTrigger trigger, Rndr::f32 value, bool);
+void HandleMoveRight(Rndr::InputPrimitive, Rndr::InputTrigger trigger, Rndr::f32 value, bool);
+
+void SetupFlyCameraControls(Rndr::Application& app, Rndr::FlyCamera& camera)
+{
+    g_camera = &camera;
+
+    using IB = Rndr::InputBinding;
+    using IT = Rndr::InputTrigger;
+    using IP = Rndr::InputPrimitive;
+
+    Opal::DynamicArray<IB> forward_bindings;
+    forward_bindings.PushBack(IB::CreateKeyboardButtonBinding(IP::W, IT::ButtonPressed, HandleMoveForward));
+    forward_bindings.PushBack(IB::CreateKeyboardButtonBinding(IP::W, IT::ButtonReleased, HandleMoveForward));
+    forward_bindings.PushBack(IB::CreateKeyboardButtonBinding(IP::S, IT::ButtonPressed, HandleMoveForward, -1));
+    forward_bindings.PushBack(IB::CreateKeyboardButtonBinding(IP::S, IT::ButtonReleased, HandleMoveForward));
+    g_camera_movement_context.AddAction("MoveForward", forward_bindings);
+
+    Opal::DynamicArray<IB> right_bindings;
+    right_bindings.PushBack(IB::CreateKeyboardButtonBinding(IP::A, IT::ButtonPressed, HandleMoveRight, -1));
+    right_bindings.PushBack(IB::CreateKeyboardButtonBinding(IP::A, IT::ButtonReleased, HandleMoveRight));
+    right_bindings.PushBack(IB::CreateKeyboardButtonBinding(IP::D, IT::ButtonPressed, HandleMoveRight));
+    right_bindings.PushBack(IB::CreateKeyboardButtonBinding(IP::D, IT::ButtonReleased, HandleMoveRight));
+    g_camera_movement_context.AddAction("MoveRight", right_bindings);
+
+    Opal::DynamicArray<IB> vert_bindings;
+    vert_bindings.PushBack(IB::CreateKeyboardButtonBinding(IP::UpArrow, IT::ButtonPressed, HandleLookVerticalButton));
+    vert_bindings.PushBack(IB::CreateKeyboardButtonBinding(IP::UpArrow, IT::ButtonReleased, HandleLookVerticalButton));
+    vert_bindings.PushBack(IB::CreateKeyboardButtonBinding(IP::DownArrow, IT::ButtonPressed, HandleLookVerticalButton, -1));
+    vert_bindings.PushBack(IB::CreateKeyboardButtonBinding(IP::DownArrow, IT::ButtonReleased, HandleLookVerticalButton));
+    vert_bindings.PushBack(IB::CreateMousePositionBinding(IP::Mouse_AxisY, HandleLookVertical));
+    g_camera_movement_context.AddAction("LookAroundVert", vert_bindings);
+
+    Opal::DynamicArray<IB> horz_bindings;
+    horz_bindings.PushBack(IB::CreateKeyboardButtonBinding(IP::RightArrow, IT::ButtonPressed, HandleLookHorizontalButton, -1));
+    horz_bindings.PushBack(IB::CreateKeyboardButtonBinding(IP::RightArrow, IT::ButtonReleased, HandleLookHorizontalButton));
+    horz_bindings.PushBack(IB::CreateKeyboardButtonBinding(IP::LeftArrow, IT::ButtonPressed, HandleLookHorizontalButton));
+    horz_bindings.PushBack(IB::CreateKeyboardButtonBinding(IP::LeftArrow, IT::ButtonReleased, HandleLookHorizontalButton));
+    horz_bindings.PushBack(IB::CreateMousePositionBinding(IP::Mouse_AxisX, HandleLookHorizontal));
+    g_camera_movement_context.AddAction("LookAroundHorz", horz_bindings);
+
+    app.GetInputSystemChecked().PushContext(Opal::Ref(&g_camera_movement_context));
+}
+
+void HandleLookVertical(Rndr::InputPrimitive, Rndr::f32 axis_value)
+{
+    g_camera->AddRoll(-g_camera_rotation_roll_speed * axis_value);
+}
+
+void HandleLookVerticalButton(Rndr::InputPrimitive, Rndr::InputTrigger trigger, Rndr::f32 value, bool)
+{
+    if (trigger == Rndr::InputTrigger::ButtonPressed)
+    {
+        g_camera->AddRoll(g_camera_rotation_roll_speed * value);
+    }
+}
+
+void HandleLookHorizontal(Rndr::InputPrimitive, Rndr::f32 axis_value)
+{
+    g_camera->AddYaw(-g_camera_rotation_yaw_speed * axis_value);
+}
+
+void HandleLookHorizontalButton(Rndr::InputPrimitive, Rndr::InputTrigger trigger, Rndr::f32 value, bool)
+{
+    if (trigger == Rndr::InputTrigger::ButtonPressed)
+    {
+        g_camera->AddYaw(g_camera_rotation_yaw_speed * value);
+    }
+}
+
+void HandleMoveForward(Rndr::InputPrimitive, Rndr::InputTrigger trigger, Rndr::f32 value, bool)
+{
+    if (trigger == Rndr::InputTrigger::ButtonPressed)
+    {
+        g_camera->MoveForward(g_camera_move_speed * value);
+    }
+}
+
+void HandleMoveRight(Rndr::InputPrimitive, Rndr::InputTrigger trigger, Rndr::f32 value, bool)
+{
+    if (trigger == Rndr::InputTrigger::ButtonPressed)
+    {
+        g_camera->MoveRight(g_camera_move_speed * value);
+    }
 }

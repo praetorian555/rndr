@@ -98,9 +98,13 @@ Rndr::InputSystem& Rndr::Application::GetInputSystemChecked() const
     return *m_input_system;
 }
 
-void Rndr::Application::ProcessSystemEvents()
+void Rndr::Application::ProcessSystemEvents(f32 delta_seconds)
 {
     m_platform_application->ProcessSystemEvents();
+    if (m_desc.enable_input_system)
+    {
+        m_input_system->ProcessEvents(delta_seconds);
+    }
 }
 
 void Rndr::Application::EnableHighPrecisionCursorMode(bool enable, GenericWindow& window)

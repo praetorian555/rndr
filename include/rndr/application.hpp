@@ -53,7 +53,7 @@ public:
     [[nodiscard]] struct Logger& GetLoggerChecked() const;
     [[nodiscard]] InputSystem& GetInputSystemChecked() const;
 
-    void ProcessSystemEvents();
+    void ProcessSystemEvents(f32 delta_seconds);
 
     void EnableHighPrecisionCursorMode(bool enable, GenericWindow& window);
 

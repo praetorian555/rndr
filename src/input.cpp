@@ -496,13 +496,13 @@ bool Rndr::InputEventProcessor::operator()(const MousePositionData& event) const
         for (const InputBinding& binding : action.GetBindings())
         {
             bool consumed = false;
-            if (binding.primitive == axes[0] && binding.trigger == InputTrigger::AxisChangedRelative)
+            if (binding.primitive == axes[0] && binding.trigger == InputTrigger::AxisChangedRelative && event.delta_position[0] != 0.0f)
             {
                 const float value = binding.modifier * event.delta_position[0];
                 binding.mouse_position_callback(axes[0], value);
                 consumed = true;
             }
-            if (binding.primitive == axes[1] && binding.trigger == InputTrigger::AxisChangedRelative)
+            if (binding.primitive == axes[1] && binding.trigger == InputTrigger::AxisChangedRelative && event.delta_position[1] != 0.0f)
             {
                 const float value = binding.modifier * event.delta_position[1];
                 binding.mouse_position_callback(axes[1], value);
