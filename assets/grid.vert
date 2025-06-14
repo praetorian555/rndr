@@ -7,8 +7,8 @@ layout(set = 0, binding = 0) uniform ViewUniforms {
 } view;
 
 vec3 grid_plane[6] = vec3[](
-    vec3(100, -1, 100), vec3(-100, -1, -100), vec3(-100, -1, 100),
-    vec3(-100, -1, -100), vec3(100, -1, 100), vec3(100, -1, -100)
+    vec3(1000, -1, 1000), vec3(-1000, -1, -1000), vec3(-100, -1, 1000),
+    vec3(-1000, -1, -1000), vec3(1000, -1, 1000), vec3(100, -1, -1000)
 );
 
 layout(location=0) out vec4 world_position;
