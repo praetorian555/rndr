@@ -18,5 +18,18 @@ void main()
     grid_2 *= clamp(vec2(line_width, line_width) / draw_width, 0.0f, 1.0f);
     // Since we have two transparent lines overlapping, we are doing alpha blending essentially
     float grid = mix(grid_2.x, 1.0f, grid_2.y);
-    out_color = vec4(grid, grid, grid, 1.0f);
+
+    out_color = vec4(0, 0, 0, 1.0f);
+    if (uv.x > -draw_width.x && uv.x < draw_width.x)
+    {
+        out_color.x = grid;
+    }
+    else if (uv.y > -draw_width.y && uv.y < draw_width.y)
+    {
+        out_color.z = grid;
+    }
+    else
+    {
+        out_color.xyz = vec3(grid);
+    }
 }
