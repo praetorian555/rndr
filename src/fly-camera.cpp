@@ -35,9 +35,9 @@ void Rndr::FlyCamera::AddPitch(f32 pitch_radians)
     m_delta_pitch_radians += pitch_radians;
 }
 
-void Rndr::FlyCamera::Tick(f32)
+void Rndr::FlyCamera::Tick(f32 delta_seconds)
 {
-    m_yaw_radians += m_delta_yaw_radians;
+    m_yaw_radians += delta_seconds * m_delta_yaw_radians;
     if (m_yaw_radians > Opal::k_pi_float)
     {
         m_yaw_radians -= 2 * Opal::k_pi_float;
@@ -47,7 +47,7 @@ void Rndr::FlyCamera::Tick(f32)
         m_yaw_radians += 2 * Opal::k_pi_float;
     }
 
-    m_pitch_radians += m_delta_pitch_radians;
+    m_pitch_radians += delta_seconds * m_delta_pitch_radians;
     f32 pitch_degrees = Opal::Degrees(m_pitch_radians);
     pitch_degrees = Opal::Clamp(pitch_degrees, -89.0f, 89.0f);
     m_pitch_radians = Opal::Radians(pitch_degrees);
@@ -61,7 +61,9 @@ void Rndr::FlyCamera::Tick(f32)
     const Quaternionf pitch_quat = Quaternionf::FromAxisAngleRadians(world_right, m_pitch_radians);
     SetRotation(Normalize(pitch_quat * yaw_quat));
 
-    const Vector3f total_move_vector = m_delta_move_forward * world_forward + m_delta_move_right * world_right;
+    const Vector3f final_forward = GetRotation() * k_local_forward;
+    const Vector3f final_right = Opal::Normalize(Opal::Cross(final_forward, k_up));
+    const Vector3f total_move_vector = delta_seconds * m_delta_move_forward * final_forward + delta_seconds * m_delta_move_right * final_right;
     SetPosition(GetPosition() + total_move_vector);
 
     m_delta_yaw_radians = 0;
