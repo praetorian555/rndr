@@ -27,6 +27,7 @@ bool Rndr::SwapChain::SetSize(int32_t width, int32_t height)
         RNDR_LOG_ERROR("Invalid swap chain size!");
         return false;
     }
+    RNDR_LOG_INFO("New swap chain size: %dx%d", width, height);
     m_desc.width = width;
     m_desc.height = height;
     return true;
