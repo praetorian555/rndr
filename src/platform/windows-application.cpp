@@ -17,6 +17,8 @@ Rndr::WindowsApplication::WindowsApplication(SystemMessageHandler* message_handl
     : PlatformApplication(message_handler, allocator), m_deferred_messages(m_allocator)
 {
     g_windows_app = this;
+    // Helps to get physical pixel size of monitor and not the scaled version.
+    SetProcessDpiAwarenessContext(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2);
 }
 
 LRESULT RndrPrivate::WindowProc(HWND window_handle, UINT msg_code, WPARAM param_w, LPARAM param_l)
