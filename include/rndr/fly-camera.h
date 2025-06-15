@@ -31,12 +31,18 @@ public:
     void MoveForward(f32 amount_world_units);
     void MoveRight(f32 amount_world_units);
     void AddYaw(f32 yaw_radians);
-    void AddRoll(f32 roll_radians);
+    void AddPitch(f32 pitch_radians);
+
+    void Tick(f32 delta_seconds);
 
 private:
     FlyCameraDesc m_desc;
     f32 m_yaw_radians = 0;
-    f32 m_roll_radians = 0;
+    f32 m_pitch_radians = 0;
+    f32 m_delta_yaw_radians = 0;
+    f32 m_delta_pitch_radians = 0;
+    f32 m_delta_move_forward = 0.0f;
+    f32 m_delta_move_right = 0.0f;
     Quaternionf m_start_rotation = Quaternionf::Identity();
 };
 

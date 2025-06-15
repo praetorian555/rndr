@@ -100,6 +100,8 @@ int main()
 
         app->ProcessSystemEvents(delta_seconds);
 
+        camera.Tick(delta_seconds);
+
         gc.BindSwapChainFrameBuffer(swap_chain);
         gc.ClearAll(Rndr::Colors::k_black);
 
@@ -189,6 +191,21 @@ void SetupFlyCameraControls(Rndr::Application& app, Rndr::FlyCamera& camera)
     using IT = Rndr::InputTrigger;
     using IP = Rndr::InputPrimitive;
 
+    Rndr::InputSystem& input_system = app.GetInputSystemChecked();
+    g_camera_movement_context.SetEnabled(false);
+    input_system.GetCurrentContext().AddAction(
+        "Toggle movement controls",
+        {
+            Rndr::InputBinding::CreateKeyboardButtonBinding(
+                Rndr::InputPrimitive::F1, Rndr::InputTrigger::ButtonPressed, [](Rndr::InputPrimitive, Rndr::InputTrigger, Rndr::f32, bool is_repeated)
+                {
+                    if (!is_repeated)
+                    {
+                        g_camera_movement_context.SetEnabled(!g_camera_movement_context.IsEnabled());
+                    }
+                })
+        });
+
     Opal::DynamicArray<IB> forward_bindings;
     forward_bindings.PushBack(IB::CreateKeyboardButtonBinding(IP::W, IT::ButtonPressed, HandleMoveForward));
     forward_bindings.PushBack(IB::CreateKeyboardButtonBinding(IP::W, IT::ButtonReleased, HandleMoveForward));
@@ -224,14 +241,14 @@ void SetupFlyCameraControls(Rndr::Application& app, Rndr::FlyCamera& camera)
 
 void HandleLookVertical(Rndr::InputPrimitive, Rndr::f32 axis_value)
 {
-    g_camera->AddRoll(-g_camera_rotation_roll_speed * axis_value);
+    g_camera->AddPitch(-g_camera_rotation_roll_speed * axis_value);
 }
 
 void HandleLookVerticalButton(Rndr::InputPrimitive, Rndr::InputTrigger trigger, Rndr::f32 value, bool)
 {
     if (trigger == Rndr::InputTrigger::ButtonPressed)
     {
-        g_camera->AddRoll(g_camera_rotation_roll_speed * value);
+        g_camera->AddPitch(g_camera_rotation_roll_speed * value);
     }
 }
 
