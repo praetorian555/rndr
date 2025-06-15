@@ -124,8 +124,12 @@ if (RNDR_BUILD_SAMPLES)
             ${IMGUI_OPENGL_SOURCE_FILES})
     target_include_directories(imgui PUBLIC ${SOURCE_PATH})
 
+    add_library(shared samples/shared/example-controller.h samples/shared/example-controller.cpp)
+    target_include_directories(shared PUBLIC samples/shared)
+    target_link_libraries(shared PUBLIC rndr opal)
+
     add_executable(window-sample samples/window/window-sample.cpp)
-    target_link_libraries(window-sample PUBLIC opal rndr imgui)
+    target_link_libraries(window-sample PUBLIC shared imgui)
 
 endif ()
 
