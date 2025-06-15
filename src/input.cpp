@@ -415,6 +415,10 @@ bool Rndr::InputSystem::ProcessEvents(float delta_seconds)
         for (auto it = m_contexts.end() - 1; it != m_contexts.begin() - 1; --it)
         {
             const Opal::Ref<InputContext>& context = *it;
+            if (!context->IsEnabled())
+            {
+                continue;
+            }
             if (std::visit(InputEventProcessor{.context = Opal::Ref(context), .window = window}, data))
             {
                 break;

@@ -129,9 +129,13 @@ public:
 
     const Opal::DynamicArray<InputAction>& GetActions() const;
 
+    [[nodiscard]] bool IsEnabled() const { return m_enabled; }
+    void SetEnabled(const bool enabled) { m_enabled = enabled; }
+
 private:
     Opal::StringUtf8 m_name;
     Opal::DynamicArray<InputAction> m_actions;
+    bool m_enabled = true;
 
     // Implementation details. ////////////////////////////////////////////////////////////////////
     friend class InputSystem;
