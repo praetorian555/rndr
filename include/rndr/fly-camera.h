@@ -15,7 +15,8 @@ enum class CursorMode;
 struct FlyCameraDesc
 {
     Point3f start_position = Point3f::Zero();
-    Point3f target_position = Point3f(0, 0, -100);
+    f32 start_yaw_radians = 0.0f;
+    f32 start_pitch_radians = 0.0f;
     ProjectionCameraDesc projection_desc;
 };
 
@@ -36,6 +37,9 @@ public:
     void Tick(f32 delta_seconds);
 
 private:
+    static f32 ClampYaw(f32 yaw);
+    static f32 ClampPitch(f32 pitch);
+
     FlyCameraDesc m_desc;
     f32 m_yaw_radians = 0;
     f32 m_pitch_radians = 0;

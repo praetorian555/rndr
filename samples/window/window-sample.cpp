@@ -80,7 +80,7 @@ int main()
         pipeline = Rndr::Pipeline(gc, desc);
     }
 
-    const Rndr::FlyCameraDesc fly_camera_desc;
+    const Rndr::FlyCameraDesc fly_camera_desc{ .start_yaw_radians = Opal::k_pi_over_2_float };
     ExampleController controller(*app, width, height, fly_camera_desc, 10.0f, 0.5f, 0.2f);
 
     app->on_window_resize.Bind(
