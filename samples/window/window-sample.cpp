@@ -58,6 +58,20 @@ int main()
             }
         });
 
+    app->GetInputSystemChecked().GetCurrentContext().AddAction(
+        "Switch display mode",
+        {Rndr::InputBinding::CreateKeyboardButtonBinding(Rndr::InputPrimitive::F2, Rndr::InputTrigger::ButtonPressed,
+                                                         [window](Rndr::InputPrimitive, Rndr::InputTrigger, Rndr::f32, bool is_repeated)
+                                                         {
+                                                             if (!is_repeated)
+                                                             {
+                                                                 const Rndr::GenericWindowMode current_mode = window->GetMode();
+                                                                 window->SetMode(current_mode == Rndr::GenericWindowMode::Windowed
+                                                                                     ? Rndr::GenericWindowMode::BorderlessFullscreen
+                                                                                     : Rndr::GenericWindowMode::Windowed);
+                                                             }
+                                                         })});
+
     const Rndr::BufferDesc buffer_desc{.usage = Rndr::Usage::Dynamic, .size = sizeof(Uniforms), .stride = sizeof(Uniforms)};
     Rndr::Buffer uniform_buffer(gc, buffer_desc);
 
@@ -80,7 +94,7 @@ int main()
         pipeline = Rndr::Pipeline(gc, desc);
     }
 
-    const Rndr::FlyCameraDesc fly_camera_desc{ .start_yaw_radians = Opal::k_pi_over_2_float };
+    const Rndr::FlyCameraDesc fly_camera_desc{.start_yaw_radians = Opal::k_pi_over_2_float};
     ExampleController controller(*app, width, height, fly_camera_desc, 10.0f, 0.5f, 0.2f);
 
     app->on_window_resize.Bind(
