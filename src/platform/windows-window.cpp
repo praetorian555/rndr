@@ -55,8 +55,8 @@ Rndr::WindowsWindow::WindowsWindow(const GenericWindowDesc& desc, Opal::Allocato
     Opal::StringUtf8 name = desc.name;
     Opal::StringWide wide_name(name.GetSize() + 1, 0);
     Opal::Transcode(name, wide_name);
-    HWND window_handle = CreateWindowEx(0, class_name, wide_name.GetData(), window_style, desc.start_x, desc.start_y, real_width, real_height,
-                                        nullptr, nullptr, instance, this);
+    HWND window_handle = CreateWindowEx(0, class_name, wide_name.GetData(), window_style, desc.start_x, desc.start_y, real_width,
+                                        real_height, nullptr, nullptr, instance, this);
     if (window_handle == nullptr)
     {
         RNDR_LOG_ERROR("CreateWindowEx failed!");
@@ -270,6 +270,11 @@ Rndr::ErrorCode Rndr::WindowsWindow::Focus()
 
 Rndr::i32 Rndr::WindowsWindow::GetWindowedStyle(const GenericWindowDesc& desc)
 {
+    // WS_OVERLAPPED - means that the window has a title bar and a border.
+    // WS_CAPTION - same as WS_OVERLAPPED.
+    // WS_SYSMENU - has the window menu on the title bar.
+    // WS_THICKFRAME - window can be resized.
+    // WS_BORDER - window has a border.
     i32 window_style = WS_OVERLAPPED | WS_CAPTION | WS_SYSMENU;
     window_style |= desc.resizable ? WS_THICKFRAME : WS_BORDER;
     window_style |= desc.supports_maximize ? WS_MAXIMIZEBOX : 0;
@@ -316,13 +321,6 @@ Rndr::ErrorCode Rndr::WindowsWindow::SetMode(GenericWindowMode mode)
         m_pre_fullscreen_placement.length = sizeof(WINDOWPLACEMENT);
         ::GetWindowPlacement(hwnd, &m_pre_fullscreen_placement);
 
-        window_style &= ~GetWindowedStyle(m_desc);
-        window_style |= GetFullscreenStyle(m_desc);
-        SetWindowLong(hwnd, GWL_STYLE, window_style);
-        SetWindowPos(hwnd, nullptr, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOZORDER);
-
-        ::ShowWindow(hwnd, SW_RESTORE);
-
         HMONITOR monitor = ::MonitorFromWindow(hwnd, MONITOR_DEFAULTTONEAREST);
         MONITORINFO monitor_info = {};
         monitor_info.cbSize = sizeof(MONITORINFO);
@@ -330,8 +328,13 @@ Rndr::ErrorCode Rndr::WindowsWindow::SetMode(GenericWindowMode mode)
         const i32 monitor_width = monitor_info.rcMonitor.right - monitor_info.rcMonitor.left;
         const i32 monitor_height = monitor_info.rcMonitor.bottom - monitor_info.rcMonitor.top;
 
-        RECT window_rect = {0, 0, monitor_width, monitor_height};
-        ::AdjustWindowRectEx(&window_rect, window_style, FALSE, window_style);
+        window_style &= ~GetWindowedStyle(m_desc);
+        window_style |= GetFullscreenStyle(m_desc);
+        SetWindowLong(hwnd, GWL_STYLE, window_style);
+        SetWindowPos(hwnd, nullptr, monitor_info.rcMonitor.left, monitor_info.rcMonitor.top, monitor_width, monitor_height,
+                     SWP_NOZORDER);
+
+        ::ShowWindow(hwnd, SW_RESTORE);
     }
     return ErrorCode::Success;
 }

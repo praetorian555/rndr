@@ -53,7 +53,7 @@ private:
     static i32 GetFullscreenStyle(const GenericWindowDesc& desc);
 
     NativeWindowHandle m_native_window_handle;
-    GenericWindowMode m_mode;
+    GenericWindowMode m_mode = GenericWindowMode::Windowed;
     WINDOWPLACEMENT m_pre_fullscreen_placement;
     bool m_is_closed = false;
     i32 m_pos_x = 0;
