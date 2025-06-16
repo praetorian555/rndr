@@ -52,6 +52,43 @@ FetchContent_Declare(
 )
 FetchContent_MakeAvailable(opal)
 
+# Setup IMGUI ######################################################################
+FetchContent_Declare(
+        imgui
+        GIT_REPOSITORY https://github.com/ocornut/imgui
+        GIT_TAG f5befd2d29e66809cd1110a152e375a7f1981f06 # release-1.91.9b
+)
+FetchContent_MakeAvailable(imgui)
+FetchContent_GetProperties(imgui SOURCE_DIR SOURCE_PATH)
+set(IMGUI_SOURCE_FILES
+        ${SOURCE_PATH}/imgui.cpp
+        ${SOURCE_PATH}/imgui.h
+        ${SOURCE_PATH}/imconfig.h
+        ${SOURCE_PATH}/imgui_internal.h
+        ${SOURCE_PATH}/imstb_rectpack.h
+        ${SOURCE_PATH}/imstb_truetype.h
+        ${SOURCE_PATH}/imstb_textedit.h
+        ${SOURCE_PATH}/imgui_draw.cpp
+        ${SOURCE_PATH}/imgui_demo.cpp
+        ${SOURCE_PATH}/imgui_tables.cpp
+        ${SOURCE_PATH}/imgui_widgets.cpp)
+# Use Win32 backhand for Windows
+if (MSVC)
+    set(IMGUI_WINDOWS_SOURCE_FILES
+            ${SOURCE_PATH}/backends/imgui_impl_win32.cpp
+            ${SOURCE_PATH}/backends/imgui_impl_win32.h)
+else ()
+    set(IMGUI_WINDOWS_SOURCE_FILES)
+endif ()
+set(IMGUI_OPENGL_SOURCE_FILES
+        ${SOURCE_PATH}/backends/imgui_impl_opengl3.cpp
+        ${SOURCE_PATH}/backends/imgui_impl_opengl3.h)
+add_library(imgui
+        ${IMGUI_SOURCE_FILES}
+        ${IMGUI_WINDOWS_SOURCE_FILES}
+        ${IMGUI_OPENGL_SOURCE_FILES})
+target_include_directories(imgui PUBLIC ${SOURCE_PATH})
+
 # The compiled library code is here
 add_subdirectory(src)
 
@@ -86,44 +123,6 @@ if (RNDR_BUILD_TESTS)
 endif ()
 
 if (RNDR_BUILD_SAMPLES)
-
-    # Setup IMGUI ######################################################################
-    FetchContent_Declare(
-            imgui
-            GIT_REPOSITORY https://github.com/ocornut/imgui
-            GIT_TAG c6e0284ac58b3f205c95365478888f7b53b077e2 # release-1.89.9
-    )
-    FetchContent_MakeAvailable(imgui)
-    FetchContent_GetProperties(imgui SOURCE_DIR SOURCE_PATH)
-    set(IMGUI_SOURCE_FILES
-            ${SOURCE_PATH}/imgui.cpp
-            ${SOURCE_PATH}/imgui.h
-            ${SOURCE_PATH}/imconfig.h
-            ${SOURCE_PATH}/imgui_internal.h
-            ${SOURCE_PATH}/imstb_rectpack.h
-            ${SOURCE_PATH}/imstb_truetype.h
-            ${SOURCE_PATH}/imstb_textedit.h
-            ${SOURCE_PATH}/imgui_draw.cpp
-            ${SOURCE_PATH}/imgui_demo.cpp
-            ${SOURCE_PATH}/imgui_tables.cpp
-            ${SOURCE_PATH}/imgui_widgets.cpp)
-    # Use Win32 backhand for Windows
-    if (MSVC)
-        set(IMGUI_WINDOWS_SOURCE_FILES
-                ${SOURCE_PATH}/backends/imgui_impl_win32.cpp
-                ${SOURCE_PATH}/backends/imgui_impl_win32.h)
-    else ()
-        set(IMGUI_WINDOWS_SOURCE_FILES)
-    endif ()
-    set(IMGUI_OPENGL_SOURCE_FILES
-            ${SOURCE_PATH}/backends/imgui_impl_opengl3.cpp
-            ${SOURCE_PATH}/backends/imgui_impl_opengl3.h)
-    add_library(imgui
-            ${IMGUI_SOURCE_FILES}
-            ${IMGUI_WINDOWS_SOURCE_FILES}
-            ${IMGUI_OPENGL_SOURCE_FILES})
-    target_include_directories(imgui PUBLIC ${SOURCE_PATH})
-
     add_library(shared samples/shared/example-controller.h samples/shared/example-controller.cpp)
     target_include_directories(shared PUBLIC samples/shared)
     target_link_libraries(shared PUBLIC rndr opal)
