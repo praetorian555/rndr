@@ -26,6 +26,7 @@ set(SOURCE_LIST
         "${PROJECT_SOURCE_DIR}/include/rndr/fly-camera.h"
         "${PROJECT_SOURCE_DIR}/include/rndr/trace.h"
         "${PROJECT_SOURCE_DIR}/include/rndr/projections.h"
+        "${PROJECT_SOURCE_DIR}/include/rndr/imgui-system.hpp"
         "${PROJECT_SOURCE_DIR}/src/log.cpp"
         "${PROJECT_SOURCE_DIR}/src/time.cpp"
         "${PROJECT_SOURCE_DIR}/src/window.cpp"
@@ -42,6 +43,7 @@ set(SOURCE_LIST
         "${PROJECT_SOURCE_DIR}/src/projections.cpp"
         "${PROJECT_SOURCE_DIR}/src/application.cpp"
         "${PROJECT_SOURCE_DIR}/src/platform-application.cpp"
+        "${PROJECT_SOURCE_DIR}/src/imgui-system.cpp"
 )
 
 list(APPEND SOURCE_LIST
@@ -100,7 +102,7 @@ target_compile_definitions(rndr PUBLIC RNDR_OPENGL)
 
 # Setup library dependencies
 target_link_libraries(rndr PUBLIC opengl32.lib User32.lib)
-target_link_libraries(rndr PUBLIC opal)
+target_link_libraries(rndr PUBLIC opal imgui)
 
 # @formatter:off
 target_compile_definitions(rndr PUBLIC RNDR_CORE_ASSETS_DIR="${CMAKE_CURRENT_SOURCE_DIR}/../assets")

@@ -4,11 +4,13 @@
 #include "rndr/application.hpp"
 #include "rndr/file.h"
 #include "rndr/fly-camera.h"
+#include "rndr/imgui-system.hpp"
 #include "rndr/log.h"
 #include "rndr/render-api.h"
 #include "rndr/types.h"
 
 #include "example-controller.h"
+#include "imgui.h"
 
 struct RNDR_ALIGN(16) Uniforms
 {
@@ -71,6 +73,9 @@ int main()
                                                                                      : Rndr::GenericWindowMode::Windowed);
                                                              }
                                                          })});
+
+    Rndr::ImGuiContext imgui_context(*window, gc);
+    app->RegisterSystemMessageHandler(&imgui_context);
 
     const Rndr::BufferDesc buffer_desc{.usage = Rndr::Usage::Dynamic, .size = sizeof(Uniforms), .stride = sizeof(Uniforms)};
     Rndr::Buffer uniform_buffer(gc, buffer_desc);
@@ -136,6 +141,7 @@ int main()
         gc.BindBuffer(uniform_buffer, 0);
         gc.UpdateBuffer(uniform_buffer, Opal::AsBytes(uniforms));
 
+        bool demo_window_opened = false;
         check_change_time += delta_seconds;
         if (check_change_time >= 1.0f)
         {
@@ -178,6 +184,10 @@ int main()
             gc.BindPipeline(pipeline);
             gc.DrawVertices(Rndr::PrimitiveTopology::Triangle, 6);
         }
+
+        imgui_context.StartFrame();
+        ImGui::ShowDemoWindow(&demo_window_opened);
+        imgui_context.EndFrame();
 
         gc.Present(swap_chain);
 
