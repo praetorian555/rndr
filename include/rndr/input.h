@@ -202,7 +202,7 @@ public:
      */
     bool ProcessEvents(float delta_seconds);
 
-    void OnWindowClose(GenericWindow&) override {}
+    bool OnWindowClose(GenericWindow&) override { return false; }
     void OnWindowSizeChanged(const GenericWindow&, i32, i32) override {}
     bool OnButtonDown(const GenericWindow& window, InputPrimitive key_code, bool is_repeated) override;
     bool OnButtonUp(const GenericWindow& window, InputPrimitive key_code, bool is_repeated) override;

@@ -1,6 +1,7 @@
 #pragma once
 
 #include "delegate.h"
+#include "imgui-system.hpp"
 #include "input.h"
 #include "opal/allocator.h"
 #include "opal/container/dynamic-array.h"
@@ -57,7 +58,11 @@ public:
 
     void EnableHighPrecisionCursorMode(bool enable, GenericWindow& window);
 
-    void OnWindowClose(GenericWindow& window) override;
+    void RegisterSystemMessageHandler(SystemMessageHandler* handler);
+    void UnregisterSystemMessageHandler(SystemMessageHandler* handler);
+
+    /** Implementation of SystemMessageHandler API */
+    bool OnWindowClose(GenericWindow& window) override;
     void OnWindowSizeChanged(const GenericWindow& window, i32 width, i32 height) override;
 
     bool OnButtonDown(const GenericWindow& window, InputPrimitive key_code, bool is_repeated) override;
@@ -69,6 +74,7 @@ public:
     bool OnMouseDoubleClick(const GenericWindow& window, InputPrimitive primitive, const Vector2i& cursor_position) override;
     bool OnMouseWheel(const GenericWindow& window, f32 wheel_delta, const Vector2i& cursor_position) override;
     bool OnMouseMove(const GenericWindow& window, f32 delta_x, f32 delta_y) override;
+    /** End of SystemMessageHandler API */
 
 private:
     Application(const ApplicationDesc& desc);
@@ -81,6 +87,8 @@ private:
     struct Logger* m_logger = nullptr;
     Opal::AllocatorBase* m_allocator = nullptr;
     InputSystem* m_input_system = nullptr;
+    Opal::Ref<ImGuiContext> m_imgui_system;
+    Opal::DynamicArray<Opal::Ref<SystemMessageHandler>> m_system_message_handlers;
 };
 
 }  // namespace Rndr

@@ -11,7 +11,7 @@ struct SystemMessageHandler
 {
     virtual ~SystemMessageHandler() = default;
 
-    virtual void OnWindowClose(GenericWindow& window) = 0;
+    virtual bool OnWindowClose(GenericWindow& window) = 0;
     virtual void OnWindowSizeChanged(const GenericWindow& window, i32 width, i32 height) = 0;
 
     virtual bool OnButtonDown(const GenericWindow& window, InputPrimitive key_code, bool is_repeated) = 0;

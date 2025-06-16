@@ -112,17 +112,59 @@ void Rndr::Application::EnableHighPrecisionCursorMode(bool enable, GenericWindow
     m_platform_application->EnableHighPrecisionCursorMode(enable, window);
 }
 
-void Rndr::Application::OnWindowClose(GenericWindow& window)
+void Rndr::Application::RegisterSystemMessageHandler(SystemMessageHandler* handler)
 {
-    const bool is_handled = on_window_close.Execute(window);
-    if (!is_handled)
+    if (handler == nullptr)
     {
-        window.ForceClose();
+        RNDR_LOG_ERROR("Trying to register invalid system message handler!");
+        return;
     }
+    for (const Opal::Ref<SystemMessageHandler>& system_message_handler : m_system_message_handlers)
+    {
+        if (system_message_handler.GetPtr() == handler)
+        {
+            return;
+        }
+    }
+    m_system_message_handlers.PushBack(Opal::Ref(*handler));
+}
+
+void Rndr::Application::UnregisterSystemMessageHandler(SystemMessageHandler* handler)
+{
+    for (i32 i = 0; i < m_system_message_handlers.GetSize(); i++)
+    {
+        const Opal::Ref<SystemMessageHandler>& system_message_handler = m_system_message_handlers[i];
+        if (system_message_handler.GetPtr() == handler)
+        {
+            m_system_message_handlers.EraseWithSwap(m_system_message_handlers.begin() + i);
+            return;
+        }
+    }
+}
+
+bool Rndr::Application::OnWindowClose(GenericWindow& window)
+{
+    for (const Opal::Ref<SystemMessageHandler>& system_message_handler : m_system_message_handlers)
+    {
+        if (system_message_handler->OnWindowClose(window))
+        {
+            return true;
+        }
+    }
+    if (on_window_close.Execute(window))
+    {
+        return true;
+    }
+    window.ForceClose();
+    return true;
 }
 
 void Rndr::Application::OnWindowSizeChanged(const GenericWindow& window, i32 width, i32 height)
 {
+    for (const Opal::Ref<SystemMessageHandler>& system_message_handler : m_system_message_handlers)
+    {
+        system_message_handler->OnWindowSizeChanged(window, width, height);
+    }
     on_window_resize.Execute(window, width, height);
 }
 
@@ -130,6 +172,10 @@ bool Rndr::Application::OnButtonDown(const GenericWindow& window, InputPrimitive
 {
     // RNDR_LOG_DEBUG("ButtonDown Key=0x%x, IsRepeated=%s", key_code, is_repeated ? "true" : "false");
     m_input_system->OnButtonDown(window, key_code, is_repeated);
+    for (const Opal::Ref<SystemMessageHandler>& system_message_handler : m_system_message_handlers)
+    {
+        system_message_handler->OnButtonDown(window, key_code, is_repeated);
+    }
     return true;
 }
 
@@ -137,17 +183,25 @@ bool Rndr::Application::OnButtonUp(const GenericWindow& window, InputPrimitive k
 {
     // RNDR_LOG_DEBUG("ButtonUp Key=0x%x, IsRepeated=%s", key_code, is_repeated ? "true" : "false");
     m_input_system->OnButtonUp(window, key_code, is_repeated);
+    for (const Opal::Ref<SystemMessageHandler>& system_message_handler : m_system_message_handlers)
+    {
+        system_message_handler->OnButtonUp(window, key_code, is_repeated);
+    }
     return true;
 }
 
 bool Rndr::Application::OnCharacter(const GenericWindow& window, uchar32 character, bool is_repeated)
 {
-    Opal::StringUtf32 in;
-    in.Append(character);
-    Opal::StringUtf8 out(10, 0);
-    Opal::Transcode(in, out);
+    // Opal::StringUtf32 in;
+    // in.Append(character);
+    // Opal::StringUtf8 out(10, 0);
+    // Opal::Transcode(in, out);
     // RNDR_LOG_DEBUG("Character Char=%s, IsRepeated=%s", out.GetData(), is_repeated ? "true" : "false");
     m_input_system->OnCharacter(window, character, is_repeated);
+    for (const Opal::Ref<SystemMessageHandler>& system_message_handler : m_system_message_handlers)
+    {
+        system_message_handler->OnCharacter(window, character, is_repeated);
+    }
     return true;
 }
 
@@ -155,6 +209,10 @@ bool Rndr::Application::OnMouseButtonDown(const GenericWindow& window, InputPrim
 {
     // RNDR_LOG_DEBUG("MouseButtonDown Key=0x%x, CursorPosition=(x=%d, y=%d)", primitive, cursor_position.x, cursor_position.y);
     m_input_system->OnMouseButtonDown(window, primitive, cursor_position);
+    for (const Opal::Ref<SystemMessageHandler>& system_message_handler : m_system_message_handlers)
+    {
+        system_message_handler->OnMouseButtonDown(window, primitive, cursor_position);
+    }
     return true;
 }
 
@@ -162,6 +220,10 @@ bool Rndr::Application::OnMouseButtonUp(const GenericWindow& window, InputPrimit
 {
     // RNDR_LOG_DEBUG("MouseButtonUp Key=0x%x, CursorPosition=(x=%d, y=%d)", primitive, cursor_position.x, cursor_position.y);
     m_input_system->OnMouseButtonUp(window, primitive, cursor_position);
+    for (const Opal::Ref<SystemMessageHandler>& system_message_handler : m_system_message_handlers)
+    {
+        system_message_handler->OnMouseButtonUp(window, primitive, cursor_position);
+    }
     return true;
 }
 
@@ -169,6 +231,10 @@ bool Rndr::Application::OnMouseDoubleClick(const GenericWindow& window, InputPri
 {
     // RNDR_LOG_DEBUG("MouseDoubleClick Key=0x%x, CursorPosition=(x=%d, y=%d)", primitive, cursor_position.x, cursor_position.y);
     m_input_system->OnMouseDoubleClick(window, primitive, cursor_position);
+    for (const Opal::Ref<SystemMessageHandler>& system_message_handler : m_system_message_handlers)
+    {
+        system_message_handler->OnMouseDoubleClick(window, primitive, cursor_position);
+    }
     return true;
 }
 
@@ -176,11 +242,19 @@ bool Rndr::Application::OnMouseWheel(const GenericWindow& window, f32 wheel_delt
 {
     // RNDR_LOG_DEBUG("MouseWheel Delta=%f, CursorPosition=(x=%d, y=%d)", wheel_delta, cursor_position.x, cursor_position.y);
     m_input_system->OnMouseWheel(window, wheel_delta, cursor_position);
+    for (const Opal::Ref<SystemMessageHandler>& system_message_handler : m_system_message_handlers)
+    {
+        system_message_handler->OnMouseWheel(window, wheel_delta, cursor_position);
+    }
     return true;
 }
 
 bool Rndr::Application::OnMouseMove(const GenericWindow& window, f32 delta_x, f32 delta_y)
 {
     m_input_system->OnMouseMove(window, delta_x, delta_y);
+    for (const Opal::Ref<SystemMessageHandler>& system_message_handler : m_system_message_handlers)
+    {
+        system_message_handler->OnMouseMove(window, delta_x, delta_y);
+    }
     return true;
 }
