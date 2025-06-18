@@ -11,6 +11,7 @@
 
 #include "example-controller.h"
 #include "imgui.h"
+#include "rndr/frames-per-second-counter.h"
 
 struct RNDR_ALIGN(16) Uniforms
 {
@@ -21,8 +22,18 @@ struct RNDR_ALIGN(16) Uniforms
 
 void SetupFlyCameraControls(Rndr::Application& app, Rndr::FlyCamera& camera);
 
+Rndr::FrameBuffer RecreateFrameBuffer(Rndr::GraphicsContext& gc, Rndr::i32 width, Rndr::i32 height)
+{
+    const Rndr::FrameBufferDesc desc{.color_attachments = {Rndr::TextureDesc{.width = width, .height = height}}, .color_attachment_samplers = {{}}};
+    return {gc, desc};
+}
+
 int main()
 {
+    Rndr::i32 resolution_index = 0;
+    Opal::DynamicArray<Rndr::Vector2i> rendering_resolution_options{{2560, 1440}, {1920, 1080}, {1600, 900}};
+    const char* rendering_resolution_options_str[]{"2560x1440", "1920x1080", "1600x900"};
+
     const Rndr::ApplicationDesc app_desc{.enable_input_system = true};
     Rndr::Application* app = Rndr::Application::Create(app_desc);
     if (app == nullptr)
@@ -37,19 +48,20 @@ int main()
         Rndr::Application::Destroy();
         return -1;
     }
-    Rndr::i32 width = 0;
-    Rndr::i32 height = 0;
+    Rndr::i32 window_width = 0;
+    Rndr::i32 window_height = 0;
     Rndr::i32 x = 0;
     Rndr::i32 y = 0;
-    window->GetPositionAndSize(x, y, width, height);
+    window->GetPositionAndSize(x, y, window_width, window_height);
     window->SetTitle("Window Sample");
 
     app->EnableHighPrecisionCursorMode(true, *window);
 
     const Rndr::GraphicsContextDesc gc_desc{.window_handle = window->GetNativeHandle()};
     Rndr::GraphicsContext gc{gc_desc};
-    const Rndr::SwapChainDesc swap_chain_desc{.width = width, .height = height};
+    const Rndr::SwapChainDesc swap_chain_desc{.width = window_width, .height = window_height, .enable_vsync = false};
     Rndr::SwapChain swap_chain{gc, swap_chain_desc};
+    Rndr::FrameBuffer final_render = RecreateFrameBuffer(gc, rendering_resolution_options[resolution_index].x, rendering_resolution_options[resolution_index].y);
 
     app->on_window_resize.Bind(
         [&swap_chain, window](const Rndr::GenericWindow& w, Rndr::i32 width, Rndr::i32 height)
@@ -100,7 +112,7 @@ int main()
     }
 
     const Rndr::FlyCameraDesc fly_camera_desc{.start_yaw_radians = Opal::k_pi_over_2_float};
-    ExampleController controller(*app, width, height, fly_camera_desc, 10.0f, 0.5f, 0.2f);
+    ExampleController controller(*app, window_width, window_height, fly_camera_desc, 10.0f, 0.5f, 0.2f);
 
     app->on_window_resize.Bind(
         [&controller, window](const Rndr::GenericWindow& w, Rndr::i32 width, Rndr::i32 height)
@@ -122,17 +134,32 @@ int main()
                                             }
                                         })});
 
+    Rndr::FramesPerSecondCounter fps_counter;
+    int selected_resolution_index = 0;
+    bool stats_window = true;
     Rndr::f64 check_change_time = 0.0;
     Rndr::f32 delta_seconds = 0.016f;
     while (!window->IsClosed())
     {
         const Rndr::f64 start_seconds = Opal::GetSeconds();
 
+        fps_counter.Update(delta_seconds);
+
         app->ProcessSystemEvents(delta_seconds);
 
         controller.Tick(delta_seconds);
 
+        if (selected_resolution_index != resolution_index)
+        {
+            resolution_index = selected_resolution_index;
+            final_render.Destroy();
+            final_render = RecreateFrameBuffer(gc, rendering_resolution_options[resolution_index].x, rendering_resolution_options[resolution_index].y);
+        }
+
         gc.BindSwapChainFrameBuffer(swap_chain);
+        gc.ClearAll(Rndr::Colors::k_black);
+
+        gc.BindFrameBuffer(final_render);
         gc.ClearAll(Rndr::Colors::k_black);
 
         Uniforms uniforms;
@@ -141,7 +168,6 @@ int main()
         gc.BindBuffer(uniform_buffer, 0);
         gc.UpdateBuffer(uniform_buffer, Opal::AsBytes(uniforms));
 
-        bool demo_window_opened = false;
         check_change_time += delta_seconds;
         if (check_change_time >= 1.0f)
         {
@@ -185,8 +211,19 @@ int main()
             gc.DrawVertices(Rndr::PrimitiveTopology::Triangle, 6);
         }
 
+        const Rndr::BlitFrameBufferDesc blit_desc;
+        gc.BlitToSwapChain(swap_chain, final_render, blit_desc);
+        gc.BindSwapChainFrameBuffer(swap_chain);
+
         imgui_context.StartFrame();
-        ImGui::ShowDemoWindow(&demo_window_opened);
+        ImGui::Begin("Stats", &stats_window);
+        ImGui::Combo("Rendering Resolution", &selected_resolution_index, rendering_resolution_options_str, 3);
+        ImGui::Text("Current Rendering resolution: %s", rendering_resolution_options_str[selected_resolution_index]);
+        window->GetPositionAndSize(x, y, window_width, window_height);
+        ImGui::Text("Window Resolution: %dx%d", window_width, window_height);
+        ImGui::Text("FPS: %.2f", fps_counter.GetFramesPerSecond());
+        ImGui::Text("Frame Time: %.2f ms", (1 / fps_counter.GetFramesPerSecond()) * 1000.0f);
+        ImGui::End();
         imgui_context.EndFrame();
 
         gc.Present(swap_chain);
@@ -199,6 +236,7 @@ int main()
     pipeline.Destroy();
     vertex_shader.Destroy();
     fragment_shader.Destroy();
+    final_render.Destroy();
     gc.Destroy();
     app->DestroyGenericWindow(window);
     Rndr::Application::Destroy();
