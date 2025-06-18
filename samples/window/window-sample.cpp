@@ -12,6 +12,7 @@
 #include "example-controller.h"
 #include "imgui.h"
 #include "rndr/frames-per-second-counter.h"
+#include "rndr/trace.h"
 
 struct RNDR_ALIGN(16) Uniforms
 {
@@ -215,16 +216,19 @@ int main()
         gc.BlitToSwapChain(swap_chain, final_render, blit_desc);
         gc.BindSwapChainFrameBuffer(swap_chain);
 
-        imgui_context.StartFrame();
-        ImGui::Begin("Stats", &stats_window);
-        ImGui::Combo("Rendering Resolution", &selected_resolution_index, rendering_resolution_options_str, 3);
-        ImGui::Text("Current Rendering resolution: %s", rendering_resolution_options_str[selected_resolution_index]);
-        window->GetPositionAndSize(x, y, window_width, window_height);
-        ImGui::Text("Window Resolution: %dx%d", window_width, window_height);
-        ImGui::Text("FPS: %.2f", fps_counter.GetFramesPerSecond());
-        ImGui::Text("Frame Time: %.2f ms", (1 / fps_counter.GetFramesPerSecond()) * 1000.0f);
-        ImGui::End();
-        imgui_context.EndFrame();
+        {
+            RNDR_GPU_EVENT_SCOPED("ImGui Render");
+            imgui_context.StartFrame();
+            ImGui::Begin("Stats", &stats_window);
+            ImGui::Combo("Rendering Resolution", &selected_resolution_index, rendering_resolution_options_str, 3);
+            ImGui::Text("Current Rendering resolution: %s", rendering_resolution_options_str[selected_resolution_index]);
+            window->GetPositionAndSize(x, y, window_width, window_height);
+            ImGui::Text("Window Resolution: %dx%d", window_width, window_height);
+            ImGui::Text("FPS: %.2f", fps_counter.GetFramesPerSecond());
+            ImGui::Text("Frame Time: %.2f ms", (1 / fps_counter.GetFramesPerSecond()) * 1000.0f);
+            ImGui::End();
+            imgui_context.EndFrame();
+        }
 
         gc.Present(swap_chain);
 

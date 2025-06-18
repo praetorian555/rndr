@@ -883,6 +883,9 @@ Rndr::ErrorCode Rndr::GraphicsContext::ClearFrameBufferDepthStencilAttachment(co
 
 Rndr::ErrorCode Rndr::GraphicsContext::BlitFrameBuffers(const FrameBuffer& dst, const FrameBuffer& src, const BlitFrameBufferDesc& desc)
 {
+    RNDR_CPU_EVENT_SCOPED("Blit Frame Buffers");
+    RNDR_GPU_EVENT_SCOPED("Blit Frame Buffers");
+
     if (!dst.IsValid())
     {
         RNDR_LOG_ERROR("BlitFrameBuffer: Failed, destination frame buffer is invalid!");
@@ -939,6 +942,9 @@ Rndr::ErrorCode Rndr::GraphicsContext::BlitFrameBuffers(const FrameBuffer& dst, 
 
 Rndr::ErrorCode Rndr::GraphicsContext::BlitToSwapChain(const SwapChain& swap_chain, const FrameBuffer& src, const BlitFrameBufferDesc& desc)
 {
+    RNDR_CPU_EVENT_SCOPED("Blit To SwapChain");
+    RNDR_GPU_EVENT_SCOPED("Blit To SwapChain");
+
     if (!src.IsValid())
     {
         RNDR_LOG_ERROR("BlitFrameBuffer: Failed, source frame buffer is invalid!");
