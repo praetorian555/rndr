@@ -236,6 +236,9 @@ public:
      */
     ErrorCode ClearFrameBufferDepthStencilAttachment(const FrameBuffer& frame_buffer, f32 depth, i32 stencil);
 
+    ErrorCode BlitFrameBuffers(const FrameBuffer& dst, const FrameBuffer& src, const BlitFrameBufferDesc& desc);
+    ErrorCode BlitToSwapChain(const SwapChain& swap_chain, const FrameBuffer& src, const BlitFrameBufferDesc& desc);
+
 private:
     GraphicsContextDesc m_desc;
     NativeDeviceContextHandle m_native_device_context = k_invalid_device_context_handle;

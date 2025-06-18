@@ -836,6 +836,19 @@ struct DrawIndicesData
     u32 base_instance;
 };
 
+struct BlitFrameBufferDesc
+{
+    bool should_copy_color = true;
+    bool should_copy_depth = false;
+    bool should_copy_stencil = false;
+    ImageFilter interpolation = ImageFilter::Linear;
+    Vector2i src_offset = Vector2i::Zero();
+    Vector2i dst_offset = Vector2i::Zero();
+    // If size is a zero-vector, use full framebuffer size
+    Vector2i src_size = Vector2i::Zero();
+    Vector2i dst_size = Vector2i::Zero();
+};
+
 // Helper functions
 
 /**

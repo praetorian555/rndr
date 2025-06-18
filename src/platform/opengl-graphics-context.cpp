@@ -880,3 +880,110 @@ Rndr::ErrorCode Rndr::GraphicsContext::ClearFrameBufferDepthStencilAttachment(co
     RNDR_GL_VERIFY("Failed to clear depth attachment!", RNDR_NOOP);
     return ErrorCode::Success;
 }
+
+Rndr::ErrorCode Rndr::GraphicsContext::BlitFrameBuffers(const FrameBuffer& dst, const FrameBuffer& src, const BlitFrameBufferDesc& desc)
+{
+    if (!dst.IsValid())
+    {
+        RNDR_LOG_ERROR("BlitFrameBuffer: Failed, destination frame buffer is invalid!");
+        return ErrorCode::InvalidArgument;
+    }
+    if (!src.IsValid())
+    {
+        RNDR_LOG_ERROR("BlitFrameBuffer: Failed, source frame buffer is invalid!");
+        return ErrorCode::InvalidArgument;
+    }
+    if ((desc.should_copy_depth || desc.should_copy_stencil) && desc.interpolation != ImageFilter::Nearest)
+    {
+        RNDR_LOG_ERROR("BlitFrameBuffer: Failed, depth and stencil attachments can only be copied with nearest interpolation!");
+        return ErrorCode::InvalidArgument;
+    }
+
+    Vector2i src_size = desc.src_size;
+    if (src_size.x == 0)
+    {
+        src_size.x = src.GetDesc().color_attachments[0].width;
+    }
+    if (src_size.y == 0)
+    {
+        src_size.y = src.GetDesc().color_attachments[0].height;
+    }
+    Vector2i dst_size = desc.dst_size;
+    if (dst_size.x == 0)
+    {
+        dst_size.x = dst.GetDesc().color_attachments[0].width;
+    }
+    if (dst_size.y == 0)
+    {
+        dst_size.y = dst.GetDesc().color_attachments[0].height;
+    }
+    GLuint mask = 0;
+    if (desc.should_copy_color)
+    {
+        mask |= GL_COLOR_BUFFER_BIT;
+    }
+    if (desc.should_copy_depth)
+    {
+        mask |= GL_DEPTH_BUFFER_BIT;
+    }
+    if (desc.should_copy_stencil)
+    {
+        mask |= GL_STENCIL_BUFFER_BIT;
+    }
+    const GLuint filter = FromImageFilterToOpenGL(desc.interpolation);
+    glBlitNamedFramebuffer(src.GetNativeFrameBuffer(), dst.GetNativeFrameBuffer(), desc.src_offset.x, desc.src_offset.y, src_size.x,
+                           src_size.y, desc.dst_offset.x, desc.dst_offset.y, dst_size.x, dst_size.y, mask, filter);
+    RNDR_GL_VERIFY("Failed to blit frame buffer into another frame buffer!", RNDR_NOOP);
+    return ErrorCode::Success;
+}
+
+Rndr::ErrorCode Rndr::GraphicsContext::BlitToSwapChain(const SwapChain& swap_chain, const FrameBuffer& src, const BlitFrameBufferDesc& desc)
+{
+    if (!src.IsValid())
+    {
+        RNDR_LOG_ERROR("BlitFrameBuffer: Failed, source frame buffer is invalid!");
+        return ErrorCode::InvalidArgument;
+    }
+    if ((desc.should_copy_depth || desc.should_copy_stencil) && desc.interpolation != ImageFilter::Nearest)
+    {
+        RNDR_LOG_ERROR("BlitFrameBuffer: Failed, depth and stencil attachments can only be copied with nearest interpolation!");
+        return ErrorCode::InvalidArgument;
+    }
+
+    Vector2i src_size = desc.src_size;
+    if (src_size.x == 0)
+    {
+        src_size.x = src.GetDesc().color_attachments[0].width;
+    }
+    if (src_size.y == 0)
+    {
+        src_size.y = src.GetDesc().color_attachments[0].height;
+    }
+    Vector2i dst_size = desc.dst_size;
+    if (dst_size.x == 0)
+    {
+        dst_size.x = swap_chain.GetDesc().width;
+    }
+    if (dst_size.y == 0)
+    {
+        dst_size.y = swap_chain.GetDesc().height;
+    }
+    GLuint mask = 0;
+    if (desc.should_copy_color)
+    {
+        mask |= GL_COLOR_BUFFER_BIT;
+    }
+    if (desc.should_copy_depth)
+    {
+        mask |= GL_DEPTH_BUFFER_BIT;
+    }
+    if (desc.should_copy_stencil)
+    {
+        mask |= GL_STENCIL_BUFFER_BIT;
+    }
+    const GLuint filter = FromImageFilterToOpenGL(desc.interpolation);
+    glBlitNamedFramebuffer(src.GetNativeFrameBuffer(), 0, desc.src_offset.x, desc.src_offset.y, src_size.x, src_size.y, desc.dst_offset.x,
+                           desc.dst_offset.y, dst_size.x, dst_size.y, mask, filter);
+    RNDR_GL_VERIFY("Failed to blit frame buffer into a swap chain!", RNDR_NOOP);
+    return ErrorCode::Success;
+}
