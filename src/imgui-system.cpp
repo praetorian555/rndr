@@ -14,6 +14,7 @@
 #include "opal/container/scope-ptr.h"
 
 #include "rndr/log.h"
+#include "rndr/trace.h"
 
 namespace
 {
@@ -198,6 +199,8 @@ void Rndr::ImGuiContext::StartFrame()
         return;
     }
 
+    RNDR_GPU_EVENT_BEGIN("ImGui Context");
+
 #if RNDR_WINDOWS
     ImGui_ImplWin32_NewFrame();
 #else
@@ -230,6 +233,8 @@ void Rndr::ImGuiContext::EndFrame()
 #else
     RNDR_ASSERT(false, "Platform not supported!");
 #endif
+
+    RNDR_GPU_EVENT_END("ImGui System");
 
     m_frame_started = false;
 }
