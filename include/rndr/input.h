@@ -5,8 +5,8 @@
 #include "opal/container/dynamic-array.h"
 #include "opal/container/scope-ptr.h"
 #include "opal/container/string.h"
-#include "system-message-handler.hpp"
 
+#include "rndr/system-message-handler.hpp"
 #include "rndr/input-primitives.h"
 #include "rndr/math.h"
 
