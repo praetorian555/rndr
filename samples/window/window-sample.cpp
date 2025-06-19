@@ -129,10 +129,21 @@ int main()
     app->GetInputSystemChecked().GetInputContexts()[0]->AddAction(
         "Toggle movement controls", {Rndr::InputBinding::CreateKeyboardButtonBinding(
                                         Rndr::InputPrimitive::F1, Rndr::InputTrigger::ButtonPressed,
-                                        [&controller](Rndr::InputPrimitive, Rndr::InputTrigger, Rndr::f32, bool is_repeated)
+                                        [app, &controller](Rndr::InputPrimitive, Rndr::InputTrigger, Rndr::f32, bool is_repeated)
                                         {
                                             if (!is_repeated)
                                             {
+                                                const Rndr::CursorPositionMode mode = app->GetCursorPositionMode();
+                                                if (mode == Rndr::CursorPositionMode::Normal)
+                                                {
+                                                    app->ShowCursor(false);
+                                                    app->SetCursorPositionMode(Rndr::CursorPositionMode::ResetToCenter);
+                                                }
+                                                else
+                                                {
+                                                    app->ShowCursor(true);
+                                                    app->SetCursorPositionMode(Rndr::CursorPositionMode::Normal);
+                                                }
                                                 controller.Enable(!controller.IsEnabled());
                                             }
                                         })});
