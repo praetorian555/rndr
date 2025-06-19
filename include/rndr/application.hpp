@@ -7,7 +7,7 @@
 #include "rndr/delegate.h"
 #include "rndr/generic-window.hpp"
 #include "rndr/imgui-system.hpp"
-#include "rndr/input.h"
+#include "rndr/input-system.hpp"
 #include "rndr/platform-application.hpp"
 #include "rndr/system-message-handler.hpp"
 

@@ -1,6 +1,6 @@
 #include <catch2/catch2.hpp>
 
-#include "rndr/input.h"
+#include "rndr/input-system.hpp"
 
 #include "rndr/application.hpp"
 #include "rndr/window.h"

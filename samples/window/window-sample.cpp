@@ -61,7 +61,7 @@ int main()
 
     const Rndr::GraphicsContextDesc gc_desc{.window_handle = window->GetNativeHandle()};
     Rndr::GraphicsContext gc{gc_desc};
-    const Rndr::SwapChainDesc swap_chain_desc{.width = window_width, .height = window_height, .enable_vsync = false};
+    const Rndr::SwapChainDesc swap_chain_desc{.width = window_width, .height = window_height, .enable_vsync = true};
     Rndr::SwapChain swap_chain{gc, swap_chain_desc};
     Rndr::FrameBuffer final_render =
         RecreateFrameBuffer(gc, rendering_resolution_options[resolution_index].x, rendering_resolution_options[resolution_index].y);

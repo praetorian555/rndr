@@ -3,7 +3,7 @@
 #include <stdio.h>
 
 #include "opal/container/in-place-array.h"
-#include "rndr/input.h"
+#include "rndr/input-system.hpp"
 
 #include "rndr/log.h"
 

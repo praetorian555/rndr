@@ -1,7 +1,7 @@
 #pragma once
 
 #include "rndr/delegate.h"
-#include "rndr/input.h"
+#include "rndr/input-system.hpp"
 #include "rndr/math.h"
 #include "rndr/projection-camera.h"
 #include "rndr/types.h"

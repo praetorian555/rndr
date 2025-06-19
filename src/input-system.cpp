@@ -6,7 +6,7 @@
 #include "opal/container/in-place-array.h"
 #include "opal/container/ref.h"
 
-#include "rndr/input.h"
+#include "rndr/input-system.hpp"
 #include "rndr/log.h"
 #include "rndr/types.h"
 
