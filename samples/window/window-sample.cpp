@@ -25,7 +25,8 @@ void SetupFlyCameraControls(Rndr::Application& app, Rndr::FlyCamera& camera);
 
 Rndr::FrameBuffer RecreateFrameBuffer(Rndr::GraphicsContext& gc, Rndr::i32 width, Rndr::i32 height)
 {
-    const Rndr::FrameBufferDesc desc{.color_attachments = {Rndr::TextureDesc{.width = width, .height = height}}, .color_attachment_samplers = {{}}};
+    const Rndr::FrameBufferDesc desc{.color_attachments = {Rndr::TextureDesc{.width = width, .height = height}},
+                                     .color_attachment_samplers = {{}}};
     return {gc, desc};
 }
 
@@ -62,7 +63,8 @@ int main()
     Rndr::GraphicsContext gc{gc_desc};
     const Rndr::SwapChainDesc swap_chain_desc{.width = window_width, .height = window_height, .enable_vsync = false};
     Rndr::SwapChain swap_chain{gc, swap_chain_desc};
-    Rndr::FrameBuffer final_render = RecreateFrameBuffer(gc, rendering_resolution_options[resolution_index].x, rendering_resolution_options[resolution_index].y);
+    Rndr::FrameBuffer final_render =
+        RecreateFrameBuffer(gc, rendering_resolution_options[resolution_index].x, rendering_resolution_options[resolution_index].y);
 
     app->on_window_resize.Bind(
         [&swap_chain, window](const Rndr::GenericWindow& w, Rndr::i32 width, Rndr::i32 height)
@@ -113,7 +115,7 @@ int main()
     }
 
     const Rndr::FlyCameraDesc fly_camera_desc{.start_yaw_radians = Opal::k_pi_over_2_float};
-    ExampleController controller(*app, window_width, window_height, fly_camera_desc, 10.0f, 0.5f, 0.2f);
+    ExampleController controller(*app, window_width, window_height, fly_camera_desc, 10.0f, 0.005f, 0.005f);
 
     app->on_window_resize.Bind(
         [&controller, window](const Rndr::GenericWindow& w, Rndr::i32 width, Rndr::i32 height)
@@ -154,7 +156,8 @@ int main()
         {
             resolution_index = selected_resolution_index;
             final_render.Destroy();
-            final_render = RecreateFrameBuffer(gc, rendering_resolution_options[resolution_index].x, rendering_resolution_options[resolution_index].y);
+            final_render =
+                RecreateFrameBuffer(gc, rendering_resolution_options[resolution_index].x, rendering_resolution_options[resolution_index].y);
         }
 
         gc.BindSwapChainFrameBuffer(swap_chain);

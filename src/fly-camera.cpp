@@ -8,9 +8,10 @@
 #include "rndr/window.h"
 
 Rndr::FlyCamera::FlyCamera(i32 screen_width, i32 screen_height, const FlyCameraDesc& desc)
-    : ProjectionCamera(desc.start_position, Quaternionf::Identity(),
-                       screen_width, screen_height, desc.projection_desc),
-      m_desc(desc), m_pitch_radians(desc.start_pitch_radians), m_yaw_radians(desc.start_yaw_radians)
+    : ProjectionCamera(desc.start_position, Quaternionf::Identity(), screen_width, screen_height, desc.projection_desc),
+      m_desc(desc),
+      m_pitch_radians(desc.start_pitch_radians),
+      m_yaw_radians(desc.start_yaw_radians)
 {
     m_yaw_radians = ClampYaw(m_yaw_radians);
     m_pitch_radians = ClampPitch(m_pitch_radians);
@@ -46,10 +47,9 @@ void Rndr::FlyCamera::AddPitch(f32 pitch_radians)
 
 void Rndr::FlyCamera::Tick(f32 delta_seconds)
 {
-    m_yaw_radians += delta_seconds * m_delta_yaw_radians;
+    m_yaw_radians += m_delta_yaw_radians;
     m_yaw_radians = ClampYaw(m_yaw_radians);
-
-    m_pitch_radians += delta_seconds * m_delta_pitch_radians;
+    m_pitch_radians += m_delta_pitch_radians;
     m_pitch_radians = ClampPitch(m_pitch_radians);
 
     // Up is the same for both local camera coordinate system and in the world coordinate system
