@@ -836,15 +836,19 @@ struct DrawIndicesData
     u32 base_instance;
 };
 
+/**
+ * Helper struct to specify options for copying frame buffers.
+ */
 struct BlitFrameBufferDesc
 {
     bool should_copy_color = true;
     bool should_copy_depth = false;
     bool should_copy_stencil = false;
+    /** ImageFilter::Linear can only be used when copying color attachments. */
     ImageFilter interpolation = ImageFilter::Linear;
     Vector2i src_offset = Vector2i::Zero();
     Vector2i dst_offset = Vector2i::Zero();
-    // If size is a zero-vector, use full framebuffer size
+    /** If size is a zero-vector, use the ful framebuffer size. */
     Vector2i src_size = Vector2i::Zero();
     Vector2i dst_size = Vector2i::Zero();
 };

@@ -236,7 +236,26 @@ public:
      */
     ErrorCode ClearFrameBufferDepthStencilAttachment(const FrameBuffer& frame_buffer, f32 depth, i32 stencil);
 
+    /**
+     * Copy attachments from the 'src' frame buffer to the 'dst' frame buffer.
+     * @param dst Destination frame buffer. Does not need to be bound beforehand.
+     * @param src Source frame buffer. Does not need to be bound beforehand.
+     * @param desc Describes the rules for copying.
+     * @return Returns ErrorCode::Success if copying is performed successfully. Returns ErrorCode::InvalidArgument if one of the frame
+     * buffers is not valid. In case that we want to copy depth or stencil attachments and specified linear interpolation return the
+     * ErrorCode::InvalidArgument. Returns ErrorCode::GraphicsAPIError if the error happens on the graphics API side.
+     */
     ErrorCode BlitFrameBuffers(const FrameBuffer& dst, const FrameBuffer& src, const BlitFrameBufferDesc& desc);
+
+    /**
+     * Copy attachments from the 'src' frame buffer to the swap chain's frame buffer.
+     * @param swap_chain The swap chain to copy to.
+     * @param src Source frame buffer. Does not need to be bound beforehand.
+     * @param desc Describes the rules for copying.
+     * @return Returns ErrorCode::Success if copying is performed successfully. Returns ErrorCode::InvalidArgument if the source frame
+     * buffer is not valid or the swap chain is not valid. In case that we want to copy depth or stencil attachments and specified linear
+     * interpolation return the ErrorCode::InvalidArgument. Returns ErrorCode::GraphicsAPIError if the error happens on the graphics API side.
+     */
     ErrorCode BlitToSwapChain(const SwapChain& swap_chain, const FrameBuffer& src, const BlitFrameBufferDesc& desc);
 
 private:

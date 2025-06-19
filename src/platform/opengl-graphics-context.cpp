@@ -945,14 +945,19 @@ Rndr::ErrorCode Rndr::GraphicsContext::BlitToSwapChain(const SwapChain& swap_cha
     RNDR_CPU_EVENT_SCOPED("Blit To SwapChain");
     RNDR_GPU_EVENT_SCOPED("Blit To SwapChain");
 
+    if (!swap_chain.IsValid())
+    {
+        RNDR_LOG_ERROR("BlitToSwapChain: Failed, invalid swap chain!");
+        return ErrorCode::InvalidArgument;
+    }
     if (!src.IsValid())
     {
-        RNDR_LOG_ERROR("BlitFrameBuffer: Failed, source frame buffer is invalid!");
+        RNDR_LOG_ERROR("BlitToSwapChain: Failed, source frame buffer is invalid!");
         return ErrorCode::InvalidArgument;
     }
     if ((desc.should_copy_depth || desc.should_copy_stencil) && desc.interpolation != ImageFilter::Nearest)
     {
-        RNDR_LOG_ERROR("BlitFrameBuffer: Failed, depth and stencil attachments can only be copied with nearest interpolation!");
+        RNDR_LOG_ERROR("BlitToSwapChain: Failed, depth and stencil attachments can only be copied with nearest interpolation!");
         return ErrorCode::InvalidArgument;
     }
 
