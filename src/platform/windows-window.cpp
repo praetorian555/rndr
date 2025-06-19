@@ -68,6 +68,9 @@ Rndr::WindowsWindow::WindowsWindow(const GenericWindowDesc& desc, Opal::Allocato
     m_pos_y = desc.start_y;
     m_width = desc.width;
     m_height = desc.height;
+
+    ::SetActiveWindow(window_handle);
+
     RNDR_LOG_INFO("Window created successfully!");
 }
 

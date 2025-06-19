@@ -14,7 +14,7 @@
 Rndr::WindowsApplication* g_windows_app = nullptr;
 
 Rndr::WindowsApplication::WindowsApplication(SystemMessageHandler* message_handler, Opal::AllocatorBase* allocator)
-    : PlatformApplication(message_handler, allocator), m_deferred_messages(m_allocator)
+    : PlatformApplication(message_handler, allocator)
 {
     g_windows_app = this;
     // Helps to get physical pixel size of monitor and not the scaled version.
@@ -46,6 +46,21 @@ Rndr::i32 Rndr::WindowsApplication::ProcessMessage(HWND window_handle, UINT msg_
             const i32 width = LOWORD(param_l);
             const i32 height = HIWORD(param_l);
             m_message_handler->OnWindowSizeChanged(window_checked, width, height);
+            return 0;
+        }
+        case WM_ACTIVATE:
+        {
+            if (LOWORD(param_w) != WA_INACTIVE)
+            {
+                m_focused_window = &window_checked;
+            }
+            else
+            {
+                if (m_focused_window.GetPtr() == &window_checked)
+                {
+                    m_focused_window = nullptr;
+                }
+            }
             return 0;
         }
         case WM_SYSKEYDOWN:
@@ -245,6 +260,17 @@ void Rndr::WindowsApplication::ProcessSystemEvents()
             DispatchMessage(&msg);
         }
     }
+
+    if (m_cursor_pos_mode == CursorPositionMode::ResetToCenter && m_focused_window.IsValid())
+    {
+        RECT window_rect;
+        GetWindowRect( reinterpret_cast<HWND>(m_focused_window->GetNativeHandle()), &window_rect);
+        const int width = window_rect.right - window_rect.left;
+        const int height = window_rect.bottom - window_rect.top;
+        const int mid_x = window_rect.left + (width / 2);
+        const int mid_y = window_rect.top + (height / 2);
+        ::SetCursorPos(mid_x, mid_y);
+    }
 }
 void Rndr::WindowsApplication::EnableHighPrecisionCursorMode(bool enable, const GenericWindow& window)
 {
@@ -262,6 +288,40 @@ void Rndr::WindowsApplication::EnableHighPrecisionCursorMode(bool enable, const 
     raw_devices[0].dwFlags = RIDEV_INPUTSINK;
     raw_devices[0].hwndTarget = window_handle;
     RegisterRawInputDevices(raw_devices.GetData(), 1, sizeof(raw_devices[0]));
+}
+
+void Rndr::WindowsApplication::ShowCursor(bool show)
+{
+    ::ShowCursor(show ? TRUE : FALSE);
+}
+
+bool Rndr::WindowsApplication::IsCursorVisible() const
+{
+    CURSORINFO cursor_info;
+    GetCursorInfo(&cursor_info);
+    return (cursor_info.flags & CURSOR_SHOWING) != 0u;
+}
+
+void Rndr::WindowsApplication::SetCursorPosition(const Vector2i& pos)
+{
+    SetCursorPos(pos.x, pos.y);
+}
+
+Rndr::Vector2i Rndr::WindowsApplication::GetCursorPosition() const
+{
+    POINT cursor_pos;
+    GetCursorPos(&cursor_pos);
+    return {cursor_pos.x, cursor_pos.y};
+}
+
+void Rndr::WindowsApplication::SetCursorPositionMode(CursorPositionMode mode)
+{
+    m_cursor_pos_mode = mode;
+}
+
+Rndr::CursorPositionMode Rndr::WindowsApplication::GetCursorPositionMode() const
+{
+    return m_cursor_pos_mode;
 }
 
 Rndr::i32 Rndr::WindowsApplication::TranslateKey(i32 win_key, i32 desc)

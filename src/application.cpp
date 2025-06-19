@@ -112,6 +112,36 @@ void Rndr::Application::EnableHighPrecisionCursorMode(bool enable, GenericWindow
     m_platform_application->EnableHighPrecisionCursorMode(enable, window);
 }
 
+void Rndr::Application::ShowCursor(bool show)
+{
+    m_platform_application->ShowCursor(show);
+}
+
+bool Rndr::Application::IsCursorVisible() const
+{
+    return m_platform_application->IsCursorVisible();
+}
+
+void Rndr::Application::SetCursorPosition(const Vector2i& pos)
+{
+    m_platform_application->SetCursorPosition(pos);
+}
+
+Rndr::Vector2i Rndr::Application::GetCursorPosition() const
+{
+    return m_platform_application->GetCursorPosition();
+}
+
+void Rndr::Application::SetCursorPositionMode(CursorPositionMode mode)
+{
+    m_platform_application->SetCursorPositionMode(mode);
+}
+
+Rndr::CursorPositionMode Rndr::Application::GetCursorPositionMode() const
+{
+    return m_platform_application->GetCursorPositionMode();
+}
+
 void Rndr::Application::RegisterSystemMessageHandler(SystemMessageHandler* handler)
 {
     if (handler == nullptr)

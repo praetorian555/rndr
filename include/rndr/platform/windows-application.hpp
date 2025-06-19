@@ -30,16 +30,23 @@ public:
     i32 ProcessMessage(HWND window_handle, UINT msg_code, WPARAM param_w, LPARAM param_l);
 
     void ProcessSystemEvents() override;
+
     void EnableHighPrecisionCursorMode(bool enable, const GenericWindow& window) override;
+    void ShowCursor(bool show) override;
+    [[nodiscard]] bool IsCursorVisible() const override;
+    void SetCursorPosition(const Vector2i& pos) override;
+    [[nodiscard]] Vector2i GetCursorPosition() const override;
+    void SetCursorPositionMode(CursorPositionMode mode) override;
+    [[nodiscard]] CursorPositionMode GetCursorPositionMode() const override;
 
 private:
     i32 TranslateKey(i32 win_key, i32 desc);
     bool GetInputPrimitive(InputPrimitive& out_primitive, i32 virtual_key);
 
-    Opal::DynamicArray<WindowsDeferredMessage> m_deferred_messages;
+    CursorPositionMode m_cursor_pos_mode = CursorPositionMode::Normal;
 };
 
-} // Rndr
+}  // namespace Rndr
 
 namespace RndrPrivate
 {

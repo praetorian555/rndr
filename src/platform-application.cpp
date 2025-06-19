@@ -16,6 +16,7 @@ Rndr::GenericWindow* Rndr::PlatformApplication::CreateGenericWindow(const Generi
     {
         m_generic_windows.PushBack(window);
     }
+    m_focused_window = window;
     return window;
 }
 
