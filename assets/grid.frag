@@ -22,11 +22,11 @@ void main()
     out_color = vec4(0, 0, 0, 1.0f);
     if (uv.x > -draw_width.x && uv.x < draw_width.x)
     {
-        out_color.x = grid;
+        out_color.x = 1.0f;
     }
     else if (uv.y > -draw_width.y && uv.y < draw_width.y)
     {
-        out_color.z = grid;
+        out_color.z = 1.0f;
     }
     else
     {
