@@ -22,13 +22,15 @@ class FrameBuffer;
 class GraphicsContext
 {
 public:
-    explicit GraphicsContext(const GraphicsContextDesc& desc);
+    GraphicsContext() = default;
+    explicit GraphicsContext(const GraphicsContextDesc& desc = {});
     ~GraphicsContext();
     GraphicsContext(const GraphicsContext&) = delete;
     GraphicsContext& operator=(const GraphicsContext&) = delete;
     GraphicsContext(GraphicsContext&& other) noexcept;
     GraphicsContext& operator=(GraphicsContext&& other) noexcept;
 
+    ErrorCode Init(const GraphicsContextDesc& desc = {});
     void Destroy();
 
     [[nodiscard]] bool IsValid() const;

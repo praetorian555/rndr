@@ -17,6 +17,7 @@
 #include "rndr/platform/opengl-shader.h"
 #include "rndr/platform/opengl-swap-chain.h"
 #include "rndr/platform/opengl-texture.h"
+#include "rndr/return-macros.hpp"
 #include "rndr/trace.h"
 
 namespace
@@ -43,168 +44,9 @@ void APIENTRY DebugOutputCallback(GLenum source, GLenum type, unsigned int id, G
 }
 }  // namespace
 
-Rndr::GraphicsContext::GraphicsContext(const Rndr::GraphicsContextDesc& desc) : m_desc(desc)
+Rndr::GraphicsContext::GraphicsContext(const GraphicsContextDesc& desc)
 {
-    RNDR_CPU_EVENT_SCOPED("Create Graphics Context");
-
-#if RNDR_WINDOWS
-    if (m_desc.window_handle == nullptr)
-    {
-        RNDR_LOG_ERROR("Window handle is null!");
-        return;
-    }
-
-    m_native_device_context = GetDC(reinterpret_cast<HWND>(m_desc.window_handle));
-    if (m_native_device_context == nullptr)
-    {
-        RNDR_LOG_ERROR("Failed to get device context from a native window!");
-        return;
-    }
-
-    PIXELFORMATDESCRIPTOR pixel_format_desc;
-    memset(&pixel_format_desc, 0, sizeof(PIXELFORMATDESCRIPTOR));
-    pixel_format_desc.nSize = sizeof(PIXELFORMATDESCRIPTOR);
-    pixel_format_desc.nVersion = 1;
-    pixel_format_desc.dwFlags = PFD_DRAW_TO_WINDOW | PFD_SUPPORT_OPENGL | PFD_DOUBLEBUFFER;
-    pixel_format_desc.iPixelType = PFD_TYPE_RGBA;
-    pixel_format_desc.cColorBits = 32;
-    pixel_format_desc.cAlphaBits = 8;
-    pixel_format_desc.cDepthBits = 24;
-    pixel_format_desc.cStencilBits = 8;
-
-    const int pixel_format = ChoosePixelFormat(m_native_device_context, &pixel_format_desc);
-    if (pixel_format == 0)
-    {
-        RNDR_LOG_ERROR("Chosen pixel format does not exist!");
-        return;
-    }
-    BOOL status = SetPixelFormat(m_native_device_context, pixel_format, &pixel_format_desc);
-    if (status == 0)
-    {
-        RNDR_LOG_ERROR("Failed to set new pixel format to the device context!");
-        return;
-    }
-
-    HGLRC graphics_context = wglCreateContext(m_native_device_context);
-    if (graphics_context == nullptr)
-    {
-        RNDR_LOG_ERROR("Failed to create OpenGL graphics context!");
-        return;
-    }
-
-    status = wglMakeCurrent(m_native_device_context, graphics_context);
-    if (status == 0)
-    {
-        RNDR_LOG_ERROR("Failed to make OpenGL graphics context current!");
-        return;
-    }
-
-    status = gladLoadWGL(m_native_device_context);
-    if (status == 0)
-    {
-        RNDR_LOG_ERROR("Failed to load WGL functions!");
-        return;
-    }
-
-    int arb_flags = WGL_CONTEXT_FORWARD_COMPATIBLE_BIT_ARB;
-#if RNDR_DEBUG
-    if (m_desc.enable_debug_layer)
-    {
-        arb_flags |= WGL_CONTEXT_DEBUG_BIT_ARB;
-    }
-#endif
-    const Opal::InPlaceArray<int, 9> attribute_list = {
-        WGL_CONTEXT_MAJOR_VERSION_ARB,
-        4,
-        WGL_CONTEXT_MINOR_VERSION_ARB,
-        6,
-        WGL_CONTEXT_FLAGS_ARB,
-        arb_flags,
-        WGL_CONTEXT_PROFILE_MASK_ARB,
-        WGL_CONTEXT_CORE_PROFILE_BIT_ARB,
-        0  // End of the attribute list
-    };
-    HGLRC old_graphics_context = graphics_context;
-    graphics_context = wglCreateContextAttribsARB(m_native_device_context, graphics_context, attribute_list.GetData());
-    if (graphics_context == nullptr)
-    {
-        RNDR_LOG_ERROR("Failed to make OpenGL graphics context with attribute list!");
-        return;
-    }
-
-    status = wglMakeCurrent(m_native_device_context, graphics_context);
-    if (status == 0)
-    {
-        RNDR_LOG_ERROR("Failed to make OpenGL graphics context current!");
-        return;
-    }
-
-    status = wglDeleteContext(old_graphics_context);
-    if (status == 0)
-    {
-        RNDR_LOG_ERROR("Failed to delete temporary graphics context!");
-        return;
-    }
-
-    status = gladLoadGL();
-    if (status == 0)
-    {
-        RNDR_LOG_ERROR("Failed to load OpenGL functions!");
-        return;
-    }
-
-    m_native_graphics_context = graphics_context;
-
-    glEnable(GL_DEBUG_OUTPUT);
-    glEnable(GL_DEBUG_OUTPUT_SYNCHRONOUS);
-    glDebugMessageCallback(&DebugOutputCallback, nullptr);
-    glDebugMessageControl(GL_DONT_CARE, GL_DONT_CARE, GL_DONT_CARE, 0, nullptr, GL_TRUE);
-    RNDR_ASSERT_OPENGL();
-
-    // Check if the required extensions are supported by the hardware.
-    if (GLAD_GL_ARB_buffer_storage == 0)
-    {
-        RNDR_HALT("ARB_buffer_storage is not supported on this device, exiting!");
-    }
-    if (GLAD_GL_ARB_direct_state_access == 0)
-    {
-        RNDR_HALT("ARB_direct_state_access is not supported on this device, exiting!");
-    }
-    if (GLAD_GL_ARB_enhanced_layouts == 0)
-    {
-        RNDR_HALT("ARB_enhanced_layouts is not supported on this device, exiting!");
-    }
-    if (GLAD_GL_ARB_gl_spirv == 0)
-    {
-        RNDR_HALT("ARB_gl_spirv is not supported on this device, exiting!");
-    }
-    if (GLAD_GL_ARB_indirect_parameters == 0)
-    {
-        RNDR_HALT("ARB_indirect_parameters is not supported on this device, exiting!");
-    }
-    if (GLAD_GL_ARB_multi_draw_indirect == 0)
-    {
-        RNDR_HALT("ARB_multi_draw_indirect is not supported on this device, exiting!");
-    }
-    if (GLAD_GL_ARB_shader_draw_parameters == 0)
-    {
-        RNDR_HALT("ARB_shader_draw_parameters is not supported on this device, exiting!");
-    }
-    if (GLAD_GL_ARB_texture_storage == 0)
-    {
-        RNDR_HALT("ARB_texture_storage is not supported on this device, exiting!");
-    }
-    if (m_desc.enable_bindless_textures && GLAD_GL_ARB_gpu_shader_int64 == 0)
-    {
-        RNDR_HALT("ARB_gpu_shader_int64 is not supported on this device, exiting!");
-    }
-    if (m_desc.enable_bindless_textures && GLAD_GL_ARB_bindless_texture == 0)
-    {
-        RNDR_HALT("ARB_bindless_texture is not supported on this device, exiting!");
-    }
-#else
-    RNDR_ASSERT(false && "OS not supported!");
-#endif  // RNDR_WINDOWS
+    Init(desc);
 }
 
 Rndr::GraphicsContext::~GraphicsContext()
@@ -212,7 +54,7 @@ Rndr::GraphicsContext::~GraphicsContext()
     Destroy();
 }
 
-Rndr::GraphicsContext::GraphicsContext(Rndr::GraphicsContext&& other) noexcept
+Rndr::GraphicsContext::GraphicsContext(GraphicsContext&& other) noexcept
     : m_desc(other.m_desc),
       m_native_device_context(other.m_native_device_context),
       m_native_graphics_context(other.m_native_graphics_context),
@@ -235,6 +77,113 @@ Rndr::GraphicsContext& Rndr::GraphicsContext::operator=(Rndr::GraphicsContext&& 
         other.m_native_graphics_context = nullptr;
     }
     return *this;
+}
+
+Rndr::ErrorCode Rndr::GraphicsContext::Init(const GraphicsContextDesc& desc)
+{
+    RNDR_CPU_EVENT_SCOPED("GraphicsContext::Init");
+
+#if RNDR_WINDOWS
+    RNDR_RETURN_ON_FAIL(desc.window_handle != nullptr, ErrorCode::InvalidArgument, "Window handle is null!", RNDR_NOOP);
+
+    m_native_device_context = GetDC(RNDR_TO_HWND(desc.window_handle));
+    RNDR_RETURN_ON_FAIL(m_native_device_context != nullptr, ErrorCode::PlatformError, "Failed to get device context from a native window!",
+                        RNDR_NOOP);
+
+    PIXELFORMATDESCRIPTOR pixel_format_desc;
+    memset(&pixel_format_desc, 0, sizeof(PIXELFORMATDESCRIPTOR));
+    pixel_format_desc.nSize = sizeof(PIXELFORMATDESCRIPTOR);
+    pixel_format_desc.nVersion = 1;
+    pixel_format_desc.dwFlags = PFD_DRAW_TO_WINDOW | PFD_SUPPORT_OPENGL | PFD_DOUBLEBUFFER;
+    pixel_format_desc.iPixelType = PFD_TYPE_RGBA;
+    pixel_format_desc.cColorBits = 32;
+    pixel_format_desc.cAlphaBits = 8;
+    pixel_format_desc.cDepthBits = 24;
+    pixel_format_desc.cStencilBits = 8;
+
+    const int pixel_format = ChoosePixelFormat(m_native_device_context, &pixel_format_desc);
+    RNDR_RETURN_ON_FAIL(pixel_format != 0, ErrorCode::PlatformError, "Pixel format RGBA is not supported!", Destroy());
+
+    BOOL status = SetPixelFormat(m_native_device_context, pixel_format, &pixel_format_desc);
+    RNDR_RETURN_ON_FAIL(status != 0, ErrorCode::PlatformError, "Failed to set RGBA pixel format to the device context!", Destroy());
+
+    HGLRC graphics_context = wglCreateContext(m_native_device_context);
+    RNDR_RETURN_ON_FAIL(graphics_context != nullptr, ErrorCode::GraphicsAPIError, "Failed to create OpenGL graphics context!", Destroy());
+    m_native_graphics_context = graphics_context;
+
+    status = wglMakeCurrent(m_native_device_context, graphics_context);
+    RNDR_RETURN_ON_FAIL(status != 0, ErrorCode::GraphicsAPIError, "Failed to make OpenGL graphics context current!", Destroy());
+
+    status = gladLoadWGL(m_native_device_context);
+    RNDR_RETURN_ON_FAIL(status != 0, ErrorCode::PlatformError, "Failed to load WGL functions!", Destroy());
+
+    int arb_flags = WGL_CONTEXT_FORWARD_COMPATIBLE_BIT_ARB;
+#if RNDR_DEBUG
+    if (desc.enable_debug_layer)
+    {
+        arb_flags |= WGL_CONTEXT_DEBUG_BIT_ARB;
+    }
+#endif
+    const Opal::InPlaceArray<int, 9> attribute_list = {
+        WGL_CONTEXT_MAJOR_VERSION_ARB,
+        4,
+        WGL_CONTEXT_MINOR_VERSION_ARB,
+        6,
+        WGL_CONTEXT_FLAGS_ARB,
+        arb_flags,
+        WGL_CONTEXT_PROFILE_MASK_ARB,
+        WGL_CONTEXT_CORE_PROFILE_BIT_ARB,
+        0  // End of the attribute list
+    };
+
+    HGLRC old_graphics_context = graphics_context;
+    graphics_context = wglCreateContextAttribsARB(m_native_device_context, graphics_context, attribute_list.GetData());
+    RNDR_RETURN_ON_FAIL(graphics_context != nullptr, ErrorCode::GraphicsAPIError, "Failed to create graphics context for OpenGL 4.6!",
+                        Destroy());
+
+    status = wglMakeCurrent(m_native_device_context, graphics_context);
+    RNDR_RETURN_ON_FAIL(status != 0, ErrorCode::GraphicsAPIError, "Failed to make OpenGL graphics context current!", Destroy());
+
+    status = wglDeleteContext(old_graphics_context);
+    RNDR_RETURN_ON_FAIL(status != 0, ErrorCode::GraphicsAPIError, "Failed to delete temporary graphics context!", Destroy());
+
+    status = gladLoadGL();
+    RNDR_RETURN_ON_FAIL(status != 0, ErrorCode::PlatformError, "Failed to load OpenGL functions!", Destroy());
+
+    m_native_graphics_context = graphics_context;
+
+    glEnable(GL_DEBUG_OUTPUT);
+    glEnable(GL_DEBUG_OUTPUT_SYNCHRONOUS);
+    glDebugMessageCallback(&DebugOutputCallback, nullptr);
+    glDebugMessageControl(GL_DONT_CARE, GL_DONT_CARE, GL_DONT_CARE, 0, nullptr, GL_TRUE);
+    RNDR_ASSERT_OPENGL();
+
+    // Check if the hardware supports the required extensions.
+    RNDR_RETURN_ON_FAIL(GLAD_GL_ARB_buffer_storage != 0, ErrorCode::FeatureNotSupported, "ARB_buffer_storage is not supported!", Destroy());
+    RNDR_RETURN_ON_FAIL(GLAD_GL_ARB_direct_state_access != 0, ErrorCode::FeatureNotSupported, "ARB_direct_storage_access is not supported!",
+                        Destroy());
+    RNDR_RETURN_ON_FAIL(GLAD_GL_ARB_enhanced_layouts != 0, ErrorCode::FeatureNotSupported, "ARB_enhanced_layouts is not supported!",
+                        Destroy());
+    RNDR_RETURN_ON_FAIL(GLAD_GL_ARB_gl_spirv != 0, ErrorCode::FeatureNotSupported, "ARB_gl_spirv is not supported!", Destroy());
+    RNDR_RETURN_ON_FAIL(GLAD_GL_ARB_indirect_parameters != 0, ErrorCode::FeatureNotSupported, "ARB_indirect_parameters is not supported!",
+                        Destroy());
+    RNDR_RETURN_ON_FAIL(GLAD_GL_ARB_multi_draw_indirect != 0, ErrorCode::FeatureNotSupported, "ARB_multi_draw_indirect is not supported!",
+                        Destroy());
+    RNDR_RETURN_ON_FAIL(GLAD_GL_ARB_shader_draw_parameters != 0, ErrorCode::FeatureNotSupported,
+                        "ARB_shader_draw_parameters is not supported!", Destroy());
+    RNDR_RETURN_ON_FAIL(GLAD_GL_ARB_texture_storage != 0, ErrorCode::FeatureNotSupported, "ARB_texture_storage is not supported!",
+                        Destroy());
+    RNDR_RETURN_ON_FAIL(!desc.enable_bindless_textures || GLAD_GL_ARB_gpu_shader_int64 != 0, ErrorCode::FeatureNotSupported,
+                        "ARB_gpu_shader_int64 is not supported!", Destroy());
+    RNDR_RETURN_ON_FAIL(!desc.enable_bindless_textures || GLAD_GL_ARB_bindless_texture != 0, ErrorCode::FeatureNotSupported,
+                        "ARB_bindless_texture is not supported!", Destroy());
+
+    m_desc = desc;
+    return ErrorCode::Success;
+#else
+    RNDR_ASSERT(false, "Platform not supported");
+    return ErrorCode::PlatformError;
+#endif  // RNDR_WINDOWS
 }
 
 void Rndr::GraphicsContext::Destroy()
