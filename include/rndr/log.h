@@ -2,8 +2,8 @@
 
 #include "opal/source-location.h"
 
-#include "rndr/types.h"
 #include "rndr/application.hpp"
+#include "rndr/types.h"
 
 namespace Rndr
 {
@@ -50,14 +50,25 @@ void Log(Logger& logger, const Opal::SourceLocation& source_location, Rndr::LogL
 /**
  * Helper macros to log messages.
  */
-#define RNDR_LOG_ERROR(format, ...) Rndr::Log(Rndr::Application::GetChecked().GetLoggerChecked(), Opal::CurrentSourceLocation(), Rndr::LogLevel::Error, format, __VA_ARGS__)
-#define RNDR_LOG_WARNING(format, ...) Rndr::Log(Rndr::Application::GetChecked().GetLoggerChecked(), Opal::CurrentSourceLocation(), Rndr::LogLevel::Warning, format, __VA_ARGS__)
-#define RNDR_LOG_DEBUG(format, ...) Rndr::Log(Rndr::Application::GetChecked().GetLoggerChecked(), Opal::CurrentSourceLocation(), Rndr::LogLevel::Debug, format, __VA_ARGS__)
-#define RNDR_LOG_INFO(format, ...) Rndr::Log(Rndr::Application::GetChecked().GetLoggerChecked(), Opal::CurrentSourceLocation(), Rndr::LogLevel::Info, format, __VA_ARGS__)
-#define RNDR_LOG_TRACE(format, ...) Rndr::Log(Rndr::Application::GetChecked().GetLoggerChecked(), Opal::CurrentSourceLocation(), Rndr::LogLevel::Trace, format, __VA_ARGS__)
+#define RNDR_LOG_ERROR(format, ...) \
+    Rndr::Log(Rndr::Application::GetChecked().GetLoggerChecked(), Opal::CurrentSourceLocation(), Rndr::LogLevel::Error, format, __VA_ARGS__)
+#define RNDR_LOG_WARNING(format, ...)                                                                                             \
+    Rndr::Log(Rndr::Application::GetChecked().GetLoggerChecked(), Opal::CurrentSourceLocation(), Rndr::LogLevel::Warning, format, \
+              __VA_ARGS__)
+#define RNDR_LOG_DEBUG(format, ...) \
+    Rndr::Log(Rndr::Application::GetChecked().GetLoggerChecked(), Opal::CurrentSourceLocation(), Rndr::LogLevel::Debug, format, __VA_ARGS__)
+#define RNDR_LOG_INFO(format, ...) \
+    Rndr::Log(Rndr::Application::GetChecked().GetLoggerChecked(), Opal::CurrentSourceLocation(), Rndr::LogLevel::Info, format, __VA_ARGS__)
+#define RNDR_LOG_TRACE(format, ...) \
+    Rndr::Log(Rndr::Application::GetChecked().GetLoggerChecked(), Opal::CurrentSourceLocation(), Rndr::LogLevel::Trace, format, __VA_ARGS__)
 
-#define RNDR_CUSTOM_LOG_ERROR(logger_ptr, format, ...) Rndr::Log(*logger_ptr, Opal::CurrentSourceLocation(), Rndr::LogLevel::Error, format, __VA_ARGS__)
-#define RNDR_CUSTOM_LOG_WARNING(logger_ptr, format, ...) Rndr::Log(*logger_ptr, Opal::CurrentSourceLocation(), Rndr::LogLevel::Warning, format, __VA_ARGS__)
-#define RNDR_CUSTOM_LOG_DEBUG(logger_ptr, format, ...) Rndr::Log(*logger_ptr, Opal::CurrentSourceLocation(), Rndr::LogLevel::Debug, format, __VA_ARGS__)
-#define RNDR_CUSTOM_LOG_INFO(logger_ptr, format, ...) Rndr::Log(*logger_ptr, Opal::CurrentSourceLocation(), Rndr::LogLevel::Info, format, __VA_ARGS__)
-#define RNDR_CUSTOM_LOG_TRACE(logger_ptr, format, ...) Rndr::Log(*logger_ptr, Opal::CurrentSourceLocation(), Rndr::LogLevel::Trace, format, __VA_ARGS__)
+#define RNDR_CUSTOM_LOG_ERROR(logger_ptr, format, ...) \
+    Rndr::Log(*logger_ptr, Opal::CurrentSourceLocation(), Rndr::LogLevel::Error, format, __VA_ARGS__)
+#define RNDR_CUSTOM_LOG_WARNING(logger_ptr, format, ...) \
+    Rndr::Log(*logger_ptr, Opal::CurrentSourceLocation(), Rndr::LogLevel::Warning, format, __VA_ARGS__)
+#define RNDR_CUSTOM_LOG_DEBUG(logger_ptr, format, ...) \
+    Rndr::Log(*logger_ptr, Opal::CurrentSourceLocation(), Rndr::LogLevel::Debug, format, __VA_ARGS__)
+#define RNDR_CUSTOM_LOG_INFO(logger_ptr, format, ...) \
+    Rndr::Log(*logger_ptr, Opal::CurrentSourceLocation(), Rndr::LogLevel::Info, format, __VA_ARGS__)
+#define RNDR_CUSTOM_LOG_TRACE(logger_ptr, format, ...) \
+    Rndr::Log(*logger_ptr, Opal::CurrentSourceLocation(), Rndr::LogLevel::Trace, format, __VA_ARGS__)
