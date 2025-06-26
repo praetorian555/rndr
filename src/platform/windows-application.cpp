@@ -70,8 +70,8 @@ Rndr::i32 Rndr::WindowsApplication::ProcessMessage(HWND window_handle, UINT msg_
             InputPrimitive primitive = InputPrimitive::A;
             if (!GetInputPrimitive(primitive, virtual_key))
             {
-                RNDR_LOG_ERROR("Virtual key is not supported!");
-                return 0;
+                RNDR_LOG_ERROR("Virtual key 0x%X is not supported!", virtual_key);
+                return 1;
             }
             const bool is_repeated = (param_l & 0x40000000) != 0;
             m_message_handler->OnButtonDown(window_checked, primitive, is_repeated);
@@ -84,8 +84,8 @@ Rndr::i32 Rndr::WindowsApplication::ProcessMessage(HWND window_handle, UINT msg_
             InputPrimitive primitive = InputPrimitive::A;
             if (!GetInputPrimitive(primitive, virtual_key))
             {
-                RNDR_LOG_ERROR("Virtual key is not supported!");
-                return 0;
+                RNDR_LOG_ERROR("Virtual key 0x%X is not supported!", virtual_key);
+                return 1;
             }
             const bool is_repeated = (param_l & 0x40000000) == 0;
             m_message_handler->OnButtonUp(window_checked, primitive, is_repeated);
@@ -343,67 +343,54 @@ bool Rndr::WindowsApplication::GetInputPrimitive(InputPrimitive& out_primitive, 
 {
     if (virtual_key < VK_BACK || virtual_key > VK_OEM_102)
     {
-        RNDR_ASSERT(false, "Unsupported virtual key range");
         return false;
     }
     if (virtual_key == 0x0A || virtual_key == 0x0B || virtual_key == 0x0E || virtual_key == 0x0F)
     {
-        RNDR_ASSERT(false, "Unsupported virtual key");
         return false;
     }
     if (virtual_key >= 0x15 && virtual_key <= 0x1A)
     {
-        RNDR_ASSERT(false, "Unsupported virtual key range");
         return false;
     }
     if (virtual_key >= 0x1C && virtual_key <= 0x1F)
     {
-        RNDR_ASSERT(false, "Unsupported virtual key range");
         return false;
     }
     if (virtual_key >= 0x29 && virtual_key <= 0x2C)
     {
-        RNDR_ASSERT(false, "Unsupported virtual key range");
         return false;
     }
     if (virtual_key == 0x29)
     {
-        RNDR_ASSERT(false, "Unsupported virtual key");
         return false;
     }
     if (virtual_key >= 0x3A && virtual_key <= 0x40)
     {
-        RNDR_ASSERT(false, "Unsupported virtual key range");
         return false;
     }
     if (virtual_key >= 0x5D && virtual_key <= 0x5F)
     {
-        RNDR_ASSERT(false, "Unsupported virtual key range");
         return false;
     }
     if (virtual_key >= 0x88 && virtual_key <= 0x8F)
     {
-        RNDR_ASSERT(false, "Unsupported virtual key range");
         return false;
     }
     if (virtual_key >= 0x92 && virtual_key <= 0x9F)
     {
-        RNDR_ASSERT(false, "Unsupported virtual key range");
         return false;
     }
     if (virtual_key >= 0xA6 && virtual_key <= 0xB9)
     {
-        RNDR_ASSERT(false, "Unsupported virtual key range");
         return false;
     }
     if (virtual_key >= 0xC1 && virtual_key <= 0xDA)
     {
-        RNDR_ASSERT(false, "Unsupported virtual key range");
         return false;
     }
     if (virtual_key == 0xDF || virtual_key == 0xE0 || virtual_key == 0xE1)
     {
-        RNDR_ASSERT(false, "Unsupported virtual key range");
         return false;
     }
     out_primitive = static_cast<InputPrimitive>(virtual_key);
