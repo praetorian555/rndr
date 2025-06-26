@@ -25,6 +25,8 @@ using LRESULT = __int64;
 
 #endif  // _WINDEF_
 
+#define RNDR_TO_HWND(x) (reinterpret_cast<HWND>(x))
+
 namespace Rndr
 {
 
