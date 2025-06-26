@@ -7,8 +7,6 @@
 
 #include "rndr/log.h"
 
-#define RNDR_TO_HWND(handle) reinterpret_cast<HWND>(handle)
-
 Rndr::WindowsWindow::WindowsWindow(const GenericWindowDesc& desc, Opal::AllocatorBase* allocator) : GenericWindow(desc, allocator)
 {
     if (desc.width == 0 || desc.height == 0)
