@@ -82,9 +82,9 @@ Rndr::ErrorCode Rndr::Shader::Initialize(const Rndr::GraphicsContext& graphics_c
 
     const char8* final_shader_code_c_str = reinterpret_cast<const char8*>(final_shader_code.GetData());
     glShaderSource(m_native_shader, 1, &final_shader_code_c_str, nullptr);
-    RNDR_GL_VERIFY("Failed to set shader source!", Destroy());
+    RNDR_GL_RETURN_ON_ERROR("Failed to set shader source!", Destroy());
     glCompileShader(m_native_shader);
-    RNDR_GL_VERIFY("Failed to compile shader source!", Destroy());
+    RNDR_GL_RETURN_ON_ERROR("Failed to compile shader source!", Destroy());
     GLint is_compiled = 0;
     glGetShaderiv(m_native_shader, GL_COMPILE_STATUS, &is_compiled);
     if (is_compiled == GL_FALSE)

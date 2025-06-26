@@ -47,32 +47,32 @@ public:
     /**
      * Clears the color image in the bound frame buffer.
      * @param color The color to clear the image to.
-     * @return Returns true if the image was cleared successfully, false otherwise.
+     * @return Returns ErrorCode::Success if the color buffer has been cleared, ErrorCode::GraphicsAPIError otherwise.
      */
-    bool ClearColor(const Vector4f& color);
+    ErrorCode ClearColor(const Vector4f& color);
 
     /**
      * Clears the depth image in the bound frame buffer.
      * @param depth The depth value to clear the image to.
-     * @return Returns true if the image was cleared successfully, false otherwise.
+     * @return Returns ErrorCode::Success if the depth buffer has been cleared, ErrorCode::GraphicsAPIError otherwise.
      */
-    bool ClearDepth(float depth);
+    ErrorCode ClearDepth(float depth);
 
     /**
      * Clears the stencil image in the bound frame buffer.
      * @param stencil The stencil value to clear the image to.
-     * @return Returns true if the image was cleared successfully, false otherwise.
+     * @return Returns ErrorCode::Success if the stencil buffer has been cleared, ErrorCode::GraphicsAPIError otherwise.
      */
-    bool ClearStencil(i32 stencil);
+    ErrorCode ClearStencil(i32 stencil);
 
     /**
      * Clears the color and depth images in the bound frame buffer.
      * @param color Color to clear the color image to.
      * @param depth Depth value to clear the depth image to. Default is 1.
      * @param stencil Stencil value to clear the stencil image to. Default is 0.
-     * @return Returns true if the images were cleared successfully, false otherwise.
+     * @return Returns ErrorCode::Success if the color, depth and stencil buffers have been cleared, ErrorCode::GraphicsAPIError otherwise.
      */
-    bool ClearAll(const Vector4f& color, float depth = 1.0f, i32 stencil = 0);
+    ErrorCode ClearAll(const Vector4f& color, float depth = 1.0f, i32 stencil = 0);
 
     /**
      * Binds a pipeline object to the graphics pipeline.
@@ -92,8 +92,8 @@ public:
     ErrorCode BindBuffer(const Buffer& buffer, i32 binding_index);
 
     /**
-     * Binds an texture to the graphics pipeline.
-     * @param texture The texture to bind.
+     * Binds a texture to the graphics pipeline.
+     * @param image The texture to bind.
      * @param binding_index The binding index to bind the texture to.
      * @return Returns ErrorCode::Success if the texture was bound successfully. Returns ErrorCode::InvalidArgument if the texture is not
      * valid. Returns ErrorCode::GraphicsAPIError if OpenGL failed to bind the texture.
@@ -153,7 +153,7 @@ public:
      * @param block_count_x Number of blocks in the x dimension.
      * @param block_count_y Number of blocks in the y dimension.
      * @param block_count_z Number of blocks in the z dimension.
-     * @param wait_for_completion Whether or not to wait for the compute shader to finish executing before returning. Default is true.
+     * @param wait_for_completion Whether to wait for the compute shader to finish executing before returning. Default is true.
      * @return Returns true if the dispatch was successful, false otherwise.
      */
     bool DispatchCompute(u32 block_count_x, u32 block_count_y, u32 block_count_z, bool wait_for_completion = true);

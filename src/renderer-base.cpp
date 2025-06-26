@@ -17,7 +17,7 @@ bool Rndr::ClearRenderer::Render()
 {
     RNDR_CPU_EVENT_SCOPED("ClearRenderer::Render");
     RNDR_GPU_EVENT_SCOPED("ClearRenderer::Render");
-    return m_desc.graphics_context->ClearAll(m_color, m_depth, m_stencil);
+    return m_desc.graphics_context->ClearAll(m_color, m_depth, m_stencil) == ErrorCode::Success;
 }
 
 Rndr::PresentRenderer::PresentRenderer(const Opal::StringUtf8& name, const Rndr::RendererBaseDesc& desc) : RendererBase(name, desc) {}
