@@ -463,6 +463,23 @@ Rndr::ErrorCode Rndr::WindowsWindow::GetPositionAndSize(i32& pos_x, i32& pos_y, 
     return ErrorCode::Success;
 }
 
+Opal::Expected<Rndr::Vector2i, Rndr::ErrorCode> Rndr::WindowsWindow::GetSize() const
+{
+    if (m_is_closed)
+    {
+        return Opal::Expected<Vector2i, ErrorCode>(ErrorCode::WindowAlreadyClosed);
+    }
+    // We use the size of the client area only
+    RECT window_rect = {};
+    BOOL rtn = ::GetClientRect(RNDR_TO_HWND(m_native_window_handle), &window_rect);
+    if (rtn == 0)
+    {
+        return Opal::Expected<Vector2i, ErrorCode>(ErrorCode::PlatformError);
+    }
+    Vector2i size(window_rect.right - window_rect.left, window_rect.bottom - window_rect.top);
+    return Opal::Expected<Vector2i, ErrorCode>(size);
+}
+
 Rndr::GenericWindowMode Rndr::WindowsWindow::GetMode() const
 {
     return m_mode;

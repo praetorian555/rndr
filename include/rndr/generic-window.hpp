@@ -3,6 +3,7 @@
 #include "opal/container/string.h"
 
 #include "rndr/error-codes.h"
+#include "rndr/math.h"
 #include "rndr/types.h"
 
 namespace Opal
@@ -79,6 +80,7 @@ public:
     [[nodiscard]] virtual bool IsMouseHovering() const = 0;
 
     virtual ErrorCode GetPositionAndSize(i32& pos_x, i32& pos_y, i32& width, i32& height) const = 0;
+    virtual Opal::Expected<Vector2i, ErrorCode> GetSize() const = 0;
     [[nodiscard]] virtual GenericWindowMode GetMode() const = 0;
     [[nodiscard]] virtual NativeWindowHandle GetNativeHandle() const = 0;
 
@@ -89,4 +91,4 @@ protected:
     Opal::AllocatorBase* m_allocator;
 };
 
-} // namespace Rndr
+}  // namespace Rndr

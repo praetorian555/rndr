@@ -45,6 +45,7 @@ public:
     [[nodiscard]] bool IsMouseHovering() const override;
 
     ErrorCode GetPositionAndSize(i32& pos_x, i32& pos_y, i32& width, i32& height) const override;
+    Opal::Expected<Vector2i, ErrorCode> GetSize() const override;
     [[nodiscard]] GenericWindowMode GetMode() const override;
     [[nodiscard]] NativeWindowHandle GetNativeHandle() const override;
 
