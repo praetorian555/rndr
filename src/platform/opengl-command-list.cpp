@@ -186,6 +186,13 @@ void Rndr::CommandList::DrawIndicesMulti(const Rndr::Pipeline& pipeline, Rndr::P
     m_commands.PushBack(DrawIndicesMultiCommand(topology, buffer_handle, static_cast<uint32_t>(draws.GetSize())));
 }
 
+bool Rndr::CommandList::DispatchCompute(uint32_t block_count_x, uint32_t block_count_y, uint32_t block_count_z, bool wait_for_completion)
+{
+    m_commands.PushBack(DispatchComputeCommand{
+        .block_count_x = block_count_x, .block_count_y = block_count_y, .block_count_z = block_count_z, .wait_for_completion = wait_for_completion});
+    return true;
+}
+
 bool Rndr::CommandList::UpdateBuffer(const Rndr::Buffer& buffer, const Opal::ArrayView<const u8>& data, Rndr::i32 offset)
 {
     m_commands.PushBack(UpdateBufferCommand{.buffer = Opal::Ref<const Buffer>(buffer), .data = data, .offset = offset});
@@ -258,9 +265,14 @@ struct CommandExecutor
     {
         graphics_context->UpdateBuffer(command.buffer, command.data, command.offset);
     }
+
+    void operator()(const Rndr::DispatchComputeCommand& command) const
+    {
+        graphics_context->DispatchCompute(command.block_count_x, command.block_count_y, command.block_count_z, command.wait_for_completion);
+    }
 };
 
-void Rndr::CommandList::Submit()
+void Rndr::CommandList::Execute()
 {
     RNDR_CPU_EVENT_SCOPED("Submit Command List");
 

@@ -134,10 +134,18 @@ struct DrawIndicesMultiCommand
     DrawIndicesMultiCommand& operator=(DrawIndicesMultiCommand&& other) noexcept;
 };
 
-using Command =
-    std::variant<PresentCommand, ClearColorCommand, ClearDepthCommand, ClearStencilCommand, ClearAllCommand, BindSwapChainCommand,
-                 BindPipelineCommand, BindBufferCommand, BindTextureCommand, BindTextureForComputeCommand, BindFrameBufferCommand,
-                 DrawVerticesCommand, DrawIndicesCommand, DrawVerticesMultiCommand, DrawIndicesMultiCommand, UpdateBufferCommand>;
+struct DispatchComputeCommand
+{
+    uint32_t block_count_x;
+    uint32_t block_count_y;
+    uint32_t block_count_z;
+    bool wait_for_completion;
+};
+
+using Command = std::variant<PresentCommand, ClearColorCommand, ClearDepthCommand, ClearStencilCommand, ClearAllCommand,
+                             BindSwapChainCommand, BindPipelineCommand, BindBufferCommand, BindTextureCommand, BindTextureForComputeCommand,
+                             BindFrameBufferCommand, DrawVerticesCommand, DrawIndicesCommand, DrawVerticesMultiCommand,
+                             DrawIndicesMultiCommand, DispatchComputeCommand, UpdateBufferCommand>;
 
 /**
  * Represents a list of commands to be executed on the GPU.
@@ -284,7 +292,7 @@ public:
      * @param block_count_x Number of blocks in the x dimension.
      * @param block_count_y Number of blocks in the y dimension.
      * @param block_count_z Number of blocks in the z dimension.
-     * @param wait_for_completion Whether or not to wait for the compute shader to finish executing before returning. Default is true.
+     * @param wait_for_completion Whether to wait for the compute shader to finish executing before returning. Default is true.
      * @return Returns true if the dispatch was successful, false otherwise.
      */
     bool DispatchCompute(uint32_t block_count_x, uint32_t block_count_y, uint32_t block_count_z, bool wait_for_completion = true);
@@ -292,7 +300,7 @@ public:
     /**
      * Submits the command list to the GPU.
      */
-    void Submit();
+    void Execute();
 
 private:
     Opal::Ref<GraphicsContext> m_graphics_context;
