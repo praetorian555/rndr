@@ -171,64 +171,25 @@ int main()
                 RecreateFrameBuffer(gc, rendering_resolution_options[resolution_index].x, rendering_resolution_options[resolution_index].y);
         }
 
-        gc.BindSwapChainFrameBuffer(swap_chain);
-        gc.ClearAll(Rndr::Colors::k_black);
+        Rndr::CommandList cmd_list{gc};
 
-        gc.BindFrameBuffer(final_render);
-        gc.ClearAll(Rndr::Colors::k_black);
+        cmd_list.CmdBindFrameBuffer(final_render);
+        cmd_list.CmdClearAll(Rndr::Colors::k_black);
 
         Uniforms uniforms;
         uniforms.view = Opal::Transpose(controller.GetViewTransform());
         uniforms.projection = Opal::Transpose(controller.GetProjectionTransform());
-        gc.BindBuffer(uniform_buffer, 0);
-        gc.UpdateBuffer(uniform_buffer, Opal::AsBytes(uniforms));
+        cmd_list.CmdBindBuffer(uniform_buffer, 0);
+        cmd_list.CmdUpdateBuffer(uniform_buffer, Opal::AsBytes(uniforms));
 
-        check_change_time += delta_seconds;
-        if (check_change_time >= 1.0f)
-        {
-            check_change_time = 0.0f;
-            const Rndr::f64 vertex_modified_time = Opal::GetLastFileModifiedTimeInSeconds(vertex_shader_path);
-            const Rndr::f64 frag_modified_time = Opal::GetLastFileModifiedTimeInSeconds(frag_shader_path);
-            const bool did_vertex_shader_change = vertex_modified_time != vertex_shader_last_modified_time;
-            const bool did_pixel_shader_change = frag_modified_time != frag_shader_last_modified_time;
-            vertex_shader_last_modified_time = vertex_modified_time;
-            frag_shader_last_modified_time = frag_modified_time;
-            if (did_vertex_shader_change)
-            {
-                const Opal::StringUtf8 new_vertex_shader_source = Rndr::File::ReadShader(RNDR_CORE_ASSETS_DIR, "grid.vert");
-                const Rndr::ShaderDesc new_vertex_shader_desc{.type = Rndr::ShaderType::Vertex, .source = new_vertex_shader_source};
-                Rndr::Shader new_shader(gc, new_vertex_shader_desc);
-                if (new_shader.IsValid())
-                {
-                    vertex_shader = Opal::Move(new_shader);
-                }
-            }
-            if (did_pixel_shader_change)
-            {
-                const Opal::StringUtf8 new_frag_shader_source = Rndr::File::ReadShader(RNDR_CORE_ASSETS_DIR, "grid.frag");
-                const Rndr::ShaderDesc new_frag_shader_desc{.type = Rndr::ShaderType::Fragment, .source = new_frag_shader_source};
-                Rndr::Shader new_shader(gc, new_frag_shader_desc);
-                if (new_shader.IsValid())
-                {
-                    fragment_shader = Opal::Move(new_shader);
-                }
-            }
-            if ((did_vertex_shader_change || did_pixel_shader_change) && vertex_shader.IsValid() && fragment_shader.IsValid())
-            {
-                const Rndr::PipelineDesc desc{.vertex_shader = &vertex_shader, .pixel_shader = &fragment_shader};
-                pipeline = Rndr::Pipeline(gc, desc);
-            }
-        }
-
-        if (pipeline.IsValid())
-        {
-            gc.BindPipeline(pipeline);
-            gc.DrawVertices(Rndr::PrimitiveTopology::Triangle, 6);
-        }
+        cmd_list.CmdBindPipeline(pipeline);
+        cmd_list.CmdDrawVertices(Rndr::PrimitiveTopology::Triangle, 6);
 
         const Rndr::BlitFrameBufferDesc blit_desc;
-        gc.BlitToSwapChain(swap_chain, final_render, blit_desc);
-        gc.BindSwapChainFrameBuffer(swap_chain);
+        cmd_list.CmdBlitToSwapChain(swap_chain, final_render, blit_desc);
+        cmd_list.CmdBindSwapChainFrameBuffer(swap_chain);
+
+        gc.SubmitCommandList(cmd_list);
 
         imgui_context.StartFrame();
         ImGui::Begin("Stats", &stats_window);
