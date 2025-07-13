@@ -69,81 +69,81 @@ Rndr::DrawIndicesMultiCommand& Rndr::DrawIndicesMultiCommand::operator=(Rndr::Dr
 
 Rndr::CommandList::CommandList(Rndr::GraphicsContext& graphics_context) : m_graphics_context(graphics_context) {}
 
-bool Rndr::CommandList::Present(const SwapChain& swap_chain)
+bool Rndr::CommandList::CmdPresent(const SwapChain& swap_chain)
 {
     m_commands.PushBack(PresentCommand{.swap_chain = Opal::Ref<const SwapChain>(swap_chain)});
     return true;
 }
 
-bool Rndr::CommandList::ClearColor(const Vector4f& color)
+bool Rndr::CommandList::CmdClearColor(const Vector4f& color)
 {
     m_commands.PushBack(ClearColorCommand{.color = color});
     return true;
 }
 
-bool Rndr::CommandList::ClearDepth(float depth)
+bool Rndr::CommandList::CmdClearDepth(float depth)
 {
     m_commands.PushBack(ClearDepthCommand{.depth = depth});
     return true;
 }
 
-bool Rndr::CommandList::ClearStencil(int32_t stencil)
+bool Rndr::CommandList::CmdClearStencil(int32_t stencil)
 {
     m_commands.PushBack(ClearStencilCommand{.stencil = stencil});
     return true;
 }
 
-bool Rndr::CommandList::ClearAll(const Rndr::Vector4f& color, float depth, int32_t stencil)
+bool Rndr::CommandList::CmdClearAll(const Rndr::Vector4f& color, float depth, int32_t stencil)
 {
     m_commands.PushBack(ClearAllCommand{.color = color, .depth = depth, .stencil = stencil});
     return true;
 }
 
-void Rndr::CommandList::BindSwapChainFrameBuffer(const Rndr::SwapChain& swap_chain)
+void Rndr::CommandList::CmdBindSwapChainFrameBuffer(const Rndr::SwapChain& swap_chain)
 {
     m_commands.PushBack(BindSwapChainCommand{.swap_chain = Opal::Ref<const SwapChain>(swap_chain)});
 }
 
-void Rndr::CommandList::BindFrameBuffer(const class Rndr::FrameBuffer& frame_buffer)
+void Rndr::CommandList::CmdBindFrameBuffer(const class Rndr::FrameBuffer& frame_buffer)
 {
     m_commands.PushBack(BindFrameBufferCommand{.frame_buffer = Opal::Ref<const FrameBuffer>(frame_buffer)});
 }
 
-void Rndr::CommandList::BindPipeline(const Rndr::Pipeline& pipeline)
+void Rndr::CommandList::CmdBindPipeline(const Rndr::Pipeline& pipeline)
 {
     m_commands.PushBack(BindPipelineCommand{.pipeline = Opal::Ref<const Pipeline>(pipeline)});
 }
 
-void Rndr::CommandList::BindBuffer(const Rndr::Buffer& buffer, int32_t binding_index)
+void Rndr::CommandList::CmdBindBuffer(const Rndr::Buffer& buffer, int32_t binding_index)
 {
     m_commands.PushBack(BindBufferCommand{.buffer = Opal::Ref<const Buffer>(buffer), .binding_index = binding_index});
 }
 
-void Rndr::CommandList::BindTexture(const Rndr::Texture& texture, int32_t binding_index)
+void Rndr::CommandList::CmdBindTexture(const Rndr::Texture& texture, int32_t binding_index)
 {
     m_commands.PushBack(BindTextureCommand{.texture = Opal::Ref<const Texture>(texture), .binding_index = binding_index});
 }
 
-void Rndr::CommandList::BindTextureForCompute(const Rndr::Texture& texture, int32_t binding_index, int32_t texture_level,
+void Rndr::CommandList::CmdBindTextureForCompute(const Rndr::Texture& texture, int32_t binding_index, int32_t texture_level,
                                               Rndr::TextureAccess access)
 {
     m_commands.PushBack(BindTextureForComputeCommand{
         .texture = Opal::Ref<const Texture>(texture), .binding_index = binding_index, .texture_level = texture_level, .access = access});
 }
 
-void Rndr::CommandList::DrawVertices(Rndr::PrimitiveTopology topology, int32_t vertex_count, int32_t instance_count, int32_t first_vertex)
+void Rndr::CommandList::CmdDrawVertices(Rndr::PrimitiveTopology topology, int32_t vertex_count, int32_t instance_count, int32_t first_vertex)
 {
     m_commands.PushBack(DrawVerticesCommand{
         .primitive_topology = topology, .vertex_count = vertex_count, .instance_count = instance_count, .first_vertex = first_vertex});
 }
 
-void Rndr::CommandList::DrawIndices(Rndr::PrimitiveTopology topology, int32_t index_count, int32_t instance_count, int32_t first_index)
+void Rndr::CommandList::CmdDrawIndices(Rndr::PrimitiveTopology topology, int32_t index_count, int32_t instance_count, int32_t first_index)
 {
     m_commands.PushBack(DrawIndicesCommand{
         .primitive_topology = topology, .index_count = index_count, .instance_count = instance_count, .first_index = first_index});
 }
 
-void Rndr::CommandList::DrawVerticesMulti(const Rndr::Pipeline& pipeline, Rndr::PrimitiveTopology topology,
+void Rndr::CommandList::CmdDrawVerticesMulti(const Rndr::Pipeline& pipeline, Rndr::PrimitiveTopology topology,
                                           const Opal::ArrayView<Rndr::DrawVerticesData>& draws)
 {
     static_assert(sizeof(DrawVerticesData::vertex_count) == 4);
@@ -158,11 +158,11 @@ void Rndr::CommandList::DrawVerticesMulti(const Rndr::Pipeline& pipeline, Rndr::
     glNamedBufferStorage(buffer_handle, draws.GetSize() * sizeof(DrawVerticesData), draws.GetData(), GL_DYNAMIC_STORAGE_BIT);
     RNDR_ASSERT_OPENGL();
 
-    BindPipeline(pipeline);
+    CmdBindPipeline(pipeline);
     m_commands.PushBack(DrawVerticesMultiCommand(topology, buffer_handle, static_cast<uint32_t>(draws.GetSize())));
 }
 
-void Rndr::CommandList::DrawIndicesMulti(const Rndr::Pipeline& pipeline, Rndr::PrimitiveTopology topology,
+void Rndr::CommandList::CmdDrawIndicesMulti(const Rndr::Pipeline& pipeline, Rndr::PrimitiveTopology topology,
                                          const Opal::ArrayView<Rndr::DrawIndicesData>& draws)
 {
     static_assert(sizeof(DrawIndicesData::index_count) == 4);
@@ -182,18 +182,18 @@ void Rndr::CommandList::DrawIndicesMulti(const Rndr::Pipeline& pipeline, Rndr::P
     glBindBuffer(GL_DRAW_INDIRECT_BUFFER, buffer_handle);
     RNDR_ASSERT_OPENGL();
 
-    BindPipeline(pipeline);
+    CmdBindPipeline(pipeline);
     m_commands.PushBack(DrawIndicesMultiCommand(topology, buffer_handle, static_cast<uint32_t>(draws.GetSize())));
 }
 
-bool Rndr::CommandList::DispatchCompute(uint32_t block_count_x, uint32_t block_count_y, uint32_t block_count_z, bool wait_for_completion)
+bool Rndr::CommandList::CmdDispatchCompute(uint32_t block_count_x, uint32_t block_count_y, uint32_t block_count_z, bool wait_for_completion)
 {
     m_commands.PushBack(DispatchComputeCommand{
         .block_count_x = block_count_x, .block_count_y = block_count_y, .block_count_z = block_count_z, .wait_for_completion = wait_for_completion});
     return true;
 }
 
-bool Rndr::CommandList::UpdateBuffer(const Rndr::Buffer& buffer, const Opal::ArrayView<const u8>& data, Rndr::i32 offset)
+bool Rndr::CommandList::CmdUpdateBuffer(const Rndr::Buffer& buffer, const Opal::ArrayView<const u8>& data, Rndr::i32 offset)
 {
     m_commands.PushBack(UpdateBufferCommand{.buffer = Opal::Ref<const Buffer>(buffer), .data = data, .offset = offset});
     return true;
@@ -280,4 +280,9 @@ void Rndr::CommandList::Execute()
     {
         std::visit(CommandExecutor{m_graphics_context}, command);
     }
+}
+
+void Rndr::CommandList::Reset()
+{
+    m_commands.Clear();
 }

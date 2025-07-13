@@ -167,28 +167,28 @@ public:
      * @param swap_chain The swap chain to present.
      * @return Returns true if the swap chain was presented successfully, false otherwise.
      */
-    bool Present(const SwapChain& swap_chain);
+    bool CmdPresent(const SwapChain& swap_chain);
 
     /**
      * Clears the color texture in the bound frame buffer.
      * @param color The color to clear the texture to.
      * @return Returns true if the texture was cleared successfully, false otherwise.
      */
-    bool ClearColor(const Vector4f& color);
+    bool CmdClearColor(const Vector4f& color);
 
     /**
      * Clears the depth texture in the bound frame buffer.
      * @param depth The depth value to clear the texture to.
      * @return Returns true if the texture was cleared successfully, false otherwise.
      */
-    bool ClearDepth(float depth);
+    bool CmdClearDepth(float depth);
 
     /**
      * Clears the stencil texture in the bound frame buffer.
      * @param stencil The stencil value to clear the texture to.
      * @return Returns true if the texture was cleared successfully, false otherwise.
      */
-    bool ClearStencil(int32_t stencil);
+    bool CmdClearStencil(int32_t stencil);
 
     /**
      * Clears the color and depth textures in the bound frame buffer.
@@ -197,27 +197,27 @@ public:
      * @param stencil Stencil value to clear the stencil texture to. Default is 0.
      * @return Returns true if the textures were cleared successfully, false otherwise.
      */
-    bool ClearAll(const Vector4f& color, float depth = 1.0f, int32_t stencil = 0);
+    bool CmdClearAll(const Vector4f& color, float depth = 1.0f, int32_t stencil = 0);
 
     /**
      * Binds a pipeline object to the graphics pipeline.
      * @param pipeline The pipeline to bind.
      */
-    void BindPipeline(const Pipeline& pipeline);
+    void CmdBindPipeline(const Pipeline& pipeline);
 
     /**
      * Binds a constant buffer to the graphics pipeline on a specified slot.
      * @param buffer The constant buffer to bind.
      * @param binding_index The binding index to bind the buffer to.
      */
-    void BindBuffer(const Buffer& buffer, int32_t binding_index);
+    void CmdBindBuffer(const Buffer& buffer, int32_t binding_index);
 
     /**
      * Binds an texture to the graphics pipeline.
      * @param texture The texture to bind.
      * @param binding_index The binding index to bind the texture to.
      */
-    void BindTexture(const Texture& texture, int32_t binding_index);
+    void CmdBindTexture(const Texture& texture, int32_t binding_index);
 
     /**
      * Binds one level of the texture to the compute pipeline.
@@ -226,20 +226,20 @@ public:
      * @param texture_level The texture level to bind.
      * @param access How the texture will be accessed in the compute shader.
      */
-    void BindTextureForCompute(const Texture& texture, int32_t binding_index, int32_t texture_level, TextureAccess access);
+    void CmdBindTextureForCompute(const Texture& texture, int32_t binding_index, int32_t texture_level, TextureAccess access);
 
     /**
      * Binds a buffer to the graphics pipeline.
      * @param frame_buffer The frame buffer to bind.
      */
-    void BindFrameBuffer(const class FrameBuffer& frame_buffer);
+    void CmdBindFrameBuffer(const class FrameBuffer& frame_buffer);
 
     /**
      * Binds a swap chain to the graphics pipeline.
      * @param swap_chain The swap chain to bind.
      * @return Returns true if the swap chain was bound successfully, false otherwise.
      */
-    void BindSwapChainFrameBuffer(const SwapChain& swap_chain);
+    void CmdBindSwapChainFrameBuffer(const SwapChain& swap_chain);
 
     /**
      * Updates the contents of a buffer.
@@ -248,7 +248,7 @@ public:
      * @param offset The offset into the buffer to update.
      * @return Returns true if the buffer was updated successfully, false otherwise.
      */
-    bool UpdateBuffer(const Buffer& buffer, const Opal::ArrayView<const u8>& data, i32 offset = 0);
+    bool CmdUpdateBuffer(const Buffer& buffer, const Opal::ArrayView<const u8>& data, i32 offset = 0);
 
     /**
      * Draws primitives without use of index buffer. It will behave as if indices were specified
@@ -259,7 +259,7 @@ public:
      * @param first_vertex The index of the first vertex to draw. By default this is 0.
      * @return Returns true if the draw call was successful, false otherwise.
      */
-    void DrawVertices(PrimitiveTopology topology, int32_t vertex_count, int32_t instance_count = 1, int32_t first_vertex = 0);
+    void CmdDrawVertices(PrimitiveTopology topology, int32_t vertex_count, int32_t instance_count = 1, int32_t first_vertex = 0);
 
     /**
      * Draws primitives using an index buffer.
@@ -269,7 +269,7 @@ public:
      * @param first_index The index of the first index to draw. By default this is 0.
      * @return Returns true if the draw call was successful, false otherwise.
      */
-    void DrawIndices(PrimitiveTopology topology, int32_t index_count, int32_t instance_count = 1, int32_t first_index = 0);
+    void CmdDrawIndices(PrimitiveTopology topology, int32_t index_count, int32_t instance_count = 1, int32_t first_index = 0);
 
     /**
      * Issue multiple draw vertices calls.
@@ -277,7 +277,7 @@ public:
      * @param topology The primitive topology to draw.
      * @param draws The draw vertices data.
      */
-    void DrawVerticesMulti(const Pipeline& pipeline, PrimitiveTopology topology, const Opal::ArrayView<DrawVerticesData>& draws);
+    void CmdDrawVerticesMulti(const Pipeline& pipeline, PrimitiveTopology topology, const Opal::ArrayView<DrawVerticesData>& draws);
 
     /**
      * Issue multiple draw indices calls.
@@ -285,7 +285,7 @@ public:
      * @param topology The primitive topology to draw.
      * @param draws The draw indices data.
      */
-    void DrawIndicesMulti(const Pipeline& pipeline, PrimitiveTopology topology, const Opal::ArrayView<DrawIndicesData>& draws);
+    void CmdDrawIndicesMulti(const Pipeline& pipeline, PrimitiveTopology topology, const Opal::ArrayView<DrawIndicesData>& draws);
 
     /**
      * Dispatches a compute shader.
@@ -295,12 +295,17 @@ public:
      * @param wait_for_completion Whether to wait for the compute shader to finish executing before returning. Default is true.
      * @return Returns true if the dispatch was successful, false otherwise.
      */
-    bool DispatchCompute(uint32_t block_count_x, uint32_t block_count_y, uint32_t block_count_z, bool wait_for_completion = true);
+    bool CmdDispatchCompute(uint32_t block_count_x, uint32_t block_count_y, uint32_t block_count_z, bool wait_for_completion = true);
 
     /**
      * Submits the command list to the GPU.
      */
     void Execute();
+
+    /**
+     * Clear command queue.
+     */
+    void Reset();
 
 private:
     Opal::Ref<GraphicsContext> m_graphics_context;
