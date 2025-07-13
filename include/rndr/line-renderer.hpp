@@ -2,7 +2,7 @@
 
 #include "opal/container/scope-ptr.h"
 
-#include "rndr/renderer-base.h"
+#include "rndr/renderer-base.hpp"
 
 namespace Rndr
 {

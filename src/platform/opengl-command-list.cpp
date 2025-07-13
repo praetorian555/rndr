@@ -1,10 +1,10 @@
-#include "rndr/platform/opengl-command-list.h"
+#include "rndr/platform/opengl-command-list.hpp"
 
 #include "glad/glad.h"
 
-#include "opengl-helpers.h"
-#include "rndr/platform/opengl-graphics-context.h"
-#include "rndr/trace.h"
+#include "opengl-helpers.hpp"
+#include "rndr/platform/opengl-graphics-context.hpp"
+#include "rndr/trace.hpp"
 
 Rndr::DrawVerticesMultiCommand::DrawVerticesMultiCommand(PrimitiveTopology primitive_topology, uint32_t buffer_handle, uint32_t draw_count)
     : primitive_topology(primitive_topology), buffer_handle(buffer_handle), draw_count(draw_count)

@@ -2,17 +2,17 @@
 #include "opal/time.h"
 
 #include "rndr/application.hpp"
-#include "rndr/file.h"
-#include "rndr/fly-camera.h"
+#include "rndr/file.hpp"
+#include "rndr/fly-camera.hpp"
 #include "rndr/imgui-system.hpp"
-#include "rndr/log.h"
-#include "rndr/render-api.h"
-#include "rndr/types.h"
+#include "rndr/log.hpp"
+#include "rndr/render-api.hpp"
+#include "rndr/types.hpp"
 
 #include "example-controller.h"
 #include "imgui.h"
 #include "rndr/frames-per-second-counter.h"
-#include "rndr/trace.h"
+#include "rndr/trace.hpp"
 
 struct RNDR_ALIGN(16) Uniforms
 {

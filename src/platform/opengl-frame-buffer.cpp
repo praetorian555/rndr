@@ -1,10 +1,10 @@
-#include "rndr/platform/opengl-frame-buffer.h"
+#include "rndr/platform/opengl-frame-buffer.hpp"
 
 #include "glad/glad.h"
 
-#include "opengl-helpers.h"
+#include "opengl-helpers.hpp"
 
-#include "rndr/log.h"
+#include "rndr/log.hpp"
 
 Rndr::FrameBuffer::FrameBuffer(const Rndr::GraphicsContext& graphics_context, const Rndr::FrameBufferDesc& desc) : m_desc(desc)
 {

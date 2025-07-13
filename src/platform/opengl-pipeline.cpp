@@ -1,14 +1,14 @@
-#include "rndr/platform/opengl-pipeline.h"
+#include "rndr/platform/opengl-pipeline.hpp"
 
 #include "glad/glad.h"
 
 #include "opal/container/dynamic-array.h"
 
-#include "opengl-helpers.h"
-#include "rndr/log.h"
-#include "rndr/platform/opengl-buffer.h"
-#include "rndr/platform/opengl-shader.h"
-#include "rndr/trace.h"
+#include "opengl-helpers.hpp"
+#include "rndr/log.hpp"
+#include "rndr/platform/opengl-buffer.hpp"
+#include "rndr/platform/opengl-shader.hpp"
+#include "rndr/trace.hpp"
 
 Rndr::Pipeline::Pipeline(const GraphicsContext& graphics_context, const PipelineDesc& desc) : m_desc(desc)
 {

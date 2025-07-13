@@ -13,8 +13,8 @@
 #include "opal/container/hash-map.h"
 #include "opal/container/scope-ptr.h"
 
-#include "rndr/log.h"
-#include "rndr/trace.h"
+#include "rndr/log.hpp"
+#include "rndr/trace.hpp"
 
 namespace
 {

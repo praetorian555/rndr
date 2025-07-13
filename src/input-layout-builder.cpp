@@ -1,7 +1,7 @@
-#include "rndr/input-layout-builder.h"
+#include "rndr/input-layout-builder.hpp"
 
-#include "rndr/log.h"
-#include "rndr/render-api.h"
+#include "rndr/log.hpp"
+#include "rndr/render-api.hpp"
 
 Rndr::InputLayoutBuilder& Rndr::InputLayoutBuilder::AddVertexBuffer(const Buffer& buffer, i32 buffer_index, DataRepetition repetition,
                                                                     i32 per_instance_rate)

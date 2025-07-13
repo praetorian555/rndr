@@ -2,9 +2,9 @@
 
 #include "opal/container/string.h"
 
-#include "rndr/error-codes.h"
-#include "rndr/math.h"
-#include "rndr/types.h"
+#include "rndr/error-codes.hpp"
+#include "rndr/math.hpp"
+#include "rndr/types.hpp"
 
 namespace Opal
 {

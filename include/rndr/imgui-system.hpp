@@ -1,7 +1,7 @@
 #pragma once
 
 #include "rndr/generic-window.hpp"
-#include "rndr/render-api.h"
+#include "rndr/render-api.hpp"
 #include "system-message-handler.hpp"
 
 namespace Rndr

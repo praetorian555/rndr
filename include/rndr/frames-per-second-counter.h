@@ -1,6 +1,6 @@
 #pragma once
 
-#include "rndr/types.h"
+#include "rndr/types.hpp"
 
 namespace Rndr
 {

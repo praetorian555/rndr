@@ -4,7 +4,7 @@
 #include "opal/container/dynamic-array.h"
 #include "opal/container/ref.h"
 
-#include "rndr/delegate.h"
+#include "rndr/delegate.hpp"
 #include "rndr/generic-window.hpp"
 #include "rndr/imgui-system.hpp"
 #include "rndr/input-system.hpp"

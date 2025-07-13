@@ -7,8 +7,8 @@
 #include "opal/container/ref.h"
 
 #include "rndr/input-system.hpp"
-#include "rndr/log.h"
-#include "rndr/types.h"
+#include "rndr/log.hpp"
+#include "rndr/types.hpp"
 
 namespace Rndr
 {

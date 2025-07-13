@@ -1,7 +1,7 @@
 #include <catch2/catch2.hpp>
 
-#include "rndr/delegate.h"
-#include "rndr/log.h"
+#include "rndr/delegate.hpp"
+#include "rndr/log.hpp"
 
 class CustomLogger : public Rndr::Logger
 {

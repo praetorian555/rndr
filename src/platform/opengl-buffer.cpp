@@ -1,12 +1,12 @@
-#include "rndr/platform/opengl-buffer.h"
+#include "rndr/platform/opengl-buffer.hpp"
 
 #include "glad/glad.h"
 
-#include "opengl-helpers.h"
+#include "opengl-helpers.hpp"
 
-#include "rndr/log.h"
-#include "rndr/platform/opengl-graphics-context.h"
-#include "rndr/trace.h"
+#include "rndr/log.hpp"
+#include "rndr/platform/opengl-graphics-context.hpp"
+#include "rndr/trace.hpp"
 
 Rndr::Buffer::Buffer(const GraphicsContext& graphics_context, const BufferDesc& desc, const Opal::ArrayView<const u8>& init_data)
 {

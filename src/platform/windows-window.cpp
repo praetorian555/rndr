@@ -3,9 +3,9 @@
 #include "opal/container/string.h"
 
 #include "rndr/platform/windows-application.hpp"
-#include "rndr/platform/windows-header.h"
+#include "rndr/platform/windows-header.hpp"
 
-#include "rndr/log.h"
+#include "rndr/log.hpp"
 
 Rndr::WindowsWindow::WindowsWindow(const GenericWindowDesc& desc, Opal::AllocatorBase* allocator) : GenericWindow(desc, allocator)
 {

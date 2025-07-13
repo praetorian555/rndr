@@ -1,4 +1,4 @@
-#include "rndr/trace.h"
+#include "rndr/trace.hpp"
 
 #if RNDR_OPENGL
 #include "glad/glad.h"

@@ -2,7 +2,7 @@
 
 #include "opal/math/transform.h"
 
-#include "rndr/math.h"
+#include "rndr/math.hpp"
 
 namespace Rndr
 {

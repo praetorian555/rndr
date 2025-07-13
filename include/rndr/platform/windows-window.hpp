@@ -2,9 +2,9 @@
 
 // #include "glad/glad_wgl.h"
 
-#include "rndr/platform/windows-header.h"
 #include "rndr/generic-window.hpp"
-#include "rndr/types.h"
+#include "rndr/platform/windows-header.hpp"
+#include "rndr/types.hpp"
 
 namespace Rndr
 {

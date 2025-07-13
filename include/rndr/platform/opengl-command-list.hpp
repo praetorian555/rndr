@@ -5,8 +5,8 @@
 #include "opal/container/dynamic-array.h"
 #include "opal/container/ref.h"
 
-#include "rndr/definitions.h"
-#include "rndr/graphics-types.h"
+#include "rndr/definitions.hpp"
+#include "rndr/graphics-types.hpp"
 
 #if RNDR_OPENGL
 

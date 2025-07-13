@@ -4,10 +4,10 @@
 #include "opal/container/ref.h"
 #include "opal/container/string.h"
 
-#include "rndr/colors.h"
-#include "rndr/math.h"
-#include "rndr/platform/windows-forward-def.h"
-#include "rndr/types.h"
+#include "rndr/colors.hpp"
+#include "rndr/math.hpp"
+#include "rndr/platform/windows-forward-def.hpp"
+#include "rndr/types.hpp"
 
 namespace Rndr
 {

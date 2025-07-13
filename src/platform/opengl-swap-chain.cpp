@@ -1,8 +1,8 @@
-#include "rndr/platform/opengl-swap-chain.h"
+#include "rndr/platform/opengl-swap-chain.hpp"
 
 #include "glad/glad_wgl.h"
 
-#include "rndr/log.h"
+#include "rndr/log.hpp"
 
 Rndr::SwapChain::SwapChain(const Rndr::GraphicsContext& graphics_context, const Rndr::SwapChainDesc& desc) : m_desc(desc)
 {

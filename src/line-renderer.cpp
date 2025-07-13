@@ -1,9 +1,9 @@
-#include "rndr/line-renderer.h"
+#include "rndr/line-renderer.hpp"
 
-#include "rndr/file.h"
-#include "rndr/input-layout-builder.h"
-#include "rndr/log.h"
-#include "rndr/trace.h"
+#include "rndr/file.hpp"
+#include "rndr/input-layout-builder.hpp"
+#include "rndr/log.hpp"
+#include "rndr/trace.hpp"
 
 Rndr::LineRenderer::LineRenderer(const Opal::StringUtf8& name, const Rndr::RendererBaseDesc& desc) : RendererBase(name, desc)
 {

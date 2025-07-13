@@ -1,9 +1,9 @@
 #pragma once
 
-#include "rndr/definitions.h"
-#include "rndr/error-codes.h"
-#include "rndr/graphics-types.h"
-#include "rndr/platform/opengl-forward-def.h"
+#include "rndr/definitions.hpp"
+#include "rndr/error-codes.hpp"
+#include "rndr/graphics-types.hpp"
+#include "rndr/platform/opengl-forward-def.hpp"
 
 namespace Rndr
 {

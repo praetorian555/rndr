@@ -2,7 +2,7 @@
 
 #include "opal/error-codes.h"
 
-#include "rndr/types.h"
+#include "rndr/types.hpp"
 
 namespace Rndr
 {

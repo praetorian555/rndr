@@ -3,7 +3,7 @@
 #include "opal/container/hash-map.h"
 #include "opal/container/string-hash.h"
 
-#include "rndr/graphics-types.h"
+#include "rndr/graphics-types.hpp"
 
 namespace Rndr
 {

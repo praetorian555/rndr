@@ -1,9 +1,9 @@
-#include "rndr/fly-camera.h"
+#include "rndr/fly-camera.hpp"
 
 #include "opal/math/transform.h"
 
-#include "rndr/log.h"
-#include "rndr/types.h"
+#include "rndr/log.hpp"
+#include "rndr/types.hpp"
 
 Rndr::FlyCamera::FlyCamera(i32 screen_width, i32 screen_height, const FlyCameraDesc& desc)
     : ProjectionCamera(desc.start_position, Quaternionf::Identity(), screen_width, screen_height, desc.projection_desc),

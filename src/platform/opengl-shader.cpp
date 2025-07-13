@@ -1,13 +1,13 @@
-#include "rndr/platform/opengl-shader.h"
+#include "rndr/platform/opengl-shader.hpp"
 
 #include "glad/glad.h"
 
 #include "opal/container/in-place-array.h"
 
-#include "opengl-helpers.h"
-#include "rndr/log.h"
-#include "rndr/platform/opengl-graphics-context.h"
-#include "rndr/trace.h"
+#include "opengl-helpers.hpp"
+#include "rndr/log.hpp"
+#include "rndr/platform/opengl-graphics-context.hpp"
+#include "rndr/trace.hpp"
 
 namespace
 {

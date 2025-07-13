@@ -3,8 +3,8 @@
 #include "opal/container/dynamic-array.h"
 
 #include "rndr/generic-window.hpp"
-#include "rndr/math.h"
-#include "rndr/types.h"
+#include "rndr/math.hpp"
+#include "rndr/types.hpp"
 
 namespace Opal
 {

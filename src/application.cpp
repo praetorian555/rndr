@@ -5,7 +5,7 @@
 #include "opal/container/in-place-array.h"
 #include "rndr/input-system.hpp"
 
-#include "rndr/log.h"
+#include "rndr/log.hpp"
 
 #if RNDR_WINDOWS
 #include "rndr/platform/windows-application.hpp"

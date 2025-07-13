@@ -1,4 +1,4 @@
-#include "rndr/log.h"
+#include "rndr/log.hpp"
 
 #include <cstdarg>
 #include <cstdio>

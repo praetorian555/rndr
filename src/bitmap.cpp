@@ -1,4 +1,4 @@
-#include "rndr/bitmap.h"
+#include "rndr/bitmap.hpp"
 
 Rndr::Bitmap::Bitmap(i32 width, i32 height, i32 depth, Rndr::PixelFormat pixel_format, const Opal::ArrayView<u8>& data)
     : m_width(width), m_height(height), m_depth(depth), m_pixel_format(pixel_format)

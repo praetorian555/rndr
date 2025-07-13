@@ -1,9 +1,9 @@
 #pragma once
 
 #include "rndr/generic-window.hpp"
-#include "rndr/input-primitives.h"
-#include "rndr/math.h"
-#include "rndr/types.h"
+#include "rndr/input-primitives.hpp"
+#include "rndr/math.hpp"
+#include "rndr/types.hpp"
 
 namespace Rndr
 {

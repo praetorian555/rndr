@@ -1,9 +1,9 @@
 #pragma once
 
-#include "rndr/definitions.h"
-#include "rndr/error-codes.h"
-#include "rndr/log.h"
-#include "rndr/types.h"
+#include "rndr/definitions.hpp"
+#include "rndr/error-codes.hpp"
+#include "rndr/log.hpp"
+#include "rndr/types.hpp"
 
 #if RNDR_DEBUG
 #define RNDR_RETURN_ON_FAIL(cond, err, msg, do_if_fails) \

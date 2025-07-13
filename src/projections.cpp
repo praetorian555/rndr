@@ -1,4 +1,4 @@
-#include "rndr/projections.h"
+#include "rndr/projections.hpp"
 
 Rndr::Matrix4x4f Rndr::OrthographicOpenGL(f32 left, f32 right, f32 bottom, f32 top, f32 near, f32 far)
 {

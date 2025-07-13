@@ -5,8 +5,8 @@
 #include "opal/container/string.h"
 #include "opal/container/dynamic-array.h"
 
-#include "rndr/bitmap.h"
-#include "rndr/graphics-types.h"
+#include "rndr/bitmap.hpp"
+#include "rndr/graphics-types.hpp"
 
 namespace Rndr
 {

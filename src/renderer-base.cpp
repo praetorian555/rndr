@@ -1,6 +1,6 @@
-#include "rndr/renderer-base.h"
+#include "rndr/renderer-base.hpp"
 
-#include "rndr/trace.h"
+#include "rndr/trace.hpp"
 
 Rndr::RendererBase::RendererBase(const Opal::StringUtf8& name, const RendererBaseDesc& desc) : m_name(name), m_desc(desc) {}
 

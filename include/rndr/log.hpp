@@ -3,7 +3,7 @@
 #include "opal/source-location.h"
 
 #include "rndr/application.hpp"
-#include "rndr/types.h"
+#include "rndr/types.hpp"
 
 namespace Rndr
 {

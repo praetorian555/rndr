@@ -1,7 +1,7 @@
 #pragma once
 
-#include "rndr/math.h"
-#include "rndr/types.h"
+#include "rndr/math.hpp"
+#include "rndr/types.hpp"
 
 namespace Rndr
 {

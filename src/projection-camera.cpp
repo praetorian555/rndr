@@ -1,9 +1,9 @@
-#include "rndr/projection-camera.h"
+#include "rndr/projection-camera.hpp"
 
 #include "opal/math/transform.h"
 
-#include "rndr/definitions.h"
-#include "rndr/projections.h"
+#include "rndr/definitions.hpp"
+#include "rndr/projections.hpp"
 
 Rndr::ProjectionCamera::ProjectionCamera(const Matrix4x4f& world_to_camera, int screen_width, int screen_height,
                                          const ProjectionCameraDesc& desc)

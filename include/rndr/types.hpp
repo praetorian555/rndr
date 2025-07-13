@@ -2,7 +2,7 @@
 
 #include "opal/types.h"
 
-#include "rndr/definitions.h"
+#include "rndr/definitions.hpp"
 
 namespace Rndr
 {

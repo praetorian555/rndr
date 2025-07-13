@@ -2,13 +2,13 @@
 
 #include "opal/container/dynamic-array.h"
 
-#include "rndr/definitions.h"
+#include "rndr/definitions.hpp"
 #include "rndr/generic-window.hpp"
-#include "rndr/input-primitives.h"
+#include "rndr/input-primitives.hpp"
 #include "rndr/platform-application.hpp"
 
 #if RNDR_WINDOWS
-#include "rndr/platform/windows-forward-def.h"
+#include "rndr/platform/windows-forward-def.hpp"
 #endif
 
 namespace Rndr

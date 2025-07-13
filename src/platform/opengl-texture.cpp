@@ -1,14 +1,14 @@
-#include "rndr/platform/opengl-texture.h"
+#include "rndr/platform/opengl-texture.hpp"
 
 #include "glad/glad.h"
 
 #include "opal/container/in-place-array.h"
 
-#include "opengl-helpers.h"
-#include "rndr/bitmap.h"
-#include "rndr/log.h"
-#include "rndr/platform/opengl-graphics-context.h"
-#include "rndr/trace.h"
+#include "opengl-helpers.hpp"
+#include "rndr/bitmap.hpp"
+#include "rndr/log.hpp"
+#include "rndr/platform/opengl-graphics-context.hpp"
+#include "rndr/trace.hpp"
 
 Rndr::Texture::Texture(const GraphicsContext& graphics_context, const TextureDesc& texture_desc, const SamplerDesc& sampler_desc,
                        const Opal::ArrayView<const u8>& init_data)

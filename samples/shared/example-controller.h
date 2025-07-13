@@ -1,8 +1,8 @@
 #pragma once
 
 #include "rndr/application.hpp"
-#include "rndr/fly-camera.h"
-#include "rndr/types.h"
+#include "rndr/fly-camera.hpp"
+#include "rndr/types.hpp"
 
 class ExampleController
 {

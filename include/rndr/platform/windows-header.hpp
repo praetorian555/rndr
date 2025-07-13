@@ -1,6 +1,6 @@
 #pragma once
 
-#include "rndr/definitions.h"
+#include "rndr/definitions.hpp"
 
 #if RNDR_WINDOWS
 

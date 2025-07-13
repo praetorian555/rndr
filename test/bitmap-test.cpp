@@ -2,7 +2,7 @@
 
 #include "opal/container/in-place-array.h"
 
-#include "rndr/bitmap.h"
+#include "rndr/bitmap.hpp"
 
 TEST_CASE("Bitmap", "[bitmap]")
 {

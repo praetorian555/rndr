@@ -6,16 +6,16 @@
 
 #include "opal/container/in-place-array.h"
 
-#include "rndr/bitmap.h"
-#include "rndr/file.h"
-#include "rndr/render-api.h"
+#include "rndr/bitmap.hpp"
+#include "rndr/file.hpp"
+#include "rndr/render-api.hpp"
 
 #include "rndr/application.hpp"
 #include "rndr/window.h"
 
 #if RNDR_OPENGL
-#include "platform/opengl-helpers.h"
-#include "rndr/platform/opengl-frame-buffer.h"
+#include "platform/opengl-helpers.hpp"
+#include "rndr/platform/opengl-frame-buffer.hpp"
 #endif
 
 TEST_CASE("App", "[app]")

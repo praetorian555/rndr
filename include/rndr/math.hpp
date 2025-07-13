@@ -9,7 +9,7 @@
 #include "opal/math/rotator.h"
 #include "opal/math/vector3.h"
 
-#include "rndr/types.h"
+#include "rndr/types.hpp"
 
 // Math types
 namespace Rndr

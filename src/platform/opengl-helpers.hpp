@@ -1,8 +1,8 @@
 #pragma once
 
-#include "rndr/definitions.h"
-#include "rndr/graphics-types.h"
-#include "rndr/platform/opengl-forward-def.h"
+#include "rndr/definitions.hpp"
+#include "rndr/graphics-types.hpp"
+#include "rndr/platform/opengl-forward-def.hpp"
 
 #if RNDR_OPENGL
 

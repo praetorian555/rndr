@@ -7,7 +7,7 @@
 #include "opal/container/in-place-array.h"
 
 #include "rndr/application.hpp"
-#include "rndr/log.h"
+#include "rndr/log.hpp"
 #include "rndr/platform/windows-window.hpp"
 #include "rndr/system-message-handler.hpp"
 

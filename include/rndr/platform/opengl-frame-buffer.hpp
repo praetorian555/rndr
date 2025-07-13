@@ -2,9 +2,9 @@
 
 #include "opal/container/dynamic-array.h"
 
-#include "rndr/error-codes.h"
-#include "rndr/graphics-types.h"
-#include "rndr/platform/opengl-texture.h"
+#include "rndr/error-codes.hpp"
+#include "rndr/graphics-types.hpp"
+#include "rndr/platform/opengl-texture.hpp"
 
 namespace Rndr
 {

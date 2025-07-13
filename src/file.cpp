@@ -1,11 +1,11 @@
-#include "rndr/file.h"
+#include "rndr/file.hpp"
 
 #include "stb_image/stb_image.h"
 #include "stb_image/stb_image_write.h"
 
 #include "opal/paths.h"
 
-#include "rndr/log.h"
+#include "rndr/log.hpp"
 
 Rndr::FileHandler::FileHandler(const char* file_path, const char* mode)
 {

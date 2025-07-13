@@ -1,4 +1,4 @@
-#include "rndr/platform/opengl-graphics-context.h"
+#include "rndr/platform/opengl-graphics-context.hpp"
 
 #include "glad/glad_wgl.h"
 
@@ -8,17 +8,17 @@
 #include "opal/container/in-place-array.h"
 #include "opal/container/string.h"
 
-#include "opengl-helpers.h"
-#include "rndr/file.h"
-#include "rndr/log.h"
-#include "rndr/platform/opengl-buffer.h"
-#include "rndr/platform/opengl-frame-buffer.h"
-#include "rndr/platform/opengl-pipeline.h"
-#include "rndr/platform/opengl-shader.h"
-#include "rndr/platform/opengl-swap-chain.h"
-#include "rndr/platform/opengl-texture.h"
+#include "opengl-helpers.hpp"
+#include "rndr/file.hpp"
+#include "rndr/log.hpp"
+#include "rndr/platform/opengl-buffer.hpp"
+#include "rndr/platform/opengl-frame-buffer.hpp"
+#include "rndr/platform/opengl-pipeline.hpp"
+#include "rndr/platform/opengl-shader.hpp"
+#include "rndr/platform/opengl-swap-chain.hpp"
+#include "rndr/platform/opengl-texture.hpp"
 #include "rndr/return-macros.hpp"
-#include "rndr/trace.h"
+#include "rndr/trace.hpp"
 
 namespace
 {

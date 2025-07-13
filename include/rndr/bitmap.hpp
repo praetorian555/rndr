@@ -1,6 +1,6 @@
 #pragma once
 
-#include "rndr/graphics-types.h"
+#include "rndr/graphics-types.hpp"
 
 namespace Rndr
 {
