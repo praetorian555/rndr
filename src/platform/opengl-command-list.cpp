@@ -3,6 +3,7 @@
 #include "glad/glad.h"
 
 #include "opengl-helpers.hpp"
+#include "rndr/log.hpp"
 #include "rndr/platform/opengl-graphics-context.hpp"
 #include "rndr/trace.hpp"
 
@@ -125,13 +126,14 @@ void Rndr::CommandList::CmdBindTexture(const Rndr::Texture& texture, int32_t bin
 }
 
 void Rndr::CommandList::CmdBindTextureForCompute(const Rndr::Texture& texture, int32_t binding_index, int32_t texture_level,
-                                              Rndr::TextureAccess access)
+                                                 Rndr::TextureAccess access)
 {
     m_commands.PushBack(BindTextureForComputeCommand{
         .texture = Opal::Ref<const Texture>(texture), .binding_index = binding_index, .texture_level = texture_level, .access = access});
 }
 
-void Rndr::CommandList::CmdDrawVertices(Rndr::PrimitiveTopology topology, int32_t vertex_count, int32_t instance_count, int32_t first_vertex)
+void Rndr::CommandList::CmdDrawVertices(Rndr::PrimitiveTopology topology, int32_t vertex_count, int32_t instance_count,
+                                        int32_t first_vertex)
 {
     m_commands.PushBack(DrawVerticesCommand{
         .primitive_topology = topology, .vertex_count = vertex_count, .instance_count = instance_count, .first_vertex = first_vertex});
@@ -144,7 +146,7 @@ void Rndr::CommandList::CmdDrawIndices(Rndr::PrimitiveTopology topology, int32_t
 }
 
 void Rndr::CommandList::CmdDrawVerticesMulti(const Rndr::Pipeline& pipeline, Rndr::PrimitiveTopology topology,
-                                          const Opal::ArrayView<Rndr::DrawVerticesData>& draws)
+                                             const Opal::ArrayView<Rndr::DrawVerticesData>& draws)
 {
     static_assert(sizeof(DrawVerticesData::vertex_count) == 4);
     static_assert(sizeof(DrawVerticesData::instance_count) == 4);
@@ -163,7 +165,7 @@ void Rndr::CommandList::CmdDrawVerticesMulti(const Rndr::Pipeline& pipeline, Rnd
 }
 
 void Rndr::CommandList::CmdDrawIndicesMulti(const Rndr::Pipeline& pipeline, Rndr::PrimitiveTopology topology,
-                                         const Opal::ArrayView<Rndr::DrawIndicesData>& draws)
+                                            const Opal::ArrayView<Rndr::DrawIndicesData>& draws)
 {
     static_assert(sizeof(DrawIndicesData::index_count) == 4);
     static_assert(sizeof(DrawIndicesData::instance_count) == 4);
@@ -188,8 +190,10 @@ void Rndr::CommandList::CmdDrawIndicesMulti(const Rndr::Pipeline& pipeline, Rndr
 
 bool Rndr::CommandList::CmdDispatchCompute(uint32_t block_count_x, uint32_t block_count_y, uint32_t block_count_z, bool wait_for_completion)
 {
-    m_commands.PushBack(DispatchComputeCommand{
-        .block_count_x = block_count_x, .block_count_y = block_count_y, .block_count_z = block_count_z, .wait_for_completion = wait_for_completion});
+    m_commands.PushBack(DispatchComputeCommand{.block_count_x = block_count_x,
+                                               .block_count_y = block_count_y,
+                                               .block_count_z = block_count_z,
+                                               .wait_for_completion = wait_for_completion});
     return true;
 }
 
@@ -197,6 +201,16 @@ bool Rndr::CommandList::CmdUpdateBuffer(const Rndr::Buffer& buffer, const Opal::
 {
     m_commands.PushBack(UpdateBufferCommand{.buffer = Opal::Ref<const Buffer>(buffer), .data = data, .offset = offset});
     return true;
+}
+
+void Rndr::CommandList::CmdBlitFrameBuffers(const FrameBuffer& dst, const FrameBuffer& src, const BlitFrameBufferDesc& desc)
+{
+    m_commands.PushBack(BlitFrameBuffersCommand{.src_frame_buffer = Opal::Ref(src), .dst_frame_buffer = Opal::Ref(dst), .blit_desc = desc});
+}
+
+void Rndr::CommandList::CmdBlitToSwapChain(const SwapChain& swap_chain, const FrameBuffer& src, const BlitFrameBufferDesc& desc)
+{
+    m_commands.PushBack(BlitToSwapChainCommand{ .swap_chain = Opal::Ref(swap_chain), .src_frame_buffer = Opal::Ref(src), .blit_desc = desc });
 }
 
 struct CommandExecutor
@@ -269,6 +283,16 @@ struct CommandExecutor
     void operator()(const Rndr::DispatchComputeCommand& command) const
     {
         graphics_context->DispatchCompute(command.block_count_x, command.block_count_y, command.block_count_z, command.wait_for_completion);
+    }
+
+    void operator()(const Rndr::BlitFrameBuffersCommand& command) const
+    {
+        graphics_context->BlitFrameBuffers(command.dst_frame_buffer, command.src_frame_buffer, command.blit_desc);
+    }
+
+    void operator()(const Rndr::BlitToSwapChainCommand& command) const
+    {
+        graphics_context->BlitToSwapChain(command.swap_chain, command.src_frame_buffer, command.blit_desc);
     }
 };
 

@@ -7,6 +7,7 @@
 
 #include "rndr/definitions.hpp"
 #include "rndr/graphics-types.hpp"
+#include "rndr/error-codes.hpp"
 
 #if RNDR_OPENGL
 
@@ -142,10 +143,25 @@ struct DispatchComputeCommand
     bool wait_for_completion;
 };
 
-using Command = std::variant<PresentCommand, ClearColorCommand, ClearDepthCommand, ClearStencilCommand, ClearAllCommand,
-                             BindSwapChainCommand, BindPipelineCommand, BindBufferCommand, BindTextureCommand, BindTextureForComputeCommand,
-                             BindFrameBufferCommand, DrawVerticesCommand, DrawIndicesCommand, DrawVerticesMultiCommand,
-                             DrawIndicesMultiCommand, DispatchComputeCommand, UpdateBufferCommand>;
+struct BlitFrameBuffersCommand
+{
+    Opal::Ref<const class FrameBuffer> src_frame_buffer;
+    Opal::Ref<const class FrameBuffer> dst_frame_buffer;
+    BlitFrameBufferDesc blit_desc;
+};
+
+struct BlitToSwapChainCommand
+{
+    Opal::Ref<const class SwapChain> swap_chain;
+    Opal::Ref<const class FrameBuffer> src_frame_buffer;
+    BlitFrameBufferDesc blit_desc;
+};
+
+using Command =
+    std::variant<PresentCommand, ClearColorCommand, ClearDepthCommand, ClearStencilCommand, ClearAllCommand, BindSwapChainCommand,
+                 BindPipelineCommand, BindBufferCommand, BindTextureCommand, BindTextureForComputeCommand, BindFrameBufferCommand,
+                 DrawVerticesCommand, DrawIndicesCommand, DrawVerticesMultiCommand, DrawIndicesMultiCommand, DispatchComputeCommand,
+                 UpdateBufferCommand, BlitFrameBuffersCommand, BlitToSwapChainCommand>;
 
 /**
  * Represents a list of commands to be executed on the GPU.
@@ -296,6 +312,22 @@ public:
      * @return Returns true if the dispatch was successful, false otherwise.
      */
     bool CmdDispatchCompute(uint32_t block_count_x, uint32_t block_count_y, uint32_t block_count_z, bool wait_for_completion = true);
+
+    /**
+     * Copy attachments from the 'src' frame buffer to the 'dst' frame buffer.
+     * @param dst Destination frame buffer. Does not need to be bound beforehand.
+     * @param src Source frame buffer. Does not need to be bound beforehand.
+     * @param desc Describes the rules for copying.
+     */
+    void CmdBlitFrameBuffers(const FrameBuffer& dst, const FrameBuffer& src, const BlitFrameBufferDesc& desc);
+
+    /**
+     * Copy attachments from the 'src' frame buffer to the swap chain's frame buffer.
+     * @param swap_chain The swap chain to copy to.
+     * @param src Source frame buffer. Does not need to be bound beforehand.
+     * @param desc Describes the rules for copying.
+     */
+    void CmdBlitToSwapChain(const SwapChain& swap_chain, const FrameBuffer& src, const BlitFrameBufferDesc& desc);
 
     /**
      * Submits the command list to the GPU.
