@@ -1,5 +1,6 @@
 #pragma once
 
+#include "opengl-command-list.hpp"
 #include "rndr/definitions.hpp"
 #include "rndr/error-codes.hpp"
 #include "rndr/graphics-types.hpp"
@@ -259,6 +260,8 @@ public:
      * interpolation return the ErrorCode::InvalidArgument. Returns ErrorCode::GraphicsAPIError if the error happens on the graphics API side.
      */
     ErrorCode BlitToSwapChain(const SwapChain& swap_chain, const FrameBuffer& src, const BlitFrameBufferDesc& desc);
+
+    void SubmitCommandList(Rndr::CommandList& command_list);
 
 private:
     GraphicsContextDesc m_desc;

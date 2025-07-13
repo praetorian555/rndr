@@ -947,3 +947,8 @@ Rndr::ErrorCode Rndr::GraphicsContext::BlitToSwapChain(const SwapChain& swap_cha
     RNDR_GL_RETURN_ON_ERROR("Failed to blit frame buffer into a swap chain!", RNDR_NOOP);
     return ErrorCode::Success;
 }
+
+void Rndr::GraphicsContext::SubmitCommandList(CommandList& command_list)
+{
+    command_list.Execute();
+}
