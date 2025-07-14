@@ -148,10 +148,12 @@ int main()
                                             }
                                         })});
 
+    Rndr::CommandList present_cmd_list{gc};
+    present_cmd_list.CmdPresent(swap_chain);
+
     Rndr::FramesPerSecondCounter fps_counter;
     int selected_resolution_index = 0;
     bool stats_window = true;
-    Rndr::f64 check_change_time = 0.0;
     Rndr::f32 delta_seconds = 0.016f;
     while (!window->IsClosed())
     {
@@ -202,7 +204,7 @@ int main()
         ImGui::End();
         imgui_context.EndFrame();
 
-        gc.Present(swap_chain);
+        gc.SubmitCommandList(present_cmd_list);
 
         const Rndr::f64 end_seconds = Opal::GetSeconds();
         delta_seconds = static_cast<Rndr::f32>(end_seconds - start_seconds);
@@ -214,7 +216,9 @@ int main()
     fragment_shader.Destroy();
     final_render.Destroy();
     gc.Destroy();
+
     app->DestroyGenericWindow(window);
     Rndr::Application::Destroy();
+
     return 0;
 }
