@@ -125,10 +125,17 @@ endif ()
 if (RNDR_BUILD_SAMPLES)
     add_library(shared samples/shared/types.hpp samples/shared/example-controller.h samples/shared/example-controller.cpp)
     target_include_directories(shared PUBLIC samples/shared)
+    # @formatter:off
+    target_compile_definitions(shared PUBLIC RNDR_SAMPLES_SHADERS_DIR="${CMAKE_CURRENT_SOURCE_DIR}/samples/shared/shaders")
+    # @formatter:on
     target_link_libraries(shared PUBLIC rndr opal)
 
     add_executable(window-sample samples/window/window-sample.cpp)
     target_link_libraries(window-sample PUBLIC shared imgui)
+
+    add_executable(text-rendering-sample samples/text-rendering/text-rendering-sample.cpp samples/extern/stb_truetype/src/stb_truetype.cpp)
+    target_include_directories(text-rendering-sample PRIVATE samples/extern/stb_truetype/include)
+    target_link_libraries(text-rendering-sample PUBLIC shared imgui)
 
 endif ()
 
