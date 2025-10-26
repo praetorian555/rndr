@@ -123,7 +123,7 @@ if (RNDR_BUILD_TESTS)
 endif ()
 
 if (RNDR_BUILD_SAMPLES)
-    add_library(shared samples/shared/example-controller.h samples/shared/example-controller.cpp)
+    add_library(shared samples/shared/types.hpp samples/shared/example-controller.h samples/shared/example-controller.cpp)
     target_include_directories(shared PUBLIC samples/shared)
     target_link_libraries(shared PUBLIC rndr opal)
 
