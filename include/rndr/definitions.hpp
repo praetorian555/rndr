@@ -26,11 +26,12 @@
 
 #if RNDR_DEBUG
 #define RNDR_STATIC_ASSERT(expr, msg) static_assert(expr, msg)
-#define RNDR_ASSERT(expr, msg) assert(expr && msg)
-#define RNDR_HALT(msg)    \
-    do                    \
-    {                     \
-        RNDR_DEBUG_BREAK; \
+#define RNDR_ASSERT(expr, msg) assert(expr&& msg)
+#define RNDR_HALT(msg, ...)               \
+    do                                    \
+    {                                     \
+        RNDR_LOG_ERROR(msg, __VA_ARGS__); \
+        RNDR_DEBUG_BREAK;                 \
     } while (0)
 #else
 #define RNDR_STATIC_ASSERT(expr, msg)

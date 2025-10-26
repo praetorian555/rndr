@@ -6,6 +6,7 @@
 
 #include "opengl-helpers.hpp"
 #include "rndr/graphics-types.hpp"
+#include "rndr/log.hpp"
 
 constexpr Rndr::u64 k_max_shader_type = static_cast<Rndr::u64>(Rndr::ShaderType::EnumCount);
 constexpr Opal::InPlaceArray<GLenum, k_max_shader_type> k_to_opengl_shader_type = {

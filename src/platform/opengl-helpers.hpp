@@ -34,10 +34,10 @@ Opal::StringUtf8 FromOpenGLUsageToString(GLenum value);
 
 }  // namespace Rndr
 
-#define RNDR_ASSERT_OPENGL()          \
-    if (glGetError() != GL_NO_ERROR)  \
-    {                                 \
-        RNDR_HALT("OpenGL failure!"); \
+#define RNDR_ASSERT_OPENGL()                               \
+    if (const GLenum error = glGetError() != GL_NO_ERROR)        \
+    {                                                      \
+        RNDR_HALT("OpenGL failed with error: %d!", error); \
     }
 
 #if RNDR_DEBUG

@@ -500,7 +500,7 @@ struct SwapChainDesc
 struct ShaderDesc
 {
     /** Type of the shader. */
-    ShaderType type;
+    ShaderType type = ShaderType::Vertex;
 
     /** Source code of the shader. */
     Opal::StringUtf8 source;
