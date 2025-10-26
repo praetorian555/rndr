@@ -114,7 +114,7 @@ struct DrawVerticesMultiCommand
 struct UpdateBufferCommand
 {
     Opal::Ref<const class Buffer> buffer;
-    Opal::ArrayView<const u8> data;
+    Opal::DynamicArray<u8> data;
     i32 offset;
 };
 
@@ -264,7 +264,7 @@ public:
      * @param offset The offset into the buffer to update.
      * @return Returns true if the buffer was updated successfully, false otherwise.
      */
-    bool CmdUpdateBuffer(const Buffer& buffer, const Opal::ArrayView<const u8>& data, i32 offset = 0);
+    bool CmdUpdateBuffer(const Buffer& buffer, const Opal::ArrayView<u8>& data, i32 offset = 0);
 
     /**
      * Draws primitives without use of index buffer. It will behave as if indices were specified

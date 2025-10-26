@@ -197,9 +197,9 @@ bool Rndr::CommandList::CmdDispatchCompute(uint32_t block_count_x, uint32_t bloc
     return true;
 }
 
-bool Rndr::CommandList::CmdUpdateBuffer(const Rndr::Buffer& buffer, const Opal::ArrayView<const u8>& data, Rndr::i32 offset)
+bool Rndr::CommandList::CmdUpdateBuffer(const Rndr::Buffer& buffer, const Opal::ArrayView<u8>& data, Rndr::i32 offset)
 {
-    m_commands.PushBack(UpdateBufferCommand{.buffer = Opal::Ref<const Buffer>(buffer), .data = data, .offset = offset});
+    m_commands.PushBack(UpdateBufferCommand{.buffer = Opal::Ref<const Buffer>(buffer), .data = {data.GetData(), data.GetSize()}, .offset = offset});
     return true;
 }
 
@@ -277,7 +277,7 @@ struct CommandExecutor
 
     void operator()(const Rndr::UpdateBufferCommand& command) const
     {
-        graphics_context->UpdateBuffer(command.buffer, command.data, command.offset);
+        graphics_context->UpdateBuffer(command.buffer, Opal::AsBytes(command.data), command.offset);
     }
 
     void operator()(const Rndr::DispatchComputeCommand& command) const
