@@ -342,9 +342,11 @@ Rndr::Texture::Texture(Texture&& other) noexcept
     : m_texture_desc(other.m_texture_desc),
       m_sampler_desc(other.m_sampler_desc),
       m_native_texture(other.m_native_texture),
+    m_bindless_handle(other.m_bindless_handle),
       m_max_mip_levels(other.m_max_mip_levels)
 {
     other.m_native_texture = k_invalid_opengl_object;
+    other.m_bindless_handle = k_invalid_opengl_object;
 }
 
 Rndr::Texture& Rndr::Texture::operator=(Texture&& other) noexcept
@@ -355,8 +357,10 @@ Rndr::Texture& Rndr::Texture::operator=(Texture&& other) noexcept
         m_texture_desc = other.m_texture_desc;
         m_sampler_desc = other.m_sampler_desc;
         m_native_texture = other.m_native_texture;
+        m_bindless_handle = other.m_bindless_handle;
         m_max_mip_levels = other.m_max_mip_levels;
         other.m_native_texture = k_invalid_opengl_object;
+        other.m_bindless_handle = k_invalid_opengl_object;
     }
     return *this;
 }
@@ -366,6 +370,8 @@ void Rndr::Texture::Destroy()
     if (m_native_texture != k_invalid_opengl_object)
     {
         glDeleteTextures(1, &m_native_texture);
+        RNDR_ASSERT_OPENGL();
+        RNDR_LOG_DEBUG("Texture::Destroy: opengl id: %u", m_native_texture);
         m_native_texture = k_invalid_opengl_object;
     }
 }

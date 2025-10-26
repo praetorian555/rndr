@@ -112,6 +112,7 @@ void Rndr::Shader::Destroy()
     {
         glDeleteShader(m_native_shader);
         RNDR_ASSERT_OPENGL();
+        RNDR_LOG_DEBUG("Shader::Destroy: opengl id: %u", m_native_shader);
         m_native_shader = k_invalid_opengl_object;
     }
 }

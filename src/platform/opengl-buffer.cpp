@@ -100,8 +100,9 @@ void Rndr::Buffer::Destroy()
 {
     if (m_native_buffer != k_invalid_opengl_object)
     {
-        RNDR_LOG_DEBUG("Buffer::Destroy: opengl id: %u", m_native_buffer);
         glDeleteBuffers(1, &m_native_buffer);
+        RNDR_ASSERT_OPENGL();
+        RNDR_LOG_DEBUG("Buffer::Destroy: opengl id: %u", m_native_buffer);
         m_native_buffer = k_invalid_opengl_object;
     }
 }
