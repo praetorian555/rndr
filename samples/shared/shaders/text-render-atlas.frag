@@ -11,5 +11,5 @@ layout (binding = 0) uniform sampler2D atlas;
 void main()
 {
     float alpha = texture(atlas, in_uv).r;
-    out_color = vec4(alpha) * in_color;
+    out_color = vec4(in_color.rgb, alpha);
 }
