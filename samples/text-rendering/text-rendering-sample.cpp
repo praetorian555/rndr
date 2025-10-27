@@ -21,8 +21,8 @@ Rndr::FrameBuffer RecreateFrameBuffer(Rndr::GraphicsContext& gc, Rndr::i32 width
 int main()
 {
     i32 resolution_index = 2;
-    Opal::DynamicArray<Rndr::Vector2i> rendering_resolution_options{{2560, 1440}, {1920, 1080}, {1600, 900}};
-    const char* rendering_resolution_options_str[]{"2560x1440", "1920x1080", "1600x900"};
+    Opal::DynamicArray<Rndr::Vector2i> rendering_resolution_options{{2560, 1440}, {1920, 1080}, {1600, 900}, {1024, 768}};
+    const char* rendering_resolution_options_str[]{"2560x1440", "1920x1080", "1600x900", "1024x768"};
 
     const Rndr::ApplicationDesc app_desc{.enable_input_system = true};
     Rndr::Application* app = Rndr::Application::Create(app_desc);
@@ -114,7 +114,7 @@ int main()
 
         imgui_context.StartFrame();
         ImGui::Begin("Stats", &stats_window);
-        ImGui::Combo("Rendering Resolution", &selected_resolution_index, rendering_resolution_options_str, 3);
+        ImGui::Combo("Rendering Resolution", &selected_resolution_index, rendering_resolution_options_str, 4);
         ImGui::Text("Current Rendering resolution: %s", rendering_resolution_options_str[selected_resolution_index]);
         window->GetPositionAndSize(x, y, window_width, window_height);
         ImGui::Text("Window Resolution: %dx%d", window_width, window_height);
