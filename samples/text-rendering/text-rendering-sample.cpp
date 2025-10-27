@@ -78,6 +78,8 @@ int main()
     Rndr::f32 delta_seconds = 0.016f;
     char buffer[1024] = {};
     f32 font_size_in_pixels = text_renderer_desc.font_size;
+    i32 oversample_h = static_cast<i32>(text_renderer_desc.oversample_h);
+    i32 oversample_v = static_cast<i32>(text_renderer_desc.oversample_v);
     while (!window->IsClosed())
     {
         const Rndr::f64 start_seconds = Opal::GetSeconds();
@@ -95,6 +97,7 @@ int main()
         }
 
         text_renderer.UpdateFontSize(font_size_in_pixels);
+        text_renderer.UpdateFontOversampling(oversample_h, oversample_v);
 
         text_renderer.DrawText("Hello World!", {100, 100}, Rndr::Colors::k_white);
         text_renderer.DrawText(buffer, {100, 300}, Rndr::Colors::k_white);
@@ -119,6 +122,8 @@ int main()
         ImGui::Text("Frame Time: %.2f ms", (1 / fps_counter.GetFramesPerSecond()) * 1000.0f);
         ImGui::InputText("Input Text", buffer, 1024);
         ImGui::InputFloat("Font Size in Pixels", &font_size_in_pixels, 2.0);
+        ImGui::InputInt("Font Oversampling Horizontal", &oversample_h);
+        ImGui::InputInt("Font Oversampling Vertical", &oversample_v);
         ImGui::End();
         imgui_context.EndFrame();
 
