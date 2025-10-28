@@ -153,6 +153,7 @@ int main()
 
     Rndr::FramesPerSecondCounter fps_counter;
     int selected_resolution_index = 0;
+    bool vsync = true;
     bool stats_window = true;
     Rndr::f32 delta_seconds = 0.016f;
     while (!window->IsClosed())
@@ -173,6 +174,8 @@ int main()
                 RecreateFrameBuffer(gc, rendering_resolution_options[resolution_index].x, rendering_resolution_options[resolution_index].y);
         }
 
+        swap_chain.SetVerticalSync(vsync);
+
         Rndr::CommandList cmd_list{gc};
 
         cmd_list.CmdBindFrameBuffer(final_render);
@@ -182,7 +185,7 @@ int main()
         uniforms.view = Opal::Transpose(controller.GetViewTransform());
         uniforms.projection = Opal::Transpose(controller.GetProjectionTransform());
         cmd_list.CmdBindBuffer(uniform_buffer, 0);
-        cmd_list.CmdUpdateBuffer(uniform_buffer, Opal::AsBytes(uniforms));
+        cmd_list.CmdUpdateBuffer(uniform_buffer, Opal::AsWritableBytes(uniforms));
 
         cmd_list.CmdBindPipeline(pipeline);
         cmd_list.CmdDrawVertices(Rndr::PrimitiveTopology::Triangle, 6);
@@ -196,11 +199,17 @@ int main()
         imgui_context.StartFrame();
         ImGui::Begin("Stats", &stats_window);
         ImGui::Combo("Rendering Resolution", &selected_resolution_index, rendering_resolution_options_str, 3);
+        ImGui::Checkbox("Vertical Sync", &vsync);
         ImGui::Text("Current Rendering resolution: %s", rendering_resolution_options_str[selected_resolution_index]);
         window->GetPositionAndSize(x, y, window_width, window_height);
         ImGui::Text("Window Resolution: %dx%d", window_width, window_height);
+        ImGui::Text("Cursor mode: %s", app->GetCursorPositionMode() == Rndr::CursorPositionMode::Normal ? "Normal" : "Reset to Center");
+        ImGui::Text("Display mode: %s", window->GetMode() == Rndr::GenericWindowMode::Windowed ? "Windowed" : "Borderless Fullscreen");
         ImGui::Text("FPS: %.2f", fps_counter.GetFramesPerSecond());
         ImGui::Text("Frame Time: %.2f ms", (1 / fps_counter.GetFramesPerSecond()) * 1000.0f);
+        ImGui::Text("Controls:");
+        ImGui::Text("F1 - Toggle between Normal and ResetToCenter cursor position mode");
+        ImGui::Text("F2 - Toggle between Windowed and BorderlessFullscreen mode");
         ImGui::End();
         imgui_context.EndFrame();
 
