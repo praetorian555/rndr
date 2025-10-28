@@ -23,13 +23,13 @@ public:
      */
     void Update(f32 delta_time);
 
-    [[nodiscard]] f32 GetFramesPerSecond() const { return m_frames_per_second; }
+    [[nodiscard]] f32 GetFramesPerSecond() const { return m_frames_per_second == 0.0f ? 60 : m_frames_per_second; }
 
 private:
-    f32 m_update_interval;
-    f32 m_time_since_last_update;
-    f32 m_frames_per_second;
-    u32 m_frames_since_last_update;
+    f32 m_update_interval = 0.0f;
+    f32 m_time_since_last_update = 0.0f;
+    f32 m_frames_per_second = 0.0f;
+    u32 m_frames_since_last_update = 0;
 };
 
 }  // namespace Rndr

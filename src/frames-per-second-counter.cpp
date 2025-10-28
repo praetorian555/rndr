@@ -1,7 +1,7 @@
 #include "rndr/frames-per-second-counter.h"
 
 Rndr::FramesPerSecondCounter::FramesPerSecondCounter(f32 update_interval)
-    : m_update_interval(update_interval), m_time_since_last_update(0.0f),  m_frames_per_second(0.0f), m_frames_since_last_update(0)
+    : m_update_interval(update_interval)
 {
 }
 
