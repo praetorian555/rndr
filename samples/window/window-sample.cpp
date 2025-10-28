@@ -185,7 +185,7 @@ int main()
         uniforms.view = Opal::Transpose(controller.GetViewTransform());
         uniforms.projection = Opal::Transpose(controller.GetProjectionTransform());
         cmd_list.CmdBindBuffer(uniform_buffer, 0);
-        cmd_list.CmdUpdateBuffer(uniform_buffer, Opal::AsWritableBytes(uniforms));
+        cmd_list.CmdUpdateBuffer(uniform_buffer, Opal::AsBytes(uniforms));
 
         cmd_list.CmdBindPipeline(pipeline);
         cmd_list.CmdDrawVertices(Rndr::PrimitiveTopology::Triangle, 6);

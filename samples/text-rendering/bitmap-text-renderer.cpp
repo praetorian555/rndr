@@ -190,9 +190,9 @@ void BitmapTextRenderer::Render(f32 delta_seconds, Rndr::CommandList& cmd_list)
     per_frame_data.mvp = Rndr::OrthographicOpenGL(0, width, 0, height, -1.0f, 1.0f);
     per_frame_data.mvp = Opal::Transpose(per_frame_data.mvp);
 
-    cmd_list.CmdUpdateBuffer(m_per_frame_data_buffer, Opal::AsWritableBytes(per_frame_data));
-    cmd_list.CmdUpdateBuffer(m_vertex_buffer, Opal::AsWritableBytes(m_vertices));
-    cmd_list.CmdUpdateBuffer(m_index_buffer, Opal::AsWritableBytes(m_indices));
+    cmd_list.CmdUpdateBuffer(m_per_frame_data_buffer, Opal::AsBytes(per_frame_data));
+    cmd_list.CmdUpdateBuffer(m_vertex_buffer, Opal::AsBytes(m_vertices));
+    cmd_list.CmdUpdateBuffer(m_index_buffer, Opal::AsBytes(m_indices));
 
     cmd_list.CmdBindFrameBuffer(*m_frame_buffer);
     cmd_list.CmdClearColor({0, 0, 0, 0});
