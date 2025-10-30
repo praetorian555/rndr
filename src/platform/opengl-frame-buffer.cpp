@@ -168,3 +168,34 @@ GLuint Rndr::FrameBuffer::GetNativeFrameBuffer() const
 {
     return m_native_frame_buffer;
 }
+
+Rndr::i32 Rndr::FrameBuffer::GetWidth() const
+{
+    if (!m_color_attachments.IsEmpty())
+    {
+        return m_color_attachments[0].GetTextureDesc().width;
+    }
+    if (m_depth_stencil_attachment.IsValid())
+    {
+        return m_depth_stencil_attachment.GetTextureDesc().width;
+    }
+    return -1;
+}
+
+Rndr::i32 Rndr::FrameBuffer::GetHeight() const
+{
+    if (!m_color_attachments.IsEmpty())
+    {
+        return m_color_attachments[0].GetTextureDesc().height;
+    }
+    if (m_depth_stencil_attachment.IsValid())
+    {
+        return m_depth_stencil_attachment.GetTextureDesc().height;
+    }
+    return -1;
+}
+
+Rndr::Vector2i Rndr::FrameBuffer::GetSize() const
+{
+    return {GetWidth(), GetHeight()};
+}

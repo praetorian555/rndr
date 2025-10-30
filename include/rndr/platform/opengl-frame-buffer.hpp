@@ -35,6 +35,10 @@ public:
     [[nodiscard]] const Texture& GetDepthStencilAttachment() const;
     [[nodiscard]] GLuint GetNativeFrameBuffer() const;
 
+    [[nodiscard]] i32 GetWidth() const;
+    [[nodiscard]] i32 GetHeight() const;
+    [[nodiscard]] Rndr::Vector2i GetSize() const;
+
 private:
     FrameBufferDesc m_desc;
     Opal::DynamicArray<Texture> m_color_attachments;
