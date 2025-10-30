@@ -14,6 +14,7 @@
 #include "imgui.h"
 
 #include "bitmap-text-renderer.hpp"
+#include "shape-2d-renderer.hpp"
 #include "types.hpp"
 
 Rndr::FrameBuffer RecreateFrameBuffer(Rndr::GraphicsContext& gc, Rndr::i32 width, Rndr::i32 height);
@@ -60,6 +61,9 @@ int main()
     text_renderer_desc.font_file_path = R"(C:\Windows\Fonts\CascadiaMono.ttf)";
     text_renderer.Init(&gc, &final_render, text_renderer_desc);
 
+    Shape2DRenderer shape_renderer;
+    shape_renderer.Init(&gc, final_render.GetWidth(), final_render.GetHeight());
+
     app->on_window_resize.Bind(
         [&swap_chain, window, &text_renderer](const Rndr::GenericWindow& w, Rndr::i32 width, Rndr::i32 height)
         {
@@ -94,6 +98,7 @@ int main()
             final_render.Destroy();
             final_render =
                 RecreateFrameBuffer(gc, rendering_resolution_options[resolution_index].x, rendering_resolution_options[resolution_index].y);
+            shape_renderer.SetFrameBufferSize(final_render.GetWidth(), final_render.GetHeight());
         }
 
         text_renderer.UpdateFontSize(font_size_in_pixels);
@@ -102,11 +107,16 @@ int main()
         text_renderer.DrawText("Hello World!", {100, 100}, Rndr::Colors::k_white);
         text_renderer.DrawText(buffer, {100, 300}, Rndr::Colors::k_white);
 
+        shape_renderer.DrawRect({400, 200}, {100, 100}, Rndr::Colors::k_white);
+
         Rndr::CommandList cmd_list{gc};
         cmd_list.CmdBindSwapChainFrameBuffer(swap_chain);
         cmd_list.CmdClearAll(Rndr::Colors::k_pink);
+        cmd_list.CmdBindFrameBuffer(final_render);
+        cmd_list.CmdClearAll(Rndr::Colors::k_black);
 
         text_renderer.Render(delta_seconds, cmd_list);
+        shape_renderer.Render(delta_seconds, cmd_list);
 
         cmd_list.CmdBlitToSwapChain(swap_chain, final_render, {});
         cmd_list.CmdBindSwapChainFrameBuffer(swap_chain);
@@ -133,6 +143,7 @@ int main()
         delta_seconds = static_cast<Rndr::f32>(end_seconds - start_seconds);
     }
 
+    shape_renderer.Destroy();
     text_renderer.Destroy();
     final_render.Destroy();
     gc.Destroy();

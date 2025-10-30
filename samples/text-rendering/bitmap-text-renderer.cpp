@@ -195,7 +195,6 @@ void BitmapTextRenderer::Render(f32 delta_seconds, Rndr::CommandList& cmd_list)
     cmd_list.CmdUpdateBuffer(m_index_buffer, Opal::AsBytes(m_indices));
 
     cmd_list.CmdBindFrameBuffer(*m_frame_buffer);
-    cmd_list.CmdClearColor({0, 0, 0, 0});
     cmd_list.CmdBindTexture(m_atlas_texture, 0);
     cmd_list.CmdBindPipeline(m_pipeline);
     cmd_list.CmdBindBuffer(m_per_frame_data_buffer, 0);
