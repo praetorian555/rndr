@@ -15,6 +15,7 @@
 
 #include "imgui.h"
 
+#include "../../build/opengl-msvc-opt-debug/_deps/opal-src/include/opal/paths.h"
 #include "bitmap-text-renderer.hpp"
 #include "shape-2d-renderer.hpp"
 #include "types.hpp"
@@ -63,7 +64,7 @@ int main()
 
     BitmapTextRenderer text_renderer;
     BitmapTextRendererDesc text_renderer_desc{.font_size = 16.0};
-    text_renderer_desc.font_file_path = R"(C:\Windows\Fonts\CascadiaMono.ttf)";
+    text_renderer_desc.font_file_path = Opal::Paths::Combine(nullptr, RNDR_CORE_ASSETS_DIR, "OpenSans.ttf").GetValue();
     text_renderer.Init(&gc, &final_render, text_renderer_desc);
 
     Shape2DRenderer shape_renderer;

@@ -134,10 +134,14 @@ void BitmapTextRenderer::UpdateFontOversampling(u32 oversample_h, u32 oversample
 bool BitmapTextRenderer::DrawText(const Opal::StringUtf8& text, const Rndr::Vector2f& in_position, const Rndr::Vector4f& color)
 {
     Rndr::Vector2f curr_position = in_position;
-    char prev_c = 0;
+    char next_c = 0;
     for (i32 i = 0; i < text.GetSize(); i++)
     {
         const char c = text[i];
+        if (i < text.GetSize() - 1)
+        {
+            next_c = text[i + 1];
+        }
         const stbtt_packedchar* packed_char = &m_packed_chars[c - m_desc.first_code_point];
         const stbtt_aligned_quad* aligned_quad = &m_aligned_quads[c - m_desc.first_code_point];
         Rndr::Vector2f glyph_size;
@@ -167,15 +171,14 @@ bool BitmapTextRenderer::DrawText(const Opal::StringUtf8& text, const Rndr::Vect
         m_indices.PushBack(first_vertex_idx + 2);
 
         const f32 scale = stbtt_ScaleForPixelHeight(&m_font_info, m_desc.font_size);
-        const i32 kern = 0;
-        if (prev_c != 0)
+        i32 kern = 0;
+        if (next_c != 0)
         {
-            stbtt_GetCodepointKernAdvance(&m_font_info, prev_c, c);
+            kern = stbtt_GetCodepointKernAdvance(&m_font_info, c, next_c);
         }
         const f32 kern_scaled = kern * scale;
 
         curr_position.x += packed_char->xadvance + kern_scaled;
-        prev_c = c;
     }
 
     return true;
