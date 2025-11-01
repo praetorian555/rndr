@@ -24,8 +24,8 @@ public:
     void Render(f32 delta_seconds, Rndr::CommandList& cmd_list);
 
     bool DrawRect(const Rndr::Point2f& bottom_left, const Rndr::Vector2f& size, const Rndr::Vector4f& color);
-    bool DrawCircle(const Rndr::Point2f& center, f32 radius, const Rndr::Vector4f& color, i32 triangle_count = 8);
     bool DrawLine(const Rndr::Point2f& start, Rndr::Point2f end, const Rndr::Vector4f& color, f32 thickness = 2);
+    bool DrawCircle(const Rndr::Point2f& center, f32 radius, const Rndr::Vector4f& color, i32 triangle_count = 8);
 
 private:
     constexpr static i32 k_max_vertex_count = 1024;

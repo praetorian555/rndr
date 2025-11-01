@@ -108,6 +108,7 @@ int main()
         text_renderer.DrawText(buffer, {100, 300}, Rndr::Colors::k_white);
 
         shape_renderer.DrawRect({400, 200}, {100, 100}, Rndr::Colors::k_white);
+        shape_renderer.DrawLine({600, 200}, {800, 400}, Rndr::Colors::k_white, 5);
 
         Rndr::CommandList cmd_list{gc};
         cmd_list.CmdBindSwapChainFrameBuffer(swap_chain);

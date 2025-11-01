@@ -75,8 +75,10 @@ bool Shape2DRenderer::Init(Rndr::GraphicsContext* gc, i32 fb_width, i32 fb_heigh
     m_fragment_shader = {*m_gc, Rndr::ShaderDesc{.type = Rndr::ShaderType::Fragment, .source = fragment_shader_contents}};
     RNDR_ASSERT(m_fragment_shader.IsValid(), "Failed to initialize fragment shader!");
 
-    const Rndr::InputLayoutDesc input_layout =
-        Rndr::InputLayoutBuilder().AddVertexBuffer(m_vertex_buffer, 0, Rndr::DataRepetition::PerVertex).AddIndexBuffer(m_index_buffer).Build();
+    const Rndr::InputLayoutDesc input_layout = Rndr::InputLayoutBuilder()
+                                                   .AddVertexBuffer(m_vertex_buffer, 0, Rndr::DataRepetition::PerVertex)
+                                                   .AddIndexBuffer(m_index_buffer)
+                                                   .Build();
 
     m_pipeline = {*m_gc,
                   Rndr::PipelineDesc{.vertex_shader = &m_vertex_shader, .pixel_shader = &m_fragment_shader, .input_layout = input_layout}};
@@ -122,17 +124,40 @@ void Shape2DRenderer::Render(f32 delta_seconds, Rndr::CommandList& cmd_list)
 
 bool Shape2DRenderer::DrawRect(const Rndr::Point2f& bottom_left, const Rndr::Vector2f& size, const Rndr::Vector4f& color)
 {
+    const i32 m_vertex_base = static_cast<i32>(m_vertices.GetSize());
     m_vertices.PushBack({.pos = bottom_left, .color = color});
     m_vertices.PushBack({.pos = bottom_left + Rndr::Vector2f{size.x, 0}, .color = color});
     m_vertices.PushBack({.pos = bottom_left + Rndr::Vector2f{size.x, size.y}, .color = color});
     m_vertices.PushBack({.pos = bottom_left + Rndr::Vector2f{0, size.y}, .color = color});
 
-    m_indices.PushBack(0);
-    m_indices.PushBack(1);
-    m_indices.PushBack(2);
-    m_indices.PushBack(0);
-    m_indices.PushBack(2);
-    m_indices.PushBack(3);
+    m_indices.PushBack(m_vertex_base + 0);
+    m_indices.PushBack(m_vertex_base + 1);
+    m_indices.PushBack(m_vertex_base + 2);
+    m_indices.PushBack(m_vertex_base + 0);
+    m_indices.PushBack(m_vertex_base + 2);
+    m_indices.PushBack(m_vertex_base + 3);
+
+    return true;
+}
+
+bool Shape2DRenderer::DrawLine(const Rndr::Point2f& start, Rndr::Point2f end, const Rndr::Vector4f& color, f32 thickness)
+{
+    Rndr::Vector2f dir = end - start;
+    dir = Opal::Normalize(dir);
+    const Rndr::Vector2f perp(-dir.y, dir.x);
+
+    const i32 m_vertex_base = static_cast<i32>(m_vertices.GetSize());
+    m_vertices.PushBack({.pos = start + 0.5f * thickness * perp, .color = color});
+    m_vertices.PushBack({.pos = start - 0.5f * thickness * perp, .color = color});
+    m_vertices.PushBack({.pos = end - 0.5f * thickness * perp, .color = color});
+    m_vertices.PushBack({.pos = end + 0.5f * thickness * perp, .color = color});
+
+    m_indices.PushBack(m_vertex_base + 0);
+    m_indices.PushBack(m_vertex_base + 1);
+    m_indices.PushBack(m_vertex_base + 2);
+    m_indices.PushBack(m_vertex_base + 0);
+    m_indices.PushBack(m_vertex_base + 2);
+    m_indices.PushBack(m_vertex_base + 3);
 
     return true;
 }
