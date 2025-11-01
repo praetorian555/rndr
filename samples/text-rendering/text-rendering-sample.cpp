@@ -1,3 +1,5 @@
+#include <algorithm>
+
 #include "stb_truetype/stb_truetype.h"
 
 #include "opal/time.h"
@@ -17,11 +19,11 @@
 #include "shape-2d-renderer.hpp"
 #include "types.hpp"
 
-Rndr::FrameBuffer RecreateFrameBuffer(Rndr::GraphicsContext& gc, Rndr::i32 width, Rndr::i32 height);
+Rndr::FrameBuffer RecreateFrameBuffer(Rndr::GraphicsContext& gc, Rndr::i32 width, Rndr::i32 height, i32 sample_count = 1);
 
 int main()
 {
-    i32 resolution_index = 2;
+    i32 resolution_index = 1;
     Opal::DynamicArray<Rndr::Vector2i> rendering_resolution_options{{2560, 1440}, {1920, 1080}, {1600, 900}, {1024, 768}};
     const char* rendering_resolution_options_str[]{"2560x1440", "1920x1080", "1600x900", "1024x768"};
 
@@ -32,7 +34,8 @@ int main()
         RNDR_LOG_ERROR("Failed to create app!");
         return -1;
     }
-    Rndr::GenericWindow* window = app->CreateGenericWindow();
+    const Rndr::GenericWindowDesc window_desc{.width = 1920, .height = 1080};
+    Rndr::GenericWindow* window = app->CreateGenericWindow(window_desc);
     if (window == nullptr)
     {
         RNDR_LOG_ERROR("Failed to create window!");
@@ -46,18 +49,20 @@ int main()
     window->GetPositionAndSize(x, y, window_width, window_height);
     window->SetTitle("Text Rendering Sample");
 
+    i32 sample_count = 8;
+
     const Rndr::GraphicsContextDesc gc_desc{.window_handle = window->GetNativeHandle()};
     Rndr::GraphicsContext gc{gc_desc};
     const Rndr::SwapChainDesc swap_chain_desc{.width = window_width, .height = window_height, .enable_vsync = true};
     Rndr::SwapChain swap_chain{gc, swap_chain_desc};
     Rndr::FrameBuffer final_render =
-        RecreateFrameBuffer(gc, rendering_resolution_options[resolution_index].x, rendering_resolution_options[resolution_index].y);
+        RecreateFrameBuffer(gc, rendering_resolution_options[resolution_index].x, rendering_resolution_options[resolution_index].y, sample_count);
 
     Rndr::ImGuiContext imgui_context(*window, gc);
     app->RegisterSystemMessageHandler(&imgui_context);
 
     BitmapTextRenderer text_renderer;
-    BitmapTextRendererDesc text_renderer_desc;
+    BitmapTextRendererDesc text_renderer_desc{.font_size = 16.0};
     text_renderer_desc.font_file_path = R"(C:\Windows\Fonts\CascadiaMono.ttf)";
     text_renderer.Init(&gc, &final_render, text_renderer_desc);
 
@@ -77,8 +82,9 @@ int main()
     present_cmd_list.CmdPresent(swap_chain);
 
     Rndr::FramesPerSecondCounter fps_counter;
-    int selected_resolution_index = 2;
+    int selected_resolution_index = 1;
     bool stats_window = true;
+    i32 selected_sample_count = sample_count;
     Rndr::f32 delta_seconds = 0.016f;
     char buffer[1024] = {};
     f32 font_size_in_pixels = text_renderer_desc.font_size;
@@ -92,19 +98,20 @@ int main()
 
         app->ProcessSystemEvents(delta_seconds);
 
-        if (selected_resolution_index != resolution_index)
+        if (selected_resolution_index != resolution_index || selected_sample_count != sample_count)
         {
             resolution_index = selected_resolution_index;
+            sample_count = selected_sample_count;
             final_render.Destroy();
             final_render =
-                RecreateFrameBuffer(gc, rendering_resolution_options[resolution_index].x, rendering_resolution_options[resolution_index].y);
+                RecreateFrameBuffer(gc, rendering_resolution_options[resolution_index].x, rendering_resolution_options[resolution_index].y, selected_sample_count);
             shape_renderer.SetFrameBufferSize(final_render.GetWidth(), final_render.GetHeight());
         }
 
         text_renderer.UpdateFontSize(font_size_in_pixels);
         text_renderer.UpdateFontOversampling(oversample_h, oversample_v);
 
-        text_renderer.DrawText("Hello World!", {100, 100}, Rndr::Colors::k_white);
+        text_renderer.DrawText("The quick brown fox jumps over the lazy dog!", {100, 100}, Rndr::Colors::k_white);
         text_renderer.DrawText(buffer, {100, 300}, Rndr::Colors::k_white);
 
         shape_renderer.DrawRect({400, 200}, {100, 100}, Rndr::Colors::k_white);
@@ -145,6 +152,7 @@ int main()
         ImGui::Text("Current Rendering resolution: %s", rendering_resolution_options_str[selected_resolution_index]);
         window->GetPositionAndSize(x, y, window_width, window_height);
         ImGui::Text("Window Resolution: %dx%d", window_width, window_height);
+        ImGui::InputInt("Rendering sample count", &selected_sample_count);
         ImGui::Text("FPS: %.2f", fps_counter.GetFramesPerSecond());
         ImGui::Text("Frame Time: %.2f ms", (1 / fps_counter.GetFramesPerSecond()) * 1000.0f);
         ImGui::InputText("Input Text", buffer, 1024);
@@ -171,9 +179,9 @@ int main()
     return 0;
 }
 
-Rndr::FrameBuffer RecreateFrameBuffer(Rndr::GraphicsContext& gc, Rndr::i32 width, Rndr::i32 height)
+Rndr::FrameBuffer RecreateFrameBuffer(Rndr::GraphicsContext& gc, Rndr::i32 width, Rndr::i32 height, i32 sample_count)
 {
-    const Rndr::FrameBufferDesc desc{.color_attachments = {Rndr::TextureDesc{.width = width, .height = height}},
+    const Rndr::FrameBufferDesc desc{.color_attachments = {Rndr::TextureDesc{.width = width, .height = height, .sample_count = sample_count}},
                                      .color_attachment_samplers = {{}}};
     return {gc, desc};
 }
