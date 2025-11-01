@@ -559,10 +559,14 @@ Rndr::ErrorCode Rndr::GraphicsContext::UpdateBuffer(const Buffer& buffer, const 
         return ErrorCode::OutOfBounds;
     }
     const i64 data_size = static_cast<i64>(data.GetSize());
-    if (data_size <= 0 || offset + data_size > buffer_size)
+    if (data_size < 0 || offset + data_size > buffer_size)
     {
         RNDR_LOG_ERROR("UpdateBuffer: Failed, data size out of bounds!");
         return ErrorCode::OutOfBounds;
+    }
+    if (data_size == 0)
+    {
+        return ErrorCode::Success;
     }
 
     const GLuint native_buffer = buffer.GetNativeBuffer();

@@ -164,9 +164,10 @@ public:
      * @param buffer The buffer to update.
      * @param data The data to update the buffer with.
      * @param offset The offset into the buffer to update, measured in bytes.
-     * @return In case of a success ErrorCode::Success is returned. If the buffer is not valid or it doesn't have Usage::Dynamic,
-     * ErrorCode::InvalidArgument is returned. If the data is negative, zero or in combination with the offset exceeds the buffer size,
+     * @return In case of a success ErrorCode::Success is returned. If the buffer is not valid, or it doesn't have Usage::Dynamic,
+     * ErrorCode::InvalidArgument is returned. If the data is negative or in combination with the offset exceeds the buffer size,
      * ErrorCode::OutOfBounds is returned. If offset is out of bounds of the buffer, ErrorCode::OutOfBounds is returned.
+     * @note Empty array will do nothing and it will return ErrorCode::Success.
      */
     ErrorCode UpdateBuffer(const Buffer& buffer, const Opal::ArrayView<const u8>& data, i64 offset = 0);
 
