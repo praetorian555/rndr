@@ -4,6 +4,7 @@
 #include "rndr/input-layout-builder.hpp"
 #include "rndr/log.hpp"
 #include "rndr/projections.hpp"
+#include "shape-2d-renderer.hpp"
 
 bool BitmapTextRenderer::Init(Rndr::GraphicsContext* gc, Rndr::FrameBuffer* frame_buffer, const BitmapTextRendererDesc& desc)
 {
@@ -206,4 +207,35 @@ void BitmapTextRenderer::Render(f32 delta_seconds, Rndr::CommandList& cmd_list)
 
     m_vertices.Clear();
     m_indices.Clear();
+}
+
+void BitmapTextRenderer::DrawGlyphBitmap(class Shape2DRenderer& shape_renderer, char ch, const Rndr::Point2f& bottom_left,
+                                         const Rndr::Vector2f& size)
+{
+    f32 scale = stbtt_ScaleForPixelHeight(&m_font_info, 16);
+    i32 width = 0;
+    i32 height = 0;
+    i32 xoff = 0;
+    i32 yoff = 0;
+    u8* data = stbtt_GetCodepointBitmap(&m_font_info, 0, scale, ch, &width, &height, &xoff, &yoff);
+    RNDR_ASSERT(data != nullptr, "Failed to get codepoint bitmap");
+
+    Rndr::Vector2f step = Rndr::Vector2f(size.x / static_cast<f32>(width), size.y / static_cast<f32>(height));
+
+    for (int y = height - 1; y >= 0; y--)
+    {
+        for (int x = 0; x < width; x++)
+        {
+            const Rndr::Point2f curr_bottom_left{bottom_left.x + x * step.x, bottom_left.y + (height - y - 1) * step.y};
+            const f32 coverage = data[y * width + x] / 255.0f;
+            shape_renderer.DrawRect(curr_bottom_left, step, {coverage, coverage, coverage, 1.0f});
+        }
+    }
+
+    shape_renderer.DrawLine(bottom_left, {bottom_left.x + width * step.x, bottom_left.y}, Rndr::Colors::k_red);
+    shape_renderer.DrawLine({bottom_left.x, bottom_left.y + height * step.y},
+                            {bottom_left.x + width * step.x, bottom_left.y + height * step.y}, Rndr::Colors::k_red);
+    shape_renderer.DrawLine(bottom_left, {bottom_left.x, bottom_left.y + height * step.y}, Rndr::Colors::k_green);
+    shape_renderer.DrawLine({bottom_left.x + width * step.x, bottom_left.y},
+                            {bottom_left.x + width * step.x, bottom_left.y + height * step.y}, Rndr::Colors::k_green);
 }

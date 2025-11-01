@@ -31,6 +31,8 @@ public:
 
     void Render(f32 delta_seconds, Rndr::CommandList& cmd_list);
 
+    void DrawGlyphBitmap(class Shape2DRenderer& shape_renderer, char ch, const Rndr::Point2f& bottom_left, const Rndr::Vector2f& size);
+
 private:
     void UpdateFontAtlas();
 

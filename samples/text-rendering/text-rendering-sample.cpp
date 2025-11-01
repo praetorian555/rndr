@@ -91,6 +91,7 @@ int main()
     f32 font_size_in_pixels = text_renderer_desc.font_size;
     i32 oversample_h = static_cast<i32>(text_renderer_desc.oversample_h);
     i32 oversample_v = static_cast<i32>(text_renderer_desc.oversample_v);
+    char glyph_to_draw[2] = {};
     while (!window->IsClosed())
     {
         const Rndr::f64 start_seconds = Opal::GetSeconds();
@@ -115,24 +116,10 @@ int main()
         text_renderer.DrawText("The quick brown fox jumps over the lazy dog!", {100, 100}, Rndr::Colors::k_white);
         text_renderer.DrawText(buffer, {100, 300}, Rndr::Colors::k_white);
 
-        shape_renderer.DrawRect({400, 200}, {100, 100}, Rndr::Colors::k_white);
-        shape_renderer.DrawLine({600, 200}, {800, 400}, Rndr::Colors::k_white, 5);
-
-        const Rndr::Point2f control_square = {500, 300};
-        shape_renderer.DrawCircle(control_square, 5, Rndr::Colors::k_green);
-        shape_renderer.DrawBezierSquare({400, 500}, control_square, {700, 500}, Rndr::Colors::k_white, 5, 16);
-
-        const Rndr::Point2f control0 = {1100, 300};
-        const Rndr::Point2f control1 = {1300, 600};
-        const Rndr::Point2f start = {1000, 500};
-        const Rndr::Point2f end = {1400, 500};
-        shape_renderer.DrawBezierCubic(start, control0, control1, end, Rndr::Colors::k_white, 5, 32);
-        shape_renderer.DrawCircle(start, 5, Rndr::Colors::k_red);
-        shape_renderer.DrawCircle(end, 5, Rndr::Colors::k_red);
-        shape_renderer.DrawCircle(control0, 5, Rndr::Colors::k_green);
-        shape_renderer.DrawCircle(control1, 5, Rndr::Colors::k_green);
-
-        shape_renderer.DrawCircle({800, 300}, 20, Rndr::Colors::k_white, 16);
+        if (glyph_to_draw[0] != 0)
+        {
+            text_renderer.DrawGlyphBitmap(shape_renderer, glyph_to_draw[0], {600, 100}, {800, 800});
+        }
 
         Rndr::CommandList cmd_list{gc};
         cmd_list.CmdBindSwapChainFrameBuffer(swap_chain);
@@ -160,6 +147,7 @@ int main()
         ImGui::InputFloat("Font Size in Pixels", &font_size_in_pixels, 2.0);
         ImGui::InputInt("Font Oversampling Horizontal", &oversample_h);
         ImGui::InputInt("Font Oversampling Vertical", &oversample_v);
+        ImGui::InputText("Glyph to inspect", glyph_to_draw, 2);
         ImGui::End();
         imgui_context.EndFrame();
 
