@@ -11,7 +11,7 @@ namespace Rndr
 {
 class CommandList;
 class GraphicsContext;
-}
+}  // namespace Rndr
 
 class Shape2DRenderer
 {
@@ -23,9 +23,14 @@ public:
 
     void Render(f32 delta_seconds, Rndr::CommandList& cmd_list);
 
-    bool DrawRect(const Rndr::Point2f& bottom_left, const Rndr::Vector2f& size, const Rndr::Vector4f& color);
-    bool DrawLine(const Rndr::Point2f& start, Rndr::Point2f end, const Rndr::Vector4f& color, f32 thickness = 2);
-    bool DrawCircle(const Rndr::Point2f& center, f32 radius, const Rndr::Vector4f& color, i32 triangle_count = 8);
+    void DrawTriangle(const Rndr::Point2f& a, const Rndr::Point2f& b, const Rndr::Point2f& c, const Rndr::Vector4f& color);
+    void DrawRect(const Rndr::Point2f& bottom_left, const Rndr::Vector2f& size, const Rndr::Vector4f& color);
+    void DrawLine(const Rndr::Point2f& start, const Rndr::Point2f& end, const Rndr::Vector4f& color, f32 thickness = 2);
+    void DrawBezierSquare(const Rndr::Point2f& start, const Rndr::Point2f& control, const Rndr::Point2f& end, const Rndr::Vector4f& color,
+                          f32 thickness = 2, i32 segment_count = 8);
+    void DrawBezierCubic(const Rndr::Point2f& start, const Rndr::Point2f& control0, const Rndr::Point2f& control1, const Rndr::Point2f& end,
+                         const Rndr::Vector4f& color, f32 thickness = 2, i32 segment_count = 8);
+    void DrawCircle(const Rndr::Point2f& center, f32 radius, const Rndr::Vector4f& color, i32 segment_count = 16);
 
 private:
     constexpr static i32 k_max_vertex_count = 1024;

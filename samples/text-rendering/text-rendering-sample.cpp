@@ -110,6 +110,22 @@ int main()
         shape_renderer.DrawRect({400, 200}, {100, 100}, Rndr::Colors::k_white);
         shape_renderer.DrawLine({600, 200}, {800, 400}, Rndr::Colors::k_white, 5);
 
+        const Rndr::Point2f control_square = {500, 300};
+        shape_renderer.DrawCircle(control_square, 5, Rndr::Colors::k_green);
+        shape_renderer.DrawBezierSquare({400, 500}, control_square, {700, 500}, Rndr::Colors::k_white, 5, 16);
+
+        const Rndr::Point2f control0 = {1100, 300};
+        const Rndr::Point2f control1 = {1300, 600};
+        const Rndr::Point2f start = {1000, 500};
+        const Rndr::Point2f end = {1400, 500};
+        shape_renderer.DrawBezierCubic(start, control0, control1, end, Rndr::Colors::k_white, 5, 32);
+        shape_renderer.DrawCircle(start, 5, Rndr::Colors::k_red);
+        shape_renderer.DrawCircle(end, 5, Rndr::Colors::k_red);
+        shape_renderer.DrawCircle(control0, 5, Rndr::Colors::k_green);
+        shape_renderer.DrawCircle(control1, 5, Rndr::Colors::k_green);
+
+        shape_renderer.DrawCircle({800, 300}, 20, Rndr::Colors::k_white, 16);
+
         Rndr::CommandList cmd_list{gc};
         cmd_list.CmdBindSwapChainFrameBuffer(swap_chain);
         cmd_list.CmdClearAll(Rndr::Colors::k_pink);

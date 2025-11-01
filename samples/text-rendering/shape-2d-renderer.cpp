@@ -122,7 +122,19 @@ void Shape2DRenderer::Render(f32 delta_seconds, Rndr::CommandList& cmd_list)
     m_indices.Clear();
 }
 
-bool Shape2DRenderer::DrawRect(const Rndr::Point2f& bottom_left, const Rndr::Vector2f& size, const Rndr::Vector4f& color)
+void Shape2DRenderer::DrawTriangle(const Rndr::Point2f& a, const Rndr::Point2f& b, const Rndr::Point2f& c, const Rndr::Vector4f& color)
+{
+    const i32 m_vertex_base = static_cast<i32>(m_vertices.GetSize());
+    m_vertices.PushBack({.pos = a, .color = color});
+    m_vertices.PushBack({.pos = b, .color = color});
+    m_vertices.PushBack({.pos = c, .color = color});
+
+    m_indices.PushBack(m_vertex_base + 0);
+    m_indices.PushBack(m_vertex_base + 1);
+    m_indices.PushBack(m_vertex_base + 2);
+}
+
+void Shape2DRenderer::DrawRect(const Rndr::Point2f& bottom_left, const Rndr::Vector2f& size, const Rndr::Vector4f& color)
 {
     const i32 m_vertex_base = static_cast<i32>(m_vertices.GetSize());
     m_vertices.PushBack({.pos = bottom_left, .color = color});
@@ -136,11 +148,9 @@ bool Shape2DRenderer::DrawRect(const Rndr::Point2f& bottom_left, const Rndr::Vec
     m_indices.PushBack(m_vertex_base + 0);
     m_indices.PushBack(m_vertex_base + 2);
     m_indices.PushBack(m_vertex_base + 3);
-
-    return true;
 }
 
-bool Shape2DRenderer::DrawLine(const Rndr::Point2f& start, Rndr::Point2f end, const Rndr::Vector4f& color, f32 thickness)
+void Shape2DRenderer::DrawLine(const Rndr::Point2f& start, const Rndr::Point2f& end, const Rndr::Vector4f& color, f32 thickness)
 {
     Rndr::Vector2f dir = end - start;
     dir = Opal::Normalize(dir);
@@ -158,6 +168,50 @@ bool Shape2DRenderer::DrawLine(const Rndr::Point2f& start, Rndr::Point2f end, co
     m_indices.PushBack(m_vertex_base + 0);
     m_indices.PushBack(m_vertex_base + 2);
     m_indices.PushBack(m_vertex_base + 3);
+}
 
-    return true;
+void Shape2DRenderer::DrawBezierSquare(const Rndr::Point2f& start, const Rndr::Point2f& control, const Rndr::Point2f& end,
+                                       const Rndr::Vector4f& color, f32 thickness, i32 segment_count)
+{
+    Rndr::Point2f curr_start = start;
+    for (i32 segment_idx = 0; segment_idx < segment_count; ++segment_idx)
+    {
+        const f32 t = static_cast<f32>(segment_idx + 1) * (1.0f / static_cast<f32>(segment_count));
+        Rndr::Point2f curr_end = Rndr::Point2f::Zero();
+        curr_end.x = (1 - t) * (1 - t) * start.x + 2 * (1 - t) * t * control.x + t * t * end.x;
+        curr_end.y = (1 - t) * (1 - t) * start.y + 2 * (1 - t) * t * control.y + t * t * end.y;
+        DrawLine(curr_start, curr_end, color, thickness);
+        curr_start = curr_end;
+    }
+}
+
+void Shape2DRenderer::DrawBezierCubic(const Rndr::Point2f& start, const Rndr::Point2f& control0, const Rndr::Point2f& control1,
+                                      const Rndr::Point2f& end, const Rndr::Vector4f& color, f32 thickness, i32 segment_count)
+{
+    Rndr::Point2f curr_start = start;
+    for (i32 segment_idx = 0; segment_idx < segment_count; ++segment_idx)
+    {
+        const f32 t = static_cast<f32>(segment_idx + 1) * (1.0f / static_cast<f32>(segment_count));
+        Rndr::Point2f curr_end = Rndr::Point2f::Zero();
+        curr_end.x = (1 - t) * (1 - t) * (1 - t) * start.x + 3 * (1 - t) * (1 - t) * t * control0.x + 3 * (1 - t) * t * t * control1.x +
+                     t * t * t * end.x;
+        curr_end.y = (1 - t) * (1 - t) * (1 - t) * start.y + 3 * (1 - t) * (1 - t) * t * control0.y + 3 * (1 - t) * t * t * control1.y +
+                     t * t * t * end.y;
+        DrawLine(curr_start, curr_end, color, thickness);
+        curr_start = curr_end;
+    }
+}
+
+void Shape2DRenderer::DrawCircle(const Rndr::Point2f& center, f32 radius, const Rndr::Vector4f& color, i32 segment_count)
+{
+    Rndr::Point2f curr_start = center + Rndr::Vector2f{radius, 0};
+    for (i32 segment_idx = 0; segment_idx < segment_count; ++segment_idx)
+    {
+        const f32 step = 360.0f / static_cast<f32>(segment_count);
+        const f32 curr_step_radians = Opal::Radians(static_cast<f32>(segment_idx + 1) * step);
+        Rndr::Point2f curr_end{radius * Opal::Cos(curr_step_radians), radius * Opal::Sin(curr_step_radians)};
+        curr_end += Rndr::Vector2f{center.x, center.y};
+        DrawTriangle(curr_start, curr_end, center, color);
+        curr_start = curr_end;
+    }
 }
