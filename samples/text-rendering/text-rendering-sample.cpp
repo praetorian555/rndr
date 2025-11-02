@@ -118,7 +118,7 @@ int main()
 
         if (glyph_to_draw[0] != 0)
         {
-            text_renderer.DrawGlyphBitmap(shape_renderer, glyph_to_draw[0], {600, 100}, {800, 800});
+            text_renderer.DrawGlyphBitmap(shape_renderer, glyph_to_draw[0], {700, 200}, 800, font_size_in_pixels);
         }
 
         Rndr::CommandList cmd_list{gc};
