@@ -143,6 +143,15 @@ Rndr::ImGuiContext::ImGuiContext(GenericWindow& window, GraphicsContext& context
     io.ConfigFlags |= m_desc.enable_keyboard_navigation ? ImGuiConfigFlags_NavEnableKeyboard : ImGuiConfigFlags_None;
     io.ConfigFlags |= m_desc.enable_gamepad_navigation ? ImGuiConfigFlags_NavEnableGamepad : ImGuiConfigFlags_None;
 
+    if (!m_desc.font_path.IsEmpty())
+    {
+        io.Fonts->Clear();
+        ImFontConfig config;
+        config.RasterizerMultiply = m_desc.alpha_multiplier;
+        io.Fonts->AddFontFromFileTTF(m_desc.font_path.GetData(), m_desc.font_size_in_pixels, &config);
+        io.Fonts->Build();
+    }
+
     i32 x, y, w, h;
     window.GetPositionAndSize(x, y, w, h);
     io.DisplaySize = ImVec2(static_cast<f32>(w), static_cast<f32>(h));

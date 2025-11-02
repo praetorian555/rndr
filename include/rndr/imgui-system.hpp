@@ -11,6 +11,9 @@ struct ImGuiContextDesc
 {
     bool enable_keyboard_navigation = true;
     bool enable_gamepad_navigation = false;
+    Opal::StringUtf8 font_path;
+    f32 font_size_in_pixels = 16;
+    f32 alpha_multiplier = 1.5f;
 };
 
 class ImGuiContext : public SystemMessageHandler
