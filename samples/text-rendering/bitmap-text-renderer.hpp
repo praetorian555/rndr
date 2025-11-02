@@ -13,9 +13,9 @@ struct BitmapTextRendererDesc
     i32 first_code_point = 32;  // ASCII
     i32 code_point_count = 95;
     i32 max_char_render_count = 1024;
-    u32 oversample_h = 1;
+    u32 oversample_h = 2;
     u32 oversample_v = 1;
-    bool align_to_int = false;
+    f32 alpha_multiplier = 1.5f;
 };
 
 class BitmapTextRenderer
@@ -27,7 +27,7 @@ public:
     void UpdateFrameBuffer(Rndr::FrameBuffer& fb);
     void UpdateFontSize(f32 font_size);
     void UpdateFontOversampling(u32 oversample_h, u32 oversample_v);
-    void UpdateAlignToInt(bool align_to_int);
+    void SetAlphaMultiplier(f32 alpha_multiplier);
 
     bool DrawText(const Opal::StringUtf8& text, const Rndr::Vector2f& position, const Rndr::Vector4f& color);
 

@@ -85,6 +85,13 @@ void BitmapTextRenderer::UpdateFontAtlas()
         stbtt_GetPackedQuad(m_packed_chars.GetData(), k_atlas_width, k_atlas_height, code_point_idx, &x, &y,
                             &m_aligned_quads[code_point_idx], 0);
     }
+    for (u8& pixel : m_atlas_data)
+    {
+        u32 val = pixel;
+        val = static_cast<u32>(static_cast<f32>(val) * m_desc.alpha_multiplier);
+        pixel = val > 255 ? 255 : val & 0x000000ff;
+    }
+
     // Useful for debugging to dump rasterized atlas
     const Rndr::Bitmap bitmap(k_atlas_width, k_atlas_height, 1, Rndr::PixelFormat::R8_UNORM, Opal::AsWritableBytes(m_atlas_data));
     Rndr::File::SaveImage(bitmap, "atlas.png");
@@ -132,11 +139,11 @@ void BitmapTextRenderer::UpdateFontOversampling(u32 oversample_h, u32 oversample
     }
 }
 
-void BitmapTextRenderer::UpdateAlignToInt(bool align_to_int)
+void BitmapTextRenderer::SetAlphaMultiplier(f32 alpha_multiplier)
 {
-    if (m_desc.align_to_int != align_to_int)
+    if (m_desc.alpha_multiplier != alpha_multiplier)
     {
-        m_desc.align_to_int = align_to_int;
+        m_desc.alpha_multiplier = alpha_multiplier;
         UpdateFontAtlas();
     }
 }

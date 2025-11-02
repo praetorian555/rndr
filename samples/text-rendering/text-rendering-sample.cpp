@@ -50,7 +50,7 @@ int main()
     window->GetPositionAndSize(x, y, window_width, window_height);
     window->SetTitle("Text Rendering Sample");
 
-    i32 sample_count = 8;
+    i32 sample_count = 1;
 
     const Rndr::GraphicsContextDesc gc_desc{.window_handle = window->GetNativeHandle()};
     Rndr::GraphicsContext gc{gc_desc};
@@ -59,12 +59,13 @@ int main()
     Rndr::FrameBuffer final_render =
         RecreateFrameBuffer(gc, rendering_resolution_options[resolution_index].x, rendering_resolution_options[resolution_index].y, sample_count);
 
-    Rndr::ImGuiContext imgui_context(*window, gc);
+    const Opal::StringUtf8 font_path = Opal::Paths::Combine(nullptr, RNDR_CORE_ASSETS_DIR, "OpenSans.ttf").GetValue();
+    Rndr::ImGuiContext imgui_context(*window, gc, {.font_path = font_path});
     app->RegisterSystemMessageHandler(&imgui_context);
 
     BitmapTextRenderer text_renderer;
     BitmapTextRendererDesc text_renderer_desc{.font_size = 16.0};
-    text_renderer_desc.font_file_path = Opal::Paths::Combine(nullptr, RNDR_CORE_ASSETS_DIR, "OpenSans.ttf").GetValue();
+    text_renderer_desc.font_file_path = font_path;
     text_renderer.Init(&gc, &final_render, text_renderer_desc);
 
     Shape2DRenderer shape_renderer;
@@ -92,7 +93,7 @@ int main()
     i32 oversample_h = static_cast<i32>(text_renderer_desc.oversample_h);
     i32 oversample_v = static_cast<i32>(text_renderer_desc.oversample_v);
     char glyph_to_draw[2] = {};
-    bool align_to_int = false;
+    f32 alpha_multiplier = text_renderer_desc.alpha_multiplier;
     while (!window->IsClosed())
     {
         const Rndr::f64 start_seconds = Opal::GetSeconds();
@@ -113,14 +114,14 @@ int main()
 
         text_renderer.UpdateFontSize(font_size_in_pixels);
         text_renderer.UpdateFontOversampling(oversample_h, oversample_v);
-        text_renderer.UpdateAlignToInt(align_to_int);
+        text_renderer.SetAlphaMultiplier(alpha_multiplier);
 
         text_renderer.DrawText("The quick brown fox jumps over the lazy dog!", {100, 100}, Rndr::Colors::k_white);
         text_renderer.DrawText(buffer, {100, 300}, Rndr::Colors::k_white);
 
         if (glyph_to_draw[0] != 0)
         {
-            text_renderer.DrawGlyphBitmap(shape_renderer, glyph_to_draw[0], {700, 200}, 800, align_to_int);
+            text_renderer.DrawGlyphBitmap(shape_renderer, glyph_to_draw[0], {700, 200}, 800);
         }
 
         shape_renderer.DrawArrow({700, 100}, {1, 0}, Rndr::Colors::k_white, 100, 2, 10, 7);
@@ -129,7 +130,7 @@ int main()
         cmd_list.CmdBindSwapChainFrameBuffer(swap_chain);
         cmd_list.CmdClearAll(Rndr::Colors::k_pink);
         cmd_list.CmdBindFrameBuffer(final_render);
-        cmd_list.CmdClearAll(Rndr::Colors::k_black);
+        cmd_list.CmdClearAll({0.06f, 0.06f, 0.06f, 0.94f});
 
         text_renderer.Render(delta_seconds, cmd_list);
         shape_renderer.Render(delta_seconds, cmd_list);
@@ -152,7 +153,7 @@ int main()
         ImGui::InputInt("Font Oversampling Horizontal", &oversample_h);
         ImGui::InputInt("Font Oversampling Vertical", &oversample_v);
         ImGui::InputText("Glyph to inspect", glyph_to_draw, 2);
-        ImGui::Checkbox("Align to int", &align_to_int);
+        ImGui::InputFloat("Alpha multiplier", &alpha_multiplier);
         ImGui::End();
         imgui_context.EndFrame();
 
