@@ -15,6 +15,7 @@ struct BitmapTextRendererDesc
     i32 max_char_render_count = 1024;
     u32 oversample_h = 1;
     u32 oversample_v = 1;
+    bool align_to_int = false;
 };
 
 class BitmapTextRenderer
@@ -26,12 +27,13 @@ public:
     void UpdateFrameBuffer(Rndr::FrameBuffer& fb);
     void UpdateFontSize(f32 font_size);
     void UpdateFontOversampling(u32 oversample_h, u32 oversample_v);
+    void UpdateAlignToInt(bool align_to_int);
 
     bool DrawText(const Opal::StringUtf8& text, const Rndr::Vector2f& position, const Rndr::Vector4f& color);
 
     void Render(f32 delta_seconds, Rndr::CommandList& cmd_list);
 
-    void DrawGlyphBitmap(class Shape2DRenderer& shape_renderer, char ch, const Rndr::Point2f& bottom_left, f32 size_y, f32 pixel_size = 16);
+    void DrawGlyphBitmap(class Shape2DRenderer& shape_renderer, char ch, const Rndr::Point2f& bottom_left, f32 size_y, bool align_to_int = false);
 
 private:
     void UpdateFontAtlas();
@@ -58,6 +60,7 @@ private:
     BitmapTextRendererDesc m_desc;
     Opal::DynamicArray<Rndr::u8> m_font_contents;
     stbtt_fontinfo m_font_info = {};
+    Opal::DynamicArray<u8> m_atlas_data;
     Rndr::Texture m_atlas_texture;
     Rndr::Buffer m_vertex_buffer;
     Rndr::Buffer m_index_buffer;

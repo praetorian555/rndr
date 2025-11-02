@@ -70,11 +70,11 @@ void BitmapTextRenderer::UpdateFontAtlas()
         stbtt_InitFont(&m_font_info, m_font_contents.GetData(), stbtt_GetFontOffsetForIndex(m_font_contents.GetData(), 0));
     }
 
-    Opal::DynamicArray<u8> atlas(k_atlas_height * k_atlas_width);
+    m_atlas_data = Opal::DynamicArray<u8>(k_atlas_height * k_atlas_width);
 
     // Render font into the atlas
     stbtt_pack_context pack_context{};
-    stbtt_PackBegin(&pack_context, atlas.GetData(), k_atlas_width, k_atlas_height, k_atlas_width, 1, nullptr);
+    stbtt_PackBegin(&pack_context, m_atlas_data.GetData(), k_atlas_width, k_atlas_height, k_atlas_width, 1, nullptr);
     stbtt_PackSetOversampling(&pack_context, m_desc.oversample_h, m_desc.oversample_v);
     stbtt_PackFontRange(&pack_context, m_font_contents.GetData(), 0, m_desc.font_size, m_desc.first_code_point, m_desc.code_point_count,
                         m_packed_chars.GetData());
@@ -86,14 +86,14 @@ void BitmapTextRenderer::UpdateFontAtlas()
                             &m_aligned_quads[code_point_idx], 0);
     }
     // Useful for debugging to dump rasterized atlas
-    const Rndr::Bitmap bitmap(k_atlas_width, k_atlas_height, 1, Rndr::PixelFormat::R8_UNORM, Opal::AsWritableBytes(atlas));
+    const Rndr::Bitmap bitmap(k_atlas_width, k_atlas_height, 1, Rndr::PixelFormat::R8_UNORM, Opal::AsWritableBytes(m_atlas_data));
     Rndr::File::SaveImage(bitmap, "atlas.png");
 
     constexpr Rndr::TextureDesc k_texture_desc{.width = k_atlas_width,
                                                .height = k_atlas_height,
                                                .type = Rndr::TextureType::Texture2D,
                                                .pixel_format = Rndr::PixelFormat::R8_UNORM};
-    m_atlas_texture = {*m_gc, k_texture_desc, {}, Opal::AsBytes(atlas)};
+    m_atlas_texture = {*m_gc, k_texture_desc, {}, Opal::AsBytes(m_atlas_data)};
     RNDR_ASSERT(m_atlas_texture.IsValid(), "Atlas texture could not be created!");
 }
 
@@ -128,6 +128,15 @@ void BitmapTextRenderer::UpdateFontOversampling(u32 oversample_h, u32 oversample
     {
         m_desc.oversample_h = oversample_h;
         m_desc.oversample_v = oversample_v;
+        UpdateFontAtlas();
+    }
+}
+
+void BitmapTextRenderer::UpdateAlignToInt(bool align_to_int)
+{
+    if (m_desc.align_to_int != align_to_int)
+    {
+        m_desc.align_to_int = align_to_int;
         UpdateFontAtlas();
     }
 }
@@ -209,33 +218,38 @@ void BitmapTextRenderer::Render(f32 delta_seconds, Rndr::CommandList& cmd_list)
     m_indices.Clear();
 }
 
-void BitmapTextRenderer::DrawGlyphBitmap(class Shape2DRenderer& shape_renderer, char ch, const Rndr::Point2f& bottom_left,
-                                         f32 size_y, f32 pixel_size)
+void BitmapTextRenderer::DrawGlyphBitmap(class Shape2DRenderer& shape_renderer, char ch, const Rndr::Point2f& bottom_left, f32 size_y,
+                                         bool align_to_int)
 {
-    f32 scale = stbtt_ScaleForPixelHeight(&m_font_info, pixel_size);
     i32 width = 0;
     i32 height = 0;
-    i32 xoff = 0;
-    i32 yoff = 0;
-    u8* data = stbtt_GetCodepointBitmap(&m_font_info, 0, scale, ch, &width, &height, &xoff, &yoff);
-    RNDR_ASSERT(data != nullptr, "Failed to get codepoint bitmap");
+    f32 xpos = 0;
+    f32 ypos = 0;
+    stbtt_aligned_quad quad;
+    stbtt_GetPackedQuad(m_packed_chars.GetData(), k_atlas_width, k_atlas_height, ch - 32, &xpos, &ypos, &quad, align_to_int ? 1 : 0);
+    width = quad.x1 - quad.x0;
+    height = quad.y1 - quad.y0;
+    stbtt_packedchar& packed_char = m_packed_chars[ch - 32];
+
 
     const f32 step = size_y / static_cast<f32>(height);
 
-    for (int y = height - 1; y >= 0; y--)
+    for (int y = packed_char.y1 - 1; y >= packed_char.y0; y--)
     {
-        for (int x = 0; x < width; x++)
+        for (int x = packed_char.x0; x < packed_char.x1; x++)
         {
-            const Rndr::Point2f curr_bottom_left{bottom_left.x + x * step, bottom_left.y + (height - y - 1) * step};
-            const f32 coverage = data[y * width + x] / 255.0f;
+            i32 x_local = x - packed_char.x0;
+            i32 y_local = (packed_char.y1 - packed_char.y0) - (y - packed_char.y0) - 1;
+            const Rndr::Point2f curr_bottom_left{bottom_left.x + x_local * step, bottom_left.y + y_local * step};
+            const f32 coverage = m_atlas_data[y * k_atlas_width + x] / 255.0f;
             shape_renderer.DrawRect(curr_bottom_left, {step, step}, {coverage, coverage, coverage, 1.0f});
         }
     }
 
     shape_renderer.DrawLine(bottom_left, {bottom_left.x + width * step, bottom_left.y}, Rndr::Colors::k_red);
-    shape_renderer.DrawLine({bottom_left.x, bottom_left.y + height * step},
-                            {bottom_left.x + width * step, bottom_left.y + height * step}, Rndr::Colors::k_red);
+    shape_renderer.DrawLine({bottom_left.x, bottom_left.y + height * step}, {bottom_left.x + width * step, bottom_left.y + height * step},
+                            Rndr::Colors::k_red);
     shape_renderer.DrawLine(bottom_left, {bottom_left.x, bottom_left.y + height * step}, Rndr::Colors::k_green);
-    shape_renderer.DrawLine({bottom_left.x + width * step, bottom_left.y},
-                            {bottom_left.x + width * step, bottom_left.y + height * step}, Rndr::Colors::k_green);
+    shape_renderer.DrawLine({bottom_left.x + width * step, bottom_left.y}, {bottom_left.x + width * step, bottom_left.y + height * step},
+                            Rndr::Colors::k_green);
 }

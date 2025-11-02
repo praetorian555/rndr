@@ -92,6 +92,7 @@ int main()
     i32 oversample_h = static_cast<i32>(text_renderer_desc.oversample_h);
     i32 oversample_v = static_cast<i32>(text_renderer_desc.oversample_v);
     char glyph_to_draw[2] = {};
+    bool align_to_int = false;
     while (!window->IsClosed())
     {
         const Rndr::f64 start_seconds = Opal::GetSeconds();
@@ -112,13 +113,14 @@ int main()
 
         text_renderer.UpdateFontSize(font_size_in_pixels);
         text_renderer.UpdateFontOversampling(oversample_h, oversample_v);
+        text_renderer.UpdateAlignToInt(align_to_int);
 
         text_renderer.DrawText("The quick brown fox jumps over the lazy dog!", {100, 100}, Rndr::Colors::k_white);
         text_renderer.DrawText(buffer, {100, 300}, Rndr::Colors::k_white);
 
         if (glyph_to_draw[0] != 0)
         {
-            text_renderer.DrawGlyphBitmap(shape_renderer, glyph_to_draw[0], {700, 200}, 800, font_size_in_pixels);
+            text_renderer.DrawGlyphBitmap(shape_renderer, glyph_to_draw[0], {700, 200}, 800, align_to_int);
         }
 
         Rndr::CommandList cmd_list{gc};
@@ -148,6 +150,7 @@ int main()
         ImGui::InputInt("Font Oversampling Horizontal", &oversample_h);
         ImGui::InputInt("Font Oversampling Vertical", &oversample_v);
         ImGui::InputText("Glyph to inspect", glyph_to_draw, 2);
+        ImGui::Checkbox("Align to int", &align_to_int);
         ImGui::End();
         imgui_context.EndFrame();
 
