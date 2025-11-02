@@ -33,7 +33,7 @@ public:
     void DrawCircle(const Rndr::Point2f& center, f32 radius, const Rndr::Vector4f& color, i32 segment_count = 16);
 
 private:
-    constexpr static i32 k_max_vertex_count = 1024;
+    constexpr static i32 k_max_vertex_count = 100 * 1024;
 
     struct VertexData
     {
