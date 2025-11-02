@@ -26,6 +26,8 @@ public:
     void DrawTriangle(const Rndr::Point2f& a, const Rndr::Point2f& b, const Rndr::Point2f& c, const Rndr::Vector4f& color);
     void DrawRect(const Rndr::Point2f& bottom_left, const Rndr::Vector2f& size, const Rndr::Vector4f& color);
     void DrawLine(const Rndr::Point2f& start, const Rndr::Point2f& end, const Rndr::Vector4f& color, f32 thickness = 2);
+    void DrawArrow(const Rndr::Point2f& start, const Rndr::Vector2f& direction, const Rndr::Vector4f& color, f32 length,
+                   f32 body_thickness = 2, f32 head_thickness = 4, f32 body_to_head_ratio = 3);
     void DrawBezierSquare(const Rndr::Point2f& start, const Rndr::Point2f& control, const Rndr::Point2f& end, const Rndr::Vector4f& color,
                           f32 thickness = 2, i32 segment_count = 8);
     void DrawBezierCubic(const Rndr::Point2f& start, const Rndr::Point2f& control0, const Rndr::Point2f& control1, const Rndr::Point2f& end,

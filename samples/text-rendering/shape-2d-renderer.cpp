@@ -170,6 +170,23 @@ void Shape2DRenderer::DrawLine(const Rndr::Point2f& start, const Rndr::Point2f& 
     m_indices.PushBack(m_vertex_base + 3);
 }
 
+void Shape2DRenderer::DrawArrow(const Rndr::Point2f& start, const Rndr::Vector2f& direction, const Rndr::Vector4f& color, f32 length,
+                                f32 body_thickness, f32 head_thickness, f32 body_to_head_ratio)
+{
+    RNDR_ASSERT(body_to_head_ratio > 0,
+                "Body to head ratio needs to be larger then one! For example if its 3 then total length is divided in 4 parts and 3 are "
+                "used for body.");
+    const f32 body_length = body_to_head_ratio * length / (body_to_head_ratio + 1);
+    const f32 head_length = length / (body_to_head_ratio + 1);
+
+    const Rndr::Vector2f dir = Opal::Normalize(direction);
+    const Rndr::Point2f body_end = start + body_length * dir;
+    DrawLine(start, body_end, color, body_thickness);
+
+    const Rndr::Vector2f perp(-dir.y, dir.x);
+    DrawTriangle(body_end + (head_thickness / 2.0f) * perp, body_end - (head_thickness / 2.0f) * perp, body_end + head_length * dir, color);
+}
+
 void Shape2DRenderer::DrawBezierSquare(const Rndr::Point2f& start, const Rndr::Point2f& control, const Rndr::Point2f& end,
                                        const Rndr::Vector4f& color, f32 thickness, i32 segment_count)
 {

@@ -123,6 +123,8 @@ int main()
             text_renderer.DrawGlyphBitmap(shape_renderer, glyph_to_draw[0], {700, 200}, 800, align_to_int);
         }
 
+        shape_renderer.DrawArrow({700, 100}, {1, 0}, Rndr::Colors::k_white, 100, 2, 10, 7);
+
         Rndr::CommandList cmd_list{gc};
         cmd_list.CmdBindSwapChainFrameBuffer(swap_chain);
         cmd_list.CmdClearAll(Rndr::Colors::k_pink);
