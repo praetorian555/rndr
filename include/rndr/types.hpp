@@ -17,8 +17,6 @@ using u16 = Opal::u16;
 using u32 = Opal::u32;
 using u64 = Opal::u64;
 
-using size_t = Opal::size_t;
-
 using f32 = Opal::f32;
 using f64 = Opal::f64;
 

@@ -95,13 +95,13 @@ int main()
     const Rndr::BufferDesc buffer_desc{.usage = Rndr::Usage::Dynamic, .size = sizeof(Uniforms), .stride = sizeof(Uniforms)};
     Rndr::Buffer uniform_buffer(gc, buffer_desc);
 
-    const Opal::StringUtf8 vertex_shader_path = Opal::Paths::Combine(nullptr, RNDR_CORE_ASSETS_DIR, "grid.vert").GetValue();
+    const Opal::StringUtf8 vertex_shader_path = Opal::Paths::Combine(RNDR_CORE_ASSETS_DIR, "grid.vert");
     Rndr::f64 vertex_shader_last_modified_time = Opal::GetLastFileModifiedTimeInSeconds(vertex_shader_path);
     const Opal::StringUtf8 vertex_shader_source = Rndr::File::ReadShader(RNDR_CORE_ASSETS_DIR, "grid.vert");
     const Rndr::ShaderDesc vertex_shader_desc{.type = Rndr::ShaderType::Vertex, .source = vertex_shader_source};
     Rndr::Shader vertex_shader(gc, vertex_shader_desc);
 
-    const Opal::StringUtf8 frag_shader_path = Opal::Paths::Combine(nullptr, RNDR_CORE_ASSETS_DIR, "grid.frag").GetValue();
+    const Opal::StringUtf8 frag_shader_path = Opal::Paths::Combine(RNDR_CORE_ASSETS_DIR, "grid.frag");
     Rndr::f64 frag_shader_last_modified_time = Opal::GetLastFileModifiedTimeInSeconds(frag_shader_path);
     const Opal::StringUtf8 fragment_shader_source = Rndr::File::ReadShader(RNDR_CORE_ASSETS_DIR, "grid.frag");
     const Rndr::ShaderDesc fragment_shader_desc{.type = Rndr::ShaderType::Fragment, .source = fragment_shader_source};

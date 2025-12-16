@@ -6,19 +6,19 @@
 Rndr::InputLayoutBuilder& Rndr::InputLayoutBuilder::AddVertexBuffer(const Buffer& buffer, i32 buffer_index, DataRepetition repetition,
                                                                     i32 per_instance_rate)
 {
-    m_buffers.try_emplace(buffer_index, Opal::Ref(buffer), repetition, per_instance_rate);
+    m_buffers.Insert(buffer_index, {.buffer = Opal::Ref(buffer), .repetition = repetition, .per_instance_rate = per_instance_rate});
     return *this;
 }
 
 Rndr::InputLayoutBuilder& Rndr::InputLayoutBuilder::AddShaderStorage(const Rndr::Buffer& buffer, i32 buffer_index)
 {
-    m_buffers.try_emplace(buffer_index, Opal::Ref(buffer), DataRepetition::PerInstance, 0);
+    m_buffers.Insert(buffer_index, {.buffer = Opal::Ref(buffer), .repetition = DataRepetition::PerInstance, .per_instance_rate = 0});
     return *this;
 }
 
 Rndr::InputLayoutBuilder& Rndr::InputLayoutBuilder::AppendElement(i32 buffer_index, PixelFormat format)
 {
-    auto buffer_it = m_buffers.find(buffer_index);
+    auto buffer_it = m_buffers.Find(buffer_index);
     if (buffer_it == m_buffers.end())
     {
         RNDR_LOG_ERROR("Failed since the buffer index is not present, call AddVertexBuffer first!");
@@ -30,7 +30,7 @@ Rndr::InputLayoutBuilder& Rndr::InputLayoutBuilder::AppendElement(i32 buffer_ind
         return *this;
     }
 
-    BufferInfo& info = buffer_it->second;
+    BufferInfo& info = buffer_it.GetValue();
     i32 instance_rate = info.repetition == DataRepetition::PerVertex ? 0 : info.per_instance_rate;
     if (instance_rate < 1)
     {
@@ -59,7 +59,7 @@ Rndr::InputLayoutDesc Rndr::InputLayoutBuilder::Build()
 {
     Opal::DynamicArray<Opal::Ref<const Buffer>> buffers;
     Opal::DynamicArray<i32> buffer_binding_slots;
-    buffers.Reserve(m_buffers.size());
+    buffers.Reserve(m_buffers.GetSize());
     for (auto const& [binding_index, buffer_info] : m_buffers)
     {
         buffers.PushBack(buffer_info.buffer);

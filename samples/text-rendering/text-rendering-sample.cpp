@@ -59,7 +59,7 @@ int main()
     Rndr::FrameBuffer final_render =
         RecreateFrameBuffer(gc, rendering_resolution_options[resolution_index].x, rendering_resolution_options[resolution_index].y, sample_count);
 
-    const Opal::StringUtf8 font_path = Opal::Paths::Combine(nullptr, RNDR_CORE_ASSETS_DIR, "OpenSans.ttf").GetValue();
+    const Opal::StringUtf8 font_path = Opal::Paths::Combine(RNDR_CORE_ASSETS_DIR, "OpenSans.ttf");
     Rndr::ImGuiContext imgui_context(*window, gc, {.font_path = font_path});
     app->RegisterSystemMessageHandler(&imgui_context);
 

@@ -257,9 +257,9 @@ bool Rndr::ImGuiContext::OnButtonDown(const GenericWindow& window, InputPrimitiv
         return false;
     }
     ImGuiIO& io = ImGui::GetIO();
-    if (g_primitive_to_imgui_key.contains(primitive))
+    if (g_primitive_to_imgui_key.Contains(primitive))
     {
-        io.AddKeyEvent(g_primitive_to_imgui_key[primitive], true);
+        io.AddKeyEvent(g_primitive_to_imgui_key.GetValue(primitive), true);
     }
     return true;
 }
@@ -271,9 +271,9 @@ bool Rndr::ImGuiContext::OnButtonUp(const GenericWindow& window, InputPrimitive 
         return false;
     }
     ImGuiIO& io = ImGui::GetIO();
-    if (g_primitive_to_imgui_key.contains(primitive))
+    if (g_primitive_to_imgui_key.Contains(primitive))
     {
-        io.AddKeyEvent(g_primitive_to_imgui_key[primitive], false);
+        io.AddKeyEvent(g_primitive_to_imgui_key.GetValue(primitive), false);
     }
     return true;
 }
@@ -295,10 +295,10 @@ bool Rndr::ImGuiContext::OnMouseButtonDown(const GenericWindow& window, InputPri
     {
         return false;
     }
-    if (g_mouse_primitive_to_imgui_key.contains(primitive))
+    if (g_mouse_primitive_to_imgui_key.Contains(primitive))
     {
         ImGuiIO& io = ImGui::GetIO();
-        io.AddMouseButtonEvent(g_mouse_primitive_to_imgui_key[primitive], true);
+        io.AddMouseButtonEvent(g_mouse_primitive_to_imgui_key.GetValue(primitive), true);
     }
     return true;
 }
@@ -310,10 +310,10 @@ bool Rndr::ImGuiContext::OnMouseButtonUp(const GenericWindow& window, InputPrimi
         return false;
     }
 
-    if (g_mouse_primitive_to_imgui_key.contains(primitive))
+    if (g_mouse_primitive_to_imgui_key.Contains(primitive))
     {
         ImGuiIO& io = ImGui::GetIO();
-        io.AddMouseButtonEvent(g_mouse_primitive_to_imgui_key[primitive], false);
+        io.AddMouseButtonEvent(g_mouse_primitive_to_imgui_key.GetValue(primitive), false);
     }
     return true;
 }

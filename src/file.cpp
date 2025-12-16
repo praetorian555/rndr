@@ -1,5 +1,6 @@
 #include "rndr/file.hpp"
 
+#include "../build/opengl-msvc-opt-debug/_deps/opal-src/include/opal/file-system.h"
 #include "stb_image/stb_image.h"
 #include "stb_image/stb_image_write.h"
 
@@ -86,14 +87,8 @@ Opal::StringUtf8 Rndr::File::ReadEntireTextFile(const Opal::StringUtf8& file_pat
 
 Opal::StringUtf8 Rndr::File::ReadShader(const Opal::StringUtf8& ref_path, const Opal::StringUtf8& shader_path)
 {
-    const auto full_path_result = Opal::Paths::Combine(nullptr, ref_path, shader_path);
-    if (!full_path_result.HasValue())
-    {
-        RNDR_LOG_ERROR("Failed to assemble shader path with error %d!", full_path_result.GetError());
-        return {};
-    }
-    Opal::StringUtf8 full_path = full_path_result.GetValue();
-    if (!Opal::Paths::Exists(full_path_result.GetValue()))
+    const Opal::StringUtf8 full_path = Opal::Paths::Combine(ref_path, shader_path);
+    if (!Opal::Exists(full_path))
     {
         RNDR_LOG_ERROR("Shader file %s does not exist!", full_path.GetData());
         return {};

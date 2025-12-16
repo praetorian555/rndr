@@ -22,7 +22,7 @@ Rndr::Application* Rndr::Application::Create(const ApplicationDesc& desc)
 {
     if (g_instance == nullptr)
     {
-        g_instance = Opal::New<Application>(desc.user_allocator, desc);
+        g_instance = Opal::New<Application>(desc.user_allocator != nullptr ? desc.user_allocator : Opal::GetDefaultAllocator(), desc);
         return g_instance;
     }
     RNDR_ASSERT(false, "There can only be one instance of the Rndr::Application!");

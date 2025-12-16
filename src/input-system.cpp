@@ -264,7 +264,7 @@ Rndr::InputSystem* Rndr::InputSystem::Get()
 {
     if (!g_input_system.IsValid())
     {
-        g_input_system = Opal::MakeDefaultScoped<InputSystem>();
+        g_input_system = Opal::ScopePtr<InputSystem>(Opal::GetDefaultAllocator());
     }
     return g_input_system.Get();
 }
@@ -273,7 +273,7 @@ Rndr::InputSystem& Rndr::InputSystem::GetChecked()
 {
     if (!g_input_system.IsValid())
     {
-        g_input_system = Opal::MakeDefaultScoped<InputSystem>();
+        g_input_system = Opal::ScopePtr<InputSystem>(Opal::GetDefaultAllocator());
     }
     RNDR_ASSERT(g_input_system.IsValid(), "Rndr::InputSystem::GetChecked()");
     return *g_input_system;
@@ -304,7 +304,7 @@ const Opal::DynamicArray<Opal::Ref<Rndr::InputContext>>& Rndr::InputSystem::GetI
 
 Rndr::InputContext& Rndr::InputSystem::GetCurrentContext()
 {
-    return m_contexts.Back().GetValue().Get();
+    return m_contexts.Back().Get();
 }
 
 bool Rndr::InputSystem::PushContext(const Opal::Ref<InputContext>& context)

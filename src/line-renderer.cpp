@@ -12,15 +12,16 @@ Rndr::LineRenderer::LineRenderer(const Opal::StringUtf8& name, const Rndr::Rende
     const Opal::StringUtf8 vertex_shader_code = File::ReadShader(RNDR_CORE_ASSETS_DIR, "lines.vert");
     const Opal::StringUtf8 pixel_shader_code = File::ReadShader(RNDR_CORE_ASSETS_DIR, "lines.frag");
 
-    m_vertex_shader =
-        Opal::MakeDefaultScoped<Shader>(m_desc.graphics_context, ShaderDesc{.type = ShaderType::Vertex, .source = vertex_shader_code});
+    Opal::AllocatorBase* default_allocator = Opal::GetDefaultAllocator();
+    m_vertex_shader = Opal::ScopePtr<Shader>(default_allocator, m_desc.graphics_context,
+                                             ShaderDesc{.type = ShaderType::Vertex, .source = vertex_shader_code});
     if (!m_vertex_shader->IsValid())
     {
         RNDR_LOG_ERROR("Failed to create vertex shader for LineRenderer");
         return;
     }
-    m_fragment_shader =
-        Opal::MakeDefaultScoped<Shader>(m_desc.graphics_context, ShaderDesc{.type = ShaderType::Fragment, .source = pixel_shader_code});
+    m_fragment_shader = Opal::ScopePtr<Shader>(default_allocator, m_desc.graphics_context,
+                                               ShaderDesc{.type = ShaderType::Fragment, .source = pixel_shader_code});
     if (!m_fragment_shader->IsValid())
     {
         RNDR_LOG_ERROR("Failed to create fragment shader for LineRenderer");
@@ -28,8 +29,8 @@ Rndr::LineRenderer::LineRenderer(const Opal::StringUtf8& name, const Rndr::Rende
     }
 
     constexpr u64 k_stride = sizeof(VertexData);
-    m_vertex_buffer = Opal::MakeDefaultScoped<Buffer>(
-        m_desc.graphics_context,
+    m_vertex_buffer = Opal::ScopePtr<Buffer>(
+        default_allocator, m_desc.graphics_context,
         BufferDesc{.type = Rndr::BufferType::ShaderStorage, .usage = Usage::Dynamic, .size = k_vertex_data_size, .stride = k_stride},
         AsBytes(m_vertex_data));
     if (!m_vertex_buffer->IsValid())
@@ -40,8 +41,8 @@ Rndr::LineRenderer::LineRenderer(const Opal::StringUtf8& name, const Rndr::Rende
 
     InputLayoutBuilder builder;
     const Rndr::InputLayoutDesc input_layout_desc = builder.AddVertexBuffer(*m_vertex_buffer, 1, Rndr::DataRepetition::PerVertex).Build();
-    m_pipeline = Opal::MakeDefaultScoped<Pipeline>(
-        m_desc.graphics_context,
+    m_pipeline = Opal::ScopePtr<Pipeline>(
+        default_allocator, m_desc.graphics_context,
         PipelineDesc{.vertex_shader = m_vertex_shader.Get(),
                      .pixel_shader = m_fragment_shader.Get(),
                      .input_layout = input_layout_desc,
@@ -53,9 +54,9 @@ Rndr::LineRenderer::LineRenderer(const Opal::StringUtf8& name, const Rndr::Rende
         return;
     }
 
-    Matrix4x4f identity_matrix;
-    m_constant_buffer = Opal::MakeDefaultScoped<Buffer>(
-        m_desc.graphics_context,
+    const Matrix4x4f identity_matrix(1.0f);
+    m_constant_buffer = Opal::ScopePtr<Buffer>(
+        default_allocator, m_desc.graphics_context,
         BufferDesc{
             .type = Rndr::BufferType::Constant, .usage = Rndr::Usage::Dynamic, .size = sizeof(Matrix4x4f), .stride = sizeof(Matrix4x4f)},
         Opal::AsBytes(identity_matrix));
@@ -76,8 +77,8 @@ void Rndr::LineRenderer::AddLine(const Point3f& start, const Point3f& end, const
         return;
     }
 
-    m_vertex_data.PushBack({start, color});
-    m_vertex_data.PushBack({end, color});
+    m_vertex_data.PushBack({.position = start, .color = color});
+    m_vertex_data.PushBack({.position = end, .color = color});
 }
 
 void Rndr::LineRenderer::SetCameraTransform(const Matrix4x4f& transform)
