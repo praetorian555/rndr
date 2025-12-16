@@ -4,7 +4,7 @@
 #include "rndr/input-layout-builder.hpp"
 #include "rndr/log.hpp"
 #include "rndr/projections.hpp"
-#include "shape-2d-renderer.hpp"
+#include "rndr/renderers/shape-2d-renderer.hpp"
 
 bool BitmapTextRenderer::Init(Rndr::GraphicsContext* gc, Rndr::FrameBuffer* frame_buffer, const BitmapTextRendererDesc& desc)
 {
@@ -225,7 +225,7 @@ void BitmapTextRenderer::Render(f32 delta_seconds, Rndr::CommandList& cmd_list)
     m_indices.Clear();
 }
 
-void BitmapTextRenderer::DrawGlyphBitmap(class Shape2DRenderer& shape_renderer, char ch, const Rndr::Point2f& bottom_left, f32 size_y,
+void BitmapTextRenderer::DrawGlyphBitmap(Rndr::Shape2DRenderer& shape_renderer, char ch, const Rndr::Point2f& bottom_left, f32 size_y,
                                          bool align_to_int)
 {
     i32 width = 0;
@@ -237,7 +237,6 @@ void BitmapTextRenderer::DrawGlyphBitmap(class Shape2DRenderer& shape_renderer, 
     width = quad.x1 - quad.x0;
     height = quad.y1 - quad.y0;
     stbtt_packedchar& packed_char = m_packed_chars[ch - 32];
-
 
     const f32 step = size_y / static_cast<f32>(height);
 

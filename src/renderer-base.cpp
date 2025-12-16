@@ -1,4 +1,4 @@
-#include "rndr/renderer-base.hpp"
+#include "../include/rndr/renderers/renderer-base.hpp"
 
 #include "rndr/trace.hpp"
 
@@ -13,20 +13,22 @@ Rndr::ClearRenderer::ClearRenderer(const Opal::StringUtf8& name,
 {
 }
 
-bool Rndr::ClearRenderer::Render()
+bool Rndr::ClearRenderer::Render(f32 delta_seconds, CommandList& command_list)
 {
+    RNDR_UNUSED(delta_seconds);
     RNDR_CPU_EVENT_SCOPED("ClearRenderer::Render");
     RNDR_GPU_EVENT_SCOPED("ClearRenderer::Render");
-    return m_desc.graphics_context->ClearAll(m_color, m_depth, m_stencil) == ErrorCode::Success;
+    return command_list.CmdClearAll(m_color, m_depth, m_stencil);
 }
 
 Rndr::PresentRenderer::PresentRenderer(const Opal::StringUtf8& name, const Rndr::RendererBaseDesc& desc) : RendererBase(name, desc) {}
 
-bool Rndr::PresentRenderer::Render()
+bool Rndr::PresentRenderer::Render(f32 delta_seconds, CommandList& command_list)
 {
+    RNDR_UNUSED(delta_seconds);
     RNDR_CPU_EVENT_SCOPED("PresentRenderer::Render");
     RNDR_GPU_EVENT_SCOPED("PresentRenderer::Render");
-    return m_desc.graphics_context->Present(m_desc.swap_chain);
+    return command_list.CmdPresent(m_desc.swap_chain);
 }
 
 bool Rndr::RendererManager::AddRenderer(Rndr::RendererBase* renderer)
@@ -99,11 +101,11 @@ Rndr::i32 Rndr::RendererManager::GetRendererIndex(const Opal::StringUtf8& name)
     return -1;
 }
 
-bool Rndr::RendererManager::Render()
+bool Rndr::RendererManager::Render(f32 delta_seconds, CommandList& command_list)
 {
     for (auto& renderer : m_renderers)
     {
-        if (!renderer->Render())
+        if (!renderer->Render(delta_seconds, command_list))
         {
             return false;
         }

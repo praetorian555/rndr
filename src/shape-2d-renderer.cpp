@@ -1,30 +1,29 @@
-#include "shape-2d-renderer.hpp"
+#include "../include/rndr/renderers/shape-2d-renderer.hpp"
 
 #include "rndr/input-layout-builder.hpp"
 #include "rndr/projections.hpp"
 
-bool Shape2DRenderer::Init(Rndr::GraphicsContext* gc, i32 fb_width, i32 fb_height)
+Rndr::Shape2DRenderer::Shape2DRenderer(const Opal::StringUtf8& name, const RendererBaseDesc& desc, Opal::Ref<FrameBuffer> target)
+    : RendererBase(name, desc)
 {
-    m_gc = gc;
-    m_fb_width = fb_width;
-    m_fb_height = fb_height;
+    SetFrameBufferTarget(target);
 
-    m_per_frame_data_buffer = {*m_gc, Rndr::BufferDesc{.type = Rndr::BufferType::Constant,
-                                                       .usage = Rndr::Usage::Dynamic,
-                                                       .size = sizeof(Rndr::Matrix4x4f),
-                                                       .stride = sizeof(Rndr::Matrix4x4f)}};
+    m_per_frame_data_buffer = {m_desc.graphics_context, Rndr::BufferDesc{.type = Rndr::BufferType::Constant,
+                                                                         .usage = Rndr::Usage::Dynamic,
+                                                                         .size = sizeof(Rndr::Matrix4x4f),
+                                                                         .stride = sizeof(Rndr::Matrix4x4f)}};
     RNDR_ASSERT(m_per_frame_data_buffer.IsValid(), "Failed to initialize per frame buffer!");
 
-    m_vertex_buffer = {*m_gc, Rndr::BufferDesc{.type = Rndr::BufferType::ShaderStorage,
-                                               .usage = Rndr::Usage::Dynamic,
-                                               .size = k_max_vertex_count * sizeof(VertexData),
-                                               .stride = sizeof(VertexData)}};
+    m_vertex_buffer = {m_desc.graphics_context, Rndr::BufferDesc{.type = Rndr::BufferType::ShaderStorage,
+                                                                 .usage = Rndr::Usage::Dynamic,
+                                                                 .size = k_max_vertex_count * sizeof(VertexData),
+                                                                 .stride = sizeof(VertexData)}};
     RNDR_ASSERT(m_vertex_buffer.IsValid(), "Failed to initialize vertex buffer!");
 
-    m_index_buffer = {*m_gc, Rndr::BufferDesc{.type = Rndr::BufferType::Index,
-                                              .usage = Rndr::Usage::Dynamic,
-                                              .size = 2 * k_max_vertex_count * sizeof(i32),
-                                              .stride = sizeof(i32)}};
+    m_index_buffer = {m_desc.graphics_context, Rndr::BufferDesc{.type = Rndr::BufferType::Index,
+                                                                .usage = Rndr::Usage::Dynamic,
+                                                                .size = 2 * k_max_vertex_count * sizeof(i32),
+                                                                .stride = sizeof(i32)}};
     RNDR_ASSERT(m_index_buffer.IsValid(), "Failed to initialize index buffer!");
 
     const Opal::StringUtf8 vertex_shader_contents = R"(
@@ -70,9 +69,9 @@ bool Shape2DRenderer::Init(Rndr::GraphicsContext* gc, i32 fb_width, i32 fb_heigh
         }
     )";
 
-    m_vertex_shader = {*m_gc, Rndr::ShaderDesc{.type = Rndr::ShaderType::Vertex, .source = vertex_shader_contents}};
+    m_vertex_shader = {m_desc.graphics_context, Rndr::ShaderDesc{.type = Rndr::ShaderType::Vertex, .source = vertex_shader_contents}};
     RNDR_ASSERT(m_vertex_shader.IsValid(), "Failed to initialize vertex shader!");
-    m_fragment_shader = {*m_gc, Rndr::ShaderDesc{.type = Rndr::ShaderType::Fragment, .source = fragment_shader_contents}};
+    m_fragment_shader = {m_desc.graphics_context, Rndr::ShaderDesc{.type = Rndr::ShaderType::Fragment, .source = fragment_shader_contents}};
     RNDR_ASSERT(m_fragment_shader.IsValid(), "Failed to initialize fragment shader!");
 
     const Rndr::InputLayoutDesc input_layout = Rndr::InputLayoutBuilder()
@@ -80,15 +79,19 @@ bool Shape2DRenderer::Init(Rndr::GraphicsContext* gc, i32 fb_width, i32 fb_heigh
                                                    .AddIndexBuffer(m_index_buffer)
                                                    .Build();
 
-    m_pipeline = {*m_gc,
+    m_pipeline = {m_desc.graphics_context,
                   Rndr::PipelineDesc{.vertex_shader = &m_vertex_shader, .pixel_shader = &m_fragment_shader, .input_layout = input_layout}};
     RNDR_ASSERT(m_pipeline.IsValid(), "Failed to initialize pipeline!");
-
-    return true;
 }
 
-void Shape2DRenderer::Destroy()
+Rndr::Shape2DRenderer::~Shape2DRenderer()
 {
+    Destroy();
+}
+
+void Rndr::Shape2DRenderer::Destroy()
+{
+    m_desc.swap_chain->on_swap_chain_resize.Unbind(m_swap_chain_resize_handle);
     m_per_frame_data_buffer.Destroy();
     m_vertex_buffer.Destroy();
     m_index_buffer.Destroy();
@@ -96,18 +99,37 @@ void Shape2DRenderer::Destroy()
     m_fragment_shader.Destroy();
     m_pipeline.Destroy();
 }
-void Shape2DRenderer::SetFrameBufferSize(i32 width, i32 height)
+
+void Rndr::Shape2DRenderer::SetFrameBufferTarget(Opal::Ref<FrameBuffer> target)
 {
-    m_fb_width = width;
-    m_fb_height = height;
+    m_target = target;
+    if (m_target.IsValid())
+    {
+        m_fb_width = m_target->GetWidth();
+        m_fb_height = m_target->GetHeight();
+    }
+    else
+    {
+        m_fb_width = m_desc.swap_chain->GetDesc().width;
+        m_fb_height = m_desc.swap_chain->GetDesc().height;
+    }
 }
 
-void Shape2DRenderer::Render(f32 delta_seconds, Rndr::CommandList& cmd_list)
+bool Rndr::Shape2DRenderer::Render(f32 delta_seconds, Rndr::CommandList& cmd_list)
 {
     RNDR_UNUSED(delta_seconds);
 
-    Rndr::Matrix4x4f projection = Rndr::OrthographicOpenGL(0, m_fb_width, 0, m_fb_height, -1, 1);
+    Rndr::Matrix4x4f projection = Rndr::OrthographicOpenGL(0, static_cast<f32>(m_fb_width), 0, static_cast<f32>(m_fb_height), -1, 1);
     projection = Opal::Transpose(projection);
+
+    if (m_target.IsValid())
+    {
+        cmd_list.CmdBindFrameBuffer(*m_target);
+    }
+    else
+    {
+        cmd_list.CmdBindSwapChainFrameBuffer(m_desc.swap_chain);
+    }
 
     cmd_list.CmdUpdateBuffer(m_per_frame_data_buffer, Opal::AsBytes(projection));
     cmd_list.CmdUpdateBuffer(m_vertex_buffer, Opal::AsBytes(m_vertices));
@@ -120,9 +142,12 @@ void Shape2DRenderer::Render(f32 delta_seconds, Rndr::CommandList& cmd_list)
 
     m_vertices.Clear();
     m_indices.Clear();
+
+    return true;
 }
 
-void Shape2DRenderer::DrawTriangle(const Rndr::Point2f& a, const Rndr::Point2f& b, const Rndr::Point2f& c, const Rndr::Vector4f& color)
+void Rndr::Shape2DRenderer::DrawTriangle(const Rndr::Point2f& a, const Rndr::Point2f& b, const Rndr::Point2f& c,
+                                         const Rndr::Vector4f& color)
 {
     const i32 m_vertex_base = static_cast<i32>(m_vertices.GetSize());
     m_vertices.PushBack({.pos = a, .color = color});
@@ -134,7 +159,7 @@ void Shape2DRenderer::DrawTriangle(const Rndr::Point2f& a, const Rndr::Point2f& 
     m_indices.PushBack(m_vertex_base + 2);
 }
 
-void Shape2DRenderer::DrawRect(const Rndr::Point2f& bottom_left, const Rndr::Vector2f& size, const Rndr::Vector4f& color)
+void Rndr::Shape2DRenderer::DrawRect(const Rndr::Point2f& bottom_left, const Rndr::Vector2f& size, const Rndr::Vector4f& color)
 {
     const i32 m_vertex_base = static_cast<i32>(m_vertices.GetSize());
     m_vertices.PushBack({.pos = bottom_left, .color = color});
@@ -150,7 +175,7 @@ void Shape2DRenderer::DrawRect(const Rndr::Point2f& bottom_left, const Rndr::Vec
     m_indices.PushBack(m_vertex_base + 3);
 }
 
-void Shape2DRenderer::DrawLine(const Rndr::Point2f& start, const Rndr::Point2f& end, const Rndr::Vector4f& color, f32 thickness)
+void Rndr::Shape2DRenderer::DrawLine(const Rndr::Point2f& start, const Rndr::Point2f& end, const Rndr::Vector4f& color, f32 thickness)
 {
     Rndr::Vector2f dir = end - start;
     dir = Opal::Normalize(dir);
@@ -170,8 +195,8 @@ void Shape2DRenderer::DrawLine(const Rndr::Point2f& start, const Rndr::Point2f& 
     m_indices.PushBack(m_vertex_base + 3);
 }
 
-void Shape2DRenderer::DrawArrow(const Rndr::Point2f& start, const Rndr::Vector2f& direction, const Rndr::Vector4f& color, f32 length,
-                                f32 body_thickness, f32 head_thickness, f32 body_to_head_ratio)
+void Rndr::Shape2DRenderer::DrawArrow(const Rndr::Point2f& start, const Rndr::Vector2f& direction, const Rndr::Vector4f& color, f32 length,
+                                      f32 body_thickness, f32 head_thickness, f32 body_to_head_ratio)
 {
     RNDR_ASSERT(body_to_head_ratio > 0,
                 "Body to head ratio needs to be larger then one! For example if its 3 then total length is divided in 4 parts and 3 are "
@@ -187,8 +212,8 @@ void Shape2DRenderer::DrawArrow(const Rndr::Point2f& start, const Rndr::Vector2f
     DrawTriangle(body_end + (head_thickness / 2.0f) * perp, body_end - (head_thickness / 2.0f) * perp, body_end + head_length * dir, color);
 }
 
-void Shape2DRenderer::DrawBezierSquare(const Rndr::Point2f& start, const Rndr::Point2f& control, const Rndr::Point2f& end,
-                                       const Rndr::Vector4f& color, f32 thickness, i32 segment_count)
+void Rndr::Shape2DRenderer::DrawBezierSquare(const Rndr::Point2f& start, const Rndr::Point2f& control, const Rndr::Point2f& end,
+                                             const Rndr::Vector4f& color, f32 thickness, i32 segment_count)
 {
     Rndr::Point2f curr_start = start;
     for (i32 segment_idx = 0; segment_idx < segment_count; ++segment_idx)
@@ -202,8 +227,8 @@ void Shape2DRenderer::DrawBezierSquare(const Rndr::Point2f& start, const Rndr::P
     }
 }
 
-void Shape2DRenderer::DrawBezierCubic(const Rndr::Point2f& start, const Rndr::Point2f& control0, const Rndr::Point2f& control1,
-                                      const Rndr::Point2f& end, const Rndr::Vector4f& color, f32 thickness, i32 segment_count)
+void Rndr::Shape2DRenderer::DrawBezierCubic(const Rndr::Point2f& start, const Rndr::Point2f& control0, const Rndr::Point2f& control1,
+                                            const Rndr::Point2f& end, const Rndr::Vector4f& color, f32 thickness, i32 segment_count)
 {
     Rndr::Point2f curr_start = start;
     for (i32 segment_idx = 0; segment_idx < segment_count; ++segment_idx)
@@ -219,7 +244,7 @@ void Shape2DRenderer::DrawBezierCubic(const Rndr::Point2f& start, const Rndr::Po
     }
 }
 
-void Shape2DRenderer::DrawCircle(const Rndr::Point2f& center, f32 radius, const Rndr::Vector4f& color, i32 segment_count)
+void Rndr::Shape2DRenderer::DrawCircle(const Rndr::Point2f& center, f32 radius, const Rndr::Vector4f& color, i32 segment_count)
 {
     Rndr::Point2f curr_start = center + Rndr::Vector2f{radius, 0};
     for (i32 segment_idx = 0; segment_idx < segment_count; ++segment_idx)

@@ -3,25 +3,26 @@
 #include "opal/container/ref.h"
 
 #include "rndr/math.hpp"
-
 #include "rndr/render-api.hpp"
-#include "types.hpp"
+#include "rndr/renderers/renderer-base.hpp"
+#include "rndr/types.hpp"
 
 namespace Rndr
 {
 class CommandList;
 class GraphicsContext;
-}  // namespace Rndr
 
-class Shape2DRenderer
+class Shape2DRenderer : public RendererBase
 {
 public:
-    bool Init(Rndr::GraphicsContext* gc, i32 fb_width, i32 fb_height);
+    Shape2DRenderer(const Opal::StringUtf8& name, const RendererBaseDesc& desc, Opal::Ref<FrameBuffer> target);
+    ~Shape2DRenderer() override;
+
     void Destroy();
 
-    void SetFrameBufferSize(i32 width, i32 height);
+    void SetFrameBufferTarget(Opal::Ref<FrameBuffer> target);
 
-    void Render(f32 delta_seconds, Rndr::CommandList& cmd_list);
+    bool Render(f32 delta_seconds, CommandList& cmd_list) override;
 
     void DrawTriangle(const Rndr::Point2f& a, const Rndr::Point2f& b, const Rndr::Point2f& c, const Rndr::Vector4f& color);
     void DrawRect(const Rndr::Point2f& bottom_left, const Rndr::Vector2f& size, const Rndr::Vector4f& color);
@@ -39,21 +40,24 @@ private:
 
     struct VertexData
     {
-        Rndr::Point2f pos;
-        Rndr::Vector4f color;
+        Point2f pos;
+        Vector4f color;
     };
 
     i32 m_fb_width = 0;
     i32 m_fb_height = 0;
 
-    Opal::Ref<Rndr::GraphicsContext> m_gc;
-    Rndr::Buffer m_per_frame_data_buffer;
-    Rndr::Buffer m_vertex_buffer;
-    Rndr::Buffer m_index_buffer;
-    Rndr::Shader m_vertex_shader;
-    Rndr::Shader m_fragment_shader;
-    Rndr::Pipeline m_pipeline;
+    Buffer m_per_frame_data_buffer;
+    Buffer m_vertex_buffer;
+    Buffer m_index_buffer;
+    Shader m_vertex_shader;
+    Shader m_fragment_shader;
+    Pipeline m_pipeline;
+    Opal::Ref<FrameBuffer> m_target;
 
     Opal::DynamicArray<VertexData> m_vertices;
     Opal::DynamicArray<i32> m_indices;
+    DelegateHandle m_swap_chain_resize_handle;
 };
+
+}  // namespace Rndr

@@ -3,6 +3,7 @@
 #include "stb_truetype/stb_truetype.h"
 
 #include "rndr/render-api.hpp"
+#include "rndr/renderers/shape-2d-renderer.hpp"
 
 #include "types.hpp"
 
@@ -33,7 +34,8 @@ public:
 
     void Render(f32 delta_seconds, Rndr::CommandList& cmd_list);
 
-    void DrawGlyphBitmap(class Shape2DRenderer& shape_renderer, char ch, const Rndr::Point2f& bottom_left, f32 size_y, bool align_to_int = false);
+    void DrawGlyphBitmap(Rndr::Shape2DRenderer& shape_renderer, char ch, const Rndr::Point2f& bottom_left, f32 size_y,
+                         bool align_to_int = false);
 
 private:
     void UpdateFontAtlas();

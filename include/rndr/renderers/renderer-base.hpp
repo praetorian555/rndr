@@ -21,7 +21,7 @@ public:
     RendererBase(const Opal::StringUtf8& name, const RendererBaseDesc& desc);
     virtual ~RendererBase() = default;
 
-    virtual bool Render() = 0;
+    virtual bool Render(f32 delta_seconds, CommandList& command_list) = 0;
 
     [[nodiscard]] const Opal::StringUtf8& GetName() const { return m_name; }
 
@@ -38,7 +38,7 @@ class ClearRenderer : public RendererBase
 public:
     ClearRenderer(const Opal::StringUtf8& name, const RendererBaseDesc& desc, const Vector4f& color, float depth = 1.0f, i32 stencil = 0);
 
-    bool Render() override;
+    bool Render(f32 delta_seconds, CommandList& command_list) override;
 
 protected:
     Vector4f m_color;
@@ -54,7 +54,7 @@ class PresentRenderer : public RendererBase
 public:
     PresentRenderer(const Opal::StringUtf8& name, const RendererBaseDesc& desc);
 
-    bool Render() override;
+    bool Render(f32 delta_seconds, CommandList& command_list) override;
 };
 
 /**
@@ -111,7 +111,7 @@ public:
      * Renders all renderers in the manager.
      * @return True if all renderers were rendered successfully.
      */
-    bool Render();
+    bool Render(f32 delta_seconds, CommandList& command_list);
 
 private:
     Opal::DynamicArray<RendererBase*> m_renderers;

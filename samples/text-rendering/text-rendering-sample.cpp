@@ -1,7 +1,9 @@
 #include <algorithm>
+#include <strstream>
 
 #include "stb_truetype/stb_truetype.h"
 
+#include "opal/paths.h"
 #include "opal/time.h"
 
 #include "rndr/application.hpp"
@@ -11,13 +13,12 @@
 #include "rndr/imgui-system.hpp"
 #include "rndr/log.hpp"
 #include "rndr/render-api.hpp"
+#include "rndr/renderers/shape-2d-renderer.hpp"
 #include "rndr/types.hpp"
 
 #include "imgui.h"
 
-#include "../../build/opengl-msvc-opt-debug/_deps/opal-src/include/opal/paths.h"
 #include "bitmap-text-renderer.hpp"
-#include "shape-2d-renderer.hpp"
 #include "types.hpp"
 
 Rndr::FrameBuffer RecreateFrameBuffer(Rndr::GraphicsContext& gc, Rndr::i32 width, Rndr::i32 height, i32 sample_count = 1);
@@ -56,8 +57,8 @@ int main()
     Rndr::GraphicsContext gc{gc_desc};
     const Rndr::SwapChainDesc swap_chain_desc{.width = window_width, .height = window_height, .enable_vsync = true};
     Rndr::SwapChain swap_chain{gc, swap_chain_desc};
-    Rndr::FrameBuffer final_render =
-        RecreateFrameBuffer(gc, rendering_resolution_options[resolution_index].x, rendering_resolution_options[resolution_index].y, sample_count);
+    Rndr::FrameBuffer final_render = RecreateFrameBuffer(gc, rendering_resolution_options[resolution_index].x,
+                                                         rendering_resolution_options[resolution_index].y, sample_count);
 
     const Opal::StringUtf8 font_path = Opal::Paths::Combine(RNDR_CORE_ASSETS_DIR, "OpenSans.ttf");
     Rndr::ImGuiContext imgui_context(*window, gc, {.font_path = font_path});
@@ -68,8 +69,8 @@ int main()
     text_renderer_desc.font_file_path = font_path;
     text_renderer.Init(&gc, &final_render, text_renderer_desc);
 
-    Shape2DRenderer shape_renderer;
-    shape_renderer.Init(&gc, final_render.GetWidth(), final_render.GetHeight());
+    Rndr::Shape2DRenderer shape_renderer("2D Shape Renderer", {.graphics_context = Opal::Ref{gc}, .swap_chain = Opal::Ref{swap_chain}},
+                                         Opal::Ref{final_render});
 
     app->on_window_resize.Bind(
         [&swap_chain, window, &text_renderer](const Rndr::GenericWindow& w, Rndr::i32 width, Rndr::i32 height)
@@ -107,9 +108,9 @@ int main()
             resolution_index = selected_resolution_index;
             sample_count = selected_sample_count;
             final_render.Destroy();
-            final_render =
-                RecreateFrameBuffer(gc, rendering_resolution_options[resolution_index].x, rendering_resolution_options[resolution_index].y, selected_sample_count);
-            shape_renderer.SetFrameBufferSize(final_render.GetWidth(), final_render.GetHeight());
+            final_render = RecreateFrameBuffer(gc, rendering_resolution_options[resolution_index].x,
+                                               rendering_resolution_options[resolution_index].y, selected_sample_count);
+            shape_renderer.SetFrameBufferTarget(Opal::Ref{final_render});
         }
 
         text_renderer.UpdateFontSize(font_size_in_pixels);
@@ -176,7 +177,8 @@ int main()
 
 Rndr::FrameBuffer RecreateFrameBuffer(Rndr::GraphicsContext& gc, Rndr::i32 width, Rndr::i32 height, i32 sample_count)
 {
-    const Rndr::FrameBufferDesc desc{.color_attachments = {Rndr::TextureDesc{.width = width, .height = height, .sample_count = sample_count}},
-                                     .color_attachment_samplers = {{}}};
+    const Rndr::FrameBufferDesc desc{
+        .color_attachments = {Rndr::TextureDesc{.width = width, .height = height, .sample_count = sample_count}},
+        .color_attachment_samplers = {{}}};
     return {gc, desc};
 }

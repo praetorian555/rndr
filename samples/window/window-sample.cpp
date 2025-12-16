@@ -12,6 +12,7 @@
 #include "example-controller.h"
 #include "imgui.h"
 #include "rndr/frames-per-second-counter.h"
+#include "rndr/renderers/grid-renderer.hpp"
 #include "rndr/trace.hpp"
 
 struct RNDR_ALIGN(16) Uniforms
@@ -92,27 +93,7 @@ int main()
     Rndr::ImGuiContext imgui_context(*window, gc);
     app->RegisterSystemMessageHandler(&imgui_context);
 
-    const Rndr::BufferDesc buffer_desc{.usage = Rndr::Usage::Dynamic, .size = sizeof(Uniforms), .stride = sizeof(Uniforms)};
-    Rndr::Buffer uniform_buffer(gc, buffer_desc);
-
-    const Opal::StringUtf8 vertex_shader_path = Opal::Paths::Combine(RNDR_CORE_ASSETS_DIR, "grid.vert");
-    Rndr::f64 vertex_shader_last_modified_time = Opal::GetLastFileModifiedTimeInSeconds(vertex_shader_path);
-    const Opal::StringUtf8 vertex_shader_source = Rndr::File::ReadShader(RNDR_CORE_ASSETS_DIR, "grid.vert");
-    const Rndr::ShaderDesc vertex_shader_desc{.type = Rndr::ShaderType::Vertex, .source = vertex_shader_source};
-    Rndr::Shader vertex_shader(gc, vertex_shader_desc);
-
-    const Opal::StringUtf8 frag_shader_path = Opal::Paths::Combine(RNDR_CORE_ASSETS_DIR, "grid.frag");
-    Rndr::f64 frag_shader_last_modified_time = Opal::GetLastFileModifiedTimeInSeconds(frag_shader_path);
-    const Opal::StringUtf8 fragment_shader_source = Rndr::File::ReadShader(RNDR_CORE_ASSETS_DIR, "grid.frag");
-    const Rndr::ShaderDesc fragment_shader_desc{.type = Rndr::ShaderType::Fragment, .source = fragment_shader_source};
-    Rndr::Shader fragment_shader(gc, fragment_shader_desc);
-
-    Rndr::Pipeline pipeline;
-    if (vertex_shader.IsValid() && fragment_shader.IsValid())
-    {
-        const Rndr::PipelineDesc desc{.vertex_shader = &vertex_shader, .pixel_shader = &fragment_shader};
-        pipeline = Rndr::Pipeline(gc, desc);
-    }
+    Rndr::GridRenderer grid_renderer("Grid Renderer", {Opal::Ref{gc}, Opal::Ref{swap_chain}}, Opal::Ref{final_render});
 
     const Rndr::FlyCameraDesc fly_camera_desc{.start_yaw_radians = Opal::k_pi_over_2_float};
     ExampleController controller(*app, window_width, window_height, fly_camera_desc, 10.0f, 0.005f, 0.005f);
@@ -165,6 +146,7 @@ int main()
         app->ProcessSystemEvents(delta_seconds);
 
         controller.Tick(delta_seconds);
+        grid_renderer.SetTransforms(controller.GetViewTransform(), controller.GetProjectionTransform());
 
         if (selected_resolution_index != resolution_index)
         {
@@ -172,6 +154,7 @@ int main()
             final_render.Destroy();
             final_render =
                 RecreateFrameBuffer(gc, rendering_resolution_options[resolution_index].x, rendering_resolution_options[resolution_index].y);
+            grid_renderer.SetFrameBufferTarget(Opal::Ref{final_render});
         }
 
         swap_chain.SetVerticalSync(vsync);
@@ -181,14 +164,7 @@ int main()
         cmd_list.CmdBindFrameBuffer(final_render);
         cmd_list.CmdClearAll(Rndr::Colors::k_black);
 
-        Uniforms uniforms;
-        uniforms.view = Opal::Transpose(controller.GetViewTransform());
-        uniforms.projection = Opal::Transpose(controller.GetProjectionTransform());
-        cmd_list.CmdBindBuffer(uniform_buffer, 0);
-        cmd_list.CmdUpdateBuffer(uniform_buffer, Opal::AsBytes(uniforms));
-
-        cmd_list.CmdBindPipeline(pipeline);
-        cmd_list.CmdDrawVertices(Rndr::PrimitiveTopology::Triangle, 6);
+        grid_renderer.Render(delta_seconds, cmd_list);
 
         const Rndr::BlitFrameBufferDesc blit_desc;
         cmd_list.CmdBlitToSwapChain(swap_chain, final_render, blit_desc);
@@ -219,10 +195,7 @@ int main()
         delta_seconds = static_cast<Rndr::f32>(end_seconds - start_seconds);
     }
 
-    uniform_buffer.Destroy();
-    pipeline.Destroy();
-    vertex_shader.Destroy();
-    fragment_shader.Destroy();
+    grid_renderer.Destroy();
     final_render.Destroy();
     gc.Destroy();
 
