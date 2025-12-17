@@ -13,6 +13,7 @@
 #include "imgui.h"
 #include "rndr/frames-per-second-counter.h"
 #include "rndr/renderers/grid-renderer.hpp"
+#include "rndr/renderers/shape-3d-renderer.hpp"
 #include "rndr/trace.hpp"
 
 struct RNDR_ALIGN(16) Uniforms
@@ -94,6 +95,7 @@ int main()
     app->RegisterSystemMessageHandler(&imgui_context);
 
     Rndr::GridRenderer grid_renderer("Grid Renderer", {Opal::Ref{gc}, Opal::Ref{swap_chain}}, Opal::Ref{final_render});
+    Rndr::Shape3DRenderer shape_renderer("3D Shape Renderer", {Opal::Ref{gc}, Opal::Ref{swap_chain}}, Opal::Ref{final_render});
 
     const Rndr::FlyCameraDesc fly_camera_desc{.start_yaw_radians = Opal::k_pi_over_2_float};
     ExampleController controller(*app, window_width, window_height, fly_camera_desc, 10.0f, 0.005f, 0.005f);
@@ -155,6 +157,7 @@ int main()
             final_render =
                 RecreateFrameBuffer(gc, rendering_resolution_options[resolution_index].x, rendering_resolution_options[resolution_index].y);
             grid_renderer.SetFrameBufferTarget(Opal::Ref{final_render});
+            shape_renderer.SetFrameBufferTarget(Opal::Ref{final_render});
         }
 
         swap_chain.SetVerticalSync(vsync);
@@ -165,6 +168,13 @@ int main()
         cmd_list.CmdClearAll(Rndr::Colors::k_black);
 
         grid_renderer.Render(delta_seconds, cmd_list);
+
+        const Rndr::Matrix4x4f cube_transform = Opal::Translate(Rndr::Vector3f{10.0f, 5.0f, -10.0f});
+        const Rndr::Matrix4x4f sphere_transform = Opal::Translate(Rndr::Vector3f{-10.0f, 5.0f, -10.0f});
+        shape_renderer.DrawCube(cube_transform, Rndr::Colors::k_white);
+        // shape_renderer.DrawSphere(sphere_transform, Rndr::Colors::k_red);
+        shape_renderer.SetTransforms(controller.GetViewTransform(), controller.GetProjectionTransform());
+        shape_renderer.Render(delta_seconds, cmd_list);
 
         const Rndr::BlitFrameBufferDesc blit_desc;
         cmd_list.CmdBlitToSwapChain(swap_chain, final_render, blit_desc);
