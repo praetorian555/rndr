@@ -1,9 +1,9 @@
 #include "rndr/file.hpp"
 
-#include "../build/opengl-msvc-opt-debug/_deps/opal-src/include/opal/file-system.h"
 #include "stb_image/stb_image.h"
 #include "stb_image/stb_image_write.h"
 
+#include "opal/file-system.h"
 #include "opal/paths.h"
 
 #include "rndr/log.hpp"

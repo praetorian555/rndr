@@ -91,7 +91,6 @@ Rndr::Shape2DRenderer::~Shape2DRenderer()
 
 void Rndr::Shape2DRenderer::Destroy()
 {
-    m_desc.swap_chain->on_swap_chain_resize.Unbind(m_swap_chain_resize_handle);
     m_per_frame_data_buffer.Destroy();
     m_vertex_buffer.Destroy();
     m_index_buffer.Destroy();

@@ -2,6 +2,7 @@
 
 #include "opal/container/ref.h"
 
+#include "rndr/delegate.hpp"
 #include "rndr/math.hpp"
 #include "rndr/render-api.hpp"
 #include "rndr/renderers/renderer-base.hpp"
