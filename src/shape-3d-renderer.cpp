@@ -5,11 +5,15 @@
 
 namespace
 {
+OPAL_START_DISABLE_WARNINGS
+OPAL_DISABLE_MSVC_WARNING(4324)
 struct PerFrameData
 {
     Rndr::Matrix4x4f view_projection_transform;
-    Rndr::Point3f camera_position_world;
+    alignas(16) Rndr::Point3f camera_position_world;
+    alignas(16) Rndr::Vector3f light_direction_world = {1.0f, 1.0f, 1.0f};
 };
+OPAL_END_DISABLE_WARNINGS
 }  // namespace
 
 Rndr::Shape3DRenderer::Shape3DRenderer(const Opal::StringUtf8& name, const RendererBaseDesc& desc, Opal::Ref<FrameBuffer> target)
@@ -57,7 +61,7 @@ Rndr::Shape3DRenderer::Shape3DRenderer(const Opal::StringUtf8& name, const Rende
     m_pipeline = Pipeline(desc.graphics_context, {.vertex_shader = &m_vertex_shader,
                                                   .pixel_shader = &m_fragment_shader,
                                                   .input_layout = input_layout_desc,
-                                                  .rasterizer = {.fill_mode = FillMode::Solid},
+                                                  .rasterizer = {.fill_mode = FillMode::Solid, .front_face_winding_order = WindingOrder::CCW},
                                                   .depth_stencil = {.is_depth_enabled = true}});
     RNDR_ASSERT(m_pipeline.IsValid(), "Failed to create pipeline!");
 }
@@ -130,52 +134,60 @@ void Rndr::Shape3DRenderer::SetupGeometryData(Opal::DynamicArray<VertexData>& ou
 
     // Generate cube data
     {
-        const f32 half = 0.5f;
+        float half = 0.5f;
+
+        // Each face needs unique vertices for correct normals and UVs
+        // 6 faces × 4 vertices = 24 vertices total
+
+        // Face data: normal direction, then 4 corner positions
+        // Format: nx, ny, nz, then for each corner: x, y, z, u, v
         struct FaceData
         {
             float normal[3];
             float verts[4][5];  // 4 vertices, each with x, y, z, u, v
         };
-        const FaceData faces[6] = {// Front face (Z+)
-                                   {{0.0f, 0.0f, 1.0f},
-                                    {{-half, -half, half, 0.0f, 0.0f},
-                                     {half, -half, half, 1.0f, 0.0f},
-                                     {half, half, half, 1.0f, 1.0f},
-                                     {-half, half, half, 0.0f, 1.0f}}},
-                                   // Back face (Z-)
-                                   {{0.0f, 0.0f, -1.0f},
-                                    {{half, -half, -half, 0.0f, 0.0f},
-                                     {-half, -half, -half, 1.0f, 0.0f},
-                                     {-half, half, -half, 1.0f, 1.0f},
-                                     {half, half, -half, 0.0f, 1.0f}}},
-                                   // Top face (Y+)
-                                   {{0.0f, 1.0f, 0.0f},
-                                    {{-half, half, half, 0.0f, 0.0f},
-                                     {half, half, half, 1.0f, 0.0f},
-                                     {half, half, -half, 1.0f, 1.0f},
-                                     {-half, half, -half, 0.0f, 1.0f}}},
-                                   // Bottom face (Y-)
-                                   {{0.0f, -1.0f, 0.0f},
-                                    {{-half, -half, -half, 0.0f, 0.0f},
-                                     {half, -half, -half, 1.0f, 0.0f},
-                                     {half, -half, half, 1.0f, 1.0f},
-                                     {-half, -half, half, 0.0f, 1.0f}}},
-                                   // Right face (X+)
-                                   {{1.0f, 0.0f, 0.0f},
-                                    {{half, -half, half, 0.0f, 0.0f},
-                                     {half, -half, -half, 1.0f, 0.0f},
-                                     {half, half, -half, 1.0f, 1.0f},
-                                     {half, half, half, 0.0f, 1.0f}}},
-                                   // Left face (X-)
-                                   {{-1.0f, 0.0f, 0.0f},
-                                    {{-half, -half, -half, 0.0f, 0.0f},
-                                     {-half, -half, half, 1.0f, 0.0f},
-                                     {-half, half, half, 1.0f, 1.0f},
-                                     {-half, half, -half, 0.0f, 1.0f}}}};
 
-        for (u32 f = 0; f < 6; ++f)
+        FaceData faces[6] = {// Front face (Z+)
+                             {{0.0f, 0.0f, 1.0f},
+                              {{-half, -half, half, 0.0f, 0.0f},
+                               {half, -half, half, 1.0f, 0.0f},
+                               {half, half, half, 1.0f, 1.0f},
+                               {-half, half, half, 0.0f, 1.0f}}},
+                             // Back face (Z-)
+                             {{0.0f, 0.0f, -1.0f},
+                              {{half, -half, -half, 0.0f, 0.0f},
+                               {-half, -half, -half, 1.0f, 0.0f},
+                               {-half, half, -half, 1.0f, 1.0f},
+                               {half, half, -half, 0.0f, 1.0f}}},
+                             // Top face (Y+)
+                             {{0.0f, 1.0f, 0.0f},
+                              {{-half, half, half, 0.0f, 0.0f},
+                               {half, half, half, 1.0f, 0.0f},
+                               {half, half, -half, 1.0f, 1.0f},
+                               {-half, half, -half, 0.0f, 1.0f}}},
+                             // Bottom face (Y-)
+                             {{0.0f, -1.0f, 0.0f},
+                              {{-half, -half, -half, 0.0f, 0.0f},
+                               {half, -half, -half, 1.0f, 0.0f},
+                               {half, -half, half, 1.0f, 1.0f},
+                               {-half, -half, half, 0.0f, 1.0f}}},
+                             // Right face (X+)
+                             {{1.0f, 0.0f, 0.0f},
+                              {{half, -half, half, 0.0f, 0.0f},
+                               {half, -half, -half, 1.0f, 0.0f},
+                               {half, half, -half, 1.0f, 1.0f},
+                               {half, half, half, 0.0f, 1.0f}}},
+                             // Left face (X-)
+                             {{-1.0f, 0.0f, 0.0f},
+                              {{-half, -half, -half, 0.0f, 0.0f},
+                               {-half, -half, half, 1.0f, 0.0f},
+                               {-half, half, half, 1.0f, 1.0f},
+                               {-half, half, -half, 0.0f, 1.0f}}}};
+
+        // Generate vertices and indices for each face
+        for (unsigned int f = 0; f < 6; ++f)
         {
-            u32 baseIndex = static_cast<u32>(out_vertex_data.GetSize());
+            // Add 4 vertices for this face
             for (int v = 0; v < 4; ++v)
             {
                 VertexData vertex;
@@ -194,12 +206,16 @@ void Rndr::Shape3DRenderer::SetupGeometryData(Opal::DynamicArray<VertexData>& ou
                 out_vertex_data.PushBack(vertex);
             }
 
-            out_index_data.PushBack(baseIndex + 0);
-            out_index_data.PushBack(baseIndex + 1);
-            out_index_data.PushBack(baseIndex + 2);
-            out_index_data.PushBack(baseIndex + 0);
-            out_index_data.PushBack(baseIndex + 2);
-            out_index_data.PushBack(baseIndex + 3);
+            // Add 2 triangles (6 indices) for this face
+            // Triangle 1: 0, 1, 2
+            out_index_data.PushBack(f * 4 + 0);
+            out_index_data.PushBack(f * 4 + 1);
+            out_index_data.PushBack(f * 4 + 2);
+
+            // Triangle 2: 0, 2, 3
+            out_index_data.PushBack(f * 4 + 0);
+            out_index_data.PushBack(f * 4 + 2);
+            out_index_data.PushBack(f * 4 + 3);
         }
 
         ShapeGeometryData& data = m_geometry_data[static_cast<u32>(ShapeType::Cube)];
@@ -213,7 +229,7 @@ void Rndr::Shape3DRenderer::SetupGeometryData(Opal::DynamicArray<VertexData>& ou
         const u32 vertex_offset = static_cast<u32>(out_vertex_data.GetSize());
         const u32 index_offset = static_cast<u32>(out_index_data.GetSize());
         constexpr u32 k_latitude_segments = 32;
-        constexpr u32 k_longitude_segments = 64;
+        constexpr u32 k_longitude_segments = 32;
 
         for (u32 lat = 0; lat <= k_latitude_segments; ++lat)
         {
@@ -237,14 +253,14 @@ void Rndr::Shape3DRenderer::SetupGeometryData(Opal::DynamicArray<VertexData>& ou
                 const f32 v = static_cast<float>(lat) / k_latitude_segments;
 
                 VertexData vertex;
-                vertex.position[0] = x;
-                vertex.position[1] = y;
-                vertex.position[2] = z;
-                vertex.normal[0] = x;
-                vertex.normal[1] = y;
-                vertex.normal[2] = z;
-                vertex.tex_coord[0] = u;
-                vertex.tex_coord[1] = v;
+                vertex.position.x = x;
+                vertex.position.y = y;
+                vertex.position.z = z;
+                vertex.normal.x = x;
+                vertex.normal.y = y;
+                vertex.normal.z = z;
+                vertex.tex_coord.x = u;
+                vertex.tex_coord.y = v;
 
                 out_vertex_data.PushBack(vertex);
             }
@@ -257,11 +273,11 @@ void Rndr::Shape3DRenderer::SetupGeometryData(Opal::DynamicArray<VertexData>& ou
                 const u32 current = lat * (k_longitude_segments + 1) + lon;
                 const u32 next = current + k_longitude_segments + 1;
                 out_index_data.PushBack(current);
-                out_index_data.PushBack(next);
-                out_index_data.PushBack(current + 1);
                 out_index_data.PushBack(current + 1);
                 out_index_data.PushBack(next);
+                out_index_data.PushBack(current + 1);
                 out_index_data.PushBack(next + 1);
+                out_index_data.PushBack(next);
             }
         }
 
@@ -275,8 +291,8 @@ void Rndr::Shape3DRenderer::SetupGeometryData(Opal::DynamicArray<VertexData>& ou
 void Rndr::Shape3DRenderer::DrawShape(ShapeType shape_type, const Matrix4x4f& transform, const Vector4f& color)
 {
     InstanceData instance_data;
-    instance_data.model_transform = transform;
-    instance_data.normal_transform = Opal::Transpose(Opal::Inverse(transform));
+    instance_data.model_transform = Opal::Transpose(transform);
+    instance_data.normal_transform = Opal::Inverse(transform);
     instance_data.color = color;
     m_instances.PushBack(instance_data);
 

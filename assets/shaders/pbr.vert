@@ -4,6 +4,7 @@ layout(std140, binding = 0) uniform PerFrameData
 {
     mat4 view_projection_transform;
     vec3 camera_position_world;
+    vec3 light_direction_world;
 };
 
 struct Vertex
@@ -50,16 +51,19 @@ layout (location = 1) out vec2 out_tex_coords;
 layout (location = 2) out vec3 out_position_world;
 layout (location = 3) out vec4 out_color;
 
+layout (location = 4) out vec3 light_dir;
+
 void main()
 {
     mat4 model_matrix = instances[gl_DrawID].model_matrix;
     mat3 normal_matrix = mat3(instances[gl_DrawID].normal_matrix);
+    light_dir = light_direction_world;
 
     mat4 mvp = view_projection_transform * model_matrix;
     vec3 pos = GetPosition(gl_VertexID);
     gl_Position = mvp * vec4(pos, 1.0);
 
-    out_normal_world = normal_matrix * GetNormal(gl_VertexID);
+    out_normal_world = normalize(normal_matrix * GetNormal(gl_VertexID));
     out_tex_coords = GetTexCoord(gl_VertexID);
     out_position_world = (model_matrix * vec4(pos, 1.0)).xyz;
     out_color = instances[gl_DrawID].color;
