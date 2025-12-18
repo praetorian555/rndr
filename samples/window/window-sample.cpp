@@ -28,7 +28,11 @@ void SetupFlyCameraControls(Rndr::Application& app, Rndr::FlyCamera& camera);
 Rndr::FrameBuffer RecreateFrameBuffer(Rndr::GraphicsContext& gc, Rndr::i32 width, Rndr::i32 height)
 {
     const Rndr::FrameBufferDesc desc{.color_attachments = {Rndr::TextureDesc{.width = width, .height = height}},
-                                     .color_attachment_samplers = {{}}};
+                                     .color_attachment_samplers = {{}},
+                                     .use_depth_stencil = true,
+                                     .depth_stencil_attachment = {Rndr::TextureDesc{
+                                         .width = width, .height = height, .pixel_format = Rndr::PixelFormat::D24_UNORM_S8_UINT}},
+                                     .depth_stencil_sampler = {{}}};
     return {gc, desc};
 }
 
@@ -97,7 +101,7 @@ int main()
     Rndr::GridRenderer grid_renderer("Grid Renderer", {Opal::Ref{gc}, Opal::Ref{swap_chain}}, Opal::Ref{final_render});
     Rndr::Shape3DRenderer shape_renderer("3D Shape Renderer", {Opal::Ref{gc}, Opal::Ref{swap_chain}}, Opal::Ref{final_render});
 
-    const Rndr::FlyCameraDesc fly_camera_desc{.start_yaw_radians = Opal::k_pi_over_2_float};
+    const Rndr::FlyCameraDesc fly_camera_desc{.start_yaw_radians = 0};
     ExampleController controller(*app, window_width, window_height, fly_camera_desc, 10.0f, 0.005f, 0.005f);
 
     app->on_window_resize.Bind(
@@ -169,10 +173,10 @@ int main()
 
         grid_renderer.Render(delta_seconds, cmd_list);
 
-        const Rndr::Matrix4x4f cube_transform = Opal::Translate(Rndr::Vector3f{10.0f, 5.0f, -10.0f});
-        const Rndr::Matrix4x4f sphere_transform = Opal::Translate(Rndr::Vector3f{-10.0f, 5.0f, -10.0f});
+        const Rndr::Matrix4x4f cube_transform = Opal::Translate(Rndr::Vector3f{10.0f, 2.0f, 3.0f});
+        const Rndr::Matrix4x4f sphere_transform = Opal::Translate(Rndr::Vector3f{10.0f, 2.0f, -3.0f});
+        shape_renderer.DrawSphere(sphere_transform, Rndr::Colors::k_red);
         shape_renderer.DrawCube(cube_transform, Rndr::Colors::k_white);
-        // shape_renderer.DrawSphere(sphere_transform, Rndr::Colors::k_red);
         shape_renderer.SetTransforms(controller.GetViewTransform(), controller.GetProjectionTransform());
         shape_renderer.Render(delta_seconds, cmd_list);
 
@@ -205,6 +209,7 @@ int main()
         delta_seconds = static_cast<Rndr::f32>(end_seconds - start_seconds);
     }
 
+    shape_renderer.Destroy();
     grid_renderer.Destroy();
     final_render.Destroy();
     gc.Destroy();
