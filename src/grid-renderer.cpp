@@ -68,11 +68,11 @@ Rndr::GridRenderer::GridRenderer(const Opal::StringUtf8& name, const RendererBas
             out_color = vec4(0, 0, 0, 1.0f);
             if (uv.x > -draw_width.x && uv.x < draw_width.x)
             {
-                out_color.x = 1.0f;
+                out_color.z = 1.0f;
             }
             else if (uv.y > -draw_width.y && uv.y < draw_width.y)
             {
-                out_color.z = 1.0f;
+                out_color.x = 1.0f;
             }
             else
             {
