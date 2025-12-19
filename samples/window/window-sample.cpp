@@ -104,7 +104,7 @@ int main()
     Rndr::GridRenderer grid_renderer("Grid Renderer", {Opal::Ref{gc}, Opal::Ref{swap_chain}}, Opal::Ref{final_render});
     Rndr::Shape3DRenderer shape_renderer("3D Shape Renderer", {Opal::Ref{gc}, Opal::Ref{swap_chain}}, Opal::Ref{final_render});
 
-    const Rndr::FlyCameraDesc fly_camera_desc{.start_yaw_radians = 0};
+    const Rndr::FlyCameraDesc fly_camera_desc{.start_position = {0.0f, 1.0f, 0.0f}, .start_yaw_radians = 0};
     ExampleController controller(*app, window_width, window_height, fly_camera_desc, 10.0f, 0.005f, 0.005f);
 
     app->on_window_resize.Bind(
