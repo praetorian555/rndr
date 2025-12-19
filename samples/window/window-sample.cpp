@@ -11,6 +11,7 @@
 
 #include "example-controller.h"
 #include "imgui.h"
+#include "opal/rng.h"
 #include "rndr/frames-per-second-counter.h"
 #include "rndr/renderers/grid-renderer.hpp"
 #include "rndr/renderers/shape-3d-renderer.hpp"
@@ -35,6 +36,8 @@ Rndr::FrameBuffer RecreateFrameBuffer(Rndr::GraphicsContext& gc, Rndr::i32 width
                                      .depth_stencil_sampler = {{}}};
     return {gc, desc};
 }
+
+void DrawScene(Rndr::Shape3DRenderer& shape_renderer);
 
 int main()
 {
@@ -173,10 +176,7 @@ int main()
 
         grid_renderer.Render(delta_seconds, cmd_list);
 
-        const Rndr::Matrix4x4f cube_transform = Opal::Translate(Rndr::Vector3f{10.0f, 2.0f, 3.0f});
-        const Rndr::Matrix4x4f sphere_transform = Opal::Translate(Rndr::Vector3f{10.0f, 2.0f, -3.0f});
-        shape_renderer.DrawSphere(sphere_transform, Rndr::Colors::k_red);
-        shape_renderer.DrawCube(cube_transform, Rndr::Colors::k_white);
+        DrawScene(shape_renderer);
         shape_renderer.SetTransforms(controller.GetViewTransform(), controller.GetProjectionTransform());
         shape_renderer.Render(delta_seconds, cmd_list);
 
@@ -218,4 +218,33 @@ int main()
     Rndr::Application::Destroy();
 
     return 0;
+}
+
+Rndr::Vector4f RandomColor(Opal::RNG& rng)
+{
+    return {rng.RandomF32(0, 1.0), rng.RandomF32(0, 1.0), rng.RandomF32(0, 1.0), 1.0f};
+}
+
+void DrawScene(Rndr::Shape3DRenderer& shape_renderer)
+{
+    const Rndr::Matrix4x4f cube_transform = Opal::Translate(Rndr::Vector3f{-2.0f, 0.0f, -10.0f});
+    const Rndr::Matrix4x4f sphere_transform = Opal::Translate(Rndr::Vector3f{2.0f, 0.0f, -10.0f});
+    shape_renderer.DrawSphere(sphere_transform, Rndr::Colors::k_red);
+    shape_renderer.DrawCube(cube_transform, Rndr::Colors::k_white);
+
+    constexpr Rndr::i32 k_cube_size = 10;
+    const Rndr::Point3f start_position = {0.0f, 0.0f, 10.0f};
+    Opal::RNG rng(100);
+    for (Rndr::i32 x = 0; x < k_cube_size; ++x)
+    {
+        for (Rndr::i32 y = 0; y < k_cube_size; ++y)
+        {
+            for (Rndr::i32 z = 0; z < k_cube_size; ++z)
+            {
+                constexpr Rndr::f32 k_distance = 5.0f;
+                const Rndr::Point3f draw_location = start_position + Rndr::Vector3f{x * k_distance, y * k_distance, z * k_distance};
+                shape_renderer.DrawSphere(Opal::Translate(draw_location), RandomColor(rng));
+            }
+        }
+    }
 }

@@ -46,7 +46,7 @@ Rndr::Shape3DRenderer::Shape3DRenderer(const Opal::StringUtf8& name, const Rende
     RNDR_ASSERT(m_index_buffer.IsValid(), "Failed to create index buffer!");
     m_model_transform_buffer = Buffer(
         desc.graphics_context,
-        {.type = BufferType::ShaderStorage, .usage = Usage::Dynamic, .size = 1000 * sizeof(InstanceData), .stride = sizeof(InstanceData)});
+        {.type = BufferType::ShaderStorage, .usage = Usage::Dynamic, .size = 10000 * sizeof(InstanceData), .stride = sizeof(InstanceData)});
     RNDR_ASSERT(m_model_transform_buffer.IsValid(), "Failed to create instance buffer!");
     m_per_frame_buffer =
         Buffer(m_desc.graphics_context,
