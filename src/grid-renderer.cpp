@@ -16,7 +16,7 @@ OPAL_END_DISABLE_WARNINGS
 Rndr::GridRenderer::GridRenderer(const Opal::StringUtf8& name, const RendererBaseDesc& desc, Opal::Ref<FrameBuffer> target)
     : RendererBase(name, desc), m_target(target)
 {
-    const BufferDesc buffer_desc{.usage = Rndr::Usage::Dynamic, .size = sizeof(Uniforms), .stride = sizeof(Uniforms)};
+    const BufferDesc buffer_desc{.usage = Rndr::Usage::Dynamic, .size = sizeof(Uniforms), .stride = sizeof(Uniforms), .debug_name = "Grid Rrenderer - Per Frame Buffer"};
     m_uniform_buffer = Buffer(m_desc.graphics_context, buffer_desc);
     RNDR_ASSERT(m_uniform_buffer.IsValid(), "Invalid buffer!");
 
@@ -81,15 +81,15 @@ Rndr::GridRenderer::GridRenderer(const Opal::StringUtf8& name, const RendererBas
         }
     )";
 
-    const ShaderDesc vertex_shader_desc{.type = ShaderType::Vertex, .source = vertex_shader_contents};
+    const ShaderDesc vertex_shader_desc{.type = ShaderType::Vertex, .source = vertex_shader_contents, .debug_name = "Grid Renderer - Vertex Shader"};
     m_vertex_shader = Shader(m_desc.graphics_context, vertex_shader_desc);
     RNDR_ASSERT(m_vertex_shader.IsValid(), "Invalid vertex shader!");
 
-    const ShaderDesc fragment_shader_desc{.type = ShaderType::Fragment, .source = fragment_shader_contents};
+    const ShaderDesc fragment_shader_desc{.type = ShaderType::Fragment, .source = fragment_shader_contents, .debug_name = "Grid Renderer - Fragment Shader"};
     m_fragment_shader = Shader(m_desc.graphics_context, fragment_shader_desc);
     RNDR_ASSERT(m_fragment_shader.IsValid(), "Invalid fragment shader!");
 
-    const PipelineDesc pipeline_desc{.vertex_shader = &m_vertex_shader, .pixel_shader = &m_fragment_shader};
+    const PipelineDesc pipeline_desc{.vertex_shader = &m_vertex_shader, .pixel_shader = &m_fragment_shader, .debug_name = "Grid Renderer - Pipeline"};
     m_pipeline = Pipeline(m_desc.graphics_context, pipeline_desc);
     RNDR_ASSERT(m_pipeline.IsValid(), "Invalid pipeline!");
 }

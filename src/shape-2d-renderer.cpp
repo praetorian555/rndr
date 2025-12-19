@@ -11,19 +11,22 @@ Rndr::Shape2DRenderer::Shape2DRenderer(const Opal::StringUtf8& name, const Rende
     m_per_frame_data_buffer = {m_desc.graphics_context, Rndr::BufferDesc{.type = Rndr::BufferType::Constant,
                                                                          .usage = Rndr::Usage::Dynamic,
                                                                          .size = sizeof(Rndr::Matrix4x4f),
-                                                                         .stride = sizeof(Rndr::Matrix4x4f)}};
+                                                                         .stride = sizeof(Rndr::Matrix4x4f),
+                                                                         .debug_name = "Shape 2D Renderer - Per Frame Buffer"}};
     RNDR_ASSERT(m_per_frame_data_buffer.IsValid(), "Failed to initialize per frame buffer!");
 
     m_vertex_buffer = {m_desc.graphics_context, Rndr::BufferDesc{.type = Rndr::BufferType::ShaderStorage,
                                                                  .usage = Rndr::Usage::Dynamic,
                                                                  .size = k_max_vertex_count * sizeof(VertexData),
-                                                                 .stride = sizeof(VertexData)}};
+                                                                 .stride = sizeof(VertexData),
+                                                                 .debug_name = "Shape 2D Renderer - Vertex Buffer"}};
     RNDR_ASSERT(m_vertex_buffer.IsValid(), "Failed to initialize vertex buffer!");
 
     m_index_buffer = {m_desc.graphics_context, Rndr::BufferDesc{.type = Rndr::BufferType::Index,
                                                                 .usage = Rndr::Usage::Dynamic,
                                                                 .size = 2 * k_max_vertex_count * sizeof(i32),
-                                                                .stride = sizeof(i32)}};
+                                                                .stride = sizeof(i32),
+                                                                .debug_name = "Shape 2D Renderer - Index Buffer"}};
     RNDR_ASSERT(m_index_buffer.IsValid(), "Failed to initialize index buffer!");
 
     const Opal::StringUtf8 vertex_shader_contents = R"(
@@ -69,9 +72,13 @@ Rndr::Shape2DRenderer::Shape2DRenderer(const Opal::StringUtf8& name, const Rende
         }
     )";
 
-    m_vertex_shader = {m_desc.graphics_context, Rndr::ShaderDesc{.type = Rndr::ShaderType::Vertex, .source = vertex_shader_contents}};
+    m_vertex_shader = {m_desc.graphics_context, Rndr::ShaderDesc{.type = Rndr::ShaderType::Vertex,
+                                                                 .source = vertex_shader_contents,
+                                                                 .debug_name = "Shape 2D Renderer - Vertex Shader"}};
     RNDR_ASSERT(m_vertex_shader.IsValid(), "Failed to initialize vertex shader!");
-    m_fragment_shader = {m_desc.graphics_context, Rndr::ShaderDesc{.type = Rndr::ShaderType::Fragment, .source = fragment_shader_contents}};
+    m_fragment_shader = {m_desc.graphics_context, Rndr::ShaderDesc{.type = Rndr::ShaderType::Fragment,
+                                                                   .source = fragment_shader_contents,
+                                                                   .debug_name = "Shape 2D Renderer - Fragment Shader"}};
     RNDR_ASSERT(m_fragment_shader.IsValid(), "Failed to initialize fragment shader!");
 
     const Rndr::InputLayoutDesc input_layout = Rndr::InputLayoutBuilder()
@@ -79,8 +86,10 @@ Rndr::Shape2DRenderer::Shape2DRenderer(const Opal::StringUtf8& name, const Rende
                                                    .AddIndexBuffer(m_index_buffer)
                                                    .Build();
 
-    m_pipeline = {m_desc.graphics_context,
-                  Rndr::PipelineDesc{.vertex_shader = &m_vertex_shader, .pixel_shader = &m_fragment_shader, .input_layout = input_layout}};
+    m_pipeline = {m_desc.graphics_context, Rndr::PipelineDesc{.vertex_shader = &m_vertex_shader,
+                                                              .pixel_shader = &m_fragment_shader,
+                                                              .input_layout = input_layout,
+                                                              .debug_name = "Shape 2D Renderer - Pipeline"}};
     RNDR_ASSERT(m_pipeline.IsValid(), "Failed to initialize pipeline!");
 }
 

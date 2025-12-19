@@ -23,9 +23,13 @@ Rndr::Shape3DRenderer::Shape3DRenderer(const Opal::StringUtf8& name, const Rende
     const Opal::StringUtf8 vertex_shader_contents = File::ReadShader(shader_dir, "pbr.vert");
     const Opal::StringUtf8 fragment_shader_contents = File::ReadShader(shader_dir, "pbr.frag");
 
-    m_vertex_shader = Shader(m_desc.graphics_context, {.type = ShaderType::Vertex, .source = vertex_shader_contents});
+    m_vertex_shader =
+        Shader(m_desc.graphics_context,
+               {.type = ShaderType::Vertex, .source = vertex_shader_contents, .debug_name = "Shape 3D Renderer - Vertex Shader"});
     RNDR_ASSERT(m_vertex_shader.IsValid(), "Failed to create vertex shader!");
-    m_fragment_shader = Shader(m_desc.graphics_context, {.type = ShaderType::Fragment, .source = fragment_shader_contents});
+    m_fragment_shader =
+        Shader(m_desc.graphics_context,
+               {.type = ShaderType::Fragment, .source = fragment_shader_contents, .debug_name = "Shape 3D Renderer - Fragment Shader"});
     RNDR_ASSERT(m_fragment_shader.IsValid(), "Failed to create fragment shader!");
 
     Opal::DynamicArray<VertexData> vertex_data;
@@ -36,21 +40,29 @@ Rndr::Shape3DRenderer::Shape3DRenderer(const Opal::StringUtf8& name, const Rende
                              {.type = BufferType::ShaderStorage,
                               .usage = Usage::Default,
                               .size = vertex_data.GetSize() * sizeof(VertexData),
-                              .stride = sizeof(VertexData)},
+                              .stride = sizeof(VertexData),
+                              .debug_name = "Shape 3D Renderer - Vertex Buffer"},
                              Opal::AsBytes(vertex_data));
     RNDR_ASSERT(m_vertex_buffer.IsValid(), "Failed to create vertex buffer!");
-    m_index_buffer = Buffer(
-        desc.graphics_context,
-        {.type = BufferType::Index, .usage = Usage::Default, .size = index_data.GetSize() * sizeof(uint32_t), .stride = sizeof(uint32_t)},
-        Opal::AsBytes(index_data));
+    m_index_buffer = Buffer(desc.graphics_context,
+                            {.type = BufferType::Index,
+                             .usage = Usage::Default,
+                             .size = index_data.GetSize() * sizeof(uint32_t),
+                             .stride = sizeof(uint32_t),
+                             .debug_name = "Shape 3D Renderer - Index Buffer"},
+                            Opal::AsBytes(index_data));
     RNDR_ASSERT(m_index_buffer.IsValid(), "Failed to create index buffer!");
-    m_model_transform_buffer = Buffer(
-        desc.graphics_context,
-        {.type = BufferType::ShaderStorage, .usage = Usage::Dynamic, .size = 10000 * sizeof(InstanceData), .stride = sizeof(InstanceData)});
+    m_model_transform_buffer = Buffer(desc.graphics_context, {.type = BufferType::ShaderStorage,
+                                                              .usage = Usage::Dynamic,
+                                                              .size = 10000 * sizeof(InstanceData),
+                                                              .stride = sizeof(InstanceData),
+                                                              .debug_name = "Shape 3D Renderer - Instance Transforms Buffer"});
     RNDR_ASSERT(m_model_transform_buffer.IsValid(), "Failed to create instance buffer!");
-    m_per_frame_buffer =
-        Buffer(m_desc.graphics_context,
-               {.type = BufferType::Constant, .usage = Usage::Dynamic, .size = sizeof(PerFrameData), .stride = sizeof(PerFrameData)});
+    m_per_frame_buffer = Buffer(m_desc.graphics_context, {.type = BufferType::Constant,
+                                                          .usage = Usage::Dynamic,
+                                                          .size = sizeof(PerFrameData),
+                                                          .stride = sizeof(PerFrameData),
+                                                          .debug_name = "Shape 3D Renderer - Per Frame Buffer"});
     RNDR_ASSERT(m_per_frame_buffer.IsValid(), "Failed to create per-frame-data buffer!");
 
     const InputLayoutDesc input_layout_desc = Rndr::InputLayoutBuilder()
@@ -58,11 +70,13 @@ Rndr::Shape3DRenderer::Shape3DRenderer(const Opal::StringUtf8& name, const Rende
                                                   .AddShaderStorage(m_model_transform_buffer, 2)
                                                   .AddIndexBuffer(m_index_buffer)
                                                   .Build();
-    m_pipeline = Pipeline(desc.graphics_context, {.vertex_shader = &m_vertex_shader,
-                                                  .pixel_shader = &m_fragment_shader,
-                                                  .input_layout = input_layout_desc,
-                                                  .rasterizer = {.fill_mode = FillMode::Solid, .front_face_winding_order = WindingOrder::CCW},
-                                                  .depth_stencil = {.is_depth_enabled = true}});
+    m_pipeline =
+        Pipeline(desc.graphics_context, {.vertex_shader = &m_vertex_shader,
+                                         .pixel_shader = &m_fragment_shader,
+                                         .input_layout = input_layout_desc,
+                                         .rasterizer = {.fill_mode = FillMode::Solid, .front_face_winding_order = WindingOrder::CCW},
+                                         .depth_stencil = {.is_depth_enabled = true},
+                                         .debug_name = "Shape 3D Renderer - Solid Pipeline"});
     RNDR_ASSERT(m_pipeline.IsValid(), "Failed to create pipeline!");
 }
 
