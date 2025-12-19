@@ -513,6 +513,8 @@ struct ShaderDesc
 
     /** List of defines that should be added to the shader in a form of DEFINE_NAME VALUE or just DEFINE_NAME. */
     Opal::DynamicArray<Opal::StringUtf8> defines;
+
+    Opal::StringUtf8 debug_name;
 };
 
 struct BufferDesc
@@ -531,6 +533,8 @@ struct BufferDesc
 
     /** Offset, in bytes, from the beginning of the buffer to the first element to use. */
     i64 offset = 0;
+
+    Opal::StringUtf8 debug_name;
 };
 
 struct SamplerDesc
@@ -582,6 +586,8 @@ struct SamplerDesc
 
     /** Maximum LOD level to use. This value can't be larger then max_mip_level. */
     f32 max_lod = 0.0f;
+
+    Opal::StringUtf8 debug_name;
 };
 
 struct TextureDesc
@@ -609,6 +615,8 @@ struct TextureDesc
 
     /** Number of samples per pixel. */
     i32 sample_count = 1;
+
+    Opal::StringUtf8 debug_name;
 };
 
 /**
@@ -793,6 +801,8 @@ struct PipelineDesc
     RasterizerDesc rasterizer;
     BlendDesc blend;
     DepthStencilDesc depth_stencil;
+
+    Opal::StringUtf8 debug_name;
 };
 
 struct FrameBufferDesc
@@ -802,6 +812,8 @@ struct FrameBufferDesc
     bool use_depth_stencil = false;
     TextureDesc depth_stencil_attachment;
     SamplerDesc depth_stencil_sampler;
+
+    Opal::StringUtf8 debug_name;
 };
 
 /**
