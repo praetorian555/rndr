@@ -234,11 +234,12 @@ Rndr::Vector4f RandomColor(Opal::RNG& rng)
 
 void DrawScene(Rndr::Shape3DRenderer& shape_renderer, const Rndr::MaterialRegistry& mat_registry)
 {
-    Opal::Ref<const Rndr::Material> red_material = mat_registry.Get("Red Color Material");
-    Opal::Ref<const Rndr::Material> default_material = mat_registry.Get("Default Material");
+    const Opal::Ref<const Rndr::Material> red_material = mat_registry.Get("Red Color Material");
+    const Opal::Ref<const Rndr::Material> white_material = mat_registry.Get("White Color Material");
+    const Opal::Ref<const Rndr::Material> default_material = mat_registry.Get("Default Material");
     const Rndr::Matrix4x4f cube_transform = Opal::Translate(Rndr::Vector3f{-2.0f, 0.0f, -10.0f});
     const Rndr::Matrix4x4f sphere_transform = Opal::Translate(Rndr::Vector3f{2.0f, 0.0f, -10.0f});
-    shape_renderer.DrawSphere(sphere_transform, red_material);
+    shape_renderer.DrawSphere(sphere_transform, default_material);
     shape_renderer.DrawCube(cube_transform, default_material);
 
     constexpr Rndr::i32 k_cube_size = 10;
@@ -252,7 +253,7 @@ void DrawScene(Rndr::Shape3DRenderer& shape_renderer, const Rndr::MaterialRegist
             {
                 constexpr Rndr::f32 k_distance = 5.0f;
                 const Rndr::Point3f draw_location = start_position + Rndr::Vector3f{x * k_distance, y * k_distance, z * k_distance};
-                shape_renderer.DrawSphere(Opal::Translate(draw_location), red_material);
+                shape_renderer.DrawSphere(Opal::Translate(draw_location), white_material);
             }
         }
     }

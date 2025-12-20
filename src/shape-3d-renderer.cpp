@@ -147,7 +147,7 @@ bool Rndr::Shape3DRenderer::Render(f32 delta_seconds, CommandList& command_list)
 
     for (auto& pair : m_materials)
     {
-        const Material* material = pair.key;
+        const Material* material = pair.key.material.GetPtr();
         PerMaterialData& material_data = pair.value;
         const Pipeline* pipeline = nullptr;
         command_list.CmdBindBuffer(m_per_frame_buffer, 0);
@@ -343,12 +343,13 @@ void Rndr::Shape3DRenderer::SetupGeometryData(Opal::DynamicArray<VertexData>& ou
 
 void Rndr::Shape3DRenderer::DrawShape(ShapeType shape_type, const Matrix4x4f& transform, Opal::Ref<const Material> material)
 {
-    auto it = m_materials.Find(material.GetPtr());
+    MaterialKey material_key{material};
+    auto it = m_materials.Find(material_key);
     if (it == m_materials.end())
     {
         PerMaterialData material_data;
-        m_materials.Insert(material.GetPtr(), material_data);
-        it = m_materials.Find(material.GetPtr());
+        m_materials.Insert(material_key, material_data);
+        it = m_materials.Find(material_key);
         RNDR_ASSERT(it != m_materials.end(), "Failed to find material in map!");
     }
     PerMaterialData& material_data = it.GetValue();
@@ -368,3 +369,30 @@ void Rndr::Shape3DRenderer::DrawShape(ShapeType shape_type, const Matrix4x4f& tr
     draw_data.instance_count = 1;
     material_data.draw_commands.PushBack(draw_data);
 }
+
+namespace Opal
+{
+template <>
+struct Hasher<Rndr::Material>
+{
+    u64 operator()(const Rndr::Material& material) const
+    {
+        u64 hash = material.m_bit_mask;
+        if ((material.m_bit_mask & 1) != 0)
+        {
+            hash ^= Hasher<StringUtf8>()(material.m_desc.albedo_texture_path);
+        }
+        return hash;
+    }
+};
+
+template <>
+struct Hasher<Rndr::Shape3DRenderer::MaterialKey>
+{
+    u64 operator()(const Rndr::Shape3DRenderer::MaterialKey& material_key) const
+    {
+        const Rndr::Material& material = *material_key.material;
+        return Hasher<Rndr::Material>()(material);
+    }
+};
+}  // namespace Opal

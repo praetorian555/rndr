@@ -11,6 +11,15 @@ namespace Rndr
 class Shape3DRenderer : public RendererBase
 {
 public:
+    struct MaterialKey
+    {
+        Opal::Ref<const Material> material;
+
+        bool operator==(const MaterialKey& other) const {
+            return *material == *other.material;
+        }
+    };
+
     Shape3DRenderer(const Opal::StringUtf8& name, const RendererBaseDesc& desc, Opal::Ref<FrameBuffer> target);
     ~Shape3DRenderer() override;
 
@@ -81,7 +90,7 @@ private:
     Pipeline m_color_pipeline;
     Pipeline m_texture_pipeline;
 
-    Opal::HashMap<const Material*, PerMaterialData> m_materials;
+    Opal::HashMap<MaterialKey, PerMaterialData> m_materials;
 
     Opal::DynamicArray<ShapeGeometryData> m_geometry_data;
 };

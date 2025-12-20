@@ -57,22 +57,3 @@ Opal::Ref<const Rndr::Material> Rndr::MaterialRegistry::Get(const Opal::StringUt
     const Material& material = m_materials.GetValue(name);
     return Opal::Ref(material);
 }
-
-namespace Opal
-{
-
-template <>
-class Hasher<Rndr::Material>
-{
-    u64 operator()(const Rndr::Material& material) const
-    {
-        u64 hash = material.m_bit_mask;
-        if ((material.m_bit_mask & 1) != 0)
-        {
-            hash ^= Hasher<StringUtf8>()(material.m_desc.albedo_texture_path);
-        }
-        return hash;
-    }
-};
-
-}  // namespace Opal
