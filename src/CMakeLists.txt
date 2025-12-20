@@ -16,6 +16,7 @@ set(SOURCE_LIST
         "${PROJECT_SOURCE_DIR}/include/rndr/platform/opengl-forward-def.hpp"
         "${PROJECT_SOURCE_DIR}/include/rndr/file.hpp"
         "${PROJECT_SOURCE_DIR}/include/rndr/bitmap.hpp"
+        "${PROJECT_SOURCE_DIR}/include/rndr/material.hpp"
         "${PROJECT_SOURCE_DIR}/include/rndr/renderers/renderer-base.hpp"
         "${PROJECT_SOURCE_DIR}/include/rndr/renderers/shape-2d-renderer.hpp"
         "${PROJECT_SOURCE_DIR}/include/rndr/renderers/shape-3d-renderer.hpp"
@@ -47,6 +48,7 @@ set(SOURCE_LIST
         "${PROJECT_SOURCE_DIR}/src/application.cpp"
         "${PROJECT_SOURCE_DIR}/src/platform-application.cpp"
         "${PROJECT_SOURCE_DIR}/src/imgui-system.cpp"
+        "${PROJECT_SOURCE_DIR}/src/material.cpp"
 )
 
 list(APPEND SOURCE_LIST
