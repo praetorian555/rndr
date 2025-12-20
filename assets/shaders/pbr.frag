@@ -7,6 +7,8 @@ layout(std140, binding = 0) uniform PerFrameData
     vec3 light_direction_world;
 };
 
+layout (binding = 0) uniform sampler2D albedo_texture;
+
 layout (location = 0) in vec3 in_normal_world;
 layout (location = 1) in vec2 in_tex_coords;
 layout (location = 2) in vec3 in_position_world;
@@ -31,6 +33,10 @@ void main()
     vec3 normal = normalize(in_normal_world);
     vec3 light_direction_world_norm = normalize(light_direction_world);
     float n_dot_l = clamp(dot(normal, light_direction_world_norm), 0.02f, 1.0f);
+#ifdef USE_ALBEDO_TEXTURE
+    vec3 color = texture(albedo_texture, in_tex_coords).rgb * n_dot_l;
+#else
     vec3 color = in_color.rgb * n_dot_l;
+#endif
     out_frag_color = vec4(color, in_color.a);
 }

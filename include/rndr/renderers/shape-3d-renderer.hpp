@@ -1,7 +1,8 @@
 #pragma once
 
-#include "opal/paths.h"
+#include "opal/container/hash-map.h"
 
+#include "rndr/material.hpp"
 #include "rndr/renderers/renderer-base.hpp"
 
 namespace Rndr
@@ -20,10 +21,10 @@ public:
 
     bool Render(f32 delta_seconds, CommandList& command_list) override;
 
-    void DrawCube(const Matrix4x4f& transform, const Vector4f& color);
-    void DrawSphere(const Matrix4x4f& transform, const Vector4f& color);
-    void DrawCylinder(const Matrix4x4f& transform, const Vector4f& color);
-    void DrawCone(const Matrix4x4f& transform, const Vector4f& color);
+    void DrawCube(const Matrix4x4f& transform, Opal::Ref<const Material> material);
+    void DrawSphere(const Matrix4x4f& transform, Opal::Ref<const Material> material);
+    // void DrawCylinder(const Matrix4x4f& transform, const Vector4f& color);
+    // void DrawCone(const Matrix4x4f& transform, const Vector4f& color);
 
 private:
     struct VertexData
@@ -38,6 +39,12 @@ private:
         Matrix4x4f model_transform;
         Matrix4x4f normal_transform;
         Vector4f color;
+    };
+
+    struct PerMaterialData
+    {
+        Opal::DynamicArray<InstanceData> instances;
+        Opal::DynamicArray<DrawIndicesData> draw_commands;
     };
 
     enum class ShapeType : u8
@@ -57,23 +64,26 @@ private:
     };
 
     void SetupGeometryData(Opal::DynamicArray<VertexData>& out_vertex_data, Opal::DynamicArray<u32>& out_index_data);
-    void DrawShape(ShapeType shape_type, const Matrix4x4f& transform, const Vector4f& color);
+    void DrawShape(ShapeType shape_type, const Matrix4x4f& transform, Opal::Ref<const Material> material);
 
     Opal::Ref<FrameBuffer> m_target;
     Matrix4x4f m_view;
     Matrix4x4f m_projection;
 
     Shader m_vertex_shader;
-    Shader m_fragment_shader;
+    Shader m_fragment_color_shader;
+    Shader m_fragment_texture_shader;
     Buffer m_per_frame_buffer;
     Buffer m_model_transform_buffer;
     Buffer m_vertex_buffer;
     Buffer m_index_buffer;
-    Pipeline m_pipeline;
+    Buffer m_draw_commands_buffer;
+    Pipeline m_color_pipeline;
+    Pipeline m_texture_pipeline;
+
+    Opal::HashMap<const Material*, PerMaterialData> m_materials;
 
     Opal::DynamicArray<ShapeGeometryData> m_geometry_data;
-    Opal::DynamicArray<InstanceData> m_instances;
-    Opal::DynamicArray<DrawIndicesData> m_draw_commands;
 };
 
 }  // namespace Rndr

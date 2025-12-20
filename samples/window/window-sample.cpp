@@ -38,7 +38,7 @@ Rndr::FrameBuffer RecreateFrameBuffer(Rndr::GraphicsContext& gc, Rndr::i32 width
     return {gc, desc};
 }
 
-void DrawScene(Rndr::Shape3DRenderer& shape_renderer);
+void DrawScene(Rndr::Shape3DRenderer& shape_renderer, const Rndr::MaterialRegistry& mat_registry);
 
 int main()
 {
@@ -104,6 +104,12 @@ int main()
 
     Rndr::GridRenderer grid_renderer("Grid Renderer", {Opal::Ref{gc}, Opal::Ref{swap_chain}}, Opal::Ref{final_render});
     Rndr::Shape3DRenderer shape_renderer("3D Shape Renderer", {Opal::Ref{gc}, Opal::Ref{swap_chain}}, Opal::Ref{final_render});
+
+    Rndr::MaterialRegistry material_registry(Opal::Ref{gc});
+    material_registry.Register("Red Color Material", {.albedo_color = Rndr::Colors::k_red});
+    material_registry.Register("White Color Material", {.albedo_color = Rndr::Colors::k_white});
+    Opal::StringUtf8 albedo_texture_path = Opal::Paths::Combine(RNDR_CORE_ASSETS_DIR, "default-texture.png");
+    material_registry.Register("Default Material", {.albedo_texture_path = albedo_texture_path});
 
     const Rndr::FlyCameraDesc fly_camera_desc{.start_position = {0.0f, 1.0f, 0.0f}, .start_yaw_radians = 0};
     ExampleController controller(*app, window_width, window_height, fly_camera_desc, 10.0f, 0.005f, 0.005f);
@@ -177,7 +183,7 @@ int main()
 
         grid_renderer.Render(delta_seconds, cmd_list);
 
-        DrawScene(shape_renderer);
+        DrawScene(shape_renderer, material_registry);
         shape_renderer.SetTransforms(controller.GetViewTransform(), controller.GetProjectionTransform());
         shape_renderer.Render(delta_seconds, cmd_list);
 
@@ -226,12 +232,14 @@ Rndr::Vector4f RandomColor(Opal::RNG& rng)
     return {rng.RandomF32(0, 1.0), rng.RandomF32(0, 1.0), rng.RandomF32(0, 1.0), 1.0f};
 }
 
-void DrawScene(Rndr::Shape3DRenderer& shape_renderer)
+void DrawScene(Rndr::Shape3DRenderer& shape_renderer, const Rndr::MaterialRegistry& mat_registry)
 {
+    Opal::Ref<const Rndr::Material> red_material = mat_registry.Get("Red Color Material");
+    Opal::Ref<const Rndr::Material> default_material = mat_registry.Get("Default Material");
     const Rndr::Matrix4x4f cube_transform = Opal::Translate(Rndr::Vector3f{-2.0f, 0.0f, -10.0f});
     const Rndr::Matrix4x4f sphere_transform = Opal::Translate(Rndr::Vector3f{2.0f, 0.0f, -10.0f});
-    shape_renderer.DrawSphere(sphere_transform, Rndr::Colors::k_red);
-    shape_renderer.DrawCube(cube_transform, Rndr::Colors::k_white);
+    shape_renderer.DrawSphere(sphere_transform, red_material);
+    shape_renderer.DrawCube(cube_transform, default_material);
 
     constexpr Rndr::i32 k_cube_size = 10;
     const Rndr::Point3f start_position = {0.0f, 0.0f, 10.0f};
@@ -244,7 +252,7 @@ void DrawScene(Rndr::Shape3DRenderer& shape_renderer)
             {
                 constexpr Rndr::f32 k_distance = 5.0f;
                 const Rndr::Point3f draw_location = start_position + Rndr::Vector3f{x * k_distance, y * k_distance, z * k_distance};
-                shape_renderer.DrawSphere(Opal::Translate(draw_location), RandomColor(rng));
+                shape_renderer.DrawSphere(Opal::Translate(draw_location), red_material);
             }
         }
     }
