@@ -17,7 +17,7 @@ constexpr Opal::InPlaceArray<GLenum, k_max_usage> k_to_opengl_usage = {GL_MAP_WR
 
 constexpr Rndr::u64 k_max_buffer_type = static_cast<Rndr::u64>(Rndr::BufferType::EnumCount);
 constexpr Opal::InPlaceArray<GLenum, k_max_buffer_type> k_to_opengl_buffer_type = {GL_ARRAY_BUFFER, GL_ELEMENT_ARRAY_BUFFER,
-                                                                                 GL_UNIFORM_BUFFER, GL_SHADER_STORAGE_BUFFER};
+                                                                                 GL_UNIFORM_BUFFER, GL_SHADER_STORAGE_BUFFER, GL_DRAW_INDIRECT_BUFFER};
 
 constexpr Rndr::u64 k_max_comparator = static_cast<Rndr::u64>(Rndr::Comparator::EnumCount);
 constexpr Opal::InPlaceArray<GLenum, k_max_comparator> k_to_opengl_comparator = {GL_NEVER, GL_ALWAYS,   GL_LESS,   GL_GREATER,
@@ -413,6 +413,8 @@ Opal::StringUtf8 Rndr::FromBufferTypeToString(Rndr::BufferType type)
             return "Constant";
         case BufferType::ShaderStorage:
             return "Storage";
+        case BufferType::DrawCommands:
+            return "DrawCommands";
         default:
             RNDR_HALT("Invalid buffer type");
     }

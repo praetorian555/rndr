@@ -7,65 +7,24 @@
 #include "rndr/platform/opengl-graphics-context.hpp"
 #include "rndr/trace.hpp"
 
-Rndr::DrawVerticesMultiCommand::DrawVerticesMultiCommand(PrimitiveTopology primitive_topology, uint32_t buffer_handle, uint32_t draw_count)
-    : primitive_topology(primitive_topology), buffer_handle(buffer_handle), draw_count(draw_count)
+Rndr::DrawVerticesMultiCommand::DrawVerticesMultiCommand(Opal::Ref<Buffer> commands_buffer, PrimitiveTopology primitive_topology,
+                                                         Opal::ArrayView<DrawVerticesData> draws)
+    : commands_buffer(commands_buffer), primitive_topology(primitive_topology)
 {
+    for (const DrawVerticesData& draw : draws)
+    {
+        draw_commands.PushBack(draw);
+    }
 }
 
-Rndr::DrawVerticesMultiCommand::~DrawVerticesMultiCommand()
+Rndr::DrawIndicesMultiCommand::DrawIndicesMultiCommand(Opal::Ref<Buffer> commands_buffer, PrimitiveTopology primitive_topology,
+                                                       Opal::ArrayView<DrawIndicesData> draws)
+    : commands_buffer(commands_buffer), primitive_topology(primitive_topology)
 {
-    glDeleteBuffers(1, &buffer_handle);
-    RNDR_ASSERT_OPENGL();
-}
-
-Rndr::DrawVerticesMultiCommand::DrawVerticesMultiCommand(DrawVerticesMultiCommand&& other) noexcept
-    : primitive_topology(other.primitive_topology), buffer_handle(other.buffer_handle), draw_count(other.draw_count)
-{
-    other.buffer_handle = 0;
-    other.draw_count = 0;
-}
-
-Rndr::DrawVerticesMultiCommand& Rndr::DrawVerticesMultiCommand::operator=(DrawVerticesMultiCommand&& other) noexcept
-{
-    primitive_topology = other.primitive_topology;
-    glDeleteBuffers(1, &buffer_handle);
-    RNDR_ASSERT_OPENGL();
-    buffer_handle = other.buffer_handle;
-    draw_count = other.draw_count;
-    other.buffer_handle = 0;
-    other.draw_count = 0;
-    return *this;
-}
-
-Rndr::DrawIndicesMultiCommand::DrawIndicesMultiCommand(Rndr::PrimitiveTopology primitive_topology, uint32_t buffer_handle,
-                                                       uint32_t draw_count)
-    : primitive_topology(primitive_topology), buffer_handle(buffer_handle), draw_count(draw_count)
-{
-}
-
-Rndr::DrawIndicesMultiCommand::~DrawIndicesMultiCommand()
-{
-    glDeleteBuffers(1, &buffer_handle);
-    RNDR_ASSERT_OPENGL();
-}
-
-Rndr::DrawIndicesMultiCommand::DrawIndicesMultiCommand(Rndr::DrawIndicesMultiCommand&& other) noexcept
-    : primitive_topology(other.primitive_topology), buffer_handle(other.buffer_handle), draw_count(other.draw_count)
-{
-    other.buffer_handle = 0;
-    other.draw_count = 0;
-}
-
-Rndr::DrawIndicesMultiCommand& Rndr::DrawIndicesMultiCommand::operator=(Rndr::DrawIndicesMultiCommand&& other) noexcept
-{
-    primitive_topology = other.primitive_topology;
-    glDeleteBuffers(1, &buffer_handle);
-    RNDR_ASSERT_OPENGL();
-    buffer_handle = other.buffer_handle;
-    draw_count = other.draw_count;
-    other.buffer_handle = 0;
-    other.draw_count = 0;
-    return *this;
+    for (const DrawIndicesData& draw : draws)
+    {
+        draw_commands.PushBack(draw);
+    }
 }
 
 Rndr::CommandList::CommandList(Rndr::GraphicsContext& graphics_context) : m_graphics_context(graphics_context) {}
@@ -145,8 +104,8 @@ void Rndr::CommandList::CmdDrawIndices(Rndr::PrimitiveTopology topology, int32_t
         .primitive_topology = topology, .index_count = index_count, .instance_count = instance_count, .first_index = first_index});
 }
 
-void Rndr::CommandList::CmdDrawVerticesMulti(const Rndr::Pipeline& pipeline, Rndr::PrimitiveTopology topology,
-                                             const Opal::ArrayView<Rndr::DrawVerticesData>& draws)
+void Rndr::CommandList::CmdDrawVerticesMulti(Opal::Ref<Buffer> commands_buffer, PrimitiveTopology topology,
+                                             const Opal::ArrayView<DrawVerticesData>& draws)
 {
     static_assert(sizeof(DrawVerticesData::vertex_count) == 4);
     static_assert(sizeof(DrawVerticesData::instance_count) == 4);
@@ -154,18 +113,11 @@ void Rndr::CommandList::CmdDrawVerticesMulti(const Rndr::Pipeline& pipeline, Rnd
     static_assert(sizeof(DrawVerticesData::base_instance) == 4);
     static_assert(sizeof(DrawVerticesData) == 16, "DrawVerticesData size is not 16 bytes");
 
-    GLuint buffer_handle = 0;
-    glCreateBuffers(1, &buffer_handle);
-    RNDR_ASSERT_OPENGL();
-    glNamedBufferStorage(buffer_handle, draws.GetSize() * sizeof(DrawVerticesData), draws.GetData(), GL_DYNAMIC_STORAGE_BIT);
-    RNDR_ASSERT_OPENGL();
-
-    CmdBindPipeline(pipeline);
-    m_commands.PushBack(DrawVerticesMultiCommand(topology, buffer_handle, static_cast<uint32_t>(draws.GetSize())));
+    m_commands.PushBack(DrawVerticesMultiCommand(commands_buffer, topology, draws));
 }
 
-void Rndr::CommandList::CmdDrawIndicesMulti(const Rndr::Pipeline& pipeline, Rndr::PrimitiveTopology topology,
-                                            const Opal::ArrayView<Rndr::DrawIndicesData>& draws)
+void Rndr::CommandList::CmdDrawIndicesMulti(Opal::Ref<Buffer> commands_buffer, PrimitiveTopology topology,
+                                            const Opal::ArrayView<DrawIndicesData>& draws)
 {
     static_assert(sizeof(DrawIndicesData::index_count) == 4);
     static_assert(sizeof(DrawIndicesData::instance_count) == 4);
@@ -174,18 +126,7 @@ void Rndr::CommandList::CmdDrawIndicesMulti(const Rndr::Pipeline& pipeline, Rndr
     static_assert(sizeof(DrawIndicesData::base_instance) == 4);
     static_assert(sizeof(DrawIndicesData) == 20, "DrawIndicesData size is not 20 bytes");
 
-    m_graphics_context->BindPipeline(pipeline);
-
-    GLuint buffer_handle = 0;
-    glCreateBuffers(1, &buffer_handle);
-    RNDR_ASSERT_OPENGL();
-    glNamedBufferStorage(buffer_handle, draws.GetSize() * sizeof(DrawIndicesData), draws.GetData(), GL_DYNAMIC_STORAGE_BIT);
-    RNDR_ASSERT_OPENGL();
-    glBindBuffer(GL_DRAW_INDIRECT_BUFFER, buffer_handle);
-    RNDR_ASSERT_OPENGL();
-
-    CmdBindPipeline(pipeline);
-    m_commands.PushBack(DrawIndicesMultiCommand(topology, buffer_handle, static_cast<uint32_t>(draws.GetSize())));
+    m_commands.PushBack(DrawIndicesMultiCommand(commands_buffer, topology, draws));
 }
 
 bool Rndr::CommandList::CmdDispatchCompute(uint32_t block_count_x, uint32_t block_count_y, uint32_t block_count_z, bool wait_for_completion)
@@ -199,7 +140,8 @@ bool Rndr::CommandList::CmdDispatchCompute(uint32_t block_count_x, uint32_t bloc
 
 bool Rndr::CommandList::CmdUpdateBuffer(const Rndr::Buffer& buffer, const Opal::ArrayView<const u8>& data, Rndr::i32 offset)
 {
-    m_commands.PushBack(UpdateBufferCommand{.buffer = Opal::Ref<const Buffer>(buffer), .data = {data.GetData(), data.GetSize()}, .offset = offset});
+    m_commands.PushBack(
+        UpdateBufferCommand{.buffer = Opal::Ref<const Buffer>(buffer), .data = {data.GetData(), data.GetSize()}, .offset = offset});
     return true;
 }
 
@@ -210,7 +152,7 @@ void Rndr::CommandList::CmdBlitFrameBuffers(const FrameBuffer& dst, const FrameB
 
 void Rndr::CommandList::CmdBlitToSwapChain(const SwapChain& swap_chain, const FrameBuffer& src, const BlitFrameBufferDesc& desc)
 {
-    m_commands.PushBack(BlitToSwapChainCommand{ .swap_chain = Opal::Ref(swap_chain), .src_frame_buffer = Opal::Ref(src), .blit_desc = desc });
+    m_commands.PushBack(BlitToSwapChainCommand{.swap_chain = Opal::Ref(swap_chain), .src_frame_buffer = Opal::Ref(src), .blit_desc = desc});
 }
 
 struct CommandExecutor
@@ -260,17 +202,25 @@ struct CommandExecutor
 
     void operator()(const Rndr::DrawVerticesMultiCommand& command) const
     {
-        glBindBuffer(GL_DRAW_INDIRECT_BUFFER, command.buffer_handle);
+        const GLuint native_buffer = command.commands_buffer->GetNativeBuffer();
+        glNamedBufferSubData(native_buffer, 0, command.draw_commands.GetSize() * sizeof(Rndr::DrawVerticesData),
+                             command.draw_commands.GetData());
+        glBindBuffer(GL_DRAW_INDIRECT_BUFFER, native_buffer);
         RNDR_ASSERT_OPENGL();
         const GLenum topology = FromPrimitiveTopologyToOpenGL(command.primitive_topology);
-        glMultiDrawArraysIndirect(topology, nullptr, static_cast<int32_t>(command.draw_count), sizeof(Rndr::DrawVerticesData));
+        glMultiDrawArraysIndirect(topology, nullptr, static_cast<int32_t>(command.draw_commands.GetSize()), sizeof(Rndr::DrawVerticesData));
         RNDR_ASSERT_OPENGL();
     }
 
     void operator()(const Rndr::DrawIndicesMultiCommand& command) const
     {
+        const GLuint native_buffer = command.commands_buffer->GetNativeBuffer();
+        glNamedBufferSubData(native_buffer, 0, command.draw_commands.GetSize() * sizeof(Rndr::DrawIndicesData),
+                             command.draw_commands.GetData());
+        glBindBuffer(GL_DRAW_INDIRECT_BUFFER, command.commands_buffer->GetNativeBuffer());
+        RNDR_ASSERT_OPENGL();
         const GLenum topology = FromPrimitiveTopologyToOpenGL(command.primitive_topology);
-        glMultiDrawElementsIndirect(topology, GL_UNSIGNED_INT, nullptr, static_cast<int32_t>(command.draw_count),
+        glMultiDrawElementsIndirect(topology, GL_UNSIGNED_INT, nullptr, static_cast<int32_t>(command.draw_commands.GetSize()),
                                     sizeof(Rndr::DrawIndicesData));
         RNDR_ASSERT_OPENGL();
     }

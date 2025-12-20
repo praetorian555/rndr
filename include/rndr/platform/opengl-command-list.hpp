@@ -6,8 +6,8 @@
 #include "opal/container/ref.h"
 
 #include "rndr/definitions.hpp"
-#include "rndr/graphics-types.hpp"
 #include "rndr/error-codes.hpp"
+#include "rndr/graphics-types.hpp"
 
 #if RNDR_OPENGL
 
@@ -96,19 +96,24 @@ struct DrawIndicesCommand
 
 struct DrawVerticesMultiCommand
 {
+    Opal::Ref<Buffer> commands_buffer;
     PrimitiveTopology primitive_topology;
-    uint32_t buffer_handle;
-    uint32_t draw_count;
+    Opal::DynamicArray<DrawVerticesData> draw_commands;
 
     DrawVerticesMultiCommand() = default;
-    DrawVerticesMultiCommand(PrimitiveTopology primitive_topology, uint32_t buffer_handle, uint32_t draw_count);
-    ~DrawVerticesMultiCommand();
+    DrawVerticesMultiCommand(Opal::Ref<Buffer> commands_buffer, PrimitiveTopology primitive_topology,
+                            Opal::ArrayView<DrawVerticesData> draws);
+};
 
-    DrawVerticesMultiCommand(DrawVerticesMultiCommand& other) = delete;
-    DrawVerticesMultiCommand& operator=(DrawVerticesMultiCommand& other) = delete;
+struct DrawIndicesMultiCommand
+{
+    Opal::Ref<Buffer> commands_buffer;
+    PrimitiveTopology primitive_topology;
+    Opal::DynamicArray<DrawIndicesData> draw_commands;
 
-    DrawVerticesMultiCommand(DrawVerticesMultiCommand&& other) noexcept;
-    DrawVerticesMultiCommand& operator=(DrawVerticesMultiCommand&& other) noexcept;
+    DrawIndicesMultiCommand() = default;
+    DrawIndicesMultiCommand(Opal::Ref<Buffer> commands_buffer, PrimitiveTopology primitive_topology,
+                            Opal::ArrayView<DrawIndicesData> draws);
 };
 
 struct UpdateBufferCommand
@@ -116,23 +121,6 @@ struct UpdateBufferCommand
     Opal::Ref<const class Buffer> buffer;
     Opal::DynamicArray<u8> data;
     i32 offset;
-};
-
-struct DrawIndicesMultiCommand
-{
-    PrimitiveTopology primitive_topology;
-    uint32_t buffer_handle;
-    uint32_t draw_count;
-
-    DrawIndicesMultiCommand() = default;
-    DrawIndicesMultiCommand(PrimitiveTopology primitive_topology, uint32_t buffer_handle, uint32_t draw_count);
-    ~DrawIndicesMultiCommand();
-
-    DrawIndicesMultiCommand(DrawIndicesMultiCommand& other) = delete;
-    DrawIndicesMultiCommand& operator=(DrawIndicesMultiCommand& other) = delete;
-
-    DrawIndicesMultiCommand(DrawIndicesMultiCommand&& other) noexcept;
-    DrawIndicesMultiCommand& operator=(DrawIndicesMultiCommand&& other) noexcept;
 };
 
 struct DispatchComputeCommand
@@ -289,19 +277,20 @@ public:
 
     /**
      * Issue multiple draw vertices calls.
-     * @param pipeline The pipeline to use.
+     * @param commands_buffer Buffer to store draw commands.
      * @param topology The primitive topology to draw.
      * @param draws The draw vertices data.
      */
-    void CmdDrawVerticesMulti(const Pipeline& pipeline, PrimitiveTopology topology, const Opal::ArrayView<DrawVerticesData>& draws);
+    void CmdDrawVerticesMulti(Opal::Ref<Buffer> commands_buffer, PrimitiveTopology topology,
+                              const Opal::ArrayView<DrawVerticesData>& draws);
 
     /**
      * Issue multiple draw indices calls.
-     * @param pipeline The pipeline to use.
+     * @param commands_buffer Buffer to store draw commands.
      * @param topology The primitive topology to draw.
      * @param draws The draw indices data.
      */
-    void CmdDrawIndicesMulti(const Pipeline& pipeline, PrimitiveTopology topology, const Opal::ArrayView<DrawIndicesData>& draws);
+    void CmdDrawIndicesMulti(Opal::Ref<Buffer> commands_buffer, PrimitiveTopology topology, const Opal::ArrayView<DrawIndicesData>& draws);
 
     /**
      * Dispatches a compute shader.

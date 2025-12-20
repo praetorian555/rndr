@@ -386,6 +386,9 @@ enum class BufferType : u8
     /** Buffer contains shader storage data. */
     ShaderStorage,
 
+    /** Buffer used to store draw commands to be run indirectly on the GPU. */
+    DrawCommands,
+
     /** Represents the number of valid entries in this enum. */
     EnumCount
 };
