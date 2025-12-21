@@ -16,7 +16,7 @@ bool BitmapTextRenderer::Init(Rndr::GraphicsContext* gc, Rndr::FrameBuffer* fram
 
     UpdateFontAtlas();
 
-    constexpr Rndr::BufferDesc k_buffer_desc{
+    const Rndr::BufferDesc k_buffer_desc{
         .type = Rndr::BufferType::Constant, .usage = Rndr::Usage::Dynamic, .size = sizeof(PerFrameData), .stride = sizeof(PerFrameData)};
     m_per_frame_data_buffer = {*m_gc, k_buffer_desc};
     RNDR_ASSERT(m_per_frame_data_buffer.IsValid(), "Buffer could not be created!");
@@ -96,7 +96,7 @@ void BitmapTextRenderer::UpdateFontAtlas()
     const Rndr::Bitmap bitmap(k_atlas_width, k_atlas_height, 1, Rndr::PixelFormat::R8_UNORM, Opal::AsWritableBytes(m_atlas_data));
     Rndr::File::SaveImage(bitmap, "atlas.png");
 
-    constexpr Rndr::TextureDesc k_texture_desc{.width = k_atlas_width,
+    const Rndr::TextureDesc k_texture_desc{.width = k_atlas_width,
                                                .height = k_atlas_height,
                                                .type = Rndr::TextureType::Texture2D,
                                                .pixel_format = Rndr::PixelFormat::R8_UNORM};
