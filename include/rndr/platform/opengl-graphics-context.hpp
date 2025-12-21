@@ -23,7 +23,6 @@ class FrameBuffer;
 class GraphicsContext
 {
 public:
-    GraphicsContext() = default;
     explicit GraphicsContext(const GraphicsContextDesc& desc = {});
     ~GraphicsContext();
     GraphicsContext(const GraphicsContext&) = delete;
