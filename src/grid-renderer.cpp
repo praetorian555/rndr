@@ -50,6 +50,8 @@ Rndr::GridRenderer::GridRenderer(const Opal::StringUtf8& name, const RendererBas
 
         layout(location = 0) out vec4 out_color;
 
+        layout(depth_greater) out float gl_FragDepth;
+
         void main()
         {
             vec2 uv = world_position.xz;
@@ -66,6 +68,7 @@ Rndr::GridRenderer::GridRenderer(const Opal::StringUtf8& name, const RendererBas
             float grid = mix(grid_2.x, 1.0f, grid_2.y);
 
             out_color = vec4(0, 0, 0, 1.0f);
+            gl_FragDepth = gl_FragCoord.z;
             if (uv.x > -draw_width.x && uv.x < draw_width.x)
             {
                 out_color.z = 1.0f;
@@ -77,6 +80,11 @@ Rndr::GridRenderer::GridRenderer(const Opal::StringUtf8& name, const RendererBas
             else
             {
                 out_color.xyz = vec3(grid);
+                if (grid < 0.02)
+                {
+                    gl_FragDepth = 1.0;
+                    out_color.a = 0.0;
+                }
             }
         }
     )";
@@ -89,7 +97,7 @@ Rndr::GridRenderer::GridRenderer(const Opal::StringUtf8& name, const RendererBas
     m_fragment_shader = Shader(m_desc.graphics_context, fragment_shader_desc);
     RNDR_ASSERT(m_fragment_shader.IsValid(), "Invalid fragment shader!");
 
-    const PipelineDesc pipeline_desc{.vertex_shader = &m_vertex_shader, .pixel_shader = &m_fragment_shader, .debug_name = "Grid Renderer - Pipeline"};
+    const PipelineDesc pipeline_desc{.vertex_shader = &m_vertex_shader, .pixel_shader = &m_fragment_shader, .depth_stencil = {.is_depth_enabled = true}, .debug_name = "Grid Renderer - Pipeline"};
     m_pipeline = Pipeline(m_desc.graphics_context, pipeline_desc);
     RNDR_ASSERT(m_pipeline.IsValid(), "Invalid pipeline!");
 }

@@ -162,7 +162,6 @@ int main()
         app->ProcessSystemEvents(delta_seconds);
 
         controller.Tick(delta_seconds);
-        grid_renderer.SetTransforms(controller.GetViewTransform(), controller.GetProjectionTransform());
 
         if (selected_resolution_index != resolution_index)
         {
@@ -178,9 +177,12 @@ int main()
 
         Rndr::CommandList cmd_list{gc};
 
+        cmd_list.CmdBindSwapChainFrameBuffer(swap_chain);
+        cmd_list.CmdClearAll(Rndr::Colors::k_pink);
         cmd_list.CmdBindFrameBuffer(final_render);
         cmd_list.CmdClearAll(Rndr::Colors::k_black);
 
+        grid_renderer.SetTransforms(controller.GetViewTransform(), controller.GetProjectionTransform());
         grid_renderer.Render(delta_seconds, cmd_list);
 
         DrawScene(shape_renderer, material_registry);
