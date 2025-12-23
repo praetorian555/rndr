@@ -15,9 +15,7 @@ public:
     {
         Opal::Ref<const Material> material;
 
-        bool operator==(const MaterialKey& other) const {
-            return *material == *other.material;
-        }
+        bool operator==(const MaterialKey& other) const { return *material == *other.material; }
     };
 
     Shape3DRenderer(const Opal::StringUtf8& name, const RendererBaseDesc& desc, Opal::Ref<FrameBuffer> target);
@@ -73,6 +71,9 @@ private:
     };
 
     void SetupGeometryData(Opal::DynamicArray<VertexData>& out_vertex_data, Opal::DynamicArray<u32>& out_index_data);
+    void GenerateCube(Opal::DynamicArray<VertexData>& out_vertex_data, Opal::DynamicArray<u32>& out_index_data, f32 u_tiling = 1.0f, f32 v_tiling = 1.0f);
+    void GenerateSphere(Opal::DynamicArray<VertexData>& out_vertex_data, Opal::DynamicArray<u32>& out_index_data, u32 latitude_segments,
+                        u32 longitude_segments, f32 u_tiling = 1.0f, f32 v_tiling = 1.0f);
     void DrawShape(ShapeType shape_type, const Matrix4x4f& transform, Opal::Ref<const Material> material);
 
     Opal::Ref<FrameBuffer> m_target;

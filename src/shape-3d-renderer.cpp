@@ -185,160 +185,165 @@ void Rndr::Shape3DRenderer::SetupGeometryData(Opal::DynamicArray<VertexData>& ou
 {
     m_geometry_data.Resize(static_cast<u64>(ShapeType::Count));
 
-    // Generate cube data
+    GenerateCube(out_vertex_data, out_index_data, 10.0f, 10.0f);
+    GenerateSphere(out_vertex_data, out_index_data, 128, 128, 100, 100);
+}
+
+void Rndr::Shape3DRenderer::GenerateCube(Opal::DynamicArray<VertexData>& out_vertex_data, Opal::DynamicArray<u32>& out_index_data,
+                                         f32 u_tiling, f32 v_tiling)
+{
+    const u32 vertex_offset = static_cast<u32>(out_vertex_data.GetSize());
+    const u32 index_offset = static_cast<u32>(out_index_data.GetSize());
+    float half = 0.5f;
+
+    // Each face needs unique vertices for correct normals and UVs
+    // 6 faces × 4 vertices = 24 vertices total
+
+    // Face data: normal direction, then 4 corner positions
+    // Format: nx, ny, nz, then for each corner: x, y, z, u, v
+    struct FaceData
     {
-        float half = 0.5f;
+        float normal[3];
+        float verts[4][5];  // 4 vertices, each with x, y, z, u, v
+    };
 
-        // Each face needs unique vertices for correct normals and UVs
-        // 6 faces × 4 vertices = 24 vertices total
+    FaceData faces[6] = {// Front face (Z+)
+                         {{0.0f, 0.0f, 1.0f},
+                          {{-half, -half, half, 0.0f, 0.0f},
+                           {half, -half, half, 1.0f, 0.0f},
+                           {half, half, half, 1.0f, 1.0f},
+                           {-half, half, half, 0.0f, 1.0f}}},
+                         // Back face (Z-)
+                         {{0.0f, 0.0f, -1.0f},
+                          {{half, -half, -half, 0.0f, 0.0f},
+                           {-half, -half, -half, 1.0f, 0.0f},
+                           {-half, half, -half, 1.0f, 1.0f},
+                           {half, half, -half, 0.0f, 1.0f}}},
+                         // Top face (Y+)
+                         {{0.0f, 1.0f, 0.0f},
+                          {{-half, half, half, 0.0f, 0.0f},
+                           {half, half, half, 1.0f, 0.0f},
+                           {half, half, -half, 1.0f, 1.0f},
+                           {-half, half, -half, 0.0f, 1.0f}}},
+                         // Bottom face (Y-)
+                         {{0.0f, -1.0f, 0.0f},
+                          {{-half, -half, -half, 0.0f, 0.0f},
+                           {half, -half, -half, 1.0f, 0.0f},
+                           {half, -half, half, 1.0f, 1.0f},
+                           {-half, -half, half, 0.0f, 1.0f}}},
+                         // Right face (X+)
+                         {{1.0f, 0.0f, 0.0f},
+                          {{half, -half, half, 0.0f, 0.0f},
+                           {half, -half, -half, 1.0f, 0.0f},
+                           {half, half, -half, 1.0f, 1.0f},
+                           {half, half, half, 0.0f, 1.0f}}},
+                         // Left face (X-)
+                         {{-1.0f, 0.0f, 0.0f},
+                          {{-half, -half, -half, 0.0f, 0.0f},
+                           {-half, -half, half, 1.0f, 0.0f},
+                           {-half, half, half, 1.0f, 1.0f},
+                           {-half, half, -half, 0.0f, 1.0f}}}};
 
-        // Face data: normal direction, then 4 corner positions
-        // Format: nx, ny, nz, then for each corner: x, y, z, u, v
-        struct FaceData
+    // Generate vertices and indices for each face
+    for (unsigned int f = 0; f < 6; ++f)
+    {
+        // Add 4 vertices for this face
+        for (int v = 0; v < 4; ++v)
         {
-            float normal[3];
-            float verts[4][5];  // 4 vertices, each with x, y, z, u, v
-        };
+            VertexData vertex;
 
-        FaceData faces[6] = {// Front face (Z+)
-                             {{0.0f, 0.0f, 1.0f},
-                              {{-half, -half, half, 0.0f, 0.0f},
-                               {half, -half, half, 1.0f, 0.0f},
-                               {half, half, half, 1.0f, 1.0f},
-                               {-half, half, half, 0.0f, 1.0f}}},
-                             // Back face (Z-)
-                             {{0.0f, 0.0f, -1.0f},
-                              {{half, -half, -half, 0.0f, 0.0f},
-                               {-half, -half, -half, 1.0f, 0.0f},
-                               {-half, half, -half, 1.0f, 1.0f},
-                               {half, half, -half, 0.0f, 1.0f}}},
-                             // Top face (Y+)
-                             {{0.0f, 1.0f, 0.0f},
-                              {{-half, half, half, 0.0f, 0.0f},
-                               {half, half, half, 1.0f, 0.0f},
-                               {half, half, -half, 1.0f, 1.0f},
-                               {-half, half, -half, 0.0f, 1.0f}}},
-                             // Bottom face (Y-)
-                             {{0.0f, -1.0f, 0.0f},
-                              {{-half, -half, -half, 0.0f, 0.0f},
-                               {half, -half, -half, 1.0f, 0.0f},
-                               {half, -half, half, 1.0f, 1.0f},
-                               {-half, -half, half, 0.0f, 1.0f}}},
-                             // Right face (X+)
-                             {{1.0f, 0.0f, 0.0f},
-                              {{half, -half, half, 0.0f, 0.0f},
-                               {half, -half, -half, 1.0f, 0.0f},
-                               {half, half, -half, 1.0f, 1.0f},
-                               {half, half, half, 0.0f, 1.0f}}},
-                             // Left face (X-)
-                             {{-1.0f, 0.0f, 0.0f},
-                              {{-half, -half, -half, 0.0f, 0.0f},
-                               {-half, -half, half, 1.0f, 0.0f},
-                               {-half, half, half, 1.0f, 1.0f},
-                               {-half, half, -half, 0.0f, 1.0f}}}};
+            vertex.position[0] = faces[f].verts[v][0];
+            vertex.position[1] = faces[f].verts[v][1];
+            vertex.position[2] = faces[f].verts[v][2];
 
-        // Generate vertices and indices for each face
-        for (unsigned int f = 0; f < 6; ++f)
-        {
-            // Add 4 vertices for this face
-            for (int v = 0; v < 4; ++v)
-            {
-                VertexData vertex;
+            vertex.normal[0] = faces[f].normal[0];
+            vertex.normal[1] = faces[f].normal[1];
+            vertex.normal[2] = faces[f].normal[2];
 
-                vertex.position[0] = faces[f].verts[v][0];
-                vertex.position[1] = faces[f].verts[v][1];
-                vertex.position[2] = faces[f].verts[v][2];
+            vertex.tex_coord[0] = faces[f].verts[v][3] * u_tiling;
+            vertex.tex_coord[1] = faces[f].verts[v][4] * v_tiling;
 
-                vertex.normal[0] = faces[f].normal[0];
-                vertex.normal[1] = faces[f].normal[1];
-                vertex.normal[2] = faces[f].normal[2];
-
-                vertex.tex_coord[0] = faces[f].verts[v][3];
-                vertex.tex_coord[1] = faces[f].verts[v][4];
-
-                out_vertex_data.PushBack(vertex);
-            }
-
-            // Add 2 triangles (6 indices) for this face
-            // Triangle 1: 0, 1, 2
-            out_index_data.PushBack(f * 4 + 0);
-            out_index_data.PushBack(f * 4 + 1);
-            out_index_data.PushBack(f * 4 + 2);
-
-            // Triangle 2: 0, 2, 3
-            out_index_data.PushBack(f * 4 + 0);
-            out_index_data.PushBack(f * 4 + 2);
-            out_index_data.PushBack(f * 4 + 3);
+            out_vertex_data.PushBack(vertex);
         }
 
-        ShapeGeometryData& data = m_geometry_data[static_cast<u32>(ShapeType::Cube)];
-        data.vertex_offset = 0;
-        data.index_offset = 0;
-        data.index_count = static_cast<u32>(out_index_data.GetSize());
+        // Add 2 triangles (6 indices) for this face
+        // Triangle 1: 0, 1, 2
+        out_index_data.PushBack(f * 4 + 0);
+        out_index_data.PushBack(f * 4 + 1);
+        out_index_data.PushBack(f * 4 + 2);
+
+        // Triangle 2: 0, 2, 3
+        out_index_data.PushBack(f * 4 + 0);
+        out_index_data.PushBack(f * 4 + 2);
+        out_index_data.PushBack(f * 4 + 3);
     }
 
-    // Generate sphere data
+    ShapeGeometryData& data = m_geometry_data[static_cast<u32>(ShapeType::Cube)];
+    data.vertex_offset = vertex_offset;
+    data.index_offset = index_offset;
+    data.index_count = static_cast<u32>(out_index_data.GetSize()) - index_offset;
+}
+
+void Rndr::Shape3DRenderer::GenerateSphere(Opal::DynamicArray<VertexData>& out_vertex_data, Opal::DynamicArray<u32>& out_index_data,
+                                           u32 latitude_segments, u32 longitude_segments, f32 u_tiling, f32 v_tiling)
+{
+    const u32 vertex_offset = static_cast<u32>(out_vertex_data.GetSize());
+    const u32 index_offset = static_cast<u32>(out_index_data.GetSize());
+
+    for (u32 lat = 0; lat <= latitude_segments; ++lat)
     {
-        const u32 vertex_offset = static_cast<u32>(out_vertex_data.GetSize());
-        const u32 index_offset = static_cast<u32>(out_index_data.GetSize());
-        constexpr u32 k_latitude_segments = 32;
-        constexpr u32 k_longitude_segments = 32;
+        const f32 theta = lat * Opal::k_pi_float / latitude_segments;  // 0 to PI (top to bottom)
+        const f32 sin_theta = Opal::Sin(theta);
+        const f32 cos_theta = Opal::Cos(theta);
 
-        for (u32 lat = 0; lat <= k_latitude_segments; ++lat)
+        for (u32 lon = 0; lon <= longitude_segments; ++lon)
         {
-            const f32 theta = lat * Opal::k_pi_float / k_latitude_segments;  // 0 to PI (top to bottom)
-            const f32 sin_theta = Opal::Sin(theta);
-            const f32 cos_theta = Opal::Cos(theta);
+            const f32 phi = lon * 2.0f * Opal::k_pi_float / longitude_segments;  // 0 to 2PI (around)
+            const f32 sin_phi = Opal::Sin(phi);
+            const f32 cos_phi = Opal::Cos(phi);
 
-            for (u32 lon = 0; lon <= k_longitude_segments; ++lon)
-            {
-                const f32 phi = lon * 2.0f * Opal::k_pi_float / k_longitude_segments;  // 0 to 2PI (around)
-                const f32 sin_phi = Opal::Sin(phi);
-                const f32 cos_phi = Opal::Cos(phi);
+            // Calculate vertex position on unit sphere, then scale by radius
+            const f32 x = cos_phi * sin_theta;
+            const f32 y = cos_theta;
+            const f32 z = sin_phi * sin_theta;
 
-                // Calculate vertex position on unit sphere, then scale by radius
-                const f32 x = cos_phi * sin_theta;
-                const f32 y = cos_theta;
-                const f32 z = sin_phi * sin_theta;
+            // UV coordinates
+            const f32 u = (static_cast<float>(lon) / longitude_segments) * u_tiling;
+            const f32 v = (static_cast<float>(lat) / latitude_segments) * v_tiling;
 
-                // UV coordinates
-                const f32 u = static_cast<float>(lon) / k_longitude_segments;
-                const f32 v = static_cast<float>(lat) / k_latitude_segments;
+            VertexData vertex;
+            vertex.position.x = x;
+            vertex.position.y = y;
+            vertex.position.z = z;
+            vertex.normal.x = x;
+            vertex.normal.y = y;
+            vertex.normal.z = z;
+            vertex.tex_coord.x = u;
+            vertex.tex_coord.y = v;
 
-                VertexData vertex;
-                vertex.position.x = x;
-                vertex.position.y = y;
-                vertex.position.z = z;
-                vertex.normal.x = x;
-                vertex.normal.y = y;
-                vertex.normal.z = z;
-                vertex.tex_coord.x = u;
-                vertex.tex_coord.y = v;
-
-                out_vertex_data.PushBack(vertex);
-            }
+            out_vertex_data.PushBack(vertex);
         }
-
-        for (u32 lat = 0; lat < k_latitude_segments; ++lat)
-        {
-            for (u32 lon = 0; lon < k_longitude_segments; ++lon)
-            {
-                const u32 current = lat * (k_longitude_segments + 1) + lon;
-                const u32 next = current + k_longitude_segments + 1;
-                out_index_data.PushBack(current);
-                out_index_data.PushBack(current + 1);
-                out_index_data.PushBack(next);
-                out_index_data.PushBack(current + 1);
-                out_index_data.PushBack(next + 1);
-                out_index_data.PushBack(next);
-            }
-        }
-
-        ShapeGeometryData& data = m_geometry_data[static_cast<u32>(ShapeType::Sphere)];
-        data.vertex_offset = vertex_offset;
-        data.index_offset = index_offset;
-        data.index_count = static_cast<u32>(out_index_data.GetSize()) - index_offset;
     }
+
+    for (u32 lat = 0; lat < latitude_segments; ++lat)
+    {
+        for (u32 lon = 0; lon < longitude_segments; ++lon)
+        {
+            const u32 current = lat * (longitude_segments + 1) + lon;
+            const u32 next = current + longitude_segments + 1;
+            out_index_data.PushBack(current);
+            out_index_data.PushBack(current + 1);
+            out_index_data.PushBack(next);
+            out_index_data.PushBack(current + 1);
+            out_index_data.PushBack(next + 1);
+            out_index_data.PushBack(next);
+        }
+    }
+
+    ShapeGeometryData& data = m_geometry_data[static_cast<u32>(ShapeType::Sphere)];
+    data.vertex_offset = vertex_offset;
+    data.index_offset = index_offset;
+    data.index_count = static_cast<u32>(out_index_data.GetSize()) - index_offset;
 }
 
 void Rndr::Shape3DRenderer::DrawShape(ShapeType shape_type, const Matrix4x4f& transform, Opal::Ref<const Material> material)
