@@ -16,36 +16,36 @@ constexpr Rndr::u64 k_max_usage = static_cast<Rndr::u64>(Rndr::Usage::EnumCount)
 constexpr Opal::InPlaceArray<GLenum, k_max_usage> k_to_opengl_usage = {GL_MAP_WRITE_BIT, GL_DYNAMIC_STORAGE_BIT, GL_MAP_READ_BIT};
 
 constexpr Rndr::u64 k_max_buffer_type = static_cast<Rndr::u64>(Rndr::BufferType::EnumCount);
-constexpr Opal::InPlaceArray<GLenum, k_max_buffer_type> k_to_opengl_buffer_type = {GL_ARRAY_BUFFER, GL_ELEMENT_ARRAY_BUFFER,
-                                                                                 GL_UNIFORM_BUFFER, GL_SHADER_STORAGE_BUFFER, GL_DRAW_INDIRECT_BUFFER};
+constexpr Opal::InPlaceArray<GLenum, k_max_buffer_type> k_to_opengl_buffer_type = {
+    GL_ARRAY_BUFFER, GL_ELEMENT_ARRAY_BUFFER, GL_UNIFORM_BUFFER, GL_SHADER_STORAGE_BUFFER, GL_DRAW_INDIRECT_BUFFER};
 
 constexpr Rndr::u64 k_max_comparator = static_cast<Rndr::u64>(Rndr::Comparator::EnumCount);
 constexpr Opal::InPlaceArray<GLenum, k_max_comparator> k_to_opengl_comparator = {GL_NEVER, GL_ALWAYS,   GL_LESS,   GL_GREATER,
-                                                                               GL_EQUAL, GL_NOTEQUAL, GL_LEQUAL, GL_GEQUAL};
+                                                                                 GL_EQUAL, GL_NOTEQUAL, GL_LEQUAL, GL_GEQUAL};
 
 constexpr Rndr::u64 k_max_stencil_op = static_cast<Rndr::u64>(Rndr::StencilOperation::EnumCount);
 constexpr Opal::InPlaceArray<GLenum, k_max_stencil_op> k_to_opengl_stencil_op = {GL_KEEP,      GL_ZERO, GL_REPLACE,   GL_INCR,
-                                                                               GL_INCR_WRAP, GL_DECR, GL_DECR_WRAP, GL_INVERT};
+                                                                                 GL_INCR_WRAP, GL_DECR, GL_DECR_WRAP, GL_INVERT};
 
 constexpr Rndr::u64 k_max_blend_factor = static_cast<Rndr::u64>(Rndr::BlendFactor::EnumCount);
 constexpr Opal::InPlaceArray<GLenum, k_max_blend_factor> k_to_opengl_blend_factor = {GL_ZERO,
-                                                                                   GL_ONE,
-                                                                                   GL_SRC_COLOR,
-                                                                                   GL_DST_COLOR,
-                                                                                   GL_ONE_MINUS_SRC_COLOR,
-                                                                                   GL_ONE_MINUS_DST_COLOR,
-                                                                                   GL_SRC_ALPHA,
-                                                                                   GL_DST_ALPHA,
-                                                                                   GL_ONE_MINUS_SRC_ALPHA,
-                                                                                   GL_ONE_MINUS_DST_ALPHA,
-                                                                                   GL_CONSTANT_COLOR,
-                                                                                   GL_ONE_MINUS_CONSTANT_COLOR,
-                                                                                   GL_CONSTANT_ALPHA,
-                                                                                   GL_ONE_MINUS_CONSTANT_ALPHA};
+                                                                                     GL_ONE,
+                                                                                     GL_SRC_COLOR,
+                                                                                     GL_DST_COLOR,
+                                                                                     GL_ONE_MINUS_SRC_COLOR,
+                                                                                     GL_ONE_MINUS_DST_COLOR,
+                                                                                     GL_SRC_ALPHA,
+                                                                                     GL_DST_ALPHA,
+                                                                                     GL_ONE_MINUS_SRC_ALPHA,
+                                                                                     GL_ONE_MINUS_DST_ALPHA,
+                                                                                     GL_CONSTANT_COLOR,
+                                                                                     GL_ONE_MINUS_CONSTANT_COLOR,
+                                                                                     GL_CONSTANT_ALPHA,
+                                                                                     GL_ONE_MINUS_CONSTANT_ALPHA};
 
 constexpr Rndr::u64 k_max_blend_op = static_cast<Rndr::u64>(Rndr::BlendOperation::EnumCount);
-constexpr Opal::InPlaceArray<GLenum, k_max_blend_op> k_to_opengl_blend_op = {GL_FUNC_ADD, GL_FUNC_SUBTRACT, GL_FUNC_REVERSE_SUBTRACT, GL_MIN,
-                                                                           GL_MAX};
+constexpr Opal::InPlaceArray<GLenum, k_max_blend_op> k_to_opengl_blend_op = {GL_FUNC_ADD, GL_FUNC_SUBTRACT, GL_FUNC_REVERSE_SUBTRACT,
+                                                                             GL_MIN, GL_MAX};
 
 constexpr Rndr::u64 k_max_image_address_mode = static_cast<Rndr::u64>(Rndr::ImageAddressMode::EnumCount);
 constexpr Opal::InPlaceArray<GLint, k_max_image_address_mode> k_to_opengl_image_address_mode = {
@@ -53,165 +53,171 @@ constexpr Opal::InPlaceArray<GLint, k_max_image_address_mode> k_to_opengl_image_
 
 constexpr Rndr::u64 k_max_pixel_format = static_cast<Rndr::u64>(Rndr::PixelFormat::EnumCount);
 constexpr Opal::InPlaceArray<GLenum, k_max_pixel_format> k_to_opengl_internal_pixel_format = {GL_RGBA8,
-                                                                                            GL_SRGB8_ALPHA8,
-                                                                                            GL_RGBA8UI,
-                                                                                            GL_RGBA8_SNORM,
-                                                                                            GL_RGBA8I,
-                                                                                            GL_RGBA8,
-                                                                                            GL_SRGB8_ALPHA8,
+                                                                                              GL_SRGB8_ALPHA8,
+                                                                                              GL_RGBA8UI,
+                                                                                              GL_RGBA8_SNORM,
+                                                                                              GL_RGBA8I,
+                                                                                              GL_RGBA8,
+                                                                                              GL_SRGB8_ALPHA8,
 
-                                                                                            GL_DEPTH24_STENCIL8,
+                                                                                              GL_DEPTH24_STENCIL8,
 
-                                                                                            GL_RGB8,
-                                                                                            GL_SRGB8,
-                                                                                            GL_RGB8UI,
-                                                                                            GL_RGB8_SNORM,
-                                                                                            GL_RGB8I,
+                                                                                              GL_RGB8,
+                                                                                              GL_SRGB8,
+                                                                                              GL_RGB8UI,
+                                                                                              GL_RGB8_SNORM,
+                                                                                              GL_RGB8I,
 
-                                                                                            GL_RG8,
-                                                                                            GL_RG8,
-                                                                                            GL_RG8UI,
-                                                                                            GL_RG8_SNORM,
-                                                                                            GL_RG8I,
+                                                                                              GL_RG8,
+                                                                                              GL_RG8,
+                                                                                              GL_RG8UI,
+                                                                                              GL_RG8_SNORM,
+                                                                                              GL_RG8I,
 
-                                                                                            GL_R8,
-                                                                                            GL_R8,
-                                                                                            GL_R8UI,
-                                                                                            GL_R8_SNORM,
-                                                                                            GL_R8I,
+                                                                                              GL_R8,
+                                                                                              GL_R8,
+                                                                                              GL_R8UI,
+                                                                                              GL_R8_SNORM,
+                                                                                              GL_R8I,
 
-                                                                                            GL_RGBA32F,
-                                                                                            GL_RGBA32UI,
-                                                                                            GL_RGBA32I,
+                                                                                              GL_RGBA32F,
+                                                                                              GL_RGBA32UI,
+                                                                                              GL_RGBA32I,
 
-                                                                                            GL_RGB32F,
-                                                                                            GL_RGB32UI,
-                                                                                            GL_RGB32I,
+                                                                                              GL_RGB32F,
+                                                                                              GL_RGB32UI,
+                                                                                              GL_RGB32I,
 
-                                                                                            GL_RG32F,
-                                                                                            GL_RG32UI,
-                                                                                            GL_RG32I,
+                                                                                              GL_RG32F,
+                                                                                              GL_RG32UI,
+                                                                                              GL_RG32I,
 
-                                                                                            GL_R32F,
-                                                                                            GL_R32UI,
-                                                                                            GL_R32I,
+                                                                                              GL_R32F,
+                                                                                              GL_R32UI,
+                                                                                              GL_R32I,
 
-                                                                                            GL_R32F,
-                                                                                            GL_R16F,
+                                                                                              GL_R32F,
+                                                                                              GL_R16F,
 
-                                                                                            GL_RG16F};
+                                                                                              GL_RG16F,
+
+                                                                                              GL_DEPTH32F_STENCIL8};
 constexpr Opal::InPlaceArray<GLenum, k_max_pixel_format> k_to_opengl_external_pixel_format = {GL_RGBA,
-                                                                                            GL_RGBA,
-                                                                                            GL_RGBA,
-                                                                                            GL_RGBA,
-                                                                                            GL_RGBA,
-                                                                                            GL_BGRA,
-                                                                                            GL_BGRA,
+                                                                                              GL_RGBA,
+                                                                                              GL_RGBA,
+                                                                                              GL_RGBA,
+                                                                                              GL_RGBA,
+                                                                                              GL_BGRA,
+                                                                                              GL_BGRA,
 
-                                                                                            GL_DEPTH_STENCIL,
+                                                                                              GL_DEPTH_STENCIL,
 
-                                                                                            GL_RGB,
-                                                                                            GL_RGB,
-                                                                                            GL_RGB,
-                                                                                            GL_RGB,
-                                                                                            GL_RGB,
+                                                                                              GL_RGB,
+                                                                                              GL_RGB,
+                                                                                              GL_RGB,
+                                                                                              GL_RGB,
+                                                                                              GL_RGB,
 
-                                                                                            GL_RG,
-                                                                                            GL_RG,
-                                                                                            GL_RG,
-                                                                                            GL_RG,
-                                                                                            GL_RG,
+                                                                                              GL_RG,
+                                                                                              GL_RG,
+                                                                                              GL_RG,
+                                                                                              GL_RG,
+                                                                                              GL_RG,
 
-                                                                                            GL_RED,
-                                                                                            GL_RED,
-                                                                                            GL_RED,
-                                                                                            GL_RED,
-                                                                                            GL_RED,
+                                                                                              GL_RED,
+                                                                                              GL_RED,
+                                                                                              GL_RED,
+                                                                                              GL_RED,
+                                                                                              GL_RED,
 
-                                                                                            GL_RGBA,
-                                                                                            GL_RGBA,
-                                                                                            GL_RGBA,
+                                                                                              GL_RGBA,
+                                                                                              GL_RGBA,
+                                                                                              GL_RGBA,
 
-                                                                                            GL_RGB,
-                                                                                            GL_RGB,
-                                                                                            GL_RGB,
+                                                                                              GL_RGB,
+                                                                                              GL_RGB,
+                                                                                              GL_RGB,
 
-                                                                                            GL_RG,
-                                                                                            GL_RG,
-                                                                                            GL_RG,
+                                                                                              GL_RG,
+                                                                                              GL_RG,
+                                                                                              GL_RG,
 
-                                                                                            GL_RED,
-                                                                                            GL_RED,
-                                                                                            GL_RED,
+                                                                                              GL_RED,
+                                                                                              GL_RED,
+                                                                                              GL_RED,
 
-                                                                                            GL_RED,
-                                                                                            GL_RED,
+                                                                                              GL_RED,
+                                                                                              GL_RED,
 
-                                                                                            GL_RG};
+                                                                                              GL_RG,
+
+                                                                                              GL_DEPTH_STENCIL};
 constexpr Opal::InPlaceArray<GLenum, k_max_pixel_format> k_to_opengl_pixel_type = {GL_UNSIGNED_BYTE,
-                                                                                 GL_UNSIGNED_BYTE,
-                                                                                 GL_UNSIGNED_BYTE,
-                                                                                 GL_BYTE,
-                                                                                 GL_BYTE,
-                                                                                 GL_UNSIGNED_BYTE,
-                                                                                 GL_UNSIGNED_BYTE,
+                                                                                   GL_UNSIGNED_BYTE,
+                                                                                   GL_UNSIGNED_BYTE,
+                                                                                   GL_BYTE,
+                                                                                   GL_BYTE,
+                                                                                   GL_UNSIGNED_BYTE,
+                                                                                   GL_UNSIGNED_BYTE,
 
-                                                                                 GL_UNSIGNED_INT_24_8,
+                                                                                   GL_UNSIGNED_INT_24_8,
 
-                                                                                 GL_UNSIGNED_BYTE,
-                                                                                 GL_UNSIGNED_BYTE,
-                                                                                 GL_UNSIGNED_BYTE,
-                                                                                 GL_BYTE,
-                                                                                 GL_BYTE,
+                                                                                   GL_UNSIGNED_BYTE,
+                                                                                   GL_UNSIGNED_BYTE,
+                                                                                   GL_UNSIGNED_BYTE,
+                                                                                   GL_BYTE,
+                                                                                   GL_BYTE,
 
-                                                                                 GL_UNSIGNED_BYTE,
-                                                                                 GL_UNSIGNED_BYTE,
-                                                                                 GL_UNSIGNED_BYTE,
-                                                                                 GL_BYTE,
-                                                                                 GL_BYTE,
+                                                                                   GL_UNSIGNED_BYTE,
+                                                                                   GL_UNSIGNED_BYTE,
+                                                                                   GL_UNSIGNED_BYTE,
+                                                                                   GL_BYTE,
+                                                                                   GL_BYTE,
 
-                                                                                 GL_UNSIGNED_BYTE,
-                                                                                 GL_UNSIGNED_BYTE,
-                                                                                 GL_UNSIGNED_BYTE,
-                                                                                 GL_BYTE,
-                                                                                 GL_BYTE,
+                                                                                   GL_UNSIGNED_BYTE,
+                                                                                   GL_UNSIGNED_BYTE,
+                                                                                   GL_UNSIGNED_BYTE,
+                                                                                   GL_BYTE,
+                                                                                   GL_BYTE,
 
-                                                                                 GL_FLOAT,
-                                                                                 GL_UNSIGNED_INT,
-                                                                                 GL_INT,
+                                                                                   GL_FLOAT,
+                                                                                   GL_UNSIGNED_INT,
+                                                                                   GL_INT,
 
-                                                                                 GL_FLOAT,
-                                                                                 GL_UNSIGNED_INT,
-                                                                                 GL_INT,
+                                                                                   GL_FLOAT,
+                                                                                   GL_UNSIGNED_INT,
+                                                                                   GL_INT,
 
-                                                                                 GL_FLOAT,
-                                                                                 GL_UNSIGNED_INT,
-                                                                                 GL_INT,
+                                                                                   GL_FLOAT,
+                                                                                   GL_UNSIGNED_INT,
+                                                                                   GL_INT,
 
-                                                                                 GL_FLOAT,
-                                                                                 GL_UNSIGNED_INT,
-                                                                                 GL_INT,
+                                                                                   GL_FLOAT,
+                                                                                   GL_UNSIGNED_INT,
+                                                                                   GL_INT,
 
-                                                                                 GL_FLOAT,
-                                                                                 GL_HALF_FLOAT,
+                                                                                   GL_FLOAT,
+                                                                                   GL_HALF_FLOAT,
 
-                                                                                 GL_HALF_FLOAT};
+                                                                                   GL_HALF_FLOAT,
+
+                                                                                   GL_FLOAT_32_UNSIGNED_INT_24_8_REV};
 constexpr Opal::InPlaceArray<int32_t, k_max_pixel_format> k_to_pixel_size = {4, 4, 4, 4, 4,  4,  4,  4,  3,  3,  3, 3, 3, 2, 2, 2, 2, 2, 1,
-                                                                           1, 1, 1, 1, 16, 16, 16, 12, 12, 12, 8, 8, 8, 4, 4, 4, 4, 2, 4};
+                                                                             1, 1, 1, 1, 16, 16, 16, 12, 12, 12, 8, 8, 8, 4, 4, 4, 4, 2, 4, 5};
 constexpr Opal::InPlaceArray<GLint, k_max_pixel_format> k_to_component_count = {4, 4, 4, 4, 4, 4, 4, 2, 3, 3, 3, 3, 3, 2, 2, 2, 2, 2, 1,
-                                                                              1, 1, 1, 1, 4, 4, 4, 3, 3, 3, 2, 2, 2, 1, 1, 1, 1, 1, 2};
+                                                                                1, 1, 1, 1, 4, 4, 4, 3, 3, 3, 2, 2, 2, 1, 1, 1, 1, 1, 2, 2};
 constexpr Opal::InPlaceArray<GLenum, k_max_pixel_format> k_to_should_normalize_data = {
     GL_TRUE,  GL_TRUE,  GL_FALSE, GL_TRUE,  GL_FALSE, GL_TRUE,  GL_TRUE,  GL_FALSE, GL_TRUE,  GL_TRUE,  GL_FALSE, GL_TRUE,  GL_FALSE,
     GL_TRUE,  GL_TRUE,  GL_FALSE, GL_TRUE,  GL_FALSE, GL_TRUE,  GL_TRUE,  GL_FALSE, GL_TRUE,  GL_FALSE, GL_FALSE, GL_FALSE, GL_FALSE,
-    GL_FALSE, GL_FALSE, GL_FALSE, GL_FALSE, GL_FALSE, GL_FALSE, GL_FALSE, GL_FALSE, GL_FALSE, GL_FALSE, GL_FALSE, GL_FALSE};
+    GL_FALSE, GL_FALSE, GL_FALSE, GL_FALSE, GL_FALSE, GL_FALSE, GL_FALSE, GL_FALSE, GL_FALSE, GL_FALSE, GL_FALSE, GL_FALSE, GL_FALSE};
 
 constexpr Opal::InPlaceArray<bool, k_max_pixel_format> k_is_integer = {
-    false, false, true,  false, true,  false, false, false, false, false, true,  false, true, false, false, true, false, true, false,
-    false, true,  false, true,  false, true,  true,  false, true,  true,  false, true,  true, false, true,  true, false, false, false};
+    false, false, true,  false, true,  false, false, false, false, false, true,  false, true, false, false, true, false, true,  false,
+    false, true,  false, true,  false, true,  true,  false, true,  true,  false, true,  true, false, true,  true, false, false, false, false};
 
 constexpr Rndr::u64 k_max_primitive_topology = static_cast<Rndr::u64>(Rndr::PrimitiveTopology::EnumCount);
 constexpr Opal::InPlaceArray<GLenum, k_max_primitive_topology> k_to_opengl_primitive_topology = {GL_POINTS, GL_LINES, GL_LINE_STRIP,
-                                                                                               GL_TRIANGLES, GL_TRIANGLE_STRIP};
+                                                                                                 GL_TRIANGLES, GL_TRIANGLE_STRIP};
 
 GLenum Rndr::FromShaderTypeToOpenGL(ShaderType type)
 {

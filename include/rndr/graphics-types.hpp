@@ -87,6 +87,8 @@ enum class PixelFormat : u8
 
     R16G16_FLOAT,
 
+    D32_FLOAT_S8_UINT,
+
     /** Represents number of elements in the enum. */
     EnumCount
 };

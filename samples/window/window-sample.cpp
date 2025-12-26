@@ -32,7 +32,7 @@ Rndr::FrameBuffer RecreateFrameBuffer(Rndr::GraphicsContext& gc, Rndr::i32 width
                                      .color_attachment_samplers = {{}},
                                      .use_depth_stencil = true,
                                      .depth_stencil_attachment = {Rndr::TextureDesc{
-                                         .width = width, .height = height, .pixel_format = Rndr::PixelFormat::D24_UNORM_S8_UINT}},
+                                         .width = width, .height = height, .pixel_format = Rndr::PixelFormat::D32_FLOAT_S8_UINT}},
                                      .depth_stencil_sampler = {{}},
                                      .debug_name = "Window Sample - Final Render Frame Buffer"};
     return {gc, desc};
