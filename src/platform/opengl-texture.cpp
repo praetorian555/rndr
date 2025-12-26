@@ -174,34 +174,34 @@ Rndr::ErrorCode Rndr::Texture::Initialize(const GraphicsContext& graphics_contex
                                      ? FromMinAndMipFiltersToOpenGL(m_sampler_desc.min_filter, m_sampler_desc.mip_map_filter)
                                      : FromImageFilterToOpenGL(m_sampler_desc.min_filter);
         glTextureParameteri(m_native_texture, GL_TEXTURE_MIN_FILTER, min_filter);
-        RNDR_GL_RETURN_ON_ERROR("Failed to set texture parameter GL_TEXTURE_MIN_FILTER!", Destroy());
+        RNDR_GL_THROW_ON_ERROR("Failed to set texture parameter GL_TEXTURE_MIN_FILTER!", Destroy());
         const GLint mag_filter = FromImageFilterToOpenGL(m_sampler_desc.mag_filter);
         glTextureParameteri(m_native_texture, GL_TEXTURE_MAG_FILTER, mag_filter);
-        RNDR_GL_RETURN_ON_ERROR("Failed to set texture parameter GL_TEXTURE_MAG_FILTER!", Destroy());
+        RNDR_GL_THROW_ON_ERROR("Failed to set texture parameter GL_TEXTURE_MAG_FILTER!", Destroy());
         glTextureParameterf(m_native_texture, GL_TEXTURE_MAX_ANISOTROPY, m_sampler_desc.max_anisotropy);
-        RNDR_GL_RETURN_ON_ERROR("Failed to set texture parameter GL_TEXTURE_MAX_ANISOTROPY!", Destroy());
+        RNDR_GL_THROW_ON_ERROR("Failed to set texture parameter GL_TEXTURE_MAX_ANISOTROPY!", Destroy());
         const GLint address_mode_u = FromImageAddressModeToOpenGL(m_sampler_desc.address_mode_u);
         const GLint address_mode_v = FromImageAddressModeToOpenGL(m_sampler_desc.address_mode_v);
         const GLint address_mode_w = FromImageAddressModeToOpenGL(m_sampler_desc.address_mode_w);
         glTextureParameteri(m_native_texture, GL_TEXTURE_WRAP_S, address_mode_u);
-        RNDR_GL_RETURN_ON_ERROR("Failed to set texture parameter GL_TEXTURE_WRAP_S!", Destroy());
+        RNDR_GL_THROW_ON_ERROR("Failed to set texture parameter GL_TEXTURE_WRAP_S!", Destroy());
         glTextureParameteri(m_native_texture, GL_TEXTURE_WRAP_T, address_mode_v);
-        RNDR_GL_RETURN_ON_ERROR("Failed to set texture parameter GL_TEXTURE_WRAP_T!", Destroy());
+        RNDR_GL_THROW_ON_ERROR("Failed to set texture parameter GL_TEXTURE_WRAP_T!", Destroy());
         glTextureParameteri(m_native_texture, GL_TEXTURE_WRAP_R, address_mode_w);
-        RNDR_GL_RETURN_ON_ERROR("Failed to set texture parameter GL_TEXTURE_WRAP_R!", Destroy());
+        RNDR_GL_THROW_ON_ERROR("Failed to set texture parameter GL_TEXTURE_WRAP_R!", Destroy());
         glTextureParameterfv(m_native_texture, GL_TEXTURE_BORDER_COLOR, m_sampler_desc.border_color.data);
-        RNDR_GL_RETURN_ON_ERROR("Failed to set texture parameter GL_TEXTURE_BORDER_COLOR!", Destroy());
+        RNDR_GL_THROW_ON_ERROR("Failed to set texture parameter GL_TEXTURE_BORDER_COLOR!", Destroy());
         glTextureParameteri(m_native_texture, GL_TEXTURE_BASE_LEVEL, m_sampler_desc.base_mip_level);
-        RNDR_GL_RETURN_ON_ERROR("Failed to set texture parameter GL_TEXTURE_BASE_LEVEL!", Destroy());
+        RNDR_GL_THROW_ON_ERROR("Failed to set texture parameter GL_TEXTURE_BASE_LEVEL!", Destroy());
         const i32 max_mip_level = m_sampler_desc.max_mip_level == 0 ? m_max_mip_levels : m_sampler_desc.max_mip_level;
         glTextureParameteri(m_native_texture, GL_TEXTURE_MAX_LEVEL, max_mip_level);
-        RNDR_GL_RETURN_ON_ERROR("Failed to set texture parameter GL_TEXTURE_MAX_LEVEL!", Destroy());
+        RNDR_GL_THROW_ON_ERROR("Failed to set texture parameter GL_TEXTURE_MAX_LEVEL!", Destroy());
         glTextureParameterf(m_native_texture, GL_TEXTURE_LOD_BIAS, m_sampler_desc.lod_bias);
-        RNDR_GL_RETURN_ON_ERROR("Failed to set texture parameter GL_TEXTURE_LOD_BIAS!", Destroy());
+        RNDR_GL_THROW_ON_ERROR("Failed to set texture parameter GL_TEXTURE_LOD_BIAS!", Destroy());
         glTextureParameterf(m_native_texture, GL_TEXTURE_MIN_LOD, m_sampler_desc.min_lod);
-        RNDR_GL_RETURN_ON_ERROR("Failed to set texture parameter GL_TEXTURE_MIN_LOD!", Destroy());
+        RNDR_GL_THROW_ON_ERROR("Failed to set texture parameter GL_TEXTURE_MIN_LOD!", Destroy());
         glTextureParameterf(m_native_texture, GL_TEXTURE_MAX_LOD, m_sampler_desc.max_lod);
-        RNDR_GL_RETURN_ON_ERROR("Failed to set texture parameter GL_TEXTURE_MAX_LOD!", Destroy());
+        RNDR_GL_THROW_ON_ERROR("Failed to set texture parameter GL_TEXTURE_MAX_LOD!", Destroy());
     }
 
     const GLenum internal_format = FromPixelFormatToInternalFormat(m_texture_desc.pixel_format);
@@ -219,13 +219,13 @@ Rndr::ErrorCode Rndr::Texture::Initialize(const GraphicsContext& graphics_contex
         if (m_texture_desc.sample_count == 1)
         {
             glTextureStorage2D(m_native_texture, m_max_mip_levels, internal_format, m_texture_desc.width, m_texture_desc.height);
-            RNDR_GL_RETURN_ON_ERROR("Failed to set texture storage for Texture 2D!", Destroy());
+            RNDR_GL_THROW_ON_ERROR("Failed to set texture storage for Texture 2D!", Destroy());
         }
         else
         {
             glTextureStorage2DMultisample(m_native_texture, m_texture_desc.sample_count, internal_format, m_texture_desc.width,
                                           m_texture_desc.height, GL_TRUE);
-            RNDR_GL_RETURN_ON_ERROR("Failed to set multisample texture storage for Texture 2D!", Destroy());
+            RNDR_GL_THROW_ON_ERROR("Failed to set multisample texture storage for Texture 2D!", Destroy());
         }
         glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
         if (!init_data.IsEmpty() && m_texture_desc.sample_count == 1)
@@ -235,7 +235,7 @@ Rndr::ErrorCode Rndr::Texture::Initialize(const GraphicsContext& graphics_contex
             constexpr int32_t k_mip_level = 0;
             glTextureSubImage2D(m_native_texture, k_mip_level, k_x_offset, k_y_offset, m_texture_desc.width, m_texture_desc.height, format,
                                 data_type, init_data.GetData());
-            RNDR_GL_RETURN_ON_ERROR("Failed to upload initial texture data to the GPU!", Destroy());
+            RNDR_GL_THROW_ON_ERROR("Failed to upload initial texture data to the GPU!", Destroy());
         }
     }
 
@@ -245,13 +245,13 @@ Rndr::ErrorCode Rndr::Texture::Initialize(const GraphicsContext& graphics_contex
         {
             glTextureStorage3D(m_native_texture, m_max_mip_levels, internal_format, m_texture_desc.width, m_texture_desc.height,
                                m_texture_desc.array_size);
-            RNDR_GL_RETURN_ON_ERROR("Failed to set texture storage for Texture 2D Array!", Destroy());
+            RNDR_GL_THROW_ON_ERROR("Failed to set texture storage for Texture 2D Array!", Destroy());
         }
         else
         {
             glTextureStorage3DMultisample(m_native_texture, m_texture_desc.sample_count, internal_format, m_texture_desc.width,
                                           m_texture_desc.height, m_texture_desc.array_size, GL_TRUE);
-            RNDR_GL_RETURN_ON_ERROR("Failed to set multisample texture storage for Texture 2D Array!", Destroy());
+            RNDR_GL_THROW_ON_ERROR("Failed to set multisample texture storage for Texture 2D Array!", Destroy());
         }
         glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
         if (!init_data.IsEmpty() && m_texture_desc.sample_count == 1)
@@ -267,7 +267,7 @@ Rndr::ErrorCode Rndr::Texture::Initialize(const GraphicsContext& graphics_contex
                 const uint8_t* data = init_data.GetData() + i * m_texture_desc.width * m_texture_desc.height * pixel_size;
                 glTextureSubImage3D(m_native_texture, k_mip_level, k_x_offset, k_y_offset, z_offset, m_texture_desc.width,
                                     m_texture_desc.height, k_depth, format, data_type, data);
-                RNDR_GL_RETURN_ON_ERROR("Failed to upload initial texture data to the GPU!", Destroy());
+                RNDR_GL_THROW_ON_ERROR("Failed to upload initial texture data to the GPU!", Destroy());
             }
         }
     }
@@ -275,18 +275,18 @@ Rndr::ErrorCode Rndr::Texture::Initialize(const GraphicsContext& graphics_contex
     if (m_texture_desc.type == TextureType::CubeMap)
     {
         glEnable(GL_TEXTURE_CUBE_MAP_SEAMLESS);
-        RNDR_GL_RETURN_ON_ERROR("Failed to enable seamless cubemap texture sampling!", Destroy());
+        RNDR_GL_THROW_ON_ERROR("Failed to enable seamless cubemap texture sampling!", Destroy());
 
         if (m_texture_desc.sample_count == 1)
         {
             glTextureStorage2D(m_native_texture, m_max_mip_levels, internal_format, m_texture_desc.width, m_texture_desc.height);
-            RNDR_GL_RETURN_ON_ERROR("Failed to set texture storage for CubeMap!", Destroy());
+            RNDR_GL_THROW_ON_ERROR("Failed to set texture storage for CubeMap!", Destroy());
         }
         else
         {
             glTextureStorage2DMultisample(m_native_texture, m_texture_desc.sample_count, internal_format, m_texture_desc.width,
                                           m_texture_desc.height, GL_TRUE);
-            RNDR_GL_RETURN_ON_ERROR("Failed to set multisample texture storage for CubeMap!", Destroy());
+            RNDR_GL_THROW_ON_ERROR("Failed to set multisample texture storage for CubeMap!", Destroy());
         }
         glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
         if (!init_data.IsEmpty() && m_texture_desc.sample_count == 1)
@@ -303,7 +303,7 @@ Rndr::ErrorCode Rndr::Texture::Initialize(const GraphicsContext& graphics_contex
                                                                 FromPixelFormatToPixelSize(m_texture_desc.pixel_format);
                 glTextureSubImage3D(m_native_texture, k_mip_level, k_x_offset, k_y_offset, z_offset, m_texture_desc.width,
                                     m_texture_desc.height, k_depth, format, data_type, data);
-                RNDR_GL_RETURN_ON_ERROR("Failed to upload initial texture data to the GPU!", Destroy());
+                RNDR_GL_THROW_ON_ERROR("Failed to upload initial texture data to the GPU!", Destroy());
             }
         }
     }
@@ -313,7 +313,7 @@ Rndr::ErrorCode Rndr::Texture::Initialize(const GraphicsContext& graphics_contex
         if (m_texture_desc.sample_count == 1)
         {
             glGenerateTextureMipmap(m_native_texture);
-            RNDR_GL_RETURN_ON_ERROR("Failed to generate mips!", Destroy());
+            RNDR_GL_THROW_ON_ERROR("Failed to generate mips!", Destroy());
         }
         else
         {
@@ -325,9 +325,9 @@ Rndr::ErrorCode Rndr::Texture::Initialize(const GraphicsContext& graphics_contex
     if (graphics_context.GetDesc().enable_bindless_textures && m_texture_desc.is_bindless)
     {
         m_bindless_handle = glGetTextureHandleARB(m_native_texture);
-        RNDR_GL_RETURN_ON_ERROR("Failed to get bindless texture handle!", Destroy());
+        RNDR_GL_THROW_ON_ERROR("Failed to get bindless texture handle!", Destroy());
         glMakeTextureHandleResidentARB(m_bindless_handle);
-        RNDR_GL_RETURN_ON_ERROR("Failed to make texture handle resident!", Destroy());
+        RNDR_GL_THROW_ON_ERROR("Failed to make texture handle resident!", Destroy());
     }
 
     return ErrorCode::Success;

@@ -223,113 +223,113 @@ bool Rndr::GraphicsContext::IsValid() const
     return m_native_device_context != k_invalid_device_context_handle && m_native_graphics_context != k_invalid_graphics_context_handle;
 }
 
-Rndr::ErrorCode Rndr::GraphicsContext::ClearColor(const Vector4f& color)
+void Rndr::GraphicsContext::ClearColor(const Vector4f& color)
 {
     RNDR_CPU_EVENT_SCOPED("GraphicsContext::ClearColor");
     RNDR_GPU_EVENT_SCOPED("GraphicsContext::ClearColor");
     glClearColor(color.x, color.y, color.z, color.w);
-    RNDR_GL_RETURN_ON_ERROR("Failed to set clear color!", RNDR_NOOP);
+    RNDR_GL_THROW_ON_ERROR("Failed to set clear color!", RNDR_NOOP);
     glClear(GL_COLOR_BUFFER_BIT);
-    RNDR_GL_RETURN_ON_ERROR("Failed to clear color buffer!", RNDR_NOOP);
-    return ErrorCode::Success;
+    RNDR_GL_THROW_ON_ERROR("Failed to clear color buffer!", RNDR_NOOP);
 }
 
-Rndr::ErrorCode Rndr::GraphicsContext::ClearDepth(float depth)
+void Rndr::GraphicsContext::ClearDepth(float depth)
 {
     RNDR_CPU_EVENT_SCOPED("GraphicsContext::ClearDepth");
     RNDR_GPU_EVENT_SCOPED("GraphicsContext::ClearDepth");
     glClearDepth(depth);
-    RNDR_GL_RETURN_ON_ERROR("Failed to set clear depth!", RNDR_NOOP);
+    RNDR_GL_THROW_ON_ERROR("Failed to set clear depth!", RNDR_NOOP);
     glClear(GL_DEPTH_BUFFER_BIT);
-    RNDR_GL_RETURN_ON_ERROR("Failed to clear depth buffer!", RNDR_NOOP);
-    return ErrorCode::Success;
+    RNDR_GL_THROW_ON_ERROR("Failed to clear depth buffer!", RNDR_NOOP);
 }
 
-Rndr::ErrorCode Rndr::GraphicsContext::ClearStencil(i32 stencil)
+void Rndr::GraphicsContext::ClearStencil(i32 stencil)
 {
     RNDR_CPU_EVENT_SCOPED("GraphicsContext::ClearStencil");
     RNDR_GPU_EVENT_SCOPED("GraphicsContext::ClearStencil");
     glClearStencil(stencil);
-    RNDR_GL_RETURN_ON_ERROR("Failed to set clear stencil!", RNDR_NOOP);
+    RNDR_GL_THROW_ON_ERROR("Failed to set clear stencil!", RNDR_NOOP);
     glClear(GL_STENCIL_BUFFER_BIT);
-    RNDR_GL_RETURN_ON_ERROR("Failed to clear stencil buffer!", RNDR_NOOP);
-    return ErrorCode::Success;
+    RNDR_GL_THROW_ON_ERROR("Failed to clear stencil buffer!", RNDR_NOOP);
 }
 
-Rndr::ErrorCode Rndr::GraphicsContext::ClearAll(const Vector4f& color, float depth, i32 stencil)
+void Rndr::GraphicsContext::ClearAll(const Vector4f& color, float depth, i32 stencil)
 {
     RNDR_CPU_EVENT_SCOPED("GraphicsContext::ClearAll");
     RNDR_GPU_EVENT_SCOPED("GraphicsContext::ClearAll");
     glClearColor(color.x, color.y, color.z, color.w);
-    RNDR_GL_RETURN_ON_ERROR("Failed to set clear color!", RNDR_NOOP);
+    RNDR_GL_THROW_ON_ERROR("Failed to set clear color!", RNDR_NOOP);
     glClearDepth(depth);
-    RNDR_GL_RETURN_ON_ERROR("Failed to set clear depth!", RNDR_NOOP);
+    RNDR_GL_THROW_ON_ERROR("Failed to set clear depth!", RNDR_NOOP);
     glClearStencil(stencil);
-    RNDR_GL_RETURN_ON_ERROR("Failed to set clear stencil value!", RNDR_NOOP);
+    RNDR_GL_THROW_ON_ERROR("Failed to set clear stencil value!", RNDR_NOOP);
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT | GL_STENCIL_BUFFER_BIT);
-    RNDR_GL_RETURN_ON_ERROR("Failed to set clear color, depth and stencil buffers!", RNDR_NOOP);
-    return ErrorCode::Success;
+    RNDR_GL_THROW_ON_ERROR("Failed to set clear color, depth and stencil buffers!", RNDR_NOOP);
 }
 
-Rndr::ErrorCode Rndr::GraphicsContext::BindPipeline(const Pipeline& pipeline)
+void Rndr::GraphicsContext::BindPipeline(const Pipeline& pipeline)
 {
     RNDR_CPU_EVENT_SCOPED("Bind Pipeline");
+    if (!pipeline.IsValid())
+    {
+        throw Opal::InvalidArgumentException(__FUNCTION__, "Pipeline object is not valid");
+    }
 
     const GLuint shader_program = pipeline.GetNativeShaderProgram();
     glUseProgram(shader_program);
-    RNDR_GL_RETURN_ON_ERROR("Failed to bind shader program!", RNDR_NOOP);
+    RNDR_GL_THROW_ON_ERROR("Failed to bind shader program!", RNDR_NOOP);
     const GLuint vertex_array = pipeline.GetNativeVertexArray();
     glBindVertexArray(vertex_array);
-    RNDR_GL_RETURN_ON_ERROR("Failed to bind vertex array object!", RNDR_NOOP);
+    RNDR_GL_THROW_ON_ERROR("Failed to bind vertex array object!", RNDR_NOOP);
     const Rndr::PipelineDesc desc = pipeline.GetDesc();
     if (desc.depth_stencil.is_depth_enabled)
     {
         glEnable(GL_DEPTH_TEST);
-        RNDR_GL_RETURN_ON_ERROR("Failed to enable depth test!", RNDR_NOOP);
+        RNDR_GL_THROW_ON_ERROR("Failed to enable depth test!", RNDR_NOOP);
         const GLenum depth_func = FromComparatorToOpenGL(desc.depth_stencil.depth_comparator);
         glDepthFunc(depth_func);
-        RNDR_GL_RETURN_ON_ERROR("Failed to set depth function!", RNDR_NOOP);
+        RNDR_GL_THROW_ON_ERROR("Failed to set depth function!", RNDR_NOOP);
         glDepthMask(desc.depth_stencil.depth_mask == Rndr::DepthMask::All ? GL_TRUE : GL_FALSE);
-        RNDR_GL_RETURN_ON_ERROR("Failed to set depth mask!", RNDR_NOOP);
+        RNDR_GL_THROW_ON_ERROR("Failed to set depth mask!", RNDR_NOOP);
     }
     else
     {
         glDisable(GL_DEPTH_TEST);
-        RNDR_GL_RETURN_ON_ERROR("Failed to disable depth test!", RNDR_NOOP);
+        RNDR_GL_THROW_ON_ERROR("Failed to disable depth test!", RNDR_NOOP);
     }
     if (desc.depth_stencil.is_stencil_enabled)
     {
         constexpr u32 k_mask_all_enabled = 0xFFFFFFFF;
         glEnable(GL_STENCIL_TEST);
-        RNDR_GL_RETURN_ON_ERROR("Failed to enable stencil test!", RNDR_NOOP);
+        RNDR_GL_THROW_ON_ERROR("Failed to enable stencil test!", RNDR_NOOP);
         glStencilMask(desc.depth_stencil.stencil_write_mask);
-        RNDR_GL_RETURN_ON_ERROR("Failed to set stencil write mask!", RNDR_NOOP);
+        RNDR_GL_THROW_ON_ERROR("Failed to set stencil write mask!", RNDR_NOOP);
         const GLenum front_face_stencil_func = FromComparatorToOpenGL(desc.depth_stencil.stencil_front_face_comparator);
         glStencilFuncSeparate(GL_FRONT, front_face_stencil_func, desc.depth_stencil.stencil_ref_value, k_mask_all_enabled);
-        RNDR_GL_RETURN_ON_ERROR("Failed to set front face stencil function!", RNDR_NOOP);
+        RNDR_GL_THROW_ON_ERROR("Failed to set front face stencil function!", RNDR_NOOP);
         const GLenum back_face_stencil_func = FromComparatorToOpenGL(desc.depth_stencil.stencil_back_face_comparator);
         glStencilFuncSeparate(GL_BACK, back_face_stencil_func, desc.depth_stencil.stencil_ref_value, k_mask_all_enabled);
-        RNDR_GL_RETURN_ON_ERROR("Failed to set back face stencil function!", RNDR_NOOP);
+        RNDR_GL_THROW_ON_ERROR("Failed to set back face stencil function!", RNDR_NOOP);
         const GLenum front_face_stencil_fail_op = FromStencilOpToOpenGL(desc.depth_stencil.stencil_front_face_fail_op);
         const GLenum front_face_stencil_depth_fail_op = FromStencilOpToOpenGL(desc.depth_stencil.stencil_front_face_depth_fail_op);
         const GLenum front_face_stencil_pass_op = FromStencilOpToOpenGL(desc.depth_stencil.stencil_front_face_pass_op);
         glStencilOpSeparate(GL_FRONT, front_face_stencil_fail_op, front_face_stencil_depth_fail_op, front_face_stencil_pass_op);
-        RNDR_GL_RETURN_ON_ERROR("Failed to set front face stencil operations!", RNDR_NOOP);
+        RNDR_GL_THROW_ON_ERROR("Failed to set front face stencil operations!", RNDR_NOOP);
         const GLenum back_face_stencil_fail_op = FromStencilOpToOpenGL(desc.depth_stencil.stencil_back_face_fail_op);
         const GLenum back_face_stencil_depth_fail_op = FromStencilOpToOpenGL(desc.depth_stencil.stencil_back_face_depth_fail_op);
         const GLenum back_face_stencil_pass_op = FromStencilOpToOpenGL(desc.depth_stencil.stencil_back_face_pass_op);
         glStencilOpSeparate(GL_BACK, back_face_stencil_fail_op, back_face_stencil_depth_fail_op, back_face_stencil_pass_op);
-        RNDR_GL_RETURN_ON_ERROR("Failed to set back face stencil operations!", RNDR_NOOP);
+        RNDR_GL_THROW_ON_ERROR("Failed to set back face stencil operations!", RNDR_NOOP);
     }
     else
     {
         glDisable(GL_STENCIL_TEST);
-        RNDR_GL_RETURN_ON_ERROR("Failed to disable stencil test!", RNDR_NOOP);
+        RNDR_GL_THROW_ON_ERROR("Failed to disable stencil test!", RNDR_NOOP);
     }
     if (desc.blend.is_enabled)
     {
         glEnable(GL_BLEND);
-        RNDR_GL_RETURN_ON_ERROR("Failed to enable blending!", RNDR_NOOP);
+        RNDR_GL_THROW_ON_ERROR("Failed to enable blending!", RNDR_NOOP);
         const GLenum src_color_factor = FromBlendFactorToOpenGL(desc.blend.src_color_factor);
         const GLenum dst_color_factor = FromBlendFactorToOpenGL(desc.blend.dst_color_factor);
         const GLenum src_alpha_factor = FromBlendFactorToOpenGL(desc.blend.src_alpha_factor);
@@ -337,75 +337,71 @@ Rndr::ErrorCode Rndr::GraphicsContext::BindPipeline(const Pipeline& pipeline)
         const GLenum color_op = FromBlendOperationToOpenGL(desc.blend.color_operation);
         const GLenum alpha_op = FromBlendOperationToOpenGL(desc.blend.alpha_operation);
         glBlendFuncSeparate(src_color_factor, dst_color_factor, src_alpha_factor, dst_alpha_factor);
-        RNDR_GL_RETURN_ON_ERROR("Failed to set blend factors!", RNDR_NOOP);
+        RNDR_GL_THROW_ON_ERROR("Failed to set blend factors!", RNDR_NOOP);
         glBlendEquationSeparate(color_op, alpha_op);
-        RNDR_GL_RETURN_ON_ERROR("Failed to set blend operations!", RNDR_NOOP);
+        RNDR_GL_THROW_ON_ERROR("Failed to set blend operations!", RNDR_NOOP);
         glBlendColor(desc.blend.const_color.r, desc.blend.const_color.g, desc.blend.const_color.b, desc.blend.const_alpha);
-        RNDR_GL_RETURN_ON_ERROR("Failed to set blend constant color!", RNDR_NOOP);
+        RNDR_GL_THROW_ON_ERROR("Failed to set blend constant color!", RNDR_NOOP);
     }
     else
     {
         glDisable(GL_BLEND);
-        RNDR_GL_RETURN_ON_ERROR("Failed to disable blending!", RNDR_NOOP);
+        RNDR_GL_THROW_ON_ERROR("Failed to disable blending!", RNDR_NOOP);
     }
     // Rasterizer configuration
     {
         glPolygonMode(GL_FRONT_AND_BACK, desc.rasterizer.fill_mode == FillMode::Solid ? GL_FILL : GL_LINE);
-        RNDR_GL_RETURN_ON_ERROR("Failed to set polygon mode!", RNDR_NOOP);
+        RNDR_GL_THROW_ON_ERROR("Failed to set polygon mode!", RNDR_NOOP);
         if (desc.rasterizer.cull_face != Face::None)
         {
             glEnable(GL_CULL_FACE);
-            RNDR_GL_RETURN_ON_ERROR("Failed to enable cull face!", RNDR_NOOP);
+            RNDR_GL_THROW_ON_ERROR("Failed to enable cull face!", RNDR_NOOP);
             glCullFace(desc.rasterizer.cull_face == Face::Front ? GL_FRONT : GL_BACK);
-            RNDR_GL_RETURN_ON_ERROR("Failed to set cull face!", RNDR_NOOP);
+            RNDR_GL_THROW_ON_ERROR("Failed to set cull face!", RNDR_NOOP);
         }
         else
         {
             glDisable(GL_CULL_FACE);
-            RNDR_GL_RETURN_ON_ERROR("Failed to disable cull face!", RNDR_NOOP);
+            RNDR_GL_THROW_ON_ERROR("Failed to disable cull face!", RNDR_NOOP);
         }
         glFrontFace(desc.rasterizer.front_face_winding_order == WindingOrder::CW ? GL_CW : GL_CCW);
-        RNDR_GL_RETURN_ON_ERROR("Failed to set front face winding order!", RNDR_NOOP);
+        RNDR_GL_THROW_ON_ERROR("Failed to set front face winding order!", RNDR_NOOP);
         if (desc.rasterizer.depth_bias != 0.0f || desc.rasterizer.slope_scaled_depth_bias != 0.0f)
         {
             glEnable(GL_POLYGON_OFFSET_LINE);
-            RNDR_GL_RETURN_ON_ERROR("Failed to enable polygon offset!", RNDR_NOOP);
+            RNDR_GL_THROW_ON_ERROR("Failed to enable polygon offset!", RNDR_NOOP);
             glPolygonOffset(desc.rasterizer.slope_scaled_depth_bias, desc.rasterizer.depth_bias);
-            RNDR_GL_RETURN_ON_ERROR("Failed to set polygon offset!", RNDR_NOOP);
+            RNDR_GL_THROW_ON_ERROR("Failed to set polygon offset!", RNDR_NOOP);
         }
         else
         {
             glDisable(GL_POLYGON_OFFSET_LINE);
-            RNDR_GL_RETURN_ON_ERROR("Failed to disable polygon offset!", RNDR_NOOP);
+            RNDR_GL_THROW_ON_ERROR("Failed to disable polygon offset!", RNDR_NOOP);
         }
         if (desc.rasterizer.scissor_size.x > 0 && desc.rasterizer.scissor_size.y > 0)
         {
             glEnable(GL_SCISSOR_TEST);
-            RNDR_GL_RETURN_ON_ERROR("Failed to enable scissor test!", RNDR_NOOP);
+            RNDR_GL_THROW_ON_ERROR("Failed to enable scissor test!", RNDR_NOOP);
             glScissor(static_cast<i32>(desc.rasterizer.scissor_bottom_left.x), static_cast<i32>(desc.rasterizer.scissor_bottom_left.y),
                       static_cast<i32>(desc.rasterizer.scissor_size.x), static_cast<i32>(desc.rasterizer.scissor_size.y));
-            RNDR_GL_RETURN_ON_ERROR("Failed to set scissor rectangle!", RNDR_NOOP);
+            RNDR_GL_THROW_ON_ERROR("Failed to set scissor rectangle!", RNDR_NOOP);
         }
         else
         {
             glDisable(GL_SCISSOR_TEST);
-            RNDR_GL_RETURN_ON_ERROR("Failed to disable scissor test!", RNDR_NOOP);
+            RNDR_GL_THROW_ON_ERROR("Failed to disable scissor test!", RNDR_NOOP);
         }
     }
-
     m_bound_pipeline = &pipeline;
-
-    return ErrorCode::Success;
 }
 
-Rndr::ErrorCode Rndr::GraphicsContext::BindBuffer(const Buffer& buffer, i32 binding_index)
+void Rndr::GraphicsContext::BindBuffer(const Buffer& buffer, i32 binding_index)
 {
     RNDR_CPU_EVENT_SCOPED("Bind Buffer");
 
     if (!buffer.IsValid())
     {
-        RNDR_LOG_ERROR("Invalid buffer object!");
-        return ErrorCode::InvalidArgument;
+        throw Opal::InvalidArgumentException(__FUNCTION__, "Buffer object is invalid");
     }
     const GLuint native_buffer = buffer.GetNativeBuffer();
     const BufferDesc& desc = buffer.GetDesc();
@@ -413,55 +409,50 @@ Rndr::ErrorCode Rndr::GraphicsContext::BindBuffer(const Buffer& buffer, i32 bind
     if (target == GL_UNIFORM_BUFFER || target == GL_SHADER_STORAGE_BUFFER)
     {
         glBindBufferRange(target, binding_index, native_buffer, 0, desc.size);
-        RNDR_GL_RETURN_ON_ERROR("Failed to bind a buffer!", RNDR_NOOP);
-        return ErrorCode::Success;
+        RNDR_GL_THROW_ON_ERROR("Failed to bind a buffer!", RNDR_NOOP);
+        return;
     }
-    RNDR_LOG_ERROR("Vertex and index buffers should be bound through the use of input layout and pipeline!");
-    return ErrorCode::InvalidArgument;
+    throw Opal::InvalidArgumentException(__FUNCTION__,
+                                         "Vertex and index buffers should be bound through the use of input layout and pipeline");
 }
 
-Rndr::ErrorCode Rndr::GraphicsContext::BindTexture(const Texture& texture, i32 binding_index)
+void Rndr::GraphicsContext::BindTexture(const Texture& texture, i32 binding_index)
 {
     RNDR_CPU_EVENT_SCOPED("Bind Texture");
 
     if (!texture.IsValid())
     {
-        RNDR_LOG_ERROR("Invalid texture object!");
-        return ErrorCode::InvalidArgument;
+        throw Opal::InvalidArgumentException(__FUNCTION__, "Texture object is invalid");
     }
     const GLuint native_texture = texture.GetNativeTexture();
     glBindTextures(binding_index, 1, &native_texture);
-    RNDR_GL_RETURN_ON_ERROR("Failed to bind texture!", RNDR_NOOP);
-    return ErrorCode::Success;
+    RNDR_GL_THROW_ON_ERROR("Failed to bind texture!", RNDR_NOOP);
 }
 
-Rndr::ErrorCode Rndr::GraphicsContext::BindTextureForCompute(const Rndr::Texture& texture, i32 binding_index, i32 image_level,
-                                                             Rndr::TextureAccess access)
+void Rndr::GraphicsContext::BindTextureForCompute(const Rndr::Texture& texture, i32 binding_index, i32 image_level,
+                                                  Rndr::TextureAccess access)
 {
     RNDR_CPU_EVENT_SCOPED("Bind Texture For Compute");
 
     if (!texture.IsValid())
     {
-        RNDR_LOG_ERROR("Invalid texture object!");
-        return ErrorCode::InvalidArgument;
+        throw Opal::InvalidArgumentException(__FUNCTION__, "Texture object is invalid");
     }
     glBindImageTexture(binding_index, texture.GetNativeTexture(), image_level, GL_FALSE, 0, FromImageAccessToOpenGL(access),
                        FromPixelFormatToInternalFormat(texture.GetTextureDesc().pixel_format));
-    RNDR_GL_RETURN_ON_ERROR("Failed to bind texture for compute!", RNDR_NOOP);
-    return ErrorCode::Success;
+    RNDR_GL_THROW_ON_ERROR("Failed to bind texture for compute!", RNDR_NOOP);
 }
 
-Rndr::ErrorCode Rndr::GraphicsContext::BindFrameBuffer(const Rndr::FrameBuffer& frame_buffer)
+void Rndr::GraphicsContext::BindFrameBuffer(const Rndr::FrameBuffer& frame_buffer)
 {
     RNDR_CPU_EVENT_SCOPED("Bind FrameBuffer");
 
     if (!frame_buffer.IsValid())
     {
-        RNDR_LOG_ERROR("Invalid frame buffer object!");
-        return ErrorCode::InvalidArgument;
+        throw Opal::InvalidArgumentException(__FUNCTION__, "Frame buffer object is invalid");
     }
     glBindFramebuffer(GL_FRAMEBUFFER, frame_buffer.GetNativeFrameBuffer());
-    RNDR_GL_RETURN_ON_ERROR("Failed to bind frame buffer!", RNDR_NOOP);
+    RNDR_GL_THROW_ON_ERROR("Failed to bind frame buffer!", RNDR_NOOP);
     TextureDesc attachment_desc;
     if (frame_buffer.GetColorAttachmentCount() > 0)
     {
@@ -472,39 +463,35 @@ Rndr::ErrorCode Rndr::GraphicsContext::BindFrameBuffer(const Rndr::FrameBuffer& 
         attachment_desc = frame_buffer.GetDepthStencilAttachment().GetTextureDesc();
     }
     glViewport(0, 0, attachment_desc.width, attachment_desc.height);
-    RNDR_GL_RETURN_ON_ERROR("Failed to set viewport!", RNDR_NOOP);
-    return ErrorCode::Success;
+    RNDR_GL_THROW_ON_ERROR("Failed to set viewport!", RNDR_NOOP);
 }
 
-Rndr::ErrorCode Rndr::GraphicsContext::BindSwapChainFrameBuffer(const Rndr::SwapChain& swap_chain)
+void Rndr::GraphicsContext::BindSwapChainFrameBuffer(const Rndr::SwapChain& swap_chain)
 {
     RNDR_CPU_EVENT_SCOPED("Bind SwapChain FrameBuffer");
 
     if (!swap_chain.IsValid())
     {
-        RNDR_LOG_ERROR("Invalid swap chain object!");
-        return ErrorCode::InvalidArgument;
+        throw Opal::InvalidArgumentException(__FUNCTION__, "Swap chain object is invalid");
     }
     glBindFramebuffer(GL_FRAMEBUFFER, 0);
-    RNDR_GL_RETURN_ON_ERROR("Failed to bind default frame buffer!", RNDR_NOOP);
+    RNDR_GL_THROW_ON_ERROR("Failed to bind default frame buffer!", RNDR_NOOP);
     const SwapChainDesc& desc = swap_chain.GetDesc();
     glViewport(0, 0, desc.width, desc.height);
-    RNDR_GL_RETURN_ON_ERROR("Failed to set viewport!", RNDR_NOOP);
-    return ErrorCode::Success;
+    RNDR_GL_THROW_ON_ERROR("Failed to set viewport!", RNDR_NOOP);
 }
 
-bool Rndr::GraphicsContext::DrawVertices(PrimitiveTopology topology, i32 vertex_count, i32 instance_count, i32 first_vertex)
+void Rndr::GraphicsContext::DrawVertices(PrimitiveTopology topology, i32 vertex_count, i32 instance_count, i32 first_vertex)
 {
     RNDR_CPU_EVENT_SCOPED("Draw Vertices");
     RNDR_GPU_EVENT_SCOPED("Draw Vertices");
 
     const GLenum primitive = FromPrimitiveTopologyToOpenGL(topology);
     glDrawArraysInstanced(primitive, first_vertex, vertex_count, instance_count);
-    RNDR_ASSERT_OPENGL();
-    return true;
+    RNDR_GL_THROW_ON_ERROR("DrawVertices failed!", RNDR_NOOP);
 }
 
-bool Rndr::GraphicsContext::DrawIndices(PrimitiveTopology topology, i32 index_count, i32 instance_count, i32 first_index)
+void Rndr::GraphicsContext::DrawIndices(PrimitiveTopology topology, i32 index_count, i32 instance_count, i32 first_index)
 {
     RNDR_CPU_EVENT_SCOPED("Draw Indices");
     RNDR_GPU_EVENT_SCOPED("Draw Indices");
@@ -518,88 +505,69 @@ bool Rndr::GraphicsContext::DrawIndices(PrimitiveTopology topology, i32 index_co
     void* index_start = reinterpret_cast<void*>(index_offset);
     const GLenum primitive = FromPrimitiveTopologyToOpenGL(topology);
     glDrawElementsInstanced(primitive, index_count, index_size_enum, index_start, instance_count);
-    RNDR_ASSERT_OPENGL();
-    return true;
+    RNDR_GL_THROW_ON_ERROR("DrawIndices failed!", RNDR_NOOP);
 }
 
-bool Rndr::GraphicsContext::DispatchCompute(u32 block_count_x, u32 block_count_y, u32 block_count_z, bool wait_for_completion)
+void Rndr::GraphicsContext::DispatchCompute(u32 block_count_x, u32 block_count_y, u32 block_count_z, bool wait_for_completion)
 {
     RNDR_CPU_EVENT_SCOPED("Dispatch Compute");
 
     glDispatchCompute(block_count_x, block_count_y, block_count_z);
-    RNDR_ASSERT_OPENGL();
+    RNDR_GL_THROW_ON_ERROR("Dispatch of compute work failed!", RNDR_NOOP);
     if (wait_for_completion)
     {
         glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT | GL_SHADER_IMAGE_ACCESS_BARRIER_BIT);
-        RNDR_ASSERT_OPENGL();
+        RNDR_GL_THROW_ON_ERROR("Memory barrier failed!", RNDR_NOOP);
     }
-    return true;
 }
 
-Rndr::ErrorCode Rndr::GraphicsContext::UpdateBuffer(const Buffer& buffer, const Opal::ArrayView<const u8>& data, i64 offset)
+void Rndr::GraphicsContext::UpdateBuffer(const Buffer& buffer, const Opal::ArrayView<const u8>& data, i64 offset)
 {
     RNDR_CPU_EVENT_SCOPED("Update Buffer Contents");
     RNDR_GPU_EVENT_SCOPED("Update Buffer Contents");
 
     if (!buffer.IsValid())
     {
-        RNDR_LOG_ERROR("UpdateBuffer: Failed, invalid buffer object!");
-        return ErrorCode::InvalidArgument;
+        throw Opal::InvalidArgumentException(__FUNCTION__, "Buffer object is invalid");
     }
     const BufferDesc desc = buffer.GetDesc();
     if (desc.usage != Usage::Dynamic)
     {
-        RNDR_LOG_ERROR("UpdateBuffer: Failed, buffer usage is not Usage::Dynamic!");
-        return ErrorCode::InvalidArgument;
+        throw Opal::InvalidArgumentException(__FUNCTION__, "Buffer usage is not dynamic");
     }
     const i64 buffer_size = static_cast<i64>(desc.size);
     if (offset < 0 || offset >= buffer_size)
     {
-        RNDR_LOG_ERROR("UpdateBuffer: Failed, offset %d is out of bounds [0, %u)!", offset, desc.size);
-        return ErrorCode::OutOfBounds;
+        throw Opal::OutOfBoundsException(static_cast<u64>(offset), 0, desc.size);
     }
     const i64 data_size = static_cast<i64>(data.GetSize());
     if (data_size < 0 || offset + data_size > buffer_size)
     {
-        RNDR_LOG_ERROR("UpdateBuffer: Failed, data size out of bounds!");
-        return ErrorCode::OutOfBounds;
+        throw Opal::OutOfBoundsException(static_cast<u64>(offset + data_size), 0, desc.size);
     }
     if (data_size == 0)
     {
-        return ErrorCode::Success;
+        return;
     }
 
     const GLuint native_buffer = buffer.GetNativeBuffer();
     glNamedBufferSubData(native_buffer, offset, data_size, data.GetData());
-    const GLenum error_code = glad_glGetError();
-    switch (error_code)
-    {
-        case GL_INVALID_VALUE:
-            RNDR_LOG_ERROR("UpdateBuffer: Failed, offset or data size out of bounds!");
-            return ErrorCode::InvalidArgument;
-        case GL_INVALID_OPERATION:
-            RNDR_LOG_ERROR("UpdateBuffer: Failed, invalid buffer object or buffer usage is not Usage::Dynamic!");
-            return ErrorCode::InvalidArgument;
-        default:
-            return ErrorCode::Success;
-    }
+    RNDR_GL_THROW_ON_ERROR("Buffer update failed", RNDR_NOOP);
 }
 
-Rndr::ErrorCode Rndr::GraphicsContext::ReadBuffer(const Buffer& buffer, Opal::ArrayView<u8>& out_data, i32 offset, i32 size) const
+void Rndr::GraphicsContext::ReadBuffer(const Buffer& buffer, Opal::ArrayView<u8>& out_data, i32 offset, i32 size) const
 {
     RNDR_CPU_EVENT_SCOPED("Read Buffer Contents");
     RNDR_GPU_EVENT_SCOPED("Read Buffer Contents");
 
     if (!buffer.IsValid())
     {
-        RNDR_LOG_ERROR("ReadBuffer: Failed, invalid buffer object!");
-        return ErrorCode::InvalidArgument;
+        throw Opal::InvalidArgumentException(__FUNCTION__, "Buffer object is invalid");
     }
     const BufferDesc& desc = buffer.GetDesc();
     if (desc.usage != Usage::ReadBack)
     {
-        RNDR_LOG_ERROR("ReadBuffer: Failed, buffer usage is not Usage::ReadBack!");
-        return ErrorCode::InvalidArgument;
+        throw Opal::InvalidArgumentException(__FUNCTION__, "Buffer usage is not readback");
     }
 
     // If size is 0, read to the end of the buffer
@@ -609,42 +577,22 @@ Rndr::ErrorCode Rndr::GraphicsContext::ReadBuffer(const Buffer& buffer, Opal::Ar
     }
     if (offset < 0 || offset >= static_cast<i32>(desc.size))
     {
-        RNDR_LOG_ERROR("ReadBuffer: Failed, offset %d is out of bounds [0, %u)!", offset, desc.size);
-        return ErrorCode::OutOfBounds;
+        throw Opal::OutOfBoundsException(static_cast<u64>(offset), 0, desc.size);
     }
     if (offset + size > static_cast<i32>(desc.size))
     {
-        RNDR_LOG_ERROR("ReadBuffer: Failed, read size %d results in out of bounds access!", size);
-        return ErrorCode::OutOfBounds;
+        throw Opal::OutOfBoundsException(static_cast<u64>(offset + size), 0, desc.size);
     }
 
     const GLuint native_buffer = buffer.GetNativeBuffer();
     u8* gpu_data = static_cast<u8*>(glMapNamedBufferRange(native_buffer, desc.offset, static_cast<i32>(desc.size), GL_MAP_READ_BIT));
-    const GLenum error_code = glad_glGetError();
-    switch (error_code)
-    {
-        case GL_INVALID_OPERATION:
-            RNDR_LOG_ERROR(
-                "ReadBuffer: Failed, either buffer is invalid object, the object is already mapped, or size of the buffer is 0!");
-            return ErrorCode::InvalidArgument;
-        case GL_INVALID_VALUE:
-            RNDR_LOG_ERROR("ReadBuffer: Failed, buffer's offset or size are either negative or result in out of bounds access!");
-            return ErrorCode::InvalidArgument;
-    }
+    RNDR_GL_THROW_ON_ERROR("Mapping of the buffer contents failed", RNDR_NOOP);
 
     RNDR_ASSERT(gpu_data != nullptr, "Mapping of GPU memory failed!");
     memcpy(out_data.GetData(), gpu_data + offset, size);
 
     glUnmapNamedBuffer(native_buffer);
-    const GLenum unmap_error_code = glad_glGetError();
-    switch (unmap_error_code)
-    {
-        case GL_INVALID_OPERATION:
-            RNDR_LOG_ERROR("ReadBuffer: Failed, buffer is not a buffer object or the object is not mapped!");
-            return ErrorCode::InvalidArgument;
-        default:
-            return ErrorCode::Success;
-    }
+    RNDR_GL_THROW_ON_ERROR("Unmapping of the buffer contents failed", RNDR_NOOP);
 }
 
 namespace
@@ -663,21 +611,18 @@ bool Overlap(Rndr::i32 src_offset, Rndr::i32 dst_offset, Rndr::i32 size)
 }
 }  // namespace
 
-Rndr::ErrorCode Rndr::GraphicsContext::CopyBuffer(const Rndr::Buffer& dst_buffer, const Rndr::Buffer& src_buffer, i32 dst_offset,
-                                                  i32 src_offset, i32 size)
+void Rndr::GraphicsContext::CopyBuffer(const Buffer& dst_buffer, const Buffer& src_buffer, i32 dst_offset, i32 src_offset, i32 size)
 {
     RNDR_CPU_EVENT_SCOPED("Copy Buffer Contents");
     RNDR_GPU_EVENT_SCOPED("Copy Buffer Contents");
 
     if (!dst_buffer.IsValid())
     {
-        RNDR_LOG_ERROR("CopyBuffer: Failed, destination buffer is invalid!");
-        return ErrorCode::InvalidArgument;
+        throw Opal::InvalidArgumentException(__FUNCTION__, "Destination buffer object is invalid");
     }
     if (!src_buffer.IsValid())
     {
-        RNDR_LOG_ERROR("CopyBuffer: Failed, source buffer is invalid!");
-        return ErrorCode::InvalidArgument;
+        throw Opal::InvalidArgumentException(__FUNCTION__, "Source buffer object is invalid");
     }
 
     const BufferDesc& dst_desc = dst_buffer.GetDesc();
@@ -685,13 +630,11 @@ Rndr::ErrorCode Rndr::GraphicsContext::CopyBuffer(const Rndr::Buffer& dst_buffer
 
     if (src_offset < 0 || src_offset >= static_cast<i32>(src_desc.size))
     {
-        RNDR_LOG_ERROR("CopyBuffer: Failed, source offset %d is out of bounds [0, %u)!", src_offset, src_desc.size);
-        return ErrorCode::OutOfBounds;
+        throw Opal::OutOfBoundsException(static_cast<u64>(src_offset), 0, src_desc.size);
     }
     if (dst_offset < 0 || dst_offset >= static_cast<i32>(dst_desc.size))
     {
-        RNDR_LOG_ERROR("CopyBuffer: Failed, destination offset %d is out of bounds [0, %u)!", dst_offset, dst_desc.size);
-        return ErrorCode::OutOfBounds;
+        throw Opal::OutOfBoundsException(static_cast<u64>(dst_offset), 0, dst_desc.size);
     }
 
     if (size == 0)
@@ -702,52 +645,35 @@ Rndr::ErrorCode Rndr::GraphicsContext::CopyBuffer(const Rndr::Buffer& dst_buffer
     }
     if (size == 0)
     {
-        RNDR_LOG_ERROR("CopyBuffer: Failed, nothing to copy!");
-        return ErrorCode::InvalidArgument;
+        return;
     }
 
     if (dst_offset + size > static_cast<i32>(dst_desc.size))
     {
-        RNDR_LOG_ERROR("CopyBuffer: Failed, not enough space in the destination buffer!");
-        return ErrorCode::OutOfBounds;
+        throw Opal::OutOfBoundsException(static_cast<u64>(dst_offset + size), 0, dst_desc.size);
     }
     if (src_offset + size > static_cast<i32>(src_desc.size))
     {
-        RNDR_LOG_ERROR("CopyBuffer: Failed, not enough data in the source buffer!");
-        return ErrorCode::OutOfBounds;
+        throw Opal::OutOfBoundsException(static_cast<u64>(src_offset + size), 0, src_desc.size);
     }
     if (src_buffer.GetNativeBuffer() == dst_buffer.GetNativeBuffer() && Overlap(src_offset, dst_offset, size))
     {
-        RNDR_LOG_ERROR("CopyBuffer: Failed, source and destination buffers are the same buffer and their ranges overlap!");
-        return ErrorCode::InvalidArgument;
+        throw Opal::InvalidArgumentException(__FUNCTION__,
+                                             "Source and destination point to the same buffer object and their ranges overlap");
     }
 
     glCopyNamedBufferSubData(src_buffer.GetNativeBuffer(), dst_buffer.GetNativeBuffer(), src_offset, dst_offset, size);
-    const GLenum error_code = glad_glGetError();
-    switch (error_code)
-    {
-        case GL_INVALID_VALUE:
-            RNDR_LOG_ERROR("CopyBuffer: Failed, source and destination buffers are the same buffer and their ranges overlap!");
-            return ErrorCode::InvalidArgument;
-        case GL_INVALID_OPERATION:
-            RNDR_LOG_ERROR(
-                "CopyBuffer: Failed, either source or destination buffers are currently mapped to the CPU memory or one of these buffers "
-                "are not valid!");
-            return ErrorCode::InvalidArgument;
-        default:
-            return ErrorCode::Success;
-    }
+    RNDR_GL_THROW_ON_ERROR("Failed to copy contents from one buffer to another", RNDR_NOOP);
 }
 
-bool Rndr::GraphicsContext::Read(const Rndr::Texture& image, Rndr::Bitmap& out_data, i32 level) const
+void Rndr::GraphicsContext::Read(const Texture& image, Bitmap& out_data, i32 level) const
 {
     RNDR_CPU_EVENT_SCOPED("Read Texture Contents");
     RNDR_GPU_EVENT_SCOPED("Read Texture Contents");
 
     if (!image.IsValid())
     {
-        RNDR_LOG_ERROR("Read of the image failed since the image is invalid!");
-        return false;
+        throw Opal::InvalidArgumentException(__FUNCTION__, "Texture object is invalid");
     }
 
     const TextureDesc& desc = image.GetTextureDesc();
@@ -756,13 +682,12 @@ bool Rndr::GraphicsContext::Read(const Rndr::Texture& image, Rndr::Bitmap& out_d
     const i32 pixel_size = FromPixelFormatToPixelSize(desc.pixel_format);
     Opal::DynamicArray<u8> tmp_data(pixel_size * desc.width * desc.height);
     glGetTextureImage(image.GetNativeTexture(), level, format, data_type, pixel_size * desc.width * desc.height, tmp_data.GetData());
-    RNDR_ASSERT_OPENGL();
+    RNDR_GL_THROW_ON_ERROR("Failed to get texture image contents", RNDR_NOOP);
 
     out_data = Bitmap(desc.width, desc.height, 1, desc.pixel_format, AsWritableBytes(tmp_data));
-    return true;
 }
 
-bool Rndr::GraphicsContext::ReadSwapChainColor(const SwapChain& swap_chain, Bitmap& out_bitmap)
+void Rndr::GraphicsContext::ReadSwapChainColor(const SwapChain& swap_chain, Bitmap& out_bitmap)
 {
     RNDR_CPU_EVENT_SCOPED("Read SwapChain");
 
@@ -771,7 +696,7 @@ bool Rndr::GraphicsContext::ReadSwapChainColor(const SwapChain& swap_chain, Bitm
     const i32 size = width * height * 4;
     Opal::DynamicArray<u8> data(size);
     glReadPixels(0, 0, width, height, GL_RGBA, GL_UNSIGNED_BYTE, data.GetData());
-    RNDR_ASSERT_OPENGL();
+    RNDR_GL_THROW_ON_ERROR("Failed to read pixel value from the swap chain", RNDR_NOOP);
     for (i32 i = 0; i < height / 2; i++)
     {
         for (i32 j = 0; j < width; j++)
@@ -785,10 +710,9 @@ bool Rndr::GraphicsContext::ReadSwapChainColor(const SwapChain& swap_chain, Bitm
         }
     }
     out_bitmap = Bitmap{width, height, 1, PixelFormat::R8G8B8A8_UNORM_SRGB, AsWritableBytes(data)};
-    return true;
 }
 
-bool Rndr::GraphicsContext::ReadSwapChainDepthStencil(const SwapChain& swap_chain, Bitmap& out_bitmap)
+void Rndr::GraphicsContext::ReadSwapChainDepthStencil(const SwapChain& swap_chain, Bitmap& out_bitmap)
 {
     RNDR_CPU_EVENT_SCOPED("Read SwapChain");
 
@@ -797,62 +721,53 @@ bool Rndr::GraphicsContext::ReadSwapChainDepthStencil(const SwapChain& swap_chai
     const i32 size = width * height;
     Opal::DynamicArray<u32> data(size);
     glReadPixels(0, 0, width, height, GL_DEPTH_STENCIL, GL_UNSIGNED_INT_24_8, data.GetData());
-    RNDR_ASSERT_OPENGL();
+    RNDR_GL_THROW_ON_ERROR("Failed to read depth and stencil values from the swap chain", RNDR_NOOP)
     const Opal::ArrayView<u8> byte_data(reinterpret_cast<u8*>(data.GetData()), size * sizeof(u32));
     out_bitmap = Bitmap{width, height, 1, PixelFormat::D24_UNORM_S8_UINT, byte_data};
-    return true;
 }
 
-Rndr::ErrorCode Rndr::GraphicsContext::ClearFrameBufferColorAttachment(const Rndr::FrameBuffer& frame_buffer,
-                                                                       Rndr::i32 color_attachment_index, const Rndr::Vector4f& color)
+void Rndr::GraphicsContext::ClearFrameBufferColorAttachment(const FrameBuffer& frame_buffer, i32 color_attachment_index,
+                                                            const Vector4f& color)
 {
     if (!frame_buffer.IsValid())
     {
-        RNDR_LOG_ERROR("ClearFrameBufferColorAttachment: Failed, invalid frame buffer object!");
-        return ErrorCode::InvalidArgument;
+        throw Opal::InvalidArgumentException(__FUNCTION__, "Frame buffer object is invalid");
     }
     if (color_attachment_index < 0 || color_attachment_index >= frame_buffer.GetColorAttachmentCount())
     {
-        RNDR_LOG_ERROR("ClearFrameBufferColorAttachment: Failed, color attachment index %d is out of bounds [0, %d)!",
-                       color_attachment_index, frame_buffer.GetColorAttachmentCount());
-        return ErrorCode::OutOfBounds;
+        throw Opal::OutOfBoundsException(static_cast<i64>(color_attachment_index), 0,
+                                         static_cast<i64>(frame_buffer.GetColorAttachmentCount() - 1));
     }
     glClearNamedFramebufferfv(frame_buffer.GetNativeFrameBuffer(), GL_COLOR, color_attachment_index, color.data);
-    RNDR_GL_RETURN_ON_ERROR("Failed to clear color attachment!", RNDR_NOOP);
-    return ErrorCode::Success;
+    RNDR_GL_THROW_ON_ERROR("Failed to clear color attachment!", RNDR_NOOP);
 }
 
-Rndr::ErrorCode Rndr::GraphicsContext::ClearFrameBufferDepthStencilAttachment(const Rndr::FrameBuffer& frame_buffer, f32 depth, i32 stencil)
+void Rndr::GraphicsContext::ClearFrameBufferDepthStencilAttachment(const Rndr::FrameBuffer& frame_buffer, f32 depth, i32 stencil)
 {
     if (!frame_buffer.IsValid())
     {
-        RNDR_LOG_ERROR("ClearFrameBufferDepthStencilAttachment: Failed, invalid frame buffer object!");
-        return ErrorCode::InvalidArgument;
+        throw Opal::InvalidArgumentException(__FUNCTION__, "Frame buffer object is invalid");
     }
     glClearNamedFramebufferfi(frame_buffer.GetNativeFrameBuffer(), GL_DEPTH_STENCIL, 0, depth, stencil);
-    RNDR_GL_RETURN_ON_ERROR("Failed to clear depth attachment!", RNDR_NOOP);
-    return ErrorCode::Success;
+    RNDR_GL_THROW_ON_ERROR("Failed to clear depth attachment!", RNDR_NOOP);
 }
 
-Rndr::ErrorCode Rndr::GraphicsContext::BlitFrameBuffers(const FrameBuffer& dst, const FrameBuffer& src, const BlitFrameBufferDesc& desc)
+void Rndr::GraphicsContext::BlitFrameBuffers(const FrameBuffer& dst, const FrameBuffer& src, const BlitFrameBufferDesc& desc)
 {
     RNDR_CPU_EVENT_SCOPED("Blit Frame Buffers");
     RNDR_GPU_EVENT_SCOPED("Blit Frame Buffers");
 
     if (!dst.IsValid())
     {
-        RNDR_LOG_ERROR("BlitFrameBuffer: Failed, destination frame buffer is invalid!");
-        return ErrorCode::InvalidArgument;
+        throw Opal::InvalidArgumentException(__FUNCTION__, "Destination frame buffer object is invalid");
     }
     if (!src.IsValid())
     {
-        RNDR_LOG_ERROR("BlitFrameBuffer: Failed, source frame buffer is invalid!");
-        return ErrorCode::InvalidArgument;
+        throw Opal::InvalidArgumentException(__FUNCTION__, "Source frame buffer object is invalid");
     }
     if ((desc.should_copy_depth || desc.should_copy_stencil) && desc.interpolation != ImageFilter::Nearest)
     {
-        RNDR_LOG_ERROR("BlitFrameBuffer: Failed, depth and stencil attachments can only be copied with nearest interpolation!");
-        return ErrorCode::InvalidArgument;
+        throw Opal::InvalidArgumentException(__FUNCTION__, "Depth and stencil attachments can only be copied with nearest interpolation");
     }
 
     Vector2i src_size = desc.src_size;
@@ -889,29 +804,25 @@ Rndr::ErrorCode Rndr::GraphicsContext::BlitFrameBuffers(const FrameBuffer& dst, 
     const GLuint filter = FromImageFilterToOpenGL(desc.interpolation);
     glBlitNamedFramebuffer(src.GetNativeFrameBuffer(), dst.GetNativeFrameBuffer(), desc.src_offset.x, desc.src_offset.y, src_size.x,
                            src_size.y, desc.dst_offset.x, desc.dst_offset.y, dst_size.x, dst_size.y, mask, filter);
-    RNDR_GL_RETURN_ON_ERROR("Failed to blit frame buffer into another frame buffer!", RNDR_NOOP);
-    return ErrorCode::Success;
+    RNDR_GL_THROW_ON_ERROR("Failed to blit frame buffer into another frame buffer!", RNDR_NOOP);
 }
 
-Rndr::ErrorCode Rndr::GraphicsContext::BlitToSwapChain(const SwapChain& swap_chain, const FrameBuffer& src, const BlitFrameBufferDesc& desc)
+void Rndr::GraphicsContext::BlitToSwapChain(const SwapChain& swap_chain, const FrameBuffer& src, const BlitFrameBufferDesc& desc)
 {
     RNDR_CPU_EVENT_SCOPED("Blit To SwapChain");
     RNDR_GPU_EVENT_SCOPED("Blit To SwapChain");
 
     if (!swap_chain.IsValid())
     {
-        RNDR_LOG_ERROR("BlitToSwapChain: Failed, invalid swap chain!");
-        return ErrorCode::InvalidArgument;
+        throw Opal::InvalidArgumentException(__FUNCTION__, "Swap chain object is invalid");
     }
     if (!src.IsValid())
     {
-        RNDR_LOG_ERROR("BlitToSwapChain: Failed, source frame buffer is invalid!");
-        return ErrorCode::InvalidArgument;
+        throw Opal::InvalidArgumentException(__FUNCTION__, "Source frame buffer object is invalid");
     }
     if ((desc.should_copy_depth || desc.should_copy_stencil) && desc.interpolation != ImageFilter::Nearest)
     {
-        RNDR_LOG_ERROR("BlitToSwapChain: Failed, depth and stencil attachments can only be copied with nearest interpolation!");
-        return ErrorCode::InvalidArgument;
+        throw Opal::InvalidArgumentException(__FUNCTION__, "Depth and stencil attachments can only be copied with nearest interpolation");
     }
 
     Vector2i src_size = desc.src_size;
@@ -948,8 +859,7 @@ Rndr::ErrorCode Rndr::GraphicsContext::BlitToSwapChain(const SwapChain& swap_cha
     const GLuint filter = FromImageFilterToOpenGL(desc.interpolation);
     glBlitNamedFramebuffer(src.GetNativeFrameBuffer(), 0, desc.src_offset.x, desc.src_offset.y, src_size.x, src_size.y, desc.dst_offset.x,
                            desc.dst_offset.y, dst_size.x, dst_size.y, mask, filter);
-    RNDR_GL_RETURN_ON_ERROR("Failed to blit frame buffer into a swap chain!", RNDR_NOOP);
-    return ErrorCode::Success;
+    RNDR_GL_THROW_ON_ERROR("Failed to blit frame buffer into a swap chain!", RNDR_NOOP);
 }
 
 void Rndr::GraphicsContext::SubmitCommandList(CommandList& command_list)

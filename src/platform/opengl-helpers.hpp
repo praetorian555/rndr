@@ -1,6 +1,7 @@
 #pragma once
 
 #include "rndr/definitions.hpp"
+#include "rndr/exception.hpp"
 #include "rndr/graphics-types.hpp"
 #include "rndr/platform/opengl-forward-def.hpp"
 
@@ -35,21 +36,20 @@ Opal::StringUtf8 FromOpenGLUsageToString(GLenum value);
 }  // namespace Rndr
 
 #define RNDR_ASSERT_OPENGL()                               \
-    if (const GLenum error = glGetError() != GL_NO_ERROR)        \
+    if (const GLenum error = glGetError() != GL_NO_ERROR)  \
     {                                                      \
         RNDR_HALT("OpenGL failed with error: %d!", error); \
     }
 
 #if RNDR_DEBUG
-#define RNDR_GL_RETURN_ON_ERROR(message, do_if_fails)                   \
+#define RNDR_GL_THROW_ON_ERROR(message, do_if_fails)                    \
     {                                                                   \
         const GLuint gl_err = glGetError();                             \
         if (gl_err != GL_NO_ERROR)                                      \
         {                                                               \
             RNDR_DEBUG_BREAK;                                           \
-            RNDR_LOG_ERROR("OpenGL error: 0x%x - %s", gl_err, message); \
             do_if_fails;                                                \
-            return ErrorCode::GraphicsAPIError;                         \
+            throw GraphicsAPIException(gl_err, message);                \
         }                                                               \
     }
 #else
