@@ -39,25 +39,19 @@ Rndr::Shape3DRenderer::Shape3DRenderer(const Opal::StringUtf8& name, const Rende
                                                                  .debug_name = "Shape 3D Renderer - Fragment Texture Shader"});
     RNDR_ASSERT(m_fragment_texture_shader.IsValid(), "Failed to create fragment shader!");
 
-    Opal::DynamicArray<VertexData> vertex_data;
-    Opal::DynamicArray<u32> index_data;
-    SetupGeometryData(vertex_data, index_data);
-
     m_vertex_buffer = Buffer(desc.graphics_context,
                              {.type = BufferType::ShaderStorage,
-                              .usage = Usage::Default,
-                              .size = vertex_data.GetSize() * sizeof(VertexData),
+                              .usage = Usage::Dynamic,
+                              .size = k_max_vertex_count * sizeof(VertexData),
                               .stride = sizeof(VertexData),
-                              .debug_name = "Shape 3D Renderer - Vertex Buffer"},
-                             Opal::AsBytes(vertex_data));
+                              .debug_name = "Shape 3D Renderer - Vertex Buffer"});
     RNDR_ASSERT(m_vertex_buffer.IsValid(), "Failed to create vertex buffer!");
     m_index_buffer = Buffer(desc.graphics_context,
                             {.type = BufferType::Index,
-                             .usage = Usage::Default,
-                             .size = index_data.GetSize() * sizeof(uint32_t),
+                             .usage = Usage::Dynamic,
+                             .size = k_max_index_count * sizeof(uint32_t),
                              .stride = sizeof(uint32_t),
-                             .debug_name = "Shape 3D Renderer - Index Buffer"},
-                            Opal::AsBytes(index_data));
+                             .debug_name = "Shape 3D Renderer - Index Buffer"});
     RNDR_ASSERT(m_index_buffer.IsValid(), "Failed to create index buffer!");
     m_model_transform_buffer = Buffer(desc.graphics_context, {.type = BufferType::ShaderStorage,
                                                               .usage = Usage::Dynamic,
@@ -131,6 +125,13 @@ bool Rndr::Shape3DRenderer::Render(f32 delta_seconds, CommandList& command_list)
 {
     RNDR_UNUSED(delta_seconds);
 
+    if (m_is_geometry_data_dirty)
+    {
+        m_is_geometry_data_dirty = false;
+        command_list.CmdUpdateBuffer(m_vertex_buffer, Opal::AsBytes(m_vertex_data));
+        command_list.CmdUpdateBuffer(m_index_buffer, Opal::AsBytes(m_index_data));
+    }
+
     PerFrameData per_frame_data;
     per_frame_data.view_projection_transform = Opal::Transpose(m_projection * m_view);
     per_frame_data.camera_position_world = Point3f::Zero();  // TODO: Get from the controller
@@ -171,26 +172,50 @@ bool Rndr::Shape3DRenderer::Render(f32 delta_seconds, CommandList& command_list)
     return true;
 }
 
-void Rndr::Shape3DRenderer::DrawCube(const Matrix4x4f& transform, Opal::Ref<const Material> material)
+void Rndr::Shape3DRenderer::DrawCube(const Matrix4x4f& transform, Opal::Ref<const Material> material, f32 u_tiling, f32 v_tiling)
 {
-    DrawShape(ShapeType::Cube, transform, material);
+    RNDR_ASSERT(u_tiling > 0.0f, "U tiling multiplier must be positive!");
+    RNDR_ASSERT(v_tiling > 0.0f, "V tiling multiplier must be positive!");
+    Opal::StringUtf8 key(256, '\0');
+    snprintf(key.GetData(), key.GetSize(), "Cube_%u_%u", static_cast<u32>(u_tiling), static_cast<u32>(v_tiling));
+    key.Trim();
+
+    if (!m_geometry_data.Contains(key))
+    {
+        ShapeGeometryData data;
+        GenerateCube(m_vertex_data, m_index_data, data, u_tiling, v_tiling);
+        m_geometry_data.Insert(key, data);
+        m_is_geometry_data_dirty = true;
+    }
+
+    DrawShape(std::move(key), transform, material);
 }
 
-void Rndr::Shape3DRenderer::DrawSphere(const Matrix4x4f& transform, Opal::Ref<const Material> material)
+void Rndr::Shape3DRenderer::DrawSphere(const Matrix4x4f& transform, Opal::Ref<const Material> material, f32 u_tiling, f32 v_tiling,
+                                       u32 latitude_segments, u32 longitude_segments)
 {
-    DrawShape(ShapeType::Sphere, transform, material);
-}
+    RNDR_ASSERT(latitude_segments > 0, "Latitude segments must be positive!");
+    RNDR_ASSERT(longitude_segments > 0, "Longitude segments must be positive!");
+    RNDR_ASSERT(u_tiling > 0.0f, "U tiling multiplier must be positive!");
+    RNDR_ASSERT(v_tiling > 0.0f, "V tiling multiplier must be positive!");
+    Opal::StringUtf8 key(256, '\0');
+    snprintf(key.GetData(), key.GetSize(), "Sphere_%u_%u_%u_%u", latitude_segments, longitude_segments, static_cast<u32>(u_tiling),
+             static_cast<u32>(v_tiling));
+    key.Trim();
 
-void Rndr::Shape3DRenderer::SetupGeometryData(Opal::DynamicArray<VertexData>& out_vertex_data, Opal::DynamicArray<u32>& out_index_data)
-{
-    m_geometry_data.Resize(static_cast<u64>(ShapeType::Count));
+    if (!m_geometry_data.Contains(key))
+    {
+        ShapeGeometryData data;
+        GenerateSphere(m_vertex_data, m_index_data, data, latitude_segments, longitude_segments, u_tiling, v_tiling);
+        m_geometry_data.Insert(key, data);
+        m_is_geometry_data_dirty = true;
+    }
 
-    GenerateCube(out_vertex_data, out_index_data, 10.0f, 10.0f);
-    GenerateSphere(out_vertex_data, out_index_data, 128, 128, 100, 100);
+    DrawShape(std::move(key), transform, material);
 }
 
 void Rndr::Shape3DRenderer::GenerateCube(Opal::DynamicArray<VertexData>& out_vertex_data, Opal::DynamicArray<u32>& out_index_data,
-                                         f32 u_tiling, f32 v_tiling)
+                                         ShapeGeometryData& out_data, f32 u_tiling, f32 v_tiling)
 {
     const u32 vertex_offset = static_cast<u32>(out_vertex_data.GetSize());
     const u32 index_offset = static_cast<u32>(out_index_data.GetSize());
@@ -278,14 +303,14 @@ void Rndr::Shape3DRenderer::GenerateCube(Opal::DynamicArray<VertexData>& out_ver
         out_index_data.PushBack(f * 4 + 3);
     }
 
-    ShapeGeometryData& data = m_geometry_data[static_cast<u32>(ShapeType::Cube)];
-    data.vertex_offset = vertex_offset;
-    data.index_offset = index_offset;
-    data.index_count = static_cast<u32>(out_index_data.GetSize()) - index_offset;
+    out_data.vertex_offset = vertex_offset;
+    out_data.index_offset = index_offset;
+    out_data.index_count = static_cast<u32>(out_index_data.GetSize()) - index_offset;
 }
 
 void Rndr::Shape3DRenderer::GenerateSphere(Opal::DynamicArray<VertexData>& out_vertex_data, Opal::DynamicArray<u32>& out_index_data,
-                                           u32 latitude_segments, u32 longitude_segments, f32 u_tiling, f32 v_tiling)
+                                           ShapeGeometryData& out_data, u32 latitude_segments, u32 longitude_segments, f32 u_tiling,
+                                           f32 v_tiling)
 {
     const u32 vertex_offset = static_cast<u32>(out_vertex_data.GetSize());
     const u32 index_offset = static_cast<u32>(out_index_data.GetSize());
@@ -340,19 +365,22 @@ void Rndr::Shape3DRenderer::GenerateSphere(Opal::DynamicArray<VertexData>& out_v
         }
     }
 
-    ShapeGeometryData& data = m_geometry_data[static_cast<u32>(ShapeType::Sphere)];
-    data.vertex_offset = vertex_offset;
-    data.index_offset = index_offset;
-    data.index_count = static_cast<u32>(out_index_data.GetSize()) - index_offset;
+    out_data.vertex_offset = vertex_offset;
+    out_data.index_offset = index_offset;
+    out_data.index_count = static_cast<u32>(out_index_data.GetSize()) - index_offset;
 }
 
-void Rndr::Shape3DRenderer::DrawShape(ShapeType shape_type, const Matrix4x4f& transform, Opal::Ref<const Material> material)
+void Rndr::Shape3DRenderer::DrawShape(Opal::StringUtf8 key, const Matrix4x4f& transform, Opal::Ref<const Material> material)
 {
-    MaterialKey material_key{material};
+    auto geometry_data_it = m_geometry_data.Find(key);
+    RNDR_ASSERT(geometry_data_it != m_geometry_data.end(), "Failed to find material in map!");
+    const ShapeGeometryData& geometry_data = geometry_data_it.GetValue();
+
+    const MaterialKey material_key{material};
     auto it = m_materials.Find(material_key);
     if (it == m_materials.end())
     {
-        PerMaterialData material_data;
+        const PerMaterialData material_data;
         m_materials.Insert(material_key, material_data);
         it = m_materials.Find(material_key);
         RNDR_ASSERT(it != m_materials.end(), "Failed to find material in map!");
@@ -364,8 +392,6 @@ void Rndr::Shape3DRenderer::DrawShape(ShapeType shape_type, const Matrix4x4f& tr
     instance_data.normal_transform = Opal::Inverse(transform);
     instance_data.color = material->GetAlbedoColor();
     material_data.instances.PushBack(instance_data);
-
-    const ShapeGeometryData& geometry_data = m_geometry_data[static_cast<u32>(shape_type)];
 
     DrawIndicesData draw_data;
     draw_data.index_count = geometry_data.index_count;

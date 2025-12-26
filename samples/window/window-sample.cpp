@@ -241,8 +241,8 @@ void DrawScene(Rndr::Shape3DRenderer& shape_renderer, const Rndr::MaterialRegist
     const Opal::Ref<const Rndr::Material> default_material = mat_registry.Get("Default Material");
     const Rndr::Matrix4x4f cube_transform = Opal::Translate(Rndr::Vector3f{-2.0f, 0.0f, -10.0f});
     const Rndr::Matrix4x4f sphere_transform = Opal::Translate(Rndr::Vector3f{2.0f, 0.0f, -10.0f});
-    shape_renderer.DrawSphere(sphere_transform, default_material);
-    shape_renderer.DrawCube(cube_transform, default_material);
+    shape_renderer.DrawSphere(sphere_transform, default_material, 2.0f, 2.0f, 32, 32);
+    shape_renderer.DrawCube(cube_transform, default_material, 1.0f, 1.0f);
 
     constexpr Rndr::i32 k_cube_size = 10;
     const Rndr::Point3f start_position = {0.0f, 0.0f, 10.0f};
