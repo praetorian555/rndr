@@ -25,6 +25,7 @@ public:
 
     void SetFrameBufferTarget(Opal::Ref<FrameBuffer> target) { m_target = target; }
     void SetTransforms(const Matrix4x4f& view, const Matrix4x4f& projection);
+    void SetCameraPosition(const Point3f& camera_position);
 
     bool Render(f32 delta_seconds, CommandList& command_list) override;
 
@@ -92,6 +93,7 @@ private:
     Opal::Ref<FrameBuffer> m_target;
     Matrix4x4f m_view;
     Matrix4x4f m_projection;
+    Point3f m_camera_position;
 
     Shader m_vertex_shader;
     Shader m_fragment_color_shader;

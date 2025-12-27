@@ -14,12 +14,13 @@ public:
     void Enable(bool enable);
     [[nodiscard]] bool IsEnabled() const;
 
-    Rndr::f32 GetMoveSpeed() const { return m_move_speed; }
-    Rndr::f32 GetYawSpeed() const { return m_yaw_speed; }
-    Rndr::f32 GetPitchSpeed() const { return m_pitch_speed; }
+    [[nodiscard]] Rndr::f32 GetMoveSpeed() const { return m_move_speed; }
+    [[nodiscard]] Rndr::f32 GetYawSpeed() const { return m_yaw_speed; }
+    [[nodiscard]] Rndr::f32 GetPitchSpeed() const { return m_pitch_speed; }
 
-    Rndr::Matrix4x4f GetViewTransform() const { return m_fly_camera.FromWorldToCamera(); }
-    Rndr::Matrix4x4f GetProjectionTransform() const { return m_fly_camera.FromCameraToNDC(); }
+    [[nodiscard]] Rndr::Matrix4x4f GetViewTransform() const { return m_fly_camera.FromWorldToCamera(); }
+    [[nodiscard]] Rndr::Matrix4x4f GetProjectionTransform() const { return m_fly_camera.FromCameraToNDC(); }
+    [[nodiscard]] Rndr::Point3f GetCameraPosition() const { return m_fly_camera.GetPosition(); }
 
     void SetMoveSpeed(Rndr::f32 speed) { m_move_speed = speed; }
     void SetYawSpeed(Rndr::f32 speed) { m_yaw_speed = speed; }

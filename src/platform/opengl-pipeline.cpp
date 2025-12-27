@@ -59,6 +59,7 @@ Rndr::Pipeline::Pipeline(const GraphicsContext& graphics_context, const Pipeline
         constexpr size_t k_error_log_size = 1024;
         GLchar error_log[k_error_log_size] = {0};
         glGetProgramInfoLog(m_native_shader_program, k_error_log_size, nullptr, error_log);
+        RNDR_LOG_ERROR("Shader linking failed:\n%s", error_log);
         RNDR_ASSERT_OPENGL();
     }
     glValidateProgram(m_native_shader_program);
@@ -69,6 +70,7 @@ Rndr::Pipeline::Pipeline(const GraphicsContext& graphics_context, const Pipeline
         constexpr size_t k_error_log_size = 1024;
         GLchar error_log[k_error_log_size] = {0};
         glGetProgramInfoLog(m_native_shader_program, k_error_log_size, nullptr, error_log);
+        RNDR_LOG_ERROR("Shader validation failed:\n%s", error_log);
         RNDR_ASSERT_OPENGL();
     }
 

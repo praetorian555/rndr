@@ -22,11 +22,11 @@ RNDR_ENUM_CLASS_FLAGS(MaterialFlags);
 struct MaterialDesc
 {
     Vector4f albedo_color = Colors::k_pink;    // Used only if albedo texture is missing.
-    Vector4f emissive_color = Colors::k_pink;  // Used only if emissive texture is missing.
+    Vector4f emissive_color = Vector4f{0, 0, 0, 0};  // Used only if emissive texture is missing.
     // Roughness of the surface, for anisotropic materials use the x and y while for isotropic materials the same value will be stored in
     // x and y. Used only if metallic-roughness texture is missing.
-    Vector4f roughness = Vector4f{1.0f, 1.0f, 0.0f, 0.0f};
-    f32 metalic = 0.0f;  // Used only if metallic-roughness texture is missing.
+    Vector4f roughness = Vector4f{0.6f, 0.6f, 0.0f, 0.0f};
+    f32 metalic = 0.2f;  // Used only if metallic-roughness texture is missing.
 
     f32 transparency_factor = 1.0f;
     f32 alpha = 0.0f;

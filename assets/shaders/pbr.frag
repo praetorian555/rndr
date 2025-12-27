@@ -8,15 +8,27 @@ layout(std140, binding = 0) uniform PerFrameData
 };
 
 layout (binding = 0) uniform sampler2D albedo_texture;
+layout (binding = 1) uniform sampler2D emissive_texture;
+layout (binding = 2) uniform sampler2D metalic_roughness_texture;
+layout (binding = 3) uniform sampler2D normal_texture;
+layout (binding = 4) uniform sampler2D ambient_occlusion_texture;
+layout (binding = 5) uniform sampler2D opacity_texture;
 
 layout (location = 0) in vec3 in_normal_world;
 layout (location = 1) in vec2 in_tex_coords;
 layout (location = 2) in vec3 in_position_world;
-layout (location = 3) in vec4 in_color;
-
-layout (location = 4) in vec3 in_normal_matrix;
+layout (location = 3) in vec4 in_albedo_color;
+layout (location = 4) in vec4 in_emissive_color;
+layout (location = 5) in vec4 in_roughness;
+layout (location = 6) in float in_transparency_factor;
+layout (location = 7) in float in_alpha_test;
+layout (location = 8) in float in_metalic_factor;
+layout (location = 9) in flat uint in_flags;
 
 layout (location = 0) out vec4 out_frag_color;
+
+#include "alpha-test.glsl"
+#include "pbr-shared.glsl"
 
 vec4 NormalToColor(vec3 normal)
 {
@@ -30,13 +42,56 @@ bool CompareVec3(vec3 expected, vec3 actual, float eps)
 
 void main()
 {
-    vec3 normal = normalize(in_normal_world);
-    vec3 light_direction_world_norm = normalize(light_direction_world);
-    float n_dot_l = clamp(dot(normal, light_direction_world_norm), 0.02f, 1.0f);
+    // Figure out the albedo color
+    vec4 albedo_color = in_albedo_color;
 #ifdef USE_ALBEDO_TEXTURE
-    vec3 color = texture(albedo_texture, in_tex_coords).rgb * n_dot_l;
-#else
-    vec3 color = in_color.rgb * n_dot_l;
+    albedo_color = texture(albedo_texture, in_tex_coords);
 #endif
-    out_frag_color = vec4(color, in_color.a);
+
+    // Load opacity of the pixel if opacity texture is used
+#ifdef USE_OPACITY_TEXTURE
+    float opacity = texture(opacity_texture, in_tex_coords).a;
+    albedo_color.a = opacity;
+#endif
+
+    // If alpha test fails, discard this fragment
+    RunAlphaTest(albedo_color.a, in_alpha_test);
+
+    // Load normal of the surface in the world corresponding to this pixel
+    vec3 normal_world = normalize(in_normal_world);
+#ifdef USE_NORMAL_TEXTURE
+    vec3 normal_sample = texture(normal_texture, in_tex_coords).rgb;
+    if (length(normal_sample) > 0.5)
+    {
+        normal_world = PerturbNormal(normal_world, normalize(camera_position_world - in_position_world), normal_sample, in_tex_coords);
+    }
+#endif
+
+    // Get metalic and roughness parameters
+    vec4 mr = in_roughness;
+    mr.b = in_metalic_factor;
+#ifdef USE_METALIC_ROUGHNESS_TEXTURE
+    mr = texture(metalic_roughness_texture, in_tex_coords);
+#endif
+
+    // Calculate the color based on the light
+    PbrInfo pbr_inputs;
+    CalculatePBRInputsMetallicRoughness(albedo_color, normal_world, camera_position_world.xyz, in_position_world, mr, pbr_inputs);
+    vec3 color = CalculatePBRLightContribution(pbr_inputs, light_direction_world, vec3(1.0));
+
+    // Modify output color using ambient occlusion
+#if USE_AMBIENT_OCCLUSION_TEXTURE
+    vec4 kao = texture(ambient_occlusion_texture, in_tex_coords);
+    color = color * (kao.r < 0.01 ? 1.0 : kao.r);
+#endif
+
+    // Modify output color if there is emissive color set
+    vec4 emissive_color = in_emissive_color;
+#if USE_EMISSIVE_COLOR_TEXTURE
+    emissive_color = texture(emissive_texture, in_tex_coords);
+#endif
+    emissive_color.rgb = SrgbToLinear(emissive_color).rgb;
+    color = pow(emissive_color.rgb + color, vec3(1.0 / 2.2));
+
+    out_frag_color = vec4(color, albedo_color.a);
 }

@@ -120,6 +120,10 @@ void Rndr::Shape3DRenderer::SetTransforms(const Matrix4x4f& view, const Matrix4x
     m_view = view;
     m_projection = projection;
 }
+void Rndr::Shape3DRenderer::SetCameraPosition(const Point3f& camera_position)
+{
+    m_camera_position = camera_position;
+}
 
 bool Rndr::Shape3DRenderer::Render(f32 delta_seconds, CommandList& command_list)
 {
@@ -134,7 +138,7 @@ bool Rndr::Shape3DRenderer::Render(f32 delta_seconds, CommandList& command_list)
 
     PerFrameData per_frame_data;
     per_frame_data.view_projection_transform = Opal::Transpose(m_projection * m_view);
-    per_frame_data.camera_position_world = Point3f::Zero();  // TODO: Get from the controller
+    per_frame_data.camera_position_world = m_camera_position;
     command_list.CmdUpdateBuffer(m_per_frame_buffer, Opal::AsBytes(per_frame_data));
 
     if (m_target.IsValid())

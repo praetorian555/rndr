@@ -188,6 +188,7 @@ int main()
 
         DrawScene(shape_renderer, material_registry);
         shape_renderer.SetTransforms(controller.GetViewTransform(), controller.GetProjectionTransform());
+        shape_renderer.SetCameraPosition(controller.GetCameraPosition());
         shape_renderer.Render(delta_seconds, cmd_list);
 
         const Rndr::BlitFrameBufferDesc blit_desc;
