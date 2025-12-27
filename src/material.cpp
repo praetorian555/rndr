@@ -83,6 +83,34 @@ bool Rndr::Material::operator==(const Material& other) const
     return true;
 }
 
+void Rndr::Material::BindResources(CommandList& command_list) const
+{
+    if (m_albedo_texture.IsValid())
+    {
+        command_list.CmdBindTexture(m_albedo_texture, 0);
+    }
+    if (m_emissive_texture.IsValid())
+    {
+        command_list.CmdBindTexture(m_emissive_texture, 1);
+    }
+    if (m_metallic_roughness_texture.IsValid())
+    {
+        command_list.CmdBindTexture(m_metallic_roughness_texture, 2);
+    }
+    if (m_normal_texture.IsValid())
+    {
+        command_list.CmdBindTexture(m_normal_texture, 3);
+    }
+    if (m_ambient_occlusion_texture.IsValid())
+    {
+        command_list.CmdBindTexture(m_ambient_occlusion_texture, 4);
+    }
+    if (m_opacity_texture.IsValid())
+    {
+        command_list.CmdBindTexture(m_opacity_texture, 5);
+    }
+}
+
 Rndr::Texture Rndr::Material::LoadTexture(const Opal::StringUtf8& texture_path)
 {
     if (texture_path.IsEmpty())

@@ -23,39 +23,28 @@ Rndr::Shape3DRenderer::Shape3DRenderer(const Opal::StringUtf8& name, const Rende
 {
     const Opal::StringUtf8 shader_dir = Opal::Paths::Combine(RNDR_CORE_ASSETS_DIR, "shaders");
     const Opal::StringUtf8 vertex_shader_contents = File::ReadShader(shader_dir, "pbr.vert");
-    const Opal::StringUtf8 fragment_shader_contents = File::ReadShader(shader_dir, "pbr.frag");
+    m_fragment_shader_source = File::ReadShader(shader_dir, "pbr.frag");
 
     m_vertex_shader =
         Shader(m_desc.graphics_context,
                {.type = ShaderType::Vertex, .source = vertex_shader_contents, .debug_name = "Shape 3D Renderer - Vertex Shader"});
     RNDR_ASSERT(m_vertex_shader.IsValid(), "Failed to create vertex shader!");
-    m_fragment_color_shader = Shader(
-        m_desc.graphics_context,
-        {.type = ShaderType::Fragment, .source = fragment_shader_contents, .debug_name = "Shape 3D Renderer - Fragment Color Shader"});
-    RNDR_ASSERT(m_fragment_color_shader.IsValid(), "Failed to create fragment shader!");
-    m_fragment_texture_shader = Shader(m_desc.graphics_context, {.type = ShaderType::Fragment,
-                                                                 .source = fragment_shader_contents,
-                                                                 .defines = {"USE_ALBEDO_TEXTURE=1"},
-                                                                 .debug_name = "Shape 3D Renderer - Fragment Texture Shader"});
-    RNDR_ASSERT(m_fragment_texture_shader.IsValid(), "Failed to create fragment shader!");
 
-    m_vertex_buffer = Buffer(desc.graphics_context,
-                             {.type = BufferType::ShaderStorage,
-                              .usage = Usage::Dynamic,
-                              .size = k_max_vertex_count * sizeof(VertexData),
-                              .stride = sizeof(VertexData),
-                              .debug_name = "Shape 3D Renderer - Vertex Buffer"});
+    m_vertex_buffer = Buffer(desc.graphics_context, {.type = BufferType::ShaderStorage,
+                                                     .usage = Usage::Dynamic,
+                                                     .size = k_max_vertex_count * sizeof(VertexData),
+                                                     .stride = sizeof(VertexData),
+                                                     .debug_name = "Shape 3D Renderer - Vertex Buffer"});
     RNDR_ASSERT(m_vertex_buffer.IsValid(), "Failed to create vertex buffer!");
-    m_index_buffer = Buffer(desc.graphics_context,
-                            {.type = BufferType::Index,
-                             .usage = Usage::Dynamic,
-                             .size = k_max_index_count * sizeof(uint32_t),
-                             .stride = sizeof(uint32_t),
-                             .debug_name = "Shape 3D Renderer - Index Buffer"});
+    m_index_buffer = Buffer(desc.graphics_context, {.type = BufferType::Index,
+                                                    .usage = Usage::Dynamic,
+                                                    .size = k_max_index_count * sizeof(uint32_t),
+                                                    .stride = sizeof(uint32_t),
+                                                    .debug_name = "Shape 3D Renderer - Index Buffer"});
     RNDR_ASSERT(m_index_buffer.IsValid(), "Failed to create index buffer!");
     m_model_transform_buffer = Buffer(desc.graphics_context, {.type = BufferType::ShaderStorage,
                                                               .usage = Usage::Dynamic,
-                                                              .size = 10000 * sizeof(InstanceData),
+                                                              .size = k_max_instance_count * sizeof(InstanceData),
                                                               .stride = sizeof(InstanceData),
                                                               .debug_name = "Shape 3D Renderer - Instance Transforms Buffer"});
     RNDR_ASSERT(m_model_transform_buffer.IsValid(), "Failed to create instance buffer!");
@@ -67,7 +56,7 @@ Rndr::Shape3DRenderer::Shape3DRenderer(const Opal::StringUtf8& name, const Rende
     RNDR_ASSERT(m_per_frame_buffer.IsValid(), "Failed to create per-frame-data buffer!");
     m_draw_commands_buffer = Buffer(m_desc.graphics_context, {.type = BufferType::DrawCommands,
                                                               .usage = Usage::Dynamic,
-                                                              .size = 10000 * sizeof(DrawIndicesData),
+                                                              .size = k_max_instance_count * sizeof(DrawIndicesData),
                                                               .stride = sizeof(DrawIndicesData),
                                                               .debug_name = "Shape 3D Renderer - Draw Commands Buffer"});
     RNDR_ASSERT(m_draw_commands_buffer.IsValid(), "Failed to create draw commands buffer!");
@@ -77,23 +66,6 @@ Rndr::Shape3DRenderer::Shape3DRenderer(const Opal::StringUtf8& name, const Rende
                                                   .AddShaderStorage(m_model_transform_buffer, 2)
                                                   .AddIndexBuffer(m_index_buffer)
                                                   .Build();
-    m_color_pipeline =
-        Pipeline(desc.graphics_context, {.vertex_shader = &m_vertex_shader,
-                                         .pixel_shader = &m_fragment_color_shader,
-                                         .input_layout = input_layout_desc,
-                                         .rasterizer = {.fill_mode = FillMode::Solid, .front_face_winding_order = WindingOrder::CCW},
-                                         .depth_stencil = {.is_depth_enabled = true},
-                                         .debug_name = "Shape 3D Renderer - Solid Color Pipeline"});
-    RNDR_ASSERT(m_color_pipeline.IsValid(), "Failed to create pipeline!");
-
-    m_texture_pipeline =
-        Pipeline(desc.graphics_context, {.vertex_shader = &m_vertex_shader,
-                                         .pixel_shader = &m_fragment_texture_shader,
-                                         .input_layout = input_layout_desc,
-                                         .rasterizer = {.fill_mode = FillMode::Solid, .front_face_winding_order = WindingOrder::CCW},
-                                         .depth_stencil = {.is_depth_enabled = true},
-                                         .debug_name = "Shape 3D Renderer - Solid Texture Pipeline"});
-    RNDR_ASSERT(m_texture_pipeline.IsValid(), "Failed to create pipeline!");
 }
 
 Rndr::Shape3DRenderer::~Shape3DRenderer()
@@ -103,15 +75,21 @@ Rndr::Shape3DRenderer::~Shape3DRenderer()
 
 void Rndr::Shape3DRenderer::Destroy()
 {
-    m_color_pipeline.Destroy();
-    m_texture_pipeline.Destroy();
+    for (auto& perm : m_shader_permutations)
+    {
+        perm.Destroy();
+    }
+    m_shader_permutations.Clear();
+    for (auto& pair : m_pipelines)
+    {
+        pair.value.Destroy();
+    }
+    m_pipelines.Clear();
     m_per_frame_buffer.Destroy();
     m_model_transform_buffer.Destroy();
     m_index_buffer.Destroy();
     m_vertex_buffer.Destroy();
     m_draw_commands_buffer.Destroy();
-    m_fragment_color_shader.Destroy();
-    m_fragment_texture_shader.Destroy();
     m_vertex_shader.Destroy();
 }
 
@@ -154,23 +132,14 @@ bool Rndr::Shape3DRenderer::Render(f32 delta_seconds, CommandList& command_list)
     {
         const Material* material = pair.key.material.GetPtr();
         PerMaterialData& material_data = pair.value;
-        const Pipeline* pipeline = nullptr;
+        const Pipeline& pipeline = m_pipelines.GetValue(pair.key);
+        command_list.CmdBindPipeline(pipeline);
         command_list.CmdBindBuffer(m_per_frame_buffer, 0);
         command_list.CmdUpdateBuffer(m_model_transform_buffer, Opal::AsBytes(material_data.instances));
-        if (material->HasAlbedoTexture())
-        {
-            pipeline = &m_texture_pipeline;
-            command_list.CmdBindTexture(material->GetAlbedoTexture(), 0);
-        }
-        else
-        {
-            pipeline = &m_color_pipeline;
-        }
-        command_list.CmdBindPipeline(*pipeline);
+        material->BindResources(command_list);
         command_list.CmdDrawIndicesMulti(Opal::Ref{m_draw_commands_buffer}, PrimitiveTopology::Triangle,
                                          Opal::ArrayView<DrawIndicesData>(material_data.draw_commands));
     }
-
     m_materials.Clear();
 
     return true;
@@ -384,12 +353,22 @@ void Rndr::Shape3DRenderer::DrawShape(Opal::StringUtf8 key, const Matrix4x4f& tr
     auto it = m_materials.Find(material_key);
     if (it == m_materials.end())
     {
+
         const PerMaterialData material_data;
         m_materials.Insert(material_key, material_data);
         it = m_materials.Find(material_key);
         RNDR_ASSERT(it != m_materials.end(), "Failed to find material in map!");
     }
     PerMaterialData& material_data = it.GetValue();
+
+    auto pipeline_it = m_pipelines.Find(material_key);
+    if (pipeline_it == m_pipelines.end())
+    {
+        ShaderPermutation shader_permutation = CreateShaderPermutationFromMaterial(material);
+        Pipeline pipeline = CreatePipeline(shader_permutation);
+        m_shader_permutations.PushBack(std::move(shader_permutation));
+        m_pipelines.Insert(material_key, std::move(pipeline));
+    }
 
     InstanceData instance_data;
     instance_data.model_transform = Opal::Transpose(transform);
@@ -409,6 +388,57 @@ void Rndr::Shape3DRenderer::DrawShape(Opal::StringUtf8 key, const Matrix4x4f& tr
     draw_data.first_index = static_cast<u32>(geometry_data.index_offset);
     draw_data.instance_count = 1;
     material_data.draw_commands.PushBack(draw_data);
+}
+
+Rndr::ShaderPermutation Rndr::Shape3DRenderer::CreateShaderPermutationFromMaterial(const Material& material)
+{
+    ShaderDesc shader_desc;
+    shader_desc.type = ShaderType::Fragment;
+    shader_desc.source = m_fragment_shader_source;
+    if (material.HasAlbedoTexture())
+    {
+        shader_desc.defines.PushBack("USE_ALBEDO_TEXTURE=1");
+    }
+    if (material.HasEmissiveTexture())
+    {
+        shader_desc.defines.PushBack("USE_EMISSIVE_TEXTURE=1");
+    }
+    if (material.HasMetalicRoughnessTexture())
+    {
+        shader_desc.defines.PushBack("USE_METALLIC_ROUGHNESS_TEXTURE=1");
+    }
+    if (material.HasNormalTexture())
+    {
+        shader_desc.defines.PushBack("USE_NORMAL_TEXTURE=1");
+    }
+    if (material.HasAmbientOcclusionTexture())
+    {
+        shader_desc.defines.PushBack("USE_AMBIENT_OCCLUSION_TEXTURE=1");
+    }
+    if (material.HasOpacityTexture())
+    {
+        shader_desc.defines.PushBack("USE_OPACITY_TEXTURE=1");
+    }
+
+    ShaderPermutation shader_permutation(m_desc.graphics_context, shader_desc);
+    if (!shader_permutation.IsValid())
+    {
+        throw Opal::Exception("Failed to create shader permutation");
+    }
+    return shader_permutation;
+}
+
+Rndr::Pipeline Rndr::Shape3DRenderer::CreatePipeline(ShaderPermutation& shader_permutation)
+{
+    const InputLayoutDesc input_layout_desc = Rndr::InputLayoutBuilder()
+                                                  .AddShaderStorage(m_vertex_buffer, 1)
+                                                  .AddShaderStorage(m_model_transform_buffer, 2)
+                                                  .AddIndexBuffer(m_index_buffer)
+                                                  .Build();
+    return Pipeline(m_desc.graphics_context, PipelineDesc{.vertex_shader = &m_vertex_shader,
+                                                          .pixel_shader = shader_permutation.GetShader().GetPtr(),
+                                                          .input_layout = input_layout_desc,
+                                                          .depth_stencil = {.is_depth_enabled = true}});
 }
 
 namespace Opal

@@ -2,6 +2,7 @@
 
 #include "opal/container/hash-map.h"
 #include "opal/container/string.h"
+#include "platform/opengl-command-list.hpp"
 
 #include "rndr/colors.hpp"
 #include "rndr/enum-flags.hpp"
@@ -71,6 +72,8 @@ public:
     [[nodiscard]] Opal::Ref<const Texture> GetOpacityTexture() const { return Opal::Ref{m_opacity_texture}; }
 
     [[nodiscard]] bool operator==(const Material& other) const;
+
+    void BindResources(CommandList& command_list) const;
 
 private:
     friend struct Opal::Hasher<Material>;

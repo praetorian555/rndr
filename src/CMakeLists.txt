@@ -30,6 +30,7 @@ set(SOURCE_LIST
         "${PROJECT_SOURCE_DIR}/include/rndr/projections.hpp"
         "${PROJECT_SOURCE_DIR}/include/rndr/imgui-system.hpp"
         "${PROJECT_SOURCE_DIR}/include/rndr/return-macros.hpp"
+        "${PROJECT_SOURCE_DIR}/include/rndr/shader-permutation.hpp"
         "${PROJECT_SOURCE_DIR}/src/log.cpp"
         "${PROJECT_SOURCE_DIR}/src/time.cpp"
         "${PROJECT_SOURCE_DIR}/src/input-system.cpp"
@@ -49,6 +50,7 @@ set(SOURCE_LIST
         "${PROJECT_SOURCE_DIR}/src/platform-application.cpp"
         "${PROJECT_SOURCE_DIR}/src/imgui-system.cpp"
         "${PROJECT_SOURCE_DIR}/src/material.cpp"
+        "${PROJECT_SOURCE_DIR}/src/shader-permutation.cpp"
 )
 
 list(APPEND SOURCE_LIST

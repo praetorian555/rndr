@@ -4,6 +4,7 @@
 
 #include "rndr/material.hpp"
 #include "rndr/renderers/renderer-base.hpp"
+#include "rndr/shader-permutation.hpp"
 
 namespace Rndr
 {
@@ -38,6 +39,7 @@ public:
 private:
     constexpr static u32 k_max_vertex_count = 1'000'000;
     constexpr static u32 k_max_index_count = 1'000'000;
+    constexpr static u32 k_max_instance_count = 100'000;
 
     struct VertexData
     {
@@ -89,6 +91,8 @@ private:
                                ShapeGeometryData& out_data, u32 latitude_segments = 32, u32 longitude_segments = 32, f32 u_tiling = 1.0f,
                                f32 v_tiling = 1.0f);
     void DrawShape(Opal::StringUtf8 key, const Matrix4x4f& transform, Opal::Ref<const Material> material);
+    ShaderPermutation CreateShaderPermutationFromMaterial(const Material& material);
+    Pipeline CreatePipeline(ShaderPermutation& shader_permutation);
 
     Opal::Ref<FrameBuffer> m_target;
     Matrix4x4f m_view;
@@ -96,17 +100,16 @@ private:
     Point3f m_camera_position;
 
     Shader m_vertex_shader;
-    Shader m_fragment_color_shader;
-    Shader m_fragment_texture_shader;
     Buffer m_per_frame_buffer;
     Buffer m_model_transform_buffer;
     Buffer m_vertex_buffer;
     Buffer m_index_buffer;
     Buffer m_draw_commands_buffer;
-    Pipeline m_color_pipeline;
-    Pipeline m_texture_pipeline;
+    Opal::StringUtf8 m_fragment_shader_source;
 
+    Opal::DynamicArray<ShaderPermutation> m_shader_permutations;
     Opal::HashMap<MaterialKey, PerMaterialData> m_materials;
+    Opal::HashMap<MaterialKey, Pipeline> m_pipelines;
     Opal::DynamicArray<VertexData> m_vertex_data;
     Opal::DynamicArray<u32> m_index_data;
     bool m_is_geometry_data_dirty = false;
