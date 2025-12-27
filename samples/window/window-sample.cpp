@@ -109,6 +109,7 @@ int main()
     material_registry.Register("Red Color Material", {.albedo_color = Rndr::Colors::k_red});
     material_registry.Register("White Color Material", {.albedo_color = Rndr::Colors::k_white});
     Opal::StringUtf8 albedo_texture_path = Opal::Paths::Combine(RNDR_CORE_ASSETS_DIR, "default-texture.png");
+    albedo_texture_path = Opal::Paths::NormalizePath(albedo_texture_path);
     material_registry.Register("Default Material", {.albedo_texture_path = albedo_texture_path});
 
     const Rndr::FlyCameraDesc fly_camera_desc{.start_position = {0.0f, 1.0f, 0.0f}, .start_yaw_radians = 0};

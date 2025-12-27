@@ -390,7 +390,13 @@ void Rndr::Shape3DRenderer::DrawShape(Opal::StringUtf8 key, const Matrix4x4f& tr
     InstanceData instance_data;
     instance_data.model_transform = Opal::Transpose(transform);
     instance_data.normal_transform = Opal::Inverse(transform);
-    instance_data.color = material->GetAlbedoColor();
+    instance_data.albedo_color = material->GetAlbedoColor();
+    instance_data.emissive_color = material->GetEmissiveColor();
+    instance_data.roughness = material->GetRoughness();
+    instance_data.metallic_factor = material->GetMetalicFactor();
+    instance_data.transparency_factor = material->GetTransparencyFactor();
+    instance_data.alpha_test = material->GetAlphaTest();
+    instance_data.flags = static_cast<u32>(material->GetMaterialFlags());
     material_data.instances.PushBack(instance_data);
 
     DrawIndicesData draw_data;
@@ -412,6 +418,26 @@ struct Hasher<Rndr::Material>
         if ((material.m_bit_mask & 1) != 0)
         {
             hash ^= Hasher<StringUtf8>()(material.m_desc.albedo_texture_path);
+        }
+        if ((material.m_bit_mask & 2) != 0)
+        {
+            hash ^= Hasher<StringUtf8>()(material.m_desc.emissive_texture_path);
+        }
+        if ((material.m_bit_mask & 4) != 0)
+        {
+            hash ^= Hasher<StringUtf8>()(material.m_desc.metallic_roughness_texture_path);
+        }
+        if ((material.m_bit_mask & 8) != 0)
+        {
+            hash ^= Hasher<StringUtf8>()(material.m_desc.normal_texture_path);
+        }
+        if ((material.m_bit_mask & 16) != 0)
+        {
+            hash ^= Hasher<StringUtf8>()(material.m_desc.ambient_occlusion_texture_path);
+        }
+        if ((material.m_bit_mask & 32) != 0)
+        {
+            hash ^= Hasher<StringUtf8>()(material.m_desc.opacity_texture_path);
         }
         return hash;
     }

@@ -49,7 +49,15 @@ private:
     {
         Matrix4x4f model_transform;
         Matrix4x4f normal_transform;
-        Vector4f color;
+        Vector4f albedo_color;
+        Vector4f emissive_color;
+        Vector4f roughness;
+
+        f32 transparency_factor;
+        f32 alpha_test;
+        f32 metallic_factor;
+
+        u32 flags;
     };
 
     struct PerMaterialData

@@ -23,7 +23,15 @@ struct Instance
 {
     mat4 model_matrix;
     mat4 normal_matrix;
-    vec4 color;
+
+    vec4 albedo_color;
+    vec4 emissive_color;
+    vec4 roughness;
+
+    float transparency_factor;
+    float alpha_test;
+    float metalic_factor;
+    uint flags;
 };
 
 layout(std430, binding = 2) restrict readonly buffer Instances
@@ -66,5 +74,5 @@ void main()
     out_normal_world = normalize(normal_matrix * GetNormal(gl_VertexID));
     out_tex_coords = GetTexCoord(gl_VertexID);
     out_position_world = (model_matrix * vec4(pos, 1.0)).xyz;
-    out_color = instances[gl_DrawID].color;
+    out_color = instances[gl_DrawID].albedo_color;
 }
