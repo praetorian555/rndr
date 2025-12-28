@@ -39,6 +39,9 @@ public:
 
     void DrawMesh(const Mesh& mesh, const Matrix4x4f& transform, Opal::Ref<const Material> material);
 
+    void AddDirectionalLight(const Vector3f& direction, const Vector4f& color);
+    void AddPointLight(const Point3f& position, const Vector4f& color);
+
 private:
     constexpr static u32 k_max_vertex_count = 1'000'000;
     constexpr static u32 k_max_index_count = 1'000'000;
@@ -88,6 +91,18 @@ private:
         u32 index_count = 0;
     };
 
+    struct DirectionalLight
+    {
+        Vector3f direction;
+        Vector4f color;
+    };
+
+    struct PointLight
+    {
+        Point3f position;
+        Vector4f color;
+    };
+
     static void GenerateCube(Opal::DynamicArray<u8>& out_vertex_data, Opal::DynamicArray<u8>& out_index_data,
                              ShapeGeometryData& out_data, f32 u_tiling = 1.0f, f32 v_tiling = 1.0f);
     static void GenerateSphere(Opal::DynamicArray<u8>& out_vertex_data, Opal::DynamicArray<u8>& out_index_data,
@@ -117,6 +132,9 @@ private:
     Opal::DynamicArray<u8> m_index_data;
     bool m_is_geometry_data_dirty = false;
     Opal::HashMap<Opal::StringUtf8, ShapeGeometryData> m_geometry_data;
+
+    Opal::DynamicArray<DirectionalLight> m_directional_lights;
+    Opal::DynamicArray<PointLight> m_point_lights;
 };
 
 }  // namespace Rndr

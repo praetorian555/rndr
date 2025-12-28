@@ -4,7 +4,12 @@ layout(std140, binding = 0) uniform PerFrameData
 {
     mat4 view_projection_transform;
     vec3 camera_position_world;
-    vec3 light_direction_world;
+    uint directional_light_count;
+    vec4 light_direction_world[4];
+    vec4 directional_light_color[4];
+    vec4 light_position_world[4];
+    vec4 point_light_color[4];
+    uint point_light_count;
 };
 
 layout (binding = 0) uniform sampler2D albedo_texture;
@@ -77,7 +82,18 @@ void main()
     // Calculate the color based on the light
     PbrInfo pbr_inputs;
     CalculatePBRInputsMetallicRoughness(albedo_color, normal_world, camera_position_world.xyz, in_position_world, mr, pbr_inputs);
-    vec3 color = CalculatePBRLightContribution(pbr_inputs, light_direction_world, vec3(1.0));
+    vec3 color = vec3(0);
+    for (int i = 0; i < directional_light_count; ++i)
+    {
+        vec3 direction = normalize(vec3(light_direction_world[i]));
+        color += CalculatePBRLightContribution(pbr_inputs, direction, vec3(directional_light_color[i]));
+    }
+    for (int i = 0; i < point_light_count; ++i)
+    {
+        vec3 direction = vec3(light_position_world[i]) - in_position_world;
+        direction = normalize(direction);
+        color += CalculatePBRLightContribution(pbr_inputs, direction, vec3(point_light_color[i]));
+    }
 
     // Modify output color using ambient occlusion
 #if defined(USE_AMBIENT_OCCLUSION_TEXTURE)

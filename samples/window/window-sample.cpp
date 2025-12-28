@@ -245,6 +245,9 @@ Rndr::Vector4f RandomColor(Opal::RNG& rng)
 
 void DrawScene(Rndr::Shape3DRenderer& shape_renderer, const Rndr::Mesh& mesh, const Rndr::MaterialRegistry& mat_registry)
 {
+    shape_renderer.AddDirectionalLight({1, 1, 1}, Rndr::Colors::k_white);
+    shape_renderer.AddPointLight({-20, 0, 0}, Rndr::Colors::k_red);
+
     const Opal::Ref<const Rndr::Material> red_material = mat_registry.Get("Red Color Material");
     const Opal::Ref<const Rndr::Material> white_material = mat_registry.Get("White Color Material");
     const Opal::Ref<const Rndr::Material> default_material = mat_registry.Get("Default Material");

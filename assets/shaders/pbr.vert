@@ -4,7 +4,12 @@ layout(std140, binding = 0) uniform PerFrameData
 {
     mat4 view_projection_transform;
     vec3 camera_position_world;
-    vec3 light_direction_world;
+    uint directional_light_count;
+    vec4 light_direction_world[4];
+    vec4 directional_light_color[4];
+    vec4 light_position_world[4];
+    vec4 point_light_color[4];
+    uint point_light_count;
 };
 
 struct Vertex

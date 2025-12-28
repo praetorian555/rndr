@@ -11,11 +11,17 @@ namespace
 {
 OPAL_START_DISABLE_WARNINGS
 OPAL_DISABLE_MSVC_WARNING(4324)
-struct PerFrameData
+struct alignas(16) PerFrameData
 {
+    constexpr static Rndr::u32 k_max_light_count = 4;
     Rndr::Matrix4x4f view_projection_transform;
-    alignas(16) Rndr::Point3f camera_position_world;
-    alignas(16) Rndr::Vector3f light_direction_world = {1.0f, 1.0f, 1.0f};
+    Rndr::Point3f camera_position_world;
+    Rndr::u32 directional_light_count;
+    Rndr::Vector4f direction_light_world[k_max_light_count];
+    Rndr::Vector4f direction_light_color[k_max_light_count];
+    Rndr::Point4f point_light_world[k_max_light_count];
+    Rndr::Vector4f point_light_color[k_max_light_count];
+    Rndr::u32 point_light_count;
 };
 OPAL_END_DISABLE_WARNINGS
 }  // namespace
@@ -121,6 +127,20 @@ bool Rndr::Shape3DRenderer::Render(f32 delta_seconds, CommandList& command_list)
     PerFrameData per_frame_data;
     per_frame_data.view_projection_transform = Opal::Transpose(m_projection * m_view);
     per_frame_data.camera_position_world = m_camera_position;
+    for (u32 light_idx = 0; light_idx < PerFrameData::k_max_light_count && light_idx < m_directional_lights.GetSize(); ++light_idx)
+    {
+        const DirectionalLight& dl = m_directional_lights[light_idx];
+        per_frame_data.direction_light_world[light_idx] = Vector4f(dl.direction.x, dl.direction.y, dl.direction.z, 0.0f);
+        per_frame_data.direction_light_color[light_idx] = dl.color;
+    }
+    per_frame_data.directional_light_count = Opal::Min(static_cast<u32>(m_directional_lights.GetSize()), PerFrameData::k_max_light_count);
+    for (u32 light_idx = 0; light_idx < PerFrameData::k_max_light_count && light_idx < m_point_lights.GetSize(); ++light_idx)
+    {
+        const PointLight& pl = m_point_lights[light_idx];
+        per_frame_data.point_light_world[light_idx] = Point4f(pl.position.x, pl.position.y, pl.position.z, 0.0f);
+        per_frame_data.point_light_color[light_idx] = pl.color;
+    }
+    per_frame_data.point_light_count = Opal::Min(static_cast<u32>(m_point_lights.GetSize()), PerFrameData::k_max_light_count);
     command_list.CmdUpdateBuffer(m_per_frame_buffer, Opal::AsBytes(per_frame_data));
 
     if (m_target.IsValid())
@@ -147,6 +167,8 @@ bool Rndr::Shape3DRenderer::Render(f32 delta_seconds, CommandList& command_list)
         command_list.CmdPopMarker();
     }
     m_materials.Clear();
+    m_directional_lights.Clear();
+    m_point_lights.Clear();
 
     command_list.CmdPopMarker();
 
@@ -210,6 +232,16 @@ void Rndr::Shape3DRenderer::DrawMesh(const Mesh& mesh, const Matrix4x4f& transfo
     }
 
     DrawShape(mesh.name, transform, material);
+}
+
+void Rndr::Shape3DRenderer::AddDirectionalLight(const Vector3f& direction, const Vector4f& color)
+{
+    m_directional_lights.PushBack({.direction = direction, .color = color});
+}
+
+void Rndr::Shape3DRenderer::AddPointLight(const Point3f& position, const Vector4f& color)
+{
+    m_point_lights.PushBack({.position = position, .color = color});
 }
 
 void Rndr::Shape3DRenderer::GenerateCube(Opal::DynamicArray<u8>& out_vertex_data, Opal::DynamicArray<u8>& out_index_data,
