@@ -32,6 +32,49 @@ Rndr::Material::Material(Opal::Ref<GraphicsContext> graphics_context, const Mate
     SET_MATERIAL_BIT(m_opacity_texture, k_bit_mask_opacity_texture);
 }
 
+Rndr::Material::Material(Material&& other) noexcept
+    : m_desc(std::move(other.m_desc)),
+      m_bit_mask(other.m_bit_mask),
+      m_graphics_context(std::move(other.m_graphics_context)),
+      m_albedo_texture(std::move(other.m_albedo_texture)),
+      m_emissive_texture(std::move(other.m_emissive_texture)),
+      m_metallic_roughness_texture(std::move(other.m_metallic_roughness_texture)),
+      m_normal_texture(std::move(other.m_normal_texture)),
+      m_ambient_occlusion_texture(std::move(other.m_ambient_occlusion_texture)),
+      m_opacity_texture(std::move(other.m_opacity_texture))
+{
+    other.m_bit_mask = 0;
+}
+
+Rndr::Material& Rndr::Material::operator=(Material&& other) noexcept
+{
+    if (this == &other)
+    {
+        return *this;
+    }
+    m_desc = std::move(other.m_desc);
+    m_bit_mask = other.m_bit_mask;
+    m_graphics_context = std::move(other.m_graphics_context);
+    m_albedo_texture = std::move(other.m_albedo_texture);
+    m_emissive_texture = std::move(other.m_emissive_texture);
+    m_metallic_roughness_texture = std::move(other.m_metallic_roughness_texture);
+    m_normal_texture = std::move(other.m_normal_texture);
+    m_ambient_occlusion_texture = std::move(other.m_ambient_occlusion_texture);
+    m_opacity_texture = std::move(other.m_opacity_texture);
+    other.m_bit_mask = 0;
+    return *this;
+}
+
+void Rndr::Material::Destroy()
+{
+    m_albedo_texture.Destroy();
+    m_emissive_texture.Destroy();
+    m_metallic_roughness_texture.Destroy();
+    m_normal_texture.Destroy();
+    m_ambient_occlusion_texture.Destroy();
+    m_opacity_texture.Destroy();
+}
+
 bool Rndr::Material::operator==(const Material& other) const
 {
     if (m_bit_mask != other.m_bit_mask)

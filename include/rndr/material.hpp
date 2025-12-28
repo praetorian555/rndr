@@ -27,10 +27,10 @@ struct MaterialDesc
     // Roughness of the surface, for anisotropic materials use the x and y while for isotropic materials the same value will be stored in
     // x and y. Used only if metallic-roughness texture is missing.
     Vector4f roughness = Vector4f{0.6f, 0.6f, 0.0f, 0.0f};
-    f32 metalic = 0.2f;  // Used only if metallic-roughness texture is missing.
+    f32 metallic_factor = 0.2f;  // Used only if metallic-roughness texture is missing.
 
     f32 transparency_factor = 1.0f;
-    f32 alpha = 0.0f;
+    f32 alpha_test = 0.0f;
 
     MaterialFlags material_flags = MaterialFlags::NoFlags;
 
@@ -48,7 +48,17 @@ struct MaterialDesc
 class Material
 {
 public:
+    Material() = default;
     explicit Material(Opal::Ref<GraphicsContext> graphics_context, const MaterialDesc& desc);
+    ~Material() { Destroy(); }
+
+    Material(const Material&) = delete;
+    Material& operator=(const Material&) = delete;
+
+    Material(Material&& other) noexcept;
+    Material& operator=(Material&& other) noexcept;
+
+    void Destroy();
 
     [[nodiscard]] bool HasAlbedoTexture() const { return (m_bit_mask & k_bit_mask_albedo_texture) != 0; }
     [[nodiscard]] const Vector4f& GetAlbedoColor() const { return m_desc.albedo_color; }
@@ -56,9 +66,9 @@ public:
     [[nodiscard]] const Vector4f& GetEmissiveColor() const { return m_desc.emissive_color; }
     [[nodiscard]] bool HasMetalicRoughnessTexture() const { return (m_bit_mask & k_bit_mask_metallic_roughness_texture) != 0; }
     [[nodiscard]] const Vector4f& GetRoughness() const { return m_desc.roughness; }
-    [[nodiscard]] f32 GetMetalicFactor() const { return m_desc.metalic; }
+    [[nodiscard]] f32 GetMetalicFactor() const { return m_desc.metallic_factor; }
     [[nodiscard]] f32 GetTransparencyFactor() const { return m_desc.transparency_factor; }
-    [[nodiscard]] f32 GetAlphaTest() const { return m_desc.alpha; }
+    [[nodiscard]] f32 GetAlphaTest() const { return m_desc.alpha_test; }
     [[nodiscard]] MaterialFlags GetMaterialFlags() const { return m_desc.material_flags; }
     [[nodiscard]] bool HasNormalTexture() const { return (m_bit_mask & k_bit_mask_normal_texture) != 0; }
     [[nodiscard]] bool HasAmbientOcclusionTexture() const { return (m_bit_mask & k_bit_mask_ambient_occlusion_texture) != 0; }
