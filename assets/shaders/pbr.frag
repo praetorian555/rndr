@@ -44,12 +44,12 @@ void main()
 {
     // Figure out the albedo color
     vec4 albedo_color = in_albedo_color;
-#ifdef USE_ALBEDO_TEXTURE
+#if defined(USE_ALBEDO_TEXTURE)
     albedo_color = texture(albedo_texture, in_tex_coords);
 #endif
 
     // Load opacity of the pixel if opacity texture is used
-#ifdef USE_OPACITY_TEXTURE
+#if defined(USE_OPACITY_TEXTURE)
     float opacity = texture(opacity_texture, in_tex_coords).a;
     albedo_color.a = opacity;
 #endif
@@ -59,7 +59,7 @@ void main()
 
     // Load normal of the surface in the world corresponding to this pixel
     vec3 normal_world = normalize(in_normal_world);
-#ifdef USE_NORMAL_TEXTURE
+#if defined(USE_NORMAL_TEXTURE)
     vec3 normal_sample = texture(normal_texture, in_tex_coords).rgb;
     if (length(normal_sample) > 0.5)
     {
@@ -70,7 +70,7 @@ void main()
     // Get metalic and roughness parameters
     vec4 mr = in_roughness;
     mr.b = in_metalic_factor;
-#ifdef USE_METALIC_ROUGHNESS_TEXTURE
+#if defined(USE_METALLIC_ROUGHNESS_TEXTURE)
     mr = texture(metalic_roughness_texture, in_tex_coords);
 #endif
 
@@ -80,14 +80,14 @@ void main()
     vec3 color = CalculatePBRLightContribution(pbr_inputs, light_direction_world, vec3(1.0));
 
     // Modify output color using ambient occlusion
-#if USE_AMBIENT_OCCLUSION_TEXTURE
+#if defined(USE_AMBIENT_OCCLUSION_TEXTURE)
     vec4 kao = texture(ambient_occlusion_texture, in_tex_coords);
     color = color * (kao.r < 0.01 ? 1.0 : kao.r);
 #endif
 
     // Modify output color if there is emissive color set
     vec4 emissive_color = in_emissive_color;
-#if USE_EMISSIVE_COLOR_TEXTURE
+#if defined(USE_EMISSIVE_TEXTURE)
     emissive_color = texture(emissive_texture, in_tex_coords);
 #endif
     emissive_color.rgb = SrgbToLinear(emissive_color).rgb;

@@ -29,7 +29,7 @@ vec4 SrgbToLinear(vec4 in_srgb)
 	return vec4(out_lin, in_srgb.a);
 }
 
-#ifdef ENABLE_IBL
+#if defined(ENABLE_IBL) && ENABLE_IBL
 // Calculation of the lighting contribution from an optional Image Based Light source.
 // Precomputed Environment Maps are required uniform inputs and are computed as outlined in [1].
 // See our README.md on Environment Maps [3] for additional discussion.
@@ -144,7 +144,7 @@ vec3 CalculatePBRInputsMetallicRoughness(vec4 albedo, vec3 normal, vec3 camera_p
 	pbr_inputs.vec_from_surface_to_camera = v;
 
 	vec3 color = vec3(0.0);
-#if ENABLE_IBL
+#if defined(ENABLE_IBL) && ENABLE_IBL
 	// Calculate lighting contribution from image based lighting source (IBL)
 	vec3 color = GetIblContribution(pbr_inputs, n, reflection, tex_env_map, tex_env_map_irradiance, tex_brdf_lut);
 #endif
