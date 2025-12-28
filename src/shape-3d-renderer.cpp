@@ -1,9 +1,11 @@
 #include "rndr/renderers/shape-3d-renderer.hpp"
 
+#include "assimp/Vertex.h"
 #include "opal/paths.h"
 
 #include "rndr/file.hpp"
 #include "rndr/input-layout-builder.hpp"
+#include "rndr/trace.hpp"
 
 namespace
 {
@@ -107,6 +109,8 @@ bool Rndr::Shape3DRenderer::Render(f32 delta_seconds, CommandList& command_list)
 {
     RNDR_UNUSED(delta_seconds);
 
+    command_list.CmdPushMarker("Shape 3D Render");
+
     if (m_is_geometry_data_dirty)
     {
         m_is_geometry_data_dirty = false;
@@ -130,6 +134,7 @@ bool Rndr::Shape3DRenderer::Render(f32 delta_seconds, CommandList& command_list)
 
     for (auto& pair : m_materials)
     {
+        command_list.CmdPushMarker("PBR Model Rendering - Material");
         const Material* material = pair.key.material.GetPtr();
         PerMaterialData& material_data = pair.value;
         const Pipeline& pipeline = m_pipelines.GetValue(pair.key);
@@ -139,8 +144,11 @@ bool Rndr::Shape3DRenderer::Render(f32 delta_seconds, CommandList& command_list)
         material->BindResources(command_list);
         command_list.CmdDrawIndicesMulti(Opal::Ref{m_draw_commands_buffer}, PrimitiveTopology::Triangle,
                                          Opal::ArrayView<DrawIndicesData>(material_data.draw_commands));
+        command_list.CmdPopMarker();
     }
     m_materials.Clear();
+
+    command_list.CmdPopMarker();
 
     return true;
 }
@@ -187,11 +195,28 @@ void Rndr::Shape3DRenderer::DrawSphere(const Matrix4x4f& transform, Opal::Ref<co
     DrawShape(std::move(key), transform, material);
 }
 
-void Rndr::Shape3DRenderer::GenerateCube(Opal::DynamicArray<VertexData>& out_vertex_data, Opal::DynamicArray<u32>& out_index_data,
+void Rndr::Shape3DRenderer::DrawMesh(const Mesh& mesh, const Matrix4x4f& transform, Opal::Ref<const Material> material)
+{
+    if (!m_geometry_data.Contains(mesh.name))
+    {
+        ShapeGeometryData data;
+        data.vertex_offset = static_cast<u32>(m_vertex_data.GetSize() / sizeof(VertexData));
+        data.index_offset = static_cast<u32>(m_index_data.GetSize() / sizeof(u32));
+        data.index_count = mesh.index_count;
+        m_geometry_data.Insert(mesh.name, data);
+        m_vertex_data.Append(mesh.vertices);
+        m_index_data.Append(mesh.indices);
+        m_is_geometry_data_dirty = true;
+    }
+
+    DrawShape(mesh.name, transform, material);
+}
+
+void Rndr::Shape3DRenderer::GenerateCube(Opal::DynamicArray<u8>& out_vertex_data, Opal::DynamicArray<u8>& out_index_data,
                                          ShapeGeometryData& out_data, f32 u_tiling, f32 v_tiling)
 {
-    const u32 vertex_offset = static_cast<u32>(out_vertex_data.GetSize());
-    const u32 index_offset = static_cast<u32>(out_index_data.GetSize());
+    const u32 vertex_offset = static_cast<u32>(out_vertex_data.GetSize() / sizeof(VertexData));
+    const u32 index_offset = static_cast<u32>(out_index_data.GetSize() / sizeof(u32));
     float half = 0.5f;
 
     // Each face needs unique vertices for correct normals and UVs
@@ -261,32 +286,36 @@ void Rndr::Shape3DRenderer::GenerateCube(Opal::DynamicArray<VertexData>& out_ver
             vertex.tex_coord[0] = faces[f].verts[v][3] * u_tiling;
             vertex.tex_coord[1] = faces[f].verts[v][4] * v_tiling;
 
-            out_vertex_data.PushBack(vertex);
+            out_vertex_data.Append(Opal::AsWritableBytes(vertex));
         }
 
+        u32 idx0 = f * 4 + 0;
+        u32 idx1 = f * 4 + 1;
+        u32 idx2 = f * 4 + 2;
+        u32 idx3 = f * 4 + 3;
         // Add 2 triangles (6 indices) for this face
         // Triangle 1: 0, 1, 2
-        out_index_data.PushBack(f * 4 + 0);
-        out_index_data.PushBack(f * 4 + 1);
-        out_index_data.PushBack(f * 4 + 2);
+        out_index_data.Append(Opal::AsWritableBytes(idx0));
+        out_index_data.Append(Opal::AsWritableBytes(idx1));
+        out_index_data.Append(Opal::AsWritableBytes(idx2));
 
         // Triangle 2: 0, 2, 3
-        out_index_data.PushBack(f * 4 + 0);
-        out_index_data.PushBack(f * 4 + 2);
-        out_index_data.PushBack(f * 4 + 3);
+        out_index_data.Append(Opal::AsWritableBytes(idx0));
+        out_index_data.Append(Opal::AsWritableBytes(idx2));
+        out_index_data.Append(Opal::AsWritableBytes(idx3));
     }
 
     out_data.vertex_offset = vertex_offset;
     out_data.index_offset = index_offset;
-    out_data.index_count = static_cast<u32>(out_index_data.GetSize()) - index_offset;
+    out_data.index_count = static_cast<u32>(out_index_data.GetSize() / sizeof(u32)) - index_offset;
 }
 
-void Rndr::Shape3DRenderer::GenerateSphere(Opal::DynamicArray<VertexData>& out_vertex_data, Opal::DynamicArray<u32>& out_index_data,
+void Rndr::Shape3DRenderer::GenerateSphere(Opal::DynamicArray<u8>& out_vertex_data, Opal::DynamicArray<u8>& out_index_data,
                                            ShapeGeometryData& out_data, u32 latitude_segments, u32 longitude_segments, f32 u_tiling,
                                            f32 v_tiling)
 {
-    const u32 vertex_offset = static_cast<u32>(out_vertex_data.GetSize());
-    const u32 index_offset = static_cast<u32>(out_index_data.GetSize());
+    const u32 vertex_offset = static_cast<u32>(out_vertex_data.GetSize() / sizeof(VertexData));
+    const u32 index_offset = static_cast<u32>(out_index_data.GetSize() / sizeof(u32));
 
     for (u32 lat = 0; lat <= latitude_segments; ++lat)
     {
@@ -319,7 +348,7 @@ void Rndr::Shape3DRenderer::GenerateSphere(Opal::DynamicArray<VertexData>& out_v
             vertex.tex_coord.x = u;
             vertex.tex_coord.y = v;
 
-            out_vertex_data.PushBack(vertex);
+            out_vertex_data.Append(Opal::AsWritableBytes(vertex));
         }
     }
 
@@ -327,20 +356,22 @@ void Rndr::Shape3DRenderer::GenerateSphere(Opal::DynamicArray<VertexData>& out_v
     {
         for (u32 lon = 0; lon < longitude_segments; ++lon)
         {
-            const u32 current = lat * (longitude_segments + 1) + lon;
-            const u32 next = current + longitude_segments + 1;
-            out_index_data.PushBack(current);
-            out_index_data.PushBack(current + 1);
-            out_index_data.PushBack(next);
-            out_index_data.PushBack(current + 1);
-            out_index_data.PushBack(next + 1);
-            out_index_data.PushBack(next);
+            u32 current = lat * (longitude_segments + 1) + lon;
+            u32 inc_current = current + 1;
+            u32 next = current + longitude_segments + 1;
+            u32 inc_next = next + 1;
+            out_index_data.Append(Opal::AsWritableBytes(current));
+            out_index_data.Append(Opal::AsWritableBytes(inc_current));
+            out_index_data.Append(Opal::AsWritableBytes(next));
+            out_index_data.Append(Opal::AsWritableBytes(inc_current));
+            out_index_data.Append(Opal::AsWritableBytes(inc_next));
+            out_index_data.Append(Opal::AsWritableBytes(next));
         }
     }
 
     out_data.vertex_offset = vertex_offset;
     out_data.index_offset = index_offset;
-    out_data.index_count = static_cast<u32>(out_index_data.GetSize()) - index_offset;
+    out_data.index_count = static_cast<u32>(out_index_data.GetSize() / sizeof(u32)) - index_offset;
 }
 
 void Rndr::Shape3DRenderer::DrawShape(Opal::StringUtf8 key, const Matrix4x4f& transform, Opal::Ref<const Material> material)

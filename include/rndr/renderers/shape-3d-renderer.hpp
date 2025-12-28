@@ -3,6 +3,7 @@
 #include "opal/container/hash-map.h"
 
 #include "rndr/material.hpp"
+#include "rndr/mesh.hpp"
 #include "rndr/renderers/renderer-base.hpp"
 #include "rndr/shader-permutation.hpp"
 
@@ -35,6 +36,8 @@ public:
                     u32 latitude_segments = 128, u32 longitude_segments = 128);
     // void DrawCylinder(const Matrix4x4f& transform, const Vector4f& color);
     // void DrawCone(const Matrix4x4f& transform, const Vector4f& color);
+
+    void DrawMesh(const Mesh& mesh, const Matrix4x4f& transform, Opal::Ref<const Material> material);
 
 private:
     constexpr static u32 k_max_vertex_count = 1'000'000;
@@ -85,9 +88,9 @@ private:
         u32 index_count = 0;
     };
 
-    static void GenerateCube(Opal::DynamicArray<VertexData>& out_vertex_data, Opal::DynamicArray<u32>& out_index_data,
+    static void GenerateCube(Opal::DynamicArray<u8>& out_vertex_data, Opal::DynamicArray<u8>& out_index_data,
                              ShapeGeometryData& out_data, f32 u_tiling = 1.0f, f32 v_tiling = 1.0f);
-    static void GenerateSphere(Opal::DynamicArray<VertexData>& out_vertex_data, Opal::DynamicArray<u32>& out_index_data,
+    static void GenerateSphere(Opal::DynamicArray<u8>& out_vertex_data, Opal::DynamicArray<u8>& out_index_data,
                                ShapeGeometryData& out_data, u32 latitude_segments = 32, u32 longitude_segments = 32, f32 u_tiling = 1.0f,
                                f32 v_tiling = 1.0f);
     void DrawShape(Opal::StringUtf8 key, const Matrix4x4f& transform, Opal::Ref<const Material> material);
@@ -110,8 +113,8 @@ private:
     Opal::DynamicArray<ShaderPermutation> m_shader_permutations;
     Opal::HashMap<MaterialKey, PerMaterialData> m_materials;
     Opal::HashMap<MaterialKey, Pipeline> m_pipelines;
-    Opal::DynamicArray<VertexData> m_vertex_data;
-    Opal::DynamicArray<u32> m_index_data;
+    Opal::DynamicArray<u8> m_vertex_data;
+    Opal::DynamicArray<u8> m_index_data;
     bool m_is_geometry_data_dirty = false;
     Opal::HashMap<Opal::StringUtf8, ShapeGeometryData> m_geometry_data;
 };

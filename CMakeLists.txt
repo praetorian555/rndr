@@ -42,6 +42,7 @@ if (RNDR_HARDENING)
 endif ()
 
 include(FetchContent)
+message(STATUS "***** Setting up Opal Dependency *****")
 SET(OPAL_BUILD_TESTS OFF)
 SET(OPAL_HARDENING ${RNDR_HARDENING})
 set(OPAL_SHARED_LIBS ${RNDR_SHARED_LIBS})
@@ -51,8 +52,10 @@ FetchContent_Declare(
         GIT_TAG main
 )
 FetchContent_MakeAvailable(opal)
+message(STATUS "***** Setup Complete *****")
 
 # Setup IMGUI ######################################################################
+message(STATUS "***** Setting up ImGui Dependency *****")
 FetchContent_Declare(
         imgui
         GIT_REPOSITORY https://github.com/ocornut/imgui
@@ -88,6 +91,29 @@ add_library(imgui
         ${IMGUI_WINDOWS_SOURCE_FILES}
         ${IMGUI_OPENGL_SOURCE_FILES})
 target_include_directories(imgui PUBLIC ${SOURCE_PATH})
+message(STATUS "***** Setup Complete *****")
+
+# Setup Assimp ######################################################################
+message(STATUS "***** Setting up Assimp Dependency *****")
+set(ASSIMP_ASAN OFF)
+set(BUILD_SHARED_LIBS OFF)
+set(ASSIMP_BUILD_ASSIMP_TOOLS OFF)
+set(ASSIMP_BUILD_TESTS OFF)
+set(ASSIMP_NO_EXPORT ON)
+set(ASSIMP_INSTALL_PDB OFF)
+set(ASSIMP_BUILD_ZLIB ON)
+set(ASSIMP_BUILD_ALL_IMPORTERS_BY_DEFAULT OFF)
+set(ASSIMP_BUILD_OBJ_IMPORTER ON)
+set(ASSIMP_BUILD_GLTF_IMPORTER ON)
+set(ASSIMP_BUILD_FBX_IMPORTER OFF)
+set(ASSIMP_BUILD_COLLADA_IMPORTER OFF)
+FetchContent_Declare(
+        assimp
+        GIT_REPOSITORY https://github.com/assimp/assimp.git
+        GIT_TAG "v6.0.2"
+)
+FetchContent_MakeAvailable(assimp)
+message(STATUS "***** Setup Complete *****")
 
 # The compiled library code is here
 add_subdirectory(src)

@@ -2,11 +2,16 @@
 
 #include <cstdio>
 
-#include "opal/container/string.h"
 #include "opal/container/dynamic-array.h"
+#include "opal/container/string.h"
 
 #include "rndr/bitmap.hpp"
 #include "rndr/graphics-types.hpp"
+#include "rndr/material.hpp"
+#include "rndr/mesh.hpp"
+
+struct aiMaterial;
+struct aiScene;
 
 namespace Rndr
 {
@@ -97,6 +102,10 @@ void PrintShader(const Opal::StringUtf8& shader_contents);
  * @return Returns true in case of a success, false otherwise.
  */
 bool SaveImage(const Bitmap& bitmap, const Opal::StringUtf8& file_path);
+
+void LoadMeshAndMaterialDescription(const Opal::StringUtf8& file_path, Mesh& out_mesh, MaterialDesc& out_material_desc);
+void LoadMesh(const aiScene& ai_scene, const Opal::StringUtf8& mesh_name, Mesh& out_mesh, u32& out_material_index);
+void LoadMaterialDescription(const aiScene& ai_scene, u32 material_index, const Opal::StringUtf8& parent_path, MaterialDesc& out_material_desc);
 
 }  // namespace File
 
