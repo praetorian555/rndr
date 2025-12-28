@@ -270,6 +270,7 @@ void Rndr::GraphicsContext::ClearAll(const Vector4f& color, float depth, i32 ste
 void Rndr::GraphicsContext::BindPipeline(const Pipeline& pipeline)
 {
     RNDR_CPU_EVENT_SCOPED("Bind Pipeline");
+    RNDR_GPU_EVENT_SCOPED("Bind Pipeline");
     if (!pipeline.IsValid())
     {
         throw Opal::InvalidArgumentException(__FUNCTION__, "Pipeline object is not valid");

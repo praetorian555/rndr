@@ -102,7 +102,7 @@ struct DrawVerticesMultiCommand
 
     DrawVerticesMultiCommand() = default;
     DrawVerticesMultiCommand(Opal::Ref<Buffer> commands_buffer, PrimitiveTopology primitive_topology,
-                            Opal::ArrayView<DrawVerticesData> draws);
+                             Opal::ArrayView<DrawVerticesData> draws);
 };
 
 struct DrawIndicesMultiCommand
@@ -145,11 +145,20 @@ struct BlitToSwapChainCommand
     BlitFrameBufferDesc blit_desc;
 };
 
+struct PushMarkerCommand
+{
+    Opal::StringUtf8 marker;
+};
+
+struct PopMarkerCommand
+{
+};
+
 using Command =
     std::variant<PresentCommand, ClearColorCommand, ClearDepthCommand, ClearStencilCommand, ClearAllCommand, BindSwapChainCommand,
                  BindPipelineCommand, BindBufferCommand, BindTextureCommand, BindTextureForComputeCommand, BindFrameBufferCommand,
                  DrawVerticesCommand, DrawIndicesCommand, DrawVerticesMultiCommand, DrawIndicesMultiCommand, DispatchComputeCommand,
-                 UpdateBufferCommand, BlitFrameBuffersCommand, BlitToSwapChainCommand>;
+                 UpdateBufferCommand, BlitFrameBuffersCommand, BlitToSwapChainCommand, PushMarkerCommand, PopMarkerCommand>;
 
 /**
  * Represents a list of commands to be executed on the GPU.
@@ -317,6 +326,9 @@ public:
      * @param desc Describes the rules for copying.
      */
     void CmdBlitToSwapChain(const SwapChain& swap_chain, const FrameBuffer& src, const BlitFrameBufferDesc& desc);
+
+    void CmdPushMarker(Opal::StringUtf8 marker);
+    void CmdPopMarker();
 
     /**
      * Submits the command list to the GPU.

@@ -1,5 +1,7 @@
 #include "rndr/platform/opengl-command-list.hpp"
 
+#include <string>
+
 #include "glad/glad.h"
 
 #include "opengl-helpers.hpp"
@@ -155,6 +157,16 @@ void Rndr::CommandList::CmdBlitToSwapChain(const SwapChain& swap_chain, const Fr
     m_commands.PushBack(BlitToSwapChainCommand{.swap_chain = Opal::Ref(swap_chain), .src_frame_buffer = Opal::Ref(src), .blit_desc = desc});
 }
 
+void Rndr::CommandList::CmdPushMarker(Opal::StringUtf8 marker)
+{
+    m_commands.PushBack(PushMarkerCommand{.marker = std::move(marker)});
+}
+
+void Rndr::CommandList::CmdPopMarker()
+{
+    m_commands.PushBack(PopMarkerCommand{});
+}
+
 struct CommandExecutor
 {
     Opal::Ref<Rndr::GraphicsContext> graphics_context;
@@ -243,6 +255,17 @@ struct CommandExecutor
     void operator()(const Rndr::BlitToSwapChainCommand& command) const
     {
         graphics_context->BlitToSwapChain(command.swap_chain, command.src_frame_buffer, command.blit_desc);
+    }
+
+    void operator()(const Rndr::PushMarkerCommand& command) const
+    {
+        RNDR_ASSERT(!command.marker.IsEmpty(), "Marker can't be empty!");
+        glPushDebugGroup(GL_DEBUG_SOURCE_APPLICATION, 0, -1, *command.marker);
+    }
+
+    void operator()(const Rndr::PopMarkerCommand&) const
+    {
+        glPopDebugGroup();
     }
 };
 
