@@ -124,6 +124,11 @@ bool Rndr::Shape3DRenderer::Render(f32 delta_seconds, CommandList& command_list)
         command_list.CmdUpdateBuffer(m_index_buffer, Opal::AsBytes(m_index_data));
     }
 
+    if (m_directional_lights.IsEmpty() && m_point_lights.IsEmpty())
+    {
+        throw Opal::Exception("No lights provided!");
+    }
+
     PerFrameData per_frame_data;
     per_frame_data.view_projection_transform = Opal::Transpose(m_projection * m_view);
     per_frame_data.camera_position_world = m_camera_position;
