@@ -42,25 +42,25 @@ Opal::StringUtf8 FromOpenGLUsageToString(GLenum value);
     }
 
 #if RNDR_DEBUG
-#define RNDR_GL_THROW_ON_ERROR(message, do_if_fails)                    \
-    {                                                                   \
-        const GLuint gl_err = glGetError();                             \
-        if (gl_err != GL_NO_ERROR)                                      \
-        {                                                               \
-            RNDR_DEBUG_BREAK;                                           \
-            do_if_fails;                                                \
-            throw GraphicsAPIException(gl_err, message);                \
-        }                                                               \
+#define RNDR_GL_THROW_ON_ERROR(message, do_if_fails)     \
+    {                                                    \
+        const GLuint gl_err = glGetError();              \
+        if (gl_err != GL_NO_ERROR)                       \
+        {                                                \
+            RNDR_DEBUG_BREAK;                            \
+            do_if_fails;                                 \
+            throw GraphicsAPIException(gl_err, message); \
+        }                                                \
     }
 #else
-#define RNDR_GL_RETURN_ON_ERROR(message, do_if_fails)                   \
+#define RNDR_GL_THROW_ON_ERROR(message, do_if_fails)                    \
     {                                                                   \
         const GLuint gl_err = glGetError();                             \
         if (gl_err != GL_NO_ERROR)                                      \
         {                                                               \
             RNDR_LOG_ERROR("OpenGL error: 0x%x - %s", gl_err, message); \
             do_if_fails;                                                \
-            return ErrorCode::GraphicsAPIError;                         \
+            throw GraphicsAPIException(gl_err, message);                \
         }                                                               \
     }
 #endif
