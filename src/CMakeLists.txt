@@ -92,6 +92,12 @@ list(APPEND SOURCE_LIST
         "${PROJECT_SOURCE_DIR}/src/platform/windows-window.cpp"
 )
 
+if (RNDR_ADVANCED_API)
+    list(APPEND SOURCE_LIST
+            "${PROJECT_SOURCE_DIR}/src/volk-implementation.cpp"
+            "${PROJECT_SOURCE_DIR}/src/vma-implementation.cpp")
+endif ()
+
 # Make an automatic library - will be static or dynamic based on user setting
 add_library(rndr ${SOURCE_LIST})
 target_link_libraries(rndr PRIVATE rndr_warnings)
@@ -110,6 +116,15 @@ target_compile_definitions(rndr PUBLIC RNDR_OPENGL)
 # Setup library dependencies
 target_link_libraries(rndr PUBLIC opengl32.lib User32.lib)
 target_link_libraries(rndr PUBLIC opal imgui assimp)
+
+if (RNDR_ADVANCED_API)
+    target_include_directories(rndr PUBLIC $ENV{VULKAN_SDK}/Include)
+#    find_library(Slang_LIBRARY NAMES slang HINTS "$ENV{VULKAN_SDK}/Lib" REQUIRED)
+    target_link_libraries(rndr PUBLIC ktx)
+    if (WIN32)
+        target_compile_definitions(rndr PUBLIC -DVK_USE_PLATFORM_WIN32_KHR -DVK_NO_PROTOTYPES)
+    endif ()
+endif ()
 
 # @formatter:off
 target_compile_definitions(rndr PUBLIC RNDR_CORE_ASSETS_DIR="${CMAKE_CURRENT_SOURCE_DIR}/../assets")

@@ -2,18 +2,21 @@ cmake_minimum_required(VERSION 3.28)
 project(RNDR VERSION 0.1.0 LANGUAGES CXX C)
 
 # Library options
-option(RNDR_BUILD_TESTS "Build tests" ON)
-message(STATUS "RNDR_BUILD_TESTS ${RNDR_BUILD_TESTS}")
+option(RNDR_ADVANCED_API "Use more advanced rendering API that is more powerful but more complicated" ON)
 option(RNDR_SHARED_LIBS "Build as a shared library" OFF)
-message(STATUS "RNDR_SHARED_LIBS ${RNDR_SHARED_LIBS}")
 option(RNDR_HARDENING "Enable hardened mode" ON)
-message(STATUS "RNDR_HARDENING ${RNDR_HARDENING}")
-option(RNDR_TRACER "Use built in profiler" OFF)
-message(STATUS "RNDR_TRACER ${RNDR_TRACER}")
-option(RNDR_DEFAULT_LOGGER "Use default logger" OFF)
-message(STATUS "RNDR_DEFAULT_LOGGER ${RNDR_DEFAULT_LOGGER}")
+option(RNDR_BUILD_TESTS "Build tests" ON)
 option(RNDR_BUILD_SAMPLES "Builds sample executables" ON)
+
+message(STATUS "RNDR_ADVANCED_API ${RNDR_ADVANCED_API}")
+message(STATUS "RNDR_BUILD_TESTS ${RNDR_BUILD_TESTS}")
+message(STATUS "RNDR_SHARED_LIBS ${RNDR_SHARED_LIBS}")
+message(STATUS "RNDR_HARDENING ${RNDR_HARDENING}")
 message(STATUS "RNDR_BUILD_SAMPLES ${RNDR_BUILD_SAMPLES}")
+
+if (RNDR_ADVANCED_API)
+    message(WARNING "Advanced API is still in development so library might not compile...")
+endif ()
 
 ## C++ language configuration boilerplate, hide symbols by default
 if (NOT DEFINED CMAKE_CXX_VISIBILITY_PRESET AND NOT DEFINED CMAKE_VISIBILITY_INLINES_HIDDEN)
@@ -114,6 +117,23 @@ FetchContent_Declare(
 )
 FetchContent_MakeAvailable(assimp)
 message(STATUS "***** Setup Complete *****")
+
+if (RNDR_ADVANCED_API)
+    if (NOT IS_DIRECTORY $ENV{VULKAN_SDK})
+        message(WARNING "Vulkan SDK not detected!")
+    else ()
+        message(STATUS "Vulkan SDK found at: $ENV{VULKAN_SDK}")
+    endif ()
+
+    message(STATUS "***** Setting up KTX Software Dependency *****")
+    FetchContent_Declare(
+            ktx
+            GIT_REPOSITORY https://github.com/KhronosGroup/KTX-Software.git
+            GIT_TAG "v4.4.2"
+    )
+    FetchContent_MakeAvailable(ktx)
+    message(STATUS "***** Setup Complete *****")
+endif ()
 
 # The compiled library code is here
 add_subdirectory(src)
