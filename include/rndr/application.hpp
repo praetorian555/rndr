@@ -3,6 +3,7 @@
 #include "opal/allocator.h"
 #include "opal/container/dynamic-array.h"
 #include "opal/container/ref.h"
+#include "opal/container/scope-ptr.h"
 
 #include "rndr/delegate.hpp"
 #include "rndr/generic-window.hpp"
@@ -42,8 +43,7 @@ public:
     using WindowResizeDelegate = MultiDelegate<void(const GenericWindow& window /*window*/, int /*width*/, int /*height*/)>;
     WindowResizeDelegate on_window_resize;
 
-    static Application* Create(const ApplicationDesc& desc = ApplicationDesc{});
-    static void Destroy();
+    static Opal::ScopePtr<Application> Create(const ApplicationDesc& desc = ApplicationDesc{});
 
     static Application& GetChecked();
     ~Application();

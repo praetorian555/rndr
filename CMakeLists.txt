@@ -184,5 +184,8 @@ if (RNDR_BUILD_SAMPLES)
     target_include_directories(text-rendering-sample PRIVATE samples/extern/stb_truetype/include)
     target_link_libraries(text-rendering-sample PUBLIC shared imgui)
 
+    add_executable(modern-vulkan samples/modern-vulkan/modern-vulkan.cpp)
+    target_link_libraries(modern-vulkan shared imgui)
+
 endif ()
 

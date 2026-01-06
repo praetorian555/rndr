@@ -1,0 +1,140 @@
+#pragma once
+
+#include "volk/volk.h"
+
+#include "opal/container/dynamic-array.h"
+#include "opal/container/hash-map.h"
+#include "rndr/enum-flags.hpp"
+
+#include "rndr/advanced/physical-device.hpp"
+#include "rndr/types.hpp"
+
+namespace Rndr
+{
+
+struct AdvancedDeviceDesc
+{
+    VkPhysicalDeviceFeatures features = {.samplerAnisotropy = VK_TRUE};
+    Opal::DynamicArray<const char*> extensions;
+    VkQueueFlags queue_flags = VK_QUEUE_GRAPHICS_BIT | VK_QUEUE_COMPUTE_BIT;
+    Opal::Ref<class AdvancedSurface> surface;
+};
+
+struct AdvancedQueueFamilyIndices
+{
+    static constexpr u32 k_invalid_index = 0xFFFFFFFF;
+
+    u32 graphics_family = k_invalid_index;
+    u32 present_family = k_invalid_index;
+    u32 compute_family = k_invalid_index;
+    u32 transfer_family = k_invalid_index;
+
+    [[nodiscard]] Opal::DynamicArray<u32> GetValidQueueFamilies() const;
+};
+
+struct AdvancedDescriptorPoolDesc
+{
+    u32 max_sets = 0;
+    Opal::DynamicArray<VkDescriptorPoolSize> pool_sizes;
+    VkDescriptorPoolCreateFlags flags = 0;
+};
+
+struct AdvancedDescriptorSetLayoutBinding
+{
+    u32 binding = 0;
+    VkDescriptorType descriptor_type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+    u32 descriptor_count = 1;
+    VkShaderStageFlags stage_flags = VK_SHADER_STAGE_VERTEX_BIT;
+    const VkSampler* sampler = nullptr;
+};
+
+struct AdvancedDescriptorSetLayoutDesc
+{
+    Opal::DynamicArray<AdvancedDescriptorSetLayoutBinding> bindings;
+    VkDescriptorSetLayoutCreateFlags flags = 0;
+};
+
+struct AdvancedUpdateDescriptorSet
+{
+    VkDescriptorSet descriptor_set = VK_NULL_HANDLE;
+    u32 binding = 0xFFFFFFFF;
+    VkDescriptorType descriptor_type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+    union
+    {
+        VkDescriptorBufferInfo buffer_info;
+        VkDescriptorImageInfo image_info;
+    };
+};
+
+class AdvancedDevice
+{
+public:
+    AdvancedDevice() = default;
+    explicit AdvancedDevice(AdvancedPhysicalDevice physical_device, const AdvancedDeviceDesc& desc = {});
+    ~AdvancedDevice();
+
+    AdvancedDevice(const AdvancedDevice&) = delete;
+    const AdvancedDevice& operator=(const AdvancedDevice&) = delete;
+    AdvancedDevice(AdvancedDevice&& other) noexcept;
+    AdvancedDevice& operator=(AdvancedDevice&& other) noexcept;
+
+    void Destroy();
+
+    [[nodiscard]] VkDevice GetNativeDevice() const { return m_device; }
+    [[nodiscard]] const AdvancedPhysicalDevice& GetPhysicalDevice() const { return m_physical_device; }
+    [[nodiscard]] VkPhysicalDevice GetNativePhysicalDevice() const { return m_physical_device.GetNativePhysicalDevice(); }
+    [[nodiscard]] const AdvancedDeviceDesc& GetDesc() const { return m_desc; }
+    [[nodiscard]] const AdvancedQueueFamilyIndices& GetQueueFamilyIndices() const { return m_queue_family_indices; }
+
+    [[nodiscard]] VkCommandBuffer CreateCommandBuffer(u32 queue_family_index) const;
+    [[nodiscard]] Opal::DynamicArray<VkCommandBuffer> CreateCommandBuffers(u32 queue_family_index, u32 count) const;
+
+    bool DestroyCommandBuffer(VkCommandBuffer command_buffer, u32 queue_family_index) const;
+    bool DestroyCommandBuffers(const Opal::DynamicArray<VkCommandBuffer>& command_buffers, u32 queue_family_index) const;
+
+    [[nodiscard]] VkDescriptorPool CreateDescriptorPool(const AdvancedDescriptorPoolDesc& desc = {}) const;
+    bool DestroyDescriptorPool(VkDescriptorPool descriptor_pool) const;
+
+    [[nodiscard]] VkDescriptorSetLayout CreateDescriptorSetLayout(const AdvancedDescriptorSetLayoutDesc& desc) const;
+    bool DestroyDescriptorSetLayout(VkDescriptorSetLayout descriptor_set_layout) const;
+
+    [[nodiscard]] Opal::DynamicArray<VkDescriptorSet> AllocateDescriptorSets(const VkDescriptorPool& descriptor_pool, u32 count,
+                                                                             const VkDescriptorSetLayout& layout) const;
+
+    void UpdateDescriptorSets(const Opal::DynamicArray<AdvancedUpdateDescriptorSet>& updates) const;
+
+private:
+    VkDevice m_device = VK_NULL_HANDLE;
+    Opal::HashMap<u32, VkCommandPool> m_queue_family_index_to_command_pool;
+    AdvancedPhysicalDevice m_physical_device;
+    AdvancedDeviceDesc m_desc;
+    AdvancedQueueFamilyIndices m_queue_family_indices;
+};
+
+enum class AdvancedDeviceQueueFamilyFlags : VkQueueFlags
+{
+    Graphics = VK_QUEUE_GRAPHICS_BIT,
+    Compute = VK_QUEUE_COMPUTE_BIT,
+    Present = VK_QUEUE_GRAPHICS_BIT
+};
+RNDR_ENUM_CLASS_FLAGS(AdvancedDeviceQueueFamilyFlags);
+
+class AdvancedDeviceQueue
+{
+public:
+    AdvancedDeviceQueue() = default;
+    explicit AdvancedDeviceQueue(const AdvancedDevice& device, AdvancedDeviceQueueFamilyFlags queue_family_flags);
+    ~AdvancedDeviceQueue() = default;
+
+    AdvancedDeviceQueue(const AdvancedDeviceQueue&) = delete;
+    AdvancedDeviceQueue& operator=(const AdvancedDeviceQueue&) = delete;
+    AdvancedDeviceQueue(AdvancedDeviceQueue&& other) noexcept;
+    AdvancedDeviceQueue& operator=(AdvancedDeviceQueue&& other) noexcept;
+
+    [[nodiscard]] VkQueue GetNativeQueue() const { return m_queue; }
+
+private:
+    VkQueue m_queue = VK_NULL_HANDLE;
+};
+
+}  // namespace Rndr

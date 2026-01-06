@@ -94,6 +94,14 @@ list(APPEND SOURCE_LIST
 
 if (RNDR_ADVANCED_API)
     list(APPEND SOURCE_LIST
+            "${PROJECT_SOURCE_DIR}/include/rndr/advanced/graphics-context.hpp"
+            "${PROJECT_SOURCE_DIR}/include/rndr/advanced/device.hpp"
+            "${PROJECT_SOURCE_DIR}/include/rndr/advanced/physical-device.hpp"
+            "${PROJECT_SOURCE_DIR}/include/rndr/advanced/swap-chain.hpp"
+            "${PROJECT_SOURCE_DIR}/src/advanced/graphics-context.cpp"
+            "${PROJECT_SOURCE_DIR}/src/advanced/device.cpp"
+            "${PROJECT_SOURCE_DIR}/src/advanced/physical-device.cpp"
+            "${PROJECT_SOURCE_DIR}/src/advanced/swap-chain.cpp"
             "${PROJECT_SOURCE_DIR}/src/volk-implementation.cpp"
             "${PROJECT_SOURCE_DIR}/src/vma-implementation.cpp")
 endif ()

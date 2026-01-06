@@ -18,24 +18,16 @@ Rndr::StdLogger g_default_logger;
 Rndr::Application* g_instance = nullptr;
 }  // namespace
 
-Rndr::Application* Rndr::Application::Create(const ApplicationDesc& desc)
-{
-    if (g_instance == nullptr)
-    {
-        g_instance = Opal::New<Application>(desc.user_allocator != nullptr ? desc.user_allocator : Opal::GetDefaultAllocator(), desc);
-        return g_instance;
-    }
-    RNDR_ASSERT(false, "There can only be one instance of the Rndr::Application!");
-    return nullptr;
-}
-
-void Rndr::Application::Destroy()
+Opal::ScopePtr<Rndr::Application> Rndr::Application::Create(const ApplicationDesc& desc)
 {
     if (g_instance != nullptr)
     {
-        Opal::Delete(g_instance->m_allocator, g_instance);
-        g_instance = nullptr;
+        throw Opal::Exception("Rndr Application already created!");
     }
+    Opal::ScopePtr<Application> app =
+        Opal::ScopePtr<Application>(desc.user_allocator != nullptr ? desc.user_allocator : Opal::GetDefaultAllocator(), desc);
+    g_instance = app.Get();
+    return app;
 }
 
 Rndr::Application& Rndr::Application::GetChecked()
