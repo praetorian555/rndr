@@ -1,5 +1,6 @@
 #pragma once
 
+#include "vma/vk_mem_alloc.h"
 #include "volk/volk.h"
 
 #include "opal/container/dynamic-array.h"
@@ -70,7 +71,8 @@ class AdvancedDevice
 {
 public:
     AdvancedDevice() = default;
-    explicit AdvancedDevice(AdvancedPhysicalDevice physical_device, const AdvancedDeviceDesc& desc = {});
+    explicit AdvancedDevice(AdvancedPhysicalDevice physical_device, const class AdvancedGraphicsContext& graphics_context,
+                            const AdvancedDeviceDesc& desc = {});
     ~AdvancedDevice();
 
     AdvancedDevice(const AdvancedDevice&) = delete;
@@ -85,6 +87,8 @@ public:
     [[nodiscard]] VkPhysicalDevice GetNativePhysicalDevice() const { return m_physical_device.GetNativePhysicalDevice(); }
     [[nodiscard]] const AdvancedDeviceDesc& GetDesc() const { return m_desc; }
     [[nodiscard]] const AdvancedQueueFamilyIndices& GetQueueFamilyIndices() const { return m_queue_family_indices; }
+
+    [[nodiscard]] VmaAllocator GetGPUAllocator() const { return m_gpu_allocator; }
 
     [[nodiscard]] VkCommandBuffer CreateCommandBuffer(u32 queue_family_index) const;
     [[nodiscard]] Opal::DynamicArray<VkCommandBuffer> CreateCommandBuffers(u32 queue_family_index, u32 count) const;
@@ -109,6 +113,7 @@ private:
     AdvancedPhysicalDevice m_physical_device;
     AdvancedDeviceDesc m_desc;
     AdvancedQueueFamilyIndices m_queue_family_indices;
+    VmaAllocator m_gpu_allocator;
 };
 
 enum class AdvancedDeviceQueueFamilyFlags : VkQueueFlags

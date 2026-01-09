@@ -1,5 +1,6 @@
 #include "rndr/advanced/device.hpp"
 
+#include "rndr/advanced/graphics-context.hpp"
 #include "rndr/advanced/swap-chain.hpp"
 
 Opal::DynamicArray<Rndr::u32> Rndr::AdvancedQueueFamilyIndices::GetValidQueueFamilies() const
@@ -24,7 +25,8 @@ Opal::DynamicArray<Rndr::u32> Rndr::AdvancedQueueFamilyIndices::GetValidQueueFam
     return valid_queue_families;
 }
 
-Rndr::AdvancedDevice::AdvancedDevice(AdvancedPhysicalDevice physical_device, const AdvancedDeviceDesc& desc)
+Rndr::AdvancedDevice::AdvancedDevice(AdvancedPhysicalDevice physical_device, const AdvancedGraphicsContext& graphics_context,
+                                     const AdvancedDeviceDesc& desc)
 {
     if (!physical_device.IsValid())
     {
@@ -79,11 +81,12 @@ Rndr::AdvancedDevice::AdvancedDevice(AdvancedPhysicalDevice physical_device, con
         }
     }
 
-    VkPhysicalDeviceVulkan12Features enabled_vk12_features = {.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_2_FEATURES,
-                                                              .descriptorIndexing = 1,
-                                                              .descriptorBindingVariableDescriptorCount = 1,
-                                                              .runtimeDescriptorArray = 1,
-                                                              .bufferDeviceAddress = 1};
+    VkPhysicalDeviceVulkan12Features enabled_vk12_features = {
+        .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_2_FEATURES,
+        .descriptorIndexing = 1,
+        .descriptorBindingVariableDescriptorCount = 1,
+        .runtimeDescriptorArray = 1,
+        .bufferDeviceAddress = 1};  // So you can get pointer to raw GPU buffer memory and pass it to shader
     const VkPhysicalDeviceVulkan13Features enabled_vk13_features = {.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_3_FEATURES,
                                                                     .pNext = &enabled_vk12_features,
                                                                     .synchronization2 = 1,
@@ -122,6 +125,24 @@ Rndr::AdvancedDevice::AdvancedDevice(AdvancedPhysicalDevice physical_device, con
     m_physical_device = Opal::Move(physical_device);
     m_desc = desc;
     m_queue_family_indices = queue_family_indices;
+
+    // Setup GPU allocator
+    const VmaVulkanFunctions vk_functions{
+        .vkGetInstanceProcAddr = vkGetInstanceProcAddr,
+        .vkGetDeviceProcAddr = vkGetDeviceProcAddr,
+        .vkCreateImage = vkCreateImage,
+    };
+    const VmaAllocatorCreateInfo vma_alloc_create_info = {
+        .flags = VMA_ALLOCATOR_CREATE_BUFFER_DEVICE_ADDRESS_BIT,
+        .physicalDevice = m_physical_device.GetNativePhysicalDevice(),
+        .device = m_device,
+        .pVulkanFunctions = &vk_functions,
+        .instance = graphics_context.GetInstance(),
+    };
+    if (vmaCreateAllocator(&vma_alloc_create_info, &m_gpu_allocator) != VK_SUCCESS)
+    {
+        throw Opal::Exception("Failed to create allocator!");
+    }
 }
 
 Rndr::AdvancedDevice::~AdvancedDevice()
@@ -164,6 +185,11 @@ Rndr::AdvancedDevice& Rndr::AdvancedDevice::operator=(AdvancedDevice&& other) no
 
 void Rndr::AdvancedDevice::Destroy()
 {
+    if (m_gpu_allocator != VK_NULL_HANDLE)
+    {
+        vmaDestroyAllocator(m_gpu_allocator);
+        m_gpu_allocator = VK_NULL_HANDLE;
+    }
     for (auto p : m_queue_family_index_to_command_pool)
     {
         vkDestroyCommandPool(m_device, p.value, nullptr);
