@@ -33,7 +33,11 @@ VKAPI_ATTR VkBool32 VKAPI_CALL DebugCallback(VkDebugUtilsMessageSeverityFlagBits
 
 Rndr::AdvancedGraphicsContext::AdvancedGraphicsContext(const AdvancedGraphicsContextDesc& desc) : m_desc(desc)
 {
-    volkInitialize();
+    VkResult result = volkInitialize();
+    if (result != VK_SUCCESS)
+    {
+        throw Opal::Exception("Failed to initialize Volk!");
+    }
 
     // Check if all the requested instance extensions are supported
     Opal::DynamicArray<const char*> required_extensions = GetRequiredInstanceExtensions(desc);
@@ -69,11 +73,12 @@ Rndr::AdvancedGraphicsContext::AdvancedGraphicsContext(const AdvancedGraphicsCon
     create_info.enabledExtensionCount = static_cast<u32>(required_extensions.GetSize());
     create_info.ppEnabledExtensionNames = required_extensions.GetData();
     create_info.enabledLayerCount = 0;
-    VkResult result = vkCreateInstance(&create_info, nullptr, &m_instance);
+    result = vkCreateInstance(&create_info, nullptr, &m_instance);
     if (result != VK_SUCCESS)
     {
         throw Opal::Exception("Failed to create Vulkan Instance!");
     }
+    volkLoadInstance(m_instance);
 
     // Creation of debug messanger
     if (m_desc.collect_debug_messages)
