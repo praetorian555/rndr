@@ -1,7 +1,9 @@
 #include "rndr/advanced/device.hpp"
 
+#include "rndr/advanced/command-buffer.hpp"
 #include "rndr/advanced/graphics-context.hpp"
 #include "rndr/advanced/swap-chain.hpp"
+#include "rndr/advanced/synchronization.hpp"
 
 Opal::DynamicArray<Rndr::u32> Rndr::AdvancedQueueFamilyIndices::GetValidQueueFamilies() const
 {
@@ -206,25 +208,7 @@ void Rndr::AdvancedDevice::Destroy()
 
 VkCommandBuffer Rndr::AdvancedDevice::CreateCommandBuffer(u32 queue_family_index) const
 {
-    const auto it = m_queue_family_index_to_command_pool.Find(queue_family_index);
-    if (it == m_queue_family_index_to_command_pool.end())
-    {
-        throw Opal::Exception("Queue family index not supported!");
-    }
 
-    VkCommandBufferAllocateInfo alloc_info{};
-    alloc_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
-    alloc_info.commandPool = it.GetValue();
-    alloc_info.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
-    alloc_info.commandBufferCount = 1;
-
-    VkCommandBuffer command_buffer{};
-    const VkResult result = vkAllocateCommandBuffers(m_device, &alloc_info, &command_buffer);
-    if (result != VK_SUCCESS)
-    {
-        throw Opal::Exception("Failed to allocate command buffer!");
-    }
-    return command_buffer;
 }
 
 Opal::DynamicArray<VkCommandBuffer> Rndr::AdvancedDevice::CreateCommandBuffers(u32 queue_family_index, u32 count) const
@@ -376,7 +360,18 @@ Rndr::AdvancedDeviceQueue::AdvancedDeviceQueue(const AdvancedDevice& device, Adv
     {
         throw Opal::Exception("Queue family index does not exist!");
     }
-    vkGetDeviceQueue(device.GetNativeDevice(), queue_index.GetValue(), 0, &m_queue);
+    m_queue_family_index = queue_index.GetValue();
+    vkGetDeviceQueue(device.GetNativeDevice(), m_queue_family_index, 0, &m_queue);
+
+    VkCommandPoolCreateInfo pool_info{};
+    pool_info.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
+    pool_info.queueFamilyIndex = m_queue_family_index;
+    pool_info.flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT;
+    const VkResult result = vkCreateCommandPool(m_device->GetNativeDevice(), &pool_info, nullptr, &m_command_pool);
+    if (result != VK_SUCCESS)
+    {
+        throw Opal::Exception("Failed to create command pool!");
+    }
 }
 
 Rndr::AdvancedDeviceQueue::AdvancedDeviceQueue(AdvancedDeviceQueue&& other) noexcept : m_queue(other.m_queue)
@@ -393,4 +388,44 @@ Rndr::AdvancedDeviceQueue& Rndr::AdvancedDeviceQueue::operator=(AdvancedDeviceQu
     m_queue = other.m_queue;
     other.m_queue = VK_NULL_HANDLE;
     return *this;
+}
+
+Opal::DynamicArray<VkCommandBuffer> Rndr::AdvancedDeviceQueue::CreateCommandBuffers(u32 count) const
+{
+    VkCommandBufferAllocateInfo alloc_info{};
+    alloc_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
+    alloc_info.commandPool = m_command_pool;
+    alloc_info.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
+    alloc_info.commandBufferCount = count;
+
+    Opal::DynamicArray<VkCommandBuffer> command_buffers(count);
+    const VkResult result = vkAllocateCommandBuffers(m_device->GetNativeDevice(), &alloc_info, command_buffers.GetData());
+    if (result != VK_SUCCESS)
+    {
+        throw Opal::Exception("Failed to allocate command buffer!");
+    }
+    return command_buffers;
+}
+
+void Rndr::AdvancedDeviceQueue::DestroyCommandBuffer(VkCommandBuffer command_buffer) const
+{
+    vkFreeCommandBuffers(m_device->GetNativeDevice(), m_command_pool, 1, &command_buffer);
+}
+
+void Rndr::AdvancedDeviceQueue::DestroyCommandBuffers(Opal::ArrayView<VkCommandBuffer> command_buffers) const
+{
+    vkFreeCommandBuffers(m_device->GetNativeDevice(), m_command_pool, command_buffers.GetSize(), command_buffers.GetData());
+}
+
+void Rndr::AdvancedDeviceQueue::Submit(const AdvancedCommandBuffer& command_buffer, const AdvancedFence& fence)
+{
+    VkCommandBuffer native_command_buffer = command_buffer.GetNativeCommandBuffer();
+    const VkSubmitInfo submit_info{
+    .sType = VK_STRUCTURE_TYPE_SUBMIT_INFO,
+    .commandBufferCount = 1,
+    .pCommandBuffers = &native_command_buffer};
+    if (vkQueueSubmit(m_queue, 1, &submit_info, fence.GetNativeFence()) != VK_SUCCESS)
+    {
+        throw Opal::Exception("Failed to submit command buffer!");
+    }
 }

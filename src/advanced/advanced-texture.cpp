@@ -2,22 +2,65 @@
 
 #include <vma/vk_mem_alloc.h>
 
-#include "rndr/advanced/device.hpp"
+#include "ktxvulkan.h"
 
-Rndr::AdvancedTexture::AdvancedTexture(const class AdvancedDevice& device, const AdvancedTextureDesc& desc) : m_desc(desc), m_device(device)
+#include "rndr/advanced/advanced-buffer.hpp"
+#include "rndr/advanced/device.hpp"
+#include "rndr/advanced/command-buffer.hpp"
+#include "rndr/advanced/synchronization.hpp"
+
+Rndr::AdvancedTexture::AdvancedTexture(const AdvancedDevice& device, const AdvancedTextureDesc& desc) : m_desc(desc), m_device(device)
 {
+    Init(device, desc);
+}
+
+Rndr::AdvancedTexture::AdvancedTexture(const AdvancedDevice& device, AdvancedDeviceQueue& queue, ktxTexture* ktx_texture,
+                                       const AdvancedTextureDesc& desc)
+    : m_desc(desc)
+{
+    m_desc.width = ktx_texture->baseWidth;
+    m_desc.height = ktx_texture->baseHeight;
+    m_desc.depth = ktx_texture->baseDepth;
+    m_desc.mip_level_count = ktx_texture->numLevels;
+    m_desc.subresource_range.mip_level_count = ktx_texture->numLevels;
+    m_desc.format = ktxTexture_GetVkFormat(ktx_texture);
+    m_desc.image_usage = desc.image_usage | VK_IMAGE_USAGE_TRANSFER_DST_BIT;  // Make sure we always set transfer destination bit
+
+    Init(device, m_desc);
+
+    // Create staging buffer
+    const AdvancedBuffer staging_buffer(device, {.size = ktx_texture->dataSize, .usage = VK_BUFFER_USAGE_TRANSFER_SRC_BIT});
+    staging_buffer.Update({ktx_texture->pData, ktx_texture->dataSize}, 0);
+
+    AdvancedCommandBuffer upload_command_buffer(device, queue);
+    upload_command_buffer.Begin();
+
+    VkImageMemoryBarrier2
+
+    upload_command_buffer.End();
+
+    const AdvancedFence fence(device, false);
+    queue.Submit(upload_command_buffer, fence);
+    fence.Wait();
+}
+
+void Rndr::AdvancedTexture::Init(const AdvancedDevice& device, const AdvancedTextureDesc& desc)
+{
+    m_desc = desc;
+    m_device = device;
+
     VmaAllocator gpu_allocator = device.GetGPUAllocator();
 
     const VkImageCreateInfo image_create_info = {
         .sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
         .imageType = m_desc.image_type,
         .format = m_desc.format,
-        .extent = {.width = desc.width, .height = desc.height, .depth = desc.depth},
-        .mipLevels = desc.mip_levels,
-        .arrayLayers = desc.array_layers,
-        .samples = desc.sample_count,
+        .extent = {.width = m_desc.width, .height = m_desc.height, .depth = m_desc.depth},
+        .mipLevels = m_desc.mip_level_count,
+        .arrayLayers = m_desc.array_layer_count,
+        .samples = m_desc.sample_count,
         .tiling = VK_IMAGE_TILING_OPTIMAL,
-        .usage = desc.image_usage,
+        .usage = m_desc.image_usage,
         .initialLayout = VK_IMAGE_LAYOUT_UNDEFINED,
     };
     const VmaAllocationCreateInfo allocation_create_info = {.flags = VMA_ALLOCATION_CREATE_DEDICATED_MEMORY_BIT,
@@ -30,13 +73,13 @@ Rndr::AdvancedTexture::AdvancedTexture(const class AdvancedDevice& device, const
     const VkImageViewCreateInfo image_view_create_info = {
         .sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
         .image = m_image,
-        .viewType = desc.view_type,
-        .format = desc.format,
-        .subresourceRange = {.aspectMask = desc.aspect_mask,
-                             .baseMipLevel = 0,
-                             .levelCount = desc.mip_map_level_count,
-                             .baseArrayLayer = 0,
-                             .layerCount = desc.array_layers},
+        .viewType = m_desc.view_type,
+        .format = m_desc.format,
+        .subresourceRange = {.aspectMask = m_desc.subresource_range.aspect_mask,
+                             .baseMipLevel = m_desc.subresource_range.first_mip_level,
+                             .levelCount = m_desc.subresource_range.mip_level_count,
+                             .baseArrayLayer = m_desc.subresource_range.first_array_layer,
+                             .layerCount = m_desc.subresource_range.array_layer_count},
     };
     result = vkCreateImageView(device.GetNativeDevice(), &image_view_create_info, nullptr, &m_view);
     if (result != VK_SUCCESS)

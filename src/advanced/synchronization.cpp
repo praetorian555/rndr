@@ -1,5 +1,7 @@
 #include "rndr/advanced/synchronization.hpp"
 
+#include <mutex>
+
 #include "rndr/advanced/device.hpp"
 
 Rndr::AdvancedFence::AdvancedFence(const class AdvancedDevice& device, bool create_signaled) : m_device(device)
@@ -44,6 +46,31 @@ Rndr::AdvancedFence& Rndr::AdvancedFence::operator=(AdvancedFence&& other) noexc
         other.m_fence = VK_NULL_HANDLE;
     }
     return *this;
+}
+
+void Rndr::AdvancedFence::Wait(u64 timeout) const
+{
+    if (vkWaitForFences(m_device->GetNativeDevice(), 1, &m_fence, VK_TRUE, timeout) != VK_SUCCESS)
+    {
+        throw Opal::Exception("Fence timed out!");
+    }
+}
+
+void Rndr::AdvancedFence::WaitForAll(Opal::ArrayView<AdvancedFence> fences, u64 timeout)
+{
+    if (fences.empty())
+    {
+        return;
+    }
+    Opal::DynamicArray<VkFence> native_fences(fences.GetSize(), Opal::GetScratchAllocator());
+    for (i32 i = 0; i < fences.GetSize(); ++i)
+    {
+        native_fences[i] = fences[i].GetNativeFence();
+    }
+    if (vkWaitForFences(fences[0].m_device->GetNativeDevice(), native_fences.GetSize(), native_fences.GetData(), VK_TRUE, timeout) != VK_SUCCESS)
+    {
+        throw Opal::Exception("Fences timed out!");
+    }
 }
 
 Rndr::AdvancedSemaphore::AdvancedSemaphore(const AdvancedDevice& device) : m_device(device)

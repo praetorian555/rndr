@@ -15,6 +15,7 @@ struct AdvancedBufferDesc
 {
     size_t size;
     VkBufferUsageFlags usage;
+    bool keep_memory_mapped = true;
 };
 
 class AdvancedBuffer
@@ -32,6 +33,7 @@ public:
     void Destroy();
 
     [[nodiscard]] VkBuffer GetNativeBuffer() const { return m_buffer; }
+    [[nodiscard]] VkDeviceAddress GetNativeDeviceAddress() const { return m_device_address; }
 
     void Update(Opal::ArrayView<u8> data, size_t offset) const;
 
@@ -40,6 +42,8 @@ private:
     Opal::Ref<const class AdvancedDevice> m_device;
     VkBuffer m_buffer;
     VmaAllocation m_allocation;
+    VkDeviceAddress m_device_address;
+    void* m_mapped_memory = nullptr;
 };
 
 }  // namespace Rndr

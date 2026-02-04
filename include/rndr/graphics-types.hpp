@@ -1,5 +1,6 @@
 #pragma once
 
+#include "enum-flags.hpp"
 #include "opal/container/dynamic-array.h"
 #include "opal/container/ref.h"
 #include "opal/container/string.h"
@@ -455,6 +456,65 @@ enum class FillMode
     /** Only the edges of the primitive are drawn. */
     Wireframe
 };
+
+enum class PipelineStageBits : u64
+{
+    None = 0ull,
+    PipelineStart = 0x1ull,
+    IndirectDraw = 0x2ull,
+    VertexInput = 0x4ull,
+    VertexShader = 0x8ull,
+    FragmentShader = 0x80ull,
+    EarlyFragmentTests = 0x100ull,
+    LateFragmentTests = 0x200ull,
+    ColorAttachmentOutput = 0x400ull,
+    ComputeShader = 0x800ull,
+    Transfer = 0x1000ull
+};
+RNDR_ENUM_CLASS_FLAGS(PipelineStageBits);
+
+enum class PipelineStageAccessBits : u64
+{
+    None = 0ull,
+    Read = 8000ull,
+    Write = 10000ull
+};
+RNDR_ENUM_CLASS_FLAGS(PipelineStageAccessBits)
+
+enum class ImageLayout
+{
+    // Usually used for initial layout of an image or when we don't care about layout.
+    Undefined = 0,
+    // When image is used for multiple incompatible operations, such as reads and writes
+    // from different pipeline stages. Slowest type of layout.
+    General = 1,
+    // When image is used as a render target.
+    ColorAttachment = 2,
+    // When image is used as a depth/stencil attachment in the frame buffer.
+    DepthStencilAttachment = 3,
+    // When image is used for reading depth/stencil values in shaders while its also bound
+    // for depth testing.
+    DepthStencilReadOnly = 4,
+    // When image is sampled in any shader stage.
+    ShaderReadOnly = 5,
+    // When image is used as a source for image transfer using DMA engine.
+    TransferSource = 6,
+    // When image is used as a destination for image transfer using DMA engine.
+    TransferDestination = 7,
+    // When image is a swap chain image that is to be presented to the screen.
+    Present = 1000001002,
+};
+
+struct ImageSubresourceRange
+{
+    // Which aspect of the image we care about.
+    u32 aspect_mask = 1; // By default, its color aspect
+    u32 first_mip_level = 0;
+    u32 mip_level_count = 1;
+    u32 first_array_layer = 0;
+    u32 array_layer_count = 1;
+};
+
 
 struct GraphicsContextDesc
 {

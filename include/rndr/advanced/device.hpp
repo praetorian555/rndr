@@ -138,8 +138,19 @@ public:
 
     [[nodiscard]] VkQueue GetNativeQueue() const { return m_queue; }
 
+    [[nodiscard]] VkCommandPool GetNativeCommandPool() const { return m_command_pool; }
+
+    [[nodiscard]] Opal::DynamicArray<VkCommandBuffer> CreateCommandBuffers(u32 count) const;
+    void DestroyCommandBuffer(VkCommandBuffer command_buffer) const;
+    void DestroyCommandBuffers(Opal::ArrayView<VkCommandBuffer> command_buffers) const;
+
+    void Submit(const class AdvancedCommandBuffer& command_buffer, const class AdvancedFence& fence);
+
 private:
+    Opal::Ref<AdvancedDevice> m_device;
+    u32 m_queue_family_index = 0;
     VkQueue m_queue = VK_NULL_HANDLE;
+    VkCommandPool m_command_pool = VK_NULL_HANDLE;
 };
 
 }  // namespace Rndr

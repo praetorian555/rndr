@@ -3,6 +3,8 @@
 #include "vma/vk_mem_alloc.h"
 #include "volk/volk.h"
 
+#include "ktx.h"
+
 #include "opal/container/ref.h"
 
 #include "rndr/types.hpp"
@@ -18,16 +20,14 @@ struct AdvancedTextureDesc
     u32 width = 0;
     u32 height = 0;
     u32 depth = 1;
-    u32 mip_levels = 1;
-    u32 array_layers = 1;
+    u32 mip_level_count = 1;
+    u32 array_layer_count = 1;
     VkSampleCountFlagBits sample_count = VK_SAMPLE_COUNT_1_BIT;
     VkImageUsageFlags image_usage = VK_IMAGE_USAGE_SAMPLED_BIT;
 
     // Image view
     VkImageViewType view_type = VK_IMAGE_VIEW_TYPE_2D;
-    VkImageAspectFlags aspect_mask = VK_IMAGE_ASPECT_COLOR_BIT;
-    u32 mip_map_level_count = 1;  // Number of mip map levels to include
-    u32 layer_count = 1;          // Number of array layers to include
+    ImageSubresourceRange subresource_range;
 };
 
 class AdvancedTexture
@@ -35,6 +35,7 @@ class AdvancedTexture
 public:
     AdvancedTexture() = default;
     explicit AdvancedTexture(const class AdvancedDevice& device, const AdvancedTextureDesc& desc = {});
+    explicit AdvancedTexture(const class AdvancedDevice& device, class AdvancedDeviceQueue& queue, ktxTexture* ktx_texture, const AdvancedTextureDesc& desc = {});
     ~AdvancedTexture();
 
     AdvancedTexture(const AdvancedTexture&) = delete;
@@ -48,6 +49,8 @@ public:
     [[nodiscard]] VkImageView GetNativeImageView() const { return m_view; }
 
 private:
+    void Init(const class AdvancedDevice& device, const AdvancedTextureDesc& desc);
+
     AdvancedTextureDesc m_desc;
     Opal::Ref<const class AdvancedDevice> m_device;
     VkImage m_image = VK_NULL_HANDLE;

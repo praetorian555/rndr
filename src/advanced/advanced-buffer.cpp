@@ -6,10 +6,8 @@ Rndr::AdvancedBuffer::AdvancedBuffer(const class AdvancedDevice& device, const A
     : m_device(device), m_desc(desc)
 {
     const VkBufferCreateInfo create_info{.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO, .size = desc.size, .usage = desc.usage};
-    // First flag means that buffer can be mapped on the CPU side and that writing will be done by either memcpy or sequential
-    // iteration over the elements, there will be no random access.
-    // Second flag means that we want to choose memory type that will improve performance but might not be host visible.
-    // This combo allows us on newer hardware to have high performance GPU memory for the buffer but still be able to access it on CPU.
+    // First two flags ensure that we get local memory that is host visible if possible, otherwise it fallbacks to invisible local memory
+    // for fast GPU access.
     const VmaAllocationCreateInfo allocation_create_info{.flags = VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT |
                                                                   VMA_ALLOCATION_CREATE_HOST_ACCESS_ALLOW_TRANSFER_INSTEAD_BIT |
                                                                   VMA_ALLOCATION_CREATE_MAPPED_BIT,
@@ -31,6 +29,16 @@ Rndr::AdvancedBuffer::AdvancedBuffer(const class AdvancedDevice& device, const A
         memcpy(gpu_data, initial_data.GetData(), initial_data.GetSize());
         vmaUnmapMemory(m_device->GetGPUAllocator(), m_allocation);
     }
+    if (m_desc.keep_memory_mapped)
+    {
+        result = vmaMapMemory(m_device->GetGPUAllocator(), m_allocation, &m_mapped_memory);
+        if (result != VK_SUCCESS)
+        {
+            throw Opal::Exception("Failed to map memory");
+        }
+    }
+    const VkBufferDeviceAddressInfo buffer_device_address_info{.sType = VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO, .buffer = m_buffer};
+    m_device_address = vkGetBufferDeviceAddress(m_device->GetNativeDevice(), &buffer_device_address_info);
 }
 
 Rndr::AdvancedBuffer::~AdvancedBuffer()
@@ -77,6 +85,11 @@ void Rndr::AdvancedBuffer::Update(Opal::ArrayView<u8> data, size_t) const
 {
     if (data.IsEmpty())
     {
+        return;
+    }
+    if (m_mapped_memory != nullptr)
+    {
+        memcpy(m_mapped_memory, data.GetData(), data.GetSize());
         return;
     }
     void* gpu_data = nullptr;
