@@ -1,3 +1,4 @@
+#include "../../build/opengl-msvc-opt-debug/_deps/opal-src/include/opal/container/in-place-array.h"
 #include "../../build/opengl-msvc-opt-debug/_deps/opal-src/include/opal/paths.h"
 #include "opal/container/dynamic-array.h"
 #include "rndr/application.hpp"
@@ -6,6 +7,7 @@
 #include "vma/vk_mem_alloc.h"
 #include "volk/volk.h"
 
+#include "rndr/advanced/advanced-buffer.hpp"
 #include "rndr/advanced/advanced-texture.hpp"
 #include "rndr/advanced/device.hpp"
 #include "rndr/advanced/graphics-context.hpp"
@@ -16,32 +18,21 @@
 using i32 = Rndr::i32;
 using u32 = Rndr::u32;
 using f32 = Rndr::f32;
+using u8 = Rndr::u8;
 
-#define VK_CHECK(expr)                                         \
-    do                                                         \
-    {                                                          \
-        [[maybe_unused]] const VkResult result_ = expr;        \
-        if (result_ != VK_SUCCESS)                             \
-            throw Opal::Exception("Vulkan operation failed!"); \
-    } while (0)
-
-Opal::DynamicArray<const char*> GetRequiredInstanceExtensions()
+struct ShaderData
 {
-    Opal::DynamicArray<const char*> required_extension_names;
-
-    // We need this extension if we want to display the image to the display
-    required_extension_names.PushBack(VK_KHR_SURFACE_EXTENSION_NAME);
-#if defined(OPAL_PLATFORM_WINDOWS)
-    // We need it if we want to display the image to the display on Windows
-    required_extension_names.PushBack(VK_KHR_WIN32_SURFACE_EXTENSION_NAME);
-#endif
-    return required_extension_names;
-}
-
-VmaAllocator vma_allocator;
+    Rndr::Matrix4x4f projection;
+    Rndr::Matrix4x4f view;
+    Rndr::Matrix4x4f model[3];
+    Rndr::Vector4f light_position{0, -1, 10, 0};
+    u32 selected = 1;
+};
 
 int main()
 {
+    constexpr i32 k_frames_in_flight = 2;
+
     auto rndr_app = Rndr::Application::Create();
     Rndr::GenericWindow* window = rndr_app->CreateGenericWindow();
     Rndr::AdvancedGraphicsContext graphics_context{{.collect_debug_messages = true}};
@@ -73,5 +64,56 @@ int main()
     Rndr::MaterialDesc material_desc;
     const Opal::StringUtf8 mesh_path = Opal::Paths::Combine(RNDR_CORE_ASSETS_DIR, "sample-models", "Suzanne", "glTF", "Suzanne.gltf");
     Rndr::File::LoadMeshAndMaterialDescription(mesh_path, mesh, material_desc);
+    Opal::DynamicArray<Rndr::u8> combined_vertex_index_data(Opal::GetScratchAllocator());
+    combined_vertex_index_data.Append(mesh.vertices);
+    combined_vertex_index_data.Append(mesh.indices);
+    Rndr::AdvancedBuffer mesh_buffer(
+        device,
+        {.size = combined_vertex_index_data.GetSize(), .usage = VK_BUFFER_USAGE_VERTEX_BUFFER_BIT | VK_BUFFER_USAGE_INDEX_BUFFER_BIT, .keep_memory_mapped = false},
+        combined_vertex_index_data);
 
+    Opal::InPlaceArray<Rndr::AdvancedBuffer, k_frames_in_flight> m_shader_buffers;
+    for (i32 i = 0; i < k_frames_in_flight; i++)
+    {
+        m_shader_buffers[i] = Rndr::AdvancedBuffer(
+            device, {.size = sizeof(ShaderData), .usage = VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT, .keep_memory_mapped = true});
+    }
+
+    // Create fences and semaphores
+    Opal::DynamicArray<VkFence> fences(k_frames_in_flight);
+    Opal::DynamicArray<VkSemaphore> present_semaphores(k_frames_in_flight);
+    for (i32 i = 0; i < k_frames_in_flight; ++i)
+    {
+        const VkFenceCreateInfo fence_create_info = {
+            .sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO,
+            .flags = VK_FENCE_CREATE_SIGNALED_BIT
+        };
+        VkResult result = vkCreateFence(device.GetNativeDevice(), &fence_create_info, nullptr, &fences[i]);
+        if (result != VK_SUCCESS)
+        {
+            throw Opal::Exception("Failed to create a fence!");
+        }
+        const VkSemaphoreCreateInfo semaphore_create_info = {
+            .sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO
+        };
+        result = vkCreateSemaphore(device.GetNativeDevice(), &semaphore_create_info, nullptr, &present_semaphores[i]);
+        if (result != VK_SUCCESS)
+        {
+            throw Opal::Exception("Failed to create a present semaphore!");
+        }
+    }
+    Opal::DynamicArray<VkSemaphore> render_semaphores(swap_chain.GetImageViews().GetSize());
+    for (auto& semaphore : render_semaphores)
+    {
+        const VkSemaphoreCreateInfo semaphore_create_info = {
+            .sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO
+        };
+        const VkResult result = vkCreateSemaphore(device.GetNativeDevice(), &semaphore_create_info, nullptr, &semaphore);
+        if (result != VK_SUCCESS)
+        {
+            throw Opal::Exception("Failed to create a render semaphore!");
+        }
+    }
+
+    auto command_buffers = m_graphics_queue.CreateCommandBuffers(k_frames_in_flight);
 }
