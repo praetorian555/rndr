@@ -6,8 +6,8 @@ namespace Rndr
 {
 
 /**
- * Helper class to store image data in the CPU memory.It can also be used to read values of
- * individual pixels as well as to change them.
+ * Helper class to store image data in the CPU memory including the mips if provided. It can also be used to read values of individual
+ * pixels as well as to change them.
  */
 class Bitmap
 {
@@ -23,10 +23,11 @@ public:
      * @param height Height of the bitmap. Must be greater than 0.
      * @param depth Depth of the bitmap. Must be greater than 0.
      * @param pixel_format Pixel format of the bitmap. Must be supported.
-     * @param data Optional data to initialize the bitmap with. If not specified, the bitmap will be
+     * @param mip_count How many mip maps there are for this bitmap. Default is 1.
+    * @param data Optional data to initialize the bitmap with. If not specified, the bitmap will be
      * initialized with zeros.
      */
-    Bitmap(i32 width, i32 height, i32 depth, PixelFormat pixel_format, const Opal::ArrayView<u8>& data = {});
+    Bitmap(i32 width, i32 height, i32 depth, PixelFormat pixel_format, i32 mip_count, const Opal::ArrayView<u8>& data = {});
 
     /**
      * Check if bitmap is valid.
@@ -38,6 +39,7 @@ public:
     [[nodiscard]] i32 GetHeight() const { return m_height; }
     [[nodiscard]] i32 GetDepth() const { return m_depth; }
     [[nodiscard]] PixelFormat GetPixelFormat() const { return m_pixel_format; }
+    [[nodiscard]] u32 GetMipCount() const { return m_mip_count; }
 
     /**
      * Get number of components per pixel.
@@ -55,25 +57,38 @@ public:
      * Get size of row in bytes.
      * @return Returns size of row in bytes.
      */
-    [[nodiscard]] u64 GetRowSize() const { return m_width * GetPixelSize(); }
+    [[nodiscard]] u64 GetRowSize(i32 mip_level = 0) const;
 
     /**
      * Get size of the bitmap in bytes but only of the first plane.
      * @return Returns size in bytes.
      */
-    [[nodiscard]] u64 GetSize2D() const { return m_width * m_height * GetPixelSize(); }
+    [[nodiscard]] u64 GetSize2D(i32 mip_level = 0) const;
 
     /**
      * Get size of the bitmap in bytes including depth.
      * @return Returns size in bytes.
      */
-    [[nodiscard]] u64 GetSize3D() const { return m_width * m_height * m_depth * GetPixelSize(); }
+    [[nodiscard]] u64 GetSize3D(i32 mip_level = 0) const;
+
+    /**
+     * Get bitmap size including depth and all mip levels.
+     * @return Return size in bytes.
+     */
+    [[nodiscard]] u64 GetTotalSize() const;
+
+    /**
+     * Offset in the pixel array where the specified mip level starts.
+     * @param mip_level Mip level.
+     * @return Offset in bytes.
+     */
+    [[nodiscard]] u64 GetMipLevelOffset(i32 mip_level = 0) const;
 
     [[nodiscard]] u8* GetData() { return m_data.GetData(); }
     [[nodiscard]] const u8* GetData() const { return m_data.GetData(); }
 
-    [[nodiscard]] Vector4f GetPixel(i32 x, i32 y, i32 z = 0) const;
-    void SetPixel(i32 x, i32 y, i32 z, const Vector4f& pixel);
+    [[nodiscard]] Vector4f GetPixel(i32 x, i32 y, i32 z = 0, i32 mip_level = 0) const;
+    void SetPixel(i32 x, i32 y, i32 z, i32 mip_level, const Vector4f& pixel);
 
     /**
      * Helper function used to check if given pixel format can be used for creating a bitmap.
@@ -83,18 +98,19 @@ public:
     [[nodiscard]] static bool IsPixelFormatSupported(PixelFormat pixel_format);
 
 private:
-    [[nodiscard]] Vector4f GetPixelUnsignedByte(i32 x, i32 y, i32 z) const;
-    void SetPixelUnsignedByte(i32 x, i32 y, i32 z, const Vector4f& pixel);
+    [[nodiscard]] Vector4f GetPixelUnsignedByte(i32 x, i32 y, i32 z, i32 mip_level) const;
+    void SetPixelUnsignedByte(i32 x, i32 y, i32 z, i32 mip_level, const Vector4f& pixel);
 
-    [[nodiscard]] Vector4f GetPixelFloat(i32 x, i32 y, i32 z) const;
-    void SetPixelFloat(i32 x, i32 y, i32 z, const Vector4f& pixel);
+    [[nodiscard]] Vector4f GetPixelFloat(i32 x, i32 y, i32 z, i32 mip_level) const;
+    void SetPixelFloat(i32 x, i32 y, i32 z, i32 mip_level, const Vector4f& pixel);
 
-    using GetPixelFunc = Vector4f (Bitmap::*)(i32 x, i32 y, i32 z) const;
-    using SetPixelFunc = void (Bitmap::*)(i32 x, i32 y, i32 z, const Vector4f& pixel);
+    using GetPixelFunc = Vector4f (Bitmap::*)(i32 x, i32 y, i32 z, i32 mip_level) const;
+    using SetPixelFunc = void (Bitmap::*)(i32 x, i32 y, i32 z, i32 mip_level, const Vector4f& pixel);
 
     i32 m_width = 0;
     i32 m_height = 0;
     i32 m_depth = 0;
+    i32 m_mip_count = 1;
     i32 m_comp_count = 0;
     PixelFormat m_pixel_format = PixelFormat::R32_TYPELESS;
     Opal::DynamicArray<u8> m_data;

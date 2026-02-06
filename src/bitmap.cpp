@@ -1,25 +1,20 @@
 #include "rndr/bitmap.hpp"
 
-Rndr::Bitmap::Bitmap(i32 width, i32 height, i32 depth, Rndr::PixelFormat pixel_format, const Opal::ArrayView<u8>& data)
-    : m_width(width), m_height(height), m_depth(depth), m_pixel_format(pixel_format)
+Rndr::Bitmap::Bitmap(i32 width, i32 height, i32 depth, Rndr::PixelFormat pixel_format, i32 mip_count, const Opal::ArrayView<u8>& data)
+    : m_width(width), m_height(height), m_depth(depth), m_mip_count(mip_count), m_pixel_format(pixel_format)
 {
-    if (width <= 0 || height <= 0 || depth <= 0 || !IsPixelFormatSupported(pixel_format))
+    if (width <= 0 || height <= 0 || depth <= 0 || mip_count < 1 || !IsPixelFormatSupported(pixel_format))
     {
-        m_data.Clear();
-        m_width = 0;
-        m_height = 0;
-        m_depth = 0;
-        m_comp_count = 0;
-        return;
+        throw Opal::Exception("Invalid input argument when creating bitmap");
     }
 
     m_comp_count = FromPixelFormatToComponentCount(pixel_format);
-    const u64 buffer_size = GetSize3D();
+    const u64 buffer_size = GetTotalSize();
     m_data.Resize(buffer_size);
-    const u64 size_to_copy = Opal::Min(data.GetSize(), buffer_size);
-    if (size_to_copy > 0)
+    RNDR_ASSERT(data.GetSize() == buffer_size, "Data size doesn't match buffer size!");
+    if (buffer_size > 0)
     {
-        memcpy(m_data.GetData(), data.GetData(), size_to_copy);
+        memcpy(m_data.GetData(), data.GetData(), buffer_size);
     }
     if (IsComponentLowPrecision(pixel_format))
     {
@@ -42,27 +37,108 @@ Rndr::u64 Rndr::Bitmap::GetPixelSize() const
     return FromPixelFormatToPixelSize(m_pixel_format);
 }
 
-Rndr::Vector4f Rndr::Bitmap::GetPixel(i32 x, i32 y, i32 z) const
+Rndr::u64 Rndr::Bitmap::GetRowSize(i32 mip_level) const
+{
+    if (mip_level >= m_mip_count)
+    {
+        throw Opal::Exception("Requested mip level does not exist");
+    }
+    const i32 width = Opal::Max(1, m_width >> mip_level);
+    return width * GetPixelSize();
+}
+
+Rndr::u64 Rndr::Bitmap::GetSize2D(i32 mip_level) const
+{
+    if (mip_level >= m_mip_count)
+    {
+        throw Opal::Exception("Requested mip level does not exist");
+    }
+    const i32 width = Opal::Max(1, m_width >> mip_level);
+    const i32 height = Opal::Max(1, m_height >> mip_level);
+    return width * height * GetPixelSize();
+}
+
+Rndr::u64 Rndr::Bitmap::GetSize3D(i32 mip_level) const
+{
+    if (mip_level >= m_mip_count)
+    {
+        throw Opal::Exception("Requested mip level does not exist");
+    }
+    const i32 width = Opal::Max(1, m_width >> mip_level);
+    const i32 height = Opal::Max(1, m_height >> mip_level);
+    const i32 depth = Opal::Max(1, m_depth >> mip_level);
+    return width * height * depth * GetPixelSize();
+}
+
+Rndr::u64 Rndr::Bitmap::GetTotalSize() const
+{
+    u64 total_size = m_width * m_height * m_depth * GetPixelSize();
+    i64 width = m_width;
+    i64 height = m_height;
+    i64 depth = m_depth;
+    while (width > 1 && height > 1 && depth > 1)
+    {
+        width = width != 1 ? width >> 1 : 1;
+        height = height != 1 ? height >> 1 : 1;
+        depth = depth != 1 ? depth >> 1 : 1;
+        total_size += width * height * depth * GetPixelSize();
+    }
+    total_size += GetPixelSize();
+    return total_size;
+}
+
+Rndr::u64 Rndr::Bitmap::GetMipLevelOffset(i32 mip_level) const
+{
+    if (mip_level >= m_mip_count)
+    {
+        throw Opal::Exception("Invalid mip level!");
+    }
+    if (mip_level == 0)
+    {
+        return 0;
+    }
+    u64 offset = 0;
+    i32 width = m_width;
+    i32 height = m_height;
+    i32 depth = m_depth;
+    i32 current_mip_level = 0;
+    while (current_mip_level < mip_level)
+    {
+        offset += width * height * depth * GetPixelSize();
+        width = Opal::Max(1, width >> 1);
+        height = Opal::Max(1, height >> 1);
+        depth = Opal::Max(1, depth >> 1);
+        current_mip_level++;
+    }
+    return offset;
+}
+
+Rndr::Vector4f Rndr::Bitmap::GetPixel(i32 x, i32 y, i32 z, i32 mip_level) const
 {
     RNDR_ASSERT(x >= 0 && x < m_width, "X out of bounds!");
     RNDR_ASSERT(y >= 0 && y < m_height, "Y out of bounds!");
     RNDR_ASSERT(z >= 0 && z < m_depth, "Z out of bounds!");
+    RNDR_ASSERT(mip_level >= 0 && mip_level < m_mip_count, "Mip level is missing!");
     RNDR_ASSERT(m_get_pixel_func != nullptr, "Get pixel function unavailable!");
-    return (*this.*m_get_pixel_func)(x, y, z);
+    return (*this.*m_get_pixel_func)(x, y, z, mip_level);
 }
 
-void Rndr::Bitmap::SetPixel(i32 x, i32 y, i32 z, const Vector4f& pixel)
+void Rndr::Bitmap::SetPixel(i32 x, i32 y, i32 z, i32 mip_level, const Vector4f& pixel)
 {
     RNDR_ASSERT(x >= 0 && x < m_width, "X out of bounds!");
     RNDR_ASSERT(y >= 0 && y < m_height, "Y out of bounds!");
     RNDR_ASSERT(z >= 0 && z < m_depth, "Z out of bounds!");
+    RNDR_ASSERT(mip_level >= 0 && mip_level < m_mip_count, "Mip level is missing!");
     RNDR_ASSERT(m_set_pixel_func != nullptr, "Set pixel function unavailable!");
-    (*this.*m_set_pixel_func)(x, y, z, pixel);
+    (*this.*m_set_pixel_func)(x, y, z, mip_level, pixel);
 }
 
-Rndr::Vector4f Rndr::Bitmap::GetPixelUnsignedByte(i32 x, i32 y, i32 z) const
+Rndr::Vector4f Rndr::Bitmap::GetPixelUnsignedByte(i32 x, i32 y, i32 z, i32 mip_level) const
 {
-    const i32 offset = (z * m_width * m_height + y * m_width + x) * m_comp_count;
+    const i32 width = Opal::Max(1, m_width >> mip_level);
+    const i32 height = Opal::Max(1, m_height >> mip_level);
+    const u64 mip_offset = GetMipLevelOffset(mip_level);
+    const u64 offset = mip_offset + (((z * width * height) + (y * width) + x) * m_comp_count);
     const uint8_t* pixel = m_data.GetData() + offset;
     Vector4f result = Vector4f::Zero();
     constexpr float k_inv_255 = 1.0f / 255.0f;
@@ -85,9 +161,12 @@ Rndr::Vector4f Rndr::Bitmap::GetPixelUnsignedByte(i32 x, i32 y, i32 z) const
     return result;
 }
 
-void Rndr::Bitmap::SetPixelUnsignedByte(i32 x, i32 y, i32 z, const Vector4f& pixel)
+void Rndr::Bitmap::SetPixelUnsignedByte(i32 x, i32 y, i32 z, i32 mip_level, const Vector4f& pixel)
 {
-    const i32 offset = (z * m_width * m_height + y * m_width + x) * m_comp_count;
+    const i32 width = Opal::Max(1, m_width >> mip_level);
+    const i32 height = Opal::Max(1, m_height >> mip_level);
+    const u64 mip_offset = GetMipLevelOffset(mip_level);
+    const u64 offset = mip_offset + ((z * width * height + y * width + x) * m_comp_count);
     uint8_t* pixel_ptr = m_data.GetData() + offset;
     constexpr float k_255 = 255.0f;
     if (m_comp_count > 0)
@@ -108,9 +187,12 @@ void Rndr::Bitmap::SetPixelUnsignedByte(i32 x, i32 y, i32 z, const Vector4f& pix
     }
 }
 
-Rndr::Vector4f Rndr::Bitmap::GetPixelFloat(i32 x, i32 y, i32 z) const
+Rndr::Vector4f Rndr::Bitmap::GetPixelFloat(i32 x, i32 y, i32 z, i32 mip_level) const
 {
-    const i32 offset = (z * m_width * m_height + y * m_width + x) * m_comp_count;
+    const i32 width = Opal::Max(1, m_width >> mip_level);
+    const i32 height = Opal::Max(1, m_height >> mip_level);
+    const u64 mip_offset = GetMipLevelOffset(mip_level);
+    const u64 offset = mip_offset + ((z * width * height + y * width + x) * m_comp_count);
     const float* pixel = reinterpret_cast<const float*>(m_data.GetData()) + offset;
     Vector4f result = Vector4f::Zero();
     if (m_comp_count > 0)
@@ -132,9 +214,12 @@ Rndr::Vector4f Rndr::Bitmap::GetPixelFloat(i32 x, i32 y, i32 z) const
     return result;
 }
 
-void Rndr::Bitmap::SetPixelFloat(i32 x, i32 y, i32 z, const Vector4f& pixel)
+void Rndr::Bitmap::SetPixelFloat(i32 x, i32 y, i32 z, i32 mip_level, const Vector4f& pixel)
 {
-    const i32 offset = (z * m_width * m_height + y * m_width + x) * m_comp_count;
+    const i32 width = Opal::Max(1, m_width >> mip_level);
+    const i32 height = Opal::Max(1, m_height >> mip_level);
+    const u64 mip_offset = GetMipLevelOffset(mip_level);
+    const u64 offset = mip_offset + ((z * width * height + y * width + x) * m_comp_count);
     float* pixel_ptr = reinterpret_cast<float*>(m_data.GetData()) + offset;
     if (m_comp_count > 0)
     {
@@ -154,12 +239,12 @@ void Rndr::Bitmap::SetPixelFloat(i32 x, i32 y, i32 z, const Vector4f& pixel)
     }
 }
 
-bool Rndr::Bitmap::IsPixelFormatSupported(Rndr::PixelFormat pixel_format)
+bool Rndr::Bitmap::IsPixelFormatSupported(PixelFormat pixel_format)
 {
-    return pixel_format == PixelFormat::R8G8B8A8_UNORM || pixel_format == PixelFormat::R8G8B8A8_UNORM_SRGB
-           || pixel_format == PixelFormat::R8G8B8_UNORM || pixel_format == PixelFormat::R8G8B8_UNORM_SRGB
-           || pixel_format == PixelFormat::R8G8_UNORM || pixel_format == PixelFormat::R8G8_UNORM_SRGB
-           || pixel_format == PixelFormat::R8_UNORM || pixel_format == PixelFormat::R8_UNORM_SRGB || pixel_format == PixelFormat::R32_FLOAT
-           || pixel_format == PixelFormat::R32G32_FLOAT || pixel_format == PixelFormat::R32G32B32_FLOAT
-           || pixel_format == PixelFormat::R32G32B32A32_FLOAT;
+    return pixel_format == PixelFormat::R8G8B8A8_UNORM || pixel_format == PixelFormat::R8G8B8A8_UNORM_SRGB ||
+           pixel_format == PixelFormat::R8G8B8_UNORM || pixel_format == PixelFormat::R8G8B8_UNORM_SRGB ||
+           pixel_format == PixelFormat::R8G8_UNORM || pixel_format == PixelFormat::R8G8_UNORM_SRGB ||
+           pixel_format == PixelFormat::R8_UNORM || pixel_format == PixelFormat::R8_UNORM_SRGB || pixel_format == PixelFormat::R32_FLOAT ||
+           pixel_format == PixelFormat::R32G32_FLOAT || pixel_format == PixelFormat::R32G32B32_FLOAT ||
+           pixel_format == PixelFormat::R32G32B32A32_FLOAT;
 }
