@@ -93,7 +93,7 @@ void BitmapTextRenderer::UpdateFontAtlas()
     }
 
     // Useful for debugging to dump rasterized atlas
-    const Rndr::Bitmap bitmap(k_atlas_width, k_atlas_height, 1, Rndr::PixelFormat::R8_UNORM, Opal::AsWritableBytes(m_atlas_data));
+    const Rndr::Bitmap bitmap(k_atlas_width, k_atlas_height, 1, Rndr::PixelFormat::R8_UNORM, 1, Opal::AsWritableBytes(m_atlas_data));
     Rndr::File::SaveImage(bitmap, "atlas.png");
 
     const Rndr::TextureDesc k_texture_desc{.width = k_atlas_width,

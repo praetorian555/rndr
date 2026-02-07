@@ -30,7 +30,7 @@ int main()
     const char* rendering_resolution_options_str[]{"2560x1440", "1920x1080", "1600x900", "1024x768"};
 
     const Rndr::ApplicationDesc app_desc{.enable_input_system = true};
-    Rndr::Application* app = Rndr::Application::Create(app_desc);
+    auto app = Rndr::Application::Create(app_desc);
     if (app == nullptr)
     {
         RNDR_LOG_ERROR("Failed to create app!");
@@ -41,7 +41,6 @@ int main()
     if (window == nullptr)
     {
         RNDR_LOG_ERROR("Failed to create window!");
-        Rndr::Application::Destroy();
         return -1;
     }
     i32 window_width = 0;
@@ -163,14 +162,6 @@ int main()
         const Rndr::f64 end_seconds = Opal::GetSeconds();
         delta_seconds = static_cast<Rndr::f32>(end_seconds - start_seconds);
     }
-
-    shape_renderer.Destroy();
-    text_renderer.Destroy();
-    final_render.Destroy();
-    gc.Destroy();
-
-    app->DestroyGenericWindow(window);
-    Rndr::Application::Destroy();
 
     return 0;
 }

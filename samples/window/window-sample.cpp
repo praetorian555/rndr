@@ -226,11 +226,6 @@ int main()
         delta_seconds = static_cast<Rndr::f32>(end_seconds - start_seconds);
     }
 
-    shape_renderer.Destroy();
-    grid_renderer.Destroy();
-    final_render.Destroy();
-    gc.Destroy();
-
     return 0;
 }
 
