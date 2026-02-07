@@ -49,7 +49,7 @@ public:
         : m_message_handler(message_handler), m_allocator(allocator), m_generic_windows(allocator)
     {
     }
-    virtual ~PlatformApplication() = default;
+    virtual ~PlatformApplication();
 
     GenericWindow* CreateGenericWindow(const GenericWindowDesc& desc);
     void DestroyGenericWindow(GenericWindow* window);

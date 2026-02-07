@@ -46,7 +46,7 @@ public:
     static Opal::ScopePtr<Application> Create(const ApplicationDesc& desc = ApplicationDesc{});
 
     static Application& GetChecked();
-    ~Application();
+    ~Application() override;
 
     GenericWindow* CreateGenericWindow(const GenericWindowDesc& desc = GenericWindowDesc());
     void DestroyGenericWindow(GenericWindow* window);
@@ -85,7 +85,7 @@ public:
     /** End of SystemMessageHandler API */
 
 private:
-    Application(const ApplicationDesc& desc);
+    explicit Application(const ApplicationDesc& desc);
 
     template <typename T, typename... Args>
     friend T* Opal::New(Opal::AllocatorBase* /*allocator*/, Args&&... /*args*/);

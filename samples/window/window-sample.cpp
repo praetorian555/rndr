@@ -32,7 +32,7 @@ Rndr::FrameBuffer RecreateFrameBuffer(Rndr::GraphicsContext& gc, Rndr::i32 width
                                      .color_attachment_samplers = {{}},
                                      .use_depth_stencil = true,
                                      .depth_stencil_attachment = {Rndr::TextureDesc{
-                                         .width = width, .height = height, .pixel_format = Rndr::PixelFormat::D32_FLOAT_S8_UINT}},
+                                         .width = width, .height = height, .pixel_format = Rndr::PixelFormat::D32_SFLOAT_S8_UINT}},
                                      .depth_stencil_sampler = {{}},
                                      .debug_name = "Window Sample - Final Render Frame Buffer"};
     return {gc, desc};
@@ -47,7 +47,7 @@ int main()
     const char* rendering_resolution_options_str[]{"2560x1440", "1920x1080", "1600x900"};
 
     const Rndr::ApplicationDesc app_desc{.enable_input_system = true};
-    Rndr::Application* app = Rndr::Application::Create(app_desc);
+    auto app = Rndr::Application::Create(app_desc);
     if (app == nullptr)
     {
         RNDR_LOG_ERROR("Failed to create app!");
@@ -57,7 +57,6 @@ int main()
     if (window == nullptr)
     {
         RNDR_LOG_ERROR("Failed to create window!");
-        Rndr::Application::Destroy();
         return -1;
     }
     Rndr::i32 window_width = 0;
@@ -134,7 +133,7 @@ int main()
     app->GetInputSystemChecked().GetInputContexts()[0]->AddAction(
         "Toggle movement controls", {Rndr::InputBinding::CreateKeyboardButtonBinding(
                                         Rndr::InputPrimitive::F1, Rndr::InputTrigger::ButtonPressed,
-                                        [app, &controller](Rndr::InputPrimitive, Rndr::InputTrigger, Rndr::f32, bool is_repeated)
+                                        [&app, &controller](Rndr::InputPrimitive, Rndr::InputTrigger, Rndr::f32, bool is_repeated)
                                         {
                                             if (!is_repeated)
                                             {
@@ -231,9 +230,6 @@ int main()
     grid_renderer.Destroy();
     final_render.Destroy();
     gc.Destroy();
-
-    app->DestroyGenericWindow(window);
-    Rndr::Application::Destroy();
 
     return 0;
 }

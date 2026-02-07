@@ -4,6 +4,15 @@
 #include "rndr/platform/windows-window.hpp"
 #endif
 
+Rndr::PlatformApplication::~PlatformApplication()
+{
+    for (GenericWindow* window : m_generic_windows)
+    {
+        window->Destroy();
+        Opal::Delete(m_allocator, window);
+    }
+}
+
 Rndr::GenericWindow* Rndr::PlatformApplication::CreateGenericWindow(const GenericWindowDesc& desc)
 {
     GenericWindow* window = nullptr;
