@@ -51,170 +51,6 @@ constexpr Rndr::u64 k_max_image_address_mode = static_cast<Rndr::u64>(Rndr::Imag
 constexpr Opal::InPlaceArray<GLint, k_max_image_address_mode> k_to_opengl_image_address_mode = {
     GL_CLAMP_TO_EDGE, GL_CLAMP_TO_BORDER, GL_REPEAT, GL_MIRRORED_REPEAT, GL_MIRROR_CLAMP_TO_EDGE};
 
-constexpr Rndr::u64 k_max_pixel_format = static_cast<Rndr::u64>(Rndr::PixelFormat::EnumCount);
-constexpr Opal::InPlaceArray<GLenum, k_max_pixel_format> k_to_opengl_internal_pixel_format = {GL_RGBA8,
-                                                                                              GL_SRGB8_ALPHA8,
-                                                                                              GL_RGBA8UI,
-                                                                                              GL_RGBA8_SNORM,
-                                                                                              GL_RGBA8I,
-                                                                                              GL_RGBA8,
-                                                                                              GL_SRGB8_ALPHA8,
-
-                                                                                              GL_DEPTH24_STENCIL8,
-
-                                                                                              GL_RGB8,
-                                                                                              GL_SRGB8,
-                                                                                              GL_RGB8UI,
-                                                                                              GL_RGB8_SNORM,
-                                                                                              GL_RGB8I,
-
-                                                                                              GL_RG8,
-                                                                                              GL_RG8,
-                                                                                              GL_RG8UI,
-                                                                                              GL_RG8_SNORM,
-                                                                                              GL_RG8I,
-
-                                                                                              GL_R8,
-                                                                                              GL_R8,
-                                                                                              GL_R8UI,
-                                                                                              GL_R8_SNORM,
-                                                                                              GL_R8I,
-
-                                                                                              GL_RGBA32F,
-                                                                                              GL_RGBA32UI,
-                                                                                              GL_RGBA32I,
-
-                                                                                              GL_RGB32F,
-                                                                                              GL_RGB32UI,
-                                                                                              GL_RGB32I,
-
-                                                                                              GL_RG32F,
-                                                                                              GL_RG32UI,
-                                                                                              GL_RG32I,
-
-                                                                                              GL_R32F,
-                                                                                              GL_R32UI,
-                                                                                              GL_R32I,
-
-                                                                                              GL_R32F,
-                                                                                              GL_R16F,
-
-                                                                                              GL_RG16F,
-
-                                                                                              GL_DEPTH32F_STENCIL8};
-constexpr Opal::InPlaceArray<GLenum, k_max_pixel_format> k_to_opengl_external_pixel_format = {GL_RGBA,
-                                                                                              GL_RGBA,
-                                                                                              GL_RGBA,
-                                                                                              GL_RGBA,
-                                                                                              GL_RGBA,
-                                                                                              GL_BGRA,
-                                                                                              GL_BGRA,
-
-                                                                                              GL_DEPTH_STENCIL,
-
-                                                                                              GL_RGB,
-                                                                                              GL_RGB,
-                                                                                              GL_RGB,
-                                                                                              GL_RGB,
-                                                                                              GL_RGB,
-
-                                                                                              GL_RG,
-                                                                                              GL_RG,
-                                                                                              GL_RG,
-                                                                                              GL_RG,
-                                                                                              GL_RG,
-
-                                                                                              GL_RED,
-                                                                                              GL_RED,
-                                                                                              GL_RED,
-                                                                                              GL_RED,
-                                                                                              GL_RED,
-
-                                                                                              GL_RGBA,
-                                                                                              GL_RGBA,
-                                                                                              GL_RGBA,
-
-                                                                                              GL_RGB,
-                                                                                              GL_RGB,
-                                                                                              GL_RGB,
-
-                                                                                              GL_RG,
-                                                                                              GL_RG,
-                                                                                              GL_RG,
-
-                                                                                              GL_RED,
-                                                                                              GL_RED,
-                                                                                              GL_RED,
-
-                                                                                              GL_RED,
-                                                                                              GL_RED,
-
-                                                                                              GL_RG,
-
-                                                                                              GL_DEPTH_STENCIL};
-constexpr Opal::InPlaceArray<GLenum, k_max_pixel_format> k_to_opengl_pixel_type = {GL_UNSIGNED_BYTE,
-                                                                                   GL_UNSIGNED_BYTE,
-                                                                                   GL_UNSIGNED_BYTE,
-                                                                                   GL_BYTE,
-                                                                                   GL_BYTE,
-                                                                                   GL_UNSIGNED_BYTE,
-                                                                                   GL_UNSIGNED_BYTE,
-
-                                                                                   GL_UNSIGNED_INT_24_8,
-
-                                                                                   GL_UNSIGNED_BYTE,
-                                                                                   GL_UNSIGNED_BYTE,
-                                                                                   GL_UNSIGNED_BYTE,
-                                                                                   GL_BYTE,
-                                                                                   GL_BYTE,
-
-                                                                                   GL_UNSIGNED_BYTE,
-                                                                                   GL_UNSIGNED_BYTE,
-                                                                                   GL_UNSIGNED_BYTE,
-                                                                                   GL_BYTE,
-                                                                                   GL_BYTE,
-
-                                                                                   GL_UNSIGNED_BYTE,
-                                                                                   GL_UNSIGNED_BYTE,
-                                                                                   GL_UNSIGNED_BYTE,
-                                                                                   GL_BYTE,
-                                                                                   GL_BYTE,
-
-                                                                                   GL_FLOAT,
-                                                                                   GL_UNSIGNED_INT,
-                                                                                   GL_INT,
-
-                                                                                   GL_FLOAT,
-                                                                                   GL_UNSIGNED_INT,
-                                                                                   GL_INT,
-
-                                                                                   GL_FLOAT,
-                                                                                   GL_UNSIGNED_INT,
-                                                                                   GL_INT,
-
-                                                                                   GL_FLOAT,
-                                                                                   GL_UNSIGNED_INT,
-                                                                                   GL_INT,
-
-                                                                                   GL_FLOAT,
-                                                                                   GL_HALF_FLOAT,
-
-                                                                                   GL_HALF_FLOAT,
-
-                                                                                   GL_FLOAT_32_UNSIGNED_INT_24_8_REV};
-constexpr Opal::InPlaceArray<int32_t, k_max_pixel_format> k_to_pixel_size = {4, 4, 4, 4, 4,  4,  4,  4,  3,  3,  3, 3, 3, 2, 2, 2, 2, 2, 1,
-                                                                             1, 1, 1, 1, 16, 16, 16, 12, 12, 12, 8, 8, 8, 4, 4, 4, 4, 2, 4, 5};
-constexpr Opal::InPlaceArray<GLint, k_max_pixel_format> k_to_component_count = {4, 4, 4, 4, 4, 4, 4, 2, 3, 3, 3, 3, 3, 2, 2, 2, 2, 2, 1,
-                                                                                1, 1, 1, 1, 4, 4, 4, 3, 3, 3, 2, 2, 2, 1, 1, 1, 1, 1, 2, 2};
-constexpr Opal::InPlaceArray<GLenum, k_max_pixel_format> k_to_should_normalize_data = {
-    GL_TRUE,  GL_TRUE,  GL_FALSE, GL_TRUE,  GL_FALSE, GL_TRUE,  GL_TRUE,  GL_FALSE, GL_TRUE,  GL_TRUE,  GL_FALSE, GL_TRUE,  GL_FALSE,
-    GL_TRUE,  GL_TRUE,  GL_FALSE, GL_TRUE,  GL_FALSE, GL_TRUE,  GL_TRUE,  GL_FALSE, GL_TRUE,  GL_FALSE, GL_FALSE, GL_FALSE, GL_FALSE,
-    GL_FALSE, GL_FALSE, GL_FALSE, GL_FALSE, GL_FALSE, GL_FALSE, GL_FALSE, GL_FALSE, GL_FALSE, GL_FALSE, GL_FALSE, GL_FALSE, GL_FALSE};
-
-constexpr Opal::InPlaceArray<bool, k_max_pixel_format> k_is_integer = {
-    false, false, true,  false, true,  false, false, false, false, false, true,  false, true, false, false, true, false, true,  false,
-    false, true,  false, true,  false, true,  true,  false, true,  true,  false, true,  true, false, true,  true, false, false, false, false};
-
 constexpr Rndr::u64 k_max_primitive_topology = static_cast<Rndr::u64>(Rndr::PrimitiveTopology::EnumCount);
 constexpr Opal::InPlaceArray<GLenum, k_max_primitive_topology> k_to_opengl_primitive_topology = {GL_POINTS, GL_LINES, GL_LINE_STRIP,
                                                                                                  GL_TRIANGLES, GL_TRIANGLE_STRIP};
@@ -321,37 +157,572 @@ GLint Rndr::FromImageAddressModeToOpenGL(ImageAddressMode address_mode)
 
 GLenum Rndr::FromPixelFormatToInternalFormat(PixelFormat format)
 {
-    return k_to_opengl_internal_pixel_format[static_cast<Rndr::u64>(format)];
+    switch (format)
+    {
+        // R8 formats
+        case PixelFormat::R8_UNORM:
+            return GL_R8;
+        case PixelFormat::R8_SNORM:
+            return GL_R8_SNORM;
+        case PixelFormat::R8_UINT:
+            return GL_R8UI;
+        case PixelFormat::R8_SINT:
+            return GL_R8I;
+
+        // RG8 formats
+        case PixelFormat::R8G8_UNORM:
+            return GL_RG8;
+        case PixelFormat::R8G8_SNORM:
+            return GL_RG8_SNORM;
+        case PixelFormat::R8G8_UINT:
+            return GL_RG8UI;
+        case PixelFormat::R8G8_SINT:
+            return GL_RG8I;
+
+        // RGB8 formats
+        case PixelFormat::R8G8B8_UNORM:
+            return GL_RGB8;
+        case PixelFormat::R8G8B8_SNORM:
+            return GL_RGB8_SNORM;
+        case PixelFormat::R8G8B8_UINT:
+            return GL_RGB8UI;
+        case PixelFormat::R8G8B8_SINT:
+            return GL_RGB8I;
+        case PixelFormat::R8G8B8_SRGB:
+            return GL_SRGB8;
+
+        // RGBA8 formats
+        case PixelFormat::R8G8B8A8_UNORM:
+            return GL_RGBA8;
+        case PixelFormat::R8G8B8A8_SNORM:
+            return GL_RGBA8_SNORM;
+        case PixelFormat::R8G8B8A8_UINT:
+            return GL_RGBA8UI;
+        case PixelFormat::R8G8B8A8_SINT:
+            return GL_RGBA8I;
+        case PixelFormat::R8G8B8A8_SRGB:
+            return GL_SRGB8_ALPHA8;
+
+        // BGRA8 formats (use RGBA internal format with BGRA external format)
+        case PixelFormat::B8G8R8A8_UNORM:
+            return GL_RGBA8;
+        case PixelFormat::B8G8R8A8_SRGB:
+            return GL_SRGB8_ALPHA8;
+
+        // A8B8G8R8 packed formats (same as RGBA8 in OpenGL)
+        case PixelFormat::A8B8G8R8_UNORM_PACK32:
+            return GL_RGBA8;
+        case PixelFormat::A8B8G8R8_SNORM_PACK32:
+            return GL_RGBA8_SNORM;
+        case PixelFormat::A8B8G8R8_UINT_PACK32:
+            return GL_RGBA8UI;
+        case PixelFormat::A8B8G8R8_SINT_PACK32:
+            return GL_RGBA8I;
+        case PixelFormat::A8B8G8R8_SRGB_PACK32:
+            return GL_SRGB8_ALPHA8;
+
+        // A2B10G10R10 formats
+        case PixelFormat::A2B10G10R10_UNORM_PACK32:
+            return GL_RGB10_A2;
+        case PixelFormat::A2B10G10R10_UINT_PACK32:
+            return GL_RGB10_A2UI;
+
+        // R16 formats
+        case PixelFormat::R16_UNORM:
+            return GL_R16;
+        case PixelFormat::R16_SNORM:
+            return GL_R16_SNORM;
+        case PixelFormat::R16_UINT:
+            return GL_R16UI;
+        case PixelFormat::R16_SINT:
+            return GL_R16I;
+        case PixelFormat::R16_SFLOAT:
+            return GL_R16F;
+
+        // RG16 formats
+        case PixelFormat::R16G16_UNORM:
+            return GL_RG16;
+        case PixelFormat::R16G16_SNORM:
+            return GL_RG16_SNORM;
+        case PixelFormat::R16G16_UINT:
+            return GL_RG16UI;
+        case PixelFormat::R16G16_SINT:
+            return GL_RG16I;
+        case PixelFormat::R16G16_SFLOAT:
+            return GL_RG16F;
+
+        // RGB16 formats
+        case PixelFormat::R16G16B16_UNORM:
+            return GL_RGB16;
+        case PixelFormat::R16G16B16_SNORM:
+            return GL_RGB16_SNORM;
+        case PixelFormat::R16G16B16_UINT:
+            return GL_RGB16UI;
+        case PixelFormat::R16G16B16_SINT:
+            return GL_RGB16I;
+        case PixelFormat::R16G16B16_SFLOAT:
+            return GL_RGB16F;
+
+        // RGBA16 formats
+        case PixelFormat::R16G16B16A16_UNORM:
+            return GL_RGBA16;
+        case PixelFormat::R16G16B16A16_SNORM:
+            return GL_RGBA16_SNORM;
+        case PixelFormat::R16G16B16A16_UINT:
+            return GL_RGBA16UI;
+        case PixelFormat::R16G16B16A16_SINT:
+            return GL_RGBA16I;
+        case PixelFormat::R16G16B16A16_SFLOAT:
+            return GL_RGBA16F;
+
+        // R32 formats
+        case PixelFormat::R32_UINT:
+            return GL_R32UI;
+        case PixelFormat::R32_SINT:
+            return GL_R32I;
+        case PixelFormat::R32_SFLOAT:
+            return GL_R32F;
+
+        // RG32 formats
+        case PixelFormat::R32G32_UINT:
+            return GL_RG32UI;
+        case PixelFormat::R32G32_SINT:
+            return GL_RG32I;
+        case PixelFormat::R32G32_SFLOAT:
+            return GL_RG32F;
+
+        // RGB32 formats
+        case PixelFormat::R32G32B32_UINT:
+            return GL_RGB32UI;
+        case PixelFormat::R32G32B32_SINT:
+            return GL_RGB32I;
+        case PixelFormat::R32G32B32_SFLOAT:
+            return GL_RGB32F;
+
+        // RGBA32 formats
+        case PixelFormat::R32G32B32A32_UINT:
+            return GL_RGBA32UI;
+        case PixelFormat::R32G32B32A32_SINT:
+            return GL_RGBA32I;
+        case PixelFormat::R32G32B32A32_SFLOAT:
+            return GL_RGBA32F;
+
+        // Special packed formats
+        case PixelFormat::B10G11R11_UFLOAT_PACK32:
+            return GL_R11F_G11F_B10F;
+        case PixelFormat::E5B9G9R9_UFLOAT_PACK32:
+            return GL_RGB9_E5;
+
+        // Depth/stencil formats
+        case PixelFormat::D16_UNORM:
+            return GL_DEPTH_COMPONENT16;
+        case PixelFormat::X8_D24_UNORM_PACK32:
+            return GL_DEPTH_COMPONENT24;
+        case PixelFormat::D32_SFLOAT:
+            return GL_DEPTH_COMPONENT32F;
+        case PixelFormat::S8_UINT:
+            return GL_STENCIL_INDEX8;
+        case PixelFormat::D24_UNORM_S8_UINT:
+            return GL_DEPTH24_STENCIL8;
+        case PixelFormat::D32_SFLOAT_S8_UINT:
+            return GL_DEPTH32F_STENCIL8;
+
+        // BC compressed formats (RGTC, core GL 3.0)
+        case PixelFormat::BC4_UNORM_BLOCK:
+            return GL_COMPRESSED_RED_RGTC1;
+        case PixelFormat::BC4_SNORM_BLOCK:
+            return GL_COMPRESSED_SIGNED_RED_RGTC1;
+        case PixelFormat::BC5_UNORM_BLOCK:
+            return GL_COMPRESSED_RG_RGTC2;
+        case PixelFormat::BC5_SNORM_BLOCK:
+            return GL_COMPRESSED_SIGNED_RG_RGTC2;
+
+        // BC compressed formats (BPTC, core GL 4.2)
+        case PixelFormat::BC6H_UFLOAT_BLOCK:
+            return GL_COMPRESSED_RGB_BPTC_UNSIGNED_FLOAT;
+        case PixelFormat::BC6H_SFLOAT_BLOCK:
+            return GL_COMPRESSED_RGB_BPTC_SIGNED_FLOAT;
+        case PixelFormat::BC7_UNORM_BLOCK:
+            return GL_COMPRESSED_RGBA_BPTC_UNORM;
+        case PixelFormat::BC7_SRGB_BLOCK:
+            return GL_COMPRESSED_SRGB_ALPHA_BPTC_UNORM;
+
+        default:
+            throw GraphicsAPIException(0, "Pixel format not supported by OpenGL!");
+    }
 }
 
 GLenum Rndr::FromPixelFormatToExternalFormat(PixelFormat format)
 {
-    return k_to_opengl_external_pixel_format[static_cast<Rndr::u64>(format)];
+    switch (format)
+    {
+        // Single-channel non-integer formats
+        case PixelFormat::R8_UNORM:
+        case PixelFormat::R8_SNORM:
+        case PixelFormat::R16_UNORM:
+        case PixelFormat::R16_SNORM:
+        case PixelFormat::R16_SFLOAT:
+        case PixelFormat::R32_SFLOAT:
+            return GL_RED;
+
+        // Single-channel integer formats
+        case PixelFormat::R8_UINT:
+        case PixelFormat::R8_SINT:
+        case PixelFormat::R16_UINT:
+        case PixelFormat::R16_SINT:
+        case PixelFormat::R32_UINT:
+        case PixelFormat::R32_SINT:
+            return GL_RED_INTEGER;
+
+        // Two-channel non-integer formats
+        case PixelFormat::R8G8_UNORM:
+        case PixelFormat::R8G8_SNORM:
+        case PixelFormat::R16G16_UNORM:
+        case PixelFormat::R16G16_SNORM:
+        case PixelFormat::R16G16_SFLOAT:
+        case PixelFormat::R32G32_SFLOAT:
+            return GL_RG;
+
+        // Two-channel integer formats
+        case PixelFormat::R8G8_UINT:
+        case PixelFormat::R8G8_SINT:
+        case PixelFormat::R16G16_UINT:
+        case PixelFormat::R16G16_SINT:
+        case PixelFormat::R32G32_UINT:
+        case PixelFormat::R32G32_SINT:
+            return GL_RG_INTEGER;
+
+        // Three-channel non-integer formats
+        case PixelFormat::R8G8B8_UNORM:
+        case PixelFormat::R8G8B8_SNORM:
+        case PixelFormat::R8G8B8_SRGB:
+        case PixelFormat::R16G16B16_UNORM:
+        case PixelFormat::R16G16B16_SNORM:
+        case PixelFormat::R16G16B16_SFLOAT:
+        case PixelFormat::R32G32B32_SFLOAT:
+        case PixelFormat::B10G11R11_UFLOAT_PACK32:
+        case PixelFormat::E5B9G9R9_UFLOAT_PACK32:
+            return GL_RGB;
+
+        // Three-channel integer formats
+        case PixelFormat::R8G8B8_UINT:
+        case PixelFormat::R8G8B8_SINT:
+        case PixelFormat::R16G16B16_UINT:
+        case PixelFormat::R16G16B16_SINT:
+        case PixelFormat::R32G32B32_UINT:
+        case PixelFormat::R32G32B32_SINT:
+            return GL_RGB_INTEGER;
+
+        // Four-channel non-integer formats
+        case PixelFormat::R8G8B8A8_UNORM:
+        case PixelFormat::R8G8B8A8_SNORM:
+        case PixelFormat::R8G8B8A8_SRGB:
+        case PixelFormat::A8B8G8R8_UNORM_PACK32:
+        case PixelFormat::A8B8G8R8_SNORM_PACK32:
+        case PixelFormat::A8B8G8R8_SRGB_PACK32:
+        case PixelFormat::A2B10G10R10_UNORM_PACK32:
+        case PixelFormat::R16G16B16A16_UNORM:
+        case PixelFormat::R16G16B16A16_SNORM:
+        case PixelFormat::R16G16B16A16_SFLOAT:
+        case PixelFormat::R32G32B32A32_SFLOAT:
+            return GL_RGBA;
+
+        // Four-channel integer formats
+        case PixelFormat::R8G8B8A8_UINT:
+        case PixelFormat::R8G8B8A8_SINT:
+        case PixelFormat::A8B8G8R8_UINT_PACK32:
+        case PixelFormat::A8B8G8R8_SINT_PACK32:
+        case PixelFormat::A2B10G10R10_UINT_PACK32:
+        case PixelFormat::R16G16B16A16_UINT:
+        case PixelFormat::R16G16B16A16_SINT:
+        case PixelFormat::R32G32B32A32_UINT:
+        case PixelFormat::R32G32B32A32_SINT:
+            return GL_RGBA_INTEGER;
+
+        // BGRA formats
+        case PixelFormat::B8G8R8A8_UNORM:
+        case PixelFormat::B8G8R8A8_SRGB:
+            return GL_BGRA;
+
+        // Depth-only formats
+        case PixelFormat::D16_UNORM:
+        case PixelFormat::X8_D24_UNORM_PACK32:
+        case PixelFormat::D32_SFLOAT:
+            return GL_DEPTH_COMPONENT;
+
+        // Stencil-only formats
+        case PixelFormat::S8_UINT:
+            return GL_STENCIL_INDEX;
+
+        // Combined depth-stencil formats
+        case PixelFormat::D24_UNORM_S8_UINT:
+        case PixelFormat::D32_SFLOAT_S8_UINT:
+            return GL_DEPTH_STENCIL;
+
+        default:
+            throw GraphicsAPIException(0, "Pixel format not supported by OpenGL!");
+    }
 }
 
 GLenum Rndr::FromPixelFormatToDataType(PixelFormat format)
 {
-    return k_to_opengl_pixel_type[static_cast<Rndr::u64>(format)];
+    switch (format)
+    {
+        // 8-bit unsigned
+        case PixelFormat::R8_UNORM:
+        case PixelFormat::R8_UINT:
+        case PixelFormat::R8G8_UNORM:
+        case PixelFormat::R8G8_UINT:
+        case PixelFormat::R8G8B8_UNORM:
+        case PixelFormat::R8G8B8_UINT:
+        case PixelFormat::R8G8B8_SRGB:
+        case PixelFormat::R8G8B8A8_UNORM:
+        case PixelFormat::R8G8B8A8_UINT:
+        case PixelFormat::R8G8B8A8_SRGB:
+        case PixelFormat::B8G8R8A8_UNORM:
+        case PixelFormat::B8G8R8A8_SRGB:
+        case PixelFormat::A8B8G8R8_UNORM_PACK32:
+        case PixelFormat::A8B8G8R8_UINT_PACK32:
+        case PixelFormat::A8B8G8R8_SRGB_PACK32:
+        case PixelFormat::S8_UINT:
+            return GL_UNSIGNED_BYTE;
+
+        // 8-bit signed
+        case PixelFormat::R8_SNORM:
+        case PixelFormat::R8_SINT:
+        case PixelFormat::R8G8_SNORM:
+        case PixelFormat::R8G8_SINT:
+        case PixelFormat::R8G8B8_SNORM:
+        case PixelFormat::R8G8B8_SINT:
+        case PixelFormat::R8G8B8A8_SNORM:
+        case PixelFormat::R8G8B8A8_SINT:
+        case PixelFormat::A8B8G8R8_SNORM_PACK32:
+        case PixelFormat::A8B8G8R8_SINT_PACK32:
+            return GL_BYTE;
+
+        // 16-bit unsigned
+        case PixelFormat::R16_UNORM:
+        case PixelFormat::R16_UINT:
+        case PixelFormat::R16G16_UNORM:
+        case PixelFormat::R16G16_UINT:
+        case PixelFormat::R16G16B16_UNORM:
+        case PixelFormat::R16G16B16_UINT:
+        case PixelFormat::R16G16B16A16_UNORM:
+        case PixelFormat::R16G16B16A16_UINT:
+        case PixelFormat::D16_UNORM:
+            return GL_UNSIGNED_SHORT;
+
+        // 16-bit signed
+        case PixelFormat::R16_SNORM:
+        case PixelFormat::R16_SINT:
+        case PixelFormat::R16G16_SNORM:
+        case PixelFormat::R16G16_SINT:
+        case PixelFormat::R16G16B16_SNORM:
+        case PixelFormat::R16G16B16_SINT:
+        case PixelFormat::R16G16B16A16_SNORM:
+        case PixelFormat::R16G16B16A16_SINT:
+            return GL_SHORT;
+
+        // 16-bit float
+        case PixelFormat::R16_SFLOAT:
+        case PixelFormat::R16G16_SFLOAT:
+        case PixelFormat::R16G16B16_SFLOAT:
+        case PixelFormat::R16G16B16A16_SFLOAT:
+            return GL_HALF_FLOAT;
+
+        // 32-bit unsigned
+        case PixelFormat::R32_UINT:
+        case PixelFormat::R32G32_UINT:
+        case PixelFormat::R32G32B32_UINT:
+        case PixelFormat::R32G32B32A32_UINT:
+        case PixelFormat::X8_D24_UNORM_PACK32:
+            return GL_UNSIGNED_INT;
+
+        // 32-bit signed
+        case PixelFormat::R32_SINT:
+        case PixelFormat::R32G32_SINT:
+        case PixelFormat::R32G32B32_SINT:
+        case PixelFormat::R32G32B32A32_SINT:
+            return GL_INT;
+
+        // 32-bit float
+        case PixelFormat::R32_SFLOAT:
+        case PixelFormat::R32G32_SFLOAT:
+        case PixelFormat::R32G32B32_SFLOAT:
+        case PixelFormat::R32G32B32A32_SFLOAT:
+        case PixelFormat::D32_SFLOAT:
+            return GL_FLOAT;
+
+        // Special packed types
+        case PixelFormat::A2B10G10R10_UNORM_PACK32:
+        case PixelFormat::A2B10G10R10_UINT_PACK32:
+            return GL_UNSIGNED_INT_2_10_10_10_REV;
+        case PixelFormat::B10G11R11_UFLOAT_PACK32:
+            return GL_UNSIGNED_INT_10F_11F_11F_REV;
+        case PixelFormat::E5B9G9R9_UFLOAT_PACK32:
+            return GL_UNSIGNED_INT_5_9_9_9_REV;
+
+        // Depth-stencil packed types
+        case PixelFormat::D24_UNORM_S8_UINT:
+            return GL_UNSIGNED_INT_24_8;
+        case PixelFormat::D32_SFLOAT_S8_UINT:
+            return GL_FLOAT_32_UNSIGNED_INT_24_8_REV;
+
+        default:
+            throw GraphicsAPIException(0, "Pixel format not supported by OpenGL!");
+    }
+}
+
+GLenum Rndr::FromPixelFormatToShouldNormalizeData(PixelFormat format)
+{
+    switch (format)
+    {
+        // UNORM formats (normalized unsigned)
+        case PixelFormat::R8_UNORM:
+        case PixelFormat::R8G8_UNORM:
+        case PixelFormat::R8G8B8_UNORM:
+        case PixelFormat::R8G8B8A8_UNORM:
+        case PixelFormat::B8G8R8A8_UNORM:
+        case PixelFormat::A8B8G8R8_UNORM_PACK32:
+        case PixelFormat::A2B10G10R10_UNORM_PACK32:
+        case PixelFormat::R16_UNORM:
+        case PixelFormat::R16G16_UNORM:
+        case PixelFormat::R16G16B16_UNORM:
+        case PixelFormat::R16G16B16A16_UNORM:
+        // SNORM formats (normalized signed)
+        case PixelFormat::R8_SNORM:
+        case PixelFormat::R8G8_SNORM:
+        case PixelFormat::R8G8B8_SNORM:
+        case PixelFormat::R8G8B8A8_SNORM:
+        case PixelFormat::A8B8G8R8_SNORM_PACK32:
+        case PixelFormat::R16_SNORM:
+        case PixelFormat::R16G16_SNORM:
+        case PixelFormat::R16G16B16_SNORM:
+        case PixelFormat::R16G16B16A16_SNORM:
+        // SRGB formats (normalized)
+        case PixelFormat::R8G8B8_SRGB:
+        case PixelFormat::R8G8B8A8_SRGB:
+        case PixelFormat::B8G8R8A8_SRGB:
+        case PixelFormat::A8B8G8R8_SRGB_PACK32:
+            return GL_TRUE;
+
+        // UINT, SINT, SFLOAT formats (not normalized)
+        case PixelFormat::R8_UINT:
+        case PixelFormat::R8_SINT:
+        case PixelFormat::R8G8_UINT:
+        case PixelFormat::R8G8_SINT:
+        case PixelFormat::R8G8B8_UINT:
+        case PixelFormat::R8G8B8_SINT:
+        case PixelFormat::R8G8B8A8_UINT:
+        case PixelFormat::R8G8B8A8_SINT:
+        case PixelFormat::A8B8G8R8_UINT_PACK32:
+        case PixelFormat::A8B8G8R8_SINT_PACK32:
+        case PixelFormat::A2B10G10R10_UINT_PACK32:
+        case PixelFormat::R16_UINT:
+        case PixelFormat::R16_SINT:
+        case PixelFormat::R16_SFLOAT:
+        case PixelFormat::R16G16_UINT:
+        case PixelFormat::R16G16_SINT:
+        case PixelFormat::R16G16_SFLOAT:
+        case PixelFormat::R16G16B16_UINT:
+        case PixelFormat::R16G16B16_SINT:
+        case PixelFormat::R16G16B16_SFLOAT:
+        case PixelFormat::R16G16B16A16_UINT:
+        case PixelFormat::R16G16B16A16_SINT:
+        case PixelFormat::R16G16B16A16_SFLOAT:
+        case PixelFormat::R32_UINT:
+        case PixelFormat::R32_SINT:
+        case PixelFormat::R32_SFLOAT:
+        case PixelFormat::R32G32_UINT:
+        case PixelFormat::R32G32_SINT:
+        case PixelFormat::R32G32_SFLOAT:
+        case PixelFormat::R32G32B32_UINT:
+        case PixelFormat::R32G32B32_SINT:
+        case PixelFormat::R32G32B32_SFLOAT:
+        case PixelFormat::R32G32B32A32_UINT:
+        case PixelFormat::R32G32B32A32_SINT:
+        case PixelFormat::R32G32B32A32_SFLOAT:
+        case PixelFormat::B10G11R11_UFLOAT_PACK32:
+        case PixelFormat::E5B9G9R9_UFLOAT_PACK32:
+        // Depth/stencil formats
+        case PixelFormat::D16_UNORM:
+        case PixelFormat::X8_D24_UNORM_PACK32:
+        case PixelFormat::D32_SFLOAT:
+        case PixelFormat::S8_UINT:
+        case PixelFormat::D24_UNORM_S8_UINT:
+        case PixelFormat::D32_SFLOAT_S8_UINT:
+        // Compressed formats
+        case PixelFormat::BC4_UNORM_BLOCK:
+        case PixelFormat::BC4_SNORM_BLOCK:
+        case PixelFormat::BC5_UNORM_BLOCK:
+        case PixelFormat::BC5_SNORM_BLOCK:
+        case PixelFormat::BC6H_UFLOAT_BLOCK:
+        case PixelFormat::BC6H_SFLOAT_BLOCK:
+        case PixelFormat::BC7_UNORM_BLOCK:
+        case PixelFormat::BC7_SRGB_BLOCK:
+            return GL_FALSE;
+
+        default:
+            throw GraphicsAPIException(0, "Pixel format not supported by OpenGL!");
+    }
+}
+
+bool Rndr::IsPixelFormatInteger(PixelFormat format)
+{
+    switch (format)
+    {
+        case PixelFormat::R8_UINT:
+        case PixelFormat::R8_SINT:
+        case PixelFormat::R8G8_UINT:
+        case PixelFormat::R8G8_SINT:
+        case PixelFormat::R8G8B8_UINT:
+        case PixelFormat::R8G8B8_SINT:
+        case PixelFormat::R8G8B8A8_UINT:
+        case PixelFormat::R8G8B8A8_SINT:
+        case PixelFormat::A8B8G8R8_UINT_PACK32:
+        case PixelFormat::A8B8G8R8_SINT_PACK32:
+        case PixelFormat::A2B10G10R10_UINT_PACK32:
+        case PixelFormat::R16_UINT:
+        case PixelFormat::R16_SINT:
+        case PixelFormat::R16G16_UINT:
+        case PixelFormat::R16G16_SINT:
+        case PixelFormat::R16G16B16_UINT:
+        case PixelFormat::R16G16B16_SINT:
+        case PixelFormat::R16G16B16A16_UINT:
+        case PixelFormat::R16G16B16A16_SINT:
+        case PixelFormat::R32_UINT:
+        case PixelFormat::R32_SINT:
+        case PixelFormat::R32G32_UINT:
+        case PixelFormat::R32G32_SINT:
+        case PixelFormat::R32G32B32_UINT:
+        case PixelFormat::R32G32B32_SINT:
+        case PixelFormat::R32G32B32A32_UINT:
+        case PixelFormat::R32G32B32A32_SINT:
+            return true;
+
+        default:
+            return false;
+    }
 }
 
 int32_t Rndr::FromPixelFormatToPixelSize(PixelFormat format)
 {
-    return k_to_pixel_size[static_cast<Rndr::u64>(format)];
+    return static_cast<int32_t>(GetPixelSize(format));
 }
 
 GLint Rndr::FromPixelFormatToComponentCount(PixelFormat format)
 {
-    return k_to_component_count[static_cast<Rndr::u64>(format)];
+    return static_cast<GLint>(GetComponentCount(format));
 }
 
-GLenum Rndr::FromPixelFormatToShouldNormalizeData(Rndr::PixelFormat format)
+bool Rndr::IsComponentLowPrecision(PixelFormat format)
 {
-    return k_to_should_normalize_data[static_cast<Rndr::u64>(format)];
+    return IsLowPrecisionFormat(format);
 }
 
-bool Rndr::IsPixelFormatInteger(Rndr::PixelFormat format)
+bool Rndr::IsComponentHighPrecision(PixelFormat format)
 {
-    return k_is_integer[static_cast<Rndr::u64>(format)];
+    return IsHighPrecisionFormat(format);
 }
 
 GLenum Rndr::FromPrimitiveTopologyToOpenGL(PrimitiveTopology topology)
@@ -393,18 +764,6 @@ GLint Rndr::FromImageAccessToOpenGL(Rndr::TextureAccess access)
 #if RNDR_DEBUG
     return GL_INVALID_ENUM;
 #endif  // RNDR_DEBUG
-}
-
-bool Rndr::IsComponentLowPrecision(PixelFormat format)
-{
-    const GLenum data_type = FromPixelFormatToDataType(format);
-    return data_type == GL_UNSIGNED_BYTE || data_type == GL_BYTE;
-}
-
-bool Rndr::IsComponentHighPrecision(PixelFormat format)
-{
-    const GLenum data_type = FromPixelFormatToDataType(format);
-    return data_type == GL_FLOAT;
 }
 
 Opal::StringUtf8 Rndr::FromBufferTypeToString(Rndr::BufferType type)
