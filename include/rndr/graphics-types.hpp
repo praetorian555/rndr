@@ -7,6 +7,7 @@
 
 #include "rndr/colors.hpp"
 #include "rndr/math.hpp"
+#include "rndr/pixel-format.hpp"
 #include "rndr/platform/windows-forward-def.hpp"
 #include "rndr/types.hpp"
 
@@ -28,69 +29,6 @@ enum class TextureType : u8
     Texture2D,
     Texture2DArray,
     CubeMap,
-    EnumCount
-};
-
-/**
- * Exact positions of channels and their size in bits.
- *
- * UNORM - Interpreted by a shader as f32ing-poi32 value in the range [0, 1].
- * SNORM - Interpreted by a shader as f32ing-poi32 value in the range [-1, 1].
- */
-enum class PixelFormat : u8
-{
-    R8G8B8A8_UNORM = 0,
-    R8G8B8A8_UNORM_SRGB,
-    R8G8B8A8_UINT,
-    R8G8B8A8_SNORM,
-    R8G8B8A8_SINT,
-    B8G8R8A8_UNORM,
-    B8G8R8A8_UNORM_SRGB,
-
-    D24_UNORM_S8_UINT,
-
-    R8G8B8_UNORM,
-    R8G8B8_UNORM_SRGB,
-    R8G8B8_UINT,
-    R8G8B8_SNORM,
-    R8G8B8_SINT,
-
-    R8G8_UNORM,
-    R8G8_UNORM_SRGB,  // TODO: This format can probably be removed
-    R8G8_UINT,
-    R8G8_SNORM,
-    R8G8_SINT,
-
-    R8_UNORM,
-    R8_UNORM_SRGB,  // TODO: This format can probably be removed
-    R8_UINT,
-    R8_SNORM,
-    R8_SINT,
-
-    R32G32B32A32_FLOAT,
-    R32G32B32A32_UINT,
-    R32G32B32A32_SINT,
-
-    R32G32B32_FLOAT,
-    R32G32B32_UINT,
-    R32G32B32_SINT,
-
-    R32G32_FLOAT,
-    R32G32_UINT,
-    R32G32_SINT,
-
-    R32_FLOAT,
-    R32_UINT,
-    R32_SINT,
-
-    R32_TYPELESS,
-    R16_TYPELESS,
-
-    R16G16_FLOAT,
-
-    D32_FLOAT_S8_UINT,
-
-    /** Represents number of elements in the enum. */
     EnumCount
 };
 
@@ -508,13 +446,12 @@ enum class ImageLayout
 struct ImageSubresourceRange
 {
     // Which aspect of the image we care about.
-    u32 aspect_mask = 1; // By default, its color aspect
+    u32 aspect_mask = 1;  // By default, its color aspect
     u32 first_mip_level = 0;
     u32 mip_level_count = 1;
     u32 first_array_layer = 0;
     u32 array_layer_count = 1;
 };
-
 
 struct GraphicsContextDesc
 {
@@ -670,7 +607,7 @@ struct TextureDesc
     TextureType type = TextureType::Texture2D;
 
     /** Image pixel format. */
-    PixelFormat pixel_format = PixelFormat::R8G8B8A8_UNORM_SRGB;
+    PixelFormat pixel_format = PixelFormat::R8G8B8A8_SRGB;
 
     /** If image should have mip maps. */
     bool use_mips = false;
@@ -694,7 +631,7 @@ struct TextureDesc
 struct InputLayoutElement
 {
     /** Data format of the element. */
-    PixelFormat format = PixelFormat::R32G32B32_FLOAT;
+    PixelFormat format = PixelFormat::R32G32B32_SFLOAT;
 
     /**
      * Offset of the element in bytes from the start of the element group. You can use

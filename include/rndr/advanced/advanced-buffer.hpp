@@ -40,7 +40,7 @@ public:
 private:
     AdvancedBufferDesc m_desc;
     Opal::Ref<const class AdvancedDevice> m_device;
-    VkBuffer m_buffer;
+    VkBuffer m_buffer = VK_NULL_HANDLE;
     VmaAllocation m_allocation;
     VkDeviceAddress m_device_address;
     void* m_mapped_memory = nullptr;

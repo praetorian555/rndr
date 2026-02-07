@@ -11,7 +11,7 @@ namespace Rndr
  * Pixel format enum that mirrors Vulkan's VkFormat.
  * Use ToVkFormat() to convert to VkFormat and FromVkFormat() to convert from VkFormat.
  */
-enum class AdvancedPixelFormat : u32
+enum class PixelFormat : u16
 {
     Undefined = 0,
 
@@ -228,6 +228,8 @@ enum class AdvancedPixelFormat : u32
     ASTC_12x10_SRGB_BLOCK = 182,
     ASTC_12x12_UNORM_BLOCK = 183,
     ASTC_12x12_SRGB_BLOCK = 184,
+
+    EnumCount
 };
 
 /**
@@ -235,48 +237,76 @@ enum class AdvancedPixelFormat : u32
  * @param format The AdvancedPixelFormat to convert.
  * @return The corresponding VkFormat value.
  */
-[[nodiscard]] VkFormat ToVkFormat(AdvancedPixelFormat format);
+[[nodiscard]] VkFormat ToVkFormat(PixelFormat format);
 
 /**
  * Convert VkFormat to AdvancedPixelFormat.
  * @param format The VkFormat to convert.
  * @return The corresponding AdvancedPixelFormat value.
  */
-[[nodiscard]] AdvancedPixelFormat FromVkFormat(VkFormat format);
+[[nodiscard]] PixelFormat FromVkFormat(VkFormat format);
 
 /**
  * Get the size of a pixel in bytes for the given format.
  * @param format The pixel format.
  * @return Size in bytes, or 0 for compressed/undefined formats.
  */
-[[nodiscard]] u32 GetPixelSize(AdvancedPixelFormat format);
+[[nodiscard]] u32 GetPixelSize(PixelFormat format);
 
 /**
  * Check if the format is a depth format.
  * @param format The pixel format.
  * @return True if the format contains a depth component.
  */
-[[nodiscard]] bool IsDepthFormat(AdvancedPixelFormat format);
+[[nodiscard]] bool IsDepthFormat(PixelFormat format);
 
 /**
  * Check if the format is a stencil format.
  * @param format The pixel format.
  * @return True if the format contains a stencil component.
  */
-[[nodiscard]] bool IsStencilFormat(AdvancedPixelFormat format);
+[[nodiscard]] bool IsStencilFormat(PixelFormat format);
 
 /**
  * Check if the format is a compressed format.
  * @param format The pixel format.
  * @return True if the format is compressed (BC, ETC2, EAC, or ASTC).
  */
-[[nodiscard]] bool IsCompressedFormat(AdvancedPixelFormat format);
+[[nodiscard]] bool IsCompressedFormat(PixelFormat format);
 
 /**
  * Check if the format is an sRGB format.
  * @param format The pixel format.
  * @return True if the format uses sRGB color space.
  */
-[[nodiscard]] bool IsSrgbFormat(AdvancedPixelFormat format);
+[[nodiscard]] bool IsSrgbFormat(PixelFormat format);
+
+/**
+ * Get the number of components for the given format.
+ * @param format The pixel format.
+ * @return Number of components (e.g. 4 for RGBA), or 0 for compressed/undefined formats.
+ */
+[[nodiscard]] u32 GetComponentCount(PixelFormat format);
+
+/**
+ * Check if the format uses 8-bit per component.
+ * @param format The pixel format.
+ * @return True if each component is 8 bits.
+ */
+[[nodiscard]] bool IsLowPrecisionFormat(PixelFormat format);
+
+/**
+ * Check if the format uses 16-bit per component.
+ * @param format The pixel format.
+ * @return True if each component is 16 bits.
+ */
+[[nodiscard]] bool IsMediumPrecisionFormat(PixelFormat format);
+
+/**
+ * Check if the format uses 32-bit per component.
+ * @param format The pixel format.
+ * @return True if each component is 32 bits.
+ */
+[[nodiscard]] bool IsHighPrecisionFormat(PixelFormat format);
 
 }  // namespace Rndr

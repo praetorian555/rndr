@@ -8,6 +8,7 @@
 #include "rndr/advanced/device.hpp"
 #include "rndr/advanced/command-buffer.hpp"
 #include "rndr/advanced/synchronization.hpp"
+#include "rndr/graphics-types.hpp"
 
 Rndr::AdvancedTexture::AdvancedTexture(const AdvancedDevice& device, const AdvancedTextureDesc& desc) : m_desc(desc), m_device(device)
 {
@@ -23,7 +24,7 @@ Rndr::AdvancedTexture::AdvancedTexture(const AdvancedDevice& device, AdvancedDev
     m_desc.depth = ktx_texture->baseDepth;
     m_desc.mip_level_count = ktx_texture->numLevels;
     m_desc.subresource_range.mip_level_count = ktx_texture->numLevels;
-    m_desc.format = ktxTexture_GetVkFormat(ktx_texture);
+    m_desc.format = Rndr::FromVkFormat(ktxTexture_GetVkFormat(ktx_texture));
     m_desc.image_usage = desc.image_usage | VK_IMAGE_USAGE_TRANSFER_DST_BIT;  // Make sure we always set transfer destination bit
 
     Init(device, m_desc);
@@ -34,9 +35,27 @@ Rndr::AdvancedTexture::AdvancedTexture(const AdvancedDevice& device, AdvancedDev
 
     AdvancedCommandBuffer upload_command_buffer(device, queue);
     upload_command_buffer.Begin();
-
-    VkImageMemoryBarrier2
-
+    upload_command_buffer.CmdImageBarrier({
+        .stages_must_finish = PipelineStageBits::None,
+        .stages_must_finish_access = PipelineStageAccessBits::None,
+        .before_stages_start = PipelineStageBits::Transfer,
+        .before_stages_start_access = PipelineStageAccessBits::Write,
+        .old_layout = ImageLayout::Undefined,
+        .new_layout = ImageLayout::TransferDestination,
+        .image = Opal::Ref{this},
+        .subresource_range = {.mip_level_count = ktx_texture->numLevels}
+    });
+    // TODO: Do a copy
+    upload_command_buffer.CmdImageBarrier({
+        .stages_must_finish = PipelineStageBits::Transfer,
+        .stages_must_finish_access = PipelineStageAccessBits::Write,
+        .before_stages_start = PipelineStageBits::FragmentShader,
+        .before_stages_start_access = PipelineStageAccessBits::Read,
+        .old_layout = ImageLayout::TransferDestination,
+        .new_layout = ImageLayout::ShaderReadOnly,
+        .image = Opal::Ref{this},
+        .subresource_range = {.mip_level_count = ktx_texture->numLevels}
+    });
     upload_command_buffer.End();
 
     const AdvancedFence fence(device, false);
@@ -54,7 +73,7 @@ void Rndr::AdvancedTexture::Init(const AdvancedDevice& device, const AdvancedTex
     const VkImageCreateInfo image_create_info = {
         .sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
         .imageType = m_desc.image_type,
-        .format = m_desc.format,
+        .format = ToVkFormat(m_desc.format),
         .extent = {.width = m_desc.width, .height = m_desc.height, .depth = m_desc.depth},
         .mipLevels = m_desc.mip_level_count,
         .arrayLayers = m_desc.array_layer_count,
@@ -74,7 +93,7 @@ void Rndr::AdvancedTexture::Init(const AdvancedDevice& device, const AdvancedTex
         .sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
         .image = m_image,
         .viewType = m_desc.view_type,
-        .format = m_desc.format,
+        .format = ToVkFormat(m_desc.format),
         .subresourceRange = {.aspectMask = m_desc.subresource_range.aspect_mask,
                              .baseMipLevel = m_desc.subresource_range.first_mip_level,
                              .levelCount = m_desc.subresource_range.mip_level_count,

@@ -164,7 +164,7 @@ Rndr::Texture Rndr::Material::LoadTexture(const Opal::StringUtf8& texture_path)
     {
         throw Opal::Exception("Albedo texture path does not exist");
     }
-    Bitmap bitmap = File::ReadEntireImage(texture_path, PixelFormat::R8G8B8A8_UNORM, true);
+    Bitmap bitmap = File::LoadImage(texture_path,  true, false);
     if (!bitmap.IsValid())
     {
         throw Opal::Exception("Failed to load bitmap!");

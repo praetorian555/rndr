@@ -1,6 +1,7 @@
 #pragma once
 
 #include "rndr/graphics-types.hpp"
+#include "rndr/pixel-format.hpp"
 
 namespace Rndr
 {
@@ -24,10 +25,12 @@ public:
      * @param depth Depth of the bitmap. Must be greater than 0.
      * @param pixel_format Pixel format of the bitmap. Must be supported.
      * @param mip_count How many mip maps there are for this bitmap. Default is 1.
-    * @param data Optional data to initialize the bitmap with. If not specified, the bitmap will be
+     * @param data Optional data to initialize the bitmap with. If not specified, the bitmap will be
      * initialized with zeros.
      */
     Bitmap(i32 width, i32 height, i32 depth, PixelFormat pixel_format, i32 mip_count, const Opal::ArrayView<u8>& data = {});
+
+    void GenerateMips();
 
     /**
      * Check if bitmap is valid.
@@ -91,7 +94,7 @@ public:
     void SetPixel(i32 x, i32 y, i32 z, i32 mip_level, const Vector4f& pixel);
 
     /**
-     * Helper function used to check if given pixel format can be used for creating a bitmap.
+     * Helper function used to check if current pixel format can be used to individually access pixels on CPU side.
      * @param pixel_format Pixel format to check.
      * @return Returns true if pixel format is supported, false otherwise.
      */
@@ -100,6 +103,9 @@ public:
 private:
     [[nodiscard]] Vector4f GetPixelUnsignedByte(i32 x, i32 y, i32 z, i32 mip_level) const;
     void SetPixelUnsignedByte(i32 x, i32 y, i32 z, i32 mip_level, const Vector4f& pixel);
+
+    [[nodiscard]] Vector4f GetPixelUnsignedShort(i32 x, i32 y, i32 z, i32 mip_level) const;
+    void SetPixelUnsignedShort(i32 x, i32 y, i32 z, i32 mip_level, const Vector4f& pixel);
 
     [[nodiscard]] Vector4f GetPixelFloat(i32 x, i32 y, i32 z, i32 mip_level) const;
     void SetPixelFloat(i32 x, i32 y, i32 z, i32 mip_level, const Vector4f& pixel);
@@ -112,7 +118,7 @@ private:
     i32 m_depth = 0;
     i32 m_mip_count = 1;
     i32 m_comp_count = 0;
-    PixelFormat m_pixel_format = PixelFormat::R32_TYPELESS;
+    PixelFormat m_pixel_format = PixelFormat::Undefined;
     Opal::DynamicArray<u8> m_data;
     GetPixelFunc m_get_pixel_func = nullptr;
     SetPixelFunc m_set_pixel_func = nullptr;

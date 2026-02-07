@@ -78,21 +78,6 @@ namespace File
 void PrintShader(const Opal::StringUtf8& shader_contents);
 
 /**
- * Reads the contents of the entire image file into CPU memory. The data is stored from top to
- * bottom, left to right, row by row.
- *
- * @param file_path Absolute or relative path to the file on the disc.
- * @param desired_format Format in which the image should be read. If the format is not supported,
- * the function will fail. Please use Bitmap::IsPixelFormatSupported to check if the format is
- * supported.
- * @param flip_vertically If true, the image will be flipped vertically.
- *
- * @return Returns a valid CPUImage object containing the image info and data in the CPU memory. You
- * can check for CPUImage validity by calling IsValid on it.
- */
-[[nodiscard]] Bitmap ReadEntireImage(const Opal::StringUtf8& file_path, PixelFormat desired_format, bool flip_vertically = false);
-
-/**
  * Save bitmap to the disc. The data is stored from top to bottom, left to right, row by row.
  *
  * @param bitmap Image in the CPU memory to save to the disc.
@@ -102,6 +87,21 @@ void PrintShader(const Opal::StringUtf8& shader_contents);
  * @return Returns true in case of a success, false otherwise.
  */
 bool SaveImage(const Bitmap& bitmap, const Opal::StringUtf8& file_path);
+
+/**
+ * Load an image from a file. Supports PNG, JPEG (via stbi) and KTX/KTX2 (via libktx).
+ * For PNG/JPEG, the channel bit depth is auto-detected (8-bit, 16-bit, or 32-bit HDR) and the
+ * image is always loaded as RGBA. For KTX files, the format is read from the file metadata.
+ *
+ * @param file_path Absolute or relative path to the image file.
+ * @param flip_vertically If true, the image will be flipped vertically. Only applies to PNG/JPEG.
+ * @param generate_mips If true, mip maps will be generated. For KTX files, mips are not generated
+ * if they are already present in the file.
+ *
+ * @return Returns a valid Bitmap.
+ * @throw Opal::Exception if file does not exist or if there was a problem loading the data.
+ */
+[[nodiscard]] Bitmap LoadImage(const Opal::StringUtf8& file_path, bool flip_vertically, bool generate_mips);
 
 void LoadMeshAndMaterialDescription(const Opal::StringUtf8& file_path, Mesh& out_mesh, MaterialDesc& out_material_desc);
 void LoadMesh(const aiScene& ai_scene, const Opal::StringUtf8& mesh_name, Mesh& out_mesh, u32& out_material_index);

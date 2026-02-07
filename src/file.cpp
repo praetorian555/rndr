@@ -3,6 +3,9 @@
 #include "stb_image/stb_image.h"
 #include "stb_image/stb_image_write.h"
 
+#include "ktx.h"
+#include "ktxvulkan.h"
+
 #include "assimp/cimport.h"
 #include "assimp/pbrmaterial.h"
 #include "assimp/postprocess.h"
@@ -179,54 +182,6 @@ void Rndr::File::PrintShader(const Opal::StringUtf8& shader_contents)
     }
 }
 
-Rndr::Bitmap Rndr::File::ReadEntireImage(const Opal::StringUtf8& file_path, PixelFormat desired_format, bool flip_vertically)
-{
-    Bitmap invalid_bitmap = {-1, -1, -1, PixelFormat::R8G8B8A8_UNORM_SRGB, {}};
-    if (!Bitmap::IsPixelFormatSupported(desired_format))
-    {
-        RNDR_LOG_ERROR("Desired pixel format is not supported!");
-        return invalid_bitmap;
-    }
-    const int desired_channel_count = Rndr::FromPixelFormatToComponentCount(desired_format);
-
-    int channels_in_file = 0;
-    int width = 0;
-    int height = 0;
-    uint8_t* tmp_data = nullptr;
-    stbi_set_flip_vertically_on_load(static_cast<int>(flip_vertically));
-    Opal::StringLocale file_path_locale;
-    file_path_locale.Resize(300);
-    const Opal::ErrorCode err = Opal::Transcode(file_path, file_path_locale);
-    if (err != Opal::ErrorCode::Success)
-    {
-        RNDR_LOG_ERROR("Failed to transcode file path!");
-        return invalid_bitmap;
-    }
-    if (Rndr::IsComponentLowPrecision(desired_format))
-    {
-        tmp_data = stbi_load(file_path_locale.GetData(), &width, &height, &channels_in_file, desired_channel_count);
-        if (tmp_data == nullptr)
-        {
-            RNDR_LOG_ERROR("Failed to load image %s", file_path_locale.GetData());
-            return invalid_bitmap;
-        }
-    }
-    else
-    {
-        f32* tmp_data_float = stbi_loadf(file_path_locale.GetData(), &width, &height, &channels_in_file, desired_channel_count);
-        if (tmp_data_float == nullptr)
-        {
-            RNDR_LOG_ERROR("Failed to load image %s", file_path_locale.GetData());
-            return invalid_bitmap;
-        }
-        tmp_data = reinterpret_cast<u8*>(tmp_data_float);
-    }
-    const u64 pixel_size = FromPixelFormatToPixelSize(desired_format);
-    Bitmap bitmap{width, height, 1, desired_format, {tmp_data, width * height * pixel_size}};
-    stbi_image_free(tmp_data);
-    return bitmap;
-}
-
 bool Rndr::File::SaveImage(const Bitmap& bitmap, const Opal::StringUtf8& file_path)
 {
     Opal::StringLocale file_path_locale;
@@ -239,21 +194,125 @@ bool Rndr::File::SaveImage(const Bitmap& bitmap, const Opal::StringUtf8& file_pa
     }
     int status = 0;
     const PixelFormat pixel_format = bitmap.GetPixelFormat();
-    if (IsComponentLowPrecision(pixel_format))
+    if (IsLowPrecisionFormat(pixel_format))
     {
         status = stbi_write_png(file_path_locale.GetData(), bitmap.GetWidth(), bitmap.GetHeight(), bitmap.GetComponentCount(),
                                 bitmap.GetData(), static_cast<int>(bitmap.GetRowSize()));
     }
-    else if (IsComponentHighPrecision(pixel_format))
+    else if (IsHighPrecisionFormat(pixel_format))
     {
         const f32* data = reinterpret_cast<const f32*>(bitmap.GetData());
         status = stbi_write_hdr(file_path_locale.GetData(), bitmap.GetWidth(), bitmap.GetHeight(), bitmap.GetComponentCount(), data);
     }
     else
     {
-        RNDR_LOG_ERROR("Unsupported pixel format!");
+        RNDR_LOG_ERROR("Unsupported pixel format for saving!");
     }
     return status == 1;
+}
+
+namespace
+{
+Rndr::PixelFormat VkFormatToPixelFormat(ktx_uint32_t vk_format)
+{
+    return static_cast<Rndr::PixelFormat>(vk_format);
+}
+}
+
+Rndr::Bitmap Rndr::File::LoadImage(const Opal::StringUtf8& file_path, bool flip_vertically, bool generate_mips)
+{
+    if (!Opal::Exists(file_path))
+    {
+        throw Opal::Exception("File does not exist!");
+    }
+
+    // Determine file extension.
+    const Opal::StringUtf8 extension = Opal::Paths::GetExtension(file_path).GetValue();
+
+    if (extension == ".ktx" || extension == ".ktx2")
+    {
+        ktxTexture* ktx_texture = nullptr;
+        const KTX_error_code result =
+            ktxTexture_CreateFromNamedFile(*file_path, KTX_TEXTURE_CREATE_LOAD_IMAGE_DATA_BIT, &ktx_texture);
+        if (result != KTX_SUCCESS || ktx_texture == nullptr)
+        {
+            throw Opal::Exception("Failed to create ktx texture!");
+        }
+
+        const ktx_uint32_t vk_format = ktxTexture_GetVkFormat(ktx_texture);
+        const PixelFormat pixel_format = VkFormatToPixelFormat(vk_format);
+        const i32 width = static_cast<i32>(ktx_texture->baseWidth);
+        const i32 height = static_cast<i32>(ktx_texture->baseHeight);
+        const i32 depth = static_cast<i32>(ktx_texture->baseDepth);
+        const i32 mip_count = static_cast<i32>(ktx_texture->numLevels);
+        u8* data = ktxTexture_GetData(ktx_texture);
+        const u64 data_size = ktxTexture_GetDataSize(ktx_texture);
+
+        Bitmap bitmap(width, height, depth, pixel_format, mip_count, {data, data_size});
+        ktxTexture_Destroy(ktx_texture);
+
+        if (generate_mips && mip_count <= 1)
+        {
+            bitmap.GenerateMips();
+        }
+
+        return bitmap;
+    }
+
+    stbi_set_flip_vertically_on_load(flip_vertically);
+
+    int width = 0;
+    int height = 0;
+    int channels_in_file = 0;
+    constexpr int k_desired_channels = 4;
+
+    PixelFormat pixel_format = PixelFormat::Undefined;
+    u8* pixel_data = nullptr;
+    u64 data_size = 0;
+
+    if (stbi_is_hdr(*file_path) > 0)
+    {
+        f32* data = stbi_loadf(*file_path, &width, &height, &channels_in_file, k_desired_channels);
+        if (data == nullptr)
+        {
+            throw Opal::Exception("Failed to load HDR image");
+        }
+        pixel_data = reinterpret_cast<u8*>(data);
+        pixel_format = PixelFormat::R32G32B32A32_SFLOAT;
+        data_size = static_cast<u64>(width) * height * k_desired_channels * sizeof(f32);
+    }
+    else if (stbi_is_16_bit(*file_path) > 0)
+    {
+        u16* data = reinterpret_cast<u16*>(stbi_load_16(*file_path, &width, &height, &channels_in_file, k_desired_channels));
+        if (data == nullptr)
+        {
+            throw Opal::Exception("Failed to load 16-bit image");
+        }
+        pixel_data = reinterpret_cast<u8*>(data);
+        pixel_format = PixelFormat::R16G16B16A16_UNORM;
+        data_size = static_cast<u64>(width) * height * k_desired_channels * sizeof(u16);
+    }
+    else
+    {
+        u8* data = stbi_load(*file_path, &width, &height, &channels_in_file, k_desired_channels);
+        if (data == nullptr)
+        {
+            throw Opal::Exception("Failed to load image");
+        }
+        pixel_data = data;
+        pixel_format = PixelFormat::R8G8B8A8_SRGB;
+        data_size = static_cast<u64>(width) * height * k_desired_channels * sizeof(u8);
+    }
+
+    Bitmap bitmap(width, height, 1, pixel_format, 1, {pixel_data, data_size});
+    stbi_image_free(pixel_data);
+
+    if (generate_mips)
+    {
+        bitmap.GenerateMips();
+    }
+
+    return bitmap;
 }
 
 void Rndr::File::LoadMeshAndMaterialDescription(const Opal::StringUtf8& file_path, Mesh& out_mesh, MaterialDesc& out_material_desc)

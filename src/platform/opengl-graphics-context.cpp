@@ -685,7 +685,7 @@ void Rndr::GraphicsContext::Read(const Texture& image, Bitmap& out_data, i32 lev
     glGetTextureImage(image.GetNativeTexture(), level, format, data_type, pixel_size * desc.width * desc.height, tmp_data.GetData());
     RNDR_GL_THROW_ON_ERROR("Failed to get texture image contents", RNDR_NOOP);
 
-    out_data = Bitmap(desc.width, desc.height, 1, desc.pixel_format, AsWritableBytes(tmp_data));
+    out_data = Bitmap(desc.width, desc.height, 1, desc.pixel_format, 1, AsWritableBytes(tmp_data));
 }
 
 void Rndr::GraphicsContext::ReadSwapChainColor(const SwapChain& swap_chain, Bitmap& out_bitmap)
@@ -710,7 +710,7 @@ void Rndr::GraphicsContext::ReadSwapChainColor(const SwapChain& swap_chain, Bitm
             Opal::Swap(data[index1 + 3], data[index2 + 3]);
         }
     }
-    out_bitmap = Bitmap{width, height, 1, PixelFormat::R8G8B8A8_UNORM_SRGB, AsWritableBytes(data)};
+    out_bitmap = Bitmap{width, height, 1, PixelFormat::R8G8B8A8_SRGB, 1,AsWritableBytes(data)};
 }
 
 void Rndr::GraphicsContext::ReadSwapChainDepthStencil(const SwapChain& swap_chain, Bitmap& out_bitmap)
@@ -724,7 +724,7 @@ void Rndr::GraphicsContext::ReadSwapChainDepthStencil(const SwapChain& swap_chai
     glReadPixels(0, 0, width, height, GL_DEPTH_STENCIL, GL_UNSIGNED_INT_24_8, data.GetData());
     RNDR_GL_THROW_ON_ERROR("Failed to read depth and stencil values from the swap chain", RNDR_NOOP)
     const Opal::ArrayView<u8> byte_data(reinterpret_cast<u8*>(data.GetData()), size * sizeof(u32));
-    out_bitmap = Bitmap{width, height, 1, PixelFormat::D24_UNORM_S8_UINT, byte_data};
+    out_bitmap = Bitmap{width, height, 1, PixelFormat::D24_UNORM_S8_UINT, 1, byte_data};
 }
 
 void Rndr::GraphicsContext::ClearFrameBufferColorAttachment(const FrameBuffer& frame_buffer, i32 color_attachment_index,

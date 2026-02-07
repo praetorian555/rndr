@@ -1,5 +1,9 @@
 #pragma once
 
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
+
 #include "vma/vk_mem_alloc.h"
 #include "volk/volk.h"
 
@@ -147,7 +151,7 @@ public:
     void Submit(const class AdvancedCommandBuffer& command_buffer, const class AdvancedFence& fence);
 
 private:
-    Opal::Ref<AdvancedDevice> m_device;
+    Opal::Ref<const AdvancedDevice> m_device;
     u32 m_queue_family_index = 0;
     VkQueue m_queue = VK_NULL_HANDLE;
     VkCommandPool m_command_pool = VK_NULL_HANDLE;

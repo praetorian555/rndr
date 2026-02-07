@@ -208,7 +208,7 @@ void Rndr::AdvancedDevice::Destroy()
 
 VkCommandBuffer Rndr::AdvancedDevice::CreateCommandBuffer(u32 queue_family_index) const
 {
-
+    return CreateCommandBuffers(queue_family_index, 1)[0];
 }
 
 Opal::DynamicArray<VkCommandBuffer> Rndr::AdvancedDevice::CreateCommandBuffers(u32 queue_family_index, u32 count) const
@@ -354,6 +354,7 @@ void Rndr::AdvancedDevice::UpdateDescriptorSets(const Opal::DynamicArray<Advance
 }
 
 Rndr::AdvancedDeviceQueue::AdvancedDeviceQueue(const AdvancedDevice& device, AdvancedDeviceQueueFamilyFlags queue_family_flags)
+    : m_device(device)
 {
     auto queue_index = device.GetPhysicalDevice().GetQueueFamilyIndex(static_cast<VkQueueFlags>(queue_family_flags));
     if (!queue_index.HasValue())
@@ -414,16 +415,15 @@ void Rndr::AdvancedDeviceQueue::DestroyCommandBuffer(VkCommandBuffer command_buf
 
 void Rndr::AdvancedDeviceQueue::DestroyCommandBuffers(Opal::ArrayView<VkCommandBuffer> command_buffers) const
 {
-    vkFreeCommandBuffers(m_device->GetNativeDevice(), m_command_pool, command_buffers.GetSize(), command_buffers.GetData());
+    vkFreeCommandBuffers(m_device->GetNativeDevice(), m_command_pool, static_cast<u32>(command_buffers.GetSize()),
+                         command_buffers.GetData());
 }
 
 void Rndr::AdvancedDeviceQueue::Submit(const AdvancedCommandBuffer& command_buffer, const AdvancedFence& fence)
 {
     VkCommandBuffer native_command_buffer = command_buffer.GetNativeCommandBuffer();
     const VkSubmitInfo submit_info{
-    .sType = VK_STRUCTURE_TYPE_SUBMIT_INFO,
-    .commandBufferCount = 1,
-    .pCommandBuffers = &native_command_buffer};
+        .sType = VK_STRUCTURE_TYPE_SUBMIT_INFO, .commandBufferCount = 1, .pCommandBuffers = &native_command_buffer};
     if (vkQueueSubmit(m_queue, 1, &submit_info, fence.GetNativeFence()) != VK_SUCCESS)
     {
         throw Opal::Exception("Failed to submit command buffer!");

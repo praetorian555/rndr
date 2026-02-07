@@ -47,18 +47,13 @@ int main()
 
     const VkExtent2D extent = swap_chain.GetExtent();
     Rndr::AdvancedTexture texture(device, {.image_type = VK_IMAGE_TYPE_2D,
-                                           .format = VK_FORMAT_D32_SFLOAT,
+                                           .format = Rndr::PixelFormat::D32_SFLOAT,
                                            .width = extent.width,
                                            .height = extent.height,
-                                           .depth = 1,
-                                           .mip_levels = 1,
-                                           .array_layers = 1,
                                            .sample_count = VK_SAMPLE_COUNT_1_BIT,
                                            .image_usage = VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT,
                                            .view_type = VK_IMAGE_VIEW_TYPE_2D,
-                                           .aspect_mask = VK_IMAGE_ASPECT_DEPTH_BIT,
-                                           .mip_map_level_count = 1,
-                                           .layer_count = 1});
+                                           .subresource_range = {.aspect_mask = VK_IMAGE_ASPECT_DEPTH_BIT}});
     // TODO: Flip y for everything in mesh for Vulkan
     Rndr::Mesh mesh;
     Rndr::MaterialDesc material_desc;
@@ -67,10 +62,11 @@ int main()
     Opal::DynamicArray<Rndr::u8> combined_vertex_index_data(Opal::GetScratchAllocator());
     combined_vertex_index_data.Append(mesh.vertices);
     combined_vertex_index_data.Append(mesh.indices);
-    Rndr::AdvancedBuffer mesh_buffer(
-        device,
-        {.size = combined_vertex_index_data.GetSize(), .usage = VK_BUFFER_USAGE_VERTEX_BUFFER_BIT | VK_BUFFER_USAGE_INDEX_BUFFER_BIT, .keep_memory_mapped = false},
-        combined_vertex_index_data);
+    Rndr::AdvancedBuffer mesh_buffer(device,
+                                     {.size = combined_vertex_index_data.GetSize(),
+                                      .usage = VK_BUFFER_USAGE_VERTEX_BUFFER_BIT | VK_BUFFER_USAGE_INDEX_BUFFER_BIT,
+                                      .keep_memory_mapped = false},
+                                     combined_vertex_index_data);
 
     Opal::InPlaceArray<Rndr::AdvancedBuffer, k_frames_in_flight> m_shader_buffers;
     for (i32 i = 0; i < k_frames_in_flight; i++)
@@ -84,18 +80,13 @@ int main()
     Opal::DynamicArray<VkSemaphore> present_semaphores(k_frames_in_flight);
     for (i32 i = 0; i < k_frames_in_flight; ++i)
     {
-        const VkFenceCreateInfo fence_create_info = {
-            .sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO,
-            .flags = VK_FENCE_CREATE_SIGNALED_BIT
-        };
+        const VkFenceCreateInfo fence_create_info = {.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO, .flags = VK_FENCE_CREATE_SIGNALED_BIT};
         VkResult result = vkCreateFence(device.GetNativeDevice(), &fence_create_info, nullptr, &fences[i]);
         if (result != VK_SUCCESS)
         {
             throw Opal::Exception("Failed to create a fence!");
         }
-        const VkSemaphoreCreateInfo semaphore_create_info = {
-            .sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO
-        };
+        const VkSemaphoreCreateInfo semaphore_create_info = {.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO};
         result = vkCreateSemaphore(device.GetNativeDevice(), &semaphore_create_info, nullptr, &present_semaphores[i]);
         if (result != VK_SUCCESS)
         {
@@ -105,9 +96,7 @@ int main()
     Opal::DynamicArray<VkSemaphore> render_semaphores(swap_chain.GetImageViews().GetSize());
     for (auto& semaphore : render_semaphores)
     {
-        const VkSemaphoreCreateInfo semaphore_create_info = {
-            .sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO
-        };
+        const VkSemaphoreCreateInfo semaphore_create_info = {.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO};
         const VkResult result = vkCreateSemaphore(device.GetNativeDevice(), &semaphore_create_info, nullptr, &semaphore);
         if (result != VK_SUCCESS)
         {

@@ -67,7 +67,7 @@ void Rndr::AdvancedFence::WaitForAll(Opal::ArrayView<AdvancedFence> fences, u64 
     {
         native_fences[i] = fences[i].GetNativeFence();
     }
-    if (vkWaitForFences(fences[0].m_device->GetNativeDevice(), native_fences.GetSize(), native_fences.GetData(), VK_TRUE, timeout) != VK_SUCCESS)
+    if (vkWaitForFences(fences[0].m_device->GetNativeDevice(), static_cast<u32>(native_fences.GetSize()), native_fences.GetData(), VK_TRUE, timeout) != VK_SUCCESS)
     {
         throw Opal::Exception("Fences timed out!");
     }

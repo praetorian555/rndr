@@ -31,6 +31,7 @@ set(SOURCE_LIST
         "${PROJECT_SOURCE_DIR}/include/rndr/imgui-system.hpp"
         "${PROJECT_SOURCE_DIR}/include/rndr/return-macros.hpp"
         "${PROJECT_SOURCE_DIR}/include/rndr/shader-permutation.hpp"
+        "${PROJECT_SOURCE_DIR}/include/rndr/pixel-format.hpp"
         "${PROJECT_SOURCE_DIR}/src/log.cpp"
         "${PROJECT_SOURCE_DIR}/src/time.cpp"
         "${PROJECT_SOURCE_DIR}/src/input-system.cpp"
@@ -51,6 +52,7 @@ set(SOURCE_LIST
         "${PROJECT_SOURCE_DIR}/src/imgui-system.cpp"
         "${PROJECT_SOURCE_DIR}/src/material.cpp"
         "${PROJECT_SOURCE_DIR}/src/shader-permutation.cpp"
+        "${PROJECT_SOURCE_DIR}/src/pixel-format.cpp"
 )
 
 list(APPEND SOURCE_LIST
@@ -101,7 +103,8 @@ if (RNDR_ADVANCED_API)
             "${PROJECT_SOURCE_DIR}/include/rndr/advanced/advanced-texture.hpp"
             "${PROJECT_SOURCE_DIR}/include/rndr/advanced/advanced-buffer.hpp"
             "${PROJECT_SOURCE_DIR}/include/rndr/advanced/synchronization.hpp"
-            "${PROJECT_SOURCE_DIR}/include/rndr/advanced/advanced-pixel-format.hpp"
+            "${PROJECT_SOURCE_DIR}/include/rndr/advanced/command-buffer.hpp"
+            "../include/rndr/pixel-format.hpp"
             "${PROJECT_SOURCE_DIR}/src/advanced/graphics-context.cpp"
             "${PROJECT_SOURCE_DIR}/src/advanced/device.cpp"
             "${PROJECT_SOURCE_DIR}/src/advanced/physical-device.cpp"
@@ -109,7 +112,7 @@ if (RNDR_ADVANCED_API)
             "${PROJECT_SOURCE_DIR}/src/advanced/advanced-texture.cpp"
             "${PROJECT_SOURCE_DIR}/src/advanced/advanced-buffer.cpp"
             "${PROJECT_SOURCE_DIR}/src/advanced/synchronization.cpp"
-            "${PROJECT_SOURCE_DIR}/src/advanced/advanced-pixel-format.cpp"
+            "${PROJECT_SOURCE_DIR}/src/advanced/command-buffer.cpp"
             "${PROJECT_SOURCE_DIR}/src/volk-implementation.cpp"
             "${PROJECT_SOURCE_DIR}/src/vma-implementation.cpp")
 endif ()

@@ -1,5 +1,9 @@
 #pragma once
 
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
+
 #include "vma/vk_mem_alloc.h"
 #include "volk/volk.h"
 
@@ -8,6 +12,7 @@
 #include "opal/container/ref.h"
 
 #include "rndr/types.hpp"
+#include "rndr/graphics-types.hpp"
 
 namespace Rndr
 {
@@ -16,7 +21,7 @@ struct AdvancedTextureDesc
 {
     // Image
     VkImageType image_type = VK_IMAGE_TYPE_2D;
-    VkFormat format = VK_FORMAT_B8G8R8A8_UNORM;
+    PixelFormat format = PixelFormat::B8G8R8A8_UNORM;
     u32 width = 0;
     u32 height = 0;
     u32 depth = 1;

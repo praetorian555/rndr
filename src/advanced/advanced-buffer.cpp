@@ -74,6 +74,10 @@ void Rndr::AdvancedBuffer::Destroy()
 {
     if (m_buffer != VK_NULL_HANDLE)
     {
+        if (m_desc.keep_memory_mapped)
+        {
+            vmaUnmapMemory(m_device->GetGPUAllocator(), m_allocation);
+        }
         vmaDestroyBuffer(m_device->GetGPUAllocator(), m_buffer, m_allocation);
         m_buffer = VK_NULL_HANDLE;
         m_allocation = VK_NULL_HANDLE;
