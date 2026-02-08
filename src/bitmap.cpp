@@ -47,17 +47,57 @@ void Rndr::Bitmap::GenerateMips()
         return;
     }
 
-    auto is_linear_color_space = [](PixelFormat pixel_format)
+    i32 max_dim = Opal::Max(Opal::Max(m_width, m_height), m_depth);
+    i32 mip_count = 1;
+    while (max_dim > 1)
     {
-        return !IsSrgbFormat(pixel_format);
-    };
-
-    if (is_linear_color_space(m_pixel_format))
-    {
+        max_dim >>= 1;
+        mip_count++;
     }
-    else
-    {
+    m_mip_count = mip_count;
 
+    m_data.Resize(GetTotalSize());
+
+    stbir_datatype data_type = STBIR_TYPE_UINT8;
+    if (IsLowPrecisionFormat(m_pixel_format) && IsSrgbFormat(m_pixel_format))
+    {
+        data_type = STBIR_TYPE_UINT8_SRGB;
+    }
+    else if (IsMediumPrecisionFormat(m_pixel_format))
+    {
+        data_type = STBIR_TYPE_UINT16;
+    }
+    else if (IsHighPrecisionFormat(m_pixel_format))
+    {
+        data_type = STBIR_TYPE_FLOAT;
+    }
+
+    const stbir_pixel_layout pixel_layout = static_cast<stbir_pixel_layout>(m_comp_count);
+
+    for (i32 mip = 1; mip < m_mip_count; mip++)
+    {
+        const i32 src_w = Opal::Max(1, m_width >> (mip - 1));
+        const i32 src_h = Opal::Max(1, m_height >> (mip - 1));
+        const i32 dst_w = Opal::Max(1, m_width >> mip);
+        const i32 dst_h = Opal::Max(1, m_height >> mip);
+        const i32 src_depth = Opal::Max(1, m_depth >> (mip - 1));
+        const i32 dst_depth = Opal::Max(1, m_depth >> mip);
+
+        const u64 src_offset = GetMipLevelOffset(mip - 1);
+        const u64 dst_offset = GetMipLevelOffset(mip);
+        const u64 src_stride = src_w * GetPixelSize();
+        const u64 dst_stride = dst_w * GetPixelSize();
+
+        const i32 slices = Opal::Min(src_depth, dst_depth);
+        for (i32 z = 0; z < slices; z++)
+        {
+            const u64 src_slice_offset = src_offset + (z * src_w * src_h * GetPixelSize());
+            const u64 dst_slice_offset = dst_offset + (z * dst_w * dst_h * GetPixelSize());
+
+            stbir_resize(m_data.GetData() + src_slice_offset, src_w, src_h, static_cast<int>(src_stride),
+                         m_data.GetData() + dst_slice_offset, dst_w, dst_h, static_cast<int>(dst_stride),
+                         pixel_layout, data_type, STBIR_EDGE_CLAMP, STBIR_FILTER_DEFAULT);
+        }
     }
 }
 
