@@ -28,6 +28,7 @@ public:
     void End() const;
 
     void CmdImageBarrier(const AdvancedImageBarrier& image_barrier);
+    void CmdCopyBufferToImage(const class AdvancedBuffer& buffer, const Bitmap& bitmap, AdvancedTexture& texture);
 
 private:
     Opal::Ref<const class AdvancedDevice> m_device;

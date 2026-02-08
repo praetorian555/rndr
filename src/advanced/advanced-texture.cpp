@@ -15,23 +15,23 @@ Rndr::AdvancedTexture::AdvancedTexture(const AdvancedDevice& device, const Advan
     Init(device, desc);
 }
 
-Rndr::AdvancedTexture::AdvancedTexture(const AdvancedDevice& device, AdvancedDeviceQueue& queue, ktxTexture* ktx_texture,
+Rndr::AdvancedTexture::AdvancedTexture(const AdvancedDevice& device, AdvancedDeviceQueue& queue, const Bitmap& bitmap,
                                        const AdvancedTextureDesc& desc)
     : m_desc(desc)
 {
-    m_desc.width = ktx_texture->baseWidth;
-    m_desc.height = ktx_texture->baseHeight;
-    m_desc.depth = ktx_texture->baseDepth;
-    m_desc.mip_level_count = ktx_texture->numLevels;
-    m_desc.subresource_range.mip_level_count = ktx_texture->numLevels;
-    m_desc.format = Rndr::FromVkFormat(ktxTexture_GetVkFormat(ktx_texture));
+    m_desc.width = bitmap.GetWidth();
+    m_desc.height = bitmap.GetHeight();
+    m_desc.depth = bitmap.GetDepth();
+    m_desc.mip_level_count = bitmap.GetMipCount();
+    m_desc.subresource_range.mip_level_count = bitmap.GetMipCount();
+    m_desc.format = bitmap.GetPixelFormat();
     m_desc.image_usage = desc.image_usage | VK_IMAGE_USAGE_TRANSFER_DST_BIT;  // Make sure we always set transfer destination bit
 
     Init(device, m_desc);
 
     // Create staging buffer
-    const AdvancedBuffer staging_buffer(device, {.size = ktx_texture->dataSize, .usage = VK_BUFFER_USAGE_TRANSFER_SRC_BIT});
-    staging_buffer.Update({ktx_texture->pData, ktx_texture->dataSize}, 0);
+    const AdvancedBuffer staging_buffer(device, {.size = bitmap.GetTotalSize(), .usage = VK_BUFFER_USAGE_TRANSFER_SRC_BIT});
+    staging_buffer.Update({bitmap.GetData(), bitmap.GetTotalSize()}, 0);
 
     AdvancedCommandBuffer upload_command_buffer(device, queue);
     upload_command_buffer.Begin();
@@ -43,9 +43,9 @@ Rndr::AdvancedTexture::AdvancedTexture(const AdvancedDevice& device, AdvancedDev
         .old_layout = ImageLayout::Undefined,
         .new_layout = ImageLayout::TransferDestination,
         .image = Opal::Ref{this},
-        .subresource_range = {.mip_level_count = ktx_texture->numLevels}
+        .subresource_range = {.mip_level_count = bitmap.GetMipCount()}
     });
-    // TODO: Do a copy
+    upload_command_buffer.CmdCopyBufferToImage(staging_buffer, bitmap, *this);
     upload_command_buffer.CmdImageBarrier({
         .stages_must_finish = PipelineStageBits::Transfer,
         .stages_must_finish_access = PipelineStageAccessBits::Write,
@@ -54,7 +54,7 @@ Rndr::AdvancedTexture::AdvancedTexture(const AdvancedDevice& device, AdvancedDev
         .old_layout = ImageLayout::TransferDestination,
         .new_layout = ImageLayout::ShaderReadOnly,
         .image = Opal::Ref{this},
-        .subresource_range = {.mip_level_count = ktx_texture->numLevels}
+        .subresource_range = {.mip_level_count = bitmap.GetMipCount()}
     });
     upload_command_buffer.End();
 

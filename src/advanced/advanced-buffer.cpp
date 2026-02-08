@@ -85,7 +85,7 @@ void Rndr::AdvancedBuffer::Destroy()
     m_device = nullptr;
 }
 
-void Rndr::AdvancedBuffer::Update(Opal::ArrayView<u8> data, size_t) const
+void Rndr::AdvancedBuffer::Update(Opal::ArrayView<const u8> data, size_t) const
 {
     if (data.IsEmpty())
     {

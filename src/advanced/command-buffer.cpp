@@ -1,5 +1,6 @@
 #include "rndr/advanced/command-buffer.hpp"
 
+#include "rndr/advanced/advanced-buffer.hpp"
 #include "rndr/advanced/device.hpp"
 
 Rndr::AdvancedCommandBuffer::AdvancedCommandBuffer(const AdvancedDevice& device, AdvancedDeviceQueue& queue)
@@ -69,12 +70,28 @@ void Rndr::AdvancedCommandBuffer::CmdImageBarrier(const AdvancedImageBarrier& im
     barrier_info.subresourceRange.levelCount = image_barrier.subresource_range.mip_level_count;
     barrier_info.subresourceRange.baseArrayLayer = image_barrier.subresource_range.first_array_layer;
     barrier_info.subresourceRange.layerCount = image_barrier.subresource_range.array_layer_count;
-    VkDependencyInfo dependency_info{
-        .sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO,
-        .imageMemoryBarrierCount = 1,
-        .pImageMemoryBarriers = &barrier_info
-    };
+    const VkDependencyInfo dependency_info{
+        .sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO, .imageMemoryBarrierCount = 1, .pImageMemoryBarriers = &barrier_info};
     vkCmdPipelineBarrier2(m_native_command_buffer, &dependency_info);
+}
+
+void Rndr::AdvancedCommandBuffer::CmdCopyBufferToImage(const class AdvancedBuffer& buffer, const Bitmap& bitmap, AdvancedTexture& texture)
+{
+    Opal::DynamicArray<VkBufferImageCopy> copy_regions(bitmap.GetMipCount(), Opal::GetScratchAllocator());
+    for (u32 mip_level = 0; mip_level < bitmap.GetMipCount(); ++mip_level)
+    {
+        const u32 width = Opal::Max(1, bitmap.GetWidth() >> mip_level);
+        const u32 height = Opal::Max(1, bitmap.GetHeight() >> mip_level);
+        const u32 depth = Opal::Max(1, bitmap.GetDepth() >> mip_level);
+        const VkBufferImageCopy copy_region{
+            .bufferOffset = bitmap.GetMipLevelOffset(static_cast<u32>(mip_level)),
+            .imageSubresource = {.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT, .mipLevel = mip_level, .layerCount = 1},
+            .imageExtent = {.width = width, .height = height, .depth = depth},
+        };
+        copy_regions[mip_level] = copy_region;
+    }
+    vkCmdCopyBufferToImage(m_native_command_buffer, buffer.GetNativeBuffer(), texture.GetNativeImage(),
+                           VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, static_cast<u32>(copy_regions.GetSize()), copy_regions.GetData());
 }
 
 Rndr::AdvancedCommandBuffer::AdvancedCommandBuffer(AdvancedCommandBuffer&& other) noexcept

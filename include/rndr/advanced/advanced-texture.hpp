@@ -11,8 +11,9 @@
 
 #include "opal/container/ref.h"
 
-#include "rndr/types.hpp"
+#include "rndr/bitmap.hpp"
 #include "rndr/graphics-types.hpp"
+#include "rndr/types.hpp"
 
 namespace Rndr
 {
@@ -40,7 +41,8 @@ class AdvancedTexture
 public:
     AdvancedTexture() = default;
     explicit AdvancedTexture(const class AdvancedDevice& device, const AdvancedTextureDesc& desc = {});
-    explicit AdvancedTexture(const class AdvancedDevice& device, class AdvancedDeviceQueue& queue, ktxTexture* ktx_texture, const AdvancedTextureDesc& desc = {});
+    explicit AdvancedTexture(const class AdvancedDevice& device, class AdvancedDeviceQueue& queue, const Bitmap& bitmap,
+                             const AdvancedTextureDesc& desc = {});
     ~AdvancedTexture();
 
     AdvancedTexture(const AdvancedTexture&) = delete;
