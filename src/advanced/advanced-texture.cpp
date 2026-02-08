@@ -2,8 +2,6 @@
 
 #include <vma/vk_mem_alloc.h>
 
-#include "ktxvulkan.h"
-
 #include "rndr/advanced/advanced-buffer.hpp"
 #include "rndr/advanced/device.hpp"
 #include "rndr/advanced/command-buffer.hpp"

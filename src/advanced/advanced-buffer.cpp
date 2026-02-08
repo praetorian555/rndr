@@ -1,5 +1,7 @@
 #include "rndr/advanced/advanced-buffer.hpp"
 
+#include "vma/vk_mem_alloc.h"
+
 #include "rndr/advanced/device.hpp"
 
 Rndr::AdvancedBuffer::AdvancedBuffer(const class AdvancedDevice& device, const AdvancedBufferDesc& desc, Opal::ArrayView<u8> initial_data)

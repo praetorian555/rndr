@@ -1,10 +1,5 @@
 #pragma once
 
-#ifndef NOMINMAX
-#define NOMINMAX
-#endif
-
-#include "vma/vk_mem_alloc.h"
 #include "volk/volk.h"
 
 #include "opal/container/dynamic-array.h"
@@ -13,6 +8,10 @@
 
 #include "rndr/advanced/physical-device.hpp"
 #include "rndr/types.hpp"
+
+// Forward declare handle to avoid vma includes in headers.
+using VmaAllocation = struct VmaAllocation_T*;
+using VmaAllocator = struct VmaAllocator_T*;
 
 namespace Rndr
 {
@@ -151,8 +150,8 @@ public:
     [[nodiscard]] VkCommandBuffer CreateCommandBuffer(QueueFamily queue_family) const;
     [[nodiscard]] Opal::DynamicArray<VkCommandBuffer> CreateCommandBuffers(QueueFamily queue_family, u32 count) const;
 
-    bool DestroyCommandBuffer(VkCommandBuffer command_buffer, QueueFamily queue_family) const;
-    bool DestroyCommandBuffers(const Opal::DynamicArray<VkCommandBuffer>& command_buffers, QueueFamily queue_family) const;
+    void DestroyCommandBuffer(VkCommandBuffer command_buffer, QueueFamily queue_family) const;
+    void DestroyCommandBuffers(const Opal::DynamicArray<VkCommandBuffer>& command_buffers, QueueFamily queue_family) const;
 
     [[nodiscard]] VkDescriptorPool CreateDescriptorPool(const AdvancedDescriptorPoolDesc& desc = {}) const;
     bool DestroyDescriptorPool(VkDescriptorPool descriptor_pool) const;

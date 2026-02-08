@@ -1,19 +1,15 @@
 #pragma once
 
-#ifndef NOMINMAX
-#define NOMINMAX
-#endif
-
-#include "vma/vk_mem_alloc.h"
 #include "volk/volk.h"
-
-#include "ktx.h"
 
 #include "opal/container/ref.h"
 
 #include "rndr/bitmap.hpp"
 #include "rndr/graphics-types.hpp"
 #include "rndr/types.hpp"
+
+// Forward declare handle to avoid vma includes in headers.
+using VmaAllocation = struct VmaAllocation_T*;
 
 namespace Rndr
 {

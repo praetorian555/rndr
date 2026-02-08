@@ -1,12 +1,14 @@
 #pragma once
 
-#include "vma/vk_mem_alloc.h"
 #include "volk/volk.h"
 
 #include "opal/container/ref.h"
 #include "opal/container/array-view.h"
 
 #include "rndr/types.hpp"
+
+// Forward declare handle to avoid vma includes in headers.
+using VmaAllocation = struct VmaAllocation_T*;
 
 namespace Rndr
 {

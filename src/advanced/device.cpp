@@ -1,5 +1,8 @@
 #include "rndr/advanced/device.hpp"
 
+#define NOMINMAX
+#include "vma/vk_mem_alloc.h"
+
 #include "opal/container/hash-set.h"
 
 #include "rndr/advanced/command-buffer.hpp"
@@ -348,7 +351,7 @@ Opal::DynamicArray<VkCommandBuffer> Rndr::AdvancedDevice::CreateCommandBuffers(Q
     return command_buffers;
 }
 
-bool Rndr::AdvancedDevice::DestroyCommandBuffer(VkCommandBuffer command_buffer, QueueFamily queue_family) const
+void Rndr::AdvancedDevice::DestroyCommandBuffer(VkCommandBuffer command_buffer, QueueFamily queue_family) const
 {
     const auto it = m_queue_family_to_queue.Find(queue_family);
     if (it == m_queue_family_to_queue.end())
@@ -356,10 +359,9 @@ bool Rndr::AdvancedDevice::DestroyCommandBuffer(VkCommandBuffer command_buffer, 
         throw Opal::Exception("Queue family index not supported!");
     }
     vkFreeCommandBuffers(m_device, it.GetValue()->GetNativeCommandPool(), 1, &command_buffer);
-    return true;
 }
 
-bool Rndr::AdvancedDevice::DestroyCommandBuffers(const Opal::DynamicArray<VkCommandBuffer>& command_buffers, QueueFamily queue_family) const
+void Rndr::AdvancedDevice::DestroyCommandBuffers(const Opal::DynamicArray<VkCommandBuffer>& command_buffers, QueueFamily queue_family) const
 {
     const auto it = m_queue_family_to_queue.Find(queue_family);
     if (it == m_queue_family_to_queue.end())
@@ -368,7 +370,6 @@ bool Rndr::AdvancedDevice::DestroyCommandBuffers(const Opal::DynamicArray<VkComm
     }
     vkFreeCommandBuffers(m_device, it.GetValue()->GetNativeCommandPool(), static_cast<u32>(command_buffers.GetSize()),
                          command_buffers.GetData());
-    return true;
 }
 
 VkDescriptorPool Rndr::AdvancedDevice::CreateDescriptorPool(const AdvancedDescriptorPoolDesc& desc) const
