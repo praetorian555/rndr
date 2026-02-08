@@ -40,8 +40,8 @@ int main()
 
     auto physical_devices = graphics_context.EnumeratePhysicalDevices();
     Rndr::AdvancedDevice device(std::move(physical_devices[0]), graphics_context, {.surface = Opal::Ref{surface}});
-    Rndr::AdvancedDeviceQueue m_graphics_queue(device, Rndr::AdvancedDeviceQueueFamilyFlags::Graphics);
-    Rndr::AdvancedDeviceQueue m_present_queue(device, Rndr::AdvancedDeviceQueueFamilyFlags::Present);
+    auto graphics_queue = device.GetQueue(Rndr::QueueFamily::Graphics);
+    auto present_queue = device.GetQueue(Rndr::QueueFamily::Present);
 
     Rndr::AdvancedSwapChain swap_chain(device, surface, {});
 
@@ -104,5 +104,5 @@ int main()
         }
     }
 
-    auto command_buffers = m_graphics_queue.CreateCommandBuffers(k_frames_in_flight);
+    auto command_buffers = graphics_queue->CreateCommandBuffers(k_frames_in_flight);
 }

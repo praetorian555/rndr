@@ -1,74 +1,80 @@
 #include "rndr/advanced/device.hpp"
 
+#include "opal/container/hash-set.h"
+
 #include "rndr/advanced/command-buffer.hpp"
 #include "rndr/advanced/graphics-context.hpp"
 #include "rndr/advanced/swap-chain.hpp"
 #include "rndr/advanced/synchronization.hpp"
+#include "rndr/exception.hpp"
 
 Opal::DynamicArray<Rndr::u32> Rndr::AdvancedQueueFamilyIndices::GetValidQueueFamilies() const
 {
+    Opal::HashSet<u32> unique_indices(6, Opal::GetScratchAllocator());
     Opal::DynamicArray<u32> valid_queue_families;
     if (graphics_family != k_invalid_index)
     {
-        valid_queue_families.PushBack(graphics_family);
+        unique_indices.Insert(graphics_family);
     }
-    if (present_family != k_invalid_index && present_family != graphics_family)
+    if (present_family != k_invalid_index)
     {
-        valid_queue_families.PushBack(present_family);
+        unique_indices.Insert(present_family);
     }
     if (transfer_family != k_invalid_index)
     {
-        valid_queue_families.PushBack(transfer_family);
+        unique_indices.Insert(transfer_family);
     }
     if (compute_family != k_invalid_index)
     {
-        valid_queue_families.PushBack(compute_family);
+        unique_indices.Insert(compute_family);
+    }
+    if (encode_family_index != k_invalid_index)
+    {
+        unique_indices.Insert(encode_family_index);
+    }
+    if (decode_family_index != k_invalid_index)
+    {
+        unique_indices.Insert(decode_family_index);
+    }
+    for (auto index : unique_indices)
+    {
+        valid_queue_families.PushBack(index);
     }
     return valid_queue_families;
 }
 
+Rndr::u32 Rndr::AdvancedQueueFamilyIndices::GetQueueFamilyIndex(QueueFamily queue_family) const
+{
+    switch (queue_family)
+    {
+        case QueueFamily::Graphics:
+            return graphics_family;
+        case QueueFamily::Present:
+            return present_family;
+        case QueueFamily::Transfer:
+            return transfer_family;
+        case QueueFamily::AsyncCompute:
+            return compute_family;
+        case QueueFamily::Decode:
+            return decode_family_index;
+        case QueueFamily::Encode:
+            return encode_family_index;
+        default:
+            throw Opal::Exception("Invalid queue family!");
+    }
+}
+
 Rndr::AdvancedDevice::AdvancedDevice(AdvancedPhysicalDevice physical_device, const AdvancedGraphicsContext& graphics_context,
                                      const AdvancedDeviceDesc& desc)
+    : m_desc(desc), m_physical_device(std::move(physical_device))
 {
-    if (!physical_device.IsValid())
+    if (!m_physical_device.IsValid())
     {
         throw Opal::Exception("Physical device is invalid!");
     }
 
-    constexpr f32 k_queue_priority = 1.0f;
-    AdvancedQueueFamilyIndices queue_family_indices;
     Opal::DynamicArray<VkDeviceQueueCreateInfo> queue_create_infos;
-    auto queue_family_index = physical_device.GetQueueFamilyIndex(VK_QUEUE_GRAPHICS_BIT);
-    if (((desc.queue_flags & VK_QUEUE_GRAPHICS_BIT) != 0u) && queue_family_index.HasValue())
-    {
-        VkDeviceQueueCreateInfo queue_create_info{};
-        queue_create_info.sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
-        queue_create_info.queueFamilyIndex = queue_family_index.GetValue();
-        queue_create_info.queueCount = 1;
-        queue_create_info.pQueuePriorities = &k_queue_priority;
-        queue_create_infos.PushBack(queue_create_info);
-        queue_family_indices.graphics_family = queue_family_index.GetValue();
-    }
-
-    if (desc.surface.IsValid())
-    {
-        auto details = desc.surface->GetSwapChainSupportDetails(physical_device);
-        auto present_queue_family_index = physical_device.GetPresentQueueFamilyIndex(desc.surface);
-        if (!present_queue_family_index.HasValue())
-        {
-            throw Opal::Exception("Present queue family index is invalid!");
-        }
-        queue_family_indices.present_family = present_queue_family_index.GetValue();
-        if (present_queue_family_index.GetValue() != queue_family_index.GetValue())
-        {
-            VkDeviceQueueCreateInfo queue_create_info{};
-            queue_create_info.sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
-            queue_create_info.queueFamilyIndex = present_queue_family_index.GetValue();
-            queue_create_info.queueCount = 1;
-            queue_create_info.pQueuePriorities = &k_queue_priority;
-            queue_create_infos.PushBack(queue_create_info);
-        }
-    }
+    CollectQueueFamilies(queue_create_infos);
 
     Opal::DynamicArray device_extensions(desc.extensions);
     if (desc.surface.IsValid())
@@ -77,7 +83,7 @@ Rndr::AdvancedDevice::AdvancedDevice(AdvancedPhysicalDevice physical_device, con
     }
     for (const char* extension_name : device_extensions)
     {
-        if (!physical_device.IsExtensionSupported(extension_name))
+        if (!m_physical_device.IsExtensionSupported(extension_name))
         {
             throw Opal::Exception("Device extension not supported!");
         }
@@ -101,32 +107,31 @@ Rndr::AdvancedDevice::AdvancedDevice(AdvancedPhysicalDevice physical_device, con
     create_info.ppEnabledExtensionNames = device_extensions.GetData();
     create_info.enabledExtensionCount = static_cast<u32>(device_extensions.GetSize());
 
-    VkResult result = vkCreateDevice(physical_device.GetNativePhysicalDevice(), &create_info, nullptr, &m_device);
+    const VkResult result = vkCreateDevice(m_physical_device.GetNativePhysicalDevice(), &create_info, nullptr, &m_device);
     if (result != VK_SUCCESS)
     {
         throw Opal::Exception("Failed to create device!");
     }
 
-    auto queue_family_indices_array = queue_family_indices.GetValidQueueFamilies();
-    for (u32 index : queue_family_indices_array)
+    auto queue_family_indices_array = m_queue_family_indices.GetValidQueueFamilies();
+    for (u8 queue_family_idx = 0; queue_family_idx < static_cast<u8>(QueueFamily::EnumCount); ++queue_family_idx)
     {
-        VkCommandPoolCreateInfo pool_info{};
-        pool_info.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
-        pool_info.queueFamilyIndex = queue_family_indices.graphics_family;
-        pool_info.flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT;
-
-        VkCommandPool command_pool{};
-        result = vkCreateCommandPool(m_device, &pool_info, nullptr, &command_pool);
-        if (result != VK_SUCCESS)
+        const QueueFamily queue_family = static_cast<QueueFamily>(queue_family_idx);
+        const u32 queue_family_index = m_queue_family_indices.GetQueueFamilyIndex(queue_family);
+        if (queue_family_index == AdvancedQueueFamilyIndices::k_invalid_index)
         {
-            throw Opal::Exception("Failed to create command pool!");
+            continue;
         }
-        m_queue_family_index_to_command_pool.Insert(index, command_pool);
+        for (const auto& pair : m_queue_family_to_queue)
+        {
+            if (pair.value->GetQueueFamilyIndex() == queue_family_index)
+            {
+                m_queue_family_to_queue.Insert(queue_family, pair.value.Clone());
+            }
+        }
+        Opal::SharedPtr<AdvancedDeviceQueue> queue_ptr(Opal::GetDefaultAllocator(), *this, queue_family_index);
+        m_queue_family_to_queue.Insert(queue_family, std::move(queue_ptr));
     }
-
-    m_physical_device = Opal::Move(physical_device);
-    m_desc = desc;
-    m_queue_family_indices = queue_family_indices;
 
     // Setup GPU allocator
     const VmaVulkanFunctions vk_functions{
@@ -147,6 +152,94 @@ Rndr::AdvancedDevice::AdvancedDevice(AdvancedPhysicalDevice physical_device, con
     }
 }
 
+void Rndr::AdvancedDevice::CollectQueueFamilies(Opal::DynamicArray<VkDeviceQueueCreateInfo>& queue_create_infos)
+{
+    constexpr f32 k_queue_priority = 1.0f;
+    auto queue_family_index = m_physical_device.GetQueueFamilyIndex(VK_QUEUE_GRAPHICS_BIT | VK_QUEUE_COMPUTE_BIT | VK_QUEUE_TRANSFER_BIT);
+    if (queue_family_index.HasValue())
+    {
+        m_queue_family_indices.graphics_family = queue_family_index.GetValue();
+    }
+    else
+    {
+        throw Opal::Exception("No queue with graphics capabilities!");
+    }
+
+    if (m_desc.surface.IsValid())
+    {
+        auto details = m_desc.surface->GetSwapChainSupportDetails(m_physical_device);
+        auto present_queue_family_index = m_physical_device.GetPresentQueueFamilyIndex(m_desc.surface);
+        if (!present_queue_family_index.HasValue())
+        {
+            throw Opal::Exception("No queue with present capabilities but surface provided!");
+        }
+        m_queue_family_indices.present_family = present_queue_family_index.GetValue();
+    }
+
+    if (m_desc.use_async_compute_queue)
+    {
+        queue_family_index = m_physical_device.GetQueueFamilyIndex(VK_QUEUE_COMPUTE_BIT | VK_QUEUE_TRANSFER_BIT, VK_QUEUE_GRAPHICS_BIT);
+        if (queue_family_index.HasValue())
+        {
+            m_queue_family_indices.compute_family = queue_family_index.GetValue();
+        }
+        else
+        {
+            throw Opal::Exception("Async compute queue requested but device does not support it");
+        }
+    }
+
+    if (m_desc.use_dedicated_transfer_queue)
+    {
+        queue_family_index =
+            m_physical_device.GetQueueFamilyIndex(VK_QUEUE_TRANSFER_BIT, VK_QUEUE_GRAPHICS_BIT | VK_QUEUE_COMPUTE_BIT |
+                                                                             VK_QUEUE_VIDEO_DECODE_BIT_KHR | VK_QUEUE_VIDEO_ENCODE_BIT_KHR);
+        if (queue_family_index.HasValue())
+        {
+            m_queue_family_indices.transfer_family = queue_family_index.GetValue();
+        }
+        else
+        {
+            throw Opal::Exception("Dedicated transfer queue requested but device does not support it");
+        }
+    }
+
+    if (m_desc.use_encode_queue)
+    {
+        queue_family_index = m_physical_device.GetQueueFamilyIndex(VK_QUEUE_VIDEO_ENCODE_BIT_KHR);
+        if (queue_family_index.HasValue())
+        {
+            m_queue_family_indices.encode_family_index = queue_family_index.GetValue();
+        }
+        else
+        {
+            throw Opal::Exception("Video encode queue requested but device does not support it");
+        }
+    }
+
+    if (m_desc.use_decode_queue)
+    {
+        queue_family_index = m_physical_device.GetQueueFamilyIndex(VK_QUEUE_VIDEO_DECODE_BIT_KHR);
+        if (queue_family_index.HasValue())
+        {
+            m_queue_family_indices.decode_family_index = queue_family_index.GetValue();
+        }
+        else
+        {
+            throw Opal::Exception("Video encode queue requested but device does not support it");
+        }
+    }
+    for (const u32 index : m_queue_family_indices.GetValidQueueFamilies())
+    {
+        VkDeviceQueueCreateInfo queue_create_info{};
+        queue_create_info.sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
+        queue_create_info.queueFamilyIndex = index;
+        queue_create_info.queueCount = 1;
+        queue_create_info.pQueuePriorities = &k_queue_priority;
+        queue_create_infos.PushBack(queue_create_info);
+    }
+}
+
 Rndr::AdvancedDevice::~AdvancedDevice()
 {
     Destroy();
@@ -154,13 +247,13 @@ Rndr::AdvancedDevice::~AdvancedDevice()
 
 Rndr::AdvancedDevice::AdvancedDevice(AdvancedDevice&& other) noexcept
     : m_device(other.m_device),
-      m_queue_family_index_to_command_pool(Opal::Move(other.m_queue_family_index_to_command_pool)),
-      m_physical_device(Opal::Move(other.m_physical_device)),
-      m_desc(Opal::Move(other.m_desc)),
+      m_queue_family_to_queue(std::move(other.m_queue_family_to_queue)),
+      m_physical_device(std::move(other.m_physical_device)),
+      m_desc(std::move(other.m_desc)),
       m_queue_family_indices(other.m_queue_family_indices)
 {
     other.m_device = VK_NULL_HANDLE;
-    other.m_queue_family_index_to_command_pool.Clear();
+    other.m_queue_family_to_queue.Clear();
     other.m_physical_device = {};
     other.m_desc = {};
     other.m_queue_family_indices = {};
@@ -171,13 +264,13 @@ Rndr::AdvancedDevice& Rndr::AdvancedDevice::operator=(AdvancedDevice&& other) no
     Destroy();
 
     m_device = other.m_device;
-    m_queue_family_index_to_command_pool = Opal::Move(other.m_queue_family_index_to_command_pool);
-    m_physical_device = Opal::Move(other.m_physical_device);
-    m_desc = Opal::Move(other.m_desc);
+    m_queue_family_to_queue = std::move(other.m_queue_family_to_queue);
+    m_physical_device = std::move(other.m_physical_device);
+    m_desc = std::move(other.m_desc);
     m_queue_family_indices = other.m_queue_family_indices;
 
     other.m_device = VK_NULL_HANDLE;
-    other.m_queue_family_index_to_command_pool.Clear();
+    other.m_queue_family_to_queue.Clear();
     other.m_physical_device = {};
     other.m_desc = {};
     other.m_queue_family_indices = {};
@@ -192,11 +285,7 @@ void Rndr::AdvancedDevice::Destroy()
         vmaDestroyAllocator(m_gpu_allocator);
         m_gpu_allocator = VK_NULL_HANDLE;
     }
-    for (auto p : m_queue_family_index_to_command_pool)
-    {
-        vkDestroyCommandPool(m_device, p.value, nullptr);
-    }
-    m_queue_family_index_to_command_pool.Clear();
+    m_queue_family_to_queue.Clear();
     if (m_device != VK_NULL_HANDLE)
     {
         vkDestroyDevice(m_device, nullptr);
@@ -206,12 +295,32 @@ void Rndr::AdvancedDevice::Destroy()
     m_desc = {};
 }
 
-VkCommandBuffer Rndr::AdvancedDevice::CreateCommandBuffer(u32 queue_family_index) const
+Opal::Ref<Rndr::AdvancedDeviceQueue> Rndr::AdvancedDevice::GetQueue(QueueFamily queue_family)
 {
-    return CreateCommandBuffers(queue_family_index, 1)[0];
+    auto queue_it = m_queue_family_to_queue.Find(queue_family);
+    if (queue_it == m_queue_family_to_queue.end())
+    {
+        throw Opal::Exception("Queue family not supported!");
+    }
+    return queue_it.GetValue().GetRef();
 }
 
-Opal::DynamicArray<VkCommandBuffer> Rndr::AdvancedDevice::CreateCommandBuffers(u32 queue_family_index, u32 count) const
+Opal::Ref<const Rndr::AdvancedDeviceQueue> Rndr::AdvancedDevice::GetQueue(QueueFamily queue_family) const
+{
+    auto queue_it = m_queue_family_to_queue.Find(queue_family);
+    if (queue_it == m_queue_family_to_queue.end())
+    {
+        throw Opal::Exception("Queue family not supported!");
+    }
+    return queue_it.GetValue().GetRef();
+}
+
+VkCommandBuffer Rndr::AdvancedDevice::CreateCommandBuffer(QueueFamily queue_family) const
+{
+    return CreateCommandBuffers(queue_family, 1)[0];
+}
+
+Opal::DynamicArray<VkCommandBuffer> Rndr::AdvancedDevice::CreateCommandBuffers(QueueFamily queue_family, u32 count) const
 {
     if (count == 0)
     {
@@ -219,16 +328,16 @@ Opal::DynamicArray<VkCommandBuffer> Rndr::AdvancedDevice::CreateCommandBuffers(u
     }
 
     Opal::DynamicArray<VkCommandBuffer> command_buffers;
-    const auto it = m_queue_family_index_to_command_pool.Find(queue_family_index);
-    if (it == m_queue_family_index_to_command_pool.end())
+    const auto queue_it = m_queue_family_to_queue.Find(queue_family);
+    if (queue_it == m_queue_family_to_queue.end())
     {
-        throw Opal::Exception("Queue family index not supported!");
+        throw Opal::Exception("Queue family not supported!");
     }
 
     command_buffers.Resize(count);
     VkCommandBufferAllocateInfo alloc_info{};
     alloc_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
-    alloc_info.commandPool = it.GetValue();
+    alloc_info.commandPool = queue_it.GetValue()->GetNativeCommandPool();
     alloc_info.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
     alloc_info.commandBufferCount = count;
     const VkResult result = vkAllocateCommandBuffers(m_device, &alloc_info, command_buffers.GetData());
@@ -239,25 +348,26 @@ Opal::DynamicArray<VkCommandBuffer> Rndr::AdvancedDevice::CreateCommandBuffers(u
     return command_buffers;
 }
 
-bool Rndr::AdvancedDevice::DestroyCommandBuffer(VkCommandBuffer command_buffer, u32 queue_family_index) const
+bool Rndr::AdvancedDevice::DestroyCommandBuffer(VkCommandBuffer command_buffer, QueueFamily queue_family) const
 {
-    const auto it = m_queue_family_index_to_command_pool.Find(queue_family_index);
-    if (it == m_queue_family_index_to_command_pool.end())
+    const auto it = m_queue_family_to_queue.Find(queue_family);
+    if (it == m_queue_family_to_queue.end())
     {
         throw Opal::Exception("Queue family index not supported!");
     }
-    vkFreeCommandBuffers(m_device, it.GetValue(), 1, &command_buffer);
+    vkFreeCommandBuffers(m_device, it.GetValue()->GetNativeCommandPool(), 1, &command_buffer);
     return true;
 }
 
-bool Rndr::AdvancedDevice::DestroyCommandBuffers(const Opal::DynamicArray<VkCommandBuffer>& command_buffers, u32 queue_family_index) const
+bool Rndr::AdvancedDevice::DestroyCommandBuffers(const Opal::DynamicArray<VkCommandBuffer>& command_buffers, QueueFamily queue_family) const
 {
-    const auto it = m_queue_family_index_to_command_pool.Find(queue_family_index);
-    if (it == m_queue_family_index_to_command_pool.end())
+    const auto it = m_queue_family_to_queue.Find(queue_family);
+    if (it == m_queue_family_to_queue.end())
     {
         throw Opal::Exception("Queue family index not supported!");
     }
-    vkFreeCommandBuffers(m_device, it.GetValue(), static_cast<u32>(command_buffers.GetSize()), command_buffers.GetData());
+    vkFreeCommandBuffers(m_device, it.GetValue()->GetNativeCommandPool(), static_cast<u32>(command_buffers.GetSize()),
+                         command_buffers.GetData());
     return true;
 }
 
@@ -353,15 +463,9 @@ void Rndr::AdvancedDevice::UpdateDescriptorSets(const Opal::DynamicArray<Advance
     }
 }
 
-Rndr::AdvancedDeviceQueue::AdvancedDeviceQueue(const AdvancedDevice& device, AdvancedDeviceQueueFamilyFlags queue_family_flags)
-    : m_device(device)
+Rndr::AdvancedDeviceQueue::AdvancedDeviceQueue(const AdvancedDevice& device, u32 queue_family_index) : m_device(device)
 {
-    auto queue_index = device.GetPhysicalDevice().GetQueueFamilyIndex(static_cast<VkQueueFlags>(queue_family_flags));
-    if (!queue_index.HasValue())
-    {
-        throw Opal::Exception("Queue family index does not exist!");
-    }
-    m_queue_family_index = queue_index.GetValue();
+    m_queue_family_index = queue_family_index;
     vkGetDeviceQueue(device.GetNativeDevice(), m_queue_family_index, 0, &m_queue);
 
     VkCommandPoolCreateInfo pool_info{};

@@ -80,12 +80,12 @@ Rndr::AdvancedPhysicalDevice& Rndr::AdvancedPhysicalDevice::operator=(AdvancedPh
     return *this;
 }
 
-Opal::Expected<Rndr::u32, VkResult> Rndr::AdvancedPhysicalDevice::GetQueueFamilyIndex(VkQueueFlags queue_flags) const
+Opal::Expected<Rndr::u32, VkResult> Rndr::AdvancedPhysicalDevice::GetQueueFamilyIndex(VkQueueFlags queue_flags, VkQueueFlags not_queue_flags) const
 {
     for (u32 i = 0; i < m_queue_family_properties.GetSize(); i++)
     {
         const VkQueueFamilyProperties& props = m_queue_family_properties[i];
-        if ((props.queueFlags & queue_flags) == queue_flags)
+        if ((props.queueFlags & queue_flags) == queue_flags && (props.queueFlags & not_queue_flags) == 0)
         {
             return Opal::Expected<u32, VkResult>(i);
         }

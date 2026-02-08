@@ -6,8 +6,9 @@
 #include "rndr/platform/windows-header.hpp"
 #endif
 
-#include "rndr/advanced/physical-device.hpp"
+#include "../../build/opengl-msvc-opt-debug/_deps/opal-src/include/opal/container/in-place-array.h"
 #include "rndr/advanced/device.hpp"
+#include "rndr/advanced/physical-device.hpp"
 #include "rndr/log.hpp"
 
 Rndr::AdvancedSurface::AdvancedSurface(const AdvancedGraphicsContext& context, NativeWindowHandle window_handle)
@@ -144,15 +145,17 @@ const AdvancedSwapChainSupportDetails swap_chain_support = surface.GetSwapChainS
     create_info.imageArrayLayers = 1;
     create_info.imageUsage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
 
-    const AdvancedQueueFamilyIndices queue_family_indices = device.GetQueueFamilyIndices();
-    auto queue_family_indices_array = queue_family_indices.GetValidQueueFamilies();
-    if (queue_family_indices.graphics_family != queue_family_indices.present_family)
+    auto graphics_queue = device.GetQueue(QueueFamily::Graphics);
+    auto present_queue = device.GetQueue(QueueFamily::Present);
+
+    if (graphics_queue != present_queue)
     {
         // If graphics and present queues are different, we use VK_SHARING_MODE_CONCURRENT
         // to allow concurrent access to the resources from different queues
+        Opal::InPlaceArray<u32, 2> indices = {graphics_queue->GetQueueFamilyIndex(), present_queue->GetQueueFamilyIndex()};
         create_info.imageSharingMode = VK_SHARING_MODE_CONCURRENT;
-        create_info.queueFamilyIndexCount = static_cast<u32>(queue_family_indices_array.GetSize());
-        create_info.pQueueFamilyIndices = queue_family_indices_array.GetData();
+        create_info.queueFamilyIndexCount = static_cast<u32>(indices.GetSize());
+        create_info.pQueueFamilyIndices = indices.GetData();
     }
     else
     {
