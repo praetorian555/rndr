@@ -141,18 +141,17 @@ Rndr::u64 Rndr::Bitmap::GetSize3D(i32 mip_level) const
 
 Rndr::u64 Rndr::Bitmap::GetTotalSize() const
 {
-    u64 total_size = m_width * m_height * m_depth * GetPixelSize();
     i64 width = m_width;
     i64 height = m_height;
     i64 depth = m_depth;
-    while (width > 1 && height > 1 && depth > 1)
+    u64 total_size = 0;
+    for (i32 current_mip_level = 0; current_mip_level < m_mip_count; current_mip_level++)
     {
+        total_size += width * height * depth * GetPixelSize();
         width = width != 1 ? width >> 1 : 1;
         height = height != 1 ? height >> 1 : 1;
         depth = depth != 1 ? depth >> 1 : 1;
-        total_size += width * height * depth * GetPixelSize();
     }
-    total_size += GetPixelSize();
     return total_size;
 }
 
@@ -170,14 +169,12 @@ Rndr::u64 Rndr::Bitmap::GetMipLevelOffset(i32 mip_level) const
     i32 width = m_width;
     i32 height = m_height;
     i32 depth = m_depth;
-    i32 current_mip_level = 0;
-    while (current_mip_level < mip_level)
+    for (i32 current_mip_level = 0; current_mip_level < mip_level; ++current_mip_level)
     {
         offset += width * height * depth * GetPixelSize();
         width = Opal::Max(1, width >> 1);
         height = Opal::Max(1, height >> 1);
         depth = Opal::Max(1, depth >> 1);
-        current_mip_level++;
     }
     return offset;
 }
