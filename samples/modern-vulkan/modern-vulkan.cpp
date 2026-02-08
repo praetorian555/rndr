@@ -1,12 +1,9 @@
-#include "../../build/opengl-msvc-opt-debug/_deps/opal-src/include/opal/container/in-place-array.h"
-#include "../../build/opengl-msvc-opt-debug/_deps/opal-src/include/opal/paths.h"
+#include "opal/container/in-place-array.h"
+#include "opal/paths.h"
 #include "opal/container/dynamic-array.h"
+
 #include "rndr/application.hpp"
 #include "rndr/file.hpp"
-
-#include "vma/vk_mem_alloc.h"
-#include "volk/volk.h"
-
 #include "rndr/advanced/advanced-buffer.hpp"
 #include "rndr/advanced/advanced-texture.hpp"
 #include "rndr/advanced/device.hpp"
@@ -105,4 +102,7 @@ int main()
     }
 
     auto command_buffers = graphics_queue->CreateCommandBuffers(k_frames_in_flight);
+
+    Rndr::Bitmap albedo = Rndr::File::LoadImage(material_desc.albedo_texture_path, true, true);
+    Rndr::Bitmap metallic_roughness = Rndr::File::LoadImage(material_desc.metallic_roughness_texture_path, true, true);
 }
