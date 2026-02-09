@@ -61,4 +61,26 @@ private:
     VmaAllocation m_image_allocation;
 };
 
+
+class AdvancedSampler
+{
+public:
+    AdvancedSampler() = default;
+    explicit AdvancedSampler(const AdvancedDevice& device, const SamplerDesc& desc = {});
+    ~AdvancedSampler();
+
+    AdvancedSampler(const AdvancedSampler&) = delete;
+    AdvancedSampler& operator=(const AdvancedSampler&) = delete;
+    AdvancedSampler(AdvancedSampler&& other) noexcept;
+    AdvancedSampler& operator=(AdvancedSampler&& other) noexcept;
+
+    void Destroy();
+
+    [[nodiscard]] VkSampler GetNativeSampler() const { return m_sampler; }
+
+private:
+    Opal::Ref<const AdvancedDevice> m_device;
+    VkSampler m_sampler = VK_NULL_HANDLE;
+};
+
 }  // namespace Rndr

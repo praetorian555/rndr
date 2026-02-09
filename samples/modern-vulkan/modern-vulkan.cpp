@@ -1,15 +1,15 @@
+#include "opal/container/dynamic-array.h"
 #include "opal/container/in-place-array.h"
 #include "opal/paths.h"
-#include "opal/container/dynamic-array.h"
 
-#include "rndr/application.hpp"
-#include "rndr/file.hpp"
 #include "rndr/advanced/advanced-buffer.hpp"
 #include "rndr/advanced/advanced-texture.hpp"
 #include "rndr/advanced/device.hpp"
 #include "rndr/advanced/graphics-context.hpp"
 #include "rndr/advanced/physical-device.hpp"
 #include "rndr/advanced/swap-chain.hpp"
+#include "rndr/application.hpp"
+#include "rndr/file.hpp"
 #include "rndr/types.hpp"
 
 using i32 = Rndr::i32;
@@ -103,6 +103,10 @@ int main()
 
     auto command_buffers = graphics_queue->CreateCommandBuffers(k_frames_in_flight);
 
-    Rndr::Bitmap albedo = Rndr::File::LoadImage(material_desc.albedo_texture_path, true, true);
-    Rndr::Bitmap metallic_roughness = Rndr::File::LoadImage(material_desc.metallic_roughness_texture_path, true, true);
+    const Rndr::Bitmap albedo_bitmap = Rndr::File::LoadImage(material_desc.albedo_texture_path, true, true);
+    const Rndr::Bitmap mr_bitmap = Rndr::File::LoadImage(material_desc.metallic_roughness_texture_path, true, true);
+    Rndr::AdvancedTexture albedo_texture(device, device.GetQueue(Rndr::QueueFamily::Transfer), albedo_bitmap);
+    Rndr::AdvancedTexture mr_texture(device, device.GetQueue(Rndr::QueueFamily::Transfer), mr_bitmap);
+    Rndr::AdvancedSampler albedo_sampler(device, {.max_anisotropy = 8.0f, .max_lod = static_cast<f32>(albedo_bitmap.GetMipCount())});
+    Rndr::AdvancedSampler mr_sampler(device, {.max_anisotropy = 8.0f, .max_lod = static_cast<f32>(mr_bitmap.GetMipCount())});
 }

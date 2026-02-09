@@ -83,6 +83,25 @@ enum class ImageAddressMode
 };
 
 /**
+ * Represents the border color used when address mode is set to Border. Maps to predefined
+ * Vulkan border colors.
+ */
+enum class BorderColor
+{
+    /** (0, 0, 0, 0) */
+    TransparentBlack = 0,
+
+    /** (0, 0, 0, 1) */
+    OpaqueBlack,
+
+    /** (1, 1, 1, 1) */
+    OpaqueWhite,
+
+    /** Represents number of elements in the enum. */
+    EnumCount
+};
+
+/**
  * Represents different ways the GPU resource can be used.
  */
 enum class Usage : u8
@@ -566,7 +585,7 @@ struct SamplerDesc
     ImageAddressMode address_mode_w = ImageAddressMode::Repeat;
 
     /** Border color used when address mode is set to Border. */
-    Vector4f border_color = Colors::k_pink;
+    BorderColor border_color = BorderColor::OpaqueBlack;
 
     /**
      * Bias to be added to the mip level before sampling. Add to shader-supplied bias, if any is

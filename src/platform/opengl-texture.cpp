@@ -2,8 +2,6 @@
 
 #include "glad/glad.h"
 
-#include "opal/container/in-place-array.h"
-
 #include "opengl-helpers.hpp"
 #include "rndr/bitmap.hpp"
 #include "rndr/log.hpp"
@@ -60,7 +58,22 @@ Rndr::ErrorCode CheckTextureDesc(const Rndr::GraphicsContext& graphics_context, 
     return Rndr::ErrorCode::Success;
 }
 
-Rndr::ErrorCode CheckSamplerDesc(const Rndr::GraphicsContext& graphics_context, const Rndr::SamplerDesc& sampler_desc)
+Rndr::Vector4f ToVector4f(Rndr::BorderColor border_color)
+{
+    switch (border_color)
+    {
+        case Rndr::BorderColor::TransparentBlack:
+            return Rndr::Vector4f{0.0f, 0.0f, 0.0f, 0.0f};
+        case Rndr::BorderColor::OpaqueBlack:
+            return Rndr::Vector4f{0.0f, 0.0f, 0.0f, 1.0f};
+        case Rndr::BorderColor::OpaqueWhite:
+            return Rndr::Vector4f{1.0f, 1.0f, 1.0f, 1.0f};
+        default:
+            return Rndr::Vector4f{0.0f, 0.0f, 0.0f, 1.0f};
+    }
+}
+
+Rndr::ErrorCode CheckSamplerDesc(const Rndr::SamplerDesc& sampler_desc)
 {
     if (sampler_desc.min_filter >= Rndr::ImageFilter::EnumCount)
     {
@@ -99,25 +112,10 @@ Rndr::ErrorCode CheckSamplerDesc(const Rndr::GraphicsContext& graphics_context, 
         RNDR_LOG_ERROR("Sampler address mode w is invalid!");
         return Rndr::ErrorCode::InvalidArgument;
     }
-    if (graphics_context.GetDesc().enable_bindless_textures)
+    if (sampler_desc.border_color >= Rndr::BorderColor::EnumCount)
     {
-        constexpr Opal::InPlaceArray<Rndr::Vector4f, 4> k_allowed_border_colors = {
-            Rndr::Vector4f{0.0f, 0.0f, 0.0f, 0.0f}, Rndr::Vector4f{1.0f, 1.0f, 1.0f, 1.0f}, Rndr::Vector4f{0.0f, 0.0f, 0.0f, 1.0f},
-            Rndr::Vector4f{1.0f, 1.0f, 1.0f, 0.0f}};
-        bool found_border_color = false;
-        for (const Rndr::Vector4f& border_color : k_allowed_border_colors)
-        {
-            if (sampler_desc.border_color == border_color)
-            {
-                found_border_color = true;
-                break;
-            }
-        }
-        if (!found_border_color)
-        {
-            RNDR_LOG_ERROR("Sampler border color is invalid for use with bindless textures!");
-            return Rndr::ErrorCode::InvalidArgument;
-        }
+        RNDR_LOG_ERROR("Sampler border color is invalid!");
+        return Rndr::ErrorCode::InvalidArgument;
     }
     if (sampler_desc.base_mip_level < 0)
     {
@@ -143,7 +141,7 @@ Rndr::ErrorCode Rndr::Texture::Initialize(const GraphicsContext& graphics_contex
     {
         return err;
     }
-    err = CheckSamplerDesc(graphics_context, sampler_desc);
+    err = CheckSamplerDesc(sampler_desc);
     if (err != ErrorCode::Success)
     {
         return err;
@@ -189,7 +187,8 @@ Rndr::ErrorCode Rndr::Texture::Initialize(const GraphicsContext& graphics_contex
         RNDR_GL_THROW_ON_ERROR("Failed to set texture parameter GL_TEXTURE_WRAP_T!", Destroy());
         glTextureParameteri(m_native_texture, GL_TEXTURE_WRAP_R, address_mode_w);
         RNDR_GL_THROW_ON_ERROR("Failed to set texture parameter GL_TEXTURE_WRAP_R!", Destroy());
-        glTextureParameterfv(m_native_texture, GL_TEXTURE_BORDER_COLOR, m_sampler_desc.border_color.data);
+        const Vector4f border_color_value = ToVector4f(m_sampler_desc.border_color);
+        glTextureParameterfv(m_native_texture, GL_TEXTURE_BORDER_COLOR, border_color_value.data);
         RNDR_GL_THROW_ON_ERROR("Failed to set texture parameter GL_TEXTURE_BORDER_COLOR!", Destroy());
         glTextureParameteri(m_native_texture, GL_TEXTURE_BASE_LEVEL, m_sampler_desc.base_mip_level);
         RNDR_GL_THROW_ON_ERROR("Failed to set texture parameter GL_TEXTURE_BASE_LEVEL!", Destroy());

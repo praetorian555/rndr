@@ -175,7 +175,7 @@ Rndr::Texture Rndr::Material::LoadTexture(const Opal::StringUtf8& texture_path)
                                  .type = TextureType::Texture2D,
                                  .pixel_format = bitmap.GetPixelFormat(),
                                  .use_mips = true};
-    const SamplerDesc sampler_desc{.max_anisotropy = 16.0f, .border_color = Colors::k_black};
+    const SamplerDesc sampler_desc{.max_anisotropy = 16.0f, .border_color = BorderColor::OpaqueBlack};
     const Opal::ArrayView<const u8> bitmap_data{bitmap.GetData(), bitmap.GetSize3D()};
     Texture texture = Texture{m_graphics_context, image_desc, sampler_desc, bitmap_data};
     if (!texture.IsValid())

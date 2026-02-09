@@ -8,6 +8,66 @@
 #include "rndr/advanced/synchronization.hpp"
 #include "rndr/graphics-types.hpp"
 
+static VkFilter ToVkFilter(Rndr::ImageFilter filter)
+{
+    switch (filter)
+    {
+        case Rndr::ImageFilter::Nearest:
+            return VK_FILTER_NEAREST;
+        case Rndr::ImageFilter::Linear:
+            return VK_FILTER_LINEAR;
+        default:
+            return VK_FILTER_LINEAR;
+    }
+}
+
+static VkSamplerMipmapMode ToVkSamplerMipmapMode(Rndr::ImageFilter filter)
+{
+    switch (filter)
+    {
+        case Rndr::ImageFilter::Nearest:
+            return VK_SAMPLER_MIPMAP_MODE_NEAREST;
+        case Rndr::ImageFilter::Linear:
+            return VK_SAMPLER_MIPMAP_MODE_LINEAR;
+        default:
+            return VK_SAMPLER_MIPMAP_MODE_LINEAR;
+    }
+}
+
+static VkSamplerAddressMode ToVkSamplerAddressMode(Rndr::ImageAddressMode mode)
+{
+    switch (mode)
+    {
+        case Rndr::ImageAddressMode::Clamp:
+            return VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
+        case Rndr::ImageAddressMode::Border:
+            return VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_BORDER;
+        case Rndr::ImageAddressMode::Repeat:
+            return VK_SAMPLER_ADDRESS_MODE_REPEAT;
+        case Rndr::ImageAddressMode::MirrorRepeat:
+            return VK_SAMPLER_ADDRESS_MODE_MIRRORED_REPEAT;
+        case Rndr::ImageAddressMode::MirrorOnce:
+            return VK_SAMPLER_ADDRESS_MODE_MIRROR_CLAMP_TO_EDGE;
+        default:
+            return VK_SAMPLER_ADDRESS_MODE_REPEAT;
+    }
+}
+
+static VkBorderColor ToVkBorderColor(Rndr::BorderColor border_color)
+{
+    switch (border_color)
+    {
+        case Rndr::BorderColor::TransparentBlack:
+            return VK_BORDER_COLOR_FLOAT_TRANSPARENT_BLACK;
+        case Rndr::BorderColor::OpaqueBlack:
+            return VK_BORDER_COLOR_FLOAT_OPAQUE_BLACK;
+        case Rndr::BorderColor::OpaqueWhite:
+            return VK_BORDER_COLOR_FLOAT_OPAQUE_WHITE;
+        default:
+            return VK_BORDER_COLOR_FLOAT_OPAQUE_BLACK;
+    }
+}
+
 Rndr::AdvancedTexture::AdvancedTexture(const AdvancedDevice& device, const AdvancedTextureDesc& desc) : m_desc(desc), m_device(device)
 {
     Init(device, desc);
@@ -153,5 +213,65 @@ void Rndr::AdvancedTexture::Destroy()
         vmaDestroyImage(m_device->GetGPUAllocator(), m_image, m_image_allocation);
         m_image = VK_NULL_HANDLE;
         m_image_allocation = VK_NULL_HANDLE;
+    }
+}
+
+// AdvancedSampler
+
+Rndr::AdvancedSampler::AdvancedSampler(const AdvancedDevice& device, const SamplerDesc& desc) : m_device(device)
+{
+    const VkSamplerCreateInfo sampler_create_info = {
+        .sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO,
+        .magFilter = ToVkFilter(desc.mag_filter),
+        .minFilter = ToVkFilter(desc.min_filter),
+        .mipmapMode = ToVkSamplerMipmapMode(desc.mip_map_filter),
+        .addressModeU = ToVkSamplerAddressMode(desc.address_mode_u),
+        .addressModeV = ToVkSamplerAddressMode(desc.address_mode_v),
+        .addressModeW = ToVkSamplerAddressMode(desc.address_mode_w),
+        .mipLodBias = desc.lod_bias,
+        .anisotropyEnable = desc.max_anisotropy > 1.0f ? VK_TRUE : VK_FALSE,
+        .maxAnisotropy = desc.max_anisotropy,
+        .minLod = desc.min_lod,
+        .maxLod = desc.max_lod,
+        .borderColor = ToVkBorderColor(desc.border_color),
+    };
+    const VkResult result = vkCreateSampler(device.GetNativeDevice(), &sampler_create_info, nullptr, &m_sampler);
+    if (result != VK_SUCCESS)
+    {
+        throw Opal::Exception("Failed to create the sampler");
+    }
+}
+
+Rndr::AdvancedSampler::~AdvancedSampler()
+{
+    Destroy();
+}
+
+Rndr::AdvancedSampler::AdvancedSampler(AdvancedSampler&& other) noexcept
+    : m_device(std::move(other.m_device)), m_sampler(other.m_sampler)
+{
+    other.m_sampler = VK_NULL_HANDLE;
+    other.m_device = nullptr;
+}
+
+Rndr::AdvancedSampler& Rndr::AdvancedSampler::operator=(AdvancedSampler&& other) noexcept
+{
+    if (this != &other)
+    {
+        Destroy();
+        m_device = std::move(other.m_device);
+        m_sampler = other.m_sampler;
+        other.m_sampler = VK_NULL_HANDLE;
+        other.m_device = nullptr;
+    }
+    return *this;
+}
+
+void Rndr::AdvancedSampler::Destroy()
+{
+    if (m_sampler != VK_NULL_HANDLE)
+    {
+        vkDestroySampler(m_device->GetNativeDevice(), m_sampler, nullptr);
+        m_sampler = VK_NULL_HANDLE;
     }
 }
