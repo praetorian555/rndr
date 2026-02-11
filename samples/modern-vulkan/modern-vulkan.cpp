@@ -5,10 +5,12 @@
 #include "rndr/advanced/advanced-buffer.hpp"
 #include "rndr/advanced/advanced-descriptor-set.hpp"
 #include "rndr/advanced/advanced-texture.hpp"
+#include "rndr/advanced/command-buffer.hpp"
 #include "rndr/advanced/device.hpp"
 #include "rndr/advanced/graphics-context.hpp"
 #include "rndr/advanced/physical-device.hpp"
 #include "rndr/advanced/swap-chain.hpp"
+#include "rndr/advanced/synchronization.hpp"
 #include "rndr/application.hpp"
 #include "rndr/file.hpp"
 #include "rndr/types.hpp"
@@ -74,40 +76,29 @@ int main()
     }
 
     // Create fences and semaphores
-    Opal::DynamicArray<VkFence> fences(k_frames_in_flight);
-    Opal::DynamicArray<VkSemaphore> present_semaphores(k_frames_in_flight);
+    Opal::DynamicArray<Rndr::AdvancedFence> fences;
+    Opal::DynamicArray<Rndr::AdvancedSemaphore> present_semaphores;
     for (i32 i = 0; i < k_frames_in_flight; ++i)
     {
-        const VkFenceCreateInfo fence_create_info = {.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO, .flags = VK_FENCE_CREATE_SIGNALED_BIT};
-        VkResult result = vkCreateFence(device.GetNativeDevice(), &fence_create_info, nullptr, &fences[i]);
-        if (result != VK_SUCCESS)
-        {
-            throw Opal::Exception("Failed to create a fence!");
-        }
-        const VkSemaphoreCreateInfo semaphore_create_info = {.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO};
-        result = vkCreateSemaphore(device.GetNativeDevice(), &semaphore_create_info, nullptr, &present_semaphores[i]);
-        if (result != VK_SUCCESS)
-        {
-            throw Opal::Exception("Failed to create a present semaphore!");
-        }
+        fences.EmplaceBack(device, true);
+        present_semaphores.EmplaceBack(device);
     }
-    Opal::DynamicArray<VkSemaphore> render_semaphores(swap_chain.GetImageViews().GetSize());
-    for (auto& semaphore : render_semaphores)
+    Opal::DynamicArray<Rndr::AdvancedSemaphore> render_semaphores;
+    for (u32 i = 0; i < swap_chain.GetImageViews().GetSize(); ++i)
     {
-        const VkSemaphoreCreateInfo semaphore_create_info = {.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO};
-        const VkResult result = vkCreateSemaphore(device.GetNativeDevice(), &semaphore_create_info, nullptr, &semaphore);
-        if (result != VK_SUCCESS)
-        {
-            throw Opal::Exception("Failed to create a render semaphore!");
-        }
+        render_semaphores.EmplaceBack(device);
     }
 
-    auto command_buffers = graphics_queue->CreateCommandBuffers(k_frames_in_flight);
+    Opal::DynamicArray<Rndr::AdvancedCommandBuffer> command_buffers;
+    for (Rndr::i32 i = 0; i < k_frames_in_flight; ++i)
+    {
+        command_buffers.EmplaceBack(device, device.GetQueue(Rndr::QueueFamily::Graphics).Get());
+    }
 
     const Rndr::Bitmap albedo_bitmap = Rndr::File::LoadImage(material_desc.albedo_texture_path, true, true);
     const Rndr::Bitmap mr_bitmap = Rndr::File::LoadImage(material_desc.metallic_roughness_texture_path, true, true);
-    Rndr::AdvancedTexture albedo_texture(device, device.GetQueue(Rndr::QueueFamily::Transfer), albedo_bitmap);
-    Rndr::AdvancedTexture mr_texture(device, device.GetQueue(Rndr::QueueFamily::Transfer), mr_bitmap);
+    Rndr::AdvancedTexture albedo_texture(device, device.GetQueue(Rndr::QueueFamily::Graphics), albedo_bitmap);
+    Rndr::AdvancedTexture mr_texture(device, device.GetQueue(Rndr::QueueFamily::Graphics), mr_bitmap);
     Rndr::AdvancedSampler albedo_sampler(device, {.max_anisotropy = 8.0f, .max_lod = static_cast<f32>(albedo_bitmap.GetMipCount())});
     Rndr::AdvancedSampler mr_sampler(device, {.max_anisotropy = 8.0f, .max_lod = static_cast<f32>(mr_bitmap.GetMipCount())});
 
@@ -132,7 +123,7 @@ int main()
         .image_info = {.sampler = albedo_sampler, .image = albedo_texture, .image_layout = Rndr::ImageLayout::ShaderReadOnly}};
     update_bindings.PushBack(binding);
     binding.binding = 1;
-    binding.image_info = {.sampler = mr_sampler, .image = mr_texture};
+    binding.image_info = {.sampler = mr_sampler, .image = mr_texture, .image_layout = Rndr::ImageLayout::ShaderReadOnly};
     update_bindings.PushBack(binding);
     descriptor_set.UpdateDescriptorSets(update_bindings);
 }

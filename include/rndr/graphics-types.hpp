@@ -444,8 +444,8 @@ RNDR_ENUM_CLASS_FLAGS(PipelineStageBits);
 enum class PipelineStageAccessBits : u64
 {
     None = 0ull,
-    Read = 8000ull,
-    Write = 10000ull
+    Read = 0x8000ull,
+    Write = 0x10000ull
 };
 RNDR_ENUM_CLASS_FLAGS(PipelineStageAccessBits)
 

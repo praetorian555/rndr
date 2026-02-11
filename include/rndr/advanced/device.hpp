@@ -58,7 +58,9 @@ class AdvancedDeviceQueue
 {
 public:
     AdvancedDeviceQueue() = default;
-    ~AdvancedDeviceQueue() = default;
+    ~AdvancedDeviceQueue();
+
+    void Destroy();
 
     explicit AdvancedDeviceQueue(const class AdvancedDevice& device, u32 queue_family_index);
 
@@ -70,10 +72,6 @@ public:
     [[nodiscard]] VkQueue GetNativeQueue() const { return m_queue; }
     [[nodiscard]] VkCommandPool GetNativeCommandPool() const { return m_command_pool; }
     [[nodiscard]] u32 GetQueueFamilyIndex() const { return m_queue_family_index; }
-
-    [[nodiscard]] Opal::DynamicArray<VkCommandBuffer> CreateCommandBuffers(u32 count) const;
-    void DestroyCommandBuffer(VkCommandBuffer command_buffer) const;
-    void DestroyCommandBuffers(Opal::ArrayView<VkCommandBuffer> command_buffers) const;
 
     void Submit(const class AdvancedCommandBuffer& command_buffer, const class AdvancedFence& fence);
 
@@ -109,15 +107,9 @@ public:
     [[nodiscard]] const AdvancedDeviceDesc& GetDesc() const { return m_desc; }
 
     Opal::Ref<AdvancedDeviceQueue> GetQueue(QueueFamily queue_family);
-    Opal::Ref<const AdvancedDeviceQueue> GetQueue(QueueFamily queue_family) const;
+    [[nodiscard]] Opal::Ref<const AdvancedDeviceQueue> GetQueue(QueueFamily queue_family) const;
 
     [[nodiscard]] VmaAllocator GetGPUAllocator() const { return m_gpu_allocator; }
-
-    [[nodiscard]] VkCommandBuffer CreateCommandBuffer(QueueFamily queue_family) const;
-    [[nodiscard]] Opal::DynamicArray<VkCommandBuffer> CreateCommandBuffers(QueueFamily queue_family, u32 count) const;
-
-    void DestroyCommandBuffer(VkCommandBuffer command_buffer, QueueFamily queue_family) const;
-    void DestroyCommandBuffers(const Opal::DynamicArray<VkCommandBuffer>& command_buffers, QueueFamily queue_family) const;
 
 private:
     void CollectQueueFamilies(Opal::DynamicArray<VkDeviceQueueCreateInfo>& queue_create_infos);

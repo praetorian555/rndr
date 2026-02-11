@@ -7,7 +7,8 @@
 Rndr::AdvancedBuffer::AdvancedBuffer(const class AdvancedDevice& device, const AdvancedBufferDesc& desc, Opal::ArrayView<u8> initial_data)
     : m_device(device), m_desc(desc)
 {
-    const VkBufferCreateInfo create_info{.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO, .size = desc.size, .usage = desc.usage};
+    const VkBufferCreateInfo create_info{
+        .sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO, .size = desc.size, .usage = desc.usage | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT};
     // First two flags ensure that we get local memory that is host visible if possible, otherwise it fallbacks to invisible local memory
     // for fast GPU access.
     const VmaAllocationCreateInfo allocation_create_info{.flags = VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT |

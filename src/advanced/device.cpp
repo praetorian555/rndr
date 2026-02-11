@@ -326,63 +326,24 @@ Opal::Ref<const Rndr::AdvancedDeviceQueue> Rndr::AdvancedDevice::GetQueue(QueueF
     return queue_it.GetValue().GetRef();
 }
 
-VkCommandBuffer Rndr::AdvancedDevice::CreateCommandBuffer(QueueFamily queue_family) const
+Rndr::AdvancedDeviceQueue::~AdvancedDeviceQueue()
 {
-    return CreateCommandBuffers(queue_family, 1)[0];
+    Destroy();
 }
 
-Opal::DynamicArray<VkCommandBuffer> Rndr::AdvancedDevice::CreateCommandBuffers(QueueFamily queue_family, u32 count) const
+void Rndr::AdvancedDeviceQueue::Destroy()
 {
-    if (count == 0)
+    m_queue = VK_NULL_HANDLE;
+    if (m_command_pool != VK_NULL_HANDLE)
     {
-        throw Opal::Exception("Count must be greater than zero!");
+        vkDestroyCommandPool(m_device->GetNativeDevice(), m_command_pool, nullptr);
+        m_command_pool = VK_NULL_HANDLE;
     }
-
-    Opal::DynamicArray<VkCommandBuffer> command_buffers;
-    const auto queue_it = m_queue_family_to_queue.Find(queue_family);
-    if (queue_it == m_queue_family_to_queue.end())
-    {
-        throw Opal::Exception("Queue family not supported!");
-    }
-
-    command_buffers.Resize(count);
-    VkCommandBufferAllocateInfo alloc_info{};
-    alloc_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
-    alloc_info.commandPool = queue_it.GetValue()->GetNativeCommandPool();
-    alloc_info.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
-    alloc_info.commandBufferCount = count;
-    const VkResult result = vkAllocateCommandBuffers(m_device, &alloc_info, command_buffers.GetData());
-    if (result != VK_SUCCESS)
-    {
-        throw Opal::Exception("Failed to allocate command buffers!");
-    }
-    return command_buffers;
 }
 
-void Rndr::AdvancedDevice::DestroyCommandBuffer(VkCommandBuffer command_buffer, QueueFamily queue_family) const
+Rndr::AdvancedDeviceQueue::AdvancedDeviceQueue(const AdvancedDevice& device, u32 queue_family_index)
+    : m_device(device), m_queue_family_index(queue_family_index)
 {
-    const auto it = m_queue_family_to_queue.Find(queue_family);
-    if (it == m_queue_family_to_queue.end())
-    {
-        throw Opal::Exception("Queue family index not supported!");
-    }
-    vkFreeCommandBuffers(m_device, it.GetValue()->GetNativeCommandPool(), 1, &command_buffer);
-}
-
-void Rndr::AdvancedDevice::DestroyCommandBuffers(const Opal::DynamicArray<VkCommandBuffer>& command_buffers, QueueFamily queue_family) const
-{
-    const auto it = m_queue_family_to_queue.Find(queue_family);
-    if (it == m_queue_family_to_queue.end())
-    {
-        throw Opal::Exception("Queue family index not supported!");
-    }
-    vkFreeCommandBuffers(m_device, it.GetValue()->GetNativeCommandPool(), static_cast<u32>(command_buffers.GetSize()),
-                         command_buffers.GetData());
-}
-
-Rndr::AdvancedDeviceQueue::AdvancedDeviceQueue(const AdvancedDevice& device, u32 queue_family_index) : m_device(device)
-{
-    m_queue_family_index = queue_family_index;
     vkGetDeviceQueue(device.GetNativeDevice(), m_queue_family_index, 0, &m_queue);
 
     VkCommandPoolCreateInfo pool_info{};
@@ -396,9 +357,11 @@ Rndr::AdvancedDeviceQueue::AdvancedDeviceQueue(const AdvancedDevice& device, u32
     }
 }
 
-Rndr::AdvancedDeviceQueue::AdvancedDeviceQueue(AdvancedDeviceQueue&& other) noexcept : m_queue(other.m_queue)
+Rndr::AdvancedDeviceQueue::AdvancedDeviceQueue(AdvancedDeviceQueue&& other) noexcept
+    : m_queue(other.m_queue), m_command_pool(other.m_command_pool)
 {
     other.m_queue = VK_NULL_HANDLE;
+    other.m_command_pool = VK_NULL_HANDLE;
 }
 
 Rndr::AdvancedDeviceQueue& Rndr::AdvancedDeviceQueue::operator=(AdvancedDeviceQueue&& other) noexcept
@@ -408,36 +371,10 @@ Rndr::AdvancedDeviceQueue& Rndr::AdvancedDeviceQueue::operator=(AdvancedDeviceQu
         return *this;
     }
     m_queue = other.m_queue;
+    m_command_pool = other.m_command_pool;
     other.m_queue = VK_NULL_HANDLE;
+    other.m_command_pool = VK_NULL_HANDLE;
     return *this;
-}
-
-Opal::DynamicArray<VkCommandBuffer> Rndr::AdvancedDeviceQueue::CreateCommandBuffers(u32 count) const
-{
-    VkCommandBufferAllocateInfo alloc_info{};
-    alloc_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
-    alloc_info.commandPool = m_command_pool;
-    alloc_info.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
-    alloc_info.commandBufferCount = count;
-
-    Opal::DynamicArray<VkCommandBuffer> command_buffers(count);
-    const VkResult result = vkAllocateCommandBuffers(m_device->GetNativeDevice(), &alloc_info, command_buffers.GetData());
-    if (result != VK_SUCCESS)
-    {
-        throw Opal::Exception("Failed to allocate command buffer!");
-    }
-    return command_buffers;
-}
-
-void Rndr::AdvancedDeviceQueue::DestroyCommandBuffer(VkCommandBuffer command_buffer) const
-{
-    vkFreeCommandBuffers(m_device->GetNativeDevice(), m_command_pool, 1, &command_buffer);
-}
-
-void Rndr::AdvancedDeviceQueue::DestroyCommandBuffers(Opal::ArrayView<VkCommandBuffer> command_buffers) const
-{
-    vkFreeCommandBuffers(m_device->GetNativeDevice(), m_command_pool, static_cast<u32>(command_buffers.GetSize()),
-                         command_buffers.GetData());
 }
 
 void Rndr::AdvancedDeviceQueue::Submit(const AdvancedCommandBuffer& command_buffer, const AdvancedFence& fence)
