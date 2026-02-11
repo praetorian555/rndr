@@ -104,7 +104,7 @@ if (RNDR_ADVANCED_API)
             "${PROJECT_SOURCE_DIR}/include/rndr/advanced/advanced-buffer.hpp"
             "${PROJECT_SOURCE_DIR}/include/rndr/advanced/synchronization.hpp"
             "${PROJECT_SOURCE_DIR}/include/rndr/advanced/command-buffer.hpp"
-            "../include/rndr/pixel-format.hpp"
+            "${PROJECT_SOURCE_DIR}/include/rndr/advanced/advanced-descriptor-set.hpp"
             "${PROJECT_SOURCE_DIR}/src/advanced/graphics-context.cpp"
             "${PROJECT_SOURCE_DIR}/src/advanced/device.cpp"
             "${PROJECT_SOURCE_DIR}/src/advanced/physical-device.cpp"
@@ -113,6 +113,7 @@ if (RNDR_ADVANCED_API)
             "${PROJECT_SOURCE_DIR}/src/advanced/advanced-buffer.cpp"
             "${PROJECT_SOURCE_DIR}/src/advanced/synchronization.cpp"
             "${PROJECT_SOURCE_DIR}/src/advanced/command-buffer.cpp"
+            "${PROJECT_SOURCE_DIR}/src/advanced/advanced-descriptor-set.cpp"
             "${PROJECT_SOURCE_DIR}/src/volk-implementation.cpp"
             "${PROJECT_SOURCE_DIR}/src/vma-implementation.cpp")
 endif ()

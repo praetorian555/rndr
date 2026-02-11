@@ -392,6 +392,17 @@ enum class ShaderType : u8
     EnumCount
 };
 
+enum class ShaderTypeBits : u32
+{
+    Vertex = 1,
+    Fragment = 2,
+    Compute = 4,
+    Task = 8,
+    Mesh = 16,
+    AllGraphics = 32
+};
+RNDR_ENUM_CLASS_FLAGS(ShaderTypeBits);
+
 /** Controls what portion of the depth buffer is written to. */
 enum class DepthMask
 {

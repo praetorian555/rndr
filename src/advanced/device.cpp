@@ -1,6 +1,7 @@
 #include "rndr/advanced/device.hpp"
 
 #define NOMINMAX
+#include "../../build/opengl-msvc-release/_deps/opal-src/third-party/catch2/include/catch2/catch2.hpp"
 #include "vma/vk_mem_alloc.h"
 
 #include "opal/container/hash-set.h"
@@ -125,12 +126,19 @@ Rndr::AdvancedDevice::AdvancedDevice(AdvancedPhysicalDevice physical_device, con
         {
             continue;
         }
+        bool already_present = false;
         for (const auto& pair : m_queue_family_to_queue)
         {
             if (pair.value->GetQueueFamilyIndex() == queue_family_index)
             {
                 m_queue_family_to_queue.Insert(queue_family, pair.value.Clone());
+                already_present = true;
+                break;
             }
+        }
+        if (already_present)
+        {
+            continue;
         }
         Opal::SharedPtr<AdvancedDeviceQueue> queue_ptr(Opal::GetDefaultAllocator(), *this, queue_family_index);
         m_queue_family_to_queue.Insert(queue_family, std::move(queue_ptr));
@@ -370,98 +378,6 @@ void Rndr::AdvancedDevice::DestroyCommandBuffers(const Opal::DynamicArray<VkComm
     }
     vkFreeCommandBuffers(m_device, it.GetValue()->GetNativeCommandPool(), static_cast<u32>(command_buffers.GetSize()),
                          command_buffers.GetData());
-}
-
-VkDescriptorPool Rndr::AdvancedDevice::CreateDescriptorPool(const AdvancedDescriptorPoolDesc& desc) const
-{
-    VkDescriptorPoolCreateInfo pool_info{};
-    pool_info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
-    pool_info.poolSizeCount = static_cast<u32>(desc.pool_sizes.GetSize());
-    pool_info.pPoolSizes = desc.pool_sizes.GetData();
-    pool_info.maxSets = desc.max_sets;
-    pool_info.flags = desc.flags;
-
-    VkDescriptorPool descriptor_pool = VK_NULL_HANDLE;
-    const VkResult result = vkCreateDescriptorPool(m_device, &pool_info, nullptr, &descriptor_pool);
-    if (result != VK_SUCCESS)
-    {
-        throw Opal::Exception("Failed to create descriptor pool!");
-    }
-    return descriptor_pool;
-}
-
-bool Rndr::AdvancedDevice::DestroyDescriptorPool(VkDescriptorPool descriptor_pool) const
-{
-    vkDestroyDescriptorPool(m_device, descriptor_pool, nullptr);
-    return true;
-}
-
-VkDescriptorSetLayout Rndr::AdvancedDevice::CreateDescriptorSetLayout(const AdvancedDescriptorSetLayoutDesc& desc) const
-{
-    Opal::DynamicArray<VkDescriptorSetLayoutBinding> bindings(desc.bindings.GetSize());
-    for (i32 i = 0; i < bindings.GetSize(); i++)
-    {
-        VkDescriptorSetLayoutBinding& binding = bindings[i];
-        binding.binding = desc.bindings[i].binding;
-        binding.descriptorType = desc.bindings[i].descriptor_type;
-        binding.descriptorCount = desc.bindings[i].descriptor_count;
-        binding.stageFlags = desc.bindings[i].stage_flags;
-        binding.pImmutableSamplers = desc.bindings[i].sampler;
-    }
-
-    VkDescriptorSetLayoutCreateInfo layout_info{};
-    layout_info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
-    layout_info.bindingCount = static_cast<u32>(bindings.GetSize());
-    layout_info.pBindings = bindings.GetData();
-
-    VkDescriptorSetLayout descriptor_set_layout = VK_NULL_HANDLE;
-    const VkResult result = vkCreateDescriptorSetLayout(m_device, &layout_info, nullptr, &descriptor_set_layout);
-    if (result != VK_SUCCESS)
-    {
-        throw Opal::Exception("Failed to create descriptor set layout!");
-    }
-    return descriptor_set_layout;
-}
-
-bool Rndr::AdvancedDevice::DestroyDescriptorSetLayout(VkDescriptorSetLayout descriptor_set_layout) const
-{
-    vkDestroyDescriptorSetLayout(m_device, descriptor_set_layout, nullptr);
-    return true;
-}
-
-Opal::DynamicArray<VkDescriptorSet> Rndr::AdvancedDevice::AllocateDescriptorSets(const VkDescriptorPool& descriptor_pool, u32 count,
-                                                                                 const VkDescriptorSetLayout& layout) const
-{
-    Opal::DynamicArray<VkDescriptorSetLayout> layouts(count, layout);
-    VkDescriptorSetAllocateInfo alloc_info{};
-    alloc_info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
-    alloc_info.descriptorPool = descriptor_pool;
-    alloc_info.descriptorSetCount = count;
-    alloc_info.pSetLayouts = layouts.GetData();
-
-    Opal::DynamicArray<VkDescriptorSet> descriptor_sets(count);
-    const VkResult result = vkAllocateDescriptorSets(m_device, &alloc_info, descriptor_sets.GetData());
-    if (result != VK_SUCCESS)
-    {
-        throw Opal::Exception("Failed to allocate descriptor sets!");
-    }
-    return descriptor_sets;
-}
-
-void Rndr::AdvancedDevice::UpdateDescriptorSets(const Opal::DynamicArray<AdvancedUpdateDescriptorSet>& updates) const
-{
-    for (i32 i = 0; i < updates.GetSize(); i++)
-    {
-        VkWriteDescriptorSet descriptor_write{};
-        descriptor_write.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-        descriptor_write.dstSet = updates[i].descriptor_set;
-        descriptor_write.dstBinding = updates[i].binding;
-        descriptor_write.dstArrayElement = 0;
-        descriptor_write.descriptorType = updates[i].descriptor_type;
-        descriptor_write.descriptorCount = 1;
-        descriptor_write.pBufferInfo = &updates[i].buffer_info;
-        vkUpdateDescriptorSets(m_device, 1, &descriptor_write, 0, nullptr);
-    }
 }
 
 Rndr::AdvancedDeviceQueue::AdvancedDeviceQueue(const AdvancedDevice& device, u32 queue_family_index) : m_device(device)

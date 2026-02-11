@@ -33,10 +33,10 @@ struct AdvancedDeviceDesc
     VkPhysicalDeviceFeatures features = {.samplerAnisotropy = VK_TRUE};
     Opal::DynamicArray<const char*> extensions;
     Opal::Ref<class AdvancedSurface> surface;
-    bool use_async_compute_queue = true;
-    bool use_dedicated_transfer_queue = true;
-    bool use_decode_queue = false;
-    bool use_encode_queue = false;
+    bool use_async_compute_queue : 1 = true;
+    bool use_dedicated_transfer_queue : 1 = true;
+    bool use_decode_queue : 1 = false;
+    bool use_encode_queue : 1 = false;
 };
 
 struct AdvancedQueueFamilyIndices
@@ -52,40 +52,6 @@ struct AdvancedQueueFamilyIndices
 
     [[nodiscard]] Opal::DynamicArray<u32> GetValidQueueFamilies() const;
     [[nodiscard]] Rndr::u32 GetQueueFamilyIndex(QueueFamily queue_family) const;
-};
-
-struct AdvancedDescriptorPoolDesc
-{
-    u32 max_sets = 0;
-    Opal::DynamicArray<VkDescriptorPoolSize> pool_sizes;
-    VkDescriptorPoolCreateFlags flags = 0;
-};
-
-struct AdvancedDescriptorSetLayoutBinding
-{
-    u32 binding = 0;
-    VkDescriptorType descriptor_type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-    u32 descriptor_count = 1;
-    VkShaderStageFlags stage_flags = VK_SHADER_STAGE_VERTEX_BIT;
-    const VkSampler* sampler = nullptr;
-};
-
-struct AdvancedDescriptorSetLayoutDesc
-{
-    Opal::DynamicArray<AdvancedDescriptorSetLayoutBinding> bindings;
-    VkDescriptorSetLayoutCreateFlags flags = 0;
-};
-
-struct AdvancedUpdateDescriptorSet
-{
-    VkDescriptorSet descriptor_set = VK_NULL_HANDLE;
-    u32 binding = 0xFFFFFFFF;
-    VkDescriptorType descriptor_type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-    union
-    {
-        VkDescriptorBufferInfo buffer_info;
-        VkDescriptorImageInfo image_info;
-    };
 };
 
 class AdvancedDeviceQueue
@@ -152,17 +118,6 @@ public:
 
     void DestroyCommandBuffer(VkCommandBuffer command_buffer, QueueFamily queue_family) const;
     void DestroyCommandBuffers(const Opal::DynamicArray<VkCommandBuffer>& command_buffers, QueueFamily queue_family) const;
-
-    [[nodiscard]] VkDescriptorPool CreateDescriptorPool(const AdvancedDescriptorPoolDesc& desc = {}) const;
-    bool DestroyDescriptorPool(VkDescriptorPool descriptor_pool) const;
-
-    [[nodiscard]] VkDescriptorSetLayout CreateDescriptorSetLayout(const AdvancedDescriptorSetLayoutDesc& desc) const;
-    bool DestroyDescriptorSetLayout(VkDescriptorSetLayout descriptor_set_layout) const;
-
-    [[nodiscard]] Opal::DynamicArray<VkDescriptorSet> AllocateDescriptorSets(const VkDescriptorPool& descriptor_pool, u32 count,
-                                                                             const VkDescriptorSetLayout& layout) const;
-
-    void UpdateDescriptorSets(const Opal::DynamicArray<AdvancedUpdateDescriptorSet>& updates) const;
 
 private:
     void CollectQueueFamilies(Opal::DynamicArray<VkDeviceQueueCreateInfo>& queue_create_infos);

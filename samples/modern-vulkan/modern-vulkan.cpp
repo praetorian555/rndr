@@ -3,6 +3,7 @@
 #include "opal/paths.h"
 
 #include "rndr/advanced/advanced-buffer.hpp"
+#include "rndr/advanced/advanced-descriptor-set.hpp"
 #include "rndr/advanced/advanced-texture.hpp"
 #include "rndr/advanced/device.hpp"
 #include "rndr/advanced/graphics-context.hpp"
@@ -109,4 +110,29 @@ int main()
     Rndr::AdvancedTexture mr_texture(device, device.GetQueue(Rndr::QueueFamily::Transfer), mr_bitmap);
     Rndr::AdvancedSampler albedo_sampler(device, {.max_anisotropy = 8.0f, .max_lod = static_cast<f32>(albedo_bitmap.GetMipCount())});
     Rndr::AdvancedSampler mr_sampler(device, {.max_anisotropy = 8.0f, .max_lod = static_cast<f32>(mr_bitmap.GetMipCount())});
+
+    // Setup descriptor pool
+    Rndr::AdvancedDescriptorPoolDesc descriptor_pool_desc;
+    descriptor_pool_desc.Add(Rndr::AdvancedDescriptorType::CombinedImageSampler, 100);
+    descriptor_pool_desc.max_sets = k_frames_in_flight;
+    Rndr::AdvancedDescriptorPool descriptor_pool(device, descriptor_pool_desc);
+
+    // Setup the descriptor set layout. It has two bindings and both are images with samplers.
+    Rndr::AdvancedDescriptorSetLayoutDesc layout_desc;
+    layout_desc.AddBinding(Rndr::AdvancedDescriptorType::CombinedImageSampler, 1, Rndr::ShaderTypeBits::Fragment);
+    layout_desc.AddBinding(Rndr::AdvancedDescriptorType::CombinedImageSampler, 1, Rndr::ShaderTypeBits::Fragment);
+    Rndr::AdvancedDescriptorSetLayout descriptor_set_layout(device, layout_desc);
+
+    // Allocate descriptor set from the descriptor pool and fill it with concrete data.
+    Rndr::AdvancedDescriptorSet descriptor_set(descriptor_pool, descriptor_set_layout);
+    Opal::DynamicArray<Rndr::AdvancedDescriptorSetUpdateBinding> update_bindings;
+    Rndr::AdvancedDescriptorSetUpdateBinding binding{
+        .descriptor_type = Rndr::AdvancedDescriptorType::CombinedImageSampler,
+        .binding = 0,
+        .image_info = {.sampler = albedo_sampler, .image = albedo_texture, .image_layout = Rndr::ImageLayout::ShaderReadOnly}};
+    update_bindings.PushBack(binding);
+    binding.binding = 1;
+    binding.image_info = {.sampler = mr_sampler, .image = mr_texture};
+    update_bindings.PushBack(binding);
+    descriptor_set.UpdateDescriptorSets(update_bindings);
 }
