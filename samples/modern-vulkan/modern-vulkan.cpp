@@ -4,6 +4,7 @@
 
 #include "rndr/advanced/advanced-buffer.hpp"
 #include "rndr/advanced/advanced-descriptor-set.hpp"
+#include "rndr/advanced/advanced-shader.hpp"
 #include "rndr/advanced/advanced-texture.hpp"
 #include "rndr/advanced/command-buffer.hpp"
 #include "rndr/advanced/device.hpp"
@@ -126,4 +127,9 @@ int main()
     binding.image_info = {.sampler = mr_sampler, .image = mr_texture, .image_layout = Rndr::ImageLayout::ShaderReadOnly};
     update_bindings.PushBack(binding);
     descriptor_set.UpdateDescriptorSets(update_bindings);
+
+    const Opal::StringUtf8 shader_path = Opal::Paths::Combine(RNDR_CORE_ASSETS_DIR, "shaders", "modern-vulkan.spv");
+    Opal::DynamicArray<u8> shader_contents = Rndr::File::ReadEntireFile(shader_path);
+    Rndr::AdvancedShader vertex_shader(device, shader_contents, {.entry_point = "main_vertex"});
+    Rndr::AdvancedShader fragment_shader(device, shader_contents, {.entry_point = "main_fragment"});
 }

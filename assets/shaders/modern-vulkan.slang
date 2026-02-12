@@ -25,7 +25,7 @@ struct VSOutput {
 };
 
 [shader("vertex")]
-VSOutput main(VSInput input, uniform ShaderData *shaderData, uint instanceIndex : SV_VulkanInstanceID) {
+VSOutput main_vertex(VSInput input, uniform ShaderData *shaderData, uint instanceIndex : SV_VulkanInstanceID) {
     VSOutput output;
     float4x4 modelMat = shaderData->model[instanceIndex];
     output.Normal = mul((float3x3)mul(shaderData->view, modelMat), input.Normal);
@@ -41,7 +41,7 @@ VSOutput main(VSInput input, uniform ShaderData *shaderData, uint instanceIndex 
 }
 
 [shader("fragment")]
-float4 main(VSOutput input) {
+float4 main_fragment(VSOutput input) {
     // Phong lighting
     float3 N = normalize(input.Normal);
     float3 L = normalize(input.LightVec);

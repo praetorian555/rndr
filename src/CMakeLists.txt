@@ -88,6 +88,12 @@ list(APPEND SOURCE_LIST
 )
 
 list(APPEND SOURCE_LIST
+        "$ENV{VULKAN_SDK}/Source/SPIRV-Reflect/spirv_reflect.h"
+        "$ENV{VULKAN_SDK}/Source/SPIRV-Reflect/spirv_reflect.c"
+)
+
+
+list(APPEND SOURCE_LIST
         "${PROJECT_SOURCE_DIR}/include/rndr/platform/windows-application.hpp"
         "${PROJECT_SOURCE_DIR}/include/rndr/platform/windows-window.hpp"
         "${PROJECT_SOURCE_DIR}/src/platform/windows-application.cpp"
@@ -105,6 +111,7 @@ if (RNDR_ADVANCED_API)
             "${PROJECT_SOURCE_DIR}/include/rndr/advanced/synchronization.hpp"
             "${PROJECT_SOURCE_DIR}/include/rndr/advanced/command-buffer.hpp"
             "${PROJECT_SOURCE_DIR}/include/rndr/advanced/advanced-descriptor-set.hpp"
+            "${PROJECT_SOURCE_DIR}/include/rndr/advanced/advanced-shader.hpp"
             "${PROJECT_SOURCE_DIR}/src/advanced/graphics-context.cpp"
             "${PROJECT_SOURCE_DIR}/src/advanced/device.cpp"
             "${PROJECT_SOURCE_DIR}/src/advanced/physical-device.cpp"
@@ -114,6 +121,7 @@ if (RNDR_ADVANCED_API)
             "${PROJECT_SOURCE_DIR}/src/advanced/synchronization.cpp"
             "${PROJECT_SOURCE_DIR}/src/advanced/command-buffer.cpp"
             "${PROJECT_SOURCE_DIR}/src/advanced/advanced-descriptor-set.cpp"
+            "${PROJECT_SOURCE_DIR}/src/advanced/advanced-shader.cpp"
             "${PROJECT_SOURCE_DIR}/src/volk-implementation.cpp"
             "${PROJECT_SOURCE_DIR}/src/vma-implementation.cpp")
 endif ()
@@ -129,6 +137,7 @@ target_include_directories(rndr PUBLIC $<BUILD_INTERFACE:${PROJECT_SOURCE_DIR}/i
 target_include_directories(rndr PRIVATE ${PROJECT_SOURCE_DIR}/src)
 target_include_directories(rndr PRIVATE ${PROJECT_SOURCE_DIR}/extern/glad/include)
 target_include_directories(rndr PRIVATE ${PROJECT_SOURCE_DIR}/extern/stb_image/include)
+target_include_directories(rndr PRIVATE $ENV{VULKAN_SDK}/Source/SPIRV-Reflect)
 
 # Setup graphics API to use
 target_compile_definitions(rndr PUBLIC RNDR_OPENGL)
@@ -139,7 +148,7 @@ target_link_libraries(rndr PUBLIC opal imgui assimp)
 
 if (RNDR_ADVANCED_API)
     target_include_directories(rndr PUBLIC $ENV{VULKAN_SDK}/Include)
-#    find_library(Slang_LIBRARY NAMES slang HINTS "$ENV{VULKAN_SDK}/Lib" REQUIRED)
+    #    find_library(Slang_LIBRARY NAMES slang HINTS "$ENV{VULKAN_SDK}/Lib" REQUIRED)
     target_link_libraries(rndr PUBLIC ktx)
     if (WIN32)
         target_compile_definitions(rndr PUBLIC -DVK_USE_PLATFORM_WIN32_KHR -DVK_NO_PROTOTYPES)
