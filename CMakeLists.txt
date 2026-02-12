@@ -168,12 +168,29 @@ if (RNDR_BUILD_TESTS)
     )
 endif ()
 
+# Compile Slang shaders to SPIR-V
+file(GLOB SLANG_SHADER_FILES "${CMAKE_CURRENT_SOURCE_DIR}/assets/shaders/*.slang")
+set(SLANG_SPIRV_OUTPUTS)
+foreach (SLANG_FILE ${SLANG_SHADER_FILES})
+    get_filename_component(SLANG_NAME ${SLANG_FILE} NAME_WE)
+    set(SPIRV_OUTPUT "${CMAKE_CURRENT_SOURCE_DIR}/assets/shaders/${SLANG_NAME}.spv")
+    add_custom_command(
+            OUTPUT ${SPIRV_OUTPUT}
+            COMMAND slangc ${SLANG_FILE} -target spirv -o ${SPIRV_OUTPUT}
+            DEPENDS ${SLANG_FILE}
+            COMMENT "Compiling ${SLANG_NAME}.slang to SPIR-V..."
+    )
+    list(APPEND SLANG_SPIRV_OUTPUTS ${SPIRV_OUTPUT})
+endforeach ()
+add_custom_target(compile_shaders DEPENDS ${SLANG_SPIRV_OUTPUTS})
+
 if (RNDR_BUILD_SAMPLES)
     add_library(shared samples/shared/types.hpp samples/shared/example-controller.h samples/shared/example-controller.cpp)
     target_include_directories(shared PUBLIC samples/shared)
     # @formatter:off
     target_compile_definitions(shared PUBLIC RNDR_SAMPLES_SHADERS_DIR="${CMAKE_CURRENT_SOURCE_DIR}/samples/shared/shaders")
     # @formatter:on
+    add_dependencies(shared compile_shaders)
     target_link_libraries(shared PUBLIC rndr opal)
 
     add_executable(window-sample samples/window/window-sample.cpp)
