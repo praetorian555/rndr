@@ -50,6 +50,7 @@ public:
 
     [[nodiscard]] VkImage GetNativeImage() const { return m_image; }
     [[nodiscard]] VkImageView GetNativeImageView() const { return m_view; }
+    [[nodiscard]] AdvancedTextureDesc GetDesc() const { return m_desc; }
 
 private:
     void Init(const class AdvancedDevice& device, const AdvancedTextureDesc& desc);

@@ -4,6 +4,7 @@
 
 #include "opal/container/dynamic-array.h"
 
+#include "rndr/pixel-format.hpp"
 #include "rndr/types.hpp"
 #include "rndr/advanced/graphics-context.hpp"
 
@@ -19,7 +20,7 @@ struct AdvancedSwapChainSupportDetails
 
 struct AdvancedSwapChainDesc
 {
-    VkFormat pixel_format = VK_FORMAT_B8G8R8A8_SRGB;
+    PixelFormat pixel_format = PixelFormat::B8G8R8A8_SRGB;
     VkColorSpaceKHR color_space = VK_COLOR_SPACE_SRGB_NONLINEAR_KHR;
     VkPresentModeKHR present_mode = VK_PRESENT_MODE_FIFO_KHR;
     u32 width = 0;

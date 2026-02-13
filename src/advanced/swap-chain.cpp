@@ -7,6 +7,7 @@
 #endif
 
 #include "../../build/opengl-msvc-opt-debug/_deps/opal-src/include/opal/container/in-place-array.h"
+#include "rndr/pixel-format.hpp"
 #include "rndr/advanced/device.hpp"
 #include "rndr/advanced/physical-device.hpp"
 #include "rndr/log.hpp"
@@ -96,7 +97,7 @@ const AdvancedSwapChainSupportDetails swap_chain_support = surface.GetSwapChainS
     bool is_supported = false;
     for (auto available_format : swap_chain_support.formats)
     {
-        if (available_format.format == desc.pixel_format && available_format.colorSpace == desc.color_space)
+        if (available_format.format == ToVkFormat(desc.pixel_format) && available_format.colorSpace == desc.color_space)
         {
             is_supported = true;
             break;
@@ -139,7 +140,7 @@ const AdvancedSwapChainSupportDetails swap_chain_support = surface.GetSwapChainS
     create_info.sType = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR;
     create_info.surface = surface.GetNativeSurface();
     create_info.minImageCount = image_count;
-    create_info.imageFormat = desc.pixel_format;
+    create_info.imageFormat = ToVkFormat(desc.pixel_format);
     create_info.imageColorSpace = desc.color_space;
     create_info.imageExtent = extent;
     create_info.imageArrayLayers = 1;
@@ -197,7 +198,7 @@ const AdvancedSwapChainSupportDetails swap_chain_support = surface.GetSwapChainS
         image_view_create_info.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
         image_view_create_info.image = m_images[i];
         image_view_create_info.viewType = VK_IMAGE_VIEW_TYPE_2D;
-        image_view_create_info.format = desc.pixel_format;
+        image_view_create_info.format = ToVkFormat(desc.pixel_format);
         image_view_create_info.components.r = VK_COMPONENT_SWIZZLE_IDENTITY;
         image_view_create_info.components.g = VK_COMPONENT_SWIZZLE_IDENTITY;
         image_view_create_info.components.b = VK_COMPONENT_SWIZZLE_IDENTITY;

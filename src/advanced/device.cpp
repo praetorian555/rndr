@@ -163,9 +163,14 @@ Rndr::AdvancedDevice::AdvancedDevice(AdvancedPhysicalDevice physical_device, con
     }
 }
 
+namespace
+{
+    Rndr::f32 g_queue_priority = 1.0f;
+}
+
+
 void Rndr::AdvancedDevice::CollectQueueFamilies(Opal::DynamicArray<VkDeviceQueueCreateInfo>& queue_create_infos)
 {
-    constexpr f32 k_queue_priority = 1.0f;
     auto queue_family_index = m_physical_device.GetQueueFamilyIndex(VK_QUEUE_GRAPHICS_BIT | VK_QUEUE_COMPUTE_BIT | VK_QUEUE_TRANSFER_BIT);
     if (queue_family_index.HasValue())
     {
@@ -246,7 +251,7 @@ void Rndr::AdvancedDevice::CollectQueueFamilies(Opal::DynamicArray<VkDeviceQueue
         queue_create_info.sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
         queue_create_info.queueFamilyIndex = index;
         queue_create_info.queueCount = 1;
-        queue_create_info.pQueuePriorities = &k_queue_priority;
+        queue_create_info.pQueuePriorities = &g_queue_priority;
         queue_create_infos.PushBack(queue_create_info);
     }
 }

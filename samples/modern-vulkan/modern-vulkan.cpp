@@ -4,6 +4,7 @@
 
 #include "rndr/advanced/advanced-buffer.hpp"
 #include "rndr/advanced/advanced-descriptor-set.hpp"
+#include "rndr/advanced/advanced-pipeline.hpp"
 #include "rndr/advanced/advanced-shader.hpp"
 #include "rndr/advanced/advanced-texture.hpp"
 #include "rndr/advanced/command-buffer.hpp"
@@ -47,7 +48,7 @@ int main()
     Rndr::AdvancedSwapChain swap_chain(device, surface, {});
 
     const VkExtent2D extent = swap_chain.GetExtent();
-    Rndr::AdvancedTexture texture(device, {.image_type = VK_IMAGE_TYPE_2D,
+    Rndr::AdvancedTexture depth_texture(device, {.image_type = VK_IMAGE_TYPE_2D,
                                            .format = Rndr::PixelFormat::D32_SFLOAT,
                                            .width = extent.width,
                                            .height = extent.height,
@@ -132,4 +133,36 @@ int main()
     Opal::DynamicArray<u8> shader_contents = Rndr::File::ReadEntireFile(shader_path);
     Rndr::AdvancedShader vertex_shader(device, shader_contents, {.entry_point = "main_vertex"});
     Rndr::AdvancedShader fragment_shader(device, shader_contents, {.entry_point = "main_fragment"});
+
+    Rndr::AdvancedVertexInputDesc vertex_input_desc;
+    vertex_input_desc.AddBinding(0, mesh.vertex_size, Rndr::DataRepetition::PerVertex);
+    vertex_input_desc.AddAttribute(0, 0, Rndr::PixelFormat::R32G32B32_SFLOAT, 0);
+    vertex_input_desc.AddAttribute(0, 1, Rndr::PixelFormat::R32G32B32_SFLOAT, sizeof(Rndr::Vector3f));
+    vertex_input_desc.AddAttribute(0, 2, Rndr::PixelFormat::R32G32_SFLOAT, 2 * sizeof(Rndr::Vector3f));
+
+    Rndr::AdvancedPushConstantRange push_constant_range{
+        .shader_stages = Rndr::ShaderTypeBits::Vertex,
+        .size = sizeof(VkDeviceAddress),
+    };
+
+    Rndr::AdvancedColorBlendDesc color_blend_desc;
+    Rndr::AdvancedGraphicsPipelineDesc pipeline_desc{
+        .vertex_input = vertex_input_desc,
+        .vertex_shader = vertex_shader,
+        .fragment_shader = fragment_shader,
+        .descriptor_set_layouts = {descriptor_set_layout},
+        .push_constant_ranges = {push_constant_range},
+        .depth_stencil = {
+            .depth_test_enabled = true,
+            .depth_write_enabled = true,
+            .depth_comparator = Rndr::Comparator::LessEqual
+        },
+        .color_blend_attachments = {
+            color_blend_desc
+        },
+        .color_attachment_formats = {
+            swap_chain.GetDesc().pixel_format
+        },
+        .depth_attachment_format = depth_texture.GetDesc().format
+    };
 }
