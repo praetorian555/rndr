@@ -39,6 +39,7 @@ public:
     explicit AdvancedTexture(const class AdvancedDevice& device, const AdvancedTextureDesc& desc = {});
     explicit AdvancedTexture(const class AdvancedDevice& device, class AdvancedDeviceQueue& queue, const Bitmap& bitmap,
                              const AdvancedTextureDesc& desc = {});
+    explicit AdvancedTexture(const class AdvancedDevice& device, VkImage native_image, const AdvancedTextureDesc& desc = {});
     ~AdvancedTexture();
 
     AdvancedTexture(const AdvancedTexture&) = delete;
@@ -48,6 +49,7 @@ public:
 
     void Destroy();
 
+    [[nodiscard]] bool IsValid() const { return m_image != VK_NULL_HANDLE; }
     [[nodiscard]] VkImage GetNativeImage() const { return m_image; }
     [[nodiscard]] VkImageView GetNativeImageView() const { return m_view; }
     [[nodiscard]] AdvancedTextureDesc GetDesc() const { return m_desc; }
@@ -59,7 +61,7 @@ private:
     Opal::Ref<const class AdvancedDevice> m_device;
     VkImage m_image = VK_NULL_HANDLE;
     VkImageView m_view = VK_NULL_HANDLE;
-    VmaAllocation m_image_allocation;
+    VmaAllocation m_image_allocation = VK_NULL_HANDLE;
 };
 
 

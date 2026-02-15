@@ -6,18 +6,20 @@
 #include "rndr/platform/windows-header.hpp"
 #endif
 
-#include "../../build/opengl-msvc-opt-debug/_deps/opal-src/include/opal/container/in-place-array.h"
-#include "rndr/pixel-format.hpp"
+#include "opal/container/in-place-array.h"
+
 #include "rndr/advanced/device.hpp"
 #include "rndr/advanced/physical-device.hpp"
+#include "rndr/advanced/synchronization.hpp"
 #include "rndr/log.hpp"
+#include "rndr/pixel-format.hpp"
 
-Rndr::AdvancedSurface::AdvancedSurface(const AdvancedGraphicsContext& context, NativeWindowHandle window_handle)
+Rndr::AdvancedSurface::AdvancedSurface(const AdvancedGraphicsContext& context, Opal::Ref<const GenericWindow> window) : m_window(window)
 {
 #if defined(OPAL_PLATFORM_WINDOWS)
     VkWin32SurfaceCreateInfoKHR surface_create_info{};
     surface_create_info.sType = VK_STRUCTURE_TYPE_WIN32_SURFACE_CREATE_INFO_KHR;
-    surface_create_info.hwnd = reinterpret_cast<HWND>(window_handle);
+    surface_create_info.hwnd = reinterpret_cast<HWND>(m_window->GetNativeHandle());
     surface_create_info.hinstance = GetModuleHandle(nullptr);
     const VkResult result = vkCreateWin32SurfaceKHR(context.GetInstance(), &surface_create_info, nullptr, &m_surface);
     if (result != VK_SUCCESS)
@@ -36,7 +38,7 @@ Rndr::AdvancedSurface::~AdvancedSurface()
     Destroy();
 }
 
-Rndr::AdvancedSurface::AdvancedSurface(AdvancedSurface&& other) noexcept : m_surface(other.m_surface), m_context(Opal::Move(other.m_context))
+Rndr::AdvancedSurface::AdvancedSurface(AdvancedSurface&& other) noexcept : m_surface(other.m_surface), m_context(std::move(other.m_context))
 {
     other.m_surface = VK_NULL_HANDLE;
     other.m_context = nullptr;
@@ -92,12 +94,127 @@ Rndr::AdvancedSwapChainSupportDetails Rndr::AdvancedSurface::GetSwapChainSupport
 }
 
 Rndr::AdvancedSwapChain::AdvancedSwapChain(const AdvancedDevice& device, const AdvancedSurface& surface, const AdvancedSwapChainDesc& desc)
+    : m_device(device), m_surface(surface), m_desc(desc)
 {
-const AdvancedSwapChainSupportDetails swap_chain_support = surface.GetSwapChainSupportDetails(device.GetPhysicalDevice());
+    Recreate();
+}
+
+Rndr::AdvancedSwapChain::~AdvancedSwapChain()
+{
+    Destroy();
+}
+
+Rndr::AdvancedSwapChain::AdvancedSwapChain(AdvancedSwapChain&& other) noexcept
+    : m_swap_chain(other.m_swap_chain),
+      m_device(std::move(other.m_device)),
+      m_surface(std::move(other.m_surface)),
+      m_color_textures(std::move(other.m_color_textures)),
+      m_depth_texture(std::move(other.m_depth_texture)),
+      m_desc(other.m_desc),
+      m_extent(other.m_extent)
+{
+    other.m_swap_chain = VK_NULL_HANDLE;
+    other.m_device = nullptr;
+    other.m_surface = nullptr;
+    other.m_color_textures.Clear();
+    other.m_desc = {};
+    other.m_extent = {};
+}
+
+Rndr::AdvancedSwapChain& Rndr::AdvancedSwapChain::operator=(AdvancedSwapChain&& other) noexcept
+{
+    Destroy();
+
+    m_swap_chain = other.m_swap_chain;
+    m_device = std::move(other.m_device);
+    m_surface = std::move(other.m_surface);
+    m_color_textures = std::move(other.m_color_textures);
+    m_depth_texture = std::move(other.m_depth_texture);
+    m_desc = other.m_desc;
+    m_extent = other.m_extent;
+
+    other.m_swap_chain = VK_NULL_HANDLE;
+    other.m_device = nullptr;
+    other.m_surface = nullptr;
+    other.m_color_textures.Clear();
+    other.m_desc = {};
+    other.m_extent = {};
+
+    return *this;
+}
+
+void Rndr::AdvancedSwapChain::Destroy()
+{
+    for (AdvancedTexture& color_texture : m_color_textures)
+    {
+        color_texture.Destroy();
+    }
+    m_color_textures.Clear();
+    m_depth_texture.Destroy();
+    if (m_swap_chain != VK_NULL_HANDLE)
+    {
+        vkDestroySwapchainKHR(m_device->GetNativeDevice(), m_swap_chain, nullptr);
+        m_swap_chain = VK_NULL_HANDLE;
+    }
+    m_surface = nullptr;
+    m_device = nullptr;
+    m_desc = {};
+    m_extent = {};
+}
+
+Rndr::u32 Rndr::AdvancedSwapChain::AcquireImage(const Opal::Ref<AdvancedSemaphore>& semaphore)
+{
+    u32 image_index = UINT32_MAX;
+    bool should_run_again = false;
+    do
+    {
+        const VkResult result = vkAcquireNextImageKHR(m_device->GetNativeDevice(), m_swap_chain, UINT64_MAX,
+                                                      semaphore->GetNativeSemaphore(), VK_NULL_HANDLE, &image_index);
+        if (result == VK_ERROR_OUT_OF_DATE_KHR)
+        {
+            Destroy();
+            Recreate();
+            should_run_again = true;
+        }
+        else if (result != VK_SUCCESS)
+        {
+            throw Opal::Exception("Failed to acquire next image from the swapchain!");
+        }
+    } while (should_run_again);
+    return image_index;
+}
+
+void Rndr::AdvancedSwapChain::Present(u32 image_index, Opal::Ref<AdvancedDeviceQueue> queue, Opal::Ref<AdvancedSemaphore> semaphore)
+{
+    Opal::DynamicArray<VkSemaphore> wait_semaphores{semaphore->GetNativeSemaphore()};
+    const VkPresentInfoKHR present_info = {
+        .sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR,
+        .waitSemaphoreCount = 1,
+        .pWaitSemaphores = wait_semaphores.GetData(),
+        .swapchainCount = 1,
+        .pSwapchains = &m_swap_chain,
+        .pImageIndices = &image_index,
+    };
+    const VkResult result = vkQueuePresentKHR(queue->GetNativeQueue(), &present_info);
+    if (result == VK_ERROR_OUT_OF_DATE_KHR)
+    {
+        Destroy();
+        Recreate();
+        return;
+    }
+    if (result != VK_SUCCESS)
+    {
+        throw Opal::Exception("Failed to present swap chain image!");
+    }
+}
+
+void Rndr::AdvancedSwapChain::Recreate()
+{
+    const AdvancedSwapChainSupportDetails swap_chain_support = m_surface->GetSwapChainSupportDetails(m_device->GetPhysicalDevice());
     bool is_supported = false;
     for (auto available_format : swap_chain_support.formats)
     {
-        if (available_format.format == ToVkFormat(desc.pixel_format) && available_format.colorSpace == desc.color_space)
+        if (available_format.format == ToVkFormat(m_desc.pixel_format) && available_format.colorSpace == m_desc.color_space)
         {
             is_supported = true;
             break;
@@ -111,7 +228,7 @@ const AdvancedSwapChainSupportDetails swap_chain_support = surface.GetSwapChainS
     is_supported = false;
     for (auto available_present_mode : swap_chain_support.present_modes)
     {
-        if (available_present_mode == desc.present_mode)
+        if (available_present_mode == m_desc.present_mode)
         {
             is_supported = true;
             break;
@@ -122,12 +239,14 @@ const AdvancedSwapChainSupportDetails swap_chain_support = surface.GetSwapChainS
         throw Opal::Exception("Swap chain present mode not supported!");
     }
 
-    VkExtent2D extent = {desc.width, desc.height};
+    const GenericWindow& window = m_surface->GetWindow();
+    const Vector2i window_size = window.GetSize().GetValue();
+    VkExtent2D extent = {.width = static_cast<u32>(window_size.x), .height = static_cast<u32>(window_size.y)};
     extent.width = Opal::Clamp(extent.width, swap_chain_support.capabilities.minImageExtent.width,
                                swap_chain_support.capabilities.maxImageExtent.width);
     extent.height = Opal::Clamp(extent.height, swap_chain_support.capabilities.minImageExtent.height,
                                 swap_chain_support.capabilities.maxImageExtent.height);
-    RNDR_LOG_INFO("Requested swap chain extent: (%d, %d)", desc.width, desc.height);
+    RNDR_LOG_INFO("Requested swap chain extent: (%d, %d)", window_size.x, window_size.y);
     RNDR_LOG_INFO("Swap chain extent: (%d, %d)", extent.width, extent.height);
 
     u32 image_count = swap_chain_support.capabilities.minImageCount + 1;
@@ -138,16 +257,17 @@ const AdvancedSwapChainSupportDetails swap_chain_support = surface.GetSwapChainS
 
     VkSwapchainCreateInfoKHR create_info{};
     create_info.sType = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR;
-    create_info.surface = surface.GetNativeSurface();
+    create_info.oldSwapchain = m_swap_chain;
+    create_info.surface = m_surface->GetNativeSurface();
     create_info.minImageCount = image_count;
-    create_info.imageFormat = ToVkFormat(desc.pixel_format);
-    create_info.imageColorSpace = desc.color_space;
+    create_info.imageFormat = ToVkFormat(m_desc.pixel_format);
+    create_info.imageColorSpace = m_desc.color_space;
     create_info.imageExtent = extent;
     create_info.imageArrayLayers = 1;
     create_info.imageUsage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
 
-    auto graphics_queue = device.GetQueue(QueueFamily::Graphics);
-    auto present_queue = device.GetQueue(QueueFamily::Present);
+    auto graphics_queue = m_device->GetQueue(QueueFamily::Graphics);
+    auto present_queue = m_device->GetQueue(QueueFamily::Present);
 
     if (graphics_queue != present_queue)
     {
@@ -167,116 +287,49 @@ const AdvancedSwapChainSupportDetails swap_chain_support = surface.GetSwapChainS
 
     create_info.preTransform = VK_SURFACE_TRANSFORM_IDENTITY_BIT_KHR;  // swap_chain_support.capabilities.currentTransform;
     create_info.compositeAlpha = VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR;
-    create_info.presentMode = desc.present_mode;
+    create_info.presentMode = m_desc.present_mode;
     // If set to VK_TRUE it means that we don't care about the color of the pixels if they are occluded by other window.
     create_info.clipped = VK_TRUE;
     create_info.oldSwapchain = VK_NULL_HANDLE;
 
-    VkResult result = vkCreateSwapchainKHR(device.GetNativeDevice(), &create_info, nullptr, &m_swap_chain);
+    VkResult result = vkCreateSwapchainKHR(m_device->GetNativeDevice(), &create_info, nullptr, &m_swap_chain);
     if (result != VK_SUCCESS)
     {
         throw Opal::Exception("Failed to create swap chain!");
     }
 
-    result = vkGetSwapchainImagesKHR(device.GetNativeDevice(), m_swap_chain, &image_count, nullptr);
+    result = vkGetSwapchainImagesKHR(m_device->GetNativeDevice(), m_swap_chain, &image_count, nullptr);
     if (result != VK_SUCCESS)
     {
         throw Opal::Exception("Failed to get number of swap chain images!");
     }
 
-    m_images.Resize(image_count);
-    result = vkGetSwapchainImagesKHR(device.GetNativeDevice(), m_swap_chain, &image_count, m_images.GetData());
+    Opal::DynamicArray<VkImage> images;
+    images.Resize(image_count);
+    result = vkGetSwapchainImagesKHR(m_device->GetNativeDevice(), m_swap_chain, &image_count, images.GetData());
     if (result != VK_SUCCESS)
     {
         throw Opal::Exception("Failed to get swap chain images!");
     }
-
-    m_image_views.Resize(m_images.GetSize());
-    for (u32 i = 0; i < m_image_views.GetSize(); ++i)
+    for (VkImage image : images)
     {
-        VkImageViewCreateInfo image_view_create_info{};
-        image_view_create_info.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
-        image_view_create_info.image = m_images[i];
-        image_view_create_info.viewType = VK_IMAGE_VIEW_TYPE_2D;
-        image_view_create_info.format = ToVkFormat(desc.pixel_format);
-        image_view_create_info.components.r = VK_COMPONENT_SWIZZLE_IDENTITY;
-        image_view_create_info.components.g = VK_COMPONENT_SWIZZLE_IDENTITY;
-        image_view_create_info.components.b = VK_COMPONENT_SWIZZLE_IDENTITY;
-        image_view_create_info.components.a = VK_COMPONENT_SWIZZLE_IDENTITY;
-        image_view_create_info.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-        image_view_create_info.subresourceRange.baseMipLevel = 0;
-        image_view_create_info.subresourceRange.levelCount = 1;
-        image_view_create_info.subresourceRange.baseArrayLayer = 0;
-        image_view_create_info.subresourceRange.layerCount = 1;
-
-        result = vkCreateImageView(device.GetNativeDevice(), &image_view_create_info, nullptr, &m_image_views[i]);
-        if (result != VK_SUCCESS)
-        {
-            throw Opal::Exception("Failed to create image view!");
-        }
+        AdvancedTexture texture(m_device, image, AdvancedTextureDesc{
+            .format = m_desc.pixel_format,
+            .width = extent.width,
+            .height = extent.height
+        });
+        m_color_textures.PushBack(std::move(texture));
     }
-
-    m_desc = desc;
-    m_extent = extent;
-    m_device = device;
-}
-
-Rndr::AdvancedSwapChain::~AdvancedSwapChain()
-{
-    Destroy();
-}
-
-Rndr::AdvancedSwapChain::AdvancedSwapChain(AdvancedSwapChain&& other) noexcept
-    : m_swap_chain(other.m_swap_chain),
-      m_device(Opal::Move(other.m_device)),
-      m_images(Opal::Move(other.m_images)),
-      m_image_views(Opal::Move(other.m_image_views)),
-      m_desc(other.m_desc),
-      m_extent(other.m_extent)
-{
-    other.m_swap_chain = VK_NULL_HANDLE;
-    other.m_device = nullptr;
-    other.m_images.Clear();
-    other.m_image_views.Clear();
-    other.m_desc = {};
-    other.m_extent = {};
-}
-
-Rndr::AdvancedSwapChain& Rndr::AdvancedSwapChain::operator=(AdvancedSwapChain&& other) noexcept
-{
-    Destroy();
-
-    m_swap_chain = other.m_swap_chain;
-    m_device = Opal::Move(other.m_device);
-    m_images = Opal::Move(other.m_images);
-    m_image_views = Opal::Move(other.m_image_views);
-    m_desc = other.m_desc;
-    m_extent = other.m_extent;
-
-    other.m_swap_chain = VK_NULL_HANDLE;
-    other.m_device = nullptr;
-    other.m_images.Clear();
-    other.m_image_views.Clear();
-    other.m_desc = {};
-    other.m_extent = {};
-
-    return *this;
-}
-
-void Rndr::AdvancedSwapChain::Destroy()
-{
-    for (const VkImageView& image_view : m_image_views)
+    if (m_desc.use_depth)
     {
-        vkDestroyImageView(m_device->GetNativeDevice(), image_view, nullptr);
+        m_depth_texture = AdvancedTexture{m_device,
+                                          {.image_type = VK_IMAGE_TYPE_2D,
+                                           .format = m_desc.depth_pixel_format,
+                                           .width = extent.width,
+                                           .height = extent.height,
+                                           .sample_count = VK_SAMPLE_COUNT_1_BIT,
+                                           .image_usage = VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT,
+                                           .view_type = VK_IMAGE_VIEW_TYPE_2D,
+                                           .subresource_range = {.aspect_mask = ImageAspectBits::Depth}}};
     }
-    m_image_views.Clear();
-    m_images.Clear();
-    if (m_swap_chain != VK_NULL_HANDLE)
-    {
-        vkDestroySwapchainKHR(m_device->GetNativeDevice(), m_swap_chain, nullptr);
-        m_swap_chain = VK_NULL_HANDLE;
-    }
-    m_desc = {};
-    m_extent = {};
-    m_device = nullptr;
 }

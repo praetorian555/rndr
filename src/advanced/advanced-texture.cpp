@@ -100,7 +100,7 @@ Rndr::AdvancedTexture::AdvancedTexture(const AdvancedDevice& device, AdvancedDev
         .before_stages_start_access = PipelineStageAccessBits::Write,
         .old_layout = ImageLayout::Undefined,
         .new_layout = ImageLayout::TransferDestination,
-        .image = Opal::Ref{this},
+        .image = Opal::Ref<const AdvancedTexture>{this},
         .subresource_range = {.mip_level_count = bitmap.GetMipCount()}
     });
     upload_command_buffer.CmdCopyBufferToImage(staging_buffer, bitmap, *this);
@@ -111,7 +111,7 @@ Rndr::AdvancedTexture::AdvancedTexture(const AdvancedDevice& device, AdvancedDev
         .before_stages_start_access = PipelineStageAccessBits::Read,
         .old_layout = ImageLayout::TransferDestination,
         .new_layout = ImageLayout::ShaderReadOnly,
-        .image = Opal::Ref{this},
+        .image = Opal::Ref<const AdvancedTexture>{this},
         .subresource_range = {.mip_level_count = bitmap.GetMipCount()}
     });
     upload_command_buffer.End();
@@ -119,6 +119,27 @@ Rndr::AdvancedTexture::AdvancedTexture(const AdvancedDevice& device, AdvancedDev
     const AdvancedFence fence(device, false);
     queue.Submit(upload_command_buffer, fence);
     fence.Wait();
+}
+
+Rndr::AdvancedTexture::AdvancedTexture(const class AdvancedDevice& device, VkImage native_image, const AdvancedTextureDesc& desc) :
+m_device(device), m_image(native_image), m_desc(desc)
+{
+    const VkImageViewCreateInfo image_view_create_info = {
+        .sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
+        .image = m_image,
+        .viewType = m_desc.view_type,
+        .format = ToVkFormat(m_desc.format),
+        .subresourceRange = {.aspectMask = static_cast<VkImageAspectFlags>(m_desc.subresource_range.aspect_mask),
+                             .baseMipLevel = m_desc.subresource_range.first_mip_level,
+                             .levelCount = m_desc.subresource_range.mip_level_count,
+                             .baseArrayLayer = m_desc.subresource_range.first_array_layer,
+                             .layerCount = m_desc.subresource_range.array_layer_count},
+    };
+    const VkResult result = vkCreateImageView(device.GetNativeDevice(), &image_view_create_info, nullptr, &m_view);
+    if (result != VK_SUCCESS)
+    {
+        throw Opal::Exception("Failed to create the image view");
+    }
 }
 
 void Rndr::AdvancedTexture::Init(const AdvancedDevice& device, const AdvancedTextureDesc& desc)
@@ -152,7 +173,7 @@ void Rndr::AdvancedTexture::Init(const AdvancedDevice& device, const AdvancedTex
         .image = m_image,
         .viewType = m_desc.view_type,
         .format = ToVkFormat(m_desc.format),
-        .subresourceRange = {.aspectMask = m_desc.subresource_range.aspect_mask,
+        .subresourceRange = {.aspectMask = static_cast<VkImageAspectFlags>(m_desc.subresource_range.aspect_mask),
                              .baseMipLevel = m_desc.subresource_range.first_mip_level,
                              .levelCount = m_desc.subresource_range.mip_level_count,
                              .baseArrayLayer = m_desc.subresource_range.first_array_layer,
@@ -208,11 +229,16 @@ void Rndr::AdvancedTexture::Destroy()
         vkDestroyImageView(m_device->GetNativeDevice(), m_view, nullptr);
         m_view = VK_NULL_HANDLE;
     }
-    if (m_image != VK_NULL_HANDLE)
+    if (m_image != VK_NULL_HANDLE && m_image_allocation != VK_NULL_HANDLE)
     {
         vmaDestroyImage(m_device->GetGPUAllocator(), m_image, m_image_allocation);
         m_image = VK_NULL_HANDLE;
         m_image_allocation = VK_NULL_HANDLE;
+    }
+    else
+    {
+        // We were not the owner of the native image
+        m_image = VK_NULL_HANDLE;
     }
 }
 
