@@ -34,6 +34,8 @@ public:
 
     void Wait(u64 timeout = k_infinite_wait) const;
 
+    void Reset() const;
+
     static void WaitForAll(Opal::ArrayView<AdvancedFence> fences, u64 timeout = k_infinite_wait);
 
 private:
@@ -72,7 +74,7 @@ struct AdvancedImageBarrier
     PipelineStageAccessBits before_stages_start_access;
     ImageLayout old_layout;
     ImageLayout new_layout;
-    Opal::Ref<class AdvancedTexture> image;
+    Opal::Ref<const class AdvancedTexture> image;
     ImageSubresourceRange subresource_range;
 };
 

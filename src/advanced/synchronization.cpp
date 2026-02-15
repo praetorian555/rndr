@@ -56,6 +56,14 @@ void Rndr::AdvancedFence::Wait(u64 timeout) const
     }
 }
 
+void Rndr::AdvancedFence::Reset() const
+{
+    if (vkResetFences(m_device->GetNativeDevice(), 1, &m_fence) != VK_SUCCESS)
+    {
+        throw Opal::Exception("Failed to reset a fence!");
+    }
+}
+
 void Rndr::AdvancedFence::WaitForAll(Opal::ArrayView<AdvancedFence> fences, u64 timeout)
 {
     if (fences.empty())
