@@ -19,5 +19,15 @@ Promoted to the core in Vulkan 1.2, lets you create variable-size arrays of desc
 shader runtime (bindless). It also allows you to modify descriptors in this array, so that you don't have to constantly
 rebind descriptor sets per draw call.
 
-When creating a descriptor set layout, this layout will have for example one binding which is array of textures and at
-runtime we 
+# Image Barriers
+
+When using image barriers we specify which stages need to finish (source stages) before specified stages execute (destination stages).
+We also specify access for both source and destination stages. In context of source stages we use write access to tell
+it to flush data to the memory (or L2 cache, whichever is coherent) and read is usually useless since it doesn't dirty
+the cache. In context of destination stages read access tells the GPU to invalidate current cache and read data from
+memory (or L2 cache). Write in destination context cleans the cache. For example, lets say we have to passes, one after
+another, that both write to the same image, no reads just writes. Write access destination means that we don't want to
+have flushing of the second pass cache after first pass has written new data to the memory, resulting in corruption.
+
+So essentially, both read and write access in destination stages is used to invalidate the cache, while write access in
+source stages is about flushing the cache to the memory.
