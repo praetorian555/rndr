@@ -1,11 +1,50 @@
 #pragma once
 
+#include "volk/volk.h"
+
 #include "opal/container/ref.h"
 
 #include "rndr/advanced/synchronization.hpp"
 
 namespace Rndr
 {
+
+enum class AttachmentLoadOperation : u8
+{
+    Load,
+    Clear,
+    DontCare
+};
+
+enum class AttachmentStoreOperation : u8
+{
+    Store,
+    DontCare
+};
+
+struct AdvancedRenderingAttachmentDesc
+{
+    VkImageView image_view;
+    ImageLayout image_layout;
+    AttachmentLoadOperation load_operation;
+    AttachmentStoreOperation store_operation;
+    union
+    {
+        Vector4f color;
+        struct
+        {
+            f32 depth;
+            u32 stencil;
+        } depth_stencil;
+    } clear_value;
+};
+
+struct AdvancedRenderingDesc
+{
+    Vector2i render_area_extent;
+    Opal::DynamicArray<AdvancedRenderingAttachmentDesc> color_attachments;
+    AdvancedRenderingAttachmentDesc depth_attachment;
+};
 
 class AdvancedCommandBuffer
 {
@@ -26,9 +65,13 @@ public:
 
     void Begin(bool submit_one_time = true) const;
     void End() const;
+    void Reset() const;
 
     void CmdImageBarrier(const AdvancedImageBarrier& image_barrier);
+    void CmdImageBarriers(const Opal::ArrayView<AdvancedImageBarrier>& image_barriers);
     void CmdCopyBufferToImage(const class AdvancedBuffer& buffer, const Bitmap& bitmap, AdvancedTexture& texture);
+    void CmdBeginRendering(const AdvancedRenderingDesc& desc);
+    void CmdEndRendering();
 
 private:
     Opal::Ref<const class AdvancedDevice> m_device;
