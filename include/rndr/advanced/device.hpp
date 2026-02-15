@@ -7,6 +7,7 @@
 #include "opal/container/shared-ptr.h"
 
 #include "rndr/advanced/physical-device.hpp"
+#include "rndr/graphics-types.hpp"
 #include "rndr/types.hpp"
 
 // Forward declare handle to avoid vma includes in headers.
@@ -74,6 +75,8 @@ public:
     [[nodiscard]] u32 GetQueueFamilyIndex() const { return m_queue_family_index; }
 
     void Submit(const class AdvancedCommandBuffer& command_buffer, const class AdvancedFence& fence);
+    void Submit(const class AdvancedCommandBuffer& command_buffer, const class AdvancedSemaphore& wait_semaphore,
+                PipelineStageBits wait_stage, const class AdvancedSemaphore& signal_semaphore, const class AdvancedFence& fence);
 
 private:
 
@@ -110,6 +113,8 @@ public:
     [[nodiscard]] Opal::Ref<const AdvancedDeviceQueue> GetQueue(QueueFamily queue_family) const;
 
     [[nodiscard]] VmaAllocator GetGPUAllocator() const { return m_gpu_allocator; }
+
+    void WaitForAll() const;
 
 private:
     void CollectQueueFamilies(Opal::DynamicArray<VkDeviceQueueCreateInfo>& queue_create_infos);

@@ -165,9 +165,16 @@ Rndr::AdvancedDevice::AdvancedDevice(AdvancedPhysicalDevice physical_device, con
 
 namespace
 {
-    Rndr::f32 g_queue_priority = 1.0f;
+Rndr::f32 g_queue_priority = 1.0f;
 }
 
+void Rndr::AdvancedDevice::WaitForAll() const 
+{
+    if (vkDeviceWaitIdle(m_device) != VK_SUCCESS)
+    {
+        throw Opal::Exception("Failed to wait for all work on device to complete!");
+    }
+}
 
 void Rndr::AdvancedDevice::CollectQueueFamilies(Opal::DynamicArray<VkDeviceQueueCreateInfo>& queue_create_infos)
 {
@@ -387,6 +394,32 @@ void Rndr::AdvancedDeviceQueue::Submit(const AdvancedCommandBuffer& command_buff
     VkCommandBuffer native_command_buffer = command_buffer.GetNativeCommandBuffer();
     const VkSubmitInfo submit_info{
         .sType = VK_STRUCTURE_TYPE_SUBMIT_INFO, .commandBufferCount = 1, .pCommandBuffers = &native_command_buffer};
+    if (vkQueueSubmit(m_queue, 1, &submit_info, fence.GetNativeFence()) != VK_SUCCESS)
+    {
+        throw Opal::Exception("Failed to submit command buffer!");
+    }
+}
+
+void Rndr::AdvancedDeviceQueue::Submit(const AdvancedCommandBuffer& command_buffer, const AdvancedSemaphore& wait_semaphore,
+                                        PipelineStageBits wait_stage, const AdvancedSemaphore& signal_semaphore,
+                                        const AdvancedFence& fence)
+{
+    VkCommandBuffer native_command_buffer = command_buffer.GetNativeCommandBuffer();
+    const VkSemaphore wait_native = wait_semaphore.GetNativeSemaphore();
+    const VkSemaphore signal_native = signal_semaphore.GetNativeSemaphore();
+    const VkPipelineStageFlags wait_stage_flags = static_cast<VkPipelineStageFlags>(wait_stage);
+    const bool has_wait = wait_native != VK_NULL_HANDLE;
+    const bool has_signal = signal_native != VK_NULL_HANDLE;
+    const VkSubmitInfo submit_info{
+        .sType = VK_STRUCTURE_TYPE_SUBMIT_INFO,
+        .waitSemaphoreCount = has_wait ? 1u : 0u,
+        .pWaitSemaphores = has_wait ? &wait_native : nullptr,
+        .pWaitDstStageMask = has_wait ? &wait_stage_flags : nullptr,
+        .commandBufferCount = 1,
+        .pCommandBuffers = &native_command_buffer,
+        .signalSemaphoreCount = has_signal ? 1u : 0u,
+        .pSignalSemaphores = has_signal ? &signal_native : nullptr,
+    };
     if (vkQueueSubmit(m_queue, 1, &submit_info, fence.GetNativeFence()) != VK_SUCCESS)
     {
         throw Opal::Exception("Failed to submit command buffer!");
