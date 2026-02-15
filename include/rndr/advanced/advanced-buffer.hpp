@@ -38,7 +38,7 @@ public:
     [[nodiscard]] VkDeviceAddress GetNativeDeviceAddress() const { return m_device_address; }
     [[nodiscard]] size_t GetSize() const { return m_desc.size; }
 
-    void Update(Opal::ArrayView<const u8> data, size_t offset) const;
+    void Update(Opal::ArrayView<const u8> data, size_t offset = 0) const;
 
 private:
     AdvancedBufferDesc m_desc;
