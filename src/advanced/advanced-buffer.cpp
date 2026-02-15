@@ -1,5 +1,8 @@
 #include "rndr/advanced/advanced-buffer.hpp"
 
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
 #include "vma/vk_mem_alloc.h"
 
 #include "rndr/advanced/device.hpp"
