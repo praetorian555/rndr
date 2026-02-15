@@ -473,10 +473,18 @@ enum class ImageLayout
     Present = 1000001002,
 };
 
+enum class ImageAspectBits : u8
+{
+    Color = 1,
+    Depth = 2,
+    Stencil = 4
+};
+RNDR_ENUM_CLASS_FLAGS(ImageAspectBits);
+
 struct ImageSubresourceRange
 {
     // Which aspect of the image we care about.
-    u32 aspect_mask = 1;  // By default, its color aspect
+    ImageAspectBits aspect_mask = ImageAspectBits::Color;
     u32 first_mip_level = 0;
     u32 mip_level_count = 1;
     u32 first_array_layer = 0;
