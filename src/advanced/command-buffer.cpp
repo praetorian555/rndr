@@ -1,6 +1,8 @@
 #include "rndr/advanced/command-buffer.hpp"
 
 #include "rndr/advanced/advanced-buffer.hpp"
+#include "rndr/advanced/advanced-descriptor-set.hpp"
+#include "rndr/advanced/advanced-pipeline.hpp"
 #include "rndr/advanced/device.hpp"
 
 Rndr::AdvancedCommandBuffer::AdvancedCommandBuffer(const AdvancedDevice& device, AdvancedDeviceQueue& queue)
@@ -170,7 +172,7 @@ void Rndr::AdvancedCommandBuffer::CmdBeginRendering(const AdvancedRenderingDesc&
             .loadOp = ToVkLoadOp(attachment.load_operation),
             .storeOp = ToVkStoreOp(attachment.store_operation),
             .clearValue = {.color = {.float32 = {attachment.clear_value.color.r, attachment.clear_value.color.g,
-                                                  attachment.clear_value.color.b, attachment.clear_value.color.a}}},
+                                                 attachment.clear_value.color.b, attachment.clear_value.color.a}}},
         });
     }
 
@@ -181,14 +183,14 @@ void Rndr::AdvancedCommandBuffer::CmdBeginRendering(const AdvancedRenderingDesc&
         .loadOp = ToVkLoadOp(desc.depth_attachment.load_operation),
         .storeOp = ToVkStoreOp(desc.depth_attachment.store_operation),
         .clearValue = {.depthStencil = {.depth = desc.depth_attachment.clear_value.depth_stencil.depth,
-                                         .stencil = desc.depth_attachment.clear_value.depth_stencil.stencil}},
+                                        .stencil = desc.depth_attachment.clear_value.depth_stencil.stencil}},
     };
 
     const bool has_depth = desc.depth_attachment.image_view != VK_NULL_HANDLE;
     const VkRenderingInfo rendering_info{
         .sType = VK_STRUCTURE_TYPE_RENDERING_INFO,
         .renderArea = {.extent = {.width = static_cast<u32>(desc.render_area_extent.x),
-                                   .height = static_cast<u32>(desc.render_area_extent.y)}},
+                                  .height = static_cast<u32>(desc.render_area_extent.y)}},
         .layerCount = 1,
         .colorAttachmentCount = static_cast<u32>(color_attachments.GetSize()),
         .pColorAttachments = color_attachments.GetData(),
@@ -200,6 +202,115 @@ void Rndr::AdvancedCommandBuffer::CmdBeginRendering(const AdvancedRenderingDesc&
 void Rndr::AdvancedCommandBuffer::CmdEndRendering()
 {
     vkCmdEndRendering(m_native_command_buffer);
+}
+
+void Rndr::AdvancedCommandBuffer::CmdSetViewport(const Vector2f& offset, const Vector2f& extent, f32 min_depth, f32 max_depth)
+{
+    const VkViewport viewport{
+        .x = offset.x, .y = offset.y, .width = extent.x, .height = extent.y, .minDepth = min_depth, .maxDepth = max_depth};
+    vkCmdSetViewport(m_native_command_buffer, 0, 1, &viewport);
+}
+
+void Rndr::AdvancedCommandBuffer::CmdSetScissor(const Vector2i& offset, const Vector2i& extent)
+{
+    const VkRect2D scissor{.offset = {.x = offset.x, .y = offset.y},
+                           .extent = {.width = static_cast<u32>(extent.x), .height = static_cast<u32>(extent.y)}};
+    vkCmdSetScissor(m_native_command_buffer, 0, 1, &scissor);
+}
+
+void Rndr::AdvancedCommandBuffer::CmdBindVertexBuffer(const AdvancedBuffer& buffer, u32 binding, u64 offset)
+{
+    const VkBuffer native_buffer = buffer.GetNativeBuffer();
+    vkCmdBindVertexBuffers(m_native_command_buffer, binding, 1, &native_buffer, &offset);
+}
+
+static VkIndexType ToVkIndexType(Rndr::IndexSize index_size)
+{
+    switch (index_size)
+    {
+        case Rndr::IndexSize::uint8:
+            return VK_INDEX_TYPE_UINT8_KHR;
+        case Rndr::IndexSize::uint16:
+            return VK_INDEX_TYPE_UINT16;
+        case Rndr::IndexSize::uint32:
+            return VK_INDEX_TYPE_UINT32;
+        default:
+            throw Opal::Exception("Unsupported index size");
+    }
+}
+
+void Rndr::AdvancedCommandBuffer::CmdBindIndexBuffer(const AdvancedBuffer& buffer, u64 offset, IndexSize index_size)
+{
+    vkCmdBindIndexBuffer(m_native_command_buffer, buffer.GetNativeBuffer(), offset, ToVkIndexType(index_size));
+}
+
+static VkShaderStageFlags ToVkShaderStageFlags(Rndr::ShaderTypeBits stages)
+{
+    VkShaderStageFlags flags = 0;
+    if (!!(stages & Rndr::ShaderTypeBits::AllGraphics))
+    {
+        flags |= VK_SHADER_STAGE_ALL_GRAPHICS;
+    }
+    if (!!(stages & Rndr::ShaderTypeBits::Vertex))
+    {
+        flags |= VK_SHADER_STAGE_VERTEX_BIT;
+    }
+    if (!!(stages & Rndr::ShaderTypeBits::Fragment))
+    {
+        flags |= VK_SHADER_STAGE_FRAGMENT_BIT;
+    }
+    if (!!(stages & Rndr::ShaderTypeBits::Compute))
+    {
+        flags |= VK_SHADER_STAGE_COMPUTE_BIT;
+    }
+    if (!!(stages & Rndr::ShaderTypeBits::Task))
+    {
+        flags |= VK_SHADER_STAGE_TASK_BIT_EXT;
+    }
+    if (!!(stages & Rndr::ShaderTypeBits::Mesh))
+    {
+        flags |= VK_SHADER_STAGE_MESH_BIT_EXT;
+    }
+    return flags;
+}
+
+void Rndr::AdvancedCommandBuffer::CmdBindPipeline(const AdvancedPipeline& pipeline)
+{
+    vkCmdBindPipeline(m_native_command_buffer, pipeline.GetBindPoint(), pipeline.GetNativePipeline());
+}
+
+void Rndr::AdvancedCommandBuffer::CmdBindDescriptorSet(const AdvancedPipeline& pipeline, const AdvancedDescriptorSet& descriptor_set,
+                                                       u32 first_set)
+{
+    const VkDescriptorSet native_set = descriptor_set.GetNativeDescriptorSet();
+    vkCmdBindDescriptorSets(m_native_command_buffer, pipeline.GetBindPoint(), pipeline.GetNativePipelineLayout(), first_set, 1, &native_set,
+                            0, nullptr);
+}
+
+void Rndr::AdvancedCommandBuffer::CmdBindDescriptorSets(const AdvancedPipeline& pipeline,
+                                                        const Opal::ArrayView<Opal::Ref<AdvancedDescriptorSet>>& descriptor_sets,
+                                                        u32 first_set)
+{
+    Opal::DynamicArray<VkDescriptorSet> native_sets(Opal::GetScratchAllocator());
+    for (const auto& set : descriptor_sets)
+    {
+        native_sets.PushBack(set->GetNativeDescriptorSet());
+    }
+    vkCmdBindDescriptorSets(m_native_command_buffer, pipeline.GetBindPoint(), pipeline.GetNativePipelineLayout(), first_set,
+                            static_cast<u32>(native_sets.GetSize()), native_sets.GetData(), 0, nullptr);
+}
+
+void Rndr::AdvancedCommandBuffer::CmdPushConstants(const AdvancedPipeline& pipeline, ShaderTypeBits shader_stages,
+                                                   Opal::ArrayView<const u8> data, u32 offset)
+{
+    vkCmdPushConstants(m_native_command_buffer, pipeline.GetNativePipelineLayout(), ToVkShaderStageFlags(shader_stages), offset,
+                       static_cast<u32>(data.GetSize()), data.GetData());
+}
+
+void Rndr::AdvancedCommandBuffer::CmdDrawIndexed(u32 index_count, u32 instance_count, u32 first_index, i32 vertex_offset,
+                                                 u32 first_instance)
+{
+    vkCmdDrawIndexed(m_native_command_buffer, index_count, instance_count, first_index, vertex_offset, first_instance);
 }
 
 Rndr::AdvancedCommandBuffer::AdvancedCommandBuffer(AdvancedCommandBuffer&& other) noexcept

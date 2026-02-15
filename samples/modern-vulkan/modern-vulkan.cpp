@@ -1,6 +1,8 @@
+#include "example-controller.h"
 #include "opal/container/dynamic-array.h"
 #include "opal/container/in-place-array.h"
 #include "opal/paths.h"
+#include "opal/time.h"
 
 #include "rndr/advanced/advanced-buffer.hpp"
 #include "rndr/advanced/advanced-descriptor-set.hpp"
@@ -15,6 +17,8 @@
 #include "rndr/advanced/synchronization.hpp"
 #include "rndr/application.hpp"
 #include "rndr/file.hpp"
+#include "rndr/fly-camera.hpp"
+#include "rndr/projections.hpp"
 #include "rndr/types.hpp"
 
 using i32 = Rndr::i32;
@@ -26,7 +30,7 @@ struct ShaderData
 {
     Rndr::Matrix4x4f projection;
     Rndr::Matrix4x4f view;
-    Rndr::Matrix4x4f model[3];
+    Opal::InPlaceArray<Rndr::Matrix4x4f, 3> models;
     Rndr::Vector4f light_position{0, -1, 10, 0};
     u32 selected = 1;
 };
@@ -35,27 +39,18 @@ int main()
 {
     constexpr i32 k_frames_in_flight = 2;
 
-    auto rndr_app = Rndr::Application::Create();
+    auto rndr_app = Rndr::Application::Create({.enable_input_system = true});
     Rndr::GenericWindow* window = rndr_app->CreateGenericWindow();
     Rndr::AdvancedGraphicsContext graphics_context{{.collect_debug_messages = true}};
-    Rndr::AdvancedSurface surface(graphics_context, window->GetNativeHandle());
+    Rndr::AdvancedSurface surface(graphics_context, window);
 
     auto physical_devices = graphics_context.EnumeratePhysicalDevices();
     Rndr::AdvancedDevice device(std::move(physical_devices[0]), graphics_context, {.surface = Opal::Ref{surface}});
     auto graphics_queue = device.GetQueue(Rndr::QueueFamily::Graphics);
     auto present_queue = device.GetQueue(Rndr::QueueFamily::Present);
 
-    Rndr::AdvancedSwapChain swap_chain(device, surface, {});
+    Rndr::AdvancedSwapChain swap_chain(device, surface, {.use_depth = true, .depth_pixel_format = Rndr::PixelFormat::D32_SFLOAT});
 
-    const VkExtent2D extent = swap_chain.GetExtent();
-    Rndr::AdvancedTexture depth_texture(device, {.image_type = VK_IMAGE_TYPE_2D,
-                                           .format = Rndr::PixelFormat::D32_SFLOAT,
-                                           .width = extent.width,
-                                           .height = extent.height,
-                                           .sample_count = VK_SAMPLE_COUNT_1_BIT,
-                                           .image_usage = VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT,
-                                           .view_type = VK_IMAGE_VIEW_TYPE_2D,
-                                           .subresource_range = {.aspect_mask = VK_IMAGE_ASPECT_DEPTH_BIT}});
     // TODO: Flip y for everything in mesh for Vulkan
     Rndr::Mesh mesh;
     Rndr::MaterialDesc material_desc;
@@ -82,11 +77,12 @@ int main()
     Opal::DynamicArray<Rndr::AdvancedSemaphore> present_semaphores;
     for (i32 i = 0; i < k_frames_in_flight; ++i)
     {
-        fences.EmplaceBack(device, true);
+        constexpr bool k_start_signaled = true;
+        fences.EmplaceBack(device, k_start_signaled);
         present_semaphores.EmplaceBack(device);
     }
     Opal::DynamicArray<Rndr::AdvancedSemaphore> render_semaphores;
-    for (u32 i = 0; i < swap_chain.GetImageViews().GetSize(); ++i)
+    for (u32 i = 0; i < swap_chain.GetColorImageCount(); ++i)
     {
         render_semaphores.EmplaceBack(device);
     }
@@ -108,7 +104,7 @@ int main()
     Rndr::AdvancedDescriptorPoolDesc descriptor_pool_desc;
     descriptor_pool_desc.Add(Rndr::AdvancedDescriptorType::CombinedImageSampler, 100);
     descriptor_pool_desc.max_sets = k_frames_in_flight;
-    Rndr::AdvancedDescriptorPool descriptor_pool(device, descriptor_pool_desc);
+    const Rndr::AdvancedDescriptorPool descriptor_pool(device, descriptor_pool_desc);
 
     // Setup the descriptor set layout. It has two bindings and both are images with samplers.
     Rndr::AdvancedDescriptorSetLayoutDesc layout_desc;
@@ -146,23 +142,124 @@ int main()
     };
 
     Rndr::AdvancedColorBlendDesc color_blend_desc;
-    Rndr::AdvancedGraphicsPipelineDesc pipeline_desc{
+    const Rndr::AdvancedGraphicsPipelineDesc pipeline_desc{
         .vertex_input = vertex_input_desc,
         .vertex_shader = vertex_shader,
         .fragment_shader = fragment_shader,
         .descriptor_set_layouts = {descriptor_set_layout},
         .push_constant_ranges = {push_constant_range},
-        .depth_stencil = {
-            .depth_test_enabled = true,
-            .depth_write_enabled = true,
-            .depth_comparator = Rndr::Comparator::LessEqual
-        },
-        .color_blend_attachments = {
-            color_blend_desc
-        },
-        .color_attachment_formats = {
-            swap_chain.GetDesc().pixel_format
-        },
-        .depth_attachment_format = depth_texture.GetDesc().format
-    };
+        .depth_stencil = {.depth_test_enabled = true, .depth_write_enabled = true, .depth_comparator = Rndr::Comparator::LessEqual},
+        .color_blend_attachments = {color_blend_desc},
+        .color_attachment_formats = {swap_chain.GetDesc().pixel_format},
+        .depth_attachment_format = swap_chain.GetDesc().depth_pixel_format};
+    Rndr::AdvancedPipeline pipeline(device, pipeline_desc);
+
+    Rndr::Vector2i window_size = window->GetSize().GetValue();
+    f32 window_width = window_size.x;
+    f32 window_height = window_size.y;
+    const Rndr::FlyCameraDesc fly_camera_desc{
+        .start_position = {0.0f, 1.0f, 0.0f}, .start_yaw_radians = 0, .projection_desc = {.near = 0.1f, .far = 32.0f}};
+    ExampleController controller(*rndr_app, window_width, window_height, fly_camera_desc, 10.0f, 0.005f, 0.005f);
+
+    Rndr::f32 delta_seconds = 0.016;
+    bool should_quit = false;
+    Rndr::u32 frame_index = 0;
+    while (!window->IsClosed())
+    {
+        Opal::GetScratchAllocator()->Reset();
+        auto start_time = Opal::GetSeconds();
+
+        window_size = window->GetSize().GetValue();
+        f32 window_width = window_size.x;
+        f32 window_height = window_size.y;
+
+        // Acquire next swap chain image to render to
+        fences[frame_index].Wait();
+        fences[frame_index].Reset();
+        u32 image_index = swap_chain.AcquireImage(present_semaphores[frame_index]);
+
+        // Update shader data
+        ShaderData shader_data;
+        shader_data.projection = controller.GetProjectionTransform();
+        shader_data.view = controller.GetViewTransform();
+        for (i32 i = 0; i < 3; i++)
+        {
+            shader_data.models[i] = Opal::Translate(Rndr::Point3f{(static_cast<f32>(i) - 1) * 3.0f, 0.0f, 0.0f});
+        }
+        m_shader_buffers[frame_index].Update(Opal::AsBytes(shader_data));
+
+        // Start recording rendering commands
+        auto& command_buffer = command_buffers[frame_index];
+        command_buffer.Reset();
+        command_buffer.Begin();
+
+        // Make sure our color and depth attachment are ready and in proper layout
+        Opal::InPlaceArray<Rndr::AdvancedImageBarrier, 2> barriers{
+            {.stages_must_finish = Rndr::PipelineStageBits::ColorAttachmentOutput,
+             .stages_must_finish_access = Rndr::PipelineStageAccessBits::None,
+             .before_stages_start = Rndr::PipelineStageBits::ColorAttachmentOutput,
+             .before_stages_start_access = Rndr::PipelineStageAccessBits::Read | Rndr::PipelineStageAccessBits::Write,
+             .old_layout = Rndr::ImageLayout::Undefined,
+             .new_layout = Rndr::ImageLayout::ColorAttachment,
+             .image = swap_chain.GetColorImage(static_cast<i32>(image_index))},
+            {.stages_must_finish = Rndr::PipelineStageBits::EarlyFragmentTests | Rndr::PipelineStageBits::LateFragmentTests,
+             .stages_must_finish_access = Rndr::PipelineStageAccessBits::Write,
+             .before_stages_start = Rndr::PipelineStageBits::EarlyFragmentTests | Rndr::PipelineStageBits::LateFragmentTests,
+             .before_stages_start_access = Rndr::PipelineStageAccessBits::Write,
+             .old_layout = Rndr::ImageLayout::Undefined,
+             .new_layout = Rndr::ImageLayout::DepthStencilAttachment,
+             .image = swap_chain.GetDepthImage(),
+             .subresource_range = {
+                 .aspect_mask = Rndr::ImageAspectBits::Depth,
+             }}};
+        command_buffer.CmdImageBarriers(barriers);
+
+        // Configure attachments, what happens when they are loaded and how they are stored after rendering
+        // Do the actual draw calls
+        const Rndr::AdvancedRenderingDesc rendering_desc{
+            .render_area_extent = window_size,
+            .color_attachments = {Rndr::AdvancedRenderingAttachmentDesc{.image_view = swap_chain.GetColorImageView(image_index),
+                                                                        .image_layout = Rndr::ImageLayout::ColorAttachment,
+                                                                        .load_operation = Rndr::AttachmentLoadOperation::Clear,
+                                                                        .store_operation = Rndr::AttachmentStoreOperation::Store,
+                                                                        .clear_value = {.color = {0.0f, 0.0f, 0.2f, 1.0f}}}},
+            .depth_attachment = {.image_view = swap_chain.GetDepthImageView(),
+                                 .image_layout = Rndr::ImageLayout::DepthStencilAttachment,
+                                 .load_operation = Rndr::AttachmentLoadOperation::Clear,
+                                 .store_operation = Rndr::AttachmentStoreOperation::DontCare,
+                                 .clear_value = {.depth_stencil = {.depth = 1.0f, .stencil = 0}}}};
+        command_buffer.CmdBeginRendering(rendering_desc);
+        command_buffer.CmdSetViewport(Rndr::Vector2f::Zero(), {window_width, window_height});
+        command_buffer.CmdSetScissor(Rndr::Vector2i::Zero(), window_size);
+        command_buffer.CmdBindVertexBuffer(mesh_buffer, 0);
+        command_buffer.CmdBindIndexBuffer(mesh_buffer, mesh.index_count * mesh.index_size, Rndr::IndexSize::uint32);
+        command_buffer.CmdBindPipeline(pipeline);
+        command_buffer.CmdBindDescriptorSet(pipeline, descriptor_set);
+        VkDeviceAddress device_address = m_shader_buffers[frame_index].GetNativeDeviceAddress();
+        command_buffer.CmdPushConstants(pipeline, Rndr::ShaderTypeBits::Vertex, Opal::AsBytes(device_address));
+        command_buffer.CmdDrawIndexed(mesh.index_count, 3);
+        command_buffer.CmdEndRendering();
+
+        command_buffer.CmdImageBarrier({
+            .stages_must_finish = Rndr::PipelineStageBits::ColorAttachmentOutput,
+            .stages_must_finish_access = Rndr::PipelineStageAccessBits::Write,
+            .before_stages_start = Rndr::PipelineStageBits::ColorAttachmentOutput,
+            .old_layout = Rndr::ImageLayout::ColorAttachment,
+            .new_layout = Rndr::ImageLayout::Present,
+            .image = swap_chain.GetColorImage(static_cast<i32>(image_index))
+        });
+        command_buffer.End();
+
+        graphics_queue->Submit(command_buffer, present_semaphores[frame_index], Rndr::PipelineStageBits::ColorAttachmentOutput,
+                               render_semaphores[image_index], fences[frame_index]);
+        frame_index = (frame_index + 1) % k_frames_in_flight;
+        swap_chain.Present(image_index, present_queue, render_semaphores[image_index]);
+
+        rndr_app->ProcessSystemEvents(delta_seconds);
+
+        auto end_time = Opal::GetSeconds();
+        delta_seconds = static_cast<f32>(end_time - start_time);
+    }
+
+    device.WaitForAll();
 }

@@ -491,6 +491,13 @@ struct ImageSubresourceRange
     u32 array_layer_count = 1;
 };
 
+enum class IndexSize : u8
+{
+    uint8,
+    uint16,
+    uint32
+};
+
 struct GraphicsContextDesc
 {
     /**
