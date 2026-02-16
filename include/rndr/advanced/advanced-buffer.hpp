@@ -18,6 +18,7 @@ struct AdvancedBufferDesc
     size_t size;
     VkBufferUsageFlags usage;
     bool keep_memory_mapped = true;
+    bool use_device_address = false;
 };
 
 class AdvancedBuffer
@@ -44,8 +45,8 @@ private:
     AdvancedBufferDesc m_desc;
     Opal::Ref<const class AdvancedDevice> m_device;
     VkBuffer m_buffer = VK_NULL_HANDLE;
-    VmaAllocation m_allocation;
-    VkDeviceAddress m_device_address;
+    VmaAllocation m_allocation = VK_NULL_HANDLE;
+    VkDeviceAddress m_device_address = 0;
     void* m_mapped_memory = nullptr;
 };
 

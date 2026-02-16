@@ -10,8 +10,11 @@
 Rndr::AdvancedBuffer::AdvancedBuffer(const class AdvancedDevice& device, const AdvancedBufferDesc& desc, Opal::ArrayView<u8> initial_data)
     : m_device(device), m_desc(desc)
 {
-    const VkBufferCreateInfo create_info{
-        .sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO, .size = desc.size, .usage = desc.usage | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT};
+    VkBufferCreateInfo create_info{.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO, .size = desc.size, .usage = desc.usage};
+    if (desc.use_device_address)
+    {
+        create_info.usage |= VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT;
+    }
     // First two flags ensure that we get local memory that is host visible if possible, otherwise it fallbacks to invisible local memory
     // for fast GPU access.
     const VmaAllocationCreateInfo allocation_create_info{.flags = VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT |
@@ -44,7 +47,14 @@ Rndr::AdvancedBuffer::AdvancedBuffer(const class AdvancedDevice& device, const A
         }
     }
     const VkBufferDeviceAddressInfo buffer_device_address_info{.sType = VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO, .buffer = m_buffer};
-    m_device_address = vkGetBufferDeviceAddress(m_device->GetNativeDevice(), &buffer_device_address_info);
+    if (m_desc.use_device_address)
+    {
+        m_device_address = vkGetBufferDeviceAddress(m_device->GetNativeDevice(), &buffer_device_address_info);
+        if (m_device_address == 0)
+        {
+            throw Opal::Exception("Failed to get buffer device address.");
+        }
+    }
 }
 
 Rndr::AdvancedBuffer::~AdvancedBuffer()
@@ -53,7 +63,11 @@ Rndr::AdvancedBuffer::~AdvancedBuffer()
 }
 
 Rndr::AdvancedBuffer::AdvancedBuffer(AdvancedBuffer&& other) noexcept
-    : m_desc(other.m_desc), m_device(std::move(other.m_device)), m_buffer(other.m_buffer), m_allocation(other.m_allocation)
+    : m_desc(other.m_desc),
+      m_device(std::move(other.m_device)),
+      m_buffer(other.m_buffer),
+      m_allocation(other.m_allocation),
+      m_device_address(other.m_device_address)
 {
     other.m_buffer = VK_NULL_HANDLE;
     other.m_allocation = VK_NULL_HANDLE;
@@ -69,9 +83,11 @@ Rndr::AdvancedBuffer& Rndr::AdvancedBuffer::operator=(AdvancedBuffer&& other) no
         m_device = std::move(other.m_device);
         m_buffer = other.m_buffer;
         m_allocation = other.m_allocation;
+        m_device_address = other.m_device_address;
         other.m_buffer = VK_NULL_HANDLE;
         other.m_allocation = VK_NULL_HANDLE;
         other.m_device = nullptr;
+        other.m_device_address = 0;
     }
     return *this;
 }
@@ -89,6 +105,7 @@ void Rndr::AdvancedBuffer::Destroy()
         m_allocation = VK_NULL_HANDLE;
     }
     m_device = nullptr;
+    m_device_address = 0;
 }
 
 void Rndr::AdvancedBuffer::Update(Opal::ArrayView<const u8> data, size_t) const
