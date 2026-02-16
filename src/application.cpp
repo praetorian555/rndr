@@ -24,8 +24,7 @@ Opal::ScopePtr<Rndr::Application> Rndr::Application::Create(const ApplicationDes
     {
         throw Opal::Exception("Rndr Application already created!");
     }
-    Opal::ScopePtr<Application> app =
-        Opal::ScopePtr<Application>(desc.user_allocator != nullptr ? desc.user_allocator : Opal::GetDefaultAllocator(), desc);
+    Opal::ScopePtr<Application> app(desc.user_allocator != nullptr ? desc.user_allocator : Opal::GetDefaultAllocator(), desc);
     g_instance = app.Get();
     return app;
 }
@@ -66,6 +65,7 @@ Rndr::Application::~Application()
     {
         Opal::Delete(m_allocator, m_platform_application.GetPtr());
     }
+    g_instance = nullptr;
 }
 
 Rndr::GenericWindow* Rndr::Application::CreateGenericWindow(const GenericWindowDesc& desc)
