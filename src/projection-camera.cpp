@@ -94,20 +94,18 @@ Rndr::Matrix4x4f Rndr::ProjectionCamera::GetProjectionTransform() const
     {
         const float width = static_cast<float>(m_desc.orthographic_width);
         const float height = width / aspect_ratio;
-#if RNDR_OPENGL
-        return OrthographicOpenGL(-width / 2, width / 2, -height / 2, height / 2, m_desc.near, m_desc.far);
-#else
-#error "Unknown render API"
-#endif
+        if (m_desc.complexity == ApiComplexity::Basic)
+        {
+            return OrthographicOpenGL(-width / 2, width / 2, -height / 2, height / 2, m_desc.near, m_desc.far);
+        }
+        return OrthographicVulkan(-width / 2, width / 2, -height / 2, height / 2, m_desc.near, m_desc.far);
     }
-    else
+
+    if (m_desc.complexity == ApiComplexity::Basic)
     {
-#if RNDR_OPENGL
         return PerspectiveOpenGL(m_desc.vertical_fov, aspect_ratio, m_desc.near, m_desc.far);
-#else
-#error "Unknown render API"
-#endif
     }
+    return PerspectiveVulkan(m_desc.vertical_fov, aspect_ratio, m_desc.near, m_desc.far);
 }
 
 float Rndr::ProjectionCamera::GetAspectRatio() const

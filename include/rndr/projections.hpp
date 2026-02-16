@@ -54,7 +54,25 @@ Matrix4x4f PerspectiveOpenGL(f32 vertical_fov, f32 aspect_ratio, f32 near, f32 f
  * @return Returns 4x4 perspective projection matrix.
  *
  * Example:
- *      Matrix4x4f projection = PerspectiveOpenGL(60.0f, width / height, 0.1f, 100.0f);
+ *      Matrix4x4f projection = PerspectiveVulkan(60.0f, width / height, 0.1f, 100.0f);
  */
 Matrix4x4f PerspectiveVulkan(f32 vertical_fov, f32 aspect_ratio, f32 near, f32 far);
+
+/**
+ * Create a orthographic projection matrix that assumes that your view space is in a right-handed
+ * coordinate system. We rotated it around x-axis for 180 degrees so that we now look down the
+ * positive Z axis (before applying orthographic projection) and Z maps between 0 and 1.
+ *
+ * @param left Position of the left clipping plane.
+ * @param right Position of the right clipping plane.
+ * @param bottom Position of the bottom clipping plane.
+ * @param top Position of the top clipping plane.
+ * @param near Position of the near clipping plane relative to the camera. Should be positive.
+ * @param far Position of the far clipping plane relative to the camera. Should be positive.
+ * @return Returns 4x4 orthographic projection matrix.
+ *
+ * Example:
+ *      Matrix4x4f projection = OrthographicVulkan(-500.0f, 500.0f, -100.0f, 100.0f, 0.1f, 100.0f);
+ */
+Matrix4x4f OrthographicVulkan(f32 left, f32 right, f32 bottom, f32 top, f32 near, f32 far);
 }

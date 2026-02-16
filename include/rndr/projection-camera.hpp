@@ -7,10 +7,16 @@
 namespace Rndr
 {
 
-enum class ProjectionType
+enum class ProjectionType : u8
 {
     Orthographic,
     Perspective
+};
+
+enum class ApiComplexity : u8
+{
+    Basic,
+    Advanced
 };
 
 struct ProjectionCameraDesc
@@ -38,6 +44,8 @@ struct ProjectionCameraDesc
      * cause distortion. This value is used only for perspective projection.
      */
     f32 vertical_fov = k_default_vertical_fov;
+
+    ApiComplexity complexity = ApiComplexity::Basic;
 };
 
 /**

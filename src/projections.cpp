@@ -46,3 +46,15 @@ Rndr::Matrix4x4f Rndr::PerspectiveVulkan(f32 vertical_fov, f32 aspect_ratio, f32
     mat.elements[3][3] = 0;
     return mat;
 }
+
+Rndr::Matrix4x4f Rndr::OrthographicVulkan(f32 left, f32 right, f32 bottom, f32 top, f32 near, f32 far)
+{
+    Matrix4x4f mat(1.0f);
+    mat.elements[0][0] = 2 / (right - left);
+    mat.elements[1][1] = -2 / (top - bottom);
+    mat.elements[2][2] = -1 / (far - near);
+    mat.elements[0][3] = -(right + left) / (right - left);
+    mat.elements[1][3] = (top + bottom) / (top - bottom);
+    mat.elements[2][3] = -near / (far - near);
+    return mat;
+}
