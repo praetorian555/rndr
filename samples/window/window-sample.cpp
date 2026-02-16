@@ -84,6 +84,7 @@ int main()
             }
         });
 
+#if RNDR_OLD_INPUT_SYSTEM
     app->GetInputSystemChecked().GetCurrentContext().AddAction(
         "Switch display mode",
         {Rndr::InputBinding::CreateKeyboardButtonBinding(Rndr::InputPrimitive::F2, Rndr::InputTrigger::ButtonPressed,
@@ -97,6 +98,7 @@ int main()
                                                                                      : Rndr::GenericWindowMode::Windowed);
                                                              }
                                                          })});
+#endif
 
     Rndr::ImGuiContext imgui_context(*window, gc);
     app->RegisterSystemMessageHandler(&imgui_context);
@@ -118,6 +120,7 @@ int main()
     material_registry.Register("Default Material", {.albedo_texture_path = albedo_texture_path});
     material_registry.Register("Helmet Material", helmet_material_desc);
 
+#if RNDR_OLD_INPUT_SYSTEM
     const Rndr::FlyCameraDesc fly_camera_desc{.start_position = {0.0f, 1.0f, 0.0f}, .start_yaw_radians = 0};
     ExampleController controller(*app, window_width, window_height, fly_camera_desc, 10.0f, 0.005f, 0.005f);
 
@@ -151,6 +154,7 @@ int main()
                                                 controller.Enable(!controller.IsEnabled());
                                             }
                                         })});
+#endif
 
     Rndr::CommandList present_cmd_list{gc};
     present_cmd_list.CmdPresent(swap_chain);
@@ -168,7 +172,9 @@ int main()
 
         app->ProcessSystemEvents(delta_seconds);
 
+#if RNDR_OLD_INPUT_SYSTEM
         controller.Tick(delta_seconds);
+#endif
 
         if (selected_resolution_index != resolution_index)
         {
@@ -189,12 +195,16 @@ int main()
         cmd_list.CmdBindFrameBuffer(final_render);
         cmd_list.CmdClearAll(Rndr::Colors::k_black);
 
+#if RNDR_OLD_INPUT_SYSTEM
         grid_renderer.SetTransforms(controller.GetViewTransform(), controller.GetProjectionTransform());
+#endif
         grid_renderer.Render(delta_seconds, cmd_list);
 
         DrawScene(shape_renderer, helmet_mesh, material_registry);
+#if RNDR_OLD_INPUT_SYSTEM
         shape_renderer.SetTransforms(controller.GetViewTransform(), controller.GetProjectionTransform());
         shape_renderer.SetCameraPosition(controller.GetCameraPosition());
+#endif
         shape_renderer.Render(delta_seconds, cmd_list);
 
         const Rndr::BlitFrameBufferDesc blit_desc;

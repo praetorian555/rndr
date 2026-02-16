@@ -106,6 +106,8 @@ void Rndr::Application::ProcessSystemEvents(f32 delta_seconds)
     {
         m_input_system->ProcessEvents(delta_seconds);
     }
+#else
+    RNDR_UNUSED(delta_seconds);
 #endif
 }
 
