@@ -10,7 +10,7 @@
 #include "rndr/advanced/graphics-context.hpp"
 #include "rndr/advanced/swap-chain.hpp"
 #include "rndr/advanced/synchronization.hpp"
-#include "rndr/exception.hpp"
+#include "rndr/advanced/vulkan-exception.hpp"
 
 Opal::DynamicArray<Rndr::u32> Rndr::AdvancedQueueFamilyIndices::GetValidQueueFamilies() const
 {
@@ -114,7 +114,7 @@ Rndr::AdvancedDevice::AdvancedDevice(AdvancedPhysicalDevice physical_device, con
     const VkResult result = vkCreateDevice(m_physical_device.GetNativePhysicalDevice(), &create_info, nullptr, &m_device);
     if (result != VK_SUCCESS)
     {
-        throw Opal::Exception("Failed to create device!");
+        throw VulkanException(result, "vkCreateDevice");
     }
 
     auto queue_family_indices_array = m_queue_family_indices.GetValidQueueFamilies();
@@ -157,9 +157,10 @@ Rndr::AdvancedDevice::AdvancedDevice(AdvancedPhysicalDevice physical_device, con
         .pVulkanFunctions = &vk_functions,
         .instance = graphics_context.GetInstance(),
     };
-    if (vmaCreateAllocator(&vma_alloc_create_info, &m_gpu_allocator) != VK_SUCCESS)
+    const VkResult vma_result = vmaCreateAllocator(&vma_alloc_create_info, &m_gpu_allocator);
+    if (vma_result != VK_SUCCESS)
     {
-        throw Opal::Exception("Failed to create allocator!");
+        throw VulkanException(vma_result, "vmaCreateAllocator");
     }
 }
 
@@ -170,9 +171,10 @@ Rndr::f32 g_queue_priority = 1.0f;
 
 void Rndr::AdvancedDevice::WaitForAll() const 
 {
-    if (vkDeviceWaitIdle(m_device) != VK_SUCCESS)
+    const VkResult wait_result = vkDeviceWaitIdle(m_device);
+    if (wait_result != VK_SUCCESS)
     {
-        throw Opal::Exception("Failed to wait for all work on device to complete!");
+        throw VulkanException(wait_result, "vkDeviceWaitIdle");
     }
 }
 
@@ -365,7 +367,7 @@ Rndr::AdvancedDeviceQueue::AdvancedDeviceQueue(const AdvancedDevice& device, u32
     const VkResult result = vkCreateCommandPool(m_device->GetNativeDevice(), &pool_info, nullptr, &m_command_pool);
     if (result != VK_SUCCESS)
     {
-        throw Opal::Exception("Failed to create command pool!");
+        throw VulkanException(result, "vkCreateCommandPool");
     }
 }
 
@@ -394,9 +396,10 @@ void Rndr::AdvancedDeviceQueue::Submit(const AdvancedCommandBuffer& command_buff
     VkCommandBuffer native_command_buffer = command_buffer.GetNativeCommandBuffer();
     const VkSubmitInfo submit_info{
         .sType = VK_STRUCTURE_TYPE_SUBMIT_INFO, .commandBufferCount = 1, .pCommandBuffers = &native_command_buffer};
-    if (vkQueueSubmit(m_queue, 1, &submit_info, fence.GetNativeFence()) != VK_SUCCESS)
+    const VkResult submit_result = vkQueueSubmit(m_queue, 1, &submit_info, fence.GetNativeFence());
+    if (submit_result != VK_SUCCESS)
     {
-        throw Opal::Exception("Failed to submit command buffer!");
+        throw VulkanException(submit_result, "vkQueueSubmit");
     }
 }
 
@@ -420,8 +423,9 @@ void Rndr::AdvancedDeviceQueue::Submit(const AdvancedCommandBuffer& command_buff
         .signalSemaphoreCount = has_signal ? 1u : 0u,
         .pSignalSemaphores = has_signal ? &signal_native : nullptr,
     };
-    if (vkQueueSubmit(m_queue, 1, &submit_info, fence.GetNativeFence()) != VK_SUCCESS)
+    const VkResult submit_result = vkQueueSubmit(m_queue, 1, &submit_info, fence.GetNativeFence());
+    if (submit_result != VK_SUCCESS)
     {
-        throw Opal::Exception("Failed to submit command buffer!");
+        throw VulkanException(submit_result, "vkQueueSubmit");
     }
 }

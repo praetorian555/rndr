@@ -11,6 +11,7 @@
 #include "rndr/advanced/device.hpp"
 #include "rndr/advanced/physical-device.hpp"
 #include "rndr/advanced/synchronization.hpp"
+#include "rndr/advanced/vulkan-exception.hpp"
 #include "rndr/log.hpp"
 #include "rndr/pixel-format.hpp"
 
@@ -24,7 +25,7 @@ Rndr::AdvancedSurface::AdvancedSurface(const AdvancedGraphicsContext& context, O
     const VkResult result = vkCreateWin32SurfaceKHR(context.GetInstance(), &surface_create_info, nullptr, &m_surface);
     if (result != VK_SUCCESS)
     {
-        throw Opal::Exception("Failed to create Vulkan surface!");
+        throw VulkanException(result, "vkCreateWin32SurfaceKHR");
     }
     m_context = &context;
 #else
@@ -87,7 +88,7 @@ Rndr::AdvancedSwapChainSupportDetails Rndr::AdvancedSurface::GetSwapChainSupport
                                                                           details.present_modes.GetData());
         if (result != VK_SUCCESS)
         {
-            throw Opal::Exception("Failed to get present modes!");
+            throw VulkanException(result, "vkGetPhysicalDeviceSurfacePresentModesKHR");
         }
     }
     return details;
@@ -178,7 +179,7 @@ Rndr::u32 Rndr::AdvancedSwapChain::AcquireImage(const Opal::Ref<AdvancedSemaphor
         }
         else if (result != VK_SUCCESS)
         {
-            throw Opal::Exception("Failed to acquire next image from the swapchain!");
+            throw VulkanException(result, "vkAcquireNextImageKHR");
         }
     } while (should_run_again);
     return image_index;
@@ -204,7 +205,7 @@ void Rndr::AdvancedSwapChain::Present(u32 image_index, Opal::Ref<AdvancedDeviceQ
     }
     if (result != VK_SUCCESS)
     {
-        throw Opal::Exception("Failed to present swap chain image!");
+        throw VulkanException(result, "vkQueuePresentKHR");
     }
 }
 
@@ -295,13 +296,13 @@ void Rndr::AdvancedSwapChain::Recreate()
     VkResult result = vkCreateSwapchainKHR(m_device->GetNativeDevice(), &create_info, nullptr, &m_swap_chain);
     if (result != VK_SUCCESS)
     {
-        throw Opal::Exception("Failed to create swap chain!");
+        throw VulkanException(result, "vkCreateSwapchainKHR");
     }
 
     result = vkGetSwapchainImagesKHR(m_device->GetNativeDevice(), m_swap_chain, &image_count, nullptr);
     if (result != VK_SUCCESS)
     {
-        throw Opal::Exception("Failed to get number of swap chain images!");
+        throw VulkanException(result, "vkGetSwapchainImagesKHR");
     }
 
     Opal::DynamicArray<VkImage> images;
@@ -309,7 +310,7 @@ void Rndr::AdvancedSwapChain::Recreate()
     result = vkGetSwapchainImagesKHR(m_device->GetNativeDevice(), m_swap_chain, &image_count, images.GetData());
     if (result != VK_SUCCESS)
     {
-        throw Opal::Exception("Failed to get swap chain images!");
+        throw VulkanException(result, "vkGetSwapchainImagesKHR");
     }
     for (VkImage image : images)
     {

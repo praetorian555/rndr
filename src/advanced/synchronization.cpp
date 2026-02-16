@@ -3,6 +3,7 @@
 #include <mutex>
 
 #include "rndr/advanced/device.hpp"
+#include "rndr/advanced/vulkan-exception.hpp"
 
 Rndr::AdvancedFence::AdvancedFence(const class AdvancedDevice& device, bool create_signaled) : m_device(device)
 {
@@ -12,7 +13,7 @@ Rndr::AdvancedFence::AdvancedFence(const class AdvancedDevice& device, bool crea
     const VkResult result = vkCreateFence(device.GetNativeDevice(), &fence_create_info, nullptr, &m_fence);
     if (result != VK_SUCCESS)
     {
-        throw Opal::Exception("Failed to create a fence");
+        throw VulkanException(result, "vkCreateFence");
     }
 }
 
@@ -50,17 +51,19 @@ Rndr::AdvancedFence& Rndr::AdvancedFence::operator=(AdvancedFence&& other) noexc
 
 void Rndr::AdvancedFence::Wait(u64 timeout) const
 {
-    if (vkWaitForFences(m_device->GetNativeDevice(), 1, &m_fence, VK_TRUE, timeout) != VK_SUCCESS)
+    const VkResult result = vkWaitForFences(m_device->GetNativeDevice(), 1, &m_fence, VK_TRUE, timeout);
+    if (result != VK_SUCCESS)
     {
-        throw Opal::Exception("Fence timed out!");
+        throw VulkanException(result, "vkWaitForFences");
     }
 }
 
 void Rndr::AdvancedFence::Reset() const
 {
-    if (vkResetFences(m_device->GetNativeDevice(), 1, &m_fence) != VK_SUCCESS)
+    const VkResult reset_result = vkResetFences(m_device->GetNativeDevice(), 1, &m_fence);
+    if (reset_result != VK_SUCCESS)
     {
-        throw Opal::Exception("Failed to reset a fence!");
+        throw VulkanException(reset_result, "vkResetFences");
     }
 }
 
@@ -75,9 +78,11 @@ void Rndr::AdvancedFence::WaitForAll(Opal::ArrayView<AdvancedFence> fences, u64 
     {
         native_fences[i] = fences[i].GetNativeFence();
     }
-    if (vkWaitForFences(fences[0].m_device->GetNativeDevice(), static_cast<u32>(native_fences.GetSize()), native_fences.GetData(), VK_TRUE, timeout) != VK_SUCCESS)
+    const VkResult wait_result =
+        vkWaitForFences(fences[0].m_device->GetNativeDevice(), static_cast<u32>(native_fences.GetSize()), native_fences.GetData(), VK_TRUE, timeout);
+    if (wait_result != VK_SUCCESS)
     {
-        throw Opal::Exception("Fences timed out!");
+        throw VulkanException(wait_result, "vkWaitForFences");
     }
 }
 
@@ -87,7 +92,7 @@ Rndr::AdvancedSemaphore::AdvancedSemaphore(const AdvancedDevice& device) : m_dev
     const VkResult result = vkCreateSemaphore(device.GetNativeDevice(), &semaphore_create_info, nullptr, &m_semaphore);
     if (result != VK_SUCCESS)
     {
-        throw Opal::Exception("Failed to create a present semaphore!");
+        throw VulkanException(result, "vkCreateSemaphore");
     }
 }
 

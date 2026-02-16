@@ -5,6 +5,7 @@
 #include "rndr/advanced/advanced-texture.hpp"
 
 #include "rndr/advanced/device.hpp"
+#include "rndr/advanced/vulkan-exception.hpp"
 
 namespace
 {
@@ -116,7 +117,7 @@ Rndr::AdvancedDescriptorPool::AdvancedDescriptorPool(const AdvancedDevice& devic
     const VkResult result = vkCreateDescriptorPool(device.GetNativeDevice(), &pool_info, nullptr, &m_pool);
     if (result != VK_SUCCESS)
     {
-        throw Opal::Exception("Failed to create descriptor pool!");
+        throw VulkanException(result, "vkCreateDescriptorPool");
     }
 }
 
@@ -195,7 +196,7 @@ Rndr::AdvancedDescriptorSetLayout::AdvancedDescriptorSetLayout(const AdvancedDev
     const VkResult result = vkCreateDescriptorSetLayout(device.GetNativeDevice(), &layout_info, nullptr, &m_layout);
     if (result != VK_SUCCESS)
     {
-        throw Opal::Exception("Failed to create descriptor set layout!");
+        throw VulkanException(result, "vkCreateDescriptorSetLayout");
     }
 }
 
@@ -259,7 +260,7 @@ Rndr::AdvancedDescriptorSet::AdvancedDescriptorSet(const AdvancedDescriptorPool&
     const VkResult result = vkAllocateDescriptorSets(m_device, &alloc_info, &m_set);
     if (result != VK_SUCCESS)
     {
-        throw Opal::Exception("Failed to allocate descriptor set!");
+        throw VulkanException(result, "vkAllocateDescriptorSets");
     }
 }
 

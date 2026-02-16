@@ -8,6 +8,7 @@
 
 #include "opal/container/dynamic-array.h"
 
+#include "rndr/advanced/vulkan-exception.hpp"
 #include "rndr/return-macros.hpp"
 
 namespace
@@ -36,7 +37,7 @@ Rndr::AdvancedGraphicsContext::AdvancedGraphicsContext(const AdvancedGraphicsCon
     VkResult result = volkInitialize();
     if (result != VK_SUCCESS)
     {
-        throw Opal::Exception("Failed to initialize Volk!");
+        throw VulkanException(result, "volkInitialize");
     }
 
     // Check if all the requested instance extensions are supported
@@ -76,7 +77,7 @@ Rndr::AdvancedGraphicsContext::AdvancedGraphicsContext(const AdvancedGraphicsCon
     result = vkCreateInstance(&create_info, nullptr, &m_instance);
     if (result != VK_SUCCESS)
     {
-        throw Opal::Exception("Failed to create Vulkan Instance!");
+        throw VulkanException(result, "vkCreateInstance");
     }
     volkLoadInstance(m_instance);
 
@@ -94,7 +95,7 @@ Rndr::AdvancedGraphicsContext::AdvancedGraphicsContext(const AdvancedGraphicsCon
         result = CreateDebugUtilsMessengerEXT(m_instance, &debug_create_info, nullptr, &m_debug_messenger);
         if (result != VK_SUCCESS)
         {
-            throw Opal::Exception("Failed to create debug messenger");
+            throw VulkanException(result, "vkCreateDebugUtilsMessengerEXT");
         }
     }
 }

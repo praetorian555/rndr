@@ -7,6 +7,7 @@
 #include "rndr/advanced/advanced-descriptor-set.hpp"
 #include "rndr/advanced/advanced-shader.hpp"
 #include "rndr/advanced/device.hpp"
+#include "rndr/advanced/vulkan-exception.hpp"
 
 static VkPrimitiveTopology ToVkPrimitiveTopology(Rndr::PrimitiveTopology topology)
 {
@@ -266,7 +267,7 @@ void Rndr::AdvancedPipeline::CreatePipelineLayout(
     const VkResult result = vkCreatePipelineLayout(m_device->GetNativeDevice(), &layout_create_info, nullptr, &m_pipeline_layout);
     if (result != VK_SUCCESS)
     {
-        throw Opal::Exception("Failed to create pipeline layout");
+        throw VulkanException(result, "vkCreatePipelineLayout");
     }
 }
 
@@ -460,11 +461,11 @@ Rndr::AdvancedPipeline::AdvancedPipeline(const AdvancedDevice& device, const Adv
         .layout = m_pipeline_layout,
     };
 
-    const VkResult result =
+    const VkResult gfx_result =
         vkCreateGraphicsPipelines(m_device->GetNativeDevice(), VK_NULL_HANDLE, 1, &pipeline_create_info, nullptr, &m_pipeline);
-    if (result != VK_SUCCESS)
+    if (gfx_result != VK_SUCCESS)
     {
-        throw Opal::Exception("Failed to create graphics pipeline");
+        throw VulkanException(gfx_result, "vkCreateGraphicsPipelines");
     }
 }
 
@@ -487,11 +488,11 @@ Rndr::AdvancedPipeline::AdvancedPipeline(const AdvancedDevice& device, const Adv
         .layout = m_pipeline_layout,
     };
 
-    const VkResult result =
+    const VkResult compute_result =
         vkCreateComputePipelines(m_device->GetNativeDevice(), VK_NULL_HANDLE, 1, &pipeline_create_info, nullptr, &m_pipeline);
-    if (result != VK_SUCCESS)
+    if (compute_result != VK_SUCCESS)
     {
-        throw Opal::Exception("Failed to create compute pipeline");
+        throw VulkanException(compute_result, "vkCreateComputePipelines");
     }
 }
 

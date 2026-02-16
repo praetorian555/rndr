@@ -5,6 +5,7 @@
 #include "spirv_reflect.h"
 
 #include "rndr/advanced/device.hpp"
+#include "rndr/advanced/vulkan-exception.hpp"
 
 static VkShaderStageFlagBits ToNativeShaderStage(SpvReflectShaderStageFlagBits stage)
 {
@@ -75,7 +76,7 @@ Rndr::AdvancedShader::AdvancedShader(const AdvancedDevice& device, Opal::ArrayVi
     const VkResult result = vkCreateShaderModule(m_device->GetNativeDevice(), &create_info, nullptr, &m_shader_module);
     if (result != VK_SUCCESS)
     {
-        throw Opal::Exception("Failed to create shader module");
+        throw VulkanException(result, "vkCreateShaderModule");
     }
 }
 

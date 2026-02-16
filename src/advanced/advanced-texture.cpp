@@ -6,6 +6,7 @@
 #include "rndr/advanced/device.hpp"
 #include "rndr/advanced/command-buffer.hpp"
 #include "rndr/advanced/synchronization.hpp"
+#include "rndr/advanced/vulkan-exception.hpp"
 #include "rndr/graphics-types.hpp"
 
 static VkFilter ToVkFilter(Rndr::ImageFilter filter)
@@ -138,7 +139,7 @@ m_device(device), m_image(native_image), m_desc(desc)
     const VkResult result = vkCreateImageView(device.GetNativeDevice(), &image_view_create_info, nullptr, &m_view);
     if (result != VK_SUCCESS)
     {
-        throw Opal::Exception("Failed to create the image view");
+        throw VulkanException(result, "vkCreateImageView");
     }
 }
 
@@ -166,7 +167,7 @@ void Rndr::AdvancedTexture::Init(const AdvancedDevice& device, const AdvancedTex
     VkResult result = vmaCreateImage(gpu_allocator, &image_create_info, &allocation_create_info, &m_image, &m_image_allocation, nullptr);
     if (result != VK_SUCCESS)
     {
-        throw Opal::Exception("Failed to allocate the image");
+        throw VulkanException(result, "vmaCreateImage");
     }
     const VkImageViewCreateInfo image_view_create_info = {
         .sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
@@ -182,7 +183,7 @@ void Rndr::AdvancedTexture::Init(const AdvancedDevice& device, const AdvancedTex
     result = vkCreateImageView(device.GetNativeDevice(), &image_view_create_info, nullptr, &m_view);
     if (result != VK_SUCCESS)
     {
-        throw Opal::Exception("Failed to create the image view");
+        throw VulkanException(result, "vkCreateImageView");
     }
 }
 
@@ -264,7 +265,7 @@ Rndr::AdvancedSampler::AdvancedSampler(const AdvancedDevice& device, const Sampl
     const VkResult result = vkCreateSampler(device.GetNativeDevice(), &sampler_create_info, nullptr, &m_sampler);
     if (result != VK_SUCCESS)
     {
-        throw Opal::Exception("Failed to create the sampler");
+        throw VulkanException(result, "vkCreateSampler");
     }
 }
 

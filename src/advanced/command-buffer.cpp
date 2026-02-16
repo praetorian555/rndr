@@ -4,6 +4,7 @@
 #include "rndr/advanced/advanced-descriptor-set.hpp"
 #include "rndr/advanced/advanced-pipeline.hpp"
 #include "rndr/advanced/device.hpp"
+#include "rndr/advanced/vulkan-exception.hpp"
 
 Rndr::AdvancedCommandBuffer::AdvancedCommandBuffer(const AdvancedDevice& device, AdvancedDeviceQueue& queue)
     : m_device(&device), m_queue(&queue)
@@ -17,7 +18,7 @@ Rndr::AdvancedCommandBuffer::AdvancedCommandBuffer(const AdvancedDevice& device,
     const VkResult result = vkAllocateCommandBuffers(m_device->GetNativeDevice(), &alloc_info, &m_native_command_buffer);
     if (result != VK_SUCCESS)
     {
-        throw Opal::Exception("Failed to allocate command buffer!");
+        throw VulkanException(result, "vkAllocateCommandBuffers");
     }
 }
 
@@ -43,23 +44,25 @@ void Rndr::AdvancedCommandBuffer::Begin(bool submit_one_time) const
     const VkResult result = vkBeginCommandBuffer(m_native_command_buffer, &begin_info);
     if (result != VK_SUCCESS)
     {
-        throw Opal::Exception("Failed to begin command buffer!");
+        throw VulkanException(result, "vkBeginCommandBuffer");
     }
 }
 
 void Rndr::AdvancedCommandBuffer::End() const
 {
-    if (vkEndCommandBuffer(m_native_command_buffer) != VK_SUCCESS)
+    const VkResult end_result = vkEndCommandBuffer(m_native_command_buffer);
+    if (end_result != VK_SUCCESS)
     {
-        throw Opal::Exception("Failed to end command buffer!");
+        throw VulkanException(end_result, "vkEndCommandBuffer");
     }
 }
 
 void Rndr::AdvancedCommandBuffer::Reset() const
 {
-    if (vkResetCommandBuffer(m_native_command_buffer, 0) != VK_SUCCESS)
+    const VkResult reset_result = vkResetCommandBuffer(m_native_command_buffer, 0);
+    if (reset_result != VK_SUCCESS)
     {
-        throw Opal::Exception("Failed to reset command buffer!");
+        throw VulkanException(reset_result, "vkResetCommandBuffer");
     }
 }
 

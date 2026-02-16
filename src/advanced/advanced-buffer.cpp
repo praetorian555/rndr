@@ -6,6 +6,7 @@
 #include "vma/vk_mem_alloc.h"
 
 #include "rndr/advanced/device.hpp"
+#include "rndr/advanced/vulkan-exception.hpp"
 
 Rndr::AdvancedBuffer::AdvancedBuffer(const class AdvancedDevice& device, const AdvancedBufferDesc& desc, Opal::ArrayView<u8> initial_data)
     : m_device(device), m_desc(desc)
@@ -25,7 +26,7 @@ Rndr::AdvancedBuffer::AdvancedBuffer(const class AdvancedDevice& device, const A
         vmaCreateBuffer(m_device->GetGPUAllocator(), &create_info, &allocation_create_info, &m_buffer, &m_allocation, nullptr);
     if (result != VK_SUCCESS)
     {
-        throw Opal::Exception("Failed to create buffer");
+        throw VulkanException(result, "vmaCreateBuffer");
     }
     if (!initial_data.IsEmpty())
     {
@@ -33,7 +34,7 @@ Rndr::AdvancedBuffer::AdvancedBuffer(const class AdvancedDevice& device, const A
         result = vmaMapMemory(m_device->GetGPUAllocator(), m_allocation, &gpu_data);
         if (result != VK_SUCCESS)
         {
-            throw Opal::Exception("Failed to map memory");
+            throw VulkanException(result, "vmaMapMemory");
         }
         memcpy(gpu_data, initial_data.GetData(), initial_data.GetSize());
         vmaUnmapMemory(m_device->GetGPUAllocator(), m_allocation);
@@ -43,7 +44,7 @@ Rndr::AdvancedBuffer::AdvancedBuffer(const class AdvancedDevice& device, const A
         result = vmaMapMemory(m_device->GetGPUAllocator(), m_allocation, &m_mapped_memory);
         if (result != VK_SUCCESS)
         {
-            throw Opal::Exception("Failed to map memory");
+            throw VulkanException(result, "vmaMapMemory");
         }
     }
     const VkBufferDeviceAddressInfo buffer_device_address_info{.sType = VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO, .buffer = m_buffer};
@@ -72,6 +73,7 @@ Rndr::AdvancedBuffer::AdvancedBuffer(AdvancedBuffer&& other) noexcept
     other.m_buffer = VK_NULL_HANDLE;
     other.m_allocation = VK_NULL_HANDLE;
     other.m_device = nullptr;
+    other.m_device_address = 0;
 }
 
 Rndr::AdvancedBuffer& Rndr::AdvancedBuffer::operator=(AdvancedBuffer&& other) noexcept
@@ -123,7 +125,7 @@ void Rndr::AdvancedBuffer::Update(Opal::ArrayView<const u8> data, size_t) const
     const VkResult result = vmaMapMemory(m_device->GetGPUAllocator(), m_allocation, &gpu_data);
     if (result != VK_SUCCESS)
     {
-        throw Opal::Exception("Failed to map memory");
+        throw VulkanException(result, "vmaMapMemory");
     }
     memcpy(gpu_data, data.GetData(), data.GetSize());
     vmaUnmapMemory(m_device->GetGPUAllocator(), m_allocation);
