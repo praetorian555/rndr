@@ -182,7 +182,7 @@ void Run()
     Rndr::Vector2i window_size = window->GetSize().GetValue();
     f32 window_width = window_size.x;
     f32 window_height = window_size.y;
-    const Rndr::FlyCameraDesc fly_camera_desc{.start_position = {0.0f, 1.0f, 0.0f},
+    const Rndr::FlyCameraDesc fly_camera_desc{.start_position = {0.0f, 1.0f, 10.0f},
                                               .start_yaw_radians = 0,
                                               .projection_desc = {.near = 0.1f, .far = 32.0f, .complexity = Rndr::ApiComplexity::Advanced}};
     ExampleController controller(*rndr_app, window_width, window_height, fly_camera_desc, 10.0f, 0.005f, 0.005f);

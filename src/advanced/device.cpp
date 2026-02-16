@@ -1,7 +1,6 @@
 #include "rndr/advanced/device.hpp"
 
 #define NOMINMAX
-#include "../../build/opengl-msvc-release/_deps/opal-src/third-party/catch2/include/catch2/catch2.hpp"
 #include "vma/vk_mem_alloc.h"
 
 #include "opal/container/hash-set.h"
