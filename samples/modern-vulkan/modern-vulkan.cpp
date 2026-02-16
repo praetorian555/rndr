@@ -35,12 +35,31 @@ struct ShaderData
     u32 selected = 1;
 };
 
+void Run();
+
 int main()
+{
+    try
+    {
+        Run();
+    } catch (const Opal::Exception& e)
+    {
+        printf("%s", *e.What());
+        return 1;
+    }
+    return 0;
+}
+
+void Run()
 {
     constexpr i32 k_frames_in_flight = 2;
 
     auto rndr_app = Rndr::Application::Create({.enable_input_system = true});
     Rndr::GenericWindow* window = rndr_app->CreateGenericWindow();
+    rndr_app->EnableHighPrecisionCursorMode(true, *window);
+    rndr_app->ShowCursor(false);
+    rndr_app->SetCursorPositionMode(Rndr::CursorPositionMode::ResetToCenter);
+
     Rndr::AdvancedGraphicsContext graphics_context{{.collect_debug_messages = true}};
     Rndr::AdvancedSurface surface(graphics_context, window);
 
@@ -56,7 +75,7 @@ int main()
     Rndr::MaterialDesc material_desc;
     const Opal::StringUtf8 mesh_path = Opal::Paths::Combine(RNDR_CORE_ASSETS_DIR, "sample-models", "Suzanne", "glTF", "Suzanne.gltf");
     Rndr::File::LoadMeshAndMaterialDescription(mesh_path, mesh, material_desc);
-    Opal::DynamicArray<Rndr::u8> combined_vertex_index_data(Opal::GetScratchAllocator());
+    Opal::DynamicArray<Rndr::u8> combined_vertex_index_data;
     combined_vertex_index_data.Append(mesh.vertices);
     combined_vertex_index_data.Append(mesh.indices);
     Rndr::AdvancedBuffer mesh_buffer(device,
@@ -69,7 +88,7 @@ int main()
     for (i32 i = 0; i < k_frames_in_flight; i++)
     {
         m_shader_buffers[i] = Rndr::AdvancedBuffer(
-            device, {.size = sizeof(ShaderData), .usage = VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT, .keep_memory_mapped = true});
+            device, {.size = sizeof(ShaderData), .usage = 0, .keep_memory_mapped = true, .use_device_address = true});
     }
 
     // Create fences and semaphores
@@ -154,15 +173,22 @@ int main()
         .depth_attachment_format = swap_chain.GetDesc().depth_pixel_format};
     Rndr::AdvancedPipeline pipeline(device, pipeline_desc);
 
+    rndr_app->GetInputSystemChecked().GetCurrentContext().AddAction(
+    "Exit",
+    {Rndr::InputBinding::CreateKeyboardButtonBinding(Rndr::InputPrimitive::Escape, Rndr::InputTrigger::ButtonPressed,
+                                                     [window](Rndr::InputPrimitive, Rndr::InputTrigger, Rndr::f32, bool)
+                                                     { window->ForceClose(); })});
+
     Rndr::Vector2i window_size = window->GetSize().GetValue();
     f32 window_width = window_size.x;
     f32 window_height = window_size.y;
-    const Rndr::FlyCameraDesc fly_camera_desc{
-        .start_position = {0.0f, 1.0f, 0.0f}, .start_yaw_radians = 0, .projection_desc = {.near = 0.1f, .far = 32.0f}};
+    const Rndr::FlyCameraDesc fly_camera_desc{.start_position = {0.0f, 1.0f, 0.0f},
+                                              .start_yaw_radians = 0,
+                                              .projection_desc = {.near = 0.1f, .far = 32.0f, .complexity = Rndr::ApiComplexity::Advanced}};
     ExampleController controller(*rndr_app, window_width, window_height, fly_camera_desc, 10.0f, 0.005f, 0.005f);
+    controller.Enable(true);
 
     Rndr::f32 delta_seconds = 0.016;
-    bool should_quit = false;
     Rndr::u32 frame_index = 0;
     while (!window->IsClosed())
     {
@@ -177,6 +203,9 @@ int main()
         fences[frame_index].Wait();
         fences[frame_index].Reset();
         u32 image_index = swap_chain.AcquireImage(present_semaphores[frame_index]);
+
+        rndr_app->ProcessSystemEvents(delta_seconds);
+        controller.Tick(delta_seconds);
 
         // Update shader data
         ShaderData shader_data;
@@ -232,7 +261,7 @@ int main()
         command_buffer.CmdSetViewport(Rndr::Vector2f::Zero(), {window_width, window_height});
         command_buffer.CmdSetScissor(Rndr::Vector2i::Zero(), window_size);
         command_buffer.CmdBindVertexBuffer(mesh_buffer, 0);
-        command_buffer.CmdBindIndexBuffer(mesh_buffer, mesh.index_count * mesh.index_size, Rndr::IndexSize::uint32);
+        command_buffer.CmdBindIndexBuffer(mesh_buffer, mesh.vertex_count * mesh.vertex_size, Rndr::IndexSize::uint32);
         command_buffer.CmdBindPipeline(pipeline);
         command_buffer.CmdBindDescriptorSet(pipeline, descriptor_set);
         VkDeviceAddress device_address = m_shader_buffers[frame_index].GetNativeDeviceAddress();
@@ -240,22 +269,18 @@ int main()
         command_buffer.CmdDrawIndexed(mesh.index_count, 3);
         command_buffer.CmdEndRendering();
 
-        command_buffer.CmdImageBarrier({
-            .stages_must_finish = Rndr::PipelineStageBits::ColorAttachmentOutput,
-            .stages_must_finish_access = Rndr::PipelineStageAccessBits::Write,
-            .before_stages_start = Rndr::PipelineStageBits::ColorAttachmentOutput,
-            .old_layout = Rndr::ImageLayout::ColorAttachment,
-            .new_layout = Rndr::ImageLayout::Present,
-            .image = swap_chain.GetColorImage(static_cast<i32>(image_index))
-        });
+        command_buffer.CmdImageBarrier({.stages_must_finish = Rndr::PipelineStageBits::ColorAttachmentOutput,
+                                        .stages_must_finish_access = Rndr::PipelineStageAccessBits::Write,
+                                        .before_stages_start = Rndr::PipelineStageBits::ColorAttachmentOutput,
+                                        .old_layout = Rndr::ImageLayout::ColorAttachment,
+                                        .new_layout = Rndr::ImageLayout::Present,
+                                        .image = swap_chain.GetColorImage(static_cast<i32>(image_index))});
         command_buffer.End();
 
         graphics_queue->Submit(command_buffer, present_semaphores[frame_index], Rndr::PipelineStageBits::ColorAttachmentOutput,
                                render_semaphores[image_index], fences[frame_index]);
         frame_index = (frame_index + 1) % k_frames_in_flight;
         swap_chain.Present(image_index, present_queue, render_semaphores[image_index]);
-
-        rndr_app->ProcessSystemEvents(delta_seconds);
 
         auto end_time = Opal::GetSeconds();
         delta_seconds = static_cast<f32>(end_time - start_time);

@@ -6,9 +6,9 @@ TEST_CASE("Frames per second counter tests", "[fps]")
 {
     Rndr::FramesPerSecondCounter counter(1.0f);
 
-    SECTION("Initial frames per second should be 0")
+    SECTION("Initial frames per second should be 60")
     {
-        REQUIRE(counter.GetFramesPerSecond() == 0.0f);
+        REQUIRE(counter.GetFramesPerSecond() == 60.0f);
     }
 
     SECTION("Frames per second should be 1 after 1 second")

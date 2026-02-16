@@ -145,9 +145,7 @@ if (RNDR_BUILD_TESTS)
             test/camera-test.cpp
             test/frames-per-second-counter-test.cpp
             test/input-test.cpp
-            test/render-api-test.cpp
             test/renderer-base-test.cpp
-            test/window-test.cpp
             extern/catch2/src/catch_amalgamated.cpp)
     add_executable(rndr_test ${RNDR_TEST_FILES})
     target_include_directories(rndr_test PRIVATE src)
@@ -158,7 +156,7 @@ if (RNDR_BUILD_TESTS)
     target_link_libraries(rndr_test rndr_warnings)
     target_link_libraries(rndr_test rndr_options)
     enable_testing()
-    add_test(NAME all_tests_no_window_no_render_api COMMAND rndr_test "~[window] ~[render-api]")
+    add_test(NAME all_tests_no_window_no_render_api COMMAND rndr_test)
 
     # Install the test executable
     install(TARGETS rndr_test

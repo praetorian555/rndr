@@ -87,9 +87,10 @@ list(APPEND SOURCE_LIST
         "${PROJECT_SOURCE_DIR}/extern/stb_image/src/stb_image.cpp"
 )
 
+file(TO_CMAKE_PATH "$ENV{VULKAN_SDK}" VULKAN_SDK_PATH)
 list(APPEND SOURCE_LIST
-        "$ENV{VULKAN_SDK}/Source/SPIRV-Reflect/spirv_reflect.h"
-        "$ENV{VULKAN_SDK}/Source/SPIRV-Reflect/spirv_reflect.c"
+        "${VULKAN_SDK_PATH}/Source/SPIRV-Reflect/spirv_reflect.h"
+        "${VULKAN_SDK_PATH}/Source/SPIRV-Reflect/spirv_reflect.c"
 )
 
 
@@ -139,7 +140,7 @@ target_include_directories(rndr PUBLIC $<BUILD_INTERFACE:${PROJECT_SOURCE_DIR}/i
 target_include_directories(rndr PRIVATE ${PROJECT_SOURCE_DIR}/src)
 target_include_directories(rndr PRIVATE ${PROJECT_SOURCE_DIR}/extern/glad/include)
 target_include_directories(rndr PRIVATE ${PROJECT_SOURCE_DIR}/extern/stb_image/include)
-target_include_directories(rndr PRIVATE $ENV{VULKAN_SDK}/Source/SPIRV-Reflect)
+target_include_directories(rndr PRIVATE ${VULKAN_SDK_PATH}/Source/SPIRV-Reflect)
 
 # Setup graphics API to use
 target_compile_definitions(rndr PUBLIC RNDR_OPENGL)
@@ -149,7 +150,7 @@ target_link_libraries(rndr PUBLIC opengl32.lib User32.lib)
 target_link_libraries(rndr PUBLIC opal imgui assimp)
 
 if (RNDR_ADVANCED_API)
-    target_include_directories(rndr PUBLIC $ENV{VULKAN_SDK}/Include)
+    target_include_directories(rndr PUBLIC ${VULKAN_SDK_PATH}/Include)
     #    find_library(Slang_LIBRARY NAMES slang HINTS "$ENV{VULKAN_SDK}/Lib" REQUIRED)
     target_link_libraries(rndr PUBLIC ktx)
     if (WIN32)

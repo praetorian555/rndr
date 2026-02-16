@@ -8,7 +8,7 @@ TEST_CASE("Bitmap", "[bitmap]")
 {
     SECTION("Create with zeroed data")
     {
-        Rndr::Bitmap bitmap(3, 4, 5, Rndr::PixelFormat::R8G8B8A8_UNORM);
+        Rndr::Bitmap bitmap(3, 4, 5, Rndr::PixelFormat::R8G8B8A8_UNORM, 1);
         REQUIRE(bitmap.IsValid());
         REQUIRE(bitmap.GetWidth() == 3);
         REQUIRE(bitmap.GetHeight() == 4);
@@ -35,7 +35,7 @@ TEST_CASE("Bitmap", "[bitmap]")
         {
             data[i] = static_cast<uint8_t>(i + 1);
         }
-        Rndr::Bitmap bitmap(k_width, k_height, k_depth, Rndr::PixelFormat::R8G8B8A8_UNORM, Opal::AsWritableBytes(data));
+        Rndr::Bitmap bitmap(k_width, k_height, k_depth, Rndr::PixelFormat::R8G8B8A8_UNORM, 1, Opal::AsWritableBytes(data));
         REQUIRE(bitmap.IsValid());
         REQUIRE(bitmap.GetWidth() == 1);
         REQUIRE(bitmap.GetHeight() == 2);
@@ -61,7 +61,7 @@ TEST_CASE("Bitmap", "[bitmap]")
             const Rndr::Vector4f ref_pixel{21 / 255.0f, 22 / 255.0f, 23 / 255.0f, 24 / 255.0f};
             REQUIRE(Opal::IsEqual(bitmap.GetPixel(0, 1, 2), ref_pixel, 0.000001f) == true);
             const Rndr::Vector4f new_pixel{5 / 255.0f, 6 / 255.0f, 7 / 255.0f, 8 / 255.0f};
-            bitmap.SetPixel(0, 1, 2, new_pixel);
+            bitmap.SetPixel(0, 1, 2, 0, new_pixel);
             REQUIRE(Opal::IsEqual(bitmap.GetPixel(0, 1, 2), new_pixel, 0.000001f) == true);
         }
     }
@@ -78,7 +78,7 @@ TEST_CASE("Bitmap", "[bitmap]")
         }
         Opal::InPlaceArray<uint8_t, k_size * sizeof(float)> data;
         memcpy(data.GetData(), data_float.GetData(), k_size * sizeof(float));
-        Rndr::Bitmap bitmap(k_width, k_height, k_depth, Rndr::PixelFormat::R32G32B32A32_FLOAT, Opal::AsWritableBytes(data));
+        Rndr::Bitmap bitmap(k_width, k_height, k_depth, Rndr::PixelFormat::R32G32B32A32_SFLOAT, 1, Opal::AsWritableBytes(data));
         REQUIRE(bitmap.IsValid());
         REQUIRE(bitmap.GetWidth() == 1);
         REQUIRE(bitmap.GetHeight() == 2);
@@ -100,7 +100,7 @@ TEST_CASE("Bitmap", "[bitmap]")
             const Rndr::Vector4f ref_pixel{21.0f, 22.0f, 23.0f, 24.0f};
             REQUIRE(Opal::IsEqual(bitmap.GetPixel(0, 1, 2), ref_pixel, 0.000001f) == true);
             const Rndr::Vector4f new_pixel{1.0f, 2.0f, 3.0f, 4.0f};
-            bitmap.SetPixel(0, 1, 2, new_pixel);
+            bitmap.SetPixel(0, 1, 2, 0, new_pixel);
             REQUIRE(Opal::IsEqual(bitmap.GetPixel(0, 1, 2), new_pixel, 0.000001f) == true);
         }
     }
@@ -115,7 +115,7 @@ TEST_CASE("Bitmap", "[bitmap]")
         {
             data[i] = static_cast<uint8_t>(i + 1);
         }
-        Rndr::Bitmap bitmap(k_width, k_height, k_depth, Rndr::PixelFormat::R8G8B8A8_UNORM, Opal::AsWritableBytes(data));
+        Rndr::Bitmap bitmap(k_width, k_height, k_depth, Rndr::PixelFormat::R8G8B8A8_UNORM, 1, Opal::AsWritableBytes(data));
         REQUIRE(bitmap.IsValid());
         REQUIRE(bitmap.GetWidth() == 1);
         REQUIRE(bitmap.GetHeight() == 2);
@@ -143,7 +143,7 @@ TEST_CASE("Bitmap", "[bitmap]")
         {
             data[i] = static_cast<uint8_t>(i + 1);
         }
-        Rndr::Bitmap bitmap(k_width, k_height, k_depth, Rndr::PixelFormat::R8G8B8A8_UNORM, Opal::AsWritableBytes(data));
+        Rndr::Bitmap bitmap(k_width, k_height, k_depth, Rndr::PixelFormat::R8G8B8A8_UNORM, 1, Opal::AsWritableBytes(data));
         REQUIRE(bitmap.IsValid());
         REQUIRE(bitmap.GetWidth() == 1);
         REQUIRE(bitmap.GetHeight() == 2);
@@ -161,24 +161,18 @@ TEST_CASE("Bitmap", "[bitmap]")
     }
     SECTION("Creating invalid bitmaps")
     {
-        const Rndr::Bitmap bitmap1(0, 0, 0, Rndr::PixelFormat::R8G8B8A8_UNORM);
-        REQUIRE(!bitmap1.IsValid());
-        const Rndr::Bitmap bitmap2(-1, 2, 2, Rndr::PixelFormat::R8G8B8A8_UNORM);
-        REQUIRE(!bitmap2.IsValid());
-        const Rndr::Bitmap bitmap3(2, -1, 2, Rndr::PixelFormat::R8G8B8A8_UNORM);
-        REQUIRE(!bitmap3.IsValid());
-        const Rndr::Bitmap bitmap4(2, 2, 0, Rndr::PixelFormat::R8G8B8A8_UNORM);
-        REQUIRE(!bitmap4.IsValid());
-        const Rndr::Bitmap bitmap5(2, 2, -1, Rndr::PixelFormat::R8G8B8A8_UNORM);
-        REQUIRE(!bitmap5.IsValid());
-        const Rndr::Bitmap bitmap6(2, 2, 2, Rndr::PixelFormat::R32_TYPELESS);
-        REQUIRE(!bitmap6.IsValid());
+        REQUIRE_THROWS(Rndr::Bitmap(0, 0, 0, Rndr::PixelFormat::R8G8B8A8_UNORM, 1));
+        REQUIRE_THROWS(Rndr::Bitmap(-1, 2, 2, Rndr::PixelFormat::R8G8B8A8_UNORM, 1));
+        REQUIRE_THROWS(Rndr::Bitmap(2, -1, 2, Rndr::PixelFormat::R8G8B8A8_UNORM, 1));
+        REQUIRE_THROWS(Rndr::Bitmap(2, 2, 0, Rndr::PixelFormat::R8G8B8A8_UNORM, 1));
+        REQUIRE_THROWS(Rndr::Bitmap(2, 2, -1, Rndr::PixelFormat::R8G8B8A8_UNORM, 1));
+        REQUIRE_THROWS(Rndr::Bitmap(2, 2, 2, Rndr::PixelFormat::Undefined, 1));
     }
     SECTION("Check if pixel format is supported")
     {
         REQUIRE(Rndr::Bitmap::IsPixelFormatSupported(Rndr::PixelFormat::R8G8B8A8_UNORM) == true);
-        REQUIRE(Rndr::Bitmap::IsPixelFormatSupported(Rndr::PixelFormat::R32G32B32A32_FLOAT)
+        REQUIRE(Rndr::Bitmap::IsPixelFormatSupported(Rndr::PixelFormat::R32G32B32A32_SFLOAT)
                 == true);
-        REQUIRE(Rndr::Bitmap::IsPixelFormatSupported(Rndr::PixelFormat::R32_TYPELESS) == false);
+        REQUIRE(Rndr::Bitmap::IsPixelFormatSupported(Rndr::PixelFormat::Undefined) == false);
     }
 }

@@ -19,19 +19,17 @@ TEST_CASE("Init", "[init]")
 {
     SECTION("Default create and destroy")
     {
-        Rndr::Application* app = Rndr::Application::Create();
+        auto app = Rndr::Application::Create();
         REQUIRE(app != nullptr);
-        Rndr::Application::Destroy();
     }
     SECTION("Create with custom logger")
     {
         CustomLogger custom_logger;
         Rndr::Logger* ptr = &custom_logger;
-        Rndr::ApplicationDesc desc = { .user_logger = ptr };
-        Rndr::Application* app = Rndr::Application::Create(desc);
+        const Rndr::ApplicationDesc desc = { .user_logger = ptr };
+        auto app = Rndr::Application::Create(desc);
         REQUIRE(app != nullptr);
         REQUIRE(&app->GetLoggerChecked() == ptr);
-        Rndr::Application::Destroy();
     }
 }
 

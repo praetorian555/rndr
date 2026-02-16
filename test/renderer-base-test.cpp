@@ -6,7 +6,7 @@ class TestRenderer : public Rndr::RendererBase
 {
 public:
     TestRenderer(const Opal::StringUtf8& name, const Rndr::RendererBaseDesc& desc) : RendererBase(name, desc) {}
-    bool Render() override { m_value++; return true; }
+    bool Render(Rndr::f32 /*delta_seconds*/, Rndr::CommandList& /*command_list*/) override { m_value++; return true; }
 
     int32_t m_value = 0;
 };
@@ -15,11 +15,12 @@ TEST_CASE("Tests for renderer manager", "[renderer-manager]")
 {
     SECTION("Add single renderer")
     {
+        Rndr::CommandList cmd;
         Rndr::RendererManager manager;
         auto renderer = new TestRenderer("Test", Rndr::RendererBaseDesc{});
         REQUIRE(manager.AddRenderer(renderer));
         REQUIRE(manager.GetRendererIndex("Test") == 0);
-        REQUIRE(manager.Render());
+        REQUIRE(manager.Render(0.0f, cmd));
         REQUIRE(renderer->m_value == 1);
 
         SECTION("Add second renderer to the back")
@@ -27,7 +28,7 @@ TEST_CASE("Tests for renderer manager", "[renderer-manager]")
             auto renderer2 = new TestRenderer("Test2", Rndr::RendererBaseDesc{});
             REQUIRE(manager.AddRenderer(renderer2));
             REQUIRE(manager.GetRendererIndex("Test2") == 1);
-            REQUIRE(manager.Render());
+            REQUIRE(manager.Render(0.0f, cmd));
             REQUIRE(renderer->m_value == 2);
             REQUIRE(renderer2->m_value == 1);
 
@@ -38,7 +39,7 @@ TEST_CASE("Tests for renderer manager", "[renderer-manager]")
                 REQUIRE(manager.GetRendererIndex("Test3") == 1);
                 REQUIRE(manager.GetRendererIndex("Test") == 0);
                 REQUIRE(manager.GetRendererIndex("Test2") == 2);
-                REQUIRE(manager.Render());
+                REQUIRE(manager.Render(0.0f, cmd));
                 REQUIRE(renderer->m_value == 3);
                 REQUIRE(renderer2->m_value == 2);
                 REQUIRE(renderer3->m_value == 1);
@@ -49,7 +50,7 @@ TEST_CASE("Tests for renderer manager", "[renderer-manager]")
                     REQUIRE(manager.GetRendererIndex("Test") == -1);
                     REQUIRE(manager.GetRendererIndex("Test2") == 1);
                     REQUIRE(manager.GetRendererIndex("Test3") == 0);
-                    REQUIRE(manager.Render());
+                    REQUIRE(manager.Render(0.0f, cmd));
                     REQUIRE(renderer->m_value == 3);
                     REQUIRE(renderer2->m_value == 3);
                     REQUIRE(renderer3->m_value == 2);
@@ -63,7 +64,7 @@ TEST_CASE("Tests for renderer manager", "[renderer-manager]")
                 REQUIRE(manager.GetRendererIndex("Test3") == 0);
                 REQUIRE(manager.GetRendererIndex("Test") == 1);
                 REQUIRE(manager.GetRendererIndex("Test2") == 2);
-                REQUIRE(manager.Render());
+                REQUIRE(manager.Render(0.0f, cmd));
                 REQUIRE(renderer->m_value == 3);
                 REQUIRE(renderer2->m_value == 2);
                 REQUIRE(renderer3->m_value == 1);
@@ -74,7 +75,7 @@ TEST_CASE("Tests for renderer manager", "[renderer-manager]")
                     REQUIRE(manager.GetRendererIndex("Test") == -1);
                     REQUIRE(manager.GetRendererIndex("Test2") == 1);
                     REQUIRE(manager.GetRendererIndex("Test3") == 0);
-                    REQUIRE(manager.Render());
+                    REQUIRE(manager.Render(0.0f, cmd));
                     REQUIRE(renderer->m_value == 3);
                     REQUIRE(renderer2->m_value == 3);
                     REQUIRE(renderer3->m_value == 2);
