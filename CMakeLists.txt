@@ -174,7 +174,7 @@ foreach (SLANG_FILE ${SLANG_SHADER_FILES})
     set(SPIRV_OUTPUT "${CMAKE_CURRENT_SOURCE_DIR}/assets/shaders/${SLANG_NAME}.spv")
     add_custom_command(
             OUTPUT ${SPIRV_OUTPUT}
-            COMMAND slangc ${SLANG_FILE} -target spirv -o ${SPIRV_OUTPUT}
+            COMMAND slangc ${SLANG_FILE} -g -target spirv -o ${SPIRV_OUTPUT} -matrix-layout-row-major -warnings-as-errors all
             DEPENDS ${SLANG_FILE}
             COMMENT "Compiling ${SLANG_NAME}.slang to SPIR-V..."
     )
