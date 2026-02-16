@@ -1,3 +1,5 @@
+#if RNDR_OLD_INPUT_SYSTEM
+
 #include <queue>
 #include <utility>
 #include <variant>
@@ -569,3 +571,5 @@ bool Rndr::InputSystem::IsMouseWheelAxis(Rndr::InputPrimitive primitive)
 {
     return primitive == InputPrimitive::Mouse_AxisWheel;
 }
+
+#endif  // RNDR_OLD_INPUT_SYSTEM

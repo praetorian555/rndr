@@ -1,3 +1,5 @@
+#if RNDR_OLD_INPUT_SYSTEM
+
 #include <catch2/catch2.hpp>
 
 #include "rndr/input-system.hpp"
@@ -448,3 +450,5 @@
 //     }
 //     Rndr::Application::Destroy();
 // }
+
+#endif  // RNDR_OLD_INPUT_SYSTEM

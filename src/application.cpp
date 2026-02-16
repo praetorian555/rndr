@@ -3,7 +3,9 @@
 #include <stdio.h>
 
 #include "opal/container/in-place-array.h"
+#if RNDR_OLD_INPUT_SYSTEM
 #include "rndr/input-system.hpp"
+#endif
 
 #include "rndr/log.hpp"
 
@@ -46,21 +48,25 @@ Rndr::Application::Application(const ApplicationDesc& desc)
 #error "Platform not supported!"
 #endif
 
+#if RNDR_OLD_INPUT_SYSTEM
     m_input_system = InputSystem::Get();
     if (desc.enable_input_system && !m_input_system->Init())
     {
         RNDR_LOG_ERROR("Failed to initialize the input system!");
         return;
     }
+#endif
 }
 
 Rndr::Application::~Application()
 {
+#if RNDR_OLD_INPUT_SYSTEM
     if (m_desc.enable_input_system)
     {
         InputSystem& input_system = InputSystem::GetChecked();
         input_system.Destroy();
     }
+#endif
     if (m_platform_application.IsValid())
     {
         Opal::Delete(m_allocator, m_platform_application.GetPtr());
@@ -84,19 +90,23 @@ Rndr::Logger& Rndr::Application::GetLoggerChecked() const
     return *m_logger;
 }
 
+#if RNDR_OLD_INPUT_SYSTEM
 Rndr::InputSystem& Rndr::Application::GetInputSystemChecked() const
 {
     RNDR_ASSERT(m_desc.enable_input_system, "Input system not enabled!");
     return *m_input_system;
 }
+#endif
 
 void Rndr::Application::ProcessSystemEvents(f32 delta_seconds)
 {
     m_platform_application->ProcessSystemEvents();
+#if RNDR_OLD_INPUT_SYSTEM
     if (m_desc.enable_input_system)
     {
         m_input_system->ProcessEvents(delta_seconds);
     }
+#endif
 }
 
 void Rndr::Application::EnableHighPrecisionCursorMode(bool enable, GenericWindow& window)
@@ -193,7 +203,9 @@ void Rndr::Application::OnWindowSizeChanged(const GenericWindow& window, i32 wid
 bool Rndr::Application::OnButtonDown(const GenericWindow& window, InputPrimitive key_code, bool is_repeated)
 {
     // RNDR_LOG_DEBUG("ButtonDown Key=0x%x, IsRepeated=%s", key_code, is_repeated ? "true" : "false");
+#if RNDR_OLD_INPUT_SYSTEM
     m_input_system->OnButtonDown(window, key_code, is_repeated);
+#endif
     for (const Opal::Ref<SystemMessageHandler>& system_message_handler : m_system_message_handlers)
     {
         system_message_handler->OnButtonDown(window, key_code, is_repeated);
@@ -204,7 +216,9 @@ bool Rndr::Application::OnButtonDown(const GenericWindow& window, InputPrimitive
 bool Rndr::Application::OnButtonUp(const GenericWindow& window, InputPrimitive key_code, bool is_repeated)
 {
     // RNDR_LOG_DEBUG("ButtonUp Key=0x%x, IsRepeated=%s", key_code, is_repeated ? "true" : "false");
+#if RNDR_OLD_INPUT_SYSTEM
     m_input_system->OnButtonUp(window, key_code, is_repeated);
+#endif
     for (const Opal::Ref<SystemMessageHandler>& system_message_handler : m_system_message_handlers)
     {
         system_message_handler->OnButtonUp(window, key_code, is_repeated);
@@ -219,7 +233,9 @@ bool Rndr::Application::OnCharacter(const GenericWindow& window, uchar32 charact
     // Opal::StringUtf8 out(10, 0);
     // Opal::Transcode(in, out);
     // RNDR_LOG_DEBUG("Character Char=%s, IsRepeated=%s", out.GetData(), is_repeated ? "true" : "false");
+#if RNDR_OLD_INPUT_SYSTEM
     m_input_system->OnCharacter(window, character, is_repeated);
+#endif
     for (const Opal::Ref<SystemMessageHandler>& system_message_handler : m_system_message_handlers)
     {
         system_message_handler->OnCharacter(window, character, is_repeated);
@@ -230,7 +246,9 @@ bool Rndr::Application::OnCharacter(const GenericWindow& window, uchar32 charact
 bool Rndr::Application::OnMouseButtonDown(const GenericWindow& window, InputPrimitive primitive, const Vector2i& cursor_position)
 {
     // RNDR_LOG_DEBUG("MouseButtonDown Key=0x%x, CursorPosition=(x=%d, y=%d)", primitive, cursor_position.x, cursor_position.y);
+#if RNDR_OLD_INPUT_SYSTEM
     m_input_system->OnMouseButtonDown(window, primitive, cursor_position);
+#endif
     for (const Opal::Ref<SystemMessageHandler>& system_message_handler : m_system_message_handlers)
     {
         system_message_handler->OnMouseButtonDown(window, primitive, cursor_position);
@@ -241,7 +259,9 @@ bool Rndr::Application::OnMouseButtonDown(const GenericWindow& window, InputPrim
 bool Rndr::Application::OnMouseButtonUp(const GenericWindow& window, InputPrimitive primitive, const Vector2i& cursor_position)
 {
     // RNDR_LOG_DEBUG("MouseButtonUp Key=0x%x, CursorPosition=(x=%d, y=%d)", primitive, cursor_position.x, cursor_position.y);
+#if RNDR_OLD_INPUT_SYSTEM
     m_input_system->OnMouseButtonUp(window, primitive, cursor_position);
+#endif
     for (const Opal::Ref<SystemMessageHandler>& system_message_handler : m_system_message_handlers)
     {
         system_message_handler->OnMouseButtonUp(window, primitive, cursor_position);
@@ -252,7 +272,9 @@ bool Rndr::Application::OnMouseButtonUp(const GenericWindow& window, InputPrimit
 bool Rndr::Application::OnMouseDoubleClick(const GenericWindow& window, InputPrimitive primitive, const Vector2i& cursor_position)
 {
     // RNDR_LOG_DEBUG("MouseDoubleClick Key=0x%x, CursorPosition=(x=%d, y=%d)", primitive, cursor_position.x, cursor_position.y);
+#if RNDR_OLD_INPUT_SYSTEM
     m_input_system->OnMouseDoubleClick(window, primitive, cursor_position);
+#endif
     for (const Opal::Ref<SystemMessageHandler>& system_message_handler : m_system_message_handlers)
     {
         system_message_handler->OnMouseDoubleClick(window, primitive, cursor_position);
@@ -263,7 +285,9 @@ bool Rndr::Application::OnMouseDoubleClick(const GenericWindow& window, InputPri
 bool Rndr::Application::OnMouseWheel(const GenericWindow& window, f32 wheel_delta, const Vector2i& cursor_position)
 {
     // RNDR_LOG_DEBUG("MouseWheel Delta=%f, CursorPosition=(x=%d, y=%d)", wheel_delta, cursor_position.x, cursor_position.y);
+#if RNDR_OLD_INPUT_SYSTEM
     m_input_system->OnMouseWheel(window, wheel_delta, cursor_position);
+#endif
     for (const Opal::Ref<SystemMessageHandler>& system_message_handler : m_system_message_handlers)
     {
         system_message_handler->OnMouseWheel(window, wheel_delta, cursor_position);
@@ -273,7 +297,9 @@ bool Rndr::Application::OnMouseWheel(const GenericWindow& window, f32 wheel_delt
 
 bool Rndr::Application::OnMouseMove(const GenericWindow& window, f32 delta_x, f32 delta_y)
 {
+#if RNDR_OLD_INPUT_SYSTEM
     m_input_system->OnMouseMove(window, delta_x, delta_y);
+#endif
     for (const Opal::Ref<SystemMessageHandler>& system_message_handler : m_system_message_handlers)
     {
         system_message_handler->OnMouseMove(window, delta_x, delta_y);

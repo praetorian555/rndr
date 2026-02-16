@@ -1,3 +1,5 @@
+#if RNDR_OLD_INPUT_SYSTEM
+
 #include "example-controller.h"
 
 ExampleController::ExampleController(Rndr::Application& app, Rndr::i32 screen_width, Rndr::i32 screen_height,
@@ -159,3 +161,5 @@ void ExampleController::HandleMoveRight(Rndr::InputPrimitive, Rndr::InputTrigger
         m_right_value = 0;
     }
 }
+
+#endif  // RNDR_OLD_INPUT_SYSTEM

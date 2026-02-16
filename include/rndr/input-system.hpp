@@ -1,5 +1,7 @@
 #pragma once
 
+#if RNDR_OLD_INPUT_SYSTEM
+
 #include <functional>
 
 #include "opal/container/dynamic-array.h"
@@ -274,3 +276,5 @@ private:
     std::bind(&std::remove_reference<decltype(*this)>::type::func_ptr, this, std::placeholders::_1)
 
 }  // namespace Rndr
+
+#endif  // RNDR_OLD_INPUT_SYSTEM

@@ -1,5 +1,7 @@
 #pragma once
 
+#if RNDR_OLD_INPUT_SYSTEM
+
 #include "rndr/types.hpp"
 
 namespace Rndr
@@ -153,3 +155,5 @@ enum class InputTrigger : u8
 };
 
 }  // namespace Rndr
+
+#endif  // RNDR_OLD_INPUT_SYSTEM

@@ -1,5 +1,7 @@
 #pragma once
 
+#if RNDR_OLD_INPUT_SYSTEM
+
 #include "rndr/application.hpp"
 #include "rndr/fly-camera.hpp"
 #include "rndr/types.hpp"
@@ -48,3 +50,5 @@ private:
     Rndr::f32 m_horizontal_value = 0.0f;
     Rndr::f32 m_right_value = 0.0f;
 };
+
+#endif  // RNDR_OLD_INPUT_SYSTEM
