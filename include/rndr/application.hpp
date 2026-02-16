@@ -4,8 +4,8 @@
 #include "opal/container/dynamic-array.h"
 #include "opal/container/ref.h"
 #include "opal/container/scope-ptr.h"
+#include "opal/delegate.h"
 
-#include "rndr/delegate.hpp"
 #include "rndr/generic-window.hpp"
 #include "rndr/imgui-system.hpp"
 #include "rndr/input-system.hpp"
@@ -37,10 +37,10 @@ struct ApplicationDesc
 class Application : public SystemMessageHandler
 {
 public:
-    using WindowCloseDelegate = Delegate<bool(const GenericWindow& /*window*/)>;
+    using WindowCloseDelegate = Opal::Delegate<bool(const GenericWindow& /*window*/)>;
     WindowCloseDelegate on_window_close;
 
-    using WindowResizeDelegate = MultiDelegate<void(const GenericWindow& window /*window*/, int /*width*/, int /*height*/)>;
+    using WindowResizeDelegate = Opal::MultiDelegate<void(const GenericWindow& window /*window*/, int /*width*/, int /*height*/)>;
     WindowResizeDelegate on_window_resize;
 
     static Opal::ScopePtr<Application> Create(const ApplicationDesc& desc = ApplicationDesc{});

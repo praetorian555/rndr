@@ -1,8 +1,8 @@
 #pragma once
 
 #include "opal/container/ref.h"
+#include "opal/delegate.h"
 
-#include "rndr/delegate.hpp"
 #include "rndr/math.hpp"
 #include "rndr/render-api.hpp"
 #include "rndr/renderers/renderer-base.hpp"
@@ -58,7 +58,7 @@ private:
 
     Opal::DynamicArray<VertexData> m_vertices;
     Opal::DynamicArray<i32> m_indices;
-    DelegateHandle m_swap_chain_resize_handle;
+    Opal::DelegateHandle m_swap_chain_resize_handle;
 };
 
 }  // namespace Rndr

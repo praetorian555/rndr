@@ -2,12 +2,13 @@
 
 #include "opal/container/hash-map.h"
 #include "opal/container/string.h"
-#include "platform/opengl-command-list.hpp"
+#include "opal/enum-flags.h"
 
 #include "rndr/colors.hpp"
-#include "rndr/enum-flags.hpp"
 #include "rndr/math.hpp"
 #include "rndr/platform/opengl-texture.hpp"
+
+#include "platform/opengl-command-list.hpp"
 
 namespace Rndr
 {
@@ -18,7 +19,7 @@ enum class MaterialFlags : u32
     Transparent = 1 << 0,
 
 };
-RNDR_ENUM_CLASS_FLAGS(MaterialFlags);
+OPAL_ENUM_CLASS_FLAGS(MaterialFlags);
 
 struct MaterialDesc
 {

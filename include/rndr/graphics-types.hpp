@@ -1,9 +1,9 @@
 #pragma once
 
-#include "enum-flags.hpp"
 #include "opal/container/dynamic-array.h"
 #include "opal/container/ref.h"
 #include "opal/container/string.h"
+#include "opal/enum-flags.h"
 
 #include "rndr/colors.hpp"
 #include "rndr/math.hpp"
@@ -401,7 +401,7 @@ enum class ShaderTypeBits : u32
     Mesh = 16,
     AllGraphics = 32
 };
-RNDR_ENUM_CLASS_FLAGS(ShaderTypeBits);
+OPAL_ENUM_CLASS_FLAGS(ShaderTypeBits);
 
 /** Controls what portion of the depth buffer is written to. */
 enum class DepthMask
@@ -439,7 +439,7 @@ enum class PipelineStageBits : u64
     ComputeShader = 0x800ull,
     Transfer = 0x1000ull
 };
-RNDR_ENUM_CLASS_FLAGS(PipelineStageBits);
+OPAL_ENUM_CLASS_FLAGS(PipelineStageBits);
 
 enum class PipelineStageAccessBits : u64
 {
@@ -447,7 +447,7 @@ enum class PipelineStageAccessBits : u64
     Read = 0x8000ull,
     Write = 0x10000ull
 };
-RNDR_ENUM_CLASS_FLAGS(PipelineStageAccessBits)
+OPAL_ENUM_CLASS_FLAGS(PipelineStageAccessBits)
 
 enum class ImageLayout
 {
@@ -479,7 +479,7 @@ enum class ImageAspectBits : u8
     Depth = 2,
     Stencil = 4
 };
-RNDR_ENUM_CLASS_FLAGS(ImageAspectBits);
+OPAL_ENUM_CLASS_FLAGS(ImageAspectBits);
 
 struct ImageSubresourceRange
 {
