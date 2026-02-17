@@ -525,6 +525,125 @@ TEST_CASE("Input system mouse button binding", "[input]")
     }
 }
 
+TEST_CASE("Middle, X1, X2 mouse button bindings", "[input]")
+{
+    Rndr::InputSystem input_system;
+    Rndr::InputContext& context = input_system.GetCurrentContext();
+
+    Rndr::MouseButton received_button{};
+    int callback_count = 0;
+
+    auto callback = [&](Rndr::MouseButton button, Rndr::Trigger /*trigger*/, const Rndr::Vector2i& /*pos*/)
+    {
+        received_button = button;
+        callback_count++;
+    };
+
+    SECTION("Middle mouse button triggers callback")
+    {
+        context.AddAction("MiddleClick")
+            .OnMouseButton(callback)
+            .Bind(Rndr::MouseButton::Middle, Rndr::Trigger::Pressed);
+
+        input_system.OnMouseButtonDown(g_fake_window, Rndr::InputPrimitive::Mouse_MiddleButton, Rndr::Vector2i{0, 0});
+        input_system.ProcessSystemEvents(0.0f);
+
+        REQUIRE(callback_count == 1);
+        REQUIRE(received_button == Rndr::MouseButton::Middle);
+    }
+
+    SECTION("X1 mouse button triggers callback")
+    {
+        context.AddAction("X1Click")
+            .OnMouseButton(callback)
+            .Bind(Rndr::MouseButton::X1, Rndr::Trigger::Pressed);
+
+        input_system.OnMouseButtonDown(g_fake_window, Rndr::InputPrimitive::Mouse_XButton1, Rndr::Vector2i{0, 0});
+        input_system.ProcessSystemEvents(0.0f);
+
+        REQUIRE(callback_count == 1);
+        REQUIRE(received_button == Rndr::MouseButton::X1);
+    }
+
+    SECTION("X2 mouse button triggers callback")
+    {
+        context.AddAction("X2Click")
+            .OnMouseButton(callback)
+            .Bind(Rndr::MouseButton::X2, Rndr::Trigger::Pressed);
+
+        input_system.OnMouseButtonDown(g_fake_window, Rndr::InputPrimitive::Mouse_XButton2, Rndr::Vector2i{0, 0});
+        input_system.ProcessSystemEvents(0.0f);
+
+        REQUIRE(callback_count == 1);
+        REQUIRE(received_button == Rndr::MouseButton::X2);
+    }
+}
+
+TEST_CASE("Mouse button cursor position passed correctly", "[input]")
+{
+    Rndr::InputSystem input_system;
+    Rndr::InputContext& context = input_system.GetCurrentContext();
+
+    Rndr::Vector2i received_position{};
+
+    context.AddAction("Click")
+        .OnMouseButton([&](Rndr::MouseButton /*button*/, Rndr::Trigger /*trigger*/, const Rndr::Vector2i& pos)
+        {
+            received_position = pos;
+        })
+        .Bind(Rndr::MouseButton::Left, Rndr::Trigger::Pressed);
+
+    SECTION("Positive coordinates")
+    {
+        input_system.OnMouseButtonDown(g_fake_window, Rndr::InputPrimitive::Mouse_LeftButton, Rndr::Vector2i{1920, 1080});
+        input_system.ProcessSystemEvents(0.0f);
+
+        REQUIRE(received_position[0] == 1920);
+        REQUIRE(received_position[1] == 1080);
+    }
+
+    SECTION("Zero coordinates")
+    {
+        input_system.OnMouseButtonDown(g_fake_window, Rndr::InputPrimitive::Mouse_LeftButton, Rndr::Vector2i{0, 0});
+        input_system.ProcessSystemEvents(0.0f);
+
+        REQUIRE(received_position[0] == 0);
+        REQUIRE(received_position[1] == 0);
+    }
+
+    SECTION("Negative coordinates")
+    {
+        input_system.OnMouseButtonDown(g_fake_window, Rndr::InputPrimitive::Mouse_LeftButton, Rndr::Vector2i{-10, -20});
+        input_system.ProcessSystemEvents(0.0f);
+
+        REQUIRE(received_position[0] == -10);
+        REQUIRE(received_position[1] == -20);
+    }
+}
+
+TEST_CASE("Double click is treated as press event", "[input]")
+{
+    Rndr::InputSystem input_system;
+    Rndr::InputContext& context = input_system.GetCurrentContext();
+
+    bool callback_fired = false;
+    Rndr::Trigger received_trigger = Rndr::Trigger::Released;
+
+    context.AddAction("Click")
+        .OnMouseButton([&](Rndr::MouseButton /*button*/, Rndr::Trigger trigger, const Rndr::Vector2i& /*pos*/)
+        {
+            callback_fired = true;
+            received_trigger = trigger;
+        })
+        .Bind(Rndr::MouseButton::Left, Rndr::Trigger::Pressed);
+
+    input_system.OnMouseDoubleClick(g_fake_window, Rndr::InputPrimitive::Mouse_LeftButton, Rndr::Vector2i{50, 50});
+    input_system.ProcessSystemEvents(0.0f);
+
+    REQUIRE(callback_fired);
+    REQUIRE(received_trigger == Rndr::Trigger::Pressed);
+}
+
 TEST_CASE("Input system mouse move binding", "[input]")
 {
     Rndr::InputSystem input_system;
@@ -571,6 +690,120 @@ TEST_CASE("Input system mouse move binding", "[input]")
     }
 }
 
+TEST_CASE("Mouse move binding only X axis ignores Y", "[input]")
+{
+    Rndr::InputSystem input_system;
+    Rndr::InputContext& context = input_system.GetCurrentContext();
+
+    int callback_count = 0;
+    Rndr::MouseAxis received_axis{};
+
+    context.AddAction("LookX")
+        .OnMousePosition([&](Rndr::MouseAxis axis, Rndr::f32 /*delta*/)
+        {
+            callback_count++;
+            received_axis = axis;
+        })
+        .Bind(Rndr::MouseAxis::X);
+
+    SECTION("X movement fires callback")
+    {
+        input_system.OnMouseMove(g_fake_window, 5.0f, 0.0f);
+        input_system.ProcessSystemEvents(0.0f);
+
+        REQUIRE(callback_count == 1);
+        REQUIRE(received_axis == Rndr::MouseAxis::X);
+    }
+
+    SECTION("Y-only movement does not fire callback")
+    {
+        input_system.OnMouseMove(g_fake_window, 0.0f, 5.0f);
+        input_system.ProcessSystemEvents(0.0f);
+
+        REQUIRE(callback_count == 0);
+    }
+
+    SECTION("Both axes moving only fires X")
+    {
+        input_system.OnMouseMove(g_fake_window, 3.0f, 7.0f);
+        input_system.ProcessSystemEvents(0.0f);
+
+        REQUIRE(callback_count == 1);
+        REQUIRE(received_axis == Rndr::MouseAxis::X);
+    }
+}
+
+TEST_CASE("Mouse move binding only Y axis ignores X", "[input]")
+{
+    Rndr::InputSystem input_system;
+    Rndr::InputContext& context = input_system.GetCurrentContext();
+
+    int callback_count = 0;
+    Rndr::MouseAxis received_axis{};
+
+    context.AddAction("LookY")
+        .OnMousePosition([&](Rndr::MouseAxis axis, Rndr::f32 /*delta*/)
+        {
+            callback_count++;
+            received_axis = axis;
+        })
+        .Bind(Rndr::MouseAxis::Y);
+
+    SECTION("Y movement fires callback")
+    {
+        input_system.OnMouseMove(g_fake_window, 0.0f, 5.0f);
+        input_system.ProcessSystemEvents(0.0f);
+
+        REQUIRE(callback_count == 1);
+        REQUIRE(received_axis == Rndr::MouseAxis::Y);
+    }
+
+    SECTION("X-only movement does not fire callback")
+    {
+        input_system.OnMouseMove(g_fake_window, 5.0f, 0.0f);
+        input_system.ProcessSystemEvents(0.0f);
+
+        REQUIRE(callback_count == 0);
+    }
+
+    SECTION("Both axes moving only fires Y")
+    {
+        input_system.OnMouseMove(g_fake_window, 3.0f, 7.0f);
+        input_system.ProcessSystemEvents(0.0f);
+
+        REQUIRE(callback_count == 1);
+        REQUIRE(received_axis == Rndr::MouseAxis::Y);
+    }
+}
+
+TEST_CASE("Multiple mouse move events dispatched individually", "[input]")
+{
+    Rndr::InputSystem input_system;
+    Rndr::InputContext& context = input_system.GetCurrentContext();
+
+    Rndr::f32 total_delta_x = 0.0f;
+    int callback_count = 0;
+
+    context.AddAction("LookX")
+        .OnMousePosition([&](Rndr::MouseAxis axis, Rndr::f32 delta)
+        {
+            if (axis == Rndr::MouseAxis::X)
+            {
+                total_delta_x += delta;
+                callback_count++;
+            }
+        })
+        .Bind(Rndr::MouseAxis::X);
+
+    input_system.OnMouseMove(g_fake_window, 2.0f, 0.0f);
+    input_system.OnMouseMove(g_fake_window, 3.0f, 0.0f);
+    input_system.OnMouseMove(g_fake_window, -1.0f, 0.0f);
+    input_system.ProcessSystemEvents(0.0f);
+
+    REQUIRE(callback_count == 3);
+    REQUIRE(total_delta_x == 4.0f);
+}
+
 TEST_CASE("Input system mouse wheel binding", "[input]")
 {
     Rndr::InputSystem input_system;
@@ -594,6 +827,15 @@ TEST_CASE("Input system mouse wheel binding", "[input]")
 
         REQUIRE(callback_fired);
         REQUIRE(received_delta_y == 120.0f);
+    }
+
+    SECTION("Negative wheel delta is passed through")
+    {
+        input_system.OnMouseWheel(g_fake_window, -120.0f, Rndr::Vector2i{0, 0});
+        input_system.ProcessSystemEvents(0.0f);
+
+        REQUIRE(callback_fired);
+        REQUIRE(received_delta_y == -120.0f);
     }
 }
 
