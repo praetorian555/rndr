@@ -1552,4 +1552,287 @@ TEST_CASE("Simultaneous combo: can be retriggered", "[input]")
     REQUIRE(callback_count == 2);
 }
 
+TEST_CASE("Context stack: default context exists on construction", "[input]")
+{
+    Rndr::InputSystem input_system;
+
+    // Should not crash, default context is available.
+    Rndr::InputContext& ctx = input_system.GetCurrentContext();
+    REQUIRE(ctx.GetName() == Opal::StringUtf8("Default"));
+}
+
+TEST_CASE("Context stack: PushContext makes new context active", "[input]")
+{
+    Rndr::InputSystem input_system;
+    Rndr::InputContext gameplay_context(Opal::StringUtf8("Gameplay"));
+
+    input_system.PushContext(gameplay_context);
+
+    REQUIRE(input_system.GetCurrentContext().GetName() == Opal::StringUtf8("Gameplay"));
+}
+
+TEST_CASE("Context stack: PopContext returns to previous context", "[input]")
+{
+    Rndr::InputSystem input_system;
+    Rndr::InputContext gameplay_context(Opal::StringUtf8("Gameplay"));
+
+    input_system.PushContext(gameplay_context);
+    REQUIRE(input_system.GetCurrentContext().GetName() == Opal::StringUtf8("Gameplay"));
+
+    bool result = input_system.PopContext();
+    REQUIRE(result);
+    REQUIRE(input_system.GetCurrentContext().GetName() == Opal::StringUtf8("Default"));
+}
+
+TEST_CASE("Context stack: PopContext on default context returns false", "[input]")
+{
+    Rndr::InputSystem input_system;
+
+    bool result = input_system.PopContext();
+    REQUIRE_FALSE(result);
+
+    // Default context should still be there.
+    REQUIRE(input_system.GetCurrentContext().GetName() == Opal::StringUtf8("Default"));
+}
+
+TEST_CASE("Context stack: top context handles events first", "[input]")
+{
+    Rndr::InputSystem input_system;
+    Rndr::InputContext& default_ctx = input_system.GetCurrentContext();
+
+    bool default_fired = false;
+    bool top_fired = false;
+
+    default_ctx.AddAction("Jump")
+        .OnButton([&](Rndr::Trigger /*trigger*/, bool /*is_repeat*/)
+        {
+            default_fired = true;
+        })
+        .Bind(Rndr::Key::Space, Rndr::Trigger::Pressed);
+
+    Rndr::InputContext top_context(Opal::StringUtf8("Top"));
+    top_context.AddAction("Jump")
+        .OnButton([&](Rndr::Trigger /*trigger*/, bool /*is_repeat*/)
+        {
+            top_fired = true;
+        })
+        .Bind(Rndr::Key::Space, Rndr::Trigger::Pressed);
+
+    input_system.PushContext(top_context);
+
+    input_system.OnButtonDown(g_fake_window, Rndr::InputPrimitive::Space, false);
+    input_system.ProcessSystemEvents(0.0f);
+
+    REQUIRE(top_fired);
+    REQUIRE_FALSE(default_fired);
+}
+
+TEST_CASE("Context stack: consumed event does not propagate", "[input]")
+{
+    Rndr::InputSystem input_system;
+    Rndr::InputContext& default_ctx = input_system.GetCurrentContext();
+
+    bool default_fired = false;
+    bool top_fired = false;
+
+    default_ctx.AddAction("Jump")
+        .OnButton([&](Rndr::Trigger /*trigger*/, bool /*is_repeat*/)
+        {
+            default_fired = true;
+        })
+        .Bind(Rndr::Key::Space, Rndr::Trigger::Pressed);
+
+    Rndr::InputContext top_context(Opal::StringUtf8("Top"));
+    top_context.AddAction("Jump")
+        .OnButton([&](Rndr::Trigger /*trigger*/, bool /*is_repeat*/)
+        {
+            top_fired = true;
+        })
+        .Bind(Rndr::Key::Space, Rndr::Trigger::Pressed);
+
+    input_system.PushContext(top_context);
+
+    input_system.OnButtonDown(g_fake_window, Rndr::InputPrimitive::Space, false);
+    input_system.ProcessSystemEvents(0.0f);
+
+    // Top consumed it, default should not fire.
+    REQUIRE(top_fired);
+    REQUIRE_FALSE(default_fired);
+}
+
+TEST_CASE("Context stack: unconsumed event propagates to lower context", "[input]")
+{
+    Rndr::InputSystem input_system;
+    Rndr::InputContext& default_ctx = input_system.GetCurrentContext();
+
+    bool default_fired = false;
+
+    default_ctx.AddAction("Jump")
+        .OnButton([&](Rndr::Trigger /*trigger*/, bool /*is_repeat*/)
+        {
+            default_fired = true;
+        })
+        .Bind(Rndr::Key::Space, Rndr::Trigger::Pressed);
+
+    // Top context has no binding for Space.
+    Rndr::InputContext top_context(Opal::StringUtf8("Top"));
+    top_context.AddAction("Shoot")
+        .OnButton([&](Rndr::Trigger /*trigger*/, bool /*is_repeat*/) {})
+        .Bind(Rndr::Key::F, Rndr::Trigger::Pressed);
+
+    input_system.PushContext(top_context);
+
+    input_system.OnButtonDown(g_fake_window, Rndr::InputPrimitive::Space, false);
+    input_system.ProcessSystemEvents(0.0f);
+
+    // Top didn't handle Space, so default should get it.
+    REQUIRE(default_fired);
+}
+
+TEST_CASE("Context stack: disabled context is skipped", "[input]")
+{
+    Rndr::InputSystem input_system;
+    Rndr::InputContext& default_ctx = input_system.GetCurrentContext();
+
+    bool default_fired = false;
+    bool top_fired = false;
+
+    default_ctx.AddAction("Jump")
+        .OnButton([&](Rndr::Trigger /*trigger*/, bool /*is_repeat*/)
+        {
+            default_fired = true;
+        })
+        .Bind(Rndr::Key::Space, Rndr::Trigger::Pressed);
+
+    Rndr::InputContext top_context(Opal::StringUtf8("Top"));
+    top_context.AddAction("Jump")
+        .OnButton([&](Rndr::Trigger /*trigger*/, bool /*is_repeat*/)
+        {
+            top_fired = true;
+        })
+        .Bind(Rndr::Key::Space, Rndr::Trigger::Pressed);
+
+    top_context.SetEnabled(false);
+    input_system.PushContext(top_context);
+
+    input_system.OnButtonDown(g_fake_window, Rndr::InputPrimitive::Space, false);
+    input_system.ProcessSystemEvents(0.0f);
+
+    // Top is disabled, default should handle it.
+    REQUIRE_FALSE(top_fired);
+    REQUIRE(default_fired);
+}
+
+TEST_CASE("Context stack: re-enabling context makes it process events", "[input]")
+{
+    Rndr::InputSystem input_system;
+    Rndr::InputContext& default_ctx = input_system.GetCurrentContext();
+
+    bool default_fired = false;
+    bool top_fired = false;
+
+    default_ctx.AddAction("Jump")
+        .OnButton([&](Rndr::Trigger /*trigger*/, bool /*is_repeat*/)
+        {
+            default_fired = true;
+        })
+        .Bind(Rndr::Key::Space, Rndr::Trigger::Pressed);
+
+    Rndr::InputContext top_context(Opal::StringUtf8("Top"));
+    top_context.AddAction("Jump")
+        .OnButton([&](Rndr::Trigger /*trigger*/, bool /*is_repeat*/)
+        {
+            top_fired = true;
+        })
+        .Bind(Rndr::Key::Space, Rndr::Trigger::Pressed);
+
+    top_context.SetEnabled(false);
+    input_system.PushContext(top_context);
+
+    // While disabled, default handles events.
+    input_system.OnButtonDown(g_fake_window, Rndr::InputPrimitive::Space, false);
+    input_system.ProcessSystemEvents(0.0f);
+    REQUIRE_FALSE(top_fired);
+    REQUIRE(default_fired);
+
+    // Re-enable.
+    default_fired = false;
+    top_context.SetEnabled(true);
+
+    input_system.OnButtonDown(g_fake_window, Rndr::InputPrimitive::Space, false);
+    input_system.ProcessSystemEvents(0.0f);
+    REQUIRE(top_fired);
+    REQUIRE_FALSE(default_fired);
+}
+
+TEST_CASE("Context stack: multiple contexts stacked correctly", "[input]")
+{
+    Rndr::InputSystem input_system;
+
+    bool default_fired = false;
+    bool a_fired = false;
+    bool b_fired = false;
+
+    input_system.GetCurrentContext().AddAction("Jump")
+        .OnButton([&](Rndr::Trigger /*trigger*/, bool /*is_repeat*/)
+        {
+            default_fired = true;
+        })
+        .Bind(Rndr::Key::Space, Rndr::Trigger::Pressed);
+
+    Rndr::InputContext context_a(Opal::StringUtf8("A"));
+    context_a.AddAction("Jump")
+        .OnButton([&](Rndr::Trigger /*trigger*/, bool /*is_repeat*/)
+        {
+            a_fired = true;
+        })
+        .Bind(Rndr::Key::Space, Rndr::Trigger::Pressed);
+
+    Rndr::InputContext context_b(Opal::StringUtf8("B"));
+    context_b.AddAction("Jump")
+        .OnButton([&](Rndr::Trigger /*trigger*/, bool /*is_repeat*/)
+        {
+            b_fired = true;
+        })
+        .Bind(Rndr::Key::Space, Rndr::Trigger::Pressed);
+
+    input_system.PushContext(context_a);
+    input_system.PushContext(context_b);
+
+    SECTION("Top context B handles event")
+    {
+        input_system.OnButtonDown(g_fake_window, Rndr::InputPrimitive::Space, false);
+        input_system.ProcessSystemEvents(0.0f);
+
+        REQUIRE(b_fired);
+        REQUIRE_FALSE(a_fired);
+        REQUIRE_FALSE(default_fired);
+    }
+
+    SECTION("After popping B, A handles event")
+    {
+        input_system.PopContext();
+
+        input_system.OnButtonDown(g_fake_window, Rndr::InputPrimitive::Space, false);
+        input_system.ProcessSystemEvents(0.0f);
+
+        REQUIRE_FALSE(b_fired);
+        REQUIRE(a_fired);
+        REQUIRE_FALSE(default_fired);
+    }
+
+    SECTION("After popping both, default handles event")
+    {
+        input_system.PopContext();
+        input_system.PopContext();
+
+        input_system.OnButtonDown(g_fake_window, Rndr::InputPrimitive::Space, false);
+        input_system.ProcessSystemEvents(0.0f);
+
+        REQUIRE_FALSE(b_fired);
+        REQUIRE_FALSE(a_fired);
+        REQUIRE(default_fired);
+    }
+}
+
 #endif  // RNDR_OLD_INPUT_SYSTEM
