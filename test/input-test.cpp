@@ -1409,4 +1409,147 @@ TEST_CASE("Sequential combo: release events do not advance combo", "[input]")
     REQUIRE(callback_count == 1);
 }
 
+// NOTE: Simultaneous combos (timeout == 0) currently use the same sequential matching as
+// sequential combos, but without a timeout. True order-independent detection is not yet
+// implemented. These tests document the current behavior.
+
+TEST_CASE("Simultaneous combo: all keys pressed triggers callback", "[input]")
+{
+    Rndr::InputSystem input_system;
+    Rndr::InputContext& context = input_system.GetCurrentContext();
+
+    int callback_count = 0;
+
+    Rndr::Key keys[] = {Rndr::Key::A, Rndr::Key::B};
+    context.AddAction("SpecialMove")
+        .OnButton([&](Rndr::Trigger /*trigger*/, bool /*is_repeat*/)
+        {
+            callback_count++;
+        })
+        .BindCombo(keys, 0.0f);
+
+    input_system.OnButtonDown(g_fake_window, Rndr::InputPrimitive::A, false);
+    input_system.OnButtonDown(g_fake_window, Rndr::InputPrimitive::B, false);
+    input_system.ProcessSystemEvents(0.0f);
+
+    REQUIRE(callback_count == 1);
+}
+
+TEST_CASE("Simultaneous combo: missing one key does not trigger", "[input]")
+{
+    Rndr::InputSystem input_system;
+    Rndr::InputContext& context = input_system.GetCurrentContext();
+
+    int callback_count = 0;
+
+    Rndr::Key keys[] = {Rndr::Key::A, Rndr::Key::B};
+    context.AddAction("SpecialMove")
+        .OnButton([&](Rndr::Trigger /*trigger*/, bool /*is_repeat*/)
+        {
+            callback_count++;
+        })
+        .BindCombo(keys, 0.0f);
+
+    SECTION("Only first key")
+    {
+        input_system.OnButtonDown(g_fake_window, Rndr::InputPrimitive::A, false);
+        input_system.ProcessSystemEvents(0.0f);
+
+        REQUIRE(callback_count == 0);
+    }
+
+    SECTION("Only second key")
+    {
+        input_system.OnButtonDown(g_fake_window, Rndr::InputPrimitive::B, false);
+        input_system.ProcessSystemEvents(0.0f);
+
+        REQUIRE(callback_count == 0);
+    }
+}
+
+TEST_CASE("Simultaneous combo: no timeout means no expiry", "[input]")
+{
+    Rndr::InputSystem input_system;
+    Rndr::InputContext& context = input_system.GetCurrentContext();
+
+    int callback_count = 0;
+
+    Rndr::Key keys[] = {Rndr::Key::A, Rndr::Key::B};
+    context.AddAction("SpecialMove")
+        .OnButton([&](Rndr::Trigger /*trigger*/, bool /*is_repeat*/)
+        {
+            callback_count++;
+        })
+        .BindCombo(keys, 0.0f);
+
+    // Press first key.
+    input_system.OnButtonDown(g_fake_window, Rndr::InputPrimitive::A, false);
+    input_system.ProcessSystemEvents(0.0f);
+
+    // Wait a very long time — no timeout should reset the combo.
+    input_system.ProcessSystemEvents(100.0f);
+
+    // Press second key — should still complete.
+    input_system.OnButtonDown(g_fake_window, Rndr::InputPrimitive::B, false);
+    input_system.ProcessSystemEvents(0.0f);
+
+    REQUIRE(callback_count == 1);
+}
+
+TEST_CASE("Simultaneous combo: wrong key resets combo", "[input]")
+{
+    Rndr::InputSystem input_system;
+    Rndr::InputContext& context = input_system.GetCurrentContext();
+
+    int callback_count = 0;
+
+    Rndr::Key keys[] = {Rndr::Key::A, Rndr::Key::B};
+    context.AddAction("SpecialMove")
+        .OnButton([&](Rndr::Trigger /*trigger*/, bool /*is_repeat*/)
+        {
+            callback_count++;
+        })
+        .BindCombo(keys, 0.0f);
+
+    // Press A, then wrong key C.
+    input_system.OnButtonDown(g_fake_window, Rndr::InputPrimitive::A, false);
+    input_system.ProcessSystemEvents(0.0f);
+    input_system.OnButtonDown(g_fake_window, Rndr::InputPrimitive::C, false);
+    input_system.ProcessSystemEvents(0.0f);
+
+    // Now press B — combo was reset so this doesn't complete it.
+    input_system.OnButtonDown(g_fake_window, Rndr::InputPrimitive::B, false);
+    input_system.ProcessSystemEvents(0.0f);
+
+    REQUIRE(callback_count == 0);
+}
+
+TEST_CASE("Simultaneous combo: can be retriggered", "[input]")
+{
+    Rndr::InputSystem input_system;
+    Rndr::InputContext& context = input_system.GetCurrentContext();
+
+    int callback_count = 0;
+
+    Rndr::Key keys[] = {Rndr::Key::A, Rndr::Key::B};
+    context.AddAction("SpecialMove")
+        .OnButton([&](Rndr::Trigger /*trigger*/, bool /*is_repeat*/)
+        {
+            callback_count++;
+        })
+        .BindCombo(keys, 0.0f);
+
+    // First trigger.
+    input_system.OnButtonDown(g_fake_window, Rndr::InputPrimitive::A, false);
+    input_system.OnButtonDown(g_fake_window, Rndr::InputPrimitive::B, false);
+    input_system.ProcessSystemEvents(0.0f);
+    REQUIRE(callback_count == 1);
+
+    // Second trigger.
+    input_system.OnButtonDown(g_fake_window, Rndr::InputPrimitive::A, false);
+    input_system.OnButtonDown(g_fake_window, Rndr::InputPrimitive::B, false);
+    input_system.ProcessSystemEvents(0.0f);
+    REQUIRE(callback_count == 2);
+}
+
 #endif  // RNDR_OLD_INPUT_SYSTEM
