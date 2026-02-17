@@ -1,6 +1,8 @@
 #pragma once
 
+#if RNDR_ADVANCED_API
 #include "volk/volk.h"
+#endif
 
 #include "rndr/types.hpp"
 
@@ -232,6 +234,8 @@ enum class PixelFormat : u16
     EnumCount
 };
 
+#if RNDR_ADVANCED_API
+
 /**
  * Convert AdvancedPixelFormat to VkFormat.
  * @param format The AdvancedPixelFormat to convert.
@@ -245,6 +249,8 @@ enum class PixelFormat : u16
  * @return The corresponding AdvancedPixelFormat value.
  */
 [[nodiscard]] PixelFormat FromVkFormat(VkFormat format);
+
+#endif
 
 /**
  * Get the size of a pixel in bytes for the given format.

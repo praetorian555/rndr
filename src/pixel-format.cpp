@@ -1,5 +1,6 @@
-#include "../include/rndr/pixel-format.hpp"
+#include "rndr/pixel-format.hpp"
 
+#if RNDR_ADVANCED_API
 VkFormat Rndr::ToVkFormat(PixelFormat format)
 {
     return static_cast<VkFormat>(format);
@@ -9,6 +10,7 @@ Rndr::PixelFormat Rndr::FromVkFormat(VkFormat format)
 {
     return static_cast<PixelFormat>(format);
 }
+#endif
 
 Rndr::u32 Rndr::GetPixelSize(PixelFormat format)
 {

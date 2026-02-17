@@ -85,13 +85,6 @@ list(APPEND SOURCE_LIST
         "${PROJECT_SOURCE_DIR}/extern/stb_image/src/stb_image.cpp"
 )
 
-file(TO_CMAKE_PATH "$ENV{VULKAN_SDK}" VULKAN_SDK_PATH)
-list(APPEND SOURCE_LIST
-        "${VULKAN_SDK_PATH}/Source/SPIRV-Reflect/spirv_reflect.h"
-        "${VULKAN_SDK_PATH}/Source/SPIRV-Reflect/spirv_reflect.c"
-)
-
-
 list(APPEND SOURCE_LIST
         "${PROJECT_SOURCE_DIR}/include/rndr/platform/windows-application.hpp"
         "${PROJECT_SOURCE_DIR}/include/rndr/platform/windows-window.hpp"
@@ -100,6 +93,10 @@ list(APPEND SOURCE_LIST
 )
 
 if (RNDR_ADVANCED_API)
+    file(TO_CMAKE_PATH "$ENV{VULKAN_SDK}" VULKAN_SDK_PATH)
+    list(APPEND SOURCE_LIST
+            "${VULKAN_SDK_PATH}/Source/SPIRV-Reflect/spirv_reflect.h"
+            "${VULKAN_SDK_PATH}/Source/SPIRV-Reflect/spirv_reflect.c")
     list(APPEND SOURCE_LIST
             "${PROJECT_SOURCE_DIR}/include/rndr/advanced/graphics-context.hpp"
             "${PROJECT_SOURCE_DIR}/include/rndr/advanced/device.hpp"
@@ -138,7 +135,6 @@ target_include_directories(rndr PUBLIC $<BUILD_INTERFACE:${PROJECT_SOURCE_DIR}/i
 target_include_directories(rndr PRIVATE ${PROJECT_SOURCE_DIR}/src)
 target_include_directories(rndr PRIVATE ${PROJECT_SOURCE_DIR}/extern/glad/include)
 target_include_directories(rndr PRIVATE ${PROJECT_SOURCE_DIR}/extern/stb_image/include)
-target_include_directories(rndr PRIVATE ${VULKAN_SDK_PATH}/Source/SPIRV-Reflect)
 
 # Setup graphics API to use
 target_compile_definitions(rndr PUBLIC RNDR_OPENGL)
@@ -148,9 +144,11 @@ target_link_libraries(rndr PUBLIC opengl32.lib User32.lib)
 target_link_libraries(rndr PUBLIC opal imgui assimp)
 
 if (RNDR_ADVANCED_API)
+    target_include_directories(rndr PRIVATE ${VULKAN_SDK_PATH}/Source/SPIRV-Reflect)
     target_include_directories(rndr PUBLIC ${VULKAN_SDK_PATH}/Include)
     #    find_library(Slang_LIBRARY NAMES slang HINTS "$ENV{VULKAN_SDK}/Lib" REQUIRED)
     target_link_libraries(rndr PUBLIC ktx)
+    target_compile_definitions(rndr PUBLIC RNDR_ADVANCED_API)
     if (WIN32)
         target_compile_definitions(rndr PUBLIC -DVK_USE_PLATFORM_WIN32_KHR -DVK_NO_PROTOTYPES)
     endif ()

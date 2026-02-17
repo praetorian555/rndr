@@ -3,8 +3,10 @@
 #include "stb_image/stb_image.h"
 #include "stb_image/stb_image_write.h"
 
+#if RNDR_ADVANCED_API
 #include "ktx.h"
 #include "ktxvulkan.h"
+#endif
 
 #include "assimp/cimport.h"
 #include "assimp/pbrmaterial.h"
@@ -14,6 +16,7 @@
 #include "opal/container/in-place-array.h"
 #include "opal/file-system.h"
 #include "opal/paths.h"
+#include "opal/exceptions.h"
 
 #include "rndr/log.hpp"
 
@@ -211,6 +214,7 @@ bool Rndr::File::SaveImage(const Bitmap& bitmap, const Opal::StringUtf8& file_pa
     return status == 1;
 }
 
+#if RNDR_ADVANCED_API
 namespace
 {
 Rndr::PixelFormat VkFormatToPixelFormat(ktx_uint32_t vk_format)
@@ -314,6 +318,7 @@ Rndr::Bitmap Rndr::File::LoadImage(const Opal::StringUtf8& file_path, bool flip_
 
     return bitmap;
 }
+#endif
 
 void Rndr::File::LoadMeshAndMaterialDescription(const Opal::StringUtf8& file_path, Mesh& out_mesh, MaterialDesc& out_material_desc)
 {
