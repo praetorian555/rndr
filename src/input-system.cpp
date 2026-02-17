@@ -1059,6 +1059,30 @@ const Rndr::InputContext& Rndr::InputSystem::GetCurrentContext() const
     return m_contexts.Back().Get();
 }
 
+Rndr::InputContext& Rndr::InputSystem::GetContextByName(const Opal::StringUtf8& name)
+{
+    for (auto& context : m_contexts)
+    {
+        if (context->GetName() == name)
+        {
+            return context;
+        }
+    }
+    throw Opal::Exception("Context by the given name does not exist!");
+}
+
+const Rndr::InputContext& Rndr::InputSystem::GetContextByName(const Opal::StringUtf8& name) const
+{
+    for (const auto& context : m_contexts)
+    {
+        if (context->GetName() == name)
+        {
+            return context;
+        }
+    }
+    throw Opal::Exception("Context by the given name does not exist!");
+}
+
 void Rndr::InputSystem::PushContext(InputContext& context)
 {
     m_contexts.PushBack(Opal::Ref<InputContext>(context));

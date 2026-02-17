@@ -786,6 +786,9 @@ public:
     [[nodiscard]] InputContext& GetCurrentContext();
     [[nodiscard]] const InputContext& GetCurrentContext() const;
 
+    [[nodiscard]] InputContext& GetContextByName(const Opal::StringUtf8& name);
+    [[nodiscard]] const InputContext& GetContextByName(const Opal::StringUtf8& name) const;
+
     /**
      * Pushes a context to the top of the stack.
      * @param context Reference to the context. The InputSystem does not manage the context lifetime.

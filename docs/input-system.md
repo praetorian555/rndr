@@ -40,6 +40,12 @@ menu_context.SetEnabled(false);  // Temporarily bypass this context.
 menu_context.SetEnabled(true);   // Re-enable it.
 ```
 
+Contexts can be retrieved by name from the `InputSystem`. This throws an `Opal::Exception` if no context with the given name exists.
+
+```cpp
+Rndr::InputContext& ctx = input_system.GetContextByName(Opal::StringUtf8("Menu"));
+```
+
 ### InputAction
 
 A named action that groups one or more input bindings and routes them to a callback. Actions are created through a fluent builder API returned by `InputContext::AddAction()`.

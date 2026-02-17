@@ -1838,6 +1838,33 @@ TEST_CASE("Context stack: multiple contexts stacked correctly", "[input]")
     }
 }
 
+TEST_CASE("Context stack: GetContextByName returns matching context", "[input]")
+{
+    Rndr::InputSystem input_system;
+    Rndr::InputContext gameplay_context(Opal::StringUtf8("Gameplay"));
+    Rndr::InputContext menu_context(Opal::StringUtf8("Menu"));
+
+    input_system.PushContext(gameplay_context);
+    input_system.PushContext(menu_context);
+
+    SECTION("Returns pushed context by name")
+    {
+        Rndr::InputContext& found = input_system.GetContextByName(Opal::StringUtf8("Gameplay"));
+        REQUIRE(found.GetName() == Opal::StringUtf8("Gameplay"));
+    }
+
+    SECTION("Returns default context by name")
+    {
+        Rndr::InputContext& found = input_system.GetContextByName(Opal::StringUtf8("Default"));
+        REQUIRE(found.GetName() == Opal::StringUtf8("Default"));
+    }
+
+    SECTION("Throws for non-existent name")
+    {
+        REQUIRE_THROWS_AS(input_system.GetContextByName(Opal::StringUtf8("NonExistent")), Opal::Exception);
+    }
+}
+
 // Action Management //////////////////////////////////////////////////////////////////////////////
 
 TEST_CASE("Action management: AddAction with unique name succeeds", "[input]")
