@@ -7,9 +7,12 @@
 
 #include <catch2/catch2.hpp>
 
+#include "opal/exceptions.h"
+
 #include "rndr/input-system.hpp"
 
 static const auto& g_fake_window = *reinterpret_cast<const Rndr::GenericWindow*>(1);
+static const auto& g_fake_window2 = *reinterpret_cast<const Rndr::GenericWindow*>(2);
 
 TEST_CASE("Input system keyboard binding", "[input]")
 {
@@ -1833,6 +1836,476 @@ TEST_CASE("Context stack: multiple contexts stacked correctly", "[input]")
         REQUIRE_FALSE(a_fired);
         REQUIRE(default_fired);
     }
+}
+
+// Action Management //////////////////////////////////////////////////////////////////////////////
+
+TEST_CASE("Action management: AddAction with unique name succeeds", "[input]")
+{
+    Rndr::InputSystem input_system;
+    Rndr::InputContext& context = input_system.GetCurrentContext();
+
+    context.AddAction("Jump")
+        .OnButton([](Rndr::Trigger, bool) {})
+        .Bind(Rndr::Key::Space, Rndr::Trigger::Pressed);
+
+    REQUIRE(context.ContainsAction("Jump"));
+}
+
+TEST_CASE("Action management: AddAction with duplicate name throws", "[input]")
+{
+    Rndr::InputSystem input_system;
+    Rndr::InputContext& context = input_system.GetCurrentContext();
+
+    context.AddAction("Jump")
+        .OnButton([](Rndr::Trigger, bool) {})
+        .Bind(Rndr::Key::Space, Rndr::Trigger::Pressed);
+
+    REQUIRE_THROWS_AS(
+        context.AddAction("Jump")
+            .OnButton([](Rndr::Trigger, bool) {})
+            .Bind(Rndr::Key::Space, Rndr::Trigger::Pressed),
+        Opal::Exception);
+}
+
+TEST_CASE("Action management: RemoveAction removes the action", "[input]")
+{
+    Rndr::InputSystem input_system;
+    Rndr::InputContext& context = input_system.GetCurrentContext();
+
+    context.AddAction("Jump")
+        .OnButton([](Rndr::Trigger, bool) {})
+        .Bind(Rndr::Key::Space, Rndr::Trigger::Pressed);
+
+    REQUIRE(context.ContainsAction("Jump"));
+
+    bool removed = context.RemoveAction("Jump");
+    REQUIRE(removed);
+    REQUIRE_FALSE(context.ContainsAction("Jump"));
+}
+
+TEST_CASE("Action management: RemoveAction returns false for non-existent", "[input]")
+{
+    Rndr::InputSystem input_system;
+    Rndr::InputContext& context = input_system.GetCurrentContext();
+
+    bool removed = context.RemoveAction("NonExistent");
+    REQUIRE_FALSE(removed);
+}
+
+TEST_CASE("Action management: ContainsAction", "[input]")
+{
+    Rndr::InputSystem input_system;
+    Rndr::InputContext& context = input_system.GetCurrentContext();
+
+    REQUIRE_FALSE(context.ContainsAction("Jump"));
+
+    context.AddAction("Jump")
+        .OnButton([](Rndr::Trigger, bool) {})
+        .Bind(Rndr::Key::Space, Rndr::Trigger::Pressed);
+
+    REQUIRE(context.ContainsAction("Jump"));
+
+    context.RemoveAction("Jump");
+    REQUIRE_FALSE(context.ContainsAction("Jump"));
+}
+
+TEST_CASE("Action management: GetAction returns pointer or nullptr", "[input]")
+{
+    Rndr::InputSystem input_system;
+    Rndr::InputContext& context = input_system.GetCurrentContext();
+
+    REQUIRE(context.GetAction("Jump") == nullptr);
+
+    context.AddAction("Jump")
+        .OnButton([](Rndr::Trigger, bool) {})
+        .Bind(Rndr::Key::Space, Rndr::Trigger::Pressed);
+
+    Rndr::InputAction* action = context.GetAction("Jump");
+    REQUIRE(action != nullptr);
+    REQUIRE(action->GetName() == Opal::StringUtf8("Jump"));
+
+    context.RemoveAction("Jump");
+    REQUIRE(context.GetAction("Jump") == nullptr);
+}
+
+// Window Filter //////////////////////////////////////////////////////////////////////////////////
+
+TEST_CASE("Window filter: action with filter only fires for matching window", "[input]")
+{
+    Rndr::InputSystem input_system;
+    Rndr::InputContext& context = input_system.GetCurrentContext();
+
+    bool callback_fired = false;
+
+    context.AddAction("Jump")
+        .OnButton([&](Rndr::Trigger, bool)
+        {
+            callback_fired = true;
+        })
+        .Bind(Rndr::Key::Space, Rndr::Trigger::Pressed)
+        .ForWindow(&g_fake_window);
+
+    SECTION("Matching window fires callback")
+    {
+        input_system.OnButtonDown(g_fake_window, Rndr::InputPrimitive::Space, false);
+        input_system.ProcessSystemEvents(0.0f);
+
+        REQUIRE(callback_fired);
+    }
+
+    SECTION("Different window does not fire callback")
+    {
+        input_system.OnButtonDown(g_fake_window2, Rndr::InputPrimitive::Space, false);
+        input_system.ProcessSystemEvents(0.0f);
+
+        REQUIRE_FALSE(callback_fired);
+    }
+}
+
+TEST_CASE("Window filter: action with no filter fires for any window", "[input]")
+{
+    Rndr::InputSystem input_system;
+    Rndr::InputContext& context = input_system.GetCurrentContext();
+
+    int callback_count = 0;
+
+    context.AddAction("Jump")
+        .OnButton([&](Rndr::Trigger, bool)
+        {
+            callback_count++;
+        })
+        .Bind(Rndr::Key::Space, Rndr::Trigger::Pressed);
+
+    input_system.OnButtonDown(g_fake_window, Rndr::InputPrimitive::Space, false);
+    input_system.ProcessSystemEvents(0.0f);
+    REQUIRE(callback_count == 1);
+
+    input_system.OnButtonDown(g_fake_window2, Rndr::InputPrimitive::Space, false);
+    input_system.ProcessSystemEvents(0.0f);
+    REQUIRE(callback_count == 2);
+}
+
+TEST_CASE("Window filter: multiple actions with different window filters", "[input]")
+{
+    Rndr::InputSystem input_system;
+    Rndr::InputContext& context = input_system.GetCurrentContext();
+
+    bool window1_fired = false;
+    bool window2_fired = false;
+
+    context.AddAction("JumpW1")
+        .OnButton([&](Rndr::Trigger, bool)
+        {
+            window1_fired = true;
+        })
+        .Bind(Rndr::Key::Space, Rndr::Trigger::Pressed)
+        .ForWindow(&g_fake_window);
+
+    context.AddAction("JumpW2")
+        .OnButton([&](Rndr::Trigger, bool)
+        {
+            window2_fired = true;
+        })
+        .Bind(Rndr::Key::Space, Rndr::Trigger::Pressed)
+        .ForWindow(&g_fake_window2);
+
+    SECTION("Event from window1 only fires window1 action")
+    {
+        input_system.OnButtonDown(g_fake_window, Rndr::InputPrimitive::Space, false);
+        input_system.ProcessSystemEvents(0.0f);
+
+        REQUIRE(window1_fired);
+        REQUIRE_FALSE(window2_fired);
+    }
+
+    SECTION("Event from window2 only fires window2 action")
+    {
+        input_system.OnButtonDown(g_fake_window2, Rndr::InputPrimitive::Space, false);
+        input_system.ProcessSystemEvents(0.0f);
+
+        REQUIRE_FALSE(window1_fired);
+        REQUIRE(window2_fired);
+    }
+}
+
+// Multiple Callback Types Per Action /////////////////////////////////////////////////////////////
+
+TEST_CASE("Multiple callbacks: OnButton and OnMouseButton on same action", "[input]")
+{
+    Rndr::InputSystem input_system;
+    Rndr::InputContext& context = input_system.GetCurrentContext();
+
+    bool button_fired = false;
+    bool mouse_button_fired = false;
+
+    context.AddAction("Interact")
+        .OnButton([&](Rndr::Trigger, bool)
+        {
+            button_fired = true;
+        })
+        .OnMouseButton([&](Rndr::MouseButton, Rndr::Trigger, const Rndr::Vector2i&)
+        {
+            mouse_button_fired = true;
+        })
+        .Bind(Rndr::Key::E, Rndr::Trigger::Pressed)
+        .Bind(Rndr::MouseButton::Left, Rndr::Trigger::Pressed);
+
+    SECTION("Key press fires button callback only")
+    {
+        input_system.OnButtonDown(g_fake_window, Rndr::InputPrimitive::E, false);
+        input_system.ProcessSystemEvents(0.0f);
+
+        REQUIRE(button_fired);
+        REQUIRE_FALSE(mouse_button_fired);
+    }
+
+    SECTION("Mouse click fires mouse button callback only")
+    {
+        input_system.OnMouseButtonDown(g_fake_window, Rndr::InputPrimitive::Mouse_LeftButton, Rndr::Vector2i{0, 0});
+        input_system.ProcessSystemEvents(0.0f);
+
+        REQUIRE_FALSE(button_fired);
+        REQUIRE(mouse_button_fired);
+    }
+}
+
+TEST_CASE("Multiple callbacks: OnButton with key and hold bindings", "[input]")
+{
+    Rndr::InputSystem input_system;
+    Rndr::InputContext& context = input_system.GetCurrentContext();
+
+    int callback_count = 0;
+
+    context.AddAction("Interact")
+        .OnButton([&](Rndr::Trigger, bool)
+        {
+            callback_count++;
+        })
+        .Bind(Rndr::Key::E, Rndr::Trigger::Pressed)
+        .BindHold(Rndr::Key::F, 0.5f);
+
+    SECTION("Key press fires immediately")
+    {
+        input_system.OnButtonDown(g_fake_window, Rndr::InputPrimitive::E, false);
+        input_system.ProcessSystemEvents(0.0f);
+
+        REQUIRE(callback_count == 1);
+    }
+
+    SECTION("Hold fires after duration")
+    {
+        input_system.OnButtonDown(g_fake_window, Rndr::InputPrimitive::F, false);
+        input_system.ProcessSystemEvents(0.3f);
+        REQUIRE(callback_count == 0);
+
+        input_system.ProcessSystemEvents(0.3f);
+        REQUIRE(callback_count == 1);
+    }
+}
+
+TEST_CASE("Multiple callbacks: OnMousePosition and OnMouseWheel on same action", "[input]")
+{
+    Rndr::InputSystem input_system;
+    Rndr::InputContext& context = input_system.GetCurrentContext();
+
+    bool position_fired = false;
+    bool wheel_fired = false;
+
+    context.AddAction("Camera")
+        .OnMousePosition([&](Rndr::MouseAxis, Rndr::f32)
+        {
+            position_fired = true;
+        })
+        .OnMouseWheel([&](Rndr::f32, Rndr::f32)
+        {
+            wheel_fired = true;
+        })
+        .Bind(Rndr::MouseAxis::X)
+        .Bind(Rndr::MouseAxis::WheelY);
+
+    SECTION("Mouse move fires position callback only")
+    {
+        input_system.OnMouseMove(g_fake_window, 5.0f, 0.0f);
+        input_system.ProcessSystemEvents(0.0f);
+
+        REQUIRE(position_fired);
+        REQUIRE_FALSE(wheel_fired);
+    }
+
+    SECTION("Mouse wheel fires wheel callback only")
+    {
+        input_system.OnMouseWheel(g_fake_window, 120.0f, Rndr::Vector2i{0, 0});
+        input_system.ProcessSystemEvents(0.0f);
+
+        REQUIRE_FALSE(position_fired);
+        REQUIRE(wheel_fired);
+    }
+}
+
+// Edge Cases /////////////////////////////////////////////////////////////////////////////////////
+
+TEST_CASE("Edge case: ProcessSystemEvents with no actions", "[input]")
+{
+    Rndr::InputSystem input_system;
+
+    // Queue an event but no actions are registered.
+    input_system.OnButtonDown(g_fake_window, Rndr::InputPrimitive::Space, false);
+    input_system.ProcessSystemEvents(0.0f);
+
+    // Should not crash.
+    REQUIRE(true);
+}
+
+TEST_CASE("Edge case: ProcessSystemEvents with no events", "[input]")
+{
+    Rndr::InputSystem input_system;
+    Rndr::InputContext& context = input_system.GetCurrentContext();
+
+    context.AddAction("Jump")
+        .OnButton([](Rndr::Trigger, bool) {})
+        .Bind(Rndr::Key::Space, Rndr::Trigger::Pressed);
+
+    // No events queued.
+    input_system.ProcessSystemEvents(0.0f);
+    input_system.ProcessSystemEvents(1.0f);
+
+    // Should not crash.
+    REQUIRE(true);
+}
+
+TEST_CASE("Edge case: events handled by default context", "[input]")
+{
+    Rndr::InputSystem input_system;
+    Rndr::InputContext& context = input_system.GetCurrentContext();
+
+    bool callback_fired = false;
+
+    context.AddAction("Jump")
+        .OnButton([&](Rndr::Trigger, bool)
+        {
+            callback_fired = true;
+        })
+        .Bind(Rndr::Key::Space, Rndr::Trigger::Pressed);
+
+    // No extra context pushed, default handles it.
+    input_system.OnButtonDown(g_fake_window, Rndr::InputPrimitive::Space, false);
+    input_system.ProcessSystemEvents(0.0f);
+
+    REQUIRE(callback_fired);
+}
+
+TEST_CASE("Edge case: removing action does not affect other actions", "[input]")
+{
+    Rndr::InputSystem input_system;
+    Rndr::InputContext& context = input_system.GetCurrentContext();
+
+    bool jump_fired = false;
+    bool shoot_fired = false;
+
+    context.AddAction("Jump")
+        .OnButton([&](Rndr::Trigger, bool)
+        {
+            jump_fired = true;
+        })
+        .Bind(Rndr::Key::Space, Rndr::Trigger::Pressed);
+
+    context.AddAction("Shoot")
+        .OnButton([&](Rndr::Trigger, bool)
+        {
+            shoot_fired = true;
+        })
+        .Bind(Rndr::Key::F, Rndr::Trigger::Pressed);
+
+    context.RemoveAction("Jump");
+
+    input_system.OnButtonDown(g_fake_window, Rndr::InputPrimitive::F, false);
+    input_system.ProcessSystemEvents(0.0f);
+
+    REQUIRE_FALSE(jump_fired);
+    REQUIRE(shoot_fired);
+}
+
+TEST_CASE("Edge case: large delta_seconds does not cause issues", "[input]")
+{
+    Rndr::InputSystem input_system;
+    Rndr::InputContext& context = input_system.GetCurrentContext();
+
+    int callback_count = 0;
+
+    context.AddAction("Hold")
+        .OnButton([&](Rndr::Trigger, bool)
+        {
+            callback_count++;
+        })
+        .BindHold(Rndr::Key::E, 0.5f);
+
+    input_system.OnButtonDown(g_fake_window, Rndr::InputPrimitive::E, false);
+    input_system.ProcessSystemEvents(999999.0f);
+
+    // Should fire exactly once, not crash.
+    REQUIRE(callback_count == 1);
+}
+
+TEST_CASE("Edge case: multiple event types in same frame", "[input]")
+{
+    Rndr::InputSystem input_system;
+    Rndr::InputContext& context = input_system.GetCurrentContext();
+
+    bool key_fired = false;
+    bool mouse_button_fired = false;
+    bool mouse_move_fired = false;
+    bool wheel_fired = false;
+    bool text_fired = false;
+
+    context.AddAction("Jump")
+        .OnButton([&](Rndr::Trigger, bool)
+        {
+            key_fired = true;
+        })
+        .Bind(Rndr::Key::Space, Rndr::Trigger::Pressed);
+
+    context.AddAction("Shoot")
+        .OnMouseButton([&](Rndr::MouseButton, Rndr::Trigger, const Rndr::Vector2i&)
+        {
+            mouse_button_fired = true;
+        })
+        .Bind(Rndr::MouseButton::Left, Rndr::Trigger::Pressed);
+
+    context.AddAction("Look")
+        .OnMousePosition([&](Rndr::MouseAxis, Rndr::f32)
+        {
+            mouse_move_fired = true;
+        })
+        .Bind(Rndr::MouseAxis::X);
+
+    context.AddAction("Zoom")
+        .OnMouseWheel([&](Rndr::f32, Rndr::f32)
+        {
+            wheel_fired = true;
+        })
+        .Bind(Rndr::MouseAxis::WheelY);
+
+    context.AddAction("Chat")
+        .OnText([&](Rndr::uchar32)
+        {
+            text_fired = true;
+        })
+        .BindText();
+
+    // Queue all event types in the same frame.
+    input_system.OnButtonDown(g_fake_window, Rndr::InputPrimitive::Space, false);
+    input_system.OnMouseButtonDown(g_fake_window, Rndr::InputPrimitive::Mouse_LeftButton, Rndr::Vector2i{0, 0});
+    input_system.OnMouseMove(g_fake_window, 5.0f, 0.0f);
+    input_system.OnMouseWheel(g_fake_window, 120.0f, Rndr::Vector2i{0, 0});
+    input_system.OnCharacter(g_fake_window, U'A', false);
+    input_system.ProcessSystemEvents(0.0f);
+
+    REQUIRE(key_fired);
+    REQUIRE(mouse_button_fired);
+    REQUIRE(mouse_move_fired);
+    REQUIRE(wheel_fired);
+    REQUIRE(text_fired);
 }
 
 #endif  // RNDR_OLD_INPUT_SYSTEM
