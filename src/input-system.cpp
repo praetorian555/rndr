@@ -739,7 +739,7 @@ Rndr::InputAction::Binding::~Binding()
 Rndr::InputAction::InputAction(InputAction&& other) noexcept
     : m_name(std::move(other.m_name)),
       m_window(other.m_window),
-      m_callback_type(other.m_callback_type),
+      m_callback_flags(other.m_callback_flags),
       m_bindings(std::move(other.m_bindings)),
       m_button_callback(std::move(other.m_button_callback)),
       m_mouse_button_callback(std::move(other.m_mouse_button_callback)),
@@ -750,7 +750,7 @@ Rndr::InputAction::InputAction(InputAction&& other) noexcept
       m_text_callback(std::move(other.m_text_callback))
 {
     other.m_window = nullptr;
-    other.m_callback_type = CallbackType::None;
+    other.m_callback_flags = CallbackFlags::None;
 }
 
 Rndr::InputAction& Rndr::InputAction::operator=(InputAction&& other) noexcept
@@ -761,7 +761,7 @@ Rndr::InputAction& Rndr::InputAction::operator=(InputAction&& other) noexcept
     }
     m_name = std::move(other.m_name);
     m_window = other.m_window;
-    m_callback_type = other.m_callback_type;
+    m_callback_flags = other.m_callback_flags;
     m_bindings = std::move(other.m_bindings);
     m_button_callback = std::move(other.m_button_callback);
     m_mouse_button_callback = std::move(other.m_mouse_button_callback);
@@ -771,7 +771,7 @@ Rndr::InputAction& Rndr::InputAction::operator=(InputAction&& other) noexcept
     m_gamepad_axis_callback = std::move(other.m_gamepad_axis_callback);
     m_text_callback = std::move(other.m_text_callback);
     other.m_window = nullptr;
-    other.m_callback_type = CallbackType::None;
+    other.m_callback_flags = CallbackFlags::None;
     return *this;
 }
 
@@ -796,56 +796,49 @@ Rndr::InputActionBuilder::InputActionBuilder(InputAction& action) : m_action(act
 
 Rndr::InputActionBuilder& Rndr::InputActionBuilder::OnButton(ButtonCallback callback)
 {
-    RNDR_ASSERT(m_action->m_callback_type == InputAction::CallbackType::None, "Callback already set on this action");
-    m_action->m_callback_type = InputAction::CallbackType::Button;
+    m_action->m_callback_flags |= InputAction::CallbackFlags::Button;
     m_action->m_button_callback = std::move(callback);
     return *this;
 }
 
 Rndr::InputActionBuilder& Rndr::InputActionBuilder::OnMouseButton(MouseButtonCallback callback)
 {
-    RNDR_ASSERT(m_action->m_callback_type == InputAction::CallbackType::None, "Callback already set on this action");
-    m_action->m_callback_type = InputAction::CallbackType::MouseButton;
+    m_action->m_callback_flags |= InputAction::CallbackFlags::MouseButton;
     m_action->m_mouse_button_callback = std::move(callback);
     return *this;
 }
 
 Rndr::InputActionBuilder& Rndr::InputActionBuilder::OnMousePosition(MousePositionCallback callback)
 {
-    RNDR_ASSERT(m_action->m_callback_type == InputAction::CallbackType::None, "Callback already set on this action");
-    m_action->m_callback_type = InputAction::CallbackType::MousePosition;
+    m_action->m_callback_flags |= InputAction::CallbackFlags::MousePosition;
     m_action->m_mouse_position_callback = std::move(callback);
     return *this;
 }
 
 Rndr::InputActionBuilder& Rndr::InputActionBuilder::OnMouseWheel(MouseWheelCallback callback)
 {
-    RNDR_ASSERT(m_action->m_callback_type == InputAction::CallbackType::None, "Callback already set on this action");
-    m_action->m_callback_type = InputAction::CallbackType::MouseWheel;
+    m_action->m_callback_flags |= InputAction::CallbackFlags::MouseWheel;
     m_action->m_mouse_wheel_callback = std::move(callback);
     return *this;
 }
 
 Rndr::InputActionBuilder& Rndr::InputActionBuilder::OnGamepadButton(GamepadButtonCallback callback)
 {
-    RNDR_ASSERT(m_action->m_callback_type == InputAction::CallbackType::None, "Callback already set on this action");
-    m_action->m_callback_type = InputAction::CallbackType::GamepadButton;
+    m_action->m_callback_flags |= InputAction::CallbackFlags::GamepadButton;
     m_action->m_gamepad_button_callback = std::move(callback);
     return *this;
 }
 
 Rndr::InputActionBuilder& Rndr::InputActionBuilder::OnGamepadAxis(GamepadAxisCallback callback)
 {
-    RNDR_ASSERT(m_action->m_callback_type == InputAction::CallbackType::None, "Callback already set on this action");
-    m_action->m_callback_type = InputAction::CallbackType::GamepadAxis;
+    m_action->m_callback_flags |= InputAction::CallbackFlags::GamepadAxis;
     m_action->m_gamepad_axis_callback = std::move(callback);
     return *this;
 }
 
 Rndr::InputActionBuilder& Rndr::InputActionBuilder::OnText(TextCallback callback)
 {
-    RNDR_ASSERT(m_action->m_callback_type == InputAction::CallbackType::None, "Callback already set on this action");
-    m_action->m_callback_type = InputAction::CallbackType::Text;
+    m_action->m_callback_flags |= InputAction::CallbackFlags::Text;
     m_action->m_text_callback = std::move(callback);
     return *this;
 }
@@ -1294,7 +1287,7 @@ void Rndr::InputSystem::UpdateTimers(f32 delta_seconds)
                         if (hold.elapsed_seconds >= hold.duration_seconds)
                         {
                             hold.has_fired = true;
-                            if (action.m_callback_type == InputAction::CallbackType::Button && action.m_button_callback)
+                            if (!!(action.m_callback_flags & InputAction::CallbackFlags::Button) && action.m_button_callback)
                             {
                                 action.m_button_callback(Trigger::Pressed, false);
                             }
@@ -1337,7 +1330,7 @@ bool Rndr::InputSystem::DispatchKeyEvent(const KeyEvent& event, InputAction& act
             const InputAction::KeyBinding& kb = binding.key;
             if (kb.key == event.key && kb.trigger == event.trigger && kb.modifiers == (m_current_modifiers & kb.modifiers))
             {
-                if (action.m_callback_type == InputAction::CallbackType::Button && action.m_button_callback)
+                if (!!(action.m_callback_flags & InputAction::CallbackFlags::Button) && action.m_button_callback)
                 {
                     action.m_button_callback(event.trigger, event.is_repeated);
                     return true;
@@ -1379,7 +1372,7 @@ bool Rndr::InputSystem::DispatchKeyEvent(const KeyEvent& event, InputAction& act
                         // Combo completed.
                         combo.current_step = 0;
                         combo.elapsed_since_last_step = 0.0f;
-                        if (action.m_callback_type == InputAction::CallbackType::Button && action.m_button_callback)
+                        if (!!(action.m_callback_flags & InputAction::CallbackFlags::Button) && action.m_button_callback)
                         {
                             action.m_button_callback(Trigger::Pressed, false);
                             return true;
@@ -1412,7 +1405,7 @@ bool Rndr::InputSystem::DispatchMouseButtonEvent(const MouseButtonEvent& event, 
             const InputAction::MouseButtonBinding& mb = binding.mouse_button;
             if (mb.button == event.button && mb.trigger == event.trigger)
             {
-                if (action.m_callback_type == InputAction::CallbackType::MouseButton && action.m_mouse_button_callback)
+                if (!!(action.m_callback_flags & InputAction::CallbackFlags::MouseButton) && action.m_mouse_button_callback)
                 {
                     action.m_mouse_button_callback(event.button, event.trigger, event.cursor_position);
                     return true;
@@ -1436,7 +1429,7 @@ bool Rndr::InputSystem::DispatchMouseMoveEvent(const MouseMoveEvent& event, Inpu
     {
         if (binding.type == InputAction::BindingType::MouseAxis)
         {
-            if (action.m_callback_type == InputAction::CallbackType::MousePosition && action.m_mouse_position_callback)
+            if (!!(action.m_callback_flags & InputAction::CallbackFlags::MousePosition) && action.m_mouse_position_callback)
             {
                 if (binding.mouse_axis.axis == MouseAxis::X && event.delta_x != 0.0f)
                 {
@@ -1467,7 +1460,7 @@ bool Rndr::InputSystem::DispatchMouseWheelEvent(const MouseWheelEvent& event, In
         {
             if (binding.mouse_axis.axis == MouseAxis::WheelY)
             {
-                if (action.m_callback_type == InputAction::CallbackType::MouseWheel && action.m_mouse_wheel_callback)
+                if (!!(action.m_callback_flags & InputAction::CallbackFlags::MouseWheel) && action.m_mouse_wheel_callback)
                 {
                     action.m_mouse_wheel_callback(0.0f, event.delta_wheel);
                     return true;
@@ -1489,7 +1482,7 @@ bool Rndr::InputSystem::DispatchCharacterEvent(const CharacterEvent& event, Inpu
     {
         if (binding.type == InputAction::BindingType::Text)
         {
-            if (action.m_callback_type == InputAction::CallbackType::Text && action.m_text_callback)
+            if (!!(action.m_callback_flags & InputAction::CallbackFlags::Text) && action.m_text_callback)
             {
                 action.m_text_callback(event.character);
                 return true;

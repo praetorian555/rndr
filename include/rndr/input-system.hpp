@@ -526,22 +526,22 @@ public:
     [[nodiscard]] const GenericWindow* GetWindow() const;
     void SetWindow(const GenericWindow* window);
 
+    enum class CallbackFlags : u8
+    {
+        None = 0,
+        Button = 1 << 0,
+        MouseButton = 1 << 1,
+        MousePosition = 1 << 2,
+        MouseWheel = 1 << 3,
+        GamepadButton = 1 << 4,
+        GamepadAxis = 1 << 5,
+        Text = 1 << 6,
+    };
+
 private:
     friend class InputActionBuilder;
     friend class InputContext;
     friend class InputSystem;
-
-    enum class CallbackType : u8
-    {
-        None,
-        Button,
-        MouseButton,
-        MousePosition,
-        MouseWheel,
-        GamepadButton,
-        GamepadAxis,
-        Text,
-    };
 
     enum class BindingType : u8
     {
@@ -628,7 +628,7 @@ private:
 
     Opal::StringUtf8 m_name;
     const GenericWindow* m_window = nullptr;
-    CallbackType m_callback_type = CallbackType::None;
+    CallbackFlags m_callback_flags = CallbackFlags::None;
     Opal::DynamicArray<Binding> m_bindings;
 
     ButtonCallback m_button_callback;
@@ -639,6 +639,8 @@ private:
     GamepadAxisCallback m_gamepad_axis_callback;
     TextCallback m_text_callback;
 };
+
+OPAL_ENUM_CLASS_FLAGS(InputAction::CallbackFlags);
 
 // InputActionBuilder /////////////////////////////////////////////////////////////////////////////
 
