@@ -82,6 +82,387 @@ TEST_CASE("Input system keyboard binding", "[input]")
     }
 }
 
+TEST_CASE("Multiple keys bound to same action", "[input]")
+{
+    Rndr::InputSystem input_system;
+    Rndr::InputContext& context = input_system.GetCurrentContext();
+
+    int callback_count = 0;
+
+    context.AddAction("MoveForward")
+        .OnButton([&](Rndr::Trigger /*trigger*/, bool /*is_repeat*/)
+        {
+            callback_count++;
+        })
+        .Bind(Rndr::Key::W, Rndr::Trigger::Pressed)
+        .Bind(Rndr::Key::UpArrow, Rndr::Trigger::Pressed);
+
+    SECTION("First key triggers callback")
+    {
+        input_system.OnButtonDown(g_fake_window, Rndr::InputPrimitive::W, false);
+        input_system.ProcessSystemEvents(0.0f);
+
+        REQUIRE(callback_count == 1);
+    }
+
+    SECTION("Second key also triggers callback")
+    {
+        input_system.OnButtonDown(g_fake_window, Rndr::InputPrimitive::UpArrow, false);
+        input_system.ProcessSystemEvents(0.0f);
+
+        REQUIRE(callback_count == 1);
+    }
+
+    SECTION("Both keys in same frame each trigger callback")
+    {
+        input_system.OnButtonDown(g_fake_window, Rndr::InputPrimitive::W, false);
+        input_system.OnButtonDown(g_fake_window, Rndr::InputPrimitive::UpArrow, false);
+        input_system.ProcessSystemEvents(0.0f);
+
+        REQUIRE(callback_count == 2);
+    }
+}
+
+TEST_CASE("Repeated key events pass is_repeat flag", "[input]")
+{
+    Rndr::InputSystem input_system;
+    Rndr::InputContext& context = input_system.GetCurrentContext();
+
+    bool received_is_repeat = false;
+
+    context.AddAction("Jump")
+        .OnButton([&](Rndr::Trigger /*trigger*/, bool is_repeat)
+        {
+            received_is_repeat = is_repeat;
+        })
+        .Bind(Rndr::Key::Space, Rndr::Trigger::Pressed);
+
+    SECTION("Non-repeated key has is_repeat false")
+    {
+        input_system.OnButtonDown(g_fake_window, Rndr::InputPrimitive::Space, false);
+        input_system.ProcessSystemEvents(0.0f);
+
+        REQUIRE_FALSE(received_is_repeat);
+    }
+
+    SECTION("Repeated key has is_repeat true")
+    {
+        input_system.OnButtonDown(g_fake_window, Rndr::InputPrimitive::Space, true);
+        input_system.ProcessSystemEvents(0.0f);
+
+        REQUIRE(received_is_repeat);
+    }
+}
+
+TEST_CASE("Same key with different triggers on separate actions", "[input]")
+{
+    Rndr::InputSystem input_system;
+    Rndr::InputContext& context = input_system.GetCurrentContext();
+
+    bool press_fired = false;
+    bool release_fired = false;
+
+    context.AddAction("JumpPress")
+        .OnButton([&](Rndr::Trigger /*trigger*/, bool /*is_repeat*/)
+        {
+            press_fired = true;
+        })
+        .Bind(Rndr::Key::Space, Rndr::Trigger::Pressed);
+
+    context.AddAction("JumpRelease")
+        .OnButton([&](Rndr::Trigger /*trigger*/, bool /*is_repeat*/)
+        {
+            release_fired = true;
+        })
+        .Bind(Rndr::Key::Space, Rndr::Trigger::Released);
+
+    SECTION("Press event only fires press action")
+    {
+        input_system.OnButtonDown(g_fake_window, Rndr::InputPrimitive::Space, false);
+        input_system.ProcessSystemEvents(0.0f);
+
+        REQUIRE(press_fired);
+        REQUIRE_FALSE(release_fired);
+    }
+
+    SECTION("Release event only fires release action")
+    {
+        input_system.OnButtonUp(g_fake_window, Rndr::InputPrimitive::Space, false);
+        input_system.ProcessSystemEvents(0.0f);
+
+        REQUIRE_FALSE(press_fired);
+        REQUIRE(release_fired);
+    }
+}
+
+TEST_CASE("Modifier key: Ctrl+Key binding", "[input]")
+{
+    Rndr::InputSystem input_system;
+    Rndr::InputContext& context = input_system.GetCurrentContext();
+
+    bool callback_fired = false;
+
+    context.AddAction("SelectAll")
+        .OnButton([&](Rndr::Trigger /*trigger*/, bool /*is_repeat*/)
+        {
+            callback_fired = true;
+        })
+        .Bind(Rndr::Key::A, Rndr::Trigger::Pressed, Rndr::Modifiers::Ctrl);
+
+    SECTION("Ctrl+A triggers callback")
+    {
+        input_system.OnButtonDown(g_fake_window, Rndr::InputPrimitive::LeftCtrl, false);
+        input_system.OnButtonDown(g_fake_window, Rndr::InputPrimitive::A, false);
+        input_system.ProcessSystemEvents(0.0f);
+
+        REQUIRE(callback_fired);
+    }
+
+    SECTION("A without Ctrl does not trigger callback")
+    {
+        input_system.OnButtonDown(g_fake_window, Rndr::InputPrimitive::A, false);
+        input_system.ProcessSystemEvents(0.0f);
+
+        REQUIRE_FALSE(callback_fired);
+    }
+
+    SECTION("RightCtrl+A also triggers callback")
+    {
+        input_system.OnButtonDown(g_fake_window, Rndr::InputPrimitive::RightCtrl, false);
+        input_system.OnButtonDown(g_fake_window, Rndr::InputPrimitive::A, false);
+        input_system.ProcessSystemEvents(0.0f);
+
+        REQUIRE(callback_fired);
+    }
+
+    SECTION("Generic Control primitive also sets Ctrl modifier")
+    {
+        input_system.OnButtonDown(g_fake_window, Rndr::InputPrimitive::Control, false);
+        input_system.OnButtonDown(g_fake_window, Rndr::InputPrimitive::A, false);
+        input_system.ProcessSystemEvents(0.0f);
+
+        REQUIRE(callback_fired);
+    }
+}
+
+TEST_CASE("Modifier key: Shift+Key binding", "[input]")
+{
+    Rndr::InputSystem input_system;
+    Rndr::InputContext& context = input_system.GetCurrentContext();
+
+    bool callback_fired = false;
+
+    context.AddAction("ShiftAction")
+        .OnButton([&](Rndr::Trigger /*trigger*/, bool /*is_repeat*/)
+        {
+            callback_fired = true;
+        })
+        .Bind(Rndr::Key::A, Rndr::Trigger::Pressed, Rndr::Modifiers::Shift);
+
+    SECTION("Shift+A triggers callback")
+    {
+        input_system.OnButtonDown(g_fake_window, Rndr::InputPrimitive::LeftShift, false);
+        input_system.OnButtonDown(g_fake_window, Rndr::InputPrimitive::A, false);
+        input_system.ProcessSystemEvents(0.0f);
+
+        REQUIRE(callback_fired);
+    }
+
+    SECTION("A without Shift does not trigger callback")
+    {
+        input_system.OnButtonDown(g_fake_window, Rndr::InputPrimitive::A, false);
+        input_system.ProcessSystemEvents(0.0f);
+
+        REQUIRE_FALSE(callback_fired);
+    }
+
+    SECTION("RightShift+A also triggers callback")
+    {
+        input_system.OnButtonDown(g_fake_window, Rndr::InputPrimitive::RightShift, false);
+        input_system.OnButtonDown(g_fake_window, Rndr::InputPrimitive::A, false);
+        input_system.ProcessSystemEvents(0.0f);
+
+        REQUIRE(callback_fired);
+    }
+}
+
+TEST_CASE("Modifier key: Alt+Key binding", "[input]")
+{
+    Rndr::InputSystem input_system;
+    Rndr::InputContext& context = input_system.GetCurrentContext();
+
+    bool callback_fired = false;
+
+    context.AddAction("AltAction")
+        .OnButton([&](Rndr::Trigger /*trigger*/, bool /*is_repeat*/)
+        {
+            callback_fired = true;
+        })
+        .Bind(Rndr::Key::A, Rndr::Trigger::Pressed, Rndr::Modifiers::Alt);
+
+    SECTION("Alt+A triggers callback")
+    {
+        input_system.OnButtonDown(g_fake_window, Rndr::InputPrimitive::LeftAlt, false);
+        input_system.OnButtonDown(g_fake_window, Rndr::InputPrimitive::A, false);
+        input_system.ProcessSystemEvents(0.0f);
+
+        REQUIRE(callback_fired);
+    }
+
+    SECTION("A without Alt does not trigger callback")
+    {
+        input_system.OnButtonDown(g_fake_window, Rndr::InputPrimitive::A, false);
+        input_system.ProcessSystemEvents(0.0f);
+
+        REQUIRE_FALSE(callback_fired);
+    }
+
+    SECTION("RightAlt+A also triggers callback")
+    {
+        input_system.OnButtonDown(g_fake_window, Rndr::InputPrimitive::RightAlt, false);
+        input_system.OnButtonDown(g_fake_window, Rndr::InputPrimitive::A, false);
+        input_system.ProcessSystemEvents(0.0f);
+
+        REQUIRE(callback_fired);
+    }
+}
+
+TEST_CASE("Combined modifiers: Ctrl+Shift+Key", "[input]")
+{
+    Rndr::InputSystem input_system;
+    Rndr::InputContext& context = input_system.GetCurrentContext();
+
+    bool callback_fired = false;
+
+    context.AddAction("CtrlShiftA")
+        .OnButton([&](Rndr::Trigger /*trigger*/, bool /*is_repeat*/)
+        {
+            callback_fired = true;
+        })
+        .Bind(Rndr::Key::A, Rndr::Trigger::Pressed, Rndr::Modifiers::Ctrl | Rndr::Modifiers::Shift);
+
+    SECTION("Ctrl+Shift+A triggers callback")
+    {
+        input_system.OnButtonDown(g_fake_window, Rndr::InputPrimitive::LeftCtrl, false);
+        input_system.OnButtonDown(g_fake_window, Rndr::InputPrimitive::LeftShift, false);
+        input_system.OnButtonDown(g_fake_window, Rndr::InputPrimitive::A, false);
+        input_system.ProcessSystemEvents(0.0f);
+
+        REQUIRE(callback_fired);
+    }
+
+    SECTION("Only Ctrl+A does not trigger Ctrl+Shift+A binding")
+    {
+        input_system.OnButtonDown(g_fake_window, Rndr::InputPrimitive::LeftCtrl, false);
+        input_system.OnButtonDown(g_fake_window, Rndr::InputPrimitive::A, false);
+        input_system.ProcessSystemEvents(0.0f);
+
+        REQUIRE_FALSE(callback_fired);
+    }
+
+    SECTION("Only Shift+A does not trigger Ctrl+Shift+A binding")
+    {
+        input_system.OnButtonDown(g_fake_window, Rndr::InputPrimitive::LeftShift, false);
+        input_system.OnButtonDown(g_fake_window, Rndr::InputPrimitive::A, false);
+        input_system.ProcessSystemEvents(0.0f);
+
+        REQUIRE_FALSE(callback_fired);
+    }
+
+    SECTION("A alone does not trigger Ctrl+Shift+A binding")
+    {
+        input_system.OnButtonDown(g_fake_window, Rndr::InputPrimitive::A, false);
+        input_system.ProcessSystemEvents(0.0f);
+
+        REQUIRE_FALSE(callback_fired);
+    }
+}
+
+TEST_CASE("No-modifier binding fires regardless of held modifiers", "[input]")
+{
+    Rndr::InputSystem input_system;
+    Rndr::InputContext& context = input_system.GetCurrentContext();
+
+    bool callback_fired = false;
+
+    context.AddAction("Jump")
+        .OnButton([&](Rndr::Trigger /*trigger*/, bool /*is_repeat*/)
+        {
+            callback_fired = true;
+        })
+        .Bind(Rndr::Key::Space, Rndr::Trigger::Pressed);
+
+    SECTION("Space fires without modifiers")
+    {
+        input_system.OnButtonDown(g_fake_window, Rndr::InputPrimitive::Space, false);
+        input_system.ProcessSystemEvents(0.0f);
+
+        REQUIRE(callback_fired);
+    }
+
+    SECTION("Space fires even with Ctrl held")
+    {
+        input_system.OnButtonDown(g_fake_window, Rndr::InputPrimitive::LeftCtrl, false);
+        input_system.OnButtonDown(g_fake_window, Rndr::InputPrimitive::Space, false);
+        input_system.ProcessSystemEvents(0.0f);
+
+        REQUIRE(callback_fired);
+    }
+
+    SECTION("Space fires even with Ctrl+Shift+Alt held")
+    {
+        input_system.OnButtonDown(g_fake_window, Rndr::InputPrimitive::LeftCtrl, false);
+        input_system.OnButtonDown(g_fake_window, Rndr::InputPrimitive::LeftShift, false);
+        input_system.OnButtonDown(g_fake_window, Rndr::InputPrimitive::LeftAlt, false);
+        input_system.OnButtonDown(g_fake_window, Rndr::InputPrimitive::Space, false);
+        input_system.ProcessSystemEvents(0.0f);
+
+        REQUIRE(callback_fired);
+    }
+}
+
+TEST_CASE("Releasing modifier clears modifier state", "[input]")
+{
+    Rndr::InputSystem input_system;
+    Rndr::InputContext& context = input_system.GetCurrentContext();
+
+    int callback_count = 0;
+
+    context.AddAction("CtrlA")
+        .OnButton([&](Rndr::Trigger /*trigger*/, bool /*is_repeat*/)
+        {
+            callback_count++;
+        })
+        .Bind(Rndr::Key::A, Rndr::Trigger::Pressed, Rndr::Modifiers::Ctrl);
+
+    SECTION("Ctrl down, Ctrl up, then A does not trigger")
+    {
+        input_system.OnButtonDown(g_fake_window, Rndr::InputPrimitive::LeftCtrl, false);
+        input_system.ProcessSystemEvents(0.0f);
+
+        input_system.OnButtonUp(g_fake_window, Rndr::InputPrimitive::LeftCtrl, false);
+        input_system.OnButtonDown(g_fake_window, Rndr::InputPrimitive::A, false);
+        input_system.ProcessSystemEvents(0.0f);
+
+        REQUIRE(callback_count == 0);
+    }
+
+    SECTION("Ctrl down, A fires, Ctrl up, A again does not fire")
+    {
+        input_system.OnButtonDown(g_fake_window, Rndr::InputPrimitive::LeftCtrl, false);
+        input_system.OnButtonDown(g_fake_window, Rndr::InputPrimitive::A, false);
+        input_system.ProcessSystemEvents(0.0f);
+
+        REQUIRE(callback_count == 1);
+
+        input_system.OnButtonUp(g_fake_window, Rndr::InputPrimitive::LeftCtrl, false);
+        input_system.OnButtonDown(g_fake_window, Rndr::InputPrimitive::A, false);
+        input_system.ProcessSystemEvents(0.0f);
+
+        REQUIRE(callback_count == 1);
+    }
+}
+
 TEST_CASE("Input system mouse button binding", "[input]")
 {
     Rndr::InputSystem input_system;
