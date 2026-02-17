@@ -1192,4 +1192,221 @@ TEST_CASE("Hold binding: unbound key does not affect hold", "[input]")
     REQUIRE(callback_count == 0);
 }
 
+TEST_CASE("Sequential combo: correct sequence triggers callback", "[input]")
+{
+    Rndr::InputSystem input_system;
+    Rndr::InputContext& context = input_system.GetCurrentContext();
+
+    int callback_count = 0;
+
+    Rndr::Key keys[] = {Rndr::Key::UpArrow, Rndr::Key::UpArrow, Rndr::Key::DownArrow};
+    context.AddAction("SecretCode")
+        .OnButton([&](Rndr::Trigger /*trigger*/, bool /*is_repeat*/)
+        {
+            callback_count++;
+        })
+        .BindCombo(keys, 0.5f);
+
+    input_system.OnButtonDown(g_fake_window, Rndr::InputPrimitive::UpArrow, false);
+    input_system.ProcessSystemEvents(0.1f);
+    input_system.OnButtonDown(g_fake_window, Rndr::InputPrimitive::UpArrow, false);
+    input_system.ProcessSystemEvents(0.1f);
+    input_system.OnButtonDown(g_fake_window, Rndr::InputPrimitive::DownArrow, false);
+    input_system.ProcessSystemEvents(0.1f);
+
+    REQUIRE(callback_count == 1);
+}
+
+TEST_CASE("Sequential combo: wrong key resets combo", "[input]")
+{
+    Rndr::InputSystem input_system;
+    Rndr::InputContext& context = input_system.GetCurrentContext();
+
+    int callback_count = 0;
+
+    Rndr::Key keys[] = {Rndr::Key::A, Rndr::Key::B, Rndr::Key::C};
+    context.AddAction("Combo")
+        .OnButton([&](Rndr::Trigger /*trigger*/, bool /*is_repeat*/)
+        {
+            callback_count++;
+        })
+        .BindCombo(keys, 0.5f);
+
+    // A, then wrong key X.
+    input_system.OnButtonDown(g_fake_window, Rndr::InputPrimitive::A, false);
+    input_system.ProcessSystemEvents(0.1f);
+    input_system.OnButtonDown(g_fake_window, Rndr::InputPrimitive::X, false);
+    input_system.ProcessSystemEvents(0.1f);
+
+    // Combo should be reset, so B,C won't complete it.
+    input_system.OnButtonDown(g_fake_window, Rndr::InputPrimitive::B, false);
+    input_system.ProcessSystemEvents(0.1f);
+    input_system.OnButtonDown(g_fake_window, Rndr::InputPrimitive::C, false);
+    input_system.ProcessSystemEvents(0.1f);
+
+    REQUIRE(callback_count == 0);
+}
+
+TEST_CASE("Sequential combo: can be triggered again after completion", "[input]")
+{
+    Rndr::InputSystem input_system;
+    Rndr::InputContext& context = input_system.GetCurrentContext();
+
+    int callback_count = 0;
+
+    Rndr::Key keys[] = {Rndr::Key::A, Rndr::Key::B};
+    context.AddAction("Combo")
+        .OnButton([&](Rndr::Trigger /*trigger*/, bool /*is_repeat*/)
+        {
+            callback_count++;
+        })
+        .BindCombo(keys, 0.5f);
+
+    // First completion.
+    input_system.OnButtonDown(g_fake_window, Rndr::InputPrimitive::A, false);
+    input_system.ProcessSystemEvents(0.1f);
+    input_system.OnButtonDown(g_fake_window, Rndr::InputPrimitive::B, false);
+    input_system.ProcessSystemEvents(0.1f);
+    REQUIRE(callback_count == 1);
+
+    // Second completion.
+    input_system.OnButtonDown(g_fake_window, Rndr::InputPrimitive::A, false);
+    input_system.ProcessSystemEvents(0.1f);
+    input_system.OnButtonDown(g_fake_window, Rndr::InputPrimitive::B, false);
+    input_system.ProcessSystemEvents(0.1f);
+    REQUIRE(callback_count == 2);
+}
+
+TEST_CASE("Sequential combo: times out between steps", "[input]")
+{
+    Rndr::InputSystem input_system;
+    Rndr::InputContext& context = input_system.GetCurrentContext();
+
+    int callback_count = 0;
+
+    Rndr::Key keys[] = {Rndr::Key::A, Rndr::Key::B};
+    context.AddAction("Combo")
+        .OnButton([&](Rndr::Trigger /*trigger*/, bool /*is_repeat*/)
+        {
+            callback_count++;
+        })
+        .BindCombo(keys, 0.3f);
+
+    // Press A.
+    input_system.OnButtonDown(g_fake_window, Rndr::InputPrimitive::A, false);
+    input_system.ProcessSystemEvents(0.0f);
+
+    // Wait longer than timeout.
+    input_system.ProcessSystemEvents(0.4f);
+
+    // Press B — combo should have been reset.
+    input_system.OnButtonDown(g_fake_window, Rndr::InputPrimitive::B, false);
+    input_system.ProcessSystemEvents(0.0f);
+
+    REQUIRE(callback_count == 0);
+}
+
+TEST_CASE("Sequential combo: 2-key combo works", "[input]")
+{
+    Rndr::InputSystem input_system;
+    Rndr::InputContext& context = input_system.GetCurrentContext();
+
+    int callback_count = 0;
+
+    Rndr::Key keys[] = {Rndr::Key::W, Rndr::Key::S};
+    context.AddAction("Combo2")
+        .OnButton([&](Rndr::Trigger /*trigger*/, bool /*is_repeat*/)
+        {
+            callback_count++;
+        })
+        .BindCombo(keys, 0.5f);
+
+    input_system.OnButtonDown(g_fake_window, Rndr::InputPrimitive::W, false);
+    input_system.ProcessSystemEvents(0.1f);
+    input_system.OnButtonDown(g_fake_window, Rndr::InputPrimitive::S, false);
+    input_system.ProcessSystemEvents(0.1f);
+
+    REQUIRE(callback_count == 1);
+}
+
+TEST_CASE("Sequential combo: partial combo does not fire", "[input]")
+{
+    Rndr::InputSystem input_system;
+    Rndr::InputContext& context = input_system.GetCurrentContext();
+
+    int callback_count = 0;
+
+    Rndr::Key keys[] = {Rndr::Key::A, Rndr::Key::B, Rndr::Key::C};
+    context.AddAction("Combo")
+        .OnButton([&](Rndr::Trigger /*trigger*/, bool /*is_repeat*/)
+        {
+            callback_count++;
+        })
+        .BindCombo(keys, 0.5f);
+
+    // Only press first 2 of 3.
+    input_system.OnButtonDown(g_fake_window, Rndr::InputPrimitive::A, false);
+    input_system.ProcessSystemEvents(0.1f);
+    input_system.OnButtonDown(g_fake_window, Rndr::InputPrimitive::B, false);
+    input_system.ProcessSystemEvents(0.1f);
+
+    REQUIRE(callback_count == 0);
+}
+
+TEST_CASE("Sequential combo: timer resets between each step", "[input]")
+{
+    Rndr::InputSystem input_system;
+    Rndr::InputContext& context = input_system.GetCurrentContext();
+
+    int callback_count = 0;
+
+    Rndr::Key keys[] = {Rndr::Key::A, Rndr::Key::B, Rndr::Key::C};
+    context.AddAction("Combo")
+        .OnButton([&](Rndr::Trigger /*trigger*/, bool /*is_repeat*/)
+        {
+            callback_count++;
+        })
+        .BindCombo(keys, 0.3f);
+
+    // Each step is within timeout, even though total time exceeds it.
+    input_system.OnButtonDown(g_fake_window, Rndr::InputPrimitive::A, false);
+    input_system.ProcessSystemEvents(0.2f);
+    input_system.OnButtonDown(g_fake_window, Rndr::InputPrimitive::B, false);
+    input_system.ProcessSystemEvents(0.2f);
+    input_system.OnButtonDown(g_fake_window, Rndr::InputPrimitive::C, false);
+    input_system.ProcessSystemEvents(0.0f);
+
+    REQUIRE(callback_count == 1);
+}
+
+TEST_CASE("Sequential combo: release events do not advance combo", "[input]")
+{
+    Rndr::InputSystem input_system;
+    Rndr::InputContext& context = input_system.GetCurrentContext();
+
+    int callback_count = 0;
+
+    Rndr::Key keys[] = {Rndr::Key::A, Rndr::Key::B};
+    context.AddAction("Combo")
+        .OnButton([&](Rndr::Trigger /*trigger*/, bool /*is_repeat*/)
+        {
+            callback_count++;
+        })
+        .BindCombo(keys, 0.5f);
+
+    // Press A, release A, release B (as if B was pressed), press B.
+    input_system.OnButtonDown(g_fake_window, Rndr::InputPrimitive::A, false);
+    input_system.ProcessSystemEvents(0.1f);
+
+    // Release events should not advance.
+    input_system.OnButtonUp(g_fake_window, Rndr::InputPrimitive::B, false);
+    input_system.ProcessSystemEvents(0.1f);
+    REQUIRE(callback_count == 0);
+
+    // Now actually press B to complete.
+    input_system.OnButtonDown(g_fake_window, Rndr::InputPrimitive::B, false);
+    input_system.ProcessSystemEvents(0.1f);
+    REQUIRE(callback_count == 1);
+}
+
 #endif  // RNDR_OLD_INPUT_SYSTEM
