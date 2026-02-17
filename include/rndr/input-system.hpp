@@ -280,6 +280,7 @@ private:
 #else  // !RNDR_OLD_INPUT_SYSTEM
 
 #include <functional>
+#include <variant>
 
 #include "opal/container/array-view.h"
 #include "opal/container/dynamic-array.h"
@@ -485,10 +486,9 @@ enum class Modifiers : u8
     Shift = 1 << 1,
     Alt = 1 << 2,
 };
+OPAL_ENUM_CLASS_FLAGS(Modifiers);
 
 }  // namespace Rndr
-
-OPAL_ENUM_CLASS_FLAGS(Rndr::Modifiers);
 
 namespace Rndr
 {
@@ -793,6 +793,13 @@ public:
      */
     bool PopContext();
 
+    /**
+     * Processes time-dependent input state such as hold timers and combo timeouts.
+     * Should be called once per frame.
+     * @param delta_seconds Time elapsed since the last frame.
+     */
+    void ProcessSystemEvents(f32 delta_seconds);
+
     // SystemMessageHandler overrides.
     bool OnWindowClose(GenericWindow&) override;
     void OnWindowSizeChanged(const GenericWindow&, i32, i32) override;
@@ -806,8 +813,62 @@ public:
     bool OnMouseMove(const GenericWindow& window, f32 delta_x, f32 delta_y) override;
 
 private:
+    struct KeyEvent
+    {
+        const GenericWindow* window;
+        Key key;
+        Trigger trigger;
+        bool is_repeated;
+    };
+
+    struct MouseButtonEvent
+    {
+        const GenericWindow* window;
+        MouseButton button;
+        Trigger trigger;
+        Vector2i cursor_position;
+    };
+
+    struct MouseMoveEvent
+    {
+        const GenericWindow* window;
+        f32 delta_x;
+        f32 delta_y;
+    };
+
+    struct MouseWheelEvent
+    {
+        const GenericWindow* window;
+        f32 delta_wheel;
+        Vector2i cursor_position;
+    };
+
+    struct CharacterEvent
+    {
+        const GenericWindow* window;
+        uchar32 character;
+    };
+
+    using InputEvent = std::variant<KeyEvent, MouseButtonEvent, MouseMoveEvent, MouseWheelEvent, CharacterEvent>;
+
+    void DispatchEvents();
+    void UpdateTimers(f32 delta_seconds);
+
+    bool DispatchKeyEvent(const KeyEvent& event, InputAction& action);
+    bool DispatchMouseButtonEvent(const MouseButtonEvent& event, InputAction& action);
+    bool DispatchMouseMoveEvent(const MouseMoveEvent& event, InputAction& action);
+    bool DispatchMouseWheelEvent(const MouseWheelEvent& event, InputAction& action);
+    bool DispatchCharacterEvent(const CharacterEvent& event, InputAction& action);
+
+    static Key InputPrimitiveToKey(InputPrimitive primitive);
+    static MouseButton InputPrimitiveToMouseButton(InputPrimitive primitive);
+    static bool IsKeyboardPrimitive(InputPrimitive primitive);
+    static bool IsMouseButtonPrimitive(InputPrimitive primitive);
+
     InputContext m_default_context;
     Opal::DynamicArray<Opal::Ref<InputContext>> m_contexts;
+    Opal::DynamicArray<InputEvent> m_event_queue;
+    Modifiers m_current_modifiers = Modifiers::None;
     f32 m_default_dead_zone = 0.2f;
 };
 

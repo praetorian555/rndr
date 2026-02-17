@@ -572,4 +572,528 @@ bool Rndr::InputSystem::IsMouseWheelAxis(Rndr::InputPrimitive primitive)
     return primitive == InputPrimitive::Mouse_AxisWheel;
 }
 
+#else  // !RNDR_OLD_INPUT_SYSTEM
+
+#include <utility>
+
+#include "opal/container/ref.h"
+
+#include "rndr/input-system.hpp"
+#include "rndr/log.hpp"
+
+// InputSystem ////////////////////////////////////////////////////////////////////////////////////
+
+Rndr::InputSystem::InputSystem()
+    : m_default_context(Opal::StringUtf8("Default"))
+{
+    m_contexts.PushBack(Opal::Ref<InputContext>(m_default_context));
+}
+
+Rndr::InputSystem::~InputSystem() = default;
+
+void Rndr::InputSystem::SetDefaultDeadZone(f32 dead_zone)
+{
+    m_default_dead_zone = dead_zone;
+}
+
+Rndr::f32 Rndr::InputSystem::GetDefaultDeadZone() const
+{
+    return m_default_dead_zone;
+}
+
+Rndr::InputContext& Rndr::InputSystem::GetCurrentContext()
+{
+    return m_contexts.Back().Get();
+}
+
+const Rndr::InputContext& Rndr::InputSystem::GetCurrentContext() const
+{
+    return m_contexts.Back().Get();
+}
+
+void Rndr::InputSystem::PushContext(InputContext& context)
+{
+    m_contexts.PushBack(Opal::Ref<InputContext>(context));
+}
+
+bool Rndr::InputSystem::PopContext()
+{
+    if (m_contexts.GetSize() <= 1)
+    {
+        RNDR_LOG_ERROR("Cannot pop default context");
+        return false;
+    }
+    m_contexts.PopBack();
+    return true;
+}
+
+void Rndr::InputSystem::ProcessSystemEvents(f32 delta_seconds)
+{
+    DispatchEvents();
+    UpdateTimers(delta_seconds);
+}
+
+// SystemMessageHandler overrides /////////////////////////////////////////////////////////////////
+
+bool Rndr::InputSystem::OnWindowClose(GenericWindow& /*window*/)
+{
+    return false;
+}
+
+void Rndr::InputSystem::OnWindowSizeChanged(const GenericWindow& /*window*/, i32 /*width*/, i32 /*height*/)
+{
+}
+
+bool Rndr::InputSystem::OnButtonDown(const GenericWindow& window, InputPrimitive key_code, bool is_repeated)
+{
+    if (!IsKeyboardPrimitive(key_code))
+    {
+        return false;
+    }
+    const Key key = InputPrimitiveToKey(key_code);
+
+    // Track modifier state.
+    if (key == Key::LeftCtrl || key == Key::RightCtrl || key == Key::Control)
+    {
+        m_current_modifiers |= Modifiers::Ctrl;
+    }
+    if (key == Key::LeftShift || key == Key::RightShift || key == Key::Shift)
+    {
+        m_current_modifiers |= Modifiers::Shift;
+    }
+    if (key == Key::LeftAlt || key == Key::RightAlt || key == Key::Alt)
+    {
+        m_current_modifiers |= Modifiers::Alt;
+    }
+
+    m_event_queue.PushBack(KeyEvent{
+        .window = &window,
+        .key = key,
+        .trigger = Trigger::Pressed,
+        .is_repeated = is_repeated,
+    });
+    return true;
+}
+
+bool Rndr::InputSystem::OnButtonUp(const GenericWindow& window, InputPrimitive key_code, bool is_repeated)
+{
+    if (!IsKeyboardPrimitive(key_code))
+    {
+        return false;
+    }
+    const Key key = InputPrimitiveToKey(key_code);
+
+    // Track modifier state.
+    if (key == Key::LeftCtrl || key == Key::RightCtrl || key == Key::Control)
+    {
+        m_current_modifiers &= ~Modifiers::Ctrl;
+    }
+    if (key == Key::LeftShift || key == Key::RightShift || key == Key::Shift)
+    {
+        m_current_modifiers &= ~Modifiers::Shift;
+    }
+    if (key == Key::LeftAlt || key == Key::RightAlt || key == Key::Alt)
+    {
+        m_current_modifiers &= ~Modifiers::Alt;
+    }
+
+    m_event_queue.PushBack(KeyEvent{
+        .window = &window,
+        .key = key,
+        .trigger = Trigger::Released,
+        .is_repeated = is_repeated,
+    });
+    return true;
+}
+
+bool Rndr::InputSystem::OnCharacter(const GenericWindow& window, uchar32 character, bool /*is_repeated*/)
+{
+    m_event_queue.PushBack(CharacterEvent{
+        .window = &window,
+        .character = character,
+    });
+    return true;
+}
+
+bool Rndr::InputSystem::OnMouseButtonDown(const GenericWindow& window, InputPrimitive primitive, const Vector2i& cursor_position)
+{
+    if (!IsMouseButtonPrimitive(primitive))
+    {
+        return false;
+    }
+    m_event_queue.PushBack(MouseButtonEvent{
+        .window = &window,
+        .button = InputPrimitiveToMouseButton(primitive),
+        .trigger = Trigger::Pressed,
+        .cursor_position = cursor_position,
+    });
+    return true;
+}
+
+bool Rndr::InputSystem::OnMouseButtonUp(const GenericWindow& window, InputPrimitive primitive, const Vector2i& cursor_position)
+{
+    if (!IsMouseButtonPrimitive(primitive))
+    {
+        return false;
+    }
+    m_event_queue.PushBack(MouseButtonEvent{
+        .window = &window,
+        .button = InputPrimitiveToMouseButton(primitive),
+        .trigger = Trigger::Released,
+        .cursor_position = cursor_position,
+    });
+    return true;
+}
+
+bool Rndr::InputSystem::OnMouseDoubleClick(const GenericWindow& window, InputPrimitive primitive, const Vector2i& cursor_position)
+{
+    // Treat double click as a press event. Actions that care about double-click can be added later.
+    return OnMouseButtonDown(window, primitive, cursor_position);
+}
+
+bool Rndr::InputSystem::OnMouseWheel(const GenericWindow& window, f32 wheel_delta, const Vector2i& cursor_position)
+{
+    m_event_queue.PushBack(MouseWheelEvent{
+        .window = &window,
+        .delta_wheel = wheel_delta,
+        .cursor_position = cursor_position,
+    });
+    return true;
+}
+
+bool Rndr::InputSystem::OnMouseMove(const GenericWindow& window, f32 delta_x, f32 delta_y)
+{
+    m_event_queue.PushBack(MouseMoveEvent{
+        .window = &window,
+        .delta_x = delta_x,
+        .delta_y = delta_y,
+    });
+    return true;
+}
+
+// Event dispatching //////////////////////////////////////////////////////////////////////////////
+
+void Rndr::InputSystem::DispatchEvents()
+{
+    for (const InputEvent& event : m_event_queue)
+    {
+        // Walk contexts from top to bottom.
+        for (auto it = m_contexts.end() - 1; it >= m_contexts.begin(); --it)
+        {
+            InputContext& context = it->Get();
+            if (!context.IsEnabled())
+            {
+                continue;
+            }
+
+            bool consumed = false;
+
+            for (InputAction& action : context.m_actions)
+            {
+                if (std::holds_alternative<KeyEvent>(event))
+                {
+                    consumed = DispatchKeyEvent(std::get<KeyEvent>(event), action);
+                }
+                else if (std::holds_alternative<MouseButtonEvent>(event))
+                {
+                    consumed = DispatchMouseButtonEvent(std::get<MouseButtonEvent>(event), action);
+                }
+                else if (std::holds_alternative<MouseMoveEvent>(event))
+                {
+                    consumed = DispatchMouseMoveEvent(std::get<MouseMoveEvent>(event), action);
+                }
+                else if (std::holds_alternative<MouseWheelEvent>(event))
+                {
+                    consumed = DispatchMouseWheelEvent(std::get<MouseWheelEvent>(event), action);
+                }
+                else if (std::holds_alternative<CharacterEvent>(event))
+                {
+                    consumed = DispatchCharacterEvent(std::get<CharacterEvent>(event), action);
+                }
+
+                if (consumed)
+                {
+                    break;
+                }
+            }
+
+            if (consumed)
+            {
+                break;
+            }
+        }
+    }
+    m_event_queue.Clear();
+}
+
+void Rndr::InputSystem::UpdateTimers(f32 delta_seconds)
+{
+    // Walk contexts from top to bottom.
+    for (auto it = m_contexts.end() - 1; it >= m_contexts.begin(); --it)
+    {
+        InputContext& context = it->Get();
+        if (!context.IsEnabled())
+        {
+            continue;
+        }
+
+        for (InputAction& action : context.m_actions)
+        {
+            for (InputAction::Binding& binding : action.m_bindings)
+            {
+
+                if (binding.type == InputAction::BindingType::Hold)
+                {
+                    InputAction::HoldBinding& hold = binding.hold;
+                    if (hold.is_held && !hold.has_fired)
+                    {
+                        hold.elapsed_seconds += delta_seconds;
+                        if (hold.elapsed_seconds >= hold.duration_seconds)
+                        {
+                            hold.has_fired = true;
+                            if (action.m_callback_type == InputAction::CallbackType::Button && action.m_button_callback)
+                            {
+                                action.m_button_callback(Trigger::Pressed, false);
+                            }
+                        }
+                    }
+                }
+                else if (binding.type == InputAction::BindingType::Combo)
+                {
+                    InputAction::ComboBinding& combo = binding.combo;
+                    if (combo.current_step > 0 && combo.timeout_seconds > 0.0f)
+                    {
+                        combo.elapsed_since_last_step += delta_seconds;
+                        if (combo.elapsed_since_last_step > combo.timeout_seconds)
+                        {
+                            // Combo timed out, reset.
+                            combo.current_step = 0;
+                            combo.elapsed_since_last_step = 0.0f;
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+// Per-event-type dispatch helpers /////////////////////////////////////////////////////////////////
+
+bool Rndr::InputSystem::DispatchKeyEvent(const KeyEvent& event, InputAction& action)
+{
+    if (action.m_window != nullptr && action.m_window != event.window)
+    {
+        return false;
+    }
+
+    for (InputAction::Binding& binding : action.m_bindings)
+    {
+
+        if (binding.type == InputAction::BindingType::Key)
+        {
+            const InputAction::KeyBinding& kb = binding.key;
+            if (kb.key == event.key && kb.trigger == event.trigger && kb.modifiers == (m_current_modifiers & kb.modifiers))
+            {
+                if (action.m_callback_type == InputAction::CallbackType::Button && action.m_button_callback)
+                {
+                    action.m_button_callback(event.trigger, event.is_repeated);
+                    return true;
+                }
+            }
+        }
+        else if (binding.type == InputAction::BindingType::Hold)
+        {
+            InputAction::HoldBinding& hold = binding.hold;
+            if (hold.key == event.key)
+            {
+                if (event.trigger == Trigger::Pressed && !hold.is_held)
+                {
+                    hold.is_held = true;
+                    hold.elapsed_seconds = 0.0f;
+                    hold.has_fired = false;
+                }
+                else if (event.trigger == Trigger::Released)
+                {
+                    hold.is_held = false;
+                    hold.elapsed_seconds = 0.0f;
+                    hold.has_fired = false;
+                }
+            }
+        }
+        else if (binding.type == InputAction::BindingType::Combo)
+        {
+            InputAction::ComboBinding& combo = binding.combo;
+            if (event.trigger == Trigger::Pressed && combo.keys.GetSize() > 0)
+            {
+                const i32 step = combo.current_step;
+                if (combo.keys[step] == event.key)
+                {
+                    combo.current_step++;
+                    combo.elapsed_since_last_step = 0.0f;
+
+                    if (combo.current_step >= static_cast<i32>(combo.keys.GetSize()))
+                    {
+                        // Combo completed.
+                        combo.current_step = 0;
+                        combo.elapsed_since_last_step = 0.0f;
+                        if (action.m_callback_type == InputAction::CallbackType::Button && action.m_button_callback)
+                        {
+                            action.m_button_callback(Trigger::Pressed, false);
+                            return true;
+                        }
+                    }
+                }
+                else
+                {
+                    // Wrong key, reset combo.
+                    combo.current_step = 0;
+                    combo.elapsed_since_last_step = 0.0f;
+                }
+            }
+        }
+    }
+    return false;
+}
+
+bool Rndr::InputSystem::DispatchMouseButtonEvent(const MouseButtonEvent& event, InputAction& action)
+{
+    if (action.m_window != nullptr && action.m_window != event.window)
+    {
+        return false;
+    }
+
+    for (const InputAction::Binding& binding : action.m_bindings)
+    {
+        if (binding.type == InputAction::BindingType::MouseButton)
+        {
+            const InputAction::MouseButtonBinding& mb = binding.mouse_button;
+            if (mb.button == event.button && mb.trigger == event.trigger)
+            {
+                if (action.m_callback_type == InputAction::CallbackType::MouseButton && action.m_mouse_button_callback)
+                {
+                    action.m_mouse_button_callback(event.button, event.trigger, event.cursor_position);
+                    return true;
+                }
+            }
+        }
+    }
+    return false;
+}
+
+bool Rndr::InputSystem::DispatchMouseMoveEvent(const MouseMoveEvent& event, InputAction& action)
+{
+    if (action.m_window != nullptr && action.m_window != event.window)
+    {
+        return false;
+    }
+
+    bool consumed = false;
+
+    for (const InputAction::Binding& binding : action.m_bindings)
+    {
+        if (binding.type == InputAction::BindingType::MouseAxis)
+        {
+            if (action.m_callback_type == InputAction::CallbackType::MousePosition && action.m_mouse_position_callback)
+            {
+                if (binding.mouse_axis.axis == MouseAxis::X && event.delta_x != 0.0f)
+                {
+                    action.m_mouse_position_callback(MouseAxis::X, event.delta_x);
+                    consumed = true;
+                }
+                else if (binding.mouse_axis.axis == MouseAxis::Y && event.delta_y != 0.0f)
+                {
+                    action.m_mouse_position_callback(MouseAxis::Y, event.delta_y);
+                    consumed = true;
+                }
+            }
+        }
+    }
+    return consumed;
+}
+
+bool Rndr::InputSystem::DispatchMouseWheelEvent(const MouseWheelEvent& event, InputAction& action)
+{
+    if (action.m_window != nullptr && action.m_window != event.window)
+    {
+        return false;
+    }
+
+    for (const InputAction::Binding& binding : action.m_bindings)
+    {
+        if (binding.type == InputAction::BindingType::MouseAxis)
+        {
+            if (binding.mouse_axis.axis == MouseAxis::WheelY)
+            {
+                if (action.m_callback_type == InputAction::CallbackType::MouseWheel && action.m_mouse_wheel_callback)
+                {
+                    action.m_mouse_wheel_callback(0.0f, event.delta_wheel);
+                    return true;
+                }
+            }
+        }
+    }
+    return false;
+}
+
+bool Rndr::InputSystem::DispatchCharacterEvent(const CharacterEvent& event, InputAction& action)
+{
+    if (action.m_window != nullptr && action.m_window != event.window)
+    {
+        return false;
+    }
+
+    for (const InputAction::Binding& binding : action.m_bindings)
+    {
+        if (binding.type == InputAction::BindingType::Text)
+        {
+            if (action.m_callback_type == InputAction::CallbackType::Text && action.m_text_callback)
+            {
+                action.m_text_callback(event.character);
+                return true;
+            }
+        }
+    }
+    return false;
+}
+
+// Conversion helpers /////////////////////////////////////////////////////////////////////////////
+
+Rndr::Key Rndr::InputSystem::InputPrimitiveToKey(InputPrimitive primitive)
+{
+    return static_cast<Key>(static_cast<u16>(primitive));
+}
+
+Rndr::MouseButton Rndr::InputSystem::InputPrimitiveToMouseButton(InputPrimitive primitive)
+{
+    switch (primitive)
+    {
+        case InputPrimitive::Mouse_LeftButton:
+            return MouseButton::Left;
+        case InputPrimitive::Mouse_RightButton:
+            return MouseButton::Right;
+        case InputPrimitive::Mouse_MiddleButton:
+            return MouseButton::Middle;
+        case InputPrimitive::Mouse_XButton1:
+            return MouseButton::X1;
+        case InputPrimitive::Mouse_XButton2:
+            return MouseButton::X2;
+        default:
+            RNDR_ASSERT(false, "Invalid mouse button primitive");
+            return MouseButton::Left;
+    }
+}
+
+bool Rndr::InputSystem::IsKeyboardPrimitive(InputPrimitive primitive)
+{
+    const auto value = static_cast<u16>(primitive);
+    return value >= static_cast<u16>(InputPrimitive::Backspace) && value <= static_cast<u16>(InputPrimitive::Apostrophe);
+}
+
+bool Rndr::InputSystem::IsMouseButtonPrimitive(InputPrimitive primitive)
+{
+    return primitive == InputPrimitive::Mouse_LeftButton || primitive == InputPrimitive::Mouse_RightButton ||
+           primitive == InputPrimitive::Mouse_MiddleButton || primitive == InputPrimitive::Mouse_XButton1 ||
+           primitive == InputPrimitive::Mouse_XButton2;
+}
+
 #endif  // RNDR_OLD_INPUT_SYSTEM
