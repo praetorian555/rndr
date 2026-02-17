@@ -915,6 +915,14 @@ Rndr::InputActionBuilder& Rndr::InputActionBuilder::BindCombo(Opal::ArrayView<Ke
     return *this;
 }
 
+Rndr::InputActionBuilder& Rndr::InputActionBuilder::BindText()
+{
+    InputAction::Binding binding;
+    binding.type = InputAction::BindingType::Text;
+    m_action->m_bindings.PushBack(std::move(binding));
+    return *this;
+}
+
 Rndr::InputActionBuilder& Rndr::InputActionBuilder::ForWindow(const GenericWindow* window)
 {
     m_action->m_window = window;

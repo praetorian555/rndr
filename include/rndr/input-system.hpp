@@ -688,6 +688,9 @@ public:
     // Combo binding. If timeout_seconds > 0, sequential combo. If timeout_seconds == 0, simultaneous chord.
     InputActionBuilder& BindCombo(Opal::ArrayView<Key> keys, f32 timeout_seconds);
 
+    // Text binding. Receives character events.
+    InputActionBuilder& BindText();
+
     // Set the window filter for this action.
     InputActionBuilder& ForWindow(const GenericWindow* window);
 

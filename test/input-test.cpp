@@ -839,4 +839,115 @@ TEST_CASE("Input system mouse wheel binding", "[input]")
     }
 }
 
+TEST_CASE("Text input: character event triggers text callback", "[input]")
+{
+    Rndr::InputSystem input_system;
+    Rndr::InputContext& context = input_system.GetCurrentContext();
+
+    Rndr::uchar32 received_char = 0;
+    bool callback_fired = false;
+
+    context.AddAction("TextInput")
+        .OnText([&](Rndr::uchar32 character)
+        {
+            callback_fired = true;
+            received_char = character;
+        })
+        .BindText();
+
+    SECTION("Single character fires callback")
+    {
+        input_system.OnCharacter(g_fake_window, U'A', false);
+        input_system.ProcessSystemEvents(0.0f);
+
+        REQUIRE(callback_fired);
+        REQUIRE(received_char == U'A');
+    }
+
+    SECTION("Unicode character fires callback")
+    {
+        input_system.OnCharacter(g_fake_window, U'\u00E9', false);  // é
+        input_system.ProcessSystemEvents(0.0f);
+
+        REQUIRE(callback_fired);
+        REQUIRE(received_char == U'\u00E9');
+    }
+}
+
+TEST_CASE("Text input: multiple characters each fire callback", "[input]")
+{
+    Rndr::InputSystem input_system;
+    Rndr::InputContext& context = input_system.GetCurrentContext();
+
+    Opal::DynamicArray<Rndr::uchar32> received_chars;
+
+    context.AddAction("TextInput")
+        .OnText([&](Rndr::uchar32 character)
+        {
+            received_chars.PushBack(character);
+        })
+        .BindText();
+
+    input_system.OnCharacter(g_fake_window, U'H', false);
+    input_system.OnCharacter(g_fake_window, U'i', false);
+    input_system.OnCharacter(g_fake_window, U'!', false);
+    input_system.ProcessSystemEvents(0.0f);
+
+    REQUIRE(received_chars.GetSize() == 3);
+    REQUIRE(received_chars[0] == U'H');
+    REQUIRE(received_chars[1] == U'i');
+    REQUIRE(received_chars[2] == U'!');
+}
+
+TEST_CASE("Text input: text binding does not fire on key events", "[input]")
+{
+    Rndr::InputSystem input_system;
+    Rndr::InputContext& context = input_system.GetCurrentContext();
+
+    bool text_callback_fired = false;
+
+    context.AddAction("TextInput")
+        .OnText([&](Rndr::uchar32 /*character*/)
+        {
+            text_callback_fired = true;
+        })
+        .BindText();
+
+    SECTION("Key down does not fire text callback")
+    {
+        input_system.OnButtonDown(g_fake_window, Rndr::InputPrimitive::A, false);
+        input_system.ProcessSystemEvents(0.0f);
+
+        REQUIRE_FALSE(text_callback_fired);
+    }
+
+    SECTION("Key up does not fire text callback")
+    {
+        input_system.OnButtonUp(g_fake_window, Rndr::InputPrimitive::A, false);
+        input_system.ProcessSystemEvents(0.0f);
+
+        REQUIRE_FALSE(text_callback_fired);
+    }
+}
+
+TEST_CASE("Text input: key binding does not fire on character events", "[input]")
+{
+    Rndr::InputSystem input_system;
+    Rndr::InputContext& context = input_system.GetCurrentContext();
+
+    bool button_callback_fired = false;
+
+    context.AddAction("PressA")
+        .OnButton([&](Rndr::Trigger /*trigger*/, bool /*is_repeat*/)
+        {
+            button_callback_fired = true;
+        })
+        .Bind(Rndr::Key::A, Rndr::Trigger::Pressed);
+
+    input_system.OnCharacter(g_fake_window, U'A', false);
+    input_system.ProcessSystemEvents(0.0f);
+
+    REQUIRE_FALSE(button_callback_fired);
+}
+
 #endif  // RNDR_OLD_INPUT_SYSTEM
