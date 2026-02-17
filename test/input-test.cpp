@@ -1,10 +1,3 @@
-#if RNDR_OLD_INPUT_SYSTEM
-
-// Old input system tests are disabled since the old tests were already commented out.
-// This file is reserved for new input system tests.
-
-#else
-
 #include <catch2/catch2.hpp>
 
 #include "opal/exceptions.h"
@@ -2334,5 +2327,3 @@ TEST_CASE("Edge case: multiple event types in same frame", "[input]")
     REQUIRE(wheel_fired);
     REQUIRE(text_fired);
 }
-
-#endif  // RNDR_OLD_INPUT_SYSTEM

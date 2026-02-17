@@ -51,27 +51,11 @@ Rndr::Application::Application(const ApplicationDesc& desc)
 #error "Platform not supported!"
 #endif
 
-#if RNDR_OLD_INPUT_SYSTEM
-    m_input_system = InputSystem::Get();
-    if (desc.enable_input_system && !m_input_system->Init())
-    {
-        RNDR_LOG_ERROR("Failed to initialize the input system!");
-        return;
-    }
-#else
     m_input_system = Opal::ScopePtr<InputSystem>(Opal::GetDefaultAllocator());
-#endif
 }
 
 Rndr::Application::~Application()
 {
-#if RNDR_OLD_INPUT_SYSTEM
-    if (m_desc.enable_input_system)
-    {
-        InputSystem& input_system = InputSystem::GetChecked();
-        input_system.Destroy();
-    }
-#endif
     if (m_platform_application.IsValid())
     {
         Opal::Delete(m_allocator, m_platform_application.GetPtr());
@@ -106,11 +90,7 @@ void Rndr::Application::ProcessSystemEvents(f32 delta_seconds)
     m_platform_application->ProcessSystemEvents();
     if (m_desc.enable_input_system)
     {
-#if RNDR_OLD_INPUT_SYSTEM
-        m_input_system->ProcessEvents(delta_seconds);
-#else
         m_input_system->ProcessSystemEvents(delta_seconds);
-#endif
     }
 }
 

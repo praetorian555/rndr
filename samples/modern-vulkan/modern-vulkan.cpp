@@ -177,20 +177,12 @@ void Run()
     f32 window_width = window_size.x;
     f32 window_height = window_size.y;
 
-#if RNDR_OLD_INPUT_SYSTEM
-    rndr_app->GetInputSystemChecked().GetCurrentContext().AddAction(
-    "Exit",
-    {Rndr::InputBinding::CreateKeyboardButtonBinding(Rndr::InputPrimitive::Escape, Rndr::InputTrigger::ButtonPressed,
-                                                     [window](Rndr::InputPrimitive, Rndr::InputTrigger, Rndr::f32, bool)
-                                                     { window->ForceClose(); })});
-#else
     rndr_app->GetInputSystemChecked().GetCurrentContext().AddAction("Exit")
     .Bind(Rndr::Key::Escape, Rndr::Trigger::Pressed)
     .OnButton([window](Rndr::Trigger, bool)
     {
         window->ForceClose();
     });
-#endif
     const Rndr::FlyCameraDesc fly_camera_desc{.start_position = {0.0f, 1.0f, 10.0f},
                                               .start_yaw_radians = 0,
                                               .projection_desc = {.near = 0.1f, .far = 32.0f, .complexity = Rndr::ApiComplexity::Advanced}};

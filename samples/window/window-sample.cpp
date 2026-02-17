@@ -84,21 +84,6 @@ int main()
             }
         });
 
-#if RNDR_OLD_INPUT_SYSTEM
-    app->GetInputSystemChecked().GetCurrentContext().AddAction(
-        "Switch display mode",
-        {Rndr::InputBinding::CreateKeyboardButtonBinding(Rndr::InputPrimitive::F2, Rndr::InputTrigger::ButtonPressed,
-                                                         [window](Rndr::InputPrimitive, Rndr::InputTrigger, Rndr::f32, bool is_repeated)
-                                                         {
-                                                             if (!is_repeated)
-                                                             {
-                                                                 const Rndr::GenericWindowMode current_mode = window->GetMode();
-                                                                 window->SetMode(current_mode == Rndr::GenericWindowMode::Windowed
-                                                                                     ? Rndr::GenericWindowMode::BorderlessFullscreen
-                                                                                     : Rndr::GenericWindowMode::Windowed);
-                                                             }
-                                                         })});
-#else
     app->GetInputSystemChecked().GetCurrentContext().AddAction("Switch display mode")
     .Bind(Rndr::Key::F2, Rndr::Trigger::Pressed)
     .OnButton([window](Rndr::Trigger, bool is_repeated)
@@ -111,7 +96,6 @@ int main()
                                 : Rndr::GenericWindowMode::Windowed);
         }
     });
-#endif
 
     Rndr::ImGuiContext imgui_context(*window, gc);
     app->RegisterSystemMessageHandler(&imgui_context);
@@ -145,29 +129,6 @@ int main()
             }
         });
 
-#if RNDR_OLD_INPUT_SYSTEM
-    app->GetInputSystemChecked().GetInputContexts()[0]->AddAction(
-        "Toggle movement controls", {Rndr::InputBinding::CreateKeyboardButtonBinding(
-                                        Rndr::InputPrimitive::F1, Rndr::InputTrigger::ButtonPressed,
-                                        [&app, &controller](Rndr::InputPrimitive, Rndr::InputTrigger, Rndr::f32, bool is_repeated)
-                                        {
-                                            if (!is_repeated)
-                                            {
-                                                const Rndr::CursorPositionMode mode = app->GetCursorPositionMode();
-                                                if (mode == Rndr::CursorPositionMode::Normal)
-                                                {
-                                                    app->ShowCursor(false);
-                                                    app->SetCursorPositionMode(Rndr::CursorPositionMode::ResetToCenter);
-                                                }
-                                                else
-                                                {
-                                                    app->ShowCursor(true);
-                                                    app->SetCursorPositionMode(Rndr::CursorPositionMode::Normal);
-                                                }
-                                                controller.Enable(!controller.IsEnabled());
-                                            }
-                                        })});
-#else
     app->GetInputSystemChecked().GetContextByName("Default").AddAction("Toggle movement controls")
     .Bind(Rndr::Key::F1, Rndr::Trigger::Pressed)
     .OnButton([&app, &controller](Rndr::Trigger, bool is_repeated)
@@ -194,7 +155,6 @@ int main()
     {
         window->ForceClose();
     });
-#endif
 
     Rndr::CommandList present_cmd_list{gc};
     present_cmd_list.CmdPresent(swap_chain);

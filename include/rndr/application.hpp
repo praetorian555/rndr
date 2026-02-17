@@ -95,11 +95,7 @@ private:
     Opal::Ref<PlatformApplication> m_platform_application;
     struct Logger* m_logger = nullptr;
     Opal::AllocatorBase* m_allocator = nullptr;
-#if RNDR_OLD_INPUT_SYSTEM
-    InputSystem* m_input_system = nullptr;
-#else
     Opal::ScopePtr<InputSystem> m_input_system;
-#endif
     Opal::Ref<ImGuiContext> m_imgui_system;
     Opal::DynamicArray<Opal::Ref<SystemMessageHandler>> m_system_message_handlers;
 };

@@ -2,8 +2,6 @@
 
 The input system handles keyboard, mouse, gamepad, and text input through a stack-based context model. It is defined in `include/rndr/input-system.hpp` and implemented in `src/input-system.cpp`.
 
-To use the new input system, build with `RNDR_OLD_INPUT_SYSTEM=OFF`.
-
 ## Core Concepts
 
 ### InputSystem
@@ -284,15 +282,6 @@ context.AddAction("MoveX")
    - Within a context, actions are checked in order. The first matching action consumes the event.
    - Hold timers are advanced by `delta_seconds`. If a hold reaches its threshold, its callback fires.
    - Combo timeouts are checked. If a combo step times out, the combo resets.
-
-## Compile-Time Switch
-
-The old and new input systems coexist via the `RNDR_OLD_INPUT_SYSTEM` CMake option:
-
-- `RNDR_OLD_INPUT_SYSTEM=ON` (default): Uses the legacy input system with global singletons and union-based callbacks.
-- `RNDR_OLD_INPUT_SYSTEM=OFF`: Uses the new input system described in this document.
-
-Both systems are in the same source files, separated by `#if RNDR_OLD_INPUT_SYSTEM` / `#else` preprocessor blocks.
 
 ## Limitations
 

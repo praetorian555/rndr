@@ -142,9 +142,6 @@ target_include_directories(rndr PRIVATE ${VULKAN_SDK_PATH}/Source/SPIRV-Reflect)
 
 # Setup graphics API to use
 target_compile_definitions(rndr PUBLIC RNDR_OPENGL)
-if (RNDR_OLD_INPUT_SYSTEM)
-    target_compile_definitions(rndr PUBLIC RNDR_OLD_INPUT_SYSTEM)
-endif ()
 
 # Setup library dependencies
 target_link_libraries(rndr PUBLIC opengl32.lib User32.lib)
