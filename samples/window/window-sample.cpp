@@ -98,6 +98,19 @@ int main()
                                                                                      : Rndr::GenericWindowMode::Windowed);
                                                              }
                                                          })});
+#else
+    app->GetInputSystemChecked().GetCurrentContext().AddAction("Switch display mode")
+    .Bind(Rndr::Key::F2, Rndr::Trigger::Pressed)
+    .OnButton([window](Rndr::Trigger, bool is_repeated)
+    {
+        if (!is_repeated)
+        {
+            const Rndr::GenericWindowMode current_mode = window->GetMode();
+            window->SetMode(current_mode == Rndr::GenericWindowMode::Windowed
+                                ? Rndr::GenericWindowMode::BorderlessFullscreen
+                                : Rndr::GenericWindowMode::Windowed);
+        }
+    });
 #endif
 
     Rndr::ImGuiContext imgui_context(*window, gc);
@@ -120,10 +133,9 @@ int main()
     material_registry.Register("Default Material", {.albedo_texture_path = albedo_texture_path});
     material_registry.Register("Helmet Material", helmet_material_desc);
 
-#if RNDR_OLD_INPUT_SYSTEM
     const Rndr::FlyCameraDesc fly_camera_desc{.start_position = {0.0f, 1.0f, 0.0f}, .start_yaw_radians = 0};
     ExampleController controller(*app, window_width, window_height, fly_camera_desc, 10.0f, 0.005f, 0.005f);
-
+    controller.Enable(false);
     app->on_window_resize.Bind(
         [&controller, window](const Rndr::GenericWindow& w, Rndr::i32 width, Rndr::i32 height)
         {
@@ -133,6 +145,7 @@ int main()
             }
         });
 
+#if RNDR_OLD_INPUT_SYSTEM
     app->GetInputSystemChecked().GetInputContexts()[0]->AddAction(
         "Toggle movement controls", {Rndr::InputBinding::CreateKeyboardButtonBinding(
                                         Rndr::InputPrimitive::F1, Rndr::InputTrigger::ButtonPressed,
@@ -154,6 +167,33 @@ int main()
                                                 controller.Enable(!controller.IsEnabled());
                                             }
                                         })});
+#else
+    app->GetInputSystemChecked().GetContextByName("Default").AddAction("Toggle movement controls")
+    .Bind(Rndr::Key::F1, Rndr::Trigger::Pressed)
+    .OnButton([&app, &controller](Rndr::Trigger, bool is_repeated)
+    {
+        if (!is_repeated)
+        {
+            const Rndr::CursorPositionMode mode = app->GetCursorPositionMode();
+            if (mode == Rndr::CursorPositionMode::Normal)
+            {
+                app->ShowCursor(false);
+                app->SetCursorPositionMode(Rndr::CursorPositionMode::ResetToCenter);
+            }
+            else
+            {
+                app->ShowCursor(true);
+                app->SetCursorPositionMode(Rndr::CursorPositionMode::Normal);
+            }
+            controller.Enable(!controller.IsEnabled());
+        }
+    });
+    app->GetInputSystemChecked().GetContextByName("Default").AddAction("Exit")
+    .Bind(Rndr::Key::Escape, Rndr::Trigger::Pressed)
+    .OnButton([window](Rndr::Trigger, bool)
+    {
+        window->ForceClose();
+    });
 #endif
 
     Rndr::CommandList present_cmd_list{gc};
@@ -171,10 +211,7 @@ int main()
         fps_counter.Update(delta_seconds);
 
         app->ProcessSystemEvents(delta_seconds);
-
-#if RNDR_OLD_INPUT_SYSTEM
         controller.Tick(delta_seconds);
-#endif
 
         if (selected_resolution_index != resolution_index)
         {
@@ -195,16 +232,12 @@ int main()
         cmd_list.CmdBindFrameBuffer(final_render);
         cmd_list.CmdClearAll(Rndr::Colors::k_black);
 
-#if RNDR_OLD_INPUT_SYSTEM
         grid_renderer.SetTransforms(controller.GetViewTransform(), controller.GetProjectionTransform());
-#endif
         grid_renderer.Render(delta_seconds, cmd_list);
 
         DrawScene(shape_renderer, helmet_mesh, material_registry);
-#if RNDR_OLD_INPUT_SYSTEM
         shape_renderer.SetTransforms(controller.GetViewTransform(), controller.GetProjectionTransform());
         shape_renderer.SetCameraPosition(controller.GetCameraPosition());
-#endif
         shape_renderer.Render(delta_seconds, cmd_list);
 
         const Rndr::BlitFrameBufferDesc blit_desc;

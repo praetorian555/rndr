@@ -183,13 +183,19 @@ void Run()
     {Rndr::InputBinding::CreateKeyboardButtonBinding(Rndr::InputPrimitive::Escape, Rndr::InputTrigger::ButtonPressed,
                                                      [window](Rndr::InputPrimitive, Rndr::InputTrigger, Rndr::f32, bool)
                                                      { window->ForceClose(); })});
-
+#else
+    rndr_app->GetInputSystemChecked().GetCurrentContext().AddAction("Exit")
+    .Bind(Rndr::Key::Escape, Rndr::Trigger::Pressed)
+    .OnButton([window](Rndr::Trigger, bool)
+    {
+        window->ForceClose();
+    });
+#endif
     const Rndr::FlyCameraDesc fly_camera_desc{.start_position = {0.0f, 1.0f, 10.0f},
                                               .start_yaw_radians = 0,
                                               .projection_desc = {.near = 0.1f, .far = 32.0f, .complexity = Rndr::ApiComplexity::Advanced}};
     ExampleController controller(*rndr_app, window_width, window_height, fly_camera_desc, 10.0f, 0.005f, 0.005f);
     controller.Enable(true);
-#endif
 
     Rndr::f32 delta_seconds = 0.016;
     Rndr::u32 frame_index = 0;
@@ -198,11 +204,9 @@ void Run()
         Opal::GetScratchAllocator()->Reset();
         auto start_time = Opal::GetSeconds();
 
-#if RNDR_OLD_INPUT_SYSTEM
         window_size = window->GetSize().GetValue();
         f32 window_width = window_size.x;
         f32 window_height = window_size.y;
-#endif
 
         // Acquire next swap chain image to render to
         fences[frame_index].Wait();
@@ -210,16 +214,12 @@ void Run()
         u32 image_index = swap_chain.AcquireImage(present_semaphores[frame_index]);
 
         rndr_app->ProcessSystemEvents(delta_seconds);
-#if RNDR_OLD_INPUT_SYSTEM
         controller.Tick(delta_seconds);
-#endif
 
         // Update shader data
         ShaderData shader_data;
-#if RNDR_OLD_INPUT_SYSTEM
         shader_data.projection = controller.GetProjectionTransform();
         shader_data.view = controller.GetViewTransform();
-#endif
         for (i32 i = 0; i < 3; i++)
         {
             shader_data.models[i] = Opal::Translate(Rndr::Point3f{(static_cast<f32>(i) - 1) * 3.0f, 0.0f, 0.0f});

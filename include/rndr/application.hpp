@@ -8,9 +8,7 @@
 
 #include "rndr/generic-window.hpp"
 #include "rndr/imgui-system.hpp"
-#if RNDR_OLD_INPUT_SYSTEM
 #include "rndr/input-system.hpp"
-#endif
 #include "rndr/platform-application.hpp"
 #include "rndr/system-message-handler.hpp"
 
@@ -55,9 +53,7 @@ public:
     void DestroyGenericWindow(GenericWindow* window);
 
     [[nodiscard]] struct Logger& GetLoggerChecked() const;
-#if RNDR_OLD_INPUT_SYSTEM
     [[nodiscard]] InputSystem& GetInputSystemChecked() const;
-#endif
 
     void ProcessSystemEvents(f32 delta_seconds);
 
@@ -101,6 +97,8 @@ private:
     Opal::AllocatorBase* m_allocator = nullptr;
 #if RNDR_OLD_INPUT_SYSTEM
     InputSystem* m_input_system = nullptr;
+#else
+    Opal::ScopePtr<InputSystem> m_input_system;
 #endif
     Opal::Ref<ImGuiContext> m_imgui_system;
     Opal::DynamicArray<Opal::Ref<SystemMessageHandler>> m_system_message_handlers;
