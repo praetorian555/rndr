@@ -47,6 +47,7 @@ public:
 
     static Opal::ScopePtr<Application> Create(const ApplicationDesc& desc = ApplicationDesc{});
 
+    static Application* Get();
     static Application& GetChecked();
     ~Application() override;
 

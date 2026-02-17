@@ -31,6 +31,11 @@ Opal::ScopePtr<Rndr::Application> Rndr::Application::Create(const ApplicationDes
     return app;
 }
 
+Rndr::Application* Rndr::Application::Get()
+{
+    return g_instance;
+}
+
 Rndr::Application& Rndr::Application::GetChecked()
 {
     RNDR_ASSERT(g_instance != nullptr, "There is no instance of the Rndr::Application!");
