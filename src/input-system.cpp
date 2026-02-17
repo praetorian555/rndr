@@ -118,7 +118,7 @@ Rndr::InputBinding Rndr::InputBinding::CreateKeyboardButtonBinding(InputPrimitiv
     InputBinding binding;
     binding.primitive = button_primitive;
     binding.trigger = trigger;
-    binding.button_callback = Opal::Move(callback);
+    binding.button_callback = std::move(callback);
     binding.modifier = modifier;
     return binding;
 }
@@ -135,7 +135,7 @@ Rndr::InputBinding Rndr::InputBinding::CreateMouseButtonBinding(InputPrimitive b
     InputBinding binding;
     binding.primitive = button_primitive;
     binding.trigger = trigger;
-    binding.mouse_button_callback = Opal::Move(callback);
+    binding.mouse_button_callback = std::move(callback);
     binding.modifier = modifier;
     return binding;
 }
@@ -147,7 +147,7 @@ Rndr::InputBinding Rndr::InputBinding::CreateTextBinding(InputTextCallback callb
     InputBinding binding;
     binding.primitive = InputPrimitive::Invalid;
     binding.trigger = InputTrigger::TextCharacter;
-    binding.text_callback = Opal::Move(callback);
+    binding.text_callback = std::move(callback);
     return binding;
 }
 
@@ -158,7 +158,7 @@ Rndr::InputBinding Rndr::InputBinding::CreateMouseWheelBinding(InputMouseWheelCa
     InputBinding binding;
     binding.primitive = InputPrimitive::Mouse_AxisWheel;
     binding.trigger = InputTrigger::AxisChangedRelative;
-    binding.mouse_wheel_callback = Opal::Move(callback);
+    binding.mouse_wheel_callback = std::move(callback);
     binding.modifier = modifier;
     return binding;
 }
@@ -172,7 +172,7 @@ Rndr::InputBinding Rndr::InputBinding::CreateMousePositionBinding(InputPrimitive
     InputBinding binding;
     binding.primitive = mouse_axis;
     binding.trigger = InputTrigger::AxisChangedRelative;
-    binding.mouse_position_callback = Opal::Move(callback);
+    binding.mouse_position_callback = std::move(callback);
     binding.modifier = modifier;
     return binding;
 }
@@ -580,6 +580,449 @@ bool Rndr::InputSystem::IsMouseWheelAxis(Rndr::InputPrimitive primitive)
 
 #include "rndr/input-system.hpp"
 #include "rndr/log.hpp"
+
+// InputAction::Binding ///////////////////////////////////////////////////////////////////////////
+
+Rndr::InputAction::Binding::Binding() : type(BindingType::Key), key{} {}
+
+Rndr::InputAction::Binding::Binding(const Binding& other) : type(other.type)
+{
+    switch (type)
+    {
+        case BindingType::Key:
+            key = other.key;
+            break;
+        case BindingType::MouseButton:
+            mouse_button = other.mouse_button;
+            break;
+        case BindingType::MouseAxis:
+            mouse_axis = other.mouse_axis;
+            break;
+        case BindingType::GamepadButton:
+            gamepad_button = other.gamepad_button;
+            break;
+        case BindingType::GamepadAxis:
+            gamepad_axis = other.gamepad_axis;
+            break;
+        case BindingType::Hold:
+            hold = other.hold;
+            break;
+        case BindingType::Combo:
+            new (&combo) ComboBinding(other.combo);
+            break;
+        case BindingType::Text:
+            break;
+    }
+}
+
+Rndr::InputAction::Binding& Rndr::InputAction::Binding::operator=(const Binding& other)
+{
+    if (this == &other)
+    {
+        return *this;
+    }
+    // Destroy current combo if active.
+    if (type == BindingType::Combo)
+    {
+        combo.~ComboBinding();
+    }
+    type = other.type;
+    switch (type)
+    {
+        case BindingType::Key:
+            key = other.key;
+            break;
+        case BindingType::MouseButton:
+            mouse_button = other.mouse_button;
+            break;
+        case BindingType::MouseAxis:
+            mouse_axis = other.mouse_axis;
+            break;
+        case BindingType::GamepadButton:
+            gamepad_button = other.gamepad_button;
+            break;
+        case BindingType::GamepadAxis:
+            gamepad_axis = other.gamepad_axis;
+            break;
+        case BindingType::Hold:
+            hold = other.hold;
+            break;
+        case BindingType::Combo:
+            new (&combo) ComboBinding(other.combo);
+            break;
+        case BindingType::Text:
+            break;
+    }
+    return *this;
+}
+
+Rndr::InputAction::Binding::Binding(Binding&& other) noexcept : type(other.type)
+{
+    switch (type)
+    {
+        case BindingType::Key:
+            key = other.key;
+            break;
+        case BindingType::MouseButton:
+            mouse_button = other.mouse_button;
+            break;
+        case BindingType::MouseAxis:
+            mouse_axis = other.mouse_axis;
+            break;
+        case BindingType::GamepadButton:
+            gamepad_button = other.gamepad_button;
+            break;
+        case BindingType::GamepadAxis:
+            gamepad_axis = other.gamepad_axis;
+            break;
+        case BindingType::Hold:
+            hold = other.hold;
+            break;
+        case BindingType::Combo:
+            new (&combo) ComboBinding(std::move(other.combo));
+            break;
+        case BindingType::Text:
+            break;
+    }
+}
+
+Rndr::InputAction::Binding& Rndr::InputAction::Binding::operator=(Binding&& other) noexcept
+{
+    if (this == &other)
+    {
+        return *this;
+    }
+    if (type == BindingType::Combo)
+    {
+        combo.~ComboBinding();
+    }
+    type = other.type;
+    switch (type)
+    {
+        case BindingType::Key:
+            key = other.key;
+            break;
+        case BindingType::MouseButton:
+            mouse_button = other.mouse_button;
+            break;
+        case BindingType::MouseAxis:
+            mouse_axis = other.mouse_axis;
+            break;
+        case BindingType::GamepadButton:
+            gamepad_button = other.gamepad_button;
+            break;
+        case BindingType::GamepadAxis:
+            gamepad_axis = other.gamepad_axis;
+            break;
+        case BindingType::Hold:
+            hold = other.hold;
+            break;
+        case BindingType::Combo:
+            new (&combo) ComboBinding(std::move(other.combo));
+            break;
+        case BindingType::Text:
+            break;
+    }
+    return *this;
+}
+
+Rndr::InputAction::Binding::~Binding()
+{
+    if (type == BindingType::Combo)
+    {
+        combo.~ComboBinding();
+    }
+}
+
+// InputAction ////////////////////////////////////////////////////////////////////////////////////
+
+Rndr::InputAction::InputAction(InputAction&& other) noexcept
+    : m_name(std::move(other.m_name)),
+      m_window(other.m_window),
+      m_callback_type(other.m_callback_type),
+      m_bindings(std::move(other.m_bindings)),
+      m_button_callback(std::move(other.m_button_callback)),
+      m_mouse_button_callback(std::move(other.m_mouse_button_callback)),
+      m_mouse_position_callback(std::move(other.m_mouse_position_callback)),
+      m_mouse_wheel_callback(std::move(other.m_mouse_wheel_callback)),
+      m_gamepad_button_callback(std::move(other.m_gamepad_button_callback)),
+      m_gamepad_axis_callback(std::move(other.m_gamepad_axis_callback)),
+      m_text_callback(std::move(other.m_text_callback))
+{
+    other.m_window = nullptr;
+    other.m_callback_type = CallbackType::None;
+}
+
+Rndr::InputAction& Rndr::InputAction::operator=(InputAction&& other) noexcept
+{
+    if (this == &other)
+    {
+        return *this;
+    }
+    m_name = std::move(other.m_name);
+    m_window = other.m_window;
+    m_callback_type = other.m_callback_type;
+    m_bindings = std::move(other.m_bindings);
+    m_button_callback = std::move(other.m_button_callback);
+    m_mouse_button_callback = std::move(other.m_mouse_button_callback);
+    m_mouse_position_callback = std::move(other.m_mouse_position_callback);
+    m_mouse_wheel_callback = std::move(other.m_mouse_wheel_callback);
+    m_gamepad_button_callback = std::move(other.m_gamepad_button_callback);
+    m_gamepad_axis_callback = std::move(other.m_gamepad_axis_callback);
+    m_text_callback = std::move(other.m_text_callback);
+    other.m_window = nullptr;
+    other.m_callback_type = CallbackType::None;
+    return *this;
+}
+
+const Opal::StringUtf8& Rndr::InputAction::GetName() const
+{
+    return m_name;
+}
+
+const Rndr::GenericWindow* Rndr::InputAction::GetWindow() const
+{
+    return m_window;
+}
+
+void Rndr::InputAction::SetWindow(const GenericWindow* window)
+{
+    m_window = window;
+}
+
+// InputActionBuilder /////////////////////////////////////////////////////////////////////////////
+
+Rndr::InputActionBuilder::InputActionBuilder(InputAction& action) : m_action(action) {}
+
+Rndr::InputActionBuilder& Rndr::InputActionBuilder::OnButton(ButtonCallback callback)
+{
+    RNDR_ASSERT(m_action->m_callback_type == InputAction::CallbackType::None, "Callback already set on this action");
+    m_action->m_callback_type = InputAction::CallbackType::Button;
+    m_action->m_button_callback = std::move(callback);
+    return *this;
+}
+
+Rndr::InputActionBuilder& Rndr::InputActionBuilder::OnMouseButton(MouseButtonCallback callback)
+{
+    RNDR_ASSERT(m_action->m_callback_type == InputAction::CallbackType::None, "Callback already set on this action");
+    m_action->m_callback_type = InputAction::CallbackType::MouseButton;
+    m_action->m_mouse_button_callback = std::move(callback);
+    return *this;
+}
+
+Rndr::InputActionBuilder& Rndr::InputActionBuilder::OnMousePosition(MousePositionCallback callback)
+{
+    RNDR_ASSERT(m_action->m_callback_type == InputAction::CallbackType::None, "Callback already set on this action");
+    m_action->m_callback_type = InputAction::CallbackType::MousePosition;
+    m_action->m_mouse_position_callback = std::move(callback);
+    return *this;
+}
+
+Rndr::InputActionBuilder& Rndr::InputActionBuilder::OnMouseWheel(MouseWheelCallback callback)
+{
+    RNDR_ASSERT(m_action->m_callback_type == InputAction::CallbackType::None, "Callback already set on this action");
+    m_action->m_callback_type = InputAction::CallbackType::MouseWheel;
+    m_action->m_mouse_wheel_callback = std::move(callback);
+    return *this;
+}
+
+Rndr::InputActionBuilder& Rndr::InputActionBuilder::OnGamepadButton(GamepadButtonCallback callback)
+{
+    RNDR_ASSERT(m_action->m_callback_type == InputAction::CallbackType::None, "Callback already set on this action");
+    m_action->m_callback_type = InputAction::CallbackType::GamepadButton;
+    m_action->m_gamepad_button_callback = std::move(callback);
+    return *this;
+}
+
+Rndr::InputActionBuilder& Rndr::InputActionBuilder::OnGamepadAxis(GamepadAxisCallback callback)
+{
+    RNDR_ASSERT(m_action->m_callback_type == InputAction::CallbackType::None, "Callback already set on this action");
+    m_action->m_callback_type = InputAction::CallbackType::GamepadAxis;
+    m_action->m_gamepad_axis_callback = std::move(callback);
+    return *this;
+}
+
+Rndr::InputActionBuilder& Rndr::InputActionBuilder::OnText(TextCallback callback)
+{
+    RNDR_ASSERT(m_action->m_callback_type == InputAction::CallbackType::None, "Callback already set on this action");
+    m_action->m_callback_type = InputAction::CallbackType::Text;
+    m_action->m_text_callback = std::move(callback);
+    return *this;
+}
+
+Rndr::InputActionBuilder& Rndr::InputActionBuilder::Bind(Key key, Trigger trigger, Modifiers modifiers)
+{
+    InputAction::Binding binding;
+    binding.type = InputAction::BindingType::Key;
+    binding.key = InputAction::KeyBinding{.key = key, .trigger = trigger, .modifiers = modifiers};
+    m_action->m_bindings.PushBack(std::move(binding));
+    return *this;
+}
+
+Rndr::InputActionBuilder& Rndr::InputActionBuilder::Bind(MouseButton button, Trigger trigger)
+{
+    InputAction::Binding binding;
+    binding.type = InputAction::BindingType::MouseButton;
+    binding.mouse_button = InputAction::MouseButtonBinding{.button = button, .trigger = trigger};
+    m_action->m_bindings.PushBack(std::move(binding));
+    return *this;
+}
+
+Rndr::InputActionBuilder& Rndr::InputActionBuilder::Bind(MouseAxis axis)
+{
+    InputAction::Binding binding;
+    binding.type = InputAction::BindingType::MouseAxis;
+    binding.mouse_axis = InputAction::MouseAxisBinding{.axis = axis};
+    m_action->m_bindings.PushBack(std::move(binding));
+    return *this;
+}
+
+Rndr::InputActionBuilder& Rndr::InputActionBuilder::Bind(GamepadButton button, Trigger trigger, u8 gamepad_index)
+{
+    InputAction::Binding binding;
+    binding.type = InputAction::BindingType::GamepadButton;
+    binding.gamepad_button = InputAction::GamepadButtonBinding{.button = button, .trigger = trigger, .gamepad_index = gamepad_index};
+    m_action->m_bindings.PushBack(std::move(binding));
+    return *this;
+}
+
+Rndr::InputActionBuilder& Rndr::InputActionBuilder::Bind(GamepadAxis axis, f32 dead_zone, u8 gamepad_index)
+{
+    InputAction::Binding binding;
+    binding.type = InputAction::BindingType::GamepadAxis;
+    binding.gamepad_axis = InputAction::GamepadAxisBinding{.axis = axis, .dead_zone = dead_zone, .gamepad_index = gamepad_index};
+    m_action->m_bindings.PushBack(std::move(binding));
+    return *this;
+}
+
+Rndr::InputActionBuilder& Rndr::InputActionBuilder::BindHold(Key key, f32 duration_seconds)
+{
+    RNDR_ASSERT(duration_seconds > 0.0f, "Hold duration must be positive");
+    InputAction::Binding binding;
+    binding.type = InputAction::BindingType::Hold;
+    binding.hold = InputAction::HoldBinding{.key = key, .duration_seconds = duration_seconds};
+    m_action->m_bindings.PushBack(std::move(binding));
+    return *this;
+}
+
+Rndr::InputActionBuilder& Rndr::InputActionBuilder::BindCombo(Opal::ArrayView<Key> keys, f32 timeout_seconds)
+{
+    RNDR_ASSERT(keys.GetSize() >= 2, "Combo must have at least 2 keys");
+    RNDR_ASSERT(timeout_seconds >= 0.0f, "Combo timeout must be non-negative");
+
+    InputAction::Binding binding;
+    binding.type = InputAction::BindingType::Combo;
+    new (&binding.combo) InputAction::ComboBinding();
+    for (const Key& k : keys)
+    {
+        binding.combo.keys.PushBack(k);
+    }
+    binding.combo.timeout_seconds = timeout_seconds;
+    m_action->m_bindings.PushBack(std::move(binding));
+    return *this;
+}
+
+Rndr::InputActionBuilder& Rndr::InputActionBuilder::ForWindow(const GenericWindow* window)
+{
+    m_action->m_window = window;
+    return *this;
+}
+
+// InputContext ///////////////////////////////////////////////////////////////////////////////////
+
+Rndr::InputContext::InputContext(Opal::StringUtf8 name) : m_name(std::move(name)) {}
+
+Rndr::InputContext::~InputContext() = default;
+
+Rndr::InputContext::InputContext(InputContext&& other) noexcept
+    : m_name(std::move(other.m_name)), m_actions(std::move(other.m_actions)), m_enabled(other.m_enabled)
+{
+}
+
+Rndr::InputContext& Rndr::InputContext::operator=(InputContext&& other) noexcept
+{
+    if (this == &other)
+    {
+        return *this;
+    }
+    m_name = std::move(other.m_name);
+    m_actions = std::move(other.m_actions);
+    m_enabled = other.m_enabled;
+    return *this;
+}
+
+const Opal::StringUtf8& Rndr::InputContext::GetName() const
+{
+    return m_name;
+}
+
+Rndr::InputActionBuilder Rndr::InputContext::AddAction(const Opal::StringUtf8& name)
+{
+    RNDR_ASSERT(!ContainsAction(name), "Duplicate action name");
+    InputAction action;
+    action.m_name = name;
+    m_actions.PushBack(std::move(action));
+    return InputActionBuilder(m_actions.Back());
+}
+
+bool Rndr::InputContext::RemoveAction(const Opal::StringUtf8& name)
+{
+    for (auto it = m_actions.begin(); it != m_actions.end(); ++it)
+    {
+        if (it->GetName() == name)
+        {
+            m_actions.Erase(it);
+            return true;
+        }
+    }
+    return false;
+}
+
+bool Rndr::InputContext::ContainsAction(const Opal::StringUtf8& name) const
+{
+    for (const InputAction& action : m_actions)
+    {
+        if (action.GetName() == name)
+        {
+            return true;
+        }
+    }
+    return false;
+}
+
+Rndr::InputAction* Rndr::InputContext::GetAction(const Opal::StringUtf8& name)
+{
+    for (InputAction& action : m_actions)
+    {
+        if (action.GetName() == name)
+        {
+            return &action;
+        }
+    }
+    return nullptr;
+}
+
+const Rndr::InputAction* Rndr::InputContext::GetAction(const Opal::StringUtf8& name) const
+{
+    for (const InputAction& action : m_actions)
+    {
+        if (action.GetName() == name)
+        {
+            return &action;
+        }
+    }
+    return nullptr;
+}
+
+bool Rndr::InputContext::IsEnabled() const
+{
+    return m_enabled;
+}
+
+void Rndr::InputContext::SetEnabled(bool enabled)
+{
+    m_enabled = enabled;
+}
 
 // InputSystem ////////////////////////////////////////////////////////////////////////////////////
 
