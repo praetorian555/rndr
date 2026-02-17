@@ -950,4 +950,246 @@ TEST_CASE("Text input: key binding does not fire on character events", "[input]"
     REQUIRE_FALSE(button_callback_fired);
 }
 
+TEST_CASE("Hold binding fires after duration elapses", "[input]")
+{
+    Rndr::InputSystem input_system;
+    Rndr::InputContext& context = input_system.GetCurrentContext();
+
+    int callback_count = 0;
+
+    context.AddAction("Interact")
+        .OnButton([&](Rndr::Trigger /*trigger*/, bool /*is_repeat*/)
+        {
+            callback_count++;
+        })
+        .BindHold(Rndr::Key::E, 0.5f);
+
+    // Press the key.
+    input_system.OnButtonDown(g_fake_window, Rndr::InputPrimitive::E, false);
+    input_system.ProcessSystemEvents(0.0f);
+    REQUIRE(callback_count == 0);
+
+    SECTION("Does not fire before duration")
+    {
+        input_system.ProcessSystemEvents(0.3f);
+        REQUIRE(callback_count == 0);
+    }
+
+    SECTION("Fires exactly when duration is reached")
+    {
+        input_system.ProcessSystemEvents(0.5f);
+        REQUIRE(callback_count == 1);
+    }
+
+    SECTION("Fires after duration exceeded")
+    {
+        input_system.ProcessSystemEvents(1.0f);
+        REQUIRE(callback_count == 1);
+    }
+}
+
+TEST_CASE("Hold binding fires exactly once", "[input]")
+{
+    Rndr::InputSystem input_system;
+    Rndr::InputContext& context = input_system.GetCurrentContext();
+
+    int callback_count = 0;
+
+    context.AddAction("Interact")
+        .OnButton([&](Rndr::Trigger /*trigger*/, bool /*is_repeat*/)
+        {
+            callback_count++;
+        })
+        .BindHold(Rndr::Key::E, 0.5f);
+
+    input_system.OnButtonDown(g_fake_window, Rndr::InputPrimitive::E, false);
+    input_system.ProcessSystemEvents(0.6f);
+    REQUIRE(callback_count == 1);
+
+    // Keep holding, should not fire again.
+    input_system.ProcessSystemEvents(0.5f);
+    REQUIRE(callback_count == 1);
+
+    input_system.ProcessSystemEvents(1.0f);
+    REQUIRE(callback_count == 1);
+}
+
+TEST_CASE("Hold binding: releasing key before duration cancels hold", "[input]")
+{
+    Rndr::InputSystem input_system;
+    Rndr::InputContext& context = input_system.GetCurrentContext();
+
+    int callback_count = 0;
+
+    context.AddAction("Interact")
+        .OnButton([&](Rndr::Trigger /*trigger*/, bool /*is_repeat*/)
+        {
+            callback_count++;
+        })
+        .BindHold(Rndr::Key::E, 0.5f);
+
+    // Press and hold partway.
+    input_system.OnButtonDown(g_fake_window, Rndr::InputPrimitive::E, false);
+    input_system.ProcessSystemEvents(0.3f);
+    REQUIRE(callback_count == 0);
+
+    // Release before threshold.
+    input_system.OnButtonUp(g_fake_window, Rndr::InputPrimitive::E, false);
+    input_system.ProcessSystemEvents(0.3f);
+    REQUIRE(callback_count == 0);
+
+    // More time passes, still no fire.
+    input_system.ProcessSystemEvents(1.0f);
+    REQUIRE(callback_count == 0);
+}
+
+TEST_CASE("Hold binding: release and re-press restarts timer", "[input]")
+{
+    Rndr::InputSystem input_system;
+    Rndr::InputContext& context = input_system.GetCurrentContext();
+
+    int callback_count = 0;
+
+    context.AddAction("Interact")
+        .OnButton([&](Rndr::Trigger /*trigger*/, bool /*is_repeat*/)
+        {
+            callback_count++;
+        })
+        .BindHold(Rndr::Key::E, 0.5f);
+
+    // Press and hold partway.
+    input_system.OnButtonDown(g_fake_window, Rndr::InputPrimitive::E, false);
+    input_system.ProcessSystemEvents(0.4f);
+    REQUIRE(callback_count == 0);
+
+    // Release.
+    input_system.OnButtonUp(g_fake_window, Rndr::InputPrimitive::E, false);
+    input_system.ProcessSystemEvents(0.0f);
+
+    // Re-press. Timer should restart.
+    input_system.OnButtonDown(g_fake_window, Rndr::InputPrimitive::E, false);
+    input_system.ProcessSystemEvents(0.3f);
+    REQUIRE(callback_count == 0);
+
+    // Not enough total time from re-press.
+    input_system.ProcessSystemEvents(0.1f);
+    REQUIRE(callback_count == 0);
+
+    // Now enough time from re-press (0.3 + 0.1 + 0.2 = 0.6 > 0.5).
+    input_system.ProcessSystemEvents(0.2f);
+    REQUIRE(callback_count == 1);
+}
+
+TEST_CASE("Hold binding: timer accumulates across multiple frames", "[input]")
+{
+    Rndr::InputSystem input_system;
+    Rndr::InputContext& context = input_system.GetCurrentContext();
+
+    int callback_count = 0;
+
+    context.AddAction("Interact")
+        .OnButton([&](Rndr::Trigger /*trigger*/, bool /*is_repeat*/)
+        {
+            callback_count++;
+        })
+        .BindHold(Rndr::Key::E, 0.5f);
+
+    input_system.OnButtonDown(g_fake_window, Rndr::InputPrimitive::E, false);
+
+    // Accumulate in small increments.
+    input_system.ProcessSystemEvents(0.1f);
+    REQUIRE(callback_count == 0);
+    input_system.ProcessSystemEvents(0.1f);
+    REQUIRE(callback_count == 0);
+    input_system.ProcessSystemEvents(0.1f);
+    REQUIRE(callback_count == 0);
+    input_system.ProcessSystemEvents(0.1f);
+    REQUIRE(callback_count == 0);
+    input_system.ProcessSystemEvents(0.1f);
+    REQUIRE(callback_count == 1);
+}
+
+TEST_CASE("Hold binding: small duration fires on next frame", "[input]")
+{
+    Rndr::InputSystem input_system;
+    Rndr::InputContext& context = input_system.GetCurrentContext();
+
+    int callback_count = 0;
+
+    context.AddAction("QuickHold")
+        .OnButton([&](Rndr::Trigger /*trigger*/, bool /*is_repeat*/)
+        {
+            callback_count++;
+        })
+        .BindHold(Rndr::Key::E, 0.001f);
+
+    input_system.OnButtonDown(g_fake_window, Rndr::InputPrimitive::E, false);
+    input_system.ProcessSystemEvents(0.016f);  // ~1 frame at 60fps
+
+    REQUIRE(callback_count == 1);
+}
+
+TEST_CASE("Hold binding: multiple holds on different keys", "[input]")
+{
+    Rndr::InputSystem input_system;
+    Rndr::InputContext& context = input_system.GetCurrentContext();
+
+    int short_hold_count = 0;
+    int long_hold_count = 0;
+
+    context.AddAction("ShortHold")
+        .OnButton([&](Rndr::Trigger /*trigger*/, bool /*is_repeat*/)
+        {
+            short_hold_count++;
+        })
+        .BindHold(Rndr::Key::E, 0.2f);
+
+    context.AddAction("LongHold")
+        .OnButton([&](Rndr::Trigger /*trigger*/, bool /*is_repeat*/)
+        {
+            long_hold_count++;
+        })
+        .BindHold(Rndr::Key::F, 1.0f);
+
+    // Press both keys.
+    input_system.OnButtonDown(g_fake_window, Rndr::InputPrimitive::E, false);
+    input_system.OnButtonDown(g_fake_window, Rndr::InputPrimitive::F, false);
+    input_system.ProcessSystemEvents(0.0f);
+
+    SECTION("Short hold fires first, long hold not yet")
+    {
+        input_system.ProcessSystemEvents(0.3f);
+        REQUIRE(short_hold_count == 1);
+        REQUIRE(long_hold_count == 0);
+    }
+
+    SECTION("Both fire after enough time")
+    {
+        input_system.ProcessSystemEvents(1.0f);
+        REQUIRE(short_hold_count == 1);
+        REQUIRE(long_hold_count == 1);
+    }
+}
+
+TEST_CASE("Hold binding: unbound key does not affect hold", "[input]")
+{
+    Rndr::InputSystem input_system;
+    Rndr::InputContext& context = input_system.GetCurrentContext();
+
+    int callback_count = 0;
+
+    context.AddAction("Interact")
+        .OnButton([&](Rndr::Trigger /*trigger*/, bool /*is_repeat*/)
+        {
+            callback_count++;
+        })
+        .BindHold(Rndr::Key::E, 0.5f);
+
+    // Press a different key.
+    input_system.OnButtonDown(g_fake_window, Rndr::InputPrimitive::W, false);
+    input_system.ProcessSystemEvents(1.0f);
+
+    REQUIRE(callback_count == 0);
+}
+
 #endif  // RNDR_OLD_INPUT_SYSTEM
