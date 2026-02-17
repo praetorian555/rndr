@@ -577,6 +577,7 @@ bool Rndr::InputSystem::IsMouseWheelAxis(Rndr::InputPrimitive primitive)
 #include <utility>
 
 #include "opal/container/ref.h"
+#include "opal/exceptions.h"
 
 #include "rndr/input-system.hpp"
 #include "rndr/log.hpp"
@@ -959,7 +960,10 @@ const Opal::StringUtf8& Rndr::InputContext::GetName() const
 
 Rndr::InputActionBuilder Rndr::InputContext::AddAction(const Opal::StringUtf8& name)
 {
-    RNDR_ASSERT(!ContainsAction(name), "Duplicate action name");
+    if (ContainsAction(name))
+    {
+        throw Opal::Exception("Duplicate action name");
+    }
     InputAction action;
     action.m_name = name;
     m_actions.PushBack(std::move(action));
