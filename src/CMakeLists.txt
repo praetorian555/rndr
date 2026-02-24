@@ -22,7 +22,7 @@ set(SOURCE_LIST
         "${PROJECT_SOURCE_DIR}/include/rndr/renderers/grid-renderer.hpp"
         "${PROJECT_SOURCE_DIR}/include/rndr/render-api.hpp"
         "${PROJECT_SOURCE_DIR}/include/rndr/input-layout-builder.hpp"
-        "${PROJECT_SOURCE_DIR}/include/rndr/frames-per-second-counter.h"
+        "${PROJECT_SOURCE_DIR}/include/rndr/frames-per-second-counter.hpp"
         "${PROJECT_SOURCE_DIR}/include/rndr/fly-camera.hpp"
         "${PROJECT_SOURCE_DIR}/include/rndr/trace.hpp"
         "${PROJECT_SOURCE_DIR}/include/rndr/projections.hpp"
@@ -141,7 +141,8 @@ target_compile_definitions(rndr PUBLIC RNDR_OPENGL)
 
 # Setup library dependencies
 target_link_libraries(rndr PUBLIC opengl32.lib User32.lib)
-target_link_libraries(rndr PUBLIC opal imgui assimp)
+target_link_libraries(rndr PUBLIC opal imgui assimp obsidian-interface)
+add_dependencies(rndr generate_reflection)
 
 if (RNDR_ADVANCED_API)
     target_include_directories(rndr PRIVATE ${VULKAN_SDK_PATH}/Source/SPIRV-Reflect)

@@ -1,6 +1,7 @@
 #pragma once
 
 #include "opal/container/dynamic-array.h"
+#include "opal/container/string.h"
 
 #include "rndr/types.hpp"
 

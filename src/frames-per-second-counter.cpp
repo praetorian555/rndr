@@ -1,4 +1,4 @@
-#include "rndr/frames-per-second-counter.h"
+#include "rndr/frames-per-second-counter.hpp"
 
 Rndr::FramesPerSecondCounter::FramesPerSecondCounter(f32 update_interval)
     : m_update_interval(update_interval)

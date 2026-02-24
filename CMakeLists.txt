@@ -57,6 +57,38 @@ FetchContent_Declare(
 FetchContent_MakeAvailable(opal)
 message(STATUS "***** Setup Complete *****")
 
+message(STATUS "***** Setting up Obsidian Dependency *****")
+SET(OBS_BUILD_TESTS OFF)
+SET(OBS_HARDENING ${RNDR_HARDENING})
+set(OBS_LLVM_PATH "F:/LLVM")
+FetchContent_Declare(
+        obsidian
+        GIT_REPOSITORY https://github.com/praetorian555/obsidian
+        GIT_TAG main
+)
+FetchContent_MakeAvailable(obsidian)
+message(STATUS "***** Setup Complete *****")
+
+function(get_include_directories OUT_GENERATOR TARGET)
+    set(${OUT_GENERATOR} $<JOIN:$<TARGET_PROPERTY:${TARGET},INCLUDE_DIRECTORIES>,,> PARENT_SCOPE)
+endfunction()
+function(get_definitions OUT_GENERATOR TARGET)
+    set(${OUT_GENERATOR} $<JOIN:$<LIST:TRANSFORM,$<TARGET_PROPERTY:${TARGET},COMPILE_DEFINITIONS>,PREPEND,-D>,,> PARENT_SCOPE)
+endfunction()
+get_include_directories(INCLUDE_DIRECTORIES rndr)
+get_definitions(DEFINITIONS rndr)
+add_custom_target(
+        generate_reflection
+        COMMAND ${CMAKE_COMMAND} -E make_directory ${CMAKE_CURRENT_BINARY_DIR}/include/generated
+        COMMAND $<TARGET_FILE:obsidian>
+        input-dir=${CMAKE_CURRENT_SOURCE_DIR}/include
+        output-dir=${CMAKE_CURRENT_BINARY_DIR}/include/generated
+        std=c++20
+        compile-options="${DEFINITIONS},-Wall,-Wextra"
+        inc-dirs=${INCLUDE_DIRECTORIES}
+        DEPENDS obsidian
+)
+
 # Setup IMGUI ######################################################################
 message(STATUS "***** Setting up ImGui Dependency *****")
 FetchContent_Declare(
