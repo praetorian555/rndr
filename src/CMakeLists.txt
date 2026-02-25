@@ -73,6 +73,24 @@ list(APPEND SOURCE_LIST
         "${PROJECT_SOURCE_DIR}/src/platform/opengl-frame-buffer.cpp"
         "${PROJECT_SOURCE_DIR}/src/platform/opengl-helpers.cpp")
 
+if (${RNDR_CANVAS})
+    list(APPEND SOURCE_LIST
+            "${PROJECT_SOURCE_DIR}/include/rndr/canvas/canvas.hpp"
+            "${PROJECT_SOURCE_DIR}/include/rndr/canvas/context.hpp"
+            "${PROJECT_SOURCE_DIR}/include/rndr/canvas/shader.hpp"
+            "${PROJECT_SOURCE_DIR}/include/rndr/canvas/display.hpp"
+            "${PROJECT_SOURCE_DIR}/include/rndr/canvas/render-target.hpp"
+            "${PROJECT_SOURCE_DIR}/include/rndr/canvas/texture.hpp"
+            "${PROJECT_SOURCE_DIR}/include/rndr/canvas/brush.hpp"
+            "${PROJECT_SOURCE_DIR}/include/rndr/canvas/vertex-layout.hpp"
+            "${PROJECT_SOURCE_DIR}/include/rndr/canvas/mesh.hpp"
+            "${PROJECT_SOURCE_DIR}/include/rndr/canvas/buffer.hpp"
+            "${PROJECT_SOURCE_DIR}/include/rndr/canvas/draw-command-buffer.hpp"
+            "${PROJECT_SOURCE_DIR}/include/rndr/canvas/draw-list.hpp"
+            "${PROJECT_SOURCE_DIR}/include/rndr/canvas/compute-list.hpp"
+            "${PROJECT_SOURCE_DIR}/src/canvas/context.cpp")
+endif ()
+
 list(APPEND SOURCE_LIST
         "${PROJECT_SOURCE_DIR}/extern/glad/src/glad.c"
         "${PROJECT_SOURCE_DIR}/extern/glad/src/glad_wgl.c"
@@ -92,7 +110,7 @@ list(APPEND SOURCE_LIST
         "${PROJECT_SOURCE_DIR}/src/platform/windows-window.cpp"
 )
 
-if (RNDR_ADVANCED_API)
+if (${RNDR_ADVANCED_API})
     file(TO_CMAKE_PATH "$ENV{VULKAN_SDK}" VULKAN_SDK_PATH)
     list(APPEND SOURCE_LIST
             "${VULKAN_SDK_PATH}/Source/SPIRV-Reflect/spirv_reflect.h"
@@ -142,9 +160,9 @@ target_compile_definitions(rndr PUBLIC RNDR_OPENGL)
 # Setup library dependencies
 target_link_libraries(rndr PUBLIC opengl32.lib User32.lib)
 target_link_libraries(rndr PUBLIC opal imgui assimp obsidian-interface)
-add_dependencies(rndr generate_reflection)
+add_dependencies(rndr generate-reflection)
 
-if (RNDR_ADVANCED_API)
+if (${RNDR_ADVANCED_API})
     target_include_directories(rndr PRIVATE ${VULKAN_SDK_PATH}/Source/SPIRV-Reflect)
     target_include_directories(rndr PUBLIC ${VULKAN_SDK_PATH}/Include)
     #    find_library(Slang_LIBRARY NAMES slang HINTS "$ENV{VULKAN_SDK}/Lib" REQUIRED)

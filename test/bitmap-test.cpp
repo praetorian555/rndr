@@ -6,6 +6,8 @@
 
 TEST_CASE("Bitmap", "[bitmap]")
 {
+    Opal::MallocAllocator allocator;
+    Opal::PushDefaultAllocator(&allocator);
     SECTION("Create with zeroed data")
     {
         Rndr::Bitmap bitmap(3, 4, 5, Rndr::PixelFormat::R8G8B8A8_UNORM, 1);

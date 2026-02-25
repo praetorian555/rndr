@@ -24,7 +24,8 @@ Opal::ScopePtr<Rndr::Application> Rndr::Application::Create(const ApplicationDes
     {
         throw Opal::Exception("Rndr Application already created!");
     }
-    Opal::ScopePtr<Application> app(desc.user_allocator != nullptr ? desc.user_allocator : Opal::GetDefaultAllocator(), desc);
+    Opal::AllocatorBase* allocator = desc.user_allocator != nullptr ? desc.user_allocator : nullptr;
+    Opal::ScopePtr<Application> app = MakeScoped<Application>(allocator, desc);
     g_instance = app.Get();
     return app;
 }
@@ -51,7 +52,7 @@ Rndr::Application::Application(const ApplicationDesc& desc)
 #error "Platform not supported!"
 #endif
 
-    m_input_system = Opal::ScopePtr<InputSystem>(Opal::GetDefaultAllocator());
+    m_input_system = Opal::MakeScoped<InputSystem>(nullptr);
 }
 
 Rndr::Application::~Application()

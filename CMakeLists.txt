@@ -3,20 +3,18 @@ project(RNDR VERSION 0.1.0 LANGUAGES CXX C)
 
 # Library options
 option(RNDR_ADVANCED_API "Use more advanced rendering API that is more powerful but more complicated" ON)
+option(RNDR_CANVAS "Enable Canvas API which is a simplified graphics API" ON)
 option(RNDR_SHARED_LIBS "Build as a shared library" OFF)
 option(RNDR_HARDENING "Enable hardened mode" ON)
 option(RNDR_BUILD_TESTS "Build tests" ON)
 option(RNDR_BUILD_SAMPLES "Builds sample executables" ON)
 
 message(STATUS "RNDR_ADVANCED_API ${RNDR_ADVANCED_API}")
+message(STATUS "RNDR_CANVAS ${RNDR_CANVAS}")
 message(STATUS "RNDR_BUILD_TESTS ${RNDR_BUILD_TESTS}")
 message(STATUS "RNDR_SHARED_LIBS ${RNDR_SHARED_LIBS}")
 message(STATUS "RNDR_HARDENING ${RNDR_HARDENING}")
 message(STATUS "RNDR_BUILD_SAMPLES ${RNDR_BUILD_SAMPLES}")
-
-if (RNDR_ADVANCED_API)
-    message(WARNING "Advanced API is still in development so library might not compile...")
-endif ()
 
 ## C++ language configuration boilerplate, hide symbols by default
 if (NOT DEFINED CMAKE_CXX_VISIBILITY_PRESET AND NOT DEFINED CMAKE_VISIBILITY_INLINES_HIDDEN)
@@ -25,7 +23,7 @@ if (NOT DEFINED CMAKE_CXX_VISIBILITY_PRESET AND NOT DEFINED CMAKE_VISIBILITY_INL
 endif ()
 
 ## Let OPAL_SHARED_LIBS override BUILD_SHARED_LIBS
-if (RNDR_SHARED_LIBS)
+if (${RNDR_SHARED_LIBS})
     set(BUILD_SHARED_LIBS "${RNDR_SHARED_LIBS}")
 endif ()
 
@@ -40,7 +38,7 @@ rndr_setup_compiler_options(rndr_options)
 
 # Setup sanitizer options
 include(cmake/sanitizers.cmake)
-if (RNDR_HARDENING)
+if (${RNDR_HARDENING})
     rndr_setup_sanitizers(rndr_options)
 endif ()
 
@@ -69,23 +67,19 @@ FetchContent_Declare(
 FetchContent_MakeAvailable(obsidian)
 message(STATUS "***** Setup Complete *****")
 
-function(get_include_directories OUT_GENERATOR TARGET)
-    set(${OUT_GENERATOR} $<JOIN:$<TARGET_PROPERTY:${TARGET},INCLUDE_DIRECTORIES>,,> PARENT_SCOPE)
-endfunction()
-function(get_definitions OUT_GENERATOR TARGET)
-    set(${OUT_GENERATOR} $<JOIN:$<LIST:TRANSFORM,$<TARGET_PROPERTY:${TARGET},COMPILE_DEFINITIONS>,PREPEND,-D>,,> PARENT_SCOPE)
-endfunction()
-get_include_directories(INCLUDE_DIRECTORIES rndr)
-get_definitions(DEFINITIONS rndr)
+# Setup reflection generator
+message("Current source dir: ${CMAKE_CURRENT_SOURCE_DIR}")
+set(RNDR_INCLUDE_DIRS $<JOIN:$<TARGET_PROPERTY:rndr,INCLUDE_DIRECTORIES>,,>)
+set(RNDR_DEFINES $<JOIN:$<LIST:TRANSFORM,$<TARGET_PROPERTY:rndr,COMPILE_DEFINITIONS>,PREPEND,-D>,,>)
 add_custom_target(
-        generate_reflection
+        generate-reflection
         COMMAND ${CMAKE_COMMAND} -E make_directory ${CMAKE_CURRENT_BINARY_DIR}/include/generated
         COMMAND $<TARGET_FILE:obsidian>
-        input-dir=${CMAKE_CURRENT_SOURCE_DIR}/include
+        input-dirs=${CMAKE_CURRENT_SOURCE_DIR}/include,${CMAKE_CURRENT_SOURCE_DIR}/src
         output-dir=${CMAKE_CURRENT_BINARY_DIR}/include/generated
         std=c++20
-        compile-options="${DEFINITIONS},-Wall,-Wextra"
-        inc-dirs=${INCLUDE_DIRECTORIES}
+        compile-options="${RNDR_DEFINES},-Wall,-Wextra"
+        inc-dirs=${RNDR_INCLUDE_DIRS}
         DEPENDS obsidian
 )
 
@@ -170,7 +164,7 @@ endif ()
 # The compiled library code is here
 add_subdirectory(src)
 
-if (RNDR_BUILD_TESTS)
+if (${RNDR_BUILD_TESTS})
     set(RNDR_TEST_FILES
             test/base-test.cpp
             test/bitmap-test.cpp
@@ -179,19 +173,22 @@ if (RNDR_BUILD_TESTS)
             test/input-test.cpp
             test/renderer-base-test.cpp
             extern/catch2/src/catch_amalgamated.cpp)
-    add_executable(rndr_test ${RNDR_TEST_FILES})
-    target_include_directories(rndr_test PRIVATE src)
-    target_include_directories(rndr_test PRIVATE extern/catch2/include)
-    target_include_directories(rndr_test PRIVATE extern/catch2/include/catch2)
-    target_include_directories(rndr_test PRIVATE extern/glad/include)
-    target_link_libraries(rndr_test rndr)
-    target_link_libraries(rndr_test rndr_warnings)
-    target_link_libraries(rndr_test rndr_options)
+    if (${RNDR_CANVAS})
+        list(APPEND RNDR_TEST_FILES test/canvas/context-test.cpp)
+    endif ()
+    add_executable(rndr-test ${RNDR_TEST_FILES})
+    target_include_directories(rndr-test PRIVATE src)
+    target_include_directories(rndr-test PRIVATE extern/catch2/include)
+    target_include_directories(rndr-test PRIVATE extern/catch2/include/catch2)
+    target_include_directories(rndr-test PRIVATE extern/glad/include)
+    target_link_libraries(rndr-test rndr)
+    target_link_libraries(rndr-test rndr_warnings)
+    target_link_libraries(rndr-test rndr_options)
     enable_testing()
-    add_test(NAME all_tests_no_window_no_render_api COMMAND rndr_test)
+    add_test(NAME all_tests_no_window_no_render_api COMMAND rndr-test)
 
     # Install the test executable
-    install(TARGETS rndr_test
+    install(TARGETS rndr-test
             LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
             ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
             RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}  # For Windows DLL files
