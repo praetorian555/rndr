@@ -9,7 +9,7 @@ namespace Rndr
 class GridRenderer : public RendererBase
 {
 public:
-    GridRenderer(const Opal::StringUtf8& name, const RendererBaseDesc& desc, Opal::Ref<FrameBuffer> target);
+    GridRenderer(Opal::StringUtf8 name, const RendererBaseDesc& desc, Opal::Ref<FrameBuffer> target);
     ~GridRenderer() override;
 
     void Destroy();

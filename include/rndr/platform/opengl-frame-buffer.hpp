@@ -15,7 +15,7 @@ class FrameBuffer
 {
 public:
     FrameBuffer() = default;
-    FrameBuffer(const GraphicsContext& graphics_context, const FrameBufferDesc& desc);
+    FrameBuffer(const GraphicsContext& graphics_context, const FrameBufferDesc& desc, Opal::StringUtf8 debug_name = "");
 
     ErrorCode Initialize(const GraphicsContext& graphics_context, const FrameBufferDesc& desc);
 
@@ -44,6 +44,7 @@ private:
     Opal::DynamicArray<Texture> m_color_attachments;
     Texture m_depth_stencil_attachment;
     GLuint m_native_frame_buffer = k_invalid_opengl_object;
+    Opal::StringUtf8 m_debug_name;
 };
 
 }  // namespace Rndr

@@ -26,7 +26,7 @@ public:
      * @param graphics_context The graphics context to create the shader with.
      * @param desc The description of the shader to create.
      */
-    Shader(const GraphicsContext& graphics_context, const ShaderDesc& desc);
+    Shader(const GraphicsContext& graphics_context, const ShaderDesc& desc, Opal::StringUtf8 debug_name = "");
 
     /**
      * Creates and compiles the shader.
@@ -50,10 +50,12 @@ public:
 
     [[nodiscard]] const ShaderDesc& GetDesc() const;
     [[nodiscard]] const GLuint GetNativeShader() const;
+    [[nodiscard]] const Opal::StringUtf8& GetDebugName() const { return m_debug_name; }
 
 private:
     ShaderDesc m_desc;
     GLuint m_native_shader = k_invalid_opengl_object;
+    Opal::StringUtf8 m_debug_name;
 };
 
 }  // namespace Rndr

@@ -26,47 +26,47 @@ struct alignas(16) PerFrameData
 OPAL_END_DISABLE_WARNINGS
 }  // namespace
 
-Rndr::Shape3DRenderer::Shape3DRenderer(const Opal::StringUtf8& name, const RendererBaseDesc& desc, Opal::Ref<FrameBuffer> target)
-    : RendererBase(name, desc), m_target(target)
+Rndr::Shape3DRenderer::Shape3DRenderer(Opal::StringUtf8 name, const RendererBaseDesc& desc, Opal::Ref<FrameBuffer> target)
+    : RendererBase(std::move(name), desc), m_target(std::move(target))
 {
     const Opal::StringUtf8 shader_dir = Opal::Paths::Combine(RNDR_CORE_ASSETS_DIR, "shaders");
-    const Opal::StringUtf8 vertex_shader_contents = File::ReadShader(shader_dir, "pbr.vert");
+    Opal::StringUtf8 vertex_shader_contents = File::ReadShader(shader_dir, "pbr.vert");
     m_fragment_shader_source = File::ReadShader(shader_dir, "pbr.frag");
 
-    m_vertex_shader =
-        Shader(m_desc.graphics_context,
-               {.type = ShaderType::Vertex, .source = vertex_shader_contents, .debug_name = "Shape 3D Renderer - Vertex Shader"});
+    m_vertex_shader = Shader(m_desc.graphics_context, {.type = ShaderType::Vertex, .source = std::move(vertex_shader_contents)},
+                             "Shape 3D Renderer - Vertex Shader");
     RNDR_ASSERT(m_vertex_shader.IsValid(), "Failed to create vertex shader!");
 
-    m_vertex_buffer = Buffer(desc.graphics_context, {.type = BufferType::ShaderStorage,
-                                                     .usage = Usage::Dynamic,
-                                                     .size = k_max_vertex_count * sizeof(VertexData),
-                                                     .stride = sizeof(VertexData),
-                                                     .debug_name = "Shape 3D Renderer - Vertex Buffer"});
+    m_vertex_buffer = Buffer(desc.graphics_context,
+                             {.type = BufferType::ShaderStorage,
+                              .usage = Usage::Dynamic,
+                              .size = k_max_vertex_count * sizeof(VertexData),
+                              .stride = sizeof(VertexData)},
+                             {}, "Shape 3D Renderer - Vertex Buffer");
     RNDR_ASSERT(m_vertex_buffer.IsValid(), "Failed to create vertex buffer!");
-    m_index_buffer = Buffer(desc.graphics_context, {.type = BufferType::Index,
-                                                    .usage = Usage::Dynamic,
-                                                    .size = k_max_index_count * sizeof(uint32_t),
-                                                    .stride = sizeof(uint32_t),
-                                                    .debug_name = "Shape 3D Renderer - Index Buffer"});
+    m_index_buffer = Buffer(
+        desc.graphics_context,
+        {.type = BufferType::Index, .usage = Usage::Dynamic, .size = k_max_index_count * sizeof(uint32_t), .stride = sizeof(uint32_t)}, {},
+        "Shape 3D Renderer - Index Buffer");
     RNDR_ASSERT(m_index_buffer.IsValid(), "Failed to create index buffer!");
-    m_model_transform_buffer = Buffer(desc.graphics_context, {.type = BufferType::ShaderStorage,
-                                                              .usage = Usage::Dynamic,
-                                                              .size = k_max_instance_count * sizeof(InstanceData),
-                                                              .stride = sizeof(InstanceData),
-                                                              .debug_name = "Shape 3D Renderer - Instance Transforms Buffer"});
+    m_model_transform_buffer = Buffer(desc.graphics_context,
+                                      {.type = BufferType::ShaderStorage,
+                                       .usage = Usage::Dynamic,
+                                       .size = k_max_instance_count * sizeof(InstanceData),
+                                       .stride = sizeof(InstanceData)},
+                                      {}, "Shape 3D Renderer - Instance Transforms Buffer");
     RNDR_ASSERT(m_model_transform_buffer.IsValid(), "Failed to create instance buffer!");
-    m_per_frame_buffer = Buffer(m_desc.graphics_context, {.type = BufferType::Constant,
-                                                          .usage = Usage::Dynamic,
-                                                          .size = sizeof(PerFrameData),
-                                                          .stride = sizeof(PerFrameData),
-                                                          .debug_name = "Shape 3D Renderer - Per Frame Buffer"});
+    m_per_frame_buffer =
+        Buffer(m_desc.graphics_context,
+               {.type = BufferType::Constant, .usage = Usage::Dynamic, .size = sizeof(PerFrameData), .stride = sizeof(PerFrameData)}, {},
+               "Shape 3D Renderer - Per Frame Buffer");
     RNDR_ASSERT(m_per_frame_buffer.IsValid(), "Failed to create per-frame-data buffer!");
-    m_draw_commands_buffer = Buffer(m_desc.graphics_context, {.type = BufferType::DrawCommands,
-                                                              .usage = Usage::Dynamic,
-                                                              .size = k_max_instance_count * sizeof(DrawIndicesData),
-                                                              .stride = sizeof(DrawIndicesData),
-                                                              .debug_name = "Shape 3D Renderer - Draw Commands Buffer"});
+    m_draw_commands_buffer = Buffer(m_desc.graphics_context,
+                                    {.type = BufferType::DrawCommands,
+                                     .usage = Usage::Dynamic,
+                                     .size = k_max_instance_count * sizeof(DrawIndicesData),
+                                     .stride = sizeof(DrawIndicesData)},
+                                    {}, "Shape 3D Renderer - Draw Commands Buffer");
     RNDR_ASSERT(m_draw_commands_buffer.IsValid(), "Failed to create draw commands buffer!");
 
     const InputLayoutDesc input_layout_desc = Rndr::InputLayoutBuilder()
@@ -192,11 +192,11 @@ void Rndr::Shape3DRenderer::DrawCube(const Matrix4x4f& transform, Opal::Ref<cons
     {
         ShapeGeometryData data;
         GenerateCube(m_vertex_data, m_index_data, data, u_tiling, v_tiling);
-        m_geometry_data.Insert(key, data);
+        m_geometry_data.Insert(key.Clone(), data);
         m_is_geometry_data_dirty = true;
     }
 
-    DrawShape(std::move(key), transform, material);
+    DrawShape(std::move(key), transform, std::move(material));
 }
 
 void Rndr::Shape3DRenderer::DrawSphere(const Matrix4x4f& transform, Opal::Ref<const Material> material, f32 u_tiling, f32 v_tiling,
@@ -215,11 +215,11 @@ void Rndr::Shape3DRenderer::DrawSphere(const Matrix4x4f& transform, Opal::Ref<co
     {
         ShapeGeometryData data;
         GenerateSphere(m_vertex_data, m_index_data, data, latitude_segments, longitude_segments, u_tiling, v_tiling);
-        m_geometry_data.Insert(key, data);
+        m_geometry_data.Insert(key.Clone(), data);
         m_is_geometry_data_dirty = true;
     }
 
-    DrawShape(std::move(key), transform, material);
+    DrawShape(std::move(key), transform, std::move(material));
 }
 
 void Rndr::Shape3DRenderer::DrawMesh(const Mesh& mesh, const Matrix4x4f& transform, Opal::Ref<const Material> material)
@@ -230,13 +230,13 @@ void Rndr::Shape3DRenderer::DrawMesh(const Mesh& mesh, const Matrix4x4f& transfo
         data.vertex_offset = static_cast<u32>(m_vertex_data.GetSize() / sizeof(VertexData));
         data.index_offset = static_cast<u32>(m_index_data.GetSize() / sizeof(u32));
         data.index_count = mesh.index_count;
-        m_geometry_data.Insert(mesh.name, data);
+        m_geometry_data.Insert(mesh.name.Clone(), data);
         m_vertex_data.Append(mesh.vertices);
         m_index_data.Append(mesh.indices);
         m_is_geometry_data_dirty = true;
     }
 
-    DrawShape(mesh.name, transform, material);
+    DrawShape(mesh.name.Clone(), transform, std::move(material));
 }
 
 void Rndr::Shape3DRenderer::AddDirectionalLight(const Vector3f& direction, const Vector4f& color)
@@ -417,13 +417,13 @@ void Rndr::Shape3DRenderer::DrawShape(Opal::StringUtf8 key, const Matrix4x4f& tr
     RNDR_ASSERT(geometry_data_it != m_geometry_data.end(), "Failed to find material in map!");
     const ShapeGeometryData& geometry_data = geometry_data_it.GetValue();
 
-    const MaterialKey material_key{material};
+    const MaterialKey material_key{.material = material.Clone()};
     auto it = m_materials.Find(material_key);
     if (it == m_materials.end())
     {
 
-        const PerMaterialData material_data;
-        m_materials.Insert(material_key, material_data);
+        PerMaterialData material_data;
+        m_materials.Insert(material_key.Clone(), std::move(material_data));
         it = m_materials.Find(material_key);
         RNDR_ASSERT(it != m_materials.end(), "Failed to find material in map!");
     }
@@ -435,7 +435,7 @@ void Rndr::Shape3DRenderer::DrawShape(Opal::StringUtf8 key, const Matrix4x4f& tr
         ShaderPermutation shader_permutation = CreateShaderPermutationFromMaterial(material);
         Pipeline pipeline = CreatePipeline(shader_permutation);
         m_shader_permutations.PushBack(std::move(shader_permutation));
-        m_pipelines.Insert(material_key, std::move(pipeline));
+        m_pipelines.Insert(material_key.Clone(), std::move(pipeline));
     }
 
     InstanceData instance_data;
@@ -462,7 +462,7 @@ Rndr::ShaderPermutation Rndr::Shape3DRenderer::CreateShaderPermutationFromMateri
 {
     ShaderDesc shader_desc;
     shader_desc.type = ShaderType::Fragment;
-    shader_desc.source = m_fragment_shader_source;
+    shader_desc.source = m_fragment_shader_source.Clone();
     if (material.HasAlbedoTexture())
     {
         shader_desc.defines.PushBack("USE_ALBEDO_TEXTURE=1");
@@ -488,7 +488,7 @@ Rndr::ShaderPermutation Rndr::Shape3DRenderer::CreateShaderPermutationFromMateri
         shader_desc.defines.PushBack("USE_OPACITY_TEXTURE=1");
     }
 
-    ShaderPermutation shader_permutation(m_desc.graphics_context, shader_desc);
+    ShaderPermutation shader_permutation(m_desc.graphics_context.Clone(), shader_desc);
     if (!shader_permutation.IsValid())
     {
         throw Opal::Exception("Failed to create shader permutation");
@@ -498,14 +498,14 @@ Rndr::ShaderPermutation Rndr::Shape3DRenderer::CreateShaderPermutationFromMateri
 
 Rndr::Pipeline Rndr::Shape3DRenderer::CreatePipeline(ShaderPermutation& shader_permutation)
 {
-    const InputLayoutDesc input_layout_desc = Rndr::InputLayoutBuilder()
-                                                  .AddShaderStorage(m_vertex_buffer, 1)
-                                                  .AddShaderStorage(m_model_transform_buffer, 2)
-                                                  .AddIndexBuffer(m_index_buffer)
-                                                  .Build();
+    InputLayoutDesc input_layout_desc = Rndr::InputLayoutBuilder()
+                                            .AddShaderStorage(m_vertex_buffer, 1)
+                                            .AddShaderStorage(m_model_transform_buffer, 2)
+                                            .AddIndexBuffer(m_index_buffer)
+                                            .Build();
     return Pipeline(m_desc.graphics_context, PipelineDesc{.vertex_shader = &m_vertex_shader,
                                                           .pixel_shader = shader_permutation.GetShader().GetPtr(),
-                                                          .input_layout = input_layout_desc,
+                                                          .input_layout = std::move(input_layout_desc),
                                                           .depth_stencil = {.is_depth_enabled = true}});
 }
 

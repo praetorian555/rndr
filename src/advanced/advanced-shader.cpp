@@ -47,7 +47,7 @@ static Rndr::ShaderTypeBits ToShaderTypeBits(SpvReflectShaderStageFlagBits stage
 
 Rndr::AdvancedShader::AdvancedShader(const AdvancedDevice& device, Opal::ArrayView<const u8> spirv_data,
                                      const AdvancedShaderDesc& desc)
-    : m_device(device), m_entry_point(desc.entry_point)
+    : m_device(device), m_entry_point(desc.entry_point.Clone())
 {
     // Use spirv-reflect to detect the shader stage from the specified entry point.
     SpvReflectShaderModule reflect_module = {};
@@ -86,7 +86,7 @@ Rndr::AdvancedShader::~AdvancedShader()
 }
 
 Rndr::AdvancedShader::AdvancedShader(AdvancedShader&& other) noexcept
-    : m_device(other.m_device),
+    : m_device(std::move(other.m_device)),
       m_shader_module(other.m_shader_module),
       m_native_stage(other.m_native_stage),
       m_stage(other.m_stage),
@@ -101,7 +101,7 @@ Rndr::AdvancedShader& Rndr::AdvancedShader::operator=(AdvancedShader&& other) no
     if (this != &other)
     {
         Destroy();
-        m_device = other.m_device;
+        m_device = std::move(other.m_device);
         m_shader_module = other.m_shader_module;
         m_native_stage = other.m_native_stage;
         m_stage = other.m_stage;

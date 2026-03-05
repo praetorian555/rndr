@@ -11,7 +11,7 @@
 
 Rndr::DrawVerticesMultiCommand::DrawVerticesMultiCommand(Opal::Ref<Buffer> commands_buffer, PrimitiveTopology primitive_topology,
                                                          Opal::ArrayView<DrawVerticesData> draws)
-    : commands_buffer(commands_buffer), primitive_topology(primitive_topology)
+    : commands_buffer(std::move(commands_buffer)), primitive_topology(primitive_topology)
 {
     for (const DrawVerticesData& draw : draws)
     {
@@ -21,7 +21,7 @@ Rndr::DrawVerticesMultiCommand::DrawVerticesMultiCommand(Opal::Ref<Buffer> comma
 
 Rndr::DrawIndicesMultiCommand::DrawIndicesMultiCommand(Opal::Ref<Buffer> commands_buffer, PrimitiveTopology primitive_topology,
                                                        Opal::ArrayView<DrawIndicesData> draws)
-    : commands_buffer(commands_buffer), primitive_topology(primitive_topology)
+    : commands_buffer(std::move(commands_buffer)), primitive_topology(primitive_topology)
 {
     for (const DrawIndicesData& draw : draws)
     {
@@ -115,7 +115,7 @@ void Rndr::CommandList::CmdDrawVerticesMulti(Opal::Ref<Buffer> commands_buffer, 
     static_assert(sizeof(DrawVerticesData::base_instance) == 4);
     static_assert(sizeof(DrawVerticesData) == 16, "DrawVerticesData size is not 16 bytes");
 
-    m_commands.PushBack(DrawVerticesMultiCommand(commands_buffer, topology, draws));
+    m_commands.PushBack(DrawVerticesMultiCommand(std::move(commands_buffer), topology, draws));
 }
 
 void Rndr::CommandList::CmdDrawIndicesMulti(Opal::Ref<Buffer> commands_buffer, PrimitiveTopology topology,
@@ -128,7 +128,7 @@ void Rndr::CommandList::CmdDrawIndicesMulti(Opal::Ref<Buffer> commands_buffer, P
     static_assert(sizeof(DrawIndicesData::base_instance) == 4);
     static_assert(sizeof(DrawIndicesData) == 20, "DrawIndicesData size is not 20 bytes");
 
-    m_commands.PushBack(DrawIndicesMultiCommand(commands_buffer, topology, draws));
+    m_commands.PushBack(DrawIndicesMultiCommand(std::move(commands_buffer), topology, draws));
 }
 
 bool Rndr::CommandList::CmdDispatchCompute(uint32_t block_count_x, uint32_t block_count_y, uint32_t block_count_z, bool wait_for_completion)
@@ -275,7 +275,7 @@ void Rndr::CommandList::Execute()
 
     for (const auto& command : m_commands)
     {
-        std::visit(CommandExecutor{m_graphics_context}, command);
+        std::visit(CommandExecutor{m_graphics_context.Clone()}, command);
     }
 }
 

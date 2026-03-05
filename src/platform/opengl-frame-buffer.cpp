@@ -6,7 +6,9 @@
 
 #include "rndr/log.hpp"
 
-Rndr::FrameBuffer::FrameBuffer(const Rndr::GraphicsContext& graphics_context, const Rndr::FrameBufferDesc& desc) : m_desc(desc)
+Rndr::FrameBuffer::FrameBuffer(const Rndr::GraphicsContext& graphics_context, const FrameBufferDesc& desc,
+                               Opal::StringUtf8 debug_name)
+    : m_desc(desc.Clone()), m_debug_name(std::move(debug_name))
 {
     const ErrorCode err = Initialize(graphics_context, desc);
     if (err != ErrorCode::Success)
@@ -15,9 +17,9 @@ Rndr::FrameBuffer::FrameBuffer(const Rndr::GraphicsContext& graphics_context, co
     }
 }
 
-Rndr::ErrorCode Rndr::FrameBuffer::Initialize(const Rndr::GraphicsContext& graphics_context, const Rndr::FrameBufferDesc& desc)
+Rndr::ErrorCode Rndr::FrameBuffer::Initialize(const Rndr::GraphicsContext& graphics_context, const FrameBufferDesc& desc)
 {
-    m_desc = desc;
+    m_desc = desc.Clone();
     for (const Rndr::TextureDesc& color_attachment_desc : m_desc.color_attachments)
     {
         if (color_attachment_desc.type != Rndr::TextureType::Texture2D)
@@ -94,7 +96,7 @@ Rndr::FrameBuffer::FrameBuffer(Rndr::FrameBuffer&& other) noexcept
 
 Rndr::FrameBuffer& Rndr::FrameBuffer::operator=(Rndr::FrameBuffer&& other) noexcept
 {
-    m_desc = other.m_desc;
+    m_desc = other.m_desc.Clone();
     Destroy();
     m_color_attachments = std::move(other.m_color_attachments);
     m_depth_stencil_attachment = std::move(other.m_depth_stencil_attachment);

@@ -16,7 +16,7 @@
     }
 
 Rndr::Material::Material(Opal::Ref<GraphicsContext> graphics_context, const MaterialDesc& desc)
-    : m_desc(desc), m_graphics_context(graphics_context)
+    : m_desc(desc.Clone()), m_graphics_context(std::move(graphics_context))
 {
     m_albedo_texture = LoadTexture(desc.albedo_texture_path);
     SET_MATERIAL_BIT(m_albedo_texture, k_bit_mask_albedo_texture);
@@ -187,7 +187,7 @@ Rndr::Texture Rndr::Material::LoadTexture(const Opal::StringUtf8& texture_path)
 
 void Rndr::MaterialRegistry::Register(Opal::StringUtf8 name, const MaterialDesc& desc)
 {
-    Material material{m_graphics_context, desc};
+    Material material{m_graphics_context.Clone(), desc};
     m_materials.Insert(Opal::Move(name), Opal::Move(material));
 }
 

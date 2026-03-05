@@ -2,14 +2,14 @@
 
 #include "rndr/trace.hpp"
 
-Rndr::RendererBase::RendererBase(const Opal::StringUtf8& name, const RendererBaseDesc& desc) : m_name(name), m_desc(desc) {}
+Rndr::RendererBase::RendererBase(Opal::StringUtf8 name, const RendererBaseDesc& desc) : m_name(std::move(name)), m_desc(desc.Clone()) {}
 
-Rndr::ClearRenderer::ClearRenderer(const Opal::StringUtf8& name,
+Rndr::ClearRenderer::ClearRenderer(Opal::StringUtf8 name,
                                    const RendererBaseDesc& desc,
                                    const Vector4f& color,
                                    f32 depth,
                                    i32 stencil)
-    : RendererBase(name, desc), m_color(color), m_depth(depth), m_stencil(stencil)
+    : RendererBase(std::move(name), desc), m_color(color), m_depth(depth), m_stencil(stencil)
 {
 }
 
@@ -21,7 +21,7 @@ bool Rndr::ClearRenderer::Render(f32 delta_seconds, CommandList& command_list)
     return command_list.CmdClearAll(m_color, m_depth, m_stencil);
 }
 
-Rndr::PresentRenderer::PresentRenderer(const Opal::StringUtf8& name, const Rndr::RendererBaseDesc& desc) : RendererBase(name, desc) {}
+Rndr::PresentRenderer::PresentRenderer(Opal::StringUtf8 name, const Rndr::RendererBaseDesc& desc) : RendererBase(std::move(name), desc) {}
 
 bool Rndr::PresentRenderer::Render(f32 delta_seconds, CommandList& command_list)
 {

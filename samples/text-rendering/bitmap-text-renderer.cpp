@@ -12,7 +12,7 @@ bool BitmapTextRenderer::Init(Rndr::GraphicsContext* gc, Rndr::FrameBuffer* fram
     RNDR_ASSERT(m_gc != nullptr, "Invalid graphics context");
     m_frame_buffer = frame_buffer;
     RNDR_ASSERT(m_frame_buffer != nullptr, "Invalid frame buffer");
-    m_desc = desc;
+    m_desc = desc.Clone();
 
     UpdateFontAtlas();
 
@@ -35,22 +35,22 @@ bool BitmapTextRenderer::Init(Rndr::GraphicsContext* gc, Rndr::FrameBuffer* fram
     m_index_buffer = {*m_gc, index_buffer_desc};
     RNDR_ASSERT(m_index_buffer.IsValid(), "Buffer could not be created!");
 
-    const Opal::StringUtf8 vertex_shader_source = Rndr::File::ReadShader(RNDR_SAMPLES_SHADERS_DIR, "text-render-atlas.vert");
-    const Rndr::ShaderDesc vertex_shader_desc{.type = Rndr::ShaderType::Vertex, .source = vertex_shader_source};
+    Opal::StringUtf8 vertex_shader_source = Rndr::File::ReadShader(RNDR_SAMPLES_SHADERS_DIR, "text-render-atlas.vert");
+    const Rndr::ShaderDesc vertex_shader_desc{.type = Rndr::ShaderType::Vertex, .source = std::move(vertex_shader_source)};
     m_vertex_shader = {*m_gc, vertex_shader_desc};
     RNDR_ASSERT(m_vertex_shader.IsValid(), "Vertex shader could not be created!");
 
-    const Opal::StringUtf8 fragment_shader_source = Rndr::File::ReadShader(RNDR_SAMPLES_SHADERS_DIR, "text-render-atlas.frag");
-    const Rndr::ShaderDesc fragment_shader_desc{.type = Rndr::ShaderType::Fragment, .source = fragment_shader_source};
+    Opal::StringUtf8 fragment_shader_source = Rndr::File::ReadShader(RNDR_SAMPLES_SHADERS_DIR, "text-render-atlas.frag");
+    const Rndr::ShaderDesc fragment_shader_desc{.type = Rndr::ShaderType::Fragment, .source = std::move(fragment_shader_source)};
     m_fragment_shader = {*m_gc, fragment_shader_desc};
     RNDR_ASSERT(m_fragment_shader.IsValid(), "Fragment shader could not be created!");
 
-    const Rndr::InputLayoutDesc input_layout_desc = Rndr::InputLayoutBuilder()
-                                                        .AddVertexBuffer(m_vertex_buffer, 1, Rndr::DataRepetition::PerVertex)
-                                                        .AddIndexBuffer(m_index_buffer)
-                                                        .Build();
+    Rndr::InputLayoutDesc input_layout_desc = Rndr::InputLayoutBuilder()
+                                                  .AddVertexBuffer(m_vertex_buffer, 1, Rndr::DataRepetition::PerVertex)
+                                                  .AddIndexBuffer(m_index_buffer)
+                                                  .Build();
     const Rndr::PipelineDesc pipeline_desc{
-        .vertex_shader = &m_vertex_shader, .pixel_shader = &m_fragment_shader, .input_layout = input_layout_desc};
+        .vertex_shader = &m_vertex_shader, .pixel_shader = &m_fragment_shader, .input_layout = std::move(input_layout_desc)};
     m_pipeline = {*m_gc, pipeline_desc};
     RNDR_ASSERT(m_pipeline.IsValid(), "Pipeline could not be created!");
 
@@ -97,9 +97,9 @@ void BitmapTextRenderer::UpdateFontAtlas()
     Rndr::File::SaveImage(bitmap, "atlas.png");
 
     const Rndr::TextureDesc k_texture_desc{.width = k_atlas_width,
-                                               .height = k_atlas_height,
-                                               .type = Rndr::TextureType::Texture2D,
-                                               .pixel_format = Rndr::PixelFormat::R8_UNORM};
+                                           .height = k_atlas_height,
+                                           .type = Rndr::TextureType::Texture2D,
+                                           .pixel_format = Rndr::PixelFormat::R8_UNORM};
     m_atlas_texture = {*m_gc, k_texture_desc, {}, Opal::AsBytes(m_atlas_data)};
     RNDR_ASSERT(m_atlas_texture.IsValid(), "Atlas texture could not be created!");
 }

@@ -13,19 +13,21 @@ namespace Rndr
 class Shape3DRenderer : public RendererBase
 {
 public:
-    struct MaterialKey
+    struct MaterialKey : Opal::ClonableBase<MaterialKey>
     {
         Opal::Ref<const Material> material;
 
         bool operator==(const MaterialKey& other) const { return *material == *other.material; }
+
+        OPAL_CLONE_FIELDS(material);
     };
 
-    Shape3DRenderer(const Opal::StringUtf8& name, const RendererBaseDesc& desc, Opal::Ref<FrameBuffer> target);
+    Shape3DRenderer(Opal::StringUtf8 name, const RendererBaseDesc& desc, Opal::Ref<FrameBuffer> target);
     ~Shape3DRenderer() override;
 
     void Destroy();
 
-    void SetFrameBufferTarget(Opal::Ref<FrameBuffer> target) { m_target = target; }
+    void SetFrameBufferTarget(Opal::Ref<FrameBuffer> target) { m_target = std::move(target); }
     void SetTransforms(const Matrix4x4f& view, const Matrix4x4f& projection);
     void SetCameraPosition(const Point3f& camera_position);
 

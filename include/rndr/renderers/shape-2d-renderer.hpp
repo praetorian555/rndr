@@ -16,7 +16,7 @@ class GraphicsContext;
 class Shape2DRenderer : public RendererBase
 {
 public:
-    Shape2DRenderer(const Opal::StringUtf8& name, const RendererBaseDesc& desc, Opal::Ref<FrameBuffer> target);
+    Shape2DRenderer(Opal::StringUtf8 name, const RendererBaseDesc& desc, Opal::Ref<FrameBuffer> target);
     ~Shape2DRenderer() override;
 
     void Destroy();

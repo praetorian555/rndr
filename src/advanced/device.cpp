@@ -69,7 +69,7 @@ Rndr::u32 Rndr::AdvancedQueueFamilyIndices::GetQueueFamilyIndex(QueueFamily queu
 
 Rndr::AdvancedDevice::AdvancedDevice(AdvancedPhysicalDevice physical_device, const AdvancedGraphicsContext& graphics_context,
                                      const AdvancedDeviceDesc& desc)
-    : m_desc(desc), m_physical_device(std::move(physical_device))
+    : m_desc(desc.Clone()), m_physical_device(std::move(physical_device))
 {
     if (!m_physical_device.IsValid())
     {
@@ -79,7 +79,7 @@ Rndr::AdvancedDevice::AdvancedDevice(AdvancedPhysicalDevice physical_device, con
     Opal::DynamicArray<VkDeviceQueueCreateInfo> queue_create_infos;
     CollectQueueFamilies(queue_create_infos);
 
-    Opal::DynamicArray device_extensions(desc.extensions);
+    Opal::DynamicArray device_extensions(desc.extensions.Clone());
     if (desc.surface.IsValid())
     {
         device_extensions.PushBack(VK_KHR_SWAPCHAIN_EXTENSION_NAME);

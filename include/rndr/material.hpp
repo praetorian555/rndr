@@ -21,9 +21,9 @@ enum class MaterialFlags : u32
 };
 OPAL_ENUM_CLASS_FLAGS(MaterialFlags);
 
-struct MaterialDesc
+struct MaterialDesc : Opal::ClonableBase<MaterialDesc>
 {
-    Vector4f albedo_color = Colors::k_pink;    // Used only if albedo texture is missing.
+    Vector4f albedo_color = Colors::k_pink;          // Used only if albedo texture is missing.
     Vector4f emissive_color = Vector4f{0, 0, 0, 0};  // Used only if emissive texture is missing.
     // Roughness of the surface, for anisotropic materials use the x and y while for isotropic materials the same value will be stored in
     // x and y. Used only if metallic-roughness texture is missing.
@@ -41,6 +41,10 @@ struct MaterialDesc
     Opal::StringUtf8 normal_texture_path;
     Opal::StringUtf8 ambient_occlusion_texture_path;
     Opal::StringUtf8 opacity_texture_path;
+
+    OPAL_CLONE_FIELDS(albedo_color, emissive_color, roughness, metallic_factor, transparency_factor, alpha_test, material_flags,
+                      albedo_texture_path, emissive_texture_path, metallic_roughness_texture_path, normal_texture_path,
+                      ambient_occlusion_texture_path, opacity_texture_path);
 };
 
 /**
@@ -113,7 +117,7 @@ private:
 class MaterialRegistry
 {
 public:
-    explicit MaterialRegistry(Opal::Ref<GraphicsContext> graphics_context) : m_graphics_context(graphics_context) {}
+    explicit MaterialRegistry(Opal::Ref<GraphicsContext> graphics_context) : m_graphics_context(std::move(graphics_context)) {}
     void Register(Opal::StringUtf8 name, const MaterialDesc& desc);
     Opal::Ref<const Material> Get(const Opal::StringUtf8& name) const;
 

@@ -15,7 +15,7 @@
 #include "rndr/log.hpp"
 #include "rndr/pixel-format.hpp"
 
-Rndr::AdvancedSurface::AdvancedSurface(const AdvancedGraphicsContext& context, Opal::Ref<const GenericWindow> window) : m_window(window)
+Rndr::AdvancedSurface::AdvancedSurface(const AdvancedGraphicsContext& context, Opal::Ref<const GenericWindow> window) : m_window(std::move(window))
 {
 #if defined(OPAL_PLATFORM_WINDOWS)
     VkWin32SurfaceCreateInfoKHR surface_create_info{};
@@ -49,7 +49,7 @@ Rndr::AdvancedSurface& Rndr::AdvancedSurface::operator=(AdvancedSurface&& other)
 {
     Destroy();
     m_surface = other.m_surface;
-    m_context = other.m_context;
+    m_context = std::move(other.m_context);
     other.m_surface = VK_NULL_HANDLE;
     other.m_context = nullptr;
     return *this;

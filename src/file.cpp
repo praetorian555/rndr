@@ -153,7 +153,7 @@ Opal::StringUtf8 Rndr::File::ReadShader(const Opal::StringUtf8& ref_path, const 
         }
         auto parent_path_result = Opal::Paths::GetParentPath(full_path);
         RNDR_ASSERT(parent_path_result.HasValue(), "Shader parent directory path is empty!");
-        const Opal::StringUtf8 parent_path = parent_path_result.GetValue();
+        const Opal::StringUtf8 parent_path = std::move(parent_path_result.GetValue());
         const Opal::StringUtf8 include_contents = ReadShader(parent_path, include_path);
         shader_contents.Erase(include_start, include_length);
         shader_contents.Insert(include_start, include_contents);
@@ -352,8 +352,7 @@ void Rndr::File::LoadMesh(const aiScene& ai_scene, const Opal::StringUtf8& mesh_
     const aiMesh* ai_mesh = ai_scene.mMeshes[0];
     out_mesh.vertex_size = sizeof(Point3f) + sizeof(Normal3f) + sizeof(Point2f);
     out_material_index = ai_mesh->mMaterialIndex;
-    out_mesh.name = mesh_name;
-    ;
+    out_mesh.name = mesh_name.Clone();
     for (u32 vertex_idx = 0; vertex_idx < ai_mesh->mNumVertices; ++vertex_idx)
     {
         Point3f position(ai_mesh->mVertices[vertex_idx].x, ai_mesh->mVertices[vertex_idx].y, ai_mesh->mVertices[vertex_idx].z);

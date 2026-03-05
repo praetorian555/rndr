@@ -20,7 +20,8 @@ void GenerateDefinesShaderCode(const Opal::DynamicArray<Opal::StringUtf8>& defin
 }
 }  // namespace
 
-Rndr::Shader::Shader(const GraphicsContext& graphics_context, const ShaderDesc& desc) : m_desc(desc)
+Rndr::Shader::Shader(const GraphicsContext& graphics_context, const ShaderDesc& desc, Opal::StringUtf8 debug_name)
+    : m_desc(desc.Clone()), m_debug_name(std::move(debug_name))
 {
     const ErrorCode err = Initialize(graphics_context, desc);
     if (err != ErrorCode::Success)
@@ -50,7 +51,7 @@ Rndr::ErrorCode Rndr::Shader::Initialize(const Rndr::GraphicsContext& graphics_c
         return Rndr::ErrorCode::InvalidArgument;
     }
 
-    m_desc = desc;
+    m_desc = desc.Clone();
 
     const GLenum shader_type = Rndr::FromShaderTypeToOpenGL(desc.type);
     m_native_shader = glCreateShader(shader_type);
@@ -60,7 +61,7 @@ Rndr::ErrorCode Rndr::Shader::Initialize(const Rndr::GraphicsContext& graphics_c
         return ErrorCode::OutOfMemory;
     }
 
-    Opal::StringUtf8 final_shader_code = desc.source;
+    Opal::StringUtf8 final_shader_code = desc.source.Clone();
     // If there are defines, insert them at the beginning of the shader source, after the version.
     if (!m_desc.defines.IsEmpty())
     {
@@ -122,7 +123,7 @@ Rndr::Shader& Rndr::Shader::operator=(Rndr::Shader&& other) noexcept
     if (this != &other)
     {
         Destroy();
-        m_desc = other.m_desc;
+        m_desc = std::move(other.m_desc);
         m_native_shader = other.m_native_shader;
         other.m_native_shader = k_invalid_opengl_object;
     }

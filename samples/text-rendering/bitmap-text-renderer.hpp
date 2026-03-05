@@ -7,7 +7,7 @@
 
 #include "types.hpp"
 
-struct BitmapTextRendererDesc
+struct BitmapTextRendererDesc : Opal::ClonableBase<BitmapTextRendererDesc>
 {
     Opal::StringUtf8 font_file_path;
     f32 font_size = 64.0f;
@@ -17,6 +17,9 @@ struct BitmapTextRendererDesc
     u32 oversample_h = 2;
     u32 oversample_v = 1;
     f32 alpha_multiplier = 1.5f;
+
+    OPAL_CLONE_FIELDS(font_file_path, font_size, first_code_point, code_point_count, max_char_render_count, oversample_h, oversample_v,
+                      alpha_multiplier);
 };
 
 class BitmapTextRenderer

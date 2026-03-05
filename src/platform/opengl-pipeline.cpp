@@ -10,7 +10,8 @@
 #include "rndr/platform/opengl-shader.hpp"
 #include "rndr/trace.hpp"
 
-Rndr::Pipeline::Pipeline(const GraphicsContext& graphics_context, const PipelineDesc& desc) : m_desc(desc)
+Rndr::Pipeline::Pipeline(const GraphicsContext& graphics_context, const PipelineDesc& desc, Opal::StringUtf8 debug_name)
+    : m_desc(desc.Clone()), m_debug_name(std::move(debug_name))
 {
     RNDR_UNUSED(graphics_context);
 
@@ -88,7 +89,7 @@ Rndr::Pipeline::Pipeline(const GraphicsContext& graphics_context, const Pipeline
         if (buffer_desc.type == BufferType::Vertex)
         {
             RNDR_ASSERT(buffer_desc.stride > static_cast<int64_t>(INT32_MIN) && buffer_desc.stride < static_cast<int64_t>(INT32_MAX),
-                "Buffer stride is out of range!");
+                        "Buffer stride is out of range!");
             glVertexArrayVertexBuffer(m_native_vertex_array, binding_index, buffer.GetNativeBuffer(), buffer_desc.offset,
                                       static_cast<int32_t>(buffer_desc.stride));
             RNDR_ASSERT_OPENGL();
@@ -163,7 +164,7 @@ Rndr::Pipeline& Rndr::Pipeline::operator=(Pipeline&& other) noexcept
     if (this != &other)
     {
         Destroy();
-        m_desc = other.m_desc;
+        m_desc = std::move(other.m_desc);
         m_native_shader_program = other.m_native_shader_program;
         m_native_vertex_array = other.m_native_vertex_array;
         other.m_native_shader_program = k_invalid_opengl_object;

@@ -2,6 +2,7 @@
 
 #include "volk/volk.h"
 
+#include "opal/clonable-base.h"
 #include "opal/container/dynamic-array.h"
 #include "opal/container/hash-map.h"
 #include "opal/container/ref.h"
@@ -24,16 +25,24 @@ enum class AdvancedDescriptorType : u8
     EnumCount
 };
 
-struct AdvancedDescriptorPoolDesc
+struct AdvancedDescriptorPoolDesc : Opal::ClonableBase<AdvancedDescriptorPoolDesc>
 {
     Opal::DynamicArray<Opal::Pair<AdvancedDescriptorType, u32>> descriptor_types;
     u32 max_sets = 1;
     bool use_update_after_bind = true;
 
+    // AdvancedDescriptorPoolDesc(Opal::DynamicArray<Opal::Pair<AdvancedDescriptorType, u32>> in_descriptor_types, u32 in_max_sets,
+    //                            bool in_use_update_after_bind)
+    //     : descriptor_types(std::move(in_descriptor_types)), max_sets(in_max_sets), use_update_after_bind(in_use_update_after_bind)
+    // {
+    // }
+    //
+    OPAL_CLONE_FIELDS(descriptor_types, max_sets, use_update_after_bind);
+
     void Add(AdvancedDescriptorType descriptor_type, u32 max_size);
 };
 
-struct AdvancedDescriptorSetLayoutDesc
+struct AdvancedDescriptorSetLayoutDesc : Opal::ClonableBase<AdvancedDescriptorSetLayoutDesc>
 {
     struct Binding
     {
@@ -42,6 +51,8 @@ struct AdvancedDescriptorSetLayoutDesc
         ShaderTypeBits shader_types;
     };
     Opal::DynamicArray<Binding> bindings;
+
+    OPAL_CLONE_FIELDS(bindings);
 
     void AddBinding(AdvancedDescriptorType descriptor_type, u32 descriptor_count, ShaderTypeBits shader_types);
 };
@@ -95,7 +106,7 @@ class AdvancedDescriptorSetLayout
 {
 public:
     AdvancedDescriptorSetLayout() = default;
-    explicit AdvancedDescriptorSetLayout(const class AdvancedDevice& device, const AdvancedDescriptorSetLayoutDesc& desc);
+    explicit AdvancedDescriptorSetLayout(const class AdvancedDevice& device, const AdvancedDescriptorSetLayoutDesc& desc = {});
     ~AdvancedDescriptorSetLayout();
 
     AdvancedDescriptorSetLayout(const AdvancedDescriptorSetLayout&) = delete;

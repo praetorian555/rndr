@@ -8,7 +8,9 @@
 #include "rndr/platform/opengl-graphics-context.hpp"
 #include "rndr/trace.hpp"
 
-Rndr::Buffer::Buffer(const GraphicsContext& graphics_context, const BufferDesc& desc, const Opal::ArrayView<const u8>& init_data)
+Rndr::Buffer::Buffer(const GraphicsContext& graphics_context, const BufferDesc& desc, const Opal::ArrayView<const u8>& init_data,
+                     Opal::StringUtf8 debug_name)
+    : m_debug_name(std::move(debug_name))
 {
     const ErrorCode err = Initialize(graphics_context, desc, init_data);
     if (err != ErrorCode::Success)
@@ -22,7 +24,7 @@ Rndr::Buffer::~Buffer()
     Destroy();
 }
 
-Rndr::Buffer::Buffer(Buffer&& other) noexcept : m_desc(other.m_desc), m_native_buffer(other.m_native_buffer)
+Rndr::Buffer::Buffer(Buffer&& other) noexcept : m_desc(std::move(other.m_desc)), m_native_buffer(other.m_native_buffer)
 {
     other.m_native_buffer = k_invalid_opengl_object;
 }

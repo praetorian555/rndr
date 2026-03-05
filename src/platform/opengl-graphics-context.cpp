@@ -282,7 +282,7 @@ void Rndr::GraphicsContext::BindPipeline(const Pipeline& pipeline)
     const GLuint vertex_array = pipeline.GetNativeVertexArray();
     glBindVertexArray(vertex_array);
     RNDR_GL_THROW_ON_ERROR("Failed to bind vertex array object!", RNDR_NOOP);
-    const Rndr::PipelineDesc desc = pipeline.GetDesc();
+    const Rndr::PipelineDesc desc = pipeline.GetDesc().Clone();
     if (desc.depth_stencil.is_depth_enabled)
     {
         glEnable(GL_DEPTH_TEST);

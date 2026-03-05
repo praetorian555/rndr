@@ -29,15 +29,17 @@ enum class QueueFamily : u8
     EnumCount
 };
 
-struct AdvancedDeviceDesc
+struct AdvancedDeviceDesc : Opal::ClonableBase<AdvancedDeviceDesc>
 {
     VkPhysicalDeviceFeatures features = {.samplerAnisotropy = VK_TRUE};
     Opal::DynamicArray<const char*> extensions;
     Opal::Ref<class AdvancedSurface> surface;
-    bool use_async_compute_queue : 1 = true;
-    bool use_dedicated_transfer_queue : 1 = true;
-    bool use_decode_queue : 1 = false;
-    bool use_encode_queue : 1 = false;
+    bool use_async_compute_queue = true;
+    bool use_dedicated_transfer_queue = true;
+    bool use_decode_queue = false;
+    bool use_encode_queue = false;
+
+    OPAL_CLONE_FIELDS(features, extensions, surface, use_async_compute_queue, use_dedicated_transfer_queue, use_decode_queue, use_encode_queue);
 };
 
 struct AdvancedQueueFamilyIndices

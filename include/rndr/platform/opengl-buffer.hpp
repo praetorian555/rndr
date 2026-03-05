@@ -28,7 +28,7 @@ public:
      * @param init_data The initial data to fill the buffer with. If empty, the contents of the allocated buffer will be undefined. Default
      * is empty.
      */
-    Buffer(const GraphicsContext& graphics_context, const BufferDesc& desc, const Opal::ArrayView<const u8>& init_data = Opal::ArrayView<const u8>{});
+    Buffer(const GraphicsContext& graphics_context, const BufferDesc& desc, const Opal::ArrayView<const u8>& init_data = Opal::ArrayView<const u8>{}, Opal::StringUtf8 debug_name = "");
 
     /**
      * Create a new buffer with initial data.
@@ -71,6 +71,7 @@ public:
 private:
     BufferDesc m_desc;
     GLuint m_native_buffer = k_invalid_opengl_object;
+    Opal::StringUtf8 m_debug_name;
 };
 
 template <typename DataType>

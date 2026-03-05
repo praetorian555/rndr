@@ -26,7 +26,7 @@ public:
      * @param graphics_context The graphics context to create the pipeline with.
      * @param desc The description of the pipeline to create.
      */
-    Pipeline(const GraphicsContext& graphics_context, const PipelineDesc& desc);
+    Pipeline(const GraphicsContext& graphics_context, const PipelineDesc& desc, Opal::StringUtf8 debug_name = "");
 
     ~Pipeline();
     Pipeline(const Pipeline&) = delete;
@@ -48,6 +48,7 @@ private:
     PipelineDesc m_desc;
     GLuint m_native_shader_program = k_invalid_opengl_object;
     GLuint m_native_vertex_array = k_invalid_opengl_object;
+    Opal::StringUtf8 m_debug_name;
 };
 
 }  // namespace Rndr

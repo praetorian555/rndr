@@ -12,7 +12,7 @@
 #include "example-controller.h"
 #include "imgui.h"
 #include "opal/rng.h"
-#include "rndr/frames-per-second-counter.h"
+#include "rndr/frames-per-second-counter.hpp"
 #include "rndr/renderers/grid-renderer.hpp"
 #include "rndr/renderers/shape-3d-renderer.hpp"
 #include "rndr/trace.hpp"
@@ -33,9 +33,8 @@ Rndr::FrameBuffer RecreateFrameBuffer(Rndr::GraphicsContext& gc, Rndr::i32 width
                                      .use_depth_stencil = true,
                                      .depth_stencil_attachment = {Rndr::TextureDesc{
                                          .width = width, .height = height, .pixel_format = Rndr::PixelFormat::D32_SFLOAT_S8_UINT}},
-                                     .depth_stencil_sampler = {{}},
-                                     .debug_name = "Window Sample - Final Render Frame Buffer"};
-    return {gc, desc};
+                                     .depth_stencil_sampler = {{}}};
+    return {gc, desc, "Window Sample - Final Render Frame Buffer"};
 }
 
 void DrawScene(Rndr::Shape3DRenderer& shape_renderer, const Rndr::Mesh& mesh, const Rndr::MaterialRegistry& mat_registry);
@@ -84,24 +83,26 @@ int main()
             }
         });
 
-    app->GetInputSystemChecked().GetCurrentContext().AddAction("Switch display mode")
-    .Bind(Rndr::Key::F2, Rndr::Trigger::Pressed)
-    .OnButton([window](Rndr::Trigger, bool is_repeated)
-    {
-        if (!is_repeated)
-        {
-            const Rndr::GenericWindowMode current_mode = window->GetMode();
-            window->SetMode(current_mode == Rndr::GenericWindowMode::Windowed
-                                ? Rndr::GenericWindowMode::BorderlessFullscreen
-                                : Rndr::GenericWindowMode::Windowed);
-        }
-    });
+    app->GetInputSystemChecked()
+        .GetCurrentContext()
+        .AddAction("Switch display mode")
+        .Bind(Rndr::Key::F2, Rndr::Trigger::Pressed)
+        .OnButton(
+            [window](Rndr::Trigger, bool is_repeated)
+            {
+                if (!is_repeated)
+                {
+                    const Rndr::GenericWindowMode current_mode = window->GetMode();
+                    window->SetMode(current_mode == Rndr::GenericWindowMode::Windowed ? Rndr::GenericWindowMode::BorderlessFullscreen
+                                                                                      : Rndr::GenericWindowMode::Windowed);
+                }
+            });
 
     Rndr::ImGuiContext imgui_context(*window, gc);
     app->RegisterSystemMessageHandler(&imgui_context);
 
-    Rndr::GridRenderer grid_renderer("Grid Renderer", {Opal::Ref{gc}, Opal::Ref{swap_chain}}, Opal::Ref{final_render});
-    Rndr::Shape3DRenderer shape_renderer("3D Shape Renderer", {Opal::Ref{gc}, Opal::Ref{swap_chain}}, Opal::Ref{final_render});
+    Rndr::GridRenderer grid_renderer("Grid Renderer", {.graphics_context = gc, .swap_chain = swap_chain}, Opal::Ref{final_render});
+    Rndr::Shape3DRenderer shape_renderer("3D Shape Renderer", {.graphics_context = gc, .swap_chain = swap_chain}, Opal::Ref{final_render});
 
     Rndr::Mesh helmet_mesh;
     Rndr::MaterialDesc helmet_material_desc;
@@ -113,8 +114,8 @@ int main()
     material_registry.Register("Red Color Material", {.albedo_color = Rndr::Colors::k_red});
     material_registry.Register("White Color Material", {.albedo_color = Rndr::Colors::k_white});
     Opal::StringUtf8 albedo_texture_path = Opal::Paths::Combine(RNDR_CORE_ASSETS_DIR, "default-texture.png");
-    albedo_texture_path = Opal::Paths::NormalizePath(albedo_texture_path);
-    material_registry.Register("Default Material", {.albedo_texture_path = albedo_texture_path});
+    albedo_texture_path = Opal::Paths::NormalizePath(std::move(albedo_texture_path));
+    material_registry.Register("Default Material", {.albedo_texture_path = std::move(albedo_texture_path)});
     material_registry.Register("Helmet Material", helmet_material_desc);
 
     const Rndr::FlyCameraDesc fly_camera_desc{.start_position = {0.0f, 1.0f, 0.0f}, .start_yaw_radians = 0};
@@ -129,32 +130,34 @@ int main()
             }
         });
 
-    app->GetInputSystemChecked().GetContextByName("Default").AddAction("Toggle movement controls")
-    .Bind(Rndr::Key::F1, Rndr::Trigger::Pressed)
-    .OnButton([&app, &controller](Rndr::Trigger, bool is_repeated)
-    {
-        if (!is_repeated)
-        {
-            const Rndr::CursorPositionMode mode = app->GetCursorPositionMode();
-            if (mode == Rndr::CursorPositionMode::Normal)
+    app->GetInputSystemChecked()
+        .GetContextByName("Default")
+        .AddAction("Toggle movement controls")
+        .Bind(Rndr::Key::F1, Rndr::Trigger::Pressed)
+        .OnButton(
+            [&app, &controller](Rndr::Trigger, bool is_repeated)
             {
-                app->ShowCursor(false);
-                app->SetCursorPositionMode(Rndr::CursorPositionMode::ResetToCenter);
-            }
-            else
-            {
-                app->ShowCursor(true);
-                app->SetCursorPositionMode(Rndr::CursorPositionMode::Normal);
-            }
-            controller.Enable(!controller.IsEnabled());
-        }
-    });
-    app->GetInputSystemChecked().GetContextByName("Default").AddAction("Exit")
-    .Bind(Rndr::Key::Escape, Rndr::Trigger::Pressed)
-    .OnButton([window](Rndr::Trigger, bool)
-    {
-        window->ForceClose();
-    });
+                if (!is_repeated)
+                {
+                    const Rndr::CursorPositionMode mode = app->GetCursorPositionMode();
+                    if (mode == Rndr::CursorPositionMode::Normal)
+                    {
+                        app->ShowCursor(false);
+                        app->SetCursorPositionMode(Rndr::CursorPositionMode::ResetToCenter);
+                    }
+                    else
+                    {
+                        app->ShowCursor(true);
+                        app->SetCursorPositionMode(Rndr::CursorPositionMode::Normal);
+                    }
+                    controller.Enable(!controller.IsEnabled());
+                }
+            });
+    app->GetInputSystemChecked()
+        .GetContextByName("Default")
+        .AddAction("Exit")
+        .Bind(Rndr::Key::Escape, Rndr::Trigger::Pressed)
+        .OnButton([window](Rndr::Trigger, bool) { window->ForceClose(); });
 
     Rndr::CommandList present_cmd_list{gc};
     present_cmd_list.CmdPresent(swap_chain);
@@ -249,9 +252,9 @@ void DrawScene(Rndr::Shape3DRenderer& shape_renderer, const Rndr::Mesh& mesh, co
     const Rndr::Matrix4x4f cube_transform = Opal::Translate(Rndr::Vector3f{-2.0f, 0.0f, -10.0f});
     const Rndr::Matrix4x4f sphere_transform = Opal::Translate(Rndr::Vector3f{2.0f, 0.0f, -10.0f});
     const Rndr::Matrix4x4f helmet_transform = Opal::Translate(Rndr::Vector3f{0.0f, 2.0f, -20.0f}) * Opal::RotateX(90.0f);
-    shape_renderer.DrawSphere(sphere_transform, default_material, 2.0f, 2.0f, 32, 32);
-    shape_renderer.DrawCube(cube_transform, default_material, 1.0f, 1.0f);
-    shape_renderer.DrawMesh(mesh, helmet_transform, helmet_material);
+    shape_renderer.DrawSphere(sphere_transform, default_material.Clone(), 2.0f, 2.0f, 32, 32);
+    shape_renderer.DrawCube(cube_transform, default_material.Clone(), 1.0f, 1.0f);
+    shape_renderer.DrawMesh(mesh, helmet_transform, helmet_material.Clone());
 
     constexpr Rndr::i32 k_cube_size = 10;
     const Rndr::Point3f start_position = {0.0f, 0.0f, 10.0f};
@@ -264,7 +267,7 @@ void DrawScene(Rndr::Shape3DRenderer& shape_renderer, const Rndr::Mesh& mesh, co
             {
                 constexpr Rndr::f32 k_distance = 5.0f;
                 const Rndr::Point3f draw_location = start_position + Rndr::Vector3f{x * k_distance, y * k_distance, z * k_distance};
-                shape_renderer.DrawSphere(Opal::Translate(draw_location), white_material);
+                shape_renderer.DrawSphere(Opal::Translate(draw_location), white_material.Clone());
             }
         }
     }

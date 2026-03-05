@@ -1,7 +1,7 @@
 #include "rndr/shader-permutation.hpp"
 
 Rndr::ShaderPermutation::ShaderPermutation(Opal::Ref<GraphicsContext> graphics_context, const ShaderDesc& shader_desc)
-    : m_shader_desc(shader_desc), m_graphics_context(std::move(graphics_context))
+    : m_shader_desc(shader_desc.Clone()), m_graphics_context(std::move(graphics_context))
 {
     m_shader = Shader(m_graphics_context, shader_desc);
     if (!m_shader.IsValid())

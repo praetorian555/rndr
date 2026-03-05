@@ -6,10 +6,12 @@
 namespace Rndr
 {
 
-struct RendererBaseDesc
+struct RendererBaseDesc : Opal::ClonableBase<RendererBaseDesc>
 {
     Opal::Ref<GraphicsContext> graphics_context;
     Opal::Ref<SwapChain> swap_chain;
+
+    OPAL_CLONE_FIELDS(graphics_context, swap_chain);
 };
 
 /**
@@ -18,7 +20,7 @@ struct RendererBaseDesc
 class RendererBase
 {
 public:
-    RendererBase(const Opal::StringUtf8& name, const RendererBaseDesc& desc);
+    RendererBase(Opal::StringUtf8 name, const RendererBaseDesc& desc);
     virtual ~RendererBase() = default;
 
     virtual bool Render(f32 delta_seconds, CommandList& command_list) = 0;
@@ -36,7 +38,7 @@ protected:
 class ClearRenderer : public RendererBase
 {
 public:
-    ClearRenderer(const Opal::StringUtf8& name, const RendererBaseDesc& desc, const Vector4f& color, float depth = 1.0f, i32 stencil = 0);
+    ClearRenderer(Opal::StringUtf8 name, const RendererBaseDesc& desc, const Vector4f& color, float depth = 1.0f, i32 stencil = 0);
 
     bool Render(f32 delta_seconds, CommandList& command_list) override;
 
@@ -52,7 +54,7 @@ protected:
 class PresentRenderer : public RendererBase
 {
 public:
-    PresentRenderer(const Opal::StringUtf8& name, const RendererBaseDesc& desc);
+    PresentRenderer(Opal::StringUtf8 name, const RendererBaseDesc& desc);
 
     bool Render(f32 delta_seconds, CommandList& command_list) override;
 };

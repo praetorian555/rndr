@@ -62,11 +62,11 @@ Rndr::InputLayoutDesc Rndr::InputLayoutBuilder::Build()
     buffers.Reserve(m_buffers.GetSize());
     for (auto const& [binding_index, buffer_info] : m_buffers)
     {
-        buffers.PushBack(buffer_info.buffer);
+        buffers.PushBack(buffer_info.buffer.Clone());
         buffer_binding_slots.PushBack(binding_index);
     }
-    return InputLayoutDesc{.index_buffer = m_index_buffer,
-                           .vertex_buffers = buffers,
-                           .vertex_buffer_binding_slots = buffer_binding_slots,
-                           .elements = m_elements};
+    return InputLayoutDesc{.index_buffer = std::move(m_index_buffer),
+                           .vertex_buffers = std::move(buffers),
+                           .vertex_buffer_binding_slots = std::move(buffer_binding_slots),
+                           .elements = std::move(m_elements)};
 }

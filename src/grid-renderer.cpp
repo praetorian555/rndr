@@ -13,14 +13,14 @@ struct RNDR_ALIGN(16) Uniforms
 };
 OPAL_END_DISABLE_WARNINGS
 
-Rndr::GridRenderer::GridRenderer(const Opal::StringUtf8& name, const RendererBaseDesc& desc, Opal::Ref<FrameBuffer> target)
-    : RendererBase(name, desc), m_target(target)
+Rndr::GridRenderer::GridRenderer(Opal::StringUtf8 name, const RendererBaseDesc& desc, Opal::Ref<FrameBuffer> target)
+    : RendererBase(std::move(name), desc), m_target(std::move(target))
 {
-    const BufferDesc buffer_desc{.usage = Rndr::Usage::Dynamic, .size = sizeof(Uniforms), .stride = sizeof(Uniforms), .debug_name = "Grid Rrenderer - Per Frame Buffer"};
-    m_uniform_buffer = Buffer(m_desc.graphics_context, buffer_desc);
+    const BufferDesc buffer_desc{.usage = Rndr::Usage::Dynamic, .size = sizeof(Uniforms), .stride = sizeof(Uniforms)};
+    m_uniform_buffer = Buffer(m_desc.graphics_context, buffer_desc, {}, "Grid Renderer - Per Frame Buffer");
     RNDR_ASSERT(m_uniform_buffer.IsValid(), "Invalid buffer!");
 
-    const Opal::StringUtf8 vertex_shader_contents = R"(
+    Opal::StringUtf8 vertex_shader_contents = R"(
         #version 460
 
         layout(set = 0, binding = 0) uniform ViewUniforms {
@@ -43,7 +43,7 @@ Rndr::GridRenderer::GridRenderer(const Opal::StringUtf8& name, const RendererBas
         }
     )";
 
-    const Opal::StringUtf8 fragment_shader_contents = R"(
+    Opal::StringUtf8 fragment_shader_contents = R"(
         #version 460
 
         layout(location = 0) in vec4 world_position;
@@ -89,16 +89,18 @@ Rndr::GridRenderer::GridRenderer(const Opal::StringUtf8& name, const RendererBas
         }
     )";
 
-    const ShaderDesc vertex_shader_desc{.type = ShaderType::Vertex, .source = vertex_shader_contents, .debug_name = "Grid Renderer - Vertex Shader"};
-    m_vertex_shader = Shader(m_desc.graphics_context, vertex_shader_desc);
+    const ShaderDesc vertex_shader_desc{.type = ShaderType::Vertex, .source = std::move(vertex_shader_contents)};
+    m_vertex_shader = Shader(m_desc.graphics_context, vertex_shader_desc, "Grid Renderer - Vertex Shader");
     RNDR_ASSERT(m_vertex_shader.IsValid(), "Invalid vertex shader!");
 
-    const ShaderDesc fragment_shader_desc{.type = ShaderType::Fragment, .source = fragment_shader_contents, .debug_name = "Grid Renderer - Fragment Shader"};
-    m_fragment_shader = Shader(m_desc.graphics_context, fragment_shader_desc);
+    const ShaderDesc fragment_shader_desc{.type = ShaderType::Fragment, .source = std::move(fragment_shader_contents)};
+    m_fragment_shader = Shader(m_desc.graphics_context, fragment_shader_desc, "Grid Renderer - Fragment Shader");
     RNDR_ASSERT(m_fragment_shader.IsValid(), "Invalid fragment shader!");
 
-    const PipelineDesc pipeline_desc{.vertex_shader = &m_vertex_shader, .pixel_shader = &m_fragment_shader, .depth_stencil = {.is_depth_enabled = true}, .debug_name = "Grid Renderer - Pipeline"};
-    m_pipeline = Pipeline(m_desc.graphics_context, pipeline_desc);
+    const PipelineDesc pipeline_desc{.vertex_shader = &m_vertex_shader,
+                                     .pixel_shader = &m_fragment_shader,
+                                     .depth_stencil = {.is_depth_enabled = true}};
+    m_pipeline = Pipeline(m_desc.graphics_context, pipeline_desc, "Grid Renderer - Pipeline");
     RNDR_ASSERT(m_pipeline.IsValid(), "Invalid pipeline!");
 }
 
@@ -117,7 +119,7 @@ void Rndr::GridRenderer::Destroy()
 
 void Rndr::GridRenderer::SetFrameBufferTarget(Opal::Ref<FrameBuffer> target)
 {
-    m_target = target;
+    m_target = std::move(target);
 }
 
 void Rndr::GridRenderer::SetTransforms(const Matrix4x4f& view, const Matrix4x4f& projection)

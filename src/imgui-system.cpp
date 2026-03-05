@@ -133,7 +133,7 @@ Opal::HashMap<Rndr::InputPrimitive, Rndr::i32> g_mouse_primitive_to_imgui_key{{R
 }  // namespace
 
 Rndr::ImGuiContext::ImGuiContext(GenericWindow& window, GraphicsContext& context, const ImGuiContextDesc& desc)
-    : m_window(window), m_context(context), m_desc(desc)
+    : m_window(window), m_context(context), m_desc(desc.Clone())
 {
 
     // Setup Dear ImGui context

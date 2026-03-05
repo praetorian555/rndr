@@ -87,7 +87,7 @@ void Rndr::AdvancedDescriptorSetLayoutDesc::AddBinding(AdvancedDescriptorType de
 // AdvancedDescriptorPool
 
 Rndr::AdvancedDescriptorPool::AdvancedDescriptorPool(const AdvancedDevice& device, const AdvancedDescriptorPoolDesc& desc)
-    : m_device(device), m_desc(desc)
+    : m_device(device), m_desc(desc.Clone())
 {
     Opal::DynamicArray<VkDescriptorPoolSize> pool_sizes(Opal::GetScratchAllocator());
     for (const auto& pair : desc.descriptor_types)
@@ -127,7 +127,7 @@ Rndr::AdvancedDescriptorPool::~AdvancedDescriptorPool()
 }
 
 Rndr::AdvancedDescriptorPool::AdvancedDescriptorPool(AdvancedDescriptorPool&& other) noexcept
-    : m_device(std::move(other.m_device)), m_pool(other.m_pool), m_desc(other.m_desc)
+    : m_device(std::move(other.m_device)), m_pool(other.m_pool), m_desc(std::move(other.m_desc))
 {
     other.m_pool = VK_NULL_HANDLE;
     other.m_device = nullptr;
@@ -140,7 +140,7 @@ Rndr::AdvancedDescriptorPool& Rndr::AdvancedDescriptorPool::operator=(AdvancedDe
         Destroy();
         m_device = std::move(other.m_device);
         m_pool = other.m_pool;
-        m_desc = other.m_desc;
+        m_desc = std::move(other.m_desc);
         other.m_pool = VK_NULL_HANDLE;
         other.m_device = nullptr;
     }
@@ -164,7 +164,7 @@ VkDevice Rndr::AdvancedDescriptorPool::GetNativeDevice() const
 // AdvancedDescriptorSetLayout
 
 Rndr::AdvancedDescriptorSetLayout::AdvancedDescriptorSetLayout(const AdvancedDevice& device, const AdvancedDescriptorSetLayoutDesc& desc)
-    : m_device(device), m_desc(desc)
+    : m_device(device), m_desc(desc.Clone())
 {
     Opal::DynamicArray<VkDescriptorSetLayoutBinding> bindings(desc.bindings.GetSize());
     Opal::DynamicArray<VkDescriptorBindingFlags> binding_flags_array(desc.bindings.GetSize());

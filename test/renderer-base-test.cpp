@@ -5,7 +5,7 @@
 class TestRenderer : public Rndr::RendererBase
 {
 public:
-    TestRenderer(const Opal::StringUtf8& name, const Rndr::RendererBaseDesc& desc) : RendererBase(name, desc) {}
+    TestRenderer(Opal::StringUtf8 name, const Rndr::RendererBaseDesc& desc) : RendererBase(std::move(name), desc) {}
     bool Render(Rndr::f32 /*delta_seconds*/, Rndr::CommandList& /*command_list*/) override { m_value++; return true; }
 
     int32_t m_value = 0;

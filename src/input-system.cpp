@@ -33,7 +33,7 @@ Rndr::InputAction::Binding::Binding(const Binding& other) : type(other.type)
             hold = other.hold;
             break;
         case BindingType::Combo:
-            new (&combo) ComboBinding(other.combo);
+            new (&combo) ComboBinding(other.combo.Clone());
             break;
         case BindingType::Text:
             break;
@@ -73,7 +73,7 @@ Rndr::InputAction::Binding& Rndr::InputAction::Binding::operator=(const Binding&
             hold = other.hold;
             break;
         case BindingType::Combo:
-            new (&combo) ComboBinding(other.combo);
+            new (&combo) ComboBinding(other.combo.Clone());
             break;
         case BindingType::Text:
             break;
@@ -382,14 +382,14 @@ const Opal::StringUtf8& Rndr::InputContext::GetName() const
     return m_name;
 }
 
-Rndr::InputActionBuilder Rndr::InputContext::AddAction(const Opal::StringUtf8& name)
+Rndr::InputActionBuilder Rndr::InputContext::AddAction(Opal::StringUtf8 name)
 {
     if (ContainsAction(name))
     {
         throw Opal::Exception("Duplicate action name");
     }
     InputAction action;
-    action.m_name = name;
+    action.m_name = std::move(name);
     m_actions.PushBack(std::move(action));
     return InputActionBuilder(m_actions.Back());
 }

@@ -2,6 +2,7 @@
 
 #include "obs/obs.hpp"
 
+#include "opal/clonable-base.h"
 #include "opal/container/dynamic-array.h"
 #include "opal/container/ref.h"
 #include "opal/container/string.h"
@@ -573,7 +574,7 @@ struct SwapChainDesc
     bool enable_vsync = true;
 };
 
-struct ShaderDesc
+struct ShaderDesc : Opal::ClonableBase<ShaderDesc>
 {
     /** Type of the shader. */
     ShaderType type = ShaderType::Vertex;
@@ -590,7 +591,7 @@ struct ShaderDesc
     /** List of defines that should be added to the shader in a form of DEFINE_NAME VALUE or just DEFINE_NAME. */
     Opal::DynamicArray<Opal::StringUtf8> defines;
 
-    Opal::StringUtf8 debug_name;
+    OPAL_CLONE_FIELDS(type, source, entry_point, defines);
 };
 
 struct BufferDesc
@@ -609,8 +610,6 @@ struct BufferDesc
 
     /** Offset, in bytes, from the beginning of the buffer to the first element to use. */
     i64 offset = 0;
-
-    Opal::StringUtf8 debug_name;
 };
 
 struct SamplerDesc
@@ -660,10 +659,12 @@ struct SamplerDesc
     /** Minimum LOD level to use. This value will resolve to base_mip_level value. */
     f32 min_lod = 0.0f;
 
-    /** Maximum LOD level to use. This value can't be larger then max_mip_level. */
+    /** Maximum LOD level to use. This value can't be larger than max_mip_level. */
     f32 max_lod = 0.0f;
 
-    Opal::StringUtf8 debug_name;
+    // OPAL_CLONE_FIELDS(min_filter, mag_filter, mip_map_filter, max_anisotropy, address_mode_u, address_mode_v, address_mode_w,
+    // border_color,
+    //                   lod_bias, base_mip_level, max_mip_level, min_lod, max_lod);
 };
 
 struct TextureDesc
@@ -691,8 +692,6 @@ struct TextureDesc
 
     /** Number of samples per pixel. */
     i32 sample_count = 1;
-
-    Opal::StringUtf8 debug_name;
 };
 
 /**
@@ -729,7 +728,7 @@ struct InputLayoutElement
  * It contains data description for all buffers used by the pipeline.
  */
 class Buffer;
-struct InputLayoutDesc
+struct InputLayoutDesc : Opal::ClonableBase<InputLayoutDesc>
 {
     /** Index buffer used by the pipeline. If it is set to null you have to use DrawVertices. */
     Opal::Ref<const Buffer> index_buffer;
@@ -742,6 +741,8 @@ struct InputLayoutDesc
 
     /** List of input layout elements for the data in the vertex buffers. */
     Opal::DynamicArray<InputLayoutElement> elements;
+
+    OPAL_CLONE_FIELDS(index_buffer, vertex_buffers, vertex_buffer_binding_slots, elements);
 };
 
 struct RasterizerDesc
@@ -864,7 +865,7 @@ struct BlendDesc
     f32 const_alpha = 0.0f;
 };
 
-struct PipelineDesc
+struct PipelineDesc : Opal::ClonableBase<PipelineDesc>
 {
     Shader* vertex_shader = nullptr;
     Shader* pixel_shader = nullptr;
@@ -878,10 +879,11 @@ struct PipelineDesc
     BlendDesc blend;
     DepthStencilDesc depth_stencil;
 
-    Opal::StringUtf8 debug_name;
+    OPAL_CLONE_FIELDS(vertex_shader, pixel_shader, geometry_shader, tesselation_control_shader, tesselation_evaluation_shader,
+                      compute_shader, input_layout, rasterizer, blend, depth_stencil);
 };
 
-struct FrameBufferDesc
+struct FrameBufferDesc : Opal::ClonableBase<FrameBufferDesc>
 {
     Opal::DynamicArray<TextureDesc> color_attachments;
     Opal::DynamicArray<SamplerDesc> color_attachment_samplers;
@@ -889,7 +891,7 @@ struct FrameBufferDesc
     TextureDesc depth_stencil_attachment;
     SamplerDesc depth_stencil_sampler;
 
-    Opal::StringUtf8 debug_name;
+    OPAL_CLONE_FIELDS(color_attachments, color_attachment_samplers, use_depth_stencil, depth_stencil_attachment, depth_stencil_sampler);
 };
 
 /**

@@ -32,7 +32,7 @@ VKAPI_ATTR VkBool32 VKAPI_CALL DebugCallback(VkDebugUtilsMessageSeverityFlagBits
 }
 }  // namespace
 
-Rndr::AdvancedGraphicsContext::AdvancedGraphicsContext(const AdvancedGraphicsContextDesc& desc) : m_desc(desc)
+Rndr::AdvancedGraphicsContext::AdvancedGraphicsContext(const AdvancedGraphicsContextDesc& desc) : m_desc(desc.Clone())
 {
     VkResult result = volkInitialize();
     if (result != VK_SUCCESS)

@@ -9,7 +9,7 @@
 #include "rndr/application.hpp"
 #include "rndr/file.hpp"
 #include "rndr/fly-camera.hpp"
-#include "rndr/frames-per-second-counter.h"
+#include "rndr/frames-per-second-counter.hpp"
 #include "rndr/imgui-system.hpp"
 #include "rndr/log.hpp"
 #include "rndr/render-api.hpp"
@@ -59,13 +59,13 @@ int main()
     Rndr::FrameBuffer final_render = RecreateFrameBuffer(gc, rendering_resolution_options[resolution_index].x,
                                                          rendering_resolution_options[resolution_index].y, sample_count);
 
-    const Opal::StringUtf8 font_path = Opal::Paths::Combine(RNDR_CORE_ASSETS_DIR, "OpenSans.ttf");
-    Rndr::ImGuiContext imgui_context(*window, gc, {.font_path = font_path});
+    Opal::StringUtf8 font_path = Opal::Paths::Combine(RNDR_CORE_ASSETS_DIR, "OpenSans.ttf");
+    Rndr::ImGuiContext imgui_context(*window, gc, {.font_path = font_path.Clone()});
     app->RegisterSystemMessageHandler(&imgui_context);
 
     BitmapTextRenderer text_renderer;
     BitmapTextRendererDesc text_renderer_desc{.font_size = 16.0};
-    text_renderer_desc.font_file_path = font_path;
+    text_renderer_desc.font_file_path = std::move(font_path);
     text_renderer.Init(&gc, &final_render, text_renderer_desc);
 
     Rndr::Shape2DRenderer shape_renderer("2D Shape Renderer", {.graphics_context = Opal::Ref{gc}, .swap_chain = Opal::Ref{swap_chain}},

@@ -3,6 +3,7 @@
 #include <functional>
 #include <variant>
 
+#include "opal/clonable-base.h"
 #include "opal/container/array-view.h"
 #include "opal/container/dynamic-array.h"
 #include "opal/container/scope-ptr.h"
@@ -317,12 +318,14 @@ private:
         bool has_fired = false;
     };
 
-    struct ComboBinding
+    struct ComboBinding : Opal::ClonableBase<ComboBinding>
     {
         Opal::DynamicArray<Key> keys;
         f32 timeout_seconds;
         i32 current_step = 0;
         f32 elapsed_since_last_step = 0.0f;
+
+        OPAL_CLONE_FIELDS(keys, timeout_seconds, current_step, elapsed_since_last_step);
     };
 
     struct Binding
@@ -447,7 +450,7 @@ public:
      * @param name Unique name for the action within this context.
      * @return Builder for chaining callback and binding configuration.
      */
-    InputActionBuilder AddAction(const Opal::StringUtf8& name);
+    InputActionBuilder AddAction(Opal::StringUtf8 name);
 
     /**
      * Removes an action by name.

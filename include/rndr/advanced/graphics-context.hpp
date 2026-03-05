@@ -2,6 +2,7 @@
 
 #include "volk/volk.h"
 
+#include "opal/clonable-base.h"
 #include "opal/container/dynamic-array.h"
 #include "opal/container/string.h"
 
@@ -9,10 +10,12 @@
 
 namespace Rndr
 {
-struct AdvancedGraphicsContextDesc
+struct AdvancedGraphicsContextDesc : Opal::ClonableBase<AdvancedGraphicsContextDesc>
 {
     bool collect_debug_messages = false;
     Opal::DynamicArray<Opal::StringUtf8> required_instance_extensions;
+
+    OPAL_CLONE_FIELDS(collect_debug_messages, required_instance_extensions);
 };
 
 class AdvancedGraphicsContext

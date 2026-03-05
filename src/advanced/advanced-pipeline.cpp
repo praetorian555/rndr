@@ -502,7 +502,7 @@ Rndr::AdvancedPipeline::~AdvancedPipeline()
 }
 
 Rndr::AdvancedPipeline::AdvancedPipeline(AdvancedPipeline&& other) noexcept
-    : m_device(other.m_device),
+    : m_device(std::move(other.m_device)),
       m_pipeline(other.m_pipeline),
       m_pipeline_layout(other.m_pipeline_layout),
       m_bind_point(other.m_bind_point)
@@ -517,7 +517,7 @@ Rndr::AdvancedPipeline& Rndr::AdvancedPipeline::operator=(AdvancedPipeline&& oth
     if (this != &other)
     {
         Destroy();
-        m_device = other.m_device;
+        m_device = std::move(other.m_device);
         m_pipeline = other.m_pipeline;
         m_pipeline_layout = other.m_pipeline_layout;
         m_bind_point = other.m_bind_point;
