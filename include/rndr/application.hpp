@@ -1,6 +1,5 @@
 #pragma once
 
-#include "opal/allocator.h"
 #include "opal/container/dynamic-array.h"
 #include "opal/container/ref.h"
 #include "opal/container/scope-ptr.h"
@@ -12,11 +11,6 @@
 #include "rndr/platform-application.hpp"
 #include "rndr/system-message-handler.hpp"
 
-namespace Opal
-{
-struct AllocatorBase;
-}
-
 namespace Rndr
 {
 
@@ -24,8 +18,6 @@ struct ApplicationDesc
 {
     /** User specified logger. User is responsible for keeping it alive and deallocating it. */
     struct Logger* user_logger;
-
-    Opal::AllocatorBase* user_allocator;
 
     /** If we should enable the input system. Defaults to no. */
     bool enable_input_system = false;
@@ -94,7 +86,6 @@ private:
     ApplicationDesc m_desc;
     Opal::Ref<PlatformApplication> m_platform_application;
     struct Logger* m_logger = nullptr;
-    Opal::AllocatorBase* m_allocator = nullptr;
     Opal::ScopePtr<InputSystem> m_input_system;
     Opal::Ref<ImGuiContext> m_imgui_system;
     Opal::DynamicArray<Opal::Ref<SystemMessageHandler>> m_system_message_handlers;

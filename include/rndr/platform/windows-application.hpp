@@ -25,7 +25,7 @@ struct WindowsDeferredMessage
 class WindowsApplication : public PlatformApplication
 {
 public:
-    WindowsApplication(struct SystemMessageHandler* message_handler, Opal::AllocatorBase* allocator);
+    WindowsApplication(struct SystemMessageHandler* message_handler);
 
     i32 ProcessMessage(HWND window_handle, UINT msg_code, WPARAM param_w, LPARAM param_l);
 

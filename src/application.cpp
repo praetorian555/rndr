@@ -2,6 +2,7 @@
 
 #include <stdio.h>
 
+#include "opal/allocator.h"
 #include "opal/container/in-place-array.h"
 #include "opal/container/scope-ptr.h"
 
@@ -24,8 +25,7 @@ Opal::ScopePtr<Rndr::Application> Rndr::Application::Create(const ApplicationDes
     {
         throw Opal::Exception("Rndr Application already created!");
     }
-    Opal::AllocatorBase* allocator = desc.user_allocator != nullptr ? desc.user_allocator : nullptr;
-    Opal::ScopePtr<Application> app = MakeScoped<Application>(allocator, desc);
+    Opal::ScopePtr<Application> app = Opal::MakeScoped<Application>(nullptr, desc);
     g_instance = app.Get();
     return app;
 }
@@ -43,11 +43,10 @@ Rndr::Application& Rndr::Application::GetChecked()
 
 Rndr::Application::Application(const ApplicationDesc& desc)
     : m_desc(desc),
-      m_logger(desc.user_logger != nullptr ? desc.user_logger : &g_default_logger),
-      m_allocator(desc.user_allocator != nullptr ? desc.user_allocator : Opal::GetDefaultAllocator())
+      m_logger(desc.user_logger != nullptr ? desc.user_logger : &g_default_logger)
 {
 #if RNDR_WINDOWS
-    m_platform_application = Opal::New<WindowsApplication>(m_allocator, this, m_allocator);
+    m_platform_application = Opal::New<WindowsApplication>(Opal::GetDefaultAllocator(), this);
 #else
 #error "Platform not supported!"
 #endif
@@ -59,7 +58,7 @@ Rndr::Application::~Application()
 {
     if (m_platform_application.IsValid())
     {
-        Opal::Delete(m_allocator, m_platform_application.GetPtr());
+        Opal::Delete(Opal::GetDefaultAllocator(), m_platform_application.GetPtr());
     }
     g_instance = nullptr;
 }

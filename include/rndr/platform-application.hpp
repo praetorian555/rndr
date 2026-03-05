@@ -6,10 +6,6 @@
 #include "rndr/math.hpp"
 #include "rndr/types.hpp"
 
-namespace Opal
-{
-struct AllocatorBase;
-}
 namespace Rndr
 {
 
@@ -45,8 +41,8 @@ enum class CursorPositionMode : u8
 class PlatformApplication
 {
 public:
-    PlatformApplication(struct SystemMessageHandler* message_handler, Opal::AllocatorBase* allocator)
-        : m_message_handler(message_handler), m_allocator(allocator), m_generic_windows(allocator)
+    PlatformApplication(struct SystemMessageHandler* message_handler)
+        : m_message_handler(message_handler)
     {
     }
     virtual ~PlatformApplication();
@@ -106,7 +102,6 @@ public:
 
 protected:
     struct SystemMessageHandler* m_message_handler;
-    Opal::AllocatorBase* m_allocator;
     Opal::DynamicArray<GenericWindow*> m_generic_windows;
     Opal::Ref<GenericWindow> m_focused_window;
     ModifierKeysState m_modifier_keys;

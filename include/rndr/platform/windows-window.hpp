@@ -12,7 +12,7 @@ namespace Rndr
 class WindowsWindow : public GenericWindow
 {
 public:
-    WindowsWindow(const GenericWindowDesc& desc, Opal::AllocatorBase* allocator);
+    WindowsWindow(const GenericWindowDesc& desc);
 
     ErrorCode RequestClose() override;
     ErrorCode ForceClose() override;

@@ -13,8 +13,8 @@
 
 Rndr::WindowsApplication* g_windows_app = nullptr;
 
-Rndr::WindowsApplication::WindowsApplication(SystemMessageHandler* message_handler, Opal::AllocatorBase* allocator)
-    : PlatformApplication(message_handler, allocator)
+Rndr::WindowsApplication::WindowsApplication(SystemMessageHandler* message_handler)
+    : PlatformApplication(message_handler)
 {
     g_windows_app = this;
     // Helps to get physical pixel size of monitor and not the scaled version.

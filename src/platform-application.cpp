@@ -1,5 +1,7 @@
 #include "rndr/platform-application.hpp"
 
+#include "opal/allocator.h"
+
 #if RNDR_WINDOWS
 #include "rndr/platform/windows-window.hpp"
 #endif
@@ -9,7 +11,7 @@ Rndr::PlatformApplication::~PlatformApplication()
     for (GenericWindow* window : m_generic_windows)
     {
         window->Destroy();
-        Opal::Delete(m_allocator, window);
+        Opal::Delete(Opal::GetDefaultAllocator(), window);
     }
 }
 
@@ -17,7 +19,7 @@ Rndr::GenericWindow* Rndr::PlatformApplication::CreateGenericWindow(const Generi
 {
     GenericWindow* window = nullptr;
 #if RNDR_WINDOWS
-    window = Opal::New<WindowsWindow>(m_allocator, desc, m_allocator);
+    window = Opal::New<WindowsWindow>(Opal::GetDefaultAllocator(), desc);
 #else
 #error "Platform not supported!"
 #endif

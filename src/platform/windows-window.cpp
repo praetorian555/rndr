@@ -7,7 +7,7 @@
 
 #include "rndr/log.hpp"
 
-Rndr::WindowsWindow::WindowsWindow(const GenericWindowDesc& desc, Opal::AllocatorBase* allocator) : GenericWindow(desc, allocator)
+Rndr::WindowsWindow::WindowsWindow(const GenericWindowDesc& desc) : GenericWindow(desc)
 {
     if (desc.width == 0 || desc.height == 0)
     {

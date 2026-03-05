@@ -6,11 +6,6 @@
 #include "rndr/math.hpp"
 #include "rndr/types.hpp"
 
-namespace Opal
-{
-struct AllocatorBase;
-}
-
 namespace Rndr
 {
 
@@ -85,10 +80,9 @@ public:
     [[nodiscard]] virtual NativeWindowHandle GetNativeHandle() const = 0;
 
 protected:
-    GenericWindow(const GenericWindowDesc& desc, Opal::AllocatorBase* allocator) : m_desc(desc), m_allocator(allocator) {}
+    GenericWindow(const GenericWindowDesc& desc) : m_desc(desc) {}
 
     GenericWindowDesc m_desc;
-    Opal::AllocatorBase* m_allocator;
 };
 
 }  // namespace Rndr
