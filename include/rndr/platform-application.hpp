@@ -1,6 +1,7 @@
 #pragma once
 
 #include "opal/container/dynamic-array.h"
+#include "opal/container/scope-ptr.h"
 
 #include "rndr/generic-window.hpp"
 #include "rndr/math.hpp"
@@ -41,14 +42,11 @@ enum class CursorPositionMode : u8
 class PlatformApplication
 {
 public:
-    PlatformApplication(struct SystemMessageHandler* message_handler)
-        : m_message_handler(message_handler)
-    {
-    }
-    virtual ~PlatformApplication();
+    PlatformApplication(struct SystemMessageHandler* message_handler) : m_message_handler(message_handler) {}
+    virtual ~PlatformApplication() = default;
 
-    GenericWindow* CreateGenericWindow(const GenericWindowDesc& desc);
-    void DestroyGenericWindow(GenericWindow* window);
+    Opal::Ref<GenericWindow> CreateGenericWindow(const GenericWindowDesc& desc);
+    void DestroyGenericWindow(Opal::Ref<GenericWindow> window);
 
     /**
      * Process any messages received from the OS in the previous frame, like input events.
@@ -97,12 +95,12 @@ public:
      */
     [[nodiscard]] virtual CursorPositionMode GetCursorPositionMode() const = 0;
 
-    class GenericWindow* GetGenericWindowByNativeHandle(NativeWindowHandle handle);
+    Opal::Ref<class GenericWindow> GetGenericWindowByNativeHandle(NativeWindowHandle handle);
     [[nodiscard]] const ModifierKeysState& GetModifierKeysState() const { return m_modifier_keys; }
 
 protected:
     struct SystemMessageHandler* m_message_handler;
-    Opal::DynamicArray<GenericWindow*> m_generic_windows;
+    Opal::DynamicArray<Opal::ScopePtr<GenericWindow>> m_generic_windows;
     Opal::Ref<GenericWindow> m_focused_window;
     ModifierKeysState m_modifier_keys;
 };

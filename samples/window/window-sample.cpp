@@ -52,7 +52,7 @@ int main()
         RNDR_LOG_ERROR("Failed to create app!");
         return -1;
     }
-    Rndr::GenericWindow* window = app->CreateGenericWindow();
+    auto window = app->CreateGenericWindow();
     if (window == nullptr)
     {
         RNDR_LOG_ERROR("Failed to create window!");
@@ -75,9 +75,9 @@ int main()
         RecreateFrameBuffer(gc, rendering_resolution_options[resolution_index].x, rendering_resolution_options[resolution_index].y);
 
     app->on_window_resize.Bind(
-        [&swap_chain, window](const Rndr::GenericWindow& w, Rndr::i32 width, Rndr::i32 height)
+        [&swap_chain, &window](const Rndr::GenericWindow& w, Rndr::i32 width, Rndr::i32 height)
         {
-            if (window == &w)
+            if (window.GetPtr() == &w)
             {
                 swap_chain.SetSize(width, height);
             }
@@ -88,7 +88,7 @@ int main()
         .AddAction("Switch display mode")
         .Bind(Rndr::Key::F2, Rndr::Trigger::Pressed)
         .OnButton(
-            [window](Rndr::Trigger, bool is_repeated)
+            [&window](Rndr::Trigger, bool is_repeated)
             {
                 if (!is_repeated)
                 {
@@ -122,9 +122,9 @@ int main()
     ExampleController controller(*app, window_width, window_height, fly_camera_desc, 10.0f, 0.005f, 0.005f);
     controller.Enable(false);
     app->on_window_resize.Bind(
-        [&controller, window](const Rndr::GenericWindow& w, Rndr::i32 width, Rndr::i32 height)
+        [&controller, &window](const Rndr::GenericWindow& w, Rndr::i32 width, Rndr::i32 height)
         {
-            if (window == &w)
+            if (window.GetPtr() == &w)
             {
                 controller.SetScreenSize(width, height);
             }
@@ -157,7 +157,7 @@ int main()
         .GetContextByName("Default")
         .AddAction("Exit")
         .Bind(Rndr::Key::Escape, Rndr::Trigger::Pressed)
-        .OnButton([window](Rndr::Trigger, bool) { window->ForceClose(); });
+        .OnButton([&window](Rndr::Trigger, bool) { window->ForceClose(); });
 
     Rndr::CommandList present_cmd_list{gc};
     present_cmd_list.CmdPresent(swap_chain);

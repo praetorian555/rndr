@@ -13,6 +13,7 @@ class WindowsWindow : public GenericWindow
 {
 public:
     WindowsWindow(const GenericWindowDesc& desc);
+    ~WindowsWindow();
 
     ErrorCode RequestClose() override;
     ErrorCode ForceClose() override;

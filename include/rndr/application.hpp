@@ -38,8 +38,8 @@ public:
     static Application& GetChecked();
     ~Application() override;
 
-    GenericWindow* CreateGenericWindow(const GenericWindowDesc& desc = GenericWindowDesc());
-    void DestroyGenericWindow(GenericWindow* window);
+    Opal::Ref<GenericWindow> CreateGenericWindow(const GenericWindowDesc& desc = GenericWindowDesc());
+    void DestroyGenericWindow(Opal::Ref<GenericWindow> window);
 
     [[nodiscard]] InputSystem& GetInputSystemChecked() const;
 

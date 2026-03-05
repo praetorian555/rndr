@@ -28,7 +28,7 @@ LRESULT RndrPrivate::WindowProc(HWND window_handle, UINT msg_code, WPARAM param_
 
 Rndr::i32 Rndr::WindowsApplication::ProcessMessage(HWND window_handle, UINT msg_code, WPARAM param_w, LPARAM param_l)
 {
-    GenericWindow* window = GetGenericWindowByNativeHandle(reinterpret_cast<NativeWindowHandle>(window_handle));
+    Opal::Ref<GenericWindow> window = GetGenericWindowByNativeHandle(reinterpret_cast<NativeWindowHandle>(window_handle));
     if (window == nullptr)
     {
         return static_cast<i32>(DefWindowProc(window_handle, msg_code, param_w, param_l));
@@ -251,7 +251,7 @@ Rndr::i32 Rndr::WindowsApplication::ProcessMessage(HWND window_handle, UINT msg_
 
 void Rndr::WindowsApplication::ProcessSystemEvents()
 {
-    for (auto* window : m_generic_windows)
+    for (const auto& window : m_generic_windows)
     {
         MSG msg;
         while (PeekMessage(&msg, reinterpret_cast<HWND>(window->GetNativeHandle()), 0, 0, PM_REMOVE))

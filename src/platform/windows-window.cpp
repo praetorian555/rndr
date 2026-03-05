@@ -72,6 +72,11 @@ Rndr::WindowsWindow::WindowsWindow(const GenericWindowDesc& desc) : GenericWindo
     RNDR_LOG_INFO("Window created successfully!");
 }
 
+Rndr::WindowsWindow::~WindowsWindow()
+{
+    WindowsWindow::Destroy();
+}
+
 Rndr::ErrorCode Rndr::WindowsWindow::RequestClose()
 {
     if (m_is_closed)

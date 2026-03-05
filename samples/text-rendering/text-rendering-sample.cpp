@@ -37,7 +37,7 @@ int main()
         return -1;
     }
     const Rndr::GenericWindowDesc window_desc{.width = 1920, .height = 1080};
-    Rndr::GenericWindow* window = app->CreateGenericWindow(window_desc);
+    auto window = app->CreateGenericWindow(window_desc);
     if (window == nullptr)
     {
         RNDR_LOG_ERROR("Failed to create window!");
@@ -72,9 +72,9 @@ int main()
                                          Opal::Ref{final_render});
 
     app->on_window_resize.Bind(
-        [&swap_chain, window, &text_renderer](const Rndr::GenericWindow& w, Rndr::i32 width, Rndr::i32 height)
+        [&swap_chain, &window, &text_renderer](const Rndr::GenericWindow& w, Rndr::i32 width, Rndr::i32 height)
         {
-            if (window == &w)
+            if (window.GetPtr() == &w)
             {
                 swap_chain.SetSize(width, height);
             }

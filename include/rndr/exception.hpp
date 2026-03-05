@@ -14,4 +14,11 @@ struct GraphicsAPIException : Opal::Exception
     }
 };
 
+struct WindowCreationException : Opal::Exception
+{
+    explicit WindowCreationException(const char* message) : Opal::Exception(Opal::StringEx("Window creation failed: ") + message)
+    {
+    }
+};
+
 }  // namespace Rndr

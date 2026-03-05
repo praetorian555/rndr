@@ -68,14 +68,14 @@ Rndr::Application::~Application()
     g_instance = nullptr;
 }
 
-Rndr::GenericWindow* Rndr::Application::CreateGenericWindow(const GenericWindowDesc& desc)
+Opal::Ref<Rndr::GenericWindow> Rndr::Application::CreateGenericWindow(const GenericWindowDesc& desc)
 {
     return m_platform_application->CreateGenericWindow(desc);
 }
 
-void Rndr::Application::DestroyGenericWindow(GenericWindow* window)
+void Rndr::Application::DestroyGenericWindow(Opal::Ref<GenericWindow> window)
 {
-    m_platform_application->DestroyGenericWindow(window);
+    m_platform_application->DestroyGenericWindow(std::move(window));
 }
 
 Rndr::InputSystem& Rndr::Application::GetInputSystemChecked() const
