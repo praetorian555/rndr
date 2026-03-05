@@ -70,7 +70,7 @@ Rndr::i32 Rndr::WindowsApplication::ProcessMessage(HWND window_handle, UINT msg_
             InputPrimitive primitive = InputPrimitive::A;
             if (!GetInputPrimitive(primitive, virtual_key))
             {
-                RNDR_LOG_ERROR("Virtual key 0x%X is not supported!", virtual_key);
+                RNDR_LOG_ERROR("Virtual key {:#X} is not supported!", virtual_key);
                 return 1;
             }
             const bool is_repeated = (param_l & 0x40000000) != 0;
@@ -84,7 +84,7 @@ Rndr::i32 Rndr::WindowsApplication::ProcessMessage(HWND window_handle, UINT msg_
             InputPrimitive primitive = InputPrimitive::A;
             if (!GetInputPrimitive(primitive, virtual_key))
             {
-                RNDR_LOG_ERROR("Virtual key 0x%X is not supported!", virtual_key);
+                RNDR_LOG_ERROR("Virtual key {:#X} is not supported!", virtual_key);
                 return 1;
             }
             const bool is_repeated = (param_l & 0x40000000) == 0;

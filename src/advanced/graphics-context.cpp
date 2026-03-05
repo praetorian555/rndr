@@ -27,7 +27,7 @@ VkResult CreateDebugUtilsMessengerEXT(VkInstance instance, const VkDebugUtilsMes
 VKAPI_ATTR VkBool32 VKAPI_CALL DebugCallback(VkDebugUtilsMessageSeverityFlagBitsEXT, VkDebugUtilsMessageTypeFlagsEXT,
                                              const VkDebugUtilsMessengerCallbackDataEXT* callback_data, void*)
 {
-    RNDR_LOG_INFO("[Vulkan Validation] %s", callback_data->pMessage);
+    RNDR_LOG_INFO("[Vulkan Validation] {}", callback_data->pMessage);
     return VK_FALSE;
 }
 }  // namespace

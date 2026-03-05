@@ -52,7 +52,7 @@ Rndr::ErrorCode CheckTextureDesc(const Rndr::GraphicsContext& graphics_context, 
     glGetIntegerv(GL_MAX_SAMPLES, &max_sample_count);
     if (texture_desc.sample_count < 1 || texture_desc.sample_count > max_sample_count)
     {
-        RNDR_LOG_ERROR("Texture sample count must be between [1, %d]!", max_sample_count);
+        RNDR_LOG_ERROR("Texture sample count must be between [1, {}]!", max_sample_count);
         return Rndr::ErrorCode::InvalidArgument;
     }
     return Rndr::ErrorCode::Success;
@@ -94,7 +94,7 @@ Rndr::ErrorCode CheckSamplerDesc(const Rndr::SamplerDesc& sampler_desc)
     glGetFloatv(GL_MAX_TEXTURE_MAX_ANISOTROPY, &max_texture_anisotropy);
     if (sampler_desc.max_anisotropy < 1.0f || sampler_desc.max_anisotropy > max_texture_anisotropy)
     {
-        RNDR_LOG_ERROR("Sampler max anisotropy must be between [1.0f, %f]!", max_texture_anisotropy);
+        RNDR_LOG_ERROR("Sampler max anisotropy must be between [1.0f, {}]!", max_texture_anisotropy);
         return Rndr::ErrorCode::InvalidArgument;
     }
     if (sampler_desc.address_mode_u >= Rndr::ImageAddressMode::EnumCount)
@@ -370,7 +370,7 @@ void Rndr::Texture::Destroy()
     {
         glDeleteTextures(1, &m_native_texture);
         RNDR_ASSERT_OPENGL();
-        RNDR_LOG_DEBUG("Texture::Destroy: opengl id: %u", m_native_texture);
+        RNDR_LOG_DEBUG("Texture::Destroy: opengl id: {}", m_native_texture);
         m_native_texture = k_invalid_opengl_object;
     }
 }

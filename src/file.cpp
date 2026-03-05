@@ -71,7 +71,7 @@ Opal::DynamicArray<Rndr::u8> Rndr::File::ReadEntireFile(const Opal::StringUtf8& 
     fopen_s(&file, file_path_locale.GetData(), "rb");
     if (file == nullptr)
     {
-        RNDR_LOG_ERROR("Failed to open file %s", file_path.GetData());
+        RNDR_LOG_ERROR("Failed to open file {}", file_path.GetData());
         return {};
     }
 
@@ -102,14 +102,14 @@ Opal::StringUtf8 Rndr::File::ReadShader(const Opal::StringUtf8& ref_path, const 
     const Opal::StringUtf8 full_path = Opal::Paths::Combine(ref_path, shader_path);
     if (!Opal::Exists(full_path))
     {
-        RNDR_LOG_ERROR("Shader file %s does not exist!", full_path.GetData());
+        RNDR_LOG_ERROR("Shader file {} does not exist!", full_path.GetData());
         return {};
     }
 
     Opal::StringUtf8 shader_contents = ReadEntireTextFile(full_path);
     if (shader_contents.IsEmpty())
     {
-        RNDR_LOG_ERROR("Failed to read shader file %s!", full_path.GetData());
+        RNDR_LOG_ERROR("Failed to read shader file {}!", full_path.GetData());
         return {};
     }
 
@@ -148,7 +148,7 @@ Opal::StringUtf8 Rndr::File::ReadShader(const Opal::StringUtf8& ref_path, const 
         }
         else
         {
-            RNDR_LOG_ERROR("Invalid include statement %s", include_line.GetData());
+            RNDR_LOG_ERROR("Invalid include statement {}", include_line.GetData());
             return {};
         }
         auto parent_path_result = Opal::Paths::GetParentPath(full_path);
@@ -170,7 +170,7 @@ void Rndr::File::PrintShader(const Opal::StringUtf8& shader_contents)
     {
         if (c == '\n')
         {
-            RNDR_LOG_INFO("%d: %s", line_number, line_buffer.GetData());
+            RNDR_LOG_INFO("{}: {}", line_number, line_buffer.GetData());
             line_buffer.Erase();
             line_number++;
         }

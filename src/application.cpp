@@ -6,6 +6,8 @@
 #include "opal/container/in-place-array.h"
 #include "opal/container/scope-ptr.h"
 
+#include "opal/logging.h"
+
 #include "rndr/log.hpp"
 
 #if RNDR_WINDOWS
@@ -15,7 +17,6 @@
 
 namespace
 {
-Rndr::StdLogger g_default_logger;
 Rndr::Application* g_instance = nullptr;
 }  // namespace
 
@@ -42,9 +43,13 @@ Rndr::Application& Rndr::Application::GetChecked()
 }
 
 Rndr::Application::Application(const ApplicationDesc& desc)
-    : m_desc(desc),
-      m_logger(desc.user_logger != nullptr ? desc.user_logger : &g_default_logger)
+    : m_desc(desc)
 {
+    Opal::Logger& logger = Opal::GetLogger();
+    if (!logger.IsCategoryRegistered("Rndr"))
+    {
+        logger.RegisterCategory("Rndr", Opal::LogLevel::Verbose);
+    }
 #if RNDR_WINDOWS
     m_platform_application = Opal::New<WindowsApplication>(Opal::GetDefaultAllocator(), this);
 #else
@@ -71,12 +76,6 @@ Rndr::GenericWindow* Rndr::Application::CreateGenericWindow(const GenericWindowD
 void Rndr::Application::DestroyGenericWindow(GenericWindow* window)
 {
     m_platform_application->DestroyGenericWindow(window);
-}
-
-Rndr::Logger& Rndr::Application::GetLoggerChecked() const
-{
-    RNDR_ASSERT(m_logger != nullptr, "There is no logger!");
-    return *m_logger;
 }
 
 Rndr::InputSystem& Rndr::Application::GetInputSystemChecked() const
@@ -187,7 +186,7 @@ void Rndr::Application::OnWindowSizeChanged(const GenericWindow& window, i32 wid
 
 bool Rndr::Application::OnButtonDown(const GenericWindow& window, InputPrimitive key_code, bool is_repeated)
 {
-    // RNDR_LOG_DEBUG("ButtonDown Key=0x%x, IsRepeated=%s", key_code, is_repeated ? "true" : "false");
+    // RNDR_LOG_DEBUG("ButtonDown Key={:#x}, IsRepeated={}", key_code, is_repeated ? "true" : "false");
     m_input_system->OnButtonDown(window, key_code, is_repeated);
     for (const Opal::Ref<SystemMessageHandler>& system_message_handler : m_system_message_handlers)
     {
@@ -198,7 +197,7 @@ bool Rndr::Application::OnButtonDown(const GenericWindow& window, InputPrimitive
 
 bool Rndr::Application::OnButtonUp(const GenericWindow& window, InputPrimitive key_code, bool is_repeated)
 {
-    // RNDR_LOG_DEBUG("ButtonUp Key=0x%x, IsRepeated=%s", key_code, is_repeated ? "true" : "false");
+    // RNDR_LOG_DEBUG("ButtonUp Key={:#x}, IsRepeated={}", key_code, is_repeated ? "true" : "false");
     m_input_system->OnButtonUp(window, key_code, is_repeated);
     for (const Opal::Ref<SystemMessageHandler>& system_message_handler : m_system_message_handlers)
     {
@@ -213,7 +212,7 @@ bool Rndr::Application::OnCharacter(const GenericWindow& window, uchar32 charact
     // in.Append(character);
     // Opal::StringUtf8 out(10, 0);
     // Opal::Transcode(in, out);
-    // RNDR_LOG_DEBUG("Character Char=%s, IsRepeated=%s", out.GetData(), is_repeated ? "true" : "false");
+    // RNDR_LOG_DEBUG("Character Char={}, IsRepeated={}", out.GetData(), is_repeated ? "true" : "false");
     m_input_system->OnCharacter(window, character, is_repeated);
     for (const Opal::Ref<SystemMessageHandler>& system_message_handler : m_system_message_handlers)
     {
@@ -224,7 +223,7 @@ bool Rndr::Application::OnCharacter(const GenericWindow& window, uchar32 charact
 
 bool Rndr::Application::OnMouseButtonDown(const GenericWindow& window, InputPrimitive primitive, const Vector2i& cursor_position)
 {
-    // RNDR_LOG_DEBUG("MouseButtonDown Key=0x%x, CursorPosition=(x=%d, y=%d)", primitive, cursor_position.x, cursor_position.y);
+    // RNDR_LOG_DEBUG("MouseButtonDown Key={:#x}, CursorPosition=(x={}, y={})", primitive, cursor_position.x, cursor_position.y);
     m_input_system->OnMouseButtonDown(window, primitive, cursor_position);
     for (const Opal::Ref<SystemMessageHandler>& system_message_handler : m_system_message_handlers)
     {
@@ -235,7 +234,7 @@ bool Rndr::Application::OnMouseButtonDown(const GenericWindow& window, InputPrim
 
 bool Rndr::Application::OnMouseButtonUp(const GenericWindow& window, InputPrimitive primitive, const Vector2i& cursor_position)
 {
-    // RNDR_LOG_DEBUG("MouseButtonUp Key=0x%x, CursorPosition=(x=%d, y=%d)", primitive, cursor_position.x, cursor_position.y);
+    // RNDR_LOG_DEBUG("MouseButtonUp Key={:#x}, CursorPosition=(x={}, y={})", primitive, cursor_position.x, cursor_position.y);
     m_input_system->OnMouseButtonUp(window, primitive, cursor_position);
     for (const Opal::Ref<SystemMessageHandler>& system_message_handler : m_system_message_handlers)
     {
@@ -246,7 +245,7 @@ bool Rndr::Application::OnMouseButtonUp(const GenericWindow& window, InputPrimit
 
 bool Rndr::Application::OnMouseDoubleClick(const GenericWindow& window, InputPrimitive primitive, const Vector2i& cursor_position)
 {
-    // RNDR_LOG_DEBUG("MouseDoubleClick Key=0x%x, CursorPosition=(x=%d, y=%d)", primitive, cursor_position.x, cursor_position.y);
+    // RNDR_LOG_DEBUG("MouseDoubleClick Key={:#x}, CursorPosition=(x={}, y={})", primitive, cursor_position.x, cursor_position.y);
     m_input_system->OnMouseDoubleClick(window, primitive, cursor_position);
     for (const Opal::Ref<SystemMessageHandler>& system_message_handler : m_system_message_handlers)
     {
@@ -257,7 +256,7 @@ bool Rndr::Application::OnMouseDoubleClick(const GenericWindow& window, InputPri
 
 bool Rndr::Application::OnMouseWheel(const GenericWindow& window, f32 wheel_delta, const Vector2i& cursor_position)
 {
-    // RNDR_LOG_DEBUG("MouseWheel Delta=%f, CursorPosition=(x=%d, y=%d)", wheel_delta, cursor_position.x, cursor_position.y);
+    // RNDR_LOG_DEBUG("MouseWheel Delta={}, CursorPosition=(x={}, y={})", wheel_delta, cursor_position.x, cursor_position.y);
     m_input_system->OnMouseWheel(window, wheel_delta, cursor_position);
     for (const Opal::Ref<SystemMessageHandler>& system_message_handler : m_system_message_handlers)
     {

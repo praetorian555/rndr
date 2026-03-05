@@ -30,7 +30,6 @@ set(SOURCE_LIST
         "${PROJECT_SOURCE_DIR}/include/rndr/return-macros.hpp"
         "${PROJECT_SOURCE_DIR}/include/rndr/shader-permutation.hpp"
         "${PROJECT_SOURCE_DIR}/include/rndr/pixel-format.hpp"
-        "${PROJECT_SOURCE_DIR}/src/log.cpp"
         "${PROJECT_SOURCE_DIR}/src/time.cpp"
         "${PROJECT_SOURCE_DIR}/src/input-system.cpp"
         "${PROJECT_SOURCE_DIR}/src/projection-camera.cpp"

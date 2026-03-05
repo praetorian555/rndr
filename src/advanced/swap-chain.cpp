@@ -12,6 +12,7 @@
 #include "rndr/advanced/physical-device.hpp"
 #include "rndr/advanced/synchronization.hpp"
 #include "rndr/advanced/vulkan-exception.hpp"
+#include "rndr/generic-window.hpp"
 #include "rndr/log.hpp"
 #include "rndr/pixel-format.hpp"
 
@@ -247,8 +248,8 @@ void Rndr::AdvancedSwapChain::Recreate()
                                swap_chain_support.capabilities.maxImageExtent.width);
     extent.height = Opal::Clamp(extent.height, swap_chain_support.capabilities.minImageExtent.height,
                                 swap_chain_support.capabilities.maxImageExtent.height);
-    RNDR_LOG_INFO("Requested swap chain extent: (%d, %d)", window_size.x, window_size.y);
-    RNDR_LOG_INFO("Swap chain extent: (%d, %d)", extent.width, extent.height);
+    RNDR_LOG_INFO("Requested swap chain extent: ({}, {})", window_size.x, window_size.y);
+    RNDR_LOG_INFO("Swap chain extent: ({}, {})", extent.width, extent.height);
 
     u32 image_count = swap_chain_support.capabilities.minImageCount + 1;
     if (swap_chain_support.capabilities.maxImageCount > 0 && image_count > swap_chain_support.capabilities.maxImageCount)

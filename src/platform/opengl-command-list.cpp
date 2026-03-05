@@ -6,6 +6,7 @@
 
 #include "opengl-helpers.hpp"
 #include "rndr/log.hpp"
+#include "rndr/platform/opengl-buffer.hpp"
 #include "rndr/platform/opengl-graphics-context.hpp"
 #include "rndr/trace.hpp"
 

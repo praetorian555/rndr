@@ -33,10 +33,10 @@ void APIENTRY DebugOutputCallback(GLenum source, GLenum type, unsigned int id, G
     switch (severity)
     {
         case GL_DEBUG_SEVERITY_HIGH:
-            RNDR_LOG_ERROR("[OpenGL] %s", message);
+            RNDR_LOG_ERROR("[OpenGL] {}", message);
             break;
         case GL_DEBUG_SEVERITY_MEDIUM:
-            RNDR_LOG_WARNING("[OpenGL] %s", message);
+            RNDR_LOG_WARNING("[OpenGL] {}", message);
             break;
         default:
             break;

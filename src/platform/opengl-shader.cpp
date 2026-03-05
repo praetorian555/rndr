@@ -95,7 +95,7 @@ Rndr::ErrorCode Rndr::Shader::Initialize(const Rndr::GraphicsContext& graphics_c
         GLint log_length = 0;
         glGetShaderiv(m_native_shader, GL_INFO_LOG_LENGTH, &log_length);
         glGetShaderInfoLog(m_native_shader, log_length, &log_length, error_log.GetData());
-        RNDR_LOG_ERROR("Failed to compile shader:\n%s", error_log);
+        RNDR_LOG_ERROR("Failed to compile shader:\n{}", error_log.GetData());
         Destroy();
         return ErrorCode::ShaderCompilationError;
     }
@@ -113,7 +113,7 @@ void Rndr::Shader::Destroy()
     {
         glDeleteShader(m_native_shader);
         RNDR_ASSERT_OPENGL();
-        RNDR_LOG_DEBUG("Shader::Destroy: opengl id: %u", m_native_shader);
+        RNDR_LOG_DEBUG("Shader::Destroy: opengl id: {}", m_native_shader);
         m_native_shader = k_invalid_opengl_object;
     }
 }

@@ -60,7 +60,7 @@ Rndr::Pipeline::Pipeline(const GraphicsContext& graphics_context, const Pipeline
         constexpr size_t k_error_log_size = 1024;
         GLchar error_log[k_error_log_size] = {0};
         glGetProgramInfoLog(m_native_shader_program, k_error_log_size, nullptr, error_log);
-        RNDR_LOG_ERROR("Shader linking failed:\n%s", error_log);
+        RNDR_LOG_ERROR("Shader linking failed:\n{}", error_log);
         RNDR_ASSERT_OPENGL();
     }
     glValidateProgram(m_native_shader_program);
@@ -71,7 +71,7 @@ Rndr::Pipeline::Pipeline(const GraphicsContext& graphics_context, const Pipeline
         constexpr size_t k_error_log_size = 1024;
         GLchar error_log[k_error_log_size] = {0};
         glGetProgramInfoLog(m_native_shader_program, k_error_log_size, nullptr, error_log);
-        RNDR_LOG_ERROR("Shader validation failed:\n%s", error_log);
+        RNDR_LOG_ERROR("Shader validation failed:\n{}", error_log);
         RNDR_ASSERT_OPENGL();
     }
 
@@ -93,7 +93,7 @@ Rndr::Pipeline::Pipeline(const GraphicsContext& graphics_context, const Pipeline
             glVertexArrayVertexBuffer(m_native_vertex_array, binding_index, buffer.GetNativeBuffer(), buffer_desc.offset,
                                       static_cast<int32_t>(buffer_desc.stride));
             RNDR_ASSERT_OPENGL();
-            RNDR_LOG_DEBUG("Added vertex buffer %u to pipeline's vertex array buffer %u, binding index: %d, offset: %d, stride: %d",
+            RNDR_LOG_DEBUG("Added vertex buffer {} to pipeline's vertex array buffer {}, binding index: {}, offset: {}, stride: {}",
                            buffer.GetNativeBuffer(), m_native_vertex_array, binding_index, buffer_desc.offset, buffer_desc.stride);
         }
         else if (buffer_desc.type == BufferType::ShaderStorage)
@@ -130,8 +130,8 @@ Rndr::Pipeline::Pipeline(const GraphicsContext& graphics_context, const Pipeline
             RNDR_ASSERT_OPENGL();
         }
         RNDR_LOG_DEBUG(
-            "Added attribute at index %d to vertex array buffer %u, binding index: %d, component count: %d, data type: %s, should "
-            "normalize data: %s, offset in vertex: %d",
+            "Added attribute at index {} to vertex array buffer {}, binding index: {}, component count: {}, data type: {}, should "
+            "normalize data: {}, offset in vertex: {}",
             attribute_index, m_native_vertex_array, element.binding_index, component_count, FromOpenGLDataTypeToString(data_type).GetData(),
             should_normalize_data ? "GL_TRUE" : "GL_FALSE", element.offset_in_vertex);
     }
@@ -141,7 +141,7 @@ Rndr::Pipeline::Pipeline(const GraphicsContext& graphics_context, const Pipeline
         RNDR_ASSERT(buffer.GetDesc().type == BufferType::Index, "Buffer is not an index buffer!");
         glVertexArrayElementBuffer(m_native_vertex_array, buffer.GetNativeBuffer());
         RNDR_ASSERT_OPENGL();
-        RNDR_LOG_DEBUG("Added index buffer %u to vertex array buffer %u", buffer.GetNativeBuffer(), m_native_vertex_array);
+        RNDR_LOG_DEBUG("Added index buffer {} to vertex array buffer {}", buffer.GetNativeBuffer(), m_native_vertex_array);
     }
 }
 

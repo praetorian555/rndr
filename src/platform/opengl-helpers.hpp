@@ -38,7 +38,7 @@ Opal::StringUtf8 FromOpenGLUsageToString(GLenum value);
 #define RNDR_ASSERT_OPENGL()                               \
     if (const GLenum error = glGetError() != GL_NO_ERROR)  \
     {                                                      \
-        RNDR_HALT("OpenGL failed with error: %d!", error); \
+        RNDR_HALT("OpenGL failed with error: {}!", error); \
     }
 
 #if RNDR_DEBUG
@@ -58,7 +58,7 @@ Opal::StringUtf8 FromOpenGLUsageToString(GLenum value);
         const GLuint gl_err = glGetError();                             \
         if (gl_err != GL_NO_ERROR)                                      \
         {                                                               \
-            RNDR_LOG_ERROR("OpenGL error: 0x%x - %s", gl_err, message); \
+            RNDR_LOG_ERROR("OpenGL error: {:#x} - {}", gl_err, message); \
             do_if_fails;                                                \
             throw GraphicsAPIException(gl_err, message);                \
         }                                                               \

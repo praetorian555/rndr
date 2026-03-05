@@ -48,7 +48,7 @@ Rndr::ErrorCode Rndr::FrameBuffer::Initialize(const Rndr::GraphicsContext& graph
         Texture color_attachment(graphics_context, color_attachment_desc, sampler_desc);
         if (!color_attachment.IsValid())
         {
-            RNDR_LOG_ERROR("Failed to create color attachment %d!", i);
+            RNDR_LOG_ERROR("Failed to create color attachment {}!", i);
             Destroy();
             return ErrorCode::InvalidArgument;
         }
