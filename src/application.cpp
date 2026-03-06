@@ -171,7 +171,7 @@ bool Rndr::Application::OnWindowClose(GenericWindow& window)
     {
         return true;
     }
-    window.ForceClose();
+    window.MarkClosed();
     return true;
 }
 

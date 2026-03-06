@@ -181,7 +181,7 @@ void Run()
     .Bind(Rndr::Key::Escape, Rndr::Trigger::Pressed)
     .OnButton([window](Rndr::Trigger, bool)
     {
-        window->ForceClose();
+        window->RequestClose();
     });
     const Rndr::FlyCameraDesc fly_camera_desc{.start_position = {0.0f, 1.0f, 10.0f},
                                               .start_yaw_radians = 0,

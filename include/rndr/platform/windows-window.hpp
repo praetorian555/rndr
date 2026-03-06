@@ -16,7 +16,6 @@ public:
     ~WindowsWindow();
 
     ErrorCode RequestClose() override;
-    ErrorCode ForceClose() override;
 
     ErrorCode Reshape(i32 pos_x, i32 pos_y, i32 width, i32 height) override;
     ErrorCode MoveTo(i32 pos_x, i32 pos_y) override;
@@ -34,7 +33,6 @@ public:
     ErrorCode SetOpacity(f32 opacity) override;
     ErrorCode SetTitle(const Opal::StringUtf8& title) override;
 
-    [[nodiscard]] bool IsClosed() const override;
     [[nodiscard]] bool IsMaximized() const override;
     [[nodiscard]] bool IsMinimized() const override;
     [[nodiscard]] bool IsVisible() const override;
@@ -57,7 +55,6 @@ private:
     NativeWindowHandle m_native_window_handle;
     GenericWindowMode m_mode = GenericWindowMode::Windowed;
     WINDOWPLACEMENT m_pre_fullscreen_placement;
-    bool m_is_closed = false;
     i32 m_pos_x = 0;
     i32 m_pos_y = 0;
     i32 m_width = 0;

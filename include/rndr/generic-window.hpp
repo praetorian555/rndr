@@ -43,11 +43,6 @@ public:
      */
     virtual ErrorCode RequestClose() = 0;
 
-    /**
-     * Marks a window as closed without triggering the Application::on_window_close event.
-     */
-    virtual ErrorCode ForceClose() = 0;
-
     virtual ErrorCode Reshape(i32 pos_x, i32 pos_y, i32 width, i32 height) = 0;
     virtual ErrorCode MoveTo(i32 pos_x, i32 pos_y) = 0;
     virtual ErrorCode BringToFront() = 0;
@@ -63,7 +58,12 @@ public:
     virtual ErrorCode SetOpacity(f32 opacity) = 0;
     virtual ErrorCode SetTitle(const Opal::StringUtf8& title) = 0;
 
-    [[nodiscard]] virtual bool IsClosed() const = 0;
+    /**
+     * Returns true if the window has been marked as closed. This is set automatically when
+     * the close request is not vetoed by the on_window_close delegate.
+     */
+    [[nodiscard]] bool IsClosed() const { return m_is_closed; }
+
     [[nodiscard]] virtual bool IsMaximized() const = 0;
     [[nodiscard]] virtual bool IsMinimized() const = 0;
     [[nodiscard]] virtual bool IsVisible() const = 0;
@@ -83,6 +83,11 @@ protected:
     GenericWindow(const GenericWindowDesc& desc) : m_desc(desc) {}
 
     GenericWindowDesc m_desc;
+    bool m_is_closed = false;
+
+private:
+    friend class Application;
+    void MarkClosed() { m_is_closed = true; }
 };
 
 }  // namespace Rndr

@@ -91,12 +91,6 @@ Rndr::ErrorCode Rndr::WindowsWindow::RequestClose()
     return ErrorCode::Success;
 }
 
-Rndr::ErrorCode Rndr::WindowsWindow::ForceClose()
-{
-    m_is_closed = true;
-    return ErrorCode::Success;
-}
-
 Rndr::ErrorCode Rndr::WindowsWindow::Reshape(i32 pos_x, i32 pos_y, i32 width, i32 height)
 {
     if (m_is_closed)
@@ -382,11 +376,6 @@ Rndr::ErrorCode Rndr::WindowsWindow::SetTitle(const Opal::StringUtf8& title)
         return ErrorCode::PlatformError;
     }
     return ErrorCode::Success;
-}
-
-bool Rndr::WindowsWindow::IsClosed() const
-{
-    return m_is_closed;
 }
 
 bool Rndr::WindowsWindow::IsMaximized() const

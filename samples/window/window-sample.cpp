@@ -157,7 +157,7 @@ int main()
         .GetContextByName("Default")
         .AddAction("Exit")
         .Bind(Rndr::Key::Escape, Rndr::Trigger::Pressed)
-        .OnButton([&window](Rndr::Trigger, bool) { window->ForceClose(); });
+        .OnButton([&window](Rndr::Trigger, bool) { window->RequestClose(); });
 
     Rndr::CommandList present_cmd_list{gc};
     present_cmd_list.CmdPresent(swap_chain);
