@@ -1,5 +1,6 @@
 #include "rndr/platform/windows-window.hpp"
 
+#include "opal/container/in-place-array.h"
 #include "opal/container/string.h"
 
 #include "rndr/platform/windows-application.hpp"
@@ -416,6 +417,30 @@ bool Rndr::WindowsWindow::IsWindowed() const
 bool Rndr::WindowsWindow::IsResizable() const
 {
     return (::GetWindowLongPtr(RNDR_TO_HWND(m_native_window_handle), GWL_STYLE) & WS_THICKFRAME) != 0;
+}
+
+void Rndr::WindowsWindow::EnableHighPrecisionCursorMode(bool enable)
+{
+    HWND window_handle = nullptr;
+    if (enable)
+    {
+        window_handle = RNDR_TO_HWND(m_native_window_handle);
+    }
+
+    constexpr uint16_t k_hid_usage_page_generic = 0x01;
+    constexpr uint16_t k_hid_usage_generic_mouse = 0x02;
+    Opal::InPlaceArray<RAWINPUTDEVICE, 1> raw_devices;
+    raw_devices[0].usUsagePage = k_hid_usage_page_generic;
+    raw_devices[0].usUsage = k_hid_usage_generic_mouse;
+    raw_devices[0].dwFlags = RIDEV_INPUTSINK;
+    raw_devices[0].hwndTarget = window_handle;
+    RegisterRawInputDevices(raw_devices.GetData(), 1, sizeof(raw_devices[0]));
+    m_high_precision_cursor = enable;
+}
+
+bool Rndr::WindowsWindow::IsHighPrecisionCursorModeEnabled() const
+{
+    return m_high_precision_cursor;
 }
 
 bool Rndr::WindowsWindow::IsMouseHovering() const

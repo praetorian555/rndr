@@ -65,7 +65,7 @@ int main()
     window->GetPositionAndSize(x, y, window_width, window_height);
     window->SetTitle("Window Sample");
 
-    app->EnableHighPrecisionCursorMode(true, *window);
+    window->EnableHighPrecisionCursorMode(true);
 
     const Rndr::GraphicsContextDesc gc_desc{.window_handle = window->GetNativeHandle()};
     Rndr::GraphicsContext gc{gc_desc};
@@ -135,20 +135,20 @@ int main()
         .AddAction("Toggle movement controls")
         .Bind(Rndr::Key::F1, Rndr::Trigger::Pressed)
         .OnButton(
-            [&app, &controller](Rndr::Trigger, bool is_repeated)
+            [&app, &window, &controller](Rndr::Trigger, bool is_repeated)
             {
                 if (!is_repeated)
                 {
-                    const Rndr::CursorPositionMode mode = app->GetCursorPositionMode();
+                    const Rndr::CursorPositionMode mode = window->GetCursorPositionMode();
                     if (mode == Rndr::CursorPositionMode::Normal)
                     {
                         app->ShowCursor(false);
-                        app->SetCursorPositionMode(Rndr::CursorPositionMode::ResetToCenter);
+                        window->SetCursorPositionMode(Rndr::CursorPositionMode::ResetToCenter);
                     }
                     else
                     {
                         app->ShowCursor(true);
-                        app->SetCursorPositionMode(Rndr::CursorPositionMode::Normal);
+                        window->SetCursorPositionMode(Rndr::CursorPositionMode::Normal);
                     }
                     controller.Enable(!controller.IsEnabled());
                 }
@@ -216,7 +216,7 @@ int main()
         ImGui::Text("Current Rendering resolution: %s", rendering_resolution_options_str[selected_resolution_index]);
         window->GetPositionAndSize(x, y, window_width, window_height);
         ImGui::Text("Window Resolution: %dx%d", window_width, window_height);
-        ImGui::Text("Cursor mode: %s", app->GetCursorPositionMode() == Rndr::CursorPositionMode::Normal ? "Normal" : "Reset to Center");
+        ImGui::Text("Cursor mode: %s", window->GetCursorPositionMode() == Rndr::CursorPositionMode::Normal ? "Normal" : "Reset to Center");
         ImGui::Text("Display mode: %s", window->GetMode() == Rndr::GenericWindowMode::Windowed ? "Windowed" : "Borderless Fullscreen");
         ImGui::Text("FPS: %.2f", fps_counter.GetFramesPerSecond());
         ImGui::Text("Frame Time: %.2f ms", (1 / fps_counter.GetFramesPerSecond()) * 1000.0f);

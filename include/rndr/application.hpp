@@ -44,13 +44,10 @@ public:
     void ProcessSystemEvents(f32 delta_seconds);
 
     /** Cursor manipulation API. */
-    void EnableHighPrecisionCursorMode(bool enable, GenericWindow& window);
     void ShowCursor(bool show);
     [[nodiscard]] bool IsCursorVisible() const;
     void SetCursorPosition(const Vector2i& pos);
     [[nodiscard]] Vector2i GetCursorPosition() const;
-    void SetCursorPositionMode(CursorPositionMode mode);
-    [[nodiscard]] CursorPositionMode GetCursorPositionMode() const;
     /** End of cursor manipulation API. */
 
     void RegisterSystemMessageHandler(SystemMessageHandler* handler);

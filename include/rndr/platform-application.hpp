@@ -23,22 +23,6 @@ struct ModifierKeysState
     bool is_caps_locked = false;
 };
 
-/**
- * Represents how the application should modify cursor's position.
- */
-enum class CursorPositionMode : u8
-{
-    /**
-     * The cursor is moved by the user and will stay there until moved again. Default behaviour.
-     */
-    Normal,
-    /**
-     * The cursor is moved by the user, but it's reset to the center of the screen every frame (this reset will not trigger mouse position
-     * update). Useful for FPS games.
-     */
-    ResetToCenter
-};
-
 class PlatformApplication
 {
 public:
@@ -52,14 +36,6 @@ public:
      * Process any messages received from the OS in the previous frame, like input events.
      */
     virtual void ProcessSystemEvents() = 0;
-
-    /**
-     * Control if the OS provides more frequent and fine-grained curser movement updates.
-     * @param enable If the mode should be enabled or not.
-     * @param window To what window to apply this change.
-     * @note On Windows this will trigger the generation of WM_INPUT system events.
-     */
-    virtual void EnableHighPrecisionCursorMode(bool enable, const GenericWindow& window) = 0;
 
     /**
      * Control cursor visibility.
@@ -83,17 +59,6 @@ public:
      * Get the current cursor position.
      */
     [[nodiscard]] virtual Vector2i GetCursorPosition() const = 0;
-
-    /**
-     * Controls cursor position mode.
-     * @param mode New cursor position mode.
-     */
-    virtual void SetCursorPositionMode(CursorPositionMode mode) = 0;
-
-    /**
-     * Get cursor position mode.
-     */
-    [[nodiscard]] virtual CursorPositionMode GetCursorPositionMode() const = 0;
 
     Opal::Ref<class GenericWindow> GetGenericWindowByNativeHandle(NativeWindowHandle handle);
     [[nodiscard]] const ModifierKeysState& GetModifierKeysState() const { return m_modifier_keys; }

@@ -43,6 +43,9 @@ public:
     [[nodiscard]] bool IsWindowed() const override;
     [[nodiscard]] bool IsMouseHovering() const override;
 
+    void EnableHighPrecisionCursorMode(bool enable) override;
+    [[nodiscard]] bool IsHighPrecisionCursorModeEnabled() const override;
+
     ErrorCode GetPositionAndSize(i32& pos_x, i32& pos_y, i32& width, i32& height) const override;
     Opal::Expected<Vector2i, ErrorCode> GetSize() const override;
     [[nodiscard]] GenericWindowMode GetMode() const override;
@@ -53,6 +56,7 @@ private:
     static i32 GetFullscreenStyle(const GenericWindowDesc& desc);
 
     NativeWindowHandle m_native_window_handle;
+    bool m_high_precision_cursor = false;
     GenericWindowMode m_mode = GenericWindowMode::Windowed;
     WINDOWPLACEMENT m_pre_fullscreen_placement;
     i32 m_pos_x = 0;

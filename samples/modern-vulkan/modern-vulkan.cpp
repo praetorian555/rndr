@@ -56,9 +56,9 @@ void Run()
 
     auto rndr_app = Rndr::Application::Create({.enable_input_system = true});
     Rndr::GenericWindow* window = rndr_app->CreateGenericWindow();
-    rndr_app->EnableHighPrecisionCursorMode(true, *window);
+    window->EnableHighPrecisionCursorMode(true);
     rndr_app->ShowCursor(false);
-    rndr_app->SetCursorPositionMode(Rndr::CursorPositionMode::ResetToCenter);
+    window->SetCursorPositionMode(Rndr::CursorPositionMode::ResetToCenter);
 
     Rndr::AdvancedGraphicsContext graphics_context{{.collect_debug_messages = true}};
     Rndr::AdvancedSurface surface(graphics_context, window);

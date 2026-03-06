@@ -17,6 +17,22 @@ enum class GenericWindowMode : u8
     Count
 };
 
+/**
+ * Represents how the window should modify cursor's position.
+ */
+enum class CursorPositionMode : u8
+{
+    /**
+     * The cursor is moved by the user and will stay there until moved again. Default behaviour.
+     */
+    Normal,
+    /**
+     * The cursor is moved by the user, but it's reset to the center of the window every frame (this reset will not trigger mouse position
+     * update). Useful for FPS games.
+     */
+    ResetToCenter
+};
+
 struct GenericWindowDesc
 {
     int width = 1024;
@@ -74,6 +90,21 @@ public:
     [[nodiscard]] virtual bool IsWindowed() const = 0;
     [[nodiscard]] virtual bool IsMouseHovering() const = 0;
 
+    /**
+     * Control if the OS provides more frequent and fine-grained cursor movement updates for this window.
+     * @param enable If the mode should be enabled or not.
+     * @note On Windows this will trigger the generation of WM_INPUT system events.
+     */
+    virtual void EnableHighPrecisionCursorMode(bool enable) = 0;
+
+    /**
+     * Check if high-precision cursor mode is enabled for this window.
+     */
+    [[nodiscard]] virtual bool IsHighPrecisionCursorModeEnabled() const = 0;
+
+    void SetCursorPositionMode(CursorPositionMode mode) { m_cursor_pos_mode = mode; }
+    [[nodiscard]] CursorPositionMode GetCursorPositionMode() const { return m_cursor_pos_mode; }
+
     virtual ErrorCode GetPositionAndSize(i32& pos_x, i32& pos_y, i32& width, i32& height) const = 0;
     virtual Opal::Expected<Vector2i, ErrorCode> GetSize() const = 0;
     [[nodiscard]] virtual GenericWindowMode GetMode() const = 0;
@@ -83,6 +114,7 @@ protected:
     GenericWindow(const GenericWindowDesc& desc) : m_desc(desc) {}
 
     GenericWindowDesc m_desc;
+    CursorPositionMode m_cursor_pos_mode = CursorPositionMode::Normal;
     bool m_is_closed = false;
 
 private:

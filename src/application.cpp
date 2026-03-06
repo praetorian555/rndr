@@ -87,11 +87,6 @@ void Rndr::Application::ProcessSystemEvents(f32 delta_seconds)
     }
 }
 
-void Rndr::Application::EnableHighPrecisionCursorMode(bool enable, GenericWindow& window)
-{
-    m_platform_application->EnableHighPrecisionCursorMode(enable, window);
-}
-
 void Rndr::Application::ShowCursor(bool show)
 {
     m_platform_application->ShowCursor(show);
@@ -110,16 +105,6 @@ void Rndr::Application::SetCursorPosition(const Vector2i& pos)
 Rndr::Vector2i Rndr::Application::GetCursorPosition() const
 {
     return m_platform_application->GetCursorPosition();
-}
-
-void Rndr::Application::SetCursorPositionMode(CursorPositionMode mode)
-{
-    m_platform_application->SetCursorPositionMode(mode);
-}
-
-Rndr::CursorPositionMode Rndr::Application::GetCursorPositionMode() const
-{
-    return m_platform_application->GetCursorPositionMode();
 }
 
 void Rndr::Application::RegisterSystemMessageHandler(SystemMessageHandler* handler)

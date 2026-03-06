@@ -261,33 +261,16 @@ void Rndr::WindowsApplication::ProcessSystemEvents()
         }
     }
 
-    if (m_cursor_pos_mode == CursorPositionMode::ResetToCenter && m_focused_window.IsValid())
+    if (m_focused_window.IsValid() && m_focused_window->GetCursorPositionMode() == CursorPositionMode::ResetToCenter)
     {
         RECT window_rect;
-        GetWindowRect( reinterpret_cast<HWND>(m_focused_window->GetNativeHandle()), &window_rect);
+        GetWindowRect(reinterpret_cast<HWND>(m_focused_window->GetNativeHandle()), &window_rect);
         const int width = window_rect.right - window_rect.left;
         const int height = window_rect.bottom - window_rect.top;
         const int mid_x = window_rect.left + (width / 2);
         const int mid_y = window_rect.top + (height / 2);
         ::SetCursorPos(mid_x, mid_y);
     }
-}
-void Rndr::WindowsApplication::EnableHighPrecisionCursorMode(bool enable, const GenericWindow& window)
-{
-    HWND window_handle = nullptr;
-    if (enable)
-    {
-        window_handle = reinterpret_cast<HWND>(window.GetNativeHandle());
-    }
-
-    constexpr uint16_t k_hid_usage_page_generic = 0x01;
-    constexpr uint16_t k_hid_usage_generic_mouse = 0x02;
-    Opal::InPlaceArray<RAWINPUTDEVICE, 1> raw_devices;
-    raw_devices[0].usUsagePage = k_hid_usage_page_generic;
-    raw_devices[0].usUsage = k_hid_usage_generic_mouse;
-    raw_devices[0].dwFlags = RIDEV_INPUTSINK;
-    raw_devices[0].hwndTarget = window_handle;
-    RegisterRawInputDevices(raw_devices.GetData(), 1, sizeof(raw_devices[0]));
 }
 
 void Rndr::WindowsApplication::ShowCursor(bool show)
@@ -312,16 +295,6 @@ Rndr::Vector2i Rndr::WindowsApplication::GetCursorPosition() const
     POINT cursor_pos;
     GetCursorPos(&cursor_pos);
     return {cursor_pos.x, cursor_pos.y};
-}
-
-void Rndr::WindowsApplication::SetCursorPositionMode(CursorPositionMode mode)
-{
-    m_cursor_pos_mode = mode;
-}
-
-Rndr::CursorPositionMode Rndr::WindowsApplication::GetCursorPositionMode() const
-{
-    return m_cursor_pos_mode;
 }
 
 Rndr::i32 Rndr::WindowsApplication::TranslateKey(i32 win_key, i32 desc)
