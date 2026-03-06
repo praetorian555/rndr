@@ -1,14 +1,13 @@
 #include "rndr/application.hpp"
 
-#include <stdio.h>
-
 #include "opal/allocator.h"
 #include "opal/container/in-place-array.h"
 #include "opal/container/scope-ptr.h"
-
 #include "opal/logging.h"
 
+#include "rndr/input-system.hpp"
 #include "rndr/log.hpp"
+#include "rndr/platform-application.hpp"
 
 #if RNDR_WINDOWS
 #include "rndr/platform/windows-application.hpp"
@@ -42,8 +41,7 @@ Rndr::Application& Rndr::Application::GetChecked()
     return *g_instance;
 }
 
-Rndr::Application::Application(const ApplicationDesc& desc)
-    : m_desc(desc)
+Rndr::Application::Application(const ApplicationDesc& desc) : m_desc(desc)
 {
     Opal::Logger& logger = Opal::GetLogger();
     if (!logger.IsCategoryRegistered("Rndr"))
@@ -51,7 +49,7 @@ Rndr::Application::Application(const ApplicationDesc& desc)
         logger.RegisterCategory("Rndr", Opal::LogLevel::Verbose);
     }
 #if RNDR_WINDOWS
-    m_platform_application = Opal::New<WindowsApplication>(Opal::GetDefaultAllocator(), this);
+    m_platform_application = Opal::MakeScoped<PlatformApplication, WindowsApplication>(Opal::GetDefaultAllocator(), this);
 #else
 #error "Platform not supported!"
 #endif
@@ -61,10 +59,6 @@ Rndr::Application::Application(const ApplicationDesc& desc)
 
 Rndr::Application::~Application()
 {
-    if (m_platform_application.IsValid())
-    {
-        Opal::Delete(Opal::GetDefaultAllocator(), m_platform_application.GetPtr());
-    }
     g_instance = nullptr;
 }
 

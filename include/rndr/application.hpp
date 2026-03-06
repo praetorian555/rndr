@@ -6,8 +6,6 @@
 #include "opal/delegate.h"
 
 #include "rndr/generic-window.hpp"
-#include "rndr/imgui-system.hpp"
-#include "rndr/input-system.hpp"
 #include "rndr/platform-application.hpp"
 #include "rndr/system-message-handler.hpp"
 
@@ -41,7 +39,7 @@ public:
     Opal::Ref<GenericWindow> CreateGenericWindow(const GenericWindowDesc& desc = GenericWindowDesc());
     void DestroyGenericWindow(Opal::Ref<GenericWindow> window);
 
-    [[nodiscard]] InputSystem& GetInputSystemChecked() const;
+    [[nodiscard]] class InputSystem& GetInputSystemChecked() const;
 
     void ProcessSystemEvents(f32 delta_seconds);
 
@@ -80,9 +78,8 @@ private:
     friend T* Opal::New(Opal::AllocatorBase* /*allocator*/, Args&&... /*args*/);
 
     ApplicationDesc m_desc;
-    Opal::Ref<PlatformApplication> m_platform_application;
-    Opal::ScopePtr<InputSystem> m_input_system;
-    Opal::Ref<ImGuiContext> m_imgui_system;
+    Opal::ScopePtr<class PlatformApplication> m_platform_application;
+    Opal::ScopePtr<class InputSystem> m_input_system;
     Opal::DynamicArray<Opal::Ref<SystemMessageHandler>> m_system_message_handlers;
 };
 
