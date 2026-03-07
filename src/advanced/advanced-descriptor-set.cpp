@@ -86,10 +86,17 @@ void Rndr::AdvancedDescriptorSetLayoutDesc::AddBinding(AdvancedDescriptorType de
 
 // AdvancedDescriptorPool
 
+Rndr::AdvancedDescriptorSetUpdateBinding Rndr::AdvancedDescriptorSetUpdateBinding::Clone(Opal::AllocatorBase* allocator) const
+{
+    AdvancedDescriptorSetUpdateBinding clone{
+        .descriptor_type = descriptor_type, .binding = binding, .resource_info = resource_info.Clone(allocator)};
+    return clone;
+}
+
 Rndr::AdvancedDescriptorPool::AdvancedDescriptorPool(const AdvancedDevice& device, const AdvancedDescriptorPoolDesc& desc)
     : m_device(device), m_desc(desc.Clone())
 {
-    Opal::DynamicArray<VkDescriptorPoolSize> pool_sizes(Opal::GetScratchAllocator());
+    Opal::DynamicArray<VkDescriptorPoolSize> pool_sizes;
     for (const auto& pair : desc.descriptor_types)
     {
         const VkDescriptorPoolSize pool_size{
@@ -295,9 +302,9 @@ void Rndr::AdvancedDescriptorSet::Destroy()
 
 void Rndr::AdvancedDescriptorSet::UpdateDescriptorSets(const Opal::DynamicArray<AdvancedDescriptorSetUpdateBinding>& updates)
 {
-    Opal::DynamicArray<VkWriteDescriptorSet> descriptor_writes(updates.GetSize(), Opal::GetScratchAllocator());
-    Opal::DynamicArray<VkDescriptorBufferInfo> buffer_infos(Opal::GetScratchAllocator());
-    Opal::DynamicArray<VkDescriptorImageInfo> image_infos(Opal::GetScratchAllocator());
+    Opal::DynamicArray<VkWriteDescriptorSet> descriptor_writes(updates.GetSize());
+    Opal::DynamicArray<VkDescriptorBufferInfo> buffer_infos(updates.GetSize());
+    Opal::DynamicArray<VkDescriptorImageInfo> image_infos(updates.GetSize());
     for (i32 i = 0; i < updates.GetSize(); i++)
     {
         VkWriteDescriptorSet& descriptor_write = descriptor_writes[i];
@@ -311,21 +318,22 @@ void Rndr::AdvancedDescriptorSet::UpdateDescriptorSets(const Opal::DynamicArray<
         if (updates[i].descriptor_type == AdvancedDescriptorType::StorageBuffer ||
             updates[i].descriptor_type == AdvancedDescriptorType::ConstantBuffer)
         {
-            buffer_infos.PushBack({.buffer = updates[i].buffer_info.buffer->GetNativeBuffer(),
-                                   .offset = 0,
-                                   .range = updates[i].buffer_info.buffer->GetSize()});
+            const AdvancedDescriptorSetUpdateBinding::BufferInfo& buffer_info =
+                updates[i].resource_info.Get<AdvancedDescriptorSetUpdateBinding::BufferInfo>();
+            buffer_infos.PushBack({.buffer = buffer_info.buffer->GetNativeBuffer(), .offset = 0, .range = buffer_info.buffer->GetSize()});
             descriptor_write.pBufferInfo = &buffer_infos.Back();
         }
         else
         {
-            image_infos.PushBack({.sampler = updates[i].image_info.sampler->GetNativeSampler(),
-                                  .imageView = updates[i].image_info.image->GetNativeImageView(),
-                                  .imageLayout = static_cast<VkImageLayout>(updates[i].image_info.image_layout)});
+            const AdvancedDescriptorSetUpdateBinding::ImageInfo& image_info =
+                updates[i].resource_info.Get<AdvancedDescriptorSetUpdateBinding::ImageInfo>();
+            image_infos.PushBack({.sampler = image_info.sampler->GetNativeSampler(),
+                                  .imageView = image_info.image->GetNativeImageView(),
+                                  .imageLayout = static_cast<VkImageLayout>(image_info.image_layout)});
             descriptor_write.pImageInfo = &image_infos.Back();
         }
         descriptor_write.pTexelBufferView = nullptr;
     }
 
-    vkUpdateDescriptorSets(m_device, static_cast<u32>(descriptor_writes.GetSize()), descriptor_writes.GetData(), 0,
-                           nullptr);
+    vkUpdateDescriptorSets(m_device, static_cast<u32>(descriptor_writes.GetSize()), descriptor_writes.GetData(), 0, nullptr);
 }

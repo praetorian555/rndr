@@ -18,7 +18,7 @@ struct AdvancedPushConstantRange
     u32 size = 0;
 };
 
-struct AdvancedVertexInputDesc
+struct AdvancedVertexInputDesc : Opal::ClonableBase<AdvancedVertexInputDesc>
 {
     struct Attribute
     {
@@ -27,15 +27,18 @@ struct AdvancedVertexInputDesc
         u32 offset;
     };
 
-    struct Binding
+    struct Binding : Opal::ClonableBase<Binding>
     {
         u32 binding;
         u32 stride;
         DataRepetition input_rate = DataRepetition::PerVertex;
         Opal::DynamicArray<Attribute> attributes;
+        OPAL_CLONE_FIELDS(binding, stride, input_rate, attributes);
     };
 
     Opal::DynamicArray<Binding> bindings;
+
+    OPAL_CLONE_FIELDS(bindings);
 
     Binding& AddBinding(u32 binding, u32 stride, DataRepetition input_rate = DataRepetition::PerVertex);
     void AddAttribute(u32 binding, u32 location, PixelFormat format, u32 offset);

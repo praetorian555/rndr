@@ -42,7 +42,8 @@ int main()
     try
     {
         Run();
-    } catch (const Opal::Exception& e)
+    }
+    catch (const Opal::Exception& e)
     {
         printf("%s", *e.What());
         return 1;
@@ -55,13 +56,13 @@ void Run()
     constexpr i32 k_frames_in_flight = 2;
 
     auto rndr_app = Rndr::Application::Create({.enable_input_system = true});
-    Rndr::GenericWindow* window = rndr_app->CreateGenericWindow();
+    auto window = rndr_app->CreateGenericWindow();
     window->EnableHighPrecisionCursorMode(true);
     rndr_app->ShowCursor(false);
     window->SetCursorPositionMode(Rndr::CursorPositionMode::ResetToCenter);
 
     Rndr::AdvancedGraphicsContext graphics_context{{.collect_debug_messages = true}};
-    Rndr::AdvancedSurface surface(graphics_context, window);
+    Rndr::AdvancedSurface surface(graphics_context, window.Get());
 
     auto physical_devices = graphics_context.EnumeratePhysicalDevices();
     Rndr::AdvancedDevice device(std::move(physical_devices[0]), graphics_context, {.surface = Opal::Ref{surface}});
@@ -87,8 +88,8 @@ void Run()
     Opal::InPlaceArray<Rndr::AdvancedBuffer, k_frames_in_flight> m_shader_buffers;
     for (i32 i = 0; i < k_frames_in_flight; i++)
     {
-        m_shader_buffers[i] = Rndr::AdvancedBuffer(
-            device, {.size = sizeof(ShaderData), .usage = 0, .keep_memory_mapped = true, .use_device_address = true});
+        m_shader_buffers[i] =
+            Rndr::AdvancedBuffer(device, {.size = sizeof(ShaderData), .usage = 0, .keep_memory_mapped = true, .use_device_address = true});
     }
 
     // Create fences and semaphores
@@ -134,14 +135,18 @@ void Run()
     // Allocate descriptor set from the descriptor pool and fill it with concrete data.
     Rndr::AdvancedDescriptorSet descriptor_set(descriptor_pool, descriptor_set_layout);
     Opal::DynamicArray<Rndr::AdvancedDescriptorSetUpdateBinding> update_bindings;
-    Rndr::AdvancedDescriptorSetUpdateBinding binding{
+    Rndr::AdvancedDescriptorSetUpdateBinding binding1{
         .descriptor_type = Rndr::AdvancedDescriptorType::CombinedImageSampler,
         .binding = 0,
-        .image_info = {.sampler = albedo_sampler, .image = albedo_texture, .image_layout = Rndr::ImageLayout::ShaderReadOnly}};
-    update_bindings.PushBack(binding);
-    binding.binding = 1;
-    binding.image_info = {.sampler = mr_sampler, .image = mr_texture, .image_layout = Rndr::ImageLayout::ShaderReadOnly};
-    update_bindings.PushBack(binding);
+        .resource_info = Rndr::AdvancedDescriptorSetUpdateBinding::ImageInfo{
+            .sampler = albedo_sampler, .image = albedo_texture, .image_layout = Rndr::ImageLayout::ShaderReadOnly}};
+    update_bindings.PushBack(std::move(binding1));
+    Rndr::AdvancedDescriptorSetUpdateBinding binding2{
+    .descriptor_type = Rndr::AdvancedDescriptorType::CombinedImageSampler,
+    .binding = 1,
+    .resource_info = Rndr::AdvancedDescriptorSetUpdateBinding::ImageInfo{
+        .sampler = mr_sampler, .image = mr_texture, .image_layout = Rndr::ImageLayout::ShaderReadOnly}};
+    update_bindings.PushBack(std::move(binding2));
     descriptor_set.UpdateDescriptorSets(update_bindings);
 
     const Opal::StringUtf8 shader_path = Opal::Paths::Combine(RNDR_CORE_ASSETS_DIR, "shaders", "modern-vulkan.spv");
@@ -162,7 +167,7 @@ void Run()
 
     Rndr::AdvancedColorBlendDesc color_blend_desc;
     const Rndr::AdvancedGraphicsPipelineDesc pipeline_desc{
-        .vertex_input = vertex_input_desc,
+        .vertex_input = std::move(vertex_input_desc),
         .vertex_shader = vertex_shader,
         .fragment_shader = fragment_shader,
         .descriptor_set_layouts = {descriptor_set_layout},
@@ -177,12 +182,11 @@ void Run()
     f32 window_width = window_size.x;
     f32 window_height = window_size.y;
 
-    rndr_app->GetInputSystemChecked().GetCurrentContext().AddAction("Exit")
-    .Bind(Rndr::Key::Escape, Rndr::Trigger::Pressed)
-    .OnButton([window](Rndr::Trigger, bool)
-    {
-        window->RequestClose();
-    });
+    rndr_app->GetInputSystemChecked()
+        .GetCurrentContext()
+        .AddAction("Exit")
+        .Bind(Rndr::Key::Escape, Rndr::Trigger::Pressed)
+        .OnButton([&window](Rndr::Trigger, bool) { window->RequestClose(); });
     const Rndr::FlyCameraDesc fly_camera_desc{.start_position = {0.0f, 1.0f, 10.0f},
                                               .start_yaw_radians = 0,
                                               .projection_desc = {.near = 0.1f, .far = 32.0f, .complexity = Rndr::ApiComplexity::Advanced}};
@@ -193,7 +197,6 @@ void Run()
     Rndr::u32 frame_index = 0;
     while (!window->IsClosed())
     {
-        Opal::GetScratchAllocator()->Reset();
         auto start_time = Opal::GetSeconds();
 
         window_size = window->GetSize().GetValue();
@@ -281,7 +284,7 @@ void Run()
         graphics_queue->Submit(command_buffer, present_semaphores[frame_index], Rndr::PipelineStageBits::ColorAttachmentOutput,
                                render_semaphores[image_index], fences[frame_index]);
         frame_index = (frame_index + 1) % k_frames_in_flight;
-        swap_chain.Present(image_index, present_queue, render_semaphores[image_index]);
+        swap_chain.Present(image_index, present_queue.Clone(), render_semaphores[image_index]);
 
         auto end_time = Opal::GetSeconds();
         delta_seconds = static_cast<f32>(end_time - start_time);

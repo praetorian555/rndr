@@ -90,7 +90,7 @@ void Rndr::AdvancedCommandBuffer::CmdImageBarrier(const AdvancedImageBarrier& im
 
 void Rndr::AdvancedCommandBuffer::CmdImageBarriers(const Opal::ArrayView<AdvancedImageBarrier>& image_barriers)
 {
-    Opal::DynamicArray<VkImageMemoryBarrier2> barriers(Opal::GetScratchAllocator());
+    Opal::DynamicArray<VkImageMemoryBarrier2> barriers;
     for (const auto& image_barrier : image_barriers)
     {
         VkImageMemoryBarrier2 barrier_info{
@@ -118,7 +118,7 @@ void Rndr::AdvancedCommandBuffer::CmdImageBarriers(const Opal::ArrayView<Advance
 
 void Rndr::AdvancedCommandBuffer::CmdCopyBufferToImage(const class AdvancedBuffer& buffer, const Bitmap& bitmap, AdvancedTexture& texture)
 {
-    Opal::DynamicArray<VkBufferImageCopy> copy_regions(bitmap.GetMipCount(), Opal::GetScratchAllocator());
+    Opal::DynamicArray<VkBufferImageCopy> copy_regions(bitmap.GetMipCount());
     for (u32 mip_level = 0; mip_level < bitmap.GetMipCount(); ++mip_level)
     {
         const u32 width = Opal::Max(1, bitmap.GetWidth() >> mip_level);
@@ -165,7 +165,7 @@ static VkAttachmentStoreOp ToVkStoreOp(Rndr::AttachmentStoreOperation op)
 
 void Rndr::AdvancedCommandBuffer::CmdBeginRendering(const AdvancedRenderingDesc& desc)
 {
-    Opal::DynamicArray<VkRenderingAttachmentInfo> color_attachments(Opal::GetScratchAllocator());
+    Opal::DynamicArray<VkRenderingAttachmentInfo> color_attachments;
     for (const auto& attachment : desc.color_attachments)
     {
         color_attachments.PushBack(VkRenderingAttachmentInfo{
@@ -294,7 +294,7 @@ void Rndr::AdvancedCommandBuffer::CmdBindDescriptorSets(const AdvancedPipeline& 
                                                         const Opal::ArrayView<Opal::Ref<AdvancedDescriptorSet>>& descriptor_sets,
                                                         u32 first_set)
 {
-    Opal::DynamicArray<VkDescriptorSet> native_sets(Opal::GetScratchAllocator());
+    Opal::DynamicArray<VkDescriptorSet> native_sets;
     for (const auto& set : descriptor_sets)
     {
         native_sets.PushBack(set->GetNativeDescriptorSet());

@@ -13,7 +13,7 @@
 
 Opal::DynamicArray<Rndr::u32> Rndr::AdvancedQueueFamilyIndices::GetValidQueueFamilies() const
 {
-    Opal::HashSet<u32> unique_indices(6, Opal::GetScratchAllocator());
+    Opal::HashSet<u32> unique_indices(6);
     Opal::DynamicArray<u32> valid_queue_families;
     if (graphics_family != k_invalid_index)
     {

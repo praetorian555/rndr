@@ -6,6 +6,7 @@
 #include "opal/container/dynamic-array.h"
 #include "opal/container/hash-map.h"
 #include "opal/container/ref.h"
+#include "opal/variant.h"
 
 #include "rndr/graphics-types.hpp"
 #include "rndr/types.hpp"
@@ -59,23 +60,26 @@ struct AdvancedDescriptorSetLayoutDesc : Opal::ClonableBase<AdvancedDescriptorSe
 
 struct AdvancedDescriptorSetUpdateBinding
 {
+    struct BufferInfo : Opal::ClonableBase<BufferInfo>
+    {
+        Opal::Ref<class AdvancedBuffer> buffer;
+        u64 offset = 0;
+        u64 size = 0;
+        OPAL_CLONE_FIELDS(buffer, offset, size);
+    };
+    struct ImageInfo : Opal::ClonableBase<ImageInfo>
+    {
+        Opal::Ref<class AdvancedSampler> sampler;
+        Opal::Ref<class AdvancedTexture> image;
+        ImageLayout image_layout;
+        OPAL_CLONE_FIELDS(sampler, image, image_layout);
+    };
+
     AdvancedDescriptorType descriptor_type = AdvancedDescriptorType::CombinedImageSampler;
     u32 binding = 0;
-    union
-    {
-        struct BufferInfo
-        {
-            Opal::Ref<class AdvancedBuffer> buffer;
-            u64 offset = 0;
-            u64 size = 0;
-        } buffer_info;
-        struct ImageInfo
-        {
-            Opal::Ref<class AdvancedSampler> sampler;
-            Opal::Ref<class AdvancedTexture> image;
-            ImageLayout image_layout;
-        } image_info;
-    };
+    Opal::Variant<BufferInfo, ImageInfo> resource_info;
+
+    AdvancedDescriptorSetUpdateBinding Clone(Opal::AllocatorBase* allocator = nullptr) const;
 };
 
 class AdvancedDescriptorPool

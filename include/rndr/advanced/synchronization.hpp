@@ -2,12 +2,12 @@
 
 #include "volk/volk.h"
 
-#include "opal/container/ref.h"
 #include "opal/container/array-view.h"
+#include "opal/container/ref.h"
 
+#include "rndr/advanced/advanced-texture.hpp"
 #include "rndr/graphics-types.hpp"
 #include "rndr/types.hpp"
-#include "rndr/advanced/advanced-texture.hpp"
 
 namespace Rndr
 {
@@ -66,7 +66,7 @@ private:
     Opal::Ref<const class AdvancedDevice> m_device;
 };
 
-struct AdvancedImageBarrier
+struct AdvancedImageBarrier : Opal::ClonableBase<AdvancedImageBarrier>
 {
     PipelineStageBits stages_must_finish;
     PipelineStageAccessBits stages_must_finish_access;
@@ -76,6 +76,9 @@ struct AdvancedImageBarrier
     ImageLayout new_layout;
     Opal::Ref<const class AdvancedTexture> image;
     ImageSubresourceRange subresource_range;
+
+    OPAL_CLONE_FIELDS(stages_must_finish, stages_must_finish_access, before_stages_start, before_stages_start_access, old_layout,
+                      new_layout, image, subresource_range);
 };
 
 }  // namespace Rndr
