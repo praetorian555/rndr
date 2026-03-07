@@ -8,6 +8,7 @@
 #include "rndr/generic-window.hpp"
 #include "rndr/input-system.hpp"
 #include "rndr/log.hpp"
+#include "rndr/monitor-info.hpp"
 #include "rndr/platform-application.hpp"
 
 #if RNDR_WINDOWS
@@ -112,6 +113,26 @@ Rndr::Vector2i Rndr::Application::GetCursorPosition() const
     return m_platform_application->GetCursorPosition();
 }
 
+Opal::DynamicArray<Rndr::MonitorInfo> Rndr::Application::GetMonitors() const
+{
+    return m_platform_application->GetMonitors();
+}
+
+Rndr::MonitorInfo Rndr::Application::GetPrimaryMonitor() const
+{
+    return m_platform_application->GetPrimaryMonitor();
+}
+
+Rndr::MonitorInfo Rndr::Application::GetMonitorAtPosition(const Vector2i& pos) const
+{
+    return m_platform_application->GetMonitorAtPosition(pos);
+}
+
+Rndr::MonitorInfo Rndr::Application::GetMonitorForWindow(const GenericWindow& window) const
+{
+    return m_platform_application->GetMonitorForWindow(window);
+}
+
 void Rndr::Application::RegisterSystemMessageHandler(SystemMessageHandler* handler)
 {
     if (handler == nullptr)
@@ -166,6 +187,24 @@ void Rndr::Application::OnWindowSizeChanged(const GenericWindow& window, i32 wid
         system_message_handler->OnWindowSizeChanged(window, width, height);
     }
     on_window_resize.Execute(window, width, height);
+}
+
+void Rndr::Application::OnMonitorChange()
+{
+    for (const Opal::Ref<SystemMessageHandler>& system_message_handler : m_system_message_handlers)
+    {
+        system_message_handler->OnMonitorChange();
+    }
+    on_monitor_change.Execute();
+}
+
+void Rndr::Application::OnWindowDpiChanged(const GenericWindow& window, f32 new_dpi_scale)
+{
+    for (const Opal::Ref<SystemMessageHandler>& system_message_handler : m_system_message_handlers)
+    {
+        system_message_handler->OnWindowDpiChanged(window, new_dpi_scale);
+    }
+    on_window_dpi_change.Execute(window, new_dpi_scale);
 }
 
 bool Rndr::Application::OnButtonDown(const GenericWindow& window, InputPrimitive key_code, bool is_repeated)

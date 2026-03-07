@@ -46,6 +46,8 @@ struct GenericWindowDesc
     bool start_minimized = false;
     bool start_maximized = false;
     bool start_visible = true;
+    /** If >= 0, center the window on the monitor with this index. Overrides start_x/start_y. */
+    int monitor_index = -1;
 };
 
 class GenericWindow

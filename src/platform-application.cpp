@@ -8,9 +8,21 @@
 
 Opal::Ref<Rndr::GenericWindow> Rndr::PlatformApplication::CreateGenericWindow(const GenericWindowDesc& desc)
 {
+    GenericWindowDesc resolved_desc = desc;
+    if (resolved_desc.monitor_index >= 0)
+    {
+        Opal::DynamicArray<MonitorInfo> monitors = GetMonitors();
+        if (resolved_desc.monitor_index < monitors.GetSize())
+        {
+            const MonitorInfo& monitor = monitors[resolved_desc.monitor_index];
+            resolved_desc.start_x = monitor.position.x + (monitor.size.x - resolved_desc.width) / 2;
+            resolved_desc.start_y = monitor.position.y + (monitor.size.y - resolved_desc.height) / 2;
+        }
+    }
+
     Opal::ScopePtr<GenericWindow> window;
 #if RNDR_WINDOWS
-    window = Opal::MakeScoped<GenericWindow, WindowsWindow>(Opal::GetDefaultAllocator(), desc);
+    window = Opal::MakeScoped<GenericWindow, WindowsWindow>(Opal::GetDefaultAllocator(), resolved_desc);
 #else
 #error "Platform not supported!"
 #endif

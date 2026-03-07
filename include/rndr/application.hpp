@@ -5,6 +5,7 @@
 #include "opal/container/scope-ptr.h"
 #include "opal/delegate.h"
 
+#include "rndr/monitor-info.hpp"
 #include "rndr/system-message-handler.hpp"
 
 namespace Rndr
@@ -28,6 +29,12 @@ public:
     using WindowResizeDelegate = Opal::MultiDelegate<void(const GenericWindow& window /*window*/, int /*width*/, int /*height*/)>;
     WindowResizeDelegate on_window_resize;
 
+    using MonitorChangeDelegate = Opal::MultiDelegate<void()>;
+    MonitorChangeDelegate on_monitor_change;
+
+    using WindowDpiChangeDelegate = Opal::MultiDelegate<void(const GenericWindow& /*window*/, f32 /*new_dpi_scale*/)>;
+    WindowDpiChangeDelegate on_window_dpi_change;
+
     static Opal::ScopePtr<Application> Create(const ApplicationDesc& desc = ApplicationDesc{});
 
     static Application* Get();
@@ -38,6 +45,13 @@ public:
     void DestroyGenericWindow(Opal::Ref<GenericWindow> window);
 
     [[nodiscard]] class InputSystem& GetInputSystemChecked() const;
+
+    /** Monitor API. */
+    [[nodiscard]] Opal::DynamicArray<MonitorInfo> GetMonitors() const;
+    [[nodiscard]] MonitorInfo GetPrimaryMonitor() const;
+    [[nodiscard]] MonitorInfo GetMonitorAtPosition(const Vector2i& pos) const;
+    [[nodiscard]] MonitorInfo GetMonitorForWindow(const GenericWindow& window) const;
+    /** End of monitor API. */
 
     void ProcessSystemEvents(f32 delta_seconds);
 
@@ -54,6 +68,8 @@ public:
     /** Implementation of SystemMessageHandler API */
     bool OnWindowClose(GenericWindow& window) override;
     void OnWindowSizeChanged(const GenericWindow& window, i32 width, i32 height) override;
+    void OnMonitorChange() override;
+    void OnWindowDpiChanged(const GenericWindow& window, f32 new_dpi_scale) override;
 
     bool OnButtonDown(const GenericWindow& window, InputPrimitive key_code, bool is_repeated) override;
     bool OnButtonUp(const GenericWindow& window, InputPrimitive key_code, bool is_repeated) override;

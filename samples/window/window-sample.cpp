@@ -52,7 +52,12 @@ int main()
         RNDR_LOG_ERROR("Failed to create app!");
         return -1;
     }
-    auto window = app->CreateGenericWindow({});
+    const auto& monitors = app->GetMonitors();
+    for (const auto& monitor : monitors)
+    {
+        RNDR_LOG_INFO("Monitor {}: {}", monitor.index, *monitor.name);
+    }
+    auto window = app->CreateGenericWindow({.monitor_index = 1});
     if (window == nullptr)
     {
         RNDR_LOG_ERROR("Failed to create window!");

@@ -15,6 +15,8 @@ struct SystemMessageHandler
 
     virtual bool OnWindowClose(GenericWindow& window) = 0;
     virtual void OnWindowSizeChanged(const GenericWindow& window, i32 width, i32 height) = 0;
+    virtual void OnMonitorChange() {}
+    virtual void OnWindowDpiChanged(const GenericWindow& window, f32 new_dpi_scale) { (void)window; (void)new_dpi_scale; }
 
     virtual bool OnButtonDown(const GenericWindow& window, InputPrimitive key_code, bool is_repeated) = 0;
     virtual bool OnButtonUp(const GenericWindow& window, InputPrimitive key_code, bool is_repeated) = 0;

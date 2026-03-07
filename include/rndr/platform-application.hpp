@@ -5,6 +5,7 @@
 
 #include "rndr/generic-window.hpp"
 #include "rndr/math.hpp"
+#include "rndr/monitor-info.hpp"
 #include "rndr/types.hpp"
 
 namespace Rndr
@@ -59,6 +60,11 @@ public:
      * Get the current cursor position.
      */
     [[nodiscard]] virtual Vector2i GetCursorPosition() const = 0;
+
+    [[nodiscard]] virtual Opal::DynamicArray<MonitorInfo> GetMonitors() const = 0;
+    [[nodiscard]] virtual MonitorInfo GetPrimaryMonitor() const = 0;
+    [[nodiscard]] virtual MonitorInfo GetMonitorAtPosition(const Vector2i& pos) const = 0;
+    [[nodiscard]] virtual MonitorInfo GetMonitorForWindow(const GenericWindow& window) const = 0;
 
     Opal::Ref<class GenericWindow> GetGenericWindowByNativeHandle(NativeWindowHandle handle);
     [[nodiscard]] const ModifierKeysState& GetModifierKeysState() const { return m_modifier_keys; }

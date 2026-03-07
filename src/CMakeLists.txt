@@ -5,6 +5,7 @@ set(SOURCE_LIST
         "${PROJECT_SOURCE_DIR}/include/rndr/platform-application.hpp"
         "${PROJECT_SOURCE_DIR}/include/rndr/log.hpp"
         "${PROJECT_SOURCE_DIR}/include/rndr/types.hpp"
+        "${PROJECT_SOURCE_DIR}/include/rndr/monitor-info.hpp"
         "${PROJECT_SOURCE_DIR}/include/rndr/definitions.hpp"
         "${PROJECT_SOURCE_DIR}/include/rndr/time.hpp"
         "${PROJECT_SOURCE_DIR}/include/rndr/input-system.hpp"
@@ -157,7 +158,7 @@ target_include_directories(rndr PRIVATE ${PROJECT_SOURCE_DIR}/extern/stb_image/i
 target_compile_definitions(rndr PUBLIC RNDR_OPENGL)
 
 # Setup library dependencies
-target_link_libraries(rndr PUBLIC opengl32.lib User32.lib)
+target_link_libraries(rndr PUBLIC opengl32.lib User32.lib Shcore.lib)
 target_link_libraries(rndr PUBLIC opal imgui assimp obsidian-interface)
 add_dependencies(rndr generate-reflection)
 

@@ -36,6 +36,11 @@ public:
     void SetCursorPosition(const Vector2i& pos) override;
     [[nodiscard]] Vector2i GetCursorPosition() const override;
 
+    [[nodiscard]] Opal::DynamicArray<MonitorInfo> GetMonitors() const override;
+    [[nodiscard]] MonitorInfo GetPrimaryMonitor() const override;
+    [[nodiscard]] MonitorInfo GetMonitorAtPosition(const Vector2i& pos) const override;
+    [[nodiscard]] MonitorInfo GetMonitorForWindow(const GenericWindow& window) const override;
+
 private:
     i32 TranslateKey(i32 win_key, i32 desc);
     bool GetInputPrimitive(InputPrimitive& out_primitive, i32 virtual_key);
