@@ -60,8 +60,7 @@ int main()
                                                          rendering_resolution_options[resolution_index].y, sample_count);
 
     Opal::StringUtf8 font_path = Opal::Paths::Combine(RNDR_CORE_ASSETS_DIR, "OpenSans.ttf");
-    Rndr::ImGuiContext imgui_context(*window, gc, {.font_path = font_path.Clone()});
-    app->RegisterSystemMessageHandler(&imgui_context);
+    Rndr::ImGuiContext imgui_context(*app, *window, gc, {.font_path = font_path.Clone()});
 
     BitmapTextRenderer text_renderer;
     BitmapTextRendererDesc text_renderer_desc{.font_size = 16.0};

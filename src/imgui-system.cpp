@@ -13,6 +13,7 @@
 #include "opal/container/hash-map.h"
 #include "opal/container/scope-ptr.h"
 
+#include "rndr/application.hpp"
 #include "rndr/log.hpp"
 #include "rndr/trace.hpp"
 
@@ -132,8 +133,8 @@ Opal::HashMap<Rndr::InputPrimitive, Rndr::i32> g_mouse_primitive_to_imgui_key{{R
 };
 }  // namespace
 
-Rndr::ImGuiContext::ImGuiContext(GenericWindow& window, GraphicsContext& context, const ImGuiContextDesc& desc)
-    : m_window(window), m_context(context), m_desc(desc.Clone())
+Rndr::ImGuiContext::ImGuiContext(Application& app, GenericWindow& window, GraphicsContext& context, const ImGuiContextDesc& desc)
+    : m_app(&app), m_window(window), m_context(context), m_desc(desc.Clone())
 {
 
     // Setup Dear ImGui context
@@ -171,10 +172,16 @@ Rndr::ImGuiContext::ImGuiContext(GenericWindow& window, GraphicsContext& context
 #else
     RNDR_ASSERT(false, "Graphics API not supported!");
 #endif
+
+    m_app->RegisterSystemMessageHandler(this);
 }
 
 Rndr::ImGuiContext::~ImGuiContext()
 {
+    if (m_app != nullptr)
+    {
+        m_app->UnregisterSystemMessageHandler(this);
+    }
     Destroy();
 }
 

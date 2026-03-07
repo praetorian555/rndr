@@ -7,6 +7,8 @@
 namespace Rndr
 {
 
+class Application;
+
 struct ImGuiContextDesc : Opal::ClonableBase<ImGuiContextDesc>
 {
     bool enable_keyboard_navigation = true;
@@ -21,7 +23,7 @@ struct ImGuiContextDesc : Opal::ClonableBase<ImGuiContextDesc>
 class ImGuiContext : public SystemMessageHandler
 {
 public:
-    ImGuiContext(GenericWindow& window, GraphicsContext& context, const ImGuiContextDesc& desc = {});
+    ImGuiContext(Application& app, GenericWindow& window, GraphicsContext& context, const ImGuiContextDesc& desc = {});
     virtual ~ImGuiContext();
 
     bool Destroy();
@@ -41,6 +43,7 @@ public:
     bool OnMouseMove(const GenericWindow& window, f32 delta_x, f32 delta_y) override;
 
 private:
+    Application* m_app = nullptr;
     Opal::Ref<GenericWindow> m_window;
     Opal::Ref<GraphicsContext> m_context;
     ImGuiContextDesc m_desc;
