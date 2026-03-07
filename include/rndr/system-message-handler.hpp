@@ -1,12 +1,14 @@
 #pragma once
 
-#include "rndr/generic-window.hpp"
 #include "rndr/input-primitives.hpp"
 #include "rndr/math.hpp"
 #include "rndr/types.hpp"
 
 namespace Rndr
 {
+
+class GenericWindow;
+
 struct SystemMessageHandler
 {
     virtual ~SystemMessageHandler() = default;

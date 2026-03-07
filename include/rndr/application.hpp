@@ -5,8 +5,6 @@
 #include "opal/container/scope-ptr.h"
 #include "opal/delegate.h"
 
-#include "rndr/generic-window.hpp"
-#include "rndr/platform-application.hpp"
 #include "rndr/system-message-handler.hpp"
 
 namespace Rndr
@@ -16,10 +14,10 @@ struct ApplicationDesc
 {
     /** If we should enable the input system. Defaults to no. */
     bool enable_input_system = false;
-
-    /** If we should enable the CPU tracer. Defaults to no. */
-    bool enable_cpu_tracer = false;
 };
+
+class GenericWindow;
+struct GenericWindowDesc;
 
 class Application : public SystemMessageHandler
 {
@@ -36,7 +34,7 @@ public:
     static Application& GetChecked();
     ~Application() override;
 
-    Opal::Ref<GenericWindow> CreateGenericWindow(const GenericWindowDesc& desc = GenericWindowDesc());
+    Opal::Ref<GenericWindow> CreateGenericWindow(const GenericWindowDesc& desc);
     void DestroyGenericWindow(Opal::Ref<GenericWindow> window);
 
     [[nodiscard]] class InputSystem& GetInputSystemChecked() const;

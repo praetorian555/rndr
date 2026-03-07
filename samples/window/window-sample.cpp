@@ -52,7 +52,7 @@ int main()
         RNDR_LOG_ERROR("Failed to create app!");
         return -1;
     }
-    auto window = app->CreateGenericWindow();
+    auto window = app->CreateGenericWindow({});
     if (window == nullptr)
     {
         RNDR_LOG_ERROR("Failed to create window!");

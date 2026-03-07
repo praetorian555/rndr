@@ -18,6 +18,7 @@
 #include "rndr/application.hpp"
 #include "rndr/file.hpp"
 #include "rndr/fly-camera.hpp"
+#include "rndr/generic-window.hpp"
 #include "rndr/projections.hpp"
 #include "rndr/types.hpp"
 
@@ -56,7 +57,7 @@ void Run()
     constexpr i32 k_frames_in_flight = 2;
 
     auto rndr_app = Rndr::Application::Create({.enable_input_system = true});
-    auto window = rndr_app->CreateGenericWindow();
+    auto window = rndr_app->CreateGenericWindow({});
     window->EnableHighPrecisionCursorMode(true);
     rndr_app->ShowCursor(false);
     window->SetCursorPositionMode(Rndr::CursorPositionMode::ResetToCenter);
@@ -142,10 +143,10 @@ void Run()
             .sampler = albedo_sampler, .image = albedo_texture, .image_layout = Rndr::ImageLayout::ShaderReadOnly}};
     update_bindings.PushBack(std::move(binding1));
     Rndr::AdvancedDescriptorSetUpdateBinding binding2{
-    .descriptor_type = Rndr::AdvancedDescriptorType::CombinedImageSampler,
-    .binding = 1,
-    .resource_info = Rndr::AdvancedDescriptorSetUpdateBinding::ImageInfo{
-        .sampler = mr_sampler, .image = mr_texture, .image_layout = Rndr::ImageLayout::ShaderReadOnly}};
+        .descriptor_type = Rndr::AdvancedDescriptorType::CombinedImageSampler,
+        .binding = 1,
+        .resource_info = Rndr::AdvancedDescriptorSetUpdateBinding::ImageInfo{
+            .sampler = mr_sampler, .image = mr_texture, .image_layout = Rndr::ImageLayout::ShaderReadOnly}};
     update_bindings.PushBack(std::move(binding2));
     descriptor_set.UpdateDescriptorSets(update_bindings);
 
