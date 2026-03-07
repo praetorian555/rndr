@@ -242,7 +242,7 @@ void Rndr::AdvancedSwapChain::Recreate()
     }
 
     const GenericWindow& window = m_surface->GetWindow();
-    const Vector2i window_size = window.GetSize().GetValue();
+    const Vector2i window_size = window.GetSize();
     VkExtent2D extent = {.width = static_cast<u32>(window_size.x), .height = static_cast<u32>(window_size.y)};
     extent.width = Opal::Clamp(extent.width, swap_chain_support.capabilities.minImageExtent.width,
                                swap_chain_support.capabilities.maxImageExtent.width);

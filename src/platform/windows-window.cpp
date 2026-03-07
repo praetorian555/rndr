@@ -2,6 +2,7 @@
 
 #include "opal/container/in-place-array.h"
 #include "opal/container/string.h"
+#include "opal/exceptions.h"
 
 #include "rndr/platform/windows-application.hpp"
 #include "rndr/platform/windows-header.hpp"
@@ -12,13 +13,11 @@ Rndr::WindowsWindow::WindowsWindow(const GenericWindowDesc& desc) : GenericWindo
 {
     if (desc.width == 0 || desc.height == 0)
     {
-        RNDR_LOG_ERROR("Window width and height must be greater than 0.");
-        return;
+        throw Opal::Exception("Window width and height must be greater than 0.");
     }
     if (desc.start_minimized && desc.start_maximized)
     {
-        RNDR_LOG_ERROR("Window cannot be both minimized and maximized at the same time.");
-        return;
+        throw Opal::Exception("Window cannot be both minimized and maximized at the same time.");
     }
 
     // TODO(Marko): This will get the handle to the exe, should pass in the name of this dll if we
@@ -37,8 +36,7 @@ Rndr::WindowsWindow::WindowsWindow(const GenericWindowDesc& desc) : GenericWindo
         const ATOM atom = RegisterClass(&window_class);
         if (atom == 0)
         {
-            RNDR_LOG_ERROR("Failed to register window class!");
-            return;
+            throw Opal::Exception("Failed to register window class!");
         }
     }
 
@@ -58,8 +56,7 @@ Rndr::WindowsWindow::WindowsWindow(const GenericWindowDesc& desc) : GenericWindo
                                         real_height, nullptr, nullptr, instance, this);
     if (window_handle == nullptr)
     {
-        RNDR_LOG_ERROR("CreateWindowEx failed!");
-        return;
+        throw Opal::Exception("CreateWindowEx failed!");
     }
 
     m_native_window_handle = reinterpret_cast<NativeWindowHandle>(window_handle);
@@ -78,33 +75,24 @@ Rndr::WindowsWindow::~WindowsWindow()
     WindowsWindow::Destroy();
 }
 
-Rndr::ErrorCode Rndr::WindowsWindow::RequestClose()
+void Rndr::WindowsWindow::RequestClose()
 {
     if (m_is_closed)
     {
-        return ErrorCode::WindowAlreadyClosed;
+        return;
     }
     const BOOL rtn = PostMessage(reinterpret_cast<HWND>(m_native_window_handle), WM_CLOSE, 0, 0);
     if (rtn == 0)
     {
-        return ErrorCode::PlatformError;
+        throw Opal::Exception("PostMessage(WM_CLOSE) failed!");
     }
-    return ErrorCode::Success;
 }
 
-Rndr::ErrorCode Rndr::WindowsWindow::Reshape(i32 pos_x, i32 pos_y, i32 width, i32 height)
+void Rndr::WindowsWindow::Reshape(i32 pos_x, i32 pos_y, i32 width, i32 height)
 {
     if (m_is_closed)
     {
-        return ErrorCode::WindowAlreadyClosed;
-    }
-    if (width <= 0 || height <= 0)
-    {
-        return ErrorCode::InvalidArgument;
-    }
-    if (pos_x < 0 || pos_y < 0)
-    {
-        return ErrorCode::OutOfBounds;
+        return;
     }
     m_pos_x = pos_x;
     m_pos_y = pos_y;
@@ -113,160 +101,109 @@ Rndr::ErrorCode Rndr::WindowsWindow::Reshape(i32 pos_x, i32 pos_y, i32 width, i3
     const BOOL rtn = MoveWindow(RNDR_TO_HWND(m_native_window_handle), pos_x, pos_y, width, height, TRUE);
     if (rtn == 0)
     {
-        return ErrorCode::PlatformError;
+        throw Opal::Exception("MoveWindow failed!");
     }
-    return ErrorCode::Success;
 }
 
-Rndr::ErrorCode Rndr::WindowsWindow::MoveTo(i32 pos_x, i32 pos_y)
+void Rndr::WindowsWindow::MoveTo(i32 pos_x, i32 pos_y)
 {
     if (m_is_closed)
     {
-        return ErrorCode::WindowAlreadyClosed;
-    }
-    if (pos_x < 0 || pos_y < 0)
-    {
-        return ErrorCode::OutOfBounds;
+        return;
     }
     m_pos_x = pos_x;
     m_pos_y = pos_y;
     const BOOL rtn = MoveWindow(RNDR_TO_HWND(m_native_window_handle), pos_x, pos_y, m_width, m_height, TRUE);
     if (rtn == 0)
     {
-        return ErrorCode::PlatformError;
+        throw Opal::Exception("MoveWindow failed!");
     }
-    return ErrorCode::Success;
 }
 
-Rndr::ErrorCode Rndr::WindowsWindow::BringToFront()
+void Rndr::WindowsWindow::BringToFront()
 {
     if (m_is_closed)
     {
-        return ErrorCode::WindowAlreadyClosed;
+        return;
     }
     if (IsMinimized())
     {
-        return Restore();
+        Restore();
     }
-    const HWND prev_active = SetActiveWindow(RNDR_TO_HWND(m_native_window_handle));
-    if (prev_active == nullptr)
-    {
-        return ErrorCode::PlatformError;
-    }
-    return ErrorCode::Success;
+    SetActiveWindow(RNDR_TO_HWND(m_native_window_handle));
 }
 
-Rndr::ErrorCode Rndr::WindowsWindow::Destroy()
+void Rndr::WindowsWindow::Destroy()
 {
     if (m_native_window_handle == nullptr)
     {
-        return ErrorCode::WindowAlreadyClosed;
+        return;
     }
-    const BOOL rtn = DestroyWindow(RNDR_TO_HWND(m_native_window_handle));
-    if (rtn == 0)
-    {
-        return ErrorCode::PlatformError;
-    }
+    DestroyWindow(RNDR_TO_HWND(m_native_window_handle));
     m_native_window_handle = nullptr;
-    return ErrorCode::Success;
 }
 
-Rndr::ErrorCode Rndr::WindowsWindow::Minimize()
+void Rndr::WindowsWindow::Minimize()
 {
     if (m_is_closed)
     {
-        return ErrorCode::WindowAlreadyClosed;
+        return;
     }
-    const BOOL rtn = ShowWindow(RNDR_TO_HWND(m_native_window_handle), SW_MINIMIZE);
-    if (rtn == 0)
-    {
-        return ErrorCode::PlatformError;
-    }
-    return ErrorCode::Success;
+    ShowWindow(RNDR_TO_HWND(m_native_window_handle), SW_MINIMIZE);
 }
 
-Rndr::ErrorCode Rndr::WindowsWindow::Maximize()
+void Rndr::WindowsWindow::Maximize()
 {
     if (m_is_closed)
     {
-        return ErrorCode::WindowAlreadyClosed;
+        return;
     }
-    const BOOL rtn = ShowWindow(RNDR_TO_HWND(m_native_window_handle), SW_MAXIMIZE);
-    if (rtn == 0)
-    {
-        return ErrorCode::PlatformError;
-    }
-    return ErrorCode::Success;
+    ShowWindow(RNDR_TO_HWND(m_native_window_handle), SW_MAXIMIZE);
 }
 
-Rndr::ErrorCode Rndr::WindowsWindow::Restore()
+void Rndr::WindowsWindow::Restore()
 {
     if (m_is_closed)
     {
-        return ErrorCode::WindowAlreadyClosed;
+        return;
     }
-    const BOOL rtn = ShowWindow(RNDR_TO_HWND(m_native_window_handle), SW_RESTORE);
-    if (rtn == 0)
-    {
-        return ErrorCode::PlatformError;
-    }
-    return ErrorCode::Success;
+    ShowWindow(RNDR_TO_HWND(m_native_window_handle), SW_RESTORE);
 }
 
-Rndr::ErrorCode Rndr::WindowsWindow::Enable(bool enable)
+void Rndr::WindowsWindow::Enable(bool enable)
 {
     if (m_is_closed)
     {
-        return ErrorCode::WindowAlreadyClosed;
+        return;
     }
-    const BOOL rtn = EnableWindow(RNDR_TO_HWND(m_native_window_handle), static_cast<BOOL>(enable));
-    if (rtn == 0)
-    {
-        return ErrorCode::PlatformError;
-    }
-    return ErrorCode::Success;
+    EnableWindow(RNDR_TO_HWND(m_native_window_handle), static_cast<BOOL>(enable));
 }
 
-Rndr::ErrorCode Rndr::WindowsWindow::Show()
+void Rndr::WindowsWindow::Show()
 {
     if (m_is_closed)
     {
-        return ErrorCode::WindowAlreadyClosed;
+        return;
     }
-    const BOOL rtn = ShowWindow(RNDR_TO_HWND(m_native_window_handle), SW_SHOW);
-    if (rtn == 0)
-    {
-        return ErrorCode::PlatformError;
-    }
-    return ErrorCode::Success;
+    ShowWindow(RNDR_TO_HWND(m_native_window_handle), SW_SHOW);
 }
 
-Rndr::ErrorCode Rndr::WindowsWindow::Hide()
+void Rndr::WindowsWindow::Hide()
 {
     if (m_is_closed)
     {
-        return ErrorCode::WindowAlreadyClosed;
+        return;
     }
-    const BOOL rtn = ShowWindow(RNDR_TO_HWND(m_native_window_handle), SW_HIDE);
-    if (rtn == 0)
-    {
-        return ErrorCode::PlatformError;
-    }
-    return ErrorCode::Success;
+    ShowWindow(RNDR_TO_HWND(m_native_window_handle), SW_HIDE);
 }
 
-Rndr::ErrorCode Rndr::WindowsWindow::Focus()
+void Rndr::WindowsWindow::Focus()
 {
     if (m_is_closed)
     {
-        return ErrorCode::WindowAlreadyClosed;
+        return;
     }
-    HWND prev_active = SetFocus(RNDR_TO_HWND(m_native_window_handle));
-    if (prev_active == nullptr)
-    {
-        return ErrorCode::PlatformError;
-    }
-    return ErrorCode::Success;
+    SetFocus(RNDR_TO_HWND(m_native_window_handle));
 }
 
 Rndr::i32 Rndr::WindowsWindow::GetWindowedStyle(const GenericWindowDesc& desc)
@@ -293,15 +230,15 @@ Rndr::i32 Rndr::WindowsWindow::GetFullscreenStyle(const GenericWindowDesc& desc)
     return WS_POPUP;
 }
 
-Rndr::ErrorCode Rndr::WindowsWindow::SetMode(GenericWindowMode mode)
+void Rndr::WindowsWindow::SetMode(GenericWindowMode mode)
 {
     if (m_is_closed)
     {
-        return ErrorCode::WindowAlreadyClosed;
+        return;
     }
     if (m_mode == mode)
     {
-        return ErrorCode::Success;
+        return;
     }
     const HWND hwnd = RNDR_TO_HWND(m_native_window_handle);
     m_mode = mode;
@@ -337,46 +274,39 @@ Rndr::ErrorCode Rndr::WindowsWindow::SetMode(GenericWindowMode mode)
 
         ::ShowWindow(hwnd, SW_RESTORE);
     }
-    return ErrorCode::Success;
 }
 
-Rndr::ErrorCode Rndr::WindowsWindow::SetOpacity(f32 opacity)
+void Rndr::WindowsWindow::SetOpacity(f32 opacity)
 {
     if (m_is_closed)
     {
-        return ErrorCode::WindowAlreadyClosed;
-    }
-    if (!m_desc.supports_transparency)
-    {
-        return ErrorCode::FeatureNotSupported;
+        return;
     }
     const BYTE alpha = static_cast<BYTE>(opacity * 255);
     const BOOL rtn = SetLayeredWindowAttributes(RNDR_TO_HWND(m_native_window_handle), 0, alpha, LWA_ALPHA);
     if (rtn == 0)
     {
-        return ErrorCode::PlatformError;
+        throw Opal::Exception("SetLayeredWindowAttributes failed!");
     }
-    return ErrorCode::Success;
 }
 
-Rndr::ErrorCode Rndr::WindowsWindow::SetTitle(const Opal::StringUtf8& title)
+void Rndr::WindowsWindow::SetTitle(const Opal::StringUtf8& title)
 {
     if (m_is_closed)
     {
-        return ErrorCode::WindowAlreadyClosed;
+        return;
     }
     Opal::StringWide win_string(4 * title.GetSize(), '\0');
     const Opal::ErrorCode err = Opal::Transcode(title, win_string);
     if (err != Opal::ErrorCode::Success)
     {
-        return ErrorCode::InvalidArgument;
+        throw Opal::Exception("Failed to transcode title string!");
     }
     const BOOL rtn = SetWindowTextW(RNDR_TO_HWND(m_native_window_handle), win_string.GetData());
     if (rtn == 0)
     {
-        return ErrorCode::PlatformError;
+        throw Opal::Exception("SetWindowTextW failed!");
     }
-    return ErrorCode::Success;
 }
 
 bool Rndr::WindowsWindow::IsMaximized() const
@@ -455,48 +385,18 @@ bool Rndr::WindowsWindow::IsMouseHovering() const
     return hovered_hwnd == hwnd_parent || IsChild(hwnd_parent, hovered_hwnd) != 0;
 }
 
-Rndr::ErrorCode Rndr::WindowsWindow::GetPositionAndSize(i32& pos_x, i32& pos_y, i32& width, i32& height) const
+Rndr::Vector2i Rndr::WindowsWindow::GetPosition() const
 {
-    if (m_is_closed)
-    {
-        return ErrorCode::WindowAlreadyClosed;
-    }
-    // We use the position of the whole window (not only the client area)
     RECT window_rect = {};
-    BOOL rtn = GetWindowRect(RNDR_TO_HWND(m_native_window_handle), &window_rect);
-    if (rtn == 0)
-    {
-        return ErrorCode::PlatformError;
-    }
-    pos_x = window_rect.left;
-    pos_y = window_rect.top;
-
-    // We use the size of the client area only
-    rtn = ::GetClientRect(RNDR_TO_HWND(m_native_window_handle), &window_rect);
-    if (rtn == 0)
-    {
-        return ErrorCode::PlatformError;
-    }
-    width = window_rect.right - window_rect.left;
-    height = window_rect.bottom - window_rect.top;
-    return ErrorCode::Success;
+    GetWindowRect(RNDR_TO_HWND(m_native_window_handle), &window_rect);
+    return {window_rect.left, window_rect.top};
 }
 
-Opal::Expected<Rndr::Vector2i, Rndr::ErrorCode> Rndr::WindowsWindow::GetSize() const
+Rndr::Vector2i Rndr::WindowsWindow::GetSize() const
 {
-    if (m_is_closed)
-    {
-        return Opal::Expected<Vector2i, ErrorCode>(ErrorCode::WindowAlreadyClosed);
-    }
-    // We use the size of the client area only
     RECT window_rect = {};
-    BOOL rtn = ::GetClientRect(RNDR_TO_HWND(m_native_window_handle), &window_rect);
-    if (rtn == 0)
-    {
-        return Opal::Expected<Vector2i, ErrorCode>(ErrorCode::PlatformError);
-    }
-    Vector2i size(window_rect.right - window_rect.left, window_rect.bottom - window_rect.top);
-    return Opal::Expected<Vector2i, ErrorCode>(size);
+    ::GetClientRect(RNDR_TO_HWND(m_native_window_handle), &window_rect);
+    return {window_rect.right - window_rect.left, window_rect.bottom - window_rect.top};
 }
 
 Rndr::GenericWindowMode Rndr::WindowsWindow::GetMode() const

@@ -153,9 +153,8 @@ Rndr::ImGuiContext::ImGuiContext(Application& app, GenericWindow& window, Graphi
         io.Fonts->Build();
     }
 
-    i32 x, y, w, h;
-    window.GetPositionAndSize(x, y, w, h);
-    io.DisplaySize = ImVec2(static_cast<f32>(w), static_cast<f32>(h));
+    const Vector2i window_size = window.GetSize();
+    io.DisplaySize = ImVec2(static_cast<f32>(window_size.x), static_cast<f32>(window_size.y));
 
     // Setup Dear ImGui style
     ImGui::StyleColorsDark();

@@ -179,7 +179,7 @@ void Run()
         .depth_attachment_format = swap_chain.GetDesc().depth_pixel_format};
     Rndr::AdvancedPipeline pipeline(device, pipeline_desc);
 
-    Rndr::Vector2i window_size = window->GetSize().GetValue();
+    Rndr::Vector2i window_size = window->GetSize();
     f32 window_width = window_size.x;
     f32 window_height = window_size.y;
 
@@ -200,7 +200,7 @@ void Run()
     {
         auto start_time = Opal::GetSeconds();
 
-        window_size = window->GetSize().GetValue();
+        window_size = window->GetSize();
         f32 window_width = window_size.x;
         f32 window_height = window_size.y;
 

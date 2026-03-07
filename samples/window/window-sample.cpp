@@ -58,11 +58,9 @@ int main()
         RNDR_LOG_ERROR("Failed to create window!");
         return -1;
     }
-    Rndr::i32 window_width = 0;
-    Rndr::i32 window_height = 0;
-    Rndr::i32 x = 0;
-    Rndr::i32 y = 0;
-    window->GetPositionAndSize(x, y, window_width, window_height);
+    Rndr::Vector2i window_size = window->GetSize();
+    Rndr::i32 window_width = window_size.x;
+    Rndr::i32 window_height = window_size.y;
     window->SetTitle("Window Sample");
 
     window->EnableHighPrecisionCursorMode(true);
@@ -213,8 +211,8 @@ int main()
         ImGui::Combo("Rendering Resolution", &selected_resolution_index, rendering_resolution_options_str, 3);
         ImGui::Checkbox("Vertical Sync", &vsync);
         ImGui::Text("Current Rendering resolution: %s", rendering_resolution_options_str[selected_resolution_index]);
-        window->GetPositionAndSize(x, y, window_width, window_height);
-        ImGui::Text("Window Resolution: %dx%d", window_width, window_height);
+        window_size = window->GetSize();
+        ImGui::Text("Window Resolution: %dx%d", window_size.x, window_size.y);
         ImGui::Text("Cursor mode: %s", window->GetCursorPositionMode() == Rndr::CursorPositionMode::Normal ? "Normal" : "Reset to Center");
         ImGui::Text("Display mode: %s", window->GetMode() == Rndr::GenericWindowMode::Windowed ? "Windowed" : "Borderless Fullscreen");
         ImGui::Text("FPS: %.2f", fps_counter.GetFramesPerSecond());

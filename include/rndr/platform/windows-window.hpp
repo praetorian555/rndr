@@ -15,23 +15,23 @@ public:
     WindowsWindow(const GenericWindowDesc& desc);
     ~WindowsWindow();
 
-    ErrorCode RequestClose() override;
+    void RequestClose() override;
 
-    ErrorCode Reshape(i32 pos_x, i32 pos_y, i32 width, i32 height) override;
-    ErrorCode MoveTo(i32 pos_x, i32 pos_y) override;
-    ErrorCode BringToFront() override;
-    ErrorCode Destroy() override;
-    ErrorCode Minimize() override;
-    ErrorCode Maximize() override;
-    ErrorCode Restore() override;
-    ErrorCode Enable(bool enable) override;
-    ErrorCode Show() override;
-    ErrorCode Hide() override;
-    ErrorCode Focus() override;
+    void Reshape(i32 pos_x, i32 pos_y, i32 width, i32 height) override;
+    void MoveTo(i32 pos_x, i32 pos_y) override;
+    void BringToFront() override;
+    void Destroy() override;
+    void Minimize() override;
+    void Maximize() override;
+    void Restore() override;
+    void Enable(bool enable) override;
+    void Show() override;
+    void Hide() override;
+    void Focus() override;
 
-    ErrorCode SetMode(GenericWindowMode mode) override;
-    ErrorCode SetOpacity(f32 opacity) override;
-    ErrorCode SetTitle(const Opal::StringUtf8& title) override;
+    void SetMode(GenericWindowMode mode) override;
+    void SetOpacity(f32 opacity) override;
+    void SetTitle(const Opal::StringUtf8& title) override;
 
     [[nodiscard]] bool IsMaximized() const override;
     [[nodiscard]] bool IsMinimized() const override;
@@ -46,8 +46,8 @@ public:
     void EnableHighPrecisionCursorMode(bool enable) override;
     [[nodiscard]] bool IsHighPrecisionCursorModeEnabled() const override;
 
-    ErrorCode GetPositionAndSize(i32& pos_x, i32& pos_y, i32& width, i32& height) const override;
-    Opal::Expected<Vector2i, ErrorCode> GetSize() const override;
+    [[nodiscard]] Vector2i GetPosition() const override;
+    [[nodiscard]] Vector2i GetSize() const override;
     [[nodiscard]] GenericWindowMode GetMode() const override;
     [[nodiscard]] NativeWindowHandle GetNativeHandle() const override;
 

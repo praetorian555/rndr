@@ -2,7 +2,6 @@
 
 #include "opal/container/string.h"
 
-#include "rndr/error-codes.hpp"
 #include "rndr/math.hpp"
 #include "rndr/types.hpp"
 
@@ -57,22 +56,22 @@ public:
     /**
      * Requests closing of the window. Should trigger Application::on_window_close as if the user pressed x in the UI.
      */
-    virtual ErrorCode RequestClose() = 0;
+    virtual void RequestClose() = 0;
 
-    virtual ErrorCode Reshape(i32 pos_x, i32 pos_y, i32 width, i32 height) = 0;
-    virtual ErrorCode MoveTo(i32 pos_x, i32 pos_y) = 0;
-    virtual ErrorCode BringToFront() = 0;
-    virtual ErrorCode Destroy() = 0;
-    virtual ErrorCode Minimize() = 0;
-    virtual ErrorCode Maximize() = 0;
-    virtual ErrorCode Restore() = 0;
-    virtual ErrorCode Enable(bool enable) = 0;
-    virtual ErrorCode Show() = 0;
-    virtual ErrorCode Hide() = 0;
-    virtual ErrorCode Focus() = 0;
-    virtual ErrorCode SetMode(GenericWindowMode mode) = 0;
-    virtual ErrorCode SetOpacity(f32 opacity) = 0;
-    virtual ErrorCode SetTitle(const Opal::StringUtf8& title) = 0;
+    virtual void Reshape(i32 pos_x, i32 pos_y, i32 width, i32 height) = 0;
+    virtual void MoveTo(i32 pos_x, i32 pos_y) = 0;
+    virtual void BringToFront() = 0;
+    virtual void Destroy() = 0;
+    virtual void Minimize() = 0;
+    virtual void Maximize() = 0;
+    virtual void Restore() = 0;
+    virtual void Enable(bool enable) = 0;
+    virtual void Show() = 0;
+    virtual void Hide() = 0;
+    virtual void Focus() = 0;
+    virtual void SetMode(GenericWindowMode mode) = 0;
+    virtual void SetOpacity(f32 opacity) = 0;
+    virtual void SetTitle(const Opal::StringUtf8& title) = 0;
 
     /**
      * Returns true if the window has been marked as closed. This is set automatically when
@@ -105,8 +104,8 @@ public:
     void SetCursorPositionMode(CursorPositionMode mode) { m_cursor_pos_mode = mode; }
     [[nodiscard]] CursorPositionMode GetCursorPositionMode() const { return m_cursor_pos_mode; }
 
-    virtual ErrorCode GetPositionAndSize(i32& pos_x, i32& pos_y, i32& width, i32& height) const = 0;
-    virtual Opal::Expected<Vector2i, ErrorCode> GetSize() const = 0;
+    [[nodiscard]] virtual Vector2i GetPosition() const = 0;
+    [[nodiscard]] virtual Vector2i GetSize() const = 0;
     [[nodiscard]] virtual GenericWindowMode GetMode() const = 0;
     [[nodiscard]] virtual NativeWindowHandle GetNativeHandle() const = 0;
 

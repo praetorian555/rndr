@@ -43,11 +43,9 @@ int main()
         RNDR_LOG_ERROR("Failed to create window!");
         return -1;
     }
-    i32 window_width = 0;
-    i32 window_height = 0;
-    i32 x = 0;
-    i32 y = 0;
-    window->GetPositionAndSize(x, y, window_width, window_height);
+    Rndr::Vector2i window_size = window->GetSize();
+    i32 window_width = window_size.x;
+    i32 window_height = window_size.y;
     window->SetTitle("Text Rendering Sample");
 
     i32 sample_count = 1;
@@ -142,8 +140,8 @@ int main()
         ImGui::Begin("Stats", &stats_window);
         ImGui::Combo("Rendering Resolution", &selected_resolution_index, rendering_resolution_options_str, 4);
         ImGui::Text("Current Rendering resolution: %s", rendering_resolution_options_str[selected_resolution_index]);
-        window->GetPositionAndSize(x, y, window_width, window_height);
-        ImGui::Text("Window Resolution: %dx%d", window_width, window_height);
+        window_size = window->GetSize();
+        ImGui::Text("Window Resolution: %dx%d", window_size.x, window_size.y);
         ImGui::InputInt("Rendering sample count", &selected_sample_count);
         ImGui::Text("FPS: %.2f", fps_counter.GetFramesPerSecond());
         ImGui::Text("Frame Time: %.2f ms", (1 / fps_counter.GetFramesPerSecond()) * 1000.0f);
