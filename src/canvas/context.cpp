@@ -151,54 +151,58 @@ Rndr::Canvas::Context Rndr::Canvas::Context::Init(NativeWindowHandle window_hand
         throw GraphicsAPIException(0, "Failed to make temporary context current!");
     }
 
-    status = gladLoadWGL(ctx.m_device_context);
-    if (status == 0)
+    // Try to load WGL extensions and create a core profile context. This may fail on software
+    // renderers (e.g. Mesa) that don't support WGL ARB extensions but already provide a full
+    // OpenGL 4.6 context via the basic wglCreateContext path.
+    HGLRC final_context = nullptr;
+    if (gladLoadWGL(ctx.m_device_context) != 0 && wglCreateContextAttribsARB != nullptr)
     {
-        wglDeleteContext(temp_context);
-        throw GraphicsAPIException(0, "Failed to load WGL functions!");
-    }
-
-    // Create the real OpenGL 4.6 core profile context.
-    int arb_flags = WGL_CONTEXT_FORWARD_COMPATIBLE_BIT_ARB;
+        int arb_flags = WGL_CONTEXT_FORWARD_COMPATIBLE_BIT_ARB;
 #if RNDR_DEBUG
-    arb_flags |= WGL_CONTEXT_DEBUG_BIT_ARB;
+        arb_flags |= WGL_CONTEXT_DEBUG_BIT_ARB;
 #endif
 
-    const Opal::InPlaceArray<i32, 9> attribute_list = {WGL_CONTEXT_MAJOR_VERSION_ARB,
-                                                       4,
-                                                       WGL_CONTEXT_MINOR_VERSION_ARB,
-                                                       6,
-                                                       WGL_CONTEXT_FLAGS_ARB,
-                                                       arb_flags,
-                                                       WGL_CONTEXT_PROFILE_MASK_ARB,
-                                                       WGL_CONTEXT_CORE_PROFILE_BIT_ARB,
-                                                       0};
+        const Opal::InPlaceArray<i32, 9> attribute_list = {WGL_CONTEXT_MAJOR_VERSION_ARB,
+                                                           4,
+                                                           WGL_CONTEXT_MINOR_VERSION_ARB,
+                                                           6,
+                                                           WGL_CONTEXT_FLAGS_ARB,
+                                                           arb_flags,
+                                                           WGL_CONTEXT_PROFILE_MASK_ARB,
+                                                           WGL_CONTEXT_CORE_PROFILE_BIT_ARB,
+                                                           0};
 
-    HGLRC real_context = wglCreateContextAttribsARB(ctx.m_device_context, nullptr, attribute_list.GetData());
-    if (real_context == nullptr)
-    {
-        wglDeleteContext(temp_context);
-        throw GraphicsAPIException(0, "Failed to create OpenGL 4.6 core profile context!");
+        HGLRC arb_context = wglCreateContextAttribsARB(ctx.m_device_context, nullptr, attribute_list.GetData());
+        if (arb_context != nullptr)
+        {
+            status = wglMakeCurrent(ctx.m_device_context, arb_context);
+            if (status != 0)
+            {
+                wglDeleteContext(temp_context);
+                final_context = arb_context;
+            }
+            else
+            {
+                wglDeleteContext(arb_context);
+            }
+        }
     }
 
-    status = wglMakeCurrent(ctx.m_device_context, real_context);
-    if (status == 0)
+    // Fallback: use the basic context directly.
+    if (final_context == nullptr)
     {
-        wglDeleteContext(real_context);
-        wglDeleteContext(temp_context);
-        throw GraphicsAPIException(0, "Failed to make OpenGL 4.6 context current!");
+        logger.Info(k_log_category, "WGL ARB extensions not available, using basic GL context.");
+        final_context = temp_context;
     }
-
-    wglDeleteContext(temp_context);
 
     status = gladLoadGL();
     if (status == 0)
     {
-        wglDeleteContext(real_context);
+        wglDeleteContext(final_context);
         throw GraphicsAPIException(0, "Failed to load OpenGL functions!");
     }
 
-    ctx.m_graphics_context = real_context;
+    ctx.m_graphics_context = final_context;
 
 #if RNDR_DEBUG
     glEnable(GL_DEBUG_OUTPUT);
