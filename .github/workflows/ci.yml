@@ -33,10 +33,11 @@ jobs:
           cp mesa/x64/libglapi.dll .
 
       - name: Install Vulkan SDK
+        shell: pwsh
         run: |
           curl -L -o VulkanSDK-Installer.exe https://sdk.lunarg.com/sdk/download/1.4.335.0/windows/VulkanSDK-1.4.335.0-Installer.exe
-          ./VulkanSDK-Installer.exe --accept-licenses --default-answer --confirm-command install com.lunarg.vulkan.core com.lunarg.vulkan.volk com.lunarg.vulkan.spirv
-          echo "VULKAN_SDK=C:\VulkanSDK\1.4.335.0" >> $GITHUB_ENV
+          Start-Process -FilePath .\VulkanSDK-Installer.exe -ArgumentList '--accept-licenses --default-answer --confirm-command install com.lunarg.vulkan.core com.lunarg.vulkan.volk com.lunarg.vulkan.spirv' -Wait
+          echo "VULKAN_SDK=C:\VulkanSDK\1.4.335.0" >> $env:GITHUB_ENV
 
       - name: Configure CMake
         run: >
