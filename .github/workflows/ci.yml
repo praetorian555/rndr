@@ -33,7 +33,7 @@ jobs:
           cp mesa/x64/libglapi.dll .
 
       - name: Install Vulkan SDK
-        uses: humbletim/install-vulkan-sdk@v1.1.1
+        uses: humbletim/install-vulkan-sdk@v1.2
         with:
           version: 1.4.335.0
           cache: true
