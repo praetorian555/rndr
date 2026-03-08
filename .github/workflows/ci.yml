@@ -44,7 +44,7 @@ jobs:
           -DRNDR_BUILD_TESTS=ON
           -DRNDR_BUILD_SAMPLES=OFF
           -DRNDR_HARDENING=OFF
-          -DRNDR_ADVANCED_API=OFF
+          -DRNDR_ADVANCED_API=ON
 
       - name: Build
         run: cmake --build ${{ matrix.build-dir }} --config ${{ matrix.config }} --target rndr-test
