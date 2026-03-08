@@ -33,7 +33,7 @@ jobs:
           -DRNDR_ADVANCED_API=OFF
 
       - name: Build
-        run: cmake --build ${{ matrix.build-dir }} --config ${{ matrix.config }} --target rndr_test
+        run: cmake --build ${{ matrix.build-dir }} --config ${{ matrix.config }} --target rndr-test
 
       - name: Run tests
-        run: ${{ matrix.build-dir }}/${{ matrix.config }}/rndr_test
+        run: ${{ matrix.build-dir }}/${{ matrix.config }}/rndr-test
