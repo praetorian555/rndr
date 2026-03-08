@@ -36,7 +36,7 @@ jobs:
         uses: jakoch/install-vulkan-sdk-action@v1
         with:
           vulkan_version: 1.4.335.0
-          optional_components: com.lunarg.vulkan.vma,com.lunarg.vulkan.core,com.lunarg.vulkan.volk,com.lunarg.vulkan.spirv
+          optional_components: com.lunarg.vulkan.vma,com.lunarg.vulkan.volk
           cache: true
 
       - name: Configure CMake
