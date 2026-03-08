@@ -4,8 +4,10 @@
 #include "opal/exceptions.h"
 #include "opal/logging.h"
 
+#include "rndr/application.hpp"
 #include "rndr/canvas/context.hpp"
 #include "rndr/exception.hpp"
+#include "rndr/generic-window.hpp"
 
 TEST_CASE("Canvas Format enum", "[canvas]")
 {
@@ -19,21 +21,24 @@ TEST_CASE("Canvas Format enum", "[canvas]")
 
 TEST_CASE("Canvas Context Init with null window handle throws", "[canvas]")
 {
-    Opal::MallocAllocator allocator;
-    Opal::PushDefaultAllocator(&allocator);
-    Opal::Logger logger;
-    Opal::SetLogger(&logger);
-
     REQUIRE_THROWS_AS(Rndr::Canvas::Context::Init(nullptr), Opal::InvalidArgumentException);
+}
+
+TEST_CASE("Canvas Context Init with valid window handle", "[canvas]")
+{
+    auto app = Rndr::Application::Create();
+    REQUIRE(app != nullptr);
+
+    Rndr::GenericWindowDesc window_desc;
+    window_desc.start_visible = false;
+    auto window = app->CreateGenericWindow(window_desc);
+
+    auto context = Rndr::Canvas::Context::Init(window->GetNativeHandle());
+    REQUIRE(context.IsValid());
 }
 
 TEST_CASE("Canvas Context Init can be called again after null handle throws", "[canvas]")
 {
-    Opal::MallocAllocator allocator;
-    Opal::PushDefaultAllocator(&allocator);
-    Opal::Logger logger;
-    Opal::SetLogger(&logger);
-
     // First call throws because of null handle.
     REQUIRE_THROWS_AS(Rndr::Canvas::Context::Init(nullptr), Opal::InvalidArgumentException);
 
