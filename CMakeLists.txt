@@ -55,31 +55,26 @@ FetchContent_Declare(
 FetchContent_MakeAvailable(opal)
 message(STATUS "***** Setup Complete *****")
 
-message(STATUS "***** Setting up Obsidian Dependency *****")
-SET(OBS_BUILD_TESTS OFF)
-SET(OBS_HARDENING ${RNDR_HARDENING})
-set(OBS_LLVM_PATH "F:/LLVM")
-FetchContent_Declare(
-        obsidian
-        GIT_REPOSITORY https://github.com/praetorian555/obsidian
-        GIT_TAG main
-)
-FetchContent_MakeAvailable(obsidian)
-message(STATUS "***** Setup Complete *****")
-
 # Setup reflection generator
-message("Current source dir: ${CMAKE_CURRENT_SOURCE_DIR}")
 set(RNDR_INCLUDE_DIRS $<JOIN:$<TARGET_PROPERTY:rndr,INCLUDE_DIRECTORIES>,,>)
 set(RNDR_DEFINES $<JOIN:$<LIST:TRANSFORM,$<TARGET_PROPERTY:rndr,COMPILE_DEFINITIONS>,PREPEND,-D>,,>)
+if (WIN32)
+    set(OBSIDIAN_EXECUTABLE ${CMAKE_CURRENT_SOURCE_DIR}/tools/obsidian/win32/obsidian.exe)
+elseif (LINUX)
+    set(OBSIDIAN_EXECUTABLE ${CMAKE_CURRENT_SOURCE_DIR}/tools/obsidian/linux/obsidian)
+else ()
+    message(FATAL_ERROR "Unsupported platform for obsidian tool")
+endif ()
 add_custom_target(
         generate-reflection
         COMMAND ${CMAKE_COMMAND} -E make_directory ${CMAKE_CURRENT_BINARY_DIR}/include/generated
-        COMMAND $<TARGET_FILE:obsidian>
+        COMMAND ${OBSIDIAN_EXECUTABLE}
         input-dirs=${CMAKE_CURRENT_SOURCE_DIR}/include,${CMAKE_CURRENT_SOURCE_DIR}/src
         output-dir=${CMAKE_CURRENT_BINARY_DIR}/include/generated
         std=c++20
         compile-options="${RNDR_DEFINES},-Wall,-Wextra"
         inc-dirs=${RNDR_INCLUDE_DIRS}
+        log-level=error
         DEPENDS obsidian
 )
 

@@ -153,13 +153,14 @@ target_include_directories(rndr PUBLIC $<BUILD_INTERFACE:${PROJECT_SOURCE_DIR}/i
 target_include_directories(rndr PRIVATE ${PROJECT_SOURCE_DIR}/src)
 target_include_directories(rndr PRIVATE ${PROJECT_SOURCE_DIR}/extern/glad/include)
 target_include_directories(rndr PRIVATE ${PROJECT_SOURCE_DIR}/extern/stb_image/include)
+target_include_directories(rndr PUBLIC ${PROJECT_SOURCE_DIR}/tools/obsidian/win32/include)
 
 # Setup graphics API to use
 target_compile_definitions(rndr PUBLIC RNDR_OPENGL)
 
 # Setup library dependencies
 target_link_libraries(rndr PUBLIC opengl32.lib User32.lib Shcore.lib)
-target_link_libraries(rndr PUBLIC opal imgui assimp obsidian-interface)
+target_link_libraries(rndr PUBLIC opal imgui assimp)
 add_dependencies(rndr generate-reflection)
 
 if (${RNDR_ADVANCED_API})
