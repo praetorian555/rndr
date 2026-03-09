@@ -172,7 +172,8 @@ if (${RNDR_BUILD_TESTS})
         list(APPEND RNDR_TEST_FILES
                 test/canvas/context-test.cpp
                 test/canvas/buffer-test.cpp
-                test/canvas/texture-test.cpp)
+                test/canvas/texture-test.cpp
+                test/canvas/render-target-test.cpp)
     endif ()
     add_executable(rndr-test ${RNDR_TEST_FILES})
     target_include_directories(rndr-test PRIVATE src)

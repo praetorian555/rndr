@@ -90,7 +90,8 @@ if (${RNDR_CANVAS})
             "${PROJECT_SOURCE_DIR}/include/rndr/canvas/compute-list.hpp"
             "${PROJECT_SOURCE_DIR}/src/canvas/context.cpp"
             "${PROJECT_SOURCE_DIR}/src/canvas/buffer.cpp"
-            "${PROJECT_SOURCE_DIR}/src/canvas/texture.cpp")
+            "${PROJECT_SOURCE_DIR}/src/canvas/texture.cpp"
+            "${PROJECT_SOURCE_DIR}/src/canvas/render-target.cpp")
 endif ()
 
 list(APPEND SOURCE_LIST
