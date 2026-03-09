@@ -216,7 +216,12 @@ Rndr::Canvas::Context Rndr::Canvas::Context::Init(NativeWindowHandle window_hand
     throw GraphicsAPIException(0, "Platform not supported!");
 #endif
 
+    GLint major = 0;
+    GLint minor = 0;
+    glGetIntegerv(GL_MAJOR_VERSION, &major);
+    glGetIntegerv(GL_MINOR_VERSION, &minor);
+
     g_context_exists = true;
-    logger.Info(k_log_category, "OpenGL 4.6 context initialized successfully.");
+    logger.Info(k_log_category, "OpenGL {}.{} context initialized successfully.", major, minor);
     return ctx;
 }
