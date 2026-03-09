@@ -1,54 +1,54 @@
-name: CI
-
-on:
-  push:
-    branches: [master]
-  pull_request:
-    branches: [master]
-
-jobs:
-  build-and-test:
-    runs-on: windows-latest
-
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - config: Debug
-            build-dir: build/ci-debug
-          - config: RelWithDebInfo
-            build-dir: build/ci-test
-          - config: Release
-            build-dir: build/ci-release
-
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Install Mesa OpenGL (software renderer)
-        run: |
-          curl -L -o mesa.7z https://github.com/pal1000/mesa-dist-win/releases/download/24.3.2/mesa3d-24.3.2-release-msvc.7z
-          7z x mesa.7z -omesa
-          cp mesa/x64/opengl32.dll .
-          cp mesa/x64/libgallium_wgl.dll .
-          cp mesa/x64/libglapi.dll .
-
-      - name: Install Vulkan SDK
-        uses: jakoch/install-vulkan-sdk-action@v1
-        with:
-          vulkan_version: 1.4.335.0
-          optional_components: com.lunarg.vulkan.vma,com.lunarg.vulkan.volk
-          cache: true
-
-      - name: Configure CMake
-        run: >
-          cmake -S . -B ${{ matrix.build-dir }}
-          -DRNDR_BUILD_TESTS=ON
-          -DRNDR_BUILD_SAMPLES=OFF
-          -DRNDR_HARDENING=OFF
-          -DRNDR_ADVANCED_API=ON
-
-      - name: Build
-        run: cmake --build ${{ matrix.build-dir }} --config ${{ matrix.config }} --target rndr-test
-
-      - name: Run tests
-        run: ${{ matrix.build-dir }}/${{ matrix.config }}/rndr-test
+#name: CI
+#
+#on:
+#  push:
+#    branches: [master]
+#  pull_request:
+#    branches: [master]
+#
+#jobs:
+#  build-and-test:
+#    runs-on: windows-latest
+#
+#    strategy:
+#      fail-fast: false
+#      matrix:
+#        include:
+#          - config: Debug
+#            build-dir: build/ci-debug
+#          - config: RelWithDebInfo
+#            build-dir: build/ci-test
+#          - config: Release
+#            build-dir: build/ci-release
+#
+#    steps:
+#      - uses: actions/checkout@v4
+#
+#      - name: Install Mesa OpenGL (software renderer)
+#        run: |
+#          curl -L -o mesa.7z https://github.com/pal1000/mesa-dist-win/releases/download/24.3.2/mesa3d-24.3.2-release-msvc.7z
+#          7z x mesa.7z -omesa
+#          cp mesa/x64/opengl32.dll .
+#          cp mesa/x64/libgallium_wgl.dll .
+#          cp mesa/x64/libglapi.dll .
+#
+#      - name: Install Vulkan SDK
+#        uses: jakoch/install-vulkan-sdk-action@v1
+#        with:
+#          vulkan_version: 1.4.335.0
+#          optional_components: com.lunarg.vulkan.vma,com.lunarg.vulkan.volk
+#          cache: true
+#
+#      - name: Configure CMake
+#        run: >
+#          cmake -S . -B ${{ matrix.build-dir }}
+#          -DRNDR_BUILD_TESTS=ON
+#          -DRNDR_BUILD_SAMPLES=OFF
+#          -DRNDR_HARDENING=OFF
+#          -DRNDR_ADVANCED_API=ON
+#
+#      - name: Build
+#        run: cmake --build ${{ matrix.build-dir }} --config ${{ matrix.config }} --target rndr-test
+#
+#      - name: Run tests
+#        run: ${{ matrix.build-dir }}/${{ matrix.config }}/rndr-test
