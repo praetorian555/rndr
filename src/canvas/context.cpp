@@ -85,6 +85,22 @@ bool Rndr::Canvas::Context::IsValid() const
 
 #define RNDR_IS_EXTENSION_ALLOWED(extension)
 
+static void* Win32GLLoadProc(const char* name)
+{
+    // Try the extension/modern path first
+    void* p = (void*)wglGetProcAddress(name);
+
+    // wglGetProcAddress returns NULL or low sentinel values for
+    // functions it doesn't know about (i.e., GL 1.0/1.1 core)
+    if (p == nullptr || p == (void*)0x1 || p == (void*)0x2 || p == (void*)0x3 || p == (void*)-1)
+    {
+        static HMODULE gl_module = GetModuleHandleA("opengl32.dll");
+        p = (void*)GetProcAddress(gl_module, name);
+    }
+
+    return p;
+}
+
 bool Rndr::Canvas::Context::g_context_exists = false;
 Rndr::Canvas::Context Rndr::Canvas::Context::Init(NativeWindowHandle window_handle)
 {
@@ -193,13 +209,21 @@ Rndr::Canvas::Context Rndr::Canvas::Context::Init(NativeWindowHandle window_hand
     {
         logger.Info(k_log_category, "WGL ARB extensions not available, using basic GL context.");
         final_context = temp_context;
+        status = gladLoadGLLoader(Win32GLLoadProc);
+        if (status == 0)
+        {
+            wglDeleteContext(final_context);
+            throw GraphicsAPIException(0, "Failed to load OpenGL functions!");
+        }
     }
-
-    status = gladLoadGL();
-    if (status == 0)
+    else
     {
-        wglDeleteContext(final_context);
-        throw GraphicsAPIException(0, "Failed to load OpenGL functions!");
+        status = gladLoadGL();
+        if (status == 0)
+        {
+            wglDeleteContext(final_context);
+            throw GraphicsAPIException(0, "Failed to load OpenGL functions!");
+        }
     }
 
     ctx.m_graphics_context = final_context;
