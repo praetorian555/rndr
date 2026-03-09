@@ -88,7 +88,9 @@ if (${RNDR_CANVAS})
             "${PROJECT_SOURCE_DIR}/include/rndr/canvas/draw-command-buffer.hpp"
             "${PROJECT_SOURCE_DIR}/include/rndr/canvas/draw-list.hpp"
             "${PROJECT_SOURCE_DIR}/include/rndr/canvas/compute-list.hpp"
-            "${PROJECT_SOURCE_DIR}/src/canvas/context.cpp")
+            "${PROJECT_SOURCE_DIR}/src/canvas/context.cpp"
+            "${PROJECT_SOURCE_DIR}/src/canvas/buffer.cpp"
+            "${PROJECT_SOURCE_DIR}/src/canvas/texture.cpp")
 endif ()
 
 list(APPEND SOURCE_LIST

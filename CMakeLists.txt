@@ -169,7 +169,10 @@ if (${RNDR_BUILD_TESTS})
             test/renderer-base-test.cpp
             extern/catch2/src/catch_amalgamated.cpp)
     if (${RNDR_CANVAS})
-        list(APPEND RNDR_TEST_FILES test/canvas/context-test.cpp)
+        list(APPEND RNDR_TEST_FILES
+                test/canvas/context-test.cpp
+                test/canvas/buffer-test.cpp
+                test/canvas/texture-test.cpp)
     endif ()
     add_executable(rndr-test ${RNDR_TEST_FILES})
     target_include_directories(rndr-test PRIVATE src)

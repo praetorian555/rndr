@@ -1,5 +1,8 @@
 #pragma once
 
+#include "opal/container/array-view.h"
+#include "opal/container/string.h"
+
 #include "rndr/types.hpp"
 
 namespace Rndr
@@ -30,8 +33,12 @@ public:
      * Create a GPU buffer.
      * @param usage Intended usage of the buffer.
      * @param size Size in bytes.
+     * @param offset Byte offset into the buffer for binding.
+     * @param init_data Optional initial data to upload.
+     * @param name Debug name for GPU debugging tools.
      */
-    explicit Buffer(BufferUsage usage, u64 size);
+    explicit Buffer(BufferUsage usage, u64 size, u64 offset = 0, const Opal::ArrayView<const u8>& init_data = {},
+                    Opal::StringUtf8 name = {});
     ~Buffer();
 
     Buffer(const Buffer&) = delete;
@@ -39,24 +46,27 @@ public:
     Buffer(Buffer&& other) noexcept;
     Buffer& operator=(Buffer&& other) noexcept;
 
-    [[nodiscard]] Buffer Clone() const;
+    [[nodiscard]] Buffer Clone(Opal::AllocatorBase* allocator = nullptr) const;
     void Destroy();
 
     /**
      * Upload data to the buffer.
-     * @param data Pointer to the source data.
-     * @param size Size of the data in bytes.
+     * @param data Data to upload.
      */
-    void Update(const void* data, u64 size);
+    void Update(const Opal::ArrayView<const u8>& data) const;
 
     [[nodiscard]] BufferUsage GetUsage() const;
     [[nodiscard]] u64 GetSize() const;
+    [[nodiscard]] u64 GetOffset() const;
+    [[nodiscard]] const Opal::StringUtf8& GetName() const;
     [[nodiscard]] bool IsValid() const;
 
 private:
     BufferUsage m_usage = BufferUsage::Uniform;
     u64 m_size = 0;
+    u64 m_offset = 0;
     u32 m_handle = 0;
+    Opal::StringUtf8 m_name;
 };
 
 }  // namespace Canvas
