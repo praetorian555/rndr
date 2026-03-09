@@ -74,6 +74,7 @@ list(APPEND SOURCE_LIST
         "${PROJECT_SOURCE_DIR}/src/platform/opengl-helpers.cpp")
 
 if (${RNDR_CANVAS})
+    file(TO_CMAKE_PATH "$ENV{VULKAN_SDK}" VULKAN_SDK_PATH)
     list(APPEND SOURCE_LIST
             "${PROJECT_SOURCE_DIR}/include/rndr/canvas/canvas.hpp"
             "${PROJECT_SOURCE_DIR}/include/rndr/canvas/context.hpp"
@@ -91,7 +92,8 @@ if (${RNDR_CANVAS})
             "${PROJECT_SOURCE_DIR}/src/canvas/context.cpp"
             "${PROJECT_SOURCE_DIR}/src/canvas/buffer.cpp"
             "${PROJECT_SOURCE_DIR}/src/canvas/texture.cpp"
-            "${PROJECT_SOURCE_DIR}/src/canvas/render-target.cpp")
+            "${PROJECT_SOURCE_DIR}/src/canvas/render-target.cpp"
+            "${PROJECT_SOURCE_DIR}/src/canvas/shader.cpp")
 endif ()
 
 list(APPEND SOURCE_LIST
@@ -166,10 +168,15 @@ target_link_libraries(rndr PUBLIC opengl32.lib User32.lib Shcore.lib)
 target_link_libraries(rndr PUBLIC opal imgui assimp)
 add_dependencies(rndr generate-reflection)
 
+if (${RNDR_CANVAS})
+    target_include_directories(rndr PRIVATE ${VULKAN_SDK_PATH}/Include)
+    find_library(Slang_LIBRARY NAMES slang HINTS "$ENV{VULKAN_SDK}/Lib" REQUIRED)
+    target_link_libraries(rndr PRIVATE ${Slang_LIBRARY})
+endif ()
+
 if (${RNDR_ADVANCED_API})
     target_include_directories(rndr PRIVATE ${VULKAN_SDK_PATH}/Source/SPIRV-Reflect)
     target_include_directories(rndr PUBLIC ${VULKAN_SDK_PATH}/Include)
-    #    find_library(Slang_LIBRARY NAMES slang HINTS "$ENV{VULKAN_SDK}/Lib" REQUIRED)
     target_link_libraries(rndr PUBLIC ktx)
     target_compile_definitions(rndr PUBLIC RNDR_ADVANCED_API)
     if (WIN32)
