@@ -94,7 +94,12 @@ static void* Win32GLLoadProc(const char* name)
     // functions it doesn't know about (i.e., GL 1.0/1.1 core)
     if (p == nullptr || p == (void*)0x1 || p == (void*)0x2 || p == (void*)0x3 || p == (void*)-1)
     {
-        static HMODULE gl_module = GetModuleHandleA("opengl32.dll");
+        // Try the Mesa gallium driver first, fall back to opengl32
+        static HMODULE gl_module = []() -> HMODULE {
+            HMODULE m = GetModuleHandleA("libgallium_wgl.dll");
+            if (!m) m = GetModuleHandleA("opengl32.dll");
+            return m;
+        }();
         p = (void*)GetProcAddress(gl_module, name);
     }
 
