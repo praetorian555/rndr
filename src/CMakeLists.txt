@@ -96,7 +96,8 @@ if (${RNDR_CANVAS})
             "${PROJECT_SOURCE_DIR}/src/canvas/shader.cpp"
             "${PROJECT_SOURCE_DIR}/src/canvas/vertex-layout.cpp"
             "${PROJECT_SOURCE_DIR}/src/canvas/mesh.cpp"
-            "${PROJECT_SOURCE_DIR}/src/canvas/brush.cpp")
+            "${PROJECT_SOURCE_DIR}/src/canvas/brush.cpp"
+            "${PROJECT_SOURCE_DIR}/src/canvas/display.cpp")
 endif ()
 
 list(APPEND SOURCE_LIST

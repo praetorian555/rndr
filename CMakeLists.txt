@@ -176,7 +176,8 @@ if (${RNDR_BUILD_TESTS})
                 test/canvas/render-target-test.cpp
                 test/canvas/shader-test.cpp
                 test/canvas/mesh-test.cpp
-                test/canvas/brush-test.cpp)
+                test/canvas/brush-test.cpp
+                test/canvas/display-test.cpp)
     endif ()
     add_executable(rndr-test ${RNDR_TEST_FILES})
     target_include_directories(rndr-test PRIVATE src)
