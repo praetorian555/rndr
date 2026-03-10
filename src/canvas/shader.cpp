@@ -405,6 +405,7 @@ struct SlangCompileResult
     ShaderStage stage = ShaderStage::Unknown;
     Opal::DynamicArray<Rndr::Canvas::ShaderParameter> parameters;
     Rndr::Canvas::VertexLayout vertex_layout;  // Only populated for vertex stage.
+    Rndr::Canvas::NumThreads num_threads;       // Only populated for compute stage.
 };
 
 SlangCompileResult CompileEntryPoint(const LoadedModule& mod, const Opal::StringUtf8& entry_point)
@@ -456,6 +457,15 @@ SlangCompileResult CompileEntryPoint(const LoadedModule& mod, const Opal::String
         if (out.stage == ShaderStage::Vertex)
         {
             out.vertex_layout = ExtractVertexLayout(layout);
+        }
+        if (out.stage == ShaderStage::Compute)
+        {
+            slang::EntryPointReflection* ep_ref = layout->getEntryPointByIndex(0);
+            SlangUInt thread_group_size[3];
+            ep_ref->getComputeThreadGroupSize(3, thread_group_size);
+            out.num_threads.x = static_cast<Rndr::u32>(thread_group_size[0]);
+            out.num_threads.y = static_cast<Rndr::u32>(thread_group_size[1]);
+            out.num_threads.z = static_cast<Rndr::u32>(thread_group_size[2]);
         }
     }
 
@@ -758,6 +768,7 @@ struct ShaderBuildResult
     Opal::StringUtf8 fragment_entry;
     Opal::DynamicArray<Rndr::Canvas::ShaderParameter> parameters;
     Rndr::Canvas::VertexLayout vertex_layout;
+    Rndr::Canvas::NumThreads num_threads;
 };
 
 ShaderBuildResult BuildFromSingleSource(const Opal::StringUtf8& source)
@@ -819,6 +830,7 @@ ShaderBuildResult BuildFromSingleSource(const Opal::StringUtf8& source)
         ShaderBuildResult out;
         out.program = program;
         out.parameters = std::move(cs_result.parameters);
+        out.num_threads = cs_result.num_threads;
         return out;
     }
 
@@ -967,6 +979,7 @@ Rndr::Canvas::Shader Rndr::Canvas::Shader::FromSourceInMemory(const Opal::String
     shader.m_fragment_entry = std::move(build.fragment_entry);
     shader.m_parameters = std::move(build.parameters);
     shader.m_vertex_layout = std::move(build.vertex_layout);
+    shader.m_num_threads = build.num_threads;
 
     return shader;
 }
@@ -1014,6 +1027,7 @@ Rndr::Canvas::Shader Rndr::Canvas::Shader::FromSourcesInMemory(const Opal::Strin
     shader.m_fragment_entry = std::move(build.fragment_entry);
     shader.m_parameters = std::move(build.parameters);
     shader.m_vertex_layout = std::move(build.vertex_layout);
+    shader.m_num_threads = build.num_threads;
 
     return shader;
 }
@@ -1030,9 +1044,11 @@ Rndr::Canvas::Shader::Shader(Shader&& other) noexcept
       m_fragment_source(std::move(other.m_fragment_source)),
       m_fragment_entry(std::move(other.m_fragment_entry)),
       m_parameters(std::move(other.m_parameters)),
-      m_vertex_layout(std::move(other.m_vertex_layout))
+      m_vertex_layout(std::move(other.m_vertex_layout)),
+      m_num_threads(other.m_num_threads)
 {
     other.m_program = 0;
+    other.m_num_threads = {};
 }
 
 Rndr::Canvas::Shader& Rndr::Canvas::Shader::operator=(Shader&& other) noexcept
@@ -1047,7 +1063,9 @@ Rndr::Canvas::Shader& Rndr::Canvas::Shader::operator=(Shader&& other) noexcept
         m_fragment_entry = std::move(other.m_fragment_entry);
         m_parameters = std::move(other.m_parameters);
         m_vertex_layout = std::move(other.m_vertex_layout);
+        m_num_threads = other.m_num_threads;
         other.m_program = 0;
+        other.m_num_threads = {};
     }
     return *this;
 }
@@ -1075,6 +1093,7 @@ void Rndr::Canvas::Shader::Destroy()
     }
     m_parameters.Clear();
     m_vertex_layout = VertexLayout();
+    m_num_threads = {};
 }
 
 bool Rndr::Canvas::Shader::IsValid() const
@@ -1107,4 +1126,9 @@ const Rndr::Canvas::ShaderParameter* Rndr::Canvas::Shader::FindParameter(const O
 const Rndr::Canvas::VertexLayout& Rndr::Canvas::Shader::GetVertexLayout() const
 {
     return m_vertex_layout;
+}
+
+const Rndr::Canvas::NumThreads& Rndr::Canvas::Shader::GetNumThreads() const
+{
+    return m_num_threads;
 }

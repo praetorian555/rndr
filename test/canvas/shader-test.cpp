@@ -750,6 +750,28 @@ TEST_CASE("Canvas Shader", "[canvas][shader]")
         REQUIRE(layout.GetStride() == 12);  // float3 = 12 bytes
     }
 
+    SECTION("Compute shader GetNumThreads")
+    {
+        Rndr::Canvas::Shader const shader = Rndr::Canvas::Shader::FromSourceInMemory(k_compute_source);
+        REQUIRE(shader.IsValid());
+
+        const Rndr::Canvas::NumThreads& num_threads = shader.GetNumThreads();
+        REQUIRE(num_threads.x == 64);
+        REQUIRE(num_threads.y == 1);
+        REQUIRE(num_threads.z == 1);
+    }
+
+    SECTION("Graphics shader GetNumThreads is zero")
+    {
+        Rndr::Canvas::Shader const shader = Rndr::Canvas::Shader::FromSourceInMemory(k_combined_source);
+        REQUIRE(shader.IsValid());
+
+        const Rndr::Canvas::NumThreads& num_threads = shader.GetNumThreads();
+        REQUIRE(num_threads.x == 0);
+        REQUIRE(num_threads.y == 0);
+        REQUIRE(num_threads.z == 0);
+    }
+
     SECTION("GetVertexLayout is empty for compute shader")
     {
         Rndr::Canvas::Shader const shader = Rndr::Canvas::Shader::FromSourceInMemory(k_compute_source);

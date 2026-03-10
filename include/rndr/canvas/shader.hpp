@@ -11,6 +11,13 @@ namespace Rndr
 namespace Canvas
 {
 
+struct NumThreads
+{
+    u32 x = 0;
+    u32 y = 0;
+    u32 z = 0;
+};
+
 enum class ParameterCategory : u8
 {
     Uniform,
@@ -98,6 +105,9 @@ public:
     /** @return Vertex layout inferred from shader reflection. Empty for compute shaders. */
     [[nodiscard]] const VertexLayout& GetVertexLayout() const;
 
+    /** @return Compute shader thread group size. All zeros for non-compute shaders. */
+    [[nodiscard]] const NumThreads& GetNumThreads() const;
+
 private:
     u32 m_program = 0;
     Opal::StringUtf8 m_vertex_source;
@@ -106,6 +116,7 @@ private:
     Opal::StringUtf8 m_fragment_entry;
     Opal::DynamicArray<ShaderParameter> m_parameters;
     VertexLayout m_vertex_layout;
+    NumThreads m_num_threads;
 };
 
 }  // namespace Canvas
