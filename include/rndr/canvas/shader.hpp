@@ -4,6 +4,7 @@
 #include "opal/container/string.h"
 
 #include "rndr/canvas/context.hpp"
+#include "rndr/canvas/vertex-layout.hpp"
 
 namespace Rndr
 {
@@ -94,6 +95,9 @@ public:
     [[nodiscard]] const Opal::DynamicArray<ShaderParameter>& GetParameters() const;
     [[nodiscard]] const ShaderParameter* FindParameter(const Opal::StringUtf8& name) const;
 
+    /** @return Vertex layout inferred from shader reflection. Empty for compute shaders. */
+    [[nodiscard]] const VertexLayout& GetVertexLayout() const;
+
 private:
     u32 m_program = 0;
     Opal::StringUtf8 m_vertex_source;
@@ -101,6 +105,7 @@ private:
     Opal::StringUtf8 m_fragment_source;  // Empty for single-source case.
     Opal::StringUtf8 m_fragment_entry;
     Opal::DynamicArray<ShaderParameter> m_parameters;
+    VertexLayout m_vertex_layout;
 };
 
 }  // namespace Canvas

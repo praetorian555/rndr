@@ -4,9 +4,7 @@
 
 #include "rndr/canvas/context.hpp"
 
-namespace Rndr
-{
-namespace Canvas
+namespace Rndr::Canvas
 {
 
 /** Semantic vertex attribute names. */
@@ -27,6 +25,12 @@ enum class Attrib : u8
 class VertexLayout
 {
 public:
+    struct Entry
+    {
+        Attrib attrib = Attrib::Position;
+        Format format = Format::Float3;
+    };
+
     VertexLayout() = default;
     ~VertexLayout();
 
@@ -50,16 +54,14 @@ public:
     /** @return Number of attributes in the layout. */
     [[nodiscard]] u32 GetAttributeCount() const;
 
+    /** @return Attribute entry at the given index. */
+    [[nodiscard]] const Entry& GetAttribute(u32 index) const;
+
     [[nodiscard]] bool IsValid() const;
 
 private:
-    struct Entry
-    {
-        Attrib attrib = Attrib::Position;
-        Format format = Format::Float3;
-    };
     Opal::DynamicArray<Entry> m_entries;
 };
 
-}  // namespace Canvas
-}  // namespace Rndr
+} // namespace Rndr::Canvas
+

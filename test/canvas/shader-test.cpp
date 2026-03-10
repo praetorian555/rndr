@@ -710,4 +710,89 @@ TEST_CASE("Canvas Shader", "[canvas][shader]")
     {
         REQUIRE_THROWS(Rndr::Canvas::Shader::FromSourceInMemory(k_mixed_compute_graphics_source));
     }
+
+    SECTION("GetVertexLayout from combined source with position only")
+    {
+        Rndr::Canvas::Shader const shader = Rndr::Canvas::Shader::FromSourceInMemory(k_combined_source);
+        REQUIRE(shader.IsValid());
+
+        const Rndr::Canvas::VertexLayout& layout = shader.GetVertexLayout();
+        REQUIRE(layout.IsValid());
+        REQUIRE(layout.GetAttributeCount() == 1);
+        REQUIRE(layout.GetStride() == 12);  // float3 = 12 bytes
+        REQUIRE(layout.GetAttribute(0).attrib == Rndr::Canvas::Attrib::Position);
+        REQUIRE(layout.GetAttribute(0).format == Rndr::Canvas::Format::Float3);
+    }
+
+    SECTION("GetVertexLayout from combined source with position and uv")
+    {
+        Rndr::Canvas::Shader const shader = Rndr::Canvas::Shader::FromSourceInMemory(k_combined_with_params_source);
+        REQUIRE(shader.IsValid());
+
+        const Rndr::Canvas::VertexLayout& layout = shader.GetVertexLayout();
+        REQUIRE(layout.IsValid());
+        REQUIRE(layout.GetAttributeCount() == 2);
+        REQUIRE(layout.GetStride() == 20);  // float3 + float2 = 12 + 8 = 20 bytes
+        REQUIRE(layout.GetAttribute(0).attrib == Rndr::Canvas::Attrib::Position);
+        REQUIRE(layout.GetAttribute(0).format == Rndr::Canvas::Format::Float3);
+        REQUIRE(layout.GetAttribute(1).attrib == Rndr::Canvas::Attrib::UV);
+        REQUIRE(layout.GetAttribute(1).format == Rndr::Canvas::Format::Float2);
+    }
+
+    SECTION("GetVertexLayout from separate sources")
+    {
+        Rndr::Canvas::Shader const shader = Rndr::Canvas::Shader::FromSourcesInMemory(k_vertex_source, k_fragment_source);
+        REQUIRE(shader.IsValid());
+
+        const Rndr::Canvas::VertexLayout& layout = shader.GetVertexLayout();
+        REQUIRE(layout.IsValid());
+        REQUIRE(layout.GetAttributeCount() == 1);
+        REQUIRE(layout.GetStride() == 12);  // float3 = 12 bytes
+    }
+
+    SECTION("GetVertexLayout is empty for compute shader")
+    {
+        Rndr::Canvas::Shader const shader = Rndr::Canvas::Shader::FromSourceInMemory(k_compute_source);
+        REQUIRE(shader.IsValid());
+
+        const Rndr::Canvas::VertexLayout& layout = shader.GetVertexLayout();
+        REQUIRE_FALSE(layout.IsValid());
+        REQUIRE(layout.GetAttributeCount() == 0);
+    }
+
+    SECTION("GetVertexLayout is empty for default constructed shader")
+    {
+        Rndr::Canvas::Shader const shader;
+        const Rndr::Canvas::VertexLayout& layout = shader.GetVertexLayout();
+        REQUIRE_FALSE(layout.IsValid());
+    }
+
+    SECTION("Move transfers vertex layout")
+    {
+        Rndr::Canvas::Shader shader = Rndr::Canvas::Shader::FromSourceInMemory(k_combined_with_params_source);
+        REQUIRE(shader.GetVertexLayout().IsValid());
+
+        Rndr::Canvas::Shader const moved(std::move(shader));
+        REQUIRE(moved.GetVertexLayout().IsValid());
+        REQUIRE(moved.GetVertexLayout().GetAttributeCount() == 2);
+    }
+
+    SECTION("Clone preserves vertex layout")
+    {
+        Rndr::Canvas::Shader const shader = Rndr::Canvas::Shader::FromSourceInMemory(k_combined_with_params_source);
+        REQUIRE(shader.GetVertexLayout().IsValid());
+
+        Rndr::Canvas::Shader const clone = shader.Clone();
+        REQUIRE(clone.GetVertexLayout().IsValid());
+        REQUIRE(clone.GetVertexLayout().GetAttributeCount() == shader.GetVertexLayout().GetAttributeCount());
+        REQUIRE(clone.GetVertexLayout().GetStride() == shader.GetVertexLayout().GetStride());
+    }
+
+    SECTION("Destroy clears vertex layout")
+    {
+        Rndr::Canvas::Shader shader = Rndr::Canvas::Shader::FromSourceInMemory(k_combined_with_params_source);
+        REQUIRE(shader.GetVertexLayout().IsValid());
+        shader.Destroy();
+        REQUIRE_FALSE(shader.GetVertexLayout().IsValid());
+    }
 }
