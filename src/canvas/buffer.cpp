@@ -122,6 +122,11 @@ const Opal::StringUtf8& Rndr::Canvas::Buffer::GetName() const
     return m_name;
 }
 
+Rndr::u32 Rndr::Canvas::Buffer::GetNativeHandle() const
+{
+    return m_handle;
+}
+
 bool Rndr::Canvas::Buffer::IsValid() const
 {
     return m_handle != 0;

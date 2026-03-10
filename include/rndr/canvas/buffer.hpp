@@ -59,6 +59,7 @@ public:
     [[nodiscard]] u64 GetSize() const;
     [[nodiscard]] u64 GetOffset() const;
     [[nodiscard]] const Opal::StringUtf8& GetName() const;
+    [[nodiscard]] u32 GetNativeHandle() const;
     [[nodiscard]] bool IsValid() const;
 
 private:

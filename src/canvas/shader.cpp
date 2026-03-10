@@ -144,9 +144,8 @@ void ExtractParam(slang::VariableLayoutReflection* param, Opal::DynamicArray<Rnd
     sp.binding_index = binding_index;
     sp.binding_space = binding_space;
     sp.category = category;
-    out_params.PushBack(std::move(sp));
 
-    // For uniform buffers, also extract individual fields.
+    // For uniform parameters, extract size/offset and fields.
     if (category == Rndr::Canvas::ParameterCategory::Uniform)
     {
         slang::TypeLayoutReflection* type_layout = param->getTypeLayout();
@@ -155,10 +154,19 @@ void ExtractParam(slang::VariableLayoutReflection* param, Opal::DynamicArray<Rnd
             const slang::TypeReflection::Kind kind = type_layout->getType()->getKind();
             if (kind == slang::TypeReflection::Kind::ConstantBuffer || kind == slang::TypeReflection::Kind::ParameterBlock)
             {
+                // Top-level UBO declaration, size stays 0.
+                out_params.PushBack(std::move(sp));
                 ExtractUniformFields(type_layout, binding_index, binding_space, out_params);
+                return;
             }
+
+            // Standalone uniform — extract size and offset.
+            sp.offset = static_cast<Rndr::i32>(param->getOffset(SLANG_PARAMETER_CATEGORY_UNIFORM));
+            sp.size = static_cast<Rndr::i32>(type_layout->getSize(SLANG_PARAMETER_CATEGORY_UNIFORM));
         }
     }
+
+    out_params.PushBack(std::move(sp));
 }
 
 void ExtractParameters(slang::ProgramLayout* layout, Opal::DynamicArray<Rndr::Canvas::ShaderParameter>& out_params)
