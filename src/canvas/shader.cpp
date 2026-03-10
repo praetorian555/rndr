@@ -439,6 +439,38 @@ GLuint LinkProgram(GLuint vertex_shader, GLuint fragment_shader)
     return program;
 }
 
+GLuint LinkProgram(GLuint shader)
+{
+    const GLuint program = glCreateProgram();
+    if (program == 0)
+    {
+        throw Rndr::GraphicsAPIException(0, "Failed to create GL program!");
+    }
+
+    glAttachShader(program, shader);
+    glLinkProgram(program);
+
+    GLint linked = 0;
+    glGetProgramiv(program, GL_LINK_STATUS, &linked);
+    if (linked == GL_FALSE)
+    {
+        GLint log_len = 0;
+        glGetProgramiv(program, GL_INFO_LOG_LENGTH, &log_len);
+        Opal::StringUtf8 log;
+        if (log_len > 0)
+        {
+            log.Resize(static_cast<Rndr::u64>(log_len));
+            glGetProgramInfoLog(program, log_len, &log_len, log.GetData());
+        }
+        glDeleteProgram(program);
+
+        Opal::StringUtf8 msg = Opal::StringUtf8("Failed to link shader program:\n") + log;
+        throw Rndr::GraphicsAPIException(0, msg.GetData());
+    }
+
+    return program;
+}
+
 // ---------------------------------------------------------------------------
 // Reflection merging.
 // ---------------------------------------------------------------------------
@@ -557,6 +589,64 @@ ShaderBuildResult BuildFromSingleSource(const Opal::StringUtf8& source)
     LoadedModule mod = LoadModule(source);
     Opal::DynamicArray<EntryPointInfo> entries = DiscoverEntryPoints(mod);
 
+    // Count entry points by stage.
+    int vertex_count = 0;
+    int fragment_count = 0;
+    int compute_count = 0;
+    for (Rndr::u64 i = 0; i < entries.GetSize(); ++i)
+    {
+        switch (entries[i].stage)
+        {
+            case ShaderStage::Vertex:
+                ++vertex_count;
+                break;
+            case ShaderStage::Fragment:
+                ++fragment_count;
+                break;
+            case ShaderStage::Compute:
+                ++compute_count;
+                break;
+            default:
+                break;
+        }
+    }
+
+    if (compute_count > 0 && (vertex_count > 0 || fragment_count > 0))
+    {
+        throw Rndr::GraphicsAPIException(0, "Shader source contains both compute and graphics entry points!");
+    }
+
+    // Compute path.
+    if (compute_count > 0)
+    {
+        Opal::StringUtf8 cs_entry = FindSingleEntryPoint(entries, ShaderStage::Compute, "compute");
+        SlangCompileResult cs_result = CompileEntryPoint(mod, cs_entry);
+        if (cs_result.stage != ShaderStage::Compute)
+        {
+            throw Rndr::GraphicsAPIException(0, "Compute entry point does not have [shader(\"compute\")] annotation!");
+        }
+
+        const GLuint cs =
+            CreateShaderFromSpirv(GL_COMPUTE_SHADER, cs_result.spirv->getBufferPointer(), cs_result.spirv->getBufferSize());
+        GLuint program = 0;
+        try
+        {
+            program = LinkProgram(cs);
+        }
+        catch (...)
+        {
+            glDeleteShader(cs);
+            throw;
+        }
+        glDeleteShader(cs);
+
+        ShaderBuildResult out;
+        out.program = program;
+        out.parameters = std::move(cs_result.parameters);
+        return out;
+    }
+
+    // Graphics path.
     Opal::StringUtf8 vs_entry = FindSingleEntryPoint(entries, ShaderStage::Vertex, "vertex");
     Opal::StringUtf8 fs_entry = FindSingleEntryPoint(entries, ShaderStage::Fragment, "fragment");
 

@@ -327,6 +327,56 @@ FSOutput FragmentMain(VSOutput input)
 }
 )";
 
+const char* k_compute_source = R"(
+RWStructuredBuffer<float4> output_buffer;
+
+struct ComputeParams
+{
+    uint count;
+};
+
+ConstantBuffer<ComputeParams> params;
+
+[shader("compute")]
+[numthreads(64, 1, 1)]
+void ComputeMain(uint3 tid : SV_DispatchThreadID)
+{
+    if (tid.x < params.count)
+    {
+        output_buffer[tid.x] = float4(float(tid.x), 0, 0, 1);
+    }
+}
+)";
+
+const char* k_mixed_compute_graphics_source = R"(
+struct VSInput
+{
+    float3 position;
+};
+
+struct VSOutput
+{
+    float4 position : SV_POSITION;
+};
+
+[shader("vertex")]
+VSOutput VertexMain(VSInput input)
+{
+    VSOutput output;
+    output.position = float4(input.position, 1.0);
+    return output;
+}
+
+RWStructuredBuffer<float4> output_buffer;
+
+[shader("compute")]
+[numthreads(64, 1, 1)]
+void ComputeMain(uint3 tid : SV_DispatchThreadID)
+{
+    output_buffer[tid.x] = float4(0, 0, 0, 1);
+}
+)";
+
 }  // namespace
 
 TEST_CASE("Canvas Shader", "[canvas][shader]")
@@ -617,5 +667,47 @@ TEST_CASE("Canvas Shader", "[canvas][shader]")
         REQUIRE(clone.GetParameters().GetSize() == shader.GetParameters().GetSize());
         REQUIRE(clone.FindParameter("diffuse_texture") != nullptr);
         REQUIRE(clone.FindParameter("material") != nullptr);
+    }
+
+    SECTION("Create compute shader from single source")
+    {
+        Rndr::Canvas::Shader const shader = Rndr::Canvas::Shader::FromSourceInMemory(k_compute_source);
+        REQUIRE(shader.IsValid());
+        REQUIRE(shader.GetNativeHandle() != 0);
+    }
+
+    SECTION("Compute shader reflection includes resources")
+    {
+        Rndr::Canvas::Shader const shader = Rndr::Canvas::Shader::FromSourceInMemory(k_compute_source);
+        REQUIRE(shader.IsValid());
+
+        const Rndr::Canvas::ShaderParameter* buffer = shader.FindParameter("output_buffer");
+        REQUIRE(buffer != nullptr);
+        REQUIRE(buffer->category == Rndr::Canvas::ParameterCategory::StorageBuffer);
+
+        const Rndr::Canvas::ShaderParameter* cb = shader.FindParameter("params");
+        REQUIRE(cb != nullptr);
+        REQUIRE(cb->category == Rndr::Canvas::ParameterCategory::Uniform);
+
+        const Rndr::Canvas::ShaderParameter* count = shader.FindParameter("count");
+        REQUIRE(count != nullptr);
+        REQUIRE(count->category == Rndr::Canvas::ParameterCategory::Uniform);
+        REQUIRE(count->size == 4);  // uint = 4 bytes
+    }
+
+    SECTION("Compute shader clone")
+    {
+        Rndr::Canvas::Shader const shader = Rndr::Canvas::Shader::FromSourceInMemory(k_compute_source);
+        REQUIRE(shader.IsValid());
+
+        Rndr::Canvas::Shader const clone = shader.Clone();
+        REQUIRE(clone.IsValid());
+        REQUIRE(clone.GetNativeHandle() != shader.GetNativeHandle());
+        REQUIRE(clone.FindParameter("output_buffer") != nullptr);
+    }
+
+    SECTION("Mixed compute and graphics entry points throws")
+    {
+        REQUIRE_THROWS(Rndr::Canvas::Shader::FromSourceInMemory(k_mixed_compute_graphics_source));
     }
 }

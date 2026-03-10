@@ -32,11 +32,16 @@ struct ShaderParameter
 };
 
 /**
- * A compiled GPU shader program containing vertex and fragment stages. Slang source is compiled to
- * SPIR-V and linked into an OpenGL program. Reflection data from both stages is merged.
+ * A compiled GPU shader program. Slang source is compiled to SPIR-V and linked into an OpenGL
+ * program.
  *
- * Entry points are auto-discovered from [shader("vertex")] and [shader("fragment")] annotations.
- * Each source must contain exactly one entry point of the expected stage type.
+ * For graphics shaders, the program contains both vertex and fragment stages. Reflection data from
+ * both stages is merged. For compute shaders, the program contains a single compute stage.
+ *
+ * Entry points are auto-discovered from [shader("vertex")], [shader("fragment")], and
+ * [shader("compute")] annotations. Single-source factory methods auto-detect whether the source
+ * is a graphics shader (exactly one vertex + one fragment entry point) or a compute shader
+ * (exactly one compute entry point). Two-source factory methods are graphics-only.
  */
 class Shader
 {
