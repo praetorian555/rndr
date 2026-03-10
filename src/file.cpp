@@ -18,6 +18,7 @@
 #include "opal/paths.h"
 #include "opal/exceptions.h"
 
+#include "rndr/canvas/vertex-layout.hpp"
 #include "rndr/log.hpp"
 
 Rndr::FileHandler::FileHandler(const char* file_path, const char* mode)
@@ -524,4 +525,196 @@ void Rndr::File::LoadMaterialDescription(const aiScene& ai_scene, u32 material_i
         out_material_desc.metallic_factor = 1.0f;
         out_material_desc.roughness = Vector4f(0.1f, 0.1f, 0.0f, 0.0f);
     }
+}
+
+namespace
+{
+
+Rndr::u32 CanvasFormatByteSize(Rndr::Canvas::Format format)
+{
+    switch (format)
+    {
+        case Rndr::Canvas::Format::Float1:
+            return 4;
+        case Rndr::Canvas::Format::Float2:
+            return 8;
+        case Rndr::Canvas::Format::Float3:
+            return 12;
+        case Rndr::Canvas::Format::Float4:
+            return 16;
+        case Rndr::Canvas::Format::Int1:
+            return 4;
+        case Rndr::Canvas::Format::Int2:
+            return 8;
+        case Rndr::Canvas::Format::Int3:
+            return 12;
+        case Rndr::Canvas::Format::Int4:
+            return 16;
+        default:
+            return 0;
+    }
+}
+
+Rndr::u32 CanvasFormatComponentCount(Rndr::Canvas::Format format)
+{
+    switch (format)
+    {
+        case Rndr::Canvas::Format::Float1:
+        case Rndr::Canvas::Format::Int1:
+            return 1;
+        case Rndr::Canvas::Format::Float2:
+        case Rndr::Canvas::Format::Int2:
+            return 2;
+        case Rndr::Canvas::Format::Float3:
+        case Rndr::Canvas::Format::Int3:
+            return 3;
+        case Rndr::Canvas::Format::Float4:
+        case Rndr::Canvas::Format::Int4:
+            return 4;
+        default:
+            return 0;
+    }
+}
+
+void WriteAttribData(const aiMesh* ai_mesh, Rndr::u32 vertex_idx, Rndr::Canvas::Attrib attrib, Rndr::Canvas::Format format,
+                     Opal::DynamicArray<Rndr::u8>& out_vertices)
+{
+    const Rndr::u32 components = CanvasFormatComponentCount(format);
+    float values[4] = {0.0f, 0.0f, 0.0f, 0.0f};
+
+    switch (attrib)
+    {
+        case Rndr::Canvas::Attrib::Position:
+        {
+            if (ai_mesh->mVertices == nullptr)
+            {
+                throw Opal::Exception("Mesh has no position data!");
+            }
+            const aiVector3D& v = ai_mesh->mVertices[vertex_idx];
+            values[0] = v.x;
+            values[1] = v.y;
+            values[2] = v.z;
+            if (components >= 4)
+            {
+                values[3] = 1.0f;
+            }
+            break;
+        }
+        case Rndr::Canvas::Attrib::Normal:
+        {
+            if (ai_mesh->mNormals == nullptr)
+            {
+                throw Opal::Exception("Mesh has no normal data!");
+            }
+            const aiVector3D& n = ai_mesh->mNormals[vertex_idx];
+            values[0] = n.x;
+            values[1] = n.y;
+            values[2] = n.z;
+            break;
+        }
+        case Rndr::Canvas::Attrib::UV:
+        {
+            if (ai_mesh->mTextureCoords[0] == nullptr)
+            {
+                throw Opal::Exception("Mesh has no UV data!");
+            }
+            const aiVector3D& uv = ai_mesh->mTextureCoords[0][vertex_idx];
+            values[0] = uv.x;
+            values[1] = uv.y;
+            if (components >= 3)
+            {
+                values[2] = uv.z;
+            }
+            break;
+        }
+        case Rndr::Canvas::Attrib::Color:
+        {
+            if (ai_mesh->mColors[0] == nullptr)
+            {
+                throw Opal::Exception("Mesh has no color data!");
+            }
+            const aiColor4D& c = ai_mesh->mColors[0][vertex_idx];
+            values[0] = c.r;
+            values[1] = c.g;
+            values[2] = c.b;
+            values[3] = c.a;
+            break;
+        }
+        case Rndr::Canvas::Attrib::Tangent:
+        {
+            if (ai_mesh->mTangents == nullptr)
+            {
+                throw Opal::Exception("Mesh has no tangent data!");
+            }
+            const aiVector3D& t = ai_mesh->mTangents[vertex_idx];
+            values[0] = t.x;
+            values[1] = t.y;
+            values[2] = t.z;
+            break;
+        }
+        default:
+            break;
+    }
+
+    const Rndr::u32 byte_size = CanvasFormatByteSize(format);
+    const Rndr::u64 old_size = out_vertices.GetSize();
+    out_vertices.Resize(old_size + byte_size);
+    memcpy(out_vertices.GetData() + old_size, values, byte_size);
+}
+
+}  // namespace
+
+void Rndr::File::LoadMesh(const Opal::StringUtf8& file_path, const Canvas::VertexLayout& layout, Mesh& out_mesh)
+{
+    if (!layout.IsValid())
+    {
+        throw Opal::InvalidArgumentException(__FUNCTION__, "Vertex layout is invalid!");
+    }
+
+    constexpr u32 k_ai_process_flags = aiProcess_JoinIdenticalVertices | aiProcess_Triangulate | aiProcess_GenSmoothNormals |
+                                       aiProcess_LimitBoneWeights | aiProcess_SplitLargeMeshes | aiProcess_ImproveCacheLocality |
+                                       aiProcess_RemoveRedundantMaterials | aiProcess_FindDegenerates | aiProcess_FindInvalidData |
+                                       aiProcess_GenUVCoords | aiProcess_CalcTangentSpace;
+    const aiScene* scene = aiImportFile(*file_path, k_ai_process_flags);
+    if (scene == nullptr || !scene->HasMeshes())
+    {
+        throw Opal::Exception("Failed to load mesh file or file contains no meshes!");
+    }
+
+    const aiMesh* ai_mesh = scene->mMeshes[0];
+    const Opal::StringUtf8 mesh_name = Opal::Paths::GetFileName(file_path).GetValue();
+
+    out_mesh.name = mesh_name.Clone();
+    out_mesh.vertex_size = layout.GetStride();
+    out_mesh.vertex_count = 0;
+    out_mesh.index_size = sizeof(u32);
+    out_mesh.index_count = 0;
+    out_mesh.vertices.Clear();
+    out_mesh.indices.Clear();
+
+    for (u32 vertex_idx = 0; vertex_idx < ai_mesh->mNumVertices; ++vertex_idx)
+    {
+        for (u32 attr_idx = 0; attr_idx < layout.GetAttributeCount(); ++attr_idx)
+        {
+            const Canvas::VertexLayout::Entry& entry = layout.GetAttribute(attr_idx);
+            WriteAttribData(ai_mesh, vertex_idx, entry.attrib, entry.format, out_mesh.vertices);
+        }
+        ++out_mesh.vertex_count;
+    }
+
+    for (u32 face_idx = 0; face_idx < ai_mesh->mNumFaces; ++face_idx)
+    {
+        const aiFace& face = ai_mesh->mFaces[face_idx];
+        if (face.mNumIndices != 3)
+        {
+            continue;
+        }
+        for (u32 index_idx = 0; index_idx < face.mNumIndices; ++index_idx)
+        {
+            out_mesh.indices.Append(Opal::AsWritableBytes<u32>(face.mIndices[index_idx]));
+            ++out_mesh.index_count;
+        }
+    }
+
+    aiReleaseImport(scene);
 }

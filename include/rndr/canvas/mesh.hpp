@@ -1,6 +1,7 @@
 #pragma once
 
 #include "opal/container/array-view.h"
+#include "opal/container/dynamic-array.h"
 
 #include "rndr/canvas/vertex-layout.hpp"
 
@@ -10,8 +11,8 @@ namespace Canvas
 {
 
 /**
- * Geometry data paired with its vertex layout. Owns its data and knows its shape. When the layout
- * is shader-derived, vertex data stride is validated at construction.
+ * Geometry data paired with its vertex layout. Owns GPU resources (VAO, VBO, IBO).
+ * Vertex data stride is validated against the layout at construction.
  */
 class Mesh
 {
@@ -21,8 +22,8 @@ public:
     /**
      * Create a mesh from a vertex layout and data.
      * @param layout Vertex layout describing the data format.
-     * @param vertex_data Raw vertex data. Stride is validated against the layout.
-     * @param index_data Raw index data. Can be empty for non-indexed geometry.
+     * @param vertex_data Raw vertex data. Size must be a multiple of the layout stride.
+     * @param index_data Raw index data (u32 indices). Can be empty for non-indexed geometry.
      */
     explicit Mesh(const VertexLayout& layout, Opal::ArrayView<const u8> vertex_data, Opal::ArrayView<const u8> index_data = {});
     ~Mesh();
@@ -36,11 +37,21 @@ public:
     void Destroy();
 
     [[nodiscard]] bool IsValid() const;
+    [[nodiscard]] u32 GetNativeHandle() const;
+    [[nodiscard]] u32 GetVertexCount() const;
+    [[nodiscard]] u32 GetIndexCount() const;
+    [[nodiscard]] bool HasIndices() const;
+    [[nodiscard]] const VertexLayout& GetVertexLayout() const;
 
 private:
     u32 m_vao = 0;
     u32 m_vbo = 0;
     u32 m_ibo = 0;
+    u32 m_vertex_count = 0;
+    u32 m_index_count = 0;
+    VertexLayout m_layout;
+    Opal::DynamicArray<u8> m_vertex_data;
+    Opal::DynamicArray<u8> m_index_data;
 };
 
 }  // namespace Canvas
