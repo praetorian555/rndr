@@ -10,14 +10,6 @@ namespace Rndr
 namespace Canvas
 {
 
-enum class ShaderType : u8
-{
-    Vertex,
-    Fragment,
-    Compute,
-    EnumCount,
-};
-
 enum class ParameterCategory : u8
 {
     Uniform,
@@ -40,28 +32,46 @@ struct ShaderParameter
 };
 
 /**
- * A single compiled GPU shader stage. Slang source is compiled to SPIR-V and uploaded to OpenGL.
+ * A compiled GPU shader program containing vertex and fragment stages. Slang source is compiled to
+ * SPIR-V and linked into an OpenGL program. Reflection data from both stages is merged.
+ *
+ * Entry points are auto-discovered from [shader("vertex")] and [shader("fragment")] annotations.
+ * Each source must contain exactly one entry point of the expected stage type.
  */
 class Shader
 {
 public:
     /**
-     * Compile a shader from a source file on disk. The shader stage is deduced from the Slang
-     * [shader("...")] annotation on the entry point.
+     * Create a shader program from a single source file containing both vertex and fragment entry
+     * points.
      * @param path Path to the Slang source file.
-     * @param entry_point Name of the entry point function in the source.
      * @return A valid Shader object.
      */
-    [[nodiscard]] static Shader FromSource(const Opal::StringUtf8& path, const Opal::StringUtf8& entry_point);
+    [[nodiscard]] static Shader FromSource(const Opal::StringUtf8& path);
 
     /**
-     * Compile a shader from source code in memory. The shader stage is deduced from the Slang
-     * [shader("...")] annotation on the entry point.
+     * Create a shader program from source code in memory containing both vertex and fragment entry
+     * points.
      * @param source Slang shader source code.
-     * @param entry_point Name of the entry point function in the source.
      * @return A valid Shader object.
      */
-    [[nodiscard]] static Shader FromSourceInMemory(const Opal::StringUtf8& source, const Opal::StringUtf8& entry_point);
+    [[nodiscard]] static Shader FromSourceInMemory(const Opal::StringUtf8& source);
+
+    /**
+     * Create a shader program from two separate source files for vertex and fragment stages.
+     * @param vertex_path Path to the vertex stage Slang source file.
+     * @param fragment_path Path to the fragment stage Slang source file.
+     * @return A valid Shader object.
+     */
+    [[nodiscard]] static Shader FromSources(const Opal::StringUtf8& vertex_path, const Opal::StringUtf8& fragment_path);
+
+    /**
+     * Create a shader program from two separate source strings for vertex and fragment stages.
+     * @param vertex_source Slang source code for the vertex stage.
+     * @param fragment_source Slang source code for the fragment stage.
+     * @return A valid Shader object.
+     */
+    [[nodiscard]] static Shader FromSourcesInMemory(const Opal::StringUtf8& vertex_source, const Opal::StringUtf8& fragment_source);
 
     Shader() = default;
     ~Shader();
@@ -76,15 +86,15 @@ public:
 
     [[nodiscard]] bool IsValid() const;
     [[nodiscard]] u32 GetNativeHandle() const;
-    [[nodiscard]] ShaderType GetType() const;
     [[nodiscard]] const Opal::DynamicArray<ShaderParameter>& GetParameters() const;
     [[nodiscard]] const ShaderParameter* FindParameter(const Opal::StringUtf8& name) const;
 
 private:
-    u32 m_shader = 0;
-    ShaderType m_type = ShaderType::EnumCount;
-    Opal::StringUtf8 m_source;
-    Opal::StringUtf8 m_entry_point;
+    u32 m_program = 0;
+    Opal::StringUtf8 m_vertex_source;
+    Opal::StringUtf8 m_vertex_entry;
+    Opal::StringUtf8 m_fragment_source;  // Empty for single-source case.
+    Opal::StringUtf8 m_fragment_entry;
     Opal::DynamicArray<ShaderParameter> m_parameters;
 };
 
