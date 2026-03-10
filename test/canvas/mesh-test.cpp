@@ -18,7 +18,7 @@ Rndr::Canvas::Context CreateTestContext(Opal::ScopePtr<Rndr::Application>& app, 
     Rndr::GenericWindowDesc window_desc;
     window_desc.start_visible = false;
     window = app->CreateGenericWindow(window_desc);
-    return Rndr::Canvas::Context::Init(window->GetNativeHandle());
+    return Rndr::Canvas::Context::Init(window.Clone());
 }
 
 struct MeshTestFixture

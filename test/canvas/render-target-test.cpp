@@ -18,7 +18,7 @@ Rndr::Canvas::Context CreateTestContext(Opal::ScopePtr<Rndr::Application>& app, 
     Rndr::GenericWindowDesc window_desc;
     window_desc.start_visible = false;
     window = app->CreateGenericWindow(window_desc);
-    return Rndr::Canvas::Context::Init(window->GetNativeHandle());
+    return Rndr::Canvas::Context::Init(window.Clone());
 }
 
 struct RenderTargetTestFixture
@@ -89,9 +89,7 @@ TEST_CASE("Canvas RenderTargetDesc builder", "[canvas][render-target]")
     SECTION("Chaining")
     {
         Rndr::Canvas::RenderTargetDesc desc;
-        desc.AddColor(64, 64, Rndr::Canvas::Format::RGBA8)
-            .AddColor(64, 64, Rndr::Canvas::Format::R8)
-            .SetDepthStencil(64, 64);
+        desc.AddColor(64, 64, Rndr::Canvas::Format::RGBA8).AddColor(64, 64, Rndr::Canvas::Format::R8).SetDepthStencil(64, 64);
 
         REQUIRE(desc.color_attachments.GetSize() == 2);
         REQUIRE(desc.color_attachments[0].format == Rndr::Canvas::Format::RGBA8);
@@ -224,11 +222,8 @@ TEST_CASE("Canvas RenderTarget", "[canvas][render-target]")
     SECTION("Different pixel formats")
     {
         const Rndr::Canvas::Format formats[] = {
-            Rndr::Canvas::Format::RGBA8,
-            Rndr::Canvas::Format::RGBA16F,
-            Rndr::Canvas::Format::RGBA32F,
-            Rndr::Canvas::Format::R8,
-            Rndr::Canvas::Format::RG8,
+            Rndr::Canvas::Format::RGBA8, Rndr::Canvas::Format::RGBA16F, Rndr::Canvas::Format::RGBA32F,
+            Rndr::Canvas::Format::R8,    Rndr::Canvas::Format::RG8,
         };
 
         for (auto fmt : formats)

@@ -18,7 +18,7 @@ Rndr::Canvas::Context CreateTestContext(Opal::ScopePtr<Rndr::Application>& app, 
     Rndr::GenericWindowDesc window_desc;
     window_desc.start_visible = false;
     window = app->CreateGenericWindow(window_desc);
-    return Rndr::Canvas::Context::Init(window->GetNativeHandle());
+    return Rndr::Canvas::Context::Init(window.Clone());
 }
 
 struct BufferTestFixture
@@ -131,8 +131,8 @@ TEST_CASE("Canvas Buffer", "[canvas][buffer]")
     SECTION("Clone")
     {
         const Rndr::u8 data[] = {10, 20, 30, 40};
-        Rndr::Canvas::Buffer buf(Rndr::Canvas::BufferUsage::Vertex, sizeof(data), 0,
-                                 Opal::ArrayView<const Rndr::u8>(data, sizeof(data)), "CloneSrc");
+        Rndr::Canvas::Buffer buf(Rndr::Canvas::BufferUsage::Vertex, sizeof(data), 0, Opal::ArrayView<const Rndr::u8>(data, sizeof(data)),
+                                 "CloneSrc");
 
         Rndr::Canvas::Buffer clone = buf.Clone();
         REQUIRE(clone.IsValid());

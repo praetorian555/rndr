@@ -1,13 +1,12 @@
 #include "rndr/canvas/context.hpp"
 
-#include <array>
-
 #include "glad/glad_wgl.h"
 
 #include "opal/logging.h"
 
 #include "rndr/definitions.hpp"
 #include "rndr/exception.hpp"
+#include "rndr/generic-window.hpp"
 #include "rndr/trace.hpp"
 
 namespace
@@ -86,7 +85,7 @@ bool Rndr::Canvas::Context::IsValid() const
 #define RNDR_IS_EXTENSION_ALLOWED(extension)
 
 bool Rndr::Canvas::Context::g_context_exists = false;
-Rndr::Canvas::Context Rndr::Canvas::Context::Init(NativeWindowHandle window_handle)
+Rndr::Canvas::Context Rndr::Canvas::Context::Init(Opal::Ref<GenericWindow> window)
 {
     RNDR_CPU_EVENT_SCOPED("Canvas::Context::Init");
 
@@ -104,12 +103,12 @@ Rndr::Canvas::Context Rndr::Canvas::Context::Init(NativeWindowHandle window_hand
     Context ctx;
 
 #if RNDR_WINDOWS
-    if (window_handle == nullptr)
+    if (!window.IsValid())
     {
         throw Opal::InvalidArgumentException(__FUNCTION__, "Window handle is null!");
     }
 
-    ctx.m_device_context = GetDC(RNDR_TO_HWND(window_handle));
+    ctx.m_device_context = GetDC(RNDR_TO_HWND(window->GetNativeHandle()));
     if (ctx.m_device_context == k_invalid_device_context_handle)
     {
         throw GraphicsAPIException(0, "Failed to get device context from window!");

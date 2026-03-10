@@ -14,7 +14,7 @@ TEST_CASE("Canvas Display", "[canvas]")
     window_desc.start_visible = false;
     auto window = app->CreateGenericWindow(window_desc);
 
-    auto context = Rndr::Canvas::Context::Init(window->GetNativeHandle());
+    auto context = Rndr::Canvas::Context::Init(window.Clone());
     REQUIRE(context.IsValid());
 
     SECTION("Create display with valid window")

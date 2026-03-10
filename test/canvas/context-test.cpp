@@ -18,9 +18,9 @@ TEST_CASE("Canvas Format enum", "[canvas]")
 {
     SECTION("EnumCount has expected value")
     {
-        constexpr auto count = static_cast<Rndr::u8>(Rndr::Canvas::Format::EnumCount);
+        constexpr auto k_count = static_cast<Rndr::u8>(Rndr::Canvas::Format::EnumCount);
         // 12 pixel formats + 8 vertex formats = 20
-        REQUIRE(count == 20);
+        REQUIRE(k_count == 20);
     }
 }
 
@@ -38,7 +38,7 @@ TEST_CASE("Canvas Context Init with valid window handle", "[canvas]")
     window_desc.start_visible = false;
     auto window = app->CreateGenericWindow(window_desc);
 
-    auto context = Rndr::Canvas::Context::Init(window->GetNativeHandle());
+    auto context = Rndr::Canvas::Context::Init(window.Clone());
     REQUIRE(context.IsValid());
 }
 

@@ -1,11 +1,16 @@
 #pragma once
 
+#include "opal/container/ref.h"
+
 #include "rndr/platform/windows-forward-def.hpp"
 #include "rndr/types.hpp"
 
 namespace Rndr
 {
-namespace Canvas
+class GenericWindow;
+}
+
+namespace Rndr::Canvas
 {
 
 /**
@@ -51,12 +56,12 @@ class Context
 public:
     /**
      * Initialize the Canvas graphics backend.
-     * @param window_handle Native window handle to bind the GL context to.
+     * @param window Window to bind the GL context to.
      * @return A valid Context object.
      * @throw Opal::InvalidArgumentException if called while a Context already exists.
      * @throw Rndr::GraphicsAPIException if the OpenGL backend fails to initialize.
      */
-    [[nodiscard]] static Context Init(NativeWindowHandle window_handle);
+    [[nodiscard]] static Context Init(Opal::Ref<GenericWindow> window);
 
     ~Context();
 
@@ -75,5 +80,4 @@ private:
     NativeGraphicsContextHandle m_graphics_context = k_invalid_graphics_context_handle;
 };
 
-}  // namespace Canvas
-}  // namespace Rndr
+}  // namespace Rndr::Canvas
