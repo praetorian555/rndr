@@ -165,8 +165,8 @@ target_compile_features(rndr PRIVATE cxx_std_20)
 # We need this directory, and users of our library will need it too
 target_include_directories(rndr PUBLIC $<BUILD_INTERFACE:${PROJECT_SOURCE_DIR}/include>)
 target_include_directories(rndr PRIVATE ${PROJECT_SOURCE_DIR}/src)
-target_include_directories(rndr PRIVATE ${PROJECT_SOURCE_DIR}/extern/glad/include)
-target_include_directories(rndr PRIVATE ${PROJECT_SOURCE_DIR}/extern/stb_image/include)
+target_include_directories(rndr PUBLIC ${PROJECT_SOURCE_DIR}/extern/glad/include)
+target_include_directories(rndr PUBLIC ${PROJECT_SOURCE_DIR}/extern/stb_image/include)
 target_include_directories(rndr PUBLIC ${PROJECT_SOURCE_DIR}/tools/obsidian/win32/include)
 
 # Figure out where is Slang library
