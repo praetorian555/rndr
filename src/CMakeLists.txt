@@ -51,6 +51,7 @@ set(SOURCE_LIST
         "${PROJECT_SOURCE_DIR}/src/material.cpp"
         "${PROJECT_SOURCE_DIR}/src/shader-permutation.cpp"
         "${PROJECT_SOURCE_DIR}/src/pixel-format.cpp"
+        canvas/draw-list.cpp
 )
 
 list(APPEND SOURCE_LIST
