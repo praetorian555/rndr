@@ -6,7 +6,7 @@
 
 #include "imgui.h"
 
-#if RNDR_OPENGL
+#if RNDR_CANVAS
 #include "backends/imgui_impl_opengl3.h"
 #endif
 
@@ -166,7 +166,7 @@ Rndr::ImGuiContext::ImGuiContext(Application& app, GenericWindow& window, Graphi
     RNDR_ASSERT(false, "Platform not supported!");
 #endif
 
-#if RNDR_OPENGL
+#if RNDR_CANVAS
     ImGui_ImplOpenGL3_Init("#version 330");
 #else
     RNDR_ASSERT(false, "Graphics API not supported!");
@@ -186,7 +186,7 @@ Rndr::ImGuiContext::~ImGuiContext()
 
 bool Rndr::ImGuiContext::Destroy()
 {
-#if RNDR_OPENGL
+#if RNDR_CANVAS
     ImGui_ImplOpenGL3_Shutdown();
 #else
     RNDR_ASSERT(false, "Platform not supported!");
@@ -222,7 +222,7 @@ void Rndr::ImGuiContext::StartFrame()
     RNDR_ASSERT(false, "Platform not supported!");
 #endif
 
-#if RNDR_OPENGL
+#if RNDR_CANVAS
     ImGui_ImplOpenGL3_NewFrame();
 #else
     RNDR_ASSERT(false, "Platform not supported!");
@@ -243,7 +243,7 @@ void Rndr::ImGuiContext::EndFrame()
 
     ImGui::Render();
 
-#if RNDR_OPENGL
+#if RNDR_CANVAS
     ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
 #else
     RNDR_ASSERT(false, "Platform not supported!");
