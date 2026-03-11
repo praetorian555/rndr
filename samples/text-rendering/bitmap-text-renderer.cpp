@@ -13,6 +13,10 @@ bool BitmapTextRenderer::Init(Rndr::GraphicsContext* gc, Rndr::FrameBuffer* fram
     m_frame_buffer = frame_buffer;
     RNDR_ASSERT(m_frame_buffer != nullptr, "Invalid frame buffer");
     m_desc = desc.Clone();
+    if (m_desc.oversample_h == 0)
+    {
+        m_desc.oversample_h = m_desc.font_size < 36.0f ? 2 : 1;
+    }
 
     UpdateFontAtlas();
 
@@ -131,7 +135,13 @@ void BitmapTextRenderer::UpdateFontSize(f32 font_size)
 
 void BitmapTextRenderer::UpdateFontOversampling(u32 oversample_h, u32 oversample_v)
 {
-    if (m_desc.oversample_h != oversample_h || m_desc.oversample_v != oversample_v)
+    u32 new_oversample_h = oversample_h;
+    if (oversample_h == 0)
+    {
+        oversample_h = m_desc.font_size < 36 ? 2 : 1;
+    }
+
+    if (m_desc.oversample_h != new_oversample_h || m_desc.oversample_v != oversample_v)
     {
         m_desc.oversample_h = oversample_h;
         m_desc.oversample_v = oversample_v;
@@ -150,7 +160,8 @@ void BitmapTextRenderer::SetAlphaMultiplier(f32 alpha_multiplier)
 
 bool BitmapTextRenderer::DrawText(const Opal::StringUtf8& text, const Rndr::Vector2f& in_position, const Rndr::Vector4f& color)
 {
-    Rndr::Vector2f curr_position = in_position;
+    Rndr::Point2f curr_position = {in_position.x, in_position.y};
+    curr_position = Opal::Floor(curr_position);
     char next_c = 0;
     for (i32 i = 0; i < text.GetSize(); i++)
     {
@@ -166,8 +177,9 @@ bool BitmapTextRenderer::DrawText(const Opal::StringUtf8& text, const Rndr::Vect
         glyph_size.y = static_cast<f32>(aligned_quad->y1 - aligned_quad->y0);
 
         Rndr::Point2f glyph_bottom_left;
-        glyph_bottom_left.x = curr_position.x + packed_char->xoff;
-        glyph_bottom_left.y = curr_position.y - (packed_char->yoff + glyph_size.y);
+        // Discard position remainder
+        glyph_bottom_left.x = Opal::Floor(curr_position.x + packed_char->xoff);
+        glyph_bottom_left.y = Opal::Floor(curr_position.y - (packed_char->yoff + glyph_size.y));
 
         const Rndr::Point2f glyph_vertices[4] = {{glyph_bottom_left.x, glyph_bottom_left.y},
                                                  {glyph_bottom_left.x + glyph_size.x, glyph_bottom_left.y},
@@ -193,9 +205,10 @@ bool BitmapTextRenderer::DrawText(const Opal::StringUtf8& text, const Rndr::Vect
         {
             kern = stbtt_GetCodepointKernAdvance(&m_font_info, c, next_c);
         }
-        const f32 kern_scaled = kern * scale;
+        const f32 kern_scaled = static_cast<f32>(kern) * scale;
 
-        curr_position.x += packed_char->xadvance + kern_scaled;
+        // Snap the position to the closest integer
+        curr_position.x += Opal::Round(packed_char->xadvance + kern_scaled);
     }
 
     return true;

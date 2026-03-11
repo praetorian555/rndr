@@ -14,9 +14,9 @@ struct BitmapTextRendererDesc : Opal::ClonableBase<BitmapTextRendererDesc>
     i32 first_code_point = 32;  // ASCII
     i32 code_point_count = 95;
     i32 max_char_render_count = 1024;
-    u32 oversample_h = 2;
+    u32 oversample_h = 0; // If left as zero it will be equal to 2 if font_size is less then 36 or 1 otherwise
     u32 oversample_v = 1;
-    f32 alpha_multiplier = 1.5f;
+    f32 alpha_multiplier = 1.0f;
 
     OPAL_CLONE_FIELDS(font_file_path, font_size, first_code_point, code_point_count, max_char_render_count, oversample_h, oversample_v,
                       alpha_multiplier);
