@@ -9,7 +9,7 @@
 #include "rndr/error-codes.hpp"
 #include "rndr/graphics-types.hpp"
 
-#if RNDR_OPENGL
+#if RNDR_CANVAS
 
 namespace Rndr
 {

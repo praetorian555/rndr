@@ -1,8 +1,8 @@
 #include "rndr/canvas/shader.hpp"
 
 #include "glad/glad.h"
-#include "slang/slang-com-ptr.h"
-#include "slang/slang.h"
+#include "slang-com-ptr.h"
+#include "slang.h"
 
 #include "rndr/exception.hpp"
 #include "rndr/file.hpp"

@@ -1,3 +1,8 @@
+if (${RNDR_ADVANCED_API})
+    file(TO_CMAKE_PATH "$ENV{VULKAN_SDK}" VULKAN_SDK_PATH)
+    message(STATUS "VulkanSDK ${VULKAN_SDK_PATH}")
+endif ()
+
 # Platform independent source and header files
 set(SOURCE_LIST
         "${PROJECT_SOURCE_DIR}/include/rndr/application.hpp"
@@ -75,7 +80,6 @@ list(APPEND SOURCE_LIST
         "${PROJECT_SOURCE_DIR}/src/platform/opengl-helpers.cpp")
 
 if (${RNDR_CANVAS})
-    file(TO_CMAKE_PATH "$ENV{VULKAN_SDK}" VULKAN_SDK_PATH)
     list(APPEND SOURCE_LIST
             "${PROJECT_SOURCE_DIR}/include/rndr/canvas/canvas.hpp"
             "${PROJECT_SOURCE_DIR}/include/rndr/canvas/context.hpp"
@@ -121,7 +125,6 @@ list(APPEND SOURCE_LIST
 )
 
 if (${RNDR_ADVANCED_API})
-    file(TO_CMAKE_PATH "$ENV{VULKAN_SDK}" VULKAN_SDK_PATH)
     list(APPEND SOURCE_LIST
             "${VULKAN_SDK_PATH}/Source/SPIRV-Reflect/spirv_reflect.h"
             "${VULKAN_SDK_PATH}/Source/SPIRV-Reflect/spirv_reflect.c")
@@ -137,6 +140,7 @@ if (${RNDR_ADVANCED_API})
             "${PROJECT_SOURCE_DIR}/include/rndr/advanced/advanced-descriptor-set.hpp"
             "${PROJECT_SOURCE_DIR}/include/rndr/advanced/advanced-shader.hpp"
             "${PROJECT_SOURCE_DIR}/include/rndr/advanced/advanced-pipeline.hpp"
+            "${PROJECT_SOURCE_DIR}/include/rndr/advanced/vulkan-exception.hpp"
             "${PROJECT_SOURCE_DIR}/src/advanced/graphics-context.cpp"
             "${PROJECT_SOURCE_DIR}/src/advanced/device.cpp"
             "${PROJECT_SOURCE_DIR}/src/advanced/physical-device.cpp"
@@ -165,23 +169,40 @@ target_include_directories(rndr PRIVATE ${PROJECT_SOURCE_DIR}/extern/glad/includ
 target_include_directories(rndr PRIVATE ${PROJECT_SOURCE_DIR}/extern/stb_image/include)
 target_include_directories(rndr PUBLIC ${PROJECT_SOURCE_DIR}/tools/obsidian/win32/include)
 
-# Setup graphics API to use
-target_compile_definitions(rndr PUBLIC RNDR_OPENGL)
-
-# Setup library dependencies
-target_link_libraries(rndr PUBLIC opengl32.lib User32.lib Shcore.lib)
-target_link_libraries(rndr PUBLIC opal imgui assimp)
-add_dependencies(rndr generate-reflection)
+# Figure out where is Slang library
+if (${RNDR_ADVANCED_API})
+    # If we are using Advanced API we will search it in Vulkan SDK
+    find_library(SLANG_LIBRARY NAMES slang HINTS ${VULKAN_SDK_PATH}/Lib REQUIRED)
+    target_link_libraries(rndr PUBLIC ${SLANG_LIBRARY})
+endif ()
+message(STATUS "SLANG_LIBRARY ${SLANG_LIBRARY}")
+if (NOT SLANG_LIBRARY AND RNDR_CANVAS)
+    # In case that we are using canvas and advanced api is disabled so no vulkan sdk, we look for slang package and link
+    # to that, where to look can be specified using -DCMAKE_PREFIX_PATH
+    find_package(slang REQUIRED)
+    target_link_libraries(rndr PUBLIC slang::slang)
+endif ()
 
 if (${RNDR_CANVAS})
-    target_include_directories(rndr PRIVATE ${VULKAN_SDK_PATH}/Include)
-    find_library(Slang_LIBRARY NAMES slang HINTS "$ENV{VULKAN_SDK}/Lib" REQUIRED)
-    target_link_libraries(rndr PRIVATE ${Slang_LIBRARY})
+    # Find Slang compiler library and includes
+    target_link_libraries(rndr PUBLIC opengl32.lib)
+    target_compile_definitions(rndr PUBLIC RNDR_CANVAS)
 endif ()
+if (${RNDR_ADVANCED_API})
+    target_compile_definitions(rndr PUBLIC RNDR_ADVANCED_API)
+endif ()
+
+# Setup library dependencies
+# TODO: Remove opengl dependency here once old code is removed
+target_link_libraries(rndr PUBLIC opengl32.lib User32.lib Shcore.lib)
+target_link_libraries(rndr PUBLIC opal imgui assimp)
+# TODO: Reenable once we refactor everything
+#add_dependencies(rndr generate-reflection)
 
 if (${RNDR_ADVANCED_API})
     target_include_directories(rndr PRIVATE ${VULKAN_SDK_PATH}/Source/SPIRV-Reflect)
     target_include_directories(rndr PUBLIC ${VULKAN_SDK_PATH}/Include)
+    target_include_directories(rndr PUBLIC ${VULKAN_SDK_PATH}/Include/slang)
     target_link_libraries(rndr PUBLIC ktx)
     target_compile_definitions(rndr PUBLIC RNDR_ADVANCED_API)
     if (WIN32)

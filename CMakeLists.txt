@@ -139,7 +139,7 @@ FetchContent_Declare(
 FetchContent_MakeAvailable(assimp)
 message(STATUS "***** Setup Complete *****")
 
-if (RNDR_ADVANCED_API)
+if (${RNDR_ADVANCED_API})
     if (NOT IS_DIRECTORY $ENV{VULKAN_SDK})
         message(WARNING "Vulkan SDK not detected!")
     else ()
@@ -188,7 +188,7 @@ if (${RNDR_BUILD_TESTS})
     target_link_libraries(rndr-test rndr_warnings)
     target_link_libraries(rndr-test rndr_options)
     enable_testing()
-    add_test(NAME all_tests_no_window_no_render_api COMMAND rndr-test)
+    add_test(NAME all_tests COMMAND rndr-test)
 
     # Install the test executable
     install(TARGETS rndr-test
@@ -199,28 +199,29 @@ if (${RNDR_BUILD_TESTS})
 endif ()
 
 # Compile Slang shaders to SPIR-V
-file(GLOB SLANG_SHADER_FILES "${CMAKE_CURRENT_SOURCE_DIR}/assets/shaders/*.slang")
-set(SLANG_SPIRV_OUTPUTS)
-foreach (SLANG_FILE ${SLANG_SHADER_FILES})
-    get_filename_component(SLANG_NAME ${SLANG_FILE} NAME_WE)
-    set(SPIRV_OUTPUT "${CMAKE_CURRENT_SOURCE_DIR}/assets/shaders/${SLANG_NAME}.spv")
-    add_custom_command(
-            OUTPUT ${SPIRV_OUTPUT}
-            COMMAND slangc ${SLANG_FILE} -g -target spirv -o ${SPIRV_OUTPUT} -matrix-layout-row-major -warnings-as-errors all
-            DEPENDS ${SLANG_FILE}
-            COMMENT "Compiling ${SLANG_NAME}.slang to SPIR-V..."
-    )
-    list(APPEND SLANG_SPIRV_OUTPUTS ${SPIRV_OUTPUT})
-endforeach ()
-add_custom_target(compile_shaders DEPENDS ${SLANG_SPIRV_OUTPUTS})
+if (${RNDR_ADVANCED_API})
+    file(GLOB SLANG_SHADER_FILES "${CMAKE_CURRENT_SOURCE_DIR}/assets/shaders/*.slang")
+    set(SLANG_SPIRV_OUTPUTS)
+    foreach (SLANG_FILE ${SLANG_SHADER_FILES})
+        get_filename_component(SLANG_NAME ${SLANG_FILE} NAME_WE)
+        set(SPIRV_OUTPUT "${CMAKE_CURRENT_SOURCE_DIR}/assets/shaders/${SLANG_NAME}.spv")
+        add_custom_command(
+                OUTPUT ${SPIRV_OUTPUT}
+                COMMAND slangc ${SLANG_FILE} -g -target spirv -o ${SPIRV_OUTPUT} -matrix-layout-row-major -warnings-as-errors all
+                DEPENDS ${SLANG_FILE}
+                COMMENT "Compiling ${SLANG_NAME}.slang to SPIR-V..."
+        )
+        list(APPEND SLANG_SPIRV_OUTPUTS ${SPIRV_OUTPUT})
+    endforeach ()
+    add_custom_target(compile_shaders DEPENDS ${SLANG_SPIRV_OUTPUTS})
+endif ()
 
-if (RNDR_BUILD_SAMPLES)
+if (${RNDR_BUILD_SAMPLES})
     add_library(shared samples/shared/types.hpp samples/shared/example-controller.h samples/shared/example-controller.cpp)
     target_include_directories(shared PUBLIC samples/shared)
     # @formatter:off
     target_compile_definitions(shared PUBLIC RNDR_SAMPLES_SHADERS_DIR="${CMAKE_CURRENT_SOURCE_DIR}/samples/shared/shaders")
     # @formatter:on
-    add_dependencies(shared compile_shaders)
     target_link_libraries(shared PUBLIC rndr opal)
 
     add_executable(window-sample samples/window/window-sample.cpp)
@@ -231,8 +232,11 @@ if (RNDR_BUILD_SAMPLES)
     target_include_directories(text-rendering-sample PRIVATE samples/extern/stb_truetype/include)
     target_link_libraries(text-rendering-sample PUBLIC shared imgui)
 
-    add_executable(modern-vulkan samples/modern-vulkan/modern-vulkan.cpp)
-    target_link_libraries(modern-vulkan shared imgui)
+    if (${RNDR_ADVANCED_API})
+        add_dependencies(shared compile_shaders)
+        add_executable(modern-vulkan samples/modern-vulkan/modern-vulkan.cpp)
+        target_link_libraries(modern-vulkan shared imgui)
+    endif ()
 
 endif ()
 

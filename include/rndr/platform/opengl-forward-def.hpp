@@ -2,7 +2,7 @@
 
 #include "rndr/definitions.hpp"
 
-#if RNDR_OPENGL
+#if RNDR_CANVAS
 
 using GLuint = unsigned int;
 using GLint = int;

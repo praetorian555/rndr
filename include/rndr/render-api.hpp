@@ -2,7 +2,7 @@
 
 #include "definitions.hpp"
 
-#if RNDR_OPENGL
+#if RNDR_CANVAS
 #include "rndr/platform/opengl-buffer.hpp"
 #include "rndr/platform/opengl-command-list.hpp"
 #include "rndr/platform/opengl-frame-buffer.hpp"

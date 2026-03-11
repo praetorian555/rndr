@@ -1,5 +1,7 @@
 #pragma once
 
+#include "glad/glad.h"
+
 #include "rndr/definitions.hpp"
 #include "rndr/error-codes.hpp"
 #include "rndr/graphics-types.hpp"
@@ -28,7 +30,8 @@ public:
      * @param init_data The initial data to fill the buffer with. If empty, the contents of the allocated buffer will be undefined. Default
      * is empty.
      */
-    Buffer(const GraphicsContext& graphics_context, const BufferDesc& desc, const Opal::ArrayView<const u8>& init_data = Opal::ArrayView<const u8>{}, Opal::StringUtf8 debug_name = "");
+    Buffer(const GraphicsContext& graphics_context, const BufferDesc& desc,
+           const Opal::ArrayView<const u8>& init_data = Opal::ArrayView<const u8>{}, Opal::StringUtf8 debug_name = "");
 
     /**
      * Create a new buffer with initial data.

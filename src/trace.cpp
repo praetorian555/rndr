@@ -1,6 +1,6 @@
 #include "rndr/trace.hpp"
 
-#if RNDR_OPENGL
+#if RNDR_CANVAS
 #include "glad/glad.h"
 #endif
 
@@ -30,7 +30,7 @@ Rndr::Trace::ScopedGpuEvent::~ScopedGpuEvent()
 
 void Rndr::Trace::BeginGpuEvent(const char* name)
 {
-#if RNDR_OPENGL
+#if RNDR_CANVAS
     static GLuint s_group_id = 0;
     glPushDebugGroup(GL_DEBUG_SOURCE_APPLICATION, s_group_id++, -1, name);
 #endif
@@ -38,7 +38,7 @@ void Rndr::Trace::BeginGpuEvent(const char* name)
 
 void Rndr::Trace::EndGpuEvent(const char*)
 {
-#if RNDR_OPENGL
+#if RNDR_CANVAS
     glPopDebugGroup();
 #endif
 }

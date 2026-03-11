@@ -5,7 +5,7 @@
 #include "rndr/graphics-types.hpp"
 #include "rndr/platform/opengl-forward-def.hpp"
 
-#if RNDR_OPENGL
+#if RNDR_CANVAS
 
 namespace Rndr
 {

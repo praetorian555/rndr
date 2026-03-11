@@ -1,4 +1,4 @@
-#if RNDR_OPENGL
+#if RNDR_CANVAS
 
 #include "glad/glad.h"
 
