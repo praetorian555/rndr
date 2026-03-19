@@ -49,6 +49,14 @@ struct DrawMeshCommand : Opal::ClonableBase<DrawMeshCommand>
     OPAL_CLONE_FIELDS(mesh, brush);
 };
 
+struct DrawMeshInstancedCommand : Opal::ClonableBase<DrawMeshInstancedCommand>
+{
+    Opal::Ref<Mesh> mesh;
+    Opal::Ref<Brush> brush;
+    u32 instance_count = 1;
+    OPAL_CLONE_FIELDS(mesh, brush, instance_count);
+};
+
 // struct DrawIndirectCommand
 // {
 //     Opal::Ref<const Mesh> mesh;
@@ -82,7 +90,8 @@ struct ClearCommand
 };
 
 using CommandVariant =
-    Opal::Variant<SetViewportCommand, SetRenderTargetCommand, SetContextCommand, DrawMeshCommand, DispatchCommand, ClearCommand>;
+    Opal::Variant<SetViewportCommand, SetRenderTargetCommand, SetContextCommand, DrawMeshCommand, DrawMeshInstancedCommand,
+                  DispatchCommand, ClearCommand>;
 
 }  // namespace Impl
 
@@ -135,6 +144,14 @@ public:
 
     /** Record a draw call. The mesh and brush must remain valid until Execute() is called. */
     void Draw(Mesh& mesh, Brush& brush);
+
+    /**
+     * Record an instanced draw call. The mesh and brush must remain valid until Execute() is called.
+     * @param mesh Mesh to draw.
+     * @param brush Brush with pipeline state and uniforms.
+     * @param instance_count Number of instances to draw.
+     */
+    void DrawInstanced(Mesh& mesh, Brush& brush, u32 instance_count);
 
     // /** Record an indirect draw call for non-indexed geometry. */
     // void DrawIndirect(const Mesh& mesh, Brush& brush, const DrawCommandBuffer<DrawCommand>& commands);

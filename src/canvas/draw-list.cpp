@@ -73,6 +73,15 @@ void Rndr::Canvas::DrawList::Draw(Mesh& mesh, Brush& brush)
     m_commands.PushBack(std::move(cmd));
 }
 
+void Rndr::Canvas::DrawList::DrawInstanced(Mesh& mesh, Brush& brush, u32 instance_count)
+{
+    Impl::DrawMeshInstancedCommand cmd;
+    cmd.mesh = &mesh;
+    cmd.brush = &brush;
+    cmd.instance_count = instance_count;
+    m_commands.PushBack(std::move(cmd));
+}
+
 // void Rndr::Canvas::DrawList::DrawIndirect(const Mesh& mesh, Brush& brush, const DrawCommandBuffer<DrawCommand>& commands)
 // {
 //     Impl::DrawIndirectCommand cmd;
@@ -127,6 +136,22 @@ void Rndr::Canvas::DrawList::Execute()
                 else
                 {
                     glDrawArrays(GL_TRIANGLES, 0, static_cast<GLsizei>(c.mesh->GetVertexCount()));
+                }
+            },
+            [](const Impl::DrawMeshInstancedCommand& c)
+            {
+                c.brush->Apply();
+                c.mesh->Upload();
+                glBindVertexArray(c.mesh->GetNativeHandle());
+                if (c.mesh->HasIndices())
+                {
+                    glDrawElementsInstanced(GL_TRIANGLES, static_cast<GLsizei>(c.mesh->GetIndexCount()), GL_UNSIGNED_INT,
+                                            nullptr, static_cast<GLsizei>(c.instance_count));
+                }
+                else
+                {
+                    glDrawArraysInstanced(GL_TRIANGLES, 0, static_cast<GLsizei>(c.mesh->GetVertexCount()),
+                                          static_cast<GLsizei>(c.instance_count));
                 }
             },
             [](const Impl::DispatchCommand& c)
