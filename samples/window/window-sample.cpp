@@ -101,7 +101,7 @@ int main()
                 }
             });
 
-    Rndr::ImGuiContext imgui_context(*app, *window, gc);
+    Rndr::ImGuiContext imgui_context(*app, *window);
 
     Rndr::GridRenderer grid_renderer("Grid Renderer", {.graphics_context = gc, .swap_chain = swap_chain}, Opal::Ref{final_render});
     Rndr::Shape3DRenderer shape_renderer("3D Shape Renderer", {.graphics_context = gc, .swap_chain = swap_chain}, Opal::Ref{final_render});

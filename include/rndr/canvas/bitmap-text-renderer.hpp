@@ -5,17 +5,17 @@
 #include "opal/clonable-base.h"
 
 #include "rndr/canvas/brush.hpp"
-#include "rndr/math.hpp"
+#include "rndr/canvas/draw-list.hpp"
 #include "rndr/canvas/mesh.hpp"
 #include "rndr/canvas/shader.hpp"
 #include "rndr/canvas/texture.hpp"
-
-#include "types.hpp"
+#include "rndr/math.hpp"
+#include "rndr/types.hpp"
 
 namespace Rndr::Canvas
 {
+
 class Context;
-}  // namespace Rndr::Canvas
 
 struct BitmapTextRendererDesc : Opal::ClonableBase<BitmapTextRendererDesc>
 {
@@ -35,29 +35,25 @@ struct BitmapTextRendererDesc : Opal::ClonableBase<BitmapTextRendererDesc>
 class BitmapTextRenderer
 {
 public:
-    bool Init(Opal::Ref<Rndr::Canvas::Context> context, const BitmapTextRendererDesc& desc);
+    bool Init(Opal::Ref<Context> context, const BitmapTextRendererDesc& desc);
     void Destroy();
     void UpdateFontSize(f32 font_size);
     void UpdateFontOversampling(u32 oversample_h, u32 oversample_v);
     void SetAlphaMultiplier(f32 alpha_multiplier);
 
-    bool DrawText(const Opal::StringUtf8& text, const Rndr::Vector2f& position, const Rndr::Vector4f& color);
+    bool DrawText(const Opal::StringUtf8& text, const Vector2f& position, const Vector4f& color);
 
-    void Render(f32 delta_seconds);
+    void BeginFrame();
+    void Render(DrawList& draw_list);
 
 private:
     void UpdateFontAtlas();
 
-    struct RNDR_ALIGN(16) PerFrameData
-    {
-        Rndr::Matrix4x4f mvp;
-    };
-
     struct RNDR_ALIGN(16) VertexData
     {
-        Rndr::Point2f pos;
-        Rndr::Point2f uv;
-        Rndr::Vector4f color;
+        Point2f pos;
+        Point2f uv;
+        Vector4f color;
     };
 
     constexpr static i32 k_atlas_width = 1024;
@@ -65,18 +61,18 @@ private:
     constexpr static i32 k_char_vertex_count = 4;
     constexpr static i32 k_char_index_count = 6;
 
-    Opal::Ref<Rndr::Canvas::Context> m_context;
-    Rndr::Canvas::Shader m_shader;
-    Rndr::Canvas::Brush m_brush;
-    Rndr::Canvas::Mesh m_mesh;
-    Rndr::Canvas::Texture m_glyph_atlas;
+    Opal::Ref<Context> m_context;
+    Shader m_shader;
+    Brush m_brush;
+    Mesh m_mesh;
+    Texture m_glyph_atlas;
 
     BitmapTextRendererDesc m_desc;
-    Opal::DynamicArray<Rndr::u8> m_font_contents;
+    Opal::DynamicArray<u8> m_font_contents;
     stbtt_fontinfo m_font_info = {};
     Opal::DynamicArray<u8> m_atlas_data;
     Opal::DynamicArray<stbtt_packedchar> m_packed_chars;
     Opal::DynamicArray<stbtt_aligned_quad> m_aligned_quads;
-    Opal::DynamicArray<VertexData> m_vertices;
-    Opal::DynamicArray<i32> m_indices;
 };
+
+}  // namespace Rndr::Canvas

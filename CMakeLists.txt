@@ -226,9 +226,7 @@ if (${RNDR_BUILD_SAMPLES})
     add_executable(window-sample samples/window/window-sample.cpp)
     target_link_libraries(window-sample PUBLIC shared imgui)
 
-    add_executable(text-rendering-sample samples/text-rendering/text-rendering-sample.cpp samples/extern/stb_truetype/src/stb_truetype.cpp
-            samples/text-rendering/bitmap-text-renderer.hpp samples/text-rendering/bitmap-text-renderer.cpp)
-    target_include_directories(text-rendering-sample PRIVATE samples/extern/stb_truetype/include)
+    add_executable(text-rendering-sample samples/text-rendering/text-rendering-sample.cpp)
     target_link_libraries(text-rendering-sample PUBLIC shared imgui)
 
     if (${RNDR_ADVANCED_API})

@@ -23,7 +23,6 @@ set(SOURCE_LIST
         "${PROJECT_SOURCE_DIR}/include/rndr/bitmap.hpp"
         "${PROJECT_SOURCE_DIR}/include/rndr/material.hpp"
         "${PROJECT_SOURCE_DIR}/include/rndr/renderers/renderer-base.hpp"
-        "${PROJECT_SOURCE_DIR}/include/rndr/renderers/shape-2d-renderer.hpp"
         "${PROJECT_SOURCE_DIR}/include/rndr/renderers/shape-3d-renderer.hpp"
         "${PROJECT_SOURCE_DIR}/include/rndr/renderers/grid-renderer.hpp"
         "${PROJECT_SOURCE_DIR}/include/rndr/render-api.hpp"
@@ -42,7 +41,6 @@ set(SOURCE_LIST
         "${PROJECT_SOURCE_DIR}/src/file.cpp"
         "${PROJECT_SOURCE_DIR}/src/bitmap.cpp"
         "${PROJECT_SOURCE_DIR}/src/renderer-base.cpp"
-        "${PROJECT_SOURCE_DIR}/src/shape-2d-renderer.cpp"
         "${PROJECT_SOURCE_DIR}/src/shape-3d-renderer.cpp"
         "${PROJECT_SOURCE_DIR}/src/grid-renderer.cpp"
         "${PROJECT_SOURCE_DIR}/src/input-layout-builder.cpp"
@@ -102,7 +100,11 @@ if (${RNDR_CANVAS})
             "${PROJECT_SOURCE_DIR}/src/canvas/mesh.cpp"
             "${PROJECT_SOURCE_DIR}/src/canvas/brush.cpp"
             "${PROJECT_SOURCE_DIR}/include/rndr/canvas/projections.hpp"
-            "${PROJECT_SOURCE_DIR}/src/canvas/projections.cpp")
+            "${PROJECT_SOURCE_DIR}/src/canvas/projections.cpp"
+            "${PROJECT_SOURCE_DIR}/include/rndr/canvas/shape-renderer.hpp"
+            "${PROJECT_SOURCE_DIR}/src/canvas/shape-renderer.cpp"
+            "${PROJECT_SOURCE_DIR}/include/rndr/canvas/bitmap-text-renderer.hpp"
+            "${PROJECT_SOURCE_DIR}/src/canvas/bitmap-text-renderer.cpp")
 endif ()
 
 list(APPEND SOURCE_LIST
@@ -187,6 +189,8 @@ if (${RNDR_CANVAS})
     # Find Slang compiler library and includes
     target_link_libraries(rndr PUBLIC opengl32.lib)
     target_compile_definitions(rndr PUBLIC RNDR_CANVAS)
+    target_include_directories(rndr PUBLIC ${PROJECT_SOURCE_DIR}/samples/extern/stb_truetype/include)
+    target_sources(rndr PRIVATE ${PROJECT_SOURCE_DIR}/samples/extern/stb_truetype/src/stb_truetype.cpp)
 endif ()
 if (${RNDR_ADVANCED_API})
     target_compile_definitions(rndr PUBLIC RNDR_ADVANCED_API)
