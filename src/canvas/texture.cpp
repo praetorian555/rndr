@@ -28,6 +28,10 @@ GLFormatInfo ToGLFormat(Rndr::Canvas::Format format)
             return {GL_RGB8, GL_RGB, GL_UNSIGNED_BYTE, 3};
         case Rndr::Canvas::Format::RGBA8:
             return {GL_RGBA8, GL_RGBA, GL_UNSIGNED_BYTE, 4};
+        case Rndr::Canvas::Format::SRGB8:
+            return {GL_SRGB8, GL_RGB, GL_UNSIGNED_BYTE, 3};
+        case Rndr::Canvas::Format::SRGBA8:
+            return {GL_SRGB8_ALPHA8, GL_RGBA, GL_UNSIGNED_BYTE, 4};
         case Rndr::Canvas::Format::R16F:
             return {GL_R16F, GL_RED, GL_HALF_FLOAT, 2};
         case Rndr::Canvas::Format::RG16F:

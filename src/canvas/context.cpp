@@ -36,11 +36,97 @@ void APIENTRY DebugOutputCallback(GLenum source, GLenum type, unsigned int id, G
     }
 }
 
+/**
+ * Map a Canvas color format to the number of color bits and alpha bits for the pixel format
+ * descriptor.
+ */
+void GetColorBits(Rndr::Canvas::Format format, BYTE& out_color_bits, BYTE& out_alpha_bits)
+{
+    switch (format)
+    {
+        case Rndr::Canvas::Format::RGB8:
+        case Rndr::Canvas::Format::SRGB8:
+            out_color_bits = 24;
+            out_alpha_bits = 0;
+            break;
+        case Rndr::Canvas::Format::RGBA8:
+        case Rndr::Canvas::Format::SRGBA8:
+        default:
+            out_color_bits = 32;
+            out_alpha_bits = 8;
+            break;
+    }
+}
+
+/**
+ * Map a Canvas depth/stencil format to the number of depth bits and stencil bits for the pixel
+ * format descriptor.
+ */
+void GetDepthStencilBits(Rndr::Canvas::Format format, BYTE& out_depth_bits, BYTE& out_stencil_bits)
+{
+    switch (format)
+    {
+        case Rndr::Canvas::Format::D32F:
+            out_depth_bits = 32;
+            out_stencil_bits = 0;
+            break;
+        case Rndr::Canvas::Format::D24S8:
+        default:
+            out_depth_bits = 24;
+            out_stencil_bits = 8;
+            break;
+    }
+}
+
 }  // namespace
 
 Rndr::Canvas::Context::Context() = default;
 
 Rndr::Canvas::Context::~Context()
+{
+    Destroy();
+}
+
+Rndr::Canvas::Context::Context(Context&& other) noexcept
+    : m_vsync_enabled(other.m_vsync_enabled),
+      m_color_format(other.m_color_format),
+      m_depth_stencil_format(other.m_depth_stencil_format),
+      m_window(std::move(other.m_window)),
+      m_device_context(other.m_device_context),
+      m_graphics_context(other.m_graphics_context),
+      m_width(other.m_width),
+      m_height(other.m_height)
+{
+    other.m_window = nullptr;
+    other.m_device_context = k_invalid_device_context_handle;
+    other.m_graphics_context = k_invalid_graphics_context_handle;
+    other.m_width = 0;
+    other.m_height = 0;
+}
+
+Rndr::Canvas::Context& Rndr::Canvas::Context::operator=(Context&& other) noexcept
+{
+    if (this != &other)
+    {
+        Destroy();
+        m_vsync_enabled = other.m_vsync_enabled;
+        m_color_format = other.m_color_format;
+        m_depth_stencil_format = other.m_depth_stencil_format;
+        m_window = std::move(other.m_window);
+        m_device_context = other.m_device_context;
+        m_graphics_context = other.m_graphics_context;
+        m_width = other.m_width;
+        m_height = other.m_height;
+        other.m_window = nullptr;
+        other.m_device_context = k_invalid_device_context_handle;
+        other.m_graphics_context = k_invalid_graphics_context_handle;
+        other.m_width = 0;
+        other.m_height = 0;
+    }
+    return *this;
+}
+
+void Rndr::Canvas::Context::Destroy()
 {
 #if RNDR_WINDOWS
     if (m_graphics_context != k_invalid_graphics_context_handle)
@@ -51,30 +137,68 @@ Rndr::Canvas::Context::~Context()
             Opal::GetLogger().Error(k_log_category, "Failed to destroy OpenGL context!");
         }
         m_graphics_context = k_invalid_graphics_context_handle;
-        m_device_context = k_invalid_device_context_handle;
     }
+    if (m_device_context != k_invalid_device_context_handle && m_window != nullptr)
+    {
+        ReleaseDC(RNDR_TO_HWND(m_window->GetNativeHandle()), m_device_context);
+    }
+    m_device_context = k_invalid_device_context_handle;
+    m_window = nullptr;
+    m_width = 0;
+    m_height = 0;
     g_context_exists = false;
 #endif
 }
 
-Rndr::Canvas::Context::Context(Context&& other) noexcept
-    : m_device_context(other.m_device_context), m_graphics_context(other.m_graphics_context)
+void Rndr::Canvas::Context::Present()
 {
-    other.m_device_context = k_invalid_device_context_handle;
-    other.m_graphics_context = k_invalid_graphics_context_handle;
+    RNDR_CPU_EVENT_SCOPED("Canvas::Context::Present");
+
+#if RNDR_WINDOWS
+    if (m_device_context != k_invalid_device_context_handle)
+    {
+        SwapBuffers(m_device_context);
+    }
+#endif
 }
 
-Rndr::Canvas::Context& Rndr::Canvas::Context::operator=(Context&& other) noexcept
+void Rndr::Canvas::Context::SetVsync(bool enabled)
 {
-    if (this != &other)
-    {
-        this->~Context();
-        m_device_context = other.m_device_context;
-        m_graphics_context = other.m_graphics_context;
-        other.m_device_context = k_invalid_device_context_handle;
-        other.m_graphics_context = k_invalid_graphics_context_handle;
-    }
-    return *this;
+    m_vsync_enabled = enabled;
+#if RNDR_WINDOWS
+    wglSwapIntervalEXT(enabled ? 1 : 0);
+#endif
+}
+
+void Rndr::Canvas::Context::Resize(i32 width, i32 height)
+{
+    m_width = width;
+    m_height = height;
+}
+
+Rndr::i32 Rndr::Canvas::Context::GetWidth() const
+{
+    return m_width;
+}
+
+Rndr::i32 Rndr::Canvas::Context::GetHeight() const
+{
+    return m_height;
+}
+
+bool Rndr::Canvas::Context::IsVsyncEnabled() const
+{
+    return m_vsync_enabled;
+}
+
+Rndr::Canvas::Format Rndr::Canvas::Context::GetColorFormat() const
+{
+    return m_color_format;
+}
+
+Rndr::Canvas::Format Rndr::Canvas::Context::GetDepthStencilFormat() const
+{
+    return m_depth_stencil_format;
 }
 
 bool Rndr::Canvas::Context::IsValid() const
@@ -85,7 +209,7 @@ bool Rndr::Canvas::Context::IsValid() const
 #define RNDR_IS_EXTENSION_ALLOWED(extension)
 
 bool Rndr::Canvas::Context::g_context_exists = false;
-Rndr::Canvas::Context Rndr::Canvas::Context::Init(Opal::Ref<GenericWindow> window)
+Rndr::Canvas::Context Rndr::Canvas::Context::Init(Opal::Ref<GenericWindow> window, const ContextDesc& desc)
 {
     RNDR_CPU_EVENT_SCOPED("Canvas::Context::Init");
 
@@ -101,6 +225,9 @@ Rndr::Canvas::Context Rndr::Canvas::Context::Init(Opal::Ref<GenericWindow> windo
     }
 
     Context ctx;
+    ctx.m_vsync_enabled = desc.vsync_enabled;
+    ctx.m_color_format = desc.color_format;
+    ctx.m_depth_stencil_format = desc.depth_stencil_format;
 
 #if RNDR_WINDOWS
     if (!window.IsValid())
@@ -108,26 +235,35 @@ Rndr::Canvas::Context Rndr::Canvas::Context::Init(Opal::Ref<GenericWindow> windo
         throw Opal::InvalidArgumentException(__FUNCTION__, "Window handle is null!");
     }
 
-    ctx.m_device_context = GetDC(RNDR_TO_HWND(window->GetNativeHandle()));
+    ctx.m_window = std::move(window);
+    ctx.m_device_context = GetDC(RNDR_TO_HWND(ctx.m_window->GetNativeHandle()));
     if (ctx.m_device_context == k_invalid_device_context_handle)
     {
         throw GraphicsAPIException(0, "Failed to get device context from window!");
     }
+
+    BYTE color_bits = 32;
+    BYTE alpha_bits = 8;
+    GetColorBits(desc.color_format, color_bits, alpha_bits);
+
+    BYTE depth_bits = 24;
+    BYTE stencil_bits = 8;
+    GetDepthStencilBits(desc.depth_stencil_format, depth_bits, stencil_bits);
 
     PIXELFORMATDESCRIPTOR pixel_format_desc = {};
     pixel_format_desc.nSize = sizeof(PIXELFORMATDESCRIPTOR);
     pixel_format_desc.nVersion = 1;
     pixel_format_desc.dwFlags = PFD_DRAW_TO_WINDOW | PFD_SUPPORT_OPENGL | PFD_DOUBLEBUFFER;
     pixel_format_desc.iPixelType = PFD_TYPE_RGBA;
-    pixel_format_desc.cColorBits = 32;
-    pixel_format_desc.cAlphaBits = 8;
-    pixel_format_desc.cDepthBits = 24;
-    pixel_format_desc.cStencilBits = 8;
+    pixel_format_desc.cColorBits = color_bits;
+    pixel_format_desc.cAlphaBits = alpha_bits;
+    pixel_format_desc.cDepthBits = depth_bits;
+    pixel_format_desc.cStencilBits = stencil_bits;
 
     const int pixel_format = ChoosePixelFormat(ctx.m_device_context, &pixel_format_desc);
     if (pixel_format == 0)
     {
-        throw GraphicsAPIException(0, "Pixel format RGBA is not supported!");
+        throw GraphicsAPIException(0, "Pixel format is not supported!");
     }
 
     BOOL status = SetPixelFormat(ctx.m_device_context, pixel_format, &pixel_format_desc);
@@ -203,6 +339,21 @@ Rndr::Canvas::Context Rndr::Canvas::Context::Init(Opal::Ref<GenericWindow> windo
 
     ctx.m_graphics_context = final_context;
 
+    // Query initial window dimensions.
+    RECT client_rect = {};
+    GetClientRect(RNDR_TO_HWND(ctx.m_window->GetNativeHandle()), &client_rect);
+    ctx.m_width = static_cast<i32>(client_rect.right - client_rect.left);
+    ctx.m_height = static_cast<i32>(client_rect.bottom - client_rect.top);
+
+    // Set vsync.
+    wglSwapIntervalEXT(ctx.m_vsync_enabled ? 1 : 0);
+
+    // Enable SRGB framebuffer if an SRGB color format was requested.
+    if (desc.color_format == Format::SRGB8 || desc.color_format == Format::SRGBA8)
+    {
+        glEnable(GL_FRAMEBUFFER_SRGB);
+    }
+
 #if RNDR_DEBUG
     glEnable(GL_DEBUG_OUTPUT);
     glEnable(GL_DEBUG_OUTPUT_SYNCHRONOUS);
@@ -211,7 +362,7 @@ Rndr::Canvas::Context Rndr::Canvas::Context::Init(Opal::Ref<GenericWindow> windo
 #endif
 
 #else
-    RNDR_UNUSED(window_handle);
+    RNDR_UNUSED(window);
     throw GraphicsAPIException(0, "Platform not supported!");
 #endif
 

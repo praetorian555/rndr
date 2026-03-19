@@ -152,6 +152,11 @@ void Rndr::Canvas::Brush::SetCullMode(CullMode mode)
     m_desc.cull_mode = mode;
 }
 
+void Rndr::Canvas::Brush::SetWindingOrder(WindingOrder order)
+{
+    m_desc.winding_order = order;
+}
+
 void Rndr::Canvas::Brush::SetFillMode(FillMode mode)
 {
     m_desc.fill_mode = mode;
@@ -401,6 +406,7 @@ void Rndr::Canvas::Brush::Apply()
     {
         glDisable(GL_CULL_FACE);
     }
+    glFrontFace(m_desc.winding_order == WindingOrder::CW ? GL_CW : GL_CCW);
 
     if (m_desc.depth_bias_factor != 0.0f || m_desc.depth_bias_units != 0.0f)
     {

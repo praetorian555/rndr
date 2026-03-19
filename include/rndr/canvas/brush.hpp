@@ -61,6 +61,18 @@ enum class FillMode : u8
     EnumCount
 };
 
+/** Vertex winding order that defines the front face. */
+enum class WindingOrder : u8
+{
+    /** Counter-clockwise winding (OpenGL default). */
+    CCW,
+
+    /** Clockwise winding. */
+    CW,
+
+    EnumCount
+};
+
 /** Comparison function for depth and stencil tests. */
 enum class CompareFunc : u8
 {
@@ -87,6 +99,7 @@ struct BrushDesc
     bool depth_write = true;
     CompareFunc depth_compare = CompareFunc::Less;
     CullMode cull_mode = CullMode::Back;
+    WindingOrder winding_order = WindingOrder::CCW;
     FillMode fill_mode = FillMode::Solid;
     f32 depth_bias_factor = 0.0f;
     f32 depth_bias_units = 0.0f;
@@ -201,6 +214,9 @@ public:
 
     /** Set the face culling mode. */
     void SetCullMode(CullMode mode);
+
+    /** Set the front-face winding order. */
+    void SetWindingOrder(WindingOrder order);
 
     /** Set the polygon fill mode. */
     void SetFillMode(FillMode mode);

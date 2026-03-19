@@ -2,10 +2,20 @@
 
 #include "stb_truetype/stb_truetype.h"
 
-#include "rndr/render-api.hpp"
-#include "rndr/renderers/shape-2d-renderer.hpp"
+#include "opal/clonable-base.h"
+
+#include "rndr/canvas/brush.hpp"
+#include "rndr/math.hpp"
+#include "rndr/canvas/mesh.hpp"
+#include "rndr/canvas/shader.hpp"
+#include "rndr/canvas/texture.hpp"
 
 #include "types.hpp"
+
+namespace Rndr::Canvas
+{
+class Context;
+}  // namespace Rndr::Canvas
 
 struct BitmapTextRendererDesc : Opal::ClonableBase<BitmapTextRendererDesc>
 {
@@ -14,7 +24,7 @@ struct BitmapTextRendererDesc : Opal::ClonableBase<BitmapTextRendererDesc>
     i32 first_code_point = 32;  // ASCII
     i32 code_point_count = 95;
     i32 max_char_render_count = 1024;
-    u32 oversample_h = 0; // If left as zero it will be equal to 2 if font_size is less then 36 or 1 otherwise
+    u32 oversample_h = 0;  // If left as zero it will be equal to 2 if font_size is less then 36 or 1 otherwise
     u32 oversample_v = 1;
     f32 alpha_multiplier = 1.0f;
 
@@ -25,20 +35,15 @@ struct BitmapTextRendererDesc : Opal::ClonableBase<BitmapTextRendererDesc>
 class BitmapTextRenderer
 {
 public:
-    bool Init(Rndr::GraphicsContext* gc, Rndr::FrameBuffer* frame_buffer, const BitmapTextRendererDesc& desc);
+    bool Init(Opal::Ref<Rndr::Canvas::Context> context, const BitmapTextRendererDesc& desc);
     void Destroy();
-
-    void UpdateFrameBuffer(Rndr::FrameBuffer& fb);
     void UpdateFontSize(f32 font_size);
     void UpdateFontOversampling(u32 oversample_h, u32 oversample_v);
     void SetAlphaMultiplier(f32 alpha_multiplier);
 
     bool DrawText(const Opal::StringUtf8& text, const Rndr::Vector2f& position, const Rndr::Vector4f& color);
 
-    void Render(f32 delta_seconds, Rndr::CommandList& cmd_list);
-
-    void DrawGlyphBitmap(Rndr::Shape2DRenderer& shape_renderer, char ch, const Rndr::Point2f& bottom_left, f32 size_y,
-                         bool align_to_int = false);
+    void Render(f32 delta_seconds);
 
 private:
     void UpdateFontAtlas();
@@ -60,19 +65,16 @@ private:
     constexpr static i32 k_char_vertex_count = 4;
     constexpr static i32 k_char_index_count = 6;
 
-    Rndr::GraphicsContext* m_gc = nullptr;
-    Rndr::FrameBuffer* m_frame_buffer = nullptr;
+    Opal::Ref<Rndr::Canvas::Context> m_context;
+    Rndr::Canvas::Shader m_shader;
+    Rndr::Canvas::Brush m_brush;
+    Rndr::Canvas::Mesh m_mesh;
+    Rndr::Canvas::Texture m_glyph_atlas;
+
     BitmapTextRendererDesc m_desc;
     Opal::DynamicArray<Rndr::u8> m_font_contents;
     stbtt_fontinfo m_font_info = {};
     Opal::DynamicArray<u8> m_atlas_data;
-    Rndr::Texture m_atlas_texture;
-    Rndr::Buffer m_vertex_buffer;
-    Rndr::Buffer m_index_buffer;
-    Rndr::Buffer m_per_frame_data_buffer;
-    Rndr::Shader m_vertex_shader;
-    Rndr::Shader m_fragment_shader;
-    Rndr::Pipeline m_pipeline;
     Opal::DynamicArray<stbtt_packedchar> m_packed_chars;
     Opal::DynamicArray<stbtt_aligned_quad> m_aligned_quads;
     Opal::DynamicArray<VertexData> m_vertices;

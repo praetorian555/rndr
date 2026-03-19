@@ -1,7 +1,7 @@
 #include <catch2/catch2.hpp>
 
+#include "rndr/canvas/projections.hpp"
 #include "rndr/projection-camera.hpp"
-#include "rndr/projections.hpp"
 
 TEST_CASE("Perspective", "ProjectionCamera")
 {
@@ -27,7 +27,7 @@ TEST_CASE("Perspective", "ProjectionCamera")
     REQUIRE(camera.GetDesc().near == k_near_plane);
     REQUIRE(camera.GetDesc().far == k_far_plane);
 
-    REQUIRE(camera.FromCameraToNDC() == Rndr::PerspectiveOpenGL(k_vertical_fov, k_aspect_ratio, k_near_plane, k_far_plane));
+    REQUIRE(camera.FromCameraToNDC() == Rndr::Canvas::Perspective(k_vertical_fov, k_aspect_ratio, k_near_plane, k_far_plane));
 
     const Rndr::Quaternionf test_rotation(Opal::Rotate(Rndr::Rotatorf{1.0f, 2.0f, 3.0f}));
     camera.SetPositionAndRotation(Rndr::Point3f{1.0f, 2.0f, 3.0f}, test_rotation);
@@ -65,7 +65,7 @@ TEST_CASE("Orthographic", "ProjectionCamera")
     const float half_width = k_orthographic_width / 2.0f;
     const float half_height = half_width / k_aspect_ratio;
     REQUIRE(camera.FromCameraToNDC() ==
-            Rndr::OrthographicOpenGL(-half_width, half_width, -half_height, half_height, k_near_plane, k_far_plane));
+            Rndr::Canvas::Orthographic(-half_width, half_width, -half_height, half_height, k_near_plane, k_far_plane));
 
     const Rndr::Rotatorf test_rotator{1.0f, 2.0f, 3.0f};
     const Rndr::Quaternionf test_rotation(Opal::Rotate(test_rotator));

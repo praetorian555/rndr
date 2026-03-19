@@ -2,6 +2,7 @@
 
 #include "opal/math/transform.h"
 
+#include "rndr/canvas/projections.hpp"
 #include "rndr/definitions.hpp"
 #include "rndr/projections.hpp"
 
@@ -96,14 +97,14 @@ Rndr::Matrix4x4f Rndr::ProjectionCamera::GetProjectionTransform() const
         const float height = width / aspect_ratio;
         if (m_desc.complexity == ApiComplexity::Basic)
         {
-            return OrthographicOpenGL(-width / 2, width / 2, -height / 2, height / 2, m_desc.near, m_desc.far);
+            return Canvas::Orthographic(-width / 2, width / 2, -height / 2, height / 2, m_desc.near, m_desc.far);
         }
         return OrthographicVulkan(-width / 2, width / 2, -height / 2, height / 2, m_desc.near, m_desc.far);
     }
 
     if (m_desc.complexity == ApiComplexity::Basic)
     {
-        return PerspectiveOpenGL(m_desc.vertical_fov, aspect_ratio, m_desc.near, m_desc.far);
+        return Canvas::Perspective(m_desc.vertical_fov, aspect_ratio, m_desc.near, m_desc.far);
     }
     return PerspectiveVulkan(m_desc.vertical_fov, aspect_ratio, m_desc.near, m_desc.far);
 }

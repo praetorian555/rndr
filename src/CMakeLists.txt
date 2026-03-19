@@ -84,7 +84,6 @@ if (${RNDR_CANVAS})
             "${PROJECT_SOURCE_DIR}/include/rndr/canvas/canvas.hpp"
             "${PROJECT_SOURCE_DIR}/include/rndr/canvas/context.hpp"
             "${PROJECT_SOURCE_DIR}/include/rndr/canvas/shader.hpp"
-            "${PROJECT_SOURCE_DIR}/include/rndr/canvas/display.hpp"
             "${PROJECT_SOURCE_DIR}/include/rndr/canvas/render-target.hpp"
             "${PROJECT_SOURCE_DIR}/include/rndr/canvas/texture.hpp"
             "${PROJECT_SOURCE_DIR}/include/rndr/canvas/brush.hpp"
@@ -102,7 +101,8 @@ if (${RNDR_CANVAS})
             "${PROJECT_SOURCE_DIR}/src/canvas/vertex-layout.cpp"
             "${PROJECT_SOURCE_DIR}/src/canvas/mesh.cpp"
             "${PROJECT_SOURCE_DIR}/src/canvas/brush.cpp"
-            "${PROJECT_SOURCE_DIR}/src/canvas/display.cpp")
+            "${PROJECT_SOURCE_DIR}/include/rndr/canvas/projections.hpp"
+            "${PROJECT_SOURCE_DIR}/src/canvas/projections.cpp")
 endif ()
 
 list(APPEND SOURCE_LIST

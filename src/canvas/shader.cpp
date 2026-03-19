@@ -10,6 +10,8 @@
 
 #include <cstring>
 
+#include "rndr/log.hpp"
+
 namespace
 {
 
@@ -401,6 +403,7 @@ LoadedModule LoadModule(const Opal::StringUtf8& source)
         {
             msg = msg + "\n" + static_cast<const char*>(diagnostics->getBufferPointer());
         }
+        RNDR_LOG_ERROR("{}", *msg);
         throw Rndr::GraphicsAPIException(0, *msg);
     }
 

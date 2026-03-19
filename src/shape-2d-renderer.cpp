@@ -1,7 +1,7 @@
 #include "../include/rndr/renderers/shape-2d-renderer.hpp"
 
 #include "rndr/input-layout-builder.hpp"
-#include "rndr/projections.hpp"
+#include "rndr/canvas/projections.hpp"
 
 Rndr::Shape2DRenderer::Shape2DRenderer(Opal::StringUtf8 name, const RendererBaseDesc& desc, Opal::Ref<FrameBuffer> target)
     : RendererBase(std::move(name), desc)
@@ -133,7 +133,7 @@ bool Rndr::Shape2DRenderer::Render(f32 delta_seconds, Rndr::CommandList& cmd_lis
 {
     RNDR_UNUSED(delta_seconds);
 
-    Rndr::Matrix4x4f projection = Rndr::OrthographicOpenGL(0, static_cast<f32>(m_fb_width), 0, static_cast<f32>(m_fb_height), -1, 1);
+    Rndr::Matrix4x4f projection = Rndr::Canvas::Orthographic(0, static_cast<f32>(m_fb_width), 0, static_cast<f32>(m_fb_height), -1, 1);
     projection = Opal::Transpose(projection);
 
     if (m_target.IsValid())

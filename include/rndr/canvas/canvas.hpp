@@ -2,7 +2,6 @@
 
 #include "rndr/canvas/context.hpp"
 #include "rndr/canvas/shader.hpp"
-#include "rndr/canvas/display.hpp"
 #include "rndr/canvas/render-target.hpp"
 #include "rndr/canvas/texture.hpp"
 #include "rndr/canvas/brush.hpp"

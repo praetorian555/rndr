@@ -1,17 +1,15 @@
 #include "bitmap-text-renderer.hpp"
 
+#include "opal/paths.h"
+#include "rndr/canvas/context.hpp"
+#include "rndr/canvas/draw-list.hpp"
 #include "rndr/file.hpp"
-#include "rndr/input-layout-builder.hpp"
 #include "rndr/log.hpp"
-#include "rndr/projections.hpp"
-#include "rndr/renderers/shape-2d-renderer.hpp"
+#include "rndr/canvas/projections.hpp"
 
-bool BitmapTextRenderer::Init(Rndr::GraphicsContext* gc, Rndr::FrameBuffer* frame_buffer, const BitmapTextRendererDesc& desc)
+bool BitmapTextRenderer::Init(Opal::Ref<Rndr::Canvas::Context> context, const BitmapTextRendererDesc& desc)
 {
-    m_gc = gc;
-    RNDR_ASSERT(m_gc != nullptr, "Invalid graphics context");
-    m_frame_buffer = frame_buffer;
-    RNDR_ASSERT(m_frame_buffer != nullptr, "Invalid frame buffer");
+    m_context = std::move(context);
     m_desc = desc.Clone();
     if (m_desc.oversample_h == 0)
     {
@@ -20,43 +18,19 @@ bool BitmapTextRenderer::Init(Rndr::GraphicsContext* gc, Rndr::FrameBuffer* fram
 
     UpdateFontAtlas();
 
-    const Rndr::BufferDesc k_buffer_desc{
-        .type = Rndr::BufferType::Constant, .usage = Rndr::Usage::Dynamic, .size = sizeof(PerFrameData), .stride = sizeof(PerFrameData)};
-    m_per_frame_data_buffer = {*m_gc, k_buffer_desc};
-    RNDR_ASSERT(m_per_frame_data_buffer.IsValid(), "Buffer could not be created!");
+    const Opal::StringUtf8 shader_path = Opal::Paths::Combine(RNDR_SAMPLES_SHADERS_DIR, "bitmap-text-render.slang");
+    m_shader = Rndr::Canvas::Shader::FromSource(shader_path);
+    RNDR_ASSERT(m_shader.IsValid(), "Shader could not be created!");
 
-    const Rndr::BufferDesc vertex_buffer_desc{.type = Rndr::BufferType::ShaderStorage,
-                                              .usage = Rndr::Usage::Dynamic,
-                                              .size = m_desc.max_char_render_count * k_char_vertex_count * sizeof(VertexData),
-                                              .stride = sizeof(VertexData)};
-    m_vertex_buffer = {*m_gc, vertex_buffer_desc};
-    RNDR_ASSERT(m_vertex_buffer.IsValid(), "Vertex buffer could not be created!");
+    const Rndr::Canvas::VertexLayout vertex_layout = m_shader.GetVertexLayout().Clone();
+    m_mesh = Rndr::Canvas::Mesh(vertex_layout, m_desc.max_char_render_count * k_char_vertex_count,
+                                m_desc.max_char_render_count * k_char_index_count, "Bitmap Text Renderer Mesh");
+    RNDR_ASSERT(m_mesh.IsValid(), "Mesh could not be created!");
 
-    const Rndr::BufferDesc index_buffer_desc{.type = Rndr::BufferType::Index,
-                                             .usage = Rndr::Usage::Dynamic,
-                                             .size = m_desc.max_char_render_count * k_char_index_count * sizeof(u32),
-                                             .stride = sizeof(u32)};
-    m_index_buffer = {*m_gc, index_buffer_desc};
-    RNDR_ASSERT(m_index_buffer.IsValid(), "Buffer could not be created!");
-
-    Opal::StringUtf8 vertex_shader_source = Rndr::File::ReadShader(RNDR_SAMPLES_SHADERS_DIR, "text-render-atlas.vert");
-    const Rndr::ShaderDesc vertex_shader_desc{.type = Rndr::ShaderType::Vertex, .source = std::move(vertex_shader_source)};
-    m_vertex_shader = {*m_gc, vertex_shader_desc};
-    RNDR_ASSERT(m_vertex_shader.IsValid(), "Vertex shader could not be created!");
-
-    Opal::StringUtf8 fragment_shader_source = Rndr::File::ReadShader(RNDR_SAMPLES_SHADERS_DIR, "text-render-atlas.frag");
-    const Rndr::ShaderDesc fragment_shader_desc{.type = Rndr::ShaderType::Fragment, .source = std::move(fragment_shader_source)};
-    m_fragment_shader = {*m_gc, fragment_shader_desc};
-    RNDR_ASSERT(m_fragment_shader.IsValid(), "Fragment shader could not be created!");
-
-    Rndr::InputLayoutDesc input_layout_desc = Rndr::InputLayoutBuilder()
-                                                  .AddVertexBuffer(m_vertex_buffer, 1, Rndr::DataRepetition::PerVertex)
-                                                  .AddIndexBuffer(m_index_buffer)
-                                                  .Build();
-    const Rndr::PipelineDesc pipeline_desc{
-        .vertex_shader = &m_vertex_shader, .pixel_shader = &m_fragment_shader, .input_layout = std::move(input_layout_desc)};
-    m_pipeline = {*m_gc, pipeline_desc};
-    RNDR_ASSERT(m_pipeline.IsValid(), "Pipeline could not be created!");
+    m_brush = Rndr::Canvas::Brush(Rndr::Canvas::BrushDesc{});
+    m_brush.SetShader(m_shader);
+    m_brush.SetBlendMode(Rndr::Canvas::BlendMode::Alpha);
+    RNDR_ASSERT(m_brush.IsValid(), "Failed to create a brush!");
 
     return true;
 }
@@ -100,28 +74,17 @@ void BitmapTextRenderer::UpdateFontAtlas()
     const Rndr::Bitmap bitmap(k_atlas_width, k_atlas_height, 1, Rndr::PixelFormat::R8_UNORM, 1, Opal::AsWritableBytes(m_atlas_data));
     Rndr::File::SaveImage(bitmap, "atlas.png");
 
-    const Rndr::TextureDesc k_texture_desc{.width = k_atlas_width,
-                                           .height = k_atlas_height,
-                                           .type = Rndr::TextureType::Texture2D,
-                                           .pixel_format = Rndr::PixelFormat::R8_UNORM};
-    m_atlas_texture = {*m_gc, k_texture_desc, {}, Opal::AsBytes(m_atlas_data)};
-    RNDR_ASSERT(m_atlas_texture.IsValid(), "Atlas texture could not be created!");
+    const Rndr::Canvas::TextureDesc k_texture_desc{
+        .width = k_atlas_width, .height = k_atlas_height, .type = Rndr::Canvas::TextureType::Texture2D, .format = Rndr::Canvas::Format::R8};
+    m_glyph_atlas = Rndr::Canvas::Texture(m_context, k_texture_desc, Opal::AsBytes(m_atlas_data), "Glyph Atlas");
+    RNDR_ASSERT(m_glyph_atlas.IsValid(), "Glyph atlas could not be created!");
 }
 
 void BitmapTextRenderer::Destroy()
 {
-    m_atlas_texture.Destroy();
-    m_index_buffer.Destroy();
-    m_vertex_buffer.Destroy();
-    m_per_frame_data_buffer.Destroy();
-    m_fragment_shader.Destroy();
-    m_vertex_shader.Destroy();
-    m_pipeline.Destroy();
-}
-
-void BitmapTextRenderer::UpdateFrameBuffer(Rndr::FrameBuffer& fb)
-{
-    m_frame_buffer = &fb;
+    m_glyph_atlas.Destroy();
+    m_mesh.Destroy();
+    m_shader.Destroy();
 }
 
 void BitmapTextRenderer::UpdateFontSize(f32 font_size)
@@ -135,13 +98,12 @@ void BitmapTextRenderer::UpdateFontSize(f32 font_size)
 
 void BitmapTextRenderer::UpdateFontOversampling(u32 oversample_h, u32 oversample_v)
 {
-    u32 new_oversample_h = oversample_h;
     if (oversample_h == 0)
     {
         oversample_h = m_desc.font_size < 36 ? 2 : 1;
     }
 
-    if (m_desc.oversample_h != new_oversample_h || m_desc.oversample_v != oversample_v)
+    if (m_desc.oversample_h != oversample_h || m_desc.oversample_v != oversample_v)
     {
         m_desc.oversample_h = oversample_h;
         m_desc.oversample_v = oversample_v;
@@ -181,23 +143,17 @@ bool BitmapTextRenderer::DrawText(const Opal::StringUtf8& text, const Rndr::Vect
         glyph_bottom_left.x = Opal::Floor(curr_position.x + packed_char->xoff);
         glyph_bottom_left.y = Opal::Floor(curr_position.y - (packed_char->yoff + glyph_size.y));
 
-        const Rndr::Point2f glyph_vertices[4] = {{glyph_bottom_left.x, glyph_bottom_left.y},
-                                                 {glyph_bottom_left.x + glyph_size.x, glyph_bottom_left.y},
-                                                 {glyph_bottom_left.x + glyph_size.x, glyph_bottom_left.y + glyph_size.y},
-                                                 {glyph_bottom_left.x, glyph_bottom_left.y + glyph_size.y}};
-
-        const i32 first_vertex_idx = static_cast<i32>(m_vertices.GetSize());
-        m_vertices.PushBack({.pos = glyph_vertices[0], .uv = {aligned_quad->s0, aligned_quad->t1}, .color = color});
-        m_vertices.PushBack({.pos = glyph_vertices[1], .uv = {aligned_quad->s1, aligned_quad->t1}, .color = color});
-        m_vertices.PushBack({.pos = glyph_vertices[2], .uv = {aligned_quad->s1, aligned_quad->t0}, .color = color});
-        m_vertices.PushBack({.pos = glyph_vertices[3], .uv = {aligned_quad->s0, aligned_quad->t0}, .color = color});
-
-        m_indices.PushBack(first_vertex_idx + 0);
-        m_indices.PushBack(first_vertex_idx + 2);
-        m_indices.PushBack(first_vertex_idx + 3);
-        m_indices.PushBack(first_vertex_idx + 0);
-        m_indices.PushBack(first_vertex_idx + 1);
-        m_indices.PushBack(first_vertex_idx + 2);
+        const VertexData glyph_vertices[4] = {
+            {.pos = {glyph_bottom_left.x, glyph_bottom_left.y}, .uv = {aligned_quad->s0, aligned_quad->t1}, .color = color},
+            {.pos = {glyph_bottom_left.x + glyph_size.x, glyph_bottom_left.y}, .uv = {aligned_quad->s1, aligned_quad->t1}, .color = color},
+            {.pos = {glyph_bottom_left.x + glyph_size.x, glyph_bottom_left.y + glyph_size.y},
+             .uv = {aligned_quad->s1, aligned_quad->t0},
+             .color = color},
+            {.pos = {glyph_bottom_left.x, glyph_bottom_left.y + glyph_size.y}, .uv = {aligned_quad->s0, aligned_quad->t0}, .color = color}};
+        const u32 first_vertex_idx = m_mesh.GetVertexCount();
+        const u32 glyph_indices[6] = {first_vertex_idx + 0, first_vertex_idx + 2, first_vertex_idx + 3,
+                                      first_vertex_idx + 0, first_vertex_idx + 1, first_vertex_idx + 2};
+        m_mesh.Append(Opal::AsBytes(glyph_vertices), Opal::AsBytes(glyph_indices));
 
         const f32 scale = stbtt_ScaleForPixelHeight(&m_font_info, m_desc.font_size);
         i32 kern = 0;
@@ -214,61 +170,21 @@ bool BitmapTextRenderer::DrawText(const Opal::StringUtf8& text, const Rndr::Vect
     return true;
 }
 
-void BitmapTextRenderer::Render(f32 delta_seconds, Rndr::CommandList& cmd_list)
+void BitmapTextRenderer::Render(f32 delta_seconds)
 {
     RNDR_UNUSED(delta_seconds);
-    PerFrameData per_frame_data;
-    const f32 width = static_cast<f32>(m_frame_buffer->GetColorAttachment(0).GetTextureDesc().width);
-    const f32 height = static_cast<f32>(m_frame_buffer->GetColorAttachment(0).GetTextureDesc().height);
-    per_frame_data.mvp = Rndr::OrthographicOpenGL(0, width, 0, height, -1.0f, 1.0f);
-    per_frame_data.mvp = Opal::Transpose(per_frame_data.mvp);
 
-    cmd_list.CmdUpdateBuffer(m_per_frame_data_buffer, Opal::AsBytes(per_frame_data));
-    cmd_list.CmdUpdateBuffer(m_vertex_buffer, Opal::AsBytes(m_vertices));
-    cmd_list.CmdUpdateBuffer(m_index_buffer, Opal::AsBytes(m_indices));
+    const f32 width = static_cast<f32>(m_context->GetWidth());
+    const f32 height = static_cast<f32>(m_context->GetHeight());
+    const Rndr::Matrix4x4f mvp = Rndr::Canvas::Orthographic(0, width, 0, height, -1.0f, 1.0f);
 
-    cmd_list.CmdBindFrameBuffer(*m_frame_buffer);
-    cmd_list.CmdBindTexture(m_atlas_texture, 0);
-    cmd_list.CmdBindPipeline(m_pipeline);
-    cmd_list.CmdBindBuffer(m_per_frame_data_buffer, 0);
+    m_brush.SetUniform("mvp", mvp);
+    m_brush.SetTexture("glyph_atlas", m_glyph_atlas);
 
-    cmd_list.CmdDrawIndices(Rndr::PrimitiveTopology::Triangle, static_cast<i32>(m_indices.GetSize()), 1, 0);
+    Rndr::Canvas::DrawList draw_list;
+    draw_list.SetRenderTarget(m_context);
+    draw_list.Draw(m_mesh, m_brush);
+    draw_list.Execute();
 
-    m_vertices.Clear();
-    m_indices.Clear();
-}
-
-void BitmapTextRenderer::DrawGlyphBitmap(Rndr::Shape2DRenderer& shape_renderer, char ch, const Rndr::Point2f& bottom_left, f32 size_y,
-                                         bool align_to_int)
-{
-    i32 width = 0;
-    i32 height = 0;
-    f32 xpos = 0;
-    f32 ypos = 0;
-    stbtt_aligned_quad quad;
-    stbtt_GetPackedQuad(m_packed_chars.GetData(), k_atlas_width, k_atlas_height, ch - 32, &xpos, &ypos, &quad, align_to_int ? 1 : 0);
-    width = quad.x1 - quad.x0;
-    height = quad.y1 - quad.y0;
-    stbtt_packedchar& packed_char = m_packed_chars[ch - 32];
-
-    const f32 step = size_y / static_cast<f32>(height);
-
-    for (int y = packed_char.y1 - 1; y >= packed_char.y0; y--)
-    {
-        for (int x = packed_char.x0; x < packed_char.x1; x++)
-        {
-            i32 x_local = x - packed_char.x0;
-            i32 y_local = (packed_char.y1 - packed_char.y0) - (y - packed_char.y0) - 1;
-            const Rndr::Point2f curr_bottom_left{bottom_left.x + x_local * step, bottom_left.y + y_local * step};
-            const f32 coverage = m_atlas_data[y * k_atlas_width + x] / 255.0f;
-            shape_renderer.DrawRect(curr_bottom_left, {step, step}, {coverage, coverage, coverage, 1.0f});
-        }
-    }
-
-    shape_renderer.DrawLine(bottom_left, {bottom_left.x + width * step, bottom_left.y}, Rndr::Colors::k_red);
-    shape_renderer.DrawLine({bottom_left.x, bottom_left.y + height * step}, {bottom_left.x + width * step, bottom_left.y + height * step},
-                            Rndr::Colors::k_red);
-    shape_renderer.DrawLine(bottom_left, {bottom_left.x, bottom_left.y + height * step}, Rndr::Colors::k_green);
-    shape_renderer.DrawLine({bottom_left.x + width * step, bottom_left.y}, {bottom_left.x + width * step, bottom_left.y + height * step},
-                            Rndr::Colors::k_green);
+    m_mesh.Clear();
 }

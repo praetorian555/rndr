@@ -2,7 +2,7 @@
 
 #include "rndr/generic-window.hpp"
 #include "rndr/render-api.hpp"
-#include "system-message-handler.hpp"
+#include "rndr/system-message-handler.hpp"
 
 namespace Rndr
 {
@@ -23,8 +23,8 @@ struct ImGuiContextDesc : Opal::ClonableBase<ImGuiContextDesc>
 class ImGuiContext : public SystemMessageHandler
 {
 public:
-    ImGuiContext(Application& app, GenericWindow& window, GraphicsContext& context, const ImGuiContextDesc& desc = {});
-    virtual ~ImGuiContext();
+    ImGuiContext(Opal::Ref<Application> app, Opal::Ref<GenericWindow> window, const ImGuiContextDesc& desc = {});
+    ~ImGuiContext() override;
 
     bool Destroy();
 
@@ -43,9 +43,8 @@ public:
     bool OnMouseMove(const GenericWindow& window, f32 delta_x, f32 delta_y) override;
 
 private:
-    Application* m_app = nullptr;
+    Opal::Ref<Application> m_app;
     Opal::Ref<GenericWindow> m_window;
-    Opal::Ref<GraphicsContext> m_context;
     ImGuiContextDesc m_desc;
     bool m_is_initialized = false;
     bool m_frame_started = false;

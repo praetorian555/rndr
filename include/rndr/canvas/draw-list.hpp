@@ -1,8 +1,10 @@
 #pragma once
 
+#include "opal/clonable-base.h"
 #include "opal/container/dynamic-array.h"
 #include "opal/variant.h"
 
+#include "rndr/math.hpp"
 #include "rndr/types.hpp"
 
 namespace Rndr::Canvas
@@ -10,7 +12,7 @@ namespace Rndr::Canvas
 
 class Mesh;
 class Brush;
-class Display;
+class Context;
 class RenderTarget;
 struct DrawCommand;
 struct DrawIndexedCommand;
@@ -28,35 +30,38 @@ struct SetViewportCommand
     i32 height;
 };
 
-struct SetRenderTargetCommand
+struct SetRenderTargetCommand : Opal::ClonableBase<SetRenderTargetCommand>
 {
-    const RenderTarget* target = nullptr;
+    Opal::Ref<const RenderTarget> target;
+    OPAL_CLONE_FIELDS(target);
 };
 
-struct SetDisplayCommand
+struct SetContextCommand : Opal::ClonableBase<SetContextCommand>
 {
-    const Display* display = nullptr;
+    Opal::Ref<const Context> context;
+    OPAL_CLONE_FIELDS(context);
 };
 
-struct DrawMeshCommand
+struct DrawMeshCommand : Opal::ClonableBase<DrawMeshCommand>
 {
-    const Mesh* mesh = nullptr;
-    Brush* brush = nullptr;
+    Opal::Ref<Mesh> mesh;
+    Opal::Ref<Brush> brush;
+    OPAL_CLONE_FIELDS(mesh, brush);
 };
 
-struct DrawIndirectCommand
-{
-    const Mesh* mesh = nullptr;
-    Brush* brush = nullptr;
-    const DrawCommandBuffer<::Rndr::Canvas::DrawCommand>* commands = nullptr;
-};
-
-struct DrawIndexedIndirectCommand
-{
-    const Mesh* mesh = nullptr;
-    Brush* brush = nullptr;
-    const DrawCommandBuffer<::Rndr::Canvas::DrawIndexedCommand>* commands = nullptr;
-};
+// struct DrawIndirectCommand
+// {
+//     Opal::Ref<const Mesh> mesh;
+//     Opal::Ref<Brush> brush;
+//     const DrawCommandBuffer<::Rndr::Canvas::DrawCommand>* commands = nullptr;
+// };
+//
+// struct DrawIndexedIndirectCommand
+// {
+//     const Mesh* mesh = nullptr;
+//     Brush* brush = nullptr;
+//     const DrawCommandBuffer<::Rndr::Canvas::DrawIndexedCommand>* commands = nullptr;
+// };
 
 struct DispatchCommand
 {
@@ -66,8 +71,18 @@ struct DispatchCommand
     u32 group_count_z = 1;
 };
 
-using CommandVariant = Opal::Variant<SetViewportCommand, SetRenderTargetCommand, SetDisplayCommand, DrawMeshCommand,
-                                     DrawIndirectCommand, DrawIndexedIndirectCommand, DispatchCommand>;
+struct ClearCommand
+{
+    Vector4f color = {0, 0, 0, 1};
+    f32 depth = 1.0f;
+    i32 stencil = 0;
+    bool clear_color = true;
+    bool clear_depth = true;
+    bool clear_stencil = true;
+};
+
+using CommandVariant =
+    Opal::Variant<SetViewportCommand, SetRenderTargetCommand, SetContextCommand, DrawMeshCommand, DispatchCommand, ClearCommand>;
 
 }  // namespace Impl
 
@@ -104,19 +119,28 @@ public:
     void SetRenderTarget(const RenderTarget& target);
 
     /**
-     * Bind the display's default framebuffer (handle 0) and set the viewport to match the
-     * display's dimensions. Subsequent draw commands will render to the screen.
+     * Bind the default framebuffer (handle 0) and set the viewport to match the context's
+     * dimensions. Subsequent draw commands will render to the screen.
      */
-    void SetRenderTarget(const Display& display);
+    void SetRenderTarget(const Context& context);
+
+    /** Clear color, depth, and stencil attachments of the currently bound render target. */
+    void Clear(const Vector4f& color, f32 depth = 1.0f, i32 stencil = 0);
+
+    /** Clear only the color attachment. */
+    void ClearColor(const Vector4f& color);
+
+    /** Clear only the depth and stencil attachments. */
+    void ClearDepthStencil(f32 depth = 1.0f, i32 stencil = 0);
 
     /** Record a draw call. The mesh and brush must remain valid until Execute() is called. */
-    void Draw(const Mesh& mesh, Brush& brush);
+    void Draw(Mesh& mesh, Brush& brush);
 
-    /** Record an indirect draw call for non-indexed geometry. */
-    void DrawIndirect(const Mesh& mesh, Brush& brush, const DrawCommandBuffer<DrawCommand>& commands);
-
-    /** Record an indirect draw call for indexed geometry. */
-    void DrawIndexedIndirect(const Mesh& mesh, Brush& brush, const DrawCommandBuffer<DrawIndexedCommand>& commands);
+    // /** Record an indirect draw call for non-indexed geometry. */
+    // void DrawIndirect(const Mesh& mesh, Brush& brush, const DrawCommandBuffer<DrawCommand>& commands);
+    //
+    // /** Record an indirect draw call for indexed geometry. */
+    // void DrawIndexedIndirect(const Mesh& mesh, Brush& brush, const DrawCommandBuffer<DrawIndexedCommand>& commands);
 
     /**
      * Record a compute dispatch. The brush must hold a compute shader and remain valid until

@@ -133,8 +133,8 @@ Opal::HashMap<Rndr::InputPrimitive, Rndr::i32> g_mouse_primitive_to_imgui_key{{R
 };
 }  // namespace
 
-Rndr::ImGuiContext::ImGuiContext(Application& app, GenericWindow& window, GraphicsContext& context, const ImGuiContextDesc& desc)
-    : m_app(&app), m_window(window), m_context(context), m_desc(desc.Clone())
+Rndr::ImGuiContext::ImGuiContext(Opal::Ref<Application> app, Opal::Ref<GenericWindow> window, const ImGuiContextDesc& desc)
+    : m_app(std::move(app)), m_window(std::move(window)), m_desc(desc.Clone())
 {
 
     // Setup Dear ImGui context
@@ -153,7 +153,7 @@ Rndr::ImGuiContext::ImGuiContext(Application& app, GenericWindow& window, Graphi
         io.Fonts->Build();
     }
 
-    const Vector2i window_size = window.GetSize();
+    const Vector2i window_size = m_window->GetSize();
     io.DisplaySize = ImVec2(static_cast<f32>(window_size.x), static_cast<f32>(window_size.y));
 
     // Setup Dear ImGui style
@@ -201,7 +201,6 @@ bool Rndr::ImGuiContext::Destroy()
     ImGui::DestroyContext();
 
     m_window = nullptr;
-    m_context = nullptr;
 
     return true;
 }
