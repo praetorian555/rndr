@@ -204,7 +204,7 @@ Rndr::Canvas::Attrib AttribFromName(const char* name)
     {
         return Rndr::Canvas::Attrib::Normal;
     }
-    if (strcmp(name, "uv") == 0 || strcmp(name, "texcoord") == 0 || strcmp(name, "texCoord") == 0)
+    if (strcmp(name, "uv") == 0 || strcmp(name, "texcoord") == 0 || strcmp(name, "texCoord") == 0 || strcmp(name, "tex_coord") == 0)
     {
         return Rndr::Canvas::Attrib::UV;
     }
