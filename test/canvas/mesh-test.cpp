@@ -83,18 +83,18 @@ TEST_CASE("Canvas Mesh", "[canvas][mesh]")
         REQUIRE_FALSE(mesh.HasIndices());
     }
 
-    SECTION("Create non-indexed mesh")
+    SECTION("Create indexed mesh from triangle data")
     {
         Rndr::Canvas::VertexLayout layout = MakePositionLayout();
-        const auto* raw = reinterpret_cast<const Rndr::u8*>(k_triangle_positions);
-        const Rndr::u64 size = sizeof(k_triangle_positions);
+        const auto* vraw = reinterpret_cast<const Rndr::u8*>(k_triangle_positions);
+        const auto* iraw = reinterpret_cast<const Rndr::u8*>(k_triangle_indices);
 
-        Rndr::Canvas::Mesh const mesh(layout, {raw, size});
+        Rndr::Canvas::Mesh const mesh(layout, {vraw, sizeof(k_triangle_positions)}, {iraw, sizeof(k_triangle_indices)});
         REQUIRE(mesh.IsValid());
         REQUIRE(mesh.GetNativeHandle() != 0);
         REQUIRE(mesh.GetVertexCount() == 3);
-        REQUIRE(mesh.GetIndexCount() == 0);
-        REQUIRE_FALSE(mesh.HasIndices());
+        REQUIRE(mesh.GetIndexCount() == 3);
+        REQUIRE(mesh.HasIndices());
     }
 
     SECTION("Create indexed mesh")
@@ -127,22 +127,32 @@ TEST_CASE("Canvas Mesh", "[canvas][mesh]")
     SECTION("Invalid layout throws")
     {
         Rndr::Canvas::VertexLayout layout;  // empty, invalid
-        const auto* raw = reinterpret_cast<const Rndr::u8*>(k_triangle_positions);
-        REQUIRE_THROWS(Rndr::Canvas::Mesh(layout, {raw, sizeof(k_triangle_positions)}));
+        const auto* vraw = reinterpret_cast<const Rndr::u8*>(k_triangle_positions);
+        const auto* iraw = reinterpret_cast<const Rndr::u8*>(k_triangle_indices);
+        REQUIRE_THROWS(Rndr::Canvas::Mesh(layout, {vraw, sizeof(k_triangle_positions)}, {iraw, sizeof(k_triangle_indices)}));
     }
 
     SECTION("Empty vertex data throws")
     {
         Rndr::Canvas::VertexLayout layout = MakePositionLayout();
-        REQUIRE_THROWS(Rndr::Canvas::Mesh(layout, {}));
+        const auto* iraw = reinterpret_cast<const Rndr::u8*>(k_triangle_indices);
+        REQUIRE_THROWS(Rndr::Canvas::Mesh(layout, {}, {iraw, sizeof(k_triangle_indices)}));
+    }
+
+    SECTION("Empty index data throws")
+    {
+        Rndr::Canvas::VertexLayout layout = MakePositionLayout();
+        const auto* vraw = reinterpret_cast<const Rndr::u8*>(k_triangle_positions);
+        REQUIRE_THROWS(Rndr::Canvas::Mesh(layout, {vraw, sizeof(k_triangle_positions)}, {}));
     }
 
     SECTION("Vertex data not multiple of stride throws")
     {
         Rndr::Canvas::VertexLayout layout = MakePositionLayout();
         const auto* raw = reinterpret_cast<const Rndr::u8*>(k_triangle_positions);
+        const auto* iraw = reinterpret_cast<const Rndr::u8*>(k_triangle_indices);
         // Pass data that's not a multiple of stride (12 bytes).
-        REQUIRE_THROWS(Rndr::Canvas::Mesh(layout, {raw, 10}));
+        REQUIRE_THROWS(Rndr::Canvas::Mesh(layout, {raw, 10}, {iraw, sizeof(k_triangle_indices)}));
     }
 
     SECTION("Index data not multiple of 4 throws")
@@ -156,8 +166,9 @@ TEST_CASE("Canvas Mesh", "[canvas][mesh]")
     SECTION("Destroy makes mesh invalid")
     {
         Rndr::Canvas::VertexLayout layout = MakePositionLayout();
-        const auto* raw = reinterpret_cast<const Rndr::u8*>(k_triangle_positions);
-        Rndr::Canvas::Mesh mesh(layout, {raw, sizeof(k_triangle_positions)});
+        const auto* vraw = reinterpret_cast<const Rndr::u8*>(k_triangle_positions);
+        const auto* iraw = reinterpret_cast<const Rndr::u8*>(k_triangle_indices);
+        Rndr::Canvas::Mesh mesh(layout, {vraw, sizeof(k_triangle_positions)}, {iraw, sizeof(k_triangle_indices)});
         REQUIRE(mesh.IsValid());
         mesh.Destroy();
         REQUIRE_FALSE(mesh.IsValid());
@@ -168,8 +179,9 @@ TEST_CASE("Canvas Mesh", "[canvas][mesh]")
     SECTION("Move constructor")
     {
         Rndr::Canvas::VertexLayout layout = MakePositionLayout();
-        const auto* raw = reinterpret_cast<const Rndr::u8*>(k_triangle_positions);
-        Rndr::Canvas::Mesh mesh(layout, {raw, sizeof(k_triangle_positions)});
+        const auto* vraw = reinterpret_cast<const Rndr::u8*>(k_triangle_positions);
+        const auto* iraw = reinterpret_cast<const Rndr::u8*>(k_triangle_indices);
+        Rndr::Canvas::Mesh mesh(layout, {vraw, sizeof(k_triangle_positions)}, {iraw, sizeof(k_triangle_indices)});
         const Rndr::u32 handle = mesh.GetNativeHandle();
 
         Rndr::Canvas::Mesh const moved(std::move(mesh));
@@ -182,8 +194,9 @@ TEST_CASE("Canvas Mesh", "[canvas][mesh]")
     SECTION("Move assignment")
     {
         Rndr::Canvas::VertexLayout layout = MakePositionLayout();
-        const auto* raw = reinterpret_cast<const Rndr::u8*>(k_triangle_positions);
-        Rndr::Canvas::Mesh mesh(layout, {raw, sizeof(k_triangle_positions)});
+        const auto* vraw = reinterpret_cast<const Rndr::u8*>(k_triangle_positions);
+        const auto* iraw = reinterpret_cast<const Rndr::u8*>(k_triangle_indices);
+        Rndr::Canvas::Mesh mesh(layout, {vraw, sizeof(k_triangle_positions)}, {iraw, sizeof(k_triangle_indices)});
         Rndr::Canvas::Mesh other;
 
         other = std::move(mesh);

@@ -348,6 +348,50 @@ void ComputeMain(uint3 tid : SV_DispatchThreadID)
 }
 )";
 
+const char* k_array_uniform_source = R"(
+static const uint k_max_lights = 4;
+
+uniform uint light_count;
+uniform float4 light_directions[k_max_lights];
+uniform float4 light_colors[k_max_lights];
+
+struct VSInput
+{
+    float3 position;
+};
+
+struct VSOutput
+{
+    float4 position : SV_POSITION;
+};
+
+[shader("vertex")]
+VSOutput VertexMain(VSInput input)
+{
+    VSOutput output;
+    output.position = float4(input.position, 1.0);
+    return output;
+}
+
+struct FSOutput
+{
+    float4 color : SV_TARGET;
+};
+
+[shader("fragment")]
+FSOutput FragmentMain(VSOutput input)
+{
+    FSOutput output;
+    float4 c = float4(0, 0, 0, 1);
+    for (uint i = 0; i < light_count && i < k_max_lights; ++i)
+    {
+        c.xyz += light_colors[i].xyz * dot(float3(0, 1, 0), light_directions[i].xyz);
+    }
+    output.color = c;
+    return output;
+}
+)";
+
 const char* k_mixed_compute_graphics_source = R"(
 struct VSInput
 {
@@ -816,5 +860,36 @@ TEST_CASE("Canvas Shader", "[canvas][shader]")
         REQUIRE(shader.GetVertexLayout().IsValid());
         shader.Destroy();
         REQUIRE_FALSE(shader.GetVertexLayout().IsValid());
+    }
+
+    SECTION("Array uniform has element count and stride")
+    {
+        Rndr::Canvas::Shader const shader = Rndr::Canvas::Shader::FromSourceInMemory(k_array_uniform_source);
+        REQUIRE(shader.IsValid());
+
+        const Rndr::Canvas::ShaderParameter* dirs = shader.FindParameter("light_directions");
+        REQUIRE(dirs != nullptr);
+        REQUIRE(dirs->category == Rndr::Canvas::ParameterCategory::Uniform);
+        REQUIRE(dirs->array_element_count == 4);
+        REQUIRE(dirs->array_stride == 16);  // float4 = 16 bytes
+        REQUIRE(dirs->size == 64);          // 4 * 16 bytes
+
+        const Rndr::Canvas::ShaderParameter* cols = shader.FindParameter("light_colors");
+        REQUIRE(cols != nullptr);
+        REQUIRE(cols->category == Rndr::Canvas::ParameterCategory::Uniform);
+        REQUIRE(cols->array_element_count == 4);
+        REQUIRE(cols->array_stride == 16);
+    }
+
+    SECTION("Non-array uniform has zero element count and stride")
+    {
+        Rndr::Canvas::Shader const shader = Rndr::Canvas::Shader::FromSourceInMemory(k_array_uniform_source);
+        REQUIRE(shader.IsValid());
+
+        const Rndr::Canvas::ShaderParameter* count = shader.FindParameter("light_count");
+        REQUIRE(count != nullptr);
+        REQUIRE(count->category == Rndr::Canvas::ParameterCategory::Uniform);
+        REQUIRE(count->array_element_count == 0);
+        REQUIRE(count->array_stride == 0);
     }
 }

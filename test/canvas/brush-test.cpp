@@ -141,6 +141,50 @@ FSOutput FragmentMain(VSOutput input)
 }
 )";
 
+const char* k_array_uniform_shader = R"(
+static const uint k_max_lights = 4;
+
+uniform uint light_count;
+uniform float4 light_directions[k_max_lights];
+uniform float4 light_colors[k_max_lights];
+
+struct VSInput
+{
+    float3 position;
+};
+
+struct VSOutput
+{
+    float4 position : SV_POSITION;
+};
+
+[shader("vertex")]
+VSOutput VertexMain(VSInput input)
+{
+    VSOutput output;
+    output.position = float4(input.position, 1.0);
+    return output;
+}
+
+struct FSOutput
+{
+    float4 color : SV_TARGET;
+};
+
+[shader("fragment")]
+FSOutput FragmentMain(VSOutput input)
+{
+    FSOutput output;
+    float4 c = float4(0, 0, 0, 1);
+    for (uint i = 0; i < light_count && i < k_max_lights; ++i)
+    {
+        c.xyz += light_colors[i].xyz * dot(float3(0, 1, 0), light_directions[i].xyz);
+    }
+    output.color = c;
+    return output;
+}
+)";
+
 }  // namespace
 
 TEST_CASE("Canvas BrushDesc defaults", "[canvas][brush]")
@@ -553,5 +597,80 @@ TEST_CASE("Canvas Brush", "[canvas][brush]")
         // Original still valid.
         REQUIRE(brush.IsValid());
         REQUIRE(brush.GetUniformBufferSlots().GetSize() == 1);
+    }
+
+    SECTION("SetUniform with array index writes to UBO slot")
+    {
+        Rndr::Canvas::Shader const shader = Rndr::Canvas::Shader::FromSourceInMemory(k_array_uniform_shader);
+        Rndr::Canvas::Brush brush;
+        brush.SetShader(shader);
+
+        struct float4
+        {
+            float x, y, z, w;
+        };
+        const float4 dir = {0.0f, 1.0f, 0.0f, 0.0f};
+        brush.SetUniform("light_directions", static_cast<Rndr::i32>(0), dir);
+
+        // Value went to UBO slot, not to fallback m_uniforms.
+        REQUIRE(brush.GetUniforms().IsEmpty());
+        REQUIRE_FALSE(brush.GetUniformBufferSlots().IsEmpty());
+
+        // Find the slot matching the parameter's binding index.
+        const Rndr::Canvas::ShaderParameter* param = shader.FindParameter("light_directions");
+        REQUIRE(param != nullptr);
+        bool found_dirty = false;
+        for (Rndr::u64 i = 0; i < brush.GetUniformBufferSlots().GetSize(); ++i)
+        {
+            if (brush.GetUniformBufferSlots()[i].binding_index == param->binding_index)
+            {
+                found_dirty = brush.GetUniformBufferSlots()[i].dirty;
+                break;
+            }
+        }
+        REQUIRE(found_dirty);
+    }
+
+    SECTION("SetUniform with array index writes correct elements")
+    {
+        Rndr::Canvas::Shader const shader = Rndr::Canvas::Shader::FromSourceInMemory(k_array_uniform_shader);
+        Rndr::Canvas::Brush brush;
+        brush.SetShader(shader);
+
+        struct float4
+        {
+            float x, y, z, w;
+        };
+        const float4 col0 = {1.0f, 0.0f, 0.0f, 1.0f};
+        const float4 col1 = {0.0f, 1.0f, 0.0f, 1.0f};
+        brush.SetUniform("light_colors", static_cast<Rndr::i32>(0), col0);
+        brush.SetUniform("light_colors", static_cast<Rndr::i32>(1), col1);
+
+        // Both writes went to UBO, no fallback.
+        REQUIRE(brush.GetUniforms().IsEmpty());
+
+        // Find the parameter and matching UBO slot by binding index.
+        const Rndr::Canvas::ShaderParameter* param = shader.FindParameter("light_colors");
+        REQUIRE(param != nullptr);
+
+        const Rndr::Canvas::UniformBufferSlot* slot = nullptr;
+        for (Rndr::u64 i = 0; i < brush.GetUniformBufferSlots().GetSize(); ++i)
+        {
+            if (brush.GetUniformBufferSlots()[i].binding_index == param->binding_index)
+            {
+                slot = &brush.GetUniformBufferSlots()[i];
+                break;
+            }
+        }
+        REQUIRE(slot != nullptr);
+
+        float4 read0 = {};
+        float4 read1 = {};
+        memcpy(&read0, slot->cpu_data.GetData() + param->offset, sizeof(float4));
+        memcpy(&read1, slot->cpu_data.GetData() + param->offset + param->array_stride, sizeof(float4));
+        REQUIRE(read0.x == 1.0f);
+        REQUIRE(read0.y == 0.0f);
+        REQUIRE(read1.x == 0.0f);
+        REQUIRE(read1.y == 1.0f);
     }
 }
