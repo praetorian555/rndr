@@ -456,12 +456,12 @@ void Rndr::File::LoadMaterialDescription(const aiScene& ai_scene, u32 material_i
     if (aiGetMaterialTexture(ai_material, aiTextureType_EMISSIVE, 0, &out_texture_path, &out_texture_mapping, &out_uv_index, &out_blend,
                              &out_texture_op, out_texture_mode.GetData(), &out_texture_flags) == AI_SUCCESS)
     {
-        out_material_desc.emissive_texture_path = Opal::Paths::Combine(parent_path, out_texture_path.C_Str());
+        out_material_desc.emissive_texture_path = Opal::Paths::NormalizePath(Opal::Paths::Combine(parent_path, out_texture_path.C_Str()));
     }
     if (aiGetMaterialTexture(ai_material, aiTextureType_DIFFUSE, 0, &out_texture_path, &out_texture_mapping, &out_uv_index, &out_blend,
                              &out_texture_op, out_texture_mode.GetData(), &out_texture_flags) == AI_SUCCESS)
     {
-        out_material_desc.albedo_texture_path = Opal::Paths::Combine(parent_path, out_texture_path.C_Str());
+        out_material_desc.albedo_texture_path = Opal::Paths::NormalizePath(Opal::Paths::Combine(parent_path, out_texture_path.C_Str()));
         // Some material heuristics
         const Opal::StringUtf8 albedo_map_path(out_texture_path.C_Str());
         if (Opal::Find(albedo_map_path, "grey_30") != Opal::StringUtf8::k_npos)
@@ -473,17 +473,17 @@ void Rndr::File::LoadMaterialDescription(const aiScene& ai_scene, u32 material_i
                              &out_texture_mapping, &out_uv_index, &out_blend, &out_texture_op, out_texture_mode.GetData(),
                              &out_texture_flags) == AI_SUCCESS)
     {
-        out_material_desc.metallic_roughness_texture_path = Opal::Paths::Combine(parent_path, out_texture_path.C_Str());
+        out_material_desc.metallic_roughness_texture_path = Opal::Paths::NormalizePath(Opal::Paths::Combine(parent_path, out_texture_path.C_Str()));
     }
     if (aiGetMaterialTexture(ai_material, aiTextureType_LIGHTMAP, 0, &out_texture_path, &out_texture_mapping, &out_uv_index, &out_blend,
                              &out_texture_op, out_texture_mode.GetData(), &out_texture_flags) == AI_SUCCESS)
     {
-        out_material_desc.ambient_occlusion_texture_path = Opal::Paths::Combine(parent_path, out_texture_path.C_Str());
+        out_material_desc.ambient_occlusion_texture_path = Opal::Paths::NormalizePath(Opal::Paths::Combine(parent_path, out_texture_path.C_Str()));
     }
     if (aiGetMaterialTexture(ai_material, aiTextureType_NORMALS, 0, &out_texture_path, &out_texture_mapping, &out_uv_index, &out_blend,
                              &out_texture_op, out_texture_mode.GetData(), &out_texture_flags) == AI_SUCCESS)
     {
-        out_material_desc.normal_texture_path = Opal::Paths::Combine(parent_path, out_texture_path.C_Str());
+        out_material_desc.normal_texture_path = Opal::Paths::NormalizePath(Opal::Paths::Combine(parent_path, out_texture_path.C_Str()));
     }
     // In case that there is no normal map, try to read the height map that can be later converted into a normal map.
     if (out_material_desc.normal_texture_path.IsEmpty())
@@ -491,14 +491,14 @@ void Rndr::File::LoadMaterialDescription(const aiScene& ai_scene, u32 material_i
         if (aiGetMaterialTexture(ai_material, aiTextureType_HEIGHT, 0, &out_texture_path, &out_texture_mapping, &out_uv_index, &out_blend,
                                  &out_texture_op, out_texture_mode.GetData(), &out_texture_flags) == AI_SUCCESS)
         {
-            out_material_desc.normal_texture_path = Opal::Paths::Combine(parent_path, out_texture_path.C_Str());
+            out_material_desc.normal_texture_path = Opal::Paths::NormalizePath(Opal::Paths::Combine(parent_path, out_texture_path.C_Str()));
         }
     }
     if (aiGetMaterialTexture(ai_material, aiTextureType_OPACITY, 0, &out_texture_path, &out_texture_mapping, &out_uv_index, &out_blend,
                              &out_texture_op, out_texture_mode.GetData(), &out_texture_flags) == AI_SUCCESS)
     {
         // Opacity info will later be stored in the alpha channel of the albedo map.
-        out_material_desc.opacity_texture_path = Opal::Paths::Combine(parent_path, out_texture_path.C_Str());
+        out_material_desc.opacity_texture_path = Opal::Paths::NormalizePath(Opal::Paths::Combine(parent_path, out_texture_path.C_Str()));
         out_material_desc.alpha_test = 0.5f;
     }
 
