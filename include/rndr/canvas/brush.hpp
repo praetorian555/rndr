@@ -179,6 +179,7 @@ class Brush
 public:
     Brush() = default;
     explicit Brush(const BrushDesc& desc);
+    Brush(const BrushDesc& desc, Opal::StringUtf8 debug_name);
     ~Brush();
 
     Brush(const Brush&) = delete;
@@ -303,6 +304,9 @@ public:
     /** @return All uniform buffer slots created from shader reflection. */
     [[nodiscard]] const Opal::DynamicArray<UniformBufferSlot>& GetUniformBufferSlots() const;
 
+    /** @return Debug name of this brush. */
+    [[nodiscard]] const Opal::StringUtf8& GetDebugName() const;
+
     /** @return True if a shader has been assigned. */
     [[nodiscard]] bool IsValid() const;
 
@@ -318,6 +322,7 @@ private:
      * binding point that has uniform fields (size > 0). Called automatically by SetShader().
      */
     void CreateUniformBufferSlots();
+    Opal::StringUtf8 m_debug_name;
     const Shader* m_shader = nullptr;
     BrushDesc m_desc;
     Opal::DynamicArray<UniformBinding> m_uniforms;

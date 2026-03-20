@@ -310,4 +310,6 @@ void Rndr::Canvas::Mesh::SetupVAO()
 
         offset += FormatByteSize(entry.format);
     }
+    const Opal::StringUtf8 vao_debug_name = m_debug_name + " - Vertex Array";
+    glObjectLabel(GL_VERTEX_ARRAY, m_vao, static_cast<GLsizei>(vao_debug_name.GetSize()), *vao_debug_name);
 }

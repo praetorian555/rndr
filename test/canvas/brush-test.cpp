@@ -673,4 +673,75 @@ TEST_CASE("Canvas Brush", "[canvas][brush]")
         REQUIRE(read1.x == 0.0f);
         REQUIRE(read1.y == 1.0f);
     }
+
+    SECTION("SetUniform throws on data size exceeding parameter size")
+    {
+        Rndr::Canvas::Shader const shader = Rndr::Canvas::Shader::FromSourceInMemory(k_uniform_shader);
+        Rndr::Canvas::Brush brush;
+        brush.SetShader(shader);
+
+        // roughness is a float (4 bytes), try writing a float4 (16 bytes).
+        struct float4
+        {
+            float x, y, z, w;
+        };
+        const float4 too_large = {1.0f, 2.0f, 3.0f, 4.0f};
+        REQUIRE_THROWS(brush.SetUniform("roughness", too_large));
+    }
+
+    SECTION("SetUniform array throws without shader")
+    {
+        Rndr::Canvas::Brush brush;
+        const float value = 1.0f;
+        REQUIRE_THROWS(brush.SetUniform("light_colors", static_cast<Rndr::i32>(0), value));
+    }
+
+    SECTION("SetUniform array throws for unknown parameter")
+    {
+        Rndr::Canvas::Shader const shader = Rndr::Canvas::Shader::FromSourceInMemory(k_array_uniform_shader);
+        Rndr::Canvas::Brush brush;
+        brush.SetShader(shader);
+
+        const float value = 1.0f;
+        REQUIRE_THROWS(brush.SetUniform("nonexistent", static_cast<Rndr::i32>(0), value));
+    }
+
+    SECTION("SetUniform array throws for non-array parameter")
+    {
+        Rndr::Canvas::Shader const shader = Rndr::Canvas::Shader::FromSourceInMemory(k_array_uniform_shader);
+        Rndr::Canvas::Brush brush;
+        brush.SetShader(shader);
+
+        const Rndr::u32 value = 1;
+        REQUIRE_THROWS(brush.SetUniform("light_count", static_cast<Rndr::i32>(0), value));
+    }
+
+    SECTION("SetUniform array throws for out of bounds index")
+    {
+        Rndr::Canvas::Shader const shader = Rndr::Canvas::Shader::FromSourceInMemory(k_array_uniform_shader);
+        Rndr::Canvas::Brush brush;
+        brush.SetShader(shader);
+
+        struct float4
+        {
+            float x, y, z, w;
+        };
+        const float4 value = {1.0f, 0.0f, 0.0f, 1.0f};
+        // Array has 4 elements, index 4 is out of bounds.
+        REQUIRE_THROWS(brush.SetUniform("light_colors", static_cast<Rndr::i32>(4), value));
+    }
+
+    SECTION("SetUniform array throws for negative index")
+    {
+        Rndr::Canvas::Shader const shader = Rndr::Canvas::Shader::FromSourceInMemory(k_array_uniform_shader);
+        Rndr::Canvas::Brush brush;
+        brush.SetShader(shader);
+
+        struct float4
+        {
+            float x, y, z, w;
+        };
+        const float4 value = {1.0f, 0.0f, 0.0f, 1.0f};
+        REQUIRE_THROWS(brush.SetUniform("light_colors", static_cast<Rndr::i32>(-1), value));
+    }
 }

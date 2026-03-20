@@ -122,7 +122,7 @@ public:
      * @param path Path to the Slang source file.
      * @return A valid Shader object.
      */
-    [[nodiscard]] static Shader FromSource(const Opal::StringUtf8& path);
+    [[nodiscard]] static Shader FromSource(const Opal::StringUtf8& path, Opal::StringUtf8 debug_name);
 
     /**
      * Create a shader program from source code in memory containing both vertex and fragment entry
@@ -130,7 +130,7 @@ public:
      * @param source Slang shader source code.
      * @return A valid Shader object.
      */
-    [[nodiscard]] static Shader FromSourceInMemory(const Opal::StringUtf8& source);
+    [[nodiscard]] static Shader FromSourceInMemory(const Opal::StringUtf8& source, Opal::StringUtf8 debug_name);
 
     /**
      * Create a shader program from two separate source files for vertex and fragment stages.
@@ -138,7 +138,7 @@ public:
      * @param fragment_path Path to the fragment stage Slang source file.
      * @return A valid Shader object.
      */
-    [[nodiscard]] static Shader FromSources(const Opal::StringUtf8& vertex_path, const Opal::StringUtf8& fragment_path);
+    [[nodiscard]] static Shader FromSources(const Opal::StringUtf8& vertex_path, const Opal::StringUtf8& fragment_path, Opal::StringUtf8 debug_name);
 
     /**
      * Create a shader program from two separate source strings for vertex and fragment stages.
@@ -146,7 +146,7 @@ public:
      * @param fragment_source Slang source code for the fragment stage.
      * @return A valid Shader object.
      */
-    [[nodiscard]] static Shader FromSourcesInMemory(const Opal::StringUtf8& vertex_source, const Opal::StringUtf8& fragment_source);
+    [[nodiscard]] static Shader FromSourcesInMemory(const Opal::StringUtf8& vertex_source, const Opal::StringUtf8& fragment_source, Opal::StringUtf8 debug_name);
 
     Shader() = default;
     ~Shader();
@@ -191,6 +191,9 @@ public:
 private:
     /** OpenGL program handle. 0 means invalid. */
     u32 m_program = 0;
+
+    /** Debug name. */
+    Opal::StringUtf8 m_debug_name;
 
     /** Original Slang source, retained for Clone(). For two-source shaders this is the vertex source. */
     Opal::StringUtf8 m_vertex_source;

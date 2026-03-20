@@ -1,6 +1,7 @@
 #include "rndr/canvas/brush.hpp"
 
 #include "glad/glad.h"
+#include "opal/exceptions.h"
 
 #include "rndr/canvas/shader.hpp"
 #include "rndr/canvas/texture.hpp"
@@ -8,6 +9,7 @@
 #include "rndr/trace.hpp"
 
 #include <algorithm>
+#include <cstdio>
 
 namespace
 {
@@ -41,10 +43,16 @@ GLenum ToGLCompareFunc(Rndr::Canvas::CompareFunc func)
 
 Rndr::Canvas::Brush::Brush(const BrushDesc& desc) : m_desc(desc) {}
 
+Rndr::Canvas::Brush::Brush(const BrushDesc& desc, Opal::StringUtf8 debug_name)
+    : m_debug_name(std::move(debug_name)), m_desc(desc)
+{
+}
+
 Rndr::Canvas::Brush::~Brush() = default;
 
 Rndr::Canvas::Brush::Brush(Brush&& other) noexcept
-    : m_shader(other.m_shader),
+    : m_debug_name(std::move(other.m_debug_name)),
+      m_shader(other.m_shader),
       m_desc(other.m_desc),
       m_uniforms(std::move(other.m_uniforms)),
       m_textures(std::move(other.m_textures)),
@@ -59,6 +67,7 @@ Rndr::Canvas::Brush& Rndr::Canvas::Brush::operator=(Brush&& other) noexcept
 {
     if (this != &other)
     {
+        m_debug_name = std::move(other.m_debug_name);
         m_shader = other.m_shader;
         m_desc = other.m_desc;
         m_uniforms = std::move(other.m_uniforms);
@@ -74,6 +83,7 @@ Rndr::Canvas::Brush& Rndr::Canvas::Brush::operator=(Brush&& other) noexcept
 Rndr::Canvas::Brush Rndr::Canvas::Brush::Clone() const
 {
     Brush clone(m_desc);
+    clone.m_debug_name = m_debug_name.Clone();
     clone.m_shader = m_shader;
 
     for (u64 i = 0; i < m_uniforms.GetSize(); ++i)
@@ -222,6 +232,11 @@ const Opal::DynamicArray<Rndr::Canvas::BufferBinding>& Rndr::Canvas::Brush::GetB
     return m_buffers;
 }
 
+const Opal::StringUtf8& Rndr::Canvas::Brush::GetDebugName() const
+{
+    return m_debug_name;
+}
+
 bool Rndr::Canvas::Brush::IsValid() const
 {
     return m_shader != nullptr;
@@ -280,24 +295,45 @@ void Rndr::Canvas::Brush::CreateUniformBufferSlots()
     // Create a GPU buffer + CPU staging area for each UBO.
     for (u64 i = 0; i < ubo_infos.GetSize(); ++i)
     {
+        Opal::StringUtf8 ubo_name;
+        if (!m_debug_name.IsEmpty())
+        {
+            char buf[256];
+            snprintf(buf, sizeof(buf), "%s - Uniform Buffer bound at %d", m_debug_name.GetData(), ubo_infos[i].binding_index);
+            ubo_name = buf;
+        }
+
         UniformBufferSlot slot;
         slot.binding_index = ubo_infos[i].binding_index;
         slot.binding_space = ubo_infos[i].binding_space;
         slot.cpu_data.Resize(static_cast<u64>(ubo_infos[i].total_size));
         memset(slot.cpu_data.GetData(), 0, slot.cpu_data.GetSize());
-        slot.gpu_buffer = Buffer(BufferUsage::Uniform, static_cast<u64>(ubo_infos[i].total_size));
+        slot.gpu_buffer = Buffer(BufferUsage::Uniform, static_cast<u64>(ubo_infos[i].total_size), 0, {}, std::move(ubo_name));
         m_uniform_buffer_slots.PushBack(std::move(slot));
     }
 }
 
 void Rndr::Canvas::Brush::SetUniformRaw(const char* name, const void* data, u64 size)
 {
+    if (name == nullptr)
+    {
+        throw Opal::InvalidArgumentException(__FUNCTION__, "Uniform name is null!");
+    }
+    if (data == nullptr || size == 0)
+    {
+        throw Opal::InvalidArgumentException(__FUNCTION__, "Uniform data is null or size is 0!");
+    }
+
     // If a shader is set, try to write into the appropriate UBO slot.
     if (m_shader != nullptr)
     {
         const ShaderParameter* param = m_shader->FindParameter(name);
         if (param != nullptr && param->category == ParameterCategory::Uniform && param->size > 0)
         {
+            if (static_cast<i32>(size) > param->size)
+            {
+                throw Opal::InvalidArgumentException(__FUNCTION__, "Uniform data size exceeds the parameter size!");
+            }
             for (u64 i = 0; i < m_uniform_buffer_slots.GetSize(); ++i)
             {
                 UniformBufferSlot& slot = m_uniform_buffer_slots[i];
@@ -331,23 +367,54 @@ void Rndr::Canvas::Brush::SetUniformRaw(const char* name, const void* data, u64 
 
 void Rndr::Canvas::Brush::SetUniformRaw(const char* name, i32 index, const void* data, u64 size)
 {
-    if (m_shader != nullptr)
+    if (name == nullptr)
     {
-        const ShaderParameter* param = m_shader->FindParameter(name);
-        if (param != nullptr && param->category == ParameterCategory::Uniform && param->size > 0 &&
-            param->array_element_count > 0 && index < param->array_element_count)
+        throw Opal::InvalidArgumentException(__FUNCTION__, "Uniform name is null!");
+    }
+    if (data == nullptr || size == 0)
+    {
+        throw Opal::InvalidArgumentException(__FUNCTION__, "Uniform data is null or size is 0!");
+    }
+    if (m_shader == nullptr)
+    {
+        throw Opal::InvalidArgumentException(__FUNCTION__, "Cannot set array uniform element without a shader!");
+    }
+    if (index < 0)
+    {
+        throw Opal::InvalidArgumentException(__FUNCTION__, "Array index is negative!");
+    }
+
+    const ShaderParameter* param = m_shader->FindParameter(name);
+    if (param == nullptr)
+    {
+        throw Opal::InvalidArgumentException(__FUNCTION__, "Uniform parameter not found!");
+    }
+    if (param->category != ParameterCategory::Uniform || param->size == 0)
+    {
+        throw Opal::InvalidArgumentException(__FUNCTION__, "Parameter is not a uniform!");
+    }
+    if (param->array_element_count == 0)
+    {
+        throw Opal::InvalidArgumentException(__FUNCTION__, "Parameter is not an array!");
+    }
+    if (index >= param->array_element_count)
+    {
+        throw Opal::InvalidArgumentException(__FUNCTION__, "Array index is out of bounds!");
+    }
+    if (static_cast<i32>(size) > param->array_stride)
+    {
+        throw Opal::InvalidArgumentException(__FUNCTION__, "Uniform data size exceeds the array element size!");
+    }
+
+    const i32 element_offset = param->offset + index * param->array_stride;
+    for (u64 i = 0; i < m_uniform_buffer_slots.GetSize(); ++i)
+    {
+        UniformBufferSlot& slot = m_uniform_buffer_slots[i];
+        if (slot.binding_index == param->binding_index && slot.binding_space == param->binding_space)
         {
-            const i32 element_offset = param->offset + index * param->array_stride;
-            for (u64 i = 0; i < m_uniform_buffer_slots.GetSize(); ++i)
-            {
-                UniformBufferSlot& slot = m_uniform_buffer_slots[i];
-                if (slot.binding_index == param->binding_index && slot.binding_space == param->binding_space)
-                {
-                    memcpy(slot.cpu_data.GetData() + element_offset, data, size);
-                    slot.dirty = true;
-                    return;
-                }
-            }
+            memcpy(slot.cpu_data.GetData() + element_offset, data, size);
+            slot.dirty = true;
+            return;
         }
     }
 }

@@ -38,7 +38,7 @@ float4 FragmentMain(VertexOutput in)
 Rndr::Canvas::CubemapRenderer::CubemapRenderer(Opal::Ref<Context> context)
     : m_context(std::move(context))
 {
-    m_shader = Shader::FromSourceInMemory(k_shader_source);
+    m_shader = Shader::FromSourceInMemory(k_shader_source, "Cube Map Renderer");
     RNDR_ASSERT(m_shader.IsValid(), "Failed to create CubemapRenderer shader!");
 
     const VertexLayout vertex_layout = m_shader.GetVertexLayout().Clone();
