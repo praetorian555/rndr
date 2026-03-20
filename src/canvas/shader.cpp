@@ -127,6 +127,19 @@ void ExtractUniformFields(slang::TypeLayoutReflection* type_layout, Rndr::i32 bi
         sp.offset = static_cast<Rndr::i32>(field->getOffset(SLANG_PARAMETER_CATEGORY_UNIFORM));
         sp.size = static_cast<Rndr::i32>(field->getTypeLayout()->getSize(SLANG_PARAMETER_CATEGORY_UNIFORM));
         sp.category = Rndr::Canvas::ParameterCategory::Uniform;
+
+        // Check if this field is an array type and extract element count / stride.
+        slang::TypeReflection* field_type = field->getTypeLayout()->getType();
+        if (field_type->getKind() == slang::TypeReflection::Kind::Array)
+        {
+            const auto element_count = static_cast<Rndr::i32>(field_type->getElementCount());
+            if (element_count > 0)
+            {
+                sp.array_element_count = element_count;
+                sp.array_stride = sp.size / element_count;
+            }
+        }
+
         out_params.PushBack(std::move(sp));
     }
 }
@@ -165,6 +178,18 @@ void ExtractParam(slang::VariableLayoutReflection* param, Opal::DynamicArray<Rnd
             // Standalone uniform — extract size and offset.
             sp.offset = static_cast<Rndr::i32>(param->getOffset(SLANG_PARAMETER_CATEGORY_UNIFORM));
             sp.size = static_cast<Rndr::i32>(type_layout->getSize(SLANG_PARAMETER_CATEGORY_UNIFORM));
+
+            // Check if this is an array type.
+            slang::TypeReflection* type = type_layout->getType();
+            if (type->getKind() == slang::TypeReflection::Kind::Array)
+            {
+                const auto element_count = static_cast<Rndr::i32>(type->getElementCount());
+                if (element_count > 0)
+                {
+                    sp.array_element_count = element_count;
+                    sp.array_stride = sp.size / element_count;
+                }
+            }
         }
     }
 
@@ -629,6 +654,7 @@ GLuint LinkProgram(GLuint vertex_shader, GLuint fragment_shader)
         glDeleteProgram(program);
 
         Opal::StringUtf8 msg = Opal::StringUtf8("Failed to link shader program:\n") + log;
+        RNDR_LOG_ERROR("{}", *msg);
         throw Rndr::GraphicsAPIException(0, msg.GetData());
     }
 
@@ -696,6 +722,8 @@ Rndr::Canvas::ShaderParameter CloneParameter(const Rndr::Canvas::ShaderParameter
     copy.binding_space = p.binding_space;
     copy.offset = p.offset;
     copy.size = p.size;
+    copy.array_element_count = p.array_element_count;
+    copy.array_stride = p.array_stride;
     copy.category = p.category;
     return copy;
 }
@@ -1133,6 +1161,7 @@ const Rndr::Canvas::ShaderParameter* Rndr::Canvas::Shader::FindParameter(const O
     }
     return nullptr;
 }
+
 
 const Rndr::Canvas::VertexLayout& Rndr::Canvas::Shader::GetVertexLayout() const
 {

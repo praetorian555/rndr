@@ -329,6 +329,29 @@ void Rndr::Canvas::Brush::SetUniformRaw(const char* name, const void* data, u64 
     m_uniforms.PushBack(std::move(binding));
 }
 
+void Rndr::Canvas::Brush::SetUniformRaw(const char* name, i32 index, const void* data, u64 size)
+{
+    if (m_shader != nullptr)
+    {
+        const ShaderParameter* param = m_shader->FindParameter(name);
+        if (param != nullptr && param->category == ParameterCategory::Uniform && param->size > 0 &&
+            param->array_element_count > 0 && index < param->array_element_count)
+        {
+            const i32 element_offset = param->offset + index * param->array_stride;
+            for (u64 i = 0; i < m_uniform_buffer_slots.GetSize(); ++i)
+            {
+                UniformBufferSlot& slot = m_uniform_buffer_slots[i];
+                if (slot.binding_index == param->binding_index && slot.binding_space == param->binding_space)
+                {
+                    memcpy(slot.cpu_data.GetData() + element_offset, data, size);
+                    slot.dirty = true;
+                    return;
+                }
+            }
+        }
+    }
+}
+
 void Rndr::Canvas::Brush::UploadUniforms()
 {
     for (u64 i = 0; i < m_uniform_buffer_slots.GetSize(); ++i)

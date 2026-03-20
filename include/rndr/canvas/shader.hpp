@@ -91,6 +91,12 @@ struct ShaderParameter
     /** Size in bytes. Zero for top-level UBO declarations and non-uniform params. */
     i32 size = 0;
 
+    /** Number of elements if this parameter is an array. Zero means it is not an array. */
+    i32 array_element_count = 0;
+
+    /** Byte stride between consecutive array elements. Only meaningful when array_element_count > 0. */
+    i32 array_stride = 0;
+
     /** What kind of resource this parameter represents. */
     ParameterCategory category = ParameterCategory::EnumCount;
 };

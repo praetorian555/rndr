@@ -260,6 +260,15 @@ public:
     template<typename T>
     void SetUniform(const char* name, const T& value);
 
+    /**
+     * Set a uniform array element by base name and index.
+     * @param name Array uniform name as declared in the shader (e.g. "light_colors").
+     * @param index Array element index.
+     * @param value Value to set.
+     */
+    template<typename T>
+    void SetUniform(const char* name, i32 index, const T& value);
+
     /** @return Fallback uniform bindings for values that did not match any shader parameter. */
     [[nodiscard]] const Opal::DynamicArray<UniformBinding>& GetUniforms() const;
 
@@ -301,6 +310,9 @@ private:
     /** Non-template core of SetUniform. Routes data to the matching UBO slot or fallback list. */
     void SetUniformRaw(const char* name, const void* data, u64 size);
 
+    /** Non-template core of SetUniform for array elements. */
+    void SetUniformRaw(const char* name, i32 index, const void* data, u64 size);
+
     /**
      * Scan the current shader's parameters and create one UniformBufferSlot for each unique UBO
      * binding point that has uniform fields (size > 0). Called automatically by SetShader().
@@ -319,6 +331,13 @@ void Brush::SetUniform(const char* name, const T& value)
 {
     static_assert(std::is_trivially_copyable_v<T>, "Uniform value must be trivially copyable!");
     SetUniformRaw(name, &value, sizeof(T));
+}
+
+template<typename T>
+void Brush::SetUniform(const char* name, i32 index, const T& value)
+{
+    static_assert(std::is_trivially_copyable_v<T>, "Uniform value must be trivially copyable!");
+    SetUniformRaw(name, index, &value, sizeof(T));
 }
 
 }  // namespace Canvas
