@@ -222,7 +222,8 @@ Rndr::PixelFormat VkFormatToPixelFormat(ktx_uint32_t vk_format)
 {
     return static_cast<Rndr::PixelFormat>(vk_format);
 }
-}
+}  // namespace
+#endif
 
 Rndr::Bitmap Rndr::File::LoadImage(const Opal::StringUtf8& file_path, bool flip_vertically, bool generate_mips)
 {
@@ -234,6 +235,7 @@ Rndr::Bitmap Rndr::File::LoadImage(const Opal::StringUtf8& file_path, bool flip_
     // Determine file extension.
     const Opal::StringUtf8 extension = Opal::Paths::GetExtension(file_path).GetValue();
 
+#if RNDR_ADVANCED_API
     if (extension == ".ktx" || extension == ".ktx2")
     {
         ktxTexture* ktx_texture = nullptr;
@@ -263,6 +265,7 @@ Rndr::Bitmap Rndr::File::LoadImage(const Opal::StringUtf8& file_path, bool flip_
 
         return bitmap;
     }
+#endif
 
     stbi_set_flip_vertically_on_load(flip_vertically);
 
@@ -319,7 +322,6 @@ Rndr::Bitmap Rndr::File::LoadImage(const Opal::StringUtf8& file_path, bool flip_
 
     return bitmap;
 }
-#endif
 
 void Rndr::File::LoadMeshAndMaterialDescription(const Opal::StringUtf8& file_path, Mesh& out_mesh, MaterialDesc& out_material_desc)
 {
