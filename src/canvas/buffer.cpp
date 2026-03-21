@@ -3,6 +3,7 @@
 #include "glad/glad.h"
 
 #include "rndr/exception.hpp"
+#include "rndr/log.hpp"
 #include "rndr/trace.hpp"
 
 Rndr::Canvas::Buffer::Buffer(BufferUsage usage, u64 size, u64 offset, const Opal::ArrayView<const u8>& init_data,
@@ -32,6 +33,8 @@ Rndr::Canvas::Buffer::Buffer(BufferUsage usage, u64 size, u64 offset, const Opal
     {
         glObjectLabel(GL_BUFFER, m_handle, static_cast<GLsizei>(m_name.GetSize()), m_name.GetData());
     }
+
+    RNDR_LOG_INFO("Created buffer '{}' with native id {}", *m_name, m_handle);
 }
 
 Rndr::Canvas::Buffer::~Buffer()

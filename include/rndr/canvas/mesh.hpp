@@ -23,6 +23,7 @@ public:
      * @param layout Vertex layout describing the data format.
      * @param vertex_data Raw vertex data. Size must be a multiple of the layout stride.
      * @param index_data Raw index data (u32 indices). Can be empty for non-indexed geometry.
+     * @param debug_name Debug name of the mesh.
      */
     explicit Mesh(const VertexLayout& layout, Opal::ArrayView<const u8> vertex_data, Opal::ArrayView<const u8> index_data,
                   Opal::StringUtf8 debug_name = "");

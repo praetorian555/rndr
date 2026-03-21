@@ -854,13 +854,13 @@ ShaderBuildResult BuildFromSingleSource(const Opal::StringUtf8& source, Opal::St
         }
 
         const GLuint cs = CreateShaderFromSpirv(GL_COMPUTE_SHADER, cs_result.spirv->getBufferPointer(), cs_result.spirv->getBufferSize());
-        const Opal::StringUtf8 shader_name = debug_name + " Compute Shader";
+        const Opal::StringUtf8 shader_name = debug_name + " - Compute Shader";
         glObjectLabel(GL_SHADER, cs, static_cast<GLsizei>(shader_name.GetSize()), *shader_name);
         GLuint program = 0;
         try
         {
             program = LinkProgram(cs);
-            const Opal::StringUtf8 program_name = debug_name + " Shader Program";
+            const Opal::StringUtf8 program_name = debug_name + " - Shader Program";
             glObjectLabel(GL_PROGRAM, program, static_cast<GLsizei>(program_name.GetSize()), *program_name);
         }
         catch (...)
@@ -896,13 +896,13 @@ ShaderBuildResult BuildFromSingleSource(const Opal::StringUtf8& source, Opal::St
     Opal::DynamicArray<Rndr::Canvas::ShaderParameter> merged = MergeParameters(vs_result.parameters, fs_result.parameters);
 
     const GLuint vs = CreateShaderFromSpirv(GL_VERTEX_SHADER, vs_result.spirv->getBufferPointer(), vs_result.spirv->getBufferSize());
-    const Opal::StringUtf8 vertex_shader_name = debug_name + " Vertex Shader";
+    const Opal::StringUtf8 vertex_shader_name = debug_name + " - Vertex Shader";
     glObjectLabel(GL_SHADER, vs, static_cast<GLsizei>(vertex_shader_name.GetSize()), *vertex_shader_name);
     GLuint fs = 0;
     try
     {
         fs = CreateShaderFromSpirv(GL_FRAGMENT_SHADER, fs_result.spirv->getBufferPointer(), fs_result.spirv->getBufferSize());
-        const Opal::StringUtf8 fragment_shader_name = debug_name + " Fragment Shader";
+        const Opal::StringUtf8 fragment_shader_name = debug_name + " - Fragment Shader";
         glObjectLabel(GL_SHADER, fs, static_cast<GLsizei>(fragment_shader_name.GetSize()), *fragment_shader_name);
     }
     catch (...)
@@ -915,7 +915,7 @@ ShaderBuildResult BuildFromSingleSource(const Opal::StringUtf8& source, Opal::St
     try
     {
         program = LinkProgram(vs, fs);
-        const Opal::StringUtf8 program_name = debug_name + " Shader Program";
+        const Opal::StringUtf8 program_name = debug_name + " - Shader Program";
         glObjectLabel(GL_PROGRAM, program, static_cast<GLsizei>(program_name.GetSize()), *program_name);
     }
     catch (...)
@@ -961,13 +961,13 @@ ShaderBuildResult BuildFromTwoSources(const Opal::StringUtf8& vertex_source, con
     Opal::DynamicArray<Rndr::Canvas::ShaderParameter> merged = MergeParameters(vs_result.parameters, fs_result.parameters);
 
     const GLuint vs = CreateShaderFromSpirv(GL_VERTEX_SHADER, vs_result.spirv->getBufferPointer(), vs_result.spirv->getBufferSize());
-    const Opal::StringUtf8 vertex_shader_name = debug_name + " Vertex Shader";
+    const Opal::StringUtf8 vertex_shader_name = debug_name + " - Vertex Shader";
     glObjectLabel(GL_SHADER, vs, static_cast<GLsizei>(vertex_shader_name.GetSize()), *vertex_shader_name);
     GLuint fs = 0;
     try
     {
         fs = CreateShaderFromSpirv(GL_FRAGMENT_SHADER, fs_result.spirv->getBufferPointer(), fs_result.spirv->getBufferSize());
-        const Opal::StringUtf8 fragment_shader_name = debug_name + " Fragment Shader";
+        const Opal::StringUtf8 fragment_shader_name = debug_name + " - Fragment Shader";
         glObjectLabel(GL_SHADER, fs, static_cast<GLsizei>(fragment_shader_name.GetSize()), *fragment_shader_name);
     }
     catch (...)
@@ -980,7 +980,7 @@ ShaderBuildResult BuildFromTwoSources(const Opal::StringUtf8& vertex_source, con
     try
     {
         program = LinkProgram(vs, fs);
-        const Opal::StringUtf8 program_name = debug_name + " Shader Program";
+        const Opal::StringUtf8 program_name = debug_name + " - Shader Program";
         glObjectLabel(GL_PROGRAM, program, static_cast<GLsizei>(program_name.GetSize()), *program_name);
     }
     catch (...)
