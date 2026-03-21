@@ -6,11 +6,10 @@
 
 #include "rndr/exception.hpp"
 #include "rndr/file.hpp"
+#include "rndr/log.hpp"
 #include "rndr/trace.hpp"
 
 #include <cstring>
-
-#include "rndr/log.hpp"
 
 namespace
 {
@@ -342,14 +341,14 @@ Rndr::Canvas::VertexLayout ExtractVertexLayout(slang::ProgramLayout* layout)
                 slang::VariableLayoutReflection* field = type_layout->getFieldByIndex(j);
                 const char* name = field->getName();
 
-                Rndr::Canvas::Attrib attrib = AttribFromName(name);
+                const Rndr::Canvas::Attrib attrib = AttribFromName(name);
                 if (attrib == Rndr::Canvas::Attrib::EnumCount)
                 {
                     Opal::StringUtf8 msg = Opal::StringUtf8("Cannot map vertex attribute '") + name + "' to a known Attrib semantic!";
                     throw Rndr::GraphicsAPIException(0, msg.GetData());
                 }
 
-                Rndr::Canvas::Format format = FormatFromSlangType(field->getTypeLayout());
+                const Rndr::Canvas::Format format = FormatFromSlangType(field->getTypeLayout());
                 if (format == Rndr::Canvas::Format::EnumCount)
                 {
                     Opal::StringUtf8 msg = Opal::StringUtf8("Unsupported vertex attribute format for '") + name + "'!";
@@ -364,14 +363,14 @@ Rndr::Canvas::VertexLayout ExtractVertexLayout(slang::ProgramLayout* layout)
             // Non-struct vertex input — single attribute.
             const char* name = param->getName();
 
-            Rndr::Canvas::Attrib attrib = AttribFromName(name);
+            const Rndr::Canvas::Attrib attrib = AttribFromName(name);
             if (attrib == Rndr::Canvas::Attrib::EnumCount)
             {
                 Opal::StringUtf8 msg = Opal::StringUtf8("Cannot map vertex attribute '") + name + "' to a known Attrib semantic!";
                 throw Rndr::GraphicsAPIException(0, msg.GetData());
             }
 
-            Rndr::Canvas::Format format = FormatFromSlangType(type_layout);
+            const Rndr::Canvas::Format format = FormatFromSlangType(type_layout);
             if (format == Rndr::Canvas::Format::EnumCount)
             {
                 Opal::StringUtf8 msg = Opal::StringUtf8("Unsupported vertex attribute format for '") + name + "'!";
@@ -936,7 +935,8 @@ ShaderBuildResult BuildFromSingleSource(const Opal::StringUtf8& source, Opal::St
     return out;
 }
 
-ShaderBuildResult BuildFromTwoSources(const Opal::StringUtf8& vertex_source, const Opal::StringUtf8& fragment_source, Opal::StringUtf8 debug_name)
+ShaderBuildResult BuildFromTwoSources(const Opal::StringUtf8& vertex_source, const Opal::StringUtf8& fragment_source,
+                                      Opal::StringUtf8 debug_name)
 {
     const LoadedModule vs_mod = LoadModule(vertex_source);
     const Opal::DynamicArray<EntryPointInfo> vs_entries = DiscoverEntryPoints(vs_mod);

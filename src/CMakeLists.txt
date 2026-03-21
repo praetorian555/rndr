@@ -54,7 +54,6 @@ set(SOURCE_LIST
         "${PROJECT_SOURCE_DIR}/src/material.cpp"
         "${PROJECT_SOURCE_DIR}/src/shader-permutation.cpp"
         "${PROJECT_SOURCE_DIR}/src/pixel-format.cpp"
-        canvas/draw-list.cpp
 )
 
 list(APPEND SOURCE_LIST
@@ -91,6 +90,11 @@ if (${RNDR_CANVAS})
             "${PROJECT_SOURCE_DIR}/include/rndr/canvas/draw-command-buffer.hpp"
             "${PROJECT_SOURCE_DIR}/include/rndr/canvas/draw-list.hpp"
             "${PROJECT_SOURCE_DIR}/include/rndr/canvas/compute-list.hpp"
+            "${PROJECT_SOURCE_DIR}/include/rndr/canvas/projections.hpp"
+            "${PROJECT_SOURCE_DIR}/include/rndr/canvas/renderers/shape-renderer.hpp"
+            "${PROJECT_SOURCE_DIR}/include/rndr/canvas/renderers/bitmap-text-renderer.hpp"
+            "${PROJECT_SOURCE_DIR}/include/rndr/canvas/renderers/cubemap-renderer.hpp"
+            "${PROJECT_SOURCE_DIR}/include/rndr/canvas/renderers/pbr-renderer.hpp"
             "${PROJECT_SOURCE_DIR}/src/canvas/context.cpp"
             "${PROJECT_SOURCE_DIR}/src/canvas/buffer.cpp"
             "${PROJECT_SOURCE_DIR}/src/canvas/texture.cpp"
@@ -99,15 +103,11 @@ if (${RNDR_CANVAS})
             "${PROJECT_SOURCE_DIR}/src/canvas/vertex-layout.cpp"
             "${PROJECT_SOURCE_DIR}/src/canvas/mesh.cpp"
             "${PROJECT_SOURCE_DIR}/src/canvas/brush.cpp"
-            "${PROJECT_SOURCE_DIR}/include/rndr/canvas/projections.hpp"
+            "${PROJECT_SOURCE_DIR}/src/canvas/draw-list.cpp"
             "${PROJECT_SOURCE_DIR}/src/canvas/projections.cpp"
-            "../include/rndr/canvas/renderers/shape-renderer.hpp"
             "${PROJECT_SOURCE_DIR}/src/canvas/shape-renderer.cpp"
-            "../include/rndr/canvas/renderers/bitmap-text-renderer.hpp"
             "${PROJECT_SOURCE_DIR}/src/canvas/bitmap-text-renderer.cpp"
-            "../include/rndr/canvas/renderers/cubemap-renderer.hpp"
             "${PROJECT_SOURCE_DIR}/src/canvas/cubemap-renderer.cpp"
-            "../include/rndr/canvas/renderers/pbr-renderer.hpp"
             "${PROJECT_SOURCE_DIR}/src/canvas/pbr-renderer.cpp")
 endif ()
 
