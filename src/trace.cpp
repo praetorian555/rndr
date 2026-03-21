@@ -1,5 +1,8 @@
 #include "rndr/trace.hpp"
 
+#include "opal/hash.h"
+#include "rndr/types.hpp"
+
 #if RNDR_CANVAS
 #include "glad/glad.h"
 #endif
@@ -31,8 +34,8 @@ Rndr::Trace::ScopedGpuEvent::~ScopedGpuEvent()
 void Rndr::Trace::BeginGpuEvent(const char* name)
 {
 #if RNDR_CANVAS
-    static GLuint s_group_id = 0;
-    glPushDebugGroup(GL_DEBUG_SOURCE_APPLICATION, s_group_id++, -1, name);
+    const u64 group_id = Opal::Hash::CalcRawArray(reinterpret_cast<const u8*>(name), strlen(name));
+    glPushDebugGroup(GL_DEBUG_SOURCE_APPLICATION, static_cast<GLuint>(group_id), -1, name);
 #endif
 }
 
