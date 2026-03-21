@@ -120,33 +120,37 @@ public:
      * Create a shader program from a single source file containing both vertex and fragment entry
      * points.
      * @param path Path to the Slang source file.
-     * @return A valid Shader object.
+     * @param debug_name Name used for debug.
+     * @return A valid Shader object. Empty by default.
      */
-    [[nodiscard]] static Shader FromSource(const Opal::StringUtf8& path, Opal::StringUtf8 debug_name);
+    [[nodiscard]] static Shader FromSource(const Opal::StringUtf8& path, Opal::StringUtf8 debug_name = "");
 
     /**
      * Create a shader program from source code in memory containing both vertex and fragment entry
      * points.
      * @param source Slang shader source code.
+     * @param debug_name Name used for debug. Empty by default.
      * @return A valid Shader object.
      */
-    [[nodiscard]] static Shader FromSourceInMemory(const Opal::StringUtf8& source, Opal::StringUtf8 debug_name);
+    [[nodiscard]] static Shader FromSourceInMemory(const Opal::StringUtf8& source, Opal::StringUtf8 debug_name = "");
 
     /**
      * Create a shader program from two separate source files for vertex and fragment stages.
      * @param vertex_path Path to the vertex stage Slang source file.
      * @param fragment_path Path to the fragment stage Slang source file.
+     * @param debug_name Name used for debug. Empty by default.
      * @return A valid Shader object.
      */
-    [[nodiscard]] static Shader FromSources(const Opal::StringUtf8& vertex_path, const Opal::StringUtf8& fragment_path, Opal::StringUtf8 debug_name);
+    [[nodiscard]] static Shader FromSources(const Opal::StringUtf8& vertex_path, const Opal::StringUtf8& fragment_path, Opal::StringUtf8 debug_name = "");
 
     /**
      * Create a shader program from two separate source strings for vertex and fragment stages.
      * @param vertex_source Slang source code for the vertex stage.
      * @param fragment_source Slang source code for the fragment stage.
+     * @param debug_name Name used for debug. Empty by default.
      * @return A valid Shader object.
      */
-    [[nodiscard]] static Shader FromSourcesInMemory(const Opal::StringUtf8& vertex_source, const Opal::StringUtf8& fragment_source, Opal::StringUtf8 debug_name);
+    [[nodiscard]] static Shader FromSourcesInMemory(const Opal::StringUtf8& vertex_source, const Opal::StringUtf8& fragment_source, Opal::StringUtf8 debug_name = "");
 
     Shader() = default;
     ~Shader();
