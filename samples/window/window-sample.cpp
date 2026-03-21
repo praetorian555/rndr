@@ -2,265 +2,265 @@
 #include "opal/time.h"
 
 #include "rndr/application.hpp"
+#include "rndr/bitmap.hpp"
+#include "rndr/canvas/context.hpp"
+#include "rndr/canvas/draw-list.hpp"
+#include "rndr/canvas/pbr-renderer.hpp"
+#include "rndr/canvas/projections.hpp"
+#include "rndr/canvas/texture.hpp"
 #include "rndr/file.hpp"
 #include "rndr/fly-camera.hpp"
+#include "rndr/frames-per-second-counter.hpp"
 #include "rndr/imgui-system.hpp"
 #include "rndr/log.hpp"
-#include "rndr/render-api.hpp"
 #include "rndr/types.hpp"
 
 #include "example-controller.h"
 #include "imgui.h"
 #include "opal/rng.h"
-#include "rndr/frames-per-second-counter.hpp"
-#include "rndr/renderers/grid-renderer.hpp"
-#include "rndr/renderers/shape-3d-renderer.hpp"
-#include "rndr/trace.hpp"
 
-struct RNDR_ALIGN(16) Uniforms
+static Rndr::Canvas::Texture LoadTextureFromFile(const Rndr::Canvas::Context& context, const Opal::StringUtf8& path)
 {
-    Rndr::Matrix4x4f view;
-    Rndr::Matrix4x4f projection;
-    Rndr::Vector3f position;
-};
+    const Rndr::Bitmap bitmap = Rndr::File::LoadImage(path, true, true);
+    RNDR_ASSERT(bitmap.IsValid(), "Failed to load image!");
+
+    Rndr::Canvas::Format format = Rndr::Canvas::Format::RGBA8;
+    switch (bitmap.GetComponentCount())
+    {
+        case 1:
+            format = Rndr::Canvas::Format::R8;
+            break;
+        case 2:
+            format = Rndr::Canvas::Format::RG8;
+            break;
+        case 3:
+            format = Rndr::Canvas::Format::RGB8;
+            break;
+        case 4:
+            format = Rndr::Canvas::Format::RGBA8;
+            break;
+    }
+
+    const Rndr::Canvas::TextureDesc desc{
+        .width = bitmap.GetWidth(),
+        .height = bitmap.GetHeight(),
+        .format = format,
+        .wrap_u = Rndr::Canvas::TextureWrap::Repeat,
+        .wrap_v = Rndr::Canvas::TextureWrap::Repeat,
+        .use_mips = bitmap.GetMipCount() > 1,
+    };
+    const Opal::ArrayView<const Rndr::u8> data(bitmap.GetData(), bitmap.GetTotalSize());
+    return Rndr::Canvas::Texture(context, desc, data, path.Clone());
+}
 
 void SetupFlyCameraControls(Rndr::Application& app, Rndr::FlyCamera& camera);
 
-Rndr::FrameBuffer RecreateFrameBuffer(Rndr::GraphicsContext& gc, Rndr::i32 width, Rndr::i32 height)
-{
-    const Rndr::FrameBufferDesc desc{.color_attachments = {Rndr::TextureDesc{.width = width, .height = height}},
-                                     .color_attachment_samplers = {{}},
-                                     .use_depth_stencil = true,
-                                     .depth_stencil_attachment = {Rndr::TextureDesc{
-                                         .width = width, .height = height, .pixel_format = Rndr::PixelFormat::D32_SFLOAT_S8_UINT}},
-                                     .depth_stencil_sampler = {{}}};
-    return {gc, desc, "Window Sample - Final Render Frame Buffer"};
-}
-
-void DrawScene(Rndr::Shape3DRenderer& shape_renderer, const Rndr::Mesh& mesh, const Rndr::MaterialRegistry& mat_registry);
+void DrawScene(Rndr::Canvas::PbrRenderer& renderer, const Rndr::Mesh& helmet_mesh, const Rndr::Canvas::Texture* default_albedo_texture,
+               const Rndr::Canvas::Texture* helmet_albedo, const Rndr::Canvas::Texture* helmet_emissive,
+               const Rndr::Canvas::Texture* helmet_mr, const Rndr::Canvas::Texture* helmet_normal, const Rndr::Canvas::Texture* helmet_ao);
 
 int main()
 {
-    Rndr::i32 resolution_index = 0;
-    Opal::DynamicArray<Rndr::Vector2i> rendering_resolution_options{{2560, 1440}, {1920, 1080}, {1600, 900}};
-    const char* rendering_resolution_options_str[]{"2560x1440", "1920x1080", "1600x900"};
+    using namespace Rndr;
 
-    const Rndr::ApplicationDesc app_desc{.enable_input_system = true};
-    auto app = Rndr::Application::Create(app_desc);
-    if (app == nullptr)
-    {
-        RNDR_LOG_ERROR("Failed to create app!");
-        return -1;
-    }
-    const auto& monitors = app->GetMonitors();
-    for (const auto& monitor : monitors)
-    {
-        RNDR_LOG_INFO("Monitor {}: {}", monitor.index, *monitor.name);
-    }
-    auto window = app->CreateGenericWindow({.monitor_index = 1});
-    if (window == nullptr)
-    {
-        RNDR_LOG_ERROR("Failed to create window!");
-        return -1;
-    }
-    Rndr::Vector2i window_size = window->GetSize();
-    Rndr::i32 window_width = window_size.x;
-    Rndr::i32 window_height = window_size.y;
-    window->SetTitle("Window Sample");
+    const ApplicationDesc app_desc{.enable_input_system = true};
+    auto app = Application::Create(app_desc);
+    RNDR_ASSERT(app.IsValid(), "Failed to create Rndr app!");
 
+    const GenericWindowDesc window_desc{.name = "Window Sample"};
+    auto window = app->CreateGenericWindow(window_desc);
+    RNDR_ASSERT(window.IsValid(), "Failed to create a window!");
     window->EnableHighPrecisionCursorMode(true);
 
-    const Rndr::GraphicsContextDesc gc_desc{.window_handle = window->GetNativeHandle()};
-    Rndr::GraphicsContext gc{gc_desc};
-    const Rndr::SwapChainDesc swap_chain_desc{.width = window_width, .height = window_height, .enable_vsync = true};
-    Rndr::SwapChain swap_chain{gc, swap_chain_desc};
-    Rndr::FrameBuffer final_render =
-        RecreateFrameBuffer(gc, rendering_resolution_options[resolution_index].x, rendering_resolution_options[resolution_index].y);
+    auto context = Canvas::Context::Init(window.Clone());
+    RNDR_ASSERT(context.IsValid(), "Failed to create Canvas context!");
+
+    Rndr::ImGuiContext imgui_context(*app, window.Clone());
+
+    Canvas::PbrRenderer pbr_renderer(Opal::Ref{context});
+
+    // Load helmet mesh.
+    Mesh helmet_mesh;
+    MaterialDesc helmet_material_desc;
+    const Opal::StringUtf8 helmet_path =
+        Opal::Paths::Combine(RNDR_CORE_ASSETS_DIR, "sample-models", "DamagedHelmet", "gltf", "DamagedHelmet.gltf");
+    File::LoadMeshAndMaterialDescription(helmet_path, helmet_mesh, helmet_material_desc);
+
+    // Load textures.
+    Opal::StringUtf8 default_albedo_path = Opal::Paths::Combine(RNDR_CORE_ASSETS_DIR, "default-texture.png");
+    default_albedo_path = Opal::Paths::NormalizePath(std::move(default_albedo_path));
+    Canvas::Texture default_albedo_texture = LoadTextureFromFile(context, default_albedo_path);
+
+    Canvas::Texture helmet_albedo;
+    if (!helmet_material_desc.albedo_texture_path.IsEmpty())
+    {
+        helmet_albedo = LoadTextureFromFile(context, helmet_material_desc.albedo_texture_path);
+    }
+    Canvas::Texture helmet_emissive;
+    if (!helmet_material_desc.emissive_texture_path.IsEmpty())
+    {
+        helmet_emissive = LoadTextureFromFile(context, helmet_material_desc.emissive_texture_path);
+    }
+    Canvas::Texture helmet_mr;
+    if (!helmet_material_desc.metallic_roughness_texture_path.IsEmpty())
+    {
+        helmet_mr = LoadTextureFromFile(context, helmet_material_desc.metallic_roughness_texture_path);
+    }
+    Canvas::Texture helmet_normal;
+    if (!helmet_material_desc.normal_texture_path.IsEmpty())
+    {
+        helmet_normal = LoadTextureFromFile(context, helmet_material_desc.normal_texture_path);
+    }
+    Canvas::Texture helmet_ao;
+    if (!helmet_material_desc.ambient_occlusion_texture_path.IsEmpty())
+    {
+        helmet_ao = LoadTextureFromFile(context, helmet_material_desc.ambient_occlusion_texture_path);
+    }
+
+    // Fly camera.
+    const i32 window_width = window->GetSize().x;
+    const i32 window_height = window->GetSize().y;
+    const FlyCameraDesc fly_camera_desc{.start_position = {0.0f, 1.0f, 0.0f}, .start_yaw_radians = 0};
+    ExampleController controller(*app, window_width, window_height, fly_camera_desc, 10.0f, 0.005f, 0.005f);
+    controller.Enable(false);
 
     app->on_window_resize.Bind(
-        [&swap_chain, &window](const Rndr::GenericWindow& w, Rndr::i32 width, Rndr::i32 height)
+        [&context, &window, &controller](const GenericWindow& w, i32 width, i32 height)
         {
             if (window.GetPtr() == &w)
             {
-                swap_chain.SetSize(width, height);
+                context.Resize(width, height);
+                controller.SetScreenSize(width, height);
             }
         });
 
     app->GetInputSystemChecked()
         .GetCurrentContext()
         .AddAction("Switch display mode")
-        .Bind(Rndr::Key::F2, Rndr::Trigger::Pressed)
+        .Bind(Key::F2, Trigger::Pressed)
         .OnButton(
-            [&window](Rndr::Trigger, bool is_repeated)
+            [&window](Trigger, bool is_repeated)
             {
                 if (!is_repeated)
                 {
-                    const Rndr::GenericWindowMode current_mode = window->GetMode();
-                    window->SetMode(current_mode == Rndr::GenericWindowMode::Windowed ? Rndr::GenericWindowMode::BorderlessFullscreen
-                                                                                      : Rndr::GenericWindowMode::Windowed);
+                    const GenericWindowMode current_mode = window->GetMode();
+                    window->SetMode(current_mode == GenericWindowMode::Windowed ? GenericWindowMode::BorderlessFullscreen
+                                                                                : GenericWindowMode::Windowed);
                 }
             });
-
-    Rndr::ImGuiContext imgui_context(*app, *window);
-
-    Rndr::GridRenderer grid_renderer("Grid Renderer", {.graphics_context = gc, .swap_chain = swap_chain}, Opal::Ref{final_render});
-    Rndr::Shape3DRenderer shape_renderer("3D Shape Renderer", {.graphics_context = gc, .swap_chain = swap_chain}, Opal::Ref{final_render});
-
-    Rndr::Mesh helmet_mesh;
-    Rndr::MaterialDesc helmet_material_desc;
-    const Opal::StringUtf8 helmet_path =
-        Opal::Paths::Combine(RNDR_CORE_ASSETS_DIR, "sample-models", "DamagedHelmet", "gltf", "DamagedHelmet.gltf");
-    Rndr::File::LoadMeshAndMaterialDescription(helmet_path, helmet_mesh, helmet_material_desc);
-
-    Rndr::MaterialRegistry material_registry(Opal::Ref{gc});
-    material_registry.Register("Red Color Material", {.albedo_color = Rndr::Colors::k_red});
-    material_registry.Register("White Color Material", {.albedo_color = Rndr::Colors::k_white});
-    Opal::StringUtf8 albedo_texture_path = Opal::Paths::Combine(RNDR_CORE_ASSETS_DIR, "default-texture.png");
-    albedo_texture_path = Opal::Paths::NormalizePath(std::move(albedo_texture_path));
-    material_registry.Register("Default Material", {.albedo_texture_path = std::move(albedo_texture_path)});
-    material_registry.Register("Helmet Material", helmet_material_desc);
-
-    const Rndr::FlyCameraDesc fly_camera_desc{.start_position = {0.0f, 1.0f, 0.0f}, .start_yaw_radians = 0};
-    ExampleController controller(*app, window_width, window_height, fly_camera_desc, 10.0f, 0.005f, 0.005f);
-    controller.Enable(false);
-    app->on_window_resize.Bind(
-        [&controller, &window](const Rndr::GenericWindow& w, Rndr::i32 width, Rndr::i32 height)
-        {
-            if (window.GetPtr() == &w)
-            {
-                controller.SetScreenSize(width, height);
-            }
-        });
 
     app->GetInputSystemChecked()
         .GetContextByName("Default")
         .AddAction("Toggle movement controls")
-        .Bind(Rndr::Key::F1, Rndr::Trigger::Pressed)
+        .Bind(Key::F1, Trigger::Pressed)
         .OnButton(
-            [&app, &window, &controller](Rndr::Trigger, bool is_repeated)
+            [&app, &window, &controller](Trigger, bool is_repeated)
             {
                 if (!is_repeated)
                 {
-                    const Rndr::CursorPositionMode mode = window->GetCursorPositionMode();
-                    if (mode == Rndr::CursorPositionMode::Normal)
+                    const CursorPositionMode mode = window->GetCursorPositionMode();
+                    if (mode == CursorPositionMode::Normal)
                     {
                         app->ShowCursor(false);
-                        window->SetCursorPositionMode(Rndr::CursorPositionMode::ResetToCenter);
+                        window->SetCursorPositionMode(CursorPositionMode::ResetToCenter);
                     }
                     else
                     {
                         app->ShowCursor(true);
-                        window->SetCursorPositionMode(Rndr::CursorPositionMode::Normal);
+                        window->SetCursorPositionMode(CursorPositionMode::Normal);
                     }
                     controller.Enable(!controller.IsEnabled());
                 }
             });
+
     app->GetInputSystemChecked()
         .GetContextByName("Default")
         .AddAction("Exit")
-        .Bind(Rndr::Key::Escape, Rndr::Trigger::Pressed)
-        .OnButton([&window](Rndr::Trigger, bool) { window->RequestClose(); });
+        .Bind(Key::Escape, Trigger::Pressed)
+        .OnButton([&window](Trigger, bool) { window->RequestClose(); });
 
-    Rndr::CommandList present_cmd_list{gc};
-    present_cmd_list.CmdPresent(swap_chain);
-
-    Rndr::FramesPerSecondCounter fps_counter;
-    int selected_resolution_index = 0;
-    bool vsync = true;
+    FramesPerSecondCounter fps_counter;
     bool stats_window = true;
-    Rndr::f32 delta_seconds = 0.016f;
+    f32 delta_seconds = 0.016f;
     while (!window->IsClosed())
     {
-        const Rndr::f64 start_seconds = Opal::GetSeconds();
+        const f64 start_seconds = Opal::GetSeconds();
 
         fps_counter.Update(delta_seconds);
 
         app->ProcessSystemEvents(delta_seconds);
         controller.Tick(delta_seconds);
 
-        if (selected_resolution_index != resolution_index)
-        {
-            resolution_index = selected_resolution_index;
-            final_render.Destroy();
-            final_render =
-                RecreateFrameBuffer(gc, rendering_resolution_options[resolution_index].x, rendering_resolution_options[resolution_index].y);
-            grid_renderer.SetFrameBufferTarget(Opal::Ref{final_render});
-            shape_renderer.SetFrameBufferTarget(Opal::Ref{final_render});
-        }
+        Canvas::DrawList draw_list;
+        draw_list.SetRenderTarget(context);
+        draw_list.Clear(Colors::k_black, 1.0f);
 
-        swap_chain.SetVerticalSync(vsync);
+        const Matrix4x4f vp = controller.GetProjectionTransform() * controller.GetViewTransform();
 
-        Rndr::CommandList cmd_list{gc};
+        pbr_renderer.BeginFrame();
+        pbr_renderer.SetViewProjection(vp);
+        pbr_renderer.SetCameraPosition(controller.GetCameraPosition());
 
-        cmd_list.CmdBindSwapChainFrameBuffer(swap_chain);
-        cmd_list.CmdClearAll(Rndr::Colors::k_pink);
-        cmd_list.CmdBindFrameBuffer(final_render);
-        cmd_list.CmdClearAll(Rndr::Colors::k_black);
+        DrawScene(pbr_renderer, helmet_mesh, &default_albedo_texture, helmet_albedo.IsValid() ? &helmet_albedo : nullptr,
+                  helmet_emissive.IsValid() ? &helmet_emissive : nullptr, helmet_mr.IsValid() ? &helmet_mr : nullptr,
+                  helmet_normal.IsValid() ? &helmet_normal : nullptr, helmet_ao.IsValid() ? &helmet_ao : nullptr);
 
-        grid_renderer.SetTransforms(controller.GetViewTransform(), controller.GetProjectionTransform());
-        grid_renderer.Render(delta_seconds, cmd_list);
-
-        DrawScene(shape_renderer, helmet_mesh, material_registry);
-        shape_renderer.SetTransforms(controller.GetViewTransform(), controller.GetProjectionTransform());
-        shape_renderer.SetCameraPosition(controller.GetCameraPosition());
-        shape_renderer.Render(delta_seconds, cmd_list);
-
-        const Rndr::BlitFrameBufferDesc blit_desc;
-        cmd_list.CmdBlitToSwapChain(swap_chain, final_render, blit_desc);
-        cmd_list.CmdBindSwapChainFrameBuffer(swap_chain);
-
-        gc.SubmitCommandList(cmd_list);
+        pbr_renderer.Render(draw_list);
+        draw_list.Execute();
 
         imgui_context.StartFrame();
         ImGui::Begin("Stats", &stats_window);
-        ImGui::Combo("Rendering Resolution", &selected_resolution_index, rendering_resolution_options_str, 3);
-        ImGui::Checkbox("Vertical Sync", &vsync);
-        ImGui::Text("Current Rendering resolution: %s", rendering_resolution_options_str[selected_resolution_index]);
-        window_size = window->GetSize();
+        const auto window_size = window->GetSize();
         ImGui::Text("Window Resolution: %dx%d", window_size.x, window_size.y);
-        ImGui::Text("Cursor mode: %s", window->GetCursorPositionMode() == Rndr::CursorPositionMode::Normal ? "Normal" : "Reset to Center");
-        ImGui::Text("Display mode: %s", window->GetMode() == Rndr::GenericWindowMode::Windowed ? "Windowed" : "Borderless Fullscreen");
         ImGui::Text("FPS: %.2f", fps_counter.GetFramesPerSecond());
         ImGui::Text("Frame Time: %.2f ms", (1 / fps_counter.GetFramesPerSecond()) * 1000.0f);
         ImGui::Text("Controls:");
-        ImGui::Text("F1 - Toggle between Normal and ResetToCenter cursor position mode");
-        ImGui::Text("F2 - Toggle between Windowed and BorderlessFullscreen mode");
+        ImGui::Text("F1 - Toggle camera controls");
+        ImGui::Text("F2 - Toggle fullscreen");
         ImGui::End();
         imgui_context.EndFrame();
 
-        gc.SubmitCommandList(present_cmd_list);
+        context.Present();
 
-        const Rndr::f64 end_seconds = Opal::GetSeconds();
-        delta_seconds = static_cast<Rndr::f32>(end_seconds - start_seconds);
+        const f64 end_seconds = Opal::GetSeconds();
+        delta_seconds = static_cast<f32>(end_seconds - start_seconds);
     }
 
     return 0;
 }
 
-Rndr::Vector4f RandomColor(Opal::RNG& rng)
+void DrawScene(Rndr::Canvas::PbrRenderer& renderer, const Rndr::Mesh& helmet_mesh, const Rndr::Canvas::Texture* default_albedo_texture,
+               const Rndr::Canvas::Texture* helmet_albedo, const Rndr::Canvas::Texture* helmet_emissive,
+               const Rndr::Canvas::Texture* helmet_mr, const Rndr::Canvas::Texture* helmet_normal, const Rndr::Canvas::Texture* helmet_ao)
 {
-    return {rng.RandomF32(0, 1.0), rng.RandomF32(0, 1.0), rng.RandomF32(0, 1.0), 1.0f};
-}
+    renderer.AddDirectionalLight({1, 1, 1}, Rndr::Colors::k_white);
+    renderer.AddPointLight({-20, 0, 0}, Rndr::Colors::k_red);
 
-void DrawScene(Rndr::Shape3DRenderer& shape_renderer, const Rndr::Mesh& mesh, const Rndr::MaterialRegistry& mat_registry)
-{
-    shape_renderer.AddDirectionalLight({1, 1, 1}, Rndr::Colors::k_white);
-    shape_renderer.AddPointLight({-20, 0, 0}, Rndr::Colors::k_red);
-
-    const Opal::Ref<const Rndr::Material> red_material = mat_registry.Get("Red Color Material");
-    const Opal::Ref<const Rndr::Material> white_material = mat_registry.Get("White Color Material");
-    const Opal::Ref<const Rndr::Material> default_material = mat_registry.Get("Default Material");
-    const Opal::Ref<const Rndr::Material> helmet_material = mat_registry.Get("Helmet Material");
+    // Red cube.
+    const Rndr::Canvas::PbrMaterialDesc red_material{.material_name = "Green Material", .albedo_color = Rndr::Colors::k_green};
     const Rndr::Matrix4x4f cube_transform = Opal::Translate(Rndr::Vector3f{-2.0f, 0.0f, -10.0f});
-    const Rndr::Matrix4x4f sphere_transform = Opal::Translate(Rndr::Vector3f{2.0f, 0.0f, -10.0f});
-    const Rndr::Matrix4x4f helmet_transform = Opal::Translate(Rndr::Vector3f{0.0f, 2.0f, -20.0f}) * Opal::RotateX(90.0f);
-    shape_renderer.DrawSphere(sphere_transform, default_material.Clone(), 2.0f, 2.0f, 32, 32);
-    shape_renderer.DrawCube(cube_transform, default_material.Clone(), 1.0f, 1.0f);
-    shape_renderer.DrawMesh(mesh, helmet_transform, helmet_material.Clone());
+    renderer.DrawCube(cube_transform, red_material);
 
+    // Textured sphere.
+    const Rndr::Canvas::PbrMaterialDesc default_material{.material_name = "Default Material", .albedo_texture = default_albedo_texture};
+    const Rndr::Matrix4x4f sphere_transform = Opal::Translate(Rndr::Vector3f{2.0f, 0.0f, -10.0f});
+    renderer.DrawSphere(sphere_transform, default_material, 2.0f, 2.0f, 32, 32);
+
+    // Helmet.
+    Rndr::Canvas::PbrMaterialDesc helmet_material;
+    helmet_material.material_name = "Damaged Helmet Material";
+    helmet_material.albedo_texture = helmet_albedo;
+    helmet_material.emissive_texture = helmet_emissive;
+    helmet_material.metallic_roughness_texture = helmet_mr;
+    helmet_material.normal_texture = helmet_normal;
+    helmet_material.ambient_occlusion_texture = helmet_ao;
+    const Rndr::Matrix4x4f helmet_transform = Opal::Translate(Rndr::Vector3f{0.0f, 2.0f, -20.0f}) * Opal::RotateX(90.0f);
+    renderer.DrawMesh("DamagedHelmet", helmet_mesh, helmet_transform, helmet_material);
+
+    // Grid of white spheres.
+    const Rndr::Canvas::PbrMaterialDesc white_material{.material_name = "White Material", .albedo_color = Rndr::Colors::k_white};
     constexpr Rndr::i32 k_cube_size = 10;
     const Rndr::Point3f start_position = {0.0f, 0.0f, 10.0f};
-    Opal::RNG rng(100);
     for (Rndr::i32 x = 0; x < k_cube_size; ++x)
     {
         for (Rndr::i32 y = 0; y < k_cube_size; ++y)
@@ -269,7 +269,7 @@ void DrawScene(Rndr::Shape3DRenderer& shape_renderer, const Rndr::Mesh& mesh, co
             {
                 constexpr Rndr::f32 k_distance = 5.0f;
                 const Rndr::Point3f draw_location = start_position + Rndr::Vector3f{x * k_distance, y * k_distance, z * k_distance};
-                shape_renderer.DrawSphere(Opal::Translate(draw_location), white_material.Clone());
+                renderer.DrawSphere(Opal::Translate(draw_location), white_material);
             }
         }
     }

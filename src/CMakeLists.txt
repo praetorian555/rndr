@@ -106,7 +106,9 @@ if (${RNDR_CANVAS})
             "${PROJECT_SOURCE_DIR}/include/rndr/canvas/bitmap-text-renderer.hpp"
             "${PROJECT_SOURCE_DIR}/src/canvas/bitmap-text-renderer.cpp"
             "${PROJECT_SOURCE_DIR}/include/rndr/canvas/cubemap-renderer.hpp"
-            "${PROJECT_SOURCE_DIR}/src/canvas/cubemap-renderer.cpp")
+            "${PROJECT_SOURCE_DIR}/src/canvas/cubemap-renderer.cpp"
+            "${PROJECT_SOURCE_DIR}/include/rndr/canvas/pbr-renderer.hpp"
+            "${PROJECT_SOURCE_DIR}/src/canvas/pbr-renderer.cpp")
 endif ()
 
 list(APPEND SOURCE_LIST
