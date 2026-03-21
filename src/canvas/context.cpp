@@ -2,18 +2,18 @@
 
 #include "glad/glad_wgl.h"
 
-#include "opal/logging.h"
+#include "opal/container/hash-set.h"
 
 #include "rndr/definitions.hpp"
 #include "rndr/exception.hpp"
 #include "rndr/generic-window.hpp"
+#include "rndr/log.hpp"
 #include "rndr/trace.hpp"
 
 namespace
 {
 
-constexpr const char* k_log_category = "Canvas";
-
+Opal::HashSet<size_t> g_log_messages;
 void APIENTRY DebugOutputCallback(GLenum source, GLenum type, unsigned int id, GLenum severity, GLsizei length, const char* message,
                                   const void* user_param)
 {
@@ -22,14 +22,27 @@ void APIENTRY DebugOutputCallback(GLenum source, GLenum type, unsigned int id, G
     RNDR_UNUSED(id);
     RNDR_UNUSED(length);
     RNDR_UNUSED(user_param);
-    Opal::Logger& logger = Opal::GetLogger();
+    if (type == GL_DEBUG_TYPE_PUSH_GROUP || type == GL_DEBUG_TYPE_POP_GROUP)
+    {
+        return;
+    }
+    const size_t message_key = Opal::Hash::CalcPOD(id) ^ (Opal::Hash::CalcPOD(source) << 1) ^ (Opal::Hash::CalcPOD(type) << 2);
+    if (g_log_messages.Contains(message_key))
+    {
+        return;
+    }
+    g_log_messages.Insert(message_key);
     switch (severity)
     {
         case GL_DEBUG_SEVERITY_HIGH:
-            logger.Error(k_log_category, "{}", message);
+            RNDR_LOG_ERROR("{}", message);
             break;
         case GL_DEBUG_SEVERITY_MEDIUM:
-            logger.Warning(k_log_category, "{}", message);
+            RNDR_LOG_WARNING("{}", message);
+            break;
+        case GL_DEBUG_SEVERITY_LOW:
+        case GL_DEBUG_SEVERITY_NOTIFICATION:
+            RNDR_LOG_INFO("{}", message);
             break;
         default:
             break;
@@ -134,7 +147,7 @@ void Rndr::Canvas::Context::Destroy()
         const BOOL status = wglDeleteContext(m_graphics_context);
         if (status == 0)
         {
-            Opal::GetLogger().Error(k_log_category, "Failed to destroy OpenGL context!");
+            RNDR_LOG_ERROR("Failed to destroy OpenGL context!");
         }
         m_graphics_context = k_invalid_graphics_context_handle;
     }
@@ -216,12 +229,6 @@ Rndr::Canvas::Context Rndr::Canvas::Context::Init(Opal::Ref<GenericWindow> windo
     if (g_context_exists)
     {
         throw Opal::InvalidArgumentException(__FUNCTION__, "Canvas::Context::Init called twice! Only one Context can exist at a time.");
-    }
-
-    Opal::Logger& logger = Opal::GetLogger();
-    if (!logger.IsCategoryRegistered(k_log_category))
-    {
-        logger.RegisterCategory(k_log_category, Opal::LogLevel::Info);
     }
 
     Context ctx;
@@ -359,6 +366,9 @@ Rndr::Canvas::Context Rndr::Canvas::Context::Init(Opal::Ref<GenericWindow> windo
     glEnable(GL_DEBUG_OUTPUT_SYNCHRONOUS);
     glDebugMessageCallback(&DebugOutputCallback, nullptr);
     glDebugMessageControl(GL_DONT_CARE, GL_DONT_CARE, GL_DONT_CARE, 0, nullptr, GL_TRUE);
+    // Ignore message that says buffer has usage hint GL_STATIC_DRAW, since this is old API not in use and makes no sense
+    constexpr GLuint k_nvidia_buffer_info_bit = 131185;
+    glDebugMessageControl(GL_DEBUG_SOURCE_API, GL_DEBUG_TYPE_OTHER, GL_DONT_CARE, 1, &k_nvidia_buffer_info_bit, GL_FALSE);
 #endif
 
 #else
@@ -372,6 +382,6 @@ Rndr::Canvas::Context Rndr::Canvas::Context::Init(Opal::Ref<GenericWindow> windo
     glGetIntegerv(GL_MINOR_VERSION, &minor);
 
     g_context_exists = true;
-    logger.Info(k_log_category, "OpenGL {}.{} context initialized successfully.", major, minor);
+    RNDR_LOG_INFO("OpenGL {}.{} context initialized successfully.", major, minor);
     return ctx;
 }
