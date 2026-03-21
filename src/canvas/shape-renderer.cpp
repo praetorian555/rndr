@@ -1,4 +1,4 @@
-#include "rndr/canvas/shape-renderer.hpp"
+#include "../../include/rndr/canvas/renderers/shape-renderer.hpp"
 
 #include "rndr/canvas/context.hpp"
 #include "rndr/canvas/projections.hpp"

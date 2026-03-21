@@ -1,4 +1,4 @@
-#include "rndr/canvas/cubemap-renderer.hpp"
+#include "../../include/rndr/canvas/renderers/cubemap-renderer.hpp"
 
 #include "rndr/canvas/context.hpp"
 

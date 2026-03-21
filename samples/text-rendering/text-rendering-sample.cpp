@@ -1,19 +1,18 @@
+#include "imgui.h"
+
 #include "opal/paths.h"
 #include "opal/time.h"
 
 #include "rndr/application.hpp"
 #include "rndr/canvas/context.hpp"
+#include "rndr/canvas/draw-list.hpp"
+#include "rndr/canvas/renderers/bitmap-text-renderer.hpp"
+#include "rndr/canvas/renderers/shape-renderer.hpp"
 #include "rndr/file.hpp"
 #include "rndr/frames-per-second-counter.hpp"
 #include "rndr/imgui-system.hpp"
 #include "rndr/log.hpp"
 #include "rndr/types.hpp"
-
-#include "imgui.h"
-
-#include "rndr/canvas/bitmap-text-renderer.hpp"
-#include "rndr/canvas/draw-list.hpp"
-#include "rndr/canvas/shape-renderer.hpp"
 
 int main()
 {

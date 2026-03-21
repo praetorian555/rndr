@@ -1,4 +1,4 @@
-#include "rndr/canvas/bitmap-text-renderer.hpp"
+#include "../../include/rndr/canvas/renderers/bitmap-text-renderer.hpp"
 
 #include "opal/paths.h"
 #include "rndr/canvas/context.hpp"

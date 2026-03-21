@@ -101,13 +101,13 @@ if (${RNDR_CANVAS})
             "${PROJECT_SOURCE_DIR}/src/canvas/brush.cpp"
             "${PROJECT_SOURCE_DIR}/include/rndr/canvas/projections.hpp"
             "${PROJECT_SOURCE_DIR}/src/canvas/projections.cpp"
-            "${PROJECT_SOURCE_DIR}/include/rndr/canvas/shape-renderer.hpp"
+            "../include/rndr/canvas/renderers/shape-renderer.hpp"
             "${PROJECT_SOURCE_DIR}/src/canvas/shape-renderer.cpp"
-            "${PROJECT_SOURCE_DIR}/include/rndr/canvas/bitmap-text-renderer.hpp"
+            "../include/rndr/canvas/renderers/bitmap-text-renderer.hpp"
             "${PROJECT_SOURCE_DIR}/src/canvas/bitmap-text-renderer.cpp"
-            "${PROJECT_SOURCE_DIR}/include/rndr/canvas/cubemap-renderer.hpp"
+            "../include/rndr/canvas/renderers/cubemap-renderer.hpp"
             "${PROJECT_SOURCE_DIR}/src/canvas/cubemap-renderer.cpp"
-            "${PROJECT_SOURCE_DIR}/include/rndr/canvas/pbr-renderer.hpp"
+            "../include/rndr/canvas/renderers/pbr-renderer.hpp"
             "${PROJECT_SOURCE_DIR}/src/canvas/pbr-renderer.cpp")
 endif ()
 

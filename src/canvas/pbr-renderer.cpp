@@ -1,4 +1,4 @@
-#include "rndr/canvas/pbr-renderer.hpp"
+#include "../../include/rndr/canvas/renderers/pbr-renderer.hpp"
 
 #include "opal/paths.h"
 

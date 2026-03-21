@@ -1,11 +1,11 @@
 #include "opal/paths.h"
 #include "opal/time.h"
 
+#include "../../include/rndr/canvas/renderers/pbr-renderer.hpp"
 #include "rndr/application.hpp"
 #include "rndr/bitmap.hpp"
 #include "rndr/canvas/context.hpp"
 #include "rndr/canvas/draw-list.hpp"
-#include "rndr/canvas/pbr-renderer.hpp"
 #include "rndr/canvas/projections.hpp"
 #include "rndr/canvas/texture.hpp"
 #include "rndr/file.hpp"
