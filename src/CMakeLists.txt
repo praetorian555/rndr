@@ -75,6 +75,8 @@ if (${RNDR_CANVAS})
             "${PROJECT_SOURCE_DIR}/src/canvas/draw-list.cpp"
             "${PROJECT_SOURCE_DIR}/src/canvas/projections.cpp"
             "${PROJECT_SOURCE_DIR}/src/canvas/bitmap.cpp"
+            "${PROJECT_SOURCE_DIR}/src/canvas/spirv-patch.hpp"
+            "${PROJECT_SOURCE_DIR}/src/canvas/spirv-patch.cpp"
             "${PROJECT_SOURCE_DIR}/src/canvas/shape-renderer.cpp"
             "${PROJECT_SOURCE_DIR}/src/canvas/bitmap-text-renderer.cpp"
             "${PROJECT_SOURCE_DIR}/src/canvas/cubemap-renderer.cpp"

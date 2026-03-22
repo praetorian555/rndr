@@ -4,6 +4,7 @@
 #include "slang-com-ptr.h"
 #include "slang.h"
 
+#include "canvas/spirv-patch.hpp"
 #include "rndr/exception.hpp"
 #include "rndr/file.hpp"
 #include "rndr/log.hpp"
@@ -589,13 +590,19 @@ Opal::StringUtf8 FindSingleEntryPoint(const Opal::DynamicArray<EntryPointInfo>& 
 
 GLuint CreateShaderFromSpirv(GLenum stage, const void* spirv_data, size_t spirv_size)
 {
+    // Patch the SPIR-V bytecode to fix Vulkan-to-OpenGL builtin differences.
+    const size_t word_count = spirv_size / sizeof(Rndr::u32);
+    Opal::DynamicArray<Rndr::u32> patched(word_count);
+    memcpy(patched.GetData(), spirv_data, spirv_size);
+    Rndr::Impl::PatchSpirv(patched);
+
     const GLuint shader = glCreateShader(stage);
     if (shader == 0)
     {
         throw Rndr::GraphicsAPIException(0, "Failed to create GL shader!");
     }
 
-    glShaderBinary(1, &shader, GL_SHADER_BINARY_FORMAT_SPIR_V, spirv_data, static_cast<GLsizei>(spirv_size));
+    glShaderBinary(1, &shader, GL_SHADER_BINARY_FORMAT_SPIR_V, patched.GetData(), static_cast<GLsizei>(spirv_size));
 
     const GLenum err = glGetError();
     if (err != GL_NO_ERROR)
