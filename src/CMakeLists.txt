@@ -177,11 +177,12 @@ target_link_libraries(rndr PUBLIC opal imgui assimp)
 # TODO: Reenable once we refactor everything
 #add_dependencies(rndr generate-reflection)
 
+target_link_libraries(rndr PUBLIC ktx)
+
 if (${RNDR_ADVANCED_API})
     target_include_directories(rndr PRIVATE ${VULKAN_SDK_PATH}/Source/SPIRV-Reflect)
     target_include_directories(rndr PUBLIC ${VULKAN_SDK_PATH}/Include)
     target_include_directories(rndr PUBLIC ${VULKAN_SDK_PATH}/Include/slang)
-    target_link_libraries(rndr PUBLIC ktx)
     target_compile_definitions(rndr PUBLIC RNDR_ADVANCED_API)
     if (WIN32)
         target_compile_definitions(rndr PUBLIC -DVK_USE_PLATFORM_WIN32_KHR -DVK_NO_PROTOTYPES)

@@ -1,6 +1,14 @@
 #include "rndr/canvas/texture.hpp"
 
+#include "stb_image/stb_image.h"
+
+#include "ktx.h"
+
 #include "glad/glad.h"
+
+#include "opal/exceptions.h"
+#include "opal/file-system.h"
+#include "opal/paths.h"
 
 #include "rndr/exception.hpp"
 #include "rndr/trace.hpp"
@@ -290,6 +298,124 @@ Rndr::Canvas::Texture::Texture(const Context& context, const TextureDesc& desc, 
     {
         glObjectLabel(GL_TEXTURE, m_handle, static_cast<GLsizei>(m_name.GetSize()), m_name.GetData());
     }
+}
+
+namespace
+{
+
+Rndr::Canvas::Format GlInternalFormatToCanvasFormat(ktx_uint32_t gl_format)
+{
+    switch (gl_format)
+    {
+        case 0x8229:  // GL_R8
+            return Rndr::Canvas::Format::R8;
+        case 0x822B:  // GL_RG8
+            return Rndr::Canvas::Format::RG8;
+        case 0x8051:  // GL_RGB8
+            return Rndr::Canvas::Format::RGB8;
+        case 0x8058:  // GL_RGBA8
+            return Rndr::Canvas::Format::RGBA8;
+        case 0x8C41:  // GL_SRGB8
+            return Rndr::Canvas::Format::SRGB8;
+        case 0x8C43:  // GL_SRGB8_ALPHA8
+            return Rndr::Canvas::Format::SRGBA8;
+        case 0x822D:  // GL_R16F
+            return Rndr::Canvas::Format::R16F;
+        case 0x822F:  // GL_RG16F
+            return Rndr::Canvas::Format::RG16F;
+        case 0x881A:  // GL_RGBA16F
+            return Rndr::Canvas::Format::RGBA16F;
+        case 0x822E:  // GL_R32F
+            return Rndr::Canvas::Format::R32F;
+        case 0x8230:  // GL_RG32F
+            return Rndr::Canvas::Format::RG32F;
+        case 0x8814:  // GL_RGBA32F
+            return Rndr::Canvas::Format::RGBA32F;
+        default:
+            throw Opal::Exception("Unsupported GL internal format in KTX file for Canvas::Texture!");
+    }
+}
+
+}  // namespace
+
+Rndr::Canvas::Texture Rndr::Canvas::Texture::FromFile(const Context& context, const Opal::StringUtf8& file_path, TextureDesc desc,
+                                                       bool flip_vertically, Opal::StringUtf8 debug_name)
+{
+    if (!Opal::Exists(file_path))
+    {
+        throw Opal::Exception("File does not exist!");
+    }
+
+    const Opal::StringUtf8 extension = Opal::Paths::GetExtension(file_path).GetValue();
+
+    if (extension == ".ktx")
+    {
+        ktxTexture1* ktx_texture = nullptr;
+        const KTX_error_code result = ktxTexture1_CreateFromNamedFile(*file_path, KTX_TEXTURE_CREATE_LOAD_IMAGE_DATA_BIT, &ktx_texture);
+        if (result != KTX_SUCCESS || ktx_texture == nullptr)
+        {
+            throw Opal::Exception("Failed to load KTX texture!");
+        }
+
+        desc.format = GlInternalFormatToCanvasFormat(ktx_texture->glInternalformat);
+        desc.width = static_cast<i32>(ktx_texture->baseWidth);
+        desc.height = static_cast<i32>(ktx_texture->baseHeight);
+
+        const i32 depth = static_cast<i32>(ktx_texture->baseDepth);
+        const i32 layers = static_cast<i32>(ktx_texture->numLayers);
+        if (layers > 1 || depth > 1)
+        {
+            desc.type = TextureType::Texture2DArray;
+            desc.array_size = layers > 1 ? layers : depth;
+        }
+
+        const u8* data = ktxTexture_GetData(reinterpret_cast<ktxTexture*>(ktx_texture));
+        const u64 data_size = ktxTexture_GetDataSize(reinterpret_cast<ktxTexture*>(ktx_texture));
+
+        Texture tex(context, desc, {data, data_size}, std::move(debug_name));
+        ktxTexture_Destroy(reinterpret_cast<ktxTexture*>(ktx_texture));
+        return tex;
+    }
+
+    stbi_set_flip_vertically_on_load(flip_vertically);
+
+    int width = 0;
+    int height = 0;
+    int channels_in_file = 0;
+    constexpr int k_desired_channels = 4;
+
+    u8* pixel_data = nullptr;
+    u64 data_size = 0;
+
+    if (stbi_is_hdr(*file_path) > 0)
+    {
+        f32* data = stbi_loadf(*file_path, &width, &height, &channels_in_file, k_desired_channels);
+        if (data == nullptr)
+        {
+            throw Opal::Exception("Failed to load HDR image!");
+        }
+        pixel_data = reinterpret_cast<u8*>(data);
+        desc.format = Format::RGBA32F;
+        data_size = static_cast<u64>(width) * height * k_desired_channels * sizeof(f32);
+    }
+    else
+    {
+        u8* data = stbi_load(*file_path, &width, &height, &channels_in_file, k_desired_channels);
+        if (data == nullptr)
+        {
+            throw Opal::Exception("Failed to load image!");
+        }
+        pixel_data = data;
+        desc.format = Format::SRGBA8;
+        data_size = static_cast<u64>(width) * height * k_desired_channels * sizeof(u8);
+    }
+
+    desc.width = width;
+    desc.height = height;
+
+    Texture tex(context, desc, {pixel_data, data_size}, std::move(debug_name));
+    stbi_image_free(pixel_data);
+    return tex;
 }
 
 Rndr::Canvas::Texture::~Texture()

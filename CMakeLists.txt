@@ -139,21 +139,21 @@ FetchContent_Declare(
 FetchContent_MakeAvailable(assimp)
 message(STATUS "***** Setup Complete *****")
 
+message(STATUS "***** Setting up KTX Software Dependency *****")
+FetchContent_Declare(
+        ktx
+        GIT_REPOSITORY https://github.com/KhronosGroup/KTX-Software.git
+        GIT_TAG "v4.4.2"
+)
+FetchContent_MakeAvailable(ktx)
+message(STATUS "***** Setup Complete *****")
+
 if (${RNDR_ADVANCED_API})
     if (NOT IS_DIRECTORY $ENV{VULKAN_SDK})
         message(WARNING "Vulkan SDK not detected!")
     else ()
         message(STATUS "Vulkan SDK found at: $ENV{VULKAN_SDK}")
     endif ()
-
-    message(STATUS "***** Setting up KTX Software Dependency *****")
-    FetchContent_Declare(
-            ktx
-            GIT_REPOSITORY https://github.com/KhronosGroup/KTX-Software.git
-            GIT_TAG "v4.4.2"
-    )
-    FetchContent_MakeAvailable(ktx)
-    message(STATUS "***** Setup Complete *****")
 endif ()
 
 # The compiled library code is here

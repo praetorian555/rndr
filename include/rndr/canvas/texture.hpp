@@ -133,6 +133,21 @@ public:
     Texture(Texture&& other) noexcept;
     Texture& operator=(Texture&& other) noexcept;
 
+    /**
+     * Load a texture from an image file. Supports PNG, JPEG, HDR (via stbi), and KTX/KTX2 (when RNDR_ADVANCED_API is enabled).
+     * Width, height, and format are determined from the file. Sampling parameters (filters, wrap modes, etc.)
+     * are taken from the provided descriptor.
+     * @param context Active Canvas context.
+     * @param file_path Path to the image file.
+     * @param desc Texture descriptor for sampling parameters. Width, height, and format fields are overridden.
+     * @param flip_vertically If true, flip the image vertically. Only applies to stbi-loaded images.
+     * @param debug_name Debug name for GPU debugging tools.
+     * @return A valid Texture.
+     * @throw Opal::Exception if the file does not exist or cannot be loaded.
+     */
+    [[nodiscard]] static Texture FromFile(const Context& context, const Opal::StringUtf8& file_path, TextureDesc desc = {},
+                                          bool flip_vertically = false, Opal::StringUtf8 debug_name = {});
+
     [[nodiscard]] Texture Clone() const;
     void Destroy();
 
