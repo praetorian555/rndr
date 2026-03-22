@@ -32,9 +32,8 @@ Rndr::Canvas::Buffer::Buffer(BufferUsage usage, u64 size, u64 offset, const Opal
     if (!m_name.IsEmpty())
     {
         glObjectLabel(GL_BUFFER, m_handle, static_cast<GLsizei>(m_name.GetSize()), m_name.GetData());
+        RNDR_LOG_INFO("Created buffer '{}' with native id {}", *m_name, m_handle);
     }
-
-    RNDR_LOG_INFO("Created buffer '{}' with native id {}", *m_name, m_handle);
 }
 
 Rndr::Canvas::Buffer::~Buffer()
