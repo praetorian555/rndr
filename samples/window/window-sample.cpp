@@ -7,7 +7,6 @@
 #include "rndr/canvas/draw-list.hpp"
 #include "rndr/canvas/projections.hpp"
 #include "rndr/canvas/texture.hpp"
-#include "rndr/file.hpp"
 #include "rndr/fly-camera.hpp"
 #include "rndr/frames-per-second-counter.hpp"
 #include "rndr/imgui-system.hpp"
@@ -20,9 +19,8 @@
 
 void SetupFlyCameraControls(Rndr::Application& app, Rndr::FlyCamera& camera);
 
-void DrawScene(Rndr::Canvas::PbrRenderer& renderer, const Rndr::Mesh& helmet_mesh, const Rndr::Canvas::Texture* default_albedo_texture,
-               const Rndr::Canvas::Texture* helmet_albedo, const Rndr::Canvas::Texture* helmet_emissive,
-               const Rndr::Canvas::Texture* helmet_mr, const Rndr::Canvas::Texture* helmet_normal, const Rndr::Canvas::Texture* helmet_ao);
+void DrawScene(Rndr::Canvas::PbrRenderer& renderer, const Rndr::Canvas::Texture& default_albedo_texture,
+               const Rndr::Canvas::PbrModel& helmet_model);
 
 int main()
 {
@@ -44,47 +42,19 @@ int main()
 
     Canvas::PbrRenderer pbr_renderer(Opal::Ref{context});
 
-    // Load helmet mesh.
-    Mesh helmet_mesh;
-    MaterialDesc helmet_material_desc;
-    const Opal::StringUtf8 helmet_path =
-        Opal::Paths::Combine(RNDR_CORE_ASSETS_DIR, "sample-models", "DamagedHelmet", "gltf", "DamagedHelmet.gltf");
-    File::LoadMeshAndMaterialDescription(helmet_path, helmet_mesh, helmet_material_desc);
-
-    // Load textures.
+    // Load helmet model (mesh + material + textures).
     const Canvas::TextureDesc tex_desc{
         .wrap_u = Canvas::TextureWrap::Repeat,
         .wrap_v = Canvas::TextureWrap::Repeat,
     };
+    const Opal::StringUtf8 helmet_path =
+        Opal::Paths::Combine(RNDR_CORE_ASSETS_DIR, "sample-models", "DamagedHelmet", "gltf", "DamagedHelmet.gltf");
+    Canvas::PbrModel helmet_model = pbr_renderer.LoadModel(helmet_path, tex_desc, true);
+
+    // Load default albedo texture for simple shapes.
     Opal::StringUtf8 default_albedo_path = Opal::Paths::Combine(RNDR_CORE_ASSETS_DIR, "default-texture.png");
     default_albedo_path = Opal::Paths::NormalizePath(std::move(default_albedo_path));
     Canvas::Texture default_albedo_texture = Canvas::Texture::FromFile(context, default_albedo_path, tex_desc, true);
-
-    Canvas::Texture helmet_albedo;
-    if (!helmet_material_desc.albedo_texture_path.IsEmpty())
-    {
-        helmet_albedo = Canvas::Texture::FromFile(context, helmet_material_desc.albedo_texture_path, tex_desc, true);
-    }
-    Canvas::Texture helmet_emissive;
-    if (!helmet_material_desc.emissive_texture_path.IsEmpty())
-    {
-        helmet_emissive = Canvas::Texture::FromFile(context, helmet_material_desc.emissive_texture_path, tex_desc, true);
-    }
-    Canvas::Texture helmet_mr;
-    if (!helmet_material_desc.metallic_roughness_texture_path.IsEmpty())
-    {
-        helmet_mr = Canvas::Texture::FromFile(context, helmet_material_desc.metallic_roughness_texture_path, tex_desc, true);
-    }
-    Canvas::Texture helmet_normal;
-    if (!helmet_material_desc.normal_texture_path.IsEmpty())
-    {
-        helmet_normal = Canvas::Texture::FromFile(context, helmet_material_desc.normal_texture_path, tex_desc, true);
-    }
-    Canvas::Texture helmet_ao;
-    if (!helmet_material_desc.ambient_occlusion_texture_path.IsEmpty())
-    {
-        helmet_ao = Canvas::Texture::FromFile(context, helmet_material_desc.ambient_occlusion_texture_path, tex_desc, true);
-    }
 
     // Fly camera.
     const i32 window_width = window->GetSize().x;
@@ -170,9 +140,7 @@ int main()
         pbr_renderer.SetViewProjection(vp);
         pbr_renderer.SetCameraPosition(controller.GetCameraPosition());
 
-        DrawScene(pbr_renderer, helmet_mesh, &default_albedo_texture, helmet_albedo.IsValid() ? &helmet_albedo : nullptr,
-                  helmet_emissive.IsValid() ? &helmet_emissive : nullptr, helmet_mr.IsValid() ? &helmet_mr : nullptr,
-                  helmet_normal.IsValid() ? &helmet_normal : nullptr, helmet_ao.IsValid() ? &helmet_ao : nullptr);
+        DrawScene(pbr_renderer, default_albedo_texture, helmet_model);
 
         pbr_renderer.Render(draw_list);
         draw_list.Execute();
@@ -198,33 +166,26 @@ int main()
     return 0;
 }
 
-void DrawScene(Rndr::Canvas::PbrRenderer& renderer, const Rndr::Mesh& helmet_mesh, const Rndr::Canvas::Texture* default_albedo_texture,
-               const Rndr::Canvas::Texture* helmet_albedo, const Rndr::Canvas::Texture* helmet_emissive,
-               const Rndr::Canvas::Texture* helmet_mr, const Rndr::Canvas::Texture* helmet_normal, const Rndr::Canvas::Texture* helmet_ao)
+void DrawScene(Rndr::Canvas::PbrRenderer& renderer, const Rndr::Canvas::Texture& default_albedo_texture,
+               const Rndr::Canvas::PbrModel& helmet_model)
 {
     renderer.AddDirectionalLight({1, 1, 1}, Rndr::Colors::k_white);
     renderer.AddPointLight({-20, 0, 0}, Rndr::Colors::k_red);
 
-    // Red cube.
-    const Rndr::Canvas::PbrMaterialDesc red_material{.material_name = "Green Material", .albedo_color = Rndr::Colors::k_green};
+    // Green cube.
+    const Rndr::Canvas::PbrMaterialDesc green_material{.material_name = "Green Material", .albedo_color = Rndr::Colors::k_green};
     const Rndr::Matrix4x4f cube_transform = Opal::Translate(Rndr::Vector3f{-2.0f, 0.0f, -10.0f});
-    renderer.DrawCube(cube_transform, red_material);
+    renderer.DrawCube(cube_transform, green_material);
 
     // Textured sphere.
-    const Rndr::Canvas::PbrMaterialDesc default_material{.material_name = "Default Material", .albedo_texture = default_albedo_texture};
+    const Rndr::Canvas::PbrMaterialDesc default_material{.material_name = "Default Material",
+                                                         .albedo_texture = Opal::Ref<const Rndr::Canvas::Texture>(default_albedo_texture)};
     const Rndr::Matrix4x4f sphere_transform = Opal::Translate(Rndr::Vector3f{2.0f, 0.0f, -10.0f});
     renderer.DrawSphere(sphere_transform, default_material, 2.0f, 2.0f, 32, 32);
 
     // Helmet.
-    Rndr::Canvas::PbrMaterialDesc helmet_material;
-    helmet_material.material_name = "Damaged Helmet Material";
-    helmet_material.albedo_texture = helmet_albedo;
-    helmet_material.emissive_texture = helmet_emissive;
-    helmet_material.metallic_roughness_texture = helmet_mr;
-    helmet_material.normal_texture = helmet_normal;
-    helmet_material.ambient_occlusion_texture = helmet_ao;
     const Rndr::Matrix4x4f helmet_transform = Opal::Translate(Rndr::Vector3f{0.0f, 2.0f, -20.0f}) * Opal::RotateX(90.0f);
-    renderer.DrawMesh("DamagedHelmet", helmet_mesh, helmet_transform, helmet_material);
+    renderer.DrawModel("DamagedHelmet", helmet_model, helmet_transform);
 
     // Grid of white spheres.
     const Rndr::Canvas::PbrMaterialDesc white_material{.material_name = "White Material", .albedo_color = Rndr::Colors::k_white};

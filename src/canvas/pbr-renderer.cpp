@@ -1,5 +1,13 @@
 #include "../../include/rndr/canvas/renderers/pbr-renderer.hpp"
 
+#include "assimp/cimport.h"
+#include "assimp/pbrmaterial.h"
+#include "assimp/postprocess.h"
+#include "assimp/scene.h"
+
+#include "opal/container/in-place-array.h"
+#include "opal/exceptions.h"
+#include "opal/math-base.h"
 #include "opal/paths.h"
 
 #include "rndr/canvas/context.hpp"
@@ -409,4 +417,267 @@ void Rndr::Canvas::PbrRenderer::GenerateSphere(Opal::DynamicArray<u8>& out_verte
             out_index_data.Append(Opal::AsWritableBytes(next));
         }
     }
+}
+
+// Model loading -------------------------------------------------------------
+
+namespace
+{
+
+void LoadMeshFromScene(const aiScene& ai_scene, const Opal::StringUtf8& mesh_name, Rndr::Mesh& out_mesh)
+{
+    if (!ai_scene.HasMeshes())
+    {
+        throw Opal::Exception("No meshes found!");
+    }
+
+    const aiMesh* ai_mesh = ai_scene.mMeshes[0];
+    out_mesh.vertex_size = sizeof(Rndr::Point3f) + sizeof(Rndr::Normal3f) + sizeof(Rndr::Point2f);
+    out_mesh.name = mesh_name.Clone();
+    for (Rndr::u32 vertex_idx = 0; vertex_idx < ai_mesh->mNumVertices; ++vertex_idx)
+    {
+        Rndr::Point3f position(ai_mesh->mVertices[vertex_idx].x, ai_mesh->mVertices[vertex_idx].y, ai_mesh->mVertices[vertex_idx].z);
+        Rndr::Normal3f normal(ai_mesh->mNormals[vertex_idx].x, ai_mesh->mNormals[vertex_idx].y, ai_mesh->mNormals[vertex_idx].z);
+        Rndr::Point2f uv(ai_mesh->mTextureCoords[0][vertex_idx].x, ai_mesh->mTextureCoords[0][vertex_idx].y);
+        out_mesh.vertices.Append(Opal::AsWritableBytes(position));
+        out_mesh.vertices.Append(Opal::AsWritableBytes(normal));
+        out_mesh.vertices.Append(Opal::AsWritableBytes(uv));
+        ++out_mesh.vertex_count;
+    }
+
+    for (Rndr::u32 face_idx = 0; face_idx < ai_mesh->mNumFaces; ++face_idx)
+    {
+        const aiFace& face = ai_mesh->mFaces[face_idx];
+        if (face.mNumIndices != 3)
+        {
+            continue;
+        }
+        for (Rndr::u32 index_idx = 0; index_idx < face.mNumIndices; ++index_idx)
+        {
+            out_mesh.indices.Append(Opal::AsWritableBytes<Rndr::u32>(face.mIndices[index_idx]));
+            ++out_mesh.index_count;
+        }
+    }
+}
+
+Opal::StringUtf8 GetTexturePath(const aiMaterial* ai_material, aiTextureType type, unsigned int index, const Opal::StringUtf8& parent_path)
+{
+    aiString out_texture_path;
+    aiTextureMapping out_texture_mapping = aiTextureMapping_UV;
+    unsigned int out_uv_index = 0;
+    float out_blend = 1.0f;
+    aiTextureOp out_texture_op = aiTextureOp_Add;
+    Opal::InPlaceArray<aiTextureMapMode, 2> out_texture_mode = {aiTextureMapMode_Wrap, aiTextureMapMode_Wrap};
+    unsigned int out_texture_flags = 0;
+    if (aiGetMaterialTexture(ai_material, type, index, &out_texture_path, &out_texture_mapping, &out_uv_index, &out_blend, &out_texture_op,
+                             out_texture_mode.GetData(), &out_texture_flags) == AI_SUCCESS)
+    {
+        return Opal::Paths::NormalizePath(Opal::Paths::Combine(parent_path, out_texture_path.C_Str()));
+    }
+    return {};
+}
+
+void LoadMaterialFromScene(const aiScene& ai_scene, Rndr::u32 material_index, const Opal::StringUtf8& parent_path,
+                           const Rndr::Canvas::Context& context, const Rndr::Canvas::TextureDesc& texture_desc, bool flip_vertically,
+                           Rndr::Canvas::PbrModel& out_model)
+{
+    const aiMaterial* ai_material = ai_scene.mMaterials[material_index];
+
+    aiColor4D ai_color;
+    if (aiGetMaterialColor(ai_material, AI_MATKEY_COLOR_AMBIENT, &ai_color) == AI_SUCCESS)
+    {
+        out_model.emissive_color = Rndr::Vector4f(ai_color.r, ai_color.g, ai_color.b, ai_color.a);
+        out_model.emissive_color.a = Opal::Clamp(out_model.emissive_color.a, 0.0f, 1.0f);
+    }
+    if (aiGetMaterialColor(ai_material, AI_MATKEY_COLOR_EMISSIVE, &ai_color) == AI_SUCCESS)
+    {
+        out_model.emissive_color.r += ai_color.r;
+        out_model.emissive_color.g += ai_color.g;
+        out_model.emissive_color.b += ai_color.b;
+        out_model.emissive_color.a += ai_color.a;
+        out_model.emissive_color.a = Opal::Clamp(out_model.emissive_color.a, 0.0f, 1.0f);
+    }
+    if (aiGetMaterialColor(ai_material, AI_MATKEY_COLOR_DIFFUSE, &ai_color) == AI_SUCCESS)
+    {
+        out_model.albedo_color = Rndr::Vector4f(ai_color.r, ai_color.g, ai_color.b, ai_color.a);
+        out_model.albedo_color.a = Opal::Clamp(out_model.albedo_color.a, 0.0f, 1.0f);
+    }
+
+    constexpr float k_opaqueness_threshold = 0.05f;
+    float opacity = 1.0f;
+    if (aiGetMaterialFloat(ai_material, AI_MATKEY_OPACITY, &opacity) == AI_SUCCESS)
+    {
+        out_model.transparency_factor = 1.0f - opacity;
+        out_model.transparency_factor = Opal::Clamp(out_model.transparency_factor, 0.0f, 1.0f);
+        if (out_model.transparency_factor >= 1.0f - k_opaqueness_threshold)
+        {
+            out_model.transparency_factor = 0.0f;
+        }
+    }
+
+    if (aiGetMaterialColor(ai_material, AI_MATKEY_COLOR_TRANSPARENT, &ai_color) == AI_SUCCESS)
+    {
+        opacity = Opal::Max(Opal::Max(ai_color.r, ai_color.g), ai_color.b);
+        out_model.transparency_factor = Opal::Clamp(opacity, 0.0f, 1.0f);
+        if (out_model.transparency_factor >= 1.0f - k_opaqueness_threshold)
+        {
+            out_model.transparency_factor = 0.0f;
+        }
+        out_model.alpha_test = 0.5f;
+    }
+
+    float factor = 1.0f;
+    if (aiGetMaterialFloat(ai_material, AI_MATKEY_GLTF_PBRMETALLICROUGHNESS_METALLIC_FACTOR, &factor) == AI_SUCCESS)
+    {
+        out_model.metallic_factor = factor;
+    }
+    if (aiGetMaterialFloat(ai_material, AI_MATKEY_GLTF_PBRMETALLICROUGHNESS_ROUGHNESS_FACTOR, &factor) == AI_SUCCESS)
+    {
+        out_model.roughness = Rndr::Vector4f(factor, factor, 0.0f, 0.0f);
+    }
+
+    // Load textures.
+    Opal::StringUtf8 path;
+
+    path = GetTexturePath(ai_material, aiTextureType_EMISSIVE, 0, parent_path);
+    if (!path.IsEmpty())
+    {
+        out_model.emissive_texture = Rndr::Canvas::Texture::FromFile(context, path, texture_desc, flip_vertically);
+    }
+
+    path = GetTexturePath(ai_material, aiTextureType_DIFFUSE, 0, parent_path);
+    if (!path.IsEmpty())
+    {
+        out_model.albedo_texture = Rndr::Canvas::Texture::FromFile(context, path, texture_desc, flip_vertically);
+    }
+
+    aiString mr_path;
+    aiTextureMapping mr_mapping = aiTextureMapping_UV;
+    unsigned int mr_uv = 0;
+    float mr_blend = 1.0f;
+    aiTextureOp mr_op = aiTextureOp_Add;
+    Opal::InPlaceArray<aiTextureMapMode, 2> mr_mode = {aiTextureMapMode_Wrap, aiTextureMapMode_Wrap};
+    unsigned int mr_flags = 0;
+    if (aiGetMaterialTexture(ai_material, AI_MATKEY_GLTF_PBRMETALLICROUGHNESS_METALLICROUGHNESS_TEXTURE, &mr_path, &mr_mapping, &mr_uv,
+                             &mr_blend, &mr_op, mr_mode.GetData(), &mr_flags) == AI_SUCCESS)
+    {
+        Opal::StringUtf8 mr_full_path = Opal::Paths::NormalizePath(Opal::Paths::Combine(parent_path, mr_path.C_Str()));
+        out_model.metallic_roughness_texture = Rndr::Canvas::Texture::FromFile(context, mr_full_path, texture_desc, flip_vertically);
+    }
+
+    path = GetTexturePath(ai_material, aiTextureType_LIGHTMAP, 0, parent_path);
+    if (!path.IsEmpty())
+    {
+        out_model.ambient_occlusion_texture = Rndr::Canvas::Texture::FromFile(context, path, texture_desc, flip_vertically);
+    }
+
+    path = GetTexturePath(ai_material, aiTextureType_NORMALS, 0, parent_path);
+    if (path.IsEmpty())
+    {
+        path = GetTexturePath(ai_material, aiTextureType_HEIGHT, 0, parent_path);
+    }
+    if (!path.IsEmpty())
+    {
+        out_model.normal_texture = Rndr::Canvas::Texture::FromFile(context, path, texture_desc, flip_vertically);
+    }
+
+    path = GetTexturePath(ai_material, aiTextureType_OPACITY, 0, parent_path);
+    if (!path.IsEmpty())
+    {
+        out_model.opacity_texture = Rndr::Canvas::Texture::FromFile(context, path, texture_desc, flip_vertically);
+        out_model.alpha_test = 0.5f;
+    }
+
+    // Material name.
+    aiString ai_material_name;
+    if (aiGetMaterialString(ai_material, AI_MATKEY_NAME, &ai_material_name) == AI_SUCCESS)
+    {
+        out_model.material_name = ai_material_name.C_Str();
+    }
+
+    // Material heuristics.
+    if ((Opal::Find(out_model.material_name, "Glass") != Opal::StringUtf8::k_npos) ||
+        (Opal::Find(out_model.material_name, "Vespa_Headlight") != Opal::StringUtf8::k_npos))
+    {
+        out_model.alpha_test = 0.75f;
+        out_model.transparency_factor = 0.1f;
+    }
+    else if (Opal::Find(out_model.material_name, "Bottle") != Opal::StringUtf8::k_npos)
+    {
+        out_model.alpha_test = 0.54f;
+        out_model.transparency_factor = 0.4f;
+    }
+    else if (Opal::Find(out_model.material_name, "Metal") != Opal::StringUtf8::k_npos)
+    {
+        out_model.metallic_factor = 1.0f;
+        out_model.roughness = Rndr::Vector4f(0.1f, 0.1f, 0.0f, 0.0f);
+    }
+}
+
+}  // namespace
+
+Rndr::Canvas::PbrModel Rndr::Canvas::PbrRenderer::LoadModel(const Opal::StringUtf8& file_path, const TextureDesc& texture_desc,
+                                                             bool flip_vertically)
+{
+    constexpr u32 k_ai_process_flags = aiProcess_JoinIdenticalVertices | aiProcess_Triangulate | aiProcess_GenSmoothNormals |
+                                       aiProcess_LimitBoneWeights | aiProcess_SplitLargeMeshes | aiProcess_ImproveCacheLocality |
+                                       aiProcess_RemoveRedundantMaterials | aiProcess_FindDegenerates | aiProcess_FindInvalidData |
+                                       aiProcess_GenUVCoords;
+
+    const aiScene* scene = aiImportFile(*file_path, k_ai_process_flags);
+    if (scene == nullptr)
+    {
+        throw Opal::Exception("Failed to load model");
+    }
+
+    PbrModel model;
+
+    const Opal::StringUtf8 mesh_name = Opal::Paths::GetFileName(file_path).GetValue();
+    LoadMeshFromScene(*scene, mesh_name, model.mesh);
+
+    if (scene->HasMeshes() && scene->mMeshes[0]->mMaterialIndex < scene->mNumMaterials)
+    {
+        const Opal::StringUtf8 parent_path = Opal::Paths::GetParentPath(file_path).GetValue();
+        LoadMaterialFromScene(*scene, scene->mMeshes[0]->mMaterialIndex, parent_path, *m_context, texture_desc, flip_vertically, model);
+    }
+
+    aiReleaseImport(scene);
+    return model;
+}
+
+void Rndr::Canvas::PbrRenderer::DrawModel(const Opal::StringUtf8& key, const PbrModel& model, const Matrix4x4f& transform)
+{
+    PbrMaterialDesc desc;
+    desc.material_name = model.material_name.Clone();
+    desc.albedo_color = model.albedo_color;
+    desc.emissive_color = model.emissive_color;
+    desc.roughness = model.roughness;
+    desc.metallic_factor = model.metallic_factor;
+    desc.transparency_factor = model.transparency_factor;
+    desc.alpha_test = model.alpha_test;
+    if (model.albedo_texture.IsValid())
+    {
+        desc.albedo_texture = Opal::Ref<const Texture>(model.albedo_texture);
+    }
+    if (model.emissive_texture.IsValid())
+    {
+        desc.emissive_texture = Opal::Ref<const Texture>(model.emissive_texture);
+    }
+    if (model.metallic_roughness_texture.IsValid())
+    {
+        desc.metallic_roughness_texture = Opal::Ref<const Texture>(model.metallic_roughness_texture);
+    }
+    if (model.normal_texture.IsValid())
+    {
+        desc.normal_texture = Opal::Ref<const Texture>(model.normal_texture);
+    }
+    if (model.ambient_occlusion_texture.IsValid())
+    {
+        desc.ambient_occlusion_texture = Opal::Ref<const Texture>(model.ambient_occlusion_texture);
+    }
+    if (model.opacity_texture.IsValid())
+    {
+        desc.opacity_texture = Opal::Ref<const Texture>(model.opacity_texture);
+    }
+    DrawMesh(key, model.mesh, transform, desc);
 }

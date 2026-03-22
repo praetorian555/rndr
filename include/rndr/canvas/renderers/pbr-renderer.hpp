@@ -14,12 +14,11 @@
 #include "rndr/canvas/texture.hpp"
 #include "rndr/colors.hpp"
 #include "rndr/math.hpp"
+#include "rndr/mesh.hpp"
 #include "rndr/types.hpp"
 
 namespace Rndr
 {
-
-struct Mesh;
 
 namespace Canvas
 {
@@ -60,6 +59,30 @@ struct PointLight
 {
     Point3f position;
     Vector4f color;
+};
+
+/**
+ * Loaded 3D model with mesh data, material properties, and owned textures.
+ * Returned by PbrRenderer::LoadModel. Use PbrRenderer::DrawModel to render.
+ */
+struct PbrModel
+{
+    Rndr::Mesh mesh;
+
+    Opal::StringUtf8 material_name;
+    Vector4f albedo_color = Colors::k_pink;
+    Vector4f emissive_color = {0, 0, 0, 0};
+    Vector4f roughness = {0.6f, 0.6f, 0.0f, 0.0f};
+    f32 metallic_factor = 0.2f;
+    f32 transparency_factor = 1.0f;
+    f32 alpha_test = 0.0f;
+
+    Texture albedo_texture;
+    Texture emissive_texture;
+    Texture metallic_roughness_texture;
+    Texture normal_texture;
+    Texture ambient_occlusion_texture;
+    Texture opacity_texture;
 };
 
 /**
@@ -130,6 +153,24 @@ public:
      * @param material PBR material description.
      */
     void DrawMesh(const Opal::StringUtf8& key, const Rndr::Mesh& mesh_data, const Matrix4x4f& transform, const PbrMaterialDesc& material);
+
+    /**
+     * Load a 3D model from a file using assimp and load its textures.
+     * @param file_path Path to the model file (e.g., .gltf, .obj).
+     * @param texture_desc Texture sampling parameters for loaded textures.
+     * @param flip_vertically If true, flip textures vertically when loading.
+     * @return A PbrModel containing mesh data, material properties, and loaded textures.
+     * @throw Opal::Exception if the file cannot be loaded.
+     */
+    PbrModel LoadModel(const Opal::StringUtf8& file_path, const TextureDesc& texture_desc = {}, bool flip_vertically = false);
+
+    /**
+     * Draw a previously loaded model.
+     * @param key Unique string identifying this geometry (for caching).
+     * @param model The loaded model.
+     * @param transform Model transform.
+     */
+    void DrawModel(const Opal::StringUtf8& key, const PbrModel& model, const Matrix4x4f& transform);
 
     /** Record all draw commands into the draw list. */
     void Render(DrawList& draw_list);
