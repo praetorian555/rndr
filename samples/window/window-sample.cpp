@@ -3,7 +3,6 @@
 
 #include "../../include/rndr/canvas/renderers/pbr-renderer.hpp"
 #include "rndr/application.hpp"
-#include "rndr/bitmap.hpp"
 #include "rndr/canvas/context.hpp"
 #include "rndr/canvas/draw-list.hpp"
 #include "rndr/canvas/projections.hpp"
@@ -18,40 +17,6 @@
 #include "example-controller.h"
 #include "imgui.h"
 #include "opal/rng.h"
-
-static Rndr::Canvas::Texture LoadTextureFromFile(const Rndr::Canvas::Context& context, const Opal::StringUtf8& path)
-{
-    const Rndr::Bitmap bitmap = Rndr::File::LoadImage(path, true, true);
-    RNDR_ASSERT(bitmap.IsValid(), "Failed to load image!");
-
-    Rndr::Canvas::Format format = Rndr::Canvas::Format::RGBA8;
-    switch (bitmap.GetComponentCount())
-    {
-        case 1:
-            format = Rndr::Canvas::Format::R8;
-            break;
-        case 2:
-            format = Rndr::Canvas::Format::RG8;
-            break;
-        case 3:
-            format = Rndr::Canvas::Format::RGB8;
-            break;
-        case 4:
-            format = Rndr::Canvas::Format::RGBA8;
-            break;
-    }
-
-    const Rndr::Canvas::TextureDesc desc{
-        .width = bitmap.GetWidth(),
-        .height = bitmap.GetHeight(),
-        .format = format,
-        .wrap_u = Rndr::Canvas::TextureWrap::Repeat,
-        .wrap_v = Rndr::Canvas::TextureWrap::Repeat,
-        .use_mips = bitmap.GetMipCount() > 1,
-    };
-    const Opal::ArrayView<const Rndr::u8> data(bitmap.GetData(), bitmap.GetTotalSize());
-    return Rndr::Canvas::Texture(context, desc, data, path.Clone());
-}
 
 void SetupFlyCameraControls(Rndr::Application& app, Rndr::FlyCamera& camera);
 
@@ -87,34 +52,38 @@ int main()
     File::LoadMeshAndMaterialDescription(helmet_path, helmet_mesh, helmet_material_desc);
 
     // Load textures.
+    const Canvas::TextureDesc tex_desc{
+        .wrap_u = Canvas::TextureWrap::Repeat,
+        .wrap_v = Canvas::TextureWrap::Repeat,
+    };
     Opal::StringUtf8 default_albedo_path = Opal::Paths::Combine(RNDR_CORE_ASSETS_DIR, "default-texture.png");
     default_albedo_path = Opal::Paths::NormalizePath(std::move(default_albedo_path));
-    Canvas::Texture default_albedo_texture = LoadTextureFromFile(context, default_albedo_path);
+    Canvas::Texture default_albedo_texture = Canvas::Texture::FromFile(context, default_albedo_path, tex_desc, true);
 
     Canvas::Texture helmet_albedo;
     if (!helmet_material_desc.albedo_texture_path.IsEmpty())
     {
-        helmet_albedo = LoadTextureFromFile(context, helmet_material_desc.albedo_texture_path);
+        helmet_albedo = Canvas::Texture::FromFile(context, helmet_material_desc.albedo_texture_path, tex_desc, true);
     }
     Canvas::Texture helmet_emissive;
     if (!helmet_material_desc.emissive_texture_path.IsEmpty())
     {
-        helmet_emissive = LoadTextureFromFile(context, helmet_material_desc.emissive_texture_path);
+        helmet_emissive = Canvas::Texture::FromFile(context, helmet_material_desc.emissive_texture_path, tex_desc, true);
     }
     Canvas::Texture helmet_mr;
     if (!helmet_material_desc.metallic_roughness_texture_path.IsEmpty())
     {
-        helmet_mr = LoadTextureFromFile(context, helmet_material_desc.metallic_roughness_texture_path);
+        helmet_mr = Canvas::Texture::FromFile(context, helmet_material_desc.metallic_roughness_texture_path, tex_desc, true);
     }
     Canvas::Texture helmet_normal;
     if (!helmet_material_desc.normal_texture_path.IsEmpty())
     {
-        helmet_normal = LoadTextureFromFile(context, helmet_material_desc.normal_texture_path);
+        helmet_normal = Canvas::Texture::FromFile(context, helmet_material_desc.normal_texture_path, tex_desc, true);
     }
     Canvas::Texture helmet_ao;
     if (!helmet_material_desc.ambient_occlusion_texture_path.IsEmpty())
     {
-        helmet_ao = LoadTextureFromFile(context, helmet_material_desc.ambient_occlusion_texture_path);
+        helmet_ao = Canvas::Texture::FromFile(context, helmet_material_desc.ambient_occlusion_texture_path, tex_desc, true);
     }
 
     // Fly camera.
