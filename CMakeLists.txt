@@ -166,7 +166,6 @@ if (${RNDR_BUILD_TESTS})
             test/camera-test.cpp
             test/frames-per-second-counter-test.cpp
             test/input-test.cpp
-            test/renderer-base-test.cpp
             extern/catch2/src/catch_amalgamated.cpp)
     if (${RNDR_CANVAS})
         list(APPEND RNDR_TEST_FILES

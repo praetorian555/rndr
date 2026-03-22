@@ -6,8 +6,7 @@
 #include "opal/container/string.h"
 
 #include "rndr/bitmap.hpp"
-#include "rndr/graphics-types.hpp"
-#include "rndr/material.hpp"
+#include "rndr/canvas/renderers/pbr-renderer.hpp"
 #include "rndr/mesh.hpp"
 
 struct aiMaterial;
@@ -107,9 +106,10 @@ bool SaveImage(const Bitmap& bitmap, const Opal::StringUtf8& file_path);
  */
 [[nodiscard]] Bitmap LoadImage(const Opal::StringUtf8& file_path, bool flip_vertically, bool generate_mips);
 
-void LoadMeshAndMaterialDescription(const Opal::StringUtf8& file_path, Mesh& out_mesh, MaterialDesc& out_material_desc);
+// void LoadMeshAndMaterialDescription(const Opal::StringUtf8& file_path, Mesh& out_mesh, Canvas::PbrMaterialDesc& out_material_desc);
 void LoadMesh(const aiScene& ai_scene, const Opal::StringUtf8& mesh_name, Mesh& out_mesh, u32& out_material_index);
-void LoadMaterialDescription(const aiScene& ai_scene, u32 material_index, const Opal::StringUtf8& parent_path, MaterialDesc& out_material_desc);
+// void LoadMaterialDescription(const aiScene& ai_scene, u32 material_index, const Opal::StringUtf8& parent_path,
+                             // Canvas::PbrMaterialDesc& out_material_desc);
 
 /**
  * Load mesh data from a file using assimp. The VertexLayout determines which attributes

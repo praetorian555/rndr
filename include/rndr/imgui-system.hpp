@@ -1,7 +1,8 @@
 #pragma once
 
+#include "opal/clonable-base.h"
+
 #include "rndr/generic-window.hpp"
-#include "rndr/render-api.hpp"
 #include "rndr/system-message-handler.hpp"
 
 namespace Rndr
