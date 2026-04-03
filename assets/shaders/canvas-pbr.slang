@@ -322,7 +322,7 @@ float4 FragmentMain(VertexOutput pin)
         float3 normal_sample = normal_texture.Sample(uv).rgb;
         if (length(normal_sample) > 0.5)
         {
-            n = PerturbNormal(n, normalize(camera_position - pin.position_world), normal_sample, uv);
+            n = PerturbNormal(n, pin.position_world, normal_sample, uv);
         }
     }
 
