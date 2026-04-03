@@ -113,7 +113,9 @@ void Rndr::Canvas::GridRenderer::Destroy()
 
 void Rndr::Canvas::GridRenderer::Render(DrawList& draw_list, const Matrix4x4f& view, const Matrix4x4f& projection)
 {
+    draw_list.BeginEvent("GridRenderer::Render");
     m_brush.SetUniform("view", view);
     m_brush.SetUniform("projection", projection);
     draw_list.Draw(m_mesh, m_brush);
+    draw_list.EndEvent("GridRenderer::Render");
 }

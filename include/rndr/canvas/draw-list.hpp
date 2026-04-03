@@ -2,6 +2,7 @@
 
 #include "opal/clonable-base.h"
 #include "opal/container/dynamic-array.h"
+#include "opal/container/string.h"
 #include "opal/variant.h"
 
 #include "rndr/math.hpp"
@@ -89,9 +90,18 @@ struct ClearCommand
     bool clear_stencil = true;
 };
 
-using CommandVariant =
-    Opal::Variant<SetViewportCommand, SetRenderTargetCommand, SetContextCommand, DrawMeshCommand, DrawMeshInstancedCommand,
-                  DispatchCommand, ClearCommand>;
+struct BeginEventCommand
+{
+    const char* event_name;
+};
+
+struct EndEventCommand
+{
+    const char* event_name;
+};
+
+using CommandVariant = Opal::Variant<SetViewportCommand, SetRenderTargetCommand, SetContextCommand, DrawMeshCommand,
+                                     DrawMeshInstancedCommand, DispatchCommand, ClearCommand, BeginEventCommand, EndEventCommand>;
 
 }  // namespace Impl
 
@@ -164,6 +174,9 @@ public:
      * Execute() is called. Issues a glMemoryBarrier(GL_ALL_BARRIER_BITS) after the dispatch.
      */
     void Dispatch(Brush& brush, u32 group_count_x, u32 group_count_y = 1, u32 group_count_z = 1);
+
+    void BeginEvent(const char* event_name);
+    void EndEvent(const char* event_name);
 
     /** Execute all recorded commands and clear internal state. */
     void Execute();

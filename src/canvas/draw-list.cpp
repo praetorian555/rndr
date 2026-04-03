@@ -110,6 +110,16 @@ void Rndr::Canvas::DrawList::Dispatch(Brush& brush, u32 group_count_x, u32 group
     m_commands.EmplaceBack(cmd);
 }
 
+void Rndr::Canvas::DrawList::BeginEvent(const char* event_name)
+{
+    m_commands.EmplaceBack<Impl::BeginEventCommand>({event_name});
+}
+
+void Rndr::Canvas::DrawList::EndEvent(const char* event_name)
+{
+    m_commands.EmplaceBack<Impl::EndEventCommand>({event_name});
+}
+
 void Rndr::Canvas::DrawList::Execute()
 {
     RNDR_CPU_EVENT_SCOPED("Canvas::DrawList::Execute");
@@ -183,6 +193,14 @@ void Rndr::Canvas::DrawList::Execute()
                     glClear(mask);
                 }
             },
+            [](const Impl::BeginEventCommand& c)
+            {
+                Trace::BeginGpuEvent(c.event_name);
+            },
+            [](const Impl::EndEventCommand& c)
+            {
+                Trace::EndGpuEvent(c.event_name);
+            }
         });
     }
 

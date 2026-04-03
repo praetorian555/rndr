@@ -248,6 +248,7 @@ void Rndr::Canvas::PbrRenderer::BindTextures(Brush& brush, const BatchKey& key)
 
 void Rndr::Canvas::PbrRenderer::Render(DrawList& draw_list)
 {
+    draw_list.BeginEvent("PbrRenderer::Render");
     for (auto& batch : m_batches)
     {
         const BatchKey& batch_key = batch.key;
@@ -293,6 +294,7 @@ void Rndr::Canvas::PbrRenderer::Render(DrawList& draw_list)
 
         draw_list.DrawInstanced(mesh, brush, static_cast<u32>(batch_data.instances.GetSize()));
     }
+    draw_list.EndEvent("PbrRenderer::Render");
 }
 
 // Geometry generators -------------------------------------------------------
