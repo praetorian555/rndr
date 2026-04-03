@@ -20,7 +20,6 @@ set(SOURCE_LIST
         "${PROJECT_SOURCE_DIR}/include/rndr/platform/windows-forward-def.hpp"
         "${PROJECT_SOURCE_DIR}/include/rndr/file.hpp"
         "${PROJECT_SOURCE_DIR}/include/rndr/bitmap.hpp"
-        "${PROJECT_SOURCE_DIR}/include/rndr/renderers/grid-renderer.hpp"
         "${PROJECT_SOURCE_DIR}/include/rndr/frames-per-second-counter.hpp"
         "${PROJECT_SOURCE_DIR}/include/rndr/fly-camera.hpp"
         "${PROJECT_SOURCE_DIR}/include/rndr/trace.hpp"
@@ -33,7 +32,6 @@ set(SOURCE_LIST
         "${PROJECT_SOURCE_DIR}/src/projection-camera.cpp"
         "${PROJECT_SOURCE_DIR}/src/file.cpp"
         "${PROJECT_SOURCE_DIR}/src/bitmap.cpp"
-        "${PROJECT_SOURCE_DIR}/src/grid-renderer.cpp"
         "${PROJECT_SOURCE_DIR}/src/fly-camera.cpp"
         "${PROJECT_SOURCE_DIR}/src/frames-per-second-counter.cpp"
         "${PROJECT_SOURCE_DIR}/src/trace.cpp"
@@ -64,6 +62,7 @@ if (${RNDR_CANVAS})
             "${PROJECT_SOURCE_DIR}/include/rndr/canvas/renderers/bitmap-text-renderer.hpp"
             "${PROJECT_SOURCE_DIR}/include/rndr/canvas/renderers/cubemap-renderer.hpp"
             "${PROJECT_SOURCE_DIR}/include/rndr/canvas/renderers/pbr-renderer.hpp"
+            "${PROJECT_SOURCE_DIR}/include/rndr/canvas/renderers/grid-renderer.hpp"
             "${PROJECT_SOURCE_DIR}/src/canvas/context.cpp"
             "${PROJECT_SOURCE_DIR}/src/canvas/buffer.cpp"
             "${PROJECT_SOURCE_DIR}/src/canvas/texture.cpp"
@@ -80,7 +79,8 @@ if (${RNDR_CANVAS})
             "${PROJECT_SOURCE_DIR}/src/canvas/shape-renderer.cpp"
             "${PROJECT_SOURCE_DIR}/src/canvas/bitmap-text-renderer.cpp"
             "${PROJECT_SOURCE_DIR}/src/canvas/cubemap-renderer.cpp"
-            "${PROJECT_SOURCE_DIR}/src/canvas/pbr-renderer.cpp")
+            "${PROJECT_SOURCE_DIR}/src/canvas/pbr-renderer.cpp"
+            "${PROJECT_SOURCE_DIR}/src/canvas/grid-renderer.cpp")
 endif ()
 
 list(APPEND SOURCE_LIST

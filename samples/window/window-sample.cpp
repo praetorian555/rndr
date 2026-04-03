@@ -1,6 +1,7 @@
 #include "opal/paths.h"
 #include "opal/time.h"
 
+#include "../../include/rndr/canvas/renderers/grid-renderer.hpp"
 #include "../../include/rndr/canvas/renderers/pbr-renderer.hpp"
 #include "rndr/application.hpp"
 #include "rndr/canvas/context.hpp"
@@ -40,6 +41,7 @@ int main()
 
     Rndr::ImGuiContext imgui_context(*app, window.Clone());
 
+    Canvas::GridRenderer grid_renderer(Opal::Ref{context});
     Canvas::PbrRenderer pbr_renderer(Opal::Ref{context});
 
     // Load helmet model (mesh + material + textures).
@@ -143,6 +145,9 @@ int main()
         DrawScene(pbr_renderer, default_albedo_texture, helmet_model);
 
         pbr_renderer.Render(draw_list);
+
+        grid_renderer.Render(draw_list, controller.GetViewTransform(), controller.GetProjectionTransform());
+
         draw_list.Execute();
 
         imgui_context.StartFrame();
