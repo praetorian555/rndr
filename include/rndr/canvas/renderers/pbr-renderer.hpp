@@ -132,6 +132,11 @@ public:
     void AddDirectionalLight(const Vector3f& direction, const Vector4f& color);
     void AddPointLight(const Point3f& position, const Vector4f& color);
 
+    void DrawAsUnlit() { m_draw_flags = 0; m_draw_flags = 1; }
+    void DrawAsLit() { m_draw_flags = 0; }
+    void DrawAsNormals() { m_draw_flags = 0; m_draw_flags = 2; }
+    void SetDrawFlags(u32 draw_flags) { m_draw_flags = draw_flags; }
+
     /**
      * Draw a unit cube centered at the origin, transformed by @p transform.
      * Geometry is generated once and cached.
@@ -234,6 +239,7 @@ private:
     Opal::Ref<Context> m_context;
     Shader m_shader;
     Texture m_dummy_texture;
+    u32 m_draw_flags = 0;
 
     Matrix4x4f m_view_projection;
     Point3f m_camera_position;

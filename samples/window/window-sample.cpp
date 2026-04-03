@@ -120,9 +120,19 @@ int main()
         .Bind(Key::Escape, Trigger::Pressed)
         .OnButton([&window](Trigger, bool) { window->RequestClose(); });
 
+    u32 draw_flags = 0;
+    app->GetInputSystemChecked()
+    .GetContextByName("Default")
+    .AddAction("Lighting Options")
+    .Bind(Key::F3, Trigger::Pressed)
+    .OnButton([&draw_flags](Trigger, bool) { draw_flags++; draw_flags %= 3; });
+
     FramesPerSecondCounter fps_counter;
     bool stats_window = true;
     f32 delta_seconds = 0.016f;
+    f32 angle_radians = 0.0f;
+    Rndr::Point3f red_light_position(-20, 5, 0);
+    bool use_light = true;
     while (!window->IsClosed())
     {
         const f64 start_seconds = Opal::GetSeconds();
@@ -141,6 +151,12 @@ int main()
         pbr_renderer.BeginFrame();
         pbr_renderer.SetViewProjection(vp);
         pbr_renderer.SetCameraPosition(controller.GetCameraPosition());
+        pbr_renderer.SetDrawFlags(draw_flags);
+
+        if (use_light)
+        {
+            pbr_renderer.AddPointLight(Opal::RotateY(Opal::Degrees(angle_radians)) * red_light_position, Rndr::Colors::k_white);
+        }
 
         DrawScene(pbr_renderer, default_albedo_texture, helmet_model);
 
@@ -159,6 +175,8 @@ int main()
         ImGui::Text("Controls:");
         ImGui::Text("F1 - Toggle camera controls");
         ImGui::Text("F2 - Toggle fullscreen");
+        ImGui::SliderAngle("Position of the light", &angle_radians, 0, 360);
+        ImGui::Checkbox("Use light", &use_light);
         ImGui::End();
         imgui_context.EndFrame();
 
@@ -174,8 +192,6 @@ int main()
 void DrawScene(Rndr::Canvas::PbrRenderer& renderer, const Rndr::Canvas::Texture& default_albedo_texture,
                const Rndr::Canvas::PbrModel& helmet_model)
 {
-    renderer.AddDirectionalLight({1, 1, 1}, Rndr::Colors::k_white);
-    renderer.AddPointLight({-20, 0, 0}, Rndr::Colors::k_red);
 
     // Green cube.
     const Rndr::Canvas::PbrMaterialDesc green_material{.material_name = "Green Material", .albedo_color = Rndr::Colors::k_green};

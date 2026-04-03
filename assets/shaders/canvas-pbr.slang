@@ -19,6 +19,10 @@ static const uint k_flag_normal_texture = 1 << 3;
 static const uint k_flag_ambient_occlusion_texture = 1 << 4;
 static const uint k_flag_opacity_texture = 1 << 5;
 
+// Draw flags
+static const uint k_flag_draw_unlit = 1 << 0;
+static const uint k_flag_draw_normals = 1 << 1;
+
 // ---------------------------------------------------------------------------
 // Per-instance data (stored in an SSBO, only accessed by the vertex shader)
 // ---------------------------------------------------------------------------
@@ -76,6 +80,7 @@ cbuffer FrameConstants
     uint point_light_count;
     float4 point_light_positions[k_max_light_count];
     float4 point_light_colors[k_max_light_count];
+    uint draw_flags;
 };
 
 [shader("vertex")]
@@ -305,6 +310,11 @@ float4 FragmentMain(VertexOutput pin)
     // Alpha test.
     RunAlphaTest(frag_albedo.a, pin.alpha_test, pin.sv_position.xy);
 
+    if ((draw_flags & k_flag_draw_unlit) != 0)
+    {
+         return frag_albedo;
+    }
+
     // Normal.
     float3 n = normalize(pin.normal_world);
     if ((flags & k_flag_normal_texture) != 0)
@@ -314,6 +324,12 @@ float4 FragmentMain(VertexOutput pin)
         {
             n = PerturbNormal(n, normalize(camera_position - pin.position_world), normal_sample, uv);
         }
+    }
+
+    if ((draw_flags & k_flag_draw_normals) != 0)
+    {
+        float3 normal_as_color = (n + 1.0) / 2;
+        return float4(normal_as_color, frag_albedo.a);
     }
 
     // Metallic-roughness.

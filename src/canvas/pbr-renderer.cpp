@@ -261,6 +261,8 @@ void Rndr::Canvas::PbrRenderer::Render(DrawList& draw_list)
 
         Brush& brush = batch_data.brush;
 
+        brush.SetUniform("draw_flags", m_draw_flags);
+
         // Set per-frame uniforms on this batch's brush.
         brush.SetUniform("view_projection", m_view_projection);
         brush.SetUniform("camera_position", m_camera_position);
