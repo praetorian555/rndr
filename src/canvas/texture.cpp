@@ -346,6 +346,11 @@ Rndr::Canvas::Texture Rndr::Canvas::Texture::FromFile(const Context& context, co
         throw Opal::Exception("File does not exist!");
     }
 
+    if (debug_name.IsEmpty())
+    {
+        debug_name = file_path.Clone();
+    }
+
     const Opal::StringUtf8 extension = Opal::Paths::GetExtension(file_path).GetValue();
 
     if (extension == ".ktx")
@@ -372,12 +377,12 @@ Rndr::Canvas::Texture Rndr::Canvas::Texture::FromFile(const Context& context, co
         const u8* data = ktxTexture_GetData(reinterpret_cast<ktxTexture*>(ktx_texture));
         const u64 data_size = ktxTexture_GetDataSize(reinterpret_cast<ktxTexture*>(ktx_texture));
 
-        Texture tex(context, desc, {data, data_size}, std::move(debug_name));
+        Texture tex(context, desc, {data, data_size}, debug_name);
         ktxTexture_Destroy(reinterpret_cast<ktxTexture*>(ktx_texture));
         return tex;
     }
 
-    stbi_set_flip_vertically_on_load(flip_vertically);
+    stbi_set_flip_vertically_on_load(flip_vertically ? 1 : 0);
 
     int width = 0;
     int height = 0;
@@ -413,7 +418,7 @@ Rndr::Canvas::Texture Rndr::Canvas::Texture::FromFile(const Context& context, co
     desc.width = width;
     desc.height = height;
 
-    Texture tex(context, desc, {pixel_data, data_size}, std::move(debug_name));
+    Texture tex(context, desc, {pixel_data, data_size}, debug_name);
     stbi_image_free(pixel_data);
     return tex;
 }

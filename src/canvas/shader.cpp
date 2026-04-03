@@ -1032,7 +1032,7 @@ Rndr::Canvas::Shader Rndr::Canvas::Shader::FromSourceInMemory(const Opal::String
         throw Opal::InvalidArgumentException(__FUNCTION__, "Shader source is empty!");
     }
 
-    ShaderBuildResult build = BuildFromSingleSource(source, std::move(debug_name));
+    ShaderBuildResult build = BuildFromSingleSource(source, debug_name.Clone());
 
     Shader shader;
     shader.m_program = build.program;
@@ -1042,6 +1042,7 @@ Rndr::Canvas::Shader Rndr::Canvas::Shader::FromSourceInMemory(const Opal::String
     shader.m_parameters = std::move(build.parameters);
     shader.m_vertex_layout = std::move(build.vertex_layout);
     shader.m_num_threads = build.num_threads;
+    shader.m_debug_name = std::move(debug_name);
 
     return shader;
 }
