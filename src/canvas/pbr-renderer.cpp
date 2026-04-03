@@ -1,7 +1,8 @@
-#include "../../include/rndr/canvas/renderers/pbr-renderer.hpp"
+#include "rndr/canvas/renderers/pbr-renderer.hpp"
 
 #include "assimp/cimport.h"
-#include "assimp/pbrmaterial.h"
+#include "assimp/GltfMaterial.h"
+#include "assimp/material.h"
 #include "assimp/postprocess.h"
 #include "assimp/scene.h"
 
@@ -11,7 +12,6 @@
 #include "opal/paths.h"
 
 #include "rndr/canvas/context.hpp"
-#include "rndr/canvas/projections.hpp"
 #include "rndr/log.hpp"
 #include "rndr/mesh.hpp"
 
@@ -529,11 +529,11 @@ void LoadMaterialFromScene(const aiScene& ai_scene, Rndr::u32 material_index, co
     }
 
     float factor = 1.0f;
-    if (aiGetMaterialFloat(ai_material, AI_MATKEY_GLTF_PBRMETALLICROUGHNESS_METALLIC_FACTOR, &factor) == AI_SUCCESS)
+    if (aiGetMaterialFloat(ai_material, AI_MATKEY_METALLIC_FACTOR, &factor) == AI_SUCCESS)
     {
         out_model.metallic_factor = factor;
     }
-    if (aiGetMaterialFloat(ai_material, AI_MATKEY_GLTF_PBRMETALLICROUGHNESS_ROUGHNESS_FACTOR, &factor) == AI_SUCCESS)
+    if (aiGetMaterialFloat(ai_material, AI_MATKEY_ROUGHNESS_FACTOR, &factor) == AI_SUCCESS)
     {
         out_model.roughness = Rndr::Vector4f(factor, factor, 0.0f, 0.0f);
     }
