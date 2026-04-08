@@ -1,6 +1,6 @@
 #include "rndr/pixel-format.hpp"
 
-#if RNDR_ADVANCED_API
+#if RNDR_FORGE
 VkFormat Rndr::ToVkFormat(PixelFormat format)
 {
     return static_cast<VkFormat>(format);

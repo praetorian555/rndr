@@ -1,4 +1,4 @@
-if (${RNDR_ADVANCED_API})
+if (${RNDR_FORGE})
     file(TO_CMAKE_PATH "$ENV{VULKAN_SDK}" VULKAN_SDK_PATH)
     message(STATUS "VulkanSDK ${VULKAN_SDK_PATH}")
 endif ()
@@ -102,7 +102,7 @@ list(APPEND SOURCE_LIST
         "${PROJECT_SOURCE_DIR}/src/platform/windows-window.cpp"
 )
 
-if (${RNDR_ADVANCED_API})
+if (${RNDR_FORGE})
     list(APPEND SOURCE_LIST
             "${VULKAN_SDK_PATH}/Source/SPIRV-Reflect/spirv_reflect.h"
             "${VULKAN_SDK_PATH}/Source/SPIRV-Reflect/spirv_reflect.c")
@@ -148,7 +148,7 @@ target_include_directories(rndr PUBLIC ${PROJECT_SOURCE_DIR}/extern/stb_image/in
 target_include_directories(rndr PUBLIC ${PROJECT_SOURCE_DIR}/tools/obsidian/win32/include)
 
 # Figure out where is Slang library
-if (${RNDR_ADVANCED_API})
+if (${RNDR_FORGE})
     # If we are using Advanced API we will search it in Vulkan SDK
     find_library(SLANG_LIBRARY NAMES slang HINTS ${VULKAN_SDK_PATH}/Lib REQUIRED)
     target_link_libraries(rndr PUBLIC ${SLANG_LIBRARY})
@@ -168,8 +168,8 @@ if (${RNDR_CANVAS})
     target_include_directories(rndr PUBLIC ${PROJECT_SOURCE_DIR}/samples/extern/stb_truetype/include)
     target_sources(rndr PRIVATE ${PROJECT_SOURCE_DIR}/samples/extern/stb_truetype/src/stb_truetype.cpp)
 endif ()
-if (${RNDR_ADVANCED_API})
-    target_compile_definitions(rndr PUBLIC RNDR_ADVANCED_API)
+if (${RNDR_FORGE})
+    target_compile_definitions(rndr PUBLIC RNDR_FORGE)
 endif ()
 
 # Setup library dependencies
@@ -181,11 +181,11 @@ target_link_libraries(rndr PUBLIC opal imgui assimp)
 
 target_link_libraries(rndr PUBLIC ktx)
 
-if (${RNDR_ADVANCED_API})
+if (${RNDR_FORGE})
     target_include_directories(rndr PRIVATE ${VULKAN_SDK_PATH}/Source/SPIRV-Reflect)
     target_include_directories(rndr PUBLIC ${VULKAN_SDK_PATH}/Include)
     target_include_directories(rndr PUBLIC ${VULKAN_SDK_PATH}/Include/slang)
-    target_compile_definitions(rndr PUBLIC RNDR_ADVANCED_API)
+    target_compile_definitions(rndr PUBLIC RNDR_FORGE)
     if (WIN32)
         target_compile_definitions(rndr PUBLIC -DVK_USE_PLATFORM_WIN32_KHR -DVK_NO_PROTOTYPES)
     endif ()

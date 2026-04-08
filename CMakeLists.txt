@@ -2,14 +2,14 @@ cmake_minimum_required(VERSION 3.28)
 project(RNDR VERSION 0.1.0 LANGUAGES CXX C)
 
 # Library options
-option(RNDR_ADVANCED_API "Use more advanced rendering API that is more powerful but more complicated" ON)
 option(RNDR_CANVAS "Enable Canvas API which is a simplified graphics API" ON)
+option(RNDR_FORGE "Use more advanced rendering API that is more powerful but more complicated" OFF)
 option(RNDR_SHARED_LIBS "Build as a shared library" OFF)
 option(RNDR_HARDENING "Enable hardened mode" ON)
 option(RNDR_BUILD_TESTS "Build tests" ON)
 option(RNDR_BUILD_SAMPLES "Builds sample executables" ON)
 
-message(STATUS "RNDR_ADVANCED_API ${RNDR_ADVANCED_API}")
+message(STATUS "RNDR_FORGE ${RNDR_FORGE}")
 message(STATUS "RNDR_CANVAS ${RNDR_CANVAS}")
 message(STATUS "RNDR_BUILD_TESTS ${RNDR_BUILD_TESTS}")
 message(STATUS "RNDR_SHARED_LIBS ${RNDR_SHARED_LIBS}")
@@ -148,7 +148,7 @@ FetchContent_Declare(
 FetchContent_MakeAvailable(ktx)
 message(STATUS "***** Setup Complete *****")
 
-if (${RNDR_ADVANCED_API})
+if (${RNDR_FORGE})
     if (NOT IS_DIRECTORY $ENV{VULKAN_SDK})
         message(WARNING "Vulkan SDK not detected!")
     else ()
@@ -198,7 +198,7 @@ if (${RNDR_BUILD_TESTS})
 endif ()
 
 # Compile Slang shaders to SPIR-V
-if (${RNDR_ADVANCED_API})
+if (${RNDR_FORGE})
     file(GLOB SLANG_SHADER_FILES "${CMAKE_CURRENT_SOURCE_DIR}/assets/shaders/*.slang")
     set(SLANG_SPIRV_OUTPUTS)
     foreach (SLANG_FILE ${SLANG_SHADER_FILES})
@@ -229,7 +229,7 @@ if (${RNDR_BUILD_SAMPLES})
     add_executable(text-rendering-sample samples/text-rendering/text-rendering-sample.cpp)
     target_link_libraries(text-rendering-sample PUBLIC shared imgui)
 
-    if (${RNDR_ADVANCED_API})
+    if (${RNDR_FORGE})
         add_dependencies(shared compile_shaders)
         add_executable(modern-vulkan samples/modern-vulkan/modern-vulkan.cpp)
         target_link_libraries(modern-vulkan shared imgui)

@@ -1,6 +1,6 @@
 #pragma once
 
-#if RNDR_ADVANCED_API
+#if RNDR_FORGE
 #include "volk/volk.h"
 #endif
 
@@ -234,7 +234,7 @@ enum class PixelFormat : u16
     EnumCount
 };
 
-#if RNDR_ADVANCED_API
+#if RNDR_FORGE
 
 /**
  * Convert AdvancedPixelFormat to VkFormat.
