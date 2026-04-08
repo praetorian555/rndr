@@ -39,6 +39,15 @@ public:
     void SetCubemap(const Texture& cubemap);
 
     /**
+     * Load an equirectangular image and convert it to a cubemap. The resulting cubemap is owned
+     * by this renderer.
+     * @param file_path Path to the equirectangular image file (PNG, JPEG, HDR).
+     * @param face_size Size of each cubemap face in pixels. If 0, defaults to half the image height.
+     * @param desc Texture descriptor for sampling parameters.
+     */
+    void SetEquirectangular(const Opal::StringUtf8& file_path, i32 face_size = 0, TextureDesc desc = {});
+
+    /**
      * Record draw commands into the draw list.
      * @param draw_list Draw list to record into.
      * @param inverse_vp Inverse of the view-projection matrix (with translation removed for skybox).
@@ -50,6 +59,7 @@ private:
     Shader m_shader;
     Brush m_brush;
     Mesh m_mesh;
+    Texture m_owned_cubemap;
 };
 
 }  // namespace Rndr::Canvas

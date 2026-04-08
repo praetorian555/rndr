@@ -79,6 +79,12 @@ void Rndr::Canvas::CubemapRenderer::SetCubemap(const Texture& cubemap)
     m_brush.SetTexture("cubemap", cubemap);
 }
 
+void Rndr::Canvas::CubemapRenderer::SetEquirectangular(const Opal::StringUtf8& file_path, i32 face_size, TextureDesc desc)
+{
+    m_owned_cubemap = Texture::FromEquirectangular(*m_context, file_path, face_size, desc);
+    m_brush.SetTexture("cubemap", m_owned_cubemap);
+}
+
 void Rndr::Canvas::CubemapRenderer::Render(DrawList& draw_list, const Matrix4x4f& inverse_vp)
 {
     m_brush.SetUniform("inverse_vp", inverse_vp);

@@ -13,6 +13,9 @@
 #include "rndr/exception.hpp"
 #include "rndr/trace.hpp"
 
+#include <algorithm>
+#include <cmath>
+
 namespace
 {
 
@@ -336,7 +339,173 @@ Rndr::Canvas::Format GlInternalFormatToCanvasFormat(ktx_uint32_t gl_format)
     }
 }
 
+void CubemapFaceDirection(Rndr::i32 face, float u, float v, float& out_x, float& out_y, float& out_z)
+{
+    switch (face)
+    {
+        case 0: out_x =  1.0f; out_y = -v;    out_z = -u;    break;  // +X
+        case 1: out_x = -1.0f; out_y = -v;    out_z =  u;    break;  // -X
+        case 2: out_x =  u;    out_y =  1.0f; out_z =  v;    break;  // +Y
+        case 3: out_x =  u;    out_y = -1.0f; out_z = -v;    break;  // -Y
+        case 4: out_x =  u;    out_y = -v;    out_z =  1.0f; break;  // +Z
+        default: out_x = -u;   out_y = -v;    out_z = -1.0f; break;  // -Z
+    }
+}
+
 }  // namespace
+
+Rndr::Canvas::Texture Rndr::Canvas::Texture::FromEquirectangular(const Context& context, const Opal::StringUtf8& file_path,
+                                                                  i32 face_size, TextureDesc desc, Opal::StringUtf8 debug_name)
+{
+    RNDR_CPU_EVENT_SCOPED("Canvas::Texture::FromEquirectangular");
+
+    if (!Opal::Exists(file_path))
+    {
+        throw Opal::Exception("File does not exist!");
+    }
+
+    if (debug_name.IsEmpty())
+    {
+        debug_name = file_path.Clone();
+    }
+
+    // Load equirectangular image.
+    int eq_width = 0;
+    int eq_height = 0;
+    int channels = 0;
+    constexpr int k_desired_channels = 4;
+
+    const bool is_hdr = stbi_is_hdr(*file_path) > 0;
+    void* eq_data = nullptr;
+    i32 bytes_per_component = 0;
+
+    stbi_set_flip_vertically_on_load(0);
+
+    if (is_hdr)
+    {
+        eq_data = stbi_loadf(*file_path, &eq_width, &eq_height, &channels, k_desired_channels);
+        bytes_per_component = static_cast<i32>(sizeof(f32));
+        desc.format = Format::RGBA32F;
+    }
+    else
+    {
+        eq_data = stbi_load(*file_path, &eq_width, &eq_height, &channels, k_desired_channels);
+        bytes_per_component = static_cast<i32>(sizeof(u8));
+        desc.format = Format::SRGBA8;
+    }
+
+    if (eq_data == nullptr)
+    {
+        throw Opal::Exception("Failed to load equirectangular image!");
+    }
+
+    if (face_size <= 0)
+    {
+        face_size = eq_height / 2;
+    }
+
+    constexpr i32 k_face_count = 6;
+    const i32 pixel_size = k_desired_channels * bytes_per_component;
+    const u64 face_bytes = static_cast<u64>(face_size) * face_size * pixel_size;
+    const u64 total_bytes = face_bytes * k_face_count;
+
+    Opal::DynamicArray<u8> cubemap_data;
+    cubemap_data.Resize(total_bytes);
+
+    constexpr f32 k_pi = 3.14159265358979323846f;
+    constexpr f32 k_two_pi = 2.0f * k_pi;
+
+    for (i32 face = 0; face < k_face_count; face++)
+    {
+        u8* face_ptr = cubemap_data.GetData() + face * face_bytes;
+
+        for (i32 j = 0; j < face_size; j++)
+        {
+            for (i32 i = 0; i < face_size; i++)
+            {
+                const f32 u = 2.0f * (static_cast<f32>(i) + 0.5f) / static_cast<f32>(face_size) - 1.0f;
+                const f32 v = 2.0f * (static_cast<f32>(j) + 0.5f) / static_cast<f32>(face_size) - 1.0f;
+
+                float dx = 0;
+                float dy = 0;
+                float dz = 0;
+                CubemapFaceDirection(face, u, v, dx, dy, dz);
+
+                // Normalize direction.
+                const f32 len = std::sqrt(dx * dx + dy * dy + dz * dz);
+                dx /= len;
+                dy /= len;
+                dz /= len;
+
+                // Convert to equirectangular UV.
+                const f32 theta = std::atan2(dz, dx);
+                const f32 phi = std::asin(std::clamp(dy, -1.0f, 1.0f));
+
+                const f32 eq_u = theta / k_two_pi + 0.5f;
+                const f32 eq_v = 0.5f - phi / k_pi;
+
+                // Bilinear sample coordinates.
+                const f32 px = eq_u * static_cast<f32>(eq_width - 1);
+                const f32 py = eq_v * static_cast<f32>(eq_height - 1);
+
+                const i32 x0 = static_cast<i32>(std::floor(px));
+                const i32 y0 = static_cast<i32>(std::floor(py));
+                const i32 y1 = std::min(y0 + 1, eq_height - 1);
+
+                // Wrap horizontally for seamless sampling.
+                const i32 x0w = ((x0 % eq_width) + eq_width) % eq_width;
+                const i32 x1w = ((x0 + 1) % eq_width + eq_width) % eq_width;
+
+                const f32 fx = px - std::floor(px);
+                const f32 fy = py - std::floor(py);
+
+                const i32 dst_offset = (j * face_size + i) * pixel_size;
+
+                if (is_hdr)
+                {
+                    const f32* src = static_cast<const f32*>(eq_data);
+                    f32* dst = reinterpret_cast<f32*>(face_ptr + dst_offset);
+
+                    for (i32 c = 0; c < k_desired_channels; c++)
+                    {
+                        const f32 s00 = src[(y0 * eq_width + x0w) * k_desired_channels + c];
+                        const f32 s10 = src[(y0 * eq_width + x1w) * k_desired_channels + c];
+                        const f32 s01 = src[(y1 * eq_width + x0w) * k_desired_channels + c];
+                        const f32 s11 = src[(y1 * eq_width + x1w) * k_desired_channels + c];
+
+                        dst[c] = (1 - fx) * (1 - fy) * s00 + fx * (1 - fy) * s10 +
+                                 (1 - fx) * fy * s01 + fx * fy * s11;
+                    }
+                }
+                else
+                {
+                    const u8* src = static_cast<const u8*>(eq_data);
+                    u8* dst = face_ptr + dst_offset;
+
+                    for (i32 c = 0; c < k_desired_channels; c++)
+                    {
+                        const f32 s00 = static_cast<f32>(src[(y0 * eq_width + x0w) * k_desired_channels + c]);
+                        const f32 s10 = static_cast<f32>(src[(y0 * eq_width + x1w) * k_desired_channels + c]);
+                        const f32 s01 = static_cast<f32>(src[(y1 * eq_width + x0w) * k_desired_channels + c]);
+                        const f32 s11 = static_cast<f32>(src[(y1 * eq_width + x1w) * k_desired_channels + c]);
+
+                        const f32 val = (1 - fx) * (1 - fy) * s00 + fx * (1 - fy) * s10 +
+                                        (1 - fx) * fy * s01 + fx * fy * s11;
+                        dst[c] = static_cast<u8>(std::clamp(val + 0.5f, 0.0f, 255.0f));
+                    }
+                }
+            }
+        }
+    }
+
+    stbi_image_free(eq_data);
+
+    desc.type = TextureType::CubeMap;
+    desc.width = face_size;
+    desc.height = face_size;
+
+    return Texture(context, desc, {cubemap_data.GetData(), total_bytes}, debug_name);
+}
 
 Rndr::Canvas::Texture Rndr::Canvas::Texture::FromFile(const Context& context, const Opal::StringUtf8& file_path, TextureDesc desc,
                                                        bool flip_vertically, Opal::StringUtf8 debug_name)

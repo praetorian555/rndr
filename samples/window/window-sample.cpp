@@ -1,6 +1,7 @@
 #include "opal/paths.h"
 #include "opal/time.h"
 
+#include "../../include/rndr/canvas/renderers/cubemap-renderer.hpp"
 #include "../../include/rndr/canvas/renderers/grid-renderer.hpp"
 #include "../../include/rndr/canvas/renderers/pbr-renderer.hpp"
 #include "rndr/application.hpp"
@@ -43,6 +44,13 @@ int main()
 
     Canvas::GridRenderer grid_renderer(Opal::Ref{context});
     Canvas::PbrRenderer pbr_renderer(Opal::Ref{context});
+    Canvas::CubemapRenderer cubemap_renderer(Opal::Ref{context});
+
+    // TODO: Replace with actual path to equirectangular image.
+    const Opal::StringUtf8 skybox_path = Opal::Paths::Combine(RNDR_CORE_ASSETS_DIR, "Panorama_Sky_04-512x512.png");
+    Canvas::TextureDesc skybox_desc;
+    skybox_desc.use_mips = true;
+    cubemap_renderer.SetEquirectangular(skybox_path, 0, skybox_desc);
 
     // Load helmet model (mesh + material + textures).
     const Canvas::TextureDesc tex_desc{
@@ -152,6 +160,10 @@ int main()
 
         const Matrix4x4f vp = controller.GetProjectionTransform() * controller.GetViewTransform();
 
+        // Skybox (rendered first, no depth write).
+        const Matrix4x4f inverse_vp = Opal::Inverse(vp);
+        cubemap_renderer.Render(draw_list, inverse_vp);
+
         pbr_renderer.BeginFrame();
         pbr_renderer.SetViewProjection(vp);
         pbr_renderer.SetCameraPosition(controller.GetCameraPosition());
@@ -167,7 +179,7 @@ int main()
 
         pbr_renderer.Render(draw_list);
 
-        grid_renderer.Render(draw_list, controller.GetViewTransform(), controller.GetProjectionTransform());
+        // grid_renderer.Render(draw_list, controller.GetViewTransform(), controller.GetProjectionTransform());
 
         draw_list.Execute();
 

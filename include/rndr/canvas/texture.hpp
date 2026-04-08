@@ -134,7 +134,7 @@ public:
     Texture& operator=(Texture&& other) noexcept;
 
     /**
-     * Load a texture from an image file. Supports PNG, JPEG, HDR (via stbi), and KTX/KTX2 (when RNDR_ADVANCED_API is enabled).
+     * Load a texture from an image file. Supports PNG, JPEG, HDR (via stbi).
      * Width, height, and format are determined from the file. Sampling parameters (filters, wrap modes, etc.)
      * are taken from the provided descriptor.
      * @param context Active Canvas context.
@@ -147,6 +147,21 @@ public:
      */
     [[nodiscard]] static Texture FromFile(const Context& context, const Opal::StringUtf8& file_path, TextureDesc desc = {},
                                           bool flip_vertically = false, Opal::StringUtf8 debug_name = {});
+
+    /**
+     * Create a cubemap texture from an equirectangular image file. The image is loaded, converted
+     * to 6 cubemap faces using bilinear sampling, and uploaded as a CubeMap texture.
+     * @param context Active Canvas context.
+     * @param file_path Path to the equirectangular image file (PNG, JPEG, HDR).
+     * @param face_size Size of each cubemap face in pixels. If 0, defaults to half the image height.
+     * @param desc Texture descriptor for sampling parameters. Width, height, format, and type fields are overridden.
+     * @param debug_name Debug name for GPU debugging tools.
+     * @return A valid CubeMap Texture.
+     * @throw Opal::Exception if the file does not exist or cannot be loaded.
+     */
+    [[nodiscard]] static Texture FromEquirectangular(const Context& context, const Opal::StringUtf8& file_path,
+                                                     i32 face_size = 0, TextureDesc desc = {},
+                                                     Opal::StringUtf8 debug_name = {});
 
     [[nodiscard]] Texture Clone() const;
     void Destroy();
