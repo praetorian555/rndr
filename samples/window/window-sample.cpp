@@ -76,7 +76,7 @@ int main()
         });
 
     app->GetInputSystemChecked()
-        .GetCurrentContext()
+        .GetContextByName("Default")
         .AddAction("Switch display mode")
         .Bind(Key::F2, Trigger::Pressed)
         .OnButton(
@@ -122,16 +122,20 @@ int main()
 
     u32 draw_flags = 0;
     app->GetInputSystemChecked()
-    .GetContextByName("Default")
-    .AddAction("Lighting Options")
-    .Bind(Key::F3, Trigger::Pressed)
-    .OnButton([&draw_flags](Trigger, bool) { draw_flags++; draw_flags %= 3; });
+        .GetContextByName("Default")
+        .AddAction("Lighting Options")
+        .Bind(Key::F3, Trigger::Pressed)
+        .OnButton(
+            [&draw_flags](Trigger, bool)
+            {
+                draw_flags++;
+                draw_flags %= 3;
+            });
 
     FramesPerSecondCounter fps_counter;
     bool stats_window = true;
     f32 delta_seconds = 0.016f;
     f32 angle_radians = 0.0f;
-    Rndr::Point3f red_light_position(-20, 5, 0);
     bool use_light = true;
     while (!window->IsClosed())
     {
@@ -155,6 +159,7 @@ int main()
 
         if (use_light)
         {
+            constexpr Rndr::Point3f red_light_position(-20, 5, 0);
             pbr_renderer.AddPointLight(Opal::RotateY(Opal::Degrees(angle_radians)) * red_light_position, Rndr::Colors::k_white);
         }
 
