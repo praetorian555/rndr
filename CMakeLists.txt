@@ -43,6 +43,7 @@ if (${RNDR_HARDENING})
 endif ()
 
 include(FetchContent)
+if (NOT TARGET opal)
 message(STATUS "***** Setting up Opal Dependency *****")
 SET(OPAL_BUILD_TESTS OFF)
 SET(OPAL_HARDENING ${RNDR_HARDENING})
@@ -54,6 +55,7 @@ FetchContent_Declare(
 )
 FetchContent_MakeAvailable(opal)
 message(STATUS "***** Setup Complete *****")
+endif ()
 
 # Setup reflection generator
 set(RNDR_INCLUDE_DIRS $<JOIN:$<TARGET_PROPERTY:rndr,INCLUDE_DIRECTORIES>,,>)
