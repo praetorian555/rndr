@@ -1,10 +1,9 @@
 #include "rndr/canvas/shader.hpp"
 
 #include "glad/glad.h"
-#include "slang-com-ptr.h"
-#include "slang.h"
 
 #include "canvas/spirv-patch.hpp"
+#include "rndr/core/shader-compiler.hpp"
 #include "rndr/exception.hpp"
 #include "rndr/file.hpp"
 #include "rndr/log.hpp"
@@ -15,213 +14,23 @@
 namespace
 {
 
-enum class ShaderStage : Rndr::u8
-{
-    Vertex,
-    Fragment,
-    Compute,
-    Unknown,
-};
-
-ShaderStage FromSlangStage(SlangStage stage)
+GLenum ToGLShaderType(Rndr::ShaderStage stage)
 {
     switch (stage)
     {
-        case SLANG_STAGE_VERTEX:
-            return ShaderStage::Vertex;
-        case SLANG_STAGE_FRAGMENT:
-            return ShaderStage::Fragment;
-        case SLANG_STAGE_COMPUTE:
-            return ShaderStage::Compute;
-        default:
-            return ShaderStage::Unknown;
-    }
-}
-
-GLenum ToGLShaderType(ShaderStage stage)
-{
-    switch (stage)
-    {
-        case ShaderStage::Vertex:
+        case Rndr::ShaderStage::Vertex:
             return GL_VERTEX_SHADER;
-        case ShaderStage::Fragment:
+        case Rndr::ShaderStage::Fragment:
             return GL_FRAGMENT_SHADER;
-        case ShaderStage::Compute:
+        case Rndr::ShaderStage::Compute:
             return GL_COMPUTE_SHADER;
         default:
             return 0;
     }
 }
 
-Rndr::Canvas::ParameterCategory CategorizeFromType(slang::TypeLayoutReflection* type_layout)
-{
-    if (type_layout == nullptr)
-    {
-        return Rndr::Canvas::ParameterCategory::EnumCount;
-    }
-    const slang::TypeReflection::Kind kind = type_layout->getType()->getKind();
-    switch (kind)
-    {
-        case slang::TypeReflection::Kind::SamplerState:
-            return Rndr::Canvas::ParameterCategory::Sampler;
-        case slang::TypeReflection::Kind::Resource:
-        {
-            const auto shape = static_cast<SlangResourceShape>(type_layout->getType()->getResourceShape() & SLANG_RESOURCE_BASE_SHAPE_MASK);
-            if (shape == SLANG_STRUCTURED_BUFFER || shape == SLANG_BYTE_ADDRESS_BUFFER)
-            {
-                return Rndr::Canvas::ParameterCategory::StorageBuffer;
-            }
-            const SlangResourceAccess access = type_layout->getType()->getResourceAccess();
-            if (access == SLANG_RESOURCE_ACCESS_READ_WRITE)
-            {
-                return Rndr::Canvas::ParameterCategory::StorageBuffer;
-            }
-            return Rndr::Canvas::ParameterCategory::Texture;
-        }
-        case slang::TypeReflection::Kind::ConstantBuffer:
-        case slang::TypeReflection::Kind::ParameterBlock:
-            return Rndr::Canvas::ParameterCategory::Uniform;
-        default:
-            return Rndr::Canvas::ParameterCategory::EnumCount;
-    }
-}
-
-Rndr::Canvas::ParameterCategory FromSlangCategory(slang::VariableLayoutReflection* param)
-{
-    const slang::ParameterCategory category = param->getCategory();
-    switch (category)
-    {
-        case slang::ParameterCategory::Uniform:
-        case slang::ParameterCategory::ConstantBuffer:
-        case slang::ParameterCategory::PushConstantBuffer:
-            return Rndr::Canvas::ParameterCategory::Uniform;
-        case slang::ParameterCategory::ShaderResource:
-            return CategorizeFromType(param->getTypeLayout());
-        case slang::ParameterCategory::SamplerState:
-            return Rndr::Canvas::ParameterCategory::Sampler;
-        case slang::ParameterCategory::UnorderedAccess:
-            return Rndr::Canvas::ParameterCategory::StorageBuffer;
-        case slang::ParameterCategory::VaryingInput:
-            return Rndr::Canvas::ParameterCategory::VaryingInput;
-        case slang::ParameterCategory::VaryingOutput:
-            return Rndr::Canvas::ParameterCategory::VaryingOutput;
-        case slang::ParameterCategory::DescriptorTableSlot:
-        case slang::ParameterCategory::SubElementRegisterSpace:
-            return CategorizeFromType(param->getTypeLayout());
-        default:
-            return Rndr::Canvas::ParameterCategory::EnumCount;
-    }
-}
-
-void ExtractUniformFields(slang::TypeLayoutReflection* type_layout, Rndr::i32 binding_index, Rndr::i32 binding_space,
-                          Opal::DynamicArray<Rndr::Canvas::ShaderParameter>& out_params)
-{
-    slang::TypeLayoutReflection* element_layout = type_layout->getElementTypeLayout();
-    if (element_layout == nullptr)
-    {
-        return;
-    }
-    const unsigned field_count = element_layout->getFieldCount();
-    for (unsigned i = 0; i < field_count; ++i)
-    {
-        slang::VariableLayoutReflection* field = element_layout->getFieldByIndex(i);
-        Rndr::Canvas::ShaderParameter sp;
-        sp.name = field->getName();
-        sp.binding_index = binding_index;
-        sp.binding_space = binding_space;
-        sp.offset = static_cast<Rndr::i32>(field->getOffset(SLANG_PARAMETER_CATEGORY_UNIFORM));
-        sp.size = static_cast<Rndr::i32>(field->getTypeLayout()->getSize(SLANG_PARAMETER_CATEGORY_UNIFORM));
-        sp.category = Rndr::Canvas::ParameterCategory::Uniform;
-
-        // Check if this field is an array type and extract element count / stride.
-        slang::TypeReflection* field_type = field->getTypeLayout()->getType();
-        if (field_type->getKind() == slang::TypeReflection::Kind::Array)
-        {
-            const auto element_count = static_cast<Rndr::i32>(field_type->getElementCount());
-            if (element_count > 0)
-            {
-                sp.array_element_count = element_count;
-                sp.array_stride = sp.size / element_count;
-            }
-        }
-
-        out_params.PushBack(std::move(sp));
-    }
-}
-
-void ExtractParam(slang::VariableLayoutReflection* param, Opal::DynamicArray<Rndr::Canvas::ShaderParameter>& out_params)
-{
-    const Rndr::Canvas::ParameterCategory category = FromSlangCategory(param);
-    if (category == Rndr::Canvas::ParameterCategory::EnumCount)
-    {
-        return;
-    }
-    const Rndr::i32 binding_index = static_cast<Rndr::i32>(param->getBindingIndex());
-    const Rndr::i32 binding_space = static_cast<Rndr::i32>(param->getBindingSpace());
-
-    Rndr::Canvas::ShaderParameter sp;
-    sp.name = param->getName();
-    sp.binding_index = binding_index;
-    sp.binding_space = binding_space;
-    sp.category = category;
-
-    // For uniform parameters, extract size/offset and fields.
-    if (category == Rndr::Canvas::ParameterCategory::Uniform)
-    {
-        slang::TypeLayoutReflection* type_layout = param->getTypeLayout();
-        if (type_layout != nullptr)
-        {
-            const slang::TypeReflection::Kind kind = type_layout->getType()->getKind();
-            if (kind == slang::TypeReflection::Kind::ConstantBuffer || kind == slang::TypeReflection::Kind::ParameterBlock)
-            {
-                // Top-level UBO declaration, size stays 0.
-                out_params.PushBack(std::move(sp));
-                ExtractUniformFields(type_layout, binding_index, binding_space, out_params);
-                return;
-            }
-
-            // Standalone uniform — extract size and offset.
-            sp.offset = static_cast<Rndr::i32>(param->getOffset(SLANG_PARAMETER_CATEGORY_UNIFORM));
-            sp.size = static_cast<Rndr::i32>(type_layout->getSize(SLANG_PARAMETER_CATEGORY_UNIFORM));
-
-            // Check if this is an array type.
-            slang::TypeReflection* type = type_layout->getType();
-            if (type->getKind() == slang::TypeReflection::Kind::Array)
-            {
-                const auto element_count = static_cast<Rndr::i32>(type->getElementCount());
-                if (element_count > 0)
-                {
-                    sp.array_element_count = element_count;
-                    sp.array_stride = sp.size / element_count;
-                }
-            }
-        }
-    }
-
-    out_params.PushBack(std::move(sp));
-}
-
-void ExtractParameters(slang::ProgramLayout* layout, Opal::DynamicArray<Rndr::Canvas::ShaderParameter>& out_params)
-{
-    // Global parameters.
-    for (unsigned i = 0; i < layout->getParameterCount(); ++i)
-    {
-        ExtractParam(layout->getParameterByIndex(i), out_params);
-    }
-
-    // Entry point parameters.
-    if (layout->getEntryPointCount() > 0)
-    {
-        slang::EntryPointReflection* ep = layout->getEntryPointByIndex(0);
-        for (unsigned i = 0; i < ep->getParameterCount(); ++i)
-        {
-            ExtractParam(ep->getParameterByIndex(i), out_params);
-        }
-    }
-}
-
 // ---------------------------------------------------------------------------
-// Vertex layout extraction from reflection.
+// Vertex layout extraction from CompileResult vertex inputs.
 // ---------------------------------------------------------------------------
 
 Rndr::Canvas::Attrib AttribFromName(const char* name)
@@ -249,32 +58,11 @@ Rndr::Canvas::Attrib AttribFromName(const char* name)
     return Rndr::Canvas::Attrib::EnumCount;
 }
 
-Rndr::Canvas::Format FormatFromSlangType(slang::TypeLayoutReflection* type_layout)
+Rndr::Canvas::Format FormatFromVertexInput(const Rndr::VertexInputAttribute& input)
 {
-    slang::TypeReflection* type = type_layout->getType();
-    const slang::TypeReflection::Kind kind = type->getKind();
-
-    slang::TypeReflection::ScalarType scalar = slang::TypeReflection::None;
-    unsigned element_count = 0;
-
-    if (kind == slang::TypeReflection::Kind::Vector)
+    if (input.scalar_type == Rndr::ScalarType::Float32)
     {
-        element_count = static_cast<unsigned>(type->getElementCount());
-        scalar = type->getElementType()->getScalarType();
-    }
-    else if (kind == slang::TypeReflection::Kind::Scalar)
-    {
-        element_count = 1;
-        scalar = type->getScalarType();
-    }
-    else
-    {
-        return Rndr::Canvas::Format::EnumCount;
-    }
-
-    if (scalar == slang::TypeReflection::Float32)
-    {
-        switch (element_count)
+        switch (input.component_count)
         {
             case 1:
                 return Rndr::Canvas::Format::Float1;
@@ -288,9 +76,9 @@ Rndr::Canvas::Format FormatFromSlangType(slang::TypeLayoutReflection* type_layou
                 return Rndr::Canvas::Format::EnumCount;
         }
     }
-    if (scalar == slang::TypeReflection::Int32)
+    if (input.scalar_type == Rndr::ScalarType::Int32)
     {
-        switch (element_count)
+        switch (input.component_count)
         {
             case 1:
                 return Rndr::Canvas::Format::Int1;
@@ -304,284 +92,35 @@ Rndr::Canvas::Format FormatFromSlangType(slang::TypeLayoutReflection* type_layou
                 return Rndr::Canvas::Format::EnumCount;
         }
     }
-
     return Rndr::Canvas::Format::EnumCount;
 }
 
-Rndr::Canvas::VertexLayout ExtractVertexLayout(slang::ProgramLayout* layout)
+Rndr::Canvas::VertexLayout BuildVertexLayout(const Opal::DynamicArray<Rndr::VertexInputAttribute>& vertex_inputs)
 {
     Rndr::Canvas::VertexLayout vertex_layout;
 
-    if (layout == nullptr || layout->getEntryPointCount() == 0)
+    for (Rndr::u64 i = 0; i < vertex_inputs.GetSize(); ++i)
     {
-        return vertex_layout;
-    }
+        const Rndr::VertexInputAttribute& input = vertex_inputs[i];
 
-    slang::EntryPointReflection* ep = layout->getEntryPointByIndex(0);
-    for (unsigned i = 0; i < ep->getParameterCount(); ++i)
-    {
-        slang::VariableLayoutReflection* param = ep->getParameterByIndex(i);
-        if (param->getCategory() != slang::ParameterCategory::VaryingInput)
+        const Rndr::Canvas::Attrib attrib = AttribFromName(input.name.GetData());
+        if (attrib == Rndr::Canvas::Attrib::EnumCount)
         {
-            continue;
+            Opal::StringUtf8 msg = Opal::StringUtf8("Cannot map vertex attribute '") + input.name + "' to a known Attrib semantic!";
+            throw Rndr::GraphicsAPIException(0, msg.GetData());
         }
 
-        slang::TypeLayoutReflection* type_layout = param->getTypeLayout();
-        if (type_layout == nullptr)
+        const Rndr::Canvas::Format format = FormatFromVertexInput(input);
+        if (format == Rndr::Canvas::Format::EnumCount)
         {
-            continue;
+            Opal::StringUtf8 msg = Opal::StringUtf8("Unsupported vertex attribute format for '") + input.name + "'!";
+            throw Rndr::GraphicsAPIException(0, msg.GetData());
         }
 
-        slang::TypeReflection* type = type_layout->getType();
-        if (type->getKind() == slang::TypeReflection::Kind::Struct)
-        {
-            // Struct vertex input — iterate fields.
-            const unsigned field_count = type_layout->getFieldCount();
-            for (unsigned j = 0; j < field_count; ++j)
-            {
-                slang::VariableLayoutReflection* field = type_layout->getFieldByIndex(j);
-                const char* name = field->getName();
-
-                const Rndr::Canvas::Attrib attrib = AttribFromName(name);
-                if (attrib == Rndr::Canvas::Attrib::EnumCount)
-                {
-                    Opal::StringUtf8 msg = Opal::StringUtf8("Cannot map vertex attribute '") + name + "' to a known Attrib semantic!";
-                    throw Rndr::GraphicsAPIException(0, msg.GetData());
-                }
-
-                const Rndr::Canvas::Format format = FormatFromSlangType(field->getTypeLayout());
-                if (format == Rndr::Canvas::Format::EnumCount)
-                {
-                    Opal::StringUtf8 msg = Opal::StringUtf8("Unsupported vertex attribute format for '") + name + "'!";
-                    throw Rndr::GraphicsAPIException(0, msg.GetData());
-                }
-
-                vertex_layout.Add(attrib, format);
-            }
-        }
-        else
-        {
-            // Non-struct vertex input — single attribute.
-            const char* name = param->getName();
-
-            const Rndr::Canvas::Attrib attrib = AttribFromName(name);
-            if (attrib == Rndr::Canvas::Attrib::EnumCount)
-            {
-                Opal::StringUtf8 msg = Opal::StringUtf8("Cannot map vertex attribute '") + name + "' to a known Attrib semantic!";
-                throw Rndr::GraphicsAPIException(0, msg.GetData());
-            }
-
-            const Rndr::Canvas::Format format = FormatFromSlangType(type_layout);
-            if (format == Rndr::Canvas::Format::EnumCount)
-            {
-                Opal::StringUtf8 msg = Opal::StringUtf8("Unsupported vertex attribute format for '") + name + "'!";
-                throw Rndr::GraphicsAPIException(0, msg.GetData());
-            }
-
-            vertex_layout.Add(attrib, format);
-        }
+        vertex_layout.Add(attrib, format);
     }
 
     return vertex_layout;
-}
-
-// ---------------------------------------------------------------------------
-// Slang module loading and entry point compilation.
-// ---------------------------------------------------------------------------
-
-struct LoadedModule
-{
-    Slang::ComPtr<slang::IGlobalSession> global_session;
-    Slang::ComPtr<slang::ISession> session;
-    slang::IModule* module = nullptr;
-};
-
-LoadedModule LoadModule(const Opal::StringUtf8& source)
-{
-    LoadedModule mod;
-
-    SlangResult result = slang::createGlobalSession(mod.global_session.writeRef());
-    if (SLANG_FAILED(result))
-    {
-        throw Rndr::GraphicsAPIException(result, "Failed to create Slang global session!");
-    }
-
-    slang::TargetDesc target_desc = {};
-    target_desc.format = SLANG_SPIRV;
-    target_desc.profile = mod.global_session->findProfile("spirv_1_5");
-    target_desc.flags = SLANG_TARGET_FLAG_GENERATE_SPIRV_DIRECTLY;
-
-    slang::SessionDesc session_desc = {};
-    session_desc.targets = &target_desc;
-    session_desc.targetCount = 1;
-
-    result = mod.global_session->createSession(session_desc, mod.session.writeRef());
-    if (SLANG_FAILED(result))
-    {
-        throw Rndr::GraphicsAPIException(result, "Failed to create Slang session!");
-    }
-
-    Slang::ComPtr<ISlangBlob> diagnostics;
-    mod.module = mod.session->loadModuleFromSourceString("canvas_shader", "canvas_shader.slang", *source, diagnostics.writeRef());
-    if (mod.module == nullptr)
-    {
-        Opal::StringUtf8 msg = "Failed to load Slang module!";
-        if (diagnostics != nullptr)
-        {
-            msg = msg + "\n" + static_cast<const char*>(diagnostics->getBufferPointer());
-        }
-        RNDR_LOG_ERROR("{}", *msg);
-        throw Rndr::GraphicsAPIException(0, *msg);
-    }
-
-    return mod;
-}
-
-struct SlangCompileResult
-{
-    Slang::ComPtr<ISlangBlob> spirv;
-    ShaderStage stage = ShaderStage::Unknown;
-    Opal::DynamicArray<Rndr::Canvas::ShaderParameter> parameters;
-    Rndr::Canvas::VertexLayout vertex_layout;  // Only populated for vertex stage.
-    Rndr::Canvas::NumThreads num_threads;      // Only populated for compute stage.
-};
-
-SlangCompileResult CompileEntryPoint(const LoadedModule& mod, const Opal::StringUtf8& entry_point)
-{
-    Slang::ComPtr<slang::IEntryPoint> ep;
-    SlangResult result = mod.module->findEntryPointByName(*entry_point, ep.writeRef());
-    if (SLANG_FAILED(result))
-    {
-        Opal::StringUtf8 msg = Opal::StringUtf8("Failed to find entry point '") + entry_point + "'!";
-        throw Rndr::GraphicsAPIException(result, msg.GetData());
-    }
-
-    slang::IComponentType* components[] = {mod.module, ep};
-    Slang::ComPtr<slang::IComponentType> linked_program;
-    Slang::ComPtr<ISlangBlob> diagnostics;
-    result = mod.session->createCompositeComponentType(components, 2, linked_program.writeRef(), diagnostics.writeRef());
-    if (SLANG_FAILED(result))
-    {
-        Opal::StringUtf8 msg = "Failed to link Slang program!";
-        if (diagnostics != nullptr)
-        {
-            msg = msg + "\n" + static_cast<const char*>(diagnostics->getBufferPointer());
-        }
-        throw Rndr::GraphicsAPIException(result, msg.GetData());
-    }
-
-    SlangCompileResult out;
-
-    result = linked_program->getEntryPointCode(0, 0, out.spirv.writeRef(), diagnostics.writeRef());
-    if (SLANG_FAILED(result))
-    {
-        Opal::StringUtf8 msg = "Failed to get SPIR-V!";
-        if (diagnostics != nullptr)
-        {
-            msg = msg + "\n" + static_cast<const char*>(diagnostics->getBufferPointer());
-        }
-        throw Rndr::GraphicsAPIException(result, msg.GetData());
-    }
-
-    slang::ProgramLayout* layout = linked_program->getLayout();
-    if (layout != nullptr)
-    {
-        if (layout->getEntryPointCount() > 0)
-        {
-            slang::EntryPointReflection* ep_reflection = layout->getEntryPointByIndex(0);
-            out.stage = FromSlangStage(ep_reflection->getStage());
-        }
-        ExtractParameters(layout, out.parameters);
-        if (out.stage == ShaderStage::Vertex)
-        {
-            out.vertex_layout = ExtractVertexLayout(layout);
-        }
-        if (out.stage == ShaderStage::Compute)
-        {
-            slang::EntryPointReflection* ep_ref = layout->getEntryPointByIndex(0);
-            SlangUInt thread_group_size[3];
-            ep_ref->getComputeThreadGroupSize(3, thread_group_size);
-            out.num_threads.x = static_cast<Rndr::u32>(thread_group_size[0]);
-            out.num_threads.y = static_cast<Rndr::u32>(thread_group_size[1]);
-            out.num_threads.z = static_cast<Rndr::u32>(thread_group_size[2]);
-        }
-    }
-
-    return out;
-}
-
-// ---------------------------------------------------------------------------
-// Entry point discovery.
-// ---------------------------------------------------------------------------
-
-struct EntryPointInfo
-{
-    Opal::StringUtf8 name;
-    ShaderStage stage;
-};
-
-Opal::DynamicArray<EntryPointInfo> DiscoverEntryPoints(const LoadedModule& mod)
-{
-    Opal::DynamicArray<EntryPointInfo> entries;
-
-    const SlangInt32 count = mod.module->getDefinedEntryPointCount();
-    for (SlangInt32 i = 0; i < count; ++i)
-    {
-        Slang::ComPtr<slang::IEntryPoint> ep;
-        mod.module->getDefinedEntryPoint(i, ep.writeRef());
-        if (ep == nullptr)
-        {
-            continue;
-        }
-
-        // Create a composite to get reflection data for this entry point.
-        slang::IComponentType* components[] = {mod.module, ep.get()};
-        Slang::ComPtr<slang::IComponentType> linked;
-        const SlangResult result = mod.session->createCompositeComponentType(components, 2, linked.writeRef(), nullptr);
-        if (SLANG_FAILED(result))
-        {
-            continue;
-        }
-
-        slang::ProgramLayout* layout = linked->getLayout();
-        if (layout != nullptr && layout->getEntryPointCount() > 0)
-        {
-            slang::EntryPointReflection* ep_ref = layout->getEntryPointByIndex(0);
-            EntryPointInfo info;
-            info.name = ep_ref->getName();
-            info.stage = FromSlangStage(ep_ref->getStage());
-            entries.PushBack(std::move(info));
-        }
-    }
-
-    return entries;
-}
-
-Opal::StringUtf8 FindSingleEntryPoint(const Opal::DynamicArray<EntryPointInfo>& entries, ShaderStage target_stage, const char* stage_name)
-{
-    Opal::StringUtf8 found_name;
-    int count = 0;
-    for (Rndr::u64 i = 0; i < entries.GetSize(); ++i)
-    {
-        if (entries[i].stage == target_stage)
-        {
-            found_name = entries[i].name.Clone();
-            ++count;
-        }
-    }
-
-    if (count == 0)
-    {
-        Opal::StringUtf8 msg = Opal::StringUtf8("No ") + stage_name + " entry point found in shader source!";
-        throw Rndr::GraphicsAPIException(0, msg.GetData());
-    }
-    if (count > 1)
-    {
-        Opal::StringUtf8 msg = Opal::StringUtf8("Multiple ") + stage_name + " entry points found, expected exactly 1!";
-        throw Rndr::GraphicsAPIException(0, msg.GetData());
-    }
-
-    return found_name;
 }
 
 // ---------------------------------------------------------------------------
@@ -590,7 +129,6 @@ Opal::StringUtf8 FindSingleEntryPoint(const Opal::DynamicArray<EntryPointInfo>& 
 
 GLuint CreateShaderFromSpirv(GLenum stage, const void* spirv_data, size_t spirv_size)
 {
-    // Patch the SPIR-V bytecode to fix Vulkan-to-OpenGL builtin differences.
     const size_t word_count = spirv_size / sizeof(Rndr::u32);
     Opal::DynamicArray<Rndr::u32> patched(word_count);
     memcpy(patched.GetData(), spirv_data, spirv_size);
@@ -701,110 +239,7 @@ GLuint LinkProgram(GLuint shader)
 }
 
 // ---------------------------------------------------------------------------
-// Reflection merging.
-// ---------------------------------------------------------------------------
-
-bool IsTopLevelResource(const Rndr::Canvas::ShaderParameter& p)
-{
-    switch (p.category)
-    {
-        case Rndr::Canvas::ParameterCategory::Texture:
-        case Rndr::Canvas::ParameterCategory::Sampler:
-        case Rndr::Canvas::ParameterCategory::StorageBuffer:
-            return true;
-        case Rndr::Canvas::ParameterCategory::Uniform:
-            // Uniform fields inside constant buffers have size > 0.
-            // Top-level uniform buffer declarations have size == 0.
-            return p.size == 0;
-        default:
-            return false;
-    }
-}
-
-Rndr::Canvas::ShaderParameter CloneParameter(const Rndr::Canvas::ShaderParameter& p)
-{
-    Rndr::Canvas::ShaderParameter copy;
-    copy.name = p.name.Clone();
-    copy.binding_index = p.binding_index;
-    copy.binding_space = p.binding_space;
-    copy.offset = p.offset;
-    copy.size = p.size;
-    copy.array_element_count = p.array_element_count;
-    copy.array_stride = p.array_stride;
-    copy.category = p.category;
-    return copy;
-}
-
-Opal::DynamicArray<Rndr::Canvas::ShaderParameter> MergeParameters(const Opal::DynamicArray<Rndr::Canvas::ShaderParameter>& vertex_params,
-                                                                  const Opal::DynamicArray<Rndr::Canvas::ShaderParameter>& fragment_params)
-{
-    using Rndr::Canvas::ParameterCategory;
-    using Rndr::Canvas::ShaderParameter;
-
-    Opal::DynamicArray<ShaderParameter> merged;
-
-    // Include vertex parameters, skip VaryingOutput (inter-stage).
-    for (Rndr::u64 i = 0; i < vertex_params.GetSize(); ++i)
-    {
-        const ShaderParameter& p = vertex_params[i];
-        if (p.category != ParameterCategory::VaryingOutput)
-        {
-            merged.PushBack(CloneParameter(p));
-        }
-    }
-
-    // Include fragment parameters, skip VaryingInput (inter-stage), check for conflicts.
-    for (Rndr::u64 i = 0; i < fragment_params.GetSize(); ++i)
-    {
-        const ShaderParameter& fp = fragment_params[i];
-        if (fp.category == ParameterCategory::VaryingInput)
-        {
-            continue;
-        }
-
-        // Check name-based conflict/duplicate.
-        bool duplicate = false;
-        for (Rndr::u64 j = 0; j < merged.GetSize(); ++j)
-        {
-            const ShaderParameter& ep = merged[j];
-            if (ep.name == fp.name)
-            {
-                if (ep.category != fp.category)
-                {
-                    Opal::StringUtf8 msg =
-                        Opal::StringUtf8("Parameter '") + fp.name + "' has conflicting types in vertex and fragment stages!";
-                    throw Rndr::GraphicsAPIException(0, msg.GetData());
-                }
-                duplicate = true;
-                break;
-            }
-        }
-
-        if (!duplicate)
-        {
-            // Check binding slot conflict for top-level resources.
-            if (IsTopLevelResource(fp))
-            {
-                for (Rndr::u64 j = 0; j < merged.GetSize(); ++j)
-                {
-                    const ShaderParameter& ep = merged[j];
-                    if (IsTopLevelResource(ep) && ep.binding_index == fp.binding_index && ep.binding_space == fp.binding_space &&
-                        ep.category != fp.category)
-                    {
-                        throw Rndr::GraphicsAPIException(
-                            0, "Binding slot conflict between vertex and fragment stages! Same binding slot used for different types.");
-                    }
-                }
-            }
-            merged.PushBack(CloneParameter(fp));
-        }
-    }
-
-    return merged;
-}
-
-// ---------------------------------------------------------------------------
-// Core build: compile both stages, merge reflection, link GL program.
+// Core build: compile stages via ShaderCompiler, link GL program.
 // ---------------------------------------------------------------------------
 
 struct ShaderBuildResult
@@ -812,15 +247,16 @@ struct ShaderBuildResult
     GLuint program = 0;
     Opal::StringUtf8 vertex_entry;
     Opal::StringUtf8 fragment_entry;
-    Opal::DynamicArray<Rndr::Canvas::ShaderParameter> parameters;
+    Opal::DynamicArray<Rndr::ShaderParameter> parameters;
     Rndr::Canvas::VertexLayout vertex_layout;
-    Rndr::Canvas::NumThreads num_threads;
+    Rndr::NumThreads num_threads;
 };
 
 ShaderBuildResult BuildFromSingleSource(const Opal::StringUtf8& source, Opal::StringUtf8 debug_name)
 {
-    LoadedModule mod = LoadModule(source);
-    Opal::DynamicArray<EntryPointInfo> entries = DiscoverEntryPoints(mod);
+    Rndr::ShaderCompiler compiler;
+    compiler.LoadModule(source);
+    Opal::DynamicArray<Rndr::EntryPointInfo> entries = compiler.DiscoverEntryPoints();
 
     // Count entry points by stage.
     int vertex_count = 0;
@@ -830,13 +266,13 @@ ShaderBuildResult BuildFromSingleSource(const Opal::StringUtf8& source, Opal::St
     {
         switch (entries[i].stage)
         {
-            case ShaderStage::Vertex:
+            case Rndr::ShaderStage::Vertex:
                 ++vertex_count;
                 break;
-            case ShaderStage::Fragment:
+            case Rndr::ShaderStage::Fragment:
                 ++fragment_count;
                 break;
-            case ShaderStage::Compute:
+            case Rndr::ShaderStage::Compute:
                 ++compute_count;
                 break;
             default:
@@ -852,14 +288,14 @@ ShaderBuildResult BuildFromSingleSource(const Opal::StringUtf8& source, Opal::St
     // Compute path.
     if (compute_count > 0)
     {
-        Opal::StringUtf8 cs_entry = FindSingleEntryPoint(entries, ShaderStage::Compute, "compute");
-        SlangCompileResult cs_result = CompileEntryPoint(mod, cs_entry);
-        if (cs_result.stage != ShaderStage::Compute)
+        const Opal::StringUtf8 cs_entry = Rndr::ShaderCompiler::FindSingleEntryPoint(entries, Rndr::ShaderStage::Compute, "compute");
+        Rndr::CompileResult cs_result = compiler.CompileEntryPoint(cs_entry);
+        if (cs_result.stage != Rndr::ShaderStage::Compute)
         {
             throw Rndr::GraphicsAPIException(0, "Compute entry point does not have [shader(\"compute\")] annotation!");
         }
 
-        const GLuint cs = CreateShaderFromSpirv(GL_COMPUTE_SHADER, cs_result.spirv->getBufferPointer(), cs_result.spirv->getBufferSize());
+        const GLuint cs = CreateShaderFromSpirv(GL_COMPUTE_SHADER, cs_result.spirv.GetData(), cs_result.spirv.GetSize());
         const Opal::StringUtf8 shader_name = debug_name + " - Compute Shader";
         glObjectLabel(GL_SHADER, cs, static_cast<GLsizei>(shader_name.GetSize()), *shader_name);
         GLuint program = 0;
@@ -884,30 +320,30 @@ ShaderBuildResult BuildFromSingleSource(const Opal::StringUtf8& source, Opal::St
     }
 
     // Graphics path.
-    Opal::StringUtf8 vs_entry = FindSingleEntryPoint(entries, ShaderStage::Vertex, "vertex");
-    Opal::StringUtf8 fs_entry = FindSingleEntryPoint(entries, ShaderStage::Fragment, "fragment");
+    Opal::StringUtf8 vs_entry = Rndr::ShaderCompiler::FindSingleEntryPoint(entries, Rndr::ShaderStage::Vertex, "vertex");
+    Opal::StringUtf8 fs_entry = Rndr::ShaderCompiler::FindSingleEntryPoint(entries, Rndr::ShaderStage::Fragment, "fragment");
 
-    SlangCompileResult vs_result = CompileEntryPoint(mod, vs_entry);
-    if (vs_result.stage != ShaderStage::Vertex)
+    Rndr::CompileResult vs_result = compiler.CompileEntryPoint(vs_entry);
+    if (vs_result.stage != Rndr::ShaderStage::Vertex)
     {
         throw Rndr::GraphicsAPIException(0, "Vertex entry point does not have [shader(\"vertex\")] annotation!");
     }
 
-    const SlangCompileResult fs_result = CompileEntryPoint(mod, fs_entry);
-    if (fs_result.stage != ShaderStage::Fragment)
+    const Rndr::CompileResult fs_result = compiler.CompileEntryPoint(fs_entry);
+    if (fs_result.stage != Rndr::ShaderStage::Fragment)
     {
         throw Rndr::GraphicsAPIException(0, "Fragment entry point does not have [shader(\"fragment\")] annotation!");
     }
 
-    Opal::DynamicArray<Rndr::Canvas::ShaderParameter> merged = MergeParameters(vs_result.parameters, fs_result.parameters);
+    Opal::DynamicArray<Rndr::ShaderParameter> merged = Rndr::ShaderCompiler::MergeParameters(vs_result.parameters, fs_result.parameters);
 
-    const GLuint vs = CreateShaderFromSpirv(GL_VERTEX_SHADER, vs_result.spirv->getBufferPointer(), vs_result.spirv->getBufferSize());
+    const GLuint vs = CreateShaderFromSpirv(GL_VERTEX_SHADER, vs_result.spirv.GetData(), vs_result.spirv.GetSize());
     const Opal::StringUtf8 vertex_shader_name = debug_name + " - Vertex Shader";
     glObjectLabel(GL_SHADER, vs, static_cast<GLsizei>(vertex_shader_name.GetSize()), *vertex_shader_name);
     GLuint fs = 0;
     try
     {
-        fs = CreateShaderFromSpirv(GL_FRAGMENT_SHADER, fs_result.spirv->getBufferPointer(), fs_result.spirv->getBufferSize());
+        fs = CreateShaderFromSpirv(GL_FRAGMENT_SHADER, fs_result.spirv.GetData(), fs_result.spirv.GetSize());
         const Opal::StringUtf8 fragment_shader_name = debug_name + " - Fragment Shader";
         glObjectLabel(GL_SHADER, fs, static_cast<GLsizei>(fragment_shader_name.GetSize()), *fragment_shader_name);
     }
@@ -938,42 +374,44 @@ ShaderBuildResult BuildFromSingleSource(const Opal::StringUtf8& source, Opal::St
     out.vertex_entry = std::move(vs_entry);
     out.fragment_entry = std::move(fs_entry);
     out.parameters = std::move(merged);
-    out.vertex_layout = std::move(vs_result.vertex_layout);
+    out.vertex_layout = BuildVertexLayout(vs_result.vertex_inputs);
     return out;
 }
 
 ShaderBuildResult BuildFromTwoSources(const Opal::StringUtf8& vertex_source, const Opal::StringUtf8& fragment_source,
                                       Opal::StringUtf8 debug_name)
 {
-    const LoadedModule vs_mod = LoadModule(vertex_source);
-    const Opal::DynamicArray<EntryPointInfo> vs_entries = DiscoverEntryPoints(vs_mod);
-    Opal::StringUtf8 vs_entry = FindSingleEntryPoint(vs_entries, ShaderStage::Vertex, "vertex");
+    Rndr::ShaderCompiler vs_compiler;
+    vs_compiler.LoadModule(vertex_source);
+    const Opal::DynamicArray<Rndr::EntryPointInfo> vs_entries = vs_compiler.DiscoverEntryPoints();
+    Opal::StringUtf8 vs_entry = Rndr::ShaderCompiler::FindSingleEntryPoint(vs_entries, Rndr::ShaderStage::Vertex, "vertex");
 
-    const LoadedModule fs_mod = LoadModule(fragment_source);
-    const Opal::DynamicArray<EntryPointInfo> fs_entries = DiscoverEntryPoints(fs_mod);
-    Opal::StringUtf8 fs_entry = FindSingleEntryPoint(fs_entries, ShaderStage::Fragment, "fragment");
+    Rndr::ShaderCompiler fs_compiler;
+    fs_compiler.LoadModule(fragment_source);
+    const Opal::DynamicArray<Rndr::EntryPointInfo> fs_entries = fs_compiler.DiscoverEntryPoints();
+    Opal::StringUtf8 fs_entry = Rndr::ShaderCompiler::FindSingleEntryPoint(fs_entries, Rndr::ShaderStage::Fragment, "fragment");
 
-    SlangCompileResult vs_result = CompileEntryPoint(vs_mod, vs_entry);
-    if (vs_result.stage != ShaderStage::Vertex)
+    Rndr::CompileResult vs_result = vs_compiler.CompileEntryPoint(vs_entry);
+    if (vs_result.stage != Rndr::ShaderStage::Vertex)
     {
         throw Rndr::GraphicsAPIException(0, "Vertex entry point does not have [shader(\"vertex\")] annotation!");
     }
 
-    const SlangCompileResult fs_result = CompileEntryPoint(fs_mod, fs_entry);
-    if (fs_result.stage != ShaderStage::Fragment)
+    const Rndr::CompileResult fs_result = fs_compiler.CompileEntryPoint(fs_entry);
+    if (fs_result.stage != Rndr::ShaderStage::Fragment)
     {
         throw Rndr::GraphicsAPIException(0, "Fragment entry point does not have [shader(\"fragment\")] annotation!");
     }
 
-    Opal::DynamicArray<Rndr::Canvas::ShaderParameter> merged = MergeParameters(vs_result.parameters, fs_result.parameters);
+    Opal::DynamicArray<Rndr::ShaderParameter> merged = Rndr::ShaderCompiler::MergeParameters(vs_result.parameters, fs_result.parameters);
 
-    const GLuint vs = CreateShaderFromSpirv(GL_VERTEX_SHADER, vs_result.spirv->getBufferPointer(), vs_result.spirv->getBufferSize());
+    const GLuint vs = CreateShaderFromSpirv(GL_VERTEX_SHADER, vs_result.spirv.GetData(), vs_result.spirv.GetSize());
     const Opal::StringUtf8 vertex_shader_name = debug_name + " - Vertex Shader";
     glObjectLabel(GL_SHADER, vs, static_cast<GLsizei>(vertex_shader_name.GetSize()), *vertex_shader_name);
     GLuint fs = 0;
     try
     {
-        fs = CreateShaderFromSpirv(GL_FRAGMENT_SHADER, fs_result.spirv->getBufferPointer(), fs_result.spirv->getBufferSize());
+        fs = CreateShaderFromSpirv(GL_FRAGMENT_SHADER, fs_result.spirv.GetData(), fs_result.spirv.GetSize());
         const Opal::StringUtf8 fragment_shader_name = debug_name + " - Fragment Shader";
         glObjectLabel(GL_SHADER, fs, static_cast<GLsizei>(fragment_shader_name.GetSize()), *fragment_shader_name);
     }
@@ -1004,7 +442,7 @@ ShaderBuildResult BuildFromTwoSources(const Opal::StringUtf8& vertex_source, con
     out.vertex_entry = std::move(vs_entry);
     out.fragment_entry = std::move(fs_entry);
     out.parameters = std::move(merged);
-    out.vertex_layout = std::move(vs_result.vertex_layout);
+    out.vertex_layout = BuildVertexLayout(vs_result.vertex_inputs);
     return out;
 }
 
@@ -1171,12 +609,12 @@ Rndr::u32 Rndr::Canvas::Shader::GetNativeHandle() const
     return m_program;
 }
 
-const Opal::DynamicArray<Rndr::Canvas::ShaderParameter>& Rndr::Canvas::Shader::GetParameters() const
+const Opal::DynamicArray<Rndr::ShaderParameter>& Rndr::Canvas::Shader::GetParameters() const
 {
     return m_parameters;
 }
 
-const Rndr::Canvas::ShaderParameter* Rndr::Canvas::Shader::FindParameter(const Opal::StringUtf8& name) const
+const Rndr::ShaderParameter* Rndr::Canvas::Shader::FindParameter(const Opal::StringUtf8& name) const
 {
     for (u64 i = 0; i < m_parameters.GetSize(); ++i)
     {
@@ -1193,7 +631,7 @@ const Rndr::Canvas::VertexLayout& Rndr::Canvas::Shader::GetVertexLayout() const
     return m_vertex_layout;
 }
 
-const Rndr::Canvas::NumThreads& Rndr::Canvas::Shader::GetNumThreads() const
+const Rndr::NumThreads& Rndr::Canvas::Shader::GetNumThreads() const
 {
     return m_num_threads;
 }

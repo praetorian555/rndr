@@ -5,101 +5,17 @@
 
 #include "rndr/canvas/context.hpp"
 #include "rndr/canvas/vertex-layout.hpp"
+#include "rndr/core/shader-compiler.hpp"
 
 namespace Rndr
 {
 namespace Canvas
 {
 
-/** Compute shader thread group size, extracted from shader reflection. */
-struct NumThreads
-{
-    u32 x = 0;
-    u32 y = 0;
-    u32 z = 0;
-};
-
-/**
- * Describes what kind of resource a shader parameter represents. Extracted from Slang reflection
- * and used by the Brush to decide how to bind the resource (e.g., as a UBO, texture, or SSBO).
- */
-enum class ParameterCategory : u8
-{
-    /** Uniform buffer data. Top-level declarations (ConstantBuffer/ParameterBlock) have size == 0.
-     *  Individual fields within a UBO, or standalone global uniforms, have size > 0 and a valid
-     *  offset within their parent UBO. */
-    Uniform,
-
-    /** Sampled texture (e.g., Texture2D, Sampler2D). */
-    Texture,
-
-    /** Sampler state (e.g., SamplerState). */
-    Sampler,
-
-    /** Read-write storage buffer (e.g., RWStructuredBuffer). */
-    StorageBuffer,
-
-    /** Vertex stage input (e.g., struct fields marked as vertex attributes). */
-    VaryingInput,
-
-    /** Inter-stage output (e.g., vertex-to-fragment varyings). */
-    VaryingOutput,
-
-    EnumCount,
-};
-
-/**
- * A single shader parameter extracted from Slang reflection. Parameters are organized as follows:
- *
- * **Explicit ConstantBuffer / ParameterBlock:**
- *   A top-level entry with `size == 0` acts as a UBO declaration (identified by binding_index).
- *   Its individual fields are separate ShaderParameter entries with `size > 0`, sharing the same
- *   binding_index. The offset is the byte offset of that field within the UBO.
- *
- *   Example: `ConstantBuffer<Material> material;` produces:
- *     - { name="material", binding_index=0, size=0 }  (top-level UBO declaration)
- *     - { name="color",    binding_index=0, size=16, offset=0  }  (field)
- *     - { name="roughness",binding_index=0, size=4,  offset=16 }  (field)
- *
- * **Standalone global uniforms:**
- *   Globals like `float4x4 mvp;` are implicitly wrapped into a default UBO by Slang. Each appears
- *   as a ShaderParameter with `size > 0` and a valid offset. Multiple standalone globals share the
- *   same binding_index (the implicit default UBO).
- *
- *   Example: `float4x4 mvp; float4 tint_color;` produces:
- *     - { name="mvp",        binding_index=0, size=64, offset=0  }
- *     - { name="tint_color", binding_index=0, size=16, offset=64 }
- *
- * The Brush uses this data to automatically create GPU uniform buffers: it groups all parameters
- * with `category == Uniform && size > 0` by binding_index, computes the total buffer size as
- * max(offset + size), and creates one UBO per group.
- */
-struct ShaderParameter
-{
-    /** Parameter name as declared in the shader source. */
-    Opal::StringUtf8 name;
-
-    /** GPU binding slot index (e.g., UBO binding point, texture unit). */
-    i32 binding_index = -1;
-
-    /** Binding space / descriptor set (always 0 for OpenGL). */
-    i32 binding_space = 0;
-
-    /** Byte offset within the parent UBO. Only meaningful for Uniform params with size > 0. */
-    i32 offset = 0;
-
-    /** Size in bytes. Zero for top-level UBO declarations and non-uniform params. */
-    i32 size = 0;
-
-    /** Number of elements if this parameter is an array. Zero means it is not an array. */
-    i32 array_element_count = 0;
-
-    /** Byte stride between consecutive array elements. Only meaningful when array_element_count > 0. */
-    i32 array_stride = 0;
-
-    /** What kind of resource this parameter represents. */
-    ParameterCategory category = ParameterCategory::EnumCount;
-};
+// Backward compatibility — these types moved to Rndr namespace in core/shader-compiler.hpp.
+using NumThreads = Rndr::NumThreads;
+using ParameterCategory = Rndr::ParameterCategory;
+using ShaderParameter = Rndr::ShaderParameter;
 
 /**
  * A compiled GPU shader program. Slang source is compiled to SPIR-V and linked into an OpenGL

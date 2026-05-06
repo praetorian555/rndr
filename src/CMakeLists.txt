@@ -42,6 +42,12 @@ set(SOURCE_LIST
         "${PROJECT_SOURCE_DIR}/src/pixel-format.cpp"
 )
 
+if (${RNDR_CANVAS} OR ${RNDR_FORGE})
+    list(APPEND SOURCE_LIST
+            "${PROJECT_SOURCE_DIR}/include/rndr/core/shader-compiler.hpp"
+            "${PROJECT_SOURCE_DIR}/src/core/shader-compiler.cpp")
+endif()
+
 if (${RNDR_CANVAS})
     list(APPEND SOURCE_LIST
             "${PROJECT_SOURCE_DIR}/include/rndr/canvas/canvas.hpp"
