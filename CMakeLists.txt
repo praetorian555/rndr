@@ -4,7 +4,6 @@ project(RNDR VERSION 0.1.0 LANGUAGES CXX C)
 # Library options
 option(RNDR_CANVAS "Enable Canvas API which is a simplified graphics API" ON)
 option(RNDR_FORGE "Use more advanced rendering API that is more powerful but more complicated" OFF)
-option(RNDR_SHARED_LIBS "Build as a shared library" OFF)
 option(RNDR_HARDENING "Enable hardened mode" ON)
 option(RNDR_BUILD_TESTS "Build tests" ON)
 option(RNDR_BUILD_SAMPLES "Builds sample executables" ON)
@@ -12,7 +11,6 @@ option(RNDR_BUILD_SAMPLES "Builds sample executables" ON)
 message(STATUS "RNDR_FORGE ${RNDR_FORGE}")
 message(STATUS "RNDR_CANVAS ${RNDR_CANVAS}")
 message(STATUS "RNDR_BUILD_TESTS ${RNDR_BUILD_TESTS}")
-message(STATUS "RNDR_SHARED_LIBS ${RNDR_SHARED_LIBS}")
 message(STATUS "RNDR_HARDENING ${RNDR_HARDENING}")
 message(STATUS "RNDR_BUILD_SAMPLES ${RNDR_BUILD_SAMPLES}")
 
@@ -20,11 +18,6 @@ message(STATUS "RNDR_BUILD_SAMPLES ${RNDR_BUILD_SAMPLES}")
 if (NOT DEFINED CMAKE_CXX_VISIBILITY_PRESET AND NOT DEFINED CMAKE_VISIBILITY_INLINES_HIDDEN)
     set(CMAKE_CXX_VISIBILITY_PRESET hidden)
     set(CMAKE_VISIBILITY_INLINES_HIDDEN YES)
-endif ()
-
-## Let OPAL_SHARED_LIBS override BUILD_SHARED_LIBS
-if (${RNDR_SHARED_LIBS})
-    set(BUILD_SHARED_LIBS "${RNDR_SHARED_LIBS}")
 endif ()
 
 # Setup compiler warnings and options
@@ -42,18 +35,19 @@ if (${RNDR_HARDENING})
     rndr_setup_sanitizers(rndr_options)
 endif ()
 
-include(FetchContent)
+include(cmake/cpm.cmake)
+
 if (NOT TARGET opal)
 message(STATUS "***** Setting up Opal Dependency *****")
-SET(OPAL_BUILD_TESTS OFF)
-SET(OPAL_HARDENING ${RNDR_HARDENING})
-set(OPAL_SHARED_LIBS ${RNDR_SHARED_LIBS})
-FetchContent_Declare(
-        opal
+cpmaddpackage(
+        NAME opal
         GIT_REPOSITORY https://github.com/praetorian555/opal
         GIT_TAG opal-0.3.2
+        OPTIONS
+        "OPAL_BUILD_TESTS OFF"
+        "OPAL_HARDENING ${RNDR_HARDENING}"
+        "OPAL_SHARED_LIBS ${RNDR_SHARED_LIBS}"
 )
-FetchContent_MakeAvailable(opal)
 message(STATUS "***** Setup Complete *****")
 endif ()
 
@@ -82,13 +76,13 @@ add_custom_target(
 
 # Setup IMGUI ######################################################################
 message(STATUS "***** Setting up ImGui Dependency *****")
-FetchContent_Declare(
-        imgui
+cpmaddpackage(
+        NAME imgui
         GIT_REPOSITORY https://github.com/ocornut/imgui
         GIT_TAG f5befd2d29e66809cd1110a152e375a7f1981f06 # release-1.91.9b
+        DOWNLOAD_ONLY YES
 )
-FetchContent_MakeAvailable(imgui)
-FetchContent_GetProperties(imgui SOURCE_DIR SOURCE_PATH)
+set(SOURCE_PATH ${imgui_SOURCE_DIR})
 set(IMGUI_SOURCE_FILES
         ${SOURCE_PATH}/imgui.cpp
         ${SOURCE_PATH}/imgui.h
@@ -121,33 +115,32 @@ message(STATUS "***** Setup Complete *****")
 
 # Setup Assimp ######################################################################
 message(STATUS "***** Setting up Assimp Dependency *****")
-set(ASSIMP_ASAN OFF)
-set(BUILD_SHARED_LIBS OFF)
-set(ASSIMP_BUILD_ASSIMP_TOOLS OFF)
-set(ASSIMP_BUILD_TESTS OFF)
-set(ASSIMP_NO_EXPORT ON)
-set(ASSIMP_INSTALL_PDB OFF)
-set(ASSIMP_BUILD_ZLIB ON)
-set(ASSIMP_BUILD_ALL_IMPORTERS_BY_DEFAULT OFF)
-set(ASSIMP_BUILD_OBJ_IMPORTER ON)
-set(ASSIMP_BUILD_GLTF_IMPORTER ON)
-set(ASSIMP_BUILD_FBX_IMPORTER OFF)
-set(ASSIMP_BUILD_COLLADA_IMPORTER OFF)
-FetchContent_Declare(
-        assimp
+cpmaddpackage(
+        NAME assimp
         GIT_REPOSITORY https://github.com/assimp/assimp.git
         GIT_TAG "v6.0.2"
+        OPTIONS
+        "ASSIMP_ASAN OFF"
+        "BUILD_SHARED_LIBS OFF"
+        "ASSIMP_BUILD_ASSIMP_TOOLS OFF"
+        "ASSIMP_BUILD_TESTS OFF"
+        "ASSIMP_NO_EXPORT ON"
+        "ASSIMP_INSTALL_PDB OFF"
+        "ASSIMP_BUILD_ZLIB ON"
+        "ASSIMP_BUILD_ALL_IMPORTERS_BY_DEFAULT OFF"
+        "ASSIMP_BUILD_OBJ_IMPORTER ON"
+        "ASSIMP_BUILD_GLTF_IMPORTER ON"
+        "ASSIMP_BUILD_FBX_IMPORTER OFF"
+        "ASSIMP_BUILD_COLLADA_IMPORTER OFF"
 )
-FetchContent_MakeAvailable(assimp)
 message(STATUS "***** Setup Complete *****")
 
 message(STATUS "***** Setting up KTX Software Dependency *****")
-FetchContent_Declare(
-        ktx
+cpmaddpackage(
+        NAME ktx
         GIT_REPOSITORY https://github.com/KhronosGroup/KTX-Software.git
         GIT_TAG "v4.4.2"
 )
-FetchContent_MakeAvailable(ktx)
 message(STATUS "***** Setup Complete *****")
 
 if (${RNDR_FORGE})
