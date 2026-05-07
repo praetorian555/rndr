@@ -35,21 +35,7 @@ if (${RNDR_HARDENING})
     rndr_setup_sanitizers(rndr_options)
 endif ()
 
-include(cmake/cpm.cmake)
-
-if (NOT TARGET opal)
-message(STATUS "***** Setting up Opal Dependency *****")
-cpmaddpackage(
-        NAME opal
-        GIT_REPOSITORY https://github.com/praetorian555/opal
-        GIT_TAG opal-0.3.2
-        OPTIONS
-        "OPAL_BUILD_TESTS OFF"
-        "OPAL_HARDENING ${RNDR_HARDENING}"
-        "OPAL_SHARED_LIBS ${RNDR_SHARED_LIBS}"
-)
-message(STATUS "***** Setup Complete *****")
-endif ()
+include(cmake/dependencies.cmake)
 
 # Setup reflection generator
 set(RNDR_INCLUDE_DIRS $<JOIN:$<TARGET_PROPERTY:rndr,INCLUDE_DIRECTORIES>,,>)
@@ -73,75 +59,6 @@ add_custom_target(
         log-level=error
         DEPENDS obsidian
 )
-
-# Setup IMGUI ######################################################################
-message(STATUS "***** Setting up ImGui Dependency *****")
-cpmaddpackage(
-        NAME imgui
-        GIT_REPOSITORY https://github.com/ocornut/imgui
-        GIT_TAG f5befd2d29e66809cd1110a152e375a7f1981f06 # release-1.91.9b
-        DOWNLOAD_ONLY YES
-)
-set(SOURCE_PATH ${imgui_SOURCE_DIR})
-set(IMGUI_SOURCE_FILES
-        ${SOURCE_PATH}/imgui.cpp
-        ${SOURCE_PATH}/imgui.h
-        ${SOURCE_PATH}/imconfig.h
-        ${SOURCE_PATH}/imgui_internal.h
-        ${SOURCE_PATH}/imstb_rectpack.h
-        ${SOURCE_PATH}/imstb_truetype.h
-        ${SOURCE_PATH}/imstb_textedit.h
-        ${SOURCE_PATH}/imgui_draw.cpp
-        ${SOURCE_PATH}/imgui_demo.cpp
-        ${SOURCE_PATH}/imgui_tables.cpp
-        ${SOURCE_PATH}/imgui_widgets.cpp)
-# Use Win32 backhand for Windows
-if (MSVC)
-    set(IMGUI_WINDOWS_SOURCE_FILES
-            ${SOURCE_PATH}/backends/imgui_impl_win32.cpp
-            ${SOURCE_PATH}/backends/imgui_impl_win32.h)
-else ()
-    set(IMGUI_WINDOWS_SOURCE_FILES)
-endif ()
-set(IMGUI_OPENGL_SOURCE_FILES
-        ${SOURCE_PATH}/backends/imgui_impl_opengl3.cpp
-        ${SOURCE_PATH}/backends/imgui_impl_opengl3.h)
-add_library(imgui
-        ${IMGUI_SOURCE_FILES}
-        ${IMGUI_WINDOWS_SOURCE_FILES}
-        ${IMGUI_OPENGL_SOURCE_FILES})
-target_include_directories(imgui PUBLIC ${SOURCE_PATH})
-message(STATUS "***** Setup Complete *****")
-
-# Setup Assimp ######################################################################
-message(STATUS "***** Setting up Assimp Dependency *****")
-cpmaddpackage(
-        NAME assimp
-        GIT_REPOSITORY https://github.com/assimp/assimp.git
-        GIT_TAG "v6.0.2"
-        OPTIONS
-        "ASSIMP_ASAN OFF"
-        "BUILD_SHARED_LIBS OFF"
-        "ASSIMP_BUILD_ASSIMP_TOOLS OFF"
-        "ASSIMP_BUILD_TESTS OFF"
-        "ASSIMP_NO_EXPORT ON"
-        "ASSIMP_INSTALL_PDB OFF"
-        "ASSIMP_BUILD_ZLIB ON"
-        "ASSIMP_BUILD_ALL_IMPORTERS_BY_DEFAULT OFF"
-        "ASSIMP_BUILD_OBJ_IMPORTER ON"
-        "ASSIMP_BUILD_GLTF_IMPORTER ON"
-        "ASSIMP_BUILD_FBX_IMPORTER OFF"
-        "ASSIMP_BUILD_COLLADA_IMPORTER OFF"
-)
-message(STATUS "***** Setup Complete *****")
-
-message(STATUS "***** Setting up KTX Software Dependency *****")
-cpmaddpackage(
-        NAME ktx
-        GIT_REPOSITORY https://github.com/KhronosGroup/KTX-Software.git
-        GIT_TAG "v4.4.2"
-)
-message(STATUS "***** Setup Complete *****")
 
 if (${RNDR_FORGE})
     if (NOT IS_DIRECTORY $ENV{VULKAN_SDK})
@@ -192,24 +109,6 @@ if (${RNDR_BUILD_TESTS})
     )
 endif ()
 
-# Compile Slang shaders to SPIR-V
-if (${RNDR_FORGE})
-    file(GLOB SLANG_SHADER_FILES "${CMAKE_CURRENT_SOURCE_DIR}/assets/shaders/*.slang")
-    set(SLANG_SPIRV_OUTPUTS)
-    foreach (SLANG_FILE ${SLANG_SHADER_FILES})
-        get_filename_component(SLANG_NAME ${SLANG_FILE} NAME_WE)
-        set(SPIRV_OUTPUT "${CMAKE_CURRENT_SOURCE_DIR}/assets/shaders/${SLANG_NAME}.spv")
-        add_custom_command(
-                OUTPUT ${SPIRV_OUTPUT}
-                COMMAND slangc ${SLANG_FILE} -g -target spirv -o ${SPIRV_OUTPUT} -matrix-layout-row-major -warnings-as-errors all
-                DEPENDS ${SLANG_FILE}
-                COMMENT "Compiling ${SLANG_NAME}.slang to SPIR-V..."
-        )
-        list(APPEND SLANG_SPIRV_OUTPUTS ${SPIRV_OUTPUT})
-    endforeach ()
-    add_custom_target(compile_shaders DEPENDS ${SLANG_SPIRV_OUTPUTS})
-endif ()
-
 if (${RNDR_BUILD_SAMPLES})
     add_library(shared samples/shared/types.hpp samples/shared/example-controller.h samples/shared/example-controller.cpp)
     target_include_directories(shared PUBLIC samples/shared)
@@ -225,7 +124,6 @@ if (${RNDR_BUILD_SAMPLES})
     target_link_libraries(text-rendering-sample PUBLIC shared imgui)
 
     if (${RNDR_FORGE})
-        add_dependencies(shared compile_shaders)
         add_executable(modern-vulkan samples/modern-vulkan/modern-vulkan.cpp)
         target_link_libraries(modern-vulkan shared imgui)
     endif ()
