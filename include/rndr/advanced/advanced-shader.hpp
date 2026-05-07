@@ -20,6 +20,34 @@ struct AdvancedShaderDesc
 class AdvancedShader
 {
 public:
+    /**
+     * Create a shader by compiling a Slang source file. The desc.entry_point selects which
+     * annotated entry point to compile.
+     */
+    [[nodiscard]] static AdvancedShader FromSource(const class AdvancedDevice& device, const Opal::StringUtf8& path,
+                                                   const AdvancedShaderDesc& desc = {});
+
+    /**
+     * Create a shader by compiling Slang source code in memory. The desc.entry_point selects
+     * which annotated entry point to compile.
+     */
+    [[nodiscard]] static AdvancedShader FromSourceInMemory(const class AdvancedDevice& device, const Opal::StringUtf8& source,
+                                                           const AdvancedShaderDesc& desc = {});
+
+    /**
+     * Create a shader from a SPIR-V binary file. The desc.entry_point selects which entry point
+     * inside the SPIR-V module is used to determine the shader stage.
+     */
+    [[nodiscard]] static AdvancedShader FromSpirvFile(const class AdvancedDevice& device, const Opal::StringUtf8& path,
+                                                      const AdvancedShaderDesc& desc = {});
+
+    /**
+     * Create a shader from SPIR-V data in memory. The desc.entry_point selects which entry
+     * point inside the SPIR-V module is used to determine the shader stage.
+     */
+    [[nodiscard]] static AdvancedShader FromSpirvInMemory(const class AdvancedDevice& device, Opal::ArrayView<const u8> spirv_data,
+                                                          const AdvancedShaderDesc& desc = {});
+
     AdvancedShader() = default;
     explicit AdvancedShader(const class AdvancedDevice& device, Opal::ArrayView<const u8> spirv_data,
                             const AdvancedShaderDesc& desc = {});

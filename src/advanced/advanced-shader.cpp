@@ -6,6 +6,8 @@
 
 #include "rndr/advanced/device.hpp"
 #include "rndr/advanced/vulkan-exception.hpp"
+#include "rndr/core/shader-compiler.hpp"
+#include "rndr/file.hpp"
 
 static VkShaderStageFlagBits ToNativeShaderStage(SpvReflectShaderStageFlagBits stage)
 {
@@ -78,6 +80,48 @@ Rndr::AdvancedShader::AdvancedShader(const AdvancedDevice& device, Opal::ArrayVi
     {
         throw VulkanException(result, "vkCreateShaderModule");
     }
+}
+
+Rndr::AdvancedShader Rndr::AdvancedShader::FromSpirvInMemory(const AdvancedDevice& device, Opal::ArrayView<const u8> spirv_data,
+                                                             const AdvancedShaderDesc& desc)
+{
+    return AdvancedShader(device, spirv_data, desc);
+}
+
+Rndr::AdvancedShader Rndr::AdvancedShader::FromSpirvFile(const AdvancedDevice& device, const Opal::StringUtf8& path,
+                                                         const AdvancedShaderDesc& desc)
+{
+    Opal::DynamicArray<u8> spirv_data = File::ReadEntireFile(path);
+    if (spirv_data.IsEmpty())
+    {
+        throw Opal::InvalidArgumentException(__FUNCTION__, "Failed to read SPIR-V file or file is empty!");
+    }
+    return AdvancedShader(device, Opal::ArrayView<const u8>(spirv_data.GetData(), spirv_data.GetSize()), desc);
+}
+
+Rndr::AdvancedShader Rndr::AdvancedShader::FromSourceInMemory(const AdvancedDevice& device, const Opal::StringUtf8& source,
+                                                              const AdvancedShaderDesc& desc)
+{
+    if (source.IsEmpty())
+    {
+        throw Opal::InvalidArgumentException(__FUNCTION__, "Shader source is empty!");
+    }
+
+    ShaderCompiler compiler;
+    compiler.LoadModule(source);
+    const CompileResult result = compiler.CompileEntryPoint(desc.entry_point);
+    return AdvancedShader(device, Opal::ArrayView<const u8>(result.spirv.GetData(), result.spirv.GetSize()), desc);
+}
+
+Rndr::AdvancedShader Rndr::AdvancedShader::FromSource(const AdvancedDevice& device, const Opal::StringUtf8& path,
+                                                     const AdvancedShaderDesc& desc)
+{
+    const Opal::StringUtf8 source = File::ReadEntireTextFile(path);
+    if (source.IsEmpty())
+    {
+        throw Opal::InvalidArgumentException(__FUNCTION__, "Failed to read shader file or file is empty!");
+    }
+    return FromSourceInMemory(device, source, desc);
 }
 
 Rndr::AdvancedShader::~AdvancedShader()
