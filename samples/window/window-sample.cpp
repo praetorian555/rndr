@@ -179,7 +179,7 @@ int main()
 
         pbr_renderer.Render(draw_list);
 
-        // grid_renderer.Render(draw_list, controller.GetViewTransform(), controller.GetProjectionTransform());
+        grid_renderer.Render(draw_list, controller.GetViewTransform(), controller.GetProjectionTransform());
 
         draw_list.Execute();
 
