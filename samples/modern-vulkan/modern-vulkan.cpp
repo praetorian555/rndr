@@ -15,6 +15,7 @@
 #include "rndr/advanced/physical-device.hpp"
 #include "rndr/advanced/swap-chain.hpp"
 #include "rndr/advanced/synchronization.hpp"
+#include "rndr/advanced/mesh.hpp"
 #include "rndr/application.hpp"
 #include "rndr/file.hpp"
 #include "rndr/fly-camera.hpp"
@@ -72,11 +73,9 @@ void Run()
 
     Rndr::AdvancedSwapChain swap_chain(device, surface, {.use_depth = true, .depth_pixel_format = Rndr::PixelFormat::D32_SFLOAT});
 
-    // TODO: Flip y for everything in mesh for Vulkan
-    Rndr::Mesh mesh;
-    Rndr::MaterialDesc material_desc;
     const Opal::StringUtf8 mesh_path = Opal::Paths::Combine(RNDR_CORE_ASSETS_DIR, "sample-models", "Suzanne", "glTF", "Suzanne.gltf");
-    Rndr::File::LoadMeshAndMaterialDescription(mesh_path, mesh, material_desc);
+    Rndr::Forge::Mesh mesh;
+    Rndr::Forge::LoadMesh(mesh_path, mesh);
     Opal::DynamicArray<Rndr::u8> combined_vertex_index_data;
     combined_vertex_index_data.Append(mesh.vertices);
     combined_vertex_index_data.Append(mesh.indices);
@@ -114,8 +113,10 @@ void Run()
         command_buffers.EmplaceBack(device, device.GetQueue(Rndr::QueueFamily::Graphics).Get());
     }
 
-    const Rndr::Bitmap albedo_bitmap = Rndr::File::LoadImage(material_desc.albedo_texture_path, true, true);
-    const Rndr::Bitmap mr_bitmap = Rndr::File::LoadImage(material_desc.metallic_roughness_texture_path, true, true);
+    const Opal::StringUtf8 albedo_texture_path = Opal::Paths::Combine(RNDR_CORE_ASSETS_DIR, "sample-models", "Suzanne", "glTF", "Suzanne_BaseColor.png");
+    const Opal::StringUtf8 metallic_roughness_texture_path = Opal::Paths::Combine(RNDR_CORE_ASSETS_DIR, "sample-models", "Suzanne", "glTF", "Suzanne_MetallicRoughness.png");
+    const Rndr::Bitmap albedo_bitmap = Rndr::File::LoadImage(albedo_texture_path, true, true);
+    const Rndr::Bitmap mr_bitmap = Rndr::File::LoadImage(metallic_roughness_texture_path, true, true);
     Rndr::AdvancedTexture albedo_texture(device, device.GetQueue(Rndr::QueueFamily::Graphics), albedo_bitmap);
     Rndr::AdvancedTexture mr_texture(device, device.GetQueue(Rndr::QueueFamily::Graphics), mr_bitmap);
     Rndr::AdvancedSampler albedo_sampler(device, {.max_anisotropy = 8.0f, .max_lod = static_cast<f32>(albedo_bitmap.GetMipCount())});
@@ -150,10 +151,9 @@ void Run()
     update_bindings.PushBack(std::move(binding2));
     descriptor_set.UpdateDescriptorSets(update_bindings);
 
-    const Opal::StringUtf8 shader_path = Opal::Paths::Combine(RNDR_CORE_ASSETS_DIR, "shaders", "modern-vulkan.spv");
-    Opal::DynamicArray<u8> shader_contents = Rndr::File::ReadEntireFile(shader_path);
-    Rndr::AdvancedShader vertex_shader(device, shader_contents, {.entry_point = "main_vertex"});
-    Rndr::AdvancedShader fragment_shader(device, shader_contents, {.entry_point = "main_fragment"});
+    const Opal::StringUtf8 shader_path = Opal::Paths::Combine(RNDR_CORE_ASSETS_DIR, "shaders", "modern-vulkan.slang");
+    const Rndr::AdvancedShader vertex_shader = Rndr::AdvancedShader::FromSource(device, shader_path, {.entry_point = "main_vertex"});
+    const Rndr::AdvancedShader fragment_shader = Rndr::AdvancedShader::FromSource(device, shader_path, {.entry_point = "main_fragment"});
 
     Rndr::AdvancedVertexInputDesc vertex_input_desc;
     vertex_input_desc.AddBinding(0, mesh.vertex_size, Rndr::DataRepetition::PerVertex);

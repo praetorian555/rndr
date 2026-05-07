@@ -7,17 +7,12 @@
 
 #include "rndr/bitmap.hpp"
 #include "rndr/canvas/renderers/pbr-renderer.hpp"
-#include "rndr/mesh.hpp"
 
 struct aiMaterial;
 struct aiScene;
 
 namespace Rndr
 {
-namespace Canvas
-{
-class VertexLayout;
-}  // namespace Canvas
 
 class FileHandler
 {
@@ -105,22 +100,6 @@ bool SaveImage(const Bitmap& bitmap, const Opal::StringUtf8& file_path);
  * @throw Opal::Exception if file does not exist or if there was a problem loading the data.
  */
 [[nodiscard]] Bitmap LoadImage(const Opal::StringUtf8& file_path, bool flip_vertically, bool generate_mips);
-
-// void LoadMeshAndMaterialDescription(const Opal::StringUtf8& file_path, Mesh& out_mesh, Canvas::PbrMaterialDesc& out_material_desc);
-void LoadMesh(const aiScene& ai_scene, const Opal::StringUtf8& mesh_name, Mesh& out_mesh, u32& out_material_index);
-// void LoadMaterialDescription(const aiScene& ai_scene, u32 material_index, const Opal::StringUtf8& parent_path,
-                             // Canvas::PbrMaterialDesc& out_material_desc);
-
-/**
- * Load mesh data from a file using assimp. The VertexLayout determines which attributes
- * are extracted and in what format. The resulting data can be used to construct a Canvas::Mesh.
- *
- * @param file_path Absolute or relative path to the mesh file.
- * @param layout Vertex layout describing what data to extract.
- * @param out_mesh Output mesh with vertex and index data packed according to the layout.
- * @throw Opal::Exception if file cannot be loaded or required vertex attributes are missing.
- */
-void LoadMesh(const Opal::StringUtf8& file_path, const Canvas::VertexLayout& layout, Mesh& out_mesh);
 
 }  // namespace File
 
