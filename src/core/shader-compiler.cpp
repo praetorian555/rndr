@@ -355,9 +355,18 @@ void Rndr::ShaderCompiler::LoadModule(const Opal::StringUtf8& source)
     target_desc.profile = m_impl->global_session->findProfile("spirv_1_5");
     target_desc.flags = SLANG_TARGET_FLAG_GENERATE_SPIRV_DIRECTLY;
 
+    // Preserve original Slang entry-point names in the emitted SPIR-V instead of renaming them
+    // all to "main". This lets downstream consumers (e.g. spirv-reflect) look up entry points by
+    // their original name.
+    slang::CompilerOptionEntry session_options[] = {
+        {slang::CompilerOptionName::VulkanUseEntryPointName, {slang::CompilerOptionValueKind::Int, 1, 0, nullptr, nullptr}},
+    };
+
     slang::SessionDesc session_desc = {};
     session_desc.targets = &target_desc;
     session_desc.targetCount = 1;
+    session_desc.compilerOptionEntries = session_options;
+    session_desc.compilerOptionEntryCount = sizeof(session_options) / sizeof(session_options[0]);
 
     result = m_impl->global_session->createSession(session_desc, m_impl->session.writeRef());
     if (SLANG_FAILED(result))
