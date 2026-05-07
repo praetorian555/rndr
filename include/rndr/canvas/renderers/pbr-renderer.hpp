@@ -14,7 +14,6 @@
 #include "rndr/canvas/texture.hpp"
 #include "rndr/colors.hpp"
 #include "rndr/math.hpp"
-#include "rndr/mesh.hpp"
 #include "rndr/types.hpp"
 
 namespace Rndr
@@ -67,7 +66,7 @@ struct PointLight
  */
 struct PbrModel
 {
-    Rndr::Mesh mesh;
+    Mesh mesh;
 
     Opal::StringUtf8 material_name;
     Vector4f albedo_color = Colors::k_pink;
@@ -151,13 +150,15 @@ public:
                     u32 latitude_segments = 32, u32 longitude_segments = 32);
 
     /**
-     * Draw an arbitrary mesh. The mesh data is uploaded once and cached by @p key.
-     * @param key Unique string identifying this geometry (used for caching).
-     * @param mesh_data CPU-side mesh data (vertices must match the PBR vertex layout: position3, normal3, texcoord2).
+     * Draw an arbitrary mesh. The mesh is registered under @p key the first time it is seen
+     * and looked up by key on subsequent frames. The caller retains ownership of @p mesh; it
+     * must outlive any frame that references it.
+     * @param key Unique string identifying this geometry (used for caching and batching).
+     * @param mesh GPU-resident mesh whose vertex layout matches the PBR shader (position3, normal3, texcoord2).
      * @param transform Model transform.
      * @param material PBR material description.
      */
-    void DrawMesh(const Opal::StringUtf8& key, const Rndr::Mesh& mesh_data, const Matrix4x4f& transform, const PbrMaterialDesc& material);
+    void DrawMesh(const Opal::StringUtf8& key, const Mesh& mesh, const Matrix4x4f& transform, const PbrMaterialDesc& material);
 
     /**
      * Load a 3D model from a file using assimp and load its textures.
@@ -246,7 +247,10 @@ private:
     Opal::DynamicArray<DirectionalLight> m_directional_lights;
     Opal::DynamicArray<PointLight> m_point_lights;
 
+    /** Owned procedural geometry (cubes, spheres) generated on demand. */
     Opal::HashMap<Opal::StringUtf8, Mesh> m_geometry_cache;
+    /** Non-owning references to externally-supplied meshes registered via DrawMesh. */
+    Opal::HashMap<Opal::StringUtf8, Opal::Ref<const Mesh>> m_external_geometry;
     Opal::HashMap<BatchKey, BatchData> m_batches;
 };
 

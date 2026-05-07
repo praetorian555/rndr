@@ -13,7 +13,6 @@
 
 #include "rndr/canvas/context.hpp"
 #include "rndr/log.hpp"
-#include "rndr/mesh.hpp"
 
 // BatchKey ==================================================================
 
@@ -150,10 +149,13 @@ void Rndr::Canvas::PbrRenderer::DrawSphere(const Matrix4x4f& transform, const Pb
     AddDrawEntry(key, transform, material);
 }
 
-void Rndr::Canvas::PbrRenderer::DrawMesh(const Opal::StringUtf8& key, const Rndr::Mesh& mesh_data, const Matrix4x4f& transform,
+void Rndr::Canvas::PbrRenderer::DrawMesh(const Opal::StringUtf8& key, const Mesh& mesh, const Matrix4x4f& transform,
                                          const PbrMaterialDesc& material)
 {
-    EnsureGeometry(key, Opal::AsBytes(mesh_data.vertices), Opal::AsBytes(mesh_data.indices));
+    if (!m_external_geometry.Contains(key))
+    {
+        m_external_geometry.Insert(key.Clone(), Opal::Ref<const Mesh>(mesh));
+    }
     AddDrawEntry(key, transform, material);
 }
 
@@ -286,15 +288,22 @@ void Rndr::Canvas::PbrRenderer::Render(DrawList& draw_list)
             brush.SetUniform("point_light_colors", static_cast<i32>(i), m_point_lights[i].color);
         }
 
-        auto geometry_it = m_geometry_cache.Find(batch_key.geometry_key);
-        RNDR_ASSERT(geometry_it != m_geometry_cache.end(), "Geometry not found in cache!");
-        Canvas::Mesh& mesh = geometry_it.GetValue();
+        Canvas::Mesh* mesh = nullptr;
+        if (auto external_it = m_external_geometry.Find(batch_key.geometry_key); external_it != m_external_geometry.end())
+        {
+            mesh = const_cast<Canvas::Mesh*>(external_it.GetValue().GetPtr());
+        }
+        else if (auto owned_it = m_geometry_cache.Find(batch_key.geometry_key); owned_it != m_geometry_cache.end())
+        {
+            mesh = &owned_it.GetValue();
+        }
+        RNDR_ASSERT(mesh != nullptr, "Geometry not found in cache!");
 
         // Upload instance data to this batch's SSBO.
         batch_data.instance_buffer.Update(Opal::AsBytes(batch_data.instances));
         brush.SetBuffer("instances", batch_data.instance_buffer);
 
-        draw_list.DrawInstanced(mesh, brush, static_cast<u32>(batch_data.instances.GetSize()));
+        draw_list.DrawInstanced(*mesh, brush, static_cast<u32>(batch_data.instances.GetSize()));
     }
     draw_list.EndEvent("PbrRenderer::Render");
 }
@@ -428,7 +437,8 @@ void Rndr::Canvas::PbrRenderer::GenerateSphere(Opal::DynamicArray<u8>& out_verte
 namespace
 {
 
-void LoadMeshFromScene(const aiScene& ai_scene, const Opal::StringUtf8& mesh_name, Rndr::Mesh& out_mesh)
+void ExtractMeshDataFromScene(const aiScene& ai_scene, Opal::DynamicArray<Rndr::u8>& out_vertex_data,
+                              Opal::DynamicArray<Rndr::u8>& out_index_data)
 {
     if (!ai_scene.HasMeshes())
     {
@@ -436,17 +446,14 @@ void LoadMeshFromScene(const aiScene& ai_scene, const Opal::StringUtf8& mesh_nam
     }
 
     const aiMesh* ai_mesh = ai_scene.mMeshes[0];
-    out_mesh.vertex_size = sizeof(Rndr::Point3f) + sizeof(Rndr::Normal3f) + sizeof(Rndr::Point2f);
-    out_mesh.name = mesh_name.Clone();
     for (Rndr::u32 vertex_idx = 0; vertex_idx < ai_mesh->mNumVertices; ++vertex_idx)
     {
         Rndr::Point3f position(ai_mesh->mVertices[vertex_idx].x, ai_mesh->mVertices[vertex_idx].y, ai_mesh->mVertices[vertex_idx].z);
         Rndr::Normal3f normal(ai_mesh->mNormals[vertex_idx].x, ai_mesh->mNormals[vertex_idx].y, ai_mesh->mNormals[vertex_idx].z);
         Rndr::Point2f uv(ai_mesh->mTextureCoords[0][vertex_idx].x, ai_mesh->mTextureCoords[0][vertex_idx].y);
-        out_mesh.vertices.Append(Opal::AsWritableBytes(position));
-        out_mesh.vertices.Append(Opal::AsWritableBytes(normal));
-        out_mesh.vertices.Append(Opal::AsWritableBytes(uv));
-        ++out_mesh.vertex_count;
+        out_vertex_data.Append(Opal::AsWritableBytes(position));
+        out_vertex_data.Append(Opal::AsWritableBytes(normal));
+        out_vertex_data.Append(Opal::AsWritableBytes(uv));
     }
 
     for (Rndr::u32 face_idx = 0; face_idx < ai_mesh->mNumFaces; ++face_idx)
@@ -458,8 +465,7 @@ void LoadMeshFromScene(const aiScene& ai_scene, const Opal::StringUtf8& mesh_nam
         }
         for (Rndr::u32 index_idx = 0; index_idx < face.mNumIndices; ++index_idx)
         {
-            out_mesh.indices.Append(Opal::AsWritableBytes<Rndr::u32>(face.mIndices[index_idx]));
-            ++out_mesh.index_count;
+            out_index_data.Append(Opal::AsWritableBytes<Rndr::u32>(face.mIndices[index_idx]));
         }
     }
 }
@@ -637,7 +643,11 @@ Rndr::Canvas::PbrModel Rndr::Canvas::PbrRenderer::LoadModel(const Opal::StringUt
     PbrModel model;
 
     const Opal::StringUtf8 mesh_name = Opal::Paths::GetFileName(file_path).GetValue();
-    LoadMeshFromScene(*scene, mesh_name, model.mesh);
+    Opal::DynamicArray<u8> vertex_data;
+    Opal::DynamicArray<u8> index_data;
+    ExtractMeshDataFromScene(*scene, vertex_data, index_data);
+    const VertexLayout vertex_layout = m_shader.GetVertexLayout().Clone();
+    model.mesh = Mesh(vertex_layout, Opal::AsBytes(vertex_data), Opal::AsBytes(index_data), mesh_name.Clone());
 
     if (scene->HasMeshes() && scene->mMeshes[0]->mMaterialIndex < scene->mNumMaterials)
     {
