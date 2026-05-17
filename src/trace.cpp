@@ -1,5 +1,7 @@
 #include "rndr/trace.hpp"
 
+#include <cstring>
+
 #include "opal/hash.h"
 #include "rndr/types.hpp"
 
