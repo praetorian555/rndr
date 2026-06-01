@@ -84,13 +84,9 @@ Rndr::InputSystem& Rndr::Application::GetInputSystemChecked() const
     return *m_input_system;
 }
 
-void Rndr::Application::ProcessSystemEvents(f32 delta_seconds)
+void Rndr::Application::ProcessSystemEvents(u32 timeout_ms)
 {
-    m_platform_application->ProcessSystemEvents();
-    if (m_desc.enable_input_system)
-    {
-        m_input_system->ProcessSystemEvents(delta_seconds);
-    }
+    m_platform_application->ProcessSystemEvents(timeout_ms);
 }
 
 void Rndr::Application::ShowCursor(bool show)

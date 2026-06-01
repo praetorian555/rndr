@@ -34,9 +34,11 @@ public:
     void DestroyGenericWindow(Opal::Ref<GenericWindow> window);
 
     /**
-     * Process any messages received from the OS in the previous frame, like input events.
+     * Process any messages received from the OS, like input events.
+     * @param timeout_ms How long to block waiting for an event before returning. Use 0 to return immediately
+     *                  if no events are pending, or InfiniteTimeout to block until at least one event arrives.
      */
-    virtual void ProcessSystemEvents() = 0;
+    virtual void ProcessSystemEvents(u32 timeout_ms) = 0;
 
     /**
      * Control cursor visibility.

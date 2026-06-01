@@ -29,7 +29,7 @@ public:
 
     i32 ProcessMessage(HWND window_handle, UINT msg_code, WPARAM param_w, LPARAM param_l);
 
-    void ProcessSystemEvents() override;
+    void ProcessSystemEvents(u32 timeout_ms) override;
 
     void ShowCursor(bool show) override;
     [[nodiscard]] bool IsCursorVisible() const override;

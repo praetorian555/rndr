@@ -263,8 +263,20 @@ Rndr::i32 Rndr::WindowsApplication::ProcessMessage(HWND window_handle, UINT msg_
     return static_cast<i32>(DefWindowProc(window_handle, msg_code, param_w, param_l));
 }
 
-void Rndr::WindowsApplication::ProcessSystemEvents()
+void Rndr::WindowsApplication::ProcessSystemEvents(u32 timeout_ms)
 {
+    if (timeout_ms != 0)
+    {
+        const DWORD wait_timeout = (timeout_ms == Application::k_infinite_timeout) ? INFINITE : static_cast<DWORD>(timeout_ms);
+        // Block until the message queue has something to process or the timeout expires. Arguments:
+        //   nCount=0, pHandles=nullptr  -- no kernel objects to wait on, we only care about the message queue.
+        //   dwMilliseconds=wait_timeout -- INFINITE waits forever, otherwise wake up after this many ms.
+        //   dwWakeMask=QS_ALLINPUT      -- wake on any input message (keyboard, mouse, paint, timers, posted msgs, etc.).
+        //   dwFlags=MWMO_INPUTAVAILABLE -- also return immediately if a matching message is already queued but
+        //                                  has not been seen by GetMessage/PeekMessage yet, avoiding a spurious wait.
+        MsgWaitForMultipleObjectsEx(0, nullptr, wait_timeout, QS_ALLINPUT, MWMO_INPUTAVAILABLE);
+    }
+
     for (const auto& window : m_generic_windows)
     {
         MSG msg;

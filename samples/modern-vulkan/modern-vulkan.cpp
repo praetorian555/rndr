@@ -209,7 +209,8 @@ void Run()
         fences[frame_index].Reset();
         u32 image_index = swap_chain.AcquireImage(present_semaphores[frame_index]);
 
-        rndr_app->ProcessSystemEvents(delta_seconds);
+        rndr_app->ProcessSystemEvents();
+        rndr_app->GetInputSystemChecked().ProcessSystemEvents(delta_seconds);
         controller.Tick(delta_seconds);
 
         // Update shader data

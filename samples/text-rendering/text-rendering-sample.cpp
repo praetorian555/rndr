@@ -63,7 +63,8 @@ int main()
 
         fps_counter.Update(delta_seconds);
 
-        app->ProcessSystemEvents(delta_seconds);
+        app->ProcessSystemEvents();
+        app->GetInputSystemChecked().ProcessSystemEvents(delta_seconds);
 
         Canvas::DrawList draw_list;
         draw_list.SetRenderTarget(context);

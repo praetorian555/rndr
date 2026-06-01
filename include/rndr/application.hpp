@@ -53,7 +53,16 @@ public:
     [[nodiscard]] MonitorInfo GetMonitorForWindow(const GenericWindow& window) const;
     /** End of monitor API. */
 
-    void ProcessSystemEvents(f32 delta_seconds);
+    /** Sentinel timeout value passed to ProcessSystemEvents that causes it to block until an event arrives. */
+    static constexpr u32 k_infinite_timeout = 0xFFFFFFFFu;
+
+    /**
+     * Process any messages received from the OS, like input events.
+     * @param timeout_ms How long to block waiting for an event before returning. Defaults to 0 which returns
+     *                  immediately if no events are pending. Pass k_infinite_timeout to block until at least
+     *                  one event arrives.
+     */
+    void ProcessSystemEvents(u32 timeout_ms = 0);
 
     /** Cursor manipulation API. */
     void ShowCursor(bool show);
