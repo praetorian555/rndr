@@ -64,6 +64,7 @@ Rndr::WindowsWindow::WindowsWindow(const GenericWindowDesc& desc) : GenericWindo
     m_pos_y = desc.start_y;
     m_width = desc.width;
     m_height = desc.height;
+    m_dpi_scale = static_cast<f32>(::GetDpiForWindow(window_handle)) / 96.0f;
 
     ::SetActiveWindow(window_handle);
 

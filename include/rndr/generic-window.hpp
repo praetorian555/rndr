@@ -1,6 +1,7 @@
 #pragma once
 
 #include "opal/container/string.h"
+#include "opal/delegate.h"
 
 #include "rndr/math.hpp"
 #include "rndr/types.hpp"
@@ -53,6 +54,10 @@ struct GenericWindowDesc
 class GenericWindow
 {
 public:
+    using DpiChangeDelegate = Opal::MultiDelegate<void(f32 /*new_dpi_scale*/)>;
+    /** Fired when the OS reports a DPI change for this window. */
+    DpiChangeDelegate on_dpi_change;
+
     virtual ~GenericWindow() = default;
 
     /**
@@ -111,16 +116,26 @@ public:
     [[nodiscard]] virtual GenericWindowMode GetMode() const = 0;
     [[nodiscard]] virtual NativeWindowHandle GetNativeHandle() const = 0;
 
+    /**
+     * Returns the current DPI scale factor for this window (1.0 == 96 DPI). Updated by the platform
+     * whenever the OS reports a DPI change.
+     */
+    [[nodiscard]] f32 GetDpiScale() const { return m_dpi_scale; }
+
 protected:
     GenericWindow(const GenericWindowDesc& desc) : m_desc(desc) {}
 
     GenericWindowDesc m_desc;
     CursorPositionMode m_cursor_pos_mode = CursorPositionMode::Normal;
     bool m_is_closed = false;
+    f32 m_dpi_scale = 1.0f;
 
 private:
     friend class Application;
+    friend class PlatformApplication;
+    friend class WindowsApplication;
     void MarkClosed() { m_is_closed = true; }
+    void SetDpiScale(f32 dpi_scale) { m_dpi_scale = dpi_scale; }
 };
 
 }  // namespace Rndr

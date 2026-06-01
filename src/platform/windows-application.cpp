@@ -237,6 +237,8 @@ Rndr::i32 Rndr::WindowsApplication::ProcessMessage(HWND window_handle, UINT msg_
         case WM_DPICHANGED:
         {
             const f32 new_dpi_scale = static_cast<f32>(HIWORD(param_w)) / 96.0f;
+            window_checked.SetDpiScale(new_dpi_scale);
+            window_checked.on_dpi_change.Execute(new_dpi_scale);
             m_message_handler->OnWindowDpiChanged(window_checked, new_dpi_scale);
             return 0;
         }

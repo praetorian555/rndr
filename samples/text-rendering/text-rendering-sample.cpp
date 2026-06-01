@@ -11,6 +11,7 @@
 #include "rndr/file.hpp"
 #include "rndr/frames-per-second-counter.hpp"
 #include "rndr/imgui-system.hpp"
+#include "rndr/input-system.hpp"
 #include "rndr/log.hpp"
 #include "rndr/types.hpp"
 
