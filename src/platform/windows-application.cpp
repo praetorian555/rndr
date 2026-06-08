@@ -118,11 +118,8 @@ Rndr::i32 Rndr::WindowsApplication::ProcessMessage(HWND window_handle, UINT msg_
         case WM_XBUTTONDBLCLK:
         case WM_XBUTTONUP:
         {
-            POINT cursor_pos_window;
-            cursor_pos_window.x = GET_X_LPARAM(param_l);
-            cursor_pos_window.y = GET_Y_LPARAM(param_l);
-            ClientToScreen(window_handle, &cursor_pos_window);
-            const Vector2i cursor_pos(cursor_pos_window.x, cursor_pos_window.y);
+            // Mouse button messages report the cursor position in client-space coordinates.
+            const Vector2i cursor_pos(GET_X_LPARAM(param_l), GET_Y_LPARAM(param_l));
 
             InputPrimitive primitive = InputPrimitive::A;
             bool mouse_up = false;
@@ -218,11 +215,13 @@ Rndr::i32 Rndr::WindowsApplication::ProcessMessage(HWND window_handle, UINT msg_
         }
         case WM_MOUSEWHEEL:
         {
-            POINT cursor_pos_window;
-            cursor_pos_window.x = GET_X_LPARAM(param_l);
-            cursor_pos_window.y = GET_Y_LPARAM(param_l);
-            ClientToScreen(window_handle, &cursor_pos_window);
-            const Vector2i cursor_pos(cursor_pos_window.x, cursor_pos_window.y);
+            // Unlike the mouse button messages, WM_MOUSEWHEEL reports the cursor position in
+            // screen-space coordinates, so convert it to client space for consistency.
+            POINT cursor_pos_screen;
+            cursor_pos_screen.x = GET_X_LPARAM(param_l);
+            cursor_pos_screen.y = GET_Y_LPARAM(param_l);
+            ScreenToClient(window_handle, &cursor_pos_screen);
+            const Vector2i cursor_pos(cursor_pos_screen.x, cursor_pos_screen.y);
 
             const i16 wheel_delta = GET_WHEEL_DELTA_WPARAM(param_w);
             constexpr f32 k_rotation_constant = 1 / 120.0f;
