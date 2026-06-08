@@ -266,11 +266,11 @@ bool Rndr::Application::OnMouseWheel(const GenericWindow& window, f32 wheel_delt
     return true;
 }
 
-bool Rndr::Application::OnMouseMove(const GenericWindow& window, f32 delta_x, f32 delta_y)
+bool Rndr::Application::OnMouseMove(const GenericWindow& window, f32 delta_x, f32 delta_y, const Vector2i& cursor_position)
 {
     for (const Opal::Ref<SystemMessageHandler>& system_message_handler : m_system_message_handlers)
     {
-        system_message_handler->OnMouseMove(window, delta_x, delta_y);
+        system_message_handler->OnMouseMove(window, delta_x, delta_y, cursor_position);
     }
     return true;
 }

@@ -88,7 +88,7 @@ public:
     bool OnMouseButtonUp(const GenericWindow& window, InputPrimitive primitive, const Vector2i& cursor_position) override;
     bool OnMouseDoubleClick(const GenericWindow& window, InputPrimitive primitive, const Vector2i& cursor_position) override;
     bool OnMouseWheel(const GenericWindow& window, f32 wheel_delta, const Vector2i& cursor_position) override;
-    bool OnMouseMove(const GenericWindow& window, f32 delta_x, f32 delta_y) override;
+    bool OnMouseMove(const GenericWindow& window, f32 delta_x, f32 delta_y, const Vector2i& cursor_position) override;
     /** End of SystemMessageHandler API */
 
 private:

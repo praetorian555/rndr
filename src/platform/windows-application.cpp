@@ -255,8 +255,16 @@ Rndr::i32 Rndr::WindowsApplication::ProcessMessage(HWND window_handle, UINT msg_
             {
                 [[maybe_unused]] const bool is_absolute_input = (raw_data->data.mouse.usFlags & MOUSE_MOVE_ABSOLUTE) == MOUSE_MOVE_ABSOLUTE;
                 RNDR_ASSERT(!is_absolute_input, "This is coming from a tablet or a virtual desktop which is not supported!");
+
+                // Raw input only carries relative motion, so query the current cursor position and
+                // convert it from screen space to the window's client space.
+                POINT cursor_pos_screen;
+                GetCursorPos(&cursor_pos_screen);
+                ScreenToClient(window_handle, &cursor_pos_screen);
+                const Vector2i cursor_pos(cursor_pos_screen.x, cursor_pos_screen.y);
+
                 m_message_handler->OnMouseMove(window_checked, static_cast<float>(raw_data->data.mouse.lLastX),
-                                               static_cast<float>(raw_data->data.mouse.lLastY));
+                                               static_cast<float>(raw_data->data.mouse.lLastY), cursor_pos);
             }
             return 0;
         }

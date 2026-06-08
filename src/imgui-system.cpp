@@ -339,7 +339,7 @@ bool Rndr::ImGuiContext::OnMouseWheel(const GenericWindow& window, f32 delta, co
     return true;
 }
 
-bool Rndr::ImGuiContext::OnMouseMove(const GenericWindow&, f32, f32)
+bool Rndr::ImGuiContext::OnMouseMove(const GenericWindow&, f32, f32, const Vector2i&)
 {
     return true;
 }

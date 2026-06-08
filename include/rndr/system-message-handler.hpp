@@ -30,7 +30,8 @@ struct SystemMessageHandler
     virtual bool OnMouseDoubleClick(const GenericWindow& window, InputPrimitive primitive, const Vector2i& cursor_position) = 0;
     virtual bool OnMouseWheel(const GenericWindow& window, f32 wheel_delta, const Vector2i& cursor_position) = 0;
 
-    // Reports relative mouse movement (deltas) since the last event, not an absolute position.
-    virtual bool OnMouseMove(const GenericWindow& window, f32 delta_x, f32 delta_y) = 0;
+    // Reports mouse movement as both the relative motion since the last event (`delta_x`, `delta_y`)
+    // and the resulting absolute `cursor_position` in client space (see the convention above).
+    virtual bool OnMouseMove(const GenericWindow& window, f32 delta_x, f32 delta_y, const Vector2i& cursor_position) = 0;
 };
 }  // namespace Rndr

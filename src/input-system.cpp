@@ -657,12 +657,13 @@ bool Rndr::InputSystem::OnMouseWheel(const GenericWindow& window, f32 wheel_delt
     return true;
 }
 
-bool Rndr::InputSystem::OnMouseMove(const GenericWindow& window, f32 delta_x, f32 delta_y)
+bool Rndr::InputSystem::OnMouseMove(const GenericWindow& window, f32 delta_x, f32 delta_y, const Vector2i& cursor_position)
 {
     m_event_queue.PushBack(MouseMoveEvent{
         .window = &window,
         .delta_x = delta_x,
         .delta_y = delta_y,
+        .cursor_position = cursor_position,
     });
     return true;
 }

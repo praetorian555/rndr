@@ -667,7 +667,7 @@ TEST_CASE("Input system mouse move binding", "[input]")
 
     SECTION("Mouse move dispatches both axes")
     {
-        input_system.OnMouseMove(g_fake_window, 5.0f, -3.0f);
+        input_system.OnMouseMove(g_fake_window, 5.0f, -3.0f, Rndr::Vector2i{});
         input_system.ProcessSystemEvents(0.0f);
 
         REQUIRE(callback_count == 2);
@@ -677,7 +677,7 @@ TEST_CASE("Input system mouse move binding", "[input]")
 
     SECTION("Zero delta axis is not dispatched")
     {
-        input_system.OnMouseMove(g_fake_window, 2.0f, 0.0f);
+        input_system.OnMouseMove(g_fake_window, 2.0f, 0.0f, Rndr::Vector2i{});
         input_system.ProcessSystemEvents(0.0f);
 
         REQUIRE(callback_count == 1);
@@ -704,7 +704,7 @@ TEST_CASE("Mouse move binding only X axis ignores Y", "[input]")
 
     SECTION("X movement fires callback")
     {
-        input_system.OnMouseMove(g_fake_window, 5.0f, 0.0f);
+        input_system.OnMouseMove(g_fake_window, 5.0f, 0.0f, Rndr::Vector2i{});
         input_system.ProcessSystemEvents(0.0f);
 
         REQUIRE(callback_count == 1);
@@ -713,7 +713,7 @@ TEST_CASE("Mouse move binding only X axis ignores Y", "[input]")
 
     SECTION("Y-only movement does not fire callback")
     {
-        input_system.OnMouseMove(g_fake_window, 0.0f, 5.0f);
+        input_system.OnMouseMove(g_fake_window, 0.0f, 5.0f, Rndr::Vector2i{});
         input_system.ProcessSystemEvents(0.0f);
 
         REQUIRE(callback_count == 0);
@@ -721,7 +721,7 @@ TEST_CASE("Mouse move binding only X axis ignores Y", "[input]")
 
     SECTION("Both axes moving only fires X")
     {
-        input_system.OnMouseMove(g_fake_window, 3.0f, 7.0f);
+        input_system.OnMouseMove(g_fake_window, 3.0f, 7.0f, Rndr::Vector2i{});
         input_system.ProcessSystemEvents(0.0f);
 
         REQUIRE(callback_count == 1);
@@ -747,7 +747,7 @@ TEST_CASE("Mouse move binding only Y axis ignores X", "[input]")
 
     SECTION("Y movement fires callback")
     {
-        input_system.OnMouseMove(g_fake_window, 0.0f, 5.0f);
+        input_system.OnMouseMove(g_fake_window, 0.0f, 5.0f, Rndr::Vector2i{});
         input_system.ProcessSystemEvents(0.0f);
 
         REQUIRE(callback_count == 1);
@@ -756,7 +756,7 @@ TEST_CASE("Mouse move binding only Y axis ignores X", "[input]")
 
     SECTION("X-only movement does not fire callback")
     {
-        input_system.OnMouseMove(g_fake_window, 5.0f, 0.0f);
+        input_system.OnMouseMove(g_fake_window, 5.0f, 0.0f, Rndr::Vector2i{});
         input_system.ProcessSystemEvents(0.0f);
 
         REQUIRE(callback_count == 0);
@@ -764,7 +764,7 @@ TEST_CASE("Mouse move binding only Y axis ignores X", "[input]")
 
     SECTION("Both axes moving only fires Y")
     {
-        input_system.OnMouseMove(g_fake_window, 3.0f, 7.0f);
+        input_system.OnMouseMove(g_fake_window, 3.0f, 7.0f, Rndr::Vector2i{});
         input_system.ProcessSystemEvents(0.0f);
 
         REQUIRE(callback_count == 1);
@@ -791,9 +791,9 @@ TEST_CASE("Multiple mouse move events dispatched individually", "[input]")
         })
         .Bind(Rndr::MouseAxis::X);
 
-    input_system.OnMouseMove(g_fake_window, 2.0f, 0.0f);
-    input_system.OnMouseMove(g_fake_window, 3.0f, 0.0f);
-    input_system.OnMouseMove(g_fake_window, -1.0f, 0.0f);
+    input_system.OnMouseMove(g_fake_window, 2.0f, 0.0f, Rndr::Vector2i{});
+    input_system.OnMouseMove(g_fake_window, 3.0f, 0.0f, Rndr::Vector2i{});
+    input_system.OnMouseMove(g_fake_window, -1.0f, 0.0f, Rndr::Vector2i{});
     input_system.ProcessSystemEvents(0.0f);
 
     REQUIRE(callback_count == 3);
@@ -2146,7 +2146,7 @@ TEST_CASE("Multiple callbacks: OnMousePosition and OnMouseWheel on same action",
 
     SECTION("Mouse move fires position callback only")
     {
-        input_system.OnMouseMove(g_fake_window, 5.0f, 0.0f);
+        input_system.OnMouseMove(g_fake_window, 5.0f, 0.0f, Rndr::Vector2i{});
         input_system.ProcessSystemEvents(0.0f);
 
         REQUIRE(position_fired);
@@ -2316,7 +2316,7 @@ TEST_CASE("Edge case: multiple event types in same frame", "[input]")
     // Queue all event types in the same frame.
     input_system.OnButtonDown(g_fake_window, Rndr::InputPrimitive::Space, false);
     input_system.OnMouseButtonDown(g_fake_window, Rndr::InputPrimitive::Mouse_LeftButton, Rndr::Vector2i{0, 0});
-    input_system.OnMouseMove(g_fake_window, 5.0f, 0.0f);
+    input_system.OnMouseMove(g_fake_window, 5.0f, 0.0f, Rndr::Vector2i{});
     input_system.OnMouseWheel(g_fake_window, 120.0f, Rndr::Vector2i{0, 0});
     input_system.OnCharacter(g_fake_window, U'A', false);
     input_system.ProcessSystemEvents(0.0f);
