@@ -190,6 +190,12 @@ void Rndr::Canvas::DrawList::Execute()
                 }
                 if (mask != 0)
                 {
+                    // A brush from a previous frame may have left depth writes disabled or the
+                    // scissor test enabled. Both silently corrupt the clear (depth would not be
+                    // written, and the clear would be confined to the scissor rectangle), so reset
+                    // them to the state glClear expects. Brushes reenable them as needed on Apply.
+                    glDepthMask(GL_TRUE);
+                    glDisable(GL_SCISSOR_TEST);
                     glClear(mask);
                 }
             },
