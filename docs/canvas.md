@@ -145,6 +145,8 @@ If `SetUniform()` is called with a name that doesn't match any shader parameter,
 | `SetWindingOrder(order)` | `CCW` | `CCW`, `CW` |
 | `SetFillMode(mode)` | `Solid` | `Solid`, `Wireframe` |
 | `SetDepthBias(factor, units)` | `0, 0` | Polygon offset for shadow acne / z-fighting |
+| `SetScissorTest(enabled)` | `false` | Enable scissor test (discard fragments outside the rectangle) |
+| `SetScissor(x, y, w, h)` | `0, 0, 0, 0` | Scissor rectangle in window pixels, origin at lower-left |
 
 ### Mesh
 

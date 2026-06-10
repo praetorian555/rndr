@@ -178,6 +178,23 @@ void Rndr::Canvas::Brush::SetDepthBias(f32 factor, f32 units)
     m_desc.depth_bias_units = units;
 }
 
+void Rndr::Canvas::Brush::SetScissorTest(bool enabled)
+{
+    m_desc.scissor_test = enabled;
+}
+
+void Rndr::Canvas::Brush::SetScissor(i32 x, i32 y, i32 width, i32 height)
+{
+    if (width < 0 || height < 0)
+    {
+        throw Opal::InvalidArgumentException(__FUNCTION__, "Scissor width and height must be non-negative!");
+    }
+    m_desc.scissor_x = x;
+    m_desc.scissor_y = y;
+    m_desc.scissor_width = width;
+    m_desc.scissor_height = height;
+}
+
 const Rndr::Canvas::BrushDesc& Rndr::Canvas::Brush::GetDesc() const
 {
     return m_desc;
@@ -508,6 +525,16 @@ void Rndr::Canvas::Brush::Apply()
     {
         glDisable(GL_POLYGON_OFFSET_FILL);
         glDisable(GL_POLYGON_OFFSET_LINE);
+    }
+
+    if (m_desc.scissor_test)
+    {
+        glEnable(GL_SCISSOR_TEST);
+        glScissor(m_desc.scissor_x, m_desc.scissor_y, m_desc.scissor_width, m_desc.scissor_height);
+    }
+    else
+    {
+        glDisable(GL_SCISSOR_TEST);
     }
 
     // 5. Upload dirty uniform buffers to the GPU.

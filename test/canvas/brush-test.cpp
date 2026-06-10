@@ -198,6 +198,11 @@ TEST_CASE("Canvas BrushDesc defaults", "[canvas][brush]")
     REQUIRE(desc.fill_mode == Rndr::Canvas::FillMode::Solid);
     REQUIRE(desc.depth_bias_factor == 0.0f);
     REQUIRE(desc.depth_bias_units == 0.0f);
+    REQUIRE(desc.scissor_test == false);
+    REQUIRE(desc.scissor_x == 0);
+    REQUIRE(desc.scissor_y == 0);
+    REQUIRE(desc.scissor_width == 0);
+    REQUIRE(desc.scissor_height == 0);
 }
 
 TEST_CASE("Canvas Brush", "[canvas][brush]")
@@ -277,6 +282,17 @@ TEST_CASE("Canvas Brush", "[canvas][brush]")
         brush.SetDepthBias(1.5f, 3.0f);
         REQUIRE(brush.GetDesc().depth_bias_factor == 1.5f);
         REQUIRE(brush.GetDesc().depth_bias_units == 3.0f);
+
+        brush.SetScissorTest(true);
+        REQUIRE(brush.GetDesc().scissor_test == true);
+
+        brush.SetScissor(10, 20, 100, 200);
+        REQUIRE(brush.GetDesc().scissor_x == 10);
+        REQUIRE(brush.GetDesc().scissor_y == 20);
+        REQUIRE(brush.GetDesc().scissor_width == 100);
+        REQUIRE(brush.GetDesc().scissor_height == 200);
+
+        REQUIRE_THROWS(brush.SetScissor(0, 0, -1, 10));
     }
 
     SECTION("SetUniform stores value by name")

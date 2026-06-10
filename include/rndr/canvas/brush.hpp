@@ -103,6 +103,15 @@ struct BrushDesc
     FillMode fill_mode = FillMode::Solid;
     f32 depth_bias_factor = 0.0f;
     f32 depth_bias_units = 0.0f;
+
+    /** When true, fragments outside the scissor rectangle are discarded. */
+    bool scissor_test = false;
+
+    /** Scissor rectangle, in window pixels with origin at the lower-left corner. */
+    i32 scissor_x = 0;
+    i32 scissor_y = 0;
+    i32 scissor_width = 0;
+    i32 scissor_height = 0;
 };
 
 /** A named uniform value stored as raw bytes. */
@@ -229,6 +238,23 @@ public:
      */
     void SetDepthBias(f32 factor, f32 units);
 
+    /**
+     * Enable or disable the scissor test. When enabled, fragments outside the rectangle set via
+     * SetScissor() are discarded. The rectangle must be configured for the test to be meaningful.
+     */
+    void SetScissorTest(bool enabled);
+
+    /**
+     * Set the scissor rectangle. Coordinates are in window pixels with the origin at the lower-left
+     * corner, matching OpenGL conventions. This does not implicitly enable the scissor test; call
+     * SetScissorTest(true) as well.
+     * @param x Left edge of the rectangle, in pixels.
+     * @param y Bottom edge of the rectangle, in pixels.
+     * @param width Width of the rectangle, in pixels. Must be non-negative.
+     * @param height Height of the rectangle, in pixels. Must be non-negative.
+     */
+    void SetScissor(i32 x, i32 y, i32 width, i32 height);
+
     /** @return Current pipeline state descriptor. */
     [[nodiscard]] const BrushDesc& GetDesc() const;
 
@@ -291,7 +317,7 @@ public:
      *   1. Binds the shader program (glUseProgram).
      *   2. Configures depth state (test, write, compare func).
      *   3. Configures blend state from BlendMode.
-     *   4. Configures rasterizer state (cull mode, fill mode, depth bias).
+     *   4. Configures rasterizer state (cull mode, fill mode, depth bias, scissor test).
      *   5. Uploads dirty uniform buffers to the GPU (UploadUniforms).
      *   6. Binds UBOs to their respective binding points (glBindBufferBase).
      *   7. Binds textures to their respective texture units (glBindTextureUnit).
