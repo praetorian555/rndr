@@ -83,3 +83,52 @@ cpmaddpackage(
         GIT_TAG "v4.4.2"
 )
 message(STATUS "***** Setup Complete *****")
+
+# Setup Slang #####################################################################
+# Pull in prebuilt Slang release binaries instead of building from source (the
+# from-source build is very heavy). CPM downloads and extracts the archive and we
+# wrap it in an imported target named `slang`.
+if ((RNDR_FORGE OR RNDR_CANVAS) AND NOT TARGET slang)
+    message(STATUS "***** Setting up Slang Dependency *****")
+    set(SLANG_VERSION 2026.10.2)
+    if (WIN32)
+        set(SLANG_ARCHIVE "slang-${SLANG_VERSION}-windows-x86_64.zip")
+    elseif (LINUX)
+        set(SLANG_ARCHIVE "slang-${SLANG_VERSION}-linux-x86_64.tar.gz")
+    else ()
+        message(FATAL_ERROR "Unsupported platform for Slang dependency")
+    endif ()
+    cpmaddpackage(
+            NAME slang
+            VERSION ${SLANG_VERSION}
+            URL https://github.com/shader-slang/slang/releases/download/v${SLANG_VERSION}/${SLANG_ARCHIVE}
+            DOWNLOAD_ONLY YES
+    )
+    add_library(slang SHARED IMPORTED GLOBAL)
+    target_include_directories(slang INTERFACE ${slang_SOURCE_DIR}/include)
+    if (WIN32)
+        set_target_properties(slang PROPERTIES
+                IMPORTED_IMPLIB ${slang_SOURCE_DIR}/lib/slang.lib
+                IMPORTED_LOCATION ${slang_SOURCE_DIR}/bin/slang.dll)
+    else ()
+        set_target_properties(slang PROPERTIES
+                IMPORTED_LOCATION ${slang_SOURCE_DIR}/lib/libslang.so)
+    endif ()
+    # Directory holding the runtime libraries (slang.dll, slang-glslang.dll, ...)
+    # that must sit next to any executable linking against Slang on Windows.
+    set(SLANG_RUNTIME_DIR ${slang_SOURCE_DIR}/bin CACHE INTERNAL "Slang runtime library directory")
+    message(STATUS "***** Setup Complete *****")
+endif ()
+
+# Copies Slang's runtime libraries (slang.dll, slang-glslang.dll, ...) next to the
+# given executable target so it can be launched from the build tree on Windows.
+function(rndr_copy_slang_runtime target)
+    if (WIN32 AND DEFINED SLANG_RUNTIME_DIR)
+        file(GLOB SLANG_RUNTIME_DLLS "${SLANG_RUNTIME_DIR}/*.dll")
+        foreach (dll ${SLANG_RUNTIME_DLLS})
+            add_custom_command(TARGET ${target} POST_BUILD
+                    COMMAND ${CMAKE_COMMAND} -E copy_if_different "${dll}" "$<TARGET_FILE_DIR:${target}>"
+                    VERBATIM)
+        endforeach ()
+    endif ()
+endfunction()

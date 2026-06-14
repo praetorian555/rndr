@@ -155,18 +155,10 @@ target_include_directories(rndr PUBLIC ${PROJECT_SOURCE_DIR}/extern/glad/include
 target_include_directories(rndr PUBLIC ${PROJECT_SOURCE_DIR}/extern/stb_image/include)
 target_include_directories(rndr PUBLIC ${PROJECT_SOURCE_DIR}/tools/obsidian/win32/include)
 
-# Figure out where is Slang library
-if (${RNDR_FORGE})
-    # If we are using Advanced API we will search it in Vulkan SDK
-    find_library(SLANG_LIBRARY NAMES slang HINTS ${VULKAN_SDK_PATH}/Lib REQUIRED)
-    target_link_libraries(rndr PUBLIC ${SLANG_LIBRARY})
-endif ()
-message(STATUS "SLANG_LIBRARY ${SLANG_LIBRARY}")
-if (NOT SLANG_LIBRARY AND RNDR_CANVAS)
-    # In case that we are using canvas and advanced api is disabled so no vulkan sdk, we look for slang package and link
-    # to that, where to look can be specified using -DCMAKE_PREFIX_PATH
-    find_package(slang REQUIRED)
-    target_link_libraries(rndr PUBLIC slang::slang)
+# Slang is provided as a prebuilt dependency via CPM (see cmake/dependencies.cmake).
+# The imported `slang` target carries its own include directories.
+if (${RNDR_FORGE} OR ${RNDR_CANVAS})
+    target_link_libraries(rndr PUBLIC slang)
 endif ()
 
 if (${RNDR_CANVAS})
@@ -192,7 +184,7 @@ target_link_libraries(rndr PUBLIC ktx)
 if (${RNDR_FORGE})
     target_include_directories(rndr PRIVATE ${VULKAN_SDK_PATH}/Source/SPIRV-Reflect)
     target_include_directories(rndr PUBLIC ${VULKAN_SDK_PATH}/Include)
-    target_include_directories(rndr PUBLIC ${VULKAN_SDK_PATH}/Include/slang)
+    # Slang headers now come from the CPM-provided imported target.
     target_compile_definitions(rndr PUBLIC RNDR_FORGE)
     if (WIN32)
         target_compile_definitions(rndr PUBLIC -DVK_USE_PLATFORM_WIN32_KHR -DVK_NO_PROTOTYPES)
