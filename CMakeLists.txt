@@ -1,6 +1,9 @@
 cmake_minimum_required(VERSION 3.28)
 project(RNDR VERSION 0.1.0 LANGUAGES CXX C)
 
+# Standard GNU install directory variables (CMAKE_INSTALL_LIBDIR/BINDIR/INCLUDEDIR).
+include(GNUInstallDirs)
+
 # Library options
 option(RNDR_CANVAS "Enable Canvas API which is a simplified graphics API" ON)
 option(RNDR_FORGE "Use more advanced rendering API that is more powerful but more complicated" OFF)
@@ -105,13 +108,6 @@ if (${RNDR_BUILD_TESTS})
     target_link_libraries(rndr-test rndr_options)
     enable_testing()
     add_test(NAME all_tests COMMAND rndr-test)
-
-    # Install the test executable
-    install(TARGETS rndr-test
-            LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
-            ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
-            RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}  # For Windows DLL files
-    )
 endif ()
 
 if (${RNDR_BUILD_SAMPLES})

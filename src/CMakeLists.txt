@@ -215,11 +215,29 @@ install(TARGETS rndr
         ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
         RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}  # For Windows DLL files
 )
-install(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/include/
-        DESTINATION include
+# Public headers (note: CMAKE_CURRENT_SOURCE_DIR here is the src/ dir, so the headers
+# live one level up under the project root).
+install(DIRECTORY ${PROJECT_SOURCE_DIR}/include/
+        DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}
         FILES_MATCHING PATTERN "*.h"
         PATTERN "*.hpp")
+# Generated headers (rndr/export.h) produced by generate_export_header into the build tree.
 install(DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/include/
-        DESTINATION include
+        DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}
         FILES_MATCHING PATTERN "*.h"
         PATTERN "*.hpp")
+
+# Install the runtime dependencies rndr pulls in (Slang DLLs, and the ASan runtime for
+# hardened builds) into the bin directory so the install prefix is self-contained and any
+# executable linking the installed rndr can be launched. Mirrors rndr_deploy_runtime(),
+# which performs the equivalent copy for build-tree executables.
+if (WIN32 AND DEFINED SLANG_RUNTIME_DIR)
+    install(DIRECTORY ${SLANG_RUNTIME_DIR}/
+            DESTINATION ${CMAKE_INSTALL_BINDIR}
+            FILES_MATCHING PATTERN "*.dll")
+endif ()
+if (MSVC AND RNDR_HARDENING)
+    get_filename_component(_msvc_bin_dir "${CMAKE_CXX_COMPILER}" DIRECTORY)
+    install(FILES "${_msvc_bin_dir}/clang_rt.asan_dynamic-x86_64.dll"
+            DESTINATION ${CMAKE_INSTALL_BINDIR})
+endif ()

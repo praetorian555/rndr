@@ -6,6 +6,7 @@ if (NOT TARGET opal)
             NAME opal
             GIT_REPOSITORY https://github.com/praetorian555/opal
             GIT_TAG opal-0.3.3
+            EXCLUDE_FROM_ALL YES
             OPTIONS
             "OPAL_BUILD_TESTS OFF"
             "OPAL_HARDENING ${RNDR_HARDENING}"
@@ -60,6 +61,7 @@ if (RNDR_ASSIMP)
             NAME assimp
             GIT_REPOSITORY https://github.com/assimp/assimp.git
             GIT_TAG "v6.0.2"
+            EXCLUDE_FROM_ALL YES
             OPTIONS
             "ASSIMP_ASAN OFF"
             "BUILD_SHARED_LIBS OFF"
@@ -84,6 +86,9 @@ if (RNDR_KTX)
             NAME ktx
             GIT_REPOSITORY https://github.com/KhronosGroup/KTX-Software.git
             GIT_TAG "v4.4.2"
+            EXCLUDE_FROM_ALL YES
+            OPTIONS
+            "KTX_FEATURE_TOOLS OFF"
     )
     message(STATUS "***** Setup Complete *****")
 endif ()
