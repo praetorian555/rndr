@@ -21,6 +21,15 @@ To build project using the cmake from command line:
 
 	cmake --build <path_to_build_dir> --config <config_name>
 
+Dependencies are fetched at configure time by [CPM](https://github.com/cpm-cmake/CPM.cmake). By default each
+dependency is downloaded into the build directory, so every build directory re-downloads them. Set
+_CPM_SOURCE_CACHE_ to a shared folder to download each dependency only once and reuse it across build
+directories:
+
+	cmake -S <path_to_lib_root> -B <path_to_build_dir> -DCPM_SOURCE_CACHE=<path_to_cache>
+
+Alternatively, set the _CPM_SOURCE_CACHE_ environment variable.
+
 If you installed the _clang-format_ tool you will have access to _clang-format_ and target. It can be run either by
 building it in IDE or with following directive in command-line:
 
