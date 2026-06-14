@@ -69,8 +69,22 @@ next to it after the build:
 	rndr_deploy_runtime(my-app)
 
 This applies both to rndr's own samples/tests and to downstream projects consuming rndr via CPM or
-`add_subdirectory`. The same runtime DLLs are placed in the `bin` directory by `cmake --install`, so
-installed executables are self-contained as well.
+`add_subdirectory`. The Slang runtime DLLs are also placed in the `bin` directory by `cmake --install`
+(see below), so installed executables are self-contained as well.
+
+## Install ##
+
+To install the library, its public headers and runtime DLLs into a prefix:
+
+	cmake --install <path_to_build_dir> --config <config_name> --prefix <install_dir>
+
+This installs `rndr` (into `lib`), its headers (into `include`) and the Slang runtime DLLs (into
+`bin`). Bundled dependencies (opal, assimp, ktx, ...) are statically linked and not installed
+separately.
+
+Hardened builds cannot be installed. A build configured with __RNDR_HARDENING=ON__ (the default) is
+AddressSanitizer-instrumented and is not meant to be distributed, so `cmake --install` fails with an
+error. Reconfigure with `-DRNDR_HARDENING=OFF` before installing.
 
 ## Documentation ##
 
