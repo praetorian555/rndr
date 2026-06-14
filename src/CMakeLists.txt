@@ -209,6 +209,14 @@ target_compile_definitions(rndr PUBLIC "$<$<NOT:$<BOOL:${BUILD_SHARED_LIBS}>>:RN
 target_include_directories(rndr PUBLIC "$<BUILD_INTERFACE:${CMAKE_CURRENT_BINARY_DIR}/include>")
 target_include_directories(rndr PUBLIC "$<INSTALL_INTERFACE:include>")
 
+# Hardened builds are AddressSanitizer-instrumented and are not meant to be distributed.
+# Fail the install (at install time, not configure time) so such a build can't be installed.
+if (RNDR_HARDENING)
+    install(CODE [[message(FATAL_ERROR
+            "rndr was configured with RNDR_HARDENING=ON (AddressSanitizer-instrumented build), \
+which must not be installed. Reconfigure with -DRNDR_HARDENING=OFF before installing.")]])
+endif ()
+
 # Install the library
 install(TARGETS rndr
         LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
@@ -227,17 +235,12 @@ install(DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/include/
         FILES_MATCHING PATTERN "*.h"
         PATTERN "*.hpp")
 
-# Install the runtime dependencies rndr pulls in (Slang DLLs, and the ASan runtime for
-# hardened builds) into the bin directory so the install prefix is self-contained and any
-# executable linking the installed rndr can be launched. Mirrors rndr_deploy_runtime(),
-# which performs the equivalent copy for build-tree executables.
+# Install the Slang runtime DLLs rndr pulls in into the bin directory so the install prefix is
+# self-contained and any executable linking the installed rndr can be launched. Mirrors
+# rndr_deploy_runtime(), which performs the equivalent copy for build-tree executables.
+# (The ASan runtime is intentionally not installed - hardened builds are blocked above.)
 if (WIN32 AND DEFINED SLANG_RUNTIME_DIR)
     install(DIRECTORY ${SLANG_RUNTIME_DIR}/
             DESTINATION ${CMAKE_INSTALL_BINDIR}
             FILES_MATCHING PATTERN "*.dll")
-endif ()
-if (MSVC AND RNDR_HARDENING)
-    get_filename_component(_msvc_bin_dir "${CMAKE_CXX_COMPILER}" DIRECTORY)
-    install(FILES "${_msvc_bin_dir}/clang_rt.asan_dynamic-x86_64.dll"
-            DESTINATION ${CMAKE_INSTALL_BINDIR})
 endif ()
