@@ -6189,6 +6189,7 @@ static void stbir__encode_scanline( stbir__info const * stbir_info, void *output
 // Get the ring buffer pointer for an index
 static float* stbir__get_ring_buffer_entry(stbir__info const * stbir_info, stbir__per_split_info const * split_info, int index )
 {
+  (void)stbir_info;
   STBIR_ASSERT( index < stbir_info->ring_buffer_num_entries );
 
   #ifdef STBIR__SEPARATE_ALLOCATIONS
