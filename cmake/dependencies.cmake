@@ -122,6 +122,7 @@ endif ()
 
 # Copies Slang's runtime libraries (slang.dll, slang-glslang.dll, ...) next to the
 # given executable target so it can be launched from the build tree on Windows.
+# Internal helper - downstream targets should use rndr_deploy_runtime() instead.
 function(rndr_copy_slang_runtime target)
     if (WIN32 AND DEFINED SLANG_RUNTIME_DIR)
         file(GLOB SLANG_RUNTIME_DLLS "${SLANG_RUNTIME_DIR}/*.dll")
@@ -131,4 +132,13 @@ function(rndr_copy_slang_runtime target)
                     VERBATIM)
         endforeach ()
     endif ()
+endfunction()
+
+# Single entry point for deploying every runtime DLL an rndr-linked executable needs next
+# to it. Call this once per executable that links rndr - both rndr's own samples/tests and
+# downstream projects consuming rndr via CPM/add_subdirectory. Keeps callers from having to
+# know which specific runtimes (Slang, ASan, ...) rndr pulls in.
+function(rndr_deploy_runtime target)
+    rndr_copy_slang_runtime(${target})
+    rndr_copy_asan_runtime(${target})
 endfunction()
