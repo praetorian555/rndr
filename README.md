@@ -50,6 +50,27 @@ The library currently offers following options for compile-time configuration:
 * __RNDR_HARDENING__ Enable hardened mode. Default is ON.
 * __RNDR_BUILD_TESTS__ Build tests. Default is ON.
 * __RNDR_BUILD_SAMPLES__ Build sample executables. Default is ON.
+* __RNDR_ASSIMP__ Pull in the Assimp dependency and enable mesh/model loading (`Forge::LoadMesh`,
+  `Canvas::PbrRenderer::LoadModel`). When OFF, Assimp is not fetched and those functions throw if
+  called. Default is ON.
+* __RNDR_KTX__ Pull in the KTX-Software dependency and enable loading of KTX textures. When OFF, KTX
+  is not fetched and `.ktx`/`.ktx2` files are not supported (other formats still load via stb_image).
+  Default is ON.
+
+## Runtime dependencies ##
+
+On Windows, rndr links against runtime libraries that must sit next to any executable that links it —
+Slang (`slang.dll`, `slang-glslang.dll`, ...) and, for hardened builds, the AddressSanitizer runtime.
+For every executable target that links `rndr`, call `rndr_deploy_runtime()` so these DLLs are copied
+next to it after the build:
+
+	add_executable(my-app main.cpp)
+	target_link_libraries(my-app PRIVATE rndr)
+	rndr_deploy_runtime(my-app)
+
+This applies both to rndr's own samples/tests and to downstream projects consuming rndr via CPM or
+`add_subdirectory`. The same runtime DLLs are placed in the `bin` directory by `cmake --install`, so
+installed executables are self-contained as well.
 
 ## Documentation ##
 
