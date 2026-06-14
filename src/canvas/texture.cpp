@@ -2,7 +2,9 @@
 
 #include "stb_image/stb_image.h"
 
+#if defined(RNDR_KTX)
 #include "ktx.h"
+#endif
 
 #include "glad/glad.h"
 
@@ -306,6 +308,7 @@ Rndr::Canvas::Texture::Texture(const Context& context, const TextureDesc& desc, 
 namespace
 {
 
+#if defined(RNDR_KTX)
 Rndr::Canvas::Format GlInternalFormatToCanvasFormat(ktx_uint32_t gl_format)
 {
     switch (gl_format)
@@ -338,6 +341,7 @@ Rndr::Canvas::Format GlInternalFormatToCanvasFormat(ktx_uint32_t gl_format)
             throw Opal::Exception("Unsupported GL internal format in KTX file for Canvas::Texture!");
     }
 }
+#endif
 
 void CubemapFaceDirection(Rndr::i32 face, float u, float v, float& out_x, float& out_y, float& out_z)
 {
@@ -522,6 +526,7 @@ Rndr::Canvas::Texture Rndr::Canvas::Texture::FromFile(const Context& context, co
 
     const Opal::StringUtf8 extension = Opal::Paths::GetExtension(file_path).GetValue();
 
+#if defined(RNDR_KTX)
     if (extension == ".ktx")
     {
         ktxTexture1* ktx_texture = nullptr;
@@ -550,6 +555,7 @@ Rndr::Canvas::Texture Rndr::Canvas::Texture::FromFile(const Context& context, co
         ktxTexture_Destroy(reinterpret_cast<ktxTexture*>(ktx_texture));
         return tex;
     }
+#endif
 
     stbi_set_flip_vertically_on_load(flip_vertically ? 1 : 0);
 

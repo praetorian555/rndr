@@ -78,13 +78,15 @@ if (RNDR_ASSIMP)
 endif ()
 
 # Setup KTX-Software ###############################################################
-message(STATUS "***** Setting up KTX Software Dependency *****")
-cpmaddpackage(
-        NAME ktx
-        GIT_REPOSITORY https://github.com/KhronosGroup/KTX-Software.git
-        GIT_TAG "v4.4.2"
-)
-message(STATUS "***** Setup Complete *****")
+if (RNDR_KTX)
+    message(STATUS "***** Setting up KTX Software Dependency *****")
+    cpmaddpackage(
+            NAME ktx
+            GIT_REPOSITORY https://github.com/KhronosGroup/KTX-Software.git
+            GIT_TAG "v4.4.2"
+    )
+    message(STATUS "***** Setup Complete *****")
+endif ()
 
 # Setup Slang #####################################################################
 # Pull in prebuilt Slang release binaries instead of building from source (the

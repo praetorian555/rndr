@@ -3,7 +3,7 @@
 #include "stb_image/stb_image.h"
 #include "stb_image/stb_image_write.h"
 
-#if RNDR_FORGE
+#if RNDR_FORGE && defined(RNDR_KTX)
 #include "ktx.h"
 #include "ktxvulkan.h"
 #endif
@@ -208,7 +208,7 @@ bool Rndr::File::SaveImage(const Bitmap& bitmap, const Opal::StringUtf8& file_pa
     return status == 1;
 }
 
-#if RNDR_FORGE
+#if RNDR_FORGE && defined(RNDR_KTX)
 namespace
 {
 Rndr::PixelFormat VkFormatToPixelFormat(ktx_uint32_t vk_format)
@@ -228,7 +228,7 @@ Rndr::Bitmap Rndr::File::LoadImage(const Opal::StringUtf8& file_path, bool flip_
     // Determine file extension.
     const Opal::StringUtf8 extension = Opal::Paths::GetExtension(file_path).GetValue();
 
-#if RNDR_FORGE
+#if RNDR_FORGE && defined(RNDR_KTX)
     if (extension == ".ktx" || extension == ".ktx2")
     {
         ktxTexture* ktx_texture = nullptr;

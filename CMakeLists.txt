@@ -8,6 +8,7 @@ option(RNDR_HARDENING "Enable hardened mode" ON)
 option(RNDR_BUILD_TESTS "Build tests" ON)
 option(RNDR_BUILD_SAMPLES "Builds sample executables" ON)
 option(RNDR_ASSIMP "Enable Assimp dependency for mesh/model loading" ON)
+option(RNDR_KTX "Enable KTX-Software dependency for KTX texture loading" ON)
 
 message(STATUS "RNDR_FORGE ${RNDR_FORGE}")
 message(STATUS "RNDR_CANVAS ${RNDR_CANVAS}")
@@ -15,6 +16,7 @@ message(STATUS "RNDR_BUILD_TESTS ${RNDR_BUILD_TESTS}")
 message(STATUS "RNDR_HARDENING ${RNDR_HARDENING}")
 message(STATUS "RNDR_BUILD_SAMPLES ${RNDR_BUILD_SAMPLES}")
 message(STATUS "RNDR_ASSIMP ${RNDR_ASSIMP}")
+message(STATUS "RNDR_KTX ${RNDR_KTX}")
 
 ## C++ language configuration boilerplate, hide symbols by default
 if (NOT DEFINED CMAKE_CXX_VISIBILITY_PRESET AND NOT DEFINED CMAKE_VISIBILITY_INLINES_HIDDEN)

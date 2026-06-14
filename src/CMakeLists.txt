@@ -183,7 +183,10 @@ endif ()
 # TODO: Reenable once we refactor everything
 #add_dependencies(rndr generate-reflection)
 
-target_link_libraries(rndr PUBLIC ktx)
+if (RNDR_KTX)
+    target_link_libraries(rndr PUBLIC ktx)
+    target_compile_definitions(rndr PUBLIC RNDR_KTX)
+endif ()
 
 if (${RNDR_FORGE})
     target_include_directories(rndr PRIVATE ${VULKAN_SDK_PATH}/Source/SPIRV-Reflect)
