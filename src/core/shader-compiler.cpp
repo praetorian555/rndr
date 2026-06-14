@@ -342,7 +342,7 @@ Rndr::ShaderCompiler& Rndr::ShaderCompiler::operator=(ShaderCompiler&& other) no
     return *this;
 }
 
-void Rndr::ShaderCompiler::LoadModule(const Opal::StringUtf8& source)
+void Rndr::ShaderCompiler::LoadModule(const Opal::StringUtf8& source, ShaderOutputFormat format)
 {
     SlangResult result = slang::createGlobalSession(m_impl->global_session.writeRef());
     if (SLANG_FAILED(result))
@@ -351,22 +351,31 @@ void Rndr::ShaderCompiler::LoadModule(const Opal::StringUtf8& source)
     }
 
     slang::TargetDesc target_desc = {};
-    target_desc.format = SLANG_SPIRV;
-    target_desc.profile = m_impl->global_session->findProfile("spirv_1_5");
-    target_desc.flags = SLANG_TARGET_FLAG_GENERATE_SPIRV_DIRECTLY;
-
     // Preserve original Slang entry-point names in the emitted SPIR-V instead of renaming them
     // all to "main". This lets downstream consumers (e.g. spirv-reflect) look up entry points by
-    // their original name.
+    // their original name. GLSL has no such option - its entry point is always "main".
     slang::CompilerOptionEntry session_options[] = {
         {slang::CompilerOptionName::VulkanUseEntryPointName, {slang::CompilerOptionValueKind::Int, 1, 0, nullptr, nullptr}},
     };
 
     slang::SessionDesc session_desc = {};
+    if (format == ShaderOutputFormat::Glsl)
+    {
+        // OpenGL-flavoured GLSL (gl_VertexID/gl_InstanceID semantics, layout(binding=...)), targeting
+        // GL 4.5. No SPIR-V-specific flags or options are needed here.
+        target_desc.format = SLANG_GLSL;
+        target_desc.profile = m_impl->global_session->findProfile("glsl_450");
+    }
+    else
+    {
+        target_desc.format = SLANG_SPIRV;
+        target_desc.profile = m_impl->global_session->findProfile("spirv_1_5");
+        target_desc.flags = SLANG_TARGET_FLAG_GENERATE_SPIRV_DIRECTLY;
+        session_desc.compilerOptionEntries = session_options;
+        session_desc.compilerOptionEntryCount = sizeof(session_options) / sizeof(session_options[0]);
+    }
     session_desc.targets = &target_desc;
     session_desc.targetCount = 1;
-    session_desc.compilerOptionEntries = session_options;
-    session_desc.compilerOptionEntryCount = sizeof(session_options) / sizeof(session_options[0]);
 
     result = m_impl->global_session->createSession(session_desc, m_impl->session.writeRef());
     if (SLANG_FAILED(result))
@@ -449,11 +458,11 @@ Rndr::CompileResult Rndr::ShaderCompiler::CompileEntryPoint(const Opal::StringUt
         throw GraphicsAPIException(result, msg.GetData());
     }
 
-    Slang::ComPtr<ISlangBlob> spirv_blob;
-    result = linked_program->getEntryPointCode(0, 0, spirv_blob.writeRef(), diagnostics.writeRef());
+    Slang::ComPtr<ISlangBlob> code_blob;
+    result = linked_program->getEntryPointCode(0, 0, code_blob.writeRef(), diagnostics.writeRef());
     if (SLANG_FAILED(result))
     {
-        Opal::StringUtf8 msg = "Failed to get SPIR-V!";
+        Opal::StringUtf8 msg = "Failed to get entry point code!";
         if (diagnostics != nullptr)
         {
             msg = msg + "\n" + static_cast<const char*>(diagnostics->getBufferPointer());
@@ -463,11 +472,11 @@ Rndr::CompileResult Rndr::ShaderCompiler::CompileEntryPoint(const Opal::StringUt
 
     CompileResult out;
 
-    // Copy SPIR-V bytecode into owning array.
-    const auto* spirv_data = static_cast<const u8*>(spirv_blob->getBufferPointer());
-    const u64 spirv_size = spirv_blob->getBufferSize();
-    out.spirv.Resize(spirv_size);
-    memcpy(out.spirv.GetData(), spirv_data, spirv_size);
+    // Copy the compiled code (SPIR-V bytecode or GLSL text) into an owning array.
+    const auto* code_data = static_cast<const u8*>(code_blob->getBufferPointer());
+    const u64 code_size = code_blob->getBufferSize();
+    out.code.Resize(code_size);
+    memcpy(out.code.GetData(), code_data, code_size);
 
     slang::ProgramLayout* layout = linked_program->getLayout();
     if (layout != nullptr)

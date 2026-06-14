@@ -17,6 +17,16 @@ enum class ShaderStage : u8
     Unknown,
 };
 
+/** Output format the Slang module is compiled to. */
+enum class ShaderOutputFormat : u8
+{
+    /** SPIR-V bytecode, consumed directly by the Forge (Vulkan) backend. */
+    SpirV,
+
+    /** OpenGL GLSL source text, consumed by the Canvas (OpenGL) backend via glShaderSource. */
+    Glsl,
+};
+
 /** Compute shader thread group size, extracted from shader reflection. */
 struct NumThreads
 {
@@ -137,8 +147,9 @@ struct EntryPointInfo
 /** Result of compiling a single entry point. */
 struct CompileResult
 {
-    /** SPIR-V bytecode. */
-    Opal::DynamicArray<u8> spirv;
+    /** Compiled entry-point code: SPIR-V bytecode or GLSL source text, depending on the
+     *  ShaderOutputFormat the module was loaded with. */
+    Opal::DynamicArray<u8> code;
 
     /** Detected shader stage. */
     ShaderStage stage = ShaderStage::Unknown;
@@ -154,17 +165,18 @@ struct CompileResult
 };
 
 /**
- * Compiles Slang shader source to SPIR-V and extracts reflection data. This is the shared
- * compilation layer used by both Canvas (OpenGL) and Forge (Vulkan) APIs.
+ * Compiles Slang shader source to SPIR-V (Forge/Vulkan) or GLSL (Canvas/OpenGL) and extracts
+ * reflection data. This is the shared compilation layer used by both APIs; the desired output
+ * format is selected when the module is loaded.
  *
  * Usage:
  * @code
  *   ShaderCompiler compiler;
- *   compiler.LoadModule(slang_source);
+ *   compiler.LoadModule(slang_source, ShaderOutputFormat::Glsl);
  *   auto entries = compiler.DiscoverEntryPoints();
  *   auto vs_name = ShaderCompiler::FindSingleEntryPoint(entries, ShaderStage::Vertex, "vertex");
  *   auto result = compiler.CompileEntryPoint(vs_name);
- *   // result.spirv contains the SPIR-V bytecode
+ *   // result.code contains the compiled code (GLSL text here)
  *   // result.parameters contains reflection data
  * @endcode
  */
@@ -179,13 +191,13 @@ public:
     ShaderCompiler(ShaderCompiler&& other) noexcept;
     ShaderCompiler& operator=(ShaderCompiler&& other) noexcept;
 
-    /** Load a Slang module from source code in memory. */
-    void LoadModule(const Opal::StringUtf8& source);
+    /** Load a Slang module from source code in memory, targeting the given output format. */
+    void LoadModule(const Opal::StringUtf8& source, ShaderOutputFormat format = ShaderOutputFormat::SpirV);
 
     /** Discover all annotated entry points in the loaded module. */
     [[nodiscard]] Opal::DynamicArray<EntryPointInfo> DiscoverEntryPoints() const;
 
-    /** Compile a specific entry point to SPIR-V and extract reflection data. */
+    /** Compile a specific entry point to the loaded output format and extract reflection data. */
     [[nodiscard]] CompileResult CompileEntryPoint(const Opal::StringUtf8& entry_point) const;
 
     /** Find exactly one entry point of the given stage. Throws if 0 or >1 found. */

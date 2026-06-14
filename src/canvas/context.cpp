@@ -295,7 +295,11 @@ Rndr::Canvas::Context Rndr::Canvas::Context::Init(Opal::Ref<GenericWindow> windo
 
     // Try to load WGL extensions and create a core profile context. This may fail on software
     // renderers (e.g. Mesa) that don't support WGL ARB extensions but already provide a full
-    // OpenGL 4.6 context via the basic wglCreateContext path.
+    // OpenGL 4.5 context via the basic wglCreateContext path.
+    //
+    // We request OpenGL 4.5 (not 4.6): shaders are now fed to GL as GLSL source, so ARB_gl_spirv
+    // (the only 4.6 feature this backend relied on) is no longer needed. 4.5 still covers everything
+    // used here (DSA, compute shaders, SSBOs) while supporting much more hardware / software stacks.
     HGLRC final_context = nullptr;
     if (gladLoadWGL(ctx.m_device_context) != 0 && wglCreateContextAttribsARB != nullptr)
     {
@@ -307,7 +311,7 @@ Rndr::Canvas::Context Rndr::Canvas::Context::Init(Opal::Ref<GenericWindow> windo
         const Opal::InPlaceArray<i32, 9> attribute_list = {WGL_CONTEXT_MAJOR_VERSION_ARB,
                                                            4,
                                                            WGL_CONTEXT_MINOR_VERSION_ARB,
-                                                           6,
+                                                           5,
                                                            WGL_CONTEXT_FLAGS_ARB,
                                                            arb_flags,
                                                            WGL_CONTEXT_PROFILE_MASK_ARB,

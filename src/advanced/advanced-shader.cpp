@@ -108,9 +108,9 @@ Rndr::AdvancedShader Rndr::AdvancedShader::FromSourceInMemory(const AdvancedDevi
     }
 
     ShaderCompiler compiler;
-    compiler.LoadModule(source);
+    compiler.LoadModule(source, ShaderOutputFormat::SpirV);
     const CompileResult result = compiler.CompileEntryPoint(desc.entry_point);
-    return AdvancedShader(device, Opal::ArrayView<const u8>(result.spirv.GetData(), result.spirv.GetSize()), desc);
+    return AdvancedShader(device, Opal::ArrayView<const u8>(result.code.GetData(), result.code.GetSize()), desc);
 }
 
 Rndr::AdvancedShader Rndr::AdvancedShader::FromSource(const AdvancedDevice& device, const Opal::StringUtf8& path,

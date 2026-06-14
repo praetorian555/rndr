@@ -67,7 +67,7 @@ All referenced Mesh and Brush objects must remain valid until `Execute()` is cal
 
 ### Shader
 
-Shaders are compiled from Slang source to SPIR-V and linked into an OpenGL program. Entry points are auto-discovered from `[shader("vertex")]`, `[shader("fragment")]`, and `[shader("compute")]` annotations. Shader reflection data (uniforms, textures, vertex layout) is extracted automatically.
+Shaders are cross-compiled from Slang source to GLSL and linked into an OpenGL program. Entry points are auto-discovered from `[shader("vertex")]`, `[shader("fragment")]`, and `[shader("compute")]` annotations. Shader reflection data (uniforms, textures, vertex layout) is extracted automatically.
 
 ```cpp
 // Single source file with both vertex and fragment entry points.
@@ -501,4 +501,4 @@ while (running)
 - **Single-use command lists** -- DrawList and ComputeList record commands then execute and reset. The list objects themselves are reusable across frames.
 - **Reflection-driven UBO management** -- The Brush automatically creates GPU uniform buffers from shader reflection, removing the need to manually manage UBO layouts.
 - **Geometry caching** -- PbrRenderer caches geometry and batches instances sharing the same mesh and texture set into instanced draw calls.
-- **Slang shaders** -- All shaders are written in Slang and compiled to SPIR-V at runtime.
+- **Slang shaders** -- All shaders are written in Slang and cross-compiled to GLSL at runtime.

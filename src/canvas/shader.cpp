@@ -2,7 +2,6 @@
 
 #include "glad/glad.h"
 
-#include "canvas/spirv-patch.hpp"
 #include "rndr/core/shader-compiler.hpp"
 #include "rndr/exception.hpp"
 #include "rndr/file.hpp"
@@ -127,12 +126,16 @@ Rndr::Canvas::VertexLayout BuildVertexLayout(const Opal::DynamicArray<Rndr::Vert
 // OpenGL shader and program creation.
 // ---------------------------------------------------------------------------
 
-GLuint CreateShaderFromSpirv(GLenum stage, const void* spirv_data, size_t spirv_size, const char* entry_point)
+GLuint CreateShaderFromGlsl(GLenum stage, const void* glsl_data, size_t glsl_size)
 {
-    const size_t word_count = spirv_size / sizeof(Rndr::u32);
-    Opal::DynamicArray<Rndr::u32> patched(word_count);
-    memcpy(patched.GetData(), spirv_data, spirv_size);
-    Rndr::Impl::PatchSpirv(patched);
+    // Slang's blob size may include a trailing null terminator; trim it so we pass GL the exact
+    // source length and don't feed an embedded null into the compiler.
+    const auto* source = static_cast<const GLchar*>(glsl_data);
+    GLint length = static_cast<GLint>(glsl_size);
+    while (length > 0 && source[length - 1] == '\0')
+    {
+        --length;
+    }
 
     const GLuint shader = glCreateShader(stage);
     if (shader == 0)
@@ -140,16 +143,8 @@ GLuint CreateShaderFromSpirv(GLenum stage, const void* spirv_data, size_t spirv_
         throw Rndr::GraphicsAPIException(0, "Failed to create GL shader!");
     }
 
-    glShaderBinary(1, &shader, GL_SHADER_BINARY_FORMAT_SPIR_V, patched.GetData(), static_cast<GLsizei>(spirv_size));
-
-    const GLenum err = glGetError();
-    if (err != GL_NO_ERROR)
-    {
-        glDeleteShader(shader);
-        throw Rndr::GraphicsAPIException(err, "Failed to upload SPIR-V binary!");
-    }
-
-    glSpecializeShader(shader, entry_point, 0, nullptr, nullptr);
+    glShaderSource(shader, 1, &source, &length);
+    glCompileShader(shader);
 
     GLint compiled = 0;
     glGetShaderiv(shader, GL_COMPILE_STATUS, &compiled);
@@ -165,7 +160,7 @@ GLuint CreateShaderFromSpirv(GLenum stage, const void* spirv_data, size_t spirv_
         }
         glDeleteShader(shader);
 
-        Opal::StringUtf8 msg = Opal::StringUtf8("Failed to specialize shader:\n") + log;
+        Opal::StringUtf8 msg = Opal::StringUtf8("Failed to compile shader:\n") + log;
         throw Rndr::GraphicsAPIException(0, msg.GetData());
     }
 
@@ -255,7 +250,7 @@ struct ShaderBuildResult
 ShaderBuildResult BuildFromSingleSource(const Opal::StringUtf8& source, Opal::StringUtf8 debug_name)
 {
     Rndr::ShaderCompiler compiler;
-    compiler.LoadModule(source);
+    compiler.LoadModule(source, Rndr::ShaderOutputFormat::Glsl);
     Opal::DynamicArray<Rndr::EntryPointInfo> entries = compiler.DiscoverEntryPoints();
 
     // Count entry points by stage.
@@ -295,7 +290,7 @@ ShaderBuildResult BuildFromSingleSource(const Opal::StringUtf8& source, Opal::St
             throw Rndr::GraphicsAPIException(0, "Compute entry point does not have [shader(\"compute\")] annotation!");
         }
 
-        const GLuint cs = CreateShaderFromSpirv(GL_COMPUTE_SHADER, cs_result.spirv.GetData(), cs_result.spirv.GetSize(), *cs_entry);
+        const GLuint cs = CreateShaderFromGlsl(GL_COMPUTE_SHADER, cs_result.code.GetData(), cs_result.code.GetSize());
         const Opal::StringUtf8 shader_name = debug_name + " - Compute Shader";
         glObjectLabel(GL_SHADER, cs, static_cast<GLsizei>(shader_name.GetSize()), *shader_name);
         GLuint program = 0;
@@ -337,13 +332,13 @@ ShaderBuildResult BuildFromSingleSource(const Opal::StringUtf8& source, Opal::St
 
     Opal::DynamicArray<Rndr::ShaderParameter> merged = Rndr::ShaderCompiler::MergeParameters(vs_result.parameters, fs_result.parameters);
 
-    const GLuint vs = CreateShaderFromSpirv(GL_VERTEX_SHADER, vs_result.spirv.GetData(), vs_result.spirv.GetSize(), *vs_entry);
+    const GLuint vs = CreateShaderFromGlsl(GL_VERTEX_SHADER, vs_result.code.GetData(), vs_result.code.GetSize());
     const Opal::StringUtf8 vertex_shader_name = debug_name + " - Vertex Shader";
     glObjectLabel(GL_SHADER, vs, static_cast<GLsizei>(vertex_shader_name.GetSize()), *vertex_shader_name);
     GLuint fs = 0;
     try
     {
-        fs = CreateShaderFromSpirv(GL_FRAGMENT_SHADER, fs_result.spirv.GetData(), fs_result.spirv.GetSize(), *fs_entry);
+        fs = CreateShaderFromGlsl(GL_FRAGMENT_SHADER, fs_result.code.GetData(), fs_result.code.GetSize());
         const Opal::StringUtf8 fragment_shader_name = debug_name + " - Fragment Shader";
         glObjectLabel(GL_SHADER, fs, static_cast<GLsizei>(fragment_shader_name.GetSize()), *fragment_shader_name);
     }
@@ -382,12 +377,12 @@ ShaderBuildResult BuildFromTwoSources(const Opal::StringUtf8& vertex_source, con
                                       Opal::StringUtf8 debug_name)
 {
     Rndr::ShaderCompiler vs_compiler;
-    vs_compiler.LoadModule(vertex_source);
+    vs_compiler.LoadModule(vertex_source, Rndr::ShaderOutputFormat::Glsl);
     const Opal::DynamicArray<Rndr::EntryPointInfo> vs_entries = vs_compiler.DiscoverEntryPoints();
     Opal::StringUtf8 vs_entry = Rndr::ShaderCompiler::FindSingleEntryPoint(vs_entries, Rndr::ShaderStage::Vertex, "vertex");
 
     Rndr::ShaderCompiler fs_compiler;
-    fs_compiler.LoadModule(fragment_source);
+    fs_compiler.LoadModule(fragment_source, Rndr::ShaderOutputFormat::Glsl);
     const Opal::DynamicArray<Rndr::EntryPointInfo> fs_entries = fs_compiler.DiscoverEntryPoints();
     Opal::StringUtf8 fs_entry = Rndr::ShaderCompiler::FindSingleEntryPoint(fs_entries, Rndr::ShaderStage::Fragment, "fragment");
 
@@ -405,13 +400,13 @@ ShaderBuildResult BuildFromTwoSources(const Opal::StringUtf8& vertex_source, con
 
     Opal::DynamicArray<Rndr::ShaderParameter> merged = Rndr::ShaderCompiler::MergeParameters(vs_result.parameters, fs_result.parameters);
 
-    const GLuint vs = CreateShaderFromSpirv(GL_VERTEX_SHADER, vs_result.spirv.GetData(), vs_result.spirv.GetSize(), *vs_entry);
+    const GLuint vs = CreateShaderFromGlsl(GL_VERTEX_SHADER, vs_result.code.GetData(), vs_result.code.GetSize());
     const Opal::StringUtf8 vertex_shader_name = debug_name + " - Vertex Shader";
     glObjectLabel(GL_SHADER, vs, static_cast<GLsizei>(vertex_shader_name.GetSize()), *vertex_shader_name);
     GLuint fs = 0;
     try
     {
-        fs = CreateShaderFromSpirv(GL_FRAGMENT_SHADER, fs_result.spirv.GetData(), fs_result.spirv.GetSize(), *fs_entry);
+        fs = CreateShaderFromGlsl(GL_FRAGMENT_SHADER, fs_result.code.GetData(), fs_result.code.GetSize());
         const Opal::StringUtf8 fragment_shader_name = debug_name + " - Fragment Shader";
         glObjectLabel(GL_SHADER, fs, static_cast<GLsizei>(fragment_shader_name.GetSize()), *fragment_shader_name);
     }

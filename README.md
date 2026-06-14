@@ -6,7 +6,7 @@ Rendering library that provides window and input management as well as a high-le
 
 Core features:
 
-* __Canvas API__ High-level rendering abstraction with command-list based drawing, automatic shader reflection, and GPU resource management (shaders, textures, buffers, meshes, render targets). Shaders are written in Slang and compiled to SPIR-V at runtime.
+* __Canvas API__ High-level rendering abstraction with command-list based drawing, automatic shader reflection, and GPU resource management (shaders, textures, buffers, meshes, render targets). Shaders are written in Slang and cross-compiled to GLSL at runtime, so the backend only requires OpenGL 4.5.
 * __Built-in Renderers__ PBR renderer with instanced batching, 2D shape renderer, bitmap text renderer, cubemap skybox renderer, and infinite grid renderer.
 * __Input System__ Stack-based input context model with support for keyboard, mouse, gamepad, text input, combos, and hold timers.
 * __Window Management__ Native window creation and event handling.
