@@ -54,26 +54,28 @@ target_include_directories(imgui PUBLIC ${SOURCE_PATH})
 message(STATUS "***** Setup Complete *****")
 
 # Setup Assimp ######################################################################
-message(STATUS "***** Setting up Assimp Dependency *****")
-cpmaddpackage(
-        NAME assimp
-        GIT_REPOSITORY https://github.com/assimp/assimp.git
-        GIT_TAG "v6.0.2"
-        OPTIONS
-        "ASSIMP_ASAN OFF"
-        "BUILD_SHARED_LIBS OFF"
-        "ASSIMP_BUILD_ASSIMP_TOOLS OFF"
-        "ASSIMP_BUILD_TESTS OFF"
-        "ASSIMP_NO_EXPORT ON"
-        "ASSIMP_INSTALL_PDB OFF"
-        "ASSIMP_BUILD_ZLIB ON"
-        "ASSIMP_BUILD_ALL_IMPORTERS_BY_DEFAULT OFF"
-        "ASSIMP_BUILD_OBJ_IMPORTER ON"
-        "ASSIMP_BUILD_GLTF_IMPORTER ON"
-        "ASSIMP_BUILD_FBX_IMPORTER OFF"
-        "ASSIMP_BUILD_COLLADA_IMPORTER OFF"
-)
-message(STATUS "***** Setup Complete *****")
+if (RNDR_ASSIMP)
+    message(STATUS "***** Setting up Assimp Dependency *****")
+    cpmaddpackage(
+            NAME assimp
+            GIT_REPOSITORY https://github.com/assimp/assimp.git
+            GIT_TAG "v6.0.2"
+            OPTIONS
+            "ASSIMP_ASAN OFF"
+            "BUILD_SHARED_LIBS OFF"
+            "ASSIMP_BUILD_ASSIMP_TOOLS OFF"
+            "ASSIMP_BUILD_TESTS OFF"
+            "ASSIMP_NO_EXPORT ON"
+            "ASSIMP_INSTALL_PDB OFF"
+            "ASSIMP_BUILD_ZLIB ON"
+            "ASSIMP_BUILD_ALL_IMPORTERS_BY_DEFAULT OFF"
+            "ASSIMP_BUILD_OBJ_IMPORTER ON"
+            "ASSIMP_BUILD_GLTF_IMPORTER ON"
+            "ASSIMP_BUILD_FBX_IMPORTER OFF"
+            "ASSIMP_BUILD_COLLADA_IMPORTER OFF"
+    )
+    message(STATUS "***** Setup Complete *****")
+endif ()
 
 # Setup KTX-Software ###############################################################
 message(STATUS "***** Setting up KTX Software Dependency *****")

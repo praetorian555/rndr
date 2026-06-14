@@ -1,10 +1,12 @@
 #include "rndr/canvas/renderers/pbr-renderer.hpp"
 
+#if defined(RNDR_ASSIMP)
 #include "assimp/cimport.h"
 #include "assimp/GltfMaterial.h"
 #include "assimp/material.h"
 #include "assimp/postprocess.h"
 #include "assimp/scene.h"
+#endif
 
 #include "opal/container/in-place-array.h"
 #include "opal/exceptions.h"
@@ -434,6 +436,8 @@ void Rndr::Canvas::PbrRenderer::GenerateSphere(Opal::DynamicArray<u8>& out_verte
 
 // Model loading -------------------------------------------------------------
 
+#if defined(RNDR_ASSIMP)
+
 namespace
 {
 
@@ -658,6 +662,19 @@ Rndr::Canvas::PbrModel Rndr::Canvas::PbrRenderer::LoadModel(const Opal::StringUt
     aiReleaseImport(scene);
     return model;
 }
+
+#else  // !RNDR_ASSIMP
+
+Rndr::Canvas::PbrModel Rndr::Canvas::PbrRenderer::LoadModel(const Opal::StringUtf8& file_path, const TextureDesc& texture_desc,
+                                                            bool flip_vertically)
+{
+    (void)file_path;
+    (void)texture_desc;
+    (void)flip_vertically;
+    throw Opal::Exception("PbrRenderer::LoadModel requires Assimp support; rebuild with RNDR_ASSIMP=ON.");
+}
+
+#endif  // RNDR_ASSIMP
 
 void Rndr::Canvas::PbrRenderer::DrawModel(const Opal::StringUtf8& key, const PbrModel& model, const Matrix4x4f& transform)
 {

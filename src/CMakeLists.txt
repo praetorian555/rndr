@@ -175,7 +175,11 @@ endif ()
 # Setup library dependencies
 # TODO: Remove opengl dependency here once old code is removed
 target_link_libraries(rndr PUBLIC opengl32.lib User32.lib Shcore.lib)
-target_link_libraries(rndr PUBLIC opal imgui assimp)
+target_link_libraries(rndr PUBLIC opal imgui)
+if (RNDR_ASSIMP)
+    target_link_libraries(rndr PUBLIC assimp)
+    target_compile_definitions(rndr PUBLIC RNDR_ASSIMP)
+endif ()
 # TODO: Reenable once we refactor everything
 #add_dependencies(rndr generate-reflection)
 

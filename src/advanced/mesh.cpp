@@ -1,17 +1,25 @@
 #include "rndr/advanced/mesh.hpp"
 
+#include "opal/exceptions.h"
+
+#if defined(RNDR_ASSIMP)
 #include "assimp/cimport.h"
 #include "assimp/postprocess.h"
 #include "assimp/scene.h"
 
 #include "opal/container/array-view.h"
-#include "opal/exceptions.h"
 #include "opal/paths.h"
 
 #include "rndr/math.hpp"
+#endif
 
 void Rndr::Forge::LoadMesh(const Opal::StringUtf8& file_path, Mesh& out_mesh)
 {
+#if !defined(RNDR_ASSIMP)
+    (void)file_path;
+    (void)out_mesh;
+    throw Opal::Exception("LoadMesh requires Assimp support; rebuild with RNDR_ASSIMP=ON.");
+#else
     constexpr u32 k_ai_process_flags = aiProcess_JoinIdenticalVertices | aiProcess_Triangulate | aiProcess_GenSmoothNormals |
                                        aiProcess_LimitBoneWeights | aiProcess_SplitLargeMeshes | aiProcess_ImproveCacheLocality |
                                        aiProcess_RemoveRedundantMaterials | aiProcess_FindDegenerates | aiProcess_FindInvalidData |
@@ -75,4 +83,5 @@ void Rndr::Forge::LoadMesh(const Opal::StringUtf8& file_path, Mesh& out_mesh)
     }
 
     aiReleaseImport(scene);
+#endif
 }

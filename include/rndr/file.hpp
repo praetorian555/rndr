@@ -8,9 +8,6 @@
 #include "rndr/bitmap.hpp"
 #include "rndr/canvas/renderers/pbr-renderer.hpp"
 
-struct aiMaterial;
-struct aiScene;
-
 namespace Rndr
 {
 
