@@ -1,0 +1,57 @@
+@PACKAGE_INIT@
+
+include(CMakeFindDependencyMacro)
+
+# rndr's bundled dependencies are installed into this same prefix; make sure their package
+# configs are discoverable when this file is found outside the default search paths.
+list(APPEND CMAKE_PREFIX_PATH "${PACKAGE_PREFIX_DIR}")
+
+# Public dependencies. opal is part of rndr's interface; assimp/ktx are private link usage that a
+# static rndr still propagates, so they must resolve for static consumers. The find lines are
+# emitted by the build only for the dependencies that were actually enabled.
+find_dependency(opal)
+@RNDR_CONFIG_FIND_ASSIMP@
+@RNDR_CONFIG_FIND_KTX@
+
+# rndr was built against the bare CPM target names (opal, assimp, ktx); the installed dependency
+# configs expose namespaced targets. Bridge the bare names the rndrTargets file may reference onto
+# the namespaced ones so linking resolves either way.
+if (NOT TARGET opal AND TARGET opal::opal)
+    add_library(opal INTERFACE IMPORTED)
+    target_link_libraries(opal INTERFACE opal::opal)
+endif ()
+if (NOT TARGET assimp AND TARGET assimp::assimp)
+    add_library(assimp INTERFACE IMPORTED)
+    target_link_libraries(assimp INTERFACE assimp::assimp)
+endif ()
+if (NOT TARGET ktx AND TARGET KTX::ktx)
+    add_library(ktx INTERFACE IMPORTED)
+    target_link_libraries(ktx INTERFACE KTX::ktx)
+endif ()
+
+# Prebuilt Slang. A static rndr links it at link time, so re-create the imported target from the
+# import library and runtime DLL shipped in this prefix.
+if (NOT TARGET slang AND EXISTS "${PACKAGE_PREFIX_DIR}/@CMAKE_INSTALL_LIBDIR@/slang.lib")
+    add_library(slang SHARED IMPORTED)
+    set_target_properties(slang PROPERTIES
+            IMPORTED_IMPLIB "${PACKAGE_PREFIX_DIR}/@CMAKE_INSTALL_LIBDIR@/slang.lib"
+            IMPORTED_LOCATION "${PACKAGE_PREFIX_DIR}/@CMAKE_INSTALL_BINDIR@/slang.dll")
+endif ()
+
+include("${CMAKE_CURRENT_LIST_DIR}/rndrTargets.cmake")
+
+# Convenience helper mirroring the build-tree rndr_deploy_runtime(): copy the Slang runtime DLLs
+# shipped in this package next to an executable that links rndr, so it can be launched. Installed
+# packages are never hardened, so (unlike the build-tree version) no ASan runtime is involved.
+if (NOT COMMAND rndr_deploy_runtime)
+    function(rndr_deploy_runtime target)
+        file(GLOB _rndr_runtime_dlls "${PACKAGE_PREFIX_DIR}/@CMAKE_INSTALL_BINDIR@/*.dll")
+        foreach (_dll ${_rndr_runtime_dlls})
+            add_custom_command(TARGET ${target} POST_BUILD
+                    COMMAND ${CMAKE_COMMAND} -E copy_if_different "${_dll}" "$<TARGET_FILE_DIR:${target}>"
+                    VERBATIM)
+        endforeach ()
+    endfunction()
+endif ()
+
+check_required_components(rndr)

@@ -2,11 +2,12 @@ include(cmake/cpm.cmake)
 
 if (NOT TARGET opal)
     message(STATUS "***** Setting up Opal Dependency *****")
+    # Not EXCLUDE_FROM_ALL: opal is a public dependency of rndr and its own install/export
+    # rules must run so `find_package(rndr)` can locate it via find_dependency(opal).
     cpmaddpackage(
             NAME opal
             GIT_REPOSITORY https://github.com/praetorian555/opal
             GIT_TAG opal-0.3.5
-            EXCLUDE_FROM_ALL YES
             OPTIONS
             "OPAL_BUILD_TESTS OFF"
             "OPAL_HARDENING ${RNDR_HARDENING}"
@@ -51,17 +52,20 @@ add_library(imgui
         ${IMGUI_SOURCE_FILES}
         ${IMGUI_WINDOWS_SOURCE_FILES}
         ${IMGUI_OPENGL_SOURCE_FILES})
-target_include_directories(imgui PUBLIC ${SOURCE_PATH})
+# Wrap in BUILD_INTERFACE so imgui can be added to rndr's install export set without leaking
+# this build-tree path. No public rndr header includes imgui, so no INSTALL_INTERFACE is needed.
+target_include_directories(imgui PUBLIC $<BUILD_INTERFACE:${SOURCE_PATH}>)
 message(STATUS "***** Setup Complete *****")
 
 # Setup Assimp ######################################################################
 if (RNDR_ASSIMP)
     message(STATUS "***** Setting up Assimp Dependency *****")
+    # Not EXCLUDE_FROM_ALL: assimp's own install/export rules must run so find_dependency(assimp)
+    # can locate it from the rndr package.
     cpmaddpackage(
             NAME assimp
             GIT_REPOSITORY https://github.com/assimp/assimp.git
             GIT_TAG "v6.0.2"
-            EXCLUDE_FROM_ALL YES
             OPTIONS
             "ASSIMP_ASAN OFF"
             "BUILD_SHARED_LIBS OFF"
@@ -82,11 +86,12 @@ endif ()
 # Setup KTX-Software ###############################################################
 if (RNDR_KTX)
     message(STATUS "***** Setting up KTX Software Dependency *****")
+    # Not EXCLUDE_FROM_ALL: KTX's own install/export rules must run so find_dependency(Ktx)
+    # can locate it from the rndr package.
     cpmaddpackage(
             NAME ktx
             GIT_REPOSITORY https://github.com/KhronosGroup/KTX-Software.git
             GIT_TAG "v4.4.2"
-            EXCLUDE_FROM_ALL YES
             OPTIONS
             "KTX_FEATURE_TOOLS OFF"
     )
@@ -126,6 +131,11 @@ if ((RNDR_FORGE OR RNDR_CANVAS) AND NOT TARGET slang)
     # Directory holding the runtime libraries (slang.dll, slang-glslang.dll, ...)
     # that must sit next to any executable linking against Slang on Windows.
     set(SLANG_RUNTIME_DIR ${slang_SOURCE_DIR}/bin CACHE INTERNAL "Slang runtime library directory")
+    # The import library that static consumers of an installed rndr must link against. Installed
+    # into <prefix>/lib and re-imported by rndrConfig.cmake.
+    if (WIN32)
+        set(SLANG_IMPLIB ${slang_SOURCE_DIR}/lib/slang.lib CACHE INTERNAL "Slang import library")
+    endif ()
     message(STATUS "***** Setup Complete *****")
 endif ()
 

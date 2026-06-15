@@ -149,8 +149,10 @@ target_compile_features(rndr PRIVATE cxx_std_20)
 # We need this directory, and users of our library will need it too
 target_include_directories(rndr PUBLIC $<BUILD_INTERFACE:${PROJECT_SOURCE_DIR}/include>)
 target_include_directories(rndr PRIVATE ${PROJECT_SOURCE_DIR}/src)
-target_include_directories(rndr PUBLIC ${PROJECT_SOURCE_DIR}/extern/glad/include)
-target_include_directories(rndr PUBLIC ${PROJECT_SOURCE_DIR}/extern/stb_image/include)
+# glad and stb_image are used only inside rndr's implementation (no public header includes
+# them), so they are wrapped in BUILD_INTERFACE and not shipped with the installed package.
+target_include_directories(rndr PUBLIC $<BUILD_INTERFACE:${PROJECT_SOURCE_DIR}/extern/glad/include>)
+target_include_directories(rndr PUBLIC $<BUILD_INTERFACE:${PROJECT_SOURCE_DIR}/extern/stb_image/include>)
 
 if (${RNDR_FORGE} OR ${RNDR_CANVAS})
     target_link_libraries(rndr PRIVATE slang)
@@ -159,7 +161,11 @@ endif ()
 if (${RNDR_CANVAS})
     target_link_libraries(rndr PRIVATE opengl32.lib)
     target_compile_definitions(rndr PUBLIC RNDR_CANVAS)
-    target_include_directories(rndr PUBLIC ${PROJECT_SOURCE_DIR}/samples/extern/stb_truetype/include)
+    # stb_truetype.h is included by the public bitmap-text-renderer.hpp, so it is shipped with
+    # the package (its headers install into <prefix>/include alongside rndr's own).
+    target_include_directories(rndr PUBLIC
+            $<BUILD_INTERFACE:${PROJECT_SOURCE_DIR}/samples/extern/stb_truetype/include>
+            $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>)
     target_sources(rndr PRIVATE ${PROJECT_SOURCE_DIR}/samples/extern/stb_truetype/src/stb_truetype.cpp)
 endif ()
 if (${RNDR_FORGE})
@@ -180,7 +186,9 @@ endif ()
 
 if (${RNDR_FORGE})
     target_include_directories(rndr PRIVATE ${VULKAN_SDK_PATH}/Source/SPIRV-Reflect)
-    target_include_directories(rndr PUBLIC ${VULKAN_SDK_PATH}/Include)
+    # Consumers of an installed FORGE-enabled rndr provide their own Vulkan SDK, so the SDK
+    # include path is build-only and not baked into the install interface.
+    target_include_directories(rndr PUBLIC $<BUILD_INTERFACE:${VULKAN_SDK_PATH}/Include>)
     target_compile_definitions(rndr PUBLIC RNDR_FORGE)
     if (WIN32)
         target_compile_definitions(rndr PUBLIC -DVK_USE_PLATFORM_WIN32_KHR -DVK_NO_PROTOTYPES)
@@ -198,6 +206,22 @@ target_compile_definitions(rndr PUBLIC "$<$<NOT:$<BOOL:${BUILD_SHARED_LIBS}>>:RN
 target_include_directories(rndr PUBLIC "$<BUILD_INTERFACE:${CMAKE_CURRENT_BINARY_DIR}/include>")
 target_include_directories(rndr PUBLIC "$<INSTALL_INTERFACE:include>")
 
+################################################################################################
+# Install / package configuration
+#
+# Installs rndr as a find_package()-able CMake package: the library, its public headers, the
+# Slang runtime it needs, and a relocatable rndrConfig.cmake. The bundled dependencies that a
+# static rndr propagates to consumers (opal, imgui, assimp, ktx, slang) are handled as follows:
+#   * imgui      - in-tree target we own, exported in the rndrTargets set below.
+#   * opal       - installed via its own export; pulled in by find_dependency(opal) in the config.
+#   * assimp/ktx - same, behind RNDR_ASSIMP / RNDR_KTX.
+#   * slang      - a prebuilt imported target, re-created by rndrConfig.cmake from the shipped
+#                  import library and runtime DLLs.
+################################################################################################
+include(CMakePackageConfigHelpers)
+
+set(RNDR_INSTALL_CMAKEDIR ${CMAKE_INSTALL_LIBDIR}/cmake/rndr)
+
 # Hardened builds are AddressSanitizer-instrumented and are not meant to be distributed.
 # Fail the install (at install time, not configure time) so such a build can't be installed.
 if (RNDR_HARDENING)
@@ -206,12 +230,15 @@ if (RNDR_HARDENING)
 which must not be installed. Reconfigure with -DRNDR_HARDENING=OFF before installing.")]])
 endif ()
 
-# Install the library
-install(TARGETS rndr
+# Export rndr together with the in-tree targets it links: imgui (a public dependency) and the
+# rndr_warnings / rndr_options interface libraries it carries as private link usage.
+install(TARGETS rndr imgui rndr_warnings rndr_options
+        EXPORT rndrTargets
         LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
         ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
         RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}  # For Windows DLL files
-)
+        INCLUDES DESTINATION ${CMAKE_INSTALL_INCLUDEDIR})
+
 # Public headers (note: CMAKE_CURRENT_SOURCE_DIR here is the src/ dir, so the headers
 # live one level up under the project root).
 install(DIRECTORY ${PROJECT_SOURCE_DIR}/include/
@@ -223,13 +250,55 @@ install(DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/include/
         DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}
         FILES_MATCHING PATTERN "*.h"
         PATTERN "*.hpp")
+# stb_truetype.h is pulled in by the public bitmap-text-renderer.hpp, so ship it too.
+if (${RNDR_CANVAS})
+    install(DIRECTORY ${PROJECT_SOURCE_DIR}/samples/extern/stb_truetype/include/
+            DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}
+            FILES_MATCHING PATTERN "*.h")
+endif ()
 
-# Install the Slang runtime DLLs rndr pulls in into the bin directory so the install prefix is
-# self-contained and any executable linking the installed rndr can be launched. Mirrors
-# rndr_deploy_runtime(), which performs the equivalent copy for build-tree executables.
+# Install the Slang runtime DLLs rndr pulls in into the bin directory, and the import library
+# into the lib directory, so the install prefix is self-contained: any executable linking the
+# installed rndr can be both linked and launched. Mirrors rndr_deploy_runtime(), which performs
+# the equivalent copy for build-tree executables.
 # (The ASan runtime is intentionally not installed - hardened builds are blocked above.)
 if (WIN32 AND DEFINED SLANG_RUNTIME_DIR)
     install(DIRECTORY ${SLANG_RUNTIME_DIR}/
             DESTINATION ${CMAKE_INSTALL_BINDIR}
             FILES_MATCHING PATTERN "*.dll")
 endif ()
+if (WIN32 AND DEFINED SLANG_IMPLIB)
+    install(FILES ${SLANG_IMPLIB} DESTINATION ${CMAKE_INSTALL_LIBDIR})
+endif ()
+
+# Install the export set (creates rndr::rndr and the namespaced in-tree targets).
+install(EXPORT rndrTargets
+        FILE rndrTargets.cmake
+        NAMESPACE rndr::
+        DESTINATION ${RNDR_INSTALL_CMAKEDIR})
+
+# Generate rndrConfig.cmake. The find_dependency() calls for the optional dependencies are
+# injected based on the build-time options so the config only requires what was actually built.
+set(RNDR_CONFIG_FIND_ASSIMP "")
+set(RNDR_CONFIG_FIND_KTX "")
+if (RNDR_ASSIMP)
+    set(RNDR_CONFIG_FIND_ASSIMP "find_dependency(assimp)")
+endif ()
+if (RNDR_KTX)
+    set(RNDR_CONFIG_FIND_KTX "find_dependency(Ktx)")
+endif ()
+
+configure_package_config_file(
+        ${PROJECT_SOURCE_DIR}/cmake/rndr-config.cmake.in
+        ${CMAKE_CURRENT_BINARY_DIR}/rndrConfig.cmake
+        INSTALL_DESTINATION ${RNDR_INSTALL_CMAKEDIR})
+
+write_basic_package_version_file(
+        ${CMAKE_CURRENT_BINARY_DIR}/rndrConfigVersion.cmake
+        VERSION ${PROJECT_VERSION}
+        COMPATIBILITY SameMajorVersion)
+
+install(FILES
+        ${CMAKE_CURRENT_BINARY_DIR}/rndrConfig.cmake
+        ${CMAKE_CURRENT_BINARY_DIR}/rndrConfigVersion.cmake
+        DESTINATION ${RNDR_INSTALL_CMAKEDIR})

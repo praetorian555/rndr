@@ -69,18 +69,39 @@ next to it after the build:
 	rndr_deploy_runtime(my-app)
 
 This applies both to rndr's own samples/tests and to downstream projects consuming rndr via CPM or
-`add_subdirectory`. The Slang runtime DLLs are also placed in the `bin` directory by `cmake --install`
-(see below), so installed executables are self-contained as well.
+`add_subdirectory`. The same `rndr_deploy_runtime()` helper is also provided to `find_package(rndr)`
+consumers of an installed package (see below), and the Slang runtime DLLs are placed in the `bin`
+directory by `cmake --install`, so installed executables are self-contained as well.
 
 ## Install ##
 
-To install the library, its public headers and runtime DLLs into a prefix:
+To install the library, its public headers, runtime DLLs and CMake package files into a prefix:
 
 	cmake --install <path_to_build_dir> --config <config_name> --prefix <install_dir>
 
-This installs `rndr` (into `lib`), its headers (into `include`) and the Slang runtime DLLs (into
-`bin`). Bundled dependencies (opal, assimp, ktx, ...) are statically linked and not installed
-separately.
+This installs a relocatable, `find_package`-able CMake package:
+
+* `rndr` and the bundled dependencies it links (opal, imgui, assimp, ktx) into `lib`,
+* its public headers into `include`,
+* the Slang runtime DLLs into `bin` and the Slang import library into `lib`,
+* and `rndrConfig.cmake` / `rndrConfigVersion.cmake` into `lib/cmake/rndr`.
+
+The bundled dependencies are installed alongside rndr (each via its own export) and pulled in
+automatically — there is no need to install or locate them separately.
+
+### Consuming an installed rndr ###
+
+Point CMake at the install prefix (`-DCMAKE_PREFIX_PATH=<install_dir>` or `CMAKE_PREFIX_PATH`) and:
+
+	find_package(rndr REQUIRED)
+
+	add_executable(my-app main.cpp)
+	target_link_libraries(my-app PRIVATE rndr::rndr)
+	rndr_deploy_runtime(my-app)   # copies the Slang runtime DLLs next to my-app
+
+`find_package(rndr)` resolves the bundled dependencies (opal/assimp/ktx via `find_dependency`, Slang
+as a re-imported prebuilt target) from the same prefix, so linking `rndr::rndr` is all a consumer
+needs.
 
 Hardened builds cannot be installed. A build configured with __RNDR_HARDENING=ON__ (the default) is
 AddressSanitizer-instrumented and is not meant to be distributed, so `cmake --install` fails with an
