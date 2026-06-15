@@ -152,16 +152,11 @@ target_include_directories(rndr PRIVATE ${PROJECT_SOURCE_DIR}/src)
 target_include_directories(rndr PUBLIC ${PROJECT_SOURCE_DIR}/extern/glad/include)
 target_include_directories(rndr PUBLIC ${PROJECT_SOURCE_DIR}/extern/stb_image/include)
 
-# Slang is provided as a prebuilt dependency via CPM (see cmake/dependencies.cmake).
-# The imported `slang` target carries its own include directories.
 if (${RNDR_FORGE} OR ${RNDR_CANVAS})
-    # Slang is used only inside rndr's implementation (shader compilation); no public
-    # header exposes it, so link it privately.
     target_link_libraries(rndr PRIVATE slang)
 endif ()
 
 if (${RNDR_CANVAS})
-    # Find Slang compiler library and includes
     target_link_libraries(rndr PRIVATE opengl32.lib)
     target_compile_definitions(rndr PUBLIC RNDR_CANVAS)
     target_include_directories(rndr PUBLIC ${PROJECT_SOURCE_DIR}/samples/extern/stb_truetype/include)
@@ -171,8 +166,7 @@ if (${RNDR_FORGE})
     target_compile_definitions(rndr PUBLIC RNDR_FORGE)
 endif ()
 
-# TODO: Remove opengl dependency here once old code is removed
-target_link_libraries(rndr PRIVATE opengl32.lib User32.lib Shcore.lib)
+target_link_libraries(rndr PRIVATE User32.lib Shcore.lib)
 target_link_libraries(rndr PUBLIC opal imgui)
 if (RNDR_ASSIMP)
     target_link_libraries(rndr PRIVATE assimp)
@@ -187,7 +181,6 @@ endif ()
 if (${RNDR_FORGE})
     target_include_directories(rndr PRIVATE ${VULKAN_SDK_PATH}/Source/SPIRV-Reflect)
     target_include_directories(rndr PUBLIC ${VULKAN_SDK_PATH}/Include)
-    # Slang headers now come from the CPM-provided imported target.
     target_compile_definitions(rndr PUBLIC RNDR_FORGE)
     if (WIN32)
         target_compile_definitions(rndr PUBLIC -DVK_USE_PLATFORM_WIN32_KHR -DVK_NO_PROTOTYPES)
