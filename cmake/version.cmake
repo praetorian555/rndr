@@ -8,7 +8,7 @@
 #
 # Falls back to RNDR_VERSION_FALLBACK when git or the tags are unavailable (e.g. a source tarball
 # without a .git directory). Keep the fallback in sync with the latest released tag.
-set(RNDR_VERSION_FALLBACK "0.2.10")
+set(RNDR_VERSION_FALLBACK "0.2.11")
 
 set(RNDR_VERSION "")
 set(RNDR_VERSION_FULL "")
