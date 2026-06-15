@@ -199,6 +199,16 @@ endif ()
 target_compile_definitions(rndr PUBLIC RNDR_CORE_ASSETS_DIR="${CMAKE_CURRENT_SOURCE_DIR}/../assets")
 # @formatter:on
 
+# Version info as compile-time defines (derived from the git tag, see cmake/version.cmake).
+# PUBLIC so consumers of an installed rndr can query the version they built against. The numeric
+# components come from project(RNDR VERSION ...); RNDR_VERSION_FULL carries the full git describe.
+target_compile_definitions(rndr PUBLIC
+        RNDR_VERSION_MAJOR=${RNDR_VERSION_MAJOR}
+        RNDR_VERSION_MINOR=${RNDR_VERSION_MINOR}
+        RNDR_VERSION_PATCH=${RNDR_VERSION_PATCH}
+        RNDR_VERSION_STRING="${RNDR_VERSION}"
+        RNDR_VERSION_FULL="${RNDR_VERSION_FULL}")
+
 ## Generate the export header for rndr and attach it to the target
 include(GenerateExportHeader)
 generate_export_header(rndr EXPORT_FILE_NAME include/rndr/export.h)

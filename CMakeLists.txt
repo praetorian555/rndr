@@ -1,5 +1,9 @@
 cmake_minimum_required(VERSION 3.28)
-project(RNDR VERSION 0.1.0 LANGUAGES CXX C)
+
+# Derive the version (RNDR_VERSION / RNDR_VERSION_FULL) from the latest git tag before project().
+include(${CMAKE_CURRENT_SOURCE_DIR}/cmake/version.cmake)
+
+project(RNDR VERSION ${RNDR_VERSION} LANGUAGES CXX C)
 
 # Standard GNU install directory variables (CMAKE_INSTALL_LIBDIR/BINDIR/INCLUDEDIR).
 include(GNUInstallDirs)
