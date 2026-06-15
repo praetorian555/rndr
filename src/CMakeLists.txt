@@ -156,12 +156,14 @@ target_include_directories(rndr PUBLIC ${PROJECT_SOURCE_DIR}/tools/obsidian/win3
 # Slang is provided as a prebuilt dependency via CPM (see cmake/dependencies.cmake).
 # The imported `slang` target carries its own include directories.
 if (${RNDR_FORGE} OR ${RNDR_CANVAS})
-    target_link_libraries(rndr PUBLIC slang)
+    # Slang is used only inside rndr's implementation (shader compilation); no public
+    # header exposes it, so link it privately.
+    target_link_libraries(rndr PRIVATE slang)
 endif ()
 
 if (${RNDR_CANVAS})
     # Find Slang compiler library and includes
-    target_link_libraries(rndr PUBLIC opengl32.lib)
+    target_link_libraries(rndr PRIVATE opengl32.lib)
     target_compile_definitions(rndr PUBLIC RNDR_CANVAS)
     target_include_directories(rndr PUBLIC ${PROJECT_SOURCE_DIR}/samples/extern/stb_truetype/include)
     target_sources(rndr PRIVATE ${PROJECT_SOURCE_DIR}/samples/extern/stb_truetype/src/stb_truetype.cpp)
@@ -170,20 +172,19 @@ if (${RNDR_FORGE})
     target_compile_definitions(rndr PUBLIC RNDR_FORGE)
 endif ()
 
-# Setup library dependencies
 # TODO: Remove opengl dependency here once old code is removed
-target_link_libraries(rndr PUBLIC opengl32.lib User32.lib Shcore.lib)
+target_link_libraries(rndr PRIVATE opengl32.lib User32.lib Shcore.lib)
 target_link_libraries(rndr PUBLIC opal imgui)
 if (RNDR_ASSIMP)
-    target_link_libraries(rndr PUBLIC assimp)
-    target_compile_definitions(rndr PUBLIC RNDR_ASSIMP)
+    target_link_libraries(rndr PRIVATE assimp)
+    target_compile_definitions(rndr PRIVATE RNDR_ASSIMP)
 endif ()
 # TODO: Reenable once we refactor everything
 #add_dependencies(rndr generate-reflection)
 
 if (RNDR_KTX)
-    target_link_libraries(rndr PUBLIC ktx)
-    target_compile_definitions(rndr PUBLIC RNDR_KTX)
+    target_link_libraries(rndr PRIVATE ktx)
+    target_compile_definitions(rndr PRIVATE RNDR_KTX)
 endif ()
 
 if (${RNDR_FORGE})
