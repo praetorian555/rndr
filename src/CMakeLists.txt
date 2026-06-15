@@ -151,7 +151,6 @@ target_include_directories(rndr PUBLIC $<BUILD_INTERFACE:${PROJECT_SOURCE_DIR}/i
 target_include_directories(rndr PRIVATE ${PROJECT_SOURCE_DIR}/src)
 target_include_directories(rndr PUBLIC ${PROJECT_SOURCE_DIR}/extern/glad/include)
 target_include_directories(rndr PUBLIC ${PROJECT_SOURCE_DIR}/extern/stb_image/include)
-target_include_directories(rndr PUBLIC ${PROJECT_SOURCE_DIR}/tools/obsidian/win32/include)
 
 # Slang is provided as a prebuilt dependency via CPM (see cmake/dependencies.cmake).
 # The imported `slang` target carries its own include directories.
@@ -179,8 +178,6 @@ if (RNDR_ASSIMP)
     target_link_libraries(rndr PRIVATE assimp)
     target_compile_definitions(rndr PRIVATE RNDR_ASSIMP)
 endif ()
-# TODO: Reenable once we refactor everything
-#add_dependencies(rndr generate-reflection)
 
 if (RNDR_KTX)
     target_link_libraries(rndr PRIVATE ktx)

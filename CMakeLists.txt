@@ -44,29 +44,6 @@ endif ()
 
 include(cmake/dependencies.cmake)
 
-# Setup reflection generator
-set(RNDR_INCLUDE_DIRS $<JOIN:$<TARGET_PROPERTY:rndr,INCLUDE_DIRECTORIES>,,>)
-set(RNDR_DEFINES $<JOIN:$<LIST:TRANSFORM,$<LIST:FILTER,$<TARGET_PROPERTY:rndr,COMPILE_DEFINITIONS>,INCLUDE,.+>,PREPEND,-D>,,>)
-if (WIN32)
-    set(OBSIDIAN_EXECUTABLE ${CMAKE_CURRENT_SOURCE_DIR}/tools/obsidian/win32/obsidian.exe)
-elseif (LINUX)
-    set(OBSIDIAN_EXECUTABLE ${CMAKE_CURRENT_SOURCE_DIR}/tools/obsidian/linux/obsidian)
-else ()
-    message(FATAL_ERROR "Unsupported platform for obsidian tool")
-endif ()
-add_custom_target(
-        generate-reflection
-        COMMAND ${CMAKE_COMMAND} -E make_directory ${CMAKE_CURRENT_BINARY_DIR}/include/generated
-        COMMAND ${OBSIDIAN_EXECUTABLE}
-        input-dirs=${CMAKE_CURRENT_SOURCE_DIR}/include,${CMAKE_CURRENT_SOURCE_DIR}/src
-        output-dir=${CMAKE_CURRENT_BINARY_DIR}/include/generated
-        std=c++20
-        compile-options="${RNDR_DEFINES},-Wall,-Wextra"
-        inc-dirs=${RNDR_INCLUDE_DIRS}
-        log-level=error
-        DEPENDS obsidian
-)
-
 if (${RNDR_FORGE})
     if (NOT IS_DIRECTORY $ENV{VULKAN_SDK})
         message(WARNING "Vulkan SDK not detected!")

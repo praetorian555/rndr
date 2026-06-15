@@ -1,7 +1,5 @@
 #pragma once
 
-#include "obs/obs.hpp"
-
 #include "opal/clonable-base.h"
 #include "opal/container/dynamic-array.h"
 #include "opal/container/ref.h"
@@ -19,7 +17,6 @@ namespace Rndr
 
 class Shader;
 
-OBS_ENUM()
 struct GraphicsConstants
 {
     static constexpr i32 k_max_frame_buffer_color_buffers = 4;
@@ -28,7 +25,6 @@ struct GraphicsConstants
     static constexpr i32 k_max_constant_buffers = 16;
 };
 
-OBS_ENUM()
 enum class TextureType : u8
 {
     Texture2D,
@@ -40,7 +36,6 @@ enum class TextureType : u8
 /**
  * Represents the filtering used to resolve the value of the image when it is sampled.
  */
-OBS_ENUM()
 enum class ImageFilter
 {
     /** Returns the value of the texture element that is nearest to image coordinate. */
@@ -59,7 +54,6 @@ enum class ImageFilter
 /**
  * Specifies how to handle image coordinate being outside the [0, 1] range.
  */
-OBS_ENUM()
 enum class ImageAddressMode
 {
     /** Coordinate is clamped to the range [0, 1]. */
@@ -93,7 +87,6 @@ enum class ImageAddressMode
  * Represents the border color used when address mode is set to Border. Maps to predefined
  * Vulkan border colors.
  */
-OBS_ENUM()
 enum class BorderColor
 {
     /** (0, 0, 0, 0) */
@@ -112,7 +105,6 @@ enum class BorderColor
 /**
  * Represents different ways the GPU resource can be used.
  */
-OBS_ENUM()
 enum class Usage : u8
 {
     /**  Use this when you don't need to update the resource after creation. Does not allow reading. */
@@ -132,7 +124,6 @@ enum class Usage : u8
  * Represents the winding order of a triangle. This is used to determine the front face of a
  * triangle.
  */
-OBS_ENUM()
 enum class WindingOrder : u32
 {
     /** Clockwise winding order. */
@@ -145,7 +136,6 @@ enum class WindingOrder : u32
 /**
  * Represents the faces of a triangle that are visible to the camera.
  */
-OBS_ENUM()
 enum class Face : u32
 {
     /** Both front and back faces are visible. */
@@ -162,7 +152,6 @@ enum class Face : u32
  * Represents the type of a primitive topology. This is used to determine how the vertices are
  * interpreted.
  */
-OBS_ENUM()
 enum class PrimitiveTopology
 {
     /** Each vertex represents one point. */
@@ -194,7 +183,6 @@ enum class PrimitiveTopology
  * Represents a comparator function used in depth and stencil tests. The function compares the
  * incoming value with the stored value and decides whether to pass the test.
  */
-OBS_ENUM()
 enum class Comparator
 {
     /** Never passes the test. */
@@ -228,7 +216,6 @@ enum class Comparator
 /**
  * Represents an operation that is performed on the stencil buffer after the stencil test completes.
  */
-OBS_ENUM()
 enum class StencilOperation
 {
     /** Keeps the current value. */
@@ -269,7 +256,6 @@ enum class StencilOperation
  * Represents a blend factor that is used in blending operations. Note that inverse here means
  * "1 - x".
  */
-OBS_ENUM()
 enum class BlendFactor
 {
     /** Factor is 0. */
@@ -322,7 +308,6 @@ enum class BlendFactor
  * Represents a blend operation that is performed on a render target. The operation is performed
  * between the source and destination color.
  */
-OBS_ENUM()
 enum class BlendOperation
 {
     /** Adds the source and destination colors. */
@@ -348,7 +333,6 @@ enum class BlendOperation
  * Represents what type of data is stored in a buffer. This is used to determine how the buffer
  * will be used.
  */
-OBS_ENUM()
 enum class BufferType : u8
 {
     /** Buffer contains vertex data. */
@@ -385,7 +369,6 @@ enum : u32
 /**
  * Represents how texture can be accessed from the shader.
  */
-OBS_ENUM()
 enum class TextureAccess
 {
     Read,
@@ -393,14 +376,12 @@ enum class TextureAccess
     ReadWrite
 };
 
-OBS_ENUM()
 enum class DataRepetition
 {
     PerVertex,
     PerInstance
 };
 
-OBS_ENUM()
 enum class ShaderType : u8
 {
     Vertex = 0,
@@ -412,7 +393,6 @@ enum class ShaderType : u8
     EnumCount
 };
 
-OBS_ENUM()
 enum class ShaderTypeBits : u32
 {
     Vertex = 1,
@@ -425,7 +405,6 @@ enum class ShaderTypeBits : u32
 OPAL_ENUM_CLASS_FLAGS(ShaderTypeBits);
 
 /** Controls what portion of the depth buffer is written to. */
-OBS_ENUM()
 enum class DepthMask
 {
     /** Writing to the depth buffer is prohibited. */
@@ -438,7 +417,6 @@ enum class DepthMask
 /**
  * Controls if the primitive should be filled or just the edges should be drawn.
  */
-OBS_ENUM()
 enum class FillMode
 {
     /** The primitive is filled. */
@@ -448,7 +426,6 @@ enum class FillMode
     Wireframe
 };
 
-OBS_ENUM()
 enum class PipelineStageBits : u64
 {
     None = 0ull,
@@ -465,7 +442,6 @@ enum class PipelineStageBits : u64
 };
 OPAL_ENUM_CLASS_FLAGS(PipelineStageBits);
 
-OBS_ENUM()
 enum class PipelineStageAccessBits : u64
 {
     None = 0ull,
@@ -474,7 +450,6 @@ enum class PipelineStageAccessBits : u64
 };
 OPAL_ENUM_CLASS_FLAGS(PipelineStageAccessBits)
 
-OBS_ENUM()
 enum class ImageLayout
 {
     // Usually used for initial layout of an image or when we don't care about layout.
@@ -499,7 +474,6 @@ enum class ImageLayout
     Present = 1000001002,
 };
 
-OBS_ENUM()
 enum class ImageAspectBits : u8
 {
     Color = 1,
@@ -508,7 +482,6 @@ enum class ImageAspectBits : u8
 };
 OPAL_ENUM_CLASS_FLAGS(ImageAspectBits);
 
-OBS_ENUM()
 struct ImageSubresourceRange
 {
     // Which aspect of the image we care about.
@@ -519,7 +492,6 @@ struct ImageSubresourceRange
     u32 array_layer_count = 1;
 };
 
-OBS_ENUM()
 enum class IndexSize : u8
 {
     uint8,
@@ -527,7 +499,6 @@ enum class IndexSize : u8
     uint32
 };
 
-OBS_CLASS()
 struct GraphicsContextDesc
 {
     /**
