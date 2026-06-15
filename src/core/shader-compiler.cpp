@@ -302,6 +302,62 @@ Rndr::ShaderParameter CloneParameter(const Rndr::ShaderParameter& p)
     return copy;
 }
 
+// ---------------------------------------------------------------------------
+// GLSL post-processing.
+// ---------------------------------------------------------------------------
+
+// Slang lowers SV_InstanceID / SV_VulkanInstanceID to the Vulkan-GLSL builtin gl_InstanceIndex even
+// when targeting OpenGL GLSL, but gl_InstanceIndex only exists in Vulkan GLSL - desktop GL has no
+// such builtin and the shader fails to compile. The Canvas backend issues only non-base-instance
+// instanced draws (glDraw*Instanced), so base instance is always 0 and the OpenGL-core gl_InstanceID
+// is an exact equivalent. Rewrite every whole-token occurrence in place.
+//
+// The replacement is shorter than the token, so we compact into a scratch buffer (always reading from
+// the original text) and swap it back, which keeps the token-boundary checks reading unmodified bytes.
+void PatchGlslInstanceBuiltin(Opal::DynamicArray<Rndr::u8>& code)
+{
+    static constexpr char k_from[] = "gl_InstanceIndex";
+    static constexpr char k_to[] = "gl_InstanceID";
+    constexpr Rndr::u64 from_len = sizeof(k_from) - 1;
+    constexpr Rndr::u64 to_len = sizeof(k_to) - 1;
+
+    const Rndr::u64 size = code.GetSize();
+    if (size < from_len)
+    {
+        return;
+    }
+
+    const auto is_ident = [](Rndr::u8 c)
+    { return (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9') || c == '_'; };
+
+    const Rndr::u8* src = code.GetData();
+    Opal::DynamicArray<Rndr::u8> out;
+    out.Resize(size);  // The output is never longer than the input.
+    Rndr::u8* dst = out.GetData();
+
+    Rndr::u64 read = 0;
+    Rndr::u64 write = 0;
+    while (read < size)
+    {
+        const bool token_match = read + from_len <= size && memcmp(src + read, k_from, from_len) == 0 &&
+                                 (read == 0 || !is_ident(src[read - 1])) &&
+                                 (read + from_len == size || !is_ident(src[read + from_len]));
+        if (token_match)
+        {
+            memcpy(dst + write, k_to, to_len);
+            write += to_len;
+            read += from_len;
+        }
+        else
+        {
+            dst[write++] = src[read++];
+        }
+    }
+
+    out.Resize(write);
+    code = std::move(out);
+}
+
 }  // namespace
 
 // ---------------------------------------------------------------------------
@@ -313,6 +369,7 @@ struct Rndr::ShaderCompiler::Impl
     Slang::ComPtr<slang::IGlobalSession> global_session;
     Slang::ComPtr<slang::ISession> session;
     slang::IModule* module = nullptr;
+    ShaderOutputFormat format = ShaderOutputFormat::SpirV;
 };
 
 // ---------------------------------------------------------------------------
@@ -344,6 +401,8 @@ Rndr::ShaderCompiler& Rndr::ShaderCompiler::operator=(ShaderCompiler&& other) no
 
 void Rndr::ShaderCompiler::LoadModule(const Opal::StringUtf8& source, ShaderOutputFormat format)
 {
+    m_impl->format = format;
+
     SlangResult result = slang::createGlobalSession(m_impl->global_session.writeRef());
     if (SLANG_FAILED(result))
     {
@@ -477,6 +536,11 @@ Rndr::CompileResult Rndr::ShaderCompiler::CompileEntryPoint(const Opal::StringUt
     const u64 code_size = code_blob->getBufferSize();
     out.code.Resize(code_size);
     memcpy(out.code.GetData(), code_data, code_size);
+
+    if (m_impl->format == ShaderOutputFormat::Glsl)
+    {
+        PatchGlslInstanceBuiltin(out.code);
+    }
 
     slang::ProgramLayout* layout = linked_program->getLayout();
     if (layout != nullptr)

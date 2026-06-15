@@ -1,10 +1,17 @@
 #include <catch2/catch2.hpp>
 
+#include "glad/glad.h"
+
+#include "opal/container/array-view.h"
 #include "opal/container/scope-ptr.h"
 #include "opal/exceptions.h"
 
 #include "rndr/application.hpp"
+#include "rndr/canvas/brush.hpp"
 #include "rndr/canvas/context.hpp"
+#include "rndr/canvas/draw-list.hpp"
+#include "rndr/canvas/mesh.hpp"
+#include "rndr/canvas/render-target.hpp"
 #include "rndr/canvas/shader.hpp"
 #include "rndr/generic-window.hpp"
 
@@ -418,6 +425,80 @@ RWStructuredBuffer<float4> output_buffer;
 void ComputeMain(uint3 tid : SV_DispatchThreadID)
 {
     output_buffer[tid.x] = float4(0, 0, 0, 1);
+}
+)";
+
+// Vertex stage reads the instance index via SV_VulkanInstanceID, which Slang lowers to the Vulkan-GLSL
+// builtin gl_InstanceIndex; the GLSL post-process rewrites it to the OpenGL-core gl_InstanceID. Each
+// instance draws a fullscreen triangle and the fragment writes its instance index into the red channel,
+// so additive blending into a float target accumulates the sum of all instance indices.
+const char* k_instance_id_vulkan_source = R"(
+struct VSInput
+{
+    float3 position;
+};
+
+struct VSOutput
+{
+    float4 position : SV_POSITION;
+    nointerpolation float instance_value;
+};
+
+[shader("vertex")]
+VSOutput VertexMain(VSInput input, uint instance_id : SV_VulkanInstanceID)
+{
+    VSOutput output;
+    output.position = float4(input.position, 1.0);
+    output.instance_value = float(instance_id);
+    return output;
+}
+
+struct FSOutput
+{
+    float4 color : SV_TARGET;
+};
+
+[shader("fragment")]
+FSOutput FragmentMain(VSOutput input)
+{
+    FSOutput output;
+    output.color = float4(input.instance_value, 0.0, 0.0, 1.0);
+    return output;
+}
+)";
+
+// Same idea, but using the platform-neutral SV_InstanceID semantic, which also lowers to
+// gl_InstanceIndex for the GLSL target and must be rewritten the same way.
+const char* k_instance_id_native_source = R"(
+struct VSInput
+{
+    float3 position;
+};
+
+struct VSOutput
+{
+    float4 position : SV_POSITION;
+};
+
+[shader("vertex")]
+VSOutput VertexMain(VSInput input, uint instance_id : SV_InstanceID)
+{
+    VSOutput output;
+    output.position = float4(input.position + float3(float(instance_id), 0, 0), 1.0);
+    return output;
+}
+
+struct FSOutput
+{
+    float4 color : SV_TARGET;
+};
+
+[shader("fragment")]
+FSOutput FragmentMain(VSOutput input)
+{
+    FSOutput output;
+    output.color = float4(1.0, 0.0, 0.0, 1.0);
+    return output;
 }
 )";
 
@@ -891,5 +972,84 @@ TEST_CASE("Canvas Shader", "[canvas][shader]")
         REQUIRE(count->category == Rndr::Canvas::ParameterCategory::Uniform);
         REQUIRE(count->array_element_count == 0);
         REQUIRE(count->array_stride == 0);
+    }
+}
+
+TEST_CASE("Canvas Shader instance ID", "[canvas][shader]")
+{
+    ShaderTestFixture const f;
+
+    // gl_InstanceIndex is a Vulkan-GLSL builtin that does not exist in desktop OpenGL GLSL. If the
+    // post-process did not rewrite it to gl_InstanceID, GL would fail to compile the shader and these
+    // would throw / produce an invalid shader.
+    SECTION("Shader using SV_VulkanInstanceID compiles and links")
+    {
+        Rndr::Canvas::Shader const shader = Rndr::Canvas::Shader::FromSourceInMemory(k_instance_id_vulkan_source);
+        REQUIRE(shader.IsValid());
+        REQUIRE(shader.GetNativeHandle() != 0);
+    }
+
+    SECTION("Shader using SV_InstanceID compiles and links")
+    {
+        Rndr::Canvas::Shader const shader = Rndr::Canvas::Shader::FromSourceInMemory(k_instance_id_native_source);
+        REQUIRE(shader.IsValid());
+        REQUIRE(shader.GetNativeHandle() != 0);
+    }
+
+    SECTION("gl_InstanceID takes distinct per-instance values during an instanced draw")
+    {
+        constexpr Rndr::u32 k_instance_count = 8;
+
+        Rndr::Canvas::Shader const shader = Rndr::Canvas::Shader::FromSourceInMemory(k_instance_id_vulkan_source);
+        REQUIRE(shader.IsValid());
+
+        Rndr::Canvas::Brush brush;
+        brush.SetCullMode(Rndr::Canvas::CullMode::None);
+        brush.SetDepthTest(false);
+        // Additive blend (GL_ONE, GL_ONE) sums each instance's fragment output into the target.
+        brush.SetBlendMode(Rndr::Canvas::BlendMode::Additive);
+        brush.SetShader(shader);
+
+        // Single fullscreen triangle; every instance covers the whole (1x1) target.
+        // clang-format off
+        const float k_fullscreen_triangle[] = {
+            -1.0f, -1.0f, 0.0f,
+             3.0f, -1.0f, 0.0f,
+            -1.0f,  3.0f, 0.0f,
+        };
+        // clang-format on
+        const Rndr::u32 k_triangle_indices[] = {0, 1, 2};
+        Rndr::Canvas::VertexLayout layout;
+        layout.Add(Rndr::Canvas::Attrib::Position, Rndr::Canvas::Format::Float3);
+        Rndr::Canvas::Mesh mesh(
+            layout, {reinterpret_cast<const Rndr::u8*>(k_fullscreen_triangle), sizeof(k_fullscreen_triangle)},
+            {reinterpret_cast<const Rndr::u8*>(k_triangle_indices), sizeof(k_triangle_indices)});
+
+        // Float target so the accumulated sum is stored without clamping to [0, 1].
+        Rndr::Canvas::RenderTargetDesc rt_desc;
+        rt_desc.AddColor(1, 1, Rndr::Canvas::Format::RGBA32F);
+        Rndr::Canvas::RenderTarget rt(f.context, rt_desc);
+        REQUIRE(rt.IsValid());
+
+        Rndr::Canvas::DrawList list;
+        list.SetRenderTarget(rt);
+        list.SetViewport(0, 0, 1, 1);
+        list.ClearColor(Rndr::Vector4f{0.0f, 0.0f, 0.0f, 0.0f});
+        list.DrawInstanced(mesh, brush, k_instance_count);
+        list.Execute();
+
+        // Read back the single pixel from the render target's color attachment.
+        float pixel[4] = {0.0f, 0.0f, 0.0f, 0.0f};
+        glBindFramebuffer(GL_FRAMEBUFFER, rt.GetNativeHandle());
+        glReadBuffer(GL_COLOR_ATTACHMENT0);
+        glReadPixels(0, 0, 1, 1, GL_RGBA, GL_FLOAT, pixel);
+        glBindFramebuffer(GL_FRAMEBUFFER, 0);
+
+        // Red holds sum(instance_id) for instance_id in [0, k_instance_count). For 0..7 that is 28.
+        // This value is only reachable if gl_InstanceID ran through distinct, non-zero values: if every
+        // instance saw 0 the sum would be 0, and any single constant k would give 8*k (never 28).
+        constexpr float k_expected_sum = static_cast<float>(k_instance_count * (k_instance_count - 1) / 2);
+        REQUIRE(pixel[0] == Catch::Approx(k_expected_sum));
+        REQUIRE(pixel[0] > 0.0f);
     }
 }
