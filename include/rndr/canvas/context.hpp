@@ -65,16 +65,19 @@ struct ContextDesc
 
 /**
  * Represents the graphics backend being alive and the on-screen presentation surface.
- * Created exclusively through the Init() factory. RAII: destructor tears down the GL backend.
+ * Created exclusively through the CreateContext() factory. RAII: destructor tears down the GL backend.
  *
  * In OpenGL terms, the Context manages the default framebuffer (handle 0). Unlike a RenderTarget
  * (which wraps a user-created FBO with owned textures), the default framebuffer is owned by the
  * windowing system. The DrawList accepts a Context directly to bind framebuffer 0 and set the
  * viewport from the Context's dimensions.
  *
+ * The first CreateContext() call creates the primary context; later calls create secondary contexts
+ * that share GPU resources with it. See CreateContext() for details and the threading/sync rules.
+ *
  * Typical usage:
  * @code
- *   auto context = Canvas::Context::Init(window, desc);
+ *   auto context = Canvas::Context::CreateContext(window, desc);
  *   // game loop
  *   list.SetRenderTarget(context);
  *   list.Draw(mesh, brush);
@@ -88,14 +91,55 @@ class Context
 {
 public:
     /**
-     * Initialize the Canvas graphics backend.
-     * @param window Window to bind the GL context to.
-     * @param desc Configuration for the context.
-     * @return A valid Context object.
-     * @throw Opal::InvalidArgumentException if called while a Context already exists.
-     * @throw Rndr::GraphicsAPIException if the OpenGL backend fails to initialize.
+     * Create a Canvas context. Behavior depends on whether a context already exists and whether a
+     * window is supplied:
+     *
+     * 1. First call (no context yet), @p window valid -> the PRIMARY context. Initializes the OpenGL
+     *    backend, binds to @p window, owns its on-screen surface. @p desc sets color/depth formats and
+     *    vsync.
+     * 2. Later call, @p window valid -> a SECONDARY per-window context. Owns @p window's surface (can
+     *    present) and shares GPU resources with the primary -- so a multi-window app uploads shaders,
+     *    glyph atlases, textures once and uses them in every window. @p desc configures this window's
+     *    surface; for resource sharing to work its pixel format must be compatible with the primary's
+     *    (typically identical). The returned context is left current on the calling thread.
+     * 3. Later call, no @p window -> a RESOURCE-ONLY context that borrows the primary's surface and
+     *    shares its resources. Intended for off-thread resource work; must not be used to present.
+     *
+     * Shared across contexts: textures, buffers, renderbuffers, samplers, and shader/program objects.
+     * NOT shared (must be created per-context): VAOs, FBOs, transform-feedback objects, program
+     * pipelines, and queries -- so RenderTargets and DrawLists are not portable between contexts even
+     * though the textures they reference are.
+     *
+     * An OpenGL context can be current on at most one thread at a time. A resource-only context (case
+     * 3) is NOT made current; call MakeCurrent() on the thread that will use it. A multi-window app
+     * binds the relevant window's context (MakeCurrent) before rendering or presenting that window.
+     * @code
+     *   // Main thread:
+     *   auto main_window = Canvas::Context::CreateContext(window_a, desc);   // primary
+     *   auto tool_window = Canvas::Context::CreateContext(window_b, desc);   // shares with primary
+     *   auto loader      = Canvas::Context::CreateContext();                 // resource-only
+     *
+     *   // Per-window render: bind the window's context, draw into it, then present it.
+     *   main_window.MakeCurrent();
+     *   // ... draw main window ...
+     *   main_window.Present();
+     *   tool_window.MakeCurrent();
+     *   // ... draw tool window ...
+     *   tool_window.Present();
+     * @endcode
+     *
+     * Sharing the namespace does not guarantee memory coherency: after writing a resource in one
+     * context, synchronize (glFinish, or a glFenceSync + glWaitSync/glClientWaitSync pair) before
+     * reading it from another context.
+     *
+     * @param window Window to bind. Required for the primary and for per-window contexts; omit for a
+     *               resource-only context.
+     * @param desc Configuration for the context's surface. Ignored for a resource-only context.
+     * @return A valid Context.
+     * @throw Opal::InvalidArgumentException if no primary exists yet and @p window is null.
+     * @throw Rndr::GraphicsAPIException if the OpenGL backend or context creation fails.
      */
-    [[nodiscard]] static Context Init(Opal::Ref<GenericWindow> window, const ContextDesc& desc = {});
+    [[nodiscard]] static Context CreateContext(Opal::Ref<GenericWindow> window = nullptr, const ContextDesc& desc = {});
 
     ~Context();
 
@@ -111,6 +155,21 @@ public:
 
     /** Enable or disable vertical sync without teardown. */
     void SetVsync(bool enabled);
+
+    /**
+     * Make this context current on the calling thread. Required before issuing GL commands from a
+     * thread other than the one that created/last bound the context (e.g. a worker thread using a
+     * shared context from CreateContext()).
+     * @return True on success, false otherwise.
+     */
+    bool MakeCurrent();
+
+    /**
+     * Release any current context from the calling thread. Call before the thread exits, or before
+     * a context is made current on a different thread.
+     * @return True on success, false otherwise.
+     */
+    static bool ReleaseCurrent();
 
     /**
      * Update the stored surface dimensions. Call this from your window resize callback.
@@ -139,7 +198,16 @@ private:
     Context();
 
     static bool g_context_exists;
+
+    // Handles of the active primary context, tracked so a later CreateContext() call can build shared
+    // contexts that reach them. Handle values are stable across C++ moves, so no per-move maintenance.
+    static NativeDeviceContextHandle g_primary_device_context;
+    static NativeGraphicsContextHandle g_primary_graphics_context;
+
     bool m_vsync_enabled = true;
+    // True for the primary context (owns the window surface and the singleton slot). False for shared
+    // contexts, which borrow the primary's device context and must not present.
+    bool m_owns_surface = true;
     Format m_color_format = Format::RGBA8;
     Format m_depth_stencil_format = Format::D24S8;
     Opal::Ref<GenericWindow> m_window = nullptr;

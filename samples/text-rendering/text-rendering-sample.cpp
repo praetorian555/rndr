@@ -28,7 +28,7 @@ int main()
     auto window = app->CreateGenericWindow(window_desc);
     RNDR_ASSERT(window.IsValid(), "Failed to create a window!");
 
-    auto context = Canvas::Context::Init(window.Clone());
+    auto context = Canvas::Context::CreateContext(window.Clone());
     RNDR_ASSERT(context.IsValid(), "Failed to create Canvas context!");
 
     Opal::StringUtf8 font_path = Opal::Paths::Combine(RNDR_CORE_ASSETS_DIR, "OpenSans.ttf");

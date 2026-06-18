@@ -37,7 +37,7 @@ int main()
     RNDR_ASSERT(window.IsValid(), "Failed to create a window!");
     window->EnableHighPrecisionCursorMode(true);
 
-    auto context = Canvas::Context::Init(window.Clone());
+    auto context = Canvas::Context::CreateContext(window.Clone());
     RNDR_ASSERT(context.IsValid(), "Failed to create Canvas context!");
 
     Rndr::ImGuiContext imgui_context(*app, window.Clone());

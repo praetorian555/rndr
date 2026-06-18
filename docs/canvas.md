@@ -19,7 +19,7 @@ desc.color_format = Canvas::Format::RGBA8;
 desc.depth_stencil_format = Canvas::Format::D24S8;
 desc.vsync_enabled = true;
 
-auto context = Canvas::Context::Init(window, desc);
+auto context = Canvas::Context::CreateContext(window, desc);
 
 // In the game loop:
 // ... record and execute draw commands ...
@@ -453,7 +453,7 @@ A minimal render loop drawing a PBR cube with a grid and skybox:
 #include "rndr/canvas/projections.hpp"
 
 // Setup (once).
-auto context = Canvas::Context::Init(window);
+auto context = Canvas::Context::CreateContext(window);
 Canvas::PbrRenderer pbr(&context);
 Canvas::GridRenderer grid(&context);
 Canvas::CubemapRenderer skybox(&context);
