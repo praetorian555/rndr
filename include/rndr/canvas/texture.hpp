@@ -164,10 +164,38 @@ public:
     void Destroy();
 
     /**
-     * Upload pixel data to the texture. Only valid for single-sample Texture2D.
-     * @param data Pixel data to upload.
+     * Upload pixel data to the entire base mip level of a single-sample Texture2D.
+     * @param data Pixel data to upload. Must be exactly width * height * pixel_size bytes.
+     * @throw Opal::InvalidArgumentException if the texture is not a Texture2D or the data size is wrong.
+     * @throw GraphicsAPIException if the texture is invalid or multi-sample.
      */
     void Update(const Opal::ArrayView<const u8>& data) const;
+
+    /**
+     * Upload pixel data to a rectangular sub-region of a single-sample Texture2D mip level.
+     * @param data Pixel data to upload. Must be exactly width * height * pixel_size bytes.
+     * @param x Horizontal texel offset of the region within the mip level.
+     * @param y Vertical texel offset of the region within the mip level.
+     * @param width Width of the region in texels.
+     * @param height Height of the region in texels.
+     * @param mip_level Target mip level. Defaults to 0.
+     * @throw Opal::InvalidArgumentException if the texture is not a Texture2D, the region or mip level is
+     *        out of bounds, or the data size does not match the region.
+     * @throw GraphicsAPIException if the texture is invalid or multi-sample.
+     */
+    void UpdateRegion(const Opal::ArrayView<const u8>& data, i32 x, i32 y, i32 width, i32 height, i32 mip_level = 0) const;
+
+    /**
+     * Upload pixel data to one full layer of a Texture2DArray or one face of a CubeMap, at a mip level.
+     * @param data Pixel data to upload. Must be exactly mip_width * mip_height * pixel_size bytes, where the
+     *        mip dimensions are the texture dimensions halved per mip level (clamped to 1).
+     * @param layer Array layer index for Texture2DArray, or face index [0, 5] for CubeMap.
+     * @param mip_level Target mip level. Defaults to 0.
+     * @throw Opal::InvalidArgumentException if the texture is not a Texture2DArray or CubeMap, the layer or
+     *        mip level is out of bounds, or the data size does not match the layer.
+     * @throw GraphicsAPIException if the texture is invalid or multi-sample.
+     */
+    void UpdateLayer(const Opal::ArrayView<const u8>& data, i32 layer, i32 mip_level = 0) const;
 
     [[nodiscard]] bool IsValid() const;
     [[nodiscard]] const TextureDesc& GetDesc() const;

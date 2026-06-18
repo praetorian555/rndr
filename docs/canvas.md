@@ -195,9 +195,21 @@ rt_desc.format = Canvas::Format::RGBA16F;
 
 Canvas::Texture hdr_texture(rt_desc, {}, "HDR Buffer");
 
-// Upload new data.
+// Upload new data (whole base-mip Texture2D).
 texture.Update(pixel_data);
+
+// Update a sub-region of a Texture2D, optionally at a mip level.
+texture.UpdateRegion(region_pixels, /*x*/ 16, /*y*/ 16, /*width*/ 32, /*height*/ 32);
+texture.UpdateRegion(mip1_pixels, 0, 0, 32, 32, /*mip_level*/ 1);
+
+// Update one layer of a Texture2DArray or one face of a CubeMap.
+array_texture.UpdateLayer(layer_pixels, /*layer*/ 2);
+cubemap.UpdateLayer(face_pixels, /*face*/ 3);
 ```
+
+All update methods require the data view to be exactly `width * height * pixel_size` bytes for the
+targeted region/layer, and throw `Opal::InvalidArgumentException` otherwise. `Update`/`UpdateRegion`
+are Texture2D-only; `UpdateLayer` is for `Texture2DArray` and `CubeMap`.
 
 Texture types: `Texture2D`, `Texture2DArray`, `CubeMap`.
 

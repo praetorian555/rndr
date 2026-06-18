@@ -704,26 +704,110 @@ void Rndr::Canvas::Texture::Destroy()
     }
 }
 
+namespace
+{
+
+void ValidateUpdatable(Rndr::u32 handle, const Rndr::Canvas::TextureDesc& desc)
+{
+    if (handle == 0)
+    {
+        throw Rndr::GraphicsAPIException(0, "Cannot update an invalid texture!");
+    }
+    if (desc.sample_count > 1)
+    {
+        throw Rndr::GraphicsAPIException(0, "Cannot update a multi-sample texture!");
+    }
+}
+
+Rndr::i32 MipDimension(Rndr::i32 base, Rndr::i32 mip_level)
+{
+    const Rndr::i32 value = base >> mip_level;
+    return value > 1 ? value : 1;
+}
+
+}  // namespace
+
 void Rndr::Canvas::Texture::Update(const Opal::ArrayView<const u8>& data) const
 {
-    RNDR_CPU_EVENT_SCOPED("Canvas::Texture::Update");
+    UpdateRegion(data, 0, 0, m_desc.width, m_desc.height, 0);
+}
 
-    if (m_handle == 0)
-    {
-        throw GraphicsAPIException(0, "Cannot update an invalid texture!");
-    }
-    if (m_desc.sample_count > 1)
-    {
-        throw GraphicsAPIException(0, "Cannot update a multi-sample texture!");
-    }
+void Rndr::Canvas::Texture::UpdateRegion(const Opal::ArrayView<const u8>& data, i32 x, i32 y, i32 width, i32 height,
+                                         i32 mip_level) const
+{
+    RNDR_CPU_EVENT_SCOPED("Canvas::Texture::UpdateRegion");
+
+    ValidateUpdatable(m_handle, m_desc);
+
     if (m_desc.type != TextureType::Texture2D)
     {
-        throw GraphicsAPIException(0, "Update is only supported for Texture2D!");
+        throw Opal::InvalidArgumentException(__FUNCTION__, "UpdateRegion is only supported for Texture2D!");
+    }
+    if (mip_level < 0 || mip_level >= m_max_mip_levels)
+    {
+        throw Opal::InvalidArgumentException(__FUNCTION__, "Mip level is out of range!");
+    }
+
+    const i32 mip_width = MipDimension(m_desc.width, mip_level);
+    const i32 mip_height = MipDimension(m_desc.height, mip_level);
+    if (x < 0 || y < 0 || width <= 0 || height <= 0 || x + width > mip_width || y + height > mip_height)
+    {
+        throw Opal::InvalidArgumentException(__FUNCTION__, "Update region is out of bounds!");
     }
 
     const GLFormatInfo fmt = ToGLFormat(m_desc.format);
+    const u64 expected_size = static_cast<u64>(width) * height * fmt.pixel_size;
+    if (data.GetSize() != expected_size)
+    {
+        throw Opal::InvalidArgumentException(__FUNCTION__, "Update data size does not match the region!");
+    }
+
     glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
-    glTextureSubImage2D(m_handle, 0, 0, 0, m_desc.width, m_desc.height, fmt.format, fmt.type, data.GetData());
+    glTextureSubImage2D(m_handle, mip_level, x, y, width, height, fmt.format, fmt.type, data.GetData());
+}
+
+void Rndr::Canvas::Texture::UpdateLayer(const Opal::ArrayView<const u8>& data, i32 layer, i32 mip_level) const
+{
+    RNDR_CPU_EVENT_SCOPED("Canvas::Texture::UpdateLayer");
+
+    ValidateUpdatable(m_handle, m_desc);
+
+    constexpr i32 k_cubemap_face_count = 6;
+    i32 layer_count = 0;
+    if (m_desc.type == TextureType::Texture2DArray)
+    {
+        layer_count = m_desc.array_size;
+    }
+    else if (m_desc.type == TextureType::CubeMap)
+    {
+        layer_count = k_cubemap_face_count;
+    }
+    else
+    {
+        throw Opal::InvalidArgumentException(__FUNCTION__, "UpdateLayer is only supported for Texture2DArray and CubeMap!");
+    }
+
+    if (layer < 0 || layer >= layer_count)
+    {
+        throw Opal::InvalidArgumentException(__FUNCTION__, "Layer is out of range!");
+    }
+    if (mip_level < 0 || mip_level >= m_max_mip_levels)
+    {
+        throw Opal::InvalidArgumentException(__FUNCTION__, "Mip level is out of range!");
+    }
+
+    const i32 mip_width = MipDimension(m_desc.width, mip_level);
+    const i32 mip_height = MipDimension(m_desc.height, mip_level);
+
+    const GLFormatInfo fmt = ToGLFormat(m_desc.format);
+    const u64 expected_size = static_cast<u64>(mip_width) * mip_height * fmt.pixel_size;
+    if (data.GetSize() != expected_size)
+    {
+        throw Opal::InvalidArgumentException(__FUNCTION__, "Update data size does not match the layer!");
+    }
+
+    glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
+    glTextureSubImage3D(m_handle, mip_level, 0, 0, layer, mip_width, mip_height, 1, fmt.format, fmt.type, data.GetData());
 }
 
 bool Rndr::Canvas::Texture::IsValid() const

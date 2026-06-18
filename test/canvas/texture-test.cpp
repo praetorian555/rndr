@@ -225,6 +225,135 @@ TEST_CASE("Canvas Texture", "[canvas][texture]")
         const Rndr::u8 pixels[4] = {};
         REQUIRE_THROWS(tex.Update(Opal::ArrayView<const Rndr::u8>(pixels, sizeof(pixels))));
     }
+
+    SECTION("Update with wrong data size throws")
+    {
+        Rndr::Canvas::TextureDesc desc;
+        desc.width = 4;
+        desc.height = 4;
+        desc.format = Rndr::Canvas::Format::RGBA8;
+
+        Rndr::Canvas::Texture tex(desc);
+        // Should be 64 bytes; provide 32.
+        const Rndr::u8 pixels[32] = {};
+        REQUIRE_THROWS_AS(tex.Update(Opal::ArrayView<const Rndr::u8>(pixels, sizeof(pixels))), Opal::InvalidArgumentException);
+    }
+
+    SECTION("UpdateRegion sub-region")
+    {
+        Rndr::Canvas::TextureDesc desc;
+        desc.width = 8;
+        desc.height = 8;
+        desc.format = Rndr::Canvas::Format::RGBA8;
+
+        Rndr::Canvas::Texture tex(desc);
+        REQUIRE(tex.IsValid());
+
+        // Update a 2x2 region at (1, 1): 2*2*4 = 16 bytes.
+        const Rndr::u8 pixels[16] = {};
+        tex.UpdateRegion(Opal::ArrayView<const Rndr::u8>(pixels, sizeof(pixels)), 1, 1, 2, 2);
+    }
+
+    SECTION("UpdateRegion out of bounds throws")
+    {
+        Rndr::Canvas::TextureDesc desc;
+        desc.width = 8;
+        desc.height = 8;
+        desc.format = Rndr::Canvas::Format::RGBA8;
+
+        Rndr::Canvas::Texture tex(desc);
+        const Rndr::u8 pixels[16] = {};
+        // Region extends past the right edge.
+        REQUIRE_THROWS_AS(tex.UpdateRegion(Opal::ArrayView<const Rndr::u8>(pixels, sizeof(pixels)), 7, 0, 2, 2),
+                          Opal::InvalidArgumentException);
+    }
+
+    SECTION("UpdateRegion at mip level")
+    {
+        Rndr::Canvas::TextureDesc desc;
+        desc.width = 8;
+        desc.height = 8;
+        desc.format = Rndr::Canvas::Format::RGBA8;
+        desc.use_mips = true;
+
+        Rndr::Canvas::Texture tex(desc);
+        REQUIRE(tex.IsValid());
+
+        // Mip 1 is 4x4; update the full 4x4 = 64 bytes.
+        const Rndr::u8 pixels[64] = {};
+        tex.UpdateRegion(Opal::ArrayView<const Rndr::u8>(pixels, sizeof(pixels)), 0, 0, 4, 4, 1);
+    }
+
+    SECTION("UpdateRegion on non-Texture2D throws")
+    {
+        Rndr::Canvas::TextureDesc desc;
+        desc.width = 8;
+        desc.height = 8;
+        desc.type = Rndr::Canvas::TextureType::CubeMap;
+
+        Rndr::Canvas::Texture tex(desc);
+        const Rndr::u8 pixels[16] = {};
+        REQUIRE_THROWS_AS(tex.UpdateRegion(Opal::ArrayView<const Rndr::u8>(pixels, sizeof(pixels)), 0, 0, 2, 2),
+                          Opal::InvalidArgumentException);
+    }
+
+    SECTION("UpdateLayer of Texture2DArray")
+    {
+        Rndr::Canvas::TextureDesc desc;
+        desc.width = 4;
+        desc.height = 4;
+        desc.format = Rndr::Canvas::Format::RGBA8;
+        desc.type = Rndr::Canvas::TextureType::Texture2DArray;
+        desc.array_size = 3;
+
+        Rndr::Canvas::Texture tex(desc);
+        REQUIRE(tex.IsValid());
+
+        // One layer is 4x4x4 = 64 bytes.
+        const Rndr::u8 pixels[64] = {};
+        tex.UpdateLayer(Opal::ArrayView<const Rndr::u8>(pixels, sizeof(pixels)), 2);
+    }
+
+    SECTION("UpdateLayer of CubeMap face")
+    {
+        Rndr::Canvas::TextureDesc desc;
+        desc.width = 4;
+        desc.height = 4;
+        desc.format = Rndr::Canvas::Format::RGBA8;
+        desc.type = Rndr::Canvas::TextureType::CubeMap;
+
+        Rndr::Canvas::Texture tex(desc);
+        REQUIRE(tex.IsValid());
+
+        // One face is 4x4x4 = 64 bytes.
+        const Rndr::u8 pixels[64] = {};
+        tex.UpdateLayer(Opal::ArrayView<const Rndr::u8>(pixels, sizeof(pixels)), 5);
+    }
+
+    SECTION("UpdateLayer out of range throws")
+    {
+        Rndr::Canvas::TextureDesc desc;
+        desc.width = 4;
+        desc.height = 4;
+        desc.type = Rndr::Canvas::TextureType::CubeMap;
+
+        Rndr::Canvas::Texture tex(desc);
+        const Rndr::u8 pixels[64] = {};
+        REQUIRE_THROWS_AS(tex.UpdateLayer(Opal::ArrayView<const Rndr::u8>(pixels, sizeof(pixels)), 6),
+                          Opal::InvalidArgumentException);
+    }
+
+    SECTION("UpdateLayer on Texture2D throws")
+    {
+        Rndr::Canvas::TextureDesc desc;
+        desc.width = 4;
+        desc.height = 4;
+
+        Rndr::Canvas::Texture tex(desc);
+        const Rndr::u8 pixels[64] = {};
+        REQUIRE_THROWS_AS(tex.UpdateLayer(Opal::ArrayView<const Rndr::u8>(pixels, sizeof(pixels)), 0),
+                          Opal::InvalidArgumentException);
+    }
 }
 
 TEST_CASE("Canvas Texture pixel formats", "[canvas][texture]")
