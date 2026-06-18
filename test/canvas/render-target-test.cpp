@@ -113,7 +113,7 @@ TEST_CASE("Canvas RenderTarget", "[canvas][render-target]")
         Rndr::Canvas::RenderTargetDesc desc;
         desc.AddColor(128, 128);
 
-        Rndr::Canvas::RenderTarget rt(f.context, desc);
+        Rndr::Canvas::RenderTarget rt(desc);
         REQUIRE(rt.IsValid());
         REQUIRE(rt.GetWidth() == 128);
         REQUIRE(rt.GetHeight() == 128);
@@ -127,7 +127,7 @@ TEST_CASE("Canvas RenderTarget", "[canvas][render-target]")
         Rndr::Canvas::RenderTargetDesc desc;
         desc.AddColor(64, 64);
 
-        Rndr::Canvas::RenderTarget rt(f.context, desc, "TestRT");
+        Rndr::Canvas::RenderTarget rt(desc, "TestRT");
         REQUIRE(rt.IsValid());
         REQUIRE(rt.GetName() == "TestRT");
     }
@@ -135,7 +135,7 @@ TEST_CASE("Canvas RenderTarget", "[canvas][render-target]")
     SECTION("Empty color attachments throws")
     {
         Rndr::Canvas::RenderTargetDesc desc;
-        REQUIRE_THROWS(Rndr::Canvas::RenderTarget(f.context, desc));
+        REQUIRE_THROWS(Rndr::Canvas::RenderTarget(desc));
     }
 
     SECTION("Too many color attachments throws")
@@ -145,7 +145,7 @@ TEST_CASE("Canvas RenderTarget", "[canvas][render-target]")
         {
             desc.AddColor(32, 32);
         }
-        REQUIRE_THROWS(Rndr::Canvas::RenderTarget(f.context, desc));
+        REQUIRE_THROWS(Rndr::Canvas::RenderTarget(desc));
     }
 
     SECTION("Multiple color attachments")
@@ -153,7 +153,7 @@ TEST_CASE("Canvas RenderTarget", "[canvas][render-target]")
         Rndr::Canvas::RenderTargetDesc desc;
         desc.AddColor(64, 64).AddColor(64, 64);
 
-        Rndr::Canvas::RenderTarget rt(f.context, desc);
+        Rndr::Canvas::RenderTarget rt(desc);
         REQUIRE(rt.IsValid());
         REQUIRE(rt.GetColorAttachmentCount() == 2);
         REQUIRE(rt.GetColorAttachment(0).IsValid());
@@ -165,7 +165,7 @@ TEST_CASE("Canvas RenderTarget", "[canvas][render-target]")
         Rndr::Canvas::RenderTargetDesc desc;
         desc.AddColor(64, 64).SetDepthStencil(64, 64);
 
-        Rndr::Canvas::RenderTarget rt(f.context, desc);
+        Rndr::Canvas::RenderTarget rt(desc);
         REQUIRE(rt.IsValid());
         REQUIRE(rt.GetDepthStencilAttachment().IsValid());
     }
@@ -175,7 +175,7 @@ TEST_CASE("Canvas RenderTarget", "[canvas][render-target]")
         Rndr::Canvas::RenderTargetDesc desc;
         desc.AddColor(64, 64).SetDepthStencil(64, 64, Rndr::Canvas::Format::D32F);
 
-        Rndr::Canvas::RenderTarget rt(f.context, desc);
+        Rndr::Canvas::RenderTarget rt(desc);
         REQUIRE(rt.IsValid());
     }
 
@@ -184,7 +184,7 @@ TEST_CASE("Canvas RenderTarget", "[canvas][render-target]")
         Rndr::Canvas::RenderTargetDesc desc;
         desc.AddColor(32, 32);
 
-        Rndr::Canvas::RenderTarget rt(f.context, desc);
+        Rndr::Canvas::RenderTarget rt(desc);
         REQUIRE(rt.IsValid());
         rt.Destroy();
         REQUIRE_FALSE(rt.IsValid());
@@ -195,7 +195,7 @@ TEST_CASE("Canvas RenderTarget", "[canvas][render-target]")
         Rndr::Canvas::RenderTargetDesc desc;
         desc.AddColor(64, 64);
 
-        Rndr::Canvas::RenderTarget rt(f.context, desc, "MoveRT");
+        Rndr::Canvas::RenderTarget rt(desc, "MoveRT");
         REQUIRE(rt.IsValid());
 
         Rndr::Canvas::RenderTarget moved(std::move(rt));
@@ -210,7 +210,7 @@ TEST_CASE("Canvas RenderTarget", "[canvas][render-target]")
         Rndr::Canvas::RenderTargetDesc desc;
         desc.AddColor(32, 32);
 
-        Rndr::Canvas::RenderTarget rt(f.context, desc);
+        Rndr::Canvas::RenderTarget rt(desc);
         Rndr::Canvas::RenderTarget other;
 
         other = std::move(rt);
@@ -231,7 +231,7 @@ TEST_CASE("Canvas RenderTarget", "[canvas][render-target]")
             Rndr::Canvas::RenderTargetDesc desc;
             desc.AddColor(16, 16, fmt);
 
-            Rndr::Canvas::RenderTarget rt(f.context, desc);
+            Rndr::Canvas::RenderTarget rt(desc);
             REQUIRE(rt.IsValid());
             REQUIRE(rt.GetColorAttachment(0).GetDesc().format == fmt);
         }
@@ -242,7 +242,7 @@ TEST_CASE("Canvas RenderTarget", "[canvas][render-target]")
         Rndr::Canvas::RenderTargetDesc desc;
         desc.AddColor(64, 64);
 
-        Rndr::Canvas::RenderTarget rt(f.context, desc);
+        Rndr::Canvas::RenderTarget rt(desc);
         REQUIRE(rt.IsValid());
 
         const Rndr::Canvas::Texture& color = rt.GetColorAttachment(0);
@@ -257,7 +257,7 @@ TEST_CASE("Canvas RenderTarget", "[canvas][render-target]")
         Rndr::Canvas::RenderTargetDesc desc;
         desc.AddColor(64, 64);
 
-        Rndr::Canvas::RenderTarget rt(f.context, desc, "CloneSrc");
+        Rndr::Canvas::RenderTarget rt(desc, "CloneSrc");
         REQUIRE(rt.IsValid());
 
         Rndr::Canvas::RenderTarget clone = rt.Clone();
@@ -277,7 +277,7 @@ TEST_CASE("Canvas RenderTarget", "[canvas][render-target]")
         Rndr::Canvas::RenderTargetDesc desc;
         desc.AddColor(32, 32).SetDepthStencil(32, 32);
 
-        Rndr::Canvas::RenderTarget rt(f.context, desc);
+        Rndr::Canvas::RenderTarget rt(desc);
         REQUIRE(rt.IsValid());
 
         Rndr::Canvas::RenderTarget clone = rt.Clone();

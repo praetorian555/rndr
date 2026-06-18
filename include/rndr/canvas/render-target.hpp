@@ -3,7 +3,7 @@
 #include "opal/container/dynamic-array.h"
 #include "opal/container/string.h"
 
-#include "rndr/canvas/context.hpp"
+#include "rndr/canvas/format.hpp"
 #include "rndr/canvas/texture.hpp"
 
 namespace Rndr
@@ -64,12 +64,11 @@ public:
     RenderTarget() = default;
 
     /**
-     * Create a render target.
-     * @param context Active Canvas context.
+     * Create a render target. Requires an active Canvas context on the calling thread.
      * @param desc Render target descriptor.
      * @param name Debug name for GPU debugging tools.
      */
-    explicit RenderTarget(const Context& context, const RenderTargetDesc& desc, const Opal::StringUtf8& name = {});
+    explicit RenderTarget(const RenderTargetDesc& desc, const Opal::StringUtf8& name = {});
     ~RenderTarget();
 
     RenderTarget(const RenderTarget&) = delete;

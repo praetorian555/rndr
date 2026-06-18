@@ -1028,7 +1028,7 @@ TEST_CASE("Canvas Shader instance ID", "[canvas][shader]")
         // Float target so the accumulated sum is stored without clamping to [0, 1].
         Rndr::Canvas::RenderTargetDesc rt_desc;
         rt_desc.AddColor(1, 1, Rndr::Canvas::Format::RGBA32F);
-        Rndr::Canvas::RenderTarget rt(f.context, rt_desc);
+        Rndr::Canvas::RenderTarget rt(rt_desc);
         REQUIRE(rt.IsValid());
 
         Rndr::Canvas::DrawList list;

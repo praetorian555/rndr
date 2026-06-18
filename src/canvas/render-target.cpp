@@ -5,11 +5,10 @@
 #include "rndr/exception.hpp"
 #include "rndr/trace.hpp"
 
-Rndr::Canvas::RenderTarget::RenderTarget(const Context& context, const RenderTargetDesc& desc, const Opal::StringUtf8& name)
+Rndr::Canvas::RenderTarget::RenderTarget(const RenderTargetDesc& desc, const Opal::StringUtf8& name)
     : m_use_depth_stencil(desc.use_depth_stencil), m_name(name.Clone())
 {
     RNDR_CPU_EVENT_SCOPED("Canvas::RenderTarget::RenderTarget");
-    RNDR_UNUSED(context);
 
     if (desc.color_attachments.IsEmpty())
     {

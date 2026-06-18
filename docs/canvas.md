@@ -226,7 +226,7 @@ auto rt_desc = Canvas::RenderTargetDesc()
     .AddColor(1024, 1024, Canvas::Format::RGBA8)
     .SetDepthStencil(1024, 1024);
 
-Canvas::RenderTarget target(context, rt_desc, "GBuffer");
+Canvas::RenderTarget target(rt_desc, "GBuffer");
 
 // Use in a draw list.
 draw_list.SetRenderTarget(target);
