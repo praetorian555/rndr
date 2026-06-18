@@ -9,6 +9,7 @@ Rndr::Canvas::RenderTarget::RenderTarget(const Context& context, const RenderTar
     : m_use_depth_stencil(desc.use_depth_stencil), m_name(name.Clone())
 {
     RNDR_CPU_EVENT_SCOPED("Canvas::RenderTarget::RenderTarget");
+    RNDR_UNUSED(context);
 
     if (desc.color_attachments.IsEmpty())
     {
@@ -28,7 +29,7 @@ Rndr::Canvas::RenderTarget::RenderTarget(const Context& context, const RenderTar
     for (i32 i = 0; i < static_cast<i32>(desc.color_attachments.GetSize()); ++i)
     {
         const TextureDesc& tex_desc = desc.color_attachments[i];
-        Texture color_tex(context, tex_desc);
+        Texture color_tex(tex_desc);
         if (!color_tex.IsValid())
         {
             Destroy();
@@ -40,7 +41,7 @@ Rndr::Canvas::RenderTarget::RenderTarget(const Context& context, const RenderTar
 
     if (m_use_depth_stencil)
     {
-        m_depth_stencil_attachment = Texture(context, desc.depth_stencil_attachment);
+        m_depth_stencil_attachment = Texture(desc.depth_stencil_attachment);
         if (!m_depth_stencil_attachment.IsValid())
         {
             Destroy();

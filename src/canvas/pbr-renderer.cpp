@@ -54,7 +54,7 @@ Rndr::Canvas::PbrRenderer::PbrRenderer(Opal::Ref<Context> context) : m_context(s
 
     // 1x1 white dummy texture for unused texture slots.
     m_dummy_texture =
-        Texture(*m_context, TextureDesc{.width = 1, .height = 1}, Opal::AsBytes(Colors::k_white), "PBR Renderer - Dummy Texture");
+        Texture(TextureDesc{.width = 1, .height = 1}, Opal::AsBytes(Colors::k_white), "PBR Renderer - Dummy Texture");
 }
 
 Rndr::Canvas::PbrRenderer::~PbrRenderer()
@@ -492,8 +492,7 @@ Opal::StringUtf8 GetTexturePath(const aiMaterial* ai_material, aiTextureType typ
 }
 
 void LoadMaterialFromScene(const aiScene& ai_scene, Rndr::u32 material_index, const Opal::StringUtf8& parent_path,
-                           const Rndr::Canvas::Context& context, const Rndr::Canvas::TextureDesc& texture_desc, bool flip_vertically,
-                           Rndr::Canvas::PbrModel& out_model)
+                           const Rndr::Canvas::TextureDesc& texture_desc, bool flip_vertically, Rndr::Canvas::PbrModel& out_model)
 {
     const aiMaterial* ai_material = ai_scene.mMaterials[material_index];
 
@@ -556,13 +555,13 @@ void LoadMaterialFromScene(const aiScene& ai_scene, Rndr::u32 material_index, co
     path = GetTexturePath(ai_material, aiTextureType_EMISSIVE, 0, parent_path);
     if (!path.IsEmpty())
     {
-        out_model.emissive_texture = Rndr::Canvas::Texture::FromFile(context, path, texture_desc, flip_vertically);
+        out_model.emissive_texture = Rndr::Canvas::Texture::FromFile(path, texture_desc, flip_vertically);
     }
 
     path = GetTexturePath(ai_material, aiTextureType_DIFFUSE, 0, parent_path);
     if (!path.IsEmpty())
     {
-        out_model.albedo_texture = Rndr::Canvas::Texture::FromFile(context, path, texture_desc, flip_vertically);
+        out_model.albedo_texture = Rndr::Canvas::Texture::FromFile(path, texture_desc, flip_vertically);
     }
 
     aiString mr_path;
@@ -576,13 +575,13 @@ void LoadMaterialFromScene(const aiScene& ai_scene, Rndr::u32 material_index, co
                              &mr_blend, &mr_op, mr_mode.GetData(), &mr_flags) == AI_SUCCESS)
     {
         Opal::StringUtf8 mr_full_path = Opal::Paths::NormalizePath(Opal::Paths::Combine(parent_path, mr_path.C_Str()));
-        out_model.metallic_roughness_texture = Rndr::Canvas::Texture::FromFile(context, mr_full_path, texture_desc, flip_vertically);
+        out_model.metallic_roughness_texture = Rndr::Canvas::Texture::FromFile(mr_full_path, texture_desc, flip_vertically);
     }
 
     path = GetTexturePath(ai_material, aiTextureType_LIGHTMAP, 0, parent_path);
     if (!path.IsEmpty())
     {
-        out_model.ambient_occlusion_texture = Rndr::Canvas::Texture::FromFile(context, path, texture_desc, flip_vertically);
+        out_model.ambient_occlusion_texture = Rndr::Canvas::Texture::FromFile(path, texture_desc, flip_vertically);
     }
 
     path = GetTexturePath(ai_material, aiTextureType_NORMALS, 0, parent_path);
@@ -592,13 +591,13 @@ void LoadMaterialFromScene(const aiScene& ai_scene, Rndr::u32 material_index, co
     }
     if (!path.IsEmpty())
     {
-        out_model.normal_texture = Rndr::Canvas::Texture::FromFile(context, path, texture_desc, flip_vertically);
+        out_model.normal_texture = Rndr::Canvas::Texture::FromFile(path, texture_desc, flip_vertically);
     }
 
     path = GetTexturePath(ai_material, aiTextureType_OPACITY, 0, parent_path);
     if (!path.IsEmpty())
     {
-        out_model.opacity_texture = Rndr::Canvas::Texture::FromFile(context, path, texture_desc, flip_vertically);
+        out_model.opacity_texture = Rndr::Canvas::Texture::FromFile(path, texture_desc, flip_vertically);
         out_model.alpha_test = 0.5f;
     }
 
@@ -656,7 +655,7 @@ Rndr::Canvas::PbrModel Rndr::Canvas::PbrRenderer::LoadModel(const Opal::StringUt
     if (scene->HasMeshes() && scene->mMeshes[0]->mMaterialIndex < scene->mNumMaterials)
     {
         const Opal::StringUtf8 parent_path = Opal::Paths::GetParentPath(file_path).GetValue();
-        LoadMaterialFromScene(*scene, scene->mMeshes[0]->mMaterialIndex, parent_path, *m_context, texture_desc, flip_vertically, model);
+        LoadMaterialFromScene(*scene, scene->mMeshes[0]->mMaterialIndex, parent_path, texture_desc, flip_vertically, model);
     }
 
     aiReleaseImport(scene);

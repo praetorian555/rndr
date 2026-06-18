@@ -185,7 +185,7 @@ desc.wrap_u = Canvas::TextureWrap::Repeat;
 desc.wrap_v = Canvas::TextureWrap::Repeat;
 desc.use_mips = true;
 
-auto texture = Canvas::Texture::FromFile(context, "textures/brick.png", desc, true, "Brick");
+auto texture = Canvas::Texture::FromFile("textures/brick.png", desc, true, "Brick");
 
 // Create programmatically.
 Canvas::TextureDesc rt_desc;
@@ -193,7 +193,7 @@ rt_desc.width = 1024;
 rt_desc.height = 1024;
 rt_desc.format = Canvas::Format::RGBA16F;
 
-Canvas::Texture hdr_texture(context, rt_desc, {}, "HDR Buffer");
+Canvas::Texture hdr_texture(rt_desc, {}, "HDR Buffer");
 
 // Upload new data.
 texture.Update(pixel_data);
@@ -256,7 +256,7 @@ Canvas::TextureDesc desc;
 desc.width = bitmap.GetWidth();
 desc.height = bitmap.GetHeight();
 desc.format = bitmap.GetFormat();
-Canvas::Texture tex(context, desc, bitmap.GetDataView());
+Canvas::Texture tex(desc, bitmap.GetDataView());
 ```
 
 Supported formats: `R8`, `RG8`, `RGB8`, `RGBA8`, `SRGB8`, `SRGBA8`, `R16F`, `RG16F`, `RGBA16F`, `R32F`, `RG32F`, `RGBA32F`.
@@ -458,7 +458,7 @@ Canvas::PbrRenderer pbr(&context);
 Canvas::GridRenderer grid(&context);
 Canvas::CubemapRenderer skybox(&context);
 
-auto cubemap = Canvas::Texture::FromFile(context, "textures/skybox.ktx");
+auto cubemap = Canvas::Texture::FromFile("textures/skybox.ktx");
 skybox.SetCubemap(cubemap);
 
 Canvas::PbrMaterialDesc material;

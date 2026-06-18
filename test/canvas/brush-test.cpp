@@ -368,7 +368,7 @@ TEST_CASE("Canvas Brush", "[canvas][brush]")
         tex_desc.width = 2;
         tex_desc.height = 2;
         tex_desc.format = Rndr::Canvas::Format::RGBA8;
-        Rndr::Canvas::Texture tex(f.context, tex_desc);
+        Rndr::Canvas::Texture tex(tex_desc);
 
         brush.SetTexture("diffuse", tex);
 
@@ -385,8 +385,8 @@ TEST_CASE("Canvas Brush", "[canvas][brush]")
         tex_desc.width = 2;
         tex_desc.height = 2;
         tex_desc.format = Rndr::Canvas::Format::RGBA8;
-        Rndr::Canvas::Texture tex1(f.context, tex_desc);
-        Rndr::Canvas::Texture tex2(f.context, tex_desc);
+        Rndr::Canvas::Texture tex1(tex_desc);
+        Rndr::Canvas::Texture tex2(tex_desc);
 
         brush.SetTexture("diffuse", tex1);
         brush.SetTexture("diffuse", tex2);
@@ -419,7 +419,7 @@ TEST_CASE("Canvas Brush", "[canvas][brush]")
         tex_desc.width = 2;
         tex_desc.height = 2;
         tex_desc.format = Rndr::Canvas::Format::RGBA8;
-        Rndr::Canvas::Texture tex(f.context, tex_desc);
+        Rndr::Canvas::Texture tex(tex_desc);
         brush.SetTexture("diffuse", tex);
 
         Rndr::Canvas::Brush const moved(std::move(brush));

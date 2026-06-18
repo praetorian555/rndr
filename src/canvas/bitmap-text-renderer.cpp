@@ -78,7 +78,7 @@ void Rndr::Canvas::BitmapTextRenderer::UpdateFontAtlas()
 
     const TextureDesc k_texture_desc{
         .width = k_atlas_width, .height = k_atlas_height, .type = TextureType::Texture2D, .format = Format::R8};
-    m_glyph_atlas = Texture(m_context, k_texture_desc, Opal::AsBytes(m_atlas_data), "Glyph Atlas");
+    m_glyph_atlas = Texture(k_texture_desc, Opal::AsBytes(m_atlas_data), "Glyph Atlas");
     RNDR_ASSERT(m_glyph_atlas.IsValid(), "Glyph atlas could not be created!");
 }
 

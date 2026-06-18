@@ -81,7 +81,7 @@ void Rndr::Canvas::CubemapRenderer::SetCubemap(const Texture& cubemap)
 
 void Rndr::Canvas::CubemapRenderer::SetEquirectangular(const Opal::StringUtf8& file_path, i32 face_size, TextureDesc desc)
 {
-    m_owned_cubemap = Texture::FromEquirectangular(*m_context, file_path, face_size, desc);
+    m_owned_cubemap = Texture::FromEquirectangular(file_path, face_size, desc);
     m_brush.SetTexture("cubemap", m_owned_cubemap);
 }
 

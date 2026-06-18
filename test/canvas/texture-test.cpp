@@ -75,7 +75,7 @@ TEST_CASE("Canvas Texture", "[canvas][texture]")
         desc.width = 64;
         desc.height = 64;
 
-        Rndr::Canvas::Texture tex(f.context, desc);
+        Rndr::Canvas::Texture tex(desc);
         REQUIRE(tex.IsValid());
         REQUIRE(tex.GetDesc().width == 64);
         REQUIRE(tex.GetDesc().height == 64);
@@ -89,7 +89,7 @@ TEST_CASE("Canvas Texture", "[canvas][texture]")
         Rndr::Canvas::TextureDesc desc;
         desc.width = 0;
         desc.height = 64;
-        REQUIRE_THROWS_AS(Rndr::Canvas::Texture(f.context, desc), Opal::InvalidArgumentException);
+        REQUIRE_THROWS_AS(Rndr::Canvas::Texture(desc), Opal::InvalidArgumentException);
     }
 
     SECTION("Negative dimensions throw")
@@ -97,7 +97,7 @@ TEST_CASE("Canvas Texture", "[canvas][texture]")
         Rndr::Canvas::TextureDesc desc;
         desc.width = 64;
         desc.height = -1;
-        REQUIRE_THROWS_AS(Rndr::Canvas::Texture(f.context, desc), Opal::InvalidArgumentException);
+        REQUIRE_THROWS_AS(Rndr::Canvas::Texture(desc), Opal::InvalidArgumentException);
     }
 
     SECTION("Texture2DArray with zero array_size throws")
@@ -107,7 +107,7 @@ TEST_CASE("Canvas Texture", "[canvas][texture]")
         desc.height = 32;
         desc.type = Rndr::Canvas::TextureType::Texture2DArray;
         desc.array_size = 0;
-        REQUIRE_THROWS_AS(Rndr::Canvas::Texture(f.context, desc), Opal::InvalidArgumentException);
+        REQUIRE_THROWS_AS(Rndr::Canvas::Texture(desc), Opal::InvalidArgumentException);
     }
 
     SECTION("Create with debug name")
@@ -116,7 +116,7 @@ TEST_CASE("Canvas Texture", "[canvas][texture]")
         desc.width = 16;
         desc.height = 16;
 
-        Rndr::Canvas::Texture tex(f.context, desc, {}, "TestTexture");
+        Rndr::Canvas::Texture tex(desc, {}, "TestTexture");
         REQUIRE(tex.IsValid());
         REQUIRE(tex.GetName() == "TestTexture");
     }
@@ -130,7 +130,7 @@ TEST_CASE("Canvas Texture", "[canvas][texture]")
 
         // 2x2 RGBA8 = 16 bytes.
         const Rndr::u8 pixels[16] = {};
-        Rndr::Canvas::Texture tex(f.context, desc, Opal::ArrayView<const Rndr::u8>(pixels, sizeof(pixels)));
+        Rndr::Canvas::Texture tex(desc, Opal::ArrayView<const Rndr::u8>(pixels, sizeof(pixels)));
         REQUIRE(tex.IsValid());
     }
 
@@ -140,7 +140,7 @@ TEST_CASE("Canvas Texture", "[canvas][texture]")
         desc.width = 8;
         desc.height = 8;
 
-        Rndr::Canvas::Texture tex(f.context, desc);
+        Rndr::Canvas::Texture tex(desc);
         REQUIRE(tex.IsValid());
         tex.Destroy();
         REQUIRE_FALSE(tex.IsValid());
@@ -152,7 +152,7 @@ TEST_CASE("Canvas Texture", "[canvas][texture]")
         desc.width = 32;
         desc.height = 32;
 
-        Rndr::Canvas::Texture tex(f.context, desc, {}, "MoveTex");
+        Rndr::Canvas::Texture tex(desc, {}, "MoveTex");
         REQUIRE(tex.IsValid());
 
         Rndr::Canvas::Texture moved(std::move(tex));
@@ -168,7 +168,7 @@ TEST_CASE("Canvas Texture", "[canvas][texture]")
         desc.width = 16;
         desc.height = 16;
 
-        Rndr::Canvas::Texture tex(f.context, desc);
+        Rndr::Canvas::Texture tex(desc);
         Rndr::Canvas::Texture other;
 
         other = std::move(tex);
@@ -184,7 +184,7 @@ TEST_CASE("Canvas Texture", "[canvas][texture]")
         desc.height = 16;
         desc.format = Rndr::Canvas::Format::RGBA8;
 
-        Rndr::Canvas::Texture tex(f.context, desc, {}, "CloneSrc");
+        Rndr::Canvas::Texture tex(desc, {}, "CloneSrc");
 
         Rndr::Canvas::Texture clone = tex.Clone();
         REQUIRE(clone.IsValid());
@@ -211,7 +211,7 @@ TEST_CASE("Canvas Texture", "[canvas][texture]")
         desc.height = 4;
         desc.format = Rndr::Canvas::Format::RGBA8;
 
-        Rndr::Canvas::Texture tex(f.context, desc);
+        Rndr::Canvas::Texture tex(desc);
         REQUIRE(tex.IsValid());
 
         // 4x4 RGBA8 = 64 bytes.
@@ -245,7 +245,7 @@ TEST_CASE("Canvas Texture pixel formats", "[canvas][texture]")
         desc.height = 4;
         desc.format = fmt;
 
-        Rndr::Canvas::Texture tex(f.context, desc);
+        Rndr::Canvas::Texture tex(desc);
         REQUIRE(tex.IsValid());
         REQUIRE(tex.GetDesc().format == fmt);
     }
@@ -263,7 +263,7 @@ TEST_CASE("Canvas Texture sampler options", "[canvas][texture]")
         desc.min_filter = Rndr::Canvas::TextureFilter::Nearest;
         desc.mag_filter = Rndr::Canvas::TextureFilter::Nearest;
 
-        Rndr::Canvas::Texture tex(f.context, desc);
+        Rndr::Canvas::Texture tex(desc);
         REQUIRE(tex.IsValid());
         REQUIRE(tex.GetDesc().min_filter == Rndr::Canvas::TextureFilter::Nearest);
         REQUIRE(tex.GetDesc().mag_filter == Rndr::Canvas::TextureFilter::Nearest);
@@ -285,7 +285,7 @@ TEST_CASE("Canvas Texture sampler options", "[canvas][texture]")
             desc.wrap_u = wrap;
             desc.wrap_v = wrap;
 
-            Rndr::Canvas::Texture tex(f.context, desc);
+            Rndr::Canvas::Texture tex(desc);
             REQUIRE(tex.IsValid());
         }
     }
@@ -298,7 +298,7 @@ TEST_CASE("Canvas Texture sampler options", "[canvas][texture]")
         desc.use_mips = true;
         desc.mip_map_filter = Rndr::Canvas::TextureFilter::Linear;
 
-        Rndr::Canvas::Texture tex(f.context, desc);
+        Rndr::Canvas::Texture tex(desc);
         REQUIRE(tex.IsValid());
         REQUIRE(tex.GetDesc().use_mips);
     }
@@ -316,7 +316,7 @@ TEST_CASE("Canvas Texture types", "[canvas][texture]")
         desc.type = Rndr::Canvas::TextureType::Texture2DArray;
         desc.array_size = 4;
 
-        Rndr::Canvas::Texture tex(f.context, desc);
+        Rndr::Canvas::Texture tex(desc);
         REQUIRE(tex.IsValid());
         REQUIRE(tex.GetDesc().type == Rndr::Canvas::TextureType::Texture2DArray);
         REQUIRE(tex.GetDesc().array_size == 4);
@@ -333,7 +333,7 @@ TEST_CASE("Canvas Texture types", "[canvas][texture]")
 
         // 2 layers * 2x2 * 4 bytes = 32 bytes.
         const Rndr::u8 pixels[32] = {};
-        Rndr::Canvas::Texture tex(f.context, desc, Opal::ArrayView<const Rndr::u8>(pixels, sizeof(pixels)));
+        Rndr::Canvas::Texture tex(desc, Opal::ArrayView<const Rndr::u8>(pixels, sizeof(pixels)));
         REQUIRE(tex.IsValid());
     }
 
@@ -344,7 +344,7 @@ TEST_CASE("Canvas Texture types", "[canvas][texture]")
         desc.height = 16;
         desc.type = Rndr::Canvas::TextureType::CubeMap;
 
-        Rndr::Canvas::Texture tex(f.context, desc);
+        Rndr::Canvas::Texture tex(desc);
         REQUIRE(tex.IsValid());
         REQUIRE(tex.GetDesc().type == Rndr::Canvas::TextureType::CubeMap);
     }
@@ -359,7 +359,7 @@ TEST_CASE("Canvas Texture types", "[canvas][texture]")
 
         // 6 faces * 2x2 * 4 bytes = 96 bytes.
         const Rndr::u8 pixels[96] = {};
-        Rndr::Canvas::Texture tex(f.context, desc, Opal::ArrayView<const Rndr::u8>(pixels, sizeof(pixels)));
+        Rndr::Canvas::Texture tex(desc, Opal::ArrayView<const Rndr::u8>(pixels, sizeof(pixels)));
         REQUIRE(tex.IsValid());
     }
 }

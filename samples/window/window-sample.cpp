@@ -64,7 +64,7 @@ int main()
     // Load default albedo texture for simple shapes.
     Opal::StringUtf8 default_albedo_path = Opal::Paths::Combine(RNDR_CORE_ASSETS_DIR, "default-texture.png");
     default_albedo_path = Opal::Paths::NormalizePath(std::move(default_albedo_path));
-    Canvas::Texture default_albedo_texture = Canvas::Texture::FromFile(context, default_albedo_path, tex_desc, true);
+    Canvas::Texture default_albedo_texture = Canvas::Texture::FromFile(default_albedo_path, tex_desc, true);
 
     // Fly camera.
     const i32 window_width = window->GetSize().x;

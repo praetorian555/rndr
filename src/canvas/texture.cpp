@@ -184,12 +184,10 @@ void ApplySamplerParams(GLuint handle, const Rndr::Canvas::TextureDesc& desc, Rn
 
 }  // namespace
 
-Rndr::Canvas::Texture::Texture(const Context& context, const TextureDesc& desc, const Opal::ArrayView<const u8>& init_data,
-                               const Opal::StringUtf8& name)
+Rndr::Canvas::Texture::Texture(const TextureDesc& desc, const Opal::ArrayView<const u8>& init_data, const Opal::StringUtf8& name)
     : m_desc(desc), m_name(name.Clone())
 {
     RNDR_CPU_EVENT_SCOPED("Canvas::Texture::Texture");
-    RNDR_UNUSED(context);
 
     if (m_desc.width <= 0 || m_desc.height <= 0)
     {
@@ -358,8 +356,8 @@ void CubemapFaceDirection(Rndr::i32 face, float u, float v, float& out_x, float&
 
 }  // namespace
 
-Rndr::Canvas::Texture Rndr::Canvas::Texture::FromEquirectangular(const Context& context, const Opal::StringUtf8& file_path,
-                                                                  i32 face_size, TextureDesc desc, Opal::StringUtf8 debug_name)
+Rndr::Canvas::Texture Rndr::Canvas::Texture::FromEquirectangular(const Opal::StringUtf8& file_path, i32 face_size, TextureDesc desc,
+                                                                  Opal::StringUtf8 debug_name)
 {
     RNDR_CPU_EVENT_SCOPED("Canvas::Texture::FromEquirectangular");
 
@@ -508,11 +506,11 @@ Rndr::Canvas::Texture Rndr::Canvas::Texture::FromEquirectangular(const Context& 
     desc.width = face_size;
     desc.height = face_size;
 
-    return Texture(context, desc, {cubemap_data.GetData(), total_bytes}, debug_name);
+    return Texture(desc, {cubemap_data.GetData(), total_bytes}, debug_name);
 }
 
-Rndr::Canvas::Texture Rndr::Canvas::Texture::FromFile(const Context& context, const Opal::StringUtf8& file_path, TextureDesc desc,
-                                                       bool flip_vertically, Opal::StringUtf8 debug_name)
+Rndr::Canvas::Texture Rndr::Canvas::Texture::FromFile(const Opal::StringUtf8& file_path, TextureDesc desc, bool flip_vertically,
+                                                       Opal::StringUtf8 debug_name)
 {
     if (!Opal::Exists(file_path))
     {
@@ -551,7 +549,7 @@ Rndr::Canvas::Texture Rndr::Canvas::Texture::FromFile(const Context& context, co
         const u8* data = ktxTexture_GetData(reinterpret_cast<ktxTexture*>(ktx_texture));
         const u64 data_size = ktxTexture_GetDataSize(reinterpret_cast<ktxTexture*>(ktx_texture));
 
-        Texture tex(context, desc, {data, data_size}, debug_name);
+        Texture tex(desc, {data, data_size}, debug_name);
         ktxTexture_Destroy(reinterpret_cast<ktxTexture*>(ktx_texture));
         return tex;
     }
@@ -593,7 +591,7 @@ Rndr::Canvas::Texture Rndr::Canvas::Texture::FromFile(const Context& context, co
     desc.width = width;
     desc.height = height;
 
-    Texture tex(context, desc, {pixel_data, data_size}, debug_name);
+    Texture tex(desc, {pixel_data, data_size}, debug_name);
     stbi_image_free(pixel_data);
     return tex;
 }
