@@ -6,6 +6,22 @@
 #include "rndr/platform/windows-window.hpp"
 #endif
 
+Rndr::PlatformApplication::~PlatformApplication()
+{
+    // Destroy windows one at a time, removing each from the list *before* it is destroyed. Window
+    // teardown dispatches WM_DESTROY synchronously, which routes back through
+    // GetGenericWindowByNativeHandle(); if a freed window were still listed, that lookup would read
+    // freed memory (heap-use-after-free with two or more windows). Draining incrementally keeps the
+    // list free of dangling entries -- the lookup for a window being torn down simply returns null.
+    while (m_generic_windows.GetSize() > 0)
+    {
+        auto it = m_generic_windows.begin();
+        Opal::ScopePtr<GenericWindow> window = std::move(*it);
+        m_generic_windows.Erase(it);
+        // `window` is destroyed at the end of this iteration, after it has left m_generic_windows.
+    }
+}
+
 Opal::Ref<Rndr::GenericWindow> Rndr::PlatformApplication::CreateGenericWindow(const GenericWindowDesc& desc)
 {
     GenericWindowDesc resolved_desc = desc;

@@ -28,7 +28,7 @@ class PlatformApplication
 {
 public:
     PlatformApplication(struct SystemMessageHandler* message_handler) : m_message_handler(message_handler) {}
-    virtual ~PlatformApplication() = default;
+    virtual ~PlatformApplication();
 
     Opal::Ref<GenericWindow> CreateGenericWindow(const GenericWindowDesc& desc);
     void DestroyGenericWindow(Opal::Ref<GenericWindow> window);
