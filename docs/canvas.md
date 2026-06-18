@@ -211,6 +211,18 @@ All update methods require the data view to be exactly `width * height * pixel_s
 targeted region/layer, and throw `Opal::InvalidArgumentException` otherwise. `Update`/`UpdateRegion`
 are Texture2D-only; `UpdateLayer` is for `Texture2DArray` and `CubeMap`.
 
+Textures can also be read back to the CPU. Each `Read*` method allocates and returns an
+`Opal::DynamicArray<u8>` sized to the requested region/layer:
+
+```cpp
+Opal::DynamicArray<u8> pixels = texture.Read();                 // whole base-mip Texture2D
+Opal::DynamicArray<u8> region = texture.ReadRegion(16, 16, 32, 32);  // Texture2D sub-region
+Opal::DynamicArray<u8> face   = cubemap.ReadLayer(/*face*/ 3);  // one array layer / cube face
+```
+
+`Read`/`ReadRegion` are Texture2D-only; `ReadLayer` is for `Texture2DArray` and `CubeMap`. Readback is
+not supported for multi-sample textures.
+
 Texture types: `Texture2D`, `Texture2DArray`, `CubeMap`.
 
 Filters: `Nearest`, `Linear`.

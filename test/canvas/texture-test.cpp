@@ -354,6 +354,102 @@ TEST_CASE("Canvas Texture", "[canvas][texture]")
         REQUIRE_THROWS_AS(tex.UpdateLayer(Opal::ArrayView<const Rndr::u8>(pixels, sizeof(pixels)), 0),
                           Opal::InvalidArgumentException);
     }
+
+    SECTION("Read Texture2D round-trips uploaded data")
+    {
+        Rndr::Canvas::TextureDesc desc;
+        desc.width = 2;
+        desc.height = 2;
+        desc.format = Rndr::Canvas::Format::RGBA8;
+
+        // 2x2 RGBA8 = 16 bytes of distinct values.
+        Rndr::u8 pixels[16];
+        for (Rndr::i32 i = 0; i < 16; ++i)
+        {
+            pixels[i] = static_cast<Rndr::u8>(i * 16);
+        }
+
+        Rndr::Canvas::Texture tex(desc, Opal::ArrayView<const Rndr::u8>(pixels, sizeof(pixels)));
+        REQUIRE(tex.IsValid());
+
+        const Opal::DynamicArray<Rndr::u8> read_back = tex.Read();
+        REQUIRE(read_back.GetSize() == sizeof(pixels));
+        for (Rndr::i32 i = 0; i < 16; ++i)
+        {
+            REQUIRE(read_back[i] == pixels[i]);
+        }
+    }
+
+    SECTION("ReadRegion round-trips an updated sub-region")
+    {
+        Rndr::Canvas::TextureDesc desc;
+        desc.width = 4;
+        desc.height = 4;
+        desc.format = Rndr::Canvas::Format::RGBA8;
+
+        Rndr::Canvas::Texture tex(desc);
+        REQUIRE(tex.IsValid());
+
+        // Write a 2x2 region at (1, 1) with a known value.
+        Rndr::u8 region[16];
+        for (Rndr::i32 i = 0; i < 16; ++i)
+        {
+            region[i] = static_cast<Rndr::u8>(200 + i);
+        }
+        tex.UpdateRegion(Opal::ArrayView<const Rndr::u8>(region, sizeof(region)), 1, 1, 2, 2);
+
+        const Opal::DynamicArray<Rndr::u8> read_back = tex.ReadRegion(1, 1, 2, 2);
+        REQUIRE(read_back.GetSize() == sizeof(region));
+        for (Rndr::i32 i = 0; i < 16; ++i)
+        {
+            REQUIRE(read_back[i] == region[i]);
+        }
+    }
+
+    SECTION("ReadLayer round-trips an updated cubemap face")
+    {
+        Rndr::Canvas::TextureDesc desc;
+        desc.width = 2;
+        desc.height = 2;
+        desc.format = Rndr::Canvas::Format::RGBA8;
+        desc.type = Rndr::Canvas::TextureType::CubeMap;
+
+        Rndr::Canvas::Texture tex(desc);
+        REQUIRE(tex.IsValid());
+
+        // One face is 2x2x4 = 16 bytes.
+        Rndr::u8 face[16];
+        for (Rndr::i32 i = 0; i < 16; ++i)
+        {
+            face[i] = static_cast<Rndr::u8>(i + 1);
+        }
+        tex.UpdateLayer(Opal::ArrayView<const Rndr::u8>(face, sizeof(face)), 4);
+
+        const Opal::DynamicArray<Rndr::u8> read_back = tex.ReadLayer(4);
+        REQUIRE(read_back.GetSize() == sizeof(face));
+        for (Rndr::i32 i = 0; i < 16; ++i)
+        {
+            REQUIRE(read_back[i] == face[i]);
+        }
+    }
+
+    SECTION("Read on non-Texture2D throws")
+    {
+        Rndr::Canvas::TextureDesc desc;
+        desc.width = 4;
+        desc.height = 4;
+        desc.type = Rndr::Canvas::TextureType::Texture2DArray;
+        desc.array_size = 2;
+
+        Rndr::Canvas::Texture tex(desc);
+        REQUIRE_THROWS_AS(tex.Read(), Opal::InvalidArgumentException);
+    }
+
+    SECTION("Read on invalid texture throws")
+    {
+        Rndr::Canvas::Texture tex;
+        REQUIRE_THROWS(tex.Read());
+    }
 }
 
 TEST_CASE("Canvas Texture pixel formats", "[canvas][texture]")

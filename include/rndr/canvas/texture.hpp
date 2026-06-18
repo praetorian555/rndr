@@ -1,6 +1,7 @@
 #pragma once
 
 #include "opal/container/array-view.h"
+#include "opal/container/dynamic-array.h"
 #include "opal/container/string.h"
 
 #include "rndr/canvas/format.hpp"
@@ -196,6 +197,40 @@ public:
      * @throw GraphicsAPIException if the texture is invalid or multi-sample.
      */
     void UpdateLayer(const Opal::ArrayView<const u8>& data, i32 layer, i32 mip_level = 0) const;
+
+    /**
+     * Read back the entire mip level of a single-sample Texture2D into CPU memory.
+     * @param mip_level Mip level to read. Defaults to 0.
+     * @return Pixel data, mip_width * mip_height * pixel_size bytes.
+     * @throw Opal::InvalidArgumentException if the texture is not a Texture2D or the mip level is out of bounds.
+     * @throw GraphicsAPIException if the texture is invalid or multi-sample.
+     */
+    [[nodiscard]] Opal::DynamicArray<u8> Read(i32 mip_level = 0) const;
+
+    /**
+     * Read back a rectangular sub-region of a single-sample Texture2D mip level into CPU memory.
+     * @param x Horizontal texel offset of the region within the mip level.
+     * @param y Vertical texel offset of the region within the mip level.
+     * @param width Width of the region in texels.
+     * @param height Height of the region in texels.
+     * @param mip_level Mip level to read. Defaults to 0.
+     * @return Pixel data, width * height * pixel_size bytes.
+     * @throw Opal::InvalidArgumentException if the texture is not a Texture2D, or the region or mip level is
+     *        out of bounds.
+     * @throw GraphicsAPIException if the texture is invalid or multi-sample.
+     */
+    [[nodiscard]] Opal::DynamicArray<u8> ReadRegion(i32 x, i32 y, i32 width, i32 height, i32 mip_level = 0) const;
+
+    /**
+     * Read back one full layer of a Texture2DArray or one face of a CubeMap, at a mip level, into CPU memory.
+     * @param layer Array layer index for Texture2DArray, or face index [0, 5] for CubeMap.
+     * @param mip_level Mip level to read. Defaults to 0.
+     * @return Pixel data, mip_width * mip_height * pixel_size bytes.
+     * @throw Opal::InvalidArgumentException if the texture is not a Texture2DArray or CubeMap, or the layer or
+     *        mip level is out of bounds.
+     * @throw GraphicsAPIException if the texture is invalid or multi-sample.
+     */
+    [[nodiscard]] Opal::DynamicArray<u8> ReadLayer(i32 layer, i32 mip_level = 0) const;
 
     [[nodiscard]] bool IsValid() const;
     [[nodiscard]] const TextureDesc& GetDesc() const;

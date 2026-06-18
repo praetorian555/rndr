@@ -707,15 +707,15 @@ void Rndr::Canvas::Texture::Destroy()
 namespace
 {
 
-void ValidateUpdatable(Rndr::u32 handle, const Rndr::Canvas::TextureDesc& desc)
+void ValidateCpuAccess(Rndr::u32 handle, const Rndr::Canvas::TextureDesc& desc)
 {
     if (handle == 0)
     {
-        throw Rndr::GraphicsAPIException(0, "Cannot update an invalid texture!");
+        throw Rndr::GraphicsAPIException(0, "Cannot transfer pixel data for an invalid texture!");
     }
     if (desc.sample_count > 1)
     {
-        throw Rndr::GraphicsAPIException(0, "Cannot update a multi-sample texture!");
+        throw Rndr::GraphicsAPIException(0, "Cannot transfer pixel data for a multi-sample texture!");
     }
 }
 
@@ -737,7 +737,7 @@ void Rndr::Canvas::Texture::UpdateRegion(const Opal::ArrayView<const u8>& data, 
 {
     RNDR_CPU_EVENT_SCOPED("Canvas::Texture::UpdateRegion");
 
-    ValidateUpdatable(m_handle, m_desc);
+    ValidateCpuAccess(m_handle, m_desc);
 
     if (m_desc.type != TextureType::Texture2D)
     {
@@ -770,7 +770,7 @@ void Rndr::Canvas::Texture::UpdateLayer(const Opal::ArrayView<const u8>& data, i
 {
     RNDR_CPU_EVENT_SCOPED("Canvas::Texture::UpdateLayer");
 
-    ValidateUpdatable(m_handle, m_desc);
+    ValidateCpuAccess(m_handle, m_desc);
 
     constexpr i32 k_cubemap_face_count = 6;
     i32 layer_count = 0;
@@ -808,6 +808,94 @@ void Rndr::Canvas::Texture::UpdateLayer(const Opal::ArrayView<const u8>& data, i
 
     glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
     glTextureSubImage3D(m_handle, mip_level, 0, 0, layer, mip_width, mip_height, 1, fmt.format, fmt.type, data.GetData());
+}
+
+Opal::DynamicArray<Rndr::u8> Rndr::Canvas::Texture::Read(i32 mip_level) const
+{
+    const i32 mip_width = MipDimension(m_desc.width, mip_level);
+    const i32 mip_height = MipDimension(m_desc.height, mip_level);
+    return ReadRegion(0, 0, mip_width, mip_height, mip_level);
+}
+
+Opal::DynamicArray<Rndr::u8> Rndr::Canvas::Texture::ReadRegion(i32 x, i32 y, i32 width, i32 height, i32 mip_level) const
+{
+    RNDR_CPU_EVENT_SCOPED("Canvas::Texture::ReadRegion");
+
+    ValidateCpuAccess(m_handle, m_desc);
+
+    if (m_desc.type != TextureType::Texture2D)
+    {
+        throw Opal::InvalidArgumentException(__FUNCTION__, "ReadRegion is only supported for Texture2D!");
+    }
+    if (mip_level < 0 || mip_level >= m_max_mip_levels)
+    {
+        throw Opal::InvalidArgumentException(__FUNCTION__, "Mip level is out of range!");
+    }
+
+    const i32 mip_width = MipDimension(m_desc.width, mip_level);
+    const i32 mip_height = MipDimension(m_desc.height, mip_level);
+    if (x < 0 || y < 0 || width <= 0 || height <= 0 || x + width > mip_width || y + height > mip_height)
+    {
+        throw Opal::InvalidArgumentException(__FUNCTION__, "Read region is out of bounds!");
+    }
+
+    const GLFormatInfo fmt = ToGLFormat(m_desc.format);
+    const u64 size = static_cast<u64>(width) * height * fmt.pixel_size;
+
+    Opal::DynamicArray<u8> result;
+    result.Resize(size);
+
+    glPixelStorei(GL_PACK_ALIGNMENT, 1);
+    glGetTextureSubImage(m_handle, mip_level, x, y, 0, width, height, 1, fmt.format, fmt.type, static_cast<GLsizei>(size),
+                         result.GetData());
+
+    return result;
+}
+
+Opal::DynamicArray<Rndr::u8> Rndr::Canvas::Texture::ReadLayer(i32 layer, i32 mip_level) const
+{
+    RNDR_CPU_EVENT_SCOPED("Canvas::Texture::ReadLayer");
+
+    ValidateCpuAccess(m_handle, m_desc);
+
+    constexpr i32 k_cubemap_face_count = 6;
+    i32 layer_count = 0;
+    if (m_desc.type == TextureType::Texture2DArray)
+    {
+        layer_count = m_desc.array_size;
+    }
+    else if (m_desc.type == TextureType::CubeMap)
+    {
+        layer_count = k_cubemap_face_count;
+    }
+    else
+    {
+        throw Opal::InvalidArgumentException(__FUNCTION__, "ReadLayer is only supported for Texture2DArray and CubeMap!");
+    }
+
+    if (layer < 0 || layer >= layer_count)
+    {
+        throw Opal::InvalidArgumentException(__FUNCTION__, "Layer is out of range!");
+    }
+    if (mip_level < 0 || mip_level >= m_max_mip_levels)
+    {
+        throw Opal::InvalidArgumentException(__FUNCTION__, "Mip level is out of range!");
+    }
+
+    const i32 mip_width = MipDimension(m_desc.width, mip_level);
+    const i32 mip_height = MipDimension(m_desc.height, mip_level);
+
+    const GLFormatInfo fmt = ToGLFormat(m_desc.format);
+    const u64 size = static_cast<u64>(mip_width) * mip_height * fmt.pixel_size;
+
+    Opal::DynamicArray<u8> result;
+    result.Resize(size);
+
+    glPixelStorei(GL_PACK_ALIGNMENT, 1);
+    glGetTextureSubImage(m_handle, mip_level, 0, 0, layer, mip_width, mip_height, 1, fmt.format, fmt.type,
+                         static_cast<GLsizei>(size), result.GetData());
+
+    return result;
 }
 
 bool Rndr::Canvas::Texture::IsValid() const
