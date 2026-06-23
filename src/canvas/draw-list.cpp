@@ -110,6 +110,31 @@ void Rndr::Canvas::DrawList::Dispatch(Brush& brush, u32 group_count_x, u32 group
     m_commands.EmplaceBack(cmd);
 }
 
+void Rndr::Canvas::DrawList::Blit(const Texture& source, const RenderTarget& destination, TextureFilter filter)
+{
+    Blit(source, 0, 0, source.GetDesc().width, source.GetDesc().height, destination, 0, 0, destination.GetWidth(),
+         destination.GetHeight(), filter);
+}
+
+void Rndr::Canvas::DrawList::Blit(const Texture& source, i32 src_x, i32 src_y, i32 src_width, i32 src_height,
+                                  const RenderTarget& destination, i32 dst_x, i32 dst_y, i32 dst_width, i32 dst_height,
+                                  TextureFilter filter)
+{
+    Impl::BlitCommand cmd;
+    cmd.source = &source;
+    cmd.destination = &destination;
+    cmd.src_x = src_x;
+    cmd.src_y = src_y;
+    cmd.src_width = src_width;
+    cmd.src_height = src_height;
+    cmd.dst_x = dst_x;
+    cmd.dst_y = dst_y;
+    cmd.dst_width = dst_width;
+    cmd.dst_height = dst_height;
+    cmd.filter = filter;
+    m_commands.PushBack(std::move(cmd));
+}
+
 void Rndr::Canvas::DrawList::BeginEvent(const char* event_name)
 {
     m_commands.EmplaceBack<Impl::BeginEventCommand>({event_name});
@@ -198,6 +223,23 @@ void Rndr::Canvas::DrawList::Execute()
                     glDisable(GL_SCISSOR_TEST);
                     glClear(mask);
                 }
+            },
+            [](const Impl::BlitCommand& c)
+            {
+                // A texture is not directly blittable, so attach it to a throwaway read framebuffer
+                // and blit from there into the destination's draw buffer (color attachment 0).
+                GLuint read_fbo = 0;
+                glCreateFramebuffers(1, &read_fbo);
+                glNamedFramebufferTexture(read_fbo, GL_COLOR_ATTACHMENT0, c.source->GetNativeHandle(), 0);
+                glNamedFramebufferReadBuffer(read_fbo, GL_COLOR_ATTACHMENT0);
+
+                const GLenum filter = c.filter == TextureFilter::Nearest ? GL_NEAREST : GL_LINEAR;
+
+                glBlitNamedFramebuffer(read_fbo, c.destination->GetNativeHandle(), c.src_x, c.src_y, c.src_x + c.src_width,
+                                       c.src_y + c.src_height, c.dst_x, c.dst_y, c.dst_x + c.dst_width, c.dst_y + c.dst_height,
+                                       GL_COLOR_BUFFER_BIT, filter);
+
+                glDeleteFramebuffers(1, &read_fbo);
             },
             [](const Impl::BeginEventCommand& c)
             {
