@@ -107,6 +107,22 @@ struct BlitCommand : Opal::ClonableBase<BlitCommand>
     OPAL_CLONE_FIELDS(source, destination, src_x, src_y, src_width, src_height, dst_x, dst_y, dst_width, dst_height, filter);
 };
 
+struct BlitTargetCommand : Opal::ClonableBase<BlitTargetCommand>
+{
+    Opal::Ref<const RenderTarget> source;
+    Opal::Ref<const RenderTarget> destination;
+    i32 src_x = 0;
+    i32 src_y = 0;
+    i32 src_width = 0;
+    i32 src_height = 0;
+    i32 dst_x = 0;
+    i32 dst_y = 0;
+    i32 dst_width = 0;
+    i32 dst_height = 0;
+    TextureFilter filter = TextureFilter::Linear;
+    OPAL_CLONE_FIELDS(source, destination, src_x, src_y, src_width, src_height, dst_x, dst_y, dst_width, dst_height, filter);
+};
+
 struct BeginEventCommand
 {
     const char* event_name;
@@ -118,8 +134,8 @@ struct EndEventCommand
 };
 
 using CommandVariant = Opal::Variant<SetViewportCommand, SetRenderTargetCommand, SetContextCommand, DrawMeshCommand,
-                                     DrawMeshInstancedCommand, DispatchCommand, ClearCommand, BlitCommand, BeginEventCommand,
-                                     EndEventCommand>;
+                                     DrawMeshInstancedCommand, DispatchCommand, ClearCommand, BlitCommand, BlitTargetCommand,
+                                     BeginEventCommand, EndEventCommand>;
 
 }  // namespace Impl
 
@@ -221,6 +237,37 @@ public:
      * @param filter Sampling filter used when the source and destination regions differ in size.
      */
     void Blit(const Texture& source, i32 src_x, i32 src_y, i32 src_width, i32 src_height, const RenderTarget& destination,
+              i32 dst_x, i32 dst_y, i32 dst_width, i32 dst_height, TextureFilter filter = TextureFilter::Linear);
+
+    /**
+     * Blit (copy) a source render target's first color attachment into a destination render target's
+     * first color attachment, stretching to fill the destination if their dimensions differ. The
+     * source and destination must remain valid until Execute() is called.
+     * @param source Render target to copy from.
+     * @param destination Render target to copy into.
+     * @param filter Sampling filter used when the source and destination dimensions differ.
+     */
+    void Blit(const RenderTarget& source, const RenderTarget& destination, TextureFilter filter = TextureFilter::Linear);
+
+    /**
+     * Blit (copy) a rectangular region of a source render target's first color attachment into a
+     * rectangular region of a destination render target's first color attachment. The source region
+     * is stretched or shrunk to fit the destination region. Regions use a bottom-left origin,
+     * matching OpenGL framebuffer coordinates. The source and destination must remain valid until
+     * Execute() is called.
+     * @param source Render target to copy from.
+     * @param src_x Horizontal texel offset of the source region.
+     * @param src_y Vertical texel offset of the source region.
+     * @param src_width Width of the source region in texels.
+     * @param src_height Height of the source region in texels.
+     * @param destination Render target to copy into.
+     * @param dst_x Horizontal texel offset of the destination region.
+     * @param dst_y Vertical texel offset of the destination region.
+     * @param dst_width Width of the destination region in texels.
+     * @param dst_height Height of the destination region in texels.
+     * @param filter Sampling filter used when the source and destination regions differ in size.
+     */
+    void Blit(const RenderTarget& source, i32 src_x, i32 src_y, i32 src_width, i32 src_height, const RenderTarget& destination,
               i32 dst_x, i32 dst_y, i32 dst_width, i32 dst_height, TextureFilter filter = TextureFilter::Linear);
 
     void BeginEvent(const char* event_name);

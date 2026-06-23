@@ -135,6 +135,31 @@ void Rndr::Canvas::DrawList::Blit(const Texture& source, i32 src_x, i32 src_y, i
     m_commands.PushBack(std::move(cmd));
 }
 
+void Rndr::Canvas::DrawList::Blit(const RenderTarget& source, const RenderTarget& destination, TextureFilter filter)
+{
+    Blit(source, 0, 0, source.GetWidth(), source.GetHeight(), destination, 0, 0, destination.GetWidth(), destination.GetHeight(),
+         filter);
+}
+
+void Rndr::Canvas::DrawList::Blit(const RenderTarget& source, i32 src_x, i32 src_y, i32 src_width, i32 src_height,
+                                  const RenderTarget& destination, i32 dst_x, i32 dst_y, i32 dst_width, i32 dst_height,
+                                  TextureFilter filter)
+{
+    Impl::BlitTargetCommand cmd;
+    cmd.source = &source;
+    cmd.destination = &destination;
+    cmd.src_x = src_x;
+    cmd.src_y = src_y;
+    cmd.src_width = src_width;
+    cmd.src_height = src_height;
+    cmd.dst_x = dst_x;
+    cmd.dst_y = dst_y;
+    cmd.dst_width = dst_width;
+    cmd.dst_height = dst_height;
+    cmd.filter = filter;
+    m_commands.PushBack(std::move(cmd));
+}
+
 void Rndr::Canvas::DrawList::BeginEvent(const char* event_name)
 {
     m_commands.EmplaceBack<Impl::BeginEventCommand>({event_name});
@@ -240,6 +265,18 @@ void Rndr::Canvas::DrawList::Execute()
                                        GL_COLOR_BUFFER_BIT, filter);
 
                 glDeleteFramebuffers(1, &read_fbo);
+            },
+            [](const Impl::BlitTargetCommand& c)
+            {
+                // Both endpoints are framebuffers, so blit directly between them. Reads come from the
+                // source's color attachment 0 and land in the destination's draw buffer.
+                glNamedFramebufferReadBuffer(c.source->GetNativeHandle(), GL_COLOR_ATTACHMENT0);
+
+                const GLenum filter = c.filter == TextureFilter::Nearest ? GL_NEAREST : GL_LINEAR;
+
+                glBlitNamedFramebuffer(c.source->GetNativeHandle(), c.destination->GetNativeHandle(), c.src_x, c.src_y,
+                                       c.src_x + c.src_width, c.src_y + c.src_height, c.dst_x, c.dst_y, c.dst_x + c.dst_width,
+                                       c.dst_y + c.dst_height, GL_COLOR_BUFFER_BIT, filter);
             },
             [](const Impl::BeginEventCommand& c)
             {
