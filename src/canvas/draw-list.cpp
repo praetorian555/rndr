@@ -112,17 +112,67 @@ void Rndr::Canvas::DrawList::Dispatch(Brush& brush, u32 group_count_x, u32 group
 
 void Rndr::Canvas::DrawList::Blit(const Texture& source, const RenderTarget& destination, TextureFilter filter)
 {
-    Blit(source, 0, 0, source.GetDesc().width, source.GetDesc().height, destination, 0, 0, destination.GetWidth(),
-         destination.GetHeight(), filter);
+    BlitTexture(source, 0, 0, source.GetDesc().width, source.GetDesc().height, destination.GetNativeHandle(), 0, 0,
+                destination.GetWidth(), destination.GetHeight(), filter);
 }
 
 void Rndr::Canvas::DrawList::Blit(const Texture& source, i32 src_x, i32 src_y, i32 src_width, i32 src_height,
                                   const RenderTarget& destination, i32 dst_x, i32 dst_y, i32 dst_width, i32 dst_height,
                                   TextureFilter filter)
 {
+    BlitTexture(source, src_x, src_y, src_width, src_height, destination.GetNativeHandle(), dst_x, dst_y, dst_width, dst_height,
+                filter);
+}
+
+void Rndr::Canvas::DrawList::Blit(const RenderTarget& source, const RenderTarget& destination, TextureFilter filter)
+{
+    BlitTarget(source, 0, 0, source.GetWidth(), source.GetHeight(), destination.GetNativeHandle(), 0, 0, destination.GetWidth(),
+               destination.GetHeight(), filter);
+}
+
+void Rndr::Canvas::DrawList::Blit(const RenderTarget& source, i32 src_x, i32 src_y, i32 src_width, i32 src_height,
+                                  const RenderTarget& destination, i32 dst_x, i32 dst_y, i32 dst_width, i32 dst_height,
+                                  TextureFilter filter)
+{
+    BlitTarget(source, src_x, src_y, src_width, src_height, destination.GetNativeHandle(), dst_x, dst_y, dst_width, dst_height,
+               filter);
+}
+
+void Rndr::Canvas::DrawList::Blit(const Texture& source, const Context& destination, TextureFilter filter)
+{
+    BlitTexture(source, 0, 0, source.GetDesc().width, source.GetDesc().height, 0, 0, 0, destination.GetWidth(),
+                destination.GetHeight(), filter);
+}
+
+void Rndr::Canvas::DrawList::Blit(const Texture& source, i32 src_x, i32 src_y, i32 src_width, i32 src_height,
+                                  const Context& destination, i32 dst_x, i32 dst_y, i32 dst_width, i32 dst_height,
+                                  TextureFilter filter)
+{
+    (void)destination;
+    BlitTexture(source, src_x, src_y, src_width, src_height, 0, dst_x, dst_y, dst_width, dst_height, filter);
+}
+
+void Rndr::Canvas::DrawList::Blit(const RenderTarget& source, const Context& destination, TextureFilter filter)
+{
+    BlitTarget(source, 0, 0, source.GetWidth(), source.GetHeight(), 0, 0, 0, destination.GetWidth(), destination.GetHeight(),
+               filter);
+}
+
+void Rndr::Canvas::DrawList::Blit(const RenderTarget& source, i32 src_x, i32 src_y, i32 src_width, i32 src_height,
+                                  const Context& destination, i32 dst_x, i32 dst_y, i32 dst_width, i32 dst_height,
+                                  TextureFilter filter)
+{
+    (void)destination;
+    BlitTarget(source, src_x, src_y, src_width, src_height, 0, dst_x, dst_y, dst_width, dst_height, filter);
+}
+
+void Rndr::Canvas::DrawList::BlitTexture(const Texture& source, i32 src_x, i32 src_y, i32 src_width, i32 src_height,
+                                         u32 destination_handle, i32 dst_x, i32 dst_y, i32 dst_width, i32 dst_height,
+                                         TextureFilter filter)
+{
     Impl::BlitCommand cmd;
     cmd.source = &source;
-    cmd.destination = &destination;
+    cmd.destination_handle = destination_handle;
     cmd.src_x = src_x;
     cmd.src_y = src_y;
     cmd.src_width = src_width;
@@ -135,19 +185,13 @@ void Rndr::Canvas::DrawList::Blit(const Texture& source, i32 src_x, i32 src_y, i
     m_commands.PushBack(std::move(cmd));
 }
 
-void Rndr::Canvas::DrawList::Blit(const RenderTarget& source, const RenderTarget& destination, TextureFilter filter)
-{
-    Blit(source, 0, 0, source.GetWidth(), source.GetHeight(), destination, 0, 0, destination.GetWidth(), destination.GetHeight(),
-         filter);
-}
-
-void Rndr::Canvas::DrawList::Blit(const RenderTarget& source, i32 src_x, i32 src_y, i32 src_width, i32 src_height,
-                                  const RenderTarget& destination, i32 dst_x, i32 dst_y, i32 dst_width, i32 dst_height,
-                                  TextureFilter filter)
+void Rndr::Canvas::DrawList::BlitTarget(const RenderTarget& source, i32 src_x, i32 src_y, i32 src_width, i32 src_height,
+                                        u32 destination_handle, i32 dst_x, i32 dst_y, i32 dst_width, i32 dst_height,
+                                        TextureFilter filter)
 {
     Impl::BlitTargetCommand cmd;
     cmd.source = &source;
-    cmd.destination = &destination;
+    cmd.destination_handle = destination_handle;
     cmd.src_x = src_x;
     cmd.src_y = src_y;
     cmd.src_width = src_width;
@@ -260,7 +304,7 @@ void Rndr::Canvas::DrawList::Execute()
 
                 const GLenum filter = c.filter == TextureFilter::Nearest ? GL_NEAREST : GL_LINEAR;
 
-                glBlitNamedFramebuffer(read_fbo, c.destination->GetNativeHandle(), c.src_x, c.src_y, c.src_x + c.src_width,
+                glBlitNamedFramebuffer(read_fbo, c.destination_handle, c.src_x, c.src_y, c.src_x + c.src_width,
                                        c.src_y + c.src_height, c.dst_x, c.dst_y, c.dst_x + c.dst_width, c.dst_y + c.dst_height,
                                        GL_COLOR_BUFFER_BIT, filter);
 
@@ -274,9 +318,9 @@ void Rndr::Canvas::DrawList::Execute()
 
                 const GLenum filter = c.filter == TextureFilter::Nearest ? GL_NEAREST : GL_LINEAR;
 
-                glBlitNamedFramebuffer(c.source->GetNativeHandle(), c.destination->GetNativeHandle(), c.src_x, c.src_y,
-                                       c.src_x + c.src_width, c.src_y + c.src_height, c.dst_x, c.dst_y, c.dst_x + c.dst_width,
-                                       c.dst_y + c.dst_height, GL_COLOR_BUFFER_BIT, filter);
+                glBlitNamedFramebuffer(c.source->GetNativeHandle(), c.destination_handle, c.src_x, c.src_y, c.src_x + c.src_width,
+                                       c.src_y + c.src_height, c.dst_x, c.dst_y, c.dst_x + c.dst_width, c.dst_y + c.dst_height,
+                                       GL_COLOR_BUFFER_BIT, filter);
             },
             [](const Impl::BeginEventCommand& c)
             {
