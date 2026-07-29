@@ -195,6 +195,49 @@ int main()
         ImGui::Text("F2 - Toggle fullscreen");
         ImGui::SliderAngle("Position of the light", &angle_radians, 0, 360);
         ImGui::Checkbox("Use light", &use_light);
+        if (ImGui::CollapsingHeader("Window Decorations"))
+        {
+            bool has_title_bar = window->HasTitleBar();
+            if (ImGui::Checkbox("Title bar", &has_title_bar))
+            {
+                window->SetTitleBarVisible(has_title_bar);
+            }
+            bool has_border = window->HasBorder();
+            if (ImGui::Checkbox("Border", &has_border))
+            {
+                window->SetBorderVisible(has_border);
+            }
+            bool is_resizable = window->IsResizable();
+            if (ImGui::Checkbox("Resizable", &is_resizable))
+            {
+                window->SetResizable(is_resizable);
+            }
+            bool supports_minimize = window->IsMinimizeSupported();
+            if (ImGui::Checkbox("Minimize button", &supports_minimize))
+            {
+                window->SetMinimizeSupported(supports_minimize);
+            }
+            bool supports_maximize = window->IsMaximizeSupported();
+            if (ImGui::Checkbox("Maximize button", &supports_maximize))
+            {
+                window->SetMaximizeSupported(supports_maximize);
+            }
+            bool supports_close = window->IsCloseSupported();
+            if (ImGui::Checkbox("Close button", &supports_close))
+            {
+                window->SetCloseSupported(supports_close);
+            }
+            bool show_in_taskbar = window->IsVisibleInTaskbar();
+            if (ImGui::Checkbox("Show in task bar", &show_in_taskbar))
+            {
+                window->SetVisibleInTaskbar(show_in_taskbar);
+            }
+            bool always_on_top = window->IsAlwaysOnTop();
+            if (ImGui::Checkbox("Always on top", &always_on_top))
+            {
+                window->SetAlwaysOnTop(always_on_top);
+            }
+        }
         ImGui::End();
         imgui_context.EndFrame();
 

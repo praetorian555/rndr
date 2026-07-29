@@ -40,26 +40,32 @@ Rndr::WindowsWindow::WindowsWindow(const GenericWindowDesc& desc) : GenericWindo
         }
     }
 
-    const DWORD window_style = GetWindowedStyle(desc);
+    const DWORD window_style = static_cast<DWORD>(GetWindowedStyle(desc) | GetInitialStateStyle(desc));
+    const DWORD extended_style = static_cast<DWORD>(GetExtendedStyle(desc));
 
     // Since the user specifies the size of the client area but CreateWindowEx expects the size of the whole window,
     // we will ask OS how big should the window be for the desired client area.
     RECT rc = {0, 0, desc.width, desc.height};
-    ::AdjustWindowRectEx(&rc, window_style, FALSE, 0);
+    ::AdjustWindowRectEx(&rc, window_style, FALSE, extended_style);
     const i32 real_width = rc.right - rc.left;
     const i32 real_height = rc.bottom - rc.top;
 
     Opal::StringUtf8 name = desc.name;
     Opal::StringWide wide_name(name.GetSize() + 1, 0);
     Opal::Transcode(name, wide_name);
-    HWND window_handle = CreateWindowEx(0, class_name, wide_name.GetData(), window_style, desc.start_x, desc.start_y, real_width,
-                                        real_height, nullptr, nullptr, instance, this);
+    HWND window_handle = CreateWindowEx(extended_style, class_name, wide_name.GetData(), window_style, desc.start_x, desc.start_y,
+                                        real_width, real_height, nullptr, nullptr, instance, this);
     if (window_handle == nullptr)
     {
         throw Opal::Exception("CreateWindowEx failed!");
     }
 
     m_native_window_handle = reinterpret_cast<NativeWindowHandle>(window_handle);
+    ApplyCloseSupport();
+    if (desc.always_on_top)
+    {
+        ::SetWindowPos(window_handle, HWND_TOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
+    }
     m_pos_x = desc.start_x;
     m_pos_y = desc.start_y;
     m_width = desc.width;
@@ -211,24 +217,98 @@ Rndr::i32 Rndr::WindowsWindow::GetWindowedStyle(const GenericWindowDesc& desc)
 {
     // WS_OVERLAPPED - means that the window has a title bar and a border.
     // WS_CAPTION - same as WS_OVERLAPPED.
-    // WS_SYSMENU - has the window menu on the title bar.
+    // WS_SYSMENU - has the window menu on the title bar, required for the caption buttons.
+    // WS_POPUP - window without a title bar.
     // WS_THICKFRAME - window can be resized.
     // WS_BORDER - window has a border.
-    i32 window_style = WS_OVERLAPPED | WS_CAPTION | WS_SYSMENU;
-    window_style |= desc.resizable ? WS_THICKFRAME : WS_BORDER;
-    window_style |= desc.supports_maximize ? WS_MAXIMIZEBOX : 0;
-    window_style |= desc.supports_minimize ? WS_MINIMIZEBOX : 0;
-    window_style |= desc.supports_transparency ? WS_EX_LAYERED : 0;
+    i32 window_style = desc.has_title_bar ? (WS_OVERLAPPED | WS_CAPTION | WS_SYSMENU) : WS_POPUP;
+    if (desc.resizable)
+    {
+        // A resizable window always needs a sizing frame, no matter what has_border says.
+        window_style |= WS_THICKFRAME;
+    }
+    else if (desc.has_border)
+    {
+        window_style |= WS_BORDER;
+    }
+    // The caption buttons only exist together with the title bar. Keeping the box styles off without one avoids
+    // a non-client area that the OS reserves but never draws.
+    if (desc.has_title_bar)
+    {
+        window_style |= desc.supports_maximize ? WS_MAXIMIZEBOX : 0;
+        window_style |= desc.supports_minimize ? WS_MINIMIZEBOX : 0;
+    }
+    return window_style;
+}
+
+Rndr::i32 Rndr::WindowsWindow::GetInitialStateStyle(const GenericWindowDesc& desc)
+{
+    i32 window_style = 0;
     window_style |= desc.start_minimized ? WS_MINIMIZE : 0;
     window_style |= desc.start_maximized ? WS_MAXIMIZE : 0;
     window_style |= desc.start_visible ? WS_VISIBLE : 0;
     return window_style;
 }
 
+Rndr::i32 Rndr::WindowsWindow::GetExtendedStyle(const GenericWindowDesc& desc)
+{
+    // WS_EX_LAYERED - window can be made translucent through SetLayeredWindowAttributes.
+    // WS_EX_TOOLWINDOW - window is left out of the task bar and the Alt+Tab list.
+    // WS_EX_APPWINDOW - window gets a task bar button.
+    // WS_EX_TOPMOST - listed here for AdjustWindowRectEx, the actual z-order is set through SetWindowPos.
+    i32 extended_style = 0;
+    extended_style |= desc.supports_transparency ? WS_EX_LAYERED : 0;
+    extended_style |= desc.show_in_taskbar ? WS_EX_APPWINDOW : WS_EX_TOOLWINDOW;
+    extended_style |= desc.always_on_top ? WS_EX_TOPMOST : 0;
+    return extended_style;
+}
+
 Rndr::i32 Rndr::WindowsWindow::GetFullscreenStyle(const GenericWindowDesc& desc)
 {
     RNDR_UNUSED(desc);
     return WS_POPUP;
+}
+
+void Rndr::WindowsWindow::ApplyStyle()
+{
+    if (m_is_closed || m_native_window_handle == nullptr)
+    {
+        return;
+    }
+    const HWND hwnd = RNDR_TO_HWND(m_native_window_handle);
+
+    // Keep whatever state the window is in right now, the desc only describes the state it started in.
+    const LONG current_style = ::GetWindowLong(hwnd, GWL_STYLE);
+    LONG new_style = m_mode == GenericWindowMode::Windowed ? GetWindowedStyle(m_desc) : GetFullscreenStyle(m_desc);
+    new_style |= current_style & (WS_VISIBLE | WS_MINIMIZE | WS_MAXIMIZE);
+
+    // SetOpacity can turn the window into a layered one on demand, so never drop that bit here.
+    const LONG current_extended_style = ::GetWindowLong(hwnd, GWL_EXSTYLE);
+    const LONG new_extended_style = GetExtendedStyle(m_desc) | (current_extended_style & WS_EX_LAYERED);
+
+    ::SetWindowLong(hwnd, GWL_STYLE, new_style);
+    ::SetWindowLong(hwnd, GWL_EXSTYLE, new_extended_style);
+    ApplyCloseSupport();
+
+    // SWP_FRAMECHANGED makes the OS recompute the non-client area, without it the old frame stays on screen.
+    HWND insert_after = m_desc.always_on_top ? HWND_TOPMOST : HWND_NOTOPMOST;
+    ::SetWindowPos(hwnd, insert_after, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_FRAMECHANGED | SWP_NOACTIVATE);
+}
+
+void Rndr::WindowsWindow::ApplyCloseSupport()
+{
+    if (m_native_window_handle == nullptr)
+    {
+        return;
+    }
+    // Graying out SC_CLOSE disables the close button and Alt+F4. It does not block WM_CLOSE, so RequestClose keeps working.
+    HMENU system_menu = ::GetSystemMenu(RNDR_TO_HWND(m_native_window_handle), FALSE);
+    if (system_menu == nullptr)
+    {
+        return;
+    }
+    const UINT flags = m_desc.supports_close ? MF_BYCOMMAND | MF_ENABLED : MF_BYCOMMAND | MF_DISABLED | MF_GRAYED;
+    ::EnableMenuItem(system_menu, SC_CLOSE, flags);
 }
 
 void Rndr::WindowsWindow::SetMode(GenericWindowMode mode)
@@ -243,13 +323,9 @@ void Rndr::WindowsWindow::SetMode(GenericWindowMode mode)
     }
     const HWND hwnd = RNDR_TO_HWND(m_native_window_handle);
     m_mode = mode;
-    LONG window_style = GetWindowLong(hwnd, GWL_STYLE);
     if (m_mode == GenericWindowMode::Windowed)
     {
-        window_style &= ~GetFullscreenStyle(m_desc);
-        window_style |= GetWindowedStyle(m_desc);
-        SetWindowLong(hwnd, GWL_STYLE, window_style);
-        SetWindowPos(hwnd, nullptr, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOZORDER);
+        ApplyStyle();
         if (m_pre_fullscreen_placement.length > 0)
         {
             ::SetWindowPlacement(hwnd, &m_pre_fullscreen_placement);
@@ -267,14 +343,114 @@ void Rndr::WindowsWindow::SetMode(GenericWindowMode mode)
         const i32 monitor_width = monitor_info.rcMonitor.right - monitor_info.rcMonitor.left;
         const i32 monitor_height = monitor_info.rcMonitor.bottom - monitor_info.rcMonitor.top;
 
-        window_style &= ~GetWindowedStyle(m_desc);
-        window_style |= GetFullscreenStyle(m_desc);
-        SetWindowLong(hwnd, GWL_STYLE, window_style);
+        ApplyStyle();
         SetWindowPos(hwnd, nullptr, monitor_info.rcMonitor.left, monitor_info.rcMonitor.top, monitor_width, monitor_height,
-                     SWP_NOZORDER);
+                     SWP_NOZORDER | SWP_FRAMECHANGED);
 
         ::ShowWindow(hwnd, SW_RESTORE);
     }
+}
+
+void Rndr::WindowsWindow::SetResizable(bool resizable)
+{
+    if (m_desc.resizable == resizable)
+    {
+        return;
+    }
+    m_desc.resizable = resizable;
+    ApplyStyle();
+}
+
+void Rndr::WindowsWindow::SetTitleBarVisible(bool visible)
+{
+    if (m_desc.has_title_bar == visible)
+    {
+        return;
+    }
+    m_desc.has_title_bar = visible;
+    ApplyStyle();
+}
+
+void Rndr::WindowsWindow::SetBorderVisible(bool visible)
+{
+    if (m_desc.has_border == visible)
+    {
+        return;
+    }
+    m_desc.has_border = visible;
+    ApplyStyle();
+}
+
+void Rndr::WindowsWindow::SetMinimizeSupported(bool supported)
+{
+    if (m_desc.supports_minimize == supported)
+    {
+        return;
+    }
+    m_desc.supports_minimize = supported;
+    ApplyStyle();
+}
+
+void Rndr::WindowsWindow::SetMaximizeSupported(bool supported)
+{
+    if (m_desc.supports_maximize == supported)
+    {
+        return;
+    }
+    m_desc.supports_maximize = supported;
+    ApplyStyle();
+}
+
+void Rndr::WindowsWindow::SetCloseSupported(bool supported)
+{
+    if (m_desc.supports_close == supported)
+    {
+        return;
+    }
+    m_desc.supports_close = supported;
+    ApplyCloseSupport();
+    // The close button is painted as part of the non-client area, so ask for a redraw of the frame.
+    if (!m_is_closed && m_native_window_handle != nullptr)
+    {
+        ::SetWindowPos(RNDR_TO_HWND(m_native_window_handle), nullptr, 0, 0, 0, 0,
+                       SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER | SWP_FRAMECHANGED | SWP_NOACTIVATE);
+    }
+}
+
+void Rndr::WindowsWindow::SetVisibleInTaskbar(bool visible)
+{
+    if (m_desc.show_in_taskbar == visible)
+    {
+        return;
+    }
+    m_desc.show_in_taskbar = visible;
+    if (m_is_closed || m_native_window_handle == nullptr)
+    {
+        return;
+    }
+    // The shell only re-evaluates the task bar button when the window is shown, so a visible window has to be
+    // cycled for the new extended style to take effect.
+    const HWND hwnd = RNDR_TO_HWND(m_native_window_handle);
+    const bool was_visible = IsVisible();
+    if (was_visible)
+    {
+        ::ShowWindow(hwnd, SW_HIDE);
+    }
+    ApplyStyle();
+    if (was_visible)
+    {
+        ::ShowWindow(hwnd, SW_SHOW);
+    }
+}
+
+void Rndr::WindowsWindow::SetAlwaysOnTop(bool always_on_top)
+{
+    if (m_desc.always_on_top == always_on_top)
+    {
+        return;
+    }
+    m_desc.always_on_top = always_on_top;
+    ApplyStyle();
 }
 
 void Rndr::WindowsWindow::SetOpacity(f32 opacity)
@@ -282,6 +458,14 @@ void Rndr::WindowsWindow::SetOpacity(f32 opacity)
     if (m_is_closed)
     {
         return;
+    }
+    // SetLayeredWindowAttributes only works on layered windows, so turn this one into one if it is not already.
+    const HWND hwnd = RNDR_TO_HWND(m_native_window_handle);
+    const LONG extended_style = ::GetWindowLong(hwnd, GWL_EXSTYLE);
+    if ((extended_style & WS_EX_LAYERED) == 0)
+    {
+        ::SetWindowLong(hwnd, GWL_EXSTYLE, extended_style | WS_EX_LAYERED);
+        m_desc.supports_transparency = true;
     }
     const BYTE alpha = static_cast<BYTE>(opacity * 255);
     const BOOL rtn = SetLayeredWindowAttributes(RNDR_TO_HWND(m_native_window_handle), 0, alpha, LWA_ALPHA);
@@ -335,7 +519,7 @@ bool Rndr::WindowsWindow::IsEnabled() const
     return ::IsWindowEnabled(RNDR_TO_HWND(m_native_window_handle)) != 0;
 }
 
-bool Rndr::WindowsWindow::IsBorderless() const
+bool Rndr::WindowsWindow::IsBorderlessFullscreen() const
 {
     return m_mode == GenericWindowMode::BorderlessFullscreen;
 }

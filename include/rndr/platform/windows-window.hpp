@@ -33,12 +33,21 @@ public:
     void SetOpacity(f32 opacity) override;
     void SetTitle(const Opal::StringUtf8& title) override;
 
+    void SetResizable(bool resizable) override;
+    void SetTitleBarVisible(bool visible) override;
+    void SetBorderVisible(bool visible) override;
+    void SetMinimizeSupported(bool supported) override;
+    void SetMaximizeSupported(bool supported) override;
+    void SetCloseSupported(bool supported) override;
+    void SetVisibleInTaskbar(bool visible) override;
+    void SetAlwaysOnTop(bool always_on_top) override;
+
     [[nodiscard]] bool IsMaximized() const override;
     [[nodiscard]] bool IsMinimized() const override;
     [[nodiscard]] bool IsVisible() const override;
     [[nodiscard]] bool IsFocused() const override;
     [[nodiscard]] bool IsEnabled() const override;
-    [[nodiscard]] bool IsBorderless() const override;
+    [[nodiscard]] bool IsBorderlessFullscreen() const override;
     [[nodiscard]] bool IsResizable() const override;
     [[nodiscard]] bool IsWindowed() const override;
     [[nodiscard]] bool IsMouseHovering() const override;
@@ -52,8 +61,17 @@ public:
     [[nodiscard]] NativeWindowHandle GetNativeHandle() const override;
 
 private:
+    /** Persistent decoration style of a windowed window. Does not include the initial state bits. */
     static i32 GetWindowedStyle(const GenericWindowDesc& desc);
     static i32 GetFullscreenStyle(const GenericWindowDesc& desc);
+    /** Style bits that only describe the state the window starts in, used solely at creation time. */
+    static i32 GetInitialStateStyle(const GenericWindowDesc& desc);
+    static i32 GetExtendedStyle(const GenericWindowDesc& desc);
+
+    /** Recomputes both styles from m_desc and m_mode and applies them to the live window. */
+    void ApplyStyle();
+    /** Enables or grays out the close entry of the system menu, following m_desc.supports_close. */
+    void ApplyCloseSupport();
 
     NativeWindowHandle m_native_window_handle;
     bool m_high_precision_cursor = false;

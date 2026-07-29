@@ -40,10 +40,35 @@ struct GenericWindowDesc
     int start_x = 0;
     int start_y = 0;
     const char* name = "Default Window";
+    /** Window can be resized by dragging its frame. Implies the presence of a sizing frame. */
     bool resizable = true;
+    /** Maximize caption button is enabled. The button is still drawn, only grayed out, when false. */
     bool supports_maximize = true;
+    /** Minimize caption button is enabled. The button is still drawn, only grayed out, when false. */
     bool supports_minimize = true;
-    bool supports_transparency = true;
+    /**
+     * Close caption button is enabled. When false the button is grayed out and the OS close shortcut
+     * (Alt+F4 on Windows) is disabled. RequestClose still works, so the app can always close the window itself.
+     */
+    bool supports_close = true;
+    /**
+     * Window can be made translucent through SetOpacity. SetOpacity enables this on demand, so it only needs to be
+     * set here if transparency has to be available from the very first presented frame.
+     * @note On Windows this creates a layered window, which can slow down or break hardware-accelerated presentation
+     * on some drivers. Off by default for that reason.
+     */
+    bool supports_transparency = false;
+    /** Window has a title bar showing the window name and the caption buttons. */
+    bool has_title_bar = true;
+    /**
+     * Window has a frame drawn around the client area. Ignored when resizable is true, since a resizable window
+     * always needs a sizing frame. Set both this and has_title_bar to false for a fully undecorated window.
+     */
+    bool has_border = true;
+    /** Window gets its own button in the OS task bar. */
+    bool show_in_taskbar = true;
+    /** Window stays above all other non-topmost windows, even when it loses focus. */
+    bool always_on_top = false;
     bool start_minimized = false;
     bool start_maximized = false;
     bool start_visible = true;
@@ -81,6 +106,35 @@ public:
     virtual void SetTitle(const Opal::StringUtf8& title) = 0;
 
     /**
+     * Decoration and behaviour toggles. All of them can be used at any point after the window is created and
+     * mirror the matching fields of GenericWindowDesc. Changes to the frame are applied immediately, which means
+     * the client area keeps its size but the outer window size changes.
+     */
+    virtual void SetResizable(bool resizable) = 0;
+    /** Show or hide the title bar. Hiding it also hides the caption buttons. */
+    virtual void SetTitleBarVisible(bool visible) = 0;
+    /** Show or hide the frame around the client area. Ignored while the window is resizable. */
+    virtual void SetBorderVisible(bool visible) = 0;
+    virtual void SetMinimizeSupported(bool supported) = 0;
+    virtual void SetMaximizeSupported(bool supported) = 0;
+    /** Enable or disable the close button and the OS close shortcut. RequestClose is unaffected. */
+    virtual void SetCloseSupported(bool supported) = 0;
+    /** Add or remove the task bar button of this window. */
+    virtual void SetVisibleInTaskbar(bool visible) = 0;
+    virtual void SetAlwaysOnTop(bool always_on_top) = 0;
+
+    [[nodiscard]] bool HasTitleBar() const { return m_desc.has_title_bar; }
+    [[nodiscard]] bool HasBorder() const { return m_desc.has_border; }
+    [[nodiscard]] bool IsMinimizeSupported() const { return m_desc.supports_minimize; }
+    [[nodiscard]] bool IsMaximizeSupported() const { return m_desc.supports_maximize; }
+    [[nodiscard]] bool IsCloseSupported() const { return m_desc.supports_close; }
+    [[nodiscard]] bool IsVisibleInTaskbar() const { return m_desc.show_in_taskbar; }
+    [[nodiscard]] bool IsAlwaysOnTop() const { return m_desc.always_on_top; }
+
+    /** Returns the description this window was created with, updated by the setters above. */
+    [[nodiscard]] const GenericWindowDesc& GetDesc() const { return m_desc; }
+
+    /**
      * Returns true if the window has been marked as closed. This is set automatically when
      * the close request is not vetoed by the on_window_close delegate.
      */
@@ -91,7 +145,8 @@ public:
     [[nodiscard]] virtual bool IsVisible() const = 0;
     [[nodiscard]] virtual bool IsFocused() const = 0;
     [[nodiscard]] virtual bool IsEnabled() const = 0;
-    [[nodiscard]] virtual bool IsBorderless() const = 0;
+    /** True while the window is in GenericWindowMode::BorderlessFullscreen. See HasBorder for the frame of a windowed window. */
+    [[nodiscard]] virtual bool IsBorderlessFullscreen() const = 0;
     [[nodiscard]] virtual bool IsResizable() const = 0;
     [[nodiscard]] virtual bool IsWindowed() const = 0;
     [[nodiscard]] virtual bool IsMouseHovering() const = 0;
