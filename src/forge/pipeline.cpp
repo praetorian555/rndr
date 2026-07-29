@@ -1,13 +1,13 @@
-#include "rndr/advanced/advanced-pipeline.hpp"
+#include "rndr/forge/pipeline.hpp"
 
 #include "opal/exceptions.h"
 
 #include "rndr/pixel-format.hpp"
 
-#include "rndr/advanced/advanced-descriptor-set.hpp"
-#include "rndr/advanced/advanced-shader.hpp"
-#include "rndr/advanced/device.hpp"
-#include "rndr/advanced/vulkan-exception.hpp"
+#include "rndr/forge/descriptor-set.hpp"
+#include "rndr/forge/shader.hpp"
+#include "rndr/forge/device.hpp"
+#include "rndr/forge/vulkan-exception.hpp"
 
 static VkPrimitiveTopology ToVkPrimitiveTopology(Rndr::PrimitiveTopology topology)
 {
@@ -218,13 +218,13 @@ static VkVertexInputRate ToVkVertexInputRate(Rndr::DataRepetition repetition)
     }
 }
 
-Rndr::AdvancedVertexInputDesc::Binding& Rndr::AdvancedVertexInputDesc::AddBinding(u32 binding, u32 stride, DataRepetition input_rate)
+Rndr::Forge::VertexInputDesc::Binding& Rndr::Forge::VertexInputDesc::AddBinding(u32 binding, u32 stride, DataRepetition input_rate)
 {
     bindings.PushBack(Binding{.binding = binding, .stride = stride, .input_rate = input_rate});
     return bindings[bindings.GetSize() - 1];
 }
 
-void Rndr::AdvancedVertexInputDesc::AddAttribute(u32 binding, u32 location, PixelFormat format, u32 offset)
+void Rndr::Forge::VertexInputDesc::AddAttribute(u32 binding, u32 location, PixelFormat format, u32 offset)
 {
     for (auto& b : bindings)
     {
@@ -237,9 +237,9 @@ void Rndr::AdvancedVertexInputDesc::AddAttribute(u32 binding, u32 location, Pixe
     throw Opal::Exception("Binding not found in vertex input desc");
 }
 
-void Rndr::AdvancedPipeline::CreatePipelineLayout(
-    Opal::ArrayView<const Opal::Ref<const AdvancedDescriptorSetLayout>> descriptor_set_layouts,
-    Opal::ArrayView<const AdvancedPushConstantRange> push_constant_ranges)
+void Rndr::Forge::Pipeline::CreatePipelineLayout(
+    Opal::ArrayView<const Opal::Ref<const DescriptorSetLayout>> descriptor_set_layouts,
+    Opal::ArrayView<const PushConstantRange> push_constant_ranges)
 {
     Opal::DynamicArray<VkDescriptorSetLayout> native_layouts;
     for (const auto& layout : descriptor_set_layouts)
@@ -271,7 +271,7 @@ void Rndr::AdvancedPipeline::CreatePipelineLayout(
     }
 }
 
-Rndr::AdvancedPipeline::AdvancedPipeline(const AdvancedDevice& device, const AdvancedGraphicsPipelineDesc& desc)
+Rndr::Forge::Pipeline::Pipeline(const Device& device, const GraphicsPipelineDesc& desc)
     : m_device(device), m_bind_point(VK_PIPELINE_BIND_POINT_GRAPHICS)
 {
     CreatePipelineLayout(
@@ -295,7 +295,7 @@ Rndr::AdvancedPipeline::AdvancedPipeline(const AdvancedDevice& device, const Adv
     }
 
     Opal::DynamicArray<VkPipelineShaderStageCreateInfo> shader_stages;
-    auto add_shader_stage = [&shader_stages](const AdvancedShader& shader)
+    auto add_shader_stage = [&shader_stages](const Shader& shader)
     {
         shader_stages.PushBack(VkPipelineShaderStageCreateInfo{
             .sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
@@ -469,7 +469,7 @@ Rndr::AdvancedPipeline::AdvancedPipeline(const AdvancedDevice& device, const Adv
     }
 }
 
-Rndr::AdvancedPipeline::AdvancedPipeline(const AdvancedDevice& device, const AdvancedComputePipelineDesc& desc)
+Rndr::Forge::Pipeline::Pipeline(const Device& device, const ComputePipelineDesc& desc)
     : m_device(device), m_bind_point(VK_PIPELINE_BIND_POINT_COMPUTE)
 {
     CreatePipelineLayout(
@@ -496,12 +496,12 @@ Rndr::AdvancedPipeline::AdvancedPipeline(const AdvancedDevice& device, const Adv
     }
 }
 
-Rndr::AdvancedPipeline::~AdvancedPipeline()
+Rndr::Forge::Pipeline::~Pipeline()
 {
     Destroy();
 }
 
-Rndr::AdvancedPipeline::AdvancedPipeline(AdvancedPipeline&& other) noexcept
+Rndr::Forge::Pipeline::Pipeline(Pipeline&& other) noexcept
     : m_device(std::move(other.m_device)),
       m_pipeline(other.m_pipeline),
       m_pipeline_layout(other.m_pipeline_layout),
@@ -512,7 +512,7 @@ Rndr::AdvancedPipeline::AdvancedPipeline(AdvancedPipeline&& other) noexcept
     other.m_device = nullptr;
 }
 
-Rndr::AdvancedPipeline& Rndr::AdvancedPipeline::operator=(AdvancedPipeline&& other) noexcept
+Rndr::Forge::Pipeline& Rndr::Forge::Pipeline::operator=(Pipeline&& other) noexcept
 {
     if (this != &other)
     {
@@ -528,7 +528,7 @@ Rndr::AdvancedPipeline& Rndr::AdvancedPipeline::operator=(AdvancedPipeline&& oth
     return *this;
 }
 
-void Rndr::AdvancedPipeline::Destroy()
+void Rndr::Forge::Pipeline::Destroy()
 {
     if (m_pipeline != VK_NULL_HANDLE)
     {

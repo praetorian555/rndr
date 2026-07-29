@@ -4,9 +4,10 @@
 
 #include "opal/container/ref.h"
 
-#include "rndr/advanced/synchronization.hpp"
+#include "rndr/forge/synchronization.hpp"
+#include "rndr/forge/forward.hpp"
 
-namespace Rndr
+namespace Rndr::Forge
 {
 
 enum class AttachmentLoadOperation : u8
@@ -22,7 +23,7 @@ enum class AttachmentStoreOperation : u8
     DontCare
 };
 
-struct AdvancedRenderingAttachmentDesc
+struct RenderingAttachmentDesc
 {
     VkImageView image_view;
     ImageLayout image_layout;
@@ -39,25 +40,25 @@ struct AdvancedRenderingAttachmentDesc
     } clear_value;
 };
 
-struct AdvancedRenderingDesc
+struct RenderingDesc
 {
     Vector2i render_area_extent;
-    Opal::DynamicArray<AdvancedRenderingAttachmentDesc> color_attachments;
-    AdvancedRenderingAttachmentDesc depth_attachment;
+    Opal::DynamicArray<RenderingAttachmentDesc> color_attachments;
+    RenderingAttachmentDesc depth_attachment;
 };
 
-class AdvancedCommandBuffer
+class CommandBuffer
 {
 public:
-    AdvancedCommandBuffer() = default;
-    AdvancedCommandBuffer(const class AdvancedDevice& device, class AdvancedDeviceQueue& queue);
-    ~AdvancedCommandBuffer();
+    CommandBuffer() = default;
+    CommandBuffer(const Device& device, DeviceQueue& queue);
+    ~CommandBuffer();
 
-    AdvancedCommandBuffer(const AdvancedCommandBuffer&) = delete;
-    AdvancedCommandBuffer& operator=(const AdvancedCommandBuffer&) = delete;
+    CommandBuffer(const CommandBuffer&) = delete;
+    CommandBuffer& operator=(const CommandBuffer&) = delete;
 
-    AdvancedCommandBuffer(AdvancedCommandBuffer&& other) noexcept;
-    AdvancedCommandBuffer& operator=(AdvancedCommandBuffer&& other) noexcept;
+    CommandBuffer(CommandBuffer&& other) noexcept;
+    CommandBuffer& operator=(CommandBuffer&& other) noexcept;
 
     /** Frees the command buffer and releases associated resources. */
     void Destroy();
@@ -81,13 +82,13 @@ public:
      * pipeline stages.
      * @param image_barrier Describes the source and destination stages, access masks, layouts, and the target image.
      */
-    void CmdImageBarrier(const AdvancedImageBarrier& image_barrier);
+    void CmdImageBarrier(const ImageBarrier& image_barrier);
 
     /**
      * Insert a pipeline barrier for multiple images in a single call.
      * @param image_barriers Array of image barrier descriptions.
      */
-    void CmdImageBarriers(const Opal::ArrayView<AdvancedImageBarrier>& image_barriers);
+    void CmdImageBarriers(const Opal::ArrayView<ImageBarrier>& image_barriers);
 
     /**
      * Copy data from a buffer to an image. Handles all mip levels described by the bitmap. The destination image must
@@ -96,13 +97,13 @@ public:
      * @param bitmap Bitmap describing the image dimensions and mip level offsets.
      * @param texture Destination texture to copy into.
      */
-    void CmdCopyBufferToImage(const class AdvancedBuffer& buffer, const Bitmap& bitmap, AdvancedTexture& texture);
+    void CmdCopyBufferToImage(const Buffer& buffer, const Bitmap& bitmap, Texture& texture);
 
     /**
      * Begin a dynamic rendering pass. Uses VK_KHR_dynamic_rendering, no render pass or framebuffer objects needed.
      * @param desc Describes the render area, color attachments, and optional depth attachment.
      */
-    void CmdBeginRendering(const AdvancedRenderingDesc& desc);
+    void CmdBeginRendering(const RenderingDesc& desc);
 
     /** End the current dynamic rendering pass. Must be paired with a prior CmdBeginRendering call. */
     void CmdEndRendering();
@@ -129,7 +130,7 @@ public:
      * @param binding The binding point index as specified in the vertex input description.
      * @param offset Byte offset into the buffer where vertex data begins.
      */
-    void CmdBindVertexBuffer(const class AdvancedBuffer& buffer, u32 binding, u64 offset = 0);
+    void CmdBindVertexBuffer(const Buffer& buffer, u32 binding, u64 offset = 0);
 
     /**
      * Bind an index buffer for subsequent indexed draw commands.
@@ -137,13 +138,13 @@ public:
      * @param offset Byte offset into the buffer where index data begins.
      * @param index_size Size of each index element (uint8, uint16, or uint32).
      */
-    void CmdBindIndexBuffer(const class AdvancedBuffer& buffer, u64 offset, IndexSize index_size);
+    void CmdBindIndexBuffer(const Buffer& buffer, u64 offset, IndexSize index_size);
 
     /**
      * Bind a graphics or compute pipeline. The bind point is determined by the pipeline type.
      * @param pipeline The pipeline to bind.
      */
-    void CmdBindPipeline(const class AdvancedPipeline& pipeline);
+    void CmdBindPipeline(const Pipeline& pipeline);
 
     /**
      * Bind a single descriptor set to a pipeline.
@@ -151,7 +152,7 @@ public:
      * @param descriptor_set The descriptor set to bind.
      * @param first_set Index of the first descriptor set slot to bind to.
      */
-    void CmdBindDescriptorSet(const class AdvancedPipeline& pipeline, const class AdvancedDescriptorSet& descriptor_set, u32 first_set = 0);
+    void CmdBindDescriptorSet(const Pipeline& pipeline, const DescriptorSet& descriptor_set, u32 first_set = 0);
 
     /**
      * Bind multiple descriptor sets to a pipeline in a single call.
@@ -159,8 +160,8 @@ public:
      * @param descriptor_sets Array of descriptor sets to bind.
      * @param first_set Index of the first descriptor set slot to bind to.
      */
-    void CmdBindDescriptorSets(const class AdvancedPipeline& pipeline,
-                               const Opal::ArrayView<Opal::Ref<AdvancedDescriptorSet>>& descriptor_sets, u32 first_set = 0);
+    void CmdBindDescriptorSets(const Pipeline& pipeline,
+                               const Opal::ArrayView<Opal::Ref<DescriptorSet>>& descriptor_sets, u32 first_set = 0);
 
     /**
      * Push constant data to the pipeline.
@@ -169,7 +170,7 @@ public:
      * @param data Data to push as byte array.
      * @param offset Byte offset into the push constant range.
      */
-    void CmdPushConstants(const class AdvancedPipeline& pipeline, ShaderTypeBits shader_stages, Opal::ArrayView<const u8> data,
+    void CmdPushConstants(const Pipeline& pipeline, ShaderTypeBits shader_stages, Opal::ArrayView<const u8> data,
                           u32 offset = 0);
 
     /**
@@ -183,9 +184,9 @@ public:
     void CmdDrawIndexed(u32 index_count, u32 instance_count = 1, u32 first_index = 0, i32 vertex_offset = 0, u32 first_instance = 0);
 
 private:
-    Opal::Ref<const class AdvancedDevice> m_device;
-    Opal::Ref<class AdvancedDeviceQueue> m_queue;
+    Opal::Ref<const Device> m_device;
+    Opal::Ref<DeviceQueue> m_queue;
     VkCommandBuffer m_native_command_buffer = VK_NULL_HANDLE;
 };
 
-}  // namespace Rndr
+}  // namespace Rndr::Forge

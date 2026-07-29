@@ -1,11 +1,11 @@
-#include "rndr/advanced/advanced-shader.hpp"
+#include "rndr/forge/shader.hpp"
 
 #include "opal/exceptions.h"
 
 #include "spirv_reflect.h"
 
-#include "rndr/advanced/device.hpp"
-#include "rndr/advanced/vulkan-exception.hpp"
+#include "rndr/forge/device.hpp"
+#include "rndr/forge/vulkan-exception.hpp"
 #include "rndr/core/shader-compiler.hpp"
 #include "rndr/file.hpp"
 
@@ -47,8 +47,8 @@ static Rndr::ShaderTypeBits ToShaderTypeBits(SpvReflectShaderStageFlagBits stage
     }
 }
 
-Rndr::AdvancedShader::AdvancedShader(const AdvancedDevice& device, Opal::ArrayView<const u8> spirv_data,
-                                     const AdvancedShaderDesc& desc)
+Rndr::Forge::Shader::Shader(const Device& device, Opal::ArrayView<const u8> spirv_data,
+                                     const ShaderDesc& desc)
     : m_device(device), m_entry_point(desc.entry_point.Clone())
 {
     // Use spirv-reflect to detect the shader stage from the specified entry point.
@@ -82,25 +82,25 @@ Rndr::AdvancedShader::AdvancedShader(const AdvancedDevice& device, Opal::ArrayVi
     }
 }
 
-Rndr::AdvancedShader Rndr::AdvancedShader::FromSpirvInMemory(const AdvancedDevice& device, Opal::ArrayView<const u8> spirv_data,
-                                                             const AdvancedShaderDesc& desc)
+Rndr::Forge::Shader Rndr::Forge::Shader::FromSpirvInMemory(const Device& device, Opal::ArrayView<const u8> spirv_data,
+                                                             const ShaderDesc& desc)
 {
-    return AdvancedShader(device, spirv_data, desc);
+    return Shader(device, spirv_data, desc);
 }
 
-Rndr::AdvancedShader Rndr::AdvancedShader::FromSpirvFile(const AdvancedDevice& device, const Opal::StringUtf8& path,
-                                                         const AdvancedShaderDesc& desc)
+Rndr::Forge::Shader Rndr::Forge::Shader::FromSpirvFile(const Device& device, const Opal::StringUtf8& path,
+                                                         const ShaderDesc& desc)
 {
     Opal::DynamicArray<u8> spirv_data = File::ReadEntireFile(path);
     if (spirv_data.IsEmpty())
     {
         throw Opal::InvalidArgumentException(__FUNCTION__, "Failed to read SPIR-V file or file is empty!");
     }
-    return AdvancedShader(device, Opal::ArrayView<const u8>(spirv_data.GetData(), spirv_data.GetSize()), desc);
+    return Shader(device, Opal::ArrayView<const u8>(spirv_data.GetData(), spirv_data.GetSize()), desc);
 }
 
-Rndr::AdvancedShader Rndr::AdvancedShader::FromSourceInMemory(const AdvancedDevice& device, const Opal::StringUtf8& source,
-                                                              const AdvancedShaderDesc& desc)
+Rndr::Forge::Shader Rndr::Forge::Shader::FromSourceInMemory(const Device& device, const Opal::StringUtf8& source,
+                                                              const ShaderDesc& desc)
 {
     if (source.IsEmpty())
     {
@@ -110,11 +110,11 @@ Rndr::AdvancedShader Rndr::AdvancedShader::FromSourceInMemory(const AdvancedDevi
     ShaderCompiler compiler;
     compiler.LoadModule(source, ShaderOutputFormat::SpirV);
     const CompileResult result = compiler.CompileEntryPoint(desc.entry_point);
-    return AdvancedShader(device, Opal::ArrayView<const u8>(result.code.GetData(), result.code.GetSize()), desc);
+    return Shader(device, Opal::ArrayView<const u8>(result.code.GetData(), result.code.GetSize()), desc);
 }
 
-Rndr::AdvancedShader Rndr::AdvancedShader::FromSource(const AdvancedDevice& device, const Opal::StringUtf8& path,
-                                                     const AdvancedShaderDesc& desc)
+Rndr::Forge::Shader Rndr::Forge::Shader::FromSource(const Device& device, const Opal::StringUtf8& path,
+                                                     const ShaderDesc& desc)
 {
     const Opal::StringUtf8 source = File::ReadEntireTextFile(path);
     if (source.IsEmpty())
@@ -124,12 +124,12 @@ Rndr::AdvancedShader Rndr::AdvancedShader::FromSource(const AdvancedDevice& devi
     return FromSourceInMemory(device, source, desc);
 }
 
-Rndr::AdvancedShader::~AdvancedShader()
+Rndr::Forge::Shader::~Shader()
 {
     Destroy();
 }
 
-Rndr::AdvancedShader::AdvancedShader(AdvancedShader&& other) noexcept
+Rndr::Forge::Shader::Shader(Shader&& other) noexcept
     : m_device(std::move(other.m_device)),
       m_shader_module(other.m_shader_module),
       m_native_stage(other.m_native_stage),
@@ -140,7 +140,7 @@ Rndr::AdvancedShader::AdvancedShader(AdvancedShader&& other) noexcept
     other.m_device = nullptr;
 }
 
-Rndr::AdvancedShader& Rndr::AdvancedShader::operator=(AdvancedShader&& other) noexcept
+Rndr::Forge::Shader& Rndr::Forge::Shader::operator=(Shader&& other) noexcept
 {
     if (this != &other)
     {
@@ -156,7 +156,7 @@ Rndr::AdvancedShader& Rndr::AdvancedShader::operator=(AdvancedShader&& other) no
     return *this;
 }
 
-void Rndr::AdvancedShader::Destroy()
+void Rndr::Forge::Shader::Destroy()
 {
     if (m_shader_module != VK_NULL_HANDLE)
     {

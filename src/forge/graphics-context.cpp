@@ -1,4 +1,4 @@
-#include "rndr/advanced/graphics-context.hpp"
+#include "rndr/forge/graphics-context.hpp"
 
 #include "opal/defines.h"
 
@@ -8,7 +8,7 @@
 
 #include "opal/container/dynamic-array.h"
 
-#include "rndr/advanced/vulkan-exception.hpp"
+#include "rndr/forge/vulkan-exception.hpp"
 #include "rndr/return-macros.hpp"
 
 namespace
@@ -32,7 +32,7 @@ VKAPI_ATTR VkBool32 VKAPI_CALL DebugCallback(VkDebugUtilsMessageSeverityFlagBits
 }
 }  // namespace
 
-Rndr::AdvancedGraphicsContext::AdvancedGraphicsContext(const AdvancedGraphicsContextDesc& desc) : m_desc(desc.Clone())
+Rndr::Forge::GraphicsContext::GraphicsContext(const GraphicsContextDesc& desc) : m_desc(desc.Clone())
 {
     VkResult result = volkInitialize();
     if (result != VK_SUCCESS)
@@ -63,7 +63,7 @@ Rndr::AdvancedGraphicsContext::AdvancedGraphicsContext(const AdvancedGraphicsCon
     // Creation of instance
     VkApplicationInfo app_info{};
     app_info.sType = VK_STRUCTURE_TYPE_APPLICATION_INFO;
-    app_info.pApplicationName = "Rndr Advanced API";
+    app_info.pApplicationName = "Rndr Forge API";
     app_info.applicationVersion = VK_MAKE_VERSION(1, 0, 0);
     app_info.pEngineName = "RNDR";
     app_info.engineVersion = VK_MAKE_VERSION(1, 0, 0);
@@ -100,7 +100,7 @@ Rndr::AdvancedGraphicsContext::AdvancedGraphicsContext(const AdvancedGraphicsCon
     }
 }
 
-Rndr::AdvancedGraphicsContext::~AdvancedGraphicsContext()
+Rndr::Forge::GraphicsContext::~GraphicsContext()
 {
     Destroy();
 }
@@ -114,7 +114,7 @@ void DestroyDebugUtilsMessengerEXT(VkInstance instance, VkDebugUtilsMessengerEXT
     }
 }
 
-Rndr::AdvancedGraphicsContext::AdvancedGraphicsContext(Rndr::AdvancedGraphicsContext&& other) noexcept
+Rndr::Forge::GraphicsContext::GraphicsContext(Rndr::Forge::GraphicsContext&& other) noexcept
     : m_instance(other.m_instance), m_debug_messenger(other.m_debug_messenger), m_desc(Opal::Move(other.m_desc))
 {
     other.m_instance = VK_NULL_HANDLE;
@@ -122,7 +122,7 @@ Rndr::AdvancedGraphicsContext::AdvancedGraphicsContext(Rndr::AdvancedGraphicsCon
     other.m_desc = {};
 }
 
-Rndr::AdvancedGraphicsContext& Rndr::AdvancedGraphicsContext::operator=(Rndr::AdvancedGraphicsContext&& other) noexcept
+Rndr::Forge::GraphicsContext& Rndr::Forge::GraphicsContext::operator=(Rndr::Forge::GraphicsContext&& other) noexcept
 {
     Destroy();
 
@@ -137,7 +137,7 @@ Rndr::AdvancedGraphicsContext& Rndr::AdvancedGraphicsContext::operator=(Rndr::Ad
     return *this;
 }
 
-void Rndr::AdvancedGraphicsContext::Destroy()
+void Rndr::Forge::GraphicsContext::Destroy()
 {
     if (m_debug_messenger != VK_NULL_HANDLE)
     {
@@ -153,7 +153,7 @@ void Rndr::AdvancedGraphicsContext::Destroy()
     volkFinalize();
 }
 
-Opal::DynamicArray<const char*> Rndr::AdvancedGraphicsContext::GetRequiredInstanceExtensions(const Rndr::AdvancedGraphicsContextDesc& desc)
+Opal::DynamicArray<const char*> Rndr::Forge::GraphicsContext::GetRequiredInstanceExtensions(const Rndr::Forge::GraphicsContextDesc& desc)
 {
     Opal::DynamicArray<const char*> required_extension_names;
     if (desc.required_instance_extensions.GetSize() > 0)
@@ -177,7 +177,7 @@ Opal::DynamicArray<const char*> Rndr::AdvancedGraphicsContext::GetRequiredInstan
     return required_extension_names;
 }
 
-Opal::DynamicArray<VkExtensionProperties> Rndr::AdvancedGraphicsContext::GetSupportedInstanceExtensions()
+Opal::DynamicArray<VkExtensionProperties> Rndr::Forge::GraphicsContext::GetSupportedInstanceExtensions()
 {
     u32 count = 0;
     vkEnumerateInstanceExtensionProperties(nullptr, &count, nullptr);
@@ -192,20 +192,20 @@ Opal::DynamicArray<VkExtensionProperties> Rndr::AdvancedGraphicsContext::GetSupp
     return extensions;
 }
 
-Opal::DynamicArray<Rndr::AdvancedPhysicalDevice> Rndr::AdvancedGraphicsContext::EnumeratePhysicalDevices() const
+Opal::DynamicArray<Rndr::Forge::PhysicalDevice> Rndr::Forge::GraphicsContext::EnumeratePhysicalDevices() const
 {
     u32 gpu_count = 0;
     vkEnumeratePhysicalDevices(m_instance, &gpu_count, nullptr);
 
     Opal::DynamicArray<VkPhysicalDevice> physical_devices(gpu_count);
     const VkResult result = vkEnumeratePhysicalDevices(m_instance, &gpu_count, physical_devices.GetData());
-    RNDR_RETURN_ON_FAIL(result == VK_SUCCESS, Opal::DynamicArray<AdvancedPhysicalDevice>(), "Failed to enumerate physical devices!",
+    RNDR_RETURN_ON_FAIL(result == VK_SUCCESS, Opal::DynamicArray<PhysicalDevice>(), "Failed to enumerate physical devices!",
                         RNDR_NOOP);
 
-    Opal::DynamicArray<AdvancedPhysicalDevice> gpu_list;
+    Opal::DynamicArray<PhysicalDevice> gpu_list;
     for (const VkPhysicalDevice& device : physical_devices)
     {
-        gpu_list.PushBack(AdvancedPhysicalDevice(device));
+        gpu_list.PushBack(PhysicalDevice(device));
     }
     return gpu_list;
 }

@@ -7,18 +7,19 @@
 
 #include "rndr/graphics-types.hpp"
 #include "rndr/types.hpp"
+#include "rndr/forge/forward.hpp"
 
-namespace Rndr
+namespace Rndr::Forge
 {
 
-struct AdvancedPushConstantRange
+struct PushConstantRange
 {
     ShaderTypeBits shader_stages;
     u32 offset = 0;
     u32 size = 0;
 };
 
-struct AdvancedVertexInputDesc : Opal::ClonableBase<AdvancedVertexInputDesc>
+struct VertexInputDesc : Opal::ClonableBase<VertexInputDesc>
 {
     struct Attribute
     {
@@ -44,7 +45,7 @@ struct AdvancedVertexInputDesc : Opal::ClonableBase<AdvancedVertexInputDesc>
     void AddAttribute(u32 binding, u32 location, PixelFormat format, u32 offset);
 };
 
-struct AdvancedRasterizerDesc
+struct RasterizerDesc
 {
     /** Whether primitives are filled or drawn as wireframe. */
     FillMode fill_mode = FillMode::Solid;
@@ -68,7 +69,7 @@ struct AdvancedRasterizerDesc
     f32 depth_bias_clamp = 0.0f;
 };
 
-struct AdvancedDepthStencilDesc
+struct DepthStencilDesc
 {
     /** Enables depth testing. When disabled, all fragments pass the depth test. */
     bool depth_test_enabled = false;
@@ -107,7 +108,7 @@ struct AdvancedDepthStencilDesc
     Comparator back_stencil_comparator = Comparator::Always;
 };
 
-struct AdvancedColorBlendDesc
+struct ColorBlendDesc
 {
     /** Enables blending. When disabled, the source fragment color is written directly. */
     bool blend_enabled = false;
@@ -131,47 +132,47 @@ struct AdvancedColorBlendDesc
     BlendOperation alpha_operation = BlendOperation::Add;
 };
 
-struct AdvancedGraphicsPipelineDesc
+struct GraphicsPipelineDesc
 {
-    AdvancedVertexInputDesc vertex_input;
+    VertexInputDesc vertex_input;
 
-    Opal::Ref<const class AdvancedShader> vertex_shader;
-    Opal::Ref<const class AdvancedShader> fragment_shader;
-    Opal::Ref<const class AdvancedShader> task_shader;
-    Opal::Ref<const class AdvancedShader> mesh_shader;
+    Opal::Ref<const Shader> vertex_shader;
+    Opal::Ref<const Shader> fragment_shader;
+    Opal::Ref<const Shader> task_shader;
+    Opal::Ref<const Shader> mesh_shader;
 
-    Opal::DynamicArray<Opal::Ref<const class AdvancedDescriptorSetLayout>> descriptor_set_layouts;
-    Opal::DynamicArray<AdvancedPushConstantRange> push_constant_ranges;
+    Opal::DynamicArray<Opal::Ref<const DescriptorSetLayout>> descriptor_set_layouts;
+    Opal::DynamicArray<PushConstantRange> push_constant_ranges;
 
     PrimitiveTopology topology = PrimitiveTopology::Triangle;
-    AdvancedRasterizerDesc rasterizer;
-    AdvancedDepthStencilDesc depth_stencil;
-    Opal::DynamicArray<AdvancedColorBlendDesc> color_blend_attachments;
+    RasterizerDesc rasterizer;
+    DepthStencilDesc depth_stencil;
+    Opal::DynamicArray<ColorBlendDesc> color_blend_attachments;
 
     Opal::DynamicArray<PixelFormat> color_attachment_formats;
     PixelFormat depth_attachment_format = PixelFormat::Undefined;
     PixelFormat stencil_attachment_format = PixelFormat::Undefined;
 };
 
-struct AdvancedComputePipelineDesc
+struct ComputePipelineDesc
 {
-    Opal::Ref<const class AdvancedShader> shader;
-    Opal::DynamicArray<Opal::Ref<const class AdvancedDescriptorSetLayout>> descriptor_set_layouts;
-    Opal::DynamicArray<AdvancedPushConstantRange> push_constant_ranges;
+    Opal::Ref<const Shader> shader;
+    Opal::DynamicArray<Opal::Ref<const DescriptorSetLayout>> descriptor_set_layouts;
+    Opal::DynamicArray<PushConstantRange> push_constant_ranges;
 };
 
-class AdvancedPipeline
+class Pipeline
 {
 public:
-    AdvancedPipeline() = default;
-    explicit AdvancedPipeline(const class AdvancedDevice& device, const AdvancedGraphicsPipelineDesc& desc);
-    explicit AdvancedPipeline(const class AdvancedDevice& device, const AdvancedComputePipelineDesc& desc);
-    ~AdvancedPipeline();
+    Pipeline() = default;
+    explicit Pipeline(const Device& device, const GraphicsPipelineDesc& desc);
+    explicit Pipeline(const Device& device, const ComputePipelineDesc& desc);
+    ~Pipeline();
 
-    AdvancedPipeline(const AdvancedPipeline&) = delete;
-    AdvancedPipeline& operator=(const AdvancedPipeline&) = delete;
-    AdvancedPipeline(AdvancedPipeline&&) noexcept;
-    AdvancedPipeline& operator=(AdvancedPipeline&&) noexcept;
+    Pipeline(const Pipeline&) = delete;
+    Pipeline& operator=(const Pipeline&) = delete;
+    Pipeline(Pipeline&&) noexcept;
+    Pipeline& operator=(Pipeline&&) noexcept;
 
     void Destroy();
 
@@ -181,13 +182,13 @@ public:
 
 private:
     void CreatePipelineLayout(
-        Opal::ArrayView<const Opal::Ref<const class AdvancedDescriptorSetLayout>> descriptor_set_layouts,
-        Opal::ArrayView<const AdvancedPushConstantRange> push_constant_ranges);
+        Opal::ArrayView<const Opal::Ref<const DescriptorSetLayout>> descriptor_set_layouts,
+        Opal::ArrayView<const PushConstantRange> push_constant_ranges);
 
-    Opal::Ref<const class AdvancedDevice> m_device;
+    Opal::Ref<const Device> m_device;
     VkPipeline m_pipeline = VK_NULL_HANDLE;
     VkPipelineLayout m_pipeline_layout = VK_NULL_HANDLE;
     VkPipelineBindPoint m_bind_point = VK_PIPELINE_BIND_POINT_GRAPHICS;
 };
 
-}  // namespace Rndr
+}  // namespace Rndr::Forge

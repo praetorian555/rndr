@@ -4,18 +4,18 @@
 #include "opal/paths.h"
 #include "opal/time.h"
 
-#include "rndr/advanced/advanced-buffer.hpp"
-#include "rndr/advanced/advanced-descriptor-set.hpp"
-#include "rndr/advanced/advanced-pipeline.hpp"
-#include "rndr/advanced/advanced-shader.hpp"
-#include "rndr/advanced/advanced-texture.hpp"
-#include "rndr/advanced/command-buffer.hpp"
-#include "rndr/advanced/device.hpp"
-#include "rndr/advanced/graphics-context.hpp"
-#include "rndr/advanced/physical-device.hpp"
-#include "rndr/advanced/swap-chain.hpp"
-#include "rndr/advanced/synchronization.hpp"
-#include "rndr/advanced/mesh.hpp"
+#include "rndr/forge/buffer.hpp"
+#include "rndr/forge/descriptor-set.hpp"
+#include "rndr/forge/pipeline.hpp"
+#include "rndr/forge/shader.hpp"
+#include "rndr/forge/texture.hpp"
+#include "rndr/forge/command-buffer.hpp"
+#include "rndr/forge/device.hpp"
+#include "rndr/forge/graphics-context.hpp"
+#include "rndr/forge/physical-device.hpp"
+#include "rndr/forge/swap-chain.hpp"
+#include "rndr/forge/synchronization.hpp"
+#include "rndr/forge/mesh.hpp"
 #include "rndr/application.hpp"
 #include "rndr/file.hpp"
 #include "rndr/fly-camera.hpp"
@@ -63,15 +63,15 @@ void Run()
     rndr_app->ShowCursor(false);
     window->SetCursorPositionMode(Rndr::CursorPositionMode::ResetToCenter);
 
-    Rndr::AdvancedGraphicsContext graphics_context{{.collect_debug_messages = true}};
-    Rndr::AdvancedSurface surface(graphics_context, window.Get());
+    Rndr::Forge::GraphicsContext graphics_context{{.collect_debug_messages = true}};
+    Rndr::Forge::Surface surface(graphics_context, window.Get());
 
     auto physical_devices = graphics_context.EnumeratePhysicalDevices();
-    Rndr::AdvancedDevice device(std::move(physical_devices[0]), graphics_context, {.surface = Opal::Ref{surface}});
-    auto graphics_queue = device.GetQueue(Rndr::QueueFamily::Graphics);
-    auto present_queue = device.GetQueue(Rndr::QueueFamily::Present);
+    Rndr::Forge::Device device(std::move(physical_devices[0]), graphics_context, {.surface = Opal::Ref{surface}});
+    auto graphics_queue = device.GetQueue(Rndr::Forge::QueueFamily::Graphics);
+    auto present_queue = device.GetQueue(Rndr::Forge::QueueFamily::Present);
 
-    Rndr::AdvancedSwapChain swap_chain(device, surface, {.use_depth = true, .depth_pixel_format = Rndr::PixelFormat::D32_SFLOAT});
+    Rndr::Forge::SwapChain swap_chain(device, surface, {.use_depth = true, .depth_pixel_format = Rndr::PixelFormat::D32_SFLOAT});
 
     const Opal::StringUtf8 mesh_path = Opal::Paths::Combine(RNDR_CORE_ASSETS_DIR, "sample-models", "Suzanne", "glTF", "Suzanne.gltf");
     Rndr::Forge::Mesh mesh;
@@ -79,95 +79,95 @@ void Run()
     Opal::DynamicArray<Rndr::u8> combined_vertex_index_data;
     combined_vertex_index_data.Append(mesh.vertices);
     combined_vertex_index_data.Append(mesh.indices);
-    Rndr::AdvancedBuffer mesh_buffer(device,
+    Rndr::Forge::Buffer mesh_buffer(device,
                                      {.size = combined_vertex_index_data.GetSize(),
                                       .usage = VK_BUFFER_USAGE_VERTEX_BUFFER_BIT | VK_BUFFER_USAGE_INDEX_BUFFER_BIT,
                                       .keep_memory_mapped = false},
                                      combined_vertex_index_data);
 
-    Opal::InPlaceArray<Rndr::AdvancedBuffer, k_frames_in_flight> m_shader_buffers;
+    Opal::InPlaceArray<Rndr::Forge::Buffer, k_frames_in_flight> m_shader_buffers;
     for (i32 i = 0; i < k_frames_in_flight; i++)
     {
         m_shader_buffers[i] =
-            Rndr::AdvancedBuffer(device, {.size = sizeof(ShaderData), .usage = 0, .keep_memory_mapped = true, .use_device_address = true});
+            Rndr::Forge::Buffer(device, {.size = sizeof(ShaderData), .usage = 0, .keep_memory_mapped = true, .use_device_address = true});
     }
 
     // Create fences and semaphores
-    Opal::DynamicArray<Rndr::AdvancedFence> fences;
-    Opal::DynamicArray<Rndr::AdvancedSemaphore> present_semaphores;
+    Opal::DynamicArray<Rndr::Forge::Fence> fences;
+    Opal::DynamicArray<Rndr::Forge::Semaphore> present_semaphores;
     for (i32 i = 0; i < k_frames_in_flight; ++i)
     {
         constexpr bool k_start_signaled = true;
         fences.EmplaceBack(device, k_start_signaled);
         present_semaphores.EmplaceBack(device);
     }
-    Opal::DynamicArray<Rndr::AdvancedSemaphore> render_semaphores;
+    Opal::DynamicArray<Rndr::Forge::Semaphore> render_semaphores;
     for (u32 i = 0; i < swap_chain.GetColorImageCount(); ++i)
     {
         render_semaphores.EmplaceBack(device);
     }
 
-    Opal::DynamicArray<Rndr::AdvancedCommandBuffer> command_buffers;
+    Opal::DynamicArray<Rndr::Forge::CommandBuffer> command_buffers;
     for (Rndr::i32 i = 0; i < k_frames_in_flight; ++i)
     {
-        command_buffers.EmplaceBack(device, device.GetQueue(Rndr::QueueFamily::Graphics).Get());
+        command_buffers.EmplaceBack(device, device.GetQueue(Rndr::Forge::QueueFamily::Graphics).Get());
     }
 
     const Opal::StringUtf8 albedo_texture_path = Opal::Paths::Combine(RNDR_CORE_ASSETS_DIR, "sample-models", "Suzanne", "glTF", "Suzanne_BaseColor.png");
     const Opal::StringUtf8 metallic_roughness_texture_path = Opal::Paths::Combine(RNDR_CORE_ASSETS_DIR, "sample-models", "Suzanne", "glTF", "Suzanne_MetallicRoughness.png");
     const Rndr::Bitmap albedo_bitmap = Rndr::File::LoadImage(albedo_texture_path, true, true);
     const Rndr::Bitmap mr_bitmap = Rndr::File::LoadImage(metallic_roughness_texture_path, true, true);
-    Rndr::AdvancedTexture albedo_texture(device, device.GetQueue(Rndr::QueueFamily::Graphics), albedo_bitmap);
-    Rndr::AdvancedTexture mr_texture(device, device.GetQueue(Rndr::QueueFamily::Graphics), mr_bitmap);
-    Rndr::AdvancedSampler albedo_sampler(device, {.max_anisotropy = 8.0f, .max_lod = static_cast<f32>(albedo_bitmap.GetMipCount())});
-    Rndr::AdvancedSampler mr_sampler(device, {.max_anisotropy = 8.0f, .max_lod = static_cast<f32>(mr_bitmap.GetMipCount())});
+    Rndr::Forge::Texture albedo_texture(device, device.GetQueue(Rndr::Forge::QueueFamily::Graphics), albedo_bitmap);
+    Rndr::Forge::Texture mr_texture(device, device.GetQueue(Rndr::Forge::QueueFamily::Graphics), mr_bitmap);
+    Rndr::Forge::Sampler albedo_sampler(device, {.max_anisotropy = 8.0f, .max_lod = static_cast<f32>(albedo_bitmap.GetMipCount())});
+    Rndr::Forge::Sampler mr_sampler(device, {.max_anisotropy = 8.0f, .max_lod = static_cast<f32>(mr_bitmap.GetMipCount())});
 
     // Setup descriptor pool
-    Rndr::AdvancedDescriptorPoolDesc descriptor_pool_desc;
-    descriptor_pool_desc.Add(Rndr::AdvancedDescriptorType::CombinedImageSampler, 100);
+    Rndr::Forge::DescriptorPoolDesc descriptor_pool_desc;
+    descriptor_pool_desc.Add(Rndr::Forge::DescriptorType::CombinedImageSampler, 100);
     descriptor_pool_desc.max_sets = k_frames_in_flight;
-    const Rndr::AdvancedDescriptorPool descriptor_pool(device, descriptor_pool_desc);
+    const Rndr::Forge::DescriptorPool descriptor_pool(device, descriptor_pool_desc);
 
     // Setup the descriptor set layout. It has two bindings and both are images with samplers.
-    Rndr::AdvancedDescriptorSetLayoutDesc layout_desc;
-    layout_desc.AddBinding(Rndr::AdvancedDescriptorType::CombinedImageSampler, 1, Rndr::ShaderTypeBits::Fragment);
-    layout_desc.AddBinding(Rndr::AdvancedDescriptorType::CombinedImageSampler, 1, Rndr::ShaderTypeBits::Fragment);
-    Rndr::AdvancedDescriptorSetLayout descriptor_set_layout(device, layout_desc);
+    Rndr::Forge::DescriptorSetLayoutDesc layout_desc;
+    layout_desc.AddBinding(Rndr::Forge::DescriptorType::CombinedImageSampler, 1, Rndr::ShaderTypeBits::Fragment);
+    layout_desc.AddBinding(Rndr::Forge::DescriptorType::CombinedImageSampler, 1, Rndr::ShaderTypeBits::Fragment);
+    Rndr::Forge::DescriptorSetLayout descriptor_set_layout(device, layout_desc);
 
     // Allocate descriptor set from the descriptor pool and fill it with concrete data.
-    Rndr::AdvancedDescriptorSet descriptor_set(descriptor_pool, descriptor_set_layout);
-    Opal::DynamicArray<Rndr::AdvancedDescriptorSetUpdateBinding> update_bindings;
-    Rndr::AdvancedDescriptorSetUpdateBinding binding1{
-        .descriptor_type = Rndr::AdvancedDescriptorType::CombinedImageSampler,
+    Rndr::Forge::DescriptorSet descriptor_set(descriptor_pool, descriptor_set_layout);
+    Opal::DynamicArray<Rndr::Forge::DescriptorSetUpdateBinding> update_bindings;
+    Rndr::Forge::DescriptorSetUpdateBinding binding1{
+        .descriptor_type = Rndr::Forge::DescriptorType::CombinedImageSampler,
         .binding = 0,
-        .resource_info = Rndr::AdvancedDescriptorSetUpdateBinding::ImageInfo{
+        .resource_info = Rndr::Forge::DescriptorSetUpdateBinding::ImageInfo{
             .sampler = albedo_sampler, .image = albedo_texture, .image_layout = Rndr::ImageLayout::ShaderReadOnly}};
     update_bindings.PushBack(std::move(binding1));
-    Rndr::AdvancedDescriptorSetUpdateBinding binding2{
-        .descriptor_type = Rndr::AdvancedDescriptorType::CombinedImageSampler,
+    Rndr::Forge::DescriptorSetUpdateBinding binding2{
+        .descriptor_type = Rndr::Forge::DescriptorType::CombinedImageSampler,
         .binding = 1,
-        .resource_info = Rndr::AdvancedDescriptorSetUpdateBinding::ImageInfo{
+        .resource_info = Rndr::Forge::DescriptorSetUpdateBinding::ImageInfo{
             .sampler = mr_sampler, .image = mr_texture, .image_layout = Rndr::ImageLayout::ShaderReadOnly}};
     update_bindings.PushBack(std::move(binding2));
     descriptor_set.UpdateDescriptorSets(update_bindings);
 
     const Opal::StringUtf8 shader_path = Opal::Paths::Combine(RNDR_CORE_ASSETS_DIR, "shaders", "modern-vulkan.slang");
-    const Rndr::AdvancedShader vertex_shader = Rndr::AdvancedShader::FromSource(device, shader_path, {.entry_point = "main_vertex"});
-    const Rndr::AdvancedShader fragment_shader = Rndr::AdvancedShader::FromSource(device, shader_path, {.entry_point = "main_fragment"});
+    const Rndr::Forge::Shader vertex_shader = Rndr::Forge::Shader::FromSource(device, shader_path, {.entry_point = "main_vertex"});
+    const Rndr::Forge::Shader fragment_shader = Rndr::Forge::Shader::FromSource(device, shader_path, {.entry_point = "main_fragment"});
 
-    Rndr::AdvancedVertexInputDesc vertex_input_desc;
+    Rndr::Forge::VertexInputDesc vertex_input_desc;
     vertex_input_desc.AddBinding(0, mesh.vertex_size, Rndr::DataRepetition::PerVertex);
     vertex_input_desc.AddAttribute(0, 0, Rndr::PixelFormat::R32G32B32_SFLOAT, 0);
     vertex_input_desc.AddAttribute(0, 1, Rndr::PixelFormat::R32G32B32_SFLOAT, sizeof(Rndr::Vector3f));
     vertex_input_desc.AddAttribute(0, 2, Rndr::PixelFormat::R32G32_SFLOAT, 2 * sizeof(Rndr::Vector3f));
 
-    Rndr::AdvancedPushConstantRange push_constant_range{
+    Rndr::Forge::PushConstantRange push_constant_range{
         .shader_stages = Rndr::ShaderTypeBits::Vertex,
         .size = sizeof(VkDeviceAddress),
     };
 
-    Rndr::AdvancedColorBlendDesc color_blend_desc;
-    const Rndr::AdvancedGraphicsPipelineDesc pipeline_desc{
+    Rndr::Forge::ColorBlendDesc color_blend_desc;
+    const Rndr::Forge::GraphicsPipelineDesc pipeline_desc{
         .vertex_input = std::move(vertex_input_desc),
         .vertex_shader = vertex_shader,
         .fragment_shader = fragment_shader,
@@ -177,7 +177,7 @@ void Run()
         .color_blend_attachments = {color_blend_desc},
         .color_attachment_formats = {swap_chain.GetDesc().pixel_format},
         .depth_attachment_format = swap_chain.GetDesc().depth_pixel_format};
-    Rndr::AdvancedPipeline pipeline(device, pipeline_desc);
+    Rndr::Forge::Pipeline pipeline(device, pipeline_desc);
 
     Rndr::Vector2i window_size = window->GetSize();
     f32 window_width = window_size.x;
@@ -229,7 +229,7 @@ void Run()
         command_buffer.Begin();
 
         // Make sure our color and depth attachment are ready and in proper layout
-        Opal::InPlaceArray<Rndr::AdvancedImageBarrier, 2> barriers{
+        Opal::InPlaceArray<Rndr::Forge::ImageBarrier, 2> barriers{
             {.stages_must_finish = Rndr::PipelineStageBits::ColorAttachmentOutput,
              .stages_must_finish_access = Rndr::PipelineStageAccessBits::None,
              .before_stages_start = Rndr::PipelineStageBits::ColorAttachmentOutput,
@@ -251,17 +251,17 @@ void Run()
 
         // Configure attachments, what happens when they are loaded and how they are stored after rendering
         // Do the actual draw calls
-        const Rndr::AdvancedRenderingDesc rendering_desc{
+        const Rndr::Forge::RenderingDesc rendering_desc{
             .render_area_extent = window_size,
-            .color_attachments = {Rndr::AdvancedRenderingAttachmentDesc{.image_view = swap_chain.GetColorImageView(image_index),
+            .color_attachments = {Rndr::Forge::RenderingAttachmentDesc{.image_view = swap_chain.GetColorImageView(image_index),
                                                                         .image_layout = Rndr::ImageLayout::ColorAttachment,
-                                                                        .load_operation = Rndr::AttachmentLoadOperation::Clear,
-                                                                        .store_operation = Rndr::AttachmentStoreOperation::Store,
+                                                                        .load_operation = Rndr::Forge::AttachmentLoadOperation::Clear,
+                                                                        .store_operation = Rndr::Forge::AttachmentStoreOperation::Store,
                                                                         .clear_value = {.color = {0.0f, 0.0f, 0.2f, 1.0f}}}},
             .depth_attachment = {.image_view = swap_chain.GetDepthImageView(),
                                  .image_layout = Rndr::ImageLayout::DepthStencilAttachment,
-                                 .load_operation = Rndr::AttachmentLoadOperation::Clear,
-                                 .store_operation = Rndr::AttachmentStoreOperation::DontCare,
+                                 .load_operation = Rndr::Forge::AttachmentLoadOperation::Clear,
+                                 .store_operation = Rndr::Forge::AttachmentStoreOperation::DontCare,
                                  .clear_value = {.depth_stencil = {.depth = 1.0f, .stencil = 0}}}};
         command_buffer.CmdBeginRendering(rendering_desc);
         command_buffer.CmdSetViewport(Rndr::Vector2f::Zero(), {window_width, window_height});

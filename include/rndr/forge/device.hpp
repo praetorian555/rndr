@@ -6,15 +6,16 @@
 #include "opal/container/hash-map.h"
 #include "opal/container/shared-ptr.h"
 
-#include "rndr/advanced/physical-device.hpp"
+#include "rndr/forge/physical-device.hpp"
 #include "rndr/graphics-types.hpp"
 #include "rndr/types.hpp"
+#include "rndr/forge/forward.hpp"
 
 // Forward declare handle to avoid vma includes in headers.
 using VmaAllocation = struct VmaAllocation_T*;
 using VmaAllocator = struct VmaAllocator_T*;
 
-namespace Rndr
+namespace Rndr::Forge
 {
 
 enum class QueueFamily : u8
@@ -29,11 +30,11 @@ enum class QueueFamily : u8
     EnumCount
 };
 
-struct AdvancedDeviceDesc : Opal::ClonableBase<AdvancedDeviceDesc>
+struct DeviceDesc : Opal::ClonableBase<DeviceDesc>
 {
     VkPhysicalDeviceFeatures features = {.samplerAnisotropy = VK_TRUE};
     Opal::DynamicArray<const char*> extensions;
-    Opal::Ref<class AdvancedSurface> surface;
+    Opal::Ref<Surface> surface;
     bool use_async_compute_queue = true;
     bool use_dedicated_transfer_queue = true;
     bool use_decode_queue = false;
@@ -42,7 +43,7 @@ struct AdvancedDeviceDesc : Opal::ClonableBase<AdvancedDeviceDesc>
     OPAL_CLONE_FIELDS(features, extensions, surface, use_async_compute_queue, use_dedicated_transfer_queue, use_decode_queue, use_encode_queue);
 };
 
-struct AdvancedQueueFamilyIndices
+struct QueueFamilyIndices
 {
     static constexpr u32 k_invalid_index = 0xFFFFFFFF;
 
@@ -57,62 +58,62 @@ struct AdvancedQueueFamilyIndices
     [[nodiscard]] Rndr::u32 GetQueueFamilyIndex(QueueFamily queue_family) const;
 };
 
-class AdvancedDeviceQueue
+class DeviceQueue
 {
 public:
-    AdvancedDeviceQueue() = default;
-    ~AdvancedDeviceQueue();
+    DeviceQueue() = default;
+    ~DeviceQueue();
 
     void Destroy();
 
-    explicit AdvancedDeviceQueue(const class AdvancedDevice& device, u32 queue_family_index);
+    explicit DeviceQueue(const Device& device, u32 queue_family_index);
 
-    AdvancedDeviceQueue(const AdvancedDeviceQueue&) = delete;
-    AdvancedDeviceQueue& operator=(const AdvancedDeviceQueue&) = delete;
-    AdvancedDeviceQueue(AdvancedDeviceQueue&& other) noexcept;
-    AdvancedDeviceQueue& operator=(AdvancedDeviceQueue&& other) noexcept;
+    DeviceQueue(const DeviceQueue&) = delete;
+    DeviceQueue& operator=(const DeviceQueue&) = delete;
+    DeviceQueue(DeviceQueue&& other) noexcept;
+    DeviceQueue& operator=(DeviceQueue&& other) noexcept;
 
     [[nodiscard]] VkQueue GetNativeQueue() const { return m_queue; }
     [[nodiscard]] VkCommandPool GetNativeCommandPool() const { return m_command_pool; }
     [[nodiscard]] u32 GetQueueFamilyIndex() const { return m_queue_family_index; }
 
-    void Submit(const class AdvancedCommandBuffer& command_buffer, const class AdvancedFence& fence);
-    void Submit(const class AdvancedCommandBuffer& command_buffer, const class AdvancedSemaphore& wait_semaphore,
-                PipelineStageBits wait_stage, const class AdvancedSemaphore& signal_semaphore, const class AdvancedFence& fence);
+    void Submit(const CommandBuffer& command_buffer, const Fence& fence);
+    void Submit(const CommandBuffer& command_buffer, const Semaphore& wait_semaphore,
+                PipelineStageBits wait_stage, const Semaphore& signal_semaphore, const Fence& fence);
 
 private:
 
-    friend class AdvancedDevice;
-    friend class Opal::SharedPtr<AdvancedDeviceQueue>;
+    friend class Device;
+    friend class Opal::SharedPtr<DeviceQueue>;
 
-    Opal::Ref<const AdvancedDevice> m_device;
+    Opal::Ref<const Device> m_device;
     u32 m_queue_family_index = 0;
     VkQueue m_queue = VK_NULL_HANDLE;
     VkCommandPool m_command_pool = VK_NULL_HANDLE;
 };
 
-class AdvancedDevice
+class Device
 {
 public:
-    AdvancedDevice() = default;
-    explicit AdvancedDevice(AdvancedPhysicalDevice physical_device, const class AdvancedGraphicsContext& graphics_context,
-                            const AdvancedDeviceDesc& desc = {});
-    ~AdvancedDevice();
+    Device() = default;
+    explicit Device(PhysicalDevice physical_device, const GraphicsContext& graphics_context,
+                            const DeviceDesc& desc = {});
+    ~Device();
 
-    AdvancedDevice(const AdvancedDevice&) = delete;
-    const AdvancedDevice& operator=(const AdvancedDevice&) = delete;
-    AdvancedDevice(AdvancedDevice&& other) noexcept;
-    AdvancedDevice& operator=(AdvancedDevice&& other) noexcept;
+    Device(const Device&) = delete;
+    const Device& operator=(const Device&) = delete;
+    Device(Device&& other) noexcept;
+    Device& operator=(Device&& other) noexcept;
 
     void Destroy();
 
     [[nodiscard]] VkDevice GetNativeDevice() const { return m_device; }
-    [[nodiscard]] const AdvancedPhysicalDevice& GetPhysicalDevice() const { return m_physical_device; }
+    [[nodiscard]] const PhysicalDevice& GetPhysicalDevice() const { return m_physical_device; }
     [[nodiscard]] VkPhysicalDevice GetNativePhysicalDevice() const { return m_physical_device.GetNativePhysicalDevice(); }
-    [[nodiscard]] const AdvancedDeviceDesc& GetDesc() const { return m_desc; }
+    [[nodiscard]] const DeviceDesc& GetDesc() const { return m_desc; }
 
-    Opal::Ref<AdvancedDeviceQueue> GetQueue(QueueFamily queue_family);
-    [[nodiscard]] Opal::Ref<const AdvancedDeviceQueue> GetQueue(QueueFamily queue_family) const;
+    Opal::Ref<DeviceQueue> GetQueue(QueueFamily queue_family);
+    [[nodiscard]] Opal::Ref<const DeviceQueue> GetQueue(QueueFamily queue_family) const;
 
     [[nodiscard]] VmaAllocator GetGPUAllocator() const { return m_gpu_allocator; }
 
@@ -122,11 +123,11 @@ private:
     void CollectQueueFamilies(Opal::DynamicArray<VkDeviceQueueCreateInfo>& queue_create_infos);
 
     VkDevice m_device = VK_NULL_HANDLE;
-    Opal::HashMap<QueueFamily, Opal::SharedPtr<AdvancedDeviceQueue>> m_queue_family_to_queue;
-    AdvancedPhysicalDevice m_physical_device;
-    AdvancedDeviceDesc m_desc;
-    AdvancedQueueFamilyIndices m_queue_family_indices;
+    Opal::HashMap<QueueFamily, Opal::SharedPtr<DeviceQueue>> m_queue_family_to_queue;
+    PhysicalDevice m_physical_device;
+    DeviceDesc m_desc;
+    QueueFamilyIndices m_queue_family_indices;
     VmaAllocator m_gpu_allocator = VK_NULL_HANDLE;
 };
 
-}  // namespace Rndr
+}  // namespace Rndr::Forge

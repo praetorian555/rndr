@@ -1,12 +1,12 @@
-#include "rndr/advanced/command-buffer.hpp"
+#include "rndr/forge/command-buffer.hpp"
 
-#include "rndr/advanced/advanced-buffer.hpp"
-#include "rndr/advanced/advanced-descriptor-set.hpp"
-#include "rndr/advanced/advanced-pipeline.hpp"
-#include "rndr/advanced/device.hpp"
-#include "rndr/advanced/vulkan-exception.hpp"
+#include "rndr/forge/buffer.hpp"
+#include "rndr/forge/descriptor-set.hpp"
+#include "rndr/forge/pipeline.hpp"
+#include "rndr/forge/device.hpp"
+#include "rndr/forge/vulkan-exception.hpp"
 
-Rndr::AdvancedCommandBuffer::AdvancedCommandBuffer(const AdvancedDevice& device, AdvancedDeviceQueue& queue)
+Rndr::Forge::CommandBuffer::CommandBuffer(const Device& device, DeviceQueue& queue)
     : m_device(&device), m_queue(&queue)
 {
     VkCommandBufferAllocateInfo alloc_info{};
@@ -22,12 +22,12 @@ Rndr::AdvancedCommandBuffer::AdvancedCommandBuffer(const AdvancedDevice& device,
     }
 }
 
-Rndr::AdvancedCommandBuffer::~AdvancedCommandBuffer()
+Rndr::Forge::CommandBuffer::~CommandBuffer()
 {
     Destroy();
 }
 
-void Rndr::AdvancedCommandBuffer::Destroy()
+void Rndr::Forge::CommandBuffer::Destroy()
 {
     if (m_native_command_buffer != VK_NULL_HANDLE)
     {
@@ -36,7 +36,7 @@ void Rndr::AdvancedCommandBuffer::Destroy()
     }
 }
 
-void Rndr::AdvancedCommandBuffer::Begin(bool submit_one_time) const
+void Rndr::Forge::CommandBuffer::Begin(bool submit_one_time) const
 {
     VkCommandBufferBeginInfo begin_info{.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO, .flags = 0};
     begin_info.flags |= submit_one_time ? VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT : 0;
@@ -48,7 +48,7 @@ void Rndr::AdvancedCommandBuffer::Begin(bool submit_one_time) const
     }
 }
 
-void Rndr::AdvancedCommandBuffer::End() const
+void Rndr::Forge::CommandBuffer::End() const
 {
     const VkResult end_result = vkEndCommandBuffer(m_native_command_buffer);
     if (end_result != VK_SUCCESS)
@@ -57,7 +57,7 @@ void Rndr::AdvancedCommandBuffer::End() const
     }
 }
 
-void Rndr::AdvancedCommandBuffer::Reset() const
+void Rndr::Forge::CommandBuffer::Reset() const
 {
     const VkResult reset_result = vkResetCommandBuffer(m_native_command_buffer, 0);
     if (reset_result != VK_SUCCESS)
@@ -66,7 +66,7 @@ void Rndr::AdvancedCommandBuffer::Reset() const
     }
 }
 
-void Rndr::AdvancedCommandBuffer::CmdImageBarrier(const AdvancedImageBarrier& image_barrier)
+void Rndr::Forge::CommandBuffer::CmdImageBarrier(const ImageBarrier& image_barrier)
 {
     VkImageMemoryBarrier2 barrier_info{
         .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
@@ -88,7 +88,7 @@ void Rndr::AdvancedCommandBuffer::CmdImageBarrier(const AdvancedImageBarrier& im
     vkCmdPipelineBarrier2(m_native_command_buffer, &dependency_info);
 }
 
-void Rndr::AdvancedCommandBuffer::CmdImageBarriers(const Opal::ArrayView<AdvancedImageBarrier>& image_barriers)
+void Rndr::Forge::CommandBuffer::CmdImageBarriers(const Opal::ArrayView<ImageBarrier>& image_barriers)
 {
     Opal::DynamicArray<VkImageMemoryBarrier2> barriers;
     for (const auto& image_barrier : image_barriers)
@@ -116,7 +116,7 @@ void Rndr::AdvancedCommandBuffer::CmdImageBarriers(const Opal::ArrayView<Advance
     vkCmdPipelineBarrier2(m_native_command_buffer, &dependency_info);
 }
 
-void Rndr::AdvancedCommandBuffer::CmdCopyBufferToImage(const class AdvancedBuffer& buffer, const Bitmap& bitmap, AdvancedTexture& texture)
+void Rndr::Forge::CommandBuffer::CmdCopyBufferToImage(const Buffer& buffer, const Bitmap& bitmap, Texture& texture)
 {
     Opal::DynamicArray<VkBufferImageCopy> copy_regions(bitmap.GetMipCount());
     for (u32 mip_level = 0; mip_level < bitmap.GetMipCount(); ++mip_level)
@@ -135,35 +135,35 @@ void Rndr::AdvancedCommandBuffer::CmdCopyBufferToImage(const class AdvancedBuffe
                            VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, static_cast<u32>(copy_regions.GetSize()), copy_regions.GetData());
 }
 
-static VkAttachmentLoadOp ToVkLoadOp(Rndr::AttachmentLoadOperation op)
+static VkAttachmentLoadOp ToVkLoadOp(Rndr::Forge::AttachmentLoadOperation op)
 {
     switch (op)
     {
-        case Rndr::AttachmentLoadOperation::Load:
+        case Rndr::Forge::AttachmentLoadOperation::Load:
             return VK_ATTACHMENT_LOAD_OP_LOAD;
-        case Rndr::AttachmentLoadOperation::Clear:
+        case Rndr::Forge::AttachmentLoadOperation::Clear:
             return VK_ATTACHMENT_LOAD_OP_CLEAR;
-        case Rndr::AttachmentLoadOperation::DontCare:
+        case Rndr::Forge::AttachmentLoadOperation::DontCare:
             return VK_ATTACHMENT_LOAD_OP_DONT_CARE;
         default:
             throw Opal::Exception("Unsupported attachment load operation");
     }
 }
 
-static VkAttachmentStoreOp ToVkStoreOp(Rndr::AttachmentStoreOperation op)
+static VkAttachmentStoreOp ToVkStoreOp(Rndr::Forge::AttachmentStoreOperation op)
 {
     switch (op)
     {
-        case Rndr::AttachmentStoreOperation::Store:
+        case Rndr::Forge::AttachmentStoreOperation::Store:
             return VK_ATTACHMENT_STORE_OP_STORE;
-        case Rndr::AttachmentStoreOperation::DontCare:
+        case Rndr::Forge::AttachmentStoreOperation::DontCare:
             return VK_ATTACHMENT_STORE_OP_DONT_CARE;
         default:
             throw Opal::Exception("Unsupported attachment store operation");
     }
 }
 
-void Rndr::AdvancedCommandBuffer::CmdBeginRendering(const AdvancedRenderingDesc& desc)
+void Rndr::Forge::CommandBuffer::CmdBeginRendering(const RenderingDesc& desc)
 {
     Opal::DynamicArray<VkRenderingAttachmentInfo> color_attachments;
     for (const auto& attachment : desc.color_attachments)
@@ -202,26 +202,26 @@ void Rndr::AdvancedCommandBuffer::CmdBeginRendering(const AdvancedRenderingDesc&
     vkCmdBeginRendering(m_native_command_buffer, &rendering_info);
 }
 
-void Rndr::AdvancedCommandBuffer::CmdEndRendering()
+void Rndr::Forge::CommandBuffer::CmdEndRendering()
 {
     vkCmdEndRendering(m_native_command_buffer);
 }
 
-void Rndr::AdvancedCommandBuffer::CmdSetViewport(const Vector2f& offset, const Vector2f& extent, f32 min_depth, f32 max_depth)
+void Rndr::Forge::CommandBuffer::CmdSetViewport(const Vector2f& offset, const Vector2f& extent, f32 min_depth, f32 max_depth)
 {
     const VkViewport viewport{
         .x = offset.x, .y = offset.y, .width = extent.x, .height = extent.y, .minDepth = min_depth, .maxDepth = max_depth};
     vkCmdSetViewport(m_native_command_buffer, 0, 1, &viewport);
 }
 
-void Rndr::AdvancedCommandBuffer::CmdSetScissor(const Vector2i& offset, const Vector2i& extent)
+void Rndr::Forge::CommandBuffer::CmdSetScissor(const Vector2i& offset, const Vector2i& extent)
 {
     const VkRect2D scissor{.offset = {.x = offset.x, .y = offset.y},
                            .extent = {.width = static_cast<u32>(extent.x), .height = static_cast<u32>(extent.y)}};
     vkCmdSetScissor(m_native_command_buffer, 0, 1, &scissor);
 }
 
-void Rndr::AdvancedCommandBuffer::CmdBindVertexBuffer(const AdvancedBuffer& buffer, u32 binding, u64 offset)
+void Rndr::Forge::CommandBuffer::CmdBindVertexBuffer(const Buffer& buffer, u32 binding, u64 offset)
 {
     const VkBuffer native_buffer = buffer.GetNativeBuffer();
     vkCmdBindVertexBuffers(m_native_command_buffer, binding, 1, &native_buffer, &offset);
@@ -242,7 +242,7 @@ static VkIndexType ToVkIndexType(Rndr::IndexSize index_size)
     }
 }
 
-void Rndr::AdvancedCommandBuffer::CmdBindIndexBuffer(const AdvancedBuffer& buffer, u64 offset, IndexSize index_size)
+void Rndr::Forge::CommandBuffer::CmdBindIndexBuffer(const Buffer& buffer, u64 offset, IndexSize index_size)
 {
     vkCmdBindIndexBuffer(m_native_command_buffer, buffer.GetNativeBuffer(), offset, ToVkIndexType(index_size));
 }
@@ -277,12 +277,12 @@ static VkShaderStageFlags ToVkShaderStageFlags(Rndr::ShaderTypeBits stages)
     return flags;
 }
 
-void Rndr::AdvancedCommandBuffer::CmdBindPipeline(const AdvancedPipeline& pipeline)
+void Rndr::Forge::CommandBuffer::CmdBindPipeline(const Pipeline& pipeline)
 {
     vkCmdBindPipeline(m_native_command_buffer, pipeline.GetBindPoint(), pipeline.GetNativePipeline());
 }
 
-void Rndr::AdvancedCommandBuffer::CmdBindDescriptorSet(const AdvancedPipeline& pipeline, const AdvancedDescriptorSet& descriptor_set,
+void Rndr::Forge::CommandBuffer::CmdBindDescriptorSet(const Pipeline& pipeline, const DescriptorSet& descriptor_set,
                                                        u32 first_set)
 {
     const VkDescriptorSet native_set = descriptor_set.GetNativeDescriptorSet();
@@ -290,8 +290,8 @@ void Rndr::AdvancedCommandBuffer::CmdBindDescriptorSet(const AdvancedPipeline& p
                             0, nullptr);
 }
 
-void Rndr::AdvancedCommandBuffer::CmdBindDescriptorSets(const AdvancedPipeline& pipeline,
-                                                        const Opal::ArrayView<Opal::Ref<AdvancedDescriptorSet>>& descriptor_sets,
+void Rndr::Forge::CommandBuffer::CmdBindDescriptorSets(const Pipeline& pipeline,
+                                                        const Opal::ArrayView<Opal::Ref<DescriptorSet>>& descriptor_sets,
                                                         u32 first_set)
 {
     Opal::DynamicArray<VkDescriptorSet> native_sets;
@@ -303,26 +303,26 @@ void Rndr::AdvancedCommandBuffer::CmdBindDescriptorSets(const AdvancedPipeline& 
                             static_cast<u32>(native_sets.GetSize()), native_sets.GetData(), 0, nullptr);
 }
 
-void Rndr::AdvancedCommandBuffer::CmdPushConstants(const AdvancedPipeline& pipeline, ShaderTypeBits shader_stages,
+void Rndr::Forge::CommandBuffer::CmdPushConstants(const Pipeline& pipeline, ShaderTypeBits shader_stages,
                                                    Opal::ArrayView<const u8> data, u32 offset)
 {
     vkCmdPushConstants(m_native_command_buffer, pipeline.GetNativePipelineLayout(), ToVkShaderStageFlags(shader_stages), offset,
                        static_cast<u32>(data.GetSize()), data.GetData());
 }
 
-void Rndr::AdvancedCommandBuffer::CmdDrawIndexed(u32 index_count, u32 instance_count, u32 first_index, i32 vertex_offset,
+void Rndr::Forge::CommandBuffer::CmdDrawIndexed(u32 index_count, u32 instance_count, u32 first_index, i32 vertex_offset,
                                                  u32 first_instance)
 {
     vkCmdDrawIndexed(m_native_command_buffer, index_count, instance_count, first_index, vertex_offset, first_instance);
 }
 
-Rndr::AdvancedCommandBuffer::AdvancedCommandBuffer(AdvancedCommandBuffer&& other) noexcept
+Rndr::Forge::CommandBuffer::CommandBuffer(CommandBuffer&& other) noexcept
     : m_device(std::move(other.m_device)), m_queue(std::move(other.m_queue)), m_native_command_buffer(other.m_native_command_buffer)
 {
     other.m_native_command_buffer = VK_NULL_HANDLE;
 }
 
-Rndr::AdvancedCommandBuffer& Rndr::AdvancedCommandBuffer::operator=(AdvancedCommandBuffer&& other) noexcept
+Rndr::Forge::CommandBuffer& Rndr::Forge::CommandBuffer::operator=(CommandBuffer&& other) noexcept
 {
     if (this != &other)
     {

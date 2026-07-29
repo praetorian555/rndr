@@ -1,12 +1,12 @@
-#include "rndr/advanced/advanced-texture.hpp"
+#include "rndr/forge/texture.hpp"
 
 #include <vma/vk_mem_alloc.h>
 
-#include "rndr/advanced/advanced-buffer.hpp"
-#include "rndr/advanced/device.hpp"
-#include "rndr/advanced/command-buffer.hpp"
-#include "rndr/advanced/synchronization.hpp"
-#include "rndr/advanced/vulkan-exception.hpp"
+#include "rndr/forge/buffer.hpp"
+#include "rndr/forge/device.hpp"
+#include "rndr/forge/command-buffer.hpp"
+#include "rndr/forge/synchronization.hpp"
+#include "rndr/forge/vulkan-exception.hpp"
 #include "rndr/graphics-types.hpp"
 
 static VkFilter ToVkFilter(Rndr::ImageFilter filter)
@@ -69,13 +69,13 @@ static VkBorderColor ToVkBorderColor(Rndr::BorderColor border_color)
     }
 }
 
-Rndr::AdvancedTexture::AdvancedTexture(const AdvancedDevice& device, const AdvancedTextureDesc& desc) : m_desc(desc), m_device(device)
+Rndr::Forge::Texture::Texture(const Device& device, const TextureDesc& desc) : m_desc(desc), m_device(device)
 {
     Init(device, desc);
 }
 
-Rndr::AdvancedTexture::AdvancedTexture(const AdvancedDevice& device, AdvancedDeviceQueue& queue, const Bitmap& bitmap,
-                                       const AdvancedTextureDesc& desc)
+Rndr::Forge::Texture::Texture(const Device& device, DeviceQueue& queue, const Bitmap& bitmap,
+                                       const TextureDesc& desc)
     : m_desc(desc)
 {
     m_desc.width = bitmap.GetWidth();
@@ -89,10 +89,10 @@ Rndr::AdvancedTexture::AdvancedTexture(const AdvancedDevice& device, AdvancedDev
     Init(device, m_desc);
 
     // Create staging buffer
-    const AdvancedBuffer staging_buffer(device, {.size = bitmap.GetTotalSize(), .usage = VK_BUFFER_USAGE_TRANSFER_SRC_BIT});
+    const Buffer staging_buffer(device, {.size = bitmap.GetTotalSize(), .usage = VK_BUFFER_USAGE_TRANSFER_SRC_BIT});
     staging_buffer.Update({bitmap.GetData(), bitmap.GetTotalSize()}, 0);
 
-    AdvancedCommandBuffer upload_command_buffer(device, queue);
+    CommandBuffer upload_command_buffer(device, queue);
     upload_command_buffer.Begin();
     upload_command_buffer.CmdImageBarrier({
         .stages_must_finish = PipelineStageBits::None,
@@ -101,7 +101,7 @@ Rndr::AdvancedTexture::AdvancedTexture(const AdvancedDevice& device, AdvancedDev
         .before_stages_start_access = PipelineStageAccessBits::Write,
         .old_layout = ImageLayout::Undefined,
         .new_layout = ImageLayout::TransferDestination,
-        .image = Opal::Ref<const AdvancedTexture>{this},
+        .image = Opal::Ref<const Texture>{this},
         .subresource_range = {.mip_level_count = bitmap.GetMipCount()}
     });
     upload_command_buffer.CmdCopyBufferToImage(staging_buffer, bitmap, *this);
@@ -112,17 +112,17 @@ Rndr::AdvancedTexture::AdvancedTexture(const AdvancedDevice& device, AdvancedDev
         .before_stages_start_access = PipelineStageAccessBits::Read,
         .old_layout = ImageLayout::TransferDestination,
         .new_layout = ImageLayout::ShaderReadOnly,
-        .image = Opal::Ref<const AdvancedTexture>{this},
+        .image = Opal::Ref<const Texture>{this},
         .subresource_range = {.mip_level_count = bitmap.GetMipCount()}
     });
     upload_command_buffer.End();
 
-    const AdvancedFence fence(device, false);
+    const Fence fence(device, false);
     queue.Submit(upload_command_buffer, fence);
     fence.Wait();
 }
 
-Rndr::AdvancedTexture::AdvancedTexture(const class AdvancedDevice& device, VkImage native_image, const AdvancedTextureDesc& desc) :
+Rndr::Forge::Texture::Texture(const Device& device, VkImage native_image, const TextureDesc& desc) :
 m_device(device), m_image(native_image), m_desc(desc)
 {
     const VkImageViewCreateInfo image_view_create_info = {
@@ -143,7 +143,7 @@ m_device(device), m_image(native_image), m_desc(desc)
     }
 }
 
-void Rndr::AdvancedTexture::Init(const AdvancedDevice& device, const AdvancedTextureDesc& desc)
+void Rndr::Forge::Texture::Init(const Device& device, const TextureDesc& desc)
 {
     m_desc = desc;
     m_device = device;
@@ -187,12 +187,12 @@ void Rndr::AdvancedTexture::Init(const AdvancedDevice& device, const AdvancedTex
     }
 }
 
-Rndr::AdvancedTexture::~AdvancedTexture()
+Rndr::Forge::Texture::~Texture()
 {
     Destroy();
 }
 
-Rndr::AdvancedTexture::AdvancedTexture(AdvancedTexture&& other) noexcept
+Rndr::Forge::Texture::Texture(Texture&& other) noexcept
     : m_desc(other.m_desc),
       m_device(std::move(other.m_device)),
       m_image(other.m_image),
@@ -205,7 +205,7 @@ Rndr::AdvancedTexture::AdvancedTexture(AdvancedTexture&& other) noexcept
     other.m_device = nullptr;
 }
 
-Rndr::AdvancedTexture& Rndr::AdvancedTexture::operator=(AdvancedTexture&& other) noexcept
+Rndr::Forge::Texture& Rndr::Forge::Texture::operator=(Texture&& other) noexcept
 {
     if (this != &other)
     {
@@ -223,7 +223,7 @@ Rndr::AdvancedTexture& Rndr::AdvancedTexture::operator=(AdvancedTexture&& other)
     return *this;
 }
 
-void Rndr::AdvancedTexture::Destroy()
+void Rndr::Forge::Texture::Destroy()
 {
     if (m_view != VK_NULL_HANDLE)
     {
@@ -243,9 +243,9 @@ void Rndr::AdvancedTexture::Destroy()
     }
 }
 
-// AdvancedSampler
+// Sampler
 
-Rndr::AdvancedSampler::AdvancedSampler(const AdvancedDevice& device, const SamplerDesc& desc) : m_device(device)
+Rndr::Forge::Sampler::Sampler(const Device& device, const SamplerDesc& desc) : m_device(device)
 {
     const VkSamplerCreateInfo sampler_create_info = {
         .sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO,
@@ -269,19 +269,19 @@ Rndr::AdvancedSampler::AdvancedSampler(const AdvancedDevice& device, const Sampl
     }
 }
 
-Rndr::AdvancedSampler::~AdvancedSampler()
+Rndr::Forge::Sampler::~Sampler()
 {
     Destroy();
 }
 
-Rndr::AdvancedSampler::AdvancedSampler(AdvancedSampler&& other) noexcept
+Rndr::Forge::Sampler::Sampler(Sampler&& other) noexcept
     : m_device(std::move(other.m_device)), m_sampler(other.m_sampler)
 {
     other.m_sampler = VK_NULL_HANDLE;
     other.m_device = nullptr;
 }
 
-Rndr::AdvancedSampler& Rndr::AdvancedSampler::operator=(AdvancedSampler&& other) noexcept
+Rndr::Forge::Sampler& Rndr::Forge::Sampler::operator=(Sampler&& other) noexcept
 {
     if (this != &other)
     {
@@ -294,7 +294,7 @@ Rndr::AdvancedSampler& Rndr::AdvancedSampler::operator=(AdvancedSampler&& other)
     return *this;
 }
 
-void Rndr::AdvancedSampler::Destroy()
+void Rndr::Forge::Sampler::Destroy()
 {
     if (m_sampler != VK_NULL_HANDLE)
     {

@@ -1,11 +1,11 @@
-#include "rndr/advanced/synchronization.hpp"
+#include "rndr/forge/synchronization.hpp"
 
 #include <mutex>
 
-#include "rndr/advanced/device.hpp"
-#include "rndr/advanced/vulkan-exception.hpp"
+#include "rndr/forge/device.hpp"
+#include "rndr/forge/vulkan-exception.hpp"
 
-Rndr::AdvancedFence::AdvancedFence(const class AdvancedDevice& device, bool create_signaled) : m_device(device)
+Rndr::Forge::Fence::Fence(const Device& device, bool create_signaled) : m_device(device)
 {
     const VkFenceCreateInfo fence_create_info = {.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO,
                                                  .flags = create_signaled ? VK_FENCE_CREATE_SIGNALED_BIT : 0u};
@@ -17,12 +17,12 @@ Rndr::AdvancedFence::AdvancedFence(const class AdvancedDevice& device, bool crea
     }
 }
 
-Rndr::AdvancedFence::~AdvancedFence()
+Rndr::Forge::Fence::~Fence()
 {
     Destroy();
 }
 
-void Rndr::AdvancedFence::Destroy()
+void Rndr::Forge::Fence::Destroy()
 {
     if (m_fence != VK_NULL_HANDLE)
     {
@@ -31,13 +31,13 @@ void Rndr::AdvancedFence::Destroy()
     }
 }
 
-Rndr::AdvancedFence::AdvancedFence(AdvancedFence&& other) noexcept : m_device(std::move(other.m_device)), m_fence(other.m_fence)
+Rndr::Forge::Fence::Fence(Fence&& other) noexcept : m_device(std::move(other.m_device)), m_fence(other.m_fence)
 {
     other.m_fence = VK_NULL_HANDLE;
     other.m_device = nullptr;
 }
 
-Rndr::AdvancedFence& Rndr::AdvancedFence::operator=(AdvancedFence&& other) noexcept
+Rndr::Forge::Fence& Rndr::Forge::Fence::operator=(Fence&& other) noexcept
 {
     if (this != &other)
     {
@@ -49,7 +49,7 @@ Rndr::AdvancedFence& Rndr::AdvancedFence::operator=(AdvancedFence&& other) noexc
     return *this;
 }
 
-void Rndr::AdvancedFence::Wait(u64 timeout) const
+void Rndr::Forge::Fence::Wait(u64 timeout) const
 {
     const VkResult result = vkWaitForFences(m_device->GetNativeDevice(), 1, &m_fence, VK_TRUE, timeout);
     if (result != VK_SUCCESS)
@@ -58,7 +58,7 @@ void Rndr::AdvancedFence::Wait(u64 timeout) const
     }
 }
 
-void Rndr::AdvancedFence::Reset() const
+void Rndr::Forge::Fence::Reset() const
 {
     const VkResult reset_result = vkResetFences(m_device->GetNativeDevice(), 1, &m_fence);
     if (reset_result != VK_SUCCESS)
@@ -67,7 +67,7 @@ void Rndr::AdvancedFence::Reset() const
     }
 }
 
-void Rndr::AdvancedFence::WaitForAll(Opal::ArrayView<AdvancedFence> fences, u64 timeout)
+void Rndr::Forge::Fence::WaitForAll(Opal::ArrayView<Fence> fences, u64 timeout)
 {
     if (fences.empty())
     {
@@ -86,7 +86,7 @@ void Rndr::AdvancedFence::WaitForAll(Opal::ArrayView<AdvancedFence> fences, u64 
     }
 }
 
-Rndr::AdvancedSemaphore::AdvancedSemaphore(const AdvancedDevice& device) : m_device(device)
+Rndr::Forge::Semaphore::Semaphore(const Device& device) : m_device(device)
 {
     const VkSemaphoreCreateInfo semaphore_create_info = {.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO};
     const VkResult result = vkCreateSemaphore(device.GetNativeDevice(), &semaphore_create_info, nullptr, &m_semaphore);
@@ -96,12 +96,12 @@ Rndr::AdvancedSemaphore::AdvancedSemaphore(const AdvancedDevice& device) : m_dev
     }
 }
 
-Rndr::AdvancedSemaphore::~AdvancedSemaphore()
+Rndr::Forge::Semaphore::~Semaphore()
 {
     Destroy();
 }
 
-void Rndr::AdvancedSemaphore::Destroy()
+void Rndr::Forge::Semaphore::Destroy()
 {
     if (m_semaphore != VK_NULL_HANDLE)
     {
@@ -110,14 +110,14 @@ void Rndr::AdvancedSemaphore::Destroy()
     }
 }
 
-Rndr::AdvancedSemaphore::AdvancedSemaphore(AdvancedSemaphore&& other) noexcept
+Rndr::Forge::Semaphore::Semaphore(Semaphore&& other) noexcept
     : m_device(std::move(other.m_device)), m_semaphore(other.m_semaphore)
 {
     other.m_device = nullptr;
     other.m_semaphore = VK_NULL_HANDLE;
 }
 
-Rndr::AdvancedSemaphore& Rndr::AdvancedSemaphore::operator=(AdvancedSemaphore&& other) noexcept
+Rndr::Forge::Semaphore& Rndr::Forge::Semaphore::operator=(Semaphore&& other) noexcept
 {
     if (this != &other)
     {

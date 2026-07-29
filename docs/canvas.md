@@ -174,7 +174,7 @@ Vertex data stride is validated against the layout at construction. Index data u
 
 ### Texture
 
-GPU texture resource supporting 2D, 2D array, and cubemap types. Loaded from files (PNG, JPEG, HDR via stbi; KTX/KTX2 when advanced API is enabled) or created programmatically.
+GPU texture resource supporting 2D, 2D array, and cubemap types. Loaded from files (PNG, JPEG, HDR via stbi; KTX/KTX2 when the Forge API is enabled) or created programmatically.
 
 ```cpp
 // Load from file.

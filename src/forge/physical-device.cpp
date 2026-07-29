@@ -1,8 +1,8 @@
-#include "rndr/advanced/physical-device.hpp"
+#include "rndr/forge/physical-device.hpp"
 
-#include "rndr/advanced/swap-chain.hpp"
+#include "rndr/forge/swap-chain.hpp"
 
-Rndr::AdvancedPhysicalDevice::AdvancedPhysicalDevice(VkPhysicalDevice physical_device)
+Rndr::Forge::PhysicalDevice::PhysicalDevice(VkPhysicalDevice physical_device)
 {
     if (physical_device == VK_NULL_HANDLE)
     {
@@ -38,12 +38,12 @@ Rndr::AdvancedPhysicalDevice::AdvancedPhysicalDevice(VkPhysicalDevice physical_d
     m_physical_device = physical_device;
 }
 
-Rndr::AdvancedPhysicalDevice::~AdvancedPhysicalDevice()
+Rndr::Forge::PhysicalDevice::~PhysicalDevice()
 {
     Destroy();
 }
 
-Rndr::AdvancedPhysicalDevice::AdvancedPhysicalDevice(AdvancedPhysicalDevice&& other) noexcept
+Rndr::Forge::PhysicalDevice::PhysicalDevice(PhysicalDevice&& other) noexcept
     : m_physical_device(other.m_physical_device),
       m_properties(other.m_properties),
       m_features(other.m_features),
@@ -59,7 +59,7 @@ Rndr::AdvancedPhysicalDevice::AdvancedPhysicalDevice(AdvancedPhysicalDevice&& ot
     other.m_supported_extensions.Clear();
 }
 
-Rndr::AdvancedPhysicalDevice& Rndr::AdvancedPhysicalDevice::operator=(AdvancedPhysicalDevice&& other) noexcept
+Rndr::Forge::PhysicalDevice& Rndr::Forge::PhysicalDevice::operator=(PhysicalDevice&& other) noexcept
 {
     Destroy();
 
@@ -80,7 +80,7 @@ Rndr::AdvancedPhysicalDevice& Rndr::AdvancedPhysicalDevice::operator=(AdvancedPh
     return *this;
 }
 
-Opal::Expected<Rndr::u32, VkResult> Rndr::AdvancedPhysicalDevice::GetQueueFamilyIndex(VkQueueFlags queue_flags, VkQueueFlags not_queue_flags) const
+Opal::Expected<Rndr::u32, VkResult> Rndr::Forge::PhysicalDevice::GetQueueFamilyIndex(VkQueueFlags queue_flags, VkQueueFlags not_queue_flags) const
 {
     for (u32 i = 0; i < m_queue_family_properties.GetSize(); i++)
     {
@@ -94,7 +94,7 @@ Opal::Expected<Rndr::u32, VkResult> Rndr::AdvancedPhysicalDevice::GetQueueFamily
     return Opal::Expected<u32, VkResult>(VK_ERROR_FEATURE_NOT_PRESENT);
 }
 
-Opal::Expected<Rndr::u32, VkResult> Rndr::AdvancedPhysicalDevice::GetPresentQueueFamilyIndex(const class AdvancedSurface& surface) const
+Opal::Expected<Rndr::u32, VkResult> Rndr::Forge::PhysicalDevice::GetPresentQueueFamilyIndex(const Surface& surface) const
 {
     for (u32 i = 0; i < m_queue_family_properties.GetSize(); i++)
     {
@@ -108,7 +108,7 @@ Opal::Expected<Rndr::u32, VkResult> Rndr::AdvancedPhysicalDevice::GetPresentQueu
     return Opal::Expected<u32, VkResult>(VK_ERROR_FEATURE_NOT_PRESENT);
 }
 
-bool Rndr::AdvancedPhysicalDevice::IsExtensionSupported(const char* extension_name) const
+bool Rndr::Forge::PhysicalDevice::IsExtensionSupported(const char* extension_name) const
 {
     bool is_found = false;
     for (const Opal::StringUtf8& supported_extension : m_supported_extensions)
@@ -126,7 +126,7 @@ bool Rndr::AdvancedPhysicalDevice::IsExtensionSupported(const char* extension_na
     return true;
 }
 
-Rndr::u32 Rndr::AdvancedPhysicalDevice::FindMemoryTypeIndex(u32 type_filter, VkMemoryPropertyFlags properties) const
+Rndr::u32 Rndr::Forge::PhysicalDevice::FindMemoryTypeIndex(u32 type_filter, VkMemoryPropertyFlags properties) const
 {
     VkPhysicalDeviceMemoryProperties memory_properties;
     vkGetPhysicalDeviceMemoryProperties(m_physical_device, &memory_properties);
@@ -144,7 +144,7 @@ Rndr::u32 Rndr::AdvancedPhysicalDevice::FindMemoryTypeIndex(u32 type_filter, VkM
     return 0;
 }
 
-void Rndr::AdvancedPhysicalDevice::Destroy()
+void Rndr::Forge::PhysicalDevice::Destroy()
 {
     m_physical_device = VK_NULL_HANDLE;
     m_queue_family_properties.Clear();

@@ -6,7 +6,7 @@
 
 #include "rndr/types.hpp"
 
-namespace Rndr
+namespace Rndr::Forge
 {
 
 inline const char* VkResultToString(VkResult result)
@@ -88,4 +88,4 @@ private:
     VkResult m_result;
 };
 
-}  // namespace Rndr
+}  // namespace Rndr::Forge

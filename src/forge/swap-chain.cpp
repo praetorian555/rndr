@@ -1,4 +1,4 @@
-#include "rndr/advanced/swap-chain.hpp"
+#include "rndr/forge/swap-chain.hpp"
 
 #include "opal/math-base.h"
 
@@ -8,15 +8,15 @@
 
 #include "opal/container/in-place-array.h"
 
-#include "rndr/advanced/device.hpp"
-#include "rndr/advanced/physical-device.hpp"
-#include "rndr/advanced/synchronization.hpp"
-#include "rndr/advanced/vulkan-exception.hpp"
+#include "rndr/forge/device.hpp"
+#include "rndr/forge/physical-device.hpp"
+#include "rndr/forge/synchronization.hpp"
+#include "rndr/forge/vulkan-exception.hpp"
 #include "rndr/generic-window.hpp"
 #include "rndr/log.hpp"
 #include "rndr/pixel-format.hpp"
 
-Rndr::AdvancedSurface::AdvancedSurface(const AdvancedGraphicsContext& context, Opal::Ref<const GenericWindow> window) : m_window(std::move(window))
+Rndr::Forge::Surface::Surface(const GraphicsContext& context, Opal::Ref<const GenericWindow> window) : m_window(std::move(window))
 {
 #if defined(OPAL_PLATFORM_WINDOWS)
     VkWin32SurfaceCreateInfoKHR surface_create_info{};
@@ -35,18 +35,18 @@ Rndr::AdvancedSurface::AdvancedSurface(const AdvancedGraphicsContext& context, O
 #endif
 }
 
-Rndr::AdvancedSurface::~AdvancedSurface()
+Rndr::Forge::Surface::~Surface()
 {
     Destroy();
 }
 
-Rndr::AdvancedSurface::AdvancedSurface(AdvancedSurface&& other) noexcept : m_surface(other.m_surface), m_context(std::move(other.m_context))
+Rndr::Forge::Surface::Surface(Surface&& other) noexcept : m_surface(other.m_surface), m_context(std::move(other.m_context))
 {
     other.m_surface = VK_NULL_HANDLE;
     other.m_context = nullptr;
 }
 
-Rndr::AdvancedSurface& Rndr::AdvancedSurface::operator=(AdvancedSurface&& other) noexcept
+Rndr::Forge::Surface& Rndr::Forge::Surface::operator=(Surface&& other) noexcept
 {
     Destroy();
     m_surface = other.m_surface;
@@ -56,7 +56,7 @@ Rndr::AdvancedSurface& Rndr::AdvancedSurface::operator=(AdvancedSurface&& other)
     return *this;
 }
 
-void Rndr::AdvancedSurface::Destroy()
+void Rndr::Forge::Surface::Destroy()
 {
     if (m_surface != VK_NULL_HANDLE)
     {
@@ -66,9 +66,9 @@ void Rndr::AdvancedSurface::Destroy()
     m_context = nullptr;
 }
 
-Rndr::AdvancedSwapChainSupportDetails Rndr::AdvancedSurface::GetSwapChainSupportDetails(const AdvancedPhysicalDevice& device) const
+Rndr::Forge::SwapChainSupportDetails Rndr::Forge::Surface::GetSwapChainSupportDetails(const PhysicalDevice& device) const
 {
-    AdvancedSwapChainSupportDetails details;
+    SwapChainSupportDetails details;
 
     vkGetPhysicalDeviceSurfaceCapabilitiesKHR(device.GetNativePhysicalDevice(), m_surface, &details.capabilities);
 
@@ -95,18 +95,18 @@ Rndr::AdvancedSwapChainSupportDetails Rndr::AdvancedSurface::GetSwapChainSupport
     return details;
 }
 
-Rndr::AdvancedSwapChain::AdvancedSwapChain(const AdvancedDevice& device, const AdvancedSurface& surface, const AdvancedSwapChainDesc& desc)
+Rndr::Forge::SwapChain::SwapChain(const Device& device, const Surface& surface, const SwapChainDesc& desc)
     : m_device(device), m_surface(surface), m_desc(desc)
 {
     Recreate();
 }
 
-Rndr::AdvancedSwapChain::~AdvancedSwapChain()
+Rndr::Forge::SwapChain::~SwapChain()
 {
     Destroy();
 }
 
-Rndr::AdvancedSwapChain::AdvancedSwapChain(AdvancedSwapChain&& other) noexcept
+Rndr::Forge::SwapChain::SwapChain(SwapChain&& other) noexcept
     : m_swap_chain(other.m_swap_chain),
       m_device(std::move(other.m_device)),
       m_surface(std::move(other.m_surface)),
@@ -123,7 +123,7 @@ Rndr::AdvancedSwapChain::AdvancedSwapChain(AdvancedSwapChain&& other) noexcept
     other.m_extent = {};
 }
 
-Rndr::AdvancedSwapChain& Rndr::AdvancedSwapChain::operator=(AdvancedSwapChain&& other) noexcept
+Rndr::Forge::SwapChain& Rndr::Forge::SwapChain::operator=(SwapChain&& other) noexcept
 {
     Destroy();
 
@@ -145,9 +145,9 @@ Rndr::AdvancedSwapChain& Rndr::AdvancedSwapChain::operator=(AdvancedSwapChain&& 
     return *this;
 }
 
-void Rndr::AdvancedSwapChain::Destroy()
+void Rndr::Forge::SwapChain::Destroy()
 {
-    for (AdvancedTexture& color_texture : m_color_textures)
+    for (Texture& color_texture : m_color_textures)
     {
         color_texture.Destroy();
     }
@@ -164,7 +164,7 @@ void Rndr::AdvancedSwapChain::Destroy()
     m_extent = {};
 }
 
-Rndr::u32 Rndr::AdvancedSwapChain::AcquireImage(const Opal::Ref<AdvancedSemaphore>& semaphore)
+Rndr::u32 Rndr::Forge::SwapChain::AcquireImage(const Opal::Ref<Semaphore>& semaphore)
 {
     u32 image_index = UINT32_MAX;
     bool should_run_again = false;
@@ -186,7 +186,7 @@ Rndr::u32 Rndr::AdvancedSwapChain::AcquireImage(const Opal::Ref<AdvancedSemaphor
     return image_index;
 }
 
-void Rndr::AdvancedSwapChain::Present(u32 image_index, Opal::Ref<AdvancedDeviceQueue> queue, Opal::Ref<AdvancedSemaphore> semaphore)
+void Rndr::Forge::SwapChain::Present(u32 image_index, Opal::Ref<DeviceQueue> queue, Opal::Ref<Semaphore> semaphore)
 {
     Opal::DynamicArray<VkSemaphore> wait_semaphores{semaphore->GetNativeSemaphore()};
     const VkPresentInfoKHR present_info = {
@@ -210,9 +210,9 @@ void Rndr::AdvancedSwapChain::Present(u32 image_index, Opal::Ref<AdvancedDeviceQ
     }
 }
 
-void Rndr::AdvancedSwapChain::Recreate()
+void Rndr::Forge::SwapChain::Recreate()
 {
-    const AdvancedSwapChainSupportDetails swap_chain_support = m_surface->GetSwapChainSupportDetails(m_device->GetPhysicalDevice());
+    const SwapChainSupportDetails swap_chain_support = m_surface->GetSwapChainSupportDetails(m_device->GetPhysicalDevice());
     bool is_supported = false;
     for (auto available_format : swap_chain_support.formats)
     {
@@ -315,7 +315,7 @@ void Rndr::AdvancedSwapChain::Recreate()
     }
     for (VkImage image : images)
     {
-        AdvancedTexture texture(m_device, image, AdvancedTextureDesc{
+        Texture texture(m_device, image, TextureDesc{
             .format = m_desc.pixel_format,
             .width = extent.width,
             .height = extent.height
@@ -324,7 +324,7 @@ void Rndr::AdvancedSwapChain::Recreate()
     }
     if (m_desc.use_depth)
     {
-        m_depth_texture = AdvancedTexture{m_device,
+        m_depth_texture = Texture{m_device,
                                           {.image_type = VK_IMAGE_TYPE_2D,
                                            .format = m_desc.depth_pixel_format,
                                            .width = extent.width,

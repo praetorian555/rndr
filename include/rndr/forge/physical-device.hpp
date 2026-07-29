@@ -6,21 +6,22 @@
 #include "opal/container/string.h"
 
 #include "rndr/types.hpp"
+#include "rndr/forge/forward.hpp"
 
-namespace Rndr
+namespace Rndr::Forge
 {
 
-class AdvancedPhysicalDevice
+class PhysicalDevice
 {
 public:
-    AdvancedPhysicalDevice() = default;
-    explicit AdvancedPhysicalDevice(VkPhysicalDevice physical_device);
-    ~AdvancedPhysicalDevice();
+    PhysicalDevice() = default;
+    explicit PhysicalDevice(VkPhysicalDevice physical_device);
+    ~PhysicalDevice();
 
-    AdvancedPhysicalDevice(const AdvancedPhysicalDevice&) = delete;
-    AdvancedPhysicalDevice& operator=(const AdvancedPhysicalDevice&) = delete;
-    AdvancedPhysicalDevice(AdvancedPhysicalDevice&&) noexcept;
-    AdvancedPhysicalDevice& operator=(AdvancedPhysicalDevice&&) noexcept;
+    PhysicalDevice(const PhysicalDevice&) = delete;
+    PhysicalDevice& operator=(const PhysicalDevice&) = delete;
+    PhysicalDevice(PhysicalDevice&&) noexcept;
+    PhysicalDevice& operator=(PhysicalDevice&&) noexcept;
 
     void Destroy();
 
@@ -33,7 +34,7 @@ public:
     [[nodiscard]] const Opal::DynamicArray<VkQueueFamilyProperties>& GetQueueFamilyProperties() const { return m_queue_family_properties; }
     [[nodiscard]] const Opal::DynamicArray<Opal::StringUtf8>& GetSupportedExtensions() const { return m_supported_extensions; }
     [[nodiscard]] Opal::Expected<u32, VkResult> GetQueueFamilyIndex(VkQueueFlags queue_flags, VkQueueFlags not_queue_flags = 0) const;
-    [[nodiscard]] Opal::Expected<u32, VkResult> GetPresentQueueFamilyIndex(const class AdvancedSurface& surface) const;
+    [[nodiscard]] Opal::Expected<u32, VkResult> GetPresentQueueFamilyIndex(const Surface& surface) const;
 
     [[nodiscard]] bool IsExtensionSupported(const char* extension_name) const;
 

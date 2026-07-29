@@ -1,14 +1,14 @@
-#include "rndr/advanced/advanced-buffer.hpp"
+#include "rndr/forge/buffer.hpp"
 
 #ifndef NOMINMAX
 #define NOMINMAX
 #endif
 #include "vma/vk_mem_alloc.h"
 
-#include "rndr/advanced/device.hpp"
-#include "rndr/advanced/vulkan-exception.hpp"
+#include "rndr/forge/device.hpp"
+#include "rndr/forge/vulkan-exception.hpp"
 
-Rndr::AdvancedBuffer::AdvancedBuffer(const class AdvancedDevice& device, const AdvancedBufferDesc& desc, Opal::ArrayView<u8> initial_data)
+Rndr::Forge::Buffer::Buffer(const Device& device, const BufferDesc& desc, Opal::ArrayView<u8> initial_data)
     : m_device(device), m_desc(desc)
 {
     VkBufferCreateInfo create_info{.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO, .size = desc.size, .usage = desc.usage};
@@ -58,12 +58,12 @@ Rndr::AdvancedBuffer::AdvancedBuffer(const class AdvancedDevice& device, const A
     }
 }
 
-Rndr::AdvancedBuffer::~AdvancedBuffer()
+Rndr::Forge::Buffer::~Buffer()
 {
     Destroy();
 }
 
-Rndr::AdvancedBuffer::AdvancedBuffer(AdvancedBuffer&& other) noexcept
+Rndr::Forge::Buffer::Buffer(Buffer&& other) noexcept
     : m_desc(other.m_desc),
       m_device(std::move(other.m_device)),
       m_buffer(other.m_buffer),
@@ -76,7 +76,7 @@ Rndr::AdvancedBuffer::AdvancedBuffer(AdvancedBuffer&& other) noexcept
     other.m_device_address = 0;
 }
 
-Rndr::AdvancedBuffer& Rndr::AdvancedBuffer::operator=(AdvancedBuffer&& other) noexcept
+Rndr::Forge::Buffer& Rndr::Forge::Buffer::operator=(Buffer&& other) noexcept
 {
     if (this != &other)
     {
@@ -94,7 +94,7 @@ Rndr::AdvancedBuffer& Rndr::AdvancedBuffer::operator=(AdvancedBuffer&& other) no
     return *this;
 }
 
-void Rndr::AdvancedBuffer::Destroy()
+void Rndr::Forge::Buffer::Destroy()
 {
     if (m_buffer != VK_NULL_HANDLE)
     {
@@ -110,7 +110,7 @@ void Rndr::AdvancedBuffer::Destroy()
     m_device_address = 0;
 }
 
-void Rndr::AdvancedBuffer::Update(Opal::ArrayView<const u8> data, size_t) const
+void Rndr::Forge::Buffer::Update(Opal::ArrayView<const u8> data, size_t) const
 {
     if (data.IsEmpty())
     {

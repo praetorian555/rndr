@@ -237,16 +237,16 @@ enum class PixelFormat : u16
 #if RNDR_FORGE
 
 /**
- * Convert AdvancedPixelFormat to VkFormat.
- * @param format The AdvancedPixelFormat to convert.
+ * Convert PixelFormat to VkFormat.
+ * @param format The PixelFormat to convert.
  * @return The corresponding VkFormat value.
  */
 [[nodiscard]] VkFormat ToVkFormat(PixelFormat format);
 
 /**
- * Convert VkFormat to AdvancedPixelFormat.
+ * Convert VkFormat to PixelFormat.
  * @param format The VkFormat to convert.
- * @return The corresponding AdvancedPixelFormat value.
+ * @return The corresponding PixelFormat value.
  */
 [[nodiscard]] PixelFormat FromVkFormat(VkFormat format);
 

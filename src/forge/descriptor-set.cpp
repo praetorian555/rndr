@@ -1,29 +1,29 @@
-#include "rndr/advanced/advanced-descriptor-set.hpp"
+#include "rndr/forge/descriptor-set.hpp"
 
 #include "opal/container/in-place-array.h"
-#include "rndr/advanced/advanced-buffer.hpp"
-#include "rndr/advanced/advanced-texture.hpp"
+#include "rndr/forge/buffer.hpp"
+#include "rndr/forge/texture.hpp"
 
-#include "rndr/advanced/device.hpp"
-#include "rndr/advanced/vulkan-exception.hpp"
+#include "rndr/forge/device.hpp"
+#include "rndr/forge/vulkan-exception.hpp"
 
 namespace
 {
-VkDescriptorType FromAdvancedDescriptorType(Rndr::AdvancedDescriptorType descriptor_type)
+VkDescriptorType FromDescriptorType(Rndr::Forge::DescriptorType descriptor_type)
 {
     switch (descriptor_type)
     {
-        case Rndr::AdvancedDescriptorType::SampledImage:
+        case Rndr::Forge::DescriptorType::SampledImage:
             return VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE;
-        case Rndr::AdvancedDescriptorType::Sampler:
+        case Rndr::Forge::DescriptorType::Sampler:
             return VK_DESCRIPTOR_TYPE_SAMPLER;
-        case Rndr::AdvancedDescriptorType::CombinedImageSampler:
+        case Rndr::Forge::DescriptorType::CombinedImageSampler:
             return VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-        case Rndr::AdvancedDescriptorType::ConstantBuffer:
+        case Rndr::Forge::DescriptorType::ConstantBuffer:
             return VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-        case Rndr::AdvancedDescriptorType::StorageBuffer:
+        case Rndr::Forge::DescriptorType::StorageBuffer:
             return VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
-        case Rndr::AdvancedDescriptorType::StorageImage:
+        case Rndr::Forge::DescriptorType::StorageImage:
             return VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
         default:
             throw Opal::Exception("Invalid descriptor type!");
@@ -62,7 +62,7 @@ VkShaderStageFlags FromShaderTypeBits(Rndr::ShaderTypeBits shader_types)
 
 }  // namespace
 
-void Rndr::AdvancedDescriptorPoolDesc::Add(AdvancedDescriptorType descriptor_type, u32 max_size)
+void Rndr::Forge::DescriptorPoolDesc::Add(DescriptorType descriptor_type, u32 max_size)
 {
     for (const auto& pair : descriptor_types)
     {
@@ -74,7 +74,7 @@ void Rndr::AdvancedDescriptorPoolDesc::Add(AdvancedDescriptorType descriptor_typ
     descriptor_types.PushBack({.key = descriptor_type, .value = max_size});
 }
 
-void Rndr::AdvancedDescriptorSetLayoutDesc::AddBinding(AdvancedDescriptorType descriptor_type, u32 descriptor_count,
+void Rndr::Forge::DescriptorSetLayoutDesc::AddBinding(DescriptorType descriptor_type, u32 descriptor_count,
                                                        ShaderTypeBits shader_types)
 {
     Binding binding;
@@ -84,23 +84,23 @@ void Rndr::AdvancedDescriptorSetLayoutDesc::AddBinding(AdvancedDescriptorType de
     bindings.PushBack(binding);
 }
 
-// AdvancedDescriptorPool
+// DescriptorPool
 
-Rndr::AdvancedDescriptorSetUpdateBinding Rndr::AdvancedDescriptorSetUpdateBinding::Clone(Opal::AllocatorBase* allocator) const
+Rndr::Forge::DescriptorSetUpdateBinding Rndr::Forge::DescriptorSetUpdateBinding::Clone(Opal::AllocatorBase* allocator) const
 {
-    AdvancedDescriptorSetUpdateBinding clone{
+    DescriptorSetUpdateBinding clone{
         .descriptor_type = descriptor_type, .binding = binding, .resource_info = resource_info.Clone(allocator)};
     return clone;
 }
 
-Rndr::AdvancedDescriptorPool::AdvancedDescriptorPool(const AdvancedDevice& device, const AdvancedDescriptorPoolDesc& desc)
+Rndr::Forge::DescriptorPool::DescriptorPool(const Device& device, const DescriptorPoolDesc& desc)
     : m_device(device), m_desc(desc.Clone())
 {
     Opal::DynamicArray<VkDescriptorPoolSize> pool_sizes;
     for (const auto& pair : desc.descriptor_types)
     {
         const VkDescriptorPoolSize pool_size{
-            .type = FromAdvancedDescriptorType(pair.key),
+            .type = FromDescriptorType(pair.key),
             .descriptorCount = pair.value,
         };
         pool_sizes.PushBack(pool_size);
@@ -128,19 +128,19 @@ Rndr::AdvancedDescriptorPool::AdvancedDescriptorPool(const AdvancedDevice& devic
     }
 }
 
-Rndr::AdvancedDescriptorPool::~AdvancedDescriptorPool()
+Rndr::Forge::DescriptorPool::~DescriptorPool()
 {
     Destroy();
 }
 
-Rndr::AdvancedDescriptorPool::AdvancedDescriptorPool(AdvancedDescriptorPool&& other) noexcept
+Rndr::Forge::DescriptorPool::DescriptorPool(DescriptorPool&& other) noexcept
     : m_device(std::move(other.m_device)), m_pool(other.m_pool), m_desc(std::move(other.m_desc))
 {
     other.m_pool = VK_NULL_HANDLE;
     other.m_device = nullptr;
 }
 
-Rndr::AdvancedDescriptorPool& Rndr::AdvancedDescriptorPool::operator=(AdvancedDescriptorPool&& other) noexcept
+Rndr::Forge::DescriptorPool& Rndr::Forge::DescriptorPool::operator=(DescriptorPool&& other) noexcept
 {
     if (this != &other)
     {
@@ -154,7 +154,7 @@ Rndr::AdvancedDescriptorPool& Rndr::AdvancedDescriptorPool::operator=(AdvancedDe
     return *this;
 }
 
-void Rndr::AdvancedDescriptorPool::Destroy()
+void Rndr::Forge::DescriptorPool::Destroy()
 {
     if (m_pool != VK_NULL_HANDLE)
     {
@@ -163,14 +163,14 @@ void Rndr::AdvancedDescriptorPool::Destroy()
     }
 }
 
-VkDevice Rndr::AdvancedDescriptorPool::GetNativeDevice() const
+VkDevice Rndr::Forge::DescriptorPool::GetNativeDevice() const
 {
     return m_device->GetNativeDevice();
 }
 
-// AdvancedDescriptorSetLayout
+// DescriptorSetLayout
 
-Rndr::AdvancedDescriptorSetLayout::AdvancedDescriptorSetLayout(const AdvancedDevice& device, const AdvancedDescriptorSetLayoutDesc& desc)
+Rndr::Forge::DescriptorSetLayout::DescriptorSetLayout(const Device& device, const DescriptorSetLayoutDesc& desc)
     : m_device(device), m_desc(desc.Clone())
 {
     Opal::DynamicArray<VkDescriptorSetLayoutBinding> bindings(desc.bindings.GetSize());
@@ -180,7 +180,7 @@ Rndr::AdvancedDescriptorSetLayout::AdvancedDescriptorSetLayout(const AdvancedDev
     {
         VkDescriptorSetLayoutBinding& binding = bindings[i];
         binding.binding = i;
-        binding.descriptorType = FromAdvancedDescriptorType(desc.bindings[i].descriptor_type);
+        binding.descriptorType = FromDescriptorType(desc.bindings[i].descriptor_type);
         binding.descriptorCount = desc.bindings[i].descriptor_count;
         binding.stageFlags = FromShaderTypeBits(desc.bindings[i].shader_types);
     }
@@ -207,19 +207,19 @@ Rndr::AdvancedDescriptorSetLayout::AdvancedDescriptorSetLayout(const AdvancedDev
     }
 }
 
-Rndr::AdvancedDescriptorSetLayout::~AdvancedDescriptorSetLayout()
+Rndr::Forge::DescriptorSetLayout::~DescriptorSetLayout()
 {
     Destroy();
 }
 
-Rndr::AdvancedDescriptorSetLayout::AdvancedDescriptorSetLayout(AdvancedDescriptorSetLayout&& other) noexcept
+Rndr::Forge::DescriptorSetLayout::DescriptorSetLayout(DescriptorSetLayout&& other) noexcept
     : m_device(std::move(other.m_device)), m_layout(other.m_layout), m_desc(std::move(other.m_desc))
 {
     other.m_layout = VK_NULL_HANDLE;
     other.m_device = nullptr;
 }
 
-Rndr::AdvancedDescriptorSetLayout& Rndr::AdvancedDescriptorSetLayout::operator=(AdvancedDescriptorSetLayout&& other) noexcept
+Rndr::Forge::DescriptorSetLayout& Rndr::Forge::DescriptorSetLayout::operator=(DescriptorSetLayout&& other) noexcept
 {
     if (this != &other)
     {
@@ -233,7 +233,7 @@ Rndr::AdvancedDescriptorSetLayout& Rndr::AdvancedDescriptorSetLayout::operator=(
     return *this;
 }
 
-void Rndr::AdvancedDescriptorSetLayout::Destroy()
+void Rndr::Forge::DescriptorSetLayout::Destroy()
 {
     if (m_layout != VK_NULL_HANDLE)
     {
@@ -242,9 +242,9 @@ void Rndr::AdvancedDescriptorSetLayout::Destroy()
     }
 }
 
-// AdvancedDescriptorSet
+// DescriptorSet
 
-Rndr::AdvancedDescriptorSet::AdvancedDescriptorSet(const AdvancedDescriptorPool& pool, const AdvancedDescriptorSetLayout& layout,
+Rndr::Forge::DescriptorSet::DescriptorSet(const DescriptorPool& pool, const DescriptorSetLayout& layout,
                                                    u32 variable_descriptor_count)
     : m_device(pool.GetNativeDevice())
 {
@@ -271,18 +271,18 @@ Rndr::AdvancedDescriptorSet::AdvancedDescriptorSet(const AdvancedDescriptorPool&
     }
 }
 
-Rndr::AdvancedDescriptorSet::~AdvancedDescriptorSet()
+Rndr::Forge::DescriptorSet::~DescriptorSet()
 {
     Destroy();
 }
 
-Rndr::AdvancedDescriptorSet::AdvancedDescriptorSet(AdvancedDescriptorSet&& other) noexcept : m_device(other.m_device), m_set(other.m_set)
+Rndr::Forge::DescriptorSet::DescriptorSet(DescriptorSet&& other) noexcept : m_device(other.m_device), m_set(other.m_set)
 {
     other.m_set = VK_NULL_HANDLE;
     other.m_device = VK_NULL_HANDLE;
 }
 
-Rndr::AdvancedDescriptorSet& Rndr::AdvancedDescriptorSet::operator=(AdvancedDescriptorSet&& other) noexcept
+Rndr::Forge::DescriptorSet& Rndr::Forge::DescriptorSet::operator=(DescriptorSet&& other) noexcept
 {
     if (this != &other)
     {
@@ -295,12 +295,12 @@ Rndr::AdvancedDescriptorSet& Rndr::AdvancedDescriptorSet::operator=(AdvancedDesc
     return *this;
 }
 
-void Rndr::AdvancedDescriptorSet::Destroy()
+void Rndr::Forge::DescriptorSet::Destroy()
 {
     m_set = VK_NULL_HANDLE;
 }
 
-void Rndr::AdvancedDescriptorSet::UpdateDescriptorSets(const Opal::DynamicArray<AdvancedDescriptorSetUpdateBinding>& updates)
+void Rndr::Forge::DescriptorSet::UpdateDescriptorSets(const Opal::DynamicArray<DescriptorSetUpdateBinding>& updates)
 {
     Opal::DynamicArray<VkWriteDescriptorSet> descriptor_writes(updates.GetSize());
     Opal::DynamicArray<VkDescriptorBufferInfo> buffer_infos(updates.GetSize());
@@ -312,21 +312,21 @@ void Rndr::AdvancedDescriptorSet::UpdateDescriptorSets(const Opal::DynamicArray<
         descriptor_write.pNext = nullptr;
         descriptor_write.dstSet = m_set;
         descriptor_write.dstBinding = updates[i].binding;
-        descriptor_write.descriptorType = FromAdvancedDescriptorType(updates[i].descriptor_type);
+        descriptor_write.descriptorType = FromDescriptorType(updates[i].descriptor_type);
         descriptor_write.descriptorCount = 1;
 
-        if (updates[i].descriptor_type == AdvancedDescriptorType::StorageBuffer ||
-            updates[i].descriptor_type == AdvancedDescriptorType::ConstantBuffer)
+        if (updates[i].descriptor_type == DescriptorType::StorageBuffer ||
+            updates[i].descriptor_type == DescriptorType::ConstantBuffer)
         {
-            const AdvancedDescriptorSetUpdateBinding::BufferInfo& buffer_info =
-                updates[i].resource_info.Get<AdvancedDescriptorSetUpdateBinding::BufferInfo>();
+            const DescriptorSetUpdateBinding::BufferInfo& buffer_info =
+                updates[i].resource_info.Get<DescriptorSetUpdateBinding::BufferInfo>();
             buffer_infos.PushBack({.buffer = buffer_info.buffer->GetNativeBuffer(), .offset = 0, .range = buffer_info.buffer->GetSize()});
             descriptor_write.pBufferInfo = &buffer_infos.Back();
         }
         else
         {
-            const AdvancedDescriptorSetUpdateBinding::ImageInfo& image_info =
-                updates[i].resource_info.Get<AdvancedDescriptorSetUpdateBinding::ImageInfo>();
+            const DescriptorSetUpdateBinding::ImageInfo& image_info =
+                updates[i].resource_info.Get<DescriptorSetUpdateBinding::ImageInfo>();
             image_infos.PushBack({.sampler = image_info.sampler->GetNativeSampler(),
                                   .imageView = image_info.image->GetNativeImageView(),
                                   .imageLayout = static_cast<VkImageLayout>(image_info.image_layout)});

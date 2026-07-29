@@ -10,7 +10,7 @@ include(GNUInstallDirs)
 
 # Library options
 option(RNDR_CANVAS "Enable Canvas API which is a simplified graphics API" ON)
-option(RNDR_FORGE "Use more advanced rendering API that is more powerful but more complicated" OFF)
+option(RNDR_FORGE "Enable the Forge API, a lower level rendering API that is more powerful but more complicated" OFF)
 option(RNDR_HARDENING "Enable hardened mode" ON)
 option(RNDR_BUILD_TESTS "Build tests" ON)
 option(RNDR_BUILD_SAMPLES "Builds sample executables" ON)

@@ -6,14 +6,15 @@
 #include "opal/container/array-view.h"
 
 #include "rndr/types.hpp"
+#include "rndr/forge/forward.hpp"
 
 // Forward declare handle to avoid vma includes in headers.
 using VmaAllocation = struct VmaAllocation_T*;
 
-namespace Rndr
+namespace Rndr::Forge
 {
 
-struct AdvancedBufferDesc
+struct BufferDesc
 {
     size_t size;
     VkBufferUsageFlags usage;
@@ -21,17 +22,17 @@ struct AdvancedBufferDesc
     bool use_device_address = false;
 };
 
-class AdvancedBuffer
+class Buffer
 {
 public:
-    AdvancedBuffer() = default;
-    explicit AdvancedBuffer(const class AdvancedDevice& device, const AdvancedBufferDesc& desc = {}, Opal::ArrayView<u8> initial_data = {});
-    ~AdvancedBuffer();
+    Buffer() = default;
+    explicit Buffer(const Device& device, const BufferDesc& desc = {}, Opal::ArrayView<u8> initial_data = {});
+    ~Buffer();
 
-    AdvancedBuffer(const AdvancedBuffer&) = delete;
-    AdvancedBuffer& operator=(const AdvancedBuffer&) = delete;
-    AdvancedBuffer(AdvancedBuffer&&) noexcept;
-    AdvancedBuffer& operator=(AdvancedBuffer&&) noexcept;
+    Buffer(const Buffer&) = delete;
+    Buffer& operator=(const Buffer&) = delete;
+    Buffer(Buffer&&) noexcept;
+    Buffer& operator=(Buffer&&) noexcept;
 
     void Destroy();
 
@@ -42,12 +43,12 @@ public:
     void Update(Opal::ArrayView<const u8> data, size_t offset = 0) const;
 
 private:
-    AdvancedBufferDesc m_desc;
-    Opal::Ref<const class AdvancedDevice> m_device;
+    BufferDesc m_desc;
+    Opal::Ref<const Device> m_device;
     VkBuffer m_buffer = VK_NULL_HANDLE;
     VmaAllocation m_allocation = VK_NULL_HANDLE;
     VkDeviceAddress m_device_address = 0;
     void* m_mapped_memory = nullptr;
 };
 
-}  // namespace Rndr
+}  // namespace Rndr::Forge

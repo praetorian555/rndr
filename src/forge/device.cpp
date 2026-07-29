@@ -1,17 +1,17 @@
-#include "rndr/advanced/device.hpp"
+#include "rndr/forge/device.hpp"
 
 #define NOMINMAX
 #include "vma/vk_mem_alloc.h"
 
 #include "opal/container/hash-set.h"
 
-#include "rndr/advanced/command-buffer.hpp"
-#include "rndr/advanced/graphics-context.hpp"
-#include "rndr/advanced/swap-chain.hpp"
-#include "rndr/advanced/synchronization.hpp"
-#include "rndr/advanced/vulkan-exception.hpp"
+#include "rndr/forge/command-buffer.hpp"
+#include "rndr/forge/graphics-context.hpp"
+#include "rndr/forge/swap-chain.hpp"
+#include "rndr/forge/synchronization.hpp"
+#include "rndr/forge/vulkan-exception.hpp"
 
-Opal::DynamicArray<Rndr::u32> Rndr::AdvancedQueueFamilyIndices::GetValidQueueFamilies() const
+Opal::DynamicArray<Rndr::u32> Rndr::Forge::QueueFamilyIndices::GetValidQueueFamilies() const
 {
     Opal::HashSet<u32> unique_indices(6);
     Opal::DynamicArray<u32> valid_queue_families;
@@ -46,7 +46,7 @@ Opal::DynamicArray<Rndr::u32> Rndr::AdvancedQueueFamilyIndices::GetValidQueueFam
     return valid_queue_families;
 }
 
-Rndr::u32 Rndr::AdvancedQueueFamilyIndices::GetQueueFamilyIndex(QueueFamily queue_family) const
+Rndr::u32 Rndr::Forge::QueueFamilyIndices::GetQueueFamilyIndex(QueueFamily queue_family) const
 {
     switch (queue_family)
     {
@@ -67,8 +67,8 @@ Rndr::u32 Rndr::AdvancedQueueFamilyIndices::GetQueueFamilyIndex(QueueFamily queu
     }
 }
 
-Rndr::AdvancedDevice::AdvancedDevice(AdvancedPhysicalDevice physical_device, const AdvancedGraphicsContext& graphics_context,
-                                     const AdvancedDeviceDesc& desc)
+Rndr::Forge::Device::Device(PhysicalDevice physical_device, const GraphicsContext& graphics_context,
+                                     const DeviceDesc& desc)
     : m_desc(desc.Clone()), m_physical_device(std::move(physical_device))
 {
     if (!m_physical_device.IsValid())
@@ -121,7 +121,7 @@ Rndr::AdvancedDevice::AdvancedDevice(AdvancedPhysicalDevice physical_device, con
     {
         const QueueFamily queue_family = static_cast<QueueFamily>(queue_family_idx);
         const u32 queue_family_index = m_queue_family_indices.GetQueueFamilyIndex(queue_family);
-        if (queue_family_index == AdvancedQueueFamilyIndices::k_invalid_index)
+        if (queue_family_index == QueueFamilyIndices::k_invalid_index)
         {
             continue;
         }
@@ -139,7 +139,7 @@ Rndr::AdvancedDevice::AdvancedDevice(AdvancedPhysicalDevice physical_device, con
         {
             continue;
         }
-        Opal::SharedPtr<AdvancedDeviceQueue> queue_ptr(Opal::GetDefaultAllocator(), *this, queue_family_index);
+        Opal::SharedPtr<DeviceQueue> queue_ptr(Opal::GetDefaultAllocator(), *this, queue_family_index);
         m_queue_family_to_queue.Insert(queue_family, std::move(queue_ptr));
     }
 
@@ -168,7 +168,7 @@ namespace
 Rndr::f32 g_queue_priority = 1.0f;
 }
 
-void Rndr::AdvancedDevice::WaitForAll() const 
+void Rndr::Forge::Device::WaitForAll() const 
 {
     const VkResult wait_result = vkDeviceWaitIdle(m_device);
     if (wait_result != VK_SUCCESS)
@@ -177,7 +177,7 @@ void Rndr::AdvancedDevice::WaitForAll() const
     }
 }
 
-void Rndr::AdvancedDevice::CollectQueueFamilies(Opal::DynamicArray<VkDeviceQueueCreateInfo>& queue_create_infos)
+void Rndr::Forge::Device::CollectQueueFamilies(Opal::DynamicArray<VkDeviceQueueCreateInfo>& queue_create_infos)
 {
     auto queue_family_index = m_physical_device.GetQueueFamilyIndex(VK_QUEUE_GRAPHICS_BIT | VK_QUEUE_COMPUTE_BIT | VK_QUEUE_TRANSFER_BIT);
     if (queue_family_index.HasValue())
@@ -264,12 +264,12 @@ void Rndr::AdvancedDevice::CollectQueueFamilies(Opal::DynamicArray<VkDeviceQueue
     }
 }
 
-Rndr::AdvancedDevice::~AdvancedDevice()
+Rndr::Forge::Device::~Device()
 {
     Destroy();
 }
 
-Rndr::AdvancedDevice::AdvancedDevice(AdvancedDevice&& other) noexcept
+Rndr::Forge::Device::Device(Device&& other) noexcept
     : m_device(other.m_device),
       m_queue_family_to_queue(std::move(other.m_queue_family_to_queue)),
       m_physical_device(std::move(other.m_physical_device)),
@@ -283,7 +283,7 @@ Rndr::AdvancedDevice::AdvancedDevice(AdvancedDevice&& other) noexcept
     other.m_queue_family_indices = {};
 }
 
-Rndr::AdvancedDevice& Rndr::AdvancedDevice::operator=(AdvancedDevice&& other) noexcept
+Rndr::Forge::Device& Rndr::Forge::Device::operator=(Device&& other) noexcept
 {
     Destroy();
 
@@ -302,7 +302,7 @@ Rndr::AdvancedDevice& Rndr::AdvancedDevice::operator=(AdvancedDevice&& other) no
     return *this;
 }
 
-void Rndr::AdvancedDevice::Destroy()
+void Rndr::Forge::Device::Destroy()
 {
     if (m_gpu_allocator != VK_NULL_HANDLE)
     {
@@ -319,7 +319,7 @@ void Rndr::AdvancedDevice::Destroy()
     m_desc = {};
 }
 
-Opal::Ref<Rndr::AdvancedDeviceQueue> Rndr::AdvancedDevice::GetQueue(QueueFamily queue_family)
+Opal::Ref<Rndr::Forge::DeviceQueue> Rndr::Forge::Device::GetQueue(QueueFamily queue_family)
 {
     auto queue_it = m_queue_family_to_queue.Find(queue_family);
     if (queue_it == m_queue_family_to_queue.end())
@@ -329,7 +329,7 @@ Opal::Ref<Rndr::AdvancedDeviceQueue> Rndr::AdvancedDevice::GetQueue(QueueFamily 
     return queue_it.GetValue().GetRef();
 }
 
-Opal::Ref<const Rndr::AdvancedDeviceQueue> Rndr::AdvancedDevice::GetQueue(QueueFamily queue_family) const
+Opal::Ref<const Rndr::Forge::DeviceQueue> Rndr::Forge::Device::GetQueue(QueueFamily queue_family) const
 {
     auto queue_it = m_queue_family_to_queue.Find(queue_family);
     if (queue_it == m_queue_family_to_queue.end())
@@ -339,12 +339,12 @@ Opal::Ref<const Rndr::AdvancedDeviceQueue> Rndr::AdvancedDevice::GetQueue(QueueF
     return queue_it.GetValue().GetRef();
 }
 
-Rndr::AdvancedDeviceQueue::~AdvancedDeviceQueue()
+Rndr::Forge::DeviceQueue::~DeviceQueue()
 {
     Destroy();
 }
 
-void Rndr::AdvancedDeviceQueue::Destroy()
+void Rndr::Forge::DeviceQueue::Destroy()
 {
     m_queue = VK_NULL_HANDLE;
     if (m_command_pool != VK_NULL_HANDLE)
@@ -354,7 +354,7 @@ void Rndr::AdvancedDeviceQueue::Destroy()
     }
 }
 
-Rndr::AdvancedDeviceQueue::AdvancedDeviceQueue(const AdvancedDevice& device, u32 queue_family_index)
+Rndr::Forge::DeviceQueue::DeviceQueue(const Device& device, u32 queue_family_index)
     : m_device(device), m_queue_family_index(queue_family_index)
 {
     vkGetDeviceQueue(device.GetNativeDevice(), m_queue_family_index, 0, &m_queue);
@@ -370,14 +370,14 @@ Rndr::AdvancedDeviceQueue::AdvancedDeviceQueue(const AdvancedDevice& device, u32
     }
 }
 
-Rndr::AdvancedDeviceQueue::AdvancedDeviceQueue(AdvancedDeviceQueue&& other) noexcept
+Rndr::Forge::DeviceQueue::DeviceQueue(DeviceQueue&& other) noexcept
     : m_queue(other.m_queue), m_command_pool(other.m_command_pool)
 {
     other.m_queue = VK_NULL_HANDLE;
     other.m_command_pool = VK_NULL_HANDLE;
 }
 
-Rndr::AdvancedDeviceQueue& Rndr::AdvancedDeviceQueue::operator=(AdvancedDeviceQueue&& other) noexcept
+Rndr::Forge::DeviceQueue& Rndr::Forge::DeviceQueue::operator=(DeviceQueue&& other) noexcept
 {
     if (this == &other)
     {
@@ -390,7 +390,7 @@ Rndr::AdvancedDeviceQueue& Rndr::AdvancedDeviceQueue::operator=(AdvancedDeviceQu
     return *this;
 }
 
-void Rndr::AdvancedDeviceQueue::Submit(const AdvancedCommandBuffer& command_buffer, const AdvancedFence& fence)
+void Rndr::Forge::DeviceQueue::Submit(const CommandBuffer& command_buffer, const Fence& fence)
 {
     VkCommandBuffer native_command_buffer = command_buffer.GetNativeCommandBuffer();
     const VkSubmitInfo submit_info{
@@ -402,9 +402,9 @@ void Rndr::AdvancedDeviceQueue::Submit(const AdvancedCommandBuffer& command_buff
     }
 }
 
-void Rndr::AdvancedDeviceQueue::Submit(const AdvancedCommandBuffer& command_buffer, const AdvancedSemaphore& wait_semaphore,
-                                        PipelineStageBits wait_stage, const AdvancedSemaphore& signal_semaphore,
-                                        const AdvancedFence& fence)
+void Rndr::Forge::DeviceQueue::Submit(const CommandBuffer& command_buffer, const Semaphore& wait_semaphore,
+                                        PipelineStageBits wait_stage, const Semaphore& signal_semaphore,
+                                        const Fence& fence)
 {
     VkCommandBuffer native_command_buffer = command_buffer.GetNativeCommandBuffer();
     const VkSemaphore wait_native = wait_semaphore.GetNativeSemaphore();
