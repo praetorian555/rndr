@@ -303,7 +303,8 @@ void Rndr::WindowsApplication::ProcessSystemEvents(u32 timeout_ms)
     for (const auto& window : m_generic_windows)
     {
         MSG msg;
-        while (PeekMessage(&msg, reinterpret_cast<HWND>(window->GetNativeHandle()), 0, 0, PM_REMOVE))
+        const HWND window_handle = reinterpret_cast<HWND>(window->GetNativeHandle());
+        while (PeekMessage(&msg, window_handle, 0, 0, PM_REMOVE))
         {
             TranslateMessage(&msg);
             DispatchMessage(&msg);
