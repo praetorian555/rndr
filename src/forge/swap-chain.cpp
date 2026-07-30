@@ -40,9 +40,11 @@ Rndr::Forge::Surface::~Surface()
     Destroy();
 }
 
-Rndr::Forge::Surface::Surface(Surface&& other) noexcept : m_surface(other.m_surface), m_context(std::move(other.m_context))
+Rndr::Forge::Surface::Surface(Surface&& other) noexcept
+    : m_surface(other.m_surface), m_window(std::move(other.m_window)), m_context(std::move(other.m_context))
 {
     other.m_surface = VK_NULL_HANDLE;
+    other.m_window = nullptr;
     other.m_context = nullptr;
 }
 
@@ -50,8 +52,10 @@ Rndr::Forge::Surface& Rndr::Forge::Surface::operator=(Surface&& other) noexcept
 {
     Destroy();
     m_surface = other.m_surface;
+    m_window = std::move(other.m_window);
     m_context = std::move(other.m_context);
     other.m_surface = VK_NULL_HANDLE;
+    other.m_window = nullptr;
     other.m_context = nullptr;
     return *this;
 }
@@ -63,6 +67,7 @@ void Rndr::Forge::Surface::Destroy()
         vkDestroySurfaceKHR(m_context->GetInstance(), m_surface, nullptr);
         m_surface = VK_NULL_HANDLE;
     }
+    m_window = nullptr;
     m_context = nullptr;
 }
 
@@ -96,7 +101,7 @@ Rndr::Forge::SwapChainSupportDetails Rndr::Forge::Surface::GetSwapChainSupportDe
 }
 
 Rndr::Forge::SwapChain::SwapChain(const Device& device, const Surface& surface, const SwapChainDesc& desc)
-    : m_device(device), m_surface(surface), m_desc(desc)
+    : m_desc(desc), m_device(device), m_surface(surface)
 {
     Recreate();
 }
@@ -107,13 +112,13 @@ Rndr::Forge::SwapChain::~SwapChain()
 }
 
 Rndr::Forge::SwapChain::SwapChain(SwapChain&& other) noexcept
-    : m_swap_chain(other.m_swap_chain),
+    : m_desc(other.m_desc),
+      m_swap_chain(other.m_swap_chain),
+      m_extent(other.m_extent),
       m_device(std::move(other.m_device)),
       m_surface(std::move(other.m_surface)),
       m_color_textures(std::move(other.m_color_textures)),
-      m_depth_texture(std::move(other.m_depth_texture)),
-      m_desc(other.m_desc),
-      m_extent(other.m_extent)
+      m_depth_texture(std::move(other.m_depth_texture))
 {
     other.m_swap_chain = VK_NULL_HANDLE;
     other.m_device = nullptr;
@@ -145,7 +150,7 @@ Rndr::Forge::SwapChain& Rndr::Forge::SwapChain::operator=(SwapChain&& other) noe
     return *this;
 }
 
-void Rndr::Forge::SwapChain::Destroy()
+void Rndr::Forge::SwapChain::DestroyImages()
 {
     for (Texture& color_texture : m_color_textures)
     {
@@ -153,10 +158,28 @@ void Rndr::Forge::SwapChain::Destroy()
     }
     m_color_textures.Clear();
     m_depth_texture.Destroy();
+}
+
+void Rndr::Forge::SwapChain::DestroySwapChain()
+{
     if (m_swap_chain != VK_NULL_HANDLE)
     {
         vkDestroySwapchainKHR(m_device->GetNativeDevice(), m_swap_chain, nullptr);
         m_swap_chain = VK_NULL_HANDLE;
+    }
+}
+
+void Rndr::Forge::SwapChain::Destroy()
+{
+    if (m_device != nullptr && m_swap_chain != VK_NULL_HANDLE)
+    {
+        // The images may still be in use by frames that were submitted but have not finished yet.
+        m_device->WaitForAll();
+    }
+    DestroyImages();
+    if (m_device != nullptr)
+    {
+        DestroySwapChain();
     }
     m_surface = nullptr;
     m_device = nullptr;
@@ -164,54 +187,90 @@ void Rndr::Forge::SwapChain::Destroy()
     m_extent = {};
 }
 
-Rndr::u32 Rndr::Forge::SwapChain::AcquireImage(const Opal::Ref<Semaphore>& semaphore)
+Rndr::Forge::AcquiredImage Rndr::Forge::SwapChain::AcquireImage(const Opal::Ref<Semaphore>& semaphore)
 {
-    u32 image_index = UINT32_MAX;
-    bool should_run_again = false;
-    do
+    if (m_swap_chain == VK_NULL_HANDLE)
     {
-        const VkResult result = vkAcquireNextImageKHR(m_device->GetNativeDevice(), m_swap_chain, UINT64_MAX,
-                                                      semaphore->GetNativeSemaphore(), VK_NULL_HANDLE, &image_index);
-        if (result == VK_ERROR_OUT_OF_DATE_KHR)
-        {
-            Destroy();
-            Recreate();
-            should_run_again = true;
-        }
-        else if (result != VK_SUCCESS)
-        {
-            throw VulkanException(result, "vkAcquireNextImageKHR");
-        }
-    } while (should_run_again);
-    return image_index;
+        // No swap chain because the window had no client area the last time we tried. Try again for the next frame.
+        Recreate();
+        return {};
+    }
+
+    u32 image_index = k_invalid_image_index;
+    const VkResult result = vkAcquireNextImageKHR(m_device->GetNativeDevice(), m_swap_chain, UINT64_MAX,
+                                                  semaphore->GetNativeSemaphore(), VK_NULL_HANDLE, &image_index);
+    if (result == VK_ERROR_OUT_OF_DATE_KHR)
+    {
+        Recreate();
+        return {};
+    }
+    // A suboptimal swap chain still hands out a usable image and signals the semaphore, so the frame is rendered with
+    // it and the recreation happens after the matching present reports the same thing.
+    if (result != VK_SUCCESS && result != VK_SUBOPTIMAL_KHR)
+    {
+        throw VulkanException(result, "vkAcquireNextImageKHR");
+    }
+    return {SwapChainStatus::Success, image_index};
 }
 
-void Rndr::Forge::SwapChain::Present(u32 image_index, Opal::Ref<DeviceQueue> queue, Opal::Ref<Semaphore> semaphore)
+Rndr::Forge::SwapChainStatus Rndr::Forge::SwapChain::Present(u32 image_index, Opal::Ref<DeviceQueue> queue,
+                                                             Opal::Ref<Semaphore> semaphore)
 {
-    Opal::DynamicArray<VkSemaphore> wait_semaphores{semaphore->GetNativeSemaphore()};
+    const VkSemaphore wait_semaphore = semaphore->GetNativeSemaphore();
     const VkPresentInfoKHR present_info = {
         .sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR,
         .waitSemaphoreCount = 1,
-        .pWaitSemaphores = wait_semaphores.GetData(),
+        .pWaitSemaphores = &wait_semaphore,
         .swapchainCount = 1,
         .pSwapchains = &m_swap_chain,
         .pImageIndices = &image_index,
     };
     const VkResult result = vkQueuePresentKHR(queue->GetNativeQueue(), &present_info);
-    if (result == VK_ERROR_OUT_OF_DATE_KHR)
+    if (result == VK_ERROR_OUT_OF_DATE_KHR || result == VK_SUBOPTIMAL_KHR)
     {
-        Destroy();
         Recreate();
-        return;
+        return SwapChainStatus::OutOfDate;
     }
     if (result != VK_SUCCESS)
     {
         throw VulkanException(result, "vkQueuePresentKHR");
     }
+    return SwapChainStatus::Success;
 }
+
+namespace
+{
+/**
+ * Pick the extent of the images of the swap chain. Surfaces that dictate their own size report it in currentExtent,
+ * the rest are driven by the size of the window. A zero extent means that the window has no client area, as happens
+ * while it is minimized, and that no swap chain can be created for it.
+ */
+VkExtent2D SelectExtent(const VkSurfaceCapabilitiesKHR& capabilities, const Rndr::GenericWindow& window)
+{
+    constexpr Rndr::u32 k_extent_driven_by_window = 0xFFFFFFFF;
+    if (capabilities.currentExtent.width != k_extent_driven_by_window)
+    {
+        return capabilities.currentExtent;
+    }
+
+    const Rndr::Vector2i window_size = window.GetSize();
+    if (window_size.x <= 0 || window_size.y <= 0)
+    {
+        return {.width = 0, .height = 0};
+    }
+    return {.width = Opal::Clamp(static_cast<Rndr::u32>(window_size.x), capabilities.minImageExtent.width,
+                                 capabilities.maxImageExtent.width),
+            .height = Opal::Clamp(static_cast<Rndr::u32>(window_size.y), capabilities.minImageExtent.height,
+                                  capabilities.maxImageExtent.height)};
+}
+}  // namespace
 
 void Rndr::Forge::SwapChain::Recreate()
 {
+    // Frames that were submitted earlier can still be reading from the images that are about to be released.
+    m_device->WaitForAll();
+    DestroyImages();
+
     const SwapChainSupportDetails swap_chain_support = m_surface->GetSwapChainSupportDetails(m_device->GetPhysicalDevice());
     bool is_supported = false;
     for (auto available_format : swap_chain_support.formats)
@@ -241,14 +300,15 @@ void Rndr::Forge::SwapChain::Recreate()
         throw Opal::Exception("Swap chain present mode not supported!");
     }
 
-    const GenericWindow& window = m_surface->GetWindow();
-    const Vector2i window_size = window.GetSize();
-    VkExtent2D extent = {.width = static_cast<u32>(window_size.x), .height = static_cast<u32>(window_size.y)};
-    extent.width = Opal::Clamp(extent.width, swap_chain_support.capabilities.minImageExtent.width,
-                               swap_chain_support.capabilities.maxImageExtent.width);
-    extent.height = Opal::Clamp(extent.height, swap_chain_support.capabilities.minImageExtent.height,
-                                swap_chain_support.capabilities.maxImageExtent.height);
-    RNDR_LOG_INFO("Requested swap chain extent: ({}, {})", window_size.x, window_size.y);
+    const VkExtent2D extent = SelectExtent(swap_chain_support.capabilities, m_surface->GetWindow());
+    if (extent.width == 0 || extent.height == 0)
+    {
+        // The window has no client area, so there is nothing to present to. Release the swap chain and let the next
+        // AcquireImage try again once the window is back.
+        DestroySwapChain();
+        m_extent = {};
+        return;
+    }
     RNDR_LOG_INFO("Swap chain extent: ({}, {})", extent.width, extent.height);
 
     u32 image_count = swap_chain_support.capabilities.minImageCount + 1;
@@ -259,7 +319,6 @@ void Rndr::Forge::SwapChain::Recreate()
 
     VkSwapchainCreateInfoKHR create_info{};
     create_info.sType = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR;
-    create_info.oldSwapchain = m_swap_chain;
     create_info.surface = m_surface->GetNativeSurface();
     create_info.minImageCount = image_count;
     create_info.imageFormat = ToVkFormat(m_desc.pixel_format);
@@ -271,11 +330,13 @@ void Rndr::Forge::SwapChain::Recreate()
     auto graphics_queue = m_device->GetQueue(QueueFamily::Graphics);
     auto present_queue = m_device->GetQueue(QueueFamily::Present);
 
+    // Has to outlive the create info, since the create info only points to it.
+    Opal::InPlaceArray<u32, 2> indices;
     if (graphics_queue != present_queue)
     {
         // If graphics and present queues are different, we use VK_SHARING_MODE_CONCURRENT
         // to allow concurrent access to the resources from different queues
-        Opal::InPlaceArray<u32, 2> indices = {graphics_queue->GetQueueFamilyIndex(), present_queue->GetQueueFamilyIndex()};
+        indices = {graphics_queue->GetQueueFamilyIndex(), present_queue->GetQueueFamilyIndex()};
         create_info.imageSharingMode = VK_SHARING_MODE_CONCURRENT;
         create_info.queueFamilyIndexCount = static_cast<u32>(indices.GetSize());
         create_info.pQueueFamilyIndices = indices.GetData();
@@ -292,13 +353,19 @@ void Rndr::Forge::SwapChain::Recreate()
     create_info.presentMode = m_desc.present_mode;
     // If set to VK_TRUE it means that we don't care about the color of the pixels if they are occluded by other window.
     create_info.clipped = VK_TRUE;
-    create_info.oldSwapchain = VK_NULL_HANDLE;
+    // Letting the driver reuse the resources of the swap chain we are replacing.
+    create_info.oldSwapchain = m_swap_chain;
 
-    VkResult result = vkCreateSwapchainKHR(m_device->GetNativeDevice(), &create_info, nullptr, &m_swap_chain);
+    VkSwapchainKHR new_swap_chain = VK_NULL_HANDLE;
+    VkResult result = vkCreateSwapchainKHR(m_device->GetNativeDevice(), &create_info, nullptr, &new_swap_chain);
+    // The old swap chain is retired by the call above, whether it succeeded or not, so it goes away either way.
+    DestroySwapChain();
     if (result != VK_SUCCESS)
     {
         throw VulkanException(result, "vkCreateSwapchainKHR");
     }
+    m_swap_chain = new_swap_chain;
+    m_extent = extent;
 
     result = vkGetSwapchainImagesKHR(m_device->GetNativeDevice(), m_swap_chain, &image_count, nullptr);
     if (result != VK_SUCCESS)

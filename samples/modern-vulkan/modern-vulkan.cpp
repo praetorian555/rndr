@@ -1,3 +1,6 @@
+#include <chrono>
+#include <thread>
+
 #include "example-controller.h"
 #include "opal/container/dynamic-array.h"
 #include "opal/container/in-place-array.h"
@@ -101,11 +104,21 @@ void Run()
         fences.EmplaceBack(device, k_start_signaled);
         present_semaphores.EmplaceBack(device);
     }
+    // One semaphore per swap chain image, so they have to be rebuilt whenever the swap chain is.
     Opal::DynamicArray<Rndr::Forge::Semaphore> render_semaphores;
-    for (u32 i = 0; i < swap_chain.GetColorImageCount(); ++i)
+    auto match_render_semaphores_to_swap_chain = [&device, &render_semaphores, &swap_chain]
     {
-        render_semaphores.EmplaceBack(device);
-    }
+        if (render_semaphores.GetSize() == swap_chain.GetColorImageCount())
+        {
+            return;
+        }
+        render_semaphores.Clear();
+        for (u32 i = 0; i < swap_chain.GetColorImageCount(); ++i)
+        {
+            render_semaphores.EmplaceBack(device);
+        }
+    };
+    match_render_semaphores_to_swap_chain();
 
     Opal::DynamicArray<Rndr::Forge::CommandBuffer> command_buffers;
     for (Rndr::i32 i = 0; i < k_frames_in_flight; ++i)
@@ -200,18 +213,43 @@ void Run()
     {
         auto start_time = Opal::GetSeconds();
 
-        window_size = window->GetSize();
-        f32 window_width = window_size.x;
-        f32 window_height = window_size.y;
+        rndr_app->ProcessSystemEvents();
+        rndr_app->GetInputSystemChecked().ProcessSystemEvents(delta_seconds);
+
+        const Rndr::Vector2i new_window_size = window->GetSize();
+        if (new_window_size != window_size)
+        {
+            window_size = new_window_size;
+            controller.SetScreenSize(window_size.x, window_size.y);
+        }
+        controller.Tick(delta_seconds);
 
         // Acquire next swap chain image to render to
         fences[frame_index].Wait();
+        const Rndr::Forge::AcquiredImage acquired_image = swap_chain.AcquireImage(present_semaphores[frame_index]);
+        if (acquired_image.status == Rndr::Forge::SwapChainStatus::OutOfDate)
+        {
+            // The swap chain was rebuilt, or the window is minimized and there is none. Nothing was submitted for this
+            // frame, so the fence is left signaled and the frame index is not advanced.
+            match_render_semaphores_to_swap_chain();
+            if (!swap_chain.IsValid())
+            {
+                // The window has no client area, so there is nothing to render into. Idle instead of retrying as fast
+                // as the loop can spin.
+                std::this_thread::sleep_for(std::chrono::milliseconds(16));
+            }
+            const auto skipped_end_time = Opal::GetSeconds();
+            delta_seconds = static_cast<f32>(skipped_end_time - start_time);
+            continue;
+        }
+        const u32 image_index = acquired_image.image_index;
         fences[frame_index].Reset();
-        u32 image_index = swap_chain.AcquireImage(present_semaphores[frame_index]);
 
-        rndr_app->ProcessSystemEvents();
-        rndr_app->GetInputSystemChecked().ProcessSystemEvents(delta_seconds);
-        controller.Tick(delta_seconds);
+        // Everything is rendered at the size of the swap chain, which can lag a frame behind the size of the window.
+        const VkExtent2D swap_chain_extent = swap_chain.GetExtent();
+        const Rndr::Vector2i render_size{static_cast<i32>(swap_chain_extent.width), static_cast<i32>(swap_chain_extent.height)};
+        const f32 render_width = static_cast<f32>(render_size.x);
+        const f32 render_height = static_cast<f32>(render_size.y);
 
         // Update shader data
         ShaderData shader_data;
@@ -252,7 +290,7 @@ void Run()
         // Configure attachments, what happens when they are loaded and how they are stored after rendering
         // Do the actual draw calls
         const Rndr::Forge::RenderingDesc rendering_desc{
-            .render_area_extent = window_size,
+            .render_area_extent = render_size,
             .color_attachments = {Rndr::Forge::RenderingAttachmentDesc{.image_view = swap_chain.GetColorImageView(image_index),
                                                                         .image_layout = Rndr::ImageLayout::ColorAttachment,
                                                                         .load_operation = Rndr::Forge::AttachmentLoadOperation::Clear,
@@ -264,8 +302,8 @@ void Run()
                                  .store_operation = Rndr::Forge::AttachmentStoreOperation::DontCare,
                                  .clear_value = {.depth_stencil = {.depth = 1.0f, .stencil = 0}}}};
         command_buffer.CmdBeginRendering(rendering_desc);
-        command_buffer.CmdSetViewport(Rndr::Vector2f::Zero(), {window_width, window_height});
-        command_buffer.CmdSetScissor(Rndr::Vector2i::Zero(), window_size);
+        command_buffer.CmdSetViewport(Rndr::Vector2f::Zero(), {render_width, render_height});
+        command_buffer.CmdSetScissor(Rndr::Vector2i::Zero(), render_size);
         command_buffer.CmdBindVertexBuffer(mesh_buffer, 0);
         command_buffer.CmdBindIndexBuffer(mesh_buffer, mesh.vertex_count * mesh.vertex_size, Rndr::IndexSize::uint32);
         command_buffer.CmdBindPipeline(pipeline);
@@ -286,7 +324,11 @@ void Run()
         graphics_queue->Submit(command_buffer, present_semaphores[frame_index], Rndr::PipelineStageBits::ColorAttachmentOutput,
                                render_semaphores[image_index], fences[frame_index]);
         frame_index = (frame_index + 1) % k_frames_in_flight;
-        swap_chain.Present(image_index, present_queue.Clone(), render_semaphores[image_index]);
+        if (swap_chain.Present(image_index, present_queue.Clone(), render_semaphores[image_index]) ==
+            Rndr::Forge::SwapChainStatus::OutOfDate)
+        {
+            match_render_semaphores_to_swap_chain();
+        }
 
         auto end_time = Opal::GetSeconds();
         delta_seconds = static_cast<f32>(end_time - start_time);

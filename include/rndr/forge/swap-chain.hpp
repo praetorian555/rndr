@@ -28,10 +28,31 @@ struct SwapChainSupportDetails
 struct SwapChainDesc
 {
     bool use_depth = true;
-    PixelFormat depth_pixel_format;
+    PixelFormat depth_pixel_format = PixelFormat::D32_SFLOAT;
     PixelFormat pixel_format = PixelFormat::B8G8R8A8_SRGB;
     VkColorSpaceKHR color_space = VK_COLOR_SPACE_SRGB_NONLINEAR_KHR;
     VkPresentModeKHR present_mode = VK_PRESENT_MODE_FIFO_KHR;
+};
+
+/** Outcome of acquiring or presenting a swap chain image. */
+enum class SwapChainStatus : u8
+{
+    /** The operation succeeded and the frame can continue. */
+    Success,
+    /**
+     * The swap chain no longer matched the surface and was recreated. The current frame has to be skipped and
+     * anything the caller cached about the swap chain - image views, image count, extent - is stale.
+     */
+    OutOfDate
+};
+
+/** Index of no image, returned by AcquireImage when the swap chain went out of date. */
+static constexpr u32 k_invalid_image_index = 0xFFFFFFFF;
+
+struct AcquiredImage
+{
+    SwapChainStatus status = SwapChainStatus::OutOfDate;
+    u32 image_index = k_invalid_image_index;
 };
 
 class Surface
@@ -69,7 +90,17 @@ public:
     SwapChain(SwapChain&& other) noexcept;
     SwapChain& operator=(SwapChain&& other) noexcept;
 
+    /**
+     * Rebuild the swap chain and its images for the current size of the window, keeping the device, the surface
+     * and the desc this swap chain was created with. Waits for the device to go idle first, so it is safe to call
+     * while previous frames are still in flight.
+     *
+     * When the window has no client area, as happens while it is minimized, the images are released and no new swap
+     * chain is created. The object stays usable and the next AcquireImage tries again.
+     */
     void Recreate();
+
+    /** Release everything, including the references to the device and the surface. The object is empty afterwards. */
     void Destroy();
 
     [[nodiscard]] bool IsValid() const { return m_swap_chain != VK_NULL_HANDLE; }
@@ -82,10 +113,31 @@ public:
     [[nodiscard]] const Texture& GetDepthImage() const { return m_depth_texture; }
     [[nodiscard]] VkImageView GetDepthImageView() const { return m_depth_texture.GetNativeImageView(); }
 
-    u32 AcquireImage(const Opal::Ref<Semaphore>& semaphore);
-    void Present(u32 image_index, Opal::Ref<DeviceQueue> queue, Opal::Ref<Semaphore> semaphore);
+    /**
+     * Acquire the next image to render into. The semaphore is signaled once the image is ready to be written to.
+     *
+     * On SwapChainStatus::OutOfDate the swap chain has been recreated, no image was acquired and the semaphore was
+     * not signaled, so the caller has to skip the frame. Because nothing was submitted for that frame, the caller
+     * must not reset its per-frame fence before this call returns Success, otherwise the next wait on that fence
+     * never completes.
+     */
+    AcquiredImage AcquireImage(const Opal::Ref<Semaphore>& semaphore);
+
+    /**
+     * Present a previously acquired image once the given semaphore is signaled.
+     *
+     * Returns SwapChainStatus::OutOfDate when the swap chain stopped matching the surface, in which case it has
+     * already been recreated and the caller has to refresh anything it cached about it.
+     */
+    SwapChainStatus Present(u32 image_index, Opal::Ref<DeviceQueue> queue, Opal::Ref<Semaphore> semaphore);
 
 private:
+    /** Destroy the color images, their views and the depth image, leaving the swap chain handle alone. */
+    void DestroyImages();
+
+    /** Destroy the swap chain handle, leaving the images alone. Does nothing when there is no swap chain. */
+    void DestroySwapChain();
+
     SwapChainDesc m_desc;
     VkSwapchainKHR m_swap_chain = VK_NULL_HANDLE;
     VkExtent2D m_extent = {};
