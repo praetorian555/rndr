@@ -110,11 +110,23 @@ Left open, deliberately:
 - `ImageLayout`, `PipelineStageBits`, `ImageSubresourceRange` and friends are Vulkan shaped but live in the
   shared `rndr/graphics-types.hpp`. Decide whether they belong in `Forge` as part of task 2.4.
 
-### 2.2 Pick one error strategy
+### 2.2 Pick one error strategy — DONE
 
-Constructors throw `VulkanException`, `Forge::PhysicalDevice::GetQueueFamilyIndex` returns
-`Opal::Expected<u32, VkResult>`. Choose one and apply it everywhere. Throwing from constructors and
-returning `Expected` from queries is defensible, but it has to be stated in the docs, not inferred.
+The count decided it: about 90 throw sites against two functions returning `Opal::Expected` and one
+returning an empty container after logging. Throwing wins, and the rule is written down in the error
+handling section of `docs/forge.md`:
+
+1. Failures throw, from ordinary methods as well as from constructors. `VulkanException` for a `VkResult`,
+   `Opal::Exception` for misuse of the API.
+2. Outcomes that are not failures are return values. A resized window is not an error, so acquire and
+   present return `SwapChainStatus`; a device with no matching queue family is not a broken device, so
+   `PhysicalDevice::GetQueueFamilyIndex` and `::GetPresentQueueFamilyIndex` return `Opal::Optional<u32>`.
+   The `VkResult` they used to report was invented at the call site and carried nothing.
+3. Never log and return a default. `GraphicsContext::EnumeratePhysicalDevices` throws instead, so that an
+   empty list keeps its one meaning, and `RNDR_RETURN_ON_FAIL` is no longer used anywhere in Forge.
+
+`Opal::Optional` has the same `HasValue()` / `GetValue()` shape as `Opal::Expected`, so the call sites in
+`Device::CollectQueueFamilies` did not change.
 
 ### 2.3 Pick one parameter convention
 
@@ -258,3 +270,6 @@ index parameters consistently `u32` — the sample casts to `i32` at `modern-vul
 
 `docs/vulkan.md` is a set of notes on Vulkan concepts, not a guide to this API. A short document covering
 object lifetimes, the frame loop, and who owns what would carry more weight than any single feature here.
+
+The file now exists, created by task 2.2, but it only covers error handling. Object lifetimes and the frame
+loop are still to be written.

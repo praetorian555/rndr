@@ -80,21 +80,21 @@ Rndr::Forge::PhysicalDevice& Rndr::Forge::PhysicalDevice::operator=(PhysicalDevi
     return *this;
 }
 
-Opal::Expected<Rndr::u32, VkResult> Rndr::Forge::PhysicalDevice::GetQueueFamilyIndex(VkQueueFlags queue_flags, VkQueueFlags not_queue_flags) const
+Opal::Optional<Rndr::u32> Rndr::Forge::PhysicalDevice::GetQueueFamilyIndex(VkQueueFlags queue_flags, VkQueueFlags not_queue_flags) const
 {
     for (u32 i = 0; i < m_queue_family_properties.GetSize(); i++)
     {
         const VkQueueFamilyProperties& props = m_queue_family_properties[i];
         if ((props.queueFlags & queue_flags) == queue_flags && (props.queueFlags & not_queue_flags) == 0)
         {
-            return Opal::Expected<u32, VkResult>(i);
+            return Opal::Optional<u32>(i);
         }
     }
 
-    return Opal::Expected<u32, VkResult>(VK_ERROR_FEATURE_NOT_PRESENT);
+    return {};
 }
 
-Opal::Expected<Rndr::u32, VkResult> Rndr::Forge::PhysicalDevice::GetPresentQueueFamilyIndex(const Surface& surface) const
+Opal::Optional<Rndr::u32> Rndr::Forge::PhysicalDevice::GetPresentQueueFamilyIndex(const Surface& surface) const
 {
     for (u32 i = 0; i < m_queue_family_properties.GetSize(); i++)
     {
@@ -102,10 +102,10 @@ Opal::Expected<Rndr::u32, VkResult> Rndr::Forge::PhysicalDevice::GetPresentQueue
         vkGetPhysicalDeviceSurfaceSupportKHR(m_physical_device, i, surface.GetNativeSurface(), &present_support);
         if (present_support == VK_TRUE)
         {
-            return Opal::Expected<u32, VkResult>(i);
+            return Opal::Optional<u32>(i);
         }
     }
-    return Opal::Expected<u32, VkResult>(VK_ERROR_FEATURE_NOT_PRESENT);
+    return {};
 }
 
 bool Rndr::Forge::PhysicalDevice::IsExtensionSupported(const char* extension_name) const

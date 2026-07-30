@@ -9,7 +9,7 @@
 #include "opal/container/dynamic-array.h"
 
 #include "rndr/forge/vulkan-exception.hpp"
-#include "rndr/return-macros.hpp"
+#include "rndr/log.hpp"
 
 namespace
 {
@@ -271,12 +271,20 @@ Opal::DynamicArray<VkExtensionProperties> Rndr::Forge::GraphicsContext::GetSuppo
 Opal::DynamicArray<Rndr::Forge::PhysicalDevice> Rndr::Forge::GraphicsContext::EnumeratePhysicalDevices() const
 {
     u32 gpu_count = 0;
-    vkEnumeratePhysicalDevices(m_instance, &gpu_count, nullptr);
+    VkResult result = vkEnumeratePhysicalDevices(m_instance, &gpu_count, nullptr);
+    if (result != VK_SUCCESS)
+    {
+        throw VulkanException(result, "vkEnumeratePhysicalDevices");
+    }
 
+    // An empty list is a valid answer - the machine has no Vulkan capable device - so a failure has to throw rather
+    // than return one, otherwise the caller cannot tell the two apart.
     Opal::DynamicArray<VkPhysicalDevice> physical_devices(gpu_count);
-    const VkResult result = vkEnumeratePhysicalDevices(m_instance, &gpu_count, physical_devices.GetData());
-    RNDR_RETURN_ON_FAIL(result == VK_SUCCESS, Opal::DynamicArray<PhysicalDevice>(), "Failed to enumerate physical devices!",
-                        RNDR_NOOP);
+    result = vkEnumeratePhysicalDevices(m_instance, &gpu_count, physical_devices.GetData());
+    if (result != VK_SUCCESS)
+    {
+        throw VulkanException(result, "vkEnumeratePhysicalDevices");
+    }
 
     Opal::DynamicArray<PhysicalDevice> gpu_list;
     for (const VkPhysicalDevice& device : physical_devices)

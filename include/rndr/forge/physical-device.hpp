@@ -3,6 +3,7 @@
 #include "volk/volk.h"
 
 #include "opal/container/dynamic-array.h"
+#include "opal/container/optional.h"
 #include "opal/container/string.h"
 
 #include "rndr/types.hpp"
@@ -33,8 +34,14 @@ public:
     [[nodiscard]] const VkPhysicalDeviceMemoryProperties& GetMemoryProperties() const { return m_memory_properties; }
     [[nodiscard]] const Opal::DynamicArray<VkQueueFamilyProperties>& GetQueueFamilyProperties() const { return m_queue_family_properties; }
     [[nodiscard]] const Opal::DynamicArray<Opal::StringUtf8>& GetSupportedExtensions() const { return m_supported_extensions; }
-    [[nodiscard]] Opal::Expected<u32, VkResult> GetQueueFamilyIndex(VkQueueFlags queue_flags, VkQueueFlags not_queue_flags = 0) const;
-    [[nodiscard]] Opal::Expected<u32, VkResult> GetPresentQueueFamilyIndex(const Surface& surface) const;
+    /**
+     * Find a queue family that has all of queue_flags and none of not_queue_flags. Empty when this device has no such
+     * family, which is an answer rather than a failure - see the error handling section of docs/forge.md.
+     */
+    [[nodiscard]] Opal::Optional<u32> GetQueueFamilyIndex(VkQueueFlags queue_flags, VkQueueFlags not_queue_flags = 0) const;
+
+    /** Find a queue family that can present to the given surface. Empty when this device cannot present to it. */
+    [[nodiscard]] Opal::Optional<u32> GetPresentQueueFamilyIndex(const Surface& surface) const;
 
     [[nodiscard]] bool IsExtensionSupported(const char* extension_name) const;
 
