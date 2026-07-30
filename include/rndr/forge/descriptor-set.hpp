@@ -134,6 +134,7 @@ public:
 
     void Destroy();
 
+    [[nodiscard]] bool IsValid() const { return m_layout != VK_NULL_HANDLE; }
     [[nodiscard]] VkDescriptorSetLayout GetNativeDescriptorSetLayout() const { return m_layout; }
     [[nodiscard]] const DescriptorSetLayoutDesc& GetDesc() const { return m_desc; }
 

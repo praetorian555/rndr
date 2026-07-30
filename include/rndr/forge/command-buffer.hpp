@@ -64,6 +64,7 @@ public:
     /** Frees the command buffer and releases associated resources. */
     void Destroy();
 
+    [[nodiscard]] bool IsValid() const { return m_native_command_buffer != VK_NULL_HANDLE; }
     [[nodiscard]] VkCommandBuffer GetNativeCommandBuffer() const { return m_native_command_buffer; }
 
     /**

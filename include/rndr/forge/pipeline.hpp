@@ -176,6 +176,7 @@ public:
 
     void Destroy();
 
+    [[nodiscard]] bool IsValid() const { return m_pipeline != VK_NULL_HANDLE; }
     [[nodiscard]] VkPipeline GetNativePipeline() const { return m_pipeline; }
     [[nodiscard]] VkPipelineLayout GetNativePipelineLayout() const { return m_pipeline_layout; }
     [[nodiscard]] VkPipelineBindPoint GetBindPoint() const { return m_bind_point; }

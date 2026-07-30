@@ -222,9 +222,10 @@ void Rndr::Forge::GraphicsContext::Destroy()
     {
         vkDestroyInstance(m_instance, nullptr);
         m_instance = VK_NULL_HANDLE;
+        // volk holds process wide state, so only the context that initialized it may tear it down. Doing this
+        // unconditionally would let an empty or moved-from context unload Vulkan out from under a live one.
+        volkFinalize();
     }
-
-    volkFinalize();
 }
 
 Opal::DynamicArray<const char*> Rndr::Forge::GraphicsContext::GetRequiredInstanceExtensions(const Rndr::Forge::GraphicsContextDesc& desc,

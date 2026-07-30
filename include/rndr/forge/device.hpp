@@ -73,6 +73,7 @@ public:
     DeviceQueue(DeviceQueue&& other) noexcept;
     DeviceQueue& operator=(DeviceQueue&& other) noexcept;
 
+    [[nodiscard]] bool IsValid() const { return m_queue != VK_NULL_HANDLE; }
     [[nodiscard]] VkQueue GetNativeQueue() const { return m_queue; }
     [[nodiscard]] VkCommandPool GetNativeCommandPool() const { return m_command_pool; }
     [[nodiscard]] u32 GetQueueFamilyIndex() const { return m_queue_family_index; }
@@ -107,6 +108,7 @@ public:
 
     void Destroy();
 
+    [[nodiscard]] bool IsValid() const { return m_device != VK_NULL_HANDLE; }
     [[nodiscard]] VkDevice GetNativeDevice() const { return m_device; }
     [[nodiscard]] const PhysicalDevice& GetPhysicalDevice() const { return m_physical_device; }
     [[nodiscard]] VkPhysicalDevice GetNativePhysicalDevice() const { return m_physical_device.GetNativePhysicalDevice(); }

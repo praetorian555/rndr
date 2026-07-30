@@ -144,13 +144,17 @@ know both vocabularies. Either wrap the remaining ones — `BufferUsageBits`, `T
 `SampleCount`, `PresentMode` — or drop the wrappers and be an explicitly thin Vulkan layer. The former fits
 the rest of the codebase.
 
-### 2.5 Consistent validity and accessors
+### 2.5 Consistent validity and accessors — DONE
 
-- Add `IsValid()` to `Forge::Buffer`, `Forge::Pipeline`, `Forge::CommandBuffer`, `Forge::DescriptorSet`,
-  `Forge::Fence`, `Forge::Semaphore`. Present on the other types already.
-- `Forge::Texture::GetDesc()` returns by value; make it a const reference like every other `GetDesc`.
-- Document the default-constructed empty state, or remove the default constructors from the types that only
-  have one so they can live in containers.
+`IsValid()` is now on every type. Beyond the six the task named, `DescriptorSetLayout`, `Device`,
+`DeviceQueue`, `Sampler` and `Shader` were missing it too. `Forge::Texture::GetDesc()` returns a const
+reference, matching every other `GetDesc`.
+
+The default constructors stay, since the types have to live in containers and as members that are filled in
+later, and the empty state is documented in `docs/forge.md` instead. Writing that section down turned up a
+bug: `GraphicsContext::Destroy()` called `volkFinalize()` unconditionally, so an empty or moved-from context
+going out of scope unloaded Vulkan process wide while another context was still using it. It now finalizes
+only when it owned the instance.
 
 ### 2.6 Explicit descriptor binding indices
 

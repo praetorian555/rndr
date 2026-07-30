@@ -8,6 +8,26 @@ tracks filling in object lifetimes and the frame loop.
 
 ---
 
+## The empty state
+
+Every type has a default constructor that produces an *empty* object: it holds no Vulkan handle, owns
+nothing, and its destructor does nothing. This exists so the types can live in containers and as members
+that are filled in later - `Opal::DynamicArray<Fence>`, the depth texture of a swap chain - not as a
+two-phase initialization step. There is no `Create()` to call afterwards; assign a constructed object over
+it instead.
+
+`IsValid()` reports whether an object holds a handle. Every type has it, and it always answers the same
+question: false for a default-constructed object, false after `Destroy()`, false for the source of a move,
+true otherwise.
+
+Calling anything else on an empty object is undefined - the accessors return null handles and the methods
+dereference references that are not there. `IsValid()` is the guard, not a Vulkan handle comparison at the
+call site.
+
+`Destroy()` is idempotent and is what the destructor calls, so releasing early is always safe.
+
+---
+
 ## Error handling
 
 Three rules, in the order they are applied.

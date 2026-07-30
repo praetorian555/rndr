@@ -36,6 +36,7 @@ public:
 
     void Destroy();
 
+    [[nodiscard]] bool IsValid() const { return m_buffer != VK_NULL_HANDLE; }
     [[nodiscard]] VkBuffer GetNativeBuffer() const { return m_buffer; }
     [[nodiscard]] VkDeviceAddress GetNativeDeviceAddress() const { return m_device_address; }
     [[nodiscard]] size_t GetSize() const { return m_desc.size; }

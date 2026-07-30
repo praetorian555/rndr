@@ -61,6 +61,7 @@ public:
 
     void Destroy();
 
+    [[nodiscard]] bool IsValid() const { return m_shader_module != VK_NULL_HANDLE; }
     [[nodiscard]] VkShaderModule GetNativeShaderModule() const { return m_shader_module; }
     [[nodiscard]] VkShaderStageFlagBits GetNativeShaderStage() const { return m_native_stage; }
     [[nodiscard]] ShaderTypeBits GetShaderStage() const { return m_stage; }

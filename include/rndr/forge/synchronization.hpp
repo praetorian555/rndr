@@ -31,6 +31,7 @@ public:
     Fence(Fence&& other) noexcept;
     Fence& operator=(Fence&& other) noexcept;
 
+    [[nodiscard]] bool IsValid() const { return m_fence != VK_NULL_HANDLE; }
     [[nodiscard]] VkFence GetNativeFence() const { return m_fence; }
 
     void Wait(u64 timeout = k_infinite_wait) const;
@@ -60,6 +61,7 @@ public:
     Semaphore(Semaphore&& other) noexcept;
     Semaphore& operator=(Semaphore&& other) noexcept;
 
+    [[nodiscard]] bool IsValid() const { return m_semaphore != VK_NULL_HANDLE; }
     [[nodiscard]] VkSemaphore GetNativeSemaphore() const { return m_semaphore; }
 
 private:

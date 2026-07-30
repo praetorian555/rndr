@@ -53,7 +53,7 @@ public:
     [[nodiscard]] bool IsValid() const { return m_image != VK_NULL_HANDLE; }
     [[nodiscard]] VkImage GetNativeImage() const { return m_image; }
     [[nodiscard]] VkImageView GetNativeImageView() const { return m_view; }
-    [[nodiscard]] TextureDesc GetDesc() const { return m_desc; }
+    [[nodiscard]] const TextureDesc& GetDesc() const { return m_desc; }
 
 private:
     void Init(const Device& device, const TextureDesc& desc);
@@ -79,6 +79,7 @@ public:
 
     void Destroy();
 
+    [[nodiscard]] bool IsValid() const { return m_sampler != VK_NULL_HANDLE; }
     [[nodiscard]] VkSampler GetNativeSampler() const { return m_sampler; }
 
 private:
