@@ -193,6 +193,11 @@ if (${RNDR_FORGE})
     if (WIN32)
         target_compile_definitions(rndr PUBLIC -DVK_USE_PLATFORM_WIN32_KHR -DVK_NO_PROTOTYPES)
     endif ()
+    # Only the instance setup in graphics-context.cpp cares about the validation layer, so this stays
+    # out of the interface of the library.
+    if (${RNDR_FORGE_VALIDATION})
+        target_compile_definitions(rndr PRIVATE RNDR_FORGE_VALIDATION)
+    endif ()
 endif ()
 
 # @formatter:off

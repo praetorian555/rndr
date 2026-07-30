@@ -24,12 +24,66 @@ VkResult CreateDebugUtilsMessengerEXT(VkInstance instance, const VkDebugUtilsMes
     return VK_ERROR_EXTENSION_NOT_PRESENT;
 }
 
-VKAPI_ATTR VkBool32 VKAPI_CALL DebugCallback(VkDebugUtilsMessageSeverityFlagBitsEXT, VkDebugUtilsMessageTypeFlagsEXT,
+VKAPI_ATTR VkBool32 VKAPI_CALL DebugCallback(VkDebugUtilsMessageSeverityFlagBitsEXT severity, VkDebugUtilsMessageTypeFlagsEXT,
                                              const VkDebugUtilsMessengerCallbackDataEXT* callback_data, void*)
 {
-    RNDR_LOG_INFO("[Vulkan Validation] {}", callback_data->pMessage);
+    if ((severity & VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT) != 0)
+    {
+        RNDR_LOG_ERROR("[Vulkan Validation] {}", callback_data->pMessage);
+    }
+    else if ((severity & VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT) != 0)
+    {
+        RNDR_LOG_WARNING("[Vulkan Validation] {}", callback_data->pMessage);
+    }
+    else
+    {
+        RNDR_LOG_INFO("[Vulkan Validation] {}", callback_data->pMessage);
+    }
     return VK_FALSE;
 }
+
+VkDebugUtilsMessengerCreateInfoEXT MakeDebugMessengerCreateInfo()
+{
+    VkDebugUtilsMessengerCreateInfoEXT debug_create_info{};
+    debug_create_info.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_MESSENGER_CREATE_INFO_EXT;
+    debug_create_info.messageSeverity = VK_DEBUG_UTILS_MESSAGE_SEVERITY_VERBOSE_BIT_EXT |
+                                        VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT;
+    debug_create_info.messageType = VK_DEBUG_UTILS_MESSAGE_TYPE_GENERAL_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_TYPE_VALIDATION_BIT_EXT |
+                                    VK_DEBUG_UTILS_MESSAGE_TYPE_PERFORMANCE_BIT_EXT;
+    debug_create_info.pfnUserCallback = DebugCallback;
+    debug_create_info.pUserData = nullptr;
+    return debug_create_info;
+}
+
+constexpr const char* k_validation_layer_name = "VK_LAYER_KHRONOS_validation";
+
+#if defined(RNDR_FORGE_VALIDATION)
+/**
+ * Check whether the validation layer is installed on this machine. It ships with the Vulkan SDK, so a build with
+ * RNDR_FORGE_VALIDATION still has to cope with it being missing at run time.
+ */
+bool IsValidationLayerAvailable()
+{
+    Rndr::u32 layer_count = 0;
+    if (vkEnumerateInstanceLayerProperties(&layer_count, nullptr) != VK_SUCCESS || layer_count == 0)
+    {
+        return false;
+    }
+    Opal::DynamicArray<VkLayerProperties> layers(layer_count);
+    if (vkEnumerateInstanceLayerProperties(&layer_count, layers.GetData()) != VK_SUCCESS)
+    {
+        return false;
+    }
+    for (const VkLayerProperties& layer : layers)
+    {
+        if (strcmp(layer.layerName, k_validation_layer_name) == 0)
+        {
+            return true;
+        }
+    }
+    return false;
+}
+#endif
 }  // namespace
 
 Rndr::Forge::GraphicsContext::GraphicsContext(const GraphicsContextDesc& desc) : m_desc(desc.Clone())
@@ -40,8 +94,17 @@ Rndr::Forge::GraphicsContext::GraphicsContext(const GraphicsContextDesc& desc) :
         throw VulkanException(result, "volkInitialize");
     }
 
+    bool use_validation_layer = false;
+#if defined(RNDR_FORGE_VALIDATION)
+    use_validation_layer = IsValidationLayerAvailable();
+    if (!use_validation_layer)
+    {
+        RNDR_LOG_WARNING("Vulkan validation layer requested but {} is not installed, continuing without it!", k_validation_layer_name);
+    }
+#endif
+
     // Check if all the requested instance extensions are supported
-    Opal::DynamicArray<const char*> required_extensions = GetRequiredInstanceExtensions(desc);
+    Opal::DynamicArray<const char*> required_extensions = GetRequiredInstanceExtensions(desc, use_validation_layer);
     const Opal::DynamicArray<VkExtensionProperties> supported_extensions = GetSupportedInstanceExtensions();
     for (const char* required_extension_name : required_extensions)
     {
@@ -74,6 +137,21 @@ Rndr::Forge::GraphicsContext::GraphicsContext(const GraphicsContextDesc& desc) :
     create_info.enabledExtensionCount = static_cast<u32>(required_extensions.GetSize());
     create_info.ppEnabledExtensionNames = required_extensions.GetData();
     create_info.enabledLayerCount = 0;
+
+    // The messenger below only covers the lifetime of the instance, so chaining a second one into the create info is
+    // what makes the messages of vkCreateInstance and vkDestroyInstance visible.
+    const VkDebugUtilsMessengerCreateInfoEXT debug_create_info = MakeDebugMessengerCreateInfo();
+    const bool collect_debug_messages = m_desc.collect_debug_messages || use_validation_layer;
+    if (collect_debug_messages)
+    {
+        create_info.pNext = &debug_create_info;
+    }
+    if (use_validation_layer)
+    {
+        create_info.enabledLayerCount = 1;
+        create_info.ppEnabledLayerNames = &k_validation_layer_name;
+    }
+
     result = vkCreateInstance(&create_info, nullptr, &m_instance);
     if (result != VK_SUCCESS)
     {
@@ -82,21 +160,17 @@ Rndr::Forge::GraphicsContext::GraphicsContext(const GraphicsContextDesc& desc) :
     volkLoadInstance(m_instance);
 
     // Creation of debug messanger
-    if (m_desc.collect_debug_messages)
+    if (collect_debug_messages)
     {
-        VkDebugUtilsMessengerCreateInfoEXT debug_create_info{};
-        debug_create_info.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_MESSENGER_CREATE_INFO_EXT;
-        debug_create_info.messageSeverity = VK_DEBUG_UTILS_MESSAGE_SEVERITY_VERBOSE_BIT_EXT |
-                                            VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT;
-        debug_create_info.messageType = VK_DEBUG_UTILS_MESSAGE_TYPE_GENERAL_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_TYPE_VALIDATION_BIT_EXT |
-                                        VK_DEBUG_UTILS_MESSAGE_TYPE_PERFORMANCE_BIT_EXT;
-        debug_create_info.pfnUserCallback = DebugCallback;
-        debug_create_info.pUserData = nullptr;
         result = CreateDebugUtilsMessengerEXT(m_instance, &debug_create_info, nullptr, &m_debug_messenger);
         if (result != VK_SUCCESS)
         {
             throw VulkanException(result, "vkCreateDebugUtilsMessengerEXT");
         }
+    }
+    if (use_validation_layer)
+    {
+        RNDR_LOG_INFO("Vulkan validation layer enabled.");
     }
 }
 
@@ -153,7 +227,8 @@ void Rndr::Forge::GraphicsContext::Destroy()
     volkFinalize();
 }
 
-Opal::DynamicArray<const char*> Rndr::Forge::GraphicsContext::GetRequiredInstanceExtensions(const Rndr::Forge::GraphicsContextDesc& desc)
+Opal::DynamicArray<const char*> Rndr::Forge::GraphicsContext::GetRequiredInstanceExtensions(const Rndr::Forge::GraphicsContextDesc& desc,
+                                                                                            bool use_validation_layer)
 {
     Opal::DynamicArray<const char*> required_extension_names;
     if (desc.required_instance_extensions.GetSize() > 0)
@@ -170,7 +245,8 @@ Opal::DynamicArray<const char*> Rndr::Forge::GraphicsContext::GetRequiredInstanc
     // We need it if we want to display the image to the display on Windows
     required_extension_names.PushBack(VK_KHR_WIN32_SURFACE_EXTENSION_NAME);
 #endif
-    if (desc.collect_debug_messages)
+    // The validation layer has nowhere to report to without the debug messenger, so it pulls in the extension itself.
+    if (desc.collect_debug_messages || use_validation_layer)
     {
         required_extension_names.PushBack(VK_EXT_DEBUG_UTILS_EXTENSION_NAME);
     }

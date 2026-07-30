@@ -39,7 +39,7 @@ public:
     Opal::DynamicArray<PhysicalDevice> EnumeratePhysicalDevices() const;
 
 private:
-    static Opal::DynamicArray<const char*> GetRequiredInstanceExtensions(const GraphicsContextDesc& desc);
+    static Opal::DynamicArray<const char*> GetRequiredInstanceExtensions(const GraphicsContextDesc& desc, bool use_validation_layer);
     static Opal::DynamicArray<VkExtensionProperties> GetSupportedInstanceExtensions();
 
     GraphicsContextDesc m_desc;
