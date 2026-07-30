@@ -25,10 +25,11 @@ enum class AttachmentStoreOperation : u8
 
 struct RenderingAttachmentDesc
 {
-    VkImageView image_view;
-    ImageLayout image_layout;
-    AttachmentLoadOperation load_operation;
-    AttachmentStoreOperation store_operation;
+    VkImageView image_view = VK_NULL_HANDLE;
+    /** Undefined by default, so an attachment that was left unconfigured fails loudly instead of rendering wrong. */
+    ImageLayout image_layout = ImageLayout::Undefined;
+    AttachmentLoadOperation load_operation = AttachmentLoadOperation::Clear;
+    AttachmentStoreOperation store_operation = AttachmentStoreOperation::Store;
     union
     {
         Vector4f color;
@@ -37,12 +38,12 @@ struct RenderingAttachmentDesc
             f32 depth;
             u32 stencil;
         } depth_stencil;
-    } clear_value;
+    } clear_value = {Vector4f{0.0f, 0.0f, 0.0f, 1.0f}};
 };
 
 struct RenderingDesc
 {
-    Vector2i render_area_extent;
+    Vector2i render_area_extent = {0, 0};
     Opal::DynamicArray<RenderingAttachmentDesc> color_attachments;
     RenderingAttachmentDesc depth_attachment;
 };

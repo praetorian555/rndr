@@ -16,8 +16,8 @@ namespace Rndr::Forge
 
 struct BufferDesc
 {
-    size_t size;
-    VkBufferUsageFlags usage;
+    size_t size = 0;
+    VkBufferUsageFlags usage = 0;
     bool keep_memory_mapped = true;
     bool use_device_address = false;
 };

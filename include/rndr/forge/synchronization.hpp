@@ -69,12 +69,12 @@ private:
 
 struct ImageBarrier : Opal::ClonableBase<ImageBarrier>
 {
-    PipelineStageBits stages_must_finish;
-    PipelineStageAccessBits stages_must_finish_access;
-    PipelineStageBits before_stages_start;
-    PipelineStageAccessBits before_stages_start_access;
-    ImageLayout old_layout;
-    ImageLayout new_layout;
+    PipelineStageBits stages_must_finish = PipelineStageBits::None;
+    PipelineStageAccessBits stages_must_finish_access = PipelineStageAccessBits::None;
+    PipelineStageBits before_stages_start = PipelineStageBits::None;
+    PipelineStageAccessBits before_stages_start_access = PipelineStageAccessBits::None;
+    ImageLayout old_layout = ImageLayout::Undefined;
+    ImageLayout new_layout = ImageLayout::Undefined;
     Opal::Ref<const Texture> image;
     ImageSubresourceRange subresource_range;
 

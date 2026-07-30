@@ -48,9 +48,9 @@ struct DescriptorSetLayoutDesc : Opal::ClonableBase<DescriptorSetLayoutDesc>
 {
     struct Binding
     {
-        DescriptorType descriptor_type;
-        u32 descriptor_count;
-        ShaderTypeBits shader_types;
+        DescriptorType descriptor_type = DescriptorType::CombinedImageSampler;
+        u32 descriptor_count = 1;
+        ShaderTypeBits shader_types = ShaderTypeBits::AllGraphics;
     };
     Opal::DynamicArray<Binding> bindings;
 
@@ -72,7 +72,7 @@ struct DescriptorSetUpdateBinding
     {
         Opal::Ref<Sampler> sampler;
         Opal::Ref<Texture> image;
-        ImageLayout image_layout;
+        ImageLayout image_layout = ImageLayout::ShaderReadOnly;
         OPAL_CLONE_FIELDS(sampler, image, image_layout);
     };
 
@@ -150,7 +150,7 @@ public:
     void UpdateDescriptorSets(const Opal::DynamicArray<DescriptorSetUpdateBinding>& updates);
 
 private:
-    VkDevice m_device;
+    VkDevice m_device = VK_NULL_HANDLE;
     VkDescriptorSet m_set = VK_NULL_HANDLE;
 };
 

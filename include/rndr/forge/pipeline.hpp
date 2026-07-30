@@ -14,7 +14,7 @@ namespace Rndr::Forge
 
 struct PushConstantRange
 {
-    ShaderTypeBits shader_stages;
+    ShaderTypeBits shader_stages = ShaderTypeBits::AllGraphics;
     u32 offset = 0;
     u32 size = 0;
 };
@@ -23,15 +23,15 @@ struct VertexInputDesc : Opal::ClonableBase<VertexInputDesc>
 {
     struct Attribute
     {
-        u32 location;
-        PixelFormat format;
-        u32 offset;
+        u32 location = 0;
+        PixelFormat format = PixelFormat::Undefined;
+        u32 offset = 0;
     };
 
     struct Binding : Opal::ClonableBase<Binding>
     {
-        u32 binding;
-        u32 stride;
+        u32 binding = 0;
+        u32 stride = 0;
         DataRepetition input_rate = DataRepetition::PerVertex;
         Opal::DynamicArray<Attribute> attributes;
         OPAL_CLONE_FIELDS(binding, stride, input_rate, attributes);

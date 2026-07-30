@@ -20,7 +20,7 @@ namespace Rndr::Forge
 
 struct SwapChainSupportDetails
 {
-    VkSurfaceCapabilitiesKHR capabilities;
+    VkSurfaceCapabilitiesKHR capabilities = {};
     Opal::DynamicArray<VkSurfaceFormatKHR> formats;
     Opal::DynamicArray<VkPresentModeKHR> present_modes;
 };
