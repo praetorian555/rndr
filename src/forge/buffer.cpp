@@ -30,6 +30,10 @@ Rndr::Forge::Buffer::Buffer(const Device& device, const BufferDesc& desc, Opal::
     }
     if (!initial_data.IsEmpty())
     {
+        if (initial_data.GetSize() > m_desc.size)
+        {
+            throw Opal::Exception("Initial data does not fit into the buffer.");
+        }
         void* gpu_data = nullptr;
         result = vmaMapMemory(m_device->GetGPUAllocator(), m_allocation, &gpu_data);
         if (result != VK_SUCCESS)
@@ -38,6 +42,7 @@ Rndr::Forge::Buffer::Buffer(const Device& device, const BufferDesc& desc, Opal::
         }
         memcpy(gpu_data, initial_data.GetData(), initial_data.GetSize());
         vmaUnmapMemory(m_device->GetGPUAllocator(), m_allocation);
+        Flush(0, initial_data.GetSize());
     }
     if (m_desc.keep_memory_mapped)
     {
@@ -68,12 +73,14 @@ Rndr::Forge::Buffer::Buffer(Buffer&& other) noexcept
       m_device(std::move(other.m_device)),
       m_buffer(other.m_buffer),
       m_allocation(other.m_allocation),
-      m_device_address(other.m_device_address)
+      m_device_address(other.m_device_address),
+      m_mapped_memory(other.m_mapped_memory)
 {
     other.m_buffer = VK_NULL_HANDLE;
     other.m_allocation = VK_NULL_HANDLE;
     other.m_device = nullptr;
     other.m_device_address = 0;
+    other.m_mapped_memory = nullptr;
 }
 
 Rndr::Forge::Buffer& Rndr::Forge::Buffer::operator=(Buffer&& other) noexcept
@@ -86,10 +93,12 @@ Rndr::Forge::Buffer& Rndr::Forge::Buffer::operator=(Buffer&& other) noexcept
         m_buffer = other.m_buffer;
         m_allocation = other.m_allocation;
         m_device_address = other.m_device_address;
+        m_mapped_memory = other.m_mapped_memory;
         other.m_buffer = VK_NULL_HANDLE;
         other.m_allocation = VK_NULL_HANDLE;
         other.m_device = nullptr;
         other.m_device_address = 0;
+        other.m_mapped_memory = nullptr;
     }
     return *this;
 }
@@ -98,7 +107,9 @@ void Rndr::Forge::Buffer::Destroy()
 {
     if (m_buffer != VK_NULL_HANDLE)
     {
-        if (m_desc.keep_memory_mapped)
+        // Keyed off the pointer rather than the desc, so that a buffer that was moved from does not try to unmap
+        // memory it no longer owns.
+        if (m_mapped_memory != nullptr)
         {
             vmaUnmapMemory(m_device->GetGPUAllocator(), m_allocation);
         }
@@ -106,19 +117,37 @@ void Rndr::Forge::Buffer::Destroy()
         m_buffer = VK_NULL_HANDLE;
         m_allocation = VK_NULL_HANDLE;
     }
+    m_mapped_memory = nullptr;
     m_device = nullptr;
     m_device_address = 0;
 }
 
-void Rndr::Forge::Buffer::Update(Opal::ArrayView<const u8> data, size_t) const
+void Rndr::Forge::Buffer::Flush(size_t offset, size_t size) const
+{
+    // VMA compares the memory type against HOST_COHERENT and skips the flush when it is not needed, and it rounds
+    // the range out to nonCoherentAtomSize itself.
+    const VkResult result = vmaFlushAllocation(m_device->GetGPUAllocator(), m_allocation, offset, size);
+    if (result != VK_SUCCESS)
+    {
+        throw VulkanException(result, "vmaFlushAllocation");
+    }
+}
+
+void Rndr::Forge::Buffer::Update(Opal::ArrayView<const u8> data, size_t offset) const
 {
     if (data.IsEmpty())
     {
         return;
     }
+    // Written this way around so that a huge offset cannot overflow the sum and pass the check.
+    if (offset > m_desc.size || data.GetSize() > m_desc.size - offset)
+    {
+        throw Opal::Exception("Update does not fit into the buffer.");
+    }
     if (m_mapped_memory != nullptr)
     {
-        memcpy(m_mapped_memory, data.GetData(), data.GetSize());
+        memcpy(static_cast<u8*>(m_mapped_memory) + offset, data.GetData(), data.GetSize());
+        Flush(offset, data.GetSize());
         return;
     }
     void* gpu_data = nullptr;
@@ -127,6 +156,7 @@ void Rndr::Forge::Buffer::Update(Opal::ArrayView<const u8> data, size_t) const
     {
         throw VulkanException(result, "vmaMapMemory");
     }
-    memcpy(gpu_data, data.GetData(), data.GetSize());
+    memcpy(static_cast<u8*>(gpu_data) + offset, data.GetData(), data.GetSize());
     vmaUnmapMemory(m_device->GetGPUAllocator(), m_allocation);
+    Flush(offset, data.GetSize());
 }
