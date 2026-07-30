@@ -9,76 +9,84 @@ signature has to update that sample in the same commit.
 
 ---
 
-## Priority 1 — Broken
+## Priority 1 — Broken — ALL DONE
 
-### 1.1 Fix swap chain recreation
+### 1.1 Fix swap chain recreation — DONE
 
-`src/forge/swap-chain.cpp`
+Teardown is split into `DestroyImages()` and `DestroySwapChain()`, with `Destroy()` on top of both for the
+full release. `Recreate()` waits for the device to go idle, passes the previous handle as `oldSwapchain` and
+retires it after `vkCreateSwapchainKHR`, whether that call succeeded or not. A window with no client area,
+as while minimized, leaves the object without a swap chain; the next `AcquireImage` tries again.
 
-`Destroy()` nulls `m_device`, `m_surface` and resets `m_desc` (`:161-164`), and `AcquireImage`/`Present`
-call `Destroy(); Recreate();` (`:177`, `:203`). `Recreate()` immediately dereferences `m_surface` and
-`m_device` (`:215`), so any window resize is a null dereference.
+`AcquireImage` returns an `AcquiredImage` — a `SwapChainStatus` plus an image index — and `Present` returns
+the status, so `SwapChainStatus::OutOfDate` tells the caller its cached image views, image count and extent
+are stale. Present recreates on `VK_SUBOPTIMAL_KHR` as well; acquire renders the frame it already got an
+image for and lets the matching present do it.
 
-- Split teardown: a `DestroyResources()` that releases the images, views and the `VkSwapchainKHR` but keeps
-  the device, surface and desc, and a full `Destroy()` that additionally drops them.
-- Wait for the device to go idle before releasing images that may still be in flight.
-- Pass the old swap chain to `oldSwapchain` and destroy it after the new one is created. Right now `:262`
-  sets it and `:295` overwrites it with `VK_NULL_HANDLE`.
-- Recreate on `VK_SUBOPTIMAL_KHR` from present as well, not only on `VK_ERROR_OUT_OF_DATE_KHR`.
-- Decide and document what `AcquireImage` returns when the swap chain was recreated, so the caller knows its
-  cached image views are stale. Returning an explicit "out of date, retry next frame" result beats looping
-  inside the acquire call.
+Verified by driving `modern-vulkan` through four resizes plus minimize and restore with the validation layer
+on: the swap chain is rebuilt each time and no validation message is reported. The layer is behind the
+`RNDR_FORGE_VALIDATION` CMake option, off by default.
 
-**Done when:** resizing the window in `modern-vulkan` keeps rendering, with validation layers clean.
+### 1.2 Assign `m_extent` in `Recreate` — DONE
 
-### 1.2 Assign `m_extent` in `Recreate`
+`Recreate()` stores the extent it created the swap chain with, and the sample renders at
+`swap_chain.GetExtent()` instead of `window->GetSize()`, which can be a frame ahead of it.
 
-`src/forge/swap-chain.cpp:244-252`
+### 1.3 Honour the offset in `Forge::Buffer::Update` — DONE
 
-The extent is computed into a local and never stored, so `GetExtent()` returns `{0, 0}` for the whole
-lifetime of the swap chain. Store it and make the sample use it instead of `window->GetSize()`.
+Both the mapped and the map-on-demand path apply the offset. The bounds check is written as
+`offset > size || data.GetSize() > size - offset` so that a large offset cannot overflow the sum and pass,
+and the initial data of the constructor is checked against the size of the buffer as well.
 
-### 1.3 Honour the offset in `Forge::Buffer::Update`
+### 1.4 Carry `m_mapped_memory` across moves — DONE
 
-`src/forge/buffer.cpp:113`
+The move constructor and move assignment transfer the pointer and null it in the source, and `Destroy()`
+clears it. `Destroy()` now decides whether to unmap from the pointer instead of from
+`m_desc.keep_memory_mapped`, so a moved-from buffer cannot unmap memory it no longer owns.
 
-The parameter is unnamed and ignored, so every update writes at offset 0. Apply the offset in both the
-mapped and the map-on-demand path, and bounds check `offset + data.GetSize()` against `m_desc.size`.
+### 1.5 Flush non-coherent writes — DONE
 
-### 1.4 Carry `m_mapped_memory` across moves
+A private `Flush(offset, size)` runs after the initial upload and after every `Update`, on both paths. VMA
+compares the memory type against `HOST_COHERENT` and skips the flush when it is not needed, and rounds the
+range out to `nonCoherentAtomSize` itself, so no coherency query is kept on the buffer.
 
-`src/forge/buffer.cpp:66-95`
+### 1.6 Default-initialize every field of every desc — DONE
 
-The move constructor and move assignment do not transfer `m_mapped_memory`, and `Destroy()` does not reset
-it. A moved buffer with `keep_memory_mapped = true` silently falls back to map/unmap on every update — which
-is what the sample does for its per-frame uniform buffers. Transfer the pointer, null it in the source, and
-clear it in `Destroy()`.
+Every field of every desc in `include/rndr/forge/` now has a default. `Forge::SwapChainDesc` already had
+one for `depth_pixel_format`; the rest were fixed:
 
-### 1.5 Flush non-coherent writes
+- `BufferDesc::size` / `::usage` — zero, which the bounds check of task 1.3 turns into a thrown exception
+  rather than a write into a buffer of unknown size.
+- `RenderingAttachmentDesc` — all five fields. `image_layout` defaults to `ImageLayout::Undefined` so that
+  an attachment left unconfigured fails loudly instead of rendering to the wrong layout, and `clear_value`
+  is opaque black.
+- `RenderingDesc::render_area_extent` — `Opal::Vector2` performs no initialization in its default
+  constructor, so this needed an explicit `{0, 0}` rather than `= {}`.
+- `VertexInputDesc::Attribute` and `::Binding`, `DescriptorSetLayoutDesc::Binding`,
+  `PushConstantRange::shader_stages`, `DescriptorSetUpdateBinding::ImageInfo::image_layout`.
+- `ImageBarrier` — the four sync fields to `None`, both layouts to `Undefined`.
+- `SwapChainSupportDetails::capabilities` and the `VkDevice` held by `DescriptorSet`, which had the same
+  problem without being descs.
 
-`src/forge/buffer.cpp`
+`ShaderTypeBits` has no zero value, so the two fields of that type default to `AllGraphics` instead of an
+"unset" state.
 
-VMA with `VMA_MEMORY_USAGE_AUTO` and `HOST_ACCESS_SEQUENTIAL_WRITE` may pick non-coherent memory. Call
-`vmaFlushAllocation` after the initial upload and after every `Update`, or query the memory properties once
-at creation and only flush when the allocation is not coherent.
+### 1.7 Free descriptor sets — DONE
 
-### 1.6 Default-initialize every field of every desc
+`DescriptorPoolDesc::free_individual_sets` drives `VK_DESCRIPTOR_POOL_CREATE_FREE_DESCRIPTOR_SET_BIT`, off by
+default because a pool that is reset or destroyed as a whole is both cheaper and the common case. It is or-ed
+into the flags rather than assigned, which the update-after-bind flag was not.
 
-`include/rndr/forge/*.hpp`
+`DescriptorSet` holds an `Opal::Ref<const DescriptorPool>` and `Destroy()` calls `vkFreeDescriptorSets` when
+that pool has the flag — calling it on a pool without the flag is invalid, so otherwise only the handle is
+dropped, as before. The reference is carried across moves.
 
-The API is designated-init based, so any field left out of the initializer keeps whatever was on the stack.
-Offenders: `Forge::BufferDesc::size` and `::usage`, all of `Forge::RenderingAttachmentDesc`,
-`Forge::SwapChainDesc::depth_pixel_format`, `Forge::VertexInputDesc::Attribute` and `::Binding`,
-`Forge::DescriptorSetLayoutDesc::Binding`, `Forge::PushConstantRange::shader_stages`,
-`Forge::ImageBarrier` sync fields.
+`DescriptorPool::Reset()` wraps `vkResetDescriptorPool` for the recycle-per-frame pattern. It invalidates
+every set that came out of the pool, which is documented on the method; the sets are not tracked, so nothing
+enforces it.
 
-### 1.7 Free descriptor sets
-
-`src/forge/descriptor-set.cpp:298`
-
-`Forge::DescriptorSet::Destroy()` only clears the handle; the set is never returned to the pool. Give the
-set a reference to its pool, call `vkFreeDescriptorSets` when the pool was created with the free-descriptor-set
-flag, and add `Forge::DescriptorPool::Reset()` for the recycle-per-frame pattern.
+Verified against the validation layer by temporarily flipping the pool of `modern-vulkan` to
+`free_individual_sets = true`: no message, clean exit.
 
 ---
 

@@ -32,6 +32,11 @@ struct DescriptorPoolDesc : Opal::ClonableBase<DescriptorPoolDesc>
     Opal::DynamicArray<Opal::Pair<DescriptorType, u32>> descriptor_types;
     u32 max_sets = 1;
     bool use_update_after_bind = true;
+    /**
+     * Allow individual sets to be returned to the pool when they are destroyed. Off by default, since a pool that is
+     * reset or destroyed as a whole is both cheaper and the common case.
+     */
+    bool free_individual_sets = false;
 
     // DescriptorPoolDesc(Opal::DynamicArray<Opal::Pair<DescriptorType, u32>> in_descriptor_types, u32 in_max_sets,
     //                            bool in_use_update_after_bind)
@@ -39,7 +44,7 @@ struct DescriptorPoolDesc : Opal::ClonableBase<DescriptorPoolDesc>
     // {
     // }
     //
-    OPAL_CLONE_FIELDS(descriptor_types, max_sets, use_update_after_bind);
+    OPAL_CLONE_FIELDS(descriptor_types, max_sets, use_update_after_bind, free_individual_sets);
 
     void Add(DescriptorType descriptor_type, u32 max_size);
 };
@@ -97,6 +102,14 @@ public:
 
     void Destroy();
 
+    /**
+     * Return every set allocated from this pool to it in one call, without touching the pool itself. Every
+     * DescriptorSet that came out of this pool is invalid afterwards and must not be destroyed or bound, which makes
+     * this the recycle-per-frame counterpart to allocating and freeing sets one by one.
+     */
+    void Reset();
+
+    [[nodiscard]] bool IsValid() const { return m_pool != VK_NULL_HANDLE; }
     [[nodiscard]] VkDescriptorPool GetNativeDescriptorPool() const { return m_pool; }
     [[nodiscard]] const DescriptorPoolDesc& GetDesc() const { return m_desc; }
     [[nodiscard]] VkDevice GetNativeDevice() const;
@@ -143,8 +156,14 @@ public:
     DescriptorSet(DescriptorSet&& other) noexcept;
     DescriptorSet& operator=(DescriptorSet&& other) noexcept;
 
+    /**
+     * Return the set to the pool it was allocated from, when that pool was created with
+     * DescriptorPoolDesc::free_individual_sets. Otherwise only the handle is dropped and the memory stays with the
+     * pool until it is reset or destroyed.
+     */
     void Destroy();
 
+    [[nodiscard]] bool IsValid() const { return m_set != VK_NULL_HANDLE; }
     [[nodiscard]] VkDescriptorSet GetNativeDescriptorSet() const { return m_set; }
 
     void UpdateDescriptorSets(const Opal::DynamicArray<DescriptorSetUpdateBinding>& updates);
@@ -152,6 +171,7 @@ public:
 private:
     VkDevice m_device = VK_NULL_HANDLE;
     VkDescriptorSet m_set = VK_NULL_HANDLE;
+    Opal::Ref<const DescriptorPool> m_pool;
 };
 
 }  // namespace Rndr::Forge

@@ -118,7 +118,11 @@ Rndr::Forge::DescriptorPool::DescriptorPool(const Device& device, const Descript
     pool_info.maxSets = desc.max_sets;
     if (desc.use_update_after_bind)
     {
-        pool_info.flags = VK_DESCRIPTOR_POOL_CREATE_UPDATE_AFTER_BIND_BIT;
+        pool_info.flags |= VK_DESCRIPTOR_POOL_CREATE_UPDATE_AFTER_BIND_BIT;
+    }
+    if (desc.free_individual_sets)
+    {
+        pool_info.flags |= VK_DESCRIPTOR_POOL_CREATE_FREE_DESCRIPTOR_SET_BIT;
     }
 
     const VkResult result = vkCreateDescriptorPool(device.GetNativeDevice(), &pool_info, nullptr, &m_pool);
@@ -160,6 +164,19 @@ void Rndr::Forge::DescriptorPool::Destroy()
     {
         vkDestroyDescriptorPool(m_device->GetNativeDevice(), m_pool, nullptr);
         m_pool = VK_NULL_HANDLE;
+    }
+}
+
+void Rndr::Forge::DescriptorPool::Reset()
+{
+    if (m_pool == VK_NULL_HANDLE)
+    {
+        return;
+    }
+    const VkResult result = vkResetDescriptorPool(m_device->GetNativeDevice(), m_pool, 0);
+    if (result != VK_SUCCESS)
+    {
+        throw VulkanException(result, "vkResetDescriptorPool");
     }
 }
 
@@ -246,7 +263,7 @@ void Rndr::Forge::DescriptorSetLayout::Destroy()
 
 Rndr::Forge::DescriptorSet::DescriptorSet(const DescriptorPool& pool, const DescriptorSetLayout& layout,
                                                    u32 variable_descriptor_count)
-    : m_device(pool.GetNativeDevice())
+    : m_device(pool.GetNativeDevice()), m_pool(pool)
 {
     VkDescriptorSetLayout native_layout = layout.GetNativeDescriptorSetLayout();
     VkDescriptorSetAllocateInfo alloc_info{};
@@ -276,10 +293,12 @@ Rndr::Forge::DescriptorSet::~DescriptorSet()
     Destroy();
 }
 
-Rndr::Forge::DescriptorSet::DescriptorSet(DescriptorSet&& other) noexcept : m_device(other.m_device), m_set(other.m_set)
+Rndr::Forge::DescriptorSet::DescriptorSet(DescriptorSet&& other) noexcept
+    : m_device(other.m_device), m_set(other.m_set), m_pool(std::move(other.m_pool))
 {
     other.m_set = VK_NULL_HANDLE;
     other.m_device = VK_NULL_HANDLE;
+    other.m_pool = nullptr;
 }
 
 Rndr::Forge::DescriptorSet& Rndr::Forge::DescriptorSet::operator=(DescriptorSet&& other) noexcept
@@ -289,15 +308,25 @@ Rndr::Forge::DescriptorSet& Rndr::Forge::DescriptorSet::operator=(DescriptorSet&
         Destroy();
         m_device = other.m_device;
         m_set = other.m_set;
+        m_pool = std::move(other.m_pool);
         other.m_set = VK_NULL_HANDLE;
         other.m_device = VK_NULL_HANDLE;
+        other.m_pool = nullptr;
     }
     return *this;
 }
 
 void Rndr::Forge::DescriptorSet::Destroy()
 {
+    // A pool without the free-descriptor-set flag hands its memory back only on Reset or on destruction, and calling
+    // vkFreeDescriptorSets on it is invalid, so there the handle is all there is to drop.
+    if (m_set != VK_NULL_HANDLE && m_pool != nullptr && m_pool->IsValid() && m_pool->GetDesc().free_individual_sets)
+    {
+        vkFreeDescriptorSets(m_device, m_pool->GetNativeDescriptorPool(), 1, &m_set);
+    }
     m_set = VK_NULL_HANDLE;
+    m_pool = nullptr;
+    m_device = VK_NULL_HANDLE;
 }
 
 void Rndr::Forge::DescriptorSet::UpdateDescriptorSets(const Opal::DynamicArray<DescriptorSetUpdateBinding>& updates)
