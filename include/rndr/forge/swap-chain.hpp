@@ -9,6 +9,7 @@
 #include "rndr/pixel-format.hpp"
 #include "rndr/types.hpp"
 #include "rndr/forge/forward.hpp"
+#include "rndr/forge/types.hpp"
 
 namespace Rndr
 {
@@ -30,8 +31,8 @@ struct SwapChainDesc
     bool use_depth = true;
     PixelFormat depth_pixel_format = PixelFormat::D32_SFLOAT;
     PixelFormat pixel_format = PixelFormat::B8G8R8A8_SRGB;
-    VkColorSpaceKHR color_space = VK_COLOR_SPACE_SRGB_NONLINEAR_KHR;
-    VkPresentModeKHR present_mode = VK_PRESENT_MODE_FIFO_KHR;
+    ColorSpace color_space = ColorSpace::SrgbNonlinear;
+    PresentMode present_mode = PresentMode::Fifo;
 };
 
 /** Outcome of acquiring or presenting a swap chain image. */

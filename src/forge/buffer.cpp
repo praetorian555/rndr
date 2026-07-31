@@ -11,7 +11,10 @@
 Rndr::Forge::Buffer::Buffer(const Device& device, const BufferDesc& desc, Opal::ArrayView<const u8> initial_data)
     : m_device(device), m_desc(desc)
 {
-    VkBufferCreateInfo create_info{.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO, .size = desc.size, .usage = desc.usage};
+    // The values of BufferUsageBits mirror VkBufferUsageFlagBits, so the mask translates as a cast.
+    VkBufferCreateInfo create_info{.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
+                                   .size = desc.size,
+                                   .usage = static_cast<VkBufferUsageFlags>(desc.usage)};
     if (desc.use_device_address)
     {
         create_info.usage |= VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT;

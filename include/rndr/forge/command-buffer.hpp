@@ -6,6 +6,7 @@
 
 #include "rndr/forge/synchronization.hpp"
 #include "rndr/forge/forward.hpp"
+#include "rndr/forge/types.hpp"
 
 namespace Rndr::Forge
 {

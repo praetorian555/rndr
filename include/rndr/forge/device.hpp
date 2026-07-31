@@ -10,6 +10,7 @@
 #include "rndr/graphics-types.hpp"
 #include "rndr/types.hpp"
 #include "rndr/forge/forward.hpp"
+#include "rndr/forge/types.hpp"
 
 // Forward declare handle to avoid vma includes in headers.
 using VmaAllocation = struct VmaAllocation_T*;

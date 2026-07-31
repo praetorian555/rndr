@@ -54,6 +54,64 @@ static VkSamplerAddressMode ToVkSamplerAddressMode(Rndr::ImageAddressMode mode)
     }
 }
 
+static VkImageType ToVkImageType(Rndr::Forge::TextureDimension dimension)
+{
+    switch (dimension)
+    {
+        case Rndr::Forge::TextureDimension::Texture1D:
+            return VK_IMAGE_TYPE_1D;
+        case Rndr::Forge::TextureDimension::Texture2D:
+            return VK_IMAGE_TYPE_2D;
+        case Rndr::Forge::TextureDimension::Texture3D:
+            return VK_IMAGE_TYPE_3D;
+    }
+    throw Opal::Exception("Unknown texture dimension!");
+}
+
+static VkImageViewType ToVkImageViewType(Rndr::Forge::TextureViewType view_type)
+{
+    switch (view_type)
+    {
+        case Rndr::Forge::TextureViewType::Texture1D:
+            return VK_IMAGE_VIEW_TYPE_1D;
+        case Rndr::Forge::TextureViewType::Texture2D:
+            return VK_IMAGE_VIEW_TYPE_2D;
+        case Rndr::Forge::TextureViewType::Texture3D:
+            return VK_IMAGE_VIEW_TYPE_3D;
+        case Rndr::Forge::TextureViewType::Cube:
+            return VK_IMAGE_VIEW_TYPE_CUBE;
+        case Rndr::Forge::TextureViewType::Texture1DArray:
+            return VK_IMAGE_VIEW_TYPE_1D_ARRAY;
+        case Rndr::Forge::TextureViewType::Texture2DArray:
+            return VK_IMAGE_VIEW_TYPE_2D_ARRAY;
+        case Rndr::Forge::TextureViewType::CubeArray:
+            return VK_IMAGE_VIEW_TYPE_CUBE_ARRAY;
+    }
+    throw Opal::Exception("Unknown texture view type!");
+}
+
+static VkSampleCountFlagBits ToVkSampleCount(Rndr::Forge::SampleCount sample_count)
+{
+    switch (sample_count)
+    {
+        case Rndr::Forge::SampleCount::Count1:
+            return VK_SAMPLE_COUNT_1_BIT;
+        case Rndr::Forge::SampleCount::Count2:
+            return VK_SAMPLE_COUNT_2_BIT;
+        case Rndr::Forge::SampleCount::Count4:
+            return VK_SAMPLE_COUNT_4_BIT;
+        case Rndr::Forge::SampleCount::Count8:
+            return VK_SAMPLE_COUNT_8_BIT;
+        case Rndr::Forge::SampleCount::Count16:
+            return VK_SAMPLE_COUNT_16_BIT;
+        case Rndr::Forge::SampleCount::Count32:
+            return VK_SAMPLE_COUNT_32_BIT;
+        case Rndr::Forge::SampleCount::Count64:
+            return VK_SAMPLE_COUNT_64_BIT;
+    }
+    throw Opal::Exception("Unknown sample count!");
+}
+
 static VkBorderColor ToVkBorderColor(Rndr::BorderColor border_color)
 {
     switch (border_color)
@@ -84,12 +142,12 @@ Rndr::Forge::Texture::Texture(const Device& device, DeviceQueue& queue, const Bi
     m_desc.mip_level_count = bitmap.GetMipCount();
     m_desc.subresource_range.mip_level_count = bitmap.GetMipCount();
     m_desc.format = bitmap.GetPixelFormat();
-    m_desc.image_usage = desc.image_usage | VK_IMAGE_USAGE_TRANSFER_DST_BIT;  // Make sure we always set transfer destination bit
+    m_desc.usage = desc.usage | TextureUsageBits::TransferDestination;  // The upload below needs the bit either way
 
     Init(device, m_desc);
 
     // Create staging buffer
-    const Buffer staging_buffer(device, {.size = bitmap.GetTotalSize(), .usage = VK_BUFFER_USAGE_TRANSFER_SRC_BIT});
+    const Buffer staging_buffer(device, {.size = bitmap.GetTotalSize(), .usage = BufferUsageBits::TransferSource});
     staging_buffer.Update({bitmap.GetData(), bitmap.GetTotalSize()}, 0);
 
     CommandBuffer upload_command_buffer(device, queue);
@@ -128,7 +186,7 @@ m_device(device), m_image(native_image), m_desc(desc)
     const VkImageViewCreateInfo image_view_create_info = {
         .sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
         .image = m_image,
-        .viewType = m_desc.view_type,
+        .viewType = ToVkImageViewType(m_desc.view_type),
         .format = ToVkFormat(m_desc.format),
         .subresourceRange = {.aspectMask = static_cast<VkImageAspectFlags>(m_desc.subresource_range.aspect_mask),
                              .baseMipLevel = m_desc.subresource_range.first_mip_level,
@@ -152,14 +210,15 @@ void Rndr::Forge::Texture::Init(const Device& device, const TextureDesc& desc)
 
     const VkImageCreateInfo image_create_info = {
         .sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
-        .imageType = m_desc.image_type,
+        .imageType = ToVkImageType(m_desc.dimension),
         .format = ToVkFormat(m_desc.format),
         .extent = {.width = m_desc.width, .height = m_desc.height, .depth = m_desc.depth},
         .mipLevels = m_desc.mip_level_count,
         .arrayLayers = m_desc.array_layer_count,
-        .samples = m_desc.sample_count,
+        .samples = ToVkSampleCount(m_desc.sample_count),
         .tiling = VK_IMAGE_TILING_OPTIMAL,
-        .usage = m_desc.image_usage,
+        // The values of TextureUsageBits mirror VkImageUsageFlagBits, so the mask translates as a cast.
+        .usage = static_cast<VkImageUsageFlags>(m_desc.usage),
         .initialLayout = VK_IMAGE_LAYOUT_UNDEFINED,
     };
     const VmaAllocationCreateInfo allocation_create_info = {.flags = VMA_ALLOCATION_CREATE_DEDICATED_MEMORY_BIT,
@@ -172,7 +231,7 @@ void Rndr::Forge::Texture::Init(const Device& device, const TextureDesc& desc)
     const VkImageViewCreateInfo image_view_create_info = {
         .sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
         .image = m_image,
-        .viewType = m_desc.view_type,
+        .viewType = ToVkImageViewType(m_desc.view_type),
         .format = ToVkFormat(m_desc.format),
         .subresourceRange = {.aspectMask = static_cast<VkImageAspectFlags>(m_desc.subresource_range.aspect_mask),
                              .baseMipLevel = m_desc.subresource_range.first_mip_level,

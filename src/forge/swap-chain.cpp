@@ -16,6 +16,38 @@
 #include "rndr/log.hpp"
 #include "rndr/pixel-format.hpp"
 
+static VkPresentModeKHR ToVkPresentMode(Rndr::Forge::PresentMode present_mode)
+{
+    switch (present_mode)
+    {
+        case Rndr::Forge::PresentMode::Immediate:
+            return VK_PRESENT_MODE_IMMEDIATE_KHR;
+        case Rndr::Forge::PresentMode::Mailbox:
+            return VK_PRESENT_MODE_MAILBOX_KHR;
+        case Rndr::Forge::PresentMode::Fifo:
+            return VK_PRESENT_MODE_FIFO_KHR;
+        case Rndr::Forge::PresentMode::FifoRelaxed:
+            return VK_PRESENT_MODE_FIFO_RELAXED_KHR;
+    }
+    throw Opal::Exception("Unknown present mode!");
+}
+
+static VkColorSpaceKHR ToVkColorSpace(Rndr::Forge::ColorSpace color_space)
+{
+    switch (color_space)
+    {
+        case Rndr::Forge::ColorSpace::SrgbNonlinear:
+            return VK_COLOR_SPACE_SRGB_NONLINEAR_KHR;
+        case Rndr::Forge::ColorSpace::ExtendedSrgbLinear:
+            return VK_COLOR_SPACE_EXTENDED_SRGB_LINEAR_EXT;
+        case Rndr::Forge::ColorSpace::Hdr10St2084:
+            return VK_COLOR_SPACE_HDR10_ST2084_EXT;
+        case Rndr::Forge::ColorSpace::DisplayP3Nonlinear:
+            return VK_COLOR_SPACE_DISPLAY_P3_NONLINEAR_EXT;
+    }
+    throw Opal::Exception("Unknown color space!");
+}
+
 Rndr::Forge::Surface::Surface(const GraphicsContext& context, const GenericWindow& window) : m_window(window)
 {
 #if defined(OPAL_PLATFORM_WINDOWS)
@@ -271,10 +303,12 @@ void Rndr::Forge::SwapChain::Recreate()
     DestroyImages();
 
     const SwapChainSupportDetails swap_chain_support = m_surface->GetSwapChainSupportDetails(m_device->GetPhysicalDevice());
+    const VkColorSpaceKHR color_space = ToVkColorSpace(m_desc.color_space);
+    const VkPresentModeKHR present_mode = ToVkPresentMode(m_desc.present_mode);
     bool is_supported = false;
     for (auto available_format : swap_chain_support.formats)
     {
-        if (available_format.format == ToVkFormat(m_desc.pixel_format) && available_format.colorSpace == m_desc.color_space)
+        if (available_format.format == ToVkFormat(m_desc.pixel_format) && available_format.colorSpace == color_space)
         {
             is_supported = true;
             break;
@@ -288,7 +322,7 @@ void Rndr::Forge::SwapChain::Recreate()
     is_supported = false;
     for (auto available_present_mode : swap_chain_support.present_modes)
     {
-        if (available_present_mode == m_desc.present_mode)
+        if (available_present_mode == present_mode)
         {
             is_supported = true;
             break;
@@ -321,7 +355,7 @@ void Rndr::Forge::SwapChain::Recreate()
     create_info.surface = m_surface->GetNativeSurface();
     create_info.minImageCount = image_count;
     create_info.imageFormat = ToVkFormat(m_desc.pixel_format);
-    create_info.imageColorSpace = m_desc.color_space;
+    create_info.imageColorSpace = color_space;
     create_info.imageExtent = extent;
     create_info.imageArrayLayers = 1;
     create_info.imageUsage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
@@ -349,7 +383,7 @@ void Rndr::Forge::SwapChain::Recreate()
 
     create_info.preTransform = VK_SURFACE_TRANSFORM_IDENTITY_BIT_KHR;  // swap_chain_support.capabilities.currentTransform;
     create_info.compositeAlpha = VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR;
-    create_info.presentMode = m_desc.present_mode;
+    create_info.presentMode = present_mode;
     // If set to VK_TRUE it means that we don't care about the color of the pixels if they are occluded by other window.
     create_info.clipped = VK_TRUE;
     // Letting the driver reuse the resources of the swap chain we are replacing.
@@ -384,20 +418,21 @@ void Rndr::Forge::SwapChain::Recreate()
         Texture texture(m_device, image, TextureDesc{
             .format = m_desc.pixel_format,
             .width = extent.width,
-            .height = extent.height
+            .height = extent.height,
+            .usage = TextureUsageBits::ColorAttachment
         });
         m_color_textures.PushBack(std::move(texture));
     }
     if (m_desc.use_depth)
     {
         m_depth_texture = Texture{m_device,
-                                          {.image_type = VK_IMAGE_TYPE_2D,
+                                          {.dimension = TextureDimension::Texture2D,
                                            .format = m_desc.depth_pixel_format,
                                            .width = extent.width,
                                            .height = extent.height,
-                                           .sample_count = VK_SAMPLE_COUNT_1_BIT,
-                                           .image_usage = VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT,
-                                           .view_type = VK_IMAGE_VIEW_TYPE_2D,
+                                           .sample_count = SampleCount::Count1,
+                                           .usage = TextureUsageBits::DepthStencilAttachment,
+                                           .view_type = TextureViewType::Texture2D,
                                            .subresource_range = {.aspect_mask = ImageAspectBits::Depth}}};
     }
 }

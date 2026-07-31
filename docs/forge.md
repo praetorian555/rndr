@@ -51,6 +51,32 @@ that is only read during the call. That is what this convention removes.
 
 ---
 
+## How much Vulkan is visible
+
+Forge is a wrapper, not a passthrough. Everything a desc asks for is named in Forge's own vocabulary -
+`BufferUsageBits`, `TextureUsageBits`, `SampleCount`, `PresentMode`, `ColorSpace`, `TextureDimension`,
+`TextureViewType` - so filling one in never requires reaching for a `Vk` enum.
+
+That vocabulary is split across two headers by what the type describes, not by who uses it:
+
+- `rndr/forge/types.hpp`, namespace `Rndr::Forge`, holds the types that are Vulkan concepts: `ImageLayout`,
+  `ImageAspectBits`, `ImageSubresourceRange`, `PipelineStageBits`, `PipelineStageAccessBits` and the usage
+  masks above. An OpenGL renderer has no use for them.
+- `rndr/graphics-types.hpp`, namespace `Rndr`, keeps what any graphics API would recognize - `PixelFormat`,
+  `ShaderTypeBits`, `IndexSize`, `Comparator`, `BlendFactor`, `SamplerDesc` - and is shared with Canvas.
+
+The values of the flag enums mirror the Vulkan values they map to, so translating a mask is a cast. The
+plain enums are translated by a `ToVk*` switch in the source file that needs them, which is why a value with
+no Vulkan counterpart cannot be cast into one by accident.
+
+Vulkan is still visible in three deliberate places. `GetNative*()` on every type hands out the raw handle,
+which is the escape hatch for anything Forge does not wrap yet. `Surface::GetSwapChainSupportDetails` and
+the queue family queries on `PhysicalDevice` return what Vulkan reported, since they exist to inspect the
+driver rather than to describe an object. And `DeviceDesc::features` is still `VkPhysicalDeviceFeatures`,
+which task 3.6 in `docs/forge-tasks.md` covers.
+
+---
+
 ## Error handling
 
 Three rules, in the order they are applied.

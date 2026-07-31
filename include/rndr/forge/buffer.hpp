@@ -7,6 +7,7 @@
 
 #include "rndr/types.hpp"
 #include "rndr/forge/forward.hpp"
+#include "rndr/forge/types.hpp"
 
 // Forward declare handle to avoid vma includes in headers.
 using VmaAllocation = struct VmaAllocation_T*;
@@ -17,7 +18,7 @@ namespace Rndr::Forge
 struct BufferDesc
 {
     size_t size = 0;
-    VkBufferUsageFlags usage = 0;
+    BufferUsageBits usage = BufferUsageBits::None;
     bool keep_memory_mapped = true;
     bool use_device_address = false;
 };

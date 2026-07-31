@@ -84,7 +84,7 @@ void Run()
     combined_vertex_index_data.Append(mesh.indices);
     Rndr::Forge::Buffer mesh_buffer(device,
                                      {.size = combined_vertex_index_data.GetSize(),
-                                      .usage = VK_BUFFER_USAGE_VERTEX_BUFFER_BIT | VK_BUFFER_USAGE_INDEX_BUFFER_BIT,
+                                      .usage = Rndr::Forge::BufferUsageBits::VertexBuffer | Rndr::Forge::BufferUsageBits::IndexBuffer,
                                       .keep_memory_mapped = false},
                                      combined_vertex_index_data);
 
@@ -92,7 +92,10 @@ void Run()
     for (i32 i = 0; i < k_frames_in_flight; i++)
     {
         m_shader_buffers[i] =
-            Rndr::Forge::Buffer(device, {.size = sizeof(ShaderData), .usage = 0, .keep_memory_mapped = true, .use_device_address = true});
+            Rndr::Forge::Buffer(device, {.size = sizeof(ShaderData),
+                                         .usage = Rndr::Forge::BufferUsageBits::None,
+                                         .keep_memory_mapped = true,
+                                         .use_device_address = true});
     }
 
     // Create fences and semaphores
@@ -154,13 +157,13 @@ void Run()
         .descriptor_type = Rndr::Forge::DescriptorType::CombinedImageSampler,
         .binding = 0,
         .resource_info = Rndr::Forge::DescriptorSetUpdateBinding::ImageInfo{
-            .sampler = albedo_sampler, .image = albedo_texture, .image_layout = Rndr::ImageLayout::ShaderReadOnly}};
+            .sampler = albedo_sampler, .image = albedo_texture, .image_layout = Rndr::Forge::ImageLayout::ShaderReadOnly}};
     update_bindings.PushBack(std::move(binding1));
     Rndr::Forge::DescriptorSetUpdateBinding binding2{
         .descriptor_type = Rndr::Forge::DescriptorType::CombinedImageSampler,
         .binding = 1,
         .resource_info = Rndr::Forge::DescriptorSetUpdateBinding::ImageInfo{
-            .sampler = mr_sampler, .image = mr_texture, .image_layout = Rndr::ImageLayout::ShaderReadOnly}};
+            .sampler = mr_sampler, .image = mr_texture, .image_layout = Rndr::Forge::ImageLayout::ShaderReadOnly}};
     update_bindings.PushBack(std::move(binding2));
     descriptor_set.UpdateDescriptorSets(update_bindings);
 
@@ -268,22 +271,22 @@ void Run()
 
         // Make sure our color and depth attachment are ready and in proper layout
         Opal::InPlaceArray<Rndr::Forge::ImageBarrier, 2> barriers{
-            {.stages_must_finish = Rndr::PipelineStageBits::ColorAttachmentOutput,
-             .stages_must_finish_access = Rndr::PipelineStageAccessBits::None,
-             .before_stages_start = Rndr::PipelineStageBits::ColorAttachmentOutput,
-             .before_stages_start_access = Rndr::PipelineStageAccessBits::Read | Rndr::PipelineStageAccessBits::Write,
-             .old_layout = Rndr::ImageLayout::Undefined,
-             .new_layout = Rndr::ImageLayout::ColorAttachment,
+            {.stages_must_finish = Rndr::Forge::PipelineStageBits::ColorAttachmentOutput,
+             .stages_must_finish_access = Rndr::Forge::PipelineStageAccessBits::None,
+             .before_stages_start = Rndr::Forge::PipelineStageBits::ColorAttachmentOutput,
+             .before_stages_start_access = Rndr::Forge::PipelineStageAccessBits::Read | Rndr::Forge::PipelineStageAccessBits::Write,
+             .old_layout = Rndr::Forge::ImageLayout::Undefined,
+             .new_layout = Rndr::Forge::ImageLayout::ColorAttachment,
              .image = swap_chain.GetColorImage(static_cast<i32>(image_index))},
-            {.stages_must_finish = Rndr::PipelineStageBits::EarlyFragmentTests | Rndr::PipelineStageBits::LateFragmentTests,
-             .stages_must_finish_access = Rndr::PipelineStageAccessBits::Write,
-             .before_stages_start = Rndr::PipelineStageBits::EarlyFragmentTests | Rndr::PipelineStageBits::LateFragmentTests,
-             .before_stages_start_access = Rndr::PipelineStageAccessBits::Write,
-             .old_layout = Rndr::ImageLayout::Undefined,
-             .new_layout = Rndr::ImageLayout::DepthStencilAttachment,
+            {.stages_must_finish = Rndr::Forge::PipelineStageBits::EarlyFragmentTests | Rndr::Forge::PipelineStageBits::LateFragmentTests,
+             .stages_must_finish_access = Rndr::Forge::PipelineStageAccessBits::Write,
+             .before_stages_start = Rndr::Forge::PipelineStageBits::EarlyFragmentTests | Rndr::Forge::PipelineStageBits::LateFragmentTests,
+             .before_stages_start_access = Rndr::Forge::PipelineStageAccessBits::Write,
+             .old_layout = Rndr::Forge::ImageLayout::Undefined,
+             .new_layout = Rndr::Forge::ImageLayout::DepthStencilAttachment,
              .image = swap_chain.GetDepthImage(),
              .subresource_range = {
-                 .aspect_mask = Rndr::ImageAspectBits::Depth,
+                 .aspect_mask = Rndr::Forge::ImageAspectBits::Depth,
              }}};
         command_buffer.CmdImageBarriers(barriers);
 
@@ -292,12 +295,12 @@ void Run()
         const Rndr::Forge::RenderingDesc rendering_desc{
             .render_area_extent = render_size,
             .color_attachments = {Rndr::Forge::RenderingAttachmentDesc{.image_view = swap_chain.GetColorImageView(image_index),
-                                                                        .image_layout = Rndr::ImageLayout::ColorAttachment,
+                                                                        .image_layout = Rndr::Forge::ImageLayout::ColorAttachment,
                                                                         .load_operation = Rndr::Forge::AttachmentLoadOperation::Clear,
                                                                         .store_operation = Rndr::Forge::AttachmentStoreOperation::Store,
                                                                         .clear_value = {.color = {0.0f, 0.0f, 0.2f, 1.0f}}}},
             .depth_attachment = {.image_view = swap_chain.GetDepthImageView(),
-                                 .image_layout = Rndr::ImageLayout::DepthStencilAttachment,
+                                 .image_layout = Rndr::Forge::ImageLayout::DepthStencilAttachment,
                                  .load_operation = Rndr::Forge::AttachmentLoadOperation::Clear,
                                  .store_operation = Rndr::Forge::AttachmentStoreOperation::DontCare,
                                  .clear_value = {.depth_stencil = {.depth = 1.0f, .stencil = 0}}}};
@@ -313,15 +316,15 @@ void Run()
         command_buffer.CmdDrawIndexed(mesh.index_count, 3);
         command_buffer.CmdEndRendering();
 
-        command_buffer.CmdImageBarrier({.stages_must_finish = Rndr::PipelineStageBits::ColorAttachmentOutput,
-                                        .stages_must_finish_access = Rndr::PipelineStageAccessBits::Write,
-                                        .before_stages_start = Rndr::PipelineStageBits::ColorAttachmentOutput,
-                                        .old_layout = Rndr::ImageLayout::ColorAttachment,
-                                        .new_layout = Rndr::ImageLayout::Present,
+        command_buffer.CmdImageBarrier({.stages_must_finish = Rndr::Forge::PipelineStageBits::ColorAttachmentOutput,
+                                        .stages_must_finish_access = Rndr::Forge::PipelineStageAccessBits::Write,
+                                        .before_stages_start = Rndr::Forge::PipelineStageBits::ColorAttachmentOutput,
+                                        .old_layout = Rndr::Forge::ImageLayout::ColorAttachment,
+                                        .new_layout = Rndr::Forge::ImageLayout::Present,
                                         .image = swap_chain.GetColorImage(static_cast<i32>(image_index))});
         command_buffer.End();
 
-        graphics_queue.Submit(command_buffer, present_semaphores[frame_index], Rndr::PipelineStageBits::ColorAttachmentOutput,
+        graphics_queue.Submit(command_buffer, present_semaphores[frame_index], Rndr::Forge::PipelineStageBits::ColorAttachmentOutput,
                               render_semaphores[image_index], fences[frame_index]);
         frame_index = (frame_index + 1) % k_frames_in_flight;
         if (swap_chain.Present(image_index, present_queue, render_semaphores[image_index]) ==

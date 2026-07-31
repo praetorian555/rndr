@@ -107,8 +107,8 @@ Left open, deliberately:
   code.
 - `ApiComplexity::Basic` / `::Advanced` in `include/rndr/projection-camera.hpp` still uses the old wording
   for what is really Canvas versus Forge clip space.
-- `ImageLayout`, `PipelineStageBits`, `ImageSubresourceRange` and friends are Vulkan shaped but live in the
-  shared `rndr/graphics-types.hpp`. Decide whether they belong in `Forge` as part of task 2.4.
+- `ImageLayout`, `PipelineStageBits`, `ImageSubresourceRange` and friends were Vulkan shaped but lived in the
+  shared `rndr/graphics-types.hpp`. Task 2.4 moved them to `rndr/forge/types.hpp`.
 
 ### 2.2 Pick one error strategy — DONE
 
@@ -150,14 +150,33 @@ section of `docs/forge.md`.
 Verified by running `modern-vulkan` with the validation layer for ten seconds and closing the window: clean
 exit, no validation message.
 
-### 2.4 Decide how much Vulkan leaks into the descs
+### 2.4 Decide how much Vulkan leaks into the descs — DONE
 
-`PixelFormat`, `ImageLayout`, `ShaderTypeBits` and `PipelineStageBits` are wrapped, but `VkBufferUsageFlags`,
-`VkImageType`, `VkImageUsageFlags`, `VkSampleCountFlagBits`, `VkImageViewType`, `VkPresentModeKHR`,
-`VkColorSpaceKHR` and `VkPhysicalDeviceFeatures` sit raw in the same structures. The user currently has to
-know both vocabularies. Either wrap the remaining ones — `BufferUsageBits`, `TextureUsageBits`,
-`SampleCount`, `PresentMode` — or drop the wrappers and be an explicitly thin Vulkan layer. The former fits
-the rest of the codebase.
+Wrapped, which is what the rest of the codebase does. No desc field names a `Vk` type any more:
+
+- `BufferDesc::usage` is `BufferUsageBits`, `TextureDesc::usage` is `TextureUsageBits` — both flag enums whose
+  values mirror the Vulkan ones, so the mask translates as a cast, the way `PipelineStageBits` already did.
+  `TextureDesc::image_usage` was renamed to `::usage` to match `BufferDesc`.
+- `TextureDesc::image_type` is `TextureDimension`, `::view_type` is `TextureViewType`, `::sample_count` is
+  `SampleCount`, `SwapChainDesc::present_mode` is `PresentMode` and `::color_space` is `ColorSpace`. These are
+  translated by a `ToVk*` switch in the source file that uses them, so a value with no Vulkan counterpart
+  cannot be cast into one by accident.
+
+This also settles the question task 2.1 left open. The split is by what a type describes, not by who uses it:
+`ImageLayout`, `ImageAspectBits`, `ImageSubresourceRange`, `PipelineStageBits` and `PipelineStageAccessBits`
+are Vulkan concepts and moved to the new `include/rndr/forge/types.hpp` under `Rndr::Forge`, next to the new
+enums. What any graphics API would recognize — `PixelFormat`, `ShaderTypeBits`, `IndexSize`, `Comparator` —
+stays in `rndr/graphics-types.hpp` under `Rndr` and shared with Canvas. The reasoning is written down in the
+"How much Vulkan is visible" section of `docs/forge.md`.
+
+Left raw on purpose: `GetNative*()`, which is the escape hatch; `Surface::GetSwapChainSupportDetails` and the
+queue family queries of `PhysicalDevice`, which report what the driver said rather than describe an object;
+the `VkImage` constructor of `Texture`, which is how the swap chain wraps images it does not own; and
+`DeviceDesc::features`, which is task 3.6. `RenderingAttachmentDesc::image_view` is still a raw `VkImageView`
+and should become a texture reference when task 4.5 makes the depth attachment optional.
+
+Verified by running `modern-vulkan` with the validation layer for ten seconds and closing the window: clean
+exit, no validation message.
 
 ### 2.5 Consistent validity and accessors — DONE
 

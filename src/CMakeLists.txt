@@ -111,6 +111,8 @@ if (${RNDR_FORGE})
             "${VULKAN_SDK_PATH}/Source/SPIRV-Reflect/spirv_reflect.h"
             "${VULKAN_SDK_PATH}/Source/SPIRV-Reflect/spirv_reflect.c")
     list(APPEND SOURCE_LIST
+            "${PROJECT_SOURCE_DIR}/include/rndr/forge/forward.hpp"
+            "${PROJECT_SOURCE_DIR}/include/rndr/forge/types.hpp"
             "${PROJECT_SOURCE_DIR}/include/rndr/forge/graphics-context.hpp"
             "${PROJECT_SOURCE_DIR}/include/rndr/forge/device.hpp"
             "${PROJECT_SOURCE_DIR}/include/rndr/forge/physical-device.hpp"

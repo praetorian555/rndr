@@ -8,6 +8,7 @@
 #include "rndr/graphics-types.hpp"
 #include "rndr/types.hpp"
 #include "rndr/forge/forward.hpp"
+#include "rndr/forge/types.hpp"
 
 // Forward declare handle to avoid vma includes in headers.
 using VmaAllocation = struct VmaAllocation_T*;
@@ -18,18 +19,18 @@ namespace Rndr::Forge
 struct TextureDesc
 {
     // Image
-    VkImageType image_type = VK_IMAGE_TYPE_2D;
+    TextureDimension dimension = TextureDimension::Texture2D;
     PixelFormat format = PixelFormat::B8G8R8A8_UNORM;
     u32 width = 0;
     u32 height = 0;
     u32 depth = 1;
     u32 mip_level_count = 1;
     u32 array_layer_count = 1;
-    VkSampleCountFlagBits sample_count = VK_SAMPLE_COUNT_1_BIT;
-    VkImageUsageFlags image_usage = VK_IMAGE_USAGE_SAMPLED_BIT;
+    SampleCount sample_count = SampleCount::Count1;
+    TextureUsageBits usage = TextureUsageBits::Sampled;
 
     // Image view
-    VkImageViewType view_type = VK_IMAGE_VIEW_TYPE_2D;
+    TextureViewType view_type = TextureViewType::Texture2D;
     ImageSubresourceRange subresource_range;
 };
 

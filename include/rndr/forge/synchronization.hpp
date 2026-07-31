@@ -9,6 +9,7 @@
 #include "rndr/graphics-types.hpp"
 #include "rndr/types.hpp"
 #include "rndr/forge/forward.hpp"
+#include "rndr/forge/types.hpp"
 
 namespace Rndr::Forge
 {
