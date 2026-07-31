@@ -140,7 +140,6 @@ Rndr::Forge::Texture::Texture(const Device& device, DeviceQueue& queue, const Bi
     m_desc.height = bitmap.GetHeight();
     m_desc.depth = bitmap.GetDepth();
     m_desc.mip_level_count = bitmap.GetMipCount();
-    m_desc.subresource_range.mip_level_count = bitmap.GetMipCount();
     m_desc.format = bitmap.GetPixelFormat();
     m_desc.usage = desc.usage | TextureUsageBits::TransferDestination;  // The upload below needs the bit either way
 
@@ -152,27 +151,9 @@ Rndr::Forge::Texture::Texture(const Device& device, DeviceQueue& queue, const Bi
 
     CommandBuffer upload_command_buffer(device, queue);
     upload_command_buffer.Begin();
-    upload_command_buffer.CmdImageBarrier({
-        .stages_must_finish = PipelineStageBits::None,
-        .stages_must_finish_access = PipelineStageAccessBits::None,
-        .before_stages_start = PipelineStageBits::Transfer,
-        .before_stages_start_access = PipelineStageAccessBits::Write,
-        .old_layout = ImageLayout::Undefined,
-        .new_layout = ImageLayout::TransferDestination,
-        .image = Opal::Ref<const Texture>{this},
-        .subresource_range = {.mip_level_count = bitmap.GetMipCount()}
-    });
+    upload_command_buffer.CmdImageBarrier(ImageBarrier::ToTransferDestination(*this));
     upload_command_buffer.CmdCopyBufferToImage(staging_buffer, bitmap, *this);
-    upload_command_buffer.CmdImageBarrier({
-        .stages_must_finish = PipelineStageBits::Transfer,
-        .stages_must_finish_access = PipelineStageAccessBits::Write,
-        .before_stages_start = PipelineStageBits::FragmentShader,
-        .before_stages_start_access = PipelineStageAccessBits::Read,
-        .old_layout = ImageLayout::TransferDestination,
-        .new_layout = ImageLayout::ShaderReadOnly,
-        .image = Opal::Ref<const Texture>{this},
-        .subresource_range = {.mip_level_count = bitmap.GetMipCount()}
-    });
+    upload_command_buffer.CmdImageBarrier(ImageBarrier::ToShaderRead(*this, ImageLayout::TransferDestination));
     upload_command_buffer.End();
 
     const Fence fence(device, false);
@@ -188,7 +169,7 @@ m_device(device), m_image(native_image), m_desc(desc)
         .image = m_image,
         .viewType = ToVkImageViewType(m_desc.view_type),
         .format = ToVkFormat(m_desc.format),
-        .subresourceRange = {.aspectMask = static_cast<VkImageAspectFlags>(m_desc.subresource_range.aspect_mask),
+        .subresourceRange = {.aspectMask = static_cast<VkImageAspectFlags>(m_desc.subresource_range.ResolveAspectMask(m_desc.format)),
                              .baseMipLevel = m_desc.subresource_range.first_mip_level,
                              .levelCount = m_desc.subresource_range.mip_level_count,
                              .baseArrayLayer = m_desc.subresource_range.first_array_layer,
@@ -233,7 +214,7 @@ void Rndr::Forge::Texture::Init(const Device& device, const TextureDesc& desc)
         .image = m_image,
         .viewType = ToVkImageViewType(m_desc.view_type),
         .format = ToVkFormat(m_desc.format),
-        .subresourceRange = {.aspectMask = static_cast<VkImageAspectFlags>(m_desc.subresource_range.aspect_mask),
+        .subresourceRange = {.aspectMask = static_cast<VkImageAspectFlags>(m_desc.subresource_range.ResolveAspectMask(m_desc.format)),
                              .baseMipLevel = m_desc.subresource_range.first_mip_level,
                              .levelCount = m_desc.subresource_range.mip_level_count,
                              .baseArrayLayer = m_desc.subresource_range.first_array_layer,

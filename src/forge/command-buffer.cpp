@@ -66,9 +66,11 @@ void Rndr::Forge::CommandBuffer::Reset() const
     }
 }
 
-void Rndr::Forge::CommandBuffer::CmdImageBarrier(const ImageBarrier& image_barrier)
+static VkImageMemoryBarrier2 ToVkImageBarrier(const Rndr::Forge::ImageBarrier& image_barrier)
 {
-    VkImageMemoryBarrier2 barrier_info{
+    const Rndr::Forge::Texture& texture = image_barrier.image.Get();
+    const Rndr::Forge::ImageSubresourceRange& range = image_barrier.subresource_range;
+    return {
         .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
         .srcStageMask = static_cast<VkPipelineStageFlags2>(image_barrier.stages_must_finish),
         .srcAccessMask = static_cast<VkAccessFlags2>(image_barrier.stages_must_finish_access),
@@ -76,13 +78,22 @@ void Rndr::Forge::CommandBuffer::CmdImageBarrier(const ImageBarrier& image_barri
         .dstAccessMask = static_cast<VkAccessFlags2>(image_barrier.before_stages_start_access),
         .oldLayout = static_cast<VkImageLayout>(image_barrier.old_layout),
         .newLayout = static_cast<VkImageLayout>(image_barrier.new_layout),
-        .image = image_barrier.image.Get().GetNativeImage(),
+        // Forge does not transfer ownership between queue families yet. Leaving these zero would name family
+        // zero, which a barrier on an image created with VK_SHARING_MODE_CONCURRENT is not allowed to do.
+        .srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+        .dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+        .image = texture.GetNativeImage(),
+        .subresourceRange = {.aspectMask = static_cast<VkImageAspectFlags>(range.ResolveAspectMask(texture.GetDesc().format)),
+                             .baseMipLevel = range.first_mip_level,
+                             .levelCount = range.mip_level_count,
+                             .baseArrayLayer = range.first_array_layer,
+                             .layerCount = range.array_layer_count},
     };
-    barrier_info.subresourceRange.aspectMask = static_cast<VkImageAspectFlags>(image_barrier.subresource_range.aspect_mask);
-    barrier_info.subresourceRange.baseMipLevel = image_barrier.subresource_range.first_mip_level;
-    barrier_info.subresourceRange.levelCount = image_barrier.subresource_range.mip_level_count;
-    barrier_info.subresourceRange.baseArrayLayer = image_barrier.subresource_range.first_array_layer;
-    barrier_info.subresourceRange.layerCount = image_barrier.subresource_range.array_layer_count;
+}
+
+void Rndr::Forge::CommandBuffer::CmdImageBarrier(const ImageBarrier& image_barrier)
+{
+    const VkImageMemoryBarrier2 barrier_info = ToVkImageBarrier(image_barrier);
     const VkDependencyInfo dependency_info{
         .sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO, .imageMemoryBarrierCount = 1, .pImageMemoryBarriers = &barrier_info};
     vkCmdPipelineBarrier2(m_native_command_buffer, &dependency_info);
@@ -90,25 +101,14 @@ void Rndr::Forge::CommandBuffer::CmdImageBarrier(const ImageBarrier& image_barri
 
 void Rndr::Forge::CommandBuffer::CmdImageBarriers(Opal::ArrayView<const ImageBarrier> image_barriers)
 {
-    Opal::DynamicArray<VkImageMemoryBarrier2> barriers;
-    for (const auto& image_barrier : image_barriers)
+    if (image_barriers.IsEmpty())
     {
-        VkImageMemoryBarrier2 barrier_info{
-            .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
-            .srcStageMask = static_cast<VkPipelineStageFlags2>(image_barrier.stages_must_finish),
-            .srcAccessMask = static_cast<VkAccessFlags2>(image_barrier.stages_must_finish_access),
-            .dstStageMask = static_cast<VkPipelineStageFlags2>(image_barrier.before_stages_start),
-            .dstAccessMask = static_cast<VkAccessFlags2>(image_barrier.before_stages_start_access),
-            .oldLayout = static_cast<VkImageLayout>(image_barrier.old_layout),
-            .newLayout = static_cast<VkImageLayout>(image_barrier.new_layout),
-            .image = image_barrier.image.Get().GetNativeImage(),
-        };
-        barrier_info.subresourceRange.aspectMask = static_cast<VkImageAspectFlags>(image_barrier.subresource_range.aspect_mask);
-        barrier_info.subresourceRange.baseMipLevel = image_barrier.subresource_range.first_mip_level;
-        barrier_info.subresourceRange.levelCount = image_barrier.subresource_range.mip_level_count;
-        barrier_info.subresourceRange.baseArrayLayer = image_barrier.subresource_range.first_array_layer;
-        barrier_info.subresourceRange.layerCount = image_barrier.subresource_range.array_layer_count;
-        barriers.PushBack(barrier_info);
+        return;
+    }
+    Opal::DynamicArray<VkImageMemoryBarrier2> barriers(image_barriers.GetSize());
+    for (i32 i = 0; i < image_barriers.GetSize(); ++i)
+    {
+        barriers[i] = ToVkImageBarrier(image_barriers[i]);
     }
     const VkDependencyInfo dependency_info{.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO,
                                            .imageMemoryBarrierCount = static_cast<u32>(barriers.GetSize()),

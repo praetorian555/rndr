@@ -86,6 +86,119 @@ void Rndr::Forge::Fence::WaitForAll(Opal::ArrayView<const Fence> fences, u64 tim
     }
 }
 
+namespace
+{
+/**
+ * What has to finish before a texture can leave the given layout, as a stage and the access it made. The
+ * layout says what the texture was last used for, so it says which work the transition has to wait on.
+ */
+struct SourceScope
+{
+    Rndr::Forge::PipelineStageBits stages = Rndr::Forge::PipelineStageBits::None;
+    Rndr::Forge::PipelineStageAccessBits access = Rndr::Forge::PipelineStageAccessBits::None;
+};
+
+SourceScope ScopeOfLayout(Rndr::Forge::ImageLayout layout)
+{
+    using namespace Rndr::Forge;
+    switch (layout)
+    {
+        case ImageLayout::Undefined:
+            // Nothing is being preserved, so there is nothing to wait for.
+            return {PipelineStageBits::PipelineStart, PipelineStageAccessBits::None};
+        case ImageLayout::ColorAttachment:
+            return {PipelineStageBits::ColorAttachmentOutput, PipelineStageAccessBits::Write};
+        case ImageLayout::DepthStencilAttachment:
+            return {PipelineStageBits::EarlyFragmentTests | PipelineStageBits::LateFragmentTests, PipelineStageAccessBits::Write};
+        case ImageLayout::DepthStencilReadOnly:
+        case ImageLayout::ShaderReadOnly:
+            return {PipelineStageBits::FragmentShader, PipelineStageAccessBits::Read};
+        case ImageLayout::TransferSource:
+            return {PipelineStageBits::Transfer, PipelineStageAccessBits::Read};
+        case ImageLayout::TransferDestination:
+            return {PipelineStageBits::Transfer, PipelineStageAccessBits::Write};
+        default:
+            // General and Present, plus anything added later, can have been touched by anything.
+            return {PipelineStageBits::AllCommands, PipelineStageAccessBits::Read | PipelineStageAccessBits::Write};
+    }
+}
+}  // namespace
+
+Rndr::Forge::ImageBarrier Rndr::Forge::ImageBarrier::ToColorAttachment(const Texture& texture, ImageLayout old_layout)
+{
+    const SourceScope source = ScopeOfLayout(old_layout);
+    return {.stages_must_finish = source.stages,
+            .stages_must_finish_access = source.access,
+            .before_stages_start = PipelineStageBits::ColorAttachmentOutput,
+            .before_stages_start_access = PipelineStageAccessBits::Read | PipelineStageAccessBits::Write,
+            .old_layout = old_layout,
+            .new_layout = ImageLayout::ColorAttachment,
+            .image = texture};
+}
+
+Rndr::Forge::ImageBarrier Rndr::Forge::ImageBarrier::ToDepthStencilAttachment(const Texture& texture, ImageLayout old_layout)
+{
+    const SourceScope source = ScopeOfLayout(old_layout);
+    return {.stages_must_finish = source.stages,
+            .stages_must_finish_access = source.access,
+            .before_stages_start = PipelineStageBits::EarlyFragmentTests | PipelineStageBits::LateFragmentTests,
+            .before_stages_start_access = PipelineStageAccessBits::Read | PipelineStageAccessBits::Write,
+            .old_layout = old_layout,
+            .new_layout = ImageLayout::DepthStencilAttachment,
+            .image = texture};
+}
+
+Rndr::Forge::ImageBarrier Rndr::Forge::ImageBarrier::ToShaderRead(const Texture& texture, ImageLayout old_layout,
+                                                                  PipelineStageBits reader)
+{
+    const SourceScope source = ScopeOfLayout(old_layout);
+    return {.stages_must_finish = source.stages,
+            .stages_must_finish_access = source.access,
+            .before_stages_start = reader,
+            .before_stages_start_access = PipelineStageAccessBits::Read,
+            .old_layout = old_layout,
+            .new_layout = ImageLayout::ShaderReadOnly,
+            .image = texture};
+}
+
+Rndr::Forge::ImageBarrier Rndr::Forge::ImageBarrier::ToTransferDestination(const Texture& texture, ImageLayout old_layout)
+{
+    const SourceScope source = ScopeOfLayout(old_layout);
+    return {.stages_must_finish = source.stages,
+            .stages_must_finish_access = source.access,
+            .before_stages_start = PipelineStageBits::Transfer,
+            .before_stages_start_access = PipelineStageAccessBits::Write,
+            .old_layout = old_layout,
+            .new_layout = ImageLayout::TransferDestination,
+            .image = texture};
+}
+
+Rndr::Forge::ImageBarrier Rndr::Forge::ImageBarrier::ToTransferSource(const Texture& texture, ImageLayout old_layout)
+{
+    const SourceScope source = ScopeOfLayout(old_layout);
+    return {.stages_must_finish = source.stages,
+            .stages_must_finish_access = source.access,
+            .before_stages_start = PipelineStageBits::Transfer,
+            .before_stages_start_access = PipelineStageAccessBits::Read,
+            .old_layout = old_layout,
+            .new_layout = ImageLayout::TransferSource,
+            .image = texture};
+}
+
+Rndr::Forge::ImageBarrier Rndr::Forge::ImageBarrier::ToPresent(const Texture& texture, ImageLayout old_layout)
+{
+    const SourceScope source = ScopeOfLayout(old_layout);
+    // The presentation engine synchronizes against the semaphore the present waits on, not against a stage,
+    // so nothing on this side has to be blocked.
+    return {.stages_must_finish = source.stages,
+            .stages_must_finish_access = source.access,
+            .before_stages_start = PipelineStageBits::PipelineEnd,
+            .before_stages_start_access = PipelineStageAccessBits::None,
+            .old_layout = old_layout,
+            .new_layout = ImageLayout::Present,
+            .image = texture};
+}
+
 Rndr::Forge::Semaphore::Semaphore(const Device& device) : m_device(device)
 {
     const VkSemaphoreCreateInfo semaphore_create_info = {.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO};

@@ -9,7 +9,7 @@ signature has to update that sample in the same commit.
 
 ---
 
-## Priority 1 — Broken — ALL DONE
+## Priority 1 — Broken
 
 ### 1.1 Fix swap chain recreation — DONE
 
@@ -87,6 +87,19 @@ enforces it.
 
 Verified against the validation layer by temporarily flipping the pool of `modern-vulkan` to
 `free_individual_sets = true`: no message, clean exit.
+
+### 1.8 Ignore queue family ownership in barriers — DONE
+
+Neither barrier path wrote `srcQueueFamilyIndex` or `dstQueueFamilyIndex`, so both are zero-initialized to
+family 0 rather than `VK_QUEUE_FAMILY_IGNORED`. On an image created `VK_SHARING_MODE_EXCLUSIVE` a source
+equal to the destination means "no ownership transfer" whatever the value, which is why this was never seen
+here. Swap chain images are created `VK_SHARING_MODE_CONCURRENT` whenever the graphics and present families
+differ (`src/forge/swap-chain.cpp:335`), and a barrier on a concurrent image must pass
+`VK_QUEUE_FAMILY_IGNORED` for both. On a GPU whose present family is not the graphics family that would be a
+validation error on every transition of every frame.
+
+Both fields are now written explicitly, in one `ToVkImageBarrier` the single and the batched path share.
+Actual ownership transfer between families is part of 3.12.
 
 ---
 
@@ -265,6 +278,28 @@ constants, and dynamic state beyond viewport and scissor (depth bias, stencil re
 There are none for this layer; `test/` covers canvas only. Start with a headless smoke test: context →
 device → buffer → compute dispatch → readback → verify. That single test would have caught 1.3, 1.4 and 1.5.
 
+### 3.12 Complete the barrier vocabulary
+
+`include/rndr/forge/types.hpp`, `include/rndr/forge/synchronization.hpp`, `src/forge/command-buffer.cpp`
+
+`PipelineStageBits` is missing most of what a barrier needs to name. The task and mesh stages are absent
+although the graphics pipeline desc already accepts task and mesh shaders; geometry and both tessellation
+stages are missing; and `Transfer` is one bit where synchronization2 splits copy, blit, resolve and clear.
+
+`PipelineStageAccessBits` is `Read` and `Write`, which map to `MEMORY_READ` and `MEMORY_WRITE`. That is legal
+everywhere and easy to reason about, but it gives up the narrowing that synchronization2 exists for - a
+barrier cannot say "color attachment write" rather than "any write". Decide whether the coarse model stays,
+and write the decision down either way.
+
+Also missing: ownership transfer between queue families, which 1.8 pinned to ignored; `VkDependencyFlags`, so
+a barrier cannot be by-region; and one call that takes image, buffer and global barriers together, which is
+one `vkCmdPipelineBarrier2` where three separate calls are three.
+
+`CmdImageBarriers` translates into a `DynamicArray` through the default allocator on every call, so a
+per-frame barrier batch heap-allocates. `Opal::GetScratchAllocator()` is not the fix on its own:
+`modern-vulkan` pushes no scratch allocator, so asking for one asserts inside Opal. Either a small in-place
+array with a heap fallback, or a scratch allocator that Forge pushes and resets itself.
+
 ---
 
 ## Priority 4 — Convenience
@@ -276,11 +311,23 @@ per-frame and per-image semaphores, and the acquire/submit/present ordering — 
 right and near identical in every application. A `Forge::FrameContext` that owns the frame count, one command
 buffer and one fence per frame, and exposes `BeginFrame()` / `EndFrame()` would roughly halve the sample.
 
-### 4.2 Barrier presets
+### 4.2 Barrier presets — DONE
 
-The sample spends about twenty lines per frame on two standard transitions. Add named constructors:
-`ImageBarrier::ToColorAttachment(texture)`, `::ToPresent(texture)`, `::ToShaderRead(texture)`,
-`::ToTransferDestination(texture)`.
+`ImageBarrier::ToColorAttachment`, `::ToDepthStencilAttachment`, `::ToShaderRead`, `::ToTransferDestination`,
+`::ToTransferSource` and `::ToPresent` name the standard transitions. Each takes the texture and the layout
+it is coming from, and derives the stages and the access from both ends: the destination from what the
+texture is about to be used for, the source from what the old layout says it was last used for. Where the old
+layout has an obvious answer it is the default, and where getting it wrong would silently discard the
+contents of the texture - `ToShaderRead`, `ToTransferSource` - the caller has to say. The twenty lines per
+frame in the sample are now two, and the two hand-written barriers inside `Texture` are one line each.
+
+The subresource range now comes from the texture too. `ImageSubresourceRange` defaulted to the color aspect
+and one mip level, so a barrier on a depth texture that forgot `aspect_mask` named the wrong aspect, and a
+barrier on a mipped texture that forgot `mip_level_count` covered mip zero only - `Texture` worked around the
+second one by hand. The default is now the whole texture: `k_all_mip_levels` and `k_all_array_layers`, which
+mirror `VK_REMAINING_MIP_LEVELS` and `VK_REMAINING_ARRAY_LAYERS`, and an empty `aspect_mask` that
+`ResolveAspectMask(format)` turns into depth, stencil, both or color. Barriers and the image view that
+`Texture` creates both go through it, so the swap chain no longer spells out the depth aspect by hand.
 
 ### 4.3 Track the current layout on the texture
 

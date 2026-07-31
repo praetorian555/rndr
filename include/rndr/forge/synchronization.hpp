@@ -79,10 +79,41 @@ struct ImageBarrier : Opal::ClonableBase<ImageBarrier>
     ImageLayout old_layout = ImageLayout::Undefined;
     ImageLayout new_layout = ImageLayout::Undefined;
     Opal::Ref<const Texture> image;
+    /** The whole texture by default - every mip level, every array layer, the aspect of its format. */
     ImageSubresourceRange subresource_range;
 
     OPAL_CLONE_FIELDS(stages_must_finish, stages_must_finish_access, before_stages_start, before_stages_start_access, old_layout,
                       new_layout, image, subresource_range);
+
+    /**
+     * The standard transitions, spelled out. Each covers the whole texture and picks the stages and the
+     * access from what the texture is about to be used for, so only the layout it is coming from is left to
+     * the caller. Where that layout has an obvious answer it is the default; where getting it wrong would
+     * throw away the contents of the texture, it is not.
+     *
+     * ImageLayout::Undefined as the old layout discards whatever the texture holds, which is what a color
+     * attachment that is cleared at the start of the frame wants and what a texture that is about to be read
+     * does not.
+     */
+
+    /** Rendered into as a color attachment. */
+    [[nodiscard]] static ImageBarrier ToColorAttachment(const Texture& texture, ImageLayout old_layout = ImageLayout::Undefined);
+
+    /** Rendered into as a depth or stencil attachment. */
+    [[nodiscard]] static ImageBarrier ToDepthStencilAttachment(const Texture& texture, ImageLayout old_layout = ImageLayout::Undefined);
+
+    /** Sampled in a shader. The reader defaults to the fragment stage. */
+    [[nodiscard]] static ImageBarrier ToShaderRead(const Texture& texture, ImageLayout old_layout,
+                                                   PipelineStageBits reader = PipelineStageBits::FragmentShader);
+
+    /** Written by a transfer command, which is how a texture is uploaded. */
+    [[nodiscard]] static ImageBarrier ToTransferDestination(const Texture& texture, ImageLayout old_layout = ImageLayout::Undefined);
+
+    /** Read by a transfer command, which is how a texture is read back or has its mips generated. */
+    [[nodiscard]] static ImageBarrier ToTransferSource(const Texture& texture, ImageLayout old_layout);
+
+    /** Handed to the presentation engine. */
+    [[nodiscard]] static ImageBarrier ToPresent(const Texture& texture, ImageLayout old_layout = ImageLayout::ColorAttachment);
 };
 
 }  // namespace Rndr::Forge

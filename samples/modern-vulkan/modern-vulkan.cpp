@@ -269,25 +269,11 @@ void Run()
         command_buffer.Reset();
         command_buffer.Begin();
 
-        // Make sure our color and depth attachment are ready and in proper layout
+        // Make sure our color and depth attachment are ready and in proper layout. Both are cleared when the
+        // render pass starts, so neither has to preserve what it holds.
         Opal::InPlaceArray<Rndr::Forge::ImageBarrier, 2> barriers{
-            {.stages_must_finish = Rndr::Forge::PipelineStageBits::ColorAttachmentOutput,
-             .stages_must_finish_access = Rndr::Forge::PipelineStageAccessBits::None,
-             .before_stages_start = Rndr::Forge::PipelineStageBits::ColorAttachmentOutput,
-             .before_stages_start_access = Rndr::Forge::PipelineStageAccessBits::Read | Rndr::Forge::PipelineStageAccessBits::Write,
-             .old_layout = Rndr::Forge::ImageLayout::Undefined,
-             .new_layout = Rndr::Forge::ImageLayout::ColorAttachment,
-             .image = swap_chain.GetColorImage(static_cast<i32>(image_index))},
-            {.stages_must_finish = Rndr::Forge::PipelineStageBits::EarlyFragmentTests | Rndr::Forge::PipelineStageBits::LateFragmentTests,
-             .stages_must_finish_access = Rndr::Forge::PipelineStageAccessBits::Write,
-             .before_stages_start = Rndr::Forge::PipelineStageBits::EarlyFragmentTests | Rndr::Forge::PipelineStageBits::LateFragmentTests,
-             .before_stages_start_access = Rndr::Forge::PipelineStageAccessBits::Write,
-             .old_layout = Rndr::Forge::ImageLayout::Undefined,
-             .new_layout = Rndr::Forge::ImageLayout::DepthStencilAttachment,
-             .image = swap_chain.GetDepthImage(),
-             .subresource_range = {
-                 .aspect_mask = Rndr::Forge::ImageAspectBits::Depth,
-             }}};
+            Rndr::Forge::ImageBarrier::ToColorAttachment(swap_chain.GetColorImage(image_index)),
+            Rndr::Forge::ImageBarrier::ToDepthStencilAttachment(swap_chain.GetDepthImage())};
         command_buffer.CmdImageBarriers(barriers);
 
         // Configure attachments, what happens when they are loaded and how they are stored after rendering
@@ -316,12 +302,7 @@ void Run()
         command_buffer.CmdDrawIndexed(mesh.index_count, 3);
         command_buffer.CmdEndRendering();
 
-        command_buffer.CmdImageBarrier({.stages_must_finish = Rndr::Forge::PipelineStageBits::ColorAttachmentOutput,
-                                        .stages_must_finish_access = Rndr::Forge::PipelineStageAccessBits::Write,
-                                        .before_stages_start = Rndr::Forge::PipelineStageBits::ColorAttachmentOutput,
-                                        .old_layout = Rndr::Forge::ImageLayout::ColorAttachment,
-                                        .new_layout = Rndr::Forge::ImageLayout::Present,
-                                        .image = swap_chain.GetColorImage(static_cast<i32>(image_index))});
+        command_buffer.CmdImageBarrier(Rndr::Forge::ImageBarrier::ToPresent(swap_chain.GetColorImage(image_index)));
         command_buffer.End();
 
         graphics_queue.Submit(command_buffer, present_semaphores[frame_index], Rndr::Forge::PipelineStageBits::ColorAttachmentOutput,

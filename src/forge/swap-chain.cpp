@@ -432,7 +432,6 @@ void Rndr::Forge::SwapChain::Recreate()
                                            .height = extent.height,
                                            .sample_count = SampleCount::Count1,
                                            .usage = TextureUsageBits::DepthStencilAttachment,
-                                           .view_type = TextureViewType::Texture2D,
-                                           .subresource_range = {.aspect_mask = ImageAspectBits::Depth}}};
+                                           .view_type = TextureViewType::Texture2D}};
     }
 }

@@ -2,6 +2,7 @@
 
 #include "opal/enum-flags.h"
 
+#include "rndr/pixel-format.hpp"
 #include "rndr/types.hpp"
 
 /**
@@ -150,20 +151,54 @@ enum class ImageLayout
 /** Which part of the data of an image a command refers to. Mirrors VkImageAspectFlagBits. */
 enum class ImageAspectBits : u8
 {
+    /** Left for the aspect to be derived from the format of the texture. */
+    None = 0,
     Color = 1,
     Depth = 2,
     Stencil = 4
 };
 OPAL_ENUM_CLASS_FLAGS(ImageAspectBits);
 
+/** Every mip level from first_mip_level on. Mirrors VK_REMAINING_MIP_LEVELS. */
+static constexpr u32 k_all_mip_levels = 0xFFFFFFFF;
+
+/** Every array layer from first_array_layer on. Mirrors VK_REMAINING_ARRAY_LAYERS. */
+static constexpr u32 k_all_array_layers = 0xFFFFFFFF;
+
+/**
+ * Which part of a texture a command refers to. The whole texture by default: every mip level, every array
+ * layer, and whichever aspect its format has.
+ */
 struct ImageSubresourceRange
 {
-    // Which aspect of the image we care about.
-    ImageAspectBits aspect_mask = ImageAspectBits::Color;
+    /** Which aspect of the image we care about. Empty derives it from the format. */
+    ImageAspectBits aspect_mask = ImageAspectBits::None;
     u32 first_mip_level = 0;
-    u32 mip_level_count = 1;
+    u32 mip_level_count = k_all_mip_levels;
     u32 first_array_layer = 0;
-    u32 array_layer_count = 1;
+    u32 array_layer_count = k_all_array_layers;
+
+    /**
+     * The aspect this range names for a texture of the given format. Returns aspect_mask when it was set,
+     * and otherwise the aspect the format implies: depth, stencil, both, or color.
+     */
+    [[nodiscard]] ImageAspectBits ResolveAspectMask(PixelFormat format) const
+    {
+        if (aspect_mask != ImageAspectBits::None)
+        {
+            return aspect_mask;
+        }
+        ImageAspectBits resolved = ImageAspectBits::None;
+        if (IsDepthFormat(format))
+        {
+            resolved |= ImageAspectBits::Depth;
+        }
+        if (IsStencilFormat(format))
+        {
+            resolved |= ImageAspectBits::Stencil;
+        }
+        return resolved == ImageAspectBits::None ? ImageAspectBits::Color : resolved;
+    }
 };
 
 /** Stages of the pipeline a barrier can wait on or block. Mirrors VkPipelineStageFlagBits2. */
@@ -179,7 +214,11 @@ enum class PipelineStageBits : u64
     LateFragmentTests = 0x200ull,
     ColorAttachmentOutput = 0x400ull,
     ComputeShader = 0x800ull,
-    Transfer = 0x1000ull
+    Transfer = 0x1000ull,
+    /** Nothing is left to run. Where work waits for a barrier that only has to happen before the end. */
+    PipelineEnd = 0x2000ull,
+    /** Every stage. The sledgehammer, correct everywhere and never the fastest. */
+    AllCommands = 0x10000ull
 };
 OPAL_ENUM_CLASS_FLAGS(PipelineStageBits);
 
