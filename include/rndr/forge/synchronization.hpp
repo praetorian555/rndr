@@ -70,6 +70,47 @@ private:
     Opal::Ref<const Device> m_device;
 };
 
+/**
+ * A dependency between two pieces of work that covers all memory, without naming a resource. Use it when the
+ * work on either side touches more resources than it is worth listing, and a buffer or image barrier when it
+ * does not - naming the resource lets the driver narrow what it has to flush.
+ */
+struct MemoryBarrier
+{
+    PipelineStageBits stages_must_finish = PipelineStageBits::None;
+    PipelineStageAccessBits stages_must_finish_access = PipelineStageAccessBits::None;
+    PipelineStageBits before_stages_start = PipelineStageBits::None;
+    PipelineStageAccessBits before_stages_start_access = PipelineStageAccessBits::None;
+};
+
+/**
+ * A dependency on one range of one buffer. Buffers have no layout, so this only orders access: the write of a
+ * compute shader against the read of a vertex shader, a transfer against anything that reads what it wrote.
+ */
+struct BufferBarrier : Opal::ClonableBase<BufferBarrier>
+{
+    PipelineStageBits stages_must_finish = PipelineStageBits::None;
+    PipelineStageAccessBits stages_must_finish_access = PipelineStageAccessBits::None;
+    PipelineStageBits before_stages_start = PipelineStageBits::None;
+    PipelineStageAccessBits before_stages_start_access = PipelineStageAccessBits::None;
+    Opal::Ref<const Buffer> buffer;
+    u64 offset = 0;
+    /** The whole buffer from the offset on by default. */
+    u64 size = k_whole_buffer;
+
+    OPAL_CLONE_FIELDS(stages_must_finish, stages_must_finish_access, before_stages_start, before_stages_start_access, buffer, offset,
+                      size);
+
+    /**
+     * A write in one set of stages, followed by a read in another. The two common cases are a compute shader
+     * feeding the vertex input stage and a transfer feeding a shader.
+     */
+    [[nodiscard]] static BufferBarrier WriteThenRead(const Buffer& buffer, PipelineStageBits writer, PipelineStageBits reader);
+
+    /** A read in one set of stages, followed by a write in another, so the write does not run ahead of it. */
+    [[nodiscard]] static BufferBarrier ReadThenWrite(const Buffer& buffer, PipelineStageBits reader, PipelineStageBits writer);
+};
+
 struct ImageBarrier : Opal::ClonableBase<ImageBarrier>
 {
     PipelineStageBits stages_must_finish = PipelineStageBits::None;

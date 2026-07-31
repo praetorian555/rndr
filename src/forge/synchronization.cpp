@@ -124,6 +124,26 @@ SourceScope ScopeOfLayout(Rndr::Forge::ImageLayout layout)
 }
 }  // namespace
 
+Rndr::Forge::BufferBarrier Rndr::Forge::BufferBarrier::WriteThenRead(const Buffer& buffer, PipelineStageBits writer,
+                                                                     PipelineStageBits reader)
+{
+    return {.stages_must_finish = writer,
+            .stages_must_finish_access = PipelineStageAccessBits::Write,
+            .before_stages_start = reader,
+            .before_stages_start_access = PipelineStageAccessBits::Read,
+            .buffer = buffer};
+}
+
+Rndr::Forge::BufferBarrier Rndr::Forge::BufferBarrier::ReadThenWrite(const Buffer& buffer, PipelineStageBits reader,
+                                                                     PipelineStageBits writer)
+{
+    return {.stages_must_finish = reader,
+            .stages_must_finish_access = PipelineStageAccessBits::Read,
+            .before_stages_start = writer,
+            .before_stages_start_access = PipelineStageAccessBits::Write,
+            .buffer = buffer};
+}
+
 Rndr::Forge::ImageBarrier Rndr::Forge::ImageBarrier::ToColorAttachment(const Texture& texture, ImageLayout old_layout)
 {
     const SourceScope source = ScopeOfLayout(old_layout);

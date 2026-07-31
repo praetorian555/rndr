@@ -49,6 +49,14 @@ struct RenderingDesc
     RenderingAttachmentDesc depth_attachment;
 };
 
+/** Barriers of every kind that belong to one dependency, for CommandBuffer::CmdBarriers. */
+struct Barriers
+{
+    Opal::ArrayView<const MemoryBarrier> memory;
+    Opal::ArrayView<const BufferBarrier> buffer;
+    Opal::ArrayView<const ImageBarrier> image;
+};
+
 class CommandBuffer
 {
 public:
@@ -92,6 +100,32 @@ public:
      * @param image_barriers Array of image barrier descriptions.
      */
     void CmdImageBarriers(Opal::ArrayView<const ImageBarrier> image_barriers);
+
+    /**
+     * Insert a pipeline barrier for a single buffer range. Buffers have no layout, so this only orders access.
+     * @param buffer_barrier Describes the source and destination stages, access masks, and the range of the buffer.
+     */
+    void CmdBufferBarrier(const BufferBarrier& buffer_barrier);
+
+    /**
+     * Insert a pipeline barrier for multiple buffer ranges in a single call.
+     * @param buffer_barriers Array of buffer barrier descriptions.
+     */
+    void CmdBufferBarriers(Opal::ArrayView<const BufferBarrier> buffer_barriers);
+
+    /**
+     * Insert a pipeline barrier that covers all memory, without naming a resource.
+     * @param memory_barrier Describes the source and destination stages and access masks.
+     */
+    void CmdMemoryBarrier(const MemoryBarrier& memory_barrier);
+
+    /**
+     * Insert every barrier of a Barriers group as one dependency. All of the other Cmd*Barrier methods are this
+     * one with the other two groups left empty, so batching through it is one pipeline barrier where separate
+     * calls would be several.
+     * @param barriers Memory, buffer and image barriers, any of which may be empty.
+     */
+    void CmdBarriers(const Barriers& barriers);
 
     /**
      * Copy data from a buffer to an image. Handles all mip levels described by the bitmap. The destination image must

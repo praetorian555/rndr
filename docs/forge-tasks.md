@@ -220,11 +220,20 @@ add immutable samplers while touching the struct.
 `Forge::Pipeline` builds compute pipelines and `QueueFamily::AsyncCompute` exists, but there is no
 `CmdDispatch`, so compute is unreachable. Add `CmdDispatch`, `CmdDispatchIndirect`.
 
-### 3.2 Buffer and memory barriers
+### 3.2 Buffer and memory barriers — DONE
 
-Only `CmdImageBarrier`/`CmdImageBarriers` exist. Without a buffer barrier there is no way to synchronize a
-compute write with a graphics read. Add `Forge::BufferBarrier` and a global memory barrier, sharing the
-`PipelineStageBits`/`PipelineStageAccessBits` vocabulary already in use.
+`BufferBarrier` names a range of one buffer - offset and size, `k_whole_buffer` by default - and `MemoryBarrier`
+names nothing at all, for work that touches more than is worth listing. Both carry the same four stage and
+access fields as `ImageBarrier`, since buffers have no layout to transition.
+
+`CmdBarriers` takes a `Barriers` group of all three kinds and issues one `vkCmdPipelineBarrier2`.
+`CmdBufferBarrier`, `CmdBufferBarriers`, `CmdMemoryBarrier`, `CmdImageBarrier` and `CmdImageBarriers` are that
+call with the other groups left empty, so batching across kinds costs one barrier where separate calls cost
+several. `BufferBarrier::WriteThenRead` and `::ReadThenWrite` cover the two orderings a buffer needs.
+
+Nothing in the repository issues one yet - the first real consumer is the compute dispatch of 3.1. Verified
+instead by temporarily driving `modern-vulkan` with a buffer barrier and a memory barrier every frame, then
+with all three kinds through one `CmdBarriers`: no validation message either way, clean exit, probe removed.
 
 ### 3.3 The rest of the draw calls
 
@@ -291,9 +300,8 @@ everywhere and easy to reason about, but it gives up the narrowing that synchron
 barrier cannot say "color attachment write" rather than "any write". Decide whether the coarse model stays,
 and write the decision down either way.
 
-Also missing: ownership transfer between queue families, which 1.8 pinned to ignored; `VkDependencyFlags`, so
-a barrier cannot be by-region; and one call that takes image, buffer and global barriers together, which is
-one `vkCmdPipelineBarrier2` where three separate calls are three.
+Also missing: ownership transfer between queue families, which 1.8 pinned to ignored, and `VkDependencyFlags`,
+so a barrier cannot be by-region. Batching across barrier kinds is covered - 3.2 added `CmdBarriers`.
 
 `CmdImageBarriers` translates into a `DynamicArray` through the default allocator on every call, so a
 per-frame barrier batch heap-allocates. `Opal::GetScratchAllocator()` is not the fix on its own:

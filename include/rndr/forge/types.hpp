@@ -159,6 +159,9 @@ enum class ImageAspectBits : u8
 };
 OPAL_ENUM_CLASS_FLAGS(ImageAspectBits);
 
+/** Everything from the offset to the end of the buffer. Mirrors VK_WHOLE_SIZE. */
+static constexpr u64 k_whole_buffer = 0xFFFFFFFFFFFFFFFF;
+
 /** Every mip level from first_mip_level on. Mirrors VK_REMAINING_MIP_LEVELS. */
 static constexpr u32 k_all_mip_levels = 0xFFFFFFFF;
 

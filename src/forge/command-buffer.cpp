@@ -91,29 +91,88 @@ static VkImageMemoryBarrier2 ToVkImageBarrier(const Rndr::Forge::ImageBarrier& i
     };
 }
 
+static VkBufferMemoryBarrier2 ToVkBufferBarrier(const Rndr::Forge::BufferBarrier& buffer_barrier)
+{
+    return {
+        .sType = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER_2,
+        .srcStageMask = static_cast<VkPipelineStageFlags2>(buffer_barrier.stages_must_finish),
+        .srcAccessMask = static_cast<VkAccessFlags2>(buffer_barrier.stages_must_finish_access),
+        .dstStageMask = static_cast<VkPipelineStageFlags2>(buffer_barrier.before_stages_start),
+        .dstAccessMask = static_cast<VkAccessFlags2>(buffer_barrier.before_stages_start_access),
+        // See ToVkImageBarrier - Forge does not transfer ownership between queue families yet.
+        .srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+        .dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+        .buffer = buffer_barrier.buffer.Get().GetNativeBuffer(),
+        .offset = buffer_barrier.offset,
+        .size = buffer_barrier.size,
+    };
+}
+
+static VkMemoryBarrier2 ToVkMemoryBarrier(const Rndr::Forge::MemoryBarrier& memory_barrier)
+{
+    return {
+        .sType = VK_STRUCTURE_TYPE_MEMORY_BARRIER_2,
+        .srcStageMask = static_cast<VkPipelineStageFlags2>(memory_barrier.stages_must_finish),
+        .srcAccessMask = static_cast<VkAccessFlags2>(memory_barrier.stages_must_finish_access),
+        .dstStageMask = static_cast<VkPipelineStageFlags2>(memory_barrier.before_stages_start),
+        .dstAccessMask = static_cast<VkAccessFlags2>(memory_barrier.before_stages_start_access),
+    };
+}
+
+void Rndr::Forge::CommandBuffer::CmdBarriers(const Barriers& barriers)
+{
+    Opal::DynamicArray<VkMemoryBarrier2> memory_barriers(barriers.memory.GetSize());
+    for (i32 i = 0; i < barriers.memory.GetSize(); ++i)
+    {
+        memory_barriers[i] = ToVkMemoryBarrier(barriers.memory[i]);
+    }
+    Opal::DynamicArray<VkBufferMemoryBarrier2> buffer_barriers(barriers.buffer.GetSize());
+    for (i32 i = 0; i < barriers.buffer.GetSize(); ++i)
+    {
+        buffer_barriers[i] = ToVkBufferBarrier(barriers.buffer[i]);
+    }
+    Opal::DynamicArray<VkImageMemoryBarrier2> image_barriers(barriers.image.GetSize());
+    for (i32 i = 0; i < barriers.image.GetSize(); ++i)
+    {
+        image_barriers[i] = ToVkImageBarrier(barriers.image[i]);
+    }
+    if (memory_barriers.IsEmpty() && buffer_barriers.IsEmpty() && image_barriers.IsEmpty())
+    {
+        return;
+    }
+    const VkDependencyInfo dependency_info{.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO,
+                                           .memoryBarrierCount = static_cast<u32>(memory_barriers.GetSize()),
+                                           .pMemoryBarriers = memory_barriers.GetData(),
+                                           .bufferMemoryBarrierCount = static_cast<u32>(buffer_barriers.GetSize()),
+                                           .pBufferMemoryBarriers = buffer_barriers.GetData(),
+                                           .imageMemoryBarrierCount = static_cast<u32>(image_barriers.GetSize()),
+                                           .pImageMemoryBarriers = image_barriers.GetData()};
+    vkCmdPipelineBarrier2(m_native_command_buffer, &dependency_info);
+}
+
 void Rndr::Forge::CommandBuffer::CmdImageBarrier(const ImageBarrier& image_barrier)
 {
-    const VkImageMemoryBarrier2 barrier_info = ToVkImageBarrier(image_barrier);
-    const VkDependencyInfo dependency_info{
-        .sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO, .imageMemoryBarrierCount = 1, .pImageMemoryBarriers = &barrier_info};
-    vkCmdPipelineBarrier2(m_native_command_buffer, &dependency_info);
+    CmdBarriers({.image = {&image_barrier, 1}});
 }
 
 void Rndr::Forge::CommandBuffer::CmdImageBarriers(Opal::ArrayView<const ImageBarrier> image_barriers)
 {
-    if (image_barriers.IsEmpty())
-    {
-        return;
-    }
-    Opal::DynamicArray<VkImageMemoryBarrier2> barriers(image_barriers.GetSize());
-    for (i32 i = 0; i < image_barriers.GetSize(); ++i)
-    {
-        barriers[i] = ToVkImageBarrier(image_barriers[i]);
-    }
-    const VkDependencyInfo dependency_info{.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO,
-                                           .imageMemoryBarrierCount = static_cast<u32>(barriers.GetSize()),
-                                           .pImageMemoryBarriers = barriers.GetData()};
-    vkCmdPipelineBarrier2(m_native_command_buffer, &dependency_info);
+    CmdBarriers({.image = image_barriers});
+}
+
+void Rndr::Forge::CommandBuffer::CmdBufferBarrier(const BufferBarrier& buffer_barrier)
+{
+    CmdBarriers({.buffer = {&buffer_barrier, 1}});
+}
+
+void Rndr::Forge::CommandBuffer::CmdBufferBarriers(Opal::ArrayView<const BufferBarrier> buffer_barriers)
+{
+    CmdBarriers({.buffer = buffer_barriers});
+}
+
+void Rndr::Forge::CommandBuffer::CmdMemoryBarrier(const MemoryBarrier& memory_barrier)
+{
+    CmdBarriers({.memory = {&memory_barrier, 1}});
 }
 
 void Rndr::Forge::CommandBuffer::CmdCopyBufferToImage(const Buffer& buffer, const Bitmap& bitmap, Texture& texture)
