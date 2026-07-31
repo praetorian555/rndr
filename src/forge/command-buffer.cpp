@@ -88,7 +88,7 @@ void Rndr::Forge::CommandBuffer::CmdImageBarrier(const ImageBarrier& image_barri
     vkCmdPipelineBarrier2(m_native_command_buffer, &dependency_info);
 }
 
-void Rndr::Forge::CommandBuffer::CmdImageBarriers(const Opal::ArrayView<ImageBarrier>& image_barriers)
+void Rndr::Forge::CommandBuffer::CmdImageBarriers(Opal::ArrayView<const ImageBarrier> image_barriers)
 {
     Opal::DynamicArray<VkImageMemoryBarrier2> barriers;
     for (const auto& image_barrier : image_barriers)
@@ -291,7 +291,7 @@ void Rndr::Forge::CommandBuffer::CmdBindDescriptorSet(const Pipeline& pipeline, 
 }
 
 void Rndr::Forge::CommandBuffer::CmdBindDescriptorSets(const Pipeline& pipeline,
-                                                        const Opal::ArrayView<Opal::Ref<DescriptorSet>>& descriptor_sets,
+                                                        Opal::ArrayView<const Opal::Ref<const DescriptorSet>> descriptor_sets,
                                                         u32 first_set)
 {
     Opal::DynamicArray<VkDescriptorSet> native_sets;

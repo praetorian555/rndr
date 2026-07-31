@@ -16,7 +16,7 @@
 #include "rndr/log.hpp"
 #include "rndr/pixel-format.hpp"
 
-Rndr::Forge::Surface::Surface(const GraphicsContext& context, Opal::Ref<const GenericWindow> window) : m_window(std::move(window))
+Rndr::Forge::Surface::Surface(const GraphicsContext& context, const GenericWindow& window) : m_window(window)
 {
 #if defined(OPAL_PLATFORM_WINDOWS)
     VkWin32SurfaceCreateInfoKHR surface_create_info{};
@@ -187,7 +187,7 @@ void Rndr::Forge::SwapChain::Destroy()
     m_extent = {};
 }
 
-Rndr::Forge::AcquiredImage Rndr::Forge::SwapChain::AcquireImage(const Opal::Ref<Semaphore>& semaphore)
+Rndr::Forge::AcquiredImage Rndr::Forge::SwapChain::AcquireImage(const Semaphore& semaphore)
 {
     if (m_swap_chain == VK_NULL_HANDLE)
     {
@@ -198,7 +198,7 @@ Rndr::Forge::AcquiredImage Rndr::Forge::SwapChain::AcquireImage(const Opal::Ref<
 
     u32 image_index = k_invalid_image_index;
     const VkResult result = vkAcquireNextImageKHR(m_device->GetNativeDevice(), m_swap_chain, UINT64_MAX,
-                                                  semaphore->GetNativeSemaphore(), VK_NULL_HANDLE, &image_index);
+                                                  semaphore.GetNativeSemaphore(), VK_NULL_HANDLE, &image_index);
     if (result == VK_ERROR_OUT_OF_DATE_KHR)
     {
         Recreate();
@@ -213,10 +213,9 @@ Rndr::Forge::AcquiredImage Rndr::Forge::SwapChain::AcquireImage(const Opal::Ref<
     return {SwapChainStatus::Success, image_index};
 }
 
-Rndr::Forge::SwapChainStatus Rndr::Forge::SwapChain::Present(u32 image_index, Opal::Ref<DeviceQueue> queue,
-                                                             Opal::Ref<Semaphore> semaphore)
+Rndr::Forge::SwapChainStatus Rndr::Forge::SwapChain::Present(u32 image_index, DeviceQueue& queue, const Semaphore& semaphore)
 {
-    const VkSemaphore wait_semaphore = semaphore->GetNativeSemaphore();
+    const VkSemaphore wait_semaphore = semaphore.GetNativeSemaphore();
     const VkPresentInfoKHR present_info = {
         .sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR,
         .waitSemaphoreCount = 1,
@@ -225,7 +224,7 @@ Rndr::Forge::SwapChainStatus Rndr::Forge::SwapChain::Present(u32 image_index, Op
         .pSwapchains = &m_swap_chain,
         .pImageIndices = &image_index,
     };
-    const VkResult result = vkQueuePresentKHR(queue->GetNativeQueue(), &present_info);
+    const VkResult result = vkQueuePresentKHR(queue.GetNativeQueue(), &present_info);
     if (result == VK_ERROR_OUT_OF_DATE_KHR || result == VK_SUBOPTIMAL_KHR)
     {
         Recreate();
@@ -327,16 +326,16 @@ void Rndr::Forge::SwapChain::Recreate()
     create_info.imageArrayLayers = 1;
     create_info.imageUsage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
 
-    auto graphics_queue = m_device->GetQueue(QueueFamily::Graphics);
-    auto present_queue = m_device->GetQueue(QueueFamily::Present);
+    const DeviceQueue& graphics_queue = m_device->GetQueue(QueueFamily::Graphics);
+    const DeviceQueue& present_queue = m_device->GetQueue(QueueFamily::Present);
 
     // Has to outlive the create info, since the create info only points to it.
     Opal::InPlaceArray<u32, 2> indices;
-    if (graphics_queue != present_queue)
+    if (&graphics_queue != &present_queue)
     {
         // If graphics and present queues are different, we use VK_SHARING_MODE_CONCURRENT
         // to allow concurrent access to the resources from different queues
-        indices = {graphics_queue->GetQueueFamilyIndex(), present_queue->GetQueueFamilyIndex()};
+        indices = {graphics_queue.GetQueueFamilyIndex(), present_queue.GetQueueFamilyIndex()};
         create_info.imageSharingMode = VK_SHARING_MODE_CONCURRENT;
         create_info.queueFamilyIndexCount = static_cast<u32>(indices.GetSize());
         create_info.pQueueFamilyIndices = indices.GetData();

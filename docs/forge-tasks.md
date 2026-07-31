@@ -128,12 +128,27 @@ handling section of `docs/forge.md`:
 `Opal::Optional` has the same `HasValue()` / `GetValue()` shape as `Opal::Expected`, so the call sites in
 `Device::CollectQueueFamilies` did not change.
 
-### 2.3 Pick one parameter convention
+### 2.3 Pick one parameter convention — DONE
 
-The API mixes `const T&`, `Opal::Ref<T>` by value and `Opal::Ref<const T>` for the same kind of argument,
-which is why the sample has to write `present_queue.Clone()` at `modern-vulkan.cpp:289`. Rule of thumb:
-`const T&` for arguments that are only read during the call, `Opal::Ref` only where the object stores the
-reference beyond the call.
+References at the API surface are plain C++ references, and `Opal::Ref` is left for the places that have to
+*store* one - members, desc fields, container elements. That a constructor keeps a reference to its argument
+does not change its parameter type; every Forge constructor already took its device as `const Device&` while
+storing an `Opal::Ref<const Device>`, and the rest now match. The rule is written down in the parameters
+section of `docs/forge.md`.
+
+- `SwapChain::Present` takes `DeviceQueue&` and `const Semaphore&`, `AcquireImage` takes `const Semaphore&`,
+  and `Surface` takes `const GenericWindow&`. `Opal::Ref` is move-only, so passing one by value was what
+  forced `present_queue.Clone()` at the call site.
+- `Device::GetQueue` returns `DeviceQueue&` / `const DeviceQueue&`. It throws when the device has no such
+  queue, so there was no absent case for `Opal::Ref` to carry. `SwapChain::Recreate` compares addresses now
+  that it holds references.
+- Ranges are `Opal::ArrayView<const T>` by value: `CmdImageBarriers`, `UpdateDescriptorSets` - which took a
+  `const Opal::DynamicArray&` and so refused every other container - `Fence::WaitForAll` and the initial data
+  of `Buffer`, which was a view over mutable `u8`. For a range of objects the element type is
+  `Opal::Ref<const T>`, as in `CmdBindDescriptorSets`, since an array of references is not a thing.
+
+Verified by running `modern-vulkan` with the validation layer for ten seconds and closing the window: clean
+exit, no validation message.
 
 ### 2.4 Decide how much Vulkan leaks into the descs
 

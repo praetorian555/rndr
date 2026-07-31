@@ -8,7 +8,7 @@
 #include "rndr/forge/device.hpp"
 #include "rndr/forge/vulkan-exception.hpp"
 
-Rndr::Forge::Buffer::Buffer(const Device& device, const BufferDesc& desc, Opal::ArrayView<u8> initial_data)
+Rndr::Forge::Buffer::Buffer(const Device& device, const BufferDesc& desc, Opal::ArrayView<const u8> initial_data)
     : m_device(device), m_desc(desc)
 {
     VkBufferCreateInfo create_info{.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO, .size = desc.size, .usage = desc.usage};

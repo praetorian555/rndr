@@ -90,7 +90,7 @@ public:
      * Insert a pipeline barrier for multiple images in a single call.
      * @param image_barriers Array of image barrier descriptions.
      */
-    void CmdImageBarriers(const Opal::ArrayView<ImageBarrier>& image_barriers);
+    void CmdImageBarriers(Opal::ArrayView<const ImageBarrier> image_barriers);
 
     /**
      * Copy data from a buffer to an image. Handles all mip levels described by the bitmap. The destination image must
@@ -163,7 +163,7 @@ public:
      * @param first_set Index of the first descriptor set slot to bind to.
      */
     void CmdBindDescriptorSets(const Pipeline& pipeline,
-                               const Opal::ArrayView<Opal::Ref<DescriptorSet>>& descriptor_sets, u32 first_set = 0);
+                               Opal::ArrayView<const Opal::Ref<const DescriptorSet>> descriptor_sets, u32 first_set = 0);
 
     /**
      * Push constant data to the pipeline.

@@ -38,7 +38,7 @@ public:
 
     void Reset() const;
 
-    static void WaitForAll(Opal::ArrayView<Fence> fences, u64 timeout = k_infinite_wait);
+    static void WaitForAll(Opal::ArrayView<const Fence> fences, u64 timeout = k_infinite_wait);
 
 private:
     VkFence m_fence = VK_NULL_HANDLE;

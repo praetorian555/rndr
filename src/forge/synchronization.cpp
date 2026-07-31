@@ -67,7 +67,7 @@ void Rndr::Forge::Fence::Reset() const
     }
 }
 
-void Rndr::Forge::Fence::WaitForAll(Opal::ArrayView<Fence> fences, u64 timeout)
+void Rndr::Forge::Fence::WaitForAll(Opal::ArrayView<const Fence> fences, u64 timeout)
 {
     if (fences.empty())
     {

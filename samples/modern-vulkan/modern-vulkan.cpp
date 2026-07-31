@@ -67,12 +67,12 @@ void Run()
     window->SetCursorPositionMode(Rndr::CursorPositionMode::ResetToCenter);
 
     Rndr::Forge::GraphicsContext graphics_context{{.collect_debug_messages = true}};
-    Rndr::Forge::Surface surface(graphics_context, window.Get());
+    Rndr::Forge::Surface surface(graphics_context, *window);
 
     auto physical_devices = graphics_context.EnumeratePhysicalDevices();
-    Rndr::Forge::Device device(std::move(physical_devices[0]), graphics_context, {.surface = Opal::Ref{surface}});
-    auto graphics_queue = device.GetQueue(Rndr::Forge::QueueFamily::Graphics);
-    auto present_queue = device.GetQueue(Rndr::Forge::QueueFamily::Present);
+    Rndr::Forge::Device device(std::move(physical_devices[0]), graphics_context, {.surface = surface});
+    Rndr::Forge::DeviceQueue& graphics_queue = device.GetQueue(Rndr::Forge::QueueFamily::Graphics);
+    Rndr::Forge::DeviceQueue& present_queue = device.GetQueue(Rndr::Forge::QueueFamily::Present);
 
     Rndr::Forge::SwapChain swap_chain(device, surface, {.use_depth = true, .depth_pixel_format = Rndr::PixelFormat::D32_SFLOAT});
 
@@ -123,15 +123,15 @@ void Run()
     Opal::DynamicArray<Rndr::Forge::CommandBuffer> command_buffers;
     for (Rndr::i32 i = 0; i < k_frames_in_flight; ++i)
     {
-        command_buffers.EmplaceBack(device, device.GetQueue(Rndr::Forge::QueueFamily::Graphics).Get());
+        command_buffers.EmplaceBack(device, graphics_queue);
     }
 
     const Opal::StringUtf8 albedo_texture_path = Opal::Paths::Combine(RNDR_CORE_ASSETS_DIR, "sample-models", "Suzanne", "glTF", "Suzanne_BaseColor.png");
     const Opal::StringUtf8 metallic_roughness_texture_path = Opal::Paths::Combine(RNDR_CORE_ASSETS_DIR, "sample-models", "Suzanne", "glTF", "Suzanne_MetallicRoughness.png");
     const Rndr::Bitmap albedo_bitmap = Rndr::File::LoadImage(albedo_texture_path, true, true);
     const Rndr::Bitmap mr_bitmap = Rndr::File::LoadImage(metallic_roughness_texture_path, true, true);
-    Rndr::Forge::Texture albedo_texture(device, device.GetQueue(Rndr::Forge::QueueFamily::Graphics), albedo_bitmap);
-    Rndr::Forge::Texture mr_texture(device, device.GetQueue(Rndr::Forge::QueueFamily::Graphics), mr_bitmap);
+    Rndr::Forge::Texture albedo_texture(device, graphics_queue, albedo_bitmap);
+    Rndr::Forge::Texture mr_texture(device, graphics_queue, mr_bitmap);
     Rndr::Forge::Sampler albedo_sampler(device, {.max_anisotropy = 8.0f, .max_lod = static_cast<f32>(albedo_bitmap.GetMipCount())});
     Rndr::Forge::Sampler mr_sampler(device, {.max_anisotropy = 8.0f, .max_lod = static_cast<f32>(mr_bitmap.GetMipCount())});
 
@@ -321,10 +321,10 @@ void Run()
                                         .image = swap_chain.GetColorImage(static_cast<i32>(image_index))});
         command_buffer.End();
 
-        graphics_queue->Submit(command_buffer, present_semaphores[frame_index], Rndr::PipelineStageBits::ColorAttachmentOutput,
-                               render_semaphores[image_index], fences[frame_index]);
+        graphics_queue.Submit(command_buffer, present_semaphores[frame_index], Rndr::PipelineStageBits::ColorAttachmentOutput,
+                              render_semaphores[image_index], fences[frame_index]);
         frame_index = (frame_index + 1) % k_frames_in_flight;
-        if (swap_chain.Present(image_index, present_queue.Clone(), render_semaphores[image_index]) ==
+        if (swap_chain.Present(image_index, present_queue, render_semaphores[image_index]) ==
             Rndr::Forge::SwapChainStatus::OutOfDate)
         {
             match_render_semaphores_to_swap_chain();

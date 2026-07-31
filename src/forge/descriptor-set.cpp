@@ -329,7 +329,7 @@ void Rndr::Forge::DescriptorSet::Destroy()
     m_device = VK_NULL_HANDLE;
 }
 
-void Rndr::Forge::DescriptorSet::UpdateDescriptorSets(const Opal::DynamicArray<DescriptorSetUpdateBinding>& updates)
+void Rndr::Forge::DescriptorSet::UpdateDescriptorSets(Opal::ArrayView<const DescriptorSetUpdateBinding> updates)
 {
     Opal::DynamicArray<VkWriteDescriptorSet> descriptor_writes(updates.GetSize());
     Opal::DynamicArray<VkDescriptorBufferInfo> buffer_infos(updates.GetSize());

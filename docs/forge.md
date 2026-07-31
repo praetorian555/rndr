@@ -28,6 +28,29 @@ call site.
 
 ---
 
+## Parameters and references
+
+References at the API surface are plain C++ references. `Opal::Ref` appears only where a reference has to be
+*stored*: as a member, as a field of a desc, or as the element type of a container, none of which can hold a
+plain reference.
+
+- An argument the call only reads is `const T&`. An argument the call mutates, or submits work to, is `T&` -
+  `SwapChain::Present` takes `DeviceQueue&` because `DeviceQueue::Submit` is non-const.
+- A constructor that keeps a reference to its argument still takes `const T&`; that it stores an
+  `Opal::Ref<const T>` internally is an implementation detail, and every Forge constructor already takes its
+  device this way.
+- A range of objects is `Opal::ArrayView<const T>`, by value. `ArrayView` is already a view, so a reference to
+  one buys nothing, and `const` on the element type says the call does not write through it. When the range is
+  of objects rather than values, the element type is `Opal::Ref<const T>`, since an array of references is not
+  a thing - `CommandBuffer::CmdBindDescriptorSets` and `Pipeline::CreatePipelineLayout` both look like this.
+- A getter that hands back an object the callee owns returns `T&`, not `Opal::Ref<T>`. `Device::GetQueue`
+  throws when the device has no such queue, so there is no absent case for the return type to carry.
+
+`Opal::Ref` is move-only, so taking one by value forces every call site to write `.Clone()` for a reference
+that is only read during the call. That is what this convention removes.
+
+---
+
 ## Error handling
 
 Three rules, in the order they are applied.

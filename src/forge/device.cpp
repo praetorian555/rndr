@@ -319,24 +319,24 @@ void Rndr::Forge::Device::Destroy()
     m_desc = {};
 }
 
-Opal::Ref<Rndr::Forge::DeviceQueue> Rndr::Forge::Device::GetQueue(QueueFamily queue_family)
+Rndr::Forge::DeviceQueue& Rndr::Forge::Device::GetQueue(QueueFamily queue_family)
 {
     auto queue_it = m_queue_family_to_queue.Find(queue_family);
     if (queue_it == m_queue_family_to_queue.end())
     {
         throw Opal::Exception("Queue family not supported!");
     }
-    return queue_it.GetValue().GetRef();
+    return *queue_it.GetValue().Get();
 }
 
-Opal::Ref<const Rndr::Forge::DeviceQueue> Rndr::Forge::Device::GetQueue(QueueFamily queue_family) const
+const Rndr::Forge::DeviceQueue& Rndr::Forge::Device::GetQueue(QueueFamily queue_family) const
 {
     auto queue_it = m_queue_family_to_queue.Find(queue_family);
     if (queue_it == m_queue_family_to_queue.end())
     {
         throw Opal::Exception("Queue family not supported!");
     }
-    return queue_it.GetValue().GetRef();
+    return *queue_it.GetValue().Get();
 }
 
 Rndr::Forge::DeviceQueue::~DeviceQueue()

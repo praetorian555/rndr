@@ -59,7 +59,7 @@ class Surface
 {
 public:
     Surface() = default;
-    explicit Surface(const GraphicsContext& context, Opal::Ref<const GenericWindow> window);
+    explicit Surface(const GraphicsContext& context, const GenericWindow& window);
     ~Surface();
     Surface(const Surface&) = delete;
     Surface& operator=(const Surface&) = delete;
@@ -121,7 +121,7 @@ public:
      * must not reset its per-frame fence before this call returns Success, otherwise the next wait on that fence
      * never completes.
      */
-    AcquiredImage AcquireImage(const Opal::Ref<Semaphore>& semaphore);
+    AcquiredImage AcquireImage(const Semaphore& semaphore);
 
     /**
      * Present a previously acquired image once the given semaphore is signaled.
@@ -129,7 +129,7 @@ public:
      * Returns SwapChainStatus::OutOfDate when the swap chain stopped matching the surface, in which case it has
      * already been recreated and the caller has to refresh anything it cached about it.
      */
-    SwapChainStatus Present(u32 image_index, Opal::Ref<DeviceQueue> queue, Opal::Ref<Semaphore> semaphore);
+    SwapChainStatus Present(u32 image_index, DeviceQueue& queue, const Semaphore& semaphore);
 
 private:
     /** Destroy the color images, their views and the depth image, leaving the swap chain handle alone. */

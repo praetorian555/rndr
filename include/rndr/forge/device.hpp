@@ -114,8 +114,9 @@ public:
     [[nodiscard]] VkPhysicalDevice GetNativePhysicalDevice() const { return m_physical_device.GetNativePhysicalDevice(); }
     [[nodiscard]] const DeviceDesc& GetDesc() const { return m_desc; }
 
-    Opal::Ref<DeviceQueue> GetQueue(QueueFamily queue_family);
-    [[nodiscard]] Opal::Ref<const DeviceQueue> GetQueue(QueueFamily queue_family) const;
+    /** Queue of the given family. Throws when the device was not created with one, so the result is always valid. */
+    DeviceQueue& GetQueue(QueueFamily queue_family);
+    [[nodiscard]] const DeviceQueue& GetQueue(QueueFamily queue_family) const;
 
     [[nodiscard]] VmaAllocator GetGPUAllocator() const { return m_gpu_allocator; }
 

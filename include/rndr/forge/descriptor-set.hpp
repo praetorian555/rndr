@@ -167,7 +167,7 @@ public:
     [[nodiscard]] bool IsValid() const { return m_set != VK_NULL_HANDLE; }
     [[nodiscard]] VkDescriptorSet GetNativeDescriptorSet() const { return m_set; }
 
-    void UpdateDescriptorSets(const Opal::DynamicArray<DescriptorSetUpdateBinding>& updates);
+    void UpdateDescriptorSets(Opal::ArrayView<const DescriptorSetUpdateBinding> updates);
 
 private:
     VkDevice m_device = VK_NULL_HANDLE;

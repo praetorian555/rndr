@@ -26,7 +26,7 @@ class Buffer
 {
 public:
     Buffer() = default;
-    explicit Buffer(const Device& device, const BufferDesc& desc = {}, Opal::ArrayView<u8> initial_data = {});
+    explicit Buffer(const Device& device, const BufferDesc& desc = {}, Opal::ArrayView<const u8> initial_data = {});
     ~Buffer();
 
     Buffer(const Buffer&) = delete;
