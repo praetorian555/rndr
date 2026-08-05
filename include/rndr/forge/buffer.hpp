@@ -41,6 +41,7 @@ public:
     [[nodiscard]] VkBuffer GetNativeBuffer() const { return m_buffer; }
     [[nodiscard]] VkDeviceAddress GetNativeDeviceAddress() const { return m_device_address; }
     [[nodiscard]] size_t GetSize() const { return m_desc.size; }
+    [[nodiscard]] const BufferDesc& GetDesc() const { return m_desc; }
 
     /**
      * Write data into the buffer at the given offset. Throws when the write does not fit. Non-coherent memory is

@@ -375,6 +375,30 @@ void Rndr::Forge::CommandBuffer::CmdDrawIndexed(u32 index_count, u32 instance_co
     vkCmdDrawIndexed(m_native_command_buffer, index_count, instance_count, first_index, vertex_offset, first_instance);
 }
 
+void Rndr::Forge::CommandBuffer::CmdDispatch(u32 group_count_x, u32 group_count_y, u32 group_count_z)
+{
+    vkCmdDispatch(m_native_command_buffer, group_count_x, group_count_y, group_count_z);
+}
+
+void Rndr::Forge::CommandBuffer::CmdDispatchIndirect(const Buffer& buffer, u64 offset)
+{
+    if (!(buffer.GetDesc().usage & BufferUsageBits::IndirectBuffer))
+    {
+        throw Opal::Exception("Indirect dispatch needs a buffer created with BufferUsageBits::IndirectBuffer!");
+    }
+    if (offset % 4 != 0)
+    {
+        throw Opal::Exception("Indirect dispatch offset must be a multiple of 4!");
+    }
+    // Written so that a large offset cannot overflow the sum and pass, the way Buffer::Update checks it.
+    const u64 buffer_size = buffer.GetSize();
+    if (offset > buffer_size || sizeof(DispatchIndirectCommand) > buffer_size - offset)
+    {
+        throw Opal::Exception("Indirect dispatch command reaches past the end of the buffer!");
+    }
+    vkCmdDispatchIndirect(m_native_command_buffer, buffer.GetNativeBuffer(), offset);
+}
+
 Rndr::Forge::CommandBuffer::CommandBuffer(CommandBuffer&& other) noexcept
     : m_device(std::move(other.m_device)), m_queue(std::move(other.m_queue)), m_native_command_buffer(other.m_native_command_buffer)
 {

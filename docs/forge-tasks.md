@@ -247,10 +247,27 @@ that nothing reads, so `use_update_after_bind` and `variable_descriptor_count` r
 
 ## Priority 3 — Missing capability
 
-### 3.1 Compute dispatch
+### 3.1 Compute dispatch — DONE
 
-`Forge::Pipeline` builds compute pipelines and `QueueFamily::AsyncCompute` exists, but there is no
-`CmdDispatch`, so compute is unreachable. Add `CmdDispatch`, `CmdDispatchIndirect`.
+`CmdDispatch` takes the three group counts, `y` and `z` defaulting to one, since a one dimensional dispatch
+is the common case. `CmdDispatchIndirect` reads them out of a buffer instead, and `DispatchIndirectCommand`
+gives the three counts a name so that the caller fills the buffer through a Forge struct rather than
+knowing the layout. It checks what it can before the call: the buffer needs
+`BufferUsageBits::IndirectBuffer`, the offset has to be a multiple of four, and the command has to fit,
+checked so a large offset cannot overflow the sum and pass. Group counts are not checked against the device
+limits - that needs limits plumbing that does not exist yet, and the validation layer already covers it.
+
+`Buffer::GetDesc()` was added along the way. Every other Forge type had one after 2.5 and `Buffer` did not,
+and the usage check needs it.
+
+Verified end to end rather than by the absence of validation messages, which proved nothing for 1.9: a probe
+compute shader wrote `index + 1000` into a 256 element storage buffer, dispatched over four groups of 64.
+The buffer was wiped and read back before each pass, so a pass could not be shown green by what the previous
+one left behind - zero before, 1000 through 1255 after, no mismatches, for the direct and the indirect path
+both. All three guards threw. Probe removed.
+
+Left for later: `PipelineStageBits` has no `Host`, so the probe drained with `AllCommands` where a
+compute-to-host barrier is what it wanted. That belongs to 3.12 along with the other missing stages.
 
 ### 3.2 Buffer and memory barriers — DONE
 

@@ -49,6 +49,17 @@ struct RenderingDesc
     RenderingAttachmentDesc depth_attachment;
 };
 
+/**
+ * The three group counts of one indirect dispatch, laid out the way CmdDispatchIndirect reads them out of a
+ * buffer. Write this into the buffer rather than three loose integers, so that the layout stays in one place.
+ */
+struct DispatchIndirectCommand
+{
+    u32 group_count_x = 0;
+    u32 group_count_y = 0;
+    u32 group_count_z = 0;
+};
+
 /** Barriers of every kind that belong to one dependency, for CommandBuffer::CmdBarriers. */
 struct Barriers
 {
@@ -219,6 +230,23 @@ public:
      * @param first_instance Instance ID of the first instance to draw.
      */
     void CmdDrawIndexed(u32 index_count, u32 instance_count = 1, u32 first_index = 0, i32 vertex_offset = 0, u32 first_instance = 0);
+
+    /**
+     * Dispatch a compute workload. The counts are in local workgroups, not invocations, so the total invocation
+     * count is these multiplied by the local size the compute shader declares. Requires a bound compute pipeline.
+     * @param group_count_x Number of local workgroups in the X dimension.
+     * @param group_count_y Number of local workgroups in the Y dimension.
+     * @param group_count_z Number of local workgroups in the Z dimension.
+     */
+    void CmdDispatch(u32 group_count_x, u32 group_count_y = 1, u32 group_count_z = 1);
+
+    /**
+     * Dispatch a compute workload whose group counts the device reads out of a buffer when it runs the command,
+     * rather than from values known while recording. The buffer holds a DispatchIndirectCommand at the offset.
+     * @param buffer Buffer holding the group counts. Must have been created with BufferUsageBits::IndirectBuffer.
+     * @param offset Byte offset of the DispatchIndirectCommand. Must be a multiple of 4.
+     */
+    void CmdDispatchIndirect(const Buffer& buffer, u64 offset = 0);
 
 private:
     Opal::Ref<const Device> m_device;
