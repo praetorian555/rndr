@@ -203,13 +203,26 @@ bug: `GraphicsContext::Destroy()` called `volkFinalize()` unconditionally, so an
 going out of scope unloaded Vulkan process wide while another context was still using it. It now finalizes
 only when it owned the instance.
 
-### 2.6 Explicit descriptor binding indices
+### 2.6 Explicit descriptor binding indices — DONE
 
-`include/rndr/forge/descriptor-set.hpp:48`
+`DescriptorSetLayoutDesc::Binding` carries its own `binding` index, so a layout can skip a slot, list its
+bindings in any order, and match a shader with non-contiguous bindings. The field is named and ordered the
+way `VertexInputDesc::Binding` already names its own, and `AddBinding` takes the index first for the same
+reason. Two bindings claiming the same index throw rather than silently shadowing one another.
 
-`Forge::DescriptorSetLayoutDesc::Binding` has no binding index — bindings are numbered by insertion order,
-so a layout cannot skip a slot, reorder, or match a shader with non-contiguous bindings. Add the index, and
-add immutable samplers while touching the struct.
+`Binding::immutable_samplers` bakes samplers into the layout. It is only accepted on `DescriptorType::Sampler`
+and `::CombinedImageSampler`, and its length has to equal `descriptor_count`; both are checked in `AddBinding`
+rather than left to the validation layer. The samplers are collected into one array sized up front, so that
+the `pImmutableSamplers` pointers stay valid until `vkCreateDescriptorSetLayout` has read them. Forge holds
+`Opal::Ref<const Sampler>` and does not own them, so the caller has to keep them alive for as long as the
+layout and its sets — documented on the field.
+
+Verified by temporarily driving `modern-vulkan` with the two bindings added in reverse order, a third at index
+7 that the shader never declares, and that third binding's sampler supplied as immutable: no validation
+message, clean exit, probe removed.
+
+Note for 3.9: the layout still passes an all-zero `binding_flags_array` and computes a `binding_flags` local
+that nothing reads, so `use_update_after_bind` and `variable_descriptor_count` remain unreachable.
 
 ---
 

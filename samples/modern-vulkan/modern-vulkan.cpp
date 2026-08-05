@@ -146,8 +146,8 @@ void Run()
 
     // Setup the descriptor set layout. It has two bindings and both are images with samplers.
     Rndr::Forge::DescriptorSetLayoutDesc layout_desc;
-    layout_desc.AddBinding(Rndr::Forge::DescriptorType::CombinedImageSampler, 1, Rndr::ShaderTypeBits::Fragment);
-    layout_desc.AddBinding(Rndr::Forge::DescriptorType::CombinedImageSampler, 1, Rndr::ShaderTypeBits::Fragment);
+    layout_desc.AddBinding(0, Rndr::Forge::DescriptorType::CombinedImageSampler, 1, Rndr::ShaderTypeBits::Fragment);
+    layout_desc.AddBinding(1, Rndr::Forge::DescriptorType::CombinedImageSampler, 1, Rndr::ShaderTypeBits::Fragment);
     Rndr::Forge::DescriptorSetLayout descriptor_set_layout(device, layout_desc);
 
     // Allocate descriptor set from the descriptor pool and fill it with concrete data.

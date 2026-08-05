@@ -74,14 +74,43 @@ void Rndr::Forge::DescriptorPoolDesc::Add(DescriptorType descriptor_type, u32 ma
     descriptor_types.PushBack({.key = descriptor_type, .value = max_size});
 }
 
-void Rndr::Forge::DescriptorSetLayoutDesc::AddBinding(DescriptorType descriptor_type, u32 descriptor_count,
-                                                       ShaderTypeBits shader_types)
+void Rndr::Forge::DescriptorSetLayoutDesc::AddBinding(u32 binding, DescriptorType descriptor_type, u32 descriptor_count,
+                                                      ShaderTypeBits shader_types,
+                                                      Opal::ArrayView<const Opal::Ref<const Sampler>> immutable_samplers)
 {
-    Binding binding;
-    binding.descriptor_type = descriptor_type;
-    binding.descriptor_count = descriptor_count;
-    binding.shader_types = shader_types;
-    bindings.PushBack(binding);
+    for (const Binding& existing : bindings)
+    {
+        if (existing.binding == binding)
+        {
+            throw Opal::Exception("Binding index already used by this layout!");
+        }
+    }
+    if (!immutable_samplers.IsEmpty())
+    {
+        if (descriptor_type != DescriptorType::Sampler && descriptor_type != DescriptorType::CombinedImageSampler)
+        {
+            throw Opal::Exception("Immutable samplers are only valid on sampler descriptors!");
+        }
+        if (immutable_samplers.GetSize() != static_cast<u64>(descriptor_count))
+        {
+            throw Opal::Exception("Immutable sampler count must match the descriptor count!");
+        }
+    }
+
+    Binding new_binding;
+    new_binding.binding = binding;
+    new_binding.descriptor_type = descriptor_type;
+    new_binding.descriptor_count = descriptor_count;
+    new_binding.shader_types = shader_types;
+    for (const Opal::Ref<const Sampler>& sampler : immutable_samplers)
+    {
+        if (!sampler.IsValid())
+        {
+            throw Opal::Exception("Immutable sampler is null!");
+        }
+        new_binding.immutable_samplers.PushBack(sampler.Clone());
+    }
+    bindings.PushBack(std::move(new_binding));
 }
 
 // DescriptorPool
@@ -193,13 +222,33 @@ Rndr::Forge::DescriptorSetLayout::DescriptorSetLayout(const Device& device, cons
     Opal::DynamicArray<VkDescriptorSetLayoutBinding> bindings(desc.bindings.GetSize());
     Opal::DynamicArray<VkDescriptorBindingFlags> binding_flags_array(desc.bindings.GetSize());
 
+    // One array for every immutable sampler of every binding, sized up front so that the pointers handed to
+    // pImmutableSamplers stay valid until vkCreateDescriptorSetLayout has read them.
+    u64 immutable_sampler_count = 0;
+    for (const DescriptorSetLayoutDesc::Binding& source : desc.bindings)
+    {
+        immutable_sampler_count += source.immutable_samplers.GetSize();
+    }
+    Opal::DynamicArray<VkSampler> immutable_samplers(immutable_sampler_count);
+    u64 next_immutable_sampler = 0;
+
     for (i32 i = 0; i < bindings.GetSize(); i++)
     {
+        const DescriptorSetLayoutDesc::Binding& source = desc.bindings[i];
         VkDescriptorSetLayoutBinding& binding = bindings[i];
-        binding.binding = i;
-        binding.descriptorType = FromDescriptorType(desc.bindings[i].descriptor_type);
-        binding.descriptorCount = desc.bindings[i].descriptor_count;
-        binding.stageFlags = FromShaderTypeBits(desc.bindings[i].shader_types);
+        binding.binding = source.binding;
+        binding.descriptorType = FromDescriptorType(source.descriptor_type);
+        binding.descriptorCount = source.descriptor_count;
+        binding.stageFlags = FromShaderTypeBits(source.shader_types);
+        binding.pImmutableSamplers = nullptr;
+        if (!source.immutable_samplers.IsEmpty())
+        {
+            binding.pImmutableSamplers = immutable_samplers.GetData() + next_immutable_sampler;
+            for (const Opal::Ref<const Sampler>& sampler : source.immutable_samplers)
+            {
+                immutable_samplers[next_immutable_sampler++] = sampler->GetNativeSampler();
+            }
+        }
     }
 
     const Opal::InPlaceArray<VkDescriptorBindingFlags, 3> binding_flags = {VK_DESCRIPTOR_BINDING_UPDATE_AFTER_BIND_BIT,

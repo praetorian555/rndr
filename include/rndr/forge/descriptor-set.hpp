@@ -3,6 +3,7 @@
 #include "volk/volk.h"
 
 #include "opal/clonable-base.h"
+#include "opal/container/array-view.h"
 #include "opal/container/dynamic-array.h"
 #include "opal/container/hash-map.h"
 #include "opal/container/ref.h"
@@ -52,17 +53,28 @@ struct DescriptorPoolDesc : Opal::ClonableBase<DescriptorPoolDesc>
 
 struct DescriptorSetLayoutDesc : Opal::ClonableBase<DescriptorSetLayoutDesc>
 {
-    struct Binding
+    struct Binding : Opal::ClonableBase<Binding>
     {
+        /** The index the shader declares this binding at. Indices may skip values and arrive in any order. */
+        u32 binding = 0;
         DescriptorType descriptor_type = DescriptorType::CombinedImageSampler;
         u32 descriptor_count = 1;
         ShaderTypeBits shader_types = ShaderTypeBits::AllGraphics;
+        /**
+         * Samplers baked into the layout, one per descriptor, for DescriptorType::Sampler and
+         * DescriptorType::CombinedImageSampler only. The sampler of such a binding cannot be written by
+         * UpdateDescriptorSets, and every Sampler listed here has to outlive the layout and every set allocated
+         * from it.
+         */
+        Opal::DynamicArray<Opal::Ref<const Sampler>> immutable_samplers;
+        OPAL_CLONE_FIELDS(binding, descriptor_type, descriptor_count, shader_types, immutable_samplers);
     };
     Opal::DynamicArray<Binding> bindings;
 
     OPAL_CLONE_FIELDS(bindings);
 
-    void AddBinding(DescriptorType descriptor_type, u32 descriptor_count, ShaderTypeBits shader_types);
+    void AddBinding(u32 binding, DescriptorType descriptor_type, u32 descriptor_count, ShaderTypeBits shader_types,
+                    Opal::ArrayView<const Opal::Ref<const Sampler>> immutable_samplers = {});
 };
 
 struct DescriptorSetUpdateBinding
