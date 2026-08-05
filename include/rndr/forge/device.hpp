@@ -115,6 +115,14 @@ public:
     [[nodiscard]] VkPhysicalDevice GetNativePhysicalDevice() const { return m_physical_device.GetNativePhysicalDevice(); }
     [[nodiscard]] const DeviceDesc& GetDesc() const { return m_desc; }
 
+    /**
+     * Whether the device was created with the named extension. Commands that belong to an extension have to ask,
+     * since the loader hands out a callable trampoline for them either way and calling one the device did not
+     * enable crashes rather than failing.
+     * @param extension_name Extension to look for, such as VK_EXT_MESH_SHADER_EXTENSION_NAME.
+     */
+    [[nodiscard]] bool IsExtensionEnabled(const char* extension_name) const;
+
     /** Queue of the given family. Throws when the device was not created with one, so the result is always valid. */
     DeviceQueue& GetQueue(QueueFamily queue_family);
     [[nodiscard]] const DeviceQueue& GetQueue(QueueFamily queue_family) const;
@@ -130,6 +138,8 @@ private:
     Opal::HashMap<QueueFamily, Opal::SharedPtr<DeviceQueue>> m_queue_family_to_queue;
     PhysicalDevice m_physical_device;
     DeviceDesc m_desc;
+    /** What was actually passed to vkCreateDevice, which is the desc plus what the device adds on its own. */
+    Opal::DynamicArray<const char*> m_enabled_extensions;
     QueueFamilyIndices m_queue_family_indices;
     VmaAllocator m_gpu_allocator = VK_NULL_HANDLE;
 };

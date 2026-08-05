@@ -60,6 +60,26 @@ struct DispatchIndirectCommand
     u32 group_count_z = 0;
 };
 
+/** The arguments of one indirect draw, laid out the way CmdDrawIndirect reads them out of a buffer. */
+struct DrawIndirectCommand
+{
+    u32 vertex_count = 0;
+    u32 instance_count = 0;
+    u32 first_vertex = 0;
+    u32 first_instance = 0;
+};
+
+/** The arguments of one indirect indexed draw, laid out the way CmdDrawIndexedIndirect reads them. */
+struct DrawIndexedIndirectCommand
+{
+    u32 index_count = 0;
+    u32 instance_count = 0;
+    u32 first_index = 0;
+    /** Added to every index before it reaches the vertex buffer. Signed, unlike the rest. */
+    i32 vertex_offset = 0;
+    u32 first_instance = 0;
+};
+
 /** Barriers of every kind that belong to one dependency, for CommandBuffer::CmdBarriers. */
 struct Barriers
 {
@@ -230,6 +250,48 @@ public:
      * @param first_instance Instance ID of the first instance to draw.
      */
     void CmdDrawIndexed(u32 index_count, u32 instance_count = 1, u32 first_index = 0, i32 vertex_offset = 0, u32 first_instance = 0);
+
+    /**
+     * Draw without an index buffer, walking the vertex buffers in order.
+     * @param vertex_count Number of vertices to draw.
+     * @param instance_count Number of instances to draw.
+     * @param first_vertex Index of the first vertex to draw.
+     * @param first_instance Instance ID of the first instance to draw.
+     */
+    void CmdDraw(u32 vertex_count, u32 instance_count = 1, u32 first_vertex = 0, u32 first_instance = 0);
+
+    /**
+     * Draw one or more times with the arguments the device reads out of a buffer when it runs the command,
+     * rather than from values known while recording.
+     * @param buffer Buffer holding the commands. Must have been created with BufferUsageBits::IndirectBuffer.
+     * @param offset Byte offset of the first DrawIndirectCommand. Must be a multiple of 4.
+     * @param draw_count Number of commands to read.
+     * @param stride Bytes between commands. Only read when draw_count is above one.
+     */
+    void CmdDrawIndirect(const Buffer& buffer, u64 offset = 0, u32 draw_count = 1,
+                         u32 stride = static_cast<u32>(sizeof(DrawIndirectCommand)));
+
+    /**
+     * The indexed counterpart of CmdDrawIndirect. Reads DrawIndexedIndirectCommand and needs a bound index
+     * buffer, the way CmdDrawIndexed does.
+     * @param buffer Buffer holding the commands. Must have been created with BufferUsageBits::IndirectBuffer.
+     * @param offset Byte offset of the first DrawIndexedIndirectCommand. Must be a multiple of 4.
+     * @param draw_count Number of commands to read.
+     * @param stride Bytes between commands. Only read when draw_count is above one.
+     */
+    void CmdDrawIndexedIndirect(const Buffer& buffer, u64 offset = 0, u32 draw_count = 1,
+                                u32 stride = static_cast<u32>(sizeof(DrawIndexedIndirectCommand)));
+
+    /**
+     * Draw through the task and mesh shader stages, which replace vertex input and the vertex shader. The
+     * counts are in workgroups, the way a compute dispatch counts them.
+     * @note Needs VK_EXT_mesh_shader on the device. Nothing enables it yet - that is device feature chaining -
+     *       so this throws rather than calling through a function pointer the loader left null.
+     * @param group_count_x Number of workgroups in the X dimension.
+     * @param group_count_y Number of workgroups in the Y dimension.
+     * @param group_count_z Number of workgroups in the Z dimension.
+     */
+    void CmdDrawMeshTasks(u32 group_count_x, u32 group_count_y = 1, u32 group_count_z = 1);
 
     /**
      * Dispatch a compute workload. The counts are in local workgroups, not invocations, so the total invocation

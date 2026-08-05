@@ -375,6 +375,68 @@ void Rndr::Forge::CommandBuffer::CmdDrawIndexed(u32 index_count, u32 instance_co
     vkCmdDrawIndexed(m_native_command_buffer, index_count, instance_count, first_index, vertex_offset, first_instance);
 }
 
+/**
+ * The checks every indirect command shares: the buffer has to allow indirect use, the offset has to be
+ * aligned, and every command the device will read has to fit inside the buffer.
+ */
+static void ValidateIndirectRange(const Rndr::Forge::Buffer& buffer, Rndr::u64 offset, Rndr::u32 count, Rndr::u32 stride,
+                                  Rndr::u64 command_size, const char* what)
+{
+    using namespace Rndr;
+    if (!(buffer.GetDesc().usage & Forge::BufferUsageBits::IndirectBuffer))
+    {
+        throw Opal::Exception(Opal::StringEx(what) + " needs a buffer created with BufferUsageBits::IndirectBuffer!");
+    }
+    if (offset % 4 != 0)
+    {
+        throw Opal::Exception(Opal::StringEx(what) + " offset must be a multiple of 4!");
+    }
+    if (count == 0)
+    {
+        return;
+    }
+    if (count > 1 && (stride % 4 != 0 || stride < command_size))
+    {
+        throw Opal::Exception(Opal::StringEx(what) + " stride must be a multiple of 4 and at least one command long!");
+    }
+    // Written so that neither the offset nor the span of the commands can overflow the sum and pass, the way
+    // Buffer::Update checks it. The last command starts at count - 1 strides in, so only that many are counted.
+    const u64 buffer_size = buffer.GetSize();
+    const u64 span_before_last = static_cast<u64>(count - 1) * stride;
+    if (offset > buffer_size || span_before_last > buffer_size - offset || command_size > buffer_size - offset - span_before_last)
+    {
+        throw Opal::Exception(Opal::StringEx(what) + " reaches past the end of the buffer!");
+    }
+}
+
+void Rndr::Forge::CommandBuffer::CmdDraw(u32 vertex_count, u32 instance_count, u32 first_vertex, u32 first_instance)
+{
+    vkCmdDraw(m_native_command_buffer, vertex_count, instance_count, first_vertex, first_instance);
+}
+
+void Rndr::Forge::CommandBuffer::CmdDrawIndirect(const Buffer& buffer, u64 offset, u32 draw_count, u32 stride)
+{
+    ValidateIndirectRange(buffer, offset, draw_count, stride, sizeof(DrawIndirectCommand), "Indirect draw");
+    vkCmdDrawIndirect(m_native_command_buffer, buffer.GetNativeBuffer(), offset, draw_count, stride);
+}
+
+void Rndr::Forge::CommandBuffer::CmdDrawIndexedIndirect(const Buffer& buffer, u64 offset, u32 draw_count, u32 stride)
+{
+    ValidateIndirectRange(buffer, offset, draw_count, stride, sizeof(DrawIndexedIndirectCommand), "Indirect indexed draw");
+    vkCmdDrawIndexedIndirect(m_native_command_buffer, buffer.GetNativeBuffer(), offset, draw_count, stride);
+}
+
+void Rndr::Forge::CommandBuffer::CmdDrawMeshTasks(u32 group_count_x, u32 group_count_y, u32 group_count_z)
+{
+    // The loader hands out a callable trampoline whether or not the device enabled the extension, so a null
+    // check does not catch this - calling it without the extension is an access violation, not a failure.
+    if (!m_device->IsExtensionEnabled(VK_EXT_MESH_SHADER_EXTENSION_NAME) || vkCmdDrawMeshTasksEXT == nullptr)
+    {
+        throw Opal::Exception("Mesh shader drawing needs VK_EXT_mesh_shader, which the device did not enable!");
+    }
+    vkCmdDrawMeshTasksEXT(m_native_command_buffer, group_count_x, group_count_y, group_count_z);
+}
+
 void Rndr::Forge::CommandBuffer::CmdDispatch(u32 group_count_x, u32 group_count_y, u32 group_count_z)
 {
     vkCmdDispatch(m_native_command_buffer, group_count_x, group_count_y, group_count_z);
@@ -382,20 +444,8 @@ void Rndr::Forge::CommandBuffer::CmdDispatch(u32 group_count_x, u32 group_count_
 
 void Rndr::Forge::CommandBuffer::CmdDispatchIndirect(const Buffer& buffer, u64 offset)
 {
-    if (!(buffer.GetDesc().usage & BufferUsageBits::IndirectBuffer))
-    {
-        throw Opal::Exception("Indirect dispatch needs a buffer created with BufferUsageBits::IndirectBuffer!");
-    }
-    if (offset % 4 != 0)
-    {
-        throw Opal::Exception("Indirect dispatch offset must be a multiple of 4!");
-    }
-    // Written so that a large offset cannot overflow the sum and pass, the way Buffer::Update checks it.
-    const u64 buffer_size = buffer.GetSize();
-    if (offset > buffer_size || sizeof(DispatchIndirectCommand) > buffer_size - offset)
-    {
-        throw Opal::Exception("Indirect dispatch command reaches past the end of the buffer!");
-    }
+    ValidateIndirectRange(buffer, offset, 1, sizeof(DispatchIndirectCommand), sizeof(DispatchIndirectCommand),
+                          "Indirect dispatch");
     vkCmdDispatchIndirect(m_native_command_buffer, buffer.GetNativeBuffer(), offset);
 }
 

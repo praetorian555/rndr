@@ -84,6 +84,7 @@ Rndr::Forge::Device::Device(PhysicalDevice physical_device, const GraphicsContex
     {
         device_extensions.PushBack(VK_KHR_SWAPCHAIN_EXTENSION_NAME);
     }
+    m_enabled_extensions = device_extensions.Clone();
     for (const char* extension_name : device_extensions)
     {
         if (!m_physical_device.IsExtensionSupported(extension_name))
@@ -262,6 +263,22 @@ void Rndr::Forge::Device::CollectQueueFamilies(Opal::DynamicArray<VkDeviceQueueC
         queue_create_info.pQueuePriorities = &g_queue_priority;
         queue_create_infos.PushBack(queue_create_info);
     }
+}
+
+bool Rndr::Forge::Device::IsExtensionEnabled(const char* extension_name) const
+{
+    if (extension_name == nullptr)
+    {
+        return false;
+    }
+    for (const char* enabled : m_enabled_extensions)
+    {
+        if (strcmp(enabled, extension_name) == 0)
+        {
+            return true;
+        }
+    }
+    return false;
 }
 
 Rndr::Forge::Device::~Device()

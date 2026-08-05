@@ -284,10 +284,41 @@ Nothing in the repository issues one yet - the first real consumer is the comput
 instead by temporarily driving `modern-vulkan` with a buffer barrier and a memory barrier every frame, then
 with all three kinds through one `CmdBarriers`: no validation message either way, clean exit, probe removed.
 
-### 3.3 The rest of the draw calls
+### 3.3 The rest of the draw calls — DONE
 
-`CmdDraw` (non-indexed), `CmdDrawIndirect`, `CmdDrawIndexedIndirect`, and `CmdDrawMeshTasks` — the graphics
-pipeline desc already accepts task and mesh shaders that nothing can draw with.
+`CmdDraw`, `CmdDrawIndirect`, `CmdDrawIndexedIndirect` and `CmdDrawMeshTasks`. `DrawIndirectCommand` and
+`DrawIndexedIndirectCommand` name the buffer contents the way `DispatchIndirectCommand` does, so a caller
+fills an indirect buffer through a Forge struct instead of knowing the Vulkan layout.
+
+The checks the indirect commands share moved into one `ValidateIndirectRange`, which `CmdDispatchIndirect`
+now goes through as well - buffer usage, offset alignment, and that every command the device will read fits,
+written so neither the offset nor the span of the commands can overflow the sum and pass. Above one command
+it also checks the stride, since that is what turns a small buffer into an out of bounds read.
+
+`CmdDrawMeshTasks` is the one that cannot run here. Nothing enables `VK_EXT_mesh_shader` yet, and the
+important part is that a null check does not catch that: the loader hands out a callable trampoline for an
+extension command whether or not the device enabled it, so the first version of this crashed with an access
+violation instead of failing. It asks the device now, through the new `Device::IsExtensionEnabled`, which
+answers from the list that actually went to `vkCreateDevice` rather than from the desc, since the swap chain
+extension is added after the desc is copied. Enabling the extension is 3.6.
+
+Verified by counting what the GPU actually did rather than by the absence of validation messages. A probe
+storage buffer bound to the vertex shader took a `1` at each vertex index it saw, so the count of ones after
+a draw is exactly the set of vertices that draw processed. Wiped between passes, with the direct and the
+indirect path deliberately given different counts so that one could not be read as the other:
+
+- `CmdDrawIndexed` over the whole mesh: 2012 of 2012.
+- `CmdDraw(300)`: 300.
+- `CmdDrawIndirect`, 600 in the buffer: 600.
+- `CmdDrawIndexedIndirect`, whole mesh in the buffer: 2012.
+
+Each matches its own argument, and the two indirect ones match what was in their buffers rather than what the
+call site said, which is the thing worth proving. All six guards threw, `CmdDrawMeshTasks` included. Probe
+removed.
+
+Worth knowing for later: an early version of the probe drew `mesh.vertex_count` vertices non-indexed and
+reported 2010 of 2012, which reads like a bug and is not one - 2012 vertices as a triangle list is 670 whole
+triangles, and the two left over never form a primitive, so they never reach the vertex shader.
 
 ### 3.4 Copies, blits and readback
 
