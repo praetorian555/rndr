@@ -47,7 +47,7 @@ int main()
     Canvas::CubemapRenderer cubemap_renderer(Opal::Ref{context});
 
     // TODO: Replace with actual path to equirectangular image.
-    const Opal::StringUtf8 skybox_path = Opal::Paths::Combine(RNDR_CORE_ASSETS_DIR, "Panorama_Sky_04-512x512.png");
+    const Opal::StringUtf8 skybox_path = Opal::Paths::Combine(RNDR_CORE_ASSETS_DIR, "Panorama_Sky_04-512x512.png").GetValue();
     Canvas::TextureDesc skybox_desc;
     skybox_desc.use_mips = true;
     cubemap_renderer.SetEquirectangular(skybox_path, 0, skybox_desc);
@@ -58,12 +58,12 @@ int main()
         .wrap_v = Canvas::TextureWrap::Repeat,
     };
     const Opal::StringUtf8 helmet_path =
-        Opal::Paths::Combine(RNDR_CORE_ASSETS_DIR, "sample-models", "DamagedHelmet", "gltf", "DamagedHelmet.gltf");
+        Opal::Paths::Combine(RNDR_CORE_ASSETS_DIR, "sample-models", "DamagedHelmet", "gltf", "DamagedHelmet.gltf").GetValue();
     Canvas::PbrModel helmet_model = pbr_renderer.LoadModel(helmet_path, tex_desc, true);
 
     // Load default albedo texture for simple shapes.
-    Opal::StringUtf8 default_albedo_path = Opal::Paths::Combine(RNDR_CORE_ASSETS_DIR, "default-texture.png");
-    default_albedo_path = Opal::Paths::NormalizePath(std::move(default_albedo_path));
+    Opal::StringUtf8 default_albedo_path = Opal::Paths::Combine(RNDR_CORE_ASSETS_DIR, "default-texture.png").GetValue();
+    default_albedo_path = Opal::Paths::NormalizePath(std::move(default_albedo_path)).GetValue();
     Canvas::Texture default_albedo_texture = Canvas::Texture::FromFile(default_albedo_path, tex_desc, true);
 
     // Fly camera.
@@ -162,7 +162,7 @@ int main()
         const Matrix4x4f vp = controller.GetProjectionTransform() * controller.GetViewTransform();
 
         // Skybox (rendered first, no depth write).
-        const Matrix4x4f inverse_vp = Opal::Inverse(vp);
+        const Matrix4x4f inverse_vp = Opal::Inverse(vp).GetValue();
         cubemap_renderer.Render(draw_list, inverse_vp);
 
         pbr_renderer.BeginFrame();

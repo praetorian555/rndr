@@ -75,5 +75,5 @@ TEST_CASE("Orthographic", "ProjectionCamera")
 
     const Rndr::Matrix4x4f ref = Opal::Translate(Rndr::Vector3f{1.0f, 2.0f, 3.0f}) * Opal::Rotate(test_rotation);
     REQUIRE(camera.FromCameraToWorld() == ref);
-    REQUIRE(camera.FromWorldToCamera() == Opal::Inverse(ref));
+    REQUIRE(camera.FromWorldToCamera() == Opal::Inverse(ref).GetValue());
 }

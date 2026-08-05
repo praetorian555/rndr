@@ -48,7 +48,7 @@ Opal::u64 Opal::Hasher<Rndr::Canvas::PbrRenderer::BatchKey>::operator()(const Rn
 
 Rndr::Canvas::PbrRenderer::PbrRenderer(Opal::Ref<Context> context) : m_context(std::move(context))
 {
-    const Opal::StringUtf8 shader_path = Opal::Paths::Combine(RNDR_CORE_ASSETS_DIR, "shaders", "canvas-pbr.slang");
+    const Opal::StringUtf8 shader_path = Opal::Paths::Combine(RNDR_CORE_ASSETS_DIR, "shaders", "canvas-pbr.slang").GetValue();
     m_shader = Shader::FromSource(shader_path, "PBR Renderer");
     RNDR_ASSERT(m_shader.IsValid(), "Failed to create PbrRenderer shader!");
 
@@ -198,7 +198,7 @@ Rndr::Canvas::PbrRenderer::InstanceData Rndr::Canvas::PbrRenderer::MakeInstanceD
 {
     InstanceData data;
     data.model_transform = transform;
-    data.normal_transform = Opal::Transpose(Opal::Inverse(transform));
+    data.normal_transform = Opal::Transpose(Opal::Inverse(transform).GetValue());
     data.albedo_color = material.albedo_color;
     data.emissive_color = material.emissive_color;
     data.roughness = material.roughness;
@@ -486,7 +486,7 @@ Opal::StringUtf8 GetTexturePath(const aiMaterial* ai_material, aiTextureType typ
     if (aiGetMaterialTexture(ai_material, type, index, &out_texture_path, &out_texture_mapping, &out_uv_index, &out_blend, &out_texture_op,
                              out_texture_mode.GetData(), &out_texture_flags) == AI_SUCCESS)
     {
-        return Opal::Paths::NormalizePath(Opal::Paths::Combine(parent_path, out_texture_path.C_Str()));
+        return Opal::Paths::NormalizePath(Opal::Paths::Combine(parent_path, out_texture_path.C_Str()).GetValue()).GetValue();
     }
     return {};
 }
@@ -574,7 +574,7 @@ void LoadMaterialFromScene(const aiScene& ai_scene, Rndr::u32 material_index, co
     if (aiGetMaterialTexture(ai_material, AI_MATKEY_GLTF_PBRMETALLICROUGHNESS_METALLICROUGHNESS_TEXTURE, &mr_path, &mr_mapping, &mr_uv,
                              &mr_blend, &mr_op, mr_mode.GetData(), &mr_flags) == AI_SUCCESS)
     {
-        Opal::StringUtf8 mr_full_path = Opal::Paths::NormalizePath(Opal::Paths::Combine(parent_path, mr_path.C_Str()));
+        Opal::StringUtf8 mr_full_path = Opal::Paths::NormalizePath(Opal::Paths::Combine(parent_path, mr_path.C_Str()).GetValue()).GetValue();
         out_model.metallic_roughness_texture = Rndr::Canvas::Texture::FromFile(mr_full_path, texture_desc, flip_vertically);
     }
 

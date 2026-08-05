@@ -93,7 +93,7 @@ Opal::StringUtf8 Rndr::File::ReadEntireTextFile(const Opal::StringUtf8& file_pat
 
 Opal::StringUtf8 Rndr::File::ReadShader(const Opal::StringUtf8& ref_path, const Opal::StringUtf8& shader_path)
 {
-    const Opal::StringUtf8 full_path = Opal::Paths::Combine(ref_path, shader_path);
+    const Opal::StringUtf8 full_path = Opal::Paths::Combine(ref_path, shader_path).GetValue();
     if (!Opal::Exists(full_path))
     {
         RNDR_LOG_ERROR("Shader file {} does not exist!", full_path.GetData());

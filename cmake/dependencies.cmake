@@ -7,7 +7,7 @@ if (NOT TARGET opal)
     cpmaddpackage(
             NAME opal
             GIT_REPOSITORY https://github.com/praetorian555/opal
-            GIT_TAG opal-0.3.7
+            GIT_TAG opal-0.4.0
             OPTIONS
             "OPAL_BUILD_TESTS OFF"
             "OPAL_HARDENING ${RNDR_HARDENING}"

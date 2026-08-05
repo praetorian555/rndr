@@ -17,7 +17,7 @@ bool Rndr::Canvas::BitmapTextRenderer::Init(Opal::Ref<Context> context, const Bi
 
     UpdateFontAtlas();
 
-    const Opal::StringUtf8 shader_path = Opal::Paths::Combine(RNDR_CORE_ASSETS_DIR, "shaders", "bitmap-text-render.slang");
+    const Opal::StringUtf8 shader_path = Opal::Paths::Combine(RNDR_CORE_ASSETS_DIR, "shaders", "bitmap-text-render.slang").GetValue();
     m_shader = Shader::FromSource(shader_path, "Bitmap Text Renderer");
     RNDR_ASSERT(m_shader.IsValid(), "Shader could not be created!");
 

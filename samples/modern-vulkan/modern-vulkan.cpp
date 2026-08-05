@@ -76,7 +76,7 @@ void Run()
 
     Rndr::Forge::SwapChain swap_chain(device, surface, {.use_depth = true, .depth_pixel_format = Rndr::PixelFormat::D32_SFLOAT});
 
-    const Opal::StringUtf8 mesh_path = Opal::Paths::Combine(RNDR_CORE_ASSETS_DIR, "sample-models", "Suzanne", "glTF", "Suzanne.gltf");
+    const Opal::StringUtf8 mesh_path = Opal::Paths::Combine(RNDR_CORE_ASSETS_DIR, "sample-models", "Suzanne", "glTF", "Suzanne.gltf").GetValue();
     Rndr::Forge::Mesh mesh;
     Rndr::Forge::LoadMesh(mesh_path, mesh);
     Opal::DynamicArray<Rndr::u8> combined_vertex_index_data;
@@ -129,8 +129,8 @@ void Run()
         command_buffers.EmplaceBack(device, graphics_queue);
     }
 
-    const Opal::StringUtf8 albedo_texture_path = Opal::Paths::Combine(RNDR_CORE_ASSETS_DIR, "sample-models", "Suzanne", "glTF", "Suzanne_BaseColor.png");
-    const Opal::StringUtf8 metallic_roughness_texture_path = Opal::Paths::Combine(RNDR_CORE_ASSETS_DIR, "sample-models", "Suzanne", "glTF", "Suzanne_MetallicRoughness.png");
+    const Opal::StringUtf8 albedo_texture_path = Opal::Paths::Combine(RNDR_CORE_ASSETS_DIR, "sample-models", "Suzanne", "glTF", "Suzanne_BaseColor.png").GetValue();
+    const Opal::StringUtf8 metallic_roughness_texture_path = Opal::Paths::Combine(RNDR_CORE_ASSETS_DIR, "sample-models", "Suzanne", "glTF", "Suzanne_MetallicRoughness.png").GetValue();
     const Rndr::Bitmap albedo_bitmap = Rndr::File::LoadImage(albedo_texture_path, true, true);
     const Rndr::Bitmap mr_bitmap = Rndr::File::LoadImage(metallic_roughness_texture_path, true, true);
     Rndr::Forge::Texture albedo_texture(device, graphics_queue, albedo_bitmap);
@@ -167,7 +167,7 @@ void Run()
     update_bindings.PushBack(std::move(binding2));
     descriptor_set.UpdateDescriptorSets(update_bindings);
 
-    const Opal::StringUtf8 shader_path = Opal::Paths::Combine(RNDR_CORE_ASSETS_DIR, "shaders", "modern-vulkan.slang");
+    const Opal::StringUtf8 shader_path = Opal::Paths::Combine(RNDR_CORE_ASSETS_DIR, "shaders", "modern-vulkan.slang").GetValue();
     const Rndr::Forge::Shader vertex_shader = Rndr::Forge::Shader::FromSource(device, shader_path, {.entry_point = "main_vertex"});
     const Rndr::Forge::Shader fragment_shader = Rndr::Forge::Shader::FromSource(device, shader_path, {.entry_point = "main_fragment"});
 

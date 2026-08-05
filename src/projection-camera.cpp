@@ -9,7 +9,7 @@
 Rndr::ProjectionCamera::ProjectionCamera(const Matrix4x4f& world_to_camera, int screen_width, int screen_height,
                                          const ProjectionCameraDesc& desc)
     : m_world_to_camera(world_to_camera),
-      m_camera_to_world(Opal::Inverse(world_to_camera)),
+      m_camera_to_world(Opal::Inverse(world_to_camera).GetValue()),
       m_screen_width(screen_width),
       m_screen_height(screen_height),
       m_desc(desc)
@@ -22,7 +22,7 @@ Rndr::ProjectionCamera::ProjectionCamera(const Point3f& position, const Quaterni
     : m_position(position), m_rotation(rotation), m_screen_width(screen_width), m_screen_height(screen_height), m_desc(desc)
 {
     m_camera_to_world = Opal::Translate(m_position) * Opal::Rotate(m_rotation);
-    m_world_to_camera = Opal::Inverse(m_camera_to_world);
+    m_world_to_camera = Opal::Inverse(m_camera_to_world).GetValue();
     UpdateTransforms();
 }
 
@@ -30,7 +30,7 @@ void Rndr::ProjectionCamera::SetPosition(const Point3f& position)
 {
     m_position = position;
     m_camera_to_world = Opal::Translate(m_position) * Opal::Rotate(m_rotation);
-    m_world_to_camera = Opal::Inverse(m_camera_to_world);
+    m_world_to_camera = Opal::Inverse(m_camera_to_world).GetValue();
     UpdateTransforms();
 }
 
@@ -38,7 +38,7 @@ void Rndr::ProjectionCamera::SetRotation(const Quaternionf& rotation)
 {
     m_rotation = rotation;
     m_camera_to_world = Opal::Translate(m_position) * Opal::Rotate(m_rotation);
-    m_world_to_camera = Opal::Inverse(m_camera_to_world);
+    m_world_to_camera = Opal::Inverse(m_camera_to_world).GetValue();
     UpdateTransforms();
 }
 
@@ -47,7 +47,7 @@ void Rndr::ProjectionCamera::SetPositionAndRotation(const Point3f& position, con
     m_position = position;
     m_rotation = rotation;
     m_camera_to_world = Opal::Translate(m_position) * Opal::Rotate(m_rotation);
-    m_world_to_camera = Opal::Inverse(m_camera_to_world);
+    m_world_to_camera = Opal::Inverse(m_camera_to_world).GetValue();
     UpdateTransforms();
 }
 
@@ -75,16 +75,16 @@ void Rndr::ProjectionCamera::SetVerticalFOV(float fov)
 void Rndr::ProjectionCamera::UpdateTransforms()
 {
     m_camera_to_ndc = GetProjectionTransform();
-    m_ndc_to_camera = Opal::Inverse(m_camera_to_ndc);
+    m_ndc_to_camera = Opal::Inverse(m_camera_to_ndc).GetValue();
 
     m_world_to_ndc = m_camera_to_ndc * m_world_to_camera;
-    m_ndc_to_world = Opal::Inverse(m_world_to_ndc);
+    m_ndc_to_world = Opal::Inverse(m_world_to_ndc).GetValue();
 }
 
 void Rndr::ProjectionCamera::SetWorldToCamera(const Matrix4x4f& world_to_camera)
 {
     m_world_to_camera = world_to_camera;
-    m_camera_to_world = Opal::Inverse(m_world_to_camera);
+    m_camera_to_world = Opal::Inverse(m_world_to_camera).GetValue();
     UpdateTransforms();
 }
 
