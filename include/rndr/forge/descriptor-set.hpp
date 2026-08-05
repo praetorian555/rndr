@@ -83,7 +83,8 @@ struct DescriptorSetUpdateBinding
     {
         Opal::Ref<Buffer> buffer;
         u64 offset = 0;
-        u64 size = 0;
+        /** Bytes visible to the shader, starting at offset. k_whole_buffer covers the rest of the buffer. */
+        u64 size = k_whole_buffer;
         OPAL_CLONE_FIELDS(buffer, offset, size);
     };
     struct ImageInfo : Opal::ClonableBase<ImageInfo>

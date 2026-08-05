@@ -380,6 +380,8 @@ void Rndr::Forge::DescriptorSet::Destroy()
 
 void Rndr::Forge::DescriptorSet::UpdateDescriptorSets(Opal::ArrayView<const DescriptorSetUpdateBinding> updates)
 {
+    // One slot per update in each array, written by index. PushBack would grow them past the size they were
+    // built with, and the pointers already handed to earlier writes would follow the old allocation.
     Opal::DynamicArray<VkWriteDescriptorSet> descriptor_writes(updates.GetSize());
     Opal::DynamicArray<VkDescriptorBufferInfo> buffer_infos(updates.GetSize());
     Opal::DynamicArray<VkDescriptorImageInfo> image_infos(updates.GetSize());
@@ -398,17 +400,30 @@ void Rndr::Forge::DescriptorSet::UpdateDescriptorSets(Opal::ArrayView<const Desc
         {
             const DescriptorSetUpdateBinding::BufferInfo& buffer_info =
                 updates[i].resource_info.Get<DescriptorSetUpdateBinding::BufferInfo>();
-            buffer_infos.PushBack({.buffer = buffer_info.buffer->GetNativeBuffer(), .offset = 0, .range = buffer_info.buffer->GetSize()});
-            descriptor_write.pBufferInfo = &buffer_infos.Back();
+            const u64 buffer_size = buffer_info.buffer->GetSize();
+            if (buffer_info.size == 0)
+            {
+                throw Opal::Exception("Descriptor buffer range is empty!");
+            }
+            // Written so that a large offset cannot overflow the sum and pass, the way Buffer::Update checks it.
+            if (buffer_info.offset > buffer_size ||
+                (buffer_info.size != k_whole_buffer && buffer_info.size > buffer_size - buffer_info.offset))
+            {
+                throw Opal::Exception("Descriptor buffer range reaches past the end of the buffer!");
+            }
+            buffer_infos[i] = {.buffer = buffer_info.buffer->GetNativeBuffer(),
+                               .offset = buffer_info.offset,
+                               .range = buffer_info.size == k_whole_buffer ? VK_WHOLE_SIZE : buffer_info.size};
+            descriptor_write.pBufferInfo = &buffer_infos[i];
         }
         else
         {
             const DescriptorSetUpdateBinding::ImageInfo& image_info =
                 updates[i].resource_info.Get<DescriptorSetUpdateBinding::ImageInfo>();
-            image_infos.PushBack({.sampler = image_info.sampler->GetNativeSampler(),
-                                  .imageView = image_info.image->GetNativeImageView(),
-                                  .imageLayout = static_cast<VkImageLayout>(image_info.image_layout)});
-            descriptor_write.pImageInfo = &image_infos.Back();
+            image_infos[i] = {.sampler = image_info.sampler->GetNativeSampler(),
+                              .imageView = image_info.image->GetNativeImageView(),
+                              .imageLayout = static_cast<VkImageLayout>(image_info.image_layout)};
+            descriptor_write.pImageInfo = &image_infos[i];
         }
         descriptor_write.pTexelBufferView = nullptr;
     }

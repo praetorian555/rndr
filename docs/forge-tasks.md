@@ -101,6 +101,25 @@ validation error on every transition of every frame.
 Both fields are now written explicitly, in one `ToVkImageBarrier` the single and the batched path share.
 Actual ownership transfer between families is part of 3.12.
 
+### 1.9 Fix the resource pointers and the buffer range in `UpdateDescriptorSets` — DONE
+
+`buffer_infos` and `image_infos` were built with one element per update and then `PushBack`-ed into, so they
+grew past the size they were constructed with and the `pBufferInfo` / `pImageInfo` pointers already handed to
+earlier writes followed the old allocation. Opal's `DynamicArray(count)` sets capacity equal to count and
+grows by 1.5x, so the first push reallocates and a later one reallocates again once the pushes pass
+`1.5n + 1` — five updates was enough. Both arrays are now written by index, which is what the pre-sizing was
+for.
+
+Measured rather than assumed: with five updates the old code left three of the five writes pointing into a
+freed block, and the validation layer said nothing, because the read happens inside the driver where neither
+it nor AddressSanitizer instruments it. Only a range check against the live array caught it.
+
+`DescriptorSetUpdateBinding::BufferInfo::offset` and `::size` were ignored - every write named the whole
+buffer from zero. They are honoured now, with `size` defaulting to `k_whole_buffer` the way
+`BufferBarrier::size` already does, so an unset field keeps meaning the whole buffer. A range reaching past
+the end of the buffer throws, written so a large offset cannot overflow the sum and pass, and a zero size
+throws rather than reaching `vkUpdateDescriptorSets`, where a zero range is invalid.
+
 ---
 
 ## Priority 2 — Shape of the API
