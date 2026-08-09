@@ -199,6 +199,26 @@ public:
     void UpdateLayer(const Opal::ArrayView<const u8>& data, i32 layer, i32 mip_level = 0) const;
 
     /**
+     * Upload pixel data to a sub-region of one layer of a Texture2DArray, or of one face of a CubeMap, at a
+     * mip level. The layer equivalent of UpdateRegion: a caller that packs many small items into a layer -- a
+     * glyph atlas page, a sprite sheet -- updates only what changed instead of re-uploading the whole layer.
+     * @param data Pixel data to upload. Must be exactly width * height * pixel_size bytes, rows tightly packed
+     *        top-to-bottom with no padding.
+     * @param layer Array layer index for Texture2DArray, or face index [0, 5] for CubeMap.
+     * @param x Left edge of the target region, in texels.
+     * @param y Top edge of the target region, in texels.
+     * @param width Width of the target region, in texels.
+     * @param height Height of the target region, in texels.
+     * @param mip_level Target mip level. Defaults to 0.
+     * @throw Opal::InvalidArgumentException if the texture is not a Texture2DArray or CubeMap, the layer or mip
+     *        level is out of bounds, the region falls outside the mip dimensions, or the data size does not
+     *        match the region.
+     * @throw GraphicsAPIException if the texture is invalid or multi-sample.
+     */
+    void UpdateLayerRegion(const Opal::ArrayView<const u8>& data, i32 layer, i32 x, i32 y, i32 width, i32 height,
+                           i32 mip_level = 0) const;
+
+    /**
      * Read back the entire mip level of a single-sample Texture2D into CPU memory.
      * @param mip_level Mip level to read. Defaults to 0.
      * @return Pixel data, mip_width * mip_height * pixel_size bytes.
