@@ -86,7 +86,8 @@ if (${RNDR_BUILD_TESTS})
                 test/canvas/shader-test.cpp
                 test/canvas/mesh-test.cpp
                 test/canvas/brush-test.cpp
-                test/canvas/bitmap-test.cpp)
+                test/canvas/bitmap-test.cpp
+                test/canvas/timestamp-query-test.cpp)
     endif ()
     add_executable(rndr-test ${RNDR_TEST_FILES})
     rndr_deploy_runtime(rndr-test)

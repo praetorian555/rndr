@@ -16,6 +16,7 @@ class Mesh;
 class Brush;
 class Context;
 class RenderTarget;
+class TimestampQuery;
 struct DrawCommand;
 struct DrawIndexedCommand;
 template <typename T>
@@ -125,6 +126,12 @@ struct BlitTargetCommand : Opal::ClonableBase<BlitTargetCommand>
                       filter);
 };
 
+struct WriteTimestampCommand : Opal::ClonableBase<WriteTimestampCommand>
+{
+    Opal::Ref<TimestampQuery> query;
+    OPAL_CLONE_FIELDS(query);
+};
+
 struct BeginEventCommand
 {
     const char* event_name;
@@ -137,7 +144,7 @@ struct EndEventCommand
 
 using CommandVariant = Opal::Variant<SetViewportCommand, SetRenderTargetCommand, SetContextCommand, DrawMeshCommand,
                                      DrawMeshInstancedCommand, DispatchCommand, ClearCommand, BlitCommand, BlitTargetCommand,
-                                     BeginEventCommand, EndEventCommand>;
+                                     WriteTimestampCommand, BeginEventCommand, EndEventCommand>;
 
 }  // namespace Impl
 
@@ -330,6 +337,12 @@ public:
      */
     void Blit(const RenderTarget& source, i32 src_x, i32 src_y, i32 src_width, i32 src_height, const Context& destination,
               i32 dst_x, i32 dst_y, i32 dst_width, i32 dst_height, TextureFilter filter = TextureFilter::Linear);
+
+    /**
+     * Record a GPU timestamp at this point in the command stream. The query must remain valid until
+     * Execute() is called. Bracket work with two of these to measure how long the GPU spent on it.
+     */
+    void WriteTimestamp(TimestampQuery& query);
 
     void BeginEvent(const char* event_name);
     void EndEvent(const char* event_name);

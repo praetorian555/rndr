@@ -11,3 +11,4 @@
 #include "rndr/canvas/draw-command-buffer.hpp"
 #include "rndr/canvas/draw-list.hpp"
 #include "rndr/canvas/compute-list.hpp"
+#include "rndr/canvas/timestamp-query.hpp"

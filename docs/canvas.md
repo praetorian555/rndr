@@ -59,6 +59,9 @@ draw_list.BeginEvent("Shadow Pass");
 // ... draws ...
 draw_list.EndEvent("Shadow Pass");
 
+// GPU timestamps.
+draw_list.WriteTimestamp(query);
+
 // Execute all recorded commands and reset.
 draw_list.Execute();
 ```
@@ -332,6 +335,32 @@ compute_list.Dispatch(compute_shader, 64, 64, 1);
 compute_list.Execute();
 ```
 
+### TimestampQuery
+
+GPU timestamp query. Records the moment the GPU reaches a point in the command stream, so you can measure how long GPU work took rather than how long the CPU took to submit it. One query is one point in time -- measuring a range takes two.
+
+```cpp
+Canvas::TimestampQuery start("FrameStart");
+Canvas::TimestampQuery end("FrameEnd");
+
+draw_list.WriteTimestamp(start);
+draw_list.Draw(mesh, brush);
+draw_list.WriteTimestamp(end);
+draw_list.Execute();
+
+// Later, once the GPU has caught up.
+if (end.IsResultAvailable())
+{
+    const Rndr::f64 gpu_ms = Canvas::GetElapsedMilliseconds(start, end);
+}
+```
+
+`Record()` writes a timestamp immediately instead of going through a DrawList, which is handy around code that does not record commands (for example a `Present()`).
+
+Results are not ready when the query is recorded -- they arrive once the GPU executes that point in the stream. `GetResult()` blocks until then and stalls the pipeline; `IsResultAvailable()` and `TryGetResult()` do not. Read timings a frame or two late, keeping one query pair per frame in flight.
+
+Timestamps are in nanoseconds with an implementation-defined origin, so only differences are meaningful. Like all OpenGL query objects, a query belongs to the context that created it and is not shared with other contexts.
+
 ### DrawCommandBuffer
 
 Fixed-layout buffer for indirect draw commands. Templated on `DrawCommand` (non-indexed) or `DrawIndexedCommand` (indexed). Indirect drawing is currently commented out in the DrawList but the buffer types are available.
@@ -520,7 +549,7 @@ while (running)
 
 ## Design Notes
 
-- **Move-only semantics** -- GPU resources (Context, Shader, Texture, Buffer, Mesh, RenderTarget, Brush) use move-only semantics to prevent accidental resource duplication. Use `Clone()` for explicit deep copies.
+- **Move-only semantics** -- GPU resources (Context, Shader, Texture, Buffer, Mesh, RenderTarget, Brush, TimestampQuery) use move-only semantics to prevent accidental resource duplication. Use `Clone()` for explicit deep copies.
 - **RAII** -- All GPU resources are released in destructors. Call `Destroy()` for early release.
 - **Single-use command lists** -- DrawList and ComputeList record commands then execute and reset. The list objects themselves are reusable across frames.
 - **Reflection-driven UBO management** -- The Brush automatically creates GPU uniform buffers from shader reflection, removing the need to manually manage UBO layouts.

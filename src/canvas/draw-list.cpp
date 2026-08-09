@@ -6,6 +6,7 @@
 #include "rndr/canvas/context.hpp"
 #include "rndr/canvas/mesh.hpp"
 #include "rndr/canvas/render-target.hpp"
+#include "rndr/canvas/timestamp-query.hpp"
 #include "rndr/trace.hpp"
 
 void Rndr::Canvas::DrawList::SetViewport(i32 x, i32 y, i32 width, i32 height)
@@ -204,6 +205,13 @@ void Rndr::Canvas::DrawList::BlitTarget(const RenderTarget& source, i32 src_x, i
     m_commands.PushBack(std::move(cmd));
 }
 
+void Rndr::Canvas::DrawList::WriteTimestamp(TimestampQuery& query)
+{
+    Impl::WriteTimestampCommand cmd;
+    cmd.query = &query;
+    m_commands.PushBack(std::move(cmd));
+}
+
 void Rndr::Canvas::DrawList::BeginEvent(const char* event_name)
 {
     m_commands.EmplaceBack<Impl::BeginEventCommand>({event_name});
@@ -321,6 +329,10 @@ void Rndr::Canvas::DrawList::Execute()
                 glBlitNamedFramebuffer(c.source->GetNativeHandle(), c.destination_handle, c.src_x, c.src_y, c.src_x + c.src_width,
                                        c.src_y + c.src_height, c.dst_x, c.dst_y, c.dst_x + c.dst_width, c.dst_y + c.dst_height,
                                        GL_COLOR_BUFFER_BIT, filter);
+            },
+            [](const Impl::WriteTimestampCommand& c)
+            {
+                c.query->Record();
             },
             [](const Impl::BeginEventCommand& c)
             {
