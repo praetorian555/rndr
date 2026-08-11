@@ -245,7 +245,7 @@ ssbo.Update(new_data);
 
 ### RenderTarget
 
-Off-screen surface for rendering to textures. Supports up to 4 color attachments and an optional depth/stencil attachment. Color attachments can be sampled as textures for post-processing.
+Off-screen surface for rendering to textures. Supports up to 4 color attachments and an optional depth/stencil attachment. Color attachments can be sampled as textures for post-processing. Attachments are either created and owned by the render target, or borrowed from textures the caller owns.
 
 ```cpp
 auto rt_desc = Canvas::RenderTargetDesc()
@@ -263,6 +263,54 @@ draw_list.Execute();
 
 // Sample the color attachment as a texture.
 post_brush.SetTexture("scene_color", target.GetColorAttachment(0));
+```
+
+#### Rendering into an existing texture
+
+`AddColor` and `SetDepthStencil` also accept a `Texture` the caller already owns. The render target
+renders into it without taking ownership -- destroying the render target leaves the texture intact, and
+the texture must outlive the render target.
+
+Both overloads take an optional mip level and layer. A negative layer, the default, renders into the
+whole texture; a non-negative layer selects one array layer or one cube map face.
+
+```cpp
+Canvas::TextureDesc face_desc;
+face_desc.width = 512;
+face_desc.height = 512;
+face_desc.type = Canvas::TextureType::CubeMap;
+Canvas::Texture cubemap(face_desc);
+
+for (Rndr::i32 face = 0; face < 6; ++face)
+{
+    // Render into one face of a cubemap the caller owns.
+    auto face_target = Canvas::RenderTargetDesc().AddColor(cubemap, 0, face);
+    Canvas::RenderTarget target(face_target, "CubeFace");
+
+    draw_list.SetRenderTarget(target);
+    // ... render the face ...
+    draw_list.Execute();
+}
+```
+
+The render target reports `GetWidth()` / `GetHeight()` for the attached mip level, so rendering into
+mip 2 of a 1024x1024 texture reports 256x256.
+
+#### Depth-only render targets
+
+A render target with a depth/stencil attachment needs no color attachment. Color output is disabled,
+which is what a shadow map pass wants.
+
+```cpp
+auto shadow_desc = Canvas::RenderTargetDesc().SetDepthStencil(2048, 2048, Canvas::Format::D32F);
+Canvas::RenderTarget shadow_map(shadow_desc, "ShadowMap");
+
+draw_list.SetRenderTarget(shadow_map);
+draw_list.ClearDepthStencil();
+// ... render occluders ...
+draw_list.Execute();
+
+lighting_brush.SetTexture("shadow_map", shadow_map.GetDepthStencilAttachment());
 ```
 
 ### Bitmap

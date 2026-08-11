@@ -254,6 +254,10 @@ public:
 
     [[nodiscard]] bool IsValid() const;
     [[nodiscard]] const TextureDesc& GetDesc() const;
+
+    /** Number of mip levels the texture was allocated with. 1 when mips are disabled. */
+    [[nodiscard]] i32 GetMipLevelCount() const;
+
     [[nodiscard]] const Opal::StringUtf8& GetName() const;
     [[nodiscard]] u32 GetNativeHandle() const;
 

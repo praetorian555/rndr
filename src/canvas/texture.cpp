@@ -957,6 +957,11 @@ const Rndr::Canvas::TextureDesc& Rndr::Canvas::Texture::GetDesc() const
     return m_desc;
 }
 
+Rndr::i32 Rndr::Canvas::Texture::GetMipLevelCount() const
+{
+    return m_max_mip_levels;
+}
+
 const Opal::StringUtf8& Rndr::Canvas::Texture::GetName() const
 {
     return m_name;

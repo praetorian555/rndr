@@ -86,6 +86,24 @@ TEST_CASE("Canvas RenderTargetDesc builder", "[canvas][render-target]")
         REQUIRE(desc.depth_stencil_attachment.format == Rndr::Canvas::Format::D32F);
     }
 
+    SECTION("Attachment description Clone copies inherited and external fields")
+    {
+        Rndr::Canvas::RenderTargetAttachmentDesc attachment;
+        attachment.width = 128;
+        attachment.height = 64;
+        attachment.format = Rndr::Canvas::Format::RGBA16F;
+        attachment.mip_level = 2;
+        attachment.layer = 3;
+
+        Rndr::Canvas::RenderTargetAttachmentDesc clone = attachment.Clone();
+        REQUIRE(clone.width == 128);
+        REQUIRE(clone.height == 64);
+        REQUIRE(clone.format == Rndr::Canvas::Format::RGBA16F);
+        REQUIRE(clone.mip_level == 2);
+        REQUIRE(clone.layer == 3);
+        REQUIRE_FALSE(clone.texture.IsValid());
+    }
+
     SECTION("Chaining")
     {
         Rndr::Canvas::RenderTargetDesc desc;
@@ -132,7 +150,7 @@ TEST_CASE("Canvas RenderTarget", "[canvas][render-target]")
         REQUIRE(rt.GetName() == "TestRT");
     }
 
-    SECTION("Empty color attachments throws")
+    SECTION("No color and no depth/stencil attachment throws")
     {
         Rndr::Canvas::RenderTargetDesc desc;
         REQUIRE_THROWS(Rndr::Canvas::RenderTarget(desc));
@@ -290,5 +308,316 @@ TEST_CASE("Canvas RenderTarget", "[canvas][render-target]")
         Rndr::Canvas::RenderTarget rt;
         Rndr::Canvas::RenderTarget clone = rt.Clone();
         REQUIRE_FALSE(clone.IsValid());
+    }
+}
+
+TEST_CASE("Canvas RenderTarget with external textures", "[canvas][render-target]")
+{
+    RenderTargetTestFixture f;
+
+    SECTION("External color texture")
+    {
+        Rndr::Canvas::TextureDesc tex_desc;
+        tex_desc.width = 64;
+        tex_desc.height = 64;
+        Rndr::Canvas::Texture color(tex_desc);
+        REQUIRE(color.IsValid());
+
+        Rndr::Canvas::RenderTargetDesc desc;
+        desc.AddColor(color);
+
+        Rndr::Canvas::RenderTarget rt(desc);
+        REQUIRE(rt.IsValid());
+        REQUIRE(rt.GetWidth() == 64);
+        REQUIRE(rt.GetHeight() == 64);
+        REQUIRE(rt.GetColorAttachmentCount() == 1);
+        REQUIRE(rt.IsColorAttachmentExternal(0));
+        REQUIRE(rt.GetColorAttachment(0).GetNativeHandle() == color.GetNativeHandle());
+    }
+
+    SECTION("External depth/stencil texture")
+    {
+        const Rndr::Canvas::Format depth_formats[] = {Rndr::Canvas::Format::D24S8, Rndr::Canvas::Format::D32F};
+
+        for (auto fmt : depth_formats)
+        {
+            Rndr::Canvas::TextureDesc depth_desc;
+            depth_desc.width = 64;
+            depth_desc.height = 64;
+            depth_desc.format = fmt;
+            Rndr::Canvas::Texture depth(depth_desc);
+            REQUIRE(depth.IsValid());
+
+            Rndr::Canvas::RenderTargetDesc desc;
+            desc.AddColor(64, 64).SetDepthStencil(depth);
+
+            Rndr::Canvas::RenderTarget rt(desc);
+            REQUIRE(rt.IsValid());
+            REQUIRE(rt.IsDepthStencilExternal());
+            REQUIRE_FALSE(rt.IsColorAttachmentExternal(0));
+            REQUIRE(rt.GetDepthStencilAttachment().GetNativeHandle() == depth.GetNativeHandle());
+        }
+    }
+
+    SECTION("External color and external depth")
+    {
+        Rndr::Canvas::TextureDesc color_desc;
+        color_desc.width = 32;
+        color_desc.height = 32;
+        Rndr::Canvas::Texture color(color_desc);
+
+        Rndr::Canvas::TextureDesc depth_desc;
+        depth_desc.width = 32;
+        depth_desc.height = 32;
+        depth_desc.format = Rndr::Canvas::Format::D24S8;
+        Rndr::Canvas::Texture depth(depth_desc);
+
+        Rndr::Canvas::RenderTargetDesc desc;
+        desc.AddColor(color).SetDepthStencil(depth);
+
+        Rndr::Canvas::RenderTarget rt(desc);
+        REQUIRE(rt.IsValid());
+        REQUIRE(rt.IsColorAttachmentExternal(0));
+        REQUIRE(rt.IsDepthStencilExternal());
+    }
+
+    SECTION("Destroying the render target leaves the external texture alive")
+    {
+        Rndr::Canvas::TextureDesc tex_desc;
+        tex_desc.width = 32;
+        tex_desc.height = 32;
+        Rndr::Canvas::Texture color(tex_desc);
+        const Rndr::u32 color_handle = color.GetNativeHandle();
+
+        {
+            Rndr::Canvas::RenderTargetDesc desc;
+            desc.AddColor(color);
+            Rndr::Canvas::RenderTarget rt(desc);
+            REQUIRE(rt.IsValid());
+            rt.Destroy();
+            REQUIRE_FALSE(rt.IsValid());
+        }
+
+        REQUIRE(color.IsValid());
+        REQUIRE(color.GetNativeHandle() == color_handle);
+        // Still usable: reattach it to a new render target.
+        Rndr::Canvas::RenderTargetDesc desc2;
+        desc2.AddColor(color);
+        Rndr::Canvas::RenderTarget rt2(desc2);
+        REQUIRE(rt2.IsValid());
+    }
+
+    SECTION("Moved-from render target leaves the external texture alive")
+    {
+        Rndr::Canvas::TextureDesc tex_desc;
+        tex_desc.width = 32;
+        tex_desc.height = 32;
+        Rndr::Canvas::Texture color(tex_desc);
+
+        Rndr::Canvas::RenderTargetDesc desc;
+        desc.AddColor(color);
+
+        Rndr::Canvas::RenderTarget rt(desc);
+        Rndr::Canvas::RenderTarget moved(std::move(rt));
+        REQUIRE(moved.IsValid());
+        REQUIRE(moved.IsColorAttachmentExternal(0));
+        REQUIRE(color.IsValid());
+    }
+
+    SECTION("Depth only render target")
+    {
+        Rndr::Canvas::RenderTargetDesc desc;
+        desc.SetDepthStencil(128, 64, Rndr::Canvas::Format::D32F);
+
+        Rndr::Canvas::RenderTarget rt(desc, "ShadowMap");
+        REQUIRE(rt.IsValid());
+        REQUIRE(rt.GetColorAttachmentCount() == 0);
+        REQUIRE(rt.GetWidth() == 128);
+        REQUIRE(rt.GetHeight() == 64);
+        REQUIRE(rt.GetDepthStencilAttachment().IsValid());
+    }
+
+    SECTION("Depth only render target with external texture")
+    {
+        Rndr::Canvas::TextureDesc depth_desc;
+        depth_desc.width = 64;
+        depth_desc.height = 64;
+        depth_desc.format = Rndr::Canvas::Format::D32F;
+        Rndr::Canvas::Texture depth(depth_desc);
+
+        Rndr::Canvas::RenderTargetDesc desc;
+        desc.SetDepthStencil(depth);
+
+        Rndr::Canvas::RenderTarget rt(desc);
+        REQUIRE(rt.IsValid());
+        REQUIRE(rt.GetColorAttachmentCount() == 0);
+        REQUIRE(rt.IsDepthStencilExternal());
+    }
+
+    SECTION("External cube map face")
+    {
+        Rndr::Canvas::TextureDesc tex_desc;
+        tex_desc.width = 32;
+        tex_desc.height = 32;
+        tex_desc.type = Rndr::Canvas::TextureType::CubeMap;
+        Rndr::Canvas::Texture cube(tex_desc);
+        REQUIRE(cube.IsValid());
+
+        for (Rndr::i32 face = 0; face < 6; ++face)
+        {
+            Rndr::Canvas::RenderTargetDesc desc;
+            desc.AddColor(cube, 0, face);
+
+            Rndr::Canvas::RenderTarget rt(desc);
+            REQUIRE(rt.IsValid());
+            REQUIRE(rt.GetWidth() == 32);
+        }
+    }
+
+    SECTION("External array layer")
+    {
+        Rndr::Canvas::TextureDesc tex_desc;
+        tex_desc.width = 32;
+        tex_desc.height = 32;
+        tex_desc.array_size = 4;
+        tex_desc.type = Rndr::Canvas::TextureType::Texture2DArray;
+        Rndr::Canvas::Texture array_tex(tex_desc);
+        REQUIRE(array_tex.IsValid());
+
+        Rndr::Canvas::RenderTargetDesc desc;
+        desc.AddColor(array_tex, 0, 3);
+
+        Rndr::Canvas::RenderTarget rt(desc);
+        REQUIRE(rt.IsValid());
+    }
+
+    SECTION("External mip level reports the mip dimensions")
+    {
+        Rndr::Canvas::TextureDesc tex_desc;
+        tex_desc.width = 64;
+        tex_desc.height = 64;
+        tex_desc.use_mips = true;
+        Rndr::Canvas::Texture color(tex_desc);
+        REQUIRE(color.GetMipLevelCount() > 2);
+
+        Rndr::Canvas::RenderTargetDesc desc;
+        desc.AddColor(color, 2);
+
+        Rndr::Canvas::RenderTarget rt(desc);
+        REQUIRE(rt.IsValid());
+        REQUIRE(rt.GetWidth() == 16);
+        REQUIRE(rt.GetHeight() == 16);
+    }
+
+    SECTION("Invalid external texture throws")
+    {
+        Rndr::Canvas::Texture empty;
+        Rndr::Canvas::RenderTargetDesc desc;
+        desc.AddColor(empty);
+        REQUIRE_THROWS(Rndr::Canvas::RenderTarget(desc));
+    }
+
+    SECTION("Out of bounds mip level throws")
+    {
+        Rndr::Canvas::TextureDesc tex_desc;
+        tex_desc.width = 32;
+        tex_desc.height = 32;
+        Rndr::Canvas::Texture color(tex_desc);
+
+        Rndr::Canvas::RenderTargetDesc desc;
+        desc.AddColor(color, 4);
+        REQUIRE_THROWS(Rndr::Canvas::RenderTarget(desc));
+    }
+
+    SECTION("Out of bounds layer throws")
+    {
+        Rndr::Canvas::TextureDesc tex_desc;
+        tex_desc.width = 32;
+        tex_desc.height = 32;
+        tex_desc.array_size = 2;
+        tex_desc.type = Rndr::Canvas::TextureType::Texture2DArray;
+        Rndr::Canvas::Texture array_tex(tex_desc);
+
+        Rndr::Canvas::RenderTargetDesc desc;
+        desc.AddColor(array_tex, 0, 2);
+        REQUIRE_THROWS(Rndr::Canvas::RenderTarget(desc));
+    }
+
+    SECTION("Layer on a Texture2D throws")
+    {
+        Rndr::Canvas::TextureDesc tex_desc;
+        tex_desc.width = 32;
+        tex_desc.height = 32;
+        Rndr::Canvas::Texture color(tex_desc);
+
+        Rndr::Canvas::RenderTargetDesc desc;
+        desc.AddColor(color, 0, 0);
+        REQUIRE_THROWS(Rndr::Canvas::RenderTarget(desc));
+    }
+
+    SECTION("Depth format texture in a color slot throws")
+    {
+        Rndr::Canvas::TextureDesc tex_desc;
+        tex_desc.width = 32;
+        tex_desc.height = 32;
+        tex_desc.format = Rndr::Canvas::Format::D32F;
+        Rndr::Canvas::Texture depth(tex_desc);
+
+        Rndr::Canvas::RenderTargetDesc desc;
+        desc.AddColor(depth);
+        REQUIRE_THROWS(Rndr::Canvas::RenderTarget(desc));
+    }
+
+    SECTION("Color format texture in the depth slot throws")
+    {
+        Rndr::Canvas::TextureDesc tex_desc;
+        tex_desc.width = 32;
+        tex_desc.height = 32;
+        Rndr::Canvas::Texture color(tex_desc);
+
+        Rndr::Canvas::RenderTargetDesc desc;
+        desc.AddColor(32, 32).SetDepthStencil(color);
+        REQUIRE_THROWS(Rndr::Canvas::RenderTarget(desc));
+    }
+
+    SECTION("Mismatched attachment sizes throw")
+    {
+        Rndr::Canvas::TextureDesc tex_desc;
+        tex_desc.width = 32;
+        tex_desc.height = 32;
+        Rndr::Canvas::Texture color(tex_desc);
+
+        Rndr::Canvas::RenderTargetDesc desc;
+        desc.AddColor(64, 64).AddColor(color);
+        REQUIRE_THROWS(Rndr::Canvas::RenderTarget(desc));
+    }
+
+    SECTION("Clone keeps borrowing the external texture")
+    {
+        Rndr::Canvas::TextureDesc tex_desc;
+        tex_desc.width = 32;
+        tex_desc.height = 32;
+        Rndr::Canvas::Texture color(tex_desc);
+
+        Rndr::Canvas::RenderTargetDesc desc;
+        desc.AddColor(color).AddColor(32, 32);
+
+        Rndr::Canvas::RenderTarget rt(desc);
+        REQUIRE(rt.IsValid());
+
+        Rndr::Canvas::RenderTarget clone = rt.Clone();
+        REQUIRE(clone.IsValid());
+        REQUIRE(clone.GetNativeHandle() != rt.GetNativeHandle());
+        // External attachment is shared, not copied.
+        REQUIRE(clone.IsColorAttachmentExternal(0));
+        REQUIRE(clone.GetColorAttachment(0).GetNativeHandle() == color.GetNativeHandle());
+        // Owned attachment still gets a fresh texture.
+        REQUIRE_FALSE(clone.IsColorAttachmentExternal(1));
+        REQUIRE(clone.GetColorAttachment(1).GetNativeHandle() != rt.GetColorAttachment(1).GetNativeHandle());
+
+        // Destroying the clone must not touch the borrowed texture.
+        clone.Destroy();
+        REQUIRE(color.IsValid());
+        REQUIRE(rt.IsValid());
     }
 }
