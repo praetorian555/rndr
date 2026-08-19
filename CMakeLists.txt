@@ -89,6 +89,10 @@ if (${RNDR_BUILD_TESTS})
                 test/canvas/bitmap-test.cpp
                 test/canvas/timestamp-query-test.cpp)
     endif ()
+    if (${RNDR_FORGE})
+        list(APPEND RNDR_TEST_FILES
+                test/forge/smoke-test.cpp)
+    endif ()
     add_executable(rndr-test ${RNDR_TEST_FILES})
     rndr_deploy_runtime(rndr-test)
     target_include_directories(rndr-test PRIVATE src)

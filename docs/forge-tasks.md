@@ -411,10 +411,45 @@ per-binding `VkDescriptorBindingFlags` equivalents (partially bound, update afte
 Multisample state, per-attachment color write masks, pipeline cache (serialized to disk), specialization
 constants, and dynamic state beyond viewport and scissor (depth bias, stencil reference, line width).
 
-### 3.11 Tests
+### 3.11 Tests — DONE
 
-There are none for this layer; `test/` covers canvas only. Start with a headless smoke test: context →
-device → buffer → compute dispatch → readback → verify. That single test would have caught 1.3, 1.4 and 1.5.
+`test/forge/smoke-test.cpp`, tag `[forge]`, in `rndr-test` behind the `RNDR_FORGE` option. No window, no
+surface, no swap chain: `Device` never needed one, so the whole file runs on a machine with nothing but a
+Vulkan driver. A machine without one skips rather than fails, decided once by trying to build a context and
+a device.
+
+Seven cases, each ending in a readback compared against a value computed on the CPU, with every destination
+wiped first:
+
+- context, physical device enumeration, device and queue;
+- buffer update at an offset and read back, including that the bytes before the offset are untouched, which
+  is what makes it a test of the offset rather than of the write (1.3, and 1.5 with it);
+- a buffer moved twice and then read, which fails if the mapped pointer did not come along (1.4);
+- the compute dispatch the task asked for: a Slang shader compiled from a string in the test file writes
+  `index + 1000` into a buffer named by its device address, over four groups of 64;
+- buffer copy and readback through `CmdCopyBuffer` and `ReadBackBuffer`;
+- a `HostAccess::None` buffer filled and read through the staging helpers;
+- texture upload, mip generation and readback of every level.
+
+It found three bugs on its first run, each fixed in its own commit:
+
+- `Device`'s move carried neither the VMA allocator nor the enabled extension list, so a moved device
+  allocated nothing and the moved-from one destroyed the allocator on the way out. `DeviceQueue`'s move
+  carried neither its device nor its family index and did not destroy the pool it already held, so a moved
+  queue released its command pool through a device it no longer had - `vkDestroyCommandPool: Invalid device`.
+  And every queue holds a reference back to its device, which a move has to re-point.
+- `Buffer` and `Texture` leaked everything they had already created when a later step of the constructor
+  threw, since the destructor does not run for an object whose constructor did.
+- `BufferDesc` asked VMA for `HOST_ACCESS_ALLOW_TRANSFER_INSTEAD` on every buffer while
+  `keep_memory_mapped` defaulted to true, which are contradictory: the flag permits memory the host cannot
+  map, and the default then failed to map it. A buffer created with nothing but `StorageBuffer` usage threw
+  from its constructor. Host access now means the memory is mappable, and `HostAccess::None` is how a caller
+  asks for device-local memory, with `Update` and `Read` throwing on one and pointing at the staging helpers.
+
+Left for later: nothing asserts on validation messages. `GraphicsContextDesc::collect_debug_messages` only
+logs them, so a test cannot fail on one; making it collectable is worth doing with 3.8, which adds the rest
+of the debug tooling. The graphics pipeline, the swap chain and the barrier presets are still only covered
+by running the sample.
 
 ### 3.12 Complete the barrier vocabulary
 
