@@ -286,35 +286,60 @@ Rndr::Forge::Device::~Device()
     Destroy();
 }
 
+void Rndr::Forge::Device::RepointQueues()
+{
+    // Every queue holds a reference back to the device it came out of, and a move leaves those pointing at the
+    // object that was moved from. Its destructor would then release the command pool through a device that is
+    // gone.
+    for (auto queue_it = m_queue_family_to_queue.begin(); queue_it != m_queue_family_to_queue.end(); ++queue_it)
+    {
+        queue_it.GetValue()->m_device = *this;
+    }
+}
+
 Rndr::Forge::Device::Device(Device&& other) noexcept
     : m_device(other.m_device),
       m_queue_family_to_queue(std::move(other.m_queue_family_to_queue)),
       m_physical_device(std::move(other.m_physical_device)),
       m_desc(std::move(other.m_desc)),
-      m_queue_family_indices(other.m_queue_family_indices)
+      m_enabled_extensions(std::move(other.m_enabled_extensions)),
+      m_queue_family_indices(other.m_queue_family_indices),
+      m_gpu_allocator(other.m_gpu_allocator)
 {
     other.m_device = VK_NULL_HANDLE;
     other.m_queue_family_to_queue.Clear();
     other.m_physical_device = {};
     other.m_desc = {};
+    other.m_enabled_extensions.Clear();
     other.m_queue_family_indices = {};
+    other.m_gpu_allocator = VK_NULL_HANDLE;
+    RepointQueues();
 }
 
 Rndr::Forge::Device& Rndr::Forge::Device::operator=(Device&& other) noexcept
 {
+    if (this == &other)
+    {
+        return *this;
+    }
     Destroy();
 
     m_device = other.m_device;
     m_queue_family_to_queue = std::move(other.m_queue_family_to_queue);
     m_physical_device = std::move(other.m_physical_device);
     m_desc = std::move(other.m_desc);
+    m_enabled_extensions = std::move(other.m_enabled_extensions);
     m_queue_family_indices = other.m_queue_family_indices;
+    m_gpu_allocator = other.m_gpu_allocator;
 
     other.m_device = VK_NULL_HANDLE;
     other.m_queue_family_to_queue.Clear();
     other.m_physical_device = {};
     other.m_desc = {};
+    other.m_enabled_extensions.Clear();
     other.m_queue_family_indices = {};
+    other.m_gpu_allocator = VK_NULL_HANDLE;
+    RepointQueues();
 
     return *this;
 }
@@ -388,8 +413,13 @@ Rndr::Forge::DeviceQueue::DeviceQueue(const Device& device, u32 queue_family_ind
 }
 
 Rndr::Forge::DeviceQueue::DeviceQueue(DeviceQueue&& other) noexcept
-    : m_queue(other.m_queue), m_command_pool(other.m_command_pool)
+    : m_device(std::move(other.m_device)),
+      m_queue_family_index(other.m_queue_family_index),
+      m_queue(other.m_queue),
+      m_command_pool(other.m_command_pool)
 {
+    other.m_device = nullptr;
+    other.m_queue_family_index = 0;
     other.m_queue = VK_NULL_HANDLE;
     other.m_command_pool = VK_NULL_HANDLE;
 }
@@ -400,8 +430,15 @@ Rndr::Forge::DeviceQueue& Rndr::Forge::DeviceQueue::operator=(DeviceQueue&& othe
     {
         return *this;
     }
+    // The device has to come along, or the command pool below is released through a device this queue no
+    // longer holds, and Destroy has to run first, or the pool this queue already owns is leaked.
+    Destroy();
+    m_device = std::move(other.m_device);
+    m_queue_family_index = other.m_queue_family_index;
     m_queue = other.m_queue;
     m_command_pool = other.m_command_pool;
+    other.m_device = nullptr;
+    other.m_queue_family_index = 0;
     other.m_queue = VK_NULL_HANDLE;
     other.m_command_pool = VK_NULL_HANDLE;
     return *this;

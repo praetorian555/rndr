@@ -134,6 +134,9 @@ public:
 private:
     void CollectQueueFamilies(Opal::DynamicArray<VkDeviceQueueCreateInfo>& queue_create_infos);
 
+    /** Point every queue back at this device, which a move has to do since the queues hold a reference to it. */
+    void RepointQueues();
+
     VkDevice m_device = VK_NULL_HANDLE;
     Opal::HashMap<QueueFamily, Opal::SharedPtr<DeviceQueue>> m_queue_family_to_queue;
     PhysicalDevice m_physical_device;
