@@ -113,6 +113,16 @@ static VkSampleCountFlagBits ToVkSampleCount(Rndr::Forge::SampleCount sample_cou
     throw Opal::Exception("Unknown sample count!");
 }
 
+/** Whether any of the usages a view is allowed for is asked for. The transfer usages are not among them. */
+static bool SupportsImageView(Rndr::Forge::TextureUsageBits usage)
+{
+    using Rndr::Forge::TextureUsageBits;
+    constexpr TextureUsageBits k_view_usages = TextureUsageBits::Sampled | TextureUsageBits::Storage | TextureUsageBits::ColorAttachment |
+                                               TextureUsageBits::DepthStencilAttachment | TextureUsageBits::TransientAttachment |
+                                               TextureUsageBits::InputAttachment;
+    return !!(usage & k_view_usages);
+}
+
 static VkBorderColor ToVkBorderColor(Rndr::BorderColor border_color)
 {
     switch (border_color)
@@ -206,6 +216,12 @@ void Rndr::Forge::Texture::Init(const Device& device, const TextureDesc& desc)
     if (result != VK_SUCCESS)
     {
         throw VulkanException(result, "vmaCreateImage");
+    }
+    // A view is only allowed on an image that some stage can read or write. A texture that is nothing but the
+    // source or the destination of a transfer is a legitimate thing to create, and giving it one is invalid.
+    if (!SupportsImageView(m_desc.usage))
+    {
+        return;
     }
     const VkImageViewCreateInfo image_view_create_info = {
         .sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,

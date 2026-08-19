@@ -53,6 +53,7 @@ public:
 
     [[nodiscard]] bool IsValid() const { return m_image != VK_NULL_HANDLE; }
     [[nodiscard]] VkImage GetNativeImage() const { return m_image; }
+    /** Null for a texture whose usage is transfer only, since Vulkan allows no view on one. */
     [[nodiscard]] VkImageView GetNativeImageView() const { return m_view; }
     [[nodiscard]] const TextureDesc& GetDesc() const { return m_desc; }
 
