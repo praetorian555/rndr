@@ -76,7 +76,8 @@ void Rndr::Forge::DescriptorPoolDesc::Add(DescriptorType descriptor_type, u32 ma
 
 void Rndr::Forge::DescriptorSetLayoutDesc::AddBinding(u32 binding, DescriptorType descriptor_type, u32 descriptor_count,
                                                       ShaderTypeBits shader_types,
-                                                      Opal::ArrayView<const Opal::Ref<const Sampler>> immutable_samplers)
+                                                      Opal::ArrayView<const Opal::Ref<const Sampler>> immutable_samplers,
+                                                      DescriptorBindingFlagBits flags)
 {
     for (const Binding& existing : bindings)
     {
@@ -102,6 +103,7 @@ void Rndr::Forge::DescriptorSetLayoutDesc::AddBinding(u32 binding, DescriptorTyp
     new_binding.descriptor_type = descriptor_type;
     new_binding.descriptor_count = descriptor_count;
     new_binding.shader_types = shader_types;
+    new_binding.flags = flags;
     for (const Opal::Ref<const Sampler>& sampler : immutable_samplers)
     {
         if (!sampler.IsValid())
@@ -117,8 +119,10 @@ void Rndr::Forge::DescriptorSetLayoutDesc::AddBinding(u32 binding, DescriptorTyp
 
 Rndr::Forge::DescriptorSetUpdateBinding Rndr::Forge::DescriptorSetUpdateBinding::Clone(Opal::AllocatorBase* allocator) const
 {
-    DescriptorSetUpdateBinding clone{
-        .descriptor_type = descriptor_type, .binding = binding, .resource_info = resource_info.Clone(allocator)};
+    DescriptorSetUpdateBinding clone{.descriptor_type = descriptor_type,
+                                     .binding = binding,
+                                     .array_element = array_element,
+                                     .resource_info = resource_info.Clone(allocator)};
     return clone;
 }
 
@@ -232,6 +236,16 @@ Rndr::Forge::DescriptorSetLayout::DescriptorSetLayout(const Device& device, cons
     Opal::DynamicArray<VkSampler> immutable_samplers(immutable_sampler_count);
     u64 next_immutable_sampler = 0;
 
+    // The binding a variable count may sit on is the one with the highest index, which is not necessarily the
+    // last one in the desc, since 2.6 let bindings arrive in any order.
+    u32 highest_binding_index = 0;
+    for (const DescriptorSetLayoutDesc::Binding& source : desc.bindings)
+    {
+        highest_binding_index = Opal::Max(highest_binding_index, source.binding);
+    }
+
+    const DeviceFeatures& features = device.GetFeatures();
+    bool has_update_after_bind = false;
     for (i32 i = 0; i < bindings.GetSize(); i++)
     {
         const DescriptorSetLayoutDesc::Binding& source = desc.bindings[i];
@@ -249,11 +263,37 @@ Rndr::Forge::DescriptorSetLayout::DescriptorSetLayout(const Device& device, cons
                 immutable_samplers[next_immutable_sampler++] = sampler->GetNativeSampler();
             }
         }
+
+        // The values of DescriptorBindingFlagBits mirror VkDescriptorBindingFlagBits, so the mask is a cast.
+        binding_flags_array[i] = static_cast<VkDescriptorBindingFlags>(source.flags);
+        if (!!(source.flags & DescriptorBindingFlagBits::UpdateAfterBind))
+        {
+            if (!features.update_after_bind_descriptors)
+            {
+                throw Opal::Exception("An update after bind binding needs the device created with "
+                                      "DeviceFeatures::update_after_bind_descriptors.");
+            }
+            has_update_after_bind = true;
+        }
+        if (!!(source.flags & DescriptorBindingFlagBits::PartiallyBound) && !features.partially_bound_descriptors)
+        {
+            throw Opal::Exception("A partially bound binding needs the device created with "
+                                  "DeviceFeatures::partially_bound_descriptors.");
+        }
+        if (!!(source.flags & DescriptorBindingFlagBits::VariableDescriptorCount))
+        {
+            if (!features.variable_descriptor_count)
+            {
+                throw Opal::Exception("A variable count binding needs the device created with "
+                                      "DeviceFeatures::variable_descriptor_count.");
+            }
+            if (source.binding != highest_binding_index)
+            {
+                throw Opal::Exception("Only the binding with the highest index may have a variable descriptor count!");
+            }
+        }
     }
 
-    const Opal::InPlaceArray<VkDescriptorBindingFlags, 3> binding_flags = {VK_DESCRIPTOR_BINDING_UPDATE_AFTER_BIND_BIT,
-                                                                           VK_DESCRIPTOR_BINDING_PARTIALLY_BOUND_BIT,
-                                                                           VK_DESCRIPTOR_BINDING_VARIABLE_DESCRIPTOR_COUNT_BIT};
     VkDescriptorSetLayoutBindingFlagsCreateInfo binding_flags_info{};
     binding_flags_info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_BINDING_FLAGS_CREATE_INFO;
     binding_flags_info.bindingCount = static_cast<u32>(binding_flags_array.GetSize());
@@ -263,7 +303,9 @@ Rndr::Forge::DescriptorSetLayout::DescriptorSetLayout(const Device& device, cons
     layout_info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
     layout_info.bindingCount = static_cast<u32>(bindings.GetSize());
     layout_info.pBindings = bindings.GetData();
-    layout_info.flags = VK_DESCRIPTOR_SET_LAYOUT_CREATE_UPDATE_AFTER_BIND_POOL_BIT;
+    // Only asked for when a binding actually wants it, since a layout that has it can only be allocated from
+    // a pool that has the matching flag.
+    layout_info.flags = has_update_after_bind ? VK_DESCRIPTOR_SET_LAYOUT_CREATE_UPDATE_AFTER_BIND_POOL_BIT : 0;
     layout_info.pNext = &binding_flags_info;
 
     const VkResult result = vkCreateDescriptorSetLayout(device.GetNativeDevice(), &layout_info, nullptr, &m_layout);
@@ -314,6 +356,38 @@ Rndr::Forge::DescriptorSet::DescriptorSet(const DescriptorPool& pool, const Desc
                                                    u32 variable_descriptor_count)
     : m_device(pool.GetNativeDevice()), m_pool(pool)
 {
+    // The binding a variable count applies to, which is the one the layout marked and there is at most one.
+    const DescriptorSetLayoutDesc::Binding* variable_binding = nullptr;
+    bool layout_needs_update_after_bind_pool = false;
+    for (const DescriptorSetLayoutDesc::Binding& binding : layout.GetDesc().bindings)
+    {
+        if (!!(binding.flags & DescriptorBindingFlagBits::VariableDescriptorCount))
+        {
+            variable_binding = &binding;
+        }
+        layout_needs_update_after_bind_pool =
+            layout_needs_update_after_bind_pool || !!(binding.flags & DescriptorBindingFlagBits::UpdateAfterBind);
+    }
+    // A layout with an update after bind binding can only be allocated from a pool that was told to expect
+    // one, and the two are created apart, so this is the first place that can see both.
+    if (layout_needs_update_after_bind_pool && !pool.GetDesc().use_update_after_bind)
+    {
+        throw Opal::Exception("A layout with an update after bind binding needs a pool created with "
+                              "DescriptorPoolDesc::use_update_after_bind.");
+    }
+    if (variable_descriptor_count > 0)
+    {
+        if (variable_binding == nullptr)
+        {
+            throw Opal::Exception("A variable descriptor count needs a layout binding with "
+                                  "DescriptorBindingFlagBits::VariableDescriptorCount.");
+        }
+        if (variable_descriptor_count > variable_binding->descriptor_count)
+        {
+            throw Opal::Exception("A variable descriptor count cannot be above the descriptor_count of its binding.");
+        }
+    }
+
     VkDescriptorSetLayout native_layout = layout.GetNativeDescriptorSetLayout();
     VkDescriptorSetAllocateInfo alloc_info{};
     alloc_info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
@@ -392,6 +466,7 @@ void Rndr::Forge::DescriptorSet::UpdateDescriptorSets(Opal::ArrayView<const Desc
         descriptor_write.pNext = nullptr;
         descriptor_write.dstSet = m_set;
         descriptor_write.dstBinding = updates[i].binding;
+        descriptor_write.dstArrayElement = updates[i].array_element;
         descriptor_write.descriptorType = FromDescriptorType(updates[i].descriptor_type);
         descriptor_write.descriptorCount = 1;
 

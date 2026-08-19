@@ -3,6 +3,7 @@
 #include "volk/volk.h"
 
 #include "opal/clonable-base.h"
+#include "opal/enum-flags.h"
 #include "opal/container/array-view.h"
 #include "opal/container/dynamic-array.h"
 #include "opal/container/hash-map.h"
@@ -16,6 +17,30 @@
 
 namespace Rndr::Forge
 {
+
+/**
+ * What a binding is allowed beyond the plain case, where every descriptor is written once before the set is
+ * bound and none of them changes afterwards. Mirrors VkDescriptorBindingFlagBits.
+ *
+ * Each of these needs the matching DeviceFeatures field, which the layout checks rather than leaving it to
+ * the validation layer.
+ */
+enum class DescriptorBindingFlagBits : u8
+{
+    None = 0,
+    /** Descriptors may be written while the set is bound, even while the device is using it. */
+    UpdateAfterBind = 1,
+    /** Descriptors may be written while the set is bound to a command buffer that has not been submitted. */
+    UpdateUnusedWhilePending = 2,
+    /** Not every descriptor has to be written. The shader is only allowed to read the ones that were. */
+    PartiallyBound = 4,
+    /**
+     * The length of this binding is chosen when a set is allocated rather than when the layout is created,
+     * with descriptor_count as the upper bound. Only the last binding of a layout may have it.
+     */
+    VariableDescriptorCount = 8
+};
+OPAL_ENUM_CLASS_FLAGS(DescriptorBindingFlagBits);
 
 enum class DescriptorType : u8
 {
@@ -60,6 +85,8 @@ struct DescriptorSetLayoutDesc : Opal::ClonableBase<DescriptorSetLayoutDesc>
         DescriptorType descriptor_type = DescriptorType::CombinedImageSampler;
         u32 descriptor_count = 1;
         ShaderTypeBits shader_types = ShaderTypeBits::AllGraphics;
+        /** What this binding is allowed beyond writing every descriptor once before the set is bound. */
+        DescriptorBindingFlagBits flags = DescriptorBindingFlagBits::None;
         /**
          * Samplers baked into the layout, one per descriptor, for DescriptorType::Sampler and
          * DescriptorType::CombinedImageSampler only. The sampler of such a binding cannot be written by
@@ -67,14 +94,15 @@ struct DescriptorSetLayoutDesc : Opal::ClonableBase<DescriptorSetLayoutDesc>
          * from it.
          */
         Opal::DynamicArray<Opal::Ref<const Sampler>> immutable_samplers;
-        OPAL_CLONE_FIELDS(binding, descriptor_type, descriptor_count, shader_types, immutable_samplers);
+        OPAL_CLONE_FIELDS(binding, descriptor_type, descriptor_count, shader_types, flags, immutable_samplers);
     };
     Opal::DynamicArray<Binding> bindings;
 
     OPAL_CLONE_FIELDS(bindings);
 
     void AddBinding(u32 binding, DescriptorType descriptor_type, u32 descriptor_count, ShaderTypeBits shader_types,
-                    Opal::ArrayView<const Opal::Ref<const Sampler>> immutable_samplers = {});
+                    Opal::ArrayView<const Opal::Ref<const Sampler>> immutable_samplers = {},
+                    DescriptorBindingFlagBits flags = DescriptorBindingFlagBits::None);
 };
 
 struct DescriptorSetUpdateBinding
@@ -97,6 +125,8 @@ struct DescriptorSetUpdateBinding
 
     DescriptorType descriptor_type = DescriptorType::CombinedImageSampler;
     u32 binding = 0;
+    /** Which descriptor of the binding to write, for a binding that is an array of them. */
+    u32 array_element = 0;
     Opal::Variant<BufferInfo, ImageInfo> resource_info;
 
     DescriptorSetUpdateBinding Clone(Opal::AllocatorBase* allocator = nullptr) const;

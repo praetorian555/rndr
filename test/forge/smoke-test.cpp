@@ -6,6 +6,7 @@
 #include "rndr/forge/buffer.hpp"
 #include "rndr/forge/command-buffer.hpp"
 #include "rndr/forge/debug.hpp"
+#include "rndr/forge/descriptor-set.hpp"
 #include "rndr/forge/device.hpp"
 #include "rndr/forge/graphics-context.hpp"
 #include "rndr/forge/physical-device.hpp"
@@ -738,5 +739,135 @@ TEST_CASE("Forge physical device selection", "[forge]")
         REQUIRE(Forge::FindPhysicalDevice(devices, desc).HasValue());
     }
 
+    REQUIRE(context.GetDebugMessageCount(Forge::DebugMessageSeverity::Error, Forge::DebugMessageTypeBits::Validation) == 0);
+}
+
+/** Writes into the second buffer of a bound array, so which descriptor was written is visible in the result. */
+constexpr const char* k_bindless_source = R"(
+[[vk::binding(0, 0)]] RWStructuredBuffer<uint> outputs[];
+
+[shader("compute")]
+[numthreads(64, 1, 1)]
+void main_bindless(uint3 thread_id : SV_DispatchThreadID)
+{
+    outputs[1][thread_id.x] = thread_id.x + 2000;
+}
+)";
+
+TEST_CASE("Forge bindless descriptor bindings", "[forge]")
+{
+    if (!IsForgeAvailable())
+    {
+        SKIP("No Vulkan device on this machine.");
+    }
+    const Forge::GraphicsContext context({.collect_debug_messages = true});
+    Opal::DynamicArray<Forge::PhysicalDevice> physical_devices = context.EnumeratePhysicalDevices();
+
+    constexpr Forge::DeviceFeatures k_bindless_features{.partially_bound_descriptors = true,
+                                                        .update_after_bind_descriptors = true,
+                                                        .non_uniform_descriptor_indexing = true};
+    const Forge::DeviceDesc bindless_desc{.features = k_bindless_features};
+    if (!Forge::FindPhysicalDevice(physical_devices, bindless_desc).HasValue())
+    {
+        SKIP("This device does not support the descriptor indexing features bindless needs.");
+    }
+    Forge::Device device(Forge::SelectPhysicalDevice(physical_devices, bindless_desc), context, bindless_desc);
+    Forge::DeviceQueue& queue = device.GetQueue(Forge::QueueFamily::Graphics);
+
+    constexpr u32 k_max_descriptors = 4;
+    constexpr u32 k_used_descriptors = 2;
+    constexpr i32 k_element_count = 256;
+    constexpr i32 k_group_size = 64;
+
+    Forge::DescriptorPoolDesc pool_desc;
+    pool_desc.Add(Forge::DescriptorType::StorageBuffer, k_max_descriptors);
+    pool_desc.max_sets = 1;
+    pool_desc.use_update_after_bind = true;
+    const Forge::DescriptorPool pool(device, pool_desc);
+
+    Forge::DescriptorSetLayoutDesc layout_desc;
+    layout_desc.AddBinding(0, Forge::DescriptorType::StorageBuffer, k_max_descriptors, ShaderTypeBits::Compute, {},
+                           Forge::DescriptorBindingFlagBits::PartiallyBound | Forge::DescriptorBindingFlagBits::UpdateAfterBind |
+                               Forge::DescriptorBindingFlagBits::VariableDescriptorCount);
+    const Forge::DescriptorSetLayout layout(device, layout_desc);
+
+    SECTION("A partially bound array is written and read where it was written")
+    {
+        // Two of the four descriptors, so the variable count is doing something, and only the second one is
+        // ever written, so partially bound is doing something too.
+        Forge::DescriptorSet descriptor_set(pool, layout, k_used_descriptors);
+
+        Forge::Buffer output(device, {.size = k_element_count * sizeof(u32),
+                                      .usage = Forge::BufferUsageBits::StorageBuffer,
+                                      .host_access = Forge::HostAccess::Random});
+        const Opal::DynamicArray<u8> zeros(k_element_count * sizeof(u32));
+        output.Update(zeros);
+
+        // Only descriptor 1 of the array is written. Descriptor 0 is left alone, which is what
+        // PartiallyBound allows and what the shader stays away from.
+        Opal::DynamicArray<Forge::DescriptorSetUpdateBinding> updates;
+        updates.PushBack(Forge::DescriptorSetUpdateBinding{
+            .descriptor_type = Forge::DescriptorType::StorageBuffer,
+            .binding = 0,
+            .array_element = 1,
+            .resource_info = Forge::DescriptorSetUpdateBinding::BufferInfo{.buffer = output}});
+        descriptor_set.UpdateDescriptorSets(updates);
+
+        const Forge::Shader shader = Forge::Shader::FromSourceInMemory(device, k_bindless_source, {.entry_point = "main_bindless"});
+        Forge::ComputePipelineDesc pipeline_desc;
+        pipeline_desc.shader = shader;
+        pipeline_desc.descriptor_set_layouts.PushBack(Opal::Ref<const Forge::DescriptorSetLayout>(layout));
+        const Forge::Pipeline pipeline(device, pipeline_desc);
+
+        Forge::ImmediateSubmit(device, queue,
+                               [&](Forge::CommandBuffer& command_buffer)
+                               {
+                                   command_buffer.CmdBindPipeline(pipeline);
+                                   command_buffer.CmdBindDescriptorSet(pipeline, descriptor_set);
+                                   command_buffer.CmdDispatch(k_element_count / k_group_size);
+                               });
+
+        Opal::DynamicArray<u32> values(k_element_count);
+        output.Read({reinterpret_cast<u8*>(values.GetData()), values.GetSize() * sizeof(u32)});
+        for (i32 i = 0; i < k_element_count; ++i)
+        {
+            REQUIRE(values[i] == static_cast<u32>(i) + 2000);
+        }
+    }
+    SECTION("A variable count above the binding's descriptor count throws")
+    {
+        REQUIRE_THROWS_AS(Forge::DescriptorSet(pool, layout, k_max_descriptors + 1), Opal::Exception);
+    }
+    SECTION("A variable count without a binding that allows it throws")
+    {
+        Forge::DescriptorSetLayoutDesc plain_desc;
+        plain_desc.AddBinding(0, Forge::DescriptorType::StorageBuffer, 1, ShaderTypeBits::Compute);
+        const Forge::DescriptorSetLayout plain_layout(device, plain_desc);
+        REQUIRE_THROWS_AS(Forge::DescriptorSet(pool, plain_layout, 1), Opal::Exception);
+    }
+    SECTION("A variable count on anything but the highest binding throws")
+    {
+        Forge::DescriptorSetLayoutDesc bad_desc;
+        bad_desc.AddBinding(0, Forge::DescriptorType::StorageBuffer, 4, ShaderTypeBits::Compute, {},
+                            Forge::DescriptorBindingFlagBits::VariableDescriptorCount);
+        bad_desc.AddBinding(1, Forge::DescriptorType::StorageBuffer, 1, ShaderTypeBits::Compute);
+        REQUIRE_THROWS_AS(Forge::DescriptorSetLayout(device, bad_desc), Opal::Exception);
+    }
+    SECTION("An update after bind layout needs a pool that expects one")
+    {
+        Forge::DescriptorPoolDesc plain_pool_desc;
+        plain_pool_desc.Add(Forge::DescriptorType::StorageBuffer, k_max_descriptors);
+        plain_pool_desc.use_update_after_bind = false;
+        const Forge::DescriptorPool plain_pool(device, plain_pool_desc);
+        REQUIRE_THROWS_AS(Forge::DescriptorSet(plain_pool, layout, k_used_descriptors), Opal::Exception);
+    }
+
+    Opal::StringUtf8 report;
+    for (const Forge::DebugMessage& message : context.GetDebugMessages())
+    {
+        report += message.text;
+        report += Opal::StringUtf8("\n");
+    }
+    INFO(*report);
     REQUIRE(context.GetDebugMessageCount(Forge::DebugMessageSeverity::Error, Forge::DebugMessageTypeBits::Validation) == 0);
 }

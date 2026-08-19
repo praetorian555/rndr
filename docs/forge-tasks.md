@@ -507,11 +507,35 @@ Left: `vkCmdBeginDebugUtilsLabelEXT` for regions inside a command buffer, and a 
 timing. Neither has a consumer yet - the sample has no pass structure worth labelling and no timing display
 - and `Canvas::TimestampQuery` is worth reading before writing the Forge one.
 
-### 3.9 Bindless plumbing
+### 3.9 Bindless plumbing - DONE
 
-`Forge::DescriptorPoolDesc::use_update_after_bind` and the `variable_descriptor_count` argument on set
-allocation exist, but the layout desc has no per-binding flags, so neither can actually be used. Add
-per-binding `VkDescriptorBindingFlags` equivalents (partially bound, update after bind, variable count).
+`DescriptorSetLayoutDesc::Binding::flags` is a `DescriptorBindingFlagBits` mask - `UpdateAfterBind`,
+`UpdateUnusedWhilePending`, `PartiallyBound`, `VariableDescriptorCount` - whose values mirror the Vulkan
+ones, so the per-binding array is filled by a cast. The array was already being built and passed; it was
+being passed all zeroes, next to a local holding the three flags that nothing read. Both existed since the
+layout was written, which is why `use_update_after_bind` and `variable_descriptor_count` had never done
+anything.
+
+`VK_DESCRIPTOR_SET_LAYOUT_CREATE_UPDATE_AFTER_BIND_POOL_BIT` was also set on every layout ever created. It
+is now set only when a binding asks for it, and `DescriptorSet` checks that such a layout is allocated from
+a pool created with `use_update_after_bind`, which is the first place that can see both.
+
+Each flag is checked against the device feature behind it, which 3.6 made requestable, so a binding asking
+for something the device was not created with says so instead of reaching the validation layer. A variable
+count is only allowed on the binding with the highest index - not the last one in the desc, since 2.6 let
+them arrive in any order - and the count given at allocation has to fit inside the `descriptor_count` the
+binding declared.
+
+Writing the test turned up the other half of what bindless needs and what the task did not name:
+`DescriptorSetUpdateBinding` had no array element, so `dstArrayElement` was always zero and Forge could only
+ever write the first descriptor of an array binding. There is an `array_element` field now.
+
+Verified end to end rather than by creation succeeding: a layout with all three flags on a four descriptor
+storage buffer array, a set allocated with a variable count of two, only descriptor one ever written, and a
+compute shader indexing `outputs[1]` writing `index + 2000` into it. All 256 values came back, which needs
+the variable count, the partially bound flag and the array element all to have taken effect. Four guards
+throw: a count above the binding's, a count without a binding that allows one, a variable count on a binding
+that is not the highest, and an update after bind layout allocated from a pool that does not expect one.
 
 ### 3.10 Pipeline gaps
 
