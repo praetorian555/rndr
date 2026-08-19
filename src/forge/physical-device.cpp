@@ -110,20 +110,14 @@ Opal::Optional<Rndr::u32> Rndr::Forge::PhysicalDevice::GetPresentQueueFamilyInde
 
 bool Rndr::Forge::PhysicalDevice::IsExtensionSupported(const char* extension_name) const
 {
-    bool is_found = false;
     for (const Opal::StringUtf8& supported_extension : m_supported_extensions)
     {
         if (supported_extension == extension_name)
         {
-            is_found = true;
-            break;
+            return true;
         }
     }
-    if (!is_found)
-    {
-        Opal::Exception("Device extension not supported!");
-    }
-    return true;
+    return false;
 }
 
 /** What an optimally tiled image of this format is allowed to do on this device. */
