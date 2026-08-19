@@ -2,8 +2,10 @@
 
 #include "volk/volk.h"
 
+#include "opal/container/array-view.h"
 #include "opal/container/dynamic-array.h"
 #include "opal/container/hash-map.h"
+#include "opal/container/ref.h"
 #include "opal/container/shared-ptr.h"
 
 #include "rndr/forge/physical-device.hpp"
@@ -59,6 +61,27 @@ struct QueueFamilyIndices
     [[nodiscard]] Rndr::u32 GetQueueFamilyIndex(QueueFamily queue_family) const;
 };
 
+/**
+ * One semaphore taking part in a submit, and the stages it is tied to: on the wait side the stages that have
+ * to wait for it, on the signal side the stages that have to finish before it is signalled. Naming the stages
+ * rather than the whole pipeline is what lets the work either side does not depend on run ahead.
+ */
+struct SemaphoreSubmit
+{
+    Opal::Ref<const Semaphore> semaphore;
+    PipelineStageBits stages = PipelineStageBits::AllCommands;
+};
+
+/** One batch of work handed to a queue. Every part of it is optional except that an empty batch does nothing. */
+struct SubmitDesc
+{
+    Opal::ArrayView<const Opal::Ref<const CommandBuffer>> command_buffers;
+    Opal::ArrayView<const SemaphoreSubmit> wait_semaphores;
+    Opal::ArrayView<const SemaphoreSubmit> signal_semaphores;
+    /** Signalled once the whole batch has finished. Empty when nothing on the host waits for it. */
+    Opal::Ref<const Fence> fence;
+};
+
 class DeviceQueue
 {
 public:
@@ -79,9 +102,24 @@ public:
     [[nodiscard]] VkCommandPool GetNativeCommandPool() const { return m_command_pool; }
     [[nodiscard]] u32 GetQueueFamilyIndex() const { return m_queue_family_index; }
 
+    /**
+     * Submit the work a SubmitDesc describes as one batch.
+     * @param desc Command buffers, the semaphores to wait on and to signal, and the fence to signal at the end.
+     */
+    void Submit(const SubmitDesc& desc);
+
+    /** One command buffer, one fence, nothing to synchronize against on the device. */
     void Submit(const CommandBuffer& command_buffer, const Fence& fence);
+
+    /** One command buffer between one wait and one signal. An empty semaphore on either side is skipped. */
     void Submit(const CommandBuffer& command_buffer, const Semaphore& wait_semaphore,
                 PipelineStageBits wait_stage, const Semaphore& signal_semaphore, const Fence& fence);
+
+    /**
+     * Block until everything submitted to this queue has finished. Coarser than a fence and meant for
+     * shutdown and for one-off setup work, not for the frame loop.
+     */
+    void WaitIdle() const;
 
 private:
 

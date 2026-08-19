@@ -449,41 +449,85 @@ Rndr::Forge::DeviceQueue& Rndr::Forge::DeviceQueue::operator=(DeviceQueue&& othe
     return *this;
 }
 
-void Rndr::Forge::DeviceQueue::Submit(const CommandBuffer& command_buffer, const Fence& fence)
+/** Translate one side of the semaphore list, checking that every semaphore in it actually holds a handle. */
+static Opal::DynamicArray<VkSemaphoreSubmitInfo> ToVkSemaphoreSubmitInfos(
+    Opal::ArrayView<const Rndr::Forge::SemaphoreSubmit> semaphores, const char* role)
 {
-    VkCommandBuffer native_command_buffer = command_buffer.GetNativeCommandBuffer();
-    const VkSubmitInfo submit_info{
-        .sType = VK_STRUCTURE_TYPE_SUBMIT_INFO, .commandBufferCount = 1, .pCommandBuffers = &native_command_buffer};
-    const VkResult submit_result = vkQueueSubmit(m_queue, 1, &submit_info, fence.GetNativeFence());
+    Opal::DynamicArray<VkSemaphoreSubmitInfo> infos(semaphores.GetSize());
+    for (Rndr::i32 i = 0; i < semaphores.GetSize(); ++i)
+    {
+        const Rndr::Forge::SemaphoreSubmit& semaphore = semaphores[i];
+        if (!semaphore.semaphore.IsValid() || !semaphore.semaphore->IsValid())
+        {
+            throw Opal::Exception(Opal::StringEx("Submit was given an empty ") + role + " semaphore!");
+        }
+        infos[i] = {.sType = VK_STRUCTURE_TYPE_SEMAPHORE_SUBMIT_INFO,
+                    .semaphore = semaphore.semaphore->GetNativeSemaphore(),
+                    .stageMask = static_cast<VkPipelineStageFlags2>(semaphore.stages)};
+    }
+    return infos;
+}
+
+void Rndr::Forge::DeviceQueue::Submit(const SubmitDesc& desc)
+{
+    Opal::DynamicArray<VkCommandBufferSubmitInfo> command_buffer_infos(desc.command_buffers.GetSize());
+    for (i32 i = 0; i < desc.command_buffers.GetSize(); ++i)
+    {
+        const CommandBuffer& command_buffer = desc.command_buffers[i].Get();
+        if (!command_buffer.IsValid())
+        {
+            throw Opal::Exception("Submit was given an empty command buffer!");
+        }
+        command_buffer_infos[i] = {.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_SUBMIT_INFO,
+                                   .commandBuffer = command_buffer.GetNativeCommandBuffer()};
+    }
+    const Opal::DynamicArray<VkSemaphoreSubmitInfo> wait_infos = ToVkSemaphoreSubmitInfos(desc.wait_semaphores, "wait");
+    const Opal::DynamicArray<VkSemaphoreSubmitInfo> signal_infos = ToVkSemaphoreSubmitInfos(desc.signal_semaphores, "signal");
+    // A fence is what the host waits on, and plenty of submits have nothing waiting for them.
+    const VkFence native_fence = desc.fence.IsValid() ? desc.fence->GetNativeFence() : VK_NULL_HANDLE;
+
+    const VkSubmitInfo2 submit_info{.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO_2,
+                                    .waitSemaphoreInfoCount = static_cast<u32>(wait_infos.GetSize()),
+                                    .pWaitSemaphoreInfos = wait_infos.GetData(),
+                                    .commandBufferInfoCount = static_cast<u32>(command_buffer_infos.GetSize()),
+                                    .pCommandBufferInfos = command_buffer_infos.GetData(),
+                                    .signalSemaphoreInfoCount = static_cast<u32>(signal_infos.GetSize()),
+                                    .pSignalSemaphoreInfos = signal_infos.GetData()};
+    const VkResult submit_result = vkQueueSubmit2(m_queue, 1, &submit_info, native_fence);
     if (submit_result != VK_SUCCESS)
     {
-        throw VulkanException(submit_result, "vkQueueSubmit");
+        throw VulkanException(submit_result, "vkQueueSubmit2");
     }
+}
+
+void Rndr::Forge::DeviceQueue::Submit(const CommandBuffer& command_buffer, const Fence& fence)
+{
+    const Opal::Ref<const CommandBuffer> command_buffer_ref(command_buffer);
+    Submit({.command_buffers = {&command_buffer_ref, 1}, .fence = fence});
 }
 
 void Rndr::Forge::DeviceQueue::Submit(const CommandBuffer& command_buffer, const Semaphore& wait_semaphore,
                                         PipelineStageBits wait_stage, const Semaphore& signal_semaphore,
                                         const Fence& fence)
 {
-    VkCommandBuffer native_command_buffer = command_buffer.GetNativeCommandBuffer();
-    const VkSemaphore wait_native = wait_semaphore.GetNativeSemaphore();
-    const VkSemaphore signal_native = signal_semaphore.GetNativeSemaphore();
-    const VkPipelineStageFlags wait_stage_flags = static_cast<VkPipelineStageFlags>(wait_stage);
-    const bool has_wait = wait_native != VK_NULL_HANDLE;
-    const bool has_signal = signal_native != VK_NULL_HANDLE;
-    const VkSubmitInfo submit_info{
-        .sType = VK_STRUCTURE_TYPE_SUBMIT_INFO,
-        .waitSemaphoreCount = has_wait ? 1u : 0u,
-        .pWaitSemaphores = has_wait ? &wait_native : nullptr,
-        .pWaitDstStageMask = has_wait ? &wait_stage_flags : nullptr,
-        .commandBufferCount = 1,
-        .pCommandBuffers = &native_command_buffer,
-        .signalSemaphoreCount = has_signal ? 1u : 0u,
-        .pSignalSemaphores = has_signal ? &signal_native : nullptr,
-    };
-    const VkResult submit_result = vkQueueSubmit(m_queue, 1, &submit_info, fence.GetNativeFence());
-    if (submit_result != VK_SUCCESS)
+    const Opal::Ref<const CommandBuffer> command_buffer_ref(command_buffer);
+    // An empty semaphore on either side means that side is not synchronized, which this overload has always
+    // allowed, so it is left out of the batch rather than rejected by the checks in the desc based Submit.
+    const SemaphoreSubmit wait{.semaphore = wait_semaphore, .stages = wait_stage};
+    const SemaphoreSubmit signal{.semaphore = signal_semaphore, .stages = PipelineStageBits::AllCommands};
+    Submit({.command_buffers = {&command_buffer_ref, 1},
+            .wait_semaphores = wait_semaphore.IsValid() ? Opal::ArrayView<const SemaphoreSubmit>{&wait, 1}
+                                                        : Opal::ArrayView<const SemaphoreSubmit>{},
+            .signal_semaphores = signal_semaphore.IsValid() ? Opal::ArrayView<const SemaphoreSubmit>{&signal, 1}
+                                                            : Opal::ArrayView<const SemaphoreSubmit>{},
+            .fence = fence});
+}
+
+void Rndr::Forge::DeviceQueue::WaitIdle() const
+{
+    const VkResult result = vkQueueWaitIdle(m_queue);
+    if (result != VK_SUCCESS)
     {
-        throw VulkanException(submit_result, "vkQueueSubmit");
+        throw VulkanException(result, "vkQueueWaitIdle");
     }
 }

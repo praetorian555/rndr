@@ -447,14 +447,14 @@ TEST_CASE("Forge debug names reach the validation layer", "[forge]")
 
     // Copying between two formats of different texel size breaks a rule the guards do not check and the
     // validation layer does, which is what makes it a way to read back what the layer calls these two images.
+    // The layer checks this while the command is recorded, so the command buffer is thrown away rather than
+    // submitted: handing the driver work that breaks the specification is undefined behaviour, and it took
+    // the next test down with it when this did.
     const Forge::ImageCopyRegion region;
-    Forge::ImmediateSubmit(fixture.device, fixture.GetQueue(),
-                           [&](Forge::CommandBuffer& command_buffer)
-                           {
-                               command_buffer.CmdImageBarrier(Forge::ImageBarrier::ToTransferSource(source, Forge::ImageLayout::Undefined));
-                               command_buffer.CmdImageBarrier(Forge::ImageBarrier::ToTransferDestination(destination));
-                               command_buffer.CmdCopyImage(source, destination, {&region, 1});
-                           });
+    Forge::CommandBuffer command_buffer(fixture.device, fixture.GetQueue());
+    command_buffer.Begin();
+    command_buffer.CmdCopyImage(source, destination, {&region, 1});
+    command_buffer.End();
 
     const Opal::StringUtf8 errors = fixture.GetValidationErrors();
     INFO(*errors);
@@ -464,5 +464,98 @@ TEST_CASE("Forge debug names reach the validation layer", "[forge]")
 
     // The error above was the point of the test, so it must not be left for the next assertion to trip over.
     fixture.context.ClearDebugMessages();
+    REQUIRE_NO_VALIDATION_ERROR(fixture);
+}
+
+TEST_CASE("Forge batched submit", "[forge]")
+{
+    if (!IsForgeAvailable())
+    {
+        SKIP("No Vulkan device on this machine.");
+    }
+    ForgeFixture fixture;
+    constexpr i32 k_size = 64;
+    const Opal::DynamicArray<u8> first_half = MakeBytes(k_size, 5);
+    const Opal::DynamicArray<u8> second_half = MakeBytes(k_size, 90);
+    const Opal::DynamicArray<u8> zeros(k_size * 2);
+
+    constexpr Forge::BufferUsageBits k_both_ways = Forge::BufferUsageBits::TransferSource | Forge::BufferUsageBits::TransferDestination;
+    const Forge::Buffer source_a(fixture.device, {.size = k_size, .usage = Forge::BufferUsageBits::TransferSource}, first_half);
+    const Forge::Buffer source_b(fixture.device, {.size = k_size, .usage = Forge::BufferUsageBits::TransferSource}, second_half);
+    const Forge::Buffer destination(fixture.device, {.size = k_size * 2, .usage = k_both_ways});
+    destination.Update(zeros);
+
+    // One command buffer per half, so a batch that dropped either one would show as half the buffer missing.
+    Forge::CommandBuffer first(fixture.device, fixture.GetQueue());
+    Forge::CommandBuffer second(fixture.device, fixture.GetQueue());
+    const Forge::BufferCopyRegion first_region{.source_offset = 0, .destination_offset = 0, .size = k_size};
+    const Forge::BufferCopyRegion second_region{.source_offset = 0, .destination_offset = k_size, .size = k_size};
+    first.Begin();
+    first.CmdCopyBuffer(source_a, destination, {&first_region, 1});
+    first.End();
+    second.Begin();
+    second.CmdCopyBuffer(source_b, destination, {&second_region, 1});
+    second.End();
+
+    SECTION("Two command buffers in one batch, with a fence")
+    {
+        const Forge::Fence fence(fixture.device, false);
+        const Opal::Ref<const Forge::CommandBuffer> batch[2] = {Opal::Ref<const Forge::CommandBuffer>(first),
+                                                                Opal::Ref<const Forge::CommandBuffer>(second)};
+        fixture.GetQueue().Submit({.command_buffers = {batch, 2}, .fence = fence});
+        fence.Wait();
+    }
+    SECTION("The same batch without a fence, waited on through the queue")
+    {
+        const Opal::Ref<const Forge::CommandBuffer> batch[2] = {Opal::Ref<const Forge::CommandBuffer>(first),
+                                                                Opal::Ref<const Forge::CommandBuffer>(second)};
+        fixture.GetQueue().Submit({.command_buffers = {batch, 2}});
+        fixture.GetQueue().WaitIdle();
+    }
+    SECTION("One batch per half, the second waiting on a semaphore the first signals")
+    {
+        const Forge::Semaphore semaphore(fixture.device);
+        const Forge::Fence fence(fixture.device, false);
+        const Opal::Ref<const Forge::CommandBuffer> first_batch[1] = {Opal::Ref<const Forge::CommandBuffer>(first)};
+        const Opal::Ref<const Forge::CommandBuffer> second_batch[1] = {Opal::Ref<const Forge::CommandBuffer>(second)};
+        const Forge::SemaphoreSubmit signal{.semaphore = semaphore, .stages = Forge::PipelineStageBits::Transfer};
+        const Forge::SemaphoreSubmit wait{.semaphore = semaphore, .stages = Forge::PipelineStageBits::Transfer};
+        fixture.GetQueue().Submit({.command_buffers = {first_batch, 1}, .signal_semaphores = {&signal, 1}});
+        fixture.GetQueue().Submit({.command_buffers = {second_batch, 1}, .wait_semaphores = {&wait, 1}, .fence = fence});
+        fence.Wait();
+    }
+
+    Opal::DynamicArray<u8> read_back(k_size * 2);
+    Forge::ReadBackBuffer(fixture.device, fixture.GetQueue(), destination, read_back);
+    for (i32 i = 0; i < k_size; ++i)
+    {
+        REQUIRE(read_back[i] == first_half[i]);
+        REQUIRE(read_back[k_size + i] == second_half[i]);
+    }
+    REQUIRE_NO_VALIDATION_ERROR(fixture);
+}
+
+TEST_CASE("Forge submit rejects an empty object", "[forge]")
+{
+    if (!IsForgeAvailable())
+    {
+        SKIP("No Vulkan device on this machine.");
+    }
+    ForgeFixture fixture;
+    const Opal::Ref<const Forge::CommandBuffer> empty_command_buffer{};
+    const Forge::CommandBuffer valid(fixture.device, fixture.GetQueue());
+
+    SECTION("An empty command buffer throws")
+    {
+        Forge::CommandBuffer empty;
+        const Opal::Ref<const Forge::CommandBuffer> batch[1] = {Opal::Ref<const Forge::CommandBuffer>(empty)};
+        REQUIRE_THROWS_AS(fixture.GetQueue().Submit({.command_buffers = {batch, 1}}), Opal::Exception);
+    }
+    SECTION("An empty semaphore throws")
+    {
+        Forge::Semaphore empty;
+        const Forge::SemaphoreSubmit wait{.semaphore = empty};
+        REQUIRE_THROWS_AS(fixture.GetQueue().Submit({.wait_semaphores = {&wait, 1}}), Opal::Exception);
+    }
     REQUIRE_NO_VALIDATION_ERROR(fixture);
 }

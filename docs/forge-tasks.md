@@ -375,12 +375,39 @@ Left for later: compressed formats are not measured by `GetPixelSize`, so the bu
 buffer-to-image copy skips them and the validation layer covers what the guard cannot. `vkCmdResolveImage`
 belongs with the multisample state of 3.10, and `vkCmdClearColorImage` has no consumer yet.
 
-### 3.5 Richer submission
+### 3.5 Richer submission — DONE apart from timeline semaphores
 
-`Forge::DeviceQueue::Submit` takes exactly one command buffer, at most one wait semaphore with one stage,
-one signal semaphore, and a mandatory fence. Add array-based submit, make the fence optional, and add
-`WaitIdle()`. Timeline semaphores are the natural follow-up and would simplify the frames-in-flight
-bookkeeping.
+`DeviceQueue::Submit(const SubmitDesc&)` takes any number of command buffers, any number of semaphores on
+either side, and a fence that may be absent. `SemaphoreSubmit` pairs a semaphore with the stages it is tied
+to - the stages that wait for it on one side, the stages that must finish before it is signalled on the
+other - which is what lets the work either side does not depend on run ahead. `WaitIdle()` wraps
+`vkQueueWaitIdle` for shutdown and setup, where a fence per submit buys nothing.
+
+Written on `vkQueueSubmit2` rather than `vkQueueSubmit`. Synchronization2 is already enabled, the barriers
+already speak it, and `VkSemaphoreSubmitInfo` carries the value field that timeline semaphores need, so the
+follow-up is a field rather than a rewrite. It also removes a question the old code left open: it cast
+`PipelineStageBits`, whose values mirror the 64 bit synchronization2 stages, to the 32 bit
+`VkPipelineStageFlags` of the original submit. That happened to be correct, since the stages both versions
+have kept their values, but it is not a cast anyone should have to check.
+
+The two old overloads remain and are written on the new one, so nothing calling them changed. The one that
+takes a wait and a signal still treats an empty semaphore on either side as "not synchronized there" and
+leaves it out of the batch, rather than tripping the checks the desc based submit makes.
+
+Verified by a test that copies one half of a buffer in one command buffer and the other half in another,
+then reads the whole thing back, run three ways: both command buffers in one batch with a fence, the same
+batch with no fence and `WaitIdle` instead, and one batch each with the second waiting on a semaphore the
+first signals. All three produce the same bytes, and a batch given an empty command buffer or an empty
+semaphore throws.
+
+That test also turned up a flaw in the naming test of 3.8, which had been submitting a deliberately invalid
+copy to provoke a message: work that breaks the specification is undefined behaviour, and the driver took
+the next test down with it. The validation layer checks a copy while it is recorded, so the command buffer
+is thrown away instead of submitted, which is both correct and faster.
+
+Left: timeline semaphores. `Semaphore` is binary only, and a timeline one needs a type and an initial value
+at creation, a value on each wait and signal, and `Wait`, `Signal` and `GetValue` on the host side. Worth
+doing with 4.1, which is where the frames-in-flight bookkeeping they simplify actually lives.
 
 ### 3.6 Device feature chaining
 
