@@ -43,15 +43,22 @@ enum class BufferUsageBits : u32
 OPAL_ENUM_CLASS_FLAGS(BufferUsageBits);
 
 /**
- * How the host intends to touch the memory of a buffer. This picks the memory type the allocation lands in,
- * so a mismatch is slow rather than wrong - reading write-combined memory works and crawls.
+ * How the host intends to touch the memory of a buffer. This picks the memory type the allocation lands in.
+ * The two host-visible values differ in speed rather than in what is allowed - reading write-combined memory
+ * works and crawls - while None asks for memory the host cannot reach at all.
  */
 enum class HostAccess : u8
 {
     /** Written from start to end and never read. Write-combined memory is fine, which is usually fastest. */
     SequentialWrite,
     /** Read back, or written out of order. Cached memory, which is what a host read needs. */
-    Random
+    Random,
+    /**
+     * Not touched by the host at all, so the allocation is free to land in memory the host cannot map.
+     * Buffer::Update and ::Read throw on such a buffer; fill and read it with UploadToBuffer and
+     * ReadBackBuffer from rndr/forge/transfer.hpp instead.
+     */
+    None
 };
 
 /** How a texture is allowed to be used. Mirrors VkImageUsageFlagBits. */

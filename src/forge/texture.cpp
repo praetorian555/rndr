@@ -260,6 +260,8 @@ void Rndr::Forge::Texture::Init(const Device& device, const TextureDesc& desc)
     result = vkCreateImageView(device.GetNativeDevice(), &image_view_create_info, nullptr, &m_view);
     if (result != VK_SUCCESS)
     {
+        // The destructor does not run for an object whose constructor threw, so the image above would leak.
+        Destroy();
         throw VulkanException(result, "vkCreateImageView");
     }
 }

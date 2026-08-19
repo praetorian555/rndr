@@ -19,53 +19,77 @@ Rndr::Forge::Buffer::Buffer(const Device& device, const BufferDesc& desc, Opal::
     {
         create_info.usage |= VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT;
     }
-    // First two flags ensure that we get local memory that is host visible if possible, otherwise it fallbacks to invisible local memory
-    // for fast GPU access. HostAccess::Random asks for cached memory instead, which is what reading the buffer back needs.
-    const VmaAllocationCreateFlags host_access_flag = desc.host_access == HostAccess::Random
-                                                          ? VMA_ALLOCATION_CREATE_HOST_ACCESS_RANDOM_BIT
-                                                          : VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT;
-    const VmaAllocationCreateInfo allocation_create_info{.flags = host_access_flag |
-                                                                  VMA_ALLOCATION_CREATE_HOST_ACCESS_ALLOW_TRANSFER_INSTEAD_BIT |
-                                                                  VMA_ALLOCATION_CREATE_MAPPED_BIT,
-                                                         .usage = VMA_MEMORY_USAGE_AUTO};
+    // Asking for host access is a promise that the memory can be mapped, so the allocation is not allowed to
+    // fall back to memory the host cannot see. HostAccess::None is how a caller asks for that fallback, and
+    // then the staging helpers of transfer.hpp are what fill the buffer.
+    VmaAllocationCreateFlags allocation_flags = 0;
+    switch (desc.host_access)
+    {
+        case HostAccess::SequentialWrite:
+            allocation_flags = VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT | VMA_ALLOCATION_CREATE_MAPPED_BIT;
+            break;
+        case HostAccess::Random:
+            allocation_flags = VMA_ALLOCATION_CREATE_HOST_ACCESS_RANDOM_BIT | VMA_ALLOCATION_CREATE_MAPPED_BIT;
+            break;
+        case HostAccess::None:
+            break;
+        default:
+            throw Opal::Exception("Unknown host access!");
+    }
+    const VmaAllocationCreateInfo allocation_create_info{.flags = allocation_flags, .usage = VMA_MEMORY_USAGE_AUTO};
     VkResult result =
         vmaCreateBuffer(m_device->GetGPUAllocator(), &create_info, &allocation_create_info, &m_buffer, &m_allocation, nullptr);
     if (result != VK_SUCCESS)
     {
         throw VulkanException(result, "vmaCreateBuffer");
     }
-    if (!initial_data.IsEmpty())
+    // Everything past this point can throw, and the destructor does not run for an object whose constructor
+    // did, so the allocation above would be leaked without this.
+    try
     {
-        if (initial_data.GetSize() > m_desc.size)
+        if (!initial_data.IsEmpty())
         {
-            throw Opal::Exception("Initial data does not fit into the buffer.");
+            if (m_desc.host_access == HostAccess::None)
+            {
+                throw Opal::Exception("A buffer with HostAccess::None cannot take initial data - use UploadToBuffer.");
+            }
+            if (initial_data.GetSize() > m_desc.size)
+            {
+                throw Opal::Exception("Initial data does not fit into the buffer.");
+            }
+            void* gpu_data = nullptr;
+            result = vmaMapMemory(m_device->GetGPUAllocator(), m_allocation, &gpu_data);
+            if (result != VK_SUCCESS)
+            {
+                throw VulkanException(result, "vmaMapMemory");
+            }
+            memcpy(gpu_data, initial_data.GetData(), initial_data.GetSize());
+            vmaUnmapMemory(m_device->GetGPUAllocator(), m_allocation);
+            Flush(0, initial_data.GetSize());
         }
-        void* gpu_data = nullptr;
-        result = vmaMapMemory(m_device->GetGPUAllocator(), m_allocation, &gpu_data);
-        if (result != VK_SUCCESS)
+        if (m_desc.keep_memory_mapped && m_desc.host_access != HostAccess::None)
         {
-            throw VulkanException(result, "vmaMapMemory");
+            result = vmaMapMemory(m_device->GetGPUAllocator(), m_allocation, &m_mapped_memory);
+            if (result != VK_SUCCESS)
+            {
+                throw VulkanException(result, "vmaMapMemory");
+            }
         }
-        memcpy(gpu_data, initial_data.GetData(), initial_data.GetSize());
-        vmaUnmapMemory(m_device->GetGPUAllocator(), m_allocation);
-        Flush(0, initial_data.GetSize());
+        if (m_desc.use_device_address)
+        {
+            const VkBufferDeviceAddressInfo buffer_device_address_info{.sType = VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO,
+                                                                       .buffer = m_buffer};
+            m_device_address = vkGetBufferDeviceAddress(m_device->GetNativeDevice(), &buffer_device_address_info);
+            if (m_device_address == 0)
+            {
+                throw Opal::Exception("Failed to get buffer device address.");
+            }
+        }
     }
-    if (m_desc.keep_memory_mapped)
+    catch (...)
     {
-        result = vmaMapMemory(m_device->GetGPUAllocator(), m_allocation, &m_mapped_memory);
-        if (result != VK_SUCCESS)
-        {
-            throw VulkanException(result, "vmaMapMemory");
-        }
-    }
-    const VkBufferDeviceAddressInfo buffer_device_address_info{.sType = VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO, .buffer = m_buffer};
-    if (m_desc.use_device_address)
-    {
-        m_device_address = vkGetBufferDeviceAddress(m_device->GetNativeDevice(), &buffer_device_address_info);
-        if (m_device_address == 0)
-        {
-            throw Opal::Exception("Failed to get buffer device address.");
-        }
+        Destroy();
+        throw;
     }
 }
 
@@ -155,6 +179,10 @@ void Rndr::Forge::Buffer::Update(Opal::ArrayView<const u8> data, size_t offset) 
     {
         return;
     }
+    if (m_desc.host_access == HostAccess::None)
+    {
+        throw Opal::Exception("Writing a buffer with HostAccess::None is not possible - use UploadToBuffer.");
+    }
     // Written this way around so that a huge offset cannot overflow the sum and pass the check.
     if (offset > m_desc.size || data.GetSize() > m_desc.size - offset)
     {
@@ -185,7 +213,7 @@ void Rndr::Forge::Buffer::Read(Opal::ArrayView<u8> data, size_t offset) const
     }
     if (m_desc.host_access != HostAccess::Random)
     {
-        throw Opal::Exception("Reading a buffer needs HostAccess::Random, otherwise the memory is write-combined!");
+        throw Opal::Exception("Reading a buffer needs HostAccess::Random - the other kinds are write-combined or not mapped at all.");
     }
     // Written this way around so that a huge offset cannot overflow the sum and pass the check.
     if (offset > m_desc.size || data.GetSize() > m_desc.size - offset)
