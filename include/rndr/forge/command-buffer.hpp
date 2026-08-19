@@ -299,6 +299,16 @@ public:
                       ImageLayout destination_layout = ImageLayout::TransferDestination);
 
     /**
+     * Fill every mip level below the first by blitting each level into the next, halving it each time. The
+     * texture needs both transfer usages and a format this device can blit and filter linearly, all three of
+     * which throw rather than being left to the validation layer.
+     * @param texture Texture whose mip 0 is filled and whose remaining levels are not.
+     * @param current_layout Layout the whole texture is in now.
+     * @param final_layout Layout to leave the whole texture in, every level in the same one.
+     */
+    void CmdGenerateMips(Texture& texture, ImageLayout current_layout, ImageLayout final_layout = ImageLayout::ShaderReadOnly);
+
+    /**
      * Begin a dynamic rendering pass. Uses VK_KHR_dynamic_rendering, no render pass or framebuffer objects needed.
      * @param desc Describes the render area, color attachments, and optional depth attachment.
      */

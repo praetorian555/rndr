@@ -506,6 +506,45 @@ void Rndr::Forge::CommandBuffer::CmdBlitImage(const Texture& source, Texture& de
                    static_cast<u32>(blit_regions.GetSize()), blit_regions.GetData(), ToVkFilter(filter));
 }
 
+void Rndr::Forge::CommandBuffer::CmdGenerateMips(Texture& texture, ImageLayout current_layout, ImageLayout final_layout)
+{
+    const TextureDesc& desc = texture.GetDesc();
+    if (desc.mip_level_count < 2)
+    {
+        throw Opal::Exception("Generating mips needs a texture with more than one mip level!");
+    }
+    // Every level is read from and written to, so both usages are needed whatever the texture is otherwise for.
+    ValidateTextureUsage(texture, TextureUsageBits::TransferSource, "source", "Mip generation");
+    ValidateTextureUsage(texture, TextureUsageBits::TransferDestination, "destination", "Mip generation");
+
+    // The whole texture starts as the destination of the first blit, including the level that already holds the
+    // data - it becomes a source one level at a time inside the loop.
+    if (current_layout != ImageLayout::TransferDestination)
+    {
+        CmdImageBarrier(ImageBarrier::ToTransferDestination(texture, current_layout));
+    }
+    for (u32 level = 1; level < desc.mip_level_count; ++level)
+    {
+        ImageBarrier to_source = ImageBarrier::ToTransferSource(texture, ImageLayout::TransferDestination);
+        to_source.subresource_range.first_mip_level = level - 1;
+        to_source.subresource_range.mip_level_count = 1;
+        CmdImageBarrier(to_source);
+
+        // Both extents are left at zero, which means the whole of each level, so the blit halves as it goes.
+        const ImageBlitRegion region{.source = {.mip_level = level - 1}, .destination = {.mip_level = level}};
+        CmdBlitImage(texture, texture, {&region, 1});
+    }
+    // Every level but the last is a transfer source by now, and the last one is still a transfer destination.
+    ImageBarrier sources_to_final = ImageBarrier::To(texture, ImageLayout::TransferSource, final_layout);
+    sources_to_final.subresource_range.first_mip_level = 0;
+    sources_to_final.subresource_range.mip_level_count = desc.mip_level_count - 1;
+    ImageBarrier last_to_final = ImageBarrier::To(texture, ImageLayout::TransferDestination, final_layout);
+    last_to_final.subresource_range.first_mip_level = desc.mip_level_count - 1;
+    last_to_final.subresource_range.mip_level_count = 1;
+    const ImageBarrier final_barriers[2] = {sources_to_final.Clone(), last_to_final.Clone()};
+    CmdImageBarriers({final_barriers, 2});
+}
+
 static VkAttachmentLoadOp ToVkLoadOp(Rndr::Forge::AttachmentLoadOperation op)
 {
     switch (op)

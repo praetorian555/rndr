@@ -4,27 +4,6 @@
 #include "rndr/forge/texture.hpp"
 #include "rndr/pixel-format.hpp"
 
-/** The transition back to whatever the caller wants the texture in once the readback has read it. */
-static Rndr::Forge::ImageBarrier BarrierFromTransferSource(const Rndr::Forge::Texture& texture, Rndr::Forge::ImageLayout final_layout)
-{
-    using namespace Rndr::Forge;
-    switch (final_layout)
-    {
-        case ImageLayout::ShaderReadOnly:
-            return ImageBarrier::ToShaderRead(texture, ImageLayout::TransferSource);
-        case ImageLayout::ColorAttachment:
-            return ImageBarrier::ToColorAttachment(texture, ImageLayout::TransferSource);
-        case ImageLayout::DepthStencilAttachment:
-            return ImageBarrier::ToDepthStencilAttachment(texture, ImageLayout::TransferSource);
-        case ImageLayout::TransferDestination:
-            return ImageBarrier::ToTransferDestination(texture, ImageLayout::TransferSource);
-        case ImageLayout::Present:
-            return ImageBarrier::ToPresent(texture, ImageLayout::TransferSource);
-        default:
-            throw Opal::Exception("Reading a texture back cannot leave it in that layout!");
-    }
-}
-
 Rndr::u64 Rndr::Forge::GetMipLevelSize(const TextureDesc& desc, u32 mip_level)
 {
     const u32 pixel_size = GetPixelSize(desc.format);
@@ -92,7 +71,7 @@ void Rndr::Forge::ReadBackTexture(const Device& device, DeviceQueue& queue, cons
                         command_buffer.CmdCopyImageToBuffer(source, staging_buffer, {&region, 1});
                         if (final_layout != ImageLayout::Undefined && final_layout != ImageLayout::TransferSource)
                         {
-                            command_buffer.CmdImageBarrier(BarrierFromTransferSource(source, final_layout));
+                            command_buffer.CmdImageBarrier(ImageBarrier::To(source, ImageLayout::TransferSource, final_layout));
                         }
                     });
     staging_buffer.Read(out);

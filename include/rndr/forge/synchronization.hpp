@@ -155,6 +155,13 @@ struct ImageBarrier : Opal::ClonableBase<ImageBarrier>
 
     /** Handed to the presentation engine. */
     [[nodiscard]] static ImageBarrier ToPresent(const Texture& texture, ImageLayout old_layout = ImageLayout::ColorAttachment);
+
+    /**
+     * The preset for a destination layout that is not known while writing the call - a function handed the
+     * layout to leave a texture in dispatches through this rather than spelling the switch out again. Throws
+     * for a layout that has no preset above.
+     */
+    [[nodiscard]] static ImageBarrier To(const Texture& texture, ImageLayout old_layout, ImageLayout new_layout);
 };
 
 }  // namespace Rndr::Forge

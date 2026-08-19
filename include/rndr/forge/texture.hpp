@@ -39,8 +39,14 @@ class Texture
 public:
     Texture() = default;
     explicit Texture(const Device& device, const TextureDesc& desc = {});
-    explicit Texture(const Device& device, DeviceQueue& queue, const Bitmap& bitmap,
-                             const TextureDesc& desc = {});
+    /**
+     * Upload a bitmap into a new texture, blocking until the copy is done.
+     * @param bitmap Source pixels. Its extent, format and mip count are taken over the ones in the desc.
+     * @param generate_mips Fill the levels below the first by blitting, for a bitmap that carries only mip 0.
+     *                      The full mip chain of the extent is created, and both transfer usages are added.
+     */
+    explicit Texture(const Device& device, DeviceQueue& queue, const Bitmap& bitmap, const TextureDesc& desc = {},
+                     bool generate_mips = false);
     explicit Texture(const Device& device, VkImage native_image, const TextureDesc& desc = {});
     ~Texture();
 

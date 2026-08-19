@@ -143,16 +143,34 @@ Rndr::Forge::Texture::Texture(const Device& device, const TextureDesc& desc) : m
     Init(device, desc);
 }
 
-Rndr::Forge::Texture::Texture(const Device& device, DeviceQueue& queue, const Bitmap& bitmap,
-                                       const TextureDesc& desc)
+/** How many mip levels an extent has all the way down to one texel on every axis. */
+static Rndr::u32 FullMipCount(Rndr::u32 width, Rndr::u32 height, Rndr::u32 depth)
+{
+    Rndr::u32 largest = Opal::Max(width, Opal::Max(height, depth));
+    Rndr::u32 count = 1;
+    while (largest > 1)
+    {
+        largest >>= 1;
+        ++count;
+    }
+    return count;
+}
+
+Rndr::Forge::Texture::Texture(const Device& device, DeviceQueue& queue, const Bitmap& bitmap, const TextureDesc& desc,
+                              bool generate_mips)
     : m_desc(desc)
 {
     m_desc.width = bitmap.GetWidth();
     m_desc.height = bitmap.GetHeight();
     m_desc.depth = bitmap.GetDepth();
-    m_desc.mip_level_count = bitmap.GetMipCount();
+    m_desc.mip_level_count = generate_mips ? FullMipCount(m_desc.width, m_desc.height, m_desc.depth) : bitmap.GetMipCount();
     m_desc.format = bitmap.GetPixelFormat();
-    m_desc.usage = desc.usage | TextureUsageBits::TransferDestination;  // The upload below needs the bit either way
+    // The upload needs the destination bit either way, and generating the mips reads every level back as well.
+    m_desc.usage = desc.usage | TextureUsageBits::TransferDestination;
+    if (generate_mips)
+    {
+        m_desc.usage |= TextureUsageBits::TransferSource;
+    }
 
     Init(device, m_desc);
 
@@ -165,6 +183,11 @@ Rndr::Forge::Texture::Texture(const Device& device, DeviceQueue& queue, const Bi
                     {
                         command_buffer.CmdImageBarrier(ImageBarrier::ToTransferDestination(*this));
                         command_buffer.CmdCopyBufferToImage(staging_buffer, bitmap, *this);
+                        if (generate_mips && m_desc.mip_level_count > 1)
+                        {
+                            command_buffer.CmdGenerateMips(*this, ImageLayout::TransferDestination);
+                            return;
+                        }
                         command_buffer.CmdImageBarrier(ImageBarrier::ToShaderRead(*this, ImageLayout::TransferDestination));
                     });
 }

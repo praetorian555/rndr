@@ -219,6 +219,27 @@ Rndr::Forge::ImageBarrier Rndr::Forge::ImageBarrier::ToPresent(const Texture& te
             .image = texture};
 }
 
+Rndr::Forge::ImageBarrier Rndr::Forge::ImageBarrier::To(const Texture& texture, ImageLayout old_layout, ImageLayout new_layout)
+{
+    switch (new_layout)
+    {
+        case ImageLayout::ShaderReadOnly:
+            return ToShaderRead(texture, old_layout);
+        case ImageLayout::ColorAttachment:
+            return ToColorAttachment(texture, old_layout);
+        case ImageLayout::DepthStencilAttachment:
+            return ToDepthStencilAttachment(texture, old_layout);
+        case ImageLayout::TransferSource:
+            return ToTransferSource(texture, old_layout);
+        case ImageLayout::TransferDestination:
+            return ToTransferDestination(texture, old_layout);
+        case ImageLayout::Present:
+            return ToPresent(texture, old_layout);
+        default:
+            throw Opal::Exception("No barrier preset transitions a texture into that layout!");
+    }
+}
+
 Rndr::Forge::Semaphore::Semaphore(const Device& device) : m_device(device)
 {
     const VkSemaphoreCreateInfo semaphore_create_info = {.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO};

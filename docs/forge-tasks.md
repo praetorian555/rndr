@@ -320,11 +320,60 @@ Worth knowing for later: an early version of the probe drew `mesh.vertex_count` 
 reported 2010 of 2012, which reads like a bug and is not one - 2012 vertices as a triangle list is 670 whole
 triangles, and the two left over never form a primitive, so they never reach the vertex shader.
 
-### 3.4 Copies, blits and readback
+### 3.4 Copies, blits and readback — DONE
 
-`CmdCopyBuffer`, `CmdCopyImage`, `CmdBlitImage`, `CmdCopyImageToBuffer`, plus a staging-buffer helper and
-mip generation. Today a texture can only be uploaded from a `Bitmap` that already has its mips, and nothing
-can be read back.
+`CmdCopyBuffer`, `CmdCopyImage`, `CmdCopyImageToBuffer` and a region-based `CmdCopyBufferToImage` that the
+`Bitmap` overload is now written on top of, which is what removed its hardcoded color aspect and its single
+array layer. Regions are `BufferCopyRegion`, `BufferImageCopyRegion` and `ImageCopyRegion`, all sharing
+`ImageSubresourceLayers` - the single-level counterpart of `ImageSubresourceRange`, whose aspect resolution
+both now go through. A zero extent means the rest of the mip level past the offset, so the common case names
+nothing at all.
+
+Readback needed more than a copy command. Every buffer was allocated
+`VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT`, which is legal to read and slow enough to be a bug,
+and nothing called `vmaInvalidateAllocation`, which non-coherent memory needs before a host read.
+`BufferDesc::host_access` picks the memory type and `Buffer::Read` invalidates before copying out, throwing
+when the buffer is not `HostAccess::Random` rather than being quietly slow.
+
+`rndr/forge/transfer.hpp` holds `ImmediateSubmit` - record, submit, wait - and `UploadToBuffer`,
+`ReadBackBuffer` and `ReadBackTexture` on top of it. `Texture`'s bitmap constructor was the one place that
+spelled a one-shot submit out by hand and now goes through it. No barrier to the host is issued before the
+readback reads: signalling the fence the submit waited on already makes every device write available to the
+host domain, and `PipelineStageBits` has no `Host` to name anyway - that is 3.12.
+
+`CmdBlitImage` names its boxes as an offset and an extent, the way the copy regions do, except that the
+extent may be negative, since a backwards box is how a blit mirrors an axis and corners are what Vulkan
+takes. Whether a format can be blitted is per device, per format and per side, so
+`PhysicalDevice::SupportsBlit` and `::SupportsLinearFilter` answer it and the command throws instead of
+leaving a driver-specific surprise to the validation layer.
+
+`CmdGenerateMips` blits each level into the next. `ImageBarrier::To` was added for it and for
+`ReadBackTexture`: both are handed the layout to leave a texture in rather than knowing it, and both were
+about to spell the same switch over the presets out. `Texture`'s bitmap constructor takes a `generate_mips`
+flag that creates the full mip chain of the extent and adds both transfer usages.
+
+Verified by measurement rather than by the absence of validation messages, which 1.9 proved means nothing.
+Every readback destination was wiped first, so nothing could be shown green by what the previous pass left:
+
+- Buffer to buffer: 1 of 256 bytes matching before the copy, 256 of 256 after.
+- Buffer to image and back, on mip 0 and on mip 1 - the levels the `Bitmap` path never exercised: 256 of 256
+  and 64 of 64.
+- Image to image: 256 of 256.
+- Blit of four distinct texels from 2x2 into 4x4 with a nearest filter, so the expected result is exact:
+  64 of 64, and 64 of 64 again with the source box run backwards on X, which mirrors it.
+- Mip generation from a mip 0 whose every texel is the same value, since a box filter of a constant is that
+  constant at every level whatever filtering the driver picked: 8x8, 4x4, 2x2 and 1x1 all exact.
+
+All eleven guards threw. The sample was run with the validation layer and its albedo texture switched to the
+`generate_mips` path: clean exit, no validation message. Probes removed.
+
+Found along the way and fixed in its own commit: `Texture` created an image view unconditionally, which is
+invalid for a texture whose usage is transfer only - a thing that could not exist before copies and blits
+made it ordinary.
+
+Left for later: compressed formats are not measured by `GetPixelSize`, so the buffer-size check of a
+buffer-to-image copy skips them and the validation layer covers what the guard cannot. `vkCmdResolveImage`
+belongs with the multisample state of 3.10, and `vkCmdClearColorImage` has no consumer yet.
 
 ### 3.5 Richer submission
 
