@@ -200,11 +200,16 @@ The values of the flag enums mirror the Vulkan values they map to, so translatin
 plain enums are translated by a `ToVk*` switch in the source file that needs them, which is why a value with
 no Vulkan counterpart cannot be cast into one by accident.
 
-Vulkan is still visible in three deliberate places. `GetNative*()` on every type hands out the raw handle,
+Vulkan is still visible in two deliberate places. `GetNative*()` on every type hands out the raw handle,
 which is the escape hatch for anything Forge does not wrap yet. `Surface::GetSwapChainSupportDetails` and
 the queue family queries on `PhysicalDevice` return what Vulkan reported, since they exist to inspect the
-driver rather than to describe an object. And `DeviceDesc::features` is still `VkPhysicalDeviceFeatures`,
-which task 3.6 in `docs/forge-tasks.md` covers.
+driver rather than to describe an object.
+
+`DeviceFeatures` is the same idea applied to device creation. Its fields are named for what they do rather
+than for the Vulkan version that introduced them, and Forge maps each one onto whichever feature structure
+Vulkan keeps it in and chains those itself. A caller never sees `VkPhysicalDeviceVulkan12Features`, never
+keeps a `pNext` chain alive, and never has to know that buffer device addresses arrived in 1.2 while
+descriptor indexing arrived in the same release by a different name.
 
 ---
 

@@ -326,6 +326,10 @@ void Rndr::Forge::Texture::Destroy()
 
 Rndr::Forge::Sampler::Sampler(const Device& device, const SamplerDesc& desc) : m_device(device)
 {
+    if (desc.max_anisotropy > 1.0f && !device.GetFeatures().sampler_anisotropy)
+    {
+        throw Opal::Exception("An anisotropic sampler needs the device created with DeviceFeatures::sampler_anisotropy.");
+    }
     const VkSamplerCreateInfo sampler_create_info = {
         .sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO,
         .magFilter = ToVkFilter(desc.mag_filter),

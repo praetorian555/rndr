@@ -409,11 +409,39 @@ Left: timeline semaphores. `Semaphore` is binary only, and a timeline one needs 
 at creation, a value on each wait and signal, and `Wait`, `Signal` and `GetValue` on the host side. Worth
 doing with 4.1, which is where the frames-in-flight bookkeeping they simplify actually lives.
 
-### 3.6 Device feature chaining
+### 3.6 Device features — DONE
 
-`Forge::DeviceDesc::features` is the Vulkan 1.0 `VkPhysicalDeviceFeatures`; the 1.2 and 1.3 features are
-hardcoded in `src/forge/device.cpp:95-104`. Let the caller request 1.1/1.2/1.3 features and extension
-feature structs, and fail with a clear message when the physical device does not support what was asked for.
+`DeviceDesc::features` is a `DeviceFeatures`, a flat struct of named booleans, rather than the Vulkan 1.0
+feature structure it used to be. The fields say what they do - `fill_mode_non_solid`, `multi_draw_indirect`,
+`buffer_device_address`, `mesh_shader` - and Forge maps each onto whichever structure Vulkan keeps it in,
+chains those, and passes the chain. The chain lives in one local in `Device`'s constructor and is read
+before that call returns, so the lifetime problem a caller-owned `pNext` chain would have created does not
+exist. Nothing in the desc names a `Vk` type any more, which is what 2.4 asked for and this was the last
+exception to.
+
+Grouping by Vulkan version was deliberately dropped. A caller has no reason to know that buffer device
+addresses arrived in 1.2 and dynamic rendering in 1.3, and that grouping ages badly as features are promoted
+between releases.
+
+What the caller cannot turn off is `synchronization2` and `dynamicRendering`, which Forge is written on -
+every barrier and every `CmdBeginRendering` - so both are always enabled, and a device without them is
+rejected by name at creation.
+
+Support is checked against `vkGetPhysicalDeviceFeatures2` before anything is requested, and an unsupported
+feature throws naming the field rather than coming back as `VK_ERROR_FEATURE_NOT_PRESENT` from
+`vkCreateDevice`, which names nothing. Asking for `mesh_shader` or `task_shader` enables `VK_EXT_mesh_shader`
+too, since a feature that lives in an extension is useless without it - that is what unblocks
+`CmdDrawMeshTasks`, which has existed since 3.3 and had no way of ever being enabled.
+
+`Device::GetFeatures()` reports what was asked for, and three guards now use it: a buffer wanting a device
+address, an anisotropic sampler, and an indirect draw of more than one command all throw when the feature
+behind them was not enabled. Writing the first of those turned up that the check has to come before
+`vmaCreateBuffer` rather than after - the allocation asks for device address memory itself, so a guard that
+threw afterwards had already produced a validation error.
+
+Verified headless: the defaults come back out of `GetFeatures`, asking for mesh shaders succeeds exactly
+when this machine has the extension, and each of the three guards throws on a device created without its
+feature. The sample runs unchanged, since the defaults are what was hardcoded before.
 
 ### 3.7 Physical device selection
 

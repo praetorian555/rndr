@@ -11,6 +11,12 @@
 Rndr::Forge::Buffer::Buffer(const Device& device, const BufferDesc& desc, Opal::ArrayView<const u8> initial_data)
     : m_device(device), m_desc(desc)
 {
+    // Checked before anything is created: the allocation below asks for device address memory, which is
+    // already a validation error on a device without the feature.
+    if (desc.use_device_address && !m_device->GetFeatures().buffer_device_address)
+    {
+        throw Opal::Exception("A buffer with a device address needs the device created with DeviceFeatures::buffer_device_address.");
+    }
     // The values of BufferUsageBits mirror VkBufferUsageFlagBits, so the mask translates as a cast.
     VkBufferCreateInfo create_info{.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
                                    .size = desc.size,

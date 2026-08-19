@@ -608,3 +608,80 @@ TEST_CASE("Forge waiting on several fences at once", "[forge]")
     }
     REQUIRE_NO_VALIDATION_ERROR(fixture);
 }
+
+TEST_CASE("Forge device features", "[forge]")
+{
+    if (!IsForgeAvailable())
+    {
+        SKIP("No Vulkan device on this machine.");
+    }
+    const Forge::GraphicsContext context({.collect_debug_messages = true});
+
+    // Builds a device on this machine's first physical device with the given features asked for.
+    auto make_device = [&context](const Forge::DeviceFeatures& features)
+    {
+        Opal::DynamicArray<Forge::PhysicalDevice> physical_devices = context.EnumeratePhysicalDevices();
+        return Forge::Device(std::move(physical_devices[0]), context, {.features = features});
+    };
+
+    SECTION("The defaults are what the device reports back")
+    {
+        const Forge::Device device = make_device({});
+        REQUIRE(device.GetFeatures().buffer_device_address);
+        REQUIRE(device.GetFeatures().descriptor_indexing);
+        REQUIRE(device.GetFeatures().sampler_anisotropy);
+        REQUIRE_FALSE(device.GetFeatures().mesh_shader);
+        REQUIRE_FALSE(device.GetFeatures().geometry_shader);
+    }
+    SECTION("Asking for mesh shaders succeeds exactly when this device has them")
+    {
+        Opal::DynamicArray<Forge::PhysicalDevice> physical_devices = context.EnumeratePhysicalDevices();
+        const bool has_extension = physical_devices[0].IsExtensionSupported(VK_EXT_MESH_SHADER_EXTENSION_NAME);
+        INFO("VK_EXT_mesh_shader supported: " << has_extension);
+        if (has_extension)
+        {
+            const Forge::Device device = make_device({.mesh_shader = true, .task_shader = true});
+            REQUIRE(device.IsExtensionEnabled(VK_EXT_MESH_SHADER_EXTENSION_NAME));
+        }
+        else
+        {
+            REQUIRE_THROWS_AS(make_device({.mesh_shader = true}), Opal::Exception);
+        }
+    }
+    SECTION("A buffer wanting a device address needs the feature")
+    {
+        const Forge::Device device = make_device({.buffer_device_address = false});
+        REQUIRE_THROWS_AS(Forge::Buffer(device, {.size = 64,
+                                                 .usage = Forge::BufferUsageBits::StorageBuffer,
+                                                 .use_device_address = true}),
+                          Opal::Exception);
+    }
+    SECTION("An anisotropic sampler needs the feature")
+    {
+        const Forge::Device device = make_device({.sampler_anisotropy = false});
+        REQUIRE_THROWS_AS(Forge::Sampler(device, {.max_anisotropy = 8.0f}), Opal::Exception);
+        // One that does not ask for anisotropy is fine on the same device.
+        const Forge::Sampler sampler(device, {.max_anisotropy = 1.0f});
+        REQUIRE(sampler.IsValid());
+    }
+    SECTION("More than one indirect command needs the feature")
+    {
+        Forge::Device device = make_device({.multi_draw_indirect = false});
+        Forge::DeviceQueue& queue = device.GetQueue(Forge::QueueFamily::Graphics);
+        const Forge::Buffer commands(device, {.size = 2 * sizeof(Forge::DrawIndirectCommand),
+                                              .usage = Forge::BufferUsageBits::IndirectBuffer});
+        Forge::CommandBuffer command_buffer(device, queue);
+        command_buffer.Begin();
+        REQUIRE_THROWS_AS(command_buffer.CmdDrawIndirect(commands, 0, 2), Opal::Exception);
+        command_buffer.End();
+    }
+
+    Opal::StringUtf8 report;
+    for (const Forge::DebugMessage& message : context.GetDebugMessages())
+    {
+        report += message.text;
+        report += Opal::StringUtf8("\n");
+    }
+    INFO(*report);
+    REQUIRE(context.GetDebugMessageCount(Forge::DebugMessageSeverity::Error, Forge::DebugMessageTypeBits::Validation) == 0);
+}

@@ -765,15 +765,27 @@ void Rndr::Forge::CommandBuffer::CmdDraw(u32 vertex_count, u32 instance_count, u
     vkCmdDraw(m_native_command_buffer, vertex_count, instance_count, first_vertex, first_instance);
 }
 
+/** More than one command in one indirect draw is a feature rather than something every device can do. */
+static void ValidateIndirectDrawCount(const Rndr::Forge::Device& device, Rndr::u32 draw_count, const char* what)
+{
+    if (draw_count > 1 && !device.GetFeatures().multi_draw_indirect)
+    {
+        throw Opal::Exception(Opal::StringEx(what) +
+                              " of more than one command needs the device created with DeviceFeatures::multi_draw_indirect!");
+    }
+}
+
 void Rndr::Forge::CommandBuffer::CmdDrawIndirect(const Buffer& buffer, u64 offset, u32 draw_count, u32 stride)
 {
     ValidateIndirectRange(buffer, offset, draw_count, stride, sizeof(DrawIndirectCommand), "Indirect draw");
+    ValidateIndirectDrawCount(*m_device, draw_count, "Indirect draw");
     vkCmdDrawIndirect(m_native_command_buffer, buffer.GetNativeBuffer(), offset, draw_count, stride);
 }
 
 void Rndr::Forge::CommandBuffer::CmdDrawIndexedIndirect(const Buffer& buffer, u64 offset, u32 draw_count, u32 stride)
 {
     ValidateIndirectRange(buffer, offset, draw_count, stride, sizeof(DrawIndexedIndirectCommand), "Indirect indexed draw");
+    ValidateIndirectDrawCount(*m_device, draw_count, "Indirect indexed draw");
     vkCmdDrawIndexedIndirect(m_native_command_buffer, buffer.GetNativeBuffer(), offset, draw_count, stride);
 }
 

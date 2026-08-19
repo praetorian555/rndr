@@ -33,9 +33,82 @@ enum class QueueFamily : u8
     EnumCount
 };
 
+/**
+ * What a device is asked to turn on, named by what it does rather than by the Vulkan version that introduced
+ * it. Forge maps each field onto whichever feature structure Vulkan keeps it in and builds the chain itself,
+ * so nothing here has to be kept alive past the call and no caller has to know which release added what.
+ *
+ * A field that this device does not support throws at creation, naming the field, rather than failing inside
+ * vkCreateDevice with a result that names nothing.
+ *
+ * Synchronization2 and dynamic rendering are not here: Forge is written on both - every barrier and every
+ * CmdBeginRendering - so they are always enabled and turning them off would only break it.
+ */
+struct DeviceFeatures
+{
+    // Rasterization and geometry.
+    /** Wireframe, which is RasterizerDesc::fill_mode set to FillMode::Wireframe. */
+    bool fill_mode_non_solid = false;
+    /** Lines thicker than one pixel. */
+    bool wide_lines = false;
+    /** Clamp depth instead of clipping against the near and far planes. */
+    bool depth_clamp = false;
+    /** Clamp the depth bias, which RasterizerDesc::depth_bias_clamp asks for. */
+    bool depth_bias_clamp = false;
+    bool geometry_shader = false;
+    bool tessellation_shader = false;
+    /** Blend state per color attachment rather than one shared by all of them. */
+    bool independent_blend = false;
+    /** More than one command in a CmdDrawIndirect or CmdDrawIndexedIndirect. */
+    bool multi_draw_indirect = false;
+    /** A non-zero first_instance in an indirect draw. */
+    bool draw_indirect_first_instance = false;
+
+    // Sampling.
+    /** Anisotropic filtering, which SamplerDesc::max_anisotropy above one asks for. */
+    bool sampler_anisotropy = true;
+    /** BC compressed texture formats. */
+    bool texture_compression_bc = false;
+
+    // Shaders.
+    bool shader_int16 = false;
+    bool shader_int64 = false;
+    bool shader_float64 = false;
+
+    // Descriptors.
+    /** Indexing into arrays of descriptors. The rest of the descriptor fields build on this one. */
+    bool descriptor_indexing = true;
+    /** Arrays of descriptors whose length the shader does not have to know. */
+    bool runtime_descriptor_array = true;
+    /** The variable_descriptor_count argument of DescriptorSet. */
+    bool variable_descriptor_count = true;
+    /** Bindings whose descriptors need not all be written, which bindless allocation depends on. */
+    bool partially_bound_descriptors = false;
+    /** DescriptorPoolDesc::use_update_after_bind. */
+    bool update_after_bind_descriptors = false;
+    /** Indexing descriptor arrays with a value that differs between invocations. */
+    bool non_uniform_descriptor_indexing = false;
+
+    // Memory and synchronization.
+    /** BufferDesc::use_device_address. */
+    bool buffer_device_address = true;
+    /** Lets a shader lay out buffer blocks the way C does. */
+    bool scalar_block_layout = false;
+    /** Semaphores that carry a counter rather than a signalled flag. */
+    bool timeline_semaphore = false;
+    /** Reset query pools from the host, which timestamp queries want. */
+    bool host_query_reset = false;
+
+    // Extension backed. Asking for one of these enables the extension it belongs to as well.
+    /** Task and mesh shaders, which CmdDrawMeshTasks needs. Pulls in VK_EXT_mesh_shader. */
+    bool mesh_shader = false;
+    /** The task stage in front of the mesh stage. Needs mesh_shader too. */
+    bool task_shader = false;
+};
+
 struct DeviceDesc : Opal::ClonableBase<DeviceDesc>
 {
-    VkPhysicalDeviceFeatures features = {.samplerAnisotropy = VK_TRUE};
+    DeviceFeatures features;
     Opal::DynamicArray<const char*> extensions;
     Opal::Ref<Surface> surface;
     bool use_async_compute_queue = true;
@@ -152,6 +225,9 @@ public:
     [[nodiscard]] const PhysicalDevice& GetPhysicalDevice() const { return m_physical_device; }
     [[nodiscard]] VkPhysicalDevice GetNativePhysicalDevice() const { return m_physical_device.GetNativePhysicalDevice(); }
     [[nodiscard]] const DeviceDesc& GetDesc() const { return m_desc; }
+
+    /** The features this device was created with, for the guards that have to ask before using one. */
+    [[nodiscard]] const DeviceFeatures& GetFeatures() const { return m_desc.features; }
 
     /**
      * Whether the device was created with the named extension. Commands that belong to an extension have to ask,

@@ -67,6 +67,135 @@ Rndr::u32 Rndr::Forge::QueueFamilyIndices::GetQueueFamilyIndex(QueueFamily queue
     }
 }
 
+namespace
+{
+using namespace Rndr;
+
+/**
+ * Every feature structure Vulkan keeps its features in, chained together once. It exists so that the mapping
+ * from Forge's flat DeviceFeatures onto them is written in one place and used twice: to ask the device what
+ * it supports, and to tell it what to enable.
+ *
+ * The chain points at its own members, so an instance of this must not be copied or moved after it is built.
+ */
+struct FeatureChain
+{
+    VkPhysicalDeviceFeatures2 features2{.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2};
+    VkPhysicalDeviceVulkan11Features vk11{.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_1_FEATURES};
+    VkPhysicalDeviceVulkan12Features vk12{.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_2_FEATURES};
+    VkPhysicalDeviceVulkan13Features vk13{.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_3_FEATURES};
+    VkPhysicalDeviceMeshShaderFeaturesEXT mesh{.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_MESH_SHADER_FEATURES_EXT};
+
+    /**
+     * @param include_mesh Whether to chain the mesh shader structure. Chaining a structure that belongs to an
+     *        extension the device does not have is not allowed, so this is only true once that is known.
+     */
+    explicit FeatureChain(bool include_mesh)
+    {
+        features2.pNext = &vk11;
+        vk11.pNext = &vk12;
+        vk12.pNext = &vk13;
+        vk13.pNext = include_mesh ? &mesh : nullptr;
+    }
+
+    FeatureChain(const FeatureChain&) = delete;
+    FeatureChain& operator=(const FeatureChain&) = delete;
+
+    /** Set the Vulkan field behind every Forge field that was asked for. */
+    void Fill(const Forge::DeviceFeatures& features)
+    {
+        features2.features.fillModeNonSolid = features.fill_mode_non_solid;
+        features2.features.wideLines = features.wide_lines;
+        features2.features.depthClamp = features.depth_clamp;
+        features2.features.depthBiasClamp = features.depth_bias_clamp;
+        features2.features.geometryShader = features.geometry_shader;
+        features2.features.tessellationShader = features.tessellation_shader;
+        features2.features.independentBlend = features.independent_blend;
+        features2.features.multiDrawIndirect = features.multi_draw_indirect;
+        features2.features.drawIndirectFirstInstance = features.draw_indirect_first_instance;
+        features2.features.samplerAnisotropy = features.sampler_anisotropy;
+        features2.features.textureCompressionBC = features.texture_compression_bc;
+        features2.features.shaderInt16 = features.shader_int16;
+        features2.features.shaderInt64 = features.shader_int64;
+        features2.features.shaderFloat64 = features.shader_float64;
+
+        vk12.descriptorIndexing = features.descriptor_indexing;
+        vk12.runtimeDescriptorArray = features.runtime_descriptor_array;
+        vk12.descriptorBindingVariableDescriptorCount = features.variable_descriptor_count;
+        vk12.descriptorBindingPartiallyBound = features.partially_bound_descriptors;
+        vk12.descriptorBindingSampledImageUpdateAfterBind = features.update_after_bind_descriptors;
+        vk12.descriptorBindingStorageBufferUpdateAfterBind = features.update_after_bind_descriptors;
+        vk12.descriptorBindingStorageImageUpdateAfterBind = features.update_after_bind_descriptors;
+        vk12.descriptorBindingUniformBufferUpdateAfterBind = features.update_after_bind_descriptors;
+        vk12.shaderSampledImageArrayNonUniformIndexing = features.non_uniform_descriptor_indexing;
+        vk12.shaderStorageBufferArrayNonUniformIndexing = features.non_uniform_descriptor_indexing;
+        vk12.shaderStorageImageArrayNonUniformIndexing = features.non_uniform_descriptor_indexing;
+        vk12.bufferDeviceAddress = features.buffer_device_address;
+        vk12.scalarBlockLayout = features.scalar_block_layout;
+        vk12.timelineSemaphore = features.timeline_semaphore;
+        vk12.hostQueryReset = features.host_query_reset;
+
+        // Forge is written on both of these, so they are not the caller's to turn off.
+        vk13.synchronization2 = VK_TRUE;
+        vk13.dynamicRendering = VK_TRUE;
+
+        mesh.meshShader = features.mesh_shader;
+        mesh.taskShader = features.task_shader;
+    }
+};
+
+/** Ask the device what it supports and throw for the first requested feature it does not, naming that one. */
+void ThrowOnUnsupportedFeatures(const Forge::PhysicalDevice& physical_device, const Forge::DeviceFeatures& requested)
+{
+    const bool has_mesh_extension = physical_device.IsExtensionSupported(VK_EXT_MESH_SHADER_EXTENSION_NAME);
+    FeatureChain supported(has_mesh_extension);
+    vkGetPhysicalDeviceFeatures2(physical_device.GetNativePhysicalDevice(), &supported.features2);
+
+    auto require = [](bool is_requested, VkBool32 is_supported, const char* name)
+    {
+        if (is_requested && is_supported == VK_FALSE)
+        {
+            throw Opal::Exception(Opal::StringEx("This device does not support the requested feature: ") + name);
+        }
+    };
+    const VkPhysicalDeviceFeatures& core = supported.features2.features;
+    require(requested.fill_mode_non_solid, core.fillModeNonSolid, "fill_mode_non_solid");
+    require(requested.wide_lines, core.wideLines, "wide_lines");
+    require(requested.depth_clamp, core.depthClamp, "depth_clamp");
+    require(requested.depth_bias_clamp, core.depthBiasClamp, "depth_bias_clamp");
+    require(requested.geometry_shader, core.geometryShader, "geometry_shader");
+    require(requested.tessellation_shader, core.tessellationShader, "tessellation_shader");
+    require(requested.independent_blend, core.independentBlend, "independent_blend");
+    require(requested.multi_draw_indirect, core.multiDrawIndirect, "multi_draw_indirect");
+    require(requested.draw_indirect_first_instance, core.drawIndirectFirstInstance, "draw_indirect_first_instance");
+    require(requested.sampler_anisotropy, core.samplerAnisotropy, "sampler_anisotropy");
+    require(requested.texture_compression_bc, core.textureCompressionBC, "texture_compression_bc");
+    require(requested.shader_int16, core.shaderInt16, "shader_int16");
+    require(requested.shader_int64, core.shaderInt64, "shader_int64");
+    require(requested.shader_float64, core.shaderFloat64, "shader_float64");
+
+    require(requested.descriptor_indexing, supported.vk12.descriptorIndexing, "descriptor_indexing");
+    require(requested.runtime_descriptor_array, supported.vk12.runtimeDescriptorArray, "runtime_descriptor_array");
+    require(requested.variable_descriptor_count, supported.vk12.descriptorBindingVariableDescriptorCount, "variable_descriptor_count");
+    require(requested.partially_bound_descriptors, supported.vk12.descriptorBindingPartiallyBound, "partially_bound_descriptors");
+    require(requested.update_after_bind_descriptors, supported.vk12.descriptorBindingSampledImageUpdateAfterBind,
+            "update_after_bind_descriptors");
+    require(requested.non_uniform_descriptor_indexing, supported.vk12.shaderSampledImageArrayNonUniformIndexing,
+            "non_uniform_descriptor_indexing");
+    require(requested.buffer_device_address, supported.vk12.bufferDeviceAddress, "buffer_device_address");
+    require(requested.scalar_block_layout, supported.vk12.scalarBlockLayout, "scalar_block_layout");
+    require(requested.timeline_semaphore, supported.vk12.timelineSemaphore, "timeline_semaphore");
+    require(requested.host_query_reset, supported.vk12.hostQueryReset, "host_query_reset");
+
+    // Forge needs these two whatever the caller asked for, so a device without them cannot be used at all.
+    require(true, supported.vk13.synchronization2, "synchronization2, which Forge requires");
+    require(true, supported.vk13.dynamicRendering, "dynamic rendering, which Forge requires");
+
+    require(requested.mesh_shader, has_mesh_extension ? supported.mesh.meshShader : VK_FALSE, "mesh_shader");
+    require(requested.task_shader, has_mesh_extension ? supported.mesh.taskShader : VK_FALSE, "task_shader");
+}
+}  // namespace
+
 Rndr::Forge::Device::Device(PhysicalDevice physical_device, const GraphicsContext& graphics_context,
                                      const DeviceDesc& desc)
     : m_desc(desc.Clone()), m_physical_device(std::move(physical_device))
@@ -84,30 +213,35 @@ Rndr::Forge::Device::Device(PhysicalDevice physical_device, const GraphicsContex
     {
         device_extensions.PushBack(VK_KHR_SWAPCHAIN_EXTENSION_NAME);
     }
+    // A feature that lives in an extension only works when the extension is enabled too, so asking for the
+    // feature is taken as asking for both rather than as a puzzle for the caller to solve.
+    if (m_desc.features.mesh_shader || m_desc.features.task_shader)
+    {
+        device_extensions.PushBack(VK_EXT_MESH_SHADER_EXTENSION_NAME);
+    }
     m_enabled_extensions = device_extensions.Clone();
     for (const char* extension_name : device_extensions)
     {
         if (!m_physical_device.IsExtensionSupported(extension_name))
         {
-            throw Opal::Exception("Device extension not supported!");
+            throw Opal::Exception(Opal::StringEx("Device extension not supported: ") + extension_name);
         }
     }
 
-    VkPhysicalDeviceVulkan12Features enabled_vk12_features = {
-        .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_2_FEATURES,
-        .descriptorIndexing = 1,
-        .descriptorBindingVariableDescriptorCount = 1,
-        .runtimeDescriptorArray = 1,
-        .bufferDeviceAddress = 1};  // So you can get pointer to raw GPU buffer memory and pass it to shader
-    const VkPhysicalDeviceVulkan13Features enabled_vk13_features = {.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_3_FEATURES,
-                                                                    .pNext = &enabled_vk12_features,
-                                                                    .synchronization2 = 1,
-                                                                    .dynamicRendering = 1};
+    // Checked against what the device reports before anything is asked for, so an unsupported feature names
+    // itself instead of coming back as VK_ERROR_FEATURE_NOT_PRESENT from vkCreateDevice.
+    ThrowOnUnsupportedFeatures(m_physical_device, m_desc.features);
+
+    FeatureChain enabled_features(m_desc.features.mesh_shader || m_desc.features.task_shader);
+    enabled_features.Fill(m_desc.features);
+
     VkDeviceCreateInfo create_info{};
     create_info.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
-    create_info.pNext = &enabled_vk13_features, create_info.pQueueCreateInfos = queue_create_infos.GetData();
+    // The features go in through the chain, which is what pEnabledFeatures staying null says.
+    create_info.pNext = &enabled_features.features2;
+    create_info.pQueueCreateInfos = queue_create_infos.GetData();
     create_info.queueCreateInfoCount = static_cast<u32>(queue_create_infos.GetSize());
-    create_info.pEnabledFeatures = &desc.features;
+    create_info.pEnabledFeatures = nullptr;
     create_info.ppEnabledExtensionNames = device_extensions.GetData();
     create_info.enabledExtensionCount = static_cast<u32>(device_extensions.GetSize());
 
