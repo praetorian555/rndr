@@ -13,6 +13,7 @@
 #include "rndr/forge/shader.hpp"
 #include "rndr/forge/texture.hpp"
 #include "rndr/forge/command-buffer.hpp"
+#include "rndr/forge/debug.hpp"
 #include "rndr/forge/device.hpp"
 #include "rndr/forge/graphics-context.hpp"
 #include "rndr/forge/physical-device.hpp"
@@ -194,6 +195,23 @@ void Run()
         .color_attachment_formats = {swap_chain.GetDesc().pixel_format},
         .depth_attachment_format = swap_chain.GetDesc().depth_pixel_format};
     Rndr::Forge::Pipeline pipeline(device, pipeline_desc);
+
+    // Names show up in validation messages and in a capture, and cost nothing in a build without debug utils.
+    Rndr::Forge::SetDebugName(device, mesh_buffer, "suzanne mesh");
+    Rndr::Forge::SetDebugName(device, albedo_texture, "suzanne albedo");
+    Rndr::Forge::SetDebugName(device, mr_texture, "suzanne metallic roughness");
+    Rndr::Forge::SetDebugName(device, albedo_sampler, "albedo sampler");
+    Rndr::Forge::SetDebugName(device, mr_sampler, "metallic roughness sampler");
+    Rndr::Forge::SetDebugName(device, descriptor_set_layout, "material layout");
+    Rndr::Forge::SetDebugName(device, descriptor_set, "material set");
+    Rndr::Forge::SetDebugName(device, pipeline, "forward pipeline");
+    Rndr::Forge::SetDebugName(device, swap_chain, "swap chain");
+    for (i32 i = 0; i < k_frames_in_flight; ++i)
+    {
+        Rndr::Forge::SetDebugName(device, m_shader_buffers[i], "per frame shader data");
+        Rndr::Forge::SetDebugName(device, command_buffers[i], "frame commands");
+        Rndr::Forge::SetDebugName(device, fences[i], "frame fence");
+    }
 
     Rndr::Vector2i window_size = window->GetSize();
     f32 window_width = window_size.x;

@@ -24,20 +24,68 @@ VkResult CreateDebugUtilsMessengerEXT(VkInstance instance, const VkDebugUtilsMes
     return VK_ERROR_EXTENSION_NOT_PRESENT;
 }
 
-VKAPI_ATTR VkBool32 VKAPI_CALL DebugCallback(VkDebugUtilsMessageSeverityFlagBitsEXT severity, VkDebugUtilsMessageTypeFlagsEXT,
-                                             const VkDebugUtilsMessengerCallbackDataEXT* callback_data, void*)
+VKAPI_ATTR VkBool32 VKAPI_CALL DebugCallback(VkDebugUtilsMessageSeverityFlagBitsEXT severity, VkDebugUtilsMessageTypeFlagsEXT types,
+                                             const VkDebugUtilsMessengerCallbackDataEXT* callback_data, void* user_data)
 {
+    using namespace Rndr::Forge;
+    DebugMessageSeverity forge_severity = DebugMessageSeverity::Info;
     if ((severity & VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT) != 0)
     {
+        forge_severity = DebugMessageSeverity::Error;
         RNDR_LOG_ERROR("[Vulkan Validation] {}", callback_data->pMessage);
     }
     else if ((severity & VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT) != 0)
     {
+        forge_severity = DebugMessageSeverity::Warning;
         RNDR_LOG_WARNING("[Vulkan Validation] {}", callback_data->pMessage);
     }
     else
     {
         RNDR_LOG_INFO("[Vulkan Validation] {}", callback_data->pMessage);
+    }
+
+    auto* log = static_cast<DebugMessageLog*>(user_data);
+    if (log == nullptr)
+    {
+        return VK_FALSE;
+    }
+    // The values of DebugMessageTypeBits mirror VkDebugUtilsMessageTypeFlagBitsEXT, so the mask translates as
+    // a cast, except for the bits of later extensions this does not name.
+    const auto forge_types = static_cast<DebugMessageTypeBits>(types) & DebugMessageTypeBits::All;
+    for (Rndr::i32 type_index = 0; type_index < 3; ++type_index)
+    {
+        const auto type_bit = static_cast<DebugMessageTypeBits>(1 << type_index);
+        if (!!(forge_types & type_bit))
+        {
+            ++log->counts[static_cast<Rndr::i32>(forge_severity)][type_index];
+        }
+    }
+    if (forge_severity == DebugMessageSeverity::Info)
+    {
+        // Only the count is kept. A long run reports thousands of these and none of them says anything went
+        // wrong, so storing them would grow without bound to no purpose.
+        return VK_FALSE;
+    }
+    if (log->messages.GetSize() < static_cast<Rndr::i32>(log->max_stored_messages))
+    {
+        // The names of the objects a message is about are handed over beside the text rather than inside it,
+        // so a message about "shadow map" reads as one only if they are collected here.
+        Opal::StringUtf8 objects;
+        for (Rndr::u32 object_index = 0; object_index < callback_data->objectCount; ++object_index)
+        {
+            const char* object_name = callback_data->pObjects[object_index].pObjectName;
+            if (object_name == nullptr)
+            {
+                continue;
+            }
+            if (!objects.IsEmpty())
+            {
+                objects += Opal::StringUtf8(", ");
+            }
+            objects += Opal::StringUtf8(object_name);
+        }
+        log->messages.PushBack(DebugMessage{
+            .severity = forge_severity, .types = forge_types, .text = callback_data->pMessage, .objects = Opal::Move(objects)});
     }
     return VK_FALSE;
 }
@@ -140,10 +188,16 @@ Rndr::Forge::GraphicsContext::GraphicsContext(const GraphicsContextDesc& desc) :
 
     // The messenger below only covers the lifetime of the instance, so chaining a second one into the create info is
     // what makes the messages of vkCreateInstance and vkDestroyInstance visible.
-    const VkDebugUtilsMessengerCreateInfoEXT debug_create_info = MakeDebugMessengerCreateInfo();
+    VkDebugUtilsMessengerCreateInfoEXT debug_create_info = MakeDebugMessengerCreateInfo();
     const bool collect_debug_messages = m_desc.collect_debug_messages || use_validation_layer;
+    m_debug_utils_enabled = collect_debug_messages;
     if (collect_debug_messages)
     {
+        m_debug_log = Opal::MakeShared<DebugMessageLog>(Opal::GetDefaultAllocator());
+        m_debug_log->max_stored_messages = m_desc.max_stored_debug_messages;
+        // The callback is handed the log rather than the context, since the context can be moved afterwards
+        // and there is no way to update this pointer once the messenger exists.
+        debug_create_info.pUserData = m_debug_log.Get();
         create_info.pNext = &debug_create_info;
     }
     if (use_validation_layer)
@@ -189,26 +243,87 @@ void DestroyDebugUtilsMessengerEXT(VkInstance instance, VkDebugUtilsMessengerEXT
 }
 
 Rndr::Forge::GraphicsContext::GraphicsContext(Rndr::Forge::GraphicsContext&& other) noexcept
-    : m_instance(other.m_instance), m_debug_messenger(other.m_debug_messenger), m_desc(Opal::Move(other.m_desc))
+    : m_instance(other.m_instance),
+      m_debug_messenger(other.m_debug_messenger),
+      m_desc(Opal::Move(other.m_desc)),
+      m_debug_log(Opal::Move(other.m_debug_log)),
+      m_debug_utils_enabled(other.m_debug_utils_enabled)
 {
     other.m_instance = VK_NULL_HANDLE;
     other.m_debug_messenger = VK_NULL_HANDLE;
     other.m_desc = {};
+    other.m_debug_log = {};
+    other.m_debug_utils_enabled = false;
 }
 
 Rndr::Forge::GraphicsContext& Rndr::Forge::GraphicsContext::operator=(Rndr::Forge::GraphicsContext&& other) noexcept
 {
+    if (this == &other)
+    {
+        return *this;
+    }
     Destroy();
 
     m_instance = other.m_instance;
     m_debug_messenger = other.m_debug_messenger;
     m_desc = Opal::Move(other.m_desc);
+    m_debug_log = Opal::Move(other.m_debug_log);
+    m_debug_utils_enabled = other.m_debug_utils_enabled;
 
     other.m_instance = VK_NULL_HANDLE;
     other.m_debug_messenger = VK_NULL_HANDLE;
     other.m_desc = {};
+    other.m_debug_log = {};
+    other.m_debug_utils_enabled = false;
 
     return *this;
+}
+
+Opal::ArrayView<const Rndr::Forge::DebugMessage> Rndr::Forge::GraphicsContext::GetDebugMessages() const
+{
+    if (!m_debug_log.IsValid())
+    {
+        return {};
+    }
+    return {m_debug_log->messages.GetData(), m_debug_log->messages.GetSize()};
+}
+
+Rndr::u32 Rndr::Forge::GraphicsContext::GetDebugMessageCount(DebugMessageSeverity severity, DebugMessageTypeBits types) const
+{
+    if (!m_debug_log.IsValid())
+    {
+        return 0;
+    }
+    if (severity != DebugMessageSeverity::Info && severity != DebugMessageSeverity::Warning && severity != DebugMessageSeverity::Error)
+    {
+        throw Opal::Exception("Unknown debug message severity!");
+    }
+    u32 count = 0;
+    for (i32 type_index = 0; type_index < 3; ++type_index)
+    {
+        const auto type_bit = static_cast<DebugMessageTypeBits>(1 << type_index);
+        if (!!(types & type_bit))
+        {
+            count += m_debug_log->counts[static_cast<i32>(severity)][type_index];
+        }
+    }
+    return count;
+}
+
+void Rndr::Forge::GraphicsContext::ClearDebugMessages()
+{
+    if (!m_debug_log.IsValid())
+    {
+        return;
+    }
+    m_debug_log->messages.Clear();
+    for (i32 severity_index = 0; severity_index < 3; ++severity_index)
+    {
+        for (i32 type_index = 0; type_index < 3; ++type_index)
+        {
+            m_debug_log->counts[severity_index][type_index] = 0;
+        }
+    }
 }
 
 void Rndr::Forge::GraphicsContext::Destroy()

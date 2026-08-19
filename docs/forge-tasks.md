@@ -394,11 +394,42 @@ feature structs, and fail with a clear message when the physical device does not
 helper: prefer discrete, require a set of extensions and features, require present support for a given
 surface.
 
-### 3.8 Debug tooling
+### 3.8 Debug tooling — messages and names DONE, labels and timestamps left
 
-No `vkSetDebugUtilsObjectName`, no `vkCmdBeginDebugUtilsLabel`, no query pool or timestamps. Captures are
-anonymous and there is no GPU timing. Add object naming on every resource — ideally a `debug_name` field on
-each desc — command buffer labels, and a timestamp query pool.
+`GraphicsContext` keeps what it is told instead of only logging it. `GetDebugMessages` hands back the
+warnings and errors, `GetDebugMessageCount` counts them by severity and by type, and `ClearDebugMessages`
+starts a fresh stretch. That last distinction is what makes the counts usable: this machine has broken layer
+manifests left behind by two other applications, which the loader reports at error severity, so a test that
+asked for "errors" would fail on somebody else's installer. Asking for `DebugMessageTypeBits::Validation`
+asks about this code.
+
+The log lives in a `SharedPtr` beside the context rather than inside it, because the callback is handed a
+pointer to it when the messenger is created and there is no way to update that pointer afterwards - a moved
+context would leave the callback writing into the object it was moved out of. Info messages are counted and
+not stored, since the loader emits thousands and none of them says anything went wrong, and the stored
+warnings and errors are capped by `GraphicsContextDesc::max_stored_debug_messages`.
+
+The headless tests of 3.11 now end by asserting that the validation layer reported nothing, and print the
+text of what it did report when they fail. Verified the other way round as well, which is the half that
+matters: a probe copying between two formats of different texel size made the assertion fail with the
+message quoted, so the tests can tell a clean run from a quiet one.
+
+`SetDebugName` in `rndr/forge/debug.hpp` names every kind of object, and messages carry
+`DebugMessage::objects`, the names of what the message is about - the validation layer hands those over
+beside the text rather than inside it, so collecting them is what makes a message about "suzanne albedo"
+read as one. There is no `debug_name` on the descs, which is what this task originally asked for: the types
+with a desc are a subset of the types with a handle, so one shape that names all of them beat a field on
+most of them. Naming is a no-op when the instance has no `VK_EXT_debug_utils`, which `Device` carries over
+from the context, since the loader hands out a callable pointer for the command either way - the same trap
+`CmdDrawMeshTasks` hit in 3.3.
+
+Verified by naming two textures, breaking a rule about them on purpose, and requiring both names to come
+back out of the reported message. The sample names its mesh, textures, samplers, layout, set, pipeline, swap
+chain, per-frame buffers, command buffers and fences.
+
+Left: `vkCmdBeginDebugUtilsLabelEXT` for regions inside a command buffer, and a timestamp query pool for GPU
+timing. Neither has a consumer yet - the sample has no pass structure worth labelling and no timing display
+- and `Canvas::TimestampQuery` is worth reading before writing the Forge one.
 
 ### 3.9 Bindless plumbing
 

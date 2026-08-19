@@ -123,6 +123,12 @@ public:
      */
     [[nodiscard]] bool IsExtensionEnabled(const char* extension_name) const;
 
+    /**
+     * Whether the instance this device came from enabled VK_EXT_debug_utils, which is what decides whether
+     * SetDebugName does anything. See GraphicsContext::AreDebugUtilsEnabled.
+     */
+    [[nodiscard]] bool AreDebugUtilsEnabled() const { return m_debug_utils_enabled; }
+
     /** Queue of the given family. Throws when the device was not created with one, so the result is always valid. */
     DeviceQueue& GetQueue(QueueFamily queue_family);
     [[nodiscard]] const DeviceQueue& GetQueue(QueueFamily queue_family) const;
@@ -145,6 +151,7 @@ private:
     Opal::DynamicArray<const char*> m_enabled_extensions;
     QueueFamilyIndices m_queue_family_indices;
     VmaAllocator m_gpu_allocator = VK_NULL_HANDLE;
+    bool m_debug_utils_enabled = false;
 };
 
 }  // namespace Rndr::Forge

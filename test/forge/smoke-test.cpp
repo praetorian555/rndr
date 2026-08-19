@@ -5,6 +5,7 @@
 
 #include "rndr/forge/buffer.hpp"
 #include "rndr/forge/command-buffer.hpp"
+#include "rndr/forge/debug.hpp"
 #include "rndr/forge/device.hpp"
 #include "rndr/forge/graphics-context.hpp"
 #include "rndr/forge/physical-device.hpp"
@@ -38,7 +39,47 @@ struct ForgeFixture
     }
 
     Forge::DeviceQueue& GetQueue() { return device.GetQueue(Forge::QueueFamily::Graphics); }
+
+    /**
+     * What the validation layer reported, as text, so a failure names the problem instead of only counting
+     * it. Validation messages only: the loader reports a layer manifest that some other application left
+     * behind at error severity, which says nothing about this code. Always empty in a build without
+     * RNDR_FORGE_VALIDATION, where there is no layer to report anything.
+     */
+    [[nodiscard]] Opal::StringUtf8 GetValidationErrors() const
+    {
+        Opal::StringUtf8 report;
+        for (const Forge::DebugMessage& message : context.GetDebugMessages())
+        {
+            if (message.severity == Forge::DebugMessageSeverity::Error && !!(message.types & Forge::DebugMessageTypeBits::Validation))
+            {
+                report += message.text;
+                if (!message.objects.IsEmpty())
+                {
+                    report += Opal::StringUtf8(" [objects: ");
+                    report += message.objects;
+                    report += Opal::StringUtf8("]");
+                }
+                report += Opal::StringUtf8("\n");
+            }
+        }
+        return report;
+    }
+
+    [[nodiscard]] u32 GetValidationErrorCount() const
+    {
+        return context.GetDebugMessageCount(Forge::DebugMessageSeverity::Error, Forge::DebugMessageTypeBits::Validation);
+    }
 };
+
+/** Fails the test with the text of the messages when the validation layer reported an error. */
+#define REQUIRE_NO_VALIDATION_ERROR(fixture)                                        \
+    do                                                                              \
+    {                                                                               \
+        const Opal::StringUtf8 validation_errors = (fixture).GetValidationErrors(); \
+        INFO(*validation_errors);                                                   \
+        REQUIRE((fixture).GetValidationErrorCount() == 0);                          \
+    } while (false)
 
 /** Whether this machine has a Vulkan device at all, so a machine without one skips rather than fails. */
 bool IsForgeAvailable()
@@ -109,6 +150,7 @@ TEST_CASE("Forge context and device", "[forge]")
     Forge::Device device(std::move(physical_devices[0]), context);
     REQUIRE(device.IsValid());
     REQUIRE(device.GetQueue(Forge::QueueFamily::Graphics).IsValid());
+    REQUIRE(context.GetDebugMessageCount(Forge::DebugMessageSeverity::Error, Forge::DebugMessageTypeBits::Validation) == 0);
 }
 
 TEST_CASE("Forge buffer update and read", "[forge]")
@@ -152,6 +194,7 @@ TEST_CASE("Forge buffer update and read", "[forge]")
         Opal::DynamicArray<u8> out(k_size);
         REQUIRE_THROWS_AS(write_only.Read(out), Opal::Exception);
     }
+    REQUIRE_NO_VALIDATION_ERROR(fixture);
 }
 
 TEST_CASE("Forge buffer survives a move", "[forge]")
@@ -183,6 +226,7 @@ TEST_CASE("Forge buffer survives a move", "[forge]")
     Opal::DynamicArray<u8> read_back(k_size);
     assigned_to.Read(read_back);
     REQUIRE(CountMismatches(written, read_back) == 0);
+    REQUIRE_NO_VALIDATION_ERROR(fixture);
 }
 
 TEST_CASE("Forge compute dispatch and readback", "[forge]")
@@ -230,6 +274,7 @@ TEST_CASE("Forge compute dispatch and readback", "[forge]")
     {
         REQUIRE(values[i] == static_cast<u32>(i) + 1000);
     }
+    REQUIRE_NO_VALIDATION_ERROR(fixture);
 }
 
 TEST_CASE("Forge buffer copy and readback", "[forge]")
@@ -266,6 +311,7 @@ TEST_CASE("Forge buffer copy and readback", "[forge]")
                                                  { command_buffer.CmdCopyBuffer(no_transfer, destination); }),
                           Opal::Exception);
     }
+    REQUIRE_NO_VALIDATION_ERROR(fixture);
 }
 
 TEST_CASE("Forge texture upload, mip generation and readback", "[forge]")
@@ -330,6 +376,7 @@ TEST_CASE("Forge texture upload, mip generation and readback", "[forge]")
                                                  too_small, 0, Forge::ImageLayout::TransferDestination),
                           Opal::Exception);
     }
+    REQUIRE_NO_VALIDATION_ERROR(fixture);
 }
 
 
@@ -373,4 +420,49 @@ TEST_CASE("Forge device-only buffer", "[forge]")
                                         written),
                           Opal::Exception);
     }
+    REQUIRE_NO_VALIDATION_ERROR(fixture);
+}
+
+
+TEST_CASE("Forge debug names reach the validation layer", "[forge]")
+{
+    if (!IsForgeAvailable())
+    {
+        SKIP("No Vulkan device on this machine.");
+    }
+    ForgeFixture fixture;
+    if (!fixture.device.AreDebugUtilsEnabled())
+    {
+        SKIP("This build has no debug utils, so there is nothing to name and nothing to report.");
+    }
+
+    constexpr Forge::TextureUsageBits k_transfer_usage =
+        Forge::TextureUsageBits::TransferSource | Forge::TextureUsageBits::TransferDestination;
+    Forge::Texture source(fixture.device,
+                          {.format = PixelFormat::R8G8B8A8_UNORM, .width = 4, .height = 4, .usage = k_transfer_usage});
+    Forge::Texture destination(fixture.device,
+                               {.format = PixelFormat::R16G16B16A16_SFLOAT, .width = 4, .height = 4, .usage = k_transfer_usage});
+    Forge::SetDebugName(fixture.device, source, "probe-source-texture");
+    Forge::SetDebugName(fixture.device, destination, "probe-destination-texture");
+
+    // Copying between two formats of different texel size breaks a rule the guards do not check and the
+    // validation layer does, which is what makes it a way to read back what the layer calls these two images.
+    const Forge::ImageCopyRegion region;
+    Forge::ImmediateSubmit(fixture.device, fixture.GetQueue(),
+                           [&](Forge::CommandBuffer& command_buffer)
+                           {
+                               command_buffer.CmdImageBarrier(Forge::ImageBarrier::ToTransferSource(source, Forge::ImageLayout::Undefined));
+                               command_buffer.CmdImageBarrier(Forge::ImageBarrier::ToTransferDestination(destination));
+                               command_buffer.CmdCopyImage(source, destination, {&region, 1});
+                           });
+
+    const Opal::StringUtf8 errors = fixture.GetValidationErrors();
+    INFO(*errors);
+    REQUIRE(fixture.GetValidationErrorCount() > 0);
+    REQUIRE(strstr(reinterpret_cast<const char*>(*errors), "probe-source-texture") != nullptr);
+    REQUIRE(strstr(reinterpret_cast<const char*>(*errors), "probe-destination-texture") != nullptr);
+
+    // The error above was the point of the test, so it must not be left for the next assertion to trip over.
+    fixture.context.ClearDebugMessages();
+    REQUIRE_NO_VALIDATION_ERROR(fixture);
 }

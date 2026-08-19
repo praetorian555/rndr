@@ -157,6 +157,7 @@ Rndr::Forge::Device::Device(PhysicalDevice physical_device, const GraphicsContex
         .pVulkanFunctions = &vk_functions,
         .instance = graphics_context.GetInstance(),
     };
+    m_debug_utils_enabled = graphics_context.AreDebugUtilsEnabled();
     const VkResult vma_result = vmaCreateAllocator(&vma_alloc_create_info, &m_gpu_allocator);
     if (vma_result != VK_SUCCESS)
     {
@@ -304,7 +305,8 @@ Rndr::Forge::Device::Device(Device&& other) noexcept
       m_desc(std::move(other.m_desc)),
       m_enabled_extensions(std::move(other.m_enabled_extensions)),
       m_queue_family_indices(other.m_queue_family_indices),
-      m_gpu_allocator(other.m_gpu_allocator)
+      m_gpu_allocator(other.m_gpu_allocator),
+      m_debug_utils_enabled(other.m_debug_utils_enabled)
 {
     other.m_device = VK_NULL_HANDLE;
     other.m_queue_family_to_queue.Clear();
@@ -313,6 +315,7 @@ Rndr::Forge::Device::Device(Device&& other) noexcept
     other.m_enabled_extensions.Clear();
     other.m_queue_family_indices = {};
     other.m_gpu_allocator = VK_NULL_HANDLE;
+    other.m_debug_utils_enabled = false;
     RepointQueues();
 }
 
@@ -331,6 +334,7 @@ Rndr::Forge::Device& Rndr::Forge::Device::operator=(Device&& other) noexcept
     m_enabled_extensions = std::move(other.m_enabled_extensions);
     m_queue_family_indices = other.m_queue_family_indices;
     m_gpu_allocator = other.m_gpu_allocator;
+    m_debug_utils_enabled = other.m_debug_utils_enabled;
 
     other.m_device = VK_NULL_HANDLE;
     other.m_queue_family_to_queue.Clear();
@@ -339,6 +343,7 @@ Rndr::Forge::Device& Rndr::Forge::Device::operator=(Device&& other) noexcept
     other.m_enabled_extensions.Clear();
     other.m_queue_family_indices = {};
     other.m_gpu_allocator = VK_NULL_HANDLE;
+    other.m_debug_utils_enabled = false;
     RepointQueues();
 
     return *this;
