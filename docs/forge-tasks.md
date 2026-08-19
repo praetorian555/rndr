@@ -443,11 +443,32 @@ Verified headless: the defaults come back out of `GetFeatures`, asking for mesh 
 when this machine has the extension, and each of the three guards throws on a device created without its
 feature. The sample runs unchanged, since the defaults are what was hardcoded before.
 
-### 3.7 Physical device selection
+### 3.7 Physical device selection — DONE
 
-`EnumeratePhysicalDevices` returns the raw list and the sample takes element 0. Add a scoring or filtering
-helper: prefer discrete, require a set of extensions and features, require present support for a given
-surface.
+`FindPhysicalDevice` returns the index of the device best suited to a `DeviceDesc`, or nothing when none of
+them can be created with it. `SelectPhysicalDevice` is the same thing moved out of the list, throwing when
+nothing qualifies and naming what the last device was missing.
+
+The requirements are the desc rather than a second structure beside it. The desc already says which surface
+has to be presented to, which extensions and features are needed and which queues are wanted, so a separate
+description of the same thing would only be one more pair to keep in step. The checks are shared with
+`Device`'s constructor for the same reason - `CollectDeviceExtensions`, `FindUnsupportedFeature` and the
+queue family masks are each written once - so a device that passes the choice cannot then fail the creation.
+
+Ranking is the kind of device first, discrete over integrated over virtual over software, then device local
+memory as the tiebreak, counted in gigabytes so that a slightly larger integrated device cannot outrank a
+discrete one. `prefer_discrete` turns the first half off, and on a machine with one device none of it
+matters.
+
+Writing the test for it turned up that `PhysicalDevice::IsExtensionSupported` returned `true` for every
+extension: it built an `Opal::Exception` where it meant to throw one and returned `true` regardless. Nothing
+had ever rejected an unsupported extension, including the check in `Device`'s constructor. Fixed in its own
+commit.
+
+Verified headless: some device on this machine meets a headless desc and can then actually be created, a
+desc naming an extension that does not exist is met by nothing, selecting when nothing qualifies throws, and
+selecting moves exactly one device out of the list. The sample picks its device this way now instead of
+taking element 0.
 
 ### 3.8 Debug tooling — messages and names DONE, labels and timestamps left
 

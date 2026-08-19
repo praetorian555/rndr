@@ -71,8 +71,11 @@ void Run()
     Rndr::Forge::GraphicsContext graphics_context{{.collect_debug_messages = true}};
     Rndr::Forge::Surface surface(graphics_context, *window);
 
+    // Picks the best device that can do everything the desc asks for, rather than whichever one the driver
+    // listed first, which on a laptop is as likely to be the integrated GPU as the discrete one.
+    const Rndr::Forge::DeviceDesc device_desc{.surface = surface};
     auto physical_devices = graphics_context.EnumeratePhysicalDevices();
-    Rndr::Forge::Device device(std::move(physical_devices[0]), graphics_context, {.surface = surface});
+    Rndr::Forge::Device device(Rndr::Forge::SelectPhysicalDevice(physical_devices, device_desc), graphics_context, device_desc);
     Rndr::Forge::DeviceQueue& graphics_queue = device.GetQueue(Rndr::Forge::QueueFamily::Graphics);
     Rndr::Forge::DeviceQueue& present_queue = device.GetQueue(Rndr::Forge::QueueFamily::Present);
 

@@ -155,6 +155,26 @@ struct SubmitDesc
     Opal::Ref<const Fence> fence;
 };
 
+/**
+ * Index of the device best suited to being created with this desc, or empty when none of them can be. What
+ * the desc asks for is what a device has to provide - its surface, its extensions, its features and its
+ * queues - so there is no second description of the requirements to keep in step with it.
+ *
+ * @param devices Devices to choose from, as EnumeratePhysicalDevices returned them.
+ * @param desc The desc the chosen device will be created with.
+ * @param prefer_discrete Rank a discrete device above an integrated one. With this off, the first device
+ *        that can do the job wins, which is what a machine with one device does either way.
+ */
+[[nodiscard]] Opal::Optional<u32> FindPhysicalDevice(Opal::ArrayView<const PhysicalDevice> devices, const DeviceDesc& desc = {},
+                                                     bool prefer_discrete = true);
+
+/**
+ * The device FindPhysicalDevice picked, moved out of the list. Throws when none of them qualifies, naming
+ * the requirement the last one failed, since "no suitable device" on its own tells nobody anything.
+ */
+[[nodiscard]] PhysicalDevice SelectPhysicalDevice(Opal::ArrayView<PhysicalDevice> devices, const DeviceDesc& desc = {},
+                                                  bool prefer_discrete = true);
+
 class DeviceQueue
 {
 public:

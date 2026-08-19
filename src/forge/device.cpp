@@ -144,18 +144,50 @@ struct FeatureChain
     }
 };
 
-/** Ask the device what it supports and throw for the first requested feature it does not, naming that one. */
-void ThrowOnUnsupportedFeatures(const Forge::PhysicalDevice& physical_device, const Forge::DeviceFeatures& requested)
+/**
+ * The queue families a desc needs, spelled once so that choosing a device and creating one cannot disagree
+ * about what "async compute" or "dedicated transfer" means.
+ */
+constexpr VkQueueFlags k_graphics_flags = VK_QUEUE_GRAPHICS_BIT | VK_QUEUE_COMPUTE_BIT | VK_QUEUE_TRANSFER_BIT;
+constexpr VkQueueFlags k_async_compute_flags = VK_QUEUE_COMPUTE_BIT | VK_QUEUE_TRANSFER_BIT;
+constexpr VkQueueFlags k_async_compute_not_flags = VK_QUEUE_GRAPHICS_BIT;
+constexpr VkQueueFlags k_dedicated_transfer_flags = VK_QUEUE_TRANSFER_BIT;
+constexpr VkQueueFlags k_dedicated_transfer_not_flags =
+    VK_QUEUE_GRAPHICS_BIT | VK_QUEUE_COMPUTE_BIT | VK_QUEUE_VIDEO_DECODE_BIT_KHR | VK_QUEUE_VIDEO_ENCODE_BIT_KHR;
+
+/** Every extension a desc implies, which is what it names plus what its surface and its features pull in. */
+Opal::DynamicArray<const char*> CollectDeviceExtensions(const Forge::DeviceDesc& desc)
+{
+    Opal::DynamicArray<const char*> extensions(desc.extensions.Clone());
+    if (desc.surface.IsValid())
+    {
+        extensions.PushBack(VK_KHR_SWAPCHAIN_EXTENSION_NAME);
+    }
+    // A feature that lives in an extension only works when the extension is enabled too, so asking for the
+    // feature is taken as asking for both rather than as a puzzle for the caller to solve.
+    if (desc.features.mesh_shader || desc.features.task_shader)
+    {
+        extensions.PushBack(VK_EXT_MESH_SHADER_EXTENSION_NAME);
+    }
+    return extensions;
+}
+
+/**
+ * The first requested feature this device does not support, or null when it supports them all. Reporting
+ * rather than throwing, so that choosing between devices and creating one both go through it.
+ */
+const char* FindUnsupportedFeature(const Forge::PhysicalDevice& physical_device, const Forge::DeviceFeatures& requested)
 {
     const bool has_mesh_extension = physical_device.IsExtensionSupported(VK_EXT_MESH_SHADER_EXTENSION_NAME);
     FeatureChain supported(has_mesh_extension);
     vkGetPhysicalDeviceFeatures2(physical_device.GetNativePhysicalDevice(), &supported.features2);
 
-    auto require = [](bool is_requested, VkBool32 is_supported, const char* name)
+    const char* missing = nullptr;
+    auto require = [&missing](bool is_requested, VkBool32 is_supported, const char* name)
     {
-        if (is_requested && is_supported == VK_FALSE)
+        if (missing == nullptr && is_requested && is_supported == VK_FALSE)
         {
-            throw Opal::Exception(Opal::StringEx("This device does not support the requested feature: ") + name);
+            missing = name;
         }
     };
     const VkPhysicalDeviceFeatures& core = supported.features2.features;
@@ -193,8 +225,149 @@ void ThrowOnUnsupportedFeatures(const Forge::PhysicalDevice& physical_device, co
 
     require(requested.mesh_shader, has_mesh_extension ? supported.mesh.meshShader : VK_FALSE, "mesh_shader");
     require(requested.task_shader, has_mesh_extension ? supported.mesh.taskShader : VK_FALSE, "task_shader");
+    return missing;
+}
+
+void ThrowOnUnsupportedFeatures(const Forge::PhysicalDevice& physical_device, const Forge::DeviceFeatures& requested)
+{
+    const char* missing = FindUnsupportedFeature(physical_device, requested);
+    if (missing != nullptr)
+    {
+        throw Opal::Exception(Opal::StringEx("This device does not support the requested feature: ") + missing);
+    }
+}
+
+/** "does not support the extension VK_EXT_mesh_shader", built without an allocating string concatenation. */
+Opal::StringUtf8 Reason(const char* what, const char* detail)
+{
+    char buffer[256] = {};
+    snprintf(buffer, sizeof(buffer), "%s%s", what, detail);
+    return Opal::StringUtf8(buffer);
+}
+
+/**
+ * Why this device cannot be created with this desc, or empty when it can. One function, so that a device
+ * that passed the choice cannot then fail the creation.
+ */
+Opal::StringUtf8 FindUnmetRequirement(const Forge::PhysicalDevice& physical_device, const Forge::DeviceDesc& desc)
+{
+    for (const char* extension_name : CollectDeviceExtensions(desc))
+    {
+        if (!physical_device.IsExtensionSupported(extension_name))
+        {
+            return Reason("does not support the extension ", extension_name);
+        }
+    }
+    const char* missing_feature = FindUnsupportedFeature(physical_device, desc.features);
+    if (missing_feature != nullptr)
+    {
+        return Reason("does not support the feature ", missing_feature);
+    }
+    if (!physical_device.GetQueueFamilyIndex(k_graphics_flags).HasValue())
+    {
+        return Opal::StringUtf8("has no graphics queue");
+    }
+    if (desc.surface.IsValid() && !physical_device.GetPresentQueueFamilyIndex(desc.surface).HasValue())
+    {
+        return Opal::StringUtf8("cannot present to this surface");
+    }
+    if (desc.use_async_compute_queue && !physical_device.GetQueueFamilyIndex(k_async_compute_flags, k_async_compute_not_flags).HasValue())
+    {
+        return Opal::StringUtf8("has no async compute queue");
+    }
+    if (desc.use_dedicated_transfer_queue &&
+        !physical_device.GetQueueFamilyIndex(k_dedicated_transfer_flags, k_dedicated_transfer_not_flags).HasValue())
+    {
+        return Opal::StringUtf8("has no dedicated transfer queue");
+    }
+    if (desc.use_decode_queue && !physical_device.GetQueueFamilyIndex(VK_QUEUE_VIDEO_DECODE_BIT_KHR).HasValue())
+    {
+        return Opal::StringUtf8("has no video decode queue");
+    }
+    if (desc.use_encode_queue && !physical_device.GetQueueFamilyIndex(VK_QUEUE_VIDEO_ENCODE_BIT_KHR).HasValue())
+    {
+        return Opal::StringUtf8("has no video encode queue");
+    }
+    return Opal::StringUtf8("");
+}
+
+/** What a device is worth once it is known to qualify. Higher wins. */
+Rndr::u64 ScorePhysicalDevice(const Forge::PhysicalDevice& physical_device, bool prefer_discrete)
+{
+    Rndr::u64 kind_score = 0;
+    if (prefer_discrete)
+    {
+        switch (physical_device.GetProperties().deviceType)
+        {
+            case VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU:
+                kind_score = 4;
+                break;
+            case VK_PHYSICAL_DEVICE_TYPE_INTEGRATED_GPU:
+                kind_score = 3;
+                break;
+            case VK_PHYSICAL_DEVICE_TYPE_VIRTUAL_GPU:
+                kind_score = 2;
+                break;
+            default:
+                // A software device qualifies, but only when there is nothing else.
+                break;
+        }
+    }
+    // Device local memory breaks the tie between two devices of the same kind. Counted in gigabytes, so that
+    // a small difference in memory cannot outweigh the kind of device it is.
+    const VkPhysicalDeviceMemoryProperties& memory = physical_device.GetMemoryProperties();
+    Rndr::u64 device_local_bytes = 0;
+    for (Rndr::u32 heap = 0; heap < memory.memoryHeapCount; ++heap)
+    {
+        if ((memory.memoryHeaps[heap].flags & VK_MEMORY_HEAP_DEVICE_LOCAL_BIT) != 0)
+        {
+            device_local_bytes += memory.memoryHeaps[heap].size;
+        }
+    }
+    constexpr Rndr::u64 k_bytes_per_gigabyte = 1024ULL * 1024ULL * 1024ULL;
+    return (kind_score * 1024) + (device_local_bytes / k_bytes_per_gigabyte);
 }
 }  // namespace
+
+Opal::Optional<Rndr::u32> Rndr::Forge::FindPhysicalDevice(Opal::ArrayView<const PhysicalDevice> devices, const DeviceDesc& desc,
+                                                          bool prefer_discrete)
+{
+    Opal::Optional<u32> best;
+    u64 best_score = 0;
+    for (i32 i = 0; i < devices.GetSize(); ++i)
+    {
+        const PhysicalDevice& physical_device = devices[i];
+        if (!physical_device.IsValid() || !FindUnmetRequirement(physical_device, desc).IsEmpty())
+        {
+            continue;
+        }
+        const u64 score = ScorePhysicalDevice(physical_device, prefer_discrete);
+        if (!best.HasValue() || score > best_score)
+        {
+            best = static_cast<u32>(i);
+            best_score = score;
+        }
+    }
+    return best;
+}
+
+Rndr::Forge::PhysicalDevice Rndr::Forge::SelectPhysicalDevice(Opal::ArrayView<PhysicalDevice> devices, const DeviceDesc& desc,
+                                                              bool prefer_discrete)
+{
+    const Opal::ArrayView<const PhysicalDevice> const_devices(devices.GetData(), devices.GetSize());
+    const Opal::Optional<u32> best = FindPhysicalDevice(const_devices, desc, prefer_discrete);
+    if (best.HasValue())
+    {
+        return std::move(devices[static_cast<i32>(best.GetValue())]);
+    }
+    if (devices.IsEmpty())
+    {
+        throw Opal::Exception("There is no Vulkan device on this machine.");
+    }
+    // On a machine with several devices the last reason is not the whole story, but a reason beats none.
+    const Opal::StringUtf8 reason = FindUnmetRequirement(devices[devices.GetSize() - 1], desc);
+    throw Opal::Exception(Opal::StringEx("No suitable device. The last one ") + reinterpret_cast<const char*>(reason.GetData()));
+}
 
 Rndr::Forge::Device::Device(PhysicalDevice physical_device, const GraphicsContext& graphics_context,
                                      const DeviceDesc& desc)
@@ -208,17 +381,7 @@ Rndr::Forge::Device::Device(PhysicalDevice physical_device, const GraphicsContex
     Opal::DynamicArray<VkDeviceQueueCreateInfo> queue_create_infos;
     CollectQueueFamilies(queue_create_infos);
 
-    Opal::DynamicArray device_extensions(desc.extensions.Clone());
-    if (desc.surface.IsValid())
-    {
-        device_extensions.PushBack(VK_KHR_SWAPCHAIN_EXTENSION_NAME);
-    }
-    // A feature that lives in an extension only works when the extension is enabled too, so asking for the
-    // feature is taken as asking for both rather than as a puzzle for the caller to solve.
-    if (m_desc.features.mesh_shader || m_desc.features.task_shader)
-    {
-        device_extensions.PushBack(VK_EXT_MESH_SHADER_EXTENSION_NAME);
-    }
+    Opal::DynamicArray<const char*> device_extensions = CollectDeviceExtensions(m_desc);
     m_enabled_extensions = device_extensions.Clone();
     for (const char* extension_name : device_extensions)
     {
@@ -315,7 +478,7 @@ void Rndr::Forge::Device::WaitForAll() const
 
 void Rndr::Forge::Device::CollectQueueFamilies(Opal::DynamicArray<VkDeviceQueueCreateInfo>& queue_create_infos)
 {
-    auto queue_family_index = m_physical_device.GetQueueFamilyIndex(VK_QUEUE_GRAPHICS_BIT | VK_QUEUE_COMPUTE_BIT | VK_QUEUE_TRANSFER_BIT);
+    auto queue_family_index = m_physical_device.GetQueueFamilyIndex(k_graphics_flags);
     if (queue_family_index.HasValue())
     {
         m_queue_family_indices.graphics_family = queue_family_index.GetValue();
@@ -338,7 +501,7 @@ void Rndr::Forge::Device::CollectQueueFamilies(Opal::DynamicArray<VkDeviceQueueC
 
     if (m_desc.use_async_compute_queue)
     {
-        queue_family_index = m_physical_device.GetQueueFamilyIndex(VK_QUEUE_COMPUTE_BIT | VK_QUEUE_TRANSFER_BIT, VK_QUEUE_GRAPHICS_BIT);
+        queue_family_index = m_physical_device.GetQueueFamilyIndex(k_async_compute_flags, k_async_compute_not_flags);
         if (queue_family_index.HasValue())
         {
             m_queue_family_indices.compute_family = queue_family_index.GetValue();
@@ -351,9 +514,7 @@ void Rndr::Forge::Device::CollectQueueFamilies(Opal::DynamicArray<VkDeviceQueueC
 
     if (m_desc.use_dedicated_transfer_queue)
     {
-        queue_family_index =
-            m_physical_device.GetQueueFamilyIndex(VK_QUEUE_TRANSFER_BIT, VK_QUEUE_GRAPHICS_BIT | VK_QUEUE_COMPUTE_BIT |
-                                                                             VK_QUEUE_VIDEO_DECODE_BIT_KHR | VK_QUEUE_VIDEO_ENCODE_BIT_KHR);
+        queue_family_index = m_physical_device.GetQueueFamilyIndex(k_dedicated_transfer_flags, k_dedicated_transfer_not_flags);
         if (queue_family_index.HasValue())
         {
             m_queue_family_indices.transfer_family = queue_family_index.GetValue();

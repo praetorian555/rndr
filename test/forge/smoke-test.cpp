@@ -685,3 +685,58 @@ TEST_CASE("Forge device features", "[forge]")
     INFO(*report);
     REQUIRE(context.GetDebugMessageCount(Forge::DebugMessageSeverity::Error, Forge::DebugMessageTypeBits::Validation) == 0);
 }
+
+TEST_CASE("Forge physical device selection", "[forge]")
+{
+    if (!IsForgeAvailable())
+    {
+        SKIP("No Vulkan device on this machine.");
+    }
+    const Forge::GraphicsContext context({.collect_debug_messages = true});
+    Opal::DynamicArray<Forge::PhysicalDevice> devices = context.EnumeratePhysicalDevices();
+    REQUIRE_FALSE(devices.IsEmpty());
+
+    SECTION("A headless desc is met by some device on this machine")
+    {
+        const Opal::Optional<u32> best = Forge::FindPhysicalDevice(devices);
+        REQUIRE(best.HasValue());
+        REQUIRE(best.GetValue() < static_cast<u32>(devices.GetSize()));
+        // The one it picked has to actually work, which is the whole point of choosing rather than guessing.
+        const Forge::Device device(std::move(devices[static_cast<i32>(best.GetValue())]), context);
+        REQUIRE(device.IsValid());
+    }
+    SECTION("A requirement nothing can meet leaves the answer empty")
+    {
+        // A device supporting an extension under this name would be a surprising machine indeed.
+        const char* nonsense_extension = "VK_EXT_this_extension_does_not_exist";
+        Forge::DeviceDesc desc;
+        desc.extensions.PushBack(nonsense_extension);
+        REQUIRE_FALSE(Forge::FindPhysicalDevice(devices, desc).HasValue());
+    }
+    SECTION("Selecting when nothing qualifies throws, naming the requirement")
+    {
+        Forge::DeviceDesc desc;
+        desc.extensions.PushBack("VK_EXT_this_extension_does_not_exist");
+        REQUIRE_THROWS_AS(Forge::SelectPhysicalDevice(devices, desc), Opal::Exception);
+    }
+    SECTION("Selecting moves the chosen device out of the list")
+    {
+        Forge::PhysicalDevice chosen = Forge::SelectPhysicalDevice(devices);
+        REQUIRE(chosen.IsValid());
+        i32 valid_left = 0;
+        for (const Forge::PhysicalDevice& device : devices)
+        {
+            valid_left += device.IsValid() ? 1 : 0;
+        }
+        REQUIRE(valid_left == static_cast<i32>(devices.GetSize()) - 1);
+    }
+    SECTION("A device that cannot present is not chosen for a desc that has to")
+    {
+        // No surface can be made without a window, so this only checks the other direction: a desc with no
+        // surface must not reject a device for presentation it was never asked to do.
+        Forge::DeviceDesc desc;
+        REQUIRE(Forge::FindPhysicalDevice(devices, desc).HasValue());
+    }
+
+    REQUIRE(context.GetDebugMessageCount(Forge::DebugMessageSeverity::Error, Forge::DebugMessageTypeBits::Validation) == 0);
+}
