@@ -73,10 +73,17 @@ void Rndr::Forge::Fence::WaitForAll(Opal::ArrayView<const Fence> fences, u64 tim
     {
         return;
     }
-    Opal::DynamicArray<VkFence> native_fences(fences.GetSize(), Opal::GetScratchAllocator());
+    // The default allocator rather than the scratch one: asking Opal for a scratch allocator asserts unless
+    // the application pushed one, and nothing in Forge does, so this asserted on the first call it ever got.
+    Opal::DynamicArray<VkFence> native_fences(fences.GetSize());
     for (i32 i = 0; i < fences.GetSize(); ++i)
     {
-        native_fences[i] = fences[i].GetNativeFence();
+        const Fence& fence = fences[i];
+        if (!fence.IsValid())
+        {
+            throw Opal::Exception("Waiting on an empty fence!");
+        }
+        native_fences[i] = fence.GetNativeFence();
     }
     const VkResult wait_result =
         vkWaitForFences(fences[0].m_device->GetNativeDevice(), static_cast<u32>(native_fences.GetSize()), native_fences.GetData(), VK_TRUE, timeout);

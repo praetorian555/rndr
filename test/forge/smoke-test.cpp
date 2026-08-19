@@ -559,3 +559,52 @@ TEST_CASE("Forge submit rejects an empty object", "[forge]")
     }
     REQUIRE_NO_VALIDATION_ERROR(fixture);
 }
+
+TEST_CASE("Forge waiting on several fences at once", "[forge]")
+{
+    if (!IsForgeAvailable())
+    {
+        SKIP("No Vulkan device on this machine.");
+    }
+    ForgeFixture fixture;
+    constexpr i32 k_size = 64;
+    const Opal::DynamicArray<u8> written = MakeBytes(k_size, 63);
+    const Forge::Buffer source(fixture.device, {.size = k_size, .usage = Forge::BufferUsageBits::TransferSource}, written);
+    constexpr Forge::BufferUsageBits k_both_ways = Forge::BufferUsageBits::TransferSource | Forge::BufferUsageBits::TransferDestination;
+    const Forge::Buffer first_destination(fixture.device, {.size = k_size, .usage = k_both_ways});
+    const Forge::Buffer second_destination(fixture.device, {.size = k_size, .usage = k_both_ways});
+
+    Opal::DynamicArray<Forge::Fence> fences;
+    fences.EmplaceBack(fixture.device, false);
+    fences.EmplaceBack(fixture.device, false);
+
+    Forge::CommandBuffer first(fixture.device, fixture.GetQueue());
+    Forge::CommandBuffer second(fixture.device, fixture.GetQueue());
+    first.Begin();
+    first.CmdCopyBuffer(source, first_destination);
+    first.End();
+    second.Begin();
+    second.CmdCopyBuffer(source, second_destination);
+    second.End();
+
+    const Opal::Ref<const Forge::CommandBuffer> first_batch[1] = {Opal::Ref<const Forge::CommandBuffer>(first)};
+    const Opal::Ref<const Forge::CommandBuffer> second_batch[1] = {Opal::Ref<const Forge::CommandBuffer>(second)};
+    fixture.GetQueue().Submit({.command_buffers = {first_batch, 1}, .fence = fences[0]});
+    fixture.GetQueue().Submit({.command_buffers = {second_batch, 1}, .fence = fences[1]});
+    Forge::Fence::WaitForAll(fences);
+
+    Opal::DynamicArray<u8> read_back(k_size);
+    Forge::ReadBackBuffer(fixture.device, fixture.GetQueue(), first_destination, read_back);
+    REQUIRE(CountMismatches(written, read_back) == 0);
+    Forge::ReadBackBuffer(fixture.device, fixture.GetQueue(), second_destination, read_back);
+    REQUIRE(CountMismatches(written, read_back) == 0);
+
+    SECTION("An empty fence in the list throws")
+    {
+        Opal::DynamicArray<Forge::Fence> with_empty;
+        with_empty.EmplaceBack(fixture.device, true);
+        with_empty.EmplaceBack();
+        REQUIRE_THROWS_AS(Forge::Fence::WaitForAll(with_empty), Opal::Exception);
+    }
+    REQUIRE_NO_VALIDATION_ERROR(fixture);
+}
