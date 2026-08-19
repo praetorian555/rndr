@@ -3,8 +3,8 @@
 Forge is the lower level of the two rendering APIs in this repository. It is a thin, owning wrapper over
 Vulkan: every type holds one Vulkan handle, is move-only, and releases the handle in its destructor.
 
-This document covers the conventions that hold across the whole API. Task 4.7 in `docs/forge-tasks.md`
-tracks filling in object lifetimes and the frame loop.
+This document covers the conventions that hold across the whole API: how long objects live and what they
+hold on to, what a frame looks like, how data gets to the device and back, and how failures are reported.
 
 ---
 
@@ -25,6 +25,137 @@ dereference references that are not there. `IsValid()` is the guard, not a Vulka
 call site.
 
 `Destroy()` is idempotent and is what the destructor calls, so releasing early is always safe.
+
+---
+
+## Object lifetimes
+
+Every object owns its handle and releases it in its destructor. Nothing is reference counted, and there is
+no deferred deletion queue: when a `Buffer` goes out of scope, its memory is freed right there.
+
+An object does *not* own what it was created from. It keeps a reference - the device, the pool a descriptor
+set came from, the queue a command buffer was allocated on - and that reference does not keep the other
+object alive. Everything therefore has to outlive what was created from it. Declaring objects in the order
+they are created gives that for free, since C++ destroys them in reverse:
+
+```cpp
+GraphicsContext context{...};       // destroyed last
+Device device{...};
+Buffer buffer{device, ...};         // destroyed first
+```
+
+The references that are easy to miss:
+
+- Every resource holds the `Device`, and the device holds the `GraphicsContext` that made its instance.
+- `DescriptorSet` holds its `DescriptorPool`, and a set is invalid once the pool is reset or destroyed.
+- `CommandBuffer` holds the `DeviceQueue` whose command pool it came from.
+- `SwapChain` holds the `Surface`, which holds the window.
+- `FrameContext` holds the swap chain and both queues.
+- The samplers baked into a `DescriptorSetLayoutDesc::Binding` are held by reference and have to outlive the
+  layout and every set allocated from it.
+
+### Waiting before destroying
+
+The other half of a lifetime is the device. Releasing an object the device is still reading is a use after
+free that no validation layer catches reliably, so work has to be finished first:
+
+- Per frame, that is what the fence of the frame is for; `FrameContext` already waits on it before it reuses
+  a slot.
+- At shutdown, `Device::WaitForAll()` waits for everything, and `DeviceQueue::WaitIdle()` for one queue.
+  `FrameContext::Destroy()` calls the first one itself, so an application that uses one only has to make
+  sure its own resources outlive the frame context.
+
+### Moves
+
+Every type is move-only. A move transfers the handle and everything that goes with it, and leaves the source
+empty - `IsValid()` false, destructor does nothing. Moving is cheap and always safe; the source is simply
+not usable afterwards.
+
+Two cases are worth knowing because they are not obvious. Moving a `Device` re-points the queues it owns
+back at the new object, since each queue holds a reference to its device. Moving a `Buffer` carries its
+mapped pointer, so the mapping follows the object rather than staying with the corpse.
+
+### What the swap chain owns
+
+`SwapChain` owns its images, and `Recreate()` replaces all of them. Anything cached about it - an image
+view, the image count, the extent - is stale afterwards. That is why acquire and present report
+`SwapChainStatus::OutOfDate` rather than throwing: it is a signal to drop what was cached, not a failure.
+Applications using `FrameContext` do not see this at all, since it re-reads what it needs each frame.
+
+---
+
+## The frame loop
+
+`FrameContext` owns the parts of a frame that are the same in every application: a fence, a command buffer
+and an image-ready semaphore per frame in flight, a render-finished semaphore per swap chain image, and the
+order in which acquire, submit and present have to happen.
+
+```cpp
+FrameContext frame_context(device, swap_chain, graphics_queue, present_queue, {.frames_in_flight = 2});
+
+while (!window->IsClosed())
+{
+    application->ProcessSystemEvents();
+
+    if (frame_context.BeginFrame() == SwapChainStatus::OutOfDate)
+    {
+        continue;  // the swap chain was rebuilt, nothing was recorded
+    }
+
+    CommandBuffer& command_buffer = frame_context.GetCommandBuffer();
+    command_buffer.CmdImageBarrier(ImageBarrier::ToColorAttachment(frame_context.GetColorImage()));
+    command_buffer.CmdBeginRendering({.render_area_extent = frame_context.GetRenderSize(),
+                                      .color_attachments = {{.image_view = frame_context.GetColorImageView(), ...}}});
+    ...
+    command_buffer.CmdEndRendering();
+
+    frame_context.EndFrame();
+}
+```
+
+`BeginFrame` waits for the slot this frame is about to reuse, acquires an image, and begins the command
+buffer, so what comes back is already recording. `EndFrame` transitions the image to `Present`, ends the
+command buffer, submits it against the right semaphores, and presents.
+
+Resizing and minimizing are ordinary outcomes rather than errors. `BeginFrame` returning `OutOfDate` means
+the swap chain has already been rebuilt, nothing was recorded, the fence of that slot was not reset and the
+frame index did not advance - there is nothing to undo, so the loop just continues. A window with no client
+area, as while minimized, has no swap chain at all; `swap_chain.IsValid()` says so, and an application that
+does not want to spin should idle for a frame.
+
+Anything the application keeps one of per frame in flight - a uniform buffer, a descriptor set - is indexed
+by `frame_context.GetFrameIndex()`. `EndFrame` takes the layout the image was left in, defaulting to
+`ImageLayout::ColorAttachment`, and passing `ImageLayout::Present` skips the transition for a frame that
+already made it.
+
+Work that happens once rather than per frame - uploading a mesh, generating mips - does not belong in this
+loop. `ImmediateSubmit` from `rndr/forge/transfer.hpp` records, submits and waits in one call.
+
+---
+
+## Getting data in and out
+
+Where a buffer's memory lives is decided by `BufferDesc::host_access`, and it decides which way of filling
+the buffer works:
+
+- `HostAccess::SequentialWrite`, the default, is memory the host writes and never reads. `Buffer::Update`
+  writes into it directly. Reading it back is possible in principle and slow enough to be a bug, so
+  `Buffer::Read` throws on such a buffer.
+- `HostAccess::Random` is cached memory. Both `Update` and `Read` work, which is what a readback wants.
+- `HostAccess::None` may land in memory the host cannot map at all, which is the fastest for the device.
+  `Update` and `Read` both throw, and the buffer is filled and read through the staging helpers instead.
+
+`UploadToBuffer`, `ReadBackBuffer` and `ReadBackTexture` in `rndr/forge/transfer.hpp` do the staging buffer,
+the copy, the submit and the wait. They block, which is what setup code wants and what a frame does not.
+
+Non-coherent memory is handled underneath: `Update` flushes and `Read` invalidates, so a write is visible to
+the device when it returns and a read sees what the device wrote. Fences carry the rest - waiting on the
+fence of a submit makes everything that submit wrote available to the host, so no extra barrier is needed
+before reading a buffer the device just filled.
+
+A texture is filled from a `Bitmap` by its constructor, which uploads every mip level the bitmap carries, or
+generates the whole chain from level zero when asked. `CommandBuffer::CmdGenerateMips` does the same for a
+texture that was filled some other way.
 
 ---
 
@@ -123,3 +254,35 @@ Vulkan device", never "the enumeration failed". Failures throw, so the two stay 
 An application that sets up a device and its resources should wrap that setup in one `try` block rather than
 checking each call. The frame loop below it needs no error handling beyond the `SwapChainStatus` it already
 has to react to.
+
+---
+
+## Debugging
+
+Build with `-DRNDR_FORGE_VALIDATION=ON` and the validation layer is enabled whenever it is installed. Its
+messages are logged, and the context also keeps them:
+
+```cpp
+if (context.GetDebugMessageCount(DebugMessageSeverity::Error, DebugMessageTypeBits::Validation) != 0)
+{
+    for (const DebugMessage& message : context.GetDebugMessages()) { ... }
+}
+```
+
+Ask for `DebugMessageTypeBits::Validation` rather than for every type. The loader reports its own problems
+through the same callback at error severity - a layer manifest that some other application left behind on
+the machine is a common one - and none of that says anything about this code. `ClearDebugMessages()` starts
+a fresh stretch, for measuring one piece of work rather than the whole run.
+
+Info messages are counted but not stored, since the loader emits thousands of them, and the stored warnings
+and errors are capped by `GraphicsContextDesc::max_stored_debug_messages`.
+
+`SetDebugName` from `rndr/forge/debug.hpp` names any object, and both the messages and a capture use the
+name in place of the handle. `DebugMessage::objects` carries the names of what a message is about, which the
+layer hands over beside the text rather than inside it. Naming does nothing in a build without the debug
+utils extension, so call sites never have to ask first.
+
+One thing the layer cannot save anyone from: work that breaks the specification is undefined behaviour once
+it is submitted, whatever the layer said about it. A command that the layer rejects at record time should be
+thrown away rather than submitted - the driver may take the process down some time later, far from the
+cause.

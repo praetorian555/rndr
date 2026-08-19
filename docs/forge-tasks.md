@@ -604,10 +604,23 @@ convention. Make it explicitly optional.
 and `Present`. Store it and add `GetCurrentColorImage()` / `GetCurrentColorImageView()`. Also make the
 index parameters consistently `u32` — the sample casts to `i32` at `modern-vulkan.cpp:239`.
 
-### 4.7 Write `docs/forge.md`
+### 4.7 Write `docs/forge.md` — DONE
 
-`docs/vulkan.md` is a set of notes on Vulkan concepts, not a guide to this API. A short document covering
-object lifetimes, the frame loop, and who owns what would carry more weight than any single feature here.
+Four sections beyond what 2.2 and the tasks after it left there:
 
-The file now exists, created by task 2.2, but it only covers error handling. Object lifetimes and the frame
-loop are still to be written.
+- **Object lifetimes.** Nothing is reference counted and nothing is deferred, and an object holds a
+  reference to what it was created from without keeping it alive, so declaration order is the whole rule.
+  The references that are easy to miss are listed - a descriptor set holds its pool, a command buffer holds
+  its queue, immutable samplers have to outlive the layout - along with the other half of a lifetime, which
+  is waiting for the device before releasing anything it might still be reading.
+- **The frame loop.** What `FrameContext` owns and what the application still decides, with the loop written
+  out, plus why a resize is a return value rather than an exception and what to do when the window has no
+  client area at all.
+- **Getting data in and out.** `HostAccess` decides where the memory lives and therefore which of `Update`,
+  `Read` and the staging helpers works. Also the part that is easy to get wrong by hand and is handled
+  underneath: flushing, invalidating, and the fence that makes a submit's writes visible to the host.
+- **Debugging.** Reading the messages back off the context, why the type filter matters more than the
+  severity, naming objects, and that a command the layer rejects has to be thrown away rather than
+  submitted, since submitting it is undefined behaviour whatever the layer said.
+
+`docs/vulkan.md` is left as what it is, notes on Vulkan itself rather than on this API.
