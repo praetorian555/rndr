@@ -20,8 +20,11 @@ Rndr::Forge::Buffer::Buffer(const Device& device, const BufferDesc& desc, Opal::
         create_info.usage |= VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT;
     }
     // First two flags ensure that we get local memory that is host visible if possible, otherwise it fallbacks to invisible local memory
-    // for fast GPU access.
-    const VmaAllocationCreateInfo allocation_create_info{.flags = VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT |
+    // for fast GPU access. HostAccess::Random asks for cached memory instead, which is what reading the buffer back needs.
+    const VmaAllocationCreateFlags host_access_flag = desc.host_access == HostAccess::Random
+                                                          ? VMA_ALLOCATION_CREATE_HOST_ACCESS_RANDOM_BIT
+                                                          : VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT;
+    const VmaAllocationCreateInfo allocation_create_info{.flags = host_access_flag |
                                                                   VMA_ALLOCATION_CREATE_HOST_ACCESS_ALLOW_TRANSFER_INSTEAD_BIT |
                                                                   VMA_ALLOCATION_CREATE_MAPPED_BIT,
                                                          .usage = VMA_MEMORY_USAGE_AUTO};
@@ -136,6 +139,16 @@ void Rndr::Forge::Buffer::Flush(size_t offset, size_t size) const
     }
 }
 
+void Rndr::Forge::Buffer::Invalidate(size_t offset, size_t size) const
+{
+    // The counterpart of Flush. VMA skips it on coherent memory and rounds the range out to nonCoherentAtomSize itself.
+    const VkResult result = vmaInvalidateAllocation(m_device->GetGPUAllocator(), m_allocation, offset, size);
+    if (result != VK_SUCCESS)
+    {
+        throw VulkanException(result, "vmaInvalidateAllocation");
+    }
+}
+
 void Rndr::Forge::Buffer::Update(Opal::ArrayView<const u8> data, size_t offset) const
 {
     if (data.IsEmpty())
@@ -162,4 +175,35 @@ void Rndr::Forge::Buffer::Update(Opal::ArrayView<const u8> data, size_t offset) 
     memcpy(static_cast<u8*>(gpu_data) + offset, data.GetData(), data.GetSize());
     vmaUnmapMemory(m_device->GetGPUAllocator(), m_allocation);
     Flush(offset, data.GetSize());
+}
+
+void Rndr::Forge::Buffer::Read(Opal::ArrayView<u8> data, size_t offset) const
+{
+    if (data.IsEmpty())
+    {
+        return;
+    }
+    if (m_desc.host_access != HostAccess::Random)
+    {
+        throw Opal::Exception("Reading a buffer needs HostAccess::Random, otherwise the memory is write-combined!");
+    }
+    // Written this way around so that a huge offset cannot overflow the sum and pass the check.
+    if (offset > m_desc.size || data.GetSize() > m_desc.size - offset)
+    {
+        throw Opal::Exception("Read does not fit into the buffer.");
+    }
+    Invalidate(offset, data.GetSize());
+    if (m_mapped_memory != nullptr)
+    {
+        memcpy(data.GetData(), static_cast<const u8*>(m_mapped_memory) + offset, data.GetSize());
+        return;
+    }
+    void* gpu_data = nullptr;
+    const VkResult result = vmaMapMemory(m_device->GetGPUAllocator(), m_allocation, &gpu_data);
+    if (result != VK_SUCCESS)
+    {
+        throw VulkanException(result, "vmaMapMemory");
+    }
+    memcpy(data.GetData(), static_cast<const u8*>(gpu_data) + offset, data.GetSize());
+    vmaUnmapMemory(m_device->GetGPUAllocator(), m_allocation);
 }

@@ -29,4 +29,5 @@ using Bounds3f = Opal::Bounds3<f32>;
 
 using Point2i = Opal::Point2<int32_t>;
 using Vector2i = Opal::Vector2<int32_t>;
+using Vector3i = Opal::Vector3<int32_t>;
 }  // namespace Rndr

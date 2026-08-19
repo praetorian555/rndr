@@ -88,6 +88,56 @@ struct Barriers
     Opal::ArrayView<const ImageBarrier> image;
 };
 
+/** One range of one buffer copied into one range of another. */
+struct BufferCopyRegion
+{
+    u64 source_offset = 0;
+    u64 destination_offset = 0;
+    /** As much as both buffers have left past their offsets, by default. */
+    u64 size = k_whole_buffer;
+};
+
+/**
+ * The part of a texture one copy or blit region touches. Unlike ImageSubresourceRange this names a single
+ * mip level, because a copy reads or writes one level at a time.
+ */
+struct ImageSubresourceLayers
+{
+    /** Which aspect of the image we care about. Empty derives it from the format. */
+    ImageAspectBits aspect_mask = ImageAspectBits::None;
+    u32 mip_level = 0;
+    u32 first_array_layer = 0;
+    u32 array_layer_count = 1;
+};
+
+/**
+ * One region copied between a buffer and a texture, in either direction. The buffer side is a linear run of
+ * pixels and the texture side is a box inside one mip level.
+ */
+struct BufferImageCopyRegion
+{
+    u64 buffer_offset = 0;
+    /** Pixels per row in the buffer. Zero means the rows are packed to the width of image_extent. */
+    u32 buffer_row_length = 0;
+    /** Rows per array layer in the buffer. Zero means they are packed to the height of image_extent. */
+    u32 buffer_image_height = 0;
+    ImageSubresourceLayers image_subresource;
+    Vector3i image_offset = {0, 0, 0};
+    /** Zero on an axis means the rest of the mip level past image_offset on that axis. */
+    Vector3i image_extent = {0, 0, 0};
+};
+
+/** One box copied from one mip level of a texture into one mip level of another. */
+struct ImageCopyRegion
+{
+    ImageSubresourceLayers source;
+    ImageSubresourceLayers destination;
+    Vector3i source_offset = {0, 0, 0};
+    Vector3i destination_offset = {0, 0, 0};
+    /** Zero on an axis means the rest of the source mip level past source_offset on that axis. */
+    Vector3i extent = {0, 0, 0};
+};
+
 class CommandBuffer
 {
 public:
@@ -159,6 +209,29 @@ public:
     void CmdBarriers(const Barriers& barriers);
 
     /**
+     * Copy ranges of one buffer into another. The source needs BufferUsageBits::TransferSource and the
+     * destination BufferUsageBits::TransferDestination.
+     * @param source Buffer to read from.
+     * @param destination Buffer to write into.
+     * @param regions Ranges to copy. A region reaching past the end of either buffer throws.
+     */
+    void CmdCopyBuffer(const Buffer& source, const Buffer& destination, Opal::ArrayView<const BufferCopyRegion> regions);
+
+    /** Copy as much of the source as fits in the destination, both from offset zero. */
+    void CmdCopyBuffer(const Buffer& source, const Buffer& destination);
+
+    /**
+     * Copy regions of a buffer into a texture. The buffer needs BufferUsageBits::TransferSource and the
+     * texture TextureUsageBits::TransferDestination.
+     * @param buffer Source buffer holding the pixels.
+     * @param texture Destination texture.
+     * @param regions Regions to copy, each naming one mip level of the texture.
+     * @param texture_layout Layout the texture is in. TransferDestination unless the texture is General.
+     */
+    void CmdCopyBufferToImage(const Buffer& buffer, Texture& texture, Opal::ArrayView<const BufferImageCopyRegion> regions,
+                              ImageLayout texture_layout = ImageLayout::TransferDestination);
+
+    /**
      * Copy data from a buffer to an image. Handles all mip levels described by the bitmap. The destination image must
      * be in the TransferDestination layout.
      * @param buffer Source buffer containing the image data.
@@ -166,6 +239,30 @@ public:
      * @param texture Destination texture to copy into.
      */
     void CmdCopyBufferToImage(const Buffer& buffer, const Bitmap& bitmap, Texture& texture);
+
+    /**
+     * Copy regions of a texture into a buffer, which is how anything rendered is read back. The texture needs
+     * TextureUsageBits::TransferSource and the buffer BufferUsageBits::TransferDestination.
+     * @param texture Source texture.
+     * @param buffer Destination buffer.
+     * @param regions Regions to copy, each naming one mip level of the texture.
+     * @param texture_layout Layout the texture is in. TransferSource unless the texture is General.
+     */
+    void CmdCopyImageToBuffer(const Texture& texture, const Buffer& buffer, Opal::ArrayView<const BufferImageCopyRegion> regions,
+                              ImageLayout texture_layout = ImageLayout::TransferSource);
+
+    /**
+     * Copy regions of one texture into another. Both must have the same format and sample count, which the
+     * validation layer checks; a copy does not convert the way a blit does.
+     * @param source Texture to read from. Needs TextureUsageBits::TransferSource.
+     * @param destination Texture to write into. Needs TextureUsageBits::TransferDestination.
+     * @param regions Regions to copy.
+     * @param source_layout Layout the source is in.
+     * @param destination_layout Layout the destination is in.
+     */
+    void CmdCopyImage(const Texture& source, Texture& destination, Opal::ArrayView<const ImageCopyRegion> regions,
+                      ImageLayout source_layout = ImageLayout::TransferSource,
+                      ImageLayout destination_layout = ImageLayout::TransferDestination);
 
     /**
      * Begin a dynamic rendering pass. Uses VK_KHR_dynamic_rendering, no render pass or framebuffer objects needed.

@@ -6,6 +6,7 @@
 #include "rndr/forge/device.hpp"
 #include "rndr/forge/command-buffer.hpp"
 #include "rndr/forge/synchronization.hpp"
+#include "rndr/forge/transfer.hpp"
 #include "rndr/forge/vulkan-exception.hpp"
 #include "rndr/graphics-types.hpp"
 
@@ -149,16 +150,13 @@ Rndr::Forge::Texture::Texture(const Device& device, DeviceQueue& queue, const Bi
     const Buffer staging_buffer(device, {.size = bitmap.GetTotalSize(), .usage = BufferUsageBits::TransferSource});
     staging_buffer.Update({bitmap.GetData(), bitmap.GetTotalSize()}, 0);
 
-    CommandBuffer upload_command_buffer(device, queue);
-    upload_command_buffer.Begin();
-    upload_command_buffer.CmdImageBarrier(ImageBarrier::ToTransferDestination(*this));
-    upload_command_buffer.CmdCopyBufferToImage(staging_buffer, bitmap, *this);
-    upload_command_buffer.CmdImageBarrier(ImageBarrier::ToShaderRead(*this, ImageLayout::TransferDestination));
-    upload_command_buffer.End();
-
-    const Fence fence(device, false);
-    queue.Submit(upload_command_buffer, fence);
-    fence.Wait();
+    ImmediateSubmit(device, queue,
+                    [&](CommandBuffer& command_buffer)
+                    {
+                        command_buffer.CmdImageBarrier(ImageBarrier::ToTransferDestination(*this));
+                        command_buffer.CmdCopyBufferToImage(staging_buffer, bitmap, *this);
+                        command_buffer.CmdImageBarrier(ImageBarrier::ToShaderRead(*this, ImageLayout::TransferDestination));
+                    });
 }
 
 Rndr::Forge::Texture::Texture(const Device& device, VkImage native_image, const TextureDesc& desc) :

@@ -175,23 +175,238 @@ void Rndr::Forge::CommandBuffer::CmdMemoryBarrier(const MemoryBarrier& memory_ba
     CmdBarriers({.memory = {&memory_barrier, 1}});
 }
 
-void Rndr::Forge::CommandBuffer::CmdCopyBufferToImage(const Buffer& buffer, const Bitmap& bitmap, Texture& texture)
+/** The extent of one mip level of a texture, which is the base extent halved once per level, floored at one. */
+static Rndr::u32 MipExtent(Rndr::u32 base_extent, Rndr::u32 mip_level)
 {
-    Opal::DynamicArray<VkBufferImageCopy> copy_regions(bitmap.GetMipCount());
-    for (u32 mip_level = 0; mip_level < bitmap.GetMipCount(); ++mip_level)
+    return Opal::Max(1u, base_extent >> mip_level);
+}
+
+/** The buffer has to allow the transfer it is about to take part in. */
+static void ValidateBufferUsage(const Rndr::Forge::Buffer& buffer, Rndr::Forge::BufferUsageBits required, const char* role,
+                                const char* what)
+{
+    if (!(buffer.GetDesc().usage & required))
     {
-        const u32 width = Opal::Max(1, bitmap.GetWidth() >> mip_level);
-        const u32 height = Opal::Max(1, bitmap.GetHeight() >> mip_level);
-        const u32 depth = Opal::Max(1, bitmap.GetDepth() >> mip_level);
-        const VkBufferImageCopy copy_region{
-            .bufferOffset = bitmap.GetMipLevelOffset(static_cast<u32>(mip_level)),
-            .imageSubresource = {.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT, .mipLevel = mip_level, .layerCount = 1},
-            .imageExtent = {.width = width, .height = height, .depth = depth},
-        };
-        copy_regions[mip_level] = copy_region;
+        throw Opal::Exception(Opal::StringEx(what) + " needs a " + role + " buffer created with the matching BufferUsageBits!");
+    }
+}
+
+/** The texture has to allow the transfer it is about to take part in. */
+static void ValidateTextureUsage(const Rndr::Forge::Texture& texture, Rndr::Forge::TextureUsageBits required, const char* role,
+                                 const char* what)
+{
+    if (!(texture.GetDesc().usage & required))
+    {
+        throw Opal::Exception(Opal::StringEx(what) + " needs a " + role + " texture created with the matching TextureUsageBits!");
+    }
+}
+
+/** The range has to fit, written so that neither a large offset nor a large size can overflow the sum and pass. */
+static void ValidateBufferRange(const Rndr::Forge::Buffer& buffer, Rndr::u64 offset, Rndr::u64 size, const char* role, const char* what)
+{
+    const Rndr::u64 buffer_size = buffer.GetSize();
+    if (offset > buffer_size || size > buffer_size - offset)
+    {
+        throw Opal::Exception(Opal::StringEx(what) + " reaches past the end of the " + role + " buffer!");
+    }
+}
+
+/**
+ * Resolve one image side of a copy: check that the subresource exists on the texture, fill a zero extent in
+ * with the rest of the mip level, and check that the box fits inside it.
+ */
+static VkExtent3D ResolveImageRegion(const Rndr::Forge::Texture& texture, const Rndr::Forge::ImageSubresourceLayers& subresource,
+                                     const Rndr::Vector3i& offset, const Rndr::Vector3i& extent, const char* role, const char* what)
+{
+    using namespace Rndr;
+    const Forge::TextureDesc& desc = texture.GetDesc();
+    if (subresource.mip_level >= desc.mip_level_count)
+    {
+        throw Opal::Exception(Opal::StringEx(what) + " names a mip level the " + role + " texture does not have!");
+    }
+    if (subresource.array_layer_count == 0 || subresource.first_array_layer > desc.array_layer_count ||
+        subresource.array_layer_count > desc.array_layer_count - subresource.first_array_layer)
+    {
+        throw Opal::Exception(Opal::StringEx(what) + " names array layers the " + role + " texture does not have!");
+    }
+    if (offset.x < 0 || offset.y < 0 || offset.z < 0 || extent.x < 0 || extent.y < 0 || extent.z < 0)
+    {
+        throw Opal::Exception(Opal::StringEx(what) + " has a negative offset or extent on the " + role + " texture!");
+    }
+    const u32 mip_width = MipExtent(desc.width, subresource.mip_level);
+    const u32 mip_height = MipExtent(desc.height, subresource.mip_level);
+    const u32 mip_depth = MipExtent(desc.depth, subresource.mip_level);
+    const u32 offset_x = static_cast<u32>(offset.x);
+    const u32 offset_y = static_cast<u32>(offset.y);
+    const u32 offset_z = static_cast<u32>(offset.z);
+    if (offset_x > mip_width || offset_y > mip_height || offset_z > mip_depth)
+    {
+        throw Opal::Exception(Opal::StringEx(what) + " starts outside the mip level of the " + role + " texture!");
+    }
+    // A zero extent on an axis means the rest of the mip level past the offset on that axis.
+    const VkExtent3D resolved{.width = extent.x != 0 ? static_cast<u32>(extent.x) : mip_width - offset_x,
+                              .height = extent.y != 0 ? static_cast<u32>(extent.y) : mip_height - offset_y,
+                              .depth = extent.z != 0 ? static_cast<u32>(extent.z) : mip_depth - offset_z};
+    if (resolved.width > mip_width - offset_x || resolved.height > mip_height - offset_y || resolved.depth > mip_depth - offset_z)
+    {
+        throw Opal::Exception(Opal::StringEx(what) + " reaches past the mip level of the " + role + " texture!");
+    }
+    return resolved;
+}
+
+static VkImageSubresourceLayers ToVkSubresourceLayers(const Rndr::Forge::ImageSubresourceLayers& subresource, Rndr::PixelFormat format)
+{
+    return {.aspectMask = static_cast<VkImageAspectFlags>(Rndr::Forge::ResolveAspectMask(subresource.aspect_mask, format)),
+            .mipLevel = subresource.mip_level,
+            .baseArrayLayer = subresource.first_array_layer,
+            .layerCount = subresource.array_layer_count};
+}
+
+/**
+ * One region of a copy between a buffer and a texture, translated and checked from both ends. Both directions
+ * describe the copy the same way, so they share this.
+ */
+static VkBufferImageCopy ToVkBufferImageCopy(const Rndr::Forge::Buffer& buffer, const Rndr::Forge::Texture& texture,
+                                             const Rndr::Forge::BufferImageCopyRegion& region, const char* buffer_role, const char* what)
+{
+    using namespace Rndr;
+    const VkExtent3D extent = ResolveImageRegion(texture, region.image_subresource, region.image_offset, region.image_extent, "target",
+                                                 what);
+    if (region.buffer_offset % 4 != 0)
+    {
+        throw Opal::Exception(Opal::StringEx(what) + " buffer offset must be a multiple of 4!");
+    }
+    // A compressed format is measured in blocks rather than pixels, so the size below would be wrong for one.
+    // GetPixelSize reports zero for those, and the validation layer covers what this cannot.
+    const u32 pixel_size = GetPixelSize(texture.GetDesc().format);
+    if (pixel_size != 0)
+    {
+        const u64 row_length = region.buffer_row_length != 0 ? region.buffer_row_length : extent.width;
+        const u64 image_height = region.buffer_image_height != 0 ? region.buffer_image_height : extent.height;
+        const u64 region_size = static_cast<u64>(pixel_size) * row_length * image_height * extent.depth *
+                                region.image_subresource.array_layer_count;
+        ValidateBufferRange(buffer, region.buffer_offset, region_size, buffer_role, what);
+    }
+    return {.bufferOffset = region.buffer_offset,
+            .bufferRowLength = region.buffer_row_length,
+            .bufferImageHeight = region.buffer_image_height,
+            .imageSubresource = ToVkSubresourceLayers(region.image_subresource, texture.GetDesc().format),
+            .imageOffset = {.x = region.image_offset.x, .y = region.image_offset.y, .z = region.image_offset.z},
+            .imageExtent = extent};
+}
+
+void Rndr::Forge::CommandBuffer::CmdCopyBuffer(const Buffer& source, const Buffer& destination,
+                                               Opal::ArrayView<const BufferCopyRegion> regions)
+{
+    if (regions.IsEmpty())
+    {
+        return;
+    }
+    ValidateBufferUsage(source, BufferUsageBits::TransferSource, "source", "Buffer copy");
+    ValidateBufferUsage(destination, BufferUsageBits::TransferDestination, "destination", "Buffer copy");
+    Opal::DynamicArray<VkBufferCopy> copy_regions(regions.GetSize());
+    for (i32 i = 0; i < regions.GetSize(); ++i)
+    {
+        const BufferCopyRegion& region = regions[i];
+        if (region.source_offset > source.GetSize() || region.destination_offset > destination.GetSize())
+        {
+            throw Opal::Exception("Buffer copy starts past the end of a buffer!");
+        }
+        // The whole buffer means as much as both sides have left, so that neither end is overrun.
+        const u64 size = region.size == k_whole_buffer ? Opal::Min(source.GetSize() - region.source_offset,
+                                                                  destination.GetSize() - region.destination_offset)
+                                                       : region.size;
+        ValidateBufferRange(source, region.source_offset, size, "source", "Buffer copy");
+        ValidateBufferRange(destination, region.destination_offset, size, "destination", "Buffer copy");
+        copy_regions[i] = {.srcOffset = region.source_offset, .dstOffset = region.destination_offset, .size = size};
+    }
+    vkCmdCopyBuffer(m_native_command_buffer, source.GetNativeBuffer(), destination.GetNativeBuffer(),
+                    static_cast<u32>(copy_regions.GetSize()), copy_regions.GetData());
+}
+
+void Rndr::Forge::CommandBuffer::CmdCopyBuffer(const Buffer& source, const Buffer& destination)
+{
+    const BufferCopyRegion region;
+    CmdCopyBuffer(source, destination, {&region, 1});
+}
+
+void Rndr::Forge::CommandBuffer::CmdCopyBufferToImage(const Buffer& buffer, Texture& texture,
+                                                      Opal::ArrayView<const BufferImageCopyRegion> regions, ImageLayout texture_layout)
+{
+    if (regions.IsEmpty())
+    {
+        return;
+    }
+    ValidateBufferUsage(buffer, BufferUsageBits::TransferSource, "source", "Buffer to image copy");
+    ValidateTextureUsage(texture, TextureUsageBits::TransferDestination, "destination", "Buffer to image copy");
+    Opal::DynamicArray<VkBufferImageCopy> copy_regions(regions.GetSize());
+    for (i32 i = 0; i < regions.GetSize(); ++i)
+    {
+        copy_regions[i] = ToVkBufferImageCopy(buffer, texture, regions[i], "source", "Buffer to image copy");
     }
     vkCmdCopyBufferToImage(m_native_command_buffer, buffer.GetNativeBuffer(), texture.GetNativeImage(),
-                           VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, static_cast<u32>(copy_regions.GetSize()), copy_regions.GetData());
+                           static_cast<VkImageLayout>(texture_layout), static_cast<u32>(copy_regions.GetSize()), copy_regions.GetData());
+}
+
+void Rndr::Forge::CommandBuffer::CmdCopyBufferToImage(const Buffer& buffer, const Bitmap& bitmap, Texture& texture)
+{
+    // One region per mip level, laid out the way the bitmap packs them. The aspect and the extent come from the
+    // texture through the general path below, so this no longer assumes a color format.
+    Opal::DynamicArray<BufferImageCopyRegion> regions(bitmap.GetMipCount());
+    for (u32 mip_level = 0; mip_level < bitmap.GetMipCount(); ++mip_level)
+    {
+        regions[mip_level] = {.buffer_offset = bitmap.GetMipLevelOffset(static_cast<i32>(mip_level)),
+                              .image_subresource = {.mip_level = mip_level}};
+    }
+    CmdCopyBufferToImage(buffer, texture, regions);
+}
+
+void Rndr::Forge::CommandBuffer::CmdCopyImageToBuffer(const Texture& texture, const Buffer& buffer,
+                                                      Opal::ArrayView<const BufferImageCopyRegion> regions, ImageLayout texture_layout)
+{
+    if (regions.IsEmpty())
+    {
+        return;
+    }
+    ValidateTextureUsage(texture, TextureUsageBits::TransferSource, "source", "Image to buffer copy");
+    ValidateBufferUsage(buffer, BufferUsageBits::TransferDestination, "destination", "Image to buffer copy");
+    Opal::DynamicArray<VkBufferImageCopy> copy_regions(regions.GetSize());
+    for (i32 i = 0; i < regions.GetSize(); ++i)
+    {
+        copy_regions[i] = ToVkBufferImageCopy(buffer, texture, regions[i], "destination", "Image to buffer copy");
+    }
+    vkCmdCopyImageToBuffer(m_native_command_buffer, texture.GetNativeImage(), static_cast<VkImageLayout>(texture_layout),
+                           buffer.GetNativeBuffer(), static_cast<u32>(copy_regions.GetSize()), copy_regions.GetData());
+}
+
+void Rndr::Forge::CommandBuffer::CmdCopyImage(const Texture& source, Texture& destination, Opal::ArrayView<const ImageCopyRegion> regions,
+                                              ImageLayout source_layout, ImageLayout destination_layout)
+{
+    if (regions.IsEmpty())
+    {
+        return;
+    }
+    ValidateTextureUsage(source, TextureUsageBits::TransferSource, "source", "Image copy");
+    ValidateTextureUsage(destination, TextureUsageBits::TransferDestination, "destination", "Image copy");
+    Opal::DynamicArray<VkImageCopy> copy_regions(regions.GetSize());
+    for (i32 i = 0; i < regions.GetSize(); ++i)
+    {
+        const ImageCopyRegion& region = regions[i];
+        // The extent is resolved against the source and then checked against the destination, so a zero extent
+        // means the rest of the source mip level and still has to fit where it is going.
+        const VkExtent3D extent = ResolveImageRegion(source, region.source, region.source_offset, region.extent, "source", "Image copy");
+        const Vector3i resolved_extent{static_cast<i32>(extent.width), static_cast<i32>(extent.height), static_cast<i32>(extent.depth)};
+        ResolveImageRegion(destination, region.destination, region.destination_offset, resolved_extent, "destination", "Image copy");
+        copy_regions[i] = {
+            .srcSubresource = ToVkSubresourceLayers(region.source, source.GetDesc().format),
+            .srcOffset = {.x = region.source_offset.x, .y = region.source_offset.y, .z = region.source_offset.z},
+            .dstSubresource = ToVkSubresourceLayers(region.destination, destination.GetDesc().format),
+            .dstOffset = {.x = region.destination_offset.x, .y = region.destination_offset.y, .z = region.destination_offset.z},
+            .extent = extent};
+    }
+    vkCmdCopyImage(m_native_command_buffer, source.GetNativeImage(), static_cast<VkImageLayout>(source_layout),
+                   destination.GetNativeImage(), static_cast<VkImageLayout>(destination_layout),
+                   static_cast<u32>(copy_regions.GetSize()), copy_regions.GetData());
 }
 
 static VkAttachmentLoadOp ToVkLoadOp(Rndr::Forge::AttachmentLoadOperation op)

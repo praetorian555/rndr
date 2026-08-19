@@ -19,6 +19,8 @@ struct BufferDesc
 {
     size_t size = 0;
     BufferUsageBits usage = BufferUsageBits::None;
+    /** Buffer::Read needs HostAccess::Random and throws without it, since the default is write-only memory. */
+    HostAccess host_access = HostAccess::SequentialWrite;
     bool keep_memory_mapped = true;
     bool use_device_address = false;
 };
@@ -49,9 +51,20 @@ public:
      */
     void Update(Opal::ArrayView<const u8> data, size_t offset = 0) const;
 
+    /**
+     * Read data out of the buffer at the given offset, filling the whole view. Throws when the read does not
+     * fit, and when the buffer was not created with HostAccess::Random - reading write-combined memory works
+     * and is slow enough to be a bug. Non-coherent memory is invalidated first, so what the device wrote is
+     * what this returns.
+     */
+    void Read(Opal::ArrayView<u8> data, size_t offset = 0) const;
+
 private:
     /** Make a host write to the given range visible to the device. Does nothing on coherent memory. */
     void Flush(size_t offset, size_t size) const;
+
+    /** Make a device write to the given range visible to the host. Does nothing on coherent memory. */
+    void Invalidate(size_t offset, size_t size) const;
 
     BufferDesc m_desc;
     Opal::Ref<const Device> m_device;

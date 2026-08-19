@@ -42,6 +42,18 @@ enum class BufferUsageBits : u32
 };
 OPAL_ENUM_CLASS_FLAGS(BufferUsageBits);
 
+/**
+ * How the host intends to touch the memory of a buffer. This picks the memory type the allocation lands in,
+ * so a mismatch is slow rather than wrong - reading write-combined memory works and crawls.
+ */
+enum class HostAccess : u8
+{
+    /** Written from start to end and never read. Write-combined memory is fine, which is usually fastest. */
+    SequentialWrite,
+    /** Read back, or written out of order. Cached memory, which is what a host read needs. */
+    Random
+};
+
 /** How a texture is allowed to be used. Mirrors VkImageUsageFlagBits. */
 enum class TextureUsageBits : u32
 {
@@ -169,6 +181,28 @@ static constexpr u32 k_all_mip_levels = 0xFFFFFFFF;
 static constexpr u32 k_all_array_layers = 0xFFFFFFFF;
 
 /**
+ * The aspect an explicit mask names, or the one the format implies when the mask is empty: depth, stencil,
+ * both, or color. Shared by everything that names part of an image - ranges, copy regions, blit regions.
+ */
+[[nodiscard]] inline ImageAspectBits ResolveAspectMask(ImageAspectBits aspect_mask, PixelFormat format)
+{
+    if (aspect_mask != ImageAspectBits::None)
+    {
+        return aspect_mask;
+    }
+    ImageAspectBits resolved = ImageAspectBits::None;
+    if (IsDepthFormat(format))
+    {
+        resolved |= ImageAspectBits::Depth;
+    }
+    if (IsStencilFormat(format))
+    {
+        resolved |= ImageAspectBits::Stencil;
+    }
+    return resolved == ImageAspectBits::None ? ImageAspectBits::Color : resolved;
+}
+
+/**
  * Which part of a texture a command refers to. The whole texture by default: every mip level, every array
  * layer, and whichever aspect its format has.
  */
@@ -187,20 +221,7 @@ struct ImageSubresourceRange
      */
     [[nodiscard]] ImageAspectBits ResolveAspectMask(PixelFormat format) const
     {
-        if (aspect_mask != ImageAspectBits::None)
-        {
-            return aspect_mask;
-        }
-        ImageAspectBits resolved = ImageAspectBits::None;
-        if (IsDepthFormat(format))
-        {
-            resolved |= ImageAspectBits::Depth;
-        }
-        if (IsStencilFormat(format))
-        {
-            resolved |= ImageAspectBits::Stencil;
-        }
-        return resolved == ImageAspectBits::None ? ImageAspectBits::Color : resolved;
+        return Forge::ResolveAspectMask(aspect_mask, format);
     }
 };
 
