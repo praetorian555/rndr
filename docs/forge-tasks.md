@@ -534,12 +534,35 @@ array with a heap fallback, or a scratch allocator that Forge pushes and resets 
 
 ## Priority 4 — Convenience
 
-### 4.1 Frame context
+### 4.1 Frame context — DONE
 
-The single biggest ergonomic gap. `modern-vulkan.cpp` hand-rolls frames-in-flight, the fence array, the
-per-frame and per-image semaphores, and the acquire/submit/present ordering — the part that is hardest to get
-right and near identical in every application. A `Forge::FrameContext` that owns the frame count, one command
-buffer and one fence per frame, and exposes `BeginFrame()` / `EndFrame()` would roughly halve the sample.
+`Forge::FrameContext` owns the frames in flight: a fence, a command buffer and an image-ready semaphore for
+each, a render-finished semaphore per swap chain image, and the order acquire, submit and present have to
+happen in. `BeginFrame` waits for the slot this frame reuses, acquires an image and hands back a command
+buffer that is already recording; `EndFrame` transitions the image to Present, closes the command buffer,
+submits it against the right semaphores and presents.
+
+Both return `SwapChainStatus`, so a resized or minimized window stays what it already was in this API - an
+outcome rather than a failure. `BeginFrame` returning `OutOfDate` means the swap chain was rebuilt, nothing
+was recorded, the fence of that slot is untouched and the frame index has not advanced, so the caller just
+continues its loop. The render-finished semaphores are rebuilt with the swap chain, which was the part of
+the sample most easily left out.
+
+`EndFrame` takes the layout the caller left the image in, defaulting to `ColorAttachment`, and makes the
+transition to `Present` itself. Passing `Present` skips it, for a frame that already did it by hand.
+
+The sample went from 339 lines to 292, and the part this replaced from 61 lines to 14. What is left in its
+loop is what the application actually decides: the barriers into its attachments, the rendering desc, the
+draw calls. `SetDebugName` has an overload for the whole context, which names every fence, semaphore and
+command buffer with the index of the frame or image it belongs to.
+
+Verified by driving the sample through four resizes, a minimize and a restore with the validation layer on:
+six swap chain rebuilds, no validation message, clean exit. The headless tests cannot reach this - a frame
+context needs a swap chain and a swap chain needs a window - so the sample is still what covers it.
+
+Timeline semaphores, which 3.5 left open, are now an internal matter: nothing outside `FrameContext` names
+the semaphores it waits on, so replacing the fence array with a timeline is a change to one file rather than
+to every application.
 
 ### 4.2 Barrier presets — DONE
 

@@ -15,6 +15,7 @@
 #include "rndr/forge/command-buffer.hpp"
 #include "rndr/forge/debug.hpp"
 #include "rndr/forge/device.hpp"
+#include "rndr/forge/frame-context.hpp"
 #include "rndr/forge/graphics-context.hpp"
 #include "rndr/forge/physical-device.hpp"
 #include "rndr/forge/swap-chain.hpp"
@@ -99,36 +100,9 @@ void Run()
                                          .use_device_address = true});
     }
 
-    // Create fences and semaphores
-    Opal::DynamicArray<Rndr::Forge::Fence> fences;
-    Opal::DynamicArray<Rndr::Forge::Semaphore> present_semaphores;
-    for (i32 i = 0; i < k_frames_in_flight; ++i)
-    {
-        constexpr bool k_start_signaled = true;
-        fences.EmplaceBack(device, k_start_signaled);
-        present_semaphores.EmplaceBack(device);
-    }
-    // One semaphore per swap chain image, so they have to be rebuilt whenever the swap chain is.
-    Opal::DynamicArray<Rndr::Forge::Semaphore> render_semaphores;
-    auto match_render_semaphores_to_swap_chain = [&device, &render_semaphores, &swap_chain]
-    {
-        if (render_semaphores.GetSize() == swap_chain.GetColorImageCount())
-        {
-            return;
-        }
-        render_semaphores.Clear();
-        for (u32 i = 0; i < swap_chain.GetColorImageCount(); ++i)
-        {
-            render_semaphores.EmplaceBack(device);
-        }
-    };
-    match_render_semaphores_to_swap_chain();
-
-    Opal::DynamicArray<Rndr::Forge::CommandBuffer> command_buffers;
-    for (Rndr::i32 i = 0; i < k_frames_in_flight; ++i)
-    {
-        command_buffers.EmplaceBack(device, graphics_queue);
-    }
+    // Owns the frames in flight: a fence, a command buffer and the semaphores on both sides of the swap chain
+    // for each, plus the order acquire, submit and present have to happen in.
+    Rndr::Forge::FrameContext frame_context(device, swap_chain, graphics_queue, present_queue, {.frames_in_flight = k_frames_in_flight});
 
     const Opal::StringUtf8 albedo_texture_path = Opal::Paths::Combine(RNDR_CORE_ASSETS_DIR, "sample-models", "Suzanne", "glTF", "Suzanne_BaseColor.png").GetValue();
     const Opal::StringUtf8 metallic_roughness_texture_path = Opal::Paths::Combine(RNDR_CORE_ASSETS_DIR, "sample-models", "Suzanne", "glTF", "Suzanne_MetallicRoughness.png").GetValue();
@@ -206,11 +180,10 @@ void Run()
     Rndr::Forge::SetDebugName(device, descriptor_set, "material set");
     Rndr::Forge::SetDebugName(device, pipeline, "forward pipeline");
     Rndr::Forge::SetDebugName(device, swap_chain, "swap chain");
+    Rndr::Forge::SetDebugName(device, frame_context, "frame");
     for (i32 i = 0; i < k_frames_in_flight; ++i)
     {
         Rndr::Forge::SetDebugName(device, m_shader_buffers[i], "per frame shader data");
-        Rndr::Forge::SetDebugName(device, command_buffers[i], "frame commands");
-        Rndr::Forge::SetDebugName(device, fences[i], "frame fence");
     }
 
     Rndr::Vector2i window_size = window->GetSize();
@@ -229,7 +202,6 @@ void Run()
     controller.Enable(true);
 
     Rndr::f32 delta_seconds = 0.016;
-    Rndr::u32 frame_index = 0;
     while (!window->IsClosed())
     {
         auto start_time = Opal::GetSeconds();
@@ -245,14 +217,9 @@ void Run()
         }
         controller.Tick(delta_seconds);
 
-        // Acquire next swap chain image to render to
-        fences[frame_index].Wait();
-        const Rndr::Forge::AcquiredImage acquired_image = swap_chain.AcquireImage(present_semaphores[frame_index]);
-        if (acquired_image.status == Rndr::Forge::SwapChainStatus::OutOfDate)
+        // Waits for this frame's slot, acquires an image, and begins its command buffer.
+        if (frame_context.BeginFrame() == Rndr::Forge::SwapChainStatus::OutOfDate)
         {
-            // The swap chain was rebuilt, or the window is minimized and there is none. Nothing was submitted for this
-            // frame, so the fence is left signaled and the frame index is not advanced.
-            match_render_semaphores_to_swap_chain();
             if (!swap_chain.IsValid())
             {
                 // The window has no client area, so there is nothing to render into. Idle instead of retrying as fast
@@ -263,12 +230,10 @@ void Run()
             delta_seconds = static_cast<f32>(skipped_end_time - start_time);
             continue;
         }
-        const u32 image_index = acquired_image.image_index;
-        fences[frame_index].Reset();
+        const u32 frame_index = frame_context.GetFrameIndex();
 
         // Everything is rendered at the size of the swap chain, which can lag a frame behind the size of the window.
-        const VkExtent2D swap_chain_extent = swap_chain.GetExtent();
-        const Rndr::Vector2i render_size{static_cast<i32>(swap_chain_extent.width), static_cast<i32>(swap_chain_extent.height)};
+        const Rndr::Vector2i render_size = frame_context.GetRenderSize();
         const f32 render_width = static_cast<f32>(render_size.x);
         const f32 render_height = static_cast<f32>(render_size.y);
 
@@ -282,15 +247,12 @@ void Run()
         }
         m_shader_buffers[frame_index].Update(Opal::AsBytes(shader_data));
 
-        // Start recording rendering commands
-        auto& command_buffer = command_buffers[frame_index];
-        command_buffer.Reset();
-        command_buffer.Begin();
+        auto& command_buffer = frame_context.GetCommandBuffer();
 
         // Make sure our color and depth attachment are ready and in proper layout. Both are cleared when the
         // render pass starts, so neither has to preserve what it holds.
         Opal::InPlaceArray<Rndr::Forge::ImageBarrier, 2> barriers{
-            Rndr::Forge::ImageBarrier::ToColorAttachment(swap_chain.GetColorImage(image_index)),
+            Rndr::Forge::ImageBarrier::ToColorAttachment(frame_context.GetColorImage()),
             Rndr::Forge::ImageBarrier::ToDepthStencilAttachment(swap_chain.GetDepthImage())};
         command_buffer.CmdImageBarriers(barriers);
 
@@ -298,7 +260,7 @@ void Run()
         // Do the actual draw calls
         const Rndr::Forge::RenderingDesc rendering_desc{
             .render_area_extent = render_size,
-            .color_attachments = {Rndr::Forge::RenderingAttachmentDesc{.image_view = swap_chain.GetColorImageView(image_index),
+            .color_attachments = {Rndr::Forge::RenderingAttachmentDesc{.image_view = frame_context.GetColorImageView(),
                                                                         .image_layout = Rndr::Forge::ImageLayout::ColorAttachment,
                                                                         .load_operation = Rndr::Forge::AttachmentLoadOperation::Clear,
                                                                         .store_operation = Rndr::Forge::AttachmentStoreOperation::Store,
@@ -320,17 +282,8 @@ void Run()
         command_buffer.CmdDrawIndexed(mesh.index_count, 3);
         command_buffer.CmdEndRendering();
 
-        command_buffer.CmdImageBarrier(Rndr::Forge::ImageBarrier::ToPresent(swap_chain.GetColorImage(image_index)));
-        command_buffer.End();
-
-        graphics_queue.Submit(command_buffer, present_semaphores[frame_index], Rndr::Forge::PipelineStageBits::ColorAttachmentOutput,
-                              render_semaphores[image_index], fences[frame_index]);
-        frame_index = (frame_index + 1) % k_frames_in_flight;
-        if (swap_chain.Present(image_index, present_queue, render_semaphores[image_index]) ==
-            Rndr::Forge::SwapChainStatus::OutOfDate)
-        {
-            match_render_semaphores_to_swap_chain();
-        }
+        // Transitions the image to Present, ends the command buffer, submits it and presents.
+        frame_context.EndFrame();
 
         auto end_time = Opal::GetSeconds();
         delta_seconds = static_cast<f32>(end_time - start_time);

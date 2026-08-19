@@ -26,5 +26,6 @@ class DescriptorSet;
 class CommandBuffer;
 class Fence;
 class Semaphore;
+class FrameContext;
 
 }  // namespace Rndr::Forge

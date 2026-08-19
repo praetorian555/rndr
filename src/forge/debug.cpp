@@ -4,6 +4,7 @@
 #include "rndr/forge/command-buffer.hpp"
 #include "rndr/forge/descriptor-set.hpp"
 #include "rndr/forge/device.hpp"
+#include "rndr/forge/frame-context.hpp"
 #include "rndr/forge/pipeline.hpp"
 #include "rndr/forge/shader.hpp"
 #include "rndr/forge/swap-chain.hpp"
@@ -104,6 +105,28 @@ void Rndr::Forge::SetDebugName(const Device& device, const DeviceQueue& queue, c
 {
     SetName(device, VK_OBJECT_TYPE_QUEUE, ToHandle(queue.GetNativeQueue()), name);
     SetName(device, VK_OBJECT_TYPE_COMMAND_POOL, ToHandle(queue.GetNativeCommandPool()), name);
+}
+
+/** "shadow pass" plus " fence 1", since a name that does not say which frame it belongs to is half a name. */
+static Opal::StringUtf8 Indexed(const Opal::StringUtf8& name, const char* what, Rndr::u32 index)
+{
+    char buffer[128] = {};
+    snprintf(buffer, sizeof(buffer), "%s %s %u", reinterpret_cast<const char*>(name.GetData()), what, index);
+    return Opal::StringUtf8(buffer);
+}
+
+void Rndr::Forge::SetDebugName(const Device& device, const FrameContext& frame_context, const Opal::StringUtf8& name)
+{
+    for (i32 frame = 0; frame < frame_context.m_fences.GetSize(); ++frame)
+    {
+        SetDebugName(device, frame_context.m_fences[frame], Indexed(name, "fence", static_cast<u32>(frame)));
+        SetDebugName(device, frame_context.m_image_ready_semaphores[frame], Indexed(name, "image ready", static_cast<u32>(frame)));
+        SetDebugName(device, frame_context.m_command_buffers[frame], Indexed(name, "commands", static_cast<u32>(frame)));
+    }
+    for (i32 image = 0; image < frame_context.m_render_finished_semaphores.GetSize(); ++image)
+    {
+        SetDebugName(device, frame_context.m_render_finished_semaphores[image], Indexed(name, "render finished", static_cast<u32>(image)));
+    }
 }
 
 void Rndr::Forge::SetDebugName(const Device& device, const SwapChain& swap_chain, const Opal::StringUtf8& name)

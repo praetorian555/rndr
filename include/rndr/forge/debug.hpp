@@ -37,4 +37,10 @@ void SetDebugName(const Device& device, const DeviceQueue& queue, const Opal::St
 /** Names the texture and its view together, since a message about either one wants the same name. */
 void SetDebugName(const Device& device, const SwapChain& swap_chain, const Opal::StringUtf8& name);
 
+/**
+ * Names every fence, semaphore and command buffer a frame context owns, each with the index of the frame or
+ * the image it belongs to appended, since which of them a message is about is the useful part.
+ */
+void SetDebugName(const Device& device, const FrameContext& frame_context, const Opal::StringUtf8& name);
+
 }  // namespace Rndr::Forge
