@@ -1,5 +1,7 @@
 #include "rndr/forge/command-buffer.hpp"
 
+#include "opal/container/in-place-array.h"
+
 #include "rndr/forge/buffer.hpp"
 #include "rndr/forge/descriptor-set.hpp"
 #include "rndr/forge/pipeline.hpp"
@@ -78,10 +80,10 @@ static VkImageMemoryBarrier2 ToVkImageBarrier(const Rndr::Forge::ImageBarrier& i
         .dstAccessMask = static_cast<VkAccessFlags2>(image_barrier.before_stages_start_access),
         .oldLayout = static_cast<VkImageLayout>(image_barrier.old_layout),
         .newLayout = static_cast<VkImageLayout>(image_barrier.new_layout),
-        // Forge does not transfer ownership between queue families yet. Leaving these zero would name family
-        // zero, which a barrier on an image created with VK_SHARING_MODE_CONCURRENT is not allowed to do.
-        .srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
-        .dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+        // Ignored unless the caller is transferring ownership. Leaving these zero would name family zero,
+        // which a barrier on an image created with VK_SHARING_MODE_CONCURRENT is not allowed to do.
+        .srcQueueFamilyIndex = image_barrier.source_queue_family,
+        .dstQueueFamilyIndex = image_barrier.destination_queue_family,
         .image = texture.GetNativeImage(),
         .subresourceRange = {.aspectMask = static_cast<VkImageAspectFlags>(range.ResolveAspectMask(texture.GetDesc().format)),
                              .baseMipLevel = range.first_mip_level,
@@ -99,9 +101,8 @@ static VkBufferMemoryBarrier2 ToVkBufferBarrier(const Rndr::Forge::BufferBarrier
         .srcAccessMask = static_cast<VkAccessFlags2>(buffer_barrier.stages_must_finish_access),
         .dstStageMask = static_cast<VkPipelineStageFlags2>(buffer_barrier.before_stages_start),
         .dstAccessMask = static_cast<VkAccessFlags2>(buffer_barrier.before_stages_start_access),
-        // See ToVkImageBarrier - Forge does not transfer ownership between queue families yet.
-        .srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
-        .dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+        .srcQueueFamilyIndex = buffer_barrier.source_queue_family,
+        .dstQueueFamilyIndex = buffer_barrier.destination_queue_family,
         .buffer = buffer_barrier.buffer.Get().GetNativeBuffer(),
         .offset = buffer_barrier.offset,
         .size = buffer_barrier.size,
@@ -119,33 +120,85 @@ static VkMemoryBarrier2 ToVkMemoryBarrier(const Rndr::Forge::MemoryBarrier& memo
     };
 }
 
+/**
+ * A batch of translated barriers that stays on the stack until it does not fit. A barrier batch happens every
+ * frame and is nearly always tiny, and the obvious alternative - Opal's scratch allocator - asserts unless
+ * the application pushed one, which nothing here does.
+ */
+template <typename T, Rndr::i32 k_in_place_count>
+class BarrierBatch
+{
+public:
+    explicit BarrierBatch(Rndr::i32 count) : m_count(count)
+    {
+        if (count > k_in_place_count)
+        {
+            m_heap.Resize(count);
+        }
+    }
+
+    T& operator[](Rndr::i32 index) { return m_count > k_in_place_count ? m_heap[index] : m_in_place[index]; }
+    [[nodiscard]] const T* GetData() const { return m_count > k_in_place_count ? m_heap.GetData() : m_in_place.GetData(); }
+    [[nodiscard]] Rndr::u32 GetCount() const { return static_cast<Rndr::u32>(m_count); }
+
+private:
+    Rndr::i32 m_count = 0;
+    Opal::InPlaceArray<T, k_in_place_count> m_in_place;
+    Opal::DynamicArray<T> m_heap;
+};
+
+/** Every stage the barriers of one dependency name, on either side. */
+template <typename Barrier>
+Rndr::Forge::PipelineStageBits CollectStages(Opal::ArrayView<const Barrier> barriers)
+{
+    Rndr::Forge::PipelineStageBits stages = Rndr::Forge::PipelineStageBits::None;
+    for (const Barrier& barrier : barriers)
+    {
+        stages |= barrier.stages_must_finish | barrier.before_stages_start;
+    }
+    return stages;
+}
+
 void Rndr::Forge::CommandBuffer::CmdBarriers(const Barriers& barriers)
 {
-    Opal::DynamicArray<VkMemoryBarrier2> memory_barriers(barriers.memory.GetSize());
+    if (barriers.memory.IsEmpty() && barriers.buffer.IsEmpty() && barriers.image.IsEmpty())
+    {
+        return;
+    }
+    // The task and mesh stages belong to an extension, and naming one the device did not enable is a
+    // validation error rather than something the driver ignores.
+    const PipelineStageBits all_stages =
+        CollectStages(barriers.memory) | CollectStages(barriers.buffer) | CollectStages(barriers.image);
+    if (!!(all_stages & (PipelineStageBits::TaskShader | PipelineStageBits::MeshShader)) &&
+        !m_device->IsExtensionEnabled(VK_EXT_MESH_SHADER_EXTENSION_NAME))
+    {
+        throw Opal::Exception("A barrier naming the task or mesh stage needs VK_EXT_mesh_shader, which the device did not enable!");
+    }
+    // Eight of each covers every batch this repository issues, and a bigger one still works.
+    constexpr i32 k_in_place_count = 8;
+    BarrierBatch<VkMemoryBarrier2, k_in_place_count> memory_barriers(static_cast<i32>(barriers.memory.GetSize()));
     for (i32 i = 0; i < barriers.memory.GetSize(); ++i)
     {
         memory_barriers[i] = ToVkMemoryBarrier(barriers.memory[i]);
     }
-    Opal::DynamicArray<VkBufferMemoryBarrier2> buffer_barriers(barriers.buffer.GetSize());
+    BarrierBatch<VkBufferMemoryBarrier2, k_in_place_count> buffer_barriers(static_cast<i32>(barriers.buffer.GetSize()));
     for (i32 i = 0; i < barriers.buffer.GetSize(); ++i)
     {
         buffer_barriers[i] = ToVkBufferBarrier(barriers.buffer[i]);
     }
-    Opal::DynamicArray<VkImageMemoryBarrier2> image_barriers(barriers.image.GetSize());
+    BarrierBatch<VkImageMemoryBarrier2, k_in_place_count> image_barriers(static_cast<i32>(barriers.image.GetSize()));
     for (i32 i = 0; i < barriers.image.GetSize(); ++i)
     {
         image_barriers[i] = ToVkImageBarrier(barriers.image[i]);
     }
-    if (memory_barriers.IsEmpty() && buffer_barriers.IsEmpty() && image_barriers.IsEmpty())
-    {
-        return;
-    }
+
     const VkDependencyInfo dependency_info{.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO,
-                                           .memoryBarrierCount = static_cast<u32>(memory_barriers.GetSize()),
+                                           .dependencyFlags = static_cast<VkDependencyFlags>(barriers.flags),
+                                           .memoryBarrierCount = memory_barriers.GetCount(),
                                            .pMemoryBarriers = memory_barriers.GetData(),
-                                           .bufferMemoryBarrierCount = static_cast<u32>(buffer_barriers.GetSize()),
+                                           .bufferMemoryBarrierCount = buffer_barriers.GetCount(),
                                            .pBufferMemoryBarriers = buffer_barriers.GetData(),
-                                           .imageMemoryBarrierCount = static_cast<u32>(image_barriers.GetSize()),
+                                           .imageMemoryBarrierCount = image_barriers.GetCount(),
                                            .pImageMemoryBarriers = image_barriers.GetData()};
     vkCmdPipelineBarrier2(m_native_command_buffer, &dependency_info);
 }

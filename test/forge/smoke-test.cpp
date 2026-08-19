@@ -871,3 +871,98 @@ TEST_CASE("Forge bindless descriptor bindings", "[forge]")
     INFO(*report);
     REQUIRE(context.GetDebugMessageCount(Forge::DebugMessageSeverity::Error, Forge::DebugMessageTypeBits::Validation) == 0);
 }
+
+TEST_CASE("Forge barrier vocabulary", "[forge]")
+{
+    if (!IsForgeAvailable())
+    {
+        SKIP("No Vulkan device on this machine.");
+    }
+    ForgeFixture fixture;
+    constexpr i32 k_size = 256;
+    const Opal::DynamicArray<u8> written = MakeBytes(k_size, 77);
+    const Opal::DynamicArray<u8> zeros(k_size);
+
+    constexpr Forge::BufferUsageBits k_both_ways = Forge::BufferUsageBits::TransferSource | Forge::BufferUsageBits::TransferDestination;
+    const Forge::Buffer source(fixture.device, {.size = k_size, .usage = Forge::BufferUsageBits::TransferSource}, written);
+    const Forge::Buffer destination(fixture.device,
+                                    {.size = k_size, .usage = k_both_ways, .host_access = Forge::HostAccess::Random});
+    destination.Update(zeros);
+
+    SECTION("A copy ordered against the host with the narrow stages and access")
+    {
+        Forge::ImmediateSubmit(fixture.device, fixture.GetQueue(),
+                               [&](Forge::CommandBuffer& command_buffer)
+                               {
+                                   command_buffer.CmdCopyBuffer(source, destination);
+                                   // The stages synchronization2 split out, and the access that says which
+                                   // write rather than any write at all.
+                                   const Forge::BufferBarrier barrier{
+                                       .stages_must_finish = Forge::PipelineStageBits::Copy,
+                                       .stages_must_finish_access = Forge::PipelineStageAccessBits::TransferWrite,
+                                       .before_stages_start = Forge::PipelineStageBits::Host,
+                                       .before_stages_start_access = Forge::PipelineStageAccessBits::HostRead,
+                                       .buffer = destination};
+                                   command_buffer.CmdBufferBarrier(barrier);
+                               });
+        Opal::DynamicArray<u8> read_back(k_size);
+        destination.Read(read_back);
+        REQUIRE(CountMismatches(written, read_back) == 0);
+    }
+    SECTION("A batch bigger than the in-place one still works")
+    {
+        // Sixteen barriers, past the eight the batch keeps on the stack, so the heap path is exercised.
+        constexpr i32 k_barrier_count = 16;
+        Opal::DynamicArray<Forge::BufferBarrier> barriers;
+        for (i32 i = 0; i < k_barrier_count; ++i)
+        {
+            barriers.PushBack(Forge::BufferBarrier::WriteThenRead(destination, Forge::PipelineStageBits::Copy,
+                                                                  Forge::PipelineStageBits::ComputeShader));
+        }
+        Forge::ImmediateSubmit(fixture.device, fixture.GetQueue(),
+                               [&](Forge::CommandBuffer& command_buffer)
+                               {
+                                   command_buffer.CmdCopyBuffer(source, destination);
+                                   command_buffer.CmdBufferBarriers(barriers);
+                               });
+        Opal::DynamicArray<u8> read_back(k_size);
+        destination.Read(read_back);
+        REQUIRE(CountMismatches(written, read_back) == 0);
+    }
+    SECTION("A barrier naming the mesh stage without the extension throws")
+    {
+        Forge::CommandBuffer command_buffer(fixture.device, fixture.GetQueue());
+        command_buffer.Begin();
+        const Forge::MemoryBarrier barrier{.stages_must_finish = Forge::PipelineStageBits::MeshShader,
+                                           .stages_must_finish_access = Forge::PipelineStageAccessBits::Write,
+                                           .before_stages_start = Forge::PipelineStageBits::FragmentShader,
+                                           .before_stages_start_access = Forge::PipelineStageAccessBits::Read};
+        REQUIRE_THROWS_AS(command_buffer.CmdMemoryBarrier(barrier), Opal::Exception);
+        command_buffer.End();
+    }
+    SECTION("An ownership transfer between two families is recorded")
+    {
+        // Both halves of a transfer, release and acquire, on the one queue this test has. Naming the same
+        // family on both sides is a no-op transfer, which is what makes it safe to record here.
+        const u32 family = fixture.GetQueue().GetQueueFamilyIndex();
+        Forge::ImmediateSubmit(fixture.device, fixture.GetQueue(),
+                               [&](Forge::CommandBuffer& command_buffer)
+                               {
+                                   command_buffer.CmdCopyBuffer(source, destination);
+                                   const Forge::BufferBarrier release{
+                                       .stages_must_finish = Forge::PipelineStageBits::Copy,
+                                       .stages_must_finish_access = Forge::PipelineStageAccessBits::TransferWrite,
+                                       .before_stages_start = Forge::PipelineStageBits::None,
+                                       .before_stages_start_access = Forge::PipelineStageAccessBits::None,
+                                       .source_queue_family = family,
+                                       .destination_queue_family = family,
+                                       .buffer = destination};
+                                   command_buffer.CmdBufferBarrier(release);
+                               });
+        Opal::DynamicArray<u8> read_back(k_size);
+        destination.Read(read_back);
+        REQUIRE(CountMismatches(written, read_back) == 0);
+    }
+
+    REQUIRE_NO_VALIDATION_ERROR(fixture);
+}

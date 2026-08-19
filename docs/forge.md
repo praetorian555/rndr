@@ -262,6 +262,39 @@ has to react to.
 
 ---
 
+## Barriers
+
+A barrier says which work has to finish before which other work may start, and for a texture it also says
+what the image is about to be used for. Forge spells both sides the same way: the stages that must finish
+and the access they made, then the stages that must not start and the access they will make.
+
+`ImageBarrier` has a preset for each of the standard transitions - `ToColorAttachment`,
+`ToDepthStencilAttachment`, `ToShaderRead`, `ToTransferSource`, `ToTransferDestination`, `ToPresent`, and
+`To` for a layout that is not known while writing the call. Each picks the stages and the access from what
+the texture is about to be used for, and derives the source side from the layout it is coming from, so the
+only thing left to the caller is where the texture is now. `BufferBarrier::WriteThenRead` and
+`::ReadThenWrite` cover the two orderings a buffer needs.
+
+`PipelineStageAccessBits` offers two ways to name an access, and the difference matters:
+
+- `Read` and `Write` are any read and any write. They are correct beside every stage, which is what makes
+  them the right thing to reach for in a barrier written by hand - an access that does not match its stage
+  is invalid, and this pair never can be.
+- The named bits - `ColorAttachmentWrite`, `TransferRead`, `ShaderSampledRead` and the rest - say which read
+  or which write, which lets a driver leave everything else alone. Forge's own presets use these, because a
+  preset knows exactly what the texture is for. Reach for them by hand once the coarse pair shows up in a
+  profile, not before.
+
+`CmdBarriers` takes barriers of all three kinds and issues them as one dependency, which is cheaper than one
+call per kind. Every other `Cmd*Barrier` is that call with the other groups left empty.
+
+Two things a barrier can carry that most do not need. `source_queue_family` and `destination_queue_family`
+transfer ownership between queue families, as two barriers naming the same pair: a release on the source
+queue and an acquire on the destination one. Both default to `k_ignored_queue_family`, which means no
+transfer. `Barriers::flags` can mark a dependency by-region, which is only valid inside a render pass.
+
+---
+
 ## Debugging
 
 Build with `-DRNDR_FORGE_VALIDATION=ON` and the validation layer is enabled whenever it is installed. Its

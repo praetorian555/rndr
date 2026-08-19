@@ -236,30 +236,95 @@ struct ImageSubresourceRange
 enum class PipelineStageBits : u64
 {
     None = 0ull,
+    /** Nothing has run yet. Where a barrier that waits for nothing puts its source. */
     PipelineStart = 0x1ull,
     IndirectDraw = 0x2ull,
+    /** Reading indices and vertex attributes both. IndexInput and VertexAttributeInput are its halves. */
     VertexInput = 0x4ull,
     VertexShader = 0x8ull,
+    TessellationControlShader = 0x10ull,
+    TessellationEvaluationShader = 0x20ull,
+    GeometryShader = 0x40ull,
     FragmentShader = 0x80ull,
     EarlyFragmentTests = 0x100ull,
     LateFragmentTests = 0x200ull,
     ColorAttachmentOutput = 0x400ull,
     ComputeShader = 0x800ull,
+    /** Every kind of transfer. Copy, Blit, Resolve and Clear are its parts, for a barrier that knows which. */
     Transfer = 0x1000ull,
     /** Nothing is left to run. Where work waits for a barrier that only has to happen before the end. */
     PipelineEnd = 0x2000ull,
+    /** The host reading or writing mapped memory. */
+    Host = 0x4000ull,
+    /** Every stage a graphics pipeline has. */
+    AllGraphics = 0x8000ull,
     /** Every stage. The sledgehammer, correct everywhere and never the fastest. */
-    AllCommands = 0x10000ull
+    AllCommands = 0x10000ull,
+    /** Needs VK_EXT_mesh_shader, which DeviceFeatures::task_shader enables. */
+    TaskShader = 0x80000ull,
+    /** Needs VK_EXT_mesh_shader, which DeviceFeatures::mesh_shader enables. */
+    MeshShader = 0x100000ull,
+    Copy = 0x100000000ull,
+    Resolve = 0x200000000ull,
+    Blit = 0x400000000ull,
+    Clear = 0x800000000ull,
+    IndexInput = 0x1000000000ull,
+    VertexAttributeInput = 0x2000000000ull,
+    /** Every stage before rasterization: vertex, tessellation, geometry, and task and mesh where they run. */
+    PreRasterizationShaders = 0x4000000000ull
 };
 OPAL_ENUM_CLASS_FLAGS(PipelineStageBits);
 
-/** How a stage touches the memory a barrier covers. Mirrors VkAccessFlagBits2. */
+/**
+ * How a stage touches the memory a barrier covers. Mirrors VkAccessFlagBits2.
+ *
+ * Read and Write are "any read" and "any write". They are correct beside any stage and are what a barrier
+ * written by hand should reach for first, since an access that does not match its stage is invalid and the
+ * pair can never be wrong. The named ones below say which read or which write, which is the narrowing
+ * synchronization2 exists for: a driver told "color attachment write" can leave everything else alone.
+ * Forge's own barrier presets use the named ones, since a preset knows exactly what the texture is for.
+ */
 enum class PipelineStageAccessBits : u64
 {
     None = 0ull,
+    IndirectCommandRead = 0x1ull,
+    IndexRead = 0x2ull,
+    VertexAttributeRead = 0x4ull,
+    ConstantBufferRead = 0x8ull,
+    InputAttachmentRead = 0x10ull,
+    ShaderRead = 0x20ull,
+    ShaderWrite = 0x40ull,
+    ColorAttachmentRead = 0x80ull,
+    ColorAttachmentWrite = 0x100ull,
+    DepthStencilAttachmentRead = 0x200ull,
+    DepthStencilAttachmentWrite = 0x400ull,
+    TransferRead = 0x800ull,
+    TransferWrite = 0x1000ull,
+    HostRead = 0x2000ull,
+    HostWrite = 0x4000ull,
+    /** Any read at all. Correct beside every stage. */
     Read = 0x8000ull,
-    Write = 0x10000ull
+    /** Any write at all. Correct beside every stage. */
+    Write = 0x10000ull,
+    ShaderSampledRead = 0x100000000ull,
+    ShaderStorageRead = 0x200000000ull,
+    ShaderStorageWrite = 0x400000000ull
 };
 OPAL_ENUM_CLASS_FLAGS(PipelineStageAccessBits)
+
+/** Everything a queue family index can be when a barrier is not transferring ownership. Mirrors VK_QUEUE_FAMILY_IGNORED. */
+static constexpr u32 k_ignored_queue_family = 0xFFFFFFFF;
+
+/** What a dependency covers beyond the resources it names. Mirrors VkDependencyFlagBits. */
+enum class DependencyFlagBits : u8
+{
+    None = 0,
+    /**
+     * Each region of the attachment depends only on the same region of what came before, which lets a tiled
+     * device keep the work in tile memory. Only valid inside a render pass.
+     */
+    ByRegion = 1
+};
+OPAL_ENUM_CLASS_FLAGS(DependencyFlagBits)
 
 }  // namespace Rndr::Forge

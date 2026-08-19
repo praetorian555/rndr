@@ -86,6 +86,8 @@ struct Barriers
     Opal::ArrayView<const MemoryBarrier> memory;
     Opal::ArrayView<const BufferBarrier> buffer;
     Opal::ArrayView<const ImageBarrier> image;
+    /** What the dependency covers beyond the resources above. ByRegion is only valid inside a render pass. */
+    DependencyFlagBits flags = DependencyFlagBits::None;
 };
 
 /** One range of one buffer copied into one range of another. */

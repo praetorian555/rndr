@@ -93,13 +93,20 @@ struct BufferBarrier : Opal::ClonableBase<BufferBarrier>
     PipelineStageAccessBits stages_must_finish_access = PipelineStageAccessBits::None;
     PipelineStageBits before_stages_start = PipelineStageBits::None;
     PipelineStageAccessBits before_stages_start_access = PipelineStageAccessBits::None;
+    /**
+     * Queue families the resource is handed between. Both ignored by default, which means no transfer and is
+     * what a resource used on one queue wants. A transfer is two barriers with the same pair of families: a
+     * release on the source queue and an acquire on the destination one, in that order.
+     */
+    u32 source_queue_family = k_ignored_queue_family;
+    u32 destination_queue_family = k_ignored_queue_family;
     Opal::Ref<const Buffer> buffer;
     u64 offset = 0;
     /** The whole buffer from the offset on by default. */
     u64 size = k_whole_buffer;
 
-    OPAL_CLONE_FIELDS(stages_must_finish, stages_must_finish_access, before_stages_start, before_stages_start_access, buffer, offset,
-                      size);
+    OPAL_CLONE_FIELDS(stages_must_finish, stages_must_finish_access, before_stages_start, before_stages_start_access,
+                      source_queue_family, destination_queue_family, buffer, offset, size);
 
     /**
      * A write in one set of stages, followed by a read in another. The two common cases are a compute shader
@@ -119,12 +126,19 @@ struct ImageBarrier : Opal::ClonableBase<ImageBarrier>
     PipelineStageAccessBits before_stages_start_access = PipelineStageAccessBits::None;
     ImageLayout old_layout = ImageLayout::Undefined;
     ImageLayout new_layout = ImageLayout::Undefined;
+    /**
+     * Queue families the resource is handed between. Both ignored by default, which means no transfer and is
+     * what a resource used on one queue wants. A transfer is two barriers with the same pair of families: a
+     * release on the source queue and an acquire on the destination one, in that order.
+     */
+    u32 source_queue_family = k_ignored_queue_family;
+    u32 destination_queue_family = k_ignored_queue_family;
     Opal::Ref<const Texture> image;
     /** The whole texture by default - every mip level, every array layer, the aspect of its format. */
     ImageSubresourceRange subresource_range;
 
     OPAL_CLONE_FIELDS(stages_must_finish, stages_must_finish_access, before_stages_start, before_stages_start_access, old_layout,
-                      new_layout, image, subresource_range);
+                      new_layout, source_queue_family, destination_queue_family, image, subresource_range);
 
     /**
      * The standard transitions, spelled out. Each covers the whole texture and picks the stages and the

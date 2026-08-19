@@ -582,26 +582,37 @@ logs them, so a test cannot fail on one; making it collectable is worth doing wi
 of the debug tooling. The graphics pipeline, the swap chain and the barrier presets are still only covered
 by running the sample.
 
-### 3.12 Complete the barrier vocabulary
+### 3.12 Complete the barrier vocabulary - DONE
 
-`include/rndr/forge/types.hpp`, `include/rndr/forge/synchronization.hpp`, `src/forge/command-buffer.cpp`
+`PipelineStageBits` names every stage a barrier here can need: the tessellation pair, geometry, task and
+mesh, `Host`, `AllGraphics`, `PreRasterizationShaders`, the halves of vertex input, and the four the
+transfer stage splits into - `Copy`, `Blit`, `Resolve`, `Clear`. `Transfer` stays as the one that covers all
+four, for a barrier that does not care which.
 
-`PipelineStageBits` is missing most of what a barrier needs to name. The task and mesh stages are absent
-although the graphics pipeline desc already accepts task and mesh shaders; geometry and both tessellation
-stages are missing; and `Transfer` is one bit where synchronization2 splits copy, blit, resolve and clear.
+**The access model: both, with the coarse pair as the default and the narrow bits used by Forge itself.**
+`Read` and `Write` stay exactly what they were, `MEMORY_READ` and `MEMORY_WRITE`, because they are correct
+beside every stage and an access that does not match its stage is invalid - a caller writing a barrier by
+hand should be able to reach for a pair that cannot be wrong. The specific bits are there beside them, and
+every barrier preset now uses them, because a preset knows precisely what the texture is about to be used
+for: `ToColorAttachment` says colour attachment write rather than any write. That is the narrowing
+synchronization2 exists for, spent where Forge already has the information and not demanded of callers who
+do not.
 
-`PipelineStageAccessBits` is `Read` and `Write`, which map to `MEMORY_READ` and `MEMORY_WRITE`. That is legal
-everywhere and easy to reason about, but it gives up the narrowing that synchronization2 exists for - a
-barrier cannot say "color attachment write" rather than "any write". Decide whether the coarse model stays,
-and write the decision down either way.
+Ownership transfer is `source_queue_family` and `destination_queue_family` on both resource barriers, both
+`k_ignored_queue_family` by default, which is what 1.8 pinned them to and is still what a resource used on
+one queue wants. `Barriers::flags` carries `DependencyFlagBits`, so a dependency can be by-region.
 
-Also missing: ownership transfer between queue families, which 1.8 pinned to ignored, and `VkDependencyFlags`,
-so a barrier cannot be by-region. Batching across barrier kinds is covered - 3.2 added `CmdBarriers`.
+The task and mesh stages belong to an extension, so `CmdBarriers` checks the device enabled it before
+naming one - the same trap `CmdDrawMeshTasks` fell into in 3.3, where the loader hands out a callable
+pointer either way.
 
-`CmdImageBarriers` translates into a `DynamicArray` through the default allocator on every call, so a
-per-frame barrier batch heap-allocates. `Opal::GetScratchAllocator()` is not the fix on its own:
-`modern-vulkan` pushes no scratch allocator, so asking for one asserts inside Opal. Either a small in-place
-array with a heap fallback, or a scratch allocator that Forge pushes and resets itself.
+The per-call allocation is gone: `BarrierBatch` keeps eight of each kind on the stack and falls back to the
+heap above that. The scratch allocator was not the answer, for the reason this task already recorded and
+`Fence::WaitForAll` then demonstrated - asking Opal for one asserts unless the application pushed it.
+
+Verified headless on a real copy: the narrow stages and access ordering a transfer against a host read, a
+batch of sixteen barriers past the in-place eight, a release-and-acquire pair naming a queue family on both
+sides, and a barrier naming the mesh stage on a device without the extension throwing.
 
 ---
 

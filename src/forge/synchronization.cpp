@@ -114,16 +114,17 @@ SourceScope ScopeOfLayout(Rndr::Forge::ImageLayout layout)
             // Nothing is being preserved, so there is nothing to wait for.
             return {PipelineStageBits::PipelineStart, PipelineStageAccessBits::None};
         case ImageLayout::ColorAttachment:
-            return {PipelineStageBits::ColorAttachmentOutput, PipelineStageAccessBits::Write};
+            return {PipelineStageBits::ColorAttachmentOutput, PipelineStageAccessBits::ColorAttachmentWrite};
         case ImageLayout::DepthStencilAttachment:
-            return {PipelineStageBits::EarlyFragmentTests | PipelineStageBits::LateFragmentTests, PipelineStageAccessBits::Write};
+            return {PipelineStageBits::EarlyFragmentTests | PipelineStageBits::LateFragmentTests,
+                    PipelineStageAccessBits::DepthStencilAttachmentWrite};
         case ImageLayout::DepthStencilReadOnly:
         case ImageLayout::ShaderReadOnly:
-            return {PipelineStageBits::FragmentShader, PipelineStageAccessBits::Read};
+            return {PipelineStageBits::FragmentShader, PipelineStageAccessBits::ShaderRead};
         case ImageLayout::TransferSource:
-            return {PipelineStageBits::Transfer, PipelineStageAccessBits::Read};
+            return {PipelineStageBits::Transfer, PipelineStageAccessBits::TransferRead};
         case ImageLayout::TransferDestination:
-            return {PipelineStageBits::Transfer, PipelineStageAccessBits::Write};
+            return {PipelineStageBits::Transfer, PipelineStageAccessBits::TransferWrite};
         default:
             // General and Present, plus anything added later, can have been touched by anything.
             return {PipelineStageBits::AllCommands, PipelineStageAccessBits::Read | PipelineStageAccessBits::Write};
@@ -157,7 +158,7 @@ Rndr::Forge::ImageBarrier Rndr::Forge::ImageBarrier::ToColorAttachment(const Tex
     return {.stages_must_finish = source.stages,
             .stages_must_finish_access = source.access,
             .before_stages_start = PipelineStageBits::ColorAttachmentOutput,
-            .before_stages_start_access = PipelineStageAccessBits::Read | PipelineStageAccessBits::Write,
+            .before_stages_start_access = PipelineStageAccessBits::ColorAttachmentRead | PipelineStageAccessBits::ColorAttachmentWrite,
             .old_layout = old_layout,
             .new_layout = ImageLayout::ColorAttachment,
             .image = texture};
@@ -169,7 +170,8 @@ Rndr::Forge::ImageBarrier Rndr::Forge::ImageBarrier::ToDepthStencilAttachment(co
     return {.stages_must_finish = source.stages,
             .stages_must_finish_access = source.access,
             .before_stages_start = PipelineStageBits::EarlyFragmentTests | PipelineStageBits::LateFragmentTests,
-            .before_stages_start_access = PipelineStageAccessBits::Read | PipelineStageAccessBits::Write,
+            .before_stages_start_access =
+                PipelineStageAccessBits::DepthStencilAttachmentRead | PipelineStageAccessBits::DepthStencilAttachmentWrite,
             .old_layout = old_layout,
             .new_layout = ImageLayout::DepthStencilAttachment,
             .image = texture};
@@ -182,7 +184,7 @@ Rndr::Forge::ImageBarrier Rndr::Forge::ImageBarrier::ToShaderRead(const Texture&
     return {.stages_must_finish = source.stages,
             .stages_must_finish_access = source.access,
             .before_stages_start = reader,
-            .before_stages_start_access = PipelineStageAccessBits::Read,
+            .before_stages_start_access = PipelineStageAccessBits::ShaderRead,
             .old_layout = old_layout,
             .new_layout = ImageLayout::ShaderReadOnly,
             .image = texture};
@@ -194,7 +196,7 @@ Rndr::Forge::ImageBarrier Rndr::Forge::ImageBarrier::ToTransferDestination(const
     return {.stages_must_finish = source.stages,
             .stages_must_finish_access = source.access,
             .before_stages_start = PipelineStageBits::Transfer,
-            .before_stages_start_access = PipelineStageAccessBits::Write,
+            .before_stages_start_access = PipelineStageAccessBits::TransferWrite,
             .old_layout = old_layout,
             .new_layout = ImageLayout::TransferDestination,
             .image = texture};
@@ -206,7 +208,7 @@ Rndr::Forge::ImageBarrier Rndr::Forge::ImageBarrier::ToTransferSource(const Text
     return {.stages_must_finish = source.stages,
             .stages_must_finish_access = source.access,
             .before_stages_start = PipelineStageBits::Transfer,
-            .before_stages_start_access = PipelineStageAccessBits::Read,
+            .before_stages_start_access = PipelineStageAccessBits::TransferRead,
             .old_layout = old_layout,
             .new_layout = ImageLayout::TransferSource,
             .image = texture};
