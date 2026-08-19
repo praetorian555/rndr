@@ -6,6 +6,7 @@
 #include "opal/container/optional.h"
 #include "opal/container/string.h"
 
+#include "rndr/pixel-format.hpp"
 #include "rndr/types.hpp"
 #include "rndr/forge/forward.hpp"
 
@@ -44,6 +45,20 @@ public:
     [[nodiscard]] Opal::Optional<u32> GetPresentQueueFamilyIndex(const Surface& surface) const;
 
     [[nodiscard]] bool IsExtensionSupported(const char* extension_name) const;
+
+    /**
+     * Whether an optimally tiled image of this format can take part in a blit. Support is per format and per
+     * side, so a format that can be blitted from cannot always be blitted into.
+     * @param format Format of the image.
+     * @param as_source True to ask about the source of the blit, false about the destination.
+     */
+    [[nodiscard]] bool SupportsBlit(PixelFormat format, bool as_source) const;
+
+    /**
+     * Whether an optimally tiled image of this format can be filtered linearly, which a blit with a linear
+     * filter needs of its source.
+     */
+    [[nodiscard]] bool SupportsLinearFilter(PixelFormat format) const;
 
     [[nodiscard]] u32 FindMemoryTypeIndex(u32 type_filter, VkMemoryPropertyFlags properties) const;
 

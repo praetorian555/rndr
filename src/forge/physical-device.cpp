@@ -126,6 +126,27 @@ bool Rndr::Forge::PhysicalDevice::IsExtensionSupported(const char* extension_nam
     return true;
 }
 
+/** What an optimally tiled image of this format is allowed to do on this device. */
+static VkFormatFeatureFlags GetOptimalTilingFeatures(VkPhysicalDevice physical_device, Rndr::PixelFormat format)
+{
+    VkFormatProperties format_properties = {};
+    vkGetPhysicalDeviceFormatProperties(physical_device, Rndr::ToVkFormat(format), &format_properties);
+    return format_properties.optimalTilingFeatures;
+}
+
+bool Rndr::Forge::PhysicalDevice::SupportsBlit(PixelFormat format, bool as_source) const
+{
+    const VkFormatFeatureFlags features = GetOptimalTilingFeatures(m_physical_device, format);
+    const VkFormatFeatureFlags required = as_source ? VK_FORMAT_FEATURE_BLIT_SRC_BIT : VK_FORMAT_FEATURE_BLIT_DST_BIT;
+    return (features & required) != 0;
+}
+
+bool Rndr::Forge::PhysicalDevice::SupportsLinearFilter(PixelFormat format) const
+{
+    const VkFormatFeatureFlags features = GetOptimalTilingFeatures(m_physical_device, format);
+    return (features & VK_FORMAT_FEATURE_SAMPLED_IMAGE_FILTER_LINEAR_BIT) != 0;
+}
+
 Rndr::u32 Rndr::Forge::PhysicalDevice::FindMemoryTypeIndex(u32 type_filter, VkMemoryPropertyFlags properties) const
 {
     VkPhysicalDeviceMemoryProperties memory_properties;

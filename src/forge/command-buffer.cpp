@@ -212,11 +212,11 @@ static void ValidateBufferRange(const Rndr::Forge::Buffer& buffer, Rndr::u64 off
 }
 
 /**
- * Resolve one image side of a copy: check that the subresource exists on the texture, fill a zero extent in
- * with the rest of the mip level, and check that the box fits inside it.
+ * Check that the subresource exists on the texture and report the extent of the mip level it names, which is
+ * what every region on that texture is measured against.
  */
-static VkExtent3D ResolveImageRegion(const Rndr::Forge::Texture& texture, const Rndr::Forge::ImageSubresourceLayers& subresource,
-                                     const Rndr::Vector3i& offset, const Rndr::Vector3i& extent, const char* role, const char* what)
+static VkExtent3D ValidateSubresource(const Rndr::Forge::Texture& texture, const Rndr::Forge::ImageSubresourceLayers& subresource,
+                                      const char* role, const char* what)
 {
     using namespace Rndr;
     const Forge::TextureDesc& desc = texture.GetDesc();
@@ -229,29 +229,73 @@ static VkExtent3D ResolveImageRegion(const Rndr::Forge::Texture& texture, const 
     {
         throw Opal::Exception(Opal::StringEx(what) + " names array layers the " + role + " texture does not have!");
     }
+    return {.width = MipExtent(desc.width, subresource.mip_level),
+            .height = MipExtent(desc.height, subresource.mip_level),
+            .depth = MipExtent(desc.depth, subresource.mip_level)};
+}
+
+/**
+ * Resolve one image side of a copy: check that the subresource exists on the texture, fill a zero extent in
+ * with the rest of the mip level, and check that the box fits inside it.
+ */
+static VkExtent3D ResolveImageRegion(const Rndr::Forge::Texture& texture, const Rndr::Forge::ImageSubresourceLayers& subresource,
+                                     const Rndr::Vector3i& offset, const Rndr::Vector3i& extent, const char* role, const char* what)
+{
+    using namespace Rndr;
+    const VkExtent3D mip_extent = ValidateSubresource(texture, subresource, role, what);
     if (offset.x < 0 || offset.y < 0 || offset.z < 0 || extent.x < 0 || extent.y < 0 || extent.z < 0)
     {
         throw Opal::Exception(Opal::StringEx(what) + " has a negative offset or extent on the " + role + " texture!");
     }
-    const u32 mip_width = MipExtent(desc.width, subresource.mip_level);
-    const u32 mip_height = MipExtent(desc.height, subresource.mip_level);
-    const u32 mip_depth = MipExtent(desc.depth, subresource.mip_level);
     const u32 offset_x = static_cast<u32>(offset.x);
     const u32 offset_y = static_cast<u32>(offset.y);
     const u32 offset_z = static_cast<u32>(offset.z);
-    if (offset_x > mip_width || offset_y > mip_height || offset_z > mip_depth)
+    if (offset_x > mip_extent.width || offset_y > mip_extent.height || offset_z > mip_extent.depth)
     {
         throw Opal::Exception(Opal::StringEx(what) + " starts outside the mip level of the " + role + " texture!");
     }
     // A zero extent on an axis means the rest of the mip level past the offset on that axis.
-    const VkExtent3D resolved{.width = extent.x != 0 ? static_cast<u32>(extent.x) : mip_width - offset_x,
-                              .height = extent.y != 0 ? static_cast<u32>(extent.y) : mip_height - offset_y,
-                              .depth = extent.z != 0 ? static_cast<u32>(extent.z) : mip_depth - offset_z};
-    if (resolved.width > mip_width - offset_x || resolved.height > mip_height - offset_y || resolved.depth > mip_depth - offset_z)
+    const VkExtent3D resolved{.width = extent.x != 0 ? static_cast<u32>(extent.x) : mip_extent.width - offset_x,
+                              .height = extent.y != 0 ? static_cast<u32>(extent.y) : mip_extent.height - offset_y,
+                              .depth = extent.z != 0 ? static_cast<u32>(extent.z) : mip_extent.depth - offset_z};
+    if (resolved.width > mip_extent.width - offset_x || resolved.height > mip_extent.height - offset_y ||
+        resolved.depth > mip_extent.depth - offset_z)
     {
         throw Opal::Exception(Opal::StringEx(what) + " reaches past the mip level of the " + role + " texture!");
     }
     return resolved;
+}
+
+/**
+ * Resolve one side of a blit into the two corners Vulkan wants. A blit names corners rather than an extent so
+ * that it can run an axis backwards, which is how it mirrors, so a negative extent is allowed here and the
+ * far corner can sit before the near one.
+ */
+static void ResolveBlitBox(const Rndr::Forge::Texture& texture, const Rndr::Forge::ImageSubresourceLayers& subresource,
+                           const Rndr::Vector3i& offset, const Rndr::Vector3i& extent, const char* role, const char* what,
+                           VkOffset3D corners[2])
+{
+    using namespace Rndr;
+    const VkExtent3D mip_extent = ValidateSubresource(texture, subresource, role, what);
+    const i32 limits[3] = {static_cast<i32>(mip_extent.width), static_cast<i32>(mip_extent.height), static_cast<i32>(mip_extent.depth)};
+    const i32 near_corner[3] = {offset.x, offset.y, offset.z};
+    const i32 sizes[3] = {extent.x, extent.y, extent.z};
+    i32 far_corner[3] = {};
+    for (i32 axis = 0; axis < 3; ++axis)
+    {
+        // A zero extent means the rest of the mip level, which is the whole axis when the offset is zero.
+        far_corner[axis] = sizes[axis] != 0 ? near_corner[axis] + sizes[axis] : limits[axis];
+        if (near_corner[axis] < 0 || near_corner[axis] > limits[axis] || far_corner[axis] < 0 || far_corner[axis] > limits[axis])
+        {
+            throw Opal::Exception(Opal::StringEx(what) + " reaches past the mip level of the " + role + " texture!");
+        }
+        if (near_corner[axis] == far_corner[axis])
+        {
+            throw Opal::Exception(Opal::StringEx(what) + " has an empty box on the " + role + " texture!");
+        }
+    }
+    corners[0] = {.x = near_corner[0], .y = near_corner[1], .z = near_corner[2]};
+    corners[1] = {.x = far_corner[0], .y = far_corner[1], .z = far_corner[2]};
 }
 
 static VkImageSubresourceLayers ToVkSubresourceLayers(const Rndr::Forge::ImageSubresourceLayers& subresource, Rndr::PixelFormat format)
@@ -407,6 +451,59 @@ void Rndr::Forge::CommandBuffer::CmdCopyImage(const Texture& source, Texture& de
     vkCmdCopyImage(m_native_command_buffer, source.GetNativeImage(), static_cast<VkImageLayout>(source_layout),
                    destination.GetNativeImage(), static_cast<VkImageLayout>(destination_layout),
                    static_cast<u32>(copy_regions.GetSize()), copy_regions.GetData());
+}
+
+static VkFilter ToVkFilter(Rndr::ImageFilter filter)
+{
+    switch (filter)
+    {
+        case Rndr::ImageFilter::Nearest:
+            return VK_FILTER_NEAREST;
+        case Rndr::ImageFilter::Linear:
+            return VK_FILTER_LINEAR;
+        default:
+            throw Opal::Exception("Unsupported image filter");
+    }
+}
+
+void Rndr::Forge::CommandBuffer::CmdBlitImage(const Texture& source, Texture& destination, Opal::ArrayView<const ImageBlitRegion> regions,
+                                              ImageFilter filter, ImageLayout source_layout, ImageLayout destination_layout)
+{
+    if (regions.IsEmpty())
+    {
+        return;
+    }
+    ValidateTextureUsage(source, TextureUsageBits::TransferSource, "source", "Image blit");
+    ValidateTextureUsage(destination, TextureUsageBits::TransferDestination, "destination", "Image blit");
+    // Blitting is per format and per side, and a format that cannot be blitted is a driver-specific surprise
+    // rather than a mistake in the calling code, so it is worth naming here instead of at the validation layer.
+    const PhysicalDevice& physical_device = m_device->GetPhysicalDevice();
+    if (!physical_device.SupportsBlit(source.GetDesc().format, true))
+    {
+        throw Opal::Exception("This device cannot blit from the format of the source texture!");
+    }
+    if (!physical_device.SupportsBlit(destination.GetDesc().format, false))
+    {
+        throw Opal::Exception("This device cannot blit into the format of the destination texture!");
+    }
+    if (filter == ImageFilter::Linear && !physical_device.SupportsLinearFilter(source.GetDesc().format))
+    {
+        throw Opal::Exception("This device cannot filter the format of the source texture linearly!");
+    }
+    Opal::DynamicArray<VkImageBlit> blit_regions(regions.GetSize());
+    for (i32 i = 0; i < regions.GetSize(); ++i)
+    {
+        const ImageBlitRegion& region = regions[i];
+        VkImageBlit blit{.srcSubresource = ToVkSubresourceLayers(region.source, source.GetDesc().format),
+                         .dstSubresource = ToVkSubresourceLayers(region.destination, destination.GetDesc().format)};
+        ResolveBlitBox(source, region.source, region.source_offset, region.source_extent, "source", "Image blit", blit.srcOffsets);
+        ResolveBlitBox(destination, region.destination, region.destination_offset, region.destination_extent, "destination", "Image blit",
+                       blit.dstOffsets);
+        blit_regions[i] = blit;
+    }
+    vkCmdBlitImage(m_native_command_buffer, source.GetNativeImage(), static_cast<VkImageLayout>(source_layout),
+                   destination.GetNativeImage(), static_cast<VkImageLayout>(destination_layout),
+                   static_cast<u32>(blit_regions.GetSize()), blit_regions.GetData(), ToVkFilter(filter));
 }
 
 static VkAttachmentLoadOp ToVkLoadOp(Rndr::Forge::AttachmentLoadOperation op)

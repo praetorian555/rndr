@@ -127,6 +127,24 @@ struct BufferImageCopyRegion
     Vector3i image_extent = {0, 0, 0};
 };
 
+/**
+ * One box of one mip level of a texture stretched into a box of another. Unlike a copy, the two boxes need
+ * not be the same size or the same format - a blit resamples and converts.
+ *
+ * A negative extent runs the box backwards from its offset, which is how an axis is mirrored.
+ */
+struct ImageBlitRegion
+{
+    ImageSubresourceLayers source;
+    ImageSubresourceLayers destination;
+    Vector3i source_offset = {0, 0, 0};
+    /** Zero on an axis means the rest of the source mip level past source_offset on that axis. */
+    Vector3i source_extent = {0, 0, 0};
+    Vector3i destination_offset = {0, 0, 0};
+    /** Zero on an axis means the rest of the destination mip level past destination_offset on that axis. */
+    Vector3i destination_extent = {0, 0, 0};
+};
+
 /** One box copied from one mip level of a texture into one mip level of another. */
 struct ImageCopyRegion
 {
@@ -262,6 +280,22 @@ public:
      */
     void CmdCopyImage(const Texture& source, Texture& destination, Opal::ArrayView<const ImageCopyRegion> regions,
                       ImageLayout source_layout = ImageLayout::TransferSource,
+                      ImageLayout destination_layout = ImageLayout::TransferDestination);
+
+    /**
+     * Stretch regions of one texture into another, resampling and converting on the way. The formats need not
+     * match, which is what separates this from CmdCopyImage, but both have to support being blitted - a
+     * format that cannot throws rather than being found out by the validation layer.
+     * @param source Texture to read from. Needs TextureUsageBits::TransferSource.
+     * @param destination Texture to write into. Needs TextureUsageBits::TransferDestination.
+     * @param regions Regions to blit.
+     * @param filter How the source is sampled where the two boxes differ in size. A linear filter needs the
+     *               source format to support linear filtering.
+     * @param source_layout Layout the source is in.
+     * @param destination_layout Layout the destination is in.
+     */
+    void CmdBlitImage(const Texture& source, Texture& destination, Opal::ArrayView<const ImageBlitRegion> regions,
+                      ImageFilter filter = ImageFilter::Linear, ImageLayout source_layout = ImageLayout::TransferSource,
                       ImageLayout destination_layout = ImageLayout::TransferDestination);
 
     /**
