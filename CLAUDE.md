@@ -6,6 +6,16 @@ Two rendering APIs live side by side: **Canvas** (OpenGL 4.5, high level, on by 
 `Opal::` is first-party — [praetorian555/opal](https://github.com/praetorian555/opal), fetched by CPM at
 configure time. It is not a third-party dependency, and it is not edited from this repo.
 
+Read its source locally rather than on GitHub, which serves whatever `main` is today and not the commit
+this build is pinned to. CPM unpacks it under a hash-named directory that changes with the pin, so ask the
+generated cache where it went:
+
+    grep OPAL_SOURCE_DIR build/msvc-debug/CMakeCache.txt
+
+Worth doing before relying on any `Opal::` behaviour that is not obvious from the call site — whether a
+container's size constructor value-initializes, whether a move steals the buffer, what `GetData()` returns.
+Guessing at those produces code that compiles and is wrong.
+
 ## Read before editing
 
 - [docs/forge.md](docs/forge.md) — conventions that hold across all of `src/forge/`: the empty-state /
