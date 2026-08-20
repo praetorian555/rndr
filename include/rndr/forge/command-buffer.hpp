@@ -2,6 +2,7 @@
 
 #include "volk/volk.h"
 
+#include "opal/container/optional.h"
 #include "opal/container/ref.h"
 #include "opal/container/string.h"
 
@@ -47,7 +48,12 @@ struct RenderingDesc
 {
     Vector2i render_area_extent = {0, 0};
     Opal::DynamicArray<RenderingAttachmentDesc> color_attachments;
-    RenderingAttachmentDesc depth_attachment;
+    /**
+     * Depth attachment, absent for a pass that renders without one. Absent is the default, so a pass that
+     * needs no depth says nothing rather than filling in a desc whose null image view means "ignore this".
+     * Present with no image view is a mistake and throws.
+     */
+    Opal::Optional<RenderingAttachmentDesc> depth_attachment;
 };
 
 /**

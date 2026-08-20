@@ -742,10 +742,22 @@ a binding the layout does not have, and a gap between two declared binding indic
 both ways round - the test fails with the assignment left as it was. The sample renders and reports no
 validation message.
 
-### 4.5 Optional depth attachment
+### 4.5 Optional depth attachment — DONE
 
-`Forge::RenderingDesc::depth_attachment` is a value, so "no depth" is expressed as a null image view by
-convention. Make it explicitly optional.
+`RenderingDesc::depth_attachment` is an `Opal::Optional<RenderingAttachmentDesc>`, empty by default, so a
+pass that renders without depth says nothing instead of filling in a desc whose null image view meant
+"ignore this". `CmdBeginRendering` builds the `VkRenderingAttachmentInfo` only when the optional holds one
+and points `pDepthAttachment` at it only then.
+
+The convention it replaced is now an error rather than a second way of saying the same thing: an attachment
+that is present and names no image view throws, since that is a desc somebody started filling in and did
+not finish. Nothing else could tell those two apart before.
+
+Verified headless, which this turned out to be reachable by after all - dynamic rendering needs an image,
+not a swap chain. A pass with one colour attachment, no depth and no pipeline at all is cleared by its load
+operation, and reading the texture back shows the clear colour in every texel. Only zero and one are used
+there, since those are the only channel values a UNORM format converts exactly. The throwing case is
+covered too, and the sample still renders with depth and reports no validation message.
 
 ### 4.6 Swap chain remembers the acquired image
 

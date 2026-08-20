@@ -1347,3 +1347,71 @@ TEST_CASE("Forge single resource descriptor updates", "[forge]")
     }
     REQUIRE_NO_VALIDATION_ERROR(fixture);
 }
+
+TEST_CASE("Forge rendering without a depth attachment", "[forge]")
+{
+    if (!IsForgeAvailable())
+    {
+        SKIP("No Vulkan device on this machine.");
+    }
+    ForgeFixture fixture;
+    constexpr i32 k_side = 4;
+    constexpr PixelFormat k_format = PixelFormat::R8G8B8A8_UNORM;
+
+    Forge::Texture color(fixture.device, {.format = k_format,
+                                          .width = k_side,
+                                          .height = k_side,
+                                          .usage = Forge::TextureUsageBits::ColorAttachment |
+                                                   Forge::TextureUsageBits::TransferSource});
+
+    SECTION("An absent depth attachment renders colour only")
+    {
+        // No pipeline and no draw: the load operation is what writes the attachment, so what comes back says
+        // the pass ran with a colour attachment and nothing else.
+        Forge::ImmediateSubmit(fixture.device, fixture.GetQueue(),
+                               [&](Forge::CommandBuffer& command_buffer)
+                               {
+                                   command_buffer.CmdImageBarrier(Forge::ImageBarrier::ToColorAttachment(color));
+                                   const Forge::RenderingDesc rendering_desc{
+                                       .render_area_extent = {k_side, k_side},
+                                       .color_attachments = {Forge::RenderingAttachmentDesc{
+                                           .image_view = color.GetNativeImageView(),
+                                           .image_layout = Forge::ImageLayout::ColorAttachment,
+                                           .load_operation = Forge::AttachmentLoadOperation::Clear,
+                                           .store_operation = Forge::AttachmentStoreOperation::Store,
+                                           .clear_value = {.color = {1.0f, 0.0f, 1.0f, 1.0f}}}}};
+                                   command_buffer.CmdBeginRendering(rendering_desc);
+                                   command_buffer.CmdEndRendering();
+                               });
+
+        Opal::DynamicArray<u8> pixels(k_side * k_side * 4);
+        // Left in TransferSource rather than the ShaderReadOnly this defaults to: that layout needs the
+        // Sampled usage, and this texture is an attachment nothing ever samples.
+        Forge::ReadBackTexture(fixture.device, fixture.GetQueue(), color, Forge::ImageLayout::ColorAttachment, pixels, 0,
+                               Forge::ImageLayout::TransferSource);
+        // Zero and one are the only channel values a UNORM format converts exactly, so this compares
+        // what was cleared rather than how the driver rounds.
+        for (i32 i = 0; i < pixels.GetSize(); i += 4)
+        {
+            REQUIRE(static_cast<i32>(pixels[i]) == 255);
+            REQUIRE(static_cast<i32>(pixels[i + 1]) == 0);
+            REQUIRE(static_cast<i32>(pixels[i + 2]) == 255);
+            REQUIRE(static_cast<i32>(pixels[i + 3]) == 255);
+        }
+    }
+    SECTION("A depth attachment that names no image view throws")
+    {
+        // What the old convention expressed as "no depth". Now that absent says it, a present attachment
+        // pointing at nothing is a filled-in desc somebody forgot to finish.
+        Forge::CommandBuffer command_buffer(fixture.device, fixture.GetQueue());
+        command_buffer.Begin();
+        const Forge::RenderingDesc rendering_desc{
+            .render_area_extent = {k_side, k_side},
+            .color_attachments = {Forge::RenderingAttachmentDesc{.image_view = color.GetNativeImageView(),
+                                                                 .image_layout = Forge::ImageLayout::ColorAttachment}},
+            .depth_attachment = Forge::RenderingAttachmentDesc{}};
+        REQUIRE_THROWS_AS(command_buffer.CmdBeginRendering(rendering_desc), Opal::Exception);
+        command_buffer.End();
+    }
+    REQUIRE_NO_VALIDATION_ERROR(fixture);
+}

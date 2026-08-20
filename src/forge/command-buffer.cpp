@@ -643,17 +643,27 @@ void Rndr::Forge::CommandBuffer::CmdBeginRendering(const RenderingDesc& desc)
         });
     }
 
-    const VkRenderingAttachmentInfo depth_attachment{
-        .sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO,
-        .imageView = desc.depth_attachment.image_view,
-        .imageLayout = static_cast<VkImageLayout>(desc.depth_attachment.image_layout),
-        .loadOp = ToVkLoadOp(desc.depth_attachment.load_operation),
-        .storeOp = ToVkStoreOp(desc.depth_attachment.store_operation),
-        .clearValue = {.depthStencil = {.depth = desc.depth_attachment.clear_value.depth_stencil.depth,
-                                        .stencil = desc.depth_attachment.clear_value.depth_stencil.stencil}},
-    };
+    // Filled only when the desc carries one, and pointed at only then: an absent depth attachment is a
+    // pass that renders without depth, not one whose attachment happens to name no image.
+    VkRenderingAttachmentInfo depth_attachment{};
+    if (desc.depth_attachment.HasValue())
+    {
+        const RenderingAttachmentDesc& depth = desc.depth_attachment.GetValue();
+        if (depth.image_view == VK_NULL_HANDLE)
+        {
+            throw Opal::Exception("A depth attachment that names no image view! Leave it absent instead.");
+        }
+        depth_attachment = {
+            .sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO,
+            .imageView = depth.image_view,
+            .imageLayout = static_cast<VkImageLayout>(depth.image_layout),
+            .loadOp = ToVkLoadOp(depth.load_operation),
+            .storeOp = ToVkStoreOp(depth.store_operation),
+            .clearValue = {.depthStencil = {.depth = depth.clear_value.depth_stencil.depth,
+                                            .stencil = depth.clear_value.depth_stencil.stencil}},
+        };
+    }
 
-    const bool has_depth = desc.depth_attachment.image_view != VK_NULL_HANDLE;
     const VkRenderingInfo rendering_info{
         .sType = VK_STRUCTURE_TYPE_RENDERING_INFO,
         .renderArea = {.extent = {.width = static_cast<u32>(desc.render_area_extent.x),
@@ -661,7 +671,7 @@ void Rndr::Forge::CommandBuffer::CmdBeginRendering(const RenderingDesc& desc)
         .layerCount = 1,
         .colorAttachmentCount = static_cast<u32>(color_attachments.GetSize()),
         .pColorAttachments = color_attachments.GetData(),
-        .pDepthAttachment = has_depth ? &depth_attachment : nullptr,
+        .pDepthAttachment = desc.depth_attachment.HasValue() ? &depth_attachment : nullptr,
     };
     vkCmdBeginRendering(m_native_command_buffer, &rendering_info);
 }
