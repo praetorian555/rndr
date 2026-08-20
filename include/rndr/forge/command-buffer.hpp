@@ -343,6 +343,31 @@ public:
     void CmdSetScissor(const Vector2i& offset, const Vector2i& extent);
 
     /**
+     * Set the depth bias for the draws that follow, for a pipeline that named DynamicStateBits::DepthBias.
+     * The pipeline still decides whether bias is enabled at all; this only supplies the values.
+     * @param constant_factor Added to every fragment, scaled by the smallest depth difference the format resolves.
+     * @param clamp Largest bias in either direction. Zero disables clamping, and a non-zero value needs
+     *              DeviceFeatures::depth_bias_clamp.
+     * @param slope_factor Scaled by how steep the polygon is in screen space.
+     */
+    void CmdSetDepthBias(f32 constant_factor, f32 clamp = 0.0f, f32 slope_factor = 0.0f);
+
+    /**
+     * Set the stencil comparison value for the draws that follow, for a pipeline that named
+     * DynamicStateBits::StencilReference.
+     * @param reference Value the stencil test compares against.
+     * @param faces Which faces it applies to.
+     */
+    void CmdSetStencilReference(u32 reference, StencilFaceBits faces = StencilFaceBits::FrontAndBack);
+
+    /**
+     * Set the line width for the draws that follow, for a pipeline that named DynamicStateBits::LineWidth.
+     * @param width Width in pixels. Anything other than one needs DeviceFeatures::wide_lines, which this
+     *              checks rather than leaving to the validation layer.
+     */
+    void CmdSetLineWidth(f32 width);
+
+    /**
      * Bind a vertex buffer to a specific binding point.
      * @param buffer The vertex buffer to bind.
      * @param binding The binding point index as specified in the vertex input description.

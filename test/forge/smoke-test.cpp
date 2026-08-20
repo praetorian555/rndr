@@ -1415,3 +1415,225 @@ TEST_CASE("Forge rendering without a depth attachment", "[forge]")
     }
     REQUIRE_NO_VALIDATION_ERROR(fixture);
 }
+
+/**
+ * A triangle that covers the whole target, writing one constant colour. Its positions come from a vertex
+ * buffer rather than from SV_VertexID: that maps to gl_VertexIndex, whose SPIR-V DrawParameters
+ * capability needs a device feature, and a test should not turn one on to draw a triangle.
+ */
+constexpr const char* k_fullscreen_source = R"(
+struct VertexOutput
+{
+    float4 position : SV_Position;
+};
+
+[shader("vertex")]
+VertexOutput main_vertex(float2 position : POSITION)
+{
+    VertexOutput output;
+    output.position = float4(position, 0.0, 1.0);
+    return output;
+}
+
+[shader("fragment")]
+float4 main_fragment() : SV_Target
+{
+    return float4(0.0, 1.0, 0.0, 0.0);
+}
+)";
+
+/** Three vertices that cover the whole target, so every texel of it is written by the one draw. */
+constexpr f32 k_fullscreen_vertices[] = {-1.0f, -1.0f, 3.0f, -1.0f, -1.0f, 3.0f};
+
+TEST_CASE("Forge color write mask", "[forge]")
+{
+    if (!IsForgeAvailable())
+    {
+        SKIP("No Vulkan device on this machine.");
+    }
+    ForgeFixture fixture;
+    constexpr i32 k_side = 4;
+    constexpr PixelFormat k_format = PixelFormat::R8G8B8A8_UNORM;
+
+    const Forge::Shader vertex_shader =
+        Forge::Shader::FromSourceInMemory(fixture.device, k_fullscreen_source, {.entry_point = "main_vertex"});
+    const Forge::Shader fragment_shader =
+        Forge::Shader::FromSourceInMemory(fixture.device, k_fullscreen_source, {.entry_point = "main_fragment"});
+
+    /**
+     * Clear the target to opaque red, draw the triangle through a pipeline with the given mask, and hand back
+     * one texel. The shader writes (0, 1, 0, 0), so every channel differs from what the clear left, and a
+     * channel that comes back red is one the mask kept the draw away from.
+     */
+    const Forge::Buffer vertices(fixture.device,
+                                 {.size = sizeof(k_fullscreen_vertices),
+                                  .usage = Forge::BufferUsageBits::VertexBuffer},
+                                 Opal::AsBytes(k_fullscreen_vertices));
+
+    auto draw_through_mask = [&](Forge::ColorWriteMaskBits mask)
+    {
+        Forge::Texture color(fixture.device, {.format = k_format,
+                                              .width = k_side,
+                                              .height = k_side,
+                                              .usage = Forge::TextureUsageBits::ColorAttachment |
+                                                       Forge::TextureUsageBits::TransferSource});
+
+        Forge::GraphicsPipelineDesc pipeline_desc;
+        pipeline_desc.vertex_shader = vertex_shader;
+        pipeline_desc.fragment_shader = fragment_shader;
+        pipeline_desc.rasterizer.cull_mode = Face::None;
+        pipeline_desc.vertex_input.AddBinding(0, 2 * sizeof(f32), DataRepetition::PerVertex);
+        pipeline_desc.vertex_input.AddAttribute(0, 0, PixelFormat::R32G32_SFLOAT, 0);
+        pipeline_desc.color_blend_attachments.PushBack(Forge::ColorBlendDesc{.color_write_mask = mask});
+        pipeline_desc.color_attachment_formats.PushBack(k_format);
+        const Forge::Pipeline pipeline(fixture.device, pipeline_desc);
+
+        Forge::ImmediateSubmit(fixture.device, fixture.GetQueue(),
+                               [&](Forge::CommandBuffer& command_buffer)
+                               {
+                                   command_buffer.CmdImageBarrier(Forge::ImageBarrier::ToColorAttachment(color));
+                                   const Forge::RenderingDesc rendering_desc{
+                                       .render_area_extent = {k_side, k_side},
+                                       .color_attachments = {Forge::RenderingAttachmentDesc{
+                                           .image_view = color.GetNativeImageView(),
+                                           .image_layout = Forge::ImageLayout::ColorAttachment,
+                                           .load_operation = Forge::AttachmentLoadOperation::Clear,
+                                           .store_operation = Forge::AttachmentStoreOperation::Store,
+                                           .clear_value = {.color = {1.0f, 0.0f, 0.0f, 1.0f}}}}};
+                                   command_buffer.CmdBeginRendering(rendering_desc);
+                                   command_buffer.CmdSetViewport(Vector2f::Zero(), {k_side, k_side});
+                                   command_buffer.CmdSetScissor(Vector2i::Zero(), {k_side, k_side});
+                                   command_buffer.CmdBindPipeline(pipeline);
+                                   command_buffer.CmdBindVertexBuffer(vertices, 0);
+                                   command_buffer.CmdDraw(3);
+                                   command_buffer.CmdEndRendering();
+                               });
+
+        Opal::DynamicArray<u8> pixels(k_side * k_side * 4);
+        Forge::ReadBackTexture(fixture.device, fixture.GetQueue(), color, Forge::ImageLayout::ColorAttachment, pixels, 0,
+                               Forge::ImageLayout::TransferSource);
+        return Opal::DynamicArray<u8>{pixels[0], pixels[1], pixels[2], pixels[3]};
+    };
+
+    SECTION("Every channel is written when nothing is masked out")
+    {
+        const Opal::DynamicArray<u8> texel = draw_through_mask(Forge::ColorWriteMaskBits::All);
+        INFO("rgba " << static_cast<i32>(texel[0]) << " " << static_cast<i32>(texel[1]) << " "
+                     << static_cast<i32>(texel[2]) << " " << static_cast<i32>(texel[3]));
+        REQUIRE(static_cast<i32>(texel[0]) == 0);
+        REQUIRE(static_cast<i32>(texel[1]) == 255);
+        REQUIRE(static_cast<i32>(texel[2]) == 0);
+        REQUIRE(static_cast<i32>(texel[3]) == 0);
+    }
+    SECTION("A masked out channel keeps what the clear left")
+    {
+        // Green only: the two channels the clear set stay red and opaque, and green is the one the draw moved.
+        const Opal::DynamicArray<u8> texel = draw_through_mask(Forge::ColorWriteMaskBits::Green);
+        INFO("rgba " << static_cast<i32>(texel[0]) << " " << static_cast<i32>(texel[1]) << " "
+                     << static_cast<i32>(texel[2]) << " " << static_cast<i32>(texel[3]));
+        REQUIRE(static_cast<i32>(texel[0]) == 255);
+        REQUIRE(static_cast<i32>(texel[1]) == 255);
+        REQUIRE(static_cast<i32>(texel[2]) == 0);
+        REQUIRE(static_cast<i32>(texel[3]) == 255);
+    }
+    SECTION("Masking every channel out leaves the attachment as it was cleared")
+    {
+        const Opal::DynamicArray<u8> texel = draw_through_mask(Forge::ColorWriteMaskBits::None);
+        REQUIRE(static_cast<i32>(texel[0]) == 255);
+        REQUIRE(static_cast<i32>(texel[1]) == 0);
+        REQUIRE(static_cast<i32>(texel[2]) == 0);
+        REQUIRE(static_cast<i32>(texel[3]) == 255);
+    }
+    REQUIRE_NO_VALIDATION_ERROR(fixture);
+}
+
+TEST_CASE("Forge pipeline sample count and dynamic state", "[forge]")
+{
+    if (!IsForgeAvailable())
+    {
+        SKIP("No Vulkan device on this machine.");
+    }
+    ForgeFixture fixture;
+    constexpr PixelFormat k_format = PixelFormat::R8G8B8A8_UNORM;
+
+    const Forge::Shader vertex_shader =
+        Forge::Shader::FromSourceInMemory(fixture.device, k_fullscreen_source, {.entry_point = "main_vertex"});
+    const Forge::Shader fragment_shader =
+        Forge::Shader::FromSourceInMemory(fixture.device, k_fullscreen_source, {.entry_point = "main_fragment"});
+
+    auto make_desc = [&]()
+    {
+        Forge::GraphicsPipelineDesc desc;
+        desc.vertex_shader = vertex_shader;
+        desc.fragment_shader = fragment_shader;
+        desc.rasterizer.cull_mode = Face::None;
+        desc.vertex_input.AddBinding(0, 2 * sizeof(f32), DataRepetition::PerVertex);
+        desc.vertex_input.AddAttribute(0, 0, PixelFormat::R32G32_SFLOAT, 0);
+        desc.color_blend_attachments.PushBack(Forge::ColorBlendDesc{});
+        desc.color_attachment_formats.PushBack(k_format);
+        return desc;
+    };
+
+    SECTION("A sample count this device supports builds a pipeline")
+    {
+        const VkPhysicalDeviceLimits& limits = fixture.device.GetPhysicalDevice().GetProperties().limits;
+        const VkSampleCountFlags supported = limits.framebufferColorSampleCounts & limits.framebufferDepthSampleCounts;
+        INFO("supported sample counts mask " << supported);
+        // One is the only count every device has to support, so it is the only one this can require.
+        REQUIRE((supported & VK_SAMPLE_COUNT_1_BIT) != 0);
+
+        Forge::GraphicsPipelineDesc desc = make_desc();
+        desc.sample_count = Forge::SampleCount::Count1;
+        const Forge::Pipeline pipeline(fixture.device, desc);
+        REQUIRE(pipeline.IsValid());
+
+        if ((supported & VK_SAMPLE_COUNT_4_BIT) != 0)
+        {
+            Forge::GraphicsPipelineDesc four = make_desc();
+            four.sample_count = Forge::SampleCount::Count4;
+            const Forge::Pipeline multisampled(fixture.device, four);
+            REQUIRE(multisampled.IsValid());
+        }
+    }
+    SECTION("A sample count this device does not support throws")
+    {
+        const VkPhysicalDeviceLimits& limits = fixture.device.GetPhysicalDevice().GetProperties().limits;
+        const VkSampleCountFlags supported = limits.framebufferColorSampleCounts & limits.framebufferDepthSampleCounts;
+        if ((supported & VK_SAMPLE_COUNT_64_BIT) != 0)
+        {
+            SKIP("This device supports 64 samples, so there is no unsupported count to test with.");
+        }
+        Forge::GraphicsPipelineDesc desc = make_desc();
+        desc.sample_count = Forge::SampleCount::Count64;
+        REQUIRE_THROWS_AS(Forge::Pipeline(fixture.device, desc), Opal::Exception);
+    }
+    SECTION("Dynamic state is recorded on a pipeline that asked for it")
+    {
+        Forge::GraphicsPipelineDesc desc = make_desc();
+        desc.dynamic_state = Forge::DynamicStateBits::DepthBias | Forge::DynamicStateBits::StencilReference;
+        desc.rasterizer.depth_bias_enabled = true;
+        const Forge::Pipeline pipeline(fixture.device, desc);
+
+        Forge::CommandBuffer command_buffer(fixture.device, fixture.GetQueue());
+        command_buffer.Begin();
+        command_buffer.CmdBindPipeline(pipeline);
+        command_buffer.CmdSetDepthBias(1.0f);
+        command_buffer.CmdSetStencilReference(3);
+        command_buffer.End();
+    }
+    SECTION("Dynamic state a feature gates throws without the feature")
+    {
+        Forge::CommandBuffer command_buffer(fixture.device, fixture.GetQueue());
+        command_buffer.Begin();
+        // The fixture device asks for neither, so both of these are the guard rather than the driver.
+        REQUIRE_FALSE(fixture.device.GetFeatures().wide_lines);
+        REQUIRE_FALSE(fixture.device.GetFeatures().depth_bias_clamp);
+        REQUIRE_THROWS_AS(command_buffer.CmdSetLineWidth(4.0f), Opal::Exception);
+        REQUIRE_THROWS_AS(command_buffer.CmdSetDepthBias(1.0f, 0.5f), Opal::Exception);
+        // The value every device draws, and a bias with no clamp, need no feature.
+        command_buffer.CmdSetLineWidth(1.0f);
+        command_buffer.CmdSetDepthBias(1.0f);
+        command_buffer.End();
+    }
+    REQUIRE_NO_VALIDATION_ERROR(fixture);
+}

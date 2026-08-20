@@ -699,6 +699,31 @@ void Rndr::Forge::CommandBuffer::CmdSetScissor(const Vector2i& offset, const Vec
     vkCmdSetScissor(m_native_command_buffer, 0, 1, &scissor);
 }
 
+void Rndr::Forge::CommandBuffer::CmdSetDepthBias(f32 constant_factor, f32 clamp, f32 slope_factor)
+{
+    // A non-zero clamp is a feature, not a value the driver quietly ignores.
+    if (clamp != 0.0f && !m_device->GetFeatures().depth_bias_clamp)
+    {
+        throw Opal::Exception("Clamping the depth bias needs DeviceFeatures::depth_bias_clamp!");
+    }
+    vkCmdSetDepthBias(m_native_command_buffer, constant_factor, clamp, slope_factor);
+}
+
+void Rndr::Forge::CommandBuffer::CmdSetStencilReference(u32 reference, StencilFaceBits faces)
+{
+    vkCmdSetStencilReference(m_native_command_buffer, static_cast<VkStencilFaceFlags>(faces), reference);
+}
+
+void Rndr::Forge::CommandBuffer::CmdSetLineWidth(f32 width)
+{
+    // One is the only width every device draws; anything else is the wide_lines feature.
+    if (width != 1.0f && !m_device->GetFeatures().wide_lines)
+    {
+        throw Opal::Exception("A line width other than one needs DeviceFeatures::wide_lines!");
+    }
+    vkCmdSetLineWidth(m_native_command_buffer, width);
+}
+
 void Rndr::Forge::CommandBuffer::CmdBindVertexBuffer(const Buffer& buffer, u32 binding, u64 offset)
 {
     const VkBuffer native_buffer = buffer.GetNativeBuffer();

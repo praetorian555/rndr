@@ -56,6 +56,29 @@ static VkCullModeFlags ToVkCullMode(Rndr::Face cull_face)
     }
 }
 
+/** The one place a SampleCount becomes a Vulkan bit, so a value with no counterpart cannot be cast into one. */
+static VkSampleCountFlagBits ToVkSampleCount(Rndr::Forge::SampleCount sample_count)
+{
+    switch (sample_count)
+    {
+        case Rndr::Forge::SampleCount::Count1:
+            return VK_SAMPLE_COUNT_1_BIT;
+        case Rndr::Forge::SampleCount::Count2:
+            return VK_SAMPLE_COUNT_2_BIT;
+        case Rndr::Forge::SampleCount::Count4:
+            return VK_SAMPLE_COUNT_4_BIT;
+        case Rndr::Forge::SampleCount::Count8:
+            return VK_SAMPLE_COUNT_8_BIT;
+        case Rndr::Forge::SampleCount::Count16:
+            return VK_SAMPLE_COUNT_16_BIT;
+        case Rndr::Forge::SampleCount::Count32:
+            return VK_SAMPLE_COUNT_32_BIT;
+        case Rndr::Forge::SampleCount::Count64:
+            return VK_SAMPLE_COUNT_64_BIT;
+    }
+    throw Opal::Exception("Unknown sample count!");
+}
+
 static VkFrontFace ToVkFrontFace(Rndr::WindingOrder winding_order)
 {
     switch (winding_order)
@@ -375,9 +398,18 @@ Rndr::Forge::Pipeline::Pipeline(const Device& device, const GraphicsPipelineDesc
         .lineWidth = 1.0f,
     };
 
+    const VkSampleCountFlagBits sample_count = ToVkSampleCount(desc.sample_count);
+    // Colour and depth are checked together: a pipeline renders into both, and a count one of them cannot
+    // carry is as unusable as one neither can.
+    const VkPhysicalDeviceLimits& limits = device.GetPhysicalDevice().GetProperties().limits;
+    const VkSampleCountFlags supported_counts = limits.framebufferColorSampleCounts & limits.framebufferDepthSampleCounts;
+    if ((supported_counts & sample_count) == 0)
+    {
+        throw Opal::Exception("This device does not support that many samples per pixel!");
+    }
     const VkPipelineMultisampleStateCreateInfo multisample_state{
         .sType = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO,
-        .rasterizationSamples = VK_SAMPLE_COUNT_1_BIT,
+        .rasterizationSamples = sample_count,
     };
 
     const auto& ds = desc.depth_stencil;
@@ -414,7 +446,7 @@ Rndr::Forge::Pipeline::Pipeline(const Device& device, const GraphicsPipelineDesc
             .srcAlphaBlendFactor = ToVkBlendFactor(cb.src_alpha_factor),
             .dstAlphaBlendFactor = ToVkBlendFactor(cb.dst_alpha_factor),
             .alphaBlendOp = ToVkBlendOp(cb.alpha_operation),
-            .colorWriteMask = VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT | VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT,
+            .colorWriteMask = static_cast<VkColorComponentFlags>(cb.color_write_mask),
         });
     }
 
@@ -424,10 +456,25 @@ Rndr::Forge::Pipeline::Pipeline(const Device& device, const GraphicsPipelineDesc
         .pAttachments = color_blend_attachments.GetData(),
     };
 
-    constexpr VkDynamicState dynamic_states[] = {VK_DYNAMIC_STATE_VIEWPORT, VK_DYNAMIC_STATE_SCISSOR};
+    // Viewport and scissor are always dynamic - nothing in the desc describes them, and CmdSetViewport and
+    // CmdSetScissor are the only way to give them a value - so the desc only adds to these two.
+    VkDynamicState dynamic_states[5] = {VK_DYNAMIC_STATE_VIEWPORT, VK_DYNAMIC_STATE_SCISSOR};
+    u32 dynamic_state_count = 2;
+    if (!!(desc.dynamic_state & DynamicStateBits::DepthBias))
+    {
+        dynamic_states[dynamic_state_count++] = VK_DYNAMIC_STATE_DEPTH_BIAS;
+    }
+    if (!!(desc.dynamic_state & DynamicStateBits::StencilReference))
+    {
+        dynamic_states[dynamic_state_count++] = VK_DYNAMIC_STATE_STENCIL_REFERENCE;
+    }
+    if (!!(desc.dynamic_state & DynamicStateBits::LineWidth))
+    {
+        dynamic_states[dynamic_state_count++] = VK_DYNAMIC_STATE_LINE_WIDTH;
+    }
     const VkPipelineDynamicStateCreateInfo dynamic_state{
         .sType = VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO,
-        .dynamicStateCount = 2,
+        .dynamicStateCount = dynamic_state_count,
         .pDynamicStates = dynamic_states,
     };
 

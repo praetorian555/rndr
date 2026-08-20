@@ -8,6 +8,7 @@
 #include "rndr/graphics-types.hpp"
 #include "rndr/types.hpp"
 #include "rndr/forge/forward.hpp"
+#include "rndr/forge/types.hpp"
 
 namespace Rndr::Forge
 {
@@ -130,6 +131,12 @@ struct ColorBlendDesc
 
     /** Operation used to combine source and destination alpha values. */
     BlendOperation alpha_operation = BlendOperation::Add;
+
+    /**
+     * Which channels this attachment is written to. A channel left out keeps what the attachment already
+     * held, blending included - the mask is applied after the blend, not instead of it.
+     */
+    ColorWriteMaskBits color_write_mask = ColorWriteMaskBits::All;
 };
 
 struct GraphicsPipelineDesc
@@ -146,6 +153,19 @@ struct GraphicsPipelineDesc
 
     PrimitiveTopology topology = PrimitiveTopology::Triangle;
     RasterizerDesc rasterizer;
+
+    /**
+     * Samples per pixel the attachments of this pipeline carry. Has to match what the attachments were
+     * created with, and a count this device does not support for both colour and depth throws rather than
+     * being left to the validation layer.
+     */
+    SampleCount sample_count = SampleCount::Count1;
+
+    /**
+     * State this pipeline leaves to the command buffer. Viewport and scissor are always dynamic and are not
+     * named here; anything named has to be set with its Cmd* call before a draw that uses it.
+     */
+    DynamicStateBits dynamic_state = DynamicStateBits::None;
     DepthStencilDesc depth_stencil;
     Opal::DynamicArray<ColorBlendDesc> color_blend_attachments;
 

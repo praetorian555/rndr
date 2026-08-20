@@ -105,6 +105,57 @@ enum class TextureViewType : u8
 };
 
 /** Samples per pixel of a multisampled texture. */
+/**
+ * Which colour channels a pipeline is allowed to write. Mirrors VkColorComponentFlagBits, so a mask is a
+ * cast. Masking a channel off leaves whatever the attachment already held in it, which is not the same as
+ * writing zero - a pass that only wants alpha leaves the colour of the pass before it alone.
+ */
+enum class ColorWriteMaskBits : u8
+{
+    None = 0,
+    Red = 0x1,
+    Green = 0x2,
+    Blue = 0x4,
+    Alpha = 0x8,
+    /** Every channel, which is what a pipeline that says nothing about this gets. */
+    All = Red | Green | Blue | Alpha
+};
+OPAL_ENUM_CLASS_FLAGS(ColorWriteMaskBits);
+
+/**
+ * Which faces a stencil command applies to. Mirrors VkStencilFaceFlagBits.
+ *
+ * Not Rndr::Face, which is a cull mode: there None means "cull nothing" and there is no way to name both
+ * faces at once, which is the case a stencil command wants most.
+ */
+enum class StencilFaceBits : u8
+{
+    Front = 0x1,
+    Back = 0x2,
+    FrontAndBack = Front | Back
+};
+OPAL_ENUM_CLASS_FLAGS(StencilFaceBits);
+
+/**
+ * State a pipeline leaves to the command buffer instead of baking in, so one pipeline serves draws that
+ * differ only in these. Viewport and scissor are always dynamic - every pipeline Forge builds declares them
+ * and CmdSetViewport and CmdSetScissor are the only way to give them a value - so they are not listed here.
+ *
+ * A state named here has to be set with the matching Cmd* call before a draw that uses it. One set here and
+ * never set on the command buffer is undefined, which is what makes this a mask rather than a default.
+ */
+enum class DynamicStateBits : u8
+{
+    None = 0,
+    /** RasterizerDesc::depth_bias_* are ignored and CmdSetDepthBias supplies them. */
+    DepthBias = 0x1,
+    /** The stencil comparison value, which CmdSetStencilReference supplies. */
+    StencilReference = 0x2,
+    /** Line width, which CmdSetLineWidth supplies. Above one needs DeviceFeatures::wide_lines. */
+    LineWidth = 0x4
+};
+OPAL_ENUM_CLASS_FLAGS(DynamicStateBits);
+
 enum class SampleCount : u8
 {
     Count1,

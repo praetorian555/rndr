@@ -574,10 +574,35 @@ the variable count, the partially bound flag and the array element all to have t
 throw: a count above the binding's, a count without a binding that allows one, a variable count on a binding
 that is not the highest, and an update after bind layout allocated from a pool that does not expect one.
 
-### 3.10 Pipeline gaps
+### 3.10 Pipeline gaps — state DONE, cache and specialization constants left
 
-Multisample state, per-attachment color write masks, pipeline cache (serialized to disk), specialization
-constants, and dynamic state beyond viewport and scissor (depth bias, stencil reference, line width).
+Three of the five were a hardcoded value becoming a field.
+
+`ColorBlendDesc::color_write_mask` is a `ColorWriteMaskBits`, every channel by default, and the mask is
+applied after the blend rather than instead of it. `GraphicsPipelineDesc::sample_count` is a `SampleCount`,
+checked against `framebufferColorSampleCounts & framebufferDepthSampleCounts` - both, since a pipeline
+renders into both and a count one of them cannot carry is as unusable as one neither can - and throwing
+rather than leaving it to the validation layer. `GraphicsPipelineDesc::dynamic_state` is a
+`DynamicStateBits` mask adding depth bias, stencil reference and line width to the viewport and scissor
+every pipeline already declares, with `CmdSetDepthBias`, `CmdSetStencilReference` and `CmdSetLineWidth` to
+supply them. The last two guard `DeviceFeatures::depth_bias_clamp` and `::wide_lines` the way
+`CmdDrawMeshTasks` guards its extension.
+
+`StencilFaceBits` is new because `Rndr::Face` could not do the job: it is a cull mode, where `None` means
+"cull nothing" and there is no way to name both faces at once, which is the case a stencil command wants
+most.
+
+This is what finally put a graphics pipeline in the headless tests. A colour write mask cannot be checked
+by anything short of a real draw, so there is now a triangle covering the target, a vertex and fragment
+shader, and a readback: unmasked writes every channel, green-only leaves the red and alpha the clear set,
+and masking everything out leaves the attachment exactly as cleared. Verified the other way round as well -
+with the mask hardcoded back to all four channels two of those three fail. The positions come from a vertex
+buffer rather than `SV_VertexID`, which maps to `gl_VertexIndex` and pulls in a SPIR-V capability that
+would have needed a device feature turned on to draw a triangle.
+
+Left: the pipeline cache serialized to disk, and specialization constants. Both touch what makes one
+pipeline the same as another, so they want doing together and deciding first - a cache keyed wrong is worse
+than no cache.
 
 ### 3.11 Tests — DONE
 
