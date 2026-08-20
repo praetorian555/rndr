@@ -5,27 +5,28 @@
 #include "opal/container/dynamic-array.h"
 #include "opal/container/in-place-array.h"
 #include "opal/paths.h"
+#include "opal/threading/thread.h"
 #include "opal/time.h"
 
-#include "rndr/forge/buffer.hpp"
-#include "rndr/forge/descriptor-set.hpp"
-#include "rndr/forge/pipeline.hpp"
-#include "rndr/forge/shader.hpp"
-#include "rndr/forge/texture.hpp"
-#include "rndr/forge/command-buffer.hpp"
-#include "rndr/forge/debug.hpp"
-#include "rndr/forge/device.hpp"
-#include "rndr/forge/frame-context.hpp"
-#include "rndr/forge/graphics-context.hpp"
-#include "rndr/forge/physical-device.hpp"
-#include "rndr/forge/query.hpp"
-#include "rndr/forge/swap-chain.hpp"
-#include "rndr/forge/synchronization.hpp"
-#include "rndr/forge/transfer.hpp"
-#include "rndr/forge/mesh.hpp"
 #include "rndr/application.hpp"
 #include "rndr/file.hpp"
 #include "rndr/fly-camera.hpp"
+#include "rndr/forge/buffer.hpp"
+#include "rndr/forge/command-buffer.hpp"
+#include "rndr/forge/debug.hpp"
+#include "rndr/forge/descriptor-set.hpp"
+#include "rndr/forge/device.hpp"
+#include "rndr/forge/frame-context.hpp"
+#include "rndr/forge/graphics-context.hpp"
+#include "rndr/forge/mesh.hpp"
+#include "rndr/forge/physical-device.hpp"
+#include "rndr/forge/pipeline.hpp"
+#include "rndr/forge/query.hpp"
+#include "rndr/forge/shader.hpp"
+#include "rndr/forge/swap-chain.hpp"
+#include "rndr/forge/synchronization.hpp"
+#include "rndr/forge/texture.hpp"
+#include "rndr/forge/transfer.hpp"
 #include "rndr/generic-window.hpp"
 #include "rndr/projections.hpp"
 #include "rndr/types.hpp"
@@ -36,7 +37,7 @@ using f32 = Rndr::f32;
 using f64 = Rndr::f64;
 using u8 = Rndr::u8;
 
-struct ShaderData
+struct PerFrameData
 {
     Rndr::Matrix4x4f projection;
     Rndr::Matrix4x4f view;
@@ -86,26 +87,26 @@ void Run()
 
     Rndr::Forge::SwapChain swap_chain(device, surface, {.use_depth = true, .depth_pixel_format = Rndr::PixelFormat::D32_SFLOAT});
 
-    const Opal::StringUtf8 mesh_path = Opal::Paths::Combine(RNDR_CORE_ASSETS_DIR, "sample-models", "Suzanne", "glTF", "Suzanne.gltf").GetValue();
+    const Opal::StringUtf8 mesh_path =
+        Opal::Paths::Combine(RNDR_CORE_ASSETS_DIR, "sample-models", "Suzanne", "glTF", "Suzanne.gltf").GetValue();
     Rndr::Forge::Mesh mesh;
     Rndr::Forge::LoadMesh(mesh_path, mesh);
     Opal::DynamicArray<Rndr::u8> combined_vertex_index_data;
     combined_vertex_index_data.Append(mesh.vertices);
     combined_vertex_index_data.Append(mesh.indices);
-    Rndr::Forge::Buffer mesh_buffer(device,
-                                     {.size = combined_vertex_index_data.GetSize(),
-                                      .usage = Rndr::Forge::BufferUsageBits::VertexBuffer | Rndr::Forge::BufferUsageBits::IndexBuffer,
-                                      .keep_memory_mapped = false},
-                                     combined_vertex_index_data);
+    const Rndr::Forge::Buffer mesh_buffer(device,
+                                          {.size = combined_vertex_index_data.GetSize(),
+                                           .usage = Rndr::Forge::BufferUsageBits::VertexBuffer | Rndr::Forge::BufferUsageBits::IndexBuffer,
+                                           .keep_memory_mapped = false},
+                                          combined_vertex_index_data);
 
-    Opal::InPlaceArray<Rndr::Forge::Buffer, k_frames_in_flight> m_shader_buffers;
+    Opal::InPlaceArray<Rndr::Forge::Buffer, k_frames_in_flight> m_per_frame_buffers;
     for (i32 i = 0; i < k_frames_in_flight; i++)
     {
-        m_shader_buffers[i] =
-            Rndr::Forge::Buffer(device, {.size = sizeof(ShaderData),
-                                         .usage = Rndr::Forge::BufferUsageBits::None,
-                                         .keep_memory_mapped = true,
-                                         .use_device_address = true});
+        m_per_frame_buffers[i] = Rndr::Forge::Buffer(device, {.size = sizeof(PerFrameData),
+                                                              .usage = Rndr::Forge::BufferUsageBits::None,
+                                                              .keep_memory_mapped = true,
+                                                              .use_device_address = true});
     }
 
     // Owns the frames in flight: a fence, a command buffer and the semaphores on both sides of the swap chain
@@ -119,9 +120,6 @@ void Run()
     {
         gpu_timers[i] = Rndr::Forge::TimestampQueryPool(device, {.query_count = 2});
     }
-    // A pool holds undefined values until it is reset, and reading one that never was is undefined rather
-    // than empty. Reset every pool once here so the first frames can ask for a result and be told there is
-    // none yet; from then on the reset each frame records is what keeps them readable.
     Rndr::Forge::ImmediateSubmit(device, graphics_queue,
                                  [&](Rndr::Forge::CommandBuffer& command_buffer)
                                  {
@@ -131,14 +129,16 @@ void Run()
                                      }
                                  });
 
-    const Opal::StringUtf8 albedo_texture_path = Opal::Paths::Combine(RNDR_CORE_ASSETS_DIR, "sample-models", "Suzanne", "glTF", "Suzanne_BaseColor.png").GetValue();
-    const Opal::StringUtf8 metallic_roughness_texture_path = Opal::Paths::Combine(RNDR_CORE_ASSETS_DIR, "sample-models", "Suzanne", "glTF", "Suzanne_MetallicRoughness.png").GetValue();
+    const Opal::StringUtf8 albedo_texture_path =
+        Opal::Paths::Combine(RNDR_CORE_ASSETS_DIR, "sample-models", "Suzanne", "glTF", "Suzanne_BaseColor.png").GetValue();
+    const Opal::StringUtf8 metallic_roughness_texture_path =
+        Opal::Paths::Combine(RNDR_CORE_ASSETS_DIR, "sample-models", "Suzanne", "glTF", "Suzanne_MetallicRoughness.png").GetValue();
     const Rndr::Bitmap albedo_bitmap = Rndr::File::LoadImage(albedo_texture_path, true, true);
     const Rndr::Bitmap mr_bitmap = Rndr::File::LoadImage(metallic_roughness_texture_path, true, true);
-    Rndr::Forge::Texture albedo_texture(device, graphics_queue, albedo_bitmap);
-    Rndr::Forge::Texture mr_texture(device, graphics_queue, mr_bitmap);
-    Rndr::Forge::Sampler albedo_sampler(device, {.max_anisotropy = 8.0f, .max_lod = static_cast<f32>(albedo_bitmap.GetMipCount())});
-    Rndr::Forge::Sampler mr_sampler(device, {.max_anisotropy = 8.0f, .max_lod = static_cast<f32>(mr_bitmap.GetMipCount())});
+    const Rndr::Forge::Texture albedo_texture(device, graphics_queue, albedo_bitmap);
+    const Rndr::Forge::Texture mr_texture(device, graphics_queue, mr_bitmap);
+    const Rndr::Forge::Sampler albedo_sampler(device, {.max_anisotropy = 8.0f, .max_lod = static_cast<f32>(albedo_bitmap.GetMipCount())});
+    const Rndr::Forge::Sampler mr_sampler(device, {.max_anisotropy = 8.0f, .max_lod = static_cast<f32>(mr_bitmap.GetMipCount())});
 
     // Setup descriptor pool
     Rndr::Forge::DescriptorPoolDesc descriptor_pool_desc;
@@ -183,9 +183,8 @@ void Run()
         .color_blend_attachments = {color_blend_desc},
         .color_attachment_formats = {swap_chain.GetDesc().pixel_format},
         .depth_attachment_format = swap_chain.GetDesc().depth_pixel_format};
-    Rndr::Forge::Pipeline pipeline(device, pipeline_desc);
+    const Rndr::Forge::Pipeline pipeline(device, pipeline_desc);
 
-    // Names show up in validation messages and in a capture, and cost nothing in a build without debug utils.
     Rndr::Forge::SetDebugName(device, mesh_buffer, "suzanne mesh");
     Rndr::Forge::SetDebugName(device, albedo_texture, "suzanne albedo");
     Rndr::Forge::SetDebugName(device, mr_texture, "suzanne metallic roughness");
@@ -198,13 +197,13 @@ void Run()
     Rndr::Forge::SetDebugName(device, frame_context, "frame");
     for (i32 i = 0; i < k_frames_in_flight; ++i)
     {
-        Rndr::Forge::SetDebugName(device, m_shader_buffers[i], "per frame shader data");
+        Rndr::Forge::SetDebugName(device, m_per_frame_buffers[i], "per frame shader data");
         Rndr::Forge::SetDebugName(device, gpu_timers[i], "frame timing");
     }
 
     Rndr::Vector2i window_size = window->GetSize();
-    f32 window_width = window_size.x;
-    f32 window_height = window_size.y;
+    const i32 window_width = window_size.x;
+    const i32 window_height = window_size.y;
 
     rndr_app->GetInputSystemChecked()
         .GetCurrentContext()
@@ -218,9 +217,6 @@ void Run()
     controller.Enable(true);
 
     Rndr::f32 delta_seconds = 0.016;
-    // What the last completed frame took on the device, and when the title last said so. The title is only
-    // rewritten a few times a second: a figure that changes every frame is unreadable, and formatting one
-    // every frame is work the frame loop does not need to do.
     f64 gpu_milliseconds = 0.0;
     f64 last_title_update_seconds = 0.0;
     while (!window->IsClosed())
@@ -243,8 +239,7 @@ void Run()
         {
             if (!swap_chain.IsValid())
             {
-                // The window has no client area, so there is nothing to render into. Idle instead of retrying as fast
-                // as the loop can spin.
+                // The window has no client area, so there is nothing to render into.
                 std::this_thread::sleep_for(std::chrono::milliseconds(16));
             }
             const auto skipped_end_time = Opal::GetSeconds();
@@ -256,7 +251,7 @@ void Run()
         // BeginFrame has already waited on the fence of this slot, so the timestamps this pool holds are the
         // ones written k_frames_in_flight frames ago and are there to read without stalling. Read them
         // before the reset below throws them away. The first frames have nothing in the pool yet and say so.
-        Rndr::Forge::TimestampQueryPool& gpu_timer = gpu_timers[frame_index];
+        const Rndr::Forge::TimestampQueryPool& gpu_timer = gpu_timers[frame_index];
         f64 measured_gpu_ms = 0.0;
         if (gpu_timer.TryGetElapsedMilliseconds(0, 1, measured_gpu_ms))
         {
@@ -269,14 +264,14 @@ void Run()
         const f32 render_height = static_cast<f32>(render_size.y);
 
         // Update shader data
-        ShaderData shader_data;
+        PerFrameData shader_data;
         shader_data.projection = controller.GetProjectionTransform();
         shader_data.view = controller.GetViewTransform();
         for (i32 i = 0; i < 3; i++)
         {
             shader_data.models[i] = Opal::Translate(Rndr::Point3f{(static_cast<f32>(i) - 1) * 3.0f, 0.0f, 0.0f});
         }
-        m_shader_buffers[frame_index].Update(Opal::AsBytes(shader_data));
+        m_per_frame_buffers[frame_index].Update(Opal::AsBytes(shader_data));
 
         auto& command_buffer = frame_context.GetCommandBuffer();
 
@@ -298,16 +293,15 @@ void Run()
         const Rndr::Forge::RenderingDesc rendering_desc{
             .render_area_extent = render_size,
             .color_attachments = {Rndr::Forge::RenderingAttachmentDesc{.image_view = frame_context.GetColorImageView(),
-                                                                        .image_layout = Rndr::Forge::ImageLayout::ColorAttachment,
-                                                                        .load_operation = Rndr::Forge::AttachmentLoadOperation::Clear,
-                                                                        .store_operation = Rndr::Forge::AttachmentStoreOperation::Store,
-                                                                        .clear_value = {.color = {0.0f, 0.0f, 0.2f, 1.0f}}}},
-            .depth_attachment = Rndr::Forge::RenderingAttachmentDesc{
-                .image_view = swap_chain.GetDepthImageView(),
-                .image_layout = Rndr::Forge::ImageLayout::DepthStencilAttachment,
-                .load_operation = Rndr::Forge::AttachmentLoadOperation::Clear,
-                .store_operation = Rndr::Forge::AttachmentStoreOperation::DontCare,
-                .clear_value = {.depth_stencil = {.depth = 1.0f, .stencil = 0}}}};
+                                                                       .image_layout = Rndr::Forge::ImageLayout::ColorAttachment,
+                                                                       .load_operation = Rndr::Forge::AttachmentLoadOperation::Clear,
+                                                                       .store_operation = Rndr::Forge::AttachmentStoreOperation::Store,
+                                                                       .clear_value = {.color = {0.0f, 0.0f, 0.2f, 1.0f}}}},
+            .depth_attachment = Rndr::Forge::RenderingAttachmentDesc{.image_view = swap_chain.GetDepthImageView(),
+                                                                     .image_layout = Rndr::Forge::ImageLayout::DepthStencilAttachment,
+                                                                     .load_operation = Rndr::Forge::AttachmentLoadOperation::Clear,
+                                                                     .store_operation = Rndr::Forge::AttachmentStoreOperation::DontCare,
+                                                                     .clear_value = {.depth_stencil = {.depth = 1.0f, .stencil = 0}}}};
         {
             // A capture shows everything between the two braces as one collapsible "forward pass" instead of
             // as a run of loose draws. The guard closes the region even if something below throws.
@@ -319,7 +313,7 @@ void Run()
             command_buffer.CmdBindIndexBuffer(mesh_buffer, mesh.vertex_count * mesh.vertex_size, Rndr::IndexSize::uint32);
             command_buffer.CmdBindPipeline(pipeline);
             command_buffer.CmdBindDescriptorSet(pipeline, descriptor_set);
-            VkDeviceAddress device_address = m_shader_buffers[frame_index].GetNativeDeviceAddress();
+            VkDeviceAddress device_address = m_per_frame_buffers[frame_index].GetNativeDeviceAddress();
             command_buffer.CmdPushConstants(pipeline, Rndr::ShaderTypeBits::Vertex, Opal::AsBytes(device_address));
             command_buffer.CmdDrawIndexed(mesh.index_count, 3);
             command_buffer.CmdEndRendering();
@@ -339,8 +333,8 @@ void Run()
         {
             last_title_update_seconds = end_time;
             char title[128] = {};
-            snprintf(title, sizeof(title), "Forge - modern-vulkan - CPU %.2f ms - GPU %.3f ms",
-                     static_cast<f64>(delta_seconds) * 1000.0, gpu_milliseconds);
+            snprintf(title, sizeof(title), "Forge - modern-vulkan - CPU %.2f ms - GPU %.3f ms", static_cast<f64>(delta_seconds) * 1000.0,
+                     gpu_milliseconds);
             window->SetTitle(Opal::StringUtf8(title));
         }
     }
