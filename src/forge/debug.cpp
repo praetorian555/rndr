@@ -107,6 +107,17 @@ void Rndr::Forge::SetDebugName(const Device& device, const DeviceQueue& queue, c
     SetName(device, VK_OBJECT_TYPE_COMMAND_POOL, ToHandle(queue.GetNativeCommandPool()), name);
 }
 
+Rndr::Forge::ScopedDebugLabel::ScopedDebugLabel(CommandBuffer& command_buffer, const Opal::StringUtf8& name, const Vector4f& color)
+    : m_command_buffer(&command_buffer)
+{
+    m_command_buffer->CmdBeginDebugLabel(name, color);
+}
+
+Rndr::Forge::ScopedDebugLabel::~ScopedDebugLabel()
+{
+    m_command_buffer->CmdEndDebugLabel();
+}
+
 /** "shadow pass" plus " fence 1", since a name that does not say which frame it belongs to is half a name. */
 static Opal::StringUtf8 Indexed(const Opal::StringUtf8& name, const char* what, Rndr::u32 index)
 {

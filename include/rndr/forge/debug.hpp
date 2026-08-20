@@ -1,7 +1,9 @@
 #pragma once
 
+#include "opal/container/ref.h"
 #include "opal/container/string.h"
 
+#include "rndr/math.hpp"
 #include "rndr/types.hpp"
 #include "rndr/forge/forward.hpp"
 
@@ -42,5 +44,39 @@ void SetDebugName(const Device& device, const SwapChain& swap_chain, const Opal:
  * the image it belongs to appended, since which of them a message is about is the useful part.
  */
 void SetDebugName(const Device& device, const FrameContext& frame_context, const Opal::StringUtf8& name);
+
+/**
+ * A debug label region that closes itself. Opens the region on construction and closes it on destruction, so
+ * an early return or a thrown exception cannot leave a capture with a region that never ends.
+ *
+ * It is not a recorded command, which is why it lives here rather than beside the CmdBeginDebugLabel it
+ * wraps: it is the thing that keeps the matching CmdEndDebugLabel from being forgotten.
+ *
+ * @code
+ *   {
+ *       Forge::ScopedDebugLabel shadow_pass(command_buffer, "shadow pass", {0.2f, 0.4f, 1.0f, 1.0f});
+ *       command_buffer.CmdBeginRendering(...);
+ *       ...
+ *       command_buffer.CmdEndRendering();
+ *   }
+ * @endcode
+ */
+class ScopedDebugLabel
+{
+public:
+    ScopedDebugLabel(CommandBuffer& command_buffer, const Opal::StringUtf8& name,
+                     const Vector4f& color = {1.0f, 1.0f, 1.0f, 1.0f});
+    ~ScopedDebugLabel();
+
+    // A scope, not a value: copying one would close the region twice and moving it would leave the question
+    // of which copy owns the end.
+    ScopedDebugLabel(const ScopedDebugLabel&) = delete;
+    ScopedDebugLabel& operator=(const ScopedDebugLabel&) = delete;
+    ScopedDebugLabel(ScopedDebugLabel&&) = delete;
+    ScopedDebugLabel& operator=(ScopedDebugLabel&&) = delete;
+
+private:
+    Opal::Ref<CommandBuffer> m_command_buffer;
+};
 
 }  // namespace Rndr::Forge

@@ -3,6 +3,7 @@
 #include "volk/volk.h"
 
 #include "opal/container/ref.h"
+#include "opal/container/string.h"
 
 #include "rndr/forge/synchronization.hpp"
 #include "rndr/forge/forward.hpp"
@@ -452,6 +453,32 @@ public:
      * @param offset Byte offset of the DispatchIndirectCommand. Must be a multiple of 4.
      */
     void CmdDispatchIndirect(const Buffer& buffer, u64 offset = 0);
+
+    /**
+     * Open a named region in the command stream, which a capture shows as one collapsible entry in place of
+     * the loose commands inside it. Where SetDebugName says what a resource is, a label says what a stretch
+     * of work is, so the two answer different questions about the same capture.
+     *
+     * Every label call is a no-op when the instance did not enable VK_EXT_debug_utils - all three test the
+     * same condition, so a build without it skips both halves of a region rather than one. A label is a
+     * convenience, and refusing to attach one is never worth failing a frame over.
+     *
+     * @param name Text shown in place of the region.
+     * @param color What a capture tool tints the region with, RGBA in [0, 1]. Purely a hint: Vulkan gives it
+     *        no meaning, the validation layer never reads it, and a tool is free to ignore it.
+     */
+    void CmdBeginDebugLabel(const Opal::StringUtf8& name, const Vector4f& color = {1.0f, 1.0f, 1.0f, 1.0f});
+
+    /** Close the region the last CmdBeginDebugLabel opened. Regions nest, and every one has to be closed. */
+    void CmdEndDebugLabel();
+
+    /**
+     * Mark one point in the command stream rather than a region, for something that happens rather than
+     * something that takes time.
+     * @param name Text shown at the marker.
+     * @param color What a capture tool tints the marker with, RGBA in [0, 1]. A hint, as above.
+     */
+    void CmdInsertDebugLabel(const Opal::StringUtf8& name, const Vector4f& color = {1.0f, 1.0f, 1.0f, 1.0f});
 
 private:
     Opal::Ref<const Device> m_device;

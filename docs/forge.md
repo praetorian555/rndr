@@ -324,3 +324,27 @@ One thing the layer cannot save anyone from: work that breaks the specification 
 it is submitted, whatever the layer said about it. A command that the layer rejects at record time should be
 thrown away rather than submitted - the driver may take the process down some time later, far from the
 cause.
+
+### Labelled regions
+
+A name says what a resource is; a label says what a stretch of work is. `CommandBuffer::CmdBeginDebugLabel`
+and `CmdEndDebugLabel` bracket a region of the command stream, which a capture shows as one collapsible
+entry in place of the loose commands inside it, and `CmdInsertDebugLabel` marks a single point.
+`ScopedDebugLabel` from `rndr/forge/debug.hpp` is the pair as a scope, so an early return or a thrown
+exception cannot leave a region open:
+
+```cpp
+{
+    ScopedDebugLabel forward_pass(command_buffer, "forward pass", {0.2f, 0.6f, 1.0f, 1.0f});
+    command_buffer.CmdBeginRendering(...);
+    ...
+    command_buffer.CmdEndRendering();
+}
+```
+
+Regions nest, and every one has to be closed. The colour is a hint and nothing more: Vulkan gives it no
+meaning, the validation layer never reads it, and a tool is free to ignore it - RenderDoc tints the row with
+it, which is enough to tell two passes apart at a glance.
+
+Like naming, labelling is a no-op in a build without the debug utils extension. All three commands ask the
+same question, so a build without it skips both halves of a region rather than one.

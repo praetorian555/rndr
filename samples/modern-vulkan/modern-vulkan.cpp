@@ -273,17 +273,22 @@ void Run()
                                  .load_operation = Rndr::Forge::AttachmentLoadOperation::Clear,
                                  .store_operation = Rndr::Forge::AttachmentStoreOperation::DontCare,
                                  .clear_value = {.depth_stencil = {.depth = 1.0f, .stencil = 0}}}};
-        command_buffer.CmdBeginRendering(rendering_desc);
-        command_buffer.CmdSetViewport(Rndr::Vector2f::Zero(), {render_width, render_height});
-        command_buffer.CmdSetScissor(Rndr::Vector2i::Zero(), render_size);
-        command_buffer.CmdBindVertexBuffer(mesh_buffer, 0);
-        command_buffer.CmdBindIndexBuffer(mesh_buffer, mesh.vertex_count * mesh.vertex_size, Rndr::IndexSize::uint32);
-        command_buffer.CmdBindPipeline(pipeline);
-        command_buffer.CmdBindDescriptorSet(pipeline, descriptor_set);
-        VkDeviceAddress device_address = m_shader_buffers[frame_index].GetNativeDeviceAddress();
-        command_buffer.CmdPushConstants(pipeline, Rndr::ShaderTypeBits::Vertex, Opal::AsBytes(device_address));
-        command_buffer.CmdDrawIndexed(mesh.index_count, 3);
-        command_buffer.CmdEndRendering();
+        {
+            // A capture shows everything between the two braces as one collapsible "forward pass" instead of
+            // as a run of loose draws. The guard closes the region even if something below throws.
+            const Rndr::Forge::ScopedDebugLabel forward_pass(command_buffer, "forward pass", {0.2f, 0.6f, 1.0f, 1.0f});
+            command_buffer.CmdBeginRendering(rendering_desc);
+            command_buffer.CmdSetViewport(Rndr::Vector2f::Zero(), {render_width, render_height});
+            command_buffer.CmdSetScissor(Rndr::Vector2i::Zero(), render_size);
+            command_buffer.CmdBindVertexBuffer(mesh_buffer, 0);
+            command_buffer.CmdBindIndexBuffer(mesh_buffer, mesh.vertex_count * mesh.vertex_size, Rndr::IndexSize::uint32);
+            command_buffer.CmdBindPipeline(pipeline);
+            command_buffer.CmdBindDescriptorSet(pipeline, descriptor_set);
+            VkDeviceAddress device_address = m_shader_buffers[frame_index].GetNativeDeviceAddress();
+            command_buffer.CmdPushConstants(pipeline, Rndr::ShaderTypeBits::Vertex, Opal::AsBytes(device_address));
+            command_buffer.CmdDrawIndexed(mesh.index_count, 3);
+            command_buffer.CmdEndRendering();
+        }
 
         // Transitions the image to Present, ends the command buffer, submits it and presents.
         frame_context.EndFrame();

@@ -865,6 +865,59 @@ void Rndr::Forge::CommandBuffer::CmdDispatchIndirect(const Buffer& buffer, u64 o
     vkCmdDispatchIndirect(m_native_command_buffer, buffer.GetNativeBuffer(), offset);
 }
 
+namespace
+{
+/**
+ * Whether a label can be recorded at all. The loader hands out a callable trampoline for a debug utils
+ * command whether or not the instance enabled the extension, so asking the device is what keeps this from
+ * being an access violation - the same trap CmdDrawMeshTasks hits.
+ *
+ * All three label commands go through this one answer, which is what keeps a region balanced: a build
+ * without the extension skips the begin and the end together rather than one of them.
+ */
+bool AreDebugLabelsUsable(const Rndr::Forge::Device& device)
+{
+    return device.AreDebugUtilsEnabled() && vkCmdBeginDebugUtilsLabelEXT != nullptr && vkCmdEndDebugUtilsLabelEXT != nullptr &&
+           vkCmdInsertDebugUtilsLabelEXT != nullptr;
+}
+
+VkDebugUtilsLabelEXT ToVkLabel(const Opal::StringUtf8& name, const Rndr::Vector4f& color)
+{
+    return {.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_LABEL_EXT,
+            .pLabelName = reinterpret_cast<const char*>(name.GetData()),
+            .color = {color.x, color.y, color.z, color.w}};
+}
+}  // namespace
+
+void Rndr::Forge::CommandBuffer::CmdBeginDebugLabel(const Opal::StringUtf8& name, const Vector4f& color)
+{
+    if (!AreDebugLabelsUsable(*m_device))
+    {
+        return;
+    }
+    const VkDebugUtilsLabelEXT label = ToVkLabel(name, color);
+    vkCmdBeginDebugUtilsLabelEXT(m_native_command_buffer, &label);
+}
+
+void Rndr::Forge::CommandBuffer::CmdEndDebugLabel()
+{
+    if (!AreDebugLabelsUsable(*m_device))
+    {
+        return;
+    }
+    vkCmdEndDebugUtilsLabelEXT(m_native_command_buffer);
+}
+
+void Rndr::Forge::CommandBuffer::CmdInsertDebugLabel(const Opal::StringUtf8& name, const Vector4f& color)
+{
+    if (!AreDebugLabelsUsable(*m_device))
+    {
+        return;
+    }
+    const VkDebugUtilsLabelEXT label = ToVkLabel(name, color);
+    vkCmdInsertDebugUtilsLabelEXT(m_native_command_buffer, &label);
+}
+
 Rndr::Forge::CommandBuffer::CommandBuffer(CommandBuffer&& other) noexcept
     : m_device(std::move(other.m_device)), m_queue(std::move(other.m_queue)), m_native_command_buffer(other.m_native_command_buffer)
 {

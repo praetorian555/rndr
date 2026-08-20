@@ -966,3 +966,81 @@ TEST_CASE("Forge barrier vocabulary", "[forge]")
 
     REQUIRE_NO_VALIDATION_ERROR(fixture);
 }
+
+TEST_CASE("Forge debug labels", "[forge]")
+{
+    if (!IsForgeAvailable())
+    {
+        SKIP("No Vulkan device on this machine.");
+    }
+    ForgeFixture fixture;
+    constexpr i32 k_size = 256;
+    const Opal::DynamicArray<u8> written = MakeBytes(k_size, 17);
+
+    const Forge::Buffer source(fixture.device, {.size = k_size, .usage = Forge::BufferUsageBits::TransferSource}, written);
+    const Forge::Buffer destination(fixture.device, {.size = k_size,
+                                                     .usage = Forge::BufferUsageBits::TransferDestination,
+                                                     .host_access = Forge::HostAccess::Random});
+
+    SECTION("A labelled region records and the work inside it still runs")
+    {
+        Forge::ImmediateSubmit(fixture.device, fixture.GetQueue(),
+                               [&](Forge::CommandBuffer& command_buffer)
+                               {
+                                   command_buffer.CmdBeginDebugLabel("copy region", {0.2f, 0.6f, 1.0f, 1.0f});
+                                   command_buffer.CmdInsertDebugLabel("about to copy");
+                                   command_buffer.CmdCopyBuffer(source, destination);
+                                   command_buffer.CmdEndDebugLabel();
+                               });
+        Opal::DynamicArray<u8> read_back(k_size);
+        destination.Read(read_back);
+        REQUIRE(CountMismatches(written, read_back) == 0);
+    }
+    SECTION("Regions nest")
+    {
+        Forge::ImmediateSubmit(fixture.device, fixture.GetQueue(),
+                               [&](Forge::CommandBuffer& command_buffer)
+                               {
+                                   command_buffer.CmdBeginDebugLabel("frame");
+                                   command_buffer.CmdBeginDebugLabel("copy pass");
+                                   command_buffer.CmdCopyBuffer(source, destination);
+                                   command_buffer.CmdEndDebugLabel();
+                                   command_buffer.CmdEndDebugLabel();
+                               });
+        Opal::DynamicArray<u8> read_back(k_size);
+        destination.Read(read_back);
+        REQUIRE(CountMismatches(written, read_back) == 0);
+    }
+    SECTION("ScopedDebugLabel closes the region it opened")
+    {
+        Forge::ImmediateSubmit(fixture.device, fixture.GetQueue(),
+                               [&](Forge::CommandBuffer& command_buffer)
+                               {
+                                   const Forge::ScopedDebugLabel scope(command_buffer, "copy pass", {1.0f, 0.5f, 0.0f, 1.0f});
+                                   command_buffer.CmdCopyBuffer(source, destination);
+                               });
+        Opal::DynamicArray<u8> read_back(k_size);
+        destination.Read(read_back);
+        REQUIRE(CountMismatches(written, read_back) == 0);
+    }
+    SECTION("A region left open by a throw is still closed")
+    {
+        // The point of the guard: the copy below is rejected while it is recorded, and the region has to end
+        // on the way out anyway. A region left open is what the layer would report at End().
+        const Forge::Buffer no_transfer(fixture.device, {.size = k_size, .usage = Forge::BufferUsageBits::ConstantBuffer});
+        Forge::CommandBuffer command_buffer(fixture.device, fixture.GetQueue());
+        command_buffer.Begin();
+        try
+        {
+            const Forge::ScopedDebugLabel scope(command_buffer, "doomed pass");
+            command_buffer.CmdCopyBuffer(no_transfer, destination);
+            FAIL("The copy should have thrown.");
+        }
+        catch (const Opal::Exception&)
+        {
+        }
+        command_buffer.End();
+        // Not submitted: work the layer rejected while it was recorded is undefined behaviour once it runs.
+    }
+    REQUIRE_NO_VALIDATION_ERROR(fixture);
+}
