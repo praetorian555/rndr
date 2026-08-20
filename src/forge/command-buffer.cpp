@@ -645,13 +645,17 @@ void Rndr::Forge::CommandBuffer::CmdBeginRendering(const RenderingDesc& desc)
 
     // Filled only when the desc carries one, and pointed at only then: an absent depth attachment is a
     // pass that renders without depth, not one whose attachment happens to name no image.
+    const bool has_depth = desc.depth_attachment.HasValue();
     VkRenderingAttachmentInfo depth_attachment{};
-    if (desc.depth_attachment.HasValue())
+    if (has_depth)
     {
         const RenderingAttachmentDesc& depth = desc.depth_attachment.GetValue();
         if (depth.image_view == VK_NULL_HANDLE)
         {
-            throw Opal::Exception("A depth attachment that names no image view! Leave it absent instead.");
+            // Most often a swap chain built with use_depth off, whose GetDepthImageView is null by design.
+            // SwapChain::HasDepth is what to ask, and an absent attachment is what to leave behind.
+            throw Opal::Exception("A depth attachment that names no image view! Leave the attachment absent "
+                                  "instead - SwapChain::HasDepth says whether there is one to name.");
         }
         depth_attachment = {
             .sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO,
@@ -671,7 +675,7 @@ void Rndr::Forge::CommandBuffer::CmdBeginRendering(const RenderingDesc& desc)
         .layerCount = 1,
         .colorAttachmentCount = static_cast<u32>(color_attachments.GetSize()),
         .pColorAttachments = color_attachments.GetData(),
-        .pDepthAttachment = desc.depth_attachment.HasValue() ? &depth_attachment : nullptr,
+        .pDepthAttachment = has_depth ? &depth_attachment : nullptr,
     };
     vkCmdBeginRendering(m_native_command_buffer, &rendering_info);
 }

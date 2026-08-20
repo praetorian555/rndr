@@ -82,6 +82,11 @@ view, the image count, the extent - is stale afterwards. That is why acquire and
 `SwapChainStatus::OutOfDate` rather than throwing: it is a signal to drop what was cached, not a failure.
 Applications using `FrameContext` do not see this at all, since it re-reads what it needs each frame.
 
+A depth image is optional: `SwapChainDesc::use_depth` is on by default, and a swap chain made without one
+has an empty depth texture, so `GetDepthImageView()` is null. Ask `HasDepth()` rather than comparing that
+view against a handle, and leave `RenderingDesc::depth_attachment` absent when it answers false - an
+attachment that is present and names no image view throws, since a null view no longer means "no depth".
+
 ---
 
 ## The frame loop

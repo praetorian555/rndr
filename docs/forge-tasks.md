@@ -753,6 +753,12 @@ The convention it replaced is now an error rather than a second way of saying th
 that is present and names no image view throws, since that is a desc somebody started filling in and did
 not finish. Nothing else could tell those two apart before.
 
+Removing the convention from one side of a boundary and leaving it on the other is what a review of this
+caught. `SwapChain::GetDepthImageView()` still hands back a null view for a swap chain built with
+`use_depth` off, which used to be exactly how a caller said "no depth" and now throws instead. `HasDepth()`
+is the guard that was missing - `IsValid()` on the depth texture, under a name a caller would look for -
+and the thrown message names it, since the answer being available is no use if nothing points at it.
+
 Verified headless, which this turned out to be reachable by after all - dynamic rendering needs an image,
 not a swap chain. A pass with one colour attachment, no depth and no pipeline at all is cleared by its load
 operation, and reading the texture back shows the clear colour in every texel. Only zero and one are used

@@ -111,6 +111,13 @@ public:
     [[nodiscard]] const Texture& GetColorImage(u32 idx) const { return m_color_textures[idx]; }
     [[nodiscard]] VkImageView GetColorImageView(u32 idx) const { return m_color_textures[idx].GetNativeImageView(); }
     [[nodiscard]] u32 GetColorImageCount() const { return static_cast<u32>(m_color_textures.GetSize()); }
+    /**
+     * Whether this swap chain was created with a depth image. A swap chain made with
+     * SwapChainDesc::use_depth off has none, and GetDepthImage and GetDepthImageView then hand back an empty
+     * texture and a null view. Ask this rather than comparing the view against VK_NULL_HANDLE, and leave
+     * RenderingDesc::depth_attachment absent when it answers false.
+     */
+    [[nodiscard]] bool HasDepth() const { return m_depth_texture.IsValid(); }
     [[nodiscard]] const Texture& GetDepthImage() const { return m_depth_texture; }
     [[nodiscard]] VkImageView GetDepthImageView() const { return m_depth_texture.GetNativeImageView(); }
 
