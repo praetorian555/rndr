@@ -24,7 +24,7 @@ struct FrameContextDesc
      * device works on this one; one makes every frame wait for the previous, which is only worth it while
      * debugging.
      */
-    u32 frames_in_flight = 2;
+    i32 frames_in_flight = 2;
 };
 
 /**
@@ -136,7 +136,7 @@ private:
      */
     Opal::DynamicArray<Semaphore> m_render_finished_semaphores;
 
-    u32 m_frame_index = 0;
+    i32 m_frame_index = 0;
     u32 m_image_index = k_invalid_image_index;
     bool m_is_frame_recording = false;
 };

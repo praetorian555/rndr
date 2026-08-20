@@ -11,7 +11,7 @@ Rndr::Forge::FrameContext::FrameContext(const Device& device, SwapChain& swap_ch
     {
         throw Opal::Exception("A frame context needs at least one frame in flight!");
     }
-    for (u32 frame = 0; frame < m_desc.frames_in_flight; ++frame)
+    for (i32 frame = 0; frame < m_desc.frames_in_flight; ++frame)
     {
         // Signaled, so that the first BeginFrame does not wait for work that was never submitted.
         constexpr bool k_start_signaled = true;
@@ -126,10 +126,10 @@ Rndr::Forge::SwapChainStatus Rndr::Forge::FrameContext::BeginFrame()
     {
         throw Opal::Exception("BeginFrame was called twice without an EndFrame in between!");
     }
-    Fence& fence = m_fences[static_cast<i32>(m_frame_index)];
+    const Fence& fence = m_fences[m_frame_index];
     fence.Wait();
 
-    const AcquiredImage acquired_image = m_swap_chain->AcquireImage(m_image_ready_semaphores[static_cast<i32>(m_frame_index)]);
+    const AcquiredImage acquired_image = m_swap_chain->AcquireImage(m_image_ready_semaphores[m_frame_index]);
     if (acquired_image.status == SwapChainStatus::OutOfDate)
     {
         // The swap chain was rebuilt, or the window has no client area and there is none. Nothing was submitted
@@ -140,7 +140,7 @@ Rndr::Forge::SwapChainStatus Rndr::Forge::FrameContext::BeginFrame()
     m_image_index = acquired_image.image_index;
     fence.Reset();
 
-    CommandBuffer& command_buffer = m_command_buffers[static_cast<i32>(m_frame_index)];
+    const CommandBuffer& command_buffer = m_command_buffers[m_frame_index];
     command_buffer.Reset();
     command_buffer.Begin();
     m_is_frame_recording = true;
@@ -153,7 +153,7 @@ Rndr::Forge::SwapChainStatus Rndr::Forge::FrameContext::EndFrame(ImageLayout col
     {
         throw Opal::Exception("EndFrame was called without a BeginFrame that succeeded!");
     }
-    CommandBuffer& command_buffer = m_command_buffers[static_cast<i32>(m_frame_index)];
+    CommandBuffer& command_buffer = m_command_buffers[m_frame_index];
     if (color_image_layout != ImageLayout::Present)
     {
         command_buffer.CmdImageBarrier(ImageBarrier::ToPresent(GetColorImage(), color_image_layout));
@@ -161,10 +161,10 @@ Rndr::Forge::SwapChainStatus Rndr::Forge::FrameContext::EndFrame(ImageLayout col
     command_buffer.End();
     m_is_frame_recording = false;
 
-    const Semaphore& image_ready = m_image_ready_semaphores[static_cast<i32>(m_frame_index)];
+    const Semaphore& image_ready = m_image_ready_semaphores[m_frame_index];
     const Semaphore& render_finished = m_render_finished_semaphores[static_cast<i32>(m_image_index)];
     m_graphics_queue->Submit(command_buffer, image_ready, PipelineStageBits::ColorAttachmentOutput, render_finished,
-                             m_fences[static_cast<i32>(m_frame_index)]);
+                             m_fences[m_frame_index]);
 
     // Advanced before the present, so that a present that comes back out of date still leaves the next frame on
     // the following slot - the work of this one was submitted either way.
@@ -185,7 +185,7 @@ Rndr::Forge::CommandBuffer& Rndr::Forge::FrameContext::GetCommandBuffer()
     {
         throw Opal::Exception("There is no command buffer outside of a frame - call BeginFrame first!");
     }
-    return m_command_buffers[static_cast<i32>(m_frame_index)];
+    return m_command_buffers[m_frame_index];
 }
 
 const Rndr::Forge::Texture& Rndr::Forge::FrameContext::GetColorImage() const
