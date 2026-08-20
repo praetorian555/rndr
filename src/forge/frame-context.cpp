@@ -38,7 +38,6 @@ Rndr::Forge::FrameContext::FrameContext(FrameContext&& other) noexcept
       m_command_buffers(std::move(other.m_command_buffers)),
       m_render_finished_semaphores(std::move(other.m_render_finished_semaphores)),
       m_frame_index(other.m_frame_index),
-      m_image_index(other.m_image_index),
       m_is_frame_recording(other.m_is_frame_recording)
 {
     other.m_device = nullptr;
@@ -50,7 +49,6 @@ Rndr::Forge::FrameContext::FrameContext(FrameContext&& other) noexcept
     other.m_command_buffers.Clear();
     other.m_render_finished_semaphores.Clear();
     other.m_frame_index = 0;
-    other.m_image_index = k_invalid_image_index;
     other.m_is_frame_recording = false;
 }
 
@@ -69,7 +67,6 @@ Rndr::Forge::FrameContext& Rndr::Forge::FrameContext::operator=(FrameContext&& o
         m_command_buffers = std::move(other.m_command_buffers);
         m_render_finished_semaphores = std::move(other.m_render_finished_semaphores);
         m_frame_index = other.m_frame_index;
-        m_image_index = other.m_image_index;
         m_is_frame_recording = other.m_is_frame_recording;
         other.m_device = nullptr;
         other.m_swap_chain = nullptr;
@@ -80,8 +77,7 @@ Rndr::Forge::FrameContext& Rndr::Forge::FrameContext::operator=(FrameContext&& o
         other.m_command_buffers.Clear();
         other.m_render_finished_semaphores.Clear();
         other.m_frame_index = 0;
-        other.m_image_index = k_invalid_image_index;
-        other.m_is_frame_recording = false;
+            other.m_is_frame_recording = false;
     }
     return *this;
 }
@@ -102,7 +98,6 @@ void Rndr::Forge::FrameContext::Destroy()
     m_graphics_queue = nullptr;
     m_present_queue = nullptr;
     m_frame_index = 0;
-    m_image_index = k_invalid_image_index;
     m_is_frame_recording = false;
 }
 
@@ -137,7 +132,6 @@ Rndr::Forge::SwapChainStatus Rndr::Forge::FrameContext::BeginFrame()
         MatchRenderSemaphoresToSwapChain();
         return SwapChainStatus::OutOfDate;
     }
-    m_image_index = acquired_image.image_index;
     fence.Reset();
 
     const CommandBuffer& command_buffer = m_command_buffers[m_frame_index];
@@ -162,7 +156,7 @@ Rndr::Forge::SwapChainStatus Rndr::Forge::FrameContext::EndFrame(ImageLayout col
     m_is_frame_recording = false;
 
     const Semaphore& image_ready = m_image_ready_semaphores[m_frame_index];
-    const Semaphore& render_finished = m_render_finished_semaphores[static_cast<i32>(m_image_index)];
+    const Semaphore& render_finished = m_render_finished_semaphores[static_cast<i32>(m_swap_chain->GetCurrentImageIndex())];
     m_graphics_queue->Submit(command_buffer, image_ready, PipelineStageBits::ColorAttachmentOutput, render_finished,
                              m_fences[m_frame_index]);
 
@@ -170,8 +164,7 @@ Rndr::Forge::SwapChainStatus Rndr::Forge::FrameContext::EndFrame(ImageLayout col
     // the following slot - the work of this one was submitted either way.
     m_frame_index = (m_frame_index + 1) % m_desc.frames_in_flight;
 
-    const SwapChainStatus status = m_swap_chain->Present(m_image_index, *m_present_queue, render_finished);
-    m_image_index = k_invalid_image_index;
+    const SwapChainStatus status = m_swap_chain->Present(*m_present_queue, render_finished);
     if (status == SwapChainStatus::OutOfDate)
     {
         MatchRenderSemaphoresToSwapChain();
@@ -190,11 +183,11 @@ Rndr::Forge::CommandBuffer& Rndr::Forge::FrameContext::GetCommandBuffer()
 
 const Rndr::Forge::Texture& Rndr::Forge::FrameContext::GetColorImage() const
 {
-    if (m_image_index == k_invalid_image_index)
+    if (!m_swap_chain->HasAcquiredImage())
     {
         throw Opal::Exception("There is no acquired image outside of a frame - call BeginFrame first!");
     }
-    return m_swap_chain->GetColorImage(m_image_index);
+    return m_swap_chain->GetCurrentColorImage();
 }
 
 VkImageView Rndr::Forge::FrameContext::GetColorImageView() const

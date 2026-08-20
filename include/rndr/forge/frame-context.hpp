@@ -100,7 +100,8 @@ public:
     [[nodiscard]] u32 GetFrameIndex() const { return m_frame_index; }
 
     /** Which swap chain image this frame acquired. Only meaningful between BeginFrame and EndFrame. */
-    [[nodiscard]] u32 GetImageIndex() const { return m_image_index; }
+    /** Index of the acquired swap chain image, which the swap chain is what remembers. */
+    [[nodiscard]] u32 GetImageIndex() const { return m_swap_chain->GetCurrentImageIndex(); }
 
     /** The swap chain image this frame renders into. */
     [[nodiscard]] const Texture& GetColorImage() const;
@@ -137,7 +138,6 @@ private:
     Opal::DynamicArray<Semaphore> m_render_finished_semaphores;
 
     i32 m_frame_index = 0;
-    u32 m_image_index = k_invalid_image_index;
     bool m_is_frame_recording = false;
 };
 

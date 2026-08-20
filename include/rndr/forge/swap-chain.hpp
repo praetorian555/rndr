@@ -132,12 +132,30 @@ public:
     AcquiredImage AcquireImage(const Semaphore& semaphore);
 
     /**
-     * Present a previously acquired image once the given semaphore is signaled.
+     * Whether an image is acquired right now, which is true between an AcquireImage that returned Success
+     * and the Present that hands it back.
+     */
+    [[nodiscard]] bool HasAcquiredImage() const { return m_current_image_index != k_invalid_image_index; }
+
+    /** Index the last AcquireImage handed out, or k_invalid_image_index when none is acquired. */
+    [[nodiscard]] u32 GetCurrentImageIndex() const { return m_current_image_index; }
+
+    /**
+     * The acquired image, which is the one to render into this frame. Throws when none is acquired, since
+     * there is no image to hand back rather than a wrong one.
+     */
+    [[nodiscard]] const Texture& GetCurrentColorImage() const;
+    [[nodiscard]] VkImageView GetCurrentColorImageView() const;
+
+    /**
+     * Present the acquired image once the given semaphore is signaled. Which image that is the swap chain
+     * remembers from AcquireImage, so nothing has to be threaded through the frame; presenting with none
+     * acquired throws. The image is no longer acquired afterwards, whatever the outcome.
      *
      * Returns SwapChainStatus::OutOfDate when the swap chain stopped matching the surface, in which case it has
      * already been recreated and the caller has to refresh anything it cached about it.
      */
-    SwapChainStatus Present(u32 image_index, DeviceQueue& queue, const Semaphore& semaphore);
+    SwapChainStatus Present(DeviceQueue& queue, const Semaphore& semaphore);
 
 private:
     /** Destroy the color images, their views and the depth image, leaving the swap chain handle alone. */
@@ -153,6 +171,8 @@ private:
     Opal::Ref<const Surface> m_surface;
     Opal::DynamicArray<Texture> m_color_textures;
     Texture m_depth_texture;
+    /** The image AcquireImage handed out, until Present gives it back. */
+    u32 m_current_image_index = k_invalid_image_index;
 };
 
 }  // namespace Rndr::Forge

@@ -765,11 +765,30 @@ operation, and reading the texture back shows the clear colour in every texel. O
 there, since those are the only channel values a UNORM format converts exactly. The throwing case is
 covered too, and the sample still renders with depth and reports no validation message.
 
-### 4.6 Swap chain remembers the acquired image
+### 4.6 Swap chain remembers the acquired image — DONE
 
-`AcquireImage` returns an index that the caller then threads through `GetColorImage`, `GetColorImageView`
-and `Present`. Store it and add `GetCurrentColorImage()` / `GetCurrentColorImageView()`. Also make the
-index parameters consistently `u32` — the sample casts to `i32` at `modern-vulkan.cpp:239`.
+`AcquireImage` records the index it hands out, `GetCurrentColorImage()` and `GetCurrentColorImageView()`
+hand back that image, and `HasAcquiredImage()` says whether there is one. Asking outside an acquire and
+present pair throws rather than returning a stale image.
+
+`Present` lost its index parameter rather than gaining an overload beside it. Presenting an image other
+than the one just acquired is not a thing anyone does, so two ways of spelling it would only have been two
+ways to get it wrong. It clears the index before calling `vkQueuePresentKHR`, not after: a present that
+comes back out of date recreates the swap chain inside that call, and an index cleared afterwards would
+have spent that moment pointing into images that no longer exist.
+
+`FrameContext` kept its own `m_image_index`, which was the same fact stored twice. It now reads the swap
+chain's, and `GetImageIndex()` forwards. That deleted the field, its two move paths and its reset.
+
+The index is carried across both `SwapChain` moves. Reviewing 4.4 had just turned up a member wired into
+the move constructor and not the assignment, so this one was written with that in mind rather than found
+the same way twice.
+
+The `i32` cast this task pointed at in the sample was already gone by the time it was reached.
+
+Verified by driving the sample through four resizes plus a minimize and restore with the layer on: six
+swap chain rebuilds, no validation message, clean exit. That is the path where the bookkeeping could go
+wrong, since an out of date acquire and an out of date present each leave the swap chain holding nothing.
 
 ### 4.7 Write `docs/forge.md` — DONE
 

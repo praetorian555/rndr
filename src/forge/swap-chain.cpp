@@ -150,7 +150,8 @@ Rndr::Forge::SwapChain::SwapChain(SwapChain&& other) noexcept
       m_device(std::move(other.m_device)),
       m_surface(std::move(other.m_surface)),
       m_color_textures(std::move(other.m_color_textures)),
-      m_depth_texture(std::move(other.m_depth_texture))
+      m_depth_texture(std::move(other.m_depth_texture)),
+      m_current_image_index(other.m_current_image_index)
 {
     other.m_swap_chain = VK_NULL_HANDLE;
     other.m_device = nullptr;
@@ -158,6 +159,7 @@ Rndr::Forge::SwapChain::SwapChain(SwapChain&& other) noexcept
     other.m_color_textures.Clear();
     other.m_desc = {};
     other.m_extent = {};
+    other.m_current_image_index = k_invalid_image_index;
 }
 
 Rndr::Forge::SwapChain& Rndr::Forge::SwapChain::operator=(SwapChain&& other) noexcept
@@ -171,6 +173,7 @@ Rndr::Forge::SwapChain& Rndr::Forge::SwapChain::operator=(SwapChain&& other) noe
     m_depth_texture = std::move(other.m_depth_texture);
     m_desc = other.m_desc;
     m_extent = other.m_extent;
+    m_current_image_index = other.m_current_image_index;
 
     other.m_swap_chain = VK_NULL_HANDLE;
     other.m_device = nullptr;
@@ -178,6 +181,7 @@ Rndr::Forge::SwapChain& Rndr::Forge::SwapChain::operator=(SwapChain&& other) noe
     other.m_color_textures.Clear();
     other.m_desc = {};
     other.m_extent = {};
+    other.m_current_image_index = k_invalid_image_index;
 
     return *this;
 }
@@ -190,6 +194,8 @@ void Rndr::Forge::SwapChain::DestroyImages()
     }
     m_color_textures.Clear();
     m_depth_texture.Destroy();
+    // The index pointed into the array that just went away, so nothing is acquired any more.
+    m_current_image_index = k_invalid_image_index;
 }
 
 void Rndr::Forge::SwapChain::DestroySwapChain()
@@ -219,6 +225,20 @@ void Rndr::Forge::SwapChain::Destroy()
     m_extent = {};
 }
 
+const Rndr::Forge::Texture& Rndr::Forge::SwapChain::GetCurrentColorImage() const
+{
+    if (!HasAcquiredImage())
+    {
+        throw Opal::Exception("There is no acquired image - AcquireImage has to come first!");
+    }
+    return m_color_textures[static_cast<i32>(m_current_image_index)];
+}
+
+VkImageView Rndr::Forge::SwapChain::GetCurrentColorImageView() const
+{
+    return GetCurrentColorImage().GetNativeImageView();
+}
+
 Rndr::Forge::AcquiredImage Rndr::Forge::SwapChain::AcquireImage(const Semaphore& semaphore)
 {
     if (m_swap_chain == VK_NULL_HANDLE)
@@ -242,11 +262,21 @@ Rndr::Forge::AcquiredImage Rndr::Forge::SwapChain::AcquireImage(const Semaphore&
     {
         throw VulkanException(result, "vkAcquireNextImageKHR");
     }
+    m_current_image_index = image_index;
     return {SwapChainStatus::Success, image_index};
 }
 
-Rndr::Forge::SwapChainStatus Rndr::Forge::SwapChain::Present(u32 image_index, DeviceQueue& queue, const Semaphore& semaphore)
+Rndr::Forge::SwapChainStatus Rndr::Forge::SwapChain::Present(DeviceQueue& queue, const Semaphore& semaphore)
 {
+    if (!HasAcquiredImage())
+    {
+        throw Opal::Exception("There is no acquired image to present - AcquireImage has to come first!");
+    }
+    // Cleared before the call rather than after: a present that comes back out of date recreates the swap
+    // chain underneath us, and the index would then point into images that no longer exist.
+    u32 image_index = m_current_image_index;
+    m_current_image_index = k_invalid_image_index;
+
     const VkSemaphore wait_semaphore = semaphore.GetNativeSemaphore();
     const VkPresentInfoKHR present_info = {
         .sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR,
