@@ -574,7 +574,7 @@ the variable count, the partially bound flag and the array element all to have t
 throw: a count above the binding's, a count without a binding that allows one, a variable count on a binding
 that is not the highest, and an update after bind layout allocated from a pool that does not expect one.
 
-### 3.10 Pipeline gaps — state DONE, cache and specialization constants left
+### 3.10 Pipeline gaps — state DONE, cache dropped, specialization constants left
 
 Three of the five were a hardcoded value becoming a field.
 
@@ -600,9 +600,16 @@ with the mask hardcoded back to all four channels two of those three fail. The p
 buffer rather than `SV_VertexID`, which maps to `gl_VertexIndex` and pulls in a SPIR-V capability that
 would have needed a device feature turned on to draw a triangle.
 
-Left: the pipeline cache serialized to disk, and specialization constants. Both touch what makes one
-pipeline the same as another, so they want doing together and deciding first - a cache keyed wrong is worse
-than no cache.
+**The pipeline cache is deliberately not done.** Measured before writing any of it, on the sample, three
+runs of a debug build: compiling its two Slang entry points takes 4.9 seconds, and building the graphics
+pipeline from the SPIR-V that comes out takes 3 milliseconds. A `VkPipelineCache` would save 0.06% of
+startup. Slang is a prebuilt dependency, so a release build moves the ratio very little.
+
+A pipeline cache earns its keep against hundreds of pipelines or a shader variant explosion, and Forge has
+one graphics pipeline and one compute pipeline. Reach for it when there is something to amortise; the five
+seconds are in 3.13 instead. This paragraph is here so nobody adds it back thinking it was an oversight.
+
+Left: specialization constants, which are unaffected by any of the above and are still a small piece.
 
 ### 3.11 Tests — DONE
 
@@ -675,6 +682,45 @@ heap above that. The scratch allocator was not the answer, for the reason this t
 Verified headless on a real copy: the narrow stages and access ordering a transfer against a host read, a
 batch of sixteen barriers past the in-place eight, a release-and-acquire pair naming a queue family on both
 sides, and a barrier naming the mesh stage on a device without the extension throwing.
+
+---
+
+### 3.13 Cache the compiled SPIR-V
+
+Compiling the two Slang entry points of the sample takes 4.9 seconds; building the pipeline from the result
+takes 3 milliseconds (measured on a debug build, three runs, see 3.10). Every run pays the 4.9 seconds
+again, and every test that calls `Shader::FromSourceInMemory` pays its own share — the `[forge]` tag is slow
+for this reason and no other. This is the only startup cost in Forge worth removing.
+
+The shape: `Shader::FromSource` and `FromSourceInMemory` look for a blob on disk before invoking Slang,
+write one when they had to compile, and hand the bytes to `vkCreateShaderModule` either way.
+
+**Keying is the whole task.** A pipeline cache handed a stale entry gives you a slow frame; a SPIR-V cache
+handed a stale entry gives you a shader that is not the source you are reading, which is a debugging session
+nobody enjoys. The key has to cover everything that changes the output:
+
+- The **resolved** source text, not the file. `File::ReadShader` expands includes, so a hash of the top file
+  alone misses an edit to anything it includes.
+- The entry point, since one source compiles several and `ShaderDesc::entry_point` picks one.
+- A Slang version stamp, so upgrading the compiler invalidates every entry rather than silently mixing
+  output from two versions.
+- Whatever compile options are added later. Better to hash a struct that grows than a list of arguments
+  assembled at the call site.
+
+Getting this wrong is silent, so the test has to be the negative one: compile, edit the source, compile
+again, and require the second result to differ. A test that only checks a hit is fast proves nothing.
+
+**Three things to decide before writing it:**
+
+- **Where the cache lives.** A `ShaderCache` object the application creates and passes to `FromSource`
+  matches how the rest of Forge works, since nothing here is global and nothing is implicit. A path on
+  `Device` is fewer parameters and one more thing that happens behind the caller's back.
+- **What a corrupt or truncated blob does.** Recompiling and overwriting is the only sane answer, which
+  means a miss and a bad entry take the same path, and a cache read never throws.
+- **Whether it is on by default.** A cache that has to be asked for is a cache most callers never get; one
+  that is on by default writes files somebody has to have chosen a location for.
+
+Not to be confused with a pipeline cache, which 3.10 measured and dropped.
 
 ---
 
