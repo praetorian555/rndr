@@ -274,7 +274,7 @@ Rndr::Forge::SwapChainStatus Rndr::Forge::SwapChain::Present(DeviceQueue& queue,
     }
     // Cleared before the call rather than after: a present that comes back out of date recreates the swap
     // chain underneath us, and the index would then point into images that no longer exist.
-    u32 image_index = m_current_image_index;
+    const u32 image_index = m_current_image_index;
     m_current_image_index = k_invalid_image_index;
 
     const VkSemaphore wait_semaphore = semaphore.GetNativeSemaphore();

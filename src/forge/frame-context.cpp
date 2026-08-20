@@ -77,7 +77,7 @@ Rndr::Forge::FrameContext& Rndr::Forge::FrameContext::operator=(FrameContext&& o
         other.m_command_buffers.Clear();
         other.m_render_finished_semaphores.Clear();
         other.m_frame_index = 0;
-            other.m_is_frame_recording = false;
+        other.m_is_frame_recording = false;
     }
     return *this;
 }
@@ -155,6 +155,13 @@ Rndr::Forge::SwapChainStatus Rndr::Forge::FrameContext::EndFrame(ImageLayout col
     command_buffer.End();
     m_is_frame_recording = false;
 
+    // The recording flag and the acquired image are set together in BeginFrame, so this only fires when
+    // something outside the frame context released the swap chain mid-frame. Cheaper to say so than to
+    // index the semaphore array with k_invalid_image_index.
+    if (!m_swap_chain->HasAcquiredImage())
+    {
+        throw Opal::Exception("The swap chain gave up its acquired image in the middle of a frame!");
+    }
     const Semaphore& image_ready = m_image_ready_semaphores[m_frame_index];
     const Semaphore& render_finished = m_render_finished_semaphores[static_cast<i32>(m_swap_chain->GetCurrentImageIndex())];
     m_graphics_queue->Submit(command_buffer, image_ready, PipelineStageBits::ColorAttachmentOutput, render_finished,

@@ -99,8 +99,10 @@ public:
     /** Which of the frames in flight this is, for indexing anything the caller keeps one of per frame. */
     [[nodiscard]] u32 GetFrameIndex() const { return m_frame_index; }
 
-    /** Which swap chain image this frame acquired. Only meaningful between BeginFrame and EndFrame. */
-    /** Index of the acquired swap chain image, which the swap chain is what remembers. */
+    /**
+     * Which swap chain image this frame acquired. Only meaningful between BeginFrame and EndFrame; the swap
+     * chain is what remembers it, and answers k_invalid_image_index outside a frame.
+     */
     [[nodiscard]] u32 GetImageIndex() const { return m_swap_chain->GetCurrentImageIndex(); }
 
     /** The swap chain image this frame renders into. */
