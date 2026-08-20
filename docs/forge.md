@@ -414,6 +414,51 @@ it for one says so rather than guessing.
 
 ---
 
+## Shader compilation and the cache
+
+Slang is the whole of Forge's startup cost. Compiling the sample's two entry points takes seconds;
+everything built out of the result - the shader module, the pipeline, the reflection - takes milliseconds.
+
+Two things make that cheaper and neither is on by accident.
+
+**The Slang global session is shared.** `slang::createGlobalSession` loads Slang's core module and costs
+about 650 ms in a debug build. It used to run once per compile. There is now one per process, created on
+first use, and nothing about the compiler's behaviour changes with it. Not synchronized: nothing in Rndr
+compiles shaders off the main thread.
+
+**`ShaderCache` keeps the compiled code**, in memory for as long as the object lives and, when it was given
+a directory, on disk for as long as the files do:
+
+```cpp
+Rndr::ShaderCache shader_cache{Opal::StringUtf8(RNDR_CORE_ASSETS_DIR "/../build/shader-cache")};
+const auto shader = Forge::Shader::FromSource(device, path, {.entry_point = "main_vertex", .cache = shader_cache});
+```
+
+The cache belongs to the application, not to Forge - a `ShaderDesc` without one compiles every time, exactly
+as before. It has to outlive the shaders that fill it to be worth anything, which is why it is not something
+`Device` hands out.
+
+A hit never creates a Slang session at all. Even the compiler version in the key comes from
+`spGetBuildTagString`, a free function, so a warm run of the sample does not load Slang.
+
+### What a hit means
+
+A wrong hit is the only failure worth worrying about: it hands back a shader that is not the source being
+read, which is a debugging session nobody enjoys. So the key holds **the source text whole**, the entry
+point, the output format and the Slang build tag, and a lookup compares all four byte for byte. The hash
+only names the file and narrows the search - a collision costs a recompile, never a wrong answer.
+
+Everything that can go wrong with a blob means the same thing and takes the same path: no entry, compile it.
+A missing file, one that does not parse, one truncated by a half-finished write, one written by a different
+Slang. `Find` never throws and never reports an error.
+
+One thing to know before changing the compiler: the cache is exact because `LoadModule` passes no
+`searchPaths` to Slang, so the source string it is handed is the whole input. Adding search paths would let
+a module pull in a file the key never sees, and the key would go on claiming hits for a source that changed
+underneath it. There is a comment saying so where the paths would go.
+
+---
+
 ## Debugging
 
 Build with `-DRNDR_FORGE_VALIDATION=ON` and the validation layer is enabled whenever it is installed. Its

@@ -9,6 +9,7 @@
 #include "opal/time.h"
 
 #include "rndr/application.hpp"
+#include "rndr/core/shader-cache.hpp"
 #include "rndr/file.hpp"
 #include "rndr/fly-camera.hpp"
 #include "rndr/forge/buffer.hpp"
@@ -146,9 +147,14 @@ void Run()
     descriptor_pool_desc.max_sets = k_frames_in_flight;
     const Rndr::Forge::DescriptorPool descriptor_pool(device, descriptor_pool_desc);
 
+    // Slang is the whole of this sample's startup cost - seconds for these two entry points, against
+    // milliseconds for everything built out of them. Cached, a second run reads two files instead.
+    Rndr::ShaderCache shader_cache{Opal::StringUtf8(RNDR_CORE_ASSETS_DIR "/../build/shader-cache")};
     const Opal::StringUtf8 shader_path = Opal::Paths::Combine(RNDR_CORE_ASSETS_DIR, "shaders", "modern-vulkan.slang").GetValue();
-    const Rndr::Forge::Shader vertex_shader = Rndr::Forge::Shader::FromSource(device, shader_path, {.entry_point = "main_vertex"});
-    const Rndr::Forge::Shader fragment_shader = Rndr::Forge::Shader::FromSource(device, shader_path, {.entry_point = "main_fragment"});
+    const Rndr::Forge::Shader vertex_shader =
+        Rndr::Forge::Shader::FromSource(device, shader_path, {.entry_point = "main_vertex", .cache = shader_cache});
+    const Rndr::Forge::Shader fragment_shader =
+        Rndr::Forge::Shader::FromSource(device, shader_path, {.entry_point = "main_fragment", .cache = shader_cache});
     const Opal::Ref<const Rndr::Forge::Shader> pipeline_shaders[] = {vertex_shader, fragment_shader};
 
     // Setup the descriptor set layout. It has two bindings and both are images with samplers. Naming the

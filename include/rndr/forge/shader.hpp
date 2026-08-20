@@ -12,6 +12,11 @@
 #include "rndr/forge/forward.hpp"
 #include "rndr/forge/types.hpp"
 
+namespace Rndr
+{
+class ShaderCache;
+}
+
 namespace Rndr::Forge
 {
 
@@ -73,6 +78,17 @@ struct ShaderPushConstantInfo
 struct ShaderDesc
 {
     Opal::StringUtf8 entry_point = "main";
+
+    /**
+     * Where to look for this entry point's compiled code before asking Slang for it, and where to keep it
+     * afterwards. Empty means compile every time, which is what happened before there was a cache.
+     *
+     * Worth having because Slang is slow and everything after it is not: compiling the two entry points of
+     * the sample costs seconds, and building the pipeline from the result costs milliseconds. The cache has
+     * to outlive the shaders that fill it to be of any use, so it belongs to the application rather than to
+     * anything here.
+     */
+    Opal::Ref<ShaderCache> cache;
 };
 
 class Shader

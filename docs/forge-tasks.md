@@ -726,40 +726,63 @@ sides, and a barrier naming the mesh stage on a device without the extension thr
 
 ---
 
-### 3.13 Cache the compiled SPIR-V
+### 3.13 Cache the compiled SPIR-V — DONE
 
-Compiling the two Slang entry points of the sample takes 4.9 seconds; building the pipeline from the result
-takes 3 milliseconds (measured on a debug build, three runs, see 3.10). Every run pays the 4.9 seconds
-again, and every test that calls `Shader::FromSourceInMemory` pays its own share — the `[forge]` tag is slow
-for this reason and no other. This is the only startup cost in Forge worth removing.
+Measured before writing any of it, the way 3.10 did. Debug build, three runs of the sample, timing spans
+inside `LoadModule` and `CompileEntryPoint`:
 
-The shape: `Shader::FromSource` and `FromSourceInMemory` look for a blob on disk before invoking Slang,
-write one when they had to compile, and hand the bytes to `vkCreateShaderModule` either way.
+| Span | Per run |
+|---|---|
+| `slang::createGlobalSession` | 1.30 s (2 x 650 ms) |
+| `createSession` + `loadModuleFromSourceString` | 1.40 s |
+| entry point codegen | 1.03 s |
 
-**Keying is the whole task.** A pipeline cache handed a stale entry gives you a slow frame; a SPIR-V cache
-handed a stale entry gives you a shader that is not the source you are reading, which is a debugging session
-nobody enjoys. The key has to cover everything that changes the output:
+The measurement moved the task. **`createGlobalSession` was running once per compile** - it loads Slang's
+core module, it is the same session whatever is being compiled, and the sample was paying for two of them.
+There is now one per process behind a function-local static. That alone took the `[forge]` suite from
+**172.7 s to 63.7 s**, because the suite compiles 78 times and every one of them was building a core module
+first. Nothing about the compiler's output changes; it is the same Slang given the same input.
 
-- The **resolved** source text, not the file. `File::ReadShader` expands includes, so a hash of the top file
-  alone misses an edit to anything it includes.
-- The entry point, since one source compiles several and `ShaderDesc::entry_point` picks one.
-- A Slang version stamp, so upgrading the compiler invalidates every entry rather than silently mixing
-  output from two versions.
-- Whatever compile options are added later. Better to hash a struct that grows than a list of arguments
-  assembled at the call site.
+Then the cache. `ShaderCache` has two tiers: in memory for as long as the object lives, and on disk when it
+was given a directory. The memory tier is not an optimisation of the disk one - Catch2 re-runs a `TEST_CASE`
+body once per `SECTION`, so a case with nine sections was compiling its shaders nine times inside one
+process, which no disk cache would have helped as much as it should.
 
-Getting this wrong is silent, so the test has to be the negative one: compile, edit the source, compile
-again, and require the second result to differ. A test that only checks a hit is fast proves nothing.
+Reached through `Forge::ShaderDesc::cache`, so no call site that does not want one changed. The cache
+belongs to the application: it has to outlive the shaders that fill it, and a `Device` handing one out
+would be Forge deciding where somebody else's files go.
 
-**Three things to decide before writing it:**
+| | `[forge]` suite | Sample startup |
+|---|---|---|
+| Before | 172.7 s | ~3.7 s of Slang |
+| Shared global session | 63.7 s | ~2.3 s |
+| Plus the cache, cold | 45.5 s | unchanged, it is a cold run |
+| Plus the cache, warm | 39.0 s | **no Slang session created at all** |
 
-- **Where the cache lives.** A `ShaderCache` object the application creates and passes to `FromSource`
-  matches how the rest of Forge works, since nothing here is global and nothing is implicit. A path on
-  `Device` is fewer parameters and one more thing that happens behind the caller's back.
-- **What a corrupt or truncated blob does.** Recompiling and overwriting is the only sane answer, which
-  means a miss and a bad entry take the same path, and a cache read never throws.
-- **Whether it is on by default.** A cache that has to be asked for is a cache most callers never get; one
-  that is on by default writes files somebody has to have chosen a location for.
+Shader compilation has stopped being what the suite spends its time on; the 39 s left is device creation per
+fixture. A warm run of the sample never loads Slang, which is worth spelling out: the build tag in the key
+comes from `spGetBuildTagString`, a **free function**, so nothing about a hit needs a session. Had it only
+been available on `IGlobalSession`, every hit would still have paid the 650 ms.
+
+**Keying is the whole task and the failure is silent.** The key holds the source text *whole*, the entry
+point, the output format and the build tag, and a lookup compares all four. The hash only names the file: a
+collision costs a recompile rather than handing back a shader that is not the source being read. Everything
+wrong with a blob - absent, unparseable, truncated, written by another Slang - is one path out, and the
+caller compiles. `Find` never throws.
+
+One premise of this task turned out to be stale. It warned that `File::ReadShader` expands includes, so
+hashing the top file misses an edit to an included one. `File::ReadShader` has **no callers**;
+`Shader::FromSource` reads the file with `ReadEntireTextFile`, `LoadModule` passes no `searchPaths`, and no
+shader in the repo has an `import`. The string handed to Slang is the whole input, which is what makes the
+key exact - and what would stop being true the moment search paths are configured. There is a comment at
+the `SessionDesc` saying so.
+
+Verified by the negative tests, since a test that only checks a hit is fast proves nothing: an edited source
+gives different SPIR-V, two entry points of one source give different SPIR-V, a blob overwritten with
+garbage reads as a miss and is replaced by a working one, a key carrying a different build tag misses a file
+that is otherwise its own, a fresh cache over the same directory reads back what the last one wrote, and a
+cache with no directory still answers within the process. The sample renders with the validation layer on
+and exits clean twice in a row, the second run being the one that proves the disk tier.
 
 Not to be confused with a pipeline cache, which 3.10 measured and dropped.
 

@@ -6,6 +6,7 @@
 
 #include "rndr/forge/device.hpp"
 #include "rndr/forge/vulkan-exception.hpp"
+#include "rndr/core/shader-cache.hpp"
 #include "rndr/core/shader-compiler.hpp"
 #include "rndr/file.hpp"
 
@@ -346,9 +347,26 @@ Rndr::Forge::Shader Rndr::Forge::Shader::FromSourceInMemory(const Device& device
         throw Opal::InvalidArgumentException(__FUNCTION__, "Shader source is empty!");
     }
 
+    // Slang is the whole cost of getting here, so it is asked last. A hit reads a file and never creates a
+    // session - even the build tag in the key comes from a free function.
+    ShaderCacheKey key;
+    if (desc.cache != nullptr)
+    {
+        key = ShaderCacheKey::Make(source, desc.entry_point, ShaderOutputFormat::SpirV);
+        const Opal::DynamicArray<u8> cached = desc.cache->Find(key);
+        if (!cached.IsEmpty())
+        {
+            return Shader(device, Opal::ArrayView<const u8>(cached.GetData(), cached.GetSize()), desc);
+        }
+    }
+
     ShaderCompiler compiler;
     compiler.LoadModule(source, ShaderOutputFormat::SpirV);
     const CompileResult result = compiler.CompileEntryPoint(desc.entry_point);
+    if (desc.cache != nullptr)
+    {
+        desc.cache->Store(key, {result.code.GetData(), result.code.GetSize()});
+    }
     return Shader(device, Opal::ArrayView<const u8>(result.code.GetData(), result.code.GetSize()), desc);
 }
 

@@ -45,7 +45,9 @@ set(SOURCE_LIST
 if (${RNDR_CANVAS} OR ${RNDR_FORGE})
     list(APPEND SOURCE_LIST
             "${PROJECT_SOURCE_DIR}/include/rndr/core/shader-compiler.hpp"
-            "${PROJECT_SOURCE_DIR}/src/core/shader-compiler.cpp")
+            "${PROJECT_SOURCE_DIR}/src/core/shader-compiler.cpp"
+            "${PROJECT_SOURCE_DIR}/include/rndr/core/shader-cache.hpp"
+            "${PROJECT_SOURCE_DIR}/src/core/shader-cache.cpp")
 endif()
 
 if (${RNDR_CANVAS})

@@ -1,5 +1,9 @@
 #include <catch2/catch2.hpp>
 
+#include "opal/file-system.h"
+
+#include "rndr/core/shader-cache.hpp"
+
 #include "opal/container/dynamic-array.h"
 #include "opal/container/in-place-array.h"
 #include "opal/exceptions.h"
@@ -28,6 +32,20 @@ namespace
 {
 
 using namespace Rndr;
+
+/**
+ * One shader cache for the whole binary. Catch2 re-runs a TEST_CASE body once per SECTION, so a case with
+ * nine sections compiles its shaders nine times; the in-memory tier turns all but the first into a lookup.
+ * The directory turns the first one of a later run into a lookup as well.
+ *
+ * A static here rather than in the library, which has no globals of its own - this is the application, and
+ * a cache that died with the fixture would be no cache at all.
+ */
+Rndr::ShaderCache& GetShaderCache()
+{
+    static Rndr::ShaderCache cache{Opal::StringUtf8(RNDR_CORE_ASSETS_DIR "/../build/shader-cache")};
+    return cache;
+}
 
 /** A Vulkan instance and a device with no surface. Everything below is built on one of these. */
 struct ForgeFixture
@@ -255,7 +273,7 @@ TEST_CASE("Forge compute dispatch and readback", "[forge]")
     output.Update(zeros);
 
     const Forge::Shader compute_shader =
-        Forge::Shader::FromSourceInMemory(fixture.device, k_compute_source, {.entry_point = "main_compute"});
+        Forge::Shader::FromSourceInMemory(fixture.device, k_compute_source, {.entry_point = "main_compute", .cache = GetShaderCache()});
     REQUIRE(compute_shader.IsValid());
     REQUIRE(compute_shader.GetShaderStage() == ShaderTypeBits::Compute);
 
@@ -819,7 +837,7 @@ TEST_CASE("Forge bindless descriptor bindings", "[forge]")
             .resource_info = Forge::DescriptorSetUpdateBinding::BufferInfo{.buffer = output}});
         descriptor_set.Update(updates);
 
-        const Forge::Shader shader = Forge::Shader::FromSourceInMemory(device, k_bindless_source, {.entry_point = "main_bindless"});
+        const Forge::Shader shader = Forge::Shader::FromSourceInMemory(device, k_bindless_source, {.entry_point = "main_bindless", .cache = GetShaderCache()});
         Forge::ComputePipelineDesc pipeline_desc;
         pipeline_desc.shader = shader;
         pipeline_desc.descriptor_set_layouts.PushBack(Opal::Ref<const Forge::DescriptorSetLayout>(layout));
@@ -1066,7 +1084,7 @@ TEST_CASE("Forge timestamp queries", "[forge]")
                                                 .host_access = Forge::HostAccess::Random,
                                                 .use_device_address = true});
     const Forge::Shader compute_shader =
-        Forge::Shader::FromSourceInMemory(fixture.device, k_compute_source, {.entry_point = "main_compute"});
+        Forge::Shader::FromSourceInMemory(fixture.device, k_compute_source, {.entry_point = "main_compute", .cache = GetShaderCache()});
     Forge::ComputePipelineDesc pipeline_desc;
     pipeline_desc.shader = compute_shader;
     pipeline_desc.push_constant_ranges.PushBack(
@@ -1279,7 +1297,7 @@ TEST_CASE("Forge single resource descriptor updates", "[forge]")
         set.Update(0, output);
 
         const Forge::Shader shader =
-            Forge::Shader::FromSourceInMemory(fixture.device, k_descriptor_source, {.entry_point = "main_descriptor"});
+            Forge::Shader::FromSourceInMemory(fixture.device, k_descriptor_source, {.entry_point = "main_descriptor", .cache = GetShaderCache()});
         Forge::ComputePipelineDesc pipeline_desc;
         pipeline_desc.shader = shader;
         pipeline_desc.descriptor_set_layouts.PushBack(Opal::Ref<const Forge::DescriptorSetLayout>(layout));
@@ -1456,9 +1474,9 @@ TEST_CASE("Forge color write mask", "[forge]")
     constexpr PixelFormat k_format = PixelFormat::R8G8B8A8_UNORM;
 
     const Forge::Shader vertex_shader =
-        Forge::Shader::FromSourceInMemory(fixture.device, k_fullscreen_source, {.entry_point = "main_vertex"});
+        Forge::Shader::FromSourceInMemory(fixture.device, k_fullscreen_source, {.entry_point = "main_vertex", .cache = GetShaderCache()});
     const Forge::Shader fragment_shader =
-        Forge::Shader::FromSourceInMemory(fixture.device, k_fullscreen_source, {.entry_point = "main_fragment"});
+        Forge::Shader::FromSourceInMemory(fixture.device, k_fullscreen_source, {.entry_point = "main_fragment", .cache = GetShaderCache()});
 
     /**
      * Clear the target to opaque red, draw the triangle through a pipeline with the given mask, and hand back
@@ -1557,9 +1575,9 @@ TEST_CASE("Forge pipeline sample count and dynamic state", "[forge]")
     constexpr PixelFormat k_format = PixelFormat::R8G8B8A8_UNORM;
 
     const Forge::Shader vertex_shader =
-        Forge::Shader::FromSourceInMemory(fixture.device, k_fullscreen_source, {.entry_point = "main_vertex"});
+        Forge::Shader::FromSourceInMemory(fixture.device, k_fullscreen_source, {.entry_point = "main_vertex", .cache = GetShaderCache()});
     const Forge::Shader fragment_shader =
-        Forge::Shader::FromSourceInMemory(fixture.device, k_fullscreen_source, {.entry_point = "main_fragment"});
+        Forge::Shader::FromSourceInMemory(fixture.device, k_fullscreen_source, {.entry_point = "main_fragment", .cache = GetShaderCache()});
 
     auto make_desc = [&]()
     {
@@ -1694,9 +1712,9 @@ TEST_CASE("Forge specialization constants", "[forge]")
     constexpr PixelFormat k_format = PixelFormat::R8G8B8A8_UNORM;
 
     const Forge::Shader vertex_shader =
-        Forge::Shader::FromSourceInMemory(fixture.device, k_specialized_source, {.entry_point = "main_vertex"});
+        Forge::Shader::FromSourceInMemory(fixture.device, k_specialized_source, {.entry_point = "main_vertex", .cache = GetShaderCache()});
     const Forge::Shader fragment_shader =
-        Forge::Shader::FromSourceInMemory(fixture.device, k_specialized_source, {.entry_point = "main_fragment"});
+        Forge::Shader::FromSourceInMemory(fixture.device, k_specialized_source, {.entry_point = "main_fragment", .cache = GetShaderCache()});
     const Forge::Buffer vertices(fixture.device,
                                  {.size = sizeof(k_fullscreen_vertices),
                                   .usage = Forge::BufferUsageBits::VertexBuffer},
@@ -1829,7 +1847,7 @@ TEST_CASE("Forge specialization constants", "[forge]")
                                                     .host_access = Forge::HostAccess::Random,
                                                     .use_device_address = true});
         const Forge::Shader compute_shader = Forge::Shader::FromSourceInMemory(fixture.device, k_specialized_compute_source,
-                                                                              {.entry_point = "main_specialized"});
+                                                                              {.entry_point = "main_specialized", .cache = GetShaderCache()});
         Forge::DescriptorPoolDesc pool_desc;
         pool_desc.Add(Forge::DescriptorType::StorageBuffer, 1);
         const Forge::DescriptorPool pool(fixture.device, pool_desc);
@@ -1922,9 +1940,9 @@ TEST_CASE("Forge shader reflection", "[forge]")
     }
     ForgeFixture fixture;
     const Forge::Shader vertex_shader =
-        Forge::Shader::FromSourceInMemory(fixture.device, k_reflected_source, {.entry_point = "main_vertex"});
+        Forge::Shader::FromSourceInMemory(fixture.device, k_reflected_source, {.entry_point = "main_vertex", .cache = GetShaderCache()});
     const Forge::Shader fragment_shader =
-        Forge::Shader::FromSourceInMemory(fixture.device, k_reflected_source, {.entry_point = "main_fragment"});
+        Forge::Shader::FromSourceInMemory(fixture.device, k_reflected_source, {.entry_point = "main_fragment", .cache = GetShaderCache()});
 
     SECTION("Each stage reports only what it reads")
     {
@@ -2059,7 +2077,7 @@ TEST_CASE("Forge shader reflection", "[forge]")
     {
         // Why the check above cannot exist. The struct has two members and reflection reports one.
         const Forge::Shader partial =
-            Forge::Shader::FromSourceInMemory(fixture.device, k_unused_input_source, {.entry_point = "main_vertex"});
+            Forge::Shader::FromSourceInMemory(fixture.device, k_unused_input_source, {.entry_point = "main_vertex", .cache = GetShaderCache()});
         REQUIRE(partial.GetInputs().GetSize() == 1);
         REQUIRE(partial.GetInputs()[0].location == 0);
     }
@@ -2107,9 +2125,9 @@ TEST_CASE("Forge descriptor bindings checked against the shader", "[forge]")
     }
     ForgeFixture fixture;
     const Forge::Shader vertex_shader =
-        Forge::Shader::FromSourceInMemory(fixture.device, k_reflected_source, {.entry_point = "main_vertex"});
+        Forge::Shader::FromSourceInMemory(fixture.device, k_reflected_source, {.entry_point = "main_vertex", .cache = GetShaderCache()});
     const Forge::Shader fragment_shader =
-        Forge::Shader::FromSourceInMemory(fixture.device, k_reflected_source, {.entry_point = "main_fragment"});
+        Forge::Shader::FromSourceInMemory(fixture.device, k_reflected_source, {.entry_point = "main_fragment", .cache = GetShaderCache()});
 
     /** A layout desc naming both stages, so the check has the shader that declares the bindings. */
     auto make_desc = [&]()
@@ -2201,6 +2219,156 @@ TEST_CASE("Forge descriptor bindings checked against the shader", "[forge]")
 
         Forge::DescriptorSet set(pool, layout);
         REQUIRE_THROWS_AS(set.GetBindingIndex("first_texture"), Opal::Exception);
+    }
+    REQUIRE_NO_VALIDATION_ERROR(fixture);
+}
+
+/** Trivial and self-contained, so the cache tests are about the cache and not about what it holds. */
+constexpr const char* k_cache_source = R"(
+[shader("compute")]
+[numthreads(1, 1, 1)]
+void main_first(uint3 id : SV_DispatchThreadID, uniform RWStructuredBuffer<uint> output) {
+    output[id.x] = 1;
+}
+
+[shader("compute")]
+[numthreads(1, 1, 1)]
+void main_second(uint3 id : SV_DispatchThreadID, uniform RWStructuredBuffer<uint> output) {
+    output[id.x] = 2;
+}
+)";
+
+/** The same source with one digit changed, which has to produce different SPIR-V and a different key. */
+constexpr const char* k_cache_source_edited = R"(
+[shader("compute")]
+[numthreads(1, 1, 1)]
+void main_first(uint3 id : SV_DispatchThreadID, uniform RWStructuredBuffer<uint> output) {
+    output[id.x] = 7;
+}
+
+[shader("compute")]
+[numthreads(1, 1, 1)]
+void main_second(uint3 id : SV_DispatchThreadID, uniform RWStructuredBuffer<uint> output) {
+    output[id.x] = 2;
+}
+)";
+
+TEST_CASE("Forge shader cache", "[forge]")
+{
+    if (!IsForgeAvailable())
+    {
+        SKIP("No Vulkan device on this machine.");
+    }
+    ForgeFixture fixture;
+
+    const Opal::StringUtf8 directory{RNDR_CORE_ASSETS_DIR "/../build/shader-cache-test"};
+    Rndr::ShaderCache cache{directory};
+    REQUIRE(!cache.GetDirectory().IsEmpty());
+
+    const Rndr::ShaderCacheKey key =
+        Rndr::ShaderCacheKey::Make(k_cache_source, "main_first", Rndr::ShaderOutputFormat::SpirV);
+    const Rndr::ShaderCacheKey edited_key =
+        Rndr::ShaderCacheKey::Make(k_cache_source_edited, "main_first", Rndr::ShaderOutputFormat::SpirV);
+    const Rndr::ShaderCacheKey second_key =
+        Rndr::ShaderCacheKey::Make(k_cache_source, "main_second", Rndr::ShaderOutputFormat::SpirV);
+
+    /** Nothing left behind by an earlier run, or a stale hit would make all of this pass for free. */
+    auto forget = [&](const Rndr::ShaderCacheKey& k)
+    {
+        const Opal::StringUtf8 path = cache.GetFilePath(k);
+        if (!path.IsEmpty() && Opal::Exists(path))
+        {
+            REQUIRE(Opal::DeleteFile(path) == Opal::ErrorCode::Success);
+        }
+    };
+    forget(key);
+    forget(edited_key);
+    forget(second_key);
+
+    /** Compiles through the cache and hands back the bytes it kept, which is what the tests compare. */
+    auto compile = [&](const char* source, const char* entry_point)
+    {
+        const Forge::Shader shader =
+            Forge::Shader::FromSourceInMemory(fixture.device, source, {.entry_point = entry_point, .cache = cache});
+        REQUIRE(shader.IsValid());
+        return cache.Find(Rndr::ShaderCacheKey::Make(source, entry_point, Rndr::ShaderOutputFormat::SpirV));
+    };
+
+    SECTION("An edited source does not come back as the old one")
+    {
+        // The test that matters. One that only checks a hit is fast proves nothing about correctness.
+        const Opal::DynamicArray<u8> original = compile(k_cache_source, "main_first");
+        const Opal::DynamicArray<u8> edited = compile(k_cache_source_edited, "main_first");
+        REQUIRE(!original.IsEmpty());
+        REQUIRE(!edited.IsEmpty());
+        REQUIRE(original != edited);
+    }
+    SECTION("Two entry points of one source do not share an entry")
+    {
+        const Opal::DynamicArray<u8> first = compile(k_cache_source, "main_first");
+        const Opal::DynamicArray<u8> second = compile(k_cache_source, "main_second");
+        REQUIRE(first != second);
+    }
+    SECTION("The same source twice is one compile and the same bytes")
+    {
+        const Opal::DynamicArray<u8> once = compile(k_cache_source, "main_first");
+        const u32 misses_after_first = cache.GetMissCount();
+        const Opal::DynamicArray<u8> twice = compile(k_cache_source, "main_first");
+        REQUIRE(once == twice);
+        // The second call found it, so it did not have to go looking for it again.
+        REQUIRE(cache.GetMissCount() == misses_after_first);
+    }
+    SECTION("A fresh cache over the same directory finds what the last one wrote")
+    {
+        const Opal::DynamicArray<u8> written = compile(k_cache_source, "main_first");
+        // No memory tier to answer from, so a hit here came off the disk.
+        Rndr::ShaderCache reopened{directory};
+        const Opal::DynamicArray<u8> read_back = reopened.Find(key);
+        REQUIRE(read_back == written);
+        REQUIRE(reopened.GetHitCount() == 1);
+    }
+    SECTION("A blob from a different Slang is not used")
+    {
+        compile(k_cache_source, "main_first");
+        Rndr::ShaderCacheKey wrong_tag = key.Clone();
+        wrong_tag.build_tag = Opal::StringUtf8("some-other-slang");
+        // Same source and entry point, so only the tag can turn this into a miss.
+        Rndr::ShaderCache reopened{directory};
+        REQUIRE(reopened.Find(wrong_tag).IsEmpty());
+    }
+    SECTION("A corrupt blob is recompiled over rather than trusted")
+    {
+        const Opal::DynamicArray<u8> written = compile(k_cache_source, "main_first");
+        const Opal::StringUtf8 path = cache.GetFilePath(key);
+        REQUIRE(Opal::Exists(path));
+
+        constexpr u8 k_garbage[] = {0xDE, 0xAD, 0xBE, 0xEF, 0x00, 0x01};
+        REQUIRE(Opal::WriteBytesToFile(path, {k_garbage, 6}) == Opal::ErrorCode::Success);
+
+        // A fresh cache, so the memory tier cannot cover for the file.
+        Rndr::ShaderCache reopened{directory};
+        REQUIRE(reopened.Find(key).IsEmpty());
+
+        // And compiling through it puts a usable entry back where the garbage was.
+        const Forge::Shader shader =
+            Forge::Shader::FromSourceInMemory(fixture.device, k_cache_source, {.entry_point = "main_first", .cache = reopened});
+        REQUIRE(shader.IsValid());
+        Rndr::ShaderCache third{directory};
+        REQUIRE(third.Find(key) == written);
+    }
+    SECTION("A cache with no directory still answers within the process")
+    {
+        Rndr::ShaderCache memory_only;
+        REQUIRE(memory_only.GetDirectory().IsEmpty());
+        REQUIRE(memory_only.GetFilePath(key).IsEmpty());
+        const Forge::Shader first =
+            Forge::Shader::FromSourceInMemory(fixture.device, k_cache_source, {.entry_point = "main_first", .cache = memory_only});
+        const Forge::Shader second =
+            Forge::Shader::FromSourceInMemory(fixture.device, k_cache_source, {.entry_point = "main_first", .cache = memory_only});
+        REQUIRE(first.IsValid());
+        REQUIRE(second.IsValid());
+        REQUIRE(memory_only.GetHitCount() == 1);
+        REQUIRE(memory_only.GetMissCount() == 1);
     }
     REQUIRE_NO_VALIDATION_ERROR(fixture);
 }

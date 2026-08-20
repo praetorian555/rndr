@@ -364,9 +364,38 @@ void PatchGlslInstanceBuiltin(Opal::DynamicArray<Rndr::u8>& code)
 // ShaderCompiler::Impl
 // ---------------------------------------------------------------------------
 
+namespace
+{
+/**
+ * The one Slang global session this process has. Creating it loads Slang's core module, which costs about
+ * 650 ms in a debug build - per compile, before this was shared, and it is the same session whatever is
+ * being compiled. Sessions and modules stay per compile, since the SPIR-V and GLSL paths configure
+ * different targets from it.
+ *
+ * Not synchronized. Slang does not document IGlobalSession as safe for concurrent use, and nothing in Rndr
+ * compiles shaders off the main thread; the day something does, this needs a mutex rather than a comment.
+ *
+ * Released after main, along with every other static. If Slang's teardown ever turns out to mind that, the
+ * fix is an explicit shutdown call rather than leaning harder on static destruction order.
+ */
+slang::IGlobalSession& GetGlobalSession()
+{
+    static Slang::ComPtr<slang::IGlobalSession> global_session = []
+    {
+        Slang::ComPtr<slang::IGlobalSession> session;
+        const SlangResult result = slang::createGlobalSession(session.writeRef());
+        if (SLANG_FAILED(result))
+        {
+            throw Rndr::GraphicsAPIException(result, "Failed to create Slang global session!");
+        }
+        return session;
+    }();
+    return *global_session;
+}
+}  // namespace
+
 struct Rndr::ShaderCompiler::Impl
 {
-    Slang::ComPtr<slang::IGlobalSession> global_session;
     Slang::ComPtr<slang::ISession> session;
     slang::IModule* module = nullptr;
     ShaderOutputFormat format = ShaderOutputFormat::SpirV;
@@ -403,11 +432,7 @@ void Rndr::ShaderCompiler::LoadModule(const Opal::StringUtf8& source, ShaderOutp
 {
     m_impl->format = format;
 
-    SlangResult result = slang::createGlobalSession(m_impl->global_session.writeRef());
-    if (SLANG_FAILED(result))
-    {
-        throw GraphicsAPIException(result, "Failed to create Slang global session!");
-    }
+    slang::IGlobalSession& global_session = GetGlobalSession();
 
     slang::TargetDesc target_desc = {};
     // Preserve original Slang entry-point names in the emitted SPIR-V instead of renaming them
@@ -423,20 +448,23 @@ void Rndr::ShaderCompiler::LoadModule(const Opal::StringUtf8& source, ShaderOutp
         // OpenGL-flavoured GLSL (gl_VertexID/gl_InstanceID semantics, layout(binding=...)), targeting
         // GL 4.5. No SPIR-V-specific flags or options are needed here.
         target_desc.format = SLANG_GLSL;
-        target_desc.profile = m_impl->global_session->findProfile("glsl_450");
+        target_desc.profile = global_session.findProfile("glsl_450");
     }
     else
     {
         target_desc.format = SLANG_SPIRV;
-        target_desc.profile = m_impl->global_session->findProfile("spirv_1_5");
+        target_desc.profile = global_session.findProfile("spirv_1_5");
         target_desc.flags = SLANG_TARGET_FLAG_GENERATE_SPIRV_DIRECTLY;
         session_desc.compilerOptionEntries = session_options;
         session_desc.compilerOptionEntryCount = sizeof(session_options) / sizeof(session_options[0]);
     }
     session_desc.targets = &target_desc;
     session_desc.targetCount = 1;
+    // No search paths, so the string below is the whole of what Slang sees and hashing it is exact. Setting
+    // searchPaths here would let a module pull in a file this never reads, and ShaderCacheKey would go on
+    // claiming a hit for a source that changed underneath it.
 
-    result = m_impl->global_session->createSession(session_desc, m_impl->session.writeRef());
+    const SlangResult result = global_session.createSession(session_desc, m_impl->session.writeRef());
     if (SLANG_FAILED(result))
     {
         throw GraphicsAPIException(result, "Failed to create Slang session!");
