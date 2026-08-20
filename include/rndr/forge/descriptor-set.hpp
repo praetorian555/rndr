@@ -42,18 +42,6 @@ enum class DescriptorBindingFlagBits : u8
 };
 OPAL_ENUM_CLASS_FLAGS(DescriptorBindingFlagBits);
 
-enum class DescriptorType : u8
-{
-    SampledImage = 0,
-    Sampler,
-    CombinedImageSampler,
-    ConstantBuffer,
-    StorageBuffer,
-    StorageImage,
-
-    EnumCount
-};
-
 struct DescriptorPoolDesc : Opal::ClonableBase<DescriptorPoolDesc>
 {
     Opal::DynamicArray<Opal::Pair<DescriptorType, u32>> descriptor_types;
@@ -82,6 +70,12 @@ struct DescriptorSetLayoutDesc : Opal::ClonableBase<DescriptorSetLayoutDesc>
     {
         /** The index the shader declares this binding at. Indices may skip values and arrive in any order. */
         u32 binding = 0;
+        /**
+         * What the shader calls this binding, filled in from reflection when the layout was given `shaders`
+         * and empty otherwise. Not something to write by hand - a name typed here that the shader does not
+         * use would be the very mistake keying by name is meant to remove. DescriptorSet::Update takes it.
+         */
+        Opal::StringUtf8 name;
         DescriptorType descriptor_type = DescriptorType::CombinedImageSampler;
         u32 descriptor_count = 1;
         ShaderTypeBits shader_types = ShaderTypeBits::AllGraphics;
@@ -94,11 +88,25 @@ struct DescriptorSetLayoutDesc : Opal::ClonableBase<DescriptorSetLayoutDesc>
          * from it.
          */
         Opal::DynamicArray<Opal::Ref<const Sampler>> immutable_samplers;
-        OPAL_CLONE_FIELDS(binding, descriptor_type, descriptor_count, shader_types, flags, immutable_samplers);
+        OPAL_CLONE_FIELDS(binding, name, descriptor_type, descriptor_count, shader_types, flags, immutable_samplers);
     };
     Opal::DynamicArray<Binding> bindings;
 
-    OPAL_CLONE_FIELDS(bindings);
+    /**
+     * The shaders this layout is meant to match. Optional: left empty, the layout is built exactly as it is
+     * written, which is what it did before there was anything to check it against.
+     *
+     * Given them, every binding is checked against what those shaders declare in `set_index` - the kind, the
+     * count, and the stages that read it - and each one is given the name the shader uses, which is what
+     * lets DescriptorSet::Update take a name. A binding either side declares and the other does not throws.
+     * Only the shaders themselves are read, so they need not outlive the layout.
+     */
+    Opal::DynamicArray<Opal::Ref<const Shader>> shaders;
+
+    /** Which descriptor set of those shaders this layout is. Only read when `shaders` is not empty. */
+    u32 set_index = 0;
+
+    OPAL_CLONE_FIELDS(bindings, shaders, set_index);
 
     void AddBinding(u32 binding, DescriptorType descriptor_type, u32 descriptor_count, ShaderTypeBits shader_types,
                     Opal::ArrayView<const Opal::Ref<const Sampler>> immutable_samplers = {},
@@ -242,6 +250,26 @@ public:
     void Update(u32 binding, const Buffer& buffer, u64 offset = 0, u64 size = k_whole_buffer, u32 array_element = 0);
 
     /**
+     * Write one image into the binding the shader calls `name`, which is the same call as above with the
+     * index looked up rather than typed. Reading as Update("albedo_texture", ...) is the point: a binding
+     * index is a number that can be wrong in a way nothing reads back, and a name cannot.
+     * @param name What the shader calls the binding. A name it does not use throws, as does any name at all
+     *             when the layout was built without `shaders` and so carries none.
+     */
+    void Update(const Opal::StringUtf8& name, const Texture& texture, const Sampler& sampler,
+                ImageLayout image_layout = ImageLayout::ShaderReadOnly, u32 array_element = 0);
+
+    /** Write one buffer into the binding the shader calls `name`, as above. */
+    void Update(const Opal::StringUtf8& name, const Buffer& buffer, u64 offset = 0, u64 size = k_whole_buffer,
+                u32 array_element = 0);
+
+    /**
+     * The index of the binding the shader calls `name`, which is what the two overloads above look up.
+     * Throws on a name no binding carries, and says so plainly when the layout carries no names at all.
+     */
+    [[nodiscard]] u32 GetBindingIndex(const Opal::StringUtf8& name) const;
+
+    /**
      * Descriptor type the layout declared for a binding. Throws when the layout has no such binding, which is
      * what the Update overloads above call to fill in the type they do not take.
      */
@@ -249,10 +277,12 @@ public:
 
 private:
     /** What one binding of the layout holds, which is all the Update overloads need to know about it. */
-    struct BindingType
+    struct BindingInfo
     {
         u32 binding = 0;
         DescriptorType descriptor_type = DescriptorType::CombinedImageSampler;
+        /** What the shader calls it, when the layout was built with the shaders that declare it. */
+        Opal::StringUtf8 name;
     };
 
     VkDevice m_device = VK_NULL_HANDLE;
@@ -262,7 +292,7 @@ private:
      * What each binding of the layout holds. Copied rather than referenced: Vulkan lets a layout be destroyed
      * while sets allocated from it live on, and holding a reference would quietly take that away.
      */
-    Opal::DynamicArray<BindingType> m_binding_types;
+    Opal::DynamicArray<BindingInfo> m_binding_types;
 };
 
 }  // namespace Rndr::Forge

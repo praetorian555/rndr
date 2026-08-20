@@ -347,6 +347,73 @@ Slang spells the declaration `[SpecializationConstant]`, which lets it assign th
 
 ---
 
+## Shader reflection
+
+A `Shader` reads its SPIR-V once when it is created and keeps what reflection found: the specialization
+constants above, and what the entry point reads from a vertex buffer, through a descriptor, and from a push
+constant block.
+
+```cpp
+shader.GetInputs();                   // location, format, name
+shader.GetBindings();                 // set, binding, kind, count, name
+shader.GetPushConstants();            // offset, size
+shader.GetSpecializationConstants();  // id, type, default, byte size
+```
+
+All of it is scoped to the entry point, not to the module. A Slang file holding a vertex and a fragment
+entry point reports each of them what it alone reads - the vertex stage of the sample declares no
+descriptors at all, and the module-wide view would have handed it the fragment stage's two.
+
+### What it is used for
+
+`VertexInputDesc::FromShader(vertex_shader)` builds one binding holding every attribute the shader reads,
+in location order. Reflection has the location and the format of each; it does not have the offset or the
+stride, which describe the vertex struct on the CPU side and appear nowhere in the SPIR-V, so this packs
+the attributes tightly and takes the total as the stride. **That is an assumption**, true of a plain struct
+whose members are declared in the order the shader reads them. A vertex buffer laid out any other way needs
+the desc written by hand.
+
+`PushConstantRangesFromShaders({shaders, count})` returns the ranges the shaders read, with a block declared
+by two stages merged into one range naming both.
+
+`DescriptorSetLayoutDesc::shaders` does not build a layout - bindings are still written by hand, since only
+the caller knows about immutable samplers, bindless flags and arrays sized past what the shader indexes.
+What naming the shaders does is check the layout against them and hand each binding the name the shader
+uses:
+
+```cpp
+layout_desc.shaders = {vertex_shader, fragment_shader};
+layout_desc.AddBinding(0, DescriptorType::CombinedImageSampler, 1, ShaderTypeBits::Fragment);
+...
+descriptor_set.Update("albedo_texture", albedo_texture, albedo_sampler);
+```
+
+### What is checked, and what cannot be
+
+Building a graphics pipeline always checks the vertex input and the push constant ranges against the
+shaders, however the desc was written. A layout checks its bindings only when it was given `shaders`.
+These throw:
+
+- a location the vertex shader reads that no attribute feeds;
+- an attribute whose numeric class is not what the shader reads it as, an integer against a float. Component
+  counts are left alone on purpose - Vulkan pads a shorter attribute and drops the tail of a longer one;
+- a push constant block no supplied range covers, including the case of no range at all;
+- a binding declared as a different kind than the shader reads, sized for fewer descriptors than the shader
+  indexes, or whose stages leave out a stage that reads it;
+- a binding the shaders read that the layout never declared.
+
+One thing deliberately does **not** throw: a vertex attribute at a location the shader declares nothing at,
+or a layout binding no shader reads. Both are tempting and both are impossible to get right. A shader input
+or a descriptor that nothing reads is optimised out of the SPIR-V, so reflection cannot tell a stale entry
+apart from one feeding a member this entry point happens to ignore - the sample binds a metallic roughness
+texture its fragment shader does not sample yet. Such a binding keeps an empty name and stays out of the
+by-name lookup, which is all it costs.
+
+`Update` by name is only as good as the names, so a layout built without `shaders` carries none, and asking
+it for one says so rather than guessing.
+
+---
+
 ## Debugging
 
 Build with `-DRNDR_FORGE_VALIDATION=ON` and the validation layer is enabled whenever it is installed. Its

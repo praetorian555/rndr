@@ -146,31 +146,34 @@ void Run()
     descriptor_pool_desc.max_sets = k_frames_in_flight;
     const Rndr::Forge::DescriptorPool descriptor_pool(device, descriptor_pool_desc);
 
-    // Setup the descriptor set layout. It has two bindings and both are images with samplers.
+    const Opal::StringUtf8 shader_path = Opal::Paths::Combine(RNDR_CORE_ASSETS_DIR, "shaders", "modern-vulkan.slang").GetValue();
+    const Rndr::Forge::Shader vertex_shader = Rndr::Forge::Shader::FromSource(device, shader_path, {.entry_point = "main_vertex"});
+    const Rndr::Forge::Shader fragment_shader = Rndr::Forge::Shader::FromSource(device, shader_path, {.entry_point = "main_fragment"});
+    const Opal::Ref<const Rndr::Forge::Shader> pipeline_shaders[] = {vertex_shader, fragment_shader};
+
+    // Setup the descriptor set layout. It has two bindings and both are images with samplers. Naming the
+    // shaders has the layout checked against what they declare, and gives each binding the name the shader
+    // uses - which is what lets the set be filled by name below.
     Rndr::Forge::DescriptorSetLayoutDesc layout_desc;
+    layout_desc.shaders = {vertex_shader, fragment_shader};
     layout_desc.AddBinding(0, Rndr::Forge::DescriptorType::CombinedImageSampler, 1, Rndr::ShaderTypeBits::Fragment);
     layout_desc.AddBinding(1, Rndr::Forge::DescriptorType::CombinedImageSampler, 1, Rndr::ShaderTypeBits::Fragment);
     Rndr::Forge::DescriptorSetLayout descriptor_set_layout(device, layout_desc);
 
     // Allocate descriptor set from the descriptor pool and fill it with concrete data.
     Rndr::Forge::DescriptorSet descriptor_set(descriptor_pool, descriptor_set_layout);
-    descriptor_set.Update(0, albedo_texture, albedo_sampler);
+    descriptor_set.Update("albedo_texture", albedo_texture, albedo_sampler);
+    // By index rather than by name, because the fragment shader declares this texture and never samples it -
+    // so it is not in the SPIR-V for reflection to name. Sampling it would give it a name here too.
     descriptor_set.Update(1, mr_texture, mr_sampler);
 
-    const Opal::StringUtf8 shader_path = Opal::Paths::Combine(RNDR_CORE_ASSETS_DIR, "shaders", "modern-vulkan.slang").GetValue();
-    const Rndr::Forge::Shader vertex_shader = Rndr::Forge::Shader::FromSource(device, shader_path, {.entry_point = "main_vertex"});
-    const Rndr::Forge::Shader fragment_shader = Rndr::Forge::Shader::FromSource(device, shader_path, {.entry_point = "main_fragment"});
-
-    Rndr::Forge::VertexInputDesc vertex_input_desc;
-    vertex_input_desc.AddBinding(0, mesh.vertex_size, Rndr::DataRepetition::PerVertex);
-    vertex_input_desc.AddAttribute(0, 0, Rndr::PixelFormat::R32G32B32_SFLOAT, 0);
-    vertex_input_desc.AddAttribute(0, 1, Rndr::PixelFormat::R32G32B32_SFLOAT, sizeof(Rndr::Vector3f));
-    vertex_input_desc.AddAttribute(0, 2, Rndr::PixelFormat::R32G32_SFLOAT, 2 * sizeof(Rndr::Vector3f));
-
-    Rndr::Forge::PushConstantRange push_constant_range{
-        .shader_stages = Rndr::ShaderTypeBits::Vertex,
-        .size = sizeof(VkDeviceAddress),
-    };
+    // The attributes and the push constant block are the shader's to declare, so neither is written out
+    // here. The mesh is packed the way FromShader assumes - position, normal, uv, in that order and with no
+    // padding - and the pipeline checks the result against the shader either way.
+    Rndr::Forge::VertexInputDesc vertex_input_desc = Rndr::Forge::VertexInputDesc::FromShader(vertex_shader);
+    RNDR_ASSERT(vertex_input_desc.bindings[0].stride == mesh.vertex_size, "Mesh is not packed the way the shader reads it");
+    const Opal::DynamicArray<Rndr::Forge::PushConstantRange> push_constant_ranges =
+        Rndr::Forge::PushConstantRangesFromShaders({pipeline_shaders, 2});
 
     Rndr::Forge::ColorBlendDesc color_blend_desc;
     const Rndr::Forge::GraphicsPipelineDesc pipeline_desc{
@@ -178,7 +181,7 @@ void Run()
         .vertex_shader = vertex_shader,
         .fragment_shader = fragment_shader,
         .descriptor_set_layouts = {descriptor_set_layout},
-        .push_constant_ranges = {push_constant_range},
+        .push_constant_ranges = push_constant_ranges.Clone(),
         .depth_stencil = {.depth_test_enabled = true, .depth_write_enabled = true, .depth_comparator = Rndr::Comparator::LessEqual},
         .color_blend_attachments = {color_blend_desc},
         .color_attachment_formats = {swap_chain.GetDesc().pixel_format},

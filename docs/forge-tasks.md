@@ -922,3 +922,48 @@ Four sections beyond what 2.2 and the tasks after it left there:
   submitted, since submitting it is undefined behaviour whatever the layer said.
 
 `docs/vulkan.md` is left as what it is, notes on Vulkan itself rather than on this API.
+
+---
+
+### 4.8 Use the rest of the reflection — DONE
+
+`Shader` was opening a `SpvReflectShaderModule` and throwing away everything but the stage and, since 3.10,
+the specialization constants. It now keeps the vertex attributes, the descriptor bindings and the push
+constant blocks as well, read in the same window, through `spvReflectEnumerateEntryPoint*` rather than the
+module wide calls: a Slang file holds several entry points and the module wide view reports their union, so
+the vertex shader of the sample would have come back claiming the fragment shader's two textures.
+
+`VertexInputDesc::FromShader` and `PushConstantRangesFromShaders` build what the shader already fixed.
+`DescriptorSetLayoutDesc::shaders` deliberately does not build a layout - immutable samplers, bindless flags
+and an array sized past what the shader indexes are all things only the caller knows - it checks the
+hand-written one and gives each binding the name the shader uses, which is what `DescriptorSet::Update`
+takes. The sample lost three `AddAttribute` calls, a hand-counted `sizeof(VkDeviceAddress)` and two binding
+indices.
+
+Reflection has the location and format of an attribute but never its offset or stride: those describe the
+vertex struct on the CPU side and are nowhere in the SPIR-V. `FromShader` packs tightly in location order
+and says so; the sample asserts the stride it computes equals `mesh.vertex_size` rather than trusting it.
+
+`GetFormatNumericClass` went into `pixel-format.hpp` for the format check, since UNORM, SNORM, USCALED,
+SSCALED, SRGB and both float kinds all arrive in a shader as floats and only UINT and SINT do not. The
+switch was generated from the enum rather than typed, so all 185 formats are covered.
+
+**Two checks were designed in and then removed, which is the finding worth keeping.** An attribute at a
+location the shader declares nothing at, and a layout binding no shader reads, both look like exactly the
+mistake this task is for - Vulkan accepts them and silently ignores them. Neither can be detected. A shader
+input or a descriptor that nothing reads is optimised out of the SPIR-V entirely: a probe compiled a struct
+with two members and one use, and reflection reported one input. So a stale attribute and a live one feeding
+a member this entry point ignores are the same thing from out here, and the check refuses correct code. The
+sample proved it before the test did - its fragment shader declares `metal_roughness_texture` and never
+samples it, and the first version of the layout check refused to build. Those bindings keep an empty name
+and drop out of the by-name lookup, which is the honest cost.
+
+Verified by a reflection test case and a descriptor test case: what each stage reports, the offsets and
+stride `FromShader` computes, ranges merged across stages, and the throwing cases - a location nothing
+feeds, a float attribute against a uint input, a range four bytes short, no range at all, a binding of the
+wrong kind, a binding whose stages omit the one reading it, a binding the shader reads that the layout
+omits, a name no binding carries, and a name asked of a layout that has none. A UNORM attribute feeding a
+float input is checked to be accepted, since that is the case a naive format comparison would refuse. The
+sample renders for twelve seconds with the validation layer on and exits with no message.
+
+---

@@ -260,6 +260,166 @@ void Rndr::Forge::VertexInputDesc::AddAttribute(u32 binding, u32 location, Pixel
     throw Opal::Exception("Binding not found in vertex input desc");
 }
 
+Rndr::Forge::VertexInputDesc Rndr::Forge::VertexInputDesc::FromShader(const Shader& vertex_shader, u32 binding,
+                                                                      DataRepetition input_rate)
+{
+    if (vertex_shader.GetShaderStage() != ShaderTypeBits::Vertex)
+    {
+        throw Opal::Exception("Only a vertex shader is fed from a vertex buffer, so only one has attributes to read!");
+    }
+    const Opal::ArrayView<const ShaderInputInfo> inputs = vertex_shader.GetInputs();
+
+    // Reflection reports the attributes in no promised order, and the packing below is defined by location.
+    Opal::DynamicArray<const ShaderInputInfo*> sorted;
+    sorted.Reserve(inputs.GetSize());
+    for (i32 i = 0; i < inputs.GetSize(); ++i)
+    {
+        sorted.PushBack(&inputs[i]);
+    }
+    for (i32 i = 1; i < sorted.GetSize(); ++i)
+    {
+        for (i32 j = i; j > 0 && sorted[j - 1]->location > sorted[j]->location; --j)
+        {
+            const ShaderInputInfo* swap = sorted[j - 1];
+            sorted[j - 1] = sorted[j];
+            sorted[j] = swap;
+        }
+    }
+
+    VertexInputDesc desc;
+    VertexInputDesc::Binding& target = desc.AddBinding(binding, 0, input_rate);
+    u32 offset = 0;
+    for (i32 i = 0; i < sorted.GetSize(); ++i)
+    {
+        const ShaderInputInfo& input = *sorted[i];
+        const u32 size = GetPixelSize(input.format);
+        if (size == 0)
+        {
+            throw Opal::Exception(Opal::StringEx("Vertex attribute ") + input.name.GetData() +
+                                  " has a format with no size, so where the next one starts is not something this can work out!");
+        }
+        target.attributes.PushBack(Attribute{.location = input.location, .format = input.format, .offset = offset});
+        offset += size;
+    }
+    // Tightly packed, so the stride is what the last attribute ends at.
+    target.stride = offset;
+    return desc;
+}
+
+Opal::DynamicArray<Rndr::Forge::PushConstantRange> Rndr::Forge::PushConstantRangesFromShaders(
+    Opal::ArrayView<const Opal::Ref<const Shader>> shaders)
+{
+    Opal::DynamicArray<PushConstantRange> ranges;
+    for (i32 shader_index = 0; shader_index < shaders.GetSize(); ++shader_index)
+    {
+        const Shader& shader = shaders[shader_index].Get();
+        const Opal::ArrayView<const ShaderPushConstantInfo> blocks = shader.GetPushConstants();
+        for (i32 block_index = 0; block_index < blocks.GetSize(); ++block_index)
+        {
+            const ShaderPushConstantInfo& block = blocks[block_index];
+            // One block declared by two stages is one range naming both, not two ranges - which is what
+            // Vulkan wants and what a vertex and fragment shader sharing a block produce.
+            bool merged = false;
+            for (i32 i = 0; i < ranges.GetSize(); ++i)
+            {
+                if (ranges[i].offset == block.offset && ranges[i].size == block.size)
+                {
+                    ranges[i].shader_stages |= shader.GetShaderStage();
+                    merged = true;
+                    break;
+                }
+            }
+            if (!merged)
+            {
+                ranges.PushBack(PushConstantRange{
+                    .shader_stages = shader.GetShaderStage(), .offset = block.offset, .size = block.size});
+            }
+        }
+    }
+    return ranges;
+}
+
+namespace
+{
+/**
+ * Check the vertex input against what the vertex shader declares. Two things are refused: a location the
+ * shader reads that no attribute feeds, and an attribute whose numeric class is not the one the shader
+ * reads it as, integer against float. Component counts are deliberately left alone - Vulkan pads a shorter
+ * attribute and drops the tail of a longer one, both on purpose.
+ *
+ * An attribute at a location the shader declares nothing at is *not* refused, however tempting: an input
+ * the shader does not read is optimised out of the SPIR-V entirely, so reflection cannot tell a stale
+ * attribute apart from one feeding a member this entry point happens to ignore. A vertex struct with a
+ * field only some of its pipelines read is ordinary, and refusing it would be refusing correct code.
+ */
+void RequireVertexInputMatchesShader(const Rndr::Forge::VertexInputDesc& vertex_input, const Rndr::Forge::Shader& vertex_shader)
+{
+    const Opal::ArrayView<const Rndr::Forge::ShaderInputInfo> inputs = vertex_shader.GetInputs();
+    for (Rndr::i32 i = 0; i < inputs.GetSize(); ++i)
+    {
+        const Rndr::Forge::ShaderInputInfo& input = inputs[i];
+        const Rndr::Forge::VertexInputDesc::Attribute* attribute = nullptr;
+        for (const Rndr::Forge::VertexInputDesc::Binding& binding : vertex_input.bindings)
+        {
+            for (const Rndr::Forge::VertexInputDesc::Attribute& candidate : binding.attributes)
+            {
+                if (candidate.location == input.location)
+                {
+                    attribute = &candidate;
+                    break;
+                }
+            }
+        }
+        if (attribute == nullptr)
+        {
+            throw Opal::Exception(Opal::StringEx("The vertex shader reads ") + input.name.GetData() + " at location " +
+                                  input.location + " and no vertex attribute feeds it!");
+        }
+        const Rndr::FormatNumericClass wanted = Rndr::GetFormatNumericClass(input.format);
+        const Rndr::FormatNumericClass given = Rndr::GetFormatNumericClass(attribute->format);
+        if (wanted != given)
+        {
+            throw Opal::Exception(Opal::StringEx("The vertex attribute at location ") + input.location +
+                                  " does not have the numeric class the shader reads " + input.name.GetData() + " as!");
+        }
+    }
+}
+
+/**
+ * Check that the supplied ranges cover every push constant block the shaders read. A range stopping short of
+ * the block is the quiet half of this - Vulkan refuses a layout that names no stage at all for a declared
+ * block, but a range four bytes too short for what the shader reads goes through.
+ */
+void RequirePushConstantsCovered(Opal::ArrayView<const Rndr::Forge::PushConstantRange> ranges,
+                                 Opal::ArrayView<const Opal::Ref<const Rndr::Forge::Shader>> shaders)
+{
+    for (Rndr::i32 shader_index = 0; shader_index < shaders.GetSize(); ++shader_index)
+    {
+        const Rndr::Forge::Shader& shader = shaders[shader_index].Get();
+        const Opal::ArrayView<const Rndr::Forge::ShaderPushConstantInfo> blocks = shader.GetPushConstants();
+        for (Rndr::i32 block_index = 0; block_index < blocks.GetSize(); ++block_index)
+        {
+            const Rndr::Forge::ShaderPushConstantInfo& block = blocks[block_index];
+            bool covered = false;
+            for (Rndr::i32 i = 0; i < ranges.GetSize(); ++i)
+            {
+                const Rndr::Forge::PushConstantRange& range = ranges[i];
+                if (range.offset <= block.offset && range.offset + range.size >= block.offset + block.size)
+                {
+                    covered = true;
+                    break;
+                }
+            }
+            if (!covered)
+            {
+                throw Opal::Exception(Opal::StringEx("A shader reads a push constant block of ") + block.size + " bytes at offset " +
+                                      block.offset + " and no push constant range of this pipeline covers it!");
+            }
+        }
+    }
+}
+}  // namespace
+
 void Rndr::Forge::Pipeline::CreatePipelineLayout(
     Opal::ArrayView<const Opal::Ref<const DescriptorSetLayout>> descriptor_set_layouts,
     Opal::ArrayView<const PushConstantRange> push_constant_ranges)
@@ -497,6 +657,15 @@ Rndr::Forge::Pipeline::Pipeline(const Device& device, const GraphicsPipelineDesc
         stage_specializations[i] = BuildStageSpecialization(stage_shaders[i].Get(), values, matched);
     }
     RequireEveryValueMatched(values, matched);
+
+    if (has_vertex)
+    {
+        RequireVertexInputMatchesShader(desc.vertex_input, *desc.vertex_shader);
+    }
+    // Not conditional on there being any ranges: no range at all is the likeliest way to get this wrong,
+    // and a shader declaring a block that the layout does not name is something Vulkan refuses outright.
+    RequirePushConstantsCovered({desc.push_constant_ranges.GetData(), desc.push_constant_ranges.GetSize()},
+                                {stage_shaders.GetData(), stage_shaders.GetSize()});
 
     Opal::DynamicArray<VkPipelineShaderStageCreateInfo> shader_stages(stage_shaders.GetSize());
     for (i32 i = 0; i < stage_shaders.GetSize(); ++i)

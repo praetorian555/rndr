@@ -36,6 +36,40 @@ struct SpecializationConstantInfo
     SpecializationValue default_value;
 };
 
+/**
+ * A vertex attribute this shader reads, as reflection found it. Built-ins are not among these - they occupy
+ * no location and are fed by the implementation rather than by a vertex buffer.
+ *
+ * Reflection has the location and the format but not the offset or the stride, which describe the vertex
+ * struct on the CPU side and appear nowhere in the SPIR-V. VertexInputDesc::FromShader fills those in under
+ * a stated assumption; everything here is fact.
+ */
+struct ShaderInputInfo
+{
+    Opal::StringUtf8 name;
+    u32 location = 0;
+    PixelFormat format = PixelFormat::Undefined;
+};
+
+/** A descriptor this shader reads, as reflection found it. */
+struct ShaderBindingInfo
+{
+    Opal::StringUtf8 name;
+    u32 set = 0;
+    u32 binding = 0;
+    DescriptorType descriptor_type = DescriptorType::CombinedImageSampler;
+    /** Descriptors in this binding. More than one means the shader declared it as an array. */
+    u32 descriptor_count = 1;
+};
+
+/** A push constant block this shader reads, as reflection found it. */
+struct ShaderPushConstantInfo
+{
+    Opal::StringUtf8 name;
+    u32 offset = 0;
+    u32 size = 0;
+};
+
 struct ShaderDesc
 {
     Opal::StringUtf8 entry_point = "main";
@@ -102,6 +136,36 @@ public:
         return {m_specialization_constants.GetData(), m_specialization_constants.GetSize()};
     }
 
+    /**
+     * The vertex attributes this entry point reads, in the order reflection reported them. Empty for a stage
+     * that takes no vertex input, which is every stage but the vertex one.
+     *
+     * VertexInputDesc::FromShader turns these into a desc, and a graphics pipeline checks whatever desc it
+     * was given against them either way.
+     */
+    [[nodiscard]] Opal::ArrayView<const ShaderInputInfo> GetInputs() const
+    {
+        return {m_inputs.GetData(), m_inputs.GetSize()};
+    }
+
+    /**
+     * The descriptors this entry point reads, across every set. Scoped to the entry point, so a Slang file
+     * holding several of them never has one stage claiming another's bindings.
+     *
+     * DescriptorSetLayoutDesc::shaders is what these are for: naming the bindings of a hand-written layout,
+     * and checking that it says what the shader says.
+     */
+    [[nodiscard]] Opal::ArrayView<const ShaderBindingInfo> GetBindings() const
+    {
+        return {m_bindings.GetData(), m_bindings.GetSize()};
+    }
+
+    /** The push constant blocks this entry point reads. PushConstantRangesFromShaders turns these into ranges. */
+    [[nodiscard]] Opal::ArrayView<const ShaderPushConstantInfo> GetPushConstants() const
+    {
+        return {m_push_constants.GetData(), m_push_constants.GetSize()};
+    }
+
 private:
     Opal::Ref<const Device> m_device;
     VkShaderModule m_shader_module = VK_NULL_HANDLE;
@@ -109,6 +173,9 @@ private:
     ShaderTypeBits m_stage = {};
     Opal::StringUtf8 m_entry_point;
     Opal::DynamicArray<SpecializationConstantInfo> m_specialization_constants;
+    Opal::DynamicArray<ShaderInputInfo> m_inputs;
+    Opal::DynamicArray<ShaderBindingInfo> m_bindings;
+    Opal::DynamicArray<ShaderPushConstantInfo> m_push_constants;
 };
 
 }  // namespace Rndr::Forge

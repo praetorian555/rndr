@@ -1862,3 +1862,345 @@ TEST_CASE("Forge specialization constants", "[forge]")
     }
     REQUIRE_NO_VALIDATION_ERROR(fixture);
 }
+
+/**
+ * A shader whose vertex stage reads three attributes and a push constant block, and whose fragment stage
+ * reads two textures. Deliberately shaped like the sample: a struct parameter Slang flattens into three
+ * locations, and bindings only the fragment stage declares.
+ */
+constexpr const char* k_reflected_source = R"(
+struct VSInput {
+    float2 position;
+    float3 tint;
+    uint2 flags;
+};
+
+layout(set = 0, binding = 0) Sampler2D first_texture;
+layout(set = 0, binding = 1) Sampler2D second_texture;
+
+struct Offsets {
+    float2 shift;
+};
+
+struct VSOutput {
+    float4 position : SV_Position;
+    float3 tint;
+};
+
+[shader("vertex")]
+VSOutput main_vertex(VSInput input, uniform Offsets *offsets) {
+    VSOutput output;
+    output.position = float4(input.position + offsets->shift, 0.0, 1.0);
+    output.tint = input.tint * float(input.flags.x + input.flags.y);
+    return output;
+}
+
+[shader("fragment")]
+float4 main_fragment(VSOutput input) {
+    return float4(input.tint, 1.0) * first_texture.Sample(float2(0, 0)) * second_texture.Sample(float2(0, 0));
+}
+)";
+
+/** Two members, one of them never read - the reason an attribute nothing declares cannot be refused. */
+constexpr const char* k_unused_input_source = R"(
+struct PartialInput {
+    float2 position;
+    float3 unused_tint;
+};
+
+[shader("vertex")]
+float4 main_vertex(PartialInput input) : SV_Position {
+    return float4(input.position, 0.0, 1.0);
+}
+)";
+
+TEST_CASE("Forge shader reflection", "[forge]")
+{
+    if (!IsForgeAvailable())
+    {
+        SKIP("No Vulkan device on this machine.");
+    }
+    ForgeFixture fixture;
+    const Forge::Shader vertex_shader =
+        Forge::Shader::FromSourceInMemory(fixture.device, k_reflected_source, {.entry_point = "main_vertex"});
+    const Forge::Shader fragment_shader =
+        Forge::Shader::FromSourceInMemory(fixture.device, k_reflected_source, {.entry_point = "main_fragment"});
+
+    SECTION("Each stage reports only what it reads")
+    {
+        // The reason the entry point scoped enumerators are the ones called: the vertex stage of this module
+        // declares no bindings at all, and the module wide call would have handed it the fragment's two.
+        REQUIRE(vertex_shader.GetInputs().GetSize() == 3);
+        REQUIRE(vertex_shader.GetBindings().GetSize() == 0);
+        REQUIRE(vertex_shader.GetPushConstants().GetSize() == 1);
+        REQUIRE(fragment_shader.GetBindings().GetSize() == 2);
+        REQUIRE(fragment_shader.GetPushConstants().GetSize() == 0);
+
+        const Opal::ArrayView<const Forge::ShaderInputInfo> inputs = vertex_shader.GetInputs();
+        for (i32 i = 0; i < inputs.GetSize(); ++i)
+        {
+            INFO("input " << reinterpret_cast<const char*>(inputs[i].name.GetData()));
+            if (inputs[i].location == 0)
+            {
+                REQUIRE(inputs[i].format == PixelFormat::R32G32_SFLOAT);
+            }
+            if (inputs[i].location == 1)
+            {
+                REQUIRE(inputs[i].format == PixelFormat::R32G32B32_SFLOAT);
+            }
+            if (inputs[i].location == 2)
+            {
+                REQUIRE(inputs[i].format == PixelFormat::R32G32_UINT);
+            }
+        }
+
+        const Opal::ArrayView<const Forge::ShaderBindingInfo> bindings = fragment_shader.GetBindings();
+        bool found_first = false;
+        for (i32 i = 0; i < bindings.GetSize(); ++i)
+        {
+            REQUIRE(bindings[i].set == 0);
+            REQUIRE(bindings[i].descriptor_type == Forge::DescriptorType::CombinedImageSampler);
+            REQUIRE(bindings[i].descriptor_count == 1);
+            if (bindings[i].name == Opal::StringUtf8("first_texture"))
+            {
+                found_first = true;
+                REQUIRE(bindings[i].binding == 0);
+            }
+        }
+        REQUIRE(found_first);
+
+        // A pointer parameter is how Slang spells a push constant block; eight bytes of float2 here.
+        REQUIRE(vertex_shader.GetPushConstants()[0].offset == 0);
+        REQUIRE(vertex_shader.GetPushConstants()[0].size == 8);
+    }
+    SECTION("A vertex input built from the shader packs the attributes in location order")
+    {
+        const Forge::VertexInputDesc derived = Forge::VertexInputDesc::FromShader(vertex_shader);
+        REQUIRE(derived.bindings.GetSize() == 1);
+        const Forge::VertexInputDesc::Binding& binding = derived.bindings[0];
+        REQUIRE(binding.binding == 0);
+        REQUIRE(binding.attributes.GetSize() == 3);
+        // float2 then float3 then uint2, tightly packed: 8, 12 and 8 bytes.
+        REQUIRE(binding.attributes[0].location == 0);
+        REQUIRE(binding.attributes[0].offset == 0);
+        REQUIRE(binding.attributes[1].location == 1);
+        REQUIRE(binding.attributes[1].offset == 8);
+        REQUIRE(binding.attributes[2].location == 2);
+        REQUIRE(binding.attributes[2].offset == 20);
+        REQUIRE(binding.stride == 28);
+    }
+    SECTION("A stage that reads no vertex buffer has no attributes to give")
+    {
+        REQUIRE_THROWS_AS(Forge::VertexInputDesc::FromShader(fragment_shader), Opal::Exception);
+    }
+    SECTION("Push constant ranges come back merged across the stages that declare them")
+    {
+        const Opal::Ref<const Forge::Shader> shaders[] = {vertex_shader, fragment_shader};
+        const Opal::DynamicArray<Forge::PushConstantRange> ranges = Forge::PushConstantRangesFromShaders({shaders, 2});
+        REQUIRE(ranges.GetSize() == 1);
+        REQUIRE(ranges[0].offset == 0);
+        REQUIRE(ranges[0].size == 8);
+        REQUIRE(!!(ranges[0].shader_stages & ShaderTypeBits::Vertex));
+    }
+
+    const Opal::Ref<const Forge::Shader> pipeline_shaders[] = {vertex_shader, fragment_shader};
+    const Opal::DynamicArray<Forge::PushConstantRange> derived_ranges =
+        Forge::PushConstantRangesFromShaders({pipeline_shaders, 2});
+    const Opal::ArrayView<const Forge::PushConstantRange> good_ranges(derived_ranges.GetData(), derived_ranges.GetSize());
+
+    /** Builds a graphics pipeline around the two stages, with whatever vertex input and ranges are handed in. */
+    auto build_pipeline = [&](const Forge::VertexInputDesc& vertex_input,
+                              Opal::ArrayView<const Forge::PushConstantRange> ranges)
+    {
+        Forge::DescriptorSetLayoutDesc layout_desc;
+        layout_desc.AddBinding(0, Forge::DescriptorType::CombinedImageSampler, 1, ShaderTypeBits::Fragment);
+        layout_desc.AddBinding(1, Forge::DescriptorType::CombinedImageSampler, 1, ShaderTypeBits::Fragment);
+        const Forge::DescriptorSetLayout layout(fixture.device, layout_desc);
+
+        Forge::GraphicsPipelineDesc pipeline_desc;
+        pipeline_desc.vertex_input = vertex_input.Clone();
+        pipeline_desc.vertex_shader = vertex_shader;
+        pipeline_desc.fragment_shader = fragment_shader;
+        pipeline_desc.descriptor_set_layouts.PushBack(Opal::Ref<const Forge::DescriptorSetLayout>(layout));
+        for (i32 i = 0; i < ranges.GetSize(); ++i)
+        {
+            pipeline_desc.push_constant_ranges.PushBack(ranges[i]);
+        }
+        pipeline_desc.color_blend_attachments.PushBack(Forge::ColorBlendDesc{});
+        pipeline_desc.color_attachment_formats.PushBack(PixelFormat::R8G8B8A8_UNORM);
+        return Forge::Pipeline(fixture.device, pipeline_desc);
+    };
+
+    SECTION("The derived vertex input and ranges build a pipeline")
+    {
+        const Forge::VertexInputDesc derived = Forge::VertexInputDesc::FromShader(vertex_shader);
+        const Forge::Pipeline pipeline = build_pipeline(derived, good_ranges);
+        REQUIRE(pipeline.IsValid());
+    }
+    SECTION("A location the shader reads that nothing feeds throws")
+    {
+        Forge::VertexInputDesc incomplete;
+        incomplete.AddBinding(0, 28);
+        incomplete.AddAttribute(0, 0, PixelFormat::R32G32_SFLOAT, 0);
+        incomplete.AddAttribute(0, 1, PixelFormat::R32G32B32_SFLOAT, 8);
+        REQUIRE_THROWS_AS(build_pipeline(incomplete, good_ranges), Opal::Exception);
+    }
+    SECTION("An attribute at a location the shader declares nothing at is accepted")
+    {
+        // Tempting to refuse, and wrong to: an input the shader does not read is optimised out of the
+        // SPIR-V, so this is indistinguishable from a vertex struct with a field only some of its pipelines
+        // read. The unused input further down proves the two really are the same case from out here.
+        Forge::VertexInputDesc extra = Forge::VertexInputDesc::FromShader(vertex_shader);
+        extra.AddAttribute(0, 7, PixelFormat::R32_SFLOAT, 28);
+        const Forge::Pipeline pipeline = build_pipeline(extra, good_ranges);
+        REQUIRE(pipeline.IsValid());
+    }
+    SECTION("An input the shader never reads is not reported at all")
+    {
+        // Why the check above cannot exist. The struct has two members and reflection reports one.
+        const Forge::Shader partial =
+            Forge::Shader::FromSourceInMemory(fixture.device, k_unused_input_source, {.entry_point = "main_vertex"});
+        REQUIRE(partial.GetInputs().GetSize() == 1);
+        REQUIRE(partial.GetInputs()[0].location == 0);
+    }
+    SECTION("An attribute of the wrong numeric class throws")
+    {
+        // Location 2 is a uint2 in the shader; a float attribute of the same width is not the same thing.
+        Forge::VertexInputDesc wrong_class;
+        wrong_class.AddBinding(0, 28);
+        wrong_class.AddAttribute(0, 0, PixelFormat::R32G32_SFLOAT, 0);
+        wrong_class.AddAttribute(0, 1, PixelFormat::R32G32B32_SFLOAT, 8);
+        wrong_class.AddAttribute(0, 2, PixelFormat::R32G32_SFLOAT, 20);
+        REQUIRE_THROWS_AS(build_pipeline(wrong_class, good_ranges), Opal::Exception);
+    }
+    SECTION("A normalised attribute feeding a float input is accepted")
+    {
+        // UNORM arrives in the shader as a float, so the class agrees even though the format does not.
+        Forge::VertexInputDesc normalised;
+        normalised.AddBinding(0, 28);
+        normalised.AddAttribute(0, 0, PixelFormat::R8G8_UNORM, 0);
+        normalised.AddAttribute(0, 1, PixelFormat::R32G32B32_SFLOAT, 8);
+        normalised.AddAttribute(0, 2, PixelFormat::R32G32_UINT, 20);
+        const Forge::Pipeline pipeline = build_pipeline(normalised, good_ranges);
+        REQUIRE(pipeline.IsValid());
+    }
+    SECTION("A push constant range that stops short of what the shader reads throws")
+    {
+        const Forge::VertexInputDesc derived = Forge::VertexInputDesc::FromShader(vertex_shader);
+        const Forge::PushConstantRange too_small{.shader_stages = ShaderTypeBits::Vertex, .offset = 0, .size = 4};
+        REQUIRE_THROWS_AS(build_pipeline(derived, {&too_small, 1}), Opal::Exception);
+    }
+    SECTION("No push constant range at all, for a shader that reads one, throws")
+    {
+        // The likeliest way to get this wrong, and the reason the check does not wait for a range to exist.
+        const Forge::VertexInputDesc derived = Forge::VertexInputDesc::FromShader(vertex_shader);
+        REQUIRE_THROWS_AS(build_pipeline(derived, {}), Opal::Exception);
+    }
+    REQUIRE_NO_VALIDATION_ERROR(fixture);
+}
+
+TEST_CASE("Forge descriptor bindings checked against the shader", "[forge]")
+{
+    if (!IsForgeAvailable())
+    {
+        SKIP("No Vulkan device on this machine.");
+    }
+    ForgeFixture fixture;
+    const Forge::Shader vertex_shader =
+        Forge::Shader::FromSourceInMemory(fixture.device, k_reflected_source, {.entry_point = "main_vertex"});
+    const Forge::Shader fragment_shader =
+        Forge::Shader::FromSourceInMemory(fixture.device, k_reflected_source, {.entry_point = "main_fragment"});
+
+    /** A layout desc naming both stages, so the check has the shader that declares the bindings. */
+    auto make_desc = [&]()
+    {
+        Forge::DescriptorSetLayoutDesc desc;
+        desc.shaders.PushBack(Opal::Ref<const Forge::Shader>(vertex_shader));
+        desc.shaders.PushBack(Opal::Ref<const Forge::Shader>(fragment_shader));
+        return desc;
+    };
+
+    SECTION("A layout that agrees with the shader is given the names")
+    {
+        Forge::DescriptorSetLayoutDesc desc = make_desc();
+        desc.AddBinding(0, Forge::DescriptorType::CombinedImageSampler, 1, ShaderTypeBits::Fragment);
+        desc.AddBinding(1, Forge::DescriptorType::CombinedImageSampler, 1, ShaderTypeBits::Fragment);
+        const Forge::DescriptorSetLayout layout(fixture.device, desc);
+        REQUIRE(layout.GetDesc().bindings[0].name == Opal::StringUtf8("first_texture"));
+        REQUIRE(layout.GetDesc().bindings[1].name == Opal::StringUtf8("second_texture"));
+        // The caller's desc is untouched - the names went onto the layout's own copy.
+        REQUIRE(desc.bindings[0].name.IsEmpty());
+    }
+    SECTION("A binding declared as the wrong kind throws")
+    {
+        Forge::DescriptorSetLayoutDesc desc = make_desc();
+        desc.AddBinding(0, Forge::DescriptorType::StorageBuffer, 1, ShaderTypeBits::Fragment);
+        desc.AddBinding(1, Forge::DescriptorType::CombinedImageSampler, 1, ShaderTypeBits::Fragment);
+        REQUIRE_THROWS_AS(Forge::DescriptorSetLayout(fixture.device, desc), Opal::Exception);
+    }
+    SECTION("A binding whose stages leave out the one that reads it throws")
+    {
+        Forge::DescriptorSetLayoutDesc desc = make_desc();
+        desc.AddBinding(0, Forge::DescriptorType::CombinedImageSampler, 1, ShaderTypeBits::Vertex);
+        desc.AddBinding(1, Forge::DescriptorType::CombinedImageSampler, 1, ShaderTypeBits::Fragment);
+        REQUIRE_THROWS_AS(Forge::DescriptorSetLayout(fixture.device, desc), Opal::Exception);
+    }
+    SECTION("A binding the shaders read that the layout omits throws")
+    {
+        Forge::DescriptorSetLayoutDesc desc = make_desc();
+        desc.AddBinding(0, Forge::DescriptorType::CombinedImageSampler, 1, ShaderTypeBits::Fragment);
+        REQUIRE_THROWS_AS(Forge::DescriptorSetLayout(fixture.device, desc), Opal::Exception);
+    }
+    SECTION("A binding no shader reads is accepted and stays nameless")
+    {
+        // A descriptor nothing samples is optimised out of the SPIR-V, so reflection cannot tell this apart
+        // from a binding that was never declared - the sample binds a metallic roughness texture its shader
+        // does not read yet. It keeps an empty name, which is the whole of what it costs.
+        Forge::DescriptorSetLayoutDesc desc = make_desc();
+        desc.AddBinding(0, Forge::DescriptorType::CombinedImageSampler, 1, ShaderTypeBits::Fragment);
+        desc.AddBinding(1, Forge::DescriptorType::CombinedImageSampler, 1, ShaderTypeBits::Fragment);
+        desc.AddBinding(5, Forge::DescriptorType::CombinedImageSampler, 1, ShaderTypeBits::Fragment);
+        const Forge::DescriptorSetLayout layout(fixture.device, desc);
+        REQUIRE(layout.GetDesc().bindings[0].name == Opal::StringUtf8("first_texture"));
+        REQUIRE(layout.GetDesc().bindings[2].name.IsEmpty());
+    }
+    SECTION("A set writes the same descriptor by name as by index")
+    {
+        Forge::DescriptorSetLayoutDesc desc = make_desc();
+        desc.AddBinding(0, Forge::DescriptorType::CombinedImageSampler, 1, ShaderTypeBits::Fragment);
+        desc.AddBinding(1, Forge::DescriptorType::CombinedImageSampler, 1, ShaderTypeBits::Fragment);
+        const Forge::DescriptorSetLayout layout(fixture.device, desc);
+
+        Forge::DescriptorPoolDesc pool_desc;
+        pool_desc.Add(Forge::DescriptorType::CombinedImageSampler, 4);
+        pool_desc.max_sets = 2;
+        const Forge::DescriptorPool pool(fixture.device, pool_desc);
+
+        const Forge::Texture texture(fixture.device, {.format = PixelFormat::R8G8B8A8_UNORM,
+                                                      .width = 4,
+                                                      .height = 4,
+                                                      .usage = Forge::TextureUsageBits::Sampled});
+        const Forge::Sampler sampler(fixture.device, {.max_anisotropy = 1.0f});
+
+        Forge::DescriptorSet set(pool, layout);
+        REQUIRE(set.GetBindingIndex("first_texture") == 0);
+        REQUIRE(set.GetBindingIndex("second_texture") == 1);
+        set.Update("first_texture", texture, sampler);
+        set.Update("second_texture", texture, sampler);
+        REQUIRE_THROWS_AS(set.GetBindingIndex("third_texture"), Opal::Exception);
+    }
+    SECTION("A set from a layout built without shaders carries no names")
+    {
+        Forge::DescriptorSetLayoutDesc desc;
+        desc.AddBinding(0, Forge::DescriptorType::CombinedImageSampler, 1, ShaderTypeBits::Fragment);
+        const Forge::DescriptorSetLayout layout(fixture.device, desc);
+
+        Forge::DescriptorPoolDesc pool_desc;
+        pool_desc.Add(Forge::DescriptorType::CombinedImageSampler, 1);
+        const Forge::DescriptorPool pool(fixture.device, pool_desc);
+
+        Forge::DescriptorSet set(pool, layout);
+        REQUIRE_THROWS_AS(set.GetBindingIndex("first_texture"), Opal::Exception);
+    }
+    REQUIRE_NO_VALIDATION_ERROR(fixture);
+}

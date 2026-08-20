@@ -49,6 +49,15 @@ static Rndr::ShaderTypeBits ToShaderTypeBits(SpvReflectShaderStageFlagBits stage
 
 namespace
 {
+/** Turns a reflection failure into the same sentence whichever of the enumerators produced it. */
+void RequireReflected(SpvReflectResult result, const char* what)
+{
+    if (result != SPV_REFLECT_RESULT_SUCCESS)
+    {
+        throw Opal::Exception(Opal::StringEx("Failed to read the ") + what + " of a SPIR-V module!");
+    }
+}
+
 /**
  * Closes the reflect module whichever way the constructor leaves it. Several of the steps that read from it
  * throw, and it is not something Opal owns and unwinds on its own.
@@ -110,6 +119,121 @@ static Rndr::Forge::SpecializationType ToSpecializationType(const SpvReflectType
     }
     throw Opal::Exception("Unsupported specialization constant type!");
 }
+
+namespace
+{
+/**
+ * The vertex attributes one entry point reads. Built-ins are dropped: they occupy no location and come from
+ * the implementation rather than from a vertex buffer, so a vertex input desc has nothing to say about them.
+ */
+void ReadInputs(const SpvReflectShaderModule& reflect_module, const char* entry_point,
+                Opal::DynamicArray<Rndr::Forge::ShaderInputInfo>& out_inputs)
+{
+    Rndr::u32 count = 0;
+    RequireReflected(spvReflectEnumerateEntryPointInputVariables(&reflect_module, entry_point, &count, nullptr), "inputs");
+    if (count == 0)
+    {
+        return;
+    }
+    Opal::DynamicArray<SpvReflectInterfaceVariable*> variables(static_cast<Rndr::i32>(count));
+    RequireReflected(spvReflectEnumerateEntryPointInputVariables(&reflect_module, entry_point, &count, variables.GetData()),
+                     "inputs");
+    for (Rndr::i32 i = 0; i < variables.GetSize(); ++i)
+    {
+        const SpvReflectInterfaceVariable& variable = *variables[i];
+        if (variable.built_in != -1)
+        {
+            continue;
+        }
+        Rndr::Forge::ShaderInputInfo info;
+        // Slang names a flattened struct member after the parameter it came from, so this reads "input.Pos"
+        // rather than "Pos". Kept as reflection gives it - it is what appears in an error about a location.
+        info.name = variable.name != nullptr ? Opal::StringUtf8(variable.name) : Opal::StringUtf8();
+        info.location = variable.location;
+        // SpvReflectFormat values are VkFormat values, which is what lets this go straight through.
+        info.format = Rndr::FromVkFormat(static_cast<VkFormat>(variable.format));
+        out_inputs.PushBack(std::move(info));
+    }
+}
+
+/**
+ * The kind Forge models a reflected descriptor as. A kind it does not model throws rather than being left
+ * out: Forge can build neither a layout, a set nor an update for such a binding, so a shader declaring one
+ * cannot use the descriptor path at all, and saying so at creation beats a binding that quietly went
+ * missing from everything that reads this.
+ */
+Rndr::Forge::DescriptorType ToDescriptorType(SpvReflectDescriptorType type)
+{
+    switch (type)
+    {
+        case SPV_REFLECT_DESCRIPTOR_TYPE_SAMPLER:
+            return Rndr::Forge::DescriptorType::Sampler;
+        case SPV_REFLECT_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER:
+            return Rndr::Forge::DescriptorType::CombinedImageSampler;
+        case SPV_REFLECT_DESCRIPTOR_TYPE_SAMPLED_IMAGE:
+            return Rndr::Forge::DescriptorType::SampledImage;
+        case SPV_REFLECT_DESCRIPTOR_TYPE_STORAGE_IMAGE:
+            return Rndr::Forge::DescriptorType::StorageImage;
+        case SPV_REFLECT_DESCRIPTOR_TYPE_UNIFORM_BUFFER:
+            return Rndr::Forge::DescriptorType::ConstantBuffer;
+        case SPV_REFLECT_DESCRIPTOR_TYPE_STORAGE_BUFFER:
+            return Rndr::Forge::DescriptorType::StorageBuffer;
+        default:
+            throw Opal::Exception("A shader declares a descriptor of a kind Forge does not model!");
+    }
+}
+
+/** The descriptors one entry point reads, across every set. */
+void ReadBindings(const SpvReflectShaderModule& reflect_module, const char* entry_point,
+                  Opal::DynamicArray<Rndr::Forge::ShaderBindingInfo>& out_bindings)
+{
+    Rndr::u32 count = 0;
+    RequireReflected(spvReflectEnumerateEntryPointDescriptorBindings(&reflect_module, entry_point, &count, nullptr), "bindings");
+    if (count == 0)
+    {
+        return;
+    }
+    Opal::DynamicArray<SpvReflectDescriptorBinding*> bindings(static_cast<Rndr::i32>(count));
+    RequireReflected(spvReflectEnumerateEntryPointDescriptorBindings(&reflect_module, entry_point, &count, bindings.GetData()),
+                     "bindings");
+    for (Rndr::i32 i = 0; i < bindings.GetSize(); ++i)
+    {
+        const SpvReflectDescriptorBinding& binding = *bindings[i];
+        Rndr::Forge::ShaderBindingInfo info;
+        info.name = binding.name != nullptr ? Opal::StringUtf8(binding.name) : Opal::StringUtf8();
+        info.set = binding.set;
+        info.binding = binding.binding;
+        info.descriptor_type = ToDescriptorType(binding.descriptor_type);
+        info.descriptor_count = binding.count;
+        out_bindings.PushBack(std::move(info));
+    }
+}
+
+/** The push constant blocks one entry point reads. */
+void ReadPushConstants(const SpvReflectShaderModule& reflect_module, const char* entry_point,
+                       Opal::DynamicArray<Rndr::Forge::ShaderPushConstantInfo>& out_push_constants)
+{
+    Rndr::u32 count = 0;
+    RequireReflected(spvReflectEnumerateEntryPointPushConstantBlocks(&reflect_module, entry_point, &count, nullptr),
+                     "push constant blocks");
+    if (count == 0)
+    {
+        return;
+    }
+    Opal::DynamicArray<SpvReflectBlockVariable*> blocks(static_cast<Rndr::i32>(count));
+    RequireReflected(spvReflectEnumerateEntryPointPushConstantBlocks(&reflect_module, entry_point, &count, blocks.GetData()),
+                     "push constant blocks");
+    for (Rndr::i32 i = 0; i < blocks.GetSize(); ++i)
+    {
+        const SpvReflectBlockVariable& block = *blocks[i];
+        Rndr::Forge::ShaderPushConstantInfo info;
+        info.name = block.name != nullptr ? Opal::StringUtf8(block.name) : Opal::StringUtf8();
+        info.offset = block.offset;
+        info.size = block.size;
+        out_push_constants.PushBack(std::move(info));
+    }
+}
+}  // namespace
 
 Rndr::Forge::Shader::Shader(const Device& device, Opal::ArrayView<const u8> spirv_data,
                                      const ShaderDesc& desc)
@@ -177,6 +301,14 @@ Rndr::Forge::Shader::Shader(const Device& device, Opal::ArrayView<const u8> spir
         }
     }
 
+    // Everything else this entry point reads: vertex attributes, descriptors and push constant blocks. Entry
+    // point scoped rather than module wide, since a Slang file holds several of them and the module wide
+    // enumerators report the union - a vertex shader would come back claiming the bindings of the fragment
+    // shader beside it.
+    ReadInputs(reflect_module, m_entry_point.GetData(), m_inputs);
+    ReadBindings(reflect_module, m_entry_point.GetData(), m_bindings);
+    ReadPushConstants(reflect_module, m_entry_point.GetData(), m_push_constants);
+
     const VkShaderModuleCreateInfo create_info{
         .sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO,
         .codeSize = spirv_data.GetSize(),
@@ -242,7 +374,10 @@ Rndr::Forge::Shader::Shader(Shader&& other) noexcept
       m_native_stage(other.m_native_stage),
       m_stage(other.m_stage),
       m_entry_point(std::move(other.m_entry_point)),
-      m_specialization_constants(std::move(other.m_specialization_constants))
+      m_specialization_constants(std::move(other.m_specialization_constants)),
+      m_inputs(std::move(other.m_inputs)),
+      m_bindings(std::move(other.m_bindings)),
+      m_push_constants(std::move(other.m_push_constants))
 {
     other.m_shader_module = VK_NULL_HANDLE;
     other.m_device = nullptr;
@@ -259,6 +394,9 @@ Rndr::Forge::Shader& Rndr::Forge::Shader::operator=(Shader&& other) noexcept
         m_stage = other.m_stage;
         m_entry_point = std::move(other.m_entry_point);
         m_specialization_constants = std::move(other.m_specialization_constants);
+        m_inputs = std::move(other.m_inputs);
+        m_bindings = std::move(other.m_bindings);
+        m_push_constants = std::move(other.m_push_constants);
         other.m_shader_module = VK_NULL_HANDLE;
         other.m_device = nullptr;
     }
@@ -274,4 +412,7 @@ void Rndr::Forge::Shader::Destroy()
     }
     m_device = nullptr;
     m_specialization_constants.Clear();
+    m_inputs.Clear();
+    m_bindings.Clear();
+    m_push_constants.Clear();
 }

@@ -5,6 +5,7 @@
 #include "rndr/forge/texture.hpp"
 
 #include "rndr/forge/device.hpp"
+#include "rndr/forge/shader.hpp"
 #include "rndr/forge/vulkan-exception.hpp"
 
 namespace
@@ -220,9 +221,147 @@ VkDevice Rndr::Forge::DescriptorPool::GetNativeDevice() const
 
 // DescriptorSetLayout
 
+namespace
+{
+/** Reads as "CombinedImageSampler" rather than "2", so a disagreement says which two kinds disagreed. */
+const char* DescriptorTypeName(Rndr::Forge::DescriptorType type)
+{
+    switch (type)
+    {
+        case Rndr::Forge::DescriptorType::SampledImage:
+            return "SampledImage";
+        case Rndr::Forge::DescriptorType::Sampler:
+            return "Sampler";
+        case Rndr::Forge::DescriptorType::CombinedImageSampler:
+            return "CombinedImageSampler";
+        case Rndr::Forge::DescriptorType::ConstantBuffer:
+            return "ConstantBuffer";
+        case Rndr::Forge::DescriptorType::StorageBuffer:
+            return "StorageBuffer";
+        case Rndr::Forge::DescriptorType::StorageImage:
+            return "StorageImage";
+        default:
+            return "unknown";
+    }
+}
+
+/** Whether `declared` names the stage a shader of that type runs at, AllGraphics counting for all but compute. */
+bool CoversStage(Rndr::ShaderTypeBits declared, Rndr::ShaderTypeBits stage)
+{
+    if (!!(declared & stage))
+    {
+        return true;
+    }
+    return !!(declared & Rndr::ShaderTypeBits::AllGraphics) && stage != Rndr::ShaderTypeBits::Compute;
+}
+
+/**
+ * Check a hand-written layout against the shaders it is meant to match, and give each binding the name the
+ * shader uses for it.
+ *
+ * Every disagreement here is one Vulkan only complains about much later, at the draw that binds the set: a
+ * binding declared as the wrong kind, one sized for fewer descriptors than the shader indexes, one whose
+ * stages leave out a stage that reads it, and a binding the shaders read that the layout never declared.
+ *
+ * A binding the layout declares that no shader reads is *not* one of them. A descriptor nothing samples is
+ * optimised out of the SPIR-V, so reflection cannot tell such a binding apart from one that was never
+ * declared - the sample's own metallic roughness texture is bound and, for now, unread. Those bindings keep
+ * their name empty and stay out of the by-name lookup, which is the whole of the cost.
+ */
+void CheckAgainstShaders(Rndr::Forge::DescriptorSetLayoutDesc& desc)
+{
+    for (Rndr::Forge::DescriptorSetLayoutDesc::Binding& target : desc.bindings)
+    {
+        Rndr::ShaderTypeBits declaring_stages = {};
+        const Rndr::Forge::ShaderBindingInfo* found = nullptr;
+        for (const Opal::Ref<const Rndr::Forge::Shader>& shader : desc.shaders)
+        {
+            const Opal::ArrayView<const Rndr::Forge::ShaderBindingInfo> bindings = shader->GetBindings();
+            for (Rndr::i32 i = 0; i < bindings.GetSize(); ++i)
+            {
+                const Rndr::Forge::ShaderBindingInfo& candidate = bindings[i];
+                if (candidate.set != desc.set_index || candidate.binding != target.binding)
+                {
+                    continue;
+                }
+                found = &candidate;
+                declaring_stages |= shader->GetShaderStage();
+            }
+        }
+        if (found == nullptr)
+        {
+            // Not an error: a descriptor no shader samples is not in the SPIR-V to be found. It keeps an
+            // empty name, so only the by-name lookup notices it is missing.
+            continue;
+        }
+        if (found->descriptor_type != target.descriptor_type)
+        {
+            throw Opal::Exception(Opal::StringEx("Binding ") + target.binding + " is declared as a " +
+                                  DescriptorTypeName(found->descriptor_type) + " by the shader and as a " +
+                                  DescriptorTypeName(target.descriptor_type) + " here!");
+        }
+        // A layout may hold more descriptors than the shader indexes - that is how a bindless array is
+        // written - but never fewer.
+        if (target.descriptor_count < found->descriptor_count)
+        {
+            throw Opal::Exception(Opal::StringEx("Binding ") + target.binding + " holds " + target.descriptor_count +
+                                  " descriptors and the shader reads " + found->descriptor_count + " of them!");
+        }
+        for (const Rndr::ShaderTypeBits stage : {Rndr::ShaderTypeBits::Vertex, Rndr::ShaderTypeBits::Fragment,
+                                                 Rndr::ShaderTypeBits::Compute, Rndr::ShaderTypeBits::Task,
+                                                 Rndr::ShaderTypeBits::Mesh})
+        {
+            if (!!(declaring_stages & stage) && !CoversStage(target.shader_types, stage))
+            {
+                throw Opal::Exception(Opal::StringEx("Binding ") + target.binding +
+                                      " is read by a stage this layout does not name!");
+            }
+        }
+        target.name = found->name.Clone();
+    }
+
+    for (const Opal::Ref<const Rndr::Forge::Shader>& shader : desc.shaders)
+    {
+        const Opal::ArrayView<const Rndr::Forge::ShaderBindingInfo> bindings = shader->GetBindings();
+        for (Rndr::i32 i = 0; i < bindings.GetSize(); ++i)
+        {
+            const Rndr::Forge::ShaderBindingInfo& declared = bindings[i];
+            if (declared.set != desc.set_index)
+            {
+                continue;
+            }
+            bool present = false;
+            for (const Rndr::Forge::DescriptorSetLayoutDesc::Binding& target : desc.bindings)
+            {
+                if (target.binding == declared.binding)
+                {
+                    present = true;
+                    break;
+                }
+            }
+            if (!present)
+            {
+                throw Opal::Exception(Opal::StringEx("A shader reads ") + declared.name.GetData() + " at binding " +
+                                      declared.binding + " of set " + desc.set_index + " and this layout does not declare it!");
+            }
+        }
+    }
+}
+
+}  // namespace
+
 Rndr::Forge::DescriptorSetLayout::DescriptorSetLayout(const Device& device, const DescriptorSetLayoutDesc& desc)
     : m_device(device), m_desc(desc.Clone())
 {
+    // Checked against m_desc rather than desc: the names it fills in are what this layout hands to every set
+    // allocated from it, and desc is the caller's to keep unchanged.
+    if (!m_desc.shaders.IsEmpty())
+    {
+        CheckAgainstShaders(m_desc);
+        // Dropped once they have been read. Nothing later needs them, and keeping the references would make
+        // GetDesc() hand out handles to shaders the caller was told it may destroy.
+        m_desc.shaders.Clear();
+    }
     Opal::DynamicArray<VkDescriptorSetLayoutBinding> bindings(desc.bindings.GetSize());
     Opal::DynamicArray<VkDescriptorBindingFlags> binding_flags_array(desc.bindings.GetSize());
 
@@ -415,7 +554,8 @@ Rndr::Forge::DescriptorSet::DescriptorSet(const DescriptorPool& pool, const Desc
     m_binding_types.Reserve(layout.GetDesc().bindings.GetSize());
     for (const DescriptorSetLayoutDesc::Binding& binding : layout.GetDesc().bindings)
     {
-        m_binding_types.PushBack({.binding = binding.binding, .descriptor_type = binding.descriptor_type});
+        m_binding_types.PushBack(
+            {.binding = binding.binding, .descriptor_type = binding.descriptor_type, .name = binding.name.Clone()});
     }
 }
 
@@ -521,7 +661,7 @@ Rndr::Forge::DescriptorType Rndr::Forge::DescriptorSet::GetBindingDescriptorType
 {
     // A linear scan: a layout has a handful of bindings, and a map would cost more to build than this
     // saves to search.
-    for (const BindingType& binding_type : m_binding_types)
+    for (const BindingInfo& binding_type : m_binding_types)
     {
         if (binding_type.binding == binding)
         {
@@ -529,6 +669,37 @@ Rndr::Forge::DescriptorType Rndr::Forge::DescriptorSet::GetBindingDescriptorType
         }
     }
     throw Opal::Exception(Opal::StringEx("The layout of this descriptor set has no binding ") + binding + "!");
+}
+
+Rndr::u32 Rndr::Forge::DescriptorSet::GetBindingIndex(const Opal::StringUtf8& name) const
+{
+    bool any_named = false;
+    for (const BindingInfo& binding_info : m_binding_types)
+    {
+        any_named = any_named || !binding_info.name.IsEmpty();
+        if (binding_info.name == name)
+        {
+            return binding_info.binding;
+        }
+    }
+    if (!any_named)
+    {
+        throw Opal::Exception("This descriptor set carries no binding names - its layout was built without "
+                              "DescriptorSetLayoutDesc::shaders, which is where the names come from.");
+    }
+    throw Opal::Exception(Opal::StringEx("No shader of this descriptor set declares a binding called ") + name.GetData() + "!");
+}
+
+void Rndr::Forge::DescriptorSet::Update(const Opal::StringUtf8& name, const Texture& texture, const Sampler& sampler,
+                                        ImageLayout image_layout, u32 array_element)
+{
+    Update(GetBindingIndex(name), texture, sampler, image_layout, array_element);
+}
+
+void Rndr::Forge::DescriptorSet::Update(const Opal::StringUtf8& name, const Buffer& buffer, u64 offset, u64 size,
+                                        u32 array_element)
+{
+    Update(GetBindingIndex(name), buffer, offset, size, array_element);
 }
 
 void Rndr::Forge::DescriptorSet::Update(u32 binding, const Texture& texture, const Sampler& sampler,

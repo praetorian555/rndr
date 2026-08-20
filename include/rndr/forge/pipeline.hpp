@@ -2,6 +2,7 @@
 
 #include "volk/volk.h"
 
+#include "opal/container/array-view.h"
 #include "opal/container/dynamic-array.h"
 #include "opal/container/ref.h"
 
@@ -44,7 +45,34 @@ struct VertexInputDesc : Opal::ClonableBase<VertexInputDesc>
 
     Binding& AddBinding(u32 binding, u32 stride, DataRepetition input_rate = DataRepetition::PerVertex);
     void AddAttribute(u32 binding, u32 location, PixelFormat format, u32 offset);
+
+    /**
+     * One binding holding every attribute the vertex shader reads, in location order.
+     *
+     * Reflection has the location and the format of each attribute but not its offset, and not the stride -
+     * those describe the vertex struct on the CPU side and appear nowhere in the SPIR-V. This fills them in
+     * by packing the attributes tightly in location order, which is the layout of a plain struct whose
+     * members are declared in the order the shader reads them and nothing else. A vertex buffer laid out any
+     * other way needs the desc written by hand; the pipeline checks either one against the shader.
+     *
+     * @param vertex_shader Shader to read the attributes from. A stage other than the vertex one throws,
+     *                      since no other stage is fed from a vertex buffer.
+     * @param binding Index of the single binding this produces.
+     * @param input_rate Whether the binding advances per vertex or per instance.
+     */
+    [[nodiscard]] static VertexInputDesc FromShader(const Shader& vertex_shader, u32 binding = 0,
+                                                    DataRepetition input_rate = DataRepetition::PerVertex);
 };
+
+/**
+ * The push constant ranges the given shaders read, merged. A block declared by two stages becomes one range
+ * naming both, which is what Vulkan wants and what a vertex and fragment shader sharing a block produce.
+ *
+ * Saves repeating an offset and a size that the shader already fixed. A graphics pipeline given ranges of
+ * its own checks them against the same reflection either way.
+ */
+[[nodiscard]] Opal::DynamicArray<PushConstantRange> PushConstantRangesFromShaders(
+    Opal::ArrayView<const Opal::Ref<const Shader>> shaders);
 
 struct RasterizerDesc
 {

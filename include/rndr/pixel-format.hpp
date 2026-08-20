@@ -253,6 +253,26 @@ enum class PixelFormat : u16
 #endif
 
 /**
+ * What a format delivers to a shader that reads it. Every normalised, scaled, sRGB and floating point
+ * format arrives as a float, which is why those are one class and not several.
+ */
+enum class FormatNumericClass : u8
+{
+    Undefined,
+    Float,
+    SignedInt,
+    UnsignedInt
+};
+
+/**
+ * The numeric class of a format. A vertex attribute and the shader input reading it have to agree on this -
+ * they need not agree on the component count, which Vulkan is happy to pad or truncate.
+ * @param format The pixel format.
+ * @return The class, or Undefined for PixelFormat::Undefined.
+ */
+[[nodiscard]] FormatNumericClass GetFormatNumericClass(PixelFormat format);
+
+/**
  * Get the size of a pixel in bytes for the given format.
  * @param format The pixel format.
  * @return Size in bytes, or 0 for compressed/undefined formats.

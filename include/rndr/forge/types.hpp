@@ -108,6 +108,22 @@ enum class TextureViewType : u8
 };
 
 /**
+ * What a descriptor binding holds. A subset of VkDescriptorType: the kinds Forge can build a layout, a set
+ * and an update for, which is what reflection is allowed to report back.
+ */
+enum class DescriptorType : u8
+{
+    SampledImage = 0,
+    Sampler,
+    CombinedImageSampler,
+    ConstantBuffer,
+    StorageBuffer,
+    StorageImage,
+
+    EnumCount
+};
+
+/**
  * The scalar a specialization constant holds. Mirrors what SPIR-V allows one to be, except that a constant
  * narrower than 32 bits is reported as its 32 bit counterpart so a caller can write a plain integer for it;
  * SpecializationConstantInfo::byte_size keeps the width Vulkan is owed.
