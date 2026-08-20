@@ -169,6 +169,16 @@ struct GraphicsPipelineDesc
     DepthStencilDesc depth_stencil;
     Opal::DynamicArray<ColorBlendDesc> color_blend_attachments;
 
+    /**
+     * Values for constants the shaders of this pipeline declare, by name. A constant left unnamed keeps the
+     * default the shader gave it, and a name no stage of this pipeline declares throws - Vulkan ignores a
+     * numeric id that matches nothing, which is exactly the mistake worth catching.
+     *
+     * Applied when the pipeline is built rather than baked into the SPIR-V, so two pipelines can share one
+     * Shader and differ only in these. Shader::GetSpecializationConstants says what the names are.
+     */
+    Opal::DynamicArray<SpecializationConstant> specialization;
+
     Opal::DynamicArray<PixelFormat> color_attachment_formats;
     PixelFormat depth_attachment_format = PixelFormat::Undefined;
     PixelFormat stencil_attachment_format = PixelFormat::Undefined;
@@ -179,6 +189,16 @@ struct ComputePipelineDesc
     Opal::Ref<const Shader> shader;
     Opal::DynamicArray<Opal::Ref<const DescriptorSetLayout>> descriptor_set_layouts;
     Opal::DynamicArray<PushConstantRange> push_constant_ranges;
+
+    /**
+     * Values for constants the shaders of this pipeline declare, by name. A constant left unnamed keeps the
+     * default the shader gave it, and a name no stage of this pipeline declares throws - Vulkan ignores a
+     * numeric id that matches nothing, which is exactly the mistake worth catching.
+     *
+     * Applied when the pipeline is built rather than baked into the SPIR-V, so two pipelines can share one
+     * Shader and differ only in these. Shader::GetSpecializationConstants says what the names are.
+     */
+    Opal::DynamicArray<SpecializationConstant> specialization;
 };
 
 class Pipeline

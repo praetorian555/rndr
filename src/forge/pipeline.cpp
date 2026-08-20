@@ -294,6 +294,155 @@ void Rndr::Forge::Pipeline::CreatePipelineLayout(
     }
 }
 
+namespace
+{
+/**
+ * What one stage needs handed to Vulkan: the map entries, the packed values they point into, and the
+ * VkSpecializationInfo tying them together. Kept alive by the caller until vkCreate*Pipelines returns,
+ * which is what pMapEntries and pData require - so this is a local of the pipeline constructor and never
+ * something handed out of a helper.
+ */
+struct StageSpecialization
+{
+    Opal::DynamicArray<VkSpecializationMapEntry> entries;
+    Opal::DynamicArray<Rndr::u8> data;
+    VkSpecializationInfo info = {};
+};
+
+/** Reads as "Float32" rather than "3", so a mismatch says which two types disagreed. */
+const char* SpecializationTypeName(Rndr::Forge::SpecializationType type)
+{
+    switch (type)
+    {
+        case Rndr::Forge::SpecializationType::Bool:
+            return "Bool";
+        case Rndr::Forge::SpecializationType::Int32:
+            return "Int32";
+        case Rndr::Forge::SpecializationType::UInt32:
+            return "UInt32";
+        case Rndr::Forge::SpecializationType::Float32:
+            return "Float32";
+        case Rndr::Forge::SpecializationType::Int64:
+            return "Int64";
+        case Rndr::Forge::SpecializationType::UInt64:
+            return "UInt64";
+        case Rndr::Forge::SpecializationType::Float64:
+            return "Float64";
+    }
+    return "unknown";
+}
+
+/**
+ * Refuses a value too wide for the constant it is going into. Only 8 and 16 bit constants can hit this:
+ * they are reported as Int32 or UInt32 so a caller can write a plain integer, which leaves nothing but this
+ * between a number too big for the declared width and it being quietly truncated on the way into the blob.
+ */
+void RequireValueFits(const Rndr::Forge::SpecializationConstant& value, Rndr::u32 byte_size)
+{
+    if (byte_size >= 4)
+    {
+        return;
+    }
+    const Rndr::u64 bits = value.value.bits;
+    const Rndr::u32 width = byte_size * 8;
+    const bool fits = value.value.type == Rndr::Forge::SpecializationType::Int32
+                          ? static_cast<Rndr::i64>(static_cast<Rndr::i32>(bits)) >= -(Rndr::i64{1} << (width - 1)) &&
+                                static_cast<Rndr::i64>(static_cast<Rndr::i32>(bits)) < (Rndr::i64{1} << (width - 1))
+                          : bits < (Rndr::u64{1} << width);
+    if (!fits)
+    {
+        throw Opal::Exception(Opal::StringEx("Specialization constant ") + reinterpret_cast<const char*>(value.name.GetData()) +
+                              " is declared " + width + " bits wide and the value given does not fit in it!");
+    }
+}
+
+/**
+ * Two values under one name would become two map entries with the same constantID, which the specification
+ * does not allow within one VkSpecializationInfo. Caught here rather than left to the validation layer,
+ * since by name it is nothing more exotic than the same name written twice.
+ */
+void RequireNoDuplicateNames(Opal::ArrayView<const Rndr::Forge::SpecializationConstant> values)
+{
+    for (Rndr::i32 i = 0; i < values.GetSize(); ++i)
+    {
+        for (Rndr::i32 j = i + 1; j < values.GetSize(); ++j)
+        {
+            if (values[i].name == values[j].name)
+            {
+                throw Opal::Exception(Opal::StringEx("Specialization constant ") + reinterpret_cast<const char*>(values[i].name.GetData()) +
+                                      " was given a value twice!");
+            }
+        }
+    }
+}
+
+/**
+ * Match the values against what this shader declares and pack the ones that belong to it. A value naming a
+ * constant this stage does not have is skipped rather than refused - another stage may declare it, and the
+ * caller is told about a name no stage at all declared once every stage has been looked at.
+ *
+ * @param out_matched One flag per value, set when this stage took it. Never cleared, so it accumulates.
+ */
+StageSpecialization BuildStageSpecialization(const Rndr::Forge::Shader& shader,
+                                             Opal::ArrayView<const Rndr::Forge::SpecializationConstant> values,
+                                             Opal::DynamicArray<bool>& out_matched)
+{
+    StageSpecialization result;
+    const Opal::ArrayView<const Rndr::Forge::SpecializationConstantInfo> declared = shader.GetSpecializationConstants();
+    for (Rndr::i32 value_index = 0; value_index < values.GetSize(); ++value_index)
+    {
+        const Rndr::Forge::SpecializationConstant& value = values[value_index];
+        for (Rndr::i32 declared_index = 0; declared_index < declared.GetSize(); ++declared_index)
+        {
+            const Rndr::Forge::SpecializationConstantInfo& info = declared[declared_index];
+            if (info.name != value.name)
+            {
+                continue;
+            }
+            // No coercion, not even an integer into a float: a value silently reinterpreted at the wrong
+            // width is not something the caller could notice from the outside.
+            if (info.type != value.value.type)
+            {
+                throw Opal::Exception(Opal::StringEx("Specialization constant ") + reinterpret_cast<const char*>(value.name.GetData()) +
+                                      " is declared as " + SpecializationTypeName(info.type) + " but was given a " +
+                                      SpecializationTypeName(value.value.type) + "!");
+            }
+            // The declared width, not the width of the value: VkSpecializationMapEntry::size has to match
+            // the type the shader declared, and an 8 or 16 bit constant is reported as Int32 or UInt32.
+            const Rndr::u32 size = info.byte_size;
+            RequireValueFits(value, size);
+            const auto offset = static_cast<Rndr::u32>(result.data.GetSize());
+            result.data.Resize(static_cast<Rndr::i32>(offset + size));
+            // The low bytes of the pattern, which is the whole value on a little-endian host and what the
+            // range check above just made sure of.
+            memcpy(result.data.GetData() + offset, &value.value.bits, size);
+            result.entries.PushBack(VkSpecializationMapEntry{.constantID = info.constant_id, .offset = offset, .size = size});
+            out_matched[value_index] = true;
+            break;
+        }
+    }
+    result.info = {.mapEntryCount = static_cast<Rndr::u32>(result.entries.GetSize()),
+                   .pMapEntries = result.entries.GetData(),
+                   .dataSize = static_cast<size_t>(result.data.GetSize()),
+                   .pData = result.data.GetData()};
+    return result;
+}
+
+/** Fails on the first value no stage of the pipeline claimed, which Vulkan would have ignored in silence. */
+void RequireEveryValueMatched(Opal::ArrayView<const Rndr::Forge::SpecializationConstant> values,
+                              const Opal::DynamicArray<bool>& matched)
+{
+    for (Rndr::i32 i = 0; i < values.GetSize(); ++i)
+    {
+        if (!matched[i])
+        {
+            throw Opal::Exception(Opal::StringEx("No shader of this pipeline declares a specialization constant called ") +
+                                  reinterpret_cast<const char*>(values[i].name.GetData()) + "!");
+        }
+    }
+}
+}  // namespace
+
 Rndr::Forge::Pipeline::Pipeline(const Device& device, const GraphicsPipelineDesc& desc)
     : m_device(device), m_bind_point(VK_PIPELINE_BIND_POINT_GRAPHICS)
 {
@@ -317,32 +466,50 @@ Rndr::Forge::Pipeline::Pipeline(const Device& device, const GraphicsPipelineDesc
         throw Opal::Exception("Task shader requires a mesh shader");
     }
 
-    Opal::DynamicArray<VkPipelineShaderStageCreateInfo> shader_stages;
-    auto add_shader_stage = [&shader_stages](const Shader& shader)
+    // The stages this pipeline has, gathered before anything points into a list: pMapEntries and pData have to
+    // stay put until vkCreateGraphicsPipelines returns, and a list still growing would move them. Same trap
+    // the descriptor writes hit once.
+    Opal::DynamicArray<Opal::Ref<const Shader>> stage_shaders;
+    if (has_vertex)
     {
-        shader_stages.PushBack(VkPipelineShaderStageCreateInfo{
+        stage_shaders.PushBack(Opal::Ref<const Shader>(*desc.vertex_shader));
+    }
+    if (has_task)
+    {
+        stage_shaders.PushBack(Opal::Ref<const Shader>(*desc.task_shader));
+    }
+    if (has_mesh)
+    {
+        stage_shaders.PushBack(Opal::Ref<const Shader>(*desc.mesh_shader));
+    }
+    if (desc.fragment_shader != nullptr)
+    {
+        stage_shaders.PushBack(Opal::Ref<const Shader>(*desc.fragment_shader));
+    }
+
+    Opal::DynamicArray<bool> matched(desc.specialization.GetSize());
+    const Opal::ArrayView<const SpecializationConstant> values(desc.specialization.GetData(), desc.specialization.GetSize());
+    RequireNoDuplicateNames(values);
+    // Built at its final size and written by index, so no element ever moves.
+    Opal::DynamicArray<StageSpecialization> stage_specializations(stage_shaders.GetSize());
+    for (i32 i = 0; i < stage_shaders.GetSize(); ++i)
+    {
+        stage_specializations[i] = BuildStageSpecialization(stage_shaders[i].Get(), values, matched);
+    }
+    RequireEveryValueMatched(values, matched);
+
+    Opal::DynamicArray<VkPipelineShaderStageCreateInfo> shader_stages(stage_shaders.GetSize());
+    for (i32 i = 0; i < stage_shaders.GetSize(); ++i)
+    {
+        const Shader& shader = stage_shaders[i].Get();
+        shader_stages[i] = VkPipelineShaderStageCreateInfo{
             .sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
             .stage = shader.GetNativeShaderStage(),
             .module = shader.GetNativeShaderModule(),
             .pName = shader.GetEntryPoint().GetData(),
-        });
-    };
-
-    if (has_vertex)
-    {
-        add_shader_stage(*desc.vertex_shader);
-    }
-    if (has_task)
-    {
-        add_shader_stage(*desc.task_shader);
-    }
-    if (has_mesh)
-    {
-        add_shader_stage(*desc.mesh_shader);
-    }
-    if (desc.fragment_shader != nullptr)
-    {
-        add_shader_stage(*desc.fragment_shader);
+            // Null rather than an empty one, which is what a stage with nothing to specialize means.
+            .pSpecializationInfo = stage_specializations[i].entries.IsEmpty() ? nullptr : &stage_specializations[i].info,
+        };
     }
 
     Opal::DynamicArray<VkVertexInputBindingDescription> vk_bindings;
@@ -523,6 +690,12 @@ Rndr::Forge::Pipeline::Pipeline(const Device& device, const ComputePipelineDesc&
         {desc.descriptor_set_layouts.GetData(), desc.descriptor_set_layouts.GetSize()},
         {desc.push_constant_ranges.GetData(), desc.push_constant_ranges.GetSize()});
 
+    Opal::DynamicArray<bool> matched(desc.specialization.GetSize());
+    const Opal::ArrayView<const SpecializationConstant> values(desc.specialization.GetData(), desc.specialization.GetSize());
+    RequireNoDuplicateNames(values);
+    const StageSpecialization stage_specialization = BuildStageSpecialization(*desc.shader, values, matched);
+    RequireEveryValueMatched(values, matched);
+
     const VkComputePipelineCreateInfo pipeline_create_info{
         .sType = VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO,
         .stage =
@@ -531,6 +704,8 @@ Rndr::Forge::Pipeline::Pipeline(const Device& device, const ComputePipelineDesc&
                 .stage = desc.shader->GetNativeShaderStage(),
                 .module = desc.shader->GetNativeShaderModule(),
                 .pName = desc.shader->GetEntryPoint().GetData(),
+                // Null rather than an empty one, which is what a stage with nothing to specialize means.
+                .pSpecializationInfo = stage_specialization.entries.IsEmpty() ? nullptr : &stage_specialization.info,
             },
         .layout = m_pipeline_layout,
     };

@@ -1637,3 +1637,228 @@ TEST_CASE("Forge pipeline sample count and dynamic state", "[forge]")
     }
     REQUIRE_NO_VALIDATION_ERROR(fixture);
 }
+
+/**
+ * A fragment shader whose output is decided by two specialization constants, so what comes back says which
+ * values the pipeline was built with. [SpecializationConstant] is the portable Slang spelling and lets the
+ * compiler pick the ids; [vk::constant_id(N)] pins them, and both reflect the same way.
+ */
+constexpr const char* k_specialized_source = R"(
+[SpecializationConstant]
+const int RED_LEVEL = 64;
+
+[SpecializationConstant]
+const bool WRITE_BLUE = false;
+
+struct VertexOutput
+{
+    float4 position : SV_Position;
+};
+
+[shader("vertex")]
+VertexOutput main_vertex(float2 position : POSITION)
+{
+    VertexOutput output;
+    output.position = float4(position, 0.0, 1.0);
+    return output;
+}
+
+[shader("fragment")]
+float4 main_fragment() : SV_Target
+{
+    return float4(float(RED_LEVEL) / 255.0, 0.0, WRITE_BLUE ? 1.0 : 0.0, 1.0);
+}
+)";
+
+/** The same idea for a compute pipeline, which takes its own path through pipeline creation. */
+constexpr const char* k_specialized_compute_source = R"(
+[SpecializationConstant]
+const uint ADDEND = 5;
+
+[shader("compute")]
+[numthreads(64, 1, 1)]
+void main_specialized(uint3 thread_id : SV_DispatchThreadID, uniform RWStructuredBuffer<uint> output)
+{
+    output[thread_id.x] = thread_id.x + ADDEND;
+}
+)";
+
+TEST_CASE("Forge specialization constants", "[forge]")
+{
+    if (!IsForgeAvailable())
+    {
+        SKIP("No Vulkan device on this machine.");
+    }
+    ForgeFixture fixture;
+    constexpr i32 k_side = 4;
+    constexpr PixelFormat k_format = PixelFormat::R8G8B8A8_UNORM;
+
+    const Forge::Shader vertex_shader =
+        Forge::Shader::FromSourceInMemory(fixture.device, k_specialized_source, {.entry_point = "main_vertex"});
+    const Forge::Shader fragment_shader =
+        Forge::Shader::FromSourceInMemory(fixture.device, k_specialized_source, {.entry_point = "main_fragment"});
+    const Forge::Buffer vertices(fixture.device,
+                                 {.size = sizeof(k_fullscreen_vertices),
+                                  .usage = Forge::BufferUsageBits::VertexBuffer},
+                                 Opal::AsBytes(k_fullscreen_vertices));
+
+    /** Builds a pipeline with the given values, draws through it, and hands back one texel. */
+    auto draw_specialized = [&](Opal::ArrayView<const Forge::SpecializationConstant> values)
+    {
+        Forge::Texture color(fixture.device, {.format = k_format,
+                                              .width = k_side,
+                                              .height = k_side,
+                                              .usage = Forge::TextureUsageBits::ColorAttachment |
+                                                       Forge::TextureUsageBits::TransferSource});
+        Forge::GraphicsPipelineDesc pipeline_desc;
+        pipeline_desc.vertex_shader = vertex_shader;
+        pipeline_desc.fragment_shader = fragment_shader;
+        pipeline_desc.rasterizer.cull_mode = Face::None;
+        pipeline_desc.vertex_input.AddBinding(0, 2 * sizeof(f32), DataRepetition::PerVertex);
+        pipeline_desc.vertex_input.AddAttribute(0, 0, PixelFormat::R32G32_SFLOAT, 0);
+        pipeline_desc.color_blend_attachments.PushBack(Forge::ColorBlendDesc{});
+        pipeline_desc.color_attachment_formats.PushBack(k_format);
+        for (i32 i = 0; i < values.GetSize(); ++i)
+        {
+            pipeline_desc.specialization.PushBack(
+                Forge::SpecializationConstant{.name = values[i].name.Clone(), .value = values[i].value});
+        }
+        const Forge::Pipeline pipeline(fixture.device, pipeline_desc);
+
+        Forge::ImmediateSubmit(fixture.device, fixture.GetQueue(),
+                               [&](Forge::CommandBuffer& command_buffer)
+                               {
+                                   command_buffer.CmdImageBarrier(Forge::ImageBarrier::ToColorAttachment(color));
+                                   const Forge::RenderingDesc rendering_desc{
+                                       .render_area_extent = {k_side, k_side},
+                                       .color_attachments = {Forge::RenderingAttachmentDesc{
+                                           .image_view = color.GetNativeImageView(),
+                                           .image_layout = Forge::ImageLayout::ColorAttachment,
+                                           .load_operation = Forge::AttachmentLoadOperation::Clear,
+                                           .store_operation = Forge::AttachmentStoreOperation::Store,
+                                           .clear_value = {.color = {0.0f, 0.0f, 0.0f, 1.0f}}}}};
+                                   command_buffer.CmdBeginRendering(rendering_desc);
+                                   command_buffer.CmdSetViewport(Vector2f::Zero(), {k_side, k_side});
+                                   command_buffer.CmdSetScissor(Vector2i::Zero(), {k_side, k_side});
+                                   command_buffer.CmdBindPipeline(pipeline);
+                                   command_buffer.CmdBindVertexBuffer(vertices, 0);
+                                   command_buffer.CmdDraw(3);
+                                   command_buffer.CmdEndRendering();
+                               });
+
+        Opal::DynamicArray<u8> pixels(k_side * k_side * 4);
+        Forge::ReadBackTexture(fixture.device, fixture.GetQueue(), color, Forge::ImageLayout::ColorAttachment, pixels, 0,
+                               Forge::ImageLayout::TransferSource);
+        return Opal::DynamicArray<u8>{pixels[0], pixels[1], pixels[2], pixels[3]};
+    };
+
+    SECTION("The shader reports what it declares")
+    {
+        const auto constants = fragment_shader.GetSpecializationConstants();
+        REQUIRE(constants.GetSize() == 2);
+        bool found_red = false;
+        bool found_blue = false;
+        for (i32 i = 0; i < constants.GetSize(); ++i)
+        {
+            if (constants[i].name == Opal::StringUtf8("RED_LEVEL"))
+            {
+                found_red = true;
+                REQUIRE(constants[i].type == Forge::SpecializationType::Int32);
+                REQUIRE(constants[i].byte_size == 4);
+                REQUIRE(constants[i].default_value.bits == 64);
+            }
+            if (constants[i].name == Opal::StringUtf8("WRITE_BLUE"))
+            {
+                found_blue = true;
+                REQUIRE(constants[i].type == Forge::SpecializationType::Bool);
+                // VkBool32, not the one byte a bool takes on this side.
+                REQUIRE(constants[i].byte_size == 4);
+                REQUIRE(constants[i].default_value.bits == 0);
+            }
+        }
+        REQUIRE(found_red);
+        REQUIRE(found_blue);
+    }
+    SECTION("One module becomes two pipelines that render differently")
+    {
+        // The point of the feature: same Shader objects, different values, different output.
+        const Forge::SpecializationConstant dim[] = {{.name = "RED_LEVEL", .value = 32}};
+        const Forge::SpecializationConstant bright[] = {{.name = "RED_LEVEL", .value = 200},
+                                                       {.name = "WRITE_BLUE", .value = true}};
+        const Opal::DynamicArray<u8> dim_texel = draw_specialized({dim, 1});
+        const Opal::DynamicArray<u8> bright_texel = draw_specialized({bright, 2});
+        INFO("dim r=" << static_cast<i32>(dim_texel[0]) << " b=" << static_cast<i32>(dim_texel[2])
+                      << " bright r=" << static_cast<i32>(bright_texel[0]) << " b="
+                      << static_cast<i32>(bright_texel[2]));
+        REQUIRE(static_cast<i32>(dim_texel[0]) == 32);
+        REQUIRE(static_cast<i32>(dim_texel[2]) == 0);
+        REQUIRE(static_cast<i32>(bright_texel[0]) == 200);
+        REQUIRE(static_cast<i32>(bright_texel[2]) == 255);
+    }
+    SECTION("A constant nothing supplies keeps the default the shader declared")
+    {
+        const Opal::DynamicArray<u8> texel = draw_specialized({});
+        REQUIRE(static_cast<i32>(texel[0]) == 64);
+        REQUIRE(static_cast<i32>(texel[2]) == 0);
+    }
+    SECTION("A name no stage declares throws")
+    {
+        // The case Vulkan ignores in silence when the value is keyed by number, which is why it is keyed
+        // by name here.
+        const Forge::SpecializationConstant wrong[] = {{.name = "RED_LEVELL", .value = 1}};
+        REQUIRE_THROWS_AS(draw_specialized({wrong, 1}), Opal::Exception);
+    }
+    SECTION("A value of the wrong type throws")
+    {
+        const Forge::SpecializationConstant wrong[] = {{.name = "RED_LEVEL", .value = 1.0f}};
+        REQUIRE_THROWS_AS(draw_specialized({wrong, 1}), Opal::Exception);
+    }
+    SECTION("One constant given a value twice throws")
+    {
+        // Two map entries with the same constantID, which the specification does not allow within one
+        // VkSpecializationInfo - and which reads as nothing worse than a repeated name from out here.
+        const Forge::SpecializationConstant twice[] = {{.name = "RED_LEVEL", .value = 32},
+                                                       {.name = "RED_LEVEL", .value = 64}};
+        REQUIRE_THROWS_AS(draw_specialized({twice, 2}), Opal::Exception);
+    }
+    SECTION("A compute pipeline specializes the same way")
+    {
+        constexpr i32 k_element_count = 128;
+        const Forge::Buffer output(fixture.device, {.size = k_element_count * sizeof(u32),
+                                                    .usage = Forge::BufferUsageBits::StorageBuffer,
+                                                    .host_access = Forge::HostAccess::Random,
+                                                    .use_device_address = true});
+        const Forge::Shader compute_shader = Forge::Shader::FromSourceInMemory(fixture.device, k_specialized_compute_source,
+                                                                              {.entry_point = "main_specialized"});
+        Forge::DescriptorPoolDesc pool_desc;
+        pool_desc.Add(Forge::DescriptorType::StorageBuffer, 1);
+        const Forge::DescriptorPool pool(fixture.device, pool_desc);
+        Forge::DescriptorSetLayoutDesc layout_desc;
+        layout_desc.AddBinding(0, Forge::DescriptorType::StorageBuffer, 1, ShaderTypeBits::Compute);
+        const Forge::DescriptorSetLayout layout(fixture.device, layout_desc);
+        Forge::DescriptorSet set(pool, layout);
+        set.Update(0, output);
+
+        Forge::ComputePipelineDesc pipeline_desc;
+        pipeline_desc.shader = compute_shader;
+        pipeline_desc.descriptor_set_layouts.PushBack(Opal::Ref<const Forge::DescriptorSetLayout>(layout));
+        pipeline_desc.specialization.PushBack(Forge::SpecializationConstant{.name = "ADDEND", .value = 100u});
+        const Forge::Pipeline pipeline(fixture.device, pipeline_desc);
+
+        Forge::ImmediateSubmit(fixture.device, fixture.GetQueue(),
+                               [&](Forge::CommandBuffer& command_buffer)
+                               {
+                                   command_buffer.CmdBindPipeline(pipeline);
+                                   command_buffer.CmdBindDescriptorSet(pipeline, set);
+                                   command_buffer.CmdDispatch(k_element_count / 64);
+                               });
+        Opal::DynamicArray<u32> values(k_element_count);
+        output.Read({reinterpret_cast<u8*>(values.GetData()), values.GetSize() * sizeof(u32)});
+        // 100 rather than the 5 the shader declares, so the value came from the pipeline.
+        for (i32 i = 0; i < k_element_count; ++i)
+        {
+            REQUIRE(values[i] == static_cast<u32>(i) + 100);
+        }
+    }
+    REQUIRE_NO_VALIDATION_ERROR(fixture);
+}

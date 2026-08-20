@@ -574,7 +574,7 @@ the variable count, the partially bound flag and the array element all to have t
 throw: a count above the binding's, a count without a binding that allows one, a variable count on a binding
 that is not the highest, and an update after bind layout allocated from a pool that does not expect one.
 
-### 3.10 Pipeline gaps — state DONE, cache dropped, specialization constants left
+### 3.10 Pipeline gaps — DONE, minus a cache that was measured and dropped
 
 Three of the five were a hardcoded value becoming a field.
 
@@ -609,7 +609,48 @@ A pipeline cache earns its keep against hundreds of pipelines or a shader varian
 one graphics pipeline and one compute pipeline. Reach for it when there is something to amortise; the five
 seconds are in 3.13 instead. This paragraph is here so nobody adds it back thinking it was an oversight.
 
-Left: specialization constants, which are unaffected by any of the above and are still a small piece.
+Specialization constants close it out. `GraphicsPipelineDesc::specialization` and the same field on
+`ComputePipelineDesc` name constants and give them values; `pSpecializationInfo` is built per stage and
+pointed at from each `VkPipelineShaderStageCreateInfo`, which both were leaving null.
+
+Keyed by **name** rather than by the numeric id Vulkan wants, and that is the point of the task rather than a
+convenience. The specification says a `constantID` matching no constant "does not affect the behavior of the
+pipeline" - a mistyped number does nothing, silently, and the pipeline renders with the default while the
+caller believes otherwise. Names come from reflection, so a name no stage declares throws. A type that does
+not match the declared one throws too, with no coercion, since a value reinterpreted at the wrong width is
+not something a caller could notice from the outside. One name given a value twice throws as well: it would
+pack two map entries sharing a `constantID`, which no single `VkSpecializationInfo` may hold.
+
+`Shader::GetSpecializationConstants` reports name, id, type, default and byte size, read in the window the
+constructor already has a `SpvReflectShaderModule` open for - nothing is reflected twice and no reflection
+state outlives the constructor, which a scope guard now sees to whichever way the constructor leaves, since
+several of the steps reading from the module throw. The default comes back as raw bytes whose meaning depends
+on the type, four for anything 32 bit or smaller and eight for the rest, low-order word first, so it is
+copied rather than reinterpreted. `SpecializationValue` is a tag and a bit pattern rather than an
+`Opal::Variant`, which is move-only and would have made a list of them awkward to write inline in a desc; the
+raw bytes are what Vulkan wants anyway. Its pointer constructor is deleted, or `{"MAX_LIGHTS", "8"}` would
+reach the `bool` one and mean true.
+
+Byte size is reported apart from the type because the two part company below 32 bits.
+`VkSpecializationMapEntry::size` has to be the byte size of the declared type - one byte for an `int8_t`
+constant - while a bool is four whatever SPIR-V calls it. Narrow integers are still reported as `Int32` or
+`UInt32` so a caller writes a plain integer for them, and the map entry carries the declared width instead;
+a value too wide for that width throws rather than being truncated on the way into the blob.
+
+The stages are gathered before anything points into a list. `pMapEntries` and `pData` have to stay put until
+`vkCreateGraphicsPipelines` returns, and the first attempt reserved capacity and pushed - the same shape as
+the bug 1.9 fixed in the descriptor writes. Both arrays are built at their final size and written by index
+instead.
+
+Slang was probed before any of this was designed around it: `[SpecializationConstant]` and
+`[vk::constant_id(N)]` both compile and reflect identically, name, id, type and default all correct. The
+first is what the tests use, since it lets the compiler assign ids.
+
+Verified by building two pipelines from one pair of `Shader` objects with different values and reading back
+two different colours, which is the only thing that shows one module producing two behaviours. Also the
+default when nothing is supplied, the reflection report, a compute pipeline through its own path, an unknown
+name, and a mismatched type. Checked the other way round as well: with `pSpecializationInfo` back to null
+both pipelines return the shader default and the two-pipeline case fails with the two colours identical.
 
 ### 3.11 Tests — DONE
 

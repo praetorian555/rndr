@@ -1,5 +1,8 @@
 #pragma once
 
+#include <cstring>
+
+#include "opal/container/string.h"
 #include "opal/enum-flags.h"
 
 #include "rndr/pixel-format.hpp"
@@ -104,7 +107,67 @@ enum class TextureViewType : u8
     CubeArray
 };
 
-/** Samples per pixel of a multisampled texture. */
+/**
+ * The scalar a specialization constant holds. Mirrors what SPIR-V allows one to be, except that a constant
+ * narrower than 32 bits is reported as its 32 bit counterpart so a caller can write a plain integer for it;
+ * SpecializationConstantInfo::byte_size keeps the width Vulkan is owed.
+ */
+enum class SpecializationType : u8
+{
+    Bool,
+    Int32,
+    UInt32,
+    Float32,
+    Int64,
+    UInt64,
+    Float64
+};
+
+/**
+ * One specialization constant value. Every kind of them fits in eight bytes, so this is a tag and a bit
+ * pattern rather than a variant - the raw bytes are what VkSpecializationInfo wants either way.
+ *
+ * The constructors are implicit so a call site reads as {"MAX_LIGHTS", 8} without naming a type.
+ */
+struct SpecializationValue
+{
+    SpecializationType type = SpecializationType::Int32;
+    /** The bit pattern, low-order word first, which is how SPIR-V stores it. */
+    u64 bits = 0;
+
+    SpecializationValue() = default;
+    SpecializationValue(bool value) : type(SpecializationType::Bool), bits(value ? 1u : 0u) {}
+    SpecializationValue(i32 value) : type(SpecializationType::Int32) { Store(&value, sizeof(value)); }
+    SpecializationValue(u32 value) : type(SpecializationType::UInt32) { Store(&value, sizeof(value)); }
+    SpecializationValue(f32 value) : type(SpecializationType::Float32) { Store(&value, sizeof(value)); }
+    SpecializationValue(i64 value) : type(SpecializationType::Int64) { Store(&value, sizeof(value)); }
+    SpecializationValue(u64 value) : type(SpecializationType::UInt64) { Store(&value, sizeof(value)); }
+    SpecializationValue(f64 value) : type(SpecializationType::Float64) { Store(&value, sizeof(value)); }
+
+    /**
+     * A pointer would otherwise reach the bool constructor, so {"MAX_LIGHTS", "8"} would compile and mean
+     * true. Deleted rather than left to convert, since nothing downstream can tell that apart from a bool
+     * the caller meant.
+     */
+    template <typename T>
+    SpecializationValue(T*) = delete;
+
+private:
+    /** Copies the bit pattern in without reinterpreting it, which a cast through a wider type would. */
+    void Store(const void* source, u64 size)
+    {
+        bits = 0;
+        memcpy(&bits, source, size);
+    }
+};
+
+/** A constant a shader declares, named, and the value to build a pipeline with. */
+struct SpecializationConstant
+{
+    Opal::StringUtf8 name;
+    SpecializationValue value;
+};
+
 /**
  * Which colour channels a pipeline is allowed to write. Mirrors VkColorComponentFlagBits, so a mask is a
  * cast. Masking a channel off leaves whatever the attachment already held in it, which is not the same as

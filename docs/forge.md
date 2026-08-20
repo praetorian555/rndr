@@ -305,6 +305,48 @@ transfer. `Barriers::flags` can mark a dependency by-region, which is only valid
 
 ---
 
+## Specialization constants
+
+A specialization constant is a value the shader declares and the pipeline decides, folded in when the
+pipeline is built. One SPIR-V module becomes several pipelines that differ in a light count, a tile size or
+a feature toggle, without recompiling the shader or reaching for a preprocessor.
+
+```slang
+[SpecializationConstant]
+const int RED_LEVEL = 64;
+```
+
+```cpp
+GraphicsPipelineDesc desc;
+desc.vertex_shader = vertex_shader;
+desc.fragment_shader = fragment_shader;
+desc.specialization.PushBack({.name = "RED_LEVEL", .value = 200});
+```
+
+Values are keyed by **name**, not by the numeric id Vulkan uses. That is the whole reason the names are
+resolved through reflection: the specification says a `constantID` matching no constant in the shader *"does
+not affect the behavior of the pipeline"* - so a mistyped number does nothing, in silence, and the pipeline
+renders with the default while the caller believes it does not. A name no stage of the pipeline declares
+throws instead.
+
+A constant left unnamed keeps the default the shader gave it. A value whose type does not match the declared
+one throws rather than being coerced, an integer into a float included. So does one name given a value twice,
+which would become two map entries sharing a `constantID` - not allowed within one `VkSpecializationInfo`.
+
+`Shader::GetSpecializationConstants()` says what a module declares - name, id, type, default and the bytes it
+occupies - so what can be specialized is answerable without reading the shader source. A constant narrower
+than 32 bits is reported as `Int32` or `UInt32`, so a caller writes a plain integer for it; `byte_size` keeps
+the declared width, which is what the map entry has to carry, and a value too wide for it throws rather than
+being truncated.
+
+These are applied at pipeline creation and do not change the SPIR-V, so nothing about them affects how a
+shader is compiled or cached.
+
+Slang spells the declaration `[SpecializationConstant]`, which lets it assign the ids, or
+`[vk::constant_id(N)]` to pin one. Both reflect identically here.
+
+---
+
 ## Debugging
 
 Build with `-DRNDR_FORGE_VALIDATION=ON` and the validation layer is enabled whenever it is installed. Its
