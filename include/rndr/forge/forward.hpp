@@ -27,5 +27,6 @@ class CommandBuffer;
 class Fence;
 class Semaphore;
 class FrameContext;
+class TimestampQueryPool;
 
 }  // namespace Rndr::Forge

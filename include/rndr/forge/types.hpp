@@ -187,6 +187,9 @@ static constexpr u32 k_all_mip_levels = 0xFFFFFFFF;
 /** Every array layer from first_array_layer on. Mirrors VK_REMAINING_ARRAY_LAYERS. */
 static constexpr u32 k_all_array_layers = 0xFFFFFFFF;
 
+/** Every query of a pool from first_query on. Vulkan has no counterpart; the count is resolved here. */
+static constexpr u32 k_all_queries = 0xFFFFFFFF;
+
 /**
  * The aspect an explicit mask names, or the one the format implies when the mask is empty: depth, stencil,
  * both, or color. Shared by everything that names part of an image - ranges, copy regions, blit regions.

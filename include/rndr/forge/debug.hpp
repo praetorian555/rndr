@@ -35,6 +35,7 @@ void SetDebugName(const Device& device, const CommandBuffer& command_buffer, con
 void SetDebugName(const Device& device, const Fence& fence, const Opal::StringUtf8& name);
 void SetDebugName(const Device& device, const Semaphore& semaphore, const Opal::StringUtf8& name);
 void SetDebugName(const Device& device, const DeviceQueue& queue, const Opal::StringUtf8& name);
+void SetDebugName(const Device& device, const TimestampQueryPool& query_pool, const Opal::StringUtf8& name);
 
 /** Names the texture and its view together, since a message about either one wants the same name. */
 void SetDebugName(const Device& device, const SwapChain& swap_chain, const Opal::StringUtf8& name);

@@ -480,6 +480,36 @@ public:
      */
     void CmdInsertDebugLabel(const Opal::StringUtf8& name, const Vector4f& color = {1.0f, 1.0f, 1.0f, 1.0f});
 
+    /**
+     * Put a range of a query pool back into the state a write needs. A pool holds undefined values until it
+     * is reset, so this has to run before the first timestamp is written into it and before every reuse.
+     *
+     * The host side of this is TimestampQueryPool::Reset, which needs DeviceFeatures::host_query_reset;
+     * recording the reset works on every device and is what a per-frame pool wants anyway.
+     *
+     * @param query_pool Pool to reset.
+     * @param first_query First query to reset.
+     * @param query_count How many to reset. k_all_queries is the rest of the pool past first_query.
+     */
+    void CmdResetQueryPool(const TimestampQueryPool& query_pool, u32 first_query = 0, u32 query_count = k_all_queries);
+
+    /**
+     * Write the GPU tick counter into one query of a pool.
+     *
+     * This is a marker in the command stream rather than a timer around a scope: the tick is written once
+     * every previously submitted command has reached @p stage. Which stage that is decides what a pair of
+     * timestamps means - see the timestamp section of docs/forge.md - and the short version is that
+     * PipelineStart then PipelineEnd measures a span of the queue while PipelineEnd on both sides measures
+     * one operation with the pipeline drained around it.
+     *
+     * @param query_pool Pool to write into. Must have been reset since the last write to this query.
+     * @param query_index Which query of the pool. Past the end of the pool throws.
+     * @param stage Exactly one pipeline stage. More than one bit throws, since vkCmdWriteTimestamp2 forbids
+     *        it, and the stage also has to be one the queue family supports.
+     */
+    void CmdWriteTimestamp(const TimestampQueryPool& query_pool, u32 query_index,
+                           PipelineStageBits stage = PipelineStageBits::AllCommands);
+
 private:
     Opal::Ref<const Device> m_device;
     Opal::Ref<DeviceQueue> m_queue;

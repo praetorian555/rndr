@@ -5,6 +5,7 @@
 #include "rndr/forge/buffer.hpp"
 #include "rndr/forge/descriptor-set.hpp"
 #include "rndr/forge/pipeline.hpp"
+#include "rndr/forge/query.hpp"
 #include "rndr/forge/device.hpp"
 #include "rndr/forge/vulkan-exception.hpp"
 
@@ -916,6 +917,26 @@ void Rndr::Forge::CommandBuffer::CmdInsertDebugLabel(const Opal::StringUtf8& nam
     }
     const VkDebugUtilsLabelEXT label = ToVkLabel(name, color);
     vkCmdInsertDebugUtilsLabelEXT(m_native_command_buffer, &label);
+}
+
+void Rndr::Forge::CommandBuffer::CmdResetQueryPool(const TimestampQueryPool& query_pool, u32 first_query, u32 query_count)
+{
+    const u32 resolved_count = query_pool.ResolveQueryRange(first_query, query_count, "Resetting");
+    vkCmdResetQueryPool(m_native_command_buffer, query_pool.GetNativeQueryPool(), first_query, resolved_count);
+}
+
+void Rndr::Forge::CommandBuffer::CmdWriteTimestamp(const TimestampQueryPool& query_pool, u32 query_index, PipelineStageBits stage)
+{
+    query_pool.ResolveQueryRange(query_index, 1, "Writing a timestamp into");
+    // vkCmdWriteTimestamp2 takes one stage, not a mask: the tick is written once every previously submitted
+    // command has reached that one stage, and there is no defined moment for "reached either of two".
+    const u64 stage_bits = static_cast<u64>(stage);
+    if (stage_bits == 0 || (stage_bits & (stage_bits - 1)) != 0)
+    {
+        throw Opal::Exception("A timestamp has to name exactly one pipeline stage!");
+    }
+    vkCmdWriteTimestamp2(m_native_command_buffer, static_cast<VkPipelineStageFlags2>(stage), query_pool.GetNativeQueryPool(),
+                         query_index);
 }
 
 Rndr::Forge::CommandBuffer::CommandBuffer(CommandBuffer&& other) noexcept

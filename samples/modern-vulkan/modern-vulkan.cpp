@@ -18,8 +18,10 @@
 #include "rndr/forge/frame-context.hpp"
 #include "rndr/forge/graphics-context.hpp"
 #include "rndr/forge/physical-device.hpp"
+#include "rndr/forge/query.hpp"
 #include "rndr/forge/swap-chain.hpp"
 #include "rndr/forge/synchronization.hpp"
+#include "rndr/forge/transfer.hpp"
 #include "rndr/forge/mesh.hpp"
 #include "rndr/application.hpp"
 #include "rndr/file.hpp"
@@ -31,6 +33,7 @@
 using i32 = Rndr::i32;
 using u32 = Rndr::u32;
 using f32 = Rndr::f32;
+using f64 = Rndr::f64;
 using u8 = Rndr::u8;
 
 struct ShaderData
@@ -61,6 +64,8 @@ int main()
 void Run()
 {
     constexpr i32 k_frames_in_flight = 2;
+    /** How often the window title is rewritten. A figure that changes every frame cannot be read. */
+    constexpr f64 k_title_update_period_seconds = 0.25;
 
     auto rndr_app = Rndr::Application::Create({.enable_input_system = true});
     auto window = rndr_app->CreateGenericWindow({});
@@ -106,6 +111,25 @@ void Run()
     // Owns the frames in flight: a fence, a command buffer and the semaphores on both sides of the swap chain
     // for each, plus the order acquire, submit and present have to happen in.
     Rndr::Forge::FrameContext frame_context(device, swap_chain, graphics_queue, present_queue, {.frames_in_flight = k_frames_in_flight});
+
+    // One pool per frame in flight, two timestamps each: one at the top of the frame and one at the bottom.
+    // Per frame rather than shared, because the frame that reads a result must not be the frame writing it.
+    Opal::InPlaceArray<Rndr::Forge::TimestampQueryPool, k_frames_in_flight> gpu_timers;
+    for (i32 i = 0; i < k_frames_in_flight; i++)
+    {
+        gpu_timers[i] = Rndr::Forge::TimestampQueryPool(device, {.query_count = 2});
+    }
+    // A pool holds undefined values until it is reset, and reading one that never was is undefined rather
+    // than empty. Reset every pool once here so the first frames can ask for a result and be told there is
+    // none yet; from then on the reset each frame records is what keeps them readable.
+    Rndr::Forge::ImmediateSubmit(device, graphics_queue,
+                                 [&](Rndr::Forge::CommandBuffer& command_buffer)
+                                 {
+                                     for (i32 i = 0; i < k_frames_in_flight; i++)
+                                     {
+                                         command_buffer.CmdResetQueryPool(gpu_timers[i]);
+                                     }
+                                 });
 
     const Opal::StringUtf8 albedo_texture_path = Opal::Paths::Combine(RNDR_CORE_ASSETS_DIR, "sample-models", "Suzanne", "glTF", "Suzanne_BaseColor.png").GetValue();
     const Opal::StringUtf8 metallic_roughness_texture_path = Opal::Paths::Combine(RNDR_CORE_ASSETS_DIR, "sample-models", "Suzanne", "glTF", "Suzanne_MetallicRoughness.png").GetValue();
@@ -187,6 +211,7 @@ void Run()
     for (i32 i = 0; i < k_frames_in_flight; ++i)
     {
         Rndr::Forge::SetDebugName(device, m_shader_buffers[i], "per frame shader data");
+        Rndr::Forge::SetDebugName(device, gpu_timers[i], "frame timing");
     }
 
     Rndr::Vector2i window_size = window->GetSize();
@@ -205,6 +230,11 @@ void Run()
     controller.Enable(true);
 
     Rndr::f32 delta_seconds = 0.016;
+    // What the last completed frame took on the device, and when the title last said so. The title is only
+    // rewritten a few times a second: a figure that changes every frame is unreadable, and formatting one
+    // every frame is work the frame loop does not need to do.
+    f64 gpu_milliseconds = 0.0;
+    f64 last_title_update_seconds = 0.0;
     while (!window->IsClosed())
     {
         auto start_time = Opal::GetSeconds();
@@ -235,6 +265,16 @@ void Run()
         }
         const u32 frame_index = frame_context.GetFrameIndex();
 
+        // BeginFrame has already waited on the fence of this slot, so the timestamps this pool holds are the
+        // ones written k_frames_in_flight frames ago and are there to read without stalling. Read them
+        // before the reset below throws them away. The first frames have nothing in the pool yet and say so.
+        Rndr::Forge::TimestampQueryPool& gpu_timer = gpu_timers[frame_index];
+        f64 measured_gpu_ms = 0.0;
+        if (gpu_timer.TryGetElapsedMilliseconds(0, 1, measured_gpu_ms))
+        {
+            gpu_milliseconds = measured_gpu_ms;
+        }
+
         // Everything is rendered at the size of the swap chain, which can lag a frame behind the size of the window.
         const Rndr::Vector2i render_size = frame_context.GetRenderSize();
         const f32 render_width = static_cast<f32>(render_size.x);
@@ -251,6 +291,12 @@ void Run()
         m_shader_buffers[frame_index].Update(Opal::AsBytes(shader_data));
 
         auto& command_buffer = frame_context.GetCommandBuffer();
+
+        // A pool holds undefined values until it is reset, so the reset comes first every frame, and the two
+        // timestamps around the frame's work measure the span between them: from the moment the device
+        // reaches the top of this command buffer to the moment everything in it has finished.
+        command_buffer.CmdResetQueryPool(gpu_timer);
+        command_buffer.CmdWriteTimestamp(gpu_timer, 0, Rndr::Forge::PipelineStageBits::PipelineStart);
 
         // Make sure our color and depth attachment are ready and in proper layout. Both are cleared when the
         // render pass starts, so neither has to preserve what it holds.
@@ -290,11 +336,24 @@ void Run()
             command_buffer.CmdEndRendering();
         }
 
+        // The closing half of the span. PipelineEnd waits for everything recorded above to finish, so the
+        // difference from the first timestamp covers the whole frame rather than a slice of it.
+        command_buffer.CmdWriteTimestamp(gpu_timer, 1, Rndr::Forge::PipelineStageBits::PipelineEnd);
+
         // Transitions the image to Present, ends the command buffer, submits it and presents.
         frame_context.EndFrame();
 
         auto end_time = Opal::GetSeconds();
         delta_seconds = static_cast<f32>(end_time - start_time);
+
+        if (end_time - last_title_update_seconds > k_title_update_period_seconds)
+        {
+            last_title_update_seconds = end_time;
+            char title[128] = {};
+            snprintf(title, sizeof(title), "Forge - modern-vulkan - CPU %.2f ms - GPU %.3f ms",
+                     static_cast<f64>(delta_seconds) * 1000.0, gpu_milliseconds);
+            window->SetTitle(Opal::StringUtf8(title));
+        }
     }
 
     device.WaitForAll();

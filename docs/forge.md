@@ -348,3 +348,68 @@ it, which is enough to tell two passes apart at a glance.
 
 Like naming, labelling is a no-op in a build without the debug utils extension. All three commands ask the
 same question, so a build without it skips both halves of a region rather than one.
+
+---
+
+## GPU timing
+
+`TimestampQueryPool` in `rndr/forge/query.hpp` owns a pool of timestamps, and
+`CommandBuffer::CmdWriteTimestamp` writes the device's tick counter into one of them. The difference between
+two ticks is what the device spent between those points, which is what the CPU side of a frame cannot tell
+you - `Opal::GetSeconds()` around a frame measures how long submitting took, not how long the work did.
+
+```cpp
+TimestampQueryPool timer(device, {.query_count = 2});
+
+command_buffer.CmdResetQueryPool(timer);
+command_buffer.CmdWriteTimestamp(timer, 0, PipelineStageBits::PipelineStart);
+...
+command_buffer.CmdWriteTimestamp(timer, 1, PipelineStageBits::PipelineEnd);
+
+// Once the fence of that submit has been waited on.
+f64 gpu_milliseconds = 0.0;
+if (timer.TryGetElapsedMilliseconds(0, 1, gpu_milliseconds)) { ... }
+```
+
+A pool holds **undefined values until it is reset**, and reading one that never was is undefined rather than
+empty - the validation layer says so. `CmdResetQueryPool` works on every device;
+`TimestampQueryPool::Reset` does it from the host and needs `DeviceFeatures::host_query_reset`.
+
+`timestampValidBits` and `timestampPeriod` are handled inside: ticks come back masked to the bits the queue
+family actually writes, and the elapsed helpers apply the device's nanoseconds per tick. The period is also
+the resolution floor, so on a device reporting tens of nanoseconds per tick a sub-microsecond measurement is
+noise. Ticks belong to the timeline of one queue family, so a tick from a graphics queue and one from an
+async compute queue are not comparable without `VK_EXT_calibrated_timestamps`.
+
+### What a pair of timestamps measures
+
+`CmdWriteTimestamp` is a marker in the command stream, not a timer around a scope. The tick is written once
+every *previously submitted* command has reached the stage the call names, and which stage that is decides
+what the pair means:
+
+- **A span** - `PipelineStart` then `PipelineEnd`. The first waits for nothing and fires as the device
+  reaches it; the second waits for everything before it to finish. The difference is wall time on the queue
+  across that stretch, which is what a frame or a pass wants. Bracketing a *single draw* this way does not
+  give that draw's cost: the GPU overlaps work, and the span swallows whatever neighbouring work was still
+  in flight.
+- **One operation on its own** - `PipelineEnd` on both sides. The write in front drains everything before
+  it, so the difference covers the operation between them and nothing else. The drain is the price: an
+  operation measured with no overlap is not what it costs inside a real frame, where it would run alongside
+  its neighbours. Both numbers are true, and they answer different questions.
+
+### Reading without stalling
+
+A result is not there when the command buffer is submitted, only when the device has run that far. Blocking
+on the frame that recorded it throws away the frames in flight, so keep one pool per frame in flight, write
+into the pool of the current frame, and read the pool whose fence has already been waited on:
+
+```cpp
+frame_context.BeginFrame();                       // waited on the fence of this slot
+TimestampQueryPool& timer = timers[frame_context.GetFrameIndex()];
+timer.TryGetElapsedMilliseconds(0, 1, gpu_ms);    // the frame from frames_in_flight ago
+command_buffer.CmdResetQueryPool(timer);          // only now is it safe to throw those away
+```
+
+The measurement lags by the number of frames in flight and costs nothing. `GetResults` and
+`GetElapsedMilliseconds` are the blocking pair, for setup and for tests; `TryGet*` returning false means the
+device has not reached those queries yet, which is what the first frames of a per-frame pool look like.

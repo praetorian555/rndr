@@ -6,6 +6,7 @@
 #include "rndr/forge/device.hpp"
 #include "rndr/forge/frame-context.hpp"
 #include "rndr/forge/pipeline.hpp"
+#include "rndr/forge/query.hpp"
 #include "rndr/forge/shader.hpp"
 #include "rndr/forge/swap-chain.hpp"
 #include "rndr/forge/synchronization.hpp"
@@ -105,6 +106,11 @@ void Rndr::Forge::SetDebugName(const Device& device, const DeviceQueue& queue, c
 {
     SetName(device, VK_OBJECT_TYPE_QUEUE, ToHandle(queue.GetNativeQueue()), name);
     SetName(device, VK_OBJECT_TYPE_COMMAND_POOL, ToHandle(queue.GetNativeCommandPool()), name);
+}
+
+void Rndr::Forge::SetDebugName(const Device& device, const TimestampQueryPool& query_pool, const Opal::StringUtf8& name)
+{
+    SetName(device, VK_OBJECT_TYPE_QUERY_POOL, ToHandle(query_pool.GetNativeQueryPool()), name);
 }
 
 Rndr::Forge::ScopedDebugLabel::ScopedDebugLabel(CommandBuffer& command_buffer, const Opal::StringUtf8& name, const Vector4f& color)

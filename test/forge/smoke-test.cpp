@@ -1,6 +1,7 @@
 #include <catch2/catch2.hpp>
 
 #include "opal/container/dynamic-array.h"
+#include "opal/container/in-place-array.h"
 #include "opal/exceptions.h"
 
 #include "rndr/forge/buffer.hpp"
@@ -11,6 +12,7 @@
 #include "rndr/forge/graphics-context.hpp"
 #include "rndr/forge/physical-device.hpp"
 #include "rndr/forge/pipeline.hpp"
+#include "rndr/forge/query.hpp"
 #include "rndr/forge/shader.hpp"
 #include "rndr/forge/texture.hpp"
 #include "rndr/forge/transfer.hpp"
@@ -33,10 +35,14 @@ struct ForgeFixture
     Forge::GraphicsContext context;
     Forge::Device device;
 
-    ForgeFixture() : context({.collect_debug_messages = true})
+    /**
+     * @param features What the device is asked to turn on. The default is what every test but the ones about
+     *        a specific feature wants, and asking for one that this device lacks throws out of here.
+     */
+    explicit ForgeFixture(const Forge::DeviceFeatures& features = {}) : context({.collect_debug_messages = true})
     {
         Opal::DynamicArray<Forge::PhysicalDevice> physical_devices = context.EnumeratePhysicalDevices();
-        device = Forge::Device(std::move(physical_devices[0]), context);
+        device = Forge::Device(std::move(physical_devices[0]), context, {.features = features});
     }
 
     Forge::DeviceQueue& GetQueue() { return device.GetQueue(Forge::QueueFamily::Graphics); }
@@ -1042,5 +1048,181 @@ TEST_CASE("Forge debug labels", "[forge]")
         command_buffer.End();
         // Not submitted: work the layer rejected while it was recorded is undefined behaviour once it runs.
     }
+    REQUIRE_NO_VALIDATION_ERROR(fixture);
+}
+
+TEST_CASE("Forge timestamp queries", "[forge]")
+{
+    if (!IsForgeAvailable())
+    {
+        SKIP("No Vulkan device on this machine.");
+    }
+    ForgeFixture fixture;
+    constexpr i32 k_element_count = 4096;
+    constexpr i32 k_group_size = 64;
+
+    const Forge::Buffer output(fixture.device, {.size = k_element_count * sizeof(u32),
+                                                .usage = Forge::BufferUsageBits::StorageBuffer,
+                                                .host_access = Forge::HostAccess::Random,
+                                                .use_device_address = true});
+    const Forge::Shader compute_shader =
+        Forge::Shader::FromSourceInMemory(fixture.device, k_compute_source, {.entry_point = "main_compute"});
+    Forge::ComputePipelineDesc pipeline_desc;
+    pipeline_desc.shader = compute_shader;
+    pipeline_desc.push_constant_ranges.PushBack(
+        {.shader_stages = ShaderTypeBits::Compute, .offset = 0, .size = sizeof(VkDeviceAddress)});
+    const Forge::Pipeline pipeline(fixture.device, pipeline_desc);
+    const VkDeviceAddress output_address = output.GetNativeDeviceAddress();
+
+    // The dispatch every measurement below wraps, so what differs between them is only how it is timed.
+    auto record_dispatch = [&](Forge::CommandBuffer& command_buffer)
+    {
+        command_buffer.CmdBindPipeline(pipeline);
+        command_buffer.CmdPushConstants(pipeline, ShaderTypeBits::Compute, Opal::AsBytes(output_address));
+        command_buffer.CmdDispatch(k_element_count / k_group_size);
+    };
+
+    SECTION("A span around a dispatch comes back as a plausible duration")
+    {
+        Forge::TimestampQueryPool pool(fixture.device, {.query_count = 2});
+        REQUIRE(pool.IsValid());
+        REQUIRE(pool.GetQueryCount() == 2);
+        Forge::SetDebugName(fixture.device, pool, "dispatch timing");
+
+        // A pool that has been reset and not yet written has nothing to read, which is what the first frames
+        // of a per-frame pool look like and the reason a frame loop asks rather than blocking. Reading one
+        // that was never reset at all is not this case: that is undefined, and the layer says so.
+        Forge::ImmediateSubmit(fixture.device, fixture.GetQueue(),
+                               [&](Forge::CommandBuffer& command_buffer) { command_buffer.CmdResetQueryPool(pool); });
+        f64 too_early_ms = -1.0;
+        REQUIRE_FALSE(pool.TryGetElapsedMilliseconds(0, 1, too_early_ms));
+        REQUIRE(too_early_ms == -1.0);
+
+        Forge::ImmediateSubmit(fixture.device, fixture.GetQueue(),
+                               [&](Forge::CommandBuffer& command_buffer)
+                               {
+                                   command_buffer.CmdResetQueryPool(pool);
+                                   command_buffer.CmdWriteTimestamp(pool, 0, Forge::PipelineStageBits::PipelineStart);
+                                   record_dispatch(command_buffer);
+                                   command_buffer.CmdWriteTimestamp(pool, 1, Forge::PipelineStageBits::PipelineEnd);
+                               });
+
+        Opal::InPlaceArray<u64, 2> ticks;
+        pool.GetResults({ticks.GetData(), 2});
+        INFO("ticks " << ticks[0] << " -> " << ticks[1] << ", period " << pool.GetTimestampPeriod() << " ns");
+        REQUIRE(ticks[1] >= ticks[0]);
+
+        // ImmediateSubmit has already waited, so the result is there without blocking.
+        f64 elapsed_ms = -1.0;
+        REQUIRE(pool.TryGetElapsedMilliseconds(0, 1, elapsed_ms));
+        INFO("elapsed " << elapsed_ms << " ms");
+        REQUIRE(elapsed_ms >= 0.0);
+        // A dispatch this small cannot take a second on a device that finished it, so a figure above one
+        // says the period or the valid bits were applied wrong rather than that the device was slow.
+        REQUIRE(elapsed_ms < 1000.0);
+        REQUIRE(elapsed_ms == pool.GetElapsedMilliseconds(0, 1));
+    }
+    SECTION("Two writes into a drained pipeline measure the dispatch on its own")
+    {
+        // The other pattern: PipelineEnd on both sides, so the write in front waits for everything before it
+        // and the difference covers the dispatch and nothing else.
+        Forge::TimestampQueryPool pool(fixture.device, {.query_count = 2});
+        Forge::ImmediateSubmit(fixture.device, fixture.GetQueue(),
+                               [&](Forge::CommandBuffer& command_buffer)
+                               {
+                                   command_buffer.CmdResetQueryPool(pool);
+                                   command_buffer.CmdWriteTimestamp(pool, 0, Forge::PipelineStageBits::PipelineEnd);
+                                   record_dispatch(command_buffer);
+                                   command_buffer.CmdWriteTimestamp(pool, 1, Forge::PipelineStageBits::PipelineEnd);
+                               });
+        const f64 elapsed_ms = pool.GetElapsedMilliseconds(0, 1);
+        INFO("isolated " << elapsed_ms << " ms");
+        REQUIRE(elapsed_ms >= 0.0);
+        REQUIRE(elapsed_ms < 1000.0);
+    }
+    SECTION("A pair at the ends of a pool is readable with the queries between them unwritten")
+    {
+        // Reading the two as one range would report the whole range unavailable, since the middle was never
+        // written, and a measurement that never arrives is indistinguishable from a device that is behind.
+        Forge::TimestampQueryPool pool(fixture.device, {.query_count = 4});
+        Forge::ImmediateSubmit(fixture.device, fixture.GetQueue(),
+                               [&](Forge::CommandBuffer& command_buffer)
+                               {
+                                   command_buffer.CmdResetQueryPool(pool);
+                                   command_buffer.CmdWriteTimestamp(pool, 0, Forge::PipelineStageBits::PipelineStart);
+                                   record_dispatch(command_buffer);
+                                   command_buffer.CmdWriteTimestamp(pool, 3, Forge::PipelineStageBits::PipelineEnd);
+                               });
+        f64 elapsed_ms = -1.0;
+        REQUIRE(pool.TryGetElapsedMilliseconds(0, 3, elapsed_ms));
+        REQUIRE(elapsed_ms >= 0.0);
+    }
+    SECTION("Resetting from the host needs the feature")
+    {
+        const Forge::TimestampQueryPool pool(fixture.device, {.query_count = 2});
+        REQUIRE_THROWS_AS(pool.Reset(), Opal::Exception);
+    }
+    SECTION("A pool that asks for no queries throws")
+    {
+        REQUIRE_THROWS_AS(Forge::TimestampQueryPool(fixture.device, {.query_count = 0}), Opal::Exception);
+    }
+    SECTION("A query past the end of the pool throws")
+    {
+        Forge::TimestampQueryPool pool(fixture.device, {.query_count = 2});
+        Forge::CommandBuffer command_buffer(fixture.device, fixture.GetQueue());
+        command_buffer.Begin();
+        command_buffer.CmdResetQueryPool(pool);
+        REQUIRE_THROWS_AS(command_buffer.CmdWriteTimestamp(pool, 2), Opal::Exception);
+        REQUIRE_THROWS_AS(command_buffer.CmdResetQueryPool(pool, 1, 2), Opal::Exception);
+        command_buffer.End();
+    }
+    SECTION("A timestamp naming more than one stage throws")
+    {
+        Forge::TimestampQueryPool pool(fixture.device, {.query_count = 2});
+        Forge::CommandBuffer command_buffer(fixture.device, fixture.GetQueue());
+        command_buffer.Begin();
+        command_buffer.CmdResetQueryPool(pool);
+        REQUIRE_THROWS_AS(command_buffer.CmdWriteTimestamp(pool, 0, Forge::PipelineStageBits::VertexShader |
+                                                                        Forge::PipelineStageBits::FragmentShader),
+                          Opal::Exception);
+        REQUIRE_THROWS_AS(command_buffer.CmdWriteTimestamp(pool, 0, Forge::PipelineStageBits::None), Opal::Exception);
+        command_buffer.End();
+    }
+    REQUIRE_NO_VALIDATION_ERROR(fixture);
+}
+
+TEST_CASE("Forge timestamp queries reset from the host", "[forge]")
+{
+    if (!IsForgeAvailable())
+    {
+        SKIP("No Vulkan device on this machine.");
+    }
+    ForgeFixture fixture({.host_query_reset = true});
+
+    constexpr i32 k_size = 256;
+    const Opal::DynamicArray<u8> written = MakeBytes(k_size, 41);
+    const Forge::Buffer source(fixture.device, {.size = k_size, .usage = Forge::BufferUsageBits::TransferSource}, written);
+    const Forge::Buffer destination(fixture.device, {.size = k_size, .usage = Forge::BufferUsageBits::TransferDestination});
+
+    const Forge::TimestampQueryPool pool(fixture.device, {.query_count = 2});
+    // The whole point of the host side: the pool is made ready without a command buffer having to carry it.
+    pool.Reset();
+    Forge::ImmediateSubmit(fixture.device, fixture.GetQueue(),
+                           [&](Forge::CommandBuffer& command_buffer)
+                           {
+                               command_buffer.CmdWriteTimestamp(pool, 0, Forge::PipelineStageBits::PipelineStart);
+                               command_buffer.CmdCopyBuffer(source, destination);
+                               command_buffer.CmdWriteTimestamp(pool, 1, Forge::PipelineStageBits::PipelineEnd);
+                           });
+    f64 elapsed_ms = -1.0;
+    REQUIRE(pool.TryGetElapsedMilliseconds(0, 1, elapsed_ms));
+    REQUIRE(elapsed_ms >= 0.0);
+
+    // Reset again and the results are gone, which is what makes a per-frame pool reusable.
+    pool.Reset();
+    f64 after_reset_ms = -1.0;
+    REQUIRE_FALSE(pool.TryGetElapsedMilliseconds(0, 1, after_reset_ms));
+    REQUIRE(after_reset_ms == -1.0);
+
     REQUIRE_NO_VALIDATION_ERROR(fixture);
 }

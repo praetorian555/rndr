@@ -470,7 +470,7 @@ desc naming an extension that does not exist is met by nothing, selecting when n
 selecting moves exactly one device out of the list. The sample picks its device this way now instead of
 taking element 0.
 
-### 3.8 Debug tooling — messages and names DONE, labels and timestamps left
+### 3.8 Debug tooling — DONE
 
 `GraphicsContext` keeps what it is told instead of only logging it. `GetDebugMessages` hands back the
 warnings and errors, `GetDebugMessageCount` counts them by severity and by type, and `ClearDebugMessages`
@@ -503,9 +503,46 @@ Verified by naming two textures, breaking a rule about them on purpose, and requ
 back out of the reported message. The sample names its mesh, textures, samplers, layout, set, pipeline, swap
 chain, per-frame buffers, command buffers and fences.
 
-Left: `vkCmdBeginDebugUtilsLabelEXT` for regions inside a command buffer, and a timestamp query pool for GPU
-timing. Neither has a consumer yet - the sample has no pass structure worth labelling and no timing display
-- and `Canvas::TimestampQuery` is worth reading before writing the Forge one.
+`CommandBuffer::CmdBeginDebugLabel`, `CmdEndDebugLabel` and `CmdInsertDebugLabel` mark a region of the
+command stream, and `ScopedDebugLabel` in `rndr/forge/debug.hpp` is the pair as a scope, so an early return
+or a throw cannot leave one open. They are `Cmd*` methods rather than free functions beside `SetDebugName`
+because a label is recorded into a command buffer and a name is not. All three ask the same question before
+calling through, which is what keeps a build without `VK_EXT_debug_utils` skipping both halves of a region
+rather than one of them. The colour is a hint and nothing else - Vulkan gives it no meaning and the layer
+never reads it - and it is kept because RenderDoc tints the row with it, which is how two passes are told
+apart at a glance.
+
+`TimestampQueryPool` in `rndr/forge/query.hpp` is the timing half: a pool of timestamps rather than one
+object per timestamp, which is the shape Vulkan actually has and lets one pool cover a whole frame.
+`CmdWriteTimestamp` writes a tick, `CmdResetQueryPool` and `TimestampQueryPool::Reset` put the pool back
+into the state a write needs, and the elapsed helpers come in a blocking pair and a `TryGet*` pair. Ticks
+are masked to `timestampValidBits` and scaled by `timestampPeriod` inside, and a family that writes no valid
+bits throws at creation rather than handing back zeroes that read like a fast device.
+
+Two things the shape had to get right. The elapsed helpers read the two queries one at a time rather than as
+the range that spans them: `vkGetQueryPoolResults` reports a whole range unavailable when any query in it
+is, so measuring one operation out of several - which leaves the queries between the pair unwritten - would
+have reported "not ready" forever, and a measurement that never arrives is indistinguishable from a device
+that is behind. And the stage a timestamp names is what decides what a pair of them means, which
+`docs/forge.md` now spells out: `PipelineStart` then `PipelineEnd` is a span of the queue, `PipelineEnd` on
+both sides is one operation with the pipeline drained around it, and bracketing a single draw the first way
+does not give that draw's cost.
+
+Verified by timing a dispatch against the ticks and the period the device reports, by a pair at the ends of
+a four query pool with the middle unwritten, and by the misuse cases - a query past the end, a stage with
+more than one bit, a pool of no queries, and `Reset` without `host_query_reset`. The negative half came for
+free: the first version of the test read a pool that had never been reset, and the layer said so, which is
+also the bug it then found in the sample.
+
+The sample keeps one pool per frame in flight, reads the result of the frame from two frames ago right after
+`BeginFrame` - where the fence of that slot has already been waited on, so nothing stalls - and shows CPU
+and GPU milliseconds in the window title. Its forward pass is one labelled region. Run across four resizes
+and a minimize with the layer on: the GPU figure tracks the window size and no validation message is
+reported.
+
+Left out on purpose: `vkQueueBeginDebugUtilsLabelEXT` for regions around a submit rather than inside one,
+which has no consumer, and pipeline statistics and occlusion queries, which are a different query type and
+belong to a different task.
 
 ### 3.9 Bindless plumbing - DONE
 
