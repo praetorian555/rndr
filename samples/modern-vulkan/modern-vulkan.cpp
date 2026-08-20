@@ -154,20 +154,8 @@ void Run()
 
     // Allocate descriptor set from the descriptor pool and fill it with concrete data.
     Rndr::Forge::DescriptorSet descriptor_set(descriptor_pool, descriptor_set_layout);
-    Opal::DynamicArray<Rndr::Forge::DescriptorSetUpdateBinding> update_bindings;
-    Rndr::Forge::DescriptorSetUpdateBinding binding1{
-        .descriptor_type = Rndr::Forge::DescriptorType::CombinedImageSampler,
-        .binding = 0,
-        .resource_info = Rndr::Forge::DescriptorSetUpdateBinding::ImageInfo{
-            .sampler = albedo_sampler, .image = albedo_texture, .image_layout = Rndr::Forge::ImageLayout::ShaderReadOnly}};
-    update_bindings.PushBack(std::move(binding1));
-    Rndr::Forge::DescriptorSetUpdateBinding binding2{
-        .descriptor_type = Rndr::Forge::DescriptorType::CombinedImageSampler,
-        .binding = 1,
-        .resource_info = Rndr::Forge::DescriptorSetUpdateBinding::ImageInfo{
-            .sampler = mr_sampler, .image = mr_texture, .image_layout = Rndr::Forge::ImageLayout::ShaderReadOnly}};
-    update_bindings.PushBack(std::move(binding2));
-    descriptor_set.UpdateDescriptorSets(update_bindings);
+    descriptor_set.Update(0, albedo_texture, albedo_sampler);
+    descriptor_set.Update(1, mr_texture, mr_sampler);
 
     const Opal::StringUtf8 shader_path = Opal::Paths::Combine(RNDR_CORE_ASSETS_DIR, "shaders", "modern-vulkan.slang").GetValue();
     const Rndr::Forge::Shader vertex_shader = Rndr::Forge::Shader::FromSource(device, shader_path, {.entry_point = "main_vertex"});

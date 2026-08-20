@@ -409,6 +409,14 @@ Rndr::Forge::DescriptorSet::DescriptorSet(const DescriptorPool& pool, const Desc
     {
         throw VulkanException(result, "vkAllocateDescriptorSets");
     }
+
+    // Copied rather than referenced: a layout may be destroyed while sets allocated from it live on,
+    // and this is the whole of what the Update overloads need from it.
+    m_binding_types.Reserve(layout.GetDesc().bindings.GetSize());
+    for (const DescriptorSetLayoutDesc::Binding& binding : layout.GetDesc().bindings)
+    {
+        m_binding_types.PushBack({.binding = binding.binding, .descriptor_type = binding.descriptor_type});
+    }
 }
 
 Rndr::Forge::DescriptorSet::~DescriptorSet()
@@ -417,7 +425,8 @@ Rndr::Forge::DescriptorSet::~DescriptorSet()
 }
 
 Rndr::Forge::DescriptorSet::DescriptorSet(DescriptorSet&& other) noexcept
-    : m_device(other.m_device), m_set(other.m_set), m_pool(std::move(other.m_pool))
+    : m_device(other.m_device), m_set(other.m_set), m_pool(std::move(other.m_pool)),
+      m_binding_types(std::move(other.m_binding_types))
 {
     other.m_set = VK_NULL_HANDLE;
     other.m_device = VK_NULL_HANDLE;
@@ -432,6 +441,7 @@ Rndr::Forge::DescriptorSet& Rndr::Forge::DescriptorSet::operator=(DescriptorSet&
         m_device = other.m_device;
         m_set = other.m_set;
         m_pool = std::move(other.m_pool);
+        m_binding_types = std::move(other.m_binding_types);
         other.m_set = VK_NULL_HANDLE;
         other.m_device = VK_NULL_HANDLE;
         other.m_pool = nullptr;
@@ -450,9 +460,10 @@ void Rndr::Forge::DescriptorSet::Destroy()
     m_set = VK_NULL_HANDLE;
     m_pool = nullptr;
     m_device = VK_NULL_HANDLE;
+    m_binding_types.Clear();
 }
 
-void Rndr::Forge::DescriptorSet::UpdateDescriptorSets(Opal::ArrayView<const DescriptorSetUpdateBinding> updates)
+void Rndr::Forge::DescriptorSet::Update(Opal::ArrayView<const DescriptorSetUpdateBinding> updates)
 {
     // One slot per update in each array, written by index. PushBack would grow them past the size they were
     // built with, and the pointers already handed to earlier writes would follow the old allocation.
@@ -504,4 +515,40 @@ void Rndr::Forge::DescriptorSet::UpdateDescriptorSets(Opal::ArrayView<const Desc
     }
 
     vkUpdateDescriptorSets(m_device, static_cast<u32>(descriptor_writes.GetSize()), descriptor_writes.GetData(), 0, nullptr);
+}
+
+Rndr::Forge::DescriptorType Rndr::Forge::DescriptorSet::GetBindingDescriptorType(u32 binding) const
+{
+    // A linear scan: a layout has a handful of bindings, and a map would cost more to build than this
+    // saves to search.
+    for (const BindingType& binding_type : m_binding_types)
+    {
+        if (binding_type.binding == binding)
+        {
+            return binding_type.descriptor_type;
+        }
+    }
+    throw Opal::Exception(Opal::StringEx("The layout of this descriptor set has no binding ") + binding + "!");
+}
+
+void Rndr::Forge::DescriptorSet::Update(u32 binding, const Texture& texture, const Sampler& sampler,
+                                        ImageLayout image_layout, u32 array_element)
+{
+    const DescriptorSetUpdateBinding update{
+        .descriptor_type = GetBindingDescriptorType(binding),
+        .binding = binding,
+        .array_element = array_element,
+        .resource_info =
+            DescriptorSetUpdateBinding::ImageInfo{.sampler = sampler, .image = texture, .image_layout = image_layout}};
+    Update({&update, 1});
+}
+
+void Rndr::Forge::DescriptorSet::Update(u32 binding, const Buffer& buffer, u64 offset, u64 size, u32 array_element)
+{
+    const DescriptorSetUpdateBinding update{
+        .descriptor_type = GetBindingDescriptorType(binding),
+        .binding = binding,
+        .array_element = array_element,
+        .resource_info = DescriptorSetUpdateBinding::BufferInfo{.buffer = buffer, .offset = offset, .size = size}};
+    Update({&update, 1});
 }

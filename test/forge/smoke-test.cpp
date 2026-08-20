@@ -817,7 +817,7 @@ TEST_CASE("Forge bindless descriptor bindings", "[forge]")
             .binding = 0,
             .array_element = 1,
             .resource_info = Forge::DescriptorSetUpdateBinding::BufferInfo{.buffer = output}});
-        descriptor_set.UpdateDescriptorSets(updates);
+        descriptor_set.Update(updates);
 
         const Forge::Shader shader = Forge::Shader::FromSourceInMemory(device, k_bindless_source, {.entry_point = "main_bindless"});
         Forge::ComputePipelineDesc pipeline_desc;
@@ -1224,5 +1224,126 @@ TEST_CASE("Forge timestamp queries reset from the host", "[forge]")
     REQUIRE_FALSE(pool.TryGetElapsedMilliseconds(0, 1, after_reset_ms));
     REQUIRE(after_reset_ms == -1.0);
 
+    REQUIRE_NO_VALIDATION_ERROR(fixture);
+}
+
+/** Writes what the storage buffer bound at binding 0 says, so a descriptor written the short way is checkable. */
+constexpr const char* k_descriptor_source = R"(
+[shader("compute")]
+[numthreads(64, 1, 1)]
+void main_descriptor(uint3 thread_id : SV_DispatchThreadID, uniform RWStructuredBuffer<uint> output)
+{
+    output[thread_id.x] = thread_id.x + 7;
+}
+)";
+
+TEST_CASE("Forge single resource descriptor updates", "[forge]")
+{
+    if (!IsForgeAvailable())
+    {
+        SKIP("No Vulkan device on this machine.");
+    }
+    ForgeFixture fixture;
+    constexpr i32 k_element_count = 128;
+    constexpr i32 k_group_size = 64;
+
+    Forge::DescriptorPoolDesc pool_desc;
+    pool_desc.Add(Forge::DescriptorType::StorageBuffer, 4);
+    pool_desc.Add(Forge::DescriptorType::CombinedImageSampler, 4);
+    pool_desc.max_sets = 4;
+    const Forge::DescriptorPool pool(fixture.device, pool_desc);
+
+    Forge::DescriptorSetLayoutDesc layout_desc;
+    layout_desc.AddBinding(0, Forge::DescriptorType::StorageBuffer, 1, ShaderTypeBits::Compute);
+    layout_desc.AddBinding(2, Forge::DescriptorType::CombinedImageSampler, 1, ShaderTypeBits::Fragment);
+    const Forge::DescriptorSetLayout layout(fixture.device, layout_desc);
+
+    SECTION("The descriptor type comes from the layout")
+    {
+        const Forge::DescriptorSet set(pool, layout);
+        REQUIRE(set.GetBindingDescriptorType(0) == Forge::DescriptorType::StorageBuffer);
+        REQUIRE(set.GetBindingDescriptorType(2) == Forge::DescriptorType::CombinedImageSampler);
+        // Binding 1 is a gap in this layout, which is a binding index the set has to reject rather than
+        // guess a type for.
+        REQUIRE_THROWS_AS(set.GetBindingDescriptorType(1), Opal::Exception);
+    }
+    SECTION("A buffer written the short way reaches the shader")
+    {
+        const Forge::Buffer output(fixture.device, {.size = k_element_count * sizeof(u32),
+                                                    .usage = Forge::BufferUsageBits::StorageBuffer,
+                                                    .host_access = Forge::HostAccess::Random});
+        const Opal::DynamicArray<u8> zeros(k_element_count * sizeof(u32));
+        output.Update(zeros);
+
+        Forge::DescriptorSet set(pool, layout);
+        set.Update(0, output);
+
+        const Forge::Shader shader =
+            Forge::Shader::FromSourceInMemory(fixture.device, k_descriptor_source, {.entry_point = "main_descriptor"});
+        Forge::ComputePipelineDesc pipeline_desc;
+        pipeline_desc.shader = shader;
+        pipeline_desc.descriptor_set_layouts.PushBack(Opal::Ref<const Forge::DescriptorSetLayout>(layout));
+        const Forge::Pipeline pipeline(fixture.device, pipeline_desc);
+
+        Forge::ImmediateSubmit(fixture.device, fixture.GetQueue(),
+                               [&](Forge::CommandBuffer& command_buffer)
+                               {
+                                   command_buffer.CmdBindPipeline(pipeline);
+                                   command_buffer.CmdBindDescriptorSet(pipeline, set);
+                                   command_buffer.CmdDispatch(k_element_count / k_group_size);
+                               });
+
+        Opal::DynamicArray<u32> values(k_element_count);
+        output.Read({reinterpret_cast<u8*>(values.GetData()), values.GetSize() * sizeof(u32)});
+        for (i32 i = 0; i < k_element_count; ++i)
+        {
+            REQUIRE(values[i] == static_cast<u32>(i) + 7);
+        }
+    }
+    SECTION("A texture written the short way records without complaint")
+    {
+        const Forge::Texture texture(fixture.device, {.format = PixelFormat::R8G8B8A8_UNORM,
+                                                      .width = 4,
+                                                      .height = 4,
+                                                      .usage = Forge::TextureUsageBits::Sampled});
+        const Forge::Sampler sampler(fixture.device, {.max_anisotropy = 1.0f});
+
+        Forge::DescriptorSet set(pool, layout);
+        set.Update(2, texture, sampler);
+    }
+    SECTION("A range past the end of the buffer throws")
+    {
+        const Forge::Buffer small(fixture.device,
+                                  {.size = 256, .usage = Forge::BufferUsageBits::StorageBuffer});
+        Forge::DescriptorSet set(pool, layout);
+        REQUIRE_THROWS_AS(set.Update(0, small, 128, 256), Opal::Exception);
+        REQUIRE_THROWS_AS(set.Update(0, small, 0, 0), Opal::Exception);
+    }
+    SECTION("A moved set carries what its layout declared")
+    {
+        // The pattern every per-frame resource in the sample uses: declare empty, assign over it. A set
+        // whose binding types stayed behind would reject the very bindings its layout has.
+        Forge::DescriptorSet set;
+        set = Forge::DescriptorSet(pool, layout);
+        REQUIRE(set.IsValid());
+        REQUIRE(set.GetBindingDescriptorType(0) == Forge::DescriptorType::StorageBuffer);
+
+        const Forge::Buffer buffer(fixture.device,
+                                   {.size = 256, .usage = Forge::BufferUsageBits::StorageBuffer});
+        set.Update(0, buffer);
+
+        const Forge::DescriptorSet moved(std::move(set));
+        REQUIRE(moved.GetBindingDescriptorType(0) == Forge::DescriptorType::StorageBuffer);
+        // The source is empty afterwards, so it knows about no binding at all.
+        REQUIRE_FALSE(set.IsValid());
+        REQUIRE_THROWS_AS(set.GetBindingDescriptorType(0), Opal::Exception);
+    }
+    SECTION("Writing a binding the layout does not have throws")
+    {
+        const Forge::Buffer buffer(fixture.device,
+                                   {.size = 256, .usage = Forge::BufferUsageBits::StorageBuffer});
+        Forge::DescriptorSet set(pool, layout);
+        REQUIRE_THROWS_AS(set.Update(3, buffer), Opal::Exception);
+    }
     REQUIRE_NO_VALIDATION_ERROR(fixture);
 }

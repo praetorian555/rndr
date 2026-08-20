@@ -90,7 +90,7 @@ struct DescriptorSetLayoutDesc : Opal::ClonableBase<DescriptorSetLayoutDesc>
         /**
          * Samplers baked into the layout, one per descriptor, for DescriptorType::Sampler and
          * DescriptorType::CombinedImageSampler only. The sampler of such a binding cannot be written by
-         * UpdateDescriptorSets, and every Sampler listed here has to outlive the layout and every set allocated
+         * DescriptorSet::Update, and every Sampler listed here has to outlive the layout and every set allocated
          * from it.
          */
         Opal::DynamicArray<Opal::Ref<const Sampler>> immutable_samplers;
@@ -109,7 +109,7 @@ struct DescriptorSetUpdateBinding
 {
     struct BufferInfo : Opal::ClonableBase<BufferInfo>
     {
-        Opal::Ref<Buffer> buffer;
+        Opal::Ref<const Buffer> buffer;
         u64 offset = 0;
         /** Bytes visible to the shader, starting at offset. k_whole_buffer covers the rest of the buffer. */
         u64 size = k_whole_buffer;
@@ -117,8 +117,8 @@ struct DescriptorSetUpdateBinding
     };
     struct ImageInfo : Opal::ClonableBase<ImageInfo>
     {
-        Opal::Ref<Sampler> sampler;
-        Opal::Ref<Texture> image;
+        Opal::Ref<const Sampler> sampler;
+        Opal::Ref<const Texture> image;
         ImageLayout image_layout = ImageLayout::ShaderReadOnly;
         OPAL_CLONE_FIELDS(sampler, image, image_layout);
     };
@@ -211,12 +211,58 @@ public:
     [[nodiscard]] bool IsValid() const { return m_set != VK_NULL_HANDLE; }
     [[nodiscard]] VkDescriptorSet GetNativeDescriptorSet() const { return m_set; }
 
-    void UpdateDescriptorSets(Opal::ArrayView<const DescriptorSetUpdateBinding> updates);
+    /**
+     * Write several descriptors as one call, which is what a set with more than one binding to fill wants -
+     * the single-resource overloads below are one vkUpdateDescriptorSets each.
+     * @param updates What to write. Each names its own binding and descriptor type.
+     */
+    void Update(Opal::ArrayView<const DescriptorSetUpdateBinding> updates);
+
+    /**
+     * Write one image into a binding. The descriptor type comes from the layout the set was allocated from,
+     * so it is not something a call site can disagree with the shader about.
+     * @param binding Index the layout declares. A binding the layout does not have throws.
+     * @param texture Image to write. Its view is what the shader reads.
+     * @param sampler Sampler to write beside it. Ignored by Vulkan when the binding has immutable samplers.
+     * @param image_layout Layout the image will be in when the shader reads it.
+     * @param array_element Which descriptor of the binding to write, for a binding that is an array.
+     */
+    void Update(u32 binding, const Texture& texture, const Sampler& sampler,
+                ImageLayout image_layout = ImageLayout::ShaderReadOnly, u32 array_element = 0);
+
+    /**
+     * Write one buffer into a binding. The descriptor type - constant or storage - comes from the layout, as
+     * above.
+     * @param binding Index the layout declares. A binding the layout does not have throws.
+     * @param buffer Buffer to write.
+     * @param offset Byte offset the shader sees as the start of the range.
+     * @param size Bytes visible from offset on. k_whole_buffer is the rest of the buffer.
+     * @param array_element Which descriptor of the binding to write, for a binding that is an array.
+     */
+    void Update(u32 binding, const Buffer& buffer, u64 offset = 0, u64 size = k_whole_buffer, u32 array_element = 0);
+
+    /**
+     * Descriptor type the layout declared for a binding. Throws when the layout has no such binding, which is
+     * what the Update overloads above call to fill in the type they do not take.
+     */
+    [[nodiscard]] DescriptorType GetBindingDescriptorType(u32 binding) const;
 
 private:
+    /** What one binding of the layout holds, which is all the Update overloads need to know about it. */
+    struct BindingType
+    {
+        u32 binding = 0;
+        DescriptorType descriptor_type = DescriptorType::CombinedImageSampler;
+    };
+
     VkDevice m_device = VK_NULL_HANDLE;
     VkDescriptorSet m_set = VK_NULL_HANDLE;
     Opal::Ref<const DescriptorPool> m_pool;
+    /**
+     * What each binding of the layout holds. Copied rather than referenced: Vulkan lets a layout be destroyed
+     * while sets allocated from it live on, and holding a reference would quietly take that away.
+     */
+    Opal::DynamicArray<BindingType> m_binding_types;
 };
 
 }  // namespace Rndr::Forge

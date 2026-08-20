@@ -709,10 +709,38 @@ Once the texture knows its own layout, `old_layout` stops being something the ca
 `texture.TransitionTo(layout)` replaces most hand-written barriers. Needs care around swap chain images,
 which the presentation engine transitions behind our back.
 
-### 4.4 Shorter descriptor set updates
+### 4.4 Shorter descriptor set updates — DONE
 
-Binding two textures currently takes thirteen lines (`modern-vulkan.cpp:139-152`). Add overloads:
-`set.Update(binding, texture, sampler, layout)` and `set.Update(binding, buffer, offset, size)`.
+`DescriptorSet::Update` has three forms: the array of `DescriptorSetUpdateBinding` that used to be called
+`UpdateDescriptorSets`, `Update(binding, texture, sampler)` and `Update(binding, buffer, offset, size)`.
+The two textures the sample binds went from thirteen lines to two, and the batch form is still there for a
+set with several bindings to fill, since each single-resource call is one `vkUpdateDescriptorSets`.
+
+The overloads do not take a `DescriptorType`, which is what makes them short. The set copies the binding
+index and descriptor type of every binding out of the layout when it is allocated, and `Update` looks the
+type up from there - so a call site cannot disagree with the shader about what a binding holds, and a
+binding the layout never declared throws instead of writing a descriptor nothing reads.
+`GetBindingDescriptorType` exposes the same lookup.
+
+Copied rather than referenced on purpose. Vulkan lets a descriptor set layout be destroyed while sets
+allocated from it live on, and holding an `Opal::Ref` to the layout would have quietly taken that away -
+a lifetime edge the rest of `docs/forge.md` would then have had to document.
+
+`DescriptorSetUpdateBinding::BufferInfo::buffer` and `ImageInfo::sampler` / `::image` became
+`Opal::Ref<const T>`, since writing a descriptor only reads the resource and every accessor it uses is
+const. That is what lets the new overloads take `const Texture&` and `const Buffer&` the way the parameter
+convention of 2.3 asks for.
+
+The copy is state, so it moves with the set. Reviewing this change caught the move assignment leaving it
+behind, which is the same bug 1.4 fixed for a mapped pointer: the set would have rejected the bindings its
+own layout declared, and only after a move - the pattern every per-frame resource in the sample uses.
+`Destroy` clears it too, so an emptied set reports no bindings rather than the ones it used to have.
+
+Verified by a compute dispatch reading a storage buffer bound through `Update(binding, buffer)` and
+checking every value it wrote, plus the throwing cases: a range past the end of the buffer, an empty range,
+a binding the layout does not have, and a gap between two declared binding indices. The move is covered
+both ways round - the test fails with the assignment left as it was. The sample renders and reports no
+validation message.
 
 ### 4.5 Optional depth attachment
 
