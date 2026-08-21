@@ -210,23 +210,76 @@ context.AddAction("SpecialMove")
     .BindCombo(keys, 0.0f);  // No timeout.
 ```
 
-### Gamepad (Planned)
+### Gamepad
 
-Gamepad support is defined in the API but not yet wired to platform input. The enums and builder methods are ready:
+Up to four gamepads (`Rndr::k_max_gamepads`) are polled through XInput. Polling happens inside
+`Application::ProcessSystemEvents()`, so nothing extra needs to be called from the frame loop.
 
 ```cpp
 // Gamepad button.
 context.AddAction("Jump")
-    .OnGamepadButton([](Rndr::GamepadButton button, Rndr::Trigger trigger, Rndr::u8 gamepad_index) { /* ... */ })
+    .OnGamepadButton([](Rndr::GamepadButton button, Rndr::Trigger trigger, Rndr::u8 gamepad_index)
+    {
+        // Handle jump.
+    })
     .Bind(Rndr::GamepadButton::A, Rndr::Trigger::Pressed);
 
 // Gamepad axis.
 context.AddAction("MoveX")
-    .OnGamepadAxis([](Rndr::GamepadAxis axis, Rndr::f32 value, Rndr::u8 gamepad_index) { /* ... */ })
-    .Bind(Rndr::GamepadAxis::LeftStickX, /*dead_zone=*/ 0.15f, /*gamepad_index=*/ 0);
+    .OnGamepadAxis([](Rndr::GamepadAxis axis, Rndr::f32 value, Rndr::u8 gamepad_index)
+    {
+        // value is dead-zone corrected and in [-1, 1].
+    })
+    .Bind(Rndr::GamepadAxis::LeftStickX, /*dead_zone=*/ 0.15f);
 ```
 
-Up to 4 gamepads will be supported via XInput. Each binding can target a specific gamepad index.
+**Callback signatures:**
+`void(GamepadButton button, Trigger trigger, u8 gamepad_index)` and
+`void(GamepadAxis axis, f32 value, u8 gamepad_index)`
+
+Buttons: `A`, `B`, `X`, `Y`, `LeftBumper`, `RightBumper`, `Back`, `Start`, `LeftThumb`, `RightThumb`,
+`DPadUp`, `DPadDown`, `DPadLeft`, `DPadRight`, `LeftTrigger`, `RightTrigger`.
+
+Axes: `LeftStickX`, `LeftStickY`, `RightStickX`, `RightStickY`, `LeftTrigger`, `RightTrigger`. Sticks
+report `[-1, 1]` with up and right positive. Triggers report `[0, 1]`.
+
+The triggers appear in both lists. They are analog, so they always report an axis value, and they also
+report button press/release as the analog value crosses the platform's trigger threshold. Binding one
+as a button and as an axis at the same time is fine; both fire.
+
+#### Gamepad Index
+
+Every binding carries a gamepad index. The default is `Rndr::k_any_gamepad`, which matches events from
+every pad — a single-player game keeps working no matter which slot the pad connects on. Pass an
+explicit index for local multiplayer.
+
+```cpp
+context.AddAction("PlayerTwoJump")
+    .OnGamepadButton(callback)
+    .Bind(Rndr::GamepadButton::A, Rndr::Trigger::Pressed, /*gamepad_index=*/ 1);
+
+context.AddAction("PlayerTwoMove")
+    .OnGamepadAxis(callback)
+    .Bind(Rndr::GamepadAxis::LeftStickX, /*dead_zone=*/ -1.0f, /*gamepad_index=*/ 1);
+```
+
+Gamepad events carry no window, so the `ForWindow()` filter does not apply to them. An action with a
+window filter still receives gamepad events.
+
+#### Connection Changes
+
+Connected slots are sampled every `ProcessSystemEvents()`. Empty slots are far more expensive to
+sample, so they are only retried once a second — expect up to a second of delay before a pad plugged
+in mid-session starts reporting.
+
+```cpp
+app->on_gamepad_connection_change.Bind([](Rndr::u8 gamepad_index, bool is_connected) { /* ... */ });
+
+bool connected = app->IsGamepadConnected(0);
+```
+
+A pad that disconnects while inputs are active reports a release for every button still held and a
+zero for every axis still deflected, so nothing stays stuck on.
 
 ## Multiple Callback Types Per Action
 
@@ -257,7 +310,8 @@ context.AddAction("EditorClick")
     .ForWindow(editor_window);  // Only fires for events from this window.
 ```
 
-An action with no window filter (the default) fires for events from any window.
+An action with no window filter (the default) fires for events from any window. Gamepad events carry
+no window, so the filter never applies to them.
 
 ## Dead Zones
 
@@ -272,8 +326,22 @@ context.AddAction("MoveX")
     .Bind(Rndr::GamepadAxis::LeftStickX, /*dead_zone=*/ 0.1f);
 ```
 
+A raw value inside the dead zone dispatches nothing. Outside it, the remaining range is rescaled back
+onto `[0, 1]`, so the value ramps up continuously from zero rather than jumping to the dead zone edge:
+
+    value = sign(raw) * (|raw| - dead_zone) / (1 - dead_zone)
+
+With a dead zone of 0.2, a raw 0.6 reports 0.5 and a raw 1.0 still reports 1.0.
+
+Returning to center is reported once. When an axis moves from outside the dead zone to inside it, the
+binding fires a single callback with a value of 0 and then stays quiet until the axis leaves the dead
+zone again. Without that, a released stick would leave whatever it was driving stuck at the last
+non-zero value.
+
 ## Event Flow
 
+0. Gamepads have no event queue of their own, so `Application::ProcessSystemEvents()` samples every
+   XInput slot and reports whatever changed since the previous sample.
 1. Platform events arrive through `SystemMessageHandler` callbacks (`OnButtonDown`, `OnMouseMove`, etc.).
 2. The `InputSystem` translates them from the legacy `InputPrimitive` enum to the new typed enums (`Key`, `MouseButton`, etc.) and queues them.
 3. Modifier key state (Ctrl, Shift, Alt) is tracked on press/release.
@@ -287,6 +355,8 @@ context.AddAction("MoveX")
 
 - **Simultaneous combos are order-dependent.** `BindCombo` with `timeout == 0` requires keys in the declared order.
 - **Horizontal mouse wheel (`WheelX`)** is defined in the `MouseAxis` enum but there is no corresponding `SystemMessageHandler` event, so it cannot be bound.
-- **Gamepad input** is defined in the API but not yet connected to platform events (XInput).
+- **Gamepad rumble** is not implemented. Only input is wired up, there is no `XInputSetState` path.
+- **A gamepad plugged in mid-session** takes up to a second to be noticed, because empty XInput slots are
+  expensive to sample and are therefore only retried once a second.
 - **Rebinding/serialization** is not implemented. The API is designed to support it in the future (actions are named, bindings are data-describable).
 - **Not thread-safe.** All input system operations must happen on the same thread.
