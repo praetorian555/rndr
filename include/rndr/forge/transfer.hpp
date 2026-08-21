@@ -59,7 +59,7 @@ void ReadBackBuffer(const Device& device, DeviceQueue& queue, const Buffer& sour
  * @param mip_level Which mip level to read.
  * @param final_layout Layout to leave the texture in. Undefined leaves it in TransferSource.
  */
-void ReadBackTexture(const Device& device, DeviceQueue& queue, const Texture& source, ImageLayout current_layout, Opal::ArrayView<u8> out,
+void ReadBackTexture(const Device& device, DeviceQueue& queue, Texture& source, ImageLayout current_layout, Opal::ArrayView<u8> out,
                      u32 mip_level = 0, ImageLayout final_layout = ImageLayout::ShaderReadOnly);
 
 /** The size in bytes of one tightly packed mip level of a texture, every array layer included. */

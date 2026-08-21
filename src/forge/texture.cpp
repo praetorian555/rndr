@@ -138,6 +138,12 @@ static VkBorderColor ToVkBorderColor(Rndr::BorderColor border_color)
     }
 }
 
+/** How many (mip level, array layer) pairs a texture has, which is how many layouts it tracks. */
+static Rndr::i64 SubresourceCount(const Rndr::Forge::TextureDesc& desc)
+{
+    return static_cast<Rndr::i64>(desc.mip_level_count) * static_cast<Rndr::i64>(desc.array_layer_count);
+}
+
 Rndr::Forge::Texture::Texture(const Device& device, const TextureDesc& desc) : m_desc(desc), m_device(device)
 {
     Init(device, desc);
@@ -195,6 +201,7 @@ Rndr::Forge::Texture::Texture(const Device& device, DeviceQueue& queue, const Bi
 Rndr::Forge::Texture::Texture(const Device& device, VkImage native_image, const TextureDesc& desc) :
 m_device(device), m_image(native_image), m_desc(desc)
 {
+    m_layouts = Opal::DynamicArray<ImageLayout>(SubresourceCount(m_desc), ImageLayout::Undefined);
     const VkImageViewCreateInfo image_view_create_info = {
         .sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
         .image = m_image,
@@ -217,6 +224,9 @@ void Rndr::Forge::Texture::Init(const Device& device, const TextureDesc& desc)
 {
     m_desc = desc;
     m_device = device;
+    // Vulkan says a freshly created image is in the undefined layout, whatever initialLayout below asks for,
+    // so the grid starts there and the first barrier on the texture transitions out of it.
+    m_layouts = Opal::DynamicArray<ImageLayout>(SubresourceCount(m_desc), ImageLayout::Undefined);
 
     VmaAllocator gpu_allocator = device.GetGPUAllocator();
 
@@ -273,11 +283,13 @@ Rndr::Forge::Texture::~Texture()
 
 Rndr::Forge::Texture::Texture(Texture&& other) noexcept
     : m_desc(other.m_desc),
+      m_layouts(std::move(other.m_layouts)),
       m_device(std::move(other.m_device)),
       m_image(other.m_image),
       m_view(other.m_view),
       m_image_allocation(other.m_image_allocation)
 {
+    other.m_layouts.Clear();
     other.m_image = VK_NULL_HANDLE;
     other.m_image_allocation = VK_NULL_HANDLE;
     other.m_view = VK_NULL_HANDLE;
@@ -290,10 +302,12 @@ Rndr::Forge::Texture& Rndr::Forge::Texture::operator=(Texture&& other) noexcept
     {
         Destroy();
         m_desc = other.m_desc;
+        m_layouts = std::move(other.m_layouts);
         m_device = std::move(other.m_device);
         m_image = other.m_image;
         m_image_allocation = other.m_image_allocation;
         m_view = other.m_view;
+        other.m_layouts.Clear();
         other.m_image = VK_NULL_HANDLE;
         other.m_image_allocation = VK_NULL_HANDLE;
         other.m_view = VK_NULL_HANDLE;
@@ -319,6 +333,111 @@ void Rndr::Forge::Texture::Destroy()
     {
         // We were not the owner of the native image
         m_image = VK_NULL_HANDLE;
+    }
+    m_layouts.Clear();
+}
+
+/** The name of a layout, for the message a range that disagrees with itself throws with. */
+static const char* LayoutName(Rndr::Forge::ImageLayout layout)
+{
+    using Rndr::Forge::ImageLayout;
+    switch (layout)
+    {
+        case ImageLayout::Undefined:
+            return "Undefined";
+        case ImageLayout::General:
+            return "General";
+        case ImageLayout::ColorAttachment:
+            return "ColorAttachment";
+        case ImageLayout::DepthStencilAttachment:
+            return "DepthStencilAttachment";
+        case ImageLayout::DepthStencilReadOnly:
+            return "DepthStencilReadOnly";
+        case ImageLayout::ShaderReadOnly:
+            return "ShaderReadOnly";
+        case ImageLayout::TransferSource:
+            return "TransferSource";
+        case ImageLayout::TransferDestination:
+            return "TransferDestination";
+        case ImageLayout::Present:
+            return "Present";
+    }
+    return "an unknown layout";
+}
+
+/**
+ * The half-open subresource range a range names, with the k_all_* counts resolved against the desc. A range
+ * that reaches past the texture throws rather than being clamped, since it is a mistake either way.
+ */
+static void ResolveRange(const Rndr::Forge::TextureDesc& desc, const Rndr::Forge::ImageSubresourceRange& range,
+                         Rndr::u32& first_mip, Rndr::u32& last_mip, Rndr::u32& first_layer, Rndr::u32& last_layer)
+{
+    using namespace Rndr;
+    first_mip = range.first_mip_level;
+    last_mip = range.mip_level_count == Forge::k_all_mip_levels ? desc.mip_level_count : first_mip + range.mip_level_count;
+    first_layer = range.first_array_layer;
+    last_layer = range.array_layer_count == Forge::k_all_array_layers ? desc.array_layer_count : first_layer + range.array_layer_count;
+    if (last_mip > desc.mip_level_count || first_mip >= last_mip)
+    {
+        throw Opal::Exception("The subresource range names mip levels the texture does not have!");
+    }
+    if (last_layer > desc.array_layer_count || first_layer >= last_layer)
+    {
+        throw Opal::Exception("The subresource range names array layers the texture does not have!");
+    }
+}
+
+Rndr::Forge::ImageLayout Rndr::Forge::Texture::GetCurrentLayout() const
+{
+    return GetCurrentLayout(ImageSubresourceRange{});
+}
+
+Rndr::Forge::ImageLayout Rndr::Forge::Texture::GetCurrentLayout(u32 mip_level, u32 array_layer) const
+{
+    if (mip_level >= m_desc.mip_level_count || array_layer >= m_desc.array_layer_count)
+    {
+        throw Opal::Exception("The texture does not have that subresource!");
+    }
+    return m_layouts[static_cast<i64>(mip_level) * m_desc.array_layer_count + array_layer];
+}
+
+Rndr::Forge::ImageLayout Rndr::Forge::Texture::GetCurrentLayout(const ImageSubresourceRange& range) const
+{
+    u32 first_mip = 0;
+    u32 last_mip = 0;
+    u32 first_layer = 0;
+    u32 last_layer = 0;
+    ResolveRange(m_desc, range, first_mip, last_mip, first_layer, last_layer);
+    const ImageLayout common = m_layouts[static_cast<i64>(first_mip) * m_desc.array_layer_count + first_layer];
+    for (u32 mip = first_mip; mip < last_mip; ++mip)
+    {
+        for (u32 layer = first_layer; layer < last_layer; ++layer)
+        {
+            const ImageLayout layout = m_layouts[static_cast<i64>(mip) * m_desc.array_layer_count + layer];
+            if (layout != common)
+            {
+                throw Opal::Exception(Opal::StringEx("The subresources of the texture are not all in one layout - found ") +
+                                      LayoutName(common) + " and " + LayoutName(layout) +
+                                      ". Ask for the layout of one subresource instead.");
+            }
+        }
+    }
+    return common;
+}
+
+void Rndr::Forge::Texture::SetCurrentLayout(const ImageSubresourceRange& range, ImageLayout layout)
+{
+    u32 first_mip = 0;
+    u32 last_mip = 0;
+    u32 first_layer = 0;
+    u32 last_layer = 0;
+    ResolveRange(m_desc, range, first_mip, last_mip, first_layer, last_layer);
+    for (u32 mip = first_mip; mip < last_mip; ++mip)
+    {
+        for (u32 layer = first_layer; layer < last_layer; ++layer)
+        {
+            m_layouts[static_cast<i64>(mip) * m_desc.array_layer_count + layer] = layout;
+        }
     }
 }
 

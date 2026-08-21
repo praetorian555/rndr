@@ -51,7 +51,7 @@ void Rndr::Forge::ReadBackBuffer(const Device& device, DeviceQueue& queue, const
     staging_buffer.Read(out);
 }
 
-void Rndr::Forge::ReadBackTexture(const Device& device, DeviceQueue& queue, const Texture& source, ImageLayout current_layout,
+void Rndr::Forge::ReadBackTexture(const Device& device, DeviceQueue& queue, Texture& source, ImageLayout current_layout,
                                   Opal::ArrayView<u8> out, u32 mip_level, ImageLayout final_layout)
 {
     const TextureDesc& desc = source.GetDesc();

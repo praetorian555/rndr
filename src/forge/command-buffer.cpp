@@ -202,6 +202,13 @@ void Rndr::Forge::CommandBuffer::CmdBarriers(const Barriers& barriers)
                                            .imageMemoryBarrierCount = image_barriers.GetCount(),
                                            .pImageMemoryBarriers = image_barriers.GetData()};
     vkCmdPipelineBarrier2(m_native_command_buffer, &dependency_info);
+
+    // Vulkan keeps no record of what layout an image ended up in, so this is where Forge's own is kept up to
+    // date. Recorded rather than executed, which is what makes it the caller's job to record in order.
+    for (const ImageBarrier& barrier : barriers.image)
+    {
+        barrier.image.Get().SetCurrentLayout(barrier.subresource_range, barrier.new_layout);
+    }
 }
 
 void Rndr::Forge::CommandBuffer::CmdImageBarrier(const ImageBarrier& image_barrier)
@@ -227,6 +234,11 @@ void Rndr::Forge::CommandBuffer::CmdBufferBarriers(Opal::ArrayView<const BufferB
 void Rndr::Forge::CommandBuffer::CmdMemoryBarrier(const MemoryBarrier& memory_barrier)
 {
     CmdBarriers({.memory = {&memory_barrier, 1}});
+}
+
+void Rndr::Forge::CommandBuffer::CmdTransition(Texture& texture, ImageLayout new_layout)
+{
+    CmdImageBarrier(ImageBarrier::To(texture, texture.GetCurrentLayout(), new_layout));
 }
 
 /** The extent of one mip level of a texture, which is the base extent halved once per level, floored at one. */

@@ -110,6 +110,8 @@ public:
 
     /** The swap chain image this frame renders into. */
     [[nodiscard]] const Texture& GetColorImage() const;
+    /** The same image, mutable, since a barrier on it moves the layout the texture tracks. */
+    [[nodiscard]] Texture& GetColorImage();
     [[nodiscard]] VkImageView GetColorImageView() const;
 
     /**

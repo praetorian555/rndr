@@ -1202,6 +1202,78 @@ TEST_CASE("Forge barrier vocabulary", "[forge]")
     REQUIRE_NO_VALIDATION_ERROR(fixture);
 }
 
+TEST_CASE("Forge texture layout tracking", "[forge]")
+{
+    if (!IsForgeAvailable())
+    {
+        SKIP("No Vulkan device on this machine.");
+    }
+    ForgeFixture fixture;
+    constexpr u32 k_mip_count = 4;  // 8 -> 4 -> 2 -> 1
+    Forge::Texture texture(fixture.device, {.format = PixelFormat::R8G8B8A8_UNORM,
+                                            .width = 8,
+                                            .height = 8,
+                                            .mip_level_count = k_mip_count,
+                                            .usage = Forge::TextureUsageBits::TransferSource |
+                                                     Forge::TextureUsageBits::TransferDestination |
+                                                     Forge::TextureUsageBits::Sampled});
+
+    SECTION("A fresh texture is undefined and a transition moves every level of it")
+    {
+        REQUIRE(texture.GetCurrentLayout() == Forge::ImageLayout::Undefined);
+        REQUIRE(texture.GetCurrentLayout(k_mip_count - 1) == Forge::ImageLayout::Undefined);
+
+        Forge::ImmediateSubmit(fixture.device, fixture.GetQueue(),
+                               [&](Forge::CommandBuffer& command_buffer)
+                               {
+                                   command_buffer.CmdTransition(texture, Forge::ImageLayout::ShaderReadOnly);
+                                   REQUIRE(texture.GetCurrentLayout() == Forge::ImageLayout::ShaderReadOnly);
+                                   // The second one has no old layout to be told: it reads ShaderReadOnly off
+                                   // the texture, which is the whole point of tracking it.
+                                   command_buffer.CmdTransition(texture, Forge::ImageLayout::TransferSource);
+                               });
+        REQUIRE(texture.GetCurrentLayout() == Forge::ImageLayout::TransferSource);
+        for (u32 level = 0; level < k_mip_count; ++level)
+        {
+            REQUIRE(texture.GetCurrentLayout(level) == Forge::ImageLayout::TransferSource);
+        }
+    }
+    SECTION("A partial range splits the grid and the whole-texture answer stops existing")
+    {
+        Forge::ImageBarrier barrier = Forge::ImageBarrier::ToTransferDestination(texture, Forge::ImageLayout::Undefined);
+        barrier.subresource_range.first_mip_level = 0;
+        barrier.subresource_range.mip_level_count = 2;
+        Forge::ImmediateSubmit(fixture.device, fixture.GetQueue(),
+                               [&](Forge::CommandBuffer& command_buffer) { command_buffer.CmdImageBarrier(barrier); });
+
+        REQUIRE(texture.GetCurrentLayout(0) == Forge::ImageLayout::TransferDestination);
+        REQUIRE(texture.GetCurrentLayout(1) == Forge::ImageLayout::TransferDestination);
+        REQUIRE(texture.GetCurrentLayout(2) == Forge::ImageLayout::Undefined);
+        REQUIRE(texture.GetCurrentLayout(3) == Forge::ImageLayout::Undefined);
+        REQUIRE_THROWS_AS(texture.GetCurrentLayout(), Opal::Exception);
+        // A transition of the whole texture cannot say what it is coming from either.
+        Forge::CommandBuffer command_buffer(fixture.device, fixture.GetQueue());
+        command_buffer.Begin();
+        REQUIRE_THROWS_AS(command_buffer.CmdTransition(texture, Forge::ImageLayout::ShaderReadOnly), Opal::Exception);
+        command_buffer.End();
+    }
+    SECTION("A subresource the texture does not have throws")
+    {
+        REQUIRE_THROWS_AS(texture.GetCurrentLayout(k_mip_count), Opal::Exception);
+        REQUIRE_THROWS_AS(texture.GetCurrentLayout(0, 1), Opal::Exception);
+    }
+    SECTION("A move carries the layouts across")
+    {
+        Forge::ImmediateSubmit(fixture.device, fixture.GetQueue(),
+                               [&](Forge::CommandBuffer& command_buffer)
+                               { command_buffer.CmdTransition(texture, Forge::ImageLayout::ShaderReadOnly); });
+        Forge::Texture moved(std::move(texture));
+        REQUIRE(moved.GetCurrentLayout() == Forge::ImageLayout::ShaderReadOnly);
+        REQUIRE_FALSE(texture.IsValid());  // NOLINT(bugprone-use-after-move)
+    }
+    REQUIRE_NO_VALIDATION_ERROR(fixture);
+}
+
 TEST_CASE("Forge debug labels", "[forge]")
 {
     if (!IsForgeAvailable())

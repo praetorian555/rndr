@@ -214,6 +214,15 @@ const Rndr::Forge::Texture& Rndr::Forge::FrameContext::GetColorImage() const
     return m_swap_chain->GetCurrentColorImage();
 }
 
+Rndr::Forge::Texture& Rndr::Forge::FrameContext::GetColorImage()
+{
+    if (!m_swap_chain->HasAcquiredImage())
+    {
+        throw Opal::Exception("There is no acquired image outside of a frame - call BeginFrame first!");
+    }
+    return m_swap_chain->GetCurrentColorImage();
+}
+
 VkImageView Rndr::Forge::FrameContext::GetColorImageView() const
 {
     return GetColorImage().GetNativeImageView();

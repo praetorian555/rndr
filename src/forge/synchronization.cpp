@@ -182,7 +182,7 @@ Rndr::Forge::BufferBarrier Rndr::Forge::BufferBarrier::ReadThenWrite(const Buffe
             .buffer = buffer};
 }
 
-Rndr::Forge::ImageBarrier Rndr::Forge::ImageBarrier::ToColorAttachment(const Texture& texture, ImageLayout old_layout)
+Rndr::Forge::ImageBarrier Rndr::Forge::ImageBarrier::ToColorAttachment(Texture& texture, ImageLayout old_layout)
 {
     const SourceScope source = ScopeOfLayout(old_layout);
     return {.stages_must_finish = source.stages,
@@ -194,7 +194,7 @@ Rndr::Forge::ImageBarrier Rndr::Forge::ImageBarrier::ToColorAttachment(const Tex
             .image = texture};
 }
 
-Rndr::Forge::ImageBarrier Rndr::Forge::ImageBarrier::ToDepthStencilAttachment(const Texture& texture, ImageLayout old_layout)
+Rndr::Forge::ImageBarrier Rndr::Forge::ImageBarrier::ToDepthStencilAttachment(Texture& texture, ImageLayout old_layout)
 {
     const SourceScope source = ScopeOfLayout(old_layout);
     return {.stages_must_finish = source.stages,
@@ -207,7 +207,7 @@ Rndr::Forge::ImageBarrier Rndr::Forge::ImageBarrier::ToDepthStencilAttachment(co
             .image = texture};
 }
 
-Rndr::Forge::ImageBarrier Rndr::Forge::ImageBarrier::ToShaderRead(const Texture& texture, ImageLayout old_layout,
+Rndr::Forge::ImageBarrier Rndr::Forge::ImageBarrier::ToShaderRead(Texture& texture, ImageLayout old_layout,
                                                                   PipelineStageBits reader)
 {
     const SourceScope source = ScopeOfLayout(old_layout);
@@ -220,7 +220,7 @@ Rndr::Forge::ImageBarrier Rndr::Forge::ImageBarrier::ToShaderRead(const Texture&
             .image = texture};
 }
 
-Rndr::Forge::ImageBarrier Rndr::Forge::ImageBarrier::ToTransferDestination(const Texture& texture, ImageLayout old_layout)
+Rndr::Forge::ImageBarrier Rndr::Forge::ImageBarrier::ToTransferDestination(Texture& texture, ImageLayout old_layout)
 {
     const SourceScope source = ScopeOfLayout(old_layout);
     return {.stages_must_finish = source.stages,
@@ -232,7 +232,7 @@ Rndr::Forge::ImageBarrier Rndr::Forge::ImageBarrier::ToTransferDestination(const
             .image = texture};
 }
 
-Rndr::Forge::ImageBarrier Rndr::Forge::ImageBarrier::ToTransferSource(const Texture& texture, ImageLayout old_layout)
+Rndr::Forge::ImageBarrier Rndr::Forge::ImageBarrier::ToTransferSource(Texture& texture, ImageLayout old_layout)
 {
     const SourceScope source = ScopeOfLayout(old_layout);
     return {.stages_must_finish = source.stages,
@@ -244,7 +244,7 @@ Rndr::Forge::ImageBarrier Rndr::Forge::ImageBarrier::ToTransferSource(const Text
             .image = texture};
 }
 
-Rndr::Forge::ImageBarrier Rndr::Forge::ImageBarrier::ToPresent(const Texture& texture, ImageLayout old_layout)
+Rndr::Forge::ImageBarrier Rndr::Forge::ImageBarrier::ToPresent(Texture& texture, ImageLayout old_layout)
 {
     const SourceScope source = ScopeOfLayout(old_layout);
     // The presentation engine synchronizes against the semaphore the present waits on, not against a stage,
@@ -258,7 +258,7 @@ Rndr::Forge::ImageBarrier Rndr::Forge::ImageBarrier::ToPresent(const Texture& te
             .image = texture};
 }
 
-Rndr::Forge::ImageBarrier Rndr::Forge::ImageBarrier::To(const Texture& texture, ImageLayout old_layout, ImageLayout new_layout)
+Rndr::Forge::ImageBarrier Rndr::Forge::ImageBarrier::To(Texture& texture, ImageLayout old_layout, ImageLayout new_layout)
 {
     switch (new_layout)
     {

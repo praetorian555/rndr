@@ -236,6 +236,15 @@ public:
     void CmdBarriers(const Barriers& barriers);
 
     /**
+     * Move a texture into a layout, with the stages and the access picked from what that layout is for. The
+     * layout it is coming from is the one the texture tracks, so this is the whole transition in one line.
+     * @param texture Texture to transition. Every mip level and array layer of it, so a texture whose levels
+     *        disagree - one halfway through mip generation - throws rather than guessing.
+     * @param new_layout Layout to move it into. One with no barrier preset throws.
+     */
+    void CmdTransition(Texture& texture, ImageLayout new_layout);
+
+    /**
      * Copy ranges of one buffer into another. The source needs BufferUsageBits::TransferSource and the
      * destination BufferUsageBits::TransferDestination.
      * @param source Buffer to read from.

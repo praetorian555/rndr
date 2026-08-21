@@ -234,6 +234,15 @@ const Rndr::Forge::Texture& Rndr::Forge::SwapChain::GetCurrentColorImage() const
     return m_color_textures[static_cast<i32>(m_current_image_index)];
 }
 
+Rndr::Forge::Texture& Rndr::Forge::SwapChain::GetCurrentColorImage()
+{
+    if (!HasAcquiredImage())
+    {
+        throw Opal::Exception("There is no acquired image - AcquireImage has to come first!");
+    }
+    return m_color_textures[static_cast<i32>(m_current_image_index)];
+}
+
 VkImageView Rndr::Forge::SwapChain::GetCurrentColorImageView() const
 {
     return GetCurrentColorImage().GetNativeImageView();
@@ -268,6 +277,10 @@ Rndr::Forge::AcquiredImage Rndr::Forge::SwapChain::AcquireImage(const Semaphore&
         throw VulkanException(result, "vkAcquireNextImageKHR");
     }
     m_current_image_index = image_index;
+    // The presentation engine is the one writer of a layout that Forge cannot observe, and the specification
+    // says the contents of a re-acquired image are undefined. Undefined is also the cheapest thing to
+    // transition out of, which is what a swap chain image cleared at the top of every frame wants.
+    m_color_textures[static_cast<i32>(image_index)].SetCurrentLayout({}, ImageLayout::Undefined);
     return {SwapChainStatus::Success, image_index};
 }
 

@@ -109,6 +109,8 @@ public:
     [[nodiscard]] const SwapChainDesc& GetDesc() const { return m_desc; }
     [[nodiscard]] const VkExtent2D& GetExtent() const { return m_extent; }
     [[nodiscard]] const Texture& GetColorImage(u32 idx) const { return m_color_textures[idx]; }
+    /** The same image, mutable, since a barrier on it moves the layout the texture tracks. */
+    [[nodiscard]] Texture& GetColorImage(u32 idx) { return m_color_textures[idx]; }
     [[nodiscard]] VkImageView GetColorImageView(u32 idx) const { return m_color_textures[idx].GetNativeImageView(); }
     [[nodiscard]] u32 GetColorImageCount() const { return static_cast<u32>(m_color_textures.GetSize()); }
     /**
@@ -119,6 +121,7 @@ public:
      */
     [[nodiscard]] bool HasDepth() const { return m_depth_texture.IsValid(); }
     [[nodiscard]] const Texture& GetDepthImage() const { return m_depth_texture; }
+    [[nodiscard]] Texture& GetDepthImage() { return m_depth_texture; }
     [[nodiscard]] VkImageView GetDepthImageView() const { return m_depth_texture.GetNativeImageView(); }
 
     /**
@@ -145,6 +148,7 @@ public:
      * there is no image to hand back rather than a wrong one.
      */
     [[nodiscard]] const Texture& GetCurrentColorImage() const;
+    [[nodiscard]] Texture& GetCurrentColorImage();
     [[nodiscard]] VkImageView GetCurrentColorImageView() const;
 
     /**
