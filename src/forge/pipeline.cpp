@@ -720,9 +720,21 @@ Rndr::Forge::Pipeline::Pipeline(const Device& device, const GraphicsPipelineDesc
         .scissorCount = 1,
     };
 
+    // Both of these are features rather than something every device does, and asking for one the device did
+    // not enable is undefined rather than a pipeline that fails to create - so it is named here instead of
+    // being left to the validation layer, the way CmdSetLineWidth names wide_lines.
+    if (desc.rasterizer.fill_mode == FillMode::Wireframe && !device.GetFeatures().fill_mode_non_solid)
+    {
+        throw Opal::Exception("A wireframe fill mode needs the device created with DeviceFeatures::fill_mode_non_solid!");
+    }
+    if (desc.rasterizer.depth_clamp && !device.GetFeatures().depth_clamp)
+    {
+        throw Opal::Exception("Clamping depth needs the device created with DeviceFeatures::depth_clamp!");
+    }
+
     const VkPipelineRasterizationStateCreateInfo rasterization_state{
         .sType = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO,
-        .depthClampEnable = VK_FALSE,
+        .depthClampEnable = desc.rasterizer.depth_clamp ? VK_TRUE : VK_FALSE,
         .rasterizerDiscardEnable = VK_FALSE,
         .polygonMode = ToVkPolygonMode(desc.rasterizer.fill_mode),
         .cullMode = ToVkCullMode(desc.rasterizer.cull_mode),

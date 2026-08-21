@@ -85,6 +85,13 @@ struct RasterizerDesc
     /** Winding order that defines the front face of a triangle. */
     WindingOrder front_face = WindingOrder::CCW;
 
+    /**
+     * Clamp a fragment's depth to the near and far planes instead of clipping the geometry against them, so
+     * a primitive that reaches past either plane is drawn flattened onto it rather than cut away. What a
+     * shadow caster behind the light wants. Needs DeviceFeatures::depth_clamp, and throws without it.
+     */
+    bool depth_clamp = false;
+
     /** Enables depth bias (polygon offset) for rendered fragments. Useful for shadow mapping. */
     bool depth_bias_enabled = false;
 
