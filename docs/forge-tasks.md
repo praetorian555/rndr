@@ -988,26 +988,56 @@ stencil pass writes a mask in one draw and a second draw lands only where the fi
 alpha blend over a cleared attachment produces the value the blend equation gives on the CPU, with the
 factors and the operation varied enough that a pipeline ignoring them would not match.
 
-### 3.17 Test the rest of the rasterizer, the topology and instancing
+### 3.17 Test the rest of the rasterizer, the topology and instancing — DONE
 
-`test/forge/smoke-test.cpp`.
+Seven cases in `test/forge/smoke-test.cpp`: `Forge culling and winding`, `Forge fill modes`,
+`Forge topologies`, `Forge instancing through a second vertex binding`, `Forge viewport and scissor`,
+`Forge viewport depth range` and `Forge depth clamp`.
 
-`RasterizerDesc::cull_mode` appears three times and is `Face::None` in all three - culling is switched off
-so it stays out of the way, and has never been switched on. `front_face`, `fill_mode` and `depth_clamp` are
-never set, `GraphicsPipelineDesc::topology` never moves off `Triangle`, and `DataRepetition::PerInstance`
-is never used, so instancing and multi-binding vertex input are both untested. `CmdSetViewport`'s depth
-range and `CmdSetScissor` are called, but nothing reads back a pixel that proves either took effect.
+**Two of these could not be written until the API grew, which is the exception the group preamble allows.**
 
-Stale since 3.15, which needed a per-instance binding to make `first_instance` visible: `DataRepetition::PerInstance`
-and a second vertex binding are both used there now. What is still missing is the readback that varies the
-instances against each other, which is what this task asks for.
+- `RasterizerDesc` had no `depth_clamp` field and `pipeline.cpp` hardcoded `depthClampEnable = VK_FALSE`, so
+  `DeviceFeatures::depth_clamp` could be asked for and checked against the device and then never used by
+  anything. It is a field now, and the pipeline throws when it is set without the feature.
+- `FillMode::Wireframe` was not checked against `fill_mode_non_solid`. The polygon mode is a plain enum in
+  the create info, so a device that never enabled the feature was handed a mode it had not agreed to and the
+  validation layer was the only thing that noticed - the same asymmetry `CmdSetLineWidth` already avoided for
+  `wide_lines`. The pipeline names it now.
 
-Done when a readback proves each: a triangle culled by winding disappears and comes back when `front_face`
-is flipped rather than when the geometry is; `FillMode::Wireframe` with `fill_mode_non_solid` leaves the
-interior of a triangle as the clear left it; a line and a point topology put pixels where a triangle would
-not; two vertex bindings, one per-vertex and one per-instance, draw four instances that differ only in what
-the second binding fed them; a scissor smaller than the viewport leaves the pixels outside it untouched;
-and a `min_depth`/`max_depth` narrowed to a sub-range lands a known depth where the mapping says it should.
+**Culling is asserted by relationship rather than by absolute winding.** Which way the fullscreen triangle
+actually winds depends on the viewport transform as much as on the vertex order, and a test that pinned it
+would be asserting the transform. What is asserted is what `front_face` is for: back-culled with a CCW front
+and back-culled with a CW front have to *differ*, and culling the front is the opposite answer to culling the
+back. The geometry never changes across any of it.
+
+The rest:
+
+- wireframe leaves the centroid of an inset triangle as the clear left it while the solid fill covers it, and
+  covers fewer texels overall than the fill without pinning where the device puts the lines;
+- a line topology along the centres of one row of texels - not along the boundary between two, so which row
+  it lands on is not left to a rounding rule - covers that row and no other;
+- a point topology puts exactly one pixel on each of three non-adjacent texels, which no triangle over the
+  same three vertices could produce. A point needs the vertex stage to write `SV_PointSize` or the size is
+  undefined, so that shader does;
+- four instances of one quad, moved into four quarters and coloured by the bits of a value, both fed by a
+  second binding at `DataRepetition::PerInstance` while the positions come from the first at the per-vertex
+  rate - so where the four end up is entirely what the second binding fed them;
+- a scissor over half the target with the viewport left whole, so what the other half is missing is the
+  scissor and not the transform, and then a viewport over half the target with the scissor left whole;
+- a `min_depth`/`max_depth` of 0.25 to 0.75 over a vertex z of zero, read back off a `D32_SFLOAT` attachment.
+  Zero rather than one half on purpose: the mapping is `min + z * (max - min)`, so zero lands exactly on
+  `min_depth`, while one half would land on the same number whether the range was applied or not.
+
+This is the first case in the file to render with a depth attachment at all. It uses a comparator of `Always`
+with the test on, since Vulkan only writes depth for a fragment that passed the test - the comparator, depth
+writes turned off, and the whole of the stencil path are still 3.16.
+
+Confirmed by mutation rather than by passing: forcing the viewport depth range back to 0 and 1 turns the
+narrowed-range section red, and forcing `depthClampEnable` to false turns the clamping section red.
+
+3.19 noted this task's inventory had gone stale when 3.15 started using a per-instance binding. That is
+settled here: the binding is now used with four instances that differ only in what it fed them, which is what
+this task actually asked for.
 
 ### 3.18 Test the samplers, the texture shapes and the remaining descriptor types
 
