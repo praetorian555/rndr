@@ -130,6 +130,14 @@ struct ForgeFixture
     {
         return context.GetDebugMessageCount(Forge::DebugMessageSeverity::Error, Forge::DebugMessageTypeBits::Validation);
     }
+
+    /**
+     * Release the device, which is where the layer names anything that outlived it. A leak has no other
+     * witness: the object is a live Vulkan handle rather than a heap allocation, so the sanitizer never sees
+     * it, and vkDestroyDevice runs after the last assertion of a case unless something asks for it early.
+     * The context outlives the device, so the message is still collected when it arrives.
+     */
+    void DestroyDevice() { device.Destroy(); }
 };
 
 /** Fails the test with the text of the messages when the validation layer reported an error. */
@@ -139,6 +147,17 @@ struct ForgeFixture
         const Opal::StringUtf8 validation_errors = (fixture).GetValidationErrors(); \
         INFO(*validation_errors);                                                   \
         REQUIRE((fixture).GetValidationErrorCount() == 0);                          \
+    } while (false)
+
+/**
+ * The same check, with the device released first, so that an object nobody destroyed is named rather than
+ * outliving the last assertion. Everything the case built on the device has to be gone before this.
+ */
+#define REQUIRE_NO_VALIDATION_ERROR_AT_TEARDOWN(fixture) \
+    do                                                   \
+    {                                                    \
+        (fixture).DestroyDevice();                       \
+        REQUIRE_NO_VALIDATION_ERROR(fixture);            \
     } while (false)
 
 /** Whether this machine has a Vulkan device at all, so a machine without one skips rather than fails. */
@@ -1648,7 +1667,7 @@ TEST_CASE("Forge barrier vocabulary", "[forge]")
         REQUIRE_THROWS_AS(command_buffer.CmdMemoryBarrier(barrier), Opal::Exception);
         command_buffer.End();
     }
-    SECTION("An ownership transfer between two families is recorded")
+    SECTION("An ownership transfer naming one family on both sides is recorded")
     {
         // Both halves of a transfer, release and acquire, on the one queue this test has. Naming the same
         // family on both sides is a no-op transfer, which is what makes it safe to record here.
@@ -3918,6 +3937,18 @@ TEST_CASE("Forge empty state and moves of the device stack", "[forge]")
                               Forge::ImmediateSubmit(device, queue, [](Forge::CommandBuffer&) {});
                               queue.WaitIdle();
                           });
+
+    // The device goes before the check, because vkDestroyDevice is what names a queue's command pool that a
+    // move assignment leaked. The context outlives it, so the message is still collected.
+    device.Destroy();
+    Opal::StringUtf8 report;
+    for (const Forge::DebugMessage& message : context.GetDebugMessages())
+    {
+        report += message.text;
+        report += Opal::StringUtf8("\n");
+    }
+    INFO(*report);
+    REQUIRE(context.GetDebugMessageCount(Forge::DebugMessageSeverity::Error, Forge::DebugMessageTypeBits::Validation) == 0);
 }
 
 TEST_CASE("Forge empty state and moves of the resources", "[forge]")
@@ -3976,11 +4007,11 @@ TEST_CASE("Forge empty state and moves of the resources", "[forge]")
     Forge::DescriptorPoolDesc sampler_pool_desc;
     sampler_pool_desc.Add(Forge::DescriptorType::CombinedImageSampler, 4);
     sampler_pool_desc.max_sets = 4;
-    const Forge::DescriptorPool sampler_pool(fixture.device, sampler_pool_desc);
+    Forge::DescriptorPool sampler_pool(fixture.device, sampler_pool_desc);
     Forge::DescriptorSetLayoutDesc sampler_layout_desc;
     sampler_layout_desc.AddBinding(0, Forge::DescriptorType::CombinedImageSampler, 1, ShaderTypeBits::Fragment);
-    const Forge::DescriptorSetLayout sampler_layout(fixture.device, sampler_layout_desc);
-    const Forge::Texture sampled(fixture.device, {.format = k_format,
+    Forge::DescriptorSetLayout sampler_layout(fixture.device, sampler_layout_desc);
+    Forge::Texture sampled(fixture.device, {.format = k_format,
                                                   .width = k_side,
                                                   .height = k_side,
                                                   .usage = Forge::TextureUsageBits::Sampled});
@@ -4010,7 +4041,7 @@ TEST_CASE("Forge empty state and moves of the resources", "[forge]")
                               RequireDispatchWrites(fixture.device, fixture.GetQueue(), pipeline, output);
                           });
 
-    const Forge::Shader compute_shader = Forge::Shader::FromSourceInMemory(
+    Forge::Shader compute_shader = Forge::Shader::FromSourceInMemory(
         fixture.device, k_compute_source, {.entry_point = "main_compute", .cache = GetShaderCache()});
     CheckLifetimeContract("Pipeline", [&] { return MakeAddressPipeline(fixture.device, compute_shader); },
                           [&](const Forge::Pipeline& pipeline)
@@ -4023,7 +4054,13 @@ TEST_CASE("Forge empty state and moves of the resources", "[forge]")
                               RequireDispatchWrites(fixture.device, fixture.GetQueue(), pipeline, output);
                           });
 
-    REQUIRE_NO_VALIDATION_ERROR(fixture);
+    // What the case built for itself, released so the device can go before the check below. Nothing here is
+    // what the case is about; they are the arguments the checks above needed.
+    sampler_pool.Destroy();
+    sampler_layout.Destroy();
+    sampled.Destroy();
+    compute_shader.Destroy();
+    REQUIRE_NO_VALIDATION_ERROR_AT_TEARDOWN(fixture);
 }
 
 TEST_CASE("Forge empty state and moves of the descriptor objects", "[forge]")
@@ -4067,14 +4104,14 @@ TEST_CASE("Forge empty state and moves of the descriptor objects", "[forge]")
                               REQUIRE(set.GetBindingDescriptorType(0) == Forge::DescriptorType::StorageBuffer);
                           });
 
-    const Forge::DescriptorPool pool(fixture.device, pool_desc);
-    const Forge::DescriptorSetLayout layout(fixture.device, layout_desc);
-    const Forge::Shader shader = Forge::Shader::FromSourceInMemory(
+    Forge::DescriptorPool pool(fixture.device, pool_desc);
+    Forge::DescriptorSetLayout layout(fixture.device, layout_desc);
+    Forge::Shader shader = Forge::Shader::FromSourceInMemory(
         fixture.device, k_descriptor_source, {.entry_point = "main_descriptor", .cache = GetShaderCache()});
     Forge::ComputePipelineDesc pipeline_desc;
     pipeline_desc.shader = shader;
     pipeline_desc.descriptor_set_layouts.PushBack(Opal::Ref<const Forge::DescriptorSetLayout>(layout));
-    const Forge::Pipeline pipeline(fixture.device, pipeline_desc);
+    Forge::Pipeline pipeline(fixture.device, pipeline_desc);
 
     CheckLifetimeContract("DescriptorSet", [&] { return Forge::DescriptorSet(pool, layout); },
                           [&](Forge::DescriptorSet& set)
@@ -4098,7 +4135,12 @@ TEST_CASE("Forge empty state and moves of the descriptor objects", "[forge]")
                               }
                           });
 
-    REQUIRE_NO_VALIDATION_ERROR(fixture);
+    // What the case built for itself, released so the device can go before the check below.
+    pipeline.Destroy();
+    shader.Destroy();
+    layout.Destroy();
+    pool.Destroy();
+    REQUIRE_NO_VALIDATION_ERROR_AT_TEARDOWN(fixture);
 }
 
 TEST_CASE("Forge empty state and moves of the command and synchronization objects", "[forge]")
@@ -4177,7 +4219,7 @@ TEST_CASE("Forge empty state and moves of the command and synchronization object
                               REQUIRE(ticks[1] >= ticks[0]);
                           });
 
-    REQUIRE_NO_VALIDATION_ERROR(fixture);
+    REQUIRE_NO_VALIDATION_ERROR_AT_TEARDOWN(fixture);
 }
 
 /**
@@ -6899,25 +6941,27 @@ TEST_CASE("Forge texture shapes past a flat two dimensional one", "[forge]")
                                                       Forge::TextureUsageBits::TransferDestination,
                                              .view_type = Forge::TextureViewType::Cube});
         // Layer order is +X, -X, +Y, -Y, +Z, -Z, so a direction of positive x has to come back as the first.
+        // From one rather than from zero: a face whose value is zero reads the same as one that was never
+        // written, so the first face would be asserting nothing.
         Opal::DynamicArray<u8> faces(6 * 4);
         for (i32 face = 0; face < 6; ++face)
         {
-            faces[face * 4 + 0] = static_cast<u8>(face * 51);
+            faces[face * 4 + 0] = static_cast<u8>((face + 1) * 36);
             faces[face * 4 + 3] = 255;
         }
         UploadMip(fixture.device, fixture.GetQueue(), cube, {faces.GetData(), faces.GetSize()}, 0);
 
         const Vector4f positive_x = sample_shape(k_cube_sample_source, "main_sample_cube", cube, {1.0f, 0.0f, 0.0f, 0.0f});
         INFO("+x red " << positive_x.x);
-        REQUIRE(positive_x.x == Catch::Approx(0.0f).margin(0.01));
+        REQUIRE(positive_x.x == Catch::Approx(36.0f / 255.0f).margin(0.01));
 
         const Vector4f negative_x = sample_shape(k_cube_sample_source, "main_sample_cube", cube, {-1.0f, 0.0f, 0.0f, 0.0f});
         INFO("-x red " << negative_x.x);
-        REQUIRE(negative_x.x == Catch::Approx(51.0f / 255.0f).margin(0.01));
+        REQUIRE(negative_x.x == Catch::Approx(2.0f * 36.0f / 255.0f).margin(0.01));
 
         const Vector4f positive_z = sample_shape(k_cube_sample_source, "main_sample_cube", cube, {0.0f, 0.0f, 1.0f, 0.0f});
         INFO("+z red " << positive_z.x);
-        REQUIRE(positive_z.x == Catch::Approx(4.0f * 51.0f / 255.0f).margin(0.01));
+        REQUIRE(positive_z.x == Catch::Approx(5.0f * 36.0f / 255.0f).margin(0.01));
     }
     SECTION("A cube view over a layer count that is not a multiple of six throws")
     {
