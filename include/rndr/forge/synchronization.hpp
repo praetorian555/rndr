@@ -240,6 +240,14 @@ struct ImageBarrier : Opal::ClonableBase<ImageBarrier>
     [[nodiscard]] static ImageBarrier ToTransferSource(Texture& texture);
     [[nodiscard]] static ImageBarrier ToTransferSource(Texture& texture, ImageLayout old_layout);
 
+    /**
+     * Read and written in a shader without a sampler, which is the layout a storage image is bound in. The
+     * accessing stage defaults to compute, since that is where most of them are written.
+     */
+    [[nodiscard]] static ImageBarrier ToGeneral(Texture& texture, PipelineStageBits accessor = PipelineStageBits::ComputeShader);
+    [[nodiscard]] static ImageBarrier ToGeneral(Texture& texture, ImageLayout old_layout,
+                                                PipelineStageBits accessor = PipelineStageBits::ComputeShader);
+
     /** Handed to the presentation engine. */
     [[nodiscard]] static ImageBarrier ToPresent(Texture& texture);
     [[nodiscard]] static ImageBarrier ToPresent(Texture& texture, ImageLayout old_layout);

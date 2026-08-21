@@ -230,8 +230,18 @@ void Rndr::Forge::Texture::Init(const Device& device, const TextureDesc& desc)
 
     VmaAllocator gpu_allocator = device.GetGPUAllocator();
 
+    // A cube view is only allowed on an image that was created saying one might be taken of it, and there is
+    // no way to add the flag afterwards - so the view type the desc already names is what asks for it.
+    const bool wants_cube_view =
+        m_desc.view_type == TextureViewType::Cube || m_desc.view_type == TextureViewType::CubeArray;
+    if (wants_cube_view && m_desc.array_layer_count % 6 != 0)
+    {
+        throw Opal::Exception("A cube view needs an array layer count that is a multiple of six!");
+    }
+
     const VkImageCreateInfo image_create_info = {
         .sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
+        .flags = wants_cube_view ? VK_IMAGE_CREATE_CUBE_COMPATIBLE_BIT : 0u,
         .imageType = ToVkImageType(m_desc.dimension),
         .format = ToVkFormat(m_desc.format),
         .extent = {.width = m_desc.width, .height = m_desc.height, .depth = m_desc.depth},

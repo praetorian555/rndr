@@ -220,6 +220,26 @@ Rndr::Forge::ImageBarrier Rndr::Forge::ImageBarrier::ToShaderRead(Texture& textu
             .image = texture};
 }
 
+Rndr::Forge::ImageBarrier Rndr::Forge::ImageBarrier::ToGeneral(Texture& texture, ImageLayout old_layout,
+                                                               PipelineStageBits accessor)
+{
+    const SourceScope source = ScopeOfLayout(old_layout);
+    // Both sides of the access, because General is the layout for an image a stage reads and writes at once,
+    // which is the whole reason to be in it rather than in one of the narrow ones.
+    return {.stages_must_finish = source.stages,
+            .stages_must_finish_access = source.access,
+            .before_stages_start = accessor,
+            .before_stages_start_access = PipelineStageAccessBits::ShaderRead | PipelineStageAccessBits::ShaderWrite,
+            .old_layout = old_layout,
+            .new_layout = ImageLayout::General,
+            .image = texture};
+}
+
+Rndr::Forge::ImageBarrier Rndr::Forge::ImageBarrier::ToGeneral(Texture& texture, PipelineStageBits accessor)
+{
+    return ToGeneral(texture, texture.GetCurrentLayout(), accessor);
+}
+
 Rndr::Forge::ImageBarrier Rndr::Forge::ImageBarrier::ToTransferDestination(Texture& texture, ImageLayout old_layout)
 {
     const SourceScope source = ScopeOfLayout(old_layout);
@@ -302,6 +322,8 @@ Rndr::Forge::ImageBarrier Rndr::Forge::ImageBarrier::To(Texture& texture, ImageL
             return ToTransferSource(texture, old_layout);
         case ImageLayout::TransferDestination:
             return ToTransferDestination(texture, old_layout);
+        case ImageLayout::General:
+            return ToGeneral(texture, old_layout);
         case ImageLayout::Present:
             return ToPresent(texture, old_layout);
         default:
