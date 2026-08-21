@@ -187,6 +187,15 @@ public:
     DeviceQueue() = default;
     ~DeviceQueue();
 
+    /**
+     * Releases the command pool this queue owns. Public because the constructor below is: a queue built from
+     * a device and a family index owns its pool and is its caller's to release, the way every other type here
+     * is.
+     *
+     * A queue that came from Device::GetQueue is not one of those. Those belong to the device and are handed
+     * out by reference, so destroying one leaves the device holding a queue with no command pool, and the
+     * next command buffer allocated on it fails. Destroy the ones you constructed and leave the rest alone.
+     */
     void Destroy();
 
     explicit DeviceQueue(const Device& device, u32 queue_family_index);

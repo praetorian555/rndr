@@ -3606,3 +3606,455 @@ TEST_CASE("Forge shader cache", "[forge]")
     REQUIRE_NO_VALIDATION_ERROR(fixture);
 }
 
+/**
+ * The contract docs/forge.md fixes in its first section, checked for every type that holds a handle. A move
+ * that drops a member is invisible until something reaches for it, which is the shape of bug a smoke test is
+ * worst at catching by accident - 3.11 found three of them in Device and DeviceQueue alone - so each type is
+ * put through the states and then asked to do its job afterwards.
+ */
+namespace
+{
+
+/**
+ * The five states of the contract, in one place so that every type answers the same questions in the same
+ * order: false when default constructed, true once built, false for the source of a move, false after
+ * Destroy, and a second Destroy that changes nothing.
+ *
+ * The type is named only by what the factory returns, so adding a type here is adding two lambdas.
+ *
+ * @param type_name Named in the failure, since the assertions themselves look alike for every type.
+ * @param make Builds one valid object. Called three times: a move needs a source, and assigning over a live
+ *        object needs one to overwrite.
+ * @param check_works Handed the object after both a move construction and a move assignment. Doing something
+ *        that touches the members a move has to carry is the point - reporting itself valid is not.
+ */
+template <typename Make, typename CheckWorks>
+void CheckLifetimeContract(const char* type_name, Make&& make, CheckWorks&& check_works)
+{
+    using T = decltype(make());
+    INFO("type " << type_name);
+
+    // Empty, owns nothing, and Destroy on it has nothing to release.
+    T empty;
+    REQUIRE_FALSE(empty.IsValid());
+    empty.Destroy();
+    REQUIRE_FALSE(empty.IsValid());
+
+    T built = make();
+    REQUIRE(built.IsValid());
+
+    T move_constructed(std::move(built));
+    REQUIRE(move_constructed.IsValid());
+    REQUIRE_FALSE(built.IsValid());
+
+    T move_assigned;
+    move_assigned = std::move(move_constructed);
+    REQUIRE(move_assigned.IsValid());
+    REQUIRE_FALSE(move_constructed.IsValid());
+
+    // Assigning over a live object has to release the one being overwritten rather than leak it, which is
+    // what DeviceQueue's assignment got wrong before 3.11. The leak itself shows up in the validation layer
+    // and in AddressSanitizer at teardown rather than in an assertion here.
+    T overwritten = make();
+    REQUIRE(overwritten.IsValid());
+    overwritten = make();
+    REQUIRE(overwritten.IsValid());
+
+    // Self assignment has to leave the object alone rather than release it and then move from the wreck. The
+    // alias is what keeps the compiler from seeing this as the obvious self move it is and warning about it.
+    T& alias = overwritten;
+    overwritten = std::move(alias);
+    REQUIRE(overwritten.IsValid());
+
+    check_works(move_assigned);
+
+    move_assigned.Destroy();
+    REQUIRE_FALSE(move_assigned.IsValid());
+    // Idempotent, so releasing early is always safe.
+    move_assigned.Destroy();
+    REQUIRE_FALSE(move_assigned.IsValid());
+}
+
+/** The compute pipeline k_compute_source needs, which pushes the address it writes through. */
+Forge::Pipeline MakeAddressPipeline(const Forge::Device& device, const Forge::Shader& shader)
+{
+    Forge::ComputePipelineDesc pipeline_desc;
+    pipeline_desc.shader = shader;
+    pipeline_desc.push_constant_ranges.PushBack(
+        {.shader_stages = ShaderTypeBits::Compute, .offset = 0, .size = sizeof(VkDeviceAddress)});
+    return Forge::Pipeline(device, pipeline_desc);
+}
+
+/** A wiped buffer of k_lifetime_elements, so nothing left in it can pass for a dispatch that ran. */
+constexpr i32 k_lifetime_elements = 64;
+
+Forge::Buffer MakeWipedOutput(const Forge::Device& device)
+{
+    Forge::Buffer output(device, {.size = k_lifetime_elements * sizeof(u32),
+                                  .usage = Forge::BufferUsageBits::StorageBuffer,
+                                  .host_access = Forge::HostAccess::Random,
+                                  .use_device_address = true});
+    const Opal::DynamicArray<u8> zeros(k_lifetime_elements * sizeof(u32));
+    output.Update(zeros);
+    return output;
+}
+
+/** Dispatch the address pipeline over one buffer and check every element it should have written. */
+void RequireDispatchWrites(const Forge::Device& device, Forge::DeviceQueue& queue, const Forge::Pipeline& pipeline,
+                           const Forge::Buffer& output)
+{
+    const VkDeviceAddress address = output.GetNativeDeviceAddress();
+    Forge::ImmediateSubmit(device, queue,
+                           [&](Forge::CommandBuffer& command_buffer)
+                           {
+                               command_buffer.CmdBindPipeline(pipeline);
+                               command_buffer.CmdPushConstants(pipeline, ShaderTypeBits::Compute, Opal::AsBytes(address));
+                               command_buffer.CmdDispatch(1);
+                           });
+    Opal::DynamicArray<u32> values(k_lifetime_elements);
+    output.Read({reinterpret_cast<u8*>(values.GetData()), values.GetSize() * sizeof(u32)});
+    for (i32 i = 0; i < k_lifetime_elements; ++i)
+    {
+        INFO("element " << i);
+        REQUIRE(values[i] == static_cast<u32>(i) + 1000);
+    }
+}
+
+}  // namespace
+
+TEST_CASE("Forge empty state and moves of the context", "[forge]")
+{
+    if (!IsForgeAvailable())
+    {
+        SKIP("No Vulkan device on this machine.");
+    }
+    // On its own, and deliberately: volkLoadInstance points one global table at whichever instance was
+    // created last, so a case holding two contexts at once is where that stops being theoretical. Two of
+    // them are live here for as long as the assignment below takes.
+    CheckLifetimeContract(
+        "GraphicsContext", [] { return Forge::GraphicsContext({.collect_debug_messages = true}); },
+        [](const Forge::GraphicsContext& context)
+        {
+            REQUIRE(context.GetInstance() != VK_NULL_HANDLE);
+            // Enumerating is the cheapest call that goes through the instance the move had to carry.
+            REQUIRE(context.EnumeratePhysicalDevices().GetSize() > 0);
+        });
+}
+
+TEST_CASE("Forge empty state and moves of the device stack", "[forge]")
+{
+    if (!IsForgeAvailable())
+    {
+        SKIP("No Vulkan device on this machine.");
+    }
+    const Forge::GraphicsContext context({.collect_debug_messages = true});
+
+    auto make_physical_device = [&context]
+    {
+        Opal::DynamicArray<Forge::PhysicalDevice> devices = context.EnumeratePhysicalDevices();
+        return std::move(devices[0]);
+    };
+    CheckLifetimeContract("PhysicalDevice", make_physical_device,
+                          [](const Forge::PhysicalDevice& physical_device)
+                          {
+                              REQUIRE(physical_device.GetNativePhysicalDevice() != VK_NULL_HANDLE);
+                              // Properties, features and the extension list are all read once at construction,
+                              // so a move that dropped them hands back zeroes and an empty list rather than
+                              // failing at the call.
+                              REQUIRE(physical_device.GetProperties().apiVersion != 0);
+                              REQUIRE_FALSE(physical_device.GetQueueFamilyProperties().IsEmpty());
+                              REQUIRE_FALSE(physical_device.GetSupportedExtensions().IsEmpty());
+                              REQUIRE(physical_device.GetMemoryProperties().memoryTypeCount > 0);
+                          });
+
+    auto make_device = [&context, &make_physical_device]
+    { return Forge::Device(make_physical_device(), context, {}); };
+    CheckLifetimeContract("Device", make_device,
+                          [](Forge::Device& device)
+                          {
+                              // Allocating is what needs the VMA allocator, which is one of the two members
+                              // Device's move used to drop; the other was the enabled extension list.
+                              const Forge::Buffer buffer = MakeWipedOutput(device);
+                              REQUIRE(buffer.IsValid());
+                              REQUIRE(device.GetNativeDevice() != VK_NULL_HANDLE);
+                              REQUIRE(device.GetPhysicalDevice().IsValid());
+                              // Every queue holds a reference back to the device, which a move has to
+                              // re-point, so reaching one through the moved device is the check for that.
+                              REQUIRE(device.GetQueue(Forge::QueueFamily::Graphics).IsValid());
+                          });
+
+    Forge::Device device = make_device();
+    const u32 graphics_family = device.GetQueue(Forge::QueueFamily::Graphics).GetQueueFamilyIndex();
+    // A queue of its own rather than one from GetQueue: those belong to the device, and destroying one would
+    // leave the device holding a queue with no command pool. See the note on DeviceQueue::Destroy.
+    CheckLifetimeContract("DeviceQueue", [&device, graphics_family] { return Forge::DeviceQueue(device, graphics_family); },
+                          [&device](Forge::DeviceQueue& queue)
+                          {
+                              REQUIRE(queue.GetNativeQueue() != VK_NULL_HANDLE);
+                              REQUIRE(queue.GetNativeCommandPool() != VK_NULL_HANDLE);
+                              // Submitting needs every member at once: the device, the queue, the family
+                              // index and the command pool the command buffer is allocated out of.
+                              Forge::ImmediateSubmit(device, queue, [](Forge::CommandBuffer&) {});
+                              queue.WaitIdle();
+                          });
+}
+
+TEST_CASE("Forge empty state and moves of the resources", "[forge]")
+{
+    if (!IsForgeAvailable())
+    {
+        SKIP("No Vulkan device on this machine.");
+    }
+    ForgeFixture fixture;
+    constexpr i32 k_side = 4;
+    constexpr PixelFormat k_format = PixelFormat::R8G8B8A8_UNORM;
+    const Opal::DynamicArray<u8> written = MakeBytes(k_lifetime_elements * sizeof(u32), 41);
+
+    CheckLifetimeContract("Buffer",
+                          [&]
+                          {
+                              return Forge::Buffer(fixture.device,
+                                                   {.size = written.GetSize(),
+                                                    .usage = Forge::BufferUsageBits::StorageBuffer,
+                                                    .host_access = Forge::HostAccess::Random},
+                                                   written);
+                          },
+                          [&](const Forge::Buffer& buffer)
+                          {
+                              // Read back through the mapped pointer, which is the member 1.4 found the move
+                              // leaving behind.
+                              Opal::DynamicArray<u8> read_back(written.GetSize());
+                              buffer.Read(read_back);
+                              REQUIRE(CountMismatches(written, read_back) == 0);
+                          });
+
+    CheckLifetimeContract("Texture",
+                          [&]
+                          {
+                              return Forge::Texture(fixture.device, {.format = k_format,
+                                                                     .width = k_side,
+                                                                     .height = k_side,
+                                                                     .usage = Forge::TextureUsageBits::ColorAttachment |
+                                                                              Forge::TextureUsageBits::TransferSource});
+                          },
+                          [&](Forge::Texture& texture)
+                          {
+                              REQUIRE(texture.GetNativeImageView() != VK_NULL_HANDLE);
+                              REQUIRE(texture.GetDesc().width == k_side);
+                              // Forge tracks the layout per subresource itself, so the move has to carry that
+                              // array; a readback transitions the texture and then asks where it ended up.
+                              REQUIRE(texture.GetCurrentLayout() == Forge::ImageLayout::Undefined);
+                              Opal::DynamicArray<u8> pixels(k_side * k_side * 4);
+                              Forge::ReadBackTexture(fixture.device, fixture.GetQueue(), texture, pixels, 0,
+                                                     Forge::ImageLayout::TransferSource);
+                              REQUIRE(texture.GetCurrentLayout() == Forge::ImageLayout::TransferSource);
+                          });
+
+    // A sampler holds nothing but its device and its handle, so writing it into a descriptor is the cheapest
+    // thing that uses both. Sampling through one is 3.18.
+    Forge::DescriptorPoolDesc sampler_pool_desc;
+    sampler_pool_desc.Add(Forge::DescriptorType::CombinedImageSampler, 4);
+    sampler_pool_desc.max_sets = 4;
+    const Forge::DescriptorPool sampler_pool(fixture.device, sampler_pool_desc);
+    Forge::DescriptorSetLayoutDesc sampler_layout_desc;
+    sampler_layout_desc.AddBinding(0, Forge::DescriptorType::CombinedImageSampler, 1, ShaderTypeBits::Fragment);
+    const Forge::DescriptorSetLayout sampler_layout(fixture.device, sampler_layout_desc);
+    const Forge::Texture sampled(fixture.device, {.format = k_format,
+                                                  .width = k_side,
+                                                  .height = k_side,
+                                                  .usage = Forge::TextureUsageBits::Sampled});
+
+    CheckLifetimeContract("Sampler", [&] { return Forge::Sampler(fixture.device, {.max_anisotropy = 1.0f}); },
+                          [&](const Forge::Sampler& sampler)
+                          {
+                              REQUIRE(sampler.GetNativeSampler() != VK_NULL_HANDLE);
+                              Forge::DescriptorSet set(sampler_pool, sampler_layout);
+                              set.Update(0, sampled, sampler);
+                          });
+
+    CheckLifetimeContract("Shader",
+                          [&]
+                          {
+                              return Forge::Shader::FromSourceInMemory(fixture.device, k_compute_source,
+                                                                       {.entry_point = "main_compute", .cache = GetShaderCache()});
+                          },
+                          [&](const Forge::Shader& shader)
+                          {
+                              // The stage and the entry point are read out of the reflection at construction,
+                              // and a pipeline built from the moved shader needs both of them plus the module.
+                              REQUIRE(shader.GetShaderStage() == ShaderTypeBits::Compute);
+                              REQUIRE(shader.GetEntryPoint() == Opal::StringUtf8("main_compute"));
+                              const Forge::Pipeline pipeline = MakeAddressPipeline(fixture.device, shader);
+                              const Forge::Buffer output = MakeWipedOutput(fixture.device);
+                              RequireDispatchWrites(fixture.device, fixture.GetQueue(), pipeline, output);
+                          });
+
+    const Forge::Shader compute_shader = Forge::Shader::FromSourceInMemory(
+        fixture.device, k_compute_source, {.entry_point = "main_compute", .cache = GetShaderCache()});
+    CheckLifetimeContract("Pipeline", [&] { return MakeAddressPipeline(fixture.device, compute_shader); },
+                          [&](const Forge::Pipeline& pipeline)
+                          {
+                              // Binding needs the layout and the bind point beside the pipeline, and the push
+                              // constant the dispatch depends on goes through the layout.
+                              REQUIRE(pipeline.GetNativePipelineLayout() != VK_NULL_HANDLE);
+                              REQUIRE(pipeline.GetBindPoint() == VK_PIPELINE_BIND_POINT_COMPUTE);
+                              const Forge::Buffer output = MakeWipedOutput(fixture.device);
+                              RequireDispatchWrites(fixture.device, fixture.GetQueue(), pipeline, output);
+                          });
+
+    REQUIRE_NO_VALIDATION_ERROR(fixture);
+}
+
+TEST_CASE("Forge empty state and moves of the descriptor objects", "[forge]")
+{
+    if (!IsForgeAvailable())
+    {
+        SKIP("No Vulkan device on this machine.");
+    }
+    ForgeFixture fixture;
+
+    Forge::DescriptorPoolDesc pool_desc;
+    pool_desc.Add(Forge::DescriptorType::StorageBuffer, 16);
+    pool_desc.max_sets = 16;
+    // On, so that DescriptorSet::Destroy returns the set to its pool rather than only dropping the handle,
+    // which is the half of 1.7 nothing runs otherwise.
+    pool_desc.free_individual_sets = true;
+
+    Forge::DescriptorSetLayoutDesc layout_desc;
+    layout_desc.AddBinding(0, Forge::DescriptorType::StorageBuffer, 1, ShaderTypeBits::Compute);
+
+    CheckLifetimeContract("DescriptorPool", [&] { return Forge::DescriptorPool(fixture.device, pool_desc); },
+                          [&](const Forge::DescriptorPool& pool)
+                          {
+                              REQUIRE(pool.GetNativeDescriptorPool() != VK_NULL_HANDLE);
+                              // Allocating out of the moved pool is what needs its device and its desc, and
+                              // the set it hands back holds the pool by reference.
+                              const Forge::DescriptorSetLayout layout(fixture.device, layout_desc);
+                              const Forge::DescriptorSet set(pool, layout);
+                              REQUIRE(set.IsValid());
+                          });
+
+    CheckLifetimeContract("DescriptorSetLayout", [&] { return Forge::DescriptorSetLayout(fixture.device, layout_desc); },
+                          [&](const Forge::DescriptorSetLayout& layout)
+                          {
+                              REQUIRE(layout.GetNativeDescriptorSetLayout() != VK_NULL_HANDLE);
+                              // The desc is what a set reads its binding types out of, so a layout that lost
+                              // it allocates a set that then knows about no binding at all.
+                              REQUIRE(layout.GetDesc().bindings.GetSize() == 1);
+                              const Forge::DescriptorPool pool(fixture.device, pool_desc);
+                              const Forge::DescriptorSet set(pool, layout);
+                              REQUIRE(set.GetBindingDescriptorType(0) == Forge::DescriptorType::StorageBuffer);
+                          });
+
+    const Forge::DescriptorPool pool(fixture.device, pool_desc);
+    const Forge::DescriptorSetLayout layout(fixture.device, layout_desc);
+    const Forge::Shader shader = Forge::Shader::FromSourceInMemory(
+        fixture.device, k_descriptor_source, {.entry_point = "main_descriptor", .cache = GetShaderCache()});
+    Forge::ComputePipelineDesc pipeline_desc;
+    pipeline_desc.shader = shader;
+    pipeline_desc.descriptor_set_layouts.PushBack(Opal::Ref<const Forge::DescriptorSetLayout>(layout));
+    const Forge::Pipeline pipeline(fixture.device, pipeline_desc);
+
+    CheckLifetimeContract("DescriptorSet", [&] { return Forge::DescriptorSet(pool, layout); },
+                          [&](Forge::DescriptorSet& set)
+                          {
+                              REQUIRE(set.GetBindingDescriptorType(0) == Forge::DescriptorType::StorageBuffer);
+                              const Forge::Buffer output = MakeWipedOutput(fixture.device);
+                              set.Update(0, output);
+                              Forge::ImmediateSubmit(fixture.device, fixture.GetQueue(),
+                                                     [&](Forge::CommandBuffer& command_buffer)
+                                                     {
+                                                         command_buffer.CmdBindPipeline(pipeline);
+                                                         command_buffer.CmdBindDescriptorSet(pipeline, set);
+                                                         command_buffer.CmdDispatch(1);
+                                                     });
+                              Opal::DynamicArray<u32> values(k_lifetime_elements);
+                              output.Read({reinterpret_cast<u8*>(values.GetData()), values.GetSize() * sizeof(u32)});
+                              for (i32 i = 0; i < k_lifetime_elements; ++i)
+                              {
+                                  INFO("element " << i);
+                                  REQUIRE(values[i] == static_cast<u32>(i) + 7);
+                              }
+                          });
+
+    REQUIRE_NO_VALIDATION_ERROR(fixture);
+}
+
+TEST_CASE("Forge empty state and moves of the command and synchronization objects", "[forge]")
+{
+    if (!IsForgeAvailable())
+    {
+        SKIP("No Vulkan device on this machine.");
+    }
+    ForgeFixture fixture;
+    Forge::DeviceQueue& queue = fixture.GetQueue();
+
+    CheckLifetimeContract("CommandBuffer", [&] { return Forge::CommandBuffer(fixture.device, queue); },
+                          [&](Forge::CommandBuffer& command_buffer)
+                          {
+                              // Recording and submitting is what needs the queue the buffer was allocated on
+                              // beside the handle itself.
+                              command_buffer.Begin();
+                              command_buffer.End();
+                              const Forge::Fence fence(fixture.device, false);
+                              queue.Submit(command_buffer, fence);
+                              fence.Wait();
+                          });
+
+    CheckLifetimeContract("Fence", [&] { return Forge::Fence(fixture.device, false); },
+                          [&](Forge::Fence& fence)
+                          {
+                              Forge::CommandBuffer command_buffer(fixture.device, queue);
+                              command_buffer.Begin();
+                              command_buffer.End();
+                              queue.Submit(command_buffer, fence);
+                              fence.Wait();
+                              // Signalled now, and Reset has to reach the device the move carried.
+                              REQUIRE(fence.TryWait(0));
+                              fence.Reset();
+                              REQUIRE_FALSE(fence.TryWait(0));
+                          });
+
+    CheckLifetimeContract("Semaphore",
+                          [&] {
+                              return Forge::Semaphore(fixture.device,
+                                                      {.type = Forge::SemaphoreType::Timeline, .initial_value = 3});
+                          },
+                          [](const Forge::Semaphore& semaphore)
+                          {
+                              // The type is a member of its own, and every host side call throws on a binary
+                              // semaphore, so a move that dropped it would fail here rather than answer wrong.
+                              REQUIRE(semaphore.IsTimeline());
+                              REQUIRE(semaphore.GetValue() == 3);
+                              semaphore.Signal(7);
+                              REQUIRE(semaphore.GetValue() == 7);
+                          });
+
+    // Four rather than the two TimestampQueryPoolDesc defaults to: a check that asks for the default value
+    // cannot tell a desc that came through the move from one that was never assigned.
+    CheckLifetimeContract("TimestampQueryPool", [&] { return Forge::TimestampQueryPool(fixture.device, {.query_count = 4}); },
+                          [&](Forge::TimestampQueryPool& pool)
+                          {
+                              REQUIRE(pool.GetQueryCount() == 4);
+                              // Read off the device once at construction and used by every elapsed helper.
+                              // Compared against what the device reports rather than against zero, because the
+                              // member defaults to one: a move that dropped it would otherwise keep answering
+                              // a plausible number and turn every measurement into ticks.
+                              REQUIRE(pool.GetTimestampPeriod() ==
+                                      fixture.device.GetPhysicalDevice().GetProperties().limits.timestampPeriod);
+                              Forge::ImmediateSubmit(fixture.device, queue,
+                                                     [&](Forge::CommandBuffer& command_buffer)
+                                                     {
+                                                         command_buffer.CmdResetQueryPool(pool);
+                                                         command_buffer.CmdWriteTimestamp(pool, 0,
+                                                                                          Forge::PipelineStageBits::PipelineStart);
+                                                         command_buffer.CmdWriteTimestamp(pool, 1,
+                                                                                          Forge::PipelineStageBits::PipelineEnd);
+                                                     });
+                              Opal::InPlaceArray<u64, 2> ticks;
+                              pool.GetResults({ticks.GetData(), 2});
+                              REQUIRE(ticks[1] >= ticks[0]);
+                          });
+
+    REQUIRE_NO_VALIDATION_ERROR(fixture);
+}
