@@ -731,6 +731,28 @@ void Rndr::Forge::CommandBuffer::CmdBeginRendering(const RenderingDesc& desc)
         };
     }
 
+    // The same shape as the depth attachment, and separate from it on purpose: Vulkan takes the two sides
+    // apart even when one image carries both, so a combined format names the same view twice.
+    const bool has_stencil = desc.stencil_attachment.HasValue();
+    VkRenderingAttachmentInfo stencil_attachment{};
+    if (has_stencil)
+    {
+        const RenderingAttachmentDesc& stencil = desc.stencil_attachment.GetValue();
+        if (stencil.image_view == VK_NULL_HANDLE)
+        {
+            throw Opal::Exception("A stencil attachment that names no image view! Leave the attachment absent instead.");
+        }
+        stencil_attachment = {
+            .sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO,
+            .imageView = stencil.image_view,
+            .imageLayout = static_cast<VkImageLayout>(stencil.image_layout),
+            .loadOp = ToVkLoadOp(stencil.load_operation),
+            .storeOp = ToVkStoreOp(stencil.store_operation),
+            .clearValue = {.depthStencil = {.depth = stencil.clear_value.depth_stencil.depth,
+                                            .stencil = stencil.clear_value.depth_stencil.stencil}},
+        };
+    }
+
     const VkRenderingInfo rendering_info{
         .sType = VK_STRUCTURE_TYPE_RENDERING_INFO,
         .renderArea = {.extent = {.width = static_cast<u32>(desc.render_area_extent.x),
@@ -739,6 +761,7 @@ void Rndr::Forge::CommandBuffer::CmdBeginRendering(const RenderingDesc& desc)
         .colorAttachmentCount = static_cast<u32>(color_attachments.GetSize()),
         .pColorAttachments = color_attachments.GetData(),
         .pDepthAttachment = has_depth ? &depth_attachment : nullptr,
+        .pStencilAttachment = has_stencil ? &stencil_attachment : nullptr,
     };
     vkCmdBeginRendering(m_native_command_buffer, &rendering_info);
 }
@@ -775,6 +798,16 @@ void Rndr::Forge::CommandBuffer::CmdSetDepthBias(f32 constant_factor, f32 clamp,
 void Rndr::Forge::CommandBuffer::CmdSetStencilReference(u32 reference, StencilFaceBits faces)
 {
     vkCmdSetStencilReference(m_native_command_buffer, static_cast<VkStencilFaceFlags>(faces), reference);
+}
+
+void Rndr::Forge::CommandBuffer::CmdSetStencilCompareMask(u32 compare_mask, StencilFaceBits faces)
+{
+    vkCmdSetStencilCompareMask(m_native_command_buffer, static_cast<VkStencilFaceFlags>(faces), compare_mask);
+}
+
+void Rndr::Forge::CommandBuffer::CmdSetStencilWriteMask(u32 write_mask, StencilFaceBits faces)
+{
+    vkCmdSetStencilWriteMask(m_native_command_buffer, static_cast<VkStencilFaceFlags>(faces), write_mask);
 }
 
 void Rndr::Forge::CommandBuffer::CmdSetLineWidth(f32 width)

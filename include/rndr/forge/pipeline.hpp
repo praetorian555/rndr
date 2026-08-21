@@ -142,6 +142,22 @@ struct DepthStencilDesc
 
     /** Comparison function for the stencil test on back-facing fragments. */
     Comparator back_stencil_comparator = Comparator::Always;
+
+    /**
+     * The three values the stencil test itself is made of, per face. They default to a full compare mask and
+     * a full write mask rather than to zero, because zero for either makes stencil_test_enabled inert: a test
+     * that reads no bits passes on nothing, and a write that touches no bits leaves the buffer alone.
+     *
+     * The reference is what front_stencil_comparator compares against and what StencilOperation::Replace
+     * writes. DynamicStateBits::StencilCompareMask, ::StencilWriteMask and ::StencilReference each hand one
+     * of them to the command buffer instead, and the field here is ignored for whichever are dynamic.
+     */
+    u32 front_compare_mask = 0xFF;
+    u32 front_write_mask = 0xFF;
+    u32 front_reference = 0;
+    u32 back_compare_mask = 0xFF;
+    u32 back_write_mask = 0xFF;
+    u32 back_reference = 0;
 };
 
 struct ColorBlendDesc

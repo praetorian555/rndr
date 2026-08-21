@@ -54,6 +54,15 @@ struct RenderingDesc
      * Present with no image view is a mistake and throws.
      */
     Opal::Optional<RenderingAttachmentDesc> depth_attachment;
+    /**
+     * Stencil attachment, absent for a pass that does no stencil work. Vulkan takes the two sides separately
+     * even when one image carries both, so a combined format such as D24_UNORM_S8_UINT names the *same image
+     * view* here as the depth attachment does - and takes its own load and store operations, since clearing
+     * the depth and keeping the stencil is a thing a pass may want. A separate stencil image names its own.
+     *
+     * Present with no image view is a mistake and throws, the way the depth attachment does.
+     */
+    Opal::Optional<RenderingAttachmentDesc> stencil_attachment;
 };
 
 /**
@@ -362,6 +371,20 @@ public:
      * @param faces Which faces it applies to.
      */
     void CmdSetStencilReference(u32 reference, StencilFaceBits faces = StencilFaceBits::FrontAndBack);
+
+    /**
+     * Set which bits the stencil test reads, for a pipeline that named DynamicStateBits::StencilCompareMask.
+     * @param compare_mask Bits of the stencil value and of the reference the comparison looks at.
+     * @param faces Which faces it applies to.
+     */
+    void CmdSetStencilCompareMask(u32 compare_mask, StencilFaceBits faces = StencilFaceBits::FrontAndBack);
+
+    /**
+     * Set which bits a stencil write touches, for a pipeline that named DynamicStateBits::StencilWriteMask.
+     * @param write_mask Bits a stencil operation is allowed to change. Zero writes nothing.
+     * @param faces Which faces it applies to.
+     */
+    void CmdSetStencilWriteMask(u32 write_mask, StencilFaceBits faces = StencilFaceBits::FrontAndBack);
 
     /**
      * Set the line width for the draws that follow, for a pipeline that named DynamicStateBits::LineWidth.

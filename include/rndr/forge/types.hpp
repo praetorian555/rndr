@@ -231,7 +231,11 @@ enum class DynamicStateBits : u8
     /** The stencil comparison value, which CmdSetStencilReference supplies. */
     StencilReference = 0x2,
     /** Line width, which CmdSetLineWidth supplies. Above one needs DeviceFeatures::wide_lines. */
-    LineWidth = 0x4
+    LineWidth = 0x4,
+    /** Which bits the stencil test reads, which CmdSetStencilCompareMask supplies. */
+    StencilCompareMask = 0x8,
+    /** Which bits a stencil write touches, which CmdSetStencilWriteMask supplies. */
+    StencilWriteMask = 0x10
 };
 OPAL_ENUM_CLASS_FLAGS(DynamicStateBits);
 

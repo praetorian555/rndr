@@ -773,6 +773,9 @@ Rndr::Forge::Pipeline::Pipeline(const Device& device, const GraphicsPipelineDesc
                 .passOp = ToVkStencilOp(ds.front_pass),
                 .depthFailOp = ToVkStencilOp(ds.front_depth_fail),
                 .compareOp = ToVkCompareOp(ds.front_stencil_comparator),
+                .compareMask = ds.front_compare_mask,
+                .writeMask = ds.front_write_mask,
+                .reference = ds.front_reference,
             },
         .back =
             {
@@ -780,6 +783,9 @@ Rndr::Forge::Pipeline::Pipeline(const Device& device, const GraphicsPipelineDesc
                 .passOp = ToVkStencilOp(ds.back_pass),
                 .depthFailOp = ToVkStencilOp(ds.back_depth_fail),
                 .compareOp = ToVkCompareOp(ds.back_stencil_comparator),
+                .compareMask = ds.back_compare_mask,
+                .writeMask = ds.back_write_mask,
+                .reference = ds.back_reference,
             },
     };
 
@@ -806,7 +812,7 @@ Rndr::Forge::Pipeline::Pipeline(const Device& device, const GraphicsPipelineDesc
 
     // Viewport and scissor are always dynamic - nothing in the desc describes them, and CmdSetViewport and
     // CmdSetScissor are the only way to give them a value - so the desc only adds to these two.
-    VkDynamicState dynamic_states[5] = {VK_DYNAMIC_STATE_VIEWPORT, VK_DYNAMIC_STATE_SCISSOR};
+    VkDynamicState dynamic_states[7] = {VK_DYNAMIC_STATE_VIEWPORT, VK_DYNAMIC_STATE_SCISSOR};
     u32 dynamic_state_count = 2;
     if (!!(desc.dynamic_state & DynamicStateBits::DepthBias))
     {
@@ -819,6 +825,14 @@ Rndr::Forge::Pipeline::Pipeline(const Device& device, const GraphicsPipelineDesc
     if (!!(desc.dynamic_state & DynamicStateBits::LineWidth))
     {
         dynamic_states[dynamic_state_count++] = VK_DYNAMIC_STATE_LINE_WIDTH;
+    }
+    if (!!(desc.dynamic_state & DynamicStateBits::StencilCompareMask))
+    {
+        dynamic_states[dynamic_state_count++] = VK_DYNAMIC_STATE_STENCIL_COMPARE_MASK;
+    }
+    if (!!(desc.dynamic_state & DynamicStateBits::StencilWriteMask))
+    {
+        dynamic_states[dynamic_state_count++] = VK_DYNAMIC_STATE_STENCIL_WRITE_MASK;
     }
     const VkPipelineDynamicStateCreateInfo dynamic_state{
         .sType = VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO,
