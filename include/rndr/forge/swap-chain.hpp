@@ -111,18 +111,15 @@ public:
     [[nodiscard]] const Texture& GetColorImage(u32 idx) const { return m_color_textures[idx]; }
     /** The same image, mutable, since a barrier on it moves the layout the texture tracks. */
     [[nodiscard]] Texture& GetColorImage(u32 idx) { return m_color_textures[idx]; }
-    [[nodiscard]] VkImageView GetColorImageView(u32 idx) const { return m_color_textures[idx].GetNativeImageView(); }
     [[nodiscard]] u32 GetColorImageCount() const { return static_cast<u32>(m_color_textures.GetSize()); }
     /**
      * Whether this swap chain was created with a depth image. A swap chain made with
-     * SwapChainDesc::use_depth off has none, and GetDepthImage and GetDepthImageView then hand back an empty
-     * texture and a null view. Ask this rather than comparing the view against VK_NULL_HANDLE, and leave
-     * RenderingDesc::depth_attachment absent when it answers false.
+     * SwapChainDesc::use_depth off has none, and GetDepthImage then hands back an empty texture. Ask this
+     * rather than testing the texture, and leave RenderingDesc::depth_attachment absent when it answers false.
      */
     [[nodiscard]] bool HasDepth() const { return m_depth_texture.IsValid(); }
     [[nodiscard]] const Texture& GetDepthImage() const { return m_depth_texture; }
     [[nodiscard]] Texture& GetDepthImage() { return m_depth_texture; }
-    [[nodiscard]] VkImageView GetDepthImageView() const { return m_depth_texture.GetNativeImageView(); }
 
     /**
      * Acquire the next image to render into. The semaphore is signaled once the image is ready to be written to.
@@ -149,7 +146,6 @@ public:
      */
     [[nodiscard]] const Texture& GetCurrentColorImage() const;
     [[nodiscard]] Texture& GetCurrentColorImage();
-    [[nodiscard]] VkImageView GetCurrentColorImageView() const;
 
     /**
      * Present the acquired image once the given semaphore is signaled. Which image that is the swap chain

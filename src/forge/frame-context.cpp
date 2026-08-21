@@ -224,11 +224,6 @@ Rndr::Forge::Texture& Rndr::Forge::FrameContext::GetColorImage()
     return m_swap_chain->GetCurrentColorImage();
 }
 
-VkImageView Rndr::Forge::FrameContext::GetColorImageView() const
-{
-    return GetColorImage().GetNativeImageView();
-}
-
 Rndr::Vector2i Rndr::Forge::FrameContext::GetRenderSize() const
 {
     const VkExtent2D extent = m_swap_chain->GetExtent();

@@ -2185,8 +2185,7 @@ TEST_CASE("Forge rendering without a depth attachment", "[forge]")
                                    const Forge::RenderingDesc rendering_desc{
                                        .render_area_extent = {k_side, k_side},
                                        .color_attachments = {Forge::RenderingAttachmentDesc{
-                                           .image_view = color.GetNativeImageView(),
-                                           .image_layout = Forge::ImageLayout::ColorAttachment,
+                                           .texture = color,
                                            .load_operation = Forge::AttachmentLoadOperation::Clear,
                                            .store_operation = Forge::AttachmentStoreOperation::Store,
                                            .clear_value = {.color = {1.0f, 0.0f, 1.0f, 1.0f}}}}};
@@ -2208,19 +2207,82 @@ TEST_CASE("Forge rendering without a depth attachment", "[forge]")
             REQUIRE(static_cast<i32>(pixels[i + 3]) == 255);
         }
     }
-    SECTION("A depth attachment that names no image view throws")
+    SECTION("A depth attachment that names no texture throws")
     {
         // What the old convention expressed as "no depth". Now that absent says it, a present attachment
-        // pointing at nothing is a filled-in desc somebody forgot to finish.
+        // pointing at nothing is a filled-in desc somebody forgot to finish. The colour attachment is
+        // transitioned first so that the throw is the depth one and not the layout check on the colour.
         Forge::CommandBuffer command_buffer(fixture.device, fixture.GetQueue());
         command_buffer.Begin();
+        command_buffer.CmdImageBarrier(Forge::ImageBarrier::ToColorAttachment(color));
         const Forge::RenderingDesc rendering_desc{
             .render_area_extent = {k_side, k_side},
-            .color_attachments = {Forge::RenderingAttachmentDesc{.image_view = color.GetNativeImageView(),
-                                                                 .image_layout = Forge::ImageLayout::ColorAttachment}},
+            .color_attachments = {Forge::RenderingAttachmentDesc{.texture = color}},
             .depth_attachment = Forge::RenderingAttachmentDesc{}};
         REQUIRE_THROWS_AS(command_buffer.CmdBeginRendering(rendering_desc), Opal::Exception);
         command_buffer.End();
+    }
+    SECTION("An attachment whose texture was never transitioned throws")
+    {
+        // The check the old API could not make: a colour attachment naming a texture no barrier has moved
+        // out of Undefined. Vulkan rejects an undefined attachment layout, but a layout that is legal and
+        // wrong - ShaderReadOnly on a texture the barriers left in ColorAttachment, say - it accepts, and
+        // reading the layout off the texture is what removes both.
+        Forge::CommandBuffer command_buffer(fixture.device, fixture.GetQueue());
+        command_buffer.Begin();
+        const Forge::RenderingDesc rendering_desc{.render_area_extent = {k_side, k_side},
+                                                  .color_attachments = {Forge::RenderingAttachmentDesc{.texture = color}}};
+        REQUIRE(color.GetCurrentLayout() == Forge::ImageLayout::Undefined);
+        REQUIRE_THROWS_AS(command_buffer.CmdBeginRendering(rendering_desc), Opal::Exception);
+        command_buffer.End();
+    }
+    SECTION("A colour attachment in a layout meant for something else throws")
+    {
+        // TransferSource is a layout this texture legitimately reaches - ReadBackTexture leaves it there -
+        // so this is the plausible-but-wrong case rather than the unconfigured one above.
+        Forge::CommandBuffer command_buffer(fixture.device, fixture.GetQueue());
+        command_buffer.Begin();
+        command_buffer.CmdTransition(color, Forge::ImageLayout::TransferSource);
+        const Forge::RenderingDesc rendering_desc{.render_area_extent = {k_side, k_side},
+                                                  .color_attachments = {Forge::RenderingAttachmentDesc{.texture = color}}};
+        REQUIRE_THROWS_AS(command_buffer.CmdBeginRendering(rendering_desc), Opal::Exception);
+        command_buffer.End();
+    }
+    SECTION("A colour attachment in the General layout is accepted")
+    {
+        // General is legal for every role, which is what makes it the layout a texture used two ways sits in.
+        Forge::ImmediateSubmit(fixture.device, fixture.GetQueue(),
+                               [&](Forge::CommandBuffer& command_buffer)
+                               {
+                                   // Written by hand rather than through ToGeneral, whose access is the
+                                   // shader read and write of a storage image: what follows here is the
+                                   // colour attachment output, and an access that does not match its stage
+                                   // is invalid whichever way round it is wrong.
+                                   command_buffer.CmdImageBarrier(
+                                       Forge::ImageBarrier{.stages_must_finish = Forge::PipelineStageBits::PipelineStart,
+                                                           .before_stages_start = Forge::PipelineStageBits::ColorAttachmentOutput,
+                                                           .before_stages_start_access = Forge::PipelineStageAccessBits::Write,
+                                                           .old_layout = Forge::ImageLayout::Undefined,
+                                                           .new_layout = Forge::ImageLayout::General,
+                                                           .image = color});
+                                   const Forge::RenderingDesc rendering_desc{
+                                       .render_area_extent = {k_side, k_side},
+                                       .color_attachments = {Forge::RenderingAttachmentDesc{
+                                           .texture = color,
+                                           .load_operation = Forge::AttachmentLoadOperation::Clear,
+                                           .store_operation = Forge::AttachmentStoreOperation::Store,
+                                           .clear_value = {.color = {0.0f, 1.0f, 0.0f, 1.0f}}}}};
+                                   command_buffer.CmdBeginRendering(rendering_desc);
+                                   command_buffer.CmdEndRendering();
+                               });
+
+        Opal::DynamicArray<u8> pixels(k_side * k_side * 4);
+        Forge::ReadBackTexture(fixture.device, fixture.GetQueue(), color, pixels, 0, Forge::ImageLayout::TransferSource);
+        for (i32 i = 0; i < pixels.GetSize(); i += 4)
+        {
+            REQUIRE(static_cast<i32>(pixels[i]) == 0);
+            REQUIRE(static_cast<i32>(pixels[i + 1]) == 255);
+        }
     }
     REQUIRE_NO_VALIDATION_ERROR(fixture);
 }
@@ -2304,8 +2366,7 @@ TEST_CASE("Forge color write mask", "[forge]")
                                    const Forge::RenderingDesc rendering_desc{
                                        .render_area_extent = {k_side, k_side},
                                        .color_attachments = {Forge::RenderingAttachmentDesc{
-                                           .image_view = color.GetNativeImageView(),
-                                           .image_layout = Forge::ImageLayout::ColorAttachment,
+                                           .texture = color,
                                            .load_operation = Forge::AttachmentLoadOperation::Clear,
                                            .store_operation = Forge::AttachmentStoreOperation::Store,
                                            .clear_value = {.color = {1.0f, 0.0f, 0.0f, 1.0f}}}}};
@@ -2588,8 +2649,7 @@ struct HalvesFixture
                                    const Forge::RenderingDesc rendering_desc{
                                        .render_area_extent = {k_side, k_side},
                                        .color_attachments = {Forge::RenderingAttachmentDesc{
-                                           .image_view = color.GetNativeImageView(),
-                                           .image_layout = Forge::ImageLayout::ColorAttachment,
+                                           .texture = color,
                                            .load_operation = Forge::AttachmentLoadOperation::Clear,
                                            .store_operation = Forge::AttachmentStoreOperation::Store,
                                            .clear_value = {.color = {0.0f, 0.0f, 0.0f, 1.0f}}}}};
@@ -3124,8 +3184,7 @@ TEST_CASE("Forge specialization constants", "[forge]")
                                    const Forge::RenderingDesc rendering_desc{
                                        .render_area_extent = {k_side, k_side},
                                        .color_attachments = {Forge::RenderingAttachmentDesc{
-                                           .image_view = color.GetNativeImageView(),
-                                           .image_layout = Forge::ImageLayout::ColorAttachment,
+                                           .texture = color,
                                            .load_operation = Forge::AttachmentLoadOperation::Clear,
                                            .store_operation = Forge::AttachmentStoreOperation::Store,
                                            .clear_value = {.color = {0.0f, 0.0f, 0.0f, 1.0f}}}}};
@@ -5207,8 +5266,7 @@ Opal::DynamicArray<u8> RenderRaster(ForgeFixture& fixture, Forge::Texture& color
                                const Forge::RenderingDesc rendering_desc{
                                    .render_area_extent = {side, side},
                                    .color_attachments = {Forge::RenderingAttachmentDesc{
-                                       .image_view = color.GetNativeImageView(),
-                                       .image_layout = Forge::ImageLayout::ColorAttachment,
+                                       .texture = color,
                                        .load_operation = Forge::AttachmentLoadOperation::Clear,
                                        .store_operation = Forge::AttachmentStoreOperation::Store,
                                        .clear_value = {.color = {1.0f, 0.0f, 0.0f, 1.0f}}}}};
@@ -5749,14 +5807,12 @@ TEST_CASE("Forge viewport depth range", "[forge]")
                 const Forge::RenderingDesc rendering_desc{
                     .render_area_extent = {k_side, k_side},
                     .color_attachments = {Forge::RenderingAttachmentDesc{
-                        .image_view = color.GetNativeImageView(),
-                        .image_layout = Forge::ImageLayout::ColorAttachment,
+                        .texture = color,
                         .load_operation = Forge::AttachmentLoadOperation::Clear,
                         .store_operation = Forge::AttachmentStoreOperation::Store,
                         .clear_value = {.color = {1.0f, 0.0f, 0.0f, 1.0f}}}},
                     .depth_attachment = Forge::RenderingAttachmentDesc{
-                        .image_view = depth.GetNativeImageView(),
-                        .image_layout = Forge::ImageLayout::DepthStencilAttachment,
+                        .texture = depth,
                         .load_operation = Forge::AttachmentLoadOperation::Clear,
                         .store_operation = Forge::AttachmentStoreOperation::Store,
                         .clear_value = {.depth_stencil = {1.0f, 0}}}};
@@ -6015,14 +6071,12 @@ TEST_CASE("Forge depth testing", "[forge]")
                 const Forge::RenderingDesc rendering_desc{
                     .render_area_extent = {k_side, k_side},
                     .color_attachments = {Forge::RenderingAttachmentDesc{
-                        .image_view = color.GetNativeImageView(),
-                        .image_layout = Forge::ImageLayout::ColorAttachment,
+                        .texture = color,
                         .load_operation = Forge::AttachmentLoadOperation::Clear,
                         .store_operation = Forge::AttachmentStoreOperation::Store,
                         .clear_value = {.color = {0.0f, 0.0f, 1.0f, 1.0f}}}},
                     .depth_attachment = Forge::RenderingAttachmentDesc{
-                        .image_view = depth.GetNativeImageView(),
-                        .image_layout = Forge::ImageLayout::DepthStencilAttachment,
+                        .texture = depth,
                         .load_operation = Forge::AttachmentLoadOperation::Clear,
                         .store_operation = Forge::AttachmentStoreOperation::Store,
                         // Cleared to whichever end of the range the comparator counts as furthest, so the
@@ -6170,21 +6224,19 @@ TEST_CASE("Forge stencil testing", "[forge]")
                 // One image carries both, so the same view is named twice - Vulkan takes the two sides
                 // apart even then, and each gets its own load and store.
                 const Forge::RenderingAttachmentDesc depth_stencil_attachment{
-                    .image_view = depth_stencil.GetNativeImageView(),
-                    .image_layout = Forge::ImageLayout::DepthStencilAttachment,
+                    .texture = depth_stencil,
                     .load_operation = Forge::AttachmentLoadOperation::Clear,
                     .store_operation = Forge::AttachmentStoreOperation::Store,
                     .clear_value = {.depth_stencil = {1.0f, 0}}};
                 const Forge::RenderingDesc rendering_desc{
                     .render_area_extent = {k_side, k_side},
                     .color_attachments = {Forge::RenderingAttachmentDesc{
-                        .image_view = color.GetNativeImageView(),
-                        .image_layout = Forge::ImageLayout::ColorAttachment,
+                        .texture = color,
                         .load_operation = Forge::AttachmentLoadOperation::Clear,
                         .store_operation = Forge::AttachmentStoreOperation::Store,
                         .clear_value = {.color = {1.0f, 0.0f, 0.0f, 1.0f}}}},
-                    .depth_attachment = depth_stencil_attachment,
-                    .stencil_attachment = depth_stencil_attachment};
+                    .depth_attachment = depth_stencil_attachment.Clone(),
+                    .stencil_attachment = depth_stencil_attachment.Clone()};
                 command_buffer.CmdBeginRendering(rendering_desc);
                 command_buffer.CmdSetViewport(Vector2f::Zero(), {k_side, k_side});
                 command_buffer.CmdSetScissor(Vector2i::Zero(), {k_side, k_side});
@@ -6235,15 +6287,16 @@ TEST_CASE("Forge stencil testing", "[forge]")
             REQUIRE(static_cast<i32>(pixels[i * 4 + 1]) == 255);
         }
     }
-    SECTION("A stencil attachment that names no image view throws")
+    SECTION("A stencil attachment that names no texture throws")
     {
         Forge::CommandBuffer command_buffer(fixture.device, fixture.GetQueue());
         Forge::Texture color = MakeColorTarget(fixture.device, k_side, k_color_format);
         command_buffer.Begin();
+        // Transitioned first so that the throw is the stencil one and not the layout check on the colour.
+        command_buffer.CmdImageBarrier(Forge::ImageBarrier::ToColorAttachment(color));
         const Forge::RenderingDesc rendering_desc{
             .render_area_extent = {k_side, k_side},
-            .color_attachments = {Forge::RenderingAttachmentDesc{.image_view = color.GetNativeImageView(),
-                                                                 .image_layout = Forge::ImageLayout::ColorAttachment}},
+            .color_attachments = {Forge::RenderingAttachmentDesc{.texture = color}},
             .stencil_attachment = Forge::RenderingAttachmentDesc{}};
         REQUIRE_THROWS_AS(command_buffer.CmdBeginRendering(rendering_desc), Opal::Exception);
         command_buffer.End();
@@ -6340,21 +6393,19 @@ TEST_CASE("Forge stencil masks set per draw", "[forge]")
                 command_buffer.CmdImageBarrier(Forge::ImageBarrier::ToColorAttachment(color));
                 command_buffer.CmdImageBarrier(Forge::ImageBarrier::ToDepthStencilAttachment(depth_stencil));
                 const Forge::RenderingAttachmentDesc depth_stencil_attachment{
-                    .image_view = depth_stencil.GetNativeImageView(),
-                    .image_layout = Forge::ImageLayout::DepthStencilAttachment,
+                    .texture = depth_stencil,
                     .load_operation = Forge::AttachmentLoadOperation::Clear,
                     .store_operation = Forge::AttachmentStoreOperation::Store,
                     .clear_value = {.depth_stencil = {1.0f, 0}}};
                 const Forge::RenderingDesc rendering_desc{
                     .render_area_extent = {k_side, k_side},
                     .color_attachments = {Forge::RenderingAttachmentDesc{
-                        .image_view = color.GetNativeImageView(),
-                        .image_layout = Forge::ImageLayout::ColorAttachment,
+                        .texture = color,
                         .load_operation = Forge::AttachmentLoadOperation::Clear,
                         .store_operation = Forge::AttachmentStoreOperation::Store,
                         .clear_value = {.color = {1.0f, 0.0f, 0.0f, 1.0f}}}},
-                    .depth_attachment = depth_stencil_attachment,
-                    .stencil_attachment = depth_stencil_attachment};
+                    .depth_attachment = depth_stencil_attachment.Clone(),
+                    .stencil_attachment = depth_stencil_attachment.Clone()};
                 command_buffer.CmdBeginRendering(rendering_desc);
                 command_buffer.CmdSetViewport(Vector2f::Zero(), {k_side, k_side});
                 command_buffer.CmdSetScissor(Vector2i::Zero(), {k_side, k_side});
@@ -6462,8 +6513,7 @@ TEST_CASE("Forge blending", "[forge]")
                                    const Forge::RenderingDesc rendering_desc{
                                        .render_area_extent = {k_side, k_side},
                                        .color_attachments = {Forge::RenderingAttachmentDesc{
-                                           .image_view = color.GetNativeImageView(),
-                                           .image_layout = Forge::ImageLayout::ColorAttachment,
+                                           .texture = color,
                                            .load_operation = Forge::AttachmentLoadOperation::Clear,
                                            .store_operation = Forge::AttachmentStoreOperation::Store,
                                            .clear_value = {.color = {0.0f, 0.0f, 0.0f, 1.0f}}}}};

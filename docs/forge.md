@@ -97,14 +97,14 @@ view, the image count, the extent - is stale afterwards. That is why acquire and
 Applications using `FrameContext` do not see this at all, since it re-reads what it needs each frame.
 
 The swap chain also remembers which image it handed out. `AcquireImage` records it, `GetCurrentColorImage()`
-and `GetCurrentColorImageView()` hand it back, and `Present` takes no index because the swap chain already
-knows which one it is - so an index never has to be threaded through a frame. `HasAcquiredImage()` is true
-only between the two, and asking for the image outside that pair throws rather than returning a stale one.
+hands it back, and `Present` takes no index because the swap chain already knows which one it is - so an
+index never has to be threaded through a frame. `HasAcquiredImage()` is true only between the two, and
+asking for the image outside that pair throws rather than returning a stale one.
 
 A depth image is optional: `SwapChainDesc::use_depth` is on by default, and a swap chain made without one
-has an empty depth texture, so `GetDepthImageView()` is null. Ask `HasDepth()` rather than comparing that
-view against a handle, and leave `RenderingDesc::depth_attachment` absent when it answers false - an
-attachment that is present and names no image view throws, since a null view no longer means "no depth".
+has an empty depth texture. Ask `HasDepth()`, and leave `RenderingDesc::depth_attachment` absent when it
+answers false - an attachment that is present and names no texture throws, since absent is what "no depth"
+is spelled as.
 
 ---
 
@@ -129,7 +129,7 @@ while (!window->IsClosed())
     CommandBuffer& command_buffer = frame_context.GetCommandBuffer();
     command_buffer.CmdImageBarrier(ImageBarrier::ToColorAttachment(frame_context.GetColorImage()));
     command_buffer.CmdBeginRendering({.render_area_extent = frame_context.GetRenderSize(),
-                                      .color_attachments = {{.image_view = frame_context.GetColorImageView(), ...}}});
+                                      .color_attachments = {{.texture = frame_context.GetColorImage(), ...}}});
     ...
     command_buffer.CmdEndRendering();
 
@@ -319,6 +319,14 @@ them. The commands that need a layout without changing it - `CmdCopyImage`, `Cmd
 `CmdCopyBufferToImage`, `CmdCopyImageToBuffer`, `CmdGenerateMips`, `ReadBackTexture` - read it the same way,
 for exactly the levels their regions name, and throw when it is not one the role allows. That last check is
 the one the old API could not make.
+
+`CmdBeginRendering` is the same thing at the other end of the frame. A `RenderingAttachmentDesc` names the
+texture it draws into rather than an image view, so the layout it is rendered in is read off that texture
+instead of being written out beside it - and the role decides which layouts are allowed: `ColorAttachment`
+or `General` for a colour attachment, `DepthStencilAttachment`, `DepthStencilReadOnly` or `General` for the
+depth and stencil ones. Anything else throws, `Undefined` included, which is a texture no barrier has moved
+into place yet. The layer rejects an undefined attachment layout too; what it cannot reject is a layout that
+is legal and not the one the barriers actually left the texture in, and that is the case this removes.
 
 The long form of each preset, the one that is told the old layout, stays for the two cases the tracker
 cannot answer: a barrier over part of a texture whose range is narrowed after the preset built it, and a

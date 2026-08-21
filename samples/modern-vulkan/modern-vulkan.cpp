@@ -324,13 +324,11 @@ void Run()
         // Do the actual draw calls
         const Rndr::Forge::RenderingDesc rendering_desc{
             .render_area_extent = render_size,
-            .color_attachments = {Rndr::Forge::RenderingAttachmentDesc{.image_view = frame_context.GetColorImageView(),
-                                                                       .image_layout = Rndr::Forge::ImageLayout::ColorAttachment,
+            .color_attachments = {Rndr::Forge::RenderingAttachmentDesc{.texture = frame_context.GetColorImage(),
                                                                        .load_operation = Rndr::Forge::AttachmentLoadOperation::Clear,
                                                                        .store_operation = Rndr::Forge::AttachmentStoreOperation::Store,
                                                                        .clear_value = {.color = {0.0f, 0.0f, 0.2f, 1.0f}}}},
-            .depth_attachment = Rndr::Forge::RenderingAttachmentDesc{.image_view = swap_chain.GetDepthImageView(),
-                                                                     .image_layout = Rndr::Forge::ImageLayout::DepthStencilAttachment,
+            .depth_attachment = Rndr::Forge::RenderingAttachmentDesc{.texture = swap_chain.GetDepthImage(),
                                                                      .load_operation = Rndr::Forge::AttachmentLoadOperation::Clear,
                                                                      .store_operation = Rndr::Forge::AttachmentStoreOperation::DontCare,
                                                                      .clear_value = {.depth_stencil = {.depth = 1.0f, .stencil = 0}}}};

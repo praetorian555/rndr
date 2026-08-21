@@ -2,6 +2,7 @@
 
 #include "volk/volk.h"
 
+#include "opal/clonable-base.h"
 #include "opal/container/optional.h"
 #include "opal/container/ref.h"
 #include "opal/container/string.h"
@@ -26,11 +27,21 @@ enum class AttachmentStoreOperation : u8
     DontCare
 };
 
-struct RenderingAttachmentDesc
+struct RenderingAttachmentDesc : Opal::ClonableBase<RenderingAttachmentDesc>
 {
-    VkImageView image_view = VK_NULL_HANDLE;
-    /** Undefined by default, so an attachment that was left unconfigured fails loudly instead of rendering wrong. */
-    ImageLayout image_layout = ImageLayout::Undefined;
+    /**
+     * Texture to render into. Its image view is what the attachment names, and the layout it is rendered in
+     * is the one the texture tracks - so a pass says which texture it draws into and nothing else, and a
+     * layout that disagrees with the barriers that led up to it cannot be written here at all.
+     *
+     * Every level and layer the view covers has to be in one layout, and that layout has to be one the role
+     * allows: ColorAttachment or General for a colour attachment, DepthStencilAttachment,
+     * DepthStencilReadOnly or General for the other two. Anything else throws, Undefined included - which is
+     * a texture no barrier has moved into place yet.
+     *
+     * Empty for an attachment nobody filled in, which throws rather than rendering into nothing.
+     */
+    Opal::Ref<const Texture> texture;
     AttachmentLoadOperation load_operation = AttachmentLoadOperation::Clear;
     AttachmentStoreOperation store_operation = AttachmentStoreOperation::Store;
     union
@@ -42,6 +53,8 @@ struct RenderingAttachmentDesc
             u32 stencil;
         } depth_stencil;
     } clear_value = {Vector4f{0.0f, 0.0f, 0.0f, 1.0f}};
+
+    OPAL_CLONE_FIELDS(texture, load_operation, store_operation, clear_value);
 };
 
 struct RenderingDesc
@@ -50,17 +63,18 @@ struct RenderingDesc
     Opal::DynamicArray<RenderingAttachmentDesc> color_attachments;
     /**
      * Depth attachment, absent for a pass that renders without one. Absent is the default, so a pass that
-     * needs no depth says nothing rather than filling in a desc whose null image view means "ignore this".
-     * Present with no image view is a mistake and throws.
+     * needs no depth says nothing rather than filling in a desc whose empty texture means "ignore this".
+     * Present with no texture is a mistake and throws.
      */
     Opal::Optional<RenderingAttachmentDesc> depth_attachment;
     /**
      * Stencil attachment, absent for a pass that does no stencil work. Vulkan takes the two sides separately
-     * even when one image carries both, so a combined format such as D24_UNORM_S8_UINT names the *same image
-     * view* here as the depth attachment does - and takes its own load and store operations, since clearing
-     * the depth and keeping the stencil is a thing a pass may want. A separate stencil image names its own.
+     * even when one image carries both, so a combined format such as D24_UNORM_S8_UINT names the *same
+     * texture* here as the depth attachment does - and takes its own load and store operations, since
+     * clearing the depth and keeping the stencil is a thing a pass may want. A separate stencil image names
+     * its own.
      *
-     * Present with no image view is a mistake and throws, the way the depth attachment does.
+     * Present with no texture is a mistake and throws, the way the depth attachment does.
      */
     Opal::Optional<RenderingAttachmentDesc> stencil_attachment;
 };
@@ -331,7 +345,10 @@ public:
 
     /**
      * Begin a dynamic rendering pass. Uses VK_KHR_dynamic_rendering, no render pass or framebuffer objects needed.
-     * @param desc Describes the render area, color attachments, and optional depth attachment.
+     * @param desc Render area, colour attachments, and the optional depth and stencil ones. Each attachment
+     *        names a texture, and the layout it is rendered in is read off that texture the way the copies
+     *        read theirs - so an attachment whose texture is in a layout its role does not allow throws,
+     *        rather than being a plausible-but-wrong layout no validation layer can catch.
      */
     void CmdBeginRendering(const RenderingDesc& desc);
 

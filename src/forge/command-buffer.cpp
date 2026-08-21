@@ -690,67 +690,96 @@ static VkAttachmentStoreOp ToVkStoreOp(Rndr::Forge::AttachmentStoreOperation op)
     }
 }
 
+/**
+ * What one rendering attachment contributes to Vulkan: the view of the texture it names, and the layout that
+ * texture is in.
+ *
+ * The layout is read rather than asked for, the way the copies and the blits read theirs. That is what turns
+ * the one thing the validation layer cannot catch - an attachment layout that is legal but not the one the
+ * barriers before it actually left the texture in - into a message naming the texture and the two layouts.
+ *
+ * @param role What this attachment is, for the messages: "colour", "depth" or "stencil".
+ * @param is_color Whether the role wants the colour attachment layouts or the depth stencil ones.
+ */
+static VkRenderingAttachmentInfo ToVkRenderingAttachment(const Rndr::Forge::RenderingAttachmentDesc& attachment, const char* role,
+                                                         bool is_color)
+{
+    using namespace Rndr;
+    if (!attachment.texture.IsValid())
+    {
+        // Most often an attachment that was filled in and never finished. A pass that wants no depth or no
+        // stencil leaves the whole attachment absent instead, which is what the default already is.
+        throw Opal::Exception(Opal::StringEx("A ") + role +
+                              " attachment that names no texture! Leave the attachment absent instead - for a swap "
+                              "chain, SwapChain::HasDepth says whether there is one to name.");
+    }
+    const Forge::Texture& texture = attachment.texture.Get();
+    if (texture.GetNativeImageView() == VK_NULL_HANDLE)
+    {
+        // A texture whose usage is transfer only, which Vulkan allows no view on and so cannot be rendered into.
+        throw Opal::Exception(Opal::StringEx("The ") + role + " attachment names a texture that has no image view!");
+    }
+
+    // Over the range the view covers rather than over the whole texture, since that is what is rendered into.
+    const Forge::ImageLayout layout = texture.GetCurrentLayout(texture.GetDesc().subresource_range);
+    const bool layout_allowed = layout == Forge::ImageLayout::General ||
+                                (is_color ? layout == Forge::ImageLayout::ColorAttachment
+                                          : layout == Forge::ImageLayout::DepthStencilAttachment ||
+                                                layout == Forge::ImageLayout::DepthStencilReadOnly);
+    if (!layout_allowed)
+    {
+        const char* allowed = is_color ? "ColorAttachment or General" : "DepthStencilAttachment, DepthStencilReadOnly or General";
+        throw Opal::Exception(Opal::StringEx("Rendering needs the ") + role + " attachment texture in the " + allowed +
+                              " layout, and it is in " + Forge::ImageLayoutToString(layout) +
+                              "! Transition it before the pass - CmdTransition, or the matching ImageBarrier preset.");
+    }
+
+    VkRenderingAttachmentInfo info{
+        .sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO,
+        .imageView = texture.GetNativeImageView(),
+        .imageLayout = static_cast<VkImageLayout>(layout),
+        .loadOp = ToVkLoadOp(attachment.load_operation),
+        .storeOp = ToVkStoreOp(attachment.store_operation),
+    };
+    // The union is read through whichever member the role uses, since Vulkan's own clear value is the same
+    // union and neither it nor the layer can tell which one was written.
+    if (is_color)
+    {
+        info.clearValue = {.color = {.float32 = {attachment.clear_value.color.r, attachment.clear_value.color.g,
+                                                 attachment.clear_value.color.b, attachment.clear_value.color.a}}};
+    }
+    else
+    {
+        info.clearValue = {.depthStencil = {.depth = attachment.clear_value.depth_stencil.depth,
+                                            .stencil = attachment.clear_value.depth_stencil.stencil}};
+    }
+    return info;
+}
+
 void Rndr::Forge::CommandBuffer::CmdBeginRendering(const RenderingDesc& desc)
 {
     Opal::DynamicArray<VkRenderingAttachmentInfo> color_attachments;
     for (const auto& attachment : desc.color_attachments)
     {
-        color_attachments.PushBack(VkRenderingAttachmentInfo{
-            .sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO,
-            .imageView = attachment.image_view,
-            .imageLayout = static_cast<VkImageLayout>(attachment.image_layout),
-            .loadOp = ToVkLoadOp(attachment.load_operation),
-            .storeOp = ToVkStoreOp(attachment.store_operation),
-            .clearValue = {.color = {.float32 = {attachment.clear_value.color.r, attachment.clear_value.color.g,
-                                                 attachment.clear_value.color.b, attachment.clear_value.color.a}}},
-        });
+        color_attachments.PushBack(ToVkRenderingAttachment(attachment, "colour", true));
     }
 
     // Filled only when the desc carries one, and pointed at only then: an absent depth attachment is a
-    // pass that renders without depth, not one whose attachment happens to name no image.
+    // pass that renders without depth, not one whose attachment happens to name no texture.
     const bool has_depth = desc.depth_attachment.HasValue();
     VkRenderingAttachmentInfo depth_attachment{};
     if (has_depth)
     {
-        const RenderingAttachmentDesc& depth = desc.depth_attachment.GetValue();
-        if (depth.image_view == VK_NULL_HANDLE)
-        {
-            // Most often a swap chain built with use_depth off, whose GetDepthImageView is null by design.
-            // SwapChain::HasDepth is what to ask, and an absent attachment is what to leave behind.
-            throw Opal::Exception("A depth attachment that names no image view! Leave the attachment absent "
-                                  "instead - SwapChain::HasDepth says whether there is one to name.");
-        }
-        depth_attachment = {
-            .sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO,
-            .imageView = depth.image_view,
-            .imageLayout = static_cast<VkImageLayout>(depth.image_layout),
-            .loadOp = ToVkLoadOp(depth.load_operation),
-            .storeOp = ToVkStoreOp(depth.store_operation),
-            .clearValue = {.depthStencil = {.depth = depth.clear_value.depth_stencil.depth,
-                                            .stencil = depth.clear_value.depth_stencil.stencil}},
-        };
+        depth_attachment = ToVkRenderingAttachment(desc.depth_attachment.GetValue(), "depth", false);
     }
 
     // The same shape as the depth attachment, and separate from it on purpose: Vulkan takes the two sides
-    // apart even when one image carries both, so a combined format names the same view twice.
+    // apart even when one image carries both, so a combined format names the same texture twice.
     const bool has_stencil = desc.stencil_attachment.HasValue();
     VkRenderingAttachmentInfo stencil_attachment{};
     if (has_stencil)
     {
-        const RenderingAttachmentDesc& stencil = desc.stencil_attachment.GetValue();
-        if (stencil.image_view == VK_NULL_HANDLE)
-        {
-            throw Opal::Exception("A stencil attachment that names no image view! Leave the attachment absent instead.");
-        }
-        stencil_attachment = {
-            .sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO,
-            .imageView = stencil.image_view,
-            .imageLayout = static_cast<VkImageLayout>(stencil.image_layout),
-            .loadOp = ToVkLoadOp(stencil.load_operation),
-            .storeOp = ToVkStoreOp(stencil.store_operation),
-            .clearValue = {.depthStencil = {.depth = stencil.clear_value.depth_stencil.depth,
-                                            .stencil = stencil.clear_value.depth_stencil.stencil}},
-        };
+        stencil_attachment = ToVkRenderingAttachment(desc.stencil_attachment.GetValue(), "stencil", false);
     }
 
     const VkRenderingInfo rendering_info{

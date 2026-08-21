@@ -243,11 +243,6 @@ Rndr::Forge::Texture& Rndr::Forge::SwapChain::GetCurrentColorImage()
     return m_color_textures[static_cast<i32>(m_current_image_index)];
 }
 
-VkImageView Rndr::Forge::SwapChain::GetCurrentColorImageView() const
-{
-    return GetCurrentColorImage().GetNativeImageView();
-}
-
 Rndr::Forge::AcquiredImage Rndr::Forge::SwapChain::AcquireImage(const Semaphore& semaphore)
 {
     // Above the early return below, so that a window with no client area does not hide the mistake.

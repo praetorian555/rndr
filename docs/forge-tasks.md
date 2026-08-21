@@ -243,29 +243,53 @@ message, clean exit, probe removed.
 Note for 3.9: the layout still passes an all-zero `binding_flags_array` and computes a `binding_flags` local
 that nothing reads, so `use_update_after_bind` and `variable_descriptor_count` remain unreachable.
 
-### 2.7 Take the texture, not the view, in rendering attachments
+### 2.7 Take the texture, not the view, in rendering attachments — DONE
 
-`include/rndr/forge/command-buffer.hpp`, `src/forge/command-buffer.cpp`, the swap chain and frame context
-getters that exist to feed it, and the sample.
+`RenderingAttachmentDesc` holds an `Opal::Ref<const Texture>` where it held a `VkImageView` and an
+`ImageLayout` written out beside it. `CmdBeginRendering` takes the view off the texture and the layout off
+what the texture tracks, so a rendering desc names what it draws into and nothing else - the descs are now
+Vk-free everywhere, not everywhere but the one seam every frame passes through.
 
-`RenderingAttachmentDesc::image_view` is a raw `VkImageView`, and `image_layout` beside it is written by
-hand. That breaks two promises the rest of the API keeps, at the one seam every frame passes through. Descs
-are otherwise Vk-free (2.4), and the texture already tracks its layout (4.3) - yet `CmdBeginRendering`
-cannot see it, because an attachment names a view rather than the texture it belongs to. So the caller
-re-states `ColorAttachment` or `DepthStencilAttachment` by hand every frame, and a layout that disagrees
-with what the barriers actually did is exactly the plausible-but-wrong bookkeeping 4.3 exists to remove.
-The copies and blits already read the tracked layout and throw when it is not one the role allows; the
-attachment is the last place that asks the caller instead.
+Holding the layout is what makes the check possible, and it is the same check the copies and blits have made
+since 4.3: the role decides which layouts it allows - `ColorAttachment` or `General` for a colour
+attachment, `DepthStencilAttachment`, `DepthStencilReadOnly` or `General` for the depth and stencil ones -
+and anything else throws, naming the role and the layout the texture is actually in. Vulkan rejects an
+undefined attachment layout on its own, so the case worth having is the other one: a layout that is legal
+and not the one the barriers left the texture in. `ShaderReadOnly` on a colour attachment is accepted by the
+layer, renders wrong, and now cannot be written at all.
 
-The attachment should name the texture - `Opal::Ref<const Texture>`, the way descs hold objects everywhere
-else - with the layout read off it and checked against what the attachment role allows. `image_layout`
-goes, or stays only as an override for the case the tracker cannot answer, mirroring how the barrier
-presets kept their long forms. `GetColorImageView()` on the swap chain and the frame context can then
-retire from the frame path; `GetNativeImageView()` remains the escape hatch.
+No override was added. Every other call site that reads the tracked layout has none, and the two cases the
+tracker cannot answer - interleaved recording of one texture across two command buffers, and a `Reset()`
+that does not roll the layouts back - break the barriers as badly as they break this, so an escape hatch
+here would only hide half of it. `docs/forge.md` says where tracking stops holding, and that is the honest
+answer until it needs a better one.
 
-Done when: a `RenderingDesc` is filled in without naming a `Vk` type or a layout, `CmdBeginRendering`
-throws on a texture whose tracked layout is not one the attachment role allows, and the sample's rendering
-desc loses both hand-written `image_layout` lines.
+The layout goes to Vulkan as the one read off the texture, and the clear value is now read through the
+member the role uses rather than always through `color`. That is not the fix for the union - 2.9 is - but
+it does mean a depth attachment no longer clears with a reinterpreted `Vector4f`.
+
+`SwapChain::GetColorImageView`, `GetCurrentColorImageView`, `GetDepthImageView` and
+`FrameContext::GetColorImageView` are gone. Each was one line over `GetNativeImageView()` on a texture the
+same object already hands out, and nothing but an attachment wanted one. `Texture::GetNativeImageView()`
+stays as the escape hatch, and is what the attachment throws about when a transfer-only texture has none.
+
+Making the desc hold a `Ref` makes it move-only, so it gained `Opal::ClonableBase` and `OPAL_CLONE_FIELDS`
+the way `ImageBarrier` and the other descs that hold references already have. The one call site that reused
+an attachment - the combined depth stencil image named as both the depth and the stencil attachment - writes
+`.Clone()` twice, which is the same idiom the sample already uses for its push constant ranges.
+
+Verified by the test binary and by the sample. The sixteen attachment sites in `smoke-test.cpp` lost their
+`image_view` and `image_layout` lines, and four cases were added: an attachment naming no texture, one whose
+texture is still in `Undefined`, one deliberately left in `TransferSource` - the plausible-but-wrong case,
+which is the one this task exists for - and a colour attachment in `General`, which renders and is read back
+to prove the allowed set is not just the obvious layout. 66 test cases and 7977 assertions pass with the
+validation layer on. The sample ran for fourteen seconds and exited cleanly with not one message reported
+between the swap chain being created and the layers unloading, which covers the path no test reaches: the
+swap chain image that `AcquireImage` resets to `Undefined` every frame and the barrier moves back.
+
+Two of the throwing tests had to transition their colour attachment first. They were written to check that a
+depth or stencil attachment naming nothing throws, and without the barrier the colour attachment throws
+first - the assertion would still have passed, on the wrong exception.
 
 ### 2.8 One word for a texture
 
@@ -293,10 +317,14 @@ enums are the only place the word survives, and `docs/forge.md` says which word 
 `include/rndr/forge/command-buffer.hpp`, `src/forge/command-buffer.cpp`, and the sample.
 
 `RenderingAttachmentDesc::clear_value` is an anonymous union of `color` and `depth_stencil`. Writing
-`.color` on a depth attachment compiles, clears with reinterpreted garbage, and nothing says so - no throw,
-no validation message, since Vulkan's own `VkClearValue` is the same union and the layer cannot know which
-member was meant. In an API where every other misuse fails loudly, this is the one silent hole at the
-surface.
+`.color` on a depth attachment compiles and nothing says so - no throw, no validation message, since
+Vulkan's own `VkClearValue` is the same union and the layer cannot know which member was meant. In an API
+where every other misuse fails loudly, this is the one silent hole at the surface.
+
+2.7 made the read side follow the role rather than always reading `color`, so what a mismatched write
+produces is now a reinterpreted value rather than a reinterpreted one plus a wrong member - a depth
+attachment given `.color` clears to whatever the first two floats of that `Vector4f` mean as a depth and a
+stencil. Better, and still silent, which is what this task is about.
 
 `Opal::Variant<Vector4f, DepthStencilClearValue>` is the shape the fix wants, and the idiom already exists -
 `DescriptorSetUpdateBinding::resource_info` holds its buffer-or-image the same way. A variant remembers

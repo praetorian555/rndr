@@ -111,7 +111,6 @@ public:
     [[nodiscard]] const Texture& GetColorImage() const;
     /** The same image, mutable, since a barrier on it moves the layout the texture tracks. */
     [[nodiscard]] Texture& GetColorImage();
-    [[nodiscard]] VkImageView GetColorImageView() const;
 
     /**
      * The size to render at, which is the size of the swap chain rather than of the window - the window can be
