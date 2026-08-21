@@ -4700,10 +4700,12 @@ TEST_CASE("Forge barrier presets", "[forge]")
                                                 .width = k_side,
                                                 .height = k_side,
                                                 .usage = Forge::TextureUsageBits::TransferSource});
-        // General is a real layout with no preset behind it, which is the near miss worth checking: the
-        // dispatch throws rather than picking whichever preset is closest.
-        REQUIRE_THROWS_AS(Forge::ImageBarrier::To(texture, Forge::ImageLayout::Undefined, Forge::ImageLayout::General),
-                          Opal::Exception);
+        // DepthStencilReadOnly is a real layout with no preset behind it, which is the near miss worth
+        // checking: the dispatch throws rather than picking whichever preset is closest. General used to be
+        // the example here and stopped being one when 3.18 gave it a preset of its own.
+        REQUIRE_THROWS_AS(
+            Forge::ImageBarrier::To(texture, Forge::ImageLayout::Undefined, Forge::ImageLayout::DepthStencilReadOnly),
+            Opal::Exception);
     }
     SECTION("ToDepthStencilAttachment moves a depth texture")
     {
@@ -6199,6 +6201,706 @@ TEST_CASE("Forge blending", "[forge]")
                                                  static_cast<f32>(k_dst[channel]) / 255.0f, 1.0f, 1.0f, true);
         }
         require_channels(pixels, expected);
+    }
+    REQUIRE_NO_VALIDATION_ERROR(fixture);
+}
+
+/**
+ * Samplers, the texture shapes past a flat 2D one, and the descriptor kinds nothing had ever bound. Every
+ * case samples in a compute shader and writes the result into a buffer as floats, so what comes back is the
+ * value the sampler produced rather than a colour a UNORM attachment had to round on the way out.
+ *
+ * Sampling is always by explicit level: a compute shader has no derivatives, so there is no implicit LOD to
+ * be had, and an explicit one is still clamped by the sampler - which is what makes the LOD clamp checkable.
+ */
+namespace
+{
+
+/** Where to sample and at what level, the same for every shader below. */
+struct SampleParams
+{
+    Vector2f uv;
+    f32 lod = 0.0f;
+    f32 padding = 0.0f;
+};
+
+constexpr const char* k_combined_sample_source = R"(
+struct SampleParams
+{
+    float2 uv;
+    float lod;
+    float padding;
+};
+[[vk::push_constant]] SampleParams params;
+
+[[vk::binding(0, 0)]] Sampler2D combined;
+[[vk::binding(1, 0)]] RWStructuredBuffer<float4> output;
+
+[shader("compute")]
+[numthreads(1, 1, 1)]
+void main_sample_combined()
+{
+    output[0] = combined.SampleLevel(params.uv, params.lod);
+}
+)";
+
+constexpr const char* k_separate_sample_source = R"(
+struct SampleParams
+{
+    float2 uv;
+    float lod;
+    float padding;
+};
+[[vk::push_constant]] SampleParams params;
+
+[[vk::binding(0, 0)]] Texture2D<float4> separate_texture;
+[[vk::binding(1, 0)]] SamplerState separate_sampler;
+[[vk::binding(2, 0)]] RWStructuredBuffer<float4> output;
+
+[shader("compute")]
+[numthreads(1, 1, 1)]
+void main_sample_separate()
+{
+    output[0] = separate_texture.SampleLevel(separate_sampler, params.uv, params.lod);
+}
+)";
+
+constexpr const char* k_shape_sample_source = R"(
+struct SampleParams
+{
+    float3 direction;
+    float lod;
+};
+[[vk::push_constant]] SampleParams params;
+
+[[vk::binding(0, 0)]] Sampler3D volume;
+[[vk::binding(1, 0)]] RWStructuredBuffer<float4> volume_output;
+
+[shader("compute")]
+[numthreads(1, 1, 1)]
+void main_sample_volume()
+{
+    volume_output[0] = volume.SampleLevel(params.direction, params.lod);
+}
+)";
+
+constexpr const char* k_cube_sample_source = R"(
+struct SampleParams
+{
+    float3 direction;
+    float lod;
+};
+[[vk::push_constant]] SampleParams params;
+
+[[vk::binding(0, 0)]] SamplerCube cube;
+[[vk::binding(1, 0)]] RWStructuredBuffer<float4> cube_output;
+
+[shader("compute")]
+[numthreads(1, 1, 1)]
+void main_sample_cube()
+{
+    cube_output[0] = cube.SampleLevel(params.direction, params.lod);
+}
+)";
+
+constexpr const char* k_storage_image_source = R"(
+[[vk::image_format("rgba8")]]
+[[vk::binding(0, 0)]] RWTexture2D<float4> storage_image;
+
+[shader("compute")]
+[numthreads(4, 4, 1)]
+void main_write_storage(uint3 thread_id : SV_DispatchThreadID)
+{
+    storage_image[thread_id.xy] = float4(float(thread_id.x) / 4.0, float(thread_id.y) / 4.0, 0.0, 1.0);
+}
+)";
+
+/**
+ * Two texels side by side, the left one red and the right one green. Their centres sit at u = 0.25 and
+ * u = 0.75, which is what every coordinate below is picked against.
+ */
+Opal::DynamicArray<u8> MakeTwoTexelRow()
+{
+    Opal::DynamicArray<u8> bytes(2 * 4);
+    bytes[0] = 255;
+    bytes[1] = 0;
+    bytes[2] = 0;
+    bytes[3] = 255;
+    bytes[4] = 0;
+    bytes[5] = 255;
+    bytes[6] = 0;
+    bytes[7] = 255;
+    return bytes;
+}
+
+/** Uploads bytes into one mip level of a texture and leaves it where a shader can read it. */
+void UploadMip(const Forge::Device& device, Forge::DeviceQueue& queue, Forge::Texture& texture, Opal::ArrayView<const u8> pixels,
+               u32 mip_level)
+{
+    const Forge::Buffer staging(device, {.size = pixels.GetSize(), .usage = Forge::BufferUsageBits::TransferSource}, pixels);
+    const Forge::BufferImageCopyRegion region{
+        .image_subresource = {.mip_level = mip_level, .array_layer_count = texture.GetDesc().array_layer_count}};
+    Forge::ImmediateSubmit(device, queue,
+                           [&](Forge::CommandBuffer& command_buffer)
+                           {
+                               command_buffer.CmdImageBarrier(Forge::ImageBarrier::ToTransferDestination(texture));
+                               command_buffer.CmdCopyBufferToImage(staging, texture, {&region, 1});
+                               command_buffer.CmdImageBarrier(Forge::ImageBarrier::ToShaderRead(
+                                   texture, Forge::PipelineStageBits::ComputeShader));
+                           });
+}
+
+}  // namespace
+
+TEST_CASE("Forge sampler filtering and addressing", "[forge]")
+{
+    if (!IsForgeAvailable())
+    {
+        SKIP("No Vulkan device on this machine.");
+    }
+    ForgeFixture fixture;
+    constexpr PixelFormat k_format = PixelFormat::R8G8B8A8_UNORM;
+
+    const Forge::Shader shader = Forge::Shader::FromSourceInMemory(
+        fixture.device, k_combined_sample_source, {.entry_point = "main_sample_combined", .cache = GetShaderCache()});
+
+    Forge::DescriptorPoolDesc pool_desc;
+    pool_desc.Add(Forge::DescriptorType::CombinedImageSampler, 8);
+    pool_desc.Add(Forge::DescriptorType::StorageBuffer, 8);
+    pool_desc.max_sets = 8;
+    const Forge::DescriptorPool pool(fixture.device, pool_desc);
+
+    Forge::DescriptorSetLayoutDesc layout_desc;
+    layout_desc.AddBinding(0, Forge::DescriptorType::CombinedImageSampler, 1, ShaderTypeBits::Compute);
+    layout_desc.AddBinding(1, Forge::DescriptorType::StorageBuffer, 1, ShaderTypeBits::Compute);
+    const Forge::DescriptorSetLayout layout(fixture.device, layout_desc);
+
+    Forge::ComputePipelineDesc pipeline_desc;
+    pipeline_desc.shader = shader;
+    pipeline_desc.descriptor_set_layouts.PushBack(Opal::Ref<const Forge::DescriptorSetLayout>(layout));
+    pipeline_desc.push_constant_ranges.PushBack(
+        {.shader_stages = ShaderTypeBits::Compute, .offset = 0, .size = sizeof(SampleParams)});
+    const Forge::Pipeline pipeline(fixture.device, pipeline_desc);
+
+    /** The one texture every section here samples: two texels, red then green. */
+    Forge::Texture row(fixture.device, {.format = k_format,
+                                        .width = 2,
+                                        .height = 1,
+                                        .usage = Forge::TextureUsageBits::Sampled |
+                                                 Forge::TextureUsageBits::TransferDestination});
+    const Opal::DynamicArray<u8> row_pixels = MakeTwoTexelRow();
+    UploadMip(fixture.device, fixture.GetQueue(), row, {row_pixels.GetData(), row_pixels.GetSize()}, 0);
+
+    /** Sample the texture through the given sampler and hand back the four floats it produced. */
+    auto sample_with = [&](const Forge::Sampler& sampler, Forge::Texture& texture, const SampleParams& params)
+    {
+        const Forge::Buffer output(fixture.device, {.size = sizeof(Vector4f),
+                                                    .usage = Forge::BufferUsageBits::StorageBuffer,
+                                                    .host_access = Forge::HostAccess::Random});
+        const Opal::DynamicArray<u8> zeros(sizeof(Vector4f));
+        output.Update(zeros);
+
+        Forge::DescriptorSet set(pool, layout);
+        set.Update(0, texture, sampler, Forge::ImageLayout::ShaderReadOnly);
+        set.Update(1, output);
+        Forge::ImmediateSubmit(fixture.device, fixture.GetQueue(),
+                               [&](Forge::CommandBuffer& command_buffer)
+                               {
+                                   command_buffer.CmdBindPipeline(pipeline);
+                                   command_buffer.CmdBindDescriptorSet(pipeline, set);
+                                   command_buffer.CmdPushConstants(pipeline, ShaderTypeBits::Compute, Opal::AsBytes(params));
+                                   command_buffer.CmdDispatch(1);
+                               });
+        Vector4f result;
+        output.Read({reinterpret_cast<u8*>(&result), sizeof(result)});
+        return result;
+    };
+
+    SECTION("A linear and a nearest sampler differ between the two texels")
+    {
+        // Three tenths of the way from the left texel centre to the right one. A linear filter has to blend
+        // in that proportion; a nearest one can only ever hand back one of the two texels whole.
+        const SampleParams params{.uv = {0.4f, 0.5f}};
+        const Forge::Sampler linear(fixture.device, {.min_filter = ImageFilter::Linear, .mag_filter = ImageFilter::Linear});
+        const Forge::Sampler nearest(fixture.device, {.min_filter = ImageFilter::Nearest, .mag_filter = ImageFilter::Nearest});
+
+        const Vector4f blended = sample_with(linear, row, params);
+        INFO("linear rgba " << blended.x << " " << blended.y << " " << blended.z << " " << blended.w);
+        REQUIRE(blended.x == Catch::Approx(0.7f).margin(0.01));
+        REQUIRE(blended.y == Catch::Approx(0.3f).margin(0.01));
+
+        const Vector4f picked = sample_with(nearest, row, params);
+        INFO("nearest rgba " << picked.x << " " << picked.y << " " << picked.z << " " << picked.w);
+        REQUIRE(picked.x == Catch::Approx(1.0f).margin(0.01));
+        REQUIRE(picked.y == Catch::Approx(0.0f).margin(0.01));
+    }
+    SECTION("Wrapping and clamping differ at a coordinate outside the texture")
+    {
+        // A quarter past the right edge. Repeat wraps it back onto the left texel; clamping holds it on the
+        // right one. A nearest filter, so the answer is a whole texel either way.
+        const SampleParams params{.uv = {1.25f, 0.5f}};
+        const Forge::Sampler repeating(fixture.device, {.min_filter = ImageFilter::Nearest,
+                                                        .mag_filter = ImageFilter::Nearest,
+                                                        .address_mode_u = ImageAddressMode::Repeat,
+                                                        .address_mode_v = ImageAddressMode::Repeat});
+        const Forge::Sampler clamping(fixture.device, {.min_filter = ImageFilter::Nearest,
+                                                       .mag_filter = ImageFilter::Nearest,
+                                                       .address_mode_u = ImageAddressMode::Clamp,
+                                                       .address_mode_v = ImageAddressMode::Clamp});
+
+        const Vector4f wrapped = sample_with(repeating, row, params);
+        INFO("wrapped rgba " << wrapped.x << " " << wrapped.y);
+        REQUIRE(wrapped.x == Catch::Approx(1.0f).margin(0.01));
+        REQUIRE(wrapped.y == Catch::Approx(0.0f).margin(0.01));
+
+        const Vector4f held = sample_with(clamping, row, params);
+        INFO("clamped rgba " << held.x << " " << held.y);
+        REQUIRE(held.x == Catch::Approx(0.0f).margin(0.01));
+        REQUIRE(held.y == Catch::Approx(1.0f).margin(0.01));
+    }
+    SECTION("A LOD clamp forces the level the sampler allows rather than the one asked for")
+    {
+        // Two levels with nothing in common: the top is red and the one below it is blue, so which level was
+        // read is not a matter of degree.
+        Forge::Texture mipped(fixture.device, {.format = k_format,
+                                               .width = 2,
+                                               .height = 2,
+                                               .mip_level_count = 2,
+                                               .usage = Forge::TextureUsageBits::Sampled |
+                                                        Forge::TextureUsageBits::TransferDestination});
+        Opal::DynamicArray<u8> top(2 * 2 * 4);
+        for (i32 texel = 0; texel < 4; ++texel)
+        {
+            top[texel * 4 + 0] = 255;
+            top[texel * 4 + 3] = 255;
+        }
+        Opal::DynamicArray<u8> bottom(4);
+        bottom[2] = 255;
+        bottom[3] = 255;
+        UploadMip(fixture.device, fixture.GetQueue(), mipped, {top.GetData(), top.GetSize()}, 0);
+        UploadMip(fixture.device, fixture.GetQueue(), mipped, {bottom.GetData(), bottom.GetSize()}, 1);
+
+        // Nearest between levels, so the answer is one level and never a blend of two.
+        const Forge::Sampler top_only(fixture.device, {.mip_map_filter = ImageFilter::Nearest, .min_lod = 0.0f, .max_lod = 0.0f});
+        const Forge::Sampler bottom_only(fixture.device, {.mip_map_filter = ImageFilter::Nearest, .min_lod = 1.0f, .max_lod = 1.0f});
+
+        // Asking for level one and being held at zero.
+        const Vector4f held_at_top = sample_with(top_only, mipped, {.uv = {0.5f, 0.5f}, .lod = 1.0f});
+        INFO("held at the top rgba " << held_at_top.x << " " << held_at_top.z);
+        REQUIRE(held_at_top.x == Catch::Approx(1.0f).margin(0.01));
+        REQUIRE(held_at_top.z == Catch::Approx(0.0f).margin(0.01));
+
+        // And asking for level zero and being pushed down to one.
+        const Vector4f pushed_to_bottom = sample_with(bottom_only, mipped, {.uv = {0.5f, 0.5f}, .lod = 0.0f});
+        INFO("pushed to the bottom rgba " << pushed_to_bottom.x << " " << pushed_to_bottom.z);
+        REQUIRE(pushed_to_bottom.x == Catch::Approx(0.0f).margin(0.01));
+        REQUIRE(pushed_to_bottom.z == Catch::Approx(1.0f).margin(0.01));
+    }
+    SECTION("An immutable sampler is the one that samples, whatever the update said")
+    {
+        // The layout bakes a nearest sampler in. The update below hands it a linear one, which Vulkan
+        // ignores for such a binding - so a result that blends would mean the write had been obeyed.
+        const Forge::Sampler baked(fixture.device, {.min_filter = ImageFilter::Nearest, .mag_filter = ImageFilter::Nearest});
+        const Forge::Sampler ignored(fixture.device, {.min_filter = ImageFilter::Linear, .mag_filter = ImageFilter::Linear});
+
+        const Opal::InPlaceArray<Opal::Ref<const Forge::Sampler>, 1> baked_samplers{Opal::Ref<const Forge::Sampler>(baked)};
+        Forge::DescriptorSetLayoutDesc immutable_desc;
+        immutable_desc.AddBinding(0, Forge::DescriptorType::CombinedImageSampler, 1, ShaderTypeBits::Compute,
+                                  {baked_samplers.GetData(), 1});
+        immutable_desc.AddBinding(1, Forge::DescriptorType::StorageBuffer, 1, ShaderTypeBits::Compute);
+        const Forge::DescriptorSetLayout immutable_layout(fixture.device, immutable_desc);
+
+        Forge::ComputePipelineDesc immutable_pipeline_desc;
+        immutable_pipeline_desc.shader = shader;
+        immutable_pipeline_desc.descriptor_set_layouts.PushBack(Opal::Ref<const Forge::DescriptorSetLayout>(immutable_layout));
+        immutable_pipeline_desc.push_constant_ranges.PushBack(
+            {.shader_stages = ShaderTypeBits::Compute, .offset = 0, .size = sizeof(SampleParams)});
+        const Forge::Pipeline immutable_pipeline(fixture.device, immutable_pipeline_desc);
+
+        const Forge::Buffer output(fixture.device, {.size = sizeof(Vector4f),
+                                                    .usage = Forge::BufferUsageBits::StorageBuffer,
+                                                    .host_access = Forge::HostAccess::Random});
+        const Opal::DynamicArray<u8> zeros(sizeof(Vector4f));
+        output.Update(zeros);
+
+        Forge::DescriptorSet set(pool, immutable_layout);
+        set.Update(0, row, ignored, Forge::ImageLayout::ShaderReadOnly);
+        set.Update(1, output);
+        const SampleParams params{.uv = {0.4f, 0.5f}};
+        Forge::ImmediateSubmit(fixture.device, fixture.GetQueue(),
+                               [&](Forge::CommandBuffer& command_buffer)
+                               {
+                                   command_buffer.CmdBindPipeline(immutable_pipeline);
+                                   command_buffer.CmdBindDescriptorSet(immutable_pipeline, set);
+                                   command_buffer.CmdPushConstants(immutable_pipeline, ShaderTypeBits::Compute,
+                                                                   Opal::AsBytes(params));
+                                   command_buffer.CmdDispatch(1);
+                               });
+        Vector4f result;
+        output.Read({reinterpret_cast<u8*>(&result), sizeof(result)});
+        INFO("rgba " << result.x << " " << result.y);
+        // The whole left texel, which is the baked nearest sampler. The linear one would have given 0.7.
+        REQUIRE(result.x == Catch::Approx(1.0f).margin(0.01));
+        REQUIRE(result.y == Catch::Approx(0.0f).margin(0.01));
+    }
+    REQUIRE_NO_VALIDATION_ERROR(fixture);
+}
+
+TEST_CASE("Forge separate sampler and sampled image", "[forge]")
+{
+    if (!IsForgeAvailable())
+    {
+        SKIP("No Vulkan device on this machine.");
+    }
+    ForgeFixture fixture;
+
+    const Forge::Shader shader = Forge::Shader::FromSourceInMemory(
+        fixture.device, k_separate_sample_source, {.entry_point = "main_sample_separate", .cache = GetShaderCache()});
+
+    Forge::DescriptorPoolDesc pool_desc;
+    pool_desc.Add(Forge::DescriptorType::SampledImage, 4);
+    pool_desc.Add(Forge::DescriptorType::Sampler, 4);
+    pool_desc.Add(Forge::DescriptorType::StorageBuffer, 4);
+    pool_desc.max_sets = 4;
+    const Forge::DescriptorPool pool(fixture.device, pool_desc);
+
+    // The image and the sampler in bindings of their own, which is the pair the combined descriptor bundles.
+    Forge::DescriptorSetLayoutDesc layout_desc;
+    layout_desc.AddBinding(0, Forge::DescriptorType::SampledImage, 1, ShaderTypeBits::Compute);
+    layout_desc.AddBinding(1, Forge::DescriptorType::Sampler, 1, ShaderTypeBits::Compute);
+    layout_desc.AddBinding(2, Forge::DescriptorType::StorageBuffer, 1, ShaderTypeBits::Compute);
+    const Forge::DescriptorSetLayout layout(fixture.device, layout_desc);
+
+    Forge::ComputePipelineDesc pipeline_desc;
+    pipeline_desc.shader = shader;
+    pipeline_desc.descriptor_set_layouts.PushBack(Opal::Ref<const Forge::DescriptorSetLayout>(layout));
+    pipeline_desc.push_constant_ranges.PushBack(
+        {.shader_stages = ShaderTypeBits::Compute, .offset = 0, .size = sizeof(SampleParams)});
+    const Forge::Pipeline pipeline(fixture.device, pipeline_desc);
+
+    Forge::Texture row(fixture.device, {.format = PixelFormat::R8G8B8A8_UNORM,
+                                        .width = 2,
+                                        .height = 1,
+                                        .usage = Forge::TextureUsageBits::Sampled |
+                                                 Forge::TextureUsageBits::TransferDestination});
+    const Opal::DynamicArray<u8> row_pixels = MakeTwoTexelRow();
+    UploadMip(fixture.device, fixture.GetQueue(), row, {row_pixels.GetData(), row_pixels.GetSize()}, 0);
+
+    const Forge::Sampler linear(fixture.device, {.min_filter = ImageFilter::Linear, .mag_filter = ImageFilter::Linear});
+    const Forge::Buffer output(fixture.device, {.size = sizeof(Vector4f),
+                                                .usage = Forge::BufferUsageBits::StorageBuffer,
+                                                .host_access = Forge::HostAccess::Random});
+    const Opal::DynamicArray<u8> zeros(sizeof(Vector4f));
+    output.Update(zeros);
+
+    Forge::DescriptorSet set(pool, layout);
+    // The sampler of the image binding and the image of the sampler binding are each the half Vulkan ignores
+    // for that descriptor type, which is what makes one Update overload serve all three kinds.
+    set.Update(0, row, linear, Forge::ImageLayout::ShaderReadOnly);
+    set.Update(1, row, linear, Forge::ImageLayout::ShaderReadOnly);
+    set.Update(2, output);
+
+    const SampleParams params{.uv = {0.4f, 0.5f}};
+    Forge::ImmediateSubmit(fixture.device, fixture.GetQueue(),
+                           [&](Forge::CommandBuffer& command_buffer)
+                           {
+                               command_buffer.CmdBindPipeline(pipeline);
+                               command_buffer.CmdBindDescriptorSet(pipeline, set);
+                               command_buffer.CmdPushConstants(pipeline, ShaderTypeBits::Compute, Opal::AsBytes(params));
+                               command_buffer.CmdDispatch(1);
+                           });
+    Vector4f result;
+    output.Read({reinterpret_cast<u8*>(&result), sizeof(result)});
+    INFO("rgba " << result.x << " " << result.y << " " << result.z << " " << result.w);
+    // The same numbers the combined descriptor produces from the same texture, sampler and coordinate.
+    REQUIRE(result.x == Catch::Approx(0.7f).margin(0.01));
+    REQUIRE(result.y == Catch::Approx(0.3f).margin(0.01));
+    REQUIRE_NO_VALIDATION_ERROR(fixture);
+}
+
+TEST_CASE("Forge storage image writes", "[forge]")
+{
+    if (!IsForgeAvailable())
+    {
+        SKIP("No Vulkan device on this machine.");
+    }
+    ForgeFixture fixture;
+    constexpr i32 k_side = 4;
+
+    const Forge::Shader shader = Forge::Shader::FromSourceInMemory(
+        fixture.device, k_storage_image_source, {.entry_point = "main_write_storage", .cache = GetShaderCache()});
+
+    Forge::DescriptorPoolDesc pool_desc;
+    pool_desc.Add(Forge::DescriptorType::StorageImage, 4);
+    pool_desc.max_sets = 4;
+    const Forge::DescriptorPool pool(fixture.device, pool_desc);
+
+    Forge::DescriptorSetLayoutDesc layout_desc;
+    layout_desc.AddBinding(0, Forge::DescriptorType::StorageImage, 1, ShaderTypeBits::Compute);
+    const Forge::DescriptorSetLayout layout(fixture.device, layout_desc);
+
+    Forge::ComputePipelineDesc pipeline_desc;
+    pipeline_desc.shader = shader;
+    pipeline_desc.descriptor_set_layouts.PushBack(Opal::Ref<const Forge::DescriptorSetLayout>(layout));
+    const Forge::Pipeline pipeline(fixture.device, pipeline_desc);
+
+    Forge::Texture storage(fixture.device, {.format = PixelFormat::R8G8B8A8_UNORM,
+                                            .width = k_side,
+                                            .height = k_side,
+                                            .usage = Forge::TextureUsageBits::Storage |
+                                                     Forge::TextureUsageBits::TransferSource});
+    const Forge::Sampler unused(fixture.device, {});
+
+    Forge::DescriptorSet set(pool, layout);
+    // General is the layout a storage image is bound in, which is what ToGeneral exists for.
+    set.Update(0, storage, unused, Forge::ImageLayout::General);
+
+    Forge::ImmediateSubmit(fixture.device, fixture.GetQueue(),
+                           [&](Forge::CommandBuffer& command_buffer)
+                           {
+                               command_buffer.CmdImageBarrier(Forge::ImageBarrier::ToGeneral(storage));
+                               command_buffer.CmdBindPipeline(pipeline);
+                               command_buffer.CmdBindDescriptorSet(pipeline, set);
+                               command_buffer.CmdDispatch(1);
+                           });
+    REQUIRE(storage.GetCurrentLayout() == Forge::ImageLayout::General);
+
+    Opal::DynamicArray<u8> pixels(k_side * k_side * 4);
+    Forge::ReadBackTexture(fixture.device, fixture.GetQueue(), storage, pixels, 0, Forge::ImageLayout::TransferSource);
+    for (i32 y = 0; y < k_side; ++y)
+    {
+        for (i32 x = 0; x < k_side; ++x)
+        {
+            const i32 base = (y * k_side + x) * 4;
+            // The shader writes its own coordinates over four, so every texel is different and a write that
+            // landed at the wrong one says which.
+            const i32 expected_red = static_cast<i32>(static_cast<f32>(x) / 4.0f * 255.0f + 0.5f);
+            const i32 expected_green = static_cast<i32>(static_cast<f32>(y) / 4.0f * 255.0f + 0.5f);
+            INFO("texel " << x << "," << y);
+            REQUIRE(static_cast<i32>(pixels[base + 0]) >= expected_red - 1);
+            REQUIRE(static_cast<i32>(pixels[base + 0]) <= expected_red + 1);
+            REQUIRE(static_cast<i32>(pixels[base + 1]) >= expected_green - 1);
+            REQUIRE(static_cast<i32>(pixels[base + 1]) <= expected_green + 1);
+        }
+    }
+    REQUIRE_NO_VALIDATION_ERROR(fixture);
+}
+
+TEST_CASE("Forge texture shapes past a flat two dimensional one", "[forge]")
+{
+    if (!IsForgeAvailable())
+    {
+        SKIP("No Vulkan device on this machine.");
+    }
+    ForgeFixture fixture;
+    constexpr PixelFormat k_format = PixelFormat::R8G8B8A8_UNORM;
+
+    Forge::DescriptorPoolDesc pool_desc;
+    pool_desc.Add(Forge::DescriptorType::CombinedImageSampler, 4);
+    pool_desc.Add(Forge::DescriptorType::StorageBuffer, 4);
+    pool_desc.max_sets = 4;
+    const Forge::DescriptorPool pool(fixture.device, pool_desc);
+
+    Forge::DescriptorSetLayoutDesc layout_desc;
+    layout_desc.AddBinding(0, Forge::DescriptorType::CombinedImageSampler, 1, ShaderTypeBits::Compute);
+    layout_desc.AddBinding(1, Forge::DescriptorType::StorageBuffer, 1, ShaderTypeBits::Compute);
+    const Forge::DescriptorSetLayout layout(fixture.device, layout_desc);
+
+    const Forge::Sampler nearest(fixture.device, {.min_filter = ImageFilter::Nearest, .mag_filter = ImageFilter::Nearest});
+
+    /** Sample one texture through one shader at one direction, and hand back what came out. */
+    auto sample_shape = [&](const char* source, const char* entry_point, Forge::Texture& texture, const Vector4f& direction)
+    {
+        const Forge::Shader shader =
+            Forge::Shader::FromSourceInMemory(fixture.device, source, {.entry_point = entry_point, .cache = GetShaderCache()});
+        Forge::ComputePipelineDesc pipeline_desc;
+        pipeline_desc.shader = shader;
+        pipeline_desc.descriptor_set_layouts.PushBack(Opal::Ref<const Forge::DescriptorSetLayout>(layout));
+        pipeline_desc.push_constant_ranges.PushBack(
+            {.shader_stages = ShaderTypeBits::Compute, .offset = 0, .size = sizeof(Vector4f)});
+        const Forge::Pipeline pipeline(fixture.device, pipeline_desc);
+
+        const Forge::Buffer output(fixture.device, {.size = sizeof(Vector4f),
+                                                    .usage = Forge::BufferUsageBits::StorageBuffer,
+                                                    .host_access = Forge::HostAccess::Random});
+        const Opal::DynamicArray<u8> zeros(sizeof(Vector4f));
+        output.Update(zeros);
+
+        Forge::DescriptorSet set(pool, layout);
+        set.Update(0, texture, nearest, Forge::ImageLayout::ShaderReadOnly);
+        set.Update(1, output);
+        Forge::ImmediateSubmit(fixture.device, fixture.GetQueue(),
+                               [&](Forge::CommandBuffer& command_buffer)
+                               {
+                                   command_buffer.CmdBindPipeline(pipeline);
+                                   command_buffer.CmdBindDescriptorSet(pipeline, set);
+                                   command_buffer.CmdPushConstants(pipeline, ShaderTypeBits::Compute, Opal::AsBytes(direction));
+                                   command_buffer.CmdDispatch(1);
+                               });
+        Vector4f result;
+        output.Read({reinterpret_cast<u8*>(&result), sizeof(result)});
+        return result;
+    };
+
+    SECTION("A three dimensional texture is sampled along its depth")
+    {
+        // Two slices, red in front and green behind, so which slice was read is not a matter of degree.
+        Forge::Texture volume(fixture.device, {.dimension = Forge::TextureDimension::Texture3D,
+                                               .format = k_format,
+                                               .width = 1,
+                                               .height = 1,
+                                               .depth = 2,
+                                               .usage = Forge::TextureUsageBits::Sampled |
+                                                        Forge::TextureUsageBits::TransferDestination,
+                                               .view_type = Forge::TextureViewType::Texture3D});
+        const Opal::DynamicArray<u8> slices = MakeTwoTexelRow();
+        UploadMip(fixture.device, fixture.GetQueue(), volume, {slices.GetData(), slices.GetSize()}, 0);
+
+        const Vector4f front = sample_shape(k_shape_sample_source, "main_sample_volume", volume, {0.5f, 0.5f, 0.25f, 0.0f});
+        INFO("front rgba " << front.x << " " << front.y);
+        REQUIRE(front.x == Catch::Approx(1.0f).margin(0.01));
+        REQUIRE(front.y == Catch::Approx(0.0f).margin(0.01));
+
+        const Vector4f back = sample_shape(k_shape_sample_source, "main_sample_volume", volume, {0.5f, 0.5f, 0.75f, 0.0f});
+        INFO("back rgba " << back.x << " " << back.y);
+        REQUIRE(back.x == Catch::Approx(0.0f).margin(0.01));
+        REQUIRE(back.y == Catch::Approx(1.0f).margin(0.01));
+    }
+    SECTION("A cube view is sampled by direction")
+    {
+        // Six faces, each one texel, each a different value. A cube view needs the image to have been made
+        // cube compatible, which nothing but the view type in the desc asks for.
+        Forge::Texture cube(fixture.device, {.format = k_format,
+                                             .width = 1,
+                                             .height = 1,
+                                             .array_layer_count = 6,
+                                             .usage = Forge::TextureUsageBits::Sampled |
+                                                      Forge::TextureUsageBits::TransferDestination,
+                                             .view_type = Forge::TextureViewType::Cube});
+        // Layer order is +X, -X, +Y, -Y, +Z, -Z, so a direction of positive x has to come back as the first.
+        Opal::DynamicArray<u8> faces(6 * 4);
+        for (i32 face = 0; face < 6; ++face)
+        {
+            faces[face * 4 + 0] = static_cast<u8>(face * 51);
+            faces[face * 4 + 3] = 255;
+        }
+        UploadMip(fixture.device, fixture.GetQueue(), cube, {faces.GetData(), faces.GetSize()}, 0);
+
+        const Vector4f positive_x = sample_shape(k_cube_sample_source, "main_sample_cube", cube, {1.0f, 0.0f, 0.0f, 0.0f});
+        INFO("+x red " << positive_x.x);
+        REQUIRE(positive_x.x == Catch::Approx(0.0f).margin(0.01));
+
+        const Vector4f negative_x = sample_shape(k_cube_sample_source, "main_sample_cube", cube, {-1.0f, 0.0f, 0.0f, 0.0f});
+        INFO("-x red " << negative_x.x);
+        REQUIRE(negative_x.x == Catch::Approx(51.0f / 255.0f).margin(0.01));
+
+        const Vector4f positive_z = sample_shape(k_cube_sample_source, "main_sample_cube", cube, {0.0f, 0.0f, 1.0f, 0.0f});
+        INFO("+z red " << positive_z.x);
+        REQUIRE(positive_z.x == Catch::Approx(4.0f * 51.0f / 255.0f).margin(0.01));
+    }
+    SECTION("A cube view over a layer count that is not a multiple of six throws")
+    {
+        REQUIRE_THROWS_AS(Forge::Texture(fixture.device, {.format = k_format,
+                                                          .width = 1,
+                                                          .height = 1,
+                                                          .array_layer_count = 4,
+                                                          .usage = Forge::TextureUsageBits::Sampled,
+                                                          .view_type = Forge::TextureViewType::Cube}),
+                          Opal::Exception);
+    }
+    REQUIRE_NO_VALIDATION_ERROR(fixture);
+}
+
+TEST_CASE("Forge descriptor pool recycling", "[forge]")
+{
+    if (!IsForgeAvailable())
+    {
+        SKIP("No Vulkan device on this machine.");
+    }
+    ForgeFixture fixture;
+    constexpr i32 k_element_count = 64;
+
+    const Forge::Shader shader = Forge::Shader::FromSourceInMemory(
+        fixture.device, k_descriptor_source, {.entry_point = "main_descriptor", .cache = GetShaderCache()});
+
+    Forge::DescriptorSetLayoutDesc layout_desc;
+    layout_desc.AddBinding(0, Forge::DescriptorType::StorageBuffer, 1, ShaderTypeBits::Compute);
+    const Forge::DescriptorSetLayout layout(fixture.device, layout_desc);
+
+    Forge::ComputePipelineDesc pipeline_desc;
+    pipeline_desc.shader = shader;
+    pipeline_desc.descriptor_set_layouts.PushBack(Opal::Ref<const Forge::DescriptorSetLayout>(layout));
+    const Forge::Pipeline pipeline(fixture.device, pipeline_desc);
+
+    /** Bind one set, dispatch through it, and check the shader wrote what it should have. */
+    auto require_set_works = [&](Forge::DescriptorSet& set)
+    {
+        const Forge::Buffer output(fixture.device, {.size = k_element_count * sizeof(u32),
+                                                    .usage = Forge::BufferUsageBits::StorageBuffer,
+                                                    .host_access = Forge::HostAccess::Random});
+        const Opal::DynamicArray<u8> zeros(k_element_count * sizeof(u32));
+        output.Update(zeros);
+        set.Update(0, output);
+        Forge::ImmediateSubmit(fixture.device, fixture.GetQueue(),
+                               [&](Forge::CommandBuffer& command_buffer)
+                               {
+                                   command_buffer.CmdBindPipeline(pipeline);
+                                   command_buffer.CmdBindDescriptorSet(pipeline, set);
+                                   command_buffer.CmdDispatch(1);
+                               });
+        Opal::DynamicArray<u32> values(k_element_count);
+        output.Read({reinterpret_cast<u8*>(values.GetData()), values.GetSize() * sizeof(u32)});
+        for (i32 i = 0; i < k_element_count; ++i)
+        {
+            INFO("element " << i);
+            REQUIRE(values[i] == static_cast<u32>(i) + 7);
+        }
+    };
+
+    SECTION("Sets allocated after a reset work")
+    {
+        // A pool with room for exactly two, filled, then reset and filled again. Without the reset the third
+        // allocation would have nothing left to come out of.
+        Forge::DescriptorPoolDesc pool_desc;
+        pool_desc.Add(Forge::DescriptorType::StorageBuffer, 2);
+        pool_desc.max_sets = 2;
+        Forge::DescriptorPool pool(fixture.device, pool_desc);
+
+        {
+            Forge::DescriptorSet first(pool, layout);
+            Forge::DescriptorSet second(pool, layout);
+            require_set_works(first);
+            require_set_works(second);
+            // Every set the pool handed out is invalid the moment it is reset, so they go out of scope first.
+        }
+        pool.Reset();
+
+        Forge::DescriptorSet after_reset(pool, layout);
+        Forge::DescriptorSet also_after_reset(pool, layout);
+        require_set_works(after_reset);
+        require_set_works(also_after_reset);
+    }
+    SECTION("A destroyed set gives its space back when the pool allows it")
+    {
+        // free_individual_sets is what makes DescriptorSet::Destroy return the set rather than only drop the
+        // handle, so the pool below runs out without it.
+        Forge::DescriptorPoolDesc pool_desc;
+        pool_desc.Add(Forge::DescriptorType::StorageBuffer, 2);
+        pool_desc.max_sets = 2;
+        pool_desc.free_individual_sets = true;
+        const Forge::DescriptorPool pool(fixture.device, pool_desc);
+
+        Forge::DescriptorSet first(pool, layout);
+        Forge::DescriptorSet second(pool, layout);
+        require_set_works(first);
+
+        first.Destroy();
+        REQUIRE_FALSE(first.IsValid());
+
+        Forge::DescriptorSet reused(pool, layout);
+        require_set_works(reused);
+        // The one that was never destroyed is untouched by any of it.
+        require_set_works(second);
     }
     REQUIRE_NO_VALIDATION_ERROR(fixture);
 }
