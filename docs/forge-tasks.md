@@ -627,16 +627,28 @@ reports says which descriptor it reached.
 
 It was checked against being vacuous rather than trusted for passing. Making the index the constant `1`
 fails at invocation 1, the first one that should have read the other element; swapping which texture is
-written to which element fails at invocation 0. So the non-uniform index and the array element are both
+written to which element fails at invocation 0. So the per-invocation index and the array element are both
 load bearing.
 
-Two gaps it turned up, neither fixed here. `uniformBufferArrayNonUniformIndexing` is the one indexing
-feature `DeviceFeatures::non_uniform_descriptor_indexing` does not map to - sampled image, storage buffer
-and storage image are all set - so a non-uniform index into an array of constant buffers fails validation
-while the feature reads as on. And `DescriptorSet::Update` passes `array_element` through to
-`dstArrayElement` unchecked: the set keeps the type of each binding but not its descriptor count, so an
-element past the end of a binding reaches the validation layer rather than throwing the way the other
-bindless mistakes here do.
+**What it does not prove is the non-uniform part**, which is worth writing down because the name says
+otherwise. Removing `shaderSampledImageArrayNonUniformIndexing` from the feature mapping and rebuilding
+leaves the case passing and the validation layer silent, so whatever
+`textures[NonUniformResourceIndex(...)]` compiles to here does not demand that bit. The index differing
+between invocations is real; the decoration Vulkan gates on that feature is not visible from out here.
+Proving it needs the SPIR-V disassembled rather than another runtime case.
+
+Two gaps it turned up, both fixed. `shaderUniformBufferArrayNonUniformIndexing` was the one indexing bit
+`DeviceFeatures::non_uniform_descriptor_indexing` did not map to, while sampled image, storage buffer and
+storage image all were. `FindUnsupportedFeature` now checks every bit each of the two descriptor indexing
+flags turns on rather than only the first: `vkCreateDevice` fails on any one of them the device lacks, and
+naming the descriptor kind keeps a device supporting most of a flag from reporting the whole flag missing.
+`"Forge bindless constant buffer array"` covers the array and the per-element writes into it, and carries
+the same caveat as above - it passes with the bit off.
+
+`DescriptorSet::Update` also passed `array_element` through to `dstArrayElement` unchecked, and Vulkan
+reports nothing for an element past the end of a binding. `BindingInfo` keeps the descriptor count now,
+taking the smaller allocated number on the binding that was given a variable count, so an element inside the
+declared array but outside the allocated one throws as well.
 
 ### 3.10 Pipeline gaps — DONE, minus a cache that was measured and dropped
 

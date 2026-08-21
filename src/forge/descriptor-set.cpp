@@ -554,8 +554,13 @@ Rndr::Forge::DescriptorSet::DescriptorSet(const DescriptorPool& pool, const Desc
     m_binding_types.Reserve(layout.GetDesc().bindings.GetSize());
     for (const DescriptorSetLayoutDesc::Binding& binding : layout.GetDesc().bindings)
     {
-        m_binding_types.PushBack(
-            {.binding = binding.binding, .descriptor_type = binding.descriptor_type, .name = binding.name.Clone()});
+        // The variable binding holds what this set was allocated with, not what the layout declared, so an
+        // element inside the declared array but outside the allocated one is caught here as well.
+        const bool is_variable = variable_descriptor_count > 0 && &binding == variable_binding;
+        m_binding_types.PushBack({.binding = binding.binding,
+                                  .descriptor_type = binding.descriptor_type,
+                                  .descriptor_count = is_variable ? variable_descriptor_count : binding.descriptor_count,
+                                  .name = binding.name.Clone()});
     }
 }
 
@@ -616,6 +621,14 @@ void Rndr::Forge::DescriptorSet::Update(Opal::ArrayView<const DescriptorSetUpdat
         descriptor_write.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
         descriptor_write.pNext = nullptr;
         descriptor_write.dstSet = m_set;
+        // Vulkan writes one descriptor per element and reports nothing when the element is past the end of
+        // the binding, so an off-by-one in a bindless array lands somewhere undefined rather than throwing.
+        const BindingInfo& binding_info = FindBinding(updates[i].binding);
+        if (updates[i].array_element >= binding_info.descriptor_count)
+        {
+            throw Opal::Exception(Opal::StringEx("Binding ") + updates[i].binding + " holds " + binding_info.descriptor_count +
+                                  " descriptors, so there is no element " + updates[i].array_element + " to write!");
+        }
         descriptor_write.dstBinding = updates[i].binding;
         descriptor_write.dstArrayElement = updates[i].array_element;
         descriptor_write.descriptorType = FromDescriptorType(updates[i].descriptor_type);
@@ -657,18 +670,23 @@ void Rndr::Forge::DescriptorSet::Update(Opal::ArrayView<const DescriptorSetUpdat
     vkUpdateDescriptorSets(m_device, static_cast<u32>(descriptor_writes.GetSize()), descriptor_writes.GetData(), 0, nullptr);
 }
 
-Rndr::Forge::DescriptorType Rndr::Forge::DescriptorSet::GetBindingDescriptorType(u32 binding) const
+const Rndr::Forge::DescriptorSet::BindingInfo& Rndr::Forge::DescriptorSet::FindBinding(u32 binding) const
 {
     // A linear scan: a layout has a handful of bindings, and a map would cost more to build than this
     // saves to search.
-    for (const BindingInfo& binding_type : m_binding_types)
+    for (const BindingInfo& binding_info : m_binding_types)
     {
-        if (binding_type.binding == binding)
+        if (binding_info.binding == binding)
         {
-            return binding_type.descriptor_type;
+            return binding_info;
         }
     }
     throw Opal::Exception(Opal::StringEx("The layout of this descriptor set has no binding ") + binding + "!");
+}
+
+Rndr::Forge::DescriptorType Rndr::Forge::DescriptorSet::GetBindingDescriptorType(u32 binding) const
+{
+    return FindBinding(binding).descriptor_type;
 }
 
 Rndr::u32 Rndr::Forge::DescriptorSet::GetBindingIndex(const Opal::StringUtf8& name) const

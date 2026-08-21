@@ -130,6 +130,7 @@ struct FeatureChain
         vk12.shaderSampledImageArrayNonUniformIndexing = features.non_uniform_descriptor_indexing;
         vk12.shaderStorageBufferArrayNonUniformIndexing = features.non_uniform_descriptor_indexing;
         vk12.shaderStorageImageArrayNonUniformIndexing = features.non_uniform_descriptor_indexing;
+        vk12.shaderUniformBufferArrayNonUniformIndexing = features.non_uniform_descriptor_indexing;
         vk12.bufferDeviceAddress = features.buffer_device_address;
         vk12.scalarBlockLayout = features.scalar_block_layout;
         vk12.hostQueryReset = features.host_query_reset;
@@ -210,10 +211,25 @@ const char* FindUnsupportedFeature(const Forge::PhysicalDevice& physical_device,
     require(requested.runtime_descriptor_array, supported.vk12.runtimeDescriptorArray, "runtime_descriptor_array");
     require(requested.variable_descriptor_count, supported.vk12.descriptorBindingVariableDescriptorCount, "variable_descriptor_count");
     require(requested.partially_bound_descriptors, supported.vk12.descriptorBindingPartiallyBound, "partially_bound_descriptors");
+    // One Forge flag turns on four Vulkan bits apiece, and vkCreateDevice fails on any one of them the
+    // device lacks, so every bit that gets enabled is checked here rather than only the first. Naming the
+    // descriptor kind keeps a device that supports most of a flag from reporting the whole flag as missing.
     require(requested.update_after_bind_descriptors, supported.vk12.descriptorBindingSampledImageUpdateAfterBind,
-            "update_after_bind_descriptors");
+            "update_after_bind_descriptors (sampled images)");
+    require(requested.update_after_bind_descriptors, supported.vk12.descriptorBindingStorageBufferUpdateAfterBind,
+            "update_after_bind_descriptors (storage buffers)");
+    require(requested.update_after_bind_descriptors, supported.vk12.descriptorBindingStorageImageUpdateAfterBind,
+            "update_after_bind_descriptors (storage images)");
+    require(requested.update_after_bind_descriptors, supported.vk12.descriptorBindingUniformBufferUpdateAfterBind,
+            "update_after_bind_descriptors (constant buffers)");
     require(requested.non_uniform_descriptor_indexing, supported.vk12.shaderSampledImageArrayNonUniformIndexing,
-            "non_uniform_descriptor_indexing");
+            "non_uniform_descriptor_indexing (sampled images)");
+    require(requested.non_uniform_descriptor_indexing, supported.vk12.shaderStorageBufferArrayNonUniformIndexing,
+            "non_uniform_descriptor_indexing (storage buffers)");
+    require(requested.non_uniform_descriptor_indexing, supported.vk12.shaderStorageImageArrayNonUniformIndexing,
+            "non_uniform_descriptor_indexing (storage images)");
+    require(requested.non_uniform_descriptor_indexing, supported.vk12.shaderUniformBufferArrayNonUniformIndexing,
+            "non_uniform_descriptor_indexing (constant buffers)");
     require(requested.buffer_device_address, supported.vk12.bufferDeviceAddress, "buffer_device_address");
     require(requested.scalar_block_layout, supported.vk12.scalarBlockLayout, "scalar_block_layout");
     require(requested.host_query_reset, supported.vk12.hostQueryReset, "host_query_reset");

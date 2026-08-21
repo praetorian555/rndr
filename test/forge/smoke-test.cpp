@@ -1182,7 +1182,9 @@ constexpr const char* k_bindless_texture_source = R"(
 [numthreads(64, 1, 1)]
 void main_bindless_textures(uint3 thread_id : SV_DispatchThreadID)
 {
-    // Alternates between two descriptors inside one subgroup, which is what makes the index non-uniform.
+    // A different descriptor per invocation. NonUniformResourceIndex is what such an index is supposed to
+    // carry; whether Slang decorates it is not something this test can see, so what is proven here is the
+    // per-invocation indexing, not the feature behind it.
     // Descriptor zero is never touched: it is the one left unwritten, so PartiallyBound has to hold.
     uint index = 1 + (thread_id.x & 1);
     float4 texel = textures[NonUniformResourceIndex(index)].SampleLevel(float2(0.5, 0.5), 0.0);
@@ -1303,6 +1305,23 @@ TEST_CASE("Forge bindless texture array", "[forge]")
             REQUIRE(values[i] == expected);
         }
     }
+    SECTION("An array element past the end of the binding throws")
+    {
+        // Three of four allocated, so elements zero through two exist and element three does not, even though
+        // the layout declares four. Vulkan writes such an element without reporting anything.
+        Forge::DescriptorSet descriptor_set(pool, layout, k_used_descriptors);
+        const Forge::Texture texture = make_texture(k_red_at_one);
+        const Forge::Sampler sampler(device, {.max_anisotropy = 1.0f});
+
+        REQUIRE_NOTHROW(descriptor_set.Update(1, texture, sampler, Forge::ImageLayout::ShaderReadOnly, k_used_descriptors - 1));
+        REQUIRE_THROWS_AS(descriptor_set.Update(1, texture, sampler, Forge::ImageLayout::ShaderReadOnly, k_used_descriptors),
+                          Opal::Exception);
+        REQUIRE_THROWS_AS(descriptor_set.Update(1, texture, sampler, Forge::ImageLayout::ShaderReadOnly, k_max_descriptors),
+                          Opal::Exception);
+        // A binding of one descriptor has only element zero, variable count or not.
+        Forge::Buffer output(device, {.size = 4, .usage = Forge::BufferUsageBits::StorageBuffer});
+        REQUIRE_THROWS_AS(descriptor_set.Update(0, output, 0, Forge::k_whole_buffer, 1), Opal::Exception);
+    }
     SECTION("A variable count above the texture binding descriptor count throws")
     {
         REQUIRE_THROWS_AS(Forge::DescriptorSet(pool, layout, k_max_descriptors + 1), Opal::Exception);
@@ -1315,6 +1334,120 @@ TEST_CASE("Forge bindless texture array", "[forge]")
         plain_pool_desc.use_update_after_bind = false;
         const Forge::DescriptorPool plain_pool(device, plain_pool_desc);
         REQUIRE_THROWS_AS(Forge::DescriptorSet(plain_pool, layout, k_used_descriptors), Opal::Exception);
+    }
+
+    Opal::StringUtf8 report;
+    for (const Forge::DebugMessage& message : context.GetDebugMessages())
+    {
+        report += message.text;
+        report += Opal::StringUtf8("\n");
+    }
+    INFO(*report);
+    REQUIRE(context.GetDebugMessageCount(Forge::DebugMessageSeverity::Error, Forge::DebugMessageTypeBits::Validation) == 0);
+}
+
+constexpr const char* k_bindless_constant_source = R"(
+struct Params
+{
+    uint value;
+};
+
+[[vk::binding(0, 0)]] RWStructuredBuffer<uint> output;
+[[vk::binding(1, 0)]] ConstantBuffer<Params> params[];
+
+[shader("compute")]
+[numthreads(64, 1, 1)]
+void main_bindless_constants(uint3 thread_id : SV_DispatchThreadID)
+{
+    uint index = thread_id.x & 1;
+    output[thread_id.x] = params[NonUniformResourceIndex(index)].value;
+}
+)";
+
+TEST_CASE("Forge bindless constant buffer array", "[forge]")
+{
+    if (!IsForgeAvailable())
+    {
+        SKIP("No Vulkan device on this machine.");
+    }
+    const Forge::GraphicsContext context({.collect_debug_messages = true});
+    Opal::DynamicArray<Forge::PhysicalDevice> physical_devices = context.EnumeratePhysicalDevices();
+
+    constexpr Forge::DeviceFeatures k_bindless_features{.partially_bound_descriptors = true,
+                                                        .update_after_bind_descriptors = true,
+                                                        .non_uniform_descriptor_indexing = true};
+    const Forge::DeviceDesc bindless_desc{.features = k_bindless_features};
+    if (!Forge::FindPhysicalDevice(physical_devices, bindless_desc).HasValue())
+    {
+        SKIP("This device does not support the descriptor indexing features bindless needs.");
+    }
+    Forge::Device device(Forge::SelectPhysicalDevice(physical_devices, bindless_desc), context, bindless_desc);
+    Forge::DeviceQueue& queue = device.GetQueue(Forge::QueueFamily::Graphics);
+
+    constexpr u32 k_max_descriptors = 2;
+    constexpr i32 k_element_count = 256;
+    constexpr i32 k_group_size = 64;
+    constexpr u32 k_value_at_zero = 11;
+    constexpr u32 k_value_at_one = 4242;
+
+    // An array of constant buffers, written one element at a time and indexed per invocation. This is the
+    // descriptor kind DeviceFeatures::non_uniform_descriptor_indexing used to leave out of its mapping.
+    // It does not prove that bit is doing anything - the case passes with it off, so nothing in the SPIR-V
+    // this shader compiles to demands it - it covers the array and the per-element writes into it.
+    Forge::DescriptorPoolDesc pool_desc;
+    pool_desc.Add(Forge::DescriptorType::StorageBuffer, 1);
+    pool_desc.Add(Forge::DescriptorType::ConstantBuffer, k_max_descriptors);
+    pool_desc.max_sets = 1;
+    const Forge::DescriptorPool pool(device, pool_desc);
+
+    Forge::DescriptorSetLayoutDesc layout_desc;
+    layout_desc.AddBinding(0, Forge::DescriptorType::StorageBuffer, 1, ShaderTypeBits::Compute);
+    layout_desc.AddBinding(1, Forge::DescriptorType::ConstantBuffer, k_max_descriptors, ShaderTypeBits::Compute);
+    const Forge::DescriptorSetLayout layout(device, layout_desc);
+    Forge::DescriptorSet descriptor_set(pool, layout);
+
+    Forge::Buffer output(device, {.size = k_element_count * sizeof(u32),
+                                  .usage = Forge::BufferUsageBits::StorageBuffer,
+                                  .host_access = Forge::HostAccess::Random});
+    const Opal::DynamicArray<u8> zeros(k_element_count * sizeof(u32));
+    output.Update(zeros);
+
+    // One constant register each, which is the smallest a constant buffer is laid out in.
+    auto make_params = [&](u32 value)
+    {
+        const u32 contents[4] = {value, 0, 0, 0};
+        return Forge::Buffer(device, {.size = sizeof(contents), .usage = Forge::BufferUsageBits::ConstantBuffer},
+                             {reinterpret_cast<const u8*>(contents), sizeof(contents)});
+    };
+    const Forge::Buffer params_zero = make_params(k_value_at_zero);
+    const Forge::Buffer params_one = make_params(k_value_at_one);
+
+    descriptor_set.Update(0, output);
+    descriptor_set.Update(1, params_zero, 0, Forge::k_whole_buffer, 0);
+    descriptor_set.Update(1, params_one, 0, Forge::k_whole_buffer, 1);
+
+    const Forge::Shader shader = Forge::Shader::FromSourceInMemory(
+        device, k_bindless_constant_source, {.entry_point = "main_bindless_constants", .cache = GetShaderCache()});
+    Forge::ComputePipelineDesc pipeline_desc;
+    pipeline_desc.shader = shader;
+    pipeline_desc.descriptor_set_layouts.PushBack(Opal::Ref<const Forge::DescriptorSetLayout>(layout));
+    const Forge::Pipeline pipeline(device, pipeline_desc);
+
+    Forge::ImmediateSubmit(device, queue,
+                           [&](Forge::CommandBuffer& command_buffer)
+                           {
+                               command_buffer.CmdBindPipeline(pipeline);
+                               command_buffer.CmdBindDescriptorSet(pipeline, descriptor_set);
+                               command_buffer.CmdDispatch(k_element_count / k_group_size);
+                           });
+
+    Opal::DynamicArray<u32> values(k_element_count);
+    output.Read({reinterpret_cast<u8*>(values.GetData()), values.GetSize() * sizeof(u32)});
+    for (i32 i = 0; i < k_element_count; ++i)
+    {
+        const u32 expected = (i % 2) == 0 ? k_value_at_zero : k_value_at_one;
+        INFO("invocation " << i);
+        REQUIRE(values[i] == expected);
     }
 
     Opal::StringUtf8 report;

@@ -281,9 +281,18 @@ private:
     {
         u32 binding = 0;
         DescriptorType descriptor_type = DescriptorType::CombinedImageSampler;
+        /**
+         * How many descriptors this binding actually holds in this set, which is what an array_element has to
+         * stay below. The count the layout declared, except on the binding that was allocated with a variable
+         * count, where it is the smaller number the set was allocated with.
+         */
+        u32 descriptor_count = 1;
         /** What the shader calls it, when the layout was built with the shaders that declare it. */
         Opal::StringUtf8 name;
     };
+
+    /** The binding of that index, throwing the way every other lookup here does when there is none. */
+    [[nodiscard]] const BindingInfo& FindBinding(u32 binding) const;
 
     VkDevice m_device = VK_NULL_HANDLE;
     VkDescriptorSet m_set = VK_NULL_HANDLE;
