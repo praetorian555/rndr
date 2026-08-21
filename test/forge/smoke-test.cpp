@@ -4909,3 +4909,762 @@ TEST_CASE("Forge binding several descriptor sets at once", "[forge]")
     }
     REQUIRE_NO_VALIDATION_ERROR(fixture);
 }
+
+/**
+ * The rasterizer state, the topologies and the per-instance vertex rate. Everything here ends in a readback
+ * that counts texels, because the mistakes this state makes - a triangle culled by the wrong winding, a
+ * scissor that did not take - produce an image rather than a failure.
+ */
+namespace
+{
+
+/** Positions with a z of their own, for the two cases that care where a fragment lands in depth. */
+constexpr const char* k_depth_position_source = R"(
+[shader("vertex")]
+float4 main_depth_vertex(float3 position : POSITION) : SV_Position
+{
+    return float4(position, 1.0);
+}
+
+[shader("fragment")]
+float4 main_depth_fragment() : SV_Target
+{
+    return float4(0.0, 1.0, 0.0, 0.0);
+}
+)";
+
+/**
+ * A point topology leaves the point size undefined unless the vertex stage writes it, so this one does. One
+ * pixel is the only size every device draws without the large_points feature.
+ */
+constexpr const char* k_point_source = R"(
+struct PointOutput
+{
+    float4 position : SV_Position;
+    float size : SV_PointSize;
+};
+
+[shader("vertex")]
+PointOutput main_point_vertex(float2 position : POSITION)
+{
+    PointOutput output;
+    output.position = float4(position, 0.0, 1.0);
+    output.size = 1.0;
+    return output;
+}
+)";
+
+/**
+ * Two bindings at two rates: the position advances per vertex and the offset and the value advance per
+ * instance, so four instances of one quad land in four places in four colours. The value is spread over the
+ * channels a bit at a time, which keeps every channel at zero or one and out of the way of UNORM rounding.
+ */
+constexpr const char* k_instanced_source = R"(
+struct InstancedOutput
+{
+    float4 position : SV_Position;
+    nointerpolation uint value : VALUE;
+};
+
+[shader("vertex")]
+InstancedOutput main_instanced_vertex(float2 position : POSITION, float2 offset : OFFSET, uint value : VALUE)
+{
+    InstancedOutput output;
+    output.position = float4(position + offset, 0.0, 1.0);
+    output.value = value;
+    return output;
+}
+
+[shader("fragment")]
+float4 main_instanced_fragment(InstancedOutput input) : SV_Target
+{
+    return float4((input.value & 1) != 0 ? 1.0 : 0.0,
+                  (input.value & 2) != 0 ? 1.0 : 0.0,
+                  (input.value & 4) != 0 ? 1.0 : 0.0,
+                  1.0);
+}
+)";
+
+/** A colour target these cases render into and read straight back out of. */
+Forge::Texture MakeColorTarget(const Forge::Device& device, i32 side, PixelFormat format = PixelFormat::R8G8B8A8_UNORM)
+{
+    return Forge::Texture(device, {.format = format,
+                                   .width = static_cast<u32>(side),
+                                   .height = static_cast<u32>(side),
+                                   .usage = Forge::TextureUsageBits::ColorAttachment |
+                                            Forge::TextureUsageBits::TransferSource});
+}
+
+/**
+ * Clear the target to opaque red, run one recorded draw over it and hand back the pixels. The viewport and
+ * the scissor are set to the whole target first, so a case that wants something else says so by setting it
+ * again inside the draw.
+ */
+template <typename Record>
+Opal::DynamicArray<u8> RenderRaster(ForgeFixture& fixture, Forge::Texture& color, i32 side, Record&& record)
+{
+    Forge::ImmediateSubmit(fixture.device, fixture.GetQueue(),
+                           [&](Forge::CommandBuffer& command_buffer)
+                           {
+                               command_buffer.CmdImageBarrier(Forge::ImageBarrier::ToColorAttachment(color));
+                               const Forge::RenderingDesc rendering_desc{
+                                   .render_area_extent = {side, side},
+                                   .color_attachments = {Forge::RenderingAttachmentDesc{
+                                       .image_view = color.GetNativeImageView(),
+                                       .image_layout = Forge::ImageLayout::ColorAttachment,
+                                       .load_operation = Forge::AttachmentLoadOperation::Clear,
+                                       .store_operation = Forge::AttachmentStoreOperation::Store,
+                                       .clear_value = {.color = {1.0f, 0.0f, 0.0f, 1.0f}}}}};
+                               command_buffer.CmdBeginRendering(rendering_desc);
+                               command_buffer.CmdSetViewport(Vector2f::Zero(),
+                                                             {static_cast<f32>(side), static_cast<f32>(side)});
+                               command_buffer.CmdSetScissor(Vector2i::Zero(), {side, side});
+                               record(command_buffer);
+                               command_buffer.CmdEndRendering();
+                           });
+    Opal::DynamicArray<u8> pixels(side * side * 4);
+    Forge::ReadBackTexture(fixture.device, fixture.GetQueue(), color, pixels, 0, Forge::ImageLayout::TransferSource);
+    return pixels;
+}
+
+/** Whether a fragment reached this texel, which the shaders above say by writing green over a red clear. */
+bool IsCovered(const Opal::DynamicArray<u8>& pixels, i32 side, i32 x, i32 y)
+{
+    const i32 base = (y * side + x) * 4;
+    return pixels[base] == 0 && pixels[base + 1] == 255;
+}
+
+i32 CountCovered(const Opal::DynamicArray<u8>& pixels, i32 side)
+{
+    i32 covered = 0;
+    for (i32 y = 0; y < side; ++y)
+    {
+        for (i32 x = 0; x < side; ++x)
+        {
+            covered += IsCovered(pixels, side, x, y) ? 1 : 0;
+        }
+    }
+    return covered;
+}
+
+/** The NDC position of the centre of one texel, which is where a point has to sit to land on it. */
+Vector2f TexelCentre(i32 side, i32 x, i32 y)
+{
+    const f32 extent = static_cast<f32>(side);
+    return {(static_cast<f32>(x) + 0.5f) / extent * 2.0f - 1.0f, (static_cast<f32>(y) + 0.5f) / extent * 2.0f - 1.0f};
+}
+
+/** One pipeline over two shaders, with everything these cases vary spelled out as arguments. */
+Forge::Pipeline MakeRasterPipeline(const Forge::Device& device, const Forge::Shader& vertex_shader,
+                                   const Forge::Shader& fragment_shader, PixelFormat format,
+                                   const Forge::RasterizerDesc& rasterizer,
+                                   PrimitiveTopology topology = PrimitiveTopology::Triangle)
+{
+    Forge::GraphicsPipelineDesc pipeline_desc;
+    pipeline_desc.vertex_shader = vertex_shader;
+    pipeline_desc.fragment_shader = fragment_shader;
+    pipeline_desc.rasterizer = rasterizer;
+    pipeline_desc.topology = topology;
+    pipeline_desc.vertex_input.AddBinding(0, 2 * sizeof(f32), DataRepetition::PerVertex);
+    pipeline_desc.vertex_input.AddAttribute(0, 0, PixelFormat::R32G32_SFLOAT, 0);
+    pipeline_desc.color_blend_attachments.PushBack(Forge::ColorBlendDesc{});
+    pipeline_desc.color_attachment_formats.PushBack(format);
+    return Forge::Pipeline(device, pipeline_desc);
+}
+
+}  // namespace
+
+TEST_CASE("Forge culling and winding", "[forge]")
+{
+    if (!IsForgeAvailable())
+    {
+        SKIP("No Vulkan device on this machine.");
+    }
+    ForgeFixture fixture;
+    constexpr i32 k_side = 4;
+    constexpr PixelFormat k_format = PixelFormat::R8G8B8A8_UNORM;
+
+    const Forge::Shader vertex_shader = Forge::Shader::FromSourceInMemory(
+        fixture.device, k_fullscreen_source, {.entry_point = "main_vertex", .cache = GetShaderCache()});
+    const Forge::Shader fragment_shader = Forge::Shader::FromSourceInMemory(
+        fixture.device, k_fullscreen_source, {.entry_point = "main_fragment", .cache = GetShaderCache()});
+    const Forge::Buffer vertices(fixture.device,
+                                 {.size = sizeof(k_fullscreen_vertices), .usage = Forge::BufferUsageBits::VertexBuffer},
+                                 Opal::AsBytes(k_fullscreen_vertices));
+
+    // Whether the one triangle survived, for a given cull mode and winding. The geometry never changes, so
+    // what the answers differ by is only the state.
+    auto is_drawn = [&](Face cull_mode, WindingOrder front_face)
+    {
+        const Forge::Pipeline pipeline = MakeRasterPipeline(fixture.device, vertex_shader, fragment_shader, k_format,
+                                                            {.cull_mode = cull_mode, .front_face = front_face});
+        Forge::Texture color = MakeColorTarget(fixture.device, k_side, k_format);
+        const Opal::DynamicArray<u8> pixels = RenderRaster(fixture, color, k_side,
+                                                           [&](Forge::CommandBuffer& command_buffer)
+                                                           {
+                                                               command_buffer.CmdBindPipeline(pipeline);
+                                                               command_buffer.CmdBindVertexBuffer(vertices, 0);
+                                                               command_buffer.CmdDraw(3);
+                                                           });
+        return CountCovered(pixels, k_side) == k_side * k_side;
+    };
+
+    SECTION("Culling nothing draws the triangle whichever way it is wound")
+    {
+        REQUIRE(is_drawn(Face::None, WindingOrder::CCW));
+        REQUIRE(is_drawn(Face::None, WindingOrder::CW));
+    }
+    SECTION("Flipping the winding, not the geometry, is what brings a culled triangle back")
+    {
+        // Which winding this triangle actually has is not asserted, and deliberately: it depends on the
+        // viewport transform as much as on the vertex order. What has to hold is that the two answers
+        // differ, since that is the whole of what front_face does.
+        const bool drawn_ccw = is_drawn(Face::Back, WindingOrder::CCW);
+        const bool drawn_cw = is_drawn(Face::Back, WindingOrder::CW);
+        INFO("back-culled, CCW front: " << drawn_ccw << ", CW front: " << drawn_cw);
+        REQUIRE(drawn_ccw != drawn_cw);
+    }
+    SECTION("Culling the other face is the opposite answer")
+    {
+        const bool back_culled = is_drawn(Face::Back, WindingOrder::CCW);
+        const bool front_culled = is_drawn(Face::Front, WindingOrder::CCW);
+        INFO("back-culled: " << back_culled << ", front-culled: " << front_culled);
+        REQUIRE(back_culled != front_culled);
+    }
+    REQUIRE_NO_VALIDATION_ERROR(fixture);
+}
+
+/** A triangle well inside the target, so that a wireframe of it has an interior to leave alone. */
+constexpr f32 k_inset_triangle[] = {-0.8f, -0.8f, 0.8f, -0.8f, 0.0f, 0.8f};
+
+TEST_CASE("Forge fill modes", "[forge]")
+{
+    if (!IsForgeAvailable())
+    {
+        SKIP("No Vulkan device on this machine.");
+    }
+    const VkPhysicalDeviceFeatures device_features = GetFirstPhysicalDeviceFeatures();
+    const bool has_wireframe = device_features.fillModeNonSolid == VK_TRUE;
+    ForgeFixture fixture({.fill_mode_non_solid = has_wireframe});
+    constexpr i32 k_side = 16;
+    constexpr PixelFormat k_format = PixelFormat::R8G8B8A8_UNORM;
+
+    const Forge::Shader vertex_shader = Forge::Shader::FromSourceInMemory(
+        fixture.device, k_fullscreen_source, {.entry_point = "main_vertex", .cache = GetShaderCache()});
+    const Forge::Shader fragment_shader = Forge::Shader::FromSourceInMemory(
+        fixture.device, k_fullscreen_source, {.entry_point = "main_fragment", .cache = GetShaderCache()});
+    const Forge::Buffer vertices(fixture.device,
+                                 {.size = sizeof(k_inset_triangle), .usage = Forge::BufferUsageBits::VertexBuffer},
+                                 Opal::AsBytes(k_inset_triangle));
+
+    auto draw_with_fill_mode = [&](FillMode fill_mode)
+    {
+        const Forge::Pipeline pipeline = MakeRasterPipeline(fixture.device, vertex_shader, fragment_shader, k_format,
+                                                            {.fill_mode = fill_mode, .cull_mode = Face::None});
+        Forge::Texture color = MakeColorTarget(fixture.device, k_side, k_format);
+        return RenderRaster(fixture, color, k_side,
+                            [&](Forge::CommandBuffer& command_buffer)
+                            {
+                                command_buffer.CmdBindPipeline(pipeline);
+                                command_buffer.CmdBindVertexBuffer(vertices, 0);
+                                command_buffer.CmdDraw(3);
+                            });
+    };
+
+    SECTION("A wireframe leaves the interior of the triangle as the clear left it")
+    {
+        INFO("fill_mode_non_solid supported: " << has_wireframe);
+        if (!has_wireframe)
+        {
+            SKIP("This device cannot draw anything but solid.");
+        }
+        const Opal::DynamicArray<u8> solid = draw_with_fill_mode(FillMode::Solid);
+        const Opal::DynamicArray<u8> wireframe = draw_with_fill_mode(FillMode::Wireframe);
+
+        // The centroid of the triangle above, which is several texels clear of every edge on a target this
+        // size, so no line width the device picks can reach it.
+        const i32 centre_x = k_side / 2;
+        const i32 centre_y = k_side / 3;
+        INFO("centroid texel " << centre_x << "," << centre_y);
+        REQUIRE(IsCovered(solid, k_side, centre_x, centre_y));
+        REQUIRE_FALSE(IsCovered(wireframe, k_side, centre_x, centre_y));
+
+        // Where exactly the edges land is the device's business; that they are drawn and that they are less
+        // than the filled triangle is not.
+        const i32 solid_covered = CountCovered(solid, k_side);
+        const i32 wireframe_covered = CountCovered(wireframe, k_side);
+        INFO("solid covered " << solid_covered << ", wireframe covered " << wireframe_covered);
+        REQUIRE(wireframe_covered > 0);
+        REQUIRE(wireframe_covered < solid_covered);
+    }
+    SECTION("A wireframe on a device without the feature throws")
+    {
+        // The polygon mode is a plain enum in the create info, so without this the device is handed a mode
+        // it never agreed to and the validation layer is the only thing that notices.
+        ForgeFixture plain({.fill_mode_non_solid = false});
+        const Forge::Shader plain_vertex = Forge::Shader::FromSourceInMemory(
+            plain.device, k_fullscreen_source, {.entry_point = "main_vertex", .cache = GetShaderCache()});
+        const Forge::Shader plain_fragment = Forge::Shader::FromSourceInMemory(
+            plain.device, k_fullscreen_source, {.entry_point = "main_fragment", .cache = GetShaderCache()});
+        REQUIRE_THROWS_AS(MakeRasterPipeline(plain.device, plain_vertex, plain_fragment, k_format,
+                                             {.fill_mode = FillMode::Wireframe, .cull_mode = Face::None}),
+                          Opal::Exception);
+        // Solid on the same device is fine, so what threw was the fill mode and not the pipeline.
+        const Forge::Pipeline solid_pipeline = MakeRasterPipeline(plain.device, plain_vertex, plain_fragment, k_format,
+                                                                  {.cull_mode = Face::None});
+        REQUIRE(solid_pipeline.IsValid());
+        REQUIRE_NO_VALIDATION_ERROR(plain);
+    }
+    REQUIRE_NO_VALIDATION_ERROR(fixture);
+}
+
+TEST_CASE("Forge topologies", "[forge]")
+{
+    if (!IsForgeAvailable())
+    {
+        SKIP("No Vulkan device on this machine.");
+    }
+    ForgeFixture fixture;
+    constexpr i32 k_side = 8;
+    constexpr PixelFormat k_format = PixelFormat::R8G8B8A8_UNORM;
+    constexpr i32 k_line_row = 4;
+
+    const Forge::Shader fragment_shader = Forge::Shader::FromSourceInMemory(
+        fixture.device, k_fullscreen_source, {.entry_point = "main_fragment", .cache = GetShaderCache()});
+
+    SECTION("A line topology puts pixels along one row and nowhere else")
+    {
+        const Forge::Shader vertex_shader = Forge::Shader::FromSourceInMemory(
+            fixture.device, k_fullscreen_source, {.entry_point = "main_vertex", .cache = GetShaderCache()});
+        // Along the centres of one row of texels rather than along the boundary between two, so which row
+        // the line lands on is not left to a rounding rule.
+        const Vector2f left = TexelCentre(k_side, 0, k_line_row);
+        const Vector2f right = TexelCentre(k_side, k_side - 1, k_line_row);
+        const f32 line_vertices[] = {left.x, left.y, right.x, right.y};
+        const Forge::Buffer vertices(fixture.device,
+                                     {.size = sizeof(line_vertices), .usage = Forge::BufferUsageBits::VertexBuffer},
+                                     Opal::AsBytes(line_vertices));
+        const Forge::Pipeline pipeline = MakeRasterPipeline(fixture.device, vertex_shader, fragment_shader, k_format,
+                                                            {.cull_mode = Face::None}, PrimitiveTopology::Line);
+        Forge::Texture color = MakeColorTarget(fixture.device, k_side, k_format);
+        const Opal::DynamicArray<u8> pixels = RenderRaster(fixture, color, k_side,
+                                                           [&](Forge::CommandBuffer& command_buffer)
+                                                           {
+                                                               command_buffer.CmdBindPipeline(pipeline);
+                                                               command_buffer.CmdBindVertexBuffer(vertices, 0);
+                                                               command_buffer.CmdDraw(2);
+                                                           });
+        // A triangle over the same two vertices would have covered nothing at all; a filled one would have
+        // covered far more than a single row.
+        for (i32 y = 0; y < k_side; ++y)
+        {
+            const bool row_has_pixels = [&]
+            {
+                for (i32 x = 0; x < k_side; ++x)
+                {
+                    if (IsCovered(pixels, k_side, x, y))
+                    {
+                        return true;
+                    }
+                }
+                return false;
+            }();
+            INFO("row " << y);
+            REQUIRE(row_has_pixels == (y == k_line_row));
+        }
+    }
+    SECTION("A point topology puts one pixel per vertex")
+    {
+        const Forge::Shader point_vertex_shader = Forge::Shader::FromSourceInMemory(
+            fixture.device, k_point_source, {.entry_point = "main_point_vertex", .cache = GetShaderCache()});
+        // Three texels no triangle over them would fill, since they are not adjacent.
+        const Vector2f first = TexelCentre(k_side, 1, 1);
+        const Vector2f second = TexelCentre(k_side, 5, 2);
+        const Vector2f third = TexelCentre(k_side, 3, 6);
+        const f32 point_vertices[] = {first.x, first.y, second.x, second.y, third.x, third.y};
+        const Forge::Buffer vertices(fixture.device,
+                                     {.size = sizeof(point_vertices), .usage = Forge::BufferUsageBits::VertexBuffer},
+                                     Opal::AsBytes(point_vertices));
+        const Forge::Pipeline pipeline = MakeRasterPipeline(fixture.device, point_vertex_shader, fragment_shader, k_format,
+                                                            {.cull_mode = Face::None}, PrimitiveTopology::Point);
+        Forge::Texture color = MakeColorTarget(fixture.device, k_side, k_format);
+        const Opal::DynamicArray<u8> pixels = RenderRaster(fixture, color, k_side,
+                                                           [&](Forge::CommandBuffer& command_buffer)
+                                                           {
+                                                               command_buffer.CmdBindPipeline(pipeline);
+                                                               command_buffer.CmdBindVertexBuffer(vertices, 0);
+                                                               command_buffer.CmdDraw(3);
+                                                           });
+        REQUIRE(CountCovered(pixels, k_side) == 3);
+        REQUIRE(IsCovered(pixels, k_side, 1, 1));
+        REQUIRE(IsCovered(pixels, k_side, 5, 2));
+        REQUIRE(IsCovered(pixels, k_side, 3, 6));
+    }
+    REQUIRE_NO_VALIDATION_ERROR(fixture);
+}
+
+TEST_CASE("Forge instancing through a second vertex binding", "[forge]")
+{
+    if (!IsForgeAvailable())
+    {
+        SKIP("No Vulkan device on this machine.");
+    }
+    ForgeFixture fixture;
+    constexpr i32 k_side = 4;
+    constexpr i32 k_half = k_side / 2;
+    constexpr PixelFormat k_format = PixelFormat::R8G8B8A8_UNORM;
+
+    const Forge::Shader vertex_shader = Forge::Shader::FromSourceInMemory(
+        fixture.device, k_instanced_source, {.entry_point = "main_instanced_vertex", .cache = GetShaderCache()});
+    const Forge::Shader fragment_shader = Forge::Shader::FromSourceInMemory(
+        fixture.device, k_instanced_source, {.entry_point = "main_instanced_fragment", .cache = GetShaderCache()});
+
+    // One quad over the top left quarter of the target, as two triangles. Every instance draws this and only
+    // this, so where the four end up is entirely what the second binding fed them.
+    constexpr f32 k_quarter_quad[] = {-1.0f, -1.0f, 0.0f, -1.0f, 0.0f, 0.0f, -1.0f, -1.0f, 0.0f, 0.0f, -1.0f, 0.0f};
+    const Forge::Buffer vertices(fixture.device,
+                                 {.size = sizeof(k_quarter_quad), .usage = Forge::BufferUsageBits::VertexBuffer},
+                                 Opal::AsBytes(k_quarter_quad));
+
+    /** Per instance: where to move the quad, and the value whose bits become its colour. */
+    struct InstanceData
+    {
+        f32 offset_x = 0.0f;
+        f32 offset_y = 0.0f;
+        u32 value = 0;
+    };
+    const InstanceData instances[] = {
+        {0.0f, 0.0f, 1},  // top left, red
+        {1.0f, 0.0f, 2},  // top right, green
+        {0.0f, 1.0f, 3},  // bottom left, red and green
+        {1.0f, 1.0f, 4},  // bottom right, blue
+    };
+    const Forge::Buffer instance_buffer(fixture.device,
+                                        {.size = sizeof(instances), .usage = Forge::BufferUsageBits::VertexBuffer},
+                                        Opal::AsBytes(instances));
+
+    Forge::GraphicsPipelineDesc pipeline_desc;
+    pipeline_desc.vertex_shader = vertex_shader;
+    pipeline_desc.fragment_shader = fragment_shader;
+    pipeline_desc.rasterizer.cull_mode = Face::None;
+    pipeline_desc.vertex_input.AddBinding(0, 2 * sizeof(f32), DataRepetition::PerVertex);
+    pipeline_desc.vertex_input.AddAttribute(0, 0, PixelFormat::R32G32_SFLOAT, 0);
+    pipeline_desc.vertex_input.AddBinding(1, sizeof(InstanceData), DataRepetition::PerInstance);
+    pipeline_desc.vertex_input.AddAttribute(1, 1, PixelFormat::R32G32_SFLOAT, 0);
+    pipeline_desc.vertex_input.AddAttribute(1, 2, PixelFormat::R32_UINT, 2 * sizeof(f32));
+    pipeline_desc.color_blend_attachments.PushBack(Forge::ColorBlendDesc{});
+    pipeline_desc.color_attachment_formats.PushBack(k_format);
+    const Forge::Pipeline pipeline(fixture.device, pipeline_desc);
+
+    Forge::Texture color = MakeColorTarget(fixture.device, k_side, k_format);
+    const Opal::DynamicArray<u8> pixels = RenderRaster(fixture, color, k_side,
+                                                       [&](Forge::CommandBuffer& command_buffer)
+                                                       {
+                                                           command_buffer.CmdBindPipeline(pipeline);
+                                                           command_buffer.CmdBindVertexBuffer(vertices, 0);
+                                                           command_buffer.CmdBindVertexBuffer(instance_buffer, 1);
+                                                           command_buffer.CmdDraw(6, 4);
+                                                       });
+
+    // Each quarter carries the bits of its own instance value, so an instance that read the wrong entry of
+    // the second binding shows up as the wrong quarter rather than as a missing one.
+    for (i32 instance = 0; instance < 4; ++instance)
+    {
+        const u32 value = instances[instance].value;
+        const i32 first_x = instances[instance].offset_x == 0.0f ? 0 : k_half;
+        const i32 first_y = instances[instance].offset_y == 0.0f ? 0 : k_half;
+        for (i32 y = first_y; y < first_y + k_half; ++y)
+        {
+            for (i32 x = first_x; x < first_x + k_half; ++x)
+            {
+                const i32 base = (y * k_side + x) * 4;
+                INFO("instance " << instance << " texel " << x << "," << y);
+                REQUIRE(static_cast<i32>(pixels[base + 0]) == ((value & 1) != 0 ? 255 : 0));
+                REQUIRE(static_cast<i32>(pixels[base + 1]) == ((value & 2) != 0 ? 255 : 0));
+                REQUIRE(static_cast<i32>(pixels[base + 2]) == ((value & 4) != 0 ? 255 : 0));
+            }
+        }
+    }
+    REQUIRE_NO_VALIDATION_ERROR(fixture);
+}
+
+TEST_CASE("Forge viewport and scissor", "[forge]")
+{
+    if (!IsForgeAvailable())
+    {
+        SKIP("No Vulkan device on this machine.");
+    }
+    ForgeFixture fixture;
+    constexpr i32 k_side = 4;
+    constexpr i32 k_half = k_side / 2;
+    constexpr PixelFormat k_format = PixelFormat::R8G8B8A8_UNORM;
+
+    const Forge::Shader vertex_shader = Forge::Shader::FromSourceInMemory(
+        fixture.device, k_fullscreen_source, {.entry_point = "main_vertex", .cache = GetShaderCache()});
+    const Forge::Shader fragment_shader = Forge::Shader::FromSourceInMemory(
+        fixture.device, k_fullscreen_source, {.entry_point = "main_fragment", .cache = GetShaderCache()});
+    const Forge::Buffer vertices(fixture.device,
+                                 {.size = sizeof(k_fullscreen_vertices), .usage = Forge::BufferUsageBits::VertexBuffer},
+                                 Opal::AsBytes(k_fullscreen_vertices));
+    const Forge::Pipeline pipeline =
+        MakeRasterPipeline(fixture.device, vertex_shader, fragment_shader, k_format, {.cull_mode = Face::None});
+
+    /** Which half of the target the covered texels are in, as two counts. */
+    auto count_halves = [&](const Opal::DynamicArray<u8>& pixels)
+    {
+        Opal::InPlaceArray<i32, 2> halves{0, 0};
+        for (i32 y = 0; y < k_side; ++y)
+        {
+            for (i32 x = 0; x < k_side; ++x)
+            {
+                halves[x < k_half ? 0 : 1] += IsCovered(pixels, k_side, x, y) ? 1 : 0;
+            }
+        }
+        return halves;
+    };
+
+    SECTION("A scissor smaller than the viewport leaves the texels outside it untouched")
+    {
+        Forge::Texture color = MakeColorTarget(fixture.device, k_side, k_format);
+        const Opal::DynamicArray<u8> pixels =
+            RenderRaster(fixture, color, k_side,
+                         [&](Forge::CommandBuffer& command_buffer)
+                         {
+                             // The viewport stays the whole target; only the scissor moves, so what the
+                             // right half is missing is the scissor and not the transform.
+                             command_buffer.CmdSetScissor(Vector2i::Zero(), {k_half, k_side});
+                             command_buffer.CmdBindPipeline(pipeline);
+                             command_buffer.CmdBindVertexBuffer(vertices, 0);
+                             command_buffer.CmdDraw(3);
+                         });
+        const Opal::InPlaceArray<i32, 2> halves = count_halves(pixels);
+        INFO("left " << halves[0] << ", right " << halves[1]);
+        REQUIRE(halves[0] == k_half * k_side);
+        REQUIRE(halves[1] == 0);
+    }
+    SECTION("A viewport over half the target squeezes the triangle into that half")
+    {
+        Forge::Texture color = MakeColorTarget(fixture.device, k_side, k_format);
+        const Opal::DynamicArray<u8> pixels =
+            RenderRaster(fixture, color, k_side,
+                         [&](Forge::CommandBuffer& command_buffer)
+                         {
+                             command_buffer.CmdSetViewport({static_cast<f32>(k_half), 0.0f},
+                                                           {static_cast<f32>(k_half), static_cast<f32>(k_side)});
+                             command_buffer.CmdBindPipeline(pipeline);
+                             command_buffer.CmdBindVertexBuffer(vertices, 0);
+                             command_buffer.CmdDraw(3);
+                         });
+        const Opal::InPlaceArray<i32, 2> halves = count_halves(pixels);
+        INFO("left " << halves[0] << ", right " << halves[1]);
+        REQUIRE(halves[0] == 0);
+        REQUIRE(halves[1] == k_half * k_side);
+    }
+    REQUIRE_NO_VALIDATION_ERROR(fixture);
+}
+
+namespace
+{
+
+/** The fullscreen triangle again, with a z the case picks, since both cases below are about where z lands. */
+Opal::DynamicArray<f32> MakeFullscreenTriangleAt(f32 z)
+{
+    Opal::DynamicArray<f32> vertices(9);
+    const f32 positions[] = {-1.0f, -1.0f, 3.0f, -1.0f, -1.0f, 3.0f};
+    for (i32 corner = 0; corner < 3; ++corner)
+    {
+        vertices[corner * 3 + 0] = positions[corner * 2 + 0];
+        vertices[corner * 3 + 1] = positions[corner * 2 + 1];
+        vertices[corner * 3 + 2] = z;
+    }
+    return vertices;
+}
+
+/** A pipeline over three-component positions, which is what both depth cases feed it. */
+Forge::Pipeline MakeDepthPipeline(const Forge::Device& device, const Forge::Shader& vertex_shader,
+                                  const Forge::Shader& fragment_shader, PixelFormat color_format,
+                                  PixelFormat depth_format, bool depth_clamp)
+{
+    Forge::GraphicsPipelineDesc pipeline_desc;
+    pipeline_desc.vertex_shader = vertex_shader;
+    pipeline_desc.fragment_shader = fragment_shader;
+    pipeline_desc.rasterizer.cull_mode = Face::None;
+    pipeline_desc.rasterizer.depth_clamp = depth_clamp;
+    pipeline_desc.vertex_input.AddBinding(0, 3 * sizeof(f32), DataRepetition::PerVertex);
+    pipeline_desc.vertex_input.AddAttribute(0, 0, PixelFormat::R32G32B32_SFLOAT, 0);
+    pipeline_desc.color_blend_attachments.PushBack(Forge::ColorBlendDesc{});
+    pipeline_desc.color_attachment_formats.PushBack(color_format);
+    if (depth_format != PixelFormat::Undefined)
+    {
+        // Writes need the test on: Vulkan only writes depth for a fragment that passed it, so a comparator
+        // of Always is how a case that is not about the comparator still fills the buffer.
+        pipeline_desc.depth_stencil.depth_test_enabled = true;
+        pipeline_desc.depth_stencil.depth_write_enabled = true;
+        pipeline_desc.depth_stencil.depth_comparator = Comparator::Always;
+        pipeline_desc.depth_attachment_format = depth_format;
+    }
+    return Forge::Pipeline(device, pipeline_desc);
+}
+
+}  // namespace
+
+TEST_CASE("Forge viewport depth range", "[forge]")
+{
+    if (!IsForgeAvailable())
+    {
+        SKIP("No Vulkan device on this machine.");
+    }
+    ForgeFixture fixture;
+    constexpr i32 k_side = 4;
+    constexpr PixelFormat k_color_format = PixelFormat::R8G8B8A8_UNORM;
+    constexpr PixelFormat k_depth_format = PixelFormat::D32_SFLOAT;
+
+    const Forge::Shader vertex_shader = Forge::Shader::FromSourceInMemory(
+        fixture.device, k_depth_position_source, {.entry_point = "main_depth_vertex", .cache = GetShaderCache()});
+    const Forge::Shader fragment_shader = Forge::Shader::FromSourceInMemory(
+        fixture.device, k_depth_position_source, {.entry_point = "main_depth_fragment", .cache = GetShaderCache()});
+    const Forge::Pipeline pipeline =
+        MakeDepthPipeline(fixture.device, vertex_shader, fragment_shader, k_color_format, k_depth_format, false);
+
+    // A z of zero, so the depth that gets written is min_depth itself and the mapping is readable off the
+    // result rather than having to be undone. A z of one half would land on the same number either way.
+    const Opal::DynamicArray<f32> triangle = MakeFullscreenTriangleAt(0.0f);
+    const Forge::Buffer vertices(fixture.device,
+                                 {.size = triangle.GetSize() * sizeof(f32), .usage = Forge::BufferUsageBits::VertexBuffer},
+                                 {reinterpret_cast<const u8*>(triangle.GetData()), triangle.GetSize() * sizeof(f32)});
+
+    // Render once through the given depth range and hand back what the depth buffer holds.
+    auto depth_through_range = [&](f32 min_depth, f32 max_depth)
+    {
+        Forge::Texture color = MakeColorTarget(fixture.device, k_side, k_color_format);
+        Forge::Texture depth(fixture.device, {.format = k_depth_format,
+                                              .width = k_side,
+                                              .height = k_side,
+                                              .usage = Forge::TextureUsageBits::DepthStencilAttachment |
+                                                       Forge::TextureUsageBits::TransferSource});
+
+        Forge::ImmediateSubmit(
+            fixture.device, fixture.GetQueue(),
+            [&](Forge::CommandBuffer& command_buffer)
+            {
+                command_buffer.CmdImageBarrier(Forge::ImageBarrier::ToColorAttachment(color));
+                command_buffer.CmdImageBarrier(Forge::ImageBarrier::ToDepthStencilAttachment(depth));
+                const Forge::RenderingDesc rendering_desc{
+                    .render_area_extent = {k_side, k_side},
+                    .color_attachments = {Forge::RenderingAttachmentDesc{
+                        .image_view = color.GetNativeImageView(),
+                        .image_layout = Forge::ImageLayout::ColorAttachment,
+                        .load_operation = Forge::AttachmentLoadOperation::Clear,
+                        .store_operation = Forge::AttachmentStoreOperation::Store,
+                        .clear_value = {.color = {1.0f, 0.0f, 0.0f, 1.0f}}}},
+                    .depth_attachment = Forge::RenderingAttachmentDesc{
+                        .image_view = depth.GetNativeImageView(),
+                        .image_layout = Forge::ImageLayout::DepthStencilAttachment,
+                        .load_operation = Forge::AttachmentLoadOperation::Clear,
+                        .store_operation = Forge::AttachmentStoreOperation::Store,
+                        .clear_value = {.depth_stencil = {1.0f, 0}}}};
+                command_buffer.CmdBeginRendering(rendering_desc);
+                command_buffer.CmdSetViewport(Vector2f::Zero(), {k_side, k_side}, min_depth, max_depth);
+                command_buffer.CmdSetScissor(Vector2i::Zero(), {k_side, k_side});
+                command_buffer.CmdBindPipeline(pipeline);
+                command_buffer.CmdBindVertexBuffer(vertices, 0);
+                command_buffer.CmdDraw(3);
+                command_buffer.CmdEndRendering();
+            });
+
+        Opal::DynamicArray<u8> bytes(k_side * k_side * sizeof(f32));
+        Forge::ReadBackTexture(fixture.device, fixture.GetQueue(), depth, bytes, 0, Forge::ImageLayout::TransferSource);
+        Opal::DynamicArray<f32> values(k_side * k_side);
+        memcpy(values.GetData(), bytes.GetData(), bytes.GetSize());
+        return values;
+    };
+
+    SECTION("The whole range maps a z of zero onto zero")
+    {
+        const Opal::DynamicArray<f32> values = depth_through_range(0.0f, 1.0f);
+        for (i32 i = 0; i < values.GetSize(); ++i)
+        {
+            INFO("texel " << i << " depth " << values[i]);
+            REQUIRE(values[i] == Catch::Approx(0.0f).margin(0.001));
+        }
+    }
+    SECTION("A narrowed range maps the same z onto the near end of it")
+    {
+        // The mapping is min + z * (max - min), so a z of zero lands exactly on min_depth. A viewport that
+        // ignored the range would still be writing zero here, which is what makes this readable.
+        const Opal::DynamicArray<f32> values = depth_through_range(0.25f, 0.75f);
+        for (i32 i = 0; i < values.GetSize(); ++i)
+        {
+            INFO("texel " << i << " depth " << values[i]);
+            REQUIRE(values[i] == Catch::Approx(0.25f).margin(0.001));
+        }
+    }
+    REQUIRE_NO_VALIDATION_ERROR(fixture);
+}
+
+TEST_CASE("Forge depth clamp", "[forge]")
+{
+    if (!IsForgeAvailable())
+    {
+        SKIP("No Vulkan device on this machine.");
+    }
+    const VkPhysicalDeviceFeatures device_features = GetFirstPhysicalDeviceFeatures();
+    const bool has_depth_clamp = device_features.depthClamp == VK_TRUE;
+    ForgeFixture fixture({.depth_clamp = has_depth_clamp});
+    constexpr i32 k_side = 4;
+    constexpr PixelFormat k_format = PixelFormat::R8G8B8A8_UNORM;
+
+    const Forge::Shader vertex_shader = Forge::Shader::FromSourceInMemory(
+        fixture.device, k_depth_position_source, {.entry_point = "main_depth_vertex", .cache = GetShaderCache()});
+    const Forge::Shader fragment_shader = Forge::Shader::FromSourceInMemory(
+        fixture.device, k_depth_position_source, {.entry_point = "main_depth_fragment", .cache = GetShaderCache()});
+
+    // Past the far plane, which is the whole point: without clamping the triangle is clipped away, and with
+    // it the fragments are flattened onto the plane and drawn.
+    const Opal::DynamicArray<f32> triangle = MakeFullscreenTriangleAt(1.5f);
+    const Forge::Buffer vertices(fixture.device,
+                                 {.size = triangle.GetSize() * sizeof(f32), .usage = Forge::BufferUsageBits::VertexBuffer},
+                                 {reinterpret_cast<const u8*>(triangle.GetData()), triangle.GetSize() * sizeof(f32)});
+
+    auto is_drawn = [&](bool depth_clamp)
+    {
+        const Forge::Pipeline pipeline = MakeDepthPipeline(fixture.device, vertex_shader, fragment_shader, k_format,
+                                                           PixelFormat::Undefined, depth_clamp);
+        Forge::Texture color = MakeColorTarget(fixture.device, k_side, k_format);
+        const Opal::DynamicArray<u8> pixels = RenderRaster(fixture, color, k_side,
+                                                           [&](Forge::CommandBuffer& command_buffer)
+                                                           {
+                                                               command_buffer.CmdBindPipeline(pipeline);
+                                                               command_buffer.CmdBindVertexBuffer(vertices, 0);
+                                                               command_buffer.CmdDraw(3);
+                                                           });
+        return CountCovered(pixels, k_side) == k_side * k_side;
+    };
+
+    SECTION("Geometry past the far plane is clipped away without clamping")
+    {
+        REQUIRE_FALSE(is_drawn(false));
+    }
+    SECTION("Clamping draws it instead of cutting it away")
+    {
+        INFO("depth_clamp supported: " << has_depth_clamp);
+        if (!has_depth_clamp)
+        {
+            SKIP("This device cannot clamp depth.");
+        }
+        REQUIRE(is_drawn(true));
+    }
+    SECTION("Clamping on a device without the feature throws")
+    {
+        ForgeFixture plain({.depth_clamp = false});
+        const Forge::Shader plain_vertex = Forge::Shader::FromSourceInMemory(
+            plain.device, k_depth_position_source, {.entry_point = "main_depth_vertex", .cache = GetShaderCache()});
+        const Forge::Shader plain_fragment = Forge::Shader::FromSourceInMemory(
+            plain.device, k_depth_position_source, {.entry_point = "main_depth_fragment", .cache = GetShaderCache()});
+        REQUIRE_THROWS_AS(
+            MakeDepthPipeline(plain.device, plain_vertex, plain_fragment, k_format, PixelFormat::Undefined, true),
+            Opal::Exception);
+        REQUIRE_NO_VALIDATION_ERROR(plain);
+    }
+    REQUIRE_NO_VALIDATION_ERROR(fixture);
+}
