@@ -134,9 +134,10 @@ static Opal::StringUtf8 Indexed(const Opal::StringUtf8& name, const char* what, 
 
 void Rndr::Forge::SetDebugName(const Device& device, const FrameContext& frame_context, const Opal::StringUtf8& name)
 {
-    for (i32 frame = 0; frame < frame_context.m_fences.GetSize(); ++frame)
+    // One name outside the loop: the timeline belongs to the whole loop rather than to a frame in it.
+    SetDebugName(device, frame_context.m_frame_timeline, name + Opal::StringUtf8(" frame timeline"));
+    for (i32 frame = 0; frame < frame_context.m_image_ready_semaphores.GetSize(); ++frame)
     {
-        SetDebugName(device, frame_context.m_fences[frame], Indexed(name, "fence", static_cast<u32>(frame)));
         SetDebugName(device, frame_context.m_image_ready_semaphores[frame], Indexed(name, "image ready", static_cast<u32>(frame)));
         SetDebugName(device, frame_context.m_command_buffers[frame], Indexed(name, "commands", static_cast<u32>(frame)));
     }

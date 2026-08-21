@@ -28,8 +28,9 @@ struct FrameContextDesc
 };
 
 /**
- * The frame loop of a windowed application: the frames in flight, the fence and command buffer of each, the
- * semaphores on both sides of the swap chain, and the order the four have to happen in.
+ * The frame loop of a windowed application: the frames in flight, the command buffer of each, the semaphores
+ * on both sides of the swap chain, the timeline that counts the frames off, and the order they have to
+ * happen in.
  *
  * BeginFrame waits for the slot this frame will reuse, acquires an image, and hands back a command buffer
  * that is already recording. EndFrame closes it, submits it against the right semaphores, and presents.
@@ -48,8 +49,7 @@ struct FrameContextDesc
  *
  * A resized or minimized window is not an error here either: BeginFrame and EndFrame return
  * SwapChainStatus::OutOfDate and have already rebuilt what went stale, so the caller skips the frame and
- * carries on. Nothing was submitted for a skipped frame, so the frame index does not advance and the fence
- * of that slot is left as it was.
+ * carries on. Nothing was submitted for a skipped frame, so the counter does not advance.
  */
 class FrameContext
 {
@@ -72,10 +72,10 @@ public:
     FrameContext(FrameContext&& other) noexcept;
     FrameContext& operator=(FrameContext&& other) noexcept;
 
-    /** Releases the fences, semaphores and command buffers. Waits for the device first, since they may be in use. */
+    /** Releases the semaphores and command buffers. Waits for the device first, since they may be in use. */
     void Destroy();
 
-    [[nodiscard]] bool IsValid() const { return !m_fences.IsEmpty(); }
+    [[nodiscard]] bool IsValid() const { return m_frame_timeline.IsValid(); }
     [[nodiscard]] const FrameContextDesc& GetDesc() const { return m_desc; }
 
     /**
@@ -97,7 +97,10 @@ public:
     [[nodiscard]] CommandBuffer& GetCommandBuffer();
 
     /** Which of the frames in flight this is, for indexing anything the caller keeps one of per frame. */
-    [[nodiscard]] u32 GetFrameIndex() const { return m_frame_index; }
+    [[nodiscard]] u32 GetFrameIndex() const
+    {
+        return static_cast<u32>(m_frames_submitted % static_cast<u64>(m_desc.frames_in_flight));
+    }
 
     /**
      * Which swap chain image this frame acquired. Only meaningful between BeginFrame and EndFrame; the swap
@@ -128,8 +131,14 @@ private:
     Opal::Ref<DeviceQueue> m_graphics_queue;
     Opal::Ref<DeviceQueue> m_present_queue;
 
+    /**
+     * One counter for the whole loop rather than a fence per slot: frame k signals k + 1 + frames_in_flight
+     * and waits for k + 1, which is what the frame whose slot it is about to reuse signalled. It starts at
+     * frames_in_flight, so the first frames in flight wait for a value that has already been reached.
+     */
+    Semaphore m_frame_timeline;
+
     /** Per frame in flight. */
-    Opal::DynamicArray<Fence> m_fences;
     Opal::DynamicArray<Semaphore> m_image_ready_semaphores;
     Opal::DynamicArray<CommandBuffer> m_command_buffers;
 
@@ -139,7 +148,8 @@ private:
      */
     Opal::DynamicArray<Semaphore> m_render_finished_semaphores;
 
-    i32 m_frame_index = 0;
+    /** Frames submitted since the context was built. The slot is this modulo the frames in flight. */
+    u64 m_frames_submitted = 0;
     bool m_is_frame_recording = false;
 };
 

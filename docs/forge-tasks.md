@@ -375,7 +375,7 @@ Left for later: compressed formats are not measured by `GetPixelSize`, so the bu
 buffer-to-image copy skips them and the validation layer covers what the guard cannot. `vkCmdResolveImage`
 belongs with the multisample state of 3.10, and `vkCmdClearColorImage` has no consumer yet.
 
-### 3.5 Richer submission — DONE apart from timeline semaphores
+### 3.5 Richer submission — DONE
 
 `DeviceQueue::Submit(const SubmitDesc&)` takes any number of command buffers, any number of semaphores on
 either side, and a fence that may be absent. `SemaphoreSubmit` pairs a semaphore with the stages it is tied
@@ -405,9 +405,31 @@ copy to provoke a message: work that breaks the specification is undefined behav
 the next test down with it. The validation layer checks a copy while it is recorded, so the command buffer
 is thrown away instead of submitted, which is both correct and faster.
 
-Left: timeline semaphores. `Semaphore` is binary only, and a timeline one needs a type and an initial value
-at creation, a value on each wait and signal, and `Wait`, `Signal` and `GetValue` on the host side. Worth
-doing with 4.1, which is where the frames-in-flight bookkeeping they simplify actually lives.
+`Semaphore` now carries a type. `SemaphoreDesc` picks between binary and timeline and, for a timeline, the
+count it starts at; `SemaphoreSubmit` carries the value the submit waits for or signals. The host side is
+`Wait`, `Signal`, `GetValue` and a batched `WaitForAll`, all four of which turn away a binary semaphore,
+since only a device wait can consume one of those.
+
+Two mistakes the API can catch, it catches. A value on a binary semaphore throws: Vulkan ignores the field
+there rather than complaining, which makes it exactly the kind of error that would otherwise surface as a
+missing dependency several frames later. A timeline signal of zero throws too, since a signal has to leave
+the count above where it was and nothing is above zero - a timeline wait for zero is legal and trivially
+satisfied, so only the signal side is turned away. Acquire and present reject a timeline outright; neither
+`vkAcquireNextImageKHR` nor `VkPresentInfoKHR` can express one.
+
+`timelineSemaphore` is not a `DeviceFeatures` field any more. It is required of every Vulkan 1.2
+implementation and Forge asks for 1.3, so an opt-in flag was guarding against a device that cannot exist;
+it is now enabled and required beside `synchronization2` and `dynamicRendering`.
+
+Found along the way and fixed here: `Semaphore::operator=(Semaphore&&)` did not destroy the handle it held
+before taking the other one, unlike `Fence::operator=` immediately above it, so assigning over a live
+semaphore leaked it. 4.1's frame timeline is built by exactly that assignment.
+
+Verified by a test that reuses the split copy above: a fresh timeline reports its initial value and the host
+raises it, a wait for a value already reached returns at once, two batches ordered by a timeline produce the
+same bytes as one, the host waits on a value the device signals with no fence anywhere in the submit, and
+`WaitForAll` covers two of them. The throwing cases are covered too, except the two swap chain rejections -
+those need a surface and a window, which the headless tests do not have.
 
 ### 3.6 Device features — DONE
 
@@ -792,16 +814,15 @@ Not to be confused with a pipeline cache, which 3.10 measured and dropped.
 
 ### 4.1 Frame context — DONE
 
-`Forge::FrameContext` owns the frames in flight: a fence, a command buffer and an image-ready semaphore for
-each, a render-finished semaphore per swap chain image, and the order acquire, submit and present have to
-happen in. `BeginFrame` waits for the slot this frame reuses, acquires an image and hands back a command
+`Forge::FrameContext` owns the frames in flight: a command buffer and an image-ready semaphore for each, a
+render-finished semaphore per swap chain image, one timeline semaphore counting the frames off, and the
+order acquire, submit and present have to happen in. `BeginFrame` waits for the slot this frame reuses, acquires an image and hands back a command
 buffer that is already recording; `EndFrame` transitions the image to Present, closes the command buffer,
 submits it against the right semaphores and presents.
 
 Both return `SwapChainStatus`, so a resized or minimized window stays what it already was in this API - an
 outcome rather than a failure. `BeginFrame` returning `OutOfDate` means the swap chain was rebuilt, nothing
-was recorded, the fence of that slot is untouched and the frame index has not advanced, so the caller just
-continues its loop. The render-finished semaphores are rebuilt with the swap chain, which was the part of
+was recorded and the counter has not advanced, so the caller just continues its loop. The render-finished semaphores are rebuilt with the swap chain, which was the part of
 the sample most easily left out.
 
 `EndFrame` takes the layout the caller left the image in, defaulting to `ColorAttachment`, and makes the
@@ -816,9 +837,25 @@ Verified by driving the sample through four resizes, a minimize and a restore wi
 six swap chain rebuilds, no validation message, clean exit. The headless tests cannot reach this - a frame
 context needs a swap chain and a swap chain needs a window - so the sample is still what covers it.
 
-Timeline semaphores, which 3.5 left open, are now an internal matter: nothing outside `FrameContext` names
-the semaphores it waits on, so replacing the fence array with a timeline is a change to one file rather than
-to every application.
+The fence per frame in flight is gone; one timeline semaphore replaced the whole array. It starts at
+`frames_in_flight`, frame *k* signals `k + 1 + frames_in_flight` on submit and `BeginFrame` for frame *k*
+waits for `k + 1` - which is what the frame whose slot it is about to reuse signalled. The first
+`frames_in_flight` frames wait for a value at or below the initial one, so they never block, and no branch
+or saturating subtraction is needed to say so. `GetFrameIndex` still means what it meant, so nothing outside
+moved: it is the counter modulo the frames in flight rather than a field of its own.
+
+Two things fell out of it beyond one fewer object per slot. There is no reset, so the ordering subtlety that
+`fence.Reset()` had to happen after the out-of-date early return rather than before it does not exist any
+more. And the fence version could deadlock: an `EndFrame` that threw between `BeginFrame`'s reset and its
+submit - the "gave up its acquired image" check, or `command_buffer.End()` - left that slot's fence
+unsignalled with nothing left to signal it, and the next `BeginFrame` on that slot waited forever. A frame
+that dies between begin and submit now costs a frame rather than the process.
+
+Verified the same way as the rest of this task: four resizes, a minimize and a restore with the validation
+layer on, six swap chain rebuilds, no validation message, clean exit. That protocol is what catches both
+ways the counter can be wrong - an off-by-one in the wait value lets the host run further ahead than
+`frames_in_flight` and the layer reports a command buffer rewritten while still in flight, and a skipped
+frame that advanced the counter would hang on a wait that never returns.
 
 ### 4.2 Barrier presets — DONE
 
