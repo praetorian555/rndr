@@ -1178,21 +1178,56 @@ cases.
 Confirmed by mutation rather than by passing: forcing `bufferRowLength` to zero in the translation turns both
 row-stride sections red, and forcing `first_set` to zero turns the multi-set case red.
 
-### 3.20 Test the queues that are not the graphics queue
+### 3.20 Test the queues that are not the graphics queue — DONE
 
-`test/forge/smoke-test.cpp`.
+Three cases in `test/forge/smoke-test.cpp`: `Forge a dispatch on the async compute queue`, `Forge transfers
+on the dedicated transfer queue` and `Forge a buffer handed from one queue family to another`.
 
-Every test runs on `QueueFamily::Graphics`. `AsyncCompute` and `Transfer` never appear, so a device created
-with `use_async_compute_queue` or `use_dedicated_transfer_queue` is never actually submitted to, and the
-per-family differences that matter - which pipeline stages a family supports for a timestamp, which
-`ImageLayout` transitions it may perform - are never met. The ownership transfer case at the end of the
-barrier vocabulary test records the release and the acquire but submits neither, so the pair has never
-crossed two real families.
+**The shared fixture was asking every test in the file for those queues.** `ForgeFixture` built its device
+with the `DeviceDesc` defaults, and `use_async_compute_queue` and `use_dedicated_transfer_queue` are both on
+there - so on a machine whose one family does everything, the fixture threw, `IsForgeAvailable` answered
+false, and all sixty-odd headless cases skipped saying there was no Vulkan device. The fixture asks for
+neither now and takes a `ForgeQueues` beside the features for the cases that want them, and
+`AreQueuesAvailable` is what those cases skip on, naming the family that is missing.
 
-Done when a dispatch runs on the async compute queue and a copy on the transfer queue, each read back; when
-a buffer written on one family is read on another through a real release and acquire pair with a semaphore
-between the two submits; and when a machine with only one family skips rather than fails, the way
-`IsForgeAvailable` already does for a machine with no device.
+What the cases prove:
+
+- a dispatch recorded on the async compute queue and read back, with the family index asserted to differ
+  from the graphics one first - a device that handed back the graphics queue under another name would pass
+  the readback while proving nothing. The command buffer comes out of that queue's own pool, which is the
+  part that cannot be borrowed across families;
+- a timestamp pair around that dispatch, resolved through the compute family's own valid bits, or the pool
+  throwing where that family reports none;
+- a buffer copy and a texture upload with readback on the transfer queue;
+- a compute write on one family, released there, acquired on the graphics family and copied out of a device
+  local buffer, with a binary semaphore between the two submits - the barriers order the memory and say
+  nothing about which queue runs first.
+
+**The transfer queue's layout vocabulary is narrower and `ReadBackTexture` walks into it.** A transfer only
+family supports no shader stage, so it cannot transition an image into `ShaderReadOnly` - which is the
+default `final_layout`. The case passes `Undefined` and ends in `TransferSource`; `TransferSource` and
+`TransferDestination` are the two layouts that family can reach. Mutating that argument back to the default
+turns the case red on the layout it ends in.
+
+**The ownership transfer is the weak half, and mutation says so.** Both halves recorded correctly and the
+data arrives - but dropping `source_queue_family` and `destination_queue_family` from the barrier translation
+altogether leaves the case green, and so does reversing the pair on the acquire side. The contents of an
+exclusive buffer are undefined without the transfer rather than wrong, this driver preserves them either
+way, and the validation layer tracks neither. So what the case actually asserts is that a real pair across
+two real families is legal, that the semaphore between the submits orders them, and that the data crosses -
+not that the release and the acquire were the reason. Proving that needs a device that loses the contents,
+which is not something a test can arrange.
+
+**One stage check Forge does not make.** `CmdWriteTimestamp` rejects a stage mask with more than one bit and
+its comment says the stage "also has to be one the queue family supports" - nothing checks that, and the
+validation layer is the only thing that would notice a compute stage named on a transfer queue. The same
+gap runs through every barrier, since a family supports only some stages there too. Closing it means the
+spec's per-queue-flags stage table rather than a one-line check, so it is a task of its own and is not taken
+here.
+
+Confirmed by mutation rather than by passing: pointing `compute_family` at the graphics family in
+`CollectQueueFamilies` turns both compute cases red, and asking `ReadBackTexture` for `ShaderReadOnly` on the
+transfer queue turns the texture section red.
 
 ### 3.21 Test the loose ends
 
