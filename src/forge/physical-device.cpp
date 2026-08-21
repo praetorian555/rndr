@@ -61,6 +61,13 @@ Rndr::Forge::PhysicalDevice::PhysicalDevice(PhysicalDevice&& other) noexcept
 
 Rndr::Forge::PhysicalDevice& Rndr::Forge::PhysicalDevice::operator=(PhysicalDevice&& other) noexcept
 {
+    // Without the guard, assigning this to itself releases what it holds and then moves from the wreck,
+    // which leaves a live object empty. Every other type here guards it the same way.
+    if (this == &other)
+    {
+        return *this;
+    }
+
     Destroy();
 
     m_physical_device = other.m_physical_device;
