@@ -207,10 +207,11 @@ if (${RNDR_FORGE})
     if (WIN32)
         target_compile_definitions(rndr PUBLIC -DVK_USE_PLATFORM_WIN32_KHR -DVK_NO_PROTOTYPES)
     endif ()
-    # Only the instance setup in graphics-context.cpp cares about the validation layer, so this stays
-    # out of the interface of the library.
+    # Public, because whether the layer is there decides what a caller sees: without it the context reports
+    # no debug messages at all, so a test that asserts on them asserts on nothing and cannot tell the two
+    # builds apart from the inside.
     if (${RNDR_FORGE_VALIDATION})
-        target_compile_definitions(rndr PRIVATE RNDR_FORGE_VALIDATION)
+        target_compile_definitions(rndr PUBLIC RNDR_FORGE_VALIDATION)
     endif ()
 endif ()
 

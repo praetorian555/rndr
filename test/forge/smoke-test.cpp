@@ -1,3 +1,5 @@
+#include <cstdlib>
+
 #include <catch2/catch2.hpp>
 
 #include "opal/file-system.h"
@@ -58,6 +60,18 @@ struct ForgeQueues
     bool async_compute = false;
     bool dedicated_transfer = false;
 };
+
+/**
+ * A device desc that asks for nothing this file does not need. DeviceDesc turns the async compute and the
+ * dedicated transfer queue on by default, and Device throws when a family it was asked for is not there - so
+ * a case that built a device without saying otherwise would fail outright on a machine whose one family does
+ * everything, which is a legal Vulkan device and what a software driver offers. ForgeFixture takes a
+ * ForgeQueues; every device built outside it goes through here.
+ */
+Forge::DeviceDesc MakeHeadlessDeviceDesc(const Forge::DeviceFeatures& features = {})
+{
+    return {.features = features, .use_async_compute_queue = false, .use_dedicated_transfer_queue = false};
+}
 
 /** A Vulkan instance and a device with no surface. Everything below is built on one of these. */
 struct ForgeFixture
@@ -163,6 +177,45 @@ bool AreQueuesAvailable(const ForgeQueues& queues)
     }
 }
 
+/**
+ * Whether the first physical device is a software one. Lavapipe reports every descriptor indexing feature
+ * and then hands each invocation element zero of a descriptor array indexed non-uniformly, so a case that
+ * asserts on which element was read has nothing to say there. Everything else in this file runs on it, which
+ * is what makes a software driver worth pointing CI at.
+ */
+bool IsSoftwareDevice()
+{
+    static const bool software = []
+    {
+        const Forge::GraphicsContext context(Forge::GraphicsContextDesc{});
+        const Opal::DynamicArray<Forge::PhysicalDevice> devices = context.EnumeratePhysicalDevices();
+        return devices[0].GetProperties().deviceType == VK_PHYSICAL_DEVICE_TYPE_CPU;
+    }();
+    return software;
+}
+
+/**
+ * Whether an environment variable is set to anything but "0". _dupenv_s rather than getenv, which MSVC
+ * deprecates and this build turns into an error.
+ */
+bool IsEnvironmentFlagSet(const char* name)
+{
+    bool is_set = false;
+#if defined(_MSC_VER)
+    char* value = nullptr;
+    size_t size = 0;
+    if (_dupenv_s(&value, &size, name) == 0 && value != nullptr)
+    {
+        is_set = value[0] != '0';
+        free(value);
+    }
+#else
+    const char* value = std::getenv(name);
+    is_set = value != nullptr && value[0] != '0';
+#endif
+    return is_set;
+}
+
 /** Writes its own thread index plus a constant into a buffer named by its address, so every value is checkable. */
 constexpr const char* k_compute_source = R"(
 [shader("compute")]
@@ -199,6 +252,25 @@ i32 CountMismatches(Opal::ArrayView<const u8> expected, Opal::ArrayView<const u8
 
 }  // namespace
 
+/**
+ * The one case here that refuses to skip. Every other case steps aside on a machine with no Vulkan device,
+ * which is what makes a run that found none look exactly like a run that passed. The same goes for a build
+ * without RNDR_FORGE_VALIDATION, where the context collects no debug messages and every
+ * REQUIRE_NO_VALIDATION_ERROR below asserts on nothing. A machine that is meant to have both says so through
+ * RNDR_TEST_REQUIRE_VULKAN, and then this fails instead of the file going quiet.
+ */
+TEST_CASE("Forge has the device the environment says it has to have", "[forge]")
+{
+    if (!IsEnvironmentFlagSet("RNDR_TEST_REQUIRE_VULKAN"))
+    {
+        SKIP("RNDR_TEST_REQUIRE_VULKAN is unset, so a machine with no Vulkan device is allowed here.");
+    }
+    REQUIRE(IsForgeAvailable());
+#if !defined(RNDR_FORGE_VALIDATION)
+    FAIL("Built without RNDR_FORGE_VALIDATION, so there is no layer behind any of the validation assertions.");
+#endif
+}
+
 TEST_CASE("Forge context and device", "[forge]")
 {
     if (!IsForgeAvailable())
@@ -211,7 +283,7 @@ TEST_CASE("Forge context and device", "[forge]")
     Opal::DynamicArray<Forge::PhysicalDevice> physical_devices = context.EnumeratePhysicalDevices();
     REQUIRE_FALSE(physical_devices.IsEmpty());
 
-    Forge::Device device(std::move(physical_devices[0]), context);
+    Forge::Device device(std::move(physical_devices[0]), context, MakeHeadlessDeviceDesc());
     REQUIRE(device.IsValid());
     REQUIRE(device.GetQueue(Forge::QueueFamily::Graphics).IsValid());
     REQUIRE(context.GetDebugMessageCount(Forge::DebugMessageSeverity::Error, Forge::DebugMessageTypeBits::Validation) == 0);
@@ -838,7 +910,7 @@ TEST_CASE("Forge timeline semaphores", "[forge]")
         // A second logical device on the same physical one. Not a second ForgeFixture: its context would
         // call volkFinalize on the way out and unload Vulkan from under this one.
         Opal::DynamicArray<Forge::PhysicalDevice> physical_devices = fixture.context.EnumeratePhysicalDevices();
-        const Forge::Device other(std::move(physical_devices[0]), fixture.context, {});
+        const Forge::Device other(std::move(physical_devices[0]), fixture.context, MakeHeadlessDeviceDesc());
         const Forge::Semaphore here(fixture.device, {.type = Forge::SemaphoreType::Timeline, .initial_value = 1});
         const Forge::Semaphore there(other, {.type = Forge::SemaphoreType::Timeline, .initial_value = 1});
         const Forge::SemaphoreWait waits[2] = {{.semaphore = here, .value = 1}, {.semaphore = there, .value = 1}};
@@ -935,7 +1007,7 @@ TEST_CASE("Forge waiting on several fences at once", "[forge]")
     {
         // A second logical device on the same physical one, for the reason the timeline case above gives.
         Opal::DynamicArray<Forge::PhysicalDevice> physical_devices = fixture.context.EnumeratePhysicalDevices();
-        const Forge::Device other(std::move(physical_devices[0]), fixture.context, {});
+        const Forge::Device other(std::move(physical_devices[0]), fixture.context, MakeHeadlessDeviceDesc());
         Opal::DynamicArray<Forge::Fence> across_devices;
         across_devices.EmplaceBack(fixture.device, true);
         across_devices.EmplaceBack(other, true);
@@ -963,7 +1035,7 @@ TEST_CASE("Forge device features", "[forge]")
     auto make_device = [&context](const Forge::DeviceFeatures& features)
     {
         Opal::DynamicArray<Forge::PhysicalDevice> physical_devices = context.EnumeratePhysicalDevices();
-        return Forge::Device(std::move(physical_devices[0]), context, {.features = features});
+        return Forge::Device(std::move(physical_devices[0]), context, MakeHeadlessDeviceDesc(features));
     };
 
     SECTION("The defaults are what the device reports back")
@@ -1040,30 +1112,31 @@ TEST_CASE("Forge physical device selection", "[forge]")
 
     SECTION("A headless desc is met by some device on this machine")
     {
-        const Opal::Optional<u32> best = Forge::FindPhysicalDevice(devices);
+        const Opal::Optional<u32> best = Forge::FindPhysicalDevice(devices, MakeHeadlessDeviceDesc());
         REQUIRE(best.HasValue());
         REQUIRE(best.GetValue() < static_cast<u32>(devices.GetSize()));
         // The one it picked has to actually work, which is the whole point of choosing rather than guessing.
-        const Forge::Device device(std::move(devices[static_cast<i32>(best.GetValue())]), context);
+        const Forge::Device device(std::move(devices[static_cast<i32>(best.GetValue())]), context,
+                                   MakeHeadlessDeviceDesc());
         REQUIRE(device.IsValid());
     }
     SECTION("A requirement nothing can meet leaves the answer empty")
     {
         // A device supporting an extension under this name would be a surprising machine indeed.
         const char* nonsense_extension = "VK_EXT_this_extension_does_not_exist";
-        Forge::DeviceDesc desc;
+        Forge::DeviceDesc desc = MakeHeadlessDeviceDesc();
         desc.extensions.PushBack(nonsense_extension);
         REQUIRE_FALSE(Forge::FindPhysicalDevice(devices, desc).HasValue());
     }
     SECTION("Selecting when nothing qualifies throws, naming the requirement")
     {
-        Forge::DeviceDesc desc;
+        Forge::DeviceDesc desc = MakeHeadlessDeviceDesc();
         desc.extensions.PushBack("VK_EXT_this_extension_does_not_exist");
         REQUIRE_THROWS_AS(Forge::SelectPhysicalDevice(devices, desc), Opal::Exception);
     }
     SECTION("Selecting moves the chosen device out of the list")
     {
-        Forge::PhysicalDevice chosen = Forge::SelectPhysicalDevice(devices);
+        Forge::PhysicalDevice chosen = Forge::SelectPhysicalDevice(devices, MakeHeadlessDeviceDesc());
         REQUIRE(chosen.IsValid());
         i32 valid_left = 0;
         for (const Forge::PhysicalDevice& device : devices)
@@ -1076,7 +1149,7 @@ TEST_CASE("Forge physical device selection", "[forge]")
     {
         // No surface can be made without a window, so this only checks the other direction: a desc with no
         // surface must not reject a device for presentation it was never asked to do.
-        Forge::DeviceDesc desc;
+        Forge::DeviceDesc desc = MakeHeadlessDeviceDesc();
         REQUIRE(Forge::FindPhysicalDevice(devices, desc).HasValue());
     }
 
@@ -1107,7 +1180,7 @@ TEST_CASE("Forge bindless descriptor bindings", "[forge]")
     constexpr Forge::DeviceFeatures k_bindless_features{.partially_bound_descriptors = true,
                                                         .update_after_bind_descriptors = true,
                                                         .non_uniform_descriptor_indexing = true};
-    const Forge::DeviceDesc bindless_desc{.features = k_bindless_features};
+    const Forge::DeviceDesc bindless_desc = MakeHeadlessDeviceDesc(k_bindless_features);
     if (!Forge::FindPhysicalDevice(physical_devices, bindless_desc).HasValue())
     {
         SKIP("This device does not support the descriptor indexing features bindless needs.");
@@ -1243,7 +1316,7 @@ TEST_CASE("Forge bindless texture array", "[forge]")
     constexpr Forge::DeviceFeatures k_bindless_features{.partially_bound_descriptors = true,
                                                         .update_after_bind_descriptors = true,
                                                         .non_uniform_descriptor_indexing = true};
-    const Forge::DeviceDesc bindless_desc{.features = k_bindless_features};
+    const Forge::DeviceDesc bindless_desc = MakeHeadlessDeviceDesc(k_bindless_features);
     if (!Forge::FindPhysicalDevice(physical_devices, bindless_desc).HasValue())
     {
         SKIP("This device does not support the descriptor indexing features bindless needs.");
@@ -1299,6 +1372,10 @@ TEST_CASE("Forge bindless texture array", "[forge]")
 
     SECTION("A shader samples the element of the array it indexes")
     {
+        if (IsSoftwareDevice())
+        {
+            SKIP("A software driver reports the non-uniform indexing feature and then reads element zero anyway.");
+        }
         // Three of the four, so the variable count is doing something.
         Forge::DescriptorSet descriptor_set(pool, layout, k_used_descriptors);
 
@@ -1415,10 +1492,14 @@ TEST_CASE("Forge bindless constant buffer array", "[forge]")
     constexpr Forge::DeviceFeatures k_bindless_features{.partially_bound_descriptors = true,
                                                         .update_after_bind_descriptors = true,
                                                         .non_uniform_descriptor_indexing = true};
-    const Forge::DeviceDesc bindless_desc{.features = k_bindless_features};
+    const Forge::DeviceDesc bindless_desc = MakeHeadlessDeviceDesc(k_bindless_features);
     if (!Forge::FindPhysicalDevice(physical_devices, bindless_desc).HasValue())
     {
         SKIP("This device does not support the descriptor indexing features bindless needs.");
+    }
+    if (IsSoftwareDevice())
+    {
+        SKIP("A software driver reports the non-uniform indexing feature and then reads element zero anyway.");
     }
     Forge::Device device(Forge::SelectPhysicalDevice(physical_devices, bindless_desc), context, bindless_desc);
     Forge::DeviceQueue& queue = device.GetQueue(Forge::QueueFamily::Graphics);
@@ -3808,7 +3889,7 @@ TEST_CASE("Forge empty state and moves of the device stack", "[forge]")
                           });
 
     auto make_device = [&context, &make_physical_device]
-    { return Forge::Device(make_physical_device(), context, {}); };
+    { return Forge::Device(make_physical_device(), context, MakeHeadlessDeviceDesc()); };
     CheckLifetimeContract("Device", make_device,
                           [](Forge::Device& device)
                           {
@@ -4817,7 +4898,7 @@ TEST_CASE("Forge barrier preset for presenting", "[forge]")
     {
         SKIP("This device has no swap chain extension.");
     }
-    Forge::DeviceDesc device_desc;
+    Forge::DeviceDesc device_desc = MakeHeadlessDeviceDesc();
     device_desc.extensions.PushBack(VK_KHR_SWAPCHAIN_EXTENSION_NAME);
     Forge::Device device(std::move(physical_devices[0]), context, device_desc);
     Forge::DeviceQueue& queue = device.GetQueue(Forge::QueueFamily::Graphics);

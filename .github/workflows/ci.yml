@@ -21,10 +21,21 @@ jobs:
           - config: Release
             build-dir: build/ci-release
 
+    env:
+      # Lavapipe, Mesa's software Vulkan driver, which ships in the same archive as the OpenGL one below.
+      # Without an ICD the runner has no Vulkan device at all, so every [forge] case skips itself and the
+      # suite comes back green having run none of them. VK_DRIVER_FILES is the name a loader from 1.3.207 on
+      # reads and VK_ICD_FILENAMES is what it was called before; both are set so neither is left guessing.
+      VK_DRIVER_FILES: ${{ github.workspace }}\mesa\x64\lvp_icd.x86_64.json
+      VK_ICD_FILENAMES: ${{ github.workspace }}\mesa\x64\lvp_icd.x86_64.json
+      # Turns the [forge] suite's own skip into a failure. Every case in that file steps aside when there is
+      # no device, so a runner that lost its driver would come back green having run none of them.
+      RNDR_TEST_REQUIRE_VULKAN: "1"
+
     steps:
       - uses: actions/checkout@v4
 
-      - name: Install Mesa OpenGL (software renderer)
+      - name: Install Mesa (software OpenGL and Vulkan)
         run: |
           curl -L -o mesa.7z https://github.com/pal1000/mesa-dist-win/releases/download/24.3.2/mesa3d-24.3.2-release-msvc.7z
           7z x mesa.7z -omesa
@@ -39,6 +50,28 @@ jobs:
           optional_components: com.lunarg.vulkan.vma,com.lunarg.vulkan.volk
           cache: true
 
+      # The layer manifest and its DLL live in the SDK's Bin directory. The action unpacks the SDK rather
+      # than running its installer, so nothing registers the layer for the loader to find on its own.
+      - name: Point the loader at the validation layer
+        run: echo "VK_LAYER_PATH=$env:VULKAN_SDK\Bin" >> $env:GITHUB_ENV
+
+      # A run with no driver, or with RNDR_FORGE_VALIDATION on and no layer behind it, still passes: the
+      # cases skip and every REQUIRE_NO_VALIDATION_ERROR reports nothing. Fail here instead, where the
+      # message says which of the two is missing.
+      - name: Check the driver and the layer are visible
+        run: |
+          if (-not (Test-Path "$env:VK_DRIVER_FILES")) { throw "No lavapipe manifest at $env:VK_DRIVER_FILES." }
+          if (-not (Test-Path "$env:GITHUB_WORKSPACE\mesa\x64\vulkan_lvp.dll")) { throw "The lavapipe manifest names a DLL that is not beside it." }
+          if (-not (Test-Path "$env:VK_LAYER_PATH\VkLayer_khronos_validation.json")) { throw "No validation layer manifest in $env:VK_LAYER_PATH." }
+          # The files being there is not the same as the loader finding them, so ask it when it is available.
+          $vulkaninfo = "$env:VULKAN_SDK\Bin\vulkaninfoSDK.exe"
+          if (Test-Path $vulkaninfo) {
+            $summary = & $vulkaninfo --summary 2>&1 | Out-String
+            Write-Host $summary
+            if ($summary -notmatch 'llvmpipe') { throw "The loader found no lavapipe device: the Vulkan tests would skip themselves." }
+            if ($summary -notmatch 'VK_LAYER_KHRONOS_validation') { throw "The loader found no validation layer: the validation assertions would pass on nothing." }
+          }
+
       - name: Configure CMake
         run: >
           cmake -S . -B ${{ matrix.build-dir }}
@@ -46,6 +79,7 @@ jobs:
           -DRNDR_BUILD_SAMPLES=OFF
           -DRNDR_HARDENING=OFF
           -DRNDR_FORGE=ON
+          -DRNDR_FORGE_VALIDATION=ON
 
       - name: Build
         run: cmake --build ${{ matrix.build-dir }} --config ${{ matrix.config }} --target rndr-test
