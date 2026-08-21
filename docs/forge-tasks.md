@@ -243,6 +243,71 @@ message, clean exit, probe removed.
 Note for 3.9: the layout still passes an all-zero `binding_flags_array` and computes a `binding_flags` local
 that nothing reads, so `use_update_after_bind` and `variable_descriptor_count` remain unreachable.
 
+### 2.7 Take the texture, not the view, in rendering attachments
+
+`include/rndr/forge/command-buffer.hpp`, `src/forge/command-buffer.cpp`, the swap chain and frame context
+getters that exist to feed it, and the sample.
+
+`RenderingAttachmentDesc::image_view` is a raw `VkImageView`, and `image_layout` beside it is written by
+hand. That breaks two promises the rest of the API keeps, at the one seam every frame passes through. Descs
+are otherwise Vk-free (2.4), and the texture already tracks its layout (4.3) - yet `CmdBeginRendering`
+cannot see it, because an attachment names a view rather than the texture it belongs to. So the caller
+re-states `ColorAttachment` or `DepthStencilAttachment` by hand every frame, and a layout that disagrees
+with what the barriers actually did is exactly the plausible-but-wrong bookkeeping 4.3 exists to remove.
+The copies and blits already read the tracked layout and throw when it is not one the role allows; the
+attachment is the last place that asks the caller instead.
+
+The attachment should name the texture - `Opal::Ref<const Texture>`, the way descs hold objects everywhere
+else - with the layout read off it and checked against what the attachment role allows. `image_layout`
+goes, or stays only as an override for the case the tracker cannot answer, mirroring how the barrier
+presets kept their long forms. `GetColorImageView()` on the swap chain and the frame context can then
+retire from the frame path; `GetNativeImageView()` remains the escape hatch.
+
+Done when: a `RenderingDesc` is filled in without naming a `Vk` type or a layout, `CmdBeginRendering`
+throws on a texture whose tracked layout is not one the attachment role allows, and the sample's rendering
+desc loses both hand-written `image_layout` lines.
+
+### 2.8 One word for a texture
+
+Every Forge header, `docs/forge.md`, and the sample.
+
+The type is `Texture`, but half the surface speaks Vulkan's word for it: `ImageBarrier`, `CmdImageBarrier`,
+`CmdCopyBufferToImage`, `CmdBlitImage`, `GetColorImage` - all of them taking or returning a `Texture&`. Two
+words for one thing is a tax on every call site and makes the API grep-hostile: searching for what touches
+a texture has to be run twice. The split is accidental rather than principled - it is not "`Image` is the
+Vulkan concept, `Texture` is the Forge object", since `GetColorImage` hands back a `Texture&`.
+
+The principled line is the one `types.hpp` already draws: what mirrors a Vulkan concept keeps Vulkan's name -
+`ImageLayout`, `ImageAspectBits`, `ImageSubresourceRange` mirror `Vk` types and stay - and what acts on or
+hands out a `Forge::Texture` says texture: `TextureBarrier`, `CmdCopyBufferToTexture`, `GetColorTexture`.
+The alternative, renaming `Texture` to `Image`, buys the same consistency but collides with `Rndr::Bitmap`
+territory and with Canvas, which says texture too.
+
+Worth doing while the sample is the only consumer, which is what this priority is for.
+
+Done when: no method takes or returns a `Texture` under a name that says image, the types that mirror `Vk`
+enums are the only place the word survives, and `docs/forge.md` says which word is whose.
+
+### 2.9 Replace the clear value union
+
+`include/rndr/forge/command-buffer.hpp`, `src/forge/command-buffer.cpp`, and the sample.
+
+`RenderingAttachmentDesc::clear_value` is an anonymous union of `color` and `depth_stencil`. Writing
+`.color` on a depth attachment compiles, clears with reinterpreted garbage, and nothing says so - no throw,
+no validation message, since Vulkan's own `VkClearValue` is the same union and the layer cannot know which
+member was meant. In an API where every other misuse fails loudly, this is the one silent hole at the
+surface.
+
+`Opal::Variant<Vector4f, DepthStencilClearValue>` is the shape the fix wants, and the idiom already exists -
+`DescriptorSetUpdateBinding::resource_info` holds its buffer-or-image the same way. A variant remembers
+which member was written, so `CmdBeginRendering` can throw on a color attachment carrying a depth clear and
+the reverse, the way the depth attachment already throws when it is present with no image. Two plain fields
+with the unused one ignored would also remove the garbage, but silently ignoring a value the caller wrote
+is the pattern 2.4 removed from the descs; being told is better.
+
+Done when: writing the wrong kind of clear value throws at record time, naming the attachment it was
+written on, and the sample's designated initializers still read as they do.
+
 ---
 
 ## Priority 3 — Missing capability
