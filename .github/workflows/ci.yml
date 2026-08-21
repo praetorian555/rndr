@@ -8,7 +8,11 @@ on:
 
 jobs:
   build-and-test:
-    runs-on: windows-latest
+    # Pinned, not windows-latest: that label moved to an image carrying Visual Studio 18 2026 and MSVC
+    # 14.51, which compiles this differently from the 17.14 and MSVC 14.44 development happens on. This
+    # image is the one that matches, and the generator below says so out loud so a future image swap fails
+    # here rather than quietly changing compilers again.
+    runs-on: windows-2022
 
     strategy:
       fail-fast: false
@@ -70,9 +74,19 @@ jobs:
           if ($summary -notmatch 'llvmpipe') { throw "The loader found no lavapipe device: the Vulkan tests would skip themselves." }
           if ($summary -notmatch 'VK_LAYER_KHRONOS_validation') { throw "The loader found no validation layer: the validation assertions would pass on nothing." }
 
+      # Which toolset the pinned image actually carries, so drift from the 14.44 development uses is one
+      # line in the log rather than a compile error to be traced back to an image bump.
+      - name: Report the compiler
+        run: |
+          $vswhere = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
+          $install = & $vswhere -latest -products * -property installationPath
+          Write-Host "Visual Studio $(& $vswhere -latest -products * -property installationVersion) at $install"
+          Write-Host "MSVC toolsets: $((Get-ChildItem "$install\VC\Tools\MSVC" -Name) -join ', ')"
+
       - name: Configure CMake
         run: >
           cmake -S . -B ${{ matrix.build-dir }}
+          -G "Visual Studio 17 2022"
           -DRNDR_BUILD_TESTS=ON
           -DRNDR_BUILD_SAMPLES=OFF
           -DRNDR_HARDENING=OFF
