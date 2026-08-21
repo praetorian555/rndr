@@ -249,9 +249,16 @@ Rndr::Forge::ImageBarrier Rndr::Forge::ImageBarrier::To(const Texture& texture, 
     }
 }
 
-Rndr::Forge::Semaphore::Semaphore(const Device& device) : m_device(device)
+Rndr::Forge::Semaphore::Semaphore(const Device& device, const SemaphoreDesc& desc) : m_device(device), m_type(desc.type)
 {
-    const VkSemaphoreCreateInfo semaphore_create_info = {.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO};
+    // The type lives in a chained structure rather than in the create info, so a binary semaphore is the one
+    // that chains nothing - which is also why it is what a defaulted desc asks for.
+    const VkSemaphoreTypeCreateInfo type_create_info = {.sType = VK_STRUCTURE_TYPE_SEMAPHORE_TYPE_CREATE_INFO,
+                                                        .semaphoreType = VK_SEMAPHORE_TYPE_TIMELINE,
+                                                        .initialValue = desc.initial_value};
+    const VkSemaphoreCreateInfo semaphore_create_info = {
+        .sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO,
+        .pNext = desc.type == SemaphoreType::Timeline ? &type_create_info : nullptr};
     const VkResult result = vkCreateSemaphore(device.GetNativeDevice(), &semaphore_create_info, nullptr, &m_semaphore);
     if (result != VK_SUCCESS)
     {
@@ -274,19 +281,111 @@ void Rndr::Forge::Semaphore::Destroy()
 }
 
 Rndr::Forge::Semaphore::Semaphore(Semaphore&& other) noexcept
-    : m_device(std::move(other.m_device)), m_semaphore(other.m_semaphore)
+    : m_device(std::move(other.m_device)), m_semaphore(other.m_semaphore), m_type(other.m_type)
 {
     other.m_device = nullptr;
     other.m_semaphore = VK_NULL_HANDLE;
+    other.m_type = SemaphoreType::Binary;
 }
 
 Rndr::Forge::Semaphore& Rndr::Forge::Semaphore::operator=(Semaphore&& other) noexcept
 {
     if (this != &other)
     {
+        // Destroy first, as Fence::operator= above already does: without it, assigning over a live semaphore
+        // drops the handle it holds and leaks it.
+        Destroy();
         m_device = std::move(other.m_device);
         m_semaphore = other.m_semaphore;
+        m_type = other.m_type;
         other.m_semaphore = VK_NULL_HANDLE;
+        other.m_type = SemaphoreType::Binary;
     }
     return *this;
+}
+
+/** The host side of a timeline is undefined on a binary semaphore, so every one of them is turned away. */
+static void ThrowIfNotTimeline(const Rndr::Forge::Semaphore& semaphore, const char* what)
+{
+    if (!semaphore.IsValid())
+    {
+        throw Opal::Exception(Opal::StringEx(what) + " an empty semaphore!");
+    }
+    if (!semaphore.IsTimeline())
+    {
+        throw Opal::Exception(Opal::StringEx(what) + " a binary semaphore, which only a device wait can consume!");
+    }
+}
+
+void Rndr::Forge::Semaphore::Wait(u64 value, u64 timeout) const
+{
+    ThrowIfNotTimeline(*this, "Waiting on");
+    const VkSemaphoreWaitInfo wait_info = {
+        .sType = VK_STRUCTURE_TYPE_SEMAPHORE_WAIT_INFO, .semaphoreCount = 1, .pSemaphores = &m_semaphore, .pValues = &value};
+    const VkResult result = vkWaitSemaphores(m_device->GetNativeDevice(), &wait_info, timeout);
+    if (result != VK_SUCCESS)
+    {
+        throw VulkanException(result, "vkWaitSemaphores");
+    }
+}
+
+void Rndr::Forge::Semaphore::Signal(u64 value) const
+{
+    ThrowIfNotTimeline(*this, "Signalling");
+    const VkSemaphoreSignalInfo signal_info = {
+        .sType = VK_STRUCTURE_TYPE_SEMAPHORE_SIGNAL_INFO, .semaphore = m_semaphore, .value = value};
+    const VkResult result = vkSignalSemaphore(m_device->GetNativeDevice(), &signal_info);
+    if (result != VK_SUCCESS)
+    {
+        throw VulkanException(result, "vkSignalSemaphore");
+    }
+}
+
+Rndr::u64 Rndr::Forge::Semaphore::GetValue() const
+{
+    ThrowIfNotTimeline(*this, "Reading the count of");
+    u64 value = 0;
+    const VkResult result = vkGetSemaphoreCounterValue(m_device->GetNativeDevice(), m_semaphore, &value);
+    if (result != VK_SUCCESS)
+    {
+        throw VulkanException(result, "vkGetSemaphoreCounterValue");
+    }
+    return value;
+}
+
+void Rndr::Forge::Semaphore::WaitForAll(Opal::ArrayView<const SemaphoreWait> waits, u64 timeout)
+{
+    if (waits.empty())
+    {
+        return;
+    }
+    // The default allocator rather than the scratch one, for the reason Fence::WaitForAll gives above.
+    // vkWaitSemaphores wants the semaphores and their values as two parallel arrays.
+    Opal::DynamicArray<VkSemaphore> native_semaphores(waits.GetSize());
+    Opal::DynamicArray<u64> values(waits.GetSize());
+    for (i32 i = 0; i < waits.GetSize(); ++i)
+    {
+        const SemaphoreWait& wait = waits[i];
+        // Two checks rather than the one a fence needs: the entry holds a reference, so the reference can be
+        // empty and so can the semaphore behind it.
+        if (!wait.semaphore.IsValid() || !wait.semaphore->IsValid())
+        {
+            throw Opal::Exception("Waiting on an empty semaphore!");
+        }
+        if (!wait.semaphore->IsTimeline())
+        {
+            throw Opal::Exception("Waiting on a binary semaphore, which only a device wait can consume!");
+        }
+        native_semaphores[i] = wait.semaphore->GetNativeSemaphore();
+        values[i] = wait.value;
+    }
+    const VkSemaphoreWaitInfo wait_info = {.sType = VK_STRUCTURE_TYPE_SEMAPHORE_WAIT_INFO,
+                                           .semaphoreCount = static_cast<u32>(native_semaphores.GetSize()),
+                                           .pSemaphores = native_semaphores.GetData(),
+                                           .pValues = values.GetData()};
+    const VkResult result = vkWaitSemaphores(waits[0].semaphore->m_device->GetNativeDevice(), &wait_info, timeout);
+    if (result != VK_SUCCESS)
+    {
+        throw VulkanException(result, "vkWaitSemaphores");
+    }
 }

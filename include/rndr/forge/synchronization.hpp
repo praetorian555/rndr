@@ -46,12 +46,32 @@ private:
     Opal::Ref<const Device> m_device;
 };
 
-// Used for synchronization on the GPU.
+enum class SemaphoreType : u8
+{
+    Binary,    // Signalled or not. Only a device wait can consume it, and consuming it clears it.
+    Timeline,  // A counter that only rises. Host and device both wait on it and both raise it.
+};
+
+struct SemaphoreDesc
+{
+    SemaphoreType type = SemaphoreType::Binary;
+    /** Timeline only. The count it starts at; a wait for that value or less is satisfied at once. */
+    u64 initial_value = 0;
+};
+
+/** One semaphore and the count to wait for, for the batched host-side wait. */
+struct SemaphoreWait
+{
+    Opal::Ref<const Semaphore> semaphore;
+    u64 value = 0;
+};
+
+// Used for synchronization on the GPU, and for a timeline, between the GPU and the host as well.
 class Semaphore
 {
 public:
     Semaphore() = default;
-    explicit Semaphore(const Device& device);
+    explicit Semaphore(const Device& device, const SemaphoreDesc& desc = {});
     ~Semaphore();
 
     void Destroy();
@@ -65,9 +85,30 @@ public:
     [[nodiscard]] bool IsValid() const { return m_semaphore != VK_NULL_HANDLE; }
     [[nodiscard]] VkSemaphore GetNativeSemaphore() const { return m_semaphore; }
 
+    [[nodiscard]] SemaphoreType GetType() const { return m_type; }
+    [[nodiscard]] bool IsTimeline() const { return m_type == SemaphoreType::Timeline; }
+
+    /**
+     * The four calls below are the host side of a timeline, and all of them throw on a binary semaphore -
+     * only a device wait can consume one of those, so there is nothing here for the host to do with it.
+     */
+
+    /** Block until the count reaches the given value. A value already reached returns at once. */
+    void Wait(u64 value, u64 timeout = Fence::k_infinite_wait) const;
+
+    /** Raise the count from the host. The value has to be above the current one. */
+    void Signal(u64 value) const;
+
+    /** The count as it stands. A device signal may have raised it again by the time this returns. */
+    [[nodiscard]] u64 GetValue() const;
+
+    /** One wait over many semaphores, which returns once every one of them has reached its value. */
+    static void WaitForAll(Opal::ArrayView<const SemaphoreWait> waits, u64 timeout = Fence::k_infinite_wait);
+
 private:
     VkSemaphore m_semaphore = VK_NULL_HANDLE;
     Opal::Ref<const Device> m_device;
+    SemaphoreType m_type = SemaphoreType::Binary;
 };
 
 /**

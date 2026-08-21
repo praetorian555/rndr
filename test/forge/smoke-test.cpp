@@ -560,6 +560,143 @@ TEST_CASE("Forge batched submit", "[forge]")
     REQUIRE_NO_VALIDATION_ERROR(fixture);
 }
 
+TEST_CASE("Forge timeline semaphores", "[forge]")
+{
+    if (!IsForgeAvailable())
+    {
+        SKIP("No Vulkan device on this machine.");
+    }
+    ForgeFixture fixture;
+    constexpr i32 k_size = 64;
+    const Opal::DynamicArray<u8> first_half = MakeBytes(k_size, 5);
+    const Opal::DynamicArray<u8> second_half = MakeBytes(k_size, 90);
+    const Opal::DynamicArray<u8> zeros(k_size * 2);
+
+    constexpr Forge::BufferUsageBits k_both_ways = Forge::BufferUsageBits::TransferSource | Forge::BufferUsageBits::TransferDestination;
+    const Forge::Buffer source_a(fixture.device, {.size = k_size, .usage = Forge::BufferUsageBits::TransferSource}, first_half);
+    const Forge::Buffer source_b(fixture.device, {.size = k_size, .usage = Forge::BufferUsageBits::TransferSource}, second_half);
+    const Forge::Buffer destination(fixture.device, {.size = k_size * 2, .usage = k_both_ways});
+    destination.Update(zeros);
+
+    // The same split copy the batched submit case uses: one command buffer per half, so a batch that dropped
+    // either one would show up as half the buffer missing rather than as nothing at all.
+    Forge::CommandBuffer first(fixture.device, fixture.GetQueue());
+    Forge::CommandBuffer second(fixture.device, fixture.GetQueue());
+    const Forge::BufferCopyRegion first_region{.source_offset = 0, .destination_offset = 0, .size = k_size};
+    const Forge::BufferCopyRegion second_region{.source_offset = 0, .destination_offset = k_size, .size = k_size};
+    first.Begin();
+    first.CmdCopyBuffer(source_a, destination, {&first_region, 1});
+    first.End();
+    second.Begin();
+    second.CmdCopyBuffer(source_b, destination, {&second_region, 1});
+    second.End();
+    const Opal::Ref<const Forge::CommandBuffer> first_batch[1] = {Opal::Ref<const Forge::CommandBuffer>(first)};
+    const Opal::Ref<const Forge::CommandBuffer> second_batch[1] = {Opal::Ref<const Forge::CommandBuffer>(second)};
+
+    // Both halves in the destination, which is what every section that submits has to end up with.
+    auto require_whole_buffer_copied = [&]()
+    {
+        Opal::DynamicArray<u8> read_back(k_size * 2);
+        Forge::ReadBackBuffer(fixture.device, fixture.GetQueue(), destination, read_back);
+        for (i32 i = 0; i < k_size; ++i)
+        {
+            REQUIRE(read_back[i] == first_half[i]);
+            REQUIRE(read_back[k_size + i] == second_half[i]);
+        }
+    };
+
+    SECTION("A fresh timeline starts at its initial value and the host can raise it")
+    {
+        constexpr u64 k_initial = 7;
+        const Forge::Semaphore timeline(fixture.device, {.type = Forge::SemaphoreType::Timeline, .initial_value = k_initial});
+        REQUIRE(timeline.IsTimeline());
+        REQUIRE(timeline.GetType() == Forge::SemaphoreType::Timeline);
+        REQUIRE(timeline.GetValue() == k_initial);
+        timeline.Signal(k_initial + 3);
+        REQUIRE(timeline.GetValue() == k_initial + 3);
+    }
+    SECTION("A wait for a value already reached returns at once")
+    {
+        const Forge::Semaphore timeline(fixture.device, {.type = Forge::SemaphoreType::Timeline, .initial_value = 4});
+        timeline.Wait(4);
+        timeline.Wait(1);
+        REQUIRE(timeline.GetValue() == 4);
+    }
+    SECTION("One batch per half, the second waiting on the value the first signals")
+    {
+        const Forge::Semaphore timeline(fixture.device, {.type = Forge::SemaphoreType::Timeline});
+        const Forge::Fence fence(fixture.device, false);
+        const Forge::SemaphoreSubmit signal{.semaphore = timeline, .stages = Forge::PipelineStageBits::Transfer, .value = 1};
+        const Forge::SemaphoreSubmit wait{.semaphore = timeline, .stages = Forge::PipelineStageBits::Transfer, .value = 1};
+        fixture.GetQueue().Submit({.command_buffers = {first_batch, 1}, .signal_semaphores = {&signal, 1}});
+        fixture.GetQueue().Submit({.command_buffers = {second_batch, 1}, .wait_semaphores = {&wait, 1}, .fence = fence});
+        fence.Wait();
+        require_whole_buffer_copied();
+    }
+    SECTION("The host waits on a value the device signals, with no fence anywhere")
+    {
+        const Forge::Semaphore timeline(fixture.device, {.type = Forge::SemaphoreType::Timeline});
+        const Forge::SemaphoreSubmit first_signal{.semaphore = timeline, .value = 1};
+        const Forge::SemaphoreSubmit second_signal{.semaphore = timeline, .value = 2};
+        fixture.GetQueue().Submit({.command_buffers = {first_batch, 1}, .signal_semaphores = {&first_signal, 1}});
+        fixture.GetQueue().Submit({.command_buffers = {second_batch, 1}, .signal_semaphores = {&second_signal, 1}});
+        timeline.Wait(2);
+        REQUIRE(timeline.GetValue() == 2);
+        require_whole_buffer_copied();
+    }
+    SECTION("WaitForAll over two timelines returns once both have been signalled")
+    {
+        const Forge::Semaphore first_timeline(fixture.device, {.type = Forge::SemaphoreType::Timeline});
+        const Forge::Semaphore second_timeline(fixture.device, {.type = Forge::SemaphoreType::Timeline});
+        const Forge::SemaphoreSubmit first_signal{.semaphore = first_timeline, .value = 1};
+        const Forge::SemaphoreSubmit second_signal{.semaphore = second_timeline, .value = 1};
+        fixture.GetQueue().Submit({.command_buffers = {first_batch, 1}, .signal_semaphores = {&first_signal, 1}});
+        fixture.GetQueue().Submit({.command_buffers = {second_batch, 1}, .signal_semaphores = {&second_signal, 1}});
+        const Forge::SemaphoreWait waits[2] = {{.semaphore = first_timeline, .value = 1}, {.semaphore = second_timeline, .value = 1}};
+        Forge::Semaphore::WaitForAll({waits, 2});
+        REQUIRE(first_timeline.GetValue() == 1);
+        REQUIRE(second_timeline.GetValue() == 1);
+        require_whole_buffer_copied();
+    }
+    SECTION("The host side of a timeline throws on a binary semaphore")
+    {
+        const Forge::Semaphore binary(fixture.device);
+        REQUIRE_FALSE(binary.IsTimeline());
+        REQUIRE_THROWS_AS(binary.Wait(1), Opal::Exception);
+        REQUIRE_THROWS_AS(binary.Signal(1), Opal::Exception);
+        REQUIRE_THROWS_AS(binary.GetValue(), Opal::Exception);
+    }
+    SECTION("A value on a binary semaphore throws, since Vulkan would ignore it")
+    {
+        const Forge::Semaphore binary(fixture.device);
+        const Forge::SemaphoreSubmit signal{.semaphore = binary, .value = 1};
+        REQUIRE_THROWS_AS(fixture.GetQueue().Submit({.command_buffers = {first_batch, 1}, .signal_semaphores = {&signal, 1}}),
+                          Opal::Exception);
+    }
+    SECTION("A timeline signalled with zero throws, since no signal can reach it")
+    {
+        const Forge::Semaphore timeline(fixture.device, {.type = Forge::SemaphoreType::Timeline});
+        const Forge::SemaphoreSubmit signal{.semaphore = timeline, .value = 0};
+        REQUIRE_THROWS_AS(fixture.GetQueue().Submit({.command_buffers = {first_batch, 1}, .signal_semaphores = {&signal, 1}}),
+                          Opal::Exception);
+        // A wait for zero is legal and trivially satisfied, so only the signal side is turned away.
+        const Forge::SemaphoreSubmit wait{.semaphore = timeline, .value = 0};
+        fixture.GetQueue().Submit({.command_buffers = {first_batch, 1}, .wait_semaphores = {&wait, 1}});
+        fixture.GetQueue().WaitIdle();
+    }
+    SECTION("An empty entry in WaitForAll throws, either way it is empty")
+    {
+        const Forge::Semaphore empty;
+        const Forge::SemaphoreWait empty_reference[1] = {{}};
+        REQUIRE_THROWS_AS(Forge::Semaphore::WaitForAll({empty_reference, 1}), Opal::Exception);
+        const Forge::SemaphoreWait empty_semaphore[1] = {{.semaphore = empty, .value = 1}};
+        REQUIRE_THROWS_AS(Forge::Semaphore::WaitForAll({empty_semaphore, 1}), Opal::Exception);
+    }
+
+    fixture.GetQueue().WaitIdle();
+    REQUIRE_NO_VALIDATION_ERROR(fixture);
+}
+
 TEST_CASE("Forge submit rejects an empty object", "[forge]")
 {
     if (!IsForgeAvailable())

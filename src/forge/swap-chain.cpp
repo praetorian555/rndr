@@ -241,6 +241,11 @@ VkImageView Rndr::Forge::SwapChain::GetCurrentColorImageView() const
 
 Rndr::Forge::AcquiredImage Rndr::Forge::SwapChain::AcquireImage(const Semaphore& semaphore)
 {
+    // Above the early return below, so that a window with no client area does not hide the mistake.
+    if (semaphore.IsTimeline())
+    {
+        throw Opal::Exception("Acquiring an image needs a binary semaphore - presentation cannot signal a timeline!");
+    }
     if (m_swap_chain == VK_NULL_HANDLE)
     {
         // No swap chain because the window had no client area the last time we tried. Try again for the next frame.
@@ -268,6 +273,10 @@ Rndr::Forge::AcquiredImage Rndr::Forge::SwapChain::AcquireImage(const Semaphore&
 
 Rndr::Forge::SwapChainStatus Rndr::Forge::SwapChain::Present(DeviceQueue& queue, const Semaphore& semaphore)
 {
+    if (semaphore.IsTimeline())
+    {
+        throw Opal::Exception("Presenting needs a binary semaphore - presentation cannot wait on a timeline!");
+    }
     if (!HasAcquiredImage())
     {
         throw Opal::Exception("There is no acquired image to present - AcquireImage has to come first!");

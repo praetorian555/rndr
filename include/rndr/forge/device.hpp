@@ -141,6 +141,8 @@ struct SemaphoreSubmit
 {
     Opal::Ref<const Semaphore> semaphore;
     PipelineStageBits stages = PipelineStageBits::AllCommands;
+    /** Timeline only: the count to wait for, or the count to signal. Must be zero for a binary semaphore. */
+    u64 value = 0;
 };
 
 /** One batch of work handed to a queue. Every part of it is optional except that an empty batch does nothing. */
