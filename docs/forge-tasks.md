@@ -998,6 +998,10 @@ never set, `GraphicsPipelineDesc::topology` never moves off `Triangle`, and `Dat
 is never used, so instancing and multi-binding vertex input are both untested. `CmdSetViewport`'s depth
 range and `CmdSetScissor` are called, but nothing reads back a pixel that proves either took effect.
 
+Stale since 3.15, which needed a per-instance binding to make `first_instance` visible: `DataRepetition::PerInstance`
+and a second vertex binding are both used there now. What is still missing is the readback that varies the
+instances against each other, which is what this task asks for.
+
 Done when a readback proves each: a triangle culled by winding disappears and comes back when `front_face`
 is flipped rather than when the geometry is; `FillMode::Wireframe` with `fill_mode_non_solid` leaves the
 interior of a triangle as the clear left it; a line and a point topology put pixels where a triangle would
@@ -1028,29 +1032,66 @@ shader writes through a `StorageImage` and the readback matches; a separate `Sam
 pair produce what the combined descriptor produces; a pool is `Reset` and the sets allocated after it work;
 and a set from a `free_individual_sets` pool is destroyed and its space reused.
 
-### 3.19 Test the transfer, barrier and binding calls nothing executes
+### 3.19 Test the transfer, barrier and binding calls nothing executes — DONE
 
-`test/forge/smoke-test.cpp`.
+Six cases in `test/forge/smoke-test.cpp`: `Forge blits`, `Forge copies from a texture into a buffer`,
+`Forge mip level sizes`, `Forge barrier batches`, `Forge barrier presets`, `Forge barrier preset for
+presenting` and `Forge binding several descriptor sets at once`.
 
-Calls that exist and never run, or run only inside a `REQUIRE_THROWS_AS`:
+Every content texture holds the same grid, and it is what makes these checkable: the red channel of a texel
+names its column and the green names its row, so a copy that moved a box, mirrored an axis or sheared a row
+says which texel it got wrong rather than only that something differs. Nothing goes through a shader, so
+these are bytes a copy moves rather than values a format rounds. Every buffer is filled with a sentinel
+first, so a byte the copy did not write says so instead of reading as a zero that could have come from
+anywhere.
 
-- `CmdBlitImage` - throw path only. No blit has ever resized, mirrored through a negative extent, converted
-  between formats or used `ImageFilter::Nearest`. `CmdGenerateMips` covers the one shape it needs and no
-  other.
-- `CmdCopyImageToBuffer` - never called directly, only inside `ReadBackTexture`, which packs tightly from
-  offset zero. `buffer_row_length`, `buffer_image_height`, `image_offset` and a sub-box extent are all
-  unexercised, and each is a place an off-by-one lands silently in the middle of an image.
-- `CmdBarriers` - never called, despite being the one every other `Cmd*Barrier` delegates to.
-  `DependencyFlagBits::ByRegion` is never set.
-- `CmdBindDescriptorSets`, the plural one - never called, so binding more than one set and a non-zero
-  `first_set` are both untested.
-- The barrier presets `ToShaderRead`, `ToTransferSource`, `ToPresent`, `ToDepthStencilAttachment` and the
-  three-argument `ImageBarrier::To`, and `BufferBarrier::ReadThenWrite`. 4.2 built ten of these and the
-  tests reach four.
-- `GetMipLevelSize` - used by the readback helper, never asserted against a size worked out by hand, which
-  is what would catch a block-compressed or a depth format being sized as if it were tightly packed RGBA.
+What now runs:
 
-Done when each of them runs and its result is read back rather than only recorded.
+- **Blits.** A two to one upscale with `ImageFilter::Nearest`, where every destination texel has to be the
+  source texel above it and nothing may be averaged with a neighbour; a negative destination extent, which
+  runs the axis backwards and mirrors it; a blit into `B8G8R8A8_UNORM`, read back as the bytes of a BGRA
+  image, which is what separates a converting blit from a copy; and a linear filter, which only has to
+  produce one value across the row that is not any of the four the source holds - a nearest filter cannot.
+- **`CmdCopyImageToBuffer` directly.** A sub-box that copies four named texels and leaves the rest of the
+  buffer alone, a non-zero `buffer_offset`, a `buffer_row_length` wider than the box so every row leaves
+  texels untouched, and a two layer array with both `buffer_row_length` and `buffer_image_height` set, where
+  the gap between the layers has to still hold the sentinel.
+- **`CmdBarriers`.** One dependency carrying a memory, a buffer and an image barrier together, with the
+  compute write it orders and the texture it transitions both read back afterwards.
+- **The presets.** `ToShaderRead`, `ToTransferSource`, the three argument `To`, `ToDepthStencilAttachment`,
+  `ToPresent`, and `BufferBarrier::ReadThenWrite`. Each image preset runs over a texture holding known
+  content and the content is read back after: a preset naming the wrong source layout either trips the
+  validation layer or discards what the texture holds - `Undefined` as an old layout is a discard - so
+  content that survives says the preset named the layout the texture was actually in. `To` into
+  `ImageLayout::General` throws, which is the near miss worth having: a real layout with no preset behind it.
+- **`ToPresent` headlessly.** `Present` is a swap chain layout, so naming it needs the device to have
+  `VK_KHR_swapchain` even though nothing presents. Asking for the extension without a surface is legal, which
+  is what makes this checkable in a file that never opens a window; it gets its own case and its own device.
+- **`CmdBindDescriptorSets`.** Two sets down in one call, and a non-zero `first_set` where set zero goes down
+  through the singular call and set one through the plural one - a call that ignored `first_set` would
+  overwrite set zero and the shader would read its own output as its input.
+- **`GetMipLevelSize`.** Against sizes worked out by hand: the quartering chain, an odd extent that halves
+  down and never below one, array layers and depth both multiplying, a depth format sized by its own texel,
+  a block compressed format that throws rather than answering with texel arithmetic, and a level past the end
+  that throws. It was right about all of them.
+
+**`DependencyFlagBits::ByRegion` turned out not to be reachable.** The flag is plumbed through to
+`dependencyFlags` correctly, but it only means anything inside a render pass, and Forge has no render passes
+but the ones `CmdBeginRendering` starts - and a barrier may not be recorded inside one of those *at all*
+unless the device enabled `VK_KHR_dynamic_rendering_local_read`, which Forge does not ask for. The validation
+layer says so in as many words. The comment on the flag said "only valid inside a render pass", which was
+true of the render passes Forge does not have and misleading about the ones it does; it now says what is
+actually the case. The test sets the flag on a barrier outside a pass, which is legal and does nothing, so
+what it checks is that the flag is not dropped on the way. Making the flag mean something is a capability
+decision - enabling that extension - rather than a test, and is not taken here.
+
+Two of the task's premises were slightly off. `ToTransferSource` and `ToTransferDestination` were already
+being reached, by `ReadBackTexture` and the upload path, but never asserted about; they are now. And the
+`CmdBlitImage` throw path the task counted was the only blit, which is still true of everything except these
+cases.
+
+Confirmed by mutation rather than by passing: forcing `bufferRowLength` to zero in the translation turns both
+row-stride sections red, and forcing `first_set` to zero turns the multi-set case red.
 
 ### 3.20 Test the queues that are not the graphics queue
 
