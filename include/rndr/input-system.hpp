@@ -163,34 +163,6 @@ enum class MouseAxis : u8
     WheelY,
 };
 
-enum class GamepadButton : u8
-{
-    A,
-    B,
-    X,
-    Y,
-    LeftBumper,
-    RightBumper,
-    Back,
-    Start,
-    LeftThumb,
-    RightThumb,
-    DPadUp,
-    DPadDown,
-    DPadLeft,
-    DPadRight,
-};
-
-enum class GamepadAxis : u8
-{
-    LeftStickX,
-    LeftStickY,
-    RightStickX,
-    RightStickY,
-    LeftTrigger,
-    RightTrigger,
-};
-
 // Trigger ////////////////////////////////////////////////////////////////////////////////////////
 
 enum class Trigger : u8
@@ -299,14 +271,19 @@ private:
     {
         GamepadButton button;
         Trigger trigger;
-        u8 gamepad_index = 0;
+        u8 gamepad_index = k_any_gamepad;
     };
 
     struct GamepadAxisBinding
     {
         GamepadAxis axis;
         f32 dead_zone = -1.0f;
-        u8 gamepad_index = 0;
+        u8 gamepad_index = k_any_gamepad;
+
+        // Last value handed to the callback. A stick returning to center lands inside the dead zone,
+        // which would otherwise dispatch nothing and leave the callback stuck on the last non-zero
+        // value. Tracking it lets the binding fire exactly one zero on the way in, then stay quiet.
+        f32 last_dispatched_value = 0.0f;
     };
 
     struct HoldBinding
@@ -400,11 +377,11 @@ public:
     // Mouse axis binding.
     InputActionBuilder& Bind(MouseAxis axis);
 
-    // Gamepad button binding.
-    InputActionBuilder& Bind(GamepadButton button, Trigger trigger, u8 gamepad_index = 0);
+    // Gamepad button binding. Defaults to matching any gamepad.
+    InputActionBuilder& Bind(GamepadButton button, Trigger trigger, u8 gamepad_index = k_any_gamepad);
 
-    // Gamepad axis binding.
-    InputActionBuilder& Bind(GamepadAxis axis, f32 dead_zone = -1.0f, u8 gamepad_index = 0);
+    // Gamepad axis binding. A dead zone of -1 means "use the InputSystem default".
+    InputActionBuilder& Bind(GamepadAxis axis, f32 dead_zone = -1.0f, u8 gamepad_index = k_any_gamepad);
 
     // Hold binding. Fires a single callback after key is held for duration_seconds.
     InputActionBuilder& BindHold(Key key, f32 duration_seconds);
@@ -543,6 +520,9 @@ public:
     bool OnMouseDoubleClick(const GenericWindow& window, InputPrimitive primitive, const Vector2i& cursor_position) override;
     bool OnMouseWheel(const GenericWindow& window, f32 wheel_delta, const Vector2i& cursor_position) override;
     bool OnMouseMove(const GenericWindow& window, f32 delta_x, f32 delta_y, const Vector2i& cursor_position) override;
+    bool OnGamepadButtonDown(u8 gamepad_index, GamepadButton button) override;
+    bool OnGamepadButtonUp(u8 gamepad_index, GamepadButton button) override;
+    bool OnGamepadAxis(u8 gamepad_index, GamepadAxis axis, f32 value) override;
 
 private:
     struct KeyEvent
@@ -582,7 +562,24 @@ private:
         uchar32 character;
     };
 
-    using InputEvent = std::variant<KeyEvent, MouseButtonEvent, MouseMoveEvent, MouseWheelEvent, CharacterEvent>;
+    // Gamepad events carry no window, so window-filtered actions still receive them.
+    struct GamepadButtonEvent
+    {
+        u8 gamepad_index;
+        GamepadButton button;
+        Trigger trigger;
+    };
+
+    // `raw_value` has no dead zone applied yet. The dead zone is resolved per binding at dispatch.
+    struct GamepadAxisEvent
+    {
+        u8 gamepad_index;
+        GamepadAxis axis;
+        f32 raw_value;
+    };
+
+    using InputEvent =
+        std::variant<KeyEvent, MouseButtonEvent, MouseMoveEvent, MouseWheelEvent, CharacterEvent, GamepadButtonEvent, GamepadAxisEvent>;
 
     void DispatchEvents();
     void UpdateTimers(f32 delta_seconds);
@@ -592,6 +589,20 @@ private:
     bool DispatchMouseMoveEvent(const MouseMoveEvent& event, InputAction& action);
     bool DispatchMouseWheelEvent(const MouseWheelEvent& event, InputAction& action);
     bool DispatchCharacterEvent(const CharacterEvent& event, InputAction& action);
+    bool DispatchGamepadButtonEvent(const GamepadButtonEvent& event, InputAction& action);
+    bool DispatchGamepadAxisEvent(const GamepadAxisEvent& event, InputAction& action);
+
+    /**
+     * Applies a dead zone to a raw axis value, rescaling the remaining range back onto [0, 1] so
+     * the value moves continuously away from zero instead of jumping to the dead zone edge.
+     * @return The rescaled value, or 0 if the raw value is inside the dead zone.
+     */
+    static f32 ApplyDeadZone(f32 raw_value, f32 dead_zone);
+
+    /** Resolves a binding's dead zone, substituting the system default when the binding has none. */
+    [[nodiscard]] f32 ResolveDeadZone(f32 binding_dead_zone) const;
+
+    static bool MatchesGamepadIndex(u8 binding_index, u8 event_index);
 
     static Key InputPrimitiveToKey(InputPrimitive primitive);
     static MouseButton InputPrimitiveToMouseButton(InputPrimitive primitive);

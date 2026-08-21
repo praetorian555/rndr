@@ -6,6 +6,8 @@
 #include "rndr/generic-window.hpp"
 #include "rndr/input-primitives.hpp"
 #include "rndr/platform-application.hpp"
+#include "rndr/platform/windows-gamepad.hpp"
+#include "rndr/time.hpp"
 
 #if RNDR_WINDOWS
 #include "rndr/platform/windows-forward-def.hpp"
@@ -36,6 +38,8 @@ public:
     void SetCursorPosition(const Vector2i& pos) override;
     [[nodiscard]] Vector2i GetCursorPosition() const override;
 
+    [[nodiscard]] bool IsGamepadConnected(u8 gamepad_index) const override;
+
     [[nodiscard]] Opal::DynamicArray<MonitorInfo> GetMonitors() const override;
     [[nodiscard]] MonitorInfo GetPrimaryMonitor() const override;
     [[nodiscard]] MonitorInfo GetMonitorAtPosition(const Vector2i& pos) const override;
@@ -45,6 +49,14 @@ private:
     i32 TranslateKey(i32 win_key, i32 desc);
     bool GetInputPrimitive(InputPrimitive& out_primitive, i32 virtual_key);
 
+    /** Samples every gamepad slot. Called from ProcessSystemEvents. */
+    void PollGamepads();
+
+    WindowsGamepad m_gamepads[k_max_gamepads];
+
+    // XInput has no message queue to drain, so gamepads are polled instead. ProcessSystemEvents
+    // takes no delta time, so the poll interval is measured here rather than passed in.
+    Timestamp m_last_gamepad_poll_timestamp = 0;
 };
 
 }  // namespace Rndr

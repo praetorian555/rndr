@@ -140,6 +140,49 @@ int main()
                 draw_flags %= 3;
             });
 
+    // Gamepad. The bindings carry no gamepad index, so they match whichever slot the pad shows up on.
+    f32 gamepad_left_stick_x = 0.0f;
+    f32 gamepad_left_stick_y = 0.0f;
+
+    app->on_gamepad_connection_change.Bind([](u8 gamepad_index, bool is_connected)
+                                           { RNDR_LOG_INFO("Gamepad %d %s", gamepad_index, is_connected ? "connected" : "disconnected"); });
+
+    app->GetInputSystemChecked()
+        .GetContextByName("Default")
+        .AddAction("Gamepad switch display mode")
+        .Bind(GamepadButton::Start, Trigger::Pressed)
+        .OnGamepadButton(
+            [&window](GamepadButton, Trigger, u8)
+            {
+                const GenericWindowMode current_mode = window->GetMode();
+                window->SetMode(current_mode == GenericWindowMode::Windowed ? GenericWindowMode::BorderlessFullscreen
+                                                                            : GenericWindowMode::Windowed);
+            });
+
+    app->GetInputSystemChecked()
+        .GetContextByName("Default")
+        .AddAction("Gamepad exit")
+        .Bind(GamepadButton::Back, Trigger::Pressed)
+        .OnGamepadButton([&window](GamepadButton, Trigger, u8) { window->RequestClose(); });
+
+    app->GetInputSystemChecked()
+        .GetContextByName("Default")
+        .AddAction("Gamepad left stick")
+        .Bind(GamepadAxis::LeftStickX)
+        .Bind(GamepadAxis::LeftStickY)
+        .OnGamepadAxis(
+            [&gamepad_left_stick_x, &gamepad_left_stick_y](GamepadAxis axis, f32 value, u8)
+            {
+                if (axis == GamepadAxis::LeftStickX)
+                {
+                    gamepad_left_stick_x = value;
+                }
+                else
+                {
+                    gamepad_left_stick_y = value;
+                }
+            });
+
     FramesPerSecondCounter fps_counter;
     bool stats_window = true;
     f32 delta_seconds = 0.016f;
@@ -193,6 +236,9 @@ int main()
         ImGui::Text("Controls:");
         ImGui::Text("F1 - Toggle camera controls");
         ImGui::Text("F2 - Toggle fullscreen");
+        ImGui::Text("Gamepad Start - Toggle fullscreen, Back - Exit");
+        ImGui::Text("Gamepad slot 0: %s", app->IsGamepadConnected(0) ? "connected" : "disconnected");
+        ImGui::Text("Gamepad left stick: %.2f, %.2f", gamepad_left_stick_x, gamepad_left_stick_y);
         ImGui::SliderAngle("Position of the light", &angle_radians, 0, 360);
         ImGui::Checkbox("Use light", &use_light);
         if (ImGui::CollapsingHeader("Window Decorations"))

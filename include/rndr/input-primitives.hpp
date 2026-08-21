@@ -152,4 +152,54 @@ enum class InputTrigger : u8
     TextCharacter
 };
 
+/**
+ * Buttons on a gamepad. LeftTrigger and RightTrigger are synthesized from the analog trigger value
+ * crossing a threshold, so a trigger can be bound either as a button or as a GamepadAxis.
+ */
+enum class GamepadButton : u8
+{
+    A,
+    B,
+    X,
+    Y,
+    LeftBumper,
+    RightBumper,
+    Back,
+    Start,
+    LeftThumb,
+    RightThumb,
+    DPadUp,
+    DPadDown,
+    DPadLeft,
+    DPadRight,
+    LeftTrigger,
+    RightTrigger,
+};
+
+/**
+ * Analog axes on a gamepad. Stick axes report [-1, 1] with up and right positive. Trigger axes
+ * report [0, 1].
+ */
+enum class GamepadAxis : u8
+{
+    LeftStickX,
+    LeftStickY,
+    RightStickX,
+    RightStickY,
+    LeftTrigger,
+    RightTrigger,
+};
+
+/** Number of entries in the GamepadButton enum. */
+constexpr u8 k_gamepad_button_count = static_cast<u8>(GamepadButton::RightTrigger) + 1;
+
+/** Number of gamepads the platform layer polls. */
+constexpr u8 k_max_gamepads = 4;
+
+/**
+ * Gamepad index that matches an event from any gamepad. This is the default for gamepad bindings,
+ * so a single-player game keeps working no matter which slot the pad connects on.
+ */
+constexpr u8 k_any_gamepad = 0xFF;
+
 }  // namespace Rndr

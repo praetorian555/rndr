@@ -105,8 +105,10 @@ list(APPEND SOURCE_LIST
 
 list(APPEND SOURCE_LIST
         "${PROJECT_SOURCE_DIR}/include/rndr/platform/windows-application.hpp"
+        "${PROJECT_SOURCE_DIR}/include/rndr/platform/windows-gamepad.hpp"
         "${PROJECT_SOURCE_DIR}/include/rndr/platform/windows-window.hpp"
         "${PROJECT_SOURCE_DIR}/src/platform/windows-application.cpp"
+        "${PROJECT_SOURCE_DIR}/src/platform/windows-gamepad.cpp"
         "${PROJECT_SOURCE_DIR}/src/platform/windows-window.cpp"
 )
 
@@ -186,7 +188,9 @@ if (${RNDR_FORGE})
     target_compile_definitions(rndr PUBLIC RNDR_FORGE)
 endif ()
 
-target_link_libraries(rndr PRIVATE User32.lib Shcore.lib)
+# Xinput.lib resolves to XInput 1.4 in the Windows 10 SDK, which ships with every supported
+# Windows version, so there is no runtime redistributable to worry about.
+target_link_libraries(rndr PRIVATE User32.lib Shcore.lib Xinput.lib)
 target_link_libraries(rndr PUBLIC opal imgui)
 if (RNDR_ASSIMP)
     target_link_libraries(rndr PRIVATE assimp)

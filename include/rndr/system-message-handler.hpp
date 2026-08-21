@@ -33,5 +33,38 @@ struct SystemMessageHandler
     // Reports mouse movement as both the relative motion since the last event (`delta_x`, `delta_y`)
     // and the resulting absolute `cursor_position` in client space (see the convention above).
     virtual bool OnMouseMove(const GenericWindow& window, f32 delta_x, f32 delta_y, const Vector2i& cursor_position) = 0;
+
+    // Gamepad callbacks below carry no window. The platform gamepad API has no notion of which window
+    // a pad belongs to, so gamepad events are global to the application.
+    //
+    // `gamepad_index` is the slot the pad is connected on, in [0, k_max_gamepads).
+    virtual bool OnGamepadButtonDown(u8 gamepad_index, GamepadButton button)
+    {
+        (void)gamepad_index;
+        (void)button;
+        return false;
+    }
+    virtual bool OnGamepadButtonUp(u8 gamepad_index, GamepadButton button)
+    {
+        (void)gamepad_index;
+        (void)button;
+        return false;
+    }
+
+    // Reports a raw axis value with no dead zone applied: [-1, 1] for sticks, [0, 1] for triggers.
+    // Dead zones belong to the individual bindings, so applying one here would filter twice.
+    virtual bool OnGamepadAxis(u8 gamepad_index, GamepadAxis axis, f32 value)
+    {
+        (void)gamepad_index;
+        (void)axis;
+        (void)value;
+        return false;
+    }
+
+    virtual void OnGamepadConnectionChanged(u8 gamepad_index, bool is_connected)
+    {
+        (void)gamepad_index;
+        (void)is_connected;
+    }
 };
 }  // namespace Rndr

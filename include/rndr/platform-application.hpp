@@ -63,6 +63,16 @@ public:
      */
     [[nodiscard]] virtual Vector2i GetCursorPosition() const = 0;
 
+    /**
+     * Check if a gamepad is connected on the given slot.
+     * @param gamepad_index Slot in [0, k_max_gamepads).
+     */
+    [[nodiscard]] virtual bool IsGamepadConnected(u8 gamepad_index) const
+    {
+        (void)gamepad_index;
+        return false;
+    }
+
     [[nodiscard]] virtual Opal::DynamicArray<MonitorInfo> GetMonitors() const = 0;
     [[nodiscard]] virtual MonitorInfo GetPrimaryMonitor() const = 0;
     [[nodiscard]] virtual MonitorInfo GetMonitorAtPosition(const Vector2i& pos) const = 0;

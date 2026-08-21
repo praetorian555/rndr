@@ -35,6 +35,9 @@ public:
     using WindowDpiChangeDelegate = Opal::MultiDelegate<void(const GenericWindow& /*window*/, f32 /*new_dpi_scale*/)>;
     WindowDpiChangeDelegate on_window_dpi_change;
 
+    using GamepadConnectionDelegate = Opal::MultiDelegate<void(u8 /*gamepad_index*/, bool /*is_connected*/)>;
+    GamepadConnectionDelegate on_gamepad_connection_change;
+
     static Opal::ScopePtr<Application> Create(const ApplicationDesc& desc = ApplicationDesc{});
 
     static Application* Get();
@@ -71,6 +74,13 @@ public:
     [[nodiscard]] Vector2i GetCursorPosition() const;
     /** End of cursor manipulation API. */
 
+    /**
+     * Checks whether a gamepad is currently connected on the given slot. Connection state is
+     * refreshed by ProcessSystemEvents.
+     * @param gamepad_index Slot in [0, k_max_gamepads).
+     */
+    [[nodiscard]] bool IsGamepadConnected(u8 gamepad_index) const;
+
     void RegisterSystemMessageHandler(SystemMessageHandler* handler);
     void UnregisterSystemMessageHandler(SystemMessageHandler* handler);
 
@@ -89,6 +99,11 @@ public:
     bool OnMouseDoubleClick(const GenericWindow& window, InputPrimitive primitive, const Vector2i& cursor_position) override;
     bool OnMouseWheel(const GenericWindow& window, f32 wheel_delta, const Vector2i& cursor_position) override;
     bool OnMouseMove(const GenericWindow& window, f32 delta_x, f32 delta_y, const Vector2i& cursor_position) override;
+
+    bool OnGamepadButtonDown(u8 gamepad_index, GamepadButton button) override;
+    bool OnGamepadButtonUp(u8 gamepad_index, GamepadButton button) override;
+    bool OnGamepadAxis(u8 gamepad_index, GamepadAxis axis, f32 value) override;
+    void OnGamepadConnectionChanged(u8 gamepad_index, bool is_connected) override;
     /** End of SystemMessageHandler API */
 
 private:

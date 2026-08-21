@@ -668,6 +668,36 @@ bool Rndr::InputSystem::OnMouseMove(const GenericWindow& window, f32 delta_x, f3
     return true;
 }
 
+bool Rndr::InputSystem::OnGamepadButtonDown(u8 gamepad_index, GamepadButton button)
+{
+    m_event_queue.PushBack(GamepadButtonEvent{
+        .gamepad_index = gamepad_index,
+        .button = button,
+        .trigger = Trigger::Pressed,
+    });
+    return true;
+}
+
+bool Rndr::InputSystem::OnGamepadButtonUp(u8 gamepad_index, GamepadButton button)
+{
+    m_event_queue.PushBack(GamepadButtonEvent{
+        .gamepad_index = gamepad_index,
+        .button = button,
+        .trigger = Trigger::Released,
+    });
+    return true;
+}
+
+bool Rndr::InputSystem::OnGamepadAxis(u8 gamepad_index, GamepadAxis axis, f32 value)
+{
+    m_event_queue.PushBack(GamepadAxisEvent{
+        .gamepad_index = gamepad_index,
+        .axis = axis,
+        .raw_value = value,
+    });
+    return true;
+}
+
 // Event dispatching //////////////////////////////////////////////////////////////////////////////
 
 void Rndr::InputSystem::DispatchEvents()
@@ -706,6 +736,14 @@ void Rndr::InputSystem::DispatchEvents()
                 else if (std::holds_alternative<CharacterEvent>(event))
                 {
                     consumed = DispatchCharacterEvent(std::get<CharacterEvent>(event), action);
+                }
+                else if (std::holds_alternative<GamepadButtonEvent>(event))
+                {
+                    consumed = DispatchGamepadButtonEvent(std::get<GamepadButtonEvent>(event), action);
+                }
+                else if (std::holds_alternative<GamepadAxisEvent>(event))
+                {
+                    consumed = DispatchGamepadAxisEvent(std::get<GamepadAxisEvent>(event), action);
                 }
 
                 if (consumed)
@@ -953,7 +991,90 @@ bool Rndr::InputSystem::DispatchCharacterEvent(const CharacterEvent& event, Inpu
     return false;
 }
 
+bool Rndr::InputSystem::DispatchGamepadButtonEvent(const GamepadButtonEvent& event, InputAction& action)
+{
+    // No window check here. Gamepad events are not tied to a window, so an action with a window
+    // filter still receives them.
+    for (const InputAction::Binding& binding : action.m_bindings)
+    {
+        if (binding.type == InputAction::BindingType::GamepadButton)
+        {
+            const InputAction::GamepadButtonBinding& gb = binding.gamepad_button;
+            if (gb.button == event.button && gb.trigger == event.trigger && MatchesGamepadIndex(gb.gamepad_index, event.gamepad_index))
+            {
+                if (!!(action.m_callback_flags & InputAction::CallbackFlags::GamepadButton) && action.m_gamepad_button_callback)
+                {
+                    action.m_gamepad_button_callback(event.button, event.trigger, event.gamepad_index);
+                    return true;
+                }
+            }
+        }
+    }
+    return false;
+}
+
+bool Rndr::InputSystem::DispatchGamepadAxisEvent(const GamepadAxisEvent& event, InputAction& action)
+{
+    for (InputAction::Binding& binding : action.m_bindings)
+    {
+        if (binding.type == InputAction::BindingType::GamepadAxis)
+        {
+            InputAction::GamepadAxisBinding& ga = binding.gamepad_axis;
+            if (ga.axis != event.axis || !MatchesGamepadIndex(ga.gamepad_index, event.gamepad_index))
+            {
+                continue;
+            }
+
+            const f32 value = ApplyDeadZone(event.raw_value, ResolveDeadZone(ga.dead_zone));
+            if (value == 0.0f && ga.last_dispatched_value == 0.0f)
+            {
+                // Inside the dead zone and already reported as centered. Leave the event unconsumed
+                // so a lower context with a smaller dead zone still gets a chance at it.
+                continue;
+            }
+
+            if (!!(action.m_callback_flags & InputAction::CallbackFlags::GamepadAxis) && action.m_gamepad_axis_callback)
+            {
+                // A value of 0 here is the one-shot "returned to center" report.
+                ga.last_dispatched_value = value;
+                action.m_gamepad_axis_callback(event.axis, value, event.gamepad_index);
+                return true;
+            }
+        }
+    }
+    return false;
+}
+
 // Conversion helpers /////////////////////////////////////////////////////////////////////////////
+
+Rndr::f32 Rndr::InputSystem::ApplyDeadZone(f32 raw_value, f32 dead_zone)
+{
+    const f32 magnitude = raw_value < 0.0f ? -raw_value : raw_value;
+    if (magnitude <= dead_zone)
+    {
+        return 0.0f;
+    }
+    if (dead_zone >= 1.0f)
+    {
+        // Degenerate dead zone, nothing left to rescale onto.
+        return 0.0f;
+    }
+
+    // Rescale [dead_zone, 1] onto [0, 1] so the value ramps up from zero instead of stepping to the
+    // dead zone edge the moment the stick crosses it.
+    const f32 scaled = (magnitude - dead_zone) / (1.0f - dead_zone);
+    return raw_value < 0.0f ? -scaled : scaled;
+}
+
+Rndr::f32 Rndr::InputSystem::ResolveDeadZone(f32 binding_dead_zone) const
+{
+    return binding_dead_zone < 0.0f ? m_default_dead_zone : binding_dead_zone;
+}
+
+bool Rndr::InputSystem::MatchesGamepadIndex(u8 binding_index, u8 event_index)
+{
+    return binding_index == k_any_gamepad || binding_index == event_index;
+}
 
 Rndr::Key Rndr::InputSystem::InputPrimitiveToKey(InputPrimitive primitive)
 {

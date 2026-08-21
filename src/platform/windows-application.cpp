@@ -13,6 +13,7 @@
 #include "rndr/monitor-info.hpp"
 #include "rndr/platform/windows-window.hpp"
 #include "rndr/system-message-handler.hpp"
+#include "rndr/time.hpp"
 
 Rndr::WindowsApplication* g_windows_app = nullptr;
 
@@ -22,6 +23,12 @@ Rndr::WindowsApplication::WindowsApplication(SystemMessageHandler* message_handl
     g_windows_app = this;
     // Helps to get physical pixel size of monitor and not the scaled version.
     SetProcessDpiAwarenessContext(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2);
+
+    for (u8 gamepad_index = 0; gamepad_index < k_max_gamepads; ++gamepad_index)
+    {
+        m_gamepads[gamepad_index].Initialize(gamepad_index, message_handler);
+    }
+    m_last_gamepad_poll_timestamp = GetTimestamp();
 }
 
 LRESULT RndrPrivate::WindowProc(HWND window_handle, UINT msg_code, WPARAM param_w, LPARAM param_l)
@@ -321,6 +328,29 @@ void Rndr::WindowsApplication::ProcessSystemEvents(u32 timeout_ms)
         const int mid_y = window_rect.top + (height / 2);
         ::SetCursorPos(mid_x, mid_y);
     }
+
+    PollGamepads();
+}
+
+void Rndr::WindowsApplication::PollGamepads()
+{
+    const Timestamp now = GetTimestamp();
+    const auto delta_seconds = static_cast<f32>(GetDuration(m_last_gamepad_poll_timestamp, now));
+    m_last_gamepad_poll_timestamp = now;
+
+    for (WindowsGamepad& gamepad : m_gamepads)
+    {
+        gamepad.Tick(delta_seconds);
+    }
+}
+
+bool Rndr::WindowsApplication::IsGamepadConnected(u8 gamepad_index) const
+{
+    if (gamepad_index >= k_max_gamepads)
+    {
+        return false;
+    }
+    return m_gamepads[gamepad_index].IsConnected();
 }
 
 void Rndr::WindowsApplication::ShowCursor(bool show)

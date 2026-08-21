@@ -99,6 +99,11 @@ bool Rndr::Application::IsCursorVisible() const
     return m_platform_application->IsCursorVisible();
 }
 
+bool Rndr::Application::IsGamepadConnected(u8 gamepad_index) const
+{
+    return m_platform_application->IsGamepadConnected(gamepad_index);
+}
+
 void Rndr::Application::SetCursorPosition(const Vector2i& pos)
 {
     m_platform_application->SetCursorPosition(pos);
@@ -273,4 +278,40 @@ bool Rndr::Application::OnMouseMove(const GenericWindow& window, f32 delta_x, f3
         system_message_handler->OnMouseMove(window, delta_x, delta_y, cursor_position);
     }
     return true;
+}
+
+bool Rndr::Application::OnGamepadButtonDown(u8 gamepad_index, GamepadButton button)
+{
+    for (const Opal::Ref<SystemMessageHandler>& system_message_handler : m_system_message_handlers)
+    {
+        system_message_handler->OnGamepadButtonDown(gamepad_index, button);
+    }
+    return true;
+}
+
+bool Rndr::Application::OnGamepadButtonUp(u8 gamepad_index, GamepadButton button)
+{
+    for (const Opal::Ref<SystemMessageHandler>& system_message_handler : m_system_message_handlers)
+    {
+        system_message_handler->OnGamepadButtonUp(gamepad_index, button);
+    }
+    return true;
+}
+
+bool Rndr::Application::OnGamepadAxis(u8 gamepad_index, GamepadAxis axis, f32 value)
+{
+    for (const Opal::Ref<SystemMessageHandler>& system_message_handler : m_system_message_handlers)
+    {
+        system_message_handler->OnGamepadAxis(gamepad_index, axis, value);
+    }
+    return true;
+}
+
+void Rndr::Application::OnGamepadConnectionChanged(u8 gamepad_index, bool is_connected)
+{
+    for (const Opal::Ref<SystemMessageHandler>& system_message_handler : m_system_message_handlers)
+    {
+        system_message_handler->OnGamepadConnectionChanged(gamepad_index, is_connected);
+    }
+    on_gamepad_connection_change.Execute(gamepad_index, is_connected);
 }
