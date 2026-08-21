@@ -614,6 +614,30 @@ the variable count, the partially bound flag and the array element all to have t
 throw: a count above the binding's, a count without a binding that allows one, a variable count on a binding
 that is not the highest, and an update after bind layout allocated from a pool that does not expect one.
 
+Textures were plumbed the whole time and unproven the whole time. The feature mapping names the sampled
+image bits specifically - `descriptorBindingSampledImageUpdateAfterBind` and
+`shaderSampledImageArrayNonUniformIndexing`, not only the storage buffer ones - but every
+`CombinedImageSampler` binding in the repo held a single descriptor, so nothing had ever written past
+element zero of an image binding or indexed one from a shader. `"Forge bindless texture array"` closes that:
+a four descriptor `Sampler2D textures[]` binding allocated with a variable count of three, elements one and
+two written and element zero deliberately left alone, and a compute shader sampling
+`textures[NonUniformResourceIndex(1 + (thread_id.x & 1))]` so the index differs between neighbouring
+invocations. Two single texel textures with different red channels, 256 invocations, and the value each one
+reports says which descriptor it reached.
+
+It was checked against being vacuous rather than trusted for passing. Making the index the constant `1`
+fails at invocation 1, the first one that should have read the other element; swapping which texture is
+written to which element fails at invocation 0. So the non-uniform index and the array element are both
+load bearing.
+
+Two gaps it turned up, neither fixed here. `uniformBufferArrayNonUniformIndexing` is the one indexing
+feature `DeviceFeatures::non_uniform_descriptor_indexing` does not map to - sampled image, storage buffer
+and storage image are all set - so a non-uniform index into an array of constant buffers fails validation
+while the feature reads as on. And `DescriptorSet::Update` passes `array_element` through to
+`dstArrayElement` unchecked: the set keeps the type of each binding but not its descriptor count, so an
+element past the end of a binding reaches the validation layer rather than throwing the way the other
+bindless mistakes here do.
+
 ### 3.10 Pipeline gaps — DONE, minus a cache that was measured and dropped
 
 Three of the five were a hardcoded value becoming a field.

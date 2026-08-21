@@ -1174,6 +1174,159 @@ TEST_CASE("Forge bindless descriptor bindings", "[forge]")
     REQUIRE(context.GetDebugMessageCount(Forge::DebugMessageSeverity::Error, Forge::DebugMessageTypeBits::Validation) == 0);
 }
 
+constexpr const char* k_bindless_texture_source = R"(
+[[vk::binding(0, 0)]] RWStructuredBuffer<uint> output;
+[[vk::binding(1, 0)]] Sampler2D textures[];
+
+[shader("compute")]
+[numthreads(64, 1, 1)]
+void main_bindless_textures(uint3 thread_id : SV_DispatchThreadID)
+{
+    // Alternates between two descriptors inside one subgroup, which is what makes the index non-uniform.
+    // Descriptor zero is never touched: it is the one left unwritten, so PartiallyBound has to hold.
+    uint index = 1 + (thread_id.x & 1);
+    float4 texel = textures[NonUniformResourceIndex(index)].SampleLevel(float2(0.5, 0.5), 0.0);
+    output[thread_id.x] = uint(texel.r * 255.0 + 0.5);
+}
+)";
+
+TEST_CASE("Forge bindless texture array", "[forge]")
+{
+    if (!IsForgeAvailable())
+    {
+        SKIP("No Vulkan device on this machine.");
+    }
+    const Forge::GraphicsContext context({.collect_debug_messages = true});
+    Opal::DynamicArray<Forge::PhysicalDevice> physical_devices = context.EnumeratePhysicalDevices();
+
+    constexpr Forge::DeviceFeatures k_bindless_features{.partially_bound_descriptors = true,
+                                                        .update_after_bind_descriptors = true,
+                                                        .non_uniform_descriptor_indexing = true};
+    const Forge::DeviceDesc bindless_desc{.features = k_bindless_features};
+    if (!Forge::FindPhysicalDevice(physical_devices, bindless_desc).HasValue())
+    {
+        SKIP("This device does not support the descriptor indexing features bindless needs.");
+    }
+    Forge::Device device(Forge::SelectPhysicalDevice(physical_devices, bindless_desc), context, bindless_desc);
+    Forge::DeviceQueue& queue = device.GetQueue(Forge::QueueFamily::Graphics);
+
+    constexpr u32 k_max_descriptors = 4;
+    constexpr u32 k_used_descriptors = 3;
+    constexpr i32 k_element_count = 256;
+    constexpr i32 k_group_size = 64;
+    // The red channel of each single texel texture, which is what comes back through the buffer.
+    constexpr u32 k_red_at_one = 40;
+    constexpr u32 k_red_at_two = 200;
+
+    // A one by one texture in ShaderReadOnly, filled with one colour. Written through the tracked layout
+    // rather than a spelled out one: created undefined, brought to TransferDestination, copied into, then
+    // left where a shader reads it.
+    auto make_texture = [&](u32 red)
+    {
+        Forge::Texture texture(device, {.format = PixelFormat::R8G8B8A8_UNORM,
+                                        .width = 1,
+                                        .height = 1,
+                                        .usage = Forge::TextureUsageBits::Sampled | Forge::TextureUsageBits::TransferDestination});
+        const u8 texel[4] = {static_cast<u8>(red), 0, 0, 255};
+        const Forge::Buffer staging(device, {.size = sizeof(texel), .usage = Forge::BufferUsageBits::TransferSource},
+                                    {texel, sizeof(texel)});
+        const Forge::BufferImageCopyRegion region;
+        Forge::ImmediateSubmit(device, queue,
+                               [&](Forge::CommandBuffer& command_buffer)
+                               {
+                                   command_buffer.CmdImageBarrier(Forge::ImageBarrier::ToTransferDestination(texture));
+                                   command_buffer.CmdCopyBufferToImage(staging, texture, {&region, 1});
+                                   command_buffer.CmdTransition(texture, Forge::ImageLayout::ShaderReadOnly);
+                               });
+        return texture;
+    };
+
+    Forge::DescriptorPoolDesc pool_desc;
+    pool_desc.Add(Forge::DescriptorType::StorageBuffer, 1);
+    pool_desc.Add(Forge::DescriptorType::CombinedImageSampler, k_max_descriptors);
+    pool_desc.max_sets = 1;
+    pool_desc.use_update_after_bind = true;
+    const Forge::DescriptorPool pool(device, pool_desc);
+
+    // The texture array is the highest binding, which is where a variable count is allowed to sit.
+    Forge::DescriptorSetLayoutDesc layout_desc;
+    layout_desc.AddBinding(0, Forge::DescriptorType::StorageBuffer, 1, ShaderTypeBits::Compute);
+    layout_desc.AddBinding(1, Forge::DescriptorType::CombinedImageSampler, k_max_descriptors, ShaderTypeBits::Compute, {},
+                           Forge::DescriptorBindingFlagBits::PartiallyBound | Forge::DescriptorBindingFlagBits::UpdateAfterBind |
+                               Forge::DescriptorBindingFlagBits::VariableDescriptorCount);
+    const Forge::DescriptorSetLayout layout(device, layout_desc);
+
+    SECTION("A shader samples the element of the array it indexes")
+    {
+        // Three of the four, so the variable count is doing something.
+        Forge::DescriptorSet descriptor_set(pool, layout, k_used_descriptors);
+
+        Forge::Buffer output(device, {.size = k_element_count * sizeof(u32),
+                                      .usage = Forge::BufferUsageBits::StorageBuffer,
+                                      .host_access = Forge::HostAccess::Random});
+        const Opal::DynamicArray<u8> zeros(k_element_count * sizeof(u32));
+        output.Update(zeros);
+
+        const Forge::Texture texture_one = make_texture(k_red_at_one);
+        const Forge::Texture texture_two = make_texture(k_red_at_two);
+        const Forge::Sampler sampler(device, {.max_anisotropy = 1.0f});
+
+        // Elements one and two, never element zero: a write past the first descriptor of a binding is the
+        // part of this that a binding holding one descriptor could never have exercised.
+        descriptor_set.Update(0, output);
+        descriptor_set.Update(1, texture_one, sampler, Forge::ImageLayout::ShaderReadOnly, 1);
+        descriptor_set.Update(1, texture_two, sampler, Forge::ImageLayout::ShaderReadOnly, 2);
+
+        const Forge::Shader shader = Forge::Shader::FromSourceInMemory(
+            device, k_bindless_texture_source, {.entry_point = "main_bindless_textures", .cache = GetShaderCache()});
+        Forge::ComputePipelineDesc pipeline_desc;
+        pipeline_desc.shader = shader;
+        pipeline_desc.descriptor_set_layouts.PushBack(Opal::Ref<const Forge::DescriptorSetLayout>(layout));
+        const Forge::Pipeline pipeline(device, pipeline_desc);
+
+        Forge::ImmediateSubmit(device, queue,
+                               [&](Forge::CommandBuffer& command_buffer)
+                               {
+                                   command_buffer.CmdBindPipeline(pipeline);
+                                   command_buffer.CmdBindDescriptorSet(pipeline, descriptor_set);
+                                   command_buffer.CmdDispatch(k_element_count / k_group_size);
+                               });
+
+        Opal::DynamicArray<u32> values(k_element_count);
+        output.Read({reinterpret_cast<u8*>(values.GetData()), values.GetSize() * sizeof(u32)});
+        for (i32 i = 0; i < k_element_count; ++i)
+        {
+            // An even invocation reads element one and an odd one element two, so a shader that ignored the
+            // index, or an update that landed on the wrong element, comes back uniform instead.
+            const u32 expected = (i % 2) == 0 ? k_red_at_one : k_red_at_two;
+            INFO("invocation " << i);
+            REQUIRE(values[i] == expected);
+        }
+    }
+    SECTION("A variable count above the texture binding descriptor count throws")
+    {
+        REQUIRE_THROWS_AS(Forge::DescriptorSet(pool, layout, k_max_descriptors + 1), Opal::Exception);
+    }
+    SECTION("An update after bind texture layout needs a pool that expects one")
+    {
+        Forge::DescriptorPoolDesc plain_pool_desc;
+        plain_pool_desc.Add(Forge::DescriptorType::StorageBuffer, 1);
+        plain_pool_desc.Add(Forge::DescriptorType::CombinedImageSampler, k_max_descriptors);
+        plain_pool_desc.use_update_after_bind = false;
+        const Forge::DescriptorPool plain_pool(device, plain_pool_desc);
+        REQUIRE_THROWS_AS(Forge::DescriptorSet(plain_pool, layout, k_used_descriptors), Opal::Exception);
+    }
+
+    Opal::StringUtf8 report;
+    for (const Forge::DebugMessage& message : context.GetDebugMessages())
+    {
+        report += message.text;
+        report += Opal::StringUtf8("\n");
+    }
+    INFO(*report);
+    REQUIRE(context.GetDebugMessageCount(Forge::DebugMessageSeverity::Error, Forge::DebugMessageTypeBits::Validation) == 0);
+}
+
 TEST_CASE("Forge barrier vocabulary", "[forge]")
 {
     if (!IsForgeAvailable())
