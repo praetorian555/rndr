@@ -132,10 +132,10 @@ struct FeatureChain
         vk12.shaderStorageImageArrayNonUniformIndexing = features.non_uniform_descriptor_indexing;
         vk12.bufferDeviceAddress = features.buffer_device_address;
         vk12.scalarBlockLayout = features.scalar_block_layout;
-        vk12.timelineSemaphore = features.timeline_semaphore;
         vk12.hostQueryReset = features.host_query_reset;
 
-        // Forge is written on both of these, so they are not the caller's to turn off.
+        // Forge is written on all of these, so they are not the caller's to turn off.
+        vk12.timelineSemaphore = VK_TRUE;
         vk13.synchronization2 = VK_TRUE;
         vk13.dynamicRendering = VK_TRUE;
 
@@ -216,10 +216,10 @@ const char* FindUnsupportedFeature(const Forge::PhysicalDevice& physical_device,
             "non_uniform_descriptor_indexing");
     require(requested.buffer_device_address, supported.vk12.bufferDeviceAddress, "buffer_device_address");
     require(requested.scalar_block_layout, supported.vk12.scalarBlockLayout, "scalar_block_layout");
-    require(requested.timeline_semaphore, supported.vk12.timelineSemaphore, "timeline_semaphore");
     require(requested.host_query_reset, supported.vk12.hostQueryReset, "host_query_reset");
 
-    // Forge needs these two whatever the caller asked for, so a device without them cannot be used at all.
+    // Forge needs these three whatever the caller asked for, so a device without them cannot be used at all.
+    require(true, supported.vk12.timelineSemaphore, "timeline semaphores, which Forge requires");
     require(true, supported.vk13.synchronization2, "synchronization2, which Forge requires");
     require(true, supported.vk13.dynamicRendering, "dynamic rendering, which Forge requires");
 

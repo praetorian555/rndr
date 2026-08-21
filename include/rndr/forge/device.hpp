@@ -94,8 +94,6 @@ struct DeviceFeatures
     bool buffer_device_address = true;
     /** Lets a shader lay out buffer blocks the way C does. */
     bool scalar_block_layout = false;
-    /** Semaphores that carry a counter rather than a signalled flag. */
-    bool timeline_semaphore = false;
     /** Reset query pools from the host, which timestamp queries want. */
     bool host_query_reset = false;
 
