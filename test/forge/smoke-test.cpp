@@ -2215,6 +2215,590 @@ TEST_CASE("Forge color write mask", "[forge]")
     REQUIRE_NO_VALIDATION_ERROR(fixture);
 }
 
+/**
+ * The setup every draw case below renders with, and why one readback answers two questions at once. The
+ * target is split down the middle by the geometry: which half comes back written says which vertices the
+ * draw reached, and which channel it is written in says which instance it fetched. Every channel is zero or
+ * one, so nothing here depends on how a UNORM format rounds.
+ */
+namespace
+{
+
+/** The four channels of one texel of a tightly packed RGBA readback. */
+struct Texel
+{
+    i32 r = 0;
+    i32 g = 0;
+    i32 b = 0;
+    i32 a = 0;
+};
+
+bool operator==(const Texel& lhs, const Texel& rhs)
+{
+    return lhs.r == rhs.r && lhs.g == rhs.g && lhs.b == rhs.b && lhs.a == rhs.a;
+}
+
+/** What the clear left, which is a half no draw covered. */
+constexpr Texel k_untouched{0, 0, 0, 255};
+/** The three instance values below, one channel each. */
+constexpr Texel k_instance_one{255, 0, 0, 255};
+constexpr Texel k_instance_two{0, 255, 0, 255};
+constexpr Texel k_instance_three{0, 0, 255, 255};
+
+/**
+ * One channel per instance value rather than a value per instance: a channel is either full or empty, which a
+ * UNORM target converts exactly, so a mismatch is a wrong instance and never a rounding step.
+ *
+ * The value is flat, so the whole triangle carries the provoking vertex's copy of it. It comes from a
+ * per-instance binding rather than from SV_InstanceID, which spares this the DrawParameters capability the
+ * builtin drags in - and it is what makes first_instance visible, since that is the index the per-instance
+ * binding is fetched at.
+ */
+constexpr const char* k_halves_source = R"(
+struct VertexOutput
+{
+    float4 position : SV_Position;
+    nointerpolation uint value : VALUE;
+};
+
+[shader("vertex")]
+VertexOutput main_vertex(float2 position : POSITION, uint value : VALUE)
+{
+    VertexOutput output;
+    output.position = float4(position, 0.0, 1.0);
+    output.value = value;
+    return output;
+}
+
+[shader("fragment")]
+float4 main_fragment(VertexOutput input) : SV_Target
+{
+    return float4(input.value == 1 ? 1.0 : 0.0, input.value == 2 ? 1.0 : 0.0, input.value == 3 ? 1.0 : 0.0, 1.0);
+}
+)";
+
+/**
+ * The indirect commands, written by the device rather than by the host. A buffer the host filled would not
+ * tell an indirect draw apart from a direct one, since the same values would be in the same place either way.
+ */
+constexpr const char* k_indirect_command_source = R"(
+// vertex_count, instance_count, first_vertex, first_instance - the left half at instance one, then the right
+// half at instance two.
+[shader("compute")]
+[numthreads(1, 1, 1)]
+void main_write_draws(uniform uint32_t *output)
+{
+    output[0] = 6; output[1] = 1; output[2] = 0; output[3] = 1;
+    output[4] = 6; output[5] = 1; output[6] = 6; output[7] = 2;
+}
+
+// index_count, instance_count, first_index, vertex_offset, first_instance - the left corners displaced by
+// four, which is the right half, at instance two.
+[shader("compute")]
+[numthreads(1, 1, 1)]
+void main_write_indexed_draw(uniform uint32_t *output)
+{
+    output[0] = 6; output[1] = 1; output[2] = 0; output[3] = 4; output[4] = 2;
+}
+
+// The three group counts of the dispatch that follows this one.
+[shader("compute")]
+[numthreads(1, 1, 1)]
+void main_write_dispatch(uniform uint32_t *output)
+{
+    output[0] = 4; output[1] = 1; output[2] = 1;
+}
+)";
+
+/** The four corners of the left half of the target followed by the four of the right, for the index buffers. */
+constexpr f32 k_half_corners[] = {
+    -1.0f, -1.0f, 0.0f, -1.0f, 0.0f, 1.0f, -1.0f, 1.0f,  // left, corners 0 to 3
+    0.0f,  -1.0f, 1.0f, -1.0f, 1.0f, 1.0f, 0.0f,  1.0f,  // right, corners 4 to 7
+};
+
+/** The same two halves with the corners already repeated, for the draws that use no index buffer. */
+constexpr f32 k_half_vertices[] = {
+    -1.0f, -1.0f, 0.0f, -1.0f, 0.0f, 1.0f, -1.0f, -1.0f, 0.0f, 1.0f, -1.0f, 1.0f,  // left, vertices 0 to 5
+    0.0f,  -1.0f, 1.0f, -1.0f, 1.0f, 1.0f, 0.0f,  -1.0f, 1.0f, 1.0f, 0.0f,  1.0f,  // right, vertices 6 to 11
+};
+
+/**
+ * Two triangles per half, naming the corners above. The first six are padding that draws nothing: a draw that
+ * ignored first_index would read them, be handed three copies of one corner, and rasterize no pixel at all -
+ * which is a different answer from ignoring the vertex offset, so one readback tells the two apart.
+ */
+constexpr u32 k_half_indices[] = {0, 0, 0, 0, 0, 0, 0, 1, 2, 0, 2, 3};
+
+/** One value per instance, so instance 0 is red, 1 is green and 2 is blue. */
+constexpr u32 k_instance_values[] = {1, 2, 3};
+
+/** The same indices as bytes of the requested width, so one list drives all three IndexSize values. */
+Opal::DynamicArray<u8> ToIndexBytes(const u32* indices, i32 count, IndexSize index_size)
+{
+    const i32 stride = index_size == IndexSize::uint8 ? 1 : (index_size == IndexSize::uint16 ? 2 : 4);
+    Opal::DynamicArray<u8> bytes(count * stride);
+    for (i32 i = 0; i < count; ++i)
+    {
+        for (i32 byte = 0; byte < stride; ++byte)
+        {
+            bytes[i * stride + byte] = static_cast<u8>((indices[i] >> (byte * 8)) & 0xFF);
+        }
+    }
+    return bytes;
+}
+
+/**
+ * Whether the first physical device has 8-bit indices, under either of the two names the extension has, so a
+ * device that has neither skips rather than fails. One context for the whole binary: enumerating is cheap and
+ * creating a device is what this suite spends its time on.
+ */
+bool IsIndexTypeUint8Supported()
+{
+    static const bool supported = []
+    {
+        const Forge::GraphicsContext context(Forge::GraphicsContextDesc{});
+        const Opal::DynamicArray<Forge::PhysicalDevice> devices = context.EnumeratePhysicalDevices();
+        return devices[0].IsExtensionSupported(VK_KHR_INDEX_TYPE_UINT8_EXTENSION_NAME) ||
+               devices[0].IsExtensionSupported(VK_EXT_INDEX_TYPE_UINT8_EXTENSION_NAME);
+    }();
+    return supported;
+}
+
+/** What the first physical device supports of the core features, for a case that has to skip without one. */
+VkPhysicalDeviceFeatures GetFirstPhysicalDeviceFeatures()
+{
+    static const VkPhysicalDeviceFeatures features = []
+    {
+        const Forge::GraphicsContext context(Forge::GraphicsContextDesc{});
+        const Opal::DynamicArray<Forge::PhysicalDevice> devices = context.EnumeratePhysicalDevices();
+        return devices[0].GetFeatures();
+    }();
+    return features;
+}
+
+/** Everything the two-halves target is rendered with, built once per case. */
+struct HalvesFixture
+{
+    static constexpr i32 k_side = 4;
+    static constexpr PixelFormat k_format = PixelFormat::R8G8B8A8_UNORM;
+
+    ForgeFixture forge;
+    Forge::Shader vertex_shader;
+    Forge::Shader fragment_shader;
+    Forge::Pipeline pipeline;
+    /** The eight corners the index buffers name. */
+    Forge::Buffer corners;
+    /** The same halves with the corners repeated, for a draw that uses no index buffer. */
+    Forge::Buffer vertices;
+    /** One value per instance, bound to the per-instance binding. */
+    Forge::Buffer instances;
+    Forge::Texture color;
+
+    explicit HalvesFixture(const Forge::DeviceFeatures& features = {}) : forge(features)
+    {
+        vertex_shader = Forge::Shader::FromSourceInMemory(forge.device, k_halves_source,
+                                                          {.entry_point = "main_vertex", .cache = GetShaderCache()});
+        fragment_shader = Forge::Shader::FromSourceInMemory(forge.device, k_halves_source,
+                                                            {.entry_point = "main_fragment", .cache = GetShaderCache()});
+
+        Forge::GraphicsPipelineDesc pipeline_desc;
+        pipeline_desc.vertex_shader = vertex_shader;
+        pipeline_desc.fragment_shader = fragment_shader;
+        // Off, so that which way a triangle winds is never what a failing case is about.
+        pipeline_desc.rasterizer.cull_mode = Face::None;
+        pipeline_desc.vertex_input.AddBinding(0, 2 * sizeof(f32), DataRepetition::PerVertex);
+        pipeline_desc.vertex_input.AddAttribute(0, 0, PixelFormat::R32G32_SFLOAT, 0);
+        pipeline_desc.vertex_input.AddBinding(1, sizeof(u32), DataRepetition::PerInstance);
+        pipeline_desc.vertex_input.AddAttribute(1, 1, PixelFormat::R32_UINT, 0);
+        pipeline_desc.color_blend_attachments.PushBack(Forge::ColorBlendDesc{});
+        pipeline_desc.color_attachment_formats.PushBack(k_format);
+        pipeline = Forge::Pipeline(forge.device, pipeline_desc);
+
+        corners = Forge::Buffer(forge.device, {.size = sizeof(k_half_corners), .usage = Forge::BufferUsageBits::VertexBuffer},
+                                Opal::AsBytes(k_half_corners));
+        vertices = Forge::Buffer(forge.device, {.size = sizeof(k_half_vertices), .usage = Forge::BufferUsageBits::VertexBuffer},
+                                 Opal::AsBytes(k_half_vertices));
+        instances = Forge::Buffer(forge.device, {.size = sizeof(k_instance_values), .usage = Forge::BufferUsageBits::VertexBuffer},
+                                  Opal::AsBytes(k_instance_values));
+        color = Forge::Texture(forge.device, {.format = k_format,
+                                              .width = k_side,
+                                              .height = k_side,
+                                              .usage = Forge::TextureUsageBits::ColorAttachment |
+                                                       Forge::TextureUsageBits::TransferSource});
+    }
+
+    Forge::DeviceQueue& GetQueue() { return forge.GetQueue(); }
+
+    /**
+     * Clear the target, record what the caller asks for and hand back the readback. The per-instance binding
+     * is bound here and the per-vertex one is not: which of the two vertex buffers a case wants is the whole
+     * difference between an indexed draw and one that is not.
+     *
+     * @param record_before Recorded ahead of the pass, for the compute dispatch an indirect case needs.
+     * @param record_draw Recorded inside the pass, with the pipeline and the instance binding already bound.
+     */
+    template <typename RecordBefore, typename RecordDraw>
+    Opal::DynamicArray<u8> Render(RecordBefore&& record_before, RecordDraw&& record_draw)
+    {
+        Forge::ImmediateSubmit(forge.device, GetQueue(),
+                               [&](Forge::CommandBuffer& command_buffer)
+                               {
+                                   record_before(command_buffer);
+                                   command_buffer.CmdImageBarrier(Forge::ImageBarrier::ToColorAttachment(color));
+                                   const Forge::RenderingDesc rendering_desc{
+                                       .render_area_extent = {k_side, k_side},
+                                       .color_attachments = {Forge::RenderingAttachmentDesc{
+                                           .image_view = color.GetNativeImageView(),
+                                           .image_layout = Forge::ImageLayout::ColorAttachment,
+                                           .load_operation = Forge::AttachmentLoadOperation::Clear,
+                                           .store_operation = Forge::AttachmentStoreOperation::Store,
+                                           .clear_value = {.color = {0.0f, 0.0f, 0.0f, 1.0f}}}}};
+                                   command_buffer.CmdBeginRendering(rendering_desc);
+                                   command_buffer.CmdSetViewport(Vector2f::Zero(), {k_side, k_side});
+                                   command_buffer.CmdSetScissor(Vector2i::Zero(), {k_side, k_side});
+                                   command_buffer.CmdBindPipeline(pipeline);
+                                   command_buffer.CmdBindVertexBuffer(instances, 1);
+                                   record_draw(command_buffer);
+                                   command_buffer.CmdEndRendering();
+                               });
+
+        Opal::DynamicArray<u8> pixels(k_side * k_side * 4);
+        // Left in TransferSource:
+        Forge::ReadBackTexture(forge.device, GetQueue(), color, pixels, 0, Forge::ImageLayout::TransferSource);
+        return pixels;
+    }
+
+    template <typename RecordDraw>
+    Opal::DynamicArray<u8> Render(RecordDraw&& record_draw)
+    {
+        return Render([](Forge::CommandBuffer&) {}, record_draw);
+    }
+};
+
+Texel GetTexel(const Opal::DynamicArray<u8>& pixels, i32 x, i32 y)
+{
+    const i32 base = (y * HalvesFixture::k_side + x) * 4;
+    return {pixels[base], pixels[base + 1], pixels[base + 2], pixels[base + 3]};
+}
+
+/**
+ * The colour of one half of the readback, which every texel of that half has to share. A draw that covered
+ * part of a half rather than all of it is exactly the mistake these cases look for, so the half is checked to
+ * be uniform before it is reduced to one value.
+ */
+Texel GetHalfColor(const Opal::DynamicArray<u8>& pixels, bool right_half)
+{
+    constexpr i32 k_half = HalvesFixture::k_side / 2;
+    const i32 first_column = right_half ? k_half : 0;
+    const Texel expected = GetTexel(pixels, first_column, 0);
+    for (i32 y = 0; y < HalvesFixture::k_side; ++y)
+    {
+        for (i32 x = first_column; x < first_column + k_half; ++x)
+        {
+            INFO("texel " << x << "," << y << " differs from the rest of its half");
+            REQUIRE(GetTexel(pixels, x, y) == expected);
+        }
+    }
+    return expected;
+}
+
+}  // namespace
+
+/** Fails with both colours spelled out when a half is not the colour it should be. */
+#define REQUIRE_HALF_COLOR(pixels, right_half, expected)                                                          \
+    do                                                                                                            \
+    {                                                                                                             \
+        const Texel half_color = GetHalfColor(pixels, right_half);                                                \
+        INFO("expected rgba " << (expected).r << " " << (expected).g << " " << (expected).b << " " << (expected).a \
+                              << ", got " << half_color.r << " " << half_color.g << " " << half_color.b << " "    \
+                              << half_color.a);                                                                   \
+        REQUIRE(half_color == (expected));                                                                        \
+    } while (false)
+
+TEST_CASE("Forge indexed draws", "[forge]")
+{
+    if (!IsForgeAvailable())
+    {
+        SKIP("No Vulkan device on this machine.");
+    }
+    const bool has_uint8 = IsIndexTypeUint8Supported();
+    HalvesFixture halves({.index_type_uint8 = has_uint8});
+
+    // The one draw every section below makes, with the index buffer built at the given width. Both offsets are
+    // non-zero: first_index skips the six padding indices and vertex_offset moves the left corners onto the
+    // right ones, so the right half comes back written and nothing else does.
+    auto draw_right_half_through = [&](IndexSize index_size)
+    {
+        const Opal::DynamicArray<u8> index_bytes =
+            ToIndexBytes(k_half_indices, static_cast<i32>(std::size(k_half_indices)), index_size);
+        const Forge::Buffer indices(halves.forge.device,
+                                    {.size = index_bytes.GetSize(), .usage = Forge::BufferUsageBits::IndexBuffer}, index_bytes);
+        return halves.Render(
+            [&](Forge::CommandBuffer& command_buffer)
+            {
+                command_buffer.CmdBindVertexBuffer(halves.corners, 0);
+                command_buffer.CmdBindIndexBuffer(indices, 0, index_size);
+                command_buffer.CmdDrawIndexed(6, 1, 6, 4, 0);
+            });
+    };
+
+    SECTION("An indexed draw follows the indices, the first index and the vertex offset")
+    {
+        const Opal::DynamicArray<u8> pixels = draw_right_half_through(IndexSize::uint32);
+        // The right half, because both offsets landed. The left half would mean vertex_offset was dropped,
+        // and an untouched target would mean first_index was, since the padding indices draw nothing.
+        REQUIRE_HALF_COLOR(pixels, true, k_instance_one);
+        REQUIRE_HALF_COLOR(pixels, false, k_untouched);
+    }
+    SECTION("16-bit indices name the same vertices")
+    {
+        const Opal::DynamicArray<u8> pixels = draw_right_half_through(IndexSize::uint16);
+        REQUIRE_HALF_COLOR(pixels, true, k_instance_one);
+        REQUIRE_HALF_COLOR(pixels, false, k_untouched);
+    }
+    SECTION("8-bit indices name the same vertices when the device has them")
+    {
+        INFO("8-bit indices supported: " << has_uint8);
+        if (!has_uint8)
+        {
+            SKIP("This device has neither VK_KHR_index_type_uint8 nor VK_EXT_index_type_uint8.");
+        }
+        const Opal::DynamicArray<u8> pixels = draw_right_half_through(IndexSize::uint8);
+        REQUIRE_HALF_COLOR(pixels, true, k_instance_one);
+        REQUIRE_HALF_COLOR(pixels, false, k_untouched);
+    }
+    SECTION("An 8-bit index buffer on a device without the feature throws")
+    {
+        // The index type is a plain enum value in a core call, so nothing but this check stands between a
+        // device that never enabled the extension and an index type it does not accept.
+        ForgeFixture plain;
+        const Opal::DynamicArray<u8> index_bytes =
+            ToIndexBytes(k_half_indices, static_cast<i32>(std::size(k_half_indices)), IndexSize::uint8);
+        const Forge::Buffer indices(plain.device, {.size = index_bytes.GetSize(), .usage = Forge::BufferUsageBits::IndexBuffer},
+                                    index_bytes);
+        Forge::CommandBuffer command_buffer(plain.device, plain.GetQueue());
+        command_buffer.Begin();
+        REQUIRE_FALSE(plain.device.GetFeatures().index_type_uint8);
+        REQUIRE_THROWS_AS(command_buffer.CmdBindIndexBuffer(indices, 0, IndexSize::uint8), Opal::Exception);
+        // The two widths that need no extension still bind on the same command buffer.
+        command_buffer.CmdBindIndexBuffer(indices, 0, IndexSize::uint16);
+        command_buffer.CmdBindIndexBuffer(indices, 0, IndexSize::uint32);
+        command_buffer.End();
+        REQUIRE_NO_VALIDATION_ERROR(plain);
+    }
+    REQUIRE_NO_VALIDATION_ERROR(halves.forge);
+}
+
+TEST_CASE("Forge indirect draws", "[forge]")
+{
+    if (!IsForgeAvailable())
+    {
+        SKIP("No Vulkan device on this machine.");
+    }
+    const VkPhysicalDeviceFeatures device_features = GetFirstPhysicalDeviceFeatures();
+    if (device_features.drawIndirectFirstInstance == VK_FALSE)
+    {
+        SKIP("This device cannot start an indirect draw at a non-zero instance.");
+    }
+    const bool has_multi_draw = device_features.multiDrawIndirect == VK_TRUE;
+    HalvesFixture halves({.multi_draw_indirect = has_multi_draw, .draw_indirect_first_instance = true});
+
+    const Forge::Shader write_draws =
+        Forge::Shader::FromSourceInMemory(halves.forge.device, k_indirect_command_source,
+                                          {.entry_point = "main_write_draws", .cache = GetShaderCache()});
+    const Forge::Shader write_indexed_draw =
+        Forge::Shader::FromSourceInMemory(halves.forge.device, k_indirect_command_source,
+                                          {.entry_point = "main_write_indexed_draw", .cache = GetShaderCache()});
+
+    // The commands live in memory the host cannot touch, so nothing but the dispatch below can have put them
+    // there - which is what separates this from a direct draw with the same numbers written into a buffer.
+    const Forge::Buffer commands(halves.forge.device, {.size = 2 * sizeof(Forge::DrawIndexedIndirectCommand),
+                                                       .usage = Forge::BufferUsageBits::IndirectBuffer |
+                                                                Forge::BufferUsageBits::StorageBuffer,
+                                                       .host_access = Forge::HostAccess::None,
+                                                       .use_device_address = true});
+
+    auto make_write_pipeline = [&](const Forge::Shader& writer)
+    {
+        Forge::ComputePipelineDesc pipeline_desc;
+        pipeline_desc.shader = writer;
+        pipeline_desc.push_constant_ranges.PushBack(
+            {.shader_stages = ShaderTypeBits::Compute, .offset = 0, .size = sizeof(VkDeviceAddress)});
+        return Forge::Pipeline(halves.forge.device, pipeline_desc);
+    };
+
+    // Dispatches the writer over the command buffer, then orders that write against the indirect read.
+    auto record_write = [&](const Forge::Pipeline& write_pipeline)
+    {
+        const VkDeviceAddress address = commands.GetNativeDeviceAddress();
+        return [&, address](Forge::CommandBuffer& command_buffer)
+        {
+            command_buffer.CmdBindPipeline(write_pipeline);
+            command_buffer.CmdPushConstants(write_pipeline, ShaderTypeBits::Compute, Opal::AsBytes(address));
+            command_buffer.CmdDispatch(1);
+            command_buffer.CmdBufferBarrier(
+                Forge::BufferBarrier::WriteThenRead(commands, Forge::PipelineStageBits::ComputeShader, Forge::PipelineStageBits::IndirectDraw));
+        };
+    };
+
+    SECTION("An indirect draw runs the command a compute shader wrote")
+    {
+        const Forge::Pipeline write_pipeline = make_write_pipeline(write_draws);
+        const Opal::DynamicArray<u8> pixels =
+            halves.Render(record_write(write_pipeline),
+                          [&](Forge::CommandBuffer& command_buffer)
+                          {
+                              command_buffer.CmdBindVertexBuffer(halves.vertices, 0);
+                              command_buffer.CmdDrawIndirect(commands, 0, 1);
+                          });
+        // The first command only: the left half, at the non-zero instance it named.
+        REQUIRE_HALF_COLOR(pixels, false, k_instance_two);
+        REQUIRE_HALF_COLOR(pixels, true, k_untouched);
+    }
+    SECTION("More than one command in one call draws all of them")
+    {
+        INFO("multi_draw_indirect supported: " << has_multi_draw);
+        if (!has_multi_draw)
+        {
+            SKIP("This device cannot read more than one indirect command per call.");
+        }
+        const Forge::Pipeline write_pipeline = make_write_pipeline(write_draws);
+        const Opal::DynamicArray<u8> pixels =
+            halves.Render(record_write(write_pipeline),
+                          [&](Forge::CommandBuffer& command_buffer)
+                          {
+                              command_buffer.CmdBindVertexBuffer(halves.vertices, 0);
+                              command_buffer.CmdDrawIndirect(commands, 0, 2);
+                          });
+        // Both commands ran, and each fetched the instance its own first_instance named rather than one of
+        // them deciding for both.
+        REQUIRE_HALF_COLOR(pixels, false, k_instance_two);
+        REQUIRE_HALF_COLOR(pixels, true, k_instance_three);
+    }
+    SECTION("An indirect indexed draw follows the indices and the vertex offset it was given")
+    {
+        const Opal::DynamicArray<u8> index_bytes = ToIndexBytes(k_half_indices + 6, 6, IndexSize::uint32);
+        const Forge::Buffer indices(halves.forge.device,
+                                    {.size = index_bytes.GetSize(), .usage = Forge::BufferUsageBits::IndexBuffer}, index_bytes);
+        const Forge::Pipeline write_pipeline = make_write_pipeline(write_indexed_draw);
+        const Opal::DynamicArray<u8> pixels =
+            halves.Render(record_write(write_pipeline),
+                          [&](Forge::CommandBuffer& command_buffer)
+                          {
+                              command_buffer.CmdBindVertexBuffer(halves.corners, 0);
+                              command_buffer.CmdBindIndexBuffer(indices, 0, IndexSize::uint32);
+                              command_buffer.CmdDrawIndexedIndirect(commands, 0, 1);
+                          });
+        // The indices name the left corners; the vertex offset of four in the command is the only reason the
+        // right half is what comes back.
+        REQUIRE_HALF_COLOR(pixels, true, k_instance_three);
+        REQUIRE_HALF_COLOR(pixels, false, k_untouched);
+    }
+    REQUIRE_NO_VALIDATION_ERROR(halves.forge);
+}
+
+TEST_CASE("Forge indirect dispatch", "[forge]")
+{
+    if (!IsForgeAvailable())
+    {
+        SKIP("No Vulkan device on this machine.");
+    }
+    ForgeFixture fixture;
+    constexpr i32 k_group_size = 64;
+    constexpr i32 k_group_count = 4;
+    constexpr i32 k_element_count = k_group_size * k_group_count;
+
+    const Forge::Shader write_dispatch =
+        Forge::Shader::FromSourceInMemory(fixture.device, k_indirect_command_source,
+                                          {.entry_point = "main_write_dispatch", .cache = GetShaderCache()});
+    const Forge::Shader compute_shader = Forge::Shader::FromSourceInMemory(
+        fixture.device, k_compute_source, {.entry_point = "main_compute", .cache = GetShaderCache()});
+
+    auto make_pipeline = [&](const Forge::Shader& shader)
+    {
+        Forge::ComputePipelineDesc pipeline_desc;
+        pipeline_desc.shader = shader;
+        pipeline_desc.push_constant_ranges.PushBack(
+            {.shader_stages = ShaderTypeBits::Compute, .offset = 0, .size = sizeof(VkDeviceAddress)});
+        return Forge::Pipeline(fixture.device, pipeline_desc);
+    };
+    const Forge::Pipeline write_pipeline = make_pipeline(write_dispatch);
+    const Forge::Pipeline compute_pipeline = make_pipeline(compute_shader);
+
+    // Device-only, so the group counts cannot have come from the host.
+    const Forge::Buffer group_counts(fixture.device, {.size = sizeof(Forge::DispatchIndirectCommand),
+                                                      .usage = Forge::BufferUsageBits::IndirectBuffer |
+                                                               Forge::BufferUsageBits::StorageBuffer |
+                                                               Forge::BufferUsageBits::TransferSource,
+                                                      .host_access = Forge::HostAccess::None,
+                                                      .use_device_address = true});
+
+    auto make_output = [&]
+    {
+        Forge::Buffer output(fixture.device, {.size = k_element_count * sizeof(u32),
+                                              .usage = Forge::BufferUsageBits::StorageBuffer,
+                                              .host_access = Forge::HostAccess::Random,
+                                              .use_device_address = true});
+        // Wiped first, so nothing left behind can pass for a dispatch that ran.
+        const Opal::DynamicArray<u8> zeros(k_element_count * sizeof(u32));
+        output.Update(zeros);
+        return output;
+    };
+    const Forge::Buffer indirect_output = make_output();
+    const Forge::Buffer direct_output = make_output();
+
+    const VkDeviceAddress group_counts_address = group_counts.GetNativeDeviceAddress();
+    const VkDeviceAddress indirect_address = indirect_output.GetNativeDeviceAddress();
+    const VkDeviceAddress direct_address = direct_output.GetNativeDeviceAddress();
+    Forge::ImmediateSubmit(fixture.device, fixture.GetQueue(),
+                           [&](Forge::CommandBuffer& command_buffer)
+                           {
+                               command_buffer.CmdBindPipeline(write_pipeline);
+                               command_buffer.CmdPushConstants(write_pipeline, ShaderTypeBits::Compute,
+                                                               Opal::AsBytes(group_counts_address));
+                               command_buffer.CmdDispatch(1);
+                               command_buffer.CmdBufferBarrier(Forge::BufferBarrier::WriteThenRead(
+                                   group_counts, Forge::PipelineStageBits::ComputeShader, Forge::PipelineStageBits::IndirectDraw));
+
+                               command_buffer.CmdBindPipeline(compute_pipeline);
+                               command_buffer.CmdPushConstants(compute_pipeline, ShaderTypeBits::Compute,
+                                                               Opal::AsBytes(indirect_address));
+                               command_buffer.CmdDispatchIndirect(group_counts);
+                               // The two dispatches write different buffers, so nothing has to order them
+                               // against each other - only the push constant between them, which records in
+                               // order with the commands around it.
+                               command_buffer.CmdPushConstants(compute_pipeline, ShaderTypeBits::Compute,
+                                                               Opal::AsBytes(direct_address));
+                               command_buffer.CmdDispatch(k_group_count);
+                           });
+
+    SECTION("The group counts came off the device")
+    {
+        Forge::DispatchIndirectCommand written;
+        Forge::ReadBackBuffer(fixture.device, fixture.GetQueue(), group_counts,
+                              {reinterpret_cast<u8*>(&written), sizeof(written)});
+        REQUIRE(written.group_count_x == k_group_count);
+        REQUIRE(written.group_count_y == 1);
+        REQUIRE(written.group_count_z == 1);
+    }
+    SECTION("An indirect dispatch of those counts matches a direct dispatch of the same ones")
+    {
+        Opal::DynamicArray<u32> from_indirect(k_element_count);
+        Opal::DynamicArray<u32> from_direct(k_element_count);
+        indirect_output.Read({reinterpret_cast<u8*>(from_indirect.GetData()), from_indirect.GetSize() * sizeof(u32)});
+        direct_output.Read({reinterpret_cast<u8*>(from_direct.GetData()), from_direct.GetSize() * sizeof(u32)});
+        for (i32 i = 0; i < k_element_count; ++i)
+        {
+            INFO("element " << i);
+            // Compared against the value the shader computes as well as against each other: two dispatches
+            // that both did nothing would agree with one another and with nothing else.
+            REQUIRE(from_indirect[i] == static_cast<u32>(i) + 1000);
+            REQUIRE(from_direct[i] == from_indirect[i]);
+        }
+    }
+    REQUIRE_NO_VALIDATION_ERROR(fixture);
+}
+
 TEST_CASE("Forge pipeline sample count and dynamic state", "[forge]")
 {
     if (!IsForgeAvailable())
@@ -3021,3 +3605,4 @@ TEST_CASE("Forge shader cache", "[forge]")
     }
     REQUIRE_NO_VALIDATION_ERROR(fixture);
 }
+
