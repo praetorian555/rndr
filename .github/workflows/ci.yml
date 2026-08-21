@@ -46,6 +46,10 @@ jobs:
         with:
           vulkan_version: 1.4.335.0
           optional_components: com.lunarg.vulkan.vma,com.lunarg.vulkan.volk
+          # The loader itself, which this image does not carry and the SDK does not ship: the action unpacks
+          # the SDK rather than running its installer, and nothing here links vulkan-1.dll anyway - volk
+          # loads it by name at run time, so it has to be somewhere the loader search finds it.
+          install_runtime: true
           cache: true
 
       # Through the registry rather than VK_DRIVER_FILES and VK_LAYER_PATH: the loader ignores both of those
