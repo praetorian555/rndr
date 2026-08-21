@@ -763,10 +763,11 @@ It found three bugs on its first run, each fixed in its own commit:
   from its constructor. Host access now means the memory is mappable, and `HostAccess::None` is how a caller
   asks for device-local memory, with `Update` and `Read` throwing on one and pointing at the staging helpers.
 
-Left for later: nothing asserts on validation messages. `GraphicsContextDesc::collect_debug_messages` only
-logs them, so a test cannot fail on one; making it collectable is worth doing with 3.8, which adds the rest
-of the debug tooling. The graphics pipeline, the swap chain and the barrier presets are still only covered
-by running the sample.
+Left for later at the time, and all but one of it now closed: nothing asserted on validation messages,
+since `GraphicsContextDesc::collect_debug_messages` only logged them - 3.8 made them collectable and
+`REQUIRE_NO_VALIDATION_ERROR` is now in every case here that touches a device. The graphics pipeline is
+covered by 3.15 through 3.17 and the barrier presets by 3.19. The swap chain is still only covered by running
+the sample, which is 3.22.
 
 ### 3.12 Complete the barrier vocabulary - DONE
 
@@ -881,15 +882,27 @@ What it checks, past the four states `docs/forge.md` fixes:
 
 - `Destroy()` on a default constructed object, which has nothing to release;
 - `Destroy()` twice, since it is idempotent and releasing early is meant to be safe;
-- move assignment *over a live object*, which has to release the one being overwritten rather than leak it -
-  the leak itself surfaces in the validation layer and in AddressSanitizer at teardown, not in an assertion;
-- self assignment, which has to leave the object alone rather than release it and then move from the wreck;
+- move assignment *over a live object*, which has to release the one being overwritten rather than leak it;
+- self assignment, which has to leave the object alone rather than release it and then move from the wreck -
+  checked only through `IsValid()`, so an assignment that released the object and kept the stale handle would
+  still pass, which is not the shape the bug below had;
 - and then the object, after both a move construction and a move assignment, doing something that needs the
   members a move has to carry.
 
 **It found one bug.** `PhysicalDevice::operator=` was the only move assignment in `src/forge/` without the
 `this != &other` guard the other fifteen have, so assigning one to itself destroyed it and left a live object
 empty. Fixed in its own commit.
+
+**The leak half of it asserted nothing until later, and the note here said otherwise.** It claimed the leak
+surfaced in the validation layer and in AddressSanitizer. Neither was true: MSVC's AddressSanitizer carries
+no leak detector, and a leaked `VkSampler` is a live handle rather than a heap allocation, so nothing there
+would see it either way. The layer does name it - at `vkDestroyDevice`, which runs *after* the last
+assertion of a case, so the message was collected and never read. Commenting the `Destroy()` out of
+`Sampler::operator=` left the whole suite green, 7542 assertions and no output. `ForgeFixture::DestroyDevice`
+and `REQUIRE_NO_VALIDATION_ERROR_AT_TEARDOWN` release the device before the check now, and the same mutation
+fails the case naming the sampler. Turning it on found a second one immediately: the descriptor case held a
+pool, a layout, a shader and a pipeline to the end of its body, so they outlived the device the first time
+the check ran for real.
 
 **Two of the checks were vacuous on the first pass, which is the trap this kind of test has.** A check that
 asserts a value equal to the member's own default cannot tell a member that came through the move from one
@@ -965,10 +978,11 @@ Three cases in `test/forge/smoke-test.cpp`: `Forge depth testing`, `Forge stenci
 
 **The stencil attachment.** `RenderingDesc` has a `stencil_attachment` beside the depth one, and
 `CmdBeginRendering` fills `pStencilAttachment` from it, with the same null-view check the depth side has. The
-task offered two shapes and this is both of them at once: Vulkan takes the two sides apart even when one
-image carries both, so a combined format such as `D24_UNORM_S8_UINT` names the *same image view* twice and a
+task offered two shapes and the API takes both: Vulkan takes the two sides apart even when one image
+carries both, so a combined format such as `D24_UNORM_S8_UINT` names the *same image view* twice and a
 separate stencil image names its own. Each side keeps its own load and store operations, since clearing the
-depth while keeping the stencil is a thing a pass may want.
+depth while keeping the stencil is a thing a pass may want. Only the combined shape is tested - no case
+builds a stencil-only image, and no case gives the two sides different load and store operations.
 
 **The stencil masks.** `DepthStencilDesc` gained `front_compare_mask`, `front_write_mask`, `front_reference`
 and the three back-facing counterparts, and `pipeline.cpp` fills them into both `VkStencilOpState`s. They
@@ -977,7 +991,8 @@ default to a full compare mask and a full write mask rather than to zero, which 
 no bits leaves the buffer alone. `DynamicStateBits` gained `StencilCompareMask` and `StencilWriteMask` with
 `CmdSetStencilCompareMask` and `CmdSetStencilWriteMask` behind them, so all three of the values are settable
 either statically or per draw - `StencilReference` and `CmdSetStencilReference` already existed and were the
-only one of the three that had a path at all.
+only one of the three that had a path at all. The two new dynamic states are untested: the cases here set all
+three masks statically, and nothing in the file names `CmdSetStencilCompareMask` or `CmdSetStencilWriteMask`.
 
 What the cases prove:
 
@@ -994,7 +1009,9 @@ What the cases prove:
   wrote and not a float the clear had to convert. Four equations against the same arithmetic done on the CPU:
   the classic source-alpha blend, additive, a zero source factor that has to leave the destination alone, and
   reverse subtract - the same two factors as the additive case, so what separates those two answers is the
-  operation rather than the factors.
+  operation rather than the factors. The colour half only: `src_alpha_factor`, `dst_alpha_factor` and
+  `alpha_operation` never vary and the readback walks three channels, so nothing here would notice the alpha
+  fields of `ColorBlendDesc` reaching the wrong members of `VkPipelineColorBlendAttachmentState`.
 
 **Two of the expectations were wrong on the first run, and both were worth having wrong.** Clearing depth to
 one and then testing with `Greater` rejects *both* quads rather than flipping which one wins, so the
@@ -1119,7 +1136,7 @@ and forcing `maxLod` to `VK_LOD_CLAMP_NONE` turns the LOD clamp section red.
 
 ### 3.19 Test the transfer, barrier and binding calls nothing executes — DONE
 
-Six cases in `test/forge/smoke-test.cpp`: `Forge blits`, `Forge copies from a texture into a buffer`,
+Seven cases in `test/forge/smoke-test.cpp`: `Forge blits`, `Forge copies from a texture into a buffer`,
 `Forge mip level sizes`, `Forge barrier batches`, `Forge barrier presets`, `Forge barrier preset for
 presenting` and `Forge binding several descriptor sets at once`.
 
@@ -1142,13 +1159,16 @@ What now runs:
   texels untouched, and a two layer array with both `buffer_row_length` and `buffer_image_height` set, where
   the gap between the layers has to still hold the sentinel.
 - **`CmdBarriers`.** One dependency carrying a memory, a buffer and an image barrier together, with the
-  compute write it orders and the texture it transitions both read back afterwards.
+  compute write it orders and the texture it transitions both read back afterwards. `CmdImageBarriers`, the
+  plural image overload, is the one call of the group still without a caller here - it forwards to
+  `CmdBarriers` like the rest, but that is an argument about risk rather than a test.
 - **The presets.** `ToShaderRead`, `ToTransferSource`, the three argument `To`, `ToDepthStencilAttachment`,
   `ToPresent`, and `BufferBarrier::ReadThenWrite`. Each image preset runs over a texture holding known
   content and the content is read back after: a preset naming the wrong source layout either trips the
   validation layer or discards what the texture holds - `Undefined` as an old layout is a discard - so
-  content that survives says the preset named the layout the texture was actually in. `To` into
-  `ImageLayout::General` throws, which is the near miss worth having: a real layout with no preset behind it.
+  content that survives says the preset named the layout the texture was actually in. `To` into a layout with
+  no preset throws, which is the near miss worth having. `General` was the example until 3.18 gave it a
+  preset of its own; it is `DepthStencilReadOnly` now.
 - **`ToPresent` headlessly.** `Present` is a swap chain layout, so naming it needs the device to have
   `VK_KHR_swapchain` even though nothing presents. Asking for the extension without a surface is legal, which
   is what makes this checkable in a file that never opens a window; it gets its own case and its own device.
