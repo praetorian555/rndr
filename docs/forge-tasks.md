@@ -864,33 +864,52 @@ Not to be confused with a pipeline cache, which 3.10 measured and dropped.
 
 ---
 
-### 3.14 Test the empty state and the moves
+### 3.14 Test the empty state and the moves — DONE
 
-`test/forge/smoke-test.cpp`.
+Five cases in `test/forge/smoke-test.cpp`, one per group of types, all named `Forge empty state and moves of
+...`: the context, the device stack, the resources, the descriptor objects, and the command and
+synchronization objects. Split that way because each group needs a different amount built underneath it, and
+a case per type would have paid for a device apiece.
 
-The first of a group, 3.14 through 3.22, that came out of one pass over the nineteen headers in
-`include/rndr/forge/` against the forty cases in the test file. Each one names what that pass found
-unexercised. None of them is a new capability, except where a test cannot be written until one exists,
-which is said where it happens.
+One helper, `CheckLifetimeContract`, asks every type the same questions in the same order, so adding a type
+is adding two lambdas - a factory and a check that the object still does its job. It walks all sixteen:
+`GraphicsContext`, `PhysicalDevice`, `Device`, `DeviceQueue`, `Buffer`, `Texture`, `Sampler`, `Shader`,
+`Pipeline`, `DescriptorPool`, `DescriptorSetLayout`, `DescriptorSet`, `CommandBuffer`, `Fence`, `Semaphore`
+and `TimestampQueryPool`.
 
-`docs/forge.md` fixes the contract in its first section: `IsValid()` is false for a default-constructed
-object, false after `Destroy()`, false for the source of a move and true otherwise, and `Destroy()` is
-idempotent. Nothing checks any of it for any type. Moves are covered only for `Buffer`, `Texture` and
-`DescriptorSet`, and 3.11 found three separate bugs in the `Device` and `DeviceQueue` moves alone - a move
-that drops a member is invisible until something reaches for it, which is the shape of bug a smoke test is
-worst at catching by accident.
+What it checks, past the four states `docs/forge.md` fixes:
 
-Done when one case walks every type that holds a handle - `GraphicsContext`, `PhysicalDevice`, `Device`,
-`DeviceQueue`, `Buffer`, `Texture`, `Sampler`, `Shader`, `Pipeline`, `DescriptorPool`,
-`DescriptorSetLayout`, `DescriptorSet`, `CommandBuffer`, `Fence`, `Semaphore`, `TimestampQueryPool` - and
-for each asserts the four states, that a second `Destroy()` is a no-op, and that a moved-to object still
-works rather than only reporting itself valid. Working means something cheap that touches the members a
-move has to carry: a moved `Buffer` reads back what was written before the move, a moved `Pipeline` binds,
-a moved `Semaphore` signals.
+- `Destroy()` on a default constructed object, which has nothing to release;
+- `Destroy()` twice, since it is idempotent and releasing early is meant to be safe;
+- move assignment *over a live object*, which has to release the one being overwritten rather than leak it -
+  the leak itself surfaces in the validation layer and in AddressSanitizer at teardown, not in an assertion;
+- self assignment, which has to leave the object alone rather than release it and then move from the wreck;
+- and then the object, after both a move construction and a move assignment, doing something that needs the
+  members a move has to carry.
 
-`DeviceQueue::Destroy` is the one to look at rather than test blindly. Queues are owned by `Device` through
-an `Opal::SharedPtr` and handed out by reference from `GetQueue`, so a caller that destroys one leaves the
-device holding a queue with no command pool. Either it stops being public or this task says why it is.
+**It found one bug.** `PhysicalDevice::operator=` was the only move assignment in `src/forge/` without the
+`this != &other` guard the other fifteen have, so assigning one to itself destroyed it and left a live object
+empty. Fixed in its own commit.
+
+**Two of the checks were vacuous on the first pass, which is the trap this kind of test has.** A check that
+asserts a value equal to the member's own default cannot tell a member that came through the move from one
+that was never assigned. `TimestampQueryPool` was asked for `query_count = 2`, which is exactly what
+`TimestampQueryPoolDesc` defaults to; it asks for four now. Its `m_timestamp_period` has the same problem and
+no fix available here - the member defaults to `1.0f` and this machine's device reports a period of exactly
+1, so the two are indistinguishable. The assertion compares against what the physical device reports rather
+than against zero, which discriminates on hardware whose period is not one. Both were caught by mutating the
+move assignment to drop a member and confirming the case went red, which is the only way to know a test of
+this shape is not passing on its own defaults.
+
+**`DeviceQueue::Destroy` stays public**, and the header now says why. The constructor `DeviceQueue(const
+Device&, u32)` is public and self-contained - it looks up the queue and creates its own command pool - so a
+queue built that way owns something and is its caller's to release, like every other type here. What is not
+safe is destroying one that came from `Device::GetQueue`: those belong to the device and are handed out by
+reference, so destroying one leaves the device holding a queue with no command pool. The doc comment says
+which is which, and the test builds its own queue rather than reaching for the device's.
+
+Left for later: `Surface`, `SwapChain` and `FrameContext` are not here, since they need a window - they are
+3.22, and belong with the rest of the windowed tests.
 
 ### 3.15 Test the indexed and the indirect draws — DONE
 
