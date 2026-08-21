@@ -622,6 +622,18 @@ TEST_CASE("Forge timeline semaphores", "[forge]")
         timeline.Wait(1);
         REQUIRE(timeline.GetValue() == 4);
     }
+    SECTION("A wait that runs out of time answers false rather than throwing")
+    {
+        // A millisecond, in the nanoseconds Vulkan counts timeouts in. Long enough that a machine under load
+        // does not report a timeout for the value that was already reached, short enough not to stall the run.
+        constexpr u64 k_short_timeout = 1000 * 1000;
+        const Forge::Semaphore timeline(fixture.device, {.type = Forge::SemaphoreType::Timeline, .initial_value = 4});
+        REQUIRE(timeline.TryWait(4, k_short_timeout));
+        // Nothing was submitted that could raise it, so the timeout is the only way out of these two.
+        REQUIRE_FALSE(timeline.TryWait(5, k_short_timeout));
+        const Forge::SemaphoreWait waits[1] = {{.semaphore = timeline, .value = 5}};
+        REQUIRE_FALSE(Forge::Semaphore::TryWaitForAll({waits, 1}, k_short_timeout));
+    }
     SECTION("One batch per half, the second waiting on the value the first signals")
     {
         const Forge::Semaphore timeline(fixture.device, {.type = Forge::SemaphoreType::Timeline});
@@ -761,6 +773,16 @@ TEST_CASE("Forge waiting on several fences at once", "[forge]")
     Forge::ReadBackBuffer(fixture.device, fixture.GetQueue(), second_destination, read_back);
     REQUIRE(CountMismatches(written, read_back) == 0);
 
+    SECTION("A fence that is not signalled in time answers false rather than throwing")
+    {
+        constexpr u64 k_short_timeout = 1000 * 1000;
+        // Both of the fences above have been waited on, so they are signalled and answer at once.
+        REQUIRE(fences[0].TryWait(k_short_timeout));
+        REQUIRE(Forge::Fence::TryWaitForAll(fences, k_short_timeout));
+        // Nothing is submitted against this one, so it stays unsignalled and the timeout is the only way out.
+        const Forge::Fence never_signalled(fixture.device, false);
+        REQUIRE_FALSE(never_signalled.TryWait(k_short_timeout));
+    }
     SECTION("An empty fence in the list throws")
     {
         Opal::DynamicArray<Forge::Fence> with_empty;

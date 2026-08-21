@@ -14,12 +14,13 @@
 namespace Rndr::Forge
 {
 
+/** A timeout that never expires, which is what the blocking waits below pass. */
+static constexpr u64 k_infinite_wait = UINT64_MAX;
+
 // Used for synchronization between CPU and GPU.
 class Fence
 {
 public:
-    static constexpr u64 k_infinite_wait = UINT64_MAX;
-
     Fence() = default;
     Fence(const Device& device, bool create_signaled);
     ~Fence();
@@ -35,11 +36,21 @@ public:
     [[nodiscard]] bool IsValid() const { return m_fence != VK_NULL_HANDLE; }
     [[nodiscard]] VkFence GetNativeFence() const { return m_fence; }
 
-    void Wait(u64 timeout = k_infinite_wait) const;
+    /** Block until the fence is signalled. */
+    void Wait() const;
+
+    /**
+     * The same wait, given up on after the timeout in nanoseconds.
+     * @return True once the fence is signalled, false when the timeout expired first, which is not a failure.
+     */
+    [[nodiscard]] bool TryWait(u64 timeout) const;
 
     void Reset() const;
 
-    static void WaitForAll(Opal::ArrayView<const Fence> fences, u64 timeout = k_infinite_wait);
+    static void WaitForAll(Opal::ArrayView<const Fence> fences);
+
+    /** WaitForAll with a timeout, answering the way TryWait does. */
+    [[nodiscard]] static bool TryWaitForAll(Opal::ArrayView<const Fence> fences, u64 timeout);
 
 private:
     VkFence m_fence = VK_NULL_HANDLE;
@@ -94,7 +105,13 @@ public:
      */
 
     /** Block until the count reaches the given value. A value already reached returns at once. */
-    void Wait(u64 value, u64 timeout = Fence::k_infinite_wait) const;
+    void Wait(u64 value) const;
+
+    /**
+     * The same wait, given up on after the timeout in nanoseconds.
+     * @return True once the count reached the value, false when the timeout expired first, which is not a failure.
+     */
+    [[nodiscard]] bool TryWait(u64 value, u64 timeout) const;
 
     /** Raise the count from the host. The value has to be above the current one. */
     void Signal(u64 value) const;
@@ -102,8 +119,14 @@ public:
     /** The count as it stands. A device signal may have raised it again by the time this returns. */
     [[nodiscard]] u64 GetValue() const;
 
-    /** One wait over many semaphores, which returns once every one of them has reached its value. */
-    static void WaitForAll(Opal::ArrayView<const SemaphoreWait> waits, u64 timeout = Fence::k_infinite_wait);
+    /**
+     * One wait over many semaphores, which returns once every one of them has reached its value. They all
+     * have to belong to the same device, since one wait is one call into one device.
+     */
+    static void WaitForAll(Opal::ArrayView<const SemaphoreWait> waits);
+
+    /** WaitForAll with a timeout, answering the way TryWait does. */
+    [[nodiscard]] static bool TryWaitForAll(Opal::ArrayView<const SemaphoreWait> waits, u64 timeout);
 
 private:
     VkSemaphore m_semaphore = VK_NULL_HANDLE;

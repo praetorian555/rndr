@@ -425,11 +425,21 @@ Found along the way and fixed here: `Semaphore::operator=(Semaphore&&)` did not 
 before taking the other one, unlike `Fence::operator=` immediately above it, so assigning over a live
 semaphore leaked it. 4.1's frame timeline is built by exactly that assignment.
 
+A blocking wait and a wait with a deadline are two calls rather than one with a defaulted timeout, on the
+fence and the semaphore alike: `Wait` blocks and `TryWait` gives up, answering false when the timeout ran
+out. They were one call, and it did not work - `vkWaitForFences` and `vkWaitSemaphores` return `VK_TIMEOUT`
+as a *success* code, which the single wait threw on, so the timeout could not be told from a lost device
+without unpacking the exception. Nothing had ever passed a timeout, which is how it went unnoticed. `TryWait`
+is `[[nodiscard]]`, since ignoring the answer is the whole mistake; `Wait` stays void and every existing
+caller of it is untouched. `k_infinite_wait` moved to namespace scope with it, since it is no longer a
+default argument on `Fence` and the semaphore was reaching across for it.
+
 Verified by a test that reuses the split copy above: a fresh timeline reports its initial value and the host
 raises it, a wait for a value already reached returns at once, two batches ordered by a timeline produce the
 same bytes as one, the host waits on a value the device signals with no fence anywhere in the submit, and
-`WaitForAll` covers two of them. The throwing cases are covered too, except the two swap chain rejections -
-those need a surface and a window, which the headless tests do not have.
+`WaitForAll` covers two of them. A `TryWait` for a value nothing will ever signal answers false, on a
+semaphore and on a fence, rather than throwing or hanging. The throwing cases are covered too, except the
+two swap chain rejections - those need a surface and a window, which the headless tests do not have.
 
 ### 3.6 Device features — DONE
 

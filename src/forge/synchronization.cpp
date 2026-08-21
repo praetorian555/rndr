@@ -49,13 +49,26 @@ Rndr::Forge::Fence& Rndr::Forge::Fence::operator=(Fence&& other) noexcept
     return *this;
 }
 
-void Rndr::Forge::Fence::Wait(u64 timeout) const
+void Rndr::Forge::Fence::Wait() const
+{
+    // An infinite timeout cannot expire, so the answer is always true and there is nothing to report.
+    (void)TryWait(k_infinite_wait);
+}
+
+bool Rndr::Forge::Fence::TryWait(u64 timeout) const
 {
     const VkResult result = vkWaitForFences(m_device->GetNativeDevice(), 1, &m_fence, VK_TRUE, timeout);
+    // VK_TIMEOUT is a success code: the wait did what it was told, the fence was simply not signalled in
+    // time. Throwing on it would leave the timeout parameter unusable for the one thing it exists for.
+    if (result == VK_TIMEOUT)
+    {
+        return false;
+    }
     if (result != VK_SUCCESS)
     {
         throw VulkanException(result, "vkWaitForFences");
     }
+    return true;
 }
 
 void Rndr::Forge::Fence::Reset() const
@@ -67,11 +80,16 @@ void Rndr::Forge::Fence::Reset() const
     }
 }
 
-void Rndr::Forge::Fence::WaitForAll(Opal::ArrayView<const Fence> fences, u64 timeout)
+void Rndr::Forge::Fence::WaitForAll(Opal::ArrayView<const Fence> fences)
+{
+    (void)TryWaitForAll(fences, k_infinite_wait);
+}
+
+bool Rndr::Forge::Fence::TryWaitForAll(Opal::ArrayView<const Fence> fences, u64 timeout)
 {
     if (fences.empty())
     {
-        return;
+        return true;
     }
     // The default allocator rather than the scratch one: asking Opal for a scratch allocator asserts unless
     // the application pushed one, and nothing in Forge does, so this asserted on the first call it ever got.
@@ -87,10 +105,15 @@ void Rndr::Forge::Fence::WaitForAll(Opal::ArrayView<const Fence> fences, u64 tim
     }
     const VkResult wait_result =
         vkWaitForFences(fences[0].m_device->GetNativeDevice(), static_cast<u32>(native_fences.GetSize()), native_fences.GetData(), VK_TRUE, timeout);
+    if (wait_result == VK_TIMEOUT)
+    {
+        return false;
+    }
     if (wait_result != VK_SUCCESS)
     {
         throw VulkanException(wait_result, "vkWaitForFences");
     }
+    return true;
 }
 
 namespace
@@ -317,16 +340,28 @@ static void ThrowIfNotTimeline(const Rndr::Forge::Semaphore& semaphore, const ch
     }
 }
 
-void Rndr::Forge::Semaphore::Wait(u64 value, u64 timeout) const
+void Rndr::Forge::Semaphore::Wait(u64 value) const
+{
+    // An infinite timeout cannot expire, so the answer is always true and there is nothing to report.
+    (void)TryWait(value, k_infinite_wait);
+}
+
+bool Rndr::Forge::Semaphore::TryWait(u64 value, u64 timeout) const
 {
     ThrowIfNotTimeline(*this, "Waiting on");
     const VkSemaphoreWaitInfo wait_info = {
         .sType = VK_STRUCTURE_TYPE_SEMAPHORE_WAIT_INFO, .semaphoreCount = 1, .pSemaphores = &m_semaphore, .pValues = &value};
     const VkResult result = vkWaitSemaphores(m_device->GetNativeDevice(), &wait_info, timeout);
+    // VK_TIMEOUT is a success code here as well, for the reason Fence::TryWait gives above.
+    if (result == VK_TIMEOUT)
+    {
+        return false;
+    }
     if (result != VK_SUCCESS)
     {
         throw VulkanException(result, "vkWaitSemaphores");
     }
+    return true;
 }
 
 void Rndr::Forge::Semaphore::Signal(u64 value) const
@@ -353,11 +388,16 @@ Rndr::u64 Rndr::Forge::Semaphore::GetValue() const
     return value;
 }
 
-void Rndr::Forge::Semaphore::WaitForAll(Opal::ArrayView<const SemaphoreWait> waits, u64 timeout)
+void Rndr::Forge::Semaphore::WaitForAll(Opal::ArrayView<const SemaphoreWait> waits)
+{
+    (void)TryWaitForAll(waits, k_infinite_wait);
+}
+
+bool Rndr::Forge::Semaphore::TryWaitForAll(Opal::ArrayView<const SemaphoreWait> waits, u64 timeout)
 {
     if (waits.empty())
     {
-        return;
+        return true;
     }
     // The default allocator rather than the scratch one, for the reason Fence::WaitForAll gives above.
     // vkWaitSemaphores wants the semaphores and their values as two parallel arrays.
@@ -384,8 +424,13 @@ void Rndr::Forge::Semaphore::WaitForAll(Opal::ArrayView<const SemaphoreWait> wai
                                            .pSemaphores = native_semaphores.GetData(),
                                            .pValues = values.GetData()};
     const VkResult result = vkWaitSemaphores(waits[0].semaphore->m_device->GetNativeDevice(), &wait_info, timeout);
+    if (result == VK_TIMEOUT)
+    {
+        return false;
+    }
     if (result != VK_SUCCESS)
     {
         throw VulkanException(result, "vkWaitSemaphores");
     }
+    return true;
 }
