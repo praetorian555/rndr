@@ -1062,28 +1062,60 @@ narrowed-range section red, and forcing `depthClampEnable` to false turns the cl
 settled here: the binding is now used with four instances that differ only in what it fed them, which is what
 this task actually asked for.
 
-### 3.18 Test the samplers, the texture shapes and the remaining descriptor types
+### 3.18 Test the samplers, the texture shapes and the remaining descriptor types — DONE
 
-`test/forge/smoke-test.cpp`.
+Five cases in `test/forge/smoke-test.cpp`: `Forge sampler filtering and addressing`, `Forge separate sampler
+and sampled image`, `Forge storage image writes`, `Forge texture shapes past a flat two dimensional one` and
+`Forge descriptor pool recycling`.
 
-`SamplerDesc` is never constructed with anything but its defaults - no filter, no address mode, no LOD
-clamp or bias, no comparison sampler - and `sampler_anisotropy` is covered only by the throw for asking
-without the feature. `DescriptorSetLayoutDesc::Binding::immutable_samplers` is never used. Every texture in
-the file is a 2D one or a small 2D array: `TextureDimension::Texture1D` and `Texture3D` never appear, nor
-do the `Cube` and `CubeArray` view types. Three of the six `DescriptorType` values - `StorageImage`,
-`SampledImage` and the standalone `Sampler` - are never bound, and `TextureUsageBits::Storage`,
-`InputAttachment` and `TransientAttachment` never appear. `DescriptorPool::Reset` is never called; the
-three `pool.Reset()` in the file are all `TimestampQueryPool`. `DescriptorPoolDesc::free_individual_sets`
-is never set, so `DescriptorSet::Destroy` returning a set to its pool - which is what 1.7 was - runs
-nowhere.
+Every sampling case samples in a **compute** shader and writes the result into a buffer as floats, so what
+comes back is the value the sampler produced rather than a colour a UNORM attachment had to round on the way
+out. Sampling is always by explicit level - a compute shader has no derivatives, so there is no implicit LOD
+to be had, and an explicit one is still clamped by the sampler, which is exactly what makes the LOD clamp
+checkable.
 
-Done when: a linear and a nearest sampler over the same two-texel texture give different values at the
-midpoint; `AddressMode` wrapping and clamping differ at a coordinate outside [0, 1]; a LOD clamp forces a
-known mip; a layout with an immutable sampler samples correctly and the `Update` that would write its
-sampler is ignored rather than obeyed; a 3D texture and a cube view are written and sampled; a compute
-shader writes through a `StorageImage` and the readback matches; a separate `Sampler` and `SampledImage`
-pair produce what the combined descriptor produces; a pool is `Reset` and the sets allocated after it work;
-and a set from a `free_individual_sets` pool is destroyed and its space reused.
+**Two API gaps had to be closed first.**
+
+- `VK_IMAGE_CREATE_CUBE_COMPATIBLE_BIT` was never set on any image, so `TextureViewType::Cube` and
+  `CubeArray` existed in the enum and could not be created - `vkCreateImageView` refuses a cube view of an
+  image that was not made cube compatible, and there is no way to add the flag afterwards. The view type the
+  desc already names is what asks for it now, and a cube view over a layer count that is not a multiple of
+  six throws rather than reaching the driver.
+- `ImageLayout::General` had no barrier preset, which is the layout a storage image is bound in - so binding
+  one meant writing an `ImageBarrier` out by hand, which is the thing the presets exist to avoid.
+  `ImageBarrier::ToGeneral` covers it, in both the short and the long form, and `To` dispatches into it.
+  Its destination access is read *and* write, since an image a stage only reads has narrower layouts to sit
+  in and General is the one for an image a stage does both to.
+
+What the cases prove:
+
+- a linear and a nearest sampler three tenths of the way between two texel centres, where the linear one has
+  to blend in that proportion and the nearest one can only hand back a whole texel;
+- `Repeat` and `Clamp` at a coordinate a quarter past the right edge, which wrap onto the left texel and hold
+  on the right one respectively;
+- a LOD clamp in both directions: asking for level one and being held at zero, and asking for level zero and
+  being pushed down to one, over two levels with nothing in common;
+- a layout with an immutable sampler baked in, where the `Update` that hands it a different sampler is
+  ignored rather than obeyed - the result is the baked nearest sampler's whole texel and not the linear
+  one's blend;
+- a separate `SampledImage` and `Sampler` pair producing the same numbers the combined descriptor does. The
+  same `Update` overload serves all three kinds, because the sampler of an image binding and the image of a
+  sampler binding are each the half Vulkan ignores for that type;
+- a compute shader writing every texel of a `StorageImage` through `RWTexture2D`, read back and compared per
+  texel;
+- a 3D texture sampled along its depth and a cube view sampled by direction, with the face order checked
+  against what the layers were uploaded as;
+- a pool with room for exactly two sets, filled, `Reset`, and filled again - and separately a
+  `free_individual_sets` pool where one set is destroyed and its space comes back, while the set that was
+  never destroyed goes on working.
+
+**One of my own earlier assertions had to be retargeted.** 3.19 checked that `ImageBarrier::To` throws for a
+layout with no preset and used `General` as the example. Giving `General` a preset here made that assertion
+false, and the full suite caught it even though every case passed when run on its own. It now names
+`DepthStencilReadOnly`, which is still a real layout with nothing behind it.
+
+Confirmed by mutation rather than by passing: dropping the cube compatible flag turns the shapes case red,
+and forcing `maxLod` to `VK_LOD_CLAMP_NONE` turns the LOD clamp section red.
 
 ### 3.19 Test the transfer, barrier and binding calls nothing executes — DONE
 
