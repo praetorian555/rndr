@@ -56,6 +56,19 @@ jobs:
       # in an elevated process and a runner is one, so it goes to the registry and finds nothing. This is
       # where mesa's own systemwidedeploy.cmd puts a driver, and where the SDK's installer would have put the
       # layer - the action unpacks the SDK rather than running it, so nothing has registered either.
+      # install_runtime only puts the loader in place on the run that downloads the SDK; a cache hit restores
+      # the files and the installer never runs, so vulkan-1.dll ends up nowhere the loader search looks. It
+      # is in the restored tree either way, so copy it where the installer would have - nothing here links
+      # it, volk loads it by name at run time.
+      - name: Put the Vulkan loader where it can be found
+        run: |
+          $found = Get-ChildItem "$env:VULKAN_SDK\runtime" -Recurse -Filter "vulkan-1.dll" -ErrorAction SilentlyContinue
+          if (-not $found) { throw "No vulkan-1.dll under $env:VULKAN_SDK\runtime." }
+          $loader = @($found | Where-Object { $_.FullName -match '\\x64\\' })[0]
+          if (-not $loader) { $loader = $found[0] }
+          Write-Host "Loader: $($loader.FullName)"
+          Copy-Item $loader.FullName "$env:SystemRoot\System32\vulkan-1.dll" -Force
+
       - name: Register the software driver and the validation layer
         run: |
           $icd = "$env:GITHUB_WORKSPACE\mesa\x64\lvp_icd.x86_64.json"
