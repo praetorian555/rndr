@@ -864,6 +864,208 @@ Not to be confused with a pipeline cache, which 3.10 measured and dropped.
 
 ---
 
+### 3.14 Test the empty state and the moves
+
+`test/forge/smoke-test.cpp`.
+
+The first of a group, 3.14 through 3.22, that came out of one pass over the nineteen headers in
+`include/rndr/forge/` against the forty cases in the test file. Each one names what that pass found
+unexercised. None of them is a new capability, except where a test cannot be written until one exists,
+which is said where it happens.
+
+`docs/forge.md` fixes the contract in its first section: `IsValid()` is false for a default-constructed
+object, false after `Destroy()`, false for the source of a move and true otherwise, and `Destroy()` is
+idempotent. Nothing checks any of it for any type. Moves are covered only for `Buffer`, `Texture` and
+`DescriptorSet`, and 3.11 found three separate bugs in the `Device` and `DeviceQueue` moves alone - a move
+that drops a member is invisible until something reaches for it, which is the shape of bug a smoke test is
+worst at catching by accident.
+
+Done when one case walks every type that holds a handle - `GraphicsContext`, `PhysicalDevice`, `Device`,
+`DeviceQueue`, `Buffer`, `Texture`, `Sampler`, `Shader`, `Pipeline`, `DescriptorPool`,
+`DescriptorSetLayout`, `DescriptorSet`, `CommandBuffer`, `Fence`, `Semaphore`, `TimestampQueryPool` - and
+for each asserts the four states, that a second `Destroy()` is a no-op, and that a moved-to object still
+works rather than only reporting itself valid. Working means something cheap that touches the members a
+move has to carry: a moved `Buffer` reads back what was written before the move, a moved `Pipeline` binds,
+a moved `Semaphore` signals.
+
+`DeviceQueue::Destroy` is the one to look at rather than test blindly. Queues are owned by `Device` through
+an `Opal::SharedPtr` and handed out by reference from `GetQueue`, so a caller that destroys one leaves the
+device holding a queue with no command pool. Either it stops being public or this task says why it is.
+
+### 3.15 Test the indexed and the indirect draws
+
+`test/forge/smoke-test.cpp`.
+
+`CmdBindIndexBuffer` and `CmdDrawIndexed` are never called. `CmdDrawIndirect` appears once, inside a
+`REQUIRE_THROWS_AS` for the `multi_draw_indirect` feature, so no indirect draw has ever run;
+`CmdDrawIndexedIndirect` and `CmdDispatchIndirect` are never called at all. Between them that is most of
+3.3 covered by nothing but the sample, which reports a wrong result by rendering something slightly wrong
+rather than by failing.
+
+Done when a readback proves each of them:
+
+- an indexed draw whose index buffer names the vertices out of order, so a draw that ignored the indices
+  produces a different image, with `first_index` and `vertex_offset` both non-zero;
+- the three `IndexSize` values, since 8-bit indices need `VK_KHR_index_type_uint8` and the code has to say
+  so rather than hand the driver a value it does not accept;
+- an indirect draw and an indirect indexed draw whose arguments a compute shader writes into the buffer
+  rather than the host, which is the case indirect exists for and the one a host-written buffer would not
+  tell apart from a direct draw;
+- more than one command in a single call with `multi_draw_indirect` on, and a non-zero `first_instance`
+  with `draw_indirect_first_instance` on - both features have a throw test today and no positive one;
+- an indirect dispatch whose group counts a previous dispatch wrote, against a direct dispatch of the same
+  counts.
+
+### 3.16 Test depth, stencil and blending, and unblock the stencil path
+
+`test/forge/smoke-test.cpp`, `include/rndr/forge/command-buffer.hpp`, `src/forge/command-buffer.cpp`,
+`include/rndr/forge/pipeline.hpp`, `src/forge/pipeline.cpp`, `include/rndr/forge/types.hpp`.
+
+No test has ever rendered with a depth attachment. `DepthStencilDesc::depth_test_enabled`,
+`depth_write_enabled` and `depth_comparator` are never set, `ColorBlendDesc::blend_enabled` is never true,
+and the stencil half of the desc is untouched. The one depth case there is renders *without* one and checks
+that a depth attachment naming no image view throws. `ImageBarrier::ToDepthStencilAttachment` is never
+called either, which is the preset a depth pass needs.
+
+Two things have to be built before the stencil part can be written, and both are gaps in the API rather
+than in the tests:
+
+- `RenderingDesc` has no stencil attachment and `CmdBeginRendering` never fills `pStencilAttachment`, so a
+  stencil buffer cannot be bound at all. Either add the attachment, or feed the depth one to both sides
+  when its format carries stencil - the second is what most callers want and the first is what a separate
+  stencil image needs.
+- `VkStencilOpState::compareMask`, `writeMask` and `reference` are left zero where the depth stencil state
+  is built in `pipeline.cpp`, and none of the three is in `DepthStencilDesc` or in `DynamicStateBits`. With
+  a zero compare mask and a zero write mask the stencil test reads nothing and writes nothing, so
+  `stencil_test_enabled` is inert as built. `CmdSetStencilReference` supplies only the third.
+
+Done when: a depth pass draws two overlapping triangles at different depths and the readback shows the
+nearer one, with the comparator flipped in a second section so the answer flips with it; `depth_write_enabled`
+off leaves the depth buffer as the clear left it, read back through `ReadBackTexture` on a depth format; a
+stencil pass writes a mask in one draw and a second draw lands only where the first allowed it; and an
+alpha blend over a cleared attachment produces the value the blend equation gives on the CPU, with the
+factors and the operation varied enough that a pipeline ignoring them would not match.
+
+### 3.17 Test the rest of the rasterizer, the topology and instancing
+
+`test/forge/smoke-test.cpp`.
+
+`RasterizerDesc::cull_mode` appears three times and is `Face::None` in all three - culling is switched off
+so it stays out of the way, and has never been switched on. `front_face`, `fill_mode` and `depth_clamp` are
+never set, `GraphicsPipelineDesc::topology` never moves off `Triangle`, and `DataRepetition::PerInstance`
+is never used, so instancing and multi-binding vertex input are both untested. `CmdSetViewport`'s depth
+range and `CmdSetScissor` are called, but nothing reads back a pixel that proves either took effect.
+
+Done when a readback proves each: a triangle culled by winding disappears and comes back when `front_face`
+is flipped rather than when the geometry is; `FillMode::Wireframe` with `fill_mode_non_solid` leaves the
+interior of a triangle as the clear left it; a line and a point topology put pixels where a triangle would
+not; two vertex bindings, one per-vertex and one per-instance, draw four instances that differ only in what
+the second binding fed them; a scissor smaller than the viewport leaves the pixels outside it untouched;
+and a `min_depth`/`max_depth` narrowed to a sub-range lands a known depth where the mapping says it should.
+
+### 3.18 Test the samplers, the texture shapes and the remaining descriptor types
+
+`test/forge/smoke-test.cpp`.
+
+`SamplerDesc` is never constructed with anything but its defaults - no filter, no address mode, no LOD
+clamp or bias, no comparison sampler - and `sampler_anisotropy` is covered only by the throw for asking
+without the feature. `DescriptorSetLayoutDesc::Binding::immutable_samplers` is never used. Every texture in
+the file is a 2D one or a small 2D array: `TextureDimension::Texture1D` and `Texture3D` never appear, nor
+do the `Cube` and `CubeArray` view types. Three of the six `DescriptorType` values - `StorageImage`,
+`SampledImage` and the standalone `Sampler` - are never bound, and `TextureUsageBits::Storage`,
+`InputAttachment` and `TransientAttachment` never appear. `DescriptorPool::Reset` is never called; the
+three `pool.Reset()` in the file are all `TimestampQueryPool`. `DescriptorPoolDesc::free_individual_sets`
+is never set, so `DescriptorSet::Destroy` returning a set to its pool - which is what 1.7 was - runs
+nowhere.
+
+Done when: a linear and a nearest sampler over the same two-texel texture give different values at the
+midpoint; `AddressMode` wrapping and clamping differ at a coordinate outside [0, 1]; a LOD clamp forces a
+known mip; a layout with an immutable sampler samples correctly and the `Update` that would write its
+sampler is ignored rather than obeyed; a 3D texture and a cube view are written and sampled; a compute
+shader writes through a `StorageImage` and the readback matches; a separate `Sampler` and `SampledImage`
+pair produce what the combined descriptor produces; a pool is `Reset` and the sets allocated after it work;
+and a set from a `free_individual_sets` pool is destroyed and its space reused.
+
+### 3.19 Test the transfer, barrier and binding calls nothing executes
+
+`test/forge/smoke-test.cpp`.
+
+Calls that exist and never run, or run only inside a `REQUIRE_THROWS_AS`:
+
+- `CmdBlitImage` - throw path only. No blit has ever resized, mirrored through a negative extent, converted
+  between formats or used `ImageFilter::Nearest`. `CmdGenerateMips` covers the one shape it needs and no
+  other.
+- `CmdCopyImageToBuffer` - never called directly, only inside `ReadBackTexture`, which packs tightly from
+  offset zero. `buffer_row_length`, `buffer_image_height`, `image_offset` and a sub-box extent are all
+  unexercised, and each is a place an off-by-one lands silently in the middle of an image.
+- `CmdBarriers` - never called, despite being the one every other `Cmd*Barrier` delegates to.
+  `DependencyFlagBits::ByRegion` is never set.
+- `CmdBindDescriptorSets`, the plural one - never called, so binding more than one set and a non-zero
+  `first_set` are both untested.
+- The barrier presets `ToShaderRead`, `ToTransferSource`, `ToPresent`, `ToDepthStencilAttachment` and the
+  three-argument `ImageBarrier::To`, and `BufferBarrier::ReadThenWrite`. 4.2 built ten of these and the
+  tests reach four.
+- `GetMipLevelSize` - used by the readback helper, never asserted against a size worked out by hand, which
+  is what would catch a block-compressed or a depth format being sized as if it were tightly packed RGBA.
+
+Done when each of them runs and its result is read back rather than only recorded.
+
+### 3.20 Test the queues that are not the graphics queue
+
+`test/forge/smoke-test.cpp`.
+
+Every test runs on `QueueFamily::Graphics`. `AsyncCompute` and `Transfer` never appear, so a device created
+with `use_async_compute_queue` or `use_dedicated_transfer_queue` is never actually submitted to, and the
+per-family differences that matter - which pipeline stages a family supports for a timestamp, which
+`ImageLayout` transitions it may perform - are never met. The ownership transfer case at the end of the
+barrier vocabulary test records the release and the acquire but submits neither, so the pair has never
+crossed two real families.
+
+Done when a dispatch runs on the async compute queue and a copy on the transfer queue, each read back; when
+a buffer written on one family is read on another through a real release and acquire pair with a semaphore
+between the two submits; and when a machine with only one family skips rather than fails, the way
+`IsForgeAvailable` already does for a machine with no device.
+
+### 3.21 Test the loose ends
+
+`test/forge/smoke-test.cpp`.
+
+Small, and each one independent of the others:
+
+- `Shader::FromSpirvFile` and `FromSpirvInMemory` - never called. Every shader in the file comes from Slang
+  source, so the SPIR-V entry points and the reflection that runs on them are covered only along the path
+  that produced that SPIR-V here. A file whose entry point does not exist, and a blob that is not SPIR-V,
+  should both throw.
+- `TimestampQueryPool::TryGetResults` - never called, although `TryGetElapsedMilliseconds` is.
+  `ResolveQueryRange` is public precisely so a caller can make the range check itself, and no caller does.
+- `PhysicalDevice::SupportsLinearFilter`, `FindMemoryTypeIndex` and `GetPresentQueueFamilyIndex` - never
+  called. The first two are reachable headlessly; the third belongs with 3.22.
+- `Forge::LoadMesh` - never called by any test. `test/mesh-test.cpp` covers the Canvas mesh, not this one.
+  A file assimp cannot read, and one whose mesh has no normals or no UVs, both throw and neither is
+  checked.
+
+### 3.22 Windowed tests: surface, swap chain, frame context
+
+New file, `test/forge/window-test.cpp`, tag `[forge-window]`.
+
+`Surface`, `SwapChain` and `FrameContext` have no test at all - the three types the whole frame loop is
+made of, covered by running the sample and looking at it. `smoke-test.cpp` is headless by design and says
+so at the top, so this belongs beside it rather than inside it, and skips on a machine that cannot open a
+window the way the headless file skips on a machine with no device.
+
+Done when: a surface is created over an offscreen window and reports its formats and present modes; a swap
+chain is created, its images acquired, rendered into and presented for several frames, with the presented
+image read back and compared; `Recreate` after a resize hands back new images at the new extent and leaves
+nothing behind for the validation layer to complain about; a window with no client area leaves the swap
+chain empty and the next `AcquireImage` recovers, which is 1.1 and is checked by nothing; `HasDepth` off
+runs the loop with an absent depth attachment, which is 4.5 from the other side; and a `FrameContext` runs
+enough frames to wrap its timeline more than once, with `frames_in_flight` at one and at two.
+
+`SwapChainStatus::OutOfDate` is the outcome worth building the test around, since it is the one the sample
+only meets when a person drags a window edge.
+
+---
+
 ## Priority 4 — Convenience
 
 ### 4.1 Frame context — DONE
