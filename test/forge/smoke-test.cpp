@@ -4774,6 +4774,38 @@ TEST_CASE("Forge barrier batches", "[forge]")
         const Opal::DynamicArray<u8> expected = MakeTexelGrid(k_side, k_side, 33);
         REQUIRE(CountMismatches(expected, pixels) == 0);
     }
+    SECTION("Several image barriers go down in one call")
+    {
+        // Three textures in different layouts, transitioned together, each one read back after. The plural
+        // overload forwards to CmdBarriers like the singular one, so what this catches is the forwarding
+        // itself - a call that dropped all but the first would leave two of the three where they were, and
+        // ReadBackTexture would be reading a layout the texture is not in.
+        constexpr i32 k_texture_count = 3;
+        Opal::DynamicArray<Forge::Texture> textures;
+        Opal::DynamicArray<Forge::ImageBarrier> barriers;
+        for (i32 i = 0; i < k_texture_count; ++i)
+        {
+            textures.PushBack(MakeGridTexture(fixture.device, fixture.GetQueue(), k_side, k_side, static_cast<u8>(60 + i)));
+        }
+        for (i32 i = 0; i < k_texture_count; ++i)
+        {
+            barriers.PushBack(Forge::ImageBarrier::ToTransferSource(textures[i]));
+        }
+        Forge::ImmediateSubmit(fixture.device, fixture.GetQueue(),
+                               [&](Forge::CommandBuffer& command_buffer)
+                               { command_buffer.CmdImageBarriers({barriers.GetData(), barriers.GetSize()}); });
+
+        for (i32 i = 0; i < k_texture_count; ++i)
+        {
+            INFO("texture " << i);
+            REQUIRE(textures[i].GetCurrentLayout() == Forge::ImageLayout::TransferSource);
+            Opal::DynamicArray<u8> pixels(k_side * k_side * 4);
+            Forge::ReadBackTexture(fixture.device, fixture.GetQueue(), textures[i], pixels, 0,
+                                   Forge::ImageLayout::TransferSource);
+            const Opal::DynamicArray<u8> expected = MakeTexelGrid(k_side, k_side, static_cast<u8>(60 + i));
+            REQUIRE(CountMismatches(expected, pixels) == 0);
+        }
+    }
     SECTION("A by-region dependency reaches the dependency flags")
     {
         // Not inside a rendering pass, which is where the flag would actually mean something. Forge is
@@ -6219,6 +6251,176 @@ TEST_CASE("Forge stencil testing", "[forge]")
     REQUIRE_NO_VALIDATION_ERROR(fixture);
 }
 
+TEST_CASE("Forge stencil masks set per draw", "[forge]")
+{
+    if (!IsForgeAvailable())
+    {
+        SKIP("No Vulkan device on this machine.");
+    }
+    ForgeFixture fixture;
+    constexpr i32 k_side = 4;
+    constexpr i32 k_half = k_side / 2;
+    constexpr PixelFormat k_color_format = PixelFormat::R8G8B8A8_UNORM;
+    constexpr PixelFormat k_depth_stencil_format = PixelFormat::D24_UNORM_S8_UINT;
+
+    const Forge::Shader vertex_shader = Forge::Shader::FromSourceInMemory(
+        fixture.device, k_pushed_color_source, {.entry_point = "main_color_vertex", .cache = GetShaderCache()});
+    const Forge::Shader fragment_shader = Forge::Shader::FromSourceInMemory(
+        fixture.device, k_pushed_color_source, {.entry_point = "main_color_fragment", .cache = GetShaderCache()});
+
+    const Forge::Buffer left_quad = MakeQuadBuffer(fixture.device, MakeLeftHalfQuad(0.5f));
+    const Forge::Buffer full_quad = MakeQuadBuffer(fixture.device, MakeFullTargetQuad(0.5f));
+
+    // All three values are dynamic on both pipelines, so what the desc holds for them is ignored and every
+    // number below comes from a CmdSet call. The static half of the same three is 3.16's business.
+    constexpr Forge::DynamicStateBits k_dynamic_stencil = Forge::DynamicStateBits::StencilCompareMask |
+                                                          Forge::DynamicStateBits::StencilWriteMask |
+                                                          Forge::DynamicStateBits::StencilReference;
+
+    /** Stamps into the stencil buffer wherever it draws, writing no colour. */
+    const Forge::Pipeline mask_pipeline = [&]
+    {
+        Forge::GraphicsPipelineDesc pipeline_desc = MakePushedColorPipelineDesc(vertex_shader, fragment_shader, k_color_format);
+        pipeline_desc.depth_stencil.stencil_test_enabled = true;
+        pipeline_desc.depth_stencil.front_stencil_comparator = Comparator::Always;
+        pipeline_desc.depth_stencil.front_pass = StencilOperation::Replace;
+        pipeline_desc.depth_stencil.back_stencil_comparator = Comparator::Always;
+        pipeline_desc.depth_stencil.back_pass = StencilOperation::Replace;
+        pipeline_desc.color_blend_attachments[0].color_write_mask = Forge::ColorWriteMaskBits::None;
+        pipeline_desc.depth_attachment_format = k_depth_stencil_format;
+        pipeline_desc.stencil_attachment_format = k_depth_stencil_format;
+        pipeline_desc.dynamic_state = k_dynamic_stencil;
+        return Forge::Pipeline(fixture.device, pipeline_desc);
+    }();
+
+    /** Paints where the stencil buffer compares equal, leaving it alone. */
+    const Forge::Pipeline paint_pipeline = [&]
+    {
+        Forge::GraphicsPipelineDesc pipeline_desc = MakePushedColorPipelineDesc(vertex_shader, fragment_shader, k_color_format);
+        pipeline_desc.depth_stencil.stencil_test_enabled = true;
+        pipeline_desc.depth_stencil.front_stencil_comparator = Comparator::Equal;
+        pipeline_desc.depth_stencil.back_stencil_comparator = Comparator::Equal;
+        pipeline_desc.depth_attachment_format = k_depth_stencil_format;
+        pipeline_desc.stencil_attachment_format = k_depth_stencil_format;
+        pipeline_desc.dynamic_state = k_dynamic_stencil;
+        return Forge::Pipeline(fixture.device, pipeline_desc);
+    }();
+
+    const Vector4f mask_color = ByteColor(0, 0, 0, 255);
+    const Vector4f paint_color = ByteColor(0, 255, 0, 255);
+
+    /**
+     * Stamp the left half with one set of values, then paint the whole target with another, and hand back
+     * what survived. Each value is set for the two faces separately rather than through the FrontAndBack
+     * default: culling is off here, so which face a fragment counts as depends on how the quad winds, and
+     * setting both by name is what keeps that from deciding the answer.
+     */
+    auto run = [&](u32 mask_write_mask, u32 mask_reference, u32 paint_compare_mask, u32 paint_reference)
+    {
+        Forge::Texture color = MakeColorTarget(fixture.device, k_side, k_color_format);
+        Forge::Texture depth_stencil(fixture.device, {.format = k_depth_stencil_format,
+                                                      .width = k_side,
+                                                      .height = k_side,
+                                                      .usage = Forge::TextureUsageBits::DepthStencilAttachment});
+
+        auto set_stencil = [](Forge::CommandBuffer& command_buffer, u32 compare_mask, u32 write_mask, u32 reference)
+        {
+            for (const Forge::StencilFaceBits face : {Forge::StencilFaceBits::Front, Forge::StencilFaceBits::Back})
+            {
+                command_buffer.CmdSetStencilCompareMask(compare_mask, face);
+                command_buffer.CmdSetStencilWriteMask(write_mask, face);
+                command_buffer.CmdSetStencilReference(reference, face);
+            }
+        };
+
+        Forge::ImmediateSubmit(
+            fixture.device, fixture.GetQueue(),
+            [&](Forge::CommandBuffer& command_buffer)
+            {
+                command_buffer.CmdImageBarrier(Forge::ImageBarrier::ToColorAttachment(color));
+                command_buffer.CmdImageBarrier(Forge::ImageBarrier::ToDepthStencilAttachment(depth_stencil));
+                const Forge::RenderingAttachmentDesc depth_stencil_attachment{
+                    .image_view = depth_stencil.GetNativeImageView(),
+                    .image_layout = Forge::ImageLayout::DepthStencilAttachment,
+                    .load_operation = Forge::AttachmentLoadOperation::Clear,
+                    .store_operation = Forge::AttachmentStoreOperation::Store,
+                    .clear_value = {.depth_stencil = {1.0f, 0}}};
+                const Forge::RenderingDesc rendering_desc{
+                    .render_area_extent = {k_side, k_side},
+                    .color_attachments = {Forge::RenderingAttachmentDesc{
+                        .image_view = color.GetNativeImageView(),
+                        .image_layout = Forge::ImageLayout::ColorAttachment,
+                        .load_operation = Forge::AttachmentLoadOperation::Clear,
+                        .store_operation = Forge::AttachmentStoreOperation::Store,
+                        .clear_value = {.color = {1.0f, 0.0f, 0.0f, 1.0f}}}},
+                    .depth_attachment = depth_stencil_attachment,
+                    .stencil_attachment = depth_stencil_attachment};
+                command_buffer.CmdBeginRendering(rendering_desc);
+                command_buffer.CmdSetViewport(Vector2f::Zero(), {k_side, k_side});
+                command_buffer.CmdSetScissor(Vector2i::Zero(), {k_side, k_side});
+
+                // Comparator Always, so the compare mask decides nothing here and the write mask is what
+                // picks which bits of the reference land in the buffer.
+                command_buffer.CmdBindPipeline(mask_pipeline);
+                set_stencil(command_buffer, 0xFF, mask_write_mask, mask_reference);
+                command_buffer.CmdBindVertexBuffer(left_quad, 0);
+                command_buffer.CmdPushConstants(mask_pipeline, ShaderTypeBits::Fragment, Opal::AsBytes(mask_color));
+                command_buffer.CmdDraw(6);
+
+                // Write mask zero, so this reads the buffer and leaves it as it found it.
+                command_buffer.CmdBindPipeline(paint_pipeline);
+                set_stencil(command_buffer, paint_compare_mask, 0, paint_reference);
+                command_buffer.CmdBindVertexBuffer(full_quad, 0);
+                command_buffer.CmdPushConstants(paint_pipeline, ShaderTypeBits::Fragment, Opal::AsBytes(paint_color));
+                command_buffer.CmdDraw(6);
+                command_buffer.CmdEndRendering();
+            });
+
+        Opal::DynamicArray<u8> pixels(k_side * k_side * 4);
+        Forge::ReadBackTexture(fixture.device, fixture.GetQueue(), color, pixels, 0, Forge::ImageLayout::TransferSource);
+        return pixels;
+    };
+
+    /** Which texels the paint reached: green where it landed, the red clear where it did not. */
+    auto require_painted = [](const Opal::DynamicArray<u8>& pixels, bool left, bool right)
+    {
+        for (i32 y = 0; y < k_side; ++y)
+        {
+            for (i32 x = 0; x < k_side; ++x)
+            {
+                const i32 base = (y * k_side + x) * 4;
+                const bool painted = x < k_half ? left : right;
+                INFO("texel " << x << "," << y << " expected painted: " << painted);
+                REQUIRE(static_cast<i32>(pixels[base + 0]) == (painted ? 0 : 255));
+                REQUIRE(static_cast<i32>(pixels[base + 1]) == (painted ? 255 : 0));
+            }
+        }
+    };
+
+    SECTION("A full write mask stamps the whole reference")
+    {
+        // Three stamped into the left half and three compared against it, which is the baseline every
+        // section below moves one value away from.
+        require_painted(run(0xFF, 3, 0xFF, 3), true, false);
+    }
+    SECTION("A write mask keeps the bits it leaves out of the buffer")
+    {
+        // The same reference of three through a write mask of one: only the low bit lands, so the buffer
+        // holds one and a test against three matches nowhere - including the half that was drawn.
+        require_painted(run(0x01, 3, 0xFF, 3), false, false);
+        // And against one it matches exactly where the stamp went, which is what rules out the stamp
+        // having been dropped altogether rather than narrowed.
+        require_painted(run(0x01, 3, 0xFF, 1), true, false);
+    }
+    SECTION("A compare mask of zero makes the test read no bits at all")
+    {
+        // Nothing about the buffer changed from the first section; the test now compares zero against zero
+        // everywhere, so the half that was never stamped passes too.
+        require_painted(run(0xFF, 3, 0x00, 3), true, true);
+    }
+    REQUIRE_NO_VALIDATION_ERROR(fixture);
+}
+
 TEST_CASE("Forge blending", "[forge]")
 {
     if (!IsForgeAvailable())
@@ -6310,6 +6512,18 @@ TEST_CASE("Forge blending", "[forge]")
         }
     };
 
+    /** The fourth channel, which the sections above leave alone and the two below are entirely about. */
+    auto require_alpha = [&](const Opal::DynamicArray<u8>& pixels, i32 expected)
+    {
+        for (i32 texel = 0; texel < k_side * k_side; ++texel)
+        {
+            const i32 actual = pixels[texel * 4 + 3];
+            INFO("texel " << texel << " alpha, expected " << expected << " got " << actual);
+            REQUIRE(actual >= expected - 1);
+            REQUIRE(actual <= expected + 1);
+        }
+    };
+
     SECTION("Source alpha over one minus source alpha is the classic blend")
     {
         const Opal::DynamicArray<u8> pixels = blend_over_destination({.blend_enabled = true,
@@ -6364,6 +6578,44 @@ TEST_CASE("Forge blending", "[forge]")
                                                  static_cast<f32>(k_dst[channel]) / 255.0f, 1.0f, 1.0f, true);
         }
         require_channels(pixels, expected);
+    }
+    SECTION("The alpha factors are read from their own fields rather than the colour ones")
+    {
+        // Opposite factors on the two halves, which is what makes a swap visible: the colour keeps the
+        // source whole and the alpha keeps the destination whole, so a translation that fed the colour
+        // fields into srcAlphaBlendFactor and dstAlphaBlendFactor would hand back exactly the other pair.
+        const Opal::DynamicArray<u8> pixels = blend_over_destination({.blend_enabled = true,
+                                                                      .src_color_factor = BlendFactor::One,
+                                                                      .dst_color_factor = BlendFactor::Zero,
+                                                                      .color_operation = BlendOperation::Add,
+                                                                      .src_alpha_factor = BlendFactor::Zero,
+                                                                      .dst_alpha_factor = BlendFactor::One,
+                                                                      .alpha_operation = BlendOperation::Add});
+        const i32 expected[3] = {k_src[0], k_src[1], k_src[2]};
+        require_channels(pixels, expected);
+        require_alpha(pixels, k_dst[3]);
+    }
+    SECTION("The alpha operation is its own as well")
+    {
+        // One and one on both halves, so the factors say nothing about which channel is which; only the
+        // operation differs, and the two answers are far apart - the colour adds to more than it started
+        // with while the alpha subtracts down to less.
+        const Opal::DynamicArray<u8> pixels = blend_over_destination({.blend_enabled = true,
+                                                                      .src_color_factor = BlendFactor::One,
+                                                                      .dst_color_factor = BlendFactor::One,
+                                                                      .color_operation = BlendOperation::Add,
+                                                                      .src_alpha_factor = BlendFactor::One,
+                                                                      .dst_alpha_factor = BlendFactor::One,
+                                                                      .alpha_operation = BlendOperation::ReverseSubtract});
+        i32 expected[3] = {};
+        for (i32 channel = 0; channel < 3; ++channel)
+        {
+            expected[channel] = expected_channel(static_cast<f32>(k_src[channel]) / 255.0f,
+                                                 static_cast<f32>(k_dst[channel]) / 255.0f, 1.0f, 1.0f, false);
+        }
+        require_channels(pixels, expected);
+        require_alpha(pixels, expected_channel(static_cast<f32>(k_src[3]) / 255.0f,
+                                               static_cast<f32>(k_dst[3]) / 255.0f, 1.0f, 1.0f, true));
     }
     REQUIRE_NO_VALIDATION_ERROR(fixture);
 }
