@@ -1251,21 +1251,41 @@ transfer queue turns the texture section red.
 
 ### 3.21 Test the loose ends
 
-`test/forge/smoke-test.cpp`.
+`test/forge/smoke-test.cpp`. Small, and each one independent of the others.
 
-Small, and each one independent of the others:
+**Public calls with no caller in any test.**
 
-- `Shader::FromSpirvFile` and `FromSpirvInMemory` - never called. Every shader in the file comes from Slang
-  source, so the SPIR-V entry points and the reflection that runs on them are covered only along the path
-  that produced that SPIR-V here. A file whose entry point does not exist, and a blob that is not SPIR-V,
-  should both throw.
-- `TimestampQueryPool::TryGetResults` - never called, although `TryGetElapsedMilliseconds` is.
-  `ResolveQueryRange` is public precisely so a caller can make the range check itself, and no caller does.
-- `PhysicalDevice::SupportsLinearFilter`, `FindMemoryTypeIndex` and `GetPresentQueueFamilyIndex` - never
-  called. The first two are reachable headlessly; the third belongs with 3.22.
-- `Forge::LoadMesh` - never called by any test. `test/mesh-test.cpp` covers the Canvas mesh, not this one.
-  A file assimp cannot read, and one whose mesh has no normals or no UVs, both throw and neither is
-  checked.
+- `Shader::FromSpirvFile` and `FromSpirvInMemory` - every shader in the file comes from Slang source, so the
+  SPIR-V entry points and the reflection that runs on them are covered only along the path that produced
+  that SPIR-V here. A file whose entry point does not exist, and a blob that is not SPIR-V, should both
+  throw.
+- `TimestampQueryPool::TryGetResults`, although `TryGetElapsedMilliseconds` is called. `ResolveQueryRange`
+  is public precisely so a caller can make the range check itself, and no caller does.
+- `PhysicalDevice::FindMemoryTypeIndex`, which is reachable headlessly, and `GetPresentQueueFamilyIndex`,
+  which belongs with 3.22.
+- `CmdImageBarriers`, the plural image overload - the one call of the barrier group 3.19 left without a
+  caller. It forwards to `CmdBarriers` like the rest, which is an argument about risk rather than a test.
+- `CmdDrawMeshTasks`. 3.3 wrote it and could only test that it threw, since nothing enabled the extension;
+  3.6 enabled it and nothing went back. A positive draw needs a mesh shader in Slang and a device that has
+  `VK_EXT_mesh_shader`, and skips on one that does not.
+- `Forge::LoadMesh` - `test/mesh-test.cpp` covers the Canvas mesh, not this one. A file assimp cannot read,
+  and one whose mesh has no normals or no UVs, both throw and neither is checked.
+
+**Fields that reach the driver with nothing asserting on them.**
+
+- `CmdSetStencilCompareMask` and `CmdSetStencilWriteMask`, with `DynamicStateBits::StencilCompareMask` and
+  `::StencilWriteMask` behind them. 3.16 added all four and named none of them; the cases there set every
+  mask statically. Per-face through `StencilFaceBits` is untouched as well.
+- The alpha half of `ColorBlendDesc`. `src_alpha_factor`, `dst_alpha_factor` and `alpha_operation` never
+  vary and the blend readback walks three channels, so nothing would notice them reaching the wrong members
+  of `VkPipelineColorBlendAttachmentState`.
+
+**The translation tables, which are switch statements a mis-typed case makes silently wrong.** Reached by a
+test today: `StencilOperation` 1 of 8 - only `Replace` - `BlendFactor` 4 of 13, `BlendOperation` 2 of 5,
+`Comparator` 4 of 8, and `ImageAddressMode` 2 of 5, which leaves `ToVkBorderColor` and every `BorderColor`
+value dead to the suite. A table-driven case per enum that builds the object and asserts no validation error
+covers the mapping being *valid*; it does not catch two entries swapped for each other, and the note should
+say so rather than imply otherwise.
 
 ### 3.22 Windowed tests: surface, swap chain, frame context
 
