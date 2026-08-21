@@ -4058,3 +4058,854 @@ TEST_CASE("Forge empty state and moves of the command and synchronization object
 
     REQUIRE_NO_VALIDATION_ERROR(fixture);
 }
+
+/**
+ * The transfer, barrier and binding calls that existed with nothing running them. Every case here ends in a
+ * readback compared against bytes worked out on the CPU, because the mistakes these calls make - a row
+ * stride off by one, a box copied from the wrong corner - land in the middle of an image and produce a
+ * result that is the right size and the right shape and wrong.
+ */
+namespace
+{
+
+/**
+ * Texel (x, y) of every content texture below. The red channel names the column and the green names the row,
+ * so a copy that moved a texel, mirrored an axis or dropped a row says which one it got wrong rather than
+ * only that something differs. The blue channel names the texture, which is what tells two of them apart.
+ *
+ * Nothing here goes through a shader, so these are bytes a copy moves rather than values a format rounds.
+ */
+Opal::DynamicArray<u8> MakeTexelGrid(i32 width, i32 height, u8 seed)
+{
+    Opal::DynamicArray<u8> bytes(width * height * 4);
+    for (i32 y = 0; y < height; ++y)
+    {
+        for (i32 x = 0; x < width; ++x)
+        {
+            const i32 base = (y * width + x) * 4;
+            bytes[base + 0] = static_cast<u8>(10 + x * 20);
+            bytes[base + 1] = static_cast<u8>(10 + y * 20);
+            bytes[base + 2] = seed;
+            bytes[base + 3] = 255;
+        }
+    }
+    return bytes;
+}
+
+/** One texel of a tightly packed RGBA readback, as four ints so a failure prints something readable. */
+Opal::InPlaceArray<i32, 4> GridTexel(Opal::ArrayView<const u8> pixels, i32 width, i32 x, i32 y)
+{
+    const i32 base = (y * width + x) * 4;
+    return {pixels[base], pixels[base + 1], pixels[base + 2], pixels[base + 3]};
+}
+
+#define REQUIRE_TEXEL_EQUALS(actual, expected)                                                                  \
+    do                                                                                                          \
+    {                                                                                                           \
+        INFO("expected rgba " << (expected)[0] << " " << (expected)[1] << " " << (expected)[2] << " "            \
+                              << (expected)[3] << ", got " << (actual)[0] << " " << (actual)[1] << " "           \
+                              << (actual)[2] << " " << (actual)[3]);                                            \
+        REQUIRE((actual)[0] == (expected)[0]);                                                                  \
+        REQUIRE((actual)[1] == (expected)[1]);                                                                  \
+        REQUIRE((actual)[2] == (expected)[2]);                                                                  \
+        REQUIRE((actual)[3] == (expected)[3]);                                                                  \
+    } while (false)
+
+/** Put pixels into every array layer of a texture and leave it where a transfer read can find it. */
+void UploadGrid(const Forge::Device& device, Forge::DeviceQueue& queue, Forge::Texture& texture, Opal::ArrayView<const u8> pixels)
+{
+    const Forge::Buffer staging(device, {.size = pixels.GetSize(), .usage = Forge::BufferUsageBits::TransferSource}, pixels);
+    const Forge::BufferImageCopyRegion region{
+        .image_subresource = {.array_layer_count = texture.GetDesc().array_layer_count}};
+    Forge::ImmediateSubmit(device, queue,
+                           [&](Forge::CommandBuffer& command_buffer)
+                           {
+                               command_buffer.CmdImageBarrier(Forge::ImageBarrier::ToTransferDestination(texture));
+                               command_buffer.CmdCopyBufferToImage(staging, texture, {&region, 1});
+                           });
+}
+
+/** A texture of the given size holding MakeTexelGrid, ready to be copied out of and into. */
+Forge::Texture MakeGridTexture(const Forge::Device& device, Forge::DeviceQueue& queue, i32 width, i32 height, u8 seed,
+                               PixelFormat format = PixelFormat::R8G8B8A8_UNORM)
+{
+    Forge::Texture texture(device, {.format = format,
+                                    .width = static_cast<u32>(width),
+                                    .height = static_cast<u32>(height),
+                                    .usage = Forge::TextureUsageBits::TransferSource |
+                                             Forge::TextureUsageBits::TransferDestination});
+    const Opal::DynamicArray<u8> pixels = MakeTexelGrid(width, height, seed);
+    UploadGrid(device, queue, texture, pixels);
+    return texture;
+}
+
+/** An empty texture a blit or a copy writes into. */
+Forge::Texture MakeTransferTarget(const Forge::Device& device, i32 width, i32 height,
+                                  PixelFormat format = PixelFormat::R8G8B8A8_UNORM)
+{
+    return Forge::Texture(device, {.format = format,
+                                   .width = static_cast<u32>(width),
+                                   .height = static_cast<u32>(height),
+                                   .usage = Forge::TextureUsageBits::TransferSource |
+                                            Forge::TextureUsageBits::TransferDestination});
+}
+
+/** The byte every buffer below is filled with before a copy, so anything the copy did not write says so. */
+constexpr u8 k_sentinel = 0xAB;
+
+}  // namespace
+
+TEST_CASE("Forge blits", "[forge]")
+{
+    if (!IsForgeAvailable())
+    {
+        SKIP("No Vulkan device on this machine.");
+    }
+    ForgeFixture fixture;
+    constexpr PixelFormat k_format = PixelFormat::R8G8B8A8_UNORM;
+    const Forge::PhysicalDevice& physical_device = fixture.device.GetPhysicalDevice();
+    if (!physical_device.SupportsBlit(k_format, true) || !physical_device.SupportsBlit(k_format, false))
+    {
+        SKIP("This device cannot blit the format these cases use.");
+    }
+    constexpr i32 k_side = 4;
+    constexpr u8 k_seed = 90;
+
+    SECTION("A blit scales the source up, and a nearest filter repeats its texels exactly")
+    {
+        constexpr i32 k_target_side = k_side * 2;
+        Forge::Texture source = MakeGridTexture(fixture.device, fixture.GetQueue(), k_side, k_side, k_seed);
+        Forge::Texture destination = MakeTransferTarget(fixture.device, k_target_side, k_target_side);
+
+        const Forge::ImageBlitRegion region{};
+        Forge::ImmediateSubmit(fixture.device, fixture.GetQueue(),
+                               [&](Forge::CommandBuffer& command_buffer)
+                               {
+                                   command_buffer.CmdImageBarrier(Forge::ImageBarrier::ToTransferSource(source));
+                                   command_buffer.CmdImageBarrier(Forge::ImageBarrier::ToTransferDestination(destination));
+                                   command_buffer.CmdBlitImage(source, destination, {&region, 1}, ImageFilter::Nearest);
+                               });
+
+        Opal::DynamicArray<u8> pixels(k_target_side * k_target_side * 4);
+        Forge::ReadBackTexture(fixture.device, fixture.GetQueue(), destination, pixels, 0, Forge::ImageLayout::TransferSource);
+        // Exactly two to one with no filtering, so every destination texel is the source texel above it and
+        // nothing has been averaged with a neighbour.
+        const Opal::DynamicArray<u8> expected = MakeTexelGrid(k_side, k_side, k_seed);
+        for (i32 y = 0; y < k_target_side; ++y)
+        {
+            for (i32 x = 0; x < k_target_side; ++x)
+            {
+                INFO("texel " << x << "," << y);
+                REQUIRE_TEXEL_EQUALS(GridTexel(pixels, k_target_side, x, y), GridTexel(expected, k_side, x / 2, y / 2));
+            }
+        }
+    }
+    SECTION("A negative extent runs an axis backwards, which mirrors it")
+    {
+        Forge::Texture source = MakeGridTexture(fixture.device, fixture.GetQueue(), k_side, k_side, k_seed);
+        Forge::Texture destination = MakeTransferTarget(fixture.device, k_side, k_side);
+
+        // The far corner sits before the near one on x, so the destination is written right to left.
+        const Forge::ImageBlitRegion region{.destination_offset = {k_side, 0, 0}, .destination_extent = {-k_side, k_side, 1}};
+        Forge::ImmediateSubmit(fixture.device, fixture.GetQueue(),
+                               [&](Forge::CommandBuffer& command_buffer)
+                               {
+                                   command_buffer.CmdImageBarrier(Forge::ImageBarrier::ToTransferSource(source));
+                                   command_buffer.CmdImageBarrier(Forge::ImageBarrier::ToTransferDestination(destination));
+                                   command_buffer.CmdBlitImage(source, destination, {&region, 1}, ImageFilter::Nearest);
+                               });
+
+        Opal::DynamicArray<u8> pixels(k_side * k_side * 4);
+        Forge::ReadBackTexture(fixture.device, fixture.GetQueue(), destination, pixels, 0, Forge::ImageLayout::TransferSource);
+        const Opal::DynamicArray<u8> expected = MakeTexelGrid(k_side, k_side, k_seed);
+        for (i32 y = 0; y < k_side; ++y)
+        {
+            for (i32 x = 0; x < k_side; ++x)
+            {
+                INFO("texel " << x << "," << y);
+                REQUIRE_TEXEL_EQUALS(GridTexel(pixels, k_side, x, y), GridTexel(expected, k_side, k_side - 1 - x, y));
+            }
+        }
+    }
+    SECTION("A blit converts between formats")
+    {
+        constexpr PixelFormat k_swapped = PixelFormat::B8G8R8A8_UNORM;
+        if (!physical_device.SupportsBlit(k_swapped, false))
+        {
+            SKIP("This device cannot blit into B8G8R8A8_UNORM.");
+        }
+        Forge::Texture source = MakeGridTexture(fixture.device, fixture.GetQueue(), k_side, k_side, k_seed);
+        Forge::Texture destination = MakeTransferTarget(fixture.device, k_side, k_side, k_swapped);
+
+        const Forge::ImageBlitRegion region{};
+        Forge::ImmediateSubmit(fixture.device, fixture.GetQueue(),
+                               [&](Forge::CommandBuffer& command_buffer)
+                               {
+                                   command_buffer.CmdImageBarrier(Forge::ImageBarrier::ToTransferSource(source));
+                                   command_buffer.CmdImageBarrier(Forge::ImageBarrier::ToTransferDestination(destination));
+                                   command_buffer.CmdBlitImage(source, destination, {&region, 1}, ImageFilter::Nearest);
+                               });
+
+        Opal::DynamicArray<u8> pixels(k_side * k_side * 4);
+        Forge::ReadBackTexture(fixture.device, fixture.GetQueue(), destination, pixels, 0, Forge::ImageLayout::TransferSource);
+        // Read back as the bytes of a BGRA image, so the red the source wrote is now the third byte. A blit
+        // that had copied rather than converted would leave it first, which is what separates this from
+        // CmdCopyImage.
+        const Opal::DynamicArray<u8> source_pixels = MakeTexelGrid(k_side, k_side, k_seed);
+        for (i32 y = 0; y < k_side; ++y)
+        {
+            for (i32 x = 0; x < k_side; ++x)
+            {
+                const Opal::InPlaceArray<i32, 4> from_source = GridTexel(source_pixels, k_side, x, y);
+                const Opal::InPlaceArray<i32, 4> actual = GridTexel(pixels, k_side, x, y);
+                INFO("texel " << x << "," << y);
+                const Opal::InPlaceArray<i32, 4> expected{from_source[2], from_source[1], from_source[0], from_source[3]};
+                REQUIRE_TEXEL_EQUALS(actual, expected);
+            }
+        }
+    }
+    SECTION("A linear filter averages where a nearest one repeats")
+    {
+        if (!physical_device.SupportsLinearFilter(k_format))
+        {
+            SKIP("This device cannot filter the test format linearly.");
+        }
+        constexpr i32 k_target_side = k_side * 2;
+        Forge::Texture source = MakeGridTexture(fixture.device, fixture.GetQueue(), k_side, k_side, k_seed);
+        Forge::Texture destination = MakeTransferTarget(fixture.device, k_target_side, k_target_side);
+
+        const Forge::ImageBlitRegion region{};
+        Forge::ImmediateSubmit(fixture.device, fixture.GetQueue(),
+                               [&](Forge::CommandBuffer& command_buffer)
+                               {
+                                   command_buffer.CmdImageBarrier(Forge::ImageBarrier::ToTransferSource(source));
+                                   command_buffer.CmdImageBarrier(Forge::ImageBarrier::ToTransferDestination(destination));
+                                   command_buffer.CmdBlitImage(source, destination, {&region, 1}, ImageFilter::Linear);
+                               });
+
+        Opal::DynamicArray<u8> pixels(k_target_side * k_target_side * 4);
+        Forge::ReadBackTexture(fixture.device, fixture.GetQueue(), destination, pixels, 0, Forge::ImageLayout::TransferSource);
+        // Where exactly a filtered sample lands is the driver's business, so this asserts the one thing the
+        // filter has to change: somewhere across the row a value appears that is not one of the four the
+        // source holds, which a nearest filter can never produce.
+        const Opal::DynamicArray<u8> source_pixels = MakeTexelGrid(k_side, k_side, k_seed);
+        bool found_blend = false;
+        for (i32 x = 0; x < k_target_side && !found_blend; ++x)
+        {
+            const i32 red = GridTexel(pixels, k_target_side, x, 0)[0];
+            bool matches_a_source_texel = false;
+            for (i32 source_x = 0; source_x < k_side; ++source_x)
+            {
+                matches_a_source_texel = matches_a_source_texel || red == GridTexel(source_pixels, k_side, source_x, 0)[0];
+            }
+            found_blend = !matches_a_source_texel;
+        }
+        REQUIRE(found_blend);
+    }
+    REQUIRE_NO_VALIDATION_ERROR(fixture);
+}
+
+TEST_CASE("Forge copies from a texture into a buffer", "[forge]")
+{
+    if (!IsForgeAvailable())
+    {
+        SKIP("No Vulkan device on this machine.");
+    }
+    ForgeFixture fixture;
+    constexpr i32 k_side = 4;
+    constexpr u8 k_seed = 55;
+    constexpr i32 k_buffer_size = 256;
+    const Opal::DynamicArray<u8> source_pixels = MakeTexelGrid(k_side, k_side, k_seed);
+
+    // Filled with the sentinel first, so every byte the copy did not write says so rather than reading as a
+    // zero that could have come from anywhere.
+    auto make_sentinel_buffer = [&]
+    {
+        Forge::Buffer buffer(fixture.device, {.size = k_buffer_size,
+                                              .usage = Forge::BufferUsageBits::TransferDestination,
+                                              .host_access = Forge::HostAccess::Random});
+        Opal::DynamicArray<u8> filler(k_buffer_size);
+        for (i32 i = 0; i < k_buffer_size; ++i)
+        {
+            filler[i] = k_sentinel;
+        }
+        buffer.Update(filler);
+        return buffer;
+    };
+
+    // Runs one region and hands back the whole buffer, so a case can check what was written and what was not.
+    auto copy_region = [&](const Forge::BufferImageCopyRegion& region)
+    {
+        Forge::Texture source = MakeGridTexture(fixture.device, fixture.GetQueue(), k_side, k_side, k_seed);
+        const Forge::Buffer buffer = make_sentinel_buffer();
+        Forge::ImmediateSubmit(fixture.device, fixture.GetQueue(),
+                               [&](Forge::CommandBuffer& command_buffer)
+                               {
+                                   command_buffer.CmdImageBarrier(Forge::ImageBarrier::ToTransferSource(source));
+                                   command_buffer.CmdCopyImageToBuffer(source, buffer, {&region, 1});
+                               });
+        Opal::DynamicArray<u8> out(k_buffer_size);
+        buffer.Read(out);
+        return out;
+    };
+
+    SECTION("A sub-box copies the texels it names and no others")
+    {
+        const Forge::BufferImageCopyRegion region{.image_offset = {1, 1, 0}, .image_extent = {2, 2, 1}};
+        const Opal::DynamicArray<u8> out = copy_region(region);
+        // Four texels packed from byte zero: the box at (1, 1), row major.
+        REQUIRE_TEXEL_EQUALS(GridTexel(out, 2, 0, 0), GridTexel(source_pixels, k_side, 1, 1));
+        REQUIRE_TEXEL_EQUALS(GridTexel(out, 2, 1, 0), GridTexel(source_pixels, k_side, 2, 1));
+        REQUIRE_TEXEL_EQUALS(GridTexel(out, 2, 0, 1), GridTexel(source_pixels, k_side, 1, 2));
+        REQUIRE_TEXEL_EQUALS(GridTexel(out, 2, 1, 1), GridTexel(source_pixels, k_side, 2, 2));
+        // Nothing past the sixteen bytes those four take.
+        for (i32 i = 2 * 2 * 4; i < k_buffer_size; ++i)
+        {
+            INFO("byte " << i);
+            REQUIRE(out[i] == k_sentinel);
+        }
+    }
+    SECTION("A buffer offset starts the copy further into the buffer")
+    {
+        constexpr i32 k_offset = 32;
+        const Forge::BufferImageCopyRegion region{.buffer_offset = k_offset, .image_extent = {k_side, k_side, 1}};
+        const Opal::DynamicArray<u8> out = copy_region(region);
+        for (i32 i = 0; i < k_offset; ++i)
+        {
+            INFO("byte " << i);
+            REQUIRE(out[i] == k_sentinel);
+        }
+        const Opal::ArrayView<const u8> written{out.GetData() + k_offset, source_pixels.GetSize()};
+        REQUIRE(CountMismatches(source_pixels, written) == 0);
+    }
+    SECTION("A row length spaces the rows out in the buffer")
+    {
+        // Two texels wide out of a four wide row length, so every row leaves two texels of the buffer alone.
+        // This is the parameter an off-by-one turns into an image that shears one texel per row.
+        const Forge::BufferImageCopyRegion region{.buffer_row_length = 4, .image_extent = {2, 2, 1}};
+        const Opal::DynamicArray<u8> out = copy_region(region);
+        for (i32 y = 0; y < 2; ++y)
+        {
+            for (i32 x = 0; x < 2; ++x)
+            {
+                INFO("texel " << x << "," << y);
+                REQUIRE_TEXEL_EQUALS(GridTexel(out, 4, x, y), GridTexel(source_pixels, k_side, x, y));
+            }
+            // The two texels of the row the copy stepped over.
+            for (i32 x = 2; x < 4; ++x)
+            {
+                for (i32 byte = 0; byte < 4; ++byte)
+                {
+                    INFO("padding texel " << x << "," << y << " byte " << byte);
+                    REQUIRE(out[(y * 4 + x) * 4 + byte] == k_sentinel);
+                }
+            }
+        }
+    }
+    SECTION("A row length and an image height space out the rows and the layers")
+    {
+        constexpr i32 k_layer_count = 2;
+        constexpr i32 k_box = 2;
+        constexpr i32 k_row_length = 4;
+        constexpr i32 k_image_height = 3;
+        Forge::Texture source(fixture.device, {.format = PixelFormat::R8G8B8A8_UNORM,
+                                               .width = k_side,
+                                               .height = k_side,
+                                               .array_layer_count = k_layer_count,
+                                               .usage = Forge::TextureUsageBits::TransferSource |
+                                                        Forge::TextureUsageBits::TransferDestination,
+                                               .view_type = Forge::TextureViewType::Texture2DArray});
+        // One grid per layer, with a different blue channel, so a layer stride that is wrong reads as the
+        // other layer rather than as noise.
+        Opal::DynamicArray<u8> both_layers(k_side * k_side * 4 * k_layer_count);
+        const Opal::DynamicArray<u8> layer_zero = MakeTexelGrid(k_side, k_side, 11);
+        const Opal::DynamicArray<u8> layer_one = MakeTexelGrid(k_side, k_side, 99);
+        for (i32 i = 0; i < layer_zero.GetSize(); ++i)
+        {
+            both_layers[i] = layer_zero[i];
+            both_layers[layer_zero.GetSize() + i] = layer_one[i];
+        }
+        UploadGrid(fixture.device, fixture.GetQueue(), source, {both_layers.GetData(), both_layers.GetSize()});
+
+        const Forge::Buffer buffer = make_sentinel_buffer();
+        const Forge::BufferImageCopyRegion region{.buffer_row_length = k_row_length,
+                                                  .buffer_image_height = k_image_height,
+                                                  .image_subresource = {.array_layer_count = k_layer_count},
+                                                  .image_extent = {k_box, k_box, 1}};
+        Forge::ImmediateSubmit(fixture.device, fixture.GetQueue(),
+                               [&](Forge::CommandBuffer& command_buffer)
+                               {
+                                   command_buffer.CmdImageBarrier(Forge::ImageBarrier::ToTransferSource(source));
+                                   command_buffer.CmdCopyImageToBuffer(source, buffer, {&region, 1});
+                               });
+        Opal::DynamicArray<u8> out(k_buffer_size);
+        buffer.Read(out);
+
+        // One layer is row_length * image_height texels apart from the next, which is larger than the box
+        // the copy actually wrote - so the gap between them has to still hold the sentinel.
+        constexpr i32 k_layer_stride = k_row_length * k_image_height;
+        for (i32 layer = 0; layer < k_layer_count; ++layer)
+        {
+            const Opal::DynamicArray<u8>& expected = layer == 0 ? layer_zero : layer_one;
+            for (i32 y = 0; y < k_box; ++y)
+            {
+                for (i32 x = 0; x < k_box; ++x)
+                {
+                    const i32 texel = layer * k_layer_stride + y * k_row_length + x;
+                    INFO("layer " << layer << " texel " << x << "," << y);
+                    REQUIRE_TEXEL_EQUALS(GridTexel(out, 1, texel, 0), GridTexel(expected, k_side, x, y));
+                }
+            }
+        }
+        // The last row of the first layer's image height is past its box and was never written.
+        for (i32 byte = 0; byte < 4 * k_row_length; ++byte)
+        {
+            const i32 index = (2 * k_row_length) * 4 + byte;
+            INFO("byte " << index << " of the gap between the layers");
+            REQUIRE(out[index] == k_sentinel);
+        }
+    }
+    REQUIRE_NO_VALIDATION_ERROR(fixture);
+}
+
+TEST_CASE("Forge mip level sizes", "[forge]")
+{
+    // No device: GetMipLevelSize reads a desc and nothing else, so this is the one case here that needs
+    // nothing on the machine.
+    SECTION("Every level is a quarter of the one above it")
+    {
+        const Forge::TextureDesc desc{.format = PixelFormat::R8G8B8A8_UNORM, .width = 8, .height = 8, .mip_level_count = 4};
+        REQUIRE(Forge::GetMipLevelSize(desc, 0) == 8 * 8 * 4);
+        REQUIRE(Forge::GetMipLevelSize(desc, 1) == 4 * 4 * 4);
+        REQUIRE(Forge::GetMipLevelSize(desc, 2) == 2 * 2 * 4);
+        REQUIRE(Forge::GetMipLevelSize(desc, 3) == 1 * 1 * 4);
+    }
+    SECTION("An odd extent halves down rather than rounding up, and never below one")
+    {
+        const Forge::TextureDesc desc{.format = PixelFormat::R8G8B8A8_UNORM, .width = 5, .height = 3, .mip_level_count = 4};
+        REQUIRE(Forge::GetMipLevelSize(desc, 0) == 5 * 3 * 4);
+        REQUIRE(Forge::GetMipLevelSize(desc, 1) == 2 * 1 * 4);
+        // Both axes are already at one here, and a level below that is still one texel rather than none.
+        REQUIRE(Forge::GetMipLevelSize(desc, 2) == 1 * 1 * 4);
+        REQUIRE(Forge::GetMipLevelSize(desc, 3) == 1 * 1 * 4);
+    }
+    SECTION("Array layers and depth both multiply the level")
+    {
+        const Forge::TextureDesc layered{
+            .format = PixelFormat::R8G8B8A8_UNORM, .width = 4, .height = 4, .mip_level_count = 2, .array_layer_count = 3};
+        REQUIRE(Forge::GetMipLevelSize(layered, 0) == 4 * 4 * 4 * 3);
+        REQUIRE(Forge::GetMipLevelSize(layered, 1) == 2 * 2 * 4 * 3);
+
+        const Forge::TextureDesc volume{.dimension = Forge::TextureDimension::Texture3D,
+                                        .format = PixelFormat::R8G8B8A8_UNORM,
+                                        .width = 4,
+                                        .height = 4,
+                                        .depth = 4,
+                                        .mip_level_count = 2};
+        REQUIRE(Forge::GetMipLevelSize(volume, 0) == 4 * 4 * 4 * 4);
+        // Depth halves with the other two axes.
+        REQUIRE(Forge::GetMipLevelSize(volume, 1) == 2 * 2 * 2 * 4);
+    }
+    SECTION("A depth format is sized by its own texel, not by four bytes of colour")
+    {
+        const Forge::TextureDesc half{.format = PixelFormat::D16_UNORM, .width = 4, .height = 4};
+        REQUIRE(Forge::GetMipLevelSize(half, 0) == 4 * 4 * 2);
+        const Forge::TextureDesc full{.format = PixelFormat::D32_SFLOAT, .width = 4, .height = 4};
+        REQUIRE(Forge::GetMipLevelSize(full, 0) == 4 * 4 * 4);
+    }
+    SECTION("A block compressed format throws rather than answering as if it were packed texels")
+    {
+        // The size of a compressed level is a count of blocks, not of texels, and answering with the texel
+        // arithmetic would hand a readback a buffer of the wrong size and no reason to notice.
+        const Forge::TextureDesc desc{.format = PixelFormat::BC1_RGBA_UNORM_BLOCK, .width = 8, .height = 8, .mip_level_count = 2};
+        REQUIRE_THROWS_AS(Forge::GetMipLevelSize(desc, 0), Opal::Exception);
+    }
+    SECTION("A level the texture does not have throws")
+    {
+        const Forge::TextureDesc desc{.format = PixelFormat::R8G8B8A8_UNORM, .width = 8, .height = 8, .mip_level_count = 2};
+        REQUIRE_THROWS_AS(Forge::GetMipLevelSize(desc, 2), Opal::Exception);
+    }
+}
+
+/** Two storage buffers in two different sets, so binding more than one set at a time is checkable. */
+constexpr const char* k_two_set_source = R"(
+[[vk::binding(0, 0)]] RWStructuredBuffer<uint> first;
+[[vk::binding(0, 1)]] RWStructuredBuffer<uint> second;
+
+[shader("compute")]
+[numthreads(64, 1, 1)]
+void main_two_sets(uint3 thread_id : SV_DispatchThreadID)
+{
+    second[thread_id.x] = first[thread_id.x] * 2;
+}
+)";
+
+TEST_CASE("Forge barrier batches", "[forge]")
+{
+    if (!IsForgeAvailable())
+    {
+        SKIP("No Vulkan device on this machine.");
+    }
+    ForgeFixture fixture;
+    constexpr i32 k_element_count = 64;
+    constexpr i32 k_side = 4;
+
+    SECTION("One call carries barriers of all three kinds")
+    {
+        // A compute shader fills a buffer, the batch orders that write against the copy that reads it and
+        // against the texture transition beside it, and the readback says both halves arrived.
+        const Forge::Shader compute_shader = Forge::Shader::FromSourceInMemory(
+            fixture.device, k_compute_source, {.entry_point = "main_compute", .cache = GetShaderCache()});
+        Forge::ComputePipelineDesc pipeline_desc;
+        pipeline_desc.shader = compute_shader;
+        pipeline_desc.push_constant_ranges.PushBack(
+            {.shader_stages = ShaderTypeBits::Compute, .offset = 0, .size = sizeof(VkDeviceAddress)});
+        const Forge::Pipeline pipeline(fixture.device, pipeline_desc);
+
+        const Forge::Buffer written(fixture.device, {.size = k_element_count * sizeof(u32),
+                                                     .usage = Forge::BufferUsageBits::StorageBuffer |
+                                                              Forge::BufferUsageBits::TransferSource,
+                                                     .host_access = Forge::HostAccess::None,
+                                                     .use_device_address = true});
+        const Forge::Buffer copied(fixture.device, {.size = k_element_count * sizeof(u32),
+                                                    .usage = Forge::BufferUsageBits::TransferDestination,
+                                                    .host_access = Forge::HostAccess::Random});
+        const Opal::DynamicArray<u8> zeros(k_element_count * sizeof(u32));
+        copied.Update(zeros);
+        Forge::Texture texture = MakeGridTexture(fixture.device, fixture.GetQueue(), k_side, k_side, 33);
+
+        const VkDeviceAddress address = written.GetNativeDeviceAddress();
+        Forge::ImmediateSubmit(
+            fixture.device, fixture.GetQueue(),
+            [&](Forge::CommandBuffer& command_buffer)
+            {
+                command_buffer.CmdBindPipeline(pipeline);
+                command_buffer.CmdPushConstants(pipeline, ShaderTypeBits::Compute, Opal::AsBytes(address));
+                command_buffer.CmdDispatch(1);
+
+                const Forge::MemoryBarrier memory{.stages_must_finish = Forge::PipelineStageBits::ComputeShader,
+                                                  .stages_must_finish_access = Forge::PipelineStageAccessBits::Write,
+                                                  .before_stages_start = Forge::PipelineStageBits::Transfer,
+                                                  .before_stages_start_access = Forge::PipelineStageAccessBits::Read};
+                const Forge::BufferBarrier buffer = Forge::BufferBarrier::WriteThenRead(
+                    written, Forge::PipelineStageBits::ComputeShader, Forge::PipelineStageBits::Transfer);
+                const Forge::ImageBarrier image = Forge::ImageBarrier::ToTransferSource(texture);
+                // CmdBarriers is what every other Cmd*Barrier delegates to, and the only way to put all
+                // three kinds into one dependency.
+                command_buffer.CmdBarriers({.memory = {&memory, 1}, .buffer = {&buffer, 1}, .image = {&image, 1}});
+
+                command_buffer.CmdCopyBuffer(written, copied);
+            });
+
+        Opal::DynamicArray<u32> values(k_element_count);
+        copied.Read({reinterpret_cast<u8*>(values.GetData()), values.GetSize() * sizeof(u32)});
+        for (i32 i = 0; i < k_element_count; ++i)
+        {
+            INFO("element " << i);
+            REQUIRE(values[i] == static_cast<u32>(i) + 1000);
+        }
+        // The image barrier in the same batch moved the texture, which is what makes this readback legal.
+        REQUIRE(texture.GetCurrentLayout() == Forge::ImageLayout::TransferSource);
+        Opal::DynamicArray<u8> pixels(k_side * k_side * 4);
+        Forge::ReadBackTexture(fixture.device, fixture.GetQueue(), texture, pixels, 0, Forge::ImageLayout::TransferSource);
+        const Opal::DynamicArray<u8> expected = MakeTexelGrid(k_side, k_side, 33);
+        REQUIRE(CountMismatches(expected, pixels) == 0);
+    }
+    SECTION("A by-region dependency reaches the dependency flags")
+    {
+        // Not inside a rendering pass, which is where the flag would actually mean something. Forge is
+        // written entirely on dynamic rendering, and vkCmdPipelineBarrier2 may not be called inside a render
+        // pass instance begun by CmdBeginRendering at all unless the device enabled
+        // VK_KHR_dynamic_rendering_local_read - the validation layer says so in as many words. So what is
+        // checkable here is that the flag reaches dependencyFlags rather than being dropped on the way;
+        // whether a tiled device then kept the work in tile memory is neither observable from here nor
+        // reachable without that extension.
+        Forge::Texture texture = MakeGridTexture(fixture.device, fixture.GetQueue(), k_side, k_side, 44);
+        Forge::ImmediateSubmit(fixture.device, fixture.GetQueue(),
+                               [&](Forge::CommandBuffer& command_buffer)
+                               {
+                                   const Forge::ImageBarrier image = Forge::ImageBarrier::ToTransferSource(texture);
+                                   command_buffer.CmdBarriers(
+                                       {.image = {&image, 1}, .flags = Forge::DependencyFlagBits::ByRegion});
+                               });
+        REQUIRE(texture.GetCurrentLayout() == Forge::ImageLayout::TransferSource);
+        Opal::DynamicArray<u8> pixels(k_side * k_side * 4);
+        Forge::ReadBackTexture(fixture.device, fixture.GetQueue(), texture, pixels, 0, Forge::ImageLayout::TransferSource);
+        const Opal::DynamicArray<u8> expected = MakeTexelGrid(k_side, k_side, 44);
+        REQUIRE(CountMismatches(expected, pixels) == 0);
+    }
+    REQUIRE_NO_VALIDATION_ERROR(fixture);
+}
+
+TEST_CASE("Forge barrier presets", "[forge]")
+{
+    if (!IsForgeAvailable())
+    {
+        SKIP("No Vulkan device on this machine.");
+    }
+    ForgeFixture fixture;
+    constexpr i32 k_side = 4;
+    constexpr u8 k_seed = 77;
+    const Opal::DynamicArray<u8> expected = MakeTexelGrid(k_side, k_side, k_seed);
+
+    /**
+     * Record the preset over a texture holding known content and read that content back afterwards. A preset
+     * naming the wrong source layout either trips the validation layer or discards what the texture holds -
+     * Undefined as an old layout is a discard - so content that survives says the preset named the layout the
+     * texture was actually in.
+     */
+    auto run_preset = [&](Forge::TextureUsageBits usage, auto&& make_barrier, Forge::ImageLayout expected_layout)
+    {
+        Forge::Texture texture(fixture.device, {.format = PixelFormat::R8G8B8A8_UNORM,
+                                                .width = k_side,
+                                                .height = k_side,
+                                                .usage = Forge::TextureUsageBits::TransferSource |
+                                                         Forge::TextureUsageBits::TransferDestination | usage});
+        UploadGrid(fixture.device, fixture.GetQueue(), texture, expected);
+        Forge::ImmediateSubmit(fixture.device, fixture.GetQueue(),
+                               [&](Forge::CommandBuffer& command_buffer)
+                               { command_buffer.CmdImageBarrier(make_barrier(texture)); });
+        REQUIRE(texture.GetCurrentLayout() == expected_layout);
+
+        Opal::DynamicArray<u8> pixels(k_side * k_side * 4);
+        Forge::ReadBackTexture(fixture.device, fixture.GetQueue(), texture, pixels, 0, Forge::ImageLayout::TransferSource);
+        REQUIRE(CountMismatches(expected, pixels) == 0);
+    };
+
+    SECTION("ToShaderRead moves a sampled texture without losing it")
+    {
+        run_preset(Forge::TextureUsageBits::Sampled, [](Forge::Texture& texture) { return Forge::ImageBarrier::ToShaderRead(texture); },
+                   Forge::ImageLayout::ShaderReadOnly);
+    }
+    SECTION("ToTransferSource moves a texture into the layout a copy reads from")
+    {
+        run_preset(Forge::TextureUsageBits::Sampled,
+                   [](Forge::Texture& texture) { return Forge::ImageBarrier::ToTransferSource(texture); },
+                   Forge::ImageLayout::TransferSource);
+    }
+    SECTION("The three argument To is told both layouts")
+    {
+        // No short form on purpose: with both, dropping an argument would leave a call that compiles and
+        // means the opposite, since the layout in the middle is the source and the one at the end is not.
+        run_preset(Forge::TextureUsageBits::Sampled,
+                   [](Forge::Texture& texture)
+                   {
+                       return Forge::ImageBarrier::To(texture, texture.GetCurrentLayout(), Forge::ImageLayout::TransferDestination);
+                   },
+                   Forge::ImageLayout::TransferDestination);
+    }
+    SECTION("A layout with no preset throws rather than guessing")
+    {
+        Forge::Texture texture(fixture.device, {.format = PixelFormat::R8G8B8A8_UNORM,
+                                                .width = k_side,
+                                                .height = k_side,
+                                                .usage = Forge::TextureUsageBits::TransferSource});
+        // General is a real layout with no preset behind it, which is the near miss worth checking: the
+        // dispatch throws rather than picking whichever preset is closest.
+        REQUIRE_THROWS_AS(Forge::ImageBarrier::To(texture, Forge::ImageLayout::Undefined, Forge::ImageLayout::General),
+                          Opal::Exception);
+    }
+    SECTION("ToDepthStencilAttachment moves a depth texture")
+    {
+        Forge::Texture depth(fixture.device, {.format = PixelFormat::D32_SFLOAT,
+                                              .width = k_side,
+                                              .height = k_side,
+                                              .usage = Forge::TextureUsageBits::DepthStencilAttachment});
+        Forge::ImmediateSubmit(fixture.device, fixture.GetQueue(),
+                               [&](Forge::CommandBuffer& command_buffer)
+                               { command_buffer.CmdImageBarrier(Forge::ImageBarrier::ToDepthStencilAttachment(depth)); });
+        // Rendering with one is 3.16; what this says is that the preset picks the depth aspect off the
+        // format rather than the colour aspect a colour texture would have given it.
+        REQUIRE(depth.GetCurrentLayout() == Forge::ImageLayout::DepthStencilAttachment);
+    }
+    SECTION("BufferBarrier::ReadThenWrite orders a read before the write that follows it")
+    {
+        // The write is a transfer over the same range a compute shader just read, so without the barrier the
+        // copy would be free to land before the dispatch finished reading.
+        const Forge::Shader compute_shader = Forge::Shader::FromSourceInMemory(
+            fixture.device, k_compute_source, {.entry_point = "main_compute", .cache = GetShaderCache()});
+        Forge::ComputePipelineDesc pipeline_desc;
+        pipeline_desc.shader = compute_shader;
+        pipeline_desc.push_constant_ranges.PushBack(
+            {.shader_stages = ShaderTypeBits::Compute, .offset = 0, .size = sizeof(VkDeviceAddress)});
+        const Forge::Pipeline pipeline(fixture.device, pipeline_desc);
+
+        constexpr i32 k_element_count = 64;
+        const Opal::DynamicArray<u8> replacement = MakeBytes(k_element_count * sizeof(u32), 13);
+        const Forge::Buffer shared(fixture.device, {.size = k_element_count * sizeof(u32),
+                                                    .usage = Forge::BufferUsageBits::StorageBuffer |
+                                                             Forge::BufferUsageBits::TransferDestination,
+                                                    .host_access = Forge::HostAccess::Random,
+                                                    .use_device_address = true});
+        const Forge::Buffer source(fixture.device,
+                                   {.size = replacement.GetSize(), .usage = Forge::BufferUsageBits::TransferSource}, replacement);
+
+        const VkDeviceAddress address = shared.GetNativeDeviceAddress();
+        Forge::ImmediateSubmit(fixture.device, fixture.GetQueue(),
+                               [&](Forge::CommandBuffer& command_buffer)
+                               {
+                                   command_buffer.CmdBindPipeline(pipeline);
+                                   command_buffer.CmdPushConstants(pipeline, ShaderTypeBits::Compute, Opal::AsBytes(address));
+                                   command_buffer.CmdDispatch(1);
+                                   command_buffer.CmdBufferBarrier(Forge::BufferBarrier::ReadThenWrite(
+                                       shared, Forge::PipelineStageBits::ComputeShader, Forge::PipelineStageBits::Transfer));
+                                   command_buffer.CmdCopyBuffer(source, shared);
+                               });
+
+        // The copy is last, so what is in the buffer is what it wrote.
+        Opal::DynamicArray<u8> out(replacement.GetSize());
+        shared.Read(out);
+        REQUIRE(CountMismatches(replacement, out) == 0);
+    }
+    REQUIRE_NO_VALIDATION_ERROR(fixture);
+}
+
+TEST_CASE("Forge barrier preset for presenting", "[forge]")
+{
+    if (!IsForgeAvailable())
+    {
+        SKIP("No Vulkan device on this machine.");
+    }
+    // Present is a swap chain layout, so naming it needs the device to have the extension even though
+    // nothing here presents. Asking for it without a surface is legal, and is what makes ToPresent
+    // checkable in a file that never opens a window.
+    const Forge::GraphicsContext context({.collect_debug_messages = true});
+    Opal::DynamicArray<Forge::PhysicalDevice> physical_devices = context.EnumeratePhysicalDevices();
+    if (!physical_devices[0].IsExtensionSupported(VK_KHR_SWAPCHAIN_EXTENSION_NAME))
+    {
+        SKIP("This device has no swap chain extension.");
+    }
+    Forge::DeviceDesc device_desc;
+    device_desc.extensions.PushBack(VK_KHR_SWAPCHAIN_EXTENSION_NAME);
+    Forge::Device device(std::move(physical_devices[0]), context, device_desc);
+    Forge::DeviceQueue& queue = device.GetQueue(Forge::QueueFamily::Graphics);
+
+    constexpr i32 k_side = 4;
+    Forge::Texture texture(device, {.format = PixelFormat::R8G8B8A8_UNORM,
+                                    .width = k_side,
+                                    .height = k_side,
+                                    .usage = Forge::TextureUsageBits::ColorAttachment |
+                                             Forge::TextureUsageBits::TransferSource});
+    Forge::ImmediateSubmit(device, queue,
+                           [&](Forge::CommandBuffer& command_buffer)
+                           {
+                               command_buffer.CmdImageBarrier(Forge::ImageBarrier::ToColorAttachment(texture));
+                               command_buffer.CmdImageBarrier(Forge::ImageBarrier::ToPresent(texture));
+                           });
+    REQUIRE(texture.GetCurrentLayout() == Forge::ImageLayout::Present);
+
+    Opal::StringUtf8 report;
+    for (const Forge::DebugMessage& message : context.GetDebugMessages())
+    {
+        if (message.severity == Forge::DebugMessageSeverity::Error && !!(message.types & Forge::DebugMessageTypeBits::Validation))
+        {
+            report += message.text;
+            report += Opal::StringUtf8("\n");
+        }
+    }
+    INFO(*report);
+    REQUIRE(context.GetDebugMessageCount(Forge::DebugMessageSeverity::Error, Forge::DebugMessageTypeBits::Validation) == 0);
+}
+
+TEST_CASE("Forge binding several descriptor sets at once", "[forge]")
+{
+    if (!IsForgeAvailable())
+    {
+        SKIP("No Vulkan device on this machine.");
+    }
+    ForgeFixture fixture;
+    constexpr i32 k_element_count = 64;
+
+    Forge::DescriptorPoolDesc pool_desc;
+    pool_desc.Add(Forge::DescriptorType::StorageBuffer, 8);
+    pool_desc.max_sets = 8;
+    const Forge::DescriptorPool pool(fixture.device, pool_desc);
+
+    Forge::DescriptorSetLayoutDesc layout_desc;
+    layout_desc.AddBinding(0, Forge::DescriptorType::StorageBuffer, 1, ShaderTypeBits::Compute);
+    const Forge::DescriptorSetLayout first_layout(fixture.device, layout_desc);
+    const Forge::DescriptorSetLayout second_layout(fixture.device, layout_desc);
+
+    const Forge::Shader shader = Forge::Shader::FromSourceInMemory(fixture.device, k_two_set_source,
+                                                                   {.entry_point = "main_two_sets", .cache = GetShaderCache()});
+    Forge::ComputePipelineDesc pipeline_desc;
+    pipeline_desc.shader = shader;
+    pipeline_desc.descriptor_set_layouts.PushBack(Opal::Ref<const Forge::DescriptorSetLayout>(first_layout));
+    pipeline_desc.descriptor_set_layouts.PushBack(Opal::Ref<const Forge::DescriptorSetLayout>(second_layout));
+    const Forge::Pipeline pipeline(fixture.device, pipeline_desc);
+
+    // Distinct values per element, so a shader that read the wrong set would produce a pattern rather than
+    // one wrong number.
+    Opal::DynamicArray<u32> input_values(k_element_count);
+    for (i32 i = 0; i < k_element_count; ++i)
+    {
+        input_values[i] = static_cast<u32>(i) + 500;
+    }
+    const Forge::Buffer input(fixture.device, {.size = k_element_count * sizeof(u32),
+                                               .usage = Forge::BufferUsageBits::StorageBuffer,
+                                               .host_access = Forge::HostAccess::Random},
+                              {reinterpret_cast<const u8*>(input_values.GetData()), input_values.GetSize() * sizeof(u32)});
+
+    auto make_wiped_output = [&]
+    {
+        Forge::Buffer output(fixture.device, {.size = k_element_count * sizeof(u32),
+                                              .usage = Forge::BufferUsageBits::StorageBuffer,
+                                              .host_access = Forge::HostAccess::Random});
+        const Opal::DynamicArray<u8> zeros(k_element_count * sizeof(u32));
+        output.Update(zeros);
+        return output;
+    };
+
+    auto require_doubled = [&](const Forge::Buffer& output)
+    {
+        Opal::DynamicArray<u32> values(k_element_count);
+        output.Read({reinterpret_cast<u8*>(values.GetData()), values.GetSize() * sizeof(u32)});
+        for (i32 i = 0; i < k_element_count; ++i)
+        {
+            INFO("element " << i);
+            REQUIRE(values[i] == input_values[i] * 2);
+        }
+    };
+
+    SECTION("Both sets go down in one call")
+    {
+        Forge::DescriptorSet first(pool, first_layout);
+        Forge::DescriptorSet second(pool, second_layout);
+        const Forge::Buffer output = make_wiped_output();
+        first.Update(0, input);
+        second.Update(0, output);
+
+        const Opal::InPlaceArray<Opal::Ref<const Forge::DescriptorSet>, 2> sets{Opal::Ref<const Forge::DescriptorSet>(first),
+                                                                                Opal::Ref<const Forge::DescriptorSet>(second)};
+        Forge::ImmediateSubmit(fixture.device, fixture.GetQueue(),
+                               [&](Forge::CommandBuffer& command_buffer)
+                               {
+                                   command_buffer.CmdBindPipeline(pipeline);
+                                   command_buffer.CmdBindDescriptorSets(pipeline, {sets.GetData(), 2});
+                                   command_buffer.CmdDispatch(1);
+                               });
+        require_doubled(output);
+    }
+    SECTION("A non-zero first set binds into the slot it names")
+    {
+        // Set zero goes down on its own and set one through the plural call at first_set one, so a call that
+        // ignored first_set would overwrite set zero and the shader would read its output as its input.
+        Forge::DescriptorSet first(pool, first_layout);
+        Forge::DescriptorSet second(pool, second_layout);
+        const Forge::Buffer output = make_wiped_output();
+        first.Update(0, input);
+        second.Update(0, output);
+
+        const Opal::InPlaceArray<Opal::Ref<const Forge::DescriptorSet>, 1> sets{Opal::Ref<const Forge::DescriptorSet>(second)};
+        Forge::ImmediateSubmit(fixture.device, fixture.GetQueue(),
+                               [&](Forge::CommandBuffer& command_buffer)
+                               {
+                                   command_buffer.CmdBindPipeline(pipeline);
+                                   command_buffer.CmdBindDescriptorSet(pipeline, first, 0);
+                                   command_buffer.CmdBindDescriptorSets(pipeline, {sets.GetData(), 1}, 1);
+                                   command_buffer.CmdDispatch(1);
+                               });
+        require_doubled(output);
+    }
+    REQUIRE_NO_VALIDATION_ERROR(fixture);
+}
