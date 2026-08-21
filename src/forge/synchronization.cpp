@@ -31,7 +31,7 @@ void Rndr::Forge::Fence::Destroy()
     }
 }
 
-Rndr::Forge::Fence::Fence(Fence&& other) noexcept : m_device(std::move(other.m_device)), m_fence(other.m_fence)
+Rndr::Forge::Fence::Fence(Fence&& other) noexcept : m_fence(other.m_fence), m_device(std::move(other.m_device))
 {
     other.m_fence = VK_NULL_HANDLE;
     other.m_device = nullptr;
@@ -45,6 +45,7 @@ Rndr::Forge::Fence& Rndr::Forge::Fence::operator=(Fence&& other) noexcept
         m_device = std::move(other.m_device);
         m_fence = other.m_fence;
         other.m_fence = VK_NULL_HANDLE;
+        other.m_device = nullptr;
     }
     return *this;
 }
@@ -101,10 +102,16 @@ bool Rndr::Forge::Fence::TryWaitForAll(Opal::ArrayView<const Fence> fences, u64 
         {
             throw Opal::Exception("Waiting on an empty fence!");
         }
+        // One wait is one call into one device, and the call below can only name the first fence's. Reading
+        // that one is safe from the second entry on, since the first has been through the check above.
+        if (i > 0 && fence.m_device->GetNativeDevice() != fences[0].m_device->GetNativeDevice())
+        {
+            throw Opal::Exception("Waiting on fences from more than one device at once!");
+        }
         native_fences[i] = fence.GetNativeFence();
     }
-    const VkResult wait_result =
-        vkWaitForFences(fences[0].m_device->GetNativeDevice(), static_cast<u32>(native_fences.GetSize()), native_fences.GetData(), VK_TRUE, timeout);
+    const VkResult wait_result = vkWaitForFences(fences[0].m_device->GetNativeDevice(), static_cast<u32>(native_fences.GetSize()),
+                                                native_fences.GetData(), VK_TRUE, timeout);
     if (wait_result == VK_TIMEOUT)
     {
         return false;
@@ -304,7 +311,7 @@ void Rndr::Forge::Semaphore::Destroy()
 }
 
 Rndr::Forge::Semaphore::Semaphore(Semaphore&& other) noexcept
-    : m_device(std::move(other.m_device)), m_semaphore(other.m_semaphore), m_type(other.m_type)
+    : m_semaphore(other.m_semaphore), m_device(std::move(other.m_device)), m_type(other.m_type)
 {
     other.m_device = nullptr;
     other.m_semaphore = VK_NULL_HANDLE;
@@ -322,6 +329,7 @@ Rndr::Forge::Semaphore& Rndr::Forge::Semaphore::operator=(Semaphore&& other) noe
         m_semaphore = other.m_semaphore;
         m_type = other.m_type;
         other.m_semaphore = VK_NULL_HANDLE;
+        other.m_device = nullptr;
         other.m_type = SemaphoreType::Binary;
     }
     return *this;
@@ -367,6 +375,13 @@ bool Rndr::Forge::Semaphore::TryWait(u64 value, u64 timeout) const
 void Rndr::Forge::Semaphore::Signal(u64 value) const
 {
     ThrowIfNotTimeline(*this, "Signalling");
+    // A signal has to leave the count above where it was. A device signal landing between this read and the
+    // call below would slip past, which no check on this side can close, but the mistake worth catching is
+    // the host signalling backwards - and Vulkan reports that one late, if at all.
+    if (value <= GetValue())
+    {
+        throw Opal::Exception("A timeline can only be signalled above the count it already holds!");
+    }
     const VkSemaphoreSignalInfo signal_info = {
         .sType = VK_STRUCTURE_TYPE_SEMAPHORE_SIGNAL_INFO, .semaphore = m_semaphore, .value = value};
     const VkResult result = vkSignalSemaphore(m_device->GetNativeDevice(), &signal_info);
@@ -415,6 +430,12 @@ bool Rndr::Forge::Semaphore::TryWaitForAll(Opal::ArrayView<const SemaphoreWait> 
         if (!wait.semaphore->IsTimeline())
         {
             throw Opal::Exception("Waiting on a binary semaphore, which only a device wait can consume!");
+        }
+        // One wait is one call into one device, and the call below can only name the first semaphore's.
+        // Reading that one is safe from the second entry on, since the first has been through the checks above.
+        if (i > 0 && wait.semaphore->m_device->GetNativeDevice() != waits[0].semaphore->m_device->GetNativeDevice())
+        {
+            throw Opal::Exception("Waiting on semaphores from more than one device at once!");
         }
         native_semaphores[i] = wait.semaphore->GetNativeSemaphore();
         values[i] = wait.value;

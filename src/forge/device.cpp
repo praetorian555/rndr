@@ -744,25 +744,33 @@ Rndr::Forge::DeviceQueue& Rndr::Forge::DeviceQueue::operator=(DeviceQueue&& othe
     return *this;
 }
 
+/** Which side of a submit a semaphore list is, which decides both the wording and one of the checks. */
+enum class SemaphoreRole
+{
+    Wait,
+    Signal
+};
+
 /** Translate one side of the semaphore list, checking that every semaphore in it actually holds a handle. */
 static Opal::DynamicArray<VkSemaphoreSubmitInfo> ToVkSemaphoreSubmitInfos(
-    Opal::ArrayView<const Rndr::Forge::SemaphoreSubmit> semaphores, const char* role, bool is_signal_side)
+    Opal::ArrayView<const Rndr::Forge::SemaphoreSubmit> semaphores, SemaphoreRole role)
 {
+    const char* role_name = role == SemaphoreRole::Signal ? "signal" : "wait";
     Opal::DynamicArray<VkSemaphoreSubmitInfo> infos(semaphores.GetSize());
     for (Rndr::i32 i = 0; i < semaphores.GetSize(); ++i)
     {
         const Rndr::Forge::SemaphoreSubmit& semaphore = semaphores[i];
         if (!semaphore.semaphore.IsValid() || !semaphore.semaphore->IsValid())
         {
-            throw Opal::Exception(Opal::StringEx("Submit was given an empty ") + role + " semaphore!");
+            throw Opal::Exception(Opal::StringEx("Submit was given an empty ") + role_name + " semaphore!");
         }
         if (!semaphore.semaphore->IsTimeline() && semaphore.value != 0)
         {
             // Vulkan ignores the field on a binary semaphore rather than complaining about it, which makes
             // this exactly the kind of mistake that would otherwise be found by the frame it went wrong in.
-            throw Opal::Exception(Opal::StringEx("A binary ") + role + " semaphore was given a value, which only a timeline has!");
+            throw Opal::Exception(Opal::StringEx("A binary ") + role_name + " semaphore was given a value, which only a timeline has!");
         }
-        if (is_signal_side && semaphore.semaphore->IsTimeline() && semaphore.value == 0)
+        if (role == SemaphoreRole::Signal && semaphore.semaphore->IsTimeline() && semaphore.value == 0)
         {
             // A signal has to leave the count above where it was, and nothing is above zero. A wait for zero
             // is legal and trivially satisfied, so only this side is turned away.
@@ -789,8 +797,9 @@ void Rndr::Forge::DeviceQueue::Submit(const SubmitDesc& desc)
         command_buffer_infos[i] = {.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_SUBMIT_INFO,
                                    .commandBuffer = command_buffer.GetNativeCommandBuffer()};
     }
-    const Opal::DynamicArray<VkSemaphoreSubmitInfo> wait_infos = ToVkSemaphoreSubmitInfos(desc.wait_semaphores, "wait", false);
-    const Opal::DynamicArray<VkSemaphoreSubmitInfo> signal_infos = ToVkSemaphoreSubmitInfos(desc.signal_semaphores, "signal", true);
+    const Opal::DynamicArray<VkSemaphoreSubmitInfo> wait_infos = ToVkSemaphoreSubmitInfos(desc.wait_semaphores, SemaphoreRole::Wait);
+    const Opal::DynamicArray<VkSemaphoreSubmitInfo> signal_infos =
+        ToVkSemaphoreSubmitInfos(desc.signal_semaphores, SemaphoreRole::Signal);
     // A fence is what the host waits on, and plenty of submits have nothing waiting for them.
     const VkFence native_fence = desc.fence.IsValid() ? desc.fence->GetNativeFence() : VK_NULL_HANDLE;
 
@@ -812,23 +821,6 @@ void Rndr::Forge::DeviceQueue::Submit(const CommandBuffer& command_buffer, const
 {
     const Opal::Ref<const CommandBuffer> command_buffer_ref(command_buffer);
     Submit({.command_buffers = {&command_buffer_ref, 1}, .fence = fence});
-}
-
-void Rndr::Forge::DeviceQueue::Submit(const CommandBuffer& command_buffer, const Semaphore& wait_semaphore,
-                                        PipelineStageBits wait_stage, const Semaphore& signal_semaphore,
-                                        const Fence& fence)
-{
-    const Opal::Ref<const CommandBuffer> command_buffer_ref(command_buffer);
-    // An empty semaphore on either side means that side is not synchronized, which this overload has always
-    // allowed, so it is left out of the batch rather than rejected by the checks in the desc based Submit.
-    const SemaphoreSubmit wait{.semaphore = wait_semaphore, .stages = wait_stage};
-    const SemaphoreSubmit signal{.semaphore = signal_semaphore, .stages = PipelineStageBits::AllCommands};
-    Submit({.command_buffers = {&command_buffer_ref, 1},
-            .wait_semaphores = wait_semaphore.IsValid() ? Opal::ArrayView<const SemaphoreSubmit>{&wait, 1}
-                                                        : Opal::ArrayView<const SemaphoreSubmit>{},
-            .signal_semaphores = signal_semaphore.IsValid() ? Opal::ArrayView<const SemaphoreSubmit>{&signal, 1}
-                                                            : Opal::ArrayView<const SemaphoreSubmit>{},
-            .fence = fence});
 }
 
 void Rndr::Forge::DeviceQueue::WaitIdle() const

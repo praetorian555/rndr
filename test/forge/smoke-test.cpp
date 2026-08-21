@@ -696,6 +696,26 @@ TEST_CASE("Forge timeline semaphores", "[forge]")
         fixture.GetQueue().Submit({.command_buffers = {first_batch, 1}, .wait_semaphores = {&wait, 1}});
         fixture.GetQueue().WaitIdle();
     }
+    SECTION("A signal that does not raise the count throws")
+    {
+        const Forge::Semaphore timeline(fixture.device, {.type = Forge::SemaphoreType::Timeline, .initial_value = 4});
+        REQUIRE_THROWS_AS(timeline.Signal(4), Opal::Exception);
+        REQUIRE_THROWS_AS(timeline.Signal(3), Opal::Exception);
+        REQUIRE(timeline.GetValue() == 4);
+        timeline.Signal(5);
+        REQUIRE(timeline.GetValue() == 5);
+    }
+    SECTION("WaitForAll over two devices throws rather than naming one of them")
+    {
+        // A second logical device on the same physical one. Not a second ForgeFixture: its context would
+        // call volkFinalize on the way out and unload Vulkan from under this one.
+        Opal::DynamicArray<Forge::PhysicalDevice> physical_devices = fixture.context.EnumeratePhysicalDevices();
+        const Forge::Device other(std::move(physical_devices[0]), fixture.context, {});
+        const Forge::Semaphore here(fixture.device, {.type = Forge::SemaphoreType::Timeline, .initial_value = 1});
+        const Forge::Semaphore there(other, {.type = Forge::SemaphoreType::Timeline, .initial_value = 1});
+        const Forge::SemaphoreWait waits[2] = {{.semaphore = here, .value = 1}, {.semaphore = there, .value = 1}};
+        REQUIRE_THROWS_AS(Forge::Semaphore::WaitForAll({waits, 2}), Opal::Exception);
+    }
     SECTION("An empty entry in WaitForAll throws, either way it is empty")
     {
         const Forge::Semaphore empty;
@@ -782,6 +802,16 @@ TEST_CASE("Forge waiting on several fences at once", "[forge]")
         // Nothing is submitted against this one, so it stays unsignalled and the timeout is the only way out.
         const Forge::Fence never_signalled(fixture.device, false);
         REQUIRE_FALSE(never_signalled.TryWait(k_short_timeout));
+    }
+    SECTION("Fences from two devices in one wait throw")
+    {
+        // A second logical device on the same physical one, for the reason the timeline case above gives.
+        Opal::DynamicArray<Forge::PhysicalDevice> physical_devices = fixture.context.EnumeratePhysicalDevices();
+        const Forge::Device other(std::move(physical_devices[0]), fixture.context, {});
+        Opal::DynamicArray<Forge::Fence> across_devices;
+        across_devices.EmplaceBack(fixture.device, true);
+        across_devices.EmplaceBack(other, true);
+        REQUIRE_THROWS_AS(Forge::Fence::WaitForAll(across_devices), Opal::Exception);
     }
     SECTION("An empty fence in the list throws")
     {

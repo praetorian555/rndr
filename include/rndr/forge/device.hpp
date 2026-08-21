@@ -204,10 +204,6 @@ public:
     /** One command buffer, one fence, nothing to synchronize against on the device. */
     void Submit(const CommandBuffer& command_buffer, const Fence& fence);
 
-    /** One command buffer between one wait and one signal. An empty semaphore on either side is skipped. */
-    void Submit(const CommandBuffer& command_buffer, const Semaphore& wait_semaphore,
-                PipelineStageBits wait_stage, const Semaphore& signal_semaphore, const Fence& fence);
-
     /**
      * Block until everything submitted to this queue has finished. Coarser than a fence and meant for
      * shutdown and for one-off setup work, not for the frame loop.

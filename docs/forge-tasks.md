@@ -390,9 +390,11 @@ follow-up is a field rather than a rewrite. It also removes a question the old c
 `VkPipelineStageFlags` of the original submit. That happened to be correct, since the stages both versions
 have kept their values, but it is not a cast anyone should have to check.
 
-The two old overloads remain and are written on the new one, so nothing calling them changed. The one that
-takes a wait and a signal still treats an empty semaphore on either side as "not synchronized there" and
-leaves it out of the batch, rather than tripping the checks the desc based submit makes.
+`Submit(command_buffer, fence)` remains, written on the desc based one; `ImmediateSubmit` in `transfer.hpp`
+is what calls it. The overload that took a wait and a signal is gone. 4.1 was its last caller and moved off
+it - two signal semaphores are more than it can express - and it was the only submit path that quietly
+dropped an empty semaphore instead of throwing, so keeping it would have meant two rules for the same
+mistake depending on which overload the caller reached for.
 
 Verified by a test that copies one half of a buffer in one command buffer and the other half in another,
 then reads the whole thing back, run three ways: both command buffers in one batch with a fence, the same
@@ -410,12 +412,18 @@ count it starts at; `SemaphoreSubmit` carries the value the submit waits for or 
 `Wait`, `Signal`, `GetValue` and a batched `WaitForAll`, all four of which turn away a binary semaphore,
 since only a device wait can consume one of those.
 
-Two mistakes the API can catch, it catches. A value on a binary semaphore throws: Vulkan ignores the field
+The mistakes the API can catch, it catches. A value on a binary semaphore throws: Vulkan ignores the field
 there rather than complaining, which makes it exactly the kind of error that would otherwise surface as a
 missing dependency several frames later. A timeline signal of zero throws too, since a signal has to leave
 the count above where it was and nothing is above zero - a timeline wait for zero is legal and trivially
-satisfied, so only the signal side is turned away. Acquire and present reject a timeline outright; neither
-`vkAcquireNextImageKHR` nor `VkPresentInfoKHR` can express one.
+satisfied, so only the signal side is turned away. `Signal` from the host makes the same check against the
+count the semaphore actually holds, which is what its doc comment had been promising and not doing; a device
+signal landing between that read and the call can still slip past, but the mistake worth catching is the
+host signalling backwards. Acquire and present reject a timeline outright; neither `vkAcquireNextImageKHR`
+nor `VkPresentInfoKHR` can express one.
+
+Both `WaitForAll` calls turn away a list that spans two devices. One wait is one call into one device, and
+the call can only name the first entry's - the rest were being read off it and assumed to agree.
 
 `timelineSemaphore` is not a `DeviceFeatures` field any more. It is required of every Vulkan 1.2
 implementation and Forge asks for 1.3, so an opt-in flag was guarding against a device that cannot exist;
@@ -826,22 +834,22 @@ Not to be confused with a pipeline cache, which 3.10 measured and dropped.
 
 `Forge::FrameContext` owns the frames in flight: a command buffer and an image-ready semaphore for each, a
 render-finished semaphore per swap chain image, one timeline semaphore counting the frames off, and the
-order acquire, submit and present have to happen in. `BeginFrame` waits for the slot this frame reuses, acquires an image and hands back a command
-buffer that is already recording; `EndFrame` transitions the image to Present, closes the command buffer,
-submits it against the right semaphores and presents.
+order acquire, submit and present have to happen in. `BeginFrame` waits for the slot this frame reuses,
+acquires an image and hands back a command buffer that is already recording; `EndFrame` transitions the
+image to Present, closes the command buffer, submits it against the right semaphores and presents.
 
 Both return `SwapChainStatus`, so a resized or minimized window stays what it already was in this API - an
 outcome rather than a failure. `BeginFrame` returning `OutOfDate` means the swap chain was rebuilt, nothing
-was recorded and the counter has not advanced, so the caller just continues its loop. The render-finished semaphores are rebuilt with the swap chain, which was the part of
-the sample most easily left out.
+was recorded and the counter has not advanced, so the caller just continues its loop. The render-finished
+semaphores are rebuilt with the swap chain, which was the part of the sample most easily left out.
 
 `EndFrame` takes the layout the caller left the image in, defaulting to `ColorAttachment`, and makes the
 transition to `Present` itself. Passing `Present` skips it, for a frame that already did it by hand.
 
 The sample went from 339 lines to 292, and the part this replaced from 61 lines to 14. What is left in its
 loop is what the application actually decides: the barriers into its attachments, the rendering desc, the
-draw calls. `SetDebugName` has an overload for the whole context, which names every fence, semaphore and
-command buffer with the index of the frame or image it belongs to.
+draw calls. `SetDebugName` has an overload for the whole context, which names the frame timeline and gives
+every semaphore and command buffer the index of the frame or image it belongs to.
 
 Verified by driving the sample through four resizes, a minimize and a restore with the validation layer on:
 six swap chain rebuilds, no validation message, clean exit. The headless tests cannot reach this - a frame
