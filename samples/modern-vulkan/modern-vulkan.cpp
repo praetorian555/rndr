@@ -225,6 +225,28 @@ void Run()
     ExampleController controller(*rndr_app, window_width, window_height, fly_camera_desc, 10.0f, 0.005f, 0.005f);
     controller.Enable(true);
 
+    bool fps_mode = true;
+    rndr_app->GetInputSystemChecked()
+        .GetCurrentContext()
+        .AddAction("FPS Mode")
+        .Bind(Rndr::Key::F1, Rndr::Trigger::Pressed)
+        .OnButton([&rndr_app, &window, &fps_mode, &controller](Rndr::Trigger, bool)
+        {
+            if (fps_mode)
+            {
+                rndr_app->ShowCursor(true);
+                window->SetCursorPositionMode(Rndr::CursorPositionMode::Normal);
+                controller.Enable(false);
+            }
+            else
+            {
+                rndr_app->ShowCursor(false);
+                window->SetCursorPositionMode(Rndr::CursorPositionMode::ResetToCenter);
+                controller.Enable(true);
+            }
+            fps_mode = !fps_mode;
+        });
+
     Rndr::f32 delta_seconds = 0.016;
     f64 gpu_milliseconds = 0.0;
     f64 last_title_update_seconds = 0.0;
