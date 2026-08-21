@@ -306,7 +306,7 @@ it means "throw the contents away". Forge does that bookkeeping instead. `Textur
 (mip level, array layer), starting at `Undefined` the way a freshly created image does, and `CmdBarriers`
 writes the new layout back over the range every image barrier covered.
 
-So the short form of every preset takes the source layout off the texture:
+So the short form of each named preset takes the source layout off the texture:
 
 ```cpp
 command_buffer.CmdTransition(texture, ImageLayout::ShaderReadOnly);       // the whole transition
@@ -323,6 +323,10 @@ the one the old API could not make.
 The long form of each preset, the one that is told the old layout, stays for the two cases the tracker
 cannot answer: a barrier over part of a texture whose range is narrowed after the preset built it, and a
 deliberate discard, which is `ImageLayout::Undefined` and is now something a call site has to say out loud.
+
+`To` is the exception with no short form. It is spelled `To(texture, old_layout, new_layout)`, so a short
+`To(texture, new_layout)` would put the destination in the slot the source occupies in the long one, and
+dropping an argument would compile into the opposite of what was meant. `CmdTransition` is its short form.
 
 **This is record-time bookkeeping, not execution-time.** It is correct exactly while one thread records
 command buffers in the order they will execute. It lies when two command buffers that touch the same texture

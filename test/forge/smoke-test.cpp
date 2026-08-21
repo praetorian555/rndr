@@ -427,6 +427,70 @@ TEST_CASE("Forge texture upload, mip generation and readback", "[forge]")
     REQUIRE_NO_VALIDATION_ERROR(fixture);
 }
 
+TEST_CASE("Forge mip generation covers every array layer", "[forge]")
+{
+    if (!IsForgeAvailable())
+    {
+        SKIP("No Vulkan device on this machine.");
+    }
+    ForgeFixture fixture;
+    constexpr PixelFormat k_format = PixelFormat::R8G8B8A8_UNORM;
+    if (!fixture.device.GetPhysicalDevice().SupportsBlit(k_format, true) ||
+        !fixture.device.GetPhysicalDevice().SupportsBlit(k_format, false))
+    {
+        SKIP("This device cannot blit R8G8B8A8_UNORM, so it cannot generate mips for one.");
+    }
+    constexpr i32 k_side = 8;
+    constexpr u32 k_mip_count = 4;  // 8 -> 4 -> 2 -> 1
+    constexpr u32 k_layer_count = 2;
+    // One constant colour per layer, so a box filter of either is that colour at every level, and a level of
+    // the second layer that was never written cannot pass for one that was.
+    constexpr u8 k_layer_texels[k_layer_count][4] = {{200, 100, 50, 255}, {17, 231, 88, 255}};
+
+    constexpr i32 k_layer_bytes = k_side * k_side * 4;
+    Opal::DynamicArray<u8> mip0(static_cast<i32>(k_layer_count) * k_layer_bytes);
+    for (i32 i = 0; i < mip0.GetSize(); ++i)
+    {
+        mip0[i] = k_layer_texels[i / k_layer_bytes][i % 4];
+    }
+
+    Forge::Texture texture(fixture.device, {.format = k_format,
+                                            .width = k_side,
+                                            .height = k_side,
+                                            .mip_level_count = k_mip_count,
+                                            .array_layer_count = k_layer_count,
+                                            .usage = Forge::TextureUsageBits::TransferSource |
+                                                     Forge::TextureUsageBits::TransferDestination |
+                                                     Forge::TextureUsageBits::Sampled,
+                                            .view_type = Forge::TextureViewType::Texture2DArray});
+    const Forge::Buffer staging(fixture.device, {.size = mip0.GetSize(), .usage = Forge::BufferUsageBits::TransferSource}, mip0);
+    // One region for both layers: the buffer holds them back to back, which is the order Vulkan copies them in.
+    const Forge::BufferImageCopyRegion mip0_region{.image_subresource = {.array_layer_count = k_layer_count}};
+    Forge::ImmediateSubmit(fixture.device, fixture.GetQueue(),
+                           [&](Forge::CommandBuffer& command_buffer)
+                           {
+                               command_buffer.CmdImageBarrier(Forge::ImageBarrier::ToTransferDestination(texture));
+                               command_buffer.CmdCopyBufferToImage(staging, texture, {&mip0_region, 1});
+                               command_buffer.CmdGenerateMips(texture, Forge::ImageLayout::TransferDestination);
+                           });
+
+    // Every level of every layer, not just of layer zero: a blit region names one array layer unless told
+    // otherwise, so a mip chain built without saying so leaves every layer past the first holding whatever it
+    // was created with, while the barriers around it still report the whole texture as filled and transitioned.
+    for (u32 level = 0; level < k_mip_count; ++level)
+    {
+        const i32 side = k_side >> level;
+        Opal::DynamicArray<u8> level_pixels(static_cast<i32>(k_layer_count) * side * side * 4);
+        Forge::ReadBackTexture(fixture.device, fixture.GetQueue(), texture, level_pixels, level, Forge::ImageLayout::TransferDestination);
+        for (i32 i = 0; i < level_pixels.GetSize(); ++i)
+        {
+            const i32 layer = i / (side * side * 4);
+            INFO("mip level " << level << ", array layer " << layer << ", byte " << i);
+            REQUIRE(level_pixels[i] == k_layer_texels[layer][i % 4]);
+        }
+    }
+    REQUIRE_NO_VALIDATION_ERROR(fixture);
+}
 
 TEST_CASE("Forge device-only buffer", "[forge]")
 {

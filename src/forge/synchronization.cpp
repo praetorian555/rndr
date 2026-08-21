@@ -288,11 +288,6 @@ Rndr::Forge::ImageBarrier Rndr::Forge::ImageBarrier::ToPresent(Texture& texture)
     return ToPresent(texture, texture.GetCurrentLayout());
 }
 
-Rndr::Forge::ImageBarrier Rndr::Forge::ImageBarrier::To(Texture& texture, ImageLayout new_layout)
-{
-    return To(texture, texture.GetCurrentLayout(), new_layout);
-}
-
 Rndr::Forge::ImageBarrier Rndr::Forge::ImageBarrier::To(Texture& texture, ImageLayout old_layout, ImageLayout new_layout)
 {
     switch (new_layout)

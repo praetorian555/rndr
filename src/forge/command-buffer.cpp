@@ -238,7 +238,7 @@ void Rndr::Forge::CommandBuffer::CmdMemoryBarrier(const MemoryBarrier& memory_ba
 
 void Rndr::Forge::CommandBuffer::CmdTransition(Texture& texture, ImageLayout new_layout)
 {
-    CmdImageBarrier(ImageBarrier::To(texture, new_layout));
+    CmdImageBarrier(ImageBarrier::To(texture, texture.GetCurrentLayout(), new_layout));
 }
 
 /** The extent of one mip level of a texture, which is the base extent halved once per level, floored at one. */
@@ -645,7 +645,10 @@ void Rndr::Forge::CommandBuffer::CmdGenerateMips(Texture& texture, ImageLayout f
         CmdImageBarrier(to_source);
 
         // Both extents are left at zero, which means the whole of each level, so the blit halves as it goes.
-        const ImageBlitRegion region{.source = {.mip_level = level - 1}, .destination = {.mip_level = level}};
+        // Every array layer in the one region: the count defaults to one, which would fill the mip chain of
+        // layer zero and leave the rest of an array texture holding whatever it was created with.
+        const ImageBlitRegion region{.source = {.mip_level = level - 1, .array_layer_count = desc.array_layer_count},
+                                     .destination = {.mip_level = level, .array_layer_count = desc.array_layer_count}};
         CmdBlitImage(texture, texture, {&region, 1});
     }
     // Every level but the last is a transfer source by now, and the last one is still a transfer destination.

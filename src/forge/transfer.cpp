@@ -71,7 +71,7 @@ void Rndr::Forge::ReadBackTexture(const Device& device, DeviceQueue& queue, Text
                         command_buffer.CmdCopyImageToBuffer(source, staging_buffer, {&region, 1});
                         if (final_layout != ImageLayout::Undefined && final_layout != ImageLayout::TransferSource)
                         {
-                            command_buffer.CmdImageBarrier(ImageBarrier::To(source, final_layout));
+                            command_buffer.CmdTransition(source, final_layout);
                         }
                     });
     staging_buffer.Read(out);

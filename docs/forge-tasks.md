@@ -918,6 +918,22 @@ execution order, it does not survive interleaved recording of two command buffer
 `CommandBuffer::Reset()` does not roll it back. Swap chain images are the case the tracker cannot observe,
 so `AcquireImage` resets the image it hands out to `Undefined`.
 
+`ImageBarrier::To` is the one preset with no short form, and deliberately. Its long form is
+`To(texture, old_layout, new_layout)`, so a short `To(texture, new_layout)` would put the destination where
+the source sits in the other, and dropping an argument would compile into the opposite of what was meant.
+`CmdTransition` is that short form instead - the same preset over the tracked layout, recorded.
+
+Two things fell out of holding the layout that were not what the task was for. `CmdGenerateMips` blitted
+array layer zero only: `ImageBlitRegion` names one layer unless told otherwise, while the barriers around
+the loop covered every layer, so an array texture came back with layers past the first still holding what
+they were created with and a tracked layout claiming otherwise. The regions now carry
+`desc.array_layer_count`, and `"Forge mip generation covers every array layer"` fails on the first byte of
+layer one without it. And the sample's depth barrier used to come out of `Undefined`, whose source scope is
+`{PipelineStart, None}` - no execution dependency at all between one frame's depth writes and the next, on
+one depth image shared across two frames in flight. It now comes out of `DepthStencilAttachment` and waits
+on the fragment test stages, which is a hazard that was there before this task and that nothing would have
+reported.
+
 Untested, and unfixably so until a headless surface exists: the acquire-time reset and the non-const swap
 chain getters have no `[forge]` coverage, since nothing in the test binary creates a swap chain. The sample
 is what exercised them - several resizes plus a minimize and restore, with no validation message.

@@ -248,8 +248,12 @@ struct ImageBarrier : Opal::ClonableBase<ImageBarrier>
      * The preset for a destination layout that is not known while writing the call - a function handed the
      * layout to leave a texture in dispatches through this rather than spelling the switch out again. Throws
      * for a layout that has no preset above.
+     *
+     * This one has no short form, and deliberately: with both, dropping an argument from a three argument
+     * call would leave a two argument one that compiles and means the opposite, since the layout in the
+     * middle is the source and the layout at the end is the destination. CommandBuffer::CmdTransition is the
+     * short form - it is this preset over the tracked layout, recorded.
      */
-    [[nodiscard]] static ImageBarrier To(Texture& texture, ImageLayout new_layout);
     [[nodiscard]] static ImageBarrier To(Texture& texture, ImageLayout old_layout, ImageLayout new_layout);
 };
 

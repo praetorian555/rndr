@@ -152,6 +152,13 @@ Rndr::Forge::SwapChainStatus Rndr::Forge::FrameContext::EndFrame()
     {
         throw Opal::Exception("EndFrame was called without a BeginFrame that succeeded!");
     }
+    // The recording flag and the acquired image are set together in BeginFrame, so this only fires when
+    // something outside the frame context released the swap chain mid-frame. Above the image is reached for
+    // rather than below, since every use of it from here on reports that as a missing BeginFrame instead.
+    if (!m_swap_chain->HasAcquiredImage())
+    {
+        throw Opal::Exception("The swap chain gave up its acquired image in the middle of a frame!");
+    }
     const u32 frame_index = GetFrameIndex();
     CommandBuffer& command_buffer = m_command_buffers[frame_index];
     Texture& color_image = GetColorImage();
@@ -162,13 +169,6 @@ Rndr::Forge::SwapChainStatus Rndr::Forge::FrameContext::EndFrame()
     command_buffer.End();
     m_is_frame_recording = false;
 
-    // The recording flag and the acquired image are set together in BeginFrame, so this only fires when
-    // something outside the frame context released the swap chain mid-frame. Cheaper to say so than to
-    // index the semaphore array with k_invalid_image_index.
-    if (!m_swap_chain->HasAcquiredImage())
-    {
-        throw Opal::Exception("The swap chain gave up its acquired image in the middle of a frame!");
-    }
     const Semaphore& image_ready = m_image_ready_semaphores[frame_index];
     const Semaphore& render_finished = m_render_finished_semaphores[static_cast<i32>(m_swap_chain->GetCurrentImageIndex())];
 
