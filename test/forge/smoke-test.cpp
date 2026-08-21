@@ -47,6 +47,18 @@ Rndr::ShaderCache& GetShaderCache()
     return cache;
 }
 
+/**
+ * Which of the optional queue families a fixture's device asks for. Both off by default: Device throws when
+ * a family it was asked for is not there, so a fixture that asked for them unconditionally would make every
+ * test in this file skip on a machine whose one family does everything - and the message would say there was
+ * no Vulkan device.
+ */
+struct ForgeQueues
+{
+    bool async_compute = false;
+    bool dedicated_transfer = false;
+};
+
 /** A Vulkan instance and a device with no surface. Everything below is built on one of these. */
 struct ForgeFixture
 {
@@ -56,14 +68,23 @@ struct ForgeFixture
     /**
      * @param features What the device is asked to turn on. The default is what every test but the ones about
      *        a specific feature wants, and asking for one that this device lacks throws out of here.
+     * @param queues Optional queue families to create alongside the graphics one. Asking for one this device
+     *        does not have throws out of here as well.
      */
-    explicit ForgeFixture(const Forge::DeviceFeatures& features = {}) : context({.collect_debug_messages = true})
+    explicit ForgeFixture(const Forge::DeviceFeatures& features = {}, const ForgeQueues& queues = {})
+        : context({.collect_debug_messages = true})
     {
         Opal::DynamicArray<Forge::PhysicalDevice> physical_devices = context.EnumeratePhysicalDevices();
-        device = Forge::Device(std::move(physical_devices[0]), context, {.features = features});
+        device = Forge::Device(std::move(physical_devices[0]), context,
+                               {.features = features,
+                                .use_async_compute_queue = queues.async_compute,
+                                .use_dedicated_transfer_queue = queues.dedicated_transfer});
     }
 
-    Forge::DeviceQueue& GetQueue() { return device.GetQueue(Forge::QueueFamily::Graphics); }
+    Forge::DeviceQueue& GetQueue(Forge::QueueFamily queue_family = Forge::QueueFamily::Graphics)
+    {
+        return device.GetQueue(queue_family);
+    }
 
     /**
      * What the validation layer reported, as text, so a failure names the problem instead of only counting
@@ -122,6 +143,24 @@ bool IsForgeAvailable()
         }
     }();
     return available;
+}
+
+/**
+ * Whether this machine offers the optional queue families, since one family that does everything is a legal
+ * device and Forge throws rather than falling back to the graphics queue when asked for a family it has not
+ * got. Tests about those families skip on such a machine the way the whole file skips on one with no device.
+ */
+bool AreQueuesAvailable(const ForgeQueues& queues)
+{
+    try
+    {
+        const ForgeFixture probe({}, queues);
+        return true;
+    }
+    catch (const Opal::Exception&)
+    {
+        return false;
+    }
 }
 
 /** Writes its own thread index plus a constant into a buffer named by its address, so every value is checkable. */
@@ -1586,6 +1625,7 @@ TEST_CASE("Forge texture layout tracking", "[forge]")
                                    command_buffer.CmdTransition(texture, Forge::ImageLayout::TransferSource);
                                });
         REQUIRE(texture.GetCurrentLayout() == Forge::ImageLayout::TransferSource);
+
         for (u32 level = 0; level < k_mip_count; ++level)
         {
             REQUIRE(texture.GetCurrentLayout(level) == Forge::ImageLayout::TransferSource);
@@ -6901,6 +6941,253 @@ TEST_CASE("Forge descriptor pool recycling", "[forge]")
         require_set_works(reused);
         // The one that was never destroyed is untouched by any of it.
         require_set_works(second);
+    }
+    REQUIRE_NO_VALIDATION_ERROR(fixture);
+}
+
+TEST_CASE("Forge a dispatch on the async compute queue", "[forge]")
+{
+    if (!IsForgeAvailable())
+    {
+        SKIP("No Vulkan device on this machine.");
+    }
+    constexpr ForgeQueues k_queues{.async_compute = true};
+    if (!AreQueuesAvailable(k_queues))
+    {
+        SKIP("This device has no async compute family.");
+    }
+    ForgeFixture fixture({}, k_queues);
+    Forge::DeviceQueue& compute_queue = fixture.GetQueue(Forge::QueueFamily::AsyncCompute);
+    // The point of the case: a family that is not the graphics one. A device that handed back the graphics
+    // queue under another name would pass everything below while proving nothing.
+    REQUIRE(compute_queue.GetQueueFamilyIndex() != fixture.GetQueue().GetQueueFamilyIndex());
+
+    constexpr i32 k_element_count = 256;
+    constexpr i32 k_group_size = 64;
+    const Forge::Buffer output(fixture.device, {.size = k_element_count * sizeof(u32),
+                                                .usage = Forge::BufferUsageBits::StorageBuffer,
+                                                .host_access = Forge::HostAccess::Random,
+                                                .use_device_address = true});
+    const Opal::DynamicArray<u8> zeros(k_element_count * sizeof(u32));
+    output.Update(zeros);
+
+    const Forge::Shader compute_shader =
+        Forge::Shader::FromSourceInMemory(fixture.device, k_compute_source, {.entry_point = "main_compute", .cache = GetShaderCache()});
+    Forge::ComputePipelineDesc pipeline_desc;
+    pipeline_desc.shader = compute_shader;
+    pipeline_desc.push_constant_ranges.PushBack(
+        {.shader_stages = ShaderTypeBits::Compute, .offset = 0, .size = sizeof(VkDeviceAddress)});
+    const Forge::Pipeline pipeline(fixture.device, pipeline_desc);
+    const VkDeviceAddress output_address = output.GetNativeDeviceAddress();
+
+    // The command buffer comes out of the pool of the queue it is submitted to, which is the part a queue of
+    // the wrong family gets wrong: a command buffer allocated on one family may not be submitted to another.
+    Forge::ImmediateSubmit(fixture.device, compute_queue,
+                           [&](Forge::CommandBuffer& command_buffer)
+                           {
+                               command_buffer.CmdBindPipeline(pipeline);
+                               command_buffer.CmdPushConstants(pipeline, ShaderTypeBits::Compute, Opal::AsBytes(output_address));
+                               command_buffer.CmdDispatch(k_element_count / k_group_size);
+                           });
+
+    Opal::DynamicArray<u32> values(k_element_count);
+    output.Read({reinterpret_cast<u8*>(values.GetData()), values.GetSize() * sizeof(u32)});
+    for (i32 i = 0; i < k_element_count; ++i)
+    {
+        REQUIRE(values[i] == static_cast<u32>(i) + 1000);
+    }
+
+    SECTION("Timestamps on that family are read with its own valid bits")
+    {
+        const u32 family_index = compute_queue.GetQueueFamilyIndex();
+        const VkQueueFamilyProperties& properties = fixture.device.GetPhysicalDevice().GetQueueFamilyProperties()[family_index];
+        if (properties.timestampValidBits == 0)
+        {
+            // A family that can time nothing is named rather than answered with zeroes.
+            REQUIRE_THROWS_AS(
+                Forge::TimestampQueryPool(fixture.device, {.query_count = 2, .queue_family = Forge::QueueFamily::AsyncCompute}),
+                Opal::Exception);
+        }
+        else
+        {
+            const Forge::TimestampQueryPool pool(fixture.device,
+                                                 {.query_count = 2, .queue_family = Forge::QueueFamily::AsyncCompute});
+            Forge::ImmediateSubmit(fixture.device, compute_queue,
+                                   [&](Forge::CommandBuffer& command_buffer)
+                                   {
+                                       command_buffer.CmdResetQueryPool(pool);
+                                       command_buffer.CmdWriteTimestamp(pool, 0, Forge::PipelineStageBits::PipelineStart);
+                                       command_buffer.CmdBindPipeline(pipeline);
+                                       command_buffer.CmdPushConstants(pipeline, ShaderTypeBits::Compute,
+                                                                       Opal::AsBytes(output_address));
+                                       command_buffer.CmdDispatch(k_element_count / k_group_size);
+                                       command_buffer.CmdWriteTimestamp(pool, 1, Forge::PipelineStageBits::PipelineEnd);
+                                   });
+            f64 elapsed_ms = -1.0;
+            REQUIRE(pool.TryGetElapsedMilliseconds(0, 1, elapsed_ms));
+            INFO("elapsed " << elapsed_ms << " ms on family " << family_index);
+            REQUIRE(elapsed_ms >= 0.0);
+            // Ticks the mask of this family did not clear come back as an interval no dispatch this small
+            // could have taken.
+            REQUIRE(elapsed_ms < 1000.0);
+        }
+    }
+    REQUIRE_NO_VALIDATION_ERROR(fixture);
+}
+
+TEST_CASE("Forge transfers on the dedicated transfer queue", "[forge]")
+{
+    if (!IsForgeAvailable())
+    {
+        SKIP("No Vulkan device on this machine.");
+    }
+    constexpr ForgeQueues k_queues{.dedicated_transfer = true};
+    if (!AreQueuesAvailable(k_queues))
+    {
+        SKIP("This device has no dedicated transfer family.");
+    }
+    ForgeFixture fixture({}, k_queues);
+    Forge::DeviceQueue& transfer_queue = fixture.GetQueue(Forge::QueueFamily::Transfer);
+    REQUIRE(transfer_queue.GetQueueFamilyIndex() != fixture.GetQueue().GetQueueFamilyIndex());
+
+    constexpr i32 k_size = 256;
+    const Opal::DynamicArray<u8> written = MakeBytes(k_size, 41);
+    const Opal::DynamicArray<u8> zeros(k_size);
+
+    SECTION("A buffer copy")
+    {
+        const Forge::Buffer source(fixture.device, {.size = k_size, .usage = Forge::BufferUsageBits::TransferSource}, written);
+        const Forge::Buffer destination(fixture.device, {.size = k_size,
+                                                         .usage = Forge::BufferUsageBits::TransferDestination,
+                                                         .host_access = Forge::HostAccess::Random});
+        destination.Update(zeros);
+        Forge::ImmediateSubmit(fixture.device, transfer_queue,
+                               [&](Forge::CommandBuffer& command_buffer) { command_buffer.CmdCopyBuffer(source, destination); });
+        Opal::DynamicArray<u8> read_back(k_size);
+        destination.Read(read_back);
+        REQUIRE(CountMismatches(written, read_back) == 0);
+    }
+    SECTION("A texture upload and readback, in the layouts this family may transition into")
+    {
+        // The per-family trap. A transfer only family supports no shader stage, so it may not transition an
+        // image into ShaderReadOnly - which is what ReadBackTexture leaves a texture in by default. Undefined
+        // as the final layout leaves it in TransferSource, and TransferSource and TransferDestination are the
+        // two this family can reach.
+        constexpr i32 k_side = 4;
+        constexpr PixelFormat k_format = PixelFormat::R8G8B8A8_UNORM;
+        const Opal::DynamicArray<u8> pixels = MakeBytes(k_side * k_side * 4, 13);
+        Forge::Texture texture(fixture.device, {.format = k_format,
+                                                .width = k_side,
+                                                .height = k_side,
+                                                .usage = Forge::TextureUsageBits::TransferSource |
+                                                         Forge::TextureUsageBits::TransferDestination});
+        const Forge::Buffer staging(fixture.device, {.size = pixels.GetSize(), .usage = Forge::BufferUsageBits::TransferSource},
+                                    pixels);
+        const Forge::BufferImageCopyRegion region;
+        Forge::ImmediateSubmit(fixture.device, transfer_queue,
+                               [&](Forge::CommandBuffer& command_buffer)
+                               {
+                                   command_buffer.CmdImageBarrier(Forge::ImageBarrier::ToTransferDestination(texture));
+                                   command_buffer.CmdCopyBufferToImage(staging, texture, {&region, 1});
+                               });
+        REQUIRE(texture.GetCurrentLayout() == Forge::ImageLayout::TransferDestination);
+
+        Opal::DynamicArray<u8> read_back(pixels.GetSize());
+        Forge::ReadBackTexture(fixture.device, transfer_queue, texture, read_back, 0, Forge::ImageLayout::Undefined);
+        REQUIRE(texture.GetCurrentLayout() == Forge::ImageLayout::TransferSource);
+        REQUIRE(CountMismatches(pixels, read_back) == 0);
+    }
+    REQUIRE_NO_VALIDATION_ERROR(fixture);
+}
+
+TEST_CASE("Forge a buffer handed from one queue family to another", "[forge]")
+{
+    if (!IsForgeAvailable())
+    {
+        SKIP("No Vulkan device on this machine.");
+    }
+    constexpr ForgeQueues k_queues{.async_compute = true};
+    if (!AreQueuesAvailable(k_queues))
+    {
+        SKIP("This device has no async compute family.");
+    }
+    ForgeFixture fixture({}, k_queues);
+    Forge::DeviceQueue& compute_queue = fixture.GetQueue(Forge::QueueFamily::AsyncCompute);
+    Forge::DeviceQueue& graphics_queue = fixture.GetQueue();
+    const u32 compute_family = compute_queue.GetQueueFamilyIndex();
+    const u32 graphics_family = graphics_queue.GetQueueFamilyIndex();
+    REQUIRE(compute_family != graphics_family);
+
+    constexpr i32 k_element_count = 256;
+    constexpr i32 k_group_size = 64;
+    constexpr u64 k_byte_size = k_element_count * sizeof(u32);
+    // Device local on purpose: a buffer the host could read would let the copy on the other family be left
+    // out, and handing a buffer between two families is what an ownership transfer is for.
+    const Forge::Buffer shared(fixture.device, {.size = k_byte_size,
+                                                .usage = Forge::BufferUsageBits::StorageBuffer |
+                                                         Forge::BufferUsageBits::TransferSource,
+                                                .use_device_address = true});
+    const Forge::Buffer host_visible(fixture.device, {.size = k_byte_size,
+                                                      .usage = Forge::BufferUsageBits::TransferDestination,
+                                                      .host_access = Forge::HostAccess::Random});
+    const Opal::DynamicArray<u8> zeros(k_byte_size);
+    host_visible.Update(zeros);
+
+    const Forge::Shader compute_shader =
+        Forge::Shader::FromSourceInMemory(fixture.device, k_compute_source, {.entry_point = "main_compute", .cache = GetShaderCache()});
+    Forge::ComputePipelineDesc pipeline_desc;
+    pipeline_desc.shader = compute_shader;
+    pipeline_desc.push_constant_ranges.PushBack(
+        {.shader_stages = ShaderTypeBits::Compute, .offset = 0, .size = sizeof(VkDeviceAddress)});
+    const Forge::Pipeline pipeline(fixture.device, pipeline_desc);
+    const VkDeviceAddress shared_address = shared.GetNativeDeviceAddress();
+
+    // The release half, on the family that wrote the buffer. Its destination stages and access are empty:
+    // what happens on the other side of a release belongs to the acquiring family and is named there.
+    Forge::CommandBuffer release_commands(fixture.device, compute_queue);
+    release_commands.Begin();
+    release_commands.CmdBindPipeline(pipeline);
+    release_commands.CmdPushConstants(pipeline, ShaderTypeBits::Compute, Opal::AsBytes(shared_address));
+    release_commands.CmdDispatch(k_element_count / k_group_size);
+    release_commands.CmdBufferBarrier({.stages_must_finish = Forge::PipelineStageBits::ComputeShader,
+                                       .stages_must_finish_access = Forge::PipelineStageAccessBits::ShaderWrite,
+                                       .before_stages_start = Forge::PipelineStageBits::None,
+                                       .before_stages_start_access = Forge::PipelineStageAccessBits::None,
+                                       .source_queue_family = compute_family,
+                                       .destination_queue_family = graphics_family,
+                                       .buffer = shared});
+    release_commands.End();
+
+    // The acquire half, on the family that reads it, naming the same pair of families in the same order.
+    Forge::CommandBuffer acquire_commands(fixture.device, graphics_queue);
+    acquire_commands.Begin();
+    acquire_commands.CmdBufferBarrier({.stages_must_finish = Forge::PipelineStageBits::None,
+                                       .stages_must_finish_access = Forge::PipelineStageAccessBits::None,
+                                       .before_stages_start = Forge::PipelineStageBits::Copy,
+                                       .before_stages_start_access = Forge::PipelineStageAccessBits::TransferRead,
+                                       .source_queue_family = compute_family,
+                                       .destination_queue_family = graphics_family,
+                                       .buffer = shared});
+    acquire_commands.CmdCopyBuffer(shared, host_visible);
+    acquire_commands.End();
+
+    // A semaphore between the two submits, which the transfer needs beyond the barriers: the acquire may not
+    // run before the release, and two queues have no order of their own.
+    const Forge::Semaphore handover(fixture.device);
+    const Forge::Fence fence(fixture.device, false);
+    const Opal::Ref<const Forge::CommandBuffer> release_batch[1] = {Opal::Ref<const Forge::CommandBuffer>(release_commands)};
+    const Opal::Ref<const Forge::CommandBuffer> acquire_batch[1] = {Opal::Ref<const Forge::CommandBuffer>(acquire_commands)};
+    const Forge::SemaphoreSubmit signal{.semaphore = handover, .stages = Forge::PipelineStageBits::ComputeShader};
+    const Forge::SemaphoreSubmit wait{.semaphore = handover, .stages = Forge::PipelineStageBits::Transfer};
+    compute_queue.Submit({.command_buffers = {release_batch, 1}, .signal_semaphores = {&signal, 1}});
+    graphics_queue.Submit({.command_buffers = {acquire_batch, 1}, .wait_semaphores = {&wait, 1}, .fence = fence});
+    fence.Wait();
+
+    Opal::DynamicArray<u32> values(k_element_count);
+    host_visible.Read({reinterpret_cast<u8*>(values.GetData()), values.GetSize() * sizeof(u32)});
+    for (i32 i = 0; i < k_element_count; ++i)
+    {
+        REQUIRE(values[i] == static_cast<u32>(i) + 1000);
     }
     REQUIRE_NO_VALIDATION_ERROR(fixture);
 }
