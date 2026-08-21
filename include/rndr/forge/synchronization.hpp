@@ -206,39 +206,50 @@ struct ImageBarrier : Opal::ClonableBase<ImageBarrier>
 
     /**
      * The standard transitions, spelled out. Each covers the whole texture and picks the stages and the
-     * access from what the texture is about to be used for, so only the layout it is coming from is left to
-     * the caller. Where that layout has an obvious answer it is the default; where getting it wrong would
-     * throw away the contents of the texture, it is not.
+     * access from what the texture is about to be used for.
      *
-     * ImageLayout::Undefined as the old layout discards whatever the texture holds, which is what a color
-     * attachment that is cleared at the start of the frame wants and what a texture that is about to be read
-     * does not.
+     * Every one comes in two forms. The short one takes the layout the texture is coming from off the texture
+     * itself, which is what Texture::GetCurrentLayout tracks and what almost every caller wants; it throws
+     * when the levels of the texture are not all in one layout, since there is then no honest answer. The long
+     * one is told that layout, for the caller that knows better than the tracker - a barrier over part of a
+     * texture, or a deliberate discard.
+     *
+     * ImageLayout::Undefined as the old layout is that discard: it throws away whatever the texture holds,
+     * which is what a color attachment cleared at the start of the frame wants and what a texture that is
+     * about to be read does not.
      */
 
     /** Rendered into as a color attachment. */
-    [[nodiscard]] static ImageBarrier ToColorAttachment(Texture& texture, ImageLayout old_layout = ImageLayout::Undefined);
+    [[nodiscard]] static ImageBarrier ToColorAttachment(Texture& texture);
+    [[nodiscard]] static ImageBarrier ToColorAttachment(Texture& texture, ImageLayout old_layout);
 
     /** Rendered into as a depth or stencil attachment. */
-    [[nodiscard]] static ImageBarrier ToDepthStencilAttachment(Texture& texture, ImageLayout old_layout = ImageLayout::Undefined);
+    [[nodiscard]] static ImageBarrier ToDepthStencilAttachment(Texture& texture);
+    [[nodiscard]] static ImageBarrier ToDepthStencilAttachment(Texture& texture, ImageLayout old_layout);
 
     /** Sampled in a shader. The reader defaults to the fragment stage. */
+    [[nodiscard]] static ImageBarrier ToShaderRead(Texture& texture, PipelineStageBits reader = PipelineStageBits::FragmentShader);
     [[nodiscard]] static ImageBarrier ToShaderRead(Texture& texture, ImageLayout old_layout,
                                                    PipelineStageBits reader = PipelineStageBits::FragmentShader);
 
     /** Written by a transfer command, which is how a texture is uploaded. */
-    [[nodiscard]] static ImageBarrier ToTransferDestination(Texture& texture, ImageLayout old_layout = ImageLayout::Undefined);
+    [[nodiscard]] static ImageBarrier ToTransferDestination(Texture& texture);
+    [[nodiscard]] static ImageBarrier ToTransferDestination(Texture& texture, ImageLayout old_layout);
 
     /** Read by a transfer command, which is how a texture is read back or has its mips generated. */
+    [[nodiscard]] static ImageBarrier ToTransferSource(Texture& texture);
     [[nodiscard]] static ImageBarrier ToTransferSource(Texture& texture, ImageLayout old_layout);
 
     /** Handed to the presentation engine. */
-    [[nodiscard]] static ImageBarrier ToPresent(Texture& texture, ImageLayout old_layout = ImageLayout::ColorAttachment);
+    [[nodiscard]] static ImageBarrier ToPresent(Texture& texture);
+    [[nodiscard]] static ImageBarrier ToPresent(Texture& texture, ImageLayout old_layout);
 
     /**
      * The preset for a destination layout that is not known while writing the call - a function handed the
      * layout to leave a texture in dispatches through this rather than spelling the switch out again. Throws
      * for a layout that has no preset above.
      */
+    [[nodiscard]] static ImageBarrier To(Texture& texture, ImageLayout new_layout);
     [[nodiscard]] static ImageBarrier To(Texture& texture, ImageLayout old_layout, ImageLayout new_layout);
 };
 

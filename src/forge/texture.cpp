@@ -194,7 +194,7 @@ Rndr::Forge::Texture::Texture(const Device& device, DeviceQueue& queue, const Bi
                             command_buffer.CmdGenerateMips(*this, ImageLayout::TransferDestination);
                             return;
                         }
-                        command_buffer.CmdImageBarrier(ImageBarrier::ToShaderRead(*this, ImageLayout::TransferDestination));
+                        command_buffer.CmdImageBarrier(ImageBarrier::ToShaderRead(*this));
                     });
 }
 

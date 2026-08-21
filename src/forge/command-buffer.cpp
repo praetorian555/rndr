@@ -238,7 +238,7 @@ void Rndr::Forge::CommandBuffer::CmdMemoryBarrier(const MemoryBarrier& memory_ba
 
 void Rndr::Forge::CommandBuffer::CmdTransition(Texture& texture, ImageLayout new_layout)
 {
-    CmdImageBarrier(ImageBarrier::To(texture, texture.GetCurrentLayout(), new_layout));
+    CmdImageBarrier(ImageBarrier::To(texture, new_layout));
 }
 
 /** The extent of one mip level of a texture, which is the base extent halved once per level, floored at one. */

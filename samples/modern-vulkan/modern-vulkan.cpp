@@ -290,8 +290,9 @@ void Run()
         command_buffer.CmdResetQueryPool(gpu_timer);
         command_buffer.CmdWriteTimestamp(gpu_timer, 0, Rndr::Forge::PipelineStageBits::PipelineStart);
 
-        // Make sure our color and depth attachment are ready and in proper layout. Both are cleared when the
-        // render pass starts, so neither has to preserve what it holds.
+        // Make sure our color and depth attachment are ready and in proper layout. Neither says what it is
+        // coming from: the swap chain image is undefined again after every acquire, and the depth image
+        // remembers the attachment layout the previous frame left it in.
         Opal::InPlaceArray<Rndr::Forge::ImageBarrier, 2> barriers{
             Rndr::Forge::ImageBarrier::ToColorAttachment(frame_context.GetColorImage()),
             Rndr::Forge::ImageBarrier::ToDepthStencilAttachment(swap_chain.GetDepthImage())};

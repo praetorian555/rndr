@@ -258,6 +258,41 @@ Rndr::Forge::ImageBarrier Rndr::Forge::ImageBarrier::ToPresent(Texture& texture,
             .image = texture};
 }
 
+Rndr::Forge::ImageBarrier Rndr::Forge::ImageBarrier::ToColorAttachment(Texture& texture)
+{
+    return ToColorAttachment(texture, texture.GetCurrentLayout());
+}
+
+Rndr::Forge::ImageBarrier Rndr::Forge::ImageBarrier::ToDepthStencilAttachment(Texture& texture)
+{
+    return ToDepthStencilAttachment(texture, texture.GetCurrentLayout());
+}
+
+Rndr::Forge::ImageBarrier Rndr::Forge::ImageBarrier::ToShaderRead(Texture& texture, PipelineStageBits reader)
+{
+    return ToShaderRead(texture, texture.GetCurrentLayout(), reader);
+}
+
+Rndr::Forge::ImageBarrier Rndr::Forge::ImageBarrier::ToTransferDestination(Texture& texture)
+{
+    return ToTransferDestination(texture, texture.GetCurrentLayout());
+}
+
+Rndr::Forge::ImageBarrier Rndr::Forge::ImageBarrier::ToTransferSource(Texture& texture)
+{
+    return ToTransferSource(texture, texture.GetCurrentLayout());
+}
+
+Rndr::Forge::ImageBarrier Rndr::Forge::ImageBarrier::ToPresent(Texture& texture)
+{
+    return ToPresent(texture, texture.GetCurrentLayout());
+}
+
+Rndr::Forge::ImageBarrier Rndr::Forge::ImageBarrier::To(Texture& texture, ImageLayout new_layout)
+{
+    return To(texture, texture.GetCurrentLayout(), new_layout);
+}
+
 Rndr::Forge::ImageBarrier Rndr::Forge::ImageBarrier::To(Texture& texture, ImageLayout old_layout, ImageLayout new_layout)
 {
     switch (new_layout)
