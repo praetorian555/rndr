@@ -2327,3 +2327,485 @@ TEST_CASE("Edge case: multiple event types in same frame", "[input]")
     REQUIRE(wheel_fired);
     REQUIRE(text_fired);
 }
+
+TEST_CASE("Gamepad button binding", "[input]")
+{
+    Rndr::InputSystem input_system;
+    Rndr::InputContext& context = input_system.GetCurrentContext();
+
+    bool callback_fired = false;
+    Rndr::GamepadButton received_button = Rndr::GamepadButton::B;
+    Rndr::Trigger received_trigger = Rndr::Trigger::Released;
+    Rndr::u8 received_index = 0xEE;
+
+    context.AddAction("Jump")
+        .OnGamepadButton([&](Rndr::GamepadButton button, Rndr::Trigger trigger, Rndr::u8 gamepad_index)
+        {
+            callback_fired = true;
+            received_button = button;
+            received_trigger = trigger;
+            received_index = gamepad_index;
+        })
+        .Bind(Rndr::GamepadButton::A, Rndr::Trigger::Pressed);
+
+    SECTION("Pressing bound button triggers callback")
+    {
+        input_system.OnGamepadButtonDown(0, Rndr::GamepadButton::A);
+        input_system.ProcessSystemEvents(0.0f);
+
+        REQUIRE(callback_fired);
+        REQUIRE(received_button == Rndr::GamepadButton::A);
+        REQUIRE(received_trigger == Rndr::Trigger::Pressed);
+        REQUIRE(received_index == 0);
+    }
+
+    SECTION("Pressing unbound button does not trigger callback")
+    {
+        input_system.OnGamepadButtonDown(0, Rndr::GamepadButton::B);
+        input_system.ProcessSystemEvents(0.0f);
+
+        REQUIRE_FALSE(callback_fired);
+    }
+
+    SECTION("Release does not fire a press binding")
+    {
+        input_system.OnGamepadButtonUp(0, Rndr::GamepadButton::A);
+        input_system.ProcessSystemEvents(0.0f);
+
+        REQUIRE_FALSE(callback_fired);
+    }
+}
+
+TEST_CASE("Gamepad button: release binding fires on release", "[input]")
+{
+    Rndr::InputSystem input_system;
+    Rndr::InputContext& context = input_system.GetCurrentContext();
+
+    Rndr::Trigger received_trigger = Rndr::Trigger::Pressed;
+    int callback_count = 0;
+
+    context.AddAction("Release")
+        .OnGamepadButton([&](Rndr::GamepadButton, Rndr::Trigger trigger, Rndr::u8)
+        {
+            callback_count++;
+            received_trigger = trigger;
+        })
+        .Bind(Rndr::GamepadButton::Start, Rndr::Trigger::Released);
+
+    input_system.OnGamepadButtonDown(0, Rndr::GamepadButton::Start);
+    input_system.OnGamepadButtonUp(0, Rndr::GamepadButton::Start);
+    input_system.ProcessSystemEvents(0.0f);
+
+    REQUIRE(callback_count == 1);
+    REQUIRE(received_trigger == Rndr::Trigger::Released);
+}
+
+TEST_CASE("Gamepad button: binding to a specific index ignores other pads", "[input]")
+{
+    Rndr::InputSystem input_system;
+    Rndr::InputContext& context = input_system.GetCurrentContext();
+
+    int callback_count = 0;
+    Rndr::u8 received_index = 0xEE;
+
+    context.AddAction("PlayerTwoJump")
+        .OnGamepadButton([&](Rndr::GamepadButton, Rndr::Trigger, Rndr::u8 gamepad_index)
+        {
+            callback_count++;
+            received_index = gamepad_index;
+        })
+        .Bind(Rndr::GamepadButton::A, Rndr::Trigger::Pressed, 1);
+
+    SECTION("Event from the bound pad fires")
+    {
+        input_system.OnGamepadButtonDown(1, Rndr::GamepadButton::A);
+        input_system.ProcessSystemEvents(0.0f);
+
+        REQUIRE(callback_count == 1);
+        REQUIRE(received_index == 1);
+    }
+
+    SECTION("Event from another pad is ignored")
+    {
+        input_system.OnGamepadButtonDown(0, Rndr::GamepadButton::A);
+        input_system.OnGamepadButtonDown(2, Rndr::GamepadButton::A);
+        input_system.ProcessSystemEvents(0.0f);
+
+        REQUIRE(callback_count == 0);
+    }
+}
+
+TEST_CASE("Gamepad button: default binding matches any pad", "[input]")
+{
+    Rndr::InputSystem input_system;
+    Rndr::InputContext& context = input_system.GetCurrentContext();
+
+    int callback_count = 0;
+
+    // No gamepad index given, so the binding defaults to k_any_gamepad.
+    context.AddAction("Jump")
+        .OnGamepadButton([&](Rndr::GamepadButton, Rndr::Trigger, Rndr::u8)
+        {
+            callback_count++;
+        })
+        .Bind(Rndr::GamepadButton::A, Rndr::Trigger::Pressed);
+
+    input_system.OnGamepadButtonDown(0, Rndr::GamepadButton::A);
+    input_system.OnGamepadButtonDown(3, Rndr::GamepadButton::A);
+    input_system.ProcessSystemEvents(0.0f);
+
+    REQUIRE(callback_count == 2);
+}
+
+TEST_CASE("Gamepad axis: dead zone gates and rescales the value", "[input]")
+{
+    Rndr::InputSystem input_system;
+    Rndr::InputContext& context = input_system.GetCurrentContext();
+
+    int callback_count = 0;
+    Rndr::f32 received_value = -99.0f;
+    Rndr::GamepadAxis received_axis = Rndr::GamepadAxis::RightStickY;
+
+    // Powers of two keep the rescale exact, so the expected value needs no epsilon.
+    input_system.SetDefaultDeadZone(0.5f);
+
+    context.AddAction("MoveX")
+        .OnGamepadAxis([&](Rndr::GamepadAxis axis, Rndr::f32 value, Rndr::u8)
+        {
+            callback_count++;
+            received_value = value;
+            received_axis = axis;
+        })
+        .Bind(Rndr::GamepadAxis::LeftStickX);
+
+    SECTION("Value inside the dead zone is not dispatched")
+    {
+        input_system.OnGamepadAxis(0, Rndr::GamepadAxis::LeftStickX, 0.25f);
+        input_system.ProcessSystemEvents(0.0f);
+
+        REQUIRE(callback_count == 0);
+    }
+
+    SECTION("Value exactly at the dead zone edge is not dispatched")
+    {
+        input_system.OnGamepadAxis(0, Rndr::GamepadAxis::LeftStickX, 0.5f);
+        input_system.ProcessSystemEvents(0.0f);
+
+        REQUIRE(callback_count == 0);
+    }
+
+    SECTION("Value outside the dead zone is rescaled onto [0, 1]")
+    {
+        input_system.OnGamepadAxis(0, Rndr::GamepadAxis::LeftStickX, 0.75f);
+        input_system.ProcessSystemEvents(0.0f);
+
+        REQUIRE(callback_count == 1);
+        REQUIRE(received_axis == Rndr::GamepadAxis::LeftStickX);
+        REQUIRE(received_value == 0.5f);
+    }
+
+    SECTION("Full deflection still reports 1")
+    {
+        input_system.OnGamepadAxis(0, Rndr::GamepadAxis::LeftStickX, 1.0f);
+        input_system.ProcessSystemEvents(0.0f);
+
+        REQUIRE(callback_count == 1);
+        REQUIRE(received_value == 1.0f);
+    }
+
+    SECTION("Negative value keeps its sign")
+    {
+        input_system.OnGamepadAxis(0, Rndr::GamepadAxis::LeftStickX, -0.75f);
+        input_system.ProcessSystemEvents(0.0f);
+
+        REQUIRE(callback_count == 1);
+        REQUIRE(received_value == -0.5f);
+    }
+
+    SECTION("Unbound axis is ignored")
+    {
+        input_system.OnGamepadAxis(0, Rndr::GamepadAxis::RightStickX, 0.75f);
+        input_system.ProcessSystemEvents(0.0f);
+
+        REQUIRE(callback_count == 0);
+    }
+}
+
+TEST_CASE("Gamepad axis: rescale with the default dead zone", "[input]")
+{
+    Rndr::InputSystem input_system;
+    Rndr::InputContext& context = input_system.GetCurrentContext();
+
+    Rndr::f32 received_value = -99.0f;
+
+    context.AddAction("MoveX")
+        .OnGamepadAxis([&](Rndr::GamepadAxis, Rndr::f32 value, Rndr::u8)
+        {
+            received_value = value;
+        })
+        .Bind(Rndr::GamepadAxis::LeftStickX);
+
+    // Default dead zone is 0.2, so 0.6 sits halfway through the live range.
+    input_system.OnGamepadAxis(0, Rndr::GamepadAxis::LeftStickX, 0.6f);
+    input_system.ProcessSystemEvents(0.0f);
+
+    REQUIRE(received_value == Catch::Approx(0.5f));
+}
+
+TEST_CASE("Gamepad axis: per-binding dead zone overrides the system default", "[input]")
+{
+    Rndr::InputSystem input_system;
+    Rndr::InputContext& context = input_system.GetCurrentContext();
+
+    input_system.SetDefaultDeadZone(0.5f);
+
+    int callback_count = 0;
+    Rndr::f32 received_value = -99.0f;
+
+    context.AddAction("Aim")
+        .OnGamepadAxis([&](Rndr::GamepadAxis, Rndr::f32 value, Rndr::u8)
+        {
+            callback_count++;
+            received_value = value;
+        })
+        .Bind(Rndr::GamepadAxis::RightStickX, 0.25f);
+
+    // Inside the system default but outside the binding's own dead zone.
+    input_system.OnGamepadAxis(0, Rndr::GamepadAxis::RightStickX, 0.5f);
+    input_system.ProcessSystemEvents(0.0f);
+
+    REQUIRE(callback_count == 1);
+    REQUIRE(received_value == Catch::Approx(1.0f / 3.0f));
+}
+
+TEST_CASE("Gamepad axis: negative dead zone falls back to the system default", "[input]")
+{
+    Rndr::InputSystem input_system;
+    Rndr::InputContext& context = input_system.GetCurrentContext();
+
+    input_system.SetDefaultDeadZone(0.5f);
+
+    int callback_count = 0;
+
+    context.AddAction("MoveY")
+        .OnGamepadAxis([&](Rndr::GamepadAxis, Rndr::f32, Rndr::u8)
+        {
+            callback_count++;
+        })
+        .Bind(Rndr::GamepadAxis::LeftStickY, -1.0f);
+
+    input_system.OnGamepadAxis(0, Rndr::GamepadAxis::LeftStickY, 0.25f);
+    input_system.ProcessSystemEvents(0.0f);
+    REQUIRE(callback_count == 0);
+
+    input_system.OnGamepadAxis(0, Rndr::GamepadAxis::LeftStickY, 0.75f);
+    input_system.ProcessSystemEvents(0.0f);
+    REQUIRE(callback_count == 1);
+}
+
+TEST_CASE("Gamepad axis: returning to center reports zero exactly once", "[input]")
+{
+    Rndr::InputSystem input_system;
+    Rndr::InputContext& context = input_system.GetCurrentContext();
+
+    input_system.SetDefaultDeadZone(0.5f);
+
+    int callback_count = 0;
+    Rndr::f32 received_value = -99.0f;
+
+    context.AddAction("MoveX")
+        .OnGamepadAxis([&](Rndr::GamepadAxis, Rndr::f32 value, Rndr::u8)
+        {
+            callback_count++;
+            received_value = value;
+        })
+        .Bind(Rndr::GamepadAxis::LeftStickX);
+
+    input_system.OnGamepadAxis(0, Rndr::GamepadAxis::LeftStickX, 0.75f);
+    input_system.ProcessSystemEvents(0.0f);
+    REQUIRE(callback_count == 1);
+    REQUIRE(received_value == 0.5f);
+
+    // Stick released. The raw value lands inside the dead zone, which still has to report a single
+    // zero so whatever the callback drives actually stops.
+    input_system.OnGamepadAxis(0, Rndr::GamepadAxis::LeftStickX, 0.1f);
+    input_system.ProcessSystemEvents(0.0f);
+    REQUIRE(callback_count == 2);
+    REQUIRE(received_value == 0.0f);
+
+    // Further events inside the dead zone are silent.
+    input_system.OnGamepadAxis(0, Rndr::GamepadAxis::LeftStickX, 0.05f);
+    input_system.OnGamepadAxis(0, Rndr::GamepadAxis::LeftStickX, 0.0f);
+    input_system.ProcessSystemEvents(0.0f);
+    REQUIRE(callback_count == 2);
+}
+
+TEST_CASE("Gamepad axis: binding to a specific index ignores other pads", "[input]")
+{
+    Rndr::InputSystem input_system;
+    Rndr::InputContext& context = input_system.GetCurrentContext();
+
+    int callback_count = 0;
+
+    context.AddAction("PlayerTwoMove")
+        .OnGamepadAxis([&](Rndr::GamepadAxis, Rndr::f32, Rndr::u8)
+        {
+            callback_count++;
+        })
+        .Bind(Rndr::GamepadAxis::LeftStickX, -1.0f, 1);
+
+    input_system.OnGamepadAxis(0, Rndr::GamepadAxis::LeftStickX, 0.9f);
+    input_system.ProcessSystemEvents(0.0f);
+    REQUIRE(callback_count == 0);
+
+    input_system.OnGamepadAxis(1, Rndr::GamepadAxis::LeftStickX, 0.9f);
+    input_system.ProcessSystemEvents(0.0f);
+    REQUIRE(callback_count == 1);
+}
+
+TEST_CASE("Gamepad trigger: bindable as both a button and an axis", "[input]")
+{
+    Rndr::InputSystem input_system;
+    Rndr::InputContext& context = input_system.GetCurrentContext();
+
+    bool button_fired = false;
+    Rndr::f32 axis_value = -99.0f;
+
+    context.AddAction("Shoot")
+        .OnGamepadButton([&](Rndr::GamepadButton, Rndr::Trigger, Rndr::u8)
+        {
+            button_fired = true;
+        })
+        .Bind(Rndr::GamepadButton::RightTrigger, Rndr::Trigger::Pressed);
+
+    context.AddAction("ShootPressure")
+        .OnGamepadAxis([&](Rndr::GamepadAxis, Rndr::f32 value, Rndr::u8)
+        {
+            axis_value = value;
+        })
+        .Bind(Rndr::GamepadAxis::RightTrigger, 0.5f);
+
+    // The platform layer reports a pulled trigger both ways in the same sample.
+    input_system.OnGamepadButtonDown(0, Rndr::GamepadButton::RightTrigger);
+    input_system.OnGamepadAxis(0, Rndr::GamepadAxis::RightTrigger, 0.75f);
+    input_system.ProcessSystemEvents(0.0f);
+
+    REQUIRE(button_fired);
+    REQUIRE(axis_value == 0.5f);
+}
+
+TEST_CASE("Gamepad: context stack consumes and propagates", "[input]")
+{
+    Rndr::InputSystem input_system;
+    Rndr::InputContext& default_context = input_system.GetCurrentContext();
+
+    bool default_fired = false;
+    default_context.AddAction("Jump")
+        .OnGamepadButton([&](Rndr::GamepadButton, Rndr::Trigger, Rndr::u8)
+        {
+            default_fired = true;
+        })
+        .Bind(Rndr::GamepadButton::A, Rndr::Trigger::Pressed);
+
+    Rndr::InputContext menu_context(Opal::StringUtf8("Menu"));
+    bool menu_fired = false;
+    menu_context.AddAction("Confirm")
+        .OnGamepadButton([&](Rndr::GamepadButton, Rndr::Trigger, Rndr::u8)
+        {
+            menu_fired = true;
+        })
+        .Bind(Rndr::GamepadButton::A, Rndr::Trigger::Pressed);
+
+    input_system.PushContext(menu_context);
+
+    SECTION("Top context consumes the event")
+    {
+        input_system.OnGamepadButtonDown(0, Rndr::GamepadButton::A);
+        input_system.ProcessSystemEvents(0.0f);
+
+        REQUIRE(menu_fired);
+        REQUIRE_FALSE(default_fired);
+    }
+
+    SECTION("Unhandled event falls through to the lower context")
+    {
+        menu_context.RemoveAction("Confirm");
+
+        input_system.OnGamepadButtonDown(0, Rndr::GamepadButton::A);
+        input_system.ProcessSystemEvents(0.0f);
+
+        REQUIRE(default_fired);
+    }
+
+    SECTION("Disabled context is skipped")
+    {
+        menu_context.SetEnabled(false);
+
+        input_system.OnGamepadButtonDown(0, Rndr::GamepadButton::A);
+        input_system.ProcessSystemEvents(0.0f);
+
+        REQUIRE_FALSE(menu_fired);
+        REQUIRE(default_fired);
+    }
+}
+
+TEST_CASE("Gamepad: events ignore the window filter", "[input]")
+{
+    Rndr::InputSystem input_system;
+    Rndr::InputContext& context = input_system.GetCurrentContext();
+
+    bool button_fired = false;
+    bool axis_fired = false;
+
+    // Gamepad events carry no window, so a window filter has nothing to match against.
+    context.AddAction("Jump")
+        .OnGamepadButton([&](Rndr::GamepadButton, Rndr::Trigger, Rndr::u8)
+        {
+            button_fired = true;
+        })
+        .Bind(Rndr::GamepadButton::A, Rndr::Trigger::Pressed)
+        .ForWindow(&g_fake_window);
+
+    context.AddAction("Move")
+        .OnGamepadAxis([&](Rndr::GamepadAxis, Rndr::f32, Rndr::u8)
+        {
+            axis_fired = true;
+        })
+        .Bind(Rndr::GamepadAxis::LeftStickX)
+        .ForWindow(&g_fake_window2);
+
+    input_system.OnGamepadButtonDown(0, Rndr::GamepadButton::A);
+    input_system.OnGamepadAxis(0, Rndr::GamepadAxis::LeftStickX, 0.9f);
+    input_system.ProcessSystemEvents(0.0f);
+
+    REQUIRE(button_fired);
+    REQUIRE(axis_fired);
+}
+
+TEST_CASE("Multiple callbacks: OnButton and OnGamepadButton on same action", "[input]")
+{
+    Rndr::InputSystem input_system;
+    Rndr::InputContext& context = input_system.GetCurrentContext();
+
+    bool key_fired = false;
+    bool gamepad_fired = false;
+
+    context.AddAction("Jump")
+        .OnButton([&](Rndr::Trigger, bool)
+        {
+            key_fired = true;
+        })
+        .OnGamepadButton([&](Rndr::GamepadButton, Rndr::Trigger, Rndr::u8)
+        {
+            gamepad_fired = true;
+        })
+        .Bind(Rndr::Key::Space, Rndr::Trigger::Pressed)
+        .Bind(Rndr::GamepadButton::A, Rndr::Trigger::Pressed);
+
+    input_system.OnButtonDown(g_fake_window, Rndr::InputPrimitive::Space, false);
+    input_system.OnGamepadButtonDown(0, Rndr::GamepadButton::A);
+    input_system.ProcessSystemEvents(0.0f);
+
+    REQUIRE(key_fired);
+    REQUIRE(gamepad_fired);
+}
