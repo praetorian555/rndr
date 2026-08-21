@@ -892,29 +892,52 @@ a moved `Semaphore` signals.
 an `Opal::SharedPtr` and handed out by reference from `GetQueue`, so a caller that destroys one leaves the
 device holding a queue with no command pool. Either it stops being public or this task says why it is.
 
-### 3.15 Test the indexed and the indirect draws
+### 3.15 Test the indexed and the indirect draws — DONE
 
-`test/forge/smoke-test.cpp`.
+Three cases in `test/forge/smoke-test.cpp`: `Forge indexed draws`, `Forge indirect draws` and
+`Forge indirect dispatch`.
 
-`CmdBindIndexBuffer` and `CmdDrawIndexed` are never called. `CmdDrawIndirect` appears once, inside a
-`REQUIRE_THROWS_AS` for the `multi_draw_indirect` feature, so no indirect draw has ever run;
-`CmdDrawIndexedIndirect` and `CmdDispatchIndirect` are never called at all. Between them that is most of
-3.3 covered by nothing but the sample, which reports a wrong result by rendering something slightly wrong
-rather than by failing.
+**The task found a live bug before a test was written.** `ToVkIndexType` returned `VK_INDEX_TYPE_UINT8_KHR`
+for `IndexSize::uint8` while `device.cpp` enabled nothing but the swap chain and the mesh shader extension,
+so an 8-bit index buffer handed the driver an index type the device had never agreed to.
+`vkCmdBindIndexBuffer` takes it as a plain enum value rather than through a function the loader would only
+hand out with the extension on, which is why nothing caught it - the same shape as the `CmdDrawMeshTasks`
+trap in 3.3, from the other side. There is now a `DeviceFeatures::index_type_uint8`. It pulls in
+`VK_KHR_index_type_uint8`, falling back to the `VK_EXT_index_type_uint8` it was promoted from: both carry the
+same feature structure, and a driver older than the promotion has only the older name. `CmdBindIndexBuffer`
+throws on `uint8` without the feature. The EXT half of that fallback is unexercised here, since this machine
+reports both names and the preference picks KHR every time.
 
-Done when a readback proves each of them:
+**The readback answers two questions at once.** The target is a 4x4 split down the middle by the geometry:
+which half comes back written says which vertices the draw reached, and which channel it is written in says
+which instance it fetched. The channel comes from a flat per-instance vertex attribute rather than from
+`SV_InstanceID` - that spares these tests the DrawParameters capability the builtin drags in, and it is what
+makes `first_instance` visible at all, since that is the index a per-instance binding is fetched at. Every
+channel is zero or one, so nothing here depends on how a UNORM format rounds.
 
-- an indexed draw whose index buffer names the vertices out of order, so a draw that ignored the indices
-  produces a different image, with `first_index` and `vertex_offset` both non-zero;
-- the three `IndexSize` values, since 8-bit indices need `VK_KHR_index_type_uint8` and the code has to say
-  so rather than hand the driver a value it does not accept;
-- an indirect draw and an indirect indexed draw whose arguments a compute shader writes into the buffer
-  rather than the host, which is the case indirect exists for and the one a host-written buffer would not
-  tell apart from a direct draw;
-- more than one command in a single call with `multi_draw_indirect` on, and a non-zero `first_instance`
-  with `draw_indirect_first_instance` on - both features have a throw test today and no positive one;
-- an indirect dispatch whose group counts a previous dispatch wrote, against a direct dispatch of the same
-  counts.
+The index buffer is six padding indices followed by the two triangles of one half, and the draw names
+`first_index = 6` with `vertex_offset = 4`. The three ways that can go wrong are three different images:
+ignoring `first_index` reads the padding, which is three copies of one corner and rasterizes no pixel;
+ignoring `vertex_offset` lights the left half; following both lights the right one. Confirmed by mutation
+rather than by passing - the offset dropped to zero fails all three index widths with the right half black,
+and the vertex offset dropped out of the indirect command fails that case the same way.
+
+What the cases prove:
+
+- the indexed draw at all three `IndexSize` values, with the 8-bit one skipping on a device that has neither
+  extension name, and a fourth section asserting that it throws there instead of binding;
+- an indirect draw and an indirect indexed draw whose commands a compute shader wrote into a
+  `HostAccess::None` buffer, so the host cannot have put them there and what is measured is not a direct draw
+  with the same numbers in it;
+- two commands in one `CmdDrawIndirect` under `multi_draw_indirect`, each with its own non-zero
+  `first_instance`, each landing in its own half in its own channel;
+- an indirect dispatch whose group counts a previous dispatch wrote, read back to confirm they came off the
+  device, and compared both against a direct dispatch of the same counts and against the value the shader
+  computes - two dispatches that both did nothing would agree with each other and with nothing else.
+
+One premise was stale. The task said both `multi_draw_indirect` and `draw_indirect_first_instance` had a
+throw test already; only the first did. `draw_indirect_first_instance` had no test at all and now has a
+positive one. Both are core features, so a device without either skips rather than fails.
 
 ### 3.16 Test depth, stencil and blending, and unblock the stencil path
 
