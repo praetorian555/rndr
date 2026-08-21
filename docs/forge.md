@@ -54,6 +54,20 @@ The references that are easy to miss:
 - The samplers baked into a `DescriptorSetLayoutDesc::Binding` are held by reference and have to outlive the
   layout and every set allocated from it.
 
+### More than one context
+
+`GraphicsContext` is the one object that is not only its own. Forge dispatches through volk, which keeps a
+single set of function pointers for the whole process: `volkInitialize` loads them and `volkFinalize` nulls
+them and unloads the library. Neither counts its callers, so Forge counts the contexts and only the last one
+out tears volk down. Destroying a second context no longer takes the first one down with it.
+
+What is left is `volkLoadInstance`, which points the global instance *and* device tables at whichever
+instance was created most recently. Two live contexts therefore share one table, and the older one
+dispatches through the newer one's instance. It works, because the loader's entry points are trampolines
+that dispatch on the handle they are given, but it is not something to rely on. Creating a second context
+while one is live logs a warning saying so. Prefer one context per process; the reason to want a second is
+usually a second *device*, which one context makes as many of as you like.
+
 ### Waiting before destroying
 
 The other half of a lifetime is the device. Releasing an object the device is still reading is a use after

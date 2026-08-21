@@ -6,6 +6,8 @@
 #include "rndr/platform/windows-header.hpp"
 #endif
 
+#include <mutex>
+
 #include "opal/container/dynamic-array.h"
 
 #include "rndr/forge/vulkan-exception.hpp"
@@ -13,6 +15,73 @@
 
 namespace
 {
+/**
+ * volk keeps one set of function pointers for the whole process: volkInitialize loads them and volkFinalize
+ * nulls them and unloads the library. Neither counts its callers, so a second context calling volkFinalize
+ * on the way out used to null the pointers a live context was still calling through - a jump to address zero
+ * on its next Vulkan call. Count the contexts here instead, so that only the last one out tears volk down.
+ *
+ * What this does not fix is volkLoadInstance: it points the global instance and device tables at whichever
+ * instance was created last, so two live contexts share one table and the older one dispatches through the
+ * newer one's instance. Ending that means per-object tables - volkLoadDeviceTable and friends - rather than
+ * a counter, so a second live context is warned about below instead.
+ */
+std::mutex g_volk_mutex;
+Rndr::i32 g_volk_users = 0;
+
+/** Load volk if this is the first context, and count this one in. Throws without counting if the load fails. */
+void AcquireVolk()
+{
+    const std::lock_guard<std::mutex> lock(g_volk_mutex);
+    if (g_volk_users == 0)
+    {
+        const VkResult result = volkInitialize();
+        if (result != VK_SUCCESS)
+        {
+            throw Rndr::Forge::VulkanException(result, "volkInitialize");
+        }
+    }
+    else
+    {
+        RNDR_LOG_WARNING(
+            "A second Forge::GraphicsContext is live. volk dispatches through one set of function pointers for the "
+            "whole process, and creating this instance repointed them, so the older context now calls through this "
+            "one's instance.");
+    }
+    ++g_volk_users;
+}
+
+/** Count this context out, and unload volk once none are left. */
+void ReleaseVolk()
+{
+    const std::lock_guard<std::mutex> lock(g_volk_mutex);
+    if (g_volk_users > 0 && --g_volk_users == 0)
+    {
+        volkFinalize();
+    }
+}
+
+/**
+ * Holds the count for the length of the constructor. A context that throws part way through never reaches
+ * its destructor, so without this the count it took would never be given back.
+ */
+struct VolkUse
+{
+    bool committed = false;
+
+    VolkUse() { AcquireVolk(); }
+    ~VolkUse()
+    {
+        if (!committed)
+        {
+            ReleaseVolk();
+        }
+    }
+
+    VolkUse(const VolkUse&) = delete;
+    VolkUse& operator=(const VolkUse&) = delete;
+};
+
 VkResult CreateDebugUtilsMessengerEXT(VkInstance instance, const VkDebugUtilsMessengerCreateInfoEXT* create_info,
                                       const VkAllocationCallbacks* allocator, VkDebugUtilsMessengerEXT* debug_messenger)
 {
@@ -136,11 +205,9 @@ bool IsValidationLayerAvailable()
 
 Rndr::Forge::GraphicsContext::GraphicsContext(const GraphicsContextDesc& desc) : m_desc(desc.Clone())
 {
-    VkResult result = volkInitialize();
-    if (result != VK_SUCCESS)
-    {
-        throw VulkanException(result, "volkInitialize");
-    }
+    // Handed over to the destructor on the last line of this function, and given back by the guard on any
+    // path out of here that throws before then.
+    VolkUse volk_use;
 
     bool use_validation_layer = false;
 #if defined(RNDR_FORGE_VALIDATION)
@@ -206,7 +273,7 @@ Rndr::Forge::GraphicsContext::GraphicsContext(const GraphicsContextDesc& desc) :
         create_info.ppEnabledLayerNames = &k_validation_layer_name;
     }
 
-    result = vkCreateInstance(&create_info, nullptr, &m_instance);
+    VkResult result = vkCreateInstance(&create_info, nullptr, &m_instance);
     if (result != VK_SUCCESS)
     {
         throw VulkanException(result, "vkCreateInstance");
@@ -226,6 +293,8 @@ Rndr::Forge::GraphicsContext::GraphicsContext(const GraphicsContextDesc& desc) :
     {
         RNDR_LOG_INFO("Vulkan validation layer enabled.");
     }
+    // Past every throw, so the count this context holds is now the destructor's to give back.
+    volk_use.committed = true;
 }
 
 Rndr::Forge::GraphicsContext::~GraphicsContext()
@@ -337,9 +406,9 @@ void Rndr::Forge::GraphicsContext::Destroy()
     {
         vkDestroyInstance(m_instance, nullptr);
         m_instance = VK_NULL_HANDLE;
-        // volk holds process wide state, so only the context that initialized it may tear it down. Doing this
-        // unconditionally would let an empty or moved-from context unload Vulkan out from under a live one.
-        volkFinalize();
+        // Holding an instance is what says this context counted itself in: a moved-from or empty one has none
+        // and must not give back a count it never took.
+        ReleaseVolk();
     }
 }
 

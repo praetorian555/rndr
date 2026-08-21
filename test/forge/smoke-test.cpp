@@ -178,6 +178,28 @@ TEST_CASE("Forge context and device", "[forge]")
     REQUIRE(context.GetDebugMessageCount(Forge::DebugMessageSeverity::Error, Forge::DebugMessageTypeBits::Validation) == 0);
 }
 
+TEST_CASE("Forge context outlives a second one", "[forge]")
+{
+    if (!IsForgeAvailable())
+    {
+        SKIP("No Vulkan device on this machine.");
+    }
+    ForgeFixture fixture;
+    {
+        // volk loads one set of function pointers for the whole process. This second context used to null
+        // every one of them on the way out, so the fixture above died on its next Vulkan call.
+        const ForgeFixture second;
+        REQUIRE(second.context.IsValid());
+        REQUIRE(second.device.IsValid());
+    }
+    // Two calls through what the second context used to unload: one instance level, one device level.
+    const Opal::DynamicArray<Forge::PhysicalDevice> physical_devices = fixture.context.EnumeratePhysicalDevices();
+    REQUIRE_FALSE(physical_devices.IsEmpty());
+    const Forge::Buffer buffer(fixture.device, {.size = 32, .usage = Forge::BufferUsageBits::TransferDestination});
+    REQUIRE(buffer.IsValid());
+    REQUIRE_NO_VALIDATION_ERROR(fixture);
+}
+
 TEST_CASE("Forge buffer update and read", "[forge]")
 {
     if (!IsForgeAvailable())
