@@ -481,7 +481,12 @@ enum class DependencyFlagBits : u8
     None = 0,
     /**
      * Each region of the attachment depends only on the same region of what came before, which lets a tiled
-     * device keep the work in tile memory. Only valid inside a render pass.
+     * device keep the work in tile memory.
+     *
+     * It only means anything inside a render pass, and Forge has no render passes but the ones
+     * CmdBeginRendering starts - inside one of those a barrier may not be recorded at all unless the device
+     * enabled VK_KHR_dynamic_rendering_local_read, which Forge does not ask for. Setting this outside a pass
+     * is allowed and does nothing.
      */
     ByRegion = 1
 };
