@@ -958,35 +958,58 @@ One premise was stale. The task said both `multi_draw_indirect` and `draw_indire
 throw test already; only the first did. `draw_indirect_first_instance` had no test at all and now has a
 positive one. Both are core features, so a device without either skips rather than fails.
 
-### 3.16 Test depth, stencil and blending, and unblock the stencil path
+### 3.16 Test depth, stencil and blending, and unblock the stencil path — DONE
 
-`test/forge/smoke-test.cpp`, `include/rndr/forge/command-buffer.hpp`, `src/forge/command-buffer.cpp`,
-`include/rndr/forge/pipeline.hpp`, `src/forge/pipeline.cpp`, `include/rndr/forge/types.hpp`.
+Three cases in `test/forge/smoke-test.cpp`: `Forge depth testing`, `Forge stencil testing` and
+`Forge blending`. Both API gaps this task named are closed.
 
-No test has ever rendered with a depth attachment. `DepthStencilDesc::depth_test_enabled`,
-`depth_write_enabled` and `depth_comparator` are never set, `ColorBlendDesc::blend_enabled` is never true,
-and the stencil half of the desc is untouched. The one depth case there is renders *without* one and checks
-that a depth attachment naming no image view throws. `ImageBarrier::ToDepthStencilAttachment` is never
-called either, which is the preset a depth pass needs.
+**The stencil attachment.** `RenderingDesc` has a `stencil_attachment` beside the depth one, and
+`CmdBeginRendering` fills `pStencilAttachment` from it, with the same null-view check the depth side has. The
+task offered two shapes and this is both of them at once: Vulkan takes the two sides apart even when one
+image carries both, so a combined format such as `D24_UNORM_S8_UINT` names the *same image view* twice and a
+separate stencil image names its own. Each side keeps its own load and store operations, since clearing the
+depth while keeping the stencil is a thing a pass may want.
 
-Two things have to be built before the stencil part can be written, and both are gaps in the API rather
-than in the tests:
+**The stencil masks.** `DepthStencilDesc` gained `front_compare_mask`, `front_write_mask`, `front_reference`
+and the three back-facing counterparts, and `pipeline.cpp` fills them into both `VkStencilOpState`s. They
+default to a full compare mask and a full write mask rather than to zero, which is what made
+`stencil_test_enabled` inert as built: a test that reads no bits passes on nothing and a write that touches
+no bits leaves the buffer alone. `DynamicStateBits` gained `StencilCompareMask` and `StencilWriteMask` with
+`CmdSetStencilCompareMask` and `CmdSetStencilWriteMask` behind them, so all three of the values are settable
+either statically or per draw - `StencilReference` and `CmdSetStencilReference` already existed and were the
+only one of the three that had a path at all.
 
-- `RenderingDesc` has no stencil attachment and `CmdBeginRendering` never fills `pStencilAttachment`, so a
-  stencil buffer cannot be bound at all. Either add the attachment, or feed the depth one to both sides
-  when its format carries stencil - the second is what most callers want and the first is what a separate
-  stencil image needs.
-- `VkStencilOpState::compareMask`, `writeMask` and `reference` are left zero where the depth stencil state
-  is built in `pipeline.cpp`, and none of the three is in `DepthStencilDesc` or in `DynamicStateBits`. With
-  a zero compare mask and a zero write mask the stencil test reads nothing and writes nothing, so
-  `stencil_test_enabled` is inert as built. `CmdSetStencilReference` supplies only the third.
+What the cases prove:
 
-Done when: a depth pass draws two overlapping triangles at different depths and the readback shows the
-nearer one, with the comparator flipped in a second section so the answer flips with it; `depth_write_enabled`
-off leaves the depth buffer as the clear left it, read back through `ReadBackTexture` on a depth format; a
-stencil pass writes a mask in one draw and a second draw lands only where the first allowed it; and an
-alpha blend over a cleared attachment produces the value the blend equation gives on the CPU, with the
-factors and the operation varied enough that a pipeline ignoring them would not match.
+- two overlapping quads at different depths, the near one drawn *first* so that a pass with no working depth
+  test would end on the far colour whatever the comparator said. Under `Less` the far quad is rejected and
+  the depth buffer reads 0.25; under `Greater` it is accepted and reads 0.75;
+- `depth_write_enabled` off, where the buffer stays at the clear - and the colour follows from that, since
+  with nothing ever written the far quad is still compared against one and still passes. That is the opposite
+  answer to the first case and only because the write was what rejected it there;
+- a stencil pass where one draw stamps a one into the left half writing no colour at all, and a second draw
+  covering the whole target lands only where the first allowed it. The same second draw with the comparator
+  set to `Always` covers everything, which is what rules out a device that simply dropped its right half;
+- a blend over a destination that is *drawn* rather than cleared to, so it is exactly the bytes the shader
+  wrote and not a float the clear had to convert. Four equations against the same arithmetic done on the CPU:
+  the classic source-alpha blend, additive, a zero source factor that has to leave the destination alone, and
+  reverse subtract - the same two factors as the additive case, so what separates those two answers is the
+  operation rather than the factors.
+
+**Two of the expectations were wrong on the first run, and both were worth having wrong.** Clearing depth to
+one and then testing with `Greater` rejects *both* quads rather than flipping which one wins, so the
+comparator case clears to whichever end of the range that comparator counts as furthest. And turning depth
+writes off does not leave the first case's colour behind: with nothing written, the second draw passes too
+and lands on top.
+
+**A per-face trap the mutation testing turned up.** Culling is off in these cases, so which of the two stencil
+states a fragment uses depends on how the quad happens to wind - and these quads turn out to be back-facing.
+Every pipeline here sets both faces to the same thing, which is what makes the cases winding-agnostic;
+mutating only the front `compareMask` back to zero leaves them green, and mutating both turns them red. A
+caller who filled in only the front half of `DepthStencilDesc` with culling off would get silence.
+
+Confirmed by mutation rather than by passing: both compare masks forced to zero - exactly the state this task
+found the code in - turns the stencil case red, and `blendEnable` forced false turns the blending case red.
 
 ### 3.17 Test the rest of the rasterizer, the topology and instancing — DONE
 
