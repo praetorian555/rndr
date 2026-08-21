@@ -810,6 +810,14 @@ static VkIndexType ToVkIndexType(Rndr::IndexSize index_size)
 
 void Rndr::Forge::CommandBuffer::CmdBindIndexBuffer(const Buffer& buffer, u64 offset, IndexSize index_size)
 {
+    // The uint8 index type belongs to an extension, but vkCmdBindIndexBuffer takes it as a plain enum value
+    // rather than through a function the loader would only hand out with the extension on. A device that did
+    // not enable it is handed an index type it never agreed to, which is the mistake CmdDrawMeshTasks makes
+    // in the other direction, so it is caught here rather than left to the validation layer.
+    if (index_size == IndexSize::uint8 && !m_device->GetFeatures().index_type_uint8)
+    {
+        throw Opal::Exception("An 8-bit index buffer needs the device created with DeviceFeatures::index_type_uint8!");
+    }
     vkCmdBindIndexBuffer(m_native_command_buffer, buffer.GetNativeBuffer(), offset, ToVkIndexType(index_size));
 }
 

@@ -102,6 +102,12 @@ struct DeviceFeatures
     bool mesh_shader = false;
     /** The task stage in front of the mesh stage. Needs mesh_shader too. */
     bool task_shader = false;
+    /**
+     * 8-bit indices, which CmdBindIndexBuffer asks for with IndexSize::uint8. Pulls in
+     * VK_KHR_index_type_uint8, or the VK_EXT_index_type_uint8 it was promoted from on a device that only
+     * has the older name.
+     */
+    bool index_type_uint8 = false;
 };
 
 struct DeviceDesc : Opal::ClonableBase<DeviceDesc>

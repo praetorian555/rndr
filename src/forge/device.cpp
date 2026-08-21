@@ -85,17 +85,35 @@ struct FeatureChain
     VkPhysicalDeviceVulkan12Features vk12{.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_2_FEATURES};
     VkPhysicalDeviceVulkan13Features vk13{.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_3_FEATURES};
     VkPhysicalDeviceMeshShaderFeaturesEXT mesh{.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_MESH_SHADER_FEATURES_EXT};
+    VkPhysicalDeviceIndexTypeUint8Features index_type_uint8{.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_INDEX_TYPE_UINT8_FEATURES};
 
     /**
-     * @param include_mesh Whether to chain the mesh shader structure. Chaining a structure that belongs to an
-     *        extension the device does not have is not allowed, so this is only true once that is known.
+     * Chaining a structure that belongs to an extension the device does not have is not allowed, so each of
+     * the extension backed ones goes in only once that extension is known to be there. The tail is walked
+     * rather than each structure naming the next, so that which ones are in does not decide the order.
+     *
+     * @param include_mesh Whether to chain the mesh shader structure.
+     * @param include_index_type_uint8 Whether to chain the 8-bit index structure.
      */
-    explicit FeatureChain(bool include_mesh)
+    explicit FeatureChain(bool include_mesh, bool include_index_type_uint8)
     {
         features2.pNext = &vk11;
         vk11.pNext = &vk12;
         vk12.pNext = &vk13;
-        vk13.pNext = include_mesh ? &mesh : nullptr;
+        void** tail = &vk13.pNext;
+        *tail = nullptr;
+        if (include_mesh)
+        {
+            *tail = &mesh;
+            tail = &mesh.pNext;
+            *tail = nullptr;
+        }
+        if (include_index_type_uint8)
+        {
+            *tail = &index_type_uint8;
+            tail = &index_type_uint8.pNext;
+            *tail = nullptr;
+        }
     }
 
     FeatureChain(const FeatureChain&) = delete;
@@ -142,6 +160,7 @@ struct FeatureChain
 
         mesh.meshShader = features.mesh_shader;
         mesh.taskShader = features.task_shader;
+        index_type_uint8.indexTypeUint8 = features.index_type_uint8;
     }
 };
 
@@ -156,8 +175,26 @@ constexpr VkQueueFlags k_dedicated_transfer_flags = VK_QUEUE_TRANSFER_BIT;
 constexpr VkQueueFlags k_dedicated_transfer_not_flags =
     VK_QUEUE_GRAPHICS_BIT | VK_QUEUE_COMPUTE_BIT | VK_QUEUE_VIDEO_DECODE_BIT_KHR | VK_QUEUE_VIDEO_ENCODE_BIT_KHR;
 
+/**
+ * Which of the two names for the 8-bit index extension this device has, or null when it has neither. The KHR
+ * one is the promotion of the EXT one and both carry the same feature structure, so preferring the newer name
+ * and falling back to the older keeps a driver that predates the promotion usable.
+ */
+const char* FindIndexTypeUint8Extension(const Forge::PhysicalDevice& physical_device)
+{
+    if (physical_device.IsExtensionSupported(VK_KHR_INDEX_TYPE_UINT8_EXTENSION_NAME))
+    {
+        return VK_KHR_INDEX_TYPE_UINT8_EXTENSION_NAME;
+    }
+    if (physical_device.IsExtensionSupported(VK_EXT_INDEX_TYPE_UINT8_EXTENSION_NAME))
+    {
+        return VK_EXT_INDEX_TYPE_UINT8_EXTENSION_NAME;
+    }
+    return nullptr;
+}
+
 /** Every extension a desc implies, which is what it names plus what its surface and its features pull in. */
-Opal::DynamicArray<const char*> CollectDeviceExtensions(const Forge::DeviceDesc& desc)
+Opal::DynamicArray<const char*> CollectDeviceExtensions(const Forge::PhysicalDevice& physical_device, const Forge::DeviceDesc& desc)
 {
     Opal::DynamicArray<const char*> extensions(desc.extensions.Clone());
     if (desc.surface.IsValid())
@@ -170,6 +207,13 @@ Opal::DynamicArray<const char*> CollectDeviceExtensions(const Forge::DeviceDesc&
     {
         extensions.PushBack(VK_EXT_MESH_SHADER_EXTENSION_NAME);
     }
+    if (desc.features.index_type_uint8)
+    {
+        // Neither name present leaves the newer one to be reported as unsupported, so a device that cannot do
+        // this says which extension it is missing rather than enabling nothing and failing later.
+        const char* name = FindIndexTypeUint8Extension(physical_device);
+        extensions.PushBack(name != nullptr ? name : VK_KHR_INDEX_TYPE_UINT8_EXTENSION_NAME);
+    }
     return extensions;
 }
 
@@ -180,7 +224,8 @@ Opal::DynamicArray<const char*> CollectDeviceExtensions(const Forge::DeviceDesc&
 const char* FindUnsupportedFeature(const Forge::PhysicalDevice& physical_device, const Forge::DeviceFeatures& requested)
 {
     const bool has_mesh_extension = physical_device.IsExtensionSupported(VK_EXT_MESH_SHADER_EXTENSION_NAME);
-    FeatureChain supported(has_mesh_extension);
+    const char* index_type_uint8_extension = FindIndexTypeUint8Extension(physical_device);
+    FeatureChain supported(has_mesh_extension, index_type_uint8_extension != nullptr);
     vkGetPhysicalDeviceFeatures2(physical_device.GetNativePhysicalDevice(), &supported.features2);
 
     const char* missing = nullptr;
@@ -241,6 +286,8 @@ const char* FindUnsupportedFeature(const Forge::PhysicalDevice& physical_device,
 
     require(requested.mesh_shader, has_mesh_extension ? supported.mesh.meshShader : VK_FALSE, "mesh_shader");
     require(requested.task_shader, has_mesh_extension ? supported.mesh.taskShader : VK_FALSE, "task_shader");
+    require(requested.index_type_uint8, index_type_uint8_extension != nullptr ? supported.index_type_uint8.indexTypeUint8 : VK_FALSE,
+            "index_type_uint8");
     return missing;
 }
 
@@ -267,7 +314,7 @@ Opal::StringUtf8 Reason(const char* what, const char* detail)
  */
 Opal::StringUtf8 FindUnmetRequirement(const Forge::PhysicalDevice& physical_device, const Forge::DeviceDesc& desc)
 {
-    for (const char* extension_name : CollectDeviceExtensions(desc))
+    for (const char* extension_name : CollectDeviceExtensions(physical_device, desc))
     {
         if (!physical_device.IsExtensionSupported(extension_name))
         {
@@ -397,7 +444,7 @@ Rndr::Forge::Device::Device(PhysicalDevice physical_device, const GraphicsContex
     Opal::DynamicArray<VkDeviceQueueCreateInfo> queue_create_infos;
     CollectQueueFamilies(queue_create_infos);
 
-    Opal::DynamicArray<const char*> device_extensions = CollectDeviceExtensions(m_desc);
+    Opal::DynamicArray<const char*> device_extensions = CollectDeviceExtensions(m_physical_device, m_desc);
     m_enabled_extensions = device_extensions.Clone();
     for (const char* extension_name : device_extensions)
     {
@@ -411,7 +458,7 @@ Rndr::Forge::Device::Device(PhysicalDevice physical_device, const GraphicsContex
     // itself instead of coming back as VK_ERROR_FEATURE_NOT_PRESENT from vkCreateDevice.
     ThrowOnUnsupportedFeatures(m_physical_device, m_desc.features);
 
-    FeatureChain enabled_features(m_desc.features.mesh_shader || m_desc.features.task_shader);
+    FeatureChain enabled_features(m_desc.features.mesh_shader || m_desc.features.task_shader, m_desc.features.index_type_uint8);
     enabled_features.Fill(m_desc.features);
 
     VkDeviceCreateInfo create_info{};
