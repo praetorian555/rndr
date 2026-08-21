@@ -297,6 +297,33 @@ enum class ImageLayout
     Present = 1000001002,
 };
 
+/** The name of a layout, for the messages the layout tracking throws with. */
+[[nodiscard]] inline const char* ImageLayoutToString(ImageLayout layout)
+{
+    switch (layout)
+    {
+        case ImageLayout::Undefined:
+            return "Undefined";
+        case ImageLayout::General:
+            return "General";
+        case ImageLayout::ColorAttachment:
+            return "ColorAttachment";
+        case ImageLayout::DepthStencilAttachment:
+            return "DepthStencilAttachment";
+        case ImageLayout::DepthStencilReadOnly:
+            return "DepthStencilReadOnly";
+        case ImageLayout::ShaderReadOnly:
+            return "ShaderReadOnly";
+        case ImageLayout::TransferSource:
+            return "TransferSource";
+        case ImageLayout::TransferDestination:
+            return "TransferDestination";
+        case ImageLayout::Present:
+            return "Present";
+    }
+    return "an unknown layout";
+}
+
 /** Which part of the data of an image a command refers to. Mirrors VkImageAspectFlagBits. */
 enum class ImageAspectBits : u8
 {

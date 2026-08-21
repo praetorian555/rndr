@@ -53,14 +53,14 @@ void ReadBackBuffer(const Device& device, DeviceQueue& queue, const Buffer& sour
 /**
  * Copy one mip level of a texture back into host memory, tightly packed. Blocks until the copy is done, and
  * leaves the texture in final_layout.
- * @param source Texture to read. Needs TextureUsageBits::TransferSource.
- * @param current_layout Layout the texture is in now.
+ * @param source Texture to read. Needs TextureUsageBits::TransferSource. Where it is now comes off the
+ *        texture, so every level of it has to be in the same layout.
  * @param out Where the pixels go. Must be exactly the size of the mip level, which throws when it is not.
  * @param mip_level Which mip level to read.
  * @param final_layout Layout to leave the texture in. Undefined leaves it in TransferSource.
  */
-void ReadBackTexture(const Device& device, DeviceQueue& queue, Texture& source, ImageLayout current_layout, Opal::ArrayView<u8> out,
-                     u32 mip_level = 0, ImageLayout final_layout = ImageLayout::ShaderReadOnly);
+void ReadBackTexture(const Device& device, DeviceQueue& queue, Texture& source, Opal::ArrayView<u8> out, u32 mip_level = 0,
+                     ImageLayout final_layout = ImageLayout::ShaderReadOnly);
 
 /** The size in bytes of one tightly packed mip level of a texture, every array layer included. */
 [[nodiscard]] u64 GetMipLevelSize(const TextureDesc& desc, u32 mip_level);

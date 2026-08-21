@@ -261,11 +261,10 @@ public:
      * texture TextureUsageBits::TransferDestination.
      * @param buffer Source buffer holding the pixels.
      * @param texture Destination texture.
-     * @param regions Regions to copy, each naming one mip level of the texture.
-     * @param texture_layout Layout the texture is in. TransferDestination unless the texture is General.
+     * @param regions Regions to copy, each naming one mip level of the texture. Every level they name has to
+     *        be in TransferDestination or General, which is read off the texture rather than asked for.
      */
-    void CmdCopyBufferToImage(const Buffer& buffer, Texture& texture, Opal::ArrayView<const BufferImageCopyRegion> regions,
-                              ImageLayout texture_layout = ImageLayout::TransferDestination);
+    void CmdCopyBufferToImage(const Buffer& buffer, Texture& texture, Opal::ArrayView<const BufferImageCopyRegion> regions);
 
     /**
      * Copy data from a buffer to an image. Handles all mip levels described by the bitmap. The destination image must
@@ -281,24 +280,21 @@ public:
      * TextureUsageBits::TransferSource and the buffer BufferUsageBits::TransferDestination.
      * @param texture Source texture.
      * @param buffer Destination buffer.
-     * @param regions Regions to copy, each naming one mip level of the texture.
-     * @param texture_layout Layout the texture is in. TransferSource unless the texture is General.
+     * @param regions Regions to copy, each naming one mip level of the texture. Every level they name has to
+     *        be in TransferSource or General, which is read off the texture rather than asked for.
      */
-    void CmdCopyImageToBuffer(const Texture& texture, const Buffer& buffer, Opal::ArrayView<const BufferImageCopyRegion> regions,
-                              ImageLayout texture_layout = ImageLayout::TransferSource);
+    void CmdCopyImageToBuffer(const Texture& texture, const Buffer& buffer, Opal::ArrayView<const BufferImageCopyRegion> regions);
 
     /**
      * Copy regions of one texture into another. Both must have the same format and sample count, which the
      * validation layer checks; a copy does not convert the way a blit does.
      * @param source Texture to read from. Needs TextureUsageBits::TransferSource.
      * @param destination Texture to write into. Needs TextureUsageBits::TransferDestination.
-     * @param regions Regions to copy.
-     * @param source_layout Layout the source is in.
-     * @param destination_layout Layout the destination is in.
+     * @param regions Regions to copy. The layouts come off the two textures: every level the regions name
+     *        has to be in TransferSource on the source and TransferDestination on the destination, or in
+     *        General on either.
      */
-    void CmdCopyImage(const Texture& source, Texture& destination, Opal::ArrayView<const ImageCopyRegion> regions,
-                      ImageLayout source_layout = ImageLayout::TransferSource,
-                      ImageLayout destination_layout = ImageLayout::TransferDestination);
+    void CmdCopyImage(const Texture& source, Texture& destination, Opal::ArrayView<const ImageCopyRegion> regions);
 
     /**
      * Stretch regions of one texture into another, resampling and converting on the way. The formats need not
@@ -309,22 +305,20 @@ public:
      * @param regions Regions to blit.
      * @param filter How the source is sampled where the two boxes differ in size. A linear filter needs the
      *               source format to support linear filtering.
-     * @param source_layout Layout the source is in.
-     * @param destination_layout Layout the destination is in.
+     * @note The layouts come off the two textures, the way CmdCopyImage reads them.
      */
     void CmdBlitImage(const Texture& source, Texture& destination, Opal::ArrayView<const ImageBlitRegion> regions,
-                      ImageFilter filter = ImageFilter::Linear, ImageLayout source_layout = ImageLayout::TransferSource,
-                      ImageLayout destination_layout = ImageLayout::TransferDestination);
+                      ImageFilter filter = ImageFilter::Linear);
 
     /**
      * Fill every mip level below the first by blitting each level into the next, halving it each time. The
      * texture needs both transfer usages and a format this device can blit and filter linearly, all three of
      * which throw rather than being left to the validation layer.
-     * @param texture Texture whose mip 0 is filled and whose remaining levels are not.
-     * @param current_layout Layout the whole texture is in now.
+     * @param texture Texture whose mip 0 is filled and whose remaining levels are not. Every level of it has
+     *        to be in the same layout, which is what it is brought out of.
      * @param final_layout Layout to leave the whole texture in, every level in the same one.
      */
-    void CmdGenerateMips(Texture& texture, ImageLayout current_layout, ImageLayout final_layout = ImageLayout::ShaderReadOnly);
+    void CmdGenerateMips(Texture& texture, ImageLayout final_layout = ImageLayout::ShaderReadOnly);
 
     /**
      * Begin a dynamic rendering pass. Uses VK_KHR_dynamic_rendering, no render pass or framebuffer objects needed.

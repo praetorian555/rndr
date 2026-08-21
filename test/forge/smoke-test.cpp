@@ -399,16 +399,17 @@ TEST_CASE("Forge texture upload, mip generation and readback", "[forge]")
                            {
                                command_buffer.CmdImageBarrier(Forge::ImageBarrier::ToTransferDestination(texture));
                                command_buffer.CmdCopyBufferToImage(staging, texture, {&mip0_region, 1});
-                               command_buffer.CmdGenerateMips(texture, Forge::ImageLayout::TransferDestination,
-                                                              Forge::ImageLayout::TransferDestination);
+                               command_buffer.CmdGenerateMips(texture, Forge::ImageLayout::TransferDestination);
                            });
+    // Nothing above named a source layout: the mip chain reads each level off the texture as it goes, and
+    // leaves every one of them in the layout it was told to finish in.
+    REQUIRE(texture.GetCurrentLayout() == Forge::ImageLayout::TransferDestination);
 
     for (u32 level = 0; level < k_mip_count; ++level)
     {
         const i32 side = k_side >> level;
         Opal::DynamicArray<u8> level_pixels(side * side * 4);
-        Forge::ReadBackTexture(fixture.device, fixture.GetQueue(), texture, Forge::ImageLayout::TransferDestination, level_pixels, level,
-                               Forge::ImageLayout::TransferDestination);
+        Forge::ReadBackTexture(fixture.device, fixture.GetQueue(), texture, level_pixels, level, Forge::ImageLayout::TransferDestination);
         INFO("mip level " << level);
         for (i32 i = 0; i < level_pixels.GetSize(); ++i)
         {
@@ -419,9 +420,9 @@ TEST_CASE("Forge texture upload, mip generation and readback", "[forge]")
     SECTION("Reading back into a view of the wrong size throws")
     {
         Opal::DynamicArray<u8> too_small(4);
-        REQUIRE_THROWS_AS(Forge::ReadBackTexture(fixture.device, fixture.GetQueue(), texture, Forge::ImageLayout::TransferDestination,
-                                                 too_small, 0, Forge::ImageLayout::TransferDestination),
-                          Opal::Exception);
+        REQUIRE_THROWS_AS(
+            Forge::ReadBackTexture(fixture.device, fixture.GetQueue(), texture, too_small, 0, Forge::ImageLayout::TransferDestination),
+            Opal::Exception);
     }
     REQUIRE_NO_VALIDATION_ERROR(fixture);
 }
@@ -500,6 +501,8 @@ TEST_CASE("Forge debug names reach the validation layer", "[forge]")
     const Forge::ImageCopyRegion region;
     Forge::CommandBuffer command_buffer(fixture.device, fixture.GetQueue());
     command_buffer.Begin();
+    command_buffer.CmdTransition(source, Forge::ImageLayout::TransferSource);
+    command_buffer.CmdTransition(destination, Forge::ImageLayout::TransferDestination);
     command_buffer.CmdCopyImage(source, destination, {&region, 1});
     command_buffer.End();
 
@@ -1262,6 +1265,22 @@ TEST_CASE("Forge texture layout tracking", "[forge]")
         REQUIRE_THROWS_AS(texture.GetCurrentLayout(k_mip_count), Opal::Exception);
         REQUIRE_THROWS_AS(texture.GetCurrentLayout(0, 1), Opal::Exception);
     }
+    SECTION("A transfer out of a layout the role does not allow throws")
+    {
+        if (!fixture.device.GetPhysicalDevice().SupportsBlit(PixelFormat::R8G8B8A8_UNORM, true) ||
+            !fixture.device.GetPhysicalDevice().SupportsBlit(PixelFormat::R8G8B8A8_UNORM, false))
+        {
+            SKIP("This device cannot blit R8G8B8A8_UNORM either way.");
+        }
+        Forge::CommandBuffer command_buffer(fixture.device, fixture.GetQueue());
+        command_buffer.Begin();
+        command_buffer.CmdTransition(texture, Forge::ImageLayout::ShaderReadOnly);
+        // Halving mip 0 into mip 1, which is what mip generation does, but with both levels left where a
+        // shader reads them rather than where a transfer does.
+        const Forge::ImageBlitRegion region{.source = {.mip_level = 0}, .destination = {.mip_level = 1}};
+        REQUIRE_THROWS_AS(command_buffer.CmdBlitImage(texture, texture, {&region, 1}), Opal::Exception);
+        command_buffer.End();
+    }
     SECTION("A move carries the layouts across")
     {
         Forge::ImmediateSubmit(fixture.device, fixture.GetQueue(),
@@ -1688,8 +1707,7 @@ TEST_CASE("Forge rendering without a depth attachment", "[forge]")
         Opal::DynamicArray<u8> pixels(k_side * k_side * 4);
         // Left in TransferSource rather than the ShaderReadOnly this defaults to: that layout needs the
         // Sampled usage, and this texture is an attachment nothing ever samples.
-        Forge::ReadBackTexture(fixture.device, fixture.GetQueue(), color, Forge::ImageLayout::ColorAttachment, pixels, 0,
-                               Forge::ImageLayout::TransferSource);
+        Forge::ReadBackTexture(fixture.device, fixture.GetQueue(), color, pixels, 0, Forge::ImageLayout::TransferSource);
         // Zero and one are the only channel values a UNORM format converts exactly, so this compares
         // what was cleared rather than how the driver rounds.
         for (i32 i = 0; i < pixels.GetSize(); i += 4)
@@ -1811,8 +1829,7 @@ TEST_CASE("Forge color write mask", "[forge]")
                                });
 
         Opal::DynamicArray<u8> pixels(k_side * k_side * 4);
-        Forge::ReadBackTexture(fixture.device, fixture.GetQueue(), color, Forge::ImageLayout::ColorAttachment, pixels, 0,
-                               Forge::ImageLayout::TransferSource);
+        Forge::ReadBackTexture(fixture.device, fixture.GetQueue(), color, pixels, 0, Forge::ImageLayout::TransferSource);
         return Opal::DynamicArray<u8>{pixels[0], pixels[1], pixels[2], pixels[3]};
     };
 
@@ -2048,8 +2065,7 @@ TEST_CASE("Forge specialization constants", "[forge]")
                                });
 
         Opal::DynamicArray<u8> pixels(k_side * k_side * 4);
-        Forge::ReadBackTexture(fixture.device, fixture.GetQueue(), color, Forge::ImageLayout::ColorAttachment, pixels, 0,
-                               Forge::ImageLayout::TransferSource);
+        Forge::ReadBackTexture(fixture.device, fixture.GetQueue(), color, pixels, 0, Forge::ImageLayout::TransferSource);
         return Opal::DynamicArray<u8>{pixels[0], pixels[1], pixels[2], pixels[3]};
     };
 

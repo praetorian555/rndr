@@ -86,12 +86,11 @@ public:
     SwapChainStatus BeginFrame();
 
     /**
-     * End the command buffer, submit it, and present the image it rendered into.
-     * @param color_image_layout Layout the caller left the swap chain image in. The transition to Present is
-     *        made from it, which is the last thing every frame does and the easiest to forget.
+     * End the command buffer, submit it, and present the image it rendered into. The transition to Present is
+     * made from whatever layout the frame left the swap chain image in, which the image itself tracks.
      * @return OutOfDate when the swap chain stopped matching the surface, in which case it has been rebuilt.
      */
-    SwapChainStatus EndFrame(ImageLayout color_image_layout = ImageLayout::ColorAttachment);
+    SwapChainStatus EndFrame();
 
     /** The command buffer of the frame in flight. Only between BeginFrame and EndFrame. */
     [[nodiscard]] CommandBuffer& GetCommandBuffer();

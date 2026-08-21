@@ -191,7 +191,7 @@ Rndr::Forge::Texture::Texture(const Device& device, DeviceQueue& queue, const Bi
                         command_buffer.CmdCopyBufferToImage(staging_buffer, bitmap, *this);
                         if (generate_mips && m_desc.mip_level_count > 1)
                         {
-                            command_buffer.CmdGenerateMips(*this, ImageLayout::TransferDestination);
+                            command_buffer.CmdGenerateMips(*this);
                             return;
                         }
                         command_buffer.CmdImageBarrier(ImageBarrier::ToShaderRead(*this));
@@ -337,34 +337,6 @@ void Rndr::Forge::Texture::Destroy()
     m_layouts.Clear();
 }
 
-/** The name of a layout, for the message a range that disagrees with itself throws with. */
-static const char* LayoutName(Rndr::Forge::ImageLayout layout)
-{
-    using Rndr::Forge::ImageLayout;
-    switch (layout)
-    {
-        case ImageLayout::Undefined:
-            return "Undefined";
-        case ImageLayout::General:
-            return "General";
-        case ImageLayout::ColorAttachment:
-            return "ColorAttachment";
-        case ImageLayout::DepthStencilAttachment:
-            return "DepthStencilAttachment";
-        case ImageLayout::DepthStencilReadOnly:
-            return "DepthStencilReadOnly";
-        case ImageLayout::ShaderReadOnly:
-            return "ShaderReadOnly";
-        case ImageLayout::TransferSource:
-            return "TransferSource";
-        case ImageLayout::TransferDestination:
-            return "TransferDestination";
-        case ImageLayout::Present:
-            return "Present";
-    }
-    return "an unknown layout";
-}
-
 /**
  * The half-open subresource range a range names, with the k_all_* counts resolved against the desc. A range
  * that reaches past the texture throws rather than being clamped, since it is a mistake either way.
@@ -417,7 +389,7 @@ Rndr::Forge::ImageLayout Rndr::Forge::Texture::GetCurrentLayout(const ImageSubre
             if (layout != common)
             {
                 throw Opal::Exception(Opal::StringEx("The subresources of the texture are not all in one layout - found ") +
-                                      LayoutName(common) + " and " + LayoutName(layout) +
+                                      ImageLayoutToString(common) + " and " + ImageLayoutToString(layout) +
                                       ". Ask for the layout of one subresource instead.");
             }
         }

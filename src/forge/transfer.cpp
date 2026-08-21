@@ -51,8 +51,8 @@ void Rndr::Forge::ReadBackBuffer(const Device& device, DeviceQueue& queue, const
     staging_buffer.Read(out);
 }
 
-void Rndr::Forge::ReadBackTexture(const Device& device, DeviceQueue& queue, Texture& source, ImageLayout current_layout,
-                                  Opal::ArrayView<u8> out, u32 mip_level, ImageLayout final_layout)
+void Rndr::Forge::ReadBackTexture(const Device& device, DeviceQueue& queue, Texture& source, Opal::ArrayView<u8> out, u32 mip_level,
+                                  ImageLayout final_layout)
 {
     const TextureDesc& desc = source.GetDesc();
     const u64 mip_size = GetMipLevelSize(desc, mip_level);
@@ -67,11 +67,11 @@ void Rndr::Forge::ReadBackTexture(const Device& device, DeviceQueue& queue, Text
     ImmediateSubmit(device, queue,
                     [&](CommandBuffer& command_buffer)
                     {
-                        command_buffer.CmdImageBarrier(ImageBarrier::ToTransferSource(source, current_layout));
+                        command_buffer.CmdImageBarrier(ImageBarrier::ToTransferSource(source));
                         command_buffer.CmdCopyImageToBuffer(source, staging_buffer, {&region, 1});
                         if (final_layout != ImageLayout::Undefined && final_layout != ImageLayout::TransferSource)
                         {
-                            command_buffer.CmdImageBarrier(ImageBarrier::To(source, ImageLayout::TransferSource, final_layout));
+                            command_buffer.CmdImageBarrier(ImageBarrier::To(source, final_layout));
                         }
                     });
     staging_buffer.Read(out);

@@ -295,9 +295,41 @@ and the access they made, then the stages that must not start and the access the
 `ImageBarrier` has a preset for each of the standard transitions - `ToColorAttachment`,
 `ToDepthStencilAttachment`, `ToShaderRead`, `ToTransferSource`, `ToTransferDestination`, `ToPresent`, and
 `To` for a layout that is not known while writing the call. Each picks the stages and the access from what
-the texture is about to be used for, and derives the source side from the layout it is coming from, so the
-only thing left to the caller is where the texture is now. `BufferBarrier::WriteThenRead` and
-`::ReadThenWrite` cover the two orderings a buffer needs.
+the texture is about to be used for, and derives the source side from the layout it is coming from.
+`BufferBarrier::WriteThenRead` and `::ReadThenWrite` cover the two orderings a buffer needs.
+
+### The texture remembers its layout
+
+Vulkan makes the current layout of an image the caller's bookkeeping: neither the driver nor the validation
+layer catches a plausible-but-wrong `oldLayout`, and `VK_IMAGE_LAYOUT_UNDEFINED` is always accepted because
+it means "throw the contents away". Forge does that bookkeeping instead. `Texture` keeps one layout per
+(mip level, array layer), starting at `Undefined` the way a freshly created image does, and `CmdBarriers`
+writes the new layout back over the range every image barrier covered.
+
+So the short form of every preset takes the source layout off the texture:
+
+```cpp
+command_buffer.CmdTransition(texture, ImageLayout::ShaderReadOnly);       // the whole transition
+command_buffer.CmdImageBarrier(ImageBarrier::ToShaderRead(texture));      // the same, with the stages spelled out
+```
+
+`GetCurrentLayout()` answers for the whole texture and throws when the levels disagree, which is what mip
+generation leaves behind halfway through; `GetCurrentLayout(mip_level, array_layer)` answers for one of
+them. The commands that need a layout without changing it - `CmdCopyImage`, `CmdBlitImage`,
+`CmdCopyBufferToImage`, `CmdCopyImageToBuffer`, `CmdGenerateMips`, `ReadBackTexture` - read it the same way,
+for exactly the levels their regions name, and throw when it is not one the role allows. That last check is
+the one the old API could not make.
+
+The long form of each preset, the one that is told the old layout, stays for the two cases the tracker
+cannot answer: a barrier over part of a texture whose range is narrowed after the preset built it, and a
+deliberate discard, which is `ImageLayout::Undefined` and is now something a call site has to say out loud.
+
+**This is record-time bookkeeping, not execution-time.** It is correct exactly while one thread records
+command buffers in the order they will execute. It lies when two command buffers that touch the same texture
+are recorded interleaved, and `CommandBuffer::Reset()` does not roll it back - the recorded barriers go, the
+layouts they set stay. Swap chain images are the one case Forge cannot observe, so `AcquireImage` resets the
+image it hands out to `Undefined`, which is what the specification says about a re-acquired image and what a
+frame that clears it wants anyway.
 
 `PipelineStageAccessBits` offers two ways to name an access, and the difference matters:
 

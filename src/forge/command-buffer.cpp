@@ -278,6 +278,45 @@ static void ValidateBufferRange(const Rndr::Forge::Buffer& buffer, Rndr::u64 off
 }
 
 /**
+ * The layout one side of a copy or blit is in, taken from the texture across every region that names it.
+ *
+ * One Vulkan call carries a single layout per side, so regions whose levels are in different layouts have no
+ * answer and throw. So does a layout the role does not allow: that is the check the API could not make while
+ * the caller supplied the layout, and it turns silent undefined behaviour into a message.
+ */
+template <typename Region>
+static Rndr::Forge::ImageLayout ResolveTransferLayout(const Rndr::Forge::Texture& texture, Opal::ArrayView<const Region> regions,
+                                                      Rndr::Forge::ImageSubresourceLayers Region::*member, bool as_source,
+                                                      const char* role, const char* what)
+{
+    using namespace Rndr;
+    Forge::ImageLayout layout = Forge::ImageLayout::Undefined;
+    for (i32 i = 0; i < regions.GetSize(); ++i)
+    {
+        const Forge::ImageSubresourceLayers& subresource = regions[i].*member;
+        const Forge::ImageSubresourceRange range{.aspect_mask = subresource.aspect_mask,
+                                                 .first_mip_level = subresource.mip_level,
+                                                 .mip_level_count = 1,
+                                                 .first_array_layer = subresource.first_array_layer,
+                                                 .array_layer_count = subresource.array_layer_count};
+        const Forge::ImageLayout region_layout = texture.GetCurrentLayout(range);
+        if (i != 0 && region_layout != layout)
+        {
+            throw Opal::Exception(Opal::StringEx(what) + " names levels of the " + role + " texture that are in different layouts, " +
+                                  Forge::ImageLayoutToString(layout) + " and " + Forge::ImageLayoutToString(region_layout) + "!");
+        }
+        layout = region_layout;
+    }
+    const Forge::ImageLayout required = as_source ? Forge::ImageLayout::TransferSource : Forge::ImageLayout::TransferDestination;
+    if (layout != required && layout != Forge::ImageLayout::General)
+    {
+        throw Opal::Exception(Opal::StringEx(what) + " needs the " + role + " texture in the " + Forge::ImageLayoutToString(required) +
+                              " or General layout, and it is in " + Forge::ImageLayoutToString(layout) + "!");
+    }
+    return layout;
+}
+
+/**
  * Check that the subresource exists on the texture and report the extent of the mip level it names, which is
  * what every region on that texture is measured against.
  */
@@ -441,7 +480,7 @@ void Rndr::Forge::CommandBuffer::CmdCopyBuffer(const Buffer& source, const Buffe
 }
 
 void Rndr::Forge::CommandBuffer::CmdCopyBufferToImage(const Buffer& buffer, Texture& texture,
-                                                      Opal::ArrayView<const BufferImageCopyRegion> regions, ImageLayout texture_layout)
+                                                      Opal::ArrayView<const BufferImageCopyRegion> regions)
 {
     if (regions.IsEmpty())
     {
@@ -454,6 +493,8 @@ void Rndr::Forge::CommandBuffer::CmdCopyBufferToImage(const Buffer& buffer, Text
     {
         copy_regions[i] = ToVkBufferImageCopy(buffer, texture, regions[i], "source", "Buffer to image copy");
     }
+    const ImageLayout texture_layout =
+        ResolveTransferLayout(texture, regions, &BufferImageCopyRegion::image_subresource, false, "destination", "Buffer to image copy");
     vkCmdCopyBufferToImage(m_native_command_buffer, buffer.GetNativeBuffer(), texture.GetNativeImage(),
                            static_cast<VkImageLayout>(texture_layout), static_cast<u32>(copy_regions.GetSize()), copy_regions.GetData());
 }
@@ -472,7 +513,7 @@ void Rndr::Forge::CommandBuffer::CmdCopyBufferToImage(const Buffer& buffer, cons
 }
 
 void Rndr::Forge::CommandBuffer::CmdCopyImageToBuffer(const Texture& texture, const Buffer& buffer,
-                                                      Opal::ArrayView<const BufferImageCopyRegion> regions, ImageLayout texture_layout)
+                                                      Opal::ArrayView<const BufferImageCopyRegion> regions)
 {
     if (regions.IsEmpty())
     {
@@ -485,12 +526,13 @@ void Rndr::Forge::CommandBuffer::CmdCopyImageToBuffer(const Texture& texture, co
     {
         copy_regions[i] = ToVkBufferImageCopy(buffer, texture, regions[i], "destination", "Image to buffer copy");
     }
+    const ImageLayout texture_layout =
+        ResolveTransferLayout(texture, regions, &BufferImageCopyRegion::image_subresource, true, "source", "Image to buffer copy");
     vkCmdCopyImageToBuffer(m_native_command_buffer, texture.GetNativeImage(), static_cast<VkImageLayout>(texture_layout),
                            buffer.GetNativeBuffer(), static_cast<u32>(copy_regions.GetSize()), copy_regions.GetData());
 }
 
-void Rndr::Forge::CommandBuffer::CmdCopyImage(const Texture& source, Texture& destination, Opal::ArrayView<const ImageCopyRegion> regions,
-                                              ImageLayout source_layout, ImageLayout destination_layout)
+void Rndr::Forge::CommandBuffer::CmdCopyImage(const Texture& source, Texture& destination, Opal::ArrayView<const ImageCopyRegion> regions)
 {
     if (regions.IsEmpty())
     {
@@ -514,6 +556,9 @@ void Rndr::Forge::CommandBuffer::CmdCopyImage(const Texture& source, Texture& de
             .dstOffset = {.x = region.destination_offset.x, .y = region.destination_offset.y, .z = region.destination_offset.z},
             .extent = extent};
     }
+    const ImageLayout source_layout = ResolveTransferLayout(source, regions, &ImageCopyRegion::source, true, "source", "Image copy");
+    const ImageLayout destination_layout =
+        ResolveTransferLayout(destination, regions, &ImageCopyRegion::destination, false, "destination", "Image copy");
     vkCmdCopyImage(m_native_command_buffer, source.GetNativeImage(), static_cast<VkImageLayout>(source_layout),
                    destination.GetNativeImage(), static_cast<VkImageLayout>(destination_layout),
                    static_cast<u32>(copy_regions.GetSize()), copy_regions.GetData());
@@ -533,7 +578,7 @@ static VkFilter ToVkFilter(Rndr::ImageFilter filter)
 }
 
 void Rndr::Forge::CommandBuffer::CmdBlitImage(const Texture& source, Texture& destination, Opal::ArrayView<const ImageBlitRegion> regions,
-                                              ImageFilter filter, ImageLayout source_layout, ImageLayout destination_layout)
+                                              ImageFilter filter)
 {
     if (regions.IsEmpty())
     {
@@ -567,12 +612,15 @@ void Rndr::Forge::CommandBuffer::CmdBlitImage(const Texture& source, Texture& de
                        blit.dstOffsets);
         blit_regions[i] = blit;
     }
+    const ImageLayout source_layout = ResolveTransferLayout(source, regions, &ImageBlitRegion::source, true, "source", "Image blit");
+    const ImageLayout destination_layout =
+        ResolveTransferLayout(destination, regions, &ImageBlitRegion::destination, false, "destination", "Image blit");
     vkCmdBlitImage(m_native_command_buffer, source.GetNativeImage(), static_cast<VkImageLayout>(source_layout),
                    destination.GetNativeImage(), static_cast<VkImageLayout>(destination_layout),
                    static_cast<u32>(blit_regions.GetSize()), blit_regions.GetData(), ToVkFilter(filter));
 }
 
-void Rndr::Forge::CommandBuffer::CmdGenerateMips(Texture& texture, ImageLayout current_layout, ImageLayout final_layout)
+void Rndr::Forge::CommandBuffer::CmdGenerateMips(Texture& texture, ImageLayout final_layout)
 {
     const TextureDesc& desc = texture.GetDesc();
     if (desc.mip_level_count < 2)
@@ -585,9 +633,9 @@ void Rndr::Forge::CommandBuffer::CmdGenerateMips(Texture& texture, ImageLayout c
 
     // The whole texture starts as the destination of the first blit, including the level that already holds the
     // data - it becomes a source one level at a time inside the loop.
-    if (current_layout != ImageLayout::TransferDestination)
+    if (texture.GetCurrentLayout() != ImageLayout::TransferDestination)
     {
-        CmdImageBarrier(ImageBarrier::ToTransferDestination(texture, current_layout));
+        CmdImageBarrier(ImageBarrier::ToTransferDestination(texture));
     }
     for (u32 level = 1; level < desc.mip_level_count; ++level)
     {

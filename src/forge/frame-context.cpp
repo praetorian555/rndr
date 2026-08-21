@@ -146,7 +146,7 @@ Rndr::Forge::SwapChainStatus Rndr::Forge::FrameContext::BeginFrame()
     return SwapChainStatus::Success;
 }
 
-Rndr::Forge::SwapChainStatus Rndr::Forge::FrameContext::EndFrame(ImageLayout color_image_layout)
+Rndr::Forge::SwapChainStatus Rndr::Forge::FrameContext::EndFrame()
 {
     if (!m_is_frame_recording)
     {
@@ -154,9 +154,10 @@ Rndr::Forge::SwapChainStatus Rndr::Forge::FrameContext::EndFrame(ImageLayout col
     }
     const u32 frame_index = GetFrameIndex();
     CommandBuffer& command_buffer = m_command_buffers[frame_index];
-    if (color_image_layout != ImageLayout::Present)
+    Texture& color_image = GetColorImage();
+    if (color_image.GetCurrentLayout() != ImageLayout::Present)
     {
-        command_buffer.CmdImageBarrier(ImageBarrier::ToPresent(GetColorImage(), color_image_layout));
+        command_buffer.CmdImageBarrier(ImageBarrier::ToPresent(color_image));
     }
     command_buffer.End();
     m_is_frame_recording = false;

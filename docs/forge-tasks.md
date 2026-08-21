@@ -893,11 +893,34 @@ mirror `VK_REMAINING_MIP_LEVELS` and `VK_REMAINING_ARRAY_LAYERS`, and an empty `
 `ResolveAspectMask(format)` turns into depth, stencil, both or color. Barriers and the image view that
 `Texture` creates both go through it, so the swap chain no longer spells out the depth aspect by hand.
 
-### 4.3 Track the current layout on the texture
+### 4.3 Track the current layout on the texture — DONE
 
-Once the texture knows its own layout, `old_layout` stops being something the caller can get wrong, and
-`texture.TransitionTo(layout)` replaces most hand-written barriers. Needs care around swap chain images,
-which the presentation engine transitions behind our back.
+`Texture` keeps one `ImageLayout` per (mip level, array layer) and `CommandBuffer::CmdBarriers` is the only
+thing that writes it, over the range each image barrier covers. Every `ImageBarrier` preset gained a form
+that reads it, `CmdTransition(texture, layout)` is the transition in one line, and the layout arguments of
+`CmdCopyImage`, `CmdBlitImage`, `CmdCopyBufferToImage`, `CmdCopyImageToBuffer`, `CmdGenerateMips`,
+`ReadBackTexture` and `FrameContext::EndFrame` are gone.
+
+Per subresource rather than per texture because the scope forced it: `CmdGenerateMips` blits level *n - 1*
+into level *n* of the same texture, so one call has that texture in `TransferSource` and
+`TransferDestination` at once, and a single layout cannot express it. `GetCurrentLayout()` throws while the
+levels disagree rather than picking one.
+
+The `Undefined` defaults on `ToColorAttachment`, `ToDepthStencilAttachment` and `ToTransferDestination` went
+with it. They were legal Vulkan that discarded the contents of the texture and said nothing, and the
+validation layer has no way to notice; a discard is now something a call site spells out. Holding the layout
+also made room for a check the old API could not make - a transfer whose source is not `TransferSource` or
+`General`, or whose destination is not `TransferDestination` or `General`, throws instead of being undefined
+behaviour the layer sometimes catches.
+
+Tracking is record-time, which `docs/forge.md` now says out loud: it is correct while one thread records in
+execution order, it does not survive interleaved recording of two command buffers over one texture, and
+`CommandBuffer::Reset()` does not roll it back. Swap chain images are the case the tracker cannot observe,
+so `AcquireImage` resets the image it hands out to `Undefined`.
+
+Untested, and unfixably so until a headless surface exists: the acquire-time reset and the non-const swap
+chain getters have no `[forge]` coverage, since nothing in the test binary creates a swap chain. The sample
+is what exercised them - several resizes plus a minimize and restore, with no validation message.
 
 ### 4.4 Shorter descriptor set updates — DONE
 
