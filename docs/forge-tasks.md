@@ -1387,10 +1387,13 @@ axes names the mode without it - the way `max_anisotropy` above one already thre
 border colour tables also fell through to a `default` that quietly answered `Repeat` and `OpaqueBlack`; they
 throw now, like every other translation table in Forge.
 
-**The throw for a mesh with no normals is unreachable.** `LoadMesh` asks assimp for
-`aiProcess_GenSmoothNormals`, so a file with no normals has them by the time the null check runs. The check
-beside it for UVs does fire, because `aiProcess_GenUVCoords` converts a mapping that is already there rather
-than inventing one. The case asserts the mesh loads rather than pretending the throw is testable.
+**`LoadMesh` generates normals from faces, so which files throw is not the obvious answer.**
+`aiProcess_GenSmoothNormals` fills them in for any mesh that still has a triangle face when it runs, which
+made the null normal check look like dead code - a triangle mesh with no `vn` loads. It is not dead: a point
+cloud, a line mesh, and a mesh whose only triangle was degenerate enough for `aiProcess_FindDegenerates` to
+remove it all arrive with no faces, nothing to generate from, and null normals. All three throw, and the case
+covers them. The UV check beside it fires on an ordinary triangle mesh, because `aiProcess_GenUVCoords`
+converts a mapping that is already there rather than inventing one.
 
 **What the eleven cases cover.**
 
@@ -1423,11 +1426,12 @@ computed independently, and every one carries a last section asserting that no t
 the same answer - which is what makes the tolerance safe and the check a check rather than a demonstration.
 The swapped pair the original note gave up on is exactly what these catch.
 
-**`FindMemoryTypeIndex` returns zero when nothing matches, and that is left alone.** It is the pattern the
+**`FindMemoryTypeIndex` answered index zero when nothing matched, and now throws.** It was the pattern the
 error handling section of `docs/forge.md` forbids - a default the caller cannot tell from a real answer, since
-type zero is a real type with real properties. Nothing in Forge calls it, so the trap has no victim today, and
-turning it into a throw is a change to public error semantics rather than a test. The case pins the current
-behaviour and says why it is a trap; whether it should throw is a decision, not a fix.
+type zero is a real memory type with real properties, so an allocation went to the wrong heap and surfaced as
+a problem somewhere else. Nothing in Forge calls it, so the trap never caught anyone. It also asked
+`vkGetPhysicalDeviceMemoryProperties` again rather than reading the copy the object already holds; two sources
+for something that cannot change is only a way for them to disagree.
 
 ### 3.22 Windowed tests: surface, swap chain, frame context — DONE
 

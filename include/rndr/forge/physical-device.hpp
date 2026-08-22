@@ -60,6 +60,19 @@ public:
      */
     [[nodiscard]] bool SupportsLinearFilter(PixelFormat format) const;
 
+    /**
+     * The first memory type this device offers that the filter allows and that has all of `properties`.
+     *
+     * Forge allocates through VMA and never calls this; it is here for a caller reaching past Forge to
+     * Vulkan, where the filter is `VkMemoryRequirements::memoryTypeBits` and the properties are whatever
+     * the allocation needs to be able to do.
+     *
+     * @param type_filter Bit per memory type of this device, set for the ones the allocation may use.
+     * @param properties Every property the type has to have. Zero accepts the first type the filter allows.
+     * @return Index into the device's memory type array.
+     * @throw Opal::Exception when no type satisfies both. Not a returned sentinel: index zero is a real
+     *        memory type, so a caller could not tell one from a match and would allocate from the wrong heap.
+     */
     [[nodiscard]] u32 FindMemoryTypeIndex(u32 type_filter, VkMemoryPropertyFlags properties) const;
 
 private:

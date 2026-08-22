@@ -150,20 +150,23 @@ bool Rndr::Forge::PhysicalDevice::SupportsLinearFilter(PixelFormat format) const
 
 Rndr::u32 Rndr::Forge::PhysicalDevice::FindMemoryTypeIndex(u32 type_filter, VkMemoryPropertyFlags properties) const
 {
-    VkPhysicalDeviceMemoryProperties memory_properties;
-    vkGetPhysicalDeviceMemoryProperties(m_physical_device, &memory_properties);
-
-    for (u32 i = 0; i < memory_properties.memoryTypeCount; ++i)
+    // The properties read once at construction rather than asked for again. They cannot change for the life
+    // of the physical device, and the accessor beside this one already hands out the cached copy - so asking
+    // twice was only a way for the two to disagree.
+    for (u32 i = 0; i < m_memory_properties.memoryTypeCount; ++i)
     {
-        // Properties here specify if the memory is device local, host visible, etc.
-        // Device has an array of memory types, and each bit in the filter corresponds to one memory type in that array.
-        if ((type_filter & (1 << i)) != 0 && (memory_properties.memoryTypes[i].propertyFlags & properties) == properties)
+        // Each bit of the filter corresponds to one entry of the device's memory type array, and the
+        // properties say whether that memory is device local, host visible and so on.
+        if ((type_filter & (1U << i)) != 0 && (m_memory_properties.memoryTypes[i].propertyFlags & properties) == properties)
         {
             return i;
         }
     }
-    // Just use first memory type available
-    return 0;
+    // Nothing matched. This used to hand back index zero, which is a real memory type with real properties
+    // and never the one that was asked for - a caller could not tell it from a match, so an allocation went
+    // to the wrong heap and the mistake surfaced somewhere else entirely. See the error handling section of
+    // docs/forge.md: a default the caller cannot distinguish from an answer is the one thing Forge does not do.
+    throw Opal::Exception("No memory type on this device has the requested properties!");
 }
 
 void Rndr::Forge::PhysicalDevice::Destroy()

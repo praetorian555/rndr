@@ -9307,6 +9307,10 @@ TEST_CASE("Forge reading timestamp ticks without blocking", "[forge]")
  * PhysicalDevice::FindMemoryTypeIndex, which is reachable headlessly and had no caller. Forge allocates
  * through VMA everywhere, so nothing inside it asks this - it is here for a caller reaching past Forge to
  * Vulkan, and it was going unexercised.
+ *
+ * It used to answer index zero when nothing matched. That is a real memory type with real properties, so a
+ * caller could not tell it from a match and would allocate from the wrong heap; it throws now, which is what
+ * the error handling section of docs/forge.md asks of everything else.
  */
 TEST_CASE("Forge memory type selection", "[forge]")
 {
@@ -9357,17 +9361,21 @@ TEST_CASE("Forge memory type selection", "[forge]")
             REQUIRE(physical_device.FindMemoryTypeIndex(every_type & ~1u, 0) == 1);
         }
     }
-    SECTION("Nothing matches, and the answer is zero rather than a failure")
+    SECTION("Nothing matches, and it throws rather than naming a type that does not")
     {
-        // Worth pinning down because it is a trap rather than a convenience: a caller that asks for something
-        // impossible is handed type zero, which is a real type with real properties and not the one it wanted.
-        // Nothing in Forge allocates through this, so the trap has no victim today - a caller that reaches for
-        // it has to compare the properties of what came back against what it asked for, the way the first
-        // section above does.
+        // No device has every property at once - DEVICE_LOCAL and the host visible bits coexist, but
+        // LAZILY_ALLOCATED and PROTECTED do not sit with them - so this is an ask that cannot be met.
         constexpr VkMemoryPropertyFlags k_impossible = 0xFFFFFFFF;
-        REQUIRE(physical_device.FindMemoryTypeIndex(every_type, k_impossible) == 0);
-        // And a filter that allows no type at all takes the same way out.
-        REQUIRE(physical_device.FindMemoryTypeIndex(0, 0) == 0);
+        REQUIRE_THROWS_AS(physical_device.FindMemoryTypeIndex(every_type, k_impossible), Opal::Exception);
+        // A filter that allows no type at all, which is the other way to match nothing: the loop never gets
+        // as far as comparing properties.
+        REQUIRE_THROWS_AS(physical_device.FindMemoryTypeIndex(0, 0), Opal::Exception);
+        REQUIRE_THROWS_AS(physical_device.FindMemoryTypeIndex(0, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT), Opal::Exception);
+        // And a filter naming only types that lack the property, which is the case a caller actually hits:
+        // the answer index zero used to give was a type the filter had already ruled out.
+        const u32 host_visible = physical_device.FindMemoryTypeIndex(
+            every_type, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
+        REQUIRE_THROWS_AS(physical_device.FindMemoryTypeIndex(1u << host_visible, k_impossible), Opal::Exception);
     }
     REQUIRE_NO_VALIDATION_ERROR(fixture);
 }
@@ -9405,11 +9413,40 @@ vn 0.0 0.0 1.0
 f 1//1 2//1 3//1
 )";
 
-/** And with no normals, which is the attribute assimp does invent - see the case below. */
+/** And with no normals but with a face, which is the shape assimp does generate normals for. */
 constexpr const char* k_obj_without_normals = R"(
 v -1.0 -1.0 0.0
 v 1.0 -1.0 0.0
 v 0.0 1.0 0.0
+vt 0.0 0.0
+vt 1.0 0.0
+vt 0.5 1.0
+f 1/1 2/2 3/3
+)";
+
+/**
+ * Three shapes that reach the null normal check with nothing to check, because assimp generates normals from
+ * faces and none of these has one left by the time it runs.
+ *
+ * A point cloud and a line mesh never had a face. The third has one written down, but every vertex of it sits
+ * at the origin, so aiProcess_FindDegenerates removes it and the mesh arrives as bare as the first two.
+ */
+constexpr const char* k_obj_points_only = R"(
+v -1.0 -1.0 0.0
+v 1.0 -1.0 0.0
+v 0.0 1.0 0.0
+)";
+
+constexpr const char* k_obj_lines_only = R"(
+v -1.0 -1.0 0.0
+v 1.0 -1.0 0.0
+l 1 2
+)";
+
+constexpr const char* k_obj_degenerate_face = R"(
+v 0.0 0.0 0.0
+v 0.0 0.0 0.0
+v 0.0 0.0 0.0
 vt 0.0 0.0
 vt 1.0 0.0
 vt 0.5 1.0
@@ -9487,13 +9524,12 @@ TEST_CASE("Forge loading a mesh from a file", "[forge]")
         Forge::Mesh mesh;
         REQUIRE_THROWS_AS(Forge::LoadMesh(path, mesh), Opal::Exception);
     }
-    SECTION("A mesh with no normals loads, because assimp generates them")
+    SECTION("A mesh with no normals but with a face loads, because assimp generates them from the face")
     {
-        // Not the assertion this case was written expecting. LoadMesh asks assimp for
-        // aiProcess_GenSmoothNormals, so a file with no normals has them by the time the null check runs and
-        // the throw beside the UV one is unreachable through this reader. aiProcess_GenUVCoords is not the
-        // same thing - it converts a mapping that is already there rather than inventing one - which is why
-        // the section above does throw.
+        // LoadMesh asks for aiProcess_GenSmoothNormals, so a file with faces and no `vn` has normals by the
+        // time the null check runs. aiProcess_GenUVCoords is not the counterpart it looks like - it converts
+        // a mapping that is already there rather than inventing one - which is why the UV section above does
+        // throw where this one does not.
         const Opal::StringUtf8 path = WriteScratchTextFile("no-normals.obj", k_obj_without_normals);
         Forge::Mesh mesh;
         Forge::LoadMesh(path, mesh);
@@ -9504,6 +9540,22 @@ TEST_CASE("Forge loading a mesh from a file", "[forge]")
         {
             const f32 normal_z = floats[vertex * 8 + 5];
             REQUIRE(Opal::Abs(normal_z) == Catch::Approx(1.0f).margin(0.01));
+        }
+    }
+    SECTION("A mesh with no face to generate normals from throws")
+    {
+        // What the section above does not reach, and the reason the null normal check is not dead code:
+        // assimp generates normals from faces, so a mesh that has none arrives with none. Three ways to get
+        // there - a point cloud, a line mesh, and a triangle so degenerate that aiProcess_FindDegenerates
+        // takes it away - and all three land on the same throw.
+        const char* const names[] = {"points-only.obj", "lines-only.obj", "degenerate-face.obj"};
+        const char* const contents[] = {k_obj_points_only, k_obj_lines_only, k_obj_degenerate_face};
+        for (i32 i = 0; i < 3; ++i)
+        {
+            INFO(names[i]);
+            const Opal::StringUtf8 path = WriteScratchTextFile(names[i], contents[i]);
+            Forge::Mesh mesh;
+            REQUIRE_THROWS_AS(Forge::LoadMesh(path, mesh), Opal::Exception);
         }
     }
     SECTION("A file assimp cannot read throws")
