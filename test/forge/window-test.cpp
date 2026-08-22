@@ -72,7 +72,7 @@ struct ForgeWindowFixture
                                            .has_border = false,
                                            .show_in_taskbar = false,
                                            .start_visible = false})),
-          context({.collect_debug_messages = true})
+          context(ForgeTest::TestContextDesc())
     {
         surface = Forge::Surface(context, *window);
         // The graphics and the present family only: asking for the optional ones would make every case here

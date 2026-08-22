@@ -88,7 +88,7 @@ struct ForgeFixture
      *        does not have throws out of here as well.
      */
     explicit ForgeFixture(const Forge::DeviceFeatures& features = {}, const ForgeQueues& queues = {})
-        : context({.collect_debug_messages = true})
+        : context(ForgeTest::TestContextDesc())
     {
         Opal::DynamicArray<Forge::PhysicalDevice> physical_devices = context.EnumeratePhysicalDevices();
         device = Forge::Device(std::move(physical_devices[0]), context,
@@ -161,7 +161,7 @@ bool IsSoftwareDevice()
 {
     static const bool software = []
     {
-        const Forge::GraphicsContext context(Forge::GraphicsContextDesc{});
+        const Forge::GraphicsContext context(ForgeTest::TestContextDesc());
         const Opal::DynamicArray<Forge::PhysicalDevice> devices = context.EnumeratePhysicalDevices();
         return devices[0].GetProperties().deviceType == VK_PHYSICAL_DEVICE_TYPE_CPU;
     }();
@@ -229,7 +229,7 @@ TEST_CASE("Forge context and device", "[forge]")
     {
         SKIP("No Vulkan device on this machine.");
     }
-    const Forge::GraphicsContext context({.collect_debug_messages = true});
+    const Forge::GraphicsContext context(ForgeTest::TestContextDesc());
     REQUIRE(context.IsValid());
 
     Opal::DynamicArray<Forge::PhysicalDevice> physical_devices = context.EnumeratePhysicalDevices();
@@ -981,7 +981,7 @@ TEST_CASE("Forge device features", "[forge]")
     {
         SKIP("No Vulkan device on this machine.");
     }
-    const Forge::GraphicsContext context({.collect_debug_messages = true});
+    const Forge::GraphicsContext context(ForgeTest::TestContextDesc());
 
     // Builds a device on this machine's first physical device with the given features asked for.
     auto make_device = [&context](const Forge::DeviceFeatures& features)
@@ -1058,7 +1058,7 @@ TEST_CASE("Forge physical device selection", "[forge]")
     {
         SKIP("No Vulkan device on this machine.");
     }
-    const Forge::GraphicsContext context({.collect_debug_messages = true});
+    const Forge::GraphicsContext context(ForgeTest::TestContextDesc());
     Opal::DynamicArray<Forge::PhysicalDevice> devices = context.EnumeratePhysicalDevices();
     REQUIRE_FALSE(devices.IsEmpty());
 
@@ -1126,7 +1126,7 @@ TEST_CASE("Forge bindless descriptor bindings", "[forge]")
     {
         SKIP("No Vulkan device on this machine.");
     }
-    const Forge::GraphicsContext context({.collect_debug_messages = true});
+    const Forge::GraphicsContext context(ForgeTest::TestContextDesc());
     Opal::DynamicArray<Forge::PhysicalDevice> physical_devices = context.EnumeratePhysicalDevices();
 
     constexpr Forge::DeviceFeatures k_bindless_features{.partially_bound_descriptors = true,
@@ -1262,7 +1262,7 @@ TEST_CASE("Forge bindless texture array", "[forge]")
     {
         SKIP("No Vulkan device on this machine.");
     }
-    const Forge::GraphicsContext context({.collect_debug_messages = true});
+    const Forge::GraphicsContext context(ForgeTest::TestContextDesc());
     Opal::DynamicArray<Forge::PhysicalDevice> physical_devices = context.EnumeratePhysicalDevices();
 
     constexpr Forge::DeviceFeatures k_bindless_features{.partially_bound_descriptors = true,
@@ -1438,7 +1438,7 @@ TEST_CASE("Forge bindless constant buffer array", "[forge]")
     {
         SKIP("No Vulkan device on this machine.");
     }
-    const Forge::GraphicsContext context({.collect_debug_messages = true});
+    const Forge::GraphicsContext context(ForgeTest::TestContextDesc());
     Opal::DynamicArray<Forge::PhysicalDevice> physical_devices = context.EnumeratePhysicalDevices();
 
     constexpr Forge::DeviceFeatures k_bindless_features{.partially_bound_descriptors = true,
@@ -2534,7 +2534,7 @@ bool IsIndexTypeUint8Supported()
 {
     static const bool supported = []
     {
-        const Forge::GraphicsContext context(Forge::GraphicsContextDesc{});
+        const Forge::GraphicsContext context(ForgeTest::TestContextDesc());
         const Opal::DynamicArray<Forge::PhysicalDevice> devices = context.EnumeratePhysicalDevices();
         return devices[0].IsExtensionSupported(VK_KHR_INDEX_TYPE_UINT8_EXTENSION_NAME) ||
                devices[0].IsExtensionSupported(VK_EXT_INDEX_TYPE_UINT8_EXTENSION_NAME);
@@ -2547,7 +2547,7 @@ VkPhysicalDeviceFeatures GetFirstPhysicalDeviceFeatures()
 {
     static const VkPhysicalDeviceFeatures features = []
     {
-        const Forge::GraphicsContext context(Forge::GraphicsContextDesc{});
+        const Forge::GraphicsContext context(ForgeTest::TestContextDesc());
         const Opal::DynamicArray<Forge::PhysicalDevice> devices = context.EnumeratePhysicalDevices();
         return devices[0].GetFeatures();
     }();
@@ -3952,7 +3952,7 @@ TEST_CASE("Forge empty state and moves of the context", "[forge]")
     // created last, so a case holding two contexts at once is where that stops being theoretical. Two of
     // them are live here for as long as the assignment below takes.
     CheckLifetimeContract(
-        "GraphicsContext", [] { return Forge::GraphicsContext({.collect_debug_messages = true}); },
+        "GraphicsContext", [] { return Forge::GraphicsContext(ForgeTest::TestContextDesc()); },
         [](const Forge::GraphicsContext& context)
         {
             REQUIRE(context.GetInstance() != VK_NULL_HANDLE);
@@ -3967,7 +3967,7 @@ TEST_CASE("Forge empty state and moves of the device stack", "[forge]")
     {
         SKIP("No Vulkan device on this machine.");
     }
-    const Forge::GraphicsContext context({.collect_debug_messages = true});
+    const Forge::GraphicsContext context(ForgeTest::TestContextDesc());
 
     auto make_physical_device = [&context]
     {
@@ -5046,7 +5046,7 @@ TEST_CASE("Forge barrier preset for presenting", "[forge]")
     // Present is a swap chain layout, so naming it needs the device to have the extension even though
     // nothing here presents. Asking for it without a surface is legal, and is what makes ToPresent
     // checkable in a file that never opens a window.
-    const Forge::GraphicsContext context({.collect_debug_messages = true});
+    const Forge::GraphicsContext context(ForgeTest::TestContextDesc());
     Opal::DynamicArray<Forge::PhysicalDevice> physical_devices = context.EnumeratePhysicalDevices();
     if (!physical_devices[0].IsExtensionSupported(VK_KHR_SWAPCHAIN_EXTENSION_NAME))
     {

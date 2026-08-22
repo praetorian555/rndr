@@ -572,6 +572,13 @@ a fresh stretch, for measuring one piece of work rather than the whole run.
 Info messages are counted but not stored, since the loader emits thousands of them, and the stored warnings
 and errors are capped by `GraphicsContextDesc::max_stored_debug_messages`.
 
+The log has the same problem and its own answer: `GraphicsContextDesc::logged_message_types` says which
+types are written out, and it is every type by default because a loader that cannot load a driver says so as
+a `General` message and there is nowhere else to hear it. A program reading its own log for its own mistakes
+- the test suite is one, building a context per case - narrows it to `Validation`, and the manifests of
+other applications stop arriving. Only the log is filtered; `GetDebugMessages` and `GetDebugMessageCount`
+answer for every type either way.
+
 `SetDebugName` from `rndr/forge/debug.hpp` names any object, and both the messages and a capture use the
 name in place of the handle. `DebugMessage::objects` carries the names of what a message is about, which the
 layer hands over beside the text rather than inside it. Naming does nothing in a build without the debug

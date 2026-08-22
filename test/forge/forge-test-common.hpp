@@ -3,6 +3,7 @@
 #include <cstdlib>
 
 #include "opal/container/string.h"
+#include "opal/logging.h"
 
 #include "rndr/forge/debug.hpp"
 #include "rndr/forge/graphics-context.hpp"
@@ -16,6 +17,49 @@
  */
 namespace ForgeTest
 {
+
+/**
+ * Registers the log category that RNDR_LOG_* writes through, so the validation layer's report reaches the
+ * console of a test run.
+ *
+ * Nothing else in a test binary does it. `Rndr::Application` registers the category and is the only thing
+ * that does, so the messages were printed only by the runs that happened to build one first - a full run,
+ * or one of the windowed suites - and a run of `[forge]` on its own collected the same messages and printed
+ * none of them. The assertions never depended on this, since the fixture reads what the debug callback
+ * collected rather than what was logged, but a person reading a failure did.
+ *
+ * At `Warning`, not the `Verbose` an application asks for: what a test run wants is what the layer objects
+ * to, and the rest is the loader naming every ICD and layer file it opens, once per fixture. This runs
+ * before main and `Rndr::Application` leaves a category that is already registered alone, so the level here
+ * is the one a full run gets too.
+ */
+/**
+ * What every context in the two test files is built with: the messages collected so the assertions can read
+ * them, and only the ones about this code written to the log.
+ *
+ * The loader reports a layer manifest that some other application left on the machine at error severity,
+ * once for every instance, and a suite that builds one per case turns that into hundreds of lines around
+ * the two that matter. Those are General messages, so naming the other two types leaves them out of the
+ * log. Nothing is left out of the counts or the storage, which is where the assertions look.
+ */
+inline Rndr::Forge::GraphicsContextDesc TestContextDesc()
+{
+    return {.collect_debug_messages = true,
+            .logged_message_types =
+                Rndr::Forge::DebugMessageTypeBits::Validation | Rndr::Forge::DebugMessageTypeBits::Performance};
+}
+
+inline bool RegisterLogCategory()
+{
+    Opal::Logger& logger = Opal::GetLogger();
+    if (!logger.IsCategoryRegistered("Rndr"))
+    {
+        logger.RegisterCategory("Rndr", Opal::LogLevel::Warning);
+    }
+    return true;
+}
+
+inline const bool g_log_category_registered = RegisterLogCategory();
 
 /**
  * What the validation layer reported, as text, so a failure names the problem instead of only counting it.

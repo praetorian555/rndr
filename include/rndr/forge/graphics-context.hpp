@@ -67,6 +67,12 @@ struct DebugMessageLog
     /** Counts by severity and then by type, indexed the way GetDebugMessageCount reads them. */
     u32 counts[3][3] = {};
     u32 max_stored_messages = 64;
+    /**
+     * Which types reach the log, copied from GraphicsContextDesc. It lives here because the callback is
+     * handed this and nothing else, and it applies to logging alone - a message of any type is still
+     * counted and still stored.
+     */
+    DebugMessageTypeBits logged_types = DebugMessageTypeBits::All;
 };
 
 struct GraphicsContextDesc : Opal::ClonableBase<GraphicsContextDesc>
@@ -74,9 +80,20 @@ struct GraphicsContextDesc : Opal::ClonableBase<GraphicsContextDesc>
     bool collect_debug_messages = false;
     /** How many warnings and errors to keep. The counts keep rising past it; only the storage is capped. */
     u32 max_stored_debug_messages = 64;
+    /**
+     * Which message types are written to the log. Everything by default, which is what an application
+     * wants: a loader that cannot load a driver says so as a General message and there is nowhere else to
+     * hear it. Narrowing this to Validation is for a program that reads its own log looking for its own
+     * mistakes, where the loader naming every manifest another application left on the machine - at error
+     * severity, once per instance - buries them.
+     *
+     * Only the log is filtered. GetDebugMessages and GetDebugMessageCount answer for every type either way,
+     * so nothing that asserts on the messages depends on this.
+     */
+    DebugMessageTypeBits logged_message_types = DebugMessageTypeBits::All;
     Opal::DynamicArray<Opal::StringUtf8> required_instance_extensions;
 
-    OPAL_CLONE_FIELDS(collect_debug_messages, max_stored_debug_messages, required_instance_extensions);
+    OPAL_CLONE_FIELDS(collect_debug_messages, max_stored_debug_messages, logged_message_types, required_instance_extensions);
 };
 
 class GraphicsContext

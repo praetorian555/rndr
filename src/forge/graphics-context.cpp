@@ -97,30 +97,42 @@ VKAPI_ATTR VkBool32 VKAPI_CALL DebugCallback(VkDebugUtilsMessageSeverityFlagBits
                                              const VkDebugUtilsMessengerCallbackDataEXT* callback_data, void* user_data)
 {
     using namespace Rndr::Forge;
+    auto* log = static_cast<DebugMessageLog*>(user_data);
+    // The values of DebugMessageTypeBits mirror VkDebugUtilsMessageTypeFlagBitsEXT, so the mask translates as
+    // a cast, except for the bits of later extensions this does not name.
+    const auto forge_types = static_cast<DebugMessageTypeBits>(types) & DebugMessageTypeBits::All;
+
+    // Which types are worth writing down is the caller's to say, and a context that collects nothing has
+    // nowhere to have said it, so it gets the default: everything.
+    const DebugMessageTypeBits logged_types = log != nullptr ? log->logged_types : DebugMessageTypeBits::All;
+    const bool is_logged = !!(forge_types & logged_types);
+
     DebugMessageSeverity forge_severity = DebugMessageSeverity::Info;
     if ((severity & VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT) != 0)
     {
         forge_severity = DebugMessageSeverity::Error;
-        RNDR_LOG_ERROR("[Vulkan Validation] {}", callback_data->pMessage);
+        if (is_logged)
+        {
+            RNDR_LOG_ERROR("[Vulkan Validation] {}", callback_data->pMessage);
+        }
     }
     else if ((severity & VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT) != 0)
     {
         forge_severity = DebugMessageSeverity::Warning;
-        RNDR_LOG_WARNING("[Vulkan Validation] {}", callback_data->pMessage);
+        if (is_logged)
+        {
+            RNDR_LOG_WARNING("[Vulkan Validation] {}", callback_data->pMessage);
+        }
     }
-    else
+    else if (is_logged)
     {
         RNDR_LOG_INFO("[Vulkan Validation] {}", callback_data->pMessage);
     }
 
-    auto* log = static_cast<DebugMessageLog*>(user_data);
     if (log == nullptr)
     {
         return VK_FALSE;
     }
-    // The values of DebugMessageTypeBits mirror VkDebugUtilsMessageTypeFlagBitsEXT, so the mask translates as
-    // a cast, except for the bits of later extensions this does not name.
-    const auto forge_types = static_cast<DebugMessageTypeBits>(types) & DebugMessageTypeBits::All;
     for (Rndr::i32 type_index = 0; type_index < 3; ++type_index)
     {
         const auto type_bit = static_cast<DebugMessageTypeBits>(1 << type_index);
@@ -262,6 +274,7 @@ Rndr::Forge::GraphicsContext::GraphicsContext(const GraphicsContextDesc& desc) :
     {
         m_debug_log = Opal::MakeShared<DebugMessageLog>(Opal::GetDefaultAllocator());
         m_debug_log->max_stored_messages = m_desc.max_stored_debug_messages;
+        m_debug_log->logged_types = m_desc.logged_message_types;
         // The callback is handed the log rather than the context, since the context can be moved afterwards
         // and there is no way to update this pointer once the messenger exists.
         debug_create_info.pUserData = m_debug_log.Get();
