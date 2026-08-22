@@ -3112,6 +3112,50 @@ void main_specialized(uint3 thread_id : SV_DispatchThreadID, uniform RWStructure
 }
 )";
 
+/**
+ * A constructor that throws leaves no object behind for a destructor to clean up, so anything it created
+ * before the throw is the constructor's own to release. The pipeline layout is created first and the checks
+ * that reject a description come after it, which made every rejected pipeline a leaked layout. Nothing
+ * noticed: the layer only names an object that outlived its device, and that report arrives at
+ * vkDestroyDevice, after the assertion at the end of a case has already passed.
+ */
+TEST_CASE("Forge a pipeline that fails to build leaves nothing behind", "[forge]")
+{
+    if (!IsForgeAvailable())
+    {
+        SKIP("No Vulkan device on this machine.");
+    }
+    ForgeFixture fixture;
+
+    SECTION("A rejected graphics pipeline releases the layout it had already created")
+    {
+        // A description with no vertex and no mesh shader, which is rejected after the layout exists. The
+        // layout is what a push constant range and a set layout make non-trivial, so both are asked for.
+        Forge::DescriptorSetLayoutDesc layout_desc;
+        layout_desc.AddBinding(0, Forge::DescriptorType::StorageBuffer, 1, ShaderTypeBits::Fragment);
+        const Forge::DescriptorSetLayout set_layout(fixture.device, layout_desc);
+
+        Forge::GraphicsPipelineDesc desc;
+        desc.descriptor_set_layouts.PushBack(set_layout);
+        desc.push_constant_ranges.PushBack({.shader_stages = ShaderTypeBits::Fragment, .offset = 0, .size = 4});
+        REQUIRE_THROWS_AS(Forge::Pipeline(fixture.device, desc), Opal::Exception);
+    }
+    SECTION("A rejected compute pipeline releases the layout it had already created")
+    {
+        // The compute constructor is a second path to the same layout, so it is checked on its own. A value
+        // for a specialization constant this shader does not declare is rejected after the layout exists.
+        const Forge::Shader compute_shader = Forge::Shader::FromSourceInMemory(
+            fixture.device, k_compute_source, {.entry_point = "main_compute", .cache = GetShaderCache()});
+        Forge::ComputePipelineDesc desc;
+        desc.shader = compute_shader;
+        desc.push_constant_ranges.PushBack(
+            {.shader_stages = ShaderTypeBits::Compute, .offset = 0, .size = sizeof(VkDeviceAddress)});
+        desc.specialization.PushBack(Forge::SpecializationConstant{.name = "NOT_DECLARED", .value = 1u});
+        REQUIRE_THROWS_AS(Forge::Pipeline(fixture.device, desc), Opal::Exception);
+    }
+    REQUIRE_NO_VALIDATION_ERROR_AT_TEARDOWN(fixture);
+}
+
 TEST_CASE("Forge specialization constants", "[forge]")
 {
     if (!IsForgeAvailable())

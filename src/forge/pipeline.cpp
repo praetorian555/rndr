@@ -457,6 +457,40 @@ void Rndr::Forge::Pipeline::CreatePipelineLayout(
 namespace
 {
 /**
+ * The pipeline layout is created before the checks that can throw, and a constructor that throws is never
+ * a destructor's to clean up - the object it would have built never came to be. This releases the layout
+ * on the way out of such a constructor, and the constructor that reaches its end dismisses it.
+ */
+class PipelineLayoutGuard
+{
+public:
+    PipelineLayoutGuard(VkDevice device, VkPipelineLayout& layout) : m_device(device), m_layout(&layout) {}
+
+    ~PipelineLayoutGuard()
+    {
+        if (m_layout != nullptr && *m_layout != VK_NULL_HANDLE)
+        {
+            vkDestroyPipelineLayout(m_device, *m_layout, nullptr);
+            *m_layout = VK_NULL_HANDLE;
+        }
+    }
+
+    // A scope, not a value: copying one would release the layout twice and moving it would leave the
+    // question of which copy owns it.
+    PipelineLayoutGuard(const PipelineLayoutGuard&) = delete;
+    PipelineLayoutGuard& operator=(const PipelineLayoutGuard&) = delete;
+    PipelineLayoutGuard(PipelineLayoutGuard&&) = delete;
+    PipelineLayoutGuard& operator=(PipelineLayoutGuard&&) = delete;
+
+    /** The pipeline is built and owns its layout, so leaving the scope must not release it. */
+    void Dismiss() { m_layout = nullptr; }
+
+private:
+    VkDevice m_device = VK_NULL_HANDLE;
+    VkPipelineLayout* m_layout = nullptr;
+};
+
+/**
  * What one stage needs handed to Vulkan: the map entries, the packed values they point into, and the
  * VkSpecializationInfo tying them together. Kept alive by the caller until vkCreate*Pipelines returns,
  * which is what pMapEntries and pData require - so this is a local of the pipeline constructor and never
@@ -609,6 +643,7 @@ Rndr::Forge::Pipeline::Pipeline(const Device& device, const GraphicsPipelineDesc
     CreatePipelineLayout(
         {desc.descriptor_set_layouts.GetData(), desc.descriptor_set_layouts.GetSize()},
         {desc.push_constant_ranges.GetData(), desc.push_constant_ranges.GetSize()});
+    PipelineLayoutGuard layout_guard(m_device->GetNativeDevice(), m_pipeline_layout);
 
     const bool has_vertex = desc.vertex_shader != nullptr;
     const bool has_mesh = desc.mesh_shader != nullptr;
@@ -876,6 +911,7 @@ Rndr::Forge::Pipeline::Pipeline(const Device& device, const GraphicsPipelineDesc
     {
         throw VulkanException(gfx_result, "vkCreateGraphicsPipelines");
     }
+    layout_guard.Dismiss();
 }
 
 Rndr::Forge::Pipeline::Pipeline(const Device& device, const ComputePipelineDesc& desc)
@@ -884,6 +920,7 @@ Rndr::Forge::Pipeline::Pipeline(const Device& device, const ComputePipelineDesc&
     CreatePipelineLayout(
         {desc.descriptor_set_layouts.GetData(), desc.descriptor_set_layouts.GetSize()},
         {desc.push_constant_ranges.GetData(), desc.push_constant_ranges.GetSize()});
+    PipelineLayoutGuard layout_guard(m_device->GetNativeDevice(), m_pipeline_layout);
 
     Opal::DynamicArray<bool> matched(desc.specialization.GetSize());
     const Opal::ArrayView<const SpecializationConstant> values(desc.specialization.GetData(), desc.specialization.GetSize());
@@ -911,6 +948,7 @@ Rndr::Forge::Pipeline::Pipeline(const Device& device, const ComputePipelineDesc&
     {
         throw VulkanException(compute_result, "vkCreateComputePipelines");
     }
+    layout_guard.Dismiss();
 }
 
 Rndr::Forge::Pipeline::~Pipeline()
