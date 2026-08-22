@@ -523,12 +523,12 @@ TEST_CASE("Forge texture upload, mip generation and readback", "[forge]")
                                                      Forge::TextureUsageBits::TransferDestination |
                                                      Forge::TextureUsageBits::Sampled});
     const Forge::Buffer staging(fixture.device, {.size = mip0.GetSize(), .usage = Forge::BufferUsageBits::TransferSource}, mip0);
-    const Forge::BufferImageCopyRegion mip0_region;
+    const Forge::BufferTextureCopyRegion mip0_region;
     Forge::ImmediateSubmit(fixture.device, fixture.GetQueue(),
                            [&](Forge::CommandBuffer& command_buffer)
                            {
-                               command_buffer.CmdImageBarrier(Forge::ImageBarrier::ToTransferDestination(texture));
-                               command_buffer.CmdCopyBufferToImage(staging, texture, {&mip0_region, 1});
+                               command_buffer.CmdTextureBarrier(Forge::TextureBarrier::ToTransferDestination(texture));
+                               command_buffer.CmdCopyBufferToTexture(staging, texture, {&mip0_region, 1});
                                command_buffer.CmdGenerateMips(texture, Forge::ImageLayout::TransferDestination);
                            });
     // Nothing above named a source layout: the mip chain reads each level off the texture as it goes, and
@@ -595,12 +595,12 @@ TEST_CASE("Forge mip generation covers every array layer", "[forge]")
                                             .view_type = Forge::TextureViewType::Texture2DArray});
     const Forge::Buffer staging(fixture.device, {.size = mip0.GetSize(), .usage = Forge::BufferUsageBits::TransferSource}, mip0);
     // One region for both layers: the buffer holds them back to back, which is the order Vulkan copies them in.
-    const Forge::BufferImageCopyRegion mip0_region{.image_subresource = {.array_layer_count = k_layer_count}};
+    const Forge::BufferTextureCopyRegion mip0_region{.texture_subresource = {.array_layer_count = k_layer_count}};
     Forge::ImmediateSubmit(fixture.device, fixture.GetQueue(),
                            [&](Forge::CommandBuffer& command_buffer)
                            {
-                               command_buffer.CmdImageBarrier(Forge::ImageBarrier::ToTransferDestination(texture));
-                               command_buffer.CmdCopyBufferToImage(staging, texture, {&mip0_region, 1});
+                               command_buffer.CmdTextureBarrier(Forge::TextureBarrier::ToTransferDestination(texture));
+                               command_buffer.CmdCopyBufferToTexture(staging, texture, {&mip0_region, 1});
                                command_buffer.CmdGenerateMips(texture, Forge::ImageLayout::TransferDestination);
                            });
 
@@ -692,12 +692,12 @@ TEST_CASE("Forge debug names reach the validation layer", "[forge]")
     // The layer checks this while the command is recorded, so the command buffer is thrown away rather than
     // submitted: handing the driver work that breaks the specification is undefined behaviour, and it took
     // the next test down with it when this did.
-    const Forge::ImageCopyRegion region;
+    const Forge::TextureCopyRegion region;
     Forge::CommandBuffer command_buffer(fixture.device, fixture.GetQueue());
     command_buffer.Begin();
     command_buffer.CmdTransition(source, Forge::ImageLayout::TransferSource);
     command_buffer.CmdTransition(destination, Forge::ImageLayout::TransferDestination);
-    command_buffer.CmdCopyImage(source, destination, {&region, 1});
+    command_buffer.CmdCopyTexture(source, destination, {&region, 1});
     command_buffer.End();
 
     const Opal::StringUtf8 errors = fixture.GetValidationErrors();
@@ -1363,12 +1363,12 @@ TEST_CASE("Forge bindless texture array", "[forge]")
         const u8 texel[4] = {static_cast<u8>(red), 0, 0, 255};
         const Forge::Buffer staging(device, {.size = sizeof(texel), .usage = Forge::BufferUsageBits::TransferSource},
                                     {texel, sizeof(texel)});
-        const Forge::BufferImageCopyRegion region;
+        const Forge::BufferTextureCopyRegion region;
         Forge::ImmediateSubmit(device, queue,
                                [&](Forge::CommandBuffer& command_buffer)
                                {
-                                   command_buffer.CmdImageBarrier(Forge::ImageBarrier::ToTransferDestination(texture));
-                                   command_buffer.CmdCopyBufferToImage(staging, texture, {&region, 1});
+                                   command_buffer.CmdTextureBarrier(Forge::TextureBarrier::ToTransferDestination(texture));
+                                   command_buffer.CmdCopyBufferToTexture(staging, texture, {&region, 1});
                                    command_buffer.CmdTransition(texture, Forge::ImageLayout::ShaderReadOnly);
                                });
         return texture;
@@ -1733,11 +1733,11 @@ TEST_CASE("Forge texture layout tracking", "[forge]")
     }
     SECTION("A partial range splits the grid and the whole-texture answer stops existing")
     {
-        Forge::ImageBarrier barrier = Forge::ImageBarrier::ToTransferDestination(texture, Forge::ImageLayout::Undefined);
+        Forge::TextureBarrier barrier = Forge::TextureBarrier::ToTransferDestination(texture, Forge::ImageLayout::Undefined);
         barrier.subresource_range.first_mip_level = 0;
         barrier.subresource_range.mip_level_count = 2;
         Forge::ImmediateSubmit(fixture.device, fixture.GetQueue(),
-                               [&](Forge::CommandBuffer& command_buffer) { command_buffer.CmdImageBarrier(barrier); });
+                               [&](Forge::CommandBuffer& command_buffer) { command_buffer.CmdTextureBarrier(barrier); });
 
         REQUIRE(texture.GetCurrentLayout(0) == Forge::ImageLayout::TransferDestination);
         REQUIRE(texture.GetCurrentLayout(1) == Forge::ImageLayout::TransferDestination);
@@ -1767,8 +1767,8 @@ TEST_CASE("Forge texture layout tracking", "[forge]")
         command_buffer.CmdTransition(texture, Forge::ImageLayout::ShaderReadOnly);
         // Halving mip 0 into mip 1, which is what mip generation does, but with both levels left where a
         // shader reads them rather than where a transfer does.
-        const Forge::ImageBlitRegion region{.source = {.mip_level = 0}, .destination = {.mip_level = 1}};
-        REQUIRE_THROWS_AS(command_buffer.CmdBlitImage(texture, texture, {&region, 1}), Opal::Exception);
+        const Forge::TextureBlitRegion region{.source = {.mip_level = 0}, .destination = {.mip_level = 1}};
+        REQUIRE_THROWS_AS(command_buffer.CmdBlitTexture(texture, texture, {&region, 1}), Opal::Exception);
         command_buffer.End();
     }
     SECTION("A move carries the layouts across")
@@ -2181,7 +2181,7 @@ TEST_CASE("Forge rendering without a depth attachment", "[forge]")
         Forge::ImmediateSubmit(fixture.device, fixture.GetQueue(),
                                [&](Forge::CommandBuffer& command_buffer)
                                {
-                                   command_buffer.CmdImageBarrier(Forge::ImageBarrier::ToColorAttachment(color));
+                                   command_buffer.CmdTextureBarrier(Forge::TextureBarrier::ToColorAttachment(color));
                                    const Forge::RenderingDesc rendering_desc{
                                        .render_area_extent = {k_side, k_side},
                                        .color_attachments = {Forge::RenderingAttachmentDesc{
@@ -2214,7 +2214,7 @@ TEST_CASE("Forge rendering without a depth attachment", "[forge]")
         // transitioned first so that the throw is the depth one and not the layout check on the colour.
         Forge::CommandBuffer command_buffer(fixture.device, fixture.GetQueue());
         command_buffer.Begin();
-        command_buffer.CmdImageBarrier(Forge::ImageBarrier::ToColorAttachment(color));
+        command_buffer.CmdTextureBarrier(Forge::TextureBarrier::ToColorAttachment(color));
         const Forge::RenderingDesc rendering_desc{
             .render_area_extent = {k_side, k_side},
             .color_attachments = {Forge::RenderingAttachmentDesc{.texture = color}},
@@ -2258,13 +2258,13 @@ TEST_CASE("Forge rendering without a depth attachment", "[forge]")
                                    // shader read and write of a storage image: what follows here is the
                                    // colour attachment output, and an access that does not match its stage
                                    // is invalid whichever way round it is wrong.
-                                   command_buffer.CmdImageBarrier(
-                                       Forge::ImageBarrier{.stages_must_finish = Forge::PipelineStageBits::PipelineStart,
-                                                           .before_stages_start = Forge::PipelineStageBits::ColorAttachmentOutput,
-                                                           .before_stages_start_access = Forge::PipelineStageAccessBits::Write,
-                                                           .old_layout = Forge::ImageLayout::Undefined,
-                                                           .new_layout = Forge::ImageLayout::General,
-                                                           .image = color});
+                                   command_buffer.CmdTextureBarrier(
+                                       Forge::TextureBarrier{.stages_must_finish = Forge::PipelineStageBits::PipelineStart,
+                                                             .before_stages_start = Forge::PipelineStageBits::ColorAttachmentOutput,
+                                                             .before_stages_start_access = Forge::PipelineStageAccessBits::Write,
+                                                             .old_layout = Forge::ImageLayout::Undefined,
+                                                             .new_layout = Forge::ImageLayout::General,
+                                                             .texture = color});
                                    const Forge::RenderingDesc rendering_desc{
                                        .render_area_extent = {k_side, k_side},
                                        .color_attachments = {Forge::RenderingAttachmentDesc{
@@ -2362,7 +2362,7 @@ TEST_CASE("Forge color write mask", "[forge]")
         Forge::ImmediateSubmit(fixture.device, fixture.GetQueue(),
                                [&](Forge::CommandBuffer& command_buffer)
                                {
-                                   command_buffer.CmdImageBarrier(Forge::ImageBarrier::ToColorAttachment(color));
+                                   command_buffer.CmdTextureBarrier(Forge::TextureBarrier::ToColorAttachment(color));
                                    const Forge::RenderingDesc rendering_desc{
                                        .render_area_extent = {k_side, k_side},
                                        .color_attachments = {Forge::RenderingAttachmentDesc{
@@ -2645,7 +2645,7 @@ struct HalvesFixture
                                [&](Forge::CommandBuffer& command_buffer)
                                {
                                    record_before(command_buffer);
-                                   command_buffer.CmdImageBarrier(Forge::ImageBarrier::ToColorAttachment(color));
+                                   command_buffer.CmdTextureBarrier(Forge::TextureBarrier::ToColorAttachment(color));
                                    const Forge::RenderingDesc rendering_desc{
                                        .render_area_extent = {k_side, k_side},
                                        .color_attachments = {Forge::RenderingAttachmentDesc{
@@ -3180,7 +3180,7 @@ TEST_CASE("Forge specialization constants", "[forge]")
         Forge::ImmediateSubmit(fixture.device, fixture.GetQueue(),
                                [&](Forge::CommandBuffer& command_buffer)
                                {
-                                   command_buffer.CmdImageBarrier(Forge::ImageBarrier::ToColorAttachment(color));
+                                   command_buffer.CmdTextureBarrier(Forge::TextureBarrier::ToColorAttachment(color));
                                    const Forge::RenderingDesc rendering_desc{
                                        .render_area_extent = {k_side, k_side},
                                        .color_attachments = {Forge::RenderingAttachmentDesc{
@@ -4337,13 +4337,13 @@ Opal::InPlaceArray<i32, 4> GridTexel(Opal::ArrayView<const u8> pixels, i32 width
 void UploadGrid(const Forge::Device& device, Forge::DeviceQueue& queue, Forge::Texture& texture, Opal::ArrayView<const u8> pixels)
 {
     const Forge::Buffer staging(device, {.size = pixels.GetSize(), .usage = Forge::BufferUsageBits::TransferSource}, pixels);
-    const Forge::BufferImageCopyRegion region{
-        .image_subresource = {.array_layer_count = texture.GetDesc().array_layer_count}};
+    const Forge::BufferTextureCopyRegion region{
+        .texture_subresource = {.array_layer_count = texture.GetDesc().array_layer_count}};
     Forge::ImmediateSubmit(device, queue,
                            [&](Forge::CommandBuffer& command_buffer)
                            {
-                               command_buffer.CmdImageBarrier(Forge::ImageBarrier::ToTransferDestination(texture));
-                               command_buffer.CmdCopyBufferToImage(staging, texture, {&region, 1});
+                               command_buffer.CmdTextureBarrier(Forge::TextureBarrier::ToTransferDestination(texture));
+                               command_buffer.CmdCopyBufferToTexture(staging, texture, {&region, 1});
                            });
 }
 
@@ -4399,13 +4399,13 @@ TEST_CASE("Forge blits", "[forge]")
         Forge::Texture source = MakeGridTexture(fixture.device, fixture.GetQueue(), k_side, k_side, k_seed);
         Forge::Texture destination = MakeTransferTarget(fixture.device, k_target_side, k_target_side);
 
-        const Forge::ImageBlitRegion region{};
+        const Forge::TextureBlitRegion region{};
         Forge::ImmediateSubmit(fixture.device, fixture.GetQueue(),
                                [&](Forge::CommandBuffer& command_buffer)
                                {
-                                   command_buffer.CmdImageBarrier(Forge::ImageBarrier::ToTransferSource(source));
-                                   command_buffer.CmdImageBarrier(Forge::ImageBarrier::ToTransferDestination(destination));
-                                   command_buffer.CmdBlitImage(source, destination, {&region, 1}, ImageFilter::Nearest);
+                                   command_buffer.CmdTextureBarrier(Forge::TextureBarrier::ToTransferSource(source));
+                                   command_buffer.CmdTextureBarrier(Forge::TextureBarrier::ToTransferDestination(destination));
+                                   command_buffer.CmdBlitTexture(source, destination, {&region, 1}, ImageFilter::Nearest);
                                });
 
         Opal::DynamicArray<u8> pixels(k_target_side * k_target_side * 4);
@@ -4428,13 +4428,13 @@ TEST_CASE("Forge blits", "[forge]")
         Forge::Texture destination = MakeTransferTarget(fixture.device, k_side, k_side);
 
         // The far corner sits before the near one on x, so the destination is written right to left.
-        const Forge::ImageBlitRegion region{.destination_offset = {k_side, 0, 0}, .destination_extent = {-k_side, k_side, 1}};
+        const Forge::TextureBlitRegion region{.destination_offset = {k_side, 0, 0}, .destination_extent = {-k_side, k_side, 1}};
         Forge::ImmediateSubmit(fixture.device, fixture.GetQueue(),
                                [&](Forge::CommandBuffer& command_buffer)
                                {
-                                   command_buffer.CmdImageBarrier(Forge::ImageBarrier::ToTransferSource(source));
-                                   command_buffer.CmdImageBarrier(Forge::ImageBarrier::ToTransferDestination(destination));
-                                   command_buffer.CmdBlitImage(source, destination, {&region, 1}, ImageFilter::Nearest);
+                                   command_buffer.CmdTextureBarrier(Forge::TextureBarrier::ToTransferSource(source));
+                                   command_buffer.CmdTextureBarrier(Forge::TextureBarrier::ToTransferDestination(destination));
+                                   command_buffer.CmdBlitTexture(source, destination, {&region, 1}, ImageFilter::Nearest);
                                });
 
         Opal::DynamicArray<u8> pixels(k_side * k_side * 4);
@@ -4459,20 +4459,20 @@ TEST_CASE("Forge blits", "[forge]")
         Forge::Texture source = MakeGridTexture(fixture.device, fixture.GetQueue(), k_side, k_side, k_seed);
         Forge::Texture destination = MakeTransferTarget(fixture.device, k_side, k_side, k_swapped);
 
-        const Forge::ImageBlitRegion region{};
+        const Forge::TextureBlitRegion region{};
         Forge::ImmediateSubmit(fixture.device, fixture.GetQueue(),
                                [&](Forge::CommandBuffer& command_buffer)
                                {
-                                   command_buffer.CmdImageBarrier(Forge::ImageBarrier::ToTransferSource(source));
-                                   command_buffer.CmdImageBarrier(Forge::ImageBarrier::ToTransferDestination(destination));
-                                   command_buffer.CmdBlitImage(source, destination, {&region, 1}, ImageFilter::Nearest);
+                                   command_buffer.CmdTextureBarrier(Forge::TextureBarrier::ToTransferSource(source));
+                                   command_buffer.CmdTextureBarrier(Forge::TextureBarrier::ToTransferDestination(destination));
+                                   command_buffer.CmdBlitTexture(source, destination, {&region, 1}, ImageFilter::Nearest);
                                });
 
         Opal::DynamicArray<u8> pixels(k_side * k_side * 4);
         Forge::ReadBackTexture(fixture.device, fixture.GetQueue(), destination, pixels, 0, Forge::ImageLayout::TransferSource);
         // Read back as the bytes of a BGRA image, so the red the source wrote is now the third byte. A blit
         // that had copied rather than converted would leave it first, which is what separates this from
-        // CmdCopyImage.
+        // CmdCopyTexture.
         const Opal::DynamicArray<u8> source_pixels = MakeTexelGrid(k_side, k_side, k_seed);
         for (i32 y = 0; y < k_side; ++y)
         {
@@ -4496,13 +4496,13 @@ TEST_CASE("Forge blits", "[forge]")
         Forge::Texture source = MakeGridTexture(fixture.device, fixture.GetQueue(), k_side, k_side, k_seed);
         Forge::Texture destination = MakeTransferTarget(fixture.device, k_target_side, k_target_side);
 
-        const Forge::ImageBlitRegion region{};
+        const Forge::TextureBlitRegion region{};
         Forge::ImmediateSubmit(fixture.device, fixture.GetQueue(),
                                [&](Forge::CommandBuffer& command_buffer)
                                {
-                                   command_buffer.CmdImageBarrier(Forge::ImageBarrier::ToTransferSource(source));
-                                   command_buffer.CmdImageBarrier(Forge::ImageBarrier::ToTransferDestination(destination));
-                                   command_buffer.CmdBlitImage(source, destination, {&region, 1}, ImageFilter::Linear);
+                                   command_buffer.CmdTextureBarrier(Forge::TextureBarrier::ToTransferSource(source));
+                                   command_buffer.CmdTextureBarrier(Forge::TextureBarrier::ToTransferDestination(destination));
+                                   command_buffer.CmdBlitTexture(source, destination, {&region, 1}, ImageFilter::Linear);
                                });
 
         Opal::DynamicArray<u8> pixels(k_target_side * k_target_side * 4);
@@ -4556,15 +4556,15 @@ TEST_CASE("Forge copies from a texture into a buffer", "[forge]")
     };
 
     // Runs one region and hands back the whole buffer, so a case can check what was written and what was not.
-    auto copy_region = [&](const Forge::BufferImageCopyRegion& region)
+    auto copy_region = [&](const Forge::BufferTextureCopyRegion& region)
     {
         Forge::Texture source = MakeGridTexture(fixture.device, fixture.GetQueue(), k_side, k_side, k_seed);
         const Forge::Buffer buffer = make_sentinel_buffer();
         Forge::ImmediateSubmit(fixture.device, fixture.GetQueue(),
                                [&](Forge::CommandBuffer& command_buffer)
                                {
-                                   command_buffer.CmdImageBarrier(Forge::ImageBarrier::ToTransferSource(source));
-                                   command_buffer.CmdCopyImageToBuffer(source, buffer, {&region, 1});
+                                   command_buffer.CmdTextureBarrier(Forge::TextureBarrier::ToTransferSource(source));
+                                   command_buffer.CmdCopyTextureToBuffer(source, buffer, {&region, 1});
                                });
         Opal::DynamicArray<u8> out(k_buffer_size);
         buffer.Read(out);
@@ -4573,7 +4573,7 @@ TEST_CASE("Forge copies from a texture into a buffer", "[forge]")
 
     SECTION("A sub-box copies the texels it names and no others")
     {
-        const Forge::BufferImageCopyRegion region{.image_offset = {1, 1, 0}, .image_extent = {2, 2, 1}};
+        const Forge::BufferTextureCopyRegion region{.texture_offset = {1, 1, 0}, .texture_extent = {2, 2, 1}};
         const Opal::DynamicArray<u8> out = copy_region(region);
         // Four texels packed from byte zero: the box at (1, 1), row major.
         REQUIRE_TEXEL_EQUALS(GridTexel(out, 2, 0, 0), GridTexel(source_pixels, k_side, 1, 1));
@@ -4590,7 +4590,7 @@ TEST_CASE("Forge copies from a texture into a buffer", "[forge]")
     SECTION("A buffer offset starts the copy further into the buffer")
     {
         constexpr i32 k_offset = 32;
-        const Forge::BufferImageCopyRegion region{.buffer_offset = k_offset, .image_extent = {k_side, k_side, 1}};
+        const Forge::BufferTextureCopyRegion region{.buffer_offset = k_offset, .texture_extent = {k_side, k_side, 1}};
         const Opal::DynamicArray<u8> out = copy_region(region);
         for (i32 i = 0; i < k_offset; ++i)
         {
@@ -4604,7 +4604,7 @@ TEST_CASE("Forge copies from a texture into a buffer", "[forge]")
     {
         // Two texels wide out of a four wide row length, so every row leaves two texels of the buffer alone.
         // This is the parameter an off-by-one turns into an image that shears one texel per row.
-        const Forge::BufferImageCopyRegion region{.buffer_row_length = 4, .image_extent = {2, 2, 1}};
+        const Forge::BufferTextureCopyRegion region{.buffer_row_length = 4, .texture_extent = {2, 2, 1}};
         const Opal::DynamicArray<u8> out = copy_region(region);
         for (i32 y = 0; y < 2; ++y)
         {
@@ -4624,12 +4624,12 @@ TEST_CASE("Forge copies from a texture into a buffer", "[forge]")
             }
         }
     }
-    SECTION("A row length and an image height space out the rows and the layers")
+    SECTION("A row length and a layer height space out the rows and the layers")
     {
         constexpr i32 k_layer_count = 2;
         constexpr i32 k_box = 2;
         constexpr i32 k_row_length = 4;
-        constexpr i32 k_image_height = 3;
+        constexpr i32 k_layer_height = 3;
         Forge::Texture source(fixture.device, {.format = PixelFormat::R8G8B8A8_UNORM,
                                                .width = k_side,
                                                .height = k_side,
@@ -4650,22 +4650,22 @@ TEST_CASE("Forge copies from a texture into a buffer", "[forge]")
         UploadGrid(fixture.device, fixture.GetQueue(), source, {both_layers.GetData(), both_layers.GetSize()});
 
         const Forge::Buffer buffer = make_sentinel_buffer();
-        const Forge::BufferImageCopyRegion region{.buffer_row_length = k_row_length,
-                                                  .buffer_image_height = k_image_height,
-                                                  .image_subresource = {.array_layer_count = k_layer_count},
-                                                  .image_extent = {k_box, k_box, 1}};
+        const Forge::BufferTextureCopyRegion region{.buffer_row_length = k_row_length,
+                                                    .buffer_layer_height = k_layer_height,
+                                                    .texture_subresource = {.array_layer_count = k_layer_count},
+                                                    .texture_extent = {k_box, k_box, 1}};
         Forge::ImmediateSubmit(fixture.device, fixture.GetQueue(),
                                [&](Forge::CommandBuffer& command_buffer)
                                {
-                                   command_buffer.CmdImageBarrier(Forge::ImageBarrier::ToTransferSource(source));
-                                   command_buffer.CmdCopyImageToBuffer(source, buffer, {&region, 1});
+                                   command_buffer.CmdTextureBarrier(Forge::TextureBarrier::ToTransferSource(source));
+                                   command_buffer.CmdCopyTextureToBuffer(source, buffer, {&region, 1});
                                });
         Opal::DynamicArray<u8> out(k_buffer_size);
         buffer.Read(out);
 
-        // One layer is row_length * image_height texels apart from the next, which is larger than the box
+        // One layer is row_length * layer_height texels apart from the next, which is larger than the box
         // the copy actually wrote - so the gap between them has to still hold the sentinel.
-        constexpr i32 k_layer_stride = k_row_length * k_image_height;
+        constexpr i32 k_layer_stride = k_row_length * k_layer_height;
         for (i32 layer = 0; layer < k_layer_count; ++layer)
         {
             const Opal::DynamicArray<u8>& expected = layer == 0 ? layer_zero : layer_one;
@@ -4679,7 +4679,7 @@ TEST_CASE("Forge copies from a texture into a buffer", "[forge]")
                 }
             }
         }
-        // The last row of the first layer's image height is past its box and was never written.
+        // The last row of the first layer's layer height is past its box and was never written.
         for (i32 byte = 0; byte < 4 * k_row_length; ++byte)
         {
             const i32 index = (2 * k_row_length) * 4 + byte;
@@ -4811,10 +4811,10 @@ TEST_CASE("Forge barrier batches", "[forge]")
                                                   .before_stages_start_access = Forge::PipelineStageAccessBits::Read};
                 const Forge::BufferBarrier buffer = Forge::BufferBarrier::WriteThenRead(
                     written, Forge::PipelineStageBits::ComputeShader, Forge::PipelineStageBits::Transfer);
-                const Forge::ImageBarrier image = Forge::ImageBarrier::ToTransferSource(texture);
+                const Forge::TextureBarrier texture_barrier = Forge::TextureBarrier::ToTransferSource(texture);
                 // CmdBarriers is what every other Cmd*Barrier delegates to, and the only way to put all
                 // three kinds into one dependency.
-                command_buffer.CmdBarriers({.memory = {&memory, 1}, .buffer = {&buffer, 1}, .image = {&image, 1}});
+                command_buffer.CmdBarriers({.memory = {&memory, 1}, .buffer = {&buffer, 1}, .texture = {&texture_barrier, 1}});
 
                 command_buffer.CmdCopyBuffer(written, copied);
             });
@@ -4826,14 +4826,14 @@ TEST_CASE("Forge barrier batches", "[forge]")
             INFO("element " << i);
             REQUIRE(values[i] == static_cast<u32>(i) + 1000);
         }
-        // The image barrier in the same batch moved the texture, which is what makes this readback legal.
+        // The texture barrier in the same batch moved the texture, which is what makes this readback legal.
         REQUIRE(texture.GetCurrentLayout() == Forge::ImageLayout::TransferSource);
         Opal::DynamicArray<u8> pixels(k_side * k_side * 4);
         Forge::ReadBackTexture(fixture.device, fixture.GetQueue(), texture, pixels, 0, Forge::ImageLayout::TransferSource);
         const Opal::DynamicArray<u8> expected = MakeTexelGrid(k_side, k_side, 33);
         REQUIRE(CountMismatches(expected, pixels) == 0);
     }
-    SECTION("Several image barriers go down in one call")
+    SECTION("Several texture barriers go down in one call")
     {
         // Three textures in different layouts, transitioned together, each one read back after. The plural
         // overload forwards to CmdBarriers like the singular one, so what this catches is the forwarding
@@ -4841,18 +4841,18 @@ TEST_CASE("Forge barrier batches", "[forge]")
         // ReadBackTexture would be reading a layout the texture is not in.
         constexpr i32 k_texture_count = 3;
         Opal::DynamicArray<Forge::Texture> textures;
-        Opal::DynamicArray<Forge::ImageBarrier> barriers;
+        Opal::DynamicArray<Forge::TextureBarrier> barriers;
         for (i32 i = 0; i < k_texture_count; ++i)
         {
             textures.PushBack(MakeGridTexture(fixture.device, fixture.GetQueue(), k_side, k_side, static_cast<u8>(60 + i)));
         }
         for (i32 i = 0; i < k_texture_count; ++i)
         {
-            barriers.PushBack(Forge::ImageBarrier::ToTransferSource(textures[i]));
+            barriers.PushBack(Forge::TextureBarrier::ToTransferSource(textures[i]));
         }
         Forge::ImmediateSubmit(fixture.device, fixture.GetQueue(),
                                [&](Forge::CommandBuffer& command_buffer)
-                               { command_buffer.CmdImageBarriers({barriers.GetData(), barriers.GetSize()}); });
+                               { command_buffer.CmdTextureBarriers({barriers.GetData(), barriers.GetSize()}); });
 
         for (i32 i = 0; i < k_texture_count; ++i)
         {
@@ -4878,9 +4878,9 @@ TEST_CASE("Forge barrier batches", "[forge]")
         Forge::ImmediateSubmit(fixture.device, fixture.GetQueue(),
                                [&](Forge::CommandBuffer& command_buffer)
                                {
-                                   const Forge::ImageBarrier image = Forge::ImageBarrier::ToTransferSource(texture);
+                                   const Forge::TextureBarrier texture_barrier = Forge::TextureBarrier::ToTransferSource(texture);
                                    command_buffer.CmdBarriers(
-                                       {.image = {&image, 1}, .flags = Forge::DependencyFlagBits::ByRegion});
+                                       {.texture = {&texture_barrier, 1}, .flags = Forge::DependencyFlagBits::ByRegion});
                                });
         REQUIRE(texture.GetCurrentLayout() == Forge::ImageLayout::TransferSource);
         Opal::DynamicArray<u8> pixels(k_side * k_side * 4);
@@ -4918,7 +4918,7 @@ TEST_CASE("Forge barrier presets", "[forge]")
         UploadGrid(fixture.device, fixture.GetQueue(), texture, expected);
         Forge::ImmediateSubmit(fixture.device, fixture.GetQueue(),
                                [&](Forge::CommandBuffer& command_buffer)
-                               { command_buffer.CmdImageBarrier(make_barrier(texture)); });
+                               { command_buffer.CmdTextureBarrier(make_barrier(texture)); });
         REQUIRE(texture.GetCurrentLayout() == expected_layout);
 
         Opal::DynamicArray<u8> pixels(k_side * k_side * 4);
@@ -4928,13 +4928,13 @@ TEST_CASE("Forge barrier presets", "[forge]")
 
     SECTION("ToShaderRead moves a sampled texture without losing it")
     {
-        run_preset(Forge::TextureUsageBits::Sampled, [](Forge::Texture& texture) { return Forge::ImageBarrier::ToShaderRead(texture); },
+        run_preset(Forge::TextureUsageBits::Sampled, [](Forge::Texture& texture) { return Forge::TextureBarrier::ToShaderRead(texture); },
                    Forge::ImageLayout::ShaderReadOnly);
     }
     SECTION("ToTransferSource moves a texture into the layout a copy reads from")
     {
         run_preset(Forge::TextureUsageBits::Sampled,
-                   [](Forge::Texture& texture) { return Forge::ImageBarrier::ToTransferSource(texture); },
+                   [](Forge::Texture& texture) { return Forge::TextureBarrier::ToTransferSource(texture); },
                    Forge::ImageLayout::TransferSource);
     }
     SECTION("The three argument To is told both layouts")
@@ -4944,7 +4944,7 @@ TEST_CASE("Forge barrier presets", "[forge]")
         run_preset(Forge::TextureUsageBits::Sampled,
                    [](Forge::Texture& texture)
                    {
-                       return Forge::ImageBarrier::To(texture, texture.GetCurrentLayout(), Forge::ImageLayout::TransferDestination);
+                       return Forge::TextureBarrier::To(texture, texture.GetCurrentLayout(), Forge::ImageLayout::TransferDestination);
                    },
                    Forge::ImageLayout::TransferDestination);
     }
@@ -4958,7 +4958,7 @@ TEST_CASE("Forge barrier presets", "[forge]")
         // checking: the dispatch throws rather than picking whichever preset is closest. General used to be
         // the example here and stopped being one when 3.18 gave it a preset of its own.
         REQUIRE_THROWS_AS(
-            Forge::ImageBarrier::To(texture, Forge::ImageLayout::Undefined, Forge::ImageLayout::DepthStencilReadOnly),
+            Forge::TextureBarrier::To(texture, Forge::ImageLayout::Undefined, Forge::ImageLayout::DepthStencilReadOnly),
             Opal::Exception);
     }
     SECTION("ToDepthStencilAttachment moves a depth texture")
@@ -4969,7 +4969,7 @@ TEST_CASE("Forge barrier presets", "[forge]")
                                               .usage = Forge::TextureUsageBits::DepthStencilAttachment});
         Forge::ImmediateSubmit(fixture.device, fixture.GetQueue(),
                                [&](Forge::CommandBuffer& command_buffer)
-                               { command_buffer.CmdImageBarrier(Forge::ImageBarrier::ToDepthStencilAttachment(depth)); });
+                               { command_buffer.CmdTextureBarrier(Forge::TextureBarrier::ToDepthStencilAttachment(depth)); });
         // Rendering with one is 3.16; what this says is that the preset picks the depth aspect off the
         // format rather than the colour aspect a colour texture would have given it.
         REQUIRE(depth.GetCurrentLayout() == Forge::ImageLayout::DepthStencilAttachment);
@@ -5045,8 +5045,8 @@ TEST_CASE("Forge barrier preset for presenting", "[forge]")
     Forge::ImmediateSubmit(device, queue,
                            [&](Forge::CommandBuffer& command_buffer)
                            {
-                               command_buffer.CmdImageBarrier(Forge::ImageBarrier::ToColorAttachment(texture));
-                               command_buffer.CmdImageBarrier(Forge::ImageBarrier::ToPresent(texture));
+                               command_buffer.CmdTextureBarrier(Forge::TextureBarrier::ToColorAttachment(texture));
+                               command_buffer.CmdTextureBarrier(Forge::TextureBarrier::ToPresent(texture));
                            });
     REQUIRE(texture.GetCurrentLayout() == Forge::ImageLayout::Present);
 
@@ -5262,7 +5262,7 @@ Opal::DynamicArray<u8> RenderRaster(ForgeFixture& fixture, Forge::Texture& color
     Forge::ImmediateSubmit(fixture.device, fixture.GetQueue(),
                            [&](Forge::CommandBuffer& command_buffer)
                            {
-                               command_buffer.CmdImageBarrier(Forge::ImageBarrier::ToColorAttachment(color));
+                               command_buffer.CmdTextureBarrier(Forge::TextureBarrier::ToColorAttachment(color));
                                const Forge::RenderingDesc rendering_desc{
                                    .render_area_extent = {side, side},
                                    .color_attachments = {Forge::RenderingAttachmentDesc{
@@ -5802,8 +5802,8 @@ TEST_CASE("Forge viewport depth range", "[forge]")
             fixture.device, fixture.GetQueue(),
             [&](Forge::CommandBuffer& command_buffer)
             {
-                command_buffer.CmdImageBarrier(Forge::ImageBarrier::ToColorAttachment(color));
-                command_buffer.CmdImageBarrier(Forge::ImageBarrier::ToDepthStencilAttachment(depth));
+                command_buffer.CmdTextureBarrier(Forge::TextureBarrier::ToColorAttachment(color));
+                command_buffer.CmdTextureBarrier(Forge::TextureBarrier::ToDepthStencilAttachment(depth));
                 const Forge::RenderingDesc rendering_desc{
                     .render_area_extent = {k_side, k_side},
                     .color_attachments = {Forge::RenderingAttachmentDesc{
@@ -6066,8 +6066,8 @@ TEST_CASE("Forge depth testing", "[forge]")
             fixture.device, fixture.GetQueue(),
             [&](Forge::CommandBuffer& command_buffer)
             {
-                command_buffer.CmdImageBarrier(Forge::ImageBarrier::ToColorAttachment(color));
-                command_buffer.CmdImageBarrier(Forge::ImageBarrier::ToDepthStencilAttachment(depth));
+                command_buffer.CmdTextureBarrier(Forge::TextureBarrier::ToColorAttachment(color));
+                command_buffer.CmdTextureBarrier(Forge::TextureBarrier::ToDepthStencilAttachment(depth));
                 const Forge::RenderingDesc rendering_desc{
                     .render_area_extent = {k_side, k_side},
                     .color_attachments = {Forge::RenderingAttachmentDesc{
@@ -6219,9 +6219,9 @@ TEST_CASE("Forge stencil testing", "[forge]")
             fixture.device, fixture.GetQueue(),
             [&](Forge::CommandBuffer& command_buffer)
             {
-                command_buffer.CmdImageBarrier(Forge::ImageBarrier::ToColorAttachment(color));
-                command_buffer.CmdImageBarrier(Forge::ImageBarrier::ToDepthStencilAttachment(depth_stencil));
-                // One image carries both, so the same view is named twice - Vulkan takes the two sides
+                command_buffer.CmdTextureBarrier(Forge::TextureBarrier::ToColorAttachment(color));
+                command_buffer.CmdTextureBarrier(Forge::TextureBarrier::ToDepthStencilAttachment(depth_stencil));
+                // One texture carries both, so the same view is named twice - Vulkan takes the two sides
                 // apart even then, and each gets its own load and store.
                 const Forge::RenderingAttachmentDesc depth_stencil_attachment{
                     .texture = depth_stencil,
@@ -6293,7 +6293,7 @@ TEST_CASE("Forge stencil testing", "[forge]")
         Forge::Texture color = MakeColorTarget(fixture.device, k_side, k_color_format);
         command_buffer.Begin();
         // Transitioned first so that the throw is the stencil one and not the layout check on the colour.
-        command_buffer.CmdImageBarrier(Forge::ImageBarrier::ToColorAttachment(color));
+        command_buffer.CmdTextureBarrier(Forge::TextureBarrier::ToColorAttachment(color));
         const Forge::RenderingDesc rendering_desc{
             .render_area_extent = {k_side, k_side},
             .color_attachments = {Forge::RenderingAttachmentDesc{.texture = color}},
@@ -6390,8 +6390,8 @@ TEST_CASE("Forge stencil masks set per draw", "[forge]")
             fixture.device, fixture.GetQueue(),
             [&](Forge::CommandBuffer& command_buffer)
             {
-                command_buffer.CmdImageBarrier(Forge::ImageBarrier::ToColorAttachment(color));
-                command_buffer.CmdImageBarrier(Forge::ImageBarrier::ToDepthStencilAttachment(depth_stencil));
+                command_buffer.CmdTextureBarrier(Forge::TextureBarrier::ToColorAttachment(color));
+                command_buffer.CmdTextureBarrier(Forge::TextureBarrier::ToDepthStencilAttachment(depth_stencil));
                 const Forge::RenderingAttachmentDesc depth_stencil_attachment{
                     .texture = depth_stencil,
                     .load_operation = Forge::AttachmentLoadOperation::Clear,
@@ -6509,7 +6509,7 @@ TEST_CASE("Forge blending", "[forge]")
         Forge::ImmediateSubmit(fixture.device, fixture.GetQueue(),
                                [&](Forge::CommandBuffer& command_buffer)
                                {
-                                   command_buffer.CmdImageBarrier(Forge::ImageBarrier::ToColorAttachment(color));
+                                   command_buffer.CmdTextureBarrier(Forge::TextureBarrier::ToColorAttachment(color));
                                    const Forge::RenderingDesc rendering_desc{
                                        .render_area_extent = {k_side, k_side},
                                        .color_attachments = {Forge::RenderingAttachmentDesc{
@@ -6803,14 +6803,14 @@ void UploadMip(const Forge::Device& device, Forge::DeviceQueue& queue, Forge::Te
                u32 mip_level)
 {
     const Forge::Buffer staging(device, {.size = pixels.GetSize(), .usage = Forge::BufferUsageBits::TransferSource}, pixels);
-    const Forge::BufferImageCopyRegion region{
-        .image_subresource = {.mip_level = mip_level, .array_layer_count = texture.GetDesc().array_layer_count}};
+    const Forge::BufferTextureCopyRegion region{
+        .texture_subresource = {.mip_level = mip_level, .array_layer_count = texture.GetDesc().array_layer_count}};
     Forge::ImmediateSubmit(device, queue,
                            [&](Forge::CommandBuffer& command_buffer)
                            {
-                               command_buffer.CmdImageBarrier(Forge::ImageBarrier::ToTransferDestination(texture));
-                               command_buffer.CmdCopyBufferToImage(staging, texture, {&region, 1});
-                               command_buffer.CmdImageBarrier(Forge::ImageBarrier::ToShaderRead(
+                               command_buffer.CmdTextureBarrier(Forge::TextureBarrier::ToTransferDestination(texture));
+                               command_buffer.CmdCopyBufferToTexture(staging, texture, {&region, 1});
+                               command_buffer.CmdTextureBarrier(Forge::TextureBarrier::ToShaderRead(
                                    texture, Forge::PipelineStageBits::ComputeShader));
                            });
 }
@@ -7123,7 +7123,7 @@ TEST_CASE("Forge storage image writes", "[forge]")
     Forge::ImmediateSubmit(fixture.device, fixture.GetQueue(),
                            [&](Forge::CommandBuffer& command_buffer)
                            {
-                               command_buffer.CmdImageBarrier(Forge::ImageBarrier::ToGeneral(storage));
+                               command_buffer.CmdTextureBarrier(Forge::TextureBarrier::ToGeneral(storage));
                                command_buffer.CmdBindPipeline(pipeline);
                                command_buffer.CmdBindDescriptorSet(pipeline, set);
                                command_buffer.CmdDispatch(1);
@@ -7496,8 +7496,8 @@ TEST_CASE("Forge transfers on the dedicated transfer queue", "[forge]")
     }
     SECTION("A texture upload and readback, in the layouts this family may transition into")
     {
-        // The per-family trap. A transfer only family supports no shader stage, so it may not transition an
-        // image into ShaderReadOnly - which is what ReadBackTexture leaves a texture in by default. Undefined
+        // The per-family trap. A transfer only family supports no shader stage, so it may not transition a
+        // texture into ShaderReadOnly - which is what ReadBackTexture leaves a texture in by default. Undefined
         // as the final layout leaves it in TransferSource, and TransferSource and TransferDestination are the
         // two this family can reach.
         constexpr i32 k_side = 4;
@@ -7510,12 +7510,12 @@ TEST_CASE("Forge transfers on the dedicated transfer queue", "[forge]")
                                                          Forge::TextureUsageBits::TransferDestination});
         const Forge::Buffer staging(fixture.device, {.size = pixels.GetSize(), .usage = Forge::BufferUsageBits::TransferSource},
                                     pixels);
-        const Forge::BufferImageCopyRegion region;
+        const Forge::BufferTextureCopyRegion region;
         Forge::ImmediateSubmit(fixture.device, transfer_queue,
                                [&](Forge::CommandBuffer& command_buffer)
                                {
-                                   command_buffer.CmdImageBarrier(Forge::ImageBarrier::ToTransferDestination(texture));
-                                   command_buffer.CmdCopyBufferToImage(staging, texture, {&region, 1});
+                                   command_buffer.CmdTextureBarrier(Forge::TextureBarrier::ToTransferDestination(texture));
+                                   command_buffer.CmdCopyBufferToTexture(staging, texture, {&region, 1});
                                });
         REQUIRE(texture.GetCurrentLayout() == Forge::ImageLayout::TransferDestination);
 

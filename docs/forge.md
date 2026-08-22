@@ -91,17 +91,17 @@ mapped pointer, so the mapping follows the object rather than staying with the c
 
 ### What the swap chain owns
 
-`SwapChain` owns its images, and `Recreate()` replaces all of them. Anything cached about it - an image
-view, the image count, the extent - is stale afterwards. That is why acquire and present report
+`SwapChain` owns its textures, and `Recreate()` replaces all of them. Anything cached about it - a view,
+the texture count, the extent - is stale afterwards. That is why acquire and present report
 `SwapChainStatus::OutOfDate` rather than throwing: it is a signal to drop what was cached, not a failure.
 Applications using `FrameContext` do not see this at all, since it re-reads what it needs each frame.
 
-The swap chain also remembers which image it handed out. `AcquireImage` records it, `GetCurrentColorImage()`
-hands it back, and `Present` takes no index because the swap chain already knows which one it is - so an
-index never has to be threaded through a frame. `HasAcquiredImage()` is true only between the two, and
-asking for the image outside that pair throws rather than returning a stale one.
+The swap chain also remembers which texture it handed out. `AcquireTexture` records it,
+`GetCurrentColorTexture()` hands it back, and `Present` takes no index because the swap chain already knows
+which one it is - so an index never has to be threaded through a frame. `HasAcquiredTexture()` is true only
+between the two, and asking for the texture outside that pair throws rather than returning a stale one.
 
-A depth image is optional: `SwapChainDesc::use_depth` is on by default, and a swap chain made without one
+A depth texture is optional: `SwapChainDesc::use_depth` is on by default, and a swap chain made without one
 has an empty depth texture. Ask `HasDepth()`, and leave `RenderingDesc::depth_attachment` absent when it
 answers false - an attachment that is present and names no texture throws, since absent is what "no depth"
 is spelled as.
@@ -111,7 +111,7 @@ is spelled as.
 ## The frame loop
 
 `FrameContext` owns the parts of a frame that are the same in every application: a fence, a command buffer
-and an image-ready semaphore per frame in flight, a render-finished semaphore per swap chain image, and the
+and a texture-ready semaphore per frame in flight, a render-finished semaphore per swap chain texture, and the
 order in which acquire, submit and present have to happen.
 
 ```cpp
@@ -127,9 +127,9 @@ while (!window->IsClosed())
     }
 
     CommandBuffer& command_buffer = frame_context.GetCommandBuffer();
-    command_buffer.CmdImageBarrier(ImageBarrier::ToColorAttachment(frame_context.GetColorImage()));
+    command_buffer.CmdTextureBarrier(TextureBarrier::ToColorAttachment(frame_context.GetColorTexture()));
     command_buffer.CmdBeginRendering({.render_area_extent = frame_context.GetRenderSize(),
-                                      .color_attachments = {{.texture = frame_context.GetColorImage(), ...}}});
+                                      .color_attachments = {{.texture = frame_context.GetColorTexture(), ...}}});
     ...
     command_buffer.CmdEndRendering();
 
@@ -137,8 +137,8 @@ while (!window->IsClosed())
 }
 ```
 
-`BeginFrame` waits for the slot this frame is about to reuse, acquires an image, and begins the command
-buffer, so what comes back is already recording. `EndFrame` transitions the image to `Present`, ends the
+`BeginFrame` waits for the slot this frame is about to reuse, acquires a texture, and begins the command
+buffer, so what comes back is already recording. `EndFrame` transitions the texture to `Present`, ends the
 command buffer, submits it against the right semaphores, and presents.
 
 Resizing and minimizing are ordinary outcomes rather than errors. `BeginFrame` returning `OutOfDate` means
@@ -148,7 +148,7 @@ area, as while minimized, has no swap chain at all; `swap_chain.IsValid()` says 
 does not want to spin should idle for a frame.
 
 Anything the application keeps one of per frame in flight - a uniform buffer, a descriptor set - is indexed
-by `frame_context.GetFrameIndex()`. `EndFrame` takes the layout the image was left in, defaulting to
+by `frame_context.GetFrameIndex()`. `EndFrame` takes the layout the texture was left in, defaulting to
 `ImageLayout::ColorAttachment`, and passing `ImageLayout::Present` skips the transition for a frame that
 already made it.
 
@@ -235,6 +235,27 @@ Vulkan keeps it in and chains those itself. A caller never sees `VkPhysicalDevic
 keeps a `pNext` chain alive, and never has to know that buffer device addresses arrived in 1.2 while
 descriptor indexing arrived in the same release by a different name.
 
+### Image or texture
+
+Vulkan says image where Forge says texture, and one word for one thing is what keeps the API searchable:
+finding everything that touches a texture is one grep, not two.
+
+**Anything that takes, holds or hands out a `Forge::Texture` says texture.** `TextureBarrier` and its
+presets, `CmdTextureBarrier`, `CmdCopyBufferToTexture`, `CmdCopyTextureToBuffer`, `CmdCopyTexture`,
+`CmdBlitTexture` and their region types, `DescriptorSetUpdateBinding::TextureInfo`, and the whole swap chain
+surface - `AcquireTexture` returning an `AcquiredTexture`, `GetCurrentColorTexture`, `GetColorTexture`,
+`GetDepthTexture`, `HasAcquiredTexture`, `GetCurrentTextureIndex`.
+
+**A name says image only where it mirrors something Vulkan named.** That is `ImageLayout`,
+`ImageAspectBits`, `ImageSubresourceRange` and `ImageSubresourceLayers`, which mirror the `Vk` types of
+those names; the `DescriptorType` values `SampledImage`, `CombinedImageSampler` and `StorageImage`, which
+mirror `VkDescriptorType`; and `Texture::GetNativeImage()` and `GetNativeImageView()`, which are named after
+the `VkImage` and `VkImageView` they hand out. `Rndr::ImageFilter` and `Rndr::ImageAddressMode` are not
+Forge types at all - they live in `rndr/graphics-types.hpp` and are shared with Canvas.
+
+So a call site that mentions an image is either reaching for a layout, a descriptor type or a raw handle.
+Anything else is a texture.
+
 ---
 
 ## Error handling
@@ -258,7 +279,7 @@ there is no reason to spell these as return values on the per-frame path.
 ### Expected outcomes are return values
 
 Not everything Vulkan reports as an error is one. A swap chain that no longer matches its surface is the
-normal consequence of the user resizing the window, so `SwapChain::AcquireImage` and `SwapChain::Present`
+normal consequence of the user resizing the window, so `SwapChain::AcquireTexture` and `SwapChain::Present`
 return a `SwapChainStatus` and the caller skips a frame. `VK_ERROR_OUT_OF_DATE_KHR` never leaves the swap
 chain as an exception.
 
@@ -289,10 +310,10 @@ has to react to.
 ## Barriers
 
 A barrier says which work has to finish before which other work may start, and for a texture it also says
-what the image is about to be used for. Forge spells both sides the same way: the stages that must finish
+what the texture is about to be used for. Forge spells both sides the same way: the stages that must finish
 and the access they made, then the stages that must not start and the access they will make.
 
-`ImageBarrier` has a preset for each of the standard transitions - `ToColorAttachment`,
+`TextureBarrier` has a preset for each of the standard transitions - `ToColorAttachment`,
 `ToDepthStencilAttachment`, `ToShaderRead`, `ToTransferSource`, `ToTransferDestination`, `ToPresent`, and
 `To` for a layout that is not known while writing the call. Each picks the stages and the access from what
 the texture is about to be used for, and derives the source side from the layout it is coming from.
@@ -304,21 +325,21 @@ Vulkan makes the current layout of an image the caller's bookkeeping: neither th
 layer catches a plausible-but-wrong `oldLayout`, and `VK_IMAGE_LAYOUT_UNDEFINED` is always accepted because
 it means "throw the contents away". Forge does that bookkeeping instead. `Texture` keeps one layout per
 (mip level, array layer), starting at `Undefined` the way a freshly created image does, and `CmdBarriers`
-writes the new layout back over the range every image barrier covered.
+writes the new layout back over the range every texture barrier covered.
 
 So the short form of each named preset takes the source layout off the texture:
 
 ```cpp
-command_buffer.CmdTransition(texture, ImageLayout::ShaderReadOnly);       // the whole transition
-command_buffer.CmdImageBarrier(ImageBarrier::ToShaderRead(texture));      // the same, with the stages spelled out
+command_buffer.CmdTransition(texture, ImageLayout::ShaderReadOnly);      // the whole transition
+command_buffer.CmdTextureBarrier(TextureBarrier::ToShaderRead(texture)); // the same, with the stages spelled out
 ```
 
 `GetCurrentLayout()` answers for the whole texture and throws when the levels disagree, which is what mip
 generation leaves behind halfway through; `GetCurrentLayout(mip_level, array_layer)` answers for one of
-them. The commands that need a layout without changing it - `CmdCopyImage`, `CmdBlitImage`,
-`CmdCopyBufferToImage`, `CmdCopyImageToBuffer`, `CmdGenerateMips`, `ReadBackTexture` - read it the same way,
-for exactly the levels their regions name, and throw when it is not one the role allows. That last check is
-the one the old API could not make.
+them. The commands that need a layout without changing it - `CmdCopyTexture`, `CmdBlitTexture`,
+`CmdCopyBufferToTexture`, `CmdCopyTextureToBuffer`, `CmdGenerateMips`, `ReadBackTexture` - read it the same
+way, for exactly the levels their regions name, and throw when it is not one the role allows. That last
+check is the one the old API could not make.
 
 `CmdBeginRendering` is the same thing at the other end of the frame. A `RenderingAttachmentDesc` names the
 texture it draws into rather than an image view, so the layout it is rendered in is read off that texture
@@ -339,9 +360,9 @@ dropping an argument would compile into the opposite of what was meant. `CmdTran
 **This is record-time bookkeeping, not execution-time.** It is correct exactly while one thread records
 command buffers in the order they will execute. It lies when two command buffers that touch the same texture
 are recorded interleaved, and `CommandBuffer::Reset()` does not roll it back - the recorded barriers go, the
-layouts they set stay. Swap chain images are the one case Forge cannot observe, so `AcquireImage` resets the
-image it hands out to `Undefined`, which is what the specification says about a re-acquired image and what a
-frame that clears it wants anyway.
+layouts they set stay. Swap chain textures are the one case Forge cannot observe, so `AcquireTexture` resets
+the texture it hands out to `Undefined`, which is what the specification says about a re-acquired image and
+what a frame that clears it wants anyway.
 
 `PipelineStageAccessBits` offers two ways to name an access, and the difference matters:
 

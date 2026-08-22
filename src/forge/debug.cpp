@@ -136,22 +136,23 @@ void Rndr::Forge::SetDebugName(const Device& device, const FrameContext& frame_c
 {
     // One name outside the loop: the timeline belongs to the whole loop rather than to a frame in it.
     SetDebugName(device, frame_context.m_frame_timeline, name + Opal::StringUtf8(" frame timeline"));
-    for (i32 frame = 0; frame < frame_context.m_image_ready_semaphores.GetSize(); ++frame)
+    for (i32 frame = 0; frame < frame_context.m_texture_ready_semaphores.GetSize(); ++frame)
     {
-        SetDebugName(device, frame_context.m_image_ready_semaphores[frame], Indexed(name, "image ready", static_cast<u32>(frame)));
+        SetDebugName(device, frame_context.m_texture_ready_semaphores[frame], Indexed(name, "texture ready", static_cast<u32>(frame)));
         SetDebugName(device, frame_context.m_command_buffers[frame], Indexed(name, "commands", static_cast<u32>(frame)));
     }
-    for (i32 image = 0; image < frame_context.m_render_finished_semaphores.GetSize(); ++image)
+    for (i32 texture = 0; texture < frame_context.m_render_finished_semaphores.GetSize(); ++texture)
     {
-        SetDebugName(device, frame_context.m_render_finished_semaphores[image], Indexed(name, "render finished", static_cast<u32>(image)));
+        SetDebugName(device, frame_context.m_render_finished_semaphores[texture],
+                     Indexed(name, "render finished", static_cast<u32>(texture)));
     }
 }
 
 void Rndr::Forge::SetDebugName(const Device& device, const SwapChain& swap_chain, const Opal::StringUtf8& name)
 {
     SetName(device, VK_OBJECT_TYPE_SWAPCHAIN_KHR, ToHandle(swap_chain.GetNativeSwapChain()), name);
-    for (u32 image_index = 0; image_index < swap_chain.GetColorImageCount(); ++image_index)
+    for (u32 texture_index = 0; texture_index < swap_chain.GetColorTextureCount(); ++texture_index)
     {
-        SetDebugName(device, swap_chain.GetColorImage(image_index), name);
+        SetDebugName(device, swap_chain.GetColorTexture(texture_index), name);
     }
 }

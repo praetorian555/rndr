@@ -187,14 +187,14 @@ Rndr::Forge::Texture::Texture(const Device& device, DeviceQueue& queue, const Bi
     ImmediateSubmit(device, queue,
                     [&](CommandBuffer& command_buffer)
                     {
-                        command_buffer.CmdImageBarrier(ImageBarrier::ToTransferDestination(*this));
-                        command_buffer.CmdCopyBufferToImage(staging_buffer, bitmap, *this);
+                        command_buffer.CmdTextureBarrier(TextureBarrier::ToTransferDestination(*this));
+                        command_buffer.CmdCopyBufferToTexture(staging_buffer, bitmap, *this);
                         if (generate_mips && m_desc.mip_level_count > 1)
                         {
                             command_buffer.CmdGenerateMips(*this);
                             return;
                         }
-                        command_buffer.CmdImageBarrier(ImageBarrier::ToShaderRead(*this));
+                        command_buffer.CmdTextureBarrier(TextureBarrier::ToShaderRead(*this));
                     });
 }
 

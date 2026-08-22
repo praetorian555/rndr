@@ -123,19 +123,19 @@ struct DescriptorSetUpdateBinding
         u64 size = k_whole_buffer;
         OPAL_CLONE_FIELDS(buffer, offset, size);
     };
-    struct ImageInfo : Opal::ClonableBase<ImageInfo>
+    struct TextureInfo : Opal::ClonableBase<TextureInfo>
     {
         Opal::Ref<const Sampler> sampler;
-        Opal::Ref<const Texture> image;
-        ImageLayout image_layout = ImageLayout::ShaderReadOnly;
-        OPAL_CLONE_FIELDS(sampler, image, image_layout);
+        Opal::Ref<const Texture> texture;
+        ImageLayout texture_layout = ImageLayout::ShaderReadOnly;
+        OPAL_CLONE_FIELDS(sampler, texture, texture_layout);
     };
 
     DescriptorType descriptor_type = DescriptorType::CombinedImageSampler;
     u32 binding = 0;
     /** Which descriptor of the binding to write, for a binding that is an array of them. */
     u32 array_element = 0;
-    Opal::Variant<BufferInfo, ImageInfo> resource_info;
+    Opal::Variant<BufferInfo, TextureInfo> resource_info;
 
     DescriptorSetUpdateBinding Clone(Opal::AllocatorBase* allocator = nullptr) const;
 };
@@ -227,16 +227,16 @@ public:
     void Update(Opal::ArrayView<const DescriptorSetUpdateBinding> updates);
 
     /**
-     * Write one image into a binding. The descriptor type comes from the layout the set was allocated from,
+     * Write one texture into a binding. The descriptor type comes from the layout the set was allocated from,
      * so it is not something a call site can disagree with the shader about.
      * @param binding Index the layout declares. A binding the layout does not have throws.
-     * @param texture Image to write. Its view is what the shader reads.
+     * @param texture Texture to write. Its view is what the shader reads.
      * @param sampler Sampler to write beside it. Ignored by Vulkan when the binding has immutable samplers.
-     * @param image_layout Layout the image will be in when the shader reads it.
+     * @param texture_layout Layout the texture will be in when the shader reads it.
      * @param array_element Which descriptor of the binding to write, for a binding that is an array.
      */
     void Update(u32 binding, const Texture& texture, const Sampler& sampler,
-                ImageLayout image_layout = ImageLayout::ShaderReadOnly, u32 array_element = 0);
+                ImageLayout texture_layout = ImageLayout::ShaderReadOnly, u32 array_element = 0);
 
     /**
      * Write one buffer into a binding. The descriptor type - constant or storage - comes from the layout, as
@@ -250,14 +250,14 @@ public:
     void Update(u32 binding, const Buffer& buffer, u64 offset = 0, u64 size = k_whole_buffer, u32 array_element = 0);
 
     /**
-     * Write one image into the binding the shader calls `name`, which is the same call as above with the
+     * Write one texture into the binding the shader calls `name`, which is the same call as above with the
      * index looked up rather than typed. Reading as Update("albedo_texture", ...) is the point: a binding
      * index is a number that can be wrong in a way nothing reads back, and a name cannot.
      * @param name What the shader calls the binding. A name it does not use throws, as does any name at all
      *             when the layout was built without `shaders` and so carries none.
      */
     void Update(const Opal::StringUtf8& name, const Texture& texture, const Sampler& sampler,
-                ImageLayout image_layout = ImageLayout::ShaderReadOnly, u32 array_element = 0);
+                ImageLayout texture_layout = ImageLayout::ShaderReadOnly, u32 array_element = 0);
 
     /** Write one buffer into the binding the shader calls `name`, as above. */
     void Update(const Opal::StringUtf8& name, const Buffer& buffer, u64 offset = 0, u64 size = k_whole_buffer,

@@ -182,7 +182,7 @@ Rndr::Forge::BufferBarrier Rndr::Forge::BufferBarrier::ReadThenWrite(const Buffe
             .buffer = buffer};
 }
 
-Rndr::Forge::ImageBarrier Rndr::Forge::ImageBarrier::ToColorAttachment(Texture& texture, ImageLayout old_layout)
+Rndr::Forge::TextureBarrier Rndr::Forge::TextureBarrier::ToColorAttachment(Texture& texture, ImageLayout old_layout)
 {
     const SourceScope source = ScopeOfLayout(old_layout);
     return {.stages_must_finish = source.stages,
@@ -191,10 +191,10 @@ Rndr::Forge::ImageBarrier Rndr::Forge::ImageBarrier::ToColorAttachment(Texture& 
             .before_stages_start_access = PipelineStageAccessBits::ColorAttachmentRead | PipelineStageAccessBits::ColorAttachmentWrite,
             .old_layout = old_layout,
             .new_layout = ImageLayout::ColorAttachment,
-            .image = texture};
+            .texture = texture};
 }
 
-Rndr::Forge::ImageBarrier Rndr::Forge::ImageBarrier::ToDepthStencilAttachment(Texture& texture, ImageLayout old_layout)
+Rndr::Forge::TextureBarrier Rndr::Forge::TextureBarrier::ToDepthStencilAttachment(Texture& texture, ImageLayout old_layout)
 {
     const SourceScope source = ScopeOfLayout(old_layout);
     return {.stages_must_finish = source.stages,
@@ -204,11 +204,11 @@ Rndr::Forge::ImageBarrier Rndr::Forge::ImageBarrier::ToDepthStencilAttachment(Te
                 PipelineStageAccessBits::DepthStencilAttachmentRead | PipelineStageAccessBits::DepthStencilAttachmentWrite,
             .old_layout = old_layout,
             .new_layout = ImageLayout::DepthStencilAttachment,
-            .image = texture};
+            .texture = texture};
 }
 
-Rndr::Forge::ImageBarrier Rndr::Forge::ImageBarrier::ToShaderRead(Texture& texture, ImageLayout old_layout,
-                                                                  PipelineStageBits reader)
+Rndr::Forge::TextureBarrier Rndr::Forge::TextureBarrier::ToShaderRead(Texture& texture, ImageLayout old_layout,
+                                                                      PipelineStageBits reader)
 {
     const SourceScope source = ScopeOfLayout(old_layout);
     return {.stages_must_finish = source.stages,
@@ -217,14 +217,14 @@ Rndr::Forge::ImageBarrier Rndr::Forge::ImageBarrier::ToShaderRead(Texture& textu
             .before_stages_start_access = PipelineStageAccessBits::ShaderRead,
             .old_layout = old_layout,
             .new_layout = ImageLayout::ShaderReadOnly,
-            .image = texture};
+            .texture = texture};
 }
 
-Rndr::Forge::ImageBarrier Rndr::Forge::ImageBarrier::ToGeneral(Texture& texture, ImageLayout old_layout,
-                                                               PipelineStageBits accessor)
+Rndr::Forge::TextureBarrier Rndr::Forge::TextureBarrier::ToGeneral(Texture& texture, ImageLayout old_layout,
+                                                                   PipelineStageBits accessor)
 {
     const SourceScope source = ScopeOfLayout(old_layout);
-    // Both sides of the access, because General is the layout for an image a stage reads and writes at once,
+    // Both sides of the access, because General is the layout for a texture a stage reads and writes at once,
     // which is the whole reason to be in it rather than in one of the narrow ones.
     return {.stages_must_finish = source.stages,
             .stages_must_finish_access = source.access,
@@ -232,15 +232,15 @@ Rndr::Forge::ImageBarrier Rndr::Forge::ImageBarrier::ToGeneral(Texture& texture,
             .before_stages_start_access = PipelineStageAccessBits::ShaderRead | PipelineStageAccessBits::ShaderWrite,
             .old_layout = old_layout,
             .new_layout = ImageLayout::General,
-            .image = texture};
+            .texture = texture};
 }
 
-Rndr::Forge::ImageBarrier Rndr::Forge::ImageBarrier::ToGeneral(Texture& texture, PipelineStageBits accessor)
+Rndr::Forge::TextureBarrier Rndr::Forge::TextureBarrier::ToGeneral(Texture& texture, PipelineStageBits accessor)
 {
     return ToGeneral(texture, texture.GetCurrentLayout(), accessor);
 }
 
-Rndr::Forge::ImageBarrier Rndr::Forge::ImageBarrier::ToTransferDestination(Texture& texture, ImageLayout old_layout)
+Rndr::Forge::TextureBarrier Rndr::Forge::TextureBarrier::ToTransferDestination(Texture& texture, ImageLayout old_layout)
 {
     const SourceScope source = ScopeOfLayout(old_layout);
     return {.stages_must_finish = source.stages,
@@ -249,10 +249,10 @@ Rndr::Forge::ImageBarrier Rndr::Forge::ImageBarrier::ToTransferDestination(Textu
             .before_stages_start_access = PipelineStageAccessBits::TransferWrite,
             .old_layout = old_layout,
             .new_layout = ImageLayout::TransferDestination,
-            .image = texture};
+            .texture = texture};
 }
 
-Rndr::Forge::ImageBarrier Rndr::Forge::ImageBarrier::ToTransferSource(Texture& texture, ImageLayout old_layout)
+Rndr::Forge::TextureBarrier Rndr::Forge::TextureBarrier::ToTransferSource(Texture& texture, ImageLayout old_layout)
 {
     const SourceScope source = ScopeOfLayout(old_layout);
     return {.stages_must_finish = source.stages,
@@ -261,10 +261,10 @@ Rndr::Forge::ImageBarrier Rndr::Forge::ImageBarrier::ToTransferSource(Texture& t
             .before_stages_start_access = PipelineStageAccessBits::TransferRead,
             .old_layout = old_layout,
             .new_layout = ImageLayout::TransferSource,
-            .image = texture};
+            .texture = texture};
 }
 
-Rndr::Forge::ImageBarrier Rndr::Forge::ImageBarrier::ToPresent(Texture& texture, ImageLayout old_layout)
+Rndr::Forge::TextureBarrier Rndr::Forge::TextureBarrier::ToPresent(Texture& texture, ImageLayout old_layout)
 {
     const SourceScope source = ScopeOfLayout(old_layout);
     // The presentation engine synchronizes against the semaphore the present waits on, not against a stage,
@@ -275,40 +275,40 @@ Rndr::Forge::ImageBarrier Rndr::Forge::ImageBarrier::ToPresent(Texture& texture,
             .before_stages_start_access = PipelineStageAccessBits::None,
             .old_layout = old_layout,
             .new_layout = ImageLayout::Present,
-            .image = texture};
+            .texture = texture};
 }
 
-Rndr::Forge::ImageBarrier Rndr::Forge::ImageBarrier::ToColorAttachment(Texture& texture)
+Rndr::Forge::TextureBarrier Rndr::Forge::TextureBarrier::ToColorAttachment(Texture& texture)
 {
     return ToColorAttachment(texture, texture.GetCurrentLayout());
 }
 
-Rndr::Forge::ImageBarrier Rndr::Forge::ImageBarrier::ToDepthStencilAttachment(Texture& texture)
+Rndr::Forge::TextureBarrier Rndr::Forge::TextureBarrier::ToDepthStencilAttachment(Texture& texture)
 {
     return ToDepthStencilAttachment(texture, texture.GetCurrentLayout());
 }
 
-Rndr::Forge::ImageBarrier Rndr::Forge::ImageBarrier::ToShaderRead(Texture& texture, PipelineStageBits reader)
+Rndr::Forge::TextureBarrier Rndr::Forge::TextureBarrier::ToShaderRead(Texture& texture, PipelineStageBits reader)
 {
     return ToShaderRead(texture, texture.GetCurrentLayout(), reader);
 }
 
-Rndr::Forge::ImageBarrier Rndr::Forge::ImageBarrier::ToTransferDestination(Texture& texture)
+Rndr::Forge::TextureBarrier Rndr::Forge::TextureBarrier::ToTransferDestination(Texture& texture)
 {
     return ToTransferDestination(texture, texture.GetCurrentLayout());
 }
 
-Rndr::Forge::ImageBarrier Rndr::Forge::ImageBarrier::ToTransferSource(Texture& texture)
+Rndr::Forge::TextureBarrier Rndr::Forge::TextureBarrier::ToTransferSource(Texture& texture)
 {
     return ToTransferSource(texture, texture.GetCurrentLayout());
 }
 
-Rndr::Forge::ImageBarrier Rndr::Forge::ImageBarrier::ToPresent(Texture& texture)
+Rndr::Forge::TextureBarrier Rndr::Forge::TextureBarrier::ToPresent(Texture& texture)
 {
     return ToPresent(texture, texture.GetCurrentLayout());
 }
 
-Rndr::Forge::ImageBarrier Rndr::Forge::ImageBarrier::To(Texture& texture, ImageLayout old_layout, ImageLayout new_layout)
+Rndr::Forge::TextureBarrier Rndr::Forge::TextureBarrier::To(Texture& texture, ImageLayout old_layout, ImageLayout new_layout)
 {
     switch (new_layout)
     {

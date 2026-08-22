@@ -62,13 +62,13 @@ void Rndr::Forge::ReadBackTexture(const Device& device, DeviceQueue& queue, Text
     }
     const Buffer staging_buffer(device,
                                 {.size = mip_size, .usage = BufferUsageBits::TransferDestination, .host_access = HostAccess::Random});
-    const BufferImageCopyRegion region{
-        .image_subresource = {.mip_level = mip_level, .array_layer_count = desc.array_layer_count}};
+    const BufferTextureCopyRegion region{
+        .texture_subresource = {.mip_level = mip_level, .array_layer_count = desc.array_layer_count}};
     ImmediateSubmit(device, queue,
                     [&](CommandBuffer& command_buffer)
                     {
-                        command_buffer.CmdImageBarrier(ImageBarrier::ToTransferSource(source));
-                        command_buffer.CmdCopyImageToBuffer(source, staging_buffer, {&region, 1});
+                        command_buffer.CmdTextureBarrier(TextureBarrier::ToTransferSource(source));
+                        command_buffer.CmdCopyTextureToBuffer(source, staging_buffer, {&region, 1});
                         if (final_layout != ImageLayout::Undefined && final_layout != ImageLayout::TransferSource)
                         {
                             command_buffer.CmdTransition(source, final_layout);

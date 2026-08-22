@@ -35,25 +35,25 @@ struct SwapChainDesc
     PresentMode present_mode = PresentMode::Fifo;
 };
 
-/** Outcome of acquiring or presenting a swap chain image. */
+/** Outcome of acquiring or presenting a swap chain texture. */
 enum class SwapChainStatus : u8
 {
     /** The operation succeeded and the frame can continue. */
     Success,
     /**
      * The swap chain no longer matched the surface and was recreated. The current frame has to be skipped and
-     * anything the caller cached about the swap chain - image views, image count, extent - is stale.
+     * anything the caller cached about the swap chain - its textures, their count, the extent - is stale.
      */
     OutOfDate
 };
 
-/** Index of no image, returned by AcquireImage when the swap chain went out of date. */
-static constexpr u32 k_invalid_image_index = 0xFFFFFFFF;
+/** Index of no texture, returned by AcquireTexture when the swap chain went out of date. */
+static constexpr u32 k_invalid_texture_index = 0xFFFFFFFF;
 
-struct AcquiredImage
+struct AcquiredTexture
 {
     SwapChainStatus status = SwapChainStatus::OutOfDate;
-    u32 image_index = k_invalid_image_index;
+    u32 texture_index = k_invalid_texture_index;
 };
 
 class Surface
@@ -92,12 +92,12 @@ public:
     SwapChain& operator=(SwapChain&& other) noexcept;
 
     /**
-     * Rebuild the swap chain and its images for the current size of the window, keeping the device, the surface
+     * Rebuild the swap chain and its textures for the current size of the window, keeping the device, the surface
      * and the desc this swap chain was created with. Waits for the device to go idle first, so it is safe to call
      * while previous frames are still in flight.
      *
-     * When the window has no client area, as happens while it is minimized, the images are released and no new swap
-     * chain is created. The object stays usable and the next AcquireImage tries again.
+     * When the window has no client area, as happens while it is minimized, the textures are released and no new swap
+     * chain is created. The object stays usable and the next AcquireTexture tries again.
      */
     void Recreate();
 
@@ -108,49 +108,49 @@ public:
     [[nodiscard]] VkSwapchainKHR GetNativeSwapChain() const { return m_swap_chain; }
     [[nodiscard]] const SwapChainDesc& GetDesc() const { return m_desc; }
     [[nodiscard]] const VkExtent2D& GetExtent() const { return m_extent; }
-    [[nodiscard]] const Texture& GetColorImage(u32 idx) const { return m_color_textures[idx]; }
-    /** The same image, mutable, since a barrier on it moves the layout the texture tracks. */
-    [[nodiscard]] Texture& GetColorImage(u32 idx) { return m_color_textures[idx]; }
-    [[nodiscard]] u32 GetColorImageCount() const { return static_cast<u32>(m_color_textures.GetSize()); }
+    [[nodiscard]] const Texture& GetColorTexture(u32 idx) const { return m_color_textures[idx]; }
+    /** The same texture, mutable, since a barrier on it moves the layout it tracks. */
+    [[nodiscard]] Texture& GetColorTexture(u32 idx) { return m_color_textures[idx]; }
+    [[nodiscard]] u32 GetColorTextureCount() const { return static_cast<u32>(m_color_textures.GetSize()); }
     /**
-     * Whether this swap chain was created with a depth image. A swap chain made with
-     * SwapChainDesc::use_depth off has none, and GetDepthImage then hands back an empty texture. Ask this
+     * Whether this swap chain was created with a depth texture. A swap chain made with
+     * SwapChainDesc::use_depth off has none, and GetDepthTexture then hands back an empty texture. Ask this
      * rather than testing the texture, and leave RenderingDesc::depth_attachment absent when it answers false.
      */
     [[nodiscard]] bool HasDepth() const { return m_depth_texture.IsValid(); }
-    [[nodiscard]] const Texture& GetDepthImage() const { return m_depth_texture; }
-    [[nodiscard]] Texture& GetDepthImage() { return m_depth_texture; }
+    [[nodiscard]] const Texture& GetDepthTexture() const { return m_depth_texture; }
+    [[nodiscard]] Texture& GetDepthTexture() { return m_depth_texture; }
 
     /**
-     * Acquire the next image to render into. The semaphore is signaled once the image is ready to be written to.
+     * Acquire the next texture to render into. The semaphore is signaled once it is ready to be written to.
      *
-     * On SwapChainStatus::OutOfDate the swap chain has been recreated, no image was acquired and the semaphore was
+     * On SwapChainStatus::OutOfDate the swap chain has been recreated, no texture was acquired and the semaphore was
      * not signaled, so the caller has to skip the frame. Because nothing was submitted for that frame, the caller
      * must not reset its per-frame fence before this call returns Success, otherwise the next wait on that fence
      * never completes.
      */
-    AcquiredImage AcquireImage(const Semaphore& semaphore);
+    AcquiredTexture AcquireTexture(const Semaphore& semaphore);
 
     /**
-     * Whether an image is acquired right now, which is true between an AcquireImage that returned Success
+     * Whether a texture is acquired right now, which is true between an AcquireTexture that returned Success
      * and the Present that hands it back.
      */
-    [[nodiscard]] bool HasAcquiredImage() const { return m_current_image_index != k_invalid_image_index; }
+    [[nodiscard]] bool HasAcquiredTexture() const { return m_current_texture_index != k_invalid_texture_index; }
 
-    /** Index the last AcquireImage handed out, or k_invalid_image_index when none is acquired. */
-    [[nodiscard]] u32 GetCurrentImageIndex() const { return m_current_image_index; }
+    /** Index the last AcquireTexture handed out, or k_invalid_texture_index when none is acquired. */
+    [[nodiscard]] u32 GetCurrentTextureIndex() const { return m_current_texture_index; }
 
     /**
-     * The acquired image, which is the one to render into this frame. Throws when none is acquired, since
-     * there is no image to hand back rather than a wrong one.
+     * The acquired texture, which is the one to render into this frame. Throws when none is acquired, since
+     * there is no texture to hand back rather than a wrong one.
      */
-    [[nodiscard]] const Texture& GetCurrentColorImage() const;
-    [[nodiscard]] Texture& GetCurrentColorImage();
+    [[nodiscard]] const Texture& GetCurrentColorTexture() const;
+    [[nodiscard]] Texture& GetCurrentColorTexture();
 
     /**
-     * Present the acquired image once the given semaphore is signaled. Which image that is the swap chain
-     * remembers from AcquireImage, so nothing has to be threaded through the frame; presenting with none
-     * acquired throws. The image is no longer acquired afterwards, whatever the outcome.
+     * Present the acquired texture once the given semaphore is signaled. Which texture that is the swap chain
+     * remembers from AcquireTexture, so nothing has to be threaded through the frame; presenting with none
+     * acquired throws. The texture is no longer acquired afterwards, whatever the outcome.
      *
      * Returns SwapChainStatus::OutOfDate when the swap chain stopped matching the surface, in which case it has
      * already been recreated and the caller has to refresh anything it cached about it.
@@ -158,10 +158,10 @@ public:
     SwapChainStatus Present(DeviceQueue& queue, const Semaphore& semaphore);
 
 private:
-    /** Destroy the color images, their views and the depth image, leaving the swap chain handle alone. */
-    void DestroyImages();
+    /** Destroy the color textures, their views and the depth texture, leaving the swap chain handle alone. */
+    void DestroyTextures();
 
-    /** Destroy the swap chain handle, leaving the images alone. Does nothing when there is no swap chain. */
+    /** Destroy the swap chain handle, leaving the textures alone. Does nothing when there is no swap chain. */
     void DestroySwapChain();
 
     SwapChainDesc m_desc;
@@ -171,8 +171,8 @@ private:
     Opal::Ref<const Surface> m_surface;
     Opal::DynamicArray<Texture> m_color_textures;
     Texture m_depth_texture;
-    /** The image AcquireImage handed out, until Present gives it back. */
-    u32 m_current_image_index = k_invalid_image_index;
+    /** The texture AcquireTexture handed out, until Present gives it back. */
+    u32 m_current_texture_index = k_invalid_texture_index;
 };
 
 }  // namespace Rndr::Forge

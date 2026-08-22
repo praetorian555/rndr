@@ -136,7 +136,7 @@ private:
 
 /**
  * A dependency between two pieces of work that covers all memory, without naming a resource. Use it when the
- * work on either side touches more resources than it is worth listing, and a buffer or image barrier when it
+ * work on either side touches more resources than it is worth listing, and a buffer or texture barrier when it
  * does not - naming the resource lets the driver narrow what it has to flush.
  */
 struct MemoryBarrier
@@ -182,7 +182,7 @@ struct BufferBarrier : Opal::ClonableBase<BufferBarrier>
     [[nodiscard]] static BufferBarrier ReadThenWrite(const Buffer& buffer, PipelineStageBits reader, PipelineStageBits writer);
 };
 
-struct ImageBarrier : Opal::ClonableBase<ImageBarrier>
+struct TextureBarrier : Opal::ClonableBase<TextureBarrier>
 {
     PipelineStageBits stages_must_finish = PipelineStageBits::None;
     PipelineStageAccessBits stages_must_finish_access = PipelineStageAccessBits::None;
@@ -197,12 +197,12 @@ struct ImageBarrier : Opal::ClonableBase<ImageBarrier>
      */
     u32 source_queue_family = k_ignored_queue_family;
     u32 destination_queue_family = k_ignored_queue_family;
-    Opal::Ref<Texture> image;
+    Opal::Ref<Texture> texture;
     /** The whole texture by default - every mip level, every array layer, the aspect of its format. */
     ImageSubresourceRange subresource_range;
 
     OPAL_CLONE_FIELDS(stages_must_finish, stages_must_finish_access, before_stages_start, before_stages_start_access, old_layout,
-                      new_layout, source_queue_family, destination_queue_family, image, subresource_range);
+                      new_layout, source_queue_family, destination_queue_family, texture, subresource_range);
 
     /**
      * The standard transitions, spelled out. Each covers the whole texture and picks the stages and the
@@ -220,37 +220,37 @@ struct ImageBarrier : Opal::ClonableBase<ImageBarrier>
      */
 
     /** Rendered into as a color attachment. */
-    [[nodiscard]] static ImageBarrier ToColorAttachment(Texture& texture);
-    [[nodiscard]] static ImageBarrier ToColorAttachment(Texture& texture, ImageLayout old_layout);
+    [[nodiscard]] static TextureBarrier ToColorAttachment(Texture& texture);
+    [[nodiscard]] static TextureBarrier ToColorAttachment(Texture& texture, ImageLayout old_layout);
 
     /** Rendered into as a depth or stencil attachment. */
-    [[nodiscard]] static ImageBarrier ToDepthStencilAttachment(Texture& texture);
-    [[nodiscard]] static ImageBarrier ToDepthStencilAttachment(Texture& texture, ImageLayout old_layout);
+    [[nodiscard]] static TextureBarrier ToDepthStencilAttachment(Texture& texture);
+    [[nodiscard]] static TextureBarrier ToDepthStencilAttachment(Texture& texture, ImageLayout old_layout);
 
     /** Sampled in a shader. The reader defaults to the fragment stage. */
-    [[nodiscard]] static ImageBarrier ToShaderRead(Texture& texture, PipelineStageBits reader = PipelineStageBits::FragmentShader);
-    [[nodiscard]] static ImageBarrier ToShaderRead(Texture& texture, ImageLayout old_layout,
-                                                   PipelineStageBits reader = PipelineStageBits::FragmentShader);
+    [[nodiscard]] static TextureBarrier ToShaderRead(Texture& texture, PipelineStageBits reader = PipelineStageBits::FragmentShader);
+    [[nodiscard]] static TextureBarrier ToShaderRead(Texture& texture, ImageLayout old_layout,
+                                                     PipelineStageBits reader = PipelineStageBits::FragmentShader);
 
     /** Written by a transfer command, which is how a texture is uploaded. */
-    [[nodiscard]] static ImageBarrier ToTransferDestination(Texture& texture);
-    [[nodiscard]] static ImageBarrier ToTransferDestination(Texture& texture, ImageLayout old_layout);
+    [[nodiscard]] static TextureBarrier ToTransferDestination(Texture& texture);
+    [[nodiscard]] static TextureBarrier ToTransferDestination(Texture& texture, ImageLayout old_layout);
 
     /** Read by a transfer command, which is how a texture is read back or has its mips generated. */
-    [[nodiscard]] static ImageBarrier ToTransferSource(Texture& texture);
-    [[nodiscard]] static ImageBarrier ToTransferSource(Texture& texture, ImageLayout old_layout);
+    [[nodiscard]] static TextureBarrier ToTransferSource(Texture& texture);
+    [[nodiscard]] static TextureBarrier ToTransferSource(Texture& texture, ImageLayout old_layout);
 
     /**
      * Read and written in a shader without a sampler, which is the layout a storage image is bound in. The
      * accessing stage defaults to compute, since that is where most of them are written.
      */
-    [[nodiscard]] static ImageBarrier ToGeneral(Texture& texture, PipelineStageBits accessor = PipelineStageBits::ComputeShader);
-    [[nodiscard]] static ImageBarrier ToGeneral(Texture& texture, ImageLayout old_layout,
-                                                PipelineStageBits accessor = PipelineStageBits::ComputeShader);
+    [[nodiscard]] static TextureBarrier ToGeneral(Texture& texture, PipelineStageBits accessor = PipelineStageBits::ComputeShader);
+    [[nodiscard]] static TextureBarrier ToGeneral(Texture& texture, ImageLayout old_layout,
+                                                  PipelineStageBits accessor = PipelineStageBits::ComputeShader);
 
     /** Handed to the presentation engine. */
-    [[nodiscard]] static ImageBarrier ToPresent(Texture& texture);
-    [[nodiscard]] static ImageBarrier ToPresent(Texture& texture, ImageLayout old_layout);
+    [[nodiscard]] static TextureBarrier ToPresent(Texture& texture);
+    [[nodiscard]] static TextureBarrier ToPresent(Texture& texture, ImageLayout old_layout);
 
     /**
      * The preset for a destination layout that is not known while writing the call - a function handed the
@@ -262,7 +262,7 @@ struct ImageBarrier : Opal::ClonableBase<ImageBarrier>
      * middle is the source and the layout at the end is the destination. CommandBuffer::CmdTransition is the
      * short form - it is this preset over the tracked layout, recorded.
      */
-    [[nodiscard]] static ImageBarrier To(Texture& texture, ImageLayout old_layout, ImageLayout new_layout);
+    [[nodiscard]] static TextureBarrier To(Texture& texture, ImageLayout old_layout, ImageLayout new_layout);
 };
 
 }  // namespace Rndr::Forge

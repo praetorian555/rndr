@@ -69,22 +69,22 @@ void Rndr::Forge::CommandBuffer::Reset() const
     }
 }
 
-static VkImageMemoryBarrier2 ToVkImageBarrier(const Rndr::Forge::ImageBarrier& image_barrier)
+static VkImageMemoryBarrier2 ToVkImageBarrier(const Rndr::Forge::TextureBarrier& texture_barrier)
 {
-    const Rndr::Forge::Texture& texture = image_barrier.image.Get();
-    const Rndr::Forge::ImageSubresourceRange& range = image_barrier.subresource_range;
+    const Rndr::Forge::Texture& texture = texture_barrier.texture.Get();
+    const Rndr::Forge::ImageSubresourceRange& range = texture_barrier.subresource_range;
     return {
         .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
-        .srcStageMask = static_cast<VkPipelineStageFlags2>(image_barrier.stages_must_finish),
-        .srcAccessMask = static_cast<VkAccessFlags2>(image_barrier.stages_must_finish_access),
-        .dstStageMask = static_cast<VkPipelineStageFlags2>(image_barrier.before_stages_start),
-        .dstAccessMask = static_cast<VkAccessFlags2>(image_barrier.before_stages_start_access),
-        .oldLayout = static_cast<VkImageLayout>(image_barrier.old_layout),
-        .newLayout = static_cast<VkImageLayout>(image_barrier.new_layout),
+        .srcStageMask = static_cast<VkPipelineStageFlags2>(texture_barrier.stages_must_finish),
+        .srcAccessMask = static_cast<VkAccessFlags2>(texture_barrier.stages_must_finish_access),
+        .dstStageMask = static_cast<VkPipelineStageFlags2>(texture_barrier.before_stages_start),
+        .dstAccessMask = static_cast<VkAccessFlags2>(texture_barrier.before_stages_start_access),
+        .oldLayout = static_cast<VkImageLayout>(texture_barrier.old_layout),
+        .newLayout = static_cast<VkImageLayout>(texture_barrier.new_layout),
         // Ignored unless the caller is transferring ownership. Leaving these zero would name family zero,
         // which a barrier on an image created with VK_SHARING_MODE_CONCURRENT is not allowed to do.
-        .srcQueueFamilyIndex = image_barrier.source_queue_family,
-        .dstQueueFamilyIndex = image_barrier.destination_queue_family,
+        .srcQueueFamilyIndex = texture_barrier.source_queue_family,
+        .dstQueueFamilyIndex = texture_barrier.destination_queue_family,
         .image = texture.GetNativeImage(),
         .subresourceRange = {.aspectMask = static_cast<VkImageAspectFlags>(range.ResolveAspectMask(texture.GetDesc().format)),
                              .baseMipLevel = range.first_mip_level,
@@ -162,14 +162,14 @@ Rndr::Forge::PipelineStageBits CollectStages(Opal::ArrayView<const Barrier> barr
 
 void Rndr::Forge::CommandBuffer::CmdBarriers(const Barriers& barriers)
 {
-    if (barriers.memory.IsEmpty() && barriers.buffer.IsEmpty() && barriers.image.IsEmpty())
+    if (barriers.memory.IsEmpty() && barriers.buffer.IsEmpty() && barriers.texture.IsEmpty())
     {
         return;
     }
     // The task and mesh stages belong to an extension, and naming one the device did not enable is a
     // validation error rather than something the driver ignores.
     const PipelineStageBits all_stages =
-        CollectStages(barriers.memory) | CollectStages(barriers.buffer) | CollectStages(barriers.image);
+        CollectStages(barriers.memory) | CollectStages(barriers.buffer) | CollectStages(barriers.texture);
     if (!!(all_stages & (PipelineStageBits::TaskShader | PipelineStageBits::MeshShader)) &&
         !m_device->IsExtensionEnabled(VK_EXT_MESH_SHADER_EXTENSION_NAME))
     {
@@ -187,10 +187,10 @@ void Rndr::Forge::CommandBuffer::CmdBarriers(const Barriers& barriers)
     {
         buffer_barriers[i] = ToVkBufferBarrier(barriers.buffer[i]);
     }
-    BarrierBatch<VkImageMemoryBarrier2, k_in_place_count> image_barriers(static_cast<i32>(barriers.image.GetSize()));
-    for (i32 i = 0; i < barriers.image.GetSize(); ++i)
+    BarrierBatch<VkImageMemoryBarrier2, k_in_place_count> image_barriers(static_cast<i32>(barriers.texture.GetSize()));
+    for (i32 i = 0; i < barriers.texture.GetSize(); ++i)
     {
-        image_barriers[i] = ToVkImageBarrier(barriers.image[i]);
+        image_barriers[i] = ToVkImageBarrier(barriers.texture[i]);
     }
 
     const VkDependencyInfo dependency_info{.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO,
@@ -203,22 +203,22 @@ void Rndr::Forge::CommandBuffer::CmdBarriers(const Barriers& barriers)
                                            .pImageMemoryBarriers = image_barriers.GetData()};
     vkCmdPipelineBarrier2(m_native_command_buffer, &dependency_info);
 
-    // Vulkan keeps no record of what layout an image ended up in, so this is where Forge's own is kept up to
+    // Vulkan keeps no record of what layout a texture ended up in, so this is where Forge's own is kept up to
     // date. Recorded rather than executed, which is what makes it the caller's job to record in order.
-    for (const ImageBarrier& barrier : barriers.image)
+    for (const TextureBarrier& barrier : barriers.texture)
     {
-        barrier.image.Get().SetCurrentLayout(barrier.subresource_range, barrier.new_layout);
+        barrier.texture.Get().SetCurrentLayout(barrier.subresource_range, barrier.new_layout);
     }
 }
 
-void Rndr::Forge::CommandBuffer::CmdImageBarrier(const ImageBarrier& image_barrier)
+void Rndr::Forge::CommandBuffer::CmdTextureBarrier(const TextureBarrier& texture_barrier)
 {
-    CmdBarriers({.image = {&image_barrier, 1}});
+    CmdBarriers({.texture = {&texture_barrier, 1}});
 }
 
-void Rndr::Forge::CommandBuffer::CmdImageBarriers(Opal::ArrayView<const ImageBarrier> image_barriers)
+void Rndr::Forge::CommandBuffer::CmdTextureBarriers(Opal::ArrayView<const TextureBarrier> texture_barriers)
 {
-    CmdBarriers({.image = image_barriers});
+    CmdBarriers({.texture = texture_barriers});
 }
 
 void Rndr::Forge::CommandBuffer::CmdBufferBarrier(const BufferBarrier& buffer_barrier)
@@ -238,7 +238,7 @@ void Rndr::Forge::CommandBuffer::CmdMemoryBarrier(const MemoryBarrier& memory_ba
 
 void Rndr::Forge::CommandBuffer::CmdTransition(Texture& texture, ImageLayout new_layout)
 {
-    CmdImageBarrier(ImageBarrier::To(texture, texture.GetCurrentLayout(), new_layout));
+    CmdTextureBarrier(TextureBarrier::To(texture, texture.GetCurrentLayout(), new_layout));
 }
 
 /** The extent of one mip level of a texture, which is the base extent halved once per level, floored at one. */
@@ -340,11 +340,11 @@ static VkExtent3D ValidateSubresource(const Rndr::Forge::Texture& texture, const
 }
 
 /**
- * Resolve one image side of a copy: check that the subresource exists on the texture, fill a zero extent in
+ * Resolve the texture side of a copy: check that the subresource exists on the texture, fill a zero extent in
  * with the rest of the mip level, and check that the box fits inside it.
  */
-static VkExtent3D ResolveImageRegion(const Rndr::Forge::Texture& texture, const Rndr::Forge::ImageSubresourceLayers& subresource,
-                                     const Rndr::Vector3i& offset, const Rndr::Vector3i& extent, const char* role, const char* what)
+static VkExtent3D ResolveTextureRegion(const Rndr::Forge::Texture& texture, const Rndr::Forge::ImageSubresourceLayers& subresource,
+                                       const Rndr::Vector3i& offset, const Rndr::Vector3i& extent, const char* role, const char* what)
 {
     using namespace Rndr;
     const VkExtent3D mip_extent = ValidateSubresource(texture, subresource, role, what);
@@ -416,11 +416,11 @@ static VkImageSubresourceLayers ToVkSubresourceLayers(const Rndr::Forge::ImageSu
  * describe the copy the same way, so they share this.
  */
 static VkBufferImageCopy ToVkBufferImageCopy(const Rndr::Forge::Buffer& buffer, const Rndr::Forge::Texture& texture,
-                                             const Rndr::Forge::BufferImageCopyRegion& region, const char* buffer_role, const char* what)
+                                             const Rndr::Forge::BufferTextureCopyRegion& region, const char* buffer_role, const char* what)
 {
     using namespace Rndr;
-    const VkExtent3D extent = ResolveImageRegion(texture, region.image_subresource, region.image_offset, region.image_extent, "target",
-                                                 what);
+    const VkExtent3D extent =
+        ResolveTextureRegion(texture, region.texture_subresource, region.texture_offset, region.texture_extent, "target", what);
     if (region.buffer_offset % 4 != 0)
     {
         throw Opal::Exception(Opal::StringEx(what) + " buffer offset must be a multiple of 4!");
@@ -431,16 +431,16 @@ static VkBufferImageCopy ToVkBufferImageCopy(const Rndr::Forge::Buffer& buffer, 
     if (pixel_size != 0)
     {
         const u64 row_length = region.buffer_row_length != 0 ? region.buffer_row_length : extent.width;
-        const u64 image_height = region.buffer_image_height != 0 ? region.buffer_image_height : extent.height;
+        const u64 image_height = region.buffer_layer_height != 0 ? region.buffer_layer_height : extent.height;
         const u64 region_size = static_cast<u64>(pixel_size) * row_length * image_height * extent.depth *
-                                region.image_subresource.array_layer_count;
+                                region.texture_subresource.array_layer_count;
         ValidateBufferRange(buffer, region.buffer_offset, region_size, buffer_role, what);
     }
     return {.bufferOffset = region.buffer_offset,
             .bufferRowLength = region.buffer_row_length,
-            .bufferImageHeight = region.buffer_image_height,
-            .imageSubresource = ToVkSubresourceLayers(region.image_subresource, texture.GetDesc().format),
-            .imageOffset = {.x = region.image_offset.x, .y = region.image_offset.y, .z = region.image_offset.z},
+            .bufferImageHeight = region.buffer_layer_height,
+            .imageSubresource = ToVkSubresourceLayers(region.texture_subresource, texture.GetDesc().format),
+            .imageOffset = {.x = region.texture_offset.x, .y = region.texture_offset.y, .z = region.texture_offset.z},
             .imageExtent = extent};
 }
 
@@ -479,76 +479,78 @@ void Rndr::Forge::CommandBuffer::CmdCopyBuffer(const Buffer& source, const Buffe
     CmdCopyBuffer(source, destination, {&region, 1});
 }
 
-void Rndr::Forge::CommandBuffer::CmdCopyBufferToImage(const Buffer& buffer, Texture& texture,
-                                                      Opal::ArrayView<const BufferImageCopyRegion> regions)
+void Rndr::Forge::CommandBuffer::CmdCopyBufferToTexture(const Buffer& buffer, Texture& texture,
+                                                        Opal::ArrayView<const BufferTextureCopyRegion> regions)
 {
     if (regions.IsEmpty())
     {
         return;
     }
-    ValidateBufferUsage(buffer, BufferUsageBits::TransferSource, "source", "Buffer to image copy");
-    ValidateTextureUsage(texture, TextureUsageBits::TransferDestination, "destination", "Buffer to image copy");
+    ValidateBufferUsage(buffer, BufferUsageBits::TransferSource, "source", "Buffer to texture copy");
+    ValidateTextureUsage(texture, TextureUsageBits::TransferDestination, "destination", "Buffer to texture copy");
     Opal::DynamicArray<VkBufferImageCopy> copy_regions(regions.GetSize());
     for (i32 i = 0; i < regions.GetSize(); ++i)
     {
-        copy_regions[i] = ToVkBufferImageCopy(buffer, texture, regions[i], "source", "Buffer to image copy");
+        copy_regions[i] = ToVkBufferImageCopy(buffer, texture, regions[i], "source", "Buffer to texture copy");
     }
-    const ImageLayout texture_layout =
-        ResolveTransferLayout(texture, regions, &BufferImageCopyRegion::image_subresource, false, "destination", "Buffer to image copy");
+    const ImageLayout texture_layout = ResolveTransferLayout(texture, regions, &BufferTextureCopyRegion::texture_subresource, false,
+                                                             "destination", "Buffer to texture copy");
     vkCmdCopyBufferToImage(m_native_command_buffer, buffer.GetNativeBuffer(), texture.GetNativeImage(),
                            static_cast<VkImageLayout>(texture_layout), static_cast<u32>(copy_regions.GetSize()), copy_regions.GetData());
 }
 
-void Rndr::Forge::CommandBuffer::CmdCopyBufferToImage(const Buffer& buffer, const Bitmap& bitmap, Texture& texture)
+void Rndr::Forge::CommandBuffer::CmdCopyBufferToTexture(const Buffer& buffer, const Bitmap& bitmap, Texture& texture)
 {
     // One region per mip level, laid out the way the bitmap packs them. The aspect and the extent come from the
     // texture through the general path below, so this no longer assumes a color format.
-    Opal::DynamicArray<BufferImageCopyRegion> regions(bitmap.GetMipCount());
+    Opal::DynamicArray<BufferTextureCopyRegion> regions(bitmap.GetMipCount());
     for (u32 mip_level = 0; mip_level < bitmap.GetMipCount(); ++mip_level)
     {
         regions[mip_level] = {.buffer_offset = bitmap.GetMipLevelOffset(static_cast<i32>(mip_level)),
-                              .image_subresource = {.mip_level = mip_level}};
+                              .texture_subresource = {.mip_level = mip_level}};
     }
-    CmdCopyBufferToImage(buffer, texture, regions);
+    CmdCopyBufferToTexture(buffer, texture, regions);
 }
 
-void Rndr::Forge::CommandBuffer::CmdCopyImageToBuffer(const Texture& texture, const Buffer& buffer,
-                                                      Opal::ArrayView<const BufferImageCopyRegion> regions)
+void Rndr::Forge::CommandBuffer::CmdCopyTextureToBuffer(const Texture& texture, const Buffer& buffer,
+                                                        Opal::ArrayView<const BufferTextureCopyRegion> regions)
 {
     if (regions.IsEmpty())
     {
         return;
     }
-    ValidateTextureUsage(texture, TextureUsageBits::TransferSource, "source", "Image to buffer copy");
-    ValidateBufferUsage(buffer, BufferUsageBits::TransferDestination, "destination", "Image to buffer copy");
+    ValidateTextureUsage(texture, TextureUsageBits::TransferSource, "source", "Texture to buffer copy");
+    ValidateBufferUsage(buffer, BufferUsageBits::TransferDestination, "destination", "Texture to buffer copy");
     Opal::DynamicArray<VkBufferImageCopy> copy_regions(regions.GetSize());
     for (i32 i = 0; i < regions.GetSize(); ++i)
     {
-        copy_regions[i] = ToVkBufferImageCopy(buffer, texture, regions[i], "destination", "Image to buffer copy");
+        copy_regions[i] = ToVkBufferImageCopy(buffer, texture, regions[i], "destination", "Texture to buffer copy");
     }
     const ImageLayout texture_layout =
-        ResolveTransferLayout(texture, regions, &BufferImageCopyRegion::image_subresource, true, "source", "Image to buffer copy");
+        ResolveTransferLayout(texture, regions, &BufferTextureCopyRegion::texture_subresource, true, "source", "Texture to buffer copy");
     vkCmdCopyImageToBuffer(m_native_command_buffer, texture.GetNativeImage(), static_cast<VkImageLayout>(texture_layout),
                            buffer.GetNativeBuffer(), static_cast<u32>(copy_regions.GetSize()), copy_regions.GetData());
 }
 
-void Rndr::Forge::CommandBuffer::CmdCopyImage(const Texture& source, Texture& destination, Opal::ArrayView<const ImageCopyRegion> regions)
+void Rndr::Forge::CommandBuffer::CmdCopyTexture(const Texture& source, Texture& destination,
+                                                Opal::ArrayView<const TextureCopyRegion> regions)
 {
     if (regions.IsEmpty())
     {
         return;
     }
-    ValidateTextureUsage(source, TextureUsageBits::TransferSource, "source", "Image copy");
-    ValidateTextureUsage(destination, TextureUsageBits::TransferDestination, "destination", "Image copy");
+    ValidateTextureUsage(source, TextureUsageBits::TransferSource, "source", "Texture copy");
+    ValidateTextureUsage(destination, TextureUsageBits::TransferDestination, "destination", "Texture copy");
     Opal::DynamicArray<VkImageCopy> copy_regions(regions.GetSize());
     for (i32 i = 0; i < regions.GetSize(); ++i)
     {
-        const ImageCopyRegion& region = regions[i];
+        const TextureCopyRegion& region = regions[i];
         // The extent is resolved against the source and then checked against the destination, so a zero extent
         // means the rest of the source mip level and still has to fit where it is going.
-        const VkExtent3D extent = ResolveImageRegion(source, region.source, region.source_offset, region.extent, "source", "Image copy");
+        const VkExtent3D extent =
+            ResolveTextureRegion(source, region.source, region.source_offset, region.extent, "source", "Texture copy");
         const Vector3i resolved_extent{static_cast<i32>(extent.width), static_cast<i32>(extent.height), static_cast<i32>(extent.depth)};
-        ResolveImageRegion(destination, region.destination, region.destination_offset, resolved_extent, "destination", "Image copy");
+        ResolveTextureRegion(destination, region.destination, region.destination_offset, resolved_extent, "destination", "Texture copy");
         copy_regions[i] = {
             .srcSubresource = ToVkSubresourceLayers(region.source, source.GetDesc().format),
             .srcOffset = {.x = region.source_offset.x, .y = region.source_offset.y, .z = region.source_offset.z},
@@ -556,9 +558,9 @@ void Rndr::Forge::CommandBuffer::CmdCopyImage(const Texture& source, Texture& de
             .dstOffset = {.x = region.destination_offset.x, .y = region.destination_offset.y, .z = region.destination_offset.z},
             .extent = extent};
     }
-    const ImageLayout source_layout = ResolveTransferLayout(source, regions, &ImageCopyRegion::source, true, "source", "Image copy");
+    const ImageLayout source_layout = ResolveTransferLayout(source, regions, &TextureCopyRegion::source, true, "source", "Texture copy");
     const ImageLayout destination_layout =
-        ResolveTransferLayout(destination, regions, &ImageCopyRegion::destination, false, "destination", "Image copy");
+        ResolveTransferLayout(destination, regions, &TextureCopyRegion::destination, false, "destination", "Texture copy");
     vkCmdCopyImage(m_native_command_buffer, source.GetNativeImage(), static_cast<VkImageLayout>(source_layout),
                    destination.GetNativeImage(), static_cast<VkImageLayout>(destination_layout),
                    static_cast<u32>(copy_regions.GetSize()), copy_regions.GetData());
@@ -577,15 +579,15 @@ static VkFilter ToVkFilter(Rndr::ImageFilter filter)
     }
 }
 
-void Rndr::Forge::CommandBuffer::CmdBlitImage(const Texture& source, Texture& destination, Opal::ArrayView<const ImageBlitRegion> regions,
-                                              ImageFilter filter)
+void Rndr::Forge::CommandBuffer::CmdBlitTexture(const Texture& source, Texture& destination,
+                                                Opal::ArrayView<const TextureBlitRegion> regions, ImageFilter filter)
 {
     if (regions.IsEmpty())
     {
         return;
     }
-    ValidateTextureUsage(source, TextureUsageBits::TransferSource, "source", "Image blit");
-    ValidateTextureUsage(destination, TextureUsageBits::TransferDestination, "destination", "Image blit");
+    ValidateTextureUsage(source, TextureUsageBits::TransferSource, "source", "Texture blit");
+    ValidateTextureUsage(destination, TextureUsageBits::TransferDestination, "destination", "Texture blit");
     // Blitting is per format and per side, and a format that cannot be blitted is a driver-specific surprise
     // rather than a mistake in the calling code, so it is worth naming here instead of at the validation layer.
     const PhysicalDevice& physical_device = m_device->GetPhysicalDevice();
@@ -604,17 +606,17 @@ void Rndr::Forge::CommandBuffer::CmdBlitImage(const Texture& source, Texture& de
     Opal::DynamicArray<VkImageBlit> blit_regions(regions.GetSize());
     for (i32 i = 0; i < regions.GetSize(); ++i)
     {
-        const ImageBlitRegion& region = regions[i];
+        const TextureBlitRegion& region = regions[i];
         VkImageBlit blit{.srcSubresource = ToVkSubresourceLayers(region.source, source.GetDesc().format),
                          .dstSubresource = ToVkSubresourceLayers(region.destination, destination.GetDesc().format)};
-        ResolveBlitBox(source, region.source, region.source_offset, region.source_extent, "source", "Image blit", blit.srcOffsets);
-        ResolveBlitBox(destination, region.destination, region.destination_offset, region.destination_extent, "destination", "Image blit",
+        ResolveBlitBox(source, region.source, region.source_offset, region.source_extent, "source", "Texture blit", blit.srcOffsets);
+        ResolveBlitBox(destination, region.destination, region.destination_offset, region.destination_extent, "destination", "Texture blit",
                        blit.dstOffsets);
         blit_regions[i] = blit;
     }
-    const ImageLayout source_layout = ResolveTransferLayout(source, regions, &ImageBlitRegion::source, true, "source", "Image blit");
+    const ImageLayout source_layout = ResolveTransferLayout(source, regions, &TextureBlitRegion::source, true, "source", "Texture blit");
     const ImageLayout destination_layout =
-        ResolveTransferLayout(destination, regions, &ImageBlitRegion::destination, false, "destination", "Image blit");
+        ResolveTransferLayout(destination, regions, &TextureBlitRegion::destination, false, "destination", "Texture blit");
     vkCmdBlitImage(m_native_command_buffer, source.GetNativeImage(), static_cast<VkImageLayout>(source_layout),
                    destination.GetNativeImage(), static_cast<VkImageLayout>(destination_layout),
                    static_cast<u32>(blit_regions.GetSize()), blit_regions.GetData(), ToVkFilter(filter));
@@ -635,31 +637,31 @@ void Rndr::Forge::CommandBuffer::CmdGenerateMips(Texture& texture, ImageLayout f
     // data - it becomes a source one level at a time inside the loop.
     if (texture.GetCurrentLayout() != ImageLayout::TransferDestination)
     {
-        CmdImageBarrier(ImageBarrier::ToTransferDestination(texture));
+        CmdTextureBarrier(TextureBarrier::ToTransferDestination(texture));
     }
     for (u32 level = 1; level < desc.mip_level_count; ++level)
     {
-        ImageBarrier to_source = ImageBarrier::ToTransferSource(texture, ImageLayout::TransferDestination);
+        TextureBarrier to_source = TextureBarrier::ToTransferSource(texture, ImageLayout::TransferDestination);
         to_source.subresource_range.first_mip_level = level - 1;
         to_source.subresource_range.mip_level_count = 1;
-        CmdImageBarrier(to_source);
+        CmdTextureBarrier(to_source);
 
         // Both extents are left at zero, which means the whole of each level, so the blit halves as it goes.
         // Every array layer in the one region: the count defaults to one, which would fill the mip chain of
         // layer zero and leave the rest of an array texture holding whatever it was created with.
-        const ImageBlitRegion region{.source = {.mip_level = level - 1, .array_layer_count = desc.array_layer_count},
-                                     .destination = {.mip_level = level, .array_layer_count = desc.array_layer_count}};
-        CmdBlitImage(texture, texture, {&region, 1});
+        const TextureBlitRegion region{.source = {.mip_level = level - 1, .array_layer_count = desc.array_layer_count},
+                                       .destination = {.mip_level = level, .array_layer_count = desc.array_layer_count}};
+        CmdBlitTexture(texture, texture, {&region, 1});
     }
     // Every level but the last is a transfer source by now, and the last one is still a transfer destination.
-    ImageBarrier sources_to_final = ImageBarrier::To(texture, ImageLayout::TransferSource, final_layout);
+    TextureBarrier sources_to_final = TextureBarrier::To(texture, ImageLayout::TransferSource, final_layout);
     sources_to_final.subresource_range.first_mip_level = 0;
     sources_to_final.subresource_range.mip_level_count = desc.mip_level_count - 1;
-    ImageBarrier last_to_final = ImageBarrier::To(texture, ImageLayout::TransferDestination, final_layout);
+    TextureBarrier last_to_final = TextureBarrier::To(texture, ImageLayout::TransferDestination, final_layout);
     last_to_final.subresource_range.first_mip_level = desc.mip_level_count - 1;
     last_to_final.subresource_range.mip_level_count = 1;
-    const ImageBarrier final_barriers[2] = {sources_to_final.Clone(), last_to_final.Clone()};
-    CmdImageBarriers({final_barriers, 2});
+    const TextureBarrier final_barriers[2] = {sources_to_final.Clone(), last_to_final.Clone()};
+    CmdTextureBarriers({final_barriers, 2});
 }
 
 static VkAttachmentLoadOp ToVkLoadOp(Rndr::Forge::AttachmentLoadOperation op)
@@ -731,7 +733,7 @@ static VkRenderingAttachmentInfo ToVkRenderingAttachment(const Rndr::Forge::Rend
         const char* allowed = is_color ? "ColorAttachment or General" : "DepthStencilAttachment, DepthStencilReadOnly or General";
         throw Opal::Exception(Opal::StringEx("Rendering needs the ") + role + " attachment texture in the " + allowed +
                               " layout, and it is in " + Forge::ImageLayoutToString(layout) +
-                              "! Transition it before the pass - CmdTransition, or the matching ImageBarrier preset.");
+                              "! Transition it before the pass - CmdTransition, or the matching TextureBarrier preset.");
     }
 
     VkRenderingAttachmentInfo info{
@@ -774,7 +776,7 @@ void Rndr::Forge::CommandBuffer::CmdBeginRendering(const RenderingDesc& desc)
     }
 
     // The same shape as the depth attachment, and separate from it on purpose: Vulkan takes the two sides
-    // apart even when one image carries both, so a combined format names the same texture twice.
+    // apart even when one texture carries both, so a combined format names the same texture twice.
     const bool has_stencil = desc.stencil_attachment.HasValue();
     VkRenderingAttachmentInfo stencil_attachment{};
     if (has_stencil)

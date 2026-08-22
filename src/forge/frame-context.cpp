@@ -20,7 +20,7 @@ Rndr::Forge::FrameContext::FrameContext(const Device& device, SwapChain& swap_ch
         device, {.type = SemaphoreType::Timeline, .initial_value = static_cast<u64>(m_desc.frames_in_flight)});
     for (i32 frame = 0; frame < m_desc.frames_in_flight; ++frame)
     {
-        m_image_ready_semaphores.EmplaceBack(device);
+        m_texture_ready_semaphores.EmplaceBack(device);
         m_command_buffers.EmplaceBack(device, graphics_queue);
     }
     MatchRenderSemaphoresToSwapChain();
@@ -38,7 +38,7 @@ Rndr::Forge::FrameContext::FrameContext(FrameContext&& other) noexcept
       m_graphics_queue(std::move(other.m_graphics_queue)),
       m_present_queue(std::move(other.m_present_queue)),
       m_frame_timeline(std::move(other.m_frame_timeline)),
-      m_image_ready_semaphores(std::move(other.m_image_ready_semaphores)),
+      m_texture_ready_semaphores(std::move(other.m_texture_ready_semaphores)),
       m_command_buffers(std::move(other.m_command_buffers)),
       m_render_finished_semaphores(std::move(other.m_render_finished_semaphores)),
       m_frames_submitted(other.m_frames_submitted),
@@ -49,7 +49,7 @@ Rndr::Forge::FrameContext::FrameContext(FrameContext&& other) noexcept
     other.m_graphics_queue = nullptr;
     other.m_present_queue = nullptr;
     // A moved-from Semaphore is already empty, so m_frame_timeline needs nothing here.
-    other.m_image_ready_semaphores.Clear();
+    other.m_texture_ready_semaphores.Clear();
     other.m_command_buffers.Clear();
     other.m_render_finished_semaphores.Clear();
     other.m_frames_submitted = 0;
@@ -67,7 +67,7 @@ Rndr::Forge::FrameContext& Rndr::Forge::FrameContext::operator=(FrameContext&& o
         m_graphics_queue = std::move(other.m_graphics_queue);
         m_present_queue = std::move(other.m_present_queue);
         m_frame_timeline = std::move(other.m_frame_timeline);
-        m_image_ready_semaphores = std::move(other.m_image_ready_semaphores);
+        m_texture_ready_semaphores = std::move(other.m_texture_ready_semaphores);
         m_command_buffers = std::move(other.m_command_buffers);
         m_render_finished_semaphores = std::move(other.m_render_finished_semaphores);
         m_frames_submitted = other.m_frames_submitted;
@@ -76,7 +76,7 @@ Rndr::Forge::FrameContext& Rndr::Forge::FrameContext::operator=(FrameContext&& o
         other.m_swap_chain = nullptr;
         other.m_graphics_queue = nullptr;
         other.m_present_queue = nullptr;
-        other.m_image_ready_semaphores.Clear();
+        other.m_texture_ready_semaphores.Clear();
         other.m_command_buffers.Clear();
         other.m_render_finished_semaphores.Clear();
         other.m_frames_submitted = 0;
@@ -94,7 +94,7 @@ void Rndr::Forge::FrameContext::Destroy()
     }
     m_command_buffers.Clear();
     m_render_finished_semaphores.Clear();
-    m_image_ready_semaphores.Clear();
+    m_texture_ready_semaphores.Clear();
     m_frame_timeline.Destroy();
     m_device = nullptr;
     m_swap_chain = nullptr;
@@ -106,13 +106,13 @@ void Rndr::Forge::FrameContext::Destroy()
 
 void Rndr::Forge::FrameContext::MatchRenderSemaphoresToSwapChain()
 {
-    const u32 image_count = m_swap_chain->GetColorImageCount();
-    if (static_cast<u32>(m_render_finished_semaphores.GetSize()) == image_count)
+    const u32 texture_count = m_swap_chain->GetColorTextureCount();
+    if (static_cast<u32>(m_render_finished_semaphores.GetSize()) == texture_count)
     {
         return;
     }
     m_render_finished_semaphores.Clear();
-    for (u32 image = 0; image < image_count; ++image)
+    for (u32 texture = 0; texture < texture_count; ++texture)
     {
         m_render_finished_semaphores.EmplaceBack(*m_device);
     }
@@ -125,13 +125,13 @@ Rndr::Forge::SwapChainStatus Rndr::Forge::FrameContext::BeginFrame()
         throw Opal::Exception("BeginFrame was called twice without an EndFrame in between!");
     }
     // Frame k waits for k + 1, which is what frame k - frames_in_flight signalled - the frame whose slot,
-    // command buffer and image-ready semaphore this one is about to reuse. Nothing to reset afterwards, so
+    // command buffer and texture-ready semaphore this one is about to reuse. Nothing to reset afterwards, so
     // there is no ordering question about where the reset goes either.
     m_frame_timeline.Wait(m_frames_submitted + 1);
 
     const u32 frame_index = GetFrameIndex();
-    const AcquiredImage acquired_image = m_swap_chain->AcquireImage(m_image_ready_semaphores[frame_index]);
-    if (acquired_image.status == SwapChainStatus::OutOfDate)
+    const AcquiredTexture acquired_texture = m_swap_chain->AcquireTexture(m_texture_ready_semaphores[frame_index]);
+    if (acquired_texture.status == SwapChainStatus::OutOfDate)
     {
         // The swap chain was rebuilt, or the window has no client area and there is none. Nothing was submitted
         // for this frame, so the counter does not advance.
@@ -152,25 +152,25 @@ Rndr::Forge::SwapChainStatus Rndr::Forge::FrameContext::EndFrame()
     {
         throw Opal::Exception("EndFrame was called without a BeginFrame that succeeded!");
     }
-    // The recording flag and the acquired image are set together in BeginFrame, so this only fires when
-    // something outside the frame context released the swap chain mid-frame. Above the image is reached for
+    // The recording flag and the acquired texture are set together in BeginFrame, so this only fires when
+    // something outside the frame context released the swap chain mid-frame. Above the texture is reached for
     // rather than below, since every use of it from here on reports that as a missing BeginFrame instead.
-    if (!m_swap_chain->HasAcquiredImage())
+    if (!m_swap_chain->HasAcquiredTexture())
     {
-        throw Opal::Exception("The swap chain gave up its acquired image in the middle of a frame!");
+        throw Opal::Exception("The swap chain gave up its acquired texture in the middle of a frame!");
     }
     const u32 frame_index = GetFrameIndex();
     CommandBuffer& command_buffer = m_command_buffers[frame_index];
-    Texture& color_image = GetColorImage();
-    if (color_image.GetCurrentLayout() != ImageLayout::Present)
+    Texture& color_texture = GetColorTexture();
+    if (color_texture.GetCurrentLayout() != ImageLayout::Present)
     {
-        command_buffer.CmdImageBarrier(ImageBarrier::ToPresent(color_image));
+        command_buffer.CmdTextureBarrier(TextureBarrier::ToPresent(color_texture));
     }
     command_buffer.End();
     m_is_frame_recording = false;
 
-    const Semaphore& image_ready = m_image_ready_semaphores[frame_index];
-    const Semaphore& render_finished = m_render_finished_semaphores[static_cast<i32>(m_swap_chain->GetCurrentImageIndex())];
+    const Semaphore& image_ready = m_texture_ready_semaphores[frame_index];
+    const Semaphore& render_finished = m_render_finished_semaphores[static_cast<i32>(m_swap_chain->GetCurrentTextureIndex())];
 
     // Two signals, which the convenience overload cannot express: the binary one the present waits on, and the
     // timeline the frame reusing this slot waits on. Both at AllCommands - the host wait on the timeline is the
@@ -206,22 +206,22 @@ Rndr::Forge::CommandBuffer& Rndr::Forge::FrameContext::GetCommandBuffer()
     return m_command_buffers[GetFrameIndex()];
 }
 
-const Rndr::Forge::Texture& Rndr::Forge::FrameContext::GetColorImage() const
+const Rndr::Forge::Texture& Rndr::Forge::FrameContext::GetColorTexture() const
 {
-    if (!m_swap_chain->HasAcquiredImage())
+    if (!m_swap_chain->HasAcquiredTexture())
     {
-        throw Opal::Exception("There is no acquired image outside of a frame - call BeginFrame first!");
+        throw Opal::Exception("There is no acquired texture outside of a frame - call BeginFrame first!");
     }
-    return m_swap_chain->GetCurrentColorImage();
+    return m_swap_chain->GetCurrentColorTexture();
 }
 
-Rndr::Forge::Texture& Rndr::Forge::FrameContext::GetColorImage()
+Rndr::Forge::Texture& Rndr::Forge::FrameContext::GetColorTexture()
 {
-    if (!m_swap_chain->HasAcquiredImage())
+    if (!m_swap_chain->HasAcquiredTexture())
     {
-        throw Opal::Exception("There is no acquired image outside of a frame - call BeginFrame first!");
+        throw Opal::Exception("There is no acquired texture outside of a frame - call BeginFrame first!");
     }
-    return m_swap_chain->GetCurrentColorImage();
+    return m_swap_chain->GetCurrentColorTexture();
 }
 
 Rndr::Vector2i Rndr::Forge::FrameContext::GetRenderSize() const

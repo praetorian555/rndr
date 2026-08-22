@@ -32,7 +32,7 @@ struct FrameContextDesc
  * on both sides of the swap chain, the timeline that counts the frames off, and the order they have to
  * happen in.
  *
- * BeginFrame waits for the slot this frame will reuse, acquires an image, and hands back a command buffer
+ * BeginFrame waits for the slot this frame will reuse, acquires a texture, and hands back a command buffer
  * that is already recording. EndFrame closes it, submits it against the right semaphores, and presents.
  * Between them the caller records whatever it likes.
  *
@@ -60,7 +60,7 @@ public:
      * @param device Device everything is created from.
      * @param swap_chain Swap chain to render into. Acquired from and presented to, so it is held by reference.
      * @param graphics_queue Queue the frame's command buffer is submitted to.
-     * @param present_queue Queue the image is presented on. The same object as the graphics queue on most devices.
+     * @param present_queue Queue the texture is presented on. The same object as the graphics queue on most devices.
      */
     FrameContext(const Device& device, SwapChain& swap_chain, DeviceQueue& graphics_queue, DeviceQueue& present_queue,
                  const FrameContextDesc& desc = {});
@@ -79,15 +79,15 @@ public:
     [[nodiscard]] const FrameContextDesc& GetDesc() const { return m_desc; }
 
     /**
-     * Wait for the slot this frame reuses, acquire an image, and begin its command buffer.
+     * Wait for the slot this frame reuses, acquire a texture, and begin its command buffer.
      * @return Success when the frame can be recorded, OutOfDate when the swap chain was rebuilt and this frame
      *         has to be skipped - nothing was recorded and nothing has to be undone.
      */
     SwapChainStatus BeginFrame();
 
     /**
-     * End the command buffer, submit it, and present the image it rendered into. The transition to Present is
-     * made from whatever layout the frame left the swap chain image in, which the image itself tracks.
+     * End the command buffer, submit it, and present the texture it rendered into. The transition to Present
+     * is made from whatever layout the frame left the swap chain texture in, which the texture itself tracks.
      * @return OutOfDate when the swap chain stopped matching the surface, in which case it has been rebuilt.
      */
     SwapChainStatus EndFrame();
@@ -102,15 +102,15 @@ public:
     }
 
     /**
-     * Which swap chain image this frame acquired. Only meaningful between BeginFrame and EndFrame; the swap
-     * chain is what remembers it, and answers k_invalid_image_index outside a frame.
+     * Which swap chain texture this frame acquired. Only meaningful between BeginFrame and EndFrame; the swap
+     * chain is what remembers it, and answers k_invalid_texture_index outside a frame.
      */
-    [[nodiscard]] u32 GetImageIndex() const { return m_swap_chain->GetCurrentImageIndex(); }
+    [[nodiscard]] u32 GetTextureIndex() const { return m_swap_chain->GetCurrentTextureIndex(); }
 
-    /** The swap chain image this frame renders into. */
-    [[nodiscard]] const Texture& GetColorImage() const;
-    /** The same image, mutable, since a barrier on it moves the layout the texture tracks. */
-    [[nodiscard]] Texture& GetColorImage();
+    /** The swap chain texture this frame renders into. */
+    [[nodiscard]] const Texture& GetColorTexture() const;
+    /** The same texture, mutable, since a barrier on it moves the layout it tracks. */
+    [[nodiscard]] Texture& GetColorTexture();
 
     /**
      * The size to render at, which is the size of the swap chain rather than of the window - the window can be
@@ -122,7 +122,7 @@ private:
     /** Names everything a frame context owns, which is the only reason anything outside needs to see them. */
     friend void SetDebugName(const Device& device, const FrameContext& frame_context, const Opal::StringUtf8& name);
 
-    /** One semaphore per swap chain image, rebuilt whenever the swap chain is. */
+    /** One semaphore per swap chain texture, rebuilt whenever the swap chain is. */
     void MatchRenderSemaphoresToSwapChain();
 
     FrameContextDesc m_desc;
@@ -139,12 +139,12 @@ private:
     Semaphore m_frame_timeline;
 
     /** Per frame in flight. */
-    Opal::DynamicArray<Semaphore> m_image_ready_semaphores;
+    Opal::DynamicArray<Semaphore> m_texture_ready_semaphores;
     Opal::DynamicArray<CommandBuffer> m_command_buffers;
 
     /**
-     * Per swap chain image rather than per frame: the semaphore a present waits on has to belong to the image
-     * being presented, not to the frame that drew it.
+     * Per swap chain texture rather than per frame: the semaphore a present waits on has to belong to the
+     * texture being presented, not to the frame that drew it.
      */
     Opal::DynamicArray<Semaphore> m_render_finished_semaphores;
 

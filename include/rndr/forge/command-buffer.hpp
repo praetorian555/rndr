@@ -69,9 +69,9 @@ struct RenderingDesc
     Opal::Optional<RenderingAttachmentDesc> depth_attachment;
     /**
      * Stencil attachment, absent for a pass that does no stencil work. Vulkan takes the two sides separately
-     * even when one image carries both, so a combined format such as D24_UNORM_S8_UINT names the *same
+     * even when one texture carries both, so a combined format such as D24_UNORM_S8_UINT names the *same
      * texture* here as the depth attachment does - and takes its own load and store operations, since
-     * clearing the depth and keeping the stencil is a thing a pass may want. A separate stencil image names
+     * clearing the depth and keeping the stencil is a thing a pass may want. A separate stencil texture names
      * its own.
      *
      * Present with no texture is a mistake and throws, the way the depth attachment does.
@@ -115,7 +115,7 @@ struct Barriers
 {
     Opal::ArrayView<const MemoryBarrier> memory;
     Opal::ArrayView<const BufferBarrier> buffer;
-    Opal::ArrayView<const ImageBarrier> image;
+    Opal::ArrayView<const TextureBarrier> texture;
     /** What the dependency covers beyond the resources above. ByRegion is only valid inside a render pass. */
     DependencyFlagBits flags = DependencyFlagBits::None;
 };
@@ -146,17 +146,17 @@ struct ImageSubresourceLayers
  * One region copied between a buffer and a texture, in either direction. The buffer side is a linear run of
  * pixels and the texture side is a box inside one mip level.
  */
-struct BufferImageCopyRegion
+struct BufferTextureCopyRegion
 {
     u64 buffer_offset = 0;
-    /** Pixels per row in the buffer. Zero means the rows are packed to the width of image_extent. */
+    /** Pixels per row in the buffer. Zero means the rows are packed to the width of texture_extent. */
     u32 buffer_row_length = 0;
-    /** Rows per array layer in the buffer. Zero means they are packed to the height of image_extent. */
-    u32 buffer_image_height = 0;
-    ImageSubresourceLayers image_subresource;
-    Vector3i image_offset = {0, 0, 0};
-    /** Zero on an axis means the rest of the mip level past image_offset on that axis. */
-    Vector3i image_extent = {0, 0, 0};
+    /** Rows per array layer in the buffer. Zero means they are packed to the height of texture_extent. */
+    u32 buffer_layer_height = 0;
+    ImageSubresourceLayers texture_subresource;
+    Vector3i texture_offset = {0, 0, 0};
+    /** Zero on an axis means the rest of the mip level past texture_offset on that axis. */
+    Vector3i texture_extent = {0, 0, 0};
 };
 
 /**
@@ -165,7 +165,7 @@ struct BufferImageCopyRegion
  *
  * A negative extent runs the box backwards from its offset, which is how an axis is mirrored.
  */
-struct ImageBlitRegion
+struct TextureBlitRegion
 {
     ImageSubresourceLayers source;
     ImageSubresourceLayers destination;
@@ -178,7 +178,7 @@ struct ImageBlitRegion
 };
 
 /** One box copied from one mip level of a texture into one mip level of another. */
-struct ImageCopyRegion
+struct TextureCopyRegion
 {
     ImageSubresourceLayers source;
     ImageSubresourceLayers destination;
@@ -220,17 +220,17 @@ public:
     void Reset() const;
 
     /**
-     * Insert a pipeline barrier for a single image. Used to transition image layouts and synchronize access between
-     * pipeline stages.
-     * @param image_barrier Describes the source and destination stages, access masks, layouts, and the target image.
+     * Insert a pipeline barrier for a single texture. Used to transition image layouts and synchronize access
+     * between pipeline stages.
+     * @param texture_barrier Describes the source and destination stages, access masks, layouts, and the texture.
      */
-    void CmdImageBarrier(const ImageBarrier& image_barrier);
+    void CmdTextureBarrier(const TextureBarrier& texture_barrier);
 
     /**
-     * Insert a pipeline barrier for multiple images in a single call.
-     * @param image_barriers Array of image barrier descriptions.
+     * Insert a pipeline barrier for multiple textures in a single call.
+     * @param texture_barriers Array of texture barrier descriptions.
      */
-    void CmdImageBarriers(Opal::ArrayView<const ImageBarrier> image_barriers);
+    void CmdTextureBarriers(Opal::ArrayView<const TextureBarrier> texture_barriers);
 
     /**
      * Insert a pipeline barrier for a single buffer range. Buffers have no layout, so this only orders access.
@@ -254,7 +254,7 @@ public:
      * Insert every barrier of a Barriers group as one dependency. All of the other Cmd*Barrier methods are this
      * one with the other two groups left empty, so batching through it is one pipeline barrier where separate
      * calls would be several.
-     * @param barriers Memory, buffer and image barriers, any of which may be empty.
+     * @param barriers Memory, buffer and texture barriers, any of which may be empty.
      */
     void CmdBarriers(const Barriers& barriers);
 
@@ -287,16 +287,16 @@ public:
      * @param regions Regions to copy, each naming one mip level of the texture. Every level they name has to
      *        be in TransferDestination or General, which is read off the texture rather than asked for.
      */
-    void CmdCopyBufferToImage(const Buffer& buffer, Texture& texture, Opal::ArrayView<const BufferImageCopyRegion> regions);
+    void CmdCopyBufferToTexture(const Buffer& buffer, Texture& texture, Opal::ArrayView<const BufferTextureCopyRegion> regions);
 
     /**
-     * Copy data from a buffer to an image. Handles all mip levels described by the bitmap. The destination image must
-     * be in the TransferDestination layout.
-     * @param buffer Source buffer containing the image data.
-     * @param bitmap Bitmap describing the image dimensions and mip level offsets.
+     * Copy data from a buffer to a texture. Handles all mip levels described by the bitmap. The destination
+     * texture must be in the TransferDestination layout.
+     * @param buffer Source buffer containing the pixel data.
+     * @param bitmap Bitmap describing the dimensions of the texture and its mip level offsets.
      * @param texture Destination texture to copy into.
      */
-    void CmdCopyBufferToImage(const Buffer& buffer, const Bitmap& bitmap, Texture& texture);
+    void CmdCopyBufferToTexture(const Buffer& buffer, const Bitmap& bitmap, Texture& texture);
 
     /**
      * Copy regions of a texture into a buffer, which is how anything rendered is read back. The texture needs
@@ -306,7 +306,7 @@ public:
      * @param regions Regions to copy, each naming one mip level of the texture. Every level they name has to
      *        be in TransferSource or General, which is read off the texture rather than asked for.
      */
-    void CmdCopyImageToBuffer(const Texture& texture, const Buffer& buffer, Opal::ArrayView<const BufferImageCopyRegion> regions);
+    void CmdCopyTextureToBuffer(const Texture& texture, const Buffer& buffer, Opal::ArrayView<const BufferTextureCopyRegion> regions);
 
     /**
      * Copy regions of one texture into another. Both must have the same format and sample count, which the
@@ -317,21 +317,21 @@ public:
      *        has to be in TransferSource on the source and TransferDestination on the destination, or in
      *        General on either.
      */
-    void CmdCopyImage(const Texture& source, Texture& destination, Opal::ArrayView<const ImageCopyRegion> regions);
+    void CmdCopyTexture(const Texture& source, Texture& destination, Opal::ArrayView<const TextureCopyRegion> regions);
 
     /**
      * Stretch regions of one texture into another, resampling and converting on the way. The formats need not
-     * match, which is what separates this from CmdCopyImage, but both have to support being blitted - a
+     * match, which is what separates this from CmdCopyTexture, but both have to support being blitted - a
      * format that cannot throws rather than being found out by the validation layer.
      * @param source Texture to read from. Needs TextureUsageBits::TransferSource.
      * @param destination Texture to write into. Needs TextureUsageBits::TransferDestination.
      * @param regions Regions to blit.
      * @param filter How the source is sampled where the two boxes differ in size. A linear filter needs the
      *               source format to support linear filtering.
-     * @note The layouts come off the two textures, the way CmdCopyImage reads them.
+     * @note The layouts come off the two textures, the way CmdCopyTexture reads them.
      */
-    void CmdBlitImage(const Texture& source, Texture& destination, Opal::ArrayView<const ImageBlitRegion> regions,
-                      ImageFilter filter = ImageFilter::Linear);
+    void CmdBlitTexture(const Texture& source, Texture& destination, Opal::ArrayView<const TextureBlitRegion> regions,
+                        ImageFilter filter = ImageFilter::Linear);
 
     /**
      * Fill every mip level below the first by blitting each level into the next, halving it each time. The

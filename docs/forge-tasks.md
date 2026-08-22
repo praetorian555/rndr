@@ -291,26 +291,45 @@ Two of the throwing tests had to transition their colour attachment first. They 
 depth or stencil attachment naming nothing throws, and without the barrier the colour attachment throws
 first - the assertion would still have passed, on the wrong exception.
 
-### 2.8 One word for a texture
+### 2.8 One word for a texture — DONE
 
-Every Forge header, `docs/forge.md`, and the sample.
+The line is the one `types.hpp` already drew, now written down in `docs/forge.md` under *Image or texture*:
+a name says image only where it mirrors something Vulkan named, and everything that takes, holds or hands
+out a `Forge::Texture` says texture.
 
-The type is `Texture`, but half the surface speaks Vulkan's word for it: `ImageBarrier`, `CmdImageBarrier`,
-`CmdCopyBufferToImage`, `CmdBlitImage`, `GetColorImage` - all of them taking or returning a `Texture&`. Two
-words for one thing is a tax on every call site and makes the API grep-hostile: searching for what touches
-a texture has to be run twice. The split is accidental rather than principled - it is not "`Image` is the
-Vulkan concept, `Texture` is the Forge object", since `GetColorImage` hands back a `Texture&`.
+What keeps the word: `ImageLayout`, `ImageAspectBits`, `ImageSubresourceRange` and `ImageSubresourceLayers`,
+which mirror the `Vk` types of those names; the `DescriptorType` values `SampledImage`,
+`CombinedImageSampler` and `StorageImage`, which mirror `VkDescriptorType`; and `GetNativeImage` /
+`GetNativeImageView`, named after the handles they hand out. `Rndr::ImageFilter` and `ImageAddressMode` were
+never Forge's - they live in `rndr/graphics-types.hpp` and are shared with Canvas.
 
-The principled line is the one `types.hpp` already draws: what mirrors a Vulkan concept keeps Vulkan's name -
-`ImageLayout`, `ImageAspectBits`, `ImageSubresourceRange` mirror `Vk` types and stay - and what acts on or
-hands out a `Forge::Texture` says texture: `TextureBarrier`, `CmdCopyBufferToTexture`, `GetColorTexture`.
-The alternative, renaming `Texture` to `Image`, buys the same consistency but collides with `Rndr::Bitmap`
-territory and with Canvas, which says texture too.
+Everything else moved. `ImageBarrier` is `TextureBarrier` and its `image` field is `texture`;
+`CmdImageBarrier` and `CmdImageBarriers` are `CmdTextureBarrier` and `CmdTextureBarriers`, and
+`Barriers::image` is `Barriers::texture`. `BufferImageCopyRegion`, `ImageBlitRegion` and `ImageCopyRegion`
+took the `Texture` spellings, and the fields naming the texture side of a copy went with them -
+`image_subresource`, `image_offset` and `image_extent` are `texture_*`, and `buffer_image_height` is
+`buffer_layer_height`, which is what it always measured. `CmdCopyBufferToImage`, `CmdCopyImageToBuffer`,
+`CmdCopyImage` and `CmdBlitImage` all end in `Texture` now.
+`DescriptorSetUpdateBinding::ImageInfo` is `TextureInfo`, holding a `texture` and a `texture_layout`, and
+both `DescriptorSet::Update` overloads take the layout under that name.
 
-Worth doing while the sample is the only consumer, which is what this priority is for.
+The swap chain went the whole way rather than keeping Vulkan's acquire vocabulary, since the thing being
+acquired is a `Texture` and nothing about the index needed Vulkan's word: `AcquireTexture` returns an
+`AcquiredTexture` carrying a `texture_index`, `HasAcquiredTexture` and `GetCurrentTextureIndex` answer for
+it, `GetColorTexture`, `GetColorTextureCount`, `GetDepthTexture` and `GetCurrentColorTexture` hand the
+textures out, and the absent one is `k_invalid_texture_index`. `FrameContext` followed with
+`GetColorTexture` and `GetTextureIndex`. What still says image inside `swap-chain.cpp` is the `VkImage`
+array `vkGetSwapchainImagesKHR` fills and the count Vulkan reports for it, which is the rule working rather
+than an exception to it.
 
-Done when: no method takes or returns a `Texture` under a name that says image, the types that mirror `Vk`
-enums are the only place the word survives, and `docs/forge.md` says which word is whose.
+Exception messages and comments followed the names - "Texture copy", "Texture blit", "There is no acquired
+texture" - which was free: every throwing test uses a bare `REQUIRE_THROWS`, so no assertion was pinned to
+the old wording.
+
+Verified by the suite and by the sample, since the swap chain half of this rename is the half no headless
+test reaches: 184 test cases pass and 1 skips, 9207 assertions, no validation error; the sample ran for
+eleven seconds and exited cleanly with nothing reported between the swap chain being created and the layers
+unloading.
 
 ### 2.9 Replace the clear value union
 
@@ -1356,7 +1375,7 @@ transfer queue turns the texture section red.
   is public precisely so a caller can make the range check itself, and no caller does.
 - `PhysicalDevice::FindMemoryTypeIndex`, which is reachable headlessly, and `GetPresentQueueFamilyIndex`,
   which belongs with 3.22.
-- `CmdImageBarriers`, the plural image overload - the one call of the barrier group 3.19 left without a
+- `CmdTextureBarriers`, the plural overload - the one call of the barrier group 3.19 left without a
   caller. It forwards to `CmdBarriers` like the rest, which is an argument about risk rather than a test.
 - `CmdDrawMeshTasks`. 3.3 wrote it and could only test that it threw, since nothing enabled the extension;
   3.6 enabled it and nothing went back. A positive draw needs a mesh shader in Slang and a device that has

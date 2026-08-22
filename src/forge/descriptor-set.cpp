@@ -657,11 +657,11 @@ void Rndr::Forge::DescriptorSet::Update(Opal::ArrayView<const DescriptorSetUpdat
         }
         else
         {
-            const DescriptorSetUpdateBinding::ImageInfo& image_info =
-                updates[i].resource_info.Get<DescriptorSetUpdateBinding::ImageInfo>();
-            image_infos[i] = {.sampler = image_info.sampler->GetNativeSampler(),
-                              .imageView = image_info.image->GetNativeImageView(),
-                              .imageLayout = static_cast<VkImageLayout>(image_info.image_layout)};
+            const DescriptorSetUpdateBinding::TextureInfo& texture_info =
+                updates[i].resource_info.Get<DescriptorSetUpdateBinding::TextureInfo>();
+            image_infos[i] = {.sampler = texture_info.sampler->GetNativeSampler(),
+                              .imageView = texture_info.texture->GetNativeImageView(),
+                              .imageLayout = static_cast<VkImageLayout>(texture_info.texture_layout)};
             descriptor_write.pImageInfo = &image_infos[i];
         }
         descriptor_write.pTexelBufferView = nullptr;
@@ -709,9 +709,9 @@ Rndr::u32 Rndr::Forge::DescriptorSet::GetBindingIndex(const Opal::StringUtf8& na
 }
 
 void Rndr::Forge::DescriptorSet::Update(const Opal::StringUtf8& name, const Texture& texture, const Sampler& sampler,
-                                        ImageLayout image_layout, u32 array_element)
+                                        ImageLayout texture_layout, u32 array_element)
 {
-    Update(GetBindingIndex(name), texture, sampler, image_layout, array_element);
+    Update(GetBindingIndex(name), texture, sampler, texture_layout, array_element);
 }
 
 void Rndr::Forge::DescriptorSet::Update(const Opal::StringUtf8& name, const Buffer& buffer, u64 offset, u64 size,
@@ -721,14 +721,14 @@ void Rndr::Forge::DescriptorSet::Update(const Opal::StringUtf8& name, const Buff
 }
 
 void Rndr::Forge::DescriptorSet::Update(u32 binding, const Texture& texture, const Sampler& sampler,
-                                        ImageLayout image_layout, u32 array_element)
+                                        ImageLayout texture_layout, u32 array_element)
 {
     const DescriptorSetUpdateBinding update{
         .descriptor_type = GetBindingDescriptorType(binding),
         .binding = binding,
         .array_element = array_element,
         .resource_info =
-            DescriptorSetUpdateBinding::ImageInfo{.sampler = sampler, .image = texture, .image_layout = image_layout}};
+            DescriptorSetUpdateBinding::TextureInfo{.sampler = sampler, .texture = texture, .texture_layout = texture_layout}};
     Update({&update, 1});
 }
 

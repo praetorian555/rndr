@@ -157,7 +157,7 @@ void Run()
         Rndr::Forge::Shader::FromSource(device, shader_path, {.entry_point = "main_fragment", .cache = shader_cache});
     const Opal::Ref<const Rndr::Forge::Shader> pipeline_shaders[] = {vertex_shader, fragment_shader};
 
-    // Setup the descriptor set layout. It has two bindings and both are images with samplers. Naming the
+    // Setup the descriptor set layout. It has two bindings and both are textures with samplers. Naming the
     // shaders has the layout checked against what they declare, and gives each binding the name the shader
     // uses - which is what lets the set be filled by name below.
     Rndr::Forge::DescriptorSetLayoutDesc layout_desc;
@@ -265,7 +265,7 @@ void Run()
         }
         controller.Tick(delta_seconds);
 
-        // Waits for this frame's slot, acquires an image, and begins its command buffer.
+        // Waits for this frame's slot, acquires a texture, and begins its command buffer.
         if (frame_context.BeginFrame() == Rndr::Forge::SwapChainStatus::OutOfDate)
         {
             if (!swap_chain.IsValid())
@@ -313,22 +313,22 @@ void Run()
         command_buffer.CmdWriteTimestamp(gpu_timer, 0, Rndr::Forge::PipelineStageBits::PipelineStart);
 
         // Make sure our color and depth attachment are ready and in proper layout. Neither says what it is
-        // coming from: the swap chain image is undefined again after every acquire, and the depth image
+        // coming from: the swap chain texture is undefined again after every acquire, and the depth texture
         // remembers the attachment layout the previous frame left it in.
-        Opal::InPlaceArray<Rndr::Forge::ImageBarrier, 2> barriers{
-            Rndr::Forge::ImageBarrier::ToColorAttachment(frame_context.GetColorImage()),
-            Rndr::Forge::ImageBarrier::ToDepthStencilAttachment(swap_chain.GetDepthImage())};
-        command_buffer.CmdImageBarriers(barriers);
+        Opal::InPlaceArray<Rndr::Forge::TextureBarrier, 2> barriers{
+            Rndr::Forge::TextureBarrier::ToColorAttachment(frame_context.GetColorTexture()),
+            Rndr::Forge::TextureBarrier::ToDepthStencilAttachment(swap_chain.GetDepthTexture())};
+        command_buffer.CmdTextureBarriers(barriers);
 
         // Configure attachments, what happens when they are loaded and how they are stored after rendering
         // Do the actual draw calls
         const Rndr::Forge::RenderingDesc rendering_desc{
             .render_area_extent = render_size,
-            .color_attachments = {Rndr::Forge::RenderingAttachmentDesc{.texture = frame_context.GetColorImage(),
+            .color_attachments = {Rndr::Forge::RenderingAttachmentDesc{.texture = frame_context.GetColorTexture(),
                                                                        .load_operation = Rndr::Forge::AttachmentLoadOperation::Clear,
                                                                        .store_operation = Rndr::Forge::AttachmentStoreOperation::Store,
                                                                        .clear_value = {.color = {0.0f, 0.0f, 0.2f, 1.0f}}}},
-            .depth_attachment = Rndr::Forge::RenderingAttachmentDesc{.texture = swap_chain.GetDepthImage(),
+            .depth_attachment = Rndr::Forge::RenderingAttachmentDesc{.texture = swap_chain.GetDepthTexture(),
                                                                      .load_operation = Rndr::Forge::AttachmentLoadOperation::Clear,
                                                                      .store_operation = Rndr::Forge::AttachmentStoreOperation::DontCare,
                                                                      .clear_value = {.depth_stencil = {.depth = 1.0f, .stencil = 0}}}};
@@ -353,7 +353,7 @@ void Run()
         // difference from the first timestamp covers the whole frame rather than a slice of it.
         command_buffer.CmdWriteTimestamp(gpu_timer, 1, Rndr::Forge::PipelineStageBits::PipelineEnd);
 
-        // Transitions the image to Present, ends the command buffer, submits it and presents.
+        // Transitions the texture to Present, ends the command buffer, submits it and presents.
         frame_context.EndFrame();
 
         auto end_time = Opal::GetSeconds();

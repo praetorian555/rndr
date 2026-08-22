@@ -151,7 +151,7 @@ Rndr::Forge::SwapChain::SwapChain(SwapChain&& other) noexcept
       m_surface(std::move(other.m_surface)),
       m_color_textures(std::move(other.m_color_textures)),
       m_depth_texture(std::move(other.m_depth_texture)),
-      m_current_image_index(other.m_current_image_index)
+      m_current_texture_index(other.m_current_texture_index)
 {
     other.m_swap_chain = VK_NULL_HANDLE;
     other.m_device = nullptr;
@@ -159,7 +159,7 @@ Rndr::Forge::SwapChain::SwapChain(SwapChain&& other) noexcept
     other.m_color_textures.Clear();
     other.m_desc = {};
     other.m_extent = {};
-    other.m_current_image_index = k_invalid_image_index;
+    other.m_current_texture_index = k_invalid_texture_index;
 }
 
 Rndr::Forge::SwapChain& Rndr::Forge::SwapChain::operator=(SwapChain&& other) noexcept
@@ -173,7 +173,7 @@ Rndr::Forge::SwapChain& Rndr::Forge::SwapChain::operator=(SwapChain&& other) noe
     m_depth_texture = std::move(other.m_depth_texture);
     m_desc = other.m_desc;
     m_extent = other.m_extent;
-    m_current_image_index = other.m_current_image_index;
+    m_current_texture_index = other.m_current_texture_index;
 
     other.m_swap_chain = VK_NULL_HANDLE;
     other.m_device = nullptr;
@@ -181,12 +181,12 @@ Rndr::Forge::SwapChain& Rndr::Forge::SwapChain::operator=(SwapChain&& other) noe
     other.m_color_textures.Clear();
     other.m_desc = {};
     other.m_extent = {};
-    other.m_current_image_index = k_invalid_image_index;
+    other.m_current_texture_index = k_invalid_texture_index;
 
     return *this;
 }
 
-void Rndr::Forge::SwapChain::DestroyImages()
+void Rndr::Forge::SwapChain::DestroyTextures()
 {
     for (Texture& color_texture : m_color_textures)
     {
@@ -195,7 +195,7 @@ void Rndr::Forge::SwapChain::DestroyImages()
     m_color_textures.Clear();
     m_depth_texture.Destroy();
     // The index pointed into the array that just went away, so nothing is acquired any more.
-    m_current_image_index = k_invalid_image_index;
+    m_current_texture_index = k_invalid_texture_index;
 }
 
 void Rndr::Forge::SwapChain::DestroySwapChain()
@@ -211,10 +211,10 @@ void Rndr::Forge::SwapChain::Destroy()
 {
     if (m_device != nullptr && m_swap_chain != VK_NULL_HANDLE)
     {
-        // The images may still be in use by frames that were submitted but have not finished yet.
+        // The textures may still be in use by frames that were submitted but have not finished yet.
         m_device->WaitForAll();
     }
-    DestroyImages();
+    DestroyTextures();
     if (m_device != nullptr)
     {
         DestroySwapChain();
@@ -225,30 +225,30 @@ void Rndr::Forge::SwapChain::Destroy()
     m_extent = {};
 }
 
-const Rndr::Forge::Texture& Rndr::Forge::SwapChain::GetCurrentColorImage() const
+const Rndr::Forge::Texture& Rndr::Forge::SwapChain::GetCurrentColorTexture() const
 {
-    if (!HasAcquiredImage())
+    if (!HasAcquiredTexture())
     {
-        throw Opal::Exception("There is no acquired image - AcquireImage has to come first!");
+        throw Opal::Exception("There is no acquired texture - AcquireTexture has to come first!");
     }
-    return m_color_textures[static_cast<i32>(m_current_image_index)];
+    return m_color_textures[static_cast<i32>(m_current_texture_index)];
 }
 
-Rndr::Forge::Texture& Rndr::Forge::SwapChain::GetCurrentColorImage()
+Rndr::Forge::Texture& Rndr::Forge::SwapChain::GetCurrentColorTexture()
 {
-    if (!HasAcquiredImage())
+    if (!HasAcquiredTexture())
     {
-        throw Opal::Exception("There is no acquired image - AcquireImage has to come first!");
+        throw Opal::Exception("There is no acquired texture - AcquireTexture has to come first!");
     }
-    return m_color_textures[static_cast<i32>(m_current_image_index)];
+    return m_color_textures[static_cast<i32>(m_current_texture_index)];
 }
 
-Rndr::Forge::AcquiredImage Rndr::Forge::SwapChain::AcquireImage(const Semaphore& semaphore)
+Rndr::Forge::AcquiredTexture Rndr::Forge::SwapChain::AcquireTexture(const Semaphore& semaphore)
 {
     // Above the early return below, so that a window with no client area does not hide the mistake.
     if (semaphore.IsTimeline())
     {
-        throw Opal::Exception("Acquiring an image needs a binary semaphore - presentation cannot signal a timeline!");
+        throw Opal::Exception("Acquiring a texture needs a binary semaphore - presentation cannot signal a timeline!");
     }
     if (m_swap_chain == VK_NULL_HANDLE)
     {
@@ -257,26 +257,26 @@ Rndr::Forge::AcquiredImage Rndr::Forge::SwapChain::AcquireImage(const Semaphore&
         return {};
     }
 
-    u32 image_index = k_invalid_image_index;
+    u32 texture_index = k_invalid_texture_index;
     const VkResult result = vkAcquireNextImageKHR(m_device->GetNativeDevice(), m_swap_chain, UINT64_MAX,
-                                                  semaphore.GetNativeSemaphore(), VK_NULL_HANDLE, &image_index);
+                                                  semaphore.GetNativeSemaphore(), VK_NULL_HANDLE, &texture_index);
     if (result == VK_ERROR_OUT_OF_DATE_KHR)
     {
         Recreate();
         return {};
     }
-    // A suboptimal swap chain still hands out a usable image and signals the semaphore, so the frame is rendered with
+    // A suboptimal swap chain still hands out a usable texture and signals the semaphore, so the frame is rendered with
     // it and the recreation happens after the matching present reports the same thing.
     if (result != VK_SUCCESS && result != VK_SUBOPTIMAL_KHR)
     {
         throw VulkanException(result, "vkAcquireNextImageKHR");
     }
-    m_current_image_index = image_index;
+    m_current_texture_index = texture_index;
     // The presentation engine is the one writer of a layout that Forge cannot observe, and the specification
-    // says the contents of a re-acquired image are undefined. Undefined is also the cheapest thing to
-    // transition out of, which is what a swap chain image cleared at the top of every frame wants.
-    m_color_textures[static_cast<i32>(image_index)].SetCurrentLayout({}, ImageLayout::Undefined);
-    return {SwapChainStatus::Success, image_index};
+    // says the contents of a re-acquired texture are undefined. Undefined is also the cheapest thing to
+    // transition out of, which is what a swap chain texture cleared at the top of every frame wants.
+    m_color_textures[static_cast<i32>(texture_index)].SetCurrentLayout({}, ImageLayout::Undefined);
+    return {SwapChainStatus::Success, texture_index};
 }
 
 Rndr::Forge::SwapChainStatus Rndr::Forge::SwapChain::Present(DeviceQueue& queue, const Semaphore& semaphore)
@@ -285,14 +285,14 @@ Rndr::Forge::SwapChainStatus Rndr::Forge::SwapChain::Present(DeviceQueue& queue,
     {
         throw Opal::Exception("Presenting needs a binary semaphore - presentation cannot wait on a timeline!");
     }
-    if (!HasAcquiredImage())
+    if (!HasAcquiredTexture())
     {
-        throw Opal::Exception("There is no acquired image to present - AcquireImage has to come first!");
+        throw Opal::Exception("There is no acquired texture to present - AcquireTexture has to come first!");
     }
     // Cleared before the call rather than after: a present that comes back out of date recreates the swap
-    // chain underneath us, and the index would then point into images that no longer exist.
-    const u32 image_index = m_current_image_index;
-    m_current_image_index = k_invalid_image_index;
+    // chain underneath us, and the index would then point into textures that no longer exist.
+    const u32 texture_index = m_current_texture_index;
+    m_current_texture_index = k_invalid_texture_index;
 
     const VkSemaphore wait_semaphore = semaphore.GetNativeSemaphore();
     const VkPresentInfoKHR present_info = {
@@ -301,7 +301,7 @@ Rndr::Forge::SwapChainStatus Rndr::Forge::SwapChain::Present(DeviceQueue& queue,
         .pWaitSemaphores = &wait_semaphore,
         .swapchainCount = 1,
         .pSwapchains = &m_swap_chain,
-        .pImageIndices = &image_index,
+        .pImageIndices = &texture_index,
     };
     const VkResult result = vkQueuePresentKHR(queue.GetNativeQueue(), &present_info);
     if (result == VK_ERROR_OUT_OF_DATE_KHR || result == VK_SUBOPTIMAL_KHR)
@@ -319,7 +319,7 @@ Rndr::Forge::SwapChainStatus Rndr::Forge::SwapChain::Present(DeviceQueue& queue,
 namespace
 {
 /**
- * Pick the extent of the images of the swap chain. Surfaces that dictate their own size report it in currentExtent,
+ * Pick the extent of the textures of the swap chain. Surfaces that dictate their own size report it in currentExtent,
  * the rest are driven by the size of the window. A zero extent means that the window has no client area, as happens
  * while it is minimized, and that no swap chain can be created for it.
  */
@@ -345,9 +345,9 @@ VkExtent2D SelectExtent(const VkSurfaceCapabilitiesKHR& capabilities, const Rndr
 
 void Rndr::Forge::SwapChain::Recreate()
 {
-    // Frames that were submitted earlier can still be reading from the images that are about to be released.
+    // Frames that were submitted earlier can still be reading from the textures that are about to be released.
     m_device->WaitForAll();
-    DestroyImages();
+    DestroyTextures();
 
     const SwapChainSupportDetails swap_chain_support = m_surface->GetSwapChainSupportDetails(m_device->GetPhysicalDevice());
     const VkColorSpaceKHR color_space = ToVkColorSpace(m_desc.color_space);
@@ -384,7 +384,7 @@ void Rndr::Forge::SwapChain::Recreate()
     if (extent.width == 0 || extent.height == 0)
     {
         // The window has no client area, so there is nothing to present to. Release the swap chain and let the next
-        // AcquireImage try again once the window is back.
+        // AcquireTexture try again once the window is back.
         DestroySwapChain();
         m_extent = {};
         return;
