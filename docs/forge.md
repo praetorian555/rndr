@@ -349,6 +349,13 @@ depth and stencil ones. Anything else throws, `Undefined` included, which is a t
 into place yet. The layer rejects an undefined attachment layout too; what it cannot reject is a layout that
 is legal and not the one the barriers actually left the texture in, and that is the case this removes.
 
+The clear value is the same idea one field over. `clear_value` is an
+`Opal::Variant<Vector4f, DepthStencilClearValue>` rather than the union `VkClearValue` is, so it remembers
+which kind was written and a colour clear on a depth attachment throws at `CmdBeginRendering` instead of
+clearing to whatever the first two floats of that vector mean as a depth and a stencil - the one attachment
+misuse the layer cannot catch either, since it is handed the same union. Only a `Clear` load operation reads
+it, so an attachment that loads or discards leaves the default alone whichever role it plays.
+
 The long form of each preset, the one that is told the old layout, stays for the two cases the tracker
 cannot answer: a barrier over part of a texture whose range is narrowed after the preset built it, and a
 deliberate discard, which is `ImageLayout::Undefined` and is now something a call site has to say out loud.

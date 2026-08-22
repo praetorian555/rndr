@@ -331,29 +331,26 @@ test reaches: 184 test cases pass and 1 skips, 9207 assertions, no validation er
 eleven seconds and exited cleanly with nothing reported between the swap chain being created and the layers
 unloading.
 
-### 2.9 Replace the clear value union
+### 2.9 Replace the clear value union — DONE
 
-`include/rndr/forge/command-buffer.hpp`, `src/forge/command-buffer.cpp`, and the sample.
+`RenderingAttachmentDesc::clear_value` is an `Opal::Variant<Vector4f, DepthStencilClearValue>`, the shape
+`DescriptorSetUpdateBinding::resource_info` already uses. The variant remembers which kind was written, so
+`CmdBeginRendering` throws on a colour attachment carrying a depth clear and on the reverse, naming the
+attachment the way the layout check above it does. `DepthStencilClearValue` gives the depth and the stencil
+a name of their own instead of the anonymous struct inside the old union.
 
-`RenderingAttachmentDesc::clear_value` is an anonymous union of `color` and `depth_stencil`. Writing
-`.color` on a depth attachment compiles and nothing says so - no throw, no validation message, since
-Vulkan's own `VkClearValue` is the same union and the layer cannot know which member was meant. In an API
-where every other misuse fails loudly, this is the one silent hole at the surface.
+Only a `Clear` load operation reads the value, and the check sits with the read: an attachment that loads or
+discards carries whatever the default holds without that being a mistake. A depth attachment that names a
+texture and nothing else *is* one, since `Clear` is the default load operation and the default clear value is
+a colour - which is exactly the case that used to clear to whatever the first two floats of that `Vector4f`
+mean as a depth and a stencil.
 
-2.7 made the read side follow the role rather than always reading `color`, so what a mismatched write
-produces is now a reinterpreted value rather than a reinterpreted one plus a wrong member - a depth
-attachment given `.color` clears to whatever the first two floats of that `Vector4f` mean as a depth and a
-stencil. Better, and still silent, which is what this task is about.
+The desc was already move-only through `ClonableBase`, so the variant costs it nothing: the initializer-list
+form the sample and the tests use goes through `Opal::Clone`, and `Variant::Clone` is what the field
+contributes to it.
 
-`Opal::Variant<Vector4f, DepthStencilClearValue>` is the shape the fix wants, and the idiom already exists -
-`DescriptorSetUpdateBinding::resource_info` holds its buffer-or-texture the same way. A variant remembers
-which member was written, so `CmdBeginRendering` can throw on a color attachment carrying a depth clear and
-the reverse, the way the depth attachment already throws when it is present with no texture. Two plain fields
-with the unused one ignored would also remove the garbage, but silently ignoring a value the caller wrote
-is the pattern 2.4 removed from the descs; being told is better.
-
-Done when: writing the wrong kind of clear value throws at record time, naming the attachment it was
-written on, and the sample's designated initializers still read as they do.
+Verified by both new cases throwing, by the same depth attachment recording without a throw once its load
+operation is `Load`, and by the sample running ten seconds with the validation layer on and nothing reported.
 
 ---
 

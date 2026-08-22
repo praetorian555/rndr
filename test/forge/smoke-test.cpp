@@ -2188,7 +2188,7 @@ TEST_CASE("Forge rendering without a depth attachment", "[forge]")
                                            .texture = color,
                                            .load_operation = Forge::AttachmentLoadOperation::Clear,
                                            .store_operation = Forge::AttachmentStoreOperation::Store,
-                                           .clear_value = {.color = {1.0f, 0.0f, 1.0f, 1.0f}}}}};
+                                           .clear_value = Vector4f{1.0f, 0.0f, 1.0f, 1.0f}}}};
                                    command_buffer.CmdBeginRendering(rendering_desc);
                                    command_buffer.CmdEndRendering();
                                });
@@ -2219,6 +2219,50 @@ TEST_CASE("Forge rendering without a depth attachment", "[forge]")
             .render_area_extent = {k_side, k_side},
             .color_attachments = {Forge::RenderingAttachmentDesc{.texture = color}},
             .depth_attachment = Forge::RenderingAttachmentDesc{}};
+        REQUIRE_THROWS_AS(command_buffer.CmdBeginRendering(rendering_desc), Opal::Exception);
+        command_buffer.End();
+    }
+    SECTION("A colour clear value on a depth attachment throws")
+    {
+        // The misuse a union could not catch and the validation layer cannot either, VkClearValue being the
+        // same union: the depth attachment would have cleared to whatever the first two floats of the vector
+        // mean as a depth and a stencil. A depth attachment with no clear value written is the same mistake,
+        // since the default holds a colour and Clear is the default load operation.
+        Forge::Texture depth(fixture.device, {.format = PixelFormat::D32_SFLOAT,
+                                              .width = k_side,
+                                              .height = k_side,
+                                              .usage = Forge::TextureUsageBits::DepthStencilAttachment});
+        Forge::CommandBuffer command_buffer(fixture.device, fixture.GetQueue());
+        command_buffer.Begin();
+        command_buffer.CmdTextureBarrier(Forge::TextureBarrier::ToColorAttachment(color));
+        command_buffer.CmdTextureBarrier(Forge::TextureBarrier::ToDepthStencilAttachment(depth));
+        const Forge::RenderingDesc rendering_desc{
+            .render_area_extent = {k_side, k_side},
+            .color_attachments = {Forge::RenderingAttachmentDesc{.texture = color}},
+            .depth_attachment = Forge::RenderingAttachmentDesc{.texture = depth,
+                                                               .clear_value = Vector4f{0.0f, 0.0f, 0.0f, 1.0f}}};
+        REQUIRE_THROWS_AS(command_buffer.CmdBeginRendering(rendering_desc), Opal::Exception);
+
+        // The same attachment loading instead of clearing is fine: nothing reads the value, so nothing can
+        // read the wrong member of it.
+        const Forge::RenderingDesc load_desc{
+            .render_area_extent = {k_side, k_side},
+            .color_attachments = {Forge::RenderingAttachmentDesc{.texture = color}},
+            .depth_attachment = Forge::RenderingAttachmentDesc{.texture = depth,
+                                                               .load_operation = Forge::AttachmentLoadOperation::Load}};
+        command_buffer.CmdBeginRendering(load_desc);
+        command_buffer.CmdEndRendering();
+        command_buffer.End();
+    }
+    SECTION("A depth clear value on a colour attachment throws")
+    {
+        Forge::CommandBuffer command_buffer(fixture.device, fixture.GetQueue());
+        command_buffer.Begin();
+        command_buffer.CmdTextureBarrier(Forge::TextureBarrier::ToColorAttachment(color));
+        const Forge::RenderingDesc rendering_desc{
+            .render_area_extent = {k_side, k_side},
+            .color_attachments = {Forge::RenderingAttachmentDesc{
+                .texture = color, .clear_value = Forge::DepthStencilClearValue{.depth = 1.0f, .stencil = 0}}}};
         REQUIRE_THROWS_AS(command_buffer.CmdBeginRendering(rendering_desc), Opal::Exception);
         command_buffer.End();
     }
@@ -2271,7 +2315,7 @@ TEST_CASE("Forge rendering without a depth attachment", "[forge]")
                                            .texture = color,
                                            .load_operation = Forge::AttachmentLoadOperation::Clear,
                                            .store_operation = Forge::AttachmentStoreOperation::Store,
-                                           .clear_value = {.color = {0.0f, 1.0f, 0.0f, 1.0f}}}}};
+                                           .clear_value = Vector4f{0.0f, 1.0f, 0.0f, 1.0f}}}};
                                    command_buffer.CmdBeginRendering(rendering_desc);
                                    command_buffer.CmdEndRendering();
                                });
@@ -2369,7 +2413,7 @@ TEST_CASE("Forge color write mask", "[forge]")
                                            .texture = color,
                                            .load_operation = Forge::AttachmentLoadOperation::Clear,
                                            .store_operation = Forge::AttachmentStoreOperation::Store,
-                                           .clear_value = {.color = {1.0f, 0.0f, 0.0f, 1.0f}}}}};
+                                           .clear_value = Vector4f{1.0f, 0.0f, 0.0f, 1.0f}}}};
                                    command_buffer.CmdBeginRendering(rendering_desc);
                                    command_buffer.CmdSetViewport(Vector2f::Zero(), {k_side, k_side});
                                    command_buffer.CmdSetScissor(Vector2i::Zero(), {k_side, k_side});
@@ -2652,7 +2696,7 @@ struct HalvesFixture
                                            .texture = color,
                                            .load_operation = Forge::AttachmentLoadOperation::Clear,
                                            .store_operation = Forge::AttachmentStoreOperation::Store,
-                                           .clear_value = {.color = {0.0f, 0.0f, 0.0f, 1.0f}}}}};
+                                           .clear_value = Vector4f{0.0f, 0.0f, 0.0f, 1.0f}}}};
                                    command_buffer.CmdBeginRendering(rendering_desc);
                                    command_buffer.CmdSetViewport(Vector2f::Zero(), {k_side, k_side});
                                    command_buffer.CmdSetScissor(Vector2i::Zero(), {k_side, k_side});
@@ -3187,7 +3231,7 @@ TEST_CASE("Forge specialization constants", "[forge]")
                                            .texture = color,
                                            .load_operation = Forge::AttachmentLoadOperation::Clear,
                                            .store_operation = Forge::AttachmentStoreOperation::Store,
-                                           .clear_value = {.color = {0.0f, 0.0f, 0.0f, 1.0f}}}}};
+                                           .clear_value = Vector4f{0.0f, 0.0f, 0.0f, 1.0f}}}};
                                    command_buffer.CmdBeginRendering(rendering_desc);
                                    command_buffer.CmdSetViewport(Vector2f::Zero(), {k_side, k_side});
                                    command_buffer.CmdSetScissor(Vector2i::Zero(), {k_side, k_side});
@@ -5269,7 +5313,7 @@ Opal::DynamicArray<u8> RenderRaster(ForgeFixture& fixture, Forge::Texture& color
                                        .texture = color,
                                        .load_operation = Forge::AttachmentLoadOperation::Clear,
                                        .store_operation = Forge::AttachmentStoreOperation::Store,
-                                       .clear_value = {.color = {1.0f, 0.0f, 0.0f, 1.0f}}}}};
+                                       .clear_value = Vector4f{1.0f, 0.0f, 0.0f, 1.0f}}}};
                                command_buffer.CmdBeginRendering(rendering_desc);
                                command_buffer.CmdSetViewport(Vector2f::Zero(),
                                                              {static_cast<f32>(side), static_cast<f32>(side)});
@@ -5810,12 +5854,12 @@ TEST_CASE("Forge viewport depth range", "[forge]")
                         .texture = color,
                         .load_operation = Forge::AttachmentLoadOperation::Clear,
                         .store_operation = Forge::AttachmentStoreOperation::Store,
-                        .clear_value = {.color = {1.0f, 0.0f, 0.0f, 1.0f}}}},
+                        .clear_value = Vector4f{1.0f, 0.0f, 0.0f, 1.0f}}},
                     .depth_attachment = Forge::RenderingAttachmentDesc{
                         .texture = depth,
                         .load_operation = Forge::AttachmentLoadOperation::Clear,
                         .store_operation = Forge::AttachmentStoreOperation::Store,
-                        .clear_value = {.depth_stencil = {1.0f, 0}}}};
+                        .clear_value = Forge::DepthStencilClearValue{1.0f, 0}}};
                 command_buffer.CmdBeginRendering(rendering_desc);
                 command_buffer.CmdSetViewport(Vector2f::Zero(), {k_side, k_side}, min_depth, max_depth);
                 command_buffer.CmdSetScissor(Vector2i::Zero(), {k_side, k_side});
@@ -6074,14 +6118,14 @@ TEST_CASE("Forge depth testing", "[forge]")
                         .texture = color,
                         .load_operation = Forge::AttachmentLoadOperation::Clear,
                         .store_operation = Forge::AttachmentStoreOperation::Store,
-                        .clear_value = {.color = {0.0f, 0.0f, 1.0f, 1.0f}}}},
+                        .clear_value = Vector4f{0.0f, 0.0f, 1.0f, 1.0f}}},
                     .depth_attachment = Forge::RenderingAttachmentDesc{
                         .texture = depth,
                         .load_operation = Forge::AttachmentLoadOperation::Clear,
                         .store_operation = Forge::AttachmentStoreOperation::Store,
                         // Cleared to whichever end of the range the comparator counts as furthest, so the
                         // first draw passes either way. Clearing to one under Greater would reject both.
-                        .clear_value = {.depth_stencil = {clear_depth, 0}}}};
+                        .clear_value = Forge::DepthStencilClearValue{clear_depth, 0}}};
                 command_buffer.CmdBeginRendering(rendering_desc);
                 command_buffer.CmdSetViewport(Vector2f::Zero(), {k_side, k_side});
                 command_buffer.CmdSetScissor(Vector2i::Zero(), {k_side, k_side});
@@ -6227,14 +6271,14 @@ TEST_CASE("Forge stencil testing", "[forge]")
                     .texture = depth_stencil,
                     .load_operation = Forge::AttachmentLoadOperation::Clear,
                     .store_operation = Forge::AttachmentStoreOperation::Store,
-                    .clear_value = {.depth_stencil = {1.0f, 0}}};
+                    .clear_value = Forge::DepthStencilClearValue{1.0f, 0}};
                 const Forge::RenderingDesc rendering_desc{
                     .render_area_extent = {k_side, k_side},
                     .color_attachments = {Forge::RenderingAttachmentDesc{
                         .texture = color,
                         .load_operation = Forge::AttachmentLoadOperation::Clear,
                         .store_operation = Forge::AttachmentStoreOperation::Store,
-                        .clear_value = {.color = {1.0f, 0.0f, 0.0f, 1.0f}}}},
+                        .clear_value = Vector4f{1.0f, 0.0f, 0.0f, 1.0f}}},
                     .depth_attachment = depth_stencil_attachment.Clone(),
                     .stencil_attachment = depth_stencil_attachment.Clone()};
                 command_buffer.CmdBeginRendering(rendering_desc);
@@ -6396,14 +6440,14 @@ TEST_CASE("Forge stencil masks set per draw", "[forge]")
                     .texture = depth_stencil,
                     .load_operation = Forge::AttachmentLoadOperation::Clear,
                     .store_operation = Forge::AttachmentStoreOperation::Store,
-                    .clear_value = {.depth_stencil = {1.0f, 0}}};
+                    .clear_value = Forge::DepthStencilClearValue{1.0f, 0}};
                 const Forge::RenderingDesc rendering_desc{
                     .render_area_extent = {k_side, k_side},
                     .color_attachments = {Forge::RenderingAttachmentDesc{
                         .texture = color,
                         .load_operation = Forge::AttachmentLoadOperation::Clear,
                         .store_operation = Forge::AttachmentStoreOperation::Store,
-                        .clear_value = {.color = {1.0f, 0.0f, 0.0f, 1.0f}}}},
+                        .clear_value = Vector4f{1.0f, 0.0f, 0.0f, 1.0f}}},
                     .depth_attachment = depth_stencil_attachment.Clone(),
                     .stencil_attachment = depth_stencil_attachment.Clone()};
                 command_buffer.CmdBeginRendering(rendering_desc);
@@ -6516,7 +6560,7 @@ TEST_CASE("Forge blending", "[forge]")
                                            .texture = color,
                                            .load_operation = Forge::AttachmentLoadOperation::Clear,
                                            .store_operation = Forge::AttachmentStoreOperation::Store,
-                                           .clear_value = {.color = {0.0f, 0.0f, 0.0f, 1.0f}}}}};
+                                           .clear_value = Vector4f{0.0f, 0.0f, 0.0f, 1.0f}}}};
                                    command_buffer.CmdBeginRendering(rendering_desc);
                                    command_buffer.CmdSetViewport(Vector2f::Zero(), {k_side, k_side});
                                    command_buffer.CmdSetScissor(Vector2i::Zero(), {k_side, k_side});

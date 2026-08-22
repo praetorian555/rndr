@@ -743,17 +743,33 @@ static VkRenderingAttachmentInfo ToVkRenderingAttachment(const Rndr::Forge::Rend
         .loadOp = ToVkLoadOp(attachment.load_operation),
         .storeOp = ToVkStoreOp(attachment.store_operation),
     };
-    // The union is read through whichever member the role uses, since Vulkan's own clear value is the same
-    // union and neither it nor the layer can tell which one was written.
-    if (is_color)
+    // Only a Clear reads the value, so an attachment that loads or discards is left alone whichever kind it
+    // carries. Where it is read, the variant says which kind was written - the one thing VkClearValue cannot,
+    // being the same union, and so the one misuse the layer cannot catch either.
+    if (attachment.load_operation == Forge::AttachmentLoadOperation::Clear)
     {
-        info.clearValue = {.color = {.float32 = {attachment.clear_value.color.r, attachment.clear_value.color.g,
-                                                 attachment.clear_value.color.b, attachment.clear_value.color.a}}};
-    }
-    else
-    {
-        info.clearValue = {.depthStencil = {.depth = attachment.clear_value.depth_stencil.depth,
-                                            .stencil = attachment.clear_value.depth_stencil.stencil}};
+        if (is_color)
+        {
+            if (!attachment.clear_value.IsActive<Vector4f>())
+            {
+                throw Opal::Exception(Opal::StringEx("The ") + role +
+                                      " attachment clears to a DepthStencilClearValue! A colour attachment clears to a "
+                                      "Vector4f.");
+            }
+            const Vector4f& color = attachment.clear_value.Get<Vector4f>();
+            info.clearValue = {.color = {.float32 = {color.r, color.g, color.b, color.a}}};
+        }
+        else
+        {
+            if (!attachment.clear_value.IsActive<Forge::DepthStencilClearValue>())
+            {
+                throw Opal::Exception(Opal::StringEx("The ") + role +
+                                      " attachment clears to a Vector4f! A depth or a stencil attachment clears to a "
+                                      "DepthStencilClearValue.");
+            }
+            const Forge::DepthStencilClearValue& depth_stencil = attachment.clear_value.Get<Forge::DepthStencilClearValue>();
+            info.clearValue = {.depthStencil = {.depth = depth_stencil.depth, .stencil = depth_stencil.stencil}};
+        }
     }
     return info;
 }

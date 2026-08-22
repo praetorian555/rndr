@@ -327,11 +327,11 @@ void Run()
             .color_attachments = {Rndr::Forge::RenderingAttachmentDesc{.texture = frame_context.GetColorTexture(),
                                                                        .load_operation = Rndr::Forge::AttachmentLoadOperation::Clear,
                                                                        .store_operation = Rndr::Forge::AttachmentStoreOperation::Store,
-                                                                       .clear_value = {.color = {0.0f, 0.0f, 0.2f, 1.0f}}}},
+                                                                       .clear_value = Rndr::Vector4f{0.0f, 0.0f, 0.2f, 1.0f}}},
             .depth_attachment = Rndr::Forge::RenderingAttachmentDesc{.texture = swap_chain.GetDepthTexture(),
                                                                      .load_operation = Rndr::Forge::AttachmentLoadOperation::Clear,
                                                                      .store_operation = Rndr::Forge::AttachmentStoreOperation::DontCare,
-                                                                     .clear_value = {.depth_stencil = {.depth = 1.0f, .stencil = 0}}}};
+                                                                     .clear_value = Rndr::Forge::DepthStencilClearValue{.depth = 1.0f, .stencil = 0}}};
         {
             // A capture shows everything between the two braces as one collapsible "forward pass" instead of
             // as a run of loose draws. The guard closes the region even if something below throws.

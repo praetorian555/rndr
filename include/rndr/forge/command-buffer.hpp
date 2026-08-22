@@ -6,6 +6,7 @@
 #include "opal/container/optional.h"
 #include "opal/container/ref.h"
 #include "opal/container/string.h"
+#include "opal/variant.h"
 
 #include "rndr/forge/synchronization.hpp"
 #include "rndr/forge/forward.hpp"
@@ -27,6 +28,13 @@ enum class AttachmentStoreOperation : u8
     DontCare
 };
 
+/** What a Clear load operation writes into a depth or a stencil attachment. */
+struct DepthStencilClearValue
+{
+    f32 depth = 0.0f;
+    u32 stencil = 0;
+};
+
 struct RenderingAttachmentDesc : Opal::ClonableBase<RenderingAttachmentDesc>
 {
     /**
@@ -44,15 +52,17 @@ struct RenderingAttachmentDesc : Opal::ClonableBase<RenderingAttachmentDesc>
     Opal::Ref<const Texture> texture;
     AttachmentLoadOperation load_operation = AttachmentLoadOperation::Clear;
     AttachmentStoreOperation store_operation = AttachmentStoreOperation::Store;
-    union
-    {
-        Vector4f color;
-        struct
-        {
-            f32 depth;
-            u32 stencil;
-        } depth_stencil;
-    } clear_value = {Vector4f{0.0f, 0.0f, 0.0f, 1.0f}};
+    /**
+     * What a Clear load operation writes into the attachment: a Vector4f for a colour attachment, a
+     * DepthStencilClearValue for a depth or a stencil one. Read only when `load_operation` is Clear, so an
+     * attachment that loads or discards leaves the default alone whichever role it plays.
+     *
+     * A variant rather than a union because a union cannot say which member was written - which is the one
+     * misuse the validation layer cannot catch either, `VkClearValue` being the same union. Writing the kind
+     * the role does not use throws at CmdBeginRendering instead of clearing to whatever the other member's
+     * bytes happen to mean.
+     */
+    Opal::Variant<Vector4f, DepthStencilClearValue> clear_value = Vector4f{0.0f, 0.0f, 0.0f, 1.0f};
 
     OPAL_CLONE_FIELDS(texture, load_operation, store_operation, clear_value);
 };
