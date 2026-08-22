@@ -346,9 +346,9 @@ attachment given `.color` clears to whatever the first two floats of that `Vecto
 stencil. Better, and still silent, which is what this task is about.
 
 `Opal::Variant<Vector4f, DepthStencilClearValue>` is the shape the fix wants, and the idiom already exists -
-`DescriptorSetUpdateBinding::resource_info` holds its buffer-or-image the same way. A variant remembers
+`DescriptorSetUpdateBinding::resource_info` holds its buffer-or-texture the same way. A variant remembers
 which member was written, so `CmdBeginRendering` can throw on a color attachment carrying a depth clear and
-the reverse, the way the depth attachment already throws when it is present with no image. Two plain fields
+the reverse, the way the depth attachment already throws when it is present with no texture. Two plain fields
 with the unused one ignored would also remove the garbage, but silently ignoring a value the caller wrote
 is the pattern 2.4 removed from the descs; being told is better.
 
@@ -1270,10 +1270,11 @@ What now runs:
   buffer alone, a non-zero `buffer_offset`, a `buffer_row_length` wider than the box so every row leaves
   texels untouched, and a two layer array with both `buffer_row_length` and `buffer_image_height` set, where
   the gap between the layers has to still hold the sentinel.
-- **`CmdBarriers`.** One dependency carrying a memory, a buffer and an image barrier together, with the
-  compute write it orders and the texture it transitions both read back afterwards. `CmdImageBarriers`, the
-  plural image overload, is the one call of the group still without a caller here - it forwards to
-  `CmdBarriers` like the rest, but that is an argument about risk rather than a test.
+- **`CmdBarriers`.** One dependency carrying a memory, a buffer and a texture barrier together, with the
+  compute write it orders and the texture it transitions both read back afterwards. The plural
+  `CmdTextureBarriers` was the one call of the group left without a caller here and has one since: three
+  textures transitioned in one call and each read back, so a forwarding that dropped all but the first is
+  visible.
 - **The presets.** `ToShaderRead`, `ToTransferSource`, the three argument `To`, `ToDepthStencilAttachment`,
   `ToPresent`, and `BufferBarrier::ReadThenWrite`. Each image preset runs over a texture holding known
   content and the content is read back after: a preset naming the wrong source layout either trips the
@@ -1375,8 +1376,6 @@ transfer queue turns the texture section red.
   is public precisely so a caller can make the range check itself, and no caller does.
 - `PhysicalDevice::FindMemoryTypeIndex`, which is reachable headlessly, and `GetPresentQueueFamilyIndex`,
   which belongs with 3.22.
-- `CmdTextureBarriers`, the plural overload - the one call of the barrier group 3.19 left without a
-  caller. It forwards to `CmdBarriers` like the rest, which is an argument about risk rather than a test.
 - `CmdDrawMeshTasks`. 3.3 wrote it and could only test that it threw, since nothing enabled the extension;
   3.6 enabled it and nothing went back. A positive draw needs a mesh shader in Slang and a device that has
   `VK_EXT_mesh_shader`, and skips on one that does not.
@@ -1385,15 +1384,13 @@ transfer queue turns the texture section red.
 
 **Fields that reach the driver with nothing asserting on them.**
 
-- `CmdSetStencilCompareMask` and `CmdSetStencilWriteMask`, with `DynamicStateBits::StencilCompareMask` and
-  `::StencilWriteMask` behind them. 3.16 added all four and named none of them; the cases there set every
-  mask statically. Per-face through `StencilFaceBits` is untouched as well.
-- The alpha half of `ColorBlendDesc`. `src_alpha_factor`, `dst_alpha_factor` and `alpha_operation` never
-  vary and the blend readback walks three channels, so nothing would notice them reaching the wrong members
-  of `VkPipelineColorBlendAttachmentState`.
+- Stencil state that differs between the faces. `CmdSetStencilCompareMask`, `CmdSetStencilWriteMask` and
+  `CmdSetStencilReference` are each called for `StencilFaceBits::Front` and `::Back` now, but with the same
+  values on both, so the one mistake the case cannot see is the two faces being swapped on the way to the
+  driver. A draw whose back faces carry a different mask than its front ones would see it.
 
 **The translation tables, which are switch statements a mis-typed case makes silently wrong.** Reached by a
-test today: `StencilOperation` 1 of 8 - only `Replace` - `BlendFactor` 4 of 13, `BlendOperation` 2 of 5,
+test today: `StencilOperation` 1 of 8 - only `Replace` - `BlendFactor` 4 of 14, `BlendOperation` 2 of 5,
 `Comparator` 4 of 8, and `ImageAddressMode` 2 of 5, which leaves `ToVkBorderColor` and every `BorderColor`
 value dead to the suite. A table-driven case per enum that builds the object and asserts no validation error
 covers the mapping being *valid*; it does not catch two entries swapped for each other, and the note should
@@ -1409,10 +1406,10 @@ so at the top, so this belongs beside it rather than inside it, and skips on a m
 window the way the headless file skips on a machine with no device.
 
 Done when: a surface is created over an offscreen window and reports its formats and present modes; a swap
-chain is created, its images acquired, rendered into and presented for several frames, with the presented
-image read back and compared; `Recreate` after a resize hands back new images at the new extent and leaves
+chain is created, its textures acquired, rendered into and presented for several frames, with the presented
+texture read back and compared; `Recreate` after a resize hands back new textures at the new extent and leaves
 nothing behind for the validation layer to complain about; a window with no client area leaves the swap
-chain empty and the next `AcquireImage` recovers, which is 1.1 and is checked by nothing; `HasDepth` off
+chain empty and the next `AcquireTexture` recovers, which is 1.1 and is checked by nothing; `HasDepth` off
 runs the loop with an absent depth attachment, which is 4.5 from the other side; and a `FrameContext` runs
 enough frames to wrap its timeline more than once, with `frames_in_flight` at one and at two.
 
