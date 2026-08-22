@@ -33,6 +33,13 @@ struct SwapChainDesc
     PixelFormat pixel_format = PixelFormat::B8G8R8A8_SRGB;
     ColorSpace color_space = ColorSpace::SrgbNonlinear;
     PresentMode present_mode = PresentMode::Fifo;
+    /**
+     * Give the color textures TransferSource as well, so that a presented frame can be copied back and
+     * looked at. Off by default, since a frame that only presents does not need it and the extra usage can
+     * cost the driver a compression path. A surface that does not offer the usage throws rather than
+     * dropping it, so a caller that asked to read the frame back is never quietly given a texture it cannot.
+     */
+    bool allow_readback = false;
 };
 
 /** Outcome of acquiring or presenting a swap chain texture. */

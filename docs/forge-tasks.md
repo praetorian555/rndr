@@ -1371,8 +1371,8 @@ transfer queue turns the texture section red.
   throw.
 - `TimestampQueryPool::TryGetResults`, although `TryGetElapsedMilliseconds` is called. `ResolveQueryRange`
   is public precisely so a caller can make the range check itself, and no caller does.
-- `PhysicalDevice::FindMemoryTypeIndex`, which is reachable headlessly, and `GetPresentQueueFamilyIndex`,
-  which belongs with 3.22.
+- `PhysicalDevice::FindMemoryTypeIndex`, which is reachable headlessly. `GetPresentQueueFamilyIndex` went
+  to 3.22 and is covered there.
 - `CmdDrawMeshTasks`. 3.3 wrote it and could only test that it threw, since nothing enabled the extension;
   3.6 enabled it and nothing went back. A positive draw needs a mesh shader in Slang and a device that has
   `VK_EXT_mesh_shader`, and skips on one that does not.
@@ -1393,25 +1393,44 @@ value dead to the suite. A table-driven case per enum that builds the object and
 covers the mapping being *valid*; it does not catch two entries swapped for each other, and the note should
 say so rather than imply otherwise.
 
-### 3.22 Windowed tests: surface, swap chain, frame context
+### 3.22 Windowed tests: surface, swap chain, frame context — DONE
 
-New file, `test/forge/window-test.cpp`, tag `[forge-window]`.
+`test/forge/window-test.cpp`, tag `[forge-window]`, six cases. `test/forge/forge-test-common.hpp` came out of
+`smoke-test.cpp` along the way: the validation report, the two assertions built on it and the environment
+flag, which are all both files share. The fixtures stayed where they are used, since one builds a device and
+the other an application, a window and a surface first.
 
-`Surface`, `SwapChain` and `FrameContext` have no test at all - the three types the whole frame loop is
-made of, covered by running the sample and looking at it. `smoke-test.cpp` is headless by design and says
-so at the top, so this belongs beside it rather than inside it, and skips on a machine that cannot open a
-window the way the headless file skips on a machine with no device.
+The window is undecorated, kept out of the task bar and never shown. Without a title bar or a sizing frame
+the client area is the whole window, so what is asked for is what the surface reports - and, unlike a caption
+window, it can be sized to nothing, which is what the recovery case needs. A window that popped up would
+steal focus from whoever is using the machine, and a hidden one has a client area and a surface all the same.
 
-Done when: a surface is created over an offscreen window and reports its formats and present modes; a swap
-chain is created, its textures acquired, rendered into and presented for several frames, with the presented
-texture read back and compared; `Recreate` after a resize hands back new textures at the new extent and leaves
-nothing behind for the validation layer to complain about; a window with no client area leaves the swap
-chain empty and the next `AcquireTexture` recovers, which is 1.1 and is checked by nothing; `HasDepth` off
-runs the loop with an absent depth attachment, which is 4.5 from the other side; and a `FrameContext` runs
-enough frames to wrap its timeline more than once, with `frames_in_flight` at one and at two.
+What a frame put on the screen is compared rather than assumed. That needed `SwapChainDesc::allow_readback`,
+off by default, which adds `TransferSource` to the color textures and throws when the surface does not offer
+the usage - a presented frame is not observable at all without it. The frame then copies the swap chain
+texture onto a texture of the test's own inside the same command buffer, and that copy is what is read back:
+reading the swap chain texture after the present would race the presentation engine. Every pixel of every
+frame is checked, which a deliberately wrong expectation confirmed by failing on all 12288 of them.
 
-`SwapChainStatus::OutOfDate` is the outcome worth building the test around, since it is the one the sample
-only meets when a person drags a window edge.
+Covered: the surface reports its formats, its present modes and the queue family that can present to it; a
+swap chain comes out at the size of the client area with textures and views to match; `HasDepth` off leaves
+an empty depth texture, which is 4.5 from the other side; nothing is acquired until `AcquireTexture` says so,
+and presenting or acquiring with a timeline semaphore throws; both types leave an empty source behind a move;
+every texture is presented, re-acquired and rendered into twice with the result read back each time; a resize
+followed by `Recreate` moves the extent *and* the textures, and a frame after it renders and presents; and
+`FrameContext` runs three times round its slots and one more at `frames_in_flight` one and two, with and
+without depth, with the frame index tracking the submitted count.
+
+1.1 is checked at last, from both ends. A window with no client area leaves the swap chain empty, the acquire
+that follows says `OutOfDate` rather than throwing or handing out an index into textures that are gone, and
+the first acquire once the window is back rebuilds while still skipping its frame. Through `FrameContext` the
+same thing is driven as a loop rather than as one demanded outcome: which end notices is the driver's to
+decide - the acquire can report it, or hand out one more texture from the swap chain it already has and leave
+the present to report it - so the loop runs until the swap chain is released, and from there every frame is
+skipped with the frame index standing still.
+
+Left as it is: `Minimize()` is the case a person hits, and sizing to nothing is what the surface sees either
+way. Minimizing shows the window to do it, which a test suite has no business doing.
 
 ---
 

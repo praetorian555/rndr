@@ -47,7 +47,12 @@ Catch2, single `rndr-test` binary, run a subset by tag:
 
     ./build/msvc-debug/Debug/rndr-test.exe "[input]"
 
-Tags in use: `[input]` `[canvas]` `[mesh]` `[bitmap]` `[fps]` `[init]`.
+Tags in use: `[input]` `[canvas]` `[mesh]` `[bitmap]` `[fps]` `[init]` `[forge]` `[forge-window]`.
+
+`[forge]` is headless and runs anywhere a Vulkan device exists. `[forge-window]` needs a window system
+as well, opens an offscreen window and presents to it, and covers `Surface`, `SwapChain` and
+`FrameContext`. Both skip rather than fail on a machine that cannot run them, so a run that found no
+device looks like a run that passed - set `RNDR_TEST_REQUIRE_VULKAN=1` to make that a failure instead.
 
 ## Commits
 

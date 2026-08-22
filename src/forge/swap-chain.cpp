@@ -406,6 +406,20 @@ void Rndr::Forge::SwapChain::Recreate()
     create_info.imageExtent = extent;
     create_info.imageArrayLayers = 1;
     create_info.imageUsage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
+    // A presented frame is only observable when it can be the source of a copy, and that is a usage the
+    // surface has to offer. Asked for and missing throws, rather than handing back textures whose desc says
+    // they can be read and whose images cannot.
+    TextureUsageBits color_texture_usage = TextureUsageBits::ColorAttachment;
+    if (m_desc.allow_readback)
+    {
+        if ((swap_chain_support.capabilities.supportedUsageFlags & VK_IMAGE_USAGE_TRANSFER_SRC_BIT) == 0)
+        {
+            throw Opal::Exception("This surface does not offer swap chain textures that can be copied from, so allow_readback "
+                                  "cannot be honoured!");
+        }
+        create_info.imageUsage |= VK_IMAGE_USAGE_TRANSFER_SRC_BIT;
+        color_texture_usage |= TextureUsageBits::TransferSource;
+    }
 
     const DeviceQueue& graphics_queue = m_device->GetQueue(QueueFamily::Graphics);
     const DeviceQueue& present_queue = m_device->GetQueue(QueueFamily::Present);
@@ -466,7 +480,7 @@ void Rndr::Forge::SwapChain::Recreate()
             .format = m_desc.pixel_format,
             .width = extent.width,
             .height = extent.height,
-            .usage = TextureUsageBits::ColorAttachment
+            .usage = color_texture_usage
         });
         m_color_textures.PushBack(std::move(texture));
     }

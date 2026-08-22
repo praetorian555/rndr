@@ -106,6 +106,13 @@ has an empty depth texture. Ask `HasDepth()`, and leave `RenderingDesc::depth_at
 answers false - an attachment that is present and names no texture throws, since absent is what "no depth"
 is spelled as.
 
+What was presented can be read back, but only when the swap chain was asked for it.
+`SwapChainDesc::allow_readback` adds `TransferSource` to the color textures, and it is off by default -
+a frame that only presents has no use for the usage, and it can cost the driver a compression path. A
+surface that does not offer it throws rather than handing back textures whose desc claims a usage their
+images do not have. The windowed tests are what it exists for; copy the swap chain texture inside the
+frame that drew it rather than reading it after the present, which races the presentation engine.
+
 ---
 
 ## The frame loop

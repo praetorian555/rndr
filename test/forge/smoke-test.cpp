@@ -24,6 +24,8 @@
 #include "rndr/forge/transfer.hpp"
 #include "rndr/types.hpp"
 
+#include "forge-test-common.hpp"
+
 /**
  * Headless tests for Forge: no window, no surface, no swap chain, so they run anywhere a Vulkan device
  * exists. Every one of them ends in a readback and compares against a value computed on the CPU, since the
@@ -100,36 +102,9 @@ struct ForgeFixture
         return device.GetQueue(queue_family);
     }
 
-    /**
-     * What the validation layer reported, as text, so a failure names the problem instead of only counting
-     * it. Validation messages only: the loader reports a layer manifest that some other application left
-     * behind at error severity, which says nothing about this code. Always empty in a build without
-     * RNDR_FORGE_VALIDATION, where there is no layer to report anything.
-     */
-    [[nodiscard]] Opal::StringUtf8 GetValidationErrors() const
-    {
-        Opal::StringUtf8 report;
-        for (const Forge::DebugMessage& message : context.GetDebugMessages())
-        {
-            if (message.severity == Forge::DebugMessageSeverity::Error && !!(message.types & Forge::DebugMessageTypeBits::Validation))
-            {
-                report += message.text;
-                if (!message.objects.IsEmpty())
-                {
-                    report += Opal::StringUtf8(" [objects: ");
-                    report += message.objects;
-                    report += Opal::StringUtf8("]");
-                }
-                report += Opal::StringUtf8("\n");
-            }
-        }
-        return report;
-    }
+    [[nodiscard]] Opal::StringUtf8 GetValidationErrors() const { return ForgeTest::CollectValidationErrors(context); }
 
-    [[nodiscard]] u32 GetValidationErrorCount() const
-    {
-        return context.GetDebugMessageCount(Forge::DebugMessageSeverity::Error, Forge::DebugMessageTypeBits::Validation);
-    }
+    [[nodiscard]] u32 GetValidationErrorCount() const { return ForgeTest::CountValidationErrors(context); }
 
     /**
      * Release the device, which is where the layer names anything that outlived it. A leak has no other
@@ -139,26 +114,6 @@ struct ForgeFixture
      */
     void DestroyDevice() { device.Destroy(); }
 };
-
-/** Fails the test with the text of the messages when the validation layer reported an error. */
-#define REQUIRE_NO_VALIDATION_ERROR(fixture)                                        \
-    do                                                                              \
-    {                                                                               \
-        const Opal::StringUtf8 validation_errors = (fixture).GetValidationErrors(); \
-        INFO(*validation_errors);                                                   \
-        REQUIRE((fixture).GetValidationErrorCount() == 0);                          \
-    } while (false)
-
-/**
- * The same check, with the device released first, so that an object nobody destroyed is named rather than
- * outliving the last assertion. Everything the case built on the device has to be gone before this.
- */
-#define REQUIRE_NO_VALIDATION_ERROR_AT_TEARDOWN(fixture) \
-    do                                                   \
-    {                                                    \
-        (fixture).DestroyDevice();                       \
-        REQUIRE_NO_VALIDATION_ERROR(fixture);            \
-    } while (false)
 
 /** Whether this machine has a Vulkan device at all, so a machine without one skips rather than fails. */
 bool IsForgeAvailable()
@@ -213,28 +168,6 @@ bool IsSoftwareDevice()
     return software;
 }
 
-/**
- * Whether an environment variable is set to anything but "0". _dupenv_s rather than getenv, which MSVC
- * deprecates and this build turns into an error.
- */
-bool IsEnvironmentFlagSet(const char* name)
-{
-    bool is_set = false;
-#if defined(_MSC_VER)
-    char* value = nullptr;
-    size_t size = 0;
-    if (_dupenv_s(&value, &size, name) == 0 && value != nullptr)
-    {
-        is_set = value[0] != '0';
-        free(value);
-    }
-#else
-    const char* value = std::getenv(name);
-    is_set = value != nullptr && value[0] != '0';
-#endif
-    return is_set;
-}
-
 /** Writes its own thread index plus a constant into a buffer named by its address, so every value is checkable. */
 constexpr const char* k_compute_source = R"(
 [shader("compute")]
@@ -280,7 +213,7 @@ i32 CountMismatches(Opal::ArrayView<const u8> expected, Opal::ArrayView<const u8
  */
 TEST_CASE("Forge has the device the environment says it has to have", "[forge]")
 {
-    if (!IsEnvironmentFlagSet("RNDR_TEST_REQUIRE_VULKAN"))
+    if (!ForgeTest::IsEnvironmentFlagSet("RNDR_TEST_REQUIRE_VULKAN"))
     {
         SKIP("RNDR_TEST_REQUIRE_VULKAN is unset, so a machine with no Vulkan device is allowed here.");
     }
