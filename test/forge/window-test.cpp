@@ -649,22 +649,14 @@ TEST_CASE("Forge swap chain recovers from a window with no client area", "[forge
                          GetFrameColor(0), &swap_chain.GetDepthTexture());
         frame_context.EndFrame();
 
+        // A window that lost its client area is something the application learns from the window system
+        // rather than from the driver. Whether an acquire or a present volunteers OutOfDate for one is up to
+        // the implementation - the specification lets it stay silent, and the software driver CI runs on
+        // does - so a test cannot demand it of either. Recreate is the call that reads the surface, finds
+        // nothing to present to and releases the swap chain, and that is the state the rest of this case is
+        // about.
         fixture.ResizeWindow(0, 0);
-        // Which end of the frame notices is the driver's to decide: the acquire can report it, or it can
-        // hand out one more texture from the swap chain it already has and leave the present to report it.
-        // Either way the swap chain is released within a frame or two, so the loop is run rather than one
-        // outcome being demanded of the frame that follows the resize.
-        i32 frames_until_empty = 0;
-        while (swap_chain.IsValid() && frames_until_empty < 8)
-        {
-            ++frames_until_empty;
-            if (frame_context.BeginFrame() == Forge::SwapChainStatus::Success)
-            {
-                RecordClearFrame(frame_context.GetCommandBuffer(), frame_context.GetColorTexture(), nullptr,
-                                 swap_chain.GetExtent(), GetFrameColor(frames_until_empty), &swap_chain.GetDepthTexture());
-                frame_context.EndFrame();
-            }
-        }
+        swap_chain.Recreate();
         REQUIRE_FALSE(swap_chain.IsValid());
 
         // From here every frame is skipped, and the slot a skipped frame would have used is still the next

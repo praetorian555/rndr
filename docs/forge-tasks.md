@@ -1424,10 +1424,15 @@ without depth, with the frame index tracking the submitted count.
 1.1 is checked at last, from both ends. A window with no client area leaves the swap chain empty, the acquire
 that follows says `OutOfDate` rather than throwing or handing out an index into textures that are gone, and
 the first acquire once the window is back rebuilds while still skipping its frame. Through `FrameContext` the
-same thing is driven as a loop rather than as one demanded outcome: which end notices is the driver's to
-decide - the acquire can report it, or hand out one more texture from the swap chain it already has and leave
-the present to report it - so the loop runs until the swap chain is released, and from there every frame is
-skipped with the frame index standing still.
+same states are driven: every frame skipped while there is nothing to render into, the frame index standing
+still because nothing was submitted, and the loop picking up on its own once the window is back.
+
+Both go through `Recreate` to reach the empty state rather than waiting for a frame to report it. Whether an
+acquire or a present volunteers `OutOfDate` for a window that lost its client area is the implementation's
+to decide - the specification lets it stay silent, and the software driver CI runs on does, where the desktop
+driver this was written on reports it within a frame. An application learns of that window from the window
+system, so this is what the call sequence looks like there too; the driver-reported path is not something a
+test can force.
 
 Left as it is: `Minimize()` is the case a person hits, and sizing to nothing is what the surface sees either
 way. Minimizing shows the window to do it, which a test suite has no business doing.
