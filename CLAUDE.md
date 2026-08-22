@@ -22,7 +22,6 @@ Guessing at those produces code that compiles and is wrong.
   `IsValid()` contract, and the error strategy. Forge deliberately departs from the rest of the repo here:
   failures throw rather than returning a status, and `RNDR_RETURN_ON_FAIL` is not used. Following the
   surrounding code from another subsystem will produce the wrong pattern.
-- [docs/forge-tasks.md](docs/forge-tasks.md) — the Forge work queue.
 
 ## Building here
 
@@ -60,6 +59,6 @@ device looks like a run that passed - set `RNDR_TEST_REQUIRE_VULKAN=1` to make t
 `fix(Forge): Return descriptor sets to their pool`. Scopes are subsystems: `Forge`, `Canvas`, `Window`,
 `CMake`.
 
-Keep the body terse: a few lines on what changed and why, not a prose retelling of the diff. Do not
-reference the task list — `docs/forge-tasks.md` records that, and a commit that cites a task number goes
-stale the moment the list is renumbered. No `Co-Authored-By` or `Claude-Session` trailers.
+Keep the body terse: a few lines on what changed and why, not a prose retelling of the diff. Do not cite
+task or issue numbers — they go stale the moment the list they refer to is renumbered, and the commit has to
+stand on its own. No `Co-Authored-By` or `Claude-Session` trailers.
