@@ -477,51 +477,62 @@ Rndr::Forge::Device::Device(PhysicalDevice physical_device, const GraphicsContex
         throw VulkanException(result, "vkCreateDevice");
     }
 
-    auto queue_family_indices_array = m_queue_family_indices.GetValidQueueFamilies();
-    for (u8 queue_family_idx = 0; queue_family_idx < static_cast<u8>(QueueFamily::EnumCount); ++queue_family_idx)
+    // The device exists from here on, and so does the command pool of every queue made below. The
+    // destructor does not run for an object whose constructor threw, so a queue that cannot create its pool
+    // or an allocator that cannot be made leaves this constructor to release what got that far.
+    try
     {
-        const QueueFamily queue_family = static_cast<QueueFamily>(queue_family_idx);
-        const u32 queue_family_index = m_queue_family_indices.GetQueueFamilyIndex(queue_family);
-        if (queue_family_index == QueueFamilyIndices::k_invalid_index)
+        auto queue_family_indices_array = m_queue_family_indices.GetValidQueueFamilies();
+        for (u8 queue_family_idx = 0; queue_family_idx < static_cast<u8>(QueueFamily::EnumCount); ++queue_family_idx)
         {
-            continue;
-        }
-        bool already_present = false;
-        for (const auto& pair : m_queue_family_to_queue)
-        {
-            if (pair.value->GetQueueFamilyIndex() == queue_family_index)
+            const QueueFamily queue_family = static_cast<QueueFamily>(queue_family_idx);
+            const u32 queue_family_index = m_queue_family_indices.GetQueueFamilyIndex(queue_family);
+            if (queue_family_index == QueueFamilyIndices::k_invalid_index)
             {
-                m_queue_family_to_queue.Insert(queue_family, pair.value.Clone());
-                already_present = true;
-                break;
+                continue;
             }
+            bool already_present = false;
+            for (const auto& pair : m_queue_family_to_queue)
+            {
+                if (pair.value->GetQueueFamilyIndex() == queue_family_index)
+                {
+                    m_queue_family_to_queue.Insert(queue_family, pair.value.Clone());
+                    already_present = true;
+                    break;
+                }
+            }
+            if (already_present)
+            {
+                continue;
+            }
+            Opal::SharedPtr<DeviceQueue> queue_ptr(Opal::GetDefaultAllocator(), *this, queue_family_index);
+            m_queue_family_to_queue.Insert(queue_family, std::move(queue_ptr));
         }
-        if (already_present)
-        {
-            continue;
-        }
-        Opal::SharedPtr<DeviceQueue> queue_ptr(Opal::GetDefaultAllocator(), *this, queue_family_index);
-        m_queue_family_to_queue.Insert(queue_family, std::move(queue_ptr));
-    }
 
-    // Setup GPU allocator
-    const VmaVulkanFunctions vk_functions{
-        .vkGetInstanceProcAddr = vkGetInstanceProcAddr,
-        .vkGetDeviceProcAddr = vkGetDeviceProcAddr,
-        .vkCreateImage = vkCreateImage,
-    };
-    const VmaAllocatorCreateInfo vma_alloc_create_info = {
-        .flags = VMA_ALLOCATOR_CREATE_BUFFER_DEVICE_ADDRESS_BIT,
-        .physicalDevice = m_physical_device.GetNativePhysicalDevice(),
-        .device = m_device,
-        .pVulkanFunctions = &vk_functions,
-        .instance = graphics_context.GetInstance(),
-    };
-    m_debug_utils_enabled = graphics_context.AreDebugUtilsEnabled();
-    const VkResult vma_result = vmaCreateAllocator(&vma_alloc_create_info, &m_gpu_allocator);
-    if (vma_result != VK_SUCCESS)
+        // Setup GPU allocator
+        const VmaVulkanFunctions vk_functions{
+            .vkGetInstanceProcAddr = vkGetInstanceProcAddr,
+            .vkGetDeviceProcAddr = vkGetDeviceProcAddr,
+            .vkCreateImage = vkCreateImage,
+        };
+        const VmaAllocatorCreateInfo vma_alloc_create_info = {
+            .flags = VMA_ALLOCATOR_CREATE_BUFFER_DEVICE_ADDRESS_BIT,
+            .physicalDevice = m_physical_device.GetNativePhysicalDevice(),
+            .device = m_device,
+            .pVulkanFunctions = &vk_functions,
+            .instance = graphics_context.GetInstance(),
+        };
+        m_debug_utils_enabled = graphics_context.AreDebugUtilsEnabled();
+        const VkResult vma_result = vmaCreateAllocator(&vma_alloc_create_info, &m_gpu_allocator);
+        if (vma_result != VK_SUCCESS)
+        {
+            throw VulkanException(vma_result, "vmaCreateAllocator");
+        }
+    }
+    catch (...)
     {
-        throw VulkanException(vma_result, "vmaCreateAllocator");
+        Destroy();
+        throw;
     }
 }
 

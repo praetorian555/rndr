@@ -135,7 +135,18 @@ Rndr::Forge::SwapChainSupportDetails Rndr::Forge::Surface::GetSwapChainSupportDe
 Rndr::Forge::SwapChain::SwapChain(const Device& device, const Surface& surface, const SwapChainDesc& desc)
     : m_desc(desc), m_device(device), m_surface(surface)
 {
-    Recreate();
+    // Recreate holds the swap chain and its textures the moment each is made, and a later step of it can
+    // still throw. The destructor does not run for an object whose constructor threw, so what it got that
+    // far is released here.
+    try
+    {
+        Recreate();
+    }
+    catch (...)
+    {
+        Destroy();
+        throw;
+    }
 }
 
 Rndr::Forge::SwapChain::~SwapChain()

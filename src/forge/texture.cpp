@@ -180,22 +180,32 @@ Rndr::Forge::Texture::Texture(const Device& device, DeviceQueue& queue, const Bi
 
     Init(device, m_desc);
 
-    // Create staging buffer
-    const Buffer staging_buffer(device, {.size = bitmap.GetTotalSize(), .usage = BufferUsageBits::TransferSource});
-    staging_buffer.Update({bitmap.GetData(), bitmap.GetTotalSize()}, 0);
+    // The image and its view exist from here on, and the destructor does not run for an object whose
+    // constructor threw, so the upload below has to release them itself if it cannot finish.
+    try
+    {
+        // Create staging buffer
+        const Buffer staging_buffer(device, {.size = bitmap.GetTotalSize(), .usage = BufferUsageBits::TransferSource});
+        staging_buffer.Update({bitmap.GetData(), bitmap.GetTotalSize()}, 0);
 
-    ImmediateSubmit(device, queue,
-                    [&](CommandBuffer& command_buffer)
-                    {
-                        command_buffer.CmdTextureBarrier(TextureBarrier::ToTransferDestination(*this));
-                        command_buffer.CmdCopyBufferToTexture(staging_buffer, bitmap, *this);
-                        if (generate_mips && m_desc.mip_level_count > 1)
+        ImmediateSubmit(device, queue,
+                        [&](CommandBuffer& command_buffer)
                         {
-                            command_buffer.CmdGenerateMips(*this);
-                            return;
-                        }
-                        command_buffer.CmdTextureBarrier(TextureBarrier::ToShaderRead(*this));
-                    });
+                            command_buffer.CmdTextureBarrier(TextureBarrier::ToTransferDestination(*this));
+                            command_buffer.CmdCopyBufferToTexture(staging_buffer, bitmap, *this);
+                            if (generate_mips && m_desc.mip_level_count > 1)
+                            {
+                                command_buffer.CmdGenerateMips(*this);
+                                return;
+                            }
+                            command_buffer.CmdTextureBarrier(TextureBarrier::ToShaderRead(*this));
+                        });
+    }
+    catch (...)
+    {
+        Destroy();
+        throw;
+    }
 }
 
 Rndr::Forge::Texture::Texture(const Device& device, VkImage native_image, const TextureDesc& desc) :

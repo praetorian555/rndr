@@ -280,6 +280,13 @@ has no two-phase initialization and no half-built objects, but `Buffer::Update`,
 `DescriptorPool::Reset` throw for the same reason: there is no useful value to return when the call did not
 do what it says.
 
+A constructor that throws releases whatever it had already created. The destructor does not run for an
+object whose constructor did not finish, so a type that creates two things - `Pipeline` its layout and then
+its pipeline, `Device` its queues and then its allocator - cleans up on the way out itself, either from the
+`catch (...)` around the part that can throw or beside the throw. The rule is worth knowing when adding a
+step to one of these: a new check placed after a `vkCreate*` call is a leak unless it is inside that
+cleanup.
+
 Exceptions cost nothing until one is thrown, and the checks that precede them are needed either way, so
 there is no reason to spell these as return values on the per-frame path.
 

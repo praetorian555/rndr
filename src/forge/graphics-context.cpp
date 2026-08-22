@@ -299,6 +299,11 @@ Rndr::Forge::GraphicsContext::GraphicsContext(const GraphicsContextDesc& desc) :
         result = CreateDebugUtilsMessengerEXT(m_instance, &debug_create_info, nullptr, &m_debug_messenger);
         if (result != VK_SUCCESS)
         {
+            // The instance above is this constructor's to release, since the destructor does not run for an
+            // object whose constructor threw. Not through Destroy(), which gives the volk count back as well
+            // and would take it a second time from the guard on the way out.
+            vkDestroyInstance(m_instance, nullptr);
+            m_instance = VK_NULL_HANDLE;
             throw VulkanException(result, "vkCreateDebugUtilsMessengerEXT");
         }
     }
