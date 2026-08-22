@@ -843,6 +843,8 @@ Rndr::Forge::Pipeline::Pipeline(const Device& device, const GraphicsPipelineDesc
         .sType = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO,
         .attachmentCount = static_cast<u32>(color_blend_attachments.GetSize()),
         .pAttachments = color_blend_attachments.GetData(),
+        .blendConstants = {desc.blend_constants.x, desc.blend_constants.y, desc.blend_constants.z,
+                           desc.blend_constants.w},
     };
 
     // Viewport and scissor are always dynamic - nothing in the desc describes them, and CmdSetViewport and

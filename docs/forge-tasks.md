@@ -1359,39 +1359,75 @@ Confirmed by mutation rather than by passing: pointing `compute_family` at the g
 `CollectQueueFamilies` turns both compute cases red, and asking `ReadBackTexture` for `ShaderReadOnly` on the
 transfer queue turns the texture section red.
 
-### 3.21 Test the loose ends
+### 3.21 Test the loose ends — DONE
 
-`test/forge/smoke-test.cpp`. Small, and each one independent of the others.
+`test/forge/smoke-test.cpp`, eleven cases. Four of them turned up something.
 
-**Public calls with no caller in any test.**
+**A blob shorter than a SPIR-V header walked off the end of its own allocation.** `Shader::FromSpirvInMemory`
+handed whatever it was given straight to `spvReflectCreateShaderModule`, which reads the generator word out of
+the header *before* it checks whether its parser accepted the module - so an empty blob had it `calloc` one
+byte and then read four bytes at offset eight. AddressSanitizer caught it on the first run of the new case.
+The parser is the thing being asked whether the bytes are SPIR-V and it has to survive being told no, so the
+size and the magic number are checked in `Shader`'s constructor now, before the blob leaves the caller's
+hands. `FromSpirvFile` had an emptiness check of its own; the in-memory path and the constructor had none.
 
-- `Shader::FromSpirvFile` and `FromSpirvInMemory` - every shader in the file comes from Slang source, so the
-  SPIR-V entry points and the reflection that runs on them are covered only along the path that produced
-  that SPIR-V here. A file whose entry point does not exist, and a blob that is not SPIR-V, should both
-  throw.
-- `TimestampQueryPool::TryGetResults`, although `TryGetElapsedMilliseconds` is called. `ResolveQueryRange`
-  is public precisely so a caller can make the range check itself, and no caller does.
-- `PhysicalDevice::FindMemoryTypeIndex`, which is reachable headlessly. `GetPresentQueueFamilyIndex` went
-  to 3.22 and is covered there.
-- `CmdDrawMeshTasks`. 3.3 wrote it and could only test that it threw, since nothing enabled the extension;
-  3.6 enabled it and nothing went back. A positive draw needs a mesh shader in Slang and a device that has
-  `VK_EXT_mesh_shader`, and skips on one that does not.
-- `Forge::LoadMesh` - `test/mesh-test.cpp` covers the Canvas mesh, not this one. A file assimp cannot read,
-  and one whose mesh has no normals or no UVs, both throw and neither is checked.
+**Four of the fourteen blend factors were dead.** Nothing ever set
+`VkPipelineColorBlendStateCreateInfo::blendConstants`, so `ConstColor` and `ConstAlpha` weighed their side by
+zero and their inverses by one - which is what `BlendFactor::Zero` and `::One` already mean. Not a validation
+error, not a wrong pipeline, just four enumerators that quietly said something else.
+`GraphicsPipelineDesc::blend_constants` is what makes them mean anything, and the test is its only caller.
+A dynamic counterpart - `DynamicStateBits::BlendConstants` and a `CmdSetBlendConstants` beside
+`CmdSetStencilReference` - is the obvious next thing and is not here; the static field is what the enum values
+needed to stop being dead.
 
-**Fields that reach the driver with nothing asserting on them.**
+**`ImageAddressMode::MirrorOnce` reached the driver on a device that never enabled the feature.**
+`MIRROR_CLAMP_TO_EDGE` is core in Vulkan 1.2 but still a feature, and `vk12.samplerMirrorClampToEdge` was
+never set. `DeviceFeatures::sampler_mirror_clamp_to_edge` sets it, and `Sampler` throws when any of the three
+axes names the mode without it - the way `max_anisotropy` above one already threw. The address mode and
+border colour tables also fell through to a `default` that quietly answered `Repeat` and `OpaqueBlack`; they
+throw now, like every other translation table in Forge.
 
-- Stencil state that differs between the faces. `CmdSetStencilCompareMask`, `CmdSetStencilWriteMask` and
-  `CmdSetStencilReference` are each called for `StencilFaceBits::Front` and `::Back` now, but with the same
-  values on both, so the one mistake the case cannot see is the two faces being swapped on the way to the
-  driver. A draw whose back faces carry a different mask than its front ones would see it.
+**The throw for a mesh with no normals is unreachable.** `LoadMesh` asks assimp for
+`aiProcess_GenSmoothNormals`, so a file with no normals has them by the time the null check runs. The check
+beside it for UVs does fire, because `aiProcess_GenUVCoords` converts a mapping that is already there rather
+than inventing one. The case asserts the mesh loads rather than pretending the throw is testable.
 
-**The translation tables, which are switch statements a mis-typed case makes silently wrong.** Reached by a
-test today: `StencilOperation` 1 of 8 - only `Replace` - `BlendFactor` 4 of 14, `BlendOperation` 2 of 5,
-`Comparator` 4 of 8, and `ImageAddressMode` 2 of 5, which leaves `ToVkBorderColor` and every `BorderColor`
-value dead to the suite. A table-driven case per enum that builds the object and asserts no validation error
-covers the mapping being *valid*; it does not catch two entries swapped for each other, and the note should
-say so rather than imply otherwise.
+**What the eleven cases cover.**
+
+The five public calls that had no caller anywhere: `Shader::FromSpirvFile` and `FromSpirvInMemory` (a module
+built from bytes reflects and dispatches the same as one built from source; a missing entry point, a blob that
+is not SPIR-V, a truncated one, an empty one and a missing file all throw), `TimestampQueryPool::TryGetResults`
+and `ResolveQueryRange` (a pool that was reset and not written says no; one the device has finished with agrees
+with the blocking read; every range that does not fit throws), `PhysicalDevice::FindMemoryTypeIndex`,
+`CmdDrawMeshTasks` (a Slang mesh shader emitting one triangle, a device with `VK_EXT_mesh_shader`, and the
+throw on a device without it), and `Forge::LoadMesh`.
+
+Stencil state that differs between the faces, which the existing per-draw case could not see: it calls all
+three `CmdSetStencil*` for `Front` and for `Back` but with the same values, so the two exchanged would change
+nothing it asserts. Different values per face need the test to know which face the quad presents, and that
+cannot come from the same three calls without assuming the answer - it comes from culling, a different enum
+reaching a different field.
+
+The five translation tables, each checked by what the device did rather than by the object having been built.
+`StencilOperation` all eight, by the value left in the stencil aspect, read back through
+`CmdCopyTextureToBuffer` rather than probed with a comparison - probing would have made the answers depend on
+the comparator table, which is the next case along. `Comparator` all eight, by which of three references
+either side of a stored value survives the stencil test. `BlendFactor` all fourteen and `BlendOperation` all
+five, against a CPU model of the equation. `ImageAddressMode` all five and `BorderColor` all three, by which
+texel of a two texel row came back for five coordinates outside it.
+
+**The note this task carried was too pessimistic, and that is worth keeping.** It said a table-driven case
+"covers the mapping being *valid*; it does not catch two entries swapped for each other". That is true of a
+case that only asserts no validation error, and none of these do. Every one of them ends in a value the CPU
+computed independently, and every one carries a last section asserting that no two entries of its enum produce
+the same answer - which is what makes the tolerance safe and the check a check rather than a demonstration.
+The swapped pair the original note gave up on is exactly what these catch.
+
+**`FindMemoryTypeIndex` returns zero when nothing matches, and that is left alone.** It is the pattern the
+error handling section of `docs/forge.md` forbids - a default the caller cannot tell from a real answer, since
+type zero is a real type with real properties. Nothing in Forge calls it, so the trap has no victim today, and
+turning it into a throw is a change to public error semantics rather than a test. The case pins the current
+behaviour and says why it is a trap; whether it should throw is a decision, not a fix.
 
 ### 3.22 Windowed tests: surface, swap chain, frame context — DONE
 

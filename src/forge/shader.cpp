@@ -236,10 +236,51 @@ void ReadPushConstants(const SpvReflectShaderModule& reflect_module, const char*
 }
 }  // namespace
 
+/**
+ * Whether a blob is long enough and marked well enough to be handed to a SPIR-V parser at all.
+ *
+ * Not a courtesy check. spirv-reflect reads the third word of the header - the generator - before it looks
+ * at whether its own parser accepted the module, so an empty blob has it allocate one byte and then read four
+ * at offset eight. The sanitizer catches that; a release build reads whatever is there. The parser is the
+ * thing being asked to decide whether the bytes are SPIR-V, and it has to survive being handed bytes that
+ * are not, so the size and the magic number are checked out here where the caller's blob still is.
+ *
+ * @param spirv_data The blob as the caller handed it over.
+ * @return An explanation of what is wrong with it, or null when nothing is.
+ */
+static const char* WhyNotSpirv(Opal::ArrayView<const Rndr::u8> spirv_data)
+{
+    // Five words of header, then at least one instruction; and vkCreateShaderModule wants a byte count that
+    // divides into words whatever reflection makes of it.
+    constexpr Rndr::i64 k_header_size = 5 * sizeof(Rndr::u32);
+    if (spirv_data.GetSize() < k_header_size)
+    {
+        return "SPIR-V data is shorter than a SPIR-V header!";
+    }
+    if (spirv_data.GetSize() % sizeof(Rndr::u32) != 0)
+    {
+        return "SPIR-V data is not a whole number of 32-bit words!";
+    }
+    constexpr Rndr::u32 k_spirv_magic = 0x07230203;
+    Rndr::u32 magic = 0;
+    memcpy(&magic, spirv_data.GetData(), sizeof(magic));
+    if (magic != k_spirv_magic)
+    {
+        return "SPIR-V data does not start with the SPIR-V magic number!";
+    }
+    return nullptr;
+}
+
 Rndr::Forge::Shader::Shader(const Device& device, Opal::ArrayView<const u8> spirv_data,
                                      const ShaderDesc& desc)
     : m_device(device), m_entry_point(desc.entry_point.Clone())
 {
+    const char* not_spirv = WhyNotSpirv(spirv_data);
+    if (not_spirv != nullptr)
+    {
+        throw Opal::Exception(not_spirv);
+    }
+
     // Use spirv-reflect to detect the shader stage from the specified entry point.
     SpvReflectShaderModule reflect_module = {};
     const SpvReflectResult reflect_result =

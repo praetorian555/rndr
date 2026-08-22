@@ -3,8 +3,10 @@
 #include <catch2/catch2.hpp>
 
 #include "opal/file-system.h"
+#include "opal/paths.h"
 
 #include "rndr/core/shader-cache.hpp"
+#include "rndr/core/shader-compiler.hpp"
 
 #include "opal/container/dynamic-array.h"
 #include "opal/container/in-place-array.h"
@@ -16,6 +18,7 @@
 #include "rndr/forge/descriptor-set.hpp"
 #include "rndr/forge/device.hpp"
 #include "rndr/forge/graphics-context.hpp"
+#include "rndr/forge/mesh.hpp"
 #include "rndr/forge/physical-device.hpp"
 #include "rndr/forge/pipeline.hpp"
 #include "rndr/forge/query.hpp"
@@ -7637,5 +7640,2060 @@ TEST_CASE("Forge a buffer handed from one queue family to another", "[forge]")
     {
         REQUIRE(values[i] == static_cast<u32>(i) + 1000);
     }
+    REQUIRE_NO_VALIDATION_ERROR(fixture);
+}
+
+namespace
+{
+
+/**
+ * What the enum table cases below render into: four texels wide, since none of them draws a shape and what
+ * is read back is one value repeated. The stencil format is one every device offers with a stencil aspect in
+ * it, so nothing here is conditional on the device.
+ */
+constexpr i32 k_table_side = 4;
+constexpr PixelFormat k_table_color_format = PixelFormat::R8G8B8A8_UNORM;
+constexpr PixelFormat k_table_depth_stencil_format = PixelFormat::D24_UNORM_S8_UINT;
+
+/**
+ * The stencil value the device ended up holding, read straight out of the stencil aspect rather than probed
+ * with a comparison. Probing would make every answer here depend on the comparator table being right, which
+ * is the next case along and has no business deciding this one.
+ *
+ * The staging buffer is sized by the whole format rather than by the aspect, which is four bytes a texel
+ * instead of the one a stencil aspect writes. CmdCopyTextureToBuffer measures the region with GetPixelSize
+ * and has no notion of an aspect narrower than the format, so a buffer sized to what the copy actually
+ * writes is refused. Over-allocating is harmless - the copy still writes one byte per texel from the front.
+ */
+u8 ReadStencilValue(ForgeFixture& fixture, Forge::Texture& depth_stencil)
+{
+    constexpr i32 k_texel_count = k_table_side * k_table_side;
+    const Forge::Buffer staging(fixture.device,
+                                {.size = k_texel_count * GetPixelSize(k_table_depth_stencil_format),
+                                 .usage = Forge::BufferUsageBits::TransferDestination,
+                                 .host_access = Forge::HostAccess::Random});
+    const Forge::BufferTextureCopyRegion region{.texture_subresource = {.aspect_mask = Forge::ImageAspectBits::Stencil},
+                                                .texture_extent = {k_table_side, k_table_side, 1}};
+    Forge::ImmediateSubmit(fixture.device, fixture.GetQueue(),
+                           [&](Forge::CommandBuffer& command_buffer)
+                           {
+                               command_buffer.CmdTextureBarrier(Forge::TextureBarrier::ToTransferSource(depth_stencil));
+                               command_buffer.CmdCopyTextureToBuffer(depth_stencil, staging, {&region, 1});
+                           });
+    Opal::DynamicArray<u8> values(k_texel_count);
+    staging.Read({values.GetData(), values.GetSize()});
+    // Every texel was covered by the same draw, so a target that does not agree with itself means the draw
+    // did not reach all of it and whichever value came back first would be an accident.
+    for (i32 i = 1; i < k_texel_count; ++i)
+    {
+        REQUIRE(values[i] == values[0]);
+    }
+    return values[0];
+}
+
+/**
+ * A pipeline that covers the whole target, writes no colour, and applies `pass_operation` to the stencil
+ * buffer wherever it draws. Comparator::Always, so nothing about the test decides whether the operation runs.
+ */
+Forge::Pipeline MakeStencilWritePipeline(const Forge::Device& device, const Forge::Shader& vertex_shader,
+                                         const Forge::Shader& fragment_shader, StencilOperation pass_operation)
+{
+    Forge::GraphicsPipelineDesc pipeline_desc =
+        MakePushedColorPipelineDesc(vertex_shader, fragment_shader, k_table_color_format);
+    pipeline_desc.depth_stencil.stencil_test_enabled = true;
+    pipeline_desc.depth_stencil.front_stencil_comparator = Comparator::Always;
+    pipeline_desc.depth_stencil.back_stencil_comparator = Comparator::Always;
+    pipeline_desc.depth_stencil.front_pass = pass_operation;
+    pipeline_desc.depth_stencil.back_pass = pass_operation;
+    pipeline_desc.color_blend_attachments[0].color_write_mask = Forge::ColorWriteMaskBits::None;
+    pipeline_desc.depth_attachment_format = k_table_depth_stencil_format;
+    pipeline_desc.stencil_attachment_format = k_table_depth_stencil_format;
+    pipeline_desc.dynamic_state = Forge::DynamicStateBits::StencilReference;
+    return Forge::Pipeline(device, pipeline_desc);
+}
+
+/** What one stencil operation does to a stored value, spelled out from the Vulkan definition of each. */
+u8 ApplyStencilOperation(StencilOperation operation, u8 stored, u8 reference)
+{
+    switch (operation)
+    {
+        case StencilOperation::Keep:
+            return stored;
+        case StencilOperation::Zero:
+            return 0;
+        case StencilOperation::Replace:
+            return reference;
+        // Clamped at the ends of the eight bits a D24_UNORM_S8_UINT stencil aspect holds, which is the only
+        // place these two differ from the wrapping pair below.
+        case StencilOperation::Increment:
+            return stored == 0xFF ? 0xFF : static_cast<u8>(stored + 1);
+        case StencilOperation::IncrementWrap:
+            return static_cast<u8>(stored + 1);
+        case StencilOperation::Decrement:
+            return stored == 0 ? 0 : static_cast<u8>(stored - 1);
+        case StencilOperation::DecrementWrap:
+            return static_cast<u8>(stored - 1);
+        case StencilOperation::Invert:
+            return static_cast<u8>(~stored);
+        default:
+            FAIL("Unhandled stencil operation");
+            return 0;
+    }
+}
+
+const char* StencilOperationName(StencilOperation operation)
+{
+    switch (operation)
+    {
+        case StencilOperation::Keep:
+            return "Keep";
+        case StencilOperation::Zero:
+            return "Zero";
+        case StencilOperation::Replace:
+            return "Replace";
+        case StencilOperation::Increment:
+            return "Increment";
+        case StencilOperation::IncrementWrap:
+            return "IncrementWrap";
+        case StencilOperation::Decrement:
+            return "Decrement";
+        case StencilOperation::DecrementWrap:
+            return "DecrementWrap";
+        case StencilOperation::Invert:
+            return "Invert";
+        default:
+            return "?";
+    }
+}
+
+/** The depth-stencil these cases render into and then read the raw stencil values out of. */
+Forge::Texture MakeStencilTarget(const Forge::Device& device)
+{
+    return Forge::Texture(device, {.format = k_table_depth_stencil_format,
+                                   .width = k_table_side,
+                                   .height = k_table_side,
+                                   .usage = Forge::TextureUsageBits::DepthStencilAttachment |
+                                            Forge::TextureUsageBits::TransferSource});
+}
+
+/**
+ * Begin rendering into a colour target cleared to red and a depth-stencil cleared to `stencil_clear`, with
+ * the viewport, the scissor and the one vertex buffer these cases use already set.
+ */
+void BeginTableRendering(Forge::CommandBuffer& command_buffer, Forge::Texture& color, Forge::Texture& depth_stencil,
+                         const Forge::Buffer& quad, u32 stencil_clear)
+{
+    command_buffer.CmdTextureBarrier(Forge::TextureBarrier::ToColorAttachment(color));
+    command_buffer.CmdTextureBarrier(Forge::TextureBarrier::ToDepthStencilAttachment(depth_stencil));
+    const Forge::RenderingAttachmentDesc depth_stencil_attachment{
+        .texture = depth_stencil,
+        .load_operation = Forge::AttachmentLoadOperation::Clear,
+        .store_operation = Forge::AttachmentStoreOperation::Store,
+        .clear_value = Forge::DepthStencilClearValue{1.0f, stencil_clear}};
+    const Forge::RenderingDesc rendering_desc{
+        .render_area_extent = {k_table_side, k_table_side},
+        .color_attachments = {Forge::RenderingAttachmentDesc{.texture = color,
+                                                             .load_operation = Forge::AttachmentLoadOperation::Clear,
+                                                             .store_operation = Forge::AttachmentStoreOperation::Store,
+                                                             .clear_value = Vector4f{1.0f, 0.0f, 0.0f, 1.0f}}},
+        .depth_attachment = depth_stencil_attachment.Clone(),
+        .stencil_attachment = depth_stencil_attachment.Clone()};
+    command_buffer.CmdBeginRendering(rendering_desc);
+    command_buffer.CmdSetViewport(Vector2f::Zero(), {k_table_side, k_table_side});
+    command_buffer.CmdSetScissor(Vector2i::Zero(), {k_table_side, k_table_side});
+    command_buffer.CmdBindVertexBuffer(quad, 0);
+}
+
+}  // namespace
+
+/**
+ * Every StencilOperation, checked by what it leaves in the stencil buffer rather than by the pipeline having
+ * been accepted. One entry of ToVkStencilOp swapped for another is a mistake nothing reports - both are legal
+ * operations and the layer has no view on which one was meant - and the value that comes back is the only
+ * witness there is.
+ *
+ * The clamping pair and the wrapping pair agree everywhere except at the end of the range they clamp at, so
+ * each of the four is run at a stored value where it differs from its partner as well as at one where it
+ * does not.
+ */
+TEST_CASE("Forge the stencil operations", "[forge]")
+{
+    if (!IsForgeAvailable())
+    {
+        SKIP("No Vulkan device on this machine.");
+    }
+    ForgeFixture fixture;
+
+    const Forge::Shader vertex_shader = Forge::Shader::FromSourceInMemory(
+        fixture.device, k_pushed_color_source, {.entry_point = "main_color_vertex", .cache = GetShaderCache()});
+    const Forge::Shader fragment_shader = Forge::Shader::FromSourceInMemory(
+        fixture.device, k_pushed_color_source, {.entry_point = "main_color_fragment", .cache = GetShaderCache()});
+    const Forge::Buffer full_quad = MakeQuadBuffer(fixture.device, MakeFullTargetQuad(0.5f));
+    const Vector4f unused_color = ByteColor(0, 0, 0, 255);
+
+    // Replace with a dynamic reference is how the buffer is seeded, so one pipeline serves every starting
+    // value and the operation under test gets a pipeline of its own.
+    const Forge::Pipeline seed_pipeline =
+        MakeStencilWritePipeline(fixture.device, vertex_shader, fragment_shader, StencilOperation::Replace);
+
+    /** Seed the stencil buffer with `stored`, apply `operation` against `reference`, and read what is left. */
+    auto apply = [&](StencilOperation operation, u8 stored, u8 reference)
+    {
+        const Forge::Pipeline operation_pipeline =
+            MakeStencilWritePipeline(fixture.device, vertex_shader, fragment_shader, operation);
+        Forge::Texture color = MakeColorTarget(fixture.device, k_table_side, k_table_color_format);
+        Forge::Texture depth_stencil = MakeStencilTarget(fixture.device);
+
+        Forge::ImmediateSubmit(fixture.device, fixture.GetQueue(),
+                               [&](Forge::CommandBuffer& command_buffer)
+                               {
+                                   BeginTableRendering(command_buffer, color, depth_stencil, full_quad, 0);
+
+                                   command_buffer.CmdBindPipeline(seed_pipeline);
+                                   command_buffer.CmdSetStencilReference(stored);
+                                   command_buffer.CmdPushConstants(seed_pipeline, ShaderTypeBits::Fragment,
+                                                                   Opal::AsBytes(unused_color));
+                                   command_buffer.CmdDraw(6);
+
+                                   command_buffer.CmdBindPipeline(operation_pipeline);
+                                   command_buffer.CmdSetStencilReference(reference);
+                                   command_buffer.CmdPushConstants(operation_pipeline, ShaderTypeBits::Fragment,
+                                                                   Opal::AsBytes(unused_color));
+                                   command_buffer.CmdDraw(6);
+                                   command_buffer.CmdEndRendering();
+                               });
+        return ReadStencilValue(fixture, depth_stencil);
+    };
+
+    constexpr StencilOperation k_operations[] = {StencilOperation::Keep,          StencilOperation::Zero,
+                                                 StencilOperation::Replace,       StencilOperation::Increment,
+                                                 StencilOperation::IncrementWrap, StencilOperation::Decrement,
+                                                 StencilOperation::DecrementWrap, StencilOperation::Invert};
+    static_assert(sizeof(k_operations) / sizeof(k_operations[0]) == static_cast<i32>(StencilOperation::EnumCount),
+                  "Every StencilOperation has to be in this table.");
+
+    // A seed the clamping pair does not saturate at, so Increment and IncrementWrap agree here and what tells
+    // the rest apart is what each one does rather than where the range ends.
+    constexpr u8 k_middle_seed = 5;
+    constexpr u8 k_reference = 200;
+
+    SECTION("Each operation leaves what its definition says, away from the ends of the range")
+    {
+        for (const StencilOperation operation : k_operations)
+        {
+            INFO("operation " << StencilOperationName(operation));
+            REQUIRE(apply(operation, k_middle_seed, k_reference) ==
+                    ApplyStencilOperation(operation, k_middle_seed, k_reference));
+        }
+    }
+    SECTION("Clamping and wrapping part company at the end of the range")
+    {
+        // The one place Increment differs from IncrementWrap, and the whole of what tells those two entries
+        // apart: everywhere else they are the same function.
+        REQUIRE(apply(StencilOperation::Increment, 0xFF, k_reference) == 0xFF);
+        REQUIRE(apply(StencilOperation::IncrementWrap, 0xFF, k_reference) == 0x00);
+        REQUIRE(apply(StencilOperation::Decrement, 0x00, k_reference) == 0x00);
+        REQUIRE(apply(StencilOperation::DecrementWrap, 0x00, k_reference) == 0xFF);
+    }
+    SECTION("No two operations agree on all three seeds, so a swapped pair has somewhere to show")
+    {
+        // What the two sections above rest on. Two entries exchanged is only visible where the values they
+        // produce differ, and this says they do rather than leaving it assumed.
+        for (const StencilOperation left : k_operations)
+        {
+            for (const StencilOperation right : k_operations)
+            {
+                if (left == right)
+                {
+                    continue;
+                }
+                INFO(StencilOperationName(left) << " against " << StencilOperationName(right));
+                const bool differ_in_the_middle = ApplyStencilOperation(left, k_middle_seed, k_reference) !=
+                                                  ApplyStencilOperation(right, k_middle_seed, k_reference);
+                const bool differ_at_the_top =
+                    ApplyStencilOperation(left, 0xFF, k_reference) != ApplyStencilOperation(right, 0xFF, k_reference);
+                const bool differ_at_the_bottom =
+                    ApplyStencilOperation(left, 0x00, k_reference) != ApplyStencilOperation(right, 0x00, k_reference);
+                REQUIRE((differ_in_the_middle || differ_at_the_top || differ_at_the_bottom));
+            }
+        }
+    }
+    REQUIRE_NO_VALIDATION_ERROR(fixture);
+}
+
+namespace
+{
+
+/** Whether one comparator passes for a reference on the left and a stored value on the right. */
+bool ComparatorPasses(Comparator comparator, u8 reference, u8 stored)
+{
+    switch (comparator)
+    {
+        case Comparator::Never:
+            return false;
+        case Comparator::Always:
+            return true;
+        case Comparator::Less:
+            return reference < stored;
+        case Comparator::Greater:
+            return reference > stored;
+        case Comparator::Equal:
+            return reference == stored;
+        case Comparator::NotEqual:
+            return reference != stored;
+        case Comparator::LessEqual:
+            return reference <= stored;
+        case Comparator::GreaterEqual:
+            return reference >= stored;
+        default:
+            FAIL("Unhandled comparator");
+            return false;
+    }
+}
+
+const char* ComparatorName(Comparator comparator)
+{
+    switch (comparator)
+    {
+        case Comparator::Never:
+            return "Never";
+        case Comparator::Always:
+            return "Always";
+        case Comparator::Less:
+            return "Less";
+        case Comparator::Greater:
+            return "Greater";
+        case Comparator::Equal:
+            return "Equal";
+        case Comparator::NotEqual:
+            return "NotEqual";
+        case Comparator::LessEqual:
+            return "LessEqual";
+        case Comparator::GreaterEqual:
+            return "GreaterEqual";
+        default:
+            return "?";
+    }
+}
+
+}  // namespace
+
+/**
+ * Every Comparator, through the stencil test, checked by whether the draw survived it. ToVkCompareOp is one
+ * switch serving the depth test, the stencil test and a comparison sampler alike, and two of its entries
+ * exchanged - Less for LessEqual, say, or Greater for Less - produces a pipeline the layer is perfectly happy
+ * with and a picture that is subtly wrong.
+ *
+ * The stencil test compares the reference on the left against the stored value on the right, so a fixed
+ * stored value and three references around it - below, equal, above - give each comparator a three way answer
+ * of its own. All eight of those answers differ, which is what makes the check a check rather than a
+ * demonstration; the last section is where that is asserted rather than assumed.
+ */
+TEST_CASE("Forge the comparators", "[forge]")
+{
+    if (!IsForgeAvailable())
+    {
+        SKIP("No Vulkan device on this machine.");
+    }
+    ForgeFixture fixture;
+
+    const Forge::Shader vertex_shader = Forge::Shader::FromSourceInMemory(
+        fixture.device, k_pushed_color_source, {.entry_point = "main_color_vertex", .cache = GetShaderCache()});
+    const Forge::Shader fragment_shader = Forge::Shader::FromSourceInMemory(
+        fixture.device, k_pushed_color_source, {.entry_point = "main_color_fragment", .cache = GetShaderCache()});
+    const Forge::Buffer full_quad = MakeQuadBuffer(fixture.device, MakeFullTargetQuad(0.5f));
+    const Vector4f unused_color = ByteColor(0, 0, 0, 255);
+    const Vector4f paint_color = ByteColor(0, 255, 0, 255);
+
+    const Forge::Pipeline seed_pipeline =
+        MakeStencilWritePipeline(fixture.device, vertex_shader, fragment_shader, StencilOperation::Replace);
+
+    /** Paints green where the stencil test passes, and leaves the buffer exactly as it found it. */
+    auto make_probe_pipeline = [&](Comparator comparator)
+    {
+        Forge::GraphicsPipelineDesc pipeline_desc =
+            MakePushedColorPipelineDesc(vertex_shader, fragment_shader, k_table_color_format);
+        pipeline_desc.depth_stencil.stencil_test_enabled = true;
+        pipeline_desc.depth_stencil.front_stencil_comparator = comparator;
+        pipeline_desc.depth_stencil.back_stencil_comparator = comparator;
+        // Keep on every outcome and a write mask of zero: this draw reads the buffer and never touches it,
+        // so what it reports is the comparison and nothing downstream of it.
+        pipeline_desc.depth_stencil.front_write_mask = 0;
+        pipeline_desc.depth_stencil.back_write_mask = 0;
+        pipeline_desc.depth_attachment_format = k_table_depth_stencil_format;
+        pipeline_desc.stencil_attachment_format = k_table_depth_stencil_format;
+        pipeline_desc.dynamic_state = Forge::DynamicStateBits::StencilReference;
+        return Forge::Pipeline(fixture.device, pipeline_desc);
+    };
+
+    /** Seed the buffer with `stored`, test `reference` against it through `comparator`, and say if green landed. */
+    auto passes = [&](Comparator comparator, u8 reference, u8 stored)
+    {
+        const Forge::Pipeline probe_pipeline = make_probe_pipeline(comparator);
+        Forge::Texture color = MakeColorTarget(fixture.device, k_table_side, k_table_color_format);
+        Forge::Texture depth_stencil = MakeStencilTarget(fixture.device);
+
+        Forge::ImmediateSubmit(fixture.device, fixture.GetQueue(),
+                               [&](Forge::CommandBuffer& command_buffer)
+                               {
+                                   BeginTableRendering(command_buffer, color, depth_stencil, full_quad, 0);
+
+                                   command_buffer.CmdBindPipeline(seed_pipeline);
+                                   command_buffer.CmdSetStencilReference(stored);
+                                   command_buffer.CmdPushConstants(seed_pipeline, ShaderTypeBits::Fragment,
+                                                                   Opal::AsBytes(unused_color));
+                                   command_buffer.CmdDraw(6);
+
+                                   command_buffer.CmdBindPipeline(probe_pipeline);
+                                   command_buffer.CmdSetStencilReference(reference);
+                                   command_buffer.CmdPushConstants(probe_pipeline, ShaderTypeBits::Fragment,
+                                                                   Opal::AsBytes(paint_color));
+                                   command_buffer.CmdDraw(6);
+                                   command_buffer.CmdEndRendering();
+                               });
+
+        Opal::DynamicArray<u8> pixels(k_table_side * k_table_side * 4);
+        Forge::ReadBackTexture(fixture.device, fixture.GetQueue(), color, pixels, 0, Forge::ImageLayout::TransferSource);
+        // The whole target was covered by one draw, so it is green everywhere or red everywhere.
+        const bool painted = pixels[0] == 0 && pixels[1] == 255;
+        for (i32 texel = 1; texel < k_table_side * k_table_side; ++texel)
+        {
+            REQUIRE((pixels[texel * 4] == 0 && pixels[texel * 4 + 1] == 255) == painted);
+        }
+        return painted;
+    };
+
+    constexpr Comparator k_comparators[] = {Comparator::Never,    Comparator::Always,    Comparator::Less,
+                                            Comparator::Greater,  Comparator::Equal,     Comparator::NotEqual,
+                                            Comparator::LessEqual, Comparator::GreaterEqual};
+    static_assert(sizeof(k_comparators) / sizeof(k_comparators[0]) == static_cast<i32>(Comparator::EnumCount),
+                  "Every Comparator has to be in this table.");
+
+    constexpr u8 k_stored = 5;
+    constexpr u8 k_references[] = {k_stored - 1, k_stored, k_stored + 1};
+
+    SECTION("Each comparator answers the three references the way its definition says")
+    {
+        for (const Comparator comparator : k_comparators)
+        {
+            for (const u8 reference : k_references)
+            {
+                INFO(ComparatorName(comparator) << " with reference " << static_cast<i32>(reference) << " against stored "
+                                                << static_cast<i32>(k_stored));
+                REQUIRE(passes(comparator, reference, k_stored) == ComparatorPasses(comparator, reference, k_stored));
+            }
+        }
+    }
+    SECTION("No two comparators answer all three the same way, so a swapped pair has somewhere to show")
+    {
+        for (const Comparator left : k_comparators)
+        {
+            for (const Comparator right : k_comparators)
+            {
+                if (left == right)
+                {
+                    continue;
+                }
+                INFO(ComparatorName(left) << " against " << ComparatorName(right));
+                bool differ_somewhere = false;
+                for (const u8 reference : k_references)
+                {
+                    differ_somewhere = differ_somewhere || ComparatorPasses(left, reference, k_stored) !=
+                                                               ComparatorPasses(right, reference, k_stored);
+                }
+                REQUIRE(differ_somewhere);
+            }
+        }
+    }
+    REQUIRE_NO_VALIDATION_ERROR(fixture);
+}
+
+namespace
+{
+
+/**
+ * What one blend factor multiplies its side of the equation by, per channel, spelled out from the Vulkan
+ * definition. A Vector4f rather than a scalar because a factor is per channel, and the alpha equation uses
+ * the alpha component of the same factor - so one value serves both halves as long as the pipeline names the
+ * same factor for colour and for alpha, which the case below does.
+ */
+Vector4f BlendFactorValue(BlendFactor factor, const Vector4f& src, const Vector4f& dst, const Vector4f& constant)
+{
+    auto all = [](f32 value) { return Vector4f{value, value, value, value}; };
+    auto invert = [](const Vector4f& value)
+    { return Vector4f{1.0f - value.x, 1.0f - value.y, 1.0f - value.z, 1.0f - value.w}; };
+    switch (factor)
+    {
+        case BlendFactor::Zero:
+            return all(0.0f);
+        case BlendFactor::One:
+            return all(1.0f);
+        case BlendFactor::SrcColor:
+            return src;
+        case BlendFactor::DstColor:
+            return dst;
+        case BlendFactor::InvSrcColor:
+            return invert(src);
+        case BlendFactor::InvDstColor:
+            return invert(dst);
+        case BlendFactor::SrcAlpha:
+            return all(src.w);
+        case BlendFactor::DstAlpha:
+            return all(dst.w);
+        case BlendFactor::InvSrcAlpha:
+            return all(1.0f - src.w);
+        case BlendFactor::InvDstAlpha:
+            return all(1.0f - dst.w);
+        case BlendFactor::ConstColor:
+            return constant;
+        case BlendFactor::InvConstColor:
+            return invert(constant);
+        case BlendFactor::ConstAlpha:
+            return all(constant.w);
+        case BlendFactor::InvConstAlpha:
+            return all(1.0f - constant.w);
+        default:
+            FAIL("Unhandled blend factor");
+            return all(0.0f);
+    }
+}
+
+const char* BlendFactorName(BlendFactor factor)
+{
+    switch (factor)
+    {
+        case BlendFactor::Zero:
+            return "Zero";
+        case BlendFactor::One:
+            return "One";
+        case BlendFactor::SrcColor:
+            return "SrcColor";
+        case BlendFactor::DstColor:
+            return "DstColor";
+        case BlendFactor::InvSrcColor:
+            return "InvSrcColor";
+        case BlendFactor::InvDstColor:
+            return "InvDstColor";
+        case BlendFactor::SrcAlpha:
+            return "SrcAlpha";
+        case BlendFactor::DstAlpha:
+            return "DstAlpha";
+        case BlendFactor::InvSrcAlpha:
+            return "InvSrcAlpha";
+        case BlendFactor::InvDstAlpha:
+            return "InvDstAlpha";
+        case BlendFactor::ConstColor:
+            return "ConstColor";
+        case BlendFactor::InvConstColor:
+            return "InvConstColor";
+        case BlendFactor::ConstAlpha:
+            return "ConstAlpha";
+        case BlendFactor::InvConstAlpha:
+            return "InvConstAlpha";
+        default:
+            return "?";
+    }
+}
+
+const char* BlendOperationName(BlendOperation operation)
+{
+    switch (operation)
+    {
+        case BlendOperation::Add:
+            return "Add";
+        case BlendOperation::Subtract:
+            return "Subtract";
+        case BlendOperation::ReverseSubtract:
+            return "ReverseSubtract";
+        case BlendOperation::Min:
+            return "Min";
+        case BlendOperation::Max:
+            return "Max";
+        default:
+            return "?";
+    }
+}
+
+/** One channel of a blend equation, clamped the way a UNORM attachment clamps it. */
+f32 BlendChannel(BlendOperation operation, f32 weighted_src, f32 weighted_dst, f32 src, f32 dst)
+{
+    f32 result = 0.0f;
+    switch (operation)
+    {
+        case BlendOperation::Add:
+            result = weighted_src + weighted_dst;
+            break;
+        case BlendOperation::Subtract:
+            result = weighted_src - weighted_dst;
+            break;
+        case BlendOperation::ReverseSubtract:
+            result = weighted_dst - weighted_src;
+            break;
+        // Min and Max ignore both factors, which is what Vulkan says of them and the one thing about these
+        // two that a test naming factors either side of them could get wrong.
+        case BlendOperation::Min:
+            result = Opal::Min(src, dst);
+            break;
+        case BlendOperation::Max:
+            result = Opal::Max(src, dst);
+            break;
+        default:
+            FAIL("Unhandled blend operation");
+            break;
+    }
+    return Opal::Clamp(result, 0.0f, 1.0f);
+}
+
+/** The whole blend equation on the CPU, as four channels of the same form. */
+Vector4f BlendOnTheCpu(BlendFactor src_factor, BlendFactor dst_factor, BlendOperation operation, const Vector4f& src,
+                       const Vector4f& dst, const Vector4f& constant)
+{
+    const Vector4f src_weight = BlendFactorValue(src_factor, src, dst, constant);
+    const Vector4f dst_weight = BlendFactorValue(dst_factor, src, dst, constant);
+    return {BlendChannel(operation, src.x * src_weight.x, dst.x * dst_weight.x, src.x, dst.x),
+            BlendChannel(operation, src.y * src_weight.y, dst.y * dst_weight.y, src.y, dst.y),
+            BlendChannel(operation, src.z * src_weight.z, dst.z * dst_weight.z, src.z, dst.z),
+            BlendChannel(operation, src.w * src_weight.w, dst.w * dst_weight.w, src.w, dst.w)};
+}
+
+/** How far apart two blended results are, in the byte levels a UNORM attachment stores them at. */
+f32 LargestChannelGap(const Vector4f& left, const Vector4f& right)
+{
+    const f32 gaps[] = {Opal::Abs(left.x - right.x), Opal::Abs(left.y - right.y), Opal::Abs(left.z - right.z),
+                        Opal::Abs(left.w - right.w)};
+    f32 largest = 0.0f;
+    for (const f32 gap : gaps)
+    {
+        largest = Opal::Max(largest, gap);
+    }
+    return largest * 255.0f;
+}
+
+}  // namespace
+
+/**
+ * Every BlendFactor and every BlendOperation, checked against the equation each one stands for rather than
+ * against the pipeline having been accepted. Both tables are switches over legal Vulkan values, so two
+ * entries exchanged builds a pipeline nothing complains about and blends the wrong thing forever.
+ *
+ * The colours are byte values a UNORM attachment stores exactly, but a factor multiplies two of them together
+ * and the product is not a byte value, so the comparison carries a tolerance of two levels. What makes that
+ * safe is the last section: no two factors here land within ten levels of each other, so the tolerance can
+ * never let one be read as another.
+ *
+ * The four constant factors were dead until this case: nothing set VkPipelineColorBlendStateCreateInfo's
+ * blendConstants, so ConstColor and ConstAlpha meant zero and their inverses meant one, which is what
+ * BlendFactor::Zero and ::One already say. GraphicsPipelineDesc::blend_constants is what makes them mean
+ * anything, and this is the only caller of it.
+ */
+TEST_CASE("Forge the blend factors and operations", "[forge]")
+{
+    if (!IsForgeAvailable())
+    {
+        SKIP("No Vulkan device on this machine.");
+    }
+    ForgeFixture fixture;
+
+    const Forge::Shader vertex_shader = Forge::Shader::FromSourceInMemory(
+        fixture.device, k_pushed_color_source, {.entry_point = "main_color_vertex", .cache = GetShaderCache()});
+    const Forge::Shader fragment_shader = Forge::Shader::FromSourceInMemory(
+        fixture.device, k_pushed_color_source, {.entry_point = "main_color_fragment", .cache = GetShaderCache()});
+    const Forge::Buffer full_quad = MakeQuadBuffer(fixture.device, MakeFullTargetQuad(0.5f));
+
+    /**
+     * Clear the target to `dst`, draw `src` over it through the given blend state, and hand back what the
+     * attachment ended up holding. The clear is what puts the destination there: the target is created fresh
+     * for every run, so nothing carries over from the run before.
+     */
+    auto blend = [&](BlendFactor src_factor, BlendFactor dst_factor, BlendOperation operation, const Vector4f& src,
+                     const Vector4f& dst, const Vector4f& constant)
+    {
+        Forge::GraphicsPipelineDesc pipeline_desc =
+            MakePushedColorPipelineDesc(vertex_shader, fragment_shader, k_table_color_format);
+        // The alpha equation is given the same three, so all four channels follow one formula and the alpha
+        // component of the factor is what the alpha channel gets - which is what BlendFactorValue models.
+        pipeline_desc.color_blend_attachments[0] = Forge::ColorBlendDesc{.blend_enabled = true,
+                                                                        .src_color_factor = src_factor,
+                                                                        .dst_color_factor = dst_factor,
+                                                                        .color_operation = operation,
+                                                                        .src_alpha_factor = src_factor,
+                                                                        .dst_alpha_factor = dst_factor,
+                                                                        .alpha_operation = operation};
+        pipeline_desc.blend_constants = constant;
+        const Forge::Pipeline pipeline(fixture.device, pipeline_desc);
+
+        Forge::Texture color = MakeColorTarget(fixture.device, k_table_side, k_table_color_format);
+        Forge::ImmediateSubmit(fixture.device, fixture.GetQueue(),
+                               [&](Forge::CommandBuffer& command_buffer)
+                               {
+                                   command_buffer.CmdTextureBarrier(Forge::TextureBarrier::ToColorAttachment(color));
+                                   const Forge::RenderingDesc rendering_desc{
+                                       .render_area_extent = {k_table_side, k_table_side},
+                                       .color_attachments = {Forge::RenderingAttachmentDesc{
+                                           .texture = color,
+                                           .load_operation = Forge::AttachmentLoadOperation::Clear,
+                                           .store_operation = Forge::AttachmentStoreOperation::Store,
+                                           .clear_value = dst}}};
+                                   command_buffer.CmdBeginRendering(rendering_desc);
+                                   command_buffer.CmdSetViewport(Vector2f::Zero(), {k_table_side, k_table_side});
+                                   command_buffer.CmdSetScissor(Vector2i::Zero(), {k_table_side, k_table_side});
+                                   command_buffer.CmdBindPipeline(pipeline);
+                                   command_buffer.CmdBindVertexBuffer(full_quad, 0);
+                                   command_buffer.CmdPushConstants(pipeline, ShaderTypeBits::Fragment, Opal::AsBytes(src));
+                                   command_buffer.CmdDraw(6);
+                                   command_buffer.CmdEndRendering();
+                               });
+
+        Opal::DynamicArray<u8> pixels(k_table_side * k_table_side * 4);
+        Forge::ReadBackTexture(fixture.device, fixture.GetQueue(), color, pixels, 0, Forge::ImageLayout::TransferSource);
+        return ByteColor(pixels[0], pixels[1], pixels[2], pixels[3]);
+    };
+
+    /** Two colours agree to within the rounding a UNORM attachment does, and no further. */
+    auto require_same_color = [](const Vector4f& measured, const Vector4f& expected)
+    {
+        INFO("measured " << measured.x << " " << measured.y << " " << measured.z << " " << measured.w);
+        INFO("expected " << expected.x << " " << expected.y << " " << expected.z << " " << expected.w);
+        REQUIRE(LargestChannelGap(measured, expected) <= 2.0f);
+    };
+
+    constexpr BlendFactor k_factors[] = {
+        BlendFactor::Zero,       BlendFactor::One,           BlendFactor::SrcColor,      BlendFactor::DstColor,
+        BlendFactor::InvSrcColor, BlendFactor::InvDstColor,  BlendFactor::SrcAlpha,      BlendFactor::DstAlpha,
+        BlendFactor::InvSrcAlpha, BlendFactor::InvDstAlpha,  BlendFactor::ConstColor,    BlendFactor::InvConstColor,
+        BlendFactor::ConstAlpha,  BlendFactor::InvConstAlpha};
+    static_assert(sizeof(k_factors) / sizeof(k_factors[0]) == static_cast<i32>(BlendFactor::EnumCount),
+                  "Every BlendFactor has to be in this table.");
+
+    constexpr BlendOperation k_operations[] = {BlendOperation::Add, BlendOperation::Subtract,
+                                               BlendOperation::ReverseSubtract, BlendOperation::Min,
+                                               BlendOperation::Max};
+    static_assert(sizeof(k_operations) / sizeof(k_operations[0]) == static_cast<i32>(BlendOperation::EnumCount),
+                  "Every BlendOperation has to be in this table.");
+
+    // Byte values, so the source and the destination themselves survive a UNORM attachment exactly and the
+    // only rounding in the answer is what the blend introduced. Chosen so that no two factors below land on
+    // the same colour - which the last section is what checks.
+    const Vector4f src = ByteColor(204, 153, 102, 153);
+    const Vector4f dst = ByteColor(77, 179, 26, 51);
+    const Vector4f constant = ByteColor(26, 77, 128, 191);
+
+    SECTION("Each factor weights the source the way its definition says")
+    {
+        // The destination is multiplied by zero and added, so what lands is the source through the factor
+        // under test and nothing else.
+        for (const BlendFactor factor : k_factors)
+        {
+            INFO("source factor " << BlendFactorName(factor));
+            require_same_color(blend(factor, BlendFactor::Zero, BlendOperation::Add, src, dst, constant),
+                               BlendOnTheCpu(factor, BlendFactor::Zero, BlendOperation::Add, src, dst, constant));
+        }
+    }
+    SECTION("Each factor weights the destination the same way")
+    {
+        // The other side of the equation, which is a separate field reaching the same table - so a mistake
+        // that reads dst_color_factor through the wrong translation shows here and not above.
+        for (const BlendFactor factor : k_factors)
+        {
+            INFO("destination factor " << BlendFactorName(factor));
+            require_same_color(blend(BlendFactor::Zero, factor, BlendOperation::Add, src, dst, constant),
+                               BlendOnTheCpu(BlendFactor::Zero, factor, BlendOperation::Add, src, dst, constant));
+        }
+    }
+    SECTION("Each operation combines the two sides the way its definition says")
+    {
+        // Both factors One, so the operation is the whole of what differs. A dimmer source than the sections
+        // above use, so that Add lands short of white and is a value rather than a clamp.
+        const Vector4f dim_src = ByteColor(102, 51, 128, 153);
+        for (const BlendOperation operation : k_operations)
+        {
+            INFO("operation " << BlendOperationName(operation));
+            require_same_color(blend(BlendFactor::One, BlendFactor::One, operation, dim_src, dst, constant),
+                               BlendOnTheCpu(BlendFactor::One, BlendFactor::One, operation, dim_src, dst, constant));
+        }
+    }
+    SECTION("No two factors and no two operations land within the tolerance of each other")
+    {
+        // What the three sections above rest on. A tolerance of two levels is only safe while the values it
+        // has to tell apart are further apart than that, and this is where that is asserted rather than
+        // eyeballed once and left to rot.
+        for (const BlendFactor left : k_factors)
+        {
+            for (const BlendFactor right : k_factors)
+            {
+                if (left == right)
+                {
+                    continue;
+                }
+                INFO(BlendFactorName(left) << " against " << BlendFactorName(right));
+                const Vector4f left_color = BlendOnTheCpu(left, BlendFactor::Zero, BlendOperation::Add, src, dst, constant);
+                const Vector4f right_color = BlendOnTheCpu(right, BlendFactor::Zero, BlendOperation::Add, src, dst, constant);
+                REQUIRE(LargestChannelGap(left_color, right_color) > 8.0f);
+            }
+        }
+        const Vector4f dim_src = ByteColor(102, 51, 128, 153);
+        for (const BlendOperation left : k_operations)
+        {
+            for (const BlendOperation right : k_operations)
+            {
+                if (left == right)
+                {
+                    continue;
+                }
+                INFO(BlendOperationName(left) << " against " << BlendOperationName(right));
+                const Vector4f left_color = BlendOnTheCpu(BlendFactor::One, BlendFactor::One, left, dim_src, dst, constant);
+                const Vector4f right_color = BlendOnTheCpu(BlendFactor::One, BlendFactor::One, right, dim_src, dst, constant);
+                REQUIRE(LargestChannelGap(left_color, right_color) > 8.0f);
+            }
+        }
+    }
+    SECTION("A constant factor is the constant the pipeline named, not zero")
+    {
+        // The regression this section exists for, and the one thing the sections above cannot catch on their
+        // own: with blendConstants left unset, ConstColor weighs its side by zero and InvConstColor by one,
+        // which is exactly what BlendFactor::Zero and ::One already mean. Compared against those two rather
+        // than against the model, so a model that made the same mistake would not hide it.
+        const Vector4f through_zero = blend(BlendFactor::Zero, BlendFactor::Zero, BlendOperation::Add, src, dst, constant);
+        const Vector4f through_one = blend(BlendFactor::One, BlendFactor::Zero, BlendOperation::Add, src, dst, constant);
+        const BlendFactor k_collapses_onto_zero[] = {BlendFactor::ConstColor, BlendFactor::ConstAlpha};
+        const BlendFactor k_collapses_onto_one[] = {BlendFactor::InvConstColor, BlendFactor::InvConstAlpha};
+        for (const BlendFactor factor : k_collapses_onto_zero)
+        {
+            INFO(BlendFactorName(factor) << " must not have collapsed onto Zero");
+            REQUIRE(LargestChannelGap(blend(factor, BlendFactor::Zero, BlendOperation::Add, src, dst, constant),
+                                      through_zero) > 8.0f);
+        }
+        for (const BlendFactor factor : k_collapses_onto_one)
+        {
+            INFO(BlendFactorName(factor) << " must not have collapsed onto One");
+            REQUIRE(LargestChannelGap(blend(factor, BlendFactor::Zero, BlendOperation::Add, src, dst, constant),
+                                      through_one) > 8.0f);
+        }
+    }
+    REQUIRE_NO_VALIDATION_ERROR(fixture);
+}
+
+namespace
+{
+
+/** The index WrapTexelIndex reports for a coordinate that fell outside the texture under Border. */
+constexpr i32 k_border_texel = -1;
+
+/** The `mirror` of the Vulkan wrapping table: the index folded about the left edge of the texture. */
+i32 MirrorIndex(i32 index)
+{
+    return index >= 0 ? index : -(1 + index);
+}
+
+/**
+ * Which texel of a row of `size` an unnormalized index lands on, straight out of the wrapping table in the
+ * image operations chapter. `k_border_texel` when the coordinate fell outside and the mode is Border.
+ *
+ * A second expression of what ToVkSamplerAddressMode maps onto, written from the specification rather than
+ * from that switch - which is what lets two of its entries being exchanged show up as a texel that is the
+ * wrong colour instead of as a sampler that builds perfectly well.
+ */
+i32 WrapTexelIndex(ImageAddressMode mode, i32 index, i32 size)
+{
+    // The remainder Vulkan means, which is the non-negative one - C leaves the sign of a negative operand to
+    // the implementation and every coordinate below the texture would come out on the wrong texel.
+    auto wrapped_mod = [](i32 value, i32 divisor)
+    {
+        const i32 remainder = value % divisor;
+        return remainder < 0 ? remainder + divisor : remainder;
+    };
+    switch (mode)
+    {
+        case ImageAddressMode::Repeat:
+            return wrapped_mod(index, size);
+        case ImageAddressMode::MirrorRepeat:
+            return (size - 1) - MirrorIndex(wrapped_mod(index, 2 * size) - size);
+        case ImageAddressMode::Clamp:
+            return Opal::Clamp(index, 0, size - 1);
+        case ImageAddressMode::Border:
+            return index < 0 || index >= size ? k_border_texel : index;
+        // Mirrored once about the left edge and then held there, which is where this parts company with
+        // MirrorRepeat: the latter goes on folding.
+        case ImageAddressMode::MirrorOnce:
+            return Opal::Clamp(MirrorIndex(index), 0, size - 1);
+        default:
+            FAIL("Unhandled image address mode");
+            return 0;
+    }
+}
+
+const char* ImageAddressModeName(ImageAddressMode mode)
+{
+    switch (mode)
+    {
+        case ImageAddressMode::Clamp:
+            return "Clamp";
+        case ImageAddressMode::Border:
+            return "Border";
+        case ImageAddressMode::Repeat:
+            return "Repeat";
+        case ImageAddressMode::MirrorRepeat:
+            return "MirrorRepeat";
+        case ImageAddressMode::MirrorOnce:
+            return "MirrorOnce";
+        default:
+            return "?";
+    }
+}
+
+const char* BorderColorName(BorderColor border_color)
+{
+    switch (border_color)
+    {
+        case BorderColor::TransparentBlack:
+            return "TransparentBlack";
+        case BorderColor::OpaqueBlack:
+            return "OpaqueBlack";
+        case BorderColor::OpaqueWhite:
+            return "OpaqueWhite";
+        default:
+            return "?";
+    }
+}
+
+/** What each BorderColor stands for, which is the whole of what ToVkBorderColor has to get right. */
+Vector4f BorderColorValue(BorderColor border_color)
+{
+    switch (border_color)
+    {
+        case BorderColor::TransparentBlack:
+            return {0.0f, 0.0f, 0.0f, 0.0f};
+        case BorderColor::OpaqueBlack:
+            return {0.0f, 0.0f, 0.0f, 1.0f};
+        case BorderColor::OpaqueWhite:
+            return {1.0f, 1.0f, 1.0f, 1.0f};
+        default:
+            FAIL("Unhandled border color");
+            return {0.0f, 0.0f, 0.0f, 0.0f};
+    }
+}
+
+/** Whether this machine offers the feature ImageAddressMode::MirrorOnce needs. */
+bool IsMirrorClampToEdgeAvailable()
+{
+    static const bool available = []
+    {
+        try
+        {
+            const ForgeFixture probe({.sampler_mirror_clamp_to_edge = true});
+            return true;
+        }
+        catch (const Opal::Exception&)
+        {
+            return false;
+        }
+    }();
+    return available;
+}
+
+}  // namespace
+
+/**
+ * Every ImageAddressMode and every BorderColor, checked by which texel came back rather than by the sampler
+ * having been created. Both are switches over legal Vulkan values, and until this case ToVkBorderColor had no
+ * caller at all in the suite while ToVkSamplerAddressMode had two of its five.
+ *
+ * The texture is the two texel row the filtering case uses - red then green - and every coordinate below sits
+ * outside it, since inside it every mode agrees and there is nothing to tell apart. Five coordinates, because
+ * no single one separates all five modes: Clamp and MirrorOnce agree everywhere above the texture, and
+ * MirrorRepeat and MirrorOnce agree everywhere until the second fold below it.
+ *
+ * Both of those switches used to fall through to a default that quietly answered Repeat and OpaqueBlack for a
+ * value they did not know. They throw now, which is what the rest of Forge does and what keeps an enumerator
+ * added later from silently meaning something else.
+ */
+TEST_CASE("Forge the sampler address modes and border colours", "[forge]")
+{
+    if (!IsForgeAvailable())
+    {
+        SKIP("No Vulkan device on this machine.");
+    }
+    const bool has_mirror_once = IsMirrorClampToEdgeAvailable();
+    INFO("MIRROR_CLAMP_TO_EDGE available: " << has_mirror_once);
+    ForgeFixture fixture({.sampler_mirror_clamp_to_edge = has_mirror_once});
+    constexpr PixelFormat k_format = PixelFormat::R8G8B8A8_UNORM;
+    constexpr i32 k_row_width = 2;
+
+    const Forge::Shader shader = Forge::Shader::FromSourceInMemory(
+        fixture.device, k_combined_sample_source, {.entry_point = "main_sample_combined", .cache = GetShaderCache()});
+
+    Forge::DescriptorPoolDesc pool_desc;
+    pool_desc.Add(Forge::DescriptorType::CombinedImageSampler, 32);
+    pool_desc.Add(Forge::DescriptorType::StorageBuffer, 32);
+    pool_desc.max_sets = 32;
+    const Forge::DescriptorPool pool(fixture.device, pool_desc);
+
+    Forge::DescriptorSetLayoutDesc layout_desc;
+    layout_desc.AddBinding(0, Forge::DescriptorType::CombinedImageSampler, 1, ShaderTypeBits::Compute);
+    layout_desc.AddBinding(1, Forge::DescriptorType::StorageBuffer, 1, ShaderTypeBits::Compute);
+    const Forge::DescriptorSetLayout layout(fixture.device, layout_desc);
+
+    Forge::ComputePipelineDesc pipeline_desc;
+    pipeline_desc.shader = shader;
+    pipeline_desc.descriptor_set_layouts.PushBack(Opal::Ref<const Forge::DescriptorSetLayout>(layout));
+    pipeline_desc.push_constant_ranges.PushBack(
+        {.shader_stages = ShaderTypeBits::Compute, .offset = 0, .size = sizeof(SampleParams)});
+    const Forge::Pipeline pipeline(fixture.device, pipeline_desc);
+
+    Forge::Texture row(fixture.device, {.format = k_format,
+                                        .width = k_row_width,
+                                        .height = 1,
+                                        .usage = Forge::TextureUsageBits::Sampled |
+                                                 Forge::TextureUsageBits::TransferDestination});
+    const Opal::DynamicArray<u8> row_pixels = MakeTwoTexelRow();
+    UploadMip(fixture.device, fixture.GetQueue(), row, {row_pixels.GetData(), row_pixels.GetSize()}, 0);
+
+    /**
+     * Sample at `u` through a nearest sampler wrapping every axis the given way. Nearest, so what comes back
+     * is one whole texel and never a blend of two - which is what makes "which texel" a question with an
+     * answer.
+     */
+    auto sample_at = [&](ImageAddressMode mode, BorderColor border_color, f32 u)
+    {
+        const Forge::Sampler sampler(fixture.device, {.min_filter = ImageFilter::Nearest,
+                                                      .mag_filter = ImageFilter::Nearest,
+                                                      .address_mode_u = mode,
+                                                      .address_mode_v = mode,
+                                                      .address_mode_w = mode,
+                                                      .border_color = border_color});
+        const Forge::Buffer output(fixture.device, {.size = sizeof(Vector4f),
+                                                    .usage = Forge::BufferUsageBits::StorageBuffer,
+                                                    .host_access = Forge::HostAccess::Random});
+        const Opal::DynamicArray<u8> zeros(sizeof(Vector4f));
+        output.Update(zeros);
+
+        Forge::DescriptorSet set(pool, layout);
+        set.Update(0, row, sampler, Forge::ImageLayout::ShaderReadOnly);
+        set.Update(1, output);
+        const SampleParams params{.uv = {u, 0.5f}};
+        Forge::ImmediateSubmit(fixture.device, fixture.GetQueue(),
+                               [&](Forge::CommandBuffer& command_buffer)
+                               {
+                                   command_buffer.CmdBindPipeline(pipeline);
+                                   command_buffer.CmdBindDescriptorSet(pipeline, set);
+                                   command_buffer.CmdPushConstants(pipeline, ShaderTypeBits::Compute, Opal::AsBytes(params));
+                                   command_buffer.CmdDispatch(1);
+                               });
+        Vector4f result;
+        output.Read({reinterpret_cast<u8*>(&result), sizeof(result)});
+        return result;
+    };
+
+    /** The colour a texel index stands for: the two the row holds, or the border colour for k_border_texel. */
+    auto texel_color = [](i32 texel, BorderColor border_color)
+    {
+        if (texel == k_border_texel)
+        {
+            return BorderColorValue(border_color);
+        }
+        return texel == 0 ? Vector4f{1.0f, 0.0f, 0.0f, 1.0f} : Vector4f{0.0f, 1.0f, 0.0f, 1.0f};
+    };
+
+    auto require_same_color = [](const Vector4f& measured, const Vector4f& expected)
+    {
+        INFO("measured " << measured.x << " " << measured.y << " " << measured.z << " " << measured.w);
+        INFO("expected " << expected.x << " " << expected.y << " " << expected.z << " " << expected.w);
+        REQUIRE(measured.x == Catch::Approx(expected.x).margin(0.01));
+        REQUIRE(measured.y == Catch::Approx(expected.y).margin(0.01));
+        REQUIRE(measured.z == Catch::Approx(expected.z).margin(0.01));
+        REQUIRE(measured.w == Catch::Approx(expected.w).margin(0.01));
+    };
+
+    // Every one of these is outside the texture, which is the only place the five modes differ from each
+    // other. The three below zero are what separate the two mirroring modes from Clamp and from each other.
+    constexpr f32 k_coordinates[] = {1.25f, 1.75f, -0.25f, -0.75f, -1.75f};
+
+    Opal::DynamicArray<ImageAddressMode> modes;
+    modes.PushBack(ImageAddressMode::Clamp);
+    modes.PushBack(ImageAddressMode::Border);
+    modes.PushBack(ImageAddressMode::Repeat);
+    modes.PushBack(ImageAddressMode::MirrorRepeat);
+    if (has_mirror_once)
+    {
+        modes.PushBack(ImageAddressMode::MirrorOnce);
+    }
+
+    SECTION("Each address mode lands on the texel the wrapping table says")
+    {
+        for (const ImageAddressMode mode : modes)
+        {
+            for (const f32 u : k_coordinates)
+            {
+                // The index Vulkan computes before wrapping, which is what the table is written against.
+                const i32 unwrapped = static_cast<i32>(Opal::Floor(u * static_cast<f32>(k_row_width)));
+                const i32 texel = WrapTexelIndex(mode, unwrapped, k_row_width);
+                INFO(ImageAddressModeName(mode) << " at u " << u << " expects texel " << texel);
+                require_same_color(sample_at(mode, BorderColor::OpaqueBlack, u),
+                                   texel_color(texel, BorderColor::OpaqueBlack));
+            }
+        }
+    }
+    SECTION("Each border colour is the one the sampler named")
+    {
+        // Only Border reads it at all, and only outside the texture, so this is the whole of what
+        // ToVkBorderColor can be asked. The three values differ in every channel that matters, so none of
+        // them can be read as another.
+        constexpr BorderColor k_border_colors[] = {BorderColor::TransparentBlack, BorderColor::OpaqueBlack,
+                                                   BorderColor::OpaqueWhite};
+        static_assert(sizeof(k_border_colors) / sizeof(k_border_colors[0]) == static_cast<i32>(BorderColor::EnumCount),
+                      "Every BorderColor has to be in this table.");
+        for (const BorderColor border_color : k_border_colors)
+        {
+            INFO("border colour " << BorderColorName(border_color));
+            require_same_color(sample_at(ImageAddressMode::Border, border_color, 1.25f),
+                               BorderColorValue(border_color));
+            // And inside the texture the border colour is not consulted, whichever one it is.
+            require_same_color(sample_at(ImageAddressMode::Border, border_color, 0.75f), {0.0f, 1.0f, 0.0f, 1.0f});
+        }
+    }
+    SECTION("No two address modes answer all five coordinates the same way")
+    {
+        // What the first section rests on. Two entries of the table exchanged is only visible where the modes
+        // disagree, and the coordinates were picked for exactly that - this is where the picking is checked.
+        for (const ImageAddressMode left : modes)
+        {
+            for (const ImageAddressMode right : modes)
+            {
+                if (left == right)
+                {
+                    continue;
+                }
+                INFO(ImageAddressModeName(left) << " against " << ImageAddressModeName(right));
+                bool differ_somewhere = false;
+                for (const f32 u : k_coordinates)
+                {
+                    const i32 unwrapped = static_cast<i32>(Opal::Floor(u * static_cast<f32>(k_row_width)));
+                    differ_somewhere = differ_somewhere || WrapTexelIndex(left, unwrapped, k_row_width) !=
+                                                               WrapTexelIndex(right, unwrapped, k_row_width);
+                }
+                REQUIRE(differ_somewhere);
+            }
+        }
+    }
+    SECTION("MirrorOnce without the feature throws rather than reaching the driver")
+    {
+        // MIRROR_CLAMP_TO_EDGE is core in Vulkan 1.2 but still a feature, and a sampler naming it on a device
+        // that did not enable it is undefined. Forge refused nothing here until the mode had a test.
+        ForgeFixture plain_fixture;
+        REQUIRE_THROWS_AS(Forge::Sampler(plain_fixture.device, {.address_mode_u = ImageAddressMode::MirrorOnce}),
+                          Opal::Exception);
+        REQUIRE_THROWS_AS(Forge::Sampler(plain_fixture.device, {.address_mode_v = ImageAddressMode::MirrorOnce}),
+                          Opal::Exception);
+        REQUIRE_THROWS_AS(Forge::Sampler(plain_fixture.device, {.address_mode_w = ImageAddressMode::MirrorOnce}),
+                          Opal::Exception);
+        // The other four modes are what every device does, so none of them is refused on the same device.
+        const Forge::Sampler unaffected(plain_fixture.device, {.address_mode_u = ImageAddressMode::MirrorRepeat});
+        REQUIRE(unaffected.IsValid());
+        REQUIRE_NO_VALIDATION_ERROR(plain_fixture);
+    }
+    if (!has_mirror_once)
+    {
+        WARN("This device has no samplerMirrorClampToEdge, so ImageAddressMode::MirrorOnce went unchecked.");
+    }
+    REQUIRE_NO_VALIDATION_ERROR(fixture);
+}
+
+/**
+ * Stencil state that differs between the two faces, which is the one mistake the existing per draw case
+ * cannot see. It calls CmdSetStencilCompareMask, CmdSetStencilWriteMask and CmdSetStencilReference for
+ * StencilFaceBits::Front and for ::Back, but with the same values on both - so the two faces being exchanged
+ * on the way to the driver would change nothing it asserts on.
+ *
+ * Giving the faces different values needs the test to know which face the quad actually presents, and that
+ * cannot come from the same three calls without assuming the answer. It comes from culling instead: a draw
+ * with Face::Back culled either survives or does not, which says what the quad is, and Face is a different
+ * enum reaching a different field. Two tables would have to be wrong in the same direction for this to pass
+ * while the driver is being lied to.
+ */
+TEST_CASE("Forge stencil state that differs between the faces", "[forge]")
+{
+    if (!IsForgeAvailable())
+    {
+        SKIP("No Vulkan device on this machine.");
+    }
+    ForgeFixture fixture;
+
+    const Forge::Shader vertex_shader = Forge::Shader::FromSourceInMemory(
+        fixture.device, k_pushed_color_source, {.entry_point = "main_color_vertex", .cache = GetShaderCache()});
+    const Forge::Shader fragment_shader = Forge::Shader::FromSourceInMemory(
+        fixture.device, k_pushed_color_source, {.entry_point = "main_color_fragment", .cache = GetShaderCache()});
+    const Forge::Buffer full_quad = MakeQuadBuffer(fixture.device, MakeFullTargetQuad(0.5f));
+    const Vector4f unused_color = ByteColor(0, 0, 0, 255);
+    const Vector4f paint_color = ByteColor(0, 255, 0, 255);
+
+    /**
+     * Which face this quad presents, decided by whether culling the back of it leaves anything behind. The
+     * winding of a quad in clip space depends on the viewport transform as much as on the order of its
+     * vertices, so it is measured rather than reasoned about - the same reason the culling case never asserts
+     * which way its triangle is wound.
+     */
+    const bool quad_is_front_facing = [&]
+    {
+        Forge::GraphicsPipelineDesc pipeline_desc =
+            MakePushedColorPipelineDesc(vertex_shader, fragment_shader, k_table_color_format);
+        pipeline_desc.rasterizer.cull_mode = Face::Back;
+        pipeline_desc.rasterizer.front_face = WindingOrder::CCW;
+        const Forge::Pipeline pipeline(fixture.device, pipeline_desc);
+
+        Forge::Texture color = MakeColorTarget(fixture.device, k_table_side, k_table_color_format);
+        const Opal::DynamicArray<u8> pixels = RenderRaster(fixture, color, k_table_side,
+                                                           [&](Forge::CommandBuffer& command_buffer)
+                                                           {
+                                                               command_buffer.CmdBindPipeline(pipeline);
+                                                               command_buffer.CmdBindVertexBuffer(full_quad, 0);
+                                                               command_buffer.CmdPushConstants(
+                                                                   pipeline, ShaderTypeBits::Fragment,
+                                                                   Opal::AsBytes(paint_color));
+                                                               command_buffer.CmdDraw(6);
+                                                           });
+        return CountCovered(pixels, k_table_side) == k_table_side * k_table_side;
+    }();
+    INFO("the quad presents its " << (quad_is_front_facing ? "front" : "back") << " face");
+
+    /**
+     * Which of a pair of values the quad's own face is due, so every expectation below is spelled once. A
+     * template, since the sections that read the buffer want a stencil value out of it and the one that
+     * reads the colour target wants whether the paint landed.
+     */
+    auto for_the_quad = [&]<typename T>(T front_value, T back_value) { return quad_is_front_facing ? front_value : back_value; };
+
+    constexpr Forge::DynamicStateBits k_dynamic_stencil = Forge::DynamicStateBits::StencilCompareMask |
+                                                          Forge::DynamicStateBits::StencilWriteMask |
+                                                          Forge::DynamicStateBits::StencilReference;
+
+    /** Stamps the reference wherever it draws, taking all three values from the command buffer. */
+    const Forge::Pipeline stamp_pipeline = [&]
+    {
+        Forge::GraphicsPipelineDesc pipeline_desc =
+            MakePushedColorPipelineDesc(vertex_shader, fragment_shader, k_table_color_format);
+        pipeline_desc.depth_stencil.stencil_test_enabled = true;
+        pipeline_desc.depth_stencil.front_stencil_comparator = Comparator::Always;
+        pipeline_desc.depth_stencil.back_stencil_comparator = Comparator::Always;
+        pipeline_desc.depth_stencil.front_pass = StencilOperation::Replace;
+        pipeline_desc.depth_stencil.back_pass = StencilOperation::Replace;
+        pipeline_desc.color_blend_attachments[0].color_write_mask = Forge::ColorWriteMaskBits::None;
+        pipeline_desc.depth_attachment_format = k_table_depth_stencil_format;
+        pipeline_desc.stencil_attachment_format = k_table_depth_stencil_format;
+        pipeline_desc.dynamic_state = k_dynamic_stencil;
+        return Forge::Pipeline(fixture.device, pipeline_desc);
+    }();
+
+    /** Paints green where the stencil test passes, leaving the buffer alone. */
+    const Forge::Pipeline probe_pipeline = [&]
+    {
+        Forge::GraphicsPipelineDesc pipeline_desc =
+            MakePushedColorPipelineDesc(vertex_shader, fragment_shader, k_table_color_format);
+        pipeline_desc.depth_stencil.stencil_test_enabled = true;
+        pipeline_desc.depth_stencil.front_stencil_comparator = Comparator::Equal;
+        pipeline_desc.depth_stencil.back_stencil_comparator = Comparator::Equal;
+        pipeline_desc.depth_attachment_format = k_table_depth_stencil_format;
+        pipeline_desc.stencil_attachment_format = k_table_depth_stencil_format;
+        pipeline_desc.dynamic_state = k_dynamic_stencil;
+        return Forge::Pipeline(fixture.device, pipeline_desc);
+    }();
+
+    /** The three values one face is given, so a call site names them together and cannot pair them wrongly. */
+    struct FaceStencil
+    {
+        u32 compare_mask = 0xFF;
+        u32 write_mask = 0xFF;
+        u32 reference = 0;
+    };
+
+    auto set_faces = [](Forge::CommandBuffer& command_buffer, const FaceStencil& front, const FaceStencil& back)
+    {
+        command_buffer.CmdSetStencilCompareMask(front.compare_mask, Forge::StencilFaceBits::Front);
+        command_buffer.CmdSetStencilWriteMask(front.write_mask, Forge::StencilFaceBits::Front);
+        command_buffer.CmdSetStencilReference(front.reference, Forge::StencilFaceBits::Front);
+        command_buffer.CmdSetStencilCompareMask(back.compare_mask, Forge::StencilFaceBits::Back);
+        command_buffer.CmdSetStencilWriteMask(back.write_mask, Forge::StencilFaceBits::Back);
+        command_buffer.CmdSetStencilReference(back.reference, Forge::StencilFaceBits::Back);
+    };
+
+    /** Stamp the quad with a different set of values per face, and hand back what the buffer holds. */
+    auto stamp = [&](const FaceStencil& front, const FaceStencil& back)
+    {
+        Forge::Texture color = MakeColorTarget(fixture.device, k_table_side, k_table_color_format);
+        Forge::Texture depth_stencil = MakeStencilTarget(fixture.device);
+        Forge::ImmediateSubmit(fixture.device, fixture.GetQueue(),
+                               [&](Forge::CommandBuffer& command_buffer)
+                               {
+                                   BeginTableRendering(command_buffer, color, depth_stencil, full_quad, 0);
+                                   command_buffer.CmdBindPipeline(stamp_pipeline);
+                                   set_faces(command_buffer, front, back);
+                                   command_buffer.CmdPushConstants(stamp_pipeline, ShaderTypeBits::Fragment,
+                                                                   Opal::AsBytes(unused_color));
+                                   command_buffer.CmdDraw(6);
+                                   command_buffer.CmdEndRendering();
+                               });
+        return ReadStencilValue(fixture, depth_stencil);
+    };
+
+    /**
+     * Seed the buffer with `seed` through both faces, then test it with a different set of values per face,
+     * and say whether the paint landed.
+     */
+    auto probe = [&](u8 seed, const FaceStencil& front, const FaceStencil& back)
+    {
+        Forge::Texture color = MakeColorTarget(fixture.device, k_table_side, k_table_color_format);
+        Forge::Texture depth_stencil = MakeStencilTarget(fixture.device);
+        Forge::ImmediateSubmit(fixture.device, fixture.GetQueue(),
+                               [&](Forge::CommandBuffer& command_buffer)
+                               {
+                                   BeginTableRendering(command_buffer, color, depth_stencil, full_quad, 0);
+
+                                   command_buffer.CmdBindPipeline(stamp_pipeline);
+                                   const FaceStencil seeding{.compare_mask = 0xFF, .write_mask = 0xFF, .reference = seed};
+                                   set_faces(command_buffer, seeding, seeding);
+                                   command_buffer.CmdPushConstants(stamp_pipeline, ShaderTypeBits::Fragment,
+                                                                   Opal::AsBytes(unused_color));
+                                   command_buffer.CmdDraw(6);
+
+                                   command_buffer.CmdBindPipeline(probe_pipeline);
+                                   set_faces(command_buffer, front, back);
+                                   command_buffer.CmdPushConstants(probe_pipeline, ShaderTypeBits::Fragment,
+                                                                   Opal::AsBytes(paint_color));
+                                   command_buffer.CmdDraw(6);
+                                   command_buffer.CmdEndRendering();
+                               });
+        Opal::DynamicArray<u8> pixels(k_table_side * k_table_side * 4);
+        Forge::ReadBackTexture(fixture.device, fixture.GetQueue(), color, pixels, 0, Forge::ImageLayout::TransferSource);
+        return CountCovered(pixels, k_table_side) == k_table_side * k_table_side;
+    };
+
+    SECTION("A reference is written by the face it was set for")
+    {
+        // Two different references, one per face. Whichever face the quad presents is the one whose value
+        // lands, and the two faces exchanged on the way to the driver puts the other number there.
+        REQUIRE(stamp({.reference = 200}, {.reference = 100}) == for_the_quad(200, 100));
+        // The same pair the other way round, so the answer cannot be whichever value happened to be set last.
+        REQUIRE(stamp({.reference = 100}, {.reference = 200}) == for_the_quad(100, 200));
+    }
+    SECTION("A write mask stops the face it was set for and no other")
+    {
+        // A write mask of zero writes nothing, so the buffer keeps the zero it was cleared to. Whether the
+        // stamp survived says which of the two faces the mask was applied to.
+        REQUIRE(stamp({.write_mask = 0xFF, .reference = 200}, {.write_mask = 0x00, .reference = 200}) ==
+                for_the_quad(200, 0));
+        REQUIRE(stamp({.write_mask = 0x00, .reference = 200}, {.write_mask = 0xFF, .reference = 200}) ==
+                for_the_quad(0, 200));
+    }
+    SECTION("A compare mask is read by the face it was set for")
+    {
+        // A compare mask of zero makes the test read no bits, so a reference of zero matches a stored five.
+        // The full mask against the same pair does not. Which of the two the quad gets is the answer.
+        constexpr u8 k_seed = 5;
+        REQUIRE(probe(k_seed, {.compare_mask = 0x00, .write_mask = 0, .reference = 0},
+                      {.compare_mask = 0xFF, .write_mask = 0, .reference = 0}) == for_the_quad(true, false));
+        REQUIRE(probe(k_seed, {.compare_mask = 0xFF, .write_mask = 0, .reference = 0},
+                      {.compare_mask = 0x00, .write_mask = 0, .reference = 0}) == for_the_quad(false, true));
+    }
+    SECTION("Naming both faces at once is the same as naming each of them")
+    {
+        // FrontAndBack is the default of all three calls and what the rest of the suite uses, so it is worth
+        // one assertion that it does not mean something else entirely.
+        Forge::Texture color = MakeColorTarget(fixture.device, k_table_side, k_table_color_format);
+        Forge::Texture depth_stencil = MakeStencilTarget(fixture.device);
+        Forge::ImmediateSubmit(fixture.device, fixture.GetQueue(),
+                               [&](Forge::CommandBuffer& command_buffer)
+                               {
+                                   BeginTableRendering(command_buffer, color, depth_stencil, full_quad, 0);
+                                   command_buffer.CmdBindPipeline(stamp_pipeline);
+                                   command_buffer.CmdSetStencilCompareMask(0xFF, Forge::StencilFaceBits::FrontAndBack);
+                                   command_buffer.CmdSetStencilWriteMask(0xFF, Forge::StencilFaceBits::FrontAndBack);
+                                   command_buffer.CmdSetStencilReference(77, Forge::StencilFaceBits::FrontAndBack);
+                                   command_buffer.CmdPushConstants(stamp_pipeline, ShaderTypeBits::Fragment,
+                                                                   Opal::AsBytes(unused_color));
+                                   command_buffer.CmdDraw(6);
+                                   command_buffer.CmdEndRendering();
+                               });
+        REQUIRE(ReadStencilValue(fixture, depth_stencil) == 77);
+        // And it reaches the face the quad does not present as well, which is the half of FrontAndBack that
+        // naming one face at a time cannot show.
+        REQUIRE(stamp({.reference = 77}, {.reference = 77}) == 77);
+    }
+    REQUIRE_NO_VALIDATION_ERROR(fixture);
+}
+
+namespace
+{
+
+/**
+ * A directory beside the shader cache for the handful of cases that need a file on disk. Created once and
+ * left there: the files in it are small, named after the case that wrote them, and rewritten every run.
+ */
+const Opal::StringUtf8& TestScratchDirectory()
+{
+    static const Opal::StringUtf8 directory = []
+    {
+        Opal::StringUtf8 path(RNDR_CORE_ASSETS_DIR "/../build/forge-test-scratch");
+        // Already there is the ordinary case and not a failure, so the code is dropped rather than checked.
+        (void)Opal::CreateDirectory(path);
+        return path;
+    }();
+    return directory;
+}
+
+Opal::StringUtf8 TestScratchPath(const char* file_name)
+{
+    return Opal::Paths::Combine(*TestScratchDirectory(), file_name).GetValue();
+}
+
+/** The SPIR-V Slang produces for one entry point, which is what a caller of FromSpirv* would have on hand. */
+Opal::DynamicArray<u8> CompileToSpirv(const char* source, const char* entry_point)
+{
+    ShaderCompiler compiler;
+    compiler.LoadModule(Opal::StringUtf8(source), ShaderOutputFormat::SpirV);
+    CompileResult result = compiler.CompileEntryPoint(Opal::StringUtf8(entry_point));
+    return std::move(result.code);
+}
+
+}  // namespace
+
+/**
+ * Shader::FromSpirvInMemory and Shader::FromSpirvFile, which had no caller anywhere in the suite. Every other
+ * shader in this file comes from Slang source, so the two entry points that take SPIR-V someone else compiled
+ * were reached only by way of FromSourceInMemory calling the constructor underneath them - and never with a
+ * blob this file chose.
+ *
+ * The SPIR-V is Slang's, compiled here through ShaderCompiler rather than read from a checked-in file, so
+ * nothing has to be regenerated when the compiler moves. What that costs is that a hand-written module is
+ * still unreached; what it buys is that the bytes are a real module rather than a fixture that rots.
+ */
+TEST_CASE("Forge shaders built from SPIR-V rather than from source", "[forge]")
+{
+    if (!IsForgeAvailable())
+    {
+        SKIP("No Vulkan device on this machine.");
+    }
+    ForgeFixture fixture;
+    const Opal::DynamicArray<u8> spirv = CompileToSpirv(k_compute_source, "main_compute");
+    REQUIRE_FALSE(spirv.IsEmpty());
+    const Opal::ArrayView<const u8> spirv_view(spirv.GetData(), spirv.GetSize());
+
+    SECTION("A module from memory carries the stage and the reflection of the entry point named")
+    {
+        const Forge::Shader shader =
+            Forge::Shader::FromSpirvInMemory(fixture.device, spirv_view, {.entry_point = "main_compute"});
+        REQUIRE(shader.IsValid());
+        REQUIRE(shader.GetShaderStage() == ShaderTypeBits::Compute);
+        REQUIRE(shader.GetNativeShaderStage() == VK_SHADER_STAGE_COMPUTE_BIT);
+        REQUIRE(shader.GetEntryPoint() == Opal::StringUtf8("main_compute"));
+        // The stage is read out of the SPIR-V rather than passed in, so this is the reflection running on a
+        // blob the caller supplied - which is the whole difference between these two entry points and the
+        // source ones.
+        REQUIRE(shader.GetPushConstants().GetSize() == 1);
+        REQUIRE(shader.GetInputs().IsEmpty());
+    }
+    SECTION("A module from memory is the same shader the source path would have built")
+    {
+        // The two paths meet in one constructor, so what this rules out is the SPIR-V arriving mangled -
+        // truncated, byte-swapped, or handed over as a size in the wrong unit.
+        const Forge::Shader from_spirv =
+            Forge::Shader::FromSpirvInMemory(fixture.device, spirv_view, {.entry_point = "main_compute"});
+        const Forge::Shader from_source = Forge::Shader::FromSourceInMemory(
+            fixture.device, k_compute_source, {.entry_point = "main_compute", .cache = GetShaderCache()});
+        REQUIRE(from_spirv.GetShaderStage() == from_source.GetShaderStage());
+        REQUIRE(from_spirv.GetPushConstants().GetSize() == from_source.GetPushConstants().GetSize());
+        REQUIRE(from_spirv.GetBindings().GetSize() == from_source.GetBindings().GetSize());
+    }
+    SECTION("A module from memory dispatches and writes what the shader says")
+    {
+        // A shader that was created is not a shader that runs. This is the same dispatch the rest of the file
+        // uses, driven by a module that came in as bytes.
+        constexpr i32 k_element_count = 256;
+        constexpr i32 k_group_size = 64;
+        const Forge::Buffer output(fixture.device, {.size = k_element_count * sizeof(u32),
+                                                    .usage = Forge::BufferUsageBits::StorageBuffer,
+                                                    .host_access = Forge::HostAccess::Random,
+                                                    .use_device_address = true});
+        const Forge::Shader shader =
+            Forge::Shader::FromSpirvInMemory(fixture.device, spirv_view, {.entry_point = "main_compute"});
+        Forge::ComputePipelineDesc pipeline_desc;
+        pipeline_desc.shader = shader;
+        pipeline_desc.push_constant_ranges.PushBack(
+            {.shader_stages = ShaderTypeBits::Compute, .offset = 0, .size = sizeof(VkDeviceAddress)});
+        const Forge::Pipeline pipeline(fixture.device, pipeline_desc);
+        const VkDeviceAddress output_address = output.GetNativeDeviceAddress();
+        Forge::ImmediateSubmit(fixture.device, fixture.GetQueue(),
+                               [&](Forge::CommandBuffer& command_buffer)
+                               {
+                                   command_buffer.CmdBindPipeline(pipeline);
+                                   command_buffer.CmdPushConstants(pipeline, ShaderTypeBits::Compute,
+                                                                   Opal::AsBytes(output_address));
+                                   command_buffer.CmdDispatch(k_element_count / k_group_size);
+                               });
+        Opal::DynamicArray<u32> values(k_element_count);
+        output.Read({reinterpret_cast<u8*>(values.GetData()), values.GetSize() * sizeof(u32)});
+        for (i32 i = 0; i < k_element_count; ++i)
+        {
+            REQUIRE(values[i] == static_cast<u32>(i) + 1000);
+        }
+    }
+    SECTION("An entry point the module does not hold throws")
+    {
+        // Reflection finds no entry point of that name and there is nothing to take a stage from, so this
+        // cannot be let through: the shader would be created with a zeroed stage and refused much later by a
+        // pipeline, naming the wrong thing.
+        REQUIRE_THROWS_AS(Forge::Shader::FromSpirvInMemory(fixture.device, spirv_view, {.entry_point = "no_such_entry"}),
+                          Opal::Exception);
+        // And the default entry point of "main", which Slang did not emit under that name here.
+        REQUIRE_THROWS_AS(Forge::Shader::FromSpirvInMemory(fixture.device, spirv_view), Opal::Exception);
+    }
+    SECTION("A blob that is not SPIR-V throws")
+    {
+        const Opal::DynamicArray<u8> junk = MakeBytes(256, 17);
+        REQUIRE_THROWS_AS(Forge::Shader::FromSpirvInMemory(fixture.device, {junk.GetData(), junk.GetSize()},
+                                                           {.entry_point = "main_compute"}),
+                          Opal::Exception);
+        // A real module cut short is the other way this arrives: the magic number is right and nothing past
+        // it is.
+        const Opal::ArrayView<const u8> half_a_module(spirv.GetData(), spirv.GetSize() / 2);
+        REQUIRE_THROWS_AS(
+            Forge::Shader::FromSpirvInMemory(fixture.device, half_a_module, {.entry_point = "main_compute"}),
+            Opal::Exception);
+        // And an empty one, which is what a file that was there and held nothing looks like from in here.
+        REQUIRE_THROWS_AS(Forge::Shader::FromSpirvInMemory(fixture.device, {}, {.entry_point = "main_compute"}),
+                          Opal::Exception);
+    }
+    SECTION("A module read from a file is the same as one handed over in memory")
+    {
+        const Opal::StringUtf8 path = TestScratchPath("from-spirv-file.spv");
+        REQUIRE(Opal::WriteBytesToFile(path, spirv_view) == Opal::ErrorCode::Success);
+        const Forge::Shader shader = Forge::Shader::FromSpirvFile(fixture.device, path, {.entry_point = "main_compute"});
+        REQUIRE(shader.IsValid());
+        REQUIRE(shader.GetShaderStage() == ShaderTypeBits::Compute);
+        REQUIRE(shader.GetEntryPoint() == Opal::StringUtf8("main_compute"));
+    }
+    SECTION("A file that is not there, and one whose contents are not SPIR-V, both throw")
+    {
+        REQUIRE_THROWS_AS(Forge::Shader::FromSpirvFile(fixture.device, TestScratchPath("no-such-file.spv"),
+                                                       {.entry_point = "main_compute"}),
+                          Opal::Exception);
+
+        const Opal::StringUtf8 junk_path = TestScratchPath("not-spirv.spv");
+        const Opal::DynamicArray<u8> junk = MakeBytes(256, 23);
+        REQUIRE(Opal::WriteBytesToFile(junk_path, {junk.GetData(), junk.GetSize()}) == Opal::ErrorCode::Success);
+        REQUIRE_THROWS_AS(Forge::Shader::FromSpirvFile(fixture.device, junk_path, {.entry_point = "main_compute"}),
+                          Opal::Exception);
+
+        // A file that exists and is empty takes the same path out as one that is missing, which is the whole
+        // of what ReadEntireFile can tell the two apart by.
+        const Opal::StringUtf8 empty_path = TestScratchPath("empty.spv");
+        REQUIRE(Opal::WriteBytesToFile(empty_path, {}) == Opal::ErrorCode::Success);
+        REQUIRE_THROWS_AS(Forge::Shader::FromSpirvFile(fixture.device, empty_path, {.entry_point = "main_compute"}),
+                          Opal::Exception);
+    }
+    SECTION("A file with the right bytes and the wrong entry point throws")
+    {
+        const Opal::StringUtf8 path = TestScratchPath("from-spirv-file.spv");
+        REQUIRE(Opal::WriteBytesToFile(path, spirv_view) == Opal::ErrorCode::Success);
+        REQUIRE_THROWS_AS(Forge::Shader::FromSpirvFile(fixture.device, path, {.entry_point = "no_such_entry"}),
+                          Opal::Exception);
+    }
+    REQUIRE_NO_VALIDATION_ERROR_AT_TEARDOWN(fixture);
+}
+
+/**
+ * TimestampQueryPool::TryGetResults and ResolveQueryRange, neither of which had a caller. The elapsed helpers
+ * are what a frame loop uses and what the timestamp case exercises; these two are what a caller reaches for
+ * when it wants the raw ticks, or wants to make the range check itself before recording anything.
+ */
+TEST_CASE("Forge reading timestamp ticks without blocking", "[forge]")
+{
+    if (!IsForgeAvailable())
+    {
+        SKIP("No Vulkan device on this machine.");
+    }
+    ForgeFixture fixture;
+    constexpr i32 k_size = 256;
+    const Opal::DynamicArray<u8> written = MakeBytes(k_size, 61);
+    const Forge::Buffer source(fixture.device, {.size = k_size, .usage = Forge::BufferUsageBits::TransferSource}, written);
+    const Forge::Buffer destination(fixture.device, {.size = k_size, .usage = Forge::BufferUsageBits::TransferDestination});
+
+    SECTION("A pool that was reset and not written has nothing to hand back")
+    {
+        const Forge::TimestampQueryPool pool(fixture.device, {.query_count = 2});
+        Forge::ImmediateSubmit(fixture.device, fixture.GetQueue(),
+                               [&](Forge::CommandBuffer& command_buffer) { command_buffer.CmdResetQueryPool(pool); });
+        Opal::InPlaceArray<u64, 2> ticks;
+        ticks[0] = 0xDEAD;
+        ticks[1] = 0xBEEF;
+        REQUIRE_FALSE(pool.TryGetResults({ticks.GetData(), 2}));
+        // The contract says the contents are unspecified on a false, since the driver may write into the
+        // range either way, so nothing is asserted about what is in there now - only that it said no.
+    }
+    SECTION("A pool the device has finished with hands back the same ticks the blocking read does")
+    {
+        const Forge::TimestampQueryPool pool(fixture.device, {.query_count = 2});
+        Forge::ImmediateSubmit(fixture.device, fixture.GetQueue(),
+                               [&](Forge::CommandBuffer& command_buffer)
+                               {
+                                   command_buffer.CmdResetQueryPool(pool);
+                                   command_buffer.CmdWriteTimestamp(pool, 0, Forge::PipelineStageBits::PipelineStart);
+                                   command_buffer.CmdCopyBuffer(source, destination);
+                                   command_buffer.CmdWriteTimestamp(pool, 1, Forge::PipelineStageBits::PipelineEnd);
+                               });
+        // ImmediateSubmit has already waited, so the non-blocking read is the one that has to succeed.
+        Opal::InPlaceArray<u64, 2> tried;
+        REQUIRE(pool.TryGetResults({tried.GetData(), 2}));
+        Opal::InPlaceArray<u64, 2> blocked;
+        pool.GetResults({blocked.GetData(), 2});
+        REQUIRE(tried[0] == blocked[0]);
+        REQUIRE(tried[1] == blocked[1]);
+        REQUIRE(tried[1] >= tried[0]);
+
+        // One query at a time, from an offset, which is the other half of what first_query is for.
+        Opal::InPlaceArray<u64, 1> second;
+        REQUIRE(pool.TryGetResults({second.GetData(), 1}, 1));
+        REQUIRE(second[0] == tried[1]);
+    }
+    SECTION("A range that does not fit in the pool throws before anything is read")
+    {
+        const Forge::TimestampQueryPool pool(fixture.device, {.query_count = 4});
+        Opal::InPlaceArray<u64, 8> ticks;
+        // A first_query at or past the end, and a count that runs off it. Both are the caller's mistake and
+        // neither is something the driver would report.
+        REQUIRE_THROWS_AS(pool.TryGetResults({ticks.GetData(), 1}, 4), Opal::Exception);
+        REQUIRE_THROWS_AS(pool.TryGetResults({ticks.GetData(), 5}), Opal::Exception);
+        REQUIRE_THROWS_AS(pool.TryGetResults({ticks.GetData(), 3}, 2), Opal::Exception);
+        REQUIRE_THROWS_AS(pool.GetResults({ticks.GetData(), 5}), Opal::Exception);
+    }
+    SECTION("ResolveQueryRange turns a count that may be every query into a concrete one")
+    {
+        // Public precisely so a caller can make this check itself, and nothing did. The pool is never
+        // recorded into here - the whole of what this does is arithmetic against the pool size.
+        const Forge::TimestampQueryPool pool(fixture.device, {.query_count = 4});
+        REQUIRE(pool.ResolveQueryRange(0, Forge::k_all_queries, "Reading") == 4);
+        REQUIRE(pool.ResolveQueryRange(2, Forge::k_all_queries, "Reading") == 2);
+        REQUIRE(pool.ResolveQueryRange(3, Forge::k_all_queries, "Reading") == 1);
+        // A concrete count comes back as itself as long as it fits.
+        REQUIRE(pool.ResolveQueryRange(0, 4, "Reading") == 4);
+        REQUIRE(pool.ResolveQueryRange(1, 2, "Reading") == 2);
+        REQUIRE(pool.ResolveQueryRange(3, 1, "Reading") == 1);
+    }
+    SECTION("ResolveQueryRange throws on every range that does not fit")
+    {
+        const Forge::TimestampQueryPool pool(fixture.device, {.query_count = 4});
+        // First query at the end and past it.
+        REQUIRE_THROWS_AS(pool.ResolveQueryRange(4, 1, "Reading"), Opal::Exception);
+        REQUIRE_THROWS_AS(pool.ResolveQueryRange(5, 1, "Reading"), Opal::Exception);
+        REQUIRE_THROWS_AS(pool.ResolveQueryRange(4, Forge::k_all_queries, "Reading"), Opal::Exception);
+        // A count of zero, which resolves to nothing and is never what a caller meant.
+        REQUIRE_THROWS_AS(pool.ResolveQueryRange(0, 0, "Reading"), Opal::Exception);
+        // And counts that run off the end from a first query that is itself fine.
+        REQUIRE_THROWS_AS(pool.ResolveQueryRange(0, 5, "Reading"), Opal::Exception);
+        REQUIRE_THROWS_AS(pool.ResolveQueryRange(3, 2, "Reading"), Opal::Exception);
+    }
+    REQUIRE_NO_VALIDATION_ERROR(fixture);
+}
+
+/**
+ * PhysicalDevice::FindMemoryTypeIndex, which is reachable headlessly and had no caller. Forge allocates
+ * through VMA everywhere, so nothing inside it asks this - it is here for a caller reaching past Forge to
+ * Vulkan, and it was going unexercised.
+ */
+TEST_CASE("Forge memory type selection", "[forge]")
+{
+    if (!IsForgeAvailable())
+    {
+        SKIP("No Vulkan device on this machine.");
+    }
+    ForgeFixture fixture;
+    const Forge::PhysicalDevice& physical_device = fixture.device.GetPhysicalDevice();
+    const VkPhysicalDeviceMemoryProperties& memory = physical_device.GetMemoryProperties();
+    REQUIRE(memory.memoryTypeCount > 0);
+    // Every type this device has, which is the filter a caller with no constraint of its own passes.
+    const u32 every_type = memory.memoryTypeCount >= 32 ? 0xFFFFFFFF : (1u << memory.memoryTypeCount) - 1;
+
+    SECTION("A type with the properties asked for is one that actually has them")
+    {
+        // Every device is required to have a device local type and a host visible coherent one, so both of
+        // these have an answer on any machine this runs on.
+        constexpr VkMemoryPropertyFlags k_wanted[] = {
+            VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
+            VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT};
+        for (const VkMemoryPropertyFlags wanted : k_wanted)
+        {
+            INFO("wanted properties " << wanted);
+            const u32 index = physical_device.FindMemoryTypeIndex(every_type, wanted);
+            REQUIRE(index < memory.memoryTypeCount);
+            REQUIRE((memory.memoryTypes[index].propertyFlags & wanted) == wanted);
+        }
+    }
+    SECTION("The filter decides which types are eligible at all")
+    {
+        // Asked for one type by name, it is the one that comes back - which is what the filter is for and
+        // what an allocation driven by a VkMemoryRequirements would pass.
+        const u32 wanted = memory.memoryTypes[0].propertyFlags;
+        REQUIRE(physical_device.FindMemoryTypeIndex(1u << 0, wanted) == 0);
+        if (memory.memoryTypeCount > 1)
+        {
+            const u32 second_wanted = memory.memoryTypes[1].propertyFlags;
+            REQUIRE(physical_device.FindMemoryTypeIndex(1u << 1, second_wanted) == 1);
+        }
+    }
+    SECTION("No property is asked for, so the first type the filter allows is the answer")
+    {
+        REQUIRE(physical_device.FindMemoryTypeIndex(every_type, 0) == 0);
+        if (memory.memoryTypeCount > 1)
+        {
+            // The lowest set bit of the filter, not the lowest index of the device.
+            REQUIRE(physical_device.FindMemoryTypeIndex(every_type & ~1u, 0) == 1);
+        }
+    }
+    SECTION("Nothing matches, and the answer is zero rather than a failure")
+    {
+        // Worth pinning down because it is a trap rather than a convenience: a caller that asks for something
+        // impossible is handed type zero, which is a real type with real properties and not the one it wanted.
+        // Nothing in Forge allocates through this, so the trap has no victim today - a caller that reaches for
+        // it has to compare the properties of what came back against what it asked for, the way the first
+        // section above does.
+        constexpr VkMemoryPropertyFlags k_impossible = 0xFFFFFFFF;
+        REQUIRE(physical_device.FindMemoryTypeIndex(every_type, k_impossible) == 0);
+        // And a filter that allows no type at all takes the same way out.
+        REQUIRE(physical_device.FindMemoryTypeIndex(0, 0) == 0);
+    }
+    REQUIRE_NO_VALIDATION_ERROR(fixture);
+}
+
+namespace
+{
+
+/** Writes text into the scratch directory and hands back the path, for the mesh cases below. */
+Opal::StringUtf8 WriteScratchTextFile(const char* file_name, const char* contents)
+{
+    Opal::StringUtf8 path = TestScratchPath(file_name);
+    const Opal::ArrayView<const u8> bytes(reinterpret_cast<const u8*>(contents), static_cast<i64>(strlen(contents)));
+    REQUIRE(Opal::WriteBytesToFile(path, bytes) == Opal::ErrorCode::Success);
+    return path;
+}
+
+/** One triangle with every attribute LoadMesh insists on: positions, normals and UVs. */
+constexpr const char* k_complete_obj = R"(
+v -1.0 -1.0 0.0
+v 1.0 -1.0 0.0
+v 0.0 1.0 0.0
+vn 0.0 0.0 1.0
+vt 0.0 0.0
+vt 1.0 0.0
+vt 0.5 1.0
+f 1/1/1 2/2/1 3/3/1
+)";
+
+/** The same triangle with no texture coordinates, which is the attribute assimp will not invent. */
+constexpr const char* k_obj_without_uvs = R"(
+v -1.0 -1.0 0.0
+v 1.0 -1.0 0.0
+v 0.0 1.0 0.0
+vn 0.0 0.0 1.0
+f 1//1 2//1 3//1
+)";
+
+/** And with no normals, which is the attribute assimp does invent - see the case below. */
+constexpr const char* k_obj_without_normals = R"(
+v -1.0 -1.0 0.0
+v 1.0 -1.0 0.0
+v 0.0 1.0 0.0
+vt 0.0 0.0
+vt 1.0 0.0
+vt 0.5 1.0
+f 1/1 2/2 3/3
+)";
+
+}  // namespace
+
+/**
+ * Forge::LoadMesh, which had no test of its own - test/mesh-test.cpp covers the Canvas mesh, which is a
+ * different type through a different reader.
+ *
+ * The meshes are written here rather than checked in: three lines of OBJ apiece, and a fixture on disk that
+ * nothing else reads is a fixture nobody notices has gone stale.
+ */
+TEST_CASE("Forge loading a mesh from a file", "[forge]")
+{
+    // RNDR_ASSIMP is private to the library, so this cannot be decided at compile time from out here. A build
+    // without it throws out of every call, which is what this asks about before asserting anything.
+    const Opal::StringUtf8 complete_path = WriteScratchTextFile("triangle.obj", k_complete_obj);
+    {
+        Forge::Mesh probe;
+        try
+        {
+            Forge::LoadMesh(complete_path, probe);
+        }
+        catch (const Opal::Exception&)
+        {
+            SKIP("This build has no assimp, so Forge::LoadMesh refuses every file.");
+        }
+    }
+
+    SECTION("A mesh with every attribute comes back packed the way the header says")
+    {
+        Forge::Mesh mesh;
+        Forge::LoadMesh(complete_path, mesh);
+        // Position, normal and UV, tightly packed: three floats, three floats, two floats.
+        REQUIRE(mesh.vertex_size == 8 * sizeof(f32));
+        REQUIRE(mesh.vertex_count == 3);
+        REQUIRE(mesh.index_size == sizeof(u32));
+        REQUIRE(mesh.index_count == 3);
+        REQUIRE(mesh.vertices.GetSize() == static_cast<u64>(mesh.vertex_count) * mesh.vertex_size);
+        REQUIRE(mesh.indices.GetSize() == static_cast<u64>(mesh.index_count) * mesh.index_size);
+        // The name is the file, extension and all.
+        REQUIRE(mesh.name == Opal::StringUtf8("triangle.obj"));
+
+        // The positions, which is the one part of the packing a caller can check against what it wrote. Read
+        // as bytes and compared as floats, since that is how the buffer is handed to a vertex binding.
+        Opal::DynamicArray<f32> floats(static_cast<i64>(mesh.vertex_count) * 8);
+        memcpy(floats.GetData(), mesh.vertices.GetData(), mesh.vertices.GetSize());
+        f32 lowest_x = floats[0];
+        f32 highest_x = floats[0];
+        for (u32 vertex = 0; vertex < mesh.vertex_count; ++vertex)
+        {
+            lowest_x = Opal::Min(lowest_x, floats[vertex * 8]);
+            highest_x = Opal::Max(highest_x, floats[vertex * 8]);
+            // The normal of a flat triangle in the z plane, whichever way round assimp wound it.
+            const f32 normal_z = floats[vertex * 8 + 5];
+            REQUIRE(Opal::Abs(normal_z) == Catch::Approx(1.0f).margin(0.01));
+        }
+        REQUIRE(lowest_x == Catch::Approx(-1.0f).margin(0.01));
+        REQUIRE(highest_x == Catch::Approx(1.0f).margin(0.01));
+
+        // Every index names a vertex that is there, which is the other half of what a mesh has to hold up.
+        Opal::DynamicArray<u32> indices(mesh.index_count);
+        memcpy(indices.GetData(), mesh.indices.GetData(), mesh.indices.GetSize());
+        for (const u32 index : indices)
+        {
+            REQUIRE(index < mesh.vertex_count);
+        }
+    }
+    SECTION("A mesh with no texture coordinates throws")
+    {
+        const Opal::StringUtf8 path = WriteScratchTextFile("no-uvs.obj", k_obj_without_uvs);
+        Forge::Mesh mesh;
+        REQUIRE_THROWS_AS(Forge::LoadMesh(path, mesh), Opal::Exception);
+    }
+    SECTION("A mesh with no normals loads, because assimp generates them")
+    {
+        // Not the assertion this case was written expecting. LoadMesh asks assimp for
+        // aiProcess_GenSmoothNormals, so a file with no normals has them by the time the null check runs and
+        // the throw beside the UV one is unreachable through this reader. aiProcess_GenUVCoords is not the
+        // same thing - it converts a mapping that is already there rather than inventing one - which is why
+        // the section above does throw.
+        const Opal::StringUtf8 path = WriteScratchTextFile("no-normals.obj", k_obj_without_normals);
+        Forge::Mesh mesh;
+        Forge::LoadMesh(path, mesh);
+        REQUIRE(mesh.vertex_count == 3);
+        Opal::DynamicArray<f32> floats(static_cast<i64>(mesh.vertex_count) * 8);
+        memcpy(floats.GetData(), mesh.vertices.GetData(), mesh.vertices.GetSize());
+        for (u32 vertex = 0; vertex < mesh.vertex_count; ++vertex)
+        {
+            const f32 normal_z = floats[vertex * 8 + 5];
+            REQUIRE(Opal::Abs(normal_z) == Catch::Approx(1.0f).margin(0.01));
+        }
+    }
+    SECTION("A file assimp cannot read throws")
+    {
+        // An extension assimp knows, holding something that is not a mesh.
+        const Opal::StringUtf8 junk_path = WriteScratchTextFile("not-a-mesh.obj", "this file is not a mesh at all\n");
+        Forge::Mesh mesh;
+        REQUIRE_THROWS_AS(Forge::LoadMesh(junk_path, mesh), Opal::Exception);
+        // A file that is not there at all, and one with an extension assimp has no reader for.
+        REQUIRE_THROWS_AS(Forge::LoadMesh(TestScratchPath("no-such-mesh.obj"), mesh), Opal::Exception);
+        const Opal::StringUtf8 unknown_path = WriteScratchTextFile("unknown-format.qqq", "nothing here either\n");
+        REQUIRE_THROWS_AS(Forge::LoadMesh(unknown_path, mesh), Opal::Exception);
+    }
+    SECTION("A mesh that failed to load leaves the one handed in as it was")
+    {
+        // LoadMesh writes into a mesh the caller owns, so what it does to that mesh on the way out of a
+        // failure is the caller's problem. It throws before touching anything, which is what lets a caller
+        // keep the mesh it already had.
+        Forge::Mesh mesh;
+        Forge::LoadMesh(complete_path, mesh);
+        const u32 loaded_count = mesh.vertex_count;
+        REQUIRE_THROWS_AS(Forge::LoadMesh(TestScratchPath("no-such-mesh.obj"), mesh), Opal::Exception);
+        REQUIRE(mesh.vertex_count == loaded_count);
+        REQUIRE(mesh.name == Opal::StringUtf8("triangle.obj"));
+    }
+}
+
+namespace
+{
+
+/**
+ * A mesh shader that emits one triangle covering the whole target, and the fragment shader that paints it.
+ * No vertex input and no vertex stage: the mesh stage produces the vertices and the indices between them,
+ * which is the whole point of the pipeline this drives.
+ */
+constexpr const char* k_mesh_source = R"(
+struct MeshVertex
+{
+    float4 position : SV_Position;
+};
+
+[shader("mesh")]
+[outputtopology("triangle")]
+[numthreads(1, 1, 1)]
+void main_mesh(out vertices MeshVertex vertices[3], out indices uint3 triangles[1])
+{
+    SetMeshOutputCounts(3, 1);
+    vertices[0].position = float4(-1.0, -1.0, 0.0, 1.0);
+    vertices[1].position = float4(3.0, -1.0, 0.0, 1.0);
+    vertices[2].position = float4(-1.0, 3.0, 0.0, 1.0);
+    triangles[0] = uint3(0, 1, 2);
+}
+
+[shader("fragment")]
+float4 main_mesh_fragment() : SV_Target
+{
+    return float4(0.0, 1.0, 0.0, 1.0);
+}
+)";
+
+/** Whether this machine can create a device with the mesh shader stage on it. */
+bool IsMeshShaderAvailable()
+{
+    static const bool available = []
+    {
+        try
+        {
+            const ForgeFixture probe({.mesh_shader = true});
+            return true;
+        }
+        catch (const Opal::Exception&)
+        {
+            return false;
+        }
+    }();
+    return available;
+}
+
+}  // namespace
+
+/**
+ * CmdDrawMeshTasks, which until now had only ever been watched throwing. 3.3 wrote it and could not do more
+ * than that, since nothing enabled VK_EXT_mesh_shader; 3.6 enabled it and nothing came back to draw through
+ * it. This is that draw.
+ */
+TEST_CASE("Forge a mesh shader draw", "[forge]")
+{
+    if (!IsForgeAvailable())
+    {
+        SKIP("No Vulkan device on this machine.");
+    }
+    if (!IsMeshShaderAvailable())
+    {
+        SKIP("This device has no VK_EXT_mesh_shader.");
+    }
+    ForgeFixture fixture({.mesh_shader = true});
+    constexpr i32 k_side = 4;
+    constexpr PixelFormat k_format = PixelFormat::R8G8B8A8_UNORM;
+
+    const Forge::Shader mesh_shader = Forge::Shader::FromSourceInMemory(
+        fixture.device, k_mesh_source, {.entry_point = "main_mesh", .cache = GetShaderCache()});
+    const Forge::Shader fragment_shader = Forge::Shader::FromSourceInMemory(
+        fixture.device, k_mesh_source, {.entry_point = "main_mesh_fragment", .cache = GetShaderCache()});
+
+    SECTION("The stage reflection reports a mesh shader rather than a vertex one")
+    {
+        // The stage comes out of the SPIR-V, so this is what says the mesh path through ToShaderTypeBits is
+        // reached at all - and a shader that came back as a vertex stage would build a pipeline that draws
+        // nothing rather than one that fails.
+        REQUIRE(mesh_shader.GetShaderStage() == ShaderTypeBits::Mesh);
+        REQUIRE(mesh_shader.GetNativeShaderStage() == VK_SHADER_STAGE_MESH_BIT_EXT);
+        // A mesh stage takes no vertex input, which is what makes the pipeline below legal without one.
+        REQUIRE(mesh_shader.GetInputs().IsEmpty());
+    }
+    SECTION("A pipeline with a mesh stage draws the triangle the shader emitted")
+    {
+        Forge::GraphicsPipelineDesc pipeline_desc;
+        pipeline_desc.mesh_shader = mesh_shader;
+        pipeline_desc.fragment_shader = fragment_shader;
+        pipeline_desc.rasterizer.cull_mode = Face::None;
+        pipeline_desc.color_blend_attachments.PushBack(Forge::ColorBlendDesc{});
+        pipeline_desc.color_attachment_formats.PushBack(k_format);
+        const Forge::Pipeline pipeline(fixture.device, pipeline_desc);
+
+        Forge::Texture color = MakeColorTarget(fixture.device, k_side, k_format);
+        const Opal::DynamicArray<u8> pixels = RenderRaster(fixture, color, k_side,
+                                                           [&](Forge::CommandBuffer& command_buffer)
+                                                           {
+                                                               command_buffer.CmdBindPipeline(pipeline);
+                                                               // One workgroup, the way a dispatch counts
+                                                               // them - there is no vertex or index count to
+                                                               // give.
+                                                               command_buffer.CmdDrawMeshTasks(1);
+                                                           });
+        // The triangle covers the whole target, so anything short of every texel means the mesh stage emitted
+        // something other than what it was told to.
+        REQUIRE(CountCovered(pixels, k_side) == k_side * k_side);
+    }
+    SECTION("No workgroups at all draws nothing, which is a draw rather than a failure")
+    {
+        Forge::GraphicsPipelineDesc pipeline_desc;
+        pipeline_desc.mesh_shader = mesh_shader;
+        pipeline_desc.fragment_shader = fragment_shader;
+        pipeline_desc.rasterizer.cull_mode = Face::None;
+        pipeline_desc.color_blend_attachments.PushBack(Forge::ColorBlendDesc{});
+        pipeline_desc.color_attachment_formats.PushBack(k_format);
+        const Forge::Pipeline pipeline(fixture.device, pipeline_desc);
+
+        Forge::Texture color = MakeColorTarget(fixture.device, k_side, k_format);
+        const Opal::DynamicArray<u8> pixels =
+            RenderRaster(fixture, color, k_side,
+                         [&](Forge::CommandBuffer& command_buffer)
+                         {
+                             command_buffer.CmdBindPipeline(pipeline);
+                             command_buffer.CmdDrawMeshTasks(0);
+                         });
+        REQUIRE(CountCovered(pixels, k_side) == 0);
+    }
+    SECTION("A pipeline with both a vertex and a mesh stage, or a task stage with neither, throws")
+    {
+        const Forge::Shader vertex_shader = Forge::Shader::FromSourceInMemory(
+            fixture.device, k_pushed_color_source, {.entry_point = "main_color_vertex", .cache = GetShaderCache()});
+        Forge::GraphicsPipelineDesc both_desc;
+        both_desc.vertex_shader = vertex_shader;
+        both_desc.mesh_shader = mesh_shader;
+        both_desc.fragment_shader = fragment_shader;
+        both_desc.color_blend_attachments.PushBack(Forge::ColorBlendDesc{});
+        both_desc.color_attachment_formats.PushBack(k_format);
+        REQUIRE_THROWS_AS(Forge::Pipeline(fixture.device, both_desc), Opal::Exception);
+
+        // A task stage in front of nothing, which Vulkan has no shape for.
+        Forge::GraphicsPipelineDesc task_only_desc;
+        task_only_desc.task_shader = mesh_shader;
+        task_only_desc.fragment_shader = fragment_shader;
+        task_only_desc.color_blend_attachments.PushBack(Forge::ColorBlendDesc{});
+        task_only_desc.color_attachment_formats.PushBack(k_format);
+        REQUIRE_THROWS_AS(Forge::Pipeline(fixture.device, task_only_desc), Opal::Exception);
+    }
+    REQUIRE_NO_VALIDATION_ERROR(fixture);
+}
+
+/**
+ * The other half of CmdDrawMeshTasks: what it does on a device that never enabled the extension. The loader
+ * hands out a callable trampoline either way, so a null check does not catch this - calling through it is an
+ * access violation rather than a call that fails, which is why the check is on the extension.
+ */
+TEST_CASE("Forge a mesh shader draw without the extension", "[forge]")
+{
+    if (!IsForgeAvailable())
+    {
+        SKIP("No Vulkan device on this machine.");
+    }
+    // The default fixture asks for no mesh shader, which is the device every other case in this file builds.
+    ForgeFixture fixture;
+    REQUIRE_FALSE(fixture.device.GetFeatures().mesh_shader);
+    REQUIRE_FALSE(fixture.device.IsExtensionEnabled(VK_EXT_MESH_SHADER_EXTENSION_NAME));
+
+    Forge::CommandBuffer command_buffer(fixture.device, fixture.GetQueue());
+    command_buffer.Begin();
+    REQUIRE_THROWS_AS(command_buffer.CmdDrawMeshTasks(1), Opal::Exception);
+    command_buffer.End();
     REQUIRE_NO_VALIDATION_ERROR(fixture);
 }

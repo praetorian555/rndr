@@ -152,6 +152,7 @@ struct FeatureChain
         vk12.bufferDeviceAddress = features.buffer_device_address;
         vk12.scalarBlockLayout = features.scalar_block_layout;
         vk12.hostQueryReset = features.host_query_reset;
+        vk12.samplerMirrorClampToEdge = features.sampler_mirror_clamp_to_edge;
 
         // Forge is written on all of these, so they are not the caller's to turn off.
         vk12.timelineSemaphore = VK_TRUE;
@@ -278,6 +279,7 @@ const char* FindUnsupportedFeature(const Forge::PhysicalDevice& physical_device,
     require(requested.buffer_device_address, supported.vk12.bufferDeviceAddress, "buffer_device_address");
     require(requested.scalar_block_layout, supported.vk12.scalarBlockLayout, "scalar_block_layout");
     require(requested.host_query_reset, supported.vk12.hostQueryReset, "host_query_reset");
+    require(requested.sampler_mirror_clamp_to_edge, supported.vk12.samplerMirrorClampToEdge, "sampler_mirror_clamp_to_edge");
 
     // Forge needs these three whatever the caller asked for, so a device without them cannot be used at all.
     require(true, supported.vk12.timelineSemaphore, "timeline semaphores, which Forge requires");

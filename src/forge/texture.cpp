@@ -51,7 +51,7 @@ static VkSamplerAddressMode ToVkSamplerAddressMode(Rndr::ImageAddressMode mode)
         case Rndr::ImageAddressMode::MirrorOnce:
             return VK_SAMPLER_ADDRESS_MODE_MIRROR_CLAMP_TO_EDGE;
         default:
-            return VK_SAMPLER_ADDRESS_MODE_REPEAT;
+            throw Opal::Exception("Unsupported image address mode");
     }
 }
 
@@ -134,7 +134,7 @@ static VkBorderColor ToVkBorderColor(Rndr::BorderColor border_color)
         case Rndr::BorderColor::OpaqueWhite:
             return VK_BORDER_COLOR_FLOAT_OPAQUE_WHITE;
         default:
-            return VK_BORDER_COLOR_FLOAT_OPAQUE_BLACK;
+            throw Opal::Exception("Unsupported border color");
     }
 }
 
@@ -440,6 +440,17 @@ Rndr::Forge::Sampler::Sampler(const Device& device, const SamplerDesc& desc) : m
     if (desc.max_anisotropy > 1.0f && !device.GetFeatures().sampler_anisotropy)
     {
         throw Opal::Exception("An anisotropic sampler needs the device created with DeviceFeatures::sampler_anisotropy.");
+    }
+    // MIRROR_CLAMP_TO_EDGE is core in Vulkan 1.2 but still a feature, and a sampler naming it on a device
+    // that did not enable it is undefined rather than a sampler that fails to create - the layer says so and
+    // the driver samples something. Named here, the way max_anisotropy above is.
+    const bool mirrors_once = desc.address_mode_u == ImageAddressMode::MirrorOnce ||
+                              desc.address_mode_v == ImageAddressMode::MirrorOnce ||
+                              desc.address_mode_w == ImageAddressMode::MirrorOnce;
+    if (mirrors_once && !device.GetFeatures().sampler_mirror_clamp_to_edge)
+    {
+        throw Opal::Exception(
+            "ImageAddressMode::MirrorOnce needs the device created with DeviceFeatures::sampler_mirror_clamp_to_edge.");
     }
     const VkSamplerCreateInfo sampler_create_info = {
         .sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO,

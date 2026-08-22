@@ -7,6 +7,7 @@
 #include "opal/container/ref.h"
 
 #include "rndr/graphics-types.hpp"
+#include "rndr/math.hpp"
 #include "rndr/types.hpp"
 #include "rndr/forge/forward.hpp"
 #include "rndr/forge/types.hpp"
@@ -219,6 +220,16 @@ struct GraphicsPipelineDesc
     DynamicStateBits dynamic_state = DynamicStateBits::None;
     DepthStencilDesc depth_stencil;
     Opal::DynamicArray<ColorBlendDesc> color_blend_attachments;
+
+    /**
+     * The colour BlendFactor::ConstColor, ::InvConstColor, ::ConstAlpha and ::InvConstAlpha stand for. Those
+     * four factors read nothing else, so a pipeline that names one and leaves this at zero blends against
+     * zero - which is what BlendFactor::Zero already means and never what the caller wanted.
+     *
+     * One value for every attachment of the pipeline, which is what Vulkan offers: the constant belongs to
+     * the blend state as a whole rather than to an attachment.
+     */
+    Vector4f blend_constants = Vector4f::Zero();
 
     /**
      * Values for constants the shaders of this pipeline declare, by name. A constant left unnamed keeps the

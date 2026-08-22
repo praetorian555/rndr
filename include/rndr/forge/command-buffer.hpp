@@ -513,8 +513,9 @@ public:
     /**
      * Draw through the task and mesh shader stages, which replace vertex input and the vertex shader. The
      * counts are in workgroups, the way a compute dispatch counts them.
-     * @note Needs VK_EXT_mesh_shader on the device. Nothing enables it yet - that is device feature chaining -
-     *       so this throws rather than calling through a function pointer the loader left null.
+     * @note Needs the device created with DeviceFeatures::mesh_shader, which pulls in VK_EXT_mesh_shader.
+     *       The loader hands out a callable trampoline whether or not the extension was enabled, so this
+     *       throws rather than calling through one that has nothing behind it.
      * @param group_count_x Number of workgroups in the X dimension.
      * @param group_count_y Number of workgroups in the Y dimension.
      * @param group_count_z Number of workgroups in the Z dimension.

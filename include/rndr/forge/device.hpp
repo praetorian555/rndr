@@ -67,6 +67,12 @@ struct DeviceFeatures
     // Sampling.
     /** Anisotropic filtering, which SamplerDesc::max_anisotropy above one asks for. */
     bool sampler_anisotropy = true;
+    /**
+     * The MIRROR_CLAMP_TO_EDGE address mode, which ImageAddressMode::MirrorOnce asks for. Core since Vulkan
+     * 1.2 but still a feature rather than something every device does, so a sampler naming that mode on a
+     * device created without this throws.
+     */
+    bool sampler_mirror_clamp_to_edge = false;
     /** BC compressed texture formats. */
     bool texture_compression_bc = false;
 
