@@ -113,6 +113,17 @@ public:
     [[nodiscard]] const GraphicsContextDesc& GetDesc() const { return m_desc; }
     [[nodiscard]] VkInstance GetInstance() const { return m_instance; }
 
+    /**
+     * Every Vulkan capable device on this machine, in the order the loader reports them.
+     *
+     * Never empty: a machine with no such device throws rather than handing back a list with nothing in
+     * it. There is nothing a caller can do with an empty one - the next step is always to index it or to
+     * hand it to SelectPhysicalDevice - so the absence is reported where it happens instead of becoming a
+     * check every caller has to remember.
+     *
+     * @throw Opal::Exception when this machine has no Vulkan capable device.
+     * @throw VulkanException when the enumeration itself failed, which is a different thing entirely.
+     */
     Opal::DynamicArray<PhysicalDevice> EnumeratePhysicalDevices() const;
 
     /**

@@ -118,7 +118,13 @@ struct ForgeFixture
     void DestroyDevice() { device.Destroy(); }
 };
 
-/** Whether this machine has a Vulkan device at all, so a machine without one skips rather than fails. */
+/**
+ * Whether this machine has a Vulkan device at all, so a machine without one skips rather than fails.
+ *
+ * This rests on EnumeratePhysicalDevices throwing when it finds none. While it handed back an empty list,
+ * the probe below reached `physical_devices[0]` on it and read off the end of the array - so the one machine
+ * this function exists for is the one machine it did not work on.
+ */
 bool IsForgeAvailable()
 {
     static const bool available = []
@@ -235,6 +241,10 @@ TEST_CASE("Forge context and device", "[forge]")
     const Forge::GraphicsContext context(ForgeTest::TestContextDesc());
     REQUIRE(context.IsValid());
 
+    // Never empty: a machine with no device throws out of here rather than handing back a list with nothing
+    // in it, which is what lets every caller in this file index the first element without checking. The
+    // machine that would have exercised the throw is the one that skips this whole case, so what is asserted
+    // here is the contract rather than the branch.
     Opal::DynamicArray<Forge::PhysicalDevice> physical_devices = context.EnumeratePhysicalDevices();
     REQUIRE_FALSE(physical_devices.IsEmpty());
 

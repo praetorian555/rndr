@@ -308,10 +308,20 @@ than two outcomes or when the caller has to react differently to each.
 ### Never log and return a default
 
 A function that logs an error and returns an empty container hands back a value the caller cannot tell from
-a legitimately empty result - `EnumeratePhysicalDevices` returning nothing has to mean "this machine has no
-Vulkan device", never "the enumeration failed". Failures throw, so the two stay distinguishable.
+a legitimately empty result. Failures throw, so the two stay distinguishable, and `RNDR_RETURN_ON_FAIL` is
+therefore not used in Forge.
 
-`RNDR_RETURN_ON_FAIL` is therefore not used in Forge.
+`EnumeratePhysicalDevices` is worth following through, because it lands on the other side of the previous
+rule. An empty list there would be a legitimate answer in the sense that nothing went wrong - the machine
+simply has no Vulkan capable device - but it is not an *outcome the caller can act on*. Every caller either
+indexes the first element or hands the list to `SelectPhysicalDevice`, so an empty one is a check every one
+of them has to remember and none of them did. It throws instead, with a message naming the absence, separate
+from the `VulkanException` that means the enumeration itself failed.
+
+The test that distinguishes the two rules is not "did something go wrong" but "is there more than one thing
+the caller might reasonably do next". A device with no queue family matching some flags leaves the caller a
+real choice - fall back to another family, or give up - so `GetQueueFamilyIndex` returns an `Opal::Optional`.
+A machine with no device at all leaves no choice, so it throws.
 
 ### What this means for callers
 

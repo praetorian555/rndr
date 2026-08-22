@@ -480,8 +480,18 @@ Opal::DynamicArray<Rndr::Forge::PhysicalDevice> Rndr::Forge::GraphicsContext::En
         throw VulkanException(result, "vkEnumeratePhysicalDevices");
     }
 
-    // An empty list is a valid answer - the machine has no Vulkan capable device - so a failure has to throw rather
-    // than return one, otherwise the caller cannot tell the two apart.
+    // A machine with no Vulkan capable device throws rather than handing back an empty list. Every caller of
+    // this either indexes the first element or hands the list to SelectPhysicalDevice, and there is nothing
+    // useful either can do with nothing - an empty list is a result every caller has to check for and none of
+    // them did, which makes it an out of bounds read waiting for the one machine that has no device.
+    //
+    // Distinct from the throws above it, which say the enumeration itself failed. This one says it succeeded
+    // and found nothing, so it carries that sentence rather than a VkResult that never came back.
+    if (gpu_count == 0)
+    {
+        throw Opal::Exception("This machine has no Vulkan capable physical device!");
+    }
+
     Opal::DynamicArray<VkPhysicalDevice> physical_devices(gpu_count);
     result = vkEnumeratePhysicalDevices(m_instance, &gpu_count, physical_devices.GetData());
     if (result != VK_SUCCESS)
