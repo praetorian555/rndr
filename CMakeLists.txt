@@ -137,5 +137,11 @@ if (${RNDR_BUILD_SAMPLES})
         rndr_deploy_runtime(modern-vulkan)
     endif ()
 
+    if (${RNDR_AUDIO})
+        add_executable(audio-sample samples/audio/audio-sample.cpp)
+        target_link_libraries(audio-sample PUBLIC shared)
+        rndr_deploy_runtime(audio-sample)
+    endif ()
+
 endif ()
 
