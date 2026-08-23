@@ -23,6 +23,11 @@ Guessing at those produces code that compiles and is wrong.
   failures throw rather than returning a status, and `RNDR_RETURN_ON_FAIL` is not used. Following the
   surrounding code from another subsystem will produce the wrong pattern.
 
+- [docs/audio.md](docs/audio.md) — `src/audio/` reports failures the other way round: nothing there throws, and
+  anything fallible returns `Opal::Expected<T, Rndr::ErrorCode>` with the detail in the log. It is the only
+  subsystem that does, and the only user of `Rndr::ErrorCode`. Canvas and Forge throw; do not carry either
+  convention across.
+
 ## Building here
 
 There is no `CMakePresets.json`. Build directories in use: `build/msvc-debug`, `build/msvc-release`,

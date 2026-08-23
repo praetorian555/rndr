@@ -20,23 +20,50 @@ The public types live under `include/rndr/audio/`:
 ```cpp
 #include "rndr/audio/audio-system.hpp"
 
-Rndr::AudioSystem audio;   // throws Rndr::AudioDeviceException when there is no output device
+auto audio_result = Rndr::AudioSystem::Create();
+if (!audio_result.HasValue())
+{
+    // ErrorCode::NoAudioDevice on a machine with no output. A game can carry on silently from here.
+    return;
+}
+const Opal::ScopePtr<Rndr::AudioSystem> audio = std::move(audio_result.GetValue());
 
-const Rndr::AudioClipHandle jump = audio.LoadClip("assets/audio/jump.wav");
-const Rndr::AudioClipHandle music = audio.LoadClip("assets/audio/theme.ogg");
+// A clip that fails to load leaves an invalid handle, and Play on an invalid handle does nothing, so a game that
+// does not care why can skip the check.
+const Rndr::AudioClipHandle jump = audio->LoadClip("assets/audio/jump.wav").GetValueOr({});
+const Rndr::AudioClipHandle music = audio->LoadClip("assets/audio/theme.ogg").GetValueOr({});
 
-audio.SetBusVolume(1, 0.6f);
-const Rndr::SoundHandle theme = audio.Play(music, {.loop = true, .bus = 1});
+audio->SetBusVolume(1, 0.6f);
+const Rndr::SoundHandle theme = audio->Play(music, {.loop = true, .bus = 1});
 
 // Later, from gameplay:
-audio.Play(jump, {.volume = 0.8f, .pan = -0.3f, .pitch = 1.1f});
-audio.SetMasterVolume(0.5f);
-audio.PauseAll();   // pause menu
-audio.ResumeAll();
-audio.Stop(theme);
+audio->Play(jump, {.volume = 0.8f, .pan = -0.3f, .pitch = 1.1f});
+audio->SetMasterVolume(0.5f);
+audio->PauseAll();   // pause menu
+audio->ResumeAll();
+audio->Stop(theme);
 ```
 
 Nothing needs to be called every frame. The audio thread runs on its own; the main thread only queues commands.
+
+### Failures
+
+Nothing in the audio API throws. Anything that can fail for a reason outside the caller's control - a file that is
+not there, a file that is not what its extension claims, a machine with no output device - returns
+`Opal::Expected<T, Rndr::ErrorCode>`, and the reason is logged at error level so the code does not have to carry
+the detail. The codes in use are `FileNotFound`, `UnsupportedFormat` (a real file of a kind no decoder here
+handles: six channels, a compressed WAV, an extension nobody reads), `CorruptData`, `NoAudioDevice`,
+`OutOfResources` (every clip slot is live), `InvalidArgument` and `PlatformError`.
+
+Two things deliberately do not report anything. A bad `AudioMixerDesc` - a zero sample rate, a zero capacity - is a
+bug in the calling code rather than a runtime condition, so it asserts in a debug build and is clamped in a release
+one. And `Play` and the per-sound setters were never fallible in the reporting sense: `Play` hands back an invalid
+handle when it cannot start, and every setter on a handle that no longer names a live sound quietly does nothing.
+
+**This is not how the rest of the repository reports failures.** Canvas and Forge both throw, and `docs/forge.md`
+says Forge does so deliberately. Audio is the exception, on purpose, and is the first user of `Rndr::ErrorCode`.
+Do not take the surrounding subsystems as the pattern when working in `src/audio/`, or this one as the pattern when
+working anywhere else.
 
 ### Clips
 
@@ -44,9 +71,11 @@ Nothing needs to be called every frame. The audio thread runs on its own; the ma
 `.ogg` (Vorbis). Both refuse more than two channels rather than downmix. `File::DecodeAudioClip` runs a decoder on
 a file already in memory, which is how the decoder tests avoid the disk.
 
-An `AudioClip` is plain data until `AudioSystem::CreateClip` takes it - the system owns the sample memory from then
-on and hands back an `AudioClipHandle`. `LoadClip` does both steps. `DestroyClip` stops every sound on the clip and
-frees it once the audio thread is provably done reading it; it is safe to call while sounds are playing.
+`AudioClip::Create` is the only way to get a clip with samples in it; the default constructor gives the empty state
+that `IsValid()` reports. An `AudioClip` is plain data until `AudioSystem::CreateClip` takes it - the system owns
+the sample memory from then on and hands back an `AudioClipHandle`. `LoadClip` does both steps and reports
+whichever of the two failed. `DestroyClip` stops every sound on the clip and frees it once the audio thread is
+provably done reading it; it is safe to call while sounds are playing.
 
 Clips are resampled to the mix rate on the way through (linear interpolation), so a 44.1 kHz file plays correctly
 through the default 48 kHz mix. Decoding to the mix rate ahead of time is still the better choice for anything
@@ -60,7 +89,8 @@ a no-op. A game can keep a handle around and never check it. `IsPlaying` is true
 includes paused and not-yet-started.
 
 `Play` returns an invalid handle, and logs why, when the clip handle is stale, the command queue is full, or every
-voice is busy with sounds it may not take one from. It never throws.
+voice is busy with sounds it may not take one from. It is not an error worth a code: a sound that did not start is
+ordinary in a busy frame, and the caller has nothing different to do about it.
 
 `PlaySoundDesc` and the setters take `volume` (linear gain, `1` is unity), `pan` in `[-1, 1]` (constant-power; acts
 as balance on a stereo clip), `pitch` as a rate multiplier (clamped to `[1/16, 16]`), `loop`, `start_paused`,
@@ -122,8 +152,8 @@ it can be tried again.
 **The device.** `WindowsAudioDevice` opens the default render endpoint in shared, event-driven mode, asking for
 stereo f32 at the mix rate with `AUDCLNT_STREAMFLAGS_AUTOCONVERTPCM`, so Windows converts to whatever the endpoint
 runs at and the mixer never has to adapt. All COM work happens on the audio thread; the thread that builds the
-device never needs `CoInitializeEx`. The constructor waits for the thread's first attempt at the stream and throws
-`AudioDeviceException` if it failed. When the endpoint disappears - headphones unplugged, default device changed -
+device never needs `CoInitializeEx`. `AudioDevice::Create` waits for the thread's first attempt at the stream and
+reports `NoAudioDevice` or `PlatformError` if it failed, logging the `HRESULT`. When the endpoint disappears - headphones unplugged, default device changed -
 the thread reopens against the new default every half second; the mixer's state is untouched, so playback carries
 on. The thread asks MMCSS for "Pro Audio" scheduling, best effort.
 
