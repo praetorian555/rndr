@@ -46,12 +46,18 @@ Catch2, single `rndr-test` binary, run a subset by tag:
 
     ./build/msvc-debug/Debug/rndr-test.exe "[input]"
 
-Tags in use: `[input]` `[canvas]` `[mesh]` `[bitmap]` `[fps]` `[init]` `[forge]` `[forge-window]`.
+Tags in use: `[input]` `[canvas]` `[mesh]` `[bitmap]` `[fps]` `[init]` `[forge]` `[forge-window]` `[audio]`
+`[audio-device]`.
 
 `[forge]` is headless and runs anywhere a Vulkan device exists. `[forge-window]` needs a window system
 as well, opens an offscreen window and presents to it, and covers `Surface`, `SwapChain` and
 `FrameContext`. Both skip rather than fail on a machine that cannot run them, so a run that found no
 device looks like a run that passed - set `RNDR_TEST_REQUIRE_VULKAN=1` to make that a failure instead.
+
+`[audio]` is headless and deterministic: decoders and the mixer driven directly. `[audio-device]` opens the real
+output endpoint and plays through it; it skips on a machine without one, and `RNDR_TEST_REQUIRE_AUDIO=1` makes that
+a failure. Read [docs/audio.md](docs/audio.md) before touching `src/audio/` - the thread split and the clip-lifetime
+rule are the whole design.
 
 ## Commits
 
