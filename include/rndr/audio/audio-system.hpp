@@ -32,7 +32,8 @@ struct AudioSystemDesc
  * Clips belong to the system. CreateClip takes an AudioClip and hands back a handle; the sample data lives here
  * until DestroyClip or the system goes away, and a clip can be destroyed while sounds are playing it - they stop.
  * Sounds are named by SoundHandle, which goes stale on its own when the sound ends, so holding one past that is
- * fine and every call on it is a no-op.
+ * fine and every call on it is a no-op. A sound also ends when a sound of at least its priority needs a voice and
+ * there is none free, so a handle can go stale without the game asking for it - see PlaySoundDesc::priority.
  *
  * Every method is for the main thread - or any single thread, as long as it is the same one. Nothing needs to be
  * called per frame.
@@ -90,6 +91,8 @@ public:
     [[nodiscard]] u32 GetActiveVoiceCount() const;
     /** Calls that were dropped because the command queue was full. Non-zero means something is spamming. */
     [[nodiscard]] u32 GetDroppedCommandCount() const;
+    /** Sounds cut short because a sound of at least their priority needed the voice. */
+    [[nodiscard]] u32 GetStolenVoiceCount() const;
 
 private:
     // Declaration order is destruction order in reverse: the device goes first and takes its thread with it, so

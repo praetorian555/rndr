@@ -33,6 +33,11 @@ struct AudioMixerDesc
  * single-producer single-consumer queue of commands and a handful of atomics; voice state is owned by the audio
  * thread and clip storage by the main thread.
  *
+ * When every voice is busy, a sound takes one from a sound that matters less - see StealVoice for the rule. The
+ * main thread decides, since it is the one handing out slots, and the sound it takes the slot from is stale from
+ * that moment: its handle stops naming anything before the audio thread has even seen the new sound. What it was
+ * playing keeps mixing for one ramp as a voice nobody can address, so the swap is a crossfade rather than a click.
+ *
  * A clip's memory is freed on the main thread, and only after the audio thread has provably stopped reading it:
  * DestroyClip queues a stop for every voice on the clip and records the mix epoch, and the slot is reclaimed once
  * two more mixes have completed. Reclaiming happens lazily inside CreateClip and DestroyClip, so nothing needs to
@@ -95,6 +100,8 @@ public:
     [[nodiscard]] u64 GetMixEpoch() const;
     /** Commands Play and the rest had to drop because the queue was full. */
     [[nodiscard]] u32 GetDroppedCommandCount() const { return m_dropped_command_count; }
+    /** Sounds that were cut short because a sound of at least their priority needed the voice. */
+    [[nodiscard]] u32 GetStolenVoiceCount() const { return m_stolen_voice_count; }
 
     /**
      * Audio thread. Applies every queued command, then writes GetSize() / 2 interleaved stereo frames into @p out,
@@ -142,8 +149,16 @@ private:
 
     struct Voice
     {
-        // Main thread only.
+        // Main thread only: what Play was asked for, kept current by the setters, and read when a voice has to be
+        // taken from someone. The gain here is the one the game asked for rather than the amplitude the audio
+        // thread is producing, which is the only version the deciding thread can see.
         u32 generation = 0;
+        u8 priority = 0;
+        u8 main_bus = 0;
+        f32 main_volume = 1.0f;
+        u64 start_order = 0;
+        bool stop_requested = false;
+        bool pause_requested = false;
 
         // Audio thread only.
         u32 playing_generation = 0;
@@ -166,22 +181,41 @@ private:
     };
 
     bool Send(const Command& command);
-    /** Main thread. Finds a voice whose last sound has finished and claims it with a new generation. */
-    SoundHandle AllocateVoice();
+    /**
+     * Main thread. Finds a voice whose last sound has finished and claims it with a new generation. The generation
+     * the slot carried before is handed back, so a Play whose command is dropped can put the slot back as it was.
+     */
+    SoundHandle AllocateVoice(u32& out_previous_generation);
+    /**
+     * Main thread. Takes a voice from a sound that matters less than the one at @p priority, and returns the claimed
+     * slot. A voice already on its way out goes first; after that only voices of equal or lower priority are
+     * candidates, the lowest priority among them, then the quietest, then the oldest. A paused voice is never taken:
+     * it is silent now and wanted back later. Returns an invalid handle when there is nothing to take.
+     */
+    SoundHandle StealVoice(u8 priority, u32& out_previous_generation);
     [[nodiscard]] bool IsLive(SoundHandle sound) const;
     void ReclaimClipSlots();
 
     // Audio thread.
     void Execute(const Command& command);
     void FinishVoice(Voice& voice);
+    /**
+     * Hands what a slot was playing to a voice nobody can address, so it can ramp down while the sound that took
+     * the slot ramps up. Leaves the slot ready to be filled.
+     */
+    void MoveToFading(Voice& voice);
     void MixVoice(Voice& voice, Opal::ArrayView<f32> out, f32 master_volume);
 
     AudioMixerDesc m_desc;
     Opal::ChannelSPSC<Command, false> m_commands;
     Opal::DynamicArray<ClipSlot> m_clips;
     Opal::DynamicArray<Voice> m_voices;
+    /** Audio thread only: sounds whose slot was taken, ramping down. No handle names them and no command reaches them. */
+    Opal::DynamicArray<Voice> m_fading_voices;
     u32 m_next_voice = 0;
+    u64 m_next_start_order = 0;
     u32 m_dropped_command_count = 0;
+    u32 m_stolen_voice_count = 0;
     u32 m_gain_ramp_frames = 0;
 
     Opal::Atomic<f32> m_master_volume = 1.0f;

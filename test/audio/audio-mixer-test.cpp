@@ -417,13 +417,14 @@ TEST_CASE("Mixer voice slots", "[audio]")
     AudioMixer mixer({.sample_rate = k_rate, .max_voices = 2, .max_clips = 2, .command_queue_capacity = 64});
     const AudioClipHandle constant = mixer.CreateClip(AudioTest::MakeConstantClip(k_rate, 1, 1000, 0.5f));
 
-    SECTION("No voice left means no sound")
+    SECTION("No voice a sound may take means no sound")
     {
-        const SoundHandle a = mixer.Play(constant);
-        const SoundHandle b = mixer.Play(constant);
+        const SoundHandle a = mixer.Play(constant, {.priority = 255});
+        const SoundHandle b = mixer.Play(constant, {.priority = 255});
         REQUIRE(a.IsValid());
         REQUIRE(b.IsValid());
         REQUIRE_FALSE(mixer.Play(constant).IsValid());
+        REQUIRE(mixer.GetStolenVoiceCount() == 0);
 
         Mix(mixer, 1100);  // both finish
         REQUIRE(mixer.Play(constant).IsValid());
@@ -455,6 +456,199 @@ TEST_CASE("Mixer voice slots", "[audio]")
         REQUIRE_FALSE(mixer.Play(AudioClipHandle{.index = 1, .generation = 1}).IsValid());
         REQUIRE_FALSE(mixer.IsPlaying(SoundHandle{}));
         REQUIRE_FALSE(mixer.IsPlaying(SoundHandle{.index = 50, .generation = 1}));
+    }
+}
+
+TEST_CASE("Mixer voice stealing", "[audio]")
+{
+    AudioMixer mixer({.sample_rate = k_rate, .max_voices = 2, .max_clips = 2, .command_queue_capacity = 64});
+    // Long enough that nothing ends on its own during a case.
+    const AudioClipHandle constant = mixer.CreateClip(AudioTest::MakeConstantClip(k_rate, 1, 100000, 0.5f));
+
+    SECTION("Equal priority loses the oldest")
+    {
+        const SoundHandle a = mixer.Play(constant);
+        const SoundHandle b = mixer.Play(constant);
+        const SoundHandle c = mixer.Play(constant);
+        REQUIRE(c.IsValid());
+        REQUIRE(c.index == a.index);
+        REQUIRE_FALSE(mixer.IsPlaying(a));  // stale the moment the slot is taken, before any mix
+        REQUIRE(mixer.IsPlaying(b));
+        REQUIRE(mixer.IsPlaying(c));
+        REQUIRE(mixer.GetStolenVoiceCount() == 1);
+    }
+
+    SECTION("Priority beats age")
+    {
+        const SoundHandle a = mixer.Play(constant, {.priority = 200});
+        const SoundHandle b = mixer.Play(constant, {.priority = 50});
+        const SoundHandle c = mixer.Play(constant, {.priority = 100});
+        REQUIRE(c.index == b.index);
+        REQUIRE(mixer.IsPlaying(a));
+        REQUIRE_FALSE(mixer.IsPlaying(b));
+    }
+
+    SECTION("The quietest of equals goes")
+    {
+        const SoundHandle a = mixer.Play(constant, {.volume = 1.0f});
+        const SoundHandle b = mixer.Play(constant, {.volume = 0.2f});
+        const SoundHandle c = mixer.Play(constant);
+        REQUIRE(c.index == b.index);
+        REQUIRE(mixer.IsPlaying(a));
+    }
+
+    SECTION("Bus volume counts towards quietest")
+    {
+        mixer.SetBusVolume(1, 0.1f);
+        const SoundHandle a = mixer.Play(constant, {.bus = 0});
+        const SoundHandle b = mixer.Play(constant, {.bus = 1});
+        const SoundHandle c = mixer.Play(constant);
+        REQUIRE(c.index == b.index);
+        REQUIRE(mixer.IsPlaying(a));
+    }
+
+    SECTION("A volume change moves who is quietest")
+    {
+        const SoundHandle a = mixer.Play(constant, {.volume = 0.2f});
+        const SoundHandle b = mixer.Play(constant, {.volume = 1.0f});
+        mixer.SetVolume(a, 1.0f);
+        mixer.SetVolume(b, 0.1f);
+        const SoundHandle c = mixer.Play(constant);
+        REQUIRE(c.index == b.index);
+        REQUIRE(mixer.IsPlaying(a));
+    }
+
+    SECTION("A higher priority is never taken")
+    {
+        const SoundHandle a = mixer.Play(constant, {.priority = 255});
+        const SoundHandle b = mixer.Play(constant, {.priority = 255});
+        REQUIRE_FALSE(mixer.Play(constant, {.priority = 100}).IsValid());
+        REQUIRE(mixer.GetStolenVoiceCount() == 0);
+        REQUIRE(mixer.IsPlaying(a));
+        REQUIRE(mixer.IsPlaying(b));
+        // Equal priority is fair game.
+        REQUIRE(mixer.Play(constant, {.priority = 255}).IsValid());
+    }
+
+    SECTION("A sound on its way out goes first whatever its priority")
+    {
+        const SoundHandle a = mixer.Play(constant, {.priority = 255});
+        const SoundHandle b = mixer.Play(constant, {.priority = 255});
+        mixer.Stop(a);
+        const SoundHandle c = mixer.Play(constant, {.priority = 10});
+        REQUIRE(c.IsValid());
+        REQUIRE(c.index == a.index);
+        REQUIRE(mixer.IsPlaying(b));
+    }
+
+    SECTION("A paused sound is never taken")
+    {
+        const SoundHandle a = mixer.Play(constant);
+        const SoundHandle b = mixer.Play(constant);
+        mixer.Pause(a);
+        const SoundHandle c = mixer.Play(constant);
+        REQUIRE(c.index == b.index);
+        REQUIRE(mixer.IsPlaying(a));
+
+        mixer.Pause(c);
+        REQUIRE_FALSE(mixer.Play(constant).IsValid());
+
+        // Resuming puts it back in reach.
+        mixer.Resume(a);
+        REQUIRE(mixer.Play(constant).IsValid());
+    }
+
+    SECTION("A sound started paused is not taken either")
+    {
+        const SoundHandle a = mixer.Play(constant, {.start_paused = true});
+        const SoundHandle b = mixer.Play(constant);
+        const SoundHandle c = mixer.Play(constant);
+        REQUIRE(c.index == b.index);
+        REQUIRE(mixer.IsPlaying(a));
+    }
+
+    SECTION("The stolen handle reaches nothing")
+    {
+        const SoundHandle a = mixer.Play(constant, {.pan = -1.0f});
+        const SoundHandle b = mixer.Play(constant, {.pan = -1.0f});
+        const SoundHandle c = mixer.Play(constant, {.pan = -1.0f});
+        REQUIRE(c.index == a.index);
+
+        mixer.Stop(a);
+        mixer.SetVolume(a, 0.0f);
+        mixer.SetPitch(a, 4.0f);
+        mixer.Pause(a);
+        Mix(mixer, 500);
+        REQUIRE(mixer.IsPlaying(b));
+        REQUIRE(mixer.IsPlaying(c));
+        REQUIRE(mixer.GetActiveVoiceCount() == 2);
+        const Opal::DynamicArray<f32> out = Mix(mixer, 500);
+        RequireFrames(out, 0, 500, 1.0f, 0.0f);  // two unity voices on the left, clamped
+    }
+
+    SECTION("The swap is a crossfade, not a click")
+    {
+        AudioMixer single({.sample_rate = k_rate, .max_voices = 1, .max_clips = 1});
+        const AudioClipHandle clip = single.CreateClip(AudioTest::MakeConstantClip(k_rate, 1, 100000, 0.5f));
+        single.Play(clip, {.pan = -1.0f});
+        Mix(single, 500);  // the first sound is at full gain by now
+
+        single.Play(clip, {.pan = -1.0f});
+        const Opal::DynamicArray<f32> out = Mix(single, 500);
+        // The sound leaving and the sound arriving ramp at the same rate over the same distance, so what comes out
+        // never dips: the level holds through the swap and there is no step anywhere in it.
+        RequireFrames(out, 0, 500, 0.5f, 0.0f, 2e-3f);
+        REQUIRE(single.GetActiveVoiceCount() == 1);  // the ghost is nobody's voice
+    }
+
+    SECTION("A slot taken twice inside one ramp still ends up with the last sound")
+    {
+        AudioMixer single({.sample_rate = k_rate, .max_voices = 1, .max_clips = 1});
+        const AudioClipHandle clip = single.CreateClip(AudioTest::MakeConstantClip(k_rate, 1, 100000, 0.5f));
+        const SoundHandle a = single.Play(clip);
+        const SoundHandle b = single.Play(clip);
+        const SoundHandle c = single.Play(clip);
+        REQUIRE(single.GetStolenVoiceCount() == 2);
+        REQUIRE_FALSE(single.IsPlaying(a));
+        REQUIRE_FALSE(single.IsPlaying(b));
+
+        Mix(single, 500);
+        REQUIRE(single.IsPlaying(c));
+        REQUIRE(single.GetActiveVoiceCount() == 1);
+    }
+
+    SECTION("Destroying a clip takes the fading sounds with it")
+    {
+        AudioMixer single({.sample_rate = k_rate, .max_voices = 1, .max_clips = 2});
+        const AudioClipHandle first = single.CreateClip(AudioTest::MakeConstantClip(k_rate, 1, 100000, 0.5f));
+        single.Play(first);
+        Mix(single, 500);
+        single.Play(first);  // the first sound becomes a ghost on the next mix
+        single.DestroyClip(first);
+        // Two mixes of a handful of frames: without the ghost being finished too, the clip would be freed under it.
+        Mix(single, 8);
+        Mix(single, 8);
+        const AudioClipHandle second = single.CreateClip(AudioTest::MakeConstantClip(k_rate, 1, 100, 0.5f));
+        REQUIRE(second.IsValid());
+        const Opal::DynamicArray<f32> out = Mix(single, 64);
+        RequireFrames(out, 0, 64, 0.0f, 0.0f);
+    }
+
+    SECTION("A steal whose command is dropped leaves the sound alone")
+    {
+        AudioMixer single({.sample_rate = k_rate, .max_voices = 1, .max_clips = 1, .command_queue_capacity = 1});
+        const AudioClipHandle clip = single.CreateClip(AudioTest::MakeConstantClip(k_rate, 1, 100000, 0.5f));
+        const SoundHandle a = single.Play(clip, {.pan = -1.0f});
+        REQUIRE(a.IsValid());
+
+        const SoundHandle b = single.Play(clip);  // queue is full: the steal has to be undone
+        REQUIRE_FALSE(b.IsValid());
+        REQUIRE(single.GetStolenVoiceCount() == 0);
+        REQUIRE(single.IsPlaying(a));
+
+        const Opal::DynamicArray<f32> out = Mix(single, 500);
+        RequireFrames(out, k_ramp_frames, 500, 0.5f, 0.0f);
+        REQUIRE(single.IsPlaying(a));
     }
 }
 

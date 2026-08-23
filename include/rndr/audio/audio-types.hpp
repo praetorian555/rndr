@@ -48,6 +48,11 @@ struct PlaySoundDesc
     bool loop = false;
     /** Allocate the voice but do not advance it until Resume. */
     bool start_paused = false;
+    /**
+     * Who wins a voice when every one of them is busy. A sound takes a voice from one of equal or lower priority,
+     * never from a higher one, and is refused when there is nothing it may take.
+     */
+    u8 priority = 128;
     /** Bus in [0, k_audio_bus_count) whose volume is applied on top of the sound's own. */
     u8 bus = 0;
 };

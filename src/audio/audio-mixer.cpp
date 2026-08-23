@@ -67,7 +67,11 @@ const Rndr::AudioMixerDesc& ValidateDesc(const Rndr::AudioMixerDesc& desc)
 }  // namespace
 
 Rndr::AudioMixer::AudioMixer(const AudioMixerDesc& desc)
-    : m_desc(ValidateDesc(desc)), m_commands(desc.command_queue_capacity), m_clips(desc.max_clips), m_voices(desc.max_voices)
+    : m_desc(ValidateDesc(desc)),
+      m_commands(desc.command_queue_capacity),
+      m_clips(desc.max_clips),
+      m_voices(desc.max_voices),
+      m_fading_voices(desc.max_voices)
 {
     m_gain_ramp_frames = std::max(1u, static_cast<u32>(static_cast<f32>(desc.sample_rate) * k_gain_ramp_seconds));
     for (Opal::Atomic<f32>& bus_volume : m_bus_volumes)
@@ -163,7 +167,7 @@ void Rndr::AudioMixer::DestroyClip(AudioClipHandle handle)
     slot.free_after_epoch = m_mix_epoch.Load<Opal::MemoryOrder::Acquire>() + 2;
 }
 
-Rndr::SoundHandle Rndr::AudioMixer::AllocateVoice()
+Rndr::SoundHandle Rndr::AudioMixer::AllocateVoice(u32& out_previous_generation)
 {
     for (u32 attempt = 0; attempt < m_voices.GetSize(); attempt++)
     {
@@ -173,6 +177,7 @@ Rndr::SoundHandle Rndr::AudioMixer::AllocateVoice()
         {
             continue;  // the audio thread has not finished the last sound put here
         }
+        out_previous_generation = voice.generation;
         voice.generation++;
         if (voice.generation == 0)
         {
@@ -182,6 +187,76 @@ Rndr::SoundHandle Rndr::AudioMixer::AllocateVoice()
         return {index, voice.generation};
     }
     return {};
+}
+
+Rndr::SoundHandle Rndr::AudioMixer::StealVoice(u8 priority, u32& out_previous_generation)
+{
+    Voice* victim = nullptr;
+    for (Voice& voice : m_voices)
+    {
+        // Only live slots. A slot whose sound has finished would have been found by AllocateVoice.
+        if (voice.finished_generation.Load<Opal::MemoryOrder::Acquire>() == voice.generation)
+        {
+            continue;
+        }
+        // A paused sound is silent now and wanted back when it resumes; taking it would be heard later.
+        if (voice.pause_requested)
+        {
+            continue;
+        }
+        // Something already on its way out costs nothing to take, whatever it was.
+        if (voice.stop_requested)
+        {
+            victim = &voice;
+            break;
+        }
+        if (voice.priority > priority)
+        {
+            continue;
+        }
+        if (victim == nullptr)
+        {
+            victim = &voice;
+            continue;
+        }
+        // Lowest priority first, then the quietest of those, then the one that has been playing longest. The gain
+        // is what the game asked for, which is all this thread knows.
+        const f32 victim_gain = victim->main_volume * m_bus_volumes[victim->main_bus].Load<Opal::MemoryOrder::Relaxed>();
+        const f32 voice_gain = voice.main_volume * m_bus_volumes[voice.main_bus].Load<Opal::MemoryOrder::Relaxed>();
+        bool is_better_victim = false;
+        if (voice.priority != victim->priority)
+        {
+            is_better_victim = voice.priority < victim->priority;
+        }
+        else if (voice_gain != victim_gain)
+        {
+            is_better_victim = voice_gain < victim_gain;
+        }
+        else
+        {
+            is_better_victim = voice.start_order < victim->start_order;
+        }
+        if (is_better_victim)
+        {
+            victim = &voice;
+        }
+    }
+
+    if (victim == nullptr)
+    {
+        return {};
+    }
+
+    // Bumping the generation retires the old handle right here: nothing the game holds names this sound any more.
+    out_previous_generation = victim->generation;
+    victim->generation++;
+    if (victim->generation == 0)
+    {
+        victim->generation = 1;
+    }
+    m_stolen_voice_count++;
+    const auto index = static_cast<u32>(victim - m_voices.GetData());
+    return {index, victim->generation};
 }
 
 bool Rndr::AudioMixer::IsLive(SoundHandle sound) const
@@ -201,13 +276,21 @@ Rndr::SoundHandle Rndr::AudioMixer::Play(AudioClipHandle clip, const PlaySoundDe
         RNDR_LOG_ERROR("AudioMixer: Play called with a clip handle that is not live");
         return {};
     }
-    const SoundHandle sound = AllocateVoice();
+    // What the slot's generation was before it was claimed, so a send that does not go through can put it back. For
+    // a stolen slot that is the generation of the sound still playing there, which is what makes the steal undoable.
+    u32 previous_generation = 0;
+    bool was_stolen = false;
+    SoundHandle sound = AllocateVoice(previous_generation);
     if (!sound.IsValid())
     {
-        RNDR_LOG_DEBUG("AudioMixer: every voice is busy, the sound is not played");
+        sound = StealVoice(desc.priority, previous_generation);
+        was_stolen = sound.IsValid();
+    }
+    if (!sound.IsValid())
+    {
+        RNDR_LOG_DEBUG("AudioMixer: every voice is busy with sounds of a higher priority, the sound is not played");
         return {};
     }
-    const u32 previous_generation = m_voices[sound.index].finished_generation.Load<Opal::MemoryOrder::Relaxed>();
 
     Command command;
     command.type = Command::Type::Play;
@@ -224,10 +307,24 @@ Rndr::SoundHandle Rndr::AudioMixer::Play(AudioClipHandle clip, const PlaySoundDe
     }
     if (!Send(command))
     {
-        // The audio thread never saw this generation, so hand the slot back as it was.
+        // The audio thread never saw this generation, so hand the slot back as it was - which for a stolen slot
+        // means the sound that was about to lose it keeps it, handle and all.
         m_voices[sound.index].generation = previous_generation;
+        if (was_stolen)
+        {
+            m_stolen_voice_count--;
+        }
         return {};
     }
+
+    // Only now that the command is on its way: until it is, the slot still belongs to whoever was there.
+    Voice& voice = m_voices[sound.index];
+    voice.priority = desc.priority;
+    voice.main_bus = command.desc.bus;
+    voice.main_volume = command.desc.volume;
+    voice.start_order = m_next_start_order++;
+    voice.stop_requested = false;
+    voice.pause_requested = command.desc.start_paused;
     return sound;
 }
 
@@ -237,6 +334,9 @@ void Rndr::AudioMixer::Stop(SoundHandle sound)
     {
         return;
     }
+    // Ahead of the audio thread on purpose: a sound on its way out is the first one a new sound may take the
+    // voice from, and that is true from the moment the stop is asked for.
+    m_voices[sound.index].stop_requested = true;
     Command command;
     command.type = Command::Type::Stop;
     command.sound = sound;
@@ -245,6 +345,10 @@ void Rndr::AudioMixer::Stop(SoundHandle sound)
 
 void Rndr::AudioMixer::StopAll()
 {
+    for (Voice& voice : m_voices)
+    {
+        voice.stop_requested = true;
+    }
     Command command;
     command.type = Command::Type::StopAll;
     Send(command);
@@ -256,6 +360,7 @@ void Rndr::AudioMixer::Pause(SoundHandle sound)
     {
         return;
     }
+    m_voices[sound.index].pause_requested = true;
     Command command;
     command.type = Command::Type::Pause;
     command.sound = sound;
@@ -268,6 +373,7 @@ void Rndr::AudioMixer::Resume(SoundHandle sound)
     {
         return;
     }
+    m_voices[sound.index].pause_requested = false;
     Command command;
     command.type = Command::Type::Resume;
     command.sound = sound;
@@ -276,6 +382,10 @@ void Rndr::AudioMixer::Resume(SoundHandle sound)
 
 void Rndr::AudioMixer::PauseAll()
 {
+    for (Voice& voice : m_voices)
+    {
+        voice.pause_requested = true;
+    }
     Command command;
     command.type = Command::Type::PauseAll;
     Send(command);
@@ -283,6 +393,10 @@ void Rndr::AudioMixer::PauseAll()
 
 void Rndr::AudioMixer::ResumeAll()
 {
+    for (Voice& voice : m_voices)
+    {
+        voice.pause_requested = false;
+    }
     Command command;
     command.type = Command::Type::ResumeAll;
     Send(command);
@@ -294,6 +408,7 @@ void Rndr::AudioMixer::SetVolume(SoundHandle sound, f32 volume)
     {
         return;
     }
+    m_voices[sound.index].main_volume = ClampVolume(volume);
     Command command;
     command.type = Command::Type::SetVolume;
     command.sound = sound;
@@ -397,6 +512,53 @@ void Rndr::AudioMixer::FinishVoice(Voice& voice)
     voice.finished_generation.Store<Opal::MemoryOrder::Release>(voice.playing_generation);
 }
 
+void Rndr::AudioMixer::MoveToFading(Voice& voice)
+{
+    Voice* ghost = nullptr;
+    for (Voice& candidate : m_fading_voices)
+    {
+        if (!candidate.is_active)
+        {
+            ghost = &candidate;
+            break;
+        }
+    }
+    if (ghost == nullptr)
+    {
+        // Every ghost is still fading, which takes a slot stolen more than once inside one ramp. Cut the one
+        // closest to silence rather than grow the array on this thread.
+        ghost = &m_fading_voices[0];
+        for (Voice& candidate : m_fading_voices)
+        {
+            if (candidate.gain_left + candidate.gain_right < ghost->gain_left + ghost->gain_right)
+            {
+                ghost = &candidate;
+            }
+        }
+    }
+
+    ghost->clip_index = voice.clip_index;
+    ghost->is_active = true;
+    ghost->is_paused = false;
+    ghost->is_stopping = true;  // a ghost exists only to ramp out
+    ghost->loop = voice.loop;
+    ghost->bus = voice.bus;
+    ghost->position = voice.position;
+    ghost->volume = voice.volume;
+    ghost->pan = voice.pan;
+    ghost->pitch = voice.pitch;
+    ghost->gain_left = voice.gain_left;
+    ghost->gain_right = voice.gain_right;
+
+    // The slot itself is left as a finished voice would leave it, except for finished_generation: the main thread
+    // has already moved that slot on to the sound about to fill it.
+    voice.is_active = false;
+    voice.is_paused = false;
+    voice.is_stopping = false;
+    voice.gain_left = 0.0f;
+    voice.gain_right = 0.0f;
+}
+
 void Rndr::AudioMixer::Execute(const Command& command)
 {
     // The per-voice commands name a generation; one that does not match belongs to a sound that has already
@@ -416,9 +578,9 @@ void Rndr::AudioMixer::Execute(const Command& command)
             Voice& fresh = m_voices[command.sound.index];
             if (fresh.is_active)
             {
-                // Cannot happen: the main thread only hands out slots whose last sound has finished. Retire the
-                // old sound rather than leak a generation.
-                FinishVoice(fresh);
+                // The slot was taken from a sound that is still playing. Hand what it was playing to a ghost so it
+                // ramps out while this one ramps in, rather than cutting it here.
+                MoveToFading(fresh);
             }
             fresh.playing_generation = command.sound.generation;
             fresh.clip_index = command.clip_index;
@@ -526,6 +688,15 @@ void Rndr::AudioMixer::Execute(const Command& command)
                 if (v.is_active && v.clip_index == command.clip_index)
                 {
                     FinishVoice(v);
+                }
+            }
+            // Ghosts too: the clip's memory is freed two mixes from now, and a ghost that is still ramping out
+            // would read it after that on a small enough buffer.
+            for (Voice& ghost : m_fading_voices)
+            {
+                if (ghost.is_active && ghost.clip_index == command.clip_index)
+                {
+                    ghost.is_active = false;
                 }
             }
             break;
@@ -636,6 +807,16 @@ void Rndr::AudioMixer::Mix(Opal::ArrayView<f32> out)
         if (voice.is_active)
         {
             active_count++;
+        }
+    }
+
+    // Sounds whose slot was taken, playing out their last ramp. They are nobody's voice any more, so they are not
+    // counted and nothing can address them.
+    for (Voice& ghost : m_fading_voices)
+    {
+        if (ghost.is_active)
+        {
+            MixVoice(ghost, out, master_volume);
         }
     }
 

@@ -138,3 +138,8 @@ Rndr::u32 Rndr::AudioSystem::GetDroppedCommandCount() const
 {
     return m_mixer.GetDroppedCommandCount();
 }
+
+Rndr::u32 Rndr::AudioSystem::GetStolenVoiceCount() const
+{
+    return m_mixer.GetStolenVoiceCount();
+}

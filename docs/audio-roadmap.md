@@ -1,29 +1,15 @@
 # Audio roadmap
 
 What an RTS needs from the audio system beyond what [audio.md](audio.md) describes today: clips, voices with
-volume/pan/pitch/loop, eight buses, master volume, pause-all, and a WASAPI device. Ordered by how much a game
-hurts without it. Each item names the layer it lands in, since the mixer is the part that runs on the audio
-thread and the part the tests drive.
+volume/pan/pitch/loop and priority-based stealing, eight buses, master volume, pause-all, and a WASAPI device.
+Ordered by how much a game hurts without it. Each item names the layer it lands in, since the mixer is the part
+that runs on the audio thread and the part the tests drive.
 
 ---
 
 ## Must have
 
-### 1. Voice priority and stealing
-
-Two hundred units fill sixty-four voices in a second, and `Play` currently refuses once they are full - the
-important sound is the one that gets dropped.
-
-- `PlaySoundDesc::priority` (u8, higher wins; default mid-range).
-- When no voice is free, steal one: lowest priority first, then quietest, then oldest. Never steal a voice of
-  higher priority than the new sound.
-- The stolen voice is ramped out over the usual 2 ms, not cut.
-- `GetStolenVoiceCount()` for the debug overlay.
-
-Layer: mixer. Main thread picks the victim, since it allocates slots; the audio thread gets a `Play` whose slot
-is still active and finishes the old sound first.
-
-### 2. Per-clip instance cap and retrigger cooldown
+### 1. Per-clip instance cap and retrigger cooldown
 
 Forty riflemen firing on the same frame sum forty copies of one clip: clipping, mush, and forty voices gone.
 
@@ -35,7 +21,7 @@ Forty riflemen firing on the same frame sum forty copies of one clip: clipping, 
 
 Layer: mixer.
 
-### 3. Camera-relative positional audio
+### 2. Camera-relative positional audio
 
 A top-down game wants sounds panned by where they are on screen and quieter the further they are from the camera
 focus. Nothing spatial beyond that - no HRTF, no doppler.
@@ -50,7 +36,7 @@ focus. Nothing spatial beyond that - no HRTF, no doppler.
 Layer: listener state is an atomic-ish snapshot read by the audio thread; pan and gain are recomputed per mix from
 position. Sounds that move (`SetPosition`) go through a command like the other setters.
 
-### 4. Long fades
+### 3. Long fades
 
 Every gain change lands in 2 ms today. Music crossfades, ambient swaps and level transitions need seconds.
 
@@ -60,7 +46,7 @@ Every gain change lands in 2 ms today. Music crossfades, ambient swaps and level
 
 Layer: mixer. Bus fades move the bus gain onto the audio thread (currently an atomic written by the main thread).
 
-### 5. Per-bus pause
+### 4. Per-bus pause
 
 Game pause must freeze the world and keep the menu alive.
 
@@ -74,26 +60,26 @@ Layer: mixer, one flag per bus on the audio thread.
 
 ## Should have
 
-### 6. Exclusive groups
+### 5. Exclusive groups
 
 Unit acknowledgements - "yes, commander" - are one at a time: a new line interrupts the previous one, and
 clicking a unit ten times should not queue ten.
 
 - `PlaySoundDesc::exclusive_group` (u8, 0 = none). Playing into a group stops whatever is playing in it.
-- Combine with item 2's cooldown on the clip for the spam case.
+- Combine with item 1's cooldown on the clip for the spam case.
 
 Layer: mixer, main-thread bookkeeping of "current sound per group".
 
-### 7. Ducking
+### 6. Ducking
 
 Voice lines and "base under attack" alerts should pull music and world sfx down while they play.
 
 - `PlaySoundDesc::duck_buses` (bit mask) and `duck_amount` (gain, default 0.5).
-- The ducked buses fade down while any ducking sound is alive and back up afterwards, over item 4's fades.
+- The ducked buses fade down while any ducking sound is alive and back up afterwards, over item 3's fades.
 
-Layer: mixer, on top of items 4 and 5.
+Layer: mixer, on top of items 3 and 4.
 
-### 8. Variation sets
+### 7. Variation sets
 
 "Rifle fire" is four clips and a little pitch jitter, not one clip.
 
@@ -104,7 +90,7 @@ Layer: mixer, on top of items 4 and 5.
 
 Layer: system.
 
-### 9. Music that does not live in memory as f32
+### 8. Music that does not live in memory as f32
 
 Five minutes of stereo at 48 kHz is 110 MB as f32. Two tracks and the OGG decode at level start is the longest
 thing in the load.
@@ -119,17 +105,17 @@ Layer: clip + mixer + a loader. Largest item on the list.
 
 ## Nice
 
-### 10. Alert bus convention
+### 9. Alert bus convention
 
 Nothing to build - a naming convention: bus 0 world sfx, 1 music, 2 UI, 3 voice, 4 alerts, with UI/voice/alerts
-non-positional. Worth writing down in `audio.md` once items 3 and 5 exist.
+non-positional. Worth writing down in `audio.md` once items 2 and 4 exist.
 
-### 11. Bus meters
+### 10. Bus meters
 
 Peak level per bus and master, written by the audio thread each mix, read for a debug overlay. Tells a designer
 which bus is clipping.
 
-### 12. Asynchronous clip loading
+### 11. Asynchronous clip loading
 
 `LoadClip` decodes on the calling thread; a long OGG takes hundreds of milliseconds. Fine inside a loading screen.
 If a game wants to load during play: decode on a worker (Opal has a thread pool) and hand the finished `AudioClip`
@@ -139,6 +125,6 @@ to `CreateClip` on the main thread.
 
 ## Suggested order
 
-Items 1, 2, 3 and 5 are all mixer-side and small on their own; they make one pass, with tests driven through
-`AudioMixer::Mix` like the existing ones. Items 4, 6 and 7 are a second pass, since 7 depends on 4 and 5. Item 9
+Items 1, 2 and 4 are all mixer-side and small on their own; they make one pass, with tests driven through
+`AudioMixer::Mix` like the existing ones. Items 3, 5 and 6 are a second pass, since 6 depends on 3 and 4. Item 8
 stands alone and is the one that changes the most.

@@ -59,12 +59,25 @@ sound ends or is stopped, the handle is stale and every call that takes it - `St
 a no-op. A game can keep a handle around and never check it. `IsPlaying` is true while the voice is alive, which
 includes paused and not-yet-started.
 
-`Play` returns an invalid handle, and logs why, when the clip handle is stale, every voice is busy (`max_voices`,
-default 64; there is no voice stealing), or the command queue is full. It never throws.
+`Play` returns an invalid handle, and logs why, when the clip handle is stale, the command queue is full, or every
+voice is busy with sounds it may not take one from. It never throws.
 
 `PlaySoundDesc` and the setters take `volume` (linear gain, `1` is unity), `pan` in `[-1, 1]` (constant-power; acts
-as balance on a stereo clip), `pitch` as a rate multiplier (clamped to `[1/16, 16]`), `loop`, `start_paused` and a
-`bus` index. Gain changes and stops are ramped over 2 ms so they do not click.
+as balance on a stereo clip), `pitch` as a rate multiplier (clamped to `[1/16, 16]`), `loop`, `start_paused`,
+`priority` and a `bus` index. Gain changes and stops are ramped over 2 ms so they do not click.
+
+### Priority and stealing
+
+There are `max_voices` (default 64) voices and a busy fight wants more, so a sound takes a voice from a sound that
+matters less. A sound already on its way out goes first. Failing that, only sounds of equal or lower `priority`
+(default 128) are candidates - a higher priority is never interrupted - and among them the lowest priority goes,
+then the quietest, then the one that has been playing longest. A paused sound is never taken: it is silent now and
+wanted back when it resumes. With nothing to take, `Play` refuses.
+
+A stolen sound ends: its handle is stale immediately, exactly as if it had finished, so a game holding one needs no
+new check. What it was playing keeps mixing for one 2 ms ramp while the new sound fades in, so the swap is a
+crossfade and not a click. `GetStolenVoiceCount` counts the sounds this has happened to - a number that climbs
+fast means `max_voices` is too low or something is playing more copies of one sound than anyone can hear.
 
 ### Buses and master volume
 
@@ -137,7 +150,5 @@ on its own bus, Up/Down for master volume, P to pause everything.
   a decoder fed from disk on the audio thread.
 - **3D.** No listener, no distance attenuation, no spatial pan. A game can compute pan and volume from positions
   and set them per sound.
-- **Voice stealing.** Once `max_voices` are busy, `Play` refuses. Stealing the quietest or oldest is the usual next
-  step.
 - **Effects and sends.** No filters, no reverb, no bus-to-bus routing beyond a single gain per bus.
 - **Other platforms.** `AudioDevice::Create` is where another backend would be picked; the mixer does not care.
