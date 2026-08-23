@@ -107,6 +107,11 @@ if (${RNDR_AUDIO})
     list(APPEND SOURCE_LIST
             "${PROJECT_SOURCE_DIR}/extern/stb_vorbis/include/stb_vorbis/stb_vorbis.h"
             "${PROJECT_SOURCE_DIR}/extern/stb_vorbis/src/stb_vorbis.cpp")
+    list(APPEND SOURCE_LIST
+            "${PROJECT_SOURCE_DIR}/include/rndr/audio/audio-types.hpp"
+            "${PROJECT_SOURCE_DIR}/include/rndr/audio/audio-clip.hpp"
+            "${PROJECT_SOURCE_DIR}/src/audio/audio-clip.cpp"
+            "${PROJECT_SOURCE_DIR}/src/audio/audio-decoders.cpp")
 endif ()
 
 list(APPEND SOURCE_LIST

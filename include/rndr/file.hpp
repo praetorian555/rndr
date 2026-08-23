@@ -8,6 +8,11 @@
 #include "rndr/bitmap.hpp"
 #include "rndr/canvas/renderers/pbr-renderer.hpp"
 
+#if RNDR_AUDIO
+#include "rndr/audio/audio-clip.hpp"
+#include "rndr/audio/audio-types.hpp"
+#endif
+
 namespace Rndr
 {
 
@@ -97,6 +102,29 @@ bool SaveImage(const Bitmap& bitmap, const Opal::StringUtf8& file_path);
  * @throw Opal::Exception if file does not exist or if there was a problem loading the data.
  */
 [[nodiscard]] Bitmap LoadImage(const Opal::StringUtf8& file_path, bool flip_vertically, bool generate_mips);
+
+#if RNDR_AUDIO
+/**
+ * Load an audio clip from a file. The extension picks the decoder: .wav or .ogg (Vorbis). Mono and stereo only.
+ *
+ * @param file_path Absolute or relative path to the audio file.
+ * @return Returns a valid AudioClip.
+ * @throw Opal::Exception if the file does not exist, the extension is not supported, or decoding fails.
+ */
+[[nodiscard]] AudioClip LoadAudioClip(const Opal::StringUtf8& file_path);
+
+/**
+ * Decode an audio file that is already in memory. What LoadAudioClip calls once it has read the file; exposed so a
+ * decoder can be exercised without touching the disk.
+ *
+ * @param file_bytes The whole file image.
+ * @param format Which decoder to run.
+ * @return Returns a valid AudioClip.
+ * @throw Opal::Exception if the bytes are not a well-formed file of that format, or use a layout the decoder
+ * does not support (more than two channels, an unusual bit depth, a compressed WAV).
+ */
+[[nodiscard]] AudioClip DecodeAudioClip(Opal::ArrayView<const u8> file_bytes, AudioFileFormat format);
+#endif
 
 }  // namespace File
 

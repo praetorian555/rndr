@@ -96,6 +96,10 @@ if (${RNDR_BUILD_TESTS})
                 test/forge/smoke-test.cpp
                 test/forge/window-test.cpp)
     endif ()
+    if (${RNDR_AUDIO})
+        list(APPEND RNDR_TEST_FILES
+                test/audio/audio-clip-test.cpp)
+    endif ()
     add_executable(rndr-test ${RNDR_TEST_FILES})
     rndr_deploy_runtime(rndr-test)
     target_include_directories(rndr-test PRIVATE src)
