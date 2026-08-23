@@ -2,9 +2,8 @@
 
 #include <cmath>
 
-#include "opal/exceptions.h"
-
 #include "rndr/audio/audio-mixer.hpp"
+#include "rndr/error-codes.hpp"
 
 #include "audio-test-common.hpp"
 
@@ -22,6 +21,28 @@ const f32 k_centre_gain = std::cos(AudioTest::k_pi / 4.0f);
 AudioMixerDesc SmallDesc()
 {
     return {.sample_rate = k_rate, .max_voices = 4, .max_clips = 4, .command_queue_capacity = 64};
+}
+
+/** Unwraps a CreateClip that is meant to succeed, so the cases below read as they did before it returned a code. */
+AudioClipHandle CreateClipOrFail(AudioMixer& mixer, AudioClip&& clip)
+{
+    Opal::Expected<AudioClipHandle, ErrorCode> result = mixer.CreateClip(std::move(clip));
+    if (!result.HasValue())
+    {
+        FAIL("expected a clip handle, got error code " << static_cast<u32>(result.GetError()));
+    }
+    return result.GetValue();
+}
+
+/** The code a CreateClip was expected to fail with. */
+ErrorCode CreateClipError(AudioMixer& mixer, AudioClip&& clip)
+{
+    Opal::Expected<AudioClipHandle, ErrorCode> result = mixer.CreateClip(std::move(clip));
+    if (result.HasValue())
+    {
+        FAIL("expected a failure, got a clip handle");
+    }
+    return result.GetError();
 }
 
 Opal::DynamicArray<f32> Mix(AudioMixer& mixer, u64 frame_count)
@@ -50,20 +71,23 @@ AudioClip MakeRampClip(u32 sample_rate, u64 frame_count)
     {
         samples[i] = static_cast<f32>(i) / static_cast<f32>(frame_count);
     }
-    return AudioClip(sample_rate, 1, {samples.GetData(), samples.GetSize()});
+    return AudioClip::Create(sample_rate, 1, {samples.GetData(), samples.GetSize()}).GetValue();
 }
 
 }  // namespace
 
 TEST_CASE("Mixer construction", "[audio]")
 {
-    SECTION("Rejects empty capacities")
+    // A desc with a zero field is a bug in the calling code, so it asserts in a debug build rather than reporting
+    // anything. What can be tested here is what a release build is left with: something that works.
+#if !RNDR_DEBUG
+    SECTION("An empty capacity is clamped rather than honoured")
     {
-        REQUIRE_THROWS_AS(AudioMixer({.sample_rate = 0}), Opal::Exception);
-        REQUIRE_THROWS_AS(AudioMixer({.max_voices = 0}), Opal::Exception);
-        REQUIRE_THROWS_AS(AudioMixer({.max_clips = 0}), Opal::Exception);
-        REQUIRE_THROWS_AS(AudioMixer({.command_queue_capacity = 0}), Opal::Exception);
+        const AudioMixer clamped({.sample_rate = 0, .max_voices = 0, .max_clips = 0, .command_queue_capacity = 0});
+        REQUIRE(clamped.GetSampleRate() >= 8000);
+        REQUIRE(clamped.GetMaxVoices() >= 1);
     }
+#endif
 
     SECTION("Starts silent and idle")
     {
@@ -85,14 +109,14 @@ TEST_CASE("Mixer clips", "[audio]")
 {
     AudioMixer mixer(SmallDesc());
 
-    SECTION("Empty clip is refused")
+    SECTION("An empty clip is refused")
     {
-        REQUIRE_THROWS_AS(mixer.CreateClip(AudioClip()), Opal::Exception);
+        REQUIRE(CreateClipError(mixer, AudioClip()) == ErrorCode::InvalidArgument);
     }
 
     SECTION("Handles are valid until destroyed")
     {
-        const AudioClipHandle clip = mixer.CreateClip(AudioTest::MakeConstantClip(k_rate, 1, 100, 0.5f));
+        const AudioClipHandle clip = CreateClipOrFail(mixer, AudioTest::MakeConstantClip(k_rate, 1, 100, 0.5f));
         REQUIRE(clip.IsValid());
         REQUIRE(mixer.IsClipValid(clip));
         REQUIRE_FALSE(mixer.IsClipValid(AudioClipHandle{}));
@@ -108,22 +132,22 @@ TEST_CASE("Mixer clips", "[audio]")
     {
         for (u32 i = 0; i < 4; i++)
         {
-            REQUIRE(mixer.CreateClip(AudioTest::MakeConstantClip(k_rate, 1, 10, 0.1f)).IsValid());
+            REQUIRE(CreateClipOrFail(mixer, AudioTest::MakeConstantClip(k_rate, 1, 10, 0.1f)).IsValid());
         }
-        REQUIRE_THROWS_AS(mixer.CreateClip(AudioTest::MakeConstantClip(k_rate, 1, 10, 0.1f)), Opal::Exception);
+        REQUIRE(CreateClipError(mixer, AudioTest::MakeConstantClip(k_rate, 1, 10, 0.1f)) == ErrorCode::OutOfResources);
     }
 
     SECTION("A destroyed slot is reused only after two more mixes")
     {
         AudioMixer single({.sample_rate = k_rate, .max_voices = 1, .max_clips = 1});
-        const AudioClipHandle first = single.CreateClip(AudioTest::MakeConstantClip(k_rate, 1, 10, 0.1f));
+        const AudioClipHandle first = CreateClipOrFail(single, AudioTest::MakeConstantClip(k_rate, 1, 10, 0.1f));
         single.DestroyClip(first);
 
-        REQUIRE_THROWS_AS(single.CreateClip(AudioTest::MakeConstantClip(k_rate, 1, 10, 0.1f)), Opal::Exception);
+        REQUIRE(CreateClipError(single, AudioTest::MakeConstantClip(k_rate, 1, 10, 0.1f)) == ErrorCode::OutOfResources);
         Mix(single, 8);
-        REQUIRE_THROWS_AS(single.CreateClip(AudioTest::MakeConstantClip(k_rate, 1, 10, 0.1f)), Opal::Exception);
+        REQUIRE(CreateClipError(single, AudioTest::MakeConstantClip(k_rate, 1, 10, 0.1f)) == ErrorCode::OutOfResources);
         Mix(single, 8);
-        const AudioClipHandle second = single.CreateClip(AudioTest::MakeConstantClip(k_rate, 1, 10, 0.1f));
+        const AudioClipHandle second = CreateClipOrFail(single, AudioTest::MakeConstantClip(k_rate, 1, 10, 0.1f));
         REQUIRE(second.IsValid());
         REQUIRE(second.index == first.index);
         REQUIRE(second.generation != first.generation);
@@ -132,7 +156,7 @@ TEST_CASE("Mixer clips", "[audio]")
 
     SECTION("Destroying a clip finishes the voices on it")
     {
-        const AudioClipHandle clip = mixer.CreateClip(AudioTest::MakeConstantClip(k_rate, 1, 100, 0.5f));
+        const AudioClipHandle clip = CreateClipOrFail(mixer, AudioTest::MakeConstantClip(k_rate, 1, 100, 0.5f));
         const SoundHandle sound = mixer.Play(clip, {.loop = true});
         Mix(mixer, 200);
         REQUIRE(mixer.IsPlaying(sound));
@@ -150,7 +174,7 @@ TEST_CASE("Mixer clips", "[audio]")
 TEST_CASE("Mixer playback", "[audio]")
 {
     AudioMixer mixer(SmallDesc());
-    const AudioClipHandle constant = mixer.CreateClip(AudioTest::MakeConstantClip(k_rate, 1, 1000, 0.5f));
+    const AudioClipHandle constant = CreateClipOrFail(mixer, AudioTest::MakeConstantClip(k_rate, 1, 1000, 0.5f));
 
     SECTION("A mono clip reaches both channels at the centre gain and ends on time")
     {
@@ -187,7 +211,8 @@ TEST_CASE("Mixer playback", "[audio]")
             samples[frame * 2] = 0.25f;
             samples[frame * 2 + 1] = -0.25f;
         }
-        const AudioClipHandle stereo = mixer.CreateClip(AudioClip(k_rate, 2, {samples.GetData(), samples.GetSize()}));
+        const AudioClipHandle stereo =
+            CreateClipOrFail(mixer, AudioClip::Create(k_rate, 2, {samples.GetData(), samples.GetSize()}).GetValue());
         mixer.Play(stereo, {.loop = true});
         const Opal::DynamicArray<f32> out = Mix(mixer, 500);
         RequireFrames(out, k_ramp_frames, 500, 0.25f * k_centre_gain, -0.25f * k_centre_gain);
@@ -224,7 +249,7 @@ TEST_CASE("Mixer playback", "[audio]")
 
     SECTION("A clip at another rate is resampled to the output rate")
     {
-        const AudioClipHandle slow = mixer.CreateClip(AudioTest::MakeConstantClip(44100, 1, 4410, 0.5f));
+        const AudioClipHandle slow = CreateClipOrFail(mixer, AudioTest::MakeConstantClip(44100, 1, 4410, 0.5f));
         const SoundHandle sound = mixer.Play(slow);
         Mix(mixer, 4700);
         REQUIRE(mixer.IsPlaying(sound));
@@ -237,7 +262,7 @@ TEST_CASE("Mixer playback", "[audio]")
 
     SECTION("Resampling interpolates rather than steps")
     {
-        const AudioClipHandle ramp = mixer.CreateClip(MakeRampClip(24000, 240));
+        const AudioClipHandle ramp = CreateClipOrFail(mixer, MakeRampClip(24000, 240));
         mixer.Play(ramp, {.pan = -1.0f});
         const Opal::DynamicArray<f32> out = Mix(mixer, 400);
         // At half the output rate, every output frame advances half a clip frame, so the left channel follows
@@ -251,7 +276,7 @@ TEST_CASE("Mixer playback", "[audio]")
 
     SECTION("Looping goes on past the end")
     {
-        const AudioClipHandle ramp = mixer.CreateClip(MakeRampClip(k_rate, 100));
+        const AudioClipHandle ramp = CreateClipOrFail(mixer, MakeRampClip(k_rate, 100));
         const SoundHandle sound = mixer.Play(ramp, {.pan = -1.0f, .loop = true});
         const Opal::DynamicArray<f32> out = Mix(mixer, 1000);
         REQUIRE(mixer.IsPlaying(sound));
@@ -267,7 +292,7 @@ TEST_CASE("Mixer playback", "[audio]")
 
     SECTION("Output is clamped")
     {
-        const AudioClipHandle loud = mixer.CreateClip(AudioTest::MakeConstantClip(k_rate, 1, 1000, 0.8f));
+        const AudioClipHandle loud = CreateClipOrFail(mixer, AudioTest::MakeConstantClip(k_rate, 1, 1000, 0.8f));
         mixer.Play(loud, {.pan = -1.0f});
         mixer.Play(loud, {.pan = -1.0f});
         const Opal::DynamicArray<f32> out = Mix(mixer, 500);
@@ -288,7 +313,7 @@ TEST_CASE("Mixer playback", "[audio]")
 TEST_CASE("Mixer voice control", "[audio]")
 {
     AudioMixer mixer(SmallDesc());
-    const AudioClipHandle constant = mixer.CreateClip(AudioTest::MakeConstantClip(k_rate, 1, 100000, 0.5f));
+    const AudioClipHandle constant = CreateClipOrFail(mixer, AudioTest::MakeConstantClip(k_rate, 1, 100000, 0.5f));
 
     SECTION("Stop ramps to silence and retires the voice")
     {
@@ -333,7 +358,7 @@ TEST_CASE("Mixer voice control", "[audio]")
 
     SECTION("Pause holds the position")
     {
-        const AudioClipHandle ramp = mixer.CreateClip(MakeRampClip(k_rate, 1000));
+        const AudioClipHandle ramp = CreateClipOrFail(mixer, MakeRampClip(k_rate, 1000));
         const SoundHandle sound = mixer.Play(ramp, {.pan = -1.0f});
         Mix(mixer, 200);
 
@@ -403,7 +428,7 @@ TEST_CASE("Mixer voice control", "[audio]")
 
     SECTION("Pitch change takes effect")
     {
-        const AudioClipHandle ramp = mixer.CreateClip(MakeRampClip(k_rate, 1000));
+        const AudioClipHandle ramp = CreateClipOrFail(mixer, MakeRampClip(k_rate, 1000));
         const SoundHandle sound = mixer.Play(ramp, {.pan = -1.0f});
         Mix(mixer, 200);
         mixer.SetPitch(sound, 2.0f);
@@ -415,7 +440,7 @@ TEST_CASE("Mixer voice control", "[audio]")
 TEST_CASE("Mixer voice slots", "[audio]")
 {
     AudioMixer mixer({.sample_rate = k_rate, .max_voices = 2, .max_clips = 2, .command_queue_capacity = 64});
-    const AudioClipHandle constant = mixer.CreateClip(AudioTest::MakeConstantClip(k_rate, 1, 1000, 0.5f));
+    const AudioClipHandle constant = CreateClipOrFail(mixer, AudioTest::MakeConstantClip(k_rate, 1, 1000, 0.5f));
 
     SECTION("No voice a sound may take means no sound")
     {
@@ -463,7 +488,7 @@ TEST_CASE("Mixer voice stealing", "[audio]")
 {
     AudioMixer mixer({.sample_rate = k_rate, .max_voices = 2, .max_clips = 2, .command_queue_capacity = 64});
     // Long enough that nothing ends on its own during a case.
-    const AudioClipHandle constant = mixer.CreateClip(AudioTest::MakeConstantClip(k_rate, 1, 100000, 0.5f));
+    const AudioClipHandle constant = CreateClipOrFail(mixer, AudioTest::MakeConstantClip(k_rate, 1, 100000, 0.5f));
 
     SECTION("Equal priority loses the oldest")
     {
@@ -589,7 +614,7 @@ TEST_CASE("Mixer voice stealing", "[audio]")
     SECTION("The swap is a crossfade, not a click")
     {
         AudioMixer single({.sample_rate = k_rate, .max_voices = 1, .max_clips = 1});
-        const AudioClipHandle clip = single.CreateClip(AudioTest::MakeConstantClip(k_rate, 1, 100000, 0.5f));
+        const AudioClipHandle clip = CreateClipOrFail(single, AudioTest::MakeConstantClip(k_rate, 1, 100000, 0.5f));
         single.Play(clip, {.pan = -1.0f});
         Mix(single, 500);  // the first sound is at full gain by now
 
@@ -604,7 +629,7 @@ TEST_CASE("Mixer voice stealing", "[audio]")
     SECTION("A slot taken twice inside one ramp still ends up with the last sound")
     {
         AudioMixer single({.sample_rate = k_rate, .max_voices = 1, .max_clips = 1});
-        const AudioClipHandle clip = single.CreateClip(AudioTest::MakeConstantClip(k_rate, 1, 100000, 0.5f));
+        const AudioClipHandle clip = CreateClipOrFail(single, AudioTest::MakeConstantClip(k_rate, 1, 100000, 0.5f));
         const SoundHandle a = single.Play(clip);
         const SoundHandle b = single.Play(clip);
         const SoundHandle c = single.Play(clip);
@@ -620,7 +645,7 @@ TEST_CASE("Mixer voice stealing", "[audio]")
     SECTION("Destroying a clip takes the fading sounds with it")
     {
         AudioMixer single({.sample_rate = k_rate, .max_voices = 1, .max_clips = 2});
-        const AudioClipHandle first = single.CreateClip(AudioTest::MakeConstantClip(k_rate, 1, 100000, 0.5f));
+        const AudioClipHandle first = CreateClipOrFail(single, AudioTest::MakeConstantClip(k_rate, 1, 100000, 0.5f));
         single.Play(first);
         Mix(single, 500);
         single.Play(first);  // the first sound becomes a ghost on the next mix
@@ -628,7 +653,7 @@ TEST_CASE("Mixer voice stealing", "[audio]")
         // Two mixes of a handful of frames: without the ghost being finished too, the clip would be freed under it.
         Mix(single, 8);
         Mix(single, 8);
-        const AudioClipHandle second = single.CreateClip(AudioTest::MakeConstantClip(k_rate, 1, 100, 0.5f));
+        const AudioClipHandle second = CreateClipOrFail(single, AudioTest::MakeConstantClip(k_rate, 1, 100, 0.5f));
         REQUIRE(second.IsValid());
         const Opal::DynamicArray<f32> out = Mix(single, 64);
         RequireFrames(out, 0, 64, 0.0f, 0.0f);
@@ -637,7 +662,7 @@ TEST_CASE("Mixer voice stealing", "[audio]")
     SECTION("A steal whose command is dropped leaves the sound alone")
     {
         AudioMixer single({.sample_rate = k_rate, .max_voices = 1, .max_clips = 1, .command_queue_capacity = 1});
-        const AudioClipHandle clip = single.CreateClip(AudioTest::MakeConstantClip(k_rate, 1, 100000, 0.5f));
+        const AudioClipHandle clip = CreateClipOrFail(single, AudioTest::MakeConstantClip(k_rate, 1, 100000, 0.5f));
         const SoundHandle a = single.Play(clip, {.pan = -1.0f});
         REQUIRE(a.IsValid());
 
@@ -655,7 +680,7 @@ TEST_CASE("Mixer voice stealing", "[audio]")
 TEST_CASE("Mixer command queue", "[audio]")
 {
     AudioMixer mixer({.sample_rate = k_rate, .max_voices = 4, .max_clips = 2, .command_queue_capacity = 1});
-    const AudioClipHandle constant = mixer.CreateClip(AudioTest::MakeConstantClip(k_rate, 1, 1000, 0.5f));
+    const AudioClipHandle constant = CreateClipOrFail(mixer, AudioTest::MakeConstantClip(k_rate, 1, 1000, 0.5f));
 
     SECTION("A full queue drops the command and hands the voice back")
     {

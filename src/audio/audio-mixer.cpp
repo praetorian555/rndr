@@ -3,8 +3,6 @@
 #include <algorithm>
 #include <cmath>
 
-#include "opal/exceptions.h"
-
 #include "rndr/log.hpp"
 
 namespace
@@ -50,28 +48,34 @@ Rndr::f32 Approach(Rndr::f32 current, Rndr::f32 target, Rndr::f32 step)
     return std::max(current - step, target);
 }
 
-/** Runs before any member is built: the queue halts on a zero capacity rather than report it. */
-const Rndr::AudioMixerDesc& ValidateDesc(const Rndr::AudioMixerDesc& desc)
+/**
+ * Runs before any member is built. A zero field is a bug in the calling code, not a runtime condition, so it trips
+ * an assert in a debug build; a release build is left with something that works rather than a queue that halts on
+ * a zero capacity.
+ */
+Rndr::AudioMixerDesc SanitizeDesc(const Rndr::AudioMixerDesc& desc)
 {
-    if (desc.sample_rate == 0)
-    {
-        throw Opal::Exception("AudioMixer: sample rate must be greater than 0");
-    }
-    if (desc.max_voices == 0 || desc.max_clips == 0 || desc.command_queue_capacity == 0)
-    {
-        throw Opal::Exception("AudioMixer: voice, clip and command queue capacities must be greater than 0");
-    }
-    return desc;
+    RNDR_ASSERT(desc.sample_rate > 0, "AudioMixer: sample rate must be greater than 0");
+    RNDR_ASSERT(desc.max_voices > 0, "AudioMixer: voice capacity must be greater than 0");
+    RNDR_ASSERT(desc.max_clips > 0, "AudioMixer: clip capacity must be greater than 0");
+    RNDR_ASSERT(desc.command_queue_capacity > 0, "AudioMixer: command queue capacity must be greater than 0");
+
+    Rndr::AudioMixerDesc sane = desc;
+    sane.sample_rate = std::max(sane.sample_rate, 8000u);
+    sane.max_voices = std::max(sane.max_voices, 1u);
+    sane.max_clips = std::max(sane.max_clips, 1u);
+    sane.command_queue_capacity = std::max(sane.command_queue_capacity, 1u);
+    return sane;
 }
 
 }  // namespace
 
 Rndr::AudioMixer::AudioMixer(const AudioMixerDesc& desc)
-    : m_desc(ValidateDesc(desc)),
-      m_commands(desc.command_queue_capacity),
-      m_clips(desc.max_clips),
-      m_voices(desc.max_voices),
-      m_fading_voices(desc.max_voices)
+    : m_desc(SanitizeDesc(desc)),
+      m_commands(m_desc.command_queue_capacity),
+      m_clips(m_desc.max_clips),
+      m_voices(m_desc.max_voices),
+      m_fading_voices(m_desc.max_voices)
 {
     m_gain_ramp_frames = std::max(1u, static_cast<u32>(static_cast<f32>(desc.sample_rate) * k_gain_ramp_seconds));
     for (Opal::Atomic<f32>& bus_volume : m_bus_volumes)
@@ -108,11 +112,14 @@ void Rndr::AudioMixer::ReclaimClipSlots()
     }
 }
 
-Rndr::AudioClipHandle Rndr::AudioMixer::CreateClip(AudioClip&& clip)
+Opal::Expected<Rndr::AudioClipHandle, Rndr::ErrorCode> Rndr::AudioMixer::CreateClip(AudioClip&& clip)
 {
+    using Result = Opal::Expected<AudioClipHandle, ErrorCode>;
+
     if (!clip.IsValid())
     {
-        throw Opal::Exception("AudioMixer: cannot create a clip from an empty AudioClip");
+        RNDR_LOG_ERROR("AudioMixer: cannot create a clip from an empty AudioClip");
+        return Result(ErrorCode::InvalidArgument);
     }
     ReclaimClipSlots();
     for (u32 i = 0; i < m_clips.GetSize(); i++)
@@ -129,9 +136,10 @@ Rndr::AudioClipHandle Rndr::AudioMixer::CreateClip(AudioClip&& clip)
             slot.generation = 1;  // zero is the invalid handle
         }
         slot.is_live = true;
-        return {i, slot.generation};
+        return Result(AudioClipHandle{i, slot.generation});
     }
-    throw Opal::Exception("AudioMixer: every clip slot is in use");
+    RNDR_LOG_ERROR("AudioMixer: every clip slot is in use");
+    return Result(ErrorCode::OutOfResources);
 }
 
 bool Rndr::AudioMixer::IsClipValid(AudioClipHandle handle) const

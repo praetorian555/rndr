@@ -3,6 +3,7 @@
 #include <cstdio>
 
 #include "opal/container/dynamic-array.h"
+#include "opal/container/expected.h"
 #include "opal/container/string.h"
 
 #include "rndr/bitmap.hpp"
@@ -107,11 +108,14 @@ bool SaveImage(const Bitmap& bitmap, const Opal::StringUtf8& file_path);
 /**
  * Load an audio clip from a file. The extension picks the decoder: .wav or .ogg (Vorbis). Mono and stereo only.
  *
+ * Unlike the image loaders above, this reports failure by code rather than by throwing - see docs/audio.md.
+ *
  * @param file_path Absolute or relative path to the audio file.
- * @return Returns a valid AudioClip.
- * @throw Opal::Exception if the file does not exist, the extension is not supported, or decoding fails.
+ * @return The clip, or ErrorCode::FileNotFound when the path names nothing, ErrorCode::UnsupportedFormat for an
+ *         extension or a layout no decoder here handles, or ErrorCode::CorruptData for a file that is not what it
+ *         claims to be. The reason is logged at error level.
  */
-[[nodiscard]] AudioClip LoadAudioClip(const Opal::StringUtf8& file_path);
+[[nodiscard]] Opal::Expected<AudioClip, ErrorCode> LoadAudioClip(const Opal::StringUtf8& file_path);
 
 /**
  * Decode an audio file that is already in memory. What LoadAudioClip calls once it has read the file; exposed so a
@@ -119,11 +123,11 @@ bool SaveImage(const Bitmap& bitmap, const Opal::StringUtf8& file_path);
  *
  * @param file_bytes The whole file image.
  * @param format Which decoder to run.
- * @return Returns a valid AudioClip.
- * @throw Opal::Exception if the bytes are not a well-formed file of that format, or use a layout the decoder
- * does not support (more than two channels, an unusual bit depth, a compressed WAV).
+ * @return The clip, or ErrorCode::CorruptData when the bytes are not a well-formed file of that format, or
+ *         ErrorCode::UnsupportedFormat for a layout the decoder does not handle (more than two channels, an
+ *         unusual bit depth, a compressed WAV).
  */
-[[nodiscard]] AudioClip DecodeAudioClip(Opal::ArrayView<const u8> file_bytes, AudioFileFormat format);
+[[nodiscard]] Opal::Expected<AudioClip, ErrorCode> DecodeAudioClip(Opal::ArrayView<const u8> file_bytes, AudioFileFormat format);
 #endif
 
 }  // namespace File

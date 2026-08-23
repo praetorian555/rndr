@@ -1,5 +1,6 @@
 #pragma once
 
+#include "opal/container/expected.h"
 #include "opal/container/scope-ptr.h"
 #include "opal/container/string.h"
 
@@ -7,6 +8,7 @@
 #include "rndr/audio/audio-device.hpp"
 #include "rndr/audio/audio-mixer.hpp"
 #include "rndr/audio/audio-types.hpp"
+#include "rndr/error-codes.hpp"
 
 namespace Rndr
 {
@@ -19,7 +21,7 @@ struct AudioSystemDesc
     u32 buffer_frames = 1024;
     /** How many sounds can play at once. Play returns an invalid handle once they are all busy. */
     u32 max_voices = 64;
-    /** How many clips can be live at once. CreateClip and LoadClip throw once they are all taken. */
+    /** How many clips can be live at once. CreateClip and LoadClip report OutOfResources once they are all taken. */
     u32 max_clips = 256;
     /** How many calls can be made between two audio callbacks before they start being dropped. */
     u32 command_queue_capacity = 1024;
@@ -38,13 +40,20 @@ struct AudioSystemDesc
  * Every method is for the main thread - or any single thread, as long as it is the same one. Nothing needs to be
  * called per frame.
  *
- * The constructor throws AudioDeviceException when there is no output device. A game that wants to run without
- * sound catches that and does without an AudioSystem.
+ * Create reports ErrorCode::NoAudioDevice on a machine with no output, so a game that wants to run without sound
+ * checks the code and carries on without an AudioSystem. Nothing in this API throws.
  */
 class AudioSystem
 {
 public:
-    explicit AudioSystem(const AudioSystemDesc& desc = {});
+    /**
+     * Builds the mixer and opens the output device.
+     * @return The running system, ErrorCode::NoAudioDevice when the machine has no output endpoint, or
+     *         ErrorCode::PlatformError when one is there and would not open. Heap-allocated because the system owns
+     *         a thread and atomics and therefore cannot be moved into the result.
+     */
+    [[nodiscard]] static Opal::Expected<Opal::ScopePtr<AudioSystem>, ErrorCode> Create(const AudioSystemDesc& desc = {});
+
     ~AudioSystem();
 
     AudioSystem(const AudioSystem&) = delete;
@@ -52,10 +61,14 @@ public:
     AudioSystem(AudioSystem&&) = delete;
     AudioSystem& operator=(AudioSystem&&) = delete;
 
-    /** Takes ownership of the clip. Throws when the clip is empty or every clip slot is live. */
-    AudioClipHandle CreateClip(AudioClip&& clip);
-    /** File::LoadAudioClip followed by CreateClip; throws on either's failure. */
-    AudioClipHandle LoadClip(const Opal::StringUtf8& file_path);
+    /**
+     * Takes ownership of the clip.
+     * @return Its handle, ErrorCode::InvalidArgument for an empty clip, or ErrorCode::OutOfResources when every
+     *         clip slot is live.
+     */
+    Opal::Expected<AudioClipHandle, ErrorCode> CreateClip(AudioClip&& clip);
+    /** File::LoadAudioClip followed by CreateClip, reporting whichever of the two failed. */
+    Opal::Expected<AudioClipHandle, ErrorCode> LoadClip(const Opal::StringUtf8& file_path);
     /** Stops every sound on the clip and frees it once the audio thread is done with it. Stale handle: no-op. */
     void DestroyClip(AudioClipHandle clip);
     [[nodiscard]] bool IsClipValid(AudioClipHandle clip) const;
@@ -95,6 +108,11 @@ public:
     [[nodiscard]] u32 GetStolenVoiceCount() const;
 
 private:
+    explicit AudioSystem(const AudioSystemDesc& desc);
+
+    template <typename T, typename... Args>
+    friend T* Opal::New(Opal::AllocatorBase* /*allocator*/, Args&&... /*args*/);
+
     // Declaration order is destruction order in reverse: the device goes first and takes its thread with it, so
     // nothing is reading the mixer when the mixer, and with it every clip, is freed.
     AudioMixer m_mixer;

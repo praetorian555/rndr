@@ -3,11 +3,11 @@
 #include <chrono>
 #include <thread>
 
+#include "opal/container/expected.h"
 #include "opal/container/scope-ptr.h"
-#include "opal/exceptions.h"
 
 #include "rndr/audio/audio-system.hpp"
-#include "rndr/exception.hpp"
+#include "rndr/error-codes.hpp"
 #include "rndr/time.hpp"
 
 #include "audio-test-common.hpp"
@@ -26,19 +26,34 @@ constexpr u32 k_rate = 48000;
 
 Opal::ScopePtr<AudioSystem> CreateSystemOrSkip(const AudioSystemDesc& desc = {})
 {
-    try
+    Opal::Expected<Opal::ScopePtr<AudioSystem>, ErrorCode> result = AudioSystem::Create(desc);
+    if (result.HasValue())
     {
-        return Opal::MakeScoped<AudioSystem>(nullptr, desc);
+        return std::move(result.GetValue());
     }
-    catch (const AudioDeviceException& exception)
+    // A machine with no output endpoint is the one case a run is allowed to skip over; anything else means the
+    // endpoint was there and something about opening it went wrong, which is a failure wherever it happens.
+    if (result.GetError() != ErrorCode::NoAudioDevice)
     {
-        if (AudioTest::IsEnvironmentFlagSet("RNDR_TEST_REQUIRE_AUDIO"))
-        {
-            FAIL("RNDR_TEST_REQUIRE_AUDIO is set and the audio device could not be opened: " << exception.what());
-        }
-        SKIP("No usable audio output on this machine: " << exception.what());
+        FAIL("the audio device could not be opened, error code " << static_cast<u32>(result.GetError()));
     }
+    if (AudioTest::IsEnvironmentFlagSet("RNDR_TEST_REQUIRE_AUDIO"))
+    {
+        FAIL("RNDR_TEST_REQUIRE_AUDIO is set and this machine has no audio output");
+    }
+    SKIP("No audio output on this machine.");
     return {};
+}
+
+/** Unwraps a clip that is meant to load, so the cases below stay about the system rather than about Expected. */
+AudioClipHandle CreateClipOrFail(AudioSystem& audio, AudioClip&& clip)
+{
+    Opal::Expected<AudioClipHandle, ErrorCode> result = audio.CreateClip(std::move(clip));
+    if (!result.HasValue())
+    {
+        FAIL("expected a clip handle, got error code " << static_cast<u32>(result.GetError()));
+    }
+    return result.GetValue();
 }
 
 void SleepMilliseconds(u32 milliseconds)
@@ -75,7 +90,7 @@ TEST_CASE("Audio system opens and closes the device", "[audio-device]")
 TEST_CASE("Audio system plays a sound to the end", "[audio-device]")
 {
     Opal::ScopePtr<AudioSystem> audio = CreateSystemOrSkip();
-    const AudioClipHandle tone = audio->CreateClip(AudioTest::MakeSineClip(k_rate, 1, 440.0f, k_rate / 10, 0.2f));
+    const AudioClipHandle tone = CreateClipOrFail(*audio, AudioTest::MakeSineClip(k_rate, 1, 440.0f, k_rate / 10, 0.2f));
     REQUIRE(audio->IsClipValid(tone));
 
     const SoundHandle sound = audio->Play(tone);
@@ -92,7 +107,7 @@ TEST_CASE("Audio system plays a sound to the end", "[audio-device]")
 TEST_CASE("Audio system takes control calls while a sound plays", "[audio-device]")
 {
     Opal::ScopePtr<AudioSystem> audio = CreateSystemOrSkip();
-    const AudioClipHandle tone = audio->CreateClip(AudioTest::MakeSineClip(k_rate, 2, 330.0f, k_rate / 4, 0.2f));
+    const AudioClipHandle tone = CreateClipOrFail(*audio, AudioTest::MakeSineClip(k_rate, 2, 330.0f, k_rate / 4, 0.2f));
     const SoundHandle sound = audio->Play(tone, {.pan = -0.5f, .loop = true});
     REQUIRE(sound.IsValid());
 
@@ -118,7 +133,7 @@ TEST_CASE("Audio system takes control calls while a sound plays", "[audio-device
 TEST_CASE("Audio system shuts down promptly with a sound still playing", "[audio-device]")
 {
     Opal::ScopePtr<AudioSystem> audio = CreateSystemOrSkip();
-    const AudioClipHandle tone = audio->CreateClip(AudioTest::MakeSineClip(k_rate, 1, 220.0f, k_rate / 4, 0.2f));
+    const AudioClipHandle tone = CreateClipOrFail(*audio, AudioTest::MakeSineClip(k_rate, 1, 220.0f, k_rate / 4, 0.2f));
     REQUIRE(audio->Play(tone, {.loop = true}).IsValid());
     SleepMilliseconds(100);
 
@@ -131,7 +146,7 @@ TEST_CASE("Audio system shuts down promptly with a sound still playing", "[audio
 TEST_CASE("Audio system destroys a clip out from under a sound", "[audio-device]")
 {
     Opal::ScopePtr<AudioSystem> audio = CreateSystemOrSkip();
-    const AudioClipHandle tone = audio->CreateClip(AudioTest::MakeSineClip(k_rate, 1, 220.0f, k_rate / 4, 0.2f));
+    const AudioClipHandle tone = CreateClipOrFail(*audio, AudioTest::MakeSineClip(k_rate, 1, 220.0f, k_rate / 4, 0.2f));
     const SoundHandle sound = audio->Play(tone, {.loop = true});
     SleepMilliseconds(50);
 
@@ -140,19 +155,16 @@ TEST_CASE("Audio system destroys a clip out from under a sound", "[audio-device]
     REQUIRE(WaitForSoundToEnd(*audio, sound, 1000));
     // Let the mix epoch move on so the slot is reclaimed, then fill it again.
     SleepMilliseconds(100);
-    const AudioClipHandle again = audio->CreateClip(AudioTest::MakeSineClip(k_rate, 1, 220.0f, k_rate / 10, 0.2f));
+    const AudioClipHandle again = CreateClipOrFail(*audio, AudioTest::MakeSineClip(k_rate, 1, 220.0f, k_rate / 10, 0.2f));
     REQUIRE(again.IsValid());
 }
 
 TEST_CASE("Audio system reports bad input without throwing from Play", "[audio-device]")
 {
     Opal::ScopePtr<AudioSystem> audio = CreateSystemOrSkip();
-    REQUIRE_THROWS_AS(audio->LoadClip("does-not-exist.wav"), Opal::Exception);
+    const Opal::Expected<AudioClipHandle, ErrorCode> missing = audio->LoadClip("does-not-exist.wav");
+    REQUIRE_FALSE(missing.HasValue());
+    REQUIRE(missing.GetError() == ErrorCode::FileNotFound);
     REQUIRE_FALSE(audio->Play(AudioClipHandle{}).IsValid());
     REQUIRE_FALSE(audio->IsPlaying(SoundHandle{}));
-}
-
-TEST_CASE("Audio system rejects an empty description", "[audio]")
-{
-    REQUIRE_THROWS_AS(AudioSystem({.sample_rate = 0}), Opal::Exception);
 }

@@ -36,7 +36,7 @@ inline Rndr::AudioClip MakeSineClip(Rndr::u32 sample_rate, Rndr::u32 channel_cou
             samples[frame * channel_count + channel] = value;
         }
     }
-    return AudioClip(sample_rate, channel_count, {samples.GetData(), samples.GetSize()});
+    return AudioClip::Create(sample_rate, channel_count, {samples.GetData(), samples.GetSize()}).GetValue();
 }
 
 /** A clip whose every sample is the same value, for cases that want to read a gain straight off the output. */
@@ -44,7 +44,7 @@ inline Rndr::AudioClip MakeConstantClip(Rndr::u32 sample_rate, Rndr::u32 channel
 {
     using namespace Rndr;
     Opal::DynamicArray<f32> samples(frame_count * channel_count, value);
-    return AudioClip(sample_rate, channel_count, {samples.GetData(), samples.GetSize()});
+    return AudioClip::Create(sample_rate, channel_count, {samples.GetData(), samples.GetSize()}).GetValue();
 }
 
 constexpr Rndr::u16 k_wav_pcm = 0x0001;

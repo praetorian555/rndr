@@ -2,11 +2,13 @@
 
 #include "opal/container/array-view.h"
 #include "opal/container/dynamic-array.h"
+#include "opal/container/expected.h"
 #include "opal/threading/atomic.h"
 #include "opal/threading/channel-spsc.h"
 
 #include "rndr/audio/audio-clip.hpp"
 #include "rndr/audio/audio-types.hpp"
+#include "rndr/error-codes.hpp"
 
 namespace Rndr
 {
@@ -17,7 +19,7 @@ struct AudioMixerDesc
     u32 sample_rate = 48000;
     /** How many sounds can play at once. Play returns an invalid handle once they are all busy. */
     u32 max_voices = 64;
-    /** How many clips can be live at once. CreateClip throws once they are all taken. */
+    /** How many clips can be live at once. CreateClip reports OutOfResources once they are all taken. */
     u32 max_clips = 256;
     /** How many calls the main thread can make between two Mix calls before they start being dropped. */
     u32 command_queue_capacity = 1024;
@@ -46,6 +48,10 @@ struct AudioMixerDesc
 class AudioMixer
 {
 public:
+    /**
+     * A desc with a zero field is a bug in the calling code rather than something to recover from: it asserts in a
+     * debug build and is clamped to a working minimum in a release one. Construction cannot fail.
+     */
     explicit AudioMixer(const AudioMixerDesc& desc = {});
     ~AudioMixer();
 
@@ -54,8 +60,12 @@ public:
     AudioMixer(AudioMixer&&) = delete;
     AudioMixer& operator=(AudioMixer&&) = delete;
 
-    /** Main thread. Takes ownership of the clip. Throws when the clip is empty or every clip slot is live. */
-    AudioClipHandle CreateClip(AudioClip&& clip);
+    /**
+     * Main thread. Takes ownership of the clip.
+     * @return Its handle, ErrorCode::InvalidArgument for an empty clip, or ErrorCode::OutOfResources when every
+     *         clip slot is live.
+     */
+    Opal::Expected<AudioClipHandle, ErrorCode> CreateClip(AudioClip&& clip);
 
     /**
      * Main thread. Stops every voice playing the clip - at once, not ramped - and frees it once the audio thread is

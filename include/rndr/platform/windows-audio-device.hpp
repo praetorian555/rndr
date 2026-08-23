@@ -5,6 +5,7 @@
 #include "opal/threading/thread.h"
 
 #include "rndr/audio/audio-device.hpp"
+#include "rndr/error-codes.hpp"
 #include "rndr/types.hpp"
 
 struct IMMDeviceEnumerator;
@@ -17,8 +18,8 @@ namespace Rndr
 /**
  * WASAPI output in shared, event-driven mode.
  *
- * Everything COM happens on the audio thread, so the thread that builds this never needs CoInitializeEx. The
- * constructor waits for that thread to report whether the stream opened and throws if it did not. The endpoint is
+ * Everything COM happens on the audio thread, so the thread that builds this never needs CoInitializeEx. Start
+ * waits for that thread to report whether the stream opened and hands back a code when it did not. The endpoint is
  * asked for stereo f32 at the requested rate and Windows converts to its own mix format, so the callback never has
  * to care what the hardware runs at.
  *
@@ -31,9 +32,16 @@ OPAL_DISABLE_MSVC_WARNING(4324)  // Structure was padded due to alignment specif
 class WindowsAudioDevice final : public AudioDevice
 {
 public:
-    /** @throw AudioDeviceException when the stream cannot be opened. */
+    /** Stores what it was given and nothing else; Start is what opens the stream. */
     WindowsAudioDevice(const AudioDeviceDesc& desc, AudioRenderCallback&& callback);
     ~WindowsAudioDevice() override;
+
+    /**
+     * Creates the thread events, starts the audio thread and waits for its first attempt at the stream. Called once,
+     * by AudioDevice::Create, before anyone else can see the device - which is why the two steps are not a two-phase
+     * initialization anybody has to know about.
+     */
+    ErrorCode Start();
 
     [[nodiscard]] u32 GetSampleRate() const override { return m_desc.sample_rate; }
 
@@ -55,6 +63,7 @@ private:
     void* m_stop_event = nullptr;
     void* m_buffer_event = nullptr;
     Opal::ThreadHandle m_thread;
+    bool m_is_thread_running = false;
 
     // Handshake between the constructor and the thread's first attempt at the stream.
     Opal::Signal m_started;

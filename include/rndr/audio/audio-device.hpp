@@ -1,9 +1,11 @@
 #pragma once
 
 #include "opal/container/array-view.h"
+#include "opal/container/expected.h"
 #include "opal/container/function.h"
 #include "opal/container/scope-ptr.h"
 
+#include "rndr/error-codes.hpp"
 #include "rndr/types.hpp"
 
 namespace Rndr
@@ -35,10 +37,12 @@ class AudioDevice
 {
 public:
     /**
-     * Picks the implementation for this platform.
-     * @throw AudioDeviceException when the endpoint cannot be opened, which includes a machine with no output device.
+     * Picks the implementation for this platform and opens its stream.
+     * @return The running device, ErrorCode::NoAudioDevice on a machine with no output endpoint, or
+     *         ErrorCode::PlatformError when the endpoint is there and would not open. The platform's own code is
+     *         logged at error level.
      */
-    static Opal::ScopePtr<AudioDevice> Create(const AudioDeviceDesc& desc, AudioRenderCallback&& callback);
+    static Opal::Expected<Opal::ScopePtr<AudioDevice>, ErrorCode> Create(const AudioDeviceDesc& desc, AudioRenderCallback&& callback);
 
     virtual ~AudioDevice() = default;
 

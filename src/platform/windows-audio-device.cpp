@@ -15,7 +15,6 @@
 #include <mmreg.h>
 #include <objbase.h>
 
-#include "rndr/exception.hpp"
 #include "rndr/log.hpp"
 
 namespace
@@ -48,57 +47,65 @@ void Release(T*& object)
 Rndr::WindowsAudioDevice::WindowsAudioDevice(const AudioDeviceDesc& desc, AudioRenderCallback&& callback)
     : m_desc(desc), m_callback(std::move(callback))
 {
-    if (desc.sample_rate == 0 || desc.buffer_frames == 0)
+}
+
+Rndr::ErrorCode Rndr::WindowsAudioDevice::Start()
+{
+    if (m_desc.sample_rate == 0 || m_desc.buffer_frames == 0)
     {
-        throw AudioDeviceException(static_cast<u32>(E_INVALIDARG), "sample rate and buffer size must be greater than 0");
+        RNDR_LOG_ERROR("WindowsAudioDevice: sample rate and buffer size must be greater than 0");
+        return ErrorCode::InvalidArgument;
     }
 
     m_stop_event = CreateEventW(nullptr, TRUE, FALSE, nullptr);
     m_buffer_event = CreateEventW(nullptr, FALSE, FALSE, nullptr);
     if (m_stop_event == nullptr || m_buffer_event == nullptr)
     {
-        const DWORD error = GetLastError();
-        if (m_stop_event != nullptr)
-        {
-            CloseHandle(m_stop_event);
-        }
-        if (m_buffer_event != nullptr)
-        {
-            CloseHandle(m_buffer_event);
-        }
-        throw AudioDeviceException(static_cast<u32>(HRESULT_FROM_WIN32(error)), "could not create the thread events");
+        RNDR_LOG_ERROR("WindowsAudioDevice: could not create the thread events (0x{:08x})",
+                       static_cast<u32>(HRESULT_FROM_WIN32(GetLastError())));
+        return ErrorCode::PlatformError;
     }
 
     const u32 state_before_start = m_started.GetState();
     Opal::Expected<Opal::ThreadHandle, Opal::ErrorCode> thread = Opal::CreateThread(&WindowsAudioDevice::ThreadMain, this);
     if (!thread.HasValue())
     {
-        CloseHandle(m_stop_event);
-        CloseHandle(m_buffer_event);
-        throw AudioDeviceException(static_cast<u32>(E_FAIL), "could not start the audio thread");
+        RNDR_LOG_ERROR("WindowsAudioDevice: could not start the audio thread");
+        return ErrorCode::PlatformError;
     }
     m_thread = thread.GetValue();
+    m_is_thread_running = true;
 
-    // The thread reports the outcome of its first attempt at the stream; there is no point returning a device that
-    // will never play anything.
+    // The thread reports the outcome of its first attempt at the stream; there is no point handing back a device
+    // that will never play anything.
     m_started.Wait(state_before_start);
     const i32 result = m_start_result.Load<Opal::MemoryOrder::Acquire>();
     if (FAILED(result))
     {
-        Opal::JoinThread(m_thread);
-        CloseHandle(m_stop_event);
-        CloseHandle(m_buffer_event);
-        const char* what = result == static_cast<i32>(E_NOTFOUND) ? "no audio output device" : "could not open the audio output stream";
-        throw AudioDeviceException(static_cast<u32>(result), what);
+        // The code is logged rather than carried: nothing above this has any use for an HRESULT, and the two cases
+        // a caller does act on - a machine with no output at all, and everything else - are the return value.
+        RNDR_LOG_ERROR("WindowsAudioDevice: could not open the output stream (0x{:08x})", static_cast<u32>(result));
+        return result == static_cast<i32>(E_NOTFOUND) ? ErrorCode::NoAudioDevice : ErrorCode::PlatformError;
     }
+    return ErrorCode::Success;
 }
 
 Rndr::WindowsAudioDevice::~WindowsAudioDevice()
 {
-    SetEvent(m_stop_event);
-    Opal::JoinThread(m_thread);
-    CloseHandle(m_stop_event);
-    CloseHandle(m_buffer_event);
+    // Start may have failed anywhere along the way, so nothing here is assumed to exist.
+    if (m_is_thread_running)
+    {
+        SetEvent(m_stop_event);
+        Opal::JoinThread(m_thread);
+    }
+    if (m_stop_event != nullptr)
+    {
+        CloseHandle(m_stop_event);
+    }
+    if (m_buffer_event != nullptr)
+    {
+        CloseHandle(m_buffer_event);
+    }
 }
 
 void Rndr::WindowsAudioDevice::ThreadMain(WindowsAudioDevice* device)

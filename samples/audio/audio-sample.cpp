@@ -15,14 +15,12 @@
 #include <cmath>
 
 #include "opal/container/dynamic-array.h"
-#include "opal/exceptions.h"
 #include "opal/paths.h"
 #include "opal/rng.h"
 #include "opal/time.h"
 
 #include "rndr/application.hpp"
 #include "rndr/audio/audio-system.hpp"
-#include "rndr/exception.hpp"
 #include "rndr/generic-window.hpp"
 #include "rndr/input-system.hpp"
 #include "rndr/log.hpp"
@@ -52,7 +50,7 @@ Rndr::AudioClip MakeBlip(Rndr::f32 frequency, Rndr::f32 seconds)
         const f32 envelope = 1.0f - static_cast<f32>(i) / static_cast<f32>(frame_count);
         samples[i] = 0.6f * envelope * envelope * std::sin(2.0f * k_pi * frequency * t);
     }
-    return AudioClip(k_rate, 1, {samples.GetData(), samples.GetSize()});
+    return AudioClip::Create(k_rate, 1, {samples.GetData(), samples.GetSize()}).GetValue();
 }
 
 /** A slow major chord, stereo, with the fifth leaning left and the third leaning right so the loop has some width. */
@@ -72,7 +70,7 @@ Rndr::AudioClip MakeChord(Rndr::f32 root, Rndr::f32 seconds)
         samples[i * 2] = 0.15f * (a + 0.5f * b + c);
         samples[i * 2 + 1] = 0.15f * (a + b + 0.5f * c);
     }
-    return AudioClip(k_rate, 2, {samples.GetData(), samples.GetSize()});
+    return AudioClip::Create(k_rate, 2, {samples.GetData(), samples.GetSize()}).GetValue();
 }
 
 }  // namespace
@@ -89,30 +87,22 @@ int main()
     auto window = app->CreateGenericWindow(window_desc);
     RNDR_ASSERT(window.IsValid(), "Failed to create a window!");
 
-    // A game that can run without sound catches this and carries on; a sample about sound has no reason to.
-    Opal::ScopePtr<AudioSystem> audio;
-    try
+    // A game that can run without sound checks the code and carries on; a sample about sound has no reason to.
+    Opal::Expected<Opal::ScopePtr<AudioSystem>, ErrorCode> audio_result = AudioSystem::Create();
+    if (!audio_result.HasValue())
     {
-        audio = Opal::MakeScoped<AudioSystem>(nullptr, AudioSystemDesc{});
-    }
-    catch (const AudioDeviceException& exception)
-    {
-        RNDR_LOG_ERROR("Could not open the audio device: {}", exception.what());
+        RNDR_LOG_ERROR("Could not open the audio device, giving up");
         return 1;
     }
+    const Opal::ScopePtr<AudioSystem> audio = std::move(audio_result.GetValue());
     audio->SetBusVolume(k_music_bus, 0.7f);
 
-    const AudioClipHandle blip = audio->CreateClip(MakeBlip(880.0f, 0.25f));
-    const AudioClipHandle chord = audio->CreateClip(MakeChord(110.0f, 2.0f));
-    AudioClipHandle ogg;
-    try
-    {
-        ogg = audio->LoadClip(Opal::Paths::Combine(RNDR_CORE_ASSETS_DIR, "audio", "test-tone.ogg").GetValue());
-    }
-    catch (const Opal::Exception& exception)
-    {
-        RNDR_LOG_WARNING("OGG fixture not loaded, O will do nothing: {}", exception.what());
-    }
+    const AudioClipHandle blip = audio->CreateClip(MakeBlip(880.0f, 0.25f)).GetValue();
+    const AudioClipHandle chord = audio->CreateClip(MakeChord(110.0f, 2.0f)).GetValue();
+    // The fixture is optional: without it `ogg` stays invalid and the O key does nothing, which is what the
+    // handler below already checks for.
+    const AudioClipHandle ogg =
+        audio->LoadClip(Opal::Paths::Combine(RNDR_CORE_ASSETS_DIR, "audio", "test-tone.ogg").GetValue()).GetValueOr({});
 
     SoundHandle chord_sound;
     bool is_paused = false;

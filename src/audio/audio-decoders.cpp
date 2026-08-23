@@ -7,7 +7,6 @@
 #include "stb_vorbis/stb_vorbis.h"
 #undef STB_VORBIS_HEADER_ONLY
 
-#include "opal/exceptions.h"
 #include "opal/file-system.h"
 #include "opal/paths.h"
 
@@ -18,21 +17,29 @@ namespace
 
 using namespace Rndr;
 
-/** Little-endian cursor over a byte view. Every read checks its bounds and throws on a short file. */
+/**
+ * Little-endian cursor over a byte view. A read that would run past the end yields zero and puts the reader in a
+ * failed state rather than reading anything, so a caller can read a whole chunk's worth of fields and ask once,
+ * at the end, whether any of it was really there.
+ */
 class ByteReader
 {
 public:
     explicit ByteReader(Opal::ArrayView<const u8> bytes) : m_bytes(bytes) {}
 
+    /** False once a read or a seek has run off the end. Nothing read after that means anything. */
+    [[nodiscard]] bool IsValid() const { return m_is_valid; }
+
     [[nodiscard]] u64 GetOffset() const { return m_offset; }
-    [[nodiscard]] u64 GetRemaining() const { return m_bytes.GetSize() - m_offset; }
+    [[nodiscard]] u64 GetRemaining() const { return m_offset >= m_bytes.GetSize() ? 0 : m_bytes.GetSize() - m_offset; }
     [[nodiscard]] bool IsAtEnd() const { return m_offset >= m_bytes.GetSize(); }
 
     void Seek(u64 offset)
     {
         if (offset > m_bytes.GetSize())
         {
-            throw Opal::Exception("WAV: chunk runs past the end of the file");
+            m_is_valid = false;
+            return;
         }
         m_offset = offset;
     }
@@ -41,48 +48,59 @@ public:
 
     u16 ReadU16()
     {
-        Require(2);
-        const u8* p = m_bytes.GetData() + m_offset;
-        m_offset += 2;
+        if (!Take(2))
+        {
+            return 0;
+        }
+        const u8* p = m_bytes.GetData() + m_offset - 2;
         return static_cast<u16>(p[0] | (p[1] << 8));
     }
 
     u32 ReadU32()
     {
-        Require(4);
-        const u8* p = m_bytes.GetData() + m_offset;
-        m_offset += 4;
+        if (!Take(4))
+        {
+            return 0;
+        }
+        const u8* p = m_bytes.GetData() + m_offset - 4;
         return static_cast<u32>(p[0]) | (static_cast<u32>(p[1]) << 8) | (static_cast<u32>(p[2]) << 16) | (static_cast<u32>(p[3]) << 24);
     }
 
-    /** Reads a four-character chunk id; returns true when it equals @p id. */
+    /** Reads a four-character chunk id; returns true when it equals @p id and the read was in bounds. */
     bool ReadTag(const char* id)
     {
-        char read_id[4];
+        char read_id[4] = {};
         ReadId(read_id);
-        return std::memcmp(read_id, id, 4) == 0;
+        return m_is_valid && std::memcmp(read_id, id, 4) == 0;
     }
 
     void ReadId(char out_id[4])
     {
-        Require(4);
-        std::memcpy(out_id, m_bytes.GetData() + m_offset, 4);
-        m_offset += 4;
+        if (!Take(4))
+        {
+            return;
+        }
+        std::memcpy(out_id, m_bytes.GetData() + m_offset - 4, 4);
     }
 
     [[nodiscard]] const u8* GetCurrent() const { return m_bytes.GetData() + m_offset; }
 
 private:
-    void Require(u64 count) const
+    /** Advances past @p count bytes when they are there, and fails the reader when they are not. */
+    bool Take(u64 count)
     {
-        if (GetRemaining() < count)
+        if (!m_is_valid || GetRemaining() < count)
         {
-            throw Opal::Exception("WAV: file ends in the middle of a field");
+            m_is_valid = false;
+            return false;
         }
+        m_offset += count;
+        return true;
     }
 
     Opal::ArrayView<const u8> m_bytes;
     u64 m_offset = 0;
+    bool m_is_valid = true;
 };
 
 constexpr u16 k_wave_format_pcm = 0x0001;
@@ -98,11 +116,12 @@ struct WavFormat
     u16 bits_per_sample = 0;
 };
 
-WavFormat ReadFormatChunk(ByteReader& reader, u32 chunk_size)
+ErrorCode ReadFormatChunk(ByteReader& reader, u32 chunk_size, WavFormat& out_format)
 {
     if (chunk_size < 16)
     {
-        throw Opal::Exception("WAV: fmt chunk is too short");
+        RNDR_LOG_ERROR("WAV: fmt chunk is too short");
+        return ErrorCode::CorruptData;
     }
     const u64 chunk_start = reader.GetOffset();
     WavFormat format;
@@ -119,7 +138,8 @@ WavFormat ReadFormatChunk(ByteReader& reader, u32 chunk_size)
         // the real format tag.
         if (chunk_size < 40)
         {
-            throw Opal::Exception("WAV: extensible fmt chunk is too short");
+            RNDR_LOG_ERROR("WAV: extensible fmt chunk is too short");
+            return ErrorCode::CorruptData;
         }
         reader.ReadU16();  // cbSize
         reader.ReadU16();  // valid bits per sample; the container size in bits_per_sample is what the data uses
@@ -127,7 +147,13 @@ WavFormat ReadFormatChunk(ByteReader& reader, u32 chunk_size)
         format.format_tag = reader.ReadU16();
     }
     reader.Seek(chunk_start + chunk_size);
-    return format;
+    if (!reader.IsValid())
+    {
+        RNDR_LOG_ERROR("WAV: the file ends inside the fmt chunk");
+        return ErrorCode::CorruptData;
+    }
+    out_format = format;
+    return ErrorCode::Success;
 }
 
 /**
@@ -184,21 +210,27 @@ void ConvertSamples(const WavFormat& format, const u8* data, u64 sample_count, f
             }
             break;
         default:
-            throw Opal::Exception("WAV: unsupported sample width");
+            // Unreachable: the caller rejects every width but these before it gets here.
+            RNDR_HALT("WAV: unsupported sample width reached the converter");
+            break;
     }
 }
 
-AudioClip DecodeWav(Opal::ArrayView<const u8> file_bytes)
+Opal::Expected<AudioClip, ErrorCode> DecodeWav(Opal::ArrayView<const u8> file_bytes)
 {
+    using Result = Opal::Expected<AudioClip, ErrorCode>;
+
     ByteReader reader(file_bytes);
     if (!reader.ReadTag("RIFF"))
     {
-        throw Opal::Exception("WAV: not a RIFF file");
+        RNDR_LOG_ERROR("WAV: not a RIFF file");
+        return Result(ErrorCode::CorruptData);
     }
     reader.ReadU32();  // RIFF size; often wrong in files written by streaming encoders, so the chunk walk decides
     if (!reader.ReadTag("WAVE"))
     {
-        throw Opal::Exception("WAV: RIFF file is not a WAVE file");
+        RNDR_LOG_ERROR("WAV: RIFF file is not a WAVE file");
+        return Result(ErrorCode::CorruptData);
     }
 
     WavFormat format;
@@ -220,14 +252,19 @@ AudioClip DecodeWav(Opal::ArrayView<const u8> file_bytes)
 
         if (std::memcmp(chunk_id, "fmt ", 4) == 0)
         {
-            format = ReadFormatChunk(reader, chunk_size);
+            const ErrorCode error = ReadFormatChunk(reader, chunk_size, format);
+            if (error != ErrorCode::Success)
+            {
+                return Result(error);
+            }
             has_format = true;
         }
         else if (std::memcmp(chunk_id, "data", 4) == 0)
         {
             if (chunk_size > reader.GetRemaining())
             {
-                throw Opal::Exception("WAV: data chunk runs past the end of the file");
+                RNDR_LOG_ERROR("WAV: data chunk runs past the end of the file");
+                return Result(ErrorCode::CorruptData);
             }
             data = reader.GetCurrent();
             data_size = chunk_size;
@@ -245,22 +282,30 @@ AudioClip DecodeWav(Opal::ArrayView<const u8> file_bytes)
         }
     }
 
+    if (!reader.IsValid())
+    {
+        RNDR_LOG_ERROR("WAV: the file ends in the middle of a chunk");
+        return Result(ErrorCode::CorruptData);
+    }
     if (!has_format)
     {
-        throw Opal::Exception("WAV: no fmt chunk");
+        RNDR_LOG_ERROR("WAV: no fmt chunk");
+        return Result(ErrorCode::CorruptData);
     }
     if (!has_data)
     {
-        throw Opal::Exception("WAV: no data chunk");
+        RNDR_LOG_ERROR("WAV: no data chunk");
+        return Result(ErrorCode::CorruptData);
     }
     if (format.format_tag != k_wave_format_pcm && format.format_tag != k_wave_format_ieee_float)
     {
-        throw Opal::Exception(Opal::StringEx("WAV: unsupported format tag ") + static_cast<u64>(format.format_tag));
+        RNDR_LOG_ERROR("WAV: unsupported format tag {}", format.format_tag);
+        return Result(ErrorCode::UnsupportedFormat);
     }
     if (format.channel_count != 1 && format.channel_count != 2)
     {
-        throw Opal::Exception(Opal::StringEx("WAV: only mono and stereo are supported, file has ") +
-                              static_cast<u64>(format.channel_count) + " channels");
+        RNDR_LOG_ERROR("WAV: only mono and stereo are supported, file has {} channels", format.channel_count);
+        return Result(ErrorCode::UnsupportedFormat);
     }
     const bool is_valid_width =
         format.format_tag == k_wave_format_ieee_float
@@ -268,43 +313,50 @@ AudioClip DecodeWav(Opal::ArrayView<const u8> file_bytes)
             : (format.bits_per_sample == 8 || format.bits_per_sample == 16 || format.bits_per_sample == 24 || format.bits_per_sample == 32);
     if (!is_valid_width)
     {
-        throw Opal::Exception(Opal::StringEx("WAV: unsupported bit depth ") + static_cast<u64>(format.bits_per_sample));
+        RNDR_LOG_ERROR("WAV: unsupported bit depth {}", format.bits_per_sample);
+        return Result(ErrorCode::UnsupportedFormat);
     }
     const u32 bytes_per_frame = format.channel_count * (format.bits_per_sample / 8);
     if (format.block_align != bytes_per_frame)
     {
-        throw Opal::Exception("WAV: block align does not match the channel count and bit depth");
+        RNDR_LOG_ERROR("WAV: block align does not match the channel count and bit depth");
+        return Result(ErrorCode::CorruptData);
     }
     const u64 frame_count = data_size / bytes_per_frame;
     if (frame_count == 0)
     {
-        throw Opal::Exception("WAV: data chunk holds no frames");
+        RNDR_LOG_ERROR("WAV: data chunk holds no frames");
+        return Result(ErrorCode::CorruptData);
     }
 
     Opal::DynamicArray<f32> samples(frame_count * format.channel_count);
     ConvertSamples(format, data, samples.GetSize(), samples.GetData());
-    return AudioClip(format.sample_rate, format.channel_count, {samples.GetData(), samples.GetSize()});
+    return AudioClip::Create(format.sample_rate, format.channel_count, {samples.GetData(), samples.GetSize()});
 }
 
-AudioClip DecodeOggVorbis(Opal::ArrayView<const u8> file_bytes)
+Opal::Expected<AudioClip, ErrorCode> DecodeOggVorbis(Opal::ArrayView<const u8> file_bytes)
 {
+    using Result = Opal::Expected<AudioClip, ErrorCode>;
+
     if (file_bytes.GetSize() > static_cast<u64>(std::numeric_limits<int>::max()))
     {
-        throw Opal::Exception("OGG: file is larger than the decoder can address");
+        RNDR_LOG_ERROR("OGG: file is larger than the decoder can address");
+        return Result(ErrorCode::UnsupportedFormat);
     }
     int error = VORBIS__no_error;
     stb_vorbis* decoder = stb_vorbis_open_memory(file_bytes.GetData(), static_cast<int>(file_bytes.GetSize()), &error, nullptr);
     if (decoder == nullptr)
     {
-        throw Opal::Exception(Opal::StringEx("OGG: not a Vorbis stream (stb_vorbis error ") + static_cast<i32>(error) + ")");
+        RNDR_LOG_ERROR("OGG: not a Vorbis stream (stb_vorbis error {})", error);
+        return Result(ErrorCode::CorruptData);
     }
 
     const stb_vorbis_info info = stb_vorbis_get_info(decoder);
     if (info.channels != 1 && info.channels != 2)
     {
         stb_vorbis_close(decoder);
-        throw Opal::Exception(Opal::StringEx("OGG: only mono and stereo are supported, file has ") + static_cast<i32>(info.channels) +
-                              " channels");
+        RNDR_LOG_ERROR("OGG: only mono and stereo are supported, file has {} channels", info.channels);
+        return Result(ErrorCode::UnsupportedFormat);
     }
 
     const u32 channel_count = static_cast<u32>(info.channels);
@@ -333,18 +385,20 @@ AudioClip DecodeOggVorbis(Opal::ArrayView<const u8> file_bytes)
 
     if (decode_error != VORBIS__no_error)
     {
-        throw Opal::Exception(Opal::StringEx("OGG: decoding failed (stb_vorbis error ") + static_cast<i32>(decode_error) + ")");
+        RNDR_LOG_ERROR("OGG: decoding failed (stb_vorbis error {})", decode_error);
+        return Result(ErrorCode::CorruptData);
     }
     if (samples.GetSize() == 0)
     {
-        throw Opal::Exception("OGG: stream holds no frames");
+        RNDR_LOG_ERROR("OGG: stream holds no frames");
+        return Result(ErrorCode::CorruptData);
     }
-    return AudioClip(static_cast<u32>(info.sample_rate), channel_count, {samples.GetData(), samples.GetSize()});
+    return AudioClip::Create(static_cast<u32>(info.sample_rate), channel_count, {samples.GetData(), samples.GetSize()});
 }
 
 }  // namespace
 
-Rndr::AudioClip Rndr::File::DecodeAudioClip(Opal::ArrayView<const u8> file_bytes, AudioFileFormat format)
+Opal::Expected<Rndr::AudioClip, Rndr::ErrorCode> Rndr::File::DecodeAudioClip(Opal::ArrayView<const u8> file_bytes, AudioFileFormat format)
 {
     switch (format)
     {
@@ -353,14 +407,18 @@ Rndr::AudioClip Rndr::File::DecodeAudioClip(Opal::ArrayView<const u8> file_bytes
         case AudioFileFormat::OggVorbis:
             return DecodeOggVorbis(file_bytes);
     }
-    throw Opal::Exception("DecodeAudioClip: unknown audio file format");
+    RNDR_LOG_ERROR("DecodeAudioClip: unknown audio file format");
+    return Opal::Expected<AudioClip, ErrorCode>(ErrorCode::InvalidArgument);
 }
 
-Rndr::AudioClip Rndr::File::LoadAudioClip(const Opal::StringUtf8& file_path)
+Opal::Expected<Rndr::AudioClip, Rndr::ErrorCode> Rndr::File::LoadAudioClip(const Opal::StringUtf8& file_path)
 {
+    using Result = Opal::Expected<AudioClip, ErrorCode>;
+
     if (!Opal::Exists(file_path))
     {
-        throw Opal::Exception(Opal::StringEx("LoadAudioClip: file does not exist: ") + file_path.GetData());
+        RNDR_LOG_ERROR("LoadAudioClip: file does not exist: {}", file_path.GetData());
+        return Result(ErrorCode::FileNotFound);
     }
 
     const Opal::StringUtf8 extension = Opal::Paths::GetExtension(file_path).GetValue();
@@ -375,13 +433,15 @@ Rndr::AudioClip Rndr::File::LoadAudioClip(const Opal::StringUtf8& file_path)
     }
     else
     {
-        throw Opal::Exception(Opal::StringEx("LoadAudioClip: unsupported extension: ") + extension.GetData());
+        RNDR_LOG_ERROR("LoadAudioClip: unsupported extension: {}", extension.GetData());
+        return Result(ErrorCode::UnsupportedFormat);
     }
 
     const Opal::DynamicArray<u8> file_bytes = ReadEntireFile(file_path);
     if (file_bytes.GetSize() == 0)
     {
-        throw Opal::Exception(Opal::StringEx("LoadAudioClip: failed to read: ") + file_path.GetData());
+        RNDR_LOG_ERROR("LoadAudioClip: failed to read: {}", file_path.GetData());
+        return Result(ErrorCode::CorruptData);
     }
     return DecodeAudioClip({file_bytes.GetData(), file_bytes.GetSize()}, format);
 }

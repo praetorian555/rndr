@@ -1,6 +1,9 @@
 #include "rndr/audio/audio-system.hpp"
 
+#include "opal/allocator.h"
+
 #include "rndr/file.hpp"
+#include "rndr/log.hpp"
 
 namespace
 {
@@ -18,20 +21,46 @@ Rndr::AudioMixerDesc MixerDesc(const Rndr::AudioSystemDesc& desc)
 Rndr::AudioSystem::AudioSystem(const AudioSystemDesc& desc) : m_mixer(MixerDesc(desc))
 {
     m_mixer.SetMasterVolume(desc.master_volume);
+}
+
+Opal::Expected<Opal::ScopePtr<Rndr::AudioSystem>, Rndr::ErrorCode> Rndr::AudioSystem::Create(const AudioSystemDesc& desc)
+{
+    using Result = Opal::Expected<Opal::ScopePtr<AudioSystem>, ErrorCode>;
+
+    Opal::ScopePtr<AudioSystem> system = Opal::MakeScoped<AudioSystem>(Opal::GetDefaultAllocator(), desc);
+    if (!system.IsValid())
+    {
+        return Result(ErrorCode::OutOfMemory);
+    }
+
+    // The callback holds the system, so the device is opened only once the system is at its final address.
     const AudioDeviceDesc device_desc{.sample_rate = desc.sample_rate, .buffer_frames = desc.buffer_frames};
-    m_device = AudioDevice::Create(device_desc, [this](Opal::ArrayView<f32> out) { m_mixer.Mix(out); });
+    AudioSystem* system_ptr = system.Get();
+    Opal::Expected<Opal::ScopePtr<AudioDevice>, ErrorCode> device =
+        AudioDevice::Create(device_desc, [system_ptr](Opal::ArrayView<f32> out) { system_ptr->m_mixer.Mix(out); });
+    if (!device.HasValue())
+    {
+        return Result(device.GetError());
+    }
+    system->m_device = std::move(device.GetValue());
+    return Result(std::move(system));
 }
 
 Rndr::AudioSystem::~AudioSystem() = default;
 
-Rndr::AudioClipHandle Rndr::AudioSystem::CreateClip(AudioClip&& clip)
+Opal::Expected<Rndr::AudioClipHandle, Rndr::ErrorCode> Rndr::AudioSystem::CreateClip(AudioClip&& clip)
 {
     return m_mixer.CreateClip(std::move(clip));
 }
 
-Rndr::AudioClipHandle Rndr::AudioSystem::LoadClip(const Opal::StringUtf8& file_path)
+Opal::Expected<Rndr::AudioClipHandle, Rndr::ErrorCode> Rndr::AudioSystem::LoadClip(const Opal::StringUtf8& file_path)
 {
-    return m_mixer.CreateClip(File::LoadAudioClip(file_path));
+    Opal::Expected<AudioClip, ErrorCode> clip = File::LoadAudioClip(file_path);
+    if (!clip.HasValue())
+    {
+        return Opal::Expected<AudioClipHandle, ErrorCode>(clip.GetError());
+    }
+    return m_mixer.CreateClip(std::move(clip.GetValue()));
 }
 
 void Rndr::AudioSystem::DestroyClip(AudioClipHandle clip)

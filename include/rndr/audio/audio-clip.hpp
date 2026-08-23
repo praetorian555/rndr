@@ -2,7 +2,9 @@
 
 #include "opal/container/array-view.h"
 #include "opal/container/dynamic-array.h"
+#include "opal/container/expected.h"
 
+#include "rndr/error-codes.hpp"
 #include "rndr/types.hpp"
 
 namespace Rndr
@@ -20,13 +22,17 @@ public:
     AudioClip() = default;
 
     /**
+     * The only way to get a clip with samples in it.
+     *
      * @param sample_rate Frames per second. Must be greater than 0.
-     * @param channel_count 1 for mono, 2 for stereo. Anything else throws.
+     * @param channel_count 1 for mono, 2 for stereo.
      * @param interleaved_frames Samples in [-1, 1], interleaved by channel. Its size must be a whole number of frames
      *        and there must be at least one. Copied.
-     * @throw Opal::Exception on any argument that does not meet the above.
+     * @return The clip, or ErrorCode::InvalidArgument for a rate of 0, an empty view or a sample count that is not a
+     *         whole number of frames, or ErrorCode::UnsupportedFormat for a channel count other than 1 or 2.
      */
-    AudioClip(u32 sample_rate, u32 channel_count, Opal::ArrayView<const f32> interleaved_frames);
+    [[nodiscard]] static Opal::Expected<AudioClip, ErrorCode> Create(u32 sample_rate, u32 channel_count,
+                                                                     Opal::ArrayView<const f32> interleaved_frames);
 
     AudioClip(const AudioClip&) = delete;
     AudioClip& operator=(const AudioClip&) = delete;
@@ -44,6 +50,8 @@ public:
     [[nodiscard]] Opal::ArrayView<const f32> GetData() const { return {m_data.GetData(), m_data.GetSize()}; }
 
 private:
+    AudioClip(u32 sample_rate, u32 channel_count, Opal::ArrayView<const f32> interleaved_frames);
+
     u32 m_sample_rate = 0;
     u32 m_channel_count = 0;
     u64 m_frame_count = 0;
