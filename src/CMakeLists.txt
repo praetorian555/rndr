@@ -110,8 +110,10 @@ if (${RNDR_AUDIO})
     list(APPEND SOURCE_LIST
             "${PROJECT_SOURCE_DIR}/include/rndr/audio/audio-types.hpp"
             "${PROJECT_SOURCE_DIR}/include/rndr/audio/audio-clip.hpp"
+            "${PROJECT_SOURCE_DIR}/include/rndr/audio/audio-mixer.hpp"
             "${PROJECT_SOURCE_DIR}/src/audio/audio-clip.cpp"
-            "${PROJECT_SOURCE_DIR}/src/audio/audio-decoders.cpp")
+            "${PROJECT_SOURCE_DIR}/src/audio/audio-decoders.cpp"
+            "${PROJECT_SOURCE_DIR}/src/audio/audio-mixer.cpp")
 endif ()
 
 list(APPEND SOURCE_LIST
