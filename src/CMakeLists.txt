@@ -103,6 +103,12 @@ list(APPEND SOURCE_LIST
         "${PROJECT_SOURCE_DIR}/extern/stb_image/src/stb_image.cpp"
 )
 
+if (${RNDR_AUDIO})
+    list(APPEND SOURCE_LIST
+            "${PROJECT_SOURCE_DIR}/extern/stb_vorbis/include/stb_vorbis/stb_vorbis.h"
+            "${PROJECT_SOURCE_DIR}/extern/stb_vorbis/src/stb_vorbis.cpp")
+endif ()
+
 list(APPEND SOURCE_LIST
         "${PROJECT_SOURCE_DIR}/include/rndr/platform/windows-application.hpp"
         "${PROJECT_SOURCE_DIR}/include/rndr/platform/windows-gamepad.hpp"
@@ -186,6 +192,11 @@ if (${RNDR_CANVAS})
 endif ()
 if (${RNDR_FORGE})
     target_compile_definitions(rndr PUBLIC RNDR_FORGE)
+endif ()
+if (${RNDR_AUDIO})
+    target_compile_definitions(rndr PUBLIC RNDR_AUDIO)
+    # stb_vorbis is only included from rndr's implementation, so like stb_image it is build-only.
+    target_include_directories(rndr PUBLIC $<BUILD_INTERFACE:${PROJECT_SOURCE_DIR}/extern/stb_vorbis/include>)
 endif ()
 
 # Xinput.lib resolves to XInput 1.4 in the Windows 10 SDK, which ships with every supported

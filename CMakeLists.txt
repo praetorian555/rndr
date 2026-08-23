@@ -18,6 +18,7 @@ option(RNDR_BUILD_SAMPLES "Builds sample executables" ON)
 option(RNDR_ASSIMP "Enable Assimp dependency for mesh/model loading" ON)
 option(RNDR_KTX "Enable KTX-Software dependency for KTX texture loading" ON)
 option(RNDR_SHARED_LIBS "Build rndr (and opal) as shared libraries" OFF)
+option(RNDR_AUDIO "Enable the audio system: clips, a software mixer and a WASAPI device on Windows" ON)
 
 # rndr and opal key their static-vs-shared choice off the standard BUILD_SHARED_LIBS variable;
 # RNDR_SHARED_LIBS is the project-facing knob that drives it.
@@ -32,6 +33,7 @@ message(STATUS "RNDR_BUILD_SAMPLES ${RNDR_BUILD_SAMPLES}")
 message(STATUS "RNDR_ASSIMP ${RNDR_ASSIMP}")
 message(STATUS "RNDR_KTX ${RNDR_KTX}")
 message(STATUS "RNDR_SHARED_LIBS ${RNDR_SHARED_LIBS}")
+message(STATUS "RNDR_AUDIO ${RNDR_AUDIO}")
 
 ## C++ language configuration boilerplate, hide symbols by default
 if (NOT DEFINED CMAKE_CXX_VISIBILITY_PRESET AND NOT DEFINED CMAKE_VISIBILITY_INLINES_HIDDEN)
