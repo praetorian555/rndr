@@ -169,7 +169,8 @@ void ConvertSamples(const WavFormat& format, const u8* data, u64 sample_count, f
             {
                 const u8* p = data + i * 3;
                 // Sign-extend by building the value in the top three bytes of an i32.
-                const auto value = static_cast<i32>((static_cast<u32>(p[0]) << 8) | (static_cast<u32>(p[1]) << 16) | (static_cast<u32>(p[2]) << 24));
+                const auto value =
+                    static_cast<i32>((static_cast<u32>(p[0]) << 8) | (static_cast<u32>(p[1]) << 16) | (static_cast<u32>(p[2]) << 24));
                 out[i] = static_cast<f32>(value >> 8) / 8388608.0f;
             }
             break;
@@ -177,8 +178,8 @@ void ConvertSamples(const WavFormat& format, const u8* data, u64 sample_count, f
             for (u64 i = 0; i < sample_count; i++)
             {
                 const u8* p = data + i * 4;
-                const auto value = static_cast<i32>(static_cast<u32>(p[0]) | (static_cast<u32>(p[1]) << 8) | (static_cast<u32>(p[2]) << 16) |
-                                                    (static_cast<u32>(p[3]) << 24));
+                const auto value = static_cast<i32>(static_cast<u32>(p[0]) | (static_cast<u32>(p[1]) << 8) |
+                                                    (static_cast<u32>(p[2]) << 16) | (static_cast<u32>(p[3]) << 24));
                 out[i] = static_cast<f32>(static_cast<f64>(value) / 2147483648.0);
             }
             break;
@@ -258,12 +259,13 @@ AudioClip DecodeWav(Opal::ArrayView<const u8> file_bytes)
     }
     if (format.channel_count != 1 && format.channel_count != 2)
     {
-        throw Opal::Exception(Opal::StringEx("WAV: only mono and stereo are supported, file has ") + static_cast<u64>(format.channel_count) +
-                              " channels");
+        throw Opal::Exception(Opal::StringEx("WAV: only mono and stereo are supported, file has ") +
+                              static_cast<u64>(format.channel_count) + " channels");
     }
-    const bool is_valid_width = format.format_tag == k_wave_format_ieee_float ? format.bits_per_sample == 32
-                                                                               : (format.bits_per_sample == 8 || format.bits_per_sample == 16 ||
-                                                                                  format.bits_per_sample == 24 || format.bits_per_sample == 32);
+    const bool is_valid_width =
+        format.format_tag == k_wave_format_ieee_float
+            ? format.bits_per_sample == 32
+            : (format.bits_per_sample == 8 || format.bits_per_sample == 16 || format.bits_per_sample == 24 || format.bits_per_sample == 32);
     if (!is_valid_width)
     {
         throw Opal::Exception(Opal::StringEx("WAV: unsupported bit depth ") + static_cast<u64>(format.bits_per_sample));
@@ -314,7 +316,8 @@ AudioClip DecodeOggVorbis(Opal::ArrayView<const u8> file_bytes)
     f32 chunk[k_frames_per_read * 2];
     while (true)
     {
-        const int frames_read = stb_vorbis_get_samples_float_interleaved(decoder, static_cast<int>(channel_count), chunk, k_frames_per_read * static_cast<int>(channel_count));
+        const int frames_read = stb_vorbis_get_samples_float_interleaved(decoder, static_cast<int>(channel_count), chunk,
+                                                                         k_frames_per_read * static_cast<int>(channel_count));
         if (frames_read <= 0)
         {
             break;

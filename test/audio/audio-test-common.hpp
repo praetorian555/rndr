@@ -152,10 +152,10 @@ inline Opal::DynamicArray<Rndr::u8> BuildWav(const WavSpec& spec, Opal::ArrayVie
     Impl::PutU16(out, spec.bits_per_sample);
     if (spec.extensible)
     {
-        Impl::PutU16(out, 22);                    // cbSize
-        Impl::PutU16(out, spec.bits_per_sample);  // valid bits
+        Impl::PutU16(out, 22);                                   // cbSize
+        Impl::PutU16(out, spec.bits_per_sample);                 // valid bits
         Impl::PutU32(out, spec.channel_count == 2 ? 0x3 : 0x4);  // channel mask
-        Impl::PutU16(out, spec.format_tag);       // sub-format GUID, first two bytes carry the tag
+        Impl::PutU16(out, spec.format_tag);                      // sub-format GUID, first two bytes carry the tag
         Impl::PutU16(out, 0x0000);
         Impl::PutU16(out, 0x0010);
         Impl::PutU16(out, 0x8000);
