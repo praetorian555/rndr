@@ -99,7 +99,8 @@ if (${RNDR_BUILD_TESTS})
     if (${RNDR_AUDIO})
         list(APPEND RNDR_TEST_FILES
                 test/audio/audio-clip-test.cpp
-                test/audio/audio-mixer-test.cpp)
+                test/audio/audio-mixer-test.cpp
+                test/audio/audio-system-test.cpp)
     endif ()
     add_executable(rndr-test ${RNDR_TEST_FILES})
     rndr_deploy_runtime(rndr-test)
