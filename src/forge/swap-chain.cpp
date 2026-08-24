@@ -4,6 +4,8 @@
 
 #if defined(OPAL_PLATFORM_WINDOWS)
 #include "rndr/platform/windows-header.hpp"
+#elif defined(OPAL_PLATFORM_LINUX)
+#include <xcb/xcb.h>
 #endif
 
 #include "opal/container/in-place-array.h"
@@ -62,6 +64,17 @@ Opal::Expected<Rndr::Forge::Surface, Rndr::ErrorCode> Rndr::Forge::Surface::Crea
     surface_create_info.hinstance = GetModuleHandle(nullptr);
     RNDR_FORGE_VK_CHECK_EXPECTED(vkCreateWin32SurfaceKHR(context.GetInstance(), &surface_create_info, nullptr, &surface.m_surface),
                                  "vkCreateWin32SurfaceKHR", Result);
+    surface.m_context = &context;
+    return Result(std::move(surface));
+#elif defined(OPAL_PLATFORM_LINUX)
+    Surface surface;
+    surface.m_window = window;
+    VkXcbSurfaceCreateInfoKHR surface_create_info{};
+    surface_create_info.sType = VK_STRUCTURE_TYPE_XCB_SURFACE_CREATE_INFO_KHR;
+    surface_create_info.connection = reinterpret_cast<xcb_connection_t*>(window.GetNativeDisplayHandle());
+    surface_create_info.window = static_cast<xcb_window_t>(reinterpret_cast<uintptr_t>(window.GetNativeHandle()));
+    RNDR_FORGE_VK_CHECK_EXPECTED(vkCreateXcbSurfaceKHR(context.GetInstance(), &surface_create_info, nullptr, &surface.m_surface),
+                                 "vkCreateXcbSurfaceKHR", Result);
     surface.m_context = &context;
     return Result(std::move(surface));
 #else

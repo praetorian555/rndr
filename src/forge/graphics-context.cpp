@@ -345,9 +345,9 @@ void DestroyDebugUtilsMessengerEXT(VkInstance instance, VkDebugUtilsMessengerEXT
 }
 
 Rndr::Forge::GraphicsContext::GraphicsContext(Rndr::Forge::GraphicsContext&& other) noexcept
-    : m_instance(other.m_instance),
+    : m_desc(Opal::Move(other.m_desc)),
+      m_instance(other.m_instance),
       m_debug_messenger(other.m_debug_messenger),
-      m_desc(Opal::Move(other.m_desc)),
       m_debug_log(Opal::Move(other.m_debug_log)),
       m_debug_utils_enabled(other.m_debug_utils_enabled)
 {
@@ -466,6 +466,9 @@ Opal::DynamicArray<const char*> Rndr::Forge::GraphicsContext::GetRequiredInstanc
 #if defined(OPAL_PLATFORM_WINDOWS)
     // We need it if we want to display the image to the display on Windows
     required_extension_names.PushBack(VK_KHR_WIN32_SURFACE_EXTENSION_NAME);
+#elif defined(OPAL_PLATFORM_LINUX)
+    // Same on Linux, where the window system is X11 reached through XCB
+    required_extension_names.PushBack(VK_KHR_XCB_SURFACE_EXTENSION_NAME);
 #endif
     // The validation layer has nowhere to report to without the debug messenger, so it pulls in the extension itself.
     if (desc.collect_debug_messages || use_validation_layer)
