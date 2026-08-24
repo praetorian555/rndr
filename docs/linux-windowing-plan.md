@@ -28,13 +28,13 @@ Decisions:
 | 0 — portability groundwork | **Done** |
 | 1 — LinuxApplication + LinuxWindow | **Done** |
 | 2 — Forge surface | **Done**: the XCB surface builds, and `[forge]`/`[forge-window]` run against a real device |
-| 3 — build and verify in WSL2 | Mostly done: one failure is open, see the next section |
+| 3 — build and verify in WSL2 | Tests green; manual sample checks and an upstream Mesa report remain |
 
 Verified on 2026-08-24 in WSL2 Ubuntu 24.04 with GCC 13 and Ninja. With Forge off and ASan on, all 92
 test cases pass. With Forge on (`VULKAN_SDK` pointed at the Windows SDK, `RNDR_HARDENING=OFF`,
-`RNDR_TEST_REQUIRE_VULKAN=1`), `[forge]` reports 73 of 79 cases passing with 5 skipped and 1 failing
-(blend ConstColor), and `[forge-window]` passes 5 of 6 with 1 skipped (the empty-client-area case,
-which X11 cannot express - see "Fixed along the way"). The device is Mesa's **llvmpipe** software
+`RNDR_TEST_REQUIRE_VULKAN=1`), `[forge]` reports 74 of 79 cases passing with 5 skipped, and
+`[forge-window]` 5 of 6 with 1 skipped (the empty-client-area case, which X11 cannot express - see
+"Fixed along the way"). The device is Mesa's **llvmpipe** software
 rasterizer - there is no dozen (`dzn`) ICD on this box - so these runs prove correctness against
 the validation layer, not against a GPU.
 
@@ -164,15 +164,15 @@ Done:
 
 Remaining:
 
-1. The open failure below (two blend-factor cases in one test).
-2. Run the `modern-vulkan` sample under WSLg: window appears, resizes, ESC closes, WASD+mouse fly camera
+1. Run the `modern-vulkan` sample under WSLg: window appears, resizes, ESC closes, WASD+mouse fly camera
    works (exercises the ResetToCenter warp, motion deltas and key translation).
-3. Window behaviours that no test tag covers, driven manually since `window-sample` is Canvas-bound and
+2. Window behaviours that no test tag covers, driven manually since `window-sample` is Canvas-bound and
    does not build on Linux: fullscreen toggle, minimize/maximize/restore, title, opacity, always-on-top,
    taskbar visibility, the resize lock, and the close veto. Either extend `modern-vulkan` with a few
    key bindings or add a small Forge-free windowing sample.
-4. Multi-monitor `GetMonitors` sanity check on a real X11 session - WSLg reports a single monitor, so
+3. Multi-monitor `GetMonitors` sanity check on a real X11 session - WSLg reports a single monitor, so
    the RandR path is only lightly exercised so far.
+4. Report the llvmpipe blend-constant rotation below to Mesa, ideally with a Forge-free repro.
 
 ### Fixed along the way
 
@@ -205,20 +205,36 @@ names. `FindIndexTypeUint8Extension` now prefers the EXT name - same feature str
 type value, and every layer knows it - with KHR kept as the fallback for a driver that one day drops
 the EXT name. Invisible on Windows only because the newer validation layer there knows both names.
 
-## Open failures
+### The blend constants arrive rotated on llvmpipe (diagnosed, worked around, unreported upstream)
 
-### 1. Blend factor ConstColor produces the wrong colour (`test/forge/smoke-test.cpp:8540`)
+The ConstColor failure was a driver bug, not a Forge one, and bigger than it looked. On llvmpipe
+(Mesa 25.2.8, LLVM 20.1.2) the blend constants arrive rotated one channel to the right: a constant of
+(r, g, b, a) blends as (a, r, g, b), so ConstColor weighs red by the constant's alpha, green by its
+red, and so on. Measured by splitting the colour and alpha factors apart in a scratch section: every
+one of the four constant factors is wrong the same way - ConstAlpha splats the constant's blue, the
+inverses are rotated too - and the original run only ever reported ConstColor because `REQUIRE` aborts
+a section at its first failure, so the factors after it never ran.
 
-    source factor ConstColor:       measured 0.6      0.0627451  0.121569  0.301961
-                                    expected 0.0815686 0.181176  0.200784  0.449412
-    destination factor ConstColor:  measured 0.227451 0.0705882  0.0313726 0.101961
-                                    expected 0.0307882 0.211965  0.0511803 0.149804
+What ruled Forge out: the constants are submitted in spec order (`src/forge/pipeline.cpp:874`, checked
+against the struct), validation is clean, feeding them through `VK_DYNAMIC_STATE_BLEND_CONSTANTS` and
+`vkCmdSetBlendConstants` instead produces the identical rotation, `LP_NATIVE_VECTOR_WIDTH=128` changes
+nothing, and the same code blends correctly on a Windows GPU. Mesa's own state plumbing reads
+correctly (lavapipe memcpys the four floats, `lp_setup.c` stores them r,g,b,a), so the rotation lives
+in llvmpipe's JIT blend codegen. No matching upstream issue found; reporting it is on the remaining
+list.
 
-Two cases out of the whole blend factor table; every other factor passes. Blend constants are written
-as static pipeline state from `PipelineDesc::blend_constants` (`src/forge/pipeline.cpp:874`). Either
-llvmpipe only honours them as dynamic state (`VK_DYNAMIC_STATE_BLEND_CONSTANTS` plus
-`vkCmdSetBlendConstants`), or Forge never gets them to the device at all. Whether this is a driver
-quirk or a Forge bug is exactly what needs establishing first - the numbers do not look like rounding.
+The regression window is bracketed by CI: the GitHub runners have no GPU, so `ci.yml` registers
+mesa-dist-win **24.3.2**'s lavapipe as the Vulkan driver on the Windows runners, and master is green
+there with this test in it - 24.3.2 blends the constants correctly, so the bug arrived between Mesa
+24.3.2 and 25.2.8.
+
+The blend-factor test now probes for the rotation at run time - one ConstColor blend compared against
+the rotated model - and only where it measures it does it leave the four constant factors out, with a
+warning; the ten factors that never read the constants keep running regardless. Probing rather than
+matching the device name is what keeps CI's older lavapipe fully covered, and hands the coverage back
+on any Mesa that fixes it without anyone editing a version check. The "constants are not zero"
+regression section still runs everywhere - rotated constants are still not zero, and it guards the
+case where they are dropped entirely.
 
 ## Running the Forge tags on Linux
 
