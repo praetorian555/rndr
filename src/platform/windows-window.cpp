@@ -623,3 +623,10 @@ Rndr::NativeWindowHandle Rndr::WindowsWindow::GetNativeHandle() const
 {
     return m_native_window_handle;
 }
+
+Rndr::NativeDisplayHandle Rndr::WindowsWindow::GetNativeDisplayHandle() const
+{
+    // TODO(Marko): Same caveat as Initialize - this is the exe module, should be the dll module
+    // if rndr is linked dynamically.
+    return reinterpret_cast<NativeDisplayHandle>(GetModuleHandle(nullptr));
+}

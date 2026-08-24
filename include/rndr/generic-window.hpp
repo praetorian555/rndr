@@ -174,6 +174,13 @@ public:
     [[nodiscard]] virtual NativeWindowHandle GetNativeHandle() const = 0;
 
     /**
+     * Returns the platform object that owns this window's native handle: the HINSTANCE of the
+     * module on Windows, the xcb_connection_t* on Linux. Rendering surface creation needs it
+     * alongside GetNativeHandle.
+     */
+    [[nodiscard]] virtual NativeDisplayHandle GetNativeDisplayHandle() const = 0;
+
+    /**
      * Returns the current DPI scale factor for this window (1.0 == 96 DPI). Updated by the platform
      * whenever the OS reports a DPI change.
      */
@@ -191,6 +198,7 @@ private:
     friend class Application;
     friend class PlatformApplication;
     friend class WindowsApplication;
+    friend class LinuxApplication;
     void MarkClosed() { m_is_closed = true; }
     void SetDpiScale(f32 dpi_scale) { m_dpi_scale = dpi_scale; }
 };

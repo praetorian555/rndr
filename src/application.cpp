@@ -14,6 +14,9 @@
 #if RNDR_WINDOWS
 #include "rndr/platform/windows-application.hpp"
 #include "rndr/platform/windows-window.hpp"
+#elif RNDR_LINUX
+#include "rndr/platform/linux-application.hpp"
+#include "rndr/platform/linux-window.hpp"
 #endif
 
 namespace
@@ -54,6 +57,8 @@ Rndr::Application::Application(const ApplicationDesc& desc) : m_desc(desc)
     }
 #if RNDR_WINDOWS
     m_platform_application = Opal::MakeScoped<PlatformApplication, WindowsApplication>(Opal::GetDefaultAllocator(), this);
+#elif RNDR_LINUX
+    m_platform_application = Opal::MakeScoped<PlatformApplication, LinuxApplication>(Opal::GetDefaultAllocator(), this);
 #else
 #error "Platform not supported!"
 #endif
@@ -155,7 +160,7 @@ void Rndr::Application::RegisterSystemMessageHandler(SystemMessageHandler* handl
 
 void Rndr::Application::UnregisterSystemMessageHandler(SystemMessageHandler* handler)
 {
-    for (i32 i = 0; i < m_system_message_handlers.GetSize(); i++)
+    for (u64 i = 0; i < m_system_message_handlers.GetSize(); i++)
     {
         const Opal::Ref<SystemMessageHandler>& system_message_handler = m_system_message_handlers[i];
         if (system_message_handler.GetPtr() == handler)

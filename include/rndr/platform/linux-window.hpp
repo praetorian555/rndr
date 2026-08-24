@@ -1,19 +1,22 @@
 #pragma once
 
-// #include "glad/glad_wgl.h"
+#include "rndr/definitions.hpp"
+
+#if RNDR_LINUX
+
+#include <xcb/xcb.h>
 
 #include "opal/container/expected.h"
 #include "opal/container/scope-ptr.h"
 
 #include "rndr/error-codes.hpp"
 #include "rndr/generic-window.hpp"
-#include "rndr/platform/windows-header.hpp"
 #include "rndr/types.hpp"
 
 namespace Rndr
 {
 
-class WindowsWindow : public GenericWindow
+class LinuxWindow : public GenericWindow
 {
 public:
     /**
@@ -23,7 +26,7 @@ public:
      */
     [[nodiscard]] static Opal::Expected<Opal::ScopePtr<GenericWindow>, ErrorCode> Create(const GenericWindowDesc& desc);
 
-    ~WindowsWindow();
+    ~LinuxWindow();
 
     ErrorCode RequestClose() override;
 
@@ -72,30 +75,36 @@ public:
     [[nodiscard]] NativeDisplayHandle GetNativeDisplayHandle() const override;
 
 private:
-    WindowsWindow(const GenericWindowDesc& desc);
+    LinuxWindow(const GenericWindowDesc& desc);
 
     template <typename T, typename... Args>
     friend T* Opal::New(Opal::AllocatorBase* /*allocator*/, Args&&... /*args*/);
 
-    /** The Win32 half of Create: registers the class and creates the OS window. */
+    /** The event pump updates the cached geometry and reads the enabled/close flags. */
+    friend class LinuxApplication;
+
+    /** The XCB half of Create: creates the OS window and applies the desc. */
     ErrorCode Initialize(const GenericWindowDesc& desc);
 
-    /** Persistent decoration style of a windowed window. Does not include the initial state bits. */
-    static i32 GetWindowedStyle(const GenericWindowDesc& desc);
-    static i32 GetFullscreenStyle(const GenericWindowDesc& desc);
-    /** Style bits that only describe the state the window starts in, used solely at creation time. */
-    static i32 GetInitialStateStyle(const GenericWindowDesc& desc);
-    static i32 GetExtendedStyle(const GenericWindowDesc& desc);
+    /** Writes the _MOTIF_WM_HINTS decorations and functions derived from m_desc. */
+    void ApplyDecorations();
+    /** Writes WM_NORMAL_HINTS: position hints, plus a min==max size lock while not resizable. */
+    void ApplySizeConstraints();
+    /**
+     * Asks the window manager to add or remove up to two _NET_WM_STATE atoms
+     * (pass XCB_ATOM_NONE as second_atom for a single one).
+     */
+    void SendNetWmState(xcb_atom_t state_atom, xcb_atom_t second_atom, bool enable);
+    /** Reads the current _NET_WM_STATE property and checks it for the given atom. */
+    [[nodiscard]] bool HasNetWmState(xcb_atom_t state_atom) const;
 
-    /** Recomputes both styles from m_desc and m_mode and applies them to the live window. */
-    void ApplyStyle();
-    /** Enables or grays out the close entry of the system menu, following m_desc.supports_close. */
-    void ApplyCloseSupport();
-
-    NativeWindowHandle m_native_window_handle;
+    class LinuxApplication* m_app = nullptr;
+    xcb_window_t m_window = XCB_NONE;
     bool m_high_precision_cursor = false;
+    bool m_is_enabled = true;
+    /** Distinguishes RequestClose from a user close so close vetoing only blocks the latter. */
+    bool m_close_requested = false;
     GenericWindowMode m_mode = GenericWindowMode::Windowed;
-    WINDOWPLACEMENT m_pre_fullscreen_placement;
     i32 m_pos_x = 0;
     i32 m_pos_y = 0;
     i32 m_width = 0;
@@ -103,3 +112,5 @@ private:
 };
 
 }  // namespace Rndr
+
+#endif  // RNDR_LINUX

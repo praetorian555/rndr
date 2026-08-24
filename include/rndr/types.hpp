@@ -25,5 +25,6 @@ using char16 = Opal::char16;
 using uchar32 = Opal::uchar32;
 
 RNDR_DECLARE_HANDLE(NativeWindowHandle);
+RNDR_DECLARE_HANDLE(NativeDisplayHandle);
 
 }  // namespace Rndr

@@ -4,6 +4,8 @@
 
 #if RNDR_WINDOWS
 #include "rndr/platform/windows-window.hpp"
+#elif RNDR_LINUX
+#include "rndr/platform/linux-window.hpp"
 #endif
 
 Rndr::PlatformApplication::~PlatformApplication()
@@ -30,7 +32,7 @@ Opal::Expected<Opal::Ref<Rndr::GenericWindow>, Rndr::ErrorCode> Rndr::PlatformAp
     if (resolved_desc.monitor_index >= 0)
     {
         Opal::DynamicArray<MonitorInfo> monitors = GetMonitors();
-        if (resolved_desc.monitor_index < monitors.GetSize())
+        if (resolved_desc.monitor_index < static_cast<i32>(monitors.GetSize()))
         {
             const MonitorInfo& monitor = monitors[resolved_desc.monitor_index];
             resolved_desc.start_x = monitor.position.x + (monitor.size.x - resolved_desc.width) / 2;
@@ -40,6 +42,8 @@ Opal::Expected<Opal::Ref<Rndr::GenericWindow>, Rndr::ErrorCode> Rndr::PlatformAp
 
 #if RNDR_WINDOWS
     Opal::Expected<Opal::ScopePtr<GenericWindow>, ErrorCode> window_result = WindowsWindow::Create(resolved_desc);
+#elif RNDR_LINUX
+    Opal::Expected<Opal::ScopePtr<GenericWindow>, ErrorCode> window_result = LinuxWindow::Create(resolved_desc);
 #else
 #error "Platform not supported!"
 #endif
