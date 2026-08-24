@@ -367,6 +367,13 @@ namespace
  */
 VkExtent2D SelectExtent(const VkSurfaceCapabilitiesKHR& capabilities, const Rndr::GenericWindow& window)
 {
+    // The window says whether it is minimized, not the surface: Windows reports a zero currentExtent for a
+    // minimized window on its own, but an iconified X11 window keeps its last geometry and the surface
+    // keeps reporting it, so presenting would quietly continue into a window nobody can see.
+    if (window.IsMinimized())
+    {
+        return {.width = 0, .height = 0};
+    }
     constexpr Rndr::u32 k_extent_driven_by_window = 0xFFFFFFFF;
     if (capabilities.currentExtent.width != k_extent_driven_by_window)
     {
