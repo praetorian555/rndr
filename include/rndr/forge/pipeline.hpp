@@ -4,13 +4,15 @@
 
 #include "opal/container/array-view.h"
 #include "opal/container/dynamic-array.h"
+#include "opal/container/expected.h"
 #include "opal/container/ref.h"
 
+#include "rndr/error-codes.hpp"
+#include "rndr/forge/forward.hpp"
+#include "rndr/forge/types.hpp"
 #include "rndr/graphics-types.hpp"
 #include "rndr/math.hpp"
 #include "rndr/types.hpp"
-#include "rndr/forge/forward.hpp"
-#include "rndr/forge/types.hpp"
 
 namespace Rndr::Forge
 {
@@ -45,7 +47,7 @@ struct VertexInputDesc : Opal::ClonableBase<VertexInputDesc>
     OPAL_CLONE_FIELDS(bindings);
 
     Binding& AddBinding(u32 binding, u32 stride, DataRepetition input_rate = DataRepetition::PerVertex);
-    void AddAttribute(u32 binding, u32 location, PixelFormat format, u32 offset);
+    [[nodiscard]] ErrorCode AddAttribute(u32 binding, u32 location, PixelFormat format, u32 offset);
 
     /**
      * One binding holding every attribute the vertex shader reads, in location order.
@@ -56,13 +58,15 @@ struct VertexInputDesc : Opal::ClonableBase<VertexInputDesc>
      * members are declared in the order the shader reads them and nothing else. A vertex buffer laid out any
      * other way needs the desc written by hand; the pipeline checks either one against the shader.
      *
-     * @param vertex_shader Shader to read the attributes from. A stage other than the vertex one throws,
+     * @param vertex_shader Shader to read the attributes from. A stage other than the vertex one is refused,
      *                      since no other stage is fed from a vertex buffer.
      * @param binding Index of the single binding this produces.
      * @param input_rate Whether the binding advances per vertex or per instance.
+     * @return The desc, or ErrorCode::InvalidArgument for a shader of another stage or an attribute of a
+     *         format whose size this cannot work out.
      */
-    [[nodiscard]] static VertexInputDesc FromShader(const Shader& vertex_shader, u32 binding = 0,
-                                                    DataRepetition input_rate = DataRepetition::PerVertex);
+    [[nodiscard]] static Opal::Expected<VertexInputDesc, ErrorCode> FromShader(const Shader& vertex_shader, u32 binding = 0,
+                                                                               DataRepetition input_rate = DataRepetition::PerVertex);
 };
 
 /**
@@ -72,8 +76,7 @@ struct VertexInputDesc : Opal::ClonableBase<VertexInputDesc>
  * Saves repeating an offset and a size that the shader already fixed. A graphics pipeline given ranges of
  * its own checks them against the same reflection either way.
  */
-[[nodiscard]] Opal::DynamicArray<PushConstantRange> PushConstantRangesFromShaders(
-    Opal::ArrayView<const Opal::Ref<const Shader>> shaders);
+[[nodiscard]] Opal::DynamicArray<PushConstantRange> PushConstantRangesFromShaders(Opal::ArrayView<const Opal::Ref<const Shader>> shaders);
 
 struct RasterizerDesc
 {
@@ -267,9 +270,22 @@ class Pipeline
 {
 public:
     Pipeline() = default;
-    explicit Pipeline(const Device& device, const GraphicsPipelineDesc& desc);
-    explicit Pipeline(const Device& device, const ComputePipelineDesc& desc);
     ~Pipeline();
+
+    /**
+     * @param desc Shaders, vertex input, fixed function state and the attachment formats.
+     * @return The pipeline, ErrorCode::InvalidArgument when the desc disagrees with the shaders or asks for a
+     *         feature this device was not created with, ErrorCode::FeatureNotSupported for a sample count
+     *         this device cannot carry, or whatever the failing creation maps to.
+     */
+    [[nodiscard]] static Opal::Expected<Pipeline, ErrorCode> Create(const Device& device, const GraphicsPipelineDesc& desc);
+
+    /**
+     * @param desc The compute shader, its layouts and its specialization values.
+     * @return The pipeline, ErrorCode::InvalidArgument when a specialization value names no constant of the
+     *         shader or is of the wrong type, or whatever the failing creation maps to.
+     */
+    [[nodiscard]] static Opal::Expected<Pipeline, ErrorCode> Create(const Device& device, const ComputePipelineDesc& desc);
 
     Pipeline(const Pipeline&) = delete;
     Pipeline& operator=(const Pipeline&) = delete;
@@ -284,9 +300,8 @@ public:
     [[nodiscard]] VkPipelineBindPoint GetBindPoint() const { return m_bind_point; }
 
 private:
-    void CreatePipelineLayout(
-        Opal::ArrayView<const Opal::Ref<const DescriptorSetLayout>> descriptor_set_layouts,
-        Opal::ArrayView<const PushConstantRange> push_constant_ranges);
+    [[nodiscard]] ErrorCode CreatePipelineLayout(Opal::ArrayView<const Opal::Ref<const DescriptorSetLayout>> descriptor_set_layouts,
+                                                 Opal::ArrayView<const PushConstantRange> push_constant_ranges);
 
     Opal::Ref<const Device> m_device;
     VkPipeline m_pipeline = VK_NULL_HANDLE;

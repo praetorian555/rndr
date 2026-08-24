@@ -6,28 +6,29 @@
 
 #include "rndr/forge/device.hpp"
 #include "rndr/forge/shader.hpp"
-#include "rndr/forge/vulkan-exception.hpp"
+#include "rndr/forge/vulkan-result.hpp"
+#include "rndr/log.hpp"
 
 namespace
 {
-VkDescriptorType FromDescriptorType(Rndr::Forge::DescriptorType descriptor_type)
+Opal::Optional<VkDescriptorType> FromDescriptorType(Rndr::Forge::DescriptorType descriptor_type)
 {
     switch (descriptor_type)
     {
         case Rndr::Forge::DescriptorType::SampledImage:
-            return VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE;
+            return Opal::Optional<VkDescriptorType>(VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE);
         case Rndr::Forge::DescriptorType::Sampler:
-            return VK_DESCRIPTOR_TYPE_SAMPLER;
+            return Opal::Optional<VkDescriptorType>(VK_DESCRIPTOR_TYPE_SAMPLER);
         case Rndr::Forge::DescriptorType::CombinedImageSampler:
-            return VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+            return Opal::Optional<VkDescriptorType>(VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER);
         case Rndr::Forge::DescriptorType::ConstantBuffer:
-            return VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+            return Opal::Optional<VkDescriptorType>(VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER);
         case Rndr::Forge::DescriptorType::StorageBuffer:
-            return VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+            return Opal::Optional<VkDescriptorType>(VK_DESCRIPTOR_TYPE_STORAGE_BUFFER);
         case Rndr::Forge::DescriptorType::StorageImage:
-            return VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
+            return Opal::Optional<VkDescriptorType>(VK_DESCRIPTOR_TYPE_STORAGE_IMAGE);
         default:
-            throw Opal::Exception("Invalid descriptor type!");
+            return {};
     }
 }
 
@@ -63,39 +64,45 @@ VkShaderStageFlags FromShaderTypeBits(Rndr::ShaderTypeBits shader_types)
 
 }  // namespace
 
-void Rndr::Forge::DescriptorPoolDesc::Add(DescriptorType descriptor_type, u32 max_size)
+Rndr::ErrorCode Rndr::Forge::DescriptorPoolDesc::Add(DescriptorType descriptor_type, u32 max_size)
 {
     for (const auto& pair : descriptor_types)
     {
         if (pair.key == descriptor_type)
         {
-            throw Opal::Exception("Descriptor type already provided!");
+            RNDR_LOG_ERROR("Forge: this pool desc already names the descriptor type {}", static_cast<u32>(descriptor_type));
+            return ErrorCode::InvalidArgument;
         }
     }
     descriptor_types.PushBack({.key = descriptor_type, .value = max_size});
+    return ErrorCode::Success;
 }
 
-void Rndr::Forge::DescriptorSetLayoutDesc::AddBinding(u32 binding, DescriptorType descriptor_type, u32 descriptor_count,
-                                                      ShaderTypeBits shader_types,
-                                                      Opal::ArrayView<const Opal::Ref<const Sampler>> immutable_samplers,
-                                                      DescriptorBindingFlagBits flags)
+Rndr::ErrorCode Rndr::Forge::DescriptorSetLayoutDesc::AddBinding(u32 binding, DescriptorType descriptor_type, u32 descriptor_count,
+                                                                 ShaderTypeBits shader_types,
+                                                                 Opal::ArrayView<const Opal::Ref<const Sampler>> immutable_samplers,
+                                                                 DescriptorBindingFlagBits flags)
 {
     for (const Binding& existing : bindings)
     {
         if (existing.binding == binding)
         {
-            throw Opal::Exception("Binding index already used by this layout!");
+            RNDR_LOG_ERROR("Forge: binding index {} is already used by this layout", binding);
+            return ErrorCode::InvalidArgument;
         }
     }
     if (!immutable_samplers.IsEmpty())
     {
         if (descriptor_type != DescriptorType::Sampler && descriptor_type != DescriptorType::CombinedImageSampler)
         {
-            throw Opal::Exception("Immutable samplers are only valid on sampler descriptors!");
+            RNDR_LOG_ERROR("Forge: immutable samplers are only valid on sampler descriptors");
+            return ErrorCode::InvalidArgument;
         }
         if (immutable_samplers.GetSize() != static_cast<u64>(descriptor_count))
         {
-            throw Opal::Exception("Immutable sampler count must match the descriptor count!");
+            RNDR_LOG_ERROR("Forge: {} immutable samplers were given for a binding holding {} descriptors", immutable_samplers.GetSize(),
+                           descriptor_count);
+            return ErrorCode::InvalidArgument;
         }
     }
 
@@ -109,11 +116,13 @@ void Rndr::Forge::DescriptorSetLayoutDesc::AddBinding(u32 binding, DescriptorTyp
     {
         if (!sampler.IsValid())
         {
-            throw Opal::Exception("Immutable sampler is null!");
+            RNDR_LOG_ERROR("Forge: an immutable sampler of this binding is empty");
+            return ErrorCode::InvalidArgument;
         }
         new_binding.immutable_samplers.PushBack(sampler.Clone());
     }
     bindings.PushBack(std::move(new_binding));
+    return ErrorCode::Success;
 }
 
 // DescriptorPool
@@ -127,14 +136,17 @@ Rndr::Forge::DescriptorSetUpdateBinding Rndr::Forge::DescriptorSetUpdateBinding:
     return clone;
 }
 
-Rndr::Forge::DescriptorPool::DescriptorPool(const Device& device, const DescriptorPoolDesc& desc)
-    : m_device(device), m_desc(desc.Clone())
+Opal::Expected<Rndr::Forge::DescriptorPool, Rndr::ErrorCode> Rndr::Forge::DescriptorPool::Create(const Device& device,
+                                                                                                 const DescriptorPoolDesc& desc)
 {
+    using Result = Opal::Expected<DescriptorPool, ErrorCode>;
+
     Opal::DynamicArray<VkDescriptorPoolSize> pool_sizes;
     for (const auto& pair : desc.descriptor_types)
     {
+        RNDR_FORGE_TRANSLATE_EXPECTED(descriptor_type, FromDescriptorType(pair.key), "the descriptor type of a pool size", Result);
         const VkDescriptorPoolSize pool_size{
-            .type = FromDescriptorType(pair.key),
+            .type = descriptor_type,
             .descriptorCount = pair.value,
         };
         pool_sizes.PushBack(pool_size);
@@ -142,8 +154,13 @@ Rndr::Forge::DescriptorPool::DescriptorPool(const Device& device, const Descript
 
     if (pool_sizes.IsEmpty())
     {
-        throw Opal::Exception("Can't create pool with no descriptors!");
+        RNDR_LOG_ERROR("Forge: a descriptor pool needs at least one kind of descriptor");
+        return Result(ErrorCode::InvalidArgument);
     }
+
+    DescriptorPool pool;
+    pool.m_device = device;
+    pool.m_desc = desc.Clone();
 
     VkDescriptorPoolCreateInfo pool_info{};
     pool_info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
@@ -159,11 +176,9 @@ Rndr::Forge::DescriptorPool::DescriptorPool(const Device& device, const Descript
         pool_info.flags |= VK_DESCRIPTOR_POOL_CREATE_FREE_DESCRIPTOR_SET_BIT;
     }
 
-    const VkResult result = vkCreateDescriptorPool(device.GetNativeDevice(), &pool_info, nullptr, &m_pool);
-    if (result != VK_SUCCESS)
-    {
-        throw VulkanException(result, "vkCreateDescriptorPool");
-    }
+    RNDR_FORGE_VK_CHECK_EXPECTED(vkCreateDescriptorPool(device.GetNativeDevice(), &pool_info, nullptr, &pool.m_pool),
+                                 "vkCreateDescriptorPool", Result);
+    return Result(std::move(pool));
 }
 
 Rndr::Forge::DescriptorPool::~DescriptorPool()
@@ -201,17 +216,14 @@ void Rndr::Forge::DescriptorPool::Destroy()
     }
 }
 
-void Rndr::Forge::DescriptorPool::Reset()
+Rndr::ErrorCode Rndr::Forge::DescriptorPool::Reset()
 {
     if (m_pool == VK_NULL_HANDLE)
     {
-        return;
+        return ErrorCode::Success;
     }
-    const VkResult result = vkResetDescriptorPool(m_device->GetNativeDevice(), m_pool, 0);
-    if (result != VK_SUCCESS)
-    {
-        throw VulkanException(result, "vkResetDescriptorPool");
-    }
+    RNDR_FORGE_VK_CHECK(vkResetDescriptorPool(m_device->GetNativeDevice(), m_pool, 0), "vkResetDescriptorPool");
+    return ErrorCode::Success;
 }
 
 VkDevice Rndr::Forge::DescriptorPool::GetNativeDevice() const
@@ -268,7 +280,7 @@ bool CoversStage(Rndr::ShaderTypeBits declared, Rndr::ShaderTypeBits stage)
  * declared - the sample's own metallic roughness texture is bound and, for now, unread. Those bindings keep
  * their name empty and stay out of the by-name lookup, which is the whole of the cost.
  */
-void CheckAgainstShaders(Rndr::Forge::DescriptorSetLayoutDesc& desc)
+Rndr::ErrorCode CheckAgainstShaders(Rndr::Forge::DescriptorSetLayoutDesc& desc)
 {
     for (Rndr::Forge::DescriptorSetLayoutDesc::Binding& target : desc.bindings)
     {
@@ -296,25 +308,25 @@ void CheckAgainstShaders(Rndr::Forge::DescriptorSetLayoutDesc& desc)
         }
         if (found->descriptor_type != target.descriptor_type)
         {
-            throw Opal::Exception(Opal::StringEx("Binding ") + target.binding + " is declared as a " +
-                                  DescriptorTypeName(found->descriptor_type) + " by the shader and as a " +
-                                  DescriptorTypeName(target.descriptor_type) + " here!");
+            RNDR_LOG_ERROR("Forge: binding {} is declared as a {} by the shader and as a {} here", target.binding,
+                           DescriptorTypeName(found->descriptor_type), DescriptorTypeName(target.descriptor_type));
+            return Rndr::ErrorCode::InvalidArgument;
         }
         // A layout may hold more descriptors than the shader indexes - that is how a bindless array is
         // written - but never fewer.
         if (target.descriptor_count < found->descriptor_count)
         {
-            throw Opal::Exception(Opal::StringEx("Binding ") + target.binding + " holds " + target.descriptor_count +
-                                  " descriptors and the shader reads " + found->descriptor_count + " of them!");
+            RNDR_LOG_ERROR("Forge: binding {} holds {} descriptors and the shader reads {} of them", target.binding,
+                           target.descriptor_count, found->descriptor_count);
+            return Rndr::ErrorCode::InvalidArgument;
         }
         for (const Rndr::ShaderTypeBits stage : {Rndr::ShaderTypeBits::Vertex, Rndr::ShaderTypeBits::Fragment,
-                                                 Rndr::ShaderTypeBits::Compute, Rndr::ShaderTypeBits::Task,
-                                                 Rndr::ShaderTypeBits::Mesh})
+                                                 Rndr::ShaderTypeBits::Compute, Rndr::ShaderTypeBits::Task, Rndr::ShaderTypeBits::Mesh})
         {
             if (!!(declaring_stages & stage) && !CoversStage(target.shader_types, stage))
             {
-                throw Opal::Exception(Opal::StringEx("Binding ") + target.binding +
-                                      " is read by a stage this layout does not name!");
+                RNDR_LOG_ERROR("Forge: binding {} is read by a stage this layout does not name", target.binding);
+                return Rndr::ErrorCode::InvalidArgument;
             }
         }
         target.name = found->name.Clone();
@@ -341,26 +353,33 @@ void CheckAgainstShaders(Rndr::Forge::DescriptorSetLayoutDesc& desc)
             }
             if (!present)
             {
-                throw Opal::Exception(Opal::StringEx("A shader reads ") + declared.name.GetData() + " at binding " +
-                                      declared.binding + " of set " + desc.set_index + " and this layout does not declare it!");
+                RNDR_LOG_ERROR("Forge: a shader reads {} at binding {} of set {} and this layout does not declare it",
+                               reinterpret_cast<const char*>(declared.name.GetData()), declared.binding, desc.set_index);
+                return Rndr::ErrorCode::InvalidArgument;
             }
         }
     }
+    return Rndr::ErrorCode::Success;
 }
 
 }  // namespace
 
-Rndr::Forge::DescriptorSetLayout::DescriptorSetLayout(const Device& device, const DescriptorSetLayoutDesc& desc)
-    : m_device(device), m_desc(desc.Clone())
+Opal::Expected<Rndr::Forge::DescriptorSetLayout, Rndr::ErrorCode> Rndr::Forge::DescriptorSetLayout::Create(
+    const Device& device, const DescriptorSetLayoutDesc& desc)
 {
-    // Checked against m_desc rather than desc: the names it fills in are what this layout hands to every set
-    // allocated from it, and desc is the caller's to keep unchanged.
-    if (!m_desc.shaders.IsEmpty())
+    using Result = Opal::Expected<DescriptorSetLayout, ErrorCode>;
+
+    DescriptorSetLayout layout;
+    layout.m_device = device;
+    layout.m_desc = desc.Clone();
+    // Checked against the clone rather than desc: the names it fills in are what this layout hands to every
+    // set allocated from it, and desc is the caller's to keep unchanged.
+    if (!layout.m_desc.shaders.IsEmpty())
     {
-        CheckAgainstShaders(m_desc);
+        RNDR_FORGE_CHECK_EXPECTED(CheckAgainstShaders(layout.m_desc), Result);
         // Dropped once they have been read. Nothing later needs them, and keeping the references would make
         // GetDesc() hand out handles to shaders the caller was told it may destroy.
-        m_desc.shaders.Clear();
+        layout.m_desc.shaders.Clear();
     }
     Opal::DynamicArray<VkDescriptorSetLayoutBinding> bindings(desc.bindings.GetSize());
     Opal::DynamicArray<VkDescriptorBindingFlags> binding_flags_array(desc.bindings.GetSize());
@@ -390,7 +409,9 @@ Rndr::Forge::DescriptorSetLayout::DescriptorSetLayout(const Device& device, cons
         const DescriptorSetLayoutDesc::Binding& source = desc.bindings[i];
         VkDescriptorSetLayoutBinding& binding = bindings[i];
         binding.binding = source.binding;
-        binding.descriptorType = FromDescriptorType(source.descriptor_type);
+        RNDR_FORGE_TRANSLATE_EXPECTED(descriptor_type, FromDescriptorType(source.descriptor_type),
+                                      "the descriptor type of a layout binding", Result);
+        binding.descriptorType = descriptor_type;
         binding.descriptorCount = source.descriptor_count;
         binding.stageFlags = FromShaderTypeBits(source.shader_types);
         binding.pImmutableSamplers = nullptr;
@@ -409,26 +430,29 @@ Rndr::Forge::DescriptorSetLayout::DescriptorSetLayout(const Device& device, cons
         {
             if (!features.update_after_bind_descriptors)
             {
-                throw Opal::Exception("An update after bind binding needs the device created with "
-                                      "DeviceFeatures::update_after_bind_descriptors.");
+                RNDR_LOG_ERROR(
+                    "Forge: an update after bind binding needs the device created with "
+                    "DeviceFeatures::update_after_bind_descriptors");
+                return Result(ErrorCode::InvalidArgument);
             }
             has_update_after_bind = true;
         }
         if (!!(source.flags & DescriptorBindingFlagBits::PartiallyBound) && !features.partially_bound_descriptors)
         {
-            throw Opal::Exception("A partially bound binding needs the device created with "
-                                  "DeviceFeatures::partially_bound_descriptors.");
+            RNDR_LOG_ERROR("Forge: a partially bound binding needs the device created with DeviceFeatures::partially_bound_descriptors");
+            return Result(ErrorCode::InvalidArgument);
         }
         if (!!(source.flags & DescriptorBindingFlagBits::VariableDescriptorCount))
         {
             if (!features.variable_descriptor_count)
             {
-                throw Opal::Exception("A variable count binding needs the device created with "
-                                      "DeviceFeatures::variable_descriptor_count.");
+                RNDR_LOG_ERROR("Forge: a variable count binding needs the device created with DeviceFeatures::variable_descriptor_count");
+                return Result(ErrorCode::InvalidArgument);
             }
             if (source.binding != highest_binding_index)
             {
-                throw Opal::Exception("Only the binding with the highest index may have a variable descriptor count!");
+                RNDR_LOG_ERROR("Forge: only the binding with the highest index may have a variable descriptor count");
+                return Result(ErrorCode::InvalidArgument);
             }
         }
     }
@@ -447,11 +471,9 @@ Rndr::Forge::DescriptorSetLayout::DescriptorSetLayout(const Device& device, cons
     layout_info.flags = has_update_after_bind ? VK_DESCRIPTOR_SET_LAYOUT_CREATE_UPDATE_AFTER_BIND_POOL_BIT : 0;
     layout_info.pNext = &binding_flags_info;
 
-    const VkResult result = vkCreateDescriptorSetLayout(device.GetNativeDevice(), &layout_info, nullptr, &m_layout);
-    if (result != VK_SUCCESS)
-    {
-        throw VulkanException(result, "vkCreateDescriptorSetLayout");
-    }
+    RNDR_FORGE_VK_CHECK_EXPECTED(vkCreateDescriptorSetLayout(device.GetNativeDevice(), &layout_info, nullptr, &layout.m_layout),
+                                 "vkCreateDescriptorSetLayout", Result);
+    return Result(std::move(layout));
 }
 
 Rndr::Forge::DescriptorSetLayout::~DescriptorSetLayout()
@@ -491,10 +513,16 @@ void Rndr::Forge::DescriptorSetLayout::Destroy()
 
 // DescriptorSet
 
-Rndr::Forge::DescriptorSet::DescriptorSet(const DescriptorPool& pool, const DescriptorSetLayout& layout,
-                                                   u32 variable_descriptor_count)
-    : m_device(pool.GetNativeDevice()), m_pool(pool)
+Opal::Expected<Rndr::Forge::DescriptorSet, Rndr::ErrorCode> Rndr::Forge::DescriptorSet::Create(const DescriptorPool& pool,
+                                                                                               const DescriptorSetLayout& layout,
+                                                                                               u32 variable_descriptor_count)
 {
+    using Result = Opal::Expected<DescriptorSet, ErrorCode>;
+
+    DescriptorSet descriptor_set;
+    descriptor_set.m_device = pool.GetNativeDevice();
+    descriptor_set.m_pool = pool;
+
     // The binding a variable count applies to, which is the one the layout marked and there is at most one.
     const DescriptorSetLayoutDesc::Binding* variable_binding = nullptr;
     bool layout_needs_update_after_bind_pool = false;
@@ -511,19 +539,25 @@ Rndr::Forge::DescriptorSet::DescriptorSet(const DescriptorPool& pool, const Desc
     // one, and the two are created apart, so this is the first place that can see both.
     if (layout_needs_update_after_bind_pool && !pool.GetDesc().use_update_after_bind)
     {
-        throw Opal::Exception("A layout with an update after bind binding needs a pool created with "
-                              "DescriptorPoolDesc::use_update_after_bind.");
+        RNDR_LOG_ERROR(
+            "Forge: a layout with an update after bind binding needs a pool created with "
+            "DescriptorPoolDesc::use_update_after_bind");
+        return Result(ErrorCode::InvalidArgument);
     }
     if (variable_descriptor_count > 0)
     {
         if (variable_binding == nullptr)
         {
-            throw Opal::Exception("A variable descriptor count needs a layout binding with "
-                                  "DescriptorBindingFlagBits::VariableDescriptorCount.");
+            RNDR_LOG_ERROR(
+                "Forge: a variable descriptor count needs a layout binding with "
+                "DescriptorBindingFlagBits::VariableDescriptorCount");
+            return Result(ErrorCode::InvalidArgument);
         }
         if (variable_descriptor_count > variable_binding->descriptor_count)
         {
-            throw Opal::Exception("A variable descriptor count cannot be above the descriptor_count of its binding.");
+            RNDR_LOG_ERROR("Forge: a variable descriptor count of {} is above the {} its binding declares", variable_descriptor_count,
+                           variable_binding->descriptor_count);
+            return Result(ErrorCode::InvalidArgument);
         }
     }
 
@@ -543,25 +577,23 @@ Rndr::Forge::DescriptorSet::DescriptorSet(const DescriptorPool& pool, const Desc
         alloc_info.pNext = &variable_count_info;
     }
 
-    const VkResult result = vkAllocateDescriptorSets(m_device, &alloc_info, &m_set);
-    if (result != VK_SUCCESS)
-    {
-        throw VulkanException(result, "vkAllocateDescriptorSets");
-    }
+    RNDR_FORGE_VK_CHECK_EXPECTED(vkAllocateDescriptorSets(descriptor_set.m_device, &alloc_info, &descriptor_set.m_set),
+                                 "vkAllocateDescriptorSets", Result);
 
     // Copied rather than referenced: a layout may be destroyed while sets allocated from it live on,
     // and this is the whole of what the Update overloads need from it.
-    m_binding_types.Reserve(layout.GetDesc().bindings.GetSize());
+    descriptor_set.m_binding_types.Reserve(layout.GetDesc().bindings.GetSize());
     for (const DescriptorSetLayoutDesc::Binding& binding : layout.GetDesc().bindings)
     {
         // The variable binding holds what this set was allocated with, not what the layout declared, so an
         // element inside the declared array but outside the allocated one is caught here as well.
         const bool is_variable = variable_descriptor_count > 0 && &binding == variable_binding;
-        m_binding_types.PushBack({.binding = binding.binding,
-                                  .descriptor_type = binding.descriptor_type,
-                                  .descriptor_count = is_variable ? variable_descriptor_count : binding.descriptor_count,
-                                  .name = binding.name.Clone()});
+        descriptor_set.m_binding_types.PushBack({.binding = binding.binding,
+                                                 .descriptor_type = binding.descriptor_type,
+                                                 .descriptor_count = is_variable ? variable_descriptor_count : binding.descriptor_count,
+                                                 .name = binding.name.Clone()});
     }
+    return Result(std::move(descriptor_set));
 }
 
 Rndr::Forge::DescriptorSet::~DescriptorSet()
@@ -570,8 +602,7 @@ Rndr::Forge::DescriptorSet::~DescriptorSet()
 }
 
 Rndr::Forge::DescriptorSet::DescriptorSet(DescriptorSet&& other) noexcept
-    : m_device(other.m_device), m_set(other.m_set), m_pool(std::move(other.m_pool)),
-      m_binding_types(std::move(other.m_binding_types))
+    : m_device(other.m_device), m_set(other.m_set), m_pool(std::move(other.m_pool)), m_binding_types(std::move(other.m_binding_types))
 {
     other.m_set = VK_NULL_HANDLE;
     other.m_device = VK_NULL_HANDLE;
@@ -608,7 +639,7 @@ void Rndr::Forge::DescriptorSet::Destroy()
     m_binding_types.Clear();
 }
 
-void Rndr::Forge::DescriptorSet::Update(Opal::ArrayView<const DescriptorSetUpdateBinding> updates)
+Rndr::ErrorCode Rndr::Forge::DescriptorSet::Update(Opal::ArrayView<const DescriptorSetUpdateBinding> updates)
 {
     // One slot per update in each array, written by index. PushBack would grow them past the size they were
     // built with, and the pointers already handed to earlier writes would follow the old allocation.
@@ -622,33 +653,41 @@ void Rndr::Forge::DescriptorSet::Update(Opal::ArrayView<const DescriptorSetUpdat
         descriptor_write.pNext = nullptr;
         descriptor_write.dstSet = m_set;
         // Vulkan writes one descriptor per element and reports nothing when the element is past the end of
-        // the binding, so an off-by-one in a bindless array lands somewhere undefined rather than throwing.
-        const BindingInfo& binding_info = FindBinding(updates[i].binding);
-        if (updates[i].array_element >= binding_info.descriptor_count)
+        // the binding, so an off-by-one in a bindless array lands somewhere undefined rather than here.
+        const Opal::Expected<const BindingInfo&, ErrorCode> binding_info = FindBinding(updates[i].binding);
+        if (!binding_info.HasValue())
         {
-            throw Opal::Exception(Opal::StringEx("Binding ") + updates[i].binding + " holds " + binding_info.descriptor_count +
-                                  " descriptors, so there is no element " + updates[i].array_element + " to write!");
+            return binding_info.GetError();
+        }
+        if (updates[i].array_element >= binding_info.GetValue().descriptor_count)
+        {
+            RNDR_LOG_ERROR("Forge: binding {} holds {} descriptors, so there is no element {} to write", updates[i].binding,
+                           binding_info.GetValue().descriptor_count, updates[i].array_element);
+            return ErrorCode::OutOfBounds;
         }
         descriptor_write.dstBinding = updates[i].binding;
         descriptor_write.dstArrayElement = updates[i].array_element;
-        descriptor_write.descriptorType = FromDescriptorType(updates[i].descriptor_type);
+        RNDR_FORGE_TRANSLATE(descriptor_type, FromDescriptorType(updates[i].descriptor_type),
+                             "the descriptor type of a descriptor set update");
+        descriptor_write.descriptorType = descriptor_type;
         descriptor_write.descriptorCount = 1;
 
-        if (updates[i].descriptor_type == DescriptorType::StorageBuffer ||
-            updates[i].descriptor_type == DescriptorType::ConstantBuffer)
+        if (updates[i].descriptor_type == DescriptorType::StorageBuffer || updates[i].descriptor_type == DescriptorType::ConstantBuffer)
         {
             const DescriptorSetUpdateBinding::BufferInfo& buffer_info =
                 updates[i].resource_info.Get<DescriptorSetUpdateBinding::BufferInfo>();
             const u64 buffer_size = buffer_info.buffer->GetSize();
             if (buffer_info.size == 0)
             {
-                throw Opal::Exception("Descriptor buffer range is empty!");
+                RNDR_LOG_ERROR("Forge: the buffer range of a descriptor update is empty");
+                return ErrorCode::InvalidArgument;
             }
             // Written so that a large offset cannot overflow the sum and pass, the way Buffer::Update checks it.
             if (buffer_info.offset > buffer_size ||
                 (buffer_info.size != k_whole_buffer && buffer_info.size > buffer_size - buffer_info.offset))
             {
-                throw Opal::Exception("Descriptor buffer range reaches past the end of the buffer!");
+                RNDR_LOG_ERROR("Forge: the buffer range of a descriptor update reaches past the end of the buffer");
+                return ErrorCode::OutOfBounds;
             }
             buffer_infos[i] = {.buffer = buffer_info.buffer->GetNativeBuffer(),
                                .offset = buffer_info.offset,
@@ -668,76 +707,111 @@ void Rndr::Forge::DescriptorSet::Update(Opal::ArrayView<const DescriptorSetUpdat
     }
 
     vkUpdateDescriptorSets(m_device, static_cast<u32>(descriptor_writes.GetSize()), descriptor_writes.GetData(), 0, nullptr);
+    return ErrorCode::Success;
 }
 
-const Rndr::Forge::DescriptorSet::BindingInfo& Rndr::Forge::DescriptorSet::FindBinding(u32 binding) const
+Opal::Expected<const Rndr::Forge::DescriptorSet::BindingInfo&, Rndr::ErrorCode> Rndr::Forge::DescriptorSet::FindBinding(u32 binding) const
 {
+    using Result = Opal::Expected<const BindingInfo&, ErrorCode>;
+
     // A linear scan: a layout has a handful of bindings, and a map would cost more to build than this
     // saves to search.
     for (const BindingInfo& binding_info : m_binding_types)
     {
         if (binding_info.binding == binding)
         {
-            return binding_info;
+            return Result(binding_info);
         }
     }
-    throw Opal::Exception(Opal::StringEx("The layout of this descriptor set has no binding ") + binding + "!");
+    RNDR_LOG_ERROR("Forge: the layout of this descriptor set has no binding {}", binding);
+    return Result(ErrorCode::InvalidArgument);
 }
 
-Rndr::Forge::DescriptorType Rndr::Forge::DescriptorSet::GetBindingDescriptorType(u32 binding) const
+Opal::Expected<Rndr::Forge::DescriptorType, Rndr::ErrorCode> Rndr::Forge::DescriptorSet::GetBindingDescriptorType(u32 binding) const
 {
-    return FindBinding(binding).descriptor_type;
+    using Result = Opal::Expected<DescriptorType, ErrorCode>;
+
+    const Opal::Expected<const BindingInfo&, ErrorCode> binding_info = FindBinding(binding);
+    if (!binding_info.HasValue())
+    {
+        return Result(binding_info.GetError());
+    }
+    return Result(binding_info.GetValue().descriptor_type);
 }
 
-Rndr::u32 Rndr::Forge::DescriptorSet::GetBindingIndex(const Opal::StringUtf8& name) const
+Opal::Expected<Rndr::u32, Rndr::ErrorCode> Rndr::Forge::DescriptorSet::GetBindingIndex(const Opal::StringUtf8& name) const
 {
+    using Result = Opal::Expected<u32, ErrorCode>;
+
     bool any_named = false;
     for (const BindingInfo& binding_info : m_binding_types)
     {
         any_named = any_named || !binding_info.name.IsEmpty();
         if (binding_info.name == name)
         {
-            return binding_info.binding;
+            return Result(binding_info.binding);
         }
     }
     if (!any_named)
     {
-        throw Opal::Exception("This descriptor set carries no binding names - its layout was built without "
-                              "DescriptorSetLayoutDesc::shaders, which is where the names come from.");
+        RNDR_LOG_ERROR(
+            "Forge: this descriptor set carries no binding names - its layout was built without "
+            "DescriptorSetLayoutDesc::shaders, which is where the names come from");
+        return Result(ErrorCode::InvalidArgument);
     }
-    throw Opal::Exception(Opal::StringEx("No shader of this descriptor set declares a binding called ") + name.GetData() + "!");
+    RNDR_LOG_ERROR("Forge: no shader of this descriptor set declares a binding called {}", reinterpret_cast<const char*>(name.GetData()));
+    return Result(ErrorCode::InvalidArgument);
 }
 
-void Rndr::Forge::DescriptorSet::Update(const Opal::StringUtf8& name, const Texture& texture, const Sampler& sampler,
-                                        ImageLayout texture_layout, u32 array_element)
+Rndr::ErrorCode Rndr::Forge::DescriptorSet::Update(const Opal::StringUtf8& name, const Texture& texture, const Sampler& sampler,
+                                                   ImageLayout texture_layout, u32 array_element)
 {
-    Update(GetBindingIndex(name), texture, sampler, texture_layout, array_element);
+    const Opal::Expected<u32, ErrorCode> binding = GetBindingIndex(name);
+    if (!binding.HasValue())
+    {
+        return binding.GetError();
+    }
+    return Update(binding.GetValue(), texture, sampler, texture_layout, array_element);
 }
 
-void Rndr::Forge::DescriptorSet::Update(const Opal::StringUtf8& name, const Buffer& buffer, u64 offset, u64 size,
-                                        u32 array_element)
+Rndr::ErrorCode Rndr::Forge::DescriptorSet::Update(const Opal::StringUtf8& name, const Buffer& buffer, u64 offset, u64 size,
+                                                   u32 array_element)
 {
-    Update(GetBindingIndex(name), buffer, offset, size, array_element);
+    const Opal::Expected<u32, ErrorCode> binding = GetBindingIndex(name);
+    if (!binding.HasValue())
+    {
+        return binding.GetError();
+    }
+    return Update(binding.GetValue(), buffer, offset, size, array_element);
 }
 
-void Rndr::Forge::DescriptorSet::Update(u32 binding, const Texture& texture, const Sampler& sampler,
-                                        ImageLayout texture_layout, u32 array_element)
+Rndr::ErrorCode Rndr::Forge::DescriptorSet::Update(u32 binding, const Texture& texture, const Sampler& sampler, ImageLayout texture_layout,
+                                                   u32 array_element)
 {
+    const Opal::Expected<DescriptorType, ErrorCode> descriptor_type = GetBindingDescriptorType(binding);
+    if (!descriptor_type.HasValue())
+    {
+        return descriptor_type.GetError();
+    }
     const DescriptorSetUpdateBinding update{
-        .descriptor_type = GetBindingDescriptorType(binding),
+        .descriptor_type = descriptor_type.GetValue(),
         .binding = binding,
         .array_element = array_element,
-        .resource_info =
-            DescriptorSetUpdateBinding::TextureInfo{.sampler = sampler, .texture = texture, .texture_layout = texture_layout}};
-    Update({&update, 1});
+        .resource_info = DescriptorSetUpdateBinding::TextureInfo{.sampler = sampler, .texture = texture, .texture_layout = texture_layout}};
+    return Update({&update, 1});
 }
 
-void Rndr::Forge::DescriptorSet::Update(u32 binding, const Buffer& buffer, u64 offset, u64 size, u32 array_element)
+Rndr::ErrorCode Rndr::Forge::DescriptorSet::Update(u32 binding, const Buffer& buffer, u64 offset, u64 size, u32 array_element)
 {
+    const Opal::Expected<DescriptorType, ErrorCode> descriptor_type = GetBindingDescriptorType(binding);
+    if (!descriptor_type.HasValue())
+    {
+        return descriptor_type.GetError();
+    }
     const DescriptorSetUpdateBinding update{
-        .descriptor_type = GetBindingDescriptorType(binding),
+        .descriptor_type = descriptor_type.GetValue(),
         .binding = binding,
         .array_element = array_element,
         .resource_info = DescriptorSetUpdateBinding::BufferInfo{.buffer = buffer, .offset = offset, .size = size}};
-    Update({&update, 1});
+    return Update({&update, 1});
 }

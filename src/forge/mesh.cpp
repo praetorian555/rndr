@@ -1,6 +1,6 @@
 #include "rndr/forge/mesh.hpp"
 
-#include "opal/exceptions.h"
+#include "rndr/log.hpp"
 
 #if defined(RNDR_ASSIMP)
 #include "assimp/cimport.h"
@@ -13,12 +13,13 @@
 #include "rndr/math.hpp"
 #endif
 
-void Rndr::Forge::LoadMesh(const Opal::StringUtf8& file_path, Mesh& out_mesh)
+Rndr::ErrorCode Rndr::Forge::LoadMesh(const Opal::StringUtf8& file_path, Mesh& out_mesh)
 {
 #if !defined(RNDR_ASSIMP)
     (void)file_path;
     (void)out_mesh;
-    throw Opal::Exception("LoadMesh requires Assimp support; rebuild with RNDR_ASSIMP=ON.");
+    RNDR_LOG_ERROR("Forge: LoadMesh needs assimp; rebuild with RNDR_ASSIMP=ON");
+    return ErrorCode::FeatureNotSupported;
 #else
     constexpr u32 k_ai_process_flags = aiProcess_JoinIdenticalVertices | aiProcess_Triangulate | aiProcess_GenSmoothNormals |
                                        aiProcess_LimitBoneWeights | aiProcess_SplitLargeMeshes | aiProcess_ImproveCacheLocality |
@@ -27,24 +28,28 @@ void Rndr::Forge::LoadMesh(const Opal::StringUtf8& file_path, Mesh& out_mesh)
     const aiScene* scene = aiImportFile(*file_path, k_ai_process_flags);
     if (scene == nullptr || !scene->HasMeshes())
     {
-        throw Opal::Exception("Failed to load mesh file or file contains no meshes!");
+        RNDR_LOG_ERROR("Forge: the mesh file could not be loaded or holds no mesh: {}", reinterpret_cast<const char*>(file_path.GetData()));
+        return ErrorCode::FileNotFound;
     }
 
     const aiMesh* ai_mesh = scene->mMeshes[0];
     if (ai_mesh->mVertices == nullptr)
     {
         aiReleaseImport(scene);
-        throw Opal::Exception("Mesh has no position data!");
+        RNDR_LOG_ERROR("Forge: the mesh has no position data");
+        return ErrorCode::UnsupportedFormat;
     }
     if (ai_mesh->mNormals == nullptr)
     {
         aiReleaseImport(scene);
-        throw Opal::Exception("Mesh has no normal data!");
+        RNDR_LOG_ERROR("Forge: the mesh has no normal data");
+        return ErrorCode::UnsupportedFormat;
     }
     if (ai_mesh->mTextureCoords[0] == nullptr)
     {
         aiReleaseImport(scene);
-        throw Opal::Exception("Mesh has no UV data!");
+        RNDR_LOG_ERROR("Forge: the mesh has no UV data");
+        return ErrorCode::UnsupportedFormat;
     }
 
     const Opal::StringUtf8 mesh_name = Opal::Paths::GetFileName(file_path).GetValue();
@@ -83,5 +88,6 @@ void Rndr::Forge::LoadMesh(const Opal::StringUtf8& file_path, Mesh& out_mesh)
     }
 
     aiReleaseImport(scene);
+    return ErrorCode::Success;
 #endif
 }

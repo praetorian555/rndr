@@ -383,8 +383,8 @@ TEST_CASE("Forge compute dispatch and readback", "[forge]")
     // Wiped first, so nothing a previous run left behind can pass for a successful dispatch.
     REQUIRE(output.Update(zeros) == ErrorCode::Success);
 
-    const Forge::Shader compute_shader =
-        Forge::Shader::FromSourceInMemory(fixture.device, k_compute_source, {.entry_point = "main_compute", .cache = GetShaderCache()});
+    const Forge::Shader compute_shader = ForgeTest::Unwrap(
+        Forge::Shader::FromSourceInMemory(fixture.device, k_compute_source, {.entry_point = "main_compute", .cache = GetShaderCache()}));
     REQUIRE(compute_shader.IsValid());
     REQUIRE(compute_shader.GetShaderStage() == ShaderTypeBits::Compute);
 
@@ -392,7 +392,7 @@ TEST_CASE("Forge compute dispatch and readback", "[forge]")
     pipeline_desc.shader = compute_shader;
     pipeline_desc.push_constant_ranges.PushBack(
         {.shader_stages = ShaderTypeBits::Compute, .offset = 0, .size = sizeof(VkDeviceAddress)});
-    const Forge::Pipeline pipeline(fixture.device, pipeline_desc);
+    const Forge::Pipeline pipeline = ForgeTest::Unwrap(Forge::Pipeline::Create(fixture.device, pipeline_desc));
     REQUIRE(pipeline.IsValid());
 
     const VkDeviceAddress output_address = output.GetNativeDeviceAddress();
@@ -1213,22 +1213,22 @@ TEST_CASE("Forge bindless descriptor bindings", "[forge]")
     constexpr i32 k_group_size = 64;
 
     Forge::DescriptorPoolDesc pool_desc;
-    pool_desc.Add(Forge::DescriptorType::StorageBuffer, k_max_descriptors);
+    REQUIRE(pool_desc.Add(Forge::DescriptorType::StorageBuffer, k_max_descriptors) == ErrorCode::Success);
     pool_desc.max_sets = 1;
     pool_desc.use_update_after_bind = true;
-    const Forge::DescriptorPool pool(device, pool_desc);
+    const Forge::DescriptorPool pool = ForgeTest::Unwrap(Forge::DescriptorPool::Create(device, pool_desc));
 
     Forge::DescriptorSetLayoutDesc layout_desc;
-    layout_desc.AddBinding(0, Forge::DescriptorType::StorageBuffer, k_max_descriptors, ShaderTypeBits::Compute, {},
+    REQUIRE(layout_desc.AddBinding(0, Forge::DescriptorType::StorageBuffer, k_max_descriptors, ShaderTypeBits::Compute, {},
                            Forge::DescriptorBindingFlagBits::PartiallyBound | Forge::DescriptorBindingFlagBits::UpdateAfterBind |
-                               Forge::DescriptorBindingFlagBits::VariableDescriptorCount);
-    const Forge::DescriptorSetLayout layout(device, layout_desc);
+                               Forge::DescriptorBindingFlagBits::VariableDescriptorCount) == ErrorCode::Success);
+    const Forge::DescriptorSetLayout layout = ForgeTest::Unwrap(Forge::DescriptorSetLayout::Create(device, layout_desc));
 
     SECTION("A partially bound array is written and read where it was written")
     {
         // Two of the four descriptors, so the variable count is doing something, and only the second one is
         // ever written, so partially bound is doing something too.
-        Forge::DescriptorSet descriptor_set(pool, layout, k_used_descriptors);
+        Forge::DescriptorSet descriptor_set = ForgeTest::Unwrap(Forge::DescriptorSet::Create(pool, layout, k_used_descriptors));
 
         Forge::Buffer output = ForgeTest::Unwrap(Forge::Buffer::Create(device, {.size = k_element_count * sizeof(u32),
                                       .usage = Forge::BufferUsageBits::StorageBuffer,
@@ -1244,14 +1244,14 @@ TEST_CASE("Forge bindless descriptor bindings", "[forge]")
             .binding = 0,
             .array_element = 1,
             .resource_info = Forge::DescriptorSetUpdateBinding::BufferInfo{.buffer = output}});
-        descriptor_set.Update(updates);
+        REQUIRE(descriptor_set.Update(updates) == ErrorCode::Success);
 
-        const Forge::Shader shader =
-            Forge::Shader::FromSourceInMemory(device, k_bindless_source, {.entry_point = "main_bindless", .cache = GetShaderCache()});
+        const Forge::Shader shader = ForgeTest::Unwrap(
+            Forge::Shader::FromSourceInMemory(device, k_bindless_source, {.entry_point = "main_bindless", .cache = GetShaderCache()}));
         Forge::ComputePipelineDesc pipeline_desc;
         pipeline_desc.shader = shader;
         pipeline_desc.descriptor_set_layouts.PushBack(Opal::Ref<const Forge::DescriptorSetLayout>(layout));
-        const Forge::Pipeline pipeline(device, pipeline_desc);
+        const Forge::Pipeline pipeline = ForgeTest::Unwrap(Forge::Pipeline::Create(device, pipeline_desc));
 
         REQUIRE(Forge::ImmediateSubmit(device, queue,
                                [&](Forge::CommandBuffer& command_buffer)
@@ -1270,30 +1270,30 @@ TEST_CASE("Forge bindless descriptor bindings", "[forge]")
     }
     SECTION("A variable count above the binding's descriptor count throws")
     {
-        REQUIRE_THROWS_AS(Forge::DescriptorSet(pool, layout, k_max_descriptors + 1), Opal::Exception);
+        REQUIRE_FALSE(Forge::DescriptorSet::Create(pool, layout, k_max_descriptors + 1).HasValue());
     }
     SECTION("A variable count without a binding that allows it throws")
     {
         Forge::DescriptorSetLayoutDesc plain_desc;
-        plain_desc.AddBinding(0, Forge::DescriptorType::StorageBuffer, 1, ShaderTypeBits::Compute);
-        const Forge::DescriptorSetLayout plain_layout(device, plain_desc);
-        REQUIRE_THROWS_AS(Forge::DescriptorSet(pool, plain_layout, 1), Opal::Exception);
+        REQUIRE(plain_desc.AddBinding(0, Forge::DescriptorType::StorageBuffer, 1, ShaderTypeBits::Compute) == ErrorCode::Success);
+        const Forge::DescriptorSetLayout plain_layout = ForgeTest::Unwrap(Forge::DescriptorSetLayout::Create(device, plain_desc));
+        REQUIRE_FALSE(Forge::DescriptorSet::Create(pool, plain_layout, 1).HasValue());
     }
     SECTION("A variable count on anything but the highest binding throws")
     {
         Forge::DescriptorSetLayoutDesc bad_desc;
-        bad_desc.AddBinding(0, Forge::DescriptorType::StorageBuffer, 4, ShaderTypeBits::Compute, {},
-                            Forge::DescriptorBindingFlagBits::VariableDescriptorCount);
-        bad_desc.AddBinding(1, Forge::DescriptorType::StorageBuffer, 1, ShaderTypeBits::Compute);
-        REQUIRE_THROWS_AS(Forge::DescriptorSetLayout(device, bad_desc), Opal::Exception);
+        REQUIRE(bad_desc.AddBinding(0, Forge::DescriptorType::StorageBuffer, 4, ShaderTypeBits::Compute, {},
+                            Forge::DescriptorBindingFlagBits::VariableDescriptorCount) == ErrorCode::Success);
+        REQUIRE(bad_desc.AddBinding(1, Forge::DescriptorType::StorageBuffer, 1, ShaderTypeBits::Compute) == ErrorCode::Success);
+        REQUIRE_FALSE(Forge::DescriptorSetLayout::Create(device, bad_desc).HasValue());
     }
     SECTION("An update after bind layout needs a pool that expects one")
     {
         Forge::DescriptorPoolDesc plain_pool_desc;
-        plain_pool_desc.Add(Forge::DescriptorType::StorageBuffer, k_max_descriptors);
+        REQUIRE(plain_pool_desc.Add(Forge::DescriptorType::StorageBuffer, k_max_descriptors) == ErrorCode::Success);
         plain_pool_desc.use_update_after_bind = false;
-        const Forge::DescriptorPool plain_pool(device, plain_pool_desc);
-        REQUIRE_THROWS_AS(Forge::DescriptorSet(plain_pool, layout, k_used_descriptors), Opal::Exception);
+        const Forge::DescriptorPool plain_pool = ForgeTest::Unwrap(Forge::DescriptorPool::Create(device, plain_pool_desc));
+        REQUIRE_FALSE(Forge::DescriptorSet::Create(plain_pool, layout, k_used_descriptors).HasValue());
     }
 
     Opal::StringUtf8 report;
@@ -1379,19 +1379,19 @@ TEST_CASE("Forge bindless texture array", "[forge]")
     };
 
     Forge::DescriptorPoolDesc pool_desc;
-    pool_desc.Add(Forge::DescriptorType::StorageBuffer, 1);
-    pool_desc.Add(Forge::DescriptorType::CombinedImageSampler, k_max_descriptors);
+    REQUIRE(pool_desc.Add(Forge::DescriptorType::StorageBuffer, 1) == ErrorCode::Success);
+    REQUIRE(pool_desc.Add(Forge::DescriptorType::CombinedImageSampler, k_max_descriptors) == ErrorCode::Success);
     pool_desc.max_sets = 1;
     pool_desc.use_update_after_bind = true;
-    const Forge::DescriptorPool pool(device, pool_desc);
+    const Forge::DescriptorPool pool = ForgeTest::Unwrap(Forge::DescriptorPool::Create(device, pool_desc));
 
     // The texture array is the highest binding, which is where a variable count is allowed to sit.
     Forge::DescriptorSetLayoutDesc layout_desc;
-    layout_desc.AddBinding(0, Forge::DescriptorType::StorageBuffer, 1, ShaderTypeBits::Compute);
-    layout_desc.AddBinding(1, Forge::DescriptorType::CombinedImageSampler, k_max_descriptors, ShaderTypeBits::Compute, {},
+    REQUIRE(layout_desc.AddBinding(0, Forge::DescriptorType::StorageBuffer, 1, ShaderTypeBits::Compute) == ErrorCode::Success);
+    REQUIRE(layout_desc.AddBinding(1, Forge::DescriptorType::CombinedImageSampler, k_max_descriptors, ShaderTypeBits::Compute, {},
                            Forge::DescriptorBindingFlagBits::PartiallyBound | Forge::DescriptorBindingFlagBits::UpdateAfterBind |
-                               Forge::DescriptorBindingFlagBits::VariableDescriptorCount);
-    const Forge::DescriptorSetLayout layout(device, layout_desc);
+                               Forge::DescriptorBindingFlagBits::VariableDescriptorCount) == ErrorCode::Success);
+    const Forge::DescriptorSetLayout layout = ForgeTest::Unwrap(Forge::DescriptorSetLayout::Create(device, layout_desc));
 
     SECTION("A shader samples the element of the array it indexes")
     {
@@ -1400,7 +1400,7 @@ TEST_CASE("Forge bindless texture array", "[forge]")
             SKIP("A software driver reports the non-uniform indexing feature and then reads element zero anyway.");
         }
         // Three of the four, so the variable count is doing something.
-        Forge::DescriptorSet descriptor_set(pool, layout, k_used_descriptors);
+        Forge::DescriptorSet descriptor_set = ForgeTest::Unwrap(Forge::DescriptorSet::Create(pool, layout, k_used_descriptors));
 
         Forge::Buffer output = ForgeTest::Unwrap(Forge::Buffer::Create(device, {.size = k_element_count * sizeof(u32),
                                       .usage = Forge::BufferUsageBits::StorageBuffer,
@@ -1414,16 +1414,16 @@ TEST_CASE("Forge bindless texture array", "[forge]")
 
         // Elements one and two, never element zero: a write past the first descriptor of a binding is the
         // part of this that a binding holding one descriptor could never have exercised.
-        descriptor_set.Update(0, output);
-        descriptor_set.Update(1, texture_one, sampler, Forge::ImageLayout::ShaderReadOnly, 1);
-        descriptor_set.Update(1, texture_two, sampler, Forge::ImageLayout::ShaderReadOnly, 2);
+        REQUIRE(descriptor_set.Update(0, output) == ErrorCode::Success);
+        REQUIRE(descriptor_set.Update(1, texture_one, sampler, Forge::ImageLayout::ShaderReadOnly, 1) == ErrorCode::Success);
+        REQUIRE(descriptor_set.Update(1, texture_two, sampler, Forge::ImageLayout::ShaderReadOnly, 2) == ErrorCode::Success);
 
-        const Forge::Shader shader = Forge::Shader::FromSourceInMemory(
-            device, k_bindless_texture_source, {.entry_point = "main_bindless_textures", .cache = GetShaderCache()});
+        const Forge::Shader shader = ForgeTest::Unwrap(Forge::Shader::FromSourceInMemory(
+            device, k_bindless_texture_source, {.entry_point = "main_bindless_textures", .cache = GetShaderCache()}));
         Forge::ComputePipelineDesc pipeline_desc;
         pipeline_desc.shader = shader;
         pipeline_desc.descriptor_set_layouts.PushBack(Opal::Ref<const Forge::DescriptorSetLayout>(layout));
-        const Forge::Pipeline pipeline(device, pipeline_desc);
+        const Forge::Pipeline pipeline = ForgeTest::Unwrap(Forge::Pipeline::Create(device, pipeline_desc));
 
         REQUIRE(Forge::ImmediateSubmit(device, queue,
                                [&](Forge::CommandBuffer& command_buffer)
@@ -1448,32 +1448,30 @@ TEST_CASE("Forge bindless texture array", "[forge]")
     {
         // Three of four allocated, so elements zero through two exist and element three does not, even though
         // the layout declares four. Vulkan writes such an element without reporting anything.
-        Forge::DescriptorSet descriptor_set(pool, layout, k_used_descriptors);
+        Forge::DescriptorSet descriptor_set = ForgeTest::Unwrap(Forge::DescriptorSet::Create(pool, layout, k_used_descriptors));
         const Forge::Texture texture = make_texture(k_red_at_one);
         const Forge::Sampler sampler = ForgeTest::Unwrap(Forge::Sampler::Create(device, {.max_anisotropy = 1.0f}));
 
         REQUIRE_NOTHROW(descriptor_set.Update(1, texture, sampler, Forge::ImageLayout::ShaderReadOnly, k_used_descriptors - 1));
-        REQUIRE_THROWS_AS(descriptor_set.Update(1, texture, sampler, Forge::ImageLayout::ShaderReadOnly, k_used_descriptors),
-                          Opal::Exception);
-        REQUIRE_THROWS_AS(descriptor_set.Update(1, texture, sampler, Forge::ImageLayout::ShaderReadOnly, k_max_descriptors),
-                          Opal::Exception);
+        REQUIRE(descriptor_set.Update(1, texture, sampler, Forge::ImageLayout::ShaderReadOnly, k_used_descriptors) != ErrorCode::Success);
+        REQUIRE(descriptor_set.Update(1, texture, sampler, Forge::ImageLayout::ShaderReadOnly, k_max_descriptors) != ErrorCode::Success);
         // A binding of one descriptor has only element zero, variable count or not.
         Forge::Buffer output =
             ForgeTest::Unwrap(Forge::Buffer::Create(device, {.size = 4, .usage = Forge::BufferUsageBits::StorageBuffer}));
-        REQUIRE_THROWS_AS(descriptor_set.Update(0, output, 0, Forge::k_whole_buffer, 1), Opal::Exception);
+        REQUIRE(descriptor_set.Update(0, output, 0, Forge::k_whole_buffer, 1) != ErrorCode::Success);
     }
     SECTION("A variable count above the texture binding descriptor count throws")
     {
-        REQUIRE_THROWS_AS(Forge::DescriptorSet(pool, layout, k_max_descriptors + 1), Opal::Exception);
+        REQUIRE_FALSE(Forge::DescriptorSet::Create(pool, layout, k_max_descriptors + 1).HasValue());
     }
     SECTION("An update after bind texture layout needs a pool that expects one")
     {
         Forge::DescriptorPoolDesc plain_pool_desc;
-        plain_pool_desc.Add(Forge::DescriptorType::StorageBuffer, 1);
-        plain_pool_desc.Add(Forge::DescriptorType::CombinedImageSampler, k_max_descriptors);
+        REQUIRE(plain_pool_desc.Add(Forge::DescriptorType::StorageBuffer, 1) == ErrorCode::Success);
+        REQUIRE(plain_pool_desc.Add(Forge::DescriptorType::CombinedImageSampler, k_max_descriptors) == ErrorCode::Success);
         plain_pool_desc.use_update_after_bind = false;
-        const Forge::DescriptorPool plain_pool(device, plain_pool_desc);
-        REQUIRE_THROWS_AS(Forge::DescriptorSet(plain_pool, layout, k_used_descriptors), Opal::Exception);
+        const Forge::DescriptorPool plain_pool = ForgeTest::Unwrap(Forge::DescriptorPool::Create(device, plain_pool_desc));
+        REQUIRE_FALSE(Forge::DescriptorSet::Create(plain_pool, layout, k_used_descriptors).HasValue());
     }
 
     Opal::StringUtf8 report;
@@ -1540,16 +1538,17 @@ TEST_CASE("Forge bindless constant buffer array", "[forge]")
     // It does not prove that bit is doing anything - the case passes with it off, so nothing in the SPIR-V
     // this shader compiles to demands it - it covers the array and the per-element writes into it.
     Forge::DescriptorPoolDesc pool_desc;
-    pool_desc.Add(Forge::DescriptorType::StorageBuffer, 1);
-    pool_desc.Add(Forge::DescriptorType::ConstantBuffer, k_max_descriptors);
+    REQUIRE(pool_desc.Add(Forge::DescriptorType::StorageBuffer, 1) == ErrorCode::Success);
+    REQUIRE(pool_desc.Add(Forge::DescriptorType::ConstantBuffer, k_max_descriptors) == ErrorCode::Success);
     pool_desc.max_sets = 1;
-    const Forge::DescriptorPool pool(device, pool_desc);
+    const Forge::DescriptorPool pool = ForgeTest::Unwrap(Forge::DescriptorPool::Create(device, pool_desc));
 
     Forge::DescriptorSetLayoutDesc layout_desc;
-    layout_desc.AddBinding(0, Forge::DescriptorType::StorageBuffer, 1, ShaderTypeBits::Compute);
-    layout_desc.AddBinding(1, Forge::DescriptorType::ConstantBuffer, k_max_descriptors, ShaderTypeBits::Compute);
-    const Forge::DescriptorSetLayout layout(device, layout_desc);
-    Forge::DescriptorSet descriptor_set(pool, layout);
+    REQUIRE(layout_desc.AddBinding(0, Forge::DescriptorType::StorageBuffer, 1, ShaderTypeBits::Compute) == ErrorCode::Success);
+    REQUIRE(layout_desc.AddBinding(1, Forge::DescriptorType::ConstantBuffer, k_max_descriptors, ShaderTypeBits::Compute) ==
+            ErrorCode::Success);
+    const Forge::DescriptorSetLayout layout = ForgeTest::Unwrap(Forge::DescriptorSetLayout::Create(device, layout_desc));
+    Forge::DescriptorSet descriptor_set = ForgeTest::Unwrap(Forge::DescriptorSet::Create(pool, layout));
 
     Forge::Buffer output = ForgeTest::Unwrap(Forge::Buffer::Create(device, {.size = k_element_count * sizeof(u32),
                                   .usage = Forge::BufferUsageBits::StorageBuffer,
@@ -1567,16 +1566,16 @@ TEST_CASE("Forge bindless constant buffer array", "[forge]")
     const Forge::Buffer params_zero = make_params(k_value_at_zero);
     const Forge::Buffer params_one = make_params(k_value_at_one);
 
-    descriptor_set.Update(0, output);
-    descriptor_set.Update(1, params_zero, 0, Forge::k_whole_buffer, 0);
-    descriptor_set.Update(1, params_one, 0, Forge::k_whole_buffer, 1);
+    REQUIRE(descriptor_set.Update(0, output) == ErrorCode::Success);
+    REQUIRE(descriptor_set.Update(1, params_zero, 0, Forge::k_whole_buffer, 0) == ErrorCode::Success);
+    REQUIRE(descriptor_set.Update(1, params_one, 0, Forge::k_whole_buffer, 1) == ErrorCode::Success);
 
-    const Forge::Shader shader = Forge::Shader::FromSourceInMemory(
-        device, k_bindless_constant_source, {.entry_point = "main_bindless_constants", .cache = GetShaderCache()});
+    const Forge::Shader shader = ForgeTest::Unwrap(Forge::Shader::FromSourceInMemory(
+        device, k_bindless_constant_source, {.entry_point = "main_bindless_constants", .cache = GetShaderCache()}));
     Forge::ComputePipelineDesc pipeline_desc;
     pipeline_desc.shader = shader;
     pipeline_desc.descriptor_set_layouts.PushBack(Opal::Ref<const Forge::DescriptorSetLayout>(layout));
-    const Forge::Pipeline pipeline(device, pipeline_desc);
+    const Forge::Pipeline pipeline = ForgeTest::Unwrap(Forge::Pipeline::Create(device, pipeline_desc));
 
     REQUIRE(Forge::ImmediateSubmit(device, queue,
                            [&](Forge::CommandBuffer& command_buffer)
@@ -1882,13 +1881,13 @@ TEST_CASE("Forge timestamp queries", "[forge]")
                                                 .usage = Forge::BufferUsageBits::StorageBuffer,
                                                 .host_access = Forge::HostAccess::Random,
                                                 .use_device_address = true}));
-    const Forge::Shader compute_shader =
-        Forge::Shader::FromSourceInMemory(fixture.device, k_compute_source, {.entry_point = "main_compute", .cache = GetShaderCache()});
+    const Forge::Shader compute_shader = ForgeTest::Unwrap(
+        Forge::Shader::FromSourceInMemory(fixture.device, k_compute_source, {.entry_point = "main_compute", .cache = GetShaderCache()}));
     Forge::ComputePipelineDesc pipeline_desc;
     pipeline_desc.shader = compute_shader;
     pipeline_desc.push_constant_ranges.PushBack(
         {.shader_stages = ShaderTypeBits::Compute, .offset = 0, .size = sizeof(VkDeviceAddress)});
-    const Forge::Pipeline pipeline(fixture.device, pipeline_desc);
+    const Forge::Pipeline pipeline = ForgeTest::Unwrap(Forge::Pipeline::Create(fixture.device, pipeline_desc));
     const VkDeviceAddress output_address = output.GetNativeDeviceAddress();
 
     // The dispatch every measurement below wraps, so what differs between them is only how it is timed.
@@ -2073,24 +2072,24 @@ TEST_CASE("Forge single resource descriptor updates", "[forge]")
     constexpr i32 k_group_size = 64;
 
     Forge::DescriptorPoolDesc pool_desc;
-    pool_desc.Add(Forge::DescriptorType::StorageBuffer, 4);
-    pool_desc.Add(Forge::DescriptorType::CombinedImageSampler, 4);
+    REQUIRE(pool_desc.Add(Forge::DescriptorType::StorageBuffer, 4) == ErrorCode::Success);
+    REQUIRE(pool_desc.Add(Forge::DescriptorType::CombinedImageSampler, 4) == ErrorCode::Success);
     pool_desc.max_sets = 4;
-    const Forge::DescriptorPool pool(fixture.device, pool_desc);
+    const Forge::DescriptorPool pool = ForgeTest::Unwrap(Forge::DescriptorPool::Create(fixture.device, pool_desc));
 
     Forge::DescriptorSetLayoutDesc layout_desc;
-    layout_desc.AddBinding(0, Forge::DescriptorType::StorageBuffer, 1, ShaderTypeBits::Compute);
-    layout_desc.AddBinding(2, Forge::DescriptorType::CombinedImageSampler, 1, ShaderTypeBits::Fragment);
-    const Forge::DescriptorSetLayout layout(fixture.device, layout_desc);
+    REQUIRE(layout_desc.AddBinding(0, Forge::DescriptorType::StorageBuffer, 1, ShaderTypeBits::Compute) == ErrorCode::Success);
+    REQUIRE(layout_desc.AddBinding(2, Forge::DescriptorType::CombinedImageSampler, 1, ShaderTypeBits::Fragment) == ErrorCode::Success);
+    const Forge::DescriptorSetLayout layout = ForgeTest::Unwrap(Forge::DescriptorSetLayout::Create(fixture.device, layout_desc));
 
     SECTION("The descriptor type comes from the layout")
     {
-        const Forge::DescriptorSet set(pool, layout);
-        REQUIRE(set.GetBindingDescriptorType(0) == Forge::DescriptorType::StorageBuffer);
-        REQUIRE(set.GetBindingDescriptorType(2) == Forge::DescriptorType::CombinedImageSampler);
+        const Forge::DescriptorSet set = ForgeTest::Unwrap(Forge::DescriptorSet::Create(pool, layout));
+        REQUIRE(ForgeTest::Unwrap(set.GetBindingDescriptorType(0)) == Forge::DescriptorType::StorageBuffer);
+        REQUIRE(ForgeTest::Unwrap(set.GetBindingDescriptorType(2)) == Forge::DescriptorType::CombinedImageSampler);
         // Binding 1 is a gap in this layout, which is a binding index the set has to reject rather than
         // guess a type for.
-        REQUIRE_THROWS_AS(set.GetBindingDescriptorType(1), Opal::Exception);
+        REQUIRE_FALSE(set.GetBindingDescriptorType(1).HasValue());
     }
     SECTION("A buffer written the short way reaches the shader")
     {
@@ -2100,15 +2099,15 @@ TEST_CASE("Forge single resource descriptor updates", "[forge]")
         const Opal::DynamicArray<u8> zeros(k_element_count * sizeof(u32));
         REQUIRE(output.Update(zeros) == ErrorCode::Success);
 
-        Forge::DescriptorSet set(pool, layout);
-        set.Update(0, output);
+        Forge::DescriptorSet set = ForgeTest::Unwrap(Forge::DescriptorSet::Create(pool, layout));
+        REQUIRE(set.Update(0, output) == ErrorCode::Success);
 
-        const Forge::Shader shader = Forge::Shader::FromSourceInMemory(fixture.device, k_descriptor_source,
-                                                                       {.entry_point = "main_descriptor", .cache = GetShaderCache()});
+        const Forge::Shader shader = ForgeTest::Unwrap(Forge::Shader::FromSourceInMemory(fixture.device, k_descriptor_source,
+                                                                       {.entry_point = "main_descriptor", .cache = GetShaderCache()}));
         Forge::ComputePipelineDesc pipeline_desc;
         pipeline_desc.shader = shader;
         pipeline_desc.descriptor_set_layouts.PushBack(Opal::Ref<const Forge::DescriptorSetLayout>(layout));
-        const Forge::Pipeline pipeline(fixture.device, pipeline_desc);
+        const Forge::Pipeline pipeline = ForgeTest::Unwrap(Forge::Pipeline::Create(fixture.device, pipeline_desc));
 
         REQUIRE(Forge::ImmediateSubmit(fixture.device, fixture.GetQueue(),
                                [&](Forge::CommandBuffer& command_buffer)
@@ -2133,42 +2132,42 @@ TEST_CASE("Forge single resource descriptor updates", "[forge]")
                                                       .usage = Forge::TextureUsageBits::Sampled}));
         const Forge::Sampler sampler = ForgeTest::Unwrap(Forge::Sampler::Create(fixture.device, {.max_anisotropy = 1.0f}));
 
-        Forge::DescriptorSet set(pool, layout);
-        set.Update(2, texture, sampler);
+        Forge::DescriptorSet set = ForgeTest::Unwrap(Forge::DescriptorSet::Create(pool, layout));
+        REQUIRE(set.Update(2, texture, sampler) == ErrorCode::Success);
     }
     SECTION("A range past the end of the buffer throws")
     {
         const Forge::Buffer small = ForgeTest::Unwrap(Forge::Buffer::Create(fixture.device,
                                   {.size = 256, .usage = Forge::BufferUsageBits::StorageBuffer}));
-        Forge::DescriptorSet set(pool, layout);
-        REQUIRE_THROWS_AS(set.Update(0, small, 128, 256), Opal::Exception);
-        REQUIRE_THROWS_AS(set.Update(0, small, 0, 0), Opal::Exception);
+        Forge::DescriptorSet set = ForgeTest::Unwrap(Forge::DescriptorSet::Create(pool, layout));
+        REQUIRE(set.Update(0, small, 128, 256) != ErrorCode::Success);
+        REQUIRE(set.Update(0, small, 0, 0) != ErrorCode::Success);
     }
     SECTION("A moved set carries what its layout declared")
     {
         // The pattern every per-frame resource in the sample uses: declare empty, assign over it. A set
         // whose binding types stayed behind would reject the very bindings its layout has.
         Forge::DescriptorSet set;
-        set = Forge::DescriptorSet(pool, layout);
+        set = ForgeTest::Unwrap(Forge::DescriptorSet::Create(pool, layout));
         REQUIRE(set.IsValid());
-        REQUIRE(set.GetBindingDescriptorType(0) == Forge::DescriptorType::StorageBuffer);
+        REQUIRE(ForgeTest::Unwrap(set.GetBindingDescriptorType(0)) == Forge::DescriptorType::StorageBuffer);
 
         const Forge::Buffer buffer = ForgeTest::Unwrap(Forge::Buffer::Create(fixture.device,
                                    {.size = 256, .usage = Forge::BufferUsageBits::StorageBuffer}));
-        set.Update(0, buffer);
+        REQUIRE(set.Update(0, buffer) == ErrorCode::Success);
 
         const Forge::DescriptorSet moved(std::move(set));
-        REQUIRE(moved.GetBindingDescriptorType(0) == Forge::DescriptorType::StorageBuffer);
+        REQUIRE(ForgeTest::Unwrap(moved.GetBindingDescriptorType(0)) == Forge::DescriptorType::StorageBuffer);
         // The source is empty afterwards, so it knows about no binding at all.
         REQUIRE_FALSE(set.IsValid());
-        REQUIRE_THROWS_AS(set.GetBindingDescriptorType(0), Opal::Exception);
+        REQUIRE_FALSE(set.GetBindingDescriptorType(0).HasValue());
     }
     SECTION("Writing a binding the layout does not have throws")
     {
         const Forge::Buffer buffer = ForgeTest::Unwrap(Forge::Buffer::Create(fixture.device,
                                    {.size = 256, .usage = Forge::BufferUsageBits::StorageBuffer}));
-        Forge::DescriptorSet set(pool, layout);
-        REQUIRE_THROWS_AS(set.Update(3, buffer), Opal::Exception);
+        Forge::DescriptorSet set = ForgeTest::Unwrap(Forge::DescriptorSet::Create(pool, layout));
+        REQUIRE(set.Update(3, buffer) != ErrorCode::Success);
     }
     REQUIRE_NO_VALIDATION_ERROR(fixture);
 }
@@ -2387,10 +2386,10 @@ TEST_CASE("Forge color write mask", "[forge]")
     constexpr i32 k_side = 4;
     constexpr PixelFormat k_format = PixelFormat::R8G8B8A8_UNORM;
 
-    const Forge::Shader vertex_shader =
-        Forge::Shader::FromSourceInMemory(fixture.device, k_fullscreen_source, {.entry_point = "main_vertex", .cache = GetShaderCache()});
-    const Forge::Shader fragment_shader =
-        Forge::Shader::FromSourceInMemory(fixture.device, k_fullscreen_source, {.entry_point = "main_fragment", .cache = GetShaderCache()});
+    const Forge::Shader vertex_shader = ForgeTest::Unwrap(
+        Forge::Shader::FromSourceInMemory(fixture.device, k_fullscreen_source, {.entry_point = "main_vertex", .cache = GetShaderCache()}));
+    const Forge::Shader fragment_shader = ForgeTest::Unwrap(Forge::Shader::FromSourceInMemory(
+        fixture.device, k_fullscreen_source, {.entry_point = "main_fragment", .cache = GetShaderCache()}));
 
     /**
      * Clear the target to opaque red, draw the triangle through a pipeline with the given mask, and hand back
@@ -2415,10 +2414,10 @@ TEST_CASE("Forge color write mask", "[forge]")
         pipeline_desc.fragment_shader = fragment_shader;
         pipeline_desc.rasterizer.cull_mode = Face::None;
         pipeline_desc.vertex_input.AddBinding(0, 2 * sizeof(f32), DataRepetition::PerVertex);
-        pipeline_desc.vertex_input.AddAttribute(0, 0, PixelFormat::R32G32_SFLOAT, 0);
+        REQUIRE(pipeline_desc.vertex_input.AddAttribute(0, 0, PixelFormat::R32G32_SFLOAT, 0) == ErrorCode::Success);
         pipeline_desc.color_blend_attachments.PushBack(Forge::ColorBlendDesc{.color_write_mask = mask});
         pipeline_desc.color_attachment_formats.PushBack(k_format);
-        const Forge::Pipeline pipeline(fixture.device, pipeline_desc);
+        const Forge::Pipeline pipeline = ForgeTest::Unwrap(Forge::Pipeline::Create(fixture.device, pipeline_desc));
 
         REQUIRE(Forge::ImmediateSubmit(
                     fixture.device, fixture.GetQueue(),
@@ -2659,10 +2658,10 @@ struct HalvesFixture
 
     explicit HalvesFixture(const Forge::DeviceFeatures& features = {}) : forge(features)
     {
-        vertex_shader = Forge::Shader::FromSourceInMemory(forge.device, k_halves_source,
-                                                          {.entry_point = "main_vertex", .cache = GetShaderCache()});
-        fragment_shader = Forge::Shader::FromSourceInMemory(forge.device, k_halves_source,
-                                                            {.entry_point = "main_fragment", .cache = GetShaderCache()});
+        vertex_shader = ForgeTest::Unwrap(Forge::Shader::FromSourceInMemory(forge.device, k_halves_source,
+                                                          {.entry_point = "main_vertex", .cache = GetShaderCache()}));
+        fragment_shader = ForgeTest::Unwrap(Forge::Shader::FromSourceInMemory(forge.device, k_halves_source,
+                                                            {.entry_point = "main_fragment", .cache = GetShaderCache()}));
 
         Forge::GraphicsPipelineDesc pipeline_desc;
         pipeline_desc.vertex_shader = vertex_shader;
@@ -2670,12 +2669,12 @@ struct HalvesFixture
         // Off, so that which way a triangle winds is never what a failing case is about.
         pipeline_desc.rasterizer.cull_mode = Face::None;
         pipeline_desc.vertex_input.AddBinding(0, 2 * sizeof(f32), DataRepetition::PerVertex);
-        pipeline_desc.vertex_input.AddAttribute(0, 0, PixelFormat::R32G32_SFLOAT, 0);
+        REQUIRE(pipeline_desc.vertex_input.AddAttribute(0, 0, PixelFormat::R32G32_SFLOAT, 0) == ErrorCode::Success);
         pipeline_desc.vertex_input.AddBinding(1, sizeof(u32), DataRepetition::PerInstance);
-        pipeline_desc.vertex_input.AddAttribute(1, 1, PixelFormat::R32_UINT, 0);
+        REQUIRE(pipeline_desc.vertex_input.AddAttribute(1, 1, PixelFormat::R32_UINT, 0) == ErrorCode::Success);
         pipeline_desc.color_blend_attachments.PushBack(Forge::ColorBlendDesc{});
         pipeline_desc.color_attachment_formats.PushBack(k_format);
-        pipeline = Forge::Pipeline(forge.device, pipeline_desc);
+        pipeline = ForgeTest::Unwrap(Forge::Pipeline::Create(forge.device, pipeline_desc));
 
         corners = ForgeTest::Unwrap(Forge::Buffer::Create(
             forge.device, {.size = sizeof(k_half_corners), .usage = Forge::BufferUsageBits::VertexBuffer}, Opal::AsBytes(k_half_corners)));
@@ -2870,11 +2869,11 @@ TEST_CASE("Forge indirect draws", "[forge]")
     HalvesFixture halves({.multi_draw_indirect = has_multi_draw, .draw_indirect_first_instance = true});
 
     const Forge::Shader write_draws =
-        Forge::Shader::FromSourceInMemory(halves.forge.device, k_indirect_command_source,
-                                          {.entry_point = "main_write_draws", .cache = GetShaderCache()});
+        ForgeTest::Unwrap(Forge::Shader::FromSourceInMemory(halves.forge.device, k_indirect_command_source,
+                                          {.entry_point = "main_write_draws", .cache = GetShaderCache()}));
     const Forge::Shader write_indexed_draw =
-        Forge::Shader::FromSourceInMemory(halves.forge.device, k_indirect_command_source,
-                                          {.entry_point = "main_write_indexed_draw", .cache = GetShaderCache()});
+        ForgeTest::Unwrap(Forge::Shader::FromSourceInMemory(halves.forge.device, k_indirect_command_source,
+                                          {.entry_point = "main_write_indexed_draw", .cache = GetShaderCache()}));
 
     // The commands live in memory the host cannot touch, so nothing but the dispatch below can have put them
     // there - which is what separates this from a direct draw with the same numbers written into a buffer.
@@ -2890,7 +2889,7 @@ TEST_CASE("Forge indirect draws", "[forge]")
         pipeline_desc.shader = writer;
         pipeline_desc.push_constant_ranges.PushBack(
             {.shader_stages = ShaderTypeBits::Compute, .offset = 0, .size = sizeof(VkDeviceAddress)});
-        return Forge::Pipeline(halves.forge.device, pipeline_desc);
+        return ForgeTest::Unwrap(Forge::Pipeline::Create(halves.forge.device, pipeline_desc));
     };
 
     // Dispatches the writer over the command buffer, then orders that write against the indirect read.
@@ -2975,10 +2974,10 @@ TEST_CASE("Forge indirect dispatch", "[forge]")
     constexpr i32 k_element_count = k_group_size * k_group_count;
 
     const Forge::Shader write_dispatch =
-        Forge::Shader::FromSourceInMemory(fixture.device, k_indirect_command_source,
-                                          {.entry_point = "main_write_dispatch", .cache = GetShaderCache()});
-    const Forge::Shader compute_shader = Forge::Shader::FromSourceInMemory(
-        fixture.device, k_compute_source, {.entry_point = "main_compute", .cache = GetShaderCache()});
+        ForgeTest::Unwrap(Forge::Shader::FromSourceInMemory(fixture.device, k_indirect_command_source,
+                                          {.entry_point = "main_write_dispatch", .cache = GetShaderCache()}));
+    const Forge::Shader compute_shader = ForgeTest::Unwrap(Forge::Shader::FromSourceInMemory(
+        fixture.device, k_compute_source, {.entry_point = "main_compute", .cache = GetShaderCache()}));
 
     auto make_pipeline = [&](const Forge::Shader& shader)
     {
@@ -2986,7 +2985,7 @@ TEST_CASE("Forge indirect dispatch", "[forge]")
         pipeline_desc.shader = shader;
         pipeline_desc.push_constant_ranges.PushBack(
             {.shader_stages = ShaderTypeBits::Compute, .offset = 0, .size = sizeof(VkDeviceAddress)});
-        return Forge::Pipeline(fixture.device, pipeline_desc);
+        return ForgeTest::Unwrap(Forge::Pipeline::Create(fixture.device, pipeline_desc));
     };
     const Forge::Pipeline write_pipeline = make_pipeline(write_dispatch);
     const Forge::Pipeline compute_pipeline = make_pipeline(compute_shader);
@@ -3077,10 +3076,10 @@ TEST_CASE("Forge pipeline sample count and dynamic state", "[forge]")
     ForgeFixture fixture;
     constexpr PixelFormat k_format = PixelFormat::R8G8B8A8_UNORM;
 
-    const Forge::Shader vertex_shader =
-        Forge::Shader::FromSourceInMemory(fixture.device, k_fullscreen_source, {.entry_point = "main_vertex", .cache = GetShaderCache()});
-    const Forge::Shader fragment_shader =
-        Forge::Shader::FromSourceInMemory(fixture.device, k_fullscreen_source, {.entry_point = "main_fragment", .cache = GetShaderCache()});
+    const Forge::Shader vertex_shader = ForgeTest::Unwrap(
+        Forge::Shader::FromSourceInMemory(fixture.device, k_fullscreen_source, {.entry_point = "main_vertex", .cache = GetShaderCache()}));
+    const Forge::Shader fragment_shader = ForgeTest::Unwrap(Forge::Shader::FromSourceInMemory(
+        fixture.device, k_fullscreen_source, {.entry_point = "main_fragment", .cache = GetShaderCache()}));
 
     auto make_desc = [&]()
     {
@@ -3089,7 +3088,7 @@ TEST_CASE("Forge pipeline sample count and dynamic state", "[forge]")
         desc.fragment_shader = fragment_shader;
         desc.rasterizer.cull_mode = Face::None;
         desc.vertex_input.AddBinding(0, 2 * sizeof(f32), DataRepetition::PerVertex);
-        desc.vertex_input.AddAttribute(0, 0, PixelFormat::R32G32_SFLOAT, 0);
+        REQUIRE(desc.vertex_input.AddAttribute(0, 0, PixelFormat::R32G32_SFLOAT, 0) == ErrorCode::Success);
         desc.color_blend_attachments.PushBack(Forge::ColorBlendDesc{});
         desc.color_attachment_formats.PushBack(k_format);
         return desc;
@@ -3105,14 +3104,14 @@ TEST_CASE("Forge pipeline sample count and dynamic state", "[forge]")
 
         Forge::GraphicsPipelineDesc desc = make_desc();
         desc.sample_count = Forge::SampleCount::Count1;
-        const Forge::Pipeline pipeline(fixture.device, desc);
+        const Forge::Pipeline pipeline = ForgeTest::Unwrap(Forge::Pipeline::Create(fixture.device, desc));
         REQUIRE(pipeline.IsValid());
 
         if ((supported & VK_SAMPLE_COUNT_4_BIT) != 0)
         {
             Forge::GraphicsPipelineDesc four = make_desc();
             four.sample_count = Forge::SampleCount::Count4;
-            const Forge::Pipeline multisampled(fixture.device, four);
+            const Forge::Pipeline multisampled = ForgeTest::Unwrap(Forge::Pipeline::Create(fixture.device, four));
             REQUIRE(multisampled.IsValid());
         }
     }
@@ -3126,14 +3125,14 @@ TEST_CASE("Forge pipeline sample count and dynamic state", "[forge]")
         }
         Forge::GraphicsPipelineDesc desc = make_desc();
         desc.sample_count = Forge::SampleCount::Count64;
-        REQUIRE_THROWS_AS(Forge::Pipeline(fixture.device, desc), Opal::Exception);
+        REQUIRE_FALSE(Forge::Pipeline::Create(fixture.device, desc).HasValue());
     }
     SECTION("Dynamic state is recorded on a pipeline that asked for it")
     {
         Forge::GraphicsPipelineDesc desc = make_desc();
         desc.dynamic_state = Forge::DynamicStateBits::DepthBias | Forge::DynamicStateBits::StencilReference;
         desc.rasterizer.depth_bias_enabled = true;
-        const Forge::Pipeline pipeline(fixture.device, desc);
+        const Forge::Pipeline pipeline = ForgeTest::Unwrap(Forge::Pipeline::Create(fixture.device, desc));
 
         Forge::CommandBuffer command_buffer = ForgeTest::Unwrap(Forge::CommandBuffer::Create(fixture.device, fixture.GetQueue()));
         REQUIRE(command_buffer.Begin() == ErrorCode::Success);
@@ -3224,26 +3223,26 @@ TEST_CASE("Forge a pipeline that fails to build leaves nothing behind", "[forge]
         // A description with no vertex and no mesh shader, which is rejected after the layout exists. The
         // layout is what a push constant range and a set layout make non-trivial, so both are asked for.
         Forge::DescriptorSetLayoutDesc layout_desc;
-        layout_desc.AddBinding(0, Forge::DescriptorType::StorageBuffer, 1, ShaderTypeBits::Fragment);
-        const Forge::DescriptorSetLayout set_layout(fixture.device, layout_desc);
+        REQUIRE(layout_desc.AddBinding(0, Forge::DescriptorType::StorageBuffer, 1, ShaderTypeBits::Fragment) == ErrorCode::Success);
+        const Forge::DescriptorSetLayout set_layout = ForgeTest::Unwrap(Forge::DescriptorSetLayout::Create(fixture.device, layout_desc));
 
         Forge::GraphicsPipelineDesc desc;
         desc.descriptor_set_layouts.PushBack(set_layout);
         desc.push_constant_ranges.PushBack({.shader_stages = ShaderTypeBits::Fragment, .offset = 0, .size = 4});
-        REQUIRE_THROWS_AS(Forge::Pipeline(fixture.device, desc), Opal::Exception);
+        REQUIRE_FALSE(Forge::Pipeline::Create(fixture.device, desc).HasValue());
     }
     SECTION("A rejected compute pipeline releases the layout it had already created")
     {
         // The compute constructor is a second path to the same layout, so it is checked on its own. A value
         // for a specialization constant this shader does not declare is rejected after the layout exists.
-        const Forge::Shader compute_shader = Forge::Shader::FromSourceInMemory(
-            fixture.device, k_compute_source, {.entry_point = "main_compute", .cache = GetShaderCache()});
+        const Forge::Shader compute_shader = ForgeTest::Unwrap(Forge::Shader::FromSourceInMemory(
+            fixture.device, k_compute_source, {.entry_point = "main_compute", .cache = GetShaderCache()}));
         Forge::ComputePipelineDesc desc;
         desc.shader = compute_shader;
         desc.push_constant_ranges.PushBack(
             {.shader_stages = ShaderTypeBits::Compute, .offset = 0, .size = sizeof(VkDeviceAddress)});
         desc.specialization.PushBack(Forge::SpecializationConstant{.name = "NOT_DECLARED", .value = 1u});
-        REQUIRE_THROWS_AS(Forge::Pipeline(fixture.device, desc), Opal::Exception);
+        REQUIRE_FALSE(Forge::Pipeline::Create(fixture.device, desc).HasValue());
     }
     REQUIRE_NO_VALIDATION_ERROR_AT_TEARDOWN(fixture);
 }
@@ -3258,18 +3257,22 @@ TEST_CASE("Forge specialization constants", "[forge]")
     constexpr i32 k_side = 4;
     constexpr PixelFormat k_format = PixelFormat::R8G8B8A8_UNORM;
 
-    const Forge::Shader vertex_shader =
-        Forge::Shader::FromSourceInMemory(fixture.device, k_specialized_source, {.entry_point = "main_vertex", .cache = GetShaderCache()});
-    const Forge::Shader fragment_shader = Forge::Shader::FromSourceInMemory(fixture.device, k_specialized_source,
-                                                                            {.entry_point = "main_fragment", .cache = GetShaderCache()});
+    const Forge::Shader vertex_shader = ForgeTest::Unwrap(
+        Forge::Shader::FromSourceInMemory(fixture.device, k_specialized_source, {.entry_point = "main_vertex", .cache = GetShaderCache()}));
+    const Forge::Shader fragment_shader = ForgeTest::Unwrap(Forge::Shader::FromSourceInMemory(fixture.device, k_specialized_source,
+                                                                            {.entry_point = "main_fragment", .cache = GetShaderCache()}));
     const Forge::Buffer vertices = ForgeTest::Unwrap(Forge::Buffer::Create(fixture.device,
                                  {.size = sizeof(k_fullscreen_vertices),
                                   .usage = Forge::BufferUsageBits::VertexBuffer},
                                  Opal::AsBytes(k_fullscreen_vertices)));
 
     /** Builds a pipeline with the given values, draws through it, and hands back one texel. */
+    // Hands back what the pipeline creation reported, since three cases below are about values it refuses.
     auto draw_specialized = [&](Opal::ArrayView<const Forge::SpecializationConstant> values)
+        -> Opal::Expected<Opal::DynamicArray<u8>, ErrorCode>
     {
+        using Result = Opal::Expected<Opal::DynamicArray<u8>, ErrorCode>;
+
         Forge::Texture color = ForgeTest::Unwrap(Forge::Texture::Create(fixture.device, {.format = k_format,
                                               .width = k_side,
                                               .height = k_side,
@@ -3280,7 +3283,7 @@ TEST_CASE("Forge specialization constants", "[forge]")
         pipeline_desc.fragment_shader = fragment_shader;
         pipeline_desc.rasterizer.cull_mode = Face::None;
         pipeline_desc.vertex_input.AddBinding(0, 2 * sizeof(f32), DataRepetition::PerVertex);
-        pipeline_desc.vertex_input.AddAttribute(0, 0, PixelFormat::R32G32_SFLOAT, 0);
+        REQUIRE(pipeline_desc.vertex_input.AddAttribute(0, 0, PixelFormat::R32G32_SFLOAT, 0) == ErrorCode::Success);
         pipeline_desc.color_blend_attachments.PushBack(Forge::ColorBlendDesc{});
         pipeline_desc.color_attachment_formats.PushBack(k_format);
         for (i32 i = 0; i < values.GetSize(); ++i)
@@ -3288,7 +3291,12 @@ TEST_CASE("Forge specialization constants", "[forge]")
             pipeline_desc.specialization.PushBack(
                 Forge::SpecializationConstant{.name = values[i].name.Clone(), .value = values[i].value});
         }
-        const Forge::Pipeline pipeline(fixture.device, pipeline_desc);
+        Opal::Expected<Forge::Pipeline, ErrorCode> pipeline_result = Forge::Pipeline::Create(fixture.device, pipeline_desc);
+        if (!pipeline_result.HasValue())
+        {
+            return Result(pipeline_result.GetError());
+        }
+        const Forge::Pipeline& pipeline = pipeline_result.GetValue();
 
         REQUIRE(Forge::ImmediateSubmit(
                     fixture.device, fixture.GetQueue(),
@@ -3313,7 +3321,7 @@ TEST_CASE("Forge specialization constants", "[forge]")
         Opal::DynamicArray<u8> pixels(k_side * k_side * 4);
         REQUIRE(Forge::ReadBackTexture(fixture.device, fixture.GetQueue(), color, pixels, 0, Forge::ImageLayout::TransferSource) ==
                 ErrorCode::Success);
-        return Opal::DynamicArray<u8>{pixels[0], pixels[1], pixels[2], pixels[3]};
+        return Result(Opal::DynamicArray<u8>{pixels[0], pixels[1], pixels[2], pixels[3]});
     };
 
     SECTION("The shader reports what it declares")
@@ -3349,8 +3357,8 @@ TEST_CASE("Forge specialization constants", "[forge]")
         const Forge::SpecializationConstant dim[] = {{.name = "RED_LEVEL", .value = 32}};
         const Forge::SpecializationConstant bright[] = {{.name = "RED_LEVEL", .value = 200},
                                                        {.name = "WRITE_BLUE", .value = true}};
-        const Opal::DynamicArray<u8> dim_texel = draw_specialized({dim, 1});
-        const Opal::DynamicArray<u8> bright_texel = draw_specialized({bright, 2});
+        const Opal::DynamicArray<u8> dim_texel = ForgeTest::Unwrap(draw_specialized({dim, 1}));
+        const Opal::DynamicArray<u8> bright_texel = ForgeTest::Unwrap(draw_specialized({bright, 2}));
         INFO("dim r=" << static_cast<i32>(dim_texel[0]) << " b=" << static_cast<i32>(dim_texel[2])
                       << " bright r=" << static_cast<i32>(bright_texel[0]) << " b="
                       << static_cast<i32>(bright_texel[2]));
@@ -3361,7 +3369,7 @@ TEST_CASE("Forge specialization constants", "[forge]")
     }
     SECTION("A constant nothing supplies keeps the default the shader declared")
     {
-        const Opal::DynamicArray<u8> texel = draw_specialized({});
+        const Opal::DynamicArray<u8> texel = ForgeTest::Unwrap(draw_specialized({}));
         REQUIRE(static_cast<i32>(texel[0]) == 64);
         REQUIRE(static_cast<i32>(texel[2]) == 0);
     }
@@ -3370,12 +3378,12 @@ TEST_CASE("Forge specialization constants", "[forge]")
         // The case Vulkan ignores in silence when the value is keyed by number, which is why it is keyed
         // by name here.
         const Forge::SpecializationConstant wrong[] = {{.name = "RED_LEVELL", .value = 1}};
-        REQUIRE_THROWS_AS(draw_specialized({wrong, 1}), Opal::Exception);
+        REQUIRE_FALSE(draw_specialized({wrong, 1}).HasValue());
     }
     SECTION("A value of the wrong type throws")
     {
         const Forge::SpecializationConstant wrong[] = {{.name = "RED_LEVEL", .value = 1.0f}};
-        REQUIRE_THROWS_AS(draw_specialized({wrong, 1}), Opal::Exception);
+        REQUIRE_FALSE(draw_specialized({wrong, 1}).HasValue());
     }
     SECTION("One constant given a value twice throws")
     {
@@ -3383,7 +3391,7 @@ TEST_CASE("Forge specialization constants", "[forge]")
         // VkSpecializationInfo - and which reads as nothing worse than a repeated name from out here.
         const Forge::SpecializationConstant twice[] = {{.name = "RED_LEVEL", .value = 32},
                                                        {.name = "RED_LEVEL", .value = 64}};
-        REQUIRE_THROWS_AS(draw_specialized({twice, 2}), Opal::Exception);
+        REQUIRE_FALSE(draw_specialized({twice, 2}).HasValue());
     }
     SECTION("A compute pipeline specializes the same way")
     {
@@ -3392,22 +3400,22 @@ TEST_CASE("Forge specialization constants", "[forge]")
                                                     .usage = Forge::BufferUsageBits::StorageBuffer,
                                                     .host_access = Forge::HostAccess::Random,
                                                     .use_device_address = true}));
-        const Forge::Shader compute_shader = Forge::Shader::FromSourceInMemory(
-            fixture.device, k_specialized_compute_source, {.entry_point = "main_specialized", .cache = GetShaderCache()});
+        const Forge::Shader compute_shader = ForgeTest::Unwrap(Forge::Shader::FromSourceInMemory(
+            fixture.device, k_specialized_compute_source, {.entry_point = "main_specialized", .cache = GetShaderCache()}));
         Forge::DescriptorPoolDesc pool_desc;
-        pool_desc.Add(Forge::DescriptorType::StorageBuffer, 1);
-        const Forge::DescriptorPool pool(fixture.device, pool_desc);
+        REQUIRE(pool_desc.Add(Forge::DescriptorType::StorageBuffer, 1) == ErrorCode::Success);
+        const Forge::DescriptorPool pool = ForgeTest::Unwrap(Forge::DescriptorPool::Create(fixture.device, pool_desc));
         Forge::DescriptorSetLayoutDesc layout_desc;
-        layout_desc.AddBinding(0, Forge::DescriptorType::StorageBuffer, 1, ShaderTypeBits::Compute);
-        const Forge::DescriptorSetLayout layout(fixture.device, layout_desc);
-        Forge::DescriptorSet set(pool, layout);
-        set.Update(0, output);
+        REQUIRE(layout_desc.AddBinding(0, Forge::DescriptorType::StorageBuffer, 1, ShaderTypeBits::Compute) == ErrorCode::Success);
+        const Forge::DescriptorSetLayout layout = ForgeTest::Unwrap(Forge::DescriptorSetLayout::Create(fixture.device, layout_desc));
+        Forge::DescriptorSet set = ForgeTest::Unwrap(Forge::DescriptorSet::Create(pool, layout));
+        REQUIRE(set.Update(0, output) == ErrorCode::Success);
 
         Forge::ComputePipelineDesc pipeline_desc;
         pipeline_desc.shader = compute_shader;
         pipeline_desc.descriptor_set_layouts.PushBack(Opal::Ref<const Forge::DescriptorSetLayout>(layout));
         pipeline_desc.specialization.PushBack(Forge::SpecializationConstant{.name = "ADDEND", .value = 100u});
-        const Forge::Pipeline pipeline(fixture.device, pipeline_desc);
+        const Forge::Pipeline pipeline = ForgeTest::Unwrap(Forge::Pipeline::Create(fixture.device, pipeline_desc));
 
         REQUIRE(Forge::ImmediateSubmit(fixture.device, fixture.GetQueue(),
                                [&](Forge::CommandBuffer& command_buffer)
@@ -3485,10 +3493,10 @@ TEST_CASE("Forge shader reflection", "[forge]")
         SKIP("No Vulkan device on this machine.");
     }
     ForgeFixture fixture;
-    const Forge::Shader vertex_shader =
-        Forge::Shader::FromSourceInMemory(fixture.device, k_reflected_source, {.entry_point = "main_vertex", .cache = GetShaderCache()});
-    const Forge::Shader fragment_shader =
-        Forge::Shader::FromSourceInMemory(fixture.device, k_reflected_source, {.entry_point = "main_fragment", .cache = GetShaderCache()});
+    const Forge::Shader vertex_shader = ForgeTest::Unwrap(
+        Forge::Shader::FromSourceInMemory(fixture.device, k_reflected_source, {.entry_point = "main_vertex", .cache = GetShaderCache()}));
+    const Forge::Shader fragment_shader = ForgeTest::Unwrap(
+        Forge::Shader::FromSourceInMemory(fixture.device, k_reflected_source, {.entry_point = "main_fragment", .cache = GetShaderCache()}));
 
     SECTION("Each stage reports only what it reads")
     {
@@ -3539,7 +3547,7 @@ TEST_CASE("Forge shader reflection", "[forge]")
     }
     SECTION("A vertex input built from the shader packs the attributes in location order")
     {
-        const Forge::VertexInputDesc derived = Forge::VertexInputDesc::FromShader(vertex_shader);
+        const Forge::VertexInputDesc derived = ForgeTest::Unwrap(Forge::VertexInputDesc::FromShader(vertex_shader));
         REQUIRE(derived.bindings.GetSize() == 1);
         const Forge::VertexInputDesc::Binding& binding = derived.bindings[0];
         REQUIRE(binding.binding == 0);
@@ -3555,7 +3563,7 @@ TEST_CASE("Forge shader reflection", "[forge]")
     }
     SECTION("A stage that reads no vertex buffer has no attributes to give")
     {
-        REQUIRE_THROWS_AS(Forge::VertexInputDesc::FromShader(fragment_shader), Opal::Exception);
+        REQUIRE_FALSE(Forge::VertexInputDesc::FromShader(fragment_shader).HasValue());
     }
     SECTION("Push constant ranges come back merged across the stages that declare them")
     {
@@ -3577,9 +3585,9 @@ TEST_CASE("Forge shader reflection", "[forge]")
                               Opal::ArrayView<const Forge::PushConstantRange> ranges)
     {
         Forge::DescriptorSetLayoutDesc layout_desc;
-        layout_desc.AddBinding(0, Forge::DescriptorType::CombinedImageSampler, 1, ShaderTypeBits::Fragment);
-        layout_desc.AddBinding(1, Forge::DescriptorType::CombinedImageSampler, 1, ShaderTypeBits::Fragment);
-        const Forge::DescriptorSetLayout layout(fixture.device, layout_desc);
+        REQUIRE(layout_desc.AddBinding(0, Forge::DescriptorType::CombinedImageSampler, 1, ShaderTypeBits::Fragment) == ErrorCode::Success);
+        REQUIRE(layout_desc.AddBinding(1, Forge::DescriptorType::CombinedImageSampler, 1, ShaderTypeBits::Fragment) == ErrorCode::Success);
+        const Forge::DescriptorSetLayout layout = ForgeTest::Unwrap(Forge::DescriptorSetLayout::Create(fixture.device, layout_desc));
 
         Forge::GraphicsPipelineDesc pipeline_desc;
         pipeline_desc.vertex_input = vertex_input.Clone();
@@ -3592,38 +3600,38 @@ TEST_CASE("Forge shader reflection", "[forge]")
         }
         pipeline_desc.color_blend_attachments.PushBack(Forge::ColorBlendDesc{});
         pipeline_desc.color_attachment_formats.PushBack(PixelFormat::R8G8B8A8_UNORM);
-        return Forge::Pipeline(fixture.device, pipeline_desc);
+        return Forge::Pipeline::Create(fixture.device, pipeline_desc);
     };
 
     SECTION("The derived vertex input and ranges build a pipeline")
     {
-        const Forge::VertexInputDesc derived = Forge::VertexInputDesc::FromShader(vertex_shader);
-        const Forge::Pipeline pipeline = build_pipeline(derived, good_ranges);
+        const Forge::VertexInputDesc derived = ForgeTest::Unwrap(Forge::VertexInputDesc::FromShader(vertex_shader));
+        const Forge::Pipeline pipeline = ForgeTest::Unwrap(build_pipeline(derived, good_ranges));
         REQUIRE(pipeline.IsValid());
     }
     SECTION("A location the shader reads that nothing feeds throws")
     {
         Forge::VertexInputDesc incomplete;
         incomplete.AddBinding(0, 28);
-        incomplete.AddAttribute(0, 0, PixelFormat::R32G32_SFLOAT, 0);
-        incomplete.AddAttribute(0, 1, PixelFormat::R32G32B32_SFLOAT, 8);
-        REQUIRE_THROWS_AS(build_pipeline(incomplete, good_ranges), Opal::Exception);
+        REQUIRE(incomplete.AddAttribute(0, 0, PixelFormat::R32G32_SFLOAT, 0) == ErrorCode::Success);
+        REQUIRE(incomplete.AddAttribute(0, 1, PixelFormat::R32G32B32_SFLOAT, 8) == ErrorCode::Success);
+        REQUIRE_FALSE(build_pipeline(incomplete, good_ranges).HasValue());
     }
     SECTION("An attribute at a location the shader declares nothing at is accepted")
     {
         // Tempting to refuse, and wrong to: an input the shader does not read is optimised out of the
         // SPIR-V, so this is indistinguishable from a vertex struct with a field only some of its pipelines
         // read. The unused input further down proves the two really are the same case from out here.
-        Forge::VertexInputDesc extra = Forge::VertexInputDesc::FromShader(vertex_shader);
-        extra.AddAttribute(0, 7, PixelFormat::R32_SFLOAT, 28);
-        const Forge::Pipeline pipeline = build_pipeline(extra, good_ranges);
+        Forge::VertexInputDesc extra = ForgeTest::Unwrap(Forge::VertexInputDesc::FromShader(vertex_shader));
+        REQUIRE(extra.AddAttribute(0, 7, PixelFormat::R32_SFLOAT, 28) == ErrorCode::Success);
+        const Forge::Pipeline pipeline = ForgeTest::Unwrap(build_pipeline(extra, good_ranges));
         REQUIRE(pipeline.IsValid());
     }
     SECTION("An input the shader never reads is not reported at all")
     {
         // Why the check above cannot exist. The struct has two members and reflection reports one.
-        const Forge::Shader partial = Forge::Shader::FromSourceInMemory(fixture.device, k_unused_input_source,
-                                                                        {.entry_point = "main_vertex", .cache = GetShaderCache()});
+        const Forge::Shader partial = ForgeTest::Unwrap(Forge::Shader::FromSourceInMemory(fixture.device, k_unused_input_source,
+                                                                        {.entry_point = "main_vertex", .cache = GetShaderCache()}));
         REQUIRE(partial.GetInputs().GetSize() == 1);
         REQUIRE(partial.GetInputs()[0].location == 0);
     }
@@ -3632,33 +3640,33 @@ TEST_CASE("Forge shader reflection", "[forge]")
         // Location 2 is a uint2 in the shader; a float attribute of the same width is not the same thing.
         Forge::VertexInputDesc wrong_class;
         wrong_class.AddBinding(0, 28);
-        wrong_class.AddAttribute(0, 0, PixelFormat::R32G32_SFLOAT, 0);
-        wrong_class.AddAttribute(0, 1, PixelFormat::R32G32B32_SFLOAT, 8);
-        wrong_class.AddAttribute(0, 2, PixelFormat::R32G32_SFLOAT, 20);
-        REQUIRE_THROWS_AS(build_pipeline(wrong_class, good_ranges), Opal::Exception);
+        REQUIRE(wrong_class.AddAttribute(0, 0, PixelFormat::R32G32_SFLOAT, 0) == ErrorCode::Success);
+        REQUIRE(wrong_class.AddAttribute(0, 1, PixelFormat::R32G32B32_SFLOAT, 8) == ErrorCode::Success);
+        REQUIRE(wrong_class.AddAttribute(0, 2, PixelFormat::R32G32_SFLOAT, 20) == ErrorCode::Success);
+        REQUIRE_FALSE(build_pipeline(wrong_class, good_ranges).HasValue());
     }
     SECTION("A normalised attribute feeding a float input is accepted")
     {
         // UNORM arrives in the shader as a float, so the class agrees even though the format does not.
         Forge::VertexInputDesc normalised;
         normalised.AddBinding(0, 28);
-        normalised.AddAttribute(0, 0, PixelFormat::R8G8_UNORM, 0);
-        normalised.AddAttribute(0, 1, PixelFormat::R32G32B32_SFLOAT, 8);
-        normalised.AddAttribute(0, 2, PixelFormat::R32G32_UINT, 20);
-        const Forge::Pipeline pipeline = build_pipeline(normalised, good_ranges);
+        REQUIRE(normalised.AddAttribute(0, 0, PixelFormat::R8G8_UNORM, 0) == ErrorCode::Success);
+        REQUIRE(normalised.AddAttribute(0, 1, PixelFormat::R32G32B32_SFLOAT, 8) == ErrorCode::Success);
+        REQUIRE(normalised.AddAttribute(0, 2, PixelFormat::R32G32_UINT, 20) == ErrorCode::Success);
+        const Forge::Pipeline pipeline = ForgeTest::Unwrap(build_pipeline(normalised, good_ranges));
         REQUIRE(pipeline.IsValid());
     }
     SECTION("A push constant range that stops short of what the shader reads throws")
     {
-        const Forge::VertexInputDesc derived = Forge::VertexInputDesc::FromShader(vertex_shader);
+        const Forge::VertexInputDesc derived = ForgeTest::Unwrap(Forge::VertexInputDesc::FromShader(vertex_shader));
         const Forge::PushConstantRange too_small{.shader_stages = ShaderTypeBits::Vertex, .offset = 0, .size = 4};
-        REQUIRE_THROWS_AS(build_pipeline(derived, {&too_small, 1}), Opal::Exception);
+        REQUIRE_FALSE(build_pipeline(derived, {&too_small, 1}).HasValue());
     }
     SECTION("No push constant range at all, for a shader that reads one, throws")
     {
         // The likeliest way to get this wrong, and the reason the check does not wait for a range to exist.
-        const Forge::VertexInputDesc derived = Forge::VertexInputDesc::FromShader(vertex_shader);
-        REQUIRE_THROWS_AS(build_pipeline(derived, {}), Opal::Exception);
+        const Forge::VertexInputDesc derived = ForgeTest::Unwrap(Forge::VertexInputDesc::FromShader(vertex_shader));
+        REQUIRE_FALSE(build_pipeline(derived, {}).HasValue());
     }
     REQUIRE_NO_VALIDATION_ERROR(fixture);
 }
@@ -3670,10 +3678,10 @@ TEST_CASE("Forge descriptor bindings checked against the shader", "[forge]")
         SKIP("No Vulkan device on this machine.");
     }
     ForgeFixture fixture;
-    const Forge::Shader vertex_shader =
-        Forge::Shader::FromSourceInMemory(fixture.device, k_reflected_source, {.entry_point = "main_vertex", .cache = GetShaderCache()});
-    const Forge::Shader fragment_shader =
-        Forge::Shader::FromSourceInMemory(fixture.device, k_reflected_source, {.entry_point = "main_fragment", .cache = GetShaderCache()});
+    const Forge::Shader vertex_shader = ForgeTest::Unwrap(
+        Forge::Shader::FromSourceInMemory(fixture.device, k_reflected_source, {.entry_point = "main_vertex", .cache = GetShaderCache()}));
+    const Forge::Shader fragment_shader = ForgeTest::Unwrap(
+        Forge::Shader::FromSourceInMemory(fixture.device, k_reflected_source, {.entry_point = "main_fragment", .cache = GetShaderCache()}));
 
     /** A layout desc naming both stages, so the check has the shader that declares the bindings. */
     auto make_desc = [&]()
@@ -3687,9 +3695,9 @@ TEST_CASE("Forge descriptor bindings checked against the shader", "[forge]")
     SECTION("A layout that agrees with the shader is given the names")
     {
         Forge::DescriptorSetLayoutDesc desc = make_desc();
-        desc.AddBinding(0, Forge::DescriptorType::CombinedImageSampler, 1, ShaderTypeBits::Fragment);
-        desc.AddBinding(1, Forge::DescriptorType::CombinedImageSampler, 1, ShaderTypeBits::Fragment);
-        const Forge::DescriptorSetLayout layout(fixture.device, desc);
+        REQUIRE(desc.AddBinding(0, Forge::DescriptorType::CombinedImageSampler, 1, ShaderTypeBits::Fragment) == ErrorCode::Success);
+        REQUIRE(desc.AddBinding(1, Forge::DescriptorType::CombinedImageSampler, 1, ShaderTypeBits::Fragment) == ErrorCode::Success);
+        const Forge::DescriptorSetLayout layout = ForgeTest::Unwrap(Forge::DescriptorSetLayout::Create(fixture.device, desc));
         REQUIRE(layout.GetDesc().bindings[0].name == Opal::StringUtf8("first_texture"));
         REQUIRE(layout.GetDesc().bindings[1].name == Opal::StringUtf8("second_texture"));
         // The caller's desc is untouched - the names went onto the layout's own copy.
@@ -3698,22 +3706,22 @@ TEST_CASE("Forge descriptor bindings checked against the shader", "[forge]")
     SECTION("A binding declared as the wrong kind throws")
     {
         Forge::DescriptorSetLayoutDesc desc = make_desc();
-        desc.AddBinding(0, Forge::DescriptorType::StorageBuffer, 1, ShaderTypeBits::Fragment);
-        desc.AddBinding(1, Forge::DescriptorType::CombinedImageSampler, 1, ShaderTypeBits::Fragment);
-        REQUIRE_THROWS_AS(Forge::DescriptorSetLayout(fixture.device, desc), Opal::Exception);
+        REQUIRE(desc.AddBinding(0, Forge::DescriptorType::StorageBuffer, 1, ShaderTypeBits::Fragment) == ErrorCode::Success);
+        REQUIRE(desc.AddBinding(1, Forge::DescriptorType::CombinedImageSampler, 1, ShaderTypeBits::Fragment) == ErrorCode::Success);
+        REQUIRE_FALSE(Forge::DescriptorSetLayout::Create(fixture.device, desc).HasValue());
     }
     SECTION("A binding whose stages leave out the one that reads it throws")
     {
         Forge::DescriptorSetLayoutDesc desc = make_desc();
-        desc.AddBinding(0, Forge::DescriptorType::CombinedImageSampler, 1, ShaderTypeBits::Vertex);
-        desc.AddBinding(1, Forge::DescriptorType::CombinedImageSampler, 1, ShaderTypeBits::Fragment);
-        REQUIRE_THROWS_AS(Forge::DescriptorSetLayout(fixture.device, desc), Opal::Exception);
+        REQUIRE(desc.AddBinding(0, Forge::DescriptorType::CombinedImageSampler, 1, ShaderTypeBits::Vertex) == ErrorCode::Success);
+        REQUIRE(desc.AddBinding(1, Forge::DescriptorType::CombinedImageSampler, 1, ShaderTypeBits::Fragment) == ErrorCode::Success);
+        REQUIRE_FALSE(Forge::DescriptorSetLayout::Create(fixture.device, desc).HasValue());
     }
     SECTION("A binding the shaders read that the layout omits throws")
     {
         Forge::DescriptorSetLayoutDesc desc = make_desc();
-        desc.AddBinding(0, Forge::DescriptorType::CombinedImageSampler, 1, ShaderTypeBits::Fragment);
-        REQUIRE_THROWS_AS(Forge::DescriptorSetLayout(fixture.device, desc), Opal::Exception);
+        REQUIRE(desc.AddBinding(0, Forge::DescriptorType::CombinedImageSampler, 1, ShaderTypeBits::Fragment) == ErrorCode::Success);
+        REQUIRE_FALSE(Forge::DescriptorSetLayout::Create(fixture.device, desc).HasValue());
     }
     SECTION("A binding no shader reads is accepted and stays nameless")
     {
@@ -3721,24 +3729,24 @@ TEST_CASE("Forge descriptor bindings checked against the shader", "[forge]")
         // from a binding that was never declared - the sample binds a metallic roughness texture its shader
         // does not read yet. It keeps an empty name, which is the whole of what it costs.
         Forge::DescriptorSetLayoutDesc desc = make_desc();
-        desc.AddBinding(0, Forge::DescriptorType::CombinedImageSampler, 1, ShaderTypeBits::Fragment);
-        desc.AddBinding(1, Forge::DescriptorType::CombinedImageSampler, 1, ShaderTypeBits::Fragment);
-        desc.AddBinding(5, Forge::DescriptorType::CombinedImageSampler, 1, ShaderTypeBits::Fragment);
-        const Forge::DescriptorSetLayout layout(fixture.device, desc);
+        REQUIRE(desc.AddBinding(0, Forge::DescriptorType::CombinedImageSampler, 1, ShaderTypeBits::Fragment) == ErrorCode::Success);
+        REQUIRE(desc.AddBinding(1, Forge::DescriptorType::CombinedImageSampler, 1, ShaderTypeBits::Fragment) == ErrorCode::Success);
+        REQUIRE(desc.AddBinding(5, Forge::DescriptorType::CombinedImageSampler, 1, ShaderTypeBits::Fragment) == ErrorCode::Success);
+        const Forge::DescriptorSetLayout layout = ForgeTest::Unwrap(Forge::DescriptorSetLayout::Create(fixture.device, desc));
         REQUIRE(layout.GetDesc().bindings[0].name == Opal::StringUtf8("first_texture"));
         REQUIRE(layout.GetDesc().bindings[2].name.IsEmpty());
     }
     SECTION("A set writes the same descriptor by name as by index")
     {
         Forge::DescriptorSetLayoutDesc desc = make_desc();
-        desc.AddBinding(0, Forge::DescriptorType::CombinedImageSampler, 1, ShaderTypeBits::Fragment);
-        desc.AddBinding(1, Forge::DescriptorType::CombinedImageSampler, 1, ShaderTypeBits::Fragment);
-        const Forge::DescriptorSetLayout layout(fixture.device, desc);
+        REQUIRE(desc.AddBinding(0, Forge::DescriptorType::CombinedImageSampler, 1, ShaderTypeBits::Fragment) == ErrorCode::Success);
+        REQUIRE(desc.AddBinding(1, Forge::DescriptorType::CombinedImageSampler, 1, ShaderTypeBits::Fragment) == ErrorCode::Success);
+        const Forge::DescriptorSetLayout layout = ForgeTest::Unwrap(Forge::DescriptorSetLayout::Create(fixture.device, desc));
 
         Forge::DescriptorPoolDesc pool_desc;
-        pool_desc.Add(Forge::DescriptorType::CombinedImageSampler, 4);
+        REQUIRE(pool_desc.Add(Forge::DescriptorType::CombinedImageSampler, 4) == ErrorCode::Success);
         pool_desc.max_sets = 2;
-        const Forge::DescriptorPool pool(fixture.device, pool_desc);
+        const Forge::DescriptorPool pool = ForgeTest::Unwrap(Forge::DescriptorPool::Create(fixture.device, pool_desc));
 
         const Forge::Texture texture = ForgeTest::Unwrap(Forge::Texture::Create(fixture.device, {.format = PixelFormat::R8G8B8A8_UNORM,
                                                       .width = 4,
@@ -3746,25 +3754,25 @@ TEST_CASE("Forge descriptor bindings checked against the shader", "[forge]")
                                                       .usage = Forge::TextureUsageBits::Sampled}));
         const Forge::Sampler sampler = ForgeTest::Unwrap(Forge::Sampler::Create(fixture.device, {.max_anisotropy = 1.0f}));
 
-        Forge::DescriptorSet set(pool, layout);
-        REQUIRE(set.GetBindingIndex("first_texture") == 0);
-        REQUIRE(set.GetBindingIndex("second_texture") == 1);
-        set.Update("first_texture", texture, sampler);
-        set.Update("second_texture", texture, sampler);
-        REQUIRE_THROWS_AS(set.GetBindingIndex("third_texture"), Opal::Exception);
+        Forge::DescriptorSet set = ForgeTest::Unwrap(Forge::DescriptorSet::Create(pool, layout));
+        REQUIRE(ForgeTest::Unwrap(set.GetBindingIndex("first_texture")) == 0);
+        REQUIRE(ForgeTest::Unwrap(set.GetBindingIndex("second_texture")) == 1);
+        REQUIRE(set.Update("first_texture", texture, sampler) == ErrorCode::Success);
+        REQUIRE(set.Update("second_texture", texture, sampler) == ErrorCode::Success);
+        REQUIRE_FALSE(set.GetBindingIndex("third_texture").HasValue());
     }
     SECTION("A set from a layout built without shaders carries no names")
     {
         Forge::DescriptorSetLayoutDesc desc;
-        desc.AddBinding(0, Forge::DescriptorType::CombinedImageSampler, 1, ShaderTypeBits::Fragment);
-        const Forge::DescriptorSetLayout layout(fixture.device, desc);
+        REQUIRE(desc.AddBinding(0, Forge::DescriptorType::CombinedImageSampler, 1, ShaderTypeBits::Fragment) == ErrorCode::Success);
+        const Forge::DescriptorSetLayout layout = ForgeTest::Unwrap(Forge::DescriptorSetLayout::Create(fixture.device, desc));
 
         Forge::DescriptorPoolDesc pool_desc;
-        pool_desc.Add(Forge::DescriptorType::CombinedImageSampler, 1);
-        const Forge::DescriptorPool pool(fixture.device, pool_desc);
+        REQUIRE(pool_desc.Add(Forge::DescriptorType::CombinedImageSampler, 1) == ErrorCode::Success);
+        const Forge::DescriptorPool pool = ForgeTest::Unwrap(Forge::DescriptorPool::Create(fixture.device, pool_desc));
 
-        Forge::DescriptorSet set(pool, layout);
-        REQUIRE_THROWS_AS(set.GetBindingIndex("first_texture"), Opal::Exception);
+        Forge::DescriptorSet set = ForgeTest::Unwrap(Forge::DescriptorSet::Create(pool, layout));
+        REQUIRE_FALSE(set.GetBindingIndex("first_texture").HasValue());
     }
     REQUIRE_NO_VALIDATION_ERROR(fixture);
 }
@@ -3835,7 +3843,7 @@ TEST_CASE("Forge shader cache", "[forge]")
     auto compile = [&](const char* source, const char* entry_point)
     {
         const Forge::Shader shader =
-            Forge::Shader::FromSourceInMemory(fixture.device, source, {.entry_point = entry_point, .cache = cache});
+            ForgeTest::Unwrap(Forge::Shader::FromSourceInMemory(fixture.device, source, {.entry_point = entry_point, .cache = cache}));
         REQUIRE(shader.IsValid());
         return cache.Find(Rndr::ShaderCacheKey::Make(source, entry_point, Rndr::ShaderOutputFormat::SpirV));
     };
@@ -3896,8 +3904,8 @@ TEST_CASE("Forge shader cache", "[forge]")
         REQUIRE(reopened.Find(key).IsEmpty());
 
         // And compiling through it puts a usable entry back where the garbage was.
-        const Forge::Shader shader =
-            Forge::Shader::FromSourceInMemory(fixture.device, k_cache_source, {.entry_point = "main_first", .cache = reopened});
+        const Forge::Shader shader = ForgeTest::Unwrap(
+            Forge::Shader::FromSourceInMemory(fixture.device, k_cache_source, {.entry_point = "main_first", .cache = reopened}));
         REQUIRE(shader.IsValid());
         Rndr::ShaderCache third{directory};
         REQUIRE(third.Find(key) == written);
@@ -3907,10 +3915,10 @@ TEST_CASE("Forge shader cache", "[forge]")
         Rndr::ShaderCache memory_only;
         REQUIRE(memory_only.GetDirectory().IsEmpty());
         REQUIRE(memory_only.GetFilePath(key).IsEmpty());
-        const Forge::Shader first =
-            Forge::Shader::FromSourceInMemory(fixture.device, k_cache_source, {.entry_point = "main_first", .cache = memory_only});
-        const Forge::Shader second =
-            Forge::Shader::FromSourceInMemory(fixture.device, k_cache_source, {.entry_point = "main_first", .cache = memory_only});
+        const Forge::Shader first = ForgeTest::Unwrap(
+            Forge::Shader::FromSourceInMemory(fixture.device, k_cache_source, {.entry_point = "main_first", .cache = memory_only}));
+        const Forge::Shader second = ForgeTest::Unwrap(
+            Forge::Shader::FromSourceInMemory(fixture.device, k_cache_source, {.entry_point = "main_first", .cache = memory_only}));
         REQUIRE(first.IsValid());
         REQUIRE(second.IsValid());
         REQUIRE(memory_only.GetHitCount() == 1);
@@ -3995,7 +4003,7 @@ Forge::Pipeline MakeAddressPipeline(const Forge::Device& device, const Forge::Sh
     pipeline_desc.shader = shader;
     pipeline_desc.push_constant_ranges.PushBack(
         {.shader_stages = ShaderTypeBits::Compute, .offset = 0, .size = sizeof(VkDeviceAddress)});
-    return Forge::Pipeline(device, pipeline_desc);
+    return ForgeTest::Unwrap(Forge::Pipeline::Create(device, pipeline_desc));
 }
 
 /** A wiped buffer of k_lifetime_elements, so nothing left in it can pass for a dispatch that ran. */
@@ -4180,12 +4188,13 @@ TEST_CASE("Forge empty state and moves of the resources", "[forge]")
     // A sampler holds nothing but its device and its handle, so writing it into a descriptor is the cheapest
     // thing that uses both. Sampling through one is 3.18.
     Forge::DescriptorPoolDesc sampler_pool_desc;
-    sampler_pool_desc.Add(Forge::DescriptorType::CombinedImageSampler, 4);
+    REQUIRE(sampler_pool_desc.Add(Forge::DescriptorType::CombinedImageSampler, 4) == ErrorCode::Success);
     sampler_pool_desc.max_sets = 4;
-    Forge::DescriptorPool sampler_pool(fixture.device, sampler_pool_desc);
+    Forge::DescriptorPool sampler_pool = ForgeTest::Unwrap(Forge::DescriptorPool::Create(fixture.device, sampler_pool_desc));
     Forge::DescriptorSetLayoutDesc sampler_layout_desc;
-    sampler_layout_desc.AddBinding(0, Forge::DescriptorType::CombinedImageSampler, 1, ShaderTypeBits::Fragment);
-    Forge::DescriptorSetLayout sampler_layout(fixture.device, sampler_layout_desc);
+    REQUIRE(sampler_layout_desc.AddBinding(0, Forge::DescriptorType::CombinedImageSampler, 1, ShaderTypeBits::Fragment) ==
+            ErrorCode::Success);
+    Forge::DescriptorSetLayout sampler_layout = ForgeTest::Unwrap(Forge::DescriptorSetLayout::Create(fixture.device, sampler_layout_desc));
     Forge::Texture sampled = ForgeTest::Unwrap(Forge::Texture::Create(fixture.device, {.format = k_format,
                                                   .width = k_side,
                                                   .height = k_side,
@@ -4195,15 +4204,15 @@ TEST_CASE("Forge empty state and moves of the resources", "[forge]")
                           [&](const Forge::Sampler& sampler)
                           {
                               REQUIRE(sampler.GetNativeSampler() != VK_NULL_HANDLE);
-                              Forge::DescriptorSet set(sampler_pool, sampler_layout);
-                              set.Update(0, sampled, sampler);
+                              Forge::DescriptorSet set = ForgeTest::Unwrap(Forge::DescriptorSet::Create(sampler_pool, sampler_layout));
+                              REQUIRE(set.Update(0, sampled, sampler) == ErrorCode::Success);
                           });
 
     CheckLifetimeContract("Shader",
                           [&]
                           {
-                              return Forge::Shader::FromSourceInMemory(fixture.device, k_compute_source,
-                                                                       {.entry_point = "main_compute", .cache = GetShaderCache()});
+                              return ForgeTest::Unwrap(Forge::Shader::FromSourceInMemory(fixture.device, k_compute_source,
+                                                                       {.entry_point = "main_compute", .cache = GetShaderCache()}));
                           },
                           [&](const Forge::Shader& shader)
                           {
@@ -4216,8 +4225,8 @@ TEST_CASE("Forge empty state and moves of the resources", "[forge]")
                               RequireDispatchWrites(fixture.device, fixture.GetQueue(), pipeline, output);
                           });
 
-    Forge::Shader compute_shader = Forge::Shader::FromSourceInMemory(
-        fixture.device, k_compute_source, {.entry_point = "main_compute", .cache = GetShaderCache()});
+    Forge::Shader compute_shader = ForgeTest::Unwrap(Forge::Shader::FromSourceInMemory(
+        fixture.device, k_compute_source, {.entry_point = "main_compute", .cache = GetShaderCache()}));
     CheckLifetimeContract("Pipeline", [&] { return MakeAddressPipeline(fixture.device, compute_shader); },
                           [&](const Forge::Pipeline& pipeline)
                           {
@@ -4247,53 +4256,55 @@ TEST_CASE("Forge empty state and moves of the descriptor objects", "[forge]")
     ForgeFixture fixture;
 
     Forge::DescriptorPoolDesc pool_desc;
-    pool_desc.Add(Forge::DescriptorType::StorageBuffer, 16);
+    REQUIRE(pool_desc.Add(Forge::DescriptorType::StorageBuffer, 16) == ErrorCode::Success);
     pool_desc.max_sets = 16;
     // On, so that DescriptorSet::Destroy returns the set to its pool rather than only dropping the handle,
     // which is the half of 1.7 nothing runs otherwise.
     pool_desc.free_individual_sets = true;
 
     Forge::DescriptorSetLayoutDesc layout_desc;
-    layout_desc.AddBinding(0, Forge::DescriptorType::StorageBuffer, 1, ShaderTypeBits::Compute);
+    REQUIRE(layout_desc.AddBinding(0, Forge::DescriptorType::StorageBuffer, 1, ShaderTypeBits::Compute) == ErrorCode::Success);
 
-    CheckLifetimeContract("DescriptorPool", [&] { return Forge::DescriptorPool(fixture.device, pool_desc); },
+    CheckLifetimeContract("DescriptorPool", [&] { return ForgeTest::Unwrap(Forge::DescriptorPool::Create(fixture.device, pool_desc)); },
                           [&](const Forge::DescriptorPool& pool)
                           {
                               REQUIRE(pool.GetNativeDescriptorPool() != VK_NULL_HANDLE);
                               // Allocating out of the moved pool is what needs its device and its desc, and
                               // the set it hands back holds the pool by reference.
-                              const Forge::DescriptorSetLayout layout(fixture.device, layout_desc);
-                              const Forge::DescriptorSet set(pool, layout);
+                              const Forge::DescriptorSetLayout layout =
+                                  ForgeTest::Unwrap(Forge::DescriptorSetLayout::Create(fixture.device, layout_desc));
+                              const Forge::DescriptorSet set = ForgeTest::Unwrap(Forge::DescriptorSet::Create(pool, layout));
                               REQUIRE(set.IsValid());
                           });
 
-    CheckLifetimeContract("DescriptorSetLayout", [&] { return Forge::DescriptorSetLayout(fixture.device, layout_desc); },
-                          [&](const Forge::DescriptorSetLayout& layout)
-                          {
-                              REQUIRE(layout.GetNativeDescriptorSetLayout() != VK_NULL_HANDLE);
-                              // The desc is what a set reads its binding types out of, so a layout that lost
-                              // it allocates a set that then knows about no binding at all.
-                              REQUIRE(layout.GetDesc().bindings.GetSize() == 1);
-                              const Forge::DescriptorPool pool(fixture.device, pool_desc);
-                              const Forge::DescriptorSet set(pool, layout);
-                              REQUIRE(set.GetBindingDescriptorType(0) == Forge::DescriptorType::StorageBuffer);
-                          });
+    CheckLifetimeContract(
+        "DescriptorSetLayout", [&] { return ForgeTest::Unwrap(Forge::DescriptorSetLayout::Create(fixture.device, layout_desc)); },
+        [&](const Forge::DescriptorSetLayout& layout)
+        {
+            REQUIRE(layout.GetNativeDescriptorSetLayout() != VK_NULL_HANDLE);
+            // The desc is what a set reads its binding types out of, so a layout that lost
+            // it allocates a set that then knows about no binding at all.
+            REQUIRE(layout.GetDesc().bindings.GetSize() == 1);
+            const Forge::DescriptorPool pool = ForgeTest::Unwrap(Forge::DescriptorPool::Create(fixture.device, pool_desc));
+            const Forge::DescriptorSet set = ForgeTest::Unwrap(Forge::DescriptorSet::Create(pool, layout));
+            REQUIRE(ForgeTest::Unwrap(set.GetBindingDescriptorType(0)) == Forge::DescriptorType::StorageBuffer);
+        });
 
-    Forge::DescriptorPool pool(fixture.device, pool_desc);
-    Forge::DescriptorSetLayout layout(fixture.device, layout_desc);
-    Forge::Shader shader = Forge::Shader::FromSourceInMemory(
-        fixture.device, k_descriptor_source, {.entry_point = "main_descriptor", .cache = GetShaderCache()});
+    Forge::DescriptorPool pool = ForgeTest::Unwrap(Forge::DescriptorPool::Create(fixture.device, pool_desc));
+    Forge::DescriptorSetLayout layout = ForgeTest::Unwrap(Forge::DescriptorSetLayout::Create(fixture.device, layout_desc));
+    Forge::Shader shader = ForgeTest::Unwrap(Forge::Shader::FromSourceInMemory(
+        fixture.device, k_descriptor_source, {.entry_point = "main_descriptor", .cache = GetShaderCache()}));
     Forge::ComputePipelineDesc pipeline_desc;
     pipeline_desc.shader = shader;
     pipeline_desc.descriptor_set_layouts.PushBack(Opal::Ref<const Forge::DescriptorSetLayout>(layout));
-    Forge::Pipeline pipeline(fixture.device, pipeline_desc);
+    Forge::Pipeline pipeline = ForgeTest::Unwrap(Forge::Pipeline::Create(fixture.device, pipeline_desc));
 
-    CheckLifetimeContract("DescriptorSet", [&] { return Forge::DescriptorSet(pool, layout); },
+    CheckLifetimeContract("DescriptorSet", [&] { return ForgeTest::Unwrap(Forge::DescriptorSet::Create(pool, layout)); },
                           [&](Forge::DescriptorSet& set)
                           {
-                              REQUIRE(set.GetBindingDescriptorType(0) == Forge::DescriptorType::StorageBuffer);
+                              REQUIRE(ForgeTest::Unwrap(set.GetBindingDescriptorType(0)) == Forge::DescriptorType::StorageBuffer);
                               const Forge::Buffer output = MakeWipedOutput(fixture.device);
-                              set.Update(0, output);
+                              REQUIRE(set.Update(0, output) == ErrorCode::Success);
                               REQUIRE(Forge::ImmediateSubmit(fixture.device, fixture.GetQueue(),
                                                      [&](Forge::CommandBuffer& command_buffer)
                                                      {
@@ -4913,13 +4924,13 @@ TEST_CASE("Forge barrier batches", "[forge]")
     {
         // A compute shader fills a buffer, the batch orders that write against the copy that reads it and
         // against the texture transition beside it, and the readback says both halves arrived.
-        const Forge::Shader compute_shader = Forge::Shader::FromSourceInMemory(
-            fixture.device, k_compute_source, {.entry_point = "main_compute", .cache = GetShaderCache()});
+        const Forge::Shader compute_shader = ForgeTest::Unwrap(Forge::Shader::FromSourceInMemory(
+            fixture.device, k_compute_source, {.entry_point = "main_compute", .cache = GetShaderCache()}));
         Forge::ComputePipelineDesc pipeline_desc;
         pipeline_desc.shader = compute_shader;
         pipeline_desc.push_constant_ranges.PushBack(
             {.shader_stages = ShaderTypeBits::Compute, .offset = 0, .size = sizeof(VkDeviceAddress)});
-        const Forge::Pipeline pipeline(fixture.device, pipeline_desc);
+        const Forge::Pipeline pipeline = ForgeTest::Unwrap(Forge::Pipeline::Create(fixture.device, pipeline_desc));
 
         const Forge::Buffer written = ForgeTest::Unwrap(Forge::Buffer::Create(fixture.device, {.size = k_element_count * sizeof(u32),
                                                      .usage = Forge::BufferUsageBits::StorageBuffer |
@@ -5126,13 +5137,13 @@ TEST_CASE("Forge barrier presets", "[forge]")
     {
         // The write is a transfer over the same range a compute shader just read, so without the barrier the
         // copy would be free to land before the dispatch finished reading.
-        const Forge::Shader compute_shader = Forge::Shader::FromSourceInMemory(
-            fixture.device, k_compute_source, {.entry_point = "main_compute", .cache = GetShaderCache()});
+        const Forge::Shader compute_shader = ForgeTest::Unwrap(Forge::Shader::FromSourceInMemory(
+            fixture.device, k_compute_source, {.entry_point = "main_compute", .cache = GetShaderCache()}));
         Forge::ComputePipelineDesc pipeline_desc;
         pipeline_desc.shader = compute_shader;
         pipeline_desc.push_constant_ranges.PushBack(
             {.shader_stages = ShaderTypeBits::Compute, .offset = 0, .size = sizeof(VkDeviceAddress)});
-        const Forge::Pipeline pipeline(fixture.device, pipeline_desc);
+        const Forge::Pipeline pipeline = ForgeTest::Unwrap(Forge::Pipeline::Create(fixture.device, pipeline_desc));
 
         constexpr i32 k_element_count = 64;
         const Opal::DynamicArray<u8> replacement = MakeBytes(k_element_count * sizeof(u32), 13);
@@ -5224,22 +5235,22 @@ TEST_CASE("Forge binding several descriptor sets at once", "[forge]")
     constexpr i32 k_element_count = 64;
 
     Forge::DescriptorPoolDesc pool_desc;
-    pool_desc.Add(Forge::DescriptorType::StorageBuffer, 8);
+    REQUIRE(pool_desc.Add(Forge::DescriptorType::StorageBuffer, 8) == ErrorCode::Success);
     pool_desc.max_sets = 8;
-    const Forge::DescriptorPool pool(fixture.device, pool_desc);
+    const Forge::DescriptorPool pool = ForgeTest::Unwrap(Forge::DescriptorPool::Create(fixture.device, pool_desc));
 
     Forge::DescriptorSetLayoutDesc layout_desc;
-    layout_desc.AddBinding(0, Forge::DescriptorType::StorageBuffer, 1, ShaderTypeBits::Compute);
-    const Forge::DescriptorSetLayout first_layout(fixture.device, layout_desc);
-    const Forge::DescriptorSetLayout second_layout(fixture.device, layout_desc);
+    REQUIRE(layout_desc.AddBinding(0, Forge::DescriptorType::StorageBuffer, 1, ShaderTypeBits::Compute) == ErrorCode::Success);
+    const Forge::DescriptorSetLayout first_layout = ForgeTest::Unwrap(Forge::DescriptorSetLayout::Create(fixture.device, layout_desc));
+    const Forge::DescriptorSetLayout second_layout = ForgeTest::Unwrap(Forge::DescriptorSetLayout::Create(fixture.device, layout_desc));
 
-    const Forge::Shader shader = Forge::Shader::FromSourceInMemory(fixture.device, k_two_set_source,
-                                                                   {.entry_point = "main_two_sets", .cache = GetShaderCache()});
+    const Forge::Shader shader = ForgeTest::Unwrap(Forge::Shader::FromSourceInMemory(fixture.device, k_two_set_source,
+                                                                   {.entry_point = "main_two_sets", .cache = GetShaderCache()}));
     Forge::ComputePipelineDesc pipeline_desc;
     pipeline_desc.shader = shader;
     pipeline_desc.descriptor_set_layouts.PushBack(Opal::Ref<const Forge::DescriptorSetLayout>(first_layout));
     pipeline_desc.descriptor_set_layouts.PushBack(Opal::Ref<const Forge::DescriptorSetLayout>(second_layout));
-    const Forge::Pipeline pipeline(fixture.device, pipeline_desc);
+    const Forge::Pipeline pipeline = ForgeTest::Unwrap(Forge::Pipeline::Create(fixture.device, pipeline_desc));
 
     // Distinct values per element, so a shader that read the wrong set would produce a pattern rather than
     // one wrong number.
@@ -5276,11 +5287,11 @@ TEST_CASE("Forge binding several descriptor sets at once", "[forge]")
 
     SECTION("Both sets go down in one call")
     {
-        Forge::DescriptorSet first(pool, first_layout);
-        Forge::DescriptorSet second(pool, second_layout);
+        Forge::DescriptorSet first = ForgeTest::Unwrap(Forge::DescriptorSet::Create(pool, first_layout));
+        Forge::DescriptorSet second = ForgeTest::Unwrap(Forge::DescriptorSet::Create(pool, second_layout));
         const Forge::Buffer output = make_wiped_output();
-        first.Update(0, input);
-        second.Update(0, output);
+        REQUIRE(first.Update(0, input) == ErrorCode::Success);
+        REQUIRE(second.Update(0, output) == ErrorCode::Success);
 
         const Opal::InPlaceArray<Opal::Ref<const Forge::DescriptorSet>, 2> sets{Opal::Ref<const Forge::DescriptorSet>(first),
                                                                                 Opal::Ref<const Forge::DescriptorSet>(second)};
@@ -5297,11 +5308,11 @@ TEST_CASE("Forge binding several descriptor sets at once", "[forge]")
     {
         // Set zero goes down on its own and set one through the plural call at first_set one, so a call that
         // ignored first_set would overwrite set zero and the shader would read its output as its input.
-        Forge::DescriptorSet first(pool, first_layout);
-        Forge::DescriptorSet second(pool, second_layout);
+        Forge::DescriptorSet first = ForgeTest::Unwrap(Forge::DescriptorSet::Create(pool, first_layout));
+        Forge::DescriptorSet second = ForgeTest::Unwrap(Forge::DescriptorSet::Create(pool, second_layout));
         const Forge::Buffer output = make_wiped_output();
-        first.Update(0, input);
-        second.Update(0, output);
+        REQUIRE(first.Update(0, input) == ErrorCode::Success);
+        REQUIRE(second.Update(0, output) == ErrorCode::Success);
 
         const Opal::InPlaceArray<Opal::Ref<const Forge::DescriptorSet>, 1> sets{Opal::Ref<const Forge::DescriptorSet>(second)};
         REQUIRE(Forge::ImmediateSubmit(fixture.device, fixture.GetQueue(),
@@ -5462,10 +5473,10 @@ Vector2f TexelCentre(i32 side, i32 x, i32 y)
 }
 
 /** One pipeline over two shaders, with everything these cases vary spelled out as arguments. */
-Forge::Pipeline MakeRasterPipeline(const Forge::Device& device, const Forge::Shader& vertex_shader,
-                                   const Forge::Shader& fragment_shader, PixelFormat format,
-                                   const Forge::RasterizerDesc& rasterizer,
-                                   PrimitiveTopology topology = PrimitiveTopology::Triangle)
+Opal::Expected<Forge::Pipeline, ErrorCode> MakeRasterPipeline(const Forge::Device& device, const Forge::Shader& vertex_shader,
+                                                              const Forge::Shader& fragment_shader, PixelFormat format,
+                                                              const Forge::RasterizerDesc& rasterizer,
+                                                              PrimitiveTopology topology = PrimitiveTopology::Triangle)
 {
     Forge::GraphicsPipelineDesc pipeline_desc;
     pipeline_desc.vertex_shader = vertex_shader;
@@ -5473,10 +5484,10 @@ Forge::Pipeline MakeRasterPipeline(const Forge::Device& device, const Forge::Sha
     pipeline_desc.rasterizer = rasterizer;
     pipeline_desc.topology = topology;
     pipeline_desc.vertex_input.AddBinding(0, 2 * sizeof(f32), DataRepetition::PerVertex);
-    pipeline_desc.vertex_input.AddAttribute(0, 0, PixelFormat::R32G32_SFLOAT, 0);
+    REQUIRE(pipeline_desc.vertex_input.AddAttribute(0, 0, PixelFormat::R32G32_SFLOAT, 0) == ErrorCode::Success);
     pipeline_desc.color_blend_attachments.PushBack(Forge::ColorBlendDesc{});
     pipeline_desc.color_attachment_formats.PushBack(format);
-    return Forge::Pipeline(device, pipeline_desc);
+    return Forge::Pipeline::Create(device, pipeline_desc);
 }
 
 }  // namespace
@@ -5491,10 +5502,10 @@ TEST_CASE("Forge culling and winding", "[forge]")
     constexpr i32 k_side = 4;
     constexpr PixelFormat k_format = PixelFormat::R8G8B8A8_UNORM;
 
-    const Forge::Shader vertex_shader = Forge::Shader::FromSourceInMemory(
-        fixture.device, k_fullscreen_source, {.entry_point = "main_vertex", .cache = GetShaderCache()});
-    const Forge::Shader fragment_shader = Forge::Shader::FromSourceInMemory(
-        fixture.device, k_fullscreen_source, {.entry_point = "main_fragment", .cache = GetShaderCache()});
+    const Forge::Shader vertex_shader = ForgeTest::Unwrap(Forge::Shader::FromSourceInMemory(
+        fixture.device, k_fullscreen_source, {.entry_point = "main_vertex", .cache = GetShaderCache()}));
+    const Forge::Shader fragment_shader = ForgeTest::Unwrap(Forge::Shader::FromSourceInMemory(
+        fixture.device, k_fullscreen_source, {.entry_point = "main_fragment", .cache = GetShaderCache()}));
     const Forge::Buffer vertices = ForgeTest::Unwrap(Forge::Buffer::Create(fixture.device,
                                  {.size = sizeof(k_fullscreen_vertices), .usage = Forge::BufferUsageBits::VertexBuffer},
                                  Opal::AsBytes(k_fullscreen_vertices)));
@@ -5503,8 +5514,8 @@ TEST_CASE("Forge culling and winding", "[forge]")
     // what the answers differ by is only the state.
     auto is_drawn = [&](Face cull_mode, WindingOrder front_face)
     {
-        const Forge::Pipeline pipeline = MakeRasterPipeline(fixture.device, vertex_shader, fragment_shader, k_format,
-                                                            {.cull_mode = cull_mode, .front_face = front_face});
+        const Forge::Pipeline pipeline = ForgeTest::Unwrap(MakeRasterPipeline(fixture.device, vertex_shader, fragment_shader, k_format,
+                                                            {.cull_mode = cull_mode, .front_face = front_face}));
         Forge::Texture color = MakeColorTarget(fixture.device, k_side, k_format);
         const Opal::DynamicArray<u8> pixels = RenderRaster(fixture, color, k_side,
                                                            [&](Forge::CommandBuffer& command_buffer)
@@ -5557,18 +5568,18 @@ TEST_CASE("Forge fill modes", "[forge]")
     constexpr i32 k_side = 16;
     constexpr PixelFormat k_format = PixelFormat::R8G8B8A8_UNORM;
 
-    const Forge::Shader vertex_shader = Forge::Shader::FromSourceInMemory(
-        fixture.device, k_fullscreen_source, {.entry_point = "main_vertex", .cache = GetShaderCache()});
-    const Forge::Shader fragment_shader = Forge::Shader::FromSourceInMemory(
-        fixture.device, k_fullscreen_source, {.entry_point = "main_fragment", .cache = GetShaderCache()});
+    const Forge::Shader vertex_shader = ForgeTest::Unwrap(Forge::Shader::FromSourceInMemory(
+        fixture.device, k_fullscreen_source, {.entry_point = "main_vertex", .cache = GetShaderCache()}));
+    const Forge::Shader fragment_shader = ForgeTest::Unwrap(Forge::Shader::FromSourceInMemory(
+        fixture.device, k_fullscreen_source, {.entry_point = "main_fragment", .cache = GetShaderCache()}));
     const Forge::Buffer vertices = ForgeTest::Unwrap(Forge::Buffer::Create(fixture.device,
                                  {.size = sizeof(k_inset_triangle), .usage = Forge::BufferUsageBits::VertexBuffer},
                                  Opal::AsBytes(k_inset_triangle)));
 
     auto draw_with_fill_mode = [&](FillMode fill_mode)
     {
-        const Forge::Pipeline pipeline = MakeRasterPipeline(fixture.device, vertex_shader, fragment_shader, k_format,
-                                                            {.fill_mode = fill_mode, .cull_mode = Face::None});
+        const Forge::Pipeline pipeline = ForgeTest::Unwrap(MakeRasterPipeline(fixture.device, vertex_shader, fragment_shader, k_format,
+                                                            {.fill_mode = fill_mode, .cull_mode = Face::None}));
         Forge::Texture color = MakeColorTarget(fixture.device, k_side, k_format);
         return RenderRaster(fixture, color, k_side,
                             [&](Forge::CommandBuffer& command_buffer)
@@ -5610,16 +5621,15 @@ TEST_CASE("Forge fill modes", "[forge]")
         // The polygon mode is a plain enum in the create info, so without this the device is handed a mode
         // it never agreed to and the validation layer is the only thing that notices.
         ForgeFixture plain({.fill_mode_non_solid = false});
-        const Forge::Shader plain_vertex = Forge::Shader::FromSourceInMemory(
-            plain.device, k_fullscreen_source, {.entry_point = "main_vertex", .cache = GetShaderCache()});
-        const Forge::Shader plain_fragment = Forge::Shader::FromSourceInMemory(
-            plain.device, k_fullscreen_source, {.entry_point = "main_fragment", .cache = GetShaderCache()});
-        REQUIRE_THROWS_AS(MakeRasterPipeline(plain.device, plain_vertex, plain_fragment, k_format,
-                                             {.fill_mode = FillMode::Wireframe, .cull_mode = Face::None}),
-                          Opal::Exception);
+        const Forge::Shader plain_vertex = ForgeTest::Unwrap(Forge::Shader::FromSourceInMemory(
+            plain.device, k_fullscreen_source, {.entry_point = "main_vertex", .cache = GetShaderCache()}));
+        const Forge::Shader plain_fragment = ForgeTest::Unwrap(Forge::Shader::FromSourceInMemory(
+            plain.device, k_fullscreen_source, {.entry_point = "main_fragment", .cache = GetShaderCache()}));
+        REQUIRE_FALSE(MakeRasterPipeline(plain.device, plain_vertex, plain_fragment, k_format,
+                                             {.fill_mode = FillMode::Wireframe, .cull_mode = Face::None}).HasValue());
         // Solid on the same device is fine, so what threw was the fill mode and not the pipeline.
-        const Forge::Pipeline solid_pipeline = MakeRasterPipeline(plain.device, plain_vertex, plain_fragment, k_format,
-                                                                  {.cull_mode = Face::None});
+        const Forge::Pipeline solid_pipeline = ForgeTest::Unwrap(MakeRasterPipeline(plain.device, plain_vertex, plain_fragment, k_format,
+                                                                  {.cull_mode = Face::None}));
         REQUIRE(solid_pipeline.IsValid());
         REQUIRE_NO_VALIDATION_ERROR(plain);
     }
@@ -5637,13 +5647,13 @@ TEST_CASE("Forge topologies", "[forge]")
     constexpr PixelFormat k_format = PixelFormat::R8G8B8A8_UNORM;
     constexpr i32 k_line_row = 4;
 
-    const Forge::Shader fragment_shader = Forge::Shader::FromSourceInMemory(
-        fixture.device, k_fullscreen_source, {.entry_point = "main_fragment", .cache = GetShaderCache()});
+    const Forge::Shader fragment_shader = ForgeTest::Unwrap(Forge::Shader::FromSourceInMemory(
+        fixture.device, k_fullscreen_source, {.entry_point = "main_fragment", .cache = GetShaderCache()}));
 
     SECTION("A line topology puts pixels along one row and nowhere else")
     {
-        const Forge::Shader vertex_shader = Forge::Shader::FromSourceInMemory(
-            fixture.device, k_fullscreen_source, {.entry_point = "main_vertex", .cache = GetShaderCache()});
+        const Forge::Shader vertex_shader = ForgeTest::Unwrap(Forge::Shader::FromSourceInMemory(
+            fixture.device, k_fullscreen_source, {.entry_point = "main_vertex", .cache = GetShaderCache()}));
         // Along the centres of one row of texels rather than along the boundary between two, so which row
         // the line lands on is not left to a rounding rule.
         const Vector2f left = TexelCentre(k_side, 0, k_line_row);
@@ -5652,8 +5662,8 @@ TEST_CASE("Forge topologies", "[forge]")
         const Forge::Buffer vertices = ForgeTest::Unwrap(Forge::Buffer::Create(fixture.device,
                                      {.size = sizeof(line_vertices), .usage = Forge::BufferUsageBits::VertexBuffer},
                                      Opal::AsBytes(line_vertices)));
-        const Forge::Pipeline pipeline = MakeRasterPipeline(fixture.device, vertex_shader, fragment_shader, k_format,
-                                                            {.cull_mode = Face::None}, PrimitiveTopology::Line);
+        const Forge::Pipeline pipeline = ForgeTest::Unwrap(MakeRasterPipeline(fixture.device, vertex_shader, fragment_shader, k_format,
+                                                            {.cull_mode = Face::None}, PrimitiveTopology::Line));
         Forge::Texture color = MakeColorTarget(fixture.device, k_side, k_format);
         const Opal::DynamicArray<u8> pixels = RenderRaster(fixture, color, k_side,
                                                            [&](Forge::CommandBuffer& command_buffer)
@@ -5684,8 +5694,8 @@ TEST_CASE("Forge topologies", "[forge]")
     }
     SECTION("A point topology puts one pixel per vertex")
     {
-        const Forge::Shader point_vertex_shader = Forge::Shader::FromSourceInMemory(
-            fixture.device, k_point_source, {.entry_point = "main_point_vertex", .cache = GetShaderCache()});
+        const Forge::Shader point_vertex_shader = ForgeTest::Unwrap(Forge::Shader::FromSourceInMemory(
+            fixture.device, k_point_source, {.entry_point = "main_point_vertex", .cache = GetShaderCache()}));
         // Three texels no triangle over them would fill, since they are not adjacent.
         const Vector2f first = TexelCentre(k_side, 1, 1);
         const Vector2f second = TexelCentre(k_side, 5, 2);
@@ -5694,8 +5704,8 @@ TEST_CASE("Forge topologies", "[forge]")
         const Forge::Buffer vertices = ForgeTest::Unwrap(Forge::Buffer::Create(fixture.device,
                                      {.size = sizeof(point_vertices), .usage = Forge::BufferUsageBits::VertexBuffer},
                                      Opal::AsBytes(point_vertices)));
-        const Forge::Pipeline pipeline = MakeRasterPipeline(fixture.device, point_vertex_shader, fragment_shader, k_format,
-                                                            {.cull_mode = Face::None}, PrimitiveTopology::Point);
+        const Forge::Pipeline pipeline = ForgeTest::Unwrap(MakeRasterPipeline(
+            fixture.device, point_vertex_shader, fragment_shader, k_format, {.cull_mode = Face::None}, PrimitiveTopology::Point));
         Forge::Texture color = MakeColorTarget(fixture.device, k_side, k_format);
         const Opal::DynamicArray<u8> pixels = RenderRaster(fixture, color, k_side,
                                                            [&](Forge::CommandBuffer& command_buffer)
@@ -5724,10 +5734,10 @@ TEST_CASE("Forge instancing through a second vertex binding", "[forge]")
     constexpr i32 k_half = k_side / 2;
     constexpr PixelFormat k_format = PixelFormat::R8G8B8A8_UNORM;
 
-    const Forge::Shader vertex_shader = Forge::Shader::FromSourceInMemory(
-        fixture.device, k_instanced_source, {.entry_point = "main_instanced_vertex", .cache = GetShaderCache()});
-    const Forge::Shader fragment_shader = Forge::Shader::FromSourceInMemory(
-        fixture.device, k_instanced_source, {.entry_point = "main_instanced_fragment", .cache = GetShaderCache()});
+    const Forge::Shader vertex_shader = ForgeTest::Unwrap(Forge::Shader::FromSourceInMemory(
+        fixture.device, k_instanced_source, {.entry_point = "main_instanced_vertex", .cache = GetShaderCache()}));
+    const Forge::Shader fragment_shader = ForgeTest::Unwrap(Forge::Shader::FromSourceInMemory(
+        fixture.device, k_instanced_source, {.entry_point = "main_instanced_fragment", .cache = GetShaderCache()}));
 
     // One quad over the top left quarter of the target, as two triangles. Every instance draws this and only
     // this, so where the four end up is entirely what the second binding fed them.
@@ -5758,13 +5768,13 @@ TEST_CASE("Forge instancing through a second vertex binding", "[forge]")
     pipeline_desc.fragment_shader = fragment_shader;
     pipeline_desc.rasterizer.cull_mode = Face::None;
     pipeline_desc.vertex_input.AddBinding(0, 2 * sizeof(f32), DataRepetition::PerVertex);
-    pipeline_desc.vertex_input.AddAttribute(0, 0, PixelFormat::R32G32_SFLOAT, 0);
+    REQUIRE(pipeline_desc.vertex_input.AddAttribute(0, 0, PixelFormat::R32G32_SFLOAT, 0) == ErrorCode::Success);
     pipeline_desc.vertex_input.AddBinding(1, sizeof(InstanceData), DataRepetition::PerInstance);
-    pipeline_desc.vertex_input.AddAttribute(1, 1, PixelFormat::R32G32_SFLOAT, 0);
-    pipeline_desc.vertex_input.AddAttribute(1, 2, PixelFormat::R32_UINT, 2 * sizeof(f32));
+    REQUIRE(pipeline_desc.vertex_input.AddAttribute(1, 1, PixelFormat::R32G32_SFLOAT, 0) == ErrorCode::Success);
+    REQUIRE(pipeline_desc.vertex_input.AddAttribute(1, 2, PixelFormat::R32_UINT, 2 * sizeof(f32)) == ErrorCode::Success);
     pipeline_desc.color_blend_attachments.PushBack(Forge::ColorBlendDesc{});
     pipeline_desc.color_attachment_formats.PushBack(k_format);
-    const Forge::Pipeline pipeline(fixture.device, pipeline_desc);
+    const Forge::Pipeline pipeline = ForgeTest::Unwrap(Forge::Pipeline::Create(fixture.device, pipeline_desc));
 
     Forge::Texture color = MakeColorTarget(fixture.device, k_side, k_format);
     const Opal::DynamicArray<u8> pixels = RenderRaster(fixture, color, k_side,
@@ -5810,15 +5820,15 @@ TEST_CASE("Forge viewport and scissor", "[forge]")
     constexpr i32 k_half = k_side / 2;
     constexpr PixelFormat k_format = PixelFormat::R8G8B8A8_UNORM;
 
-    const Forge::Shader vertex_shader = Forge::Shader::FromSourceInMemory(
-        fixture.device, k_fullscreen_source, {.entry_point = "main_vertex", .cache = GetShaderCache()});
-    const Forge::Shader fragment_shader = Forge::Shader::FromSourceInMemory(
-        fixture.device, k_fullscreen_source, {.entry_point = "main_fragment", .cache = GetShaderCache()});
+    const Forge::Shader vertex_shader = ForgeTest::Unwrap(Forge::Shader::FromSourceInMemory(
+        fixture.device, k_fullscreen_source, {.entry_point = "main_vertex", .cache = GetShaderCache()}));
+    const Forge::Shader fragment_shader = ForgeTest::Unwrap(Forge::Shader::FromSourceInMemory(
+        fixture.device, k_fullscreen_source, {.entry_point = "main_fragment", .cache = GetShaderCache()}));
     const Forge::Buffer vertices = ForgeTest::Unwrap(Forge::Buffer::Create(fixture.device,
                                  {.size = sizeof(k_fullscreen_vertices), .usage = Forge::BufferUsageBits::VertexBuffer},
                                  Opal::AsBytes(k_fullscreen_vertices)));
     const Forge::Pipeline pipeline =
-        MakeRasterPipeline(fixture.device, vertex_shader, fragment_shader, k_format, {.cull_mode = Face::None});
+        ForgeTest::Unwrap(MakeRasterPipeline(fixture.device, vertex_shader, fragment_shader, k_format, {.cull_mode = Face::None}));
 
     /** Which half of the target the covered texels are in, as two counts. */
     auto count_halves = [&](const Opal::DynamicArray<u8>& pixels)
@@ -5892,9 +5902,9 @@ Opal::DynamicArray<f32> MakeFullscreenTriangleAt(f32 z)
 }
 
 /** A pipeline over three-component positions, which is what both depth cases feed it. */
-Forge::Pipeline MakeDepthPipeline(const Forge::Device& device, const Forge::Shader& vertex_shader,
-                                  const Forge::Shader& fragment_shader, PixelFormat color_format,
-                                  PixelFormat depth_format, bool depth_clamp)
+Opal::Expected<Forge::Pipeline, ErrorCode> MakeDepthPipeline(const Forge::Device& device, const Forge::Shader& vertex_shader,
+                                                             const Forge::Shader& fragment_shader, PixelFormat color_format,
+                                                             PixelFormat depth_format, bool depth_clamp)
 {
     Forge::GraphicsPipelineDesc pipeline_desc;
     pipeline_desc.vertex_shader = vertex_shader;
@@ -5902,7 +5912,7 @@ Forge::Pipeline MakeDepthPipeline(const Forge::Device& device, const Forge::Shad
     pipeline_desc.rasterizer.cull_mode = Face::None;
     pipeline_desc.rasterizer.depth_clamp = depth_clamp;
     pipeline_desc.vertex_input.AddBinding(0, 3 * sizeof(f32), DataRepetition::PerVertex);
-    pipeline_desc.vertex_input.AddAttribute(0, 0, PixelFormat::R32G32B32_SFLOAT, 0);
+    REQUIRE(pipeline_desc.vertex_input.AddAttribute(0, 0, PixelFormat::R32G32B32_SFLOAT, 0) == ErrorCode::Success);
     pipeline_desc.color_blend_attachments.PushBack(Forge::ColorBlendDesc{});
     pipeline_desc.color_attachment_formats.PushBack(color_format);
     if (depth_format != PixelFormat::Undefined)
@@ -5914,7 +5924,7 @@ Forge::Pipeline MakeDepthPipeline(const Forge::Device& device, const Forge::Shad
         pipeline_desc.depth_stencil.depth_comparator = Comparator::Always;
         pipeline_desc.depth_attachment_format = depth_format;
     }
-    return Forge::Pipeline(device, pipeline_desc);
+    return Forge::Pipeline::Create(device, pipeline_desc);
 }
 
 }  // namespace
@@ -5930,12 +5940,12 @@ TEST_CASE("Forge viewport depth range", "[forge]")
     constexpr PixelFormat k_color_format = PixelFormat::R8G8B8A8_UNORM;
     constexpr PixelFormat k_depth_format = PixelFormat::D32_SFLOAT;
 
-    const Forge::Shader vertex_shader = Forge::Shader::FromSourceInMemory(
-        fixture.device, k_depth_position_source, {.entry_point = "main_depth_vertex", .cache = GetShaderCache()});
-    const Forge::Shader fragment_shader = Forge::Shader::FromSourceInMemory(
-        fixture.device, k_depth_position_source, {.entry_point = "main_depth_fragment", .cache = GetShaderCache()});
+    const Forge::Shader vertex_shader = ForgeTest::Unwrap(Forge::Shader::FromSourceInMemory(
+        fixture.device, k_depth_position_source, {.entry_point = "main_depth_vertex", .cache = GetShaderCache()}));
+    const Forge::Shader fragment_shader = ForgeTest::Unwrap(Forge::Shader::FromSourceInMemory(
+        fixture.device, k_depth_position_source, {.entry_point = "main_depth_fragment", .cache = GetShaderCache()}));
     const Forge::Pipeline pipeline =
-        MakeDepthPipeline(fixture.device, vertex_shader, fragment_shader, k_color_format, k_depth_format, false);
+        ForgeTest::Unwrap(MakeDepthPipeline(fixture.device, vertex_shader, fragment_shader, k_color_format, k_depth_format, false));
 
     // A z of zero, so the depth that gets written is min_depth itself and the mapping is readable off the
     // result rather than having to be undone. A z of one half would land on the same number either way.
@@ -6024,10 +6034,10 @@ TEST_CASE("Forge depth clamp", "[forge]")
     constexpr i32 k_side = 4;
     constexpr PixelFormat k_format = PixelFormat::R8G8B8A8_UNORM;
 
-    const Forge::Shader vertex_shader = Forge::Shader::FromSourceInMemory(
-        fixture.device, k_depth_position_source, {.entry_point = "main_depth_vertex", .cache = GetShaderCache()});
-    const Forge::Shader fragment_shader = Forge::Shader::FromSourceInMemory(
-        fixture.device, k_depth_position_source, {.entry_point = "main_depth_fragment", .cache = GetShaderCache()});
+    const Forge::Shader vertex_shader = ForgeTest::Unwrap(Forge::Shader::FromSourceInMemory(
+        fixture.device, k_depth_position_source, {.entry_point = "main_depth_vertex", .cache = GetShaderCache()}));
+    const Forge::Shader fragment_shader = ForgeTest::Unwrap(Forge::Shader::FromSourceInMemory(
+        fixture.device, k_depth_position_source, {.entry_point = "main_depth_fragment", .cache = GetShaderCache()}));
 
     // Past the far plane, which is the whole point: without clamping the triangle is clipped away, and with
     // it the fragments are flattened onto the plane and drawn.
@@ -6038,8 +6048,8 @@ TEST_CASE("Forge depth clamp", "[forge]")
 
     auto is_drawn = [&](bool depth_clamp)
     {
-        const Forge::Pipeline pipeline = MakeDepthPipeline(fixture.device, vertex_shader, fragment_shader, k_format,
-                                                           PixelFormat::Undefined, depth_clamp);
+        const Forge::Pipeline pipeline = ForgeTest::Unwrap(MakeDepthPipeline(fixture.device, vertex_shader, fragment_shader, k_format,
+                                                           PixelFormat::Undefined, depth_clamp));
         Forge::Texture color = MakeColorTarget(fixture.device, k_side, k_format);
         const Opal::DynamicArray<u8> pixels = RenderRaster(fixture, color, k_side,
                                                            [&](Forge::CommandBuffer& command_buffer)
@@ -6068,13 +6078,11 @@ TEST_CASE("Forge depth clamp", "[forge]")
     SECTION("Clamping on a device without the feature throws")
     {
         ForgeFixture plain({.depth_clamp = false});
-        const Forge::Shader plain_vertex = Forge::Shader::FromSourceInMemory(
-            plain.device, k_depth_position_source, {.entry_point = "main_depth_vertex", .cache = GetShaderCache()});
-        const Forge::Shader plain_fragment = Forge::Shader::FromSourceInMemory(
-            plain.device, k_depth_position_source, {.entry_point = "main_depth_fragment", .cache = GetShaderCache()});
-        REQUIRE_THROWS_AS(
-            MakeDepthPipeline(plain.device, plain_vertex, plain_fragment, k_format, PixelFormat::Undefined, true),
-            Opal::Exception);
+        const Forge::Shader plain_vertex = ForgeTest::Unwrap(Forge::Shader::FromSourceInMemory(
+            plain.device, k_depth_position_source, {.entry_point = "main_depth_vertex", .cache = GetShaderCache()}));
+        const Forge::Shader plain_fragment = ForgeTest::Unwrap(Forge::Shader::FromSourceInMemory(
+            plain.device, k_depth_position_source, {.entry_point = "main_depth_fragment", .cache = GetShaderCache()}));
+        REQUIRE_FALSE(MakeDepthPipeline(plain.device, plain_vertex, plain_fragment, k_format, PixelFormat::Undefined, true).HasValue());
         REQUIRE_NO_VALIDATION_ERROR(plain);
     }
     REQUIRE_NO_VALIDATION_ERROR(fixture);
@@ -6160,7 +6168,7 @@ Forge::GraphicsPipelineDesc MakePushedColorPipelineDesc(const Forge::Shader& ver
     pipeline_desc.fragment_shader = fragment_shader;
     pipeline_desc.rasterizer.cull_mode = Face::None;
     pipeline_desc.vertex_input.AddBinding(0, 3 * sizeof(f32), DataRepetition::PerVertex);
-    pipeline_desc.vertex_input.AddAttribute(0, 0, PixelFormat::R32G32B32_SFLOAT, 0);
+    REQUIRE(pipeline_desc.vertex_input.AddAttribute(0, 0, PixelFormat::R32G32B32_SFLOAT, 0) == ErrorCode::Success);
     pipeline_desc.push_constant_ranges.PushBack(
         {.shader_stages = ShaderTypeBits::Fragment, .offset = 0, .size = sizeof(Vector4f)});
     pipeline_desc.color_blend_attachments.PushBack(Forge::ColorBlendDesc{});
@@ -6181,10 +6189,10 @@ TEST_CASE("Forge depth testing", "[forge]")
     constexpr PixelFormat k_color_format = PixelFormat::R8G8B8A8_UNORM;
     constexpr PixelFormat k_depth_format = PixelFormat::D32_SFLOAT;
 
-    const Forge::Shader vertex_shader = Forge::Shader::FromSourceInMemory(
-        fixture.device, k_pushed_color_source, {.entry_point = "main_color_vertex", .cache = GetShaderCache()});
-    const Forge::Shader fragment_shader = Forge::Shader::FromSourceInMemory(
-        fixture.device, k_pushed_color_source, {.entry_point = "main_color_fragment", .cache = GetShaderCache()});
+    const Forge::Shader vertex_shader = ForgeTest::Unwrap(Forge::Shader::FromSourceInMemory(
+        fixture.device, k_pushed_color_source, {.entry_point = "main_color_vertex", .cache = GetShaderCache()}));
+    const Forge::Shader fragment_shader = ForgeTest::Unwrap(Forge::Shader::FromSourceInMemory(
+        fixture.device, k_pushed_color_source, {.entry_point = "main_color_fragment", .cache = GetShaderCache()}));
 
     // Near is drawn first and far second, so a pass with no working depth test would end on the far colour
     // whatever the comparator said - which is what makes the two answers below tell them apart.
@@ -6200,7 +6208,7 @@ TEST_CASE("Forge depth testing", "[forge]")
         pipeline_desc.depth_stencil.depth_write_enabled = depth_write;
         pipeline_desc.depth_stencil.depth_comparator = comparator;
         pipeline_desc.depth_attachment_format = k_depth_format;
-        return Forge::Pipeline(fixture.device, pipeline_desc);
+        return ForgeTest::Unwrap(Forge::Pipeline::Create(fixture.device, pipeline_desc));
     };
 
     /** What one pass leaves behind: the colour that survived and the depth beside it. */
@@ -6321,10 +6329,10 @@ TEST_CASE("Forge stencil testing", "[forge]")
     constexpr PixelFormat k_color_format = PixelFormat::R8G8B8A8_UNORM;
     constexpr PixelFormat k_depth_stencil_format = PixelFormat::D24_UNORM_S8_UINT;
 
-    const Forge::Shader vertex_shader = Forge::Shader::FromSourceInMemory(
-        fixture.device, k_pushed_color_source, {.entry_point = "main_color_vertex", .cache = GetShaderCache()});
-    const Forge::Shader fragment_shader = Forge::Shader::FromSourceInMemory(
-        fixture.device, k_pushed_color_source, {.entry_point = "main_color_fragment", .cache = GetShaderCache()});
+    const Forge::Shader vertex_shader = ForgeTest::Unwrap(Forge::Shader::FromSourceInMemory(
+        fixture.device, k_pushed_color_source, {.entry_point = "main_color_vertex", .cache = GetShaderCache()}));
+    const Forge::Shader fragment_shader = ForgeTest::Unwrap(Forge::Shader::FromSourceInMemory(
+        fixture.device, k_pushed_color_source, {.entry_point = "main_color_fragment", .cache = GetShaderCache()}));
 
     // Both faces of every pipeline below are set to the same thing, and not for tidiness: culling is off, so
     // which of the two states a fragment uses depends on how the quad happens to wind, and setting only the
@@ -6350,7 +6358,7 @@ TEST_CASE("Forge stencil testing", "[forge]")
         pipeline_desc.color_blend_attachments[0].color_write_mask = Forge::ColorWriteMaskBits::None;
         pipeline_desc.depth_attachment_format = k_depth_stencil_format;
         pipeline_desc.stencil_attachment_format = k_depth_stencil_format;
-        return Forge::Pipeline(fixture.device, pipeline_desc);
+        return ForgeTest::Unwrap(Forge::Pipeline::Create(fixture.device, pipeline_desc));
     }();
 
     /** The pipeline that paints, either only where the stencil says one or everywhere. */
@@ -6367,7 +6375,7 @@ TEST_CASE("Forge stencil testing", "[forge]")
         pipeline_desc.depth_stencil.back_write_mask = 0;
         pipeline_desc.depth_attachment_format = k_depth_stencil_format;
         pipeline_desc.stencil_attachment_format = k_depth_stencil_format;
-        return Forge::Pipeline(fixture.device, pipeline_desc);
+        return ForgeTest::Unwrap(Forge::Pipeline::Create(fixture.device, pipeline_desc));
     };
 
     auto run_pass = [&](const Forge::Pipeline& paint_pipeline)
@@ -6483,10 +6491,10 @@ TEST_CASE("Forge stencil masks set per draw", "[forge]")
     constexpr PixelFormat k_color_format = PixelFormat::R8G8B8A8_UNORM;
     constexpr PixelFormat k_depth_stencil_format = PixelFormat::D24_UNORM_S8_UINT;
 
-    const Forge::Shader vertex_shader = Forge::Shader::FromSourceInMemory(
-        fixture.device, k_pushed_color_source, {.entry_point = "main_color_vertex", .cache = GetShaderCache()});
-    const Forge::Shader fragment_shader = Forge::Shader::FromSourceInMemory(
-        fixture.device, k_pushed_color_source, {.entry_point = "main_color_fragment", .cache = GetShaderCache()});
+    const Forge::Shader vertex_shader = ForgeTest::Unwrap(Forge::Shader::FromSourceInMemory(
+        fixture.device, k_pushed_color_source, {.entry_point = "main_color_vertex", .cache = GetShaderCache()}));
+    const Forge::Shader fragment_shader = ForgeTest::Unwrap(Forge::Shader::FromSourceInMemory(
+        fixture.device, k_pushed_color_source, {.entry_point = "main_color_fragment", .cache = GetShaderCache()}));
 
     const Forge::Buffer left_quad = MakeQuadBuffer(fixture.device, MakeLeftHalfQuad(0.5f));
     const Forge::Buffer full_quad = MakeQuadBuffer(fixture.device, MakeFullTargetQuad(0.5f));
@@ -6510,7 +6518,7 @@ TEST_CASE("Forge stencil masks set per draw", "[forge]")
         pipeline_desc.depth_attachment_format = k_depth_stencil_format;
         pipeline_desc.stencil_attachment_format = k_depth_stencil_format;
         pipeline_desc.dynamic_state = k_dynamic_stencil;
-        return Forge::Pipeline(fixture.device, pipeline_desc);
+        return ForgeTest::Unwrap(Forge::Pipeline::Create(fixture.device, pipeline_desc));
     }();
 
     /** Paints where the stencil buffer compares equal, leaving it alone. */
@@ -6523,7 +6531,7 @@ TEST_CASE("Forge stencil masks set per draw", "[forge]")
         pipeline_desc.depth_attachment_format = k_depth_stencil_format;
         pipeline_desc.stencil_attachment_format = k_depth_stencil_format;
         pipeline_desc.dynamic_state = k_dynamic_stencil;
-        return Forge::Pipeline(fixture.device, pipeline_desc);
+        return ForgeTest::Unwrap(Forge::Pipeline::Create(fixture.device, pipeline_desc));
     }();
 
     const Vector4f mask_color = ByteColor(0, 0, 0, 255);
@@ -6653,10 +6661,10 @@ TEST_CASE("Forge blending", "[forge]")
     constexpr i32 k_side = 4;
     constexpr PixelFormat k_format = PixelFormat::R8G8B8A8_UNORM;
 
-    const Forge::Shader vertex_shader = Forge::Shader::FromSourceInMemory(
-        fixture.device, k_pushed_color_source, {.entry_point = "main_color_vertex", .cache = GetShaderCache()});
-    const Forge::Shader fragment_shader = Forge::Shader::FromSourceInMemory(
-        fixture.device, k_pushed_color_source, {.entry_point = "main_color_fragment", .cache = GetShaderCache()});
+    const Forge::Shader vertex_shader = ForgeTest::Unwrap(Forge::Shader::FromSourceInMemory(
+        fixture.device, k_pushed_color_source, {.entry_point = "main_color_vertex", .cache = GetShaderCache()}));
+    const Forge::Shader fragment_shader = ForgeTest::Unwrap(Forge::Shader::FromSourceInMemory(
+        fixture.device, k_pushed_color_source, {.entry_point = "main_color_fragment", .cache = GetShaderCache()}));
     const Forge::Buffer quad = MakeQuadBuffer(fixture.device, MakeFullTargetQuad(0.5f));
 
     // Byte values rather than round numbers, so what comes back is the blend equation and not a coincidence
@@ -6665,14 +6673,14 @@ TEST_CASE("Forge blending", "[forge]")
     constexpr i32 k_src[4] = {128, 96, 48, 128};
 
     /** The pipeline that lays the destination down, with blending off so it arrives untouched. */
-    const Forge::Pipeline opaque_pipeline(
-        fixture.device, MakePushedColorPipelineDesc(vertex_shader, fragment_shader, k_format));
+    const Forge::Pipeline opaque_pipeline = ForgeTest::Unwrap(Forge::Pipeline::Create(
+        fixture.device, MakePushedColorPipelineDesc(vertex_shader, fragment_shader, k_format)));
 
     auto blend_over_destination = [&](const Forge::ColorBlendDesc& blend)
     {
         Forge::GraphicsPipelineDesc pipeline_desc = MakePushedColorPipelineDesc(vertex_shader, fragment_shader, k_format);
         pipeline_desc.color_blend_attachments[0] = blend;
-        const Forge::Pipeline blend_pipeline(fixture.device, pipeline_desc);
+        const Forge::Pipeline blend_pipeline = ForgeTest::Unwrap(Forge::Pipeline::Create(fixture.device, pipeline_desc));
 
         Forge::Texture color = MakeColorTarget(fixture.device, k_side, k_format);
         const Vector4f destination = ByteColor(k_dst[0], k_dst[1], k_dst[2], k_dst[3]);
@@ -7000,26 +7008,26 @@ TEST_CASE("Forge sampler filtering and addressing", "[forge]")
     ForgeFixture fixture;
     constexpr PixelFormat k_format = PixelFormat::R8G8B8A8_UNORM;
 
-    const Forge::Shader shader = Forge::Shader::FromSourceInMemory(
-        fixture.device, k_combined_sample_source, {.entry_point = "main_sample_combined", .cache = GetShaderCache()});
+    const Forge::Shader shader = ForgeTest::Unwrap(Forge::Shader::FromSourceInMemory(
+        fixture.device, k_combined_sample_source, {.entry_point = "main_sample_combined", .cache = GetShaderCache()}));
 
     Forge::DescriptorPoolDesc pool_desc;
-    pool_desc.Add(Forge::DescriptorType::CombinedImageSampler, 8);
-    pool_desc.Add(Forge::DescriptorType::StorageBuffer, 8);
+    REQUIRE(pool_desc.Add(Forge::DescriptorType::CombinedImageSampler, 8) == ErrorCode::Success);
+    REQUIRE(pool_desc.Add(Forge::DescriptorType::StorageBuffer, 8) == ErrorCode::Success);
     pool_desc.max_sets = 8;
-    const Forge::DescriptorPool pool(fixture.device, pool_desc);
+    const Forge::DescriptorPool pool = ForgeTest::Unwrap(Forge::DescriptorPool::Create(fixture.device, pool_desc));
 
     Forge::DescriptorSetLayoutDesc layout_desc;
-    layout_desc.AddBinding(0, Forge::DescriptorType::CombinedImageSampler, 1, ShaderTypeBits::Compute);
-    layout_desc.AddBinding(1, Forge::DescriptorType::StorageBuffer, 1, ShaderTypeBits::Compute);
-    const Forge::DescriptorSetLayout layout(fixture.device, layout_desc);
+    REQUIRE(layout_desc.AddBinding(0, Forge::DescriptorType::CombinedImageSampler, 1, ShaderTypeBits::Compute) == ErrorCode::Success);
+    REQUIRE(layout_desc.AddBinding(1, Forge::DescriptorType::StorageBuffer, 1, ShaderTypeBits::Compute) == ErrorCode::Success);
+    const Forge::DescriptorSetLayout layout = ForgeTest::Unwrap(Forge::DescriptorSetLayout::Create(fixture.device, layout_desc));
 
     Forge::ComputePipelineDesc pipeline_desc;
     pipeline_desc.shader = shader;
     pipeline_desc.descriptor_set_layouts.PushBack(Opal::Ref<const Forge::DescriptorSetLayout>(layout));
     pipeline_desc.push_constant_ranges.PushBack(
         {.shader_stages = ShaderTypeBits::Compute, .offset = 0, .size = sizeof(SampleParams)});
-    const Forge::Pipeline pipeline(fixture.device, pipeline_desc);
+    const Forge::Pipeline pipeline = ForgeTest::Unwrap(Forge::Pipeline::Create(fixture.device, pipeline_desc));
 
     /** The one texture every section here samples: two texels, red then green. */
     Forge::Texture row = ForgeTest::Unwrap(Forge::Texture::Create(fixture.device, {.format = k_format,
@@ -7039,9 +7047,9 @@ TEST_CASE("Forge sampler filtering and addressing", "[forge]")
         const Opal::DynamicArray<u8> zeros(sizeof(Vector4f));
         REQUIRE(output.Update(zeros) == ErrorCode::Success);
 
-        Forge::DescriptorSet set(pool, layout);
-        set.Update(0, texture, sampler, Forge::ImageLayout::ShaderReadOnly);
-        set.Update(1, output);
+        Forge::DescriptorSet set = ForgeTest::Unwrap(Forge::DescriptorSet::Create(pool, layout));
+        REQUIRE(set.Update(0, texture, sampler, Forge::ImageLayout::ShaderReadOnly) == ErrorCode::Success);
+        REQUIRE(set.Update(1, output) == ErrorCode::Success);
         REQUIRE(Forge::ImmediateSubmit(fixture.device, fixture.GetQueue(),
                                [&](Forge::CommandBuffer& command_buffer)
                                {
@@ -7151,17 +7159,18 @@ TEST_CASE("Forge sampler filtering and addressing", "[forge]")
 
         const Opal::InPlaceArray<Opal::Ref<const Forge::Sampler>, 1> baked_samplers{Opal::Ref<const Forge::Sampler>(baked)};
         Forge::DescriptorSetLayoutDesc immutable_desc;
-        immutable_desc.AddBinding(0, Forge::DescriptorType::CombinedImageSampler, 1, ShaderTypeBits::Compute,
-                                  {baked_samplers.GetData(), 1});
-        immutable_desc.AddBinding(1, Forge::DescriptorType::StorageBuffer, 1, ShaderTypeBits::Compute);
-        const Forge::DescriptorSetLayout immutable_layout(fixture.device, immutable_desc);
+        REQUIRE(immutable_desc.AddBinding(0, Forge::DescriptorType::CombinedImageSampler, 1, ShaderTypeBits::Compute,
+                                  {baked_samplers.GetData(), 1}) == ErrorCode::Success);
+        REQUIRE(immutable_desc.AddBinding(1, Forge::DescriptorType::StorageBuffer, 1, ShaderTypeBits::Compute) == ErrorCode::Success);
+        const Forge::DescriptorSetLayout immutable_layout =
+            ForgeTest::Unwrap(Forge::DescriptorSetLayout::Create(fixture.device, immutable_desc));
 
         Forge::ComputePipelineDesc immutable_pipeline_desc;
         immutable_pipeline_desc.shader = shader;
         immutable_pipeline_desc.descriptor_set_layouts.PushBack(Opal::Ref<const Forge::DescriptorSetLayout>(immutable_layout));
         immutable_pipeline_desc.push_constant_ranges.PushBack(
             {.shader_stages = ShaderTypeBits::Compute, .offset = 0, .size = sizeof(SampleParams)});
-        const Forge::Pipeline immutable_pipeline(fixture.device, immutable_pipeline_desc);
+        const Forge::Pipeline immutable_pipeline = ForgeTest::Unwrap(Forge::Pipeline::Create(fixture.device, immutable_pipeline_desc));
 
         const Forge::Buffer output = ForgeTest::Unwrap(Forge::Buffer::Create(fixture.device, {.size = sizeof(Vector4f),
                                                     .usage = Forge::BufferUsageBits::StorageBuffer,
@@ -7169,9 +7178,9 @@ TEST_CASE("Forge sampler filtering and addressing", "[forge]")
         const Opal::DynamicArray<u8> zeros(sizeof(Vector4f));
         REQUIRE(output.Update(zeros) == ErrorCode::Success);
 
-        Forge::DescriptorSet set(pool, immutable_layout);
-        set.Update(0, row, ignored, Forge::ImageLayout::ShaderReadOnly);
-        set.Update(1, output);
+        Forge::DescriptorSet set = ForgeTest::Unwrap(Forge::DescriptorSet::Create(pool, immutable_layout));
+        REQUIRE(set.Update(0, row, ignored, Forge::ImageLayout::ShaderReadOnly) == ErrorCode::Success);
+        REQUIRE(set.Update(1, output) == ErrorCode::Success);
         const SampleParams params{.uv = {0.4f, 0.5f}};
         REQUIRE(Forge::ImmediateSubmit(fixture.device, fixture.GetQueue(),
                                [&](Forge::CommandBuffer& command_buffer)
@@ -7200,29 +7209,29 @@ TEST_CASE("Forge separate sampler and sampled image", "[forge]")
     }
     ForgeFixture fixture;
 
-    const Forge::Shader shader = Forge::Shader::FromSourceInMemory(
-        fixture.device, k_separate_sample_source, {.entry_point = "main_sample_separate", .cache = GetShaderCache()});
+    const Forge::Shader shader = ForgeTest::Unwrap(Forge::Shader::FromSourceInMemory(
+        fixture.device, k_separate_sample_source, {.entry_point = "main_sample_separate", .cache = GetShaderCache()}));
 
     Forge::DescriptorPoolDesc pool_desc;
-    pool_desc.Add(Forge::DescriptorType::SampledImage, 4);
-    pool_desc.Add(Forge::DescriptorType::Sampler, 4);
-    pool_desc.Add(Forge::DescriptorType::StorageBuffer, 4);
+    REQUIRE(pool_desc.Add(Forge::DescriptorType::SampledImage, 4) == ErrorCode::Success);
+    REQUIRE(pool_desc.Add(Forge::DescriptorType::Sampler, 4) == ErrorCode::Success);
+    REQUIRE(pool_desc.Add(Forge::DescriptorType::StorageBuffer, 4) == ErrorCode::Success);
     pool_desc.max_sets = 4;
-    const Forge::DescriptorPool pool(fixture.device, pool_desc);
+    const Forge::DescriptorPool pool = ForgeTest::Unwrap(Forge::DescriptorPool::Create(fixture.device, pool_desc));
 
     // The image and the sampler in bindings of their own, which is the pair the combined descriptor bundles.
     Forge::DescriptorSetLayoutDesc layout_desc;
-    layout_desc.AddBinding(0, Forge::DescriptorType::SampledImage, 1, ShaderTypeBits::Compute);
-    layout_desc.AddBinding(1, Forge::DescriptorType::Sampler, 1, ShaderTypeBits::Compute);
-    layout_desc.AddBinding(2, Forge::DescriptorType::StorageBuffer, 1, ShaderTypeBits::Compute);
-    const Forge::DescriptorSetLayout layout(fixture.device, layout_desc);
+    REQUIRE(layout_desc.AddBinding(0, Forge::DescriptorType::SampledImage, 1, ShaderTypeBits::Compute) == ErrorCode::Success);
+    REQUIRE(layout_desc.AddBinding(1, Forge::DescriptorType::Sampler, 1, ShaderTypeBits::Compute) == ErrorCode::Success);
+    REQUIRE(layout_desc.AddBinding(2, Forge::DescriptorType::StorageBuffer, 1, ShaderTypeBits::Compute) == ErrorCode::Success);
+    const Forge::DescriptorSetLayout layout = ForgeTest::Unwrap(Forge::DescriptorSetLayout::Create(fixture.device, layout_desc));
 
     Forge::ComputePipelineDesc pipeline_desc;
     pipeline_desc.shader = shader;
     pipeline_desc.descriptor_set_layouts.PushBack(Opal::Ref<const Forge::DescriptorSetLayout>(layout));
     pipeline_desc.push_constant_ranges.PushBack(
         {.shader_stages = ShaderTypeBits::Compute, .offset = 0, .size = sizeof(SampleParams)});
-    const Forge::Pipeline pipeline(fixture.device, pipeline_desc);
+    const Forge::Pipeline pipeline = ForgeTest::Unwrap(Forge::Pipeline::Create(fixture.device, pipeline_desc));
 
     Forge::Texture row = ForgeTest::Unwrap(Forge::Texture::Create(fixture.device, {.format = PixelFormat::R8G8B8A8_UNORM,
                                         .width = 2,
@@ -7240,12 +7249,12 @@ TEST_CASE("Forge separate sampler and sampled image", "[forge]")
     const Opal::DynamicArray<u8> zeros(sizeof(Vector4f));
     REQUIRE(output.Update(zeros) == ErrorCode::Success);
 
-    Forge::DescriptorSet set(pool, layout);
+    Forge::DescriptorSet set = ForgeTest::Unwrap(Forge::DescriptorSet::Create(pool, layout));
     // The sampler of the image binding and the image of the sampler binding are each the half Vulkan ignores
     // for that descriptor type, which is what makes one Update overload serve all three kinds.
-    set.Update(0, row, linear, Forge::ImageLayout::ShaderReadOnly);
-    set.Update(1, row, linear, Forge::ImageLayout::ShaderReadOnly);
-    set.Update(2, output);
+    REQUIRE(set.Update(0, row, linear, Forge::ImageLayout::ShaderReadOnly) == ErrorCode::Success);
+    REQUIRE(set.Update(1, row, linear, Forge::ImageLayout::ShaderReadOnly) == ErrorCode::Success);
+    REQUIRE(set.Update(2, output) == ErrorCode::Success);
 
     const SampleParams params{.uv = {0.4f, 0.5f}};
     REQUIRE(Forge::ImmediateSubmit(fixture.device, fixture.GetQueue(),
@@ -7275,22 +7284,22 @@ TEST_CASE("Forge storage image writes", "[forge]")
     ForgeFixture fixture;
     constexpr i32 k_side = 4;
 
-    const Forge::Shader shader = Forge::Shader::FromSourceInMemory(
-        fixture.device, k_storage_image_source, {.entry_point = "main_write_storage", .cache = GetShaderCache()});
+    const Forge::Shader shader = ForgeTest::Unwrap(Forge::Shader::FromSourceInMemory(
+        fixture.device, k_storage_image_source, {.entry_point = "main_write_storage", .cache = GetShaderCache()}));
 
     Forge::DescriptorPoolDesc pool_desc;
-    pool_desc.Add(Forge::DescriptorType::StorageImage, 4);
+    REQUIRE(pool_desc.Add(Forge::DescriptorType::StorageImage, 4) == ErrorCode::Success);
     pool_desc.max_sets = 4;
-    const Forge::DescriptorPool pool(fixture.device, pool_desc);
+    const Forge::DescriptorPool pool = ForgeTest::Unwrap(Forge::DescriptorPool::Create(fixture.device, pool_desc));
 
     Forge::DescriptorSetLayoutDesc layout_desc;
-    layout_desc.AddBinding(0, Forge::DescriptorType::StorageImage, 1, ShaderTypeBits::Compute);
-    const Forge::DescriptorSetLayout layout(fixture.device, layout_desc);
+    REQUIRE(layout_desc.AddBinding(0, Forge::DescriptorType::StorageImage, 1, ShaderTypeBits::Compute) == ErrorCode::Success);
+    const Forge::DescriptorSetLayout layout = ForgeTest::Unwrap(Forge::DescriptorSetLayout::Create(fixture.device, layout_desc));
 
     Forge::ComputePipelineDesc pipeline_desc;
     pipeline_desc.shader = shader;
     pipeline_desc.descriptor_set_layouts.PushBack(Opal::Ref<const Forge::DescriptorSetLayout>(layout));
-    const Forge::Pipeline pipeline(fixture.device, pipeline_desc);
+    const Forge::Pipeline pipeline = ForgeTest::Unwrap(Forge::Pipeline::Create(fixture.device, pipeline_desc));
 
     Forge::Texture storage = ForgeTest::Unwrap(Forge::Texture::Create(fixture.device, {.format = PixelFormat::R8G8B8A8_UNORM,
                                             .width = k_side,
@@ -7299,9 +7308,9 @@ TEST_CASE("Forge storage image writes", "[forge]")
                                                      Forge::TextureUsageBits::TransferSource}));
     const Forge::Sampler unused = ForgeTest::Unwrap(Forge::Sampler::Create(fixture.device, {}));
 
-    Forge::DescriptorSet set(pool, layout);
+    Forge::DescriptorSet set = ForgeTest::Unwrap(Forge::DescriptorSet::Create(pool, layout));
     // General is the layout a storage image is bound in, which is what ToGeneral exists for.
-    set.Update(0, storage, unused, Forge::ImageLayout::General);
+    REQUIRE(set.Update(0, storage, unused, Forge::ImageLayout::General) == ErrorCode::Success);
 
     REQUIRE(Forge::ImmediateSubmit(fixture.device, fixture.GetQueue(),
                            [&](Forge::CommandBuffer& command_buffer)
@@ -7345,15 +7354,15 @@ TEST_CASE("Forge texture shapes past a flat two dimensional one", "[forge]")
     constexpr PixelFormat k_format = PixelFormat::R8G8B8A8_UNORM;
 
     Forge::DescriptorPoolDesc pool_desc;
-    pool_desc.Add(Forge::DescriptorType::CombinedImageSampler, 4);
-    pool_desc.Add(Forge::DescriptorType::StorageBuffer, 4);
+    REQUIRE(pool_desc.Add(Forge::DescriptorType::CombinedImageSampler, 4) == ErrorCode::Success);
+    REQUIRE(pool_desc.Add(Forge::DescriptorType::StorageBuffer, 4) == ErrorCode::Success);
     pool_desc.max_sets = 4;
-    const Forge::DescriptorPool pool(fixture.device, pool_desc);
+    const Forge::DescriptorPool pool = ForgeTest::Unwrap(Forge::DescriptorPool::Create(fixture.device, pool_desc));
 
     Forge::DescriptorSetLayoutDesc layout_desc;
-    layout_desc.AddBinding(0, Forge::DescriptorType::CombinedImageSampler, 1, ShaderTypeBits::Compute);
-    layout_desc.AddBinding(1, Forge::DescriptorType::StorageBuffer, 1, ShaderTypeBits::Compute);
-    const Forge::DescriptorSetLayout layout(fixture.device, layout_desc);
+    REQUIRE(layout_desc.AddBinding(0, Forge::DescriptorType::CombinedImageSampler, 1, ShaderTypeBits::Compute) == ErrorCode::Success);
+    REQUIRE(layout_desc.AddBinding(1, Forge::DescriptorType::StorageBuffer, 1, ShaderTypeBits::Compute) == ErrorCode::Success);
+    const Forge::DescriptorSetLayout layout = ForgeTest::Unwrap(Forge::DescriptorSetLayout::Create(fixture.device, layout_desc));
 
     const Forge::Sampler nearest =
         ForgeTest::Unwrap(Forge::Sampler::Create(fixture.device, {.min_filter = ImageFilter::Nearest, .mag_filter = ImageFilter::Nearest}));
@@ -7361,14 +7370,14 @@ TEST_CASE("Forge texture shapes past a flat two dimensional one", "[forge]")
     /** Sample one texture through one shader at one direction, and hand back what came out. */
     auto sample_shape = [&](const char* source, const char* entry_point, Forge::Texture& texture, const Vector4f& direction)
     {
-        const Forge::Shader shader =
-            Forge::Shader::FromSourceInMemory(fixture.device, source, {.entry_point = entry_point, .cache = GetShaderCache()});
+        const Forge::Shader shader = ForgeTest::Unwrap(
+            Forge::Shader::FromSourceInMemory(fixture.device, source, {.entry_point = entry_point, .cache = GetShaderCache()}));
         Forge::ComputePipelineDesc pipeline_desc;
         pipeline_desc.shader = shader;
         pipeline_desc.descriptor_set_layouts.PushBack(Opal::Ref<const Forge::DescriptorSetLayout>(layout));
         pipeline_desc.push_constant_ranges.PushBack(
             {.shader_stages = ShaderTypeBits::Compute, .offset = 0, .size = sizeof(Vector4f)});
-        const Forge::Pipeline pipeline(fixture.device, pipeline_desc);
+        const Forge::Pipeline pipeline = ForgeTest::Unwrap(Forge::Pipeline::Create(fixture.device, pipeline_desc));
 
         const Forge::Buffer output = ForgeTest::Unwrap(Forge::Buffer::Create(fixture.device, {.size = sizeof(Vector4f),
                                                     .usage = Forge::BufferUsageBits::StorageBuffer,
@@ -7376,9 +7385,9 @@ TEST_CASE("Forge texture shapes past a flat two dimensional one", "[forge]")
         const Opal::DynamicArray<u8> zeros(sizeof(Vector4f));
         REQUIRE(output.Update(zeros) == ErrorCode::Success);
 
-        Forge::DescriptorSet set(pool, layout);
-        set.Update(0, texture, nearest, Forge::ImageLayout::ShaderReadOnly);
-        set.Update(1, output);
+        Forge::DescriptorSet set = ForgeTest::Unwrap(Forge::DescriptorSet::Create(pool, layout));
+        REQUIRE(set.Update(0, texture, nearest, Forge::ImageLayout::ShaderReadOnly) == ErrorCode::Success);
+        REQUIRE(set.Update(1, output) == ErrorCode::Success);
         REQUIRE(Forge::ImmediateSubmit(fixture.device, fixture.GetQueue(),
                                [&](Forge::CommandBuffer& command_buffer)
                                {
@@ -7472,17 +7481,17 @@ TEST_CASE("Forge descriptor pool recycling", "[forge]")
     ForgeFixture fixture;
     constexpr i32 k_element_count = 64;
 
-    const Forge::Shader shader = Forge::Shader::FromSourceInMemory(
-        fixture.device, k_descriptor_source, {.entry_point = "main_descriptor", .cache = GetShaderCache()});
+    const Forge::Shader shader = ForgeTest::Unwrap(Forge::Shader::FromSourceInMemory(
+        fixture.device, k_descriptor_source, {.entry_point = "main_descriptor", .cache = GetShaderCache()}));
 
     Forge::DescriptorSetLayoutDesc layout_desc;
-    layout_desc.AddBinding(0, Forge::DescriptorType::StorageBuffer, 1, ShaderTypeBits::Compute);
-    const Forge::DescriptorSetLayout layout(fixture.device, layout_desc);
+    REQUIRE(layout_desc.AddBinding(0, Forge::DescriptorType::StorageBuffer, 1, ShaderTypeBits::Compute) == ErrorCode::Success);
+    const Forge::DescriptorSetLayout layout = ForgeTest::Unwrap(Forge::DescriptorSetLayout::Create(fixture.device, layout_desc));
 
     Forge::ComputePipelineDesc pipeline_desc;
     pipeline_desc.shader = shader;
     pipeline_desc.descriptor_set_layouts.PushBack(Opal::Ref<const Forge::DescriptorSetLayout>(layout));
-    const Forge::Pipeline pipeline(fixture.device, pipeline_desc);
+    const Forge::Pipeline pipeline = ForgeTest::Unwrap(Forge::Pipeline::Create(fixture.device, pipeline_desc));
 
     /** Bind one set, dispatch through it, and check the shader wrote what it should have. */
     auto require_set_works = [&](Forge::DescriptorSet& set)
@@ -7492,7 +7501,7 @@ TEST_CASE("Forge descriptor pool recycling", "[forge]")
                                                     .host_access = Forge::HostAccess::Random}));
         const Opal::DynamicArray<u8> zeros(k_element_count * sizeof(u32));
         REQUIRE(output.Update(zeros) == ErrorCode::Success);
-        set.Update(0, output);
+        REQUIRE(set.Update(0, output) == ErrorCode::Success);
         REQUIRE(Forge::ImmediateSubmit(fixture.device, fixture.GetQueue(),
                                [&](Forge::CommandBuffer& command_buffer)
                                {
@@ -7514,21 +7523,21 @@ TEST_CASE("Forge descriptor pool recycling", "[forge]")
         // A pool with room for exactly two, filled, then reset and filled again. Without the reset the third
         // allocation would have nothing left to come out of.
         Forge::DescriptorPoolDesc pool_desc;
-        pool_desc.Add(Forge::DescriptorType::StorageBuffer, 2);
+        REQUIRE(pool_desc.Add(Forge::DescriptorType::StorageBuffer, 2) == ErrorCode::Success);
         pool_desc.max_sets = 2;
-        Forge::DescriptorPool pool(fixture.device, pool_desc);
+        Forge::DescriptorPool pool = ForgeTest::Unwrap(Forge::DescriptorPool::Create(fixture.device, pool_desc));
 
         {
-            Forge::DescriptorSet first(pool, layout);
-            Forge::DescriptorSet second(pool, layout);
+            Forge::DescriptorSet first = ForgeTest::Unwrap(Forge::DescriptorSet::Create(pool, layout));
+            Forge::DescriptorSet second = ForgeTest::Unwrap(Forge::DescriptorSet::Create(pool, layout));
             require_set_works(first);
             require_set_works(second);
             // Every set the pool handed out is invalid the moment it is reset, so they go out of scope first.
         }
-        pool.Reset();
+        REQUIRE(pool.Reset() == ErrorCode::Success);
 
-        Forge::DescriptorSet after_reset(pool, layout);
-        Forge::DescriptorSet also_after_reset(pool, layout);
+        Forge::DescriptorSet after_reset = ForgeTest::Unwrap(Forge::DescriptorSet::Create(pool, layout));
+        Forge::DescriptorSet also_after_reset = ForgeTest::Unwrap(Forge::DescriptorSet::Create(pool, layout));
         require_set_works(after_reset);
         require_set_works(also_after_reset);
     }
@@ -7537,19 +7546,19 @@ TEST_CASE("Forge descriptor pool recycling", "[forge]")
         // free_individual_sets is what makes DescriptorSet::Destroy return the set rather than only drop the
         // handle, so the pool below runs out without it.
         Forge::DescriptorPoolDesc pool_desc;
-        pool_desc.Add(Forge::DescriptorType::StorageBuffer, 2);
+        REQUIRE(pool_desc.Add(Forge::DescriptorType::StorageBuffer, 2) == ErrorCode::Success);
         pool_desc.max_sets = 2;
         pool_desc.free_individual_sets = true;
-        const Forge::DescriptorPool pool(fixture.device, pool_desc);
+        const Forge::DescriptorPool pool = ForgeTest::Unwrap(Forge::DescriptorPool::Create(fixture.device, pool_desc));
 
-        Forge::DescriptorSet first(pool, layout);
-        Forge::DescriptorSet second(pool, layout);
+        Forge::DescriptorSet first = ForgeTest::Unwrap(Forge::DescriptorSet::Create(pool, layout));
+        Forge::DescriptorSet second = ForgeTest::Unwrap(Forge::DescriptorSet::Create(pool, layout));
         require_set_works(first);
 
         first.Destroy();
         REQUIRE_FALSE(first.IsValid());
 
-        Forge::DescriptorSet reused(pool, layout);
+        Forge::DescriptorSet reused = ForgeTest::Unwrap(Forge::DescriptorSet::Create(pool, layout));
         require_set_works(reused);
         // The one that was never destroyed is untouched by any of it.
         require_set_works(second);
@@ -7583,13 +7592,13 @@ TEST_CASE("Forge a dispatch on the async compute queue", "[forge]")
     const Opal::DynamicArray<u8> zeros(k_element_count * sizeof(u32));
     REQUIRE(output.Update(zeros) == ErrorCode::Success);
 
-    const Forge::Shader compute_shader =
-        Forge::Shader::FromSourceInMemory(fixture.device, k_compute_source, {.entry_point = "main_compute", .cache = GetShaderCache()});
+    const Forge::Shader compute_shader = ForgeTest::Unwrap(
+        Forge::Shader::FromSourceInMemory(fixture.device, k_compute_source, {.entry_point = "main_compute", .cache = GetShaderCache()}));
     Forge::ComputePipelineDesc pipeline_desc;
     pipeline_desc.shader = compute_shader;
     pipeline_desc.push_constant_ranges.PushBack(
         {.shader_stages = ShaderTypeBits::Compute, .offset = 0, .size = sizeof(VkDeviceAddress)});
-    const Forge::Pipeline pipeline(fixture.device, pipeline_desc);
+    const Forge::Pipeline pipeline = ForgeTest::Unwrap(Forge::Pipeline::Create(fixture.device, pipeline_desc));
     const VkDeviceAddress output_address = output.GetNativeDeviceAddress();
 
     // The command buffer comes out of the pool of the queue it is submitted to, which is the part a queue of
@@ -7753,13 +7762,13 @@ TEST_CASE("Forge a buffer handed from one queue family to another", "[forge]")
     const Opal::DynamicArray<u8> zeros(k_byte_size);
     REQUIRE(host_visible.Update(zeros) == ErrorCode::Success);
 
-    const Forge::Shader compute_shader =
-        Forge::Shader::FromSourceInMemory(fixture.device, k_compute_source, {.entry_point = "main_compute", .cache = GetShaderCache()});
+    const Forge::Shader compute_shader = ForgeTest::Unwrap(
+        Forge::Shader::FromSourceInMemory(fixture.device, k_compute_source, {.entry_point = "main_compute", .cache = GetShaderCache()}));
     Forge::ComputePipelineDesc pipeline_desc;
     pipeline_desc.shader = compute_shader;
     pipeline_desc.push_constant_ranges.PushBack(
         {.shader_stages = ShaderTypeBits::Compute, .offset = 0, .size = sizeof(VkDeviceAddress)});
-    const Forge::Pipeline pipeline(fixture.device, pipeline_desc);
+    const Forge::Pipeline pipeline = ForgeTest::Unwrap(Forge::Pipeline::Create(fixture.device, pipeline_desc));
     const VkDeviceAddress shared_address = shared.GetNativeDeviceAddress();
 
     // The release half, on the family that wrote the buffer. Its destination stages and access are empty:
@@ -7880,7 +7889,7 @@ Forge::Pipeline MakeStencilWritePipeline(const Forge::Device& device, const Forg
     pipeline_desc.depth_attachment_format = k_table_depth_stencil_format;
     pipeline_desc.stencil_attachment_format = k_table_depth_stencil_format;
     pipeline_desc.dynamic_state = Forge::DynamicStateBits::StencilReference;
-    return Forge::Pipeline(device, pipeline_desc);
+    return ForgeTest::Unwrap(Forge::Pipeline::Create(device, pipeline_desc));
 }
 
 /** What one stencil operation does to a stored value, spelled out from the Vulkan definition of each. */
@@ -7995,10 +8004,10 @@ TEST_CASE("Forge the stencil operations", "[forge]")
     }
     ForgeFixture fixture;
 
-    const Forge::Shader vertex_shader = Forge::Shader::FromSourceInMemory(
-        fixture.device, k_pushed_color_source, {.entry_point = "main_color_vertex", .cache = GetShaderCache()});
-    const Forge::Shader fragment_shader = Forge::Shader::FromSourceInMemory(
-        fixture.device, k_pushed_color_source, {.entry_point = "main_color_fragment", .cache = GetShaderCache()});
+    const Forge::Shader vertex_shader = ForgeTest::Unwrap(Forge::Shader::FromSourceInMemory(
+        fixture.device, k_pushed_color_source, {.entry_point = "main_color_vertex", .cache = GetShaderCache()}));
+    const Forge::Shader fragment_shader = ForgeTest::Unwrap(Forge::Shader::FromSourceInMemory(
+        fixture.device, k_pushed_color_source, {.entry_point = "main_color_fragment", .cache = GetShaderCache()}));
     const Forge::Buffer full_quad = MakeQuadBuffer(fixture.device, MakeFullTargetQuad(0.5f));
     const Vector4f unused_color = ByteColor(0, 0, 0, 255);
 
@@ -8168,10 +8177,10 @@ TEST_CASE("Forge the comparators", "[forge]")
     }
     ForgeFixture fixture;
 
-    const Forge::Shader vertex_shader = Forge::Shader::FromSourceInMemory(
-        fixture.device, k_pushed_color_source, {.entry_point = "main_color_vertex", .cache = GetShaderCache()});
-    const Forge::Shader fragment_shader = Forge::Shader::FromSourceInMemory(
-        fixture.device, k_pushed_color_source, {.entry_point = "main_color_fragment", .cache = GetShaderCache()});
+    const Forge::Shader vertex_shader = ForgeTest::Unwrap(Forge::Shader::FromSourceInMemory(
+        fixture.device, k_pushed_color_source, {.entry_point = "main_color_vertex", .cache = GetShaderCache()}));
+    const Forge::Shader fragment_shader = ForgeTest::Unwrap(Forge::Shader::FromSourceInMemory(
+        fixture.device, k_pushed_color_source, {.entry_point = "main_color_fragment", .cache = GetShaderCache()}));
     const Forge::Buffer full_quad = MakeQuadBuffer(fixture.device, MakeFullTargetQuad(0.5f));
     const Vector4f unused_color = ByteColor(0, 0, 0, 255);
     const Vector4f paint_color = ByteColor(0, 255, 0, 255);
@@ -8194,7 +8203,7 @@ TEST_CASE("Forge the comparators", "[forge]")
         pipeline_desc.depth_attachment_format = k_table_depth_stencil_format;
         pipeline_desc.stencil_attachment_format = k_table_depth_stencil_format;
         pipeline_desc.dynamic_state = Forge::DynamicStateBits::StencilReference;
-        return Forge::Pipeline(fixture.device, pipeline_desc);
+        return ForgeTest::Unwrap(Forge::Pipeline::Create(fixture.device, pipeline_desc));
     };
 
     /** Seed the buffer with `stored`, test `reference` against it through `comparator`, and say if green landed. */
@@ -8466,10 +8475,10 @@ TEST_CASE("Forge the blend factors and operations", "[forge]")
     }
     ForgeFixture fixture;
 
-    const Forge::Shader vertex_shader = Forge::Shader::FromSourceInMemory(
-        fixture.device, k_pushed_color_source, {.entry_point = "main_color_vertex", .cache = GetShaderCache()});
-    const Forge::Shader fragment_shader = Forge::Shader::FromSourceInMemory(
-        fixture.device, k_pushed_color_source, {.entry_point = "main_color_fragment", .cache = GetShaderCache()});
+    const Forge::Shader vertex_shader = ForgeTest::Unwrap(Forge::Shader::FromSourceInMemory(
+        fixture.device, k_pushed_color_source, {.entry_point = "main_color_vertex", .cache = GetShaderCache()}));
+    const Forge::Shader fragment_shader = ForgeTest::Unwrap(Forge::Shader::FromSourceInMemory(
+        fixture.device, k_pushed_color_source, {.entry_point = "main_color_fragment", .cache = GetShaderCache()}));
     const Forge::Buffer full_quad = MakeQuadBuffer(fixture.device, MakeFullTargetQuad(0.5f));
 
     /**
@@ -8492,7 +8501,7 @@ TEST_CASE("Forge the blend factors and operations", "[forge]")
                                                                         .dst_alpha_factor = dst_factor,
                                                                         .alpha_operation = operation};
         pipeline_desc.blend_constants = constant;
-        const Forge::Pipeline pipeline(fixture.device, pipeline_desc);
+        const Forge::Pipeline pipeline = ForgeTest::Unwrap(Forge::Pipeline::Create(fixture.device, pipeline_desc));
 
         Forge::Texture color = MakeColorTarget(fixture.device, k_table_side, k_table_color_format);
         REQUIRE(Forge::ImmediateSubmit(
@@ -8793,26 +8802,26 @@ TEST_CASE("Forge the sampler address modes and border colours", "[forge]")
     constexpr PixelFormat k_format = PixelFormat::R8G8B8A8_UNORM;
     constexpr i32 k_row_width = 2;
 
-    const Forge::Shader shader = Forge::Shader::FromSourceInMemory(
-        fixture.device, k_combined_sample_source, {.entry_point = "main_sample_combined", .cache = GetShaderCache()});
+    const Forge::Shader shader = ForgeTest::Unwrap(Forge::Shader::FromSourceInMemory(
+        fixture.device, k_combined_sample_source, {.entry_point = "main_sample_combined", .cache = GetShaderCache()}));
 
     Forge::DescriptorPoolDesc pool_desc;
-    pool_desc.Add(Forge::DescriptorType::CombinedImageSampler, 32);
-    pool_desc.Add(Forge::DescriptorType::StorageBuffer, 32);
+    REQUIRE(pool_desc.Add(Forge::DescriptorType::CombinedImageSampler, 32) == ErrorCode::Success);
+    REQUIRE(pool_desc.Add(Forge::DescriptorType::StorageBuffer, 32) == ErrorCode::Success);
     pool_desc.max_sets = 32;
-    const Forge::DescriptorPool pool(fixture.device, pool_desc);
+    const Forge::DescriptorPool pool = ForgeTest::Unwrap(Forge::DescriptorPool::Create(fixture.device, pool_desc));
 
     Forge::DescriptorSetLayoutDesc layout_desc;
-    layout_desc.AddBinding(0, Forge::DescriptorType::CombinedImageSampler, 1, ShaderTypeBits::Compute);
-    layout_desc.AddBinding(1, Forge::DescriptorType::StorageBuffer, 1, ShaderTypeBits::Compute);
-    const Forge::DescriptorSetLayout layout(fixture.device, layout_desc);
+    REQUIRE(layout_desc.AddBinding(0, Forge::DescriptorType::CombinedImageSampler, 1, ShaderTypeBits::Compute) == ErrorCode::Success);
+    REQUIRE(layout_desc.AddBinding(1, Forge::DescriptorType::StorageBuffer, 1, ShaderTypeBits::Compute) == ErrorCode::Success);
+    const Forge::DescriptorSetLayout layout = ForgeTest::Unwrap(Forge::DescriptorSetLayout::Create(fixture.device, layout_desc));
 
     Forge::ComputePipelineDesc pipeline_desc;
     pipeline_desc.shader = shader;
     pipeline_desc.descriptor_set_layouts.PushBack(Opal::Ref<const Forge::DescriptorSetLayout>(layout));
     pipeline_desc.push_constant_ranges.PushBack(
         {.shader_stages = ShaderTypeBits::Compute, .offset = 0, .size = sizeof(SampleParams)});
-    const Forge::Pipeline pipeline(fixture.device, pipeline_desc);
+    const Forge::Pipeline pipeline = ForgeTest::Unwrap(Forge::Pipeline::Create(fixture.device, pipeline_desc));
 
     Forge::Texture row = ForgeTest::Unwrap(Forge::Texture::Create(fixture.device, {.format = k_format,
                                         .width = k_row_width,
@@ -8841,9 +8850,9 @@ TEST_CASE("Forge the sampler address modes and border colours", "[forge]")
         const Opal::DynamicArray<u8> zeros(sizeof(Vector4f));
         REQUIRE(output.Update(zeros) == ErrorCode::Success);
 
-        Forge::DescriptorSet set(pool, layout);
-        set.Update(0, row, sampler, Forge::ImageLayout::ShaderReadOnly);
-        set.Update(1, output);
+        Forge::DescriptorSet set = ForgeTest::Unwrap(Forge::DescriptorSet::Create(pool, layout));
+        REQUIRE(set.Update(0, row, sampler, Forge::ImageLayout::ShaderReadOnly) == ErrorCode::Success);
+        REQUIRE(set.Update(1, output) == ErrorCode::Success);
         const SampleParams params{.uv = {u, 0.5f}};
         REQUIRE(Forge::ImmediateSubmit(fixture.device, fixture.GetQueue(),
                                [&](Forge::CommandBuffer& command_buffer)
@@ -8991,10 +9000,10 @@ TEST_CASE("Forge stencil state that differs between the faces", "[forge]")
     }
     ForgeFixture fixture;
 
-    const Forge::Shader vertex_shader = Forge::Shader::FromSourceInMemory(
-        fixture.device, k_pushed_color_source, {.entry_point = "main_color_vertex", .cache = GetShaderCache()});
-    const Forge::Shader fragment_shader = Forge::Shader::FromSourceInMemory(
-        fixture.device, k_pushed_color_source, {.entry_point = "main_color_fragment", .cache = GetShaderCache()});
+    const Forge::Shader vertex_shader = ForgeTest::Unwrap(Forge::Shader::FromSourceInMemory(
+        fixture.device, k_pushed_color_source, {.entry_point = "main_color_vertex", .cache = GetShaderCache()}));
+    const Forge::Shader fragment_shader = ForgeTest::Unwrap(Forge::Shader::FromSourceInMemory(
+        fixture.device, k_pushed_color_source, {.entry_point = "main_color_fragment", .cache = GetShaderCache()}));
     const Forge::Buffer full_quad = MakeQuadBuffer(fixture.device, MakeFullTargetQuad(0.5f));
     const Vector4f unused_color = ByteColor(0, 0, 0, 255);
     const Vector4f paint_color = ByteColor(0, 255, 0, 255);
@@ -9011,7 +9020,7 @@ TEST_CASE("Forge stencil state that differs between the faces", "[forge]")
             MakePushedColorPipelineDesc(vertex_shader, fragment_shader, k_table_color_format);
         pipeline_desc.rasterizer.cull_mode = Face::Back;
         pipeline_desc.rasterizer.front_face = WindingOrder::CCW;
-        const Forge::Pipeline pipeline(fixture.device, pipeline_desc);
+        const Forge::Pipeline pipeline = ForgeTest::Unwrap(Forge::Pipeline::Create(fixture.device, pipeline_desc));
 
         Forge::Texture color = MakeColorTarget(fixture.device, k_table_side, k_table_color_format);
         const Opal::DynamicArray<u8> pixels = RenderRaster(fixture, color, k_table_side,
@@ -9054,7 +9063,7 @@ TEST_CASE("Forge stencil state that differs between the faces", "[forge]")
         pipeline_desc.depth_attachment_format = k_table_depth_stencil_format;
         pipeline_desc.stencil_attachment_format = k_table_depth_stencil_format;
         pipeline_desc.dynamic_state = k_dynamic_stencil;
-        return Forge::Pipeline(fixture.device, pipeline_desc);
+        return ForgeTest::Unwrap(Forge::Pipeline::Create(fixture.device, pipeline_desc));
     }();
 
     /** Paints green where the stencil test passes, leaving the buffer alone. */
@@ -9068,7 +9077,7 @@ TEST_CASE("Forge stencil state that differs between the faces", "[forge]")
         pipeline_desc.depth_attachment_format = k_table_depth_stencil_format;
         pipeline_desc.stencil_attachment_format = k_table_depth_stencil_format;
         pipeline_desc.dynamic_state = k_dynamic_stencil;
-        return Forge::Pipeline(fixture.device, pipeline_desc);
+        return ForgeTest::Unwrap(Forge::Pipeline::Create(fixture.device, pipeline_desc));
     }();
 
     /** The three values one face is given, so a call site names them together and cannot pair them wrongly. */
@@ -9257,7 +9266,7 @@ TEST_CASE("Forge shaders built from SPIR-V rather than from source", "[forge]")
     SECTION("A module from memory carries the stage and the reflection of the entry point named")
     {
         const Forge::Shader shader =
-            Forge::Shader::FromSpirvInMemory(fixture.device, spirv_view, {.entry_point = "main_compute"});
+            ForgeTest::Unwrap(Forge::Shader::FromSpirvInMemory(fixture.device, spirv_view, {.entry_point = "main_compute"}));
         REQUIRE(shader.IsValid());
         REQUIRE(shader.GetShaderStage() == ShaderTypeBits::Compute);
         REQUIRE(shader.GetNativeShaderStage() == VK_SHADER_STAGE_COMPUTE_BIT);
@@ -9273,9 +9282,9 @@ TEST_CASE("Forge shaders built from SPIR-V rather than from source", "[forge]")
         // The two paths meet in one constructor, so what this rules out is the SPIR-V arriving mangled -
         // truncated, byte-swapped, or handed over as a size in the wrong unit.
         const Forge::Shader from_spirv =
-            Forge::Shader::FromSpirvInMemory(fixture.device, spirv_view, {.entry_point = "main_compute"});
-        const Forge::Shader from_source = Forge::Shader::FromSourceInMemory(
-            fixture.device, k_compute_source, {.entry_point = "main_compute", .cache = GetShaderCache()});
+            ForgeTest::Unwrap(Forge::Shader::FromSpirvInMemory(fixture.device, spirv_view, {.entry_point = "main_compute"}));
+        const Forge::Shader from_source = ForgeTest::Unwrap(Forge::Shader::FromSourceInMemory(
+            fixture.device, k_compute_source, {.entry_point = "main_compute", .cache = GetShaderCache()}));
         REQUIRE(from_spirv.GetShaderStage() == from_source.GetShaderStage());
         REQUIRE(from_spirv.GetPushConstants().GetSize() == from_source.GetPushConstants().GetSize());
         REQUIRE(from_spirv.GetBindings().GetSize() == from_source.GetBindings().GetSize());
@@ -9291,12 +9300,12 @@ TEST_CASE("Forge shaders built from SPIR-V rather than from source", "[forge]")
                                                     .host_access = Forge::HostAccess::Random,
                                                     .use_device_address = true}));
         const Forge::Shader shader =
-            Forge::Shader::FromSpirvInMemory(fixture.device, spirv_view, {.entry_point = "main_compute"});
+            ForgeTest::Unwrap(Forge::Shader::FromSpirvInMemory(fixture.device, spirv_view, {.entry_point = "main_compute"}));
         Forge::ComputePipelineDesc pipeline_desc;
         pipeline_desc.shader = shader;
         pipeline_desc.push_constant_ranges.PushBack(
             {.shader_stages = ShaderTypeBits::Compute, .offset = 0, .size = sizeof(VkDeviceAddress)});
-        const Forge::Pipeline pipeline(fixture.device, pipeline_desc);
+        const Forge::Pipeline pipeline = ForgeTest::Unwrap(Forge::Pipeline::Create(fixture.device, pipeline_desc));
         const VkDeviceAddress output_address = output.GetNativeDeviceAddress();
         REQUIRE(Forge::ImmediateSubmit(fixture.device, fixture.GetQueue(),
                                [&](Forge::CommandBuffer& command_buffer)
@@ -9318,61 +9327,52 @@ TEST_CASE("Forge shaders built from SPIR-V rather than from source", "[forge]")
         // Reflection finds no entry point of that name and there is nothing to take a stage from, so this
         // cannot be let through: the shader would be created with a zeroed stage and refused much later by a
         // pipeline, naming the wrong thing.
-        REQUIRE_THROWS_AS(Forge::Shader::FromSpirvInMemory(fixture.device, spirv_view, {.entry_point = "no_such_entry"}),
-                          Opal::Exception);
+        REQUIRE_FALSE(Forge::Shader::FromSpirvInMemory(fixture.device, spirv_view, {.entry_point = "no_such_entry"}).HasValue());
         // And the default entry point of "main", which Slang did not emit under that name here.
-        REQUIRE_THROWS_AS(Forge::Shader::FromSpirvInMemory(fixture.device, spirv_view), Opal::Exception);
+        REQUIRE_FALSE(Forge::Shader::FromSpirvInMemory(fixture.device, spirv_view).HasValue());
     }
     SECTION("A blob that is not SPIR-V throws")
     {
         const Opal::DynamicArray<u8> junk = MakeBytes(256, 17);
-        REQUIRE_THROWS_AS(Forge::Shader::FromSpirvInMemory(fixture.device, {junk.GetData(), junk.GetSize()},
-                                                           {.entry_point = "main_compute"}),
-                          Opal::Exception);
+        REQUIRE_FALSE(Forge::Shader::FromSpirvInMemory(fixture.device, {junk.GetData(), junk.GetSize()},
+                                                           {.entry_point = "main_compute"}).HasValue());
         // A real module cut short is the other way this arrives: the magic number is right and nothing past
         // it is.
         const Opal::ArrayView<const u8> half_a_module(spirv.GetData(), spirv.GetSize() / 2);
-        REQUIRE_THROWS_AS(
-            Forge::Shader::FromSpirvInMemory(fixture.device, half_a_module, {.entry_point = "main_compute"}),
-            Opal::Exception);
+        REQUIRE_FALSE(Forge::Shader::FromSpirvInMemory(fixture.device, half_a_module, {.entry_point = "main_compute"}).HasValue());
         // And an empty one, which is what a file that was there and held nothing looks like from in here.
-        REQUIRE_THROWS_AS(Forge::Shader::FromSpirvInMemory(fixture.device, {}, {.entry_point = "main_compute"}),
-                          Opal::Exception);
+        REQUIRE_FALSE(Forge::Shader::FromSpirvInMemory(fixture.device, {}, {.entry_point = "main_compute"}).HasValue());
     }
     SECTION("A module read from a file is the same as one handed over in memory")
     {
         const Opal::StringUtf8 path = TestScratchPath("from-spirv-file.spv");
         REQUIRE(Opal::WriteBytesToFile(path, spirv_view) == Opal::ErrorCode::Success);
-        const Forge::Shader shader = Forge::Shader::FromSpirvFile(fixture.device, path, {.entry_point = "main_compute"});
+        const Forge::Shader shader = ForgeTest::Unwrap(Forge::Shader::FromSpirvFile(fixture.device, path, {.entry_point = "main_compute"}));
         REQUIRE(shader.IsValid());
         REQUIRE(shader.GetShaderStage() == ShaderTypeBits::Compute);
         REQUIRE(shader.GetEntryPoint() == Opal::StringUtf8("main_compute"));
     }
     SECTION("A file that is not there, and one whose contents are not SPIR-V, both throw")
     {
-        REQUIRE_THROWS_AS(Forge::Shader::FromSpirvFile(fixture.device, TestScratchPath("no-such-file.spv"),
-                                                       {.entry_point = "main_compute"}),
-                          Opal::Exception);
+        REQUIRE_FALSE(Forge::Shader::FromSpirvFile(fixture.device, TestScratchPath("no-such-file.spv"),
+                                                       {.entry_point = "main_compute"}).HasValue());
 
         const Opal::StringUtf8 junk_path = TestScratchPath("not-spirv.spv");
         const Opal::DynamicArray<u8> junk = MakeBytes(256, 23);
         REQUIRE(Opal::WriteBytesToFile(junk_path, {junk.GetData(), junk.GetSize()}) == Opal::ErrorCode::Success);
-        REQUIRE_THROWS_AS(Forge::Shader::FromSpirvFile(fixture.device, junk_path, {.entry_point = "main_compute"}),
-                          Opal::Exception);
+        REQUIRE_FALSE(Forge::Shader::FromSpirvFile(fixture.device, junk_path, {.entry_point = "main_compute"}).HasValue());
 
         // A file that exists and is empty takes the same path out as one that is missing, which is the whole
         // of what ReadEntireFile can tell the two apart by.
         const Opal::StringUtf8 empty_path = TestScratchPath("empty.spv");
         REQUIRE(Opal::WriteBytesToFile(empty_path, {}) == Opal::ErrorCode::Success);
-        REQUIRE_THROWS_AS(Forge::Shader::FromSpirvFile(fixture.device, empty_path, {.entry_point = "main_compute"}),
-                          Opal::Exception);
+        REQUIRE_FALSE(Forge::Shader::FromSpirvFile(fixture.device, empty_path, {.entry_point = "main_compute"}).HasValue());
     }
     SECTION("A file with the right bytes and the wrong entry point throws")
     {
         const Opal::StringUtf8 path = TestScratchPath("from-spirv-file.spv");
         REQUIRE(Opal::WriteBytesToFile(path, spirv_view) == Opal::ErrorCode::Success);
-        REQUIRE_THROWS_AS(Forge::Shader::FromSpirvFile(fixture.device, path, {.entry_point = "no_such_entry"}),
-                          Opal::Exception);
+        REQUIRE_FALSE(Forge::Shader::FromSpirvFile(fixture.device, path, {.entry_point = "no_such_entry"}).HasValue());
     }
     REQUIRE_NO_VALIDATION_ERROR_AT_TEARDOWN(fixture);
 }
@@ -9644,7 +9644,7 @@ TEST_CASE("Forge loading a mesh from a file", "[forge]")
         Forge::Mesh probe;
         try
         {
-            Forge::LoadMesh(complete_path, probe);
+            REQUIRE(Forge::LoadMesh(complete_path, probe) == ErrorCode::Success);
         }
         catch (const Opal::Exception&)
         {
@@ -9655,7 +9655,7 @@ TEST_CASE("Forge loading a mesh from a file", "[forge]")
     SECTION("A mesh with every attribute comes back packed the way the header says")
     {
         Forge::Mesh mesh;
-        Forge::LoadMesh(complete_path, mesh);
+        REQUIRE(Forge::LoadMesh(complete_path, mesh) == ErrorCode::Success);
         // Position, normal and UV, tightly packed: three floats, three floats, two floats.
         REQUIRE(mesh.vertex_size == 8 * sizeof(f32));
         REQUIRE(mesh.vertex_count == 3);
@@ -9695,7 +9695,7 @@ TEST_CASE("Forge loading a mesh from a file", "[forge]")
     {
         const Opal::StringUtf8 path = WriteScratchTextFile("no-uvs.obj", k_obj_without_uvs);
         Forge::Mesh mesh;
-        REQUIRE_THROWS_AS(Forge::LoadMesh(path, mesh), Opal::Exception);
+        REQUIRE(Forge::LoadMesh(path, mesh) != ErrorCode::Success);
     }
     SECTION("A mesh with no normals but with a face loads, because assimp generates them from the face")
     {
@@ -9705,7 +9705,7 @@ TEST_CASE("Forge loading a mesh from a file", "[forge]")
         // throw where this one does not.
         const Opal::StringUtf8 path = WriteScratchTextFile("no-normals.obj", k_obj_without_normals);
         Forge::Mesh mesh;
-        Forge::LoadMesh(path, mesh);
+        REQUIRE(Forge::LoadMesh(path, mesh) == ErrorCode::Success);
         REQUIRE(mesh.vertex_count == 3);
         Opal::DynamicArray<f32> floats(static_cast<i64>(mesh.vertex_count) * 8);
         memcpy(floats.GetData(), mesh.vertices.GetData(), mesh.vertices.GetSize());
@@ -9728,7 +9728,7 @@ TEST_CASE("Forge loading a mesh from a file", "[forge]")
             INFO(names[i]);
             const Opal::StringUtf8 path = WriteScratchTextFile(names[i], contents[i]);
             Forge::Mesh mesh;
-            REQUIRE_THROWS_AS(Forge::LoadMesh(path, mesh), Opal::Exception);
+            REQUIRE(Forge::LoadMesh(path, mesh) != ErrorCode::Success);
         }
     }
     SECTION("A file assimp cannot read throws")
@@ -9736,11 +9736,11 @@ TEST_CASE("Forge loading a mesh from a file", "[forge]")
         // An extension assimp knows, holding something that is not a mesh.
         const Opal::StringUtf8 junk_path = WriteScratchTextFile("not-a-mesh.obj", "this file is not a mesh at all\n");
         Forge::Mesh mesh;
-        REQUIRE_THROWS_AS(Forge::LoadMesh(junk_path, mesh), Opal::Exception);
+        REQUIRE(Forge::LoadMesh(junk_path, mesh) != ErrorCode::Success);
         // A file that is not there at all, and one with an extension assimp has no reader for.
-        REQUIRE_THROWS_AS(Forge::LoadMesh(TestScratchPath("no-such-mesh.obj"), mesh), Opal::Exception);
+        REQUIRE(Forge::LoadMesh(TestScratchPath("no-such-mesh.obj"), mesh) != ErrorCode::Success);
         const Opal::StringUtf8 unknown_path = WriteScratchTextFile("unknown-format.qqq", "nothing here either\n");
-        REQUIRE_THROWS_AS(Forge::LoadMesh(unknown_path, mesh), Opal::Exception);
+        REQUIRE(Forge::LoadMesh(unknown_path, mesh) != ErrorCode::Success);
     }
     SECTION("A mesh that failed to load leaves the one handed in as it was")
     {
@@ -9748,9 +9748,9 @@ TEST_CASE("Forge loading a mesh from a file", "[forge]")
         // failure is the caller's problem. It throws before touching anything, which is what lets a caller
         // keep the mesh it already had.
         Forge::Mesh mesh;
-        Forge::LoadMesh(complete_path, mesh);
+        REQUIRE(Forge::LoadMesh(complete_path, mesh) == ErrorCode::Success);
         const u32 loaded_count = mesh.vertex_count;
-        REQUIRE_THROWS_AS(Forge::LoadMesh(TestScratchPath("no-such-mesh.obj"), mesh), Opal::Exception);
+        REQUIRE(Forge::LoadMesh(TestScratchPath("no-such-mesh.obj"), mesh) != ErrorCode::Success);
         REQUIRE(mesh.vertex_count == loaded_count);
         REQUIRE(mesh.name == Opal::StringUtf8("triangle.obj"));
     }
@@ -9828,10 +9828,10 @@ TEST_CASE("Forge a mesh shader draw", "[forge]")
     constexpr i32 k_side = 4;
     constexpr PixelFormat k_format = PixelFormat::R8G8B8A8_UNORM;
 
-    const Forge::Shader mesh_shader = Forge::Shader::FromSourceInMemory(
-        fixture.device, k_mesh_source, {.entry_point = "main_mesh", .cache = GetShaderCache()});
-    const Forge::Shader fragment_shader = Forge::Shader::FromSourceInMemory(
-        fixture.device, k_mesh_source, {.entry_point = "main_mesh_fragment", .cache = GetShaderCache()});
+    const Forge::Shader mesh_shader = ForgeTest::Unwrap(Forge::Shader::FromSourceInMemory(
+        fixture.device, k_mesh_source, {.entry_point = "main_mesh", .cache = GetShaderCache()}));
+    const Forge::Shader fragment_shader = ForgeTest::Unwrap(Forge::Shader::FromSourceInMemory(
+        fixture.device, k_mesh_source, {.entry_point = "main_mesh_fragment", .cache = GetShaderCache()}));
 
     SECTION("The stage reflection reports a mesh shader rather than a vertex one")
     {
@@ -9851,7 +9851,7 @@ TEST_CASE("Forge a mesh shader draw", "[forge]")
         pipeline_desc.rasterizer.cull_mode = Face::None;
         pipeline_desc.color_blend_attachments.PushBack(Forge::ColorBlendDesc{});
         pipeline_desc.color_attachment_formats.PushBack(k_format);
-        const Forge::Pipeline pipeline(fixture.device, pipeline_desc);
+        const Forge::Pipeline pipeline = ForgeTest::Unwrap(Forge::Pipeline::Create(fixture.device, pipeline_desc));
 
         Forge::Texture color = MakeColorTarget(fixture.device, k_side, k_format);
         const Opal::DynamicArray<u8> pixels = RenderRaster(fixture, color, k_side,
@@ -9875,7 +9875,7 @@ TEST_CASE("Forge a mesh shader draw", "[forge]")
         pipeline_desc.rasterizer.cull_mode = Face::None;
         pipeline_desc.color_blend_attachments.PushBack(Forge::ColorBlendDesc{});
         pipeline_desc.color_attachment_formats.PushBack(k_format);
-        const Forge::Pipeline pipeline(fixture.device, pipeline_desc);
+        const Forge::Pipeline pipeline = ForgeTest::Unwrap(Forge::Pipeline::Create(fixture.device, pipeline_desc));
 
         Forge::Texture color = MakeColorTarget(fixture.device, k_side, k_format);
         const Opal::DynamicArray<u8> pixels =
@@ -9889,15 +9889,15 @@ TEST_CASE("Forge a mesh shader draw", "[forge]")
     }
     SECTION("A pipeline with both a vertex and a mesh stage, or a task stage with neither, throws")
     {
-        const Forge::Shader vertex_shader = Forge::Shader::FromSourceInMemory(
-            fixture.device, k_pushed_color_source, {.entry_point = "main_color_vertex", .cache = GetShaderCache()});
+        const Forge::Shader vertex_shader = ForgeTest::Unwrap(Forge::Shader::FromSourceInMemory(
+            fixture.device, k_pushed_color_source, {.entry_point = "main_color_vertex", .cache = GetShaderCache()}));
         Forge::GraphicsPipelineDesc both_desc;
         both_desc.vertex_shader = vertex_shader;
         both_desc.mesh_shader = mesh_shader;
         both_desc.fragment_shader = fragment_shader;
         both_desc.color_blend_attachments.PushBack(Forge::ColorBlendDesc{});
         both_desc.color_attachment_formats.PushBack(k_format);
-        REQUIRE_THROWS_AS(Forge::Pipeline(fixture.device, both_desc), Opal::Exception);
+        REQUIRE_FALSE(Forge::Pipeline::Create(fixture.device, both_desc).HasValue());
 
         // A task stage in front of nothing, which Vulkan has no shape for.
         Forge::GraphicsPipelineDesc task_only_desc;
@@ -9905,7 +9905,7 @@ TEST_CASE("Forge a mesh shader draw", "[forge]")
         task_only_desc.fragment_shader = fragment_shader;
         task_only_desc.color_blend_attachments.PushBack(Forge::ColorBlendDesc{});
         task_only_desc.color_attachment_formats.PushBack(k_format);
-        REQUIRE_THROWS_AS(Forge::Pipeline(fixture.device, task_only_desc), Opal::Exception);
+        REQUIRE_FALSE(Forge::Pipeline::Create(fixture.device, task_only_desc).HasValue());
     }
     REQUIRE_NO_VALIDATION_ERROR(fixture);
 }

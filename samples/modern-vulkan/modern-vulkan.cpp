@@ -115,7 +115,7 @@ void Run()
     const Opal::StringUtf8 mesh_path =
         Opal::Paths::Combine(RNDR_CORE_ASSETS_DIR, "sample-models", "Suzanne", "glTF", "Suzanne.gltf").GetValue();
     Rndr::Forge::Mesh mesh;
-    Rndr::Forge::LoadMesh(mesh_path, mesh);
+    RequireOk(Rndr::Forge::LoadMesh(mesh_path, mesh));
     Opal::DynamicArray<Rndr::u8> combined_vertex_index_data;
     combined_vertex_index_data.Append(mesh.vertices);
     combined_vertex_index_data.Append(mesh.indices);
@@ -170,18 +170,18 @@ void Run()
 
     // Setup descriptor pool
     Rndr::Forge::DescriptorPoolDesc descriptor_pool_desc;
-    descriptor_pool_desc.Add(Rndr::Forge::DescriptorType::CombinedImageSampler, 100);
+    RequireOk(descriptor_pool_desc.Add(Rndr::Forge::DescriptorType::CombinedImageSampler, 100));
     descriptor_pool_desc.max_sets = k_frames_in_flight;
-    const Rndr::Forge::DescriptorPool descriptor_pool(device, descriptor_pool_desc);
+    const Rndr::Forge::DescriptorPool descriptor_pool = Require(Rndr::Forge::DescriptorPool::Create(device, descriptor_pool_desc));
 
     // Slang is the whole of this sample's startup cost - seconds for these two entry points, against
     // milliseconds for everything built out of them. Cached, a second run reads two files instead.
     Rndr::ShaderCache shader_cache{Opal::StringUtf8(RNDR_CORE_ASSETS_DIR "/../build/shader-cache")};
     const Opal::StringUtf8 shader_path = Opal::Paths::Combine(RNDR_CORE_ASSETS_DIR, "shaders", "modern-vulkan.slang").GetValue();
     const Rndr::Forge::Shader vertex_shader =
-        Rndr::Forge::Shader::FromSource(device, shader_path, {.entry_point = "main_vertex", .cache = shader_cache});
+        Require(Rndr::Forge::Shader::FromSource(device, shader_path, {.entry_point = "main_vertex", .cache = shader_cache}));
     const Rndr::Forge::Shader fragment_shader =
-        Rndr::Forge::Shader::FromSource(device, shader_path, {.entry_point = "main_fragment", .cache = shader_cache});
+        Require(Rndr::Forge::Shader::FromSource(device, shader_path, {.entry_point = "main_fragment", .cache = shader_cache}));
     const Opal::Ref<const Rndr::Forge::Shader> pipeline_shaders[] = {vertex_shader, fragment_shader};
 
     // Setup the descriptor set layout. It has two bindings and both are textures with samplers. Naming the
@@ -189,21 +189,21 @@ void Run()
     // uses - which is what lets the set be filled by name below.
     Rndr::Forge::DescriptorSetLayoutDesc layout_desc;
     layout_desc.shaders = {vertex_shader, fragment_shader};
-    layout_desc.AddBinding(0, Rndr::Forge::DescriptorType::CombinedImageSampler, 1, Rndr::ShaderTypeBits::Fragment);
-    layout_desc.AddBinding(1, Rndr::Forge::DescriptorType::CombinedImageSampler, 1, Rndr::ShaderTypeBits::Fragment);
-    Rndr::Forge::DescriptorSetLayout descriptor_set_layout(device, layout_desc);
+    RequireOk(layout_desc.AddBinding(0, Rndr::Forge::DescriptorType::CombinedImageSampler, 1, Rndr::ShaderTypeBits::Fragment));
+    RequireOk(layout_desc.AddBinding(1, Rndr::Forge::DescriptorType::CombinedImageSampler, 1, Rndr::ShaderTypeBits::Fragment));
+    Rndr::Forge::DescriptorSetLayout descriptor_set_layout = Require(Rndr::Forge::DescriptorSetLayout::Create(device, layout_desc));
 
     // Allocate descriptor set from the descriptor pool and fill it with concrete data.
-    Rndr::Forge::DescriptorSet descriptor_set(descriptor_pool, descriptor_set_layout);
-    descriptor_set.Update("albedo_texture", albedo_texture, albedo_sampler);
+    Rndr::Forge::DescriptorSet descriptor_set = Require(Rndr::Forge::DescriptorSet::Create(descriptor_pool, descriptor_set_layout));
+    RequireOk(descriptor_set.Update("albedo_texture", albedo_texture, albedo_sampler));
     // By index rather than by name, because the fragment shader declares this texture and never samples it -
     // so it is not in the SPIR-V for reflection to name. Sampling it would give it a name here too.
-    descriptor_set.Update(1, mr_texture, mr_sampler);
+    RequireOk(descriptor_set.Update(1, mr_texture, mr_sampler));
 
     // The attributes and the push constant block are the shader's to declare, so neither is written out
     // here. The mesh is packed the way FromShader assumes - position, normal, uv, in that order and with no
     // padding - and the pipeline checks the result against the shader either way.
-    Rndr::Forge::VertexInputDesc vertex_input_desc = Rndr::Forge::VertexInputDesc::FromShader(vertex_shader);
+    Rndr::Forge::VertexInputDesc vertex_input_desc = Require(Rndr::Forge::VertexInputDesc::FromShader(vertex_shader));
     RNDR_ASSERT(vertex_input_desc.bindings[0].stride == mesh.vertex_size, "Mesh is not packed the way the shader reads it");
     const Opal::DynamicArray<Rndr::Forge::PushConstantRange> push_constant_ranges =
         Rndr::Forge::PushConstantRangesFromShaders({pipeline_shaders, 2});
@@ -219,7 +219,7 @@ void Run()
         .color_blend_attachments = {color_blend_desc},
         .color_attachment_formats = {swap_chain.GetDesc().pixel_format},
         .depth_attachment_format = swap_chain.GetDesc().depth_pixel_format};
-    const Rndr::Forge::Pipeline pipeline(device, pipeline_desc);
+    const Rndr::Forge::Pipeline pipeline = Require(Rndr::Forge::Pipeline::Create(device, pipeline_desc));
 
     Rndr::Forge::SetDebugName(device, mesh_buffer, "suzanne mesh");
     Rndr::Forge::SetDebugName(device, albedo_texture, "suzanne albedo");

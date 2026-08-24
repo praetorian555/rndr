@@ -4,13 +4,15 @@
 
 #include "opal/container/array-view.h"
 #include "opal/container/dynamic-array.h"
+#include "opal/container/expected.h"
 #include "opal/container/ref.h"
 #include "opal/container/string.h"
 
-#include "rndr/graphics-types.hpp"
-#include "rndr/types.hpp"
+#include "rndr/error-codes.hpp"
 #include "rndr/forge/forward.hpp"
 #include "rndr/forge/types.hpp"
+#include "rndr/graphics-types.hpp"
+#include "rndr/types.hpp"
 
 namespace Rndr
 {
@@ -97,34 +99,43 @@ public:
     /**
      * Create a shader by compiling a Slang source file. The desc.entry_point selects which
      * annotated entry point to compile.
+     * @return The shader, ErrorCode::FileNotFound for a file that is not there or is empty,
+     *         ErrorCode::ShaderCompilationError when Slang refused the source, or whatever
+     *         FromSpirvInMemory reported about what came out of it.
      */
-    [[nodiscard]] static Shader FromSource(const Device& device, const Opal::StringUtf8& path,
-                                                   const ShaderDesc& desc = {});
+    [[nodiscard]] static Opal::Expected<Shader, ErrorCode> FromSource(const Device& device, const Opal::StringUtf8& path,
+                                                                      const ShaderDesc& desc = {});
 
     /**
      * Create a shader by compiling Slang source code in memory. The desc.entry_point selects
      * which annotated entry point to compile.
+     * @return The shader, ErrorCode::InvalidArgument for empty source, ErrorCode::ShaderCompilationError
+     *         when Slang refused it, or whatever FromSpirvInMemory reported.
      */
-    [[nodiscard]] static Shader FromSourceInMemory(const Device& device, const Opal::StringUtf8& source,
-                                                           const ShaderDesc& desc = {});
+    [[nodiscard]] static Opal::Expected<Shader, ErrorCode> FromSourceInMemory(const Device& device, const Opal::StringUtf8& source,
+                                                                              const ShaderDesc& desc = {});
 
     /**
      * Create a shader from a SPIR-V binary file. The desc.entry_point selects which entry point
      * inside the SPIR-V module is used to determine the shader stage.
+     * @return The shader, ErrorCode::FileNotFound for a file that is not there or is empty, or whatever
+     *         FromSpirvInMemory reported.
      */
-    [[nodiscard]] static Shader FromSpirvFile(const Device& device, const Opal::StringUtf8& path,
-                                                      const ShaderDesc& desc = {});
+    [[nodiscard]] static Opal::Expected<Shader, ErrorCode> FromSpirvFile(const Device& device, const Opal::StringUtf8& path,
+                                                                         const ShaderDesc& desc = {});
 
     /**
      * Create a shader from SPIR-V data in memory. The desc.entry_point selects which entry
      * point inside the SPIR-V module is used to determine the shader stage.
+     * @return The shader, ErrorCode::CorruptData for bytes that are not a SPIR-V module,
+     *         ErrorCode::InvalidArgument when the module names no such entry point,
+     *         ErrorCode::UnsupportedFormat for a stage, a constant type or a descriptor kind Forge does not
+     *         model, or whatever the failing creation maps to.
      */
-    [[nodiscard]] static Shader FromSpirvInMemory(const Device& device, Opal::ArrayView<const u8> spirv_data,
-                                                          const ShaderDesc& desc = {});
+    [[nodiscard]] static Opal::Expected<Shader, ErrorCode> FromSpirvInMemory(const Device& device, Opal::ArrayView<const u8> spirv_data,
+                                                                             const ShaderDesc& desc = {});
 
     Shader() = default;
-    explicit Shader(const Device& device, Opal::ArrayView<const u8> spirv_data,
-                            const ShaderDesc& desc = {});
     ~Shader();
 
     Shader(const Shader&) = delete;
@@ -159,10 +170,7 @@ public:
      * VertexInputDesc::FromShader turns these into a desc, and a graphics pipeline checks whatever desc it
      * was given against them either way.
      */
-    [[nodiscard]] Opal::ArrayView<const ShaderInputInfo> GetInputs() const
-    {
-        return {m_inputs.GetData(), m_inputs.GetSize()};
-    }
+    [[nodiscard]] Opal::ArrayView<const ShaderInputInfo> GetInputs() const { return {m_inputs.GetData(), m_inputs.GetSize()}; }
 
     /**
      * The descriptors this entry point reads, across every set. Scoped to the entry point, so a Slang file
@@ -171,10 +179,7 @@ public:
      * DescriptorSetLayoutDesc::shaders is what these are for: naming the bindings of a hand-written layout,
      * and checking that it says what the shader says.
      */
-    [[nodiscard]] Opal::ArrayView<const ShaderBindingInfo> GetBindings() const
-    {
-        return {m_bindings.GetData(), m_bindings.GetSize()};
-    }
+    [[nodiscard]] Opal::ArrayView<const ShaderBindingInfo> GetBindings() const { return {m_bindings.GetData(), m_bindings.GetSize()}; }
 
     /** The push constant blocks this entry point reads. PushConstantRangesFromShaders turns these into ranges. */
     [[nodiscard]] Opal::ArrayView<const ShaderPushConstantInfo> GetPushConstants() const

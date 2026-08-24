@@ -3,6 +3,7 @@
 #include "opal/container/dynamic-array.h"
 #include "opal/container/string.h"
 
+#include "rndr/error-codes.hpp"
 #include "rndr/types.hpp"
 
 namespace Rndr::Forge
@@ -33,9 +34,11 @@ struct Mesh
  * Vertices are packed as position (float3), normal (float3), uv (float2). Indices are 32-bit.
  *
  * @param file_path Absolute or relative path to the mesh file.
- * @param out_mesh Output mesh with vertex and index data populated.
- * @throw Opal::Exception if the file cannot be loaded or required vertex attributes are missing.
+ * @param out_mesh Output mesh with vertex and index data populated. Untouched when this reports.
+ * @return ErrorCode::Success, ErrorCode::FeatureNotSupported in a build without assimp,
+ *         ErrorCode::FileNotFound when the file holds no mesh, or ErrorCode::UnsupportedFormat when the mesh
+ *         is missing an attribute this needs.
  */
-void LoadMesh(const Opal::StringUtf8& file_path, Mesh& out_mesh);
+[[nodiscard]] ErrorCode LoadMesh(const Opal::StringUtf8& file_path, Mesh& out_mesh);
 
 }  // namespace Rndr::Forge

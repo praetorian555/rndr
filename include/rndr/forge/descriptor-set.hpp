@@ -3,17 +3,19 @@
 #include "volk/volk.h"
 
 #include "opal/clonable-base.h"
-#include "opal/enum-flags.h"
 #include "opal/container/array-view.h"
 #include "opal/container/dynamic-array.h"
+#include "opal/container/expected.h"
 #include "opal/container/hash-map.h"
 #include "opal/container/ref.h"
+#include "opal/enum-flags.h"
 #include "opal/variant.h"
 
-#include "rndr/graphics-types.hpp"
-#include "rndr/types.hpp"
+#include "rndr/error-codes.hpp"
 #include "rndr/forge/forward.hpp"
 #include "rndr/forge/types.hpp"
+#include "rndr/graphics-types.hpp"
+#include "rndr/types.hpp"
 
 namespace Rndr::Forge
 {
@@ -61,7 +63,7 @@ struct DescriptorPoolDesc : Opal::ClonableBase<DescriptorPoolDesc>
     //
     OPAL_CLONE_FIELDS(descriptor_types, max_sets, use_update_after_bind, free_individual_sets);
 
-    void Add(DescriptorType descriptor_type, u32 max_size);
+    [[nodiscard]] ErrorCode Add(DescriptorType descriptor_type, u32 max_size);
 };
 
 struct DescriptorSetLayoutDesc : Opal::ClonableBase<DescriptorSetLayoutDesc>
@@ -108,9 +110,9 @@ struct DescriptorSetLayoutDesc : Opal::ClonableBase<DescriptorSetLayoutDesc>
 
     OPAL_CLONE_FIELDS(bindings, shaders, set_index);
 
-    void AddBinding(u32 binding, DescriptorType descriptor_type, u32 descriptor_count, ShaderTypeBits shader_types,
-                    Opal::ArrayView<const Opal::Ref<const Sampler>> immutable_samplers = {},
-                    DescriptorBindingFlagBits flags = DescriptorBindingFlagBits::None);
+    [[nodiscard]] ErrorCode AddBinding(u32 binding, DescriptorType descriptor_type, u32 descriptor_count, ShaderTypeBits shader_types,
+                                       Opal::ArrayView<const Opal::Ref<const Sampler>> immutable_samplers = {},
+                                       DescriptorBindingFlagBits flags = DescriptorBindingFlagBits::None);
 };
 
 struct DescriptorSetUpdateBinding
@@ -144,8 +146,14 @@ class DescriptorPool
 {
 public:
     DescriptorPool() = default;
-    explicit DescriptorPool(const Device& device, const DescriptorPoolDesc& desc = {});
     ~DescriptorPool();
+
+    /**
+     * @param desc How many descriptors of each kind the pool holds, and how many sets it hands out.
+     * @return The pool, ErrorCode::InvalidArgument for a desc naming no descriptors, or whatever the failing
+     *         creation maps to.
+     */
+    [[nodiscard]] static Opal::Expected<DescriptorPool, ErrorCode> Create(const Device& device, const DescriptorPoolDesc& desc = {});
 
     DescriptorPool(const DescriptorPool&) = delete;
     DescriptorPool& operator=(const DescriptorPool&) = delete;
@@ -159,7 +167,7 @@ public:
      * DescriptorSet that came out of this pool is invalid afterwards and must not be destroyed or bound, which makes
      * this the recycle-per-frame counterpart to allocating and freeing sets one by one.
      */
-    void Reset();
+    [[nodiscard]] ErrorCode Reset();
 
     [[nodiscard]] bool IsValid() const { return m_pool != VK_NULL_HANDLE; }
     [[nodiscard]] VkDescriptorPool GetNativeDescriptorPool() const { return m_pool; }
@@ -176,8 +184,15 @@ class DescriptorSetLayout
 {
 public:
     DescriptorSetLayout() = default;
-    explicit DescriptorSetLayout(const Device& device, const DescriptorSetLayoutDesc& desc = {});
     ~DescriptorSetLayout();
+
+    /**
+     * @param desc The bindings, and optionally the shaders they are checked against.
+     * @return The layout, ErrorCode::InvalidArgument when a binding disagrees with the shaders or asks for a
+     *         flag the device was not created with, or whatever the failing creation maps to.
+     */
+    [[nodiscard]] static Opal::Expected<DescriptorSetLayout, ErrorCode> Create(const Device& device,
+                                                                               const DescriptorSetLayoutDesc& desc = {});
 
     DescriptorSetLayout(const DescriptorSetLayout&) = delete;
     DescriptorSetLayout& operator=(const DescriptorSetLayout&) = delete;
@@ -200,8 +215,18 @@ class DescriptorSet
 {
 public:
     DescriptorSet() = default;
-    explicit DescriptorSet(const DescriptorPool& pool, const DescriptorSetLayout& layout,
-                                   u32 variable_descriptor_count = 0);
+
+    /**
+     * Allocate one set of that layout out of that pool.
+     *
+     * @param variable_descriptor_count How many descriptors the variable-count binding of the layout gets.
+     *        Zero for a layout that has none.
+     * @return The set, ErrorCode::InvalidArgument when the layout and the pool disagree about update after
+     *         bind or the count does not fit its binding, or whatever the failing allocation maps to.
+     */
+    [[nodiscard]] static Opal::Expected<DescriptorSet, ErrorCode> Create(const DescriptorPool& pool, const DescriptorSetLayout& layout,
+                                                                         u32 variable_descriptor_count = 0);
+
     ~DescriptorSet();
 
     DescriptorSet(const DescriptorSet&) = delete;
@@ -224,7 +249,7 @@ public:
      * the single-resource overloads below are one vkUpdateDescriptorSets each.
      * @param updates What to write. Each names its own binding and descriptor type.
      */
-    void Update(Opal::ArrayView<const DescriptorSetUpdateBinding> updates);
+    [[nodiscard]] ErrorCode Update(Opal::ArrayView<const DescriptorSetUpdateBinding> updates);
 
     /**
      * Write one texture into a binding. The descriptor type comes from the layout the set was allocated from,
@@ -235,8 +260,8 @@ public:
      * @param texture_layout Layout the texture will be in when the shader reads it.
      * @param array_element Which descriptor of the binding to write, for a binding that is an array.
      */
-    void Update(u32 binding, const Texture& texture, const Sampler& sampler,
-                ImageLayout texture_layout = ImageLayout::ShaderReadOnly, u32 array_element = 0);
+    [[nodiscard]] ErrorCode Update(u32 binding, const Texture& texture, const Sampler& sampler,
+                                   ImageLayout texture_layout = ImageLayout::ShaderReadOnly, u32 array_element = 0);
 
     /**
      * Write one buffer into a binding. The descriptor type - constant or storage - comes from the layout, as
@@ -247,7 +272,7 @@ public:
      * @param size Bytes visible from offset on. k_whole_buffer is the rest of the buffer.
      * @param array_element Which descriptor of the binding to write, for a binding that is an array.
      */
-    void Update(u32 binding, const Buffer& buffer, u64 offset = 0, u64 size = k_whole_buffer, u32 array_element = 0);
+    [[nodiscard]] ErrorCode Update(u32 binding, const Buffer& buffer, u64 offset = 0, u64 size = k_whole_buffer, u32 array_element = 0);
 
     /**
      * Write one texture into the binding the shader calls `name`, which is the same call as above with the
@@ -256,24 +281,24 @@ public:
      * @param name What the shader calls the binding. A name it does not use throws, as does any name at all
      *             when the layout was built without `shaders` and so carries none.
      */
-    void Update(const Opal::StringUtf8& name, const Texture& texture, const Sampler& sampler,
-                ImageLayout texture_layout = ImageLayout::ShaderReadOnly, u32 array_element = 0);
+    [[nodiscard]] ErrorCode Update(const Opal::StringUtf8& name, const Texture& texture, const Sampler& sampler,
+                                   ImageLayout texture_layout = ImageLayout::ShaderReadOnly, u32 array_element = 0);
 
     /** Write one buffer into the binding the shader calls `name`, as above. */
-    void Update(const Opal::StringUtf8& name, const Buffer& buffer, u64 offset = 0, u64 size = k_whole_buffer,
-                u32 array_element = 0);
+    [[nodiscard]] ErrorCode Update(const Opal::StringUtf8& name, const Buffer& buffer, u64 offset = 0, u64 size = k_whole_buffer,
+                                   u32 array_element = 0);
 
     /**
      * The index of the binding the shader calls `name`, which is what the two overloads above look up.
      * Throws on a name no binding carries, and says so plainly when the layout carries no names at all.
      */
-    [[nodiscard]] u32 GetBindingIndex(const Opal::StringUtf8& name) const;
+    [[nodiscard]] Opal::Expected<u32, ErrorCode> GetBindingIndex(const Opal::StringUtf8& name) const;
 
     /**
      * Descriptor type the layout declared for a binding. Throws when the layout has no such binding, which is
      * what the Update overloads above call to fill in the type they do not take.
      */
-    [[nodiscard]] DescriptorType GetBindingDescriptorType(u32 binding) const;
+    [[nodiscard]] Opal::Expected<DescriptorType, ErrorCode> GetBindingDescriptorType(u32 binding) const;
 
 private:
     /** What one binding of the layout holds, which is all the Update overloads need to know about it. */
@@ -292,7 +317,7 @@ private:
     };
 
     /** The binding of that index, throwing the way every other lookup here does when there is none. */
-    [[nodiscard]] const BindingInfo& FindBinding(u32 binding) const;
+    [[nodiscard]] Opal::Expected<const BindingInfo&, ErrorCode> FindBinding(u32 binding) const;
 
     VkDevice m_device = VK_NULL_HANDLE;
     VkDescriptorSet m_set = VK_NULL_HANDLE;
