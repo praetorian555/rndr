@@ -341,7 +341,7 @@ Opal::Optional<Rndr::Canvas::Format> GlInternalFormatToCanvasFormat(ktx_uint32_t
         case 0x8814:  // GL_RGBA32F
             return Rndr::Canvas::Format::RGBA32F;
         default:
-            return Opal::NullOpt;
+            return {};
     }
 }
 #endif
