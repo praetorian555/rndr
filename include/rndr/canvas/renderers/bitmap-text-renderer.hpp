@@ -35,11 +35,29 @@ struct BitmapTextRendererDesc : Opal::ClonableBase<BitmapTextRendererDesc>
 class BitmapTextRenderer
 {
 public:
-    bool Init(Opal::Ref<Context> context, const BitmapTextRendererDesc& desc);
+    BitmapTextRenderer() = default;
+
+    /**
+     * Create the renderer: rasterize the font atlas and build the shader, mesh and brush.
+     * @param context Context to render with. Has to outlive the renderer.
+     * @param desc Font file, size and atlas parameters.
+     * @return The renderer, ErrorCode::FileNotFound when the font file cannot be read,
+     *         ErrorCode::CorruptData when it holds no fonts, or whatever creating the GPU resources
+     *         reports. The reason is logged at error level.
+     */
+    [[nodiscard]] static Opal::Expected<BitmapTextRenderer, ErrorCode> Create(Opal::Ref<Context> context,
+                                                                             const BitmapTextRendererDesc& desc);
+
     void Destroy();
-    void UpdateFontSize(f32 font_size);
-    void UpdateFontOversampling(u32 oversample_h, u32 oversample_v);
-    void SetAlphaMultiplier(f32 alpha_multiplier);
+
+    /** @return ErrorCode::Success, or whatever rebuilding the font atlas reports. */
+    [[nodiscard]] ErrorCode UpdateFontSize(f32 font_size);
+
+    /** @return ErrorCode::Success, or whatever rebuilding the font atlas reports. */
+    [[nodiscard]] ErrorCode UpdateFontOversampling(u32 oversample_h, u32 oversample_v);
+
+    /** @return ErrorCode::Success, or whatever rebuilding the font atlas reports. */
+    [[nodiscard]] ErrorCode SetAlphaMultiplier(f32 alpha_multiplier);
 
     bool DrawText(const Opal::StringUtf8& text, const Vector2f& position, const Vector4f& color);
 
@@ -47,7 +65,7 @@ public:
     void Render(DrawList& draw_list);
 
 private:
-    void UpdateFontAtlas();
+    [[nodiscard]] ErrorCode UpdateFontAtlas();
 
     struct RNDR_ALIGN(16) VertexData
     {

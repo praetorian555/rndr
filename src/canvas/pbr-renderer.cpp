@@ -9,29 +9,12 @@
 #endif
 
 #include "opal/container/in-place-array.h"
-#include "opal/exceptions.h"
 #include "opal/math-base.h"
 #include "opal/paths.h"
 
 #include "rndr/canvas/context.hpp"
+#include "rndr/canvas/gl-result.hpp"
 #include "rndr/log.hpp"
-
-namespace
-{
-
-// Interim bridge while PbrRenderer still reports by throwing: unwraps a result into the exception
-// this renderer's callers already handle.
-template <typename T>
-T UnwrapOrThrow(Opal::Expected<T, Rndr::ErrorCode>&& result, const char* what)
-{
-    if (!result.HasValue())
-    {
-        throw Opal::Exception(what);
-    }
-    return std::move(result).GetValue();
-}
-
-}  // namespace
 
 // BatchKey ==================================================================
 
@@ -63,19 +46,24 @@ Opal::u64 Opal::Hasher<Rndr::Canvas::PbrRenderer::BatchKey>::operator()(const Rn
 
 // PbrRenderer ===============================================================
 
-Rndr::Canvas::PbrRenderer::PbrRenderer(Opal::Ref<Context> context) : m_context(std::move(context))
+Opal::Expected<Rndr::Canvas::PbrRenderer, Rndr::ErrorCode> Rndr::Canvas::PbrRenderer::Create(Opal::Ref<Context> context)
 {
+    using ResultType = Opal::Expected<PbrRenderer, ErrorCode>;
+    PbrRenderer renderer;
+    renderer.m_context = std::move(context);
+
     const Opal::StringUtf8 shader_path = Opal::Paths::Combine(RNDR_CORE_ASSETS_DIR, "shaders", "canvas-pbr.slang").GetValue();
-    m_shader = UnwrapOrThrow(Shader::FromSource(shader_path, "PBR Renderer"), "Failed to create PbrRenderer shader");
-    RNDR_ASSERT(m_shader.IsValid(), "Failed to create PbrRenderer shader!");
+    auto shader_result = Shader::FromSource(shader_path, "PBR Renderer");
+    RNDR_CANVAS_CHECK_EXPECTED(shader_result.GetErrorOr(ErrorCode::Success), ResultType);
+    renderer.m_shader = std::move(shader_result).GetValue();
 
     // 1x1 white dummy texture for unused texture slots.
     auto dummy_result = Texture::Create(TextureDesc{.width = 1, .height = 1}, Opal::AsBytes(Colors::k_white),
                                         "PBR Renderer - Dummy Texture");
-    if (dummy_result.HasValue())
-    {
-        m_dummy_texture = std::move(dummy_result).GetValue();
-    }
+    RNDR_CANVAS_CHECK_EXPECTED(dummy_result.GetErrorOr(ErrorCode::Success), ResultType);
+    renderer.m_dummy_texture = std::move(dummy_result).GetValue();
+
+    return ResultType(std::move(renderer));
 }
 
 Rndr::Canvas::PbrRenderer::~PbrRenderer()
@@ -123,21 +111,22 @@ void Rndr::Canvas::PbrRenderer::AddPointLight(const Point3f& position, const Vec
 
 // Geometry ------------------------------------------------------------------
 
-void Rndr::Canvas::PbrRenderer::EnsureGeometry(const Opal::StringUtf8& key, const Opal::ArrayView<const u8>& vertex_data,
-                                               const Opal::ArrayView<const u8>& index_data)
+Rndr::ErrorCode Rndr::Canvas::PbrRenderer::EnsureGeometry(const Opal::StringUtf8& key, const Opal::ArrayView<const u8>& vertex_data,
+                                                          const Opal::ArrayView<const u8>& index_data)
 {
     if (m_geometry_cache.Contains(key))
     {
-        return;
+        return ErrorCode::Success;
     }
     const VertexLayout vertex_layout = m_shader.GetVertexLayout().Clone();
-    Canvas::Mesh mesh = UnwrapOrThrow(Mesh::Create(vertex_layout, vertex_data, index_data, key.Clone()),
-                                      "Failed to create PbrRenderer mesh");
-    RNDR_ASSERT(mesh.IsValid(), "Failed to create PbrRenderer mesh!");
-    m_geometry_cache.Insert(key.Clone(), std::move(mesh));
+    auto mesh_result = Mesh::Create(vertex_layout, vertex_data, index_data, key.Clone());
+    RNDR_CANVAS_CHECK(mesh_result.GetErrorOr(ErrorCode::Success));
+    m_geometry_cache.Insert(key.Clone(), std::move(mesh_result).GetValue());
+    return ErrorCode::Success;
 }
 
-void Rndr::Canvas::PbrRenderer::DrawCube(const Matrix4x4f& transform, const PbrMaterialDesc& material, f32 u_tiling, f32 v_tiling)
+Rndr::ErrorCode Rndr::Canvas::PbrRenderer::DrawCube(const Matrix4x4f& transform, const PbrMaterialDesc& material, f32 u_tiling,
+                                                    f32 v_tiling)
 {
     Opal::StringUtf8 key(64, '\0');
     snprintf(key.GetData(), key.GetSize(), "Cube_%u_%u", static_cast<u32>(u_tiling), static_cast<u32>(v_tiling));
@@ -148,14 +137,14 @@ void Rndr::Canvas::PbrRenderer::DrawCube(const Matrix4x4f& transform, const PbrM
         Opal::DynamicArray<u8> vertex_data;
         Opal::DynamicArray<u8> index_data;
         GenerateCube(vertex_data, index_data, u_tiling, v_tiling);
-        EnsureGeometry(key, Opal::AsBytes(vertex_data), Opal::AsBytes(index_data));
+        RNDR_CANVAS_CHECK(EnsureGeometry(key, Opal::AsBytes(vertex_data), Opal::AsBytes(index_data)));
     }
 
-    AddDrawEntry(key, transform, material);
+    return AddDrawEntry(key, transform, material);
 }
 
-void Rndr::Canvas::PbrRenderer::DrawSphere(const Matrix4x4f& transform, const PbrMaterialDesc& material, f32 u_tiling, f32 v_tiling,
-                                           u32 latitude_segments, u32 longitude_segments)
+Rndr::ErrorCode Rndr::Canvas::PbrRenderer::DrawSphere(const Matrix4x4f& transform, const PbrMaterialDesc& material, f32 u_tiling,
+                                                      f32 v_tiling, u32 latitude_segments, u32 longitude_segments)
 {
     Opal::StringUtf8 key(128, '\0');
     snprintf(key.GetData(), key.GetSize(), "Sphere_%u_%u_%u_%u", latitude_segments, longitude_segments, static_cast<u32>(u_tiling),
@@ -167,20 +156,20 @@ void Rndr::Canvas::PbrRenderer::DrawSphere(const Matrix4x4f& transform, const Pb
         Opal::DynamicArray<u8> vertex_data;
         Opal::DynamicArray<u8> index_data;
         GenerateSphere(vertex_data, index_data, latitude_segments, longitude_segments, u_tiling, v_tiling);
-        EnsureGeometry(key, Opal::AsBytes(vertex_data), Opal::AsBytes(index_data));
+        RNDR_CANVAS_CHECK(EnsureGeometry(key, Opal::AsBytes(vertex_data), Opal::AsBytes(index_data)));
     }
 
-    AddDrawEntry(key, transform, material);
+    return AddDrawEntry(key, transform, material);
 }
 
-void Rndr::Canvas::PbrRenderer::DrawMesh(const Opal::StringUtf8& key, const Mesh& mesh, const Matrix4x4f& transform,
-                                         const PbrMaterialDesc& material)
+Rndr::ErrorCode Rndr::Canvas::PbrRenderer::DrawMesh(const Opal::StringUtf8& key, const Mesh& mesh, const Matrix4x4f& transform,
+                                                    const PbrMaterialDesc& material)
 {
     if (!m_external_geometry.Contains(key))
     {
         m_external_geometry.Insert(key.Clone(), Opal::Ref<const Mesh>(mesh));
     }
-    AddDrawEntry(key, transform, material);
+    return AddDrawEntry(key, transform, material);
 }
 
 // Draw entry recording ------------------------------------------------------
@@ -231,7 +220,7 @@ Rndr::Canvas::PbrRenderer::InstanceData Rndr::Canvas::PbrRenderer::MakeInstanceD
     return data;
 }
 
-void Rndr::Canvas::PbrRenderer::AddDrawEntry(const Opal::StringUtf8& geometry_key, const Matrix4x4f& transform,
+Rndr::ErrorCode Rndr::Canvas::PbrRenderer::AddDrawEntry(const Opal::StringUtf8& geometry_key, const Matrix4x4f& transform,
                                              const PbrMaterialDesc& material)
 {
     BatchKey batch_key;
@@ -248,15 +237,17 @@ void Rndr::Canvas::PbrRenderer::AddDrawEntry(const Opal::StringUtf8& geometry_ke
     {
         BatchData data;
         data.brush = Brush(BrushDesc{.depth_test = true, .depth_write = true}, "PBR Renderer - " + material.material_name.Clone());
-        (void)data.brush.SetShader(m_shader);
-        data.instance_buffer = UnwrapOrThrow(Buffer::Create(BufferUsage::Storage, k_max_instance_count * sizeof(InstanceData), 0, {},
-                                                            "PBR Renderer - " + material.material_name.Clone() + " - Instance Buffer"),
-                                             "Failed to create PBR instance buffer");
+        RNDR_CANVAS_CHECK(data.brush.SetShader(m_shader));
+        auto instance_buffer_result = Buffer::Create(BufferUsage::Storage, k_max_instance_count * sizeof(InstanceData), 0, {},
+                                                     "PBR Renderer - " + material.material_name.Clone() + " - Instance Buffer");
+        RNDR_CANVAS_CHECK(instance_buffer_result.GetErrorOr(ErrorCode::Success));
+        data.instance_buffer = std::move(instance_buffer_result).GetValue();
         BindTextures(data.brush, batch_key);
         m_batches.Insert(batch_key.Clone(), std::move(data));
         it = m_batches.Find(batch_key);
     }
     it.GetValue().instances.PushBack(MakeInstanceData(transform, material));
+    return ErrorCode::Success;
 }
 
 // Rendering -----------------------------------------------------------------
@@ -464,12 +455,13 @@ void Rndr::Canvas::PbrRenderer::GenerateSphere(Opal::DynamicArray<u8>& out_verte
 namespace
 {
 
-void ExtractMeshDataFromScene(const aiScene& ai_scene, Opal::DynamicArray<Rndr::u8>& out_vertex_data,
-                              Opal::DynamicArray<Rndr::u8>& out_index_data)
+Rndr::ErrorCode ExtractMeshDataFromScene(const aiScene& ai_scene, Opal::DynamicArray<Rndr::u8>& out_vertex_data,
+                                         Opal::DynamicArray<Rndr::u8>& out_index_data)
 {
     if (!ai_scene.HasMeshes())
     {
-        throw Opal::Exception("No meshes found!");
+        RNDR_LOG_ERROR("Canvas: No meshes found in the model file");
+        return Rndr::ErrorCode::CorruptData;
     }
 
     const aiMesh* ai_mesh = ai_scene.mMeshes[0];
@@ -495,6 +487,7 @@ void ExtractMeshDataFromScene(const aiScene& ai_scene, Opal::DynamicArray<Rndr::
             out_index_data.Append(Opal::AsWritableBytes<Rndr::u32>(face.mIndices[index_idx]));
         }
     }
+    return Rndr::ErrorCode::Success;
 }
 
 Opal::StringUtf8 GetTexturePath(const aiMaterial* ai_material, aiTextureType type, unsigned int index, const Opal::StringUtf8& parent_path)
@@ -514,8 +507,9 @@ Opal::StringUtf8 GetTexturePath(const aiMaterial* ai_material, aiTextureType typ
     return {};
 }
 
-void LoadMaterialFromScene(const aiScene& ai_scene, Rndr::u32 material_index, const Opal::StringUtf8& parent_path,
-                           const Rndr::Canvas::TextureDesc& texture_desc, bool flip_vertically, Rndr::Canvas::PbrModel& out_model)
+Rndr::ErrorCode LoadMaterialFromScene(const aiScene& ai_scene, Rndr::u32 material_index, const Opal::StringUtf8& parent_path,
+                                      const Rndr::Canvas::TextureDesc& texture_desc, bool flip_vertically,
+                                      Rndr::Canvas::PbrModel& out_model)
 {
     const aiMaterial* ai_material = ai_scene.mMaterials[material_index];
 
@@ -578,13 +572,17 @@ void LoadMaterialFromScene(const aiScene& ai_scene, Rndr::u32 material_index, co
     path = GetTexturePath(ai_material, aiTextureType_EMISSIVE, 0, parent_path);
     if (!path.IsEmpty())
     {
-        out_model.emissive_texture = UnwrapOrThrow(Rndr::Canvas::Texture::FromFile(path, texture_desc, flip_vertically), "Failed to load PBR texture");
+        auto texture_result = Rndr::Canvas::Texture::FromFile(path, texture_desc, flip_vertically);
+        RNDR_CANVAS_CHECK(texture_result.GetErrorOr(Rndr::ErrorCode::Success));
+        out_model.emissive_texture = std::move(texture_result).GetValue();
     }
 
     path = GetTexturePath(ai_material, aiTextureType_DIFFUSE, 0, parent_path);
     if (!path.IsEmpty())
     {
-        out_model.albedo_texture = UnwrapOrThrow(Rndr::Canvas::Texture::FromFile(path, texture_desc, flip_vertically), "Failed to load PBR texture");
+        auto texture_result = Rndr::Canvas::Texture::FromFile(path, texture_desc, flip_vertically);
+        RNDR_CANVAS_CHECK(texture_result.GetErrorOr(Rndr::ErrorCode::Success));
+        out_model.albedo_texture = std::move(texture_result).GetValue();
     }
 
     aiString mr_path;
@@ -598,13 +596,17 @@ void LoadMaterialFromScene(const aiScene& ai_scene, Rndr::u32 material_index, co
                              &mr_blend, &mr_op, mr_mode.GetData(), &mr_flags) == AI_SUCCESS)
     {
         Opal::StringUtf8 mr_full_path = Opal::Paths::NormalizePath(Opal::Paths::Combine(parent_path, mr_path.C_Str()).GetValue()).GetValue();
-        out_model.metallic_roughness_texture = UnwrapOrThrow(Rndr::Canvas::Texture::FromFile(mr_full_path, texture_desc, flip_vertically), "Failed to load PBR texture");
+        auto texture_result = Rndr::Canvas::Texture::FromFile(mr_full_path, texture_desc, flip_vertically);
+        RNDR_CANVAS_CHECK(texture_result.GetErrorOr(Rndr::ErrorCode::Success));
+        out_model.metallic_roughness_texture = std::move(texture_result).GetValue();
     }
 
     path = GetTexturePath(ai_material, aiTextureType_LIGHTMAP, 0, parent_path);
     if (!path.IsEmpty())
     {
-        out_model.ambient_occlusion_texture = UnwrapOrThrow(Rndr::Canvas::Texture::FromFile(path, texture_desc, flip_vertically), "Failed to load PBR texture");
+        auto texture_result = Rndr::Canvas::Texture::FromFile(path, texture_desc, flip_vertically);
+        RNDR_CANVAS_CHECK(texture_result.GetErrorOr(Rndr::ErrorCode::Success));
+        out_model.ambient_occlusion_texture = std::move(texture_result).GetValue();
     }
 
     path = GetTexturePath(ai_material, aiTextureType_NORMALS, 0, parent_path);
@@ -614,13 +616,17 @@ void LoadMaterialFromScene(const aiScene& ai_scene, Rndr::u32 material_index, co
     }
     if (!path.IsEmpty())
     {
-        out_model.normal_texture = UnwrapOrThrow(Rndr::Canvas::Texture::FromFile(path, texture_desc, flip_vertically), "Failed to load PBR texture");
+        auto texture_result = Rndr::Canvas::Texture::FromFile(path, texture_desc, flip_vertically);
+        RNDR_CANVAS_CHECK(texture_result.GetErrorOr(Rndr::ErrorCode::Success));
+        out_model.normal_texture = std::move(texture_result).GetValue();
     }
 
     path = GetTexturePath(ai_material, aiTextureType_OPACITY, 0, parent_path);
     if (!path.IsEmpty())
     {
-        out_model.opacity_texture = UnwrapOrThrow(Rndr::Canvas::Texture::FromFile(path, texture_desc, flip_vertically), "Failed to load PBR texture");
+        auto texture_result = Rndr::Canvas::Texture::FromFile(path, texture_desc, flip_vertically);
+        RNDR_CANVAS_CHECK(texture_result.GetErrorOr(Rndr::ErrorCode::Success));
+        out_model.opacity_texture = std::move(texture_result).GetValue();
         out_model.alpha_test = 0.5f;
     }
 
@@ -648,13 +654,16 @@ void LoadMaterialFromScene(const aiScene& ai_scene, Rndr::u32 material_index, co
         out_model.metallic_factor = 1.0f;
         out_model.roughness = Rndr::Vector4f(0.1f, 0.1f, 0.0f, 0.0f);
     }
+    return Rndr::ErrorCode::Success;
 }
 
 }  // namespace
 
-Rndr::Canvas::PbrModel Rndr::Canvas::PbrRenderer::LoadModel(const Opal::StringUtf8& file_path, const TextureDesc& texture_desc,
-                                                             bool flip_vertically)
+Opal::Expected<Rndr::Canvas::PbrModel, Rndr::ErrorCode> Rndr::Canvas::PbrRenderer::LoadModel(const Opal::StringUtf8& file_path,
+                                                                                             const TextureDesc& texture_desc,
+                                                                                             bool flip_vertically)
 {
+    using ResultType = Opal::Expected<PbrModel, ErrorCode>;
     constexpr u32 k_ai_process_flags = aiProcess_JoinIdenticalVertices | aiProcess_Triangulate | aiProcess_GenSmoothNormals |
                                        aiProcess_LimitBoneWeights | aiProcess_SplitLargeMeshes | aiProcess_ImproveCacheLocality |
                                        aiProcess_RemoveRedundantMaterials | aiProcess_FindDegenerates | aiProcess_FindInvalidData |
@@ -663,7 +672,8 @@ Rndr::Canvas::PbrModel Rndr::Canvas::PbrRenderer::LoadModel(const Opal::StringUt
     const aiScene* scene = aiImportFile(*file_path, k_ai_process_flags);
     if (scene == nullptr)
     {
-        throw Opal::Exception("Failed to load model");
+        RNDR_LOG_ERROR("Canvas: Failed to load model {}: {}", *file_path, aiGetErrorString());
+        return ResultType(ErrorCode::CorruptData);
     }
 
     PbrModel model;
@@ -671,35 +681,53 @@ Rndr::Canvas::PbrModel Rndr::Canvas::PbrRenderer::LoadModel(const Opal::StringUt
     const Opal::StringUtf8 mesh_name = Opal::Paths::GetFileName(file_path).GetValue();
     Opal::DynamicArray<u8> vertex_data;
     Opal::DynamicArray<u8> index_data;
-    ExtractMeshDataFromScene(*scene, vertex_data, index_data);
+    const ErrorCode extract_code = ExtractMeshDataFromScene(*scene, vertex_data, index_data);
+    if (extract_code != ErrorCode::Success)
+    {
+        aiReleaseImport(scene);
+        return ResultType(extract_code);
+    }
     const VertexLayout vertex_layout = m_shader.GetVertexLayout().Clone();
-    model.mesh = UnwrapOrThrow(Mesh::Create(vertex_layout, Opal::AsBytes(vertex_data), Opal::AsBytes(index_data), mesh_name.Clone()),
-                               "Failed to create model mesh");
+    auto mesh_result = Mesh::Create(vertex_layout, Opal::AsBytes(vertex_data), Opal::AsBytes(index_data), mesh_name.Clone());
+    if (!mesh_result.HasValue())
+    {
+        aiReleaseImport(scene);
+        return ResultType(mesh_result.GetError());
+    }
+    model.mesh = std::move(mesh_result).GetValue();
 
     if (scene->HasMeshes() && scene->mMeshes[0]->mMaterialIndex < scene->mNumMaterials)
     {
         const Opal::StringUtf8 parent_path = Opal::Paths::GetParentPath(file_path).GetValue();
-        LoadMaterialFromScene(*scene, scene->mMeshes[0]->mMaterialIndex, parent_path, texture_desc, flip_vertically, model);
+        const ErrorCode material_code =
+            LoadMaterialFromScene(*scene, scene->mMeshes[0]->mMaterialIndex, parent_path, texture_desc, flip_vertically, model);
+        if (material_code != ErrorCode::Success)
+        {
+            aiReleaseImport(scene);
+            return ResultType(material_code);
+        }
     }
 
     aiReleaseImport(scene);
-    return model;
+    return ResultType(std::move(model));
 }
 
 #else  // !RNDR_ASSIMP
 
-Rndr::Canvas::PbrModel Rndr::Canvas::PbrRenderer::LoadModel(const Opal::StringUtf8& file_path, const TextureDesc& texture_desc,
-                                                            bool flip_vertically)
+Opal::Expected<Rndr::Canvas::PbrModel, Rndr::ErrorCode> Rndr::Canvas::PbrRenderer::LoadModel(const Opal::StringUtf8& file_path,
+                                                                                             const TextureDesc& texture_desc,
+                                                                                             bool flip_vertically)
 {
     (void)file_path;
     (void)texture_desc;
     (void)flip_vertically;
-    throw Opal::Exception("PbrRenderer::LoadModel requires Assimp support; rebuild with RNDR_ASSIMP=ON.");
+    RNDR_LOG_ERROR("Canvas: PbrRenderer::LoadModel requires Assimp support; rebuild with RNDR_ASSIMP=ON");
+    return Opal::Expected<PbrModel, ErrorCode>(ErrorCode::FeatureNotSupported);
 }
 
 #endif  // RNDR_ASSIMP
 
-void Rndr::Canvas::PbrRenderer::DrawModel(const Opal::StringUtf8& key, const PbrModel& model, const Matrix4x4f& transform)
+Rndr::ErrorCode Rndr::Canvas::PbrRenderer::DrawModel(const Opal::StringUtf8& key, const PbrModel& model, const Matrix4x4f& transform)
 {
     PbrMaterialDesc desc;
     desc.material_name = model.material_name.Clone();
@@ -733,5 +761,5 @@ void Rndr::Canvas::PbrRenderer::DrawModel(const Opal::StringUtf8& key, const Pbr
     {
         desc.opacity_texture = Opal::Ref<const Texture>(model.opacity_texture);
     }
-    DrawMesh(key, model.mesh, transform, desc);
+    return DrawMesh(key, model.mesh, transform, desc);
 }

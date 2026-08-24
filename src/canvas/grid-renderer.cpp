@@ -1,6 +1,7 @@
 #include "rndr/canvas/renderers/grid-renderer.hpp"
 
 #include "rndr/canvas/context.hpp"
+#include "rndr/canvas/gl-result.hpp"
 #include "rndr/trace.hpp"
 
 static const Opal::StringUtf8 k_shader_source = R"(
@@ -71,17 +72,17 @@ float4 FragmentMain(VertexOutput in)
 }
 )";
 
-Rndr::Canvas::GridRenderer::GridRenderer(Opal::Ref<Context> context)
-    : m_context(std::move(context))
+Opal::Expected<Rndr::Canvas::GridRenderer, Rndr::ErrorCode> Rndr::Canvas::GridRenderer::Create(Opal::Ref<Context> context)
 {
-    auto shader_result = Shader::FromSourceInMemory(k_shader_source, "Grid Renderer Shader");
-    if (shader_result.HasValue())
-    {
-        m_shader = std::move(shader_result).GetValue();
-    }
-    RNDR_ASSERT(m_shader.IsValid(), "Failed to create GridRenderer shader!");
+    using ResultType = Opal::Expected<GridRenderer, ErrorCode>;
+    GridRenderer renderer;
+    renderer.m_context = std::move(context);
 
-    const VertexLayout vertex_layout = m_shader.GetVertexLayout().Clone();
+    auto shader_result = Shader::FromSourceInMemory(k_shader_source, "Grid Renderer Shader");
+    RNDR_CANVAS_CHECK_EXPECTED(shader_result.GetErrorOr(ErrorCode::Success), ResultType);
+    renderer.m_shader = std::move(shader_result).GetValue();
+
+    const VertexLayout vertex_layout = renderer.m_shader.GetVertexLayout().Clone();
 
     // Large ground-plane quad on the XZ plane (two triangles).
     struct Vertex
@@ -97,15 +98,13 @@ Rndr::Canvas::GridRenderer::GridRenderer(Opal::Ref<Context> context)
     };
     const u32 indices[6] = {2, 0, 3, 0, 2, 1};
     auto mesh_result = Mesh::Create(vertex_layout, Opal::AsBytes(k_vertices), Opal::AsBytes(indices), "GridRenderer Mesh");
-    if (mesh_result.HasValue())
-    {
-        m_mesh = std::move(mesh_result).GetValue();
-    }
-    RNDR_ASSERT(m_mesh.IsValid(), "Failed to create GridRenderer mesh!");
+    RNDR_CANVAS_CHECK_EXPECTED(mesh_result.GetErrorOr(ErrorCode::Success), ResultType);
+    renderer.m_mesh = std::move(mesh_result).GetValue();
 
-    m_brush = Brush(BrushDesc{.blend_mode = BlendMode::Alpha, .depth_test = true, .cull_mode = CullMode::None}, "Grid Renderer Brush");
-    (void)m_brush.SetShader(m_shader);
-    RNDR_ASSERT(m_brush.IsValid(), "Failed to create GridRenderer brush!");
+    renderer.m_brush =
+        Brush(BrushDesc{.blend_mode = BlendMode::Alpha, .depth_test = true, .cull_mode = CullMode::None}, "Grid Renderer Brush");
+    RNDR_CANVAS_CHECK_EXPECTED(renderer.m_brush.SetShader(renderer.m_shader), ResultType);
+    return ResultType(std::move(renderer));
 }
 
 Rndr::Canvas::GridRenderer::~GridRenderer()

@@ -35,12 +35,15 @@ int main()
     Opal::StringUtf8 font_path = Opal::Paths::Combine(RNDR_CORE_ASSETS_DIR, "OpenSans.ttf").GetValue();
     Rndr::ImGuiContext imgui_context(*app, window.Clone(), {.font_path = font_path.Clone()});
 
-    Canvas::BitmapTextRenderer text_renderer;
     Canvas::BitmapTextRendererDesc text_renderer_desc{.font_size = 16.0};
     text_renderer_desc.font_file_path = std::move(font_path);
-    text_renderer.Init(context, text_renderer_desc);
+    auto text_renderer_result = Canvas::BitmapTextRenderer::Create(Opal::Ref{context}, text_renderer_desc);
+    RNDR_ASSERT(text_renderer_result.HasValue(), "Failed to create text renderer!");
+    Canvas::BitmapTextRenderer text_renderer = std::move(text_renderer_result).GetValue();
 
-    Canvas::ShapeRenderer shape_renderer(context);
+    auto shape_renderer_result = Canvas::ShapeRenderer::Create(Opal::Ref{context});
+    RNDR_ASSERT(shape_renderer_result.HasValue(), "Failed to create shape renderer!");
+    Canvas::ShapeRenderer shape_renderer = std::move(shape_renderer_result).GetValue();
 
     app->on_window_resize.Bind(
         [&context, &window](const Rndr::GenericWindow& w, Rndr::i32 width, Rndr::i32 height)
@@ -72,9 +75,9 @@ int main()
         draw_list.SetRenderTarget(context);
         draw_list.Clear({0.05, 0.02, 0.1, 1}, 1);
 
-        text_renderer.UpdateFontSize(font_size_in_pixels);
-        text_renderer.UpdateFontOversampling(oversample_h, oversample_v);
-        text_renderer.SetAlphaMultiplier(alpha_multiplier);
+        (void)text_renderer.UpdateFontSize(font_size_in_pixels);
+        (void)text_renderer.UpdateFontOversampling(oversample_h, oversample_v);
+        (void)text_renderer.SetAlphaMultiplier(alpha_multiplier);
 
         text_renderer.BeginFrame();
         text_renderer.DrawText("The quick brown fox jumps over the lazy dog!", {100, 100}, Rndr::Colors::k_white);

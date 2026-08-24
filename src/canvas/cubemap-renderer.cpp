@@ -1,6 +1,7 @@
 #include "../../include/rndr/canvas/renderers/cubemap-renderer.hpp"
 
 #include "rndr/canvas/context.hpp"
+#include "rndr/canvas/gl-result.hpp"
 
 static const Opal::StringUtf8 k_shader_source = R"(
 struct VertexInput
@@ -35,17 +36,17 @@ float4 FragmentMain(VertexOutput in)
 }
 )";
 
-Rndr::Canvas::CubemapRenderer::CubemapRenderer(Opal::Ref<Context> context)
-    : m_context(std::move(context))
+Opal::Expected<Rndr::Canvas::CubemapRenderer, Rndr::ErrorCode> Rndr::Canvas::CubemapRenderer::Create(Opal::Ref<Context> context)
 {
-    auto shader_result = Shader::FromSourceInMemory(k_shader_source, "Cube Map Renderer");
-    if (shader_result.HasValue())
-    {
-        m_shader = std::move(shader_result).GetValue();
-    }
-    RNDR_ASSERT(m_shader.IsValid(), "Failed to create CubemapRenderer shader!");
+    using ResultType = Opal::Expected<CubemapRenderer, ErrorCode>;
+    CubemapRenderer renderer;
+    renderer.m_context = std::move(context);
 
-    const VertexLayout vertex_layout = m_shader.GetVertexLayout().Clone();
+    auto shader_result = Shader::FromSourceInMemory(k_shader_source, "Cube Map Renderer");
+    RNDR_CANVAS_CHECK_EXPECTED(shader_result.GetErrorOr(ErrorCode::Success), ResultType);
+    renderer.m_shader = std::move(shader_result).GetValue();
+
+    const VertexLayout vertex_layout = renderer.m_shader.GetVertexLayout().Clone();
 
     // Full-screen triangle in NDC. Vertex positions extend beyond [-1,1] so that a single
     // triangle covers the entire screen after clipping.
@@ -60,15 +61,12 @@ Rndr::Canvas::CubemapRenderer::CubemapRenderer(Opal::Ref<Context> context)
     };
     const u32 indices[3] = {0, 1, 2};
     auto mesh_result = Mesh::Create(vertex_layout, Opal::AsBytes(vertices), Opal::AsBytes(indices), "CubemapRenderer Mesh");
-    if (mesh_result.HasValue())
-    {
-        m_mesh = std::move(mesh_result).GetValue();
-    }
-    RNDR_ASSERT(m_mesh.IsValid(), "Failed to create CubemapRenderer mesh!");
+    RNDR_CANVAS_CHECK_EXPECTED(mesh_result.GetErrorOr(ErrorCode::Success), ResultType);
+    renderer.m_mesh = std::move(mesh_result).GetValue();
 
-    m_brush = Brush(BrushDesc{.depth_test = false, .depth_write = false, .cull_mode = CullMode::None});
-    (void)m_brush.SetShader(m_shader);
-    RNDR_ASSERT(m_brush.IsValid(), "Failed to create CubemapRenderer brush!");
+    renderer.m_brush = Brush(BrushDesc{.depth_test = false, .depth_write = false, .cull_mode = CullMode::None});
+    RNDR_CANVAS_CHECK_EXPECTED(renderer.m_brush.SetShader(renderer.m_shader), ResultType);
+    return ResultType(std::move(renderer));
 }
 
 Rndr::Canvas::CubemapRenderer::~CubemapRenderer()
@@ -87,15 +85,13 @@ void Rndr::Canvas::CubemapRenderer::SetCubemap(const Texture& cubemap)
     m_brush.SetTexture("cubemap", cubemap);
 }
 
-void Rndr::Canvas::CubemapRenderer::SetEquirectangular(const Opal::StringUtf8& file_path, i32 face_size, TextureDesc desc)
+Rndr::ErrorCode Rndr::Canvas::CubemapRenderer::SetEquirectangular(const Opal::StringUtf8& file_path, i32 face_size, TextureDesc desc)
 {
     auto cubemap_result = Texture::FromEquirectangular(file_path, face_size, desc);
-    if (!cubemap_result.HasValue())
-    {
-        throw Opal::Exception("Failed to load equirectangular image!");
-    }
+    RNDR_CANVAS_CHECK(cubemap_result.GetErrorOr(ErrorCode::Success));
     m_owned_cubemap = std::move(cubemap_result).GetValue();
     m_brush.SetTexture("cubemap", m_owned_cubemap);
+    return ErrorCode::Success;
 }
 
 void Rndr::Canvas::CubemapRenderer::Render(DrawList& draw_list, const Matrix4x4f& inverse_vp)

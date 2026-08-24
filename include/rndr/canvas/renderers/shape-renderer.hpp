@@ -17,7 +17,16 @@ class Context;
 class ShapeRenderer
 {
 public:
-    explicit ShapeRenderer(Opal::Ref<Context> context);
+    ShapeRenderer() = default;
+
+    /**
+     * Create the renderer with its shader, mesh and brush ready to draw.
+     * @param context Context to render with. Has to outlive the renderer.
+     * @return The renderer, or whatever creating its shader, mesh or brush reports. The reason is logged
+     *         at error level.
+     */
+    [[nodiscard]] static Opal::Expected<ShapeRenderer, ErrorCode> Create(Opal::Ref<Context> context);
+
     ~ShapeRenderer();
 
     ShapeRenderer(const ShapeRenderer&) = delete;

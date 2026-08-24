@@ -43,15 +43,22 @@ int main()
 
     Rndr::ImGuiContext imgui_context(*app, window.Clone());
 
-    Canvas::GridRenderer grid_renderer(Opal::Ref{context});
-    Canvas::PbrRenderer pbr_renderer(Opal::Ref{context});
-    Canvas::CubemapRenderer cubemap_renderer(Opal::Ref{context});
+    auto grid_renderer_result = Canvas::GridRenderer::Create(Opal::Ref{context});
+    RNDR_ASSERT(grid_renderer_result.HasValue(), "Failed to create grid renderer!");
+    Canvas::GridRenderer grid_renderer = std::move(grid_renderer_result).GetValue();
+    auto pbr_renderer_result = Canvas::PbrRenderer::Create(Opal::Ref{context});
+    RNDR_ASSERT(pbr_renderer_result.HasValue(), "Failed to create PBR renderer!");
+    Canvas::PbrRenderer pbr_renderer = std::move(pbr_renderer_result).GetValue();
+    auto cubemap_renderer_result = Canvas::CubemapRenderer::Create(Opal::Ref{context});
+    RNDR_ASSERT(cubemap_renderer_result.HasValue(), "Failed to create cubemap renderer!");
+    Canvas::CubemapRenderer cubemap_renderer = std::move(cubemap_renderer_result).GetValue();
 
     // TODO: Replace with actual path to equirectangular image.
     const Opal::StringUtf8 skybox_path = Opal::Paths::Combine(RNDR_CORE_ASSETS_DIR, "Panorama_Sky_04-512x512.png").GetValue();
     Canvas::TextureDesc skybox_desc;
     skybox_desc.use_mips = true;
-    cubemap_renderer.SetEquirectangular(skybox_path, 0, skybox_desc);
+    const Rndr::ErrorCode skybox_code = cubemap_renderer.SetEquirectangular(skybox_path, 0, skybox_desc);
+    RNDR_ASSERT(skybox_code == Rndr::ErrorCode::Success, "Failed to load skybox!");
 
     // Load helmet model (mesh + material + textures).
     const Canvas::TextureDesc tex_desc{
@@ -60,7 +67,9 @@ int main()
     };
     const Opal::StringUtf8 helmet_path =
         Opal::Paths::Combine(RNDR_CORE_ASSETS_DIR, "sample-models", "DamagedHelmet", "gltf", "DamagedHelmet.gltf").GetValue();
-    Canvas::PbrModel helmet_model = pbr_renderer.LoadModel(helmet_path, tex_desc, true);
+    auto helmet_model_result = pbr_renderer.LoadModel(helmet_path, tex_desc, true);
+    RNDR_ASSERT(helmet_model_result.HasValue(), "Failed to load helmet model!");
+    Canvas::PbrModel helmet_model = std::move(helmet_model_result).GetValue();
 
     // Load default albedo texture for simple shapes.
     Opal::StringUtf8 default_albedo_path = Opal::Paths::Combine(RNDR_CORE_ASSETS_DIR, "default-texture.png").GetValue();
@@ -306,17 +315,17 @@ void DrawScene(Rndr::Canvas::PbrRenderer& renderer, const Rndr::Canvas::Texture&
     // Green cube.
     const Rndr::Canvas::PbrMaterialDesc green_material{.material_name = "Green Material", .albedo_color = Rndr::Colors::k_green};
     const Rndr::Matrix4x4f cube_transform = Opal::Translate(Rndr::Vector3f{-2.0f, 0.0f, -10.0f});
-    renderer.DrawCube(cube_transform, green_material);
+    (void)renderer.DrawCube(cube_transform, green_material);
 
     // Textured sphere.
     const Rndr::Canvas::PbrMaterialDesc default_material{.material_name = "Default Material",
                                                          .albedo_texture = Opal::Ref<const Rndr::Canvas::Texture>(default_albedo_texture)};
     const Rndr::Matrix4x4f sphere_transform = Opal::Translate(Rndr::Vector3f{2.0f, 0.0f, -10.0f});
-    renderer.DrawSphere(sphere_transform, default_material, 2.0f, 2.0f, 32, 32);
+    (void)renderer.DrawSphere(sphere_transform, default_material, 2.0f, 2.0f, 32, 32);
 
     // Helmet.
     const Rndr::Matrix4x4f helmet_transform = Opal::Translate(Rndr::Vector3f{0.0f, 2.0f, -20.0f}) * Opal::RotateX(90.0f);
-    renderer.DrawModel("DamagedHelmet", helmet_model, helmet_transform);
+    (void)renderer.DrawModel("DamagedHelmet", helmet_model, helmet_transform);
 
     // Grid of white spheres.
     const Rndr::Canvas::PbrMaterialDesc white_material{.material_name = "White Material", .albedo_color = Rndr::Colors::k_white};
@@ -330,7 +339,7 @@ void DrawScene(Rndr::Canvas::PbrRenderer& renderer, const Rndr::Canvas::Texture&
             {
                 constexpr Rndr::f32 k_distance = 5.0f;
                 const Rndr::Point3f draw_location = start_position + Rndr::Vector3f{x * k_distance, y * k_distance, z * k_distance};
-                renderer.DrawSphere(Opal::Translate(draw_location), white_material);
+                (void)renderer.DrawSphere(Opal::Translate(draw_location), white_material);
             }
         }
     }

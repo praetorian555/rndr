@@ -1,6 +1,7 @@
 #include "../../include/rndr/canvas/renderers/shape-renderer.hpp"
 
 #include "rndr/canvas/context.hpp"
+#include "rndr/canvas/gl-result.hpp"
 #include "rndr/canvas/projections.hpp"
 
 static const Opal::StringUtf8 k_shader_source = R"(
@@ -34,27 +35,24 @@ float4 FragmentMain(VertexOutput in)
 }
 )";
 
-Rndr::Canvas::ShapeRenderer::ShapeRenderer(Opal::Ref<Context> context)
-    : m_context(std::move(context))
+Opal::Expected<Rndr::Canvas::ShapeRenderer, Rndr::ErrorCode> Rndr::Canvas::ShapeRenderer::Create(Opal::Ref<Context> context)
 {
+    using ResultType = Opal::Expected<ShapeRenderer, ErrorCode>;
+    ShapeRenderer renderer;
+    renderer.m_context = std::move(context);
+
     auto shader_result = Shader::FromSourceInMemory(k_shader_source, "Shape Renderer");
-    if (shader_result.HasValue())
-    {
-        m_shader = std::move(shader_result).GetValue();
-    }
-    RNDR_ASSERT(m_shader.IsValid(), "Failed to create ShapeRenderer shader!");
+    RNDR_CANVAS_CHECK_EXPECTED(shader_result.GetErrorOr(ErrorCode::Success), ResultType);
+    renderer.m_shader = std::move(shader_result).GetValue();
 
-    const VertexLayout vertex_layout = m_shader.GetVertexLayout().Clone();
+    const VertexLayout vertex_layout = renderer.m_shader.GetVertexLayout().Clone();
     auto mesh_result = Mesh::Create(vertex_layout, k_max_vertex_count, k_max_index_count, "ShapeRenderer Mesh");
-    if (mesh_result.HasValue())
-    {
-        m_mesh = std::move(mesh_result).GetValue();
-    }
-    RNDR_ASSERT(m_mesh.IsValid(), "Failed to create ShapeRenderer mesh!");
+    RNDR_CANVAS_CHECK_EXPECTED(mesh_result.GetErrorOr(ErrorCode::Success), ResultType);
+    renderer.m_mesh = std::move(mesh_result).GetValue();
 
-    m_brush = Brush(BrushDesc{.cull_mode = CullMode::None});
-    (void)m_brush.SetShader(m_shader);
-    RNDR_ASSERT(m_brush.IsValid(), "Failed to create ShapeRenderer brush!");
+    renderer.m_brush = Brush(BrushDesc{.cull_mode = CullMode::None});
+    RNDR_CANVAS_CHECK_EXPECTED(renderer.m_brush.SetShader(renderer.m_shader), ResultType);
+    return ResultType(std::move(renderer));
 }
 
 Rndr::Canvas::ShapeRenderer::~ShapeRenderer()

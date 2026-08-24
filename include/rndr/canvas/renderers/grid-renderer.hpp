@@ -20,7 +20,16 @@ class Context;
 class GridRenderer
 {
 public:
-    explicit GridRenderer(Opal::Ref<Context> context);
+    GridRenderer() = default;
+
+    /**
+     * Create the renderer with its shader, mesh and brush ready to draw.
+     * @param context Context to render with. Has to outlive the renderer.
+     * @return The renderer, or whatever creating its shader, mesh or brush reports. The reason is logged
+     *         at error level.
+     */
+    [[nodiscard]] static Opal::Expected<GridRenderer, ErrorCode> Create(Opal::Ref<Context> context);
+
     ~GridRenderer();
 
     GridRenderer(const GridRenderer&) = delete;

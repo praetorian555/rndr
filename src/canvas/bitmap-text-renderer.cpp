@@ -2,56 +2,58 @@
 
 #include "opal/paths.h"
 #include "rndr/canvas/context.hpp"
+#include "rndr/canvas/gl-result.hpp"
 #include "rndr/canvas/projections.hpp"
 #include "rndr/file.hpp"
 #include "rndr/log.hpp"
 
-bool Rndr::Canvas::BitmapTextRenderer::Init(Opal::Ref<Context> context, const BitmapTextRendererDesc& desc)
+Opal::Expected<Rndr::Canvas::BitmapTextRenderer, Rndr::ErrorCode> Rndr::Canvas::BitmapTextRenderer::Create(
+    Opal::Ref<Context> context, const BitmapTextRendererDesc& desc)
 {
-    m_context = std::move(context);
-    m_desc = desc.Clone();
-    if (m_desc.oversample_h == 0)
+    using ResultType = Opal::Expected<BitmapTextRenderer, ErrorCode>;
+    BitmapTextRenderer renderer;
+    renderer.m_context = std::move(context);
+    renderer.m_desc = desc.Clone();
+    if (renderer.m_desc.oversample_h == 0)
     {
-        m_desc.oversample_h = m_desc.font_size < 36.0f ? 2 : 1;
+        renderer.m_desc.oversample_h = renderer.m_desc.font_size < 36.0f ? 2 : 1;
     }
 
-    UpdateFontAtlas();
+    RNDR_CANVAS_CHECK_EXPECTED(renderer.UpdateFontAtlas(), ResultType);
 
     const Opal::StringUtf8 shader_path = Opal::Paths::Combine(RNDR_CORE_ASSETS_DIR, "shaders", "bitmap-text-render.slang").GetValue();
     auto shader_result = Shader::FromSource(shader_path, "Bitmap Text Renderer");
-    if (shader_result.HasValue())
-    {
-        m_shader = std::move(shader_result).GetValue();
-    }
-    RNDR_ASSERT(m_shader.IsValid(), "Shader could not be created!");
+    RNDR_CANVAS_CHECK_EXPECTED(shader_result.GetErrorOr(ErrorCode::Success), ResultType);
+    renderer.m_shader = std::move(shader_result).GetValue();
 
-    const VertexLayout vertex_layout = m_shader.GetVertexLayout().Clone();
-    auto mesh_result = Mesh::Create(vertex_layout, m_desc.max_char_render_count * k_char_vertex_count,
-                                    m_desc.max_char_render_count * k_char_index_count, "Bitmap Text Renderer Mesh");
-    if (mesh_result.HasValue())
-    {
-        m_mesh = std::move(mesh_result).GetValue();
-    }
-    RNDR_ASSERT(m_mesh.IsValid(), "Mesh could not be created!");
+    const VertexLayout vertex_layout = renderer.m_shader.GetVertexLayout().Clone();
+    auto mesh_result = Mesh::Create(vertex_layout, renderer.m_desc.max_char_render_count * k_char_vertex_count,
+                                    renderer.m_desc.max_char_render_count * k_char_index_count, "Bitmap Text Renderer Mesh");
+    RNDR_CANVAS_CHECK_EXPECTED(mesh_result.GetErrorOr(ErrorCode::Success), ResultType);
+    renderer.m_mesh = std::move(mesh_result).GetValue();
 
-    m_brush = Brush(BrushDesc{});
-    (void)m_brush.SetShader(m_shader);
-    m_brush.SetBlendMode(BlendMode::Alpha);
-    RNDR_ASSERT(m_brush.IsValid(), "Failed to create a brush!");
+    renderer.m_brush = Brush(BrushDesc{});
+    RNDR_CANVAS_CHECK_EXPECTED(renderer.m_brush.SetShader(renderer.m_shader), ResultType);
+    renderer.m_brush.SetBlendMode(BlendMode::Alpha);
 
-    return true;
+    return ResultType(std::move(renderer));
 }
 
-void Rndr::Canvas::BitmapTextRenderer::UpdateFontAtlas()
+Rndr::ErrorCode Rndr::Canvas::BitmapTextRenderer::UpdateFontAtlas()
 {
     if (m_font_contents.IsEmpty())
     {
         m_font_contents = Rndr::File::ReadEntireFile(m_desc.font_file_path);
-        RNDR_ASSERT(!m_font_contents.IsEmpty(), "Invalid font path");
+        if (m_font_contents.IsEmpty())
+        {
+            RNDR_LOG_ERROR("Canvas: Failed to read font file or file is empty: {}", *m_desc.font_file_path);
+            return ErrorCode::FileNotFound;
+        }
         const i32 font_count = stbtt_GetNumberOfFonts(m_font_contents.GetData());
         if (font_count == 0)
         {
-            throw Opal::Exception("No fonts in the font file!");
+            RNDR_LOG_ERROR("Canvas: No fonts in the font file: {}", *m_desc.font_file_path);
+            return ErrorCode::CorruptData;
         }
         m_packed_chars.Resize(m_desc.code_point_count);
         m_aligned_quads.Resize(m_desc.code_point_count);
@@ -91,11 +93,9 @@ void Rndr::Canvas::BitmapTextRenderer::UpdateFontAtlas()
     const TextureDesc k_texture_desc{
         .width = k_atlas_width, .height = k_atlas_height, .type = TextureType::Texture2D, .format = Format::R8};
     auto atlas_result = Texture::Create(k_texture_desc, Opal::AsBytes(m_atlas_data), "Glyph Atlas");
-    if (atlas_result.HasValue())
-    {
-        m_glyph_atlas = std::move(atlas_result).GetValue();
-    }
-    RNDR_ASSERT(m_glyph_atlas.IsValid(), "Glyph atlas could not be created!");
+    RNDR_CANVAS_CHECK(atlas_result.GetErrorOr(ErrorCode::Success));
+    m_glyph_atlas = std::move(atlas_result).GetValue();
+    return ErrorCode::Success;
 }
 
 void Rndr::Canvas::BitmapTextRenderer::Destroy()
@@ -105,16 +105,17 @@ void Rndr::Canvas::BitmapTextRenderer::Destroy()
     m_shader.Destroy();
 }
 
-void Rndr::Canvas::BitmapTextRenderer::UpdateFontSize(f32 font_size)
+Rndr::ErrorCode Rndr::Canvas::BitmapTextRenderer::UpdateFontSize(f32 font_size)
 {
     if (font_size != m_desc.font_size)
     {
         m_desc.font_size = font_size;
-        UpdateFontAtlas();
+        return UpdateFontAtlas();
     }
+    return ErrorCode::Success;
 }
 
-void Rndr::Canvas::BitmapTextRenderer::UpdateFontOversampling(u32 oversample_h, u32 oversample_v)
+Rndr::ErrorCode Rndr::Canvas::BitmapTextRenderer::UpdateFontOversampling(u32 oversample_h, u32 oversample_v)
 {
     if (oversample_h == 0)
     {
@@ -125,17 +126,19 @@ void Rndr::Canvas::BitmapTextRenderer::UpdateFontOversampling(u32 oversample_h, 
     {
         m_desc.oversample_h = oversample_h;
         m_desc.oversample_v = oversample_v;
-        UpdateFontAtlas();
+        return UpdateFontAtlas();
     }
+    return ErrorCode::Success;
 }
 
-void Rndr::Canvas::BitmapTextRenderer::SetAlphaMultiplier(f32 alpha_multiplier)
+Rndr::ErrorCode Rndr::Canvas::BitmapTextRenderer::SetAlphaMultiplier(f32 alpha_multiplier)
 {
     if (m_desc.alpha_multiplier != alpha_multiplier)
     {
         m_desc.alpha_multiplier = alpha_multiplier;
-        UpdateFontAtlas();
+        return UpdateFontAtlas();
     }
+    return ErrorCode::Success;
 }
 
 bool Rndr::Canvas::BitmapTextRenderer::DrawText(const Opal::StringUtf8& text, const Vector2f& in_position, const Vector4f& color)

@@ -94,7 +94,7 @@ struct PbrModel
  *
  * Usage:
  * @code
- *   PbrRenderer renderer(context);
+ *   auto renderer = PbrRenderer::Create(context).GetValue();
  *   // Each frame:
  *   renderer.BeginFrame();
  *   renderer.SetViewProjection(vp);
@@ -109,7 +109,16 @@ struct PbrModel
 class PbrRenderer
 {
 public:
-    explicit PbrRenderer(Opal::Ref<Context> context);
+    PbrRenderer() = default;
+
+    /**
+     * Create the renderer with its shader and dummy texture ready to draw.
+     * @param context Context to render with. Has to outlive the renderer.
+     * @return The renderer, or whatever creating its shader or dummy texture reports. The reason is
+     *         logged at error level.
+     */
+    [[nodiscard]] static Opal::Expected<PbrRenderer, ErrorCode> Create(Opal::Ref<Context> context);
+
     ~PbrRenderer();
 
     PbrRenderer(const PbrRenderer&) = delete;
@@ -139,15 +148,18 @@ public:
     /**
      * Draw a unit cube centered at the origin, transformed by @p transform.
      * Geometry is generated once and cached.
+     * @return ErrorCode::Success, or whatever creating the cached geometry or batch reports.
      */
-    void DrawCube(const Matrix4x4f& transform, const PbrMaterialDesc& material, f32 u_tiling = 1.0f, f32 v_tiling = 1.0f);
+    [[nodiscard]] ErrorCode DrawCube(const Matrix4x4f& transform, const PbrMaterialDesc& material, f32 u_tiling = 1.0f,
+                                     f32 v_tiling = 1.0f);
 
     /**
      * Draw a unit sphere centered at the origin, transformed by @p transform.
      * Geometry is generated once and cached.
+     * @return ErrorCode::Success, or whatever creating the cached geometry or batch reports.
      */
-    void DrawSphere(const Matrix4x4f& transform, const PbrMaterialDesc& material, f32 u_tiling = 1.0f, f32 v_tiling = 1.0f,
-                    u32 latitude_segments = 32, u32 longitude_segments = 32);
+    [[nodiscard]] ErrorCode DrawSphere(const Matrix4x4f& transform, const PbrMaterialDesc& material, f32 u_tiling = 1.0f,
+                                       f32 v_tiling = 1.0f, u32 latitude_segments = 32, u32 longitude_segments = 32);
 
     /**
      * Draw an arbitrary mesh. The mesh is registered under @p key the first time it is seen
@@ -157,26 +169,32 @@ public:
      * @param mesh GPU-resident mesh whose vertex layout matches the PBR shader (position3, normal3, texcoord2).
      * @param transform Model transform.
      * @param material PBR material description.
+     * @return ErrorCode::Success, or whatever creating the batch reports.
      */
-    void DrawMesh(const Opal::StringUtf8& key, const Mesh& mesh, const Matrix4x4f& transform, const PbrMaterialDesc& material);
+    [[nodiscard]] ErrorCode DrawMesh(const Opal::StringUtf8& key, const Mesh& mesh, const Matrix4x4f& transform,
+                                     const PbrMaterialDesc& material);
 
     /**
      * Load a 3D model from a file using assimp and load its textures.
      * @param file_path Path to the model file (e.g., .gltf, .obj).
      * @param texture_desc Texture sampling parameters for loaded textures.
      * @param flip_vertically If true, flip textures vertically when loading.
-     * @return A PbrModel containing mesh data, material properties, and loaded textures.
-     * @throw Opal::Exception if the file cannot be loaded.
+     * @return The model with its mesh, material properties and loaded textures;
+     *         ErrorCode::FeatureNotSupported without Assimp support, ErrorCode::CorruptData for a file
+     *         Assimp cannot load or one with no meshes, or whatever creating the mesh or loading a
+     *         texture reports. The reason is logged at error level.
      */
-    PbrModel LoadModel(const Opal::StringUtf8& file_path, const TextureDesc& texture_desc = {}, bool flip_vertically = false);
+    [[nodiscard]] Opal::Expected<PbrModel, ErrorCode> LoadModel(const Opal::StringUtf8& file_path, const TextureDesc& texture_desc = {},
+                                                                bool flip_vertically = false);
 
     /**
      * Draw a previously loaded model.
      * @param key Unique string identifying this geometry (for caching).
      * @param model The loaded model.
      * @param transform Model transform.
+     * @return ErrorCode::Success, or whatever creating the batch reports.
      */
-    void DrawModel(const Opal::StringUtf8& key, const PbrModel& model, const Matrix4x4f& transform);
+    [[nodiscard]] ErrorCode DrawModel(const Opal::StringUtf8& key, const PbrModel& model, const Matrix4x4f& transform);
 
     /** Record all draw commands into the draw list. */
     void Render(DrawList& draw_list);
@@ -228,9 +246,10 @@ private:
 
     static u32 ComputeMaterialFlags(const PbrMaterialDesc& material);
     InstanceData MakeInstanceData(const Matrix4x4f& transform, const PbrMaterialDesc& material);
-    void EnsureGeometry(const Opal::StringUtf8& key, const Opal::ArrayView<const u8>& vertex_data,
+    [[nodiscard]] ErrorCode EnsureGeometry(const Opal::StringUtf8& key, const Opal::ArrayView<const u8>& vertex_data,
                         const Opal::ArrayView<const u8>& index_data);
-    void AddDrawEntry(const Opal::StringUtf8& geometry_key, const Matrix4x4f& transform, const PbrMaterialDesc& material);
+    [[nodiscard]] ErrorCode AddDrawEntry(const Opal::StringUtf8& geometry_key, const Matrix4x4f& transform,
+                                         const PbrMaterialDesc& material);
     void BindTextures(Brush& brush, const BatchKey& key);
 
     static void GenerateCube(Opal::DynamicArray<u8>& out_vertex_data, Opal::DynamicArray<u8>& out_index_data, f32 u_tiling, f32 v_tiling);
