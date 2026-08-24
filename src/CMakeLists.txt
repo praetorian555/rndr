@@ -253,10 +253,17 @@ if (RNDR_KTX)
 endif ()
 
 if (${RNDR_FORGE})
-    target_include_directories(rndr PRIVATE ${VULKAN_SDK_PATH}/Source/SPIRV-Reflect)
+    # SYSTEM on both: the SDK headers (VMA in particular) do not survive this project's warning
+    # level, and SPIRV-Reflect is vendored SDK source rather than ours, so it is compiled with
+    # warnings off instead of being edited.
+    target_include_directories(rndr SYSTEM PRIVATE ${VULKAN_SDK_PATH}/Source/SPIRV-Reflect)
+    if (NOT MSVC)
+        set_source_files_properties(${VULKAN_SDK_PATH}/Source/SPIRV-Reflect/spirv_reflect.c
+                PROPERTIES COMPILE_OPTIONS "-w")
+    endif ()
     # Consumers of an installed FORGE-enabled rndr provide their own Vulkan SDK, so the SDK
     # include path is build-only and not baked into the install interface.
-    target_include_directories(rndr PUBLIC $<BUILD_INTERFACE:${VULKAN_SDK_PATH}/Include>)
+    target_include_directories(rndr SYSTEM PUBLIC $<BUILD_INTERFACE:${VULKAN_SDK_PATH}/Include>)
     target_compile_definitions(rndr PUBLIC RNDR_FORGE)
     if (WIN32)
         target_compile_definitions(rndr PUBLIC -DVK_USE_PLATFORM_WIN32_KHR -DVK_NO_PROTOTYPES)

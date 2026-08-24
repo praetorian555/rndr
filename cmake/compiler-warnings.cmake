@@ -39,6 +39,11 @@ function(rndr_setup_compiler_warnings target)
         -Wnull-dereference # a null dereference is detected
         -Wdouble-promotion # implicit float to double promotion
         -Wimplicit-fallthrough # switch case falls through without an annotation
+        # Both are part of -Wextra and both fire on idioms this codebase uses everywhere, while MSVC
+        # at /W4 /WX accepts them: partially initialized Vulkan structs (the remaining members are
+        # value-initialized on purpose) and i32 loop indices compared against a u64 GetSize().
+        -Wno-missing-field-initializers
+        -Wno-sign-compare
     )
 
     # Warnings as errors
