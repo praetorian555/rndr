@@ -133,11 +133,14 @@ struct ForgeWindowFixture
     /**
      * Resize the whole window and let the window system catch up. What the client area ends up as is read
      * back off the window rather than assumed, since the frame around it is counted in what is passed here.
+     * The result is the window's: a platform that cannot express the asked-for size refuses here, which is
+     * how the empty-client-area cases discover whether this window system has such a window at all.
      */
-    void ResizeWindow(i32 width, i32 height)
+    ErrorCode ResizeWindow(i32 width, i32 height)
     {
-        window->Reshape(0, 0, width, height);
+        const ErrorCode result = window->Reshape(0, 0, width, height);
         PumpEvents();
+        return result;
     }
 
     void PumpEvents()
@@ -651,7 +654,12 @@ TEST_CASE("Forge swap chain recovers from a window with no client area", "[forge
             ForgeTest::Unwrap(Forge::SwapChain::Create(fixture.device, fixture.surface, {.pixel_format = k_swap_chain_format}));
         REQUIRE(swap_chain.IsValid());
 
-        fixture.ResizeWindow(0, 0);
+        // X11 is a platform that cannot: a zero-sized window is a protocol error there, and an iconified
+        // window keeps its geometry, so the surface never reports the empty extent this case is about.
+        if (fixture.ResizeWindow(0, 0) != ErrorCode::Success)
+        {
+            SKIP("This window system has no window without a client area.");
+        }
         REQUIRE(fixture.GetClientSize().x == 0);
         REQUIRE(swap_chain.Recreate() == ErrorCode::Success);
         REQUIRE_FALSE(swap_chain.IsValid());
@@ -703,7 +711,10 @@ TEST_CASE("Forge swap chain recovers from a window with no client area", "[forge
         // does - so a test cannot demand it of either. Recreate is the call that reads the surface, finds
         // nothing to present to and releases the swap chain, and that is the state the rest of this case is
         // about.
-        fixture.ResizeWindow(0, 0);
+        if (fixture.ResizeWindow(0, 0) != ErrorCode::Success)
+        {
+            SKIP("This window system has no window without a client area.");
+        }
         REQUIRE(swap_chain.Recreate() == ErrorCode::Success);
         REQUIRE_FALSE(swap_chain.IsValid());
 

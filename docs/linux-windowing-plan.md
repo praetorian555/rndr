@@ -28,12 +28,13 @@ Decisions:
 | 0 — portability groundwork | **Done** |
 | 1 — LinuxApplication + LinuxWindow | **Done** |
 | 2 — Forge surface | **Done**: the XCB surface builds, and `[forge]`/`[forge-window]` run against a real device |
-| 3 — build and verify in WSL2 | Mostly done: five failures are open, see the next section |
+| 3 — build and verify in WSL2 | Mostly done: three failures are open, see the next section |
 
 Verified on 2026-08-24 in WSL2 Ubuntu 24.04 with GCC 13 and Ninja. With Forge off and ASan on, all 92
 test cases pass. With Forge on (`VULKAN_SDK` pointed at the Windows SDK, `RNDR_HARDENING=OFF`,
 `RNDR_TEST_REQUIRE_VULKAN=1`), `[forge]` reports 72 of 79 cases passing with 5 skipped, and
-`[forge-window]` 5 of 6. The device is Mesa's **llvmpipe** software rasterizer - there is no dozen
+`[forge-window]` passes 5 of 6 with 1 skipped (the empty-client-area case, which X11 cannot express -
+see "Fixed along the way"). The device is Mesa's **llvmpipe** software rasterizer - there is no dozen
 (`dzn`) ICD on this box - so these runs prove correctness against the validation layer, not against a
 GPU.
 
@@ -163,7 +164,7 @@ Done:
 
 Remaining:
 
-1. The five open failures below.
+1. The three open failures below (one validation count, two blend cases).
 2. Run the `modern-vulkan` sample under WSLg: window appears, resizes, ESC closes, WASD+mouse fly camera
    works (exercises the ResetToCenter warp, motion deltas and key translation).
 3. Window behaviours that no test tag covers, driven manually since `window-sample` is Canvas-bound and
@@ -182,24 +183,23 @@ returns, so a caller that read the size straight back read the old one - which i
 swap-chain resize test does. The same function now rejects a zero width or height with
 `InvalidArgument`, since X11 answers `BadValue` for a window without a client area.
 
+The empty-client-area swap chain cases (`test/forge/window-test.cpp`, "no client area") now probe the
+platform instead of assuming it: `ForgeWindowFixture::ResizeWindow` returns what `Reshape` said, and a
+refusal skips the section. X11 has no window without a client area - a zero size is a protocol error,
+and an iconified window keeps its geometry, so the surface never reports the zero extent the cases are
+about. The recovery logic they cover is platform-neutral and stays covered by the Windows run.
+
+`SwapChain` also treats a minimized window as having no client area regardless of what the surface
+reports (`SelectExtent` asks `GenericWindow::IsMinimized` first). Windows reports a zero
+`currentExtent` for a minimized window on its own; an iconified X11 window keeps its last geometry, and
+without the check Forge would keep presenting into a window nobody can see. Not testable in `[forge-window]` -
+minimize needs a window manager managing a mapped window, and the fixture's window is deliberately never
+shown - so it belongs to the manual checks in item 3 above: verify rendering pauses while minimized and
+resumes on restore.
+
 ## Open failures
 
-### 1. A window with no client area has no X11 equivalent (`test/forge/window-test.cpp:655`, `:708`)
-
-    REQUIRE( fixture.GetClientSize().x == 0 )   // 128 == 0
-    REQUIRE_FALSE( swap_chain.IsValid() )       // !true
-
-`ForgeWindowFixture::ResizeWindow(0, 0)` is how the test asks for a window with nothing to present to,
-and on Windows that models a minimized window, whose client rectangle really is empty. X11 has no such
-window: a zero size is a protocol error, and unmapping the window does not make
-`vkGetPhysicalDeviceSurfaceCapabilitiesKHR` report a zero extent either, so the swap chain never sees
-the state the test is about.
-
-This one wants a decision rather than a fix, since it is shared test code and Windows passes today:
-either the case skips on X11, or the fixture expresses "no client area" as a minimize and the test
-stops demanding a zero extent from a driver that is free to keep reporting one.
-
-### 2. uint8 index type reaches a device that never enabled the extension (`test/forge/smoke-test.cpp:2854`)
+### 1. uint8 index type reaches a device that never enabled the extension (`test/forge/smoke-test.cpp:2854`)
 
     Validation Error: [ VUID-vkCmdBindIndexBuffer-indexType-parameter ]
     vkCmdBindIndexBuffer(): indexType (1000265000) does not fall within the begin..end range of the
@@ -212,7 +212,7 @@ checks the refusal passes. The validation error is counted against the *other* c
 being added at device creation. Start at how `index_type_uint8` is queried and enabled in
 `src/forge/device.cpp`. Invisible on Windows, where the GPU supports the extension natively.
 
-### 3. Blend factor ConstColor produces the wrong colour (`test/forge/smoke-test.cpp:8540`)
+### 2. Blend factor ConstColor produces the wrong colour (`test/forge/smoke-test.cpp:8540`)
 
     source factor ConstColor:       measured 0.6      0.0627451  0.121569  0.301961
                                     expected 0.0815686 0.181176  0.200784  0.449412
