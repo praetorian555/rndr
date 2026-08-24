@@ -8,8 +8,8 @@
 Rndr::FlyCamera::FlyCamera(i32 screen_width, i32 screen_height, const FlyCameraDesc& desc)
     : ProjectionCamera(desc.start_position, Quaternionf::Identity(), screen_width, screen_height, desc.projection_desc),
       m_desc(desc),
-      m_pitch_radians(desc.start_pitch_radians),
-      m_yaw_radians(desc.start_yaw_radians)
+      m_yaw_radians(desc.start_yaw_radians),
+      m_pitch_radians(desc.start_pitch_radians)
 {
     m_yaw_radians = ClampYaw(m_yaw_radians);
     m_pitch_radians = ClampPitch(m_pitch_radians);

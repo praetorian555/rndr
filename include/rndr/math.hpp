@@ -1,5 +1,9 @@
 #pragma once
 
+// Opal's bounds2.h/bounds3.h use uint8_t without including <cstdint>; MSVC's headers leak the
+// declaration but GCC's do not, so provide it before any Opal math header.
+#include <cstdint>
+
 #include "opal/math-base.h"
 #include "opal/math/bounds2.h"
 #include "opal/math/bounds3.h"

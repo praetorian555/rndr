@@ -7,7 +7,10 @@
 #include "opal/container/string.h"
 
 #include "rndr/bitmap.hpp"
+
+#if RNDR_CANVAS
 #include "rndr/canvas/renderers/pbr-renderer.hpp"
+#endif
 
 #if RNDR_AUDIO
 #include "rndr/audio/audio-clip.hpp"
@@ -36,7 +39,7 @@ public:
     bool Write(const void* buffer, size_t element_size, size_t element_count);
 
 private:
-    struct _iobuf* m_file_handle = 0;
+    FILE* m_file_handle = nullptr;
 };
 
 namespace File

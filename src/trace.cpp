@@ -38,6 +38,8 @@ void Rndr::Trace::BeginGpuEvent(const char* name)
 #if RNDR_CANVAS
     const u64 group_id = Opal::Hash::CalcRawArray(reinterpret_cast<const u8*>(name), strlen(name));
     glPushDebugGroup(GL_DEBUG_SOURCE_APPLICATION, static_cast<GLuint>(group_id), -1, name);
+#else
+    RNDR_UNUSED(name);
 #endif
 }
 

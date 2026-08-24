@@ -420,6 +420,7 @@ Rndr::FormatNumericClass Rndr::GetFormatNumericClass(PixelFormat format)
             return FormatNumericClass::UnsignedInt;
 
         case PixelFormat::Undefined:
+        case PixelFormat::EnumCount:
             return FormatNumericClass::Undefined;
     }
     return FormatNumericClass::Undefined;

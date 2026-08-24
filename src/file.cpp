@@ -14,9 +14,25 @@
 
 #include "rndr/log.hpp"
 
+namespace
+{
+
+FILE* OpenFile(const char* file_path, const char* mode)
+{
+#if RNDR_WINDOWS
+    FILE* file = nullptr;
+    fopen_s(&file, file_path, mode);
+    return file;
+#else
+    return fopen(file_path, mode);
+#endif
+}
+
+}  // namespace
+
 Rndr::FileHandler::FileHandler(const char* file_path, const char* mode)
 {
-    fopen_s(&m_file_handle, file_path, mode);
+    m_file_handle = OpenFile(file_path, mode);
 }
 
 Rndr::FileHandler::~FileHandler()
@@ -37,16 +53,16 @@ bool Rndr::FileHandler::IsEOF() const
     return feof(m_file_handle) != 0;
 }
 
-bool Rndr::FileHandler::Read(void* buffer, u64 element_size, u64 element_count)
+bool Rndr::FileHandler::Read(void* buffer, size_t element_size, size_t element_count)
 {
-    const u64 read_elements = fread(buffer, element_size, element_count, m_file_handle);
+    const size_t read_elements = fread(buffer, element_size, element_count, m_file_handle);
     RNDR_ASSERT(read_elements == element_count, "Expected to read element_count elements!");
     return read_elements == element_count;
 }
 
-bool Rndr::FileHandler::Write(const void* buffer, u64 element_size, u64 element_count)
+bool Rndr::FileHandler::Write(const void* buffer, size_t element_size, size_t element_count)
 {
-    const u64 written_elements = fwrite(buffer, element_size, element_count, m_file_handle);
+    const size_t written_elements = fwrite(buffer, element_size, element_count, m_file_handle);
     RNDR_ASSERT(written_elements == element_count, "Expected to write element_count elements!");
     return written_elements == element_count;
 }
@@ -61,8 +77,7 @@ Opal::DynamicArray<Rndr::u8> Rndr::File::ReadEntireFile(const Opal::StringUtf8& 
         RNDR_LOG_ERROR("Failed to transcode file path!");
         return {};
     }
-    FILE* file = nullptr;
-    fopen_s(&file, file_path_locale.GetData(), "rb");
+    FILE* file = OpenFile(file_path_locale.GetData(), "rb");
     if (file == nullptr)
     {
         RNDR_LOG_ERROR("Failed to open file {}", file_path.GetData());
@@ -75,7 +90,7 @@ Opal::DynamicArray<Rndr::u8> Rndr::File::ReadEntireFile(const Opal::StringUtf8& 
 
     Opal::DynamicArray<u8> contents(contents_size);
     const u64 read_bytes = fread(contents.GetData(), 1, contents.GetSize(), file);
-    if (read_bytes != contents_size)
+    if (read_bytes != static_cast<u64>(contents_size))
     {
         RNDR_LOG_WARNING("Failed to read all bytes from the file!");
     }
