@@ -63,6 +63,15 @@ T Require(Opal::Expected<T, Rndr::ErrorCode>&& result)
     return std::move(result).GetValue();
 }
 
+/** The same for a call that reports a code and nothing else. */
+inline void RequireOk(Rndr::ErrorCode status)
+{
+    if (status != Rndr::ErrorCode::Success)
+    {
+        throw Opal::Exception("A Forge call failed. The log above says which and why.");
+    }
+}
+
 int main()
 {
     try
@@ -110,19 +119,20 @@ void Run()
     Opal::DynamicArray<Rndr::u8> combined_vertex_index_data;
     combined_vertex_index_data.Append(mesh.vertices);
     combined_vertex_index_data.Append(mesh.indices);
-    const Rndr::Forge::Buffer mesh_buffer(device,
-                                          {.size = combined_vertex_index_data.GetSize(),
-                                           .usage = Rndr::Forge::BufferUsageBits::VertexBuffer | Rndr::Forge::BufferUsageBits::IndexBuffer,
-                                           .keep_memory_mapped = false},
-                                          combined_vertex_index_data);
+    const Rndr::Forge::Buffer mesh_buffer = Require(
+        Rndr::Forge::Buffer::Create(device,
+                                    {.size = combined_vertex_index_data.GetSize(),
+                                     .usage = Rndr::Forge::BufferUsageBits::VertexBuffer | Rndr::Forge::BufferUsageBits::IndexBuffer,
+                                     .keep_memory_mapped = false},
+                                    combined_vertex_index_data));
 
     Opal::InPlaceArray<Rndr::Forge::Buffer, k_frames_in_flight> m_per_frame_buffers;
     for (i32 i = 0; i < k_frames_in_flight; i++)
     {
-        m_per_frame_buffers[i] = Rndr::Forge::Buffer(device, {.size = sizeof(PerFrameData),
-                                                              .usage = Rndr::Forge::BufferUsageBits::None,
-                                                              .keep_memory_mapped = true,
-                                                              .use_device_address = true});
+        m_per_frame_buffers[i] = Require(Rndr::Forge::Buffer::Create(device, {.size = sizeof(PerFrameData),
+                                                                              .usage = Rndr::Forge::BufferUsageBits::None,
+                                                                              .keep_memory_mapped = true,
+                                                                              .use_device_address = true}));
     }
 
     // Owns the frames in flight: a fence, a command buffer and the semaphores on both sides of the swap chain
@@ -134,16 +144,16 @@ void Run()
     Opal::InPlaceArray<Rndr::Forge::TimestampQueryPool, k_frames_in_flight> gpu_timers;
     for (i32 i = 0; i < k_frames_in_flight; i++)
     {
-        gpu_timers[i] = Rndr::Forge::TimestampQueryPool(device, {.query_count = 2});
+        gpu_timers[i] = Require(Rndr::Forge::TimestampQueryPool::Create(device, {.query_count = 2}));
     }
-    Rndr::Forge::ImmediateSubmit(device, graphics_queue,
-                                 [&](Rndr::Forge::CommandBuffer& command_buffer)
-                                 {
-                                     for (i32 i = 0; i < k_frames_in_flight; i++)
-                                     {
-                                         command_buffer.CmdResetQueryPool(gpu_timers[i]);
-                                     }
-                                 });
+    RequireOk(Rndr::Forge::ImmediateSubmit(device, graphics_queue,
+                                           [&](Rndr::Forge::CommandBuffer& command_buffer)
+                                           {
+                                               for (i32 i = 0; i < k_frames_in_flight; i++)
+                                               {
+                                                   RequireOk(command_buffer.CmdResetQueryPool(gpu_timers[i]));
+                                               }
+                                           }));
 
     const Opal::StringUtf8 albedo_texture_path =
         Opal::Paths::Combine(RNDR_CORE_ASSETS_DIR, "sample-models", "Suzanne", "glTF", "Suzanne_BaseColor.png").GetValue();
@@ -151,10 +161,12 @@ void Run()
         Opal::Paths::Combine(RNDR_CORE_ASSETS_DIR, "sample-models", "Suzanne", "glTF", "Suzanne_MetallicRoughness.png").GetValue();
     const Rndr::Bitmap albedo_bitmap = Rndr::File::LoadImage(albedo_texture_path, true, true);
     const Rndr::Bitmap mr_bitmap = Rndr::File::LoadImage(metallic_roughness_texture_path, true, true);
-    const Rndr::Forge::Texture albedo_texture(device, graphics_queue, albedo_bitmap);
-    const Rndr::Forge::Texture mr_texture(device, graphics_queue, mr_bitmap);
-    const Rndr::Forge::Sampler albedo_sampler(device, {.max_anisotropy = 8.0f, .max_lod = static_cast<f32>(albedo_bitmap.GetMipCount())});
-    const Rndr::Forge::Sampler mr_sampler(device, {.max_anisotropy = 8.0f, .max_lod = static_cast<f32>(mr_bitmap.GetMipCount())});
+    const Rndr::Forge::Texture albedo_texture = Require(Rndr::Forge::Texture::Create(device, graphics_queue, albedo_bitmap));
+    const Rndr::Forge::Texture mr_texture = Require(Rndr::Forge::Texture::Create(device, graphics_queue, mr_bitmap));
+    const Rndr::Forge::Sampler albedo_sampler =
+        Require(Rndr::Forge::Sampler::Create(device, {.max_anisotropy = 8.0f, .max_lod = static_cast<f32>(albedo_bitmap.GetMipCount())}));
+    const Rndr::Forge::Sampler mr_sampler =
+        Require(Rndr::Forge::Sampler::Create(device, {.max_anisotropy = 8.0f, .max_lod = static_cast<f32>(mr_bitmap.GetMipCount())}));
 
     // Setup descriptor pool
     Rndr::Forge::DescriptorPoolDesc descriptor_pool_desc;
@@ -300,7 +312,7 @@ void Run()
         // before the reset below throws them away. The first frames have nothing in the pool yet and say so.
         const Rndr::Forge::TimestampQueryPool& gpu_timer = gpu_timers[frame_index];
         f64 measured_gpu_ms = 0.0;
-        if (gpu_timer.TryGetElapsedMilliseconds(0, 1, measured_gpu_ms))
+        if (gpu_timer.TryGetElapsedMilliseconds(0, 1, measured_gpu_ms).GetValueOr(false))
         {
             gpu_milliseconds = measured_gpu_ms;
         }
@@ -318,23 +330,23 @@ void Run()
         {
             shader_data.models[i] = Opal::Translate(Rndr::Point3f{(static_cast<f32>(i) - 1) * 3.0f, 0.0f, 0.0f});
         }
-        m_per_frame_buffers[frame_index].Update(Opal::AsBytes(shader_data));
+        RequireOk(m_per_frame_buffers[frame_index].Update(Opal::AsBytes(shader_data)));
 
         auto& command_buffer = frame_context.GetCommandBuffer();
 
         // A pool holds undefined values until it is reset, so the reset comes first every frame, and the two
         // timestamps around the frame's work measure the span between them: from the moment the device
         // reaches the top of this command buffer to the moment everything in it has finished.
-        command_buffer.CmdResetQueryPool(gpu_timer);
-        command_buffer.CmdWriteTimestamp(gpu_timer, 0, Rndr::Forge::PipelineStageBits::PipelineStart);
+        RequireOk(command_buffer.CmdResetQueryPool(gpu_timer));
+        RequireOk(command_buffer.CmdWriteTimestamp(gpu_timer, 0, Rndr::Forge::PipelineStageBits::PipelineStart));
 
         // Make sure our color and depth attachment are ready and in proper layout. Neither says what it is
         // coming from: the swap chain texture is undefined again after every acquire, and the depth texture
         // remembers the attachment layout the previous frame left it in.
         Opal::InPlaceArray<Rndr::Forge::TextureBarrier, 2> barriers{
-            Rndr::Forge::TextureBarrier::ToColorAttachment(frame_context.GetColorTexture()),
-            Rndr::Forge::TextureBarrier::ToDepthStencilAttachment(swap_chain.GetDepthTexture())};
-        command_buffer.CmdTextureBarriers(barriers);
+            Require(Rndr::Forge::TextureBarrier::ToColorAttachment(frame_context.GetColorTexture())),
+            Require(Rndr::Forge::TextureBarrier::ToDepthStencilAttachment(swap_chain.GetDepthTexture()))};
+        RequireOk(command_buffer.CmdTextureBarriers(barriers));
 
         // Configure attachments, what happens when they are loaded and how they are stored after rendering
         // Do the actual draw calls
@@ -353,22 +365,22 @@ void Run()
             // A capture shows everything between the two braces as one collapsible "forward pass" instead of
             // as a run of loose draws. The guard closes the region even if something below throws.
             const Rndr::Forge::ScopedDebugLabel forward_pass(command_buffer, "forward pass", {0.2f, 0.6f, 1.0f, 1.0f});
-            command_buffer.CmdBeginRendering(rendering_desc);
-            command_buffer.CmdSetViewport(Rndr::Vector2f::Zero(), {render_width, render_height});
-            command_buffer.CmdSetScissor(Rndr::Vector2i::Zero(), render_size);
-            command_buffer.CmdBindVertexBuffer(mesh_buffer, 0);
-            command_buffer.CmdBindIndexBuffer(mesh_buffer, mesh.vertex_count * mesh.vertex_size, Rndr::IndexSize::uint32);
-            command_buffer.CmdBindPipeline(pipeline);
-            command_buffer.CmdBindDescriptorSet(pipeline, descriptor_set);
+            RequireOk(command_buffer.CmdBeginRendering(rendering_desc));
+            RequireOk(command_buffer.CmdSetViewport(Rndr::Vector2f::Zero(), {render_width, render_height}));
+            RequireOk(command_buffer.CmdSetScissor(Rndr::Vector2i::Zero(), render_size));
+            RequireOk(command_buffer.CmdBindVertexBuffer(mesh_buffer, 0));
+            RequireOk(command_buffer.CmdBindIndexBuffer(mesh_buffer, mesh.vertex_count * mesh.vertex_size, Rndr::IndexSize::uint32));
+            RequireOk(command_buffer.CmdBindPipeline(pipeline));
+            RequireOk(command_buffer.CmdBindDescriptorSet(pipeline, descriptor_set));
             VkDeviceAddress device_address = m_per_frame_buffers[frame_index].GetNativeDeviceAddress();
-            command_buffer.CmdPushConstants(pipeline, Rndr::ShaderTypeBits::Vertex, Opal::AsBytes(device_address));
-            command_buffer.CmdDrawIndexed(mesh.index_count, 3);
-            command_buffer.CmdEndRendering();
+            RequireOk(command_buffer.CmdPushConstants(pipeline, Rndr::ShaderTypeBits::Vertex, Opal::AsBytes(device_address)));
+            RequireOk(command_buffer.CmdDrawIndexed(mesh.index_count, 3));
+            RequireOk(command_buffer.CmdEndRendering());
         }
 
         // The closing half of the span. PipelineEnd waits for everything recorded above to finish, so the
         // difference from the first timestamp covers the whole frame rather than a slice of it.
-        command_buffer.CmdWriteTimestamp(gpu_timer, 1, Rndr::Forge::PipelineStageBits::PipelineEnd);
+        RequireOk(command_buffer.CmdWriteTimestamp(gpu_timer, 1, Rndr::Forge::PipelineStageBits::PipelineEnd));
 
         // Transitions the texture to Present, ends the command buffer, submits it and presents.
         frame_context.EndFrame();

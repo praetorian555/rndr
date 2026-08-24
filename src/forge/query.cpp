@@ -1,6 +1,7 @@
 #include "rndr/forge/query.hpp"
 
-#include "rndr/forge/vulkan-exception.hpp"
+#include "rndr/forge/vulkan-result.hpp"
+#include "rndr/log.hpp"
 
 namespace
 {
@@ -8,10 +9,9 @@ namespace
 constexpr Rndr::f64 k_nanoseconds_per_millisecond = 1'000'000.0;
 
 /** "Reading 2 queries from index 3 of a timestamp query pool holding 2", since a range error that names no range is half a message. */
-Opal::StringEx RangeMessage(const char* what, Rndr::u32 first_query, Rndr::u32 query_count, Rndr::u32 pool_size)
+void LogRange(const char* what, Rndr::u32 first_query, Rndr::u32 query_count, Rndr::u32 pool_size)
 {
-    return Opal::StringEx(what) + " " + query_count + " queries from index " + first_query + " of a timestamp query pool holding " +
-           pool_size + "!";
+    RNDR_LOG_ERROR("Forge: {} {} queries from index {} of a timestamp query pool holding {}", what, query_count, first_query, pool_size);
 }
 
 /**
@@ -19,9 +19,11 @@ Opal::StringEx RangeMessage(const char* what, Rndr::u32 first_query, Rndr::u32 q
  * back masked, since the bits above what the family writes are undefined and would otherwise turn a
  * difference between two of them into noise.
  */
-bool ReadQueryResults(const Rndr::Forge::Device& device, VkQueryPool query_pool, Rndr::u32 first_query, Rndr::u64* out_ticks,
-                      Rndr::u32 query_count, Rndr::u64 valid_bits_mask, bool wait)
+Opal::Expected<bool, Rndr::ErrorCode> ReadQueryResults(const Rndr::Forge::Device& device, VkQueryPool query_pool, Rndr::u32 first_query,
+                                                       Rndr::u64* out_ticks, Rndr::u32 query_count, Rndr::u64 valid_bits_mask, bool wait)
 {
+    using Result = Opal::Expected<bool, Rndr::ErrorCode>;
+
     const VkQueryResultFlags flags = VK_QUERY_RESULT_64_BIT | (wait ? VK_QUERY_RESULT_WAIT_BIT : 0u);
     const VkResult result =
         vkGetQueryPoolResults(device.GetNativeDevice(), query_pool, first_query, query_count,
@@ -30,17 +32,18 @@ bool ReadQueryResults(const Rndr::Forge::Device& device, VkQueryPool query_pool,
     // rather than a failure - see the error handling section of docs/forge.md.
     if (result == VK_NOT_READY && !wait)
     {
-        return false;
+        return Result(false);
     }
     if (result != VK_SUCCESS)
     {
-        throw Rndr::Forge::VulkanException(result, "vkGetQueryPoolResults");
+        RNDR_LOG_ERROR("Forge: {} failed: {}", "vkGetQueryPoolResults", Rndr::Forge::VkResultToString(result));
+        return Result(Rndr::Forge::VkResultToErrorCode(result));
     }
     for (Rndr::u32 i = 0; i < query_count; ++i)
     {
         out_ticks[i] &= valid_bits_mask;
     }
-    return true;
+    return Result(true);
 }
 
 /** Ticks to milliseconds, zero when the counter did not move forward, which is what a wrapped one looks like. */
@@ -55,18 +58,21 @@ Rndr::f64 ToMilliseconds(Rndr::u64 start_ticks, Rndr::u64 end_ticks, Rndr::f32 t
 }
 }  // namespace
 
-Rndr::Forge::TimestampQueryPool::TimestampQueryPool(const Device& device, const TimestampQueryPoolDesc& desc)
-    : m_device(&device), m_desc(desc)
+Opal::Expected<Rndr::Forge::TimestampQueryPool, Rndr::ErrorCode> Rndr::Forge::TimestampQueryPool::Create(const Device& device,
+                                                                                                         const TimestampQueryPoolDesc& desc)
 {
+    using Result = Opal::Expected<TimestampQueryPool, ErrorCode>;
+
     if (desc.query_count == 0)
     {
-        throw Opal::Exception("A timestamp query pool needs at least one query!");
+        RNDR_LOG_ERROR("Forge: a timestamp query pool needs at least one query");
+        return Result(ErrorCode::InvalidArgument);
     }
 
     Opal::Expected<const DeviceQueue&, ErrorCode> queue = device.GetQueue(desc.queue_family);
     if (!queue.HasValue())
     {
-        throw Opal::Exception("The device was not created with the queue family this query pool asks for!");
+        return Result(queue.GetError());
     }
     const u32 queue_family_index = queue.GetValue().GetQueueFamilyIndex();
     const VkQueueFamilyProperties& family_properties = device.GetPhysicalDevice().GetQueueFamilyProperties()[queue_family_index];
@@ -75,19 +81,23 @@ Rndr::Forge::TimestampQueryPool::TimestampQueryPool(const Device& device, const 
     // zero that reads like a fast operation rather than like a missing capability.
     if (family_properties.timestampValidBits == 0)
     {
-        throw Opal::Exception("This queue family does not support timestamp queries!");
+        RNDR_LOG_ERROR("Forge: queue family {} does not support timestamp queries", queue_family_index);
+        return Result(ErrorCode::FeatureNotSupported);
     }
+
+    TimestampQueryPool pool;
+    pool.m_device = &device;
+    pool.m_desc = desc;
     // Shifting a 64 bit value by 64 is undefined, and a family that writes all 64 bits is the common case.
-    m_valid_bits_mask = family_properties.timestampValidBits >= 64 ? UINT64_MAX : (1ull << family_properties.timestampValidBits) - 1ull;
-    m_timestamp_period = device.GetPhysicalDevice().GetProperties().limits.timestampPeriod;
+    pool.m_valid_bits_mask =
+        family_properties.timestampValidBits >= 64 ? UINT64_MAX : (1ull << family_properties.timestampValidBits) - 1ull;
+    pool.m_timestamp_period = device.GetPhysicalDevice().GetProperties().limits.timestampPeriod;
 
     const VkQueryPoolCreateInfo create_info{
         .sType = VK_STRUCTURE_TYPE_QUERY_POOL_CREATE_INFO, .queryType = VK_QUERY_TYPE_TIMESTAMP, .queryCount = desc.query_count};
-    const VkResult result = vkCreateQueryPool(device.GetNativeDevice(), &create_info, nullptr, &m_query_pool);
-    if (result != VK_SUCCESS)
-    {
-        throw VulkanException(result, "vkCreateQueryPool");
-    }
+    RNDR_FORGE_VK_CHECK_EXPECTED(vkCreateQueryPool(device.GetNativeDevice(), &create_info, nullptr, &pool.m_query_pool),
+                                 "vkCreateQueryPool", Result);
+    return Result(std::move(pool));
 }
 
 Rndr::Forge::TimestampQueryPool::~TimestampQueryPool()
@@ -129,71 +139,121 @@ Rndr::Forge::TimestampQueryPool& Rndr::Forge::TimestampQueryPool::operator=(Time
     return *this;
 }
 
-Rndr::u32 Rndr::Forge::TimestampQueryPool::ResolveQueryRange(u32 first_query, u32 query_count, const char* what) const
+Opal::Expected<Rndr::u32, Rndr::ErrorCode> Rndr::Forge::TimestampQueryPool::ResolveQueryRange(u32 first_query, u32 query_count,
+                                                                                              const char* what) const
 {
+    using Result = Opal::Expected<u32, ErrorCode>;
+
     const u32 pool_size = m_desc.query_count;
     if (first_query >= pool_size)
     {
-        throw Opal::Exception(RangeMessage(what, first_query, query_count, pool_size));
+        LogRange(what, first_query, query_count, pool_size);
+        return Result(ErrorCode::OutOfBounds);
     }
     const u32 remaining = pool_size - first_query;
     const u32 resolved = query_count == k_all_queries ? remaining : query_count;
     if (resolved == 0 || resolved > remaining)
     {
-        throw Opal::Exception(RangeMessage(what, first_query, resolved, pool_size));
+        LogRange(what, first_query, resolved, pool_size);
+        return Result(ErrorCode::OutOfBounds);
     }
-    return resolved;
+    return Result(resolved);
 }
 
-void Rndr::Forge::TimestampQueryPool::Reset(u32 first_query, u32 query_count) const
+Rndr::ErrorCode Rndr::Forge::TimestampQueryPool::Reset(u32 first_query, u32 query_count) const
 {
-    const u32 resolved_count = ResolveQueryRange(first_query, query_count, "Resetting");
+    const Opal::Expected<u32, ErrorCode> resolved_count = ResolveQueryRange(first_query, query_count, "Resetting");
+    if (!resolved_count.HasValue())
+    {
+        return resolved_count.GetError();
+    }
     // vkResetQueryPool is the host side of the reset and belongs to the feature the device has to be asked
     // for. Calling it on a device that did not enable it is undefined, not a call that fails.
     if (!m_device->GetFeatures().host_query_reset)
     {
-        throw Opal::Exception("Resetting a query pool from the host needs DeviceFeatures::host_query_reset!");
+        RNDR_LOG_ERROR("Forge: resetting a query pool from the host needs DeviceFeatures::host_query_reset");
+        return ErrorCode::InvalidArgument;
     }
-    vkResetQueryPool(m_device->GetNativeDevice(), m_query_pool, first_query, resolved_count);
+    vkResetQueryPool(m_device->GetNativeDevice(), m_query_pool, first_query, resolved_count.GetValue());
+    return ErrorCode::Success;
 }
 
-void Rndr::Forge::TimestampQueryPool::GetResults(Opal::ArrayView<u64> out_results, u32 first_query) const
+Rndr::ErrorCode Rndr::Forge::TimestampQueryPool::GetResults(Opal::ArrayView<u64> out_results, u32 first_query) const
 {
-    const u32 count = ResolveQueryRange(first_query, static_cast<u32>(out_results.GetSize()), "Reading");
-    ReadQueryResults(*m_device, m_query_pool, first_query, out_results.GetData(), count, m_valid_bits_mask, true);
+    const Opal::Expected<u32, ErrorCode> count = ResolveQueryRange(first_query, static_cast<u32>(out_results.GetSize()), "Reading");
+    if (!count.HasValue())
+    {
+        return count.GetError();
+    }
+    const Opal::Expected<bool, ErrorCode> read =
+        ReadQueryResults(*m_device, m_query_pool, first_query, out_results.GetData(), count.GetValue(), m_valid_bits_mask, true);
+    return read.HasValue() ? ErrorCode::Success : read.GetError();
 }
 
-bool Rndr::Forge::TimestampQueryPool::TryGetResults(Opal::ArrayView<u64> out_results, u32 first_query) const
+Opal::Expected<bool, Rndr::ErrorCode> Rndr::Forge::TimestampQueryPool::TryGetResults(Opal::ArrayView<u64> out_results,
+                                                                                     u32 first_query) const
 {
-    const u32 count = ResolveQueryRange(first_query, static_cast<u32>(out_results.GetSize()), "Reading");
-    return ReadQueryResults(*m_device, m_query_pool, first_query, out_results.GetData(), count, m_valid_bits_mask, false);
+    using Result = Opal::Expected<bool, ErrorCode>;
+
+    const Opal::Expected<u32, ErrorCode> count = ResolveQueryRange(first_query, static_cast<u32>(out_results.GetSize()), "Reading");
+    if (!count.HasValue())
+    {
+        return Result(count.GetError());
+    }
+    return ReadQueryResults(*m_device, m_query_pool, first_query, out_results.GetData(), count.GetValue(), m_valid_bits_mask, false);
 }
 
-Rndr::f64 Rndr::Forge::TimestampQueryPool::GetElapsedMilliseconds(u32 start_query, u32 end_query) const
+Opal::Expected<Rndr::f64, Rndr::ErrorCode> Rndr::Forge::TimestampQueryPool::GetElapsedMilliseconds(u32 start_query, u32 end_query) const
 {
+    using Result = Opal::Expected<f64, ErrorCode>;
+
     // One query at a time rather than the range that spans them. A read of a range is unavailable when any
     // query in it is, so a pool whose middle queries were never written - which is what measuring one
     // operation out of several looks like - would never report a result for the pair at its ends.
     u64 start_ticks = 0;
     u64 end_ticks = 0;
-    ResolveQueryRange(start_query, 1, "Reading");
-    ResolveQueryRange(end_query, 1, "Reading");
-    ReadQueryResults(*m_device, m_query_pool, start_query, &start_ticks, 1, m_valid_bits_mask, true);
-    ReadQueryResults(*m_device, m_query_pool, end_query, &end_ticks, 1, m_valid_bits_mask, true);
-    return ToMilliseconds(start_ticks, end_ticks, m_timestamp_period);
+    RNDR_FORGE_CHECK_EXPECTED(ResolveQueryRange(start_query, 1, "Reading").GetErrorOr(ErrorCode::Success), Result);
+    RNDR_FORGE_CHECK_EXPECTED(ResolveQueryRange(end_query, 1, "Reading").GetErrorOr(ErrorCode::Success), Result);
+    const Opal::Expected<bool, ErrorCode> start_read =
+        ReadQueryResults(*m_device, m_query_pool, start_query, &start_ticks, 1, m_valid_bits_mask, true);
+    if (!start_read.HasValue())
+    {
+        return Result(start_read.GetError());
+    }
+    const Opal::Expected<bool, ErrorCode> end_read =
+        ReadQueryResults(*m_device, m_query_pool, end_query, &end_ticks, 1, m_valid_bits_mask, true);
+    if (!end_read.HasValue())
+    {
+        return Result(end_read.GetError());
+    }
+    return Result(ToMilliseconds(start_ticks, end_ticks, m_timestamp_period));
 }
 
-bool Rndr::Forge::TimestampQueryPool::TryGetElapsedMilliseconds(u32 start_query, u32 end_query, f64& out_milliseconds) const
+Opal::Expected<bool, Rndr::ErrorCode> Rndr::Forge::TimestampQueryPool::TryGetElapsedMilliseconds(u32 start_query, u32 end_query,
+                                                                                                 f64& out_milliseconds) const
 {
+    using Result = Opal::Expected<bool, ErrorCode>;
+
     u64 start_ticks = 0;
     u64 end_ticks = 0;
-    ResolveQueryRange(start_query, 1, "Reading");
-    ResolveQueryRange(end_query, 1, "Reading");
-    if (!ReadQueryResults(*m_device, m_query_pool, start_query, &start_ticks, 1, m_valid_bits_mask, false) ||
-        !ReadQueryResults(*m_device, m_query_pool, end_query, &end_ticks, 1, m_valid_bits_mask, false))
+    RNDR_FORGE_CHECK_EXPECTED(ResolveQueryRange(start_query, 1, "Reading").GetErrorOr(ErrorCode::Success), Result);
+    RNDR_FORGE_CHECK_EXPECTED(ResolveQueryRange(end_query, 1, "Reading").GetErrorOr(ErrorCode::Success), Result);
+    const Opal::Expected<bool, ErrorCode> start_read =
+        ReadQueryResults(*m_device, m_query_pool, start_query, &start_ticks, 1, m_valid_bits_mask, false);
+    if (!start_read.HasValue())
     {
-        return false;
+        return Result(start_read.GetError());
+    }
+    const Opal::Expected<bool, ErrorCode> end_read =
+        ReadQueryResults(*m_device, m_query_pool, end_query, &end_ticks, 1, m_valid_bits_mask, false);
+    if (!end_read.HasValue())
+    {
+        return Result(end_read.GetError());
+    }
+    if (!start_read.GetValue() || !end_read.GetValue())
+    {
+        return Result(false);
     }
     out_milliseconds = ToMilliseconds(start_ticks, end_ticks, m_timestamp_period);
-    return true;
+    return Result(true);
 }

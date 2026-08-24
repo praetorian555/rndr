@@ -2,6 +2,8 @@
 
 #include "volk/volk.h"
 
+#include "opal/container/optional.h"
+
 #include "rndr/error-codes.hpp"
 #include "rndr/log.hpp"
 #include "rndr/types.hpp"
@@ -120,10 +122,81 @@ inline ErrorCode VkResultToErrorCode(VkResult result)
  * @param expr A call returning VkResult.
  * @param function_name Name of the Vulkan function, for the log line.
  */
-#define RNDR_FORGE_VK_CHECK(expr, function_name)                                                                  do                                                                                                            {                                                                                                                 const VkResult vk_result_ = (expr);                                                                            if (vk_result_ != VK_SUCCESS)                                                                                  {                                                                                                                 RNDR_LOG_ERROR("Forge: {} failed: {}", function_name, Rndr::Forge::VkResultToString(vk_result_));               return Rndr::Forge::VkResultToErrorCode(vk_result_);                                                       }                                                                                                         } while (0)
+#define RNDR_FORGE_VK_CHECK(expr, function_name)                                                              \
+    do                                                                                                        \
+    {                                                                                                         \
+        const VkResult vk_result_ = (expr);                                                                   \
+        if (vk_result_ != VK_SUCCESS)                                                                         \
+        {                                                                                                     \
+            RNDR_LOG_ERROR("Forge: {} failed: {}", function_name, Rndr::Forge::VkResultToString(vk_result_)); \
+            return Rndr::Forge::VkResultToErrorCode(vk_result_);                                              \
+        }                                                                                                     \
+    } while (0)
 
 /**
  * The same, for a function that returns an Opal::Expected. The error is wrapped in @p ResultType, which is the
  * Expected the enclosing function returns.
  */
-#define RNDR_FORGE_VK_CHECK_EXPECTED(expr, function_name, ResultType)                                             do                                                                                                            {                                                                                                                 const VkResult vk_result_ = (expr);                                                                            if (vk_result_ != VK_SUCCESS)                                                                                  {                                                                                                                 RNDR_LOG_ERROR("Forge: {} failed: {}", function_name, Rndr::Forge::VkResultToString(vk_result_));               return ResultType(Rndr::Forge::VkResultToErrorCode(vk_result_));                                           }                                                                                                         } while (0)
+#define RNDR_FORGE_VK_CHECK_EXPECTED(expr, function_name, ResultType)                                         \
+    do                                                                                                        \
+    {                                                                                                         \
+        const VkResult vk_result_ = (expr);                                                                   \
+        if (vk_result_ != VK_SUCCESS)                                                                         \
+        {                                                                                                     \
+            RNDR_LOG_ERROR("Forge: {} failed: {}", function_name, Rndr::Forge::VkResultToString(vk_result_)); \
+            return ResultType(Rndr::Forge::VkResultToErrorCode(vk_result_));                                  \
+        }                                                                                                     \
+    } while (0)
+
+/**
+ * Translate a Forge value into the Vulkan one it maps to, and on a value that maps to nothing log it and give
+ * up. The translation returns an Opal::Optional; @p name is the constant this declares to hold the result.
+ * For a function that returns Rndr::ErrorCode.
+ *
+ * @param name Name for the translated value.
+ * @param expr Translation call, returning an Opal::Optional.
+ * @param what What was being translated, for the log line.
+ */
+#define RNDR_FORGE_TRANSLATE(name, expr, what)                                \
+    const auto name##_optional_ = (expr);                                     \
+    if (!name##_optional_.HasValue())                                         \
+    {                                                                         \
+        RNDR_LOG_ERROR("Forge: {} names nothing Forge maps to Vulkan", what); \
+        return Rndr::ErrorCode::InvalidArgument;                              \
+    }                                                                         \
+    const auto name = name##_optional_.GetValue()
+
+/** The same, for a function returning the Opal::Expected named by @p ResultType. */
+#define RNDR_FORGE_TRANSLATE_EXPECTED(name, expr, what, ResultType)           \
+    const auto name##_optional_ = (expr);                                     \
+    if (!name##_optional_.HasValue())                                         \
+    {                                                                         \
+        RNDR_LOG_ERROR("Forge: {} names nothing Forge maps to Vulkan", what); \
+        return ResultType(Rndr::ErrorCode::InvalidArgument);                  \
+    }                                                                         \
+    const auto name = name##_optional_.GetValue()
+
+/**
+ * Give up on the enclosing call when a check or a step reported something. For a function that returns
+ * Rndr::ErrorCode.
+ */
+#define RNDR_FORGE_CHECK(expr)                       \
+    do                                               \
+    {                                                \
+        const Rndr::ErrorCode error_code_ = (expr);  \
+        if (error_code_ != Rndr::ErrorCode::Success) \
+        {                                            \
+            return error_code_;                      \
+        }                                            \
+    } while (0)
+
+/** The same, for a function returning the Opal::Expected named by @p ResultType. */
+#define RNDR_FORGE_CHECK_EXPECTED(expr, ResultType)  \
+    do                                               \
+    {                                                \
+        const Rndr::ErrorCode error_code_ = (expr);  \
+        if (error_code_ != Rndr::ErrorCode::Success) \
+        {                                            \
+            return ResultType(error_code_);          \
+        }                                            \
+    } while (0)

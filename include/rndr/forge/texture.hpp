@@ -3,13 +3,15 @@
 #include "volk/volk.h"
 
 #include "opal/container/dynamic-array.h"
+#include "opal/container/expected.h"
 #include "opal/container/ref.h"
 
 #include "rndr/bitmap.hpp"
-#include "rndr/graphics-types.hpp"
-#include "rndr/types.hpp"
+#include "rndr/error-codes.hpp"
 #include "rndr/forge/forward.hpp"
 #include "rndr/forge/types.hpp"
+#include "rndr/graphics-types.hpp"
+#include "rndr/types.hpp"
 
 // Forward declare handle to avoid vma includes in headers.
 using VmaAllocation = struct VmaAllocation_T*;
@@ -39,17 +41,36 @@ class Texture
 {
 public:
     Texture() = default;
-    explicit Texture(const Device& device, const TextureDesc& desc = {});
+    ~Texture();
+
+    /**
+     * Create the image and, unless its usage is transfer only, a view of it.
+     *
+     * @param device Device to allocate from. Has to outlive the texture.
+     * @param desc Extent, format, usage and what the view covers.
+     * @return The texture, ErrorCode::InvalidArgument when the desc names something it cannot - a cube view
+     *         over an array that is not a multiple of six, an enum value that maps to nothing - or whatever
+     *         the failing allocation maps to.
+     */
+    [[nodiscard]] static Opal::Expected<Texture, ErrorCode> Create(const Device& device, const TextureDesc& desc = {});
+
     /**
      * Upload a bitmap into a new texture, blocking until the copy is done.
+     *
      * @param bitmap Source pixels. Its extent, format and mip count are taken over the ones in the desc.
      * @param generate_mips Fill the levels below the first by blitting, for a bitmap that carries only mip 0.
      *                      The full mip chain of the extent is created, and both transfer usages are added.
+     * @return The texture, or what the creation, the staging buffer or the upload reported.
      */
-    explicit Texture(const Device& device, DeviceQueue& queue, const Bitmap& bitmap, const TextureDesc& desc = {},
-                     bool generate_mips = false);
-    explicit Texture(const Device& device, VkImage native_image, const TextureDesc& desc = {});
-    ~Texture();
+    [[nodiscard]] static Opal::Expected<Texture, ErrorCode> Create(const Device& device, DeviceQueue& queue, const Bitmap& bitmap,
+                                                                   const TextureDesc& desc = {}, bool generate_mips = false);
+
+    /**
+     * Wrap an image Forge did not create - a swap chain one - and give it a view. The image is not owned and
+     * is not released with the texture; the view is.
+     */
+    [[nodiscard]] static Opal::Expected<Texture, ErrorCode> Create(const Device& device, VkImage native_image,
+                                                                   const TextureDesc& desc = {});
 
     Texture(const Texture&) = delete;
     Texture& operator=(const Texture&) = delete;
@@ -72,16 +93,20 @@ public:
      * That makes it a record-time answer rather than an execution-time one - see the barriers section of
      * docs/forge.md for where it stops being true.
      *
-     * @return The layout the whole texture is in. Throws when the subresources are not all in the same one,
-     *         which is what mip generation leaves behind halfway through; ask per subresource instead.
+     * @return The layout the whole texture is in, or ErrorCode::InvalidArgument when the subresources are
+     *         not all in the same one - which is what mip generation leaves behind halfway through. Ask per
+     *         subresource instead.
      */
-    [[nodiscard]] ImageLayout GetCurrentLayout() const;
+    [[nodiscard]] Opal::Expected<ImageLayout, ErrorCode> GetCurrentLayout() const;
 
-    /** The layout of one subresource. */
-    [[nodiscard]] ImageLayout GetCurrentLayout(u32 mip_level, u32 array_layer = 0) const;
+    /**
+     * The layout of one subresource.
+     * @return The layout, or ErrorCode::OutOfBounds when the texture has no such subresource.
+     */
+    [[nodiscard]] Opal::Expected<ImageLayout, ErrorCode> GetCurrentLayout(u32 mip_level, u32 array_layer = 0) const;
 
-    /** The layout of a range, throwing the way the whole-texture form does when the range is not uniform. */
-    [[nodiscard]] ImageLayout GetCurrentLayout(const ImageSubresourceRange& range) const;
+    /** The layout of a range, answering the way the whole-texture form does when the range is not uniform. */
+    [[nodiscard]] Opal::Expected<ImageLayout, ErrorCode> GetCurrentLayout(const ImageSubresourceRange& range) const;
 
 private:
     /** Only CommandBuffer records the barriers that move a layout, and only SwapChain re-acquires an image. */
@@ -89,9 +114,9 @@ private:
     friend class SwapChain;
 
     /** Write a layout over every subresource a range covers, resolving the k_all_* counts against the desc. */
-    void SetCurrentLayout(const ImageSubresourceRange& range, ImageLayout layout);
+    [[nodiscard]] ErrorCode SetCurrentLayout(const ImageSubresourceRange& range, ImageLayout layout);
 
-    void Init(const Device& device, const TextureDesc& desc);
+    [[nodiscard]] ErrorCode Init(const Device& device, const TextureDesc& desc);
 
     TextureDesc m_desc;
     /** One entry per subresource, mip level major: mip_level * array_layer_count + array_layer. */
@@ -106,8 +131,15 @@ class Sampler
 {
 public:
     Sampler() = default;
-    explicit Sampler(const Device& device, const SamplerDesc& desc = {});
     ~Sampler();
+
+    /**
+     * @param desc Filters, address modes and the anisotropy and LOD range.
+     * @return The sampler, ErrorCode::InvalidArgument when the desc asks for something this device was not
+     *         created with - anisotropy, MirrorOnce - or names a value that maps to nothing, or whatever the
+     *         failing creation maps to.
+     */
+    [[nodiscard]] static Opal::Expected<Sampler, ErrorCode> Create(const Device& device, const SamplerDesc& desc = {});
 
     Sampler(const Sampler&) = delete;
     Sampler& operator=(const Sampler&) = delete;

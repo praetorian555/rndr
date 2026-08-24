@@ -222,10 +222,11 @@ i32 CountWrongPixels(Opal::ArrayView<const u8> pixels, const Vector4f& color)
 /** A texture of this file's own, the frame's copy target, so that what was presented can be read back. */
 Forge::Texture MakeReadbackTexture(const Forge::Device& device, const VkExtent2D& extent)
 {
-    return Forge::Texture(device, {.format = k_swap_chain_format,
-                                   .width = extent.width,
-                                   .height = extent.height,
-                                   .usage = Forge::TextureUsageBits::TransferSource | Forge::TextureUsageBits::TransferDestination});
+    return ForgeTest::Unwrap(
+        Forge::Texture::Create(device, {.format = k_swap_chain_format,
+                                        .width = extent.width,
+                                        .height = extent.height,
+                                        .usage = Forge::TextureUsageBits::TransferSource | Forge::TextureUsageBits::TransferDestination}));
 }
 
 /**
@@ -240,12 +241,12 @@ void RecordClearFrame(Forge::CommandBuffer& command_buffer, Forge::Texture& colo
                       const VkExtent2D& extent, const Vector4f& color, Forge::Texture* depth_texture)
 {
     Opal::DynamicArray<Forge::TextureBarrier> barriers;
-    barriers.PushBack(Forge::TextureBarrier::ToColorAttachment(color_texture));
+    barriers.PushBack(ForgeTest::Unwrap(Forge::TextureBarrier::ToColorAttachment(color_texture)));
     if (depth_texture != nullptr)
     {
-        barriers.PushBack(Forge::TextureBarrier::ToDepthStencilAttachment(*depth_texture));
+        barriers.PushBack(ForgeTest::Unwrap(Forge::TextureBarrier::ToDepthStencilAttachment(*depth_texture)));
     }
-    command_buffer.CmdTextureBarriers(barriers);
+    REQUIRE(command_buffer.CmdTextureBarriers(barriers) == ErrorCode::Success);
 
     Forge::RenderingDesc rendering_desc{
         .render_area_extent = {static_cast<i32>(extent.width), static_cast<i32>(extent.height)},
@@ -261,16 +262,17 @@ void RecordClearFrame(Forge::CommandBuffer& command_buffer, Forge::Texture& colo
                                            .store_operation = Forge::AttachmentStoreOperation::DontCare,
                                            .clear_value = Forge::DepthStencilClearValue{.depth = 1.0f, .stencil = 0}};
     }
-    command_buffer.CmdBeginRendering(rendering_desc);
-    command_buffer.CmdEndRendering();
+    REQUIRE(command_buffer.CmdBeginRendering(rendering_desc) == ErrorCode::Success);
+    REQUIRE(command_buffer.CmdEndRendering() == ErrorCode::Success);
 
     if (readback != nullptr)
     {
-        Opal::InPlaceArray<Forge::TextureBarrier, 2> copy_barriers{Forge::TextureBarrier::ToTransferSource(color_texture),
-                                                                   Forge::TextureBarrier::ToTransferDestination(*readback)};
-        command_buffer.CmdTextureBarriers(copy_barriers);
+        Opal::InPlaceArray<Forge::TextureBarrier, 2> copy_barriers{
+            ForgeTest::Unwrap(Forge::TextureBarrier::ToTransferSource(color_texture)),
+            ForgeTest::Unwrap(Forge::TextureBarrier::ToTransferDestination(*readback))};
+        REQUIRE(command_buffer.CmdTextureBarriers(copy_barriers) == ErrorCode::Success);
         const Forge::TextureCopyRegion region;
-        command_buffer.CmdCopyTexture(color_texture, *readback, {&region, 1});
+        REQUIRE(command_buffer.CmdCopyTexture(color_texture, *readback, {&region, 1}) == ErrorCode::Success);
     }
 }
 
@@ -281,12 +283,12 @@ void SubmitAndWait(ForgeWindowFixture& fixture, Forge::CommandBuffer& command_bu
     const Opal::Ref<const Forge::CommandBuffer> submitted(command_buffer);
     const Forge::SemaphoreSubmit wait{.semaphore = texture_ready, .stages = Forge::PipelineStageBits::ColorAttachmentOutput};
     const Forge::SemaphoreSubmit signal{.semaphore = render_finished, .stages = Forge::PipelineStageBits::AllCommands};
-    const Forge::Fence frame_done(fixture.device, false);
+    const Forge::Fence frame_done = ForgeTest::Unwrap(Forge::Fence::Create(fixture.device, false));
     REQUIRE(
         fixture.GetGraphicsQueue().Submit(
             {.command_buffers = {&submitted, 1}, .wait_semaphores = {&wait, 1}, .signal_semaphores = {&signal, 1}, .fence = frame_done}) ==
         ErrorCode::Success);
-    frame_done.Wait();
+    REQUIRE(frame_done.Wait() == ErrorCode::Success);
 }
 
 }  // namespace
@@ -400,12 +402,13 @@ TEST_CASE("Forge swap chain matches the window it was built over", "[forge-windo
         REQUIRE(swap_chain.GetCurrentTextureIndex() == Forge::k_invalid_texture_index);
         REQUIRE_THROWS_AS(swap_chain.GetCurrentColorTexture(), Opal::Exception);
 
-        const Forge::Semaphore render_finished(fixture.device);
+        const Forge::Semaphore render_finished = ForgeTest::Unwrap(Forge::Semaphore::Create(fixture.device));
         REQUIRE_THROWS_AS(swap_chain.Present(fixture.GetPresentQueue(), render_finished), Opal::Exception);
 
         // A timeline cannot take part in presentation either way round, and both calls say so rather than
         // handing the driver a semaphore it will reject.
-        const Forge::Semaphore timeline(fixture.device, {.type = Forge::SemaphoreType::Timeline});
+        const Forge::Semaphore timeline =
+            ForgeTest::Unwrap(Forge::Semaphore::Create(fixture.device, {.type = Forge::SemaphoreType::Timeline}));
         REQUIRE_THROWS_AS(swap_chain.AcquireTexture(timeline), Opal::Exception);
         REQUIRE_THROWS_AS(swap_chain.Present(fixture.GetPresentQueue(), timeline), Opal::Exception);
     }
@@ -448,8 +451,8 @@ TEST_CASE("Forge swap chain presents the frames that were rendered into it", "[f
     const i32 frame_count = static_cast<i32>(swap_chain.GetColorTextureCount()) * 2;
     for (i32 frame = 0; frame < frame_count; ++frame)
     {
-        const Forge::Semaphore texture_ready(fixture.device);
-        const Forge::Semaphore render_finished(fixture.device);
+        const Forge::Semaphore texture_ready = ForgeTest::Unwrap(Forge::Semaphore::Create(fixture.device));
+        const Forge::Semaphore render_finished = ForgeTest::Unwrap(Forge::Semaphore::Create(fixture.device));
         const Forge::AcquiredTexture acquired = swap_chain.AcquireTexture(texture_ready);
         REQUIRE(acquired.status == Forge::SwapChainStatus::Success);
         REQUIRE(acquired.texture_index < swap_chain.GetColorTextureCount());
@@ -457,12 +460,13 @@ TEST_CASE("Forge swap chain presents the frames that were rendered into it", "[f
         REQUIRE(swap_chain.GetCurrentTextureIndex() == acquired.texture_index);
 
         const Vector4f color = GetFrameColor(frame);
-        Forge::CommandBuffer command_buffer(fixture.device, fixture.GetGraphicsQueue());
-        command_buffer.Begin();
+        Forge::CommandBuffer command_buffer = ForgeTest::Unwrap(Forge::CommandBuffer::Create(fixture.device, fixture.GetGraphicsQueue()));
+        REQUIRE(command_buffer.Begin() == ErrorCode::Success);
         RecordClearFrame(command_buffer, swap_chain.GetCurrentColorTexture(), &readback, swap_chain.GetExtent(), color,
                          &swap_chain.GetDepthTexture());
-        command_buffer.CmdTextureBarrier(Forge::TextureBarrier::ToPresent(swap_chain.GetCurrentColorTexture()));
-        command_buffer.End();
+        REQUIRE(command_buffer.CmdTextureBarrier(Forge::TextureBarrier::ToPresent(swap_chain.GetCurrentColorTexture())) ==
+                ErrorCode::Success);
+        REQUIRE(command_buffer.End() == ErrorCode::Success);
         SubmitAndWait(fixture, command_buffer, texture_ready, render_finished);
 
         REQUIRE(swap_chain.Present(fixture.GetPresentQueue(), render_finished) == Forge::SwapChainStatus::Success);
@@ -471,7 +475,8 @@ TEST_CASE("Forge swap chain presents the frames that were rendered into it", "[f
         // The copy was part of the frame that was just waited for, so what it holds is the bytes the present
         // handed to the presentation engine.
         INFO("frame " << frame << " rendered into texture " << acquired.texture_index);
-        Forge::ReadBackTexture(fixture.device, fixture.GetGraphicsQueue(), readback, pixels, 0, Forge::ImageLayout::Undefined);
+        REQUIRE(Forge::ReadBackTexture(fixture.device, fixture.GetGraphicsQueue(), readback, pixels, 0, Forge::ImageLayout::Undefined) ==
+                ErrorCode::Success);
         REQUIRE(CountWrongPixels(pixels, color) == 0);
     }
 
@@ -543,7 +548,8 @@ TEST_CASE("Forge frame context runs frames past the end of its timeline", "[forg
 
     // The readback holds the last frame's copy, which is what the last present put on the screen.
     REQUIRE(fixture.device.WaitForAll() == ErrorCode::Success);
-    Forge::ReadBackTexture(fixture.device, fixture.GetGraphicsQueue(), readback, pixels, 0, Forge::ImageLayout::Undefined);
+    REQUIRE(Forge::ReadBackTexture(fixture.device, fixture.GetGraphicsQueue(), readback, pixels, 0, Forge::ImageLayout::Undefined) ==
+            ErrorCode::Success);
     REQUIRE(CountWrongPixels(pixels, last_color) == 0);
 
     readback.Destroy();
@@ -591,16 +597,17 @@ TEST_CASE("Forge swap chain follows the window across a resize", "[forge-window]
     // and their views are usable rather than merely present. In its own scope, so that the semaphores and
     // the command buffer are gone before the teardown check releases the device they came from.
     {
-        const Forge::Semaphore texture_ready(fixture.device);
-        const Forge::Semaphore render_finished(fixture.device);
+        const Forge::Semaphore texture_ready = ForgeTest::Unwrap(Forge::Semaphore::Create(fixture.device));
+        const Forge::Semaphore render_finished = ForgeTest::Unwrap(Forge::Semaphore::Create(fixture.device));
         const Forge::AcquiredTexture acquired = swap_chain.AcquireTexture(texture_ready);
         REQUIRE(acquired.status == Forge::SwapChainStatus::Success);
-        Forge::CommandBuffer command_buffer(fixture.device, fixture.GetGraphicsQueue());
-        command_buffer.Begin();
+        Forge::CommandBuffer command_buffer = ForgeTest::Unwrap(Forge::CommandBuffer::Create(fixture.device, fixture.GetGraphicsQueue()));
+        REQUIRE(command_buffer.Begin() == ErrorCode::Success);
         RecordClearFrame(command_buffer, swap_chain.GetCurrentColorTexture(), nullptr, swap_chain.GetExtent(), GetFrameColor(0),
                          &swap_chain.GetDepthTexture());
-        command_buffer.CmdTextureBarrier(Forge::TextureBarrier::ToPresent(swap_chain.GetCurrentColorTexture()));
-        command_buffer.End();
+        REQUIRE(command_buffer.CmdTextureBarrier(Forge::TextureBarrier::ToPresent(swap_chain.GetCurrentColorTexture())) ==
+                ErrorCode::Success);
+        REQUIRE(command_buffer.End() == ErrorCode::Success);
         SubmitAndWait(fixture, command_buffer, texture_ready, render_finished);
         swap_chain.Present(fixture.GetPresentQueue(), render_finished);
         REQUIRE(fixture.device.WaitForAll() == ErrorCode::Success);
@@ -640,7 +647,7 @@ TEST_CASE("Forge swap chain recovers from a window with no client area", "[forge
 
         // Acquiring while there is nothing to render into tries again and says the frame has to be skipped,
         // rather than throwing or handing out an index into textures that do not exist.
-        const Forge::Semaphore texture_ready(fixture.device);
+        const Forge::Semaphore texture_ready = ForgeTest::Unwrap(Forge::Semaphore::Create(fixture.device));
         const Forge::AcquiredTexture while_empty = swap_chain.AcquireTexture(texture_ready);
         REQUIRE(while_empty.status == Forge::SwapChainStatus::OutOfDate);
         REQUIRE(while_empty.texture_index == Forge::k_invalid_texture_index);

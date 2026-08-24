@@ -3,12 +3,13 @@
 #include <vma/vk_mem_alloc.h>
 
 #include "rndr/forge/buffer.hpp"
-#include "rndr/forge/device.hpp"
 #include "rndr/forge/command-buffer.hpp"
+#include "rndr/forge/device.hpp"
 #include "rndr/forge/synchronization.hpp"
 #include "rndr/forge/transfer.hpp"
-#include "rndr/forge/vulkan-exception.hpp"
+#include "rndr/forge/vulkan-result.hpp"
 #include "rndr/graphics-types.hpp"
+#include "rndr/log.hpp"
 
 static VkFilter ToVkFilter(Rndr::ImageFilter filter)
 {
@@ -36,7 +37,7 @@ static VkSamplerMipmapMode ToVkSamplerMipmapMode(Rndr::ImageFilter filter)
     }
 }
 
-static VkSamplerAddressMode ToVkSamplerAddressMode(Rndr::ImageAddressMode mode)
+static Opal::Optional<VkSamplerAddressMode> ToVkSamplerAddressMode(Rndr::ImageAddressMode mode)
 {
     switch (mode)
     {
@@ -51,66 +52,66 @@ static VkSamplerAddressMode ToVkSamplerAddressMode(Rndr::ImageAddressMode mode)
         case Rndr::ImageAddressMode::MirrorOnce:
             return VK_SAMPLER_ADDRESS_MODE_MIRROR_CLAMP_TO_EDGE;
         default:
-            throw Opal::Exception("Unsupported image address mode");
+            return {};
     }
 }
 
-static VkImageType ToVkImageType(Rndr::Forge::TextureDimension dimension)
+static Opal::Optional<VkImageType> ToVkImageType(Rndr::Forge::TextureDimension dimension)
 {
     switch (dimension)
     {
         case Rndr::Forge::TextureDimension::Texture1D:
-            return VK_IMAGE_TYPE_1D;
+            return Opal::Optional<VkImageType>(VK_IMAGE_TYPE_1D);
         case Rndr::Forge::TextureDimension::Texture2D:
-            return VK_IMAGE_TYPE_2D;
+            return Opal::Optional<VkImageType>(VK_IMAGE_TYPE_2D);
         case Rndr::Forge::TextureDimension::Texture3D:
-            return VK_IMAGE_TYPE_3D;
+            return Opal::Optional<VkImageType>(VK_IMAGE_TYPE_3D);
     }
-    throw Opal::Exception("Unknown texture dimension!");
+    return {};
 }
 
-static VkImageViewType ToVkImageViewType(Rndr::Forge::TextureViewType view_type)
+static Opal::Optional<VkImageViewType> ToVkImageViewType(Rndr::Forge::TextureViewType view_type)
 {
     switch (view_type)
     {
         case Rndr::Forge::TextureViewType::Texture1D:
-            return VK_IMAGE_VIEW_TYPE_1D;
+            return Opal::Optional<VkImageViewType>(VK_IMAGE_VIEW_TYPE_1D);
         case Rndr::Forge::TextureViewType::Texture2D:
-            return VK_IMAGE_VIEW_TYPE_2D;
+            return Opal::Optional<VkImageViewType>(VK_IMAGE_VIEW_TYPE_2D);
         case Rndr::Forge::TextureViewType::Texture3D:
-            return VK_IMAGE_VIEW_TYPE_3D;
+            return Opal::Optional<VkImageViewType>(VK_IMAGE_VIEW_TYPE_3D);
         case Rndr::Forge::TextureViewType::Cube:
-            return VK_IMAGE_VIEW_TYPE_CUBE;
+            return Opal::Optional<VkImageViewType>(VK_IMAGE_VIEW_TYPE_CUBE);
         case Rndr::Forge::TextureViewType::Texture1DArray:
-            return VK_IMAGE_VIEW_TYPE_1D_ARRAY;
+            return Opal::Optional<VkImageViewType>(VK_IMAGE_VIEW_TYPE_1D_ARRAY);
         case Rndr::Forge::TextureViewType::Texture2DArray:
-            return VK_IMAGE_VIEW_TYPE_2D_ARRAY;
+            return Opal::Optional<VkImageViewType>(VK_IMAGE_VIEW_TYPE_2D_ARRAY);
         case Rndr::Forge::TextureViewType::CubeArray:
-            return VK_IMAGE_VIEW_TYPE_CUBE_ARRAY;
+            return Opal::Optional<VkImageViewType>(VK_IMAGE_VIEW_TYPE_CUBE_ARRAY);
     }
-    throw Opal::Exception("Unknown texture view type!");
+    return {};
 }
 
-static VkSampleCountFlagBits ToVkSampleCount(Rndr::Forge::SampleCount sample_count)
+static Opal::Optional<VkSampleCountFlagBits> ToVkSampleCount(Rndr::Forge::SampleCount sample_count)
 {
     switch (sample_count)
     {
         case Rndr::Forge::SampleCount::Count1:
-            return VK_SAMPLE_COUNT_1_BIT;
+            return Opal::Optional<VkSampleCountFlagBits>(VK_SAMPLE_COUNT_1_BIT);
         case Rndr::Forge::SampleCount::Count2:
-            return VK_SAMPLE_COUNT_2_BIT;
+            return Opal::Optional<VkSampleCountFlagBits>(VK_SAMPLE_COUNT_2_BIT);
         case Rndr::Forge::SampleCount::Count4:
-            return VK_SAMPLE_COUNT_4_BIT;
+            return Opal::Optional<VkSampleCountFlagBits>(VK_SAMPLE_COUNT_4_BIT);
         case Rndr::Forge::SampleCount::Count8:
-            return VK_SAMPLE_COUNT_8_BIT;
+            return Opal::Optional<VkSampleCountFlagBits>(VK_SAMPLE_COUNT_8_BIT);
         case Rndr::Forge::SampleCount::Count16:
-            return VK_SAMPLE_COUNT_16_BIT;
+            return Opal::Optional<VkSampleCountFlagBits>(VK_SAMPLE_COUNT_16_BIT);
         case Rndr::Forge::SampleCount::Count32:
-            return VK_SAMPLE_COUNT_32_BIT;
+            return Opal::Optional<VkSampleCountFlagBits>(VK_SAMPLE_COUNT_32_BIT);
         case Rndr::Forge::SampleCount::Count64:
-            return VK_SAMPLE_COUNT_64_BIT;
+            return Opal::Optional<VkSampleCountFlagBits>(VK_SAMPLE_COUNT_64_BIT);
     }
-    throw Opal::Exception("Unknown sample count!");
+    return {};
 }
 
 /** Whether any of the usages a view is allowed for is asked for. The transfer usages are not among them. */
@@ -123,7 +124,7 @@ static bool SupportsImageView(Rndr::Forge::TextureUsageBits usage)
     return !!(usage & k_view_usages);
 }
 
-static VkBorderColor ToVkBorderColor(Rndr::BorderColor border_color)
+static Opal::Optional<VkBorderColor> ToVkBorderColor(Rndr::BorderColor border_color)
 {
     switch (border_color)
     {
@@ -134,7 +135,7 @@ static VkBorderColor ToVkBorderColor(Rndr::BorderColor border_color)
         case Rndr::BorderColor::OpaqueWhite:
             return VK_BORDER_COLOR_FLOAT_OPAQUE_WHITE;
         default:
-            throw Opal::Exception("Unsupported border color");
+            return {};
     }
 }
 
@@ -144,9 +145,17 @@ static Rndr::i64 SubresourceCount(const Rndr::Forge::TextureDesc& desc)
     return static_cast<Rndr::i64>(desc.mip_level_count) * static_cast<Rndr::i64>(desc.array_layer_count);
 }
 
-Rndr::Forge::Texture::Texture(const Device& device, const TextureDesc& desc) : m_desc(desc), m_device(device)
+Opal::Expected<Rndr::Forge::Texture, Rndr::ErrorCode> Rndr::Forge::Texture::Create(const Device& device, const TextureDesc& desc)
 {
-    Init(device, desc);
+    using Result = Opal::Expected<Texture, ErrorCode>;
+
+    Texture texture;
+    const ErrorCode status = texture.Init(device, desc);
+    if (status != ErrorCode::Success)
+    {
+        return Result(status);
+    }
+    return Result(std::move(texture));
 }
 
 /** How many mip levels an extent has all the way down to one texel on every axis. */
@@ -162,75 +171,108 @@ static Rndr::u32 FullMipCount(Rndr::u32 width, Rndr::u32 height, Rndr::u32 depth
     return count;
 }
 
-Rndr::Forge::Texture::Texture(const Device& device, DeviceQueue& queue, const Bitmap& bitmap, const TextureDesc& desc,
-                              bool generate_mips)
-    : m_desc(desc)
+Opal::Expected<Rndr::Forge::Texture, Rndr::ErrorCode> Rndr::Forge::Texture::Create(const Device& device, DeviceQueue& queue,
+                                                                                   const Bitmap& bitmap, const TextureDesc& desc,
+                                                                                   bool generate_mips)
 {
-    m_desc.width = bitmap.GetWidth();
-    m_desc.height = bitmap.GetHeight();
-    m_desc.depth = bitmap.GetDepth();
-    m_desc.mip_level_count = generate_mips ? FullMipCount(m_desc.width, m_desc.height, m_desc.depth) : bitmap.GetMipCount();
-    m_desc.format = bitmap.GetPixelFormat();
+    using Result = Opal::Expected<Texture, ErrorCode>;
+
+    TextureDesc image_desc = desc;
+    image_desc.width = bitmap.GetWidth();
+    image_desc.height = bitmap.GetHeight();
+    image_desc.depth = bitmap.GetDepth();
+    image_desc.mip_level_count = generate_mips ? FullMipCount(image_desc.width, image_desc.height, image_desc.depth) : bitmap.GetMipCount();
+    image_desc.format = bitmap.GetPixelFormat();
     // The upload needs the destination bit either way, and generating the mips reads every level back as well.
-    m_desc.usage = desc.usage | TextureUsageBits::TransferDestination;
+    image_desc.usage = desc.usage | TextureUsageBits::TransferDestination;
     if (generate_mips)
     {
-        m_desc.usage |= TextureUsageBits::TransferSource;
+        image_desc.usage |= TextureUsageBits::TransferSource;
     }
 
-    Init(device, m_desc);
-
-    // The image and its view exist from here on, and the destructor does not run for an object whose
-    // constructor threw, so the upload below has to release them itself if it cannot finish.
-    try
+    // The image and its view are built into this, so an upload that cannot finish leaves through the
+    // destructor with both already released.
+    Texture texture;
+    const ErrorCode init_status = texture.Init(device, image_desc);
+    if (init_status != ErrorCode::Success)
     {
-        // Create staging buffer
-        const Buffer staging_buffer(device, {.size = bitmap.GetTotalSize(), .usage = BufferUsageBits::TransferSource});
-        staging_buffer.Update({bitmap.GetData(), bitmap.GetTotalSize()}, 0);
+        return Result(init_status);
+    }
 
+    Opal::Expected<Buffer, ErrorCode> staging_buffer =
+        Buffer::Create(device, {.size = bitmap.GetTotalSize(), .usage = BufferUsageBits::TransferSource});
+    if (!staging_buffer.HasValue())
+    {
+        return Result(staging_buffer.GetError());
+    }
+    const ErrorCode update_status = staging_buffer.GetValue().Update({bitmap.GetData(), bitmap.GetTotalSize()}, 0);
+    if (update_status != ErrorCode::Success)
+    {
+        return Result(update_status);
+    }
+
+    // The first code any of the recorded commands reports, which is what the whole upload reports.
+    ErrorCode record_status = ErrorCode::Success;
+    const ErrorCode submit_status =
         ImmediateSubmit(device, queue,
                         [&](CommandBuffer& command_buffer)
                         {
-                            command_buffer.CmdTextureBarrier(TextureBarrier::ToTransferDestination(*this));
-                            command_buffer.CmdCopyBufferToTexture(staging_buffer, bitmap, *this);
-                            if (generate_mips && m_desc.mip_level_count > 1)
+                            record_status = command_buffer.CmdTextureBarrier(TextureBarrier::ToTransferDestination(texture));
+                            if (record_status != ErrorCode::Success)
                             {
-                                command_buffer.CmdGenerateMips(*this);
                                 return;
                             }
-                            command_buffer.CmdTextureBarrier(TextureBarrier::ToShaderRead(*this));
+                            record_status = command_buffer.CmdCopyBufferToTexture(staging_buffer.GetValue(), bitmap, texture);
+                            if (record_status != ErrorCode::Success)
+                            {
+                                return;
+                            }
+                            if (generate_mips && image_desc.mip_level_count > 1)
+                            {
+                                record_status = command_buffer.CmdGenerateMips(texture);
+                                return;
+                            }
+                            record_status = command_buffer.CmdTextureBarrier(TextureBarrier::ToShaderRead(texture));
                         });
-    }
-    catch (...)
+    if (record_status != ErrorCode::Success)
     {
-        Destroy();
-        throw;
+        return Result(record_status);
     }
+    if (submit_status != ErrorCode::Success)
+    {
+        return Result(submit_status);
+    }
+    return Result(std::move(texture));
 }
 
-Rndr::Forge::Texture::Texture(const Device& device, VkImage native_image, const TextureDesc& desc) :
-m_device(device), m_image(native_image), m_desc(desc)
+Opal::Expected<Rndr::Forge::Texture, Rndr::ErrorCode> Rndr::Forge::Texture::Create(const Device& device, VkImage native_image,
+                                                                                   const TextureDesc& desc)
 {
-    m_layouts = Opal::DynamicArray<ImageLayout>(SubresourceCount(m_desc), ImageLayout::Undefined);
+    using Result = Opal::Expected<Texture, ErrorCode>;
+
+    Texture texture;
+    texture.m_device = device;
+    texture.m_image = native_image;
+    texture.m_desc = desc;
+    texture.m_layouts = Opal::DynamicArray<ImageLayout>(SubresourceCount(desc), ImageLayout::Undefined);
+    RNDR_FORGE_TRANSLATE_EXPECTED(view_type, ToVkImageViewType(desc.view_type), "TextureDesc::view_type", Result);
     const VkImageViewCreateInfo image_view_create_info = {
         .sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
-        .image = m_image,
-        .viewType = ToVkImageViewType(m_desc.view_type),
-        .format = ToVkFormat(m_desc.format),
-        .subresourceRange = {.aspectMask = static_cast<VkImageAspectFlags>(m_desc.subresource_range.ResolveAspectMask(m_desc.format)),
-                             .baseMipLevel = m_desc.subresource_range.first_mip_level,
-                             .levelCount = m_desc.subresource_range.mip_level_count,
-                             .baseArrayLayer = m_desc.subresource_range.first_array_layer,
-                             .layerCount = m_desc.subresource_range.array_layer_count},
+        .image = native_image,
+        .viewType = view_type,
+        .format = ToVkFormat(desc.format),
+        .subresourceRange = {.aspectMask = static_cast<VkImageAspectFlags>(desc.subresource_range.ResolveAspectMask(desc.format)),
+                             .baseMipLevel = desc.subresource_range.first_mip_level,
+                             .levelCount = desc.subresource_range.mip_level_count,
+                             .baseArrayLayer = desc.subresource_range.first_array_layer,
+                             .layerCount = desc.subresource_range.array_layer_count},
     };
-    const VkResult result = vkCreateImageView(device.GetNativeDevice(), &image_view_create_info, nullptr, &m_view);
-    if (result != VK_SUCCESS)
-    {
-        throw VulkanException(result, "vkCreateImageView");
-    }
+    RNDR_FORGE_VK_CHECK_EXPECTED(vkCreateImageView(device.GetNativeDevice(), &image_view_create_info, nullptr, &texture.m_view),
+                                 "vkCreateImageView", Result);
+    return Result(std::move(texture));
 }
 
-void Rndr::Forge::Texture::Init(const Device& device, const TextureDesc& desc)
+Rndr::ErrorCode Rndr::Forge::Texture::Init(const Device& device, const TextureDesc& desc)
 {
     m_desc = desc;
     m_device = device;
@@ -242,22 +284,24 @@ void Rndr::Forge::Texture::Init(const Device& device, const TextureDesc& desc)
 
     // A cube view is only allowed on an image that was created saying one might be taken of it, and there is
     // no way to add the flag afterwards - so the view type the desc already names is what asks for it.
-    const bool wants_cube_view =
-        m_desc.view_type == TextureViewType::Cube || m_desc.view_type == TextureViewType::CubeArray;
+    const bool wants_cube_view = m_desc.view_type == TextureViewType::Cube || m_desc.view_type == TextureViewType::CubeArray;
     if (wants_cube_view && m_desc.array_layer_count % 6 != 0)
     {
-        throw Opal::Exception("A cube view needs an array layer count that is a multiple of six!");
+        RNDR_LOG_ERROR("Forge: a cube view needs an array layer count that is a multiple of six, got {}", m_desc.array_layer_count);
+        return ErrorCode::InvalidArgument;
     }
 
+    RNDR_FORGE_TRANSLATE(image_type, ToVkImageType(m_desc.dimension), "TextureDesc::dimension");
+    RNDR_FORGE_TRANSLATE(sample_count, ToVkSampleCount(m_desc.sample_count), "TextureDesc::sample_count");
     const VkImageCreateInfo image_create_info = {
         .sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
         .flags = wants_cube_view ? VK_IMAGE_CREATE_CUBE_COMPATIBLE_BIT : 0u,
-        .imageType = ToVkImageType(m_desc.dimension),
+        .imageType = image_type,
         .format = ToVkFormat(m_desc.format),
         .extent = {.width = m_desc.width, .height = m_desc.height, .depth = m_desc.depth},
         .mipLevels = m_desc.mip_level_count,
         .arrayLayers = m_desc.array_layer_count,
-        .samples = ToVkSampleCount(m_desc.sample_count),
+        .samples = sample_count,
         .tiling = VK_IMAGE_TILING_OPTIMAL,
         // The values of TextureUsageBits mirror VkImageUsageFlagBits, so the mask translates as a cast.
         .usage = static_cast<VkImageUsageFlags>(m_desc.usage),
@@ -265,21 +309,19 @@ void Rndr::Forge::Texture::Init(const Device& device, const TextureDesc& desc)
     };
     const VmaAllocationCreateInfo allocation_create_info = {.flags = VMA_ALLOCATION_CREATE_DEDICATED_MEMORY_BIT,
                                                             .usage = VMA_MEMORY_USAGE_AUTO};
-    VkResult result = vmaCreateImage(gpu_allocator, &image_create_info, &allocation_create_info, &m_image, &m_image_allocation, nullptr);
-    if (result != VK_SUCCESS)
-    {
-        throw VulkanException(result, "vmaCreateImage");
-    }
+    RNDR_FORGE_VK_CHECK(vmaCreateImage(gpu_allocator, &image_create_info, &allocation_create_info, &m_image, &m_image_allocation, nullptr),
+                        "vmaCreateImage");
     // A view is only allowed on an image that some stage can read or write. A texture that is nothing but the
     // source or the destination of a transfer is a legitimate thing to create, and giving it one is invalid.
     if (!SupportsImageView(m_desc.usage))
     {
-        return;
+        return ErrorCode::Success;
     }
+    RNDR_FORGE_TRANSLATE(view_type, ToVkImageViewType(m_desc.view_type), "TextureDesc::view_type");
     const VkImageViewCreateInfo image_view_create_info = {
         .sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
         .image = m_image,
-        .viewType = ToVkImageViewType(m_desc.view_type),
+        .viewType = view_type,
         .format = ToVkFormat(m_desc.format),
         .subresourceRange = {.aspectMask = static_cast<VkImageAspectFlags>(m_desc.subresource_range.ResolveAspectMask(m_desc.format)),
                              .baseMipLevel = m_desc.subresource_range.first_mip_level,
@@ -287,13 +329,8 @@ void Rndr::Forge::Texture::Init(const Device& device, const TextureDesc& desc)
                              .baseArrayLayer = m_desc.subresource_range.first_array_layer,
                              .layerCount = m_desc.subresource_range.array_layer_count},
     };
-    result = vkCreateImageView(device.GetNativeDevice(), &image_view_create_info, nullptr, &m_view);
-    if (result != VK_SUCCESS)
-    {
-        // The destructor does not run for an object whose constructor threw, so the image above would leak.
-        Destroy();
-        throw VulkanException(result, "vkCreateImageView");
-    }
+    RNDR_FORGE_VK_CHECK(vkCreateImageView(device.GetNativeDevice(), &image_view_create_info, nullptr, &m_view), "vkCreateImageView");
+    return ErrorCode::Success;
 }
 
 Rndr::Forge::Texture::~Texture()
@@ -359,10 +396,10 @@ void Rndr::Forge::Texture::Destroy()
 
 /**
  * The half-open subresource range a range names, with the k_all_* counts resolved against the desc. A range
- * that reaches past the texture throws rather than being clamped, since it is a mistake either way.
+ * that reaches past the texture is refused rather than clamped, since it is a mistake either way.
  */
-static void ResolveRange(const Rndr::Forge::TextureDesc& desc, const Rndr::Forge::ImageSubresourceRange& range,
-                         Rndr::u32& first_mip, Rndr::u32& last_mip, Rndr::u32& first_layer, Rndr::u32& last_layer)
+static Rndr::ErrorCode ResolveRange(const Rndr::Forge::TextureDesc& desc, const Rndr::Forge::ImageSubresourceRange& range,
+                                    Rndr::u32& first_mip, Rndr::u32& last_mip, Rndr::u32& first_layer, Rndr::u32& last_layer)
 {
     using namespace Rndr;
     first_mip = range.first_mip_level;
@@ -371,35 +408,49 @@ static void ResolveRange(const Rndr::Forge::TextureDesc& desc, const Rndr::Forge
     last_layer = range.array_layer_count == Forge::k_all_array_layers ? desc.array_layer_count : first_layer + range.array_layer_count;
     if (last_mip > desc.mip_level_count || first_mip >= last_mip)
     {
-        throw Opal::Exception("The subresource range names mip levels the texture does not have!");
+        RNDR_LOG_ERROR("Forge: the subresource range names mip levels [{}, {}) that a texture with {} does not have", first_mip, last_mip,
+                       desc.mip_level_count);
+        return ErrorCode::OutOfBounds;
     }
     if (last_layer > desc.array_layer_count || first_layer >= last_layer)
     {
-        throw Opal::Exception("The subresource range names array layers the texture does not have!");
+        RNDR_LOG_ERROR("Forge: the subresource range names array layers [{}, {}) that a texture with {} does not have", first_layer,
+                       last_layer, desc.array_layer_count);
+        return ErrorCode::OutOfBounds;
     }
+    return ErrorCode::Success;
 }
 
-Rndr::Forge::ImageLayout Rndr::Forge::Texture::GetCurrentLayout() const
+Opal::Expected<Rndr::Forge::ImageLayout, Rndr::ErrorCode> Rndr::Forge::Texture::GetCurrentLayout() const
 {
     return GetCurrentLayout(ImageSubresourceRange{});
 }
 
-Rndr::Forge::ImageLayout Rndr::Forge::Texture::GetCurrentLayout(u32 mip_level, u32 array_layer) const
+Opal::Expected<Rndr::Forge::ImageLayout, Rndr::ErrorCode> Rndr::Forge::Texture::GetCurrentLayout(u32 mip_level, u32 array_layer) const
 {
+    using Result = Opal::Expected<ImageLayout, ErrorCode>;
+
     if (mip_level >= m_desc.mip_level_count || array_layer >= m_desc.array_layer_count)
     {
-        throw Opal::Exception("The texture does not have that subresource!");
+        RNDR_LOG_ERROR("Forge: the texture has no subresource at mip {} layer {}", mip_level, array_layer);
+        return Result(ErrorCode::OutOfBounds);
     }
-    return m_layouts[static_cast<i64>(mip_level) * m_desc.array_layer_count + array_layer];
+    return Result(m_layouts[static_cast<i64>(mip_level) * m_desc.array_layer_count + array_layer]);
 }
 
-Rndr::Forge::ImageLayout Rndr::Forge::Texture::GetCurrentLayout(const ImageSubresourceRange& range) const
+Opal::Expected<Rndr::Forge::ImageLayout, Rndr::ErrorCode> Rndr::Forge::Texture::GetCurrentLayout(const ImageSubresourceRange& range) const
 {
+    using Result = Opal::Expected<ImageLayout, ErrorCode>;
+
     u32 first_mip = 0;
     u32 last_mip = 0;
     u32 first_layer = 0;
     u32 last_layer = 0;
-    ResolveRange(m_desc, range, first_mip, last_mip, first_layer, last_layer);
+    const ErrorCode range_status = ResolveRange(m_desc, range, first_mip, last_mip, first_layer, last_layer);
+    if (range_status != ErrorCode::Success)
+    {
+        return Result(range_status);
+    }
     const ImageLayout common = m_layouts[static_cast<i64>(first_mip) * m_desc.array_layer_count + first_layer];
     for (u32 mip = first_mip; mip < last_mip; ++mip)
     {
@@ -408,22 +459,28 @@ Rndr::Forge::ImageLayout Rndr::Forge::Texture::GetCurrentLayout(const ImageSubre
             const ImageLayout layout = m_layouts[static_cast<i64>(mip) * m_desc.array_layer_count + layer];
             if (layout != common)
             {
-                throw Opal::Exception(Opal::StringEx("The subresources of the texture are not all in one layout - found ") +
-                                      ImageLayoutToString(common) + " and " + ImageLayoutToString(layout) +
-                                      ". Ask for the layout of one subresource instead.");
+                RNDR_LOG_ERROR(
+                    "Forge: the subresources of the texture are not all in one layout - found {} and {}. Ask for the layout "
+                    "of one subresource instead.",
+                    ImageLayoutToString(common), ImageLayoutToString(layout));
+                return Result(ErrorCode::InvalidArgument);
             }
         }
     }
-    return common;
+    return Result(common);
 }
 
-void Rndr::Forge::Texture::SetCurrentLayout(const ImageSubresourceRange& range, ImageLayout layout)
+Rndr::ErrorCode Rndr::Forge::Texture::SetCurrentLayout(const ImageSubresourceRange& range, ImageLayout layout)
 {
     u32 first_mip = 0;
     u32 last_mip = 0;
     u32 first_layer = 0;
     u32 last_layer = 0;
-    ResolveRange(m_desc, range, first_mip, last_mip, first_layer, last_layer);
+    const ErrorCode range_status = ResolveRange(m_desc, range, first_mip, last_mip, first_layer, last_layer);
+    if (range_status != ErrorCode::Success)
+    {
+        return range_status;
+    }
     for (u32 mip = first_mip; mip < last_mip; ++mip)
     {
         for (u32 layer = first_layer; layer < last_layer; ++layer)
@@ -431,47 +488,54 @@ void Rndr::Forge::Texture::SetCurrentLayout(const ImageSubresourceRange& range, 
             m_layouts[static_cast<i64>(mip) * m_desc.array_layer_count + layer] = layout;
         }
     }
+    return ErrorCode::Success;
 }
 
 // Sampler
 
-Rndr::Forge::Sampler::Sampler(const Device& device, const SamplerDesc& desc) : m_device(device)
+Opal::Expected<Rndr::Forge::Sampler, Rndr::ErrorCode> Rndr::Forge::Sampler::Create(const Device& device, const SamplerDesc& desc)
 {
+    using Result = Opal::Expected<Sampler, ErrorCode>;
+
     if (desc.max_anisotropy > 1.0f && !device.GetFeatures().sampler_anisotropy)
     {
-        throw Opal::Exception("An anisotropic sampler needs the device created with DeviceFeatures::sampler_anisotropy.");
+        RNDR_LOG_ERROR("Forge: an anisotropic sampler needs the device created with DeviceFeatures::sampler_anisotropy");
+        return Result(ErrorCode::InvalidArgument);
     }
     // MIRROR_CLAMP_TO_EDGE is core in Vulkan 1.2 but still a feature, and a sampler naming it on a device
     // that did not enable it is undefined rather than a sampler that fails to create - the layer says so and
     // the driver samples something. Named here, the way max_anisotropy above is.
-    const bool mirrors_once = desc.address_mode_u == ImageAddressMode::MirrorOnce ||
-                              desc.address_mode_v == ImageAddressMode::MirrorOnce ||
+    const bool mirrors_once = desc.address_mode_u == ImageAddressMode::MirrorOnce || desc.address_mode_v == ImageAddressMode::MirrorOnce ||
                               desc.address_mode_w == ImageAddressMode::MirrorOnce;
     if (mirrors_once && !device.GetFeatures().sampler_mirror_clamp_to_edge)
     {
-        throw Opal::Exception(
-            "ImageAddressMode::MirrorOnce needs the device created with DeviceFeatures::sampler_mirror_clamp_to_edge.");
+        RNDR_LOG_ERROR("Forge: ImageAddressMode::MirrorOnce needs the device created with DeviceFeatures::sampler_mirror_clamp_to_edge");
+        return Result(ErrorCode::InvalidArgument);
     }
+    RNDR_FORGE_TRANSLATE_EXPECTED(address_mode_u, ToVkSamplerAddressMode(desc.address_mode_u), "SamplerDesc::address_mode_u", Result);
+    RNDR_FORGE_TRANSLATE_EXPECTED(address_mode_v, ToVkSamplerAddressMode(desc.address_mode_v), "SamplerDesc::address_mode_v", Result);
+    RNDR_FORGE_TRANSLATE_EXPECTED(address_mode_w, ToVkSamplerAddressMode(desc.address_mode_w), "SamplerDesc::address_mode_w", Result);
+    RNDR_FORGE_TRANSLATE_EXPECTED(border_color, ToVkBorderColor(desc.border_color), "SamplerDesc::border_color", Result);
+    Sampler sampler;
+    sampler.m_device = device;
     const VkSamplerCreateInfo sampler_create_info = {
         .sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO,
         .magFilter = ToVkFilter(desc.mag_filter),
         .minFilter = ToVkFilter(desc.min_filter),
         .mipmapMode = ToVkSamplerMipmapMode(desc.mip_map_filter),
-        .addressModeU = ToVkSamplerAddressMode(desc.address_mode_u),
-        .addressModeV = ToVkSamplerAddressMode(desc.address_mode_v),
-        .addressModeW = ToVkSamplerAddressMode(desc.address_mode_w),
+        .addressModeU = address_mode_u,
+        .addressModeV = address_mode_v,
+        .addressModeW = address_mode_w,
         .mipLodBias = desc.lod_bias,
         .anisotropyEnable = desc.max_anisotropy > 1.0f ? VK_TRUE : VK_FALSE,
         .maxAnisotropy = desc.max_anisotropy,
         .minLod = desc.min_lod,
         .maxLod = desc.max_lod,
-        .borderColor = ToVkBorderColor(desc.border_color),
+        .borderColor = border_color,
     };
-    const VkResult result = vkCreateSampler(device.GetNativeDevice(), &sampler_create_info, nullptr, &m_sampler);
-    if (result != VK_SUCCESS)
-    {
-        throw VulkanException(result, "vkCreateSampler");
-    }
+    RNDR_FORGE_VK_CHECK_EXPECTED(vkCreateSampler(device.GetNativeDevice(), &sampler_create_info, nullptr, &sampler.m_sampler),
+                                 "vkCreateSampler", Result);
+    return Result(std::move(sampler));
 }
 
 Rndr::Forge::Sampler::~Sampler()
@@ -479,8 +543,7 @@ Rndr::Forge::Sampler::~Sampler()
     Destroy();
 }
 
-Rndr::Forge::Sampler::Sampler(Sampler&& other) noexcept
-    : m_device(std::move(other.m_device)), m_sampler(other.m_sampler)
+Rndr::Forge::Sampler::Sampler(Sampler&& other) noexcept : m_device(std::move(other.m_device)), m_sampler(other.m_sampler)
 {
     other.m_sampler = VK_NULL_HANDLE;
     other.m_device = nullptr;

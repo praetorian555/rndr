@@ -6,21 +6,30 @@
 #include "vma/vk_mem_alloc.h"
 
 #include "rndr/forge/device.hpp"
-#include "rndr/forge/vulkan-exception.hpp"
+#include "rndr/forge/vulkan-result.hpp"
+#include "rndr/log.hpp"
 
-Rndr::Forge::Buffer::Buffer(const Device& device, const BufferDesc& desc, Opal::ArrayView<const u8> initial_data)
-    : m_device(device), m_desc(desc)
+Opal::Expected<Rndr::Forge::Buffer, Rndr::ErrorCode> Rndr::Forge::Buffer::Create(const Device& device, const BufferDesc& desc,
+                                                                                 Opal::ArrayView<const u8> initial_data)
 {
+    using Result = Opal::Expected<Buffer, ErrorCode>;
+
     // Checked before anything is created: the allocation below asks for device address memory, which is
     // already a validation error on a device without the feature.
-    if (desc.use_device_address && !m_device->GetFeatures().buffer_device_address)
+    if (desc.use_device_address && !device.GetFeatures().buffer_device_address)
     {
-        throw Opal::Exception("A buffer with a device address needs the device created with DeviceFeatures::buffer_device_address.");
+        RNDR_LOG_ERROR("Forge: a buffer with a device address needs the device created with DeviceFeatures::buffer_device_address");
+        return Result(ErrorCode::InvalidArgument);
     }
+
+    // Everything below is built into this, so a way out of here releases what got that far through the
+    // destructor rather than by hand.
+    Buffer buffer;
+    buffer.m_device = device;
+    buffer.m_desc = desc;
     // The values of BufferUsageBits mirror VkBufferUsageFlagBits, so the mask translates as a cast.
-    VkBufferCreateInfo create_info{.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
-                                   .size = desc.size,
-                                   .usage = static_cast<VkBufferUsageFlags>(desc.usage)};
+    VkBufferCreateInfo create_info{
+        .sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO, .size = desc.size, .usage = static_cast<VkBufferUsageFlags>(desc.usage)};
     if (desc.use_device_address)
     {
         create_info.usage |= VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT;
@@ -40,63 +49,53 @@ Rndr::Forge::Buffer::Buffer(const Device& device, const BufferDesc& desc, Opal::
         case HostAccess::None:
             break;
         default:
-            throw Opal::Exception("Unknown host access!");
+            RNDR_LOG_ERROR("Forge: BufferDesc::host_access is not one of the three: {}", static_cast<u32>(desc.host_access));
+            return Result(ErrorCode::InvalidArgument);
     }
     const VmaAllocationCreateInfo allocation_create_info{.flags = allocation_flags, .usage = VMA_MEMORY_USAGE_AUTO};
-    VkResult result =
-        vmaCreateBuffer(m_device->GetGPUAllocator(), &create_info, &allocation_create_info, &m_buffer, &m_allocation, nullptr);
-    if (result != VK_SUCCESS)
+    RNDR_FORGE_VK_CHECK_EXPECTED(
+        vmaCreateBuffer(device.GetGPUAllocator(), &create_info, &allocation_create_info, &buffer.m_buffer, &buffer.m_allocation, nullptr),
+        "vmaCreateBuffer", Result);
+
+    if (!initial_data.IsEmpty())
     {
-        throw VulkanException(result, "vmaCreateBuffer");
-    }
-    // Everything past this point can throw, and the destructor does not run for an object whose constructor
-    // did, so the allocation above would be leaked without this.
-    try
-    {
-        if (!initial_data.IsEmpty())
+        if (desc.host_access == HostAccess::None)
         {
-            if (m_desc.host_access == HostAccess::None)
-            {
-                throw Opal::Exception("A buffer with HostAccess::None cannot take initial data - use UploadToBuffer.");
-            }
-            if (initial_data.GetSize() > m_desc.size)
-            {
-                throw Opal::Exception("Initial data does not fit into the buffer.");
-            }
-            void* gpu_data = nullptr;
-            result = vmaMapMemory(m_device->GetGPUAllocator(), m_allocation, &gpu_data);
-            if (result != VK_SUCCESS)
-            {
-                throw VulkanException(result, "vmaMapMemory");
-            }
-            memcpy(gpu_data, initial_data.GetData(), initial_data.GetSize());
-            vmaUnmapMemory(m_device->GetGPUAllocator(), m_allocation);
-            Flush(0, initial_data.GetSize());
+            RNDR_LOG_ERROR("Forge: a buffer with HostAccess::None cannot take initial data - use UploadToBuffer");
+            return Result(ErrorCode::InvalidArgument);
         }
-        if (m_desc.keep_memory_mapped && m_desc.host_access != HostAccess::None)
+        if (initial_data.GetSize() > desc.size)
         {
-            result = vmaMapMemory(m_device->GetGPUAllocator(), m_allocation, &m_mapped_memory);
-            if (result != VK_SUCCESS)
-            {
-                throw VulkanException(result, "vmaMapMemory");
-            }
+            RNDR_LOG_ERROR("Forge: initial data of {} bytes does not fit into a buffer of {}", initial_data.GetSize(), desc.size);
+            return Result(ErrorCode::OutOfBounds);
         }
-        if (m_desc.use_device_address)
+        void* gpu_data = nullptr;
+        RNDR_FORGE_VK_CHECK_EXPECTED(vmaMapMemory(device.GetGPUAllocator(), buffer.m_allocation, &gpu_data), "vmaMapMemory", Result);
+        memcpy(gpu_data, initial_data.GetData(), initial_data.GetSize());
+        vmaUnmapMemory(device.GetGPUAllocator(), buffer.m_allocation);
+        const ErrorCode flush_status = buffer.Flush(0, initial_data.GetSize());
+        if (flush_status != ErrorCode::Success)
         {
-            const VkBufferDeviceAddressInfo buffer_device_address_info{.sType = VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO,
-                                                                       .buffer = m_buffer};
-            m_device_address = vkGetBufferDeviceAddress(m_device->GetNativeDevice(), &buffer_device_address_info);
-            if (m_device_address == 0)
-            {
-                throw Opal::Exception("Failed to get buffer device address.");
-            }
+            return Result(flush_status);
         }
     }
-    catch (...)
+    if (desc.keep_memory_mapped && desc.host_access != HostAccess::None)
     {
-        Destroy();
-        throw;
+        RNDR_FORGE_VK_CHECK_EXPECTED(vmaMapMemory(device.GetGPUAllocator(), buffer.m_allocation, &buffer.m_mapped_memory), "vmaMapMemory",
+                                     Result);
     }
+    if (desc.use_device_address)
+    {
+        const VkBufferDeviceAddressInfo buffer_device_address_info{.sType = VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO,
+                                                                   .buffer = buffer.m_buffer};
+        buffer.m_device_address = vkGetBufferDeviceAddress(device.GetNativeDevice(), &buffer_device_address_info);
+        if (buffer.m_device_address == 0)
+        {
+            RNDR_LOG_ERROR("Forge: the device gave no address for a buffer that asked for one");
+            return Result(ErrorCode::GraphicsAPIError);
+        }
+    }
+    return Result(std::move(buffer));
 }
 
 Rndr::Forge::Buffer::~Buffer()
@@ -158,86 +157,80 @@ void Rndr::Forge::Buffer::Destroy()
     m_device_address = 0;
 }
 
-void Rndr::Forge::Buffer::Flush(size_t offset, size_t size) const
+Rndr::ErrorCode Rndr::Forge::Buffer::Flush(size_t offset, size_t size) const
 {
     // VMA compares the memory type against HOST_COHERENT and skips the flush when it is not needed, and it rounds
     // the range out to nonCoherentAtomSize itself.
-    const VkResult result = vmaFlushAllocation(m_device->GetGPUAllocator(), m_allocation, offset, size);
-    if (result != VK_SUCCESS)
-    {
-        throw VulkanException(result, "vmaFlushAllocation");
-    }
+    RNDR_FORGE_VK_CHECK(vmaFlushAllocation(m_device->GetGPUAllocator(), m_allocation, offset, size), "vmaFlushAllocation");
+    return ErrorCode::Success;
 }
 
-void Rndr::Forge::Buffer::Invalidate(size_t offset, size_t size) const
+Rndr::ErrorCode Rndr::Forge::Buffer::Invalidate(size_t offset, size_t size) const
 {
     // The counterpart of Flush. VMA skips it on coherent memory and rounds the range out to nonCoherentAtomSize itself.
-    const VkResult result = vmaInvalidateAllocation(m_device->GetGPUAllocator(), m_allocation, offset, size);
-    if (result != VK_SUCCESS)
-    {
-        throw VulkanException(result, "vmaInvalidateAllocation");
-    }
+    RNDR_FORGE_VK_CHECK(vmaInvalidateAllocation(m_device->GetGPUAllocator(), m_allocation, offset, size), "vmaInvalidateAllocation");
+    return ErrorCode::Success;
 }
 
-void Rndr::Forge::Buffer::Update(Opal::ArrayView<const u8> data, size_t offset) const
+Rndr::ErrorCode Rndr::Forge::Buffer::Update(Opal::ArrayView<const u8> data, size_t offset) const
 {
     if (data.IsEmpty())
     {
-        return;
+        return ErrorCode::Success;
     }
     if (m_desc.host_access == HostAccess::None)
     {
-        throw Opal::Exception("Writing a buffer with HostAccess::None is not possible - use UploadToBuffer.");
+        RNDR_LOG_ERROR("Forge: writing a buffer with HostAccess::None is not possible - use UploadToBuffer");
+        return ErrorCode::InvalidArgument;
     }
     // Written this way around so that a huge offset cannot overflow the sum and pass the check.
     if (offset > m_desc.size || data.GetSize() > m_desc.size - offset)
     {
-        throw Opal::Exception("Update does not fit into the buffer.");
+        RNDR_LOG_ERROR("Forge: an update of {} bytes at offset {} does not fit into a buffer of {}", data.GetSize(), offset, m_desc.size);
+        return ErrorCode::OutOfBounds;
     }
     if (m_mapped_memory != nullptr)
     {
         memcpy(static_cast<u8*>(m_mapped_memory) + offset, data.GetData(), data.GetSize());
-        Flush(offset, data.GetSize());
-        return;
+        return Flush(offset, data.GetSize());
     }
     void* gpu_data = nullptr;
-    const VkResult result = vmaMapMemory(m_device->GetGPUAllocator(), m_allocation, &gpu_data);
-    if (result != VK_SUCCESS)
-    {
-        throw VulkanException(result, "vmaMapMemory");
-    }
+    RNDR_FORGE_VK_CHECK(vmaMapMemory(m_device->GetGPUAllocator(), m_allocation, &gpu_data), "vmaMapMemory");
     memcpy(static_cast<u8*>(gpu_data) + offset, data.GetData(), data.GetSize());
     vmaUnmapMemory(m_device->GetGPUAllocator(), m_allocation);
-    Flush(offset, data.GetSize());
+    return Flush(offset, data.GetSize());
 }
 
-void Rndr::Forge::Buffer::Read(Opal::ArrayView<u8> data, size_t offset) const
+Rndr::ErrorCode Rndr::Forge::Buffer::Read(Opal::ArrayView<u8> data, size_t offset) const
 {
     if (data.IsEmpty())
     {
-        return;
+        return ErrorCode::Success;
     }
     if (m_desc.host_access != HostAccess::Random)
     {
-        throw Opal::Exception("Reading a buffer needs HostAccess::Random - the other kinds are write-combined or not mapped at all.");
+        RNDR_LOG_ERROR("Forge: reading a buffer needs HostAccess::Random - the other kinds are write-combined or not mapped at all");
+        return ErrorCode::InvalidArgument;
     }
     // Written this way around so that a huge offset cannot overflow the sum and pass the check.
     if (offset > m_desc.size || data.GetSize() > m_desc.size - offset)
     {
-        throw Opal::Exception("Read does not fit into the buffer.");
+        RNDR_LOG_ERROR("Forge: a read of {} bytes at offset {} does not fit into a buffer of {}", data.GetSize(), offset, m_desc.size);
+        return ErrorCode::OutOfBounds;
     }
-    Invalidate(offset, data.GetSize());
+    const ErrorCode invalidate_status = Invalidate(offset, data.GetSize());
+    if (invalidate_status != ErrorCode::Success)
+    {
+        return invalidate_status;
+    }
     if (m_mapped_memory != nullptr)
     {
         memcpy(data.GetData(), static_cast<const u8*>(m_mapped_memory) + offset, data.GetSize());
-        return;
+        return ErrorCode::Success;
     }
     void* gpu_data = nullptr;
-    const VkResult result = vmaMapMemory(m_device->GetGPUAllocator(), m_allocation, &gpu_data);
-    if (result != VK_SUCCESS)
-    {
-        throw VulkanException(result, "vmaMapMemory");
-    }
+    RNDR_FORGE_VK_CHECK(vmaMapMemory(m_device->GetGPUAllocator(), m_allocation, &gpu_data), "vmaMapMemory");
     memcpy(data.GetData(), static_cast<const u8*>(gpu_data) + offset, data.GetSize());
     vmaUnmapMemory(m_device->GetGPUAllocator(), m_allocation);
+    return ErrorCode::Success;
 }

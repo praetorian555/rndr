@@ -3,18 +3,21 @@
 #include <mutex>
 
 #include "rndr/forge/device.hpp"
-#include "rndr/forge/vulkan-exception.hpp"
+#include "rndr/forge/vulkan-result.hpp"
+#include "rndr/log.hpp"
 
-Rndr::Forge::Fence::Fence(const Device& device, bool create_signaled) : m_device(device)
+Opal::Expected<Rndr::Forge::Fence, Rndr::ErrorCode> Rndr::Forge::Fence::Create(const Device& device, bool create_signaled)
 {
+    using Result = Opal::Expected<Fence, ErrorCode>;
+
     const VkFenceCreateInfo fence_create_info = {.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO,
                                                  .flags = create_signaled ? VK_FENCE_CREATE_SIGNALED_BIT : 0u};
 
-    const VkResult result = vkCreateFence(device.GetNativeDevice(), &fence_create_info, nullptr, &m_fence);
-    if (result != VK_SUCCESS)
-    {
-        throw VulkanException(result, "vkCreateFence");
-    }
+    Fence fence;
+    fence.m_device = device;
+    RNDR_FORGE_VK_CHECK_EXPECTED(vkCreateFence(device.GetNativeDevice(), &fence_create_info, nullptr, &fence.m_fence), "vkCreateFence",
+                                 Result);
+    return Result(std::move(fence));
 }
 
 Rndr::Forge::Fence::~Fence()
@@ -50,47 +53,51 @@ Rndr::Forge::Fence& Rndr::Forge::Fence::operator=(Fence&& other) noexcept
     return *this;
 }
 
-void Rndr::Forge::Fence::Wait() const
+Rndr::ErrorCode Rndr::Forge::Fence::Wait() const
 {
-    // An infinite timeout cannot expire, so the answer is always true and there is nothing to report.
-    (void)TryWait(k_infinite_wait);
+    // An infinite timeout cannot expire, so the only thing this can report is a failed wait.
+    const Opal::Expected<bool, ErrorCode> result = TryWait(k_infinite_wait);
+    return result.HasValue() ? ErrorCode::Success : result.GetError();
 }
 
-bool Rndr::Forge::Fence::TryWait(u64 timeout) const
+Opal::Expected<bool, Rndr::ErrorCode> Rndr::Forge::Fence::TryWait(u64 timeout) const
 {
+    using Result = Opal::Expected<bool, ErrorCode>;
+
     const VkResult result = vkWaitForFences(m_device->GetNativeDevice(), 1, &m_fence, VK_TRUE, timeout);
     // VK_TIMEOUT is a success code: the wait did what it was told, the fence was simply not signalled in
-    // time. Throwing on it would leave the timeout parameter unusable for the one thing it exists for.
+    // time. Reporting it as a failure would leave the timeout parameter unusable for the one thing it exists for.
     if (result == VK_TIMEOUT)
     {
-        return false;
+        return Result(false);
     }
     if (result != VK_SUCCESS)
     {
-        throw VulkanException(result, "vkWaitForFences");
+        RNDR_LOG_ERROR("Forge: {} failed: {}", "vkWaitForFences", VkResultToString(result));
+        return Result(VkResultToErrorCode(result));
     }
-    return true;
+    return Result(true);
 }
 
-void Rndr::Forge::Fence::Reset() const
+Rndr::ErrorCode Rndr::Forge::Fence::Reset() const
 {
-    const VkResult reset_result = vkResetFences(m_device->GetNativeDevice(), 1, &m_fence);
-    if (reset_result != VK_SUCCESS)
-    {
-        throw VulkanException(reset_result, "vkResetFences");
-    }
+    RNDR_FORGE_VK_CHECK(vkResetFences(m_device->GetNativeDevice(), 1, &m_fence), "vkResetFences");
+    return ErrorCode::Success;
 }
 
-void Rndr::Forge::Fence::WaitForAll(Opal::ArrayView<const Fence> fences)
+Rndr::ErrorCode Rndr::Forge::Fence::WaitForAll(Opal::ArrayView<const Fence> fences)
 {
-    (void)TryWaitForAll(fences, k_infinite_wait);
+    const Opal::Expected<bool, ErrorCode> result = TryWaitForAll(fences, k_infinite_wait);
+    return result.HasValue() ? ErrorCode::Success : result.GetError();
 }
 
-bool Rndr::Forge::Fence::TryWaitForAll(Opal::ArrayView<const Fence> fences, u64 timeout)
+Opal::Expected<bool, Rndr::ErrorCode> Rndr::Forge::Fence::TryWaitForAll(Opal::ArrayView<const Fence> fences, u64 timeout)
 {
+    using Result = Opal::Expected<bool, ErrorCode>;
+
     if (fences.empty())
     {
-        return true;
+        return Result(true);
     }
     // The default allocator rather than the scratch one: asking Opal for a scratch allocator asserts unless
     // the application pushed one, and nothing in Forge does, so this asserted on the first call it ever got.
@@ -100,27 +107,30 @@ bool Rndr::Forge::Fence::TryWaitForAll(Opal::ArrayView<const Fence> fences, u64 
         const Fence& fence = fences[i];
         if (!fence.IsValid())
         {
-            throw Opal::Exception("Waiting on an empty fence!");
+            RNDR_LOG_ERROR("Forge: waiting on an empty fence");
+            return Result(ErrorCode::InvalidArgument);
         }
         // One wait is one call into one device, and the call below can only name the first fence's. Reading
         // that one is safe from the second entry on, since the first has been through the check above.
         if (i > 0 && fence.m_device->GetNativeDevice() != fences[0].m_device->GetNativeDevice())
         {
-            throw Opal::Exception("Waiting on fences from more than one device at once!");
+            RNDR_LOG_ERROR("Forge: waiting on fences from more than one device at once");
+            return Result(ErrorCode::InvalidArgument);
         }
         native_fences[i] = fence.GetNativeFence();
     }
     const VkResult wait_result = vkWaitForFences(fences[0].m_device->GetNativeDevice(), static_cast<u32>(native_fences.GetSize()),
-                                                native_fences.GetData(), VK_TRUE, timeout);
+                                                 native_fences.GetData(), VK_TRUE, timeout);
     if (wait_result == VK_TIMEOUT)
     {
-        return false;
+        return Result(false);
     }
     if (wait_result != VK_SUCCESS)
     {
-        throw VulkanException(wait_result, "vkWaitForFences");
+        RNDR_LOG_ERROR("Forge: {} failed: {}", "vkWaitForFences", VkResultToString(wait_result));
+        return Result(VkResultToErrorCode(wait_result));
     }
-    return true;
+    return Result(true);
 }
 
 namespace
@@ -207,8 +217,7 @@ Rndr::Forge::TextureBarrier Rndr::Forge::TextureBarrier::ToDepthStencilAttachmen
             .texture = texture};
 }
 
-Rndr::Forge::TextureBarrier Rndr::Forge::TextureBarrier::ToShaderRead(Texture& texture, ImageLayout old_layout,
-                                                                      PipelineStageBits reader)
+Rndr::Forge::TextureBarrier Rndr::Forge::TextureBarrier::ToShaderRead(Texture& texture, ImageLayout old_layout, PipelineStageBits reader)
 {
     const SourceScope source = ScopeOfLayout(old_layout);
     return {.stages_must_finish = source.stages,
@@ -220,8 +229,7 @@ Rndr::Forge::TextureBarrier Rndr::Forge::TextureBarrier::ToShaderRead(Texture& t
             .texture = texture};
 }
 
-Rndr::Forge::TextureBarrier Rndr::Forge::TextureBarrier::ToGeneral(Texture& texture, ImageLayout old_layout,
-                                                                   PipelineStageBits accessor)
+Rndr::Forge::TextureBarrier Rndr::Forge::TextureBarrier::ToGeneral(Texture& texture, ImageLayout old_layout, PipelineStageBits accessor)
 {
     const SourceScope source = ScopeOfLayout(old_layout);
     // Both sides of the access, because General is the layout for a texture a stage reads and writes at once,
@@ -235,9 +243,31 @@ Rndr::Forge::TextureBarrier Rndr::Forge::TextureBarrier::ToGeneral(Texture& text
             .texture = texture};
 }
 
-Rndr::Forge::TextureBarrier Rndr::Forge::TextureBarrier::ToGeneral(Texture& texture, PipelineStageBits accessor)
+/** The layout the one-argument presets below leave, or what reading it off the texture reported. */
+static Opal::Expected<Rndr::Forge::TextureBarrier, Rndr::ErrorCode> FromCurrentLayout(
+    Rndr::Forge::Texture& texture, Rndr::Forge::TextureBarrier (*make)(Rndr::Forge::Texture&, Rndr::Forge::ImageLayout))
 {
-    return ToGeneral(texture, texture.GetCurrentLayout(), accessor);
+    using Result = Opal::Expected<Rndr::Forge::TextureBarrier, Rndr::ErrorCode>;
+
+    const Opal::Expected<Rndr::Forge::ImageLayout, Rndr::ErrorCode> old_layout = texture.GetCurrentLayout();
+    if (!old_layout.HasValue())
+    {
+        return Result(old_layout.GetError());
+    }
+    return Result(make(texture, old_layout.GetValue()));
+}
+
+Opal::Expected<Rndr::Forge::TextureBarrier, Rndr::ErrorCode> Rndr::Forge::TextureBarrier::ToGeneral(Texture& texture,
+                                                                                                    PipelineStageBits accessor)
+{
+    using Result = Opal::Expected<TextureBarrier, ErrorCode>;
+
+    const Opal::Expected<ImageLayout, ErrorCode> old_layout = texture.GetCurrentLayout();
+    if (!old_layout.HasValue())
+    {
+        return Result(old_layout.GetError());
+    }
+    return Result(ToGeneral(texture, old_layout.GetValue(), accessor));
 }
 
 Rndr::Forge::TextureBarrier Rndr::Forge::TextureBarrier::ToTransferDestination(Texture& texture, ImageLayout old_layout)
@@ -278,74 +308,88 @@ Rndr::Forge::TextureBarrier Rndr::Forge::TextureBarrier::ToPresent(Texture& text
             .texture = texture};
 }
 
-Rndr::Forge::TextureBarrier Rndr::Forge::TextureBarrier::ToColorAttachment(Texture& texture)
+Opal::Expected<Rndr::Forge::TextureBarrier, Rndr::ErrorCode> Rndr::Forge::TextureBarrier::ToColorAttachment(Texture& texture)
 {
-    return ToColorAttachment(texture, texture.GetCurrentLayout());
+    return FromCurrentLayout(texture, [](Texture& t, ImageLayout layout) { return ToColorAttachment(t, layout); });
 }
 
-Rndr::Forge::TextureBarrier Rndr::Forge::TextureBarrier::ToDepthStencilAttachment(Texture& texture)
+Opal::Expected<Rndr::Forge::TextureBarrier, Rndr::ErrorCode> Rndr::Forge::TextureBarrier::ToDepthStencilAttachment(Texture& texture)
 {
-    return ToDepthStencilAttachment(texture, texture.GetCurrentLayout());
+    return FromCurrentLayout(texture, [](Texture& t, ImageLayout layout) { return ToDepthStencilAttachment(t, layout); });
 }
 
-Rndr::Forge::TextureBarrier Rndr::Forge::TextureBarrier::ToShaderRead(Texture& texture, PipelineStageBits reader)
+Opal::Expected<Rndr::Forge::TextureBarrier, Rndr::ErrorCode> Rndr::Forge::TextureBarrier::ToShaderRead(Texture& texture,
+                                                                                                       PipelineStageBits reader)
 {
-    return ToShaderRead(texture, texture.GetCurrentLayout(), reader);
+    using Result = Opal::Expected<TextureBarrier, ErrorCode>;
+
+    const Opal::Expected<ImageLayout, ErrorCode> old_layout = texture.GetCurrentLayout();
+    if (!old_layout.HasValue())
+    {
+        return Result(old_layout.GetError());
+    }
+    return Result(ToShaderRead(texture, old_layout.GetValue(), reader));
 }
 
-Rndr::Forge::TextureBarrier Rndr::Forge::TextureBarrier::ToTransferDestination(Texture& texture)
+Opal::Expected<Rndr::Forge::TextureBarrier, Rndr::ErrorCode> Rndr::Forge::TextureBarrier::ToTransferDestination(Texture& texture)
 {
-    return ToTransferDestination(texture, texture.GetCurrentLayout());
+    return FromCurrentLayout(texture, [](Texture& t, ImageLayout layout) { return ToTransferDestination(t, layout); });
 }
 
-Rndr::Forge::TextureBarrier Rndr::Forge::TextureBarrier::ToTransferSource(Texture& texture)
+Opal::Expected<Rndr::Forge::TextureBarrier, Rndr::ErrorCode> Rndr::Forge::TextureBarrier::ToTransferSource(Texture& texture)
 {
-    return ToTransferSource(texture, texture.GetCurrentLayout());
+    return FromCurrentLayout(texture, [](Texture& t, ImageLayout layout) { return ToTransferSource(t, layout); });
 }
 
-Rndr::Forge::TextureBarrier Rndr::Forge::TextureBarrier::ToPresent(Texture& texture)
+Opal::Expected<Rndr::Forge::TextureBarrier, Rndr::ErrorCode> Rndr::Forge::TextureBarrier::ToPresent(Texture& texture)
 {
-    return ToPresent(texture, texture.GetCurrentLayout());
+    return FromCurrentLayout(texture, [](Texture& t, ImageLayout layout) { return ToPresent(t, layout); });
 }
 
-Rndr::Forge::TextureBarrier Rndr::Forge::TextureBarrier::To(Texture& texture, ImageLayout old_layout, ImageLayout new_layout)
+Opal::Expected<Rndr::Forge::TextureBarrier, Rndr::ErrorCode> Rndr::Forge::TextureBarrier::To(Texture& texture, ImageLayout old_layout,
+                                                                                             ImageLayout new_layout)
 {
+    using Result = Opal::Expected<TextureBarrier, ErrorCode>;
+
     switch (new_layout)
     {
         case ImageLayout::ShaderReadOnly:
-            return ToShaderRead(texture, old_layout);
+            return Result(ToShaderRead(texture, old_layout));
         case ImageLayout::ColorAttachment:
-            return ToColorAttachment(texture, old_layout);
+            return Result(ToColorAttachment(texture, old_layout));
         case ImageLayout::DepthStencilAttachment:
-            return ToDepthStencilAttachment(texture, old_layout);
+            return Result(ToDepthStencilAttachment(texture, old_layout));
         case ImageLayout::TransferSource:
-            return ToTransferSource(texture, old_layout);
+            return Result(ToTransferSource(texture, old_layout));
         case ImageLayout::TransferDestination:
-            return ToTransferDestination(texture, old_layout);
+            return Result(ToTransferDestination(texture, old_layout));
         case ImageLayout::General:
-            return ToGeneral(texture, old_layout);
+            return Result(ToGeneral(texture, old_layout));
         case ImageLayout::Present:
-            return ToPresent(texture, old_layout);
+            return Result(ToPresent(texture, old_layout));
         default:
-            throw Opal::Exception("No barrier preset transitions a texture into that layout!");
+            RNDR_LOG_ERROR("Forge: no barrier preset transitions a texture into {}", ImageLayoutToString(new_layout));
+            return Result(ErrorCode::InvalidArgument);
     }
 }
 
-Rndr::Forge::Semaphore::Semaphore(const Device& device, const SemaphoreDesc& desc) : m_device(device), m_type(desc.type)
+Opal::Expected<Rndr::Forge::Semaphore, Rndr::ErrorCode> Rndr::Forge::Semaphore::Create(const Device& device, const SemaphoreDesc& desc)
 {
+    using Result = Opal::Expected<Semaphore, ErrorCode>;
+
     // The type lives in a chained structure rather than in the create info, so a binary semaphore is the one
     // that chains nothing - which is also why it is what a defaulted desc asks for.
     const VkSemaphoreTypeCreateInfo type_create_info = {.sType = VK_STRUCTURE_TYPE_SEMAPHORE_TYPE_CREATE_INFO,
                                                         .semaphoreType = VK_SEMAPHORE_TYPE_TIMELINE,
                                                         .initialValue = desc.initial_value};
-    const VkSemaphoreCreateInfo semaphore_create_info = {
-        .sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO,
-        .pNext = desc.type == SemaphoreType::Timeline ? &type_create_info : nullptr};
-    const VkResult result = vkCreateSemaphore(device.GetNativeDevice(), &semaphore_create_info, nullptr, &m_semaphore);
-    if (result != VK_SUCCESS)
-    {
-        throw VulkanException(result, "vkCreateSemaphore");
-    }
+    const VkSemaphoreCreateInfo semaphore_create_info = {.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO,
+                                                         .pNext = desc.type == SemaphoreType::Timeline ? &type_create_info : nullptr};
+    Semaphore semaphore;
+    semaphore.m_device = device;
+    semaphore.m_type = desc.type;
+    RNDR_FORGE_VK_CHECK_EXPECTED(vkCreateSemaphore(device.GetNativeDevice(), &semaphore_create_info, nullptr, &semaphore.m_semaphore),
+                                 "vkCreateSemaphore", Result);
+    return Result(std::move(semaphore));
 }
 
 Rndr::Forge::Semaphore::~Semaphore()
@@ -387,84 +431,107 @@ Rndr::Forge::Semaphore& Rndr::Forge::Semaphore::operator=(Semaphore&& other) noe
     return *this;
 }
 
-/** The host side of a timeline is undefined on a binary semaphore, so every one of them is turned away. */
-static void ThrowIfNotTimeline(const Rndr::Forge::Semaphore& semaphore, const char* what)
+/** The host side of a timeline does nothing on a binary semaphore, so every one of them is turned away. */
+static Rndr::ErrorCode RequireTimeline(const Rndr::Forge::Semaphore& semaphore, const char* what)
 {
     if (!semaphore.IsValid())
     {
-        throw Opal::Exception(Opal::StringEx(what) + " an empty semaphore!");
+        RNDR_LOG_ERROR("Forge: {} an empty semaphore", what);
+        return Rndr::ErrorCode::InvalidArgument;
     }
     if (!semaphore.IsTimeline())
     {
-        throw Opal::Exception(Opal::StringEx(what) + " a binary semaphore, which only a device wait can consume!");
+        RNDR_LOG_ERROR("Forge: {} a binary semaphore, which only a device wait can consume", what);
+        return Rndr::ErrorCode::InvalidArgument;
     }
+    return Rndr::ErrorCode::Success;
 }
 
-void Rndr::Forge::Semaphore::Wait(u64 value) const
+Rndr::ErrorCode Rndr::Forge::Semaphore::Wait(u64 value) const
 {
-    // An infinite timeout cannot expire, so the answer is always true and there is nothing to report.
-    (void)TryWait(value, k_infinite_wait);
+    // An infinite timeout cannot expire, so the only thing this can report is a failed wait.
+    const Opal::Expected<bool, ErrorCode> result = TryWait(value, k_infinite_wait);
+    return result.HasValue() ? ErrorCode::Success : result.GetError();
 }
 
-bool Rndr::Forge::Semaphore::TryWait(u64 value, u64 timeout) const
+Opal::Expected<bool, Rndr::ErrorCode> Rndr::Forge::Semaphore::TryWait(u64 value, u64 timeout) const
 {
-    ThrowIfNotTimeline(*this, "Waiting on");
+    using Result = Opal::Expected<bool, ErrorCode>;
+
+    const ErrorCode timeline_status = RequireTimeline(*this, "waiting on");
+    if (timeline_status != ErrorCode::Success)
+    {
+        return Result(timeline_status);
+    }
     const VkSemaphoreWaitInfo wait_info = {
         .sType = VK_STRUCTURE_TYPE_SEMAPHORE_WAIT_INFO, .semaphoreCount = 1, .pSemaphores = &m_semaphore, .pValues = &value};
     const VkResult result = vkWaitSemaphores(m_device->GetNativeDevice(), &wait_info, timeout);
     // VK_TIMEOUT is a success code here as well, for the reason Fence::TryWait gives above.
     if (result == VK_TIMEOUT)
     {
-        return false;
+        return Result(false);
     }
     if (result != VK_SUCCESS)
     {
-        throw VulkanException(result, "vkWaitSemaphores");
+        RNDR_LOG_ERROR("Forge: {} failed: {}", "vkWaitSemaphores", VkResultToString(result));
+        return Result(VkResultToErrorCode(result));
     }
-    return true;
+    return Result(true);
 }
 
-void Rndr::Forge::Semaphore::Signal(u64 value) const
+Rndr::ErrorCode Rndr::Forge::Semaphore::Signal(u64 value) const
 {
-    ThrowIfNotTimeline(*this, "Signalling");
+    const ErrorCode timeline_status = RequireTimeline(*this, "signalling");
+    if (timeline_status != ErrorCode::Success)
+    {
+        return timeline_status;
+    }
     // A signal has to leave the count above where it was. A device signal landing between this read and the
     // call below would slip past, which no check on this side can close, but the mistake worth catching is
     // the host signalling backwards - and Vulkan reports that one late, if at all.
-    if (value <= GetValue())
+    const Opal::Expected<u64, ErrorCode> current = GetValue();
+    if (!current.HasValue())
     {
-        throw Opal::Exception("A timeline can only be signalled above the count it already holds!");
+        return current.GetError();
     }
-    const VkSemaphoreSignalInfo signal_info = {
-        .sType = VK_STRUCTURE_TYPE_SEMAPHORE_SIGNAL_INFO, .semaphore = m_semaphore, .value = value};
-    const VkResult result = vkSignalSemaphore(m_device->GetNativeDevice(), &signal_info);
-    if (result != VK_SUCCESS)
+    if (value <= current.GetValue())
     {
-        throw VulkanException(result, "vkSignalSemaphore");
+        RNDR_LOG_ERROR("Forge: a timeline holding {} can only be signalled above that, not with {}", current.GetValue(), value);
+        return ErrorCode::InvalidArgument;
     }
+    const VkSemaphoreSignalInfo signal_info = {.sType = VK_STRUCTURE_TYPE_SEMAPHORE_SIGNAL_INFO, .semaphore = m_semaphore, .value = value};
+    RNDR_FORGE_VK_CHECK(vkSignalSemaphore(m_device->GetNativeDevice(), &signal_info), "vkSignalSemaphore");
+    return ErrorCode::Success;
 }
 
-Rndr::u64 Rndr::Forge::Semaphore::GetValue() const
+Opal::Expected<Rndr::u64, Rndr::ErrorCode> Rndr::Forge::Semaphore::GetValue() const
 {
-    ThrowIfNotTimeline(*this, "Reading the count of");
+    using Result = Opal::Expected<u64, ErrorCode>;
+
+    const ErrorCode timeline_status = RequireTimeline(*this, "reading the count of");
+    if (timeline_status != ErrorCode::Success)
+    {
+        return Result(timeline_status);
+    }
     u64 value = 0;
-    const VkResult result = vkGetSemaphoreCounterValue(m_device->GetNativeDevice(), m_semaphore, &value);
-    if (result != VK_SUCCESS)
-    {
-        throw VulkanException(result, "vkGetSemaphoreCounterValue");
-    }
-    return value;
+    RNDR_FORGE_VK_CHECK_EXPECTED(vkGetSemaphoreCounterValue(m_device->GetNativeDevice(), m_semaphore, &value), "vkGetSemaphoreCounterValue",
+                                 Result);
+    return Result(value);
 }
 
-void Rndr::Forge::Semaphore::WaitForAll(Opal::ArrayView<const SemaphoreWait> waits)
+Rndr::ErrorCode Rndr::Forge::Semaphore::WaitForAll(Opal::ArrayView<const SemaphoreWait> waits)
 {
-    (void)TryWaitForAll(waits, k_infinite_wait);
+    const Opal::Expected<bool, ErrorCode> result = TryWaitForAll(waits, k_infinite_wait);
+    return result.HasValue() ? ErrorCode::Success : result.GetError();
 }
 
-bool Rndr::Forge::Semaphore::TryWaitForAll(Opal::ArrayView<const SemaphoreWait> waits, u64 timeout)
+Opal::Expected<bool, Rndr::ErrorCode> Rndr::Forge::Semaphore::TryWaitForAll(Opal::ArrayView<const SemaphoreWait> waits, u64 timeout)
 {
+    using Result = Opal::Expected<bool, ErrorCode>;
+
     if (waits.empty())
     {
-        return true;
+        return Result(true);
     }
     // The default allocator rather than the scratch one, for the reason Fence::WaitForAll gives above.
     // vkWaitSemaphores wants the semaphores and their values as two parallel arrays.
@@ -477,17 +544,20 @@ bool Rndr::Forge::Semaphore::TryWaitForAll(Opal::ArrayView<const SemaphoreWait> 
         // empty and so can the semaphore behind it.
         if (!wait.semaphore.IsValid() || !wait.semaphore->IsValid())
         {
-            throw Opal::Exception("Waiting on an empty semaphore!");
+            RNDR_LOG_ERROR("Forge: waiting on an empty semaphore");
+            return Result(ErrorCode::InvalidArgument);
         }
         if (!wait.semaphore->IsTimeline())
         {
-            throw Opal::Exception("Waiting on a binary semaphore, which only a device wait can consume!");
+            RNDR_LOG_ERROR("Forge: waiting on a binary semaphore, which only a device wait can consume");
+            return Result(ErrorCode::InvalidArgument);
         }
         // One wait is one call into one device, and the call below can only name the first semaphore's.
         // Reading that one is safe from the second entry on, since the first has been through the checks above.
         if (i > 0 && wait.semaphore->m_device->GetNativeDevice() != waits[0].semaphore->m_device->GetNativeDevice())
         {
-            throw Opal::Exception("Waiting on semaphores from more than one device at once!");
+            RNDR_LOG_ERROR("Forge: waiting on semaphores from more than one device at once");
+            return Result(ErrorCode::InvalidArgument);
         }
         native_semaphores[i] = wait.semaphore->GetNativeSemaphore();
         values[i] = wait.value;
@@ -499,11 +569,12 @@ bool Rndr::Forge::Semaphore::TryWaitForAll(Opal::ArrayView<const SemaphoreWait> 
     const VkResult result = vkWaitSemaphores(waits[0].semaphore->m_device->GetNativeDevice(), &wait_info, timeout);
     if (result == VK_TIMEOUT)
     {
-        return false;
+        return Result(false);
     }
     if (result != VK_SUCCESS)
     {
-        throw VulkanException(result, "vkWaitSemaphores");
+        RNDR_LOG_ERROR("Forge: {} failed: {}", "vkWaitSemaphores", VkResultToString(result));
+        return Result(VkResultToErrorCode(result));
     }
-    return true;
+    return Result(true);
 }

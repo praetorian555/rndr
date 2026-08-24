@@ -116,12 +116,13 @@ void Rndr::Forge::SetDebugName(const Device& device, const TimestampQueryPool& q
 Rndr::Forge::ScopedDebugLabel::ScopedDebugLabel(CommandBuffer& command_buffer, const Opal::StringUtf8& name, const Vector4f& color)
     : m_command_buffer(&command_buffer)
 {
-    m_command_buffer->CmdBeginDebugLabel(name, color);
+    // Best effort: a label that cannot be recorded is not something a scope guard has anything to do about.
+    (void)m_command_buffer->CmdBeginDebugLabel(name, color);
 }
 
 Rndr::Forge::ScopedDebugLabel::~ScopedDebugLabel()
 {
-    m_command_buffer->CmdEndDebugLabel();
+    (void)m_command_buffer->CmdEndDebugLabel();
 }
 
 /** "shadow pass" plus " fence 1", since a name that does not say which frame it belongs to is half a name. */

@@ -3,6 +3,7 @@
 #include "volk/volk.h"
 
 #include "opal/container/array-view.h"
+#include "opal/container/expected.h"
 #include "opal/container/ref.h"
 
 #include "rndr/forge/device.hpp"
@@ -55,8 +56,16 @@ class TimestampQueryPool
 {
 public:
     TimestampQueryPool() = default;
-    explicit TimestampQueryPool(const Device& device, const TimestampQueryPoolDesc& desc = {});
     ~TimestampQueryPool();
+
+    /**
+     * @param desc How many queries, and the queue family whose timeline they belong to.
+     * @return The pool, ErrorCode::InvalidArgument for a pool of no queries or a family the device was not
+     *         created with, ErrorCode::FeatureNotSupported when that family writes no timestamp bits, or
+     *         whatever the failing creation maps to.
+     */
+    [[nodiscard]] static Opal::Expected<TimestampQueryPool, ErrorCode> Create(const Device& device,
+                                                                              const TimestampQueryPoolDesc& desc = {});
 
     TimestampQueryPool(const TimestampQueryPool&) = delete;
     TimestampQueryPool& operator=(const TimestampQueryPool&) = delete;
@@ -76,7 +85,7 @@ public:
 
     /**
      * Put a range of the pool back into the state a write needs, from the host rather than from a command
-     * buffer. Needs DeviceFeatures::host_query_reset and throws when the device was created without it;
+     * buffer. Needs DeviceFeatures::host_query_reset and is refused when the device was created without it;
      * CommandBuffer::CmdResetQueryPool works either way.
      *
      * Resetting from the host is only safe when nothing on the device is using the pool, which for a pool
@@ -84,34 +93,39 @@ public:
      *
      * @param first_query First query to reset.
      * @param query_count How many to reset. k_all_queries is the rest of the pool past first_query.
+     * @return ErrorCode::Success, ErrorCode::OutOfBounds when the range does not fit, or
+     *         ErrorCode::InvalidArgument without the feature.
      */
-    void Reset(u32 first_query = 0, u32 query_count = k_all_queries) const;
+    [[nodiscard]] ErrorCode Reset(u32 first_query = 0, u32 query_count = k_all_queries) const;
 
     /**
      * Read raw ticks, blocking until the device has written every one of them. A query that was never
      * written blocks forever, so this is for a range the command buffer definitely filled.
      * @param out_results Filled with one tick per query. Its size decides how many are read.
      * @param first_query First query to read.
+     * @return ErrorCode::Success, ErrorCode::OutOfBounds when the range does not fit, or whatever the failing
+     *         read maps to.
      */
-    void GetResults(Opal::ArrayView<u64> out_results, u32 first_query = 0) const;
+    [[nodiscard]] ErrorCode GetResults(Opal::ArrayView<u64> out_results, u32 first_query = 0) const;
 
     /**
      * Read raw ticks only if the device has already written all of them.
      * @param out_results Filled with one tick per query when this returns true. Its contents are unspecified
      *                    when it returns false, since the driver is free to write into the range either way.
      * @param first_query First query to read.
-     * @return True when every query in the range was available, false when any was not.
+     * @return True when every query in the range was available, false when any was not - which is an outcome
+     *         rather than a failure - or the code the range check or the read reported.
      */
-    bool TryGetResults(Opal::ArrayView<u64> out_results, u32 first_query = 0) const;
+    [[nodiscard]] Opal::Expected<bool, ErrorCode> TryGetResults(Opal::ArrayView<u64> out_results, u32 first_query = 0) const;
 
     /**
      * Milliseconds between two written timestamps, blocking until both are there.
      * @param start_query Query written before the measured work.
      * @param end_query Query written after it.
-     * @return Elapsed milliseconds, or zero when end_query does not hold a later tick than start_query,
-     *         which is what a wrapped counter looks like.
+     * @return Elapsed milliseconds - zero when end_query does not hold a later tick than start_query, which
+     *         is what a wrapped counter looks like - or the code the range check or the read reported.
      */
-    [[nodiscard]] f64 GetElapsedMilliseconds(u32 start_query, u32 end_query) const;
+    [[nodiscard]] Opal::Expected<f64, ErrorCode> GetElapsedMilliseconds(u32 start_query, u32 end_query) const;
 
     /**
      * Milliseconds between two written timestamps, only if both are already there. This is what a frame loop
@@ -119,20 +133,20 @@ public:
      * @param start_query Query written before the measured work.
      * @param end_query Query written after it.
      * @param out_milliseconds Set when this returns true, untouched otherwise.
-     * @return True when both queries were available.
+     * @return True when both queries were available, or the code the range check or the read reported.
      */
-    bool TryGetElapsedMilliseconds(u32 start_query, u32 end_query, f64& out_milliseconds) const;
+    [[nodiscard]] Opal::Expected<bool, ErrorCode> TryGetElapsedMilliseconds(u32 start_query, u32 end_query, f64& out_milliseconds) const;
 
     /**
-     * Turn a first_query and a count that may be k_all_queries into a concrete count, throwing when the
-     * range does not fit in the pool. Public because CommandBuffer::CmdResetQueryPool and CmdWriteTimestamp
-     * make the same check, and one range check beats three.
+     * Turn a first_query and a count that may be k_all_queries into a concrete count. Public because
+     * CommandBuffer::CmdResetQueryPool and CmdWriteTimestamp make the same check, and one range check beats
+     * three.
      * @param first_query First query of the range.
      * @param query_count How many, or k_all_queries for the rest of the pool.
-     * @param what What the caller is doing, so a message names it. Reads as "Reading 2 queries from index 3...".
-     * @return How many queries the range covers, which a caller checking only that the range fits may ignore.
+     * @param what What the caller is doing, so the log line names it. Reads as "Reading 2 queries from index 3...".
+     * @return How many queries the range covers, or ErrorCode::OutOfBounds when it does not fit in the pool.
      */
-    u32 ResolveQueryRange(u32 first_query, u32 query_count, const char* what) const;
+    [[nodiscard]] Opal::Expected<u32, ErrorCode> ResolveQueryRange(u32 first_query, u32 query_count, const char* what) const;
 
 private:
     Opal::Ref<const Device> m_device;

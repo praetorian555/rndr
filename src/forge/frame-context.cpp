@@ -16,11 +16,23 @@ Rndr::Forge::FrameContext::FrameContext(const Device& device, SwapChain& swap_ch
     // Starting at the number of frames in flight is what replaces a fence per slot created signaled: the
     // first frames_in_flight frames wait for a value at or below it, so none of them waits for work that was
     // never submitted.
-    m_frame_timeline = Semaphore(device, {.type = SemaphoreType::Timeline, .initial_value = static_cast<u64>(m_desc.frames_in_flight)});
+    Opal::Expected<Semaphore, ErrorCode> timeline =
+        Semaphore::Create(device, {.type = SemaphoreType::Timeline, .initial_value = static_cast<u64>(m_desc.frames_in_flight)});
+    if (!timeline.HasValue())
+    {
+        throw Opal::Exception("The frame timeline could not be created!");
+    }
+    m_frame_timeline = std::move(timeline.GetValue());
     for (i32 frame = 0; frame < m_desc.frames_in_flight; ++frame)
     {
-        m_texture_ready_semaphores.EmplaceBack(device);
-        m_command_buffers.EmplaceBack(device, graphics_queue);
+        Opal::Expected<Semaphore, ErrorCode> texture_ready = Semaphore::Create(device);
+        Opal::Expected<CommandBuffer, ErrorCode> command_buffer = CommandBuffer::Create(device, graphics_queue);
+        if (!texture_ready.HasValue() || !command_buffer.HasValue())
+        {
+            throw Opal::Exception("A frame slot could not be created!");
+        }
+        m_texture_ready_semaphores.EmplaceBack(std::move(texture_ready.GetValue()));
+        m_command_buffers.EmplaceBack(std::move(command_buffer.GetValue()));
     }
     MatchRenderSemaphoresToSwapChain();
 }
@@ -114,7 +126,12 @@ void Rndr::Forge::FrameContext::MatchRenderSemaphoresToSwapChain()
     m_render_finished_semaphores.Clear();
     for (u32 texture = 0; texture < texture_count; ++texture)
     {
-        m_render_finished_semaphores.EmplaceBack(*m_device);
+        Opal::Expected<Semaphore, ErrorCode> render_finished = Semaphore::Create(*m_device);
+        if (!render_finished.HasValue())
+        {
+            throw Opal::Exception("A render finished semaphore could not be created!");
+        }
+        m_render_finished_semaphores.EmplaceBack(std::move(render_finished.GetValue()));
     }
 }
 
@@ -127,7 +144,10 @@ Rndr::Forge::SwapChainStatus Rndr::Forge::FrameContext::BeginFrame()
     // Frame k waits for k + 1, which is what frame k - frames_in_flight signalled - the frame whose slot,
     // command buffer and texture-ready semaphore this one is about to reuse. Nothing to reset afterwards, so
     // there is no ordering question about where the reset goes either.
-    m_frame_timeline.Wait(m_frames_submitted + 1);
+    if (m_frame_timeline.Wait(m_frames_submitted + 1) != ErrorCode::Success)
+    {
+        throw Opal::Exception("Waiting for the frame timeline failed!");
+    }
 
     const u32 frame_index = GetFrameIndex();
     const AcquiredTexture acquired_texture = m_swap_chain->AcquireTexture(m_texture_ready_semaphores[frame_index]);
@@ -140,8 +160,10 @@ Rndr::Forge::SwapChainStatus Rndr::Forge::FrameContext::BeginFrame()
     }
 
     const CommandBuffer& command_buffer = m_command_buffers[frame_index];
-    command_buffer.Reset();
-    command_buffer.Begin();
+    if (command_buffer.Reset() != ErrorCode::Success || command_buffer.Begin() != ErrorCode::Success)
+    {
+        throw Opal::Exception("The frame command buffer could not be reset and begun!");
+    }
     m_is_frame_recording = true;
     return SwapChainStatus::Success;
 }
@@ -162,11 +184,22 @@ Rndr::Forge::SwapChainStatus Rndr::Forge::FrameContext::EndFrame()
     const u32 frame_index = GetFrameIndex();
     CommandBuffer& command_buffer = m_command_buffers[frame_index];
     Texture& color_texture = GetColorTexture();
-    if (color_texture.GetCurrentLayout() != ImageLayout::Present)
+    const Opal::Expected<ImageLayout, ErrorCode> color_layout = color_texture.GetCurrentLayout();
+    if (!color_layout.HasValue())
     {
-        command_buffer.CmdTextureBarrier(TextureBarrier::ToPresent(color_texture));
+        throw Opal::Exception("The swap chain texture is not all in one layout at the end of a frame!");
     }
-    command_buffer.End();
+    if (color_layout.GetValue() != ImageLayout::Present)
+    {
+        if (command_buffer.CmdTextureBarrier(TextureBarrier::ToPresent(color_texture)) != ErrorCode::Success)
+        {
+            throw Opal::Exception("The barrier into the present layout could not be recorded!");
+        }
+    }
+    if (command_buffer.End() != ErrorCode::Success)
+    {
+        throw Opal::Exception("The frame command buffer could not be ended!");
+    }
     m_is_frame_recording = false;
 
     const Semaphore& image_ready = m_texture_ready_semaphores[frame_index];

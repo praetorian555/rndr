@@ -3,13 +3,15 @@
 #include "volk/volk.h"
 
 #include "opal/clonable-base.h"
+#include "opal/container/expected.h"
 #include "opal/container/optional.h"
 #include "opal/container/ref.h"
 #include "opal/container/string.h"
 #include "opal/variant.h"
 
-#include "rndr/forge/synchronization.hpp"
+#include "rndr/error-codes.hpp"
 #include "rndr/forge/forward.hpp"
+#include "rndr/forge/synchronization.hpp"
 #include "rndr/forge/types.hpp"
 
 namespace Rndr::Forge
@@ -44,10 +46,10 @@ struct RenderingAttachmentDesc : Opal::ClonableBase<RenderingAttachmentDesc>
      *
      * Every level and layer the view covers has to be in one layout, and that layout has to be one the role
      * allows: ColorAttachment or General for a colour attachment, DepthStencilAttachment,
-     * DepthStencilReadOnly or General for the other two. Anything else throws, Undefined included - which is
+     * DepthStencilReadOnly or General for the other two. Anything else is refused, Undefined included - which is
      * a texture no barrier has moved into place yet.
      *
-     * Empty for an attachment nobody filled in, which throws rather than rendering into nothing.
+     * Empty for an attachment nobody filled in, which is refused rather than rendering into nothing.
      */
     Opal::Ref<const Texture> texture;
     AttachmentLoadOperation load_operation = AttachmentLoadOperation::Clear;
@@ -59,7 +61,7 @@ struct RenderingAttachmentDesc : Opal::ClonableBase<RenderingAttachmentDesc>
      *
      * A variant rather than a union because a union cannot say which member was written - which is the one
      * misuse the validation layer cannot catch either, `VkClearValue` being the same union. Writing the kind
-     * the role does not use throws at CmdBeginRendering instead of clearing to whatever the other member's
+     * the role does not use is refused at CmdBeginRendering instead of clearing to whatever the other member's
      * bytes happen to mean.
      */
     Opal::Variant<Vector4f, DepthStencilClearValue> clear_value = Vector4f{0.0f, 0.0f, 0.0f, 1.0f};
@@ -74,7 +76,7 @@ struct RenderingDesc
     /**
      * Depth attachment, absent for a pass that renders without one. Absent is the default, so a pass that
      * needs no depth says nothing rather than filling in a desc whose empty texture means "ignore this".
-     * Present with no texture is a mistake and throws.
+     * Present with no texture is a mistake and is refused.
      */
     Opal::Optional<RenderingAttachmentDesc> depth_attachment;
     /**
@@ -84,7 +86,7 @@ struct RenderingDesc
      * clearing the depth and keeping the stencil is a thing a pass may want. A separate stencil texture names
      * its own.
      *
-     * Present with no texture is a mistake and throws, the way the depth attachment does.
+     * Present with no texture is a mistake and is refused, the way the depth attachment does.
      */
     Opal::Optional<RenderingAttachmentDesc> stencil_attachment;
 };
@@ -202,8 +204,16 @@ class CommandBuffer
 {
 public:
     CommandBuffer() = default;
-    CommandBuffer(const Device& device, DeviceQueue& queue);
     ~CommandBuffer();
+
+    /**
+     * Allocate a primary command buffer out of the queue's command pool.
+     *
+     * @param device Device the pool belongs to. Has to outlive the command buffer.
+     * @param queue Queue the buffer is recorded for and submitted to. Has to outlive it as well.
+     * @return The command buffer, or whatever the failing allocation maps to.
+     */
+    [[nodiscard]] static Opal::Expected<CommandBuffer, ErrorCode> Create(const Device& device, DeviceQueue& queue);
 
     CommandBuffer(const CommandBuffer&) = delete;
     CommandBuffer& operator=(const CommandBuffer&) = delete;
@@ -220,45 +230,53 @@ public:
     /**
      * Begin recording commands into the command buffer.
      * @param submit_one_time If true, the command buffer is intended to be submitted once and then reset or freed.
+     * @return ErrorCode::Success, or whatever the failing call maps to.
      */
-    void Begin(bool submit_one_time = true) const;
+    [[nodiscard]] ErrorCode Begin(bool submit_one_time = true) const;
 
     /** End recording commands. Must be called after Begin and before submitting the command buffer. */
-    void End() const;
+    [[nodiscard]] ErrorCode End() const;
 
     /** Reset the command buffer to its initial state, allowing it to be recorded again. */
-    void Reset() const;
+    [[nodiscard]] ErrorCode Reset() const;
 
     /**
      * Insert a pipeline barrier for a single texture. Used to transition image layouts and synchronize access
      * between pipeline stages.
      * @param texture_barrier Describes the source and destination stages, access masks, layouts, and the texture.
      */
-    void CmdTextureBarrier(const TextureBarrier& texture_barrier);
+    [[nodiscard]] ErrorCode CmdTextureBarrier(const TextureBarrier& texture_barrier);
+
+    /**
+     * The same, for a barrier that came from one of the TextureBarrier presets that reads the texture's
+     * current layout. A preset that could not be built reports through the command that would have used it,
+     * so the two spellings read the same at a call site.
+     */
+    [[nodiscard]] ErrorCode CmdTextureBarrier(const Opal::Expected<TextureBarrier, ErrorCode>& texture_barrier);
 
     /**
      * Insert a pipeline barrier for multiple textures in a single call.
      * @param texture_barriers Array of texture barrier descriptions.
      */
-    void CmdTextureBarriers(Opal::ArrayView<const TextureBarrier> texture_barriers);
+    [[nodiscard]] ErrorCode CmdTextureBarriers(Opal::ArrayView<const TextureBarrier> texture_barriers);
 
     /**
      * Insert a pipeline barrier for a single buffer range. Buffers have no layout, so this only orders access.
      * @param buffer_barrier Describes the source and destination stages, access masks, and the range of the buffer.
      */
-    void CmdBufferBarrier(const BufferBarrier& buffer_barrier);
+    [[nodiscard]] ErrorCode CmdBufferBarrier(const BufferBarrier& buffer_barrier);
 
     /**
      * Insert a pipeline barrier for multiple buffer ranges in a single call.
      * @param buffer_barriers Array of buffer barrier descriptions.
      */
-    void CmdBufferBarriers(Opal::ArrayView<const BufferBarrier> buffer_barriers);
+    [[nodiscard]] ErrorCode CmdBufferBarriers(Opal::ArrayView<const BufferBarrier> buffer_barriers);
 
     /**
      * Insert a pipeline barrier that covers all memory, without naming a resource.
      * @param memory_barrier Describes the source and destination stages and access masks.
      */
-    void CmdMemoryBarrier(const MemoryBarrier& memory_barrier);
+    [[nodiscard]] ErrorCode CmdMemoryBarrier(const MemoryBarrier& memory_barrier);
 
     /**
      * Insert every barrier of a Barriers group as one dependency. All of the other Cmd*Barrier methods are this
@@ -266,28 +284,28 @@ public:
      * calls would be several.
      * @param barriers Memory, buffer and texture barriers, any of which may be empty.
      */
-    void CmdBarriers(const Barriers& barriers);
+    [[nodiscard]] ErrorCode CmdBarriers(const Barriers& barriers);
 
     /**
      * Move a texture into a layout, with the stages and the access picked from what that layout is for. The
      * layout it is coming from is the one the texture tracks, so this is the whole transition in one line.
      * @param texture Texture to transition. Every mip level and array layer of it, so a texture whose levels
-     *        disagree - one halfway through mip generation - throws rather than guessing.
-     * @param new_layout Layout to move it into. One with no barrier preset throws.
+     *        disagree - one halfway through mip generation - is refused rather than guessed at.
+     * @param new_layout Layout to move it into. One with no barrier preset is refused.
      */
-    void CmdTransition(Texture& texture, ImageLayout new_layout);
+    [[nodiscard]] ErrorCode CmdTransition(Texture& texture, ImageLayout new_layout);
 
     /**
      * Copy ranges of one buffer into another. The source needs BufferUsageBits::TransferSource and the
      * destination BufferUsageBits::TransferDestination.
      * @param source Buffer to read from.
      * @param destination Buffer to write into.
-     * @param regions Ranges to copy. A region reaching past the end of either buffer throws.
+     * @param regions Ranges to copy. A region reaching past the end of either buffer is refused.
      */
-    void CmdCopyBuffer(const Buffer& source, const Buffer& destination, Opal::ArrayView<const BufferCopyRegion> regions);
+    [[nodiscard]] ErrorCode CmdCopyBuffer(const Buffer& source, const Buffer& destination, Opal::ArrayView<const BufferCopyRegion> regions);
 
     /** Copy as much of the source as fits in the destination, both from offset zero. */
-    void CmdCopyBuffer(const Buffer& source, const Buffer& destination);
+    [[nodiscard]] ErrorCode CmdCopyBuffer(const Buffer& source, const Buffer& destination);
 
     /**
      * Copy regions of a buffer into a texture. The buffer needs BufferUsageBits::TransferSource and the
@@ -297,7 +315,8 @@ public:
      * @param regions Regions to copy, each naming one mip level of the texture. Every level they name has to
      *        be in TransferDestination or General, which is read off the texture rather than asked for.
      */
-    void CmdCopyBufferToTexture(const Buffer& buffer, Texture& texture, Opal::ArrayView<const BufferTextureCopyRegion> regions);
+    [[nodiscard]] ErrorCode CmdCopyBufferToTexture(const Buffer& buffer, Texture& texture,
+                                                   Opal::ArrayView<const BufferTextureCopyRegion> regions);
 
     /**
      * Copy data from a buffer to a texture. Handles all mip levels described by the bitmap. The destination
@@ -306,7 +325,7 @@ public:
      * @param bitmap Bitmap describing the dimensions of the texture and its mip level offsets.
      * @param texture Destination texture to copy into.
      */
-    void CmdCopyBufferToTexture(const Buffer& buffer, const Bitmap& bitmap, Texture& texture);
+    [[nodiscard]] ErrorCode CmdCopyBufferToTexture(const Buffer& buffer, const Bitmap& bitmap, Texture& texture);
 
     /**
      * Copy regions of a texture into a buffer, which is how anything rendered is read back. The texture needs
@@ -316,7 +335,8 @@ public:
      * @param regions Regions to copy, each naming one mip level of the texture. Every level they name has to
      *        be in TransferSource or General, which is read off the texture rather than asked for.
      */
-    void CmdCopyTextureToBuffer(const Texture& texture, const Buffer& buffer, Opal::ArrayView<const BufferTextureCopyRegion> regions);
+    [[nodiscard]] ErrorCode CmdCopyTextureToBuffer(const Texture& texture, const Buffer& buffer,
+                                                   Opal::ArrayView<const BufferTextureCopyRegion> regions);
 
     /**
      * Copy regions of one texture into another. Both must have the same format and sample count, which the
@@ -327,12 +347,12 @@ public:
      *        has to be in TransferSource on the source and TransferDestination on the destination, or in
      *        General on either.
      */
-    void CmdCopyTexture(const Texture& source, Texture& destination, Opal::ArrayView<const TextureCopyRegion> regions);
+    [[nodiscard]] ErrorCode CmdCopyTexture(const Texture& source, Texture& destination, Opal::ArrayView<const TextureCopyRegion> regions);
 
     /**
      * Stretch regions of one texture into another, resampling and converting on the way. The formats need not
      * match, which is what separates this from CmdCopyTexture, but both have to support being blitted - a
-     * format that cannot throws rather than being found out by the validation layer.
+     * format that cannot is refused rather than being found out by the validation layer.
      * @param source Texture to read from. Needs TextureUsageBits::TransferSource.
      * @param destination Texture to write into. Needs TextureUsageBits::TransferDestination.
      * @param regions Regions to blit.
@@ -340,30 +360,30 @@ public:
      *               source format to support linear filtering.
      * @note The layouts come off the two textures, the way CmdCopyTexture reads them.
      */
-    void CmdBlitTexture(const Texture& source, Texture& destination, Opal::ArrayView<const TextureBlitRegion> regions,
-                        ImageFilter filter = ImageFilter::Linear);
+    [[nodiscard]] ErrorCode CmdBlitTexture(const Texture& source, Texture& destination, Opal::ArrayView<const TextureBlitRegion> regions,
+                                           ImageFilter filter = ImageFilter::Linear);
 
     /**
      * Fill every mip level below the first by blitting each level into the next, halving it each time. The
      * texture needs both transfer usages and a format this device can blit and filter linearly, all three of
-     * which throw rather than being left to the validation layer.
+     * which are refused rather than being left to the validation layer.
      * @param texture Texture whose mip 0 is filled and whose remaining levels are not. Every level of it has
      *        to be in the same layout, which is what it is brought out of.
      * @param final_layout Layout to leave the whole texture in, every level in the same one.
      */
-    void CmdGenerateMips(Texture& texture, ImageLayout final_layout = ImageLayout::ShaderReadOnly);
+    [[nodiscard]] ErrorCode CmdGenerateMips(Texture& texture, ImageLayout final_layout = ImageLayout::ShaderReadOnly);
 
     /**
      * Begin a dynamic rendering pass. Uses VK_KHR_dynamic_rendering, no render pass or framebuffer objects needed.
      * @param desc Render area, colour attachments, and the optional depth and stencil ones. Each attachment
      *        names a texture, and the layout it is rendered in is read off that texture the way the copies
-     *        read theirs - so an attachment whose texture is in a layout its role does not allow throws,
+     *        read theirs - so an attachment whose texture is in a layout its role does not allow is refused,
      *        rather than being a plausible-but-wrong layout no validation layer can catch.
      */
-    void CmdBeginRendering(const RenderingDesc& desc);
+    [[nodiscard]] ErrorCode CmdBeginRendering(const RenderingDesc& desc);
 
     /** End the current dynamic rendering pass. Must be paired with a prior CmdBeginRendering call. */
-    void CmdEndRendering();
+    [[nodiscard]] ErrorCode CmdEndRendering();
 
     /**
      * Set the viewport for subsequent draw commands.
@@ -372,14 +392,14 @@ public:
      * @param min_depth Minimum depth value of the viewport. Range [0, 1].
      * @param max_depth Maximum depth value of the viewport. Range [0, 1].
      */
-    void CmdSetViewport(const Vector2f& offset, const Vector2f& extent, f32 min_depth = 0.0f, f32 max_depth = 1.0f);
+    [[nodiscard]] ErrorCode CmdSetViewport(const Vector2f& offset, const Vector2f& extent, f32 min_depth = 0.0f, f32 max_depth = 1.0f);
 
     /**
      * Set the scissor rectangle for subsequent draw commands. Pixels outside the scissor rectangle are discarded.
      * @param offset Top-left corner of the scissor rectangle in pixels.
      * @param extent Width and height of the scissor rectangle in pixels.
      */
-    void CmdSetScissor(const Vector2i& offset, const Vector2i& extent);
+    [[nodiscard]] ErrorCode CmdSetScissor(const Vector2i& offset, const Vector2i& extent);
 
     /**
      * Set the depth bias for the draws that follow, for a pipeline that named DynamicStateBits::DepthBias.
@@ -389,7 +409,7 @@ public:
      *              DeviceFeatures::depth_bias_clamp.
      * @param slope_factor Scaled by how steep the polygon is in screen space.
      */
-    void CmdSetDepthBias(f32 constant_factor, f32 clamp = 0.0f, f32 slope_factor = 0.0f);
+    [[nodiscard]] ErrorCode CmdSetDepthBias(f32 constant_factor, f32 clamp = 0.0f, f32 slope_factor = 0.0f);
 
     /**
      * Set the stencil comparison value for the draws that follow, for a pipeline that named
@@ -397,28 +417,28 @@ public:
      * @param reference Value the stencil test compares against.
      * @param faces Which faces it applies to.
      */
-    void CmdSetStencilReference(u32 reference, StencilFaceBits faces = StencilFaceBits::FrontAndBack);
+    [[nodiscard]] ErrorCode CmdSetStencilReference(u32 reference, StencilFaceBits faces = StencilFaceBits::FrontAndBack);
 
     /**
      * Set which bits the stencil test reads, for a pipeline that named DynamicStateBits::StencilCompareMask.
      * @param compare_mask Bits of the stencil value and of the reference the comparison looks at.
      * @param faces Which faces it applies to.
      */
-    void CmdSetStencilCompareMask(u32 compare_mask, StencilFaceBits faces = StencilFaceBits::FrontAndBack);
+    [[nodiscard]] ErrorCode CmdSetStencilCompareMask(u32 compare_mask, StencilFaceBits faces = StencilFaceBits::FrontAndBack);
 
     /**
      * Set which bits a stencil write touches, for a pipeline that named DynamicStateBits::StencilWriteMask.
      * @param write_mask Bits a stencil operation is allowed to change. Zero writes nothing.
      * @param faces Which faces it applies to.
      */
-    void CmdSetStencilWriteMask(u32 write_mask, StencilFaceBits faces = StencilFaceBits::FrontAndBack);
+    [[nodiscard]] ErrorCode CmdSetStencilWriteMask(u32 write_mask, StencilFaceBits faces = StencilFaceBits::FrontAndBack);
 
     /**
      * Set the line width for the draws that follow, for a pipeline that named DynamicStateBits::LineWidth.
      * @param width Width in pixels. Anything other than one needs DeviceFeatures::wide_lines, which this
      *              checks rather than leaving to the validation layer.
      */
-    void CmdSetLineWidth(f32 width);
+    [[nodiscard]] ErrorCode CmdSetLineWidth(f32 width);
 
     /**
      * Bind a vertex buffer to a specific binding point.
@@ -426,7 +446,7 @@ public:
      * @param binding The binding point index as specified in the vertex input description.
      * @param offset Byte offset into the buffer where vertex data begins.
      */
-    void CmdBindVertexBuffer(const Buffer& buffer, u32 binding, u64 offset = 0);
+    [[nodiscard]] ErrorCode CmdBindVertexBuffer(const Buffer& buffer, u32 binding, u64 offset = 0);
 
     /**
      * Bind an index buffer for subsequent indexed draw commands.
@@ -434,13 +454,13 @@ public:
      * @param offset Byte offset into the buffer where index data begins.
      * @param index_size Size of each index element (uint8, uint16, or uint32).
      */
-    void CmdBindIndexBuffer(const Buffer& buffer, u64 offset, IndexSize index_size);
+    [[nodiscard]] ErrorCode CmdBindIndexBuffer(const Buffer& buffer, u64 offset, IndexSize index_size);
 
     /**
      * Bind a graphics or compute pipeline. The bind point is determined by the pipeline type.
      * @param pipeline The pipeline to bind.
      */
-    void CmdBindPipeline(const Pipeline& pipeline);
+    [[nodiscard]] ErrorCode CmdBindPipeline(const Pipeline& pipeline);
 
     /**
      * Bind a single descriptor set to a pipeline.
@@ -448,7 +468,7 @@ public:
      * @param descriptor_set The descriptor set to bind.
      * @param first_set Index of the first descriptor set slot to bind to.
      */
-    void CmdBindDescriptorSet(const Pipeline& pipeline, const DescriptorSet& descriptor_set, u32 first_set = 0);
+    [[nodiscard]] ErrorCode CmdBindDescriptorSet(const Pipeline& pipeline, const DescriptorSet& descriptor_set, u32 first_set = 0);
 
     /**
      * Bind multiple descriptor sets to a pipeline in a single call.
@@ -456,8 +476,8 @@ public:
      * @param descriptor_sets Array of descriptor sets to bind.
      * @param first_set Index of the first descriptor set slot to bind to.
      */
-    void CmdBindDescriptorSets(const Pipeline& pipeline,
-                               Opal::ArrayView<const Opal::Ref<const DescriptorSet>> descriptor_sets, u32 first_set = 0);
+    [[nodiscard]] ErrorCode CmdBindDescriptorSets(const Pipeline& pipeline,
+                                                  Opal::ArrayView<const Opal::Ref<const DescriptorSet>> descriptor_sets, u32 first_set = 0);
 
     /**
      * Push constant data to the pipeline.
@@ -466,8 +486,8 @@ public:
      * @param data Data to push as byte array.
      * @param offset Byte offset into the push constant range.
      */
-    void CmdPushConstants(const Pipeline& pipeline, ShaderTypeBits shader_stages, Opal::ArrayView<const u8> data,
-                          u32 offset = 0);
+    [[nodiscard]] ErrorCode CmdPushConstants(const Pipeline& pipeline, ShaderTypeBits shader_stages, Opal::ArrayView<const u8> data,
+                                             u32 offset = 0);
 
     /**
      * Draw indexed primitives.
@@ -477,7 +497,8 @@ public:
      * @param vertex_offset Value added to the vertex index before indexing into the vertex buffer.
      * @param first_instance Instance ID of the first instance to draw.
      */
-    void CmdDrawIndexed(u32 index_count, u32 instance_count = 1, u32 first_index = 0, i32 vertex_offset = 0, u32 first_instance = 0);
+    [[nodiscard]] ErrorCode CmdDrawIndexed(u32 index_count, u32 instance_count = 1, u32 first_index = 0, i32 vertex_offset = 0,
+                                           u32 first_instance = 0);
 
     /**
      * Draw without an index buffer, walking the vertex buffers in order.
@@ -486,7 +507,7 @@ public:
      * @param first_vertex Index of the first vertex to draw.
      * @param first_instance Instance ID of the first instance to draw.
      */
-    void CmdDraw(u32 vertex_count, u32 instance_count = 1, u32 first_vertex = 0, u32 first_instance = 0);
+    [[nodiscard]] ErrorCode CmdDraw(u32 vertex_count, u32 instance_count = 1, u32 first_vertex = 0, u32 first_instance = 0);
 
     /**
      * Draw one or more times with the arguments the device reads out of a buffer when it runs the command,
@@ -496,8 +517,8 @@ public:
      * @param draw_count Number of commands to read.
      * @param stride Bytes between commands. Only read when draw_count is above one.
      */
-    void CmdDrawIndirect(const Buffer& buffer, u64 offset = 0, u32 draw_count = 1,
-                         u32 stride = static_cast<u32>(sizeof(DrawIndirectCommand)));
+    [[nodiscard]] ErrorCode CmdDrawIndirect(const Buffer& buffer, u64 offset = 0, u32 draw_count = 1,
+                                            u32 stride = static_cast<u32>(sizeof(DrawIndirectCommand)));
 
     /**
      * The indexed counterpart of CmdDrawIndirect. Reads DrawIndexedIndirectCommand and needs a bound index
@@ -507,20 +528,20 @@ public:
      * @param draw_count Number of commands to read.
      * @param stride Bytes between commands. Only read when draw_count is above one.
      */
-    void CmdDrawIndexedIndirect(const Buffer& buffer, u64 offset = 0, u32 draw_count = 1,
-                                u32 stride = static_cast<u32>(sizeof(DrawIndexedIndirectCommand)));
+    [[nodiscard]] ErrorCode CmdDrawIndexedIndirect(const Buffer& buffer, u64 offset = 0, u32 draw_count = 1,
+                                                   u32 stride = static_cast<u32>(sizeof(DrawIndexedIndirectCommand)));
 
     /**
      * Draw through the task and mesh shader stages, which replace vertex input and the vertex shader. The
      * counts are in workgroups, the way a compute dispatch counts them.
      * @note Needs the device created with DeviceFeatures::mesh_shader, which pulls in VK_EXT_mesh_shader.
      *       The loader hands out a callable trampoline whether or not the extension was enabled, so this
-     *       throws rather than calling through one that has nothing behind it.
+     *       is refused rather than calling through one that has nothing behind it.
      * @param group_count_x Number of workgroups in the X dimension.
      * @param group_count_y Number of workgroups in the Y dimension.
      * @param group_count_z Number of workgroups in the Z dimension.
      */
-    void CmdDrawMeshTasks(u32 group_count_x, u32 group_count_y = 1, u32 group_count_z = 1);
+    [[nodiscard]] ErrorCode CmdDrawMeshTasks(u32 group_count_x, u32 group_count_y = 1, u32 group_count_z = 1);
 
     /**
      * Dispatch a compute workload. The counts are in local workgroups, not invocations, so the total invocation
@@ -529,7 +550,7 @@ public:
      * @param group_count_y Number of local workgroups in the Y dimension.
      * @param group_count_z Number of local workgroups in the Z dimension.
      */
-    void CmdDispatch(u32 group_count_x, u32 group_count_y = 1, u32 group_count_z = 1);
+    [[nodiscard]] ErrorCode CmdDispatch(u32 group_count_x, u32 group_count_y = 1, u32 group_count_z = 1);
 
     /**
      * Dispatch a compute workload whose group counts the device reads out of a buffer when it runs the command,
@@ -537,7 +558,7 @@ public:
      * @param buffer Buffer holding the group counts. Must have been created with BufferUsageBits::IndirectBuffer.
      * @param offset Byte offset of the DispatchIndirectCommand. Must be a multiple of 4.
      */
-    void CmdDispatchIndirect(const Buffer& buffer, u64 offset = 0);
+    [[nodiscard]] ErrorCode CmdDispatchIndirect(const Buffer& buffer, u64 offset = 0);
 
     /**
      * Open a named region in the command stream, which a capture shows as one collapsible entry in place of
@@ -552,10 +573,10 @@ public:
      * @param color What a capture tool tints the region with, RGBA in [0, 1]. Purely a hint: Vulkan gives it
      *        no meaning, the validation layer never reads it, and a tool is free to ignore it.
      */
-    void CmdBeginDebugLabel(const Opal::StringUtf8& name, const Vector4f& color = {1.0f, 1.0f, 1.0f, 1.0f});
+    [[nodiscard]] ErrorCode CmdBeginDebugLabel(const Opal::StringUtf8& name, const Vector4f& color = {1.0f, 1.0f, 1.0f, 1.0f});
 
     /** Close the region the last CmdBeginDebugLabel opened. Regions nest, and every one has to be closed. */
-    void CmdEndDebugLabel();
+    [[nodiscard]] ErrorCode CmdEndDebugLabel();
 
     /**
      * Mark one point in the command stream rather than a region, for something that happens rather than
@@ -563,7 +584,7 @@ public:
      * @param name Text shown at the marker.
      * @param color What a capture tool tints the marker with, RGBA in [0, 1]. A hint, as above.
      */
-    void CmdInsertDebugLabel(const Opal::StringUtf8& name, const Vector4f& color = {1.0f, 1.0f, 1.0f, 1.0f});
+    [[nodiscard]] ErrorCode CmdInsertDebugLabel(const Opal::StringUtf8& name, const Vector4f& color = {1.0f, 1.0f, 1.0f, 1.0f});
 
     /**
      * Put a range of a query pool back into the state a write needs. A pool holds undefined values until it
@@ -576,7 +597,7 @@ public:
      * @param first_query First query to reset.
      * @param query_count How many to reset. k_all_queries is the rest of the pool past first_query.
      */
-    void CmdResetQueryPool(const TimestampQueryPool& query_pool, u32 first_query = 0, u32 query_count = k_all_queries);
+    [[nodiscard]] ErrorCode CmdResetQueryPool(const TimestampQueryPool& query_pool, u32 first_query = 0, u32 query_count = k_all_queries);
 
     /**
      * Write the GPU tick counter into one query of a pool.
@@ -588,12 +609,12 @@ public:
      * one operation with the pipeline drained around it.
      *
      * @param query_pool Pool to write into. Must have been reset since the last write to this query.
-     * @param query_index Which query of the pool. Past the end of the pool throws.
-     * @param stage Exactly one pipeline stage. More than one bit throws, since vkCmdWriteTimestamp2 forbids
+     * @param query_index Which query of the pool. Past the end of the pool is refused.
+     * @param stage Exactly one pipeline stage. More than one bit is refused, since vkCmdWriteTimestamp2 forbids
      *        it, and the stage also has to be one the queue family supports.
      */
-    void CmdWriteTimestamp(const TimestampQueryPool& query_pool, u32 query_index,
-                           PipelineStageBits stage = PipelineStageBits::AllCommands);
+    [[nodiscard]] ErrorCode CmdWriteTimestamp(const TimestampQueryPool& query_pool, u32 query_index,
+                                              PipelineStageBits stage = PipelineStageBits::AllCommands);
 
 private:
     Opal::Ref<const Device> m_device;

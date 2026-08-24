@@ -282,7 +282,8 @@ TEST_CASE("Forge context outlives a second one", "[forge]")
     // Two calls through what the second context used to unload: one instance level, one device level.
     const Opal::DynamicArray<Forge::PhysicalDevice> physical_devices = ForgeTest::Unwrap(fixture.context.EnumeratePhysicalDevices());
     REQUIRE_FALSE(physical_devices.IsEmpty());
-    const Forge::Buffer buffer(fixture.device, {.size = 32, .usage = Forge::BufferUsageBits::TransferDestination});
+    const Forge::Buffer buffer =
+        ForgeTest::Unwrap(Forge::Buffer::Create(fixture.device, {.size = 32, .usage = Forge::BufferUsageBits::TransferDestination}));
     REQUIRE(buffer.IsValid());
     REQUIRE_NO_VALIDATION_ERROR(fixture);
 }
@@ -298,21 +299,21 @@ TEST_CASE("Forge buffer update and read", "[forge]")
     constexpr i32 k_offset = 64;
     const Opal::DynamicArray<u8> written = MakeBytes(k_size - k_offset, 3);
 
-    Forge::Buffer buffer(fixture.device, {.size = k_size,
+    Forge::Buffer buffer = ForgeTest::Unwrap(Forge::Buffer::Create(fixture.device, {.size = k_size,
                                           .usage = Forge::BufferUsageBits::TransferSource,
-                                          .host_access = Forge::HostAccess::Random});
+                                          .host_access = Forge::HostAccess::Random}));
     const Opal::DynamicArray<u8> zeros(k_size);
-    buffer.Update(zeros);
-    buffer.Update(written, k_offset);
+    REQUIRE(buffer.Update(zeros) == ErrorCode::Success);
+    REQUIRE(buffer.Update(written, k_offset) == ErrorCode::Success);
 
     Opal::DynamicArray<u8> read_back(k_size - k_offset);
-    buffer.Read(read_back, k_offset);
+    REQUIRE(buffer.Read(read_back, k_offset) == ErrorCode::Success);
     REQUIRE(CountMismatches(written, read_back) == 0);
 
     // The bytes before the offset must be untouched, which is what makes this a test of the offset rather
     // than of the write.
     Opal::DynamicArray<u8> head(k_offset);
-    buffer.Read(head, 0);
+    REQUIRE(buffer.Read(head, 0) == ErrorCode::Success);
     for (i32 i = 0; i < k_offset; ++i)
     {
         REQUIRE(head[i] == 0);
@@ -320,13 +321,14 @@ TEST_CASE("Forge buffer update and read", "[forge]")
 
     SECTION("A write that does not fit throws")
     {
-        REQUIRE_THROWS_AS(buffer.Update(written, k_size - 1), Opal::Exception);
+        REQUIRE(buffer.Update(written, k_size - 1) != ErrorCode::Success);
     }
     SECTION("A read of write-combined memory throws")
     {
-        const Forge::Buffer write_only(fixture.device, {.size = k_size, .usage = Forge::BufferUsageBits::TransferSource});
+        const Forge::Buffer write_only =
+            ForgeTest::Unwrap(Forge::Buffer::Create(fixture.device, {.size = k_size, .usage = Forge::BufferUsageBits::TransferSource}));
         Opal::DynamicArray<u8> out(k_size);
-        REQUIRE_THROWS_AS(write_only.Read(out), Opal::Exception);
+        REQUIRE(write_only.Read(out) != ErrorCode::Success);
     }
     REQUIRE_NO_VALIDATION_ERROR(fixture);
 }
@@ -341,11 +343,11 @@ TEST_CASE("Forge buffer survives a move", "[forge]")
     constexpr i32 k_size = 128;
     const Opal::DynamicArray<u8> written = MakeBytes(k_size, 17);
 
-    Forge::Buffer source(fixture.device, {.size = k_size,
+    Forge::Buffer source = ForgeTest::Unwrap(Forge::Buffer::Create(fixture.device, {.size = k_size,
                                           .usage = Forge::BufferUsageBits::TransferSource,
                                           .host_access = Forge::HostAccess::Random,
                                           .keep_memory_mapped = true},
-                         written);
+                         written));
 
     Forge::Buffer moved_to(std::move(source));
     REQUIRE_FALSE(source.IsValid());
@@ -358,7 +360,7 @@ TEST_CASE("Forge buffer survives a move", "[forge]")
 
     // The mapped pointer has to have come along, or this writes through a pointer the source unmapped.
     Opal::DynamicArray<u8> read_back(k_size);
-    assigned_to.Read(read_back);
+    REQUIRE(assigned_to.Read(read_back) == ErrorCode::Success);
     REQUIRE(CountMismatches(written, read_back) == 0);
     REQUIRE_NO_VALIDATION_ERROR(fixture);
 }
@@ -373,13 +375,13 @@ TEST_CASE("Forge compute dispatch and readback", "[forge]")
     constexpr i32 k_element_count = 256;
     constexpr i32 k_group_size = 64;
 
-    Forge::Buffer output(fixture.device, {.size = k_element_count * sizeof(u32),
+    Forge::Buffer output = ForgeTest::Unwrap(Forge::Buffer::Create(fixture.device, {.size = k_element_count * sizeof(u32),
                                           .usage = Forge::BufferUsageBits::StorageBuffer,
                                           .host_access = Forge::HostAccess::Random,
-                                          .use_device_address = true});
+                                          .use_device_address = true}));
     const Opal::DynamicArray<u8> zeros(k_element_count * sizeof(u32));
     // Wiped first, so nothing a previous run left behind can pass for a successful dispatch.
-    output.Update(zeros);
+    REQUIRE(output.Update(zeros) == ErrorCode::Success);
 
     const Forge::Shader compute_shader =
         Forge::Shader::FromSourceInMemory(fixture.device, k_compute_source, {.entry_point = "main_compute", .cache = GetShaderCache()});
@@ -394,16 +396,17 @@ TEST_CASE("Forge compute dispatch and readback", "[forge]")
     REQUIRE(pipeline.IsValid());
 
     const VkDeviceAddress output_address = output.GetNativeDeviceAddress();
-    Forge::ImmediateSubmit(fixture.device, fixture.GetQueue(),
+    REQUIRE(Forge::ImmediateSubmit(fixture.device, fixture.GetQueue(),
                            [&](Forge::CommandBuffer& command_buffer)
                            {
-                               command_buffer.CmdBindPipeline(pipeline);
-                               command_buffer.CmdPushConstants(pipeline, ShaderTypeBits::Compute, Opal::AsBytes(output_address));
-                               command_buffer.CmdDispatch(k_element_count / k_group_size);
-                           });
+                               REQUIRE(command_buffer.CmdBindPipeline(pipeline) == ErrorCode::Success);
+                               REQUIRE(command_buffer.CmdPushConstants(pipeline, ShaderTypeBits::Compute, Opal::AsBytes(output_address)) ==
+                                       ErrorCode::Success);
+                               REQUIRE(command_buffer.CmdDispatch(k_element_count / k_group_size) == ErrorCode::Success);
+                           }) == ErrorCode::Success);
 
     Opal::DynamicArray<u32> values(k_element_count);
-    output.Read({reinterpret_cast<u8*>(values.GetData()), values.GetSize() * sizeof(u32)});
+    REQUIRE(output.Read({reinterpret_cast<u8*>(values.GetData()), values.GetSize() * sizeof(u32)}) == ErrorCode::Success);
     for (i32 i = 0; i < k_element_count; ++i)
     {
         REQUIRE(values[i] == static_cast<u32>(i) + 1000);
@@ -421,29 +424,35 @@ TEST_CASE("Forge buffer copy and readback", "[forge]")
     constexpr i32 k_size = 256;
     const Opal::DynamicArray<u8> written = MakeBytes(k_size, 29);
 
-    const Forge::Buffer source(fixture.device, {.size = k_size, .usage = Forge::BufferUsageBits::TransferSource}, written);
-    const Forge::Buffer destination(
+    const Forge::Buffer source = ForgeTest::Unwrap(
+        Forge::Buffer::Create(fixture.device, {.size = k_size, .usage = Forge::BufferUsageBits::TransferSource}, written));
+    const Forge::Buffer destination = ForgeTest::Unwrap(Forge::Buffer::Create(
         fixture.device,
-        {.size = k_size, .usage = Forge::BufferUsageBits::TransferSource | Forge::BufferUsageBits::TransferDestination});
+        {.size = k_size, .usage = Forge::BufferUsageBits::TransferSource | Forge::BufferUsageBits::TransferDestination}));
     const Opal::DynamicArray<u8> zeros(k_size);
-    destination.Update(zeros);
+    REQUIRE(destination.Update(zeros) == ErrorCode::Success);
 
     Opal::DynamicArray<u8> read_back(k_size);
-    Forge::ReadBackBuffer(fixture.device, fixture.GetQueue(), destination, read_back);
+    REQUIRE(Forge::ReadBackBuffer(fixture.device, fixture.GetQueue(), destination, read_back) == ErrorCode::Success);
     REQUIRE(CountMismatches(zeros, read_back) == 0);
 
-    Forge::ImmediateSubmit(fixture.device, fixture.GetQueue(),
-                           [&](Forge::CommandBuffer& command_buffer) { command_buffer.CmdCopyBuffer(source, destination); });
-    Forge::ReadBackBuffer(fixture.device, fixture.GetQueue(), destination, read_back);
+    REQUIRE(Forge::ImmediateSubmit(fixture.device, fixture.GetQueue(), [&](Forge::CommandBuffer& command_buffer)
+                                   { REQUIRE(command_buffer.CmdCopyBuffer(source, destination) == ErrorCode::Success); }) ==
+            ErrorCode::Success);
+    REQUIRE(Forge::ReadBackBuffer(fixture.device, fixture.GetQueue(), destination, read_back) == ErrorCode::Success);
     REQUIRE(CountMismatches(written, read_back) == 0);
 
-    SECTION("A copy from a buffer without the transfer usage throws")
+    SECTION("A copy from a buffer without the transfer usage is refused")
     {
-        const Forge::Buffer no_transfer(fixture.device, {.size = k_size, .usage = Forge::BufferUsageBits::ConstantBuffer});
-        REQUIRE_THROWS_AS(Forge::ImmediateSubmit(fixture.device, fixture.GetQueue(),
-                                                 [&](Forge::CommandBuffer& command_buffer)
-                                                 { command_buffer.CmdCopyBuffer(no_transfer, destination); }),
-                          Opal::Exception);
+        const Forge::Buffer no_transfer =
+            ForgeTest::Unwrap(Forge::Buffer::Create(fixture.device, {.size = k_size, .usage = Forge::BufferUsageBits::ConstantBuffer}));
+        // The submit itself is fine: what the recorder reported is the copy's own answer, and nothing was
+        // recorded to run.
+        ErrorCode copy_status = ErrorCode::Success;
+        REQUIRE(Forge::ImmediateSubmit(fixture.device, fixture.GetQueue(),
+                                       [&](Forge::CommandBuffer& command_buffer)
+                                       { copy_status = command_buffer.CmdCopyBuffer(no_transfer, destination); }) == ErrorCode::Success);
+        REQUIRE(copy_status == ErrorCode::InvalidArgument);
     }
     REQUIRE_NO_VALIDATION_ERROR(fixture);
 }
@@ -472,31 +481,34 @@ TEST_CASE("Forge texture upload, mip generation and readback", "[forge]")
         mip0[i] = k_texel[i % 4];
     }
 
-    Forge::Texture texture(fixture.device, {.format = k_format,
+    Forge::Texture texture = ForgeTest::Unwrap(Forge::Texture::Create(fixture.device, {.format = k_format,
                                             .width = k_side,
                                             .height = k_side,
                                             .mip_level_count = k_mip_count,
                                             .usage = Forge::TextureUsageBits::TransferSource |
                                                      Forge::TextureUsageBits::TransferDestination |
-                                                     Forge::TextureUsageBits::Sampled});
-    const Forge::Buffer staging(fixture.device, {.size = mip0.GetSize(), .usage = Forge::BufferUsageBits::TransferSource}, mip0);
+                                                     Forge::TextureUsageBits::Sampled}));
+    const Forge::Buffer staging = ForgeTest::Unwrap(
+        Forge::Buffer::Create(fixture.device, {.size = mip0.GetSize(), .usage = Forge::BufferUsageBits::TransferSource}, mip0));
     const Forge::BufferTextureCopyRegion mip0_region;
-    Forge::ImmediateSubmit(fixture.device, fixture.GetQueue(),
-                           [&](Forge::CommandBuffer& command_buffer)
-                           {
-                               command_buffer.CmdTextureBarrier(Forge::TextureBarrier::ToTransferDestination(texture));
-                               command_buffer.CmdCopyBufferToTexture(staging, texture, {&mip0_region, 1});
-                               command_buffer.CmdGenerateMips(texture, Forge::ImageLayout::TransferDestination);
-                           });
+    REQUIRE(Forge::ImmediateSubmit(
+                fixture.device, fixture.GetQueue(),
+                [&](Forge::CommandBuffer& command_buffer)
+                {
+                    REQUIRE(command_buffer.CmdTextureBarrier(Forge::TextureBarrier::ToTransferDestination(texture)) == ErrorCode::Success);
+                    REQUIRE(command_buffer.CmdCopyBufferToTexture(staging, texture, {&mip0_region, 1}) == ErrorCode::Success);
+                    REQUIRE(command_buffer.CmdGenerateMips(texture, Forge::ImageLayout::TransferDestination) == ErrorCode::Success);
+                }) == ErrorCode::Success);
     // Nothing above named a source layout: the mip chain reads each level off the texture as it goes, and
     // leaves every one of them in the layout it was told to finish in.
-    REQUIRE(texture.GetCurrentLayout() == Forge::ImageLayout::TransferDestination);
+    REQUIRE(ForgeTest::Unwrap(texture.GetCurrentLayout()) == Forge::ImageLayout::TransferDestination);
 
     for (u32 level = 0; level < k_mip_count; ++level)
     {
         const i32 side = k_side >> level;
         Opal::DynamicArray<u8> level_pixels(side * side * 4);
-        Forge::ReadBackTexture(fixture.device, fixture.GetQueue(), texture, level_pixels, level, Forge::ImageLayout::TransferDestination);
+        REQUIRE(Forge::ReadBackTexture(fixture.device, fixture.GetQueue(), texture, level_pixels, level,
+                                       Forge::ImageLayout::TransferDestination) == ErrorCode::Success);
         INFO("mip level " << level);
         for (i32 i = 0; i < level_pixels.GetSize(); ++i)
         {
@@ -507,9 +519,8 @@ TEST_CASE("Forge texture upload, mip generation and readback", "[forge]")
     SECTION("Reading back into a view of the wrong size throws")
     {
         Opal::DynamicArray<u8> too_small(4);
-        REQUIRE_THROWS_AS(
-            Forge::ReadBackTexture(fixture.device, fixture.GetQueue(), texture, too_small, 0, Forge::ImageLayout::TransferDestination),
-            Opal::Exception);
+        REQUIRE(Forge::ReadBackTexture(fixture.device, fixture.GetQueue(), texture, too_small, 0,
+                                       Forge::ImageLayout::TransferDestination) != ErrorCode::Success);
     }
     REQUIRE_NO_VALIDATION_ERROR(fixture);
 }
@@ -541,7 +552,7 @@ TEST_CASE("Forge mip generation covers every array layer", "[forge]")
         mip0[i] = k_layer_texels[i / k_layer_bytes][i % 4];
     }
 
-    Forge::Texture texture(fixture.device, {.format = k_format,
+    Forge::Texture texture = ForgeTest::Unwrap(Forge::Texture::Create(fixture.device, {.format = k_format,
                                             .width = k_side,
                                             .height = k_side,
                                             .mip_level_count = k_mip_count,
@@ -549,17 +560,19 @@ TEST_CASE("Forge mip generation covers every array layer", "[forge]")
                                             .usage = Forge::TextureUsageBits::TransferSource |
                                                      Forge::TextureUsageBits::TransferDestination |
                                                      Forge::TextureUsageBits::Sampled,
-                                            .view_type = Forge::TextureViewType::Texture2DArray});
-    const Forge::Buffer staging(fixture.device, {.size = mip0.GetSize(), .usage = Forge::BufferUsageBits::TransferSource}, mip0);
+                                            .view_type = Forge::TextureViewType::Texture2DArray}));
+    const Forge::Buffer staging = ForgeTest::Unwrap(
+        Forge::Buffer::Create(fixture.device, {.size = mip0.GetSize(), .usage = Forge::BufferUsageBits::TransferSource}, mip0));
     // One region for both layers: the buffer holds them back to back, which is the order Vulkan copies them in.
     const Forge::BufferTextureCopyRegion mip0_region{.texture_subresource = {.array_layer_count = k_layer_count}};
-    Forge::ImmediateSubmit(fixture.device, fixture.GetQueue(),
-                           [&](Forge::CommandBuffer& command_buffer)
-                           {
-                               command_buffer.CmdTextureBarrier(Forge::TextureBarrier::ToTransferDestination(texture));
-                               command_buffer.CmdCopyBufferToTexture(staging, texture, {&mip0_region, 1});
-                               command_buffer.CmdGenerateMips(texture, Forge::ImageLayout::TransferDestination);
-                           });
+    REQUIRE(Forge::ImmediateSubmit(
+                fixture.device, fixture.GetQueue(),
+                [&](Forge::CommandBuffer& command_buffer)
+                {
+                    REQUIRE(command_buffer.CmdTextureBarrier(Forge::TextureBarrier::ToTransferDestination(texture)) == ErrorCode::Success);
+                    REQUIRE(command_buffer.CmdCopyBufferToTexture(staging, texture, {&mip0_region, 1}) == ErrorCode::Success);
+                    REQUIRE(command_buffer.CmdGenerateMips(texture, Forge::ImageLayout::TransferDestination) == ErrorCode::Success);
+                }) == ErrorCode::Success);
 
     // Every level of every layer, not just of layer zero: a blit region names one array layer unless told
     // otherwise, so a mip chain built without saying so leaves every layer past the first holding whatever it
@@ -568,7 +581,8 @@ TEST_CASE("Forge mip generation covers every array layer", "[forge]")
     {
         const i32 side = k_side >> level;
         Opal::DynamicArray<u8> level_pixels(static_cast<i32>(k_layer_count) * side * side * 4);
-        Forge::ReadBackTexture(fixture.device, fixture.GetQueue(), texture, level_pixels, level, Forge::ImageLayout::TransferDestination);
+        REQUIRE(Forge::ReadBackTexture(fixture.device, fixture.GetQueue(), texture, level_pixels, level,
+                                       Forge::ImageLayout::TransferDestination) == ErrorCode::Success);
         for (i32 i = 0; i < level_pixels.GetSize(); ++i)
         {
             const i32 layer = i / (side * side * 4);
@@ -591,33 +605,32 @@ TEST_CASE("Forge device-only buffer", "[forge]")
 
     // HostAccess::None is the only kind that may land in memory the host cannot map, so it is the only kind
     // that has to go through the staging helpers at both ends.
-    const Forge::Buffer buffer(
+    const Forge::Buffer buffer = ForgeTest::Unwrap(Forge::Buffer::Create(
         fixture.device,
         {.size = k_size,
          .usage = Forge::BufferUsageBits::StorageBuffer | Forge::BufferUsageBits::TransferSource |
                   Forge::BufferUsageBits::TransferDestination,
-         .host_access = Forge::HostAccess::None});
+         .host_access = Forge::HostAccess::None}));
     REQUIRE(buffer.IsValid());
 
-    Forge::UploadToBuffer(fixture.device, fixture.GetQueue(), buffer, written);
+    REQUIRE(Forge::UploadToBuffer(fixture.device, fixture.GetQueue(), buffer, written) == ErrorCode::Success);
     Opal::DynamicArray<u8> read_back(k_size);
-    Forge::ReadBackBuffer(fixture.device, fixture.GetQueue(), buffer, read_back);
+    REQUIRE(Forge::ReadBackBuffer(fixture.device, fixture.GetQueue(), buffer, read_back) == ErrorCode::Success);
     REQUIRE(CountMismatches(written, read_back) == 0);
 
     SECTION("Update and Read both throw on it")
     {
         Opal::DynamicArray<u8> out(k_size);
-        REQUIRE_THROWS_AS(buffer.Update(written), Opal::Exception);
-        REQUIRE_THROWS_AS(buffer.Read(out), Opal::Exception);
+        REQUIRE(buffer.Update(written) != ErrorCode::Success);
+        REQUIRE(buffer.Read(out) != ErrorCode::Success);
     }
     SECTION("Initial data throws rather than leaking the allocation")
     {
-        REQUIRE_THROWS_AS(Forge::Buffer(fixture.device,
+        REQUIRE_FALSE(Forge::Buffer::Create(fixture.device,
                                         {.size = k_size,
                                          .usage = Forge::BufferUsageBits::TransferDestination,
                                          .host_access = Forge::HostAccess::None},
-                                        written),
-                          Opal::Exception);
+                                        written).HasValue());
     }
     REQUIRE_NO_VALIDATION_ERROR(fixture);
 }
@@ -637,10 +650,10 @@ TEST_CASE("Forge debug names reach the validation layer", "[forge]")
 
     constexpr Forge::TextureUsageBits k_transfer_usage =
         Forge::TextureUsageBits::TransferSource | Forge::TextureUsageBits::TransferDestination;
-    Forge::Texture source(fixture.device,
-                          {.format = PixelFormat::R8G8B8A8_UNORM, .width = 4, .height = 4, .usage = k_transfer_usage});
-    Forge::Texture destination(fixture.device,
-                               {.format = PixelFormat::R16G16B16A16_SFLOAT, .width = 4, .height = 4, .usage = k_transfer_usage});
+    Forge::Texture source = ForgeTest::Unwrap(Forge::Texture::Create(fixture.device,
+                          {.format = PixelFormat::R8G8B8A8_UNORM, .width = 4, .height = 4, .usage = k_transfer_usage}));
+    Forge::Texture destination = ForgeTest::Unwrap(Forge::Texture::Create(fixture.device,
+                               {.format = PixelFormat::R16G16B16A16_SFLOAT, .width = 4, .height = 4, .usage = k_transfer_usage}));
     Forge::SetDebugName(fixture.device, source, "probe-source-texture");
     Forge::SetDebugName(fixture.device, destination, "probe-destination-texture");
 
@@ -650,12 +663,12 @@ TEST_CASE("Forge debug names reach the validation layer", "[forge]")
     // submitted: handing the driver work that breaks the specification is undefined behaviour, and it took
     // the next test down with it when this did.
     const Forge::TextureCopyRegion region;
-    Forge::CommandBuffer command_buffer(fixture.device, fixture.GetQueue());
-    command_buffer.Begin();
-    command_buffer.CmdTransition(source, Forge::ImageLayout::TransferSource);
-    command_buffer.CmdTransition(destination, Forge::ImageLayout::TransferDestination);
-    command_buffer.CmdCopyTexture(source, destination, {&region, 1});
-    command_buffer.End();
+    Forge::CommandBuffer command_buffer = ForgeTest::Unwrap(Forge::CommandBuffer::Create(fixture.device, fixture.GetQueue()));
+    REQUIRE(command_buffer.Begin() == ErrorCode::Success);
+    REQUIRE(command_buffer.CmdTransition(source, Forge::ImageLayout::TransferSource) == ErrorCode::Success);
+    REQUIRE(command_buffer.CmdTransition(destination, Forge::ImageLayout::TransferDestination) == ErrorCode::Success);
+    REQUIRE(command_buffer.CmdCopyTexture(source, destination, {&region, 1}) == ErrorCode::Success);
+    REQUIRE(command_buffer.End() == ErrorCode::Success);
 
     const Opal::StringUtf8 errors = fixture.GetValidationErrors();
     INFO(*errors);
@@ -681,30 +694,32 @@ TEST_CASE("Forge batched submit", "[forge]")
     const Opal::DynamicArray<u8> zeros(k_size * 2);
 
     constexpr Forge::BufferUsageBits k_both_ways = Forge::BufferUsageBits::TransferSource | Forge::BufferUsageBits::TransferDestination;
-    const Forge::Buffer source_a(fixture.device, {.size = k_size, .usage = Forge::BufferUsageBits::TransferSource}, first_half);
-    const Forge::Buffer source_b(fixture.device, {.size = k_size, .usage = Forge::BufferUsageBits::TransferSource}, second_half);
-    const Forge::Buffer destination(fixture.device, {.size = k_size * 2, .usage = k_both_ways});
-    destination.Update(zeros);
+    const Forge::Buffer source_a = ForgeTest::Unwrap(
+        Forge::Buffer::Create(fixture.device, {.size = k_size, .usage = Forge::BufferUsageBits::TransferSource}, first_half));
+    const Forge::Buffer source_b = ForgeTest::Unwrap(
+        Forge::Buffer::Create(fixture.device, {.size = k_size, .usage = Forge::BufferUsageBits::TransferSource}, second_half));
+    const Forge::Buffer destination = ForgeTest::Unwrap(Forge::Buffer::Create(fixture.device, {.size = k_size * 2, .usage = k_both_ways}));
+    REQUIRE(destination.Update(zeros) == ErrorCode::Success);
 
     // One command buffer per half, so a batch that dropped either one would show as half the buffer missing.
-    Forge::CommandBuffer first(fixture.device, fixture.GetQueue());
-    Forge::CommandBuffer second(fixture.device, fixture.GetQueue());
+    Forge::CommandBuffer first = ForgeTest::Unwrap(Forge::CommandBuffer::Create(fixture.device, fixture.GetQueue()));
+    Forge::CommandBuffer second = ForgeTest::Unwrap(Forge::CommandBuffer::Create(fixture.device, fixture.GetQueue()));
     const Forge::BufferCopyRegion first_region{.source_offset = 0, .destination_offset = 0, .size = k_size};
     const Forge::BufferCopyRegion second_region{.source_offset = 0, .destination_offset = k_size, .size = k_size};
-    first.Begin();
-    first.CmdCopyBuffer(source_a, destination, {&first_region, 1});
-    first.End();
-    second.Begin();
-    second.CmdCopyBuffer(source_b, destination, {&second_region, 1});
-    second.End();
+    REQUIRE(first.Begin() == ErrorCode::Success);
+    REQUIRE(first.CmdCopyBuffer(source_a, destination, {&first_region, 1}) == ErrorCode::Success);
+    REQUIRE(first.End() == ErrorCode::Success);
+    REQUIRE(second.Begin() == ErrorCode::Success);
+    REQUIRE(second.CmdCopyBuffer(source_b, destination, {&second_region, 1}) == ErrorCode::Success);
+    REQUIRE(second.End() == ErrorCode::Success);
 
     SECTION("Two command buffers in one batch, with a fence")
     {
-        const Forge::Fence fence(fixture.device, false);
+        const Forge::Fence fence = ForgeTest::Unwrap(Forge::Fence::Create(fixture.device, false));
         const Opal::Ref<const Forge::CommandBuffer> batch[2] = {Opal::Ref<const Forge::CommandBuffer>(first),
                                                                 Opal::Ref<const Forge::CommandBuffer>(second)};
         REQUIRE(fixture.GetQueue().Submit({.command_buffers = {batch, 2}, .fence = fence}) == ErrorCode::Success);
-        fence.Wait();
+        REQUIRE(fence.Wait() == ErrorCode::Success);
     }
     SECTION("The same batch without a fence, waited on through the queue")
     {
@@ -715,8 +730,8 @@ TEST_CASE("Forge batched submit", "[forge]")
     }
     SECTION("One batch per half, the second waiting on a semaphore the first signals")
     {
-        const Forge::Semaphore semaphore(fixture.device);
-        const Forge::Fence fence(fixture.device, false);
+        const Forge::Semaphore semaphore = ForgeTest::Unwrap(Forge::Semaphore::Create(fixture.device));
+        const Forge::Fence fence = ForgeTest::Unwrap(Forge::Fence::Create(fixture.device, false));
         const Opal::Ref<const Forge::CommandBuffer> first_batch[1] = {Opal::Ref<const Forge::CommandBuffer>(first)};
         const Opal::Ref<const Forge::CommandBuffer> second_batch[1] = {Opal::Ref<const Forge::CommandBuffer>(second)};
         const Forge::SemaphoreSubmit signal{.semaphore = semaphore, .stages = Forge::PipelineStageBits::Transfer};
@@ -724,11 +739,11 @@ TEST_CASE("Forge batched submit", "[forge]")
         REQUIRE(fixture.GetQueue().Submit({.command_buffers = {first_batch, 1}, .signal_semaphores = {&signal, 1}}) == ErrorCode::Success);
         REQUIRE(fixture.GetQueue().Submit({.command_buffers = {second_batch, 1}, .wait_semaphores = {&wait, 1}, .fence = fence}) ==
                 ErrorCode::Success);
-        fence.Wait();
+        REQUIRE(fence.Wait() == ErrorCode::Success);
     }
 
     Opal::DynamicArray<u8> read_back(k_size * 2);
-    Forge::ReadBackBuffer(fixture.device, fixture.GetQueue(), destination, read_back);
+    REQUIRE(Forge::ReadBackBuffer(fixture.device, fixture.GetQueue(), destination, read_back) == ErrorCode::Success);
     for (i32 i = 0; i < k_size; ++i)
     {
         REQUIRE(read_back[i] == first_half[i]);
@@ -750,23 +765,25 @@ TEST_CASE("Forge timeline semaphores", "[forge]")
     const Opal::DynamicArray<u8> zeros(k_size * 2);
 
     constexpr Forge::BufferUsageBits k_both_ways = Forge::BufferUsageBits::TransferSource | Forge::BufferUsageBits::TransferDestination;
-    const Forge::Buffer source_a(fixture.device, {.size = k_size, .usage = Forge::BufferUsageBits::TransferSource}, first_half);
-    const Forge::Buffer source_b(fixture.device, {.size = k_size, .usage = Forge::BufferUsageBits::TransferSource}, second_half);
-    const Forge::Buffer destination(fixture.device, {.size = k_size * 2, .usage = k_both_ways});
-    destination.Update(zeros);
+    const Forge::Buffer source_a = ForgeTest::Unwrap(
+        Forge::Buffer::Create(fixture.device, {.size = k_size, .usage = Forge::BufferUsageBits::TransferSource}, first_half));
+    const Forge::Buffer source_b = ForgeTest::Unwrap(
+        Forge::Buffer::Create(fixture.device, {.size = k_size, .usage = Forge::BufferUsageBits::TransferSource}, second_half));
+    const Forge::Buffer destination = ForgeTest::Unwrap(Forge::Buffer::Create(fixture.device, {.size = k_size * 2, .usage = k_both_ways}));
+    REQUIRE(destination.Update(zeros) == ErrorCode::Success);
 
     // The same split copy the batched submit case uses: one command buffer per half, so a batch that dropped
     // either one would show up as half the buffer missing rather than as nothing at all.
-    Forge::CommandBuffer first(fixture.device, fixture.GetQueue());
-    Forge::CommandBuffer second(fixture.device, fixture.GetQueue());
+    Forge::CommandBuffer first = ForgeTest::Unwrap(Forge::CommandBuffer::Create(fixture.device, fixture.GetQueue()));
+    Forge::CommandBuffer second = ForgeTest::Unwrap(Forge::CommandBuffer::Create(fixture.device, fixture.GetQueue()));
     const Forge::BufferCopyRegion first_region{.source_offset = 0, .destination_offset = 0, .size = k_size};
     const Forge::BufferCopyRegion second_region{.source_offset = 0, .destination_offset = k_size, .size = k_size};
-    first.Begin();
-    first.CmdCopyBuffer(source_a, destination, {&first_region, 1});
-    first.End();
-    second.Begin();
-    second.CmdCopyBuffer(source_b, destination, {&second_region, 1});
-    second.End();
+    REQUIRE(first.Begin() == ErrorCode::Success);
+    REQUIRE(first.CmdCopyBuffer(source_a, destination, {&first_region, 1}) == ErrorCode::Success);
+    REQUIRE(first.End() == ErrorCode::Success);
+    REQUIRE(second.Begin() == ErrorCode::Success);
+    REQUIRE(second.CmdCopyBuffer(source_b, destination, {&second_region, 1}) == ErrorCode::Success);
+    REQUIRE(second.End() == ErrorCode::Success);
     const Opal::Ref<const Forge::CommandBuffer> first_batch[1] = {Opal::Ref<const Forge::CommandBuffer>(first)};
     const Opal::Ref<const Forge::CommandBuffer> second_batch[1] = {Opal::Ref<const Forge::CommandBuffer>(second)};
 
@@ -774,7 +791,7 @@ TEST_CASE("Forge timeline semaphores", "[forge]")
     auto require_whole_buffer_copied = [&]()
     {
         Opal::DynamicArray<u8> read_back(k_size * 2);
-        Forge::ReadBackBuffer(fixture.device, fixture.GetQueue(), destination, read_back);
+        REQUIRE(Forge::ReadBackBuffer(fixture.device, fixture.GetQueue(), destination, read_back) == ErrorCode::Success);
         for (i32 i = 0; i < k_size; ++i)
         {
             REQUIRE(read_back[i] == first_half[i]);
@@ -785,61 +802,68 @@ TEST_CASE("Forge timeline semaphores", "[forge]")
     SECTION("A fresh timeline starts at its initial value and the host can raise it")
     {
         constexpr u64 k_initial = 7;
-        const Forge::Semaphore timeline(fixture.device, {.type = Forge::SemaphoreType::Timeline, .initial_value = k_initial});
+        const Forge::Semaphore timeline = ForgeTest::Unwrap(
+            Forge::Semaphore::Create(fixture.device, {.type = Forge::SemaphoreType::Timeline, .initial_value = k_initial}));
         REQUIRE(timeline.IsTimeline());
         REQUIRE(timeline.GetType() == Forge::SemaphoreType::Timeline);
-        REQUIRE(timeline.GetValue() == k_initial);
-        timeline.Signal(k_initial + 3);
-        REQUIRE(timeline.GetValue() == k_initial + 3);
+        REQUIRE(ForgeTest::Unwrap(timeline.GetValue()) == k_initial);
+        REQUIRE(timeline.Signal(k_initial + 3) == ErrorCode::Success);
+        REQUIRE(ForgeTest::Unwrap(timeline.GetValue()) == k_initial + 3);
     }
     SECTION("A wait for a value already reached returns at once")
     {
-        const Forge::Semaphore timeline(fixture.device, {.type = Forge::SemaphoreType::Timeline, .initial_value = 4});
-        timeline.Wait(4);
-        timeline.Wait(1);
-        REQUIRE(timeline.GetValue() == 4);
+        const Forge::Semaphore timeline =
+            ForgeTest::Unwrap(Forge::Semaphore::Create(fixture.device, {.type = Forge::SemaphoreType::Timeline, .initial_value = 4}));
+        REQUIRE(timeline.Wait(4) == ErrorCode::Success);
+        REQUIRE(timeline.Wait(1) == ErrorCode::Success);
+        REQUIRE(ForgeTest::Unwrap(timeline.GetValue()) == 4);
     }
     SECTION("A wait that runs out of time answers false rather than throwing")
     {
         // A millisecond, in the nanoseconds Vulkan counts timeouts in. Long enough that a machine under load
         // does not report a timeout for the value that was already reached, short enough not to stall the run.
         constexpr u64 k_short_timeout = 1000 * 1000;
-        const Forge::Semaphore timeline(fixture.device, {.type = Forge::SemaphoreType::Timeline, .initial_value = 4});
-        REQUIRE(timeline.TryWait(4, k_short_timeout));
+        const Forge::Semaphore timeline =
+            ForgeTest::Unwrap(Forge::Semaphore::Create(fixture.device, {.type = Forge::SemaphoreType::Timeline, .initial_value = 4}));
+        REQUIRE(ForgeTest::Unwrap(timeline.TryWait(4, k_short_timeout)));
         // Nothing was submitted that could raise it, so the timeout is the only way out of these two.
-        REQUIRE_FALSE(timeline.TryWait(5, k_short_timeout));
+        REQUIRE_FALSE(ForgeTest::Unwrap(timeline.TryWait(5, k_short_timeout)));
         const Forge::SemaphoreWait waits[1] = {{.semaphore = timeline, .value = 5}};
-        REQUIRE_FALSE(Forge::Semaphore::TryWaitForAll({waits, 1}, k_short_timeout));
+        REQUIRE_FALSE(ForgeTest::Unwrap(Forge::Semaphore::TryWaitForAll({waits, 1}, k_short_timeout)));
     }
     SECTION("One batch per half, the second waiting on the value the first signals")
     {
-        const Forge::Semaphore timeline(fixture.device, {.type = Forge::SemaphoreType::Timeline});
-        const Forge::Fence fence(fixture.device, false);
+        const Forge::Semaphore timeline =
+            ForgeTest::Unwrap(Forge::Semaphore::Create(fixture.device, {.type = Forge::SemaphoreType::Timeline}));
+        const Forge::Fence fence = ForgeTest::Unwrap(Forge::Fence::Create(fixture.device, false));
         const Forge::SemaphoreSubmit signal{.semaphore = timeline, .stages = Forge::PipelineStageBits::Transfer, .value = 1};
         const Forge::SemaphoreSubmit wait{.semaphore = timeline, .stages = Forge::PipelineStageBits::Transfer, .value = 1};
         REQUIRE(fixture.GetQueue().Submit({.command_buffers = {first_batch, 1}, .signal_semaphores = {&signal, 1}}) == ErrorCode::Success);
         REQUIRE(fixture.GetQueue().Submit({.command_buffers = {second_batch, 1}, .wait_semaphores = {&wait, 1}, .fence = fence}) ==
                 ErrorCode::Success);
-        fence.Wait();
+        REQUIRE(fence.Wait() == ErrorCode::Success);
         require_whole_buffer_copied();
     }
     SECTION("The host waits on a value the device signals, with no fence anywhere")
     {
-        const Forge::Semaphore timeline(fixture.device, {.type = Forge::SemaphoreType::Timeline});
+        const Forge::Semaphore timeline =
+            ForgeTest::Unwrap(Forge::Semaphore::Create(fixture.device, {.type = Forge::SemaphoreType::Timeline}));
         const Forge::SemaphoreSubmit first_signal{.semaphore = timeline, .value = 1};
         const Forge::SemaphoreSubmit second_signal{.semaphore = timeline, .value = 2};
         REQUIRE(fixture.GetQueue().Submit({.command_buffers = {first_batch, 1}, .signal_semaphores = {&first_signal, 1}}) ==
                 ErrorCode::Success);
         REQUIRE(fixture.GetQueue().Submit({.command_buffers = {second_batch, 1}, .signal_semaphores = {&second_signal, 1}}) ==
                 ErrorCode::Success);
-        timeline.Wait(2);
-        REQUIRE(timeline.GetValue() == 2);
+        REQUIRE(timeline.Wait(2) == ErrorCode::Success);
+        REQUIRE(ForgeTest::Unwrap(timeline.GetValue()) == 2);
         require_whole_buffer_copied();
     }
     SECTION("WaitForAll over two timelines returns once both have been signalled")
     {
-        const Forge::Semaphore first_timeline(fixture.device, {.type = Forge::SemaphoreType::Timeline});
-        const Forge::Semaphore second_timeline(fixture.device, {.type = Forge::SemaphoreType::Timeline});
+        const Forge::Semaphore first_timeline =
+            ForgeTest::Unwrap(Forge::Semaphore::Create(fixture.device, {.type = Forge::SemaphoreType::Timeline}));
+        const Forge::Semaphore second_timeline =
+            ForgeTest::Unwrap(Forge::Semaphore::Create(fixture.device, {.type = Forge::SemaphoreType::Timeline}));
         const Forge::SemaphoreSubmit first_signal{.semaphore = first_timeline, .value = 1};
         const Forge::SemaphoreSubmit second_signal{.semaphore = second_timeline, .value = 1};
         REQUIRE(fixture.GetQueue().Submit({.command_buffers = {first_batch, 1}, .signal_semaphores = {&first_signal, 1}}) ==
@@ -847,29 +871,30 @@ TEST_CASE("Forge timeline semaphores", "[forge]")
         REQUIRE(fixture.GetQueue().Submit({.command_buffers = {second_batch, 1}, .signal_semaphores = {&second_signal, 1}}) ==
                 ErrorCode::Success);
         const Forge::SemaphoreWait waits[2] = {{.semaphore = first_timeline, .value = 1}, {.semaphore = second_timeline, .value = 1}};
-        Forge::Semaphore::WaitForAll({waits, 2});
-        REQUIRE(first_timeline.GetValue() == 1);
-        REQUIRE(second_timeline.GetValue() == 1);
+        REQUIRE(Forge::Semaphore::WaitForAll({waits, 2}) == ErrorCode::Success);
+        REQUIRE(ForgeTest::Unwrap(first_timeline.GetValue()) == 1);
+        REQUIRE(ForgeTest::Unwrap(second_timeline.GetValue()) == 1);
         require_whole_buffer_copied();
     }
-    SECTION("The host side of a timeline throws on a binary semaphore")
+    SECTION("The host side of a timeline is refused on a binary semaphore")
     {
-        const Forge::Semaphore binary(fixture.device);
+        const Forge::Semaphore binary = ForgeTest::Unwrap(Forge::Semaphore::Create(fixture.device));
         REQUIRE_FALSE(binary.IsTimeline());
-        REQUIRE_THROWS_AS(binary.Wait(1), Opal::Exception);
-        REQUIRE_THROWS_AS(binary.Signal(1), Opal::Exception);
-        REQUIRE_THROWS_AS(binary.GetValue(), Opal::Exception);
+        REQUIRE(binary.Wait(1) == ErrorCode::InvalidArgument);
+        REQUIRE(binary.Signal(1) == ErrorCode::InvalidArgument);
+        REQUIRE_FALSE(binary.GetValue().HasValue());
     }
     SECTION("A value on a binary semaphore is refused, since Vulkan would ignore it")
     {
-        const Forge::Semaphore binary(fixture.device);
+        const Forge::Semaphore binary = ForgeTest::Unwrap(Forge::Semaphore::Create(fixture.device));
         const Forge::SemaphoreSubmit signal{.semaphore = binary, .value = 1};
         REQUIRE(fixture.GetQueue().Submit({.command_buffers = {first_batch, 1}, .signal_semaphores = {&signal, 1}}) ==
                 ErrorCode::InvalidArgument);
     }
     SECTION("A timeline signalled with zero is refused, since no signal can reach it")
     {
-        const Forge::Semaphore timeline(fixture.device, {.type = Forge::SemaphoreType::Timeline});
+        const Forge::Semaphore timeline =
+            ForgeTest::Unwrap(Forge::Semaphore::Create(fixture.device, {.type = Forge::SemaphoreType::Timeline}));
         const Forge::SemaphoreSubmit signal{.semaphore = timeline, .value = 0};
         REQUIRE(fixture.GetQueue().Submit({.command_buffers = {first_batch, 1}, .signal_semaphores = {&signal, 1}}) ==
                 ErrorCode::InvalidArgument);
@@ -880,12 +905,13 @@ TEST_CASE("Forge timeline semaphores", "[forge]")
     }
     SECTION("A signal that does not raise the count throws")
     {
-        const Forge::Semaphore timeline(fixture.device, {.type = Forge::SemaphoreType::Timeline, .initial_value = 4});
-        REQUIRE_THROWS_AS(timeline.Signal(4), Opal::Exception);
-        REQUIRE_THROWS_AS(timeline.Signal(3), Opal::Exception);
-        REQUIRE(timeline.GetValue() == 4);
-        timeline.Signal(5);
-        REQUIRE(timeline.GetValue() == 5);
+        const Forge::Semaphore timeline =
+            ForgeTest::Unwrap(Forge::Semaphore::Create(fixture.device, {.type = Forge::SemaphoreType::Timeline, .initial_value = 4}));
+        REQUIRE(timeline.Signal(4) != ErrorCode::Success);
+        REQUIRE(timeline.Signal(3) != ErrorCode::Success);
+        REQUIRE(ForgeTest::Unwrap(timeline.GetValue()) == 4);
+        REQUIRE(timeline.Signal(5) == ErrorCode::Success);
+        REQUIRE(ForgeTest::Unwrap(timeline.GetValue()) == 5);
     }
     SECTION("WaitForAll over two devices throws rather than naming one of them")
     {
@@ -894,18 +920,20 @@ TEST_CASE("Forge timeline semaphores", "[forge]")
         Opal::DynamicArray<Forge::PhysicalDevice> physical_devices = ForgeTest::Unwrap(fixture.context.EnumeratePhysicalDevices());
         const Forge::Device other =
             ForgeTest::Unwrap(Forge::Device::Create(std::move(physical_devices[0]), fixture.context, MakeHeadlessDeviceDesc()));
-        const Forge::Semaphore here(fixture.device, {.type = Forge::SemaphoreType::Timeline, .initial_value = 1});
-        const Forge::Semaphore there(other, {.type = Forge::SemaphoreType::Timeline, .initial_value = 1});
+        const Forge::Semaphore here =
+            ForgeTest::Unwrap(Forge::Semaphore::Create(fixture.device, {.type = Forge::SemaphoreType::Timeline, .initial_value = 1}));
+        const Forge::Semaphore there =
+            ForgeTest::Unwrap(Forge::Semaphore::Create(other, {.type = Forge::SemaphoreType::Timeline, .initial_value = 1}));
         const Forge::SemaphoreWait waits[2] = {{.semaphore = here, .value = 1}, {.semaphore = there, .value = 1}};
-        REQUIRE_THROWS_AS(Forge::Semaphore::WaitForAll({waits, 2}), Opal::Exception);
+        REQUIRE(Forge::Semaphore::WaitForAll({waits, 2}) != ErrorCode::Success);
     }
     SECTION("An empty entry in WaitForAll throws, either way it is empty")
     {
         const Forge::Semaphore empty;
         const Forge::SemaphoreWait empty_reference[1] = {{}};
-        REQUIRE_THROWS_AS(Forge::Semaphore::WaitForAll({empty_reference, 1}), Opal::Exception);
+        REQUIRE(Forge::Semaphore::WaitForAll({empty_reference, 1}) != ErrorCode::Success);
         const Forge::SemaphoreWait empty_semaphore[1] = {{.semaphore = empty, .value = 1}};
-        REQUIRE_THROWS_AS(Forge::Semaphore::WaitForAll({empty_semaphore, 1}), Opal::Exception);
+        REQUIRE(Forge::Semaphore::WaitForAll({empty_semaphore, 1}) != ErrorCode::Success);
     }
 
     REQUIRE(fixture.GetQueue().WaitIdle() == ErrorCode::Success);
@@ -920,7 +948,7 @@ TEST_CASE("Forge submit rejects an empty object", "[forge]")
     }
     ForgeFixture fixture;
     const Opal::Ref<const Forge::CommandBuffer> empty_command_buffer{};
-    const Forge::CommandBuffer valid(fixture.device, fixture.GetQueue());
+    const Forge::CommandBuffer valid = ForgeTest::Unwrap(Forge::CommandBuffer::Create(fixture.device, fixture.GetQueue()));
 
     SECTION("An empty command buffer is refused")
     {
@@ -946,45 +974,48 @@ TEST_CASE("Forge waiting on several fences at once", "[forge]")
     ForgeFixture fixture;
     constexpr i32 k_size = 64;
     const Opal::DynamicArray<u8> written = MakeBytes(k_size, 63);
-    const Forge::Buffer source(fixture.device, {.size = k_size, .usage = Forge::BufferUsageBits::TransferSource}, written);
+    const Forge::Buffer source = ForgeTest::Unwrap(
+        Forge::Buffer::Create(fixture.device, {.size = k_size, .usage = Forge::BufferUsageBits::TransferSource}, written));
     constexpr Forge::BufferUsageBits k_both_ways = Forge::BufferUsageBits::TransferSource | Forge::BufferUsageBits::TransferDestination;
-    const Forge::Buffer first_destination(fixture.device, {.size = k_size, .usage = k_both_ways});
-    const Forge::Buffer second_destination(fixture.device, {.size = k_size, .usage = k_both_ways});
+    const Forge::Buffer first_destination =
+        ForgeTest::Unwrap(Forge::Buffer::Create(fixture.device, {.size = k_size, .usage = k_both_ways}));
+    const Forge::Buffer second_destination =
+        ForgeTest::Unwrap(Forge::Buffer::Create(fixture.device, {.size = k_size, .usage = k_both_ways}));
 
     Opal::DynamicArray<Forge::Fence> fences;
-    fences.EmplaceBack(fixture.device, false);
-    fences.EmplaceBack(fixture.device, false);
+    fences.EmplaceBack(ForgeTest::Unwrap(Forge::Fence::Create(fixture.device, false)));
+    fences.EmplaceBack(ForgeTest::Unwrap(Forge::Fence::Create(fixture.device, false)));
 
-    Forge::CommandBuffer first(fixture.device, fixture.GetQueue());
-    Forge::CommandBuffer second(fixture.device, fixture.GetQueue());
-    first.Begin();
-    first.CmdCopyBuffer(source, first_destination);
-    first.End();
-    second.Begin();
-    second.CmdCopyBuffer(source, second_destination);
-    second.End();
+    Forge::CommandBuffer first = ForgeTest::Unwrap(Forge::CommandBuffer::Create(fixture.device, fixture.GetQueue()));
+    Forge::CommandBuffer second = ForgeTest::Unwrap(Forge::CommandBuffer::Create(fixture.device, fixture.GetQueue()));
+    REQUIRE(first.Begin() == ErrorCode::Success);
+    REQUIRE(first.CmdCopyBuffer(source, first_destination) == ErrorCode::Success);
+    REQUIRE(first.End() == ErrorCode::Success);
+    REQUIRE(second.Begin() == ErrorCode::Success);
+    REQUIRE(second.CmdCopyBuffer(source, second_destination) == ErrorCode::Success);
+    REQUIRE(second.End() == ErrorCode::Success);
 
     const Opal::Ref<const Forge::CommandBuffer> first_batch[1] = {Opal::Ref<const Forge::CommandBuffer>(first)};
     const Opal::Ref<const Forge::CommandBuffer> second_batch[1] = {Opal::Ref<const Forge::CommandBuffer>(second)};
     REQUIRE(fixture.GetQueue().Submit({.command_buffers = {first_batch, 1}, .fence = fences[0]}) == ErrorCode::Success);
     REQUIRE(fixture.GetQueue().Submit({.command_buffers = {second_batch, 1}, .fence = fences[1]}) == ErrorCode::Success);
-    Forge::Fence::WaitForAll(fences);
+    REQUIRE(Forge::Fence::WaitForAll(fences) == ErrorCode::Success);
 
     Opal::DynamicArray<u8> read_back(k_size);
-    Forge::ReadBackBuffer(fixture.device, fixture.GetQueue(), first_destination, read_back);
+    REQUIRE(Forge::ReadBackBuffer(fixture.device, fixture.GetQueue(), first_destination, read_back) == ErrorCode::Success);
     REQUIRE(CountMismatches(written, read_back) == 0);
-    Forge::ReadBackBuffer(fixture.device, fixture.GetQueue(), second_destination, read_back);
+    REQUIRE(Forge::ReadBackBuffer(fixture.device, fixture.GetQueue(), second_destination, read_back) == ErrorCode::Success);
     REQUIRE(CountMismatches(written, read_back) == 0);
 
     SECTION("A fence that is not signalled in time answers false rather than throwing")
     {
         constexpr u64 k_short_timeout = 1000 * 1000;
         // Both of the fences above have been waited on, so they are signalled and answer at once.
-        REQUIRE(fences[0].TryWait(k_short_timeout));
-        REQUIRE(Forge::Fence::TryWaitForAll(fences, k_short_timeout));
+        REQUIRE(ForgeTest::Unwrap(fences[0].TryWait(k_short_timeout)));
+        REQUIRE(ForgeTest::Unwrap(Forge::Fence::TryWaitForAll(fences, k_short_timeout)));
         // Nothing is submitted against this one, so it stays unsignalled and the timeout is the only way out.
-        const Forge::Fence never_signalled(fixture.device, false);
-        REQUIRE_FALSE(never_signalled.TryWait(k_short_timeout));
+        const Forge::Fence never_signalled = ForgeTest::Unwrap(Forge::Fence::Create(fixture.device, false));
+        REQUIRE_FALSE(ForgeTest::Unwrap(never_signalled.TryWait(k_short_timeout)));
     }
     SECTION("Fences from two devices in one wait throw")
     {
@@ -993,16 +1024,16 @@ TEST_CASE("Forge waiting on several fences at once", "[forge]")
         const Forge::Device other =
             ForgeTest::Unwrap(Forge::Device::Create(std::move(physical_devices[0]), fixture.context, MakeHeadlessDeviceDesc()));
         Opal::DynamicArray<Forge::Fence> across_devices;
-        across_devices.EmplaceBack(fixture.device, true);
-        across_devices.EmplaceBack(other, true);
-        REQUIRE_THROWS_AS(Forge::Fence::WaitForAll(across_devices), Opal::Exception);
+        across_devices.EmplaceBack(ForgeTest::Unwrap(Forge::Fence::Create(fixture.device, true)));
+        across_devices.EmplaceBack(ForgeTest::Unwrap(Forge::Fence::Create(other, true)));
+        REQUIRE(Forge::Fence::WaitForAll(across_devices) != ErrorCode::Success);
     }
     SECTION("An empty fence in the list throws")
     {
         Opal::DynamicArray<Forge::Fence> with_empty;
-        with_empty.EmplaceBack(fixture.device, true);
+        with_empty.EmplaceBack(ForgeTest::Unwrap(Forge::Fence::Create(fixture.device, true)));
         with_empty.EmplaceBack();
-        REQUIRE_THROWS_AS(Forge::Fence::WaitForAll(with_empty), Opal::Exception);
+        REQUIRE(Forge::Fence::WaitForAll(with_empty) != ErrorCode::Success);
     }
     REQUIRE_NO_VALIDATION_ERROR(fixture);
 }
@@ -1050,29 +1081,28 @@ TEST_CASE("Forge device features", "[forge]")
     SECTION("A buffer wanting a device address needs the feature")
     {
         const Forge::Device device = ForgeTest::Unwrap(make_device({.buffer_device_address = false}));
-        REQUIRE_THROWS_AS(Forge::Buffer(device, {.size = 64,
+        REQUIRE_FALSE(Forge::Buffer::Create(device, {.size = 64,
                                                  .usage = Forge::BufferUsageBits::StorageBuffer,
-                                                 .use_device_address = true}),
-                          Opal::Exception);
+                                                 .use_device_address = true}).HasValue());
     }
     SECTION("An anisotropic sampler needs the feature")
     {
         const Forge::Device device = ForgeTest::Unwrap(make_device({.sampler_anisotropy = false}));
-        REQUIRE_THROWS_AS(Forge::Sampler(device, {.max_anisotropy = 8.0f}), Opal::Exception);
+        REQUIRE_FALSE(Forge::Sampler::Create(device, {.max_anisotropy = 8.0f}).HasValue());
         // One that does not ask for anisotropy is fine on the same device.
-        const Forge::Sampler sampler(device, {.max_anisotropy = 1.0f});
+        const Forge::Sampler sampler = ForgeTest::Unwrap(Forge::Sampler::Create(device, {.max_anisotropy = 1.0f}));
         REQUIRE(sampler.IsValid());
     }
     SECTION("More than one indirect command needs the feature")
     {
         Forge::Device device = ForgeTest::Unwrap(make_device({.multi_draw_indirect = false}));
         Forge::DeviceQueue& queue = ForgeTest::Unwrap(device.GetQueue(Forge::QueueFamily::Graphics));
-        const Forge::Buffer commands(device, {.size = 2 * sizeof(Forge::DrawIndirectCommand),
-                                              .usage = Forge::BufferUsageBits::IndirectBuffer});
-        Forge::CommandBuffer command_buffer(device, queue);
-        command_buffer.Begin();
-        REQUIRE_THROWS_AS(command_buffer.CmdDrawIndirect(commands, 0, 2), Opal::Exception);
-        command_buffer.End();
+        const Forge::Buffer commands = ForgeTest::Unwrap(Forge::Buffer::Create(device, {.size = 2 * sizeof(Forge::DrawIndirectCommand),
+                                              .usage = Forge::BufferUsageBits::IndirectBuffer}));
+        Forge::CommandBuffer command_buffer = ForgeTest::Unwrap(Forge::CommandBuffer::Create(device, queue));
+        REQUIRE(command_buffer.Begin() == ErrorCode::Success);
+        REQUIRE(command_buffer.CmdDrawIndirect(commands, 0, 2) != ErrorCode::Success);
+        REQUIRE(command_buffer.End() == ErrorCode::Success);
     }
 
     Opal::StringUtf8 report;
@@ -1200,11 +1230,11 @@ TEST_CASE("Forge bindless descriptor bindings", "[forge]")
         // ever written, so partially bound is doing something too.
         Forge::DescriptorSet descriptor_set(pool, layout, k_used_descriptors);
 
-        Forge::Buffer output(device, {.size = k_element_count * sizeof(u32),
+        Forge::Buffer output = ForgeTest::Unwrap(Forge::Buffer::Create(device, {.size = k_element_count * sizeof(u32),
                                       .usage = Forge::BufferUsageBits::StorageBuffer,
-                                      .host_access = Forge::HostAccess::Random});
+                                      .host_access = Forge::HostAccess::Random}));
         const Opal::DynamicArray<u8> zeros(k_element_count * sizeof(u32));
-        output.Update(zeros);
+        REQUIRE(output.Update(zeros) == ErrorCode::Success);
 
         // Only descriptor 1 of the array is written. Descriptor 0 is left alone, which is what
         // PartiallyBound allows and what the shader stays away from.
@@ -1216,22 +1246,23 @@ TEST_CASE("Forge bindless descriptor bindings", "[forge]")
             .resource_info = Forge::DescriptorSetUpdateBinding::BufferInfo{.buffer = output}});
         descriptor_set.Update(updates);
 
-        const Forge::Shader shader = Forge::Shader::FromSourceInMemory(device, k_bindless_source, {.entry_point = "main_bindless", .cache = GetShaderCache()});
+        const Forge::Shader shader =
+            Forge::Shader::FromSourceInMemory(device, k_bindless_source, {.entry_point = "main_bindless", .cache = GetShaderCache()});
         Forge::ComputePipelineDesc pipeline_desc;
         pipeline_desc.shader = shader;
         pipeline_desc.descriptor_set_layouts.PushBack(Opal::Ref<const Forge::DescriptorSetLayout>(layout));
         const Forge::Pipeline pipeline(device, pipeline_desc);
 
-        Forge::ImmediateSubmit(device, queue,
+        REQUIRE(Forge::ImmediateSubmit(device, queue,
                                [&](Forge::CommandBuffer& command_buffer)
                                {
-                                   command_buffer.CmdBindPipeline(pipeline);
-                                   command_buffer.CmdBindDescriptorSet(pipeline, descriptor_set);
-                                   command_buffer.CmdDispatch(k_element_count / k_group_size);
-                               });
+                                   REQUIRE(command_buffer.CmdBindPipeline(pipeline) == ErrorCode::Success);
+                                   REQUIRE(command_buffer.CmdBindDescriptorSet(pipeline, descriptor_set) == ErrorCode::Success);
+                                   REQUIRE(command_buffer.CmdDispatch(k_element_count / k_group_size) == ErrorCode::Success);
+                               }) == ErrorCode::Success);
 
         Opal::DynamicArray<u32> values(k_element_count);
-        output.Read({reinterpret_cast<u8*>(values.GetData()), values.GetSize() * sizeof(u32)});
+        REQUIRE(output.Read({reinterpret_cast<u8*>(values.GetData()), values.GetSize() * sizeof(u32)}) == ErrorCode::Success);
         for (i32 i = 0; i < k_element_count; ++i)
         {
             REQUIRE(values[i] == static_cast<u32>(i) + 2000);
@@ -1327,21 +1358,23 @@ TEST_CASE("Forge bindless texture array", "[forge]")
     // left where a shader reads it.
     auto make_texture = [&](u32 red)
     {
-        Forge::Texture texture(device, {.format = PixelFormat::R8G8B8A8_UNORM,
+        Forge::Texture texture = ForgeTest::Unwrap(Forge::Texture::Create(device, {.format = PixelFormat::R8G8B8A8_UNORM,
                                         .width = 1,
                                         .height = 1,
-                                        .usage = Forge::TextureUsageBits::Sampled | Forge::TextureUsageBits::TransferDestination});
+                                        .usage = Forge::TextureUsageBits::Sampled | Forge::TextureUsageBits::TransferDestination}));
         const u8 texel[4] = {static_cast<u8>(red), 0, 0, 255};
-        const Forge::Buffer staging(device, {.size = sizeof(texel), .usage = Forge::BufferUsageBits::TransferSource},
-                                    {texel, sizeof(texel)});
+        const Forge::Buffer staging = ForgeTest::Unwrap(Forge::Buffer::Create(
+            device, {.size = sizeof(texel), .usage = Forge::BufferUsageBits::TransferSource}, {texel, sizeof(texel)}));
         const Forge::BufferTextureCopyRegion region;
-        Forge::ImmediateSubmit(device, queue,
-                               [&](Forge::CommandBuffer& command_buffer)
-                               {
-                                   command_buffer.CmdTextureBarrier(Forge::TextureBarrier::ToTransferDestination(texture));
-                                   command_buffer.CmdCopyBufferToTexture(staging, texture, {&region, 1});
-                                   command_buffer.CmdTransition(texture, Forge::ImageLayout::ShaderReadOnly);
-                               });
+        REQUIRE(Forge::ImmediateSubmit(
+                    device, queue,
+                    [&](Forge::CommandBuffer& command_buffer)
+                    {
+                        REQUIRE(command_buffer.CmdTextureBarrier(Forge::TextureBarrier::ToTransferDestination(texture)) ==
+                                ErrorCode::Success);
+                        REQUIRE(command_buffer.CmdCopyBufferToTexture(staging, texture, {&region, 1}) == ErrorCode::Success);
+                        REQUIRE(command_buffer.CmdTransition(texture, Forge::ImageLayout::ShaderReadOnly) == ErrorCode::Success);
+                    }) == ErrorCode::Success);
         return texture;
     };
 
@@ -1369,15 +1402,15 @@ TEST_CASE("Forge bindless texture array", "[forge]")
         // Three of the four, so the variable count is doing something.
         Forge::DescriptorSet descriptor_set(pool, layout, k_used_descriptors);
 
-        Forge::Buffer output(device, {.size = k_element_count * sizeof(u32),
+        Forge::Buffer output = ForgeTest::Unwrap(Forge::Buffer::Create(device, {.size = k_element_count * sizeof(u32),
                                       .usage = Forge::BufferUsageBits::StorageBuffer,
-                                      .host_access = Forge::HostAccess::Random});
+                                      .host_access = Forge::HostAccess::Random}));
         const Opal::DynamicArray<u8> zeros(k_element_count * sizeof(u32));
-        output.Update(zeros);
+        REQUIRE(output.Update(zeros) == ErrorCode::Success);
 
         const Forge::Texture texture_one = make_texture(k_red_at_one);
         const Forge::Texture texture_two = make_texture(k_red_at_two);
-        const Forge::Sampler sampler(device, {.max_anisotropy = 1.0f});
+        const Forge::Sampler sampler = ForgeTest::Unwrap(Forge::Sampler::Create(device, {.max_anisotropy = 1.0f}));
 
         // Elements one and two, never element zero: a write past the first descriptor of a binding is the
         // part of this that a binding holding one descriptor could never have exercised.
@@ -1392,16 +1425,16 @@ TEST_CASE("Forge bindless texture array", "[forge]")
         pipeline_desc.descriptor_set_layouts.PushBack(Opal::Ref<const Forge::DescriptorSetLayout>(layout));
         const Forge::Pipeline pipeline(device, pipeline_desc);
 
-        Forge::ImmediateSubmit(device, queue,
+        REQUIRE(Forge::ImmediateSubmit(device, queue,
                                [&](Forge::CommandBuffer& command_buffer)
                                {
-                                   command_buffer.CmdBindPipeline(pipeline);
-                                   command_buffer.CmdBindDescriptorSet(pipeline, descriptor_set);
-                                   command_buffer.CmdDispatch(k_element_count / k_group_size);
-                               });
+                                   REQUIRE(command_buffer.CmdBindPipeline(pipeline) == ErrorCode::Success);
+                                   REQUIRE(command_buffer.CmdBindDescriptorSet(pipeline, descriptor_set) == ErrorCode::Success);
+                                   REQUIRE(command_buffer.CmdDispatch(k_element_count / k_group_size) == ErrorCode::Success);
+                               }) == ErrorCode::Success);
 
         Opal::DynamicArray<u32> values(k_element_count);
-        output.Read({reinterpret_cast<u8*>(values.GetData()), values.GetSize() * sizeof(u32)});
+        REQUIRE(output.Read({reinterpret_cast<u8*>(values.GetData()), values.GetSize() * sizeof(u32)}) == ErrorCode::Success);
         for (i32 i = 0; i < k_element_count; ++i)
         {
             // An even invocation reads element one and an odd one element two, so a shader that ignored the
@@ -1417,7 +1450,7 @@ TEST_CASE("Forge bindless texture array", "[forge]")
         // the layout declares four. Vulkan writes such an element without reporting anything.
         Forge::DescriptorSet descriptor_set(pool, layout, k_used_descriptors);
         const Forge::Texture texture = make_texture(k_red_at_one);
-        const Forge::Sampler sampler(device, {.max_anisotropy = 1.0f});
+        const Forge::Sampler sampler = ForgeTest::Unwrap(Forge::Sampler::Create(device, {.max_anisotropy = 1.0f}));
 
         REQUIRE_NOTHROW(descriptor_set.Update(1, texture, sampler, Forge::ImageLayout::ShaderReadOnly, k_used_descriptors - 1));
         REQUIRE_THROWS_AS(descriptor_set.Update(1, texture, sampler, Forge::ImageLayout::ShaderReadOnly, k_used_descriptors),
@@ -1425,7 +1458,8 @@ TEST_CASE("Forge bindless texture array", "[forge]")
         REQUIRE_THROWS_AS(descriptor_set.Update(1, texture, sampler, Forge::ImageLayout::ShaderReadOnly, k_max_descriptors),
                           Opal::Exception);
         // A binding of one descriptor has only element zero, variable count or not.
-        Forge::Buffer output(device, {.size = 4, .usage = Forge::BufferUsageBits::StorageBuffer});
+        Forge::Buffer output =
+            ForgeTest::Unwrap(Forge::Buffer::Create(device, {.size = 4, .usage = Forge::BufferUsageBits::StorageBuffer}));
         REQUIRE_THROWS_AS(descriptor_set.Update(0, output, 0, Forge::k_whole_buffer, 1), Opal::Exception);
     }
     SECTION("A variable count above the texture binding descriptor count throws")
@@ -1517,18 +1551,18 @@ TEST_CASE("Forge bindless constant buffer array", "[forge]")
     const Forge::DescriptorSetLayout layout(device, layout_desc);
     Forge::DescriptorSet descriptor_set(pool, layout);
 
-    Forge::Buffer output(device, {.size = k_element_count * sizeof(u32),
+    Forge::Buffer output = ForgeTest::Unwrap(Forge::Buffer::Create(device, {.size = k_element_count * sizeof(u32),
                                   .usage = Forge::BufferUsageBits::StorageBuffer,
-                                  .host_access = Forge::HostAccess::Random});
+                                  .host_access = Forge::HostAccess::Random}));
     const Opal::DynamicArray<u8> zeros(k_element_count * sizeof(u32));
-    output.Update(zeros);
+    REQUIRE(output.Update(zeros) == ErrorCode::Success);
 
     // One constant register each, which is the smallest a constant buffer is laid out in.
     auto make_params = [&](u32 value)
     {
         const u32 contents[4] = {value, 0, 0, 0};
-        return Forge::Buffer(device, {.size = sizeof(contents), .usage = Forge::BufferUsageBits::ConstantBuffer},
-                             {reinterpret_cast<const u8*>(contents), sizeof(contents)});
+        return ForgeTest::Unwrap(Forge::Buffer::Create(device, {.size = sizeof(contents), .usage = Forge::BufferUsageBits::ConstantBuffer},
+                             {reinterpret_cast<const u8*>(contents), sizeof(contents)}));
     };
     const Forge::Buffer params_zero = make_params(k_value_at_zero);
     const Forge::Buffer params_one = make_params(k_value_at_one);
@@ -1544,16 +1578,16 @@ TEST_CASE("Forge bindless constant buffer array", "[forge]")
     pipeline_desc.descriptor_set_layouts.PushBack(Opal::Ref<const Forge::DescriptorSetLayout>(layout));
     const Forge::Pipeline pipeline(device, pipeline_desc);
 
-    Forge::ImmediateSubmit(device, queue,
+    REQUIRE(Forge::ImmediateSubmit(device, queue,
                            [&](Forge::CommandBuffer& command_buffer)
                            {
-                               command_buffer.CmdBindPipeline(pipeline);
-                               command_buffer.CmdBindDescriptorSet(pipeline, descriptor_set);
-                               command_buffer.CmdDispatch(k_element_count / k_group_size);
-                           });
+                               REQUIRE(command_buffer.CmdBindPipeline(pipeline) == ErrorCode::Success);
+                               REQUIRE(command_buffer.CmdBindDescriptorSet(pipeline, descriptor_set) == ErrorCode::Success);
+                               REQUIRE(command_buffer.CmdDispatch(k_element_count / k_group_size) == ErrorCode::Success);
+                           }) == ErrorCode::Success);
 
     Opal::DynamicArray<u32> values(k_element_count);
-    output.Read({reinterpret_cast<u8*>(values.GetData()), values.GetSize() * sizeof(u32)});
+    REQUIRE(output.Read({reinterpret_cast<u8*>(values.GetData()), values.GetSize() * sizeof(u32)}) == ErrorCode::Success);
     for (i32 i = 0; i < k_element_count; ++i)
     {
         const u32 expected = (i % 2) == 0 ? k_value_at_zero : k_value_at_one;
@@ -1583,17 +1617,18 @@ TEST_CASE("Forge barrier vocabulary", "[forge]")
     const Opal::DynamicArray<u8> zeros(k_size);
 
     constexpr Forge::BufferUsageBits k_both_ways = Forge::BufferUsageBits::TransferSource | Forge::BufferUsageBits::TransferDestination;
-    const Forge::Buffer source(fixture.device, {.size = k_size, .usage = Forge::BufferUsageBits::TransferSource}, written);
-    const Forge::Buffer destination(fixture.device,
-                                    {.size = k_size, .usage = k_both_ways, .host_access = Forge::HostAccess::Random});
-    destination.Update(zeros);
+    const Forge::Buffer source = ForgeTest::Unwrap(
+        Forge::Buffer::Create(fixture.device, {.size = k_size, .usage = Forge::BufferUsageBits::TransferSource}, written));
+    const Forge::Buffer destination = ForgeTest::Unwrap(Forge::Buffer::Create(fixture.device,
+                                    {.size = k_size, .usage = k_both_ways, .host_access = Forge::HostAccess::Random}));
+    REQUIRE(destination.Update(zeros) == ErrorCode::Success);
 
     SECTION("A copy ordered against the host with the narrow stages and access")
     {
-        Forge::ImmediateSubmit(fixture.device, fixture.GetQueue(),
+        REQUIRE(Forge::ImmediateSubmit(fixture.device, fixture.GetQueue(),
                                [&](Forge::CommandBuffer& command_buffer)
                                {
-                                   command_buffer.CmdCopyBuffer(source, destination);
+                                   REQUIRE(command_buffer.CmdCopyBuffer(source, destination) == ErrorCode::Success);
                                    // The stages synchronization2 split out, and the access that says which
                                    // write rather than any write at all.
                                    const Forge::BufferBarrier barrier{
@@ -1602,10 +1637,10 @@ TEST_CASE("Forge barrier vocabulary", "[forge]")
                                        .before_stages_start = Forge::PipelineStageBits::Host,
                                        .before_stages_start_access = Forge::PipelineStageAccessBits::HostRead,
                                        .buffer = destination};
-                                   command_buffer.CmdBufferBarrier(barrier);
-                               });
+                                   REQUIRE(command_buffer.CmdBufferBarrier(barrier) == ErrorCode::Success);
+                               }) == ErrorCode::Success);
         Opal::DynamicArray<u8> read_back(k_size);
-        destination.Read(read_back);
+        REQUIRE(destination.Read(read_back) == ErrorCode::Success);
         REQUIRE(CountMismatches(written, read_back) == 0);
     }
     SECTION("A batch bigger than the in-place one still works")
@@ -1618,36 +1653,36 @@ TEST_CASE("Forge barrier vocabulary", "[forge]")
             barriers.PushBack(Forge::BufferBarrier::WriteThenRead(destination, Forge::PipelineStageBits::Copy,
                                                                   Forge::PipelineStageBits::ComputeShader));
         }
-        Forge::ImmediateSubmit(fixture.device, fixture.GetQueue(),
+        REQUIRE(Forge::ImmediateSubmit(fixture.device, fixture.GetQueue(),
                                [&](Forge::CommandBuffer& command_buffer)
                                {
-                                   command_buffer.CmdCopyBuffer(source, destination);
-                                   command_buffer.CmdBufferBarriers(barriers);
-                               });
+                                   REQUIRE(command_buffer.CmdCopyBuffer(source, destination) == ErrorCode::Success);
+                                   REQUIRE(command_buffer.CmdBufferBarriers(barriers) == ErrorCode::Success);
+                               }) == ErrorCode::Success);
         Opal::DynamicArray<u8> read_back(k_size);
-        destination.Read(read_back);
+        REQUIRE(destination.Read(read_back) == ErrorCode::Success);
         REQUIRE(CountMismatches(written, read_back) == 0);
     }
     SECTION("A barrier naming the mesh stage without the extension throws")
     {
-        Forge::CommandBuffer command_buffer(fixture.device, fixture.GetQueue());
-        command_buffer.Begin();
+        Forge::CommandBuffer command_buffer = ForgeTest::Unwrap(Forge::CommandBuffer::Create(fixture.device, fixture.GetQueue()));
+        REQUIRE(command_buffer.Begin() == ErrorCode::Success);
         const Forge::MemoryBarrier barrier{.stages_must_finish = Forge::PipelineStageBits::MeshShader,
                                            .stages_must_finish_access = Forge::PipelineStageAccessBits::Write,
                                            .before_stages_start = Forge::PipelineStageBits::FragmentShader,
                                            .before_stages_start_access = Forge::PipelineStageAccessBits::Read};
-        REQUIRE_THROWS_AS(command_buffer.CmdMemoryBarrier(barrier), Opal::Exception);
-        command_buffer.End();
+        REQUIRE(command_buffer.CmdMemoryBarrier(barrier) != ErrorCode::Success);
+        REQUIRE(command_buffer.End() == ErrorCode::Success);
     }
     SECTION("An ownership transfer naming one family on both sides is recorded")
     {
         // Both halves of a transfer, release and acquire, on the one queue this test has. Naming the same
         // family on both sides is a no-op transfer, which is what makes it safe to record here.
         const u32 family = fixture.GetQueue().GetQueueFamilyIndex();
-        Forge::ImmediateSubmit(fixture.device, fixture.GetQueue(),
+        REQUIRE(Forge::ImmediateSubmit(fixture.device, fixture.GetQueue(),
                                [&](Forge::CommandBuffer& command_buffer)
                                {
-                                   command_buffer.CmdCopyBuffer(source, destination);
+                                   REQUIRE(command_buffer.CmdCopyBuffer(source, destination) == ErrorCode::Success);
                                    const Forge::BufferBarrier release{
                                        .stages_must_finish = Forge::PipelineStageBits::Copy,
                                        .stages_must_finish_access = Forge::PipelineStageAccessBits::TransferWrite,
@@ -1656,10 +1691,10 @@ TEST_CASE("Forge barrier vocabulary", "[forge]")
                                        .source_queue_family = family,
                                        .destination_queue_family = family,
                                        .buffer = destination};
-                                   command_buffer.CmdBufferBarrier(release);
-                               });
+                                   REQUIRE(command_buffer.CmdBufferBarrier(release) == ErrorCode::Success);
+                               }) == ErrorCode::Success);
         Opal::DynamicArray<u8> read_back(k_size);
-        destination.Read(read_back);
+        REQUIRE(destination.Read(read_back) == ErrorCode::Success);
         REQUIRE(CountMismatches(written, read_back) == 0);
     }
 
@@ -1674,33 +1709,33 @@ TEST_CASE("Forge texture layout tracking", "[forge]")
     }
     ForgeFixture fixture;
     constexpr u32 k_mip_count = 4;  // 8 -> 4 -> 2 -> 1
-    Forge::Texture texture(fixture.device, {.format = PixelFormat::R8G8B8A8_UNORM,
+    Forge::Texture texture = ForgeTest::Unwrap(Forge::Texture::Create(fixture.device, {.format = PixelFormat::R8G8B8A8_UNORM,
                                             .width = 8,
                                             .height = 8,
                                             .mip_level_count = k_mip_count,
                                             .usage = Forge::TextureUsageBits::TransferSource |
                                                      Forge::TextureUsageBits::TransferDestination |
-                                                     Forge::TextureUsageBits::Sampled});
+                                                     Forge::TextureUsageBits::Sampled}));
 
     SECTION("A fresh texture is undefined and a transition moves every level of it")
     {
-        REQUIRE(texture.GetCurrentLayout() == Forge::ImageLayout::Undefined);
-        REQUIRE(texture.GetCurrentLayout(k_mip_count - 1) == Forge::ImageLayout::Undefined);
+        REQUIRE(ForgeTest::Unwrap(texture.GetCurrentLayout()) == Forge::ImageLayout::Undefined);
+        REQUIRE(ForgeTest::Unwrap(texture.GetCurrentLayout(k_mip_count - 1)) == Forge::ImageLayout::Undefined);
 
-        Forge::ImmediateSubmit(fixture.device, fixture.GetQueue(),
+        REQUIRE(Forge::ImmediateSubmit(fixture.device, fixture.GetQueue(),
                                [&](Forge::CommandBuffer& command_buffer)
                                {
-                                   command_buffer.CmdTransition(texture, Forge::ImageLayout::ShaderReadOnly);
-                                   REQUIRE(texture.GetCurrentLayout() == Forge::ImageLayout::ShaderReadOnly);
+                                   REQUIRE(command_buffer.CmdTransition(texture, Forge::ImageLayout::ShaderReadOnly) == ErrorCode::Success);
+                                   REQUIRE(ForgeTest::Unwrap(texture.GetCurrentLayout()) == Forge::ImageLayout::ShaderReadOnly);
                                    // The second one has no old layout to be told: it reads ShaderReadOnly off
                                    // the texture, which is the whole point of tracking it.
-                                   command_buffer.CmdTransition(texture, Forge::ImageLayout::TransferSource);
-                               });
-        REQUIRE(texture.GetCurrentLayout() == Forge::ImageLayout::TransferSource);
+                                   REQUIRE(command_buffer.CmdTransition(texture, Forge::ImageLayout::TransferSource) == ErrorCode::Success);
+                               }) == ErrorCode::Success);
+        REQUIRE(ForgeTest::Unwrap(texture.GetCurrentLayout()) == Forge::ImageLayout::TransferSource);
 
         for (u32 level = 0; level < k_mip_count; ++level)
         {
-            REQUIRE(texture.GetCurrentLayout(level) == Forge::ImageLayout::TransferSource);
+            REQUIRE(ForgeTest::Unwrap(texture.GetCurrentLayout(level)) == Forge::ImageLayout::TransferSource);
         }
     }
     SECTION("A partial range splits the grid and the whole-texture answer stops existing")
@@ -1708,24 +1743,25 @@ TEST_CASE("Forge texture layout tracking", "[forge]")
         Forge::TextureBarrier barrier = Forge::TextureBarrier::ToTransferDestination(texture, Forge::ImageLayout::Undefined);
         barrier.subresource_range.first_mip_level = 0;
         barrier.subresource_range.mip_level_count = 2;
-        Forge::ImmediateSubmit(fixture.device, fixture.GetQueue(),
-                               [&](Forge::CommandBuffer& command_buffer) { command_buffer.CmdTextureBarrier(barrier); });
+        REQUIRE(Forge::ImmediateSubmit(fixture.device, fixture.GetQueue(), [&](Forge::CommandBuffer& command_buffer)
+                                       { REQUIRE(command_buffer.CmdTextureBarrier(barrier) == ErrorCode::Success); }) ==
+                ErrorCode::Success);
 
-        REQUIRE(texture.GetCurrentLayout(0) == Forge::ImageLayout::TransferDestination);
-        REQUIRE(texture.GetCurrentLayout(1) == Forge::ImageLayout::TransferDestination);
-        REQUIRE(texture.GetCurrentLayout(2) == Forge::ImageLayout::Undefined);
-        REQUIRE(texture.GetCurrentLayout(3) == Forge::ImageLayout::Undefined);
-        REQUIRE_THROWS_AS(texture.GetCurrentLayout(), Opal::Exception);
+        REQUIRE(ForgeTest::Unwrap(texture.GetCurrentLayout(0)) == Forge::ImageLayout::TransferDestination);
+        REQUIRE(ForgeTest::Unwrap(texture.GetCurrentLayout(1)) == Forge::ImageLayout::TransferDestination);
+        REQUIRE(ForgeTest::Unwrap(texture.GetCurrentLayout(2)) == Forge::ImageLayout::Undefined);
+        REQUIRE(ForgeTest::Unwrap(texture.GetCurrentLayout(3)) == Forge::ImageLayout::Undefined);
+        REQUIRE_FALSE(texture.GetCurrentLayout().HasValue());
         // A transition of the whole texture cannot say what it is coming from either.
-        Forge::CommandBuffer command_buffer(fixture.device, fixture.GetQueue());
-        command_buffer.Begin();
-        REQUIRE_THROWS_AS(command_buffer.CmdTransition(texture, Forge::ImageLayout::ShaderReadOnly), Opal::Exception);
-        command_buffer.End();
+        Forge::CommandBuffer command_buffer = ForgeTest::Unwrap(Forge::CommandBuffer::Create(fixture.device, fixture.GetQueue()));
+        REQUIRE(command_buffer.Begin() == ErrorCode::Success);
+        REQUIRE(command_buffer.CmdTransition(texture, Forge::ImageLayout::ShaderReadOnly) != ErrorCode::Success);
+        REQUIRE(command_buffer.End() == ErrorCode::Success);
     }
     SECTION("A subresource the texture does not have throws")
     {
-        REQUIRE_THROWS_AS(texture.GetCurrentLayout(k_mip_count), Opal::Exception);
-        REQUIRE_THROWS_AS(texture.GetCurrentLayout(0, 1), Opal::Exception);
+        REQUIRE_FALSE(texture.GetCurrentLayout(k_mip_count).HasValue());
+        REQUIRE_FALSE(texture.GetCurrentLayout(0, 1).HasValue());
     }
     SECTION("A transfer out of a layout the role does not allow throws")
     {
@@ -1734,22 +1770,23 @@ TEST_CASE("Forge texture layout tracking", "[forge]")
         {
             SKIP("This device cannot blit R8G8B8A8_UNORM either way.");
         }
-        Forge::CommandBuffer command_buffer(fixture.device, fixture.GetQueue());
-        command_buffer.Begin();
-        command_buffer.CmdTransition(texture, Forge::ImageLayout::ShaderReadOnly);
+        Forge::CommandBuffer command_buffer = ForgeTest::Unwrap(Forge::CommandBuffer::Create(fixture.device, fixture.GetQueue()));
+        REQUIRE(command_buffer.Begin() == ErrorCode::Success);
+        REQUIRE(command_buffer.CmdTransition(texture, Forge::ImageLayout::ShaderReadOnly) == ErrorCode::Success);
         // Halving mip 0 into mip 1, which is what mip generation does, but with both levels left where a
         // shader reads them rather than where a transfer does.
         const Forge::TextureBlitRegion region{.source = {.mip_level = 0}, .destination = {.mip_level = 1}};
-        REQUIRE_THROWS_AS(command_buffer.CmdBlitTexture(texture, texture, {&region, 1}), Opal::Exception);
-        command_buffer.End();
+        REQUIRE(command_buffer.CmdBlitTexture(texture, texture, {&region, 1}) != ErrorCode::Success);
+        REQUIRE(command_buffer.End() == ErrorCode::Success);
     }
     SECTION("A move carries the layouts across")
     {
-        Forge::ImmediateSubmit(fixture.device, fixture.GetQueue(),
-                               [&](Forge::CommandBuffer& command_buffer)
-                               { command_buffer.CmdTransition(texture, Forge::ImageLayout::ShaderReadOnly); });
+        REQUIRE(Forge::ImmediateSubmit(
+                    fixture.device, fixture.GetQueue(), [&](Forge::CommandBuffer& command_buffer)
+                    { REQUIRE(command_buffer.CmdTransition(texture, Forge::ImageLayout::ShaderReadOnly) == ErrorCode::Success); }) ==
+                ErrorCode::Success);
         Forge::Texture moved(std::move(texture));
-        REQUIRE(moved.GetCurrentLayout() == Forge::ImageLayout::ShaderReadOnly);
+        REQUIRE(ForgeTest::Unwrap(moved.GetCurrentLayout()) == Forge::ImageLayout::ShaderReadOnly);
         REQUIRE_FALSE(texture.IsValid());  // NOLINT(bugprone-use-after-move)
     }
     REQUIRE_NO_VALIDATION_ERROR(fixture);
@@ -1765,69 +1802,67 @@ TEST_CASE("Forge debug labels", "[forge]")
     constexpr i32 k_size = 256;
     const Opal::DynamicArray<u8> written = MakeBytes(k_size, 17);
 
-    const Forge::Buffer source(fixture.device, {.size = k_size, .usage = Forge::BufferUsageBits::TransferSource}, written);
-    const Forge::Buffer destination(fixture.device, {.size = k_size,
+    const Forge::Buffer source = ForgeTest::Unwrap(
+        Forge::Buffer::Create(fixture.device, {.size = k_size, .usage = Forge::BufferUsageBits::TransferSource}, written));
+    const Forge::Buffer destination = ForgeTest::Unwrap(Forge::Buffer::Create(fixture.device, {.size = k_size,
                                                      .usage = Forge::BufferUsageBits::TransferDestination,
-                                                     .host_access = Forge::HostAccess::Random});
+                                                     .host_access = Forge::HostAccess::Random}));
 
     SECTION("A labelled region records and the work inside it still runs")
     {
-        Forge::ImmediateSubmit(fixture.device, fixture.GetQueue(),
-                               [&](Forge::CommandBuffer& command_buffer)
-                               {
-                                   command_buffer.CmdBeginDebugLabel("copy region", {0.2f, 0.6f, 1.0f, 1.0f});
-                                   command_buffer.CmdInsertDebugLabel("about to copy");
-                                   command_buffer.CmdCopyBuffer(source, destination);
-                                   command_buffer.CmdEndDebugLabel();
-                               });
+        REQUIRE(Forge::ImmediateSubmit(fixture.device, fixture.GetQueue(),
+                                       [&](Forge::CommandBuffer& command_buffer)
+                                       {
+                                           REQUIRE(command_buffer.CmdBeginDebugLabel("copy region", {0.2f, 0.6f, 1.0f, 1.0f}) ==
+                                                   ErrorCode::Success);
+                                           REQUIRE(command_buffer.CmdInsertDebugLabel("about to copy") == ErrorCode::Success);
+                                           REQUIRE(command_buffer.CmdCopyBuffer(source, destination) == ErrorCode::Success);
+                                           REQUIRE(command_buffer.CmdEndDebugLabel() == ErrorCode::Success);
+                                       }) == ErrorCode::Success);
         Opal::DynamicArray<u8> read_back(k_size);
-        destination.Read(read_back);
+        REQUIRE(destination.Read(read_back) == ErrorCode::Success);
         REQUIRE(CountMismatches(written, read_back) == 0);
     }
     SECTION("Regions nest")
     {
-        Forge::ImmediateSubmit(fixture.device, fixture.GetQueue(),
+        REQUIRE(Forge::ImmediateSubmit(fixture.device, fixture.GetQueue(),
                                [&](Forge::CommandBuffer& command_buffer)
                                {
-                                   command_buffer.CmdBeginDebugLabel("frame");
-                                   command_buffer.CmdBeginDebugLabel("copy pass");
-                                   command_buffer.CmdCopyBuffer(source, destination);
-                                   command_buffer.CmdEndDebugLabel();
-                                   command_buffer.CmdEndDebugLabel();
-                               });
+                                   REQUIRE(command_buffer.CmdBeginDebugLabel("frame") == ErrorCode::Success);
+                                   REQUIRE(command_buffer.CmdBeginDebugLabel("copy pass") == ErrorCode::Success);
+                                   REQUIRE(command_buffer.CmdCopyBuffer(source, destination) == ErrorCode::Success);
+                                   REQUIRE(command_buffer.CmdEndDebugLabel() == ErrorCode::Success);
+                                   REQUIRE(command_buffer.CmdEndDebugLabel() == ErrorCode::Success);
+                               }) == ErrorCode::Success);
         Opal::DynamicArray<u8> read_back(k_size);
-        destination.Read(read_back);
+        REQUIRE(destination.Read(read_back) == ErrorCode::Success);
         REQUIRE(CountMismatches(written, read_back) == 0);
     }
     SECTION("ScopedDebugLabel closes the region it opened")
     {
-        Forge::ImmediateSubmit(fixture.device, fixture.GetQueue(),
+        REQUIRE(Forge::ImmediateSubmit(fixture.device, fixture.GetQueue(),
                                [&](Forge::CommandBuffer& command_buffer)
                                {
                                    const Forge::ScopedDebugLabel scope(command_buffer, "copy pass", {1.0f, 0.5f, 0.0f, 1.0f});
-                                   command_buffer.CmdCopyBuffer(source, destination);
-                               });
+                                   REQUIRE(command_buffer.CmdCopyBuffer(source, destination) == ErrorCode::Success);
+                               }) == ErrorCode::Success);
         Opal::DynamicArray<u8> read_back(k_size);
-        destination.Read(read_back);
+        REQUIRE(destination.Read(read_back) == ErrorCode::Success);
         REQUIRE(CountMismatches(written, read_back) == 0);
     }
-    SECTION("A region left open by a throw is still closed")
+    SECTION("A region left open by a refused command is still closed")
     {
         // The point of the guard: the copy below is rejected while it is recorded, and the region has to end
         // on the way out anyway. A region left open is what the layer would report at End().
-        const Forge::Buffer no_transfer(fixture.device, {.size = k_size, .usage = Forge::BufferUsageBits::ConstantBuffer});
-        Forge::CommandBuffer command_buffer(fixture.device, fixture.GetQueue());
-        command_buffer.Begin();
-        try
+        const Forge::Buffer no_transfer =
+            ForgeTest::Unwrap(Forge::Buffer::Create(fixture.device, {.size = k_size, .usage = Forge::BufferUsageBits::ConstantBuffer}));
+        Forge::CommandBuffer command_buffer = ForgeTest::Unwrap(Forge::CommandBuffer::Create(fixture.device, fixture.GetQueue()));
+        REQUIRE(command_buffer.Begin() == ErrorCode::Success);
         {
             const Forge::ScopedDebugLabel scope(command_buffer, "doomed pass");
-            command_buffer.CmdCopyBuffer(no_transfer, destination);
-            FAIL("The copy should have thrown.");
+            REQUIRE(command_buffer.CmdCopyBuffer(no_transfer, destination) == ErrorCode::InvalidArgument);
         }
-        catch (const Opal::Exception&)
-        {
-        }
-        command_buffer.End();
+        REQUIRE(command_buffer.End() == ErrorCode::Success);
         // Not submitted: work the layer rejected while it was recorded is undefined behaviour once it runs.
     }
     REQUIRE_NO_VALIDATION_ERROR(fixture);
@@ -1843,10 +1878,10 @@ TEST_CASE("Forge timestamp queries", "[forge]")
     constexpr i32 k_element_count = 4096;
     constexpr i32 k_group_size = 64;
 
-    const Forge::Buffer output(fixture.device, {.size = k_element_count * sizeof(u32),
+    const Forge::Buffer output = ForgeTest::Unwrap(Forge::Buffer::Create(fixture.device, {.size = k_element_count * sizeof(u32),
                                                 .usage = Forge::BufferUsageBits::StorageBuffer,
                                                 .host_access = Forge::HostAccess::Random,
-                                                .use_device_address = true});
+                                                .use_device_address = true}));
     const Forge::Shader compute_shader =
         Forge::Shader::FromSourceInMemory(fixture.device, k_compute_source, {.entry_point = "main_compute", .cache = GetShaderCache()});
     Forge::ComputePipelineDesc pipeline_desc;
@@ -1859,14 +1894,14 @@ TEST_CASE("Forge timestamp queries", "[forge]")
     // The dispatch every measurement below wraps, so what differs between them is only how it is timed.
     auto record_dispatch = [&](Forge::CommandBuffer& command_buffer)
     {
-        command_buffer.CmdBindPipeline(pipeline);
-        command_buffer.CmdPushConstants(pipeline, ShaderTypeBits::Compute, Opal::AsBytes(output_address));
-        command_buffer.CmdDispatch(k_element_count / k_group_size);
+        REQUIRE(command_buffer.CmdBindPipeline(pipeline) == ErrorCode::Success);
+        REQUIRE(command_buffer.CmdPushConstants(pipeline, ShaderTypeBits::Compute, Opal::AsBytes(output_address)) == ErrorCode::Success);
+        REQUIRE(command_buffer.CmdDispatch(k_element_count / k_group_size) == ErrorCode::Success);
     };
 
     SECTION("A span around a dispatch comes back as a plausible duration")
     {
-        Forge::TimestampQueryPool pool(fixture.device, {.query_count = 2});
+        Forge::TimestampQueryPool pool = ForgeTest::Unwrap(Forge::TimestampQueryPool::Create(fixture.device, {.query_count = 2}));
         REQUIRE(pool.IsValid());
         REQUIRE(pool.GetQueryCount() == 2);
         Forge::SetDebugName(fixture.device, pool, "dispatch timing");
@@ -1874,50 +1909,54 @@ TEST_CASE("Forge timestamp queries", "[forge]")
         // A pool that has been reset and not yet written has nothing to read, which is what the first frames
         // of a per-frame pool look like and the reason a frame loop asks rather than blocking. Reading one
         // that was never reset at all is not this case: that is undefined, and the layer says so.
-        Forge::ImmediateSubmit(fixture.device, fixture.GetQueue(),
-                               [&](Forge::CommandBuffer& command_buffer) { command_buffer.CmdResetQueryPool(pool); });
+        REQUIRE(Forge::ImmediateSubmit(fixture.device, fixture.GetQueue(), [&](Forge::CommandBuffer& command_buffer)
+                                       { REQUIRE(command_buffer.CmdResetQueryPool(pool) == ErrorCode::Success); }) == ErrorCode::Success);
         f64 too_early_ms = -1.0;
-        REQUIRE_FALSE(pool.TryGetElapsedMilliseconds(0, 1, too_early_ms));
+        REQUIRE_FALSE(ForgeTest::Unwrap(pool.TryGetElapsedMilliseconds(0, 1, too_early_ms)));
         REQUIRE(too_early_ms == -1.0);
 
-        Forge::ImmediateSubmit(fixture.device, fixture.GetQueue(),
+        REQUIRE(Forge::ImmediateSubmit(fixture.device, fixture.GetQueue(),
                                [&](Forge::CommandBuffer& command_buffer)
                                {
-                                   command_buffer.CmdResetQueryPool(pool);
-                                   command_buffer.CmdWriteTimestamp(pool, 0, Forge::PipelineStageBits::PipelineStart);
+                                   REQUIRE(command_buffer.CmdResetQueryPool(pool) == ErrorCode::Success);
+                                   REQUIRE(command_buffer.CmdWriteTimestamp(pool, 0, Forge::PipelineStageBits::PipelineStart) ==
+                                           ErrorCode::Success);
                                    record_dispatch(command_buffer);
-                                   command_buffer.CmdWriteTimestamp(pool, 1, Forge::PipelineStageBits::PipelineEnd);
-                               });
+                                   REQUIRE(command_buffer.CmdWriteTimestamp(pool, 1, Forge::PipelineStageBits::PipelineEnd) ==
+                                           ErrorCode::Success);
+                               }) == ErrorCode::Success);
 
         Opal::InPlaceArray<u64, 2> ticks;
-        pool.GetResults({ticks.GetData(), 2});
+        REQUIRE(pool.GetResults({ticks.GetData(), 2}) == ErrorCode::Success);
         INFO("ticks " << ticks[0] << " -> " << ticks[1] << ", period " << pool.GetTimestampPeriod() << " ns");
         REQUIRE(ticks[1] >= ticks[0]);
 
         // ImmediateSubmit has already waited, so the result is there without blocking.
         f64 elapsed_ms = -1.0;
-        REQUIRE(pool.TryGetElapsedMilliseconds(0, 1, elapsed_ms));
+        REQUIRE(ForgeTest::Unwrap(pool.TryGetElapsedMilliseconds(0, 1, elapsed_ms)));
         INFO("elapsed " << elapsed_ms << " ms");
         REQUIRE(elapsed_ms >= 0.0);
         // A dispatch this small cannot take a second on a device that finished it, so a figure above one
         // says the period or the valid bits were applied wrong rather than that the device was slow.
         REQUIRE(elapsed_ms < 1000.0);
-        REQUIRE(elapsed_ms == pool.GetElapsedMilliseconds(0, 1));
+        REQUIRE(elapsed_ms == ForgeTest::Unwrap(pool.GetElapsedMilliseconds(0, 1)));
     }
     SECTION("Two writes into a drained pipeline measure the dispatch on its own")
     {
         // The other pattern: PipelineEnd on both sides, so the write in front waits for everything before it
         // and the difference covers the dispatch and nothing else.
-        Forge::TimestampQueryPool pool(fixture.device, {.query_count = 2});
-        Forge::ImmediateSubmit(fixture.device, fixture.GetQueue(),
+        Forge::TimestampQueryPool pool = ForgeTest::Unwrap(Forge::TimestampQueryPool::Create(fixture.device, {.query_count = 2}));
+        REQUIRE(Forge::ImmediateSubmit(fixture.device, fixture.GetQueue(),
                                [&](Forge::CommandBuffer& command_buffer)
                                {
-                                   command_buffer.CmdResetQueryPool(pool);
-                                   command_buffer.CmdWriteTimestamp(pool, 0, Forge::PipelineStageBits::PipelineEnd);
+                                   REQUIRE(command_buffer.CmdResetQueryPool(pool) == ErrorCode::Success);
+                                   REQUIRE(command_buffer.CmdWriteTimestamp(pool, 0, Forge::PipelineStageBits::PipelineEnd) ==
+                                           ErrorCode::Success);
                                    record_dispatch(command_buffer);
-                                   command_buffer.CmdWriteTimestamp(pool, 1, Forge::PipelineStageBits::PipelineEnd);
-                               });
-        const f64 elapsed_ms = pool.GetElapsedMilliseconds(0, 1);
+                                   REQUIRE(command_buffer.CmdWriteTimestamp(pool, 1, Forge::PipelineStageBits::PipelineEnd) ==
+                                           ErrorCode::Success);
+                               }) == ErrorCode::Success);
+        const f64 elapsed_ms = ForgeTest::Unwrap(pool.GetElapsedMilliseconds(0, 1));
         INFO("isolated " << elapsed_ms << " ms");
         REQUIRE(elapsed_ms >= 0.0);
         REQUIRE(elapsed_ms < 1000.0);
@@ -1926,49 +1965,50 @@ TEST_CASE("Forge timestamp queries", "[forge]")
     {
         // Reading the two as one range would report the whole range unavailable, since the middle was never
         // written, and a measurement that never arrives is indistinguishable from a device that is behind.
-        Forge::TimestampQueryPool pool(fixture.device, {.query_count = 4});
-        Forge::ImmediateSubmit(fixture.device, fixture.GetQueue(),
+        Forge::TimestampQueryPool pool = ForgeTest::Unwrap(Forge::TimestampQueryPool::Create(fixture.device, {.query_count = 4}));
+        REQUIRE(Forge::ImmediateSubmit(fixture.device, fixture.GetQueue(),
                                [&](Forge::CommandBuffer& command_buffer)
                                {
-                                   command_buffer.CmdResetQueryPool(pool);
-                                   command_buffer.CmdWriteTimestamp(pool, 0, Forge::PipelineStageBits::PipelineStart);
+                                   REQUIRE(command_buffer.CmdResetQueryPool(pool) == ErrorCode::Success);
+                                   REQUIRE(command_buffer.CmdWriteTimestamp(pool, 0, Forge::PipelineStageBits::PipelineStart) ==
+                                           ErrorCode::Success);
                                    record_dispatch(command_buffer);
-                                   command_buffer.CmdWriteTimestamp(pool, 3, Forge::PipelineStageBits::PipelineEnd);
-                               });
+                                   REQUIRE(command_buffer.CmdWriteTimestamp(pool, 3, Forge::PipelineStageBits::PipelineEnd) ==
+                                           ErrorCode::Success);
+                               }) == ErrorCode::Success);
         f64 elapsed_ms = -1.0;
-        REQUIRE(pool.TryGetElapsedMilliseconds(0, 3, elapsed_ms));
+        REQUIRE(ForgeTest::Unwrap(pool.TryGetElapsedMilliseconds(0, 3, elapsed_ms)));
         REQUIRE(elapsed_ms >= 0.0);
     }
     SECTION("Resetting from the host needs the feature")
     {
-        const Forge::TimestampQueryPool pool(fixture.device, {.query_count = 2});
-        REQUIRE_THROWS_AS(pool.Reset(), Opal::Exception);
+        const Forge::TimestampQueryPool pool = ForgeTest::Unwrap(Forge::TimestampQueryPool::Create(fixture.device, {.query_count = 2}));
+        REQUIRE(pool.Reset() != ErrorCode::Success);
     }
     SECTION("A pool that asks for no queries throws")
     {
-        REQUIRE_THROWS_AS(Forge::TimestampQueryPool(fixture.device, {.query_count = 0}), Opal::Exception);
+        REQUIRE_FALSE(Forge::TimestampQueryPool::Create(fixture.device, {.query_count = 0}).HasValue());
     }
     SECTION("A query past the end of the pool throws")
     {
-        Forge::TimestampQueryPool pool(fixture.device, {.query_count = 2});
-        Forge::CommandBuffer command_buffer(fixture.device, fixture.GetQueue());
-        command_buffer.Begin();
-        command_buffer.CmdResetQueryPool(pool);
-        REQUIRE_THROWS_AS(command_buffer.CmdWriteTimestamp(pool, 2), Opal::Exception);
-        REQUIRE_THROWS_AS(command_buffer.CmdResetQueryPool(pool, 1, 2), Opal::Exception);
-        command_buffer.End();
+        Forge::TimestampQueryPool pool = ForgeTest::Unwrap(Forge::TimestampQueryPool::Create(fixture.device, {.query_count = 2}));
+        Forge::CommandBuffer command_buffer = ForgeTest::Unwrap(Forge::CommandBuffer::Create(fixture.device, fixture.GetQueue()));
+        REQUIRE(command_buffer.Begin() == ErrorCode::Success);
+        REQUIRE(command_buffer.CmdResetQueryPool(pool) == ErrorCode::Success);
+        REQUIRE(command_buffer.CmdWriteTimestamp(pool, 2) != ErrorCode::Success);
+        REQUIRE(command_buffer.CmdResetQueryPool(pool, 1, 2) != ErrorCode::Success);
+        REQUIRE(command_buffer.End() == ErrorCode::Success);
     }
     SECTION("A timestamp naming more than one stage throws")
     {
-        Forge::TimestampQueryPool pool(fixture.device, {.query_count = 2});
-        Forge::CommandBuffer command_buffer(fixture.device, fixture.GetQueue());
-        command_buffer.Begin();
-        command_buffer.CmdResetQueryPool(pool);
-        REQUIRE_THROWS_AS(command_buffer.CmdWriteTimestamp(pool, 0, Forge::PipelineStageBits::VertexShader |
-                                                                        Forge::PipelineStageBits::FragmentShader),
-                          Opal::Exception);
-        REQUIRE_THROWS_AS(command_buffer.CmdWriteTimestamp(pool, 0, Forge::PipelineStageBits::None), Opal::Exception);
-        command_buffer.End();
+        Forge::TimestampQueryPool pool = ForgeTest::Unwrap(Forge::TimestampQueryPool::Create(fixture.device, {.query_count = 2}));
+        Forge::CommandBuffer command_buffer = ForgeTest::Unwrap(Forge::CommandBuffer::Create(fixture.device, fixture.GetQueue()));
+        REQUIRE(command_buffer.Begin() == ErrorCode::Success);
+        REQUIRE(command_buffer.CmdResetQueryPool(pool) == ErrorCode::Success);
+        REQUIRE(command_buffer.CmdWriteTimestamp(pool, 0, Forge::PipelineStageBits::VertexShader |
+                                                                        Forge::PipelineStageBits::FragmentShader) != ErrorCode::Success);
+        REQUIRE(command_buffer.CmdWriteTimestamp(pool, 0, Forge::PipelineStageBits::None) != ErrorCode::Success);
+        REQUIRE(command_buffer.End() == ErrorCode::Success);
     }
     REQUIRE_NO_VALIDATION_ERROR(fixture);
 }
@@ -1983,27 +2023,30 @@ TEST_CASE("Forge timestamp queries reset from the host", "[forge]")
 
     constexpr i32 k_size = 256;
     const Opal::DynamicArray<u8> written = MakeBytes(k_size, 41);
-    const Forge::Buffer source(fixture.device, {.size = k_size, .usage = Forge::BufferUsageBits::TransferSource}, written);
-    const Forge::Buffer destination(fixture.device, {.size = k_size, .usage = Forge::BufferUsageBits::TransferDestination});
+    const Forge::Buffer source = ForgeTest::Unwrap(
+        Forge::Buffer::Create(fixture.device, {.size = k_size, .usage = Forge::BufferUsageBits::TransferSource}, written));
+    const Forge::Buffer destination =
+        ForgeTest::Unwrap(Forge::Buffer::Create(fixture.device, {.size = k_size, .usage = Forge::BufferUsageBits::TransferDestination}));
 
-    const Forge::TimestampQueryPool pool(fixture.device, {.query_count = 2});
+    const Forge::TimestampQueryPool pool = ForgeTest::Unwrap(Forge::TimestampQueryPool::Create(fixture.device, {.query_count = 2}));
     // The whole point of the host side: the pool is made ready without a command buffer having to carry it.
-    pool.Reset();
-    Forge::ImmediateSubmit(fixture.device, fixture.GetQueue(),
-                           [&](Forge::CommandBuffer& command_buffer)
-                           {
-                               command_buffer.CmdWriteTimestamp(pool, 0, Forge::PipelineStageBits::PipelineStart);
-                               command_buffer.CmdCopyBuffer(source, destination);
-                               command_buffer.CmdWriteTimestamp(pool, 1, Forge::PipelineStageBits::PipelineEnd);
-                           });
+    REQUIRE(pool.Reset() == ErrorCode::Success);
+    REQUIRE(Forge::ImmediateSubmit(
+                fixture.device, fixture.GetQueue(),
+                [&](Forge::CommandBuffer& command_buffer)
+                {
+                    REQUIRE(command_buffer.CmdWriteTimestamp(pool, 0, Forge::PipelineStageBits::PipelineStart) == ErrorCode::Success);
+                    REQUIRE(command_buffer.CmdCopyBuffer(source, destination) == ErrorCode::Success);
+                    REQUIRE(command_buffer.CmdWriteTimestamp(pool, 1, Forge::PipelineStageBits::PipelineEnd) == ErrorCode::Success);
+                }) == ErrorCode::Success);
     f64 elapsed_ms = -1.0;
-    REQUIRE(pool.TryGetElapsedMilliseconds(0, 1, elapsed_ms));
+    REQUIRE(ForgeTest::Unwrap(pool.TryGetElapsedMilliseconds(0, 1, elapsed_ms)));
     REQUIRE(elapsed_ms >= 0.0);
 
     // Reset again and the results are gone, which is what makes a per-frame pool reusable.
-    pool.Reset();
+    REQUIRE(pool.Reset() == ErrorCode::Success);
     f64 after_reset_ms = -1.0;
-    REQUIRE_FALSE(pool.TryGetElapsedMilliseconds(0, 1, after_reset_ms));
+    REQUIRE_FALSE(ForgeTest::Unwrap(pool.TryGetElapsedMilliseconds(0, 1, after_reset_ms)));
     REQUIRE(after_reset_ms == -1.0);
 
     REQUIRE_NO_VALIDATION_ERROR(fixture);
@@ -2051,32 +2094,32 @@ TEST_CASE("Forge single resource descriptor updates", "[forge]")
     }
     SECTION("A buffer written the short way reaches the shader")
     {
-        const Forge::Buffer output(fixture.device, {.size = k_element_count * sizeof(u32),
+        const Forge::Buffer output = ForgeTest::Unwrap(Forge::Buffer::Create(fixture.device, {.size = k_element_count * sizeof(u32),
                                                     .usage = Forge::BufferUsageBits::StorageBuffer,
-                                                    .host_access = Forge::HostAccess::Random});
+                                                    .host_access = Forge::HostAccess::Random}));
         const Opal::DynamicArray<u8> zeros(k_element_count * sizeof(u32));
-        output.Update(zeros);
+        REQUIRE(output.Update(zeros) == ErrorCode::Success);
 
         Forge::DescriptorSet set(pool, layout);
         set.Update(0, output);
 
-        const Forge::Shader shader =
-            Forge::Shader::FromSourceInMemory(fixture.device, k_descriptor_source, {.entry_point = "main_descriptor", .cache = GetShaderCache()});
+        const Forge::Shader shader = Forge::Shader::FromSourceInMemory(fixture.device, k_descriptor_source,
+                                                                       {.entry_point = "main_descriptor", .cache = GetShaderCache()});
         Forge::ComputePipelineDesc pipeline_desc;
         pipeline_desc.shader = shader;
         pipeline_desc.descriptor_set_layouts.PushBack(Opal::Ref<const Forge::DescriptorSetLayout>(layout));
         const Forge::Pipeline pipeline(fixture.device, pipeline_desc);
 
-        Forge::ImmediateSubmit(fixture.device, fixture.GetQueue(),
+        REQUIRE(Forge::ImmediateSubmit(fixture.device, fixture.GetQueue(),
                                [&](Forge::CommandBuffer& command_buffer)
                                {
-                                   command_buffer.CmdBindPipeline(pipeline);
-                                   command_buffer.CmdBindDescriptorSet(pipeline, set);
-                                   command_buffer.CmdDispatch(k_element_count / k_group_size);
-                               });
+                                   REQUIRE(command_buffer.CmdBindPipeline(pipeline) == ErrorCode::Success);
+                                   REQUIRE(command_buffer.CmdBindDescriptorSet(pipeline, set) == ErrorCode::Success);
+                                   REQUIRE(command_buffer.CmdDispatch(k_element_count / k_group_size) == ErrorCode::Success);
+                               }) == ErrorCode::Success);
 
         Opal::DynamicArray<u32> values(k_element_count);
-        output.Read({reinterpret_cast<u8*>(values.GetData()), values.GetSize() * sizeof(u32)});
+        REQUIRE(output.Read({reinterpret_cast<u8*>(values.GetData()), values.GetSize() * sizeof(u32)}) == ErrorCode::Success);
         for (i32 i = 0; i < k_element_count; ++i)
         {
             REQUIRE(values[i] == static_cast<u32>(i) + 7);
@@ -2084,19 +2127,19 @@ TEST_CASE("Forge single resource descriptor updates", "[forge]")
     }
     SECTION("A texture written the short way records without complaint")
     {
-        const Forge::Texture texture(fixture.device, {.format = PixelFormat::R8G8B8A8_UNORM,
+        const Forge::Texture texture = ForgeTest::Unwrap(Forge::Texture::Create(fixture.device, {.format = PixelFormat::R8G8B8A8_UNORM,
                                                       .width = 4,
                                                       .height = 4,
-                                                      .usage = Forge::TextureUsageBits::Sampled});
-        const Forge::Sampler sampler(fixture.device, {.max_anisotropy = 1.0f});
+                                                      .usage = Forge::TextureUsageBits::Sampled}));
+        const Forge::Sampler sampler = ForgeTest::Unwrap(Forge::Sampler::Create(fixture.device, {.max_anisotropy = 1.0f}));
 
         Forge::DescriptorSet set(pool, layout);
         set.Update(2, texture, sampler);
     }
     SECTION("A range past the end of the buffer throws")
     {
-        const Forge::Buffer small(fixture.device,
-                                  {.size = 256, .usage = Forge::BufferUsageBits::StorageBuffer});
+        const Forge::Buffer small = ForgeTest::Unwrap(Forge::Buffer::Create(fixture.device,
+                                  {.size = 256, .usage = Forge::BufferUsageBits::StorageBuffer}));
         Forge::DescriptorSet set(pool, layout);
         REQUIRE_THROWS_AS(set.Update(0, small, 128, 256), Opal::Exception);
         REQUIRE_THROWS_AS(set.Update(0, small, 0, 0), Opal::Exception);
@@ -2110,8 +2153,8 @@ TEST_CASE("Forge single resource descriptor updates", "[forge]")
         REQUIRE(set.IsValid());
         REQUIRE(set.GetBindingDescriptorType(0) == Forge::DescriptorType::StorageBuffer);
 
-        const Forge::Buffer buffer(fixture.device,
-                                   {.size = 256, .usage = Forge::BufferUsageBits::StorageBuffer});
+        const Forge::Buffer buffer = ForgeTest::Unwrap(Forge::Buffer::Create(fixture.device,
+                                   {.size = 256, .usage = Forge::BufferUsageBits::StorageBuffer}));
         set.Update(0, buffer);
 
         const Forge::DescriptorSet moved(std::move(set));
@@ -2122,8 +2165,8 @@ TEST_CASE("Forge single resource descriptor updates", "[forge]")
     }
     SECTION("Writing a binding the layout does not have throws")
     {
-        const Forge::Buffer buffer(fixture.device,
-                                   {.size = 256, .usage = Forge::BufferUsageBits::StorageBuffer});
+        const Forge::Buffer buffer = ForgeTest::Unwrap(Forge::Buffer::Create(fixture.device,
+                                   {.size = 256, .usage = Forge::BufferUsageBits::StorageBuffer}));
         Forge::DescriptorSet set(pool, layout);
         REQUIRE_THROWS_AS(set.Update(3, buffer), Opal::Exception);
     }
@@ -2140,35 +2183,36 @@ TEST_CASE("Forge rendering without a depth attachment", "[forge]")
     constexpr i32 k_side = 4;
     constexpr PixelFormat k_format = PixelFormat::R8G8B8A8_UNORM;
 
-    Forge::Texture color(fixture.device, {.format = k_format,
+    Forge::Texture color = ForgeTest::Unwrap(Forge::Texture::Create(fixture.device, {.format = k_format,
                                           .width = k_side,
                                           .height = k_side,
                                           .usage = Forge::TextureUsageBits::ColorAttachment |
-                                                   Forge::TextureUsageBits::TransferSource});
+                                                   Forge::TextureUsageBits::TransferSource}));
 
     SECTION("An absent depth attachment renders colour only")
     {
         // No pipeline and no draw: the load operation is what writes the attachment, so what comes back says
         // the pass ran with a colour attachment and nothing else.
-        Forge::ImmediateSubmit(fixture.device, fixture.GetQueue(),
-                               [&](Forge::CommandBuffer& command_buffer)
-                               {
-                                   command_buffer.CmdTextureBarrier(Forge::TextureBarrier::ToColorAttachment(color));
-                                   const Forge::RenderingDesc rendering_desc{
-                                       .render_area_extent = {k_side, k_side},
-                                       .color_attachments = {Forge::RenderingAttachmentDesc{
-                                           .texture = color,
-                                           .load_operation = Forge::AttachmentLoadOperation::Clear,
-                                           .store_operation = Forge::AttachmentStoreOperation::Store,
-                                           .clear_value = Vector4f{1.0f, 0.0f, 1.0f, 1.0f}}}};
-                                   command_buffer.CmdBeginRendering(rendering_desc);
-                                   command_buffer.CmdEndRendering();
-                               });
+        REQUIRE(Forge::ImmediateSubmit(
+                    fixture.device, fixture.GetQueue(),
+                    [&](Forge::CommandBuffer& command_buffer)
+                    {
+                        REQUIRE(command_buffer.CmdTextureBarrier(Forge::TextureBarrier::ToColorAttachment(color)) == ErrorCode::Success);
+                        const Forge::RenderingDesc rendering_desc{
+                            .render_area_extent = {k_side, k_side},
+                            .color_attachments = {Forge::RenderingAttachmentDesc{.texture = color,
+                                                                                 .load_operation = Forge::AttachmentLoadOperation::Clear,
+                                                                                 .store_operation = Forge::AttachmentStoreOperation::Store,
+                                                                                 .clear_value = Vector4f{1.0f, 0.0f, 1.0f, 1.0f}}}};
+                        REQUIRE(command_buffer.CmdBeginRendering(rendering_desc) == ErrorCode::Success);
+                        REQUIRE(command_buffer.CmdEndRendering() == ErrorCode::Success);
+                    }) == ErrorCode::Success);
 
         Opal::DynamicArray<u8> pixels(k_side * k_side * 4);
         // Left in TransferSource rather than the ShaderReadOnly this defaults to: that layout needs the
         // Sampled usage, and this texture is an attachment nothing ever samples.
-        Forge::ReadBackTexture(fixture.device, fixture.GetQueue(), color, pixels, 0, Forge::ImageLayout::TransferSource);
+        REQUIRE(Forge::ReadBackTexture(fixture.device, fixture.GetQueue(), color, pixels, 0, Forge::ImageLayout::TransferSource) ==
+                ErrorCode::Success);
         // Zero and one are the only channel values a UNORM format converts exactly, so this compares
         // what was cleared rather than how the driver rounds.
         for (i32 i = 0; i < pixels.GetSize(); i += 4)
@@ -2184,15 +2228,15 @@ TEST_CASE("Forge rendering without a depth attachment", "[forge]")
         // What the old convention expressed as "no depth". Now that absent says it, a present attachment
         // pointing at nothing is a filled-in desc somebody forgot to finish. The colour attachment is
         // transitioned first so that the throw is the depth one and not the layout check on the colour.
-        Forge::CommandBuffer command_buffer(fixture.device, fixture.GetQueue());
-        command_buffer.Begin();
-        command_buffer.CmdTextureBarrier(Forge::TextureBarrier::ToColorAttachment(color));
+        Forge::CommandBuffer command_buffer = ForgeTest::Unwrap(Forge::CommandBuffer::Create(fixture.device, fixture.GetQueue()));
+        REQUIRE(command_buffer.Begin() == ErrorCode::Success);
+        REQUIRE(command_buffer.CmdTextureBarrier(Forge::TextureBarrier::ToColorAttachment(color)) == ErrorCode::Success);
         const Forge::RenderingDesc rendering_desc{
             .render_area_extent = {k_side, k_side},
             .color_attachments = {Forge::RenderingAttachmentDesc{.texture = color}},
             .depth_attachment = Forge::RenderingAttachmentDesc{}};
-        REQUIRE_THROWS_AS(command_buffer.CmdBeginRendering(rendering_desc), Opal::Exception);
-        command_buffer.End();
+        REQUIRE(command_buffer.CmdBeginRendering(rendering_desc) != ErrorCode::Success);
+        REQUIRE(command_buffer.End() == ErrorCode::Success);
     }
     SECTION("A colour clear value on a depth attachment throws")
     {
@@ -2200,20 +2244,20 @@ TEST_CASE("Forge rendering without a depth attachment", "[forge]")
         // same union: the depth attachment would have cleared to whatever the first two floats of the vector
         // mean as a depth and a stencil. A depth attachment with no clear value written is the same mistake,
         // since the default holds a colour and Clear is the default load operation.
-        Forge::Texture depth(fixture.device, {.format = PixelFormat::D32_SFLOAT,
+        Forge::Texture depth = ForgeTest::Unwrap(Forge::Texture::Create(fixture.device, {.format = PixelFormat::D32_SFLOAT,
                                               .width = k_side,
                                               .height = k_side,
-                                              .usage = Forge::TextureUsageBits::DepthStencilAttachment});
-        Forge::CommandBuffer command_buffer(fixture.device, fixture.GetQueue());
-        command_buffer.Begin();
-        command_buffer.CmdTextureBarrier(Forge::TextureBarrier::ToColorAttachment(color));
-        command_buffer.CmdTextureBarrier(Forge::TextureBarrier::ToDepthStencilAttachment(depth));
+                                              .usage = Forge::TextureUsageBits::DepthStencilAttachment}));
+        Forge::CommandBuffer command_buffer = ForgeTest::Unwrap(Forge::CommandBuffer::Create(fixture.device, fixture.GetQueue()));
+        REQUIRE(command_buffer.Begin() == ErrorCode::Success);
+        REQUIRE(command_buffer.CmdTextureBarrier(Forge::TextureBarrier::ToColorAttachment(color)) == ErrorCode::Success);
+        REQUIRE(command_buffer.CmdTextureBarrier(Forge::TextureBarrier::ToDepthStencilAttachment(depth)) == ErrorCode::Success);
         const Forge::RenderingDesc rendering_desc{
             .render_area_extent = {k_side, k_side},
             .color_attachments = {Forge::RenderingAttachmentDesc{.texture = color}},
             .depth_attachment = Forge::RenderingAttachmentDesc{.texture = depth,
                                                                .clear_value = Vector4f{0.0f, 0.0f, 0.0f, 1.0f}}};
-        REQUIRE_THROWS_AS(command_buffer.CmdBeginRendering(rendering_desc), Opal::Exception);
+        REQUIRE(command_buffer.CmdBeginRendering(rendering_desc) != ErrorCode::Success);
 
         // The same attachment loading instead of clearing is fine: nothing reads the value, so nothing can
         // read the wrong member of it.
@@ -2222,21 +2266,21 @@ TEST_CASE("Forge rendering without a depth attachment", "[forge]")
             .color_attachments = {Forge::RenderingAttachmentDesc{.texture = color}},
             .depth_attachment = Forge::RenderingAttachmentDesc{.texture = depth,
                                                                .load_operation = Forge::AttachmentLoadOperation::Load}};
-        command_buffer.CmdBeginRendering(load_desc);
-        command_buffer.CmdEndRendering();
-        command_buffer.End();
+        REQUIRE(command_buffer.CmdBeginRendering(load_desc) == ErrorCode::Success);
+        REQUIRE(command_buffer.CmdEndRendering() == ErrorCode::Success);
+        REQUIRE(command_buffer.End() == ErrorCode::Success);
     }
     SECTION("A depth clear value on a colour attachment throws")
     {
-        Forge::CommandBuffer command_buffer(fixture.device, fixture.GetQueue());
-        command_buffer.Begin();
-        command_buffer.CmdTextureBarrier(Forge::TextureBarrier::ToColorAttachment(color));
+        Forge::CommandBuffer command_buffer = ForgeTest::Unwrap(Forge::CommandBuffer::Create(fixture.device, fixture.GetQueue()));
+        REQUIRE(command_buffer.Begin() == ErrorCode::Success);
+        REQUIRE(command_buffer.CmdTextureBarrier(Forge::TextureBarrier::ToColorAttachment(color)) == ErrorCode::Success);
         const Forge::RenderingDesc rendering_desc{
             .render_area_extent = {k_side, k_side},
             .color_attachments = {Forge::RenderingAttachmentDesc{
                 .texture = color, .clear_value = Forge::DepthStencilClearValue{.depth = 1.0f, .stencil = 0}}}};
-        REQUIRE_THROWS_AS(command_buffer.CmdBeginRendering(rendering_desc), Opal::Exception);
-        command_buffer.End();
+        REQUIRE(command_buffer.CmdBeginRendering(rendering_desc) != ErrorCode::Success);
+        REQUIRE(command_buffer.End() == ErrorCode::Success);
     }
     SECTION("An attachment whose texture was never transitioned throws")
     {
@@ -2244,43 +2288,43 @@ TEST_CASE("Forge rendering without a depth attachment", "[forge]")
         // out of Undefined. Vulkan rejects an undefined attachment layout, but a layout that is legal and
         // wrong - ShaderReadOnly on a texture the barriers left in ColorAttachment, say - it accepts, and
         // reading the layout off the texture is what removes both.
-        Forge::CommandBuffer command_buffer(fixture.device, fixture.GetQueue());
-        command_buffer.Begin();
+        Forge::CommandBuffer command_buffer = ForgeTest::Unwrap(Forge::CommandBuffer::Create(fixture.device, fixture.GetQueue()));
+        REQUIRE(command_buffer.Begin() == ErrorCode::Success);
         const Forge::RenderingDesc rendering_desc{.render_area_extent = {k_side, k_side},
                                                   .color_attachments = {Forge::RenderingAttachmentDesc{.texture = color}}};
-        REQUIRE(color.GetCurrentLayout() == Forge::ImageLayout::Undefined);
-        REQUIRE_THROWS_AS(command_buffer.CmdBeginRendering(rendering_desc), Opal::Exception);
-        command_buffer.End();
+        REQUIRE(ForgeTest::Unwrap(color.GetCurrentLayout()) == Forge::ImageLayout::Undefined);
+        REQUIRE(command_buffer.CmdBeginRendering(rendering_desc) != ErrorCode::Success);
+        REQUIRE(command_buffer.End() == ErrorCode::Success);
     }
     SECTION("A colour attachment in a layout meant for something else throws")
     {
         // TransferSource is a layout this texture legitimately reaches - ReadBackTexture leaves it there -
         // so this is the plausible-but-wrong case rather than the unconfigured one above.
-        Forge::CommandBuffer command_buffer(fixture.device, fixture.GetQueue());
-        command_buffer.Begin();
-        command_buffer.CmdTransition(color, Forge::ImageLayout::TransferSource);
+        Forge::CommandBuffer command_buffer = ForgeTest::Unwrap(Forge::CommandBuffer::Create(fixture.device, fixture.GetQueue()));
+        REQUIRE(command_buffer.Begin() == ErrorCode::Success);
+        REQUIRE(command_buffer.CmdTransition(color, Forge::ImageLayout::TransferSource) == ErrorCode::Success);
         const Forge::RenderingDesc rendering_desc{.render_area_extent = {k_side, k_side},
                                                   .color_attachments = {Forge::RenderingAttachmentDesc{.texture = color}}};
-        REQUIRE_THROWS_AS(command_buffer.CmdBeginRendering(rendering_desc), Opal::Exception);
-        command_buffer.End();
+        REQUIRE(command_buffer.CmdBeginRendering(rendering_desc) != ErrorCode::Success);
+        REQUIRE(command_buffer.End() == ErrorCode::Success);
     }
     SECTION("A colour attachment in the General layout is accepted")
     {
         // General is legal for every role, which is what makes it the layout a texture used two ways sits in.
-        Forge::ImmediateSubmit(fixture.device, fixture.GetQueue(),
+        REQUIRE(Forge::ImmediateSubmit(fixture.device, fixture.GetQueue(),
                                [&](Forge::CommandBuffer& command_buffer)
                                {
                                    // Written by hand rather than through ToGeneral, whose access is the
                                    // shader read and write of a storage image: what follows here is the
                                    // colour attachment output, and an access that does not match its stage
                                    // is invalid whichever way round it is wrong.
-                                   command_buffer.CmdTextureBarrier(
+                                   REQUIRE(command_buffer.CmdTextureBarrier(
                                        Forge::TextureBarrier{.stages_must_finish = Forge::PipelineStageBits::PipelineStart,
                                                              .before_stages_start = Forge::PipelineStageBits::ColorAttachmentOutput,
                                                              .before_stages_start_access = Forge::PipelineStageAccessBits::Write,
                                                              .old_layout = Forge::ImageLayout::Undefined,
                                                              .new_layout = Forge::ImageLayout::General,
-                                                             .texture = color});
+                                                             .texture = color}) == ErrorCode::Success);
                                    const Forge::RenderingDesc rendering_desc{
                                        .render_area_extent = {k_side, k_side},
                                        .color_attachments = {Forge::RenderingAttachmentDesc{
@@ -2288,12 +2332,13 @@ TEST_CASE("Forge rendering without a depth attachment", "[forge]")
                                            .load_operation = Forge::AttachmentLoadOperation::Clear,
                                            .store_operation = Forge::AttachmentStoreOperation::Store,
                                            .clear_value = Vector4f{0.0f, 1.0f, 0.0f, 1.0f}}}};
-                                   command_buffer.CmdBeginRendering(rendering_desc);
-                                   command_buffer.CmdEndRendering();
-                               });
+                                   REQUIRE(command_buffer.CmdBeginRendering(rendering_desc) == ErrorCode::Success);
+                                   REQUIRE(command_buffer.CmdEndRendering() == ErrorCode::Success);
+                               }) == ErrorCode::Success);
 
         Opal::DynamicArray<u8> pixels(k_side * k_side * 4);
-        Forge::ReadBackTexture(fixture.device, fixture.GetQueue(), color, pixels, 0, Forge::ImageLayout::TransferSource);
+        REQUIRE(Forge::ReadBackTexture(fixture.device, fixture.GetQueue(), color, pixels, 0, Forge::ImageLayout::TransferSource) ==
+                ErrorCode::Success);
         for (i32 i = 0; i < pixels.GetSize(); i += 4)
         {
             REQUIRE(static_cast<i32>(pixels[i]) == 0);
@@ -2352,18 +2397,18 @@ TEST_CASE("Forge color write mask", "[forge]")
      * one texel. The shader writes (0, 1, 0, 0), so every channel differs from what the clear left, and a
      * channel that comes back red is one the mask kept the draw away from.
      */
-    const Forge::Buffer vertices(fixture.device,
+    const Forge::Buffer vertices = ForgeTest::Unwrap(Forge::Buffer::Create(fixture.device,
                                  {.size = sizeof(k_fullscreen_vertices),
                                   .usage = Forge::BufferUsageBits::VertexBuffer},
-                                 Opal::AsBytes(k_fullscreen_vertices));
+                                 Opal::AsBytes(k_fullscreen_vertices)));
 
     auto draw_through_mask = [&](Forge::ColorWriteMaskBits mask)
     {
-        Forge::Texture color(fixture.device, {.format = k_format,
+        Forge::Texture color = ForgeTest::Unwrap(Forge::Texture::Create(fixture.device, {.format = k_format,
                                               .width = k_side,
                                               .height = k_side,
                                               .usage = Forge::TextureUsageBits::ColorAttachment |
-                                                       Forge::TextureUsageBits::TransferSource});
+                                                       Forge::TextureUsageBits::TransferSource}));
 
         Forge::GraphicsPipelineDesc pipeline_desc;
         pipeline_desc.vertex_shader = vertex_shader;
@@ -2375,28 +2420,29 @@ TEST_CASE("Forge color write mask", "[forge]")
         pipeline_desc.color_attachment_formats.PushBack(k_format);
         const Forge::Pipeline pipeline(fixture.device, pipeline_desc);
 
-        Forge::ImmediateSubmit(fixture.device, fixture.GetQueue(),
-                               [&](Forge::CommandBuffer& command_buffer)
-                               {
-                                   command_buffer.CmdTextureBarrier(Forge::TextureBarrier::ToColorAttachment(color));
-                                   const Forge::RenderingDesc rendering_desc{
-                                       .render_area_extent = {k_side, k_side},
-                                       .color_attachments = {Forge::RenderingAttachmentDesc{
-                                           .texture = color,
-                                           .load_operation = Forge::AttachmentLoadOperation::Clear,
-                                           .store_operation = Forge::AttachmentStoreOperation::Store,
-                                           .clear_value = Vector4f{1.0f, 0.0f, 0.0f, 1.0f}}}};
-                                   command_buffer.CmdBeginRendering(rendering_desc);
-                                   command_buffer.CmdSetViewport(Vector2f::Zero(), {k_side, k_side});
-                                   command_buffer.CmdSetScissor(Vector2i::Zero(), {k_side, k_side});
-                                   command_buffer.CmdBindPipeline(pipeline);
-                                   command_buffer.CmdBindVertexBuffer(vertices, 0);
-                                   command_buffer.CmdDraw(3);
-                                   command_buffer.CmdEndRendering();
-                               });
+        REQUIRE(Forge::ImmediateSubmit(
+                    fixture.device, fixture.GetQueue(),
+                    [&](Forge::CommandBuffer& command_buffer)
+                    {
+                        REQUIRE(command_buffer.CmdTextureBarrier(Forge::TextureBarrier::ToColorAttachment(color)) == ErrorCode::Success);
+                        const Forge::RenderingDesc rendering_desc{
+                            .render_area_extent = {k_side, k_side},
+                            .color_attachments = {Forge::RenderingAttachmentDesc{.texture = color,
+                                                                                 .load_operation = Forge::AttachmentLoadOperation::Clear,
+                                                                                 .store_operation = Forge::AttachmentStoreOperation::Store,
+                                                                                 .clear_value = Vector4f{1.0f, 0.0f, 0.0f, 1.0f}}}};
+                        REQUIRE(command_buffer.CmdBeginRendering(rendering_desc) == ErrorCode::Success);
+                        REQUIRE(command_buffer.CmdSetViewport(Vector2f::Zero(), {k_side, k_side}) == ErrorCode::Success);
+                        REQUIRE(command_buffer.CmdSetScissor(Vector2i::Zero(), {k_side, k_side}) == ErrorCode::Success);
+                        REQUIRE(command_buffer.CmdBindPipeline(pipeline) == ErrorCode::Success);
+                        REQUIRE(command_buffer.CmdBindVertexBuffer(vertices, 0) == ErrorCode::Success);
+                        REQUIRE(command_buffer.CmdDraw(3) == ErrorCode::Success);
+                        REQUIRE(command_buffer.CmdEndRendering() == ErrorCode::Success);
+                    }) == ErrorCode::Success);
 
         Opal::DynamicArray<u8> pixels(k_side * k_side * 4);
-        Forge::ReadBackTexture(fixture.device, fixture.GetQueue(), color, pixels, 0, Forge::ImageLayout::TransferSource);
+        REQUIRE(Forge::ReadBackTexture(fixture.device, fixture.GetQueue(), color, pixels, 0, Forge::ImageLayout::TransferSource) ==
+                ErrorCode::Success);
         return Opal::DynamicArray<u8>{pixels[0], pixels[1], pixels[2], pixels[3]};
     };
 
@@ -2631,17 +2677,19 @@ struct HalvesFixture
         pipeline_desc.color_attachment_formats.PushBack(k_format);
         pipeline = Forge::Pipeline(forge.device, pipeline_desc);
 
-        corners = Forge::Buffer(forge.device, {.size = sizeof(k_half_corners), .usage = Forge::BufferUsageBits::VertexBuffer},
-                                Opal::AsBytes(k_half_corners));
-        vertices = Forge::Buffer(forge.device, {.size = sizeof(k_half_vertices), .usage = Forge::BufferUsageBits::VertexBuffer},
-                                 Opal::AsBytes(k_half_vertices));
-        instances = Forge::Buffer(forge.device, {.size = sizeof(k_instance_values), .usage = Forge::BufferUsageBits::VertexBuffer},
-                                  Opal::AsBytes(k_instance_values));
-        color = Forge::Texture(forge.device, {.format = k_format,
+        corners = ForgeTest::Unwrap(Forge::Buffer::Create(
+            forge.device, {.size = sizeof(k_half_corners), .usage = Forge::BufferUsageBits::VertexBuffer}, Opal::AsBytes(k_half_corners)));
+        vertices = ForgeTest::Unwrap(Forge::Buffer::Create(forge.device,
+                                                           {.size = sizeof(k_half_vertices), .usage = Forge::BufferUsageBits::VertexBuffer},
+                                                           Opal::AsBytes(k_half_vertices)));
+        instances = ForgeTest::Unwrap(
+            Forge::Buffer::Create(forge.device, {.size = sizeof(k_instance_values), .usage = Forge::BufferUsageBits::VertexBuffer},
+                                  Opal::AsBytes(k_instance_values)));
+        color = ForgeTest::Unwrap(Forge::Texture::Create(forge.device, {.format = k_format,
                                               .width = k_side,
                                               .height = k_side,
                                               .usage = Forge::TextureUsageBits::ColorAttachment |
-                                                       Forge::TextureUsageBits::TransferSource});
+                                                       Forge::TextureUsageBits::TransferSource}));
     }
 
     Forge::DeviceQueue& GetQueue() { return forge.GetQueue(); }
@@ -2657,11 +2705,12 @@ struct HalvesFixture
     template <typename RecordBefore, typename RecordDraw>
     Opal::DynamicArray<u8> Render(RecordBefore&& record_before, RecordDraw&& record_draw)
     {
-        Forge::ImmediateSubmit(forge.device, GetQueue(),
+        REQUIRE(Forge::ImmediateSubmit(forge.device, GetQueue(),
                                [&](Forge::CommandBuffer& command_buffer)
                                {
                                    record_before(command_buffer);
-                                   command_buffer.CmdTextureBarrier(Forge::TextureBarrier::ToColorAttachment(color));
+                                   REQUIRE(command_buffer.CmdTextureBarrier(Forge::TextureBarrier::ToColorAttachment(color)) ==
+                                           ErrorCode::Success);
                                    const Forge::RenderingDesc rendering_desc{
                                        .render_area_extent = {k_side, k_side},
                                        .color_attachments = {Forge::RenderingAttachmentDesc{
@@ -2669,18 +2718,19 @@ struct HalvesFixture
                                            .load_operation = Forge::AttachmentLoadOperation::Clear,
                                            .store_operation = Forge::AttachmentStoreOperation::Store,
                                            .clear_value = Vector4f{0.0f, 0.0f, 0.0f, 1.0f}}}};
-                                   command_buffer.CmdBeginRendering(rendering_desc);
-                                   command_buffer.CmdSetViewport(Vector2f::Zero(), {k_side, k_side});
-                                   command_buffer.CmdSetScissor(Vector2i::Zero(), {k_side, k_side});
-                                   command_buffer.CmdBindPipeline(pipeline);
-                                   command_buffer.CmdBindVertexBuffer(instances, 1);
+                                   REQUIRE(command_buffer.CmdBeginRendering(rendering_desc) == ErrorCode::Success);
+                                   REQUIRE(command_buffer.CmdSetViewport(Vector2f::Zero(), {k_side, k_side}) == ErrorCode::Success);
+                                   REQUIRE(command_buffer.CmdSetScissor(Vector2i::Zero(), {k_side, k_side}) == ErrorCode::Success);
+                                   REQUIRE(command_buffer.CmdBindPipeline(pipeline) == ErrorCode::Success);
+                                   REQUIRE(command_buffer.CmdBindVertexBuffer(instances, 1) == ErrorCode::Success);
                                    record_draw(command_buffer);
-                                   command_buffer.CmdEndRendering();
-                               });
+                                   REQUIRE(command_buffer.CmdEndRendering() == ErrorCode::Success);
+                               }) == ErrorCode::Success);
 
         Opal::DynamicArray<u8> pixels(k_side * k_side * 4);
         // Left in TransferSource:
-        Forge::ReadBackTexture(forge.device, GetQueue(), color, pixels, 0, Forge::ImageLayout::TransferSource);
+        REQUIRE(Forge::ReadBackTexture(forge.device, GetQueue(), color, pixels, 0, Forge::ImageLayout::TransferSource) ==
+                ErrorCode::Success);
         return pixels;
     }
 
@@ -2747,14 +2797,14 @@ TEST_CASE("Forge indexed draws", "[forge]")
     {
         const Opal::DynamicArray<u8> index_bytes =
             ToIndexBytes(k_half_indices, static_cast<i32>(std::size(k_half_indices)), index_size);
-        const Forge::Buffer indices(halves.forge.device,
-                                    {.size = index_bytes.GetSize(), .usage = Forge::BufferUsageBits::IndexBuffer}, index_bytes);
+        const Forge::Buffer indices = ForgeTest::Unwrap(Forge::Buffer::Create(halves.forge.device,
+                                    {.size = index_bytes.GetSize(), .usage = Forge::BufferUsageBits::IndexBuffer}, index_bytes));
         return halves.Render(
             [&](Forge::CommandBuffer& command_buffer)
             {
-                command_buffer.CmdBindVertexBuffer(halves.corners, 0);
-                command_buffer.CmdBindIndexBuffer(indices, 0, index_size);
-                command_buffer.CmdDrawIndexed(6, 1, 6, 4, 0);
+                REQUIRE(command_buffer.CmdBindVertexBuffer(halves.corners, 0) == ErrorCode::Success);
+                REQUIRE(command_buffer.CmdBindIndexBuffer(indices, 0, index_size) == ErrorCode::Success);
+                REQUIRE(command_buffer.CmdDrawIndexed(6, 1, 6, 4, 0) == ErrorCode::Success);
             });
     };
 
@@ -2790,16 +2840,16 @@ TEST_CASE("Forge indexed draws", "[forge]")
         ForgeFixture plain;
         const Opal::DynamicArray<u8> index_bytes =
             ToIndexBytes(k_half_indices, static_cast<i32>(std::size(k_half_indices)), IndexSize::uint8);
-        const Forge::Buffer indices(plain.device, {.size = index_bytes.GetSize(), .usage = Forge::BufferUsageBits::IndexBuffer},
-                                    index_bytes);
-        Forge::CommandBuffer command_buffer(plain.device, plain.GetQueue());
-        command_buffer.Begin();
+        const Forge::Buffer indices = ForgeTest::Unwrap(Forge::Buffer::Create(
+            plain.device, {.size = index_bytes.GetSize(), .usage = Forge::BufferUsageBits::IndexBuffer}, index_bytes));
+        Forge::CommandBuffer command_buffer = ForgeTest::Unwrap(Forge::CommandBuffer::Create(plain.device, plain.GetQueue()));
+        REQUIRE(command_buffer.Begin() == ErrorCode::Success);
         REQUIRE_FALSE(plain.device.GetFeatures().index_type_uint8);
-        REQUIRE_THROWS_AS(command_buffer.CmdBindIndexBuffer(indices, 0, IndexSize::uint8), Opal::Exception);
+        REQUIRE(command_buffer.CmdBindIndexBuffer(indices, 0, IndexSize::uint8) != ErrorCode::Success);
         // The two widths that need no extension still bind on the same command buffer.
-        command_buffer.CmdBindIndexBuffer(indices, 0, IndexSize::uint16);
-        command_buffer.CmdBindIndexBuffer(indices, 0, IndexSize::uint32);
-        command_buffer.End();
+        REQUIRE(command_buffer.CmdBindIndexBuffer(indices, 0, IndexSize::uint16) == ErrorCode::Success);
+        REQUIRE(command_buffer.CmdBindIndexBuffer(indices, 0, IndexSize::uint32) == ErrorCode::Success);
+        REQUIRE(command_buffer.End() == ErrorCode::Success);
         REQUIRE_NO_VALIDATION_ERROR(plain);
     }
     REQUIRE_NO_VALIDATION_ERROR(halves.forge);
@@ -2828,11 +2878,11 @@ TEST_CASE("Forge indirect draws", "[forge]")
 
     // The commands live in memory the host cannot touch, so nothing but the dispatch below can have put them
     // there - which is what separates this from a direct draw with the same numbers written into a buffer.
-    const Forge::Buffer commands(halves.forge.device, {.size = 2 * sizeof(Forge::DrawIndexedIndirectCommand),
-                                                       .usage = Forge::BufferUsageBits::IndirectBuffer |
-                                                                Forge::BufferUsageBits::StorageBuffer,
-                                                       .host_access = Forge::HostAccess::None,
-                                                       .use_device_address = true});
+    const Forge::Buffer commands = ForgeTest::Unwrap(
+        Forge::Buffer::Create(halves.forge.device, {.size = 2 * sizeof(Forge::DrawIndexedIndirectCommand),
+                                                    .usage = Forge::BufferUsageBits::IndirectBuffer | Forge::BufferUsageBits::StorageBuffer,
+                                                    .host_access = Forge::HostAccess::None,
+                                                    .use_device_address = true}));
 
     auto make_write_pipeline = [&](const Forge::Shader& writer)
     {
@@ -2849,11 +2899,11 @@ TEST_CASE("Forge indirect draws", "[forge]")
         const VkDeviceAddress address = commands.GetNativeDeviceAddress();
         return [&, address](Forge::CommandBuffer& command_buffer)
         {
-            command_buffer.CmdBindPipeline(write_pipeline);
-            command_buffer.CmdPushConstants(write_pipeline, ShaderTypeBits::Compute, Opal::AsBytes(address));
-            command_buffer.CmdDispatch(1);
-            command_buffer.CmdBufferBarrier(
-                Forge::BufferBarrier::WriteThenRead(commands, Forge::PipelineStageBits::ComputeShader, Forge::PipelineStageBits::IndirectDraw));
+            REQUIRE(command_buffer.CmdBindPipeline(write_pipeline) == ErrorCode::Success);
+            REQUIRE(command_buffer.CmdPushConstants(write_pipeline, ShaderTypeBits::Compute, Opal::AsBytes(address)) == ErrorCode::Success);
+            REQUIRE(command_buffer.CmdDispatch(1) == ErrorCode::Success);
+            REQUIRE(command_buffer.CmdBufferBarrier(Forge::BufferBarrier::WriteThenRead(
+                        commands, Forge::PipelineStageBits::ComputeShader, Forge::PipelineStageBits::IndirectDraw)) == ErrorCode::Success);
         };
     };
 
@@ -2864,8 +2914,8 @@ TEST_CASE("Forge indirect draws", "[forge]")
             halves.Render(record_write(write_pipeline),
                           [&](Forge::CommandBuffer& command_buffer)
                           {
-                              command_buffer.CmdBindVertexBuffer(halves.vertices, 0);
-                              command_buffer.CmdDrawIndirect(commands, 0, 1);
+                              REQUIRE(command_buffer.CmdBindVertexBuffer(halves.vertices, 0) == ErrorCode::Success);
+                              REQUIRE(command_buffer.CmdDrawIndirect(commands, 0, 1) == ErrorCode::Success);
                           });
         // The first command only: the left half, at the non-zero instance it named.
         REQUIRE_HALF_COLOR(pixels, false, k_instance_two);
@@ -2883,8 +2933,8 @@ TEST_CASE("Forge indirect draws", "[forge]")
             halves.Render(record_write(write_pipeline),
                           [&](Forge::CommandBuffer& command_buffer)
                           {
-                              command_buffer.CmdBindVertexBuffer(halves.vertices, 0);
-                              command_buffer.CmdDrawIndirect(commands, 0, 2);
+                              REQUIRE(command_buffer.CmdBindVertexBuffer(halves.vertices, 0) == ErrorCode::Success);
+                              REQUIRE(command_buffer.CmdDrawIndirect(commands, 0, 2) == ErrorCode::Success);
                           });
         // Both commands ran, and each fetched the instance its own first_instance named rather than one of
         // them deciding for both.
@@ -2894,16 +2944,16 @@ TEST_CASE("Forge indirect draws", "[forge]")
     SECTION("An indirect indexed draw follows the indices and the vertex offset it was given")
     {
         const Opal::DynamicArray<u8> index_bytes = ToIndexBytes(k_half_indices + 6, 6, IndexSize::uint32);
-        const Forge::Buffer indices(halves.forge.device,
-                                    {.size = index_bytes.GetSize(), .usage = Forge::BufferUsageBits::IndexBuffer}, index_bytes);
+        const Forge::Buffer indices = ForgeTest::Unwrap(Forge::Buffer::Create(halves.forge.device,
+                                    {.size = index_bytes.GetSize(), .usage = Forge::BufferUsageBits::IndexBuffer}, index_bytes));
         const Forge::Pipeline write_pipeline = make_write_pipeline(write_indexed_draw);
         const Opal::DynamicArray<u8> pixels =
             halves.Render(record_write(write_pipeline),
                           [&](Forge::CommandBuffer& command_buffer)
                           {
-                              command_buffer.CmdBindVertexBuffer(halves.corners, 0);
-                              command_buffer.CmdBindIndexBuffer(indices, 0, IndexSize::uint32);
-                              command_buffer.CmdDrawIndexedIndirect(commands, 0, 1);
+                              REQUIRE(command_buffer.CmdBindVertexBuffer(halves.corners, 0) == ErrorCode::Success);
+                              REQUIRE(command_buffer.CmdBindIndexBuffer(indices, 0, IndexSize::uint32) == ErrorCode::Success);
+                              REQUIRE(command_buffer.CmdDrawIndexedIndirect(commands, 0, 1) == ErrorCode::Success);
                           });
         // The indices name the left corners; the vertex offset of four in the command is the only reason the
         // right half is what comes back.
@@ -2942,22 +2992,22 @@ TEST_CASE("Forge indirect dispatch", "[forge]")
     const Forge::Pipeline compute_pipeline = make_pipeline(compute_shader);
 
     // Device-only, so the group counts cannot have come from the host.
-    const Forge::Buffer group_counts(fixture.device, {.size = sizeof(Forge::DispatchIndirectCommand),
-                                                      .usage = Forge::BufferUsageBits::IndirectBuffer |
-                                                               Forge::BufferUsageBits::StorageBuffer |
-                                                               Forge::BufferUsageBits::TransferSource,
-                                                      .host_access = Forge::HostAccess::None,
-                                                      .use_device_address = true});
+    const Forge::Buffer group_counts = ForgeTest::Unwrap(Forge::Buffer::Create(
+        fixture.device,
+        {.size = sizeof(Forge::DispatchIndirectCommand),
+         .usage = Forge::BufferUsageBits::IndirectBuffer | Forge::BufferUsageBits::StorageBuffer | Forge::BufferUsageBits::TransferSource,
+         .host_access = Forge::HostAccess::None,
+         .use_device_address = true}));
 
     auto make_output = [&]
     {
-        Forge::Buffer output(fixture.device, {.size = k_element_count * sizeof(u32),
+        Forge::Buffer output = ForgeTest::Unwrap(Forge::Buffer::Create(fixture.device, {.size = k_element_count * sizeof(u32),
                                               .usage = Forge::BufferUsageBits::StorageBuffer,
                                               .host_access = Forge::HostAccess::Random,
-                                              .use_device_address = true});
+                                              .use_device_address = true}));
         // Wiped first, so nothing left behind can pass for a dispatch that ran.
         const Opal::DynamicArray<u8> zeros(k_element_count * sizeof(u32));
-        output.Update(zeros);
+        REQUIRE(output.Update(zeros) == ErrorCode::Success);
         return output;
     };
     const Forge::Buffer indirect_output = make_output();
@@ -2966,33 +3016,34 @@ TEST_CASE("Forge indirect dispatch", "[forge]")
     const VkDeviceAddress group_counts_address = group_counts.GetNativeDeviceAddress();
     const VkDeviceAddress indirect_address = indirect_output.GetNativeDeviceAddress();
     const VkDeviceAddress direct_address = direct_output.GetNativeDeviceAddress();
-    Forge::ImmediateSubmit(fixture.device, fixture.GetQueue(),
+    REQUIRE(Forge::ImmediateSubmit(fixture.device, fixture.GetQueue(),
                            [&](Forge::CommandBuffer& command_buffer)
                            {
-                               command_buffer.CmdBindPipeline(write_pipeline);
-                               command_buffer.CmdPushConstants(write_pipeline, ShaderTypeBits::Compute,
-                                                               Opal::AsBytes(group_counts_address));
-                               command_buffer.CmdDispatch(1);
-                               command_buffer.CmdBufferBarrier(Forge::BufferBarrier::WriteThenRead(
-                                   group_counts, Forge::PipelineStageBits::ComputeShader, Forge::PipelineStageBits::IndirectDraw));
+                               REQUIRE(command_buffer.CmdBindPipeline(write_pipeline) == ErrorCode::Success);
+                               REQUIRE(command_buffer.CmdPushConstants(write_pipeline, ShaderTypeBits::Compute,
+                                                               Opal::AsBytes(group_counts_address)) == ErrorCode::Success);
+                               REQUIRE(command_buffer.CmdDispatch(1) == ErrorCode::Success);
+                               REQUIRE(command_buffer.CmdBufferBarrier(Forge::BufferBarrier::WriteThenRead(
+                                           group_counts, Forge::PipelineStageBits::ComputeShader,
+                                           Forge::PipelineStageBits::IndirectDraw)) == ErrorCode::Success);
 
-                               command_buffer.CmdBindPipeline(compute_pipeline);
-                               command_buffer.CmdPushConstants(compute_pipeline, ShaderTypeBits::Compute,
-                                                               Opal::AsBytes(indirect_address));
-                               command_buffer.CmdDispatchIndirect(group_counts);
+                               REQUIRE(command_buffer.CmdBindPipeline(compute_pipeline) == ErrorCode::Success);
+                               REQUIRE(command_buffer.CmdPushConstants(compute_pipeline, ShaderTypeBits::Compute,
+                                                               Opal::AsBytes(indirect_address)) == ErrorCode::Success);
+                               REQUIRE(command_buffer.CmdDispatchIndirect(group_counts) == ErrorCode::Success);
                                // The two dispatches write different buffers, so nothing has to order them
                                // against each other - only the push constant between them, which records in
                                // order with the commands around it.
-                               command_buffer.CmdPushConstants(compute_pipeline, ShaderTypeBits::Compute,
-                                                               Opal::AsBytes(direct_address));
-                               command_buffer.CmdDispatch(k_group_count);
-                           });
+                               REQUIRE(command_buffer.CmdPushConstants(compute_pipeline, ShaderTypeBits::Compute,
+                                                               Opal::AsBytes(direct_address)) == ErrorCode::Success);
+                               REQUIRE(command_buffer.CmdDispatch(k_group_count) == ErrorCode::Success);
+                           }) == ErrorCode::Success);
 
     SECTION("The group counts came off the device")
     {
         Forge::DispatchIndirectCommand written;
-        Forge::ReadBackBuffer(fixture.device, fixture.GetQueue(), group_counts,
-                              {reinterpret_cast<u8*>(&written), sizeof(written)});
+        REQUIRE(Forge::ReadBackBuffer(fixture.device, fixture.GetQueue(), group_counts,
+                              {reinterpret_cast<u8*>(&written), sizeof(written)}) == ErrorCode::Success);
         REQUIRE(written.group_count_x == k_group_count);
         REQUIRE(written.group_count_y == 1);
         REQUIRE(written.group_count_z == 1);
@@ -3001,8 +3052,10 @@ TEST_CASE("Forge indirect dispatch", "[forge]")
     {
         Opal::DynamicArray<u32> from_indirect(k_element_count);
         Opal::DynamicArray<u32> from_direct(k_element_count);
-        indirect_output.Read({reinterpret_cast<u8*>(from_indirect.GetData()), from_indirect.GetSize() * sizeof(u32)});
-        direct_output.Read({reinterpret_cast<u8*>(from_direct.GetData()), from_direct.GetSize() * sizeof(u32)});
+        REQUIRE(indirect_output.Read({reinterpret_cast<u8*>(from_indirect.GetData()), from_indirect.GetSize() * sizeof(u32)}) ==
+                ErrorCode::Success);
+        REQUIRE(direct_output.Read({reinterpret_cast<u8*>(from_direct.GetData()), from_direct.GetSize() * sizeof(u32)}) ==
+                ErrorCode::Success);
         for (i32 i = 0; i < k_element_count; ++i)
         {
             INFO("element " << i);
@@ -3082,26 +3135,26 @@ TEST_CASE("Forge pipeline sample count and dynamic state", "[forge]")
         desc.rasterizer.depth_bias_enabled = true;
         const Forge::Pipeline pipeline(fixture.device, desc);
 
-        Forge::CommandBuffer command_buffer(fixture.device, fixture.GetQueue());
-        command_buffer.Begin();
-        command_buffer.CmdBindPipeline(pipeline);
-        command_buffer.CmdSetDepthBias(1.0f);
-        command_buffer.CmdSetStencilReference(3);
-        command_buffer.End();
+        Forge::CommandBuffer command_buffer = ForgeTest::Unwrap(Forge::CommandBuffer::Create(fixture.device, fixture.GetQueue()));
+        REQUIRE(command_buffer.Begin() == ErrorCode::Success);
+        REQUIRE(command_buffer.CmdBindPipeline(pipeline) == ErrorCode::Success);
+        REQUIRE(command_buffer.CmdSetDepthBias(1.0f) == ErrorCode::Success);
+        REQUIRE(command_buffer.CmdSetStencilReference(3) == ErrorCode::Success);
+        REQUIRE(command_buffer.End() == ErrorCode::Success);
     }
     SECTION("Dynamic state a feature gates throws without the feature")
     {
-        Forge::CommandBuffer command_buffer(fixture.device, fixture.GetQueue());
-        command_buffer.Begin();
+        Forge::CommandBuffer command_buffer = ForgeTest::Unwrap(Forge::CommandBuffer::Create(fixture.device, fixture.GetQueue()));
+        REQUIRE(command_buffer.Begin() == ErrorCode::Success);
         // The fixture device asks for neither, so both of these are the guard rather than the driver.
         REQUIRE_FALSE(fixture.device.GetFeatures().wide_lines);
         REQUIRE_FALSE(fixture.device.GetFeatures().depth_bias_clamp);
-        REQUIRE_THROWS_AS(command_buffer.CmdSetLineWidth(4.0f), Opal::Exception);
-        REQUIRE_THROWS_AS(command_buffer.CmdSetDepthBias(1.0f, 0.5f), Opal::Exception);
+        REQUIRE(command_buffer.CmdSetLineWidth(4.0f) != ErrorCode::Success);
+        REQUIRE(command_buffer.CmdSetDepthBias(1.0f, 0.5f) != ErrorCode::Success);
         // The value every device draws, and a bias with no clamp, need no feature.
-        command_buffer.CmdSetLineWidth(1.0f);
-        command_buffer.CmdSetDepthBias(1.0f);
-        command_buffer.End();
+        REQUIRE(command_buffer.CmdSetLineWidth(1.0f) == ErrorCode::Success);
+        REQUIRE(command_buffer.CmdSetDepthBias(1.0f) == ErrorCode::Success);
+        REQUIRE(command_buffer.End() == ErrorCode::Success);
     }
     REQUIRE_NO_VALIDATION_ERROR(fixture);
 }
@@ -3207,21 +3260,21 @@ TEST_CASE("Forge specialization constants", "[forge]")
 
     const Forge::Shader vertex_shader =
         Forge::Shader::FromSourceInMemory(fixture.device, k_specialized_source, {.entry_point = "main_vertex", .cache = GetShaderCache()});
-    const Forge::Shader fragment_shader =
-        Forge::Shader::FromSourceInMemory(fixture.device, k_specialized_source, {.entry_point = "main_fragment", .cache = GetShaderCache()});
-    const Forge::Buffer vertices(fixture.device,
+    const Forge::Shader fragment_shader = Forge::Shader::FromSourceInMemory(fixture.device, k_specialized_source,
+                                                                            {.entry_point = "main_fragment", .cache = GetShaderCache()});
+    const Forge::Buffer vertices = ForgeTest::Unwrap(Forge::Buffer::Create(fixture.device,
                                  {.size = sizeof(k_fullscreen_vertices),
                                   .usage = Forge::BufferUsageBits::VertexBuffer},
-                                 Opal::AsBytes(k_fullscreen_vertices));
+                                 Opal::AsBytes(k_fullscreen_vertices)));
 
     /** Builds a pipeline with the given values, draws through it, and hands back one texel. */
     auto draw_specialized = [&](Opal::ArrayView<const Forge::SpecializationConstant> values)
     {
-        Forge::Texture color(fixture.device, {.format = k_format,
+        Forge::Texture color = ForgeTest::Unwrap(Forge::Texture::Create(fixture.device, {.format = k_format,
                                               .width = k_side,
                                               .height = k_side,
                                               .usage = Forge::TextureUsageBits::ColorAttachment |
-                                                       Forge::TextureUsageBits::TransferSource});
+                                                       Forge::TextureUsageBits::TransferSource}));
         Forge::GraphicsPipelineDesc pipeline_desc;
         pipeline_desc.vertex_shader = vertex_shader;
         pipeline_desc.fragment_shader = fragment_shader;
@@ -3237,28 +3290,29 @@ TEST_CASE("Forge specialization constants", "[forge]")
         }
         const Forge::Pipeline pipeline(fixture.device, pipeline_desc);
 
-        Forge::ImmediateSubmit(fixture.device, fixture.GetQueue(),
-                               [&](Forge::CommandBuffer& command_buffer)
-                               {
-                                   command_buffer.CmdTextureBarrier(Forge::TextureBarrier::ToColorAttachment(color));
-                                   const Forge::RenderingDesc rendering_desc{
-                                       .render_area_extent = {k_side, k_side},
-                                       .color_attachments = {Forge::RenderingAttachmentDesc{
-                                           .texture = color,
-                                           .load_operation = Forge::AttachmentLoadOperation::Clear,
-                                           .store_operation = Forge::AttachmentStoreOperation::Store,
-                                           .clear_value = Vector4f{0.0f, 0.0f, 0.0f, 1.0f}}}};
-                                   command_buffer.CmdBeginRendering(rendering_desc);
-                                   command_buffer.CmdSetViewport(Vector2f::Zero(), {k_side, k_side});
-                                   command_buffer.CmdSetScissor(Vector2i::Zero(), {k_side, k_side});
-                                   command_buffer.CmdBindPipeline(pipeline);
-                                   command_buffer.CmdBindVertexBuffer(vertices, 0);
-                                   command_buffer.CmdDraw(3);
-                                   command_buffer.CmdEndRendering();
-                               });
+        REQUIRE(Forge::ImmediateSubmit(
+                    fixture.device, fixture.GetQueue(),
+                    [&](Forge::CommandBuffer& command_buffer)
+                    {
+                        REQUIRE(command_buffer.CmdTextureBarrier(Forge::TextureBarrier::ToColorAttachment(color)) == ErrorCode::Success);
+                        const Forge::RenderingDesc rendering_desc{
+                            .render_area_extent = {k_side, k_side},
+                            .color_attachments = {Forge::RenderingAttachmentDesc{.texture = color,
+                                                                                 .load_operation = Forge::AttachmentLoadOperation::Clear,
+                                                                                 .store_operation = Forge::AttachmentStoreOperation::Store,
+                                                                                 .clear_value = Vector4f{0.0f, 0.0f, 0.0f, 1.0f}}}};
+                        REQUIRE(command_buffer.CmdBeginRendering(rendering_desc) == ErrorCode::Success);
+                        REQUIRE(command_buffer.CmdSetViewport(Vector2f::Zero(), {k_side, k_side}) == ErrorCode::Success);
+                        REQUIRE(command_buffer.CmdSetScissor(Vector2i::Zero(), {k_side, k_side}) == ErrorCode::Success);
+                        REQUIRE(command_buffer.CmdBindPipeline(pipeline) == ErrorCode::Success);
+                        REQUIRE(command_buffer.CmdBindVertexBuffer(vertices, 0) == ErrorCode::Success);
+                        REQUIRE(command_buffer.CmdDraw(3) == ErrorCode::Success);
+                        REQUIRE(command_buffer.CmdEndRendering() == ErrorCode::Success);
+                    }) == ErrorCode::Success);
 
         Opal::DynamicArray<u8> pixels(k_side * k_side * 4);
-        Forge::ReadBackTexture(fixture.device, fixture.GetQueue(), color, pixels, 0, Forge::ImageLayout::TransferSource);
+        REQUIRE(Forge::ReadBackTexture(fixture.device, fixture.GetQueue(), color, pixels, 0, Forge::ImageLayout::TransferSource) ==
+                ErrorCode::Success);
         return Opal::DynamicArray<u8>{pixels[0], pixels[1], pixels[2], pixels[3]};
     };
 
@@ -3334,12 +3388,12 @@ TEST_CASE("Forge specialization constants", "[forge]")
     SECTION("A compute pipeline specializes the same way")
     {
         constexpr i32 k_element_count = 128;
-        const Forge::Buffer output(fixture.device, {.size = k_element_count * sizeof(u32),
+        const Forge::Buffer output = ForgeTest::Unwrap(Forge::Buffer::Create(fixture.device, {.size = k_element_count * sizeof(u32),
                                                     .usage = Forge::BufferUsageBits::StorageBuffer,
                                                     .host_access = Forge::HostAccess::Random,
-                                                    .use_device_address = true});
-        const Forge::Shader compute_shader = Forge::Shader::FromSourceInMemory(fixture.device, k_specialized_compute_source,
-                                                                              {.entry_point = "main_specialized", .cache = GetShaderCache()});
+                                                    .use_device_address = true}));
+        const Forge::Shader compute_shader = Forge::Shader::FromSourceInMemory(
+            fixture.device, k_specialized_compute_source, {.entry_point = "main_specialized", .cache = GetShaderCache()});
         Forge::DescriptorPoolDesc pool_desc;
         pool_desc.Add(Forge::DescriptorType::StorageBuffer, 1);
         const Forge::DescriptorPool pool(fixture.device, pool_desc);
@@ -3355,15 +3409,15 @@ TEST_CASE("Forge specialization constants", "[forge]")
         pipeline_desc.specialization.PushBack(Forge::SpecializationConstant{.name = "ADDEND", .value = 100u});
         const Forge::Pipeline pipeline(fixture.device, pipeline_desc);
 
-        Forge::ImmediateSubmit(fixture.device, fixture.GetQueue(),
+        REQUIRE(Forge::ImmediateSubmit(fixture.device, fixture.GetQueue(),
                                [&](Forge::CommandBuffer& command_buffer)
                                {
-                                   command_buffer.CmdBindPipeline(pipeline);
-                                   command_buffer.CmdBindDescriptorSet(pipeline, set);
-                                   command_buffer.CmdDispatch(k_element_count / 64);
-                               });
+                                   REQUIRE(command_buffer.CmdBindPipeline(pipeline) == ErrorCode::Success);
+                                   REQUIRE(command_buffer.CmdBindDescriptorSet(pipeline, set) == ErrorCode::Success);
+                                   REQUIRE(command_buffer.CmdDispatch(k_element_count / 64) == ErrorCode::Success);
+                               }) == ErrorCode::Success);
         Opal::DynamicArray<u32> values(k_element_count);
-        output.Read({reinterpret_cast<u8*>(values.GetData()), values.GetSize() * sizeof(u32)});
+        REQUIRE(output.Read({reinterpret_cast<u8*>(values.GetData()), values.GetSize() * sizeof(u32)}) == ErrorCode::Success);
         // 100 rather than the 5 the shader declares, so the value came from the pipeline.
         for (i32 i = 0; i < k_element_count; ++i)
         {
@@ -3568,8 +3622,8 @@ TEST_CASE("Forge shader reflection", "[forge]")
     SECTION("An input the shader never reads is not reported at all")
     {
         // Why the check above cannot exist. The struct has two members and reflection reports one.
-        const Forge::Shader partial =
-            Forge::Shader::FromSourceInMemory(fixture.device, k_unused_input_source, {.entry_point = "main_vertex", .cache = GetShaderCache()});
+        const Forge::Shader partial = Forge::Shader::FromSourceInMemory(fixture.device, k_unused_input_source,
+                                                                        {.entry_point = "main_vertex", .cache = GetShaderCache()});
         REQUIRE(partial.GetInputs().GetSize() == 1);
         REQUIRE(partial.GetInputs()[0].location == 0);
     }
@@ -3686,11 +3740,11 @@ TEST_CASE("Forge descriptor bindings checked against the shader", "[forge]")
         pool_desc.max_sets = 2;
         const Forge::DescriptorPool pool(fixture.device, pool_desc);
 
-        const Forge::Texture texture(fixture.device, {.format = PixelFormat::R8G8B8A8_UNORM,
+        const Forge::Texture texture = ForgeTest::Unwrap(Forge::Texture::Create(fixture.device, {.format = PixelFormat::R8G8B8A8_UNORM,
                                                       .width = 4,
                                                       .height = 4,
-                                                      .usage = Forge::TextureUsageBits::Sampled});
-        const Forge::Sampler sampler(fixture.device, {.max_anisotropy = 1.0f});
+                                                      .usage = Forge::TextureUsageBits::Sampled}));
+        const Forge::Sampler sampler = ForgeTest::Unwrap(Forge::Sampler::Create(fixture.device, {.max_anisotropy = 1.0f}));
 
         Forge::DescriptorSet set(pool, layout);
         REQUIRE(set.GetBindingIndex("first_texture") == 0);
@@ -3949,12 +4003,12 @@ constexpr i32 k_lifetime_elements = 64;
 
 Forge::Buffer MakeWipedOutput(const Forge::Device& device)
 {
-    Forge::Buffer output(device, {.size = k_lifetime_elements * sizeof(u32),
+    Forge::Buffer output = ForgeTest::Unwrap(Forge::Buffer::Create(device, {.size = k_lifetime_elements * sizeof(u32),
                                   .usage = Forge::BufferUsageBits::StorageBuffer,
                                   .host_access = Forge::HostAccess::Random,
-                                  .use_device_address = true});
+                                  .use_device_address = true}));
     const Opal::DynamicArray<u8> zeros(k_lifetime_elements * sizeof(u32));
-    output.Update(zeros);
+    REQUIRE(output.Update(zeros) == ErrorCode::Success);
     return output;
 }
 
@@ -3963,15 +4017,16 @@ void RequireDispatchWrites(const Forge::Device& device, Forge::DeviceQueue& queu
                            const Forge::Buffer& output)
 {
     const VkDeviceAddress address = output.GetNativeDeviceAddress();
-    Forge::ImmediateSubmit(device, queue,
+    REQUIRE(Forge::ImmediateSubmit(device, queue,
                            [&](Forge::CommandBuffer& command_buffer)
                            {
-                               command_buffer.CmdBindPipeline(pipeline);
-                               command_buffer.CmdPushConstants(pipeline, ShaderTypeBits::Compute, Opal::AsBytes(address));
-                               command_buffer.CmdDispatch(1);
-                           });
+                               REQUIRE(command_buffer.CmdBindPipeline(pipeline) == ErrorCode::Success);
+                               REQUIRE(command_buffer.CmdPushConstants(pipeline, ShaderTypeBits::Compute, Opal::AsBytes(address)) ==
+                                       ErrorCode::Success);
+                               REQUIRE(command_buffer.CmdDispatch(1) == ErrorCode::Success);
+                           }) == ErrorCode::Success);
     Opal::DynamicArray<u32> values(k_lifetime_elements);
-    output.Read({reinterpret_cast<u8*>(values.GetData()), values.GetSize() * sizeof(u32)});
+    REQUIRE(output.Read({reinterpret_cast<u8*>(values.GetData()), values.GetSize() * sizeof(u32)}) == ErrorCode::Success);
     for (i32 i = 0; i < k_lifetime_elements; ++i)
     {
         INFO("element " << i);
@@ -4054,7 +4109,7 @@ TEST_CASE("Forge empty state and moves of the device stack", "[forge]")
             REQUIRE(queue.GetNativeCommandPool() != VK_NULL_HANDLE);
             // Submitting needs every member at once: the device, the queue, the family
             // index and the command pool the command buffer is allocated out of.
-            Forge::ImmediateSubmit(device, queue, [](Forge::CommandBuffer&) {});
+            REQUIRE(Forge::ImmediateSubmit(device, queue, [](Forge::CommandBuffer&) {}) == ErrorCode::Success);
             REQUIRE(queue.WaitIdle() == ErrorCode::Success);
         });
 
@@ -4085,29 +4140,29 @@ TEST_CASE("Forge empty state and moves of the resources", "[forge]")
     CheckLifetimeContract("Buffer",
                           [&]
                           {
-                              return Forge::Buffer(fixture.device,
+                              return ForgeTest::Unwrap(Forge::Buffer::Create(fixture.device,
                                                    {.size = written.GetSize(),
                                                     .usage = Forge::BufferUsageBits::StorageBuffer,
                                                     .host_access = Forge::HostAccess::Random},
-                                                   written);
+                                                   written));
                           },
                           [&](const Forge::Buffer& buffer)
                           {
                               // Read back through the mapped pointer, which is the member 1.4 found the move
                               // leaving behind.
                               Opal::DynamicArray<u8> read_back(written.GetSize());
-                              buffer.Read(read_back);
+                              REQUIRE(buffer.Read(read_back) == ErrorCode::Success);
                               REQUIRE(CountMismatches(written, read_back) == 0);
                           });
 
     CheckLifetimeContract("Texture",
                           [&]
                           {
-                              return Forge::Texture(fixture.device, {.format = k_format,
+                              return ForgeTest::Unwrap(Forge::Texture::Create(fixture.device, {.format = k_format,
                                                                      .width = k_side,
                                                                      .height = k_side,
                                                                      .usage = Forge::TextureUsageBits::ColorAttachment |
-                                                                              Forge::TextureUsageBits::TransferSource});
+                                                                              Forge::TextureUsageBits::TransferSource}));
                           },
                           [&](Forge::Texture& texture)
                           {
@@ -4115,11 +4170,11 @@ TEST_CASE("Forge empty state and moves of the resources", "[forge]")
                               REQUIRE(texture.GetDesc().width == k_side);
                               // Forge tracks the layout per subresource itself, so the move has to carry that
                               // array; a readback transitions the texture and then asks where it ended up.
-                              REQUIRE(texture.GetCurrentLayout() == Forge::ImageLayout::Undefined);
+                              REQUIRE(ForgeTest::Unwrap(texture.GetCurrentLayout()) == Forge::ImageLayout::Undefined);
                               Opal::DynamicArray<u8> pixels(k_side * k_side * 4);
-                              Forge::ReadBackTexture(fixture.device, fixture.GetQueue(), texture, pixels, 0,
-                                                     Forge::ImageLayout::TransferSource);
-                              REQUIRE(texture.GetCurrentLayout() == Forge::ImageLayout::TransferSource);
+                              REQUIRE(Forge::ReadBackTexture(fixture.device, fixture.GetQueue(), texture, pixels, 0,
+                                                     Forge::ImageLayout::TransferSource) == ErrorCode::Success);
+                              REQUIRE(ForgeTest::Unwrap(texture.GetCurrentLayout()) == Forge::ImageLayout::TransferSource);
                           });
 
     // A sampler holds nothing but its device and its handle, so writing it into a descriptor is the cheapest
@@ -4131,12 +4186,12 @@ TEST_CASE("Forge empty state and moves of the resources", "[forge]")
     Forge::DescriptorSetLayoutDesc sampler_layout_desc;
     sampler_layout_desc.AddBinding(0, Forge::DescriptorType::CombinedImageSampler, 1, ShaderTypeBits::Fragment);
     Forge::DescriptorSetLayout sampler_layout(fixture.device, sampler_layout_desc);
-    Forge::Texture sampled(fixture.device, {.format = k_format,
+    Forge::Texture sampled = ForgeTest::Unwrap(Forge::Texture::Create(fixture.device, {.format = k_format,
                                                   .width = k_side,
                                                   .height = k_side,
-                                                  .usage = Forge::TextureUsageBits::Sampled});
+                                                  .usage = Forge::TextureUsageBits::Sampled}));
 
-    CheckLifetimeContract("Sampler", [&] { return Forge::Sampler(fixture.device, {.max_anisotropy = 1.0f}); },
+    CheckLifetimeContract("Sampler", [&] { return ForgeTest::Unwrap(Forge::Sampler::Create(fixture.device, {.max_anisotropy = 1.0f})); },
                           [&](const Forge::Sampler& sampler)
                           {
                               REQUIRE(sampler.GetNativeSampler() != VK_NULL_HANDLE);
@@ -4239,15 +4294,16 @@ TEST_CASE("Forge empty state and moves of the descriptor objects", "[forge]")
                               REQUIRE(set.GetBindingDescriptorType(0) == Forge::DescriptorType::StorageBuffer);
                               const Forge::Buffer output = MakeWipedOutput(fixture.device);
                               set.Update(0, output);
-                              Forge::ImmediateSubmit(fixture.device, fixture.GetQueue(),
+                              REQUIRE(Forge::ImmediateSubmit(fixture.device, fixture.GetQueue(),
                                                      [&](Forge::CommandBuffer& command_buffer)
                                                      {
-                                                         command_buffer.CmdBindPipeline(pipeline);
-                                                         command_buffer.CmdBindDescriptorSet(pipeline, set);
-                                                         command_buffer.CmdDispatch(1);
-                                                     });
+                                                         REQUIRE(command_buffer.CmdBindPipeline(pipeline) == ErrorCode::Success);
+                                                         REQUIRE(command_buffer.CmdBindDescriptorSet(pipeline, set) == ErrorCode::Success);
+                                                         REQUIRE(command_buffer.CmdDispatch(1) == ErrorCode::Success);
+                                                     }) == ErrorCode::Success);
                               Opal::DynamicArray<u32> values(k_lifetime_elements);
-                              output.Read({reinterpret_cast<u8*>(values.GetData()), values.GetSize() * sizeof(u32)});
+                              REQUIRE(output.Read({reinterpret_cast<u8*>(values.GetData()), values.GetSize() * sizeof(u32)}) ==
+                                      ErrorCode::Success);
                               for (i32 i = 0; i < k_lifetime_elements; ++i)
                               {
                                   INFO("element " << i);
@@ -4272,72 +4328,72 @@ TEST_CASE("Forge empty state and moves of the command and synchronization object
     ForgeFixture fixture;
     Forge::DeviceQueue& queue = fixture.GetQueue();
 
-    CheckLifetimeContract("CommandBuffer", [&] { return Forge::CommandBuffer(fixture.device, queue); },
+    CheckLifetimeContract("CommandBuffer", [&] { return ForgeTest::Unwrap(Forge::CommandBuffer::Create(fixture.device, queue)); },
                           [&](Forge::CommandBuffer& command_buffer)
                           {
                               // Recording and submitting is what needs the queue the buffer was allocated on
                               // beside the handle itself.
-                              command_buffer.Begin();
-                              command_buffer.End();
-                              const Forge::Fence fence(fixture.device, false);
+                              REQUIRE(command_buffer.Begin() == ErrorCode::Success);
+                              REQUIRE(command_buffer.End() == ErrorCode::Success);
+                              const Forge::Fence fence = ForgeTest::Unwrap(Forge::Fence::Create(fixture.device, false));
                               REQUIRE(queue.Submit(command_buffer, fence) == ErrorCode::Success);
-                              fence.Wait();
+                              REQUIRE(fence.Wait() == ErrorCode::Success);
                           });
 
-    CheckLifetimeContract("Fence", [&] { return Forge::Fence(fixture.device, false); },
+    CheckLifetimeContract("Fence", [&] { return ForgeTest::Unwrap(Forge::Fence::Create(fixture.device, false)); },
                           [&](Forge::Fence& fence)
                           {
-                              Forge::CommandBuffer command_buffer(fixture.device, queue);
-                              command_buffer.Begin();
-                              command_buffer.End();
+                              Forge::CommandBuffer command_buffer = ForgeTest::Unwrap(Forge::CommandBuffer::Create(fixture.device, queue));
+                              REQUIRE(command_buffer.Begin() == ErrorCode::Success);
+                              REQUIRE(command_buffer.End() == ErrorCode::Success);
                               REQUIRE(queue.Submit(command_buffer, fence) == ErrorCode::Success);
-                              fence.Wait();
+                              REQUIRE(fence.Wait() == ErrorCode::Success);
                               // Signalled now, and Reset has to reach the device the move carried.
-                              REQUIRE(fence.TryWait(0));
-                              fence.Reset();
-                              REQUIRE_FALSE(fence.TryWait(0));
+                              REQUIRE(ForgeTest::Unwrap(fence.TryWait(0)));
+                              REQUIRE(fence.Reset() == ErrorCode::Success);
+                              REQUIRE_FALSE(ForgeTest::Unwrap(fence.TryWait(0)));
                           });
 
     CheckLifetimeContract("Semaphore",
                           [&] {
-                              return Forge::Semaphore(fixture.device,
-                                                      {.type = Forge::SemaphoreType::Timeline, .initial_value = 3});
+                              return ForgeTest::Unwrap(Forge::Semaphore::Create(fixture.device,
+                                                      {.type = Forge::SemaphoreType::Timeline, .initial_value = 3}));
                           },
                           [](const Forge::Semaphore& semaphore)
                           {
                               // The type is a member of its own, and every host side call throws on a binary
                               // semaphore, so a move that dropped it would fail here rather than answer wrong.
                               REQUIRE(semaphore.IsTimeline());
-                              REQUIRE(semaphore.GetValue() == 3);
-                              semaphore.Signal(7);
-                              REQUIRE(semaphore.GetValue() == 7);
+                              REQUIRE(ForgeTest::Unwrap(semaphore.GetValue()) == 3);
+                              REQUIRE(semaphore.Signal(7) == ErrorCode::Success);
+                              REQUIRE(ForgeTest::Unwrap(semaphore.GetValue()) == 7);
                           });
 
     // Four rather than the two TimestampQueryPoolDesc defaults to: a check that asks for the default value
     // cannot tell a desc that came through the move from one that was never assigned.
-    CheckLifetimeContract("TimestampQueryPool", [&] { return Forge::TimestampQueryPool(fixture.device, {.query_count = 4}); },
-                          [&](Forge::TimestampQueryPool& pool)
-                          {
-                              REQUIRE(pool.GetQueryCount() == 4);
-                              // Read off the device once at construction and used by every elapsed helper.
-                              // Compared against what the device reports rather than against zero, because the
-                              // member defaults to one: a move that dropped it would otherwise keep answering
-                              // a plausible number and turn every measurement into ticks.
-                              REQUIRE(pool.GetTimestampPeriod() ==
-                                      fixture.device.GetPhysicalDevice().GetProperties().limits.timestampPeriod);
-                              Forge::ImmediateSubmit(fixture.device, queue,
-                                                     [&](Forge::CommandBuffer& command_buffer)
-                                                     {
-                                                         command_buffer.CmdResetQueryPool(pool);
-                                                         command_buffer.CmdWriteTimestamp(pool, 0,
-                                                                                          Forge::PipelineStageBits::PipelineStart);
-                                                         command_buffer.CmdWriteTimestamp(pool, 1,
-                                                                                          Forge::PipelineStageBits::PipelineEnd);
-                                                     });
-                              Opal::InPlaceArray<u64, 2> ticks;
-                              pool.GetResults({ticks.GetData(), 2});
-                              REQUIRE(ticks[1] >= ticks[0]);
-                          });
+    CheckLifetimeContract(
+        "TimestampQueryPool", [&] { return ForgeTest::Unwrap(Forge::TimestampQueryPool::Create(fixture.device, {.query_count = 4})); },
+        [&](Forge::TimestampQueryPool& pool)
+        {
+            REQUIRE(pool.GetQueryCount() == 4);
+            // Read off the device once at construction and used by every elapsed helper.
+            // Compared against what the device reports rather than against zero, because the
+            // member defaults to one: a move that dropped it would otherwise keep answering
+            // a plausible number and turn every measurement into ticks.
+            REQUIRE(pool.GetTimestampPeriod() == fixture.device.GetPhysicalDevice().GetProperties().limits.timestampPeriod);
+            REQUIRE(Forge::ImmediateSubmit(fixture.device, queue,
+                                           [&](Forge::CommandBuffer& command_buffer)
+                                           {
+                                               REQUIRE(command_buffer.CmdResetQueryPool(pool) == ErrorCode::Success);
+                                               REQUIRE(command_buffer.CmdWriteTimestamp(pool, 0, Forge::PipelineStageBits::PipelineStart) ==
+                                                       ErrorCode::Success);
+                                               REQUIRE(command_buffer.CmdWriteTimestamp(pool, 1, Forge::PipelineStageBits::PipelineEnd) ==
+                                                       ErrorCode::Success);
+                                           }) == ErrorCode::Success);
+            Opal::InPlaceArray<u64, 2> ticks;
+            REQUIRE(pool.GetResults({ticks.GetData(), 2}) == ErrorCode::Success);
+            REQUIRE(ticks[1] >= ticks[0]);
+        });
 
     REQUIRE_NO_VALIDATION_ERROR_AT_TEARDOWN(fixture);
 }
@@ -4397,26 +4453,28 @@ Opal::InPlaceArray<i32, 4> GridTexel(Opal::ArrayView<const u8> pixels, i32 width
 /** Put pixels into every array layer of a texture and leave it where a transfer read can find it. */
 void UploadGrid(const Forge::Device& device, Forge::DeviceQueue& queue, Forge::Texture& texture, Opal::ArrayView<const u8> pixels)
 {
-    const Forge::Buffer staging(device, {.size = pixels.GetSize(), .usage = Forge::BufferUsageBits::TransferSource}, pixels);
+    const Forge::Buffer staging = ForgeTest::Unwrap(
+        Forge::Buffer::Create(device, {.size = pixels.GetSize(), .usage = Forge::BufferUsageBits::TransferSource}, pixels));
     const Forge::BufferTextureCopyRegion region{
         .texture_subresource = {.array_layer_count = texture.GetDesc().array_layer_count}};
-    Forge::ImmediateSubmit(device, queue,
-                           [&](Forge::CommandBuffer& command_buffer)
-                           {
-                               command_buffer.CmdTextureBarrier(Forge::TextureBarrier::ToTransferDestination(texture));
-                               command_buffer.CmdCopyBufferToTexture(staging, texture, {&region, 1});
-                           });
+    REQUIRE(Forge::ImmediateSubmit(device, queue,
+                                   [&](Forge::CommandBuffer& command_buffer)
+                                   {
+                                       REQUIRE(command_buffer.CmdTextureBarrier(Forge::TextureBarrier::ToTransferDestination(texture)) ==
+                                               ErrorCode::Success);
+                                       REQUIRE(command_buffer.CmdCopyBufferToTexture(staging, texture, {&region, 1}) == ErrorCode::Success);
+                                   }) == ErrorCode::Success);
 }
 
 /** A texture of the given size holding MakeTexelGrid, ready to be copied out of and into. */
 Forge::Texture MakeGridTexture(const Forge::Device& device, Forge::DeviceQueue& queue, i32 width, i32 height, u8 seed,
                                PixelFormat format = PixelFormat::R8G8B8A8_UNORM)
 {
-    Forge::Texture texture(device, {.format = format,
+    Forge::Texture texture = ForgeTest::Unwrap(Forge::Texture::Create(device, {.format = format,
                                     .width = static_cast<u32>(width),
                                     .height = static_cast<u32>(height),
                                     .usage = Forge::TextureUsageBits::TransferSource |
-                                             Forge::TextureUsageBits::TransferDestination});
+                                             Forge::TextureUsageBits::TransferDestination}));
     const Opal::DynamicArray<u8> pixels = MakeTexelGrid(width, height, seed);
     UploadGrid(device, queue, texture, pixels);
     return texture;
@@ -4426,11 +4484,11 @@ Forge::Texture MakeGridTexture(const Forge::Device& device, Forge::DeviceQueue& 
 Forge::Texture MakeTransferTarget(const Forge::Device& device, i32 width, i32 height,
                                   PixelFormat format = PixelFormat::R8G8B8A8_UNORM)
 {
-    return Forge::Texture(device, {.format = format,
+    return ForgeTest::Unwrap(Forge::Texture::Create(device, {.format = format,
                                    .width = static_cast<u32>(width),
                                    .height = static_cast<u32>(height),
                                    .usage = Forge::TextureUsageBits::TransferSource |
-                                            Forge::TextureUsageBits::TransferDestination});
+                                            Forge::TextureUsageBits::TransferDestination}));
 }
 
 /** The byte every buffer below is filled with before a copy, so anything the copy did not write says so. */
@@ -4461,16 +4519,20 @@ TEST_CASE("Forge blits", "[forge]")
         Forge::Texture destination = MakeTransferTarget(fixture.device, k_target_side, k_target_side);
 
         const Forge::TextureBlitRegion region{};
-        Forge::ImmediateSubmit(fixture.device, fixture.GetQueue(),
-                               [&](Forge::CommandBuffer& command_buffer)
-                               {
-                                   command_buffer.CmdTextureBarrier(Forge::TextureBarrier::ToTransferSource(source));
-                                   command_buffer.CmdTextureBarrier(Forge::TextureBarrier::ToTransferDestination(destination));
-                                   command_buffer.CmdBlitTexture(source, destination, {&region, 1}, ImageFilter::Nearest);
-                               });
+        REQUIRE(Forge::ImmediateSubmit(
+                    fixture.device, fixture.GetQueue(),
+                    [&](Forge::CommandBuffer& command_buffer)
+                    {
+                        REQUIRE(command_buffer.CmdTextureBarrier(Forge::TextureBarrier::ToTransferSource(source)) == ErrorCode::Success);
+                        REQUIRE(command_buffer.CmdTextureBarrier(Forge::TextureBarrier::ToTransferDestination(destination)) ==
+                                ErrorCode::Success);
+                        REQUIRE(command_buffer.CmdBlitTexture(source, destination, {&region, 1}, ImageFilter::Nearest) ==
+                                ErrorCode::Success);
+                    }) == ErrorCode::Success);
 
         Opal::DynamicArray<u8> pixels(k_target_side * k_target_side * 4);
-        Forge::ReadBackTexture(fixture.device, fixture.GetQueue(), destination, pixels, 0, Forge::ImageLayout::TransferSource);
+        REQUIRE(Forge::ReadBackTexture(fixture.device, fixture.GetQueue(), destination, pixels, 0, Forge::ImageLayout::TransferSource) ==
+                ErrorCode::Success);
         // Exactly two to one with no filtering, so every destination texel is the source texel above it and
         // nothing has been averaged with a neighbour.
         const Opal::DynamicArray<u8> expected = MakeTexelGrid(k_side, k_side, k_seed);
@@ -4490,16 +4552,20 @@ TEST_CASE("Forge blits", "[forge]")
 
         // The far corner sits before the near one on x, so the destination is written right to left.
         const Forge::TextureBlitRegion region{.destination_offset = {k_side, 0, 0}, .destination_extent = {-k_side, k_side, 1}};
-        Forge::ImmediateSubmit(fixture.device, fixture.GetQueue(),
-                               [&](Forge::CommandBuffer& command_buffer)
-                               {
-                                   command_buffer.CmdTextureBarrier(Forge::TextureBarrier::ToTransferSource(source));
-                                   command_buffer.CmdTextureBarrier(Forge::TextureBarrier::ToTransferDestination(destination));
-                                   command_buffer.CmdBlitTexture(source, destination, {&region, 1}, ImageFilter::Nearest);
-                               });
+        REQUIRE(Forge::ImmediateSubmit(
+                    fixture.device, fixture.GetQueue(),
+                    [&](Forge::CommandBuffer& command_buffer)
+                    {
+                        REQUIRE(command_buffer.CmdTextureBarrier(Forge::TextureBarrier::ToTransferSource(source)) == ErrorCode::Success);
+                        REQUIRE(command_buffer.CmdTextureBarrier(Forge::TextureBarrier::ToTransferDestination(destination)) ==
+                                ErrorCode::Success);
+                        REQUIRE(command_buffer.CmdBlitTexture(source, destination, {&region, 1}, ImageFilter::Nearest) ==
+                                ErrorCode::Success);
+                    }) == ErrorCode::Success);
 
         Opal::DynamicArray<u8> pixels(k_side * k_side * 4);
-        Forge::ReadBackTexture(fixture.device, fixture.GetQueue(), destination, pixels, 0, Forge::ImageLayout::TransferSource);
+        REQUIRE(Forge::ReadBackTexture(fixture.device, fixture.GetQueue(), destination, pixels, 0, Forge::ImageLayout::TransferSource) ==
+                ErrorCode::Success);
         const Opal::DynamicArray<u8> expected = MakeTexelGrid(k_side, k_side, k_seed);
         for (i32 y = 0; y < k_side; ++y)
         {
@@ -4521,16 +4587,20 @@ TEST_CASE("Forge blits", "[forge]")
         Forge::Texture destination = MakeTransferTarget(fixture.device, k_side, k_side, k_swapped);
 
         const Forge::TextureBlitRegion region{};
-        Forge::ImmediateSubmit(fixture.device, fixture.GetQueue(),
-                               [&](Forge::CommandBuffer& command_buffer)
-                               {
-                                   command_buffer.CmdTextureBarrier(Forge::TextureBarrier::ToTransferSource(source));
-                                   command_buffer.CmdTextureBarrier(Forge::TextureBarrier::ToTransferDestination(destination));
-                                   command_buffer.CmdBlitTexture(source, destination, {&region, 1}, ImageFilter::Nearest);
-                               });
+        REQUIRE(Forge::ImmediateSubmit(
+                    fixture.device, fixture.GetQueue(),
+                    [&](Forge::CommandBuffer& command_buffer)
+                    {
+                        REQUIRE(command_buffer.CmdTextureBarrier(Forge::TextureBarrier::ToTransferSource(source)) == ErrorCode::Success);
+                        REQUIRE(command_buffer.CmdTextureBarrier(Forge::TextureBarrier::ToTransferDestination(destination)) ==
+                                ErrorCode::Success);
+                        REQUIRE(command_buffer.CmdBlitTexture(source, destination, {&region, 1}, ImageFilter::Nearest) ==
+                                ErrorCode::Success);
+                    }) == ErrorCode::Success);
 
         Opal::DynamicArray<u8> pixels(k_side * k_side * 4);
-        Forge::ReadBackTexture(fixture.device, fixture.GetQueue(), destination, pixels, 0, Forge::ImageLayout::TransferSource);
+        REQUIRE(Forge::ReadBackTexture(fixture.device, fixture.GetQueue(), destination, pixels, 0, Forge::ImageLayout::TransferSource) ==
+                ErrorCode::Success);
         // Read back as the bytes of a BGRA image, so the red the source wrote is now the third byte. A blit
         // that had copied rather than converted would leave it first, which is what separates this from
         // CmdCopyTexture.
@@ -4558,16 +4628,20 @@ TEST_CASE("Forge blits", "[forge]")
         Forge::Texture destination = MakeTransferTarget(fixture.device, k_target_side, k_target_side);
 
         const Forge::TextureBlitRegion region{};
-        Forge::ImmediateSubmit(fixture.device, fixture.GetQueue(),
-                               [&](Forge::CommandBuffer& command_buffer)
-                               {
-                                   command_buffer.CmdTextureBarrier(Forge::TextureBarrier::ToTransferSource(source));
-                                   command_buffer.CmdTextureBarrier(Forge::TextureBarrier::ToTransferDestination(destination));
-                                   command_buffer.CmdBlitTexture(source, destination, {&region, 1}, ImageFilter::Linear);
-                               });
+        REQUIRE(Forge::ImmediateSubmit(
+                    fixture.device, fixture.GetQueue(),
+                    [&](Forge::CommandBuffer& command_buffer)
+                    {
+                        REQUIRE(command_buffer.CmdTextureBarrier(Forge::TextureBarrier::ToTransferSource(source)) == ErrorCode::Success);
+                        REQUIRE(command_buffer.CmdTextureBarrier(Forge::TextureBarrier::ToTransferDestination(destination)) ==
+                                ErrorCode::Success);
+                        REQUIRE(command_buffer.CmdBlitTexture(source, destination, {&region, 1}, ImageFilter::Linear) ==
+                                ErrorCode::Success);
+                    }) == ErrorCode::Success);
 
         Opal::DynamicArray<u8> pixels(k_target_side * k_target_side * 4);
-        Forge::ReadBackTexture(fixture.device, fixture.GetQueue(), destination, pixels, 0, Forge::ImageLayout::TransferSource);
+        REQUIRE(Forge::ReadBackTexture(fixture.device, fixture.GetQueue(), destination, pixels, 0, Forge::ImageLayout::TransferSource) ==
+                ErrorCode::Success);
         // Where exactly a filtered sample lands is the driver's business, so this asserts the one thing the
         // filter has to change: somewhere across the row a value appears that is not one of the four the
         // source holds, which a nearest filter can never produce.
@@ -4604,15 +4678,15 @@ TEST_CASE("Forge copies from a texture into a buffer", "[forge]")
     // zero that could have come from anywhere.
     auto make_sentinel_buffer = [&]
     {
-        Forge::Buffer buffer(fixture.device, {.size = k_buffer_size,
+        Forge::Buffer buffer = ForgeTest::Unwrap(Forge::Buffer::Create(fixture.device, {.size = k_buffer_size,
                                               .usage = Forge::BufferUsageBits::TransferDestination,
-                                              .host_access = Forge::HostAccess::Random});
+                                              .host_access = Forge::HostAccess::Random}));
         Opal::DynamicArray<u8> filler(k_buffer_size);
         for (i32 i = 0; i < k_buffer_size; ++i)
         {
             filler[i] = k_sentinel;
         }
-        buffer.Update(filler);
+        REQUIRE(buffer.Update(filler) == ErrorCode::Success);
         return buffer;
     };
 
@@ -4621,14 +4695,15 @@ TEST_CASE("Forge copies from a texture into a buffer", "[forge]")
     {
         Forge::Texture source = MakeGridTexture(fixture.device, fixture.GetQueue(), k_side, k_side, k_seed);
         const Forge::Buffer buffer = make_sentinel_buffer();
-        Forge::ImmediateSubmit(fixture.device, fixture.GetQueue(),
-                               [&](Forge::CommandBuffer& command_buffer)
-                               {
-                                   command_buffer.CmdTextureBarrier(Forge::TextureBarrier::ToTransferSource(source));
-                                   command_buffer.CmdCopyTextureToBuffer(source, buffer, {&region, 1});
-                               });
+        REQUIRE(Forge::ImmediateSubmit(
+                    fixture.device, fixture.GetQueue(),
+                    [&](Forge::CommandBuffer& command_buffer)
+                    {
+                        REQUIRE(command_buffer.CmdTextureBarrier(Forge::TextureBarrier::ToTransferSource(source)) == ErrorCode::Success);
+                        REQUIRE(command_buffer.CmdCopyTextureToBuffer(source, buffer, {&region, 1}) == ErrorCode::Success);
+                    }) == ErrorCode::Success);
         Opal::DynamicArray<u8> out(k_buffer_size);
-        buffer.Read(out);
+        REQUIRE(buffer.Read(out) == ErrorCode::Success);
         return out;
     };
 
@@ -4691,13 +4766,13 @@ TEST_CASE("Forge copies from a texture into a buffer", "[forge]")
         constexpr i32 k_box = 2;
         constexpr i32 k_row_length = 4;
         constexpr i32 k_layer_height = 3;
-        Forge::Texture source(fixture.device, {.format = PixelFormat::R8G8B8A8_UNORM,
+        Forge::Texture source = ForgeTest::Unwrap(Forge::Texture::Create(fixture.device, {.format = PixelFormat::R8G8B8A8_UNORM,
                                                .width = k_side,
                                                .height = k_side,
                                                .array_layer_count = k_layer_count,
                                                .usage = Forge::TextureUsageBits::TransferSource |
                                                         Forge::TextureUsageBits::TransferDestination,
-                                               .view_type = Forge::TextureViewType::Texture2DArray});
+                                               .view_type = Forge::TextureViewType::Texture2DArray}));
         // One grid per layer, with a different blue channel, so a layer stride that is wrong reads as the
         // other layer rather than as noise.
         Opal::DynamicArray<u8> both_layers(k_side * k_side * 4 * k_layer_count);
@@ -4715,14 +4790,15 @@ TEST_CASE("Forge copies from a texture into a buffer", "[forge]")
                                                     .buffer_layer_height = k_layer_height,
                                                     .texture_subresource = {.array_layer_count = k_layer_count},
                                                     .texture_extent = {k_box, k_box, 1}};
-        Forge::ImmediateSubmit(fixture.device, fixture.GetQueue(),
-                               [&](Forge::CommandBuffer& command_buffer)
-                               {
-                                   command_buffer.CmdTextureBarrier(Forge::TextureBarrier::ToTransferSource(source));
-                                   command_buffer.CmdCopyTextureToBuffer(source, buffer, {&region, 1});
-                               });
+        REQUIRE(Forge::ImmediateSubmit(
+                    fixture.device, fixture.GetQueue(),
+                    [&](Forge::CommandBuffer& command_buffer)
+                    {
+                        REQUIRE(command_buffer.CmdTextureBarrier(Forge::TextureBarrier::ToTransferSource(source)) == ErrorCode::Success);
+                        REQUIRE(command_buffer.CmdCopyTextureToBuffer(source, buffer, {&region, 1}) == ErrorCode::Success);
+                    }) == ErrorCode::Success);
         Opal::DynamicArray<u8> out(k_buffer_size);
-        buffer.Read(out);
+        REQUIRE(buffer.Read(out) == ErrorCode::Success);
 
         // One layer is row_length * layer_height texels apart from the next, which is larger than the box
         // the copy actually wrote - so the gap between them has to still hold the sentinel.
@@ -4758,26 +4834,26 @@ TEST_CASE("Forge mip level sizes", "[forge]")
     SECTION("Every level is a quarter of the one above it")
     {
         const Forge::TextureDesc desc{.format = PixelFormat::R8G8B8A8_UNORM, .width = 8, .height = 8, .mip_level_count = 4};
-        REQUIRE(Forge::GetMipLevelSize(desc, 0) == 8 * 8 * 4);
-        REQUIRE(Forge::GetMipLevelSize(desc, 1) == 4 * 4 * 4);
-        REQUIRE(Forge::GetMipLevelSize(desc, 2) == 2 * 2 * 4);
-        REQUIRE(Forge::GetMipLevelSize(desc, 3) == 1 * 1 * 4);
+        REQUIRE(ForgeTest::Unwrap(Forge::GetMipLevelSize(desc, 0)) == 8 * 8 * 4);
+        REQUIRE(ForgeTest::Unwrap(Forge::GetMipLevelSize(desc, 1)) == 4 * 4 * 4);
+        REQUIRE(ForgeTest::Unwrap(Forge::GetMipLevelSize(desc, 2)) == 2 * 2 * 4);
+        REQUIRE(ForgeTest::Unwrap(Forge::GetMipLevelSize(desc, 3)) == 1 * 1 * 4);
     }
     SECTION("An odd extent halves down rather than rounding up, and never below one")
     {
         const Forge::TextureDesc desc{.format = PixelFormat::R8G8B8A8_UNORM, .width = 5, .height = 3, .mip_level_count = 4};
-        REQUIRE(Forge::GetMipLevelSize(desc, 0) == 5 * 3 * 4);
-        REQUIRE(Forge::GetMipLevelSize(desc, 1) == 2 * 1 * 4);
+        REQUIRE(ForgeTest::Unwrap(Forge::GetMipLevelSize(desc, 0)) == 5 * 3 * 4);
+        REQUIRE(ForgeTest::Unwrap(Forge::GetMipLevelSize(desc, 1)) == 2 * 1 * 4);
         // Both axes are already at one here, and a level below that is still one texel rather than none.
-        REQUIRE(Forge::GetMipLevelSize(desc, 2) == 1 * 1 * 4);
-        REQUIRE(Forge::GetMipLevelSize(desc, 3) == 1 * 1 * 4);
+        REQUIRE(ForgeTest::Unwrap(Forge::GetMipLevelSize(desc, 2)) == 1 * 1 * 4);
+        REQUIRE(ForgeTest::Unwrap(Forge::GetMipLevelSize(desc, 3)) == 1 * 1 * 4);
     }
     SECTION("Array layers and depth both multiply the level")
     {
         const Forge::TextureDesc layered{
             .format = PixelFormat::R8G8B8A8_UNORM, .width = 4, .height = 4, .mip_level_count = 2, .array_layer_count = 3};
-        REQUIRE(Forge::GetMipLevelSize(layered, 0) == 4 * 4 * 4 * 3);
-        REQUIRE(Forge::GetMipLevelSize(layered, 1) == 2 * 2 * 4 * 3);
+        REQUIRE(ForgeTest::Unwrap(Forge::GetMipLevelSize(layered, 0)) == 4 * 4 * 4 * 3);
+        REQUIRE(ForgeTest::Unwrap(Forge::GetMipLevelSize(layered, 1)) == 2 * 2 * 4 * 3);
 
         const Forge::TextureDesc volume{.dimension = Forge::TextureDimension::Texture3D,
                                         .format = PixelFormat::R8G8B8A8_UNORM,
@@ -4785,28 +4861,28 @@ TEST_CASE("Forge mip level sizes", "[forge]")
                                         .height = 4,
                                         .depth = 4,
                                         .mip_level_count = 2};
-        REQUIRE(Forge::GetMipLevelSize(volume, 0) == 4 * 4 * 4 * 4);
+        REQUIRE(ForgeTest::Unwrap(Forge::GetMipLevelSize(volume, 0)) == 4 * 4 * 4 * 4);
         // Depth halves with the other two axes.
-        REQUIRE(Forge::GetMipLevelSize(volume, 1) == 2 * 2 * 2 * 4);
+        REQUIRE(ForgeTest::Unwrap(Forge::GetMipLevelSize(volume, 1)) == 2 * 2 * 2 * 4);
     }
     SECTION("A depth format is sized by its own texel, not by four bytes of colour")
     {
         const Forge::TextureDesc half{.format = PixelFormat::D16_UNORM, .width = 4, .height = 4};
-        REQUIRE(Forge::GetMipLevelSize(half, 0) == 4 * 4 * 2);
+        REQUIRE(ForgeTest::Unwrap(Forge::GetMipLevelSize(half, 0)) == 4 * 4 * 2);
         const Forge::TextureDesc full{.format = PixelFormat::D32_SFLOAT, .width = 4, .height = 4};
-        REQUIRE(Forge::GetMipLevelSize(full, 0) == 4 * 4 * 4);
+        REQUIRE(ForgeTest::Unwrap(Forge::GetMipLevelSize(full, 0)) == 4 * 4 * 4);
     }
     SECTION("A block compressed format throws rather than answering as if it were packed texels")
     {
         // The size of a compressed level is a count of blocks, not of texels, and answering with the texel
         // arithmetic would hand a readback a buffer of the wrong size and no reason to notice.
         const Forge::TextureDesc desc{.format = PixelFormat::BC1_RGBA_UNORM_BLOCK, .width = 8, .height = 8, .mip_level_count = 2};
-        REQUIRE_THROWS_AS(Forge::GetMipLevelSize(desc, 0), Opal::Exception);
+        REQUIRE_FALSE(Forge::GetMipLevelSize(desc, 0).HasValue());
     }
     SECTION("A level the texture does not have throws")
     {
         const Forge::TextureDesc desc{.format = PixelFormat::R8G8B8A8_UNORM, .width = 8, .height = 8, .mip_level_count = 2};
-        REQUIRE_THROWS_AS(Forge::GetMipLevelSize(desc, 2), Opal::Exception);
+        REQUIRE_FALSE(Forge::GetMipLevelSize(desc, 2).HasValue());
     }
 }
 
@@ -4845,26 +4921,26 @@ TEST_CASE("Forge barrier batches", "[forge]")
             {.shader_stages = ShaderTypeBits::Compute, .offset = 0, .size = sizeof(VkDeviceAddress)});
         const Forge::Pipeline pipeline(fixture.device, pipeline_desc);
 
-        const Forge::Buffer written(fixture.device, {.size = k_element_count * sizeof(u32),
+        const Forge::Buffer written = ForgeTest::Unwrap(Forge::Buffer::Create(fixture.device, {.size = k_element_count * sizeof(u32),
                                                      .usage = Forge::BufferUsageBits::StorageBuffer |
                                                               Forge::BufferUsageBits::TransferSource,
                                                      .host_access = Forge::HostAccess::None,
-                                                     .use_device_address = true});
-        const Forge::Buffer copied(fixture.device, {.size = k_element_count * sizeof(u32),
+                                                     .use_device_address = true}));
+        const Forge::Buffer copied = ForgeTest::Unwrap(Forge::Buffer::Create(fixture.device, {.size = k_element_count * sizeof(u32),
                                                     .usage = Forge::BufferUsageBits::TransferDestination,
-                                                    .host_access = Forge::HostAccess::Random});
+                                                    .host_access = Forge::HostAccess::Random}));
         const Opal::DynamicArray<u8> zeros(k_element_count * sizeof(u32));
-        copied.Update(zeros);
+        REQUIRE(copied.Update(zeros) == ErrorCode::Success);
         Forge::Texture texture = MakeGridTexture(fixture.device, fixture.GetQueue(), k_side, k_side, 33);
 
         const VkDeviceAddress address = written.GetNativeDeviceAddress();
-        Forge::ImmediateSubmit(
+        REQUIRE(Forge::ImmediateSubmit(
             fixture.device, fixture.GetQueue(),
             [&](Forge::CommandBuffer& command_buffer)
             {
-                command_buffer.CmdBindPipeline(pipeline);
-                command_buffer.CmdPushConstants(pipeline, ShaderTypeBits::Compute, Opal::AsBytes(address));
-                command_buffer.CmdDispatch(1);
+                REQUIRE(command_buffer.CmdBindPipeline(pipeline) == ErrorCode::Success);
+                REQUIRE(command_buffer.CmdPushConstants(pipeline, ShaderTypeBits::Compute, Opal::AsBytes(address)) == ErrorCode::Success);
+                REQUIRE(command_buffer.CmdDispatch(1) == ErrorCode::Success);
 
                 const Forge::MemoryBarrier memory{.stages_must_finish = Forge::PipelineStageBits::ComputeShader,
                                                   .stages_must_finish_access = Forge::PipelineStageAccessBits::Write,
@@ -4872,25 +4948,27 @@ TEST_CASE("Forge barrier batches", "[forge]")
                                                   .before_stages_start_access = Forge::PipelineStageAccessBits::Read};
                 const Forge::BufferBarrier buffer = Forge::BufferBarrier::WriteThenRead(
                     written, Forge::PipelineStageBits::ComputeShader, Forge::PipelineStageBits::Transfer);
-                const Forge::TextureBarrier texture_barrier = Forge::TextureBarrier::ToTransferSource(texture);
+                const Forge::TextureBarrier texture_barrier = ForgeTest::Unwrap(Forge::TextureBarrier::ToTransferSource(texture));
                 // CmdBarriers is what every other Cmd*Barrier delegates to, and the only way to put all
                 // three kinds into one dependency.
-                command_buffer.CmdBarriers({.memory = {&memory, 1}, .buffer = {&buffer, 1}, .texture = {&texture_barrier, 1}});
+                REQUIRE(command_buffer.CmdBarriers({.memory = {&memory, 1}, .buffer = {&buffer, 1}, .texture = {&texture_barrier, 1}}) ==
+                        ErrorCode::Success);
 
-                command_buffer.CmdCopyBuffer(written, copied);
-            });
+                REQUIRE(command_buffer.CmdCopyBuffer(written, copied) == ErrorCode::Success);
+            }) == ErrorCode::Success);
 
         Opal::DynamicArray<u32> values(k_element_count);
-        copied.Read({reinterpret_cast<u8*>(values.GetData()), values.GetSize() * sizeof(u32)});
+        REQUIRE(copied.Read({reinterpret_cast<u8*>(values.GetData()), values.GetSize() * sizeof(u32)}) == ErrorCode::Success);
         for (i32 i = 0; i < k_element_count; ++i)
         {
             INFO("element " << i);
             REQUIRE(values[i] == static_cast<u32>(i) + 1000);
         }
         // The texture barrier in the same batch moved the texture, which is what makes this readback legal.
-        REQUIRE(texture.GetCurrentLayout() == Forge::ImageLayout::TransferSource);
+        REQUIRE(ForgeTest::Unwrap(texture.GetCurrentLayout()) == Forge::ImageLayout::TransferSource);
         Opal::DynamicArray<u8> pixels(k_side * k_side * 4);
-        Forge::ReadBackTexture(fixture.device, fixture.GetQueue(), texture, pixels, 0, Forge::ImageLayout::TransferSource);
+        REQUIRE(Forge::ReadBackTexture(fixture.device, fixture.GetQueue(), texture, pixels, 0, Forge::ImageLayout::TransferSource) ==
+                ErrorCode::Success);
         const Opal::DynamicArray<u8> expected = MakeTexelGrid(k_side, k_side, 33);
         REQUIRE(CountMismatches(expected, pixels) == 0);
     }
@@ -4909,19 +4987,20 @@ TEST_CASE("Forge barrier batches", "[forge]")
         }
         for (i32 i = 0; i < k_texture_count; ++i)
         {
-            barriers.PushBack(Forge::TextureBarrier::ToTransferSource(textures[i]));
+            barriers.PushBack(ForgeTest::Unwrap(Forge::TextureBarrier::ToTransferSource(textures[i])));
         }
-        Forge::ImmediateSubmit(fixture.device, fixture.GetQueue(),
-                               [&](Forge::CommandBuffer& command_buffer)
-                               { command_buffer.CmdTextureBarriers({barriers.GetData(), barriers.GetSize()}); });
+        REQUIRE(Forge::ImmediateSubmit(
+                    fixture.device, fixture.GetQueue(), [&](Forge::CommandBuffer& command_buffer)
+                    { REQUIRE(command_buffer.CmdTextureBarriers({barriers.GetData(), barriers.GetSize()}) == ErrorCode::Success); }) ==
+                ErrorCode::Success);
 
         for (i32 i = 0; i < k_texture_count; ++i)
         {
             INFO("texture " << i);
-            REQUIRE(textures[i].GetCurrentLayout() == Forge::ImageLayout::TransferSource);
+            REQUIRE(ForgeTest::Unwrap(textures[i].GetCurrentLayout()) == Forge::ImageLayout::TransferSource);
             Opal::DynamicArray<u8> pixels(k_side * k_side * 4);
-            Forge::ReadBackTexture(fixture.device, fixture.GetQueue(), textures[i], pixels, 0,
-                                   Forge::ImageLayout::TransferSource);
+            REQUIRE(Forge::ReadBackTexture(fixture.device, fixture.GetQueue(), textures[i], pixels, 0,
+                                   Forge::ImageLayout::TransferSource) == ErrorCode::Success);
             const Opal::DynamicArray<u8> expected = MakeTexelGrid(k_side, k_side, static_cast<u8>(60 + i));
             REQUIRE(CountMismatches(expected, pixels) == 0);
         }
@@ -4936,16 +5015,18 @@ TEST_CASE("Forge barrier batches", "[forge]")
         // whether a tiled device then kept the work in tile memory is neither observable from here nor
         // reachable without that extension.
         Forge::Texture texture = MakeGridTexture(fixture.device, fixture.GetQueue(), k_side, k_side, 44);
-        Forge::ImmediateSubmit(fixture.device, fixture.GetQueue(),
-                               [&](Forge::CommandBuffer& command_buffer)
-                               {
-                                   const Forge::TextureBarrier texture_barrier = Forge::TextureBarrier::ToTransferSource(texture);
-                                   command_buffer.CmdBarriers(
-                                       {.texture = {&texture_barrier, 1}, .flags = Forge::DependencyFlagBits::ByRegion});
-                               });
-        REQUIRE(texture.GetCurrentLayout() == Forge::ImageLayout::TransferSource);
+        REQUIRE(Forge::ImmediateSubmit(
+                    fixture.device, fixture.GetQueue(),
+                    [&](Forge::CommandBuffer& command_buffer)
+                    {
+                        const Forge::TextureBarrier texture_barrier = ForgeTest::Unwrap(Forge::TextureBarrier::ToTransferSource(texture));
+                        REQUIRE(command_buffer.CmdBarriers({.texture = {&texture_barrier, 1},
+                                                            .flags = Forge::DependencyFlagBits::ByRegion}) == ErrorCode::Success);
+                    }) == ErrorCode::Success);
+        REQUIRE(ForgeTest::Unwrap(texture.GetCurrentLayout()) == Forge::ImageLayout::TransferSource);
         Opal::DynamicArray<u8> pixels(k_side * k_side * 4);
-        Forge::ReadBackTexture(fixture.device, fixture.GetQueue(), texture, pixels, 0, Forge::ImageLayout::TransferSource);
+        REQUIRE(Forge::ReadBackTexture(fixture.device, fixture.GetQueue(), texture, pixels, 0, Forge::ImageLayout::TransferSource) ==
+                ErrorCode::Success);
         const Opal::DynamicArray<u8> expected = MakeTexelGrid(k_side, k_side, 44);
         REQUIRE(CountMismatches(expected, pixels) == 0);
     }
@@ -4971,69 +5052,75 @@ TEST_CASE("Forge barrier presets", "[forge]")
      */
     auto run_preset = [&](Forge::TextureUsageBits usage, auto&& make_barrier, Forge::ImageLayout expected_layout)
     {
-        Forge::Texture texture(fixture.device, {.format = PixelFormat::R8G8B8A8_UNORM,
+        Forge::Texture texture = ForgeTest::Unwrap(Forge::Texture::Create(fixture.device, {.format = PixelFormat::R8G8B8A8_UNORM,
                                                 .width = k_side,
                                                 .height = k_side,
                                                 .usage = Forge::TextureUsageBits::TransferSource |
-                                                         Forge::TextureUsageBits::TransferDestination | usage});
+                                                         Forge::TextureUsageBits::TransferDestination | usage}));
         UploadGrid(fixture.device, fixture.GetQueue(), texture, expected);
-        Forge::ImmediateSubmit(fixture.device, fixture.GetQueue(),
-                               [&](Forge::CommandBuffer& command_buffer)
-                               { command_buffer.CmdTextureBarrier(make_barrier(texture)); });
-        REQUIRE(texture.GetCurrentLayout() == expected_layout);
+        REQUIRE(Forge::ImmediateSubmit(fixture.device, fixture.GetQueue(), [&](Forge::CommandBuffer& command_buffer)
+                                       { REQUIRE(command_buffer.CmdTextureBarrier(make_barrier(texture)) == ErrorCode::Success); }) ==
+                ErrorCode::Success);
+        REQUIRE(ForgeTest::Unwrap(texture.GetCurrentLayout()) == expected_layout);
 
         Opal::DynamicArray<u8> pixels(k_side * k_side * 4);
-        Forge::ReadBackTexture(fixture.device, fixture.GetQueue(), texture, pixels, 0, Forge::ImageLayout::TransferSource);
+        REQUIRE(Forge::ReadBackTexture(fixture.device, fixture.GetQueue(), texture, pixels, 0, Forge::ImageLayout::TransferSource) ==
+                ErrorCode::Success);
         REQUIRE(CountMismatches(expected, pixels) == 0);
     };
 
     SECTION("ToShaderRead moves a sampled texture without losing it")
     {
-        run_preset(Forge::TextureUsageBits::Sampled, [](Forge::Texture& texture) { return Forge::TextureBarrier::ToShaderRead(texture); },
-                   Forge::ImageLayout::ShaderReadOnly);
+        run_preset(
+            Forge::TextureUsageBits::Sampled, [](Forge::Texture& texture)
+            { return ForgeTest::Unwrap(Forge::TextureBarrier::ToShaderRead(texture)); }, Forge::ImageLayout::ShaderReadOnly);
     }
     SECTION("ToTransferSource moves a texture into the layout a copy reads from")
     {
         run_preset(Forge::TextureUsageBits::Sampled,
-                   [](Forge::Texture& texture) { return Forge::TextureBarrier::ToTransferSource(texture); },
+                   [](Forge::Texture& texture) { return ForgeTest::Unwrap(Forge::TextureBarrier::ToTransferSource(texture)); },
                    Forge::ImageLayout::TransferSource);
     }
     SECTION("The three argument To is told both layouts")
     {
         // No short form on purpose: with both, dropping an argument would leave a call that compiles and
         // means the opposite, since the layout in the middle is the source and the one at the end is not.
-        run_preset(Forge::TextureUsageBits::Sampled,
-                   [](Forge::Texture& texture)
-                   {
-                       return Forge::TextureBarrier::To(texture, texture.GetCurrentLayout(), Forge::ImageLayout::TransferDestination);
-                   },
-                   Forge::ImageLayout::TransferDestination);
+        run_preset(
+            Forge::TextureUsageBits::Sampled,
+            [](Forge::Texture& texture)
+            {
+                return ForgeTest::Unwrap(Forge::TextureBarrier::To(texture, ForgeTest::Unwrap(texture.GetCurrentLayout()),
+                                                                   Forge::ImageLayout::TransferDestination));
+            },
+            Forge::ImageLayout::TransferDestination);
     }
-    SECTION("A layout with no preset throws rather than guessing")
+    SECTION("A layout with no preset is refused rather than guessed at")
     {
-        Forge::Texture texture(fixture.device, {.format = PixelFormat::R8G8B8A8_UNORM,
+        Forge::Texture texture = ForgeTest::Unwrap(Forge::Texture::Create(fixture.device, {.format = PixelFormat::R8G8B8A8_UNORM,
                                                 .width = k_side,
                                                 .height = k_side,
-                                                .usage = Forge::TextureUsageBits::TransferSource});
+                                                .usage = Forge::TextureUsageBits::TransferSource}));
         // DepthStencilReadOnly is a real layout with no preset behind it, which is the near miss worth
         // checking: the dispatch throws rather than picking whichever preset is closest. General used to be
         // the example here and stopped being one when 3.18 gave it a preset of its own.
-        REQUIRE_THROWS_AS(
-            Forge::TextureBarrier::To(texture, Forge::ImageLayout::Undefined, Forge::ImageLayout::DepthStencilReadOnly),
-            Opal::Exception);
+        REQUIRE_FALSE(
+            Forge::TextureBarrier::To(texture, Forge::ImageLayout::Undefined, Forge::ImageLayout::DepthStencilReadOnly).HasValue());
     }
     SECTION("ToDepthStencilAttachment moves a depth texture")
     {
-        Forge::Texture depth(fixture.device, {.format = PixelFormat::D32_SFLOAT,
+        Forge::Texture depth = ForgeTest::Unwrap(Forge::Texture::Create(fixture.device, {.format = PixelFormat::D32_SFLOAT,
                                               .width = k_side,
                                               .height = k_side,
-                                              .usage = Forge::TextureUsageBits::DepthStencilAttachment});
-        Forge::ImmediateSubmit(fixture.device, fixture.GetQueue(),
-                               [&](Forge::CommandBuffer& command_buffer)
-                               { command_buffer.CmdTextureBarrier(Forge::TextureBarrier::ToDepthStencilAttachment(depth)); });
+                                              .usage = Forge::TextureUsageBits::DepthStencilAttachment}));
+        REQUIRE(Forge::ImmediateSubmit(fixture.device, fixture.GetQueue(),
+                                       [&](Forge::CommandBuffer& command_buffer)
+                                       {
+                                           REQUIRE(command_buffer.CmdTextureBarrier(
+                                                       Forge::TextureBarrier::ToDepthStencilAttachment(depth)) == ErrorCode::Success);
+                                       }) == ErrorCode::Success);
         // Rendering with one is 3.16; what this says is that the preset picks the depth aspect off the
         // format rather than the colour aspect a colour texture would have given it.
-        REQUIRE(depth.GetCurrentLayout() == Forge::ImageLayout::DepthStencilAttachment);
+        REQUIRE(ForgeTest::Unwrap(depth.GetCurrentLayout()) == Forge::ImageLayout::DepthStencilAttachment);
     }
     SECTION("BufferBarrier::ReadThenWrite orders a read before the write that follows it")
     {
@@ -5049,29 +5136,31 @@ TEST_CASE("Forge barrier presets", "[forge]")
 
         constexpr i32 k_element_count = 64;
         const Opal::DynamicArray<u8> replacement = MakeBytes(k_element_count * sizeof(u32), 13);
-        const Forge::Buffer shared(fixture.device, {.size = k_element_count * sizeof(u32),
+        const Forge::Buffer shared = ForgeTest::Unwrap(Forge::Buffer::Create(fixture.device, {.size = k_element_count * sizeof(u32),
                                                     .usage = Forge::BufferUsageBits::StorageBuffer |
                                                              Forge::BufferUsageBits::TransferDestination,
                                                     .host_access = Forge::HostAccess::Random,
-                                                    .use_device_address = true});
-        const Forge::Buffer source(fixture.device,
-                                   {.size = replacement.GetSize(), .usage = Forge::BufferUsageBits::TransferSource}, replacement);
+                                                    .use_device_address = true}));
+        const Forge::Buffer source = ForgeTest::Unwrap(Forge::Buffer::Create(fixture.device,
+                                   {.size = replacement.GetSize(), .usage = Forge::BufferUsageBits::TransferSource}, replacement));
 
         const VkDeviceAddress address = shared.GetNativeDeviceAddress();
-        Forge::ImmediateSubmit(fixture.device, fixture.GetQueue(),
+        REQUIRE(Forge::ImmediateSubmit(fixture.device, fixture.GetQueue(),
                                [&](Forge::CommandBuffer& command_buffer)
                                {
-                                   command_buffer.CmdBindPipeline(pipeline);
-                                   command_buffer.CmdPushConstants(pipeline, ShaderTypeBits::Compute, Opal::AsBytes(address));
-                                   command_buffer.CmdDispatch(1);
-                                   command_buffer.CmdBufferBarrier(Forge::BufferBarrier::ReadThenWrite(
-                                       shared, Forge::PipelineStageBits::ComputeShader, Forge::PipelineStageBits::Transfer));
-                                   command_buffer.CmdCopyBuffer(source, shared);
-                               });
+                                   REQUIRE(command_buffer.CmdBindPipeline(pipeline) == ErrorCode::Success);
+                                   REQUIRE(command_buffer.CmdPushConstants(pipeline, ShaderTypeBits::Compute, Opal::AsBytes(address)) ==
+                                           ErrorCode::Success);
+                                   REQUIRE(command_buffer.CmdDispatch(1) == ErrorCode::Success);
+                                   REQUIRE(command_buffer.CmdBufferBarrier(Forge::BufferBarrier::ReadThenWrite(
+                                               shared, Forge::PipelineStageBits::ComputeShader, Forge::PipelineStageBits::Transfer)) ==
+                                           ErrorCode::Success);
+                                   REQUIRE(command_buffer.CmdCopyBuffer(source, shared) == ErrorCode::Success);
+                               }) == ErrorCode::Success);
 
         // The copy is last, so what is in the buffer is what it wrote.
         Opal::DynamicArray<u8> out(replacement.GetSize());
-        shared.Read(out);
+        REQUIRE(shared.Read(out) == ErrorCode::Success);
         REQUIRE(CountMismatches(replacement, out) == 0);
     }
     REQUIRE_NO_VALIDATION_ERROR(fixture);
@@ -5098,18 +5187,19 @@ TEST_CASE("Forge barrier preset for presenting", "[forge]")
     Forge::DeviceQueue& queue = ForgeTest::Unwrap(device.GetQueue(Forge::QueueFamily::Graphics));
 
     constexpr i32 k_side = 4;
-    Forge::Texture texture(device, {.format = PixelFormat::R8G8B8A8_UNORM,
+    Forge::Texture texture = ForgeTest::Unwrap(Forge::Texture::Create(device, {.format = PixelFormat::R8G8B8A8_UNORM,
                                     .width = k_side,
                                     .height = k_side,
                                     .usage = Forge::TextureUsageBits::ColorAttachment |
-                                             Forge::TextureUsageBits::TransferSource});
-    Forge::ImmediateSubmit(device, queue,
-                           [&](Forge::CommandBuffer& command_buffer)
-                           {
-                               command_buffer.CmdTextureBarrier(Forge::TextureBarrier::ToColorAttachment(texture));
-                               command_buffer.CmdTextureBarrier(Forge::TextureBarrier::ToPresent(texture));
-                           });
-    REQUIRE(texture.GetCurrentLayout() == Forge::ImageLayout::Present);
+                                             Forge::TextureUsageBits::TransferSource}));
+    REQUIRE(Forge::ImmediateSubmit(
+                device, queue,
+                [&](Forge::CommandBuffer& command_buffer)
+                {
+                    REQUIRE(command_buffer.CmdTextureBarrier(Forge::TextureBarrier::ToColorAttachment(texture)) == ErrorCode::Success);
+                    REQUIRE(command_buffer.CmdTextureBarrier(Forge::TextureBarrier::ToPresent(texture)) == ErrorCode::Success);
+                }) == ErrorCode::Success);
+    REQUIRE(ForgeTest::Unwrap(texture.GetCurrentLayout()) == Forge::ImageLayout::Present);
 
     Opal::StringUtf8 report;
     for (const Forge::DebugMessage& message : context.GetDebugMessages())
@@ -5158,25 +5248,25 @@ TEST_CASE("Forge binding several descriptor sets at once", "[forge]")
     {
         input_values[i] = static_cast<u32>(i) + 500;
     }
-    const Forge::Buffer input(fixture.device, {.size = k_element_count * sizeof(u32),
+    const Forge::Buffer input = ForgeTest::Unwrap(Forge::Buffer::Create(fixture.device, {.size = k_element_count * sizeof(u32),
                                                .usage = Forge::BufferUsageBits::StorageBuffer,
                                                .host_access = Forge::HostAccess::Random},
-                              {reinterpret_cast<const u8*>(input_values.GetData()), input_values.GetSize() * sizeof(u32)});
+                              {reinterpret_cast<const u8*>(input_values.GetData()), input_values.GetSize() * sizeof(u32)}));
 
     auto make_wiped_output = [&]
     {
-        Forge::Buffer output(fixture.device, {.size = k_element_count * sizeof(u32),
+        Forge::Buffer output = ForgeTest::Unwrap(Forge::Buffer::Create(fixture.device, {.size = k_element_count * sizeof(u32),
                                               .usage = Forge::BufferUsageBits::StorageBuffer,
-                                              .host_access = Forge::HostAccess::Random});
+                                              .host_access = Forge::HostAccess::Random}));
         const Opal::DynamicArray<u8> zeros(k_element_count * sizeof(u32));
-        output.Update(zeros);
+        REQUIRE(output.Update(zeros) == ErrorCode::Success);
         return output;
     };
 
     auto require_doubled = [&](const Forge::Buffer& output)
     {
         Opal::DynamicArray<u32> values(k_element_count);
-        output.Read({reinterpret_cast<u8*>(values.GetData()), values.GetSize() * sizeof(u32)});
+        REQUIRE(output.Read({reinterpret_cast<u8*>(values.GetData()), values.GetSize() * sizeof(u32)}) == ErrorCode::Success);
         for (i32 i = 0; i < k_element_count; ++i)
         {
             INFO("element " << i);
@@ -5194,13 +5284,13 @@ TEST_CASE("Forge binding several descriptor sets at once", "[forge]")
 
         const Opal::InPlaceArray<Opal::Ref<const Forge::DescriptorSet>, 2> sets{Opal::Ref<const Forge::DescriptorSet>(first),
                                                                                 Opal::Ref<const Forge::DescriptorSet>(second)};
-        Forge::ImmediateSubmit(fixture.device, fixture.GetQueue(),
+        REQUIRE(Forge::ImmediateSubmit(fixture.device, fixture.GetQueue(),
                                [&](Forge::CommandBuffer& command_buffer)
                                {
-                                   command_buffer.CmdBindPipeline(pipeline);
-                                   command_buffer.CmdBindDescriptorSets(pipeline, {sets.GetData(), 2});
-                                   command_buffer.CmdDispatch(1);
-                               });
+                                   REQUIRE(command_buffer.CmdBindPipeline(pipeline) == ErrorCode::Success);
+                                   REQUIRE(command_buffer.CmdBindDescriptorSets(pipeline, {sets.GetData(), 2}) == ErrorCode::Success);
+                                   REQUIRE(command_buffer.CmdDispatch(1) == ErrorCode::Success);
+                               }) == ErrorCode::Success);
         require_doubled(output);
     }
     SECTION("A non-zero first set binds into the slot it names")
@@ -5214,14 +5304,14 @@ TEST_CASE("Forge binding several descriptor sets at once", "[forge]")
         second.Update(0, output);
 
         const Opal::InPlaceArray<Opal::Ref<const Forge::DescriptorSet>, 1> sets{Opal::Ref<const Forge::DescriptorSet>(second)};
-        Forge::ImmediateSubmit(fixture.device, fixture.GetQueue(),
+        REQUIRE(Forge::ImmediateSubmit(fixture.device, fixture.GetQueue(),
                                [&](Forge::CommandBuffer& command_buffer)
                                {
-                                   command_buffer.CmdBindPipeline(pipeline);
-                                   command_buffer.CmdBindDescriptorSet(pipeline, first, 0);
-                                   command_buffer.CmdBindDescriptorSets(pipeline, {sets.GetData(), 1}, 1);
-                                   command_buffer.CmdDispatch(1);
-                               });
+                                   REQUIRE(command_buffer.CmdBindPipeline(pipeline) == ErrorCode::Success);
+                                   REQUIRE(command_buffer.CmdBindDescriptorSet(pipeline, first, 0) == ErrorCode::Success);
+                                   REQUIRE(command_buffer.CmdBindDescriptorSets(pipeline, {sets.GetData(), 1}, 1) == ErrorCode::Success);
+                                   REQUIRE(command_buffer.CmdDispatch(1) == ErrorCode::Success);
+                               }) == ErrorCode::Success);
         require_doubled(output);
     }
     REQUIRE_NO_VALIDATION_ERROR(fixture);
@@ -5305,11 +5395,11 @@ float4 main_instanced_fragment(InstancedOutput input) : SV_Target
 /** A colour target these cases render into and read straight back out of. */
 Forge::Texture MakeColorTarget(const Forge::Device& device, i32 side, PixelFormat format = PixelFormat::R8G8B8A8_UNORM)
 {
-    return Forge::Texture(device, {.format = format,
+    return ForgeTest::Unwrap(Forge::Texture::Create(device, {.format = format,
                                    .width = static_cast<u32>(side),
                                    .height = static_cast<u32>(side),
                                    .usage = Forge::TextureUsageBits::ColorAttachment |
-                                            Forge::TextureUsageBits::TransferSource});
+                                            Forge::TextureUsageBits::TransferSource}));
 }
 
 /**
@@ -5320,26 +5410,27 @@ Forge::Texture MakeColorTarget(const Forge::Device& device, i32 side, PixelForma
 template <typename Record>
 Opal::DynamicArray<u8> RenderRaster(ForgeFixture& fixture, Forge::Texture& color, i32 side, Record&& record)
 {
-    Forge::ImmediateSubmit(fixture.device, fixture.GetQueue(),
-                           [&](Forge::CommandBuffer& command_buffer)
-                           {
-                               command_buffer.CmdTextureBarrier(Forge::TextureBarrier::ToColorAttachment(color));
-                               const Forge::RenderingDesc rendering_desc{
-                                   .render_area_extent = {side, side},
-                                   .color_attachments = {Forge::RenderingAttachmentDesc{
-                                       .texture = color,
-                                       .load_operation = Forge::AttachmentLoadOperation::Clear,
-                                       .store_operation = Forge::AttachmentStoreOperation::Store,
-                                       .clear_value = Vector4f{1.0f, 0.0f, 0.0f, 1.0f}}}};
-                               command_buffer.CmdBeginRendering(rendering_desc);
-                               command_buffer.CmdSetViewport(Vector2f::Zero(),
-                                                             {static_cast<f32>(side), static_cast<f32>(side)});
-                               command_buffer.CmdSetScissor(Vector2i::Zero(), {side, side});
-                               record(command_buffer);
-                               command_buffer.CmdEndRendering();
-                           });
+    REQUIRE(Forge::ImmediateSubmit(
+                fixture.device, fixture.GetQueue(),
+                [&](Forge::CommandBuffer& command_buffer)
+                {
+                    REQUIRE(command_buffer.CmdTextureBarrier(Forge::TextureBarrier::ToColorAttachment(color)) == ErrorCode::Success);
+                    const Forge::RenderingDesc rendering_desc{
+                        .render_area_extent = {side, side},
+                        .color_attachments = {Forge::RenderingAttachmentDesc{.texture = color,
+                                                                             .load_operation = Forge::AttachmentLoadOperation::Clear,
+                                                                             .store_operation = Forge::AttachmentStoreOperation::Store,
+                                                                             .clear_value = Vector4f{1.0f, 0.0f, 0.0f, 1.0f}}}};
+                    REQUIRE(command_buffer.CmdBeginRendering(rendering_desc) == ErrorCode::Success);
+                    REQUIRE(command_buffer.CmdSetViewport(Vector2f::Zero(), {static_cast<f32>(side), static_cast<f32>(side)}) ==
+                            ErrorCode::Success);
+                    REQUIRE(command_buffer.CmdSetScissor(Vector2i::Zero(), {side, side}) == ErrorCode::Success);
+                    record(command_buffer);
+                    REQUIRE(command_buffer.CmdEndRendering() == ErrorCode::Success);
+                }) == ErrorCode::Success);
     Opal::DynamicArray<u8> pixels(side * side * 4);
-    Forge::ReadBackTexture(fixture.device, fixture.GetQueue(), color, pixels, 0, Forge::ImageLayout::TransferSource);
+    REQUIRE(Forge::ReadBackTexture(fixture.device, fixture.GetQueue(), color, pixels, 0, Forge::ImageLayout::TransferSource) ==
+            ErrorCode::Success);
     return pixels;
 }
 
@@ -5404,9 +5495,9 @@ TEST_CASE("Forge culling and winding", "[forge]")
         fixture.device, k_fullscreen_source, {.entry_point = "main_vertex", .cache = GetShaderCache()});
     const Forge::Shader fragment_shader = Forge::Shader::FromSourceInMemory(
         fixture.device, k_fullscreen_source, {.entry_point = "main_fragment", .cache = GetShaderCache()});
-    const Forge::Buffer vertices(fixture.device,
+    const Forge::Buffer vertices = ForgeTest::Unwrap(Forge::Buffer::Create(fixture.device,
                                  {.size = sizeof(k_fullscreen_vertices), .usage = Forge::BufferUsageBits::VertexBuffer},
-                                 Opal::AsBytes(k_fullscreen_vertices));
+                                 Opal::AsBytes(k_fullscreen_vertices)));
 
     // Whether the one triangle survived, for a given cull mode and winding. The geometry never changes, so
     // what the answers differ by is only the state.
@@ -5418,9 +5509,10 @@ TEST_CASE("Forge culling and winding", "[forge]")
         const Opal::DynamicArray<u8> pixels = RenderRaster(fixture, color, k_side,
                                                            [&](Forge::CommandBuffer& command_buffer)
                                                            {
-                                                               command_buffer.CmdBindPipeline(pipeline);
-                                                               command_buffer.CmdBindVertexBuffer(vertices, 0);
-                                                               command_buffer.CmdDraw(3);
+                                                               REQUIRE(command_buffer.CmdBindPipeline(pipeline) == ErrorCode::Success);
+                                                               REQUIRE(command_buffer.CmdBindVertexBuffer(vertices, 0) ==
+                                                                       ErrorCode::Success);
+                                                               REQUIRE(command_buffer.CmdDraw(3) == ErrorCode::Success);
                                                            });
         return CountCovered(pixels, k_side) == k_side * k_side;
     };
@@ -5469,9 +5561,9 @@ TEST_CASE("Forge fill modes", "[forge]")
         fixture.device, k_fullscreen_source, {.entry_point = "main_vertex", .cache = GetShaderCache()});
     const Forge::Shader fragment_shader = Forge::Shader::FromSourceInMemory(
         fixture.device, k_fullscreen_source, {.entry_point = "main_fragment", .cache = GetShaderCache()});
-    const Forge::Buffer vertices(fixture.device,
+    const Forge::Buffer vertices = ForgeTest::Unwrap(Forge::Buffer::Create(fixture.device,
                                  {.size = sizeof(k_inset_triangle), .usage = Forge::BufferUsageBits::VertexBuffer},
-                                 Opal::AsBytes(k_inset_triangle));
+                                 Opal::AsBytes(k_inset_triangle)));
 
     auto draw_with_fill_mode = [&](FillMode fill_mode)
     {
@@ -5481,9 +5573,9 @@ TEST_CASE("Forge fill modes", "[forge]")
         return RenderRaster(fixture, color, k_side,
                             [&](Forge::CommandBuffer& command_buffer)
                             {
-                                command_buffer.CmdBindPipeline(pipeline);
-                                command_buffer.CmdBindVertexBuffer(vertices, 0);
-                                command_buffer.CmdDraw(3);
+                                REQUIRE(command_buffer.CmdBindPipeline(pipeline) == ErrorCode::Success);
+                                REQUIRE(command_buffer.CmdBindVertexBuffer(vertices, 0) == ErrorCode::Success);
+                                REQUIRE(command_buffer.CmdDraw(3) == ErrorCode::Success);
                             });
     };
 
@@ -5557,18 +5649,19 @@ TEST_CASE("Forge topologies", "[forge]")
         const Vector2f left = TexelCentre(k_side, 0, k_line_row);
         const Vector2f right = TexelCentre(k_side, k_side - 1, k_line_row);
         const f32 line_vertices[] = {left.x, left.y, right.x, right.y};
-        const Forge::Buffer vertices(fixture.device,
+        const Forge::Buffer vertices = ForgeTest::Unwrap(Forge::Buffer::Create(fixture.device,
                                      {.size = sizeof(line_vertices), .usage = Forge::BufferUsageBits::VertexBuffer},
-                                     Opal::AsBytes(line_vertices));
+                                     Opal::AsBytes(line_vertices)));
         const Forge::Pipeline pipeline = MakeRasterPipeline(fixture.device, vertex_shader, fragment_shader, k_format,
                                                             {.cull_mode = Face::None}, PrimitiveTopology::Line);
         Forge::Texture color = MakeColorTarget(fixture.device, k_side, k_format);
         const Opal::DynamicArray<u8> pixels = RenderRaster(fixture, color, k_side,
                                                            [&](Forge::CommandBuffer& command_buffer)
                                                            {
-                                                               command_buffer.CmdBindPipeline(pipeline);
-                                                               command_buffer.CmdBindVertexBuffer(vertices, 0);
-                                                               command_buffer.CmdDraw(2);
+                                                               REQUIRE(command_buffer.CmdBindPipeline(pipeline) == ErrorCode::Success);
+                                                               REQUIRE(command_buffer.CmdBindVertexBuffer(vertices, 0) ==
+                                                                       ErrorCode::Success);
+                                                               REQUIRE(command_buffer.CmdDraw(2) == ErrorCode::Success);
                                                            });
         // A triangle over the same two vertices would have covered nothing at all; a filled one would have
         // covered far more than a single row.
@@ -5598,18 +5691,19 @@ TEST_CASE("Forge topologies", "[forge]")
         const Vector2f second = TexelCentre(k_side, 5, 2);
         const Vector2f third = TexelCentre(k_side, 3, 6);
         const f32 point_vertices[] = {first.x, first.y, second.x, second.y, third.x, third.y};
-        const Forge::Buffer vertices(fixture.device,
+        const Forge::Buffer vertices = ForgeTest::Unwrap(Forge::Buffer::Create(fixture.device,
                                      {.size = sizeof(point_vertices), .usage = Forge::BufferUsageBits::VertexBuffer},
-                                     Opal::AsBytes(point_vertices));
+                                     Opal::AsBytes(point_vertices)));
         const Forge::Pipeline pipeline = MakeRasterPipeline(fixture.device, point_vertex_shader, fragment_shader, k_format,
                                                             {.cull_mode = Face::None}, PrimitiveTopology::Point);
         Forge::Texture color = MakeColorTarget(fixture.device, k_side, k_format);
         const Opal::DynamicArray<u8> pixels = RenderRaster(fixture, color, k_side,
                                                            [&](Forge::CommandBuffer& command_buffer)
                                                            {
-                                                               command_buffer.CmdBindPipeline(pipeline);
-                                                               command_buffer.CmdBindVertexBuffer(vertices, 0);
-                                                               command_buffer.CmdDraw(3);
+                                                               REQUIRE(command_buffer.CmdBindPipeline(pipeline) == ErrorCode::Success);
+                                                               REQUIRE(command_buffer.CmdBindVertexBuffer(vertices, 0) ==
+                                                                       ErrorCode::Success);
+                                                               REQUIRE(command_buffer.CmdDraw(3) == ErrorCode::Success);
                                                            });
         REQUIRE(CountCovered(pixels, k_side) == 3);
         REQUIRE(IsCovered(pixels, k_side, 1, 1));
@@ -5638,9 +5732,9 @@ TEST_CASE("Forge instancing through a second vertex binding", "[forge]")
     // One quad over the top left quarter of the target, as two triangles. Every instance draws this and only
     // this, so where the four end up is entirely what the second binding fed them.
     constexpr f32 k_quarter_quad[] = {-1.0f, -1.0f, 0.0f, -1.0f, 0.0f, 0.0f, -1.0f, -1.0f, 0.0f, 0.0f, -1.0f, 0.0f};
-    const Forge::Buffer vertices(fixture.device,
+    const Forge::Buffer vertices = ForgeTest::Unwrap(Forge::Buffer::Create(fixture.device,
                                  {.size = sizeof(k_quarter_quad), .usage = Forge::BufferUsageBits::VertexBuffer},
-                                 Opal::AsBytes(k_quarter_quad));
+                                 Opal::AsBytes(k_quarter_quad)));
 
     /** Per instance: where to move the quad, and the value whose bits become its colour. */
     struct InstanceData
@@ -5655,9 +5749,9 @@ TEST_CASE("Forge instancing through a second vertex binding", "[forge]")
         {0.0f, 1.0f, 3},  // bottom left, red and green
         {1.0f, 1.0f, 4},  // bottom right, blue
     };
-    const Forge::Buffer instance_buffer(fixture.device,
+    const Forge::Buffer instance_buffer = ForgeTest::Unwrap(Forge::Buffer::Create(fixture.device,
                                         {.size = sizeof(instances), .usage = Forge::BufferUsageBits::VertexBuffer},
-                                        Opal::AsBytes(instances));
+                                        Opal::AsBytes(instances)));
 
     Forge::GraphicsPipelineDesc pipeline_desc;
     pipeline_desc.vertex_shader = vertex_shader;
@@ -5676,10 +5770,11 @@ TEST_CASE("Forge instancing through a second vertex binding", "[forge]")
     const Opal::DynamicArray<u8> pixels = RenderRaster(fixture, color, k_side,
                                                        [&](Forge::CommandBuffer& command_buffer)
                                                        {
-                                                           command_buffer.CmdBindPipeline(pipeline);
-                                                           command_buffer.CmdBindVertexBuffer(vertices, 0);
-                                                           command_buffer.CmdBindVertexBuffer(instance_buffer, 1);
-                                                           command_buffer.CmdDraw(6, 4);
+                                                           REQUIRE(command_buffer.CmdBindPipeline(pipeline) == ErrorCode::Success);
+                                                           REQUIRE(command_buffer.CmdBindVertexBuffer(vertices, 0) == ErrorCode::Success);
+                                                           REQUIRE(command_buffer.CmdBindVertexBuffer(instance_buffer, 1) ==
+                                                                   ErrorCode::Success);
+                                                           REQUIRE(command_buffer.CmdDraw(6, 4) == ErrorCode::Success);
                                                        });
 
     // Each quarter carries the bits of its own instance value, so an instance that read the wrong entry of
@@ -5719,9 +5814,9 @@ TEST_CASE("Forge viewport and scissor", "[forge]")
         fixture.device, k_fullscreen_source, {.entry_point = "main_vertex", .cache = GetShaderCache()});
     const Forge::Shader fragment_shader = Forge::Shader::FromSourceInMemory(
         fixture.device, k_fullscreen_source, {.entry_point = "main_fragment", .cache = GetShaderCache()});
-    const Forge::Buffer vertices(fixture.device,
+    const Forge::Buffer vertices = ForgeTest::Unwrap(Forge::Buffer::Create(fixture.device,
                                  {.size = sizeof(k_fullscreen_vertices), .usage = Forge::BufferUsageBits::VertexBuffer},
-                                 Opal::AsBytes(k_fullscreen_vertices));
+                                 Opal::AsBytes(k_fullscreen_vertices)));
     const Forge::Pipeline pipeline =
         MakeRasterPipeline(fixture.device, vertex_shader, fragment_shader, k_format, {.cull_mode = Face::None});
 
@@ -5748,10 +5843,10 @@ TEST_CASE("Forge viewport and scissor", "[forge]")
                          {
                              // The viewport stays the whole target; only the scissor moves, so what the
                              // right half is missing is the scissor and not the transform.
-                             command_buffer.CmdSetScissor(Vector2i::Zero(), {k_half, k_side});
-                             command_buffer.CmdBindPipeline(pipeline);
-                             command_buffer.CmdBindVertexBuffer(vertices, 0);
-                             command_buffer.CmdDraw(3);
+                             REQUIRE(command_buffer.CmdSetScissor(Vector2i::Zero(), {k_half, k_side}) == ErrorCode::Success);
+                             REQUIRE(command_buffer.CmdBindPipeline(pipeline) == ErrorCode::Success);
+                             REQUIRE(command_buffer.CmdBindVertexBuffer(vertices, 0) == ErrorCode::Success);
+                             REQUIRE(command_buffer.CmdDraw(3) == ErrorCode::Success);
                          });
         const Opal::InPlaceArray<i32, 2> halves = count_halves(pixels);
         INFO("left " << halves[0] << ", right " << halves[1]);
@@ -5765,11 +5860,11 @@ TEST_CASE("Forge viewport and scissor", "[forge]")
             RenderRaster(fixture, color, k_side,
                          [&](Forge::CommandBuffer& command_buffer)
                          {
-                             command_buffer.CmdSetViewport({static_cast<f32>(k_half), 0.0f},
-                                                           {static_cast<f32>(k_half), static_cast<f32>(k_side)});
-                             command_buffer.CmdBindPipeline(pipeline);
-                             command_buffer.CmdBindVertexBuffer(vertices, 0);
-                             command_buffer.CmdDraw(3);
+                             REQUIRE(command_buffer.CmdSetViewport({static_cast<f32>(k_half), 0.0f},
+                                                           {static_cast<f32>(k_half), static_cast<f32>(k_side)}) == ErrorCode::Success);
+                             REQUIRE(command_buffer.CmdBindPipeline(pipeline) == ErrorCode::Success);
+                             REQUIRE(command_buffer.CmdBindVertexBuffer(vertices, 0) == ErrorCode::Success);
+                             REQUIRE(command_buffer.CmdDraw(3) == ErrorCode::Success);
                          });
         const Opal::InPlaceArray<i32, 2> halves = count_halves(pixels);
         INFO("left " << halves[0] << ", right " << halves[1]);
@@ -5845,26 +5940,26 @@ TEST_CASE("Forge viewport depth range", "[forge]")
     // A z of zero, so the depth that gets written is min_depth itself and the mapping is readable off the
     // result rather than having to be undone. A z of one half would land on the same number either way.
     const Opal::DynamicArray<f32> triangle = MakeFullscreenTriangleAt(0.0f);
-    const Forge::Buffer vertices(fixture.device,
+    const Forge::Buffer vertices = ForgeTest::Unwrap(Forge::Buffer::Create(fixture.device,
                                  {.size = triangle.GetSize() * sizeof(f32), .usage = Forge::BufferUsageBits::VertexBuffer},
-                                 {reinterpret_cast<const u8*>(triangle.GetData()), triangle.GetSize() * sizeof(f32)});
+                                 {reinterpret_cast<const u8*>(triangle.GetData()), triangle.GetSize() * sizeof(f32)}));
 
     // Render once through the given depth range and hand back what the depth buffer holds.
     auto depth_through_range = [&](f32 min_depth, f32 max_depth)
     {
         Forge::Texture color = MakeColorTarget(fixture.device, k_side, k_color_format);
-        Forge::Texture depth(fixture.device, {.format = k_depth_format,
+        Forge::Texture depth = ForgeTest::Unwrap(Forge::Texture::Create(fixture.device, {.format = k_depth_format,
                                               .width = k_side,
                                               .height = k_side,
                                               .usage = Forge::TextureUsageBits::DepthStencilAttachment |
-                                                       Forge::TextureUsageBits::TransferSource});
+                                                       Forge::TextureUsageBits::TransferSource}));
 
-        Forge::ImmediateSubmit(
+        REQUIRE(Forge::ImmediateSubmit(
             fixture.device, fixture.GetQueue(),
             [&](Forge::CommandBuffer& command_buffer)
             {
-                command_buffer.CmdTextureBarrier(Forge::TextureBarrier::ToColorAttachment(color));
-                command_buffer.CmdTextureBarrier(Forge::TextureBarrier::ToDepthStencilAttachment(depth));
+                REQUIRE(command_buffer.CmdTextureBarrier(Forge::TextureBarrier::ToColorAttachment(color)) == ErrorCode::Success);
+                REQUIRE(command_buffer.CmdTextureBarrier(Forge::TextureBarrier::ToDepthStencilAttachment(depth)) == ErrorCode::Success);
                 const Forge::RenderingDesc rendering_desc{
                     .render_area_extent = {k_side, k_side},
                     .color_attachments = {Forge::RenderingAttachmentDesc{
@@ -5877,17 +5972,18 @@ TEST_CASE("Forge viewport depth range", "[forge]")
                         .load_operation = Forge::AttachmentLoadOperation::Clear,
                         .store_operation = Forge::AttachmentStoreOperation::Store,
                         .clear_value = Forge::DepthStencilClearValue{1.0f, 0}}};
-                command_buffer.CmdBeginRendering(rendering_desc);
-                command_buffer.CmdSetViewport(Vector2f::Zero(), {k_side, k_side}, min_depth, max_depth);
-                command_buffer.CmdSetScissor(Vector2i::Zero(), {k_side, k_side});
-                command_buffer.CmdBindPipeline(pipeline);
-                command_buffer.CmdBindVertexBuffer(vertices, 0);
-                command_buffer.CmdDraw(3);
-                command_buffer.CmdEndRendering();
-            });
+                REQUIRE(command_buffer.CmdBeginRendering(rendering_desc) == ErrorCode::Success);
+                REQUIRE(command_buffer.CmdSetViewport(Vector2f::Zero(), {k_side, k_side}, min_depth, max_depth) == ErrorCode::Success);
+                REQUIRE(command_buffer.CmdSetScissor(Vector2i::Zero(), {k_side, k_side}) == ErrorCode::Success);
+                REQUIRE(command_buffer.CmdBindPipeline(pipeline) == ErrorCode::Success);
+                REQUIRE(command_buffer.CmdBindVertexBuffer(vertices, 0) == ErrorCode::Success);
+                REQUIRE(command_buffer.CmdDraw(3) == ErrorCode::Success);
+                REQUIRE(command_buffer.CmdEndRendering() == ErrorCode::Success);
+            }) == ErrorCode::Success);
 
         Opal::DynamicArray<u8> bytes(k_side * k_side * sizeof(f32));
-        Forge::ReadBackTexture(fixture.device, fixture.GetQueue(), depth, bytes, 0, Forge::ImageLayout::TransferSource);
+        REQUIRE(Forge::ReadBackTexture(fixture.device, fixture.GetQueue(), depth, bytes, 0, Forge::ImageLayout::TransferSource) ==
+                ErrorCode::Success);
         Opal::DynamicArray<f32> values(k_side * k_side);
         memcpy(values.GetData(), bytes.GetData(), bytes.GetSize());
         return values;
@@ -5936,9 +6032,9 @@ TEST_CASE("Forge depth clamp", "[forge]")
     // Past the far plane, which is the whole point: without clamping the triangle is clipped away, and with
     // it the fragments are flattened onto the plane and drawn.
     const Opal::DynamicArray<f32> triangle = MakeFullscreenTriangleAt(1.5f);
-    const Forge::Buffer vertices(fixture.device,
+    const Forge::Buffer vertices = ForgeTest::Unwrap(Forge::Buffer::Create(fixture.device,
                                  {.size = triangle.GetSize() * sizeof(f32), .usage = Forge::BufferUsageBits::VertexBuffer},
-                                 {reinterpret_cast<const u8*>(triangle.GetData()), triangle.GetSize() * sizeof(f32)});
+                                 {reinterpret_cast<const u8*>(triangle.GetData()), triangle.GetSize() * sizeof(f32)}));
 
     auto is_drawn = [&](bool depth_clamp)
     {
@@ -5948,9 +6044,10 @@ TEST_CASE("Forge depth clamp", "[forge]")
         const Opal::DynamicArray<u8> pixels = RenderRaster(fixture, color, k_side,
                                                            [&](Forge::CommandBuffer& command_buffer)
                                                            {
-                                                               command_buffer.CmdBindPipeline(pipeline);
-                                                               command_buffer.CmdBindVertexBuffer(vertices, 0);
-                                                               command_buffer.CmdDraw(3);
+                                                               REQUIRE(command_buffer.CmdBindPipeline(pipeline) == ErrorCode::Success);
+                                                               REQUIRE(command_buffer.CmdBindVertexBuffer(vertices, 0) ==
+                                                                       ErrorCode::Success);
+                                                               REQUIRE(command_buffer.CmdDraw(3) == ErrorCode::Success);
                                                            });
         return CountCovered(pixels, k_side) == k_side * k_side;
     };
@@ -6042,8 +6139,9 @@ Opal::DynamicArray<f32> MakeLeftHalfQuad(f32 z)
 
 Forge::Buffer MakeQuadBuffer(const Forge::Device& device, const Opal::DynamicArray<f32>& vertices)
 {
-    return Forge::Buffer(device, {.size = vertices.GetSize() * sizeof(f32), .usage = Forge::BufferUsageBits::VertexBuffer},
-                         {reinterpret_cast<const u8*>(vertices.GetData()), vertices.GetSize() * sizeof(f32)});
+    return ForgeTest::Unwrap(
+        Forge::Buffer::Create(device, {.size = vertices.GetSize() * sizeof(f32), .usage = Forge::BufferUsageBits::VertexBuffer},
+                              {reinterpret_cast<const u8*>(vertices.GetData()), vertices.GetSize() * sizeof(f32)}));
 }
 
 /** A colour as the shader wants it, built from the byte values a UNORM target round trips exactly. */
@@ -6117,18 +6215,18 @@ TEST_CASE("Forge depth testing", "[forge]")
     {
         const Forge::Pipeline pipeline = make_pipeline(comparator, depth_write);
         Forge::Texture color = MakeColorTarget(fixture.device, k_side, k_color_format);
-        Forge::Texture depth(fixture.device, {.format = k_depth_format,
+        Forge::Texture depth = ForgeTest::Unwrap(Forge::Texture::Create(fixture.device, {.format = k_depth_format,
                                               .width = k_side,
                                               .height = k_side,
                                               .usage = Forge::TextureUsageBits::DepthStencilAttachment |
-                                                       Forge::TextureUsageBits::TransferSource});
+                                                       Forge::TextureUsageBits::TransferSource}));
 
-        Forge::ImmediateSubmit(
+        REQUIRE(Forge::ImmediateSubmit(
             fixture.device, fixture.GetQueue(),
             [&](Forge::CommandBuffer& command_buffer)
             {
-                command_buffer.CmdTextureBarrier(Forge::TextureBarrier::ToColorAttachment(color));
-                command_buffer.CmdTextureBarrier(Forge::TextureBarrier::ToDepthStencilAttachment(depth));
+                REQUIRE(command_buffer.CmdTextureBarrier(Forge::TextureBarrier::ToColorAttachment(color)) == ErrorCode::Success);
+                REQUIRE(command_buffer.CmdTextureBarrier(Forge::TextureBarrier::ToDepthStencilAttachment(depth)) == ErrorCode::Success);
                 const Forge::RenderingDesc rendering_desc{
                     .render_area_extent = {k_side, k_side},
                     .color_attachments = {Forge::RenderingAttachmentDesc{
@@ -6143,23 +6241,27 @@ TEST_CASE("Forge depth testing", "[forge]")
                         // Cleared to whichever end of the range the comparator counts as furthest, so the
                         // first draw passes either way. Clearing to one under Greater would reject both.
                         .clear_value = Forge::DepthStencilClearValue{clear_depth, 0}}};
-                command_buffer.CmdBeginRendering(rendering_desc);
-                command_buffer.CmdSetViewport(Vector2f::Zero(), {k_side, k_side});
-                command_buffer.CmdSetScissor(Vector2i::Zero(), {k_side, k_side});
-                command_buffer.CmdBindPipeline(pipeline);
-                command_buffer.CmdBindVertexBuffer(near_quad, 0);
-                command_buffer.CmdPushConstants(pipeline, ShaderTypeBits::Fragment, Opal::AsBytes(near_color));
-                command_buffer.CmdDraw(6);
-                command_buffer.CmdBindVertexBuffer(far_quad, 0);
-                command_buffer.CmdPushConstants(pipeline, ShaderTypeBits::Fragment, Opal::AsBytes(far_color));
-                command_buffer.CmdDraw(6);
-                command_buffer.CmdEndRendering();
-            });
+                REQUIRE(command_buffer.CmdBeginRendering(rendering_desc) == ErrorCode::Success);
+                REQUIRE(command_buffer.CmdSetViewport(Vector2f::Zero(), {k_side, k_side}) == ErrorCode::Success);
+                REQUIRE(command_buffer.CmdSetScissor(Vector2i::Zero(), {k_side, k_side}) == ErrorCode::Success);
+                REQUIRE(command_buffer.CmdBindPipeline(pipeline) == ErrorCode::Success);
+                REQUIRE(command_buffer.CmdBindVertexBuffer(near_quad, 0) == ErrorCode::Success);
+                REQUIRE(command_buffer.CmdPushConstants(pipeline, ShaderTypeBits::Fragment, Opal::AsBytes(near_color)) ==
+                        ErrorCode::Success);
+                REQUIRE(command_buffer.CmdDraw(6) == ErrorCode::Success);
+                REQUIRE(command_buffer.CmdBindVertexBuffer(far_quad, 0) == ErrorCode::Success);
+                REQUIRE(command_buffer.CmdPushConstants(pipeline, ShaderTypeBits::Fragment, Opal::AsBytes(far_color)) ==
+                        ErrorCode::Success);
+                REQUIRE(command_buffer.CmdDraw(6) == ErrorCode::Success);
+                REQUIRE(command_buffer.CmdEndRendering() == ErrorCode::Success);
+            }) == ErrorCode::Success);
 
         Opal::DynamicArray<u8> pixels(k_side * k_side * 4);
-        Forge::ReadBackTexture(fixture.device, fixture.GetQueue(), color, pixels, 0, Forge::ImageLayout::TransferSource);
+        REQUIRE(Forge::ReadBackTexture(fixture.device, fixture.GetQueue(), color, pixels, 0, Forge::ImageLayout::TransferSource) ==
+                ErrorCode::Success);
         Opal::DynamicArray<u8> depth_bytes(k_side * k_side * sizeof(f32));
-        Forge::ReadBackTexture(fixture.device, fixture.GetQueue(), depth, depth_bytes, 0, Forge::ImageLayout::TransferSource);
+        REQUIRE(Forge::ReadBackTexture(fixture.device, fixture.GetQueue(), depth, depth_bytes, 0, Forge::ImageLayout::TransferSource) ==
+                ErrorCode::Success);
         Opal::DynamicArray<f32> depths(k_side * k_side);
         memcpy(depths.GetData(), depth_bytes.GetData(), depth_bytes.GetSize());
         return PassResult{std::move(pixels), std::move(depths)};
@@ -6271,17 +6373,18 @@ TEST_CASE("Forge stencil testing", "[forge]")
     auto run_pass = [&](const Forge::Pipeline& paint_pipeline)
     {
         Forge::Texture color = MakeColorTarget(fixture.device, k_side, k_color_format);
-        Forge::Texture depth_stencil(fixture.device, {.format = k_depth_stencil_format,
+        Forge::Texture depth_stencil = ForgeTest::Unwrap(Forge::Texture::Create(fixture.device, {.format = k_depth_stencil_format,
                                                       .width = k_side,
                                                       .height = k_side,
-                                                      .usage = Forge::TextureUsageBits::DepthStencilAttachment});
+                                                      .usage = Forge::TextureUsageBits::DepthStencilAttachment}));
 
-        Forge::ImmediateSubmit(
+        REQUIRE(Forge::ImmediateSubmit(
             fixture.device, fixture.GetQueue(),
             [&](Forge::CommandBuffer& command_buffer)
             {
-                command_buffer.CmdTextureBarrier(Forge::TextureBarrier::ToColorAttachment(color));
-                command_buffer.CmdTextureBarrier(Forge::TextureBarrier::ToDepthStencilAttachment(depth_stencil));
+                REQUIRE(command_buffer.CmdTextureBarrier(Forge::TextureBarrier::ToColorAttachment(color)) == ErrorCode::Success);
+                REQUIRE(command_buffer.CmdTextureBarrier(Forge::TextureBarrier::ToDepthStencilAttachment(depth_stencil)) ==
+                        ErrorCode::Success);
                 // One texture carries both, so the same view is named twice - Vulkan takes the two sides
                 // apart even then, and each gets its own load and store.
                 const Forge::RenderingAttachmentDesc depth_stencil_attachment{
@@ -6298,24 +6401,27 @@ TEST_CASE("Forge stencil testing", "[forge]")
                         .clear_value = Vector4f{1.0f, 0.0f, 0.0f, 1.0f}}},
                     .depth_attachment = depth_stencil_attachment.Clone(),
                     .stencil_attachment = depth_stencil_attachment.Clone()};
-                command_buffer.CmdBeginRendering(rendering_desc);
-                command_buffer.CmdSetViewport(Vector2f::Zero(), {k_side, k_side});
-                command_buffer.CmdSetScissor(Vector2i::Zero(), {k_side, k_side});
+                REQUIRE(command_buffer.CmdBeginRendering(rendering_desc) == ErrorCode::Success);
+                REQUIRE(command_buffer.CmdSetViewport(Vector2f::Zero(), {k_side, k_side}) == ErrorCode::Success);
+                REQUIRE(command_buffer.CmdSetScissor(Vector2i::Zero(), {k_side, k_side}) == ErrorCode::Success);
 
-                command_buffer.CmdBindPipeline(mask_pipeline);
-                command_buffer.CmdBindVertexBuffer(left_quad, 0);
-                command_buffer.CmdPushConstants(mask_pipeline, ShaderTypeBits::Fragment, Opal::AsBytes(mask_color));
-                command_buffer.CmdDraw(6);
+                REQUIRE(command_buffer.CmdBindPipeline(mask_pipeline) == ErrorCode::Success);
+                REQUIRE(command_buffer.CmdBindVertexBuffer(left_quad, 0) == ErrorCode::Success);
+                REQUIRE(command_buffer.CmdPushConstants(mask_pipeline, ShaderTypeBits::Fragment, Opal::AsBytes(mask_color)) ==
+                        ErrorCode::Success);
+                REQUIRE(command_buffer.CmdDraw(6) == ErrorCode::Success);
 
-                command_buffer.CmdBindPipeline(paint_pipeline);
-                command_buffer.CmdBindVertexBuffer(full_quad, 0);
-                command_buffer.CmdPushConstants(paint_pipeline, ShaderTypeBits::Fragment, Opal::AsBytes(paint_color));
-                command_buffer.CmdDraw(6);
-                command_buffer.CmdEndRendering();
-            });
+                REQUIRE(command_buffer.CmdBindPipeline(paint_pipeline) == ErrorCode::Success);
+                REQUIRE(command_buffer.CmdBindVertexBuffer(full_quad, 0) == ErrorCode::Success);
+                REQUIRE(command_buffer.CmdPushConstants(paint_pipeline, ShaderTypeBits::Fragment, Opal::AsBytes(paint_color)) ==
+                        ErrorCode::Success);
+                REQUIRE(command_buffer.CmdDraw(6) == ErrorCode::Success);
+                REQUIRE(command_buffer.CmdEndRendering() == ErrorCode::Success);
+            }) == ErrorCode::Success);
 
         Opal::DynamicArray<u8> pixels(k_side * k_side * 4);
-        Forge::ReadBackTexture(fixture.device, fixture.GetQueue(), color, pixels, 0, Forge::ImageLayout::TransferSource);
+        REQUIRE(Forge::ReadBackTexture(fixture.device, fixture.GetQueue(), color, pixels, 0, Forge::ImageLayout::TransferSource) ==
+                ErrorCode::Success);
         return pixels;
     };
 
@@ -6350,17 +6456,17 @@ TEST_CASE("Forge stencil testing", "[forge]")
     }
     SECTION("A stencil attachment that names no texture throws")
     {
-        Forge::CommandBuffer command_buffer(fixture.device, fixture.GetQueue());
+        Forge::CommandBuffer command_buffer = ForgeTest::Unwrap(Forge::CommandBuffer::Create(fixture.device, fixture.GetQueue()));
         Forge::Texture color = MakeColorTarget(fixture.device, k_side, k_color_format);
-        command_buffer.Begin();
+        REQUIRE(command_buffer.Begin() == ErrorCode::Success);
         // Transitioned first so that the throw is the stencil one and not the layout check on the colour.
-        command_buffer.CmdTextureBarrier(Forge::TextureBarrier::ToColorAttachment(color));
+        REQUIRE(command_buffer.CmdTextureBarrier(Forge::TextureBarrier::ToColorAttachment(color)) == ErrorCode::Success);
         const Forge::RenderingDesc rendering_desc{
             .render_area_extent = {k_side, k_side},
             .color_attachments = {Forge::RenderingAttachmentDesc{.texture = color}},
             .stencil_attachment = Forge::RenderingAttachmentDesc{}};
-        REQUIRE_THROWS_AS(command_buffer.CmdBeginRendering(rendering_desc), Opal::Exception);
-        command_buffer.End();
+        REQUIRE(command_buffer.CmdBeginRendering(rendering_desc) != ErrorCode::Success);
+        REQUIRE(command_buffer.End() == ErrorCode::Success);
     }
     REQUIRE_NO_VALIDATION_ERROR(fixture);
 }
@@ -6432,27 +6538,28 @@ TEST_CASE("Forge stencil masks set per draw", "[forge]")
     auto run = [&](u32 mask_write_mask, u32 mask_reference, u32 paint_compare_mask, u32 paint_reference)
     {
         Forge::Texture color = MakeColorTarget(fixture.device, k_side, k_color_format);
-        Forge::Texture depth_stencil(fixture.device, {.format = k_depth_stencil_format,
+        Forge::Texture depth_stencil = ForgeTest::Unwrap(Forge::Texture::Create(fixture.device, {.format = k_depth_stencil_format,
                                                       .width = k_side,
                                                       .height = k_side,
-                                                      .usage = Forge::TextureUsageBits::DepthStencilAttachment});
+                                                      .usage = Forge::TextureUsageBits::DepthStencilAttachment}));
 
         auto set_stencil = [](Forge::CommandBuffer& command_buffer, u32 compare_mask, u32 write_mask, u32 reference)
         {
             for (const Forge::StencilFaceBits face : {Forge::StencilFaceBits::Front, Forge::StencilFaceBits::Back})
             {
-                command_buffer.CmdSetStencilCompareMask(compare_mask, face);
-                command_buffer.CmdSetStencilWriteMask(write_mask, face);
-                command_buffer.CmdSetStencilReference(reference, face);
+                REQUIRE(command_buffer.CmdSetStencilCompareMask(compare_mask, face) == ErrorCode::Success);
+                REQUIRE(command_buffer.CmdSetStencilWriteMask(write_mask, face) == ErrorCode::Success);
+                REQUIRE(command_buffer.CmdSetStencilReference(reference, face) == ErrorCode::Success);
             }
         };
 
-        Forge::ImmediateSubmit(
+        REQUIRE(Forge::ImmediateSubmit(
             fixture.device, fixture.GetQueue(),
             [&](Forge::CommandBuffer& command_buffer)
             {
-                command_buffer.CmdTextureBarrier(Forge::TextureBarrier::ToColorAttachment(color));
-                command_buffer.CmdTextureBarrier(Forge::TextureBarrier::ToDepthStencilAttachment(depth_stencil));
+                REQUIRE(command_buffer.CmdTextureBarrier(Forge::TextureBarrier::ToColorAttachment(color)) == ErrorCode::Success);
+                REQUIRE(command_buffer.CmdTextureBarrier(Forge::TextureBarrier::ToDepthStencilAttachment(depth_stencil)) ==
+                        ErrorCode::Success);
                 const Forge::RenderingAttachmentDesc depth_stencil_attachment{
                     .texture = depth_stencil,
                     .load_operation = Forge::AttachmentLoadOperation::Clear,
@@ -6467,29 +6574,32 @@ TEST_CASE("Forge stencil masks set per draw", "[forge]")
                         .clear_value = Vector4f{1.0f, 0.0f, 0.0f, 1.0f}}},
                     .depth_attachment = depth_stencil_attachment.Clone(),
                     .stencil_attachment = depth_stencil_attachment.Clone()};
-                command_buffer.CmdBeginRendering(rendering_desc);
-                command_buffer.CmdSetViewport(Vector2f::Zero(), {k_side, k_side});
-                command_buffer.CmdSetScissor(Vector2i::Zero(), {k_side, k_side});
+                REQUIRE(command_buffer.CmdBeginRendering(rendering_desc) == ErrorCode::Success);
+                REQUIRE(command_buffer.CmdSetViewport(Vector2f::Zero(), {k_side, k_side}) == ErrorCode::Success);
+                REQUIRE(command_buffer.CmdSetScissor(Vector2i::Zero(), {k_side, k_side}) == ErrorCode::Success);
 
                 // Comparator Always, so the compare mask decides nothing here and the write mask is what
                 // picks which bits of the reference land in the buffer.
-                command_buffer.CmdBindPipeline(mask_pipeline);
+                REQUIRE(command_buffer.CmdBindPipeline(mask_pipeline) == ErrorCode::Success);
                 set_stencil(command_buffer, 0xFF, mask_write_mask, mask_reference);
-                command_buffer.CmdBindVertexBuffer(left_quad, 0);
-                command_buffer.CmdPushConstants(mask_pipeline, ShaderTypeBits::Fragment, Opal::AsBytes(mask_color));
-                command_buffer.CmdDraw(6);
+                REQUIRE(command_buffer.CmdBindVertexBuffer(left_quad, 0) == ErrorCode::Success);
+                REQUIRE(command_buffer.CmdPushConstants(mask_pipeline, ShaderTypeBits::Fragment, Opal::AsBytes(mask_color)) ==
+                        ErrorCode::Success);
+                REQUIRE(command_buffer.CmdDraw(6) == ErrorCode::Success);
 
                 // Write mask zero, so this reads the buffer and leaves it as it found it.
-                command_buffer.CmdBindPipeline(paint_pipeline);
+                REQUIRE(command_buffer.CmdBindPipeline(paint_pipeline) == ErrorCode::Success);
                 set_stencil(command_buffer, paint_compare_mask, 0, paint_reference);
-                command_buffer.CmdBindVertexBuffer(full_quad, 0);
-                command_buffer.CmdPushConstants(paint_pipeline, ShaderTypeBits::Fragment, Opal::AsBytes(paint_color));
-                command_buffer.CmdDraw(6);
-                command_buffer.CmdEndRendering();
-            });
+                REQUIRE(command_buffer.CmdBindVertexBuffer(full_quad, 0) == ErrorCode::Success);
+                REQUIRE(command_buffer.CmdPushConstants(paint_pipeline, ShaderTypeBits::Fragment, Opal::AsBytes(paint_color)) ==
+                        ErrorCode::Success);
+                REQUIRE(command_buffer.CmdDraw(6) == ErrorCode::Success);
+                REQUIRE(command_buffer.CmdEndRendering() == ErrorCode::Success);
+            }) == ErrorCode::Success);
 
         Opal::DynamicArray<u8> pixels(k_side * k_side * 4);
-        Forge::ReadBackTexture(fixture.device, fixture.GetQueue(), color, pixels, 0, Forge::ImageLayout::TransferSource);
+        REQUIRE(Forge::ReadBackTexture(fixture.device, fixture.GetQueue(), color, pixels, 0, Forge::ImageLayout::TransferSource) ==
+                ErrorCode::Success);
         return pixels;
     };
 
@@ -6567,35 +6677,36 @@ TEST_CASE("Forge blending", "[forge]")
         Forge::Texture color = MakeColorTarget(fixture.device, k_side, k_format);
         const Vector4f destination = ByteColor(k_dst[0], k_dst[1], k_dst[2], k_dst[3]);
         const Vector4f source = ByteColor(k_src[0], k_src[1], k_src[2], k_src[3]);
-        Forge::ImmediateSubmit(fixture.device, fixture.GetQueue(),
-                               [&](Forge::CommandBuffer& command_buffer)
-                               {
-                                   command_buffer.CmdTextureBarrier(Forge::TextureBarrier::ToColorAttachment(color));
-                                   const Forge::RenderingDesc rendering_desc{
-                                       .render_area_extent = {k_side, k_side},
-                                       .color_attachments = {Forge::RenderingAttachmentDesc{
-                                           .texture = color,
-                                           .load_operation = Forge::AttachmentLoadOperation::Clear,
-                                           .store_operation = Forge::AttachmentStoreOperation::Store,
-                                           .clear_value = Vector4f{0.0f, 0.0f, 0.0f, 1.0f}}}};
-                                   command_buffer.CmdBeginRendering(rendering_desc);
-                                   command_buffer.CmdSetViewport(Vector2f::Zero(), {k_side, k_side});
-                                   command_buffer.CmdSetScissor(Vector2i::Zero(), {k_side, k_side});
-                                   command_buffer.CmdBindVertexBuffer(quad, 0);
-                                   // The destination is drawn rather than cleared to, so it is exactly the
-                                   // bytes the shader wrote and not a float the clear had to convert.
-                                   command_buffer.CmdBindPipeline(opaque_pipeline);
-                                   command_buffer.CmdPushConstants(opaque_pipeline, ShaderTypeBits::Fragment,
-                                                                   Opal::AsBytes(destination));
-                                   command_buffer.CmdDraw(6);
-                                   command_buffer.CmdBindPipeline(blend_pipeline);
-                                   command_buffer.CmdPushConstants(blend_pipeline, ShaderTypeBits::Fragment,
-                                                                   Opal::AsBytes(source));
-                                   command_buffer.CmdDraw(6);
-                                   command_buffer.CmdEndRendering();
-                               });
+        REQUIRE(Forge::ImmediateSubmit(
+                    fixture.device, fixture.GetQueue(),
+                    [&](Forge::CommandBuffer& command_buffer)
+                    {
+                        REQUIRE(command_buffer.CmdTextureBarrier(Forge::TextureBarrier::ToColorAttachment(color)) == ErrorCode::Success);
+                        const Forge::RenderingDesc rendering_desc{
+                            .render_area_extent = {k_side, k_side},
+                            .color_attachments = {Forge::RenderingAttachmentDesc{.texture = color,
+                                                                                 .load_operation = Forge::AttachmentLoadOperation::Clear,
+                                                                                 .store_operation = Forge::AttachmentStoreOperation::Store,
+                                                                                 .clear_value = Vector4f{0.0f, 0.0f, 0.0f, 1.0f}}}};
+                        REQUIRE(command_buffer.CmdBeginRendering(rendering_desc) == ErrorCode::Success);
+                        REQUIRE(command_buffer.CmdSetViewport(Vector2f::Zero(), {k_side, k_side}) == ErrorCode::Success);
+                        REQUIRE(command_buffer.CmdSetScissor(Vector2i::Zero(), {k_side, k_side}) == ErrorCode::Success);
+                        REQUIRE(command_buffer.CmdBindVertexBuffer(quad, 0) == ErrorCode::Success);
+                        // The destination is drawn rather than cleared to, so it is exactly the
+                        // bytes the shader wrote and not a float the clear had to convert.
+                        REQUIRE(command_buffer.CmdBindPipeline(opaque_pipeline) == ErrorCode::Success);
+                        REQUIRE(command_buffer.CmdPushConstants(opaque_pipeline, ShaderTypeBits::Fragment, Opal::AsBytes(destination)) ==
+                                ErrorCode::Success);
+                        REQUIRE(command_buffer.CmdDraw(6) == ErrorCode::Success);
+                        REQUIRE(command_buffer.CmdBindPipeline(blend_pipeline) == ErrorCode::Success);
+                        REQUIRE(command_buffer.CmdPushConstants(blend_pipeline, ShaderTypeBits::Fragment, Opal::AsBytes(source)) ==
+                                ErrorCode::Success);
+                        REQUIRE(command_buffer.CmdDraw(6) == ErrorCode::Success);
+                        REQUIRE(command_buffer.CmdEndRendering() == ErrorCode::Success);
+                    }) == ErrorCode::Success);
         Opal::DynamicArray<u8> pixels(k_side * k_side * 4);
-        Forge::ReadBackTexture(fixture.device, fixture.GetQueue(), color, pixels, 0, Forge::ImageLayout::TransferSource);
+        REQUIRE(Forge::ReadBackTexture(fixture.device, fixture.GetQueue(), color, pixels, 0, Forge::ImageLayout::TransferSource) ==
+                ErrorCode::Success);
         return pixels;
     };
 
@@ -6863,17 +6974,19 @@ Opal::DynamicArray<u8> MakeTwoTexelRow()
 void UploadMip(const Forge::Device& device, Forge::DeviceQueue& queue, Forge::Texture& texture, Opal::ArrayView<const u8> pixels,
                u32 mip_level)
 {
-    const Forge::Buffer staging(device, {.size = pixels.GetSize(), .usage = Forge::BufferUsageBits::TransferSource}, pixels);
+    const Forge::Buffer staging = ForgeTest::Unwrap(
+        Forge::Buffer::Create(device, {.size = pixels.GetSize(), .usage = Forge::BufferUsageBits::TransferSource}, pixels));
     const Forge::BufferTextureCopyRegion region{
         .texture_subresource = {.mip_level = mip_level, .array_layer_count = texture.GetDesc().array_layer_count}};
-    Forge::ImmediateSubmit(device, queue,
-                           [&](Forge::CommandBuffer& command_buffer)
-                           {
-                               command_buffer.CmdTextureBarrier(Forge::TextureBarrier::ToTransferDestination(texture));
-                               command_buffer.CmdCopyBufferToTexture(staging, texture, {&region, 1});
-                               command_buffer.CmdTextureBarrier(Forge::TextureBarrier::ToShaderRead(
-                                   texture, Forge::PipelineStageBits::ComputeShader));
-                           });
+    REQUIRE(Forge::ImmediateSubmit(device, queue,
+                                   [&](Forge::CommandBuffer& command_buffer)
+                                   {
+                                       REQUIRE(command_buffer.CmdTextureBarrier(Forge::TextureBarrier::ToTransferDestination(texture)) ==
+                                               ErrorCode::Success);
+                                       REQUIRE(command_buffer.CmdCopyBufferToTexture(staging, texture, {&region, 1}) == ErrorCode::Success);
+                                       REQUIRE(command_buffer.CmdTextureBarrier(Forge::TextureBarrier::ToShaderRead(
+                                                   texture, Forge::PipelineStageBits::ComputeShader)) == ErrorCode::Success);
+                                   }) == ErrorCode::Success);
 }
 
 }  // namespace
@@ -6909,36 +7022,37 @@ TEST_CASE("Forge sampler filtering and addressing", "[forge]")
     const Forge::Pipeline pipeline(fixture.device, pipeline_desc);
 
     /** The one texture every section here samples: two texels, red then green. */
-    Forge::Texture row(fixture.device, {.format = k_format,
+    Forge::Texture row = ForgeTest::Unwrap(Forge::Texture::Create(fixture.device, {.format = k_format,
                                         .width = 2,
                                         .height = 1,
                                         .usage = Forge::TextureUsageBits::Sampled |
-                                                 Forge::TextureUsageBits::TransferDestination});
+                                                 Forge::TextureUsageBits::TransferDestination}));
     const Opal::DynamicArray<u8> row_pixels = MakeTwoTexelRow();
     UploadMip(fixture.device, fixture.GetQueue(), row, {row_pixels.GetData(), row_pixels.GetSize()}, 0);
 
     /** Sample the texture through the given sampler and hand back the four floats it produced. */
     auto sample_with = [&](const Forge::Sampler& sampler, Forge::Texture& texture, const SampleParams& params)
     {
-        const Forge::Buffer output(fixture.device, {.size = sizeof(Vector4f),
+        const Forge::Buffer output = ForgeTest::Unwrap(Forge::Buffer::Create(fixture.device, {.size = sizeof(Vector4f),
                                                     .usage = Forge::BufferUsageBits::StorageBuffer,
-                                                    .host_access = Forge::HostAccess::Random});
+                                                    .host_access = Forge::HostAccess::Random}));
         const Opal::DynamicArray<u8> zeros(sizeof(Vector4f));
-        output.Update(zeros);
+        REQUIRE(output.Update(zeros) == ErrorCode::Success);
 
         Forge::DescriptorSet set(pool, layout);
         set.Update(0, texture, sampler, Forge::ImageLayout::ShaderReadOnly);
         set.Update(1, output);
-        Forge::ImmediateSubmit(fixture.device, fixture.GetQueue(),
+        REQUIRE(Forge::ImmediateSubmit(fixture.device, fixture.GetQueue(),
                                [&](Forge::CommandBuffer& command_buffer)
                                {
-                                   command_buffer.CmdBindPipeline(pipeline);
-                                   command_buffer.CmdBindDescriptorSet(pipeline, set);
-                                   command_buffer.CmdPushConstants(pipeline, ShaderTypeBits::Compute, Opal::AsBytes(params));
-                                   command_buffer.CmdDispatch(1);
-                               });
+                                   REQUIRE(command_buffer.CmdBindPipeline(pipeline) == ErrorCode::Success);
+                                   REQUIRE(command_buffer.CmdBindDescriptorSet(pipeline, set) == ErrorCode::Success);
+                                   REQUIRE(command_buffer.CmdPushConstants(pipeline, ShaderTypeBits::Compute, Opal::AsBytes(params)) ==
+                                           ErrorCode::Success);
+                                   REQUIRE(command_buffer.CmdDispatch(1) == ErrorCode::Success);
+                               }) == ErrorCode::Success);
         Vector4f result;
-        output.Read({reinterpret_cast<u8*>(&result), sizeof(result)});
+        REQUIRE(output.Read({reinterpret_cast<u8*>(&result), sizeof(result)}) == ErrorCode::Success);
         return result;
     };
 
@@ -6947,8 +7061,10 @@ TEST_CASE("Forge sampler filtering and addressing", "[forge]")
         // Three tenths of the way from the left texel centre to the right one. A linear filter has to blend
         // in that proportion; a nearest one can only ever hand back one of the two texels whole.
         const SampleParams params{.uv = {0.4f, 0.5f}};
-        const Forge::Sampler linear(fixture.device, {.min_filter = ImageFilter::Linear, .mag_filter = ImageFilter::Linear});
-        const Forge::Sampler nearest(fixture.device, {.min_filter = ImageFilter::Nearest, .mag_filter = ImageFilter::Nearest});
+        const Forge::Sampler linear = ForgeTest::Unwrap(
+            Forge::Sampler::Create(fixture.device, {.min_filter = ImageFilter::Linear, .mag_filter = ImageFilter::Linear}));
+        const Forge::Sampler nearest = ForgeTest::Unwrap(
+            Forge::Sampler::Create(fixture.device, {.min_filter = ImageFilter::Nearest, .mag_filter = ImageFilter::Nearest}));
 
         const Vector4f blended = sample_with(linear, row, params);
         INFO("linear rgba " << blended.x << " " << blended.y << " " << blended.z << " " << blended.w);
@@ -6965,14 +7081,14 @@ TEST_CASE("Forge sampler filtering and addressing", "[forge]")
         // A quarter past the right edge. Repeat wraps it back onto the left texel; clamping holds it on the
         // right one. A nearest filter, so the answer is a whole texel either way.
         const SampleParams params{.uv = {1.25f, 0.5f}};
-        const Forge::Sampler repeating(fixture.device, {.min_filter = ImageFilter::Nearest,
+        const Forge::Sampler repeating = ForgeTest::Unwrap(Forge::Sampler::Create(fixture.device, {.min_filter = ImageFilter::Nearest,
                                                         .mag_filter = ImageFilter::Nearest,
                                                         .address_mode_u = ImageAddressMode::Repeat,
-                                                        .address_mode_v = ImageAddressMode::Repeat});
-        const Forge::Sampler clamping(fixture.device, {.min_filter = ImageFilter::Nearest,
+                                                        .address_mode_v = ImageAddressMode::Repeat}));
+        const Forge::Sampler clamping = ForgeTest::Unwrap(Forge::Sampler::Create(fixture.device, {.min_filter = ImageFilter::Nearest,
                                                        .mag_filter = ImageFilter::Nearest,
                                                        .address_mode_u = ImageAddressMode::Clamp,
-                                                       .address_mode_v = ImageAddressMode::Clamp});
+                                                       .address_mode_v = ImageAddressMode::Clamp}));
 
         const Vector4f wrapped = sample_with(repeating, row, params);
         INFO("wrapped rgba " << wrapped.x << " " << wrapped.y);
@@ -6988,12 +7104,12 @@ TEST_CASE("Forge sampler filtering and addressing", "[forge]")
     {
         // Two levels with nothing in common: the top is red and the one below it is blue, so which level was
         // read is not a matter of degree.
-        Forge::Texture mipped(fixture.device, {.format = k_format,
+        Forge::Texture mipped = ForgeTest::Unwrap(Forge::Texture::Create(fixture.device, {.format = k_format,
                                                .width = 2,
                                                .height = 2,
                                                .mip_level_count = 2,
                                                .usage = Forge::TextureUsageBits::Sampled |
-                                                        Forge::TextureUsageBits::TransferDestination});
+                                                        Forge::TextureUsageBits::TransferDestination}));
         Opal::DynamicArray<u8> top(2 * 2 * 4);
         for (i32 texel = 0; texel < 4; ++texel)
         {
@@ -7007,8 +7123,10 @@ TEST_CASE("Forge sampler filtering and addressing", "[forge]")
         UploadMip(fixture.device, fixture.GetQueue(), mipped, {bottom.GetData(), bottom.GetSize()}, 1);
 
         // Nearest between levels, so the answer is one level and never a blend of two.
-        const Forge::Sampler top_only(fixture.device, {.mip_map_filter = ImageFilter::Nearest, .min_lod = 0.0f, .max_lod = 0.0f});
-        const Forge::Sampler bottom_only(fixture.device, {.mip_map_filter = ImageFilter::Nearest, .min_lod = 1.0f, .max_lod = 1.0f});
+        const Forge::Sampler top_only = ForgeTest::Unwrap(
+            Forge::Sampler::Create(fixture.device, {.mip_map_filter = ImageFilter::Nearest, .min_lod = 0.0f, .max_lod = 0.0f}));
+        const Forge::Sampler bottom_only = ForgeTest::Unwrap(
+            Forge::Sampler::Create(fixture.device, {.mip_map_filter = ImageFilter::Nearest, .min_lod = 1.0f, .max_lod = 1.0f}));
 
         // Asking for level one and being held at zero.
         const Vector4f held_at_top = sample_with(top_only, mipped, {.uv = {0.5f, 0.5f}, .lod = 1.0f});
@@ -7026,8 +7144,10 @@ TEST_CASE("Forge sampler filtering and addressing", "[forge]")
     {
         // The layout bakes a nearest sampler in. The update below hands it a linear one, which Vulkan
         // ignores for such a binding - so a result that blends would mean the write had been obeyed.
-        const Forge::Sampler baked(fixture.device, {.min_filter = ImageFilter::Nearest, .mag_filter = ImageFilter::Nearest});
-        const Forge::Sampler ignored(fixture.device, {.min_filter = ImageFilter::Linear, .mag_filter = ImageFilter::Linear});
+        const Forge::Sampler baked = ForgeTest::Unwrap(
+            Forge::Sampler::Create(fixture.device, {.min_filter = ImageFilter::Nearest, .mag_filter = ImageFilter::Nearest}));
+        const Forge::Sampler ignored = ForgeTest::Unwrap(
+            Forge::Sampler::Create(fixture.device, {.min_filter = ImageFilter::Linear, .mag_filter = ImageFilter::Linear}));
 
         const Opal::InPlaceArray<Opal::Ref<const Forge::Sampler>, 1> baked_samplers{Opal::Ref<const Forge::Sampler>(baked)};
         Forge::DescriptorSetLayoutDesc immutable_desc;
@@ -7043,27 +7163,27 @@ TEST_CASE("Forge sampler filtering and addressing", "[forge]")
             {.shader_stages = ShaderTypeBits::Compute, .offset = 0, .size = sizeof(SampleParams)});
         const Forge::Pipeline immutable_pipeline(fixture.device, immutable_pipeline_desc);
 
-        const Forge::Buffer output(fixture.device, {.size = sizeof(Vector4f),
+        const Forge::Buffer output = ForgeTest::Unwrap(Forge::Buffer::Create(fixture.device, {.size = sizeof(Vector4f),
                                                     .usage = Forge::BufferUsageBits::StorageBuffer,
-                                                    .host_access = Forge::HostAccess::Random});
+                                                    .host_access = Forge::HostAccess::Random}));
         const Opal::DynamicArray<u8> zeros(sizeof(Vector4f));
-        output.Update(zeros);
+        REQUIRE(output.Update(zeros) == ErrorCode::Success);
 
         Forge::DescriptorSet set(pool, immutable_layout);
         set.Update(0, row, ignored, Forge::ImageLayout::ShaderReadOnly);
         set.Update(1, output);
         const SampleParams params{.uv = {0.4f, 0.5f}};
-        Forge::ImmediateSubmit(fixture.device, fixture.GetQueue(),
+        REQUIRE(Forge::ImmediateSubmit(fixture.device, fixture.GetQueue(),
                                [&](Forge::CommandBuffer& command_buffer)
                                {
-                                   command_buffer.CmdBindPipeline(immutable_pipeline);
-                                   command_buffer.CmdBindDescriptorSet(immutable_pipeline, set);
-                                   command_buffer.CmdPushConstants(immutable_pipeline, ShaderTypeBits::Compute,
-                                                                   Opal::AsBytes(params));
-                                   command_buffer.CmdDispatch(1);
-                               });
+                                   REQUIRE(command_buffer.CmdBindPipeline(immutable_pipeline) == ErrorCode::Success);
+                                   REQUIRE(command_buffer.CmdBindDescriptorSet(immutable_pipeline, set) == ErrorCode::Success);
+                                   REQUIRE(command_buffer.CmdPushConstants(immutable_pipeline, ShaderTypeBits::Compute,
+                                                                   Opal::AsBytes(params)) == ErrorCode::Success);
+                                   REQUIRE(command_buffer.CmdDispatch(1) == ErrorCode::Success);
+                               }) == ErrorCode::Success);
         Vector4f result;
-        output.Read({reinterpret_cast<u8*>(&result), sizeof(result)});
+        REQUIRE(output.Read({reinterpret_cast<u8*>(&result), sizeof(result)}) == ErrorCode::Success);
         INFO("rgba " << result.x << " " << result.y);
         // The whole left texel, which is the baked nearest sampler. The linear one would have given 0.7.
         REQUIRE(result.x == Catch::Approx(1.0f).margin(0.01));
@@ -7104,20 +7224,21 @@ TEST_CASE("Forge separate sampler and sampled image", "[forge]")
         {.shader_stages = ShaderTypeBits::Compute, .offset = 0, .size = sizeof(SampleParams)});
     const Forge::Pipeline pipeline(fixture.device, pipeline_desc);
 
-    Forge::Texture row(fixture.device, {.format = PixelFormat::R8G8B8A8_UNORM,
+    Forge::Texture row = ForgeTest::Unwrap(Forge::Texture::Create(fixture.device, {.format = PixelFormat::R8G8B8A8_UNORM,
                                         .width = 2,
                                         .height = 1,
                                         .usage = Forge::TextureUsageBits::Sampled |
-                                                 Forge::TextureUsageBits::TransferDestination});
+                                                 Forge::TextureUsageBits::TransferDestination}));
     const Opal::DynamicArray<u8> row_pixels = MakeTwoTexelRow();
     UploadMip(fixture.device, fixture.GetQueue(), row, {row_pixels.GetData(), row_pixels.GetSize()}, 0);
 
-    const Forge::Sampler linear(fixture.device, {.min_filter = ImageFilter::Linear, .mag_filter = ImageFilter::Linear});
-    const Forge::Buffer output(fixture.device, {.size = sizeof(Vector4f),
+    const Forge::Sampler linear =
+        ForgeTest::Unwrap(Forge::Sampler::Create(fixture.device, {.min_filter = ImageFilter::Linear, .mag_filter = ImageFilter::Linear}));
+    const Forge::Buffer output = ForgeTest::Unwrap(Forge::Buffer::Create(fixture.device, {.size = sizeof(Vector4f),
                                                 .usage = Forge::BufferUsageBits::StorageBuffer,
-                                                .host_access = Forge::HostAccess::Random});
+                                                .host_access = Forge::HostAccess::Random}));
     const Opal::DynamicArray<u8> zeros(sizeof(Vector4f));
-    output.Update(zeros);
+    REQUIRE(output.Update(zeros) == ErrorCode::Success);
 
     Forge::DescriptorSet set(pool, layout);
     // The sampler of the image binding and the image of the sampler binding are each the half Vulkan ignores
@@ -7127,16 +7248,17 @@ TEST_CASE("Forge separate sampler and sampled image", "[forge]")
     set.Update(2, output);
 
     const SampleParams params{.uv = {0.4f, 0.5f}};
-    Forge::ImmediateSubmit(fixture.device, fixture.GetQueue(),
+    REQUIRE(Forge::ImmediateSubmit(fixture.device, fixture.GetQueue(),
                            [&](Forge::CommandBuffer& command_buffer)
                            {
-                               command_buffer.CmdBindPipeline(pipeline);
-                               command_buffer.CmdBindDescriptorSet(pipeline, set);
-                               command_buffer.CmdPushConstants(pipeline, ShaderTypeBits::Compute, Opal::AsBytes(params));
-                               command_buffer.CmdDispatch(1);
-                           });
+                               REQUIRE(command_buffer.CmdBindPipeline(pipeline) == ErrorCode::Success);
+                               REQUIRE(command_buffer.CmdBindDescriptorSet(pipeline, set) == ErrorCode::Success);
+                               REQUIRE(command_buffer.CmdPushConstants(pipeline, ShaderTypeBits::Compute, Opal::AsBytes(params)) ==
+                                       ErrorCode::Success);
+                               REQUIRE(command_buffer.CmdDispatch(1) == ErrorCode::Success);
+                           }) == ErrorCode::Success);
     Vector4f result;
-    output.Read({reinterpret_cast<u8*>(&result), sizeof(result)});
+    REQUIRE(output.Read({reinterpret_cast<u8*>(&result), sizeof(result)}) == ErrorCode::Success);
     INFO("rgba " << result.x << " " << result.y << " " << result.z << " " << result.w);
     // The same numbers the combined descriptor produces from the same texture, sampler and coordinate.
     REQUIRE(result.x == Catch::Approx(0.7f).margin(0.01));
@@ -7170,29 +7292,30 @@ TEST_CASE("Forge storage image writes", "[forge]")
     pipeline_desc.descriptor_set_layouts.PushBack(Opal::Ref<const Forge::DescriptorSetLayout>(layout));
     const Forge::Pipeline pipeline(fixture.device, pipeline_desc);
 
-    Forge::Texture storage(fixture.device, {.format = PixelFormat::R8G8B8A8_UNORM,
+    Forge::Texture storage = ForgeTest::Unwrap(Forge::Texture::Create(fixture.device, {.format = PixelFormat::R8G8B8A8_UNORM,
                                             .width = k_side,
                                             .height = k_side,
                                             .usage = Forge::TextureUsageBits::Storage |
-                                                     Forge::TextureUsageBits::TransferSource});
-    const Forge::Sampler unused(fixture.device, {});
+                                                     Forge::TextureUsageBits::TransferSource}));
+    const Forge::Sampler unused = ForgeTest::Unwrap(Forge::Sampler::Create(fixture.device, {}));
 
     Forge::DescriptorSet set(pool, layout);
     // General is the layout a storage image is bound in, which is what ToGeneral exists for.
     set.Update(0, storage, unused, Forge::ImageLayout::General);
 
-    Forge::ImmediateSubmit(fixture.device, fixture.GetQueue(),
+    REQUIRE(Forge::ImmediateSubmit(fixture.device, fixture.GetQueue(),
                            [&](Forge::CommandBuffer& command_buffer)
                            {
-                               command_buffer.CmdTextureBarrier(Forge::TextureBarrier::ToGeneral(storage));
-                               command_buffer.CmdBindPipeline(pipeline);
-                               command_buffer.CmdBindDescriptorSet(pipeline, set);
-                               command_buffer.CmdDispatch(1);
-                           });
-    REQUIRE(storage.GetCurrentLayout() == Forge::ImageLayout::General);
+                               REQUIRE(command_buffer.CmdTextureBarrier(Forge::TextureBarrier::ToGeneral(storage)) == ErrorCode::Success);
+                               REQUIRE(command_buffer.CmdBindPipeline(pipeline) == ErrorCode::Success);
+                               REQUIRE(command_buffer.CmdBindDescriptorSet(pipeline, set) == ErrorCode::Success);
+                               REQUIRE(command_buffer.CmdDispatch(1) == ErrorCode::Success);
+                           }) == ErrorCode::Success);
+    REQUIRE(ForgeTest::Unwrap(storage.GetCurrentLayout()) == Forge::ImageLayout::General);
 
     Opal::DynamicArray<u8> pixels(k_side * k_side * 4);
-    Forge::ReadBackTexture(fixture.device, fixture.GetQueue(), storage, pixels, 0, Forge::ImageLayout::TransferSource);
+    REQUIRE(Forge::ReadBackTexture(fixture.device, fixture.GetQueue(), storage, pixels, 0, Forge::ImageLayout::TransferSource) ==
+            ErrorCode::Success);
     for (i32 y = 0; y < k_side; ++y)
     {
         for (i32 x = 0; x < k_side; ++x)
@@ -7232,7 +7355,8 @@ TEST_CASE("Forge texture shapes past a flat two dimensional one", "[forge]")
     layout_desc.AddBinding(1, Forge::DescriptorType::StorageBuffer, 1, ShaderTypeBits::Compute);
     const Forge::DescriptorSetLayout layout(fixture.device, layout_desc);
 
-    const Forge::Sampler nearest(fixture.device, {.min_filter = ImageFilter::Nearest, .mag_filter = ImageFilter::Nearest});
+    const Forge::Sampler nearest =
+        ForgeTest::Unwrap(Forge::Sampler::Create(fixture.device, {.min_filter = ImageFilter::Nearest, .mag_filter = ImageFilter::Nearest}));
 
     /** Sample one texture through one shader at one direction, and hand back what came out. */
     auto sample_shape = [&](const char* source, const char* entry_point, Forge::Texture& texture, const Vector4f& direction)
@@ -7246,39 +7370,40 @@ TEST_CASE("Forge texture shapes past a flat two dimensional one", "[forge]")
             {.shader_stages = ShaderTypeBits::Compute, .offset = 0, .size = sizeof(Vector4f)});
         const Forge::Pipeline pipeline(fixture.device, pipeline_desc);
 
-        const Forge::Buffer output(fixture.device, {.size = sizeof(Vector4f),
+        const Forge::Buffer output = ForgeTest::Unwrap(Forge::Buffer::Create(fixture.device, {.size = sizeof(Vector4f),
                                                     .usage = Forge::BufferUsageBits::StorageBuffer,
-                                                    .host_access = Forge::HostAccess::Random});
+                                                    .host_access = Forge::HostAccess::Random}));
         const Opal::DynamicArray<u8> zeros(sizeof(Vector4f));
-        output.Update(zeros);
+        REQUIRE(output.Update(zeros) == ErrorCode::Success);
 
         Forge::DescriptorSet set(pool, layout);
         set.Update(0, texture, nearest, Forge::ImageLayout::ShaderReadOnly);
         set.Update(1, output);
-        Forge::ImmediateSubmit(fixture.device, fixture.GetQueue(),
+        REQUIRE(Forge::ImmediateSubmit(fixture.device, fixture.GetQueue(),
                                [&](Forge::CommandBuffer& command_buffer)
                                {
-                                   command_buffer.CmdBindPipeline(pipeline);
-                                   command_buffer.CmdBindDescriptorSet(pipeline, set);
-                                   command_buffer.CmdPushConstants(pipeline, ShaderTypeBits::Compute, Opal::AsBytes(direction));
-                                   command_buffer.CmdDispatch(1);
-                               });
+                                   REQUIRE(command_buffer.CmdBindPipeline(pipeline) == ErrorCode::Success);
+                                   REQUIRE(command_buffer.CmdBindDescriptorSet(pipeline, set) == ErrorCode::Success);
+                                   REQUIRE(command_buffer.CmdPushConstants(pipeline, ShaderTypeBits::Compute, Opal::AsBytes(direction)) ==
+                                           ErrorCode::Success);
+                                   REQUIRE(command_buffer.CmdDispatch(1) == ErrorCode::Success);
+                               }) == ErrorCode::Success);
         Vector4f result;
-        output.Read({reinterpret_cast<u8*>(&result), sizeof(result)});
+        REQUIRE(output.Read({reinterpret_cast<u8*>(&result), sizeof(result)}) == ErrorCode::Success);
         return result;
     };
 
     SECTION("A three dimensional texture is sampled along its depth")
     {
         // Two slices, red in front and green behind, so which slice was read is not a matter of degree.
-        Forge::Texture volume(fixture.device, {.dimension = Forge::TextureDimension::Texture3D,
+        Forge::Texture volume = ForgeTest::Unwrap(Forge::Texture::Create(fixture.device, {.dimension = Forge::TextureDimension::Texture3D,
                                                .format = k_format,
                                                .width = 1,
                                                .height = 1,
                                                .depth = 2,
                                                .usage = Forge::TextureUsageBits::Sampled |
                                                         Forge::TextureUsageBits::TransferDestination,
-                                               .view_type = Forge::TextureViewType::Texture3D});
+                                               .view_type = Forge::TextureViewType::Texture3D}));
         const Opal::DynamicArray<u8> slices = MakeTwoTexelRow();
         UploadMip(fixture.device, fixture.GetQueue(), volume, {slices.GetData(), slices.GetSize()}, 0);
 
@@ -7296,13 +7421,13 @@ TEST_CASE("Forge texture shapes past a flat two dimensional one", "[forge]")
     {
         // Six faces, each one texel, each a different value. A cube view needs the image to have been made
         // cube compatible, which nothing but the view type in the desc asks for.
-        Forge::Texture cube(fixture.device, {.format = k_format,
+        Forge::Texture cube = ForgeTest::Unwrap(Forge::Texture::Create(fixture.device, {.format = k_format,
                                              .width = 1,
                                              .height = 1,
                                              .array_layer_count = 6,
                                              .usage = Forge::TextureUsageBits::Sampled |
                                                       Forge::TextureUsageBits::TransferDestination,
-                                             .view_type = Forge::TextureViewType::Cube});
+                                             .view_type = Forge::TextureViewType::Cube}));
         // Layer order is +X, -X, +Y, -Y, +Z, -Z, so a direction of positive x has to come back as the first.
         // From one rather than from zero: a face whose value is zero reads the same as one that was never
         // written, so the first face would be asserting nothing.
@@ -7328,13 +7453,12 @@ TEST_CASE("Forge texture shapes past a flat two dimensional one", "[forge]")
     }
     SECTION("A cube view over a layer count that is not a multiple of six throws")
     {
-        REQUIRE_THROWS_AS(Forge::Texture(fixture.device, {.format = k_format,
+        REQUIRE_FALSE(Forge::Texture::Create(fixture.device, {.format = k_format,
                                                           .width = 1,
                                                           .height = 1,
                                                           .array_layer_count = 4,
                                                           .usage = Forge::TextureUsageBits::Sampled,
-                                                          .view_type = Forge::TextureViewType::Cube}),
-                          Opal::Exception);
+                                                          .view_type = Forge::TextureViewType::Cube}).HasValue());
     }
     REQUIRE_NO_VALIDATION_ERROR(fixture);
 }
@@ -7363,21 +7487,21 @@ TEST_CASE("Forge descriptor pool recycling", "[forge]")
     /** Bind one set, dispatch through it, and check the shader wrote what it should have. */
     auto require_set_works = [&](Forge::DescriptorSet& set)
     {
-        const Forge::Buffer output(fixture.device, {.size = k_element_count * sizeof(u32),
+        const Forge::Buffer output = ForgeTest::Unwrap(Forge::Buffer::Create(fixture.device, {.size = k_element_count * sizeof(u32),
                                                     .usage = Forge::BufferUsageBits::StorageBuffer,
-                                                    .host_access = Forge::HostAccess::Random});
+                                                    .host_access = Forge::HostAccess::Random}));
         const Opal::DynamicArray<u8> zeros(k_element_count * sizeof(u32));
-        output.Update(zeros);
+        REQUIRE(output.Update(zeros) == ErrorCode::Success);
         set.Update(0, output);
-        Forge::ImmediateSubmit(fixture.device, fixture.GetQueue(),
+        REQUIRE(Forge::ImmediateSubmit(fixture.device, fixture.GetQueue(),
                                [&](Forge::CommandBuffer& command_buffer)
                                {
-                                   command_buffer.CmdBindPipeline(pipeline);
-                                   command_buffer.CmdBindDescriptorSet(pipeline, set);
-                                   command_buffer.CmdDispatch(1);
-                               });
+                                   REQUIRE(command_buffer.CmdBindPipeline(pipeline) == ErrorCode::Success);
+                                   REQUIRE(command_buffer.CmdBindDescriptorSet(pipeline, set) == ErrorCode::Success);
+                                   REQUIRE(command_buffer.CmdDispatch(1) == ErrorCode::Success);
+                               }) == ErrorCode::Success);
         Opal::DynamicArray<u32> values(k_element_count);
-        output.Read({reinterpret_cast<u8*>(values.GetData()), values.GetSize() * sizeof(u32)});
+        REQUIRE(output.Read({reinterpret_cast<u8*>(values.GetData()), values.GetSize() * sizeof(u32)}) == ErrorCode::Success);
         for (i32 i = 0; i < k_element_count; ++i)
         {
             INFO("element " << i);
@@ -7452,12 +7576,12 @@ TEST_CASE("Forge a dispatch on the async compute queue", "[forge]")
 
     constexpr i32 k_element_count = 256;
     constexpr i32 k_group_size = 64;
-    const Forge::Buffer output(fixture.device, {.size = k_element_count * sizeof(u32),
+    const Forge::Buffer output = ForgeTest::Unwrap(Forge::Buffer::Create(fixture.device, {.size = k_element_count * sizeof(u32),
                                                 .usage = Forge::BufferUsageBits::StorageBuffer,
                                                 .host_access = Forge::HostAccess::Random,
-                                                .use_device_address = true});
+                                                .use_device_address = true}));
     const Opal::DynamicArray<u8> zeros(k_element_count * sizeof(u32));
-    output.Update(zeros);
+    REQUIRE(output.Update(zeros) == ErrorCode::Success);
 
     const Forge::Shader compute_shader =
         Forge::Shader::FromSourceInMemory(fixture.device, k_compute_source, {.entry_point = "main_compute", .cache = GetShaderCache()});
@@ -7470,16 +7594,17 @@ TEST_CASE("Forge a dispatch on the async compute queue", "[forge]")
 
     // The command buffer comes out of the pool of the queue it is submitted to, which is the part a queue of
     // the wrong family gets wrong: a command buffer allocated on one family may not be submitted to another.
-    Forge::ImmediateSubmit(fixture.device, compute_queue,
+    REQUIRE(Forge::ImmediateSubmit(fixture.device, compute_queue,
                            [&](Forge::CommandBuffer& command_buffer)
                            {
-                               command_buffer.CmdBindPipeline(pipeline);
-                               command_buffer.CmdPushConstants(pipeline, ShaderTypeBits::Compute, Opal::AsBytes(output_address));
-                               command_buffer.CmdDispatch(k_element_count / k_group_size);
-                           });
+                               REQUIRE(command_buffer.CmdBindPipeline(pipeline) == ErrorCode::Success);
+                               REQUIRE(command_buffer.CmdPushConstants(pipeline, ShaderTypeBits::Compute, Opal::AsBytes(output_address)) ==
+                                       ErrorCode::Success);
+                               REQUIRE(command_buffer.CmdDispatch(k_element_count / k_group_size) == ErrorCode::Success);
+                           }) == ErrorCode::Success);
 
     Opal::DynamicArray<u32> values(k_element_count);
-    output.Read({reinterpret_cast<u8*>(values.GetData()), values.GetSize() * sizeof(u32)});
+    REQUIRE(output.Read({reinterpret_cast<u8*>(values.GetData()), values.GetSize() * sizeof(u32)}) == ErrorCode::Success);
     for (i32 i = 0; i < k_element_count; ++i)
     {
         REQUIRE(values[i] == static_cast<u32>(i) + 1000);
@@ -7492,27 +7617,29 @@ TEST_CASE("Forge a dispatch on the async compute queue", "[forge]")
         if (properties.timestampValidBits == 0)
         {
             // A family that can time nothing is named rather than answered with zeroes.
-            REQUIRE_THROWS_AS(
-                Forge::TimestampQueryPool(fixture.device, {.query_count = 2, .queue_family = Forge::QueueFamily::AsyncCompute}),
-                Opal::Exception);
+            REQUIRE_FALSE(
+                Forge::TimestampQueryPool::Create(fixture.device, {.query_count = 2, .queue_family = Forge::QueueFamily::AsyncCompute})
+                    .HasValue());
         }
         else
         {
-            const Forge::TimestampQueryPool pool(fixture.device,
-                                                 {.query_count = 2, .queue_family = Forge::QueueFamily::AsyncCompute});
-            Forge::ImmediateSubmit(fixture.device, compute_queue,
+            const Forge::TimestampQueryPool pool = ForgeTest::Unwrap(Forge::TimestampQueryPool::Create(fixture.device,
+                                                 {.query_count = 2, .queue_family = Forge::QueueFamily::AsyncCompute}));
+            REQUIRE(Forge::ImmediateSubmit(fixture.device, compute_queue,
                                    [&](Forge::CommandBuffer& command_buffer)
                                    {
-                                       command_buffer.CmdResetQueryPool(pool);
-                                       command_buffer.CmdWriteTimestamp(pool, 0, Forge::PipelineStageBits::PipelineStart);
-                                       command_buffer.CmdBindPipeline(pipeline);
-                                       command_buffer.CmdPushConstants(pipeline, ShaderTypeBits::Compute,
-                                                                       Opal::AsBytes(output_address));
-                                       command_buffer.CmdDispatch(k_element_count / k_group_size);
-                                       command_buffer.CmdWriteTimestamp(pool, 1, Forge::PipelineStageBits::PipelineEnd);
-                                   });
+                                       REQUIRE(command_buffer.CmdResetQueryPool(pool) == ErrorCode::Success);
+                                       REQUIRE(command_buffer.CmdWriteTimestamp(pool, 0, Forge::PipelineStageBits::PipelineStart) ==
+                                               ErrorCode::Success);
+                                       REQUIRE(command_buffer.CmdBindPipeline(pipeline) == ErrorCode::Success);
+                                       REQUIRE(command_buffer.CmdPushConstants(pipeline, ShaderTypeBits::Compute,
+                                                                       Opal::AsBytes(output_address)) == ErrorCode::Success);
+                                       REQUIRE(command_buffer.CmdDispatch(k_element_count / k_group_size) == ErrorCode::Success);
+                                       REQUIRE(command_buffer.CmdWriteTimestamp(pool, 1, Forge::PipelineStageBits::PipelineEnd) ==
+                                               ErrorCode::Success);
+                                   }) == ErrorCode::Success);
             f64 elapsed_ms = -1.0;
-            REQUIRE(pool.TryGetElapsedMilliseconds(0, 1, elapsed_ms));
+            REQUIRE(ForgeTest::Unwrap(pool.TryGetElapsedMilliseconds(0, 1, elapsed_ms)));
             INFO("elapsed " << elapsed_ms << " ms on family " << family_index);
             REQUIRE(elapsed_ms >= 0.0);
             // Ticks the mask of this family did not clear come back as an interval no dispatch this small
@@ -7544,15 +7671,17 @@ TEST_CASE("Forge transfers on the dedicated transfer queue", "[forge]")
 
     SECTION("A buffer copy")
     {
-        const Forge::Buffer source(fixture.device, {.size = k_size, .usage = Forge::BufferUsageBits::TransferSource}, written);
-        const Forge::Buffer destination(fixture.device, {.size = k_size,
+        const Forge::Buffer source = ForgeTest::Unwrap(
+            Forge::Buffer::Create(fixture.device, {.size = k_size, .usage = Forge::BufferUsageBits::TransferSource}, written));
+        const Forge::Buffer destination = ForgeTest::Unwrap(Forge::Buffer::Create(fixture.device, {.size = k_size,
                                                          .usage = Forge::BufferUsageBits::TransferDestination,
-                                                         .host_access = Forge::HostAccess::Random});
-        destination.Update(zeros);
-        Forge::ImmediateSubmit(fixture.device, transfer_queue,
-                               [&](Forge::CommandBuffer& command_buffer) { command_buffer.CmdCopyBuffer(source, destination); });
+                                                         .host_access = Forge::HostAccess::Random}));
+        REQUIRE(destination.Update(zeros) == ErrorCode::Success);
+        REQUIRE(Forge::ImmediateSubmit(fixture.device, transfer_queue, [&](Forge::CommandBuffer& command_buffer)
+                                       { REQUIRE(command_buffer.CmdCopyBuffer(source, destination) == ErrorCode::Success); }) ==
+                ErrorCode::Success);
         Opal::DynamicArray<u8> read_back(k_size);
-        destination.Read(read_back);
+        REQUIRE(destination.Read(read_back) == ErrorCode::Success);
         REQUIRE(CountMismatches(written, read_back) == 0);
     }
     SECTION("A texture upload and readback, in the layouts this family may transition into")
@@ -7564,25 +7693,28 @@ TEST_CASE("Forge transfers on the dedicated transfer queue", "[forge]")
         constexpr i32 k_side = 4;
         constexpr PixelFormat k_format = PixelFormat::R8G8B8A8_UNORM;
         const Opal::DynamicArray<u8> pixels = MakeBytes(k_side * k_side * 4, 13);
-        Forge::Texture texture(fixture.device, {.format = k_format,
+        Forge::Texture texture = ForgeTest::Unwrap(Forge::Texture::Create(fixture.device, {.format = k_format,
                                                 .width = k_side,
                                                 .height = k_side,
                                                 .usage = Forge::TextureUsageBits::TransferSource |
-                                                         Forge::TextureUsageBits::TransferDestination});
-        const Forge::Buffer staging(fixture.device, {.size = pixels.GetSize(), .usage = Forge::BufferUsageBits::TransferSource},
-                                    pixels);
+                                                         Forge::TextureUsageBits::TransferDestination}));
+        const Forge::Buffer staging = ForgeTest::Unwrap(
+            Forge::Buffer::Create(fixture.device, {.size = pixels.GetSize(), .usage = Forge::BufferUsageBits::TransferSource}, pixels));
         const Forge::BufferTextureCopyRegion region;
-        Forge::ImmediateSubmit(fixture.device, transfer_queue,
-                               [&](Forge::CommandBuffer& command_buffer)
-                               {
-                                   command_buffer.CmdTextureBarrier(Forge::TextureBarrier::ToTransferDestination(texture));
-                                   command_buffer.CmdCopyBufferToTexture(staging, texture, {&region, 1});
-                               });
-        REQUIRE(texture.GetCurrentLayout() == Forge::ImageLayout::TransferDestination);
+        REQUIRE(
+            Forge::ImmediateSubmit(fixture.device, transfer_queue,
+                                   [&](Forge::CommandBuffer& command_buffer)
+                                   {
+                                       REQUIRE(command_buffer.CmdTextureBarrier(Forge::TextureBarrier::ToTransferDestination(texture)) ==
+                                               ErrorCode::Success);
+                                       REQUIRE(command_buffer.CmdCopyBufferToTexture(staging, texture, {&region, 1}) == ErrorCode::Success);
+                                   }) == ErrorCode::Success);
+        REQUIRE(ForgeTest::Unwrap(texture.GetCurrentLayout()) == Forge::ImageLayout::TransferDestination);
 
         Opal::DynamicArray<u8> read_back(pixels.GetSize());
-        Forge::ReadBackTexture(fixture.device, transfer_queue, texture, read_back, 0, Forge::ImageLayout::Undefined);
-        REQUIRE(texture.GetCurrentLayout() == Forge::ImageLayout::TransferSource);
+        REQUIRE(Forge::ReadBackTexture(fixture.device, transfer_queue, texture, read_back, 0, Forge::ImageLayout::Undefined) ==
+                ErrorCode::Success);
+        REQUIRE(ForgeTest::Unwrap(texture.GetCurrentLayout()) == Forge::ImageLayout::TransferSource);
         REQUIRE(CountMismatches(pixels, read_back) == 0);
     }
     REQUIRE_NO_VALIDATION_ERROR(fixture);
@@ -7611,15 +7743,15 @@ TEST_CASE("Forge a buffer handed from one queue family to another", "[forge]")
     constexpr u64 k_byte_size = k_element_count * sizeof(u32);
     // Device local on purpose: a buffer the host could read would let the copy on the other family be left
     // out, and handing a buffer between two families is what an ownership transfer is for.
-    const Forge::Buffer shared(fixture.device, {.size = k_byte_size,
+    const Forge::Buffer shared = ForgeTest::Unwrap(Forge::Buffer::Create(fixture.device, {.size = k_byte_size,
                                                 .usage = Forge::BufferUsageBits::StorageBuffer |
                                                          Forge::BufferUsageBits::TransferSource,
-                                                .use_device_address = true});
-    const Forge::Buffer host_visible(fixture.device, {.size = k_byte_size,
+                                                .use_device_address = true}));
+    const Forge::Buffer host_visible = ForgeTest::Unwrap(Forge::Buffer::Create(fixture.device, {.size = k_byte_size,
                                                       .usage = Forge::BufferUsageBits::TransferDestination,
-                                                      .host_access = Forge::HostAccess::Random});
+                                                      .host_access = Forge::HostAccess::Random}));
     const Opal::DynamicArray<u8> zeros(k_byte_size);
-    host_visible.Update(zeros);
+    REQUIRE(host_visible.Update(zeros) == ErrorCode::Success);
 
     const Forge::Shader compute_shader =
         Forge::Shader::FromSourceInMemory(fixture.device, k_compute_source, {.entry_point = "main_compute", .cache = GetShaderCache()});
@@ -7632,37 +7764,37 @@ TEST_CASE("Forge a buffer handed from one queue family to another", "[forge]")
 
     // The release half, on the family that wrote the buffer. Its destination stages and access are empty:
     // what happens on the other side of a release belongs to the acquiring family and is named there.
-    Forge::CommandBuffer release_commands(fixture.device, compute_queue);
-    release_commands.Begin();
-    release_commands.CmdBindPipeline(pipeline);
-    release_commands.CmdPushConstants(pipeline, ShaderTypeBits::Compute, Opal::AsBytes(shared_address));
-    release_commands.CmdDispatch(k_element_count / k_group_size);
-    release_commands.CmdBufferBarrier({.stages_must_finish = Forge::PipelineStageBits::ComputeShader,
+    Forge::CommandBuffer release_commands = ForgeTest::Unwrap(Forge::CommandBuffer::Create(fixture.device, compute_queue));
+    REQUIRE(release_commands.Begin() == ErrorCode::Success);
+    REQUIRE(release_commands.CmdBindPipeline(pipeline) == ErrorCode::Success);
+    REQUIRE(release_commands.CmdPushConstants(pipeline, ShaderTypeBits::Compute, Opal::AsBytes(shared_address)) == ErrorCode::Success);
+    REQUIRE(release_commands.CmdDispatch(k_element_count / k_group_size) == ErrorCode::Success);
+    REQUIRE(release_commands.CmdBufferBarrier({.stages_must_finish = Forge::PipelineStageBits::ComputeShader,
                                        .stages_must_finish_access = Forge::PipelineStageAccessBits::ShaderWrite,
                                        .before_stages_start = Forge::PipelineStageBits::None,
                                        .before_stages_start_access = Forge::PipelineStageAccessBits::None,
                                        .source_queue_family = compute_family,
                                        .destination_queue_family = graphics_family,
-                                       .buffer = shared});
-    release_commands.End();
+                                       .buffer = shared}) == ErrorCode::Success);
+    REQUIRE(release_commands.End() == ErrorCode::Success);
 
     // The acquire half, on the family that reads it, naming the same pair of families in the same order.
-    Forge::CommandBuffer acquire_commands(fixture.device, graphics_queue);
-    acquire_commands.Begin();
-    acquire_commands.CmdBufferBarrier({.stages_must_finish = Forge::PipelineStageBits::None,
+    Forge::CommandBuffer acquire_commands = ForgeTest::Unwrap(Forge::CommandBuffer::Create(fixture.device, graphics_queue));
+    REQUIRE(acquire_commands.Begin() == ErrorCode::Success);
+    REQUIRE(acquire_commands.CmdBufferBarrier({.stages_must_finish = Forge::PipelineStageBits::None,
                                        .stages_must_finish_access = Forge::PipelineStageAccessBits::None,
                                        .before_stages_start = Forge::PipelineStageBits::Copy,
                                        .before_stages_start_access = Forge::PipelineStageAccessBits::TransferRead,
                                        .source_queue_family = compute_family,
                                        .destination_queue_family = graphics_family,
-                                       .buffer = shared});
-    acquire_commands.CmdCopyBuffer(shared, host_visible);
-    acquire_commands.End();
+                                       .buffer = shared}) == ErrorCode::Success);
+    REQUIRE(acquire_commands.CmdCopyBuffer(shared, host_visible) == ErrorCode::Success);
+    REQUIRE(acquire_commands.End() == ErrorCode::Success);
 
     // A semaphore between the two submits, which the transfer needs beyond the barriers: the acquire may not
     // run before the release, and two queues have no order of their own.
-    const Forge::Semaphore handover(fixture.device);
-    const Forge::Fence fence(fixture.device, false);
+    const Forge::Semaphore handover = ForgeTest::Unwrap(Forge::Semaphore::Create(fixture.device));
+    const Forge::Fence fence = ForgeTest::Unwrap(Forge::Fence::Create(fixture.device, false));
     const Opal::Ref<const Forge::CommandBuffer> release_batch[1] = {Opal::Ref<const Forge::CommandBuffer>(release_commands)};
     const Opal::Ref<const Forge::CommandBuffer> acquire_batch[1] = {Opal::Ref<const Forge::CommandBuffer>(acquire_commands)};
     const Forge::SemaphoreSubmit signal{.semaphore = handover, .stages = Forge::PipelineStageBits::ComputeShader};
@@ -7670,10 +7802,10 @@ TEST_CASE("Forge a buffer handed from one queue family to another", "[forge]")
     REQUIRE(compute_queue.Submit({.command_buffers = {release_batch, 1}, .signal_semaphores = {&signal, 1}}) == ErrorCode::Success);
     REQUIRE(graphics_queue.Submit({.command_buffers = {acquire_batch, 1}, .wait_semaphores = {&wait, 1}, .fence = fence}) ==
             ErrorCode::Success);
-    fence.Wait();
+    REQUIRE(fence.Wait() == ErrorCode::Success);
 
     Opal::DynamicArray<u32> values(k_element_count);
-    host_visible.Read({reinterpret_cast<u8*>(values.GetData()), values.GetSize() * sizeof(u32)});
+    REQUIRE(host_visible.Read({reinterpret_cast<u8*>(values.GetData()), values.GetSize() * sizeof(u32)}) == ErrorCode::Success);
     for (i32 i = 0; i < k_element_count; ++i)
     {
         REQUIRE(values[i] == static_cast<u32>(i) + 1000);
@@ -7706,20 +7838,21 @@ constexpr PixelFormat k_table_depth_stencil_format = PixelFormat::D24_UNORM_S8_U
 u8 ReadStencilValue(ForgeFixture& fixture, Forge::Texture& depth_stencil)
 {
     constexpr i32 k_texel_count = k_table_side * k_table_side;
-    const Forge::Buffer staging(fixture.device,
+    const Forge::Buffer staging = ForgeTest::Unwrap(Forge::Buffer::Create(fixture.device,
                                 {.size = k_texel_count * GetPixelSize(k_table_depth_stencil_format),
                                  .usage = Forge::BufferUsageBits::TransferDestination,
-                                 .host_access = Forge::HostAccess::Random});
+                                 .host_access = Forge::HostAccess::Random}));
     const Forge::BufferTextureCopyRegion region{.texture_subresource = {.aspect_mask = Forge::ImageAspectBits::Stencil},
                                                 .texture_extent = {k_table_side, k_table_side, 1}};
-    Forge::ImmediateSubmit(fixture.device, fixture.GetQueue(),
-                           [&](Forge::CommandBuffer& command_buffer)
-                           {
-                               command_buffer.CmdTextureBarrier(Forge::TextureBarrier::ToTransferSource(depth_stencil));
-                               command_buffer.CmdCopyTextureToBuffer(depth_stencil, staging, {&region, 1});
-                           });
+    REQUIRE(Forge::ImmediateSubmit(
+                fixture.device, fixture.GetQueue(),
+                [&](Forge::CommandBuffer& command_buffer)
+                {
+                    REQUIRE(command_buffer.CmdTextureBarrier(Forge::TextureBarrier::ToTransferSource(depth_stencil)) == ErrorCode::Success);
+                    REQUIRE(command_buffer.CmdCopyTextureToBuffer(depth_stencil, staging, {&region, 1}) == ErrorCode::Success);
+                }) == ErrorCode::Success);
     Opal::DynamicArray<u8> values(k_texel_count);
-    staging.Read({values.GetData(), values.GetSize()});
+    REQUIRE(staging.Read({values.GetData(), values.GetSize()}) == ErrorCode::Success);
     // Every texel was covered by the same draw, so a target that does not agree with itself means the draw
     // did not reach all of it and whichever value came back first would be an accident.
     for (i32 i = 1; i < k_texel_count; ++i)
@@ -7807,11 +7940,11 @@ const char* StencilOperationName(StencilOperation operation)
 /** The depth-stencil these cases render into and then read the raw stencil values out of. */
 Forge::Texture MakeStencilTarget(const Forge::Device& device)
 {
-    return Forge::Texture(device, {.format = k_table_depth_stencil_format,
+    return ForgeTest::Unwrap(Forge::Texture::Create(device, {.format = k_table_depth_stencil_format,
                                    .width = k_table_side,
                                    .height = k_table_side,
                                    .usage = Forge::TextureUsageBits::DepthStencilAttachment |
-                                            Forge::TextureUsageBits::TransferSource});
+                                            Forge::TextureUsageBits::TransferSource}));
 }
 
 /**
@@ -7821,8 +7954,8 @@ Forge::Texture MakeStencilTarget(const Forge::Device& device)
 void BeginTableRendering(Forge::CommandBuffer& command_buffer, Forge::Texture& color, Forge::Texture& depth_stencil,
                          const Forge::Buffer& quad, u32 stencil_clear)
 {
-    command_buffer.CmdTextureBarrier(Forge::TextureBarrier::ToColorAttachment(color));
-    command_buffer.CmdTextureBarrier(Forge::TextureBarrier::ToDepthStencilAttachment(depth_stencil));
+    REQUIRE(command_buffer.CmdTextureBarrier(Forge::TextureBarrier::ToColorAttachment(color)) == ErrorCode::Success);
+    REQUIRE(command_buffer.CmdTextureBarrier(Forge::TextureBarrier::ToDepthStencilAttachment(depth_stencil)) == ErrorCode::Success);
     const Forge::RenderingAttachmentDesc depth_stencil_attachment{
         .texture = depth_stencil,
         .load_operation = Forge::AttachmentLoadOperation::Clear,
@@ -7836,10 +7969,10 @@ void BeginTableRendering(Forge::CommandBuffer& command_buffer, Forge::Texture& c
                                                              .clear_value = Vector4f{1.0f, 0.0f, 0.0f, 1.0f}}},
         .depth_attachment = depth_stencil_attachment.Clone(),
         .stencil_attachment = depth_stencil_attachment.Clone()};
-    command_buffer.CmdBeginRendering(rendering_desc);
-    command_buffer.CmdSetViewport(Vector2f::Zero(), {k_table_side, k_table_side});
-    command_buffer.CmdSetScissor(Vector2i::Zero(), {k_table_side, k_table_side});
-    command_buffer.CmdBindVertexBuffer(quad, 0);
+    REQUIRE(command_buffer.CmdBeginRendering(rendering_desc) == ErrorCode::Success);
+    REQUIRE(command_buffer.CmdSetViewport(Vector2f::Zero(), {k_table_side, k_table_side}) == ErrorCode::Success);
+    REQUIRE(command_buffer.CmdSetScissor(Vector2i::Zero(), {k_table_side, k_table_side}) == ErrorCode::Success);
+    REQUIRE(command_buffer.CmdBindVertexBuffer(quad, 0) == ErrorCode::Success);
 }
 
 }  // namespace
@@ -7882,24 +8015,24 @@ TEST_CASE("Forge the stencil operations", "[forge]")
         Forge::Texture color = MakeColorTarget(fixture.device, k_table_side, k_table_color_format);
         Forge::Texture depth_stencil = MakeStencilTarget(fixture.device);
 
-        Forge::ImmediateSubmit(fixture.device, fixture.GetQueue(),
+        REQUIRE(Forge::ImmediateSubmit(fixture.device, fixture.GetQueue(),
                                [&](Forge::CommandBuffer& command_buffer)
                                {
                                    BeginTableRendering(command_buffer, color, depth_stencil, full_quad, 0);
 
-                                   command_buffer.CmdBindPipeline(seed_pipeline);
-                                   command_buffer.CmdSetStencilReference(stored);
-                                   command_buffer.CmdPushConstants(seed_pipeline, ShaderTypeBits::Fragment,
-                                                                   Opal::AsBytes(unused_color));
-                                   command_buffer.CmdDraw(6);
+                                   REQUIRE(command_buffer.CmdBindPipeline(seed_pipeline) == ErrorCode::Success);
+                                   REQUIRE(command_buffer.CmdSetStencilReference(stored) == ErrorCode::Success);
+                                   REQUIRE(command_buffer.CmdPushConstants(seed_pipeline, ShaderTypeBits::Fragment,
+                                                                   Opal::AsBytes(unused_color)) == ErrorCode::Success);
+                                   REQUIRE(command_buffer.CmdDraw(6) == ErrorCode::Success);
 
-                                   command_buffer.CmdBindPipeline(operation_pipeline);
-                                   command_buffer.CmdSetStencilReference(reference);
-                                   command_buffer.CmdPushConstants(operation_pipeline, ShaderTypeBits::Fragment,
-                                                                   Opal::AsBytes(unused_color));
-                                   command_buffer.CmdDraw(6);
-                                   command_buffer.CmdEndRendering();
-                               });
+                                   REQUIRE(command_buffer.CmdBindPipeline(operation_pipeline) == ErrorCode::Success);
+                                   REQUIRE(command_buffer.CmdSetStencilReference(reference) == ErrorCode::Success);
+                                   REQUIRE(command_buffer.CmdPushConstants(operation_pipeline, ShaderTypeBits::Fragment,
+                                                                   Opal::AsBytes(unused_color)) == ErrorCode::Success);
+                                   REQUIRE(command_buffer.CmdDraw(6) == ErrorCode::Success);
+                                   REQUIRE(command_buffer.CmdEndRendering() == ErrorCode::Success);
+                               }) == ErrorCode::Success);
         return ReadStencilValue(fixture, depth_stencil);
     };
 
@@ -8071,27 +8204,28 @@ TEST_CASE("Forge the comparators", "[forge]")
         Forge::Texture color = MakeColorTarget(fixture.device, k_table_side, k_table_color_format);
         Forge::Texture depth_stencil = MakeStencilTarget(fixture.device);
 
-        Forge::ImmediateSubmit(fixture.device, fixture.GetQueue(),
+        REQUIRE(Forge::ImmediateSubmit(fixture.device, fixture.GetQueue(),
                                [&](Forge::CommandBuffer& command_buffer)
                                {
                                    BeginTableRendering(command_buffer, color, depth_stencil, full_quad, 0);
 
-                                   command_buffer.CmdBindPipeline(seed_pipeline);
-                                   command_buffer.CmdSetStencilReference(stored);
-                                   command_buffer.CmdPushConstants(seed_pipeline, ShaderTypeBits::Fragment,
-                                                                   Opal::AsBytes(unused_color));
-                                   command_buffer.CmdDraw(6);
+                                   REQUIRE(command_buffer.CmdBindPipeline(seed_pipeline) == ErrorCode::Success);
+                                   REQUIRE(command_buffer.CmdSetStencilReference(stored) == ErrorCode::Success);
+                                   REQUIRE(command_buffer.CmdPushConstants(seed_pipeline, ShaderTypeBits::Fragment,
+                                                                   Opal::AsBytes(unused_color)) == ErrorCode::Success);
+                                   REQUIRE(command_buffer.CmdDraw(6) == ErrorCode::Success);
 
-                                   command_buffer.CmdBindPipeline(probe_pipeline);
-                                   command_buffer.CmdSetStencilReference(reference);
-                                   command_buffer.CmdPushConstants(probe_pipeline, ShaderTypeBits::Fragment,
-                                                                   Opal::AsBytes(paint_color));
-                                   command_buffer.CmdDraw(6);
-                                   command_buffer.CmdEndRendering();
-                               });
+                                   REQUIRE(command_buffer.CmdBindPipeline(probe_pipeline) == ErrorCode::Success);
+                                   REQUIRE(command_buffer.CmdSetStencilReference(reference) == ErrorCode::Success);
+                                   REQUIRE(command_buffer.CmdPushConstants(probe_pipeline, ShaderTypeBits::Fragment,
+                                                                   Opal::AsBytes(paint_color)) == ErrorCode::Success);
+                                   REQUIRE(command_buffer.CmdDraw(6) == ErrorCode::Success);
+                                   REQUIRE(command_buffer.CmdEndRendering() == ErrorCode::Success);
+                               }) == ErrorCode::Success);
 
         Opal::DynamicArray<u8> pixels(k_table_side * k_table_side * 4);
-        Forge::ReadBackTexture(fixture.device, fixture.GetQueue(), color, pixels, 0, Forge::ImageLayout::TransferSource);
+        REQUIRE(Forge::ReadBackTexture(fixture.device, fixture.GetQueue(), color, pixels, 0, Forge::ImageLayout::TransferSource) ==
+                ErrorCode::Success);
         // The whole target was covered by one draw, so it is green everywhere or red everywhere.
         const bool painted = pixels[0] == 0 && pixels[1] == 255;
         for (i32 texel = 1; texel < k_table_side * k_table_side; ++texel)
@@ -8361,29 +8495,31 @@ TEST_CASE("Forge the blend factors and operations", "[forge]")
         const Forge::Pipeline pipeline(fixture.device, pipeline_desc);
 
         Forge::Texture color = MakeColorTarget(fixture.device, k_table_side, k_table_color_format);
-        Forge::ImmediateSubmit(fixture.device, fixture.GetQueue(),
-                               [&](Forge::CommandBuffer& command_buffer)
-                               {
-                                   command_buffer.CmdTextureBarrier(Forge::TextureBarrier::ToColorAttachment(color));
-                                   const Forge::RenderingDesc rendering_desc{
-                                       .render_area_extent = {k_table_side, k_table_side},
-                                       .color_attachments = {Forge::RenderingAttachmentDesc{
-                                           .texture = color,
-                                           .load_operation = Forge::AttachmentLoadOperation::Clear,
-                                           .store_operation = Forge::AttachmentStoreOperation::Store,
-                                           .clear_value = dst}}};
-                                   command_buffer.CmdBeginRendering(rendering_desc);
-                                   command_buffer.CmdSetViewport(Vector2f::Zero(), {k_table_side, k_table_side});
-                                   command_buffer.CmdSetScissor(Vector2i::Zero(), {k_table_side, k_table_side});
-                                   command_buffer.CmdBindPipeline(pipeline);
-                                   command_buffer.CmdBindVertexBuffer(full_quad, 0);
-                                   command_buffer.CmdPushConstants(pipeline, ShaderTypeBits::Fragment, Opal::AsBytes(src));
-                                   command_buffer.CmdDraw(6);
-                                   command_buffer.CmdEndRendering();
-                               });
+        REQUIRE(Forge::ImmediateSubmit(
+                    fixture.device, fixture.GetQueue(),
+                    [&](Forge::CommandBuffer& command_buffer)
+                    {
+                        REQUIRE(command_buffer.CmdTextureBarrier(Forge::TextureBarrier::ToColorAttachment(color)) == ErrorCode::Success);
+                        const Forge::RenderingDesc rendering_desc{
+                            .render_area_extent = {k_table_side, k_table_side},
+                            .color_attachments = {Forge::RenderingAttachmentDesc{.texture = color,
+                                                                                 .load_operation = Forge::AttachmentLoadOperation::Clear,
+                                                                                 .store_operation = Forge::AttachmentStoreOperation::Store,
+                                                                                 .clear_value = dst}}};
+                        REQUIRE(command_buffer.CmdBeginRendering(rendering_desc) == ErrorCode::Success);
+                        REQUIRE(command_buffer.CmdSetViewport(Vector2f::Zero(), {k_table_side, k_table_side}) == ErrorCode::Success);
+                        REQUIRE(command_buffer.CmdSetScissor(Vector2i::Zero(), {k_table_side, k_table_side}) == ErrorCode::Success);
+                        REQUIRE(command_buffer.CmdBindPipeline(pipeline) == ErrorCode::Success);
+                        REQUIRE(command_buffer.CmdBindVertexBuffer(full_quad, 0) == ErrorCode::Success);
+                        REQUIRE(command_buffer.CmdPushConstants(pipeline, ShaderTypeBits::Fragment, Opal::AsBytes(src)) ==
+                                ErrorCode::Success);
+                        REQUIRE(command_buffer.CmdDraw(6) == ErrorCode::Success);
+                        REQUIRE(command_buffer.CmdEndRendering() == ErrorCode::Success);
+                    }) == ErrorCode::Success);
 
         Opal::DynamicArray<u8> pixels(k_table_side * k_table_side * 4);
-        Forge::ReadBackTexture(fixture.device, fixture.GetQueue(), color, pixels, 0, Forge::ImageLayout::TransferSource);
+        REQUIRE(Forge::ReadBackTexture(fixture.device, fixture.GetQueue(), color, pixels, 0, Forge::ImageLayout::TransferSource) ==
+                ErrorCode::Success);
         return ByteColor(pixels[0], pixels[1], pixels[2], pixels[3]);
     };
 
@@ -8678,11 +8814,11 @@ TEST_CASE("Forge the sampler address modes and border colours", "[forge]")
         {.shader_stages = ShaderTypeBits::Compute, .offset = 0, .size = sizeof(SampleParams)});
     const Forge::Pipeline pipeline(fixture.device, pipeline_desc);
 
-    Forge::Texture row(fixture.device, {.format = k_format,
+    Forge::Texture row = ForgeTest::Unwrap(Forge::Texture::Create(fixture.device, {.format = k_format,
                                         .width = k_row_width,
                                         .height = 1,
                                         .usage = Forge::TextureUsageBits::Sampled |
-                                                 Forge::TextureUsageBits::TransferDestination});
+                                                 Forge::TextureUsageBits::TransferDestination}));
     const Opal::DynamicArray<u8> row_pixels = MakeTwoTexelRow();
     UploadMip(fixture.device, fixture.GetQueue(), row, {row_pixels.GetData(), row_pixels.GetSize()}, 0);
 
@@ -8693,32 +8829,33 @@ TEST_CASE("Forge the sampler address modes and border colours", "[forge]")
      */
     auto sample_at = [&](ImageAddressMode mode, BorderColor border_color, f32 u)
     {
-        const Forge::Sampler sampler(fixture.device, {.min_filter = ImageFilter::Nearest,
+        const Forge::Sampler sampler = ForgeTest::Unwrap(Forge::Sampler::Create(fixture.device, {.min_filter = ImageFilter::Nearest,
                                                       .mag_filter = ImageFilter::Nearest,
                                                       .address_mode_u = mode,
                                                       .address_mode_v = mode,
                                                       .address_mode_w = mode,
-                                                      .border_color = border_color});
-        const Forge::Buffer output(fixture.device, {.size = sizeof(Vector4f),
+                                                      .border_color = border_color}));
+        const Forge::Buffer output = ForgeTest::Unwrap(Forge::Buffer::Create(fixture.device, {.size = sizeof(Vector4f),
                                                     .usage = Forge::BufferUsageBits::StorageBuffer,
-                                                    .host_access = Forge::HostAccess::Random});
+                                                    .host_access = Forge::HostAccess::Random}));
         const Opal::DynamicArray<u8> zeros(sizeof(Vector4f));
-        output.Update(zeros);
+        REQUIRE(output.Update(zeros) == ErrorCode::Success);
 
         Forge::DescriptorSet set(pool, layout);
         set.Update(0, row, sampler, Forge::ImageLayout::ShaderReadOnly);
         set.Update(1, output);
         const SampleParams params{.uv = {u, 0.5f}};
-        Forge::ImmediateSubmit(fixture.device, fixture.GetQueue(),
+        REQUIRE(Forge::ImmediateSubmit(fixture.device, fixture.GetQueue(),
                                [&](Forge::CommandBuffer& command_buffer)
                                {
-                                   command_buffer.CmdBindPipeline(pipeline);
-                                   command_buffer.CmdBindDescriptorSet(pipeline, set);
-                                   command_buffer.CmdPushConstants(pipeline, ShaderTypeBits::Compute, Opal::AsBytes(params));
-                                   command_buffer.CmdDispatch(1);
-                               });
+                                   REQUIRE(command_buffer.CmdBindPipeline(pipeline) == ErrorCode::Success);
+                                   REQUIRE(command_buffer.CmdBindDescriptorSet(pipeline, set) == ErrorCode::Success);
+                                   REQUIRE(command_buffer.CmdPushConstants(pipeline, ShaderTypeBits::Compute, Opal::AsBytes(params)) ==
+                                           ErrorCode::Success);
+                                   REQUIRE(command_buffer.CmdDispatch(1) == ErrorCode::Success);
+                               }) == ErrorCode::Success);
         Vector4f result;
-        output.Read({reinterpret_cast<u8*>(&result), sizeof(result)});
+        REQUIRE(output.Read({reinterpret_cast<u8*>(&result), sizeof(result)}) == ErrorCode::Success);
         return result;
     };
 
@@ -8818,14 +8955,12 @@ TEST_CASE("Forge the sampler address modes and border colours", "[forge]")
         // MIRROR_CLAMP_TO_EDGE is core in Vulkan 1.2 but still a feature, and a sampler naming it on a device
         // that did not enable it is undefined. Forge refused nothing here until the mode had a test.
         ForgeFixture plain_fixture;
-        REQUIRE_THROWS_AS(Forge::Sampler(plain_fixture.device, {.address_mode_u = ImageAddressMode::MirrorOnce}),
-                          Opal::Exception);
-        REQUIRE_THROWS_AS(Forge::Sampler(plain_fixture.device, {.address_mode_v = ImageAddressMode::MirrorOnce}),
-                          Opal::Exception);
-        REQUIRE_THROWS_AS(Forge::Sampler(plain_fixture.device, {.address_mode_w = ImageAddressMode::MirrorOnce}),
-                          Opal::Exception);
+        REQUIRE_FALSE(Forge::Sampler::Create(plain_fixture.device, {.address_mode_u = ImageAddressMode::MirrorOnce}).HasValue());
+        REQUIRE_FALSE(Forge::Sampler::Create(plain_fixture.device, {.address_mode_v = ImageAddressMode::MirrorOnce}).HasValue());
+        REQUIRE_FALSE(Forge::Sampler::Create(plain_fixture.device, {.address_mode_w = ImageAddressMode::MirrorOnce}).HasValue());
         // The other four modes are what every device does, so none of them is refused on the same device.
-        const Forge::Sampler unaffected(plain_fixture.device, {.address_mode_u = ImageAddressMode::MirrorRepeat});
+        const Forge::Sampler unaffected =
+            ForgeTest::Unwrap(Forge::Sampler::Create(plain_fixture.device, {.address_mode_u = ImageAddressMode::MirrorRepeat}));
         REQUIRE(unaffected.IsValid());
         REQUIRE_NO_VALIDATION_ERROR(plain_fixture);
     }
@@ -8882,12 +9017,13 @@ TEST_CASE("Forge stencil state that differs between the faces", "[forge]")
         const Opal::DynamicArray<u8> pixels = RenderRaster(fixture, color, k_table_side,
                                                            [&](Forge::CommandBuffer& command_buffer)
                                                            {
-                                                               command_buffer.CmdBindPipeline(pipeline);
-                                                               command_buffer.CmdBindVertexBuffer(full_quad, 0);
-                                                               command_buffer.CmdPushConstants(
+                                                               REQUIRE(command_buffer.CmdBindPipeline(pipeline) == ErrorCode::Success);
+                                                               REQUIRE(command_buffer.CmdBindVertexBuffer(full_quad, 0) ==
+                                                                       ErrorCode::Success);
+                                                               REQUIRE(command_buffer.CmdPushConstants(
                                                                    pipeline, ShaderTypeBits::Fragment,
-                                                                   Opal::AsBytes(paint_color));
-                                                               command_buffer.CmdDraw(6);
+                                                                   Opal::AsBytes(paint_color)) == ErrorCode::Success);
+                                                               REQUIRE(command_buffer.CmdDraw(6) == ErrorCode::Success);
                                                            });
         return CountCovered(pixels, k_table_side) == k_table_side * k_table_side;
     }();
@@ -8945,12 +9081,12 @@ TEST_CASE("Forge stencil state that differs between the faces", "[forge]")
 
     auto set_faces = [](Forge::CommandBuffer& command_buffer, const FaceStencil& front, const FaceStencil& back)
     {
-        command_buffer.CmdSetStencilCompareMask(front.compare_mask, Forge::StencilFaceBits::Front);
-        command_buffer.CmdSetStencilWriteMask(front.write_mask, Forge::StencilFaceBits::Front);
-        command_buffer.CmdSetStencilReference(front.reference, Forge::StencilFaceBits::Front);
-        command_buffer.CmdSetStencilCompareMask(back.compare_mask, Forge::StencilFaceBits::Back);
-        command_buffer.CmdSetStencilWriteMask(back.write_mask, Forge::StencilFaceBits::Back);
-        command_buffer.CmdSetStencilReference(back.reference, Forge::StencilFaceBits::Back);
+        REQUIRE(command_buffer.CmdSetStencilCompareMask(front.compare_mask, Forge::StencilFaceBits::Front) == ErrorCode::Success);
+        REQUIRE(command_buffer.CmdSetStencilWriteMask(front.write_mask, Forge::StencilFaceBits::Front) == ErrorCode::Success);
+        REQUIRE(command_buffer.CmdSetStencilReference(front.reference, Forge::StencilFaceBits::Front) == ErrorCode::Success);
+        REQUIRE(command_buffer.CmdSetStencilCompareMask(back.compare_mask, Forge::StencilFaceBits::Back) == ErrorCode::Success);
+        REQUIRE(command_buffer.CmdSetStencilWriteMask(back.write_mask, Forge::StencilFaceBits::Back) == ErrorCode::Success);
+        REQUIRE(command_buffer.CmdSetStencilReference(back.reference, Forge::StencilFaceBits::Back) == ErrorCode::Success);
     };
 
     /** Stamp the quad with a different set of values per face, and hand back what the buffer holds. */
@@ -8958,17 +9094,17 @@ TEST_CASE("Forge stencil state that differs between the faces", "[forge]")
     {
         Forge::Texture color = MakeColorTarget(fixture.device, k_table_side, k_table_color_format);
         Forge::Texture depth_stencil = MakeStencilTarget(fixture.device);
-        Forge::ImmediateSubmit(fixture.device, fixture.GetQueue(),
+        REQUIRE(Forge::ImmediateSubmit(fixture.device, fixture.GetQueue(),
                                [&](Forge::CommandBuffer& command_buffer)
                                {
                                    BeginTableRendering(command_buffer, color, depth_stencil, full_quad, 0);
-                                   command_buffer.CmdBindPipeline(stamp_pipeline);
+                                   REQUIRE(command_buffer.CmdBindPipeline(stamp_pipeline) == ErrorCode::Success);
                                    set_faces(command_buffer, front, back);
-                                   command_buffer.CmdPushConstants(stamp_pipeline, ShaderTypeBits::Fragment,
-                                                                   Opal::AsBytes(unused_color));
-                                   command_buffer.CmdDraw(6);
-                                   command_buffer.CmdEndRendering();
-                               });
+                                   REQUIRE(command_buffer.CmdPushConstants(stamp_pipeline, ShaderTypeBits::Fragment,
+                                                                   Opal::AsBytes(unused_color)) == ErrorCode::Success);
+                                   REQUIRE(command_buffer.CmdDraw(6) == ErrorCode::Success);
+                                   REQUIRE(command_buffer.CmdEndRendering() == ErrorCode::Success);
+                               }) == ErrorCode::Success);
         return ReadStencilValue(fixture, depth_stencil);
     };
 
@@ -8980,27 +9116,28 @@ TEST_CASE("Forge stencil state that differs between the faces", "[forge]")
     {
         Forge::Texture color = MakeColorTarget(fixture.device, k_table_side, k_table_color_format);
         Forge::Texture depth_stencil = MakeStencilTarget(fixture.device);
-        Forge::ImmediateSubmit(fixture.device, fixture.GetQueue(),
+        REQUIRE(Forge::ImmediateSubmit(fixture.device, fixture.GetQueue(),
                                [&](Forge::CommandBuffer& command_buffer)
                                {
                                    BeginTableRendering(command_buffer, color, depth_stencil, full_quad, 0);
 
-                                   command_buffer.CmdBindPipeline(stamp_pipeline);
+                                   REQUIRE(command_buffer.CmdBindPipeline(stamp_pipeline) == ErrorCode::Success);
                                    const FaceStencil seeding{.compare_mask = 0xFF, .write_mask = 0xFF, .reference = seed};
                                    set_faces(command_buffer, seeding, seeding);
-                                   command_buffer.CmdPushConstants(stamp_pipeline, ShaderTypeBits::Fragment,
-                                                                   Opal::AsBytes(unused_color));
-                                   command_buffer.CmdDraw(6);
+                                   REQUIRE(command_buffer.CmdPushConstants(stamp_pipeline, ShaderTypeBits::Fragment,
+                                                                   Opal::AsBytes(unused_color)) == ErrorCode::Success);
+                                   REQUIRE(command_buffer.CmdDraw(6) == ErrorCode::Success);
 
-                                   command_buffer.CmdBindPipeline(probe_pipeline);
+                                   REQUIRE(command_buffer.CmdBindPipeline(probe_pipeline) == ErrorCode::Success);
                                    set_faces(command_buffer, front, back);
-                                   command_buffer.CmdPushConstants(probe_pipeline, ShaderTypeBits::Fragment,
-                                                                   Opal::AsBytes(paint_color));
-                                   command_buffer.CmdDraw(6);
-                                   command_buffer.CmdEndRendering();
-                               });
+                                   REQUIRE(command_buffer.CmdPushConstants(probe_pipeline, ShaderTypeBits::Fragment,
+                                                                   Opal::AsBytes(paint_color)) == ErrorCode::Success);
+                                   REQUIRE(command_buffer.CmdDraw(6) == ErrorCode::Success);
+                                   REQUIRE(command_buffer.CmdEndRendering() == ErrorCode::Success);
+                               }) == ErrorCode::Success);
         Opal::DynamicArray<u8> pixels(k_table_side * k_table_side * 4);
-        Forge::ReadBackTexture(fixture.device, fixture.GetQueue(), color, pixels, 0, Forge::ImageLayout::TransferSource);
+        REQUIRE(Forge::ReadBackTexture(fixture.device, fixture.GetQueue(), color, pixels, 0, Forge::ImageLayout::TransferSource) ==
+                ErrorCode::Success);
         return CountCovered(pixels, k_table_side) == k_table_side * k_table_side;
     };
 
@@ -9037,19 +9174,22 @@ TEST_CASE("Forge stencil state that differs between the faces", "[forge]")
         // one assertion that it does not mean something else entirely.
         Forge::Texture color = MakeColorTarget(fixture.device, k_table_side, k_table_color_format);
         Forge::Texture depth_stencil = MakeStencilTarget(fixture.device);
-        Forge::ImmediateSubmit(fixture.device, fixture.GetQueue(),
+        REQUIRE(Forge::ImmediateSubmit(fixture.device, fixture.GetQueue(),
                                [&](Forge::CommandBuffer& command_buffer)
                                {
                                    BeginTableRendering(command_buffer, color, depth_stencil, full_quad, 0);
-                                   command_buffer.CmdBindPipeline(stamp_pipeline);
-                                   command_buffer.CmdSetStencilCompareMask(0xFF, Forge::StencilFaceBits::FrontAndBack);
-                                   command_buffer.CmdSetStencilWriteMask(0xFF, Forge::StencilFaceBits::FrontAndBack);
-                                   command_buffer.CmdSetStencilReference(77, Forge::StencilFaceBits::FrontAndBack);
-                                   command_buffer.CmdPushConstants(stamp_pipeline, ShaderTypeBits::Fragment,
-                                                                   Opal::AsBytes(unused_color));
-                                   command_buffer.CmdDraw(6);
-                                   command_buffer.CmdEndRendering();
-                               });
+                                   REQUIRE(command_buffer.CmdBindPipeline(stamp_pipeline) == ErrorCode::Success);
+                                   REQUIRE(command_buffer.CmdSetStencilCompareMask(0xFF, Forge::StencilFaceBits::FrontAndBack) ==
+                                           ErrorCode::Success);
+                                   REQUIRE(command_buffer.CmdSetStencilWriteMask(0xFF, Forge::StencilFaceBits::FrontAndBack) ==
+                                           ErrorCode::Success);
+                                   REQUIRE(command_buffer.CmdSetStencilReference(77, Forge::StencilFaceBits::FrontAndBack) ==
+                                           ErrorCode::Success);
+                                   REQUIRE(command_buffer.CmdPushConstants(stamp_pipeline, ShaderTypeBits::Fragment,
+                                                                   Opal::AsBytes(unused_color)) == ErrorCode::Success);
+                                   REQUIRE(command_buffer.CmdDraw(6) == ErrorCode::Success);
+                                   REQUIRE(command_buffer.CmdEndRendering() == ErrorCode::Success);
+                               }) == ErrorCode::Success);
         REQUIRE(ReadStencilValue(fixture, depth_stencil) == 77);
         // And it reaches the face the quad does not present as well, which is the half of FrontAndBack that
         // naming one face at a time cannot show.
@@ -9146,10 +9286,10 @@ TEST_CASE("Forge shaders built from SPIR-V rather than from source", "[forge]")
         // uses, driven by a module that came in as bytes.
         constexpr i32 k_element_count = 256;
         constexpr i32 k_group_size = 64;
-        const Forge::Buffer output(fixture.device, {.size = k_element_count * sizeof(u32),
+        const Forge::Buffer output = ForgeTest::Unwrap(Forge::Buffer::Create(fixture.device, {.size = k_element_count * sizeof(u32),
                                                     .usage = Forge::BufferUsageBits::StorageBuffer,
                                                     .host_access = Forge::HostAccess::Random,
-                                                    .use_device_address = true});
+                                                    .use_device_address = true}));
         const Forge::Shader shader =
             Forge::Shader::FromSpirvInMemory(fixture.device, spirv_view, {.entry_point = "main_compute"});
         Forge::ComputePipelineDesc pipeline_desc;
@@ -9158,16 +9298,16 @@ TEST_CASE("Forge shaders built from SPIR-V rather than from source", "[forge]")
             {.shader_stages = ShaderTypeBits::Compute, .offset = 0, .size = sizeof(VkDeviceAddress)});
         const Forge::Pipeline pipeline(fixture.device, pipeline_desc);
         const VkDeviceAddress output_address = output.GetNativeDeviceAddress();
-        Forge::ImmediateSubmit(fixture.device, fixture.GetQueue(),
+        REQUIRE(Forge::ImmediateSubmit(fixture.device, fixture.GetQueue(),
                                [&](Forge::CommandBuffer& command_buffer)
                                {
-                                   command_buffer.CmdBindPipeline(pipeline);
-                                   command_buffer.CmdPushConstants(pipeline, ShaderTypeBits::Compute,
-                                                                   Opal::AsBytes(output_address));
-                                   command_buffer.CmdDispatch(k_element_count / k_group_size);
-                               });
+                                   REQUIRE(command_buffer.CmdBindPipeline(pipeline) == ErrorCode::Success);
+                                   REQUIRE(command_buffer.CmdPushConstants(pipeline, ShaderTypeBits::Compute,
+                                                                   Opal::AsBytes(output_address)) == ErrorCode::Success);
+                                   REQUIRE(command_buffer.CmdDispatch(k_element_count / k_group_size) == ErrorCode::Success);
+                               }) == ErrorCode::Success);
         Opal::DynamicArray<u32> values(k_element_count);
-        output.Read({reinterpret_cast<u8*>(values.GetData()), values.GetSize() * sizeof(u32)});
+        REQUIRE(output.Read({reinterpret_cast<u8*>(values.GetData()), values.GetSize() * sizeof(u32)}) == ErrorCode::Success);
         for (i32 i = 0; i < k_element_count; ++i)
         {
             REQUIRE(values[i] == static_cast<u32>(i) + 1000);
@@ -9251,82 +9391,86 @@ TEST_CASE("Forge reading timestamp ticks without blocking", "[forge]")
     ForgeFixture fixture;
     constexpr i32 k_size = 256;
     const Opal::DynamicArray<u8> written = MakeBytes(k_size, 61);
-    const Forge::Buffer source(fixture.device, {.size = k_size, .usage = Forge::BufferUsageBits::TransferSource}, written);
-    const Forge::Buffer destination(fixture.device, {.size = k_size, .usage = Forge::BufferUsageBits::TransferDestination});
+    const Forge::Buffer source = ForgeTest::Unwrap(
+        Forge::Buffer::Create(fixture.device, {.size = k_size, .usage = Forge::BufferUsageBits::TransferSource}, written));
+    const Forge::Buffer destination =
+        ForgeTest::Unwrap(Forge::Buffer::Create(fixture.device, {.size = k_size, .usage = Forge::BufferUsageBits::TransferDestination}));
 
     SECTION("A pool that was reset and not written has nothing to hand back")
     {
-        const Forge::TimestampQueryPool pool(fixture.device, {.query_count = 2});
-        Forge::ImmediateSubmit(fixture.device, fixture.GetQueue(),
-                               [&](Forge::CommandBuffer& command_buffer) { command_buffer.CmdResetQueryPool(pool); });
+        const Forge::TimestampQueryPool pool = ForgeTest::Unwrap(Forge::TimestampQueryPool::Create(fixture.device, {.query_count = 2}));
+        REQUIRE(Forge::ImmediateSubmit(fixture.device, fixture.GetQueue(), [&](Forge::CommandBuffer& command_buffer)
+                                       { REQUIRE(command_buffer.CmdResetQueryPool(pool) == ErrorCode::Success); }) == ErrorCode::Success);
         Opal::InPlaceArray<u64, 2> ticks;
         ticks[0] = 0xDEAD;
         ticks[1] = 0xBEEF;
-        REQUIRE_FALSE(pool.TryGetResults({ticks.GetData(), 2}));
+        REQUIRE_FALSE(ForgeTest::Unwrap(pool.TryGetResults({ticks.GetData(), 2})));
         // The contract says the contents are unspecified on a false, since the driver may write into the
         // range either way, so nothing is asserted about what is in there now - only that it said no.
     }
     SECTION("A pool the device has finished with hands back the same ticks the blocking read does")
     {
-        const Forge::TimestampQueryPool pool(fixture.device, {.query_count = 2});
-        Forge::ImmediateSubmit(fixture.device, fixture.GetQueue(),
+        const Forge::TimestampQueryPool pool = ForgeTest::Unwrap(Forge::TimestampQueryPool::Create(fixture.device, {.query_count = 2}));
+        REQUIRE(Forge::ImmediateSubmit(fixture.device, fixture.GetQueue(),
                                [&](Forge::CommandBuffer& command_buffer)
                                {
-                                   command_buffer.CmdResetQueryPool(pool);
-                                   command_buffer.CmdWriteTimestamp(pool, 0, Forge::PipelineStageBits::PipelineStart);
-                                   command_buffer.CmdCopyBuffer(source, destination);
-                                   command_buffer.CmdWriteTimestamp(pool, 1, Forge::PipelineStageBits::PipelineEnd);
-                               });
+                                   REQUIRE(command_buffer.CmdResetQueryPool(pool) == ErrorCode::Success);
+                                   REQUIRE(command_buffer.CmdWriteTimestamp(pool, 0, Forge::PipelineStageBits::PipelineStart) ==
+                                           ErrorCode::Success);
+                                   REQUIRE(command_buffer.CmdCopyBuffer(source, destination) == ErrorCode::Success);
+                                   REQUIRE(command_buffer.CmdWriteTimestamp(pool, 1, Forge::PipelineStageBits::PipelineEnd) ==
+                                           ErrorCode::Success);
+                               }) == ErrorCode::Success);
         // ImmediateSubmit has already waited, so the non-blocking read is the one that has to succeed.
         Opal::InPlaceArray<u64, 2> tried;
-        REQUIRE(pool.TryGetResults({tried.GetData(), 2}));
+        REQUIRE(ForgeTest::Unwrap(pool.TryGetResults({tried.GetData(), 2})));
         Opal::InPlaceArray<u64, 2> blocked;
-        pool.GetResults({blocked.GetData(), 2});
+        REQUIRE(pool.GetResults({blocked.GetData(), 2}) == ErrorCode::Success);
         REQUIRE(tried[0] == blocked[0]);
         REQUIRE(tried[1] == blocked[1]);
         REQUIRE(tried[1] >= tried[0]);
 
         // One query at a time, from an offset, which is the other half of what first_query is for.
         Opal::InPlaceArray<u64, 1> second;
-        REQUIRE(pool.TryGetResults({second.GetData(), 1}, 1));
+        REQUIRE(ForgeTest::Unwrap(pool.TryGetResults({second.GetData(), 1}, 1)));
         REQUIRE(second[0] == tried[1]);
     }
     SECTION("A range that does not fit in the pool throws before anything is read")
     {
-        const Forge::TimestampQueryPool pool(fixture.device, {.query_count = 4});
+        const Forge::TimestampQueryPool pool = ForgeTest::Unwrap(Forge::TimestampQueryPool::Create(fixture.device, {.query_count = 4}));
         Opal::InPlaceArray<u64, 8> ticks;
         // A first_query at or past the end, and a count that runs off it. Both are the caller's mistake and
         // neither is something the driver would report.
-        REQUIRE_THROWS_AS(pool.TryGetResults({ticks.GetData(), 1}, 4), Opal::Exception);
-        REQUIRE_THROWS_AS(pool.TryGetResults({ticks.GetData(), 5}), Opal::Exception);
-        REQUIRE_THROWS_AS(pool.TryGetResults({ticks.GetData(), 3}, 2), Opal::Exception);
-        REQUIRE_THROWS_AS(pool.GetResults({ticks.GetData(), 5}), Opal::Exception);
+        REQUIRE_FALSE(pool.TryGetResults({ticks.GetData(), 1}, 4).HasValue());
+        REQUIRE_FALSE(pool.TryGetResults({ticks.GetData(), 5}).HasValue());
+        REQUIRE_FALSE(pool.TryGetResults({ticks.GetData(), 3}, 2).HasValue());
+        REQUIRE(pool.GetResults({ticks.GetData(), 5}) != ErrorCode::Success);
     }
     SECTION("ResolveQueryRange turns a count that may be every query into a concrete one")
     {
         // Public precisely so a caller can make this check itself, and nothing did. The pool is never
         // recorded into here - the whole of what this does is arithmetic against the pool size.
-        const Forge::TimestampQueryPool pool(fixture.device, {.query_count = 4});
-        REQUIRE(pool.ResolveQueryRange(0, Forge::k_all_queries, "Reading") == 4);
-        REQUIRE(pool.ResolveQueryRange(2, Forge::k_all_queries, "Reading") == 2);
-        REQUIRE(pool.ResolveQueryRange(3, Forge::k_all_queries, "Reading") == 1);
+        const Forge::TimestampQueryPool pool = ForgeTest::Unwrap(Forge::TimestampQueryPool::Create(fixture.device, {.query_count = 4}));
+        REQUIRE(ForgeTest::Unwrap(pool.ResolveQueryRange(0, Forge::k_all_queries, "Reading")) == 4);
+        REQUIRE(ForgeTest::Unwrap(pool.ResolveQueryRange(2, Forge::k_all_queries, "Reading")) == 2);
+        REQUIRE(ForgeTest::Unwrap(pool.ResolveQueryRange(3, Forge::k_all_queries, "Reading")) == 1);
         // A concrete count comes back as itself as long as it fits.
-        REQUIRE(pool.ResolveQueryRange(0, 4, "Reading") == 4);
-        REQUIRE(pool.ResolveQueryRange(1, 2, "Reading") == 2);
-        REQUIRE(pool.ResolveQueryRange(3, 1, "Reading") == 1);
+        REQUIRE(ForgeTest::Unwrap(pool.ResolveQueryRange(0, 4, "Reading")) == 4);
+        REQUIRE(ForgeTest::Unwrap(pool.ResolveQueryRange(1, 2, "Reading")) == 2);
+        REQUIRE(ForgeTest::Unwrap(pool.ResolveQueryRange(3, 1, "Reading")) == 1);
     }
     SECTION("ResolveQueryRange throws on every range that does not fit")
     {
-        const Forge::TimestampQueryPool pool(fixture.device, {.query_count = 4});
+        const Forge::TimestampQueryPool pool = ForgeTest::Unwrap(Forge::TimestampQueryPool::Create(fixture.device, {.query_count = 4}));
         // First query at the end and past it.
-        REQUIRE_THROWS_AS(pool.ResolveQueryRange(4, 1, "Reading"), Opal::Exception);
-        REQUIRE_THROWS_AS(pool.ResolveQueryRange(5, 1, "Reading"), Opal::Exception);
-        REQUIRE_THROWS_AS(pool.ResolveQueryRange(4, Forge::k_all_queries, "Reading"), Opal::Exception);
+        REQUIRE_FALSE(pool.ResolveQueryRange(4, 1, "Reading").HasValue());
+        REQUIRE_FALSE(pool.ResolveQueryRange(5, 1, "Reading").HasValue());
+        REQUIRE_FALSE(pool.ResolveQueryRange(4, Forge::k_all_queries, "Reading").HasValue());
         // A count of zero, which resolves to nothing and is never what a caller meant.
-        REQUIRE_THROWS_AS(pool.ResolveQueryRange(0, 0, "Reading"), Opal::Exception);
+        REQUIRE_FALSE(pool.ResolveQueryRange(0, 0, "Reading").HasValue());
         // And counts that run off the end from a first query that is itself fine.
-        REQUIRE_THROWS_AS(pool.ResolveQueryRange(0, 5, "Reading"), Opal::Exception);
-        REQUIRE_THROWS_AS(pool.ResolveQueryRange(3, 2, "Reading"), Opal::Exception);
+        REQUIRE_FALSE(pool.ResolveQueryRange(0, 5, "Reading").HasValue());
+        REQUIRE_FALSE(pool.ResolveQueryRange(3, 2, "Reading").HasValue());
     }
     REQUIRE_NO_VALIDATION_ERROR(fixture);
 }
@@ -9713,11 +9857,11 @@ TEST_CASE("Forge a mesh shader draw", "[forge]")
         const Opal::DynamicArray<u8> pixels = RenderRaster(fixture, color, k_side,
                                                            [&](Forge::CommandBuffer& command_buffer)
                                                            {
-                                                               command_buffer.CmdBindPipeline(pipeline);
+                                                               REQUIRE(command_buffer.CmdBindPipeline(pipeline) == ErrorCode::Success);
                                                                // One workgroup, the way a dispatch counts
                                                                // them - there is no vertex or index count to
                                                                // give.
-                                                               command_buffer.CmdDrawMeshTasks(1);
+                                                               REQUIRE(command_buffer.CmdDrawMeshTasks(1) == ErrorCode::Success);
                                                            });
         // The triangle covers the whole target, so anything short of every texel means the mesh stage emitted
         // something other than what it was told to.
@@ -9738,8 +9882,8 @@ TEST_CASE("Forge a mesh shader draw", "[forge]")
             RenderRaster(fixture, color, k_side,
                          [&](Forge::CommandBuffer& command_buffer)
                          {
-                             command_buffer.CmdBindPipeline(pipeline);
-                             command_buffer.CmdDrawMeshTasks(0);
+                             REQUIRE(command_buffer.CmdBindPipeline(pipeline) == ErrorCode::Success);
+                             REQUIRE(command_buffer.CmdDrawMeshTasks(0) == ErrorCode::Success);
                          });
         REQUIRE(CountCovered(pixels, k_side) == 0);
     }
@@ -9782,9 +9926,9 @@ TEST_CASE("Forge a mesh shader draw without the extension", "[forge]")
     REQUIRE_FALSE(fixture.device.GetFeatures().mesh_shader);
     REQUIRE_FALSE(fixture.device.IsExtensionEnabled(VK_EXT_MESH_SHADER_EXTENSION_NAME));
 
-    Forge::CommandBuffer command_buffer(fixture.device, fixture.GetQueue());
-    command_buffer.Begin();
-    REQUIRE_THROWS_AS(command_buffer.CmdDrawMeshTasks(1), Opal::Exception);
-    command_buffer.End();
+    Forge::CommandBuffer command_buffer = ForgeTest::Unwrap(Forge::CommandBuffer::Create(fixture.device, fixture.GetQueue()));
+    REQUIRE(command_buffer.Begin() == ErrorCode::Success);
+    REQUIRE(command_buffer.CmdDrawMeshTasks(1) != ErrorCode::Success);
+    REQUIRE(command_buffer.End() == ErrorCode::Success);
     REQUIRE_NO_VALIDATION_ERROR(fixture);
 }

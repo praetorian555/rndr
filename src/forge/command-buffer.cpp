@@ -4,25 +4,28 @@
 
 #include "rndr/forge/buffer.hpp"
 #include "rndr/forge/descriptor-set.hpp"
+#include "rndr/forge/device.hpp"
 #include "rndr/forge/pipeline.hpp"
 #include "rndr/forge/query.hpp"
-#include "rndr/forge/device.hpp"
-#include "rndr/forge/vulkan-exception.hpp"
+#include "rndr/forge/vulkan-result.hpp"
+#include "rndr/log.hpp"
 
-Rndr::Forge::CommandBuffer::CommandBuffer(const Device& device, DeviceQueue& queue)
-    : m_device(&device), m_queue(&queue)
+Opal::Expected<Rndr::Forge::CommandBuffer, Rndr::ErrorCode> Rndr::Forge::CommandBuffer::Create(const Device& device, DeviceQueue& queue)
 {
+    using Result = Opal::Expected<CommandBuffer, ErrorCode>;
+
     VkCommandBufferAllocateInfo alloc_info{};
     alloc_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
-    alloc_info.commandPool = m_queue->GetNativeCommandPool();
+    alloc_info.commandPool = queue.GetNativeCommandPool();
     alloc_info.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
     alloc_info.commandBufferCount = 1;
 
-    const VkResult result = vkAllocateCommandBuffers(m_device->GetNativeDevice(), &alloc_info, &m_native_command_buffer);
-    if (result != VK_SUCCESS)
-    {
-        throw VulkanException(result, "vkAllocateCommandBuffers");
-    }
+    CommandBuffer command_buffer;
+    command_buffer.m_device = &device;
+    command_buffer.m_queue = &queue;
+    RNDR_FORGE_VK_CHECK_EXPECTED(vkAllocateCommandBuffers(device.GetNativeDevice(), &alloc_info, &command_buffer.m_native_command_buffer),
+                                 "vkAllocateCommandBuffers", Result);
+    return Result(std::move(command_buffer));
 }
 
 Rndr::Forge::CommandBuffer::~CommandBuffer()
@@ -39,34 +42,25 @@ void Rndr::Forge::CommandBuffer::Destroy()
     }
 }
 
-void Rndr::Forge::CommandBuffer::Begin(bool submit_one_time) const
+Rndr::ErrorCode Rndr::Forge::CommandBuffer::Begin(bool submit_one_time) const
 {
     VkCommandBufferBeginInfo begin_info{.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO, .flags = 0};
     begin_info.flags |= submit_one_time ? VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT : 0;
 
-    const VkResult result = vkBeginCommandBuffer(m_native_command_buffer, &begin_info);
-    if (result != VK_SUCCESS)
-    {
-        throw VulkanException(result, "vkBeginCommandBuffer");
-    }
+    RNDR_FORGE_VK_CHECK(vkBeginCommandBuffer(m_native_command_buffer, &begin_info), "vkBeginCommandBuffer");
+    return ErrorCode::Success;
 }
 
-void Rndr::Forge::CommandBuffer::End() const
+Rndr::ErrorCode Rndr::Forge::CommandBuffer::End() const
 {
-    const VkResult end_result = vkEndCommandBuffer(m_native_command_buffer);
-    if (end_result != VK_SUCCESS)
-    {
-        throw VulkanException(end_result, "vkEndCommandBuffer");
-    }
+    RNDR_FORGE_VK_CHECK(vkEndCommandBuffer(m_native_command_buffer), "vkEndCommandBuffer");
+    return ErrorCode::Success;
 }
 
-void Rndr::Forge::CommandBuffer::Reset() const
+Rndr::ErrorCode Rndr::Forge::CommandBuffer::Reset() const
 {
-    const VkResult reset_result = vkResetCommandBuffer(m_native_command_buffer, 0);
-    if (reset_result != VK_SUCCESS)
-    {
-        throw VulkanException(reset_result, "vkResetCommandBuffer");
-    }
+    RNDR_FORGE_VK_CHECK(vkResetCommandBuffer(m_native_command_buffer, 0), "vkResetCommandBuffer");
+    return ErrorCode::Success;
 }
 
 static VkImageMemoryBarrier2 ToVkImageBarrier(const Rndr::Forge::TextureBarrier& texture_barrier)
@@ -160,20 +154,20 @@ Rndr::Forge::PipelineStageBits CollectStages(Opal::ArrayView<const Barrier> barr
     return stages;
 }
 
-void Rndr::Forge::CommandBuffer::CmdBarriers(const Barriers& barriers)
+Rndr::ErrorCode Rndr::Forge::CommandBuffer::CmdBarriers(const Barriers& barriers)
 {
     if (barriers.memory.IsEmpty() && barriers.buffer.IsEmpty() && barriers.texture.IsEmpty())
     {
-        return;
+        return ErrorCode::Success;
     }
     // The task and mesh stages belong to an extension, and naming one the device did not enable is a
     // validation error rather than something the driver ignores.
-    const PipelineStageBits all_stages =
-        CollectStages(barriers.memory) | CollectStages(barriers.buffer) | CollectStages(barriers.texture);
+    const PipelineStageBits all_stages = CollectStages(barriers.memory) | CollectStages(barriers.buffer) | CollectStages(barriers.texture);
     if (!!(all_stages & (PipelineStageBits::TaskShader | PipelineStageBits::MeshShader)) &&
         !m_device->IsExtensionEnabled(VK_EXT_MESH_SHADER_EXTENSION_NAME))
     {
-        throw Opal::Exception("A barrier naming the task or mesh stage needs VK_EXT_mesh_shader, which the device did not enable!");
+        RNDR_LOG_ERROR("Forge: a barrier naming the task or mesh stage needs VK_EXT_mesh_shader, which the device did not enable");
+        return ErrorCode::InvalidArgument;
     }
     // Eight of each covers every batch this repository issues, and a bigger one still works.
     constexpr i32 k_in_place_count = 8;
@@ -207,38 +201,53 @@ void Rndr::Forge::CommandBuffer::CmdBarriers(const Barriers& barriers)
     // date. Recorded rather than executed, which is what makes it the caller's job to record in order.
     for (const TextureBarrier& barrier : barriers.texture)
     {
-        barrier.texture.Get().SetCurrentLayout(barrier.subresource_range, barrier.new_layout);
+        RNDR_FORGE_CHECK(barrier.texture.Get().SetCurrentLayout(barrier.subresource_range, barrier.new_layout));
     }
+    return ErrorCode::Success;
 }
 
-void Rndr::Forge::CommandBuffer::CmdTextureBarrier(const TextureBarrier& texture_barrier)
+Rndr::ErrorCode Rndr::Forge::CommandBuffer::CmdTextureBarrier(const TextureBarrier& texture_barrier)
 {
-    CmdBarriers({.texture = {&texture_barrier, 1}});
+    return CmdBarriers({.texture = {&texture_barrier, 1}});
 }
 
-void Rndr::Forge::CommandBuffer::CmdTextureBarriers(Opal::ArrayView<const TextureBarrier> texture_barriers)
+Rndr::ErrorCode Rndr::Forge::CommandBuffer::CmdTextureBarrier(const Opal::Expected<TextureBarrier, ErrorCode>& texture_barrier)
 {
-    CmdBarriers({.texture = texture_barriers});
+    if (!texture_barrier.HasValue())
+    {
+        return texture_barrier.GetError();
+    }
+    return CmdTextureBarrier(texture_barrier.GetValue());
 }
 
-void Rndr::Forge::CommandBuffer::CmdBufferBarrier(const BufferBarrier& buffer_barrier)
+Rndr::ErrorCode Rndr::Forge::CommandBuffer::CmdTextureBarriers(Opal::ArrayView<const TextureBarrier> texture_barriers)
 {
-    CmdBarriers({.buffer = {&buffer_barrier, 1}});
+    return CmdBarriers({.texture = texture_barriers});
 }
 
-void Rndr::Forge::CommandBuffer::CmdBufferBarriers(Opal::ArrayView<const BufferBarrier> buffer_barriers)
+Rndr::ErrorCode Rndr::Forge::CommandBuffer::CmdBufferBarrier(const BufferBarrier& buffer_barrier)
 {
-    CmdBarriers({.buffer = buffer_barriers});
+    return CmdBarriers({.buffer = {&buffer_barrier, 1}});
 }
 
-void Rndr::Forge::CommandBuffer::CmdMemoryBarrier(const MemoryBarrier& memory_barrier)
+Rndr::ErrorCode Rndr::Forge::CommandBuffer::CmdBufferBarriers(Opal::ArrayView<const BufferBarrier> buffer_barriers)
 {
-    CmdBarriers({.memory = {&memory_barrier, 1}});
+    return CmdBarriers({.buffer = buffer_barriers});
 }
 
-void Rndr::Forge::CommandBuffer::CmdTransition(Texture& texture, ImageLayout new_layout)
+Rndr::ErrorCode Rndr::Forge::CommandBuffer::CmdMemoryBarrier(const MemoryBarrier& memory_barrier)
 {
-    CmdTextureBarrier(TextureBarrier::To(texture, texture.GetCurrentLayout(), new_layout));
+    return CmdBarriers({.memory = {&memory_barrier, 1}});
+}
+
+Rndr::ErrorCode Rndr::Forge::CommandBuffer::CmdTransition(Texture& texture, ImageLayout new_layout)
+{
+    const Opal::Expected<ImageLayout, ErrorCode> old_layout = texture.GetCurrentLayout();
+    if (!old_layout.HasValue())
+    {
+        return old_layout.GetError();
+    }
+    return CmdTextureBarrier(TextureBarrier::To(texture, old_layout.GetValue(), new_layout));
 }
 
 /** The extent of one mip level of a texture, which is the base extent halved once per level, floored at one. */
@@ -248,48 +257,58 @@ static Rndr::u32 MipExtent(Rndr::u32 base_extent, Rndr::u32 mip_level)
 }
 
 /** The buffer has to allow the transfer it is about to take part in. */
-static void ValidateBufferUsage(const Rndr::Forge::Buffer& buffer, Rndr::Forge::BufferUsageBits required, const char* role,
-                                const char* what)
+static Rndr::ErrorCode ValidateBufferUsage(const Rndr::Forge::Buffer& buffer, Rndr::Forge::BufferUsageBits required, const char* role,
+                                           const char* what)
 {
     if (!(buffer.GetDesc().usage & required))
     {
-        throw Opal::Exception(Opal::StringEx(what) + " needs a " + role + " buffer created with the matching BufferUsageBits!");
+        RNDR_LOG_ERROR("Forge: {} needs a {} buffer created with the matching BufferUsageBits", what, role);
+        return Rndr::ErrorCode::InvalidArgument;
     }
+    return Rndr::ErrorCode::Success;
 }
 
 /** The texture has to allow the transfer it is about to take part in. */
-static void ValidateTextureUsage(const Rndr::Forge::Texture& texture, Rndr::Forge::TextureUsageBits required, const char* role,
-                                 const char* what)
+static Rndr::ErrorCode ValidateTextureUsage(const Rndr::Forge::Texture& texture, Rndr::Forge::TextureUsageBits required, const char* role,
+                                            const char* what)
 {
     if (!(texture.GetDesc().usage & required))
     {
-        throw Opal::Exception(Opal::StringEx(what) + " needs a " + role + " texture created with the matching TextureUsageBits!");
+        RNDR_LOG_ERROR("Forge: {} needs a {} texture created with the matching TextureUsageBits", what, role);
+        return Rndr::ErrorCode::InvalidArgument;
     }
+    return Rndr::ErrorCode::Success;
 }
 
 /** The range has to fit, written so that neither a large offset nor a large size can overflow the sum and pass. */
-static void ValidateBufferRange(const Rndr::Forge::Buffer& buffer, Rndr::u64 offset, Rndr::u64 size, const char* role, const char* what)
+static Rndr::ErrorCode ValidateBufferRange(const Rndr::Forge::Buffer& buffer, Rndr::u64 offset, Rndr::u64 size, const char* role,
+                                           const char* what)
 {
     const Rndr::u64 buffer_size = buffer.GetSize();
     if (offset > buffer_size || size > buffer_size - offset)
     {
-        throw Opal::Exception(Opal::StringEx(what) + " reaches past the end of the " + role + " buffer!");
+        RNDR_LOG_ERROR("Forge: {} reaches past the end of the {} buffer", what, role);
+        return Rndr::ErrorCode::OutOfBounds;
     }
+    return Rndr::ErrorCode::Success;
 }
 
 /**
  * The layout one side of a copy or blit is in, taken from the texture across every region that names it.
  *
  * One Vulkan call carries a single layout per side, so regions whose levels are in different layouts have no
- * answer and throw. So does a layout the role does not allow: that is the check the API could not make while
- * the caller supplied the layout, and it turns silent undefined behaviour into a message.
+ * answer and are refused. So is a layout the role does not allow: that is the check the API could not make
+ * while the caller supplied the layout, and it turns silent undefined behaviour into a message.
  */
 template <typename Region>
-static Rndr::Forge::ImageLayout ResolveTransferLayout(const Rndr::Forge::Texture& texture, Opal::ArrayView<const Region> regions,
-                                                      Rndr::Forge::ImageSubresourceLayers Region::*member, bool as_source,
-                                                      const char* role, const char* what)
+static Opal::Expected<Rndr::Forge::ImageLayout, Rndr::ErrorCode> ResolveTransferLayout(const Rndr::Forge::Texture& texture,
+                                                                                       Opal::ArrayView<const Region> regions,
+                                                                                       Rndr::Forge::ImageSubresourceLayers Region::* member,
+                                                                                       bool as_source, const char* role, const char* what)
 {
     using namespace Rndr;
+    using Result = Opal::Expected<Forge::ImageLayout, ErrorCode>;
+
     Forge::ImageLayout layout = Forge::ImageLayout::Undefined;
     for (i32 i = 0; i < regions.GetSize(); ++i)
     {
@@ -299,65 +318,87 @@ static Rndr::Forge::ImageLayout ResolveTransferLayout(const Rndr::Forge::Texture
                                                  .mip_level_count = 1,
                                                  .first_array_layer = subresource.first_array_layer,
                                                  .array_layer_count = subresource.array_layer_count};
-        const Forge::ImageLayout region_layout = texture.GetCurrentLayout(range);
-        if (i != 0 && region_layout != layout)
+        const Opal::Expected<Forge::ImageLayout, ErrorCode> region_layout = texture.GetCurrentLayout(range);
+        if (!region_layout.HasValue())
         {
-            throw Opal::Exception(Opal::StringEx(what) + " names levels of the " + role + " texture that are in different layouts, " +
-                                  Forge::ImageLayoutToString(layout) + " and " + Forge::ImageLayoutToString(region_layout) + "!");
+            return Result(region_layout.GetError());
         }
-        layout = region_layout;
+        if (i != 0 && region_layout.GetValue() != layout)
+        {
+            RNDR_LOG_ERROR("Forge: {} names levels of the {} texture that are in different layouts, {} and {}", what, role,
+                           Forge::ImageLayoutToString(layout), Forge::ImageLayoutToString(region_layout.GetValue()));
+            return Result(ErrorCode::InvalidArgument);
+        }
+        layout = region_layout.GetValue();
     }
     const Forge::ImageLayout required = as_source ? Forge::ImageLayout::TransferSource : Forge::ImageLayout::TransferDestination;
     if (layout != required && layout != Forge::ImageLayout::General)
     {
-        throw Opal::Exception(Opal::StringEx(what) + " needs the " + role + " texture in the " + Forge::ImageLayoutToString(required) +
-                              " or General layout, and it is in " + Forge::ImageLayoutToString(layout) + "!");
+        RNDR_LOG_ERROR("Forge: {} needs the {} texture in the {} or General layout, and it is in {}", what, role,
+                       Forge::ImageLayoutToString(required), Forge::ImageLayoutToString(layout));
+        return Result(ErrorCode::InvalidArgument);
     }
-    return layout;
+    return Result(layout);
 }
 
 /**
  * Check that the subresource exists on the texture and report the extent of the mip level it names, which is
  * what every region on that texture is measured against.
  */
-static VkExtent3D ValidateSubresource(const Rndr::Forge::Texture& texture, const Rndr::Forge::ImageSubresourceLayers& subresource,
-                                      const char* role, const char* what)
+static Opal::Expected<VkExtent3D, Rndr::ErrorCode> ValidateSubresource(const Rndr::Forge::Texture& texture,
+                                                                       const Rndr::Forge::ImageSubresourceLayers& subresource,
+                                                                       const char* role, const char* what)
 {
     using namespace Rndr;
+    using Result = Opal::Expected<VkExtent3D, ErrorCode>;
+
     const Forge::TextureDesc& desc = texture.GetDesc();
     if (subresource.mip_level >= desc.mip_level_count)
     {
-        throw Opal::Exception(Opal::StringEx(what) + " names a mip level the " + role + " texture does not have!");
+        RNDR_LOG_ERROR("Forge: {} names a mip level the {} texture does not have", what, role);
+        return Result(ErrorCode::OutOfBounds);
     }
     if (subresource.array_layer_count == 0 || subresource.first_array_layer > desc.array_layer_count ||
         subresource.array_layer_count > desc.array_layer_count - subresource.first_array_layer)
     {
-        throw Opal::Exception(Opal::StringEx(what) + " names array layers the " + role + " texture does not have!");
+        RNDR_LOG_ERROR("Forge: {} names array layers the {} texture does not have", what, role);
+        return Result(ErrorCode::OutOfBounds);
     }
-    return {.width = MipExtent(desc.width, subresource.mip_level),
-            .height = MipExtent(desc.height, subresource.mip_level),
-            .depth = MipExtent(desc.depth, subresource.mip_level)};
+    return Result(VkExtent3D{.width = MipExtent(desc.width, subresource.mip_level),
+                             .height = MipExtent(desc.height, subresource.mip_level),
+                             .depth = MipExtent(desc.depth, subresource.mip_level)});
 }
 
 /**
  * Resolve the texture side of a copy: check that the subresource exists on the texture, fill a zero extent in
  * with the rest of the mip level, and check that the box fits inside it.
  */
-static VkExtent3D ResolveTextureRegion(const Rndr::Forge::Texture& texture, const Rndr::Forge::ImageSubresourceLayers& subresource,
-                                       const Rndr::Vector3i& offset, const Rndr::Vector3i& extent, const char* role, const char* what)
+static Opal::Expected<VkExtent3D, Rndr::ErrorCode> ResolveTextureRegion(const Rndr::Forge::Texture& texture,
+                                                                        const Rndr::Forge::ImageSubresourceLayers& subresource,
+                                                                        const Rndr::Vector3i& offset, const Rndr::Vector3i& extent,
+                                                                        const char* role, const char* what)
 {
     using namespace Rndr;
-    const VkExtent3D mip_extent = ValidateSubresource(texture, subresource, role, what);
+    using Result = Opal::Expected<VkExtent3D, ErrorCode>;
+
+    const Opal::Expected<VkExtent3D, ErrorCode> mip_extent_result = ValidateSubresource(texture, subresource, role, what);
+    if (!mip_extent_result.HasValue())
+    {
+        return Result(mip_extent_result.GetError());
+    }
+    const VkExtent3D mip_extent = mip_extent_result.GetValue();
     if (offset.x < 0 || offset.y < 0 || offset.z < 0 || extent.x < 0 || extent.y < 0 || extent.z < 0)
     {
-        throw Opal::Exception(Opal::StringEx(what) + " has a negative offset or extent on the " + role + " texture!");
+        RNDR_LOG_ERROR("Forge: {} has a negative offset or extent on the {} texture", what, role);
+        return Result(ErrorCode::InvalidArgument);
     }
     const u32 offset_x = static_cast<u32>(offset.x);
     const u32 offset_y = static_cast<u32>(offset.y);
     const u32 offset_z = static_cast<u32>(offset.z);
     if (offset_x > mip_extent.width || offset_y > mip_extent.height || offset_z > mip_extent.depth)
     {
-        throw Opal::Exception(Opal::StringEx(what) + " starts outside the mip level of the " + role + " texture!");
+        RNDR_LOG_ERROR("Forge: {} starts outside the mip level of the {} texture", what, role);
+        return Result(ErrorCode::OutOfBounds);
     }
     // A zero extent on an axis means the rest of the mip level past the offset on that axis.
     const VkExtent3D resolved{.width = extent.x != 0 ? static_cast<u32>(extent.x) : mip_extent.width - offset_x,
@@ -366,9 +407,10 @@ static VkExtent3D ResolveTextureRegion(const Rndr::Forge::Texture& texture, cons
     if (resolved.width > mip_extent.width - offset_x || resolved.height > mip_extent.height - offset_y ||
         resolved.depth > mip_extent.depth - offset_z)
     {
-        throw Opal::Exception(Opal::StringEx(what) + " reaches past the mip level of the " + role + " texture!");
+        RNDR_LOG_ERROR("Forge: {} reaches past the mip level of the {} texture", what, role);
+        return Result(ErrorCode::OutOfBounds);
     }
-    return resolved;
+    return Result(resolved);
 }
 
 /**
@@ -376,12 +418,17 @@ static VkExtent3D ResolveTextureRegion(const Rndr::Forge::Texture& texture, cons
  * that it can run an axis backwards, which is how it mirrors, so a negative extent is allowed here and the
  * far corner can sit before the near one.
  */
-static void ResolveBlitBox(const Rndr::Forge::Texture& texture, const Rndr::Forge::ImageSubresourceLayers& subresource,
-                           const Rndr::Vector3i& offset, const Rndr::Vector3i& extent, const char* role, const char* what,
-                           VkOffset3D corners[2])
+static Rndr::ErrorCode ResolveBlitBox(const Rndr::Forge::Texture& texture, const Rndr::Forge::ImageSubresourceLayers& subresource,
+                                      const Rndr::Vector3i& offset, const Rndr::Vector3i& extent, const char* role, const char* what,
+                                      VkOffset3D corners[2])
 {
     using namespace Rndr;
-    const VkExtent3D mip_extent = ValidateSubresource(texture, subresource, role, what);
+    const Opal::Expected<VkExtent3D, ErrorCode> mip_extent_result = ValidateSubresource(texture, subresource, role, what);
+    if (!mip_extent_result.HasValue())
+    {
+        return mip_extent_result.GetError();
+    }
+    const VkExtent3D mip_extent = mip_extent_result.GetValue();
     const i32 limits[3] = {static_cast<i32>(mip_extent.width), static_cast<i32>(mip_extent.height), static_cast<i32>(mip_extent.depth)};
     const i32 near_corner[3] = {offset.x, offset.y, offset.z};
     const i32 sizes[3] = {extent.x, extent.y, extent.z};
@@ -392,15 +439,18 @@ static void ResolveBlitBox(const Rndr::Forge::Texture& texture, const Rndr::Forg
         far_corner[axis] = sizes[axis] != 0 ? near_corner[axis] + sizes[axis] : limits[axis];
         if (near_corner[axis] < 0 || near_corner[axis] > limits[axis] || far_corner[axis] < 0 || far_corner[axis] > limits[axis])
         {
-            throw Opal::Exception(Opal::StringEx(what) + " reaches past the mip level of the " + role + " texture!");
+            RNDR_LOG_ERROR("Forge: {} reaches past the mip level of the {} texture", what, role);
+            return ErrorCode::OutOfBounds;
         }
         if (near_corner[axis] == far_corner[axis])
         {
-            throw Opal::Exception(Opal::StringEx(what) + " has an empty box on the " + role + " texture!");
+            RNDR_LOG_ERROR("Forge: {} has an empty box on the {} texture", what, role);
+            return ErrorCode::InvalidArgument;
         }
     }
     corners[0] = {.x = near_corner[0], .y = near_corner[1], .z = near_corner[2]};
     corners[1] = {.x = far_corner[0], .y = far_corner[1], .z = far_corner[2]};
+    return ErrorCode::Success;
 }
 
 static VkImageSubresourceLayers ToVkSubresourceLayers(const Rndr::Forge::ImageSubresourceLayers& subresource, Rndr::PixelFormat format)
@@ -415,15 +465,25 @@ static VkImageSubresourceLayers ToVkSubresourceLayers(const Rndr::Forge::ImageSu
  * One region of a copy between a buffer and a texture, translated and checked from both ends. Both directions
  * describe the copy the same way, so they share this.
  */
-static VkBufferImageCopy ToVkBufferImageCopy(const Rndr::Forge::Buffer& buffer, const Rndr::Forge::Texture& texture,
-                                             const Rndr::Forge::BufferTextureCopyRegion& region, const char* buffer_role, const char* what)
+static Opal::Expected<VkBufferImageCopy, Rndr::ErrorCode> ToVkBufferImageCopy(const Rndr::Forge::Buffer& buffer,
+                                                                              const Rndr::Forge::Texture& texture,
+                                                                              const Rndr::Forge::BufferTextureCopyRegion& region,
+                                                                              const char* buffer_role, const char* what)
 {
     using namespace Rndr;
-    const VkExtent3D extent =
+    using Result = Opal::Expected<VkBufferImageCopy, ErrorCode>;
+
+    const Opal::Expected<VkExtent3D, ErrorCode> extent_result =
         ResolveTextureRegion(texture, region.texture_subresource, region.texture_offset, region.texture_extent, "target", what);
+    if (!extent_result.HasValue())
+    {
+        return Result(extent_result.GetError());
+    }
+    const VkExtent3D extent = extent_result.GetValue();
     if (region.buffer_offset % 4 != 0)
     {
-        throw Opal::Exception(Opal::StringEx(what) + " buffer offset must be a multiple of 4!");
+        RNDR_LOG_ERROR("Forge: the {} buffer offset must be a multiple of 4, and is {}", what, region.buffer_offset);
+        return Result(ErrorCode::InvalidArgument);
     }
     // A compressed format is measured in blocks rather than pixels, so the size below would be wrong for one.
     // GetPixelSize reports zero for those, and the validation layer covers what this cannot.
@@ -432,74 +492,89 @@ static VkBufferImageCopy ToVkBufferImageCopy(const Rndr::Forge::Buffer& buffer, 
     {
         const u64 row_length = region.buffer_row_length != 0 ? region.buffer_row_length : extent.width;
         const u64 image_height = region.buffer_layer_height != 0 ? region.buffer_layer_height : extent.height;
-        const u64 region_size = static_cast<u64>(pixel_size) * row_length * image_height * extent.depth *
-                                region.texture_subresource.array_layer_count;
-        ValidateBufferRange(buffer, region.buffer_offset, region_size, buffer_role, what);
+        const u64 region_size =
+            static_cast<u64>(pixel_size) * row_length * image_height * extent.depth * region.texture_subresource.array_layer_count;
+        RNDR_FORGE_CHECK_EXPECTED(ValidateBufferRange(buffer, region.buffer_offset, region_size, buffer_role, what), Result);
     }
-    return {.bufferOffset = region.buffer_offset,
-            .bufferRowLength = region.buffer_row_length,
-            .bufferImageHeight = region.buffer_layer_height,
-            .imageSubresource = ToVkSubresourceLayers(region.texture_subresource, texture.GetDesc().format),
-            .imageOffset = {.x = region.texture_offset.x, .y = region.texture_offset.y, .z = region.texture_offset.z},
-            .imageExtent = extent};
+    return Result(
+        VkBufferImageCopy{.bufferOffset = region.buffer_offset,
+                          .bufferRowLength = region.buffer_row_length,
+                          .bufferImageHeight = region.buffer_layer_height,
+                          .imageSubresource = ToVkSubresourceLayers(region.texture_subresource, texture.GetDesc().format),
+                          .imageOffset = {.x = region.texture_offset.x, .y = region.texture_offset.y, .z = region.texture_offset.z},
+                          .imageExtent = extent});
 }
 
-void Rndr::Forge::CommandBuffer::CmdCopyBuffer(const Buffer& source, const Buffer& destination,
-                                               Opal::ArrayView<const BufferCopyRegion> regions)
+Rndr::ErrorCode Rndr::Forge::CommandBuffer::CmdCopyBuffer(const Buffer& source, const Buffer& destination,
+                                                          Opal::ArrayView<const BufferCopyRegion> regions)
 {
     if (regions.IsEmpty())
     {
-        return;
+        return ErrorCode::Success;
     }
-    ValidateBufferUsage(source, BufferUsageBits::TransferSource, "source", "Buffer copy");
-    ValidateBufferUsage(destination, BufferUsageBits::TransferDestination, "destination", "Buffer copy");
+    RNDR_FORGE_CHECK(ValidateBufferUsage(source, BufferUsageBits::TransferSource, "source", "Buffer copy"));
+    RNDR_FORGE_CHECK(ValidateBufferUsage(destination, BufferUsageBits::TransferDestination, "destination", "Buffer copy"));
     Opal::DynamicArray<VkBufferCopy> copy_regions(regions.GetSize());
     for (i32 i = 0; i < regions.GetSize(); ++i)
     {
         const BufferCopyRegion& region = regions[i];
         if (region.source_offset > source.GetSize() || region.destination_offset > destination.GetSize())
         {
-            throw Opal::Exception("Buffer copy starts past the end of a buffer!");
+            RNDR_LOG_ERROR("Forge: a buffer copy starts past the end of a buffer");
+            return ErrorCode::OutOfBounds;
         }
         // The whole buffer means as much as both sides have left, so that neither end is overrun.
-        const u64 size = region.size == k_whole_buffer ? Opal::Min(source.GetSize() - region.source_offset,
-                                                                  destination.GetSize() - region.destination_offset)
-                                                       : region.size;
-        ValidateBufferRange(source, region.source_offset, size, "source", "Buffer copy");
-        ValidateBufferRange(destination, region.destination_offset, size, "destination", "Buffer copy");
+        const u64 size = region.size == k_whole_buffer
+                             ? Opal::Min(source.GetSize() - region.source_offset, destination.GetSize() - region.destination_offset)
+                             : region.size;
+        RNDR_FORGE_CHECK(ValidateBufferRange(source, region.source_offset, size, "source", "Buffer copy"));
+        RNDR_FORGE_CHECK(ValidateBufferRange(destination, region.destination_offset, size, "destination", "Buffer copy"));
         copy_regions[i] = {.srcOffset = region.source_offset, .dstOffset = region.destination_offset, .size = size};
     }
     vkCmdCopyBuffer(m_native_command_buffer, source.GetNativeBuffer(), destination.GetNativeBuffer(),
                     static_cast<u32>(copy_regions.GetSize()), copy_regions.GetData());
+    return ErrorCode::Success;
 }
 
-void Rndr::Forge::CommandBuffer::CmdCopyBuffer(const Buffer& source, const Buffer& destination)
+Rndr::ErrorCode Rndr::Forge::CommandBuffer::CmdCopyBuffer(const Buffer& source, const Buffer& destination)
 {
     const BufferCopyRegion region;
-    CmdCopyBuffer(source, destination, {&region, 1});
+    return CmdCopyBuffer(source, destination, {&region, 1});
 }
 
-void Rndr::Forge::CommandBuffer::CmdCopyBufferToTexture(const Buffer& buffer, Texture& texture,
-                                                        Opal::ArrayView<const BufferTextureCopyRegion> regions)
+Rndr::ErrorCode Rndr::Forge::CommandBuffer::CmdCopyBufferToTexture(const Buffer& buffer, Texture& texture,
+                                                                   Opal::ArrayView<const BufferTextureCopyRegion> regions)
 {
     if (regions.IsEmpty())
     {
-        return;
+        return ErrorCode::Success;
     }
-    ValidateBufferUsage(buffer, BufferUsageBits::TransferSource, "source", "Buffer to texture copy");
-    ValidateTextureUsage(texture, TextureUsageBits::TransferDestination, "destination", "Buffer to texture copy");
+    RNDR_FORGE_CHECK(ValidateBufferUsage(buffer, BufferUsageBits::TransferSource, "source", "Buffer to texture copy"));
+    RNDR_FORGE_CHECK(ValidateTextureUsage(texture, TextureUsageBits::TransferDestination, "destination", "Buffer to texture copy"));
     Opal::DynamicArray<VkBufferImageCopy> copy_regions(regions.GetSize());
     for (i32 i = 0; i < regions.GetSize(); ++i)
     {
-        copy_regions[i] = ToVkBufferImageCopy(buffer, texture, regions[i], "source", "Buffer to texture copy");
+        Opal::Expected<VkBufferImageCopy, ErrorCode> copy_region =
+            ToVkBufferImageCopy(buffer, texture, regions[i], "source", "Buffer to texture copy");
+        if (!copy_region.HasValue())
+        {
+            return copy_region.GetError();
+        }
+        copy_regions[i] = copy_region.GetValue();
     }
-    const ImageLayout texture_layout = ResolveTransferLayout(texture, regions, &BufferTextureCopyRegion::texture_subresource, false,
-                                                             "destination", "Buffer to texture copy");
+    const Opal::Expected<ImageLayout, ErrorCode> texture_layout = ResolveTransferLayout(
+        texture, regions, &BufferTextureCopyRegion::texture_subresource, false, "destination", "Buffer to texture copy");
+    if (!texture_layout.HasValue())
+    {
+        return texture_layout.GetError();
+    }
     vkCmdCopyBufferToImage(m_native_command_buffer, buffer.GetNativeBuffer(), texture.GetNativeImage(),
-                           static_cast<VkImageLayout>(texture_layout), static_cast<u32>(copy_regions.GetSize()), copy_regions.GetData());
+                           static_cast<VkImageLayout>(texture_layout.GetValue()), static_cast<u32>(copy_regions.GetSize()),
+                           copy_regions.GetData());
+    return ErrorCode::Success;
 }
 
-void Rndr::Forge::CommandBuffer::CmdCopyBufferToTexture(const Buffer& buffer, const Bitmap& bitmap, Texture& texture)
+Rndr::ErrorCode Rndr::Forge::CommandBuffer::CmdCopyBufferToTexture(const Buffer& buffer, const Bitmap& bitmap, Texture& texture)
 {
     // One region per mip level, laid out the way the bitmap packs them. The aspect and the extent come from the
     // texture through the general path below, so this no longer assumes a color format.
@@ -509,48 +584,69 @@ void Rndr::Forge::CommandBuffer::CmdCopyBufferToTexture(const Buffer& buffer, co
         regions[mip_level] = {.buffer_offset = bitmap.GetMipLevelOffset(static_cast<i32>(mip_level)),
                               .texture_subresource = {.mip_level = mip_level}};
     }
-    CmdCopyBufferToTexture(buffer, texture, regions);
+    return CmdCopyBufferToTexture(buffer, texture, regions);
 }
 
-void Rndr::Forge::CommandBuffer::CmdCopyTextureToBuffer(const Texture& texture, const Buffer& buffer,
-                                                        Opal::ArrayView<const BufferTextureCopyRegion> regions)
+Rndr::ErrorCode Rndr::Forge::CommandBuffer::CmdCopyTextureToBuffer(const Texture& texture, const Buffer& buffer,
+                                                                   Opal::ArrayView<const BufferTextureCopyRegion> regions)
 {
     if (regions.IsEmpty())
     {
-        return;
+        return ErrorCode::Success;
     }
-    ValidateTextureUsage(texture, TextureUsageBits::TransferSource, "source", "Texture to buffer copy");
-    ValidateBufferUsage(buffer, BufferUsageBits::TransferDestination, "destination", "Texture to buffer copy");
+    RNDR_FORGE_CHECK(ValidateTextureUsage(texture, TextureUsageBits::TransferSource, "source", "Texture to buffer copy"));
+    RNDR_FORGE_CHECK(ValidateBufferUsage(buffer, BufferUsageBits::TransferDestination, "destination", "Texture to buffer copy"));
     Opal::DynamicArray<VkBufferImageCopy> copy_regions(regions.GetSize());
     for (i32 i = 0; i < regions.GetSize(); ++i)
     {
-        copy_regions[i] = ToVkBufferImageCopy(buffer, texture, regions[i], "destination", "Texture to buffer copy");
+        Opal::Expected<VkBufferImageCopy, ErrorCode> copy_region =
+            ToVkBufferImageCopy(buffer, texture, regions[i], "destination", "Texture to buffer copy");
+        if (!copy_region.HasValue())
+        {
+            return copy_region.GetError();
+        }
+        copy_regions[i] = copy_region.GetValue();
     }
-    const ImageLayout texture_layout =
+    const Opal::Expected<ImageLayout, ErrorCode> texture_layout =
         ResolveTransferLayout(texture, regions, &BufferTextureCopyRegion::texture_subresource, true, "source", "Texture to buffer copy");
-    vkCmdCopyImageToBuffer(m_native_command_buffer, texture.GetNativeImage(), static_cast<VkImageLayout>(texture_layout),
+    if (!texture_layout.HasValue())
+    {
+        return texture_layout.GetError();
+    }
+    vkCmdCopyImageToBuffer(m_native_command_buffer, texture.GetNativeImage(), static_cast<VkImageLayout>(texture_layout.GetValue()),
                            buffer.GetNativeBuffer(), static_cast<u32>(copy_regions.GetSize()), copy_regions.GetData());
+    return ErrorCode::Success;
 }
 
-void Rndr::Forge::CommandBuffer::CmdCopyTexture(const Texture& source, Texture& destination,
-                                                Opal::ArrayView<const TextureCopyRegion> regions)
+Rndr::ErrorCode Rndr::Forge::CommandBuffer::CmdCopyTexture(const Texture& source, Texture& destination,
+                                                           Opal::ArrayView<const TextureCopyRegion> regions)
 {
     if (regions.IsEmpty())
     {
-        return;
+        return ErrorCode::Success;
     }
-    ValidateTextureUsage(source, TextureUsageBits::TransferSource, "source", "Texture copy");
-    ValidateTextureUsage(destination, TextureUsageBits::TransferDestination, "destination", "Texture copy");
+    RNDR_FORGE_CHECK(ValidateTextureUsage(source, TextureUsageBits::TransferSource, "source", "Texture copy"));
+    RNDR_FORGE_CHECK(ValidateTextureUsage(destination, TextureUsageBits::TransferDestination, "destination", "Texture copy"));
     Opal::DynamicArray<VkImageCopy> copy_regions(regions.GetSize());
     for (i32 i = 0; i < regions.GetSize(); ++i)
     {
         const TextureCopyRegion& region = regions[i];
         // The extent is resolved against the source and then checked against the destination, so a zero extent
         // means the rest of the source mip level and still has to fit where it is going.
-        const VkExtent3D extent =
+        const Opal::Expected<VkExtent3D, ErrorCode> extent_result =
             ResolveTextureRegion(source, region.source, region.source_offset, region.extent, "source", "Texture copy");
+        if (!extent_result.HasValue())
+        {
+            return extent_result.GetError();
+        }
+        const VkExtent3D extent = extent_result.GetValue();
         const Vector3i resolved_extent{static_cast<i32>(extent.width), static_cast<i32>(extent.height), static_cast<i32>(extent.depth)};
-        ResolveTextureRegion(destination, region.destination, region.destination_offset, resolved_extent, "destination", "Texture copy");
+        const Opal::Expected<VkExtent3D, ErrorCode> destination_extent = ResolveTextureRegion(
+            destination, region.destination, region.destination_offset, resolved_extent, "destination", "Texture copy");
+        if (!destination_extent.HasValue())
+        {
+            return destination_extent.GetError();
+        }
         copy_regions[i] = {
             .srcSubresource = ToVkSubresourceLayers(region.source, source.GetDesc().format),
             .srcOffset = {.x = region.source_offset.x, .y = region.source_offset.y, .z = region.source_offset.z},
@@ -558,137 +654,176 @@ void Rndr::Forge::CommandBuffer::CmdCopyTexture(const Texture& source, Texture& 
             .dstOffset = {.x = region.destination_offset.x, .y = region.destination_offset.y, .z = region.destination_offset.z},
             .extent = extent};
     }
-    const ImageLayout source_layout = ResolveTransferLayout(source, regions, &TextureCopyRegion::source, true, "source", "Texture copy");
-    const ImageLayout destination_layout =
+    const Opal::Expected<ImageLayout, ErrorCode> source_layout =
+        ResolveTransferLayout(source, regions, &TextureCopyRegion::source, true, "source", "Texture copy");
+    if (!source_layout.HasValue())
+    {
+        return source_layout.GetError();
+    }
+    const Opal::Expected<ImageLayout, ErrorCode> destination_layout =
         ResolveTransferLayout(destination, regions, &TextureCopyRegion::destination, false, "destination", "Texture copy");
-    vkCmdCopyImage(m_native_command_buffer, source.GetNativeImage(), static_cast<VkImageLayout>(source_layout),
-                   destination.GetNativeImage(), static_cast<VkImageLayout>(destination_layout),
+    if (!destination_layout.HasValue())
+    {
+        return destination_layout.GetError();
+    }
+    vkCmdCopyImage(m_native_command_buffer, source.GetNativeImage(), static_cast<VkImageLayout>(source_layout.GetValue()),
+                   destination.GetNativeImage(), static_cast<VkImageLayout>(destination_layout.GetValue()),
                    static_cast<u32>(copy_regions.GetSize()), copy_regions.GetData());
+    return ErrorCode::Success;
 }
 
-static VkFilter ToVkFilter(Rndr::ImageFilter filter)
+static Opal::Optional<VkFilter> ToVkFilter(Rndr::ImageFilter filter)
 {
     switch (filter)
     {
         case Rndr::ImageFilter::Nearest:
-            return VK_FILTER_NEAREST;
+            return Opal::Optional<VkFilter>(VK_FILTER_NEAREST);
         case Rndr::ImageFilter::Linear:
-            return VK_FILTER_LINEAR;
+            return Opal::Optional<VkFilter>(VK_FILTER_LINEAR);
         default:
-            throw Opal::Exception("Unsupported image filter");
+            return {};
     }
 }
 
-void Rndr::Forge::CommandBuffer::CmdBlitTexture(const Texture& source, Texture& destination,
-                                                Opal::ArrayView<const TextureBlitRegion> regions, ImageFilter filter)
+Rndr::ErrorCode Rndr::Forge::CommandBuffer::CmdBlitTexture(const Texture& source, Texture& destination,
+                                                           Opal::ArrayView<const TextureBlitRegion> regions, ImageFilter filter)
 {
     if (regions.IsEmpty())
     {
-        return;
+        return ErrorCode::Success;
     }
-    ValidateTextureUsage(source, TextureUsageBits::TransferSource, "source", "Texture blit");
-    ValidateTextureUsage(destination, TextureUsageBits::TransferDestination, "destination", "Texture blit");
+    RNDR_FORGE_CHECK(ValidateTextureUsage(source, TextureUsageBits::TransferSource, "source", "Texture blit"));
+    RNDR_FORGE_CHECK(ValidateTextureUsage(destination, TextureUsageBits::TransferDestination, "destination", "Texture blit"));
     // Blitting is per format and per side, and a format that cannot be blitted is a driver-specific surprise
     // rather than a mistake in the calling code, so it is worth naming here instead of at the validation layer.
     const PhysicalDevice& physical_device = m_device->GetPhysicalDevice();
     if (!physical_device.SupportsBlit(source.GetDesc().format, true))
     {
-        throw Opal::Exception("This device cannot blit from the format of the source texture!");
+        RNDR_LOG_ERROR("Forge: this device cannot blit from the format of the source texture");
+        return ErrorCode::FeatureNotSupported;
     }
     if (!physical_device.SupportsBlit(destination.GetDesc().format, false))
     {
-        throw Opal::Exception("This device cannot blit into the format of the destination texture!");
+        RNDR_LOG_ERROR("Forge: this device cannot blit into the format of the destination texture");
+        return ErrorCode::FeatureNotSupported;
     }
     if (filter == ImageFilter::Linear && !physical_device.SupportsLinearFilter(source.GetDesc().format))
     {
-        throw Opal::Exception("This device cannot filter the format of the source texture linearly!");
+        RNDR_LOG_ERROR("Forge: this device cannot filter the format of the source texture linearly");
+        return ErrorCode::FeatureNotSupported;
     }
+    RNDR_FORGE_TRANSLATE(vk_filter, ToVkFilter(filter), "the blit filter");
     Opal::DynamicArray<VkImageBlit> blit_regions(regions.GetSize());
     for (i32 i = 0; i < regions.GetSize(); ++i)
     {
         const TextureBlitRegion& region = regions[i];
         VkImageBlit blit{.srcSubresource = ToVkSubresourceLayers(region.source, source.GetDesc().format),
                          .dstSubresource = ToVkSubresourceLayers(region.destination, destination.GetDesc().format)};
-        ResolveBlitBox(source, region.source, region.source_offset, region.source_extent, "source", "Texture blit", blit.srcOffsets);
-        ResolveBlitBox(destination, region.destination, region.destination_offset, region.destination_extent, "destination", "Texture blit",
-                       blit.dstOffsets);
+        RNDR_FORGE_CHECK(
+            ResolveBlitBox(source, region.source, region.source_offset, region.source_extent, "source", "Texture blit", blit.srcOffsets));
+        RNDR_FORGE_CHECK(ResolveBlitBox(destination, region.destination, region.destination_offset, region.destination_extent,
+                                        "destination", "Texture blit", blit.dstOffsets));
         blit_regions[i] = blit;
     }
-    const ImageLayout source_layout = ResolveTransferLayout(source, regions, &TextureBlitRegion::source, true, "source", "Texture blit");
-    const ImageLayout destination_layout =
+    const Opal::Expected<ImageLayout, ErrorCode> source_layout =
+        ResolveTransferLayout(source, regions, &TextureBlitRegion::source, true, "source", "Texture blit");
+    if (!source_layout.HasValue())
+    {
+        return source_layout.GetError();
+    }
+    const Opal::Expected<ImageLayout, ErrorCode> destination_layout =
         ResolveTransferLayout(destination, regions, &TextureBlitRegion::destination, false, "destination", "Texture blit");
-    vkCmdBlitImage(m_native_command_buffer, source.GetNativeImage(), static_cast<VkImageLayout>(source_layout),
-                   destination.GetNativeImage(), static_cast<VkImageLayout>(destination_layout),
-                   static_cast<u32>(blit_regions.GetSize()), blit_regions.GetData(), ToVkFilter(filter));
+    if (!destination_layout.HasValue())
+    {
+        return destination_layout.GetError();
+    }
+    vkCmdBlitImage(m_native_command_buffer, source.GetNativeImage(), static_cast<VkImageLayout>(source_layout.GetValue()),
+                   destination.GetNativeImage(), static_cast<VkImageLayout>(destination_layout.GetValue()),
+                   static_cast<u32>(blit_regions.GetSize()), blit_regions.GetData(), vk_filter);
+    return ErrorCode::Success;
 }
 
-void Rndr::Forge::CommandBuffer::CmdGenerateMips(Texture& texture, ImageLayout final_layout)
+Rndr::ErrorCode Rndr::Forge::CommandBuffer::CmdGenerateMips(Texture& texture, ImageLayout final_layout)
 {
     const TextureDesc& desc = texture.GetDesc();
     if (desc.mip_level_count < 2)
     {
-        throw Opal::Exception("Generating mips needs a texture with more than one mip level!");
+        RNDR_LOG_ERROR("Forge: generating mips needs a texture with more than one mip level");
+        return ErrorCode::InvalidArgument;
     }
     // Every level is read from and written to, so both usages are needed whatever the texture is otherwise for.
-    ValidateTextureUsage(texture, TextureUsageBits::TransferSource, "source", "Mip generation");
-    ValidateTextureUsage(texture, TextureUsageBits::TransferDestination, "destination", "Mip generation");
+    RNDR_FORGE_CHECK(ValidateTextureUsage(texture, TextureUsageBits::TransferSource, "source", "Mip generation"));
+    RNDR_FORGE_CHECK(ValidateTextureUsage(texture, TextureUsageBits::TransferDestination, "destination", "Mip generation"));
 
     // The whole texture starts as the destination of the first blit, including the level that already holds the
     // data - it becomes a source one level at a time inside the loop.
-    if (texture.GetCurrentLayout() != ImageLayout::TransferDestination)
+    const Opal::Expected<ImageLayout, ErrorCode> current_layout = texture.GetCurrentLayout();
+    if (!current_layout.HasValue())
     {
-        CmdTextureBarrier(TextureBarrier::ToTransferDestination(texture));
+        return current_layout.GetError();
+    }
+    if (current_layout.GetValue() != ImageLayout::TransferDestination)
+    {
+        RNDR_FORGE_CHECK(CmdTextureBarrier(TextureBarrier::ToTransferDestination(texture)));
     }
     for (u32 level = 1; level < desc.mip_level_count; ++level)
     {
         TextureBarrier to_source = TextureBarrier::ToTransferSource(texture, ImageLayout::TransferDestination);
         to_source.subresource_range.first_mip_level = level - 1;
         to_source.subresource_range.mip_level_count = 1;
-        CmdTextureBarrier(to_source);
+        RNDR_FORGE_CHECK(CmdTextureBarrier(to_source));
 
         // Both extents are left at zero, which means the whole of each level, so the blit halves as it goes.
         // Every array layer in the one region: the count defaults to one, which would fill the mip chain of
         // layer zero and leave the rest of an array texture holding whatever it was created with.
         const TextureBlitRegion region{.source = {.mip_level = level - 1, .array_layer_count = desc.array_layer_count},
                                        .destination = {.mip_level = level, .array_layer_count = desc.array_layer_count}};
-        CmdBlitTexture(texture, texture, {&region, 1});
+        RNDR_FORGE_CHECK(CmdBlitTexture(texture, texture, {&region, 1}));
     }
     // Every level but the last is a transfer source by now, and the last one is still a transfer destination.
-    TextureBarrier sources_to_final = TextureBarrier::To(texture, ImageLayout::TransferSource, final_layout);
-    sources_to_final.subresource_range.first_mip_level = 0;
-    sources_to_final.subresource_range.mip_level_count = desc.mip_level_count - 1;
-    TextureBarrier last_to_final = TextureBarrier::To(texture, ImageLayout::TransferDestination, final_layout);
-    last_to_final.subresource_range.first_mip_level = desc.mip_level_count - 1;
-    last_to_final.subresource_range.mip_level_count = 1;
-    const TextureBarrier final_barriers[2] = {sources_to_final.Clone(), last_to_final.Clone()};
-    CmdTextureBarriers({final_barriers, 2});
+    Opal::Expected<TextureBarrier, ErrorCode> sources_to_final = TextureBarrier::To(texture, ImageLayout::TransferSource, final_layout);
+    if (!sources_to_final.HasValue())
+    {
+        return sources_to_final.GetError();
+    }
+    sources_to_final.GetValue().subresource_range.first_mip_level = 0;
+    sources_to_final.GetValue().subresource_range.mip_level_count = desc.mip_level_count - 1;
+    Opal::Expected<TextureBarrier, ErrorCode> last_to_final = TextureBarrier::To(texture, ImageLayout::TransferDestination, final_layout);
+    if (!last_to_final.HasValue())
+    {
+        return last_to_final.GetError();
+    }
+    last_to_final.GetValue().subresource_range.first_mip_level = desc.mip_level_count - 1;
+    last_to_final.GetValue().subresource_range.mip_level_count = 1;
+    const TextureBarrier final_barriers[2] = {sources_to_final.GetValue().Clone(), last_to_final.GetValue().Clone()};
+    return CmdTextureBarriers({final_barriers, 2});
 }
 
-static VkAttachmentLoadOp ToVkLoadOp(Rndr::Forge::AttachmentLoadOperation op)
+static Opal::Optional<VkAttachmentLoadOp> ToVkLoadOp(Rndr::Forge::AttachmentLoadOperation op)
 {
     switch (op)
     {
         case Rndr::Forge::AttachmentLoadOperation::Load:
-            return VK_ATTACHMENT_LOAD_OP_LOAD;
+            return Opal::Optional<VkAttachmentLoadOp>(VK_ATTACHMENT_LOAD_OP_LOAD);
         case Rndr::Forge::AttachmentLoadOperation::Clear:
-            return VK_ATTACHMENT_LOAD_OP_CLEAR;
+            return Opal::Optional<VkAttachmentLoadOp>(VK_ATTACHMENT_LOAD_OP_CLEAR);
         case Rndr::Forge::AttachmentLoadOperation::DontCare:
-            return VK_ATTACHMENT_LOAD_OP_DONT_CARE;
+            return Opal::Optional<VkAttachmentLoadOp>(VK_ATTACHMENT_LOAD_OP_DONT_CARE);
         default:
-            throw Opal::Exception("Unsupported attachment load operation");
+            return {};
     }
 }
 
-static VkAttachmentStoreOp ToVkStoreOp(Rndr::Forge::AttachmentStoreOperation op)
+static Opal::Optional<VkAttachmentStoreOp> ToVkStoreOp(Rndr::Forge::AttachmentStoreOperation op)
 {
     switch (op)
     {
         case Rndr::Forge::AttachmentStoreOperation::Store:
-            return VK_ATTACHMENT_STORE_OP_STORE;
+            return Opal::Optional<VkAttachmentStoreOp>(VK_ATTACHMENT_STORE_OP_STORE);
         case Rndr::Forge::AttachmentStoreOperation::DontCare:
-            return VK_ATTACHMENT_STORE_OP_DONT_CARE;
+            return Opal::Optional<VkAttachmentStoreOp>(VK_ATTACHMENT_STORE_OP_DONT_CARE);
         default:
-            throw Opal::Exception("Unsupported attachment store operation");
+            return {};
     }
 }
 
@@ -703,45 +838,59 @@ static VkAttachmentStoreOp ToVkStoreOp(Rndr::Forge::AttachmentStoreOperation op)
  * @param role What this attachment is, for the messages: "colour", "depth" or "stencil".
  * @param is_color Whether the role wants the colour attachment layouts or the depth stencil ones.
  */
-static VkRenderingAttachmentInfo ToVkRenderingAttachment(const Rndr::Forge::RenderingAttachmentDesc& attachment, const char* role,
-                                                         bool is_color)
+static Opal::Expected<VkRenderingAttachmentInfo, Rndr::ErrorCode> ToVkRenderingAttachment(
+    const Rndr::Forge::RenderingAttachmentDesc& attachment, const char* role, bool is_color)
 {
     using namespace Rndr;
+    using Result = Opal::Expected<VkRenderingAttachmentInfo, ErrorCode>;
+
     if (!attachment.texture.IsValid())
     {
         // Most often an attachment that was filled in and never finished. A pass that wants no depth or no
         // stencil leaves the whole attachment absent instead, which is what the default already is.
-        throw Opal::Exception(Opal::StringEx("A ") + role +
-                              " attachment that names no texture! Leave the attachment absent instead - for a swap "
-                              "chain, SwapChain::HasDepth says whether there is one to name.");
+        RNDR_LOG_ERROR(
+            "Forge: a {} attachment that names no texture. Leave the attachment absent instead - for a swap chain, "
+            "SwapChain::HasDepth says whether there is one to name.",
+            role);
+        return Result(ErrorCode::InvalidArgument);
     }
     const Forge::Texture& texture = attachment.texture.Get();
     if (texture.GetNativeImageView() == VK_NULL_HANDLE)
     {
         // A texture whose usage is transfer only, which Vulkan allows no view on and so cannot be rendered into.
-        throw Opal::Exception(Opal::StringEx("The ") + role + " attachment names a texture that has no image view!");
+        RNDR_LOG_ERROR("Forge: the {} attachment names a texture that has no image view", role);
+        return Result(ErrorCode::InvalidArgument);
     }
 
     // Over the range the view covers rather than over the whole texture, since that is what is rendered into.
-    const Forge::ImageLayout layout = texture.GetCurrentLayout(texture.GetDesc().subresource_range);
-    const bool layout_allowed = layout == Forge::ImageLayout::General ||
-                                (is_color ? layout == Forge::ImageLayout::ColorAttachment
-                                          : layout == Forge::ImageLayout::DepthStencilAttachment ||
-                                                layout == Forge::ImageLayout::DepthStencilReadOnly);
+    const Opal::Expected<Forge::ImageLayout, ErrorCode> layout_result = texture.GetCurrentLayout(texture.GetDesc().subresource_range);
+    if (!layout_result.HasValue())
+    {
+        return Result(layout_result.GetError());
+    }
+    const Forge::ImageLayout layout = layout_result.GetValue();
+    const bool layout_allowed =
+        layout == Forge::ImageLayout::General ||
+        (is_color ? layout == Forge::ImageLayout::ColorAttachment
+                  : layout == Forge::ImageLayout::DepthStencilAttachment || layout == Forge::ImageLayout::DepthStencilReadOnly);
     if (!layout_allowed)
     {
         const char* allowed = is_color ? "ColorAttachment or General" : "DepthStencilAttachment, DepthStencilReadOnly or General";
-        throw Opal::Exception(Opal::StringEx("Rendering needs the ") + role + " attachment texture in the " + allowed +
-                              " layout, and it is in " + Forge::ImageLayoutToString(layout) +
-                              "! Transition it before the pass - CmdTransition, or the matching TextureBarrier preset.");
+        RNDR_LOG_ERROR(
+            "Forge: rendering needs the {} attachment texture in the {} layout, and it is in {}. Transition it before the "
+            "pass - CmdTransition, or the matching TextureBarrier preset.",
+            role, allowed, Forge::ImageLayoutToString(layout));
+        return Result(ErrorCode::InvalidArgument);
     }
 
+    RNDR_FORGE_TRANSLATE_EXPECTED(load_op, ToVkLoadOp(attachment.load_operation), "RenderingAttachmentDesc::load_operation", Result);
+    RNDR_FORGE_TRANSLATE_EXPECTED(store_op, ToVkStoreOp(attachment.store_operation), "RenderingAttachmentDesc::store_operation", Result);
     VkRenderingAttachmentInfo info{
         .sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO,
         .imageView = texture.GetNativeImageView(),
         .imageLayout = static_cast<VkImageLayout>(layout),
-        .loadOp = ToVkLoadOp(attachment.load_operation),
-        .storeOp = ToVkStoreOp(attachment.store_operation),
+        .loadOp = load_op,
+        .storeOp = store_op,
     };
     // Only a Clear reads the value, so an attachment that loads or discards is left alone whichever kind it
     // carries. Where it is read, the variant says which kind was written - the one thing VkClearValue cannot,
@@ -752,9 +901,9 @@ static VkRenderingAttachmentInfo ToVkRenderingAttachment(const Rndr::Forge::Rend
         {
             if (!attachment.clear_value.IsActive<Vector4f>())
             {
-                throw Opal::Exception(Opal::StringEx("The ") + role +
-                                      " attachment clears to a DepthStencilClearValue! A colour attachment clears to a "
-                                      "Vector4f.");
+                RNDR_LOG_ERROR("Forge: the {} attachment clears to a DepthStencilClearValue. A colour attachment clears to a Vector4f.",
+                               role);
+                return Result(ErrorCode::InvalidArgument);
             }
             const Vector4f& color = attachment.clear_value.Get<Vector4f>();
             info.clearValue = {.color = {.float32 = {color.r, color.g, color.b, color.a}}};
@@ -763,23 +912,30 @@ static VkRenderingAttachmentInfo ToVkRenderingAttachment(const Rndr::Forge::Rend
         {
             if (!attachment.clear_value.IsActive<Forge::DepthStencilClearValue>())
             {
-                throw Opal::Exception(Opal::StringEx("The ") + role +
-                                      " attachment clears to a Vector4f! A depth or a stencil attachment clears to a "
-                                      "DepthStencilClearValue.");
+                RNDR_LOG_ERROR(
+                    "Forge: the {} attachment clears to a Vector4f. A depth or a stencil attachment clears to a "
+                    "DepthStencilClearValue.",
+                    role);
+                return Result(ErrorCode::InvalidArgument);
             }
             const Forge::DepthStencilClearValue& depth_stencil = attachment.clear_value.Get<Forge::DepthStencilClearValue>();
             info.clearValue = {.depthStencil = {.depth = depth_stencil.depth, .stencil = depth_stencil.stencil}};
         }
     }
-    return info;
+    return Result(info);
 }
 
-void Rndr::Forge::CommandBuffer::CmdBeginRendering(const RenderingDesc& desc)
+Rndr::ErrorCode Rndr::Forge::CommandBuffer::CmdBeginRendering(const RenderingDesc& desc)
 {
     Opal::DynamicArray<VkRenderingAttachmentInfo> color_attachments;
     for (const auto& attachment : desc.color_attachments)
     {
-        color_attachments.PushBack(ToVkRenderingAttachment(attachment, "colour", true));
+        Opal::Expected<VkRenderingAttachmentInfo, ErrorCode> info = ToVkRenderingAttachment(attachment, "colour", true);
+        if (!info.HasValue())
+        {
+            return info.GetError();
+        }
+        color_attachments.PushBack(info.GetValue());
     }
 
     // Filled only when the desc carries one, and pointed at only then: an absent depth attachment is a
@@ -788,7 +944,13 @@ void Rndr::Forge::CommandBuffer::CmdBeginRendering(const RenderingDesc& desc)
     VkRenderingAttachmentInfo depth_attachment{};
     if (has_depth)
     {
-        depth_attachment = ToVkRenderingAttachment(desc.depth_attachment.GetValue(), "depth", false);
+        Opal::Expected<VkRenderingAttachmentInfo, ErrorCode> info =
+            ToVkRenderingAttachment(desc.depth_attachment.GetValue(), "depth", false);
+        if (!info.HasValue())
+        {
+            return info.GetError();
+        }
+        depth_attachment = info.GetValue();
     }
 
     // The same shape as the depth attachment, and separate from it on purpose: Vulkan takes the two sides
@@ -797,7 +959,13 @@ void Rndr::Forge::CommandBuffer::CmdBeginRendering(const RenderingDesc& desc)
     VkRenderingAttachmentInfo stencil_attachment{};
     if (has_stencil)
     {
-        stencil_attachment = ToVkRenderingAttachment(desc.stencil_attachment.GetValue(), "stencil", false);
+        Opal::Expected<VkRenderingAttachmentInfo, ErrorCode> info =
+            ToVkRenderingAttachment(desc.stencil_attachment.GetValue(), "stencil", false);
+        if (!info.HasValue())
+        {
+            return info.GetError();
+        }
+        stencil_attachment = info.GetValue();
     }
 
     const VkRenderingInfo rendering_info{
@@ -811,84 +979,96 @@ void Rndr::Forge::CommandBuffer::CmdBeginRendering(const RenderingDesc& desc)
         .pStencilAttachment = has_stencil ? &stencil_attachment : nullptr,
     };
     vkCmdBeginRendering(m_native_command_buffer, &rendering_info);
+    return ErrorCode::Success;
 }
 
-void Rndr::Forge::CommandBuffer::CmdEndRendering()
+Rndr::ErrorCode Rndr::Forge::CommandBuffer::CmdEndRendering()
 {
     vkCmdEndRendering(m_native_command_buffer);
+    return ErrorCode::Success;
 }
 
-void Rndr::Forge::CommandBuffer::CmdSetViewport(const Vector2f& offset, const Vector2f& extent, f32 min_depth, f32 max_depth)
+Rndr::ErrorCode Rndr::Forge::CommandBuffer::CmdSetViewport(const Vector2f& offset, const Vector2f& extent, f32 min_depth, f32 max_depth)
 {
     const VkViewport viewport{
         .x = offset.x, .y = offset.y, .width = extent.x, .height = extent.y, .minDepth = min_depth, .maxDepth = max_depth};
     vkCmdSetViewport(m_native_command_buffer, 0, 1, &viewport);
+    return ErrorCode::Success;
 }
 
-void Rndr::Forge::CommandBuffer::CmdSetScissor(const Vector2i& offset, const Vector2i& extent)
+Rndr::ErrorCode Rndr::Forge::CommandBuffer::CmdSetScissor(const Vector2i& offset, const Vector2i& extent)
 {
     const VkRect2D scissor{.offset = {.x = offset.x, .y = offset.y},
                            .extent = {.width = static_cast<u32>(extent.x), .height = static_cast<u32>(extent.y)}};
     vkCmdSetScissor(m_native_command_buffer, 0, 1, &scissor);
+    return ErrorCode::Success;
 }
 
-void Rndr::Forge::CommandBuffer::CmdSetDepthBias(f32 constant_factor, f32 clamp, f32 slope_factor)
+Rndr::ErrorCode Rndr::Forge::CommandBuffer::CmdSetDepthBias(f32 constant_factor, f32 clamp, f32 slope_factor)
 {
     // A non-zero clamp is a feature, not a value the driver quietly ignores.
     if (clamp != 0.0f && !m_device->GetFeatures().depth_bias_clamp)
     {
-        throw Opal::Exception("Clamping the depth bias needs DeviceFeatures::depth_bias_clamp!");
+        RNDR_LOG_ERROR("Forge: clamping the depth bias needs DeviceFeatures::depth_bias_clamp");
+        return ErrorCode::InvalidArgument;
     }
     vkCmdSetDepthBias(m_native_command_buffer, constant_factor, clamp, slope_factor);
+    return ErrorCode::Success;
 }
 
-void Rndr::Forge::CommandBuffer::CmdSetStencilReference(u32 reference, StencilFaceBits faces)
+Rndr::ErrorCode Rndr::Forge::CommandBuffer::CmdSetStencilReference(u32 reference, StencilFaceBits faces)
 {
     vkCmdSetStencilReference(m_native_command_buffer, static_cast<VkStencilFaceFlags>(faces), reference);
+    return ErrorCode::Success;
 }
 
-void Rndr::Forge::CommandBuffer::CmdSetStencilCompareMask(u32 compare_mask, StencilFaceBits faces)
+Rndr::ErrorCode Rndr::Forge::CommandBuffer::CmdSetStencilCompareMask(u32 compare_mask, StencilFaceBits faces)
 {
     vkCmdSetStencilCompareMask(m_native_command_buffer, static_cast<VkStencilFaceFlags>(faces), compare_mask);
+    return ErrorCode::Success;
 }
 
-void Rndr::Forge::CommandBuffer::CmdSetStencilWriteMask(u32 write_mask, StencilFaceBits faces)
+Rndr::ErrorCode Rndr::Forge::CommandBuffer::CmdSetStencilWriteMask(u32 write_mask, StencilFaceBits faces)
 {
     vkCmdSetStencilWriteMask(m_native_command_buffer, static_cast<VkStencilFaceFlags>(faces), write_mask);
+    return ErrorCode::Success;
 }
 
-void Rndr::Forge::CommandBuffer::CmdSetLineWidth(f32 width)
+Rndr::ErrorCode Rndr::Forge::CommandBuffer::CmdSetLineWidth(f32 width)
 {
     // One is the only width every device draws; anything else is the wide_lines feature.
     if (width != 1.0f && !m_device->GetFeatures().wide_lines)
     {
-        throw Opal::Exception("A line width other than one needs DeviceFeatures::wide_lines!");
+        RNDR_LOG_ERROR("Forge: a line width other than one needs DeviceFeatures::wide_lines");
+        return ErrorCode::InvalidArgument;
     }
     vkCmdSetLineWidth(m_native_command_buffer, width);
+    return ErrorCode::Success;
 }
 
-void Rndr::Forge::CommandBuffer::CmdBindVertexBuffer(const Buffer& buffer, u32 binding, u64 offset)
+Rndr::ErrorCode Rndr::Forge::CommandBuffer::CmdBindVertexBuffer(const Buffer& buffer, u32 binding, u64 offset)
 {
     const VkBuffer native_buffer = buffer.GetNativeBuffer();
     vkCmdBindVertexBuffers(m_native_command_buffer, binding, 1, &native_buffer, &offset);
+    return ErrorCode::Success;
 }
 
-static VkIndexType ToVkIndexType(Rndr::IndexSize index_size)
+static Opal::Optional<VkIndexType> ToVkIndexType(Rndr::IndexSize index_size)
 {
     switch (index_size)
     {
         case Rndr::IndexSize::uint8:
-            return VK_INDEX_TYPE_UINT8_KHR;
+            return Opal::Optional<VkIndexType>(VK_INDEX_TYPE_UINT8_KHR);
         case Rndr::IndexSize::uint16:
-            return VK_INDEX_TYPE_UINT16;
+            return Opal::Optional<VkIndexType>(VK_INDEX_TYPE_UINT16);
         case Rndr::IndexSize::uint32:
-            return VK_INDEX_TYPE_UINT32;
+            return Opal::Optional<VkIndexType>(VK_INDEX_TYPE_UINT32);
         default:
-            throw Opal::Exception("Unsupported index size");
+            return {};
     }
 }
 
-void Rndr::Forge::CommandBuffer::CmdBindIndexBuffer(const Buffer& buffer, u64 offset, IndexSize index_size)
+Rndr::ErrorCode Rndr::Forge::CommandBuffer::CmdBindIndexBuffer(const Buffer& buffer, u64 offset, IndexSize index_size)
 {
     // The uint8 index type belongs to an extension, but vkCmdBindIndexBuffer takes it as a plain enum value
     // rather than through a function the loader would only hand out with the extension on. A device that did
@@ -896,9 +1076,12 @@ void Rndr::Forge::CommandBuffer::CmdBindIndexBuffer(const Buffer& buffer, u64 of
     // in the other direction, so it is caught here rather than left to the validation layer.
     if (index_size == IndexSize::uint8 && !m_device->GetFeatures().index_type_uint8)
     {
-        throw Opal::Exception("An 8-bit index buffer needs the device created with DeviceFeatures::index_type_uint8!");
+        RNDR_LOG_ERROR("Forge: an 8-bit index buffer needs the device created with DeviceFeatures::index_type_uint8");
+        return ErrorCode::InvalidArgument;
     }
-    vkCmdBindIndexBuffer(m_native_command_buffer, buffer.GetNativeBuffer(), offset, ToVkIndexType(index_size));
+    RNDR_FORGE_TRANSLATE(index_type, ToVkIndexType(index_size), "the index size");
+    vkCmdBindIndexBuffer(m_native_command_buffer, buffer.GetNativeBuffer(), offset, index_type);
+    return ErrorCode::Success;
 }
 
 static VkShaderStageFlags ToVkShaderStageFlags(Rndr::ShaderTypeBits stages)
@@ -931,22 +1114,24 @@ static VkShaderStageFlags ToVkShaderStageFlags(Rndr::ShaderTypeBits stages)
     return flags;
 }
 
-void Rndr::Forge::CommandBuffer::CmdBindPipeline(const Pipeline& pipeline)
+Rndr::ErrorCode Rndr::Forge::CommandBuffer::CmdBindPipeline(const Pipeline& pipeline)
 {
     vkCmdBindPipeline(m_native_command_buffer, pipeline.GetBindPoint(), pipeline.GetNativePipeline());
+    return ErrorCode::Success;
 }
 
-void Rndr::Forge::CommandBuffer::CmdBindDescriptorSet(const Pipeline& pipeline, const DescriptorSet& descriptor_set,
-                                                       u32 first_set)
+Rndr::ErrorCode Rndr::Forge::CommandBuffer::CmdBindDescriptorSet(const Pipeline& pipeline, const DescriptorSet& descriptor_set,
+                                                                 u32 first_set)
 {
     const VkDescriptorSet native_set = descriptor_set.GetNativeDescriptorSet();
     vkCmdBindDescriptorSets(m_native_command_buffer, pipeline.GetBindPoint(), pipeline.GetNativePipelineLayout(), first_set, 1, &native_set,
                             0, nullptr);
+    return ErrorCode::Success;
 }
 
-void Rndr::Forge::CommandBuffer::CmdBindDescriptorSets(const Pipeline& pipeline,
-                                                        Opal::ArrayView<const Opal::Ref<const DescriptorSet>> descriptor_sets,
-                                                        u32 first_set)
+Rndr::ErrorCode Rndr::Forge::CommandBuffer::CmdBindDescriptorSets(const Pipeline& pipeline,
+                                                                  Opal::ArrayView<const Opal::Ref<const DescriptorSet>> descriptor_sets,
+                                                                  u32 first_set)
 {
     Opal::DynamicArray<VkDescriptorSet> native_sets;
     for (const auto& set : descriptor_sets)
@@ -955,44 +1140,50 @@ void Rndr::Forge::CommandBuffer::CmdBindDescriptorSets(const Pipeline& pipeline,
     }
     vkCmdBindDescriptorSets(m_native_command_buffer, pipeline.GetBindPoint(), pipeline.GetNativePipelineLayout(), first_set,
                             static_cast<u32>(native_sets.GetSize()), native_sets.GetData(), 0, nullptr);
+    return ErrorCode::Success;
 }
 
-void Rndr::Forge::CommandBuffer::CmdPushConstants(const Pipeline& pipeline, ShaderTypeBits shader_stages,
-                                                   Opal::ArrayView<const u8> data, u32 offset)
+Rndr::ErrorCode Rndr::Forge::CommandBuffer::CmdPushConstants(const Pipeline& pipeline, ShaderTypeBits shader_stages,
+                                                             Opal::ArrayView<const u8> data, u32 offset)
 {
     vkCmdPushConstants(m_native_command_buffer, pipeline.GetNativePipelineLayout(), ToVkShaderStageFlags(shader_stages), offset,
                        static_cast<u32>(data.GetSize()), data.GetData());
+    return ErrorCode::Success;
 }
 
-void Rndr::Forge::CommandBuffer::CmdDrawIndexed(u32 index_count, u32 instance_count, u32 first_index, i32 vertex_offset,
-                                                 u32 first_instance)
+Rndr::ErrorCode Rndr::Forge::CommandBuffer::CmdDrawIndexed(u32 index_count, u32 instance_count, u32 first_index, i32 vertex_offset,
+                                                           u32 first_instance)
 {
     vkCmdDrawIndexed(m_native_command_buffer, index_count, instance_count, first_index, vertex_offset, first_instance);
+    return ErrorCode::Success;
 }
 
 /**
  * The checks every indirect command shares: the buffer has to allow indirect use, the offset has to be
  * aligned, and every command the device will read has to fit inside the buffer.
  */
-static void ValidateIndirectRange(const Rndr::Forge::Buffer& buffer, Rndr::u64 offset, Rndr::u32 count, Rndr::u32 stride,
-                                  Rndr::u64 command_size, const char* what)
+static Rndr::ErrorCode ValidateIndirectRange(const Rndr::Forge::Buffer& buffer, Rndr::u64 offset, Rndr::u32 count, Rndr::u32 stride,
+                                             Rndr::u64 command_size, const char* what)
 {
     using namespace Rndr;
     if (!(buffer.GetDesc().usage & Forge::BufferUsageBits::IndirectBuffer))
     {
-        throw Opal::Exception(Opal::StringEx(what) + " needs a buffer created with BufferUsageBits::IndirectBuffer!");
+        RNDR_LOG_ERROR("Forge: {} needs a buffer created with BufferUsageBits::IndirectBuffer", what);
+        return ErrorCode::InvalidArgument;
     }
     if (offset % 4 != 0)
     {
-        throw Opal::Exception(Opal::StringEx(what) + " offset must be a multiple of 4!");
+        RNDR_LOG_ERROR("Forge: the {} offset must be a multiple of 4, and is {}", what, offset);
+        return ErrorCode::InvalidArgument;
     }
     if (count == 0)
     {
-        return;
+        return ErrorCode::Success;
     }
     if (count > 1 && (stride % 4 != 0 || stride < command_size))
     {
-        throw Opal::Exception(Opal::StringEx(what) + " stride must be a multiple of 4 and at least one command long!");
+        RNDR_LOG_ERROR("Forge: the {} stride must be a multiple of 4 and at least one command long, and is {}", what, stride);
+        return ErrorCode::InvalidArgument;
     }
     // Written so that neither the offset nor the span of the commands can overflow the sum and pass, the way
     // Buffer::Update checks it. The last command starts at count - 1 strides in, so only that many are counted.
@@ -1000,60 +1191,71 @@ static void ValidateIndirectRange(const Rndr::Forge::Buffer& buffer, Rndr::u64 o
     const u64 span_before_last = static_cast<u64>(count - 1) * stride;
     if (offset > buffer_size || span_before_last > buffer_size - offset || command_size > buffer_size - offset - span_before_last)
     {
-        throw Opal::Exception(Opal::StringEx(what) + " reaches past the end of the buffer!");
+        RNDR_LOG_ERROR("Forge: {} reaches past the end of the buffer", what);
+        return ErrorCode::OutOfBounds;
     }
+    return ErrorCode::Success;
 }
 
-void Rndr::Forge::CommandBuffer::CmdDraw(u32 vertex_count, u32 instance_count, u32 first_vertex, u32 first_instance)
+Rndr::ErrorCode Rndr::Forge::CommandBuffer::CmdDraw(u32 vertex_count, u32 instance_count, u32 first_vertex, u32 first_instance)
 {
     vkCmdDraw(m_native_command_buffer, vertex_count, instance_count, first_vertex, first_instance);
+    return ErrorCode::Success;
 }
 
 /** More than one command in one indirect draw is a feature rather than something every device can do. */
-static void ValidateIndirectDrawCount(const Rndr::Forge::Device& device, Rndr::u32 draw_count, const char* what)
+static Rndr::ErrorCode ValidateIndirectDrawCount(const Rndr::Forge::Device& device, Rndr::u32 draw_count, const char* what)
 {
     if (draw_count > 1 && !device.GetFeatures().multi_draw_indirect)
     {
-        throw Opal::Exception(Opal::StringEx(what) +
-                              " of more than one command needs the device created with DeviceFeatures::multi_draw_indirect!");
+        RNDR_LOG_ERROR("Forge: {} of more than one command needs the device created with DeviceFeatures::multi_draw_indirect", what);
+        return Rndr::ErrorCode::InvalidArgument;
     }
+    return Rndr::ErrorCode::Success;
 }
 
-void Rndr::Forge::CommandBuffer::CmdDrawIndirect(const Buffer& buffer, u64 offset, u32 draw_count, u32 stride)
+Rndr::ErrorCode Rndr::Forge::CommandBuffer::CmdDrawIndirect(const Buffer& buffer, u64 offset, u32 draw_count, u32 stride)
 {
-    ValidateIndirectRange(buffer, offset, draw_count, stride, sizeof(DrawIndirectCommand), "Indirect draw");
-    ValidateIndirectDrawCount(*m_device, draw_count, "Indirect draw");
+    RNDR_FORGE_CHECK(ValidateIndirectRange(buffer, offset, draw_count, stride, sizeof(DrawIndirectCommand), "Indirect draw"));
+    RNDR_FORGE_CHECK(ValidateIndirectDrawCount(*m_device, draw_count, "Indirect draw"));
     vkCmdDrawIndirect(m_native_command_buffer, buffer.GetNativeBuffer(), offset, draw_count, stride);
+    return ErrorCode::Success;
 }
 
-void Rndr::Forge::CommandBuffer::CmdDrawIndexedIndirect(const Buffer& buffer, u64 offset, u32 draw_count, u32 stride)
+Rndr::ErrorCode Rndr::Forge::CommandBuffer::CmdDrawIndexedIndirect(const Buffer& buffer, u64 offset, u32 draw_count, u32 stride)
 {
-    ValidateIndirectRange(buffer, offset, draw_count, stride, sizeof(DrawIndexedIndirectCommand), "Indirect indexed draw");
-    ValidateIndirectDrawCount(*m_device, draw_count, "Indirect indexed draw");
+    RNDR_FORGE_CHECK(
+        ValidateIndirectRange(buffer, offset, draw_count, stride, sizeof(DrawIndexedIndirectCommand), "Indirect indexed draw"));
+    RNDR_FORGE_CHECK(ValidateIndirectDrawCount(*m_device, draw_count, "Indirect indexed draw"));
     vkCmdDrawIndexedIndirect(m_native_command_buffer, buffer.GetNativeBuffer(), offset, draw_count, stride);
+    return ErrorCode::Success;
 }
 
-void Rndr::Forge::CommandBuffer::CmdDrawMeshTasks(u32 group_count_x, u32 group_count_y, u32 group_count_z)
+Rndr::ErrorCode Rndr::Forge::CommandBuffer::CmdDrawMeshTasks(u32 group_count_x, u32 group_count_y, u32 group_count_z)
 {
     // The loader hands out a callable trampoline whether or not the device enabled the extension, so a null
     // check does not catch this - calling it without the extension is an access violation, not a failure.
     if (!m_device->IsExtensionEnabled(VK_EXT_MESH_SHADER_EXTENSION_NAME) || vkCmdDrawMeshTasksEXT == nullptr)
     {
-        throw Opal::Exception("Mesh shader drawing needs VK_EXT_mesh_shader, which the device did not enable!");
+        RNDR_LOG_ERROR("Forge: mesh shader drawing needs VK_EXT_mesh_shader, which the device did not enable");
+        return ErrorCode::InvalidArgument;
     }
     vkCmdDrawMeshTasksEXT(m_native_command_buffer, group_count_x, group_count_y, group_count_z);
+    return ErrorCode::Success;
 }
 
-void Rndr::Forge::CommandBuffer::CmdDispatch(u32 group_count_x, u32 group_count_y, u32 group_count_z)
+Rndr::ErrorCode Rndr::Forge::CommandBuffer::CmdDispatch(u32 group_count_x, u32 group_count_y, u32 group_count_z)
 {
     vkCmdDispatch(m_native_command_buffer, group_count_x, group_count_y, group_count_z);
+    return ErrorCode::Success;
 }
 
-void Rndr::Forge::CommandBuffer::CmdDispatchIndirect(const Buffer& buffer, u64 offset)
+Rndr::ErrorCode Rndr::Forge::CommandBuffer::CmdDispatchIndirect(const Buffer& buffer, u64 offset)
 {
-    ValidateIndirectRange(buffer, offset, 1, sizeof(DispatchIndirectCommand), sizeof(DispatchIndirectCommand),
-                          "Indirect dispatch");
+    RNDR_FORGE_CHECK(
+        ValidateIndirectRange(buffer, offset, 1, sizeof(DispatchIndirectCommand), sizeof(DispatchIndirectCommand), "Indirect dispatch"));
     vkCmdDispatchIndirect(m_native_command_buffer, buffer.GetNativeBuffer(), offset);
+    return ErrorCode::Success;
 }
 
 namespace
@@ -1080,53 +1282,67 @@ VkDebugUtilsLabelEXT ToVkLabel(const Opal::StringUtf8& name, const Rndr::Vector4
 }
 }  // namespace
 
-void Rndr::Forge::CommandBuffer::CmdBeginDebugLabel(const Opal::StringUtf8& name, const Vector4f& color)
+Rndr::ErrorCode Rndr::Forge::CommandBuffer::CmdBeginDebugLabel(const Opal::StringUtf8& name, const Vector4f& color)
 {
     if (!AreDebugLabelsUsable(*m_device))
     {
-        return;
+        return ErrorCode::Success;
     }
     const VkDebugUtilsLabelEXT label = ToVkLabel(name, color);
     vkCmdBeginDebugUtilsLabelEXT(m_native_command_buffer, &label);
+    return ErrorCode::Success;
 }
 
-void Rndr::Forge::CommandBuffer::CmdEndDebugLabel()
+Rndr::ErrorCode Rndr::Forge::CommandBuffer::CmdEndDebugLabel()
 {
     if (!AreDebugLabelsUsable(*m_device))
     {
-        return;
+        return ErrorCode::Success;
     }
     vkCmdEndDebugUtilsLabelEXT(m_native_command_buffer);
+    return ErrorCode::Success;
 }
 
-void Rndr::Forge::CommandBuffer::CmdInsertDebugLabel(const Opal::StringUtf8& name, const Vector4f& color)
+Rndr::ErrorCode Rndr::Forge::CommandBuffer::CmdInsertDebugLabel(const Opal::StringUtf8& name, const Vector4f& color)
 {
     if (!AreDebugLabelsUsable(*m_device))
     {
-        return;
+        return ErrorCode::Success;
     }
     const VkDebugUtilsLabelEXT label = ToVkLabel(name, color);
     vkCmdInsertDebugUtilsLabelEXT(m_native_command_buffer, &label);
+    return ErrorCode::Success;
 }
 
-void Rndr::Forge::CommandBuffer::CmdResetQueryPool(const TimestampQueryPool& query_pool, u32 first_query, u32 query_count)
+Rndr::ErrorCode Rndr::Forge::CommandBuffer::CmdResetQueryPool(const TimestampQueryPool& query_pool, u32 first_query, u32 query_count)
 {
-    const u32 resolved_count = query_pool.ResolveQueryRange(first_query, query_count, "Resetting");
-    vkCmdResetQueryPool(m_native_command_buffer, query_pool.GetNativeQueryPool(), first_query, resolved_count);
+    const Opal::Expected<u32, ErrorCode> resolved_count = query_pool.ResolveQueryRange(first_query, query_count, "Resetting");
+    if (!resolved_count.HasValue())
+    {
+        return resolved_count.GetError();
+    }
+    vkCmdResetQueryPool(m_native_command_buffer, query_pool.GetNativeQueryPool(), first_query, resolved_count.GetValue());
+    return ErrorCode::Success;
 }
 
-void Rndr::Forge::CommandBuffer::CmdWriteTimestamp(const TimestampQueryPool& query_pool, u32 query_index, PipelineStageBits stage)
+Rndr::ErrorCode Rndr::Forge::CommandBuffer::CmdWriteTimestamp(const TimestampQueryPool& query_pool, u32 query_index,
+                                                              PipelineStageBits stage)
 {
-    query_pool.ResolveQueryRange(query_index, 1, "Writing a timestamp into");
+    const Opal::Expected<u32, ErrorCode> resolved = query_pool.ResolveQueryRange(query_index, 1, "Writing a timestamp into");
+    if (!resolved.HasValue())
+    {
+        return resolved.GetError();
+    }
     // vkCmdWriteTimestamp2 takes one stage, not a mask: the tick is written once every previously submitted
     // command has reached that one stage, and there is no defined moment for "reached either of two".
     const u64 stage_bits = static_cast<u64>(stage);
     if (stage_bits == 0 || (stage_bits & (stage_bits - 1)) != 0)
     {
-        throw Opal::Exception("A timestamp has to name exactly one pipeline stage!");
+        RNDR_LOG_ERROR("Forge: a timestamp has to name exactly one pipeline stage");
+        return ErrorCode::InvalidArgument;
     }
-    vkCmdWriteTimestamp2(m_native_command_buffer, static_cast<VkPipelineStageFlags2>(stage), query_pool.GetNativeQueryPool(),
-                         query_index);
+    vkCmdWriteTimestamp2(m_native_command_buffer, static_cast<VkPipelineStageFlags2>(stage), query_pool.GetNativeQueryPool(), query_index);
+    return ErrorCode::Success;
 }
 
 Rndr::Forge::CommandBuffer::CommandBuffer(CommandBuffer&& other) noexcept

@@ -3,13 +3,15 @@
 #include "volk/volk.h"
 
 #include "opal/container/array-view.h"
+#include "opal/container/expected.h"
 #include "opal/container/ref.h"
 
+#include "rndr/error-codes.hpp"
+#include "rndr/forge/forward.hpp"
 #include "rndr/forge/texture.hpp"
+#include "rndr/forge/types.hpp"
 #include "rndr/graphics-types.hpp"
 #include "rndr/types.hpp"
-#include "rndr/forge/forward.hpp"
-#include "rndr/forge/types.hpp"
 
 namespace Rndr::Forge
 {
@@ -22,8 +24,14 @@ class Fence
 {
 public:
     Fence() = default;
-    Fence(const Device& device, bool create_signaled);
     ~Fence();
+
+    /**
+     * @param create_signaled Start signalled, which is what a frame loop wants of the fence it waits on
+     *        before recording the first frame.
+     * @return The fence, or whatever the failing creation maps to.
+     */
+    [[nodiscard]] static Opal::Expected<Fence, ErrorCode> Create(const Device& device, bool create_signaled);
 
     void Destroy();
 
@@ -36,21 +44,30 @@ public:
     [[nodiscard]] bool IsValid() const { return m_fence != VK_NULL_HANDLE; }
     [[nodiscard]] VkFence GetNativeFence() const { return m_fence; }
 
-    /** Block until the fence is signalled. */
-    void Wait() const;
+    /**
+     * Block until the fence is signalled.
+     * @return ErrorCode::Success, or whatever the failing wait maps to.
+     */
+    [[nodiscard]] ErrorCode Wait() const;
 
     /**
      * The same wait, given up on after the timeout in nanoseconds.
-     * @return True once the fence is signalled, false when the timeout expired first, which is not a failure.
+     * @return True once the fence is signalled, false when the timeout expired first - which is not a failure
+     *         and is the one thing the timeout exists for - or whatever the failing wait maps to.
      */
-    [[nodiscard]] bool TryWait(u64 timeout) const;
+    [[nodiscard]] Opal::Expected<bool, ErrorCode> TryWait(u64 timeout) const;
 
-    void Reset() const;
+    [[nodiscard]] ErrorCode Reset() const;
 
-    static void WaitForAll(Opal::ArrayView<const Fence> fences);
+    /**
+     * One wait over many fences, which returns once every one of them is signalled.
+     * @return ErrorCode::Success, ErrorCode::InvalidArgument when a fence is empty or they do not all belong
+     *         to one device, or whatever the failing wait maps to.
+     */
+    [[nodiscard]] static ErrorCode WaitForAll(Opal::ArrayView<const Fence> fences);
 
     /** WaitForAll with a timeout, answering the way TryWait does. */
-    [[nodiscard]] static bool TryWaitForAll(Opal::ArrayView<const Fence> fences, u64 timeout);
+    [[nodiscard]] static Opal::Expected<bool, ErrorCode> TryWaitForAll(Opal::ArrayView<const Fence> fences, u64 timeout);
 
 private:
     VkFence m_fence = VK_NULL_HANDLE;
@@ -82,8 +99,13 @@ class Semaphore
 {
 public:
     Semaphore() = default;
-    explicit Semaphore(const Device& device, const SemaphoreDesc& desc = {});
     ~Semaphore();
+
+    /**
+     * @param desc Whether it counts, and the count it starts at.
+     * @return The semaphore, or whatever the failing creation maps to.
+     */
+    [[nodiscard]] static Opal::Expected<Semaphore, ErrorCode> Create(const Device& device, const SemaphoreDesc& desc = {});
 
     void Destroy();
 
@@ -100,33 +122,41 @@ public:
     [[nodiscard]] bool IsTimeline() const { return m_type == SemaphoreType::Timeline; }
 
     /**
-     * The four calls below are the host side of a timeline, and all of them throw on a binary semaphore -
-     * only a device wait can consume one of those, so there is nothing here for the host to do with it.
+     * The four calls below are the host side of a timeline, and all of them report ErrorCode::InvalidArgument
+     * on a binary semaphore - only a device wait can consume one of those, so there is nothing here for the
+     * host to do with it. An empty semaphore answers the same way.
      */
 
     /** Block until the count reaches the given value. A value already reached returns at once. */
-    void Wait(u64 value) const;
+    [[nodiscard]] ErrorCode Wait(u64 value) const;
 
     /**
      * The same wait, given up on after the timeout in nanoseconds.
-     * @return True once the count reached the value, false when the timeout expired first, which is not a failure.
+     * @return True once the count reached the value, false when the timeout expired first - which is not a
+     *         failure - or the code the semaphore or the wait reported.
      */
-    [[nodiscard]] bool TryWait(u64 value, u64 timeout) const;
+    [[nodiscard]] Opal::Expected<bool, ErrorCode> TryWait(u64 value, u64 timeout) const;
 
-    /** Raise the count from the host. The value has to be above the current one. */
-    void Signal(u64 value) const;
+    /**
+     * Raise the count from the host.
+     * @return ErrorCode::Success, or ErrorCode::InvalidArgument when the value is not above the count it
+     *         already holds, which no signal can reach.
+     */
+    [[nodiscard]] ErrorCode Signal(u64 value) const;
 
     /** The count as it stands. A device signal may have raised it again by the time this returns. */
-    [[nodiscard]] u64 GetValue() const;
+    [[nodiscard]] Opal::Expected<u64, ErrorCode> GetValue() const;
 
     /**
      * One wait over many semaphores, which returns once every one of them has reached its value. They all
      * have to belong to the same device, since one wait is one call into one device.
+     * @return ErrorCode::Success, ErrorCode::InvalidArgument when one of them is empty or binary or they do
+     *         not all belong to one device, or whatever the failing wait maps to.
      */
-    static void WaitForAll(Opal::ArrayView<const SemaphoreWait> waits);
+    [[nodiscard]] static ErrorCode WaitForAll(Opal::ArrayView<const SemaphoreWait> waits);
 
     /** WaitForAll with a timeout, answering the way TryWait does. */
-    [[nodiscard]] static bool TryWaitForAll(Opal::ArrayView<const SemaphoreWait> waits, u64 timeout);
+    [[nodiscard]] static Opal::Expected<bool, ErrorCode> TryWaitForAll(Opal::ArrayView<const SemaphoreWait> waits, u64 timeout);
 
 private:
     VkSemaphore m_semaphore = VK_NULL_HANDLE;
@@ -169,8 +199,8 @@ struct BufferBarrier : Opal::ClonableBase<BufferBarrier>
     /** The whole buffer from the offset on by default. */
     u64 size = k_whole_buffer;
 
-    OPAL_CLONE_FIELDS(stages_must_finish, stages_must_finish_access, before_stages_start, before_stages_start_access,
-                      source_queue_family, destination_queue_family, buffer, offset, size);
+    OPAL_CLONE_FIELDS(stages_must_finish, stages_must_finish_access, before_stages_start, before_stages_start_access, source_queue_family,
+                      destination_queue_family, buffer, offset, size);
 
     /**
      * A write in one set of stages, followed by a read in another. The two common cases are a compute shader
@@ -182,6 +212,12 @@ struct BufferBarrier : Opal::ClonableBase<BufferBarrier>
     [[nodiscard]] static BufferBarrier ReadThenWrite(const Buffer& buffer, PipelineStageBits reader, PipelineStageBits writer);
 };
 
+/**
+ * The presets on TextureBarrier come in two shapes. One given the layout the texture is leaving cannot fail
+ * and hands back the barrier. One that has to read the layout off the texture can - a texture whose
+ * subresources are not all in one layout has no single layout to leave - so it hands back what that read
+ * reported, and CommandBuffer::CmdTextureBarrier takes either shape.
+ */
 struct TextureBarrier : Opal::ClonableBase<TextureBarrier>
 {
     PipelineStageBits stages_must_finish = PipelineStageBits::None;
@@ -220,36 +256,38 @@ struct TextureBarrier : Opal::ClonableBase<TextureBarrier>
      */
 
     /** Rendered into as a color attachment. */
-    [[nodiscard]] static TextureBarrier ToColorAttachment(Texture& texture);
+    [[nodiscard]] static Opal::Expected<TextureBarrier, ErrorCode> ToColorAttachment(Texture& texture);
     [[nodiscard]] static TextureBarrier ToColorAttachment(Texture& texture, ImageLayout old_layout);
 
     /** Rendered into as a depth or stencil attachment. */
-    [[nodiscard]] static TextureBarrier ToDepthStencilAttachment(Texture& texture);
+    [[nodiscard]] static Opal::Expected<TextureBarrier, ErrorCode> ToDepthStencilAttachment(Texture& texture);
     [[nodiscard]] static TextureBarrier ToDepthStencilAttachment(Texture& texture, ImageLayout old_layout);
 
     /** Sampled in a shader. The reader defaults to the fragment stage. */
-    [[nodiscard]] static TextureBarrier ToShaderRead(Texture& texture, PipelineStageBits reader = PipelineStageBits::FragmentShader);
+    [[nodiscard]] static Opal::Expected<TextureBarrier, ErrorCode> ToShaderRead(
+        Texture& texture, PipelineStageBits reader = PipelineStageBits::FragmentShader);
     [[nodiscard]] static TextureBarrier ToShaderRead(Texture& texture, ImageLayout old_layout,
                                                      PipelineStageBits reader = PipelineStageBits::FragmentShader);
 
     /** Written by a transfer command, which is how a texture is uploaded. */
-    [[nodiscard]] static TextureBarrier ToTransferDestination(Texture& texture);
+    [[nodiscard]] static Opal::Expected<TextureBarrier, ErrorCode> ToTransferDestination(Texture& texture);
     [[nodiscard]] static TextureBarrier ToTransferDestination(Texture& texture, ImageLayout old_layout);
 
     /** Read by a transfer command, which is how a texture is read back or has its mips generated. */
-    [[nodiscard]] static TextureBarrier ToTransferSource(Texture& texture);
+    [[nodiscard]] static Opal::Expected<TextureBarrier, ErrorCode> ToTransferSource(Texture& texture);
     [[nodiscard]] static TextureBarrier ToTransferSource(Texture& texture, ImageLayout old_layout);
 
     /**
      * Read and written in a shader without a sampler, which is the layout a storage image is bound in. The
      * accessing stage defaults to compute, since that is where most of them are written.
      */
-    [[nodiscard]] static TextureBarrier ToGeneral(Texture& texture, PipelineStageBits accessor = PipelineStageBits::ComputeShader);
+    [[nodiscard]] static Opal::Expected<TextureBarrier, ErrorCode> ToGeneral(Texture& texture,
+                                                                             PipelineStageBits accessor = PipelineStageBits::ComputeShader);
     [[nodiscard]] static TextureBarrier ToGeneral(Texture& texture, ImageLayout old_layout,
                                                   PipelineStageBits accessor = PipelineStageBits::ComputeShader);
 
     /** Handed to the presentation engine. */
-    [[nodiscard]] static TextureBarrier ToPresent(Texture& texture);
+    [[nodiscard]] static Opal::Expected<TextureBarrier, ErrorCode> ToPresent(Texture& texture);
     [[nodiscard]] static TextureBarrier ToPresent(Texture& texture, ImageLayout old_layout);
 
     /**
@@ -262,7 +300,7 @@ struct TextureBarrier : Opal::ClonableBase<TextureBarrier>
      * middle is the source and the layout at the end is the destination. CommandBuffer::CmdTransition is the
      * short form - it is this preset over the tracked layout, recorded.
      */
-    [[nodiscard]] static TextureBarrier To(Texture& texture, ImageLayout old_layout, ImageLayout new_layout);
+    [[nodiscard]] static Opal::Expected<TextureBarrier, ErrorCode> To(Texture& texture, ImageLayout old_layout, ImageLayout new_layout);
 };
 
 }  // namespace Rndr::Forge

@@ -287,7 +287,8 @@ Rndr::Forge::AcquiredTexture Rndr::Forge::SwapChain::AcquireTexture(const Semaph
     // The presentation engine is the one writer of a layout that Forge cannot observe, and the specification
     // says the contents of a re-acquired texture are undefined. Undefined is also the cheapest thing to
     // transition out of, which is what a swap chain texture cleared at the top of every frame wants.
-    m_color_textures[static_cast<i32>(texture_index)].SetCurrentLayout({}, ImageLayout::Undefined);
+    // Undefined covers every subresource of a swap chain texture, so this range check cannot fail.
+    (void)m_color_textures[static_cast<i32>(texture_index)].SetCurrentLayout({}, ImageLayout::Undefined);
     return {SwapChainStatus::Success, texture_index};
 }
 
@@ -498,20 +499,28 @@ void Rndr::Forge::SwapChain::Recreate()
     }
     for (VkImage image : images)
     {
-        Texture texture(
+        Opal::Expected<Texture, ErrorCode> texture = Texture::Create(
             m_device, image,
             TextureDesc{.format = m_desc.pixel_format, .width = extent.width, .height = extent.height, .usage = color_texture_usage});
-        m_color_textures.PushBack(std::move(texture));
+        if (!texture.HasValue())
+        {
+            throw Opal::Exception("A swap chain texture could not be wrapped!");
+        }
+        m_color_textures.PushBack(std::move(texture.GetValue()));
     }
     if (m_desc.use_depth)
     {
-        m_depth_texture = Texture{m_device,
-                                  {.dimension = TextureDimension::Texture2D,
-                                   .format = m_desc.depth_pixel_format,
-                                   .width = extent.width,
-                                   .height = extent.height,
-                                   .sample_count = SampleCount::Count1,
-                                   .usage = TextureUsageBits::DepthStencilAttachment,
-                                   .view_type = TextureViewType::Texture2D}};
+        Opal::Expected<Texture, ErrorCode> depth_texture = Texture::Create(m_device, {.dimension = TextureDimension::Texture2D,
+                                                                                      .format = m_desc.depth_pixel_format,
+                                                                                      .width = extent.width,
+                                                                                      .height = extent.height,
+                                                                                      .sample_count = SampleCount::Count1,
+                                                                                      .usage = TextureUsageBits::DepthStencilAttachment,
+                                                                                      .view_type = TextureViewType::Texture2D});
+        if (!depth_texture.HasValue())
+        {
+            throw Opal::Exception("The swap chain depth texture could not be created!");
+        }
+        m_depth_texture = std::move(depth_texture.GetValue());
     }
 }
