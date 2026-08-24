@@ -71,20 +71,46 @@ struct ForgeWindowFixture
                                            .has_title_bar = false,
                                            .has_border = false,
                                            .show_in_taskbar = false,
-                                           .start_visible = false})),
-          context(ForgeTest::TestContextDesc())
+                                           .start_visible = false}))
     {
+        Opal::Expected<Forge::GraphicsContext, ErrorCode> context_result = Forge::GraphicsContext::Create(ForgeTest::TestContextDesc());
+        if (!context_result.HasValue())
+        {
+            status = context_result.GetError();
+            return;
+        }
+        context = std::move(context_result.GetValue());
+
         surface = Forge::Surface(context, *window);
         // The graphics and the present family only: asking for the optional ones would make every case here
         // skip on a device whose single family does everything, the way the headless file explains.
-        const Forge::DeviceDesc device_desc{
-            .surface = surface, .use_async_compute_queue = false, .use_dedicated_transfer_queue = false};
-        Opal::DynamicArray<Forge::PhysicalDevice> physical_devices = context.EnumeratePhysicalDevices();
-        device = Forge::Device(Forge::SelectPhysicalDevice(physical_devices, device_desc), context, device_desc);
+        const Forge::DeviceDesc device_desc{.surface = surface, .use_async_compute_queue = false, .use_dedicated_transfer_queue = false};
+        Opal::Expected<Opal::DynamicArray<Forge::PhysicalDevice>, ErrorCode> physical_devices = context.EnumeratePhysicalDevices();
+        if (!physical_devices.HasValue())
+        {
+            status = physical_devices.GetError();
+            return;
+        }
+        Opal::Expected<Forge::PhysicalDevice, ErrorCode> chosen = Forge::SelectPhysicalDevice(physical_devices.GetValue(), device_desc);
+        if (!chosen.HasValue())
+        {
+            status = chosen.GetError();
+            return;
+        }
+        Opal::Expected<Forge::Device, ErrorCode> device_result = Forge::Device::Create(std::move(chosen.GetValue()), context, device_desc);
+        if (!device_result.HasValue())
+        {
+            status = device_result.GetError();
+            return;
+        }
+        device = std::move(device_result.GetValue());
     }
 
-    Forge::DeviceQueue& GetGraphicsQueue() { return device.GetQueue(Forge::QueueFamily::Graphics); }
-    Forge::DeviceQueue& GetPresentQueue() { return device.GetQueue(Forge::QueueFamily::Present); }
+    /** What the machine said when this fixture asked for what it wanted. The probe below reads it. */
+    ErrorCode status = ErrorCode::Success;
+
+    Forge::DeviceQueue& GetGraphicsQueue() { return ForgeTest::Unwrap(device.GetQueue(Forge::QueueFamily::Graphics)); }
+    Forge::DeviceQueue& GetPresentQueue() { return ForgeTest::Unwrap(device.GetQueue(Forge::QueueFamily::Present)); }
 
     [[nodiscard]] Opal::StringUtf8 GetValidationErrors() const { return ForgeTest::CollectValidationErrors(context); }
     [[nodiscard]] u32 GetValidationErrorCount() const { return ForgeTest::CountValidationErrors(context); }
@@ -126,10 +152,11 @@ bool IsForgeWindowAvailable()
 {
     static const bool available = []
     {
+        // The window and the surface still report by throwing, so both ways of failing are caught here.
         try
         {
             const ForgeWindowFixture probe;
-            return true;
+            return probe.status == ErrorCode::Success;
         }
         catch (const Opal::Exception&)
         {
@@ -255,10 +282,10 @@ void SubmitAndWait(ForgeWindowFixture& fixture, Forge::CommandBuffer& command_bu
     const Forge::SemaphoreSubmit wait{.semaphore = texture_ready, .stages = Forge::PipelineStageBits::ColorAttachmentOutput};
     const Forge::SemaphoreSubmit signal{.semaphore = render_finished, .stages = Forge::PipelineStageBits::AllCommands};
     const Forge::Fence frame_done(fixture.device, false);
-    fixture.GetGraphicsQueue().Submit({.command_buffers = {&submitted, 1},
-                                       .wait_semaphores = {&wait, 1},
-                                       .signal_semaphores = {&signal, 1},
-                                       .fence = frame_done});
+    REQUIRE(
+        fixture.GetGraphicsQueue().Submit(
+            {.command_buffers = {&submitted, 1}, .wait_semaphores = {&wait, 1}, .signal_semaphores = {&signal, 1}, .fence = frame_done}) ==
+        ErrorCode::Success);
     frame_done.Wait();
 }
 
@@ -361,8 +388,7 @@ TEST_CASE("Forge swap chain matches the window it was built over", "[forge-windo
     {
         // 4.5 from the other side: the sample reads HasDepth to decide whether to name a depth attachment,
         // and nothing checked that a swap chain without one answers false rather than handing out a texture.
-        const Forge::SwapChain swap_chain(fixture.device, fixture.surface,
-                                          {.use_depth = false, .pixel_format = k_swap_chain_format});
+        const Forge::SwapChain swap_chain(fixture.device, fixture.surface, {.use_depth = false, .pixel_format = k_swap_chain_format});
         REQUIRE(swap_chain.IsValid());
         REQUIRE_FALSE(swap_chain.HasDepth());
         REQUIRE_FALSE(swap_chain.GetDepthTexture().IsValid());
@@ -449,7 +475,7 @@ TEST_CASE("Forge swap chain presents the frames that were rendered into it", "[f
         REQUIRE(CountWrongPixels(pixels, color) == 0);
     }
 
-    fixture.device.WaitForAll();
+    REQUIRE(fixture.device.WaitForAll() == ErrorCode::Success);
     readback.Destroy();
     swap_chain.Destroy();
     REQUIRE_NO_VALIDATION_ERROR_AT_TEARDOWN(fixture);
@@ -508,15 +534,15 @@ TEST_CASE("Forge frame context runs frames past the end of its timeline", "[forg
         REQUIRE(frame_context.GetRenderSize().y == static_cast<i32>(swap_chain.GetExtent().height));
 
         last_color = GetFrameColor(frame);
-        RecordClearFrame(frame_context.GetCommandBuffer(), frame_context.GetColorTexture(), &readback, swap_chain.GetExtent(),
-                         last_color, use_depth ? &swap_chain.GetDepthTexture() : nullptr);
+        RecordClearFrame(frame_context.GetCommandBuffer(), frame_context.GetColorTexture(), &readback, swap_chain.GetExtent(), last_color,
+                         use_depth ? &swap_chain.GetDepthTexture() : nullptr);
         frame_context.EndFrame();
         ++submitted;
     }
     REQUIRE(submitted == frame_count);
 
     // The readback holds the last frame's copy, which is what the last present put on the screen.
-    fixture.device.WaitForAll();
+    REQUIRE(fixture.device.WaitForAll() == ErrorCode::Success);
     Forge::ReadBackTexture(fixture.device, fixture.GetGraphicsQueue(), readback, pixels, 0, Forge::ImageLayout::Undefined);
     REQUIRE(CountWrongPixels(pixels, last_color) == 0);
 
@@ -577,10 +603,10 @@ TEST_CASE("Forge swap chain follows the window across a resize", "[forge-window]
         command_buffer.End();
         SubmitAndWait(fixture, command_buffer, texture_ready, render_finished);
         swap_chain.Present(fixture.GetPresentQueue(), render_finished);
-        fixture.device.WaitForAll();
+        REQUIRE(fixture.device.WaitForAll() == ErrorCode::Success);
     }
 
-    fixture.device.WaitForAll();
+    REQUIRE(fixture.device.WaitForAll() == ErrorCode::Success);
     swap_chain.Destroy();
     REQUIRE_NO_VALIDATION_ERROR_AT_TEARDOWN(fixture);
 }
@@ -634,7 +660,7 @@ TEST_CASE("Forge swap chain recovers from a window with no client area", "[forge
         REQUIRE(recovered.status == Forge::SwapChainStatus::Success);
         REQUIRE(recovered.texture_index < swap_chain.GetColorTextureCount());
 
-        fixture.device.WaitForAll();
+        REQUIRE(fixture.device.WaitForAll() == ErrorCode::Success);
         swap_chain.Destroy();
     }
     SECTION("A frame context over an empty client area skips its frames and picks up again")
@@ -678,7 +704,7 @@ TEST_CASE("Forge swap chain recovers from a window with no client area", "[forge
                          GetFrameColor(1), &swap_chain.GetDepthTexture());
         REQUIRE(frame_context.EndFrame() == Forge::SwapChainStatus::Success);
 
-        fixture.device.WaitForAll();
+        REQUIRE(fixture.device.WaitForAll() == ErrorCode::Success);
         frame_context.Destroy();
         swap_chain.Destroy();
     }

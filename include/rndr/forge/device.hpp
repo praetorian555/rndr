@@ -4,15 +4,17 @@
 
 #include "opal/container/array-view.h"
 #include "opal/container/dynamic-array.h"
+#include "opal/container/expected.h"
 #include "opal/container/hash-map.h"
 #include "opal/container/ref.h"
 #include "opal/container/shared-ptr.h"
 
+#include "rndr/error-codes.hpp"
+#include "rndr/forge/forward.hpp"
 #include "rndr/forge/physical-device.hpp"
+#include "rndr/forge/types.hpp"
 #include "rndr/graphics-types.hpp"
 #include "rndr/types.hpp"
-#include "rndr/forge/forward.hpp"
-#include "rndr/forge/types.hpp"
 
 // Forward declare handle to avoid vma includes in headers.
 using VmaAllocation = struct VmaAllocation_T*;
@@ -38,8 +40,8 @@ enum class QueueFamily : u8
  * it. Forge maps each field onto whichever feature structure Vulkan keeps it in and builds the chain itself,
  * so nothing here has to be kept alive past the call and no caller has to know which release added what.
  *
- * A field that this device does not support throws at creation, naming the field, rather than failing inside
- * vkCreateDevice with a result that names nothing.
+ * A field that this device does not support is reported at creation, with the log naming the field, rather
+ * than failing inside vkCreateDevice with a result that names nothing.
  *
  * Synchronization2 and dynamic rendering are not here: Forge is written on both - every barrier and every
  * CmdBeginRendering - so they are always enabled and turning them off would only break it.
@@ -126,7 +128,8 @@ struct DeviceDesc : Opal::ClonableBase<DeviceDesc>
     bool use_decode_queue = false;
     bool use_encode_queue = false;
 
-    OPAL_CLONE_FIELDS(features, extensions, surface, use_async_compute_queue, use_dedicated_transfer_queue, use_decode_queue, use_encode_queue);
+    OPAL_CLONE_FIELDS(features, extensions, surface, use_async_compute_queue, use_dedicated_transfer_queue, use_decode_queue,
+                      use_encode_queue);
 };
 
 struct QueueFamilyIndices
@@ -141,6 +144,7 @@ struct QueueFamilyIndices
     u32 decode_family_index = k_invalid_index;
 
     [[nodiscard]] Opal::DynamicArray<u32> GetValidQueueFamilies() const;
+    /** Index of that family, or k_invalid_index when the device has none - including for a value that names no family. */
     [[nodiscard]] Rndr::u32 GetQueueFamilyIndex(QueueFamily queue_family) const;
 };
 
@@ -181,11 +185,14 @@ struct SubmitDesc
                                                      bool prefer_discrete = true);
 
 /**
- * The device FindPhysicalDevice picked, moved out of the list. Throws when none of them qualifies, naming
- * the requirement the last one failed, since "no suitable device" on its own tells nobody anything.
+ * The device FindPhysicalDevice picked, moved out of the list.
+ *
+ * @return The device, ErrorCode::NoGraphicsDevice for an empty list, or ErrorCode::FeatureNotSupported when
+ *         none of them qualifies. The log names the requirement the last one failed, since "no suitable
+ *         device" on its own tells nobody anything.
  */
-[[nodiscard]] PhysicalDevice SelectPhysicalDevice(Opal::ArrayView<PhysicalDevice> devices, const DeviceDesc& desc = {},
-                                                  bool prefer_discrete = true);
+[[nodiscard]] Opal::Expected<PhysicalDevice, ErrorCode> SelectPhysicalDevice(Opal::ArrayView<PhysicalDevice> devices,
+                                                                             const DeviceDesc& desc = {}, bool prefer_discrete = true);
 
 class DeviceQueue
 {
@@ -204,7 +211,14 @@ public:
      */
     void Destroy();
 
-    explicit DeviceQueue(const Device& device, u32 queue_family_index);
+    /**
+     * A queue of the given family on this device, with a command pool of its own.
+     *
+     * @param device Device to take the queue from. Has to outlive the queue.
+     * @param queue_family_index Family the queue belongs to.
+     * @return The queue, or whatever the failing command pool creation maps to.
+     */
+    [[nodiscard]] static Opal::Expected<DeviceQueue, ErrorCode> Create(const Device& device, u32 queue_family_index);
 
     DeviceQueue(const DeviceQueue&) = delete;
     DeviceQueue& operator=(const DeviceQueue&) = delete;
@@ -219,20 +233,23 @@ public:
     /**
      * Submit the work a SubmitDesc describes as one batch.
      * @param desc Command buffers, the semaphores to wait on and to signal, and the fence to signal at the end.
+     * @return ErrorCode::Success, ErrorCode::InvalidArgument when the desc names an empty command buffer or an
+     *         empty semaphore, or gives a value to a semaphore that has no counter, or whatever the failing
+     *         submit maps to.
      */
-    void Submit(const SubmitDesc& desc);
+    [[nodiscard]] ErrorCode Submit(const SubmitDesc& desc);
 
     /** One command buffer, one fence, nothing to synchronize against on the device. */
-    void Submit(const CommandBuffer& command_buffer, const Fence& fence);
+    [[nodiscard]] ErrorCode Submit(const CommandBuffer& command_buffer, const Fence& fence);
 
     /**
      * Block until everything submitted to this queue has finished. Coarser than a fence and meant for
      * shutdown and for one-off setup work, not for the frame loop.
+     * @return ErrorCode::Success, or whatever the failing wait maps to.
      */
-    void WaitIdle() const;
+    [[nodiscard]] ErrorCode WaitIdle() const;
 
 private:
-
     friend class Device;
     friend class Opal::SharedPtr<DeviceQueue>;
 
@@ -246,9 +263,20 @@ class Device
 {
 public:
     Device() = default;
-    explicit Device(PhysicalDevice physical_device, const GraphicsContext& graphics_context,
-                            const DeviceDesc& desc = {});
     ~Device();
+
+    /**
+     * Create the logical device, its queues and its allocator.
+     *
+     * @param physical_device The device to create it on, moved in. SelectPhysicalDevice picks one.
+     * @param graphics_context Context the physical device came from. Has to outlive the device.
+     * @param desc Features, extensions, surface and which queues to take.
+     * @return The device, ErrorCode::InvalidArgument for an empty physical device,
+     *         ErrorCode::FeatureNotSupported when the desc asks for an extension, a feature or a queue this
+     *         device does not have - the log names which - or whatever the failing Vulkan call maps to.
+     */
+    [[nodiscard]] static Opal::Expected<Device, ErrorCode> Create(PhysicalDevice physical_device, const GraphicsContext& graphics_context,
+                                                                  const DeviceDesc& desc = {});
 
     Device(const Device&) = delete;
     const Device& operator=(const Device&) = delete;
@@ -280,16 +308,23 @@ public:
      */
     [[nodiscard]] bool AreDebugUtilsEnabled() const { return m_debug_utils_enabled; }
 
-    /** Queue of the given family. Throws when the device was not created with one, so the result is always valid. */
-    DeviceQueue& GetQueue(QueueFamily queue_family);
-    [[nodiscard]] const DeviceQueue& GetQueue(QueueFamily queue_family) const;
+    /**
+     * Queue of the given family.
+     * @return The queue, or ErrorCode::InvalidArgument when the device was not created with one.
+     */
+    [[nodiscard]] Opal::Expected<DeviceQueue&, ErrorCode> GetQueue(QueueFamily queue_family);
+    [[nodiscard]] Opal::Expected<const DeviceQueue&, ErrorCode> GetQueue(QueueFamily queue_family) const;
 
     [[nodiscard]] VmaAllocator GetGPUAllocator() const { return m_gpu_allocator; }
 
-    void WaitForAll() const;
+    /**
+     * Block until everything submitted to any of this device's queues has finished.
+     * @return ErrorCode::Success, or whatever the failing wait maps to.
+     */
+    [[nodiscard]] ErrorCode WaitForAll() const;
 
 private:
-    void CollectQueueFamilies(Opal::DynamicArray<VkDeviceQueueCreateInfo>& queue_create_infos);
+    [[nodiscard]] ErrorCode CollectQueueFamilies(Opal::DynamicArray<VkDeviceQueueCreateInfo>& queue_create_infos);
 
     /** Point every queue back at this device, which a move has to do since the queues hold a reference to it. */
     void RepointQueues();

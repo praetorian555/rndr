@@ -222,8 +222,9 @@ void Rndr::Forge::SwapChain::Destroy()
 {
     if (m_device != nullptr && m_swap_chain != VK_NULL_HANDLE)
     {
-        // The textures may still be in use by frames that were submitted but have not finished yet.
-        m_device->WaitForAll();
+        // The textures may still be in use by frames that were submitted but have not finished yet. A wait
+        // that fails has already logged why, and there is nothing else teardown can do about it.
+        (void)m_device->WaitForAll();
     }
     DestroyTextures();
     if (m_device != nullptr)
@@ -269,8 +270,8 @@ Rndr::Forge::AcquiredTexture Rndr::Forge::SwapChain::AcquireTexture(const Semaph
     }
 
     u32 texture_index = k_invalid_texture_index;
-    const VkResult result = vkAcquireNextImageKHR(m_device->GetNativeDevice(), m_swap_chain, UINT64_MAX,
-                                                  semaphore.GetNativeSemaphore(), VK_NULL_HANDLE, &texture_index);
+    const VkResult result = vkAcquireNextImageKHR(m_device->GetNativeDevice(), m_swap_chain, UINT64_MAX, semaphore.GetNativeSemaphore(),
+                                                  VK_NULL_HANDLE, &texture_index);
     if (result == VK_ERROR_OUT_OF_DATE_KHR)
     {
         Recreate();
@@ -347,17 +348,20 @@ VkExtent2D SelectExtent(const VkSurfaceCapabilitiesKHR& capabilities, const Rndr
     {
         return {.width = 0, .height = 0};
     }
-    return {.width = Opal::Clamp(static_cast<Rndr::u32>(window_size.x), capabilities.minImageExtent.width,
-                                 capabilities.maxImageExtent.width),
-            .height = Opal::Clamp(static_cast<Rndr::u32>(window_size.y), capabilities.minImageExtent.height,
-                                  capabilities.maxImageExtent.height)};
+    return {
+        .width = Opal::Clamp(static_cast<Rndr::u32>(window_size.x), capabilities.minImageExtent.width, capabilities.maxImageExtent.width),
+        .height =
+            Opal::Clamp(static_cast<Rndr::u32>(window_size.y), capabilities.minImageExtent.height, capabilities.maxImageExtent.height)};
 }
 }  // namespace
 
 void Rndr::Forge::SwapChain::Recreate()
 {
     // Frames that were submitted earlier can still be reading from the textures that are about to be released.
-    m_device->WaitForAll();
+    if (m_device->WaitForAll() != ErrorCode::Success)
+    {
+        throw Opal::Exception("Waiting for the device to go idle before recreating the swap chain failed!");
+    }
     DestroyTextures();
 
     const SwapChainSupportDetails swap_chain_support = m_surface->GetSwapChainSupportDetails(m_device->GetPhysicalDevice());
@@ -425,15 +429,22 @@ void Rndr::Forge::SwapChain::Recreate()
     {
         if ((swap_chain_support.capabilities.supportedUsageFlags & VK_IMAGE_USAGE_TRANSFER_SRC_BIT) == 0)
         {
-            throw Opal::Exception("This surface does not offer swap chain textures that can be copied from, so allow_readback "
-                                  "cannot be honoured!");
+            throw Opal::Exception(
+                "This surface does not offer swap chain textures that can be copied from, so allow_readback "
+                "cannot be honoured!");
         }
         create_info.imageUsage |= VK_IMAGE_USAGE_TRANSFER_SRC_BIT;
         color_texture_usage |= TextureUsageBits::TransferSource;
     }
 
-    const DeviceQueue& graphics_queue = m_device->GetQueue(QueueFamily::Graphics);
-    const DeviceQueue& present_queue = m_device->GetQueue(QueueFamily::Present);
+    Opal::Expected<const DeviceQueue&, ErrorCode> graphics_queue_result = m_device->GetQueue(QueueFamily::Graphics);
+    Opal::Expected<const DeviceQueue&, ErrorCode> present_queue_result = m_device->GetQueue(QueueFamily::Present);
+    if (!graphics_queue_result.HasValue() || !present_queue_result.HasValue())
+    {
+        throw Opal::Exception("A swap chain needs a device created with both a graphics and a present queue!");
+    }
+    const DeviceQueue& graphics_queue = graphics_queue_result.GetValue();
+    const DeviceQueue& present_queue = present_queue_result.GetValue();
 
     // Has to outlive the create info, since the create info only points to it.
     Opal::InPlaceArray<u32, 2> indices;
@@ -487,23 +498,20 @@ void Rndr::Forge::SwapChain::Recreate()
     }
     for (VkImage image : images)
     {
-        Texture texture(m_device, image, TextureDesc{
-            .format = m_desc.pixel_format,
-            .width = extent.width,
-            .height = extent.height,
-            .usage = color_texture_usage
-        });
+        Texture texture(
+            m_device, image,
+            TextureDesc{.format = m_desc.pixel_format, .width = extent.width, .height = extent.height, .usage = color_texture_usage});
         m_color_textures.PushBack(std::move(texture));
     }
     if (m_desc.use_depth)
     {
         m_depth_texture = Texture{m_device,
-                                          {.dimension = TextureDimension::Texture2D,
-                                           .format = m_desc.depth_pixel_format,
-                                           .width = extent.width,
-                                           .height = extent.height,
-                                           .sample_count = SampleCount::Count1,
-                                           .usage = TextureUsageBits::DepthStencilAttachment,
-                                           .view_type = TextureViewType::Texture2D}};
+                                  {.dimension = TextureDimension::Texture2D,
+                                   .format = m_desc.depth_pixel_format,
+                                   .width = extent.width,
+                                   .height = extent.height,
+                                   .sample_count = SampleCount::Count1,
+                                   .usage = TextureUsageBits::DepthStencilAttachment,
+                                   .view_type = TextureViewType::Texture2D}};
     }
 }

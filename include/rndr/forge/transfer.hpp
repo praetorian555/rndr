@@ -2,11 +2,11 @@
 
 #include "opal/container/array-view.h"
 
-#include "rndr/types.hpp"
 #include "rndr/forge/command-buffer.hpp"
 #include "rndr/forge/device.hpp"
 #include "rndr/forge/synchronization.hpp"
 #include "rndr/forge/types.hpp"
+#include "rndr/types.hpp"
 
 namespace Rndr::Forge
 {
@@ -28,7 +28,10 @@ void ImmediateSubmit(const Device& device, DeviceQueue& queue, Recorder&& record
     recorder(command_buffer);
     command_buffer.End();
     const Fence fence(device, false);
-    queue.Submit(command_buffer, fence);
+    if (queue.Submit(command_buffer, fence) != ErrorCode::Success)
+    {
+        throw Opal::Exception("Submitting the immediate command buffer failed!");
+    }
     fence.Wait();
 }
 

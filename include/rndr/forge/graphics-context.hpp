@@ -3,14 +3,16 @@
 #include "volk/volk.h"
 
 #include "opal/clonable-base.h"
-#include "opal/enum-flags.h"
 #include "opal/container/array-view.h"
 #include "opal/container/dynamic-array.h"
+#include "opal/container/expected.h"
 #include "opal/container/shared-ptr.h"
 #include "opal/container/string.h"
+#include "opal/enum-flags.h"
 
-#include "rndr/forge/physical-device.hpp"
+#include "rndr/error-codes.hpp"
 #include "rndr/forge/forward.hpp"
+#include "rndr/forge/physical-device.hpp"
 
 namespace Rndr::Forge
 {
@@ -100,8 +102,18 @@ class GraphicsContext
 {
 public:
     GraphicsContext() = default;
-    explicit GraphicsContext(const GraphicsContextDesc& desc);
     ~GraphicsContext();
+
+    /**
+     * Load Vulkan and create the instance, with the validation layer and the debug messenger when the build
+     * and the desc ask for them.
+     *
+     * @param desc What to collect and which instance extensions to require.
+     * @return The context, ErrorCode::FeatureNotSupported when a required instance extension is not there, or
+     *         whatever the failing Vulkan call maps to - see VkResultToErrorCode.
+     */
+    [[nodiscard]] static Opal::Expected<GraphicsContext, ErrorCode> Create(const GraphicsContextDesc& desc = {});
+
     GraphicsContext(const GraphicsContext&) = delete;
     GraphicsContext& operator=(const GraphicsContext&) = delete;
     GraphicsContext(GraphicsContext&&) noexcept;
@@ -116,15 +128,15 @@ public:
     /**
      * Every Vulkan capable device on this machine, in the order the loader reports them.
      *
-     * Never empty: a machine with no such device throws rather than handing back a list with nothing in
-     * it. There is nothing a caller can do with an empty one - the next step is always to index it or to
-     * hand it to SelectPhysicalDevice - so the absence is reported where it happens instead of becoming a
-     * check every caller has to remember.
+     * Never an empty list: a machine with no such device reports ErrorCode::NoGraphicsDevice rather than
+     * handing back a list with nothing in it. There is nothing a caller can do with an empty one - the next
+     * step is always to index it or to hand it to SelectPhysicalDevice - so the absence is reported where it
+     * happens instead of becoming a check every caller has to remember.
      *
-     * @throw Opal::Exception when this machine has no Vulkan capable device.
-     * @throw VulkanException when the enumeration itself failed, which is a different thing entirely.
+     * @return The devices, ErrorCode::NoGraphicsDevice when this machine has none, or whatever the failing
+     *         enumeration maps to, which is a different thing entirely.
      */
-    Opal::DynamicArray<PhysicalDevice> EnumeratePhysicalDevices() const;
+    [[nodiscard]] Opal::Expected<Opal::DynamicArray<PhysicalDevice>, ErrorCode> EnumeratePhysicalDevices() const;
 
     /**
      * The warnings and errors reported so far, oldest first, capped at
@@ -140,9 +152,10 @@ public:
      * about a layer manifest some other application left behind.
      * @note A message that names two types is counted under each, so a mask naming both can come out above
      *       the number of messages. Vulkan reports one type per message in practice.
+     * @return The count, or ErrorCode::InvalidArgument when severity is not one of the three.
      */
-    [[nodiscard]] u32 GetDebugMessageCount(DebugMessageSeverity severity,
-                                           DebugMessageTypeBits types = DebugMessageTypeBits::All) const;
+    [[nodiscard]] Opal::Expected<u32, ErrorCode> GetDebugMessageCount(DebugMessageSeverity severity,
+                                                                      DebugMessageTypeBits types = DebugMessageTypeBits::All) const;
 
     /** Drop the stored messages and zero the counts, so the next stretch of work is measured on its own. */
     void ClearDebugMessages();

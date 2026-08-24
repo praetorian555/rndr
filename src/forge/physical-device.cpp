@@ -1,27 +1,33 @@
 #include "rndr/forge/physical-device.hpp"
 
 #include "rndr/forge/swap-chain.hpp"
+#include "rndr/log.hpp"
 
-Rndr::Forge::PhysicalDevice::PhysicalDevice(VkPhysicalDevice physical_device)
+Opal::Expected<Rndr::Forge::PhysicalDevice, Rndr::ErrorCode> Rndr::Forge::PhysicalDevice::Create(VkPhysicalDevice physical_device)
 {
+    using Result = Opal::Expected<PhysicalDevice, ErrorCode>;
+
     if (physical_device == VK_NULL_HANDLE)
     {
-        throw Opal::Exception("Physical device handle is invalid!");
+        RNDR_LOG_ERROR("Forge: PhysicalDevice::Create was given a null handle");
+        return Result(ErrorCode::InvalidArgument);
     }
 
-    vkGetPhysicalDeviceProperties(physical_device, &m_properties);
-    vkGetPhysicalDeviceFeatures(physical_device, &m_features);
-    vkGetPhysicalDeviceMemoryProperties(physical_device, &m_memory_properties);
+    PhysicalDevice device;
+    vkGetPhysicalDeviceProperties(physical_device, &device.m_properties);
+    vkGetPhysicalDeviceFeatures(physical_device, &device.m_features);
+    vkGetPhysicalDeviceMemoryProperties(physical_device, &device.m_memory_properties);
 
     u32 queue_family_count = 0;
     vkGetPhysicalDeviceQueueFamilyProperties(physical_device, &queue_family_count, nullptr);
     if (queue_family_count == 0)
     {
-        throw Opal::Exception("No queue families found!");
+        RNDR_LOG_ERROR("Forge: physical device {} reports no queue family", static_cast<const char*>(device.m_properties.deviceName));
+        return Result(ErrorCode::GraphicsAPIError);
     }
 
-    m_queue_family_properties.Resize(queue_family_count);
-    vkGetPhysicalDeviceQueueFamilyProperties(physical_device, &queue_family_count, m_queue_family_properties.GetData());
+    device.m_queue_family_properties.Resize(queue_family_count);
+    vkGetPhysicalDeviceQueueFamilyProperties(physical_device, &queue_family_count, device.m_queue_family_properties.GetData());
 
     u32 extension_count = 0;
     vkEnumerateDeviceExtensionProperties(physical_device, nullptr, &extension_count, nullptr);
@@ -31,11 +37,12 @@ Rndr::Forge::PhysicalDevice::PhysicalDevice(VkPhysicalDevice physical_device)
         vkEnumerateDeviceExtensionProperties(physical_device, nullptr, &extension_count, extensions.GetData());
         for (const VkExtensionProperties& extension : extensions)
         {
-            m_supported_extensions.PushBack(extension.extensionName);
+            device.m_supported_extensions.PushBack(extension.extensionName);
         }
     }
 
-    m_physical_device = physical_device;
+    device.m_physical_device = physical_device;
+    return Result(std::move(device));
 }
 
 Rndr::Forge::PhysicalDevice::~PhysicalDevice()
@@ -148,8 +155,11 @@ bool Rndr::Forge::PhysicalDevice::SupportsLinearFilter(PixelFormat format) const
     return (features & VK_FORMAT_FEATURE_SAMPLED_IMAGE_FILTER_LINEAR_BIT) != 0;
 }
 
-Rndr::u32 Rndr::Forge::PhysicalDevice::FindMemoryTypeIndex(u32 type_filter, VkMemoryPropertyFlags properties) const
+Opal::Expected<Rndr::u32, Rndr::ErrorCode> Rndr::Forge::PhysicalDevice::FindMemoryTypeIndex(u32 type_filter,
+                                                                                            VkMemoryPropertyFlags properties) const
 {
+    using Result = Opal::Expected<u32, ErrorCode>;
+
     // The properties read once at construction rather than asked for again. They cannot change for the life
     // of the physical device, and the accessor beside this one already hands out the cached copy - so asking
     // twice was only a way for the two to disagree.
@@ -159,14 +169,15 @@ Rndr::u32 Rndr::Forge::PhysicalDevice::FindMemoryTypeIndex(u32 type_filter, VkMe
         // properties say whether that memory is device local, host visible and so on.
         if ((type_filter & (1U << i)) != 0 && (m_memory_properties.memoryTypes[i].propertyFlags & properties) == properties)
         {
-            return i;
+            return Result(i);
         }
     }
     // Nothing matched. This used to hand back index zero, which is a real memory type with real properties
     // and never the one that was asked for - a caller could not tell it from a match, so an allocation went
     // to the wrong heap and the mistake surfaced somewhere else entirely. See the error handling section of
     // docs/forge.md: a default the caller cannot distinguish from an answer is the one thing Forge does not do.
-    throw Opal::Exception("No memory type on this device has the requested properties!");
+    RNDR_LOG_ERROR("Forge: no memory type on this device has the requested properties");
+    return Result(ErrorCode::FeatureNotSupported);
 }
 
 void Rndr::Forge::PhysicalDevice::Destroy()

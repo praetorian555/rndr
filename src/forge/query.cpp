@@ -10,8 +10,8 @@ constexpr Rndr::f64 k_nanoseconds_per_millisecond = 1'000'000.0;
 /** "Reading 2 queries from index 3 of a timestamp query pool holding 2", since a range error that names no range is half a message. */
 Opal::StringEx RangeMessage(const char* what, Rndr::u32 first_query, Rndr::u32 query_count, Rndr::u32 pool_size)
 {
-    return Opal::StringEx(what) + " " + query_count + " queries from index " + first_query +
-           " of a timestamp query pool holding " + pool_size + "!";
+    return Opal::StringEx(what) + " " + query_count + " queries from index " + first_query + " of a timestamp query pool holding " +
+           pool_size + "!";
 }
 
 /**
@@ -23,9 +23,9 @@ bool ReadQueryResults(const Rndr::Forge::Device& device, VkQueryPool query_pool,
                       Rndr::u32 query_count, Rndr::u64 valid_bits_mask, bool wait)
 {
     const VkQueryResultFlags flags = VK_QUERY_RESULT_64_BIT | (wait ? VK_QUERY_RESULT_WAIT_BIT : 0u);
-    const VkResult result = vkGetQueryPoolResults(device.GetNativeDevice(), query_pool, first_query, query_count,
-                                                  static_cast<size_t>(query_count) * sizeof(Rndr::u64), out_ticks,
-                                                  sizeof(Rndr::u64), flags);
+    const VkResult result =
+        vkGetQueryPoolResults(device.GetNativeDevice(), query_pool, first_query, query_count,
+                              static_cast<size_t>(query_count) * sizeof(Rndr::u64), out_ticks, sizeof(Rndr::u64), flags);
     // Without the wait bit this is the answer "the device has not run that far yet", which is an outcome
     // rather than a failure - see the error handling section of docs/forge.md.
     if (result == VK_NOT_READY && !wait)
@@ -63,9 +63,12 @@ Rndr::Forge::TimestampQueryPool::TimestampQueryPool(const Device& device, const 
         throw Opal::Exception("A timestamp query pool needs at least one query!");
     }
 
-    // Throws when the device was not created with this queue, so the family index below is always a real one.
-    const DeviceQueue& queue = device.GetQueue(desc.queue_family);
-    const u32 queue_family_index = queue.GetQueueFamilyIndex();
+    Opal::Expected<const DeviceQueue&, ErrorCode> queue = device.GetQueue(desc.queue_family);
+    if (!queue.HasValue())
+    {
+        throw Opal::Exception("The device was not created with the queue family this query pool asks for!");
+    }
+    const u32 queue_family_index = queue.GetValue().GetQueueFamilyIndex();
     const VkQueueFamilyProperties& family_properties = device.GetPhysicalDevice().GetQueueFamilyProperties()[queue_family_index];
 
     // A family that writes no valid bits cannot time anything, and every measurement it produced would be a
@@ -75,8 +78,7 @@ Rndr::Forge::TimestampQueryPool::TimestampQueryPool(const Device& device, const 
         throw Opal::Exception("This queue family does not support timestamp queries!");
     }
     // Shifting a 64 bit value by 64 is undefined, and a family that writes all 64 bits is the common case.
-    m_valid_bits_mask =
-        family_properties.timestampValidBits >= 64 ? UINT64_MAX : (1ull << family_properties.timestampValidBits) - 1ull;
+    m_valid_bits_mask = family_properties.timestampValidBits >= 64 ? UINT64_MAX : (1ull << family_properties.timestampValidBits) - 1ull;
     m_timestamp_period = device.GetPhysicalDevice().GetProperties().limits.timestampPeriod;
 
     const VkQueryPoolCreateInfo create_info{

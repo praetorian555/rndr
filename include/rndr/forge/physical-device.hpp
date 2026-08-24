@@ -3,12 +3,14 @@
 #include "volk/volk.h"
 
 #include "opal/container/dynamic-array.h"
+#include "opal/container/expected.h"
 #include "opal/container/optional.h"
 #include "opal/container/string.h"
 
+#include "rndr/error-codes.hpp"
+#include "rndr/forge/forward.hpp"
 #include "rndr/pixel-format.hpp"
 #include "rndr/types.hpp"
-#include "rndr/forge/forward.hpp"
 
 namespace Rndr::Forge
 {
@@ -17,8 +19,17 @@ class PhysicalDevice
 {
 public:
     PhysicalDevice() = default;
-    explicit PhysicalDevice(VkPhysicalDevice physical_device);
     ~PhysicalDevice();
+
+    /**
+     * Read everything this device reports about itself: its properties, its features, its memory, its queue
+     * families and its extensions.
+     *
+     * @param physical_device Handle the loader reported.
+     * @return The device, ErrorCode::InvalidArgument for a null handle, or ErrorCode::GraphicsAPIError when
+     *         the device reports no queue family at all, which no usable device does.
+     */
+    [[nodiscard]] static Opal::Expected<PhysicalDevice, ErrorCode> Create(VkPhysicalDevice physical_device);
 
     PhysicalDevice(const PhysicalDevice&) = delete;
     PhysicalDevice& operator=(const PhysicalDevice&) = delete;
@@ -69,11 +80,11 @@ public:
      *
      * @param type_filter Bit per memory type of this device, set for the ones the allocation may use.
      * @param properties Every property the type has to have. Zero accepts the first type the filter allows.
-     * @return Index into the device's memory type array.
-     * @throw Opal::Exception when no type satisfies both. Not a returned sentinel: index zero is a real
-     *        memory type, so a caller could not tell one from a match and would allocate from the wrong heap.
+     * @return Index into the device's memory type array, or ErrorCode::FeatureNotSupported when no type
+     *         satisfies both. Not a returned sentinel: index zero is a real memory type, so a caller could
+     *         not tell one from a match and would allocate from the wrong heap.
      */
-    [[nodiscard]] u32 FindMemoryTypeIndex(u32 type_filter, VkMemoryPropertyFlags properties) const;
+    [[nodiscard]] Opal::Expected<u32, ErrorCode> FindMemoryTypeIndex(u32 type_filter, VkMemoryPropertyFlags properties) const;
 
 private:
     VkPhysicalDevice m_physical_device = VK_NULL_HANDLE;
@@ -84,4 +95,4 @@ private:
     Opal::DynamicArray<Opal::StringUtf8> m_supported_extensions;
 };
 
-}
+}  // namespace Rndr::Forge

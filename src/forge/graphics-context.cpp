@@ -10,7 +10,7 @@
 
 #include "opal/container/dynamic-array.h"
 
-#include "rndr/forge/vulkan-exception.hpp"
+#include "rndr/forge/vulkan-result.hpp"
 #include "rndr/log.hpp"
 
 namespace
@@ -29,8 +29,8 @@ namespace
 std::mutex g_volk_mutex;
 Rndr::i32 g_volk_users = 0;
 
-/** Load volk if this is the first context, and count this one in. Throws without counting if the load fails. */
-void AcquireVolk()
+/** Load volk if this is the first context, and count this one in. Reports without counting if the load fails. */
+Rndr::ErrorCode AcquireVolk()
 {
     const std::lock_guard<std::mutex> lock(g_volk_mutex);
     if (g_volk_users == 0)
@@ -38,7 +38,8 @@ void AcquireVolk()
         const VkResult result = volkInitialize();
         if (result != VK_SUCCESS)
         {
-            throw Rndr::Forge::VulkanException(result, "volkInitialize");
+            RNDR_LOG_ERROR("Forge: {} failed: {}", "volkInitialize", Rndr::Forge::VkResultToString(result));
+            return Rndr::Forge::VkResultToErrorCode(result);
         }
     }
     else
@@ -49,6 +50,7 @@ void AcquireVolk()
             "one's instance.");
     }
     ++g_volk_users;
+    return Rndr::ErrorCode::Success;
 }
 
 /** Count this context out, and unload volk once none are left. */
@@ -62,17 +64,18 @@ void ReleaseVolk()
 }
 
 /**
- * Holds the count for the length of the constructor. A context that throws part way through never reaches
- * its destructor, so without this the count it took would never be given back.
+ * Holds the count for the length of Create. A context that gives up part way through never reaches its
+ * destructor, so without this the count it took would never be given back.
  */
 struct VolkUse
 {
     bool committed = false;
+    Rndr::ErrorCode status = Rndr::ErrorCode::Success;
 
-    VolkUse() { AcquireVolk(); }
+    VolkUse() { status = AcquireVolk(); }
     ~VolkUse()
     {
-        if (!committed)
+        if (!committed && status == Rndr::ErrorCode::Success)
         {
             ReleaseVolk();
         }
@@ -175,8 +178,8 @@ VkDebugUtilsMessengerCreateInfoEXT MakeDebugMessengerCreateInfo()
 {
     VkDebugUtilsMessengerCreateInfoEXT debug_create_info{};
     debug_create_info.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_MESSENGER_CREATE_INFO_EXT;
-    debug_create_info.messageSeverity = VK_DEBUG_UTILS_MESSAGE_SEVERITY_VERBOSE_BIT_EXT |
-                                        VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT;
+    debug_create_info.messageSeverity = VK_DEBUG_UTILS_MESSAGE_SEVERITY_VERBOSE_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT |
+                                        VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT;
     debug_create_info.messageType = VK_DEBUG_UTILS_MESSAGE_TYPE_GENERAL_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_TYPE_VALIDATION_BIT_EXT |
                                     VK_DEBUG_UTILS_MESSAGE_TYPE_PERFORMANCE_BIT_EXT;
     debug_create_info.pfnUserCallback = DebugCallback;
@@ -215,11 +218,20 @@ bool IsValidationLayerAvailable()
 #endif
 }  // namespace
 
-Rndr::Forge::GraphicsContext::GraphicsContext(const GraphicsContextDesc& desc) : m_desc(desc.Clone())
+Opal::Expected<Rndr::Forge::GraphicsContext, Rndr::ErrorCode> Rndr::Forge::GraphicsContext::Create(const GraphicsContextDesc& desc)
 {
+    using Result = Opal::Expected<GraphicsContext, ErrorCode>;
+
     // Handed over to the destructor on the last line of this function, and given back by the guard on any
-    // path out of here that throws before then.
+    // path out of here that gives up before then.
     VolkUse volk_use;
+    if (volk_use.status != ErrorCode::Success)
+    {
+        return Result(volk_use.status);
+    }
+
+    GraphicsContext context;
+    context.m_desc = desc.Clone();
 
     bool use_validation_layer = false;
 #if defined(RNDR_FORGE_VALIDATION)
@@ -246,7 +258,8 @@ Rndr::Forge::GraphicsContext::GraphicsContext(const GraphicsContextDesc& desc) :
         }
         if (!is_found)
         {
-            throw Opal::Exception("Extension not supported!");
+            RNDR_LOG_ERROR("Forge: instance extension {} is not supported", required_extension_name);
+            return Result(ErrorCode::FeatureNotSupported);
         }
     }
 
@@ -268,16 +281,16 @@ Rndr::Forge::GraphicsContext::GraphicsContext(const GraphicsContextDesc& desc) :
     // The messenger below only covers the lifetime of the instance, so chaining a second one into the create info is
     // what makes the messages of vkCreateInstance and vkDestroyInstance visible.
     VkDebugUtilsMessengerCreateInfoEXT debug_create_info = MakeDebugMessengerCreateInfo();
-    const bool collect_debug_messages = m_desc.collect_debug_messages || use_validation_layer;
-    m_debug_utils_enabled = collect_debug_messages;
+    const bool collect_debug_messages = context.m_desc.collect_debug_messages || use_validation_layer;
+    context.m_debug_utils_enabled = collect_debug_messages;
     if (collect_debug_messages)
     {
-        m_debug_log = Opal::MakeShared<DebugMessageLog>(Opal::GetDefaultAllocator());
-        m_debug_log->max_stored_messages = m_desc.max_stored_debug_messages;
-        m_debug_log->logged_types = m_desc.logged_message_types;
+        context.m_debug_log = Opal::MakeShared<DebugMessageLog>(Opal::GetDefaultAllocator());
+        context.m_debug_log->max_stored_messages = context.m_desc.max_stored_debug_messages;
+        context.m_debug_log->logged_types = context.m_desc.logged_message_types;
         // The callback is handed the log rather than the context, since the context can be moved afterwards
         // and there is no way to update this pointer once the messenger exists.
-        debug_create_info.pUserData = m_debug_log.Get();
+        debug_create_info.pUserData = context.m_debug_log.Get();
         create_info.pNext = &debug_create_info;
     }
     if (use_validation_layer)
@@ -286,33 +299,35 @@ Rndr::Forge::GraphicsContext::GraphicsContext(const GraphicsContextDesc& desc) :
         create_info.ppEnabledLayerNames = &k_validation_layer_name;
     }
 
-    VkResult result = vkCreateInstance(&create_info, nullptr, &m_instance);
+    VkResult result = vkCreateInstance(&create_info, nullptr, &context.m_instance);
     if (result != VK_SUCCESS)
     {
-        throw VulkanException(result, "vkCreateInstance");
+        RNDR_LOG_ERROR("Forge: {} failed: {}", "vkCreateInstance", VkResultToString(result));
+        return Result(VkResultToErrorCode(result));
     }
-    volkLoadInstance(m_instance);
+    volkLoadInstance(context.m_instance);
 
     // Creation of debug messanger
     if (collect_debug_messages)
     {
-        result = CreateDebugUtilsMessengerEXT(m_instance, &debug_create_info, nullptr, &m_debug_messenger);
+        result = CreateDebugUtilsMessengerEXT(context.m_instance, &debug_create_info, nullptr, &context.m_debug_messenger);
         if (result != VK_SUCCESS)
         {
-            // The instance above is this constructor's to release, since the destructor does not run for an
-            // object whose constructor threw. Not through Destroy(), which gives the volk count back as well
-            // and would take it a second time from the guard on the way out.
-            vkDestroyInstance(m_instance, nullptr);
-            m_instance = VK_NULL_HANDLE;
-            throw VulkanException(result, "vkCreateDebugUtilsMessengerEXT");
+            // The instance above is released here rather than by context's destructor, which goes through
+            // Destroy() and would give the volk count back as well - the guard takes that on its way out.
+            vkDestroyInstance(context.m_instance, nullptr);
+            context.m_instance = VK_NULL_HANDLE;
+            RNDR_LOG_ERROR("Forge: {} failed: {}", "vkCreateDebugUtilsMessengerEXT", VkResultToString(result));
+            return Result(VkResultToErrorCode(result));
         }
     }
     if (use_validation_layer)
     {
         RNDR_LOG_INFO("Vulkan validation layer enabled.");
     }
-    // Past every throw, so the count this context holds is now the destructor's to give back.
+    // Past every way out, so the count this context holds is now the destructor's to give back.
     volk_use.committed = true;
+    return Result(std::move(context));
 }
 
 Rndr::Forge::GraphicsContext::~GraphicsContext()
@@ -375,15 +390,19 @@ Opal::ArrayView<const Rndr::Forge::DebugMessage> Rndr::Forge::GraphicsContext::G
     return {m_debug_log->messages.GetData(), m_debug_log->messages.GetSize()};
 }
 
-Rndr::u32 Rndr::Forge::GraphicsContext::GetDebugMessageCount(DebugMessageSeverity severity, DebugMessageTypeBits types) const
+Opal::Expected<Rndr::u32, Rndr::ErrorCode> Rndr::Forge::GraphicsContext::GetDebugMessageCount(DebugMessageSeverity severity,
+                                                                                              DebugMessageTypeBits types) const
 {
-    if (!m_debug_log.IsValid())
-    {
-        return 0;
-    }
+    using Result = Opal::Expected<u32, ErrorCode>;
+
     if (severity != DebugMessageSeverity::Info && severity != DebugMessageSeverity::Warning && severity != DebugMessageSeverity::Error)
     {
-        throw Opal::Exception("Unknown debug message severity!");
+        RNDR_LOG_ERROR("Forge: GetDebugMessageCount was given a severity that is none of the three: {}", static_cast<u32>(severity));
+        return Result(ErrorCode::InvalidArgument);
+    }
+    if (!m_debug_log.IsValid())
+    {
+        return Result(0u);
     }
     u32 count = 0;
     for (i32 type_index = 0; type_index < 3; ++type_index)
@@ -394,7 +413,7 @@ Rndr::u32 Rndr::Forge::GraphicsContext::GetDebugMessageCount(DebugMessageSeverit
             count += m_debug_log->counts[static_cast<i32>(severity)][type_index];
         }
     }
-    return count;
+    return Result(count);
 }
 
 void Rndr::Forge::GraphicsContext::ClearDebugMessages()
@@ -471,38 +490,40 @@ Opal::DynamicArray<VkExtensionProperties> Rndr::Forge::GraphicsContext::GetSuppo
     return extensions;
 }
 
-Opal::DynamicArray<Rndr::Forge::PhysicalDevice> Rndr::Forge::GraphicsContext::EnumeratePhysicalDevices() const
+Opal::Expected<Opal::DynamicArray<Rndr::Forge::PhysicalDevice>, Rndr::ErrorCode> Rndr::Forge::GraphicsContext::EnumeratePhysicalDevices()
+    const
 {
-    u32 gpu_count = 0;
-    VkResult result = vkEnumeratePhysicalDevices(m_instance, &gpu_count, nullptr);
-    if (result != VK_SUCCESS)
-    {
-        throw VulkanException(result, "vkEnumeratePhysicalDevices");
-    }
+    using Result = Opal::Expected<Opal::DynamicArray<PhysicalDevice>, ErrorCode>;
 
-    // A machine with no Vulkan capable device throws rather than handing back an empty list. Every caller of
-    // this either indexes the first element or hands the list to SelectPhysicalDevice, and there is nothing
-    // useful either can do with nothing - an empty list is a result every caller has to check for and none of
-    // them did, which makes it an out of bounds read waiting for the one machine that has no device.
+    u32 gpu_count = 0;
+    RNDR_FORGE_VK_CHECK_EXPECTED(vkEnumeratePhysicalDevices(m_instance, &gpu_count, nullptr), "vkEnumeratePhysicalDevices", Result);
+
+    // A machine with no Vulkan capable device reports that rather than handing back an empty list. Every
+    // caller of this either indexes the first element or hands the list to SelectPhysicalDevice, and there is
+    // nothing useful either can do with nothing - an empty list is a result every caller has to check for and
+    // none of them did, which makes it an out of bounds read waiting for the one machine that has no device.
     //
-    // Distinct from the throws above it, which say the enumeration itself failed. This one says it succeeded
-    // and found nothing, so it carries that sentence rather than a VkResult that never came back.
+    // Distinct from the codes above it, which say the enumeration itself failed. This one says it succeeded
+    // and found nothing.
     if (gpu_count == 0)
     {
-        throw Opal::Exception("This machine has no Vulkan capable physical device!");
+        RNDR_LOG_ERROR("Forge: this machine has no Vulkan capable physical device");
+        return Result(ErrorCode::NoGraphicsDevice);
     }
 
     Opal::DynamicArray<VkPhysicalDevice> physical_devices(gpu_count);
-    result = vkEnumeratePhysicalDevices(m_instance, &gpu_count, physical_devices.GetData());
-    if (result != VK_SUCCESS)
-    {
-        throw VulkanException(result, "vkEnumeratePhysicalDevices");
-    }
+    RNDR_FORGE_VK_CHECK_EXPECTED(vkEnumeratePhysicalDevices(m_instance, &gpu_count, physical_devices.GetData()),
+                                 "vkEnumeratePhysicalDevices", Result);
 
     Opal::DynamicArray<PhysicalDevice> gpu_list;
     for (const VkPhysicalDevice& device : physical_devices)
     {
-        gpu_list.PushBack(PhysicalDevice(device));
+        Opal::Expected<PhysicalDevice, ErrorCode> physical_device = PhysicalDevice::Create(device);
+        if (!physical_device.HasValue())
+        {
+            return Result(physical_device.GetError());
+        }
+        gpu_list.PushBack(std::move(physical_device.GetValue()));
     }
-    return gpu_list;
+    return Result(std::move(gpu_list));
 }

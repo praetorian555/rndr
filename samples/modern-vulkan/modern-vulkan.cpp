@@ -49,6 +49,20 @@ struct PerFrameData
 
 void Run();
 
+/**
+ * Unwrap what a Forge call reported. Forge logs which call failed and why before it hands back a code, so a
+ * sample that cannot get through its own setup only has to stop.
+ */
+template <typename T>
+T Require(Opal::Expected<T, Rndr::ErrorCode>&& result)
+{
+    if (!result.HasValue())
+    {
+        throw Opal::Exception("A Forge call failed. The log above says which and why.");
+    }
+    return std::move(result).GetValue();
+}
+
 int main()
 {
     try
@@ -75,16 +89,17 @@ void Run()
     rndr_app->ShowCursor(false);
     window->SetCursorPositionMode(Rndr::CursorPositionMode::ResetToCenter);
 
-    Rndr::Forge::GraphicsContext graphics_context{{.collect_debug_messages = true}};
+    Rndr::Forge::GraphicsContext graphics_context = Require(Rndr::Forge::GraphicsContext::Create({.collect_debug_messages = true}));
     Rndr::Forge::Surface surface(graphics_context, *window);
 
     // Picks the best device that can do everything the desc asks for, rather than whichever one the driver
     // listed first, which on a laptop is as likely to be the integrated GPU as the discrete one.
     const Rndr::Forge::DeviceDesc device_desc{.surface = surface};
-    auto physical_devices = graphics_context.EnumeratePhysicalDevices();
-    Rndr::Forge::Device device(Rndr::Forge::SelectPhysicalDevice(physical_devices, device_desc), graphics_context, device_desc);
-    Rndr::Forge::DeviceQueue& graphics_queue = device.GetQueue(Rndr::Forge::QueueFamily::Graphics);
-    Rndr::Forge::DeviceQueue& present_queue = device.GetQueue(Rndr::Forge::QueueFamily::Present);
+    auto physical_devices = Require(graphics_context.EnumeratePhysicalDevices());
+    Rndr::Forge::Device device = Require(Rndr::Forge::Device::Create(
+        Require(Rndr::Forge::SelectPhysicalDevice(physical_devices, device_desc)), graphics_context, device_desc));
+    Rndr::Forge::DeviceQueue& graphics_queue = Require(device.GetQueue(Rndr::Forge::QueueFamily::Graphics));
+    Rndr::Forge::DeviceQueue& present_queue = Require(device.GetQueue(Rndr::Forge::QueueFamily::Present));
 
     Rndr::Forge::SwapChain swap_chain(device, surface, {.use_depth = true, .depth_pixel_format = Rndr::PixelFormat::D32_SFLOAT});
 
@@ -230,22 +245,23 @@ void Run()
         .GetCurrentContext()
         .AddAction("FPS Mode")
         .Bind(Rndr::Key::F1, Rndr::Trigger::Pressed)
-        .OnButton([&rndr_app, &window, &fps_mode, &controller](Rndr::Trigger, bool)
-        {
-            if (fps_mode)
+        .OnButton(
+            [&rndr_app, &window, &fps_mode, &controller](Rndr::Trigger, bool)
             {
-                rndr_app->ShowCursor(true);
-                window->SetCursorPositionMode(Rndr::CursorPositionMode::Normal);
-                controller.Enable(false);
-            }
-            else
-            {
-                rndr_app->ShowCursor(false);
-                window->SetCursorPositionMode(Rndr::CursorPositionMode::ResetToCenter);
-                controller.Enable(true);
-            }
-            fps_mode = !fps_mode;
-        });
+                if (fps_mode)
+                {
+                    rndr_app->ShowCursor(true);
+                    window->SetCursorPositionMode(Rndr::CursorPositionMode::Normal);
+                    controller.Enable(false);
+                }
+                else
+                {
+                    rndr_app->ShowCursor(false);
+                    window->SetCursorPositionMode(Rndr::CursorPositionMode::ResetToCenter);
+                    controller.Enable(true);
+                }
+                fps_mode = !fps_mode;
+            });
 
     Rndr::f32 delta_seconds = 0.016;
     f64 gpu_milliseconds = 0.0;
@@ -328,10 +344,11 @@ void Run()
                                                                        .load_operation = Rndr::Forge::AttachmentLoadOperation::Clear,
                                                                        .store_operation = Rndr::Forge::AttachmentStoreOperation::Store,
                                                                        .clear_value = Rndr::Vector4f{0.0f, 0.0f, 0.2f, 1.0f}}},
-            .depth_attachment = Rndr::Forge::RenderingAttachmentDesc{.texture = swap_chain.GetDepthTexture(),
-                                                                     .load_operation = Rndr::Forge::AttachmentLoadOperation::Clear,
-                                                                     .store_operation = Rndr::Forge::AttachmentStoreOperation::DontCare,
-                                                                     .clear_value = Rndr::Forge::DepthStencilClearValue{.depth = 1.0f, .stencil = 0}}};
+            .depth_attachment =
+                Rndr::Forge::RenderingAttachmentDesc{.texture = swap_chain.GetDepthTexture(),
+                                                     .load_operation = Rndr::Forge::AttachmentLoadOperation::Clear,
+                                                     .store_operation = Rndr::Forge::AttachmentStoreOperation::DontCare,
+                                                     .clear_value = Rndr::Forge::DepthStencilClearValue{.depth = 1.0f, .stencil = 0}}};
         {
             // A capture shows everything between the two braces as one collapsible "forward pass" instead of
             // as a run of loose draws. The guard closes the region even if something below throws.
@@ -369,5 +386,6 @@ void Run()
         }
     }
 
-    device.WaitForAll();
+    // On the way out, with the window already closed: nothing here can act on a wait that failed.
+    (void)device.WaitForAll();
 }

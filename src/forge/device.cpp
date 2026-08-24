@@ -9,7 +9,8 @@
 #include "rndr/forge/graphics-context.hpp"
 #include "rndr/forge/swap-chain.hpp"
 #include "rndr/forge/synchronization.hpp"
-#include "rndr/forge/vulkan-exception.hpp"
+#include "rndr/forge/vulkan-result.hpp"
+#include "rndr/log.hpp"
 
 Opal::DynamicArray<Rndr::u32> Rndr::Forge::QueueFamilyIndices::GetValidQueueFamilies() const
 {
@@ -63,7 +64,9 @@ Rndr::u32 Rndr::Forge::QueueFamilyIndices::GetQueueFamilyIndex(QueueFamily queue
         case QueueFamily::Encode:
             return encode_family_index;
         default:
-            throw Opal::Exception("Invalid queue family!");
+            // A value that names no family has no index, which is the same answer as a device that was not
+            // created with that family - and k_invalid_index is what every caller already checks for.
+            return k_invalid_index;
     }
 }
 
@@ -293,13 +296,15 @@ const char* FindUnsupportedFeature(const Forge::PhysicalDevice& physical_device,
     return missing;
 }
 
-void ThrowOnUnsupportedFeatures(const Forge::PhysicalDevice& physical_device, const Forge::DeviceFeatures& requested)
+Rndr::ErrorCode ReportUnsupportedFeatures(const Forge::PhysicalDevice& physical_device, const Forge::DeviceFeatures& requested)
 {
     const char* missing = FindUnsupportedFeature(physical_device, requested);
     if (missing != nullptr)
     {
-        throw Opal::Exception(Opal::StringEx("This device does not support the requested feature: ") + missing);
+        RNDR_LOG_ERROR("Forge: this device does not support the requested feature: {}", missing);
+        return Rndr::ErrorCode::FeatureNotSupported;
     }
+    return Rndr::ErrorCode::Success;
 }
 
 /** "does not support the extension VK_EXT_mesh_shader", built without an allocating string concatenation. */
@@ -416,52 +421,75 @@ Opal::Optional<Rndr::u32> Rndr::Forge::FindPhysicalDevice(Opal::ArrayView<const 
     return best;
 }
 
-Rndr::Forge::PhysicalDevice Rndr::Forge::SelectPhysicalDevice(Opal::ArrayView<PhysicalDevice> devices, const DeviceDesc& desc,
-                                                              bool prefer_discrete)
+Opal::Expected<Rndr::Forge::PhysicalDevice, Rndr::ErrorCode> Rndr::Forge::SelectPhysicalDevice(Opal::ArrayView<PhysicalDevice> devices,
+                                                                                               const DeviceDesc& desc, bool prefer_discrete)
 {
+    using Result = Opal::Expected<PhysicalDevice, ErrorCode>;
+
     const Opal::ArrayView<const PhysicalDevice> const_devices(devices.GetData(), devices.GetSize());
     const Opal::Optional<u32> best = FindPhysicalDevice(const_devices, desc, prefer_discrete);
     if (best.HasValue())
     {
-        return std::move(devices[static_cast<i32>(best.GetValue())]);
+        return Result(std::move(devices[static_cast<i32>(best.GetValue())]));
     }
     if (devices.IsEmpty())
     {
-        throw Opal::Exception("There is no Vulkan device on this machine.");
+        RNDR_LOG_ERROR("Forge: there is no Vulkan device on this machine");
+        return Result(ErrorCode::NoGraphicsDevice);
     }
     // On a machine with several devices the last reason is not the whole story, but a reason beats none.
     const Opal::StringUtf8 reason = FindUnmetRequirement(devices[devices.GetSize() - 1], desc);
-    throw Opal::Exception(Opal::StringEx("No suitable device. The last one ") + reinterpret_cast<const char*>(reason.GetData()));
+    RNDR_LOG_ERROR("Forge: no suitable device. The last one {}", reinterpret_cast<const char*>(reason.GetData()));
+    return Result(ErrorCode::FeatureNotSupported);
 }
 
-Rndr::Forge::Device::Device(PhysicalDevice physical_device, const GraphicsContext& graphics_context,
-                                     const DeviceDesc& desc)
-    : m_desc(desc.Clone()), m_physical_device(std::move(physical_device))
+Opal::Expected<Rndr::Forge::Device, Rndr::ErrorCode> Rndr::Forge::Device::Create(PhysicalDevice physical_device,
+                                                                                 const GraphicsContext& graphics_context,
+                                                                                 const DeviceDesc& desc)
 {
-    if (!m_physical_device.IsValid())
+    using Result = Opal::Expected<Device, ErrorCode>;
+
+    // Everything below is built into this, so a way out of here that leaves part of a device behind releases
+    // it through the destructor rather than by hand.
+    Device device;
+    device.m_desc = desc.Clone();
+    device.m_physical_device = std::move(physical_device);
+
+    if (!device.m_physical_device.IsValid())
     {
-        throw Opal::Exception("Physical device is invalid!");
+        RNDR_LOG_ERROR("Forge: Device::Create was given an empty physical device");
+        return Result(ErrorCode::InvalidArgument);
     }
 
     Opal::DynamicArray<VkDeviceQueueCreateInfo> queue_create_infos;
-    CollectQueueFamilies(queue_create_infos);
+    const ErrorCode queue_status = device.CollectQueueFamilies(queue_create_infos);
+    if (queue_status != ErrorCode::Success)
+    {
+        return Result(queue_status);
+    }
 
-    Opal::DynamicArray<const char*> device_extensions = CollectDeviceExtensions(m_physical_device, m_desc);
-    m_enabled_extensions = device_extensions.Clone();
+    Opal::DynamicArray<const char*> device_extensions = CollectDeviceExtensions(device.m_physical_device, device.m_desc);
+    device.m_enabled_extensions = device_extensions.Clone();
     for (const char* extension_name : device_extensions)
     {
-        if (!m_physical_device.IsExtensionSupported(extension_name))
+        if (!device.m_physical_device.IsExtensionSupported(extension_name))
         {
-            throw Opal::Exception(Opal::StringEx("Device extension not supported: ") + extension_name);
+            RNDR_LOG_ERROR("Forge: device extension not supported: {}", extension_name);
+            return Result(ErrorCode::FeatureNotSupported);
         }
     }
 
     // Checked against what the device reports before anything is asked for, so an unsupported feature names
     // itself instead of coming back as VK_ERROR_FEATURE_NOT_PRESENT from vkCreateDevice.
-    ThrowOnUnsupportedFeatures(m_physical_device, m_desc.features);
+    const ErrorCode feature_status = ReportUnsupportedFeatures(device.m_physical_device, device.m_desc.features);
+    if (feature_status != ErrorCode::Success)
+    {
+        return Result(feature_status);
+    }
 
-    FeatureChain enabled_features(m_desc.features.mesh_shader || m_desc.features.task_shader, m_desc.features.index_type_uint8);
-    enabled_features.Fill(m_desc.features);
+    FeatureChain enabled_features(device.m_desc.features.mesh_shader || device.m_desc.features.task_shader,
+                                  device.m_desc.features.index_type_uint8);
+    enabled_features.Fill(device.m_desc.features);
 
     VkDeviceCreateInfo create_info{};
     create_info.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
@@ -473,69 +501,63 @@ Rndr::Forge::Device::Device(PhysicalDevice physical_device, const GraphicsContex
     create_info.ppEnabledExtensionNames = device_extensions.GetData();
     create_info.enabledExtensionCount = static_cast<u32>(device_extensions.GetSize());
 
-    const VkResult result = vkCreateDevice(m_physical_device.GetNativePhysicalDevice(), &create_info, nullptr, &m_device);
-    if (result != VK_SUCCESS)
+    RNDR_FORGE_VK_CHECK_EXPECTED(
+        vkCreateDevice(device.m_physical_device.GetNativePhysicalDevice(), &create_info, nullptr, &device.m_device), "vkCreateDevice",
+        Result);
+
+    // The device exists from here on, and so does the command pool of every queue made below. Both belong to
+    // the local device, so a queue that cannot create its pool or an allocator that cannot be made leaves
+    // through the destructor with everything that got that far already released.
+    for (u8 queue_family_idx = 0; queue_family_idx < static_cast<u8>(QueueFamily::EnumCount); ++queue_family_idx)
     {
-        throw VulkanException(result, "vkCreateDevice");
+        const QueueFamily queue_family = static_cast<QueueFamily>(queue_family_idx);
+        const u32 queue_family_index = device.m_queue_family_indices.GetQueueFamilyIndex(queue_family);
+        if (queue_family_index == QueueFamilyIndices::k_invalid_index)
+        {
+            continue;
+        }
+        bool already_present = false;
+        for (const auto& pair : device.m_queue_family_to_queue)
+        {
+            if (pair.value->GetQueueFamilyIndex() == queue_family_index)
+            {
+                device.m_queue_family_to_queue.Insert(queue_family, pair.value.Clone());
+                already_present = true;
+                break;
+            }
+        }
+        if (already_present)
+        {
+            continue;
+        }
+        Opal::Expected<DeviceQueue, ErrorCode> queue = DeviceQueue::Create(device, queue_family_index);
+        if (!queue.HasValue())
+        {
+            return Result(queue.GetError());
+        }
+        Opal::SharedPtr<DeviceQueue> queue_ptr(Opal::GetDefaultAllocator(), std::move(queue.GetValue()));
+        device.m_queue_family_to_queue.Insert(queue_family, std::move(queue_ptr));
     }
 
-    // The device exists from here on, and so does the command pool of every queue made below. The
-    // destructor does not run for an object whose constructor threw, so a queue that cannot create its pool
-    // or an allocator that cannot be made leaves this constructor to release what got that far.
-    try
-    {
-        auto queue_family_indices_array = m_queue_family_indices.GetValidQueueFamilies();
-        for (u8 queue_family_idx = 0; queue_family_idx < static_cast<u8>(QueueFamily::EnumCount); ++queue_family_idx)
-        {
-            const QueueFamily queue_family = static_cast<QueueFamily>(queue_family_idx);
-            const u32 queue_family_index = m_queue_family_indices.GetQueueFamilyIndex(queue_family);
-            if (queue_family_index == QueueFamilyIndices::k_invalid_index)
-            {
-                continue;
-            }
-            bool already_present = false;
-            for (const auto& pair : m_queue_family_to_queue)
-            {
-                if (pair.value->GetQueueFamilyIndex() == queue_family_index)
-                {
-                    m_queue_family_to_queue.Insert(queue_family, pair.value.Clone());
-                    already_present = true;
-                    break;
-                }
-            }
-            if (already_present)
-            {
-                continue;
-            }
-            Opal::SharedPtr<DeviceQueue> queue_ptr(Opal::GetDefaultAllocator(), *this, queue_family_index);
-            m_queue_family_to_queue.Insert(queue_family, std::move(queue_ptr));
-        }
+    // Setup GPU allocator
+    const VmaVulkanFunctions vk_functions{
+        .vkGetInstanceProcAddr = vkGetInstanceProcAddr,
+        .vkGetDeviceProcAddr = vkGetDeviceProcAddr,
+        .vkCreateImage = vkCreateImage,
+    };
+    const VmaAllocatorCreateInfo vma_alloc_create_info = {
+        .flags = VMA_ALLOCATOR_CREATE_BUFFER_DEVICE_ADDRESS_BIT,
+        .physicalDevice = device.m_physical_device.GetNativePhysicalDevice(),
+        .device = device.m_device,
+        .pVulkanFunctions = &vk_functions,
+        .instance = graphics_context.GetInstance(),
+    };
+    device.m_debug_utils_enabled = graphics_context.AreDebugUtilsEnabled();
+    RNDR_FORGE_VK_CHECK_EXPECTED(vmaCreateAllocator(&vma_alloc_create_info, &device.m_gpu_allocator), "vmaCreateAllocator", Result);
 
-        // Setup GPU allocator
-        const VmaVulkanFunctions vk_functions{
-            .vkGetInstanceProcAddr = vkGetInstanceProcAddr,
-            .vkGetDeviceProcAddr = vkGetDeviceProcAddr,
-            .vkCreateImage = vkCreateImage,
-        };
-        const VmaAllocatorCreateInfo vma_alloc_create_info = {
-            .flags = VMA_ALLOCATOR_CREATE_BUFFER_DEVICE_ADDRESS_BIT,
-            .physicalDevice = m_physical_device.GetNativePhysicalDevice(),
-            .device = m_device,
-            .pVulkanFunctions = &vk_functions,
-            .instance = graphics_context.GetInstance(),
-        };
-        m_debug_utils_enabled = graphics_context.AreDebugUtilsEnabled();
-        const VkResult vma_result = vmaCreateAllocator(&vma_alloc_create_info, &m_gpu_allocator);
-        if (vma_result != VK_SUCCESS)
-        {
-            throw VulkanException(vma_result, "vmaCreateAllocator");
-        }
-    }
-    catch (...)
-    {
-        Destroy();
-        throw;
-    }
+    // Every queue holds a reference back to the device it was made from, and this one is about to be moved
+    // into the Expected. The move constructor repoints them, so nothing here has to.
+    return Result(std::move(device));
 }
 
 namespace
@@ -543,16 +565,13 @@ namespace
 Rndr::f32 g_queue_priority = 1.0f;
 }
 
-void Rndr::Forge::Device::WaitForAll() const 
+Rndr::ErrorCode Rndr::Forge::Device::WaitForAll() const
 {
-    const VkResult wait_result = vkDeviceWaitIdle(m_device);
-    if (wait_result != VK_SUCCESS)
-    {
-        throw VulkanException(wait_result, "vkDeviceWaitIdle");
-    }
+    RNDR_FORGE_VK_CHECK(vkDeviceWaitIdle(m_device), "vkDeviceWaitIdle");
+    return ErrorCode::Success;
 }
 
-void Rndr::Forge::Device::CollectQueueFamilies(Opal::DynamicArray<VkDeviceQueueCreateInfo>& queue_create_infos)
+Rndr::ErrorCode Rndr::Forge::Device::CollectQueueFamilies(Opal::DynamicArray<VkDeviceQueueCreateInfo>& queue_create_infos)
 {
     auto queue_family_index = m_physical_device.GetQueueFamilyIndex(k_graphics_flags);
     if (queue_family_index.HasValue())
@@ -561,16 +580,17 @@ void Rndr::Forge::Device::CollectQueueFamilies(Opal::DynamicArray<VkDeviceQueueC
     }
     else
     {
-        throw Opal::Exception("No queue with graphics capabilities!");
+        RNDR_LOG_ERROR("Forge: this device has no queue with graphics capabilities");
+        return ErrorCode::FeatureNotSupported;
     }
 
     if (m_desc.surface.IsValid())
     {
-        auto details = m_desc.surface->GetSwapChainSupportDetails(m_physical_device);
         auto present_queue_family_index = m_physical_device.GetPresentQueueFamilyIndex(m_desc.surface);
         if (!present_queue_family_index.HasValue())
         {
-            throw Opal::Exception("No queue with present capabilities but surface provided!");
+            RNDR_LOG_ERROR("Forge: a surface was given but this device cannot present to it");
+            return ErrorCode::FeatureNotSupported;
         }
         m_queue_family_indices.present_family = present_queue_family_index.GetValue();
     }
@@ -584,7 +604,8 @@ void Rndr::Forge::Device::CollectQueueFamilies(Opal::DynamicArray<VkDeviceQueueC
         }
         else
         {
-            throw Opal::Exception("Async compute queue requested but device does not support it");
+            RNDR_LOG_ERROR("Forge: an async compute queue was requested but this device has none");
+            return ErrorCode::FeatureNotSupported;
         }
     }
 
@@ -597,7 +618,8 @@ void Rndr::Forge::Device::CollectQueueFamilies(Opal::DynamicArray<VkDeviceQueueC
         }
         else
         {
-            throw Opal::Exception("Dedicated transfer queue requested but device does not support it");
+            RNDR_LOG_ERROR("Forge: a dedicated transfer queue was requested but this device has none");
+            return ErrorCode::FeatureNotSupported;
         }
     }
 
@@ -610,7 +632,8 @@ void Rndr::Forge::Device::CollectQueueFamilies(Opal::DynamicArray<VkDeviceQueueC
         }
         else
         {
-            throw Opal::Exception("Video encode queue requested but device does not support it");
+            RNDR_LOG_ERROR("Forge: a video encode queue was requested but this device has none");
+            return ErrorCode::FeatureNotSupported;
         }
     }
 
@@ -623,7 +646,8 @@ void Rndr::Forge::Device::CollectQueueFamilies(Opal::DynamicArray<VkDeviceQueueC
         }
         else
         {
-            throw Opal::Exception("Video encode queue requested but device does not support it");
+            RNDR_LOG_ERROR("Forge: a video decode queue was requested but this device has none");
+            return ErrorCode::FeatureNotSupported;
         }
     }
     for (const u32 index : m_queue_family_indices.GetValidQueueFamilies())
@@ -635,6 +659,7 @@ void Rndr::Forge::Device::CollectQueueFamilies(Opal::DynamicArray<VkDeviceQueueC
         queue_create_info.pQueuePriorities = &g_queue_priority;
         queue_create_infos.PushBack(queue_create_info);
     }
+    return ErrorCode::Success;
 }
 
 bool Rndr::Forge::Device::IsExtensionEnabled(const char* extension_name) const
@@ -737,24 +762,30 @@ void Rndr::Forge::Device::Destroy()
     m_desc = {};
 }
 
-Rndr::Forge::DeviceQueue& Rndr::Forge::Device::GetQueue(QueueFamily queue_family)
+Opal::Expected<Rndr::Forge::DeviceQueue&, Rndr::ErrorCode> Rndr::Forge::Device::GetQueue(QueueFamily queue_family)
 {
+    using Result = Opal::Expected<DeviceQueue&, ErrorCode>;
+
     auto queue_it = m_queue_family_to_queue.Find(queue_family);
     if (queue_it == m_queue_family_to_queue.end())
     {
-        throw Opal::Exception("Queue family not supported!");
+        RNDR_LOG_ERROR("Forge: this device was not created with the queue family {}", static_cast<u32>(queue_family));
+        return Result(ErrorCode::InvalidArgument);
     }
-    return *queue_it.GetValue().Get();
+    return Result(*queue_it.GetValue().Get());
 }
 
-const Rndr::Forge::DeviceQueue& Rndr::Forge::Device::GetQueue(QueueFamily queue_family) const
+Opal::Expected<const Rndr::Forge::DeviceQueue&, Rndr::ErrorCode> Rndr::Forge::Device::GetQueue(QueueFamily queue_family) const
 {
+    using Result = Opal::Expected<const DeviceQueue&, ErrorCode>;
+
     auto queue_it = m_queue_family_to_queue.Find(queue_family);
     if (queue_it == m_queue_family_to_queue.end())
     {
-        throw Opal::Exception("Queue family not supported!");
+        RNDR_LOG_ERROR("Forge: this device was not created with the queue family {}", static_cast<u32>(queue_family));
+        return Result(ErrorCode::InvalidArgument);
     }
-    return *queue_it.GetValue().Get();
+    return Result(*queue_it.GetValue().Get());
 }
 
 Rndr::Forge::DeviceQueue::~DeviceQueue()
@@ -772,20 +803,22 @@ void Rndr::Forge::DeviceQueue::Destroy()
     }
 }
 
-Rndr::Forge::DeviceQueue::DeviceQueue(const Device& device, u32 queue_family_index)
-    : m_device(device), m_queue_family_index(queue_family_index)
+Opal::Expected<Rndr::Forge::DeviceQueue, Rndr::ErrorCode> Rndr::Forge::DeviceQueue::Create(const Device& device, u32 queue_family_index)
 {
-    vkGetDeviceQueue(device.GetNativeDevice(), m_queue_family_index, 0, &m_queue);
+    using Result = Opal::Expected<DeviceQueue, ErrorCode>;
+
+    DeviceQueue queue;
+    queue.m_device = device;
+    queue.m_queue_family_index = queue_family_index;
+    vkGetDeviceQueue(device.GetNativeDevice(), queue_family_index, 0, &queue.m_queue);
 
     VkCommandPoolCreateInfo pool_info{};
     pool_info.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
-    pool_info.queueFamilyIndex = m_queue_family_index;
+    pool_info.queueFamilyIndex = queue_family_index;
     pool_info.flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT;
-    const VkResult result = vkCreateCommandPool(m_device->GetNativeDevice(), &pool_info, nullptr, &m_command_pool);
-    if (result != VK_SUCCESS)
-    {
-        throw VulkanException(result, "vkCreateCommandPool");
-    }
+    RNDR_FORGE_VK_CHECK_EXPECTED(vkCreateCommandPool(device.GetNativeDevice(), &pool_info, nullptr, &queue.m_command_pool),
+                                 "vkCreateCommandPool", Result);
+    return Result(std::move(queue));
 }
 
 Rndr::Forge::DeviceQueue::DeviceQueue(DeviceQueue&& other) noexcept
@@ -828,9 +861,12 @@ enum class SemaphoreRole
 };
 
 /** Translate one side of the semaphore list, checking that every semaphore in it actually holds a handle. */
-static Opal::DynamicArray<VkSemaphoreSubmitInfo> ToVkSemaphoreSubmitInfos(
+static Opal::Expected<Opal::DynamicArray<VkSemaphoreSubmitInfo>, Rndr::ErrorCode> ToVkSemaphoreSubmitInfos(
     Opal::ArrayView<const Rndr::Forge::SemaphoreSubmit> semaphores, SemaphoreRole role)
 {
+    using Rndr::ErrorCode;
+    using Result = Opal::Expected<Opal::DynamicArray<VkSemaphoreSubmitInfo>, ErrorCode>;
+
     const char* role_name = role == SemaphoreRole::Signal ? "signal" : "wait";
     Opal::DynamicArray<VkSemaphoreSubmitInfo> infos(semaphores.GetSize());
     for (Rndr::i32 i = 0; i < semaphores.GetSize(); ++i)
@@ -838,29 +874,32 @@ static Opal::DynamicArray<VkSemaphoreSubmitInfo> ToVkSemaphoreSubmitInfos(
         const Rndr::Forge::SemaphoreSubmit& semaphore = semaphores[i];
         if (!semaphore.semaphore.IsValid() || !semaphore.semaphore->IsValid())
         {
-            throw Opal::Exception(Opal::StringEx("Submit was given an empty ") + role_name + " semaphore!");
+            RNDR_LOG_ERROR("Forge: Submit was given an empty {} semaphore", role_name);
+            return Result(ErrorCode::InvalidArgument);
         }
         if (!semaphore.semaphore->IsTimeline() && semaphore.value != 0)
         {
             // Vulkan ignores the field on a binary semaphore rather than complaining about it, which makes
             // this exactly the kind of mistake that would otherwise be found by the frame it went wrong in.
-            throw Opal::Exception(Opal::StringEx("A binary ") + role_name + " semaphore was given a value, which only a timeline has!");
+            RNDR_LOG_ERROR("Forge: a binary {} semaphore was given a value, which only a timeline has", role_name);
+            return Result(ErrorCode::InvalidArgument);
         }
         if (role == SemaphoreRole::Signal && semaphore.semaphore->IsTimeline() && semaphore.value == 0)
         {
             // A signal has to leave the count above where it was, and nothing is above zero. A wait for zero
             // is legal and trivially satisfied, so only this side is turned away.
-            throw Opal::Exception("A timeline signal semaphore was given a value of zero, which no signal can reach!");
+            RNDR_LOG_ERROR("Forge: a timeline signal semaphore was given a value of zero, which no signal can reach");
+            return Result(ErrorCode::InvalidArgument);
         }
         infos[i] = {.sType = VK_STRUCTURE_TYPE_SEMAPHORE_SUBMIT_INFO,
                     .semaphore = semaphore.semaphore->GetNativeSemaphore(),
                     .value = semaphore.value,
                     .stageMask = static_cast<VkPipelineStageFlags2>(semaphore.stages)};
     }
-    return infos;
+    return Result(std::move(infos));
 }
 
-void Rndr::Forge::DeviceQueue::Submit(const SubmitDesc& desc)
+Rndr::ErrorCode Rndr::Forge::DeviceQueue::Submit(const SubmitDesc& desc)
 {
     Opal::DynamicArray<VkCommandBufferSubmitInfo> command_buffer_infos(desc.command_buffers.GetSize());
     for (i32 i = 0; i < desc.command_buffers.GetSize(); ++i)
@@ -868,14 +907,26 @@ void Rndr::Forge::DeviceQueue::Submit(const SubmitDesc& desc)
         const CommandBuffer& command_buffer = desc.command_buffers[i].Get();
         if (!command_buffer.IsValid())
         {
-            throw Opal::Exception("Submit was given an empty command buffer!");
+            RNDR_LOG_ERROR("Forge: Submit was given an empty command buffer");
+            return ErrorCode::InvalidArgument;
         }
         command_buffer_infos[i] = {.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_SUBMIT_INFO,
                                    .commandBuffer = command_buffer.GetNativeCommandBuffer()};
     }
-    const Opal::DynamicArray<VkSemaphoreSubmitInfo> wait_infos = ToVkSemaphoreSubmitInfos(desc.wait_semaphores, SemaphoreRole::Wait);
-    const Opal::DynamicArray<VkSemaphoreSubmitInfo> signal_infos =
+    Opal::Expected<Opal::DynamicArray<VkSemaphoreSubmitInfo>, ErrorCode> wait_infos_result =
+        ToVkSemaphoreSubmitInfos(desc.wait_semaphores, SemaphoreRole::Wait);
+    if (!wait_infos_result.HasValue())
+    {
+        return wait_infos_result.GetError();
+    }
+    Opal::Expected<Opal::DynamicArray<VkSemaphoreSubmitInfo>, ErrorCode> signal_infos_result =
         ToVkSemaphoreSubmitInfos(desc.signal_semaphores, SemaphoreRole::Signal);
+    if (!signal_infos_result.HasValue())
+    {
+        return signal_infos_result.GetError();
+    }
+    const Opal::DynamicArray<VkSemaphoreSubmitInfo>& wait_infos = wait_infos_result.GetValue();
+    const Opal::DynamicArray<VkSemaphoreSubmitInfo>& signal_infos = signal_infos_result.GetValue();
     // A fence is what the host waits on, and plenty of submits have nothing waiting for them.
     const VkFence native_fence = desc.fence.IsValid() ? desc.fence->GetNativeFence() : VK_NULL_HANDLE;
 
@@ -886,24 +937,18 @@ void Rndr::Forge::DeviceQueue::Submit(const SubmitDesc& desc)
                                     .pCommandBufferInfos = command_buffer_infos.GetData(),
                                     .signalSemaphoreInfoCount = static_cast<u32>(signal_infos.GetSize()),
                                     .pSignalSemaphoreInfos = signal_infos.GetData()};
-    const VkResult submit_result = vkQueueSubmit2(m_queue, 1, &submit_info, native_fence);
-    if (submit_result != VK_SUCCESS)
-    {
-        throw VulkanException(submit_result, "vkQueueSubmit2");
-    }
+    RNDR_FORGE_VK_CHECK(vkQueueSubmit2(m_queue, 1, &submit_info, native_fence), "vkQueueSubmit2");
+    return ErrorCode::Success;
 }
 
-void Rndr::Forge::DeviceQueue::Submit(const CommandBuffer& command_buffer, const Fence& fence)
+Rndr::ErrorCode Rndr::Forge::DeviceQueue::Submit(const CommandBuffer& command_buffer, const Fence& fence)
 {
     const Opal::Ref<const CommandBuffer> command_buffer_ref(command_buffer);
-    Submit({.command_buffers = {&command_buffer_ref, 1}, .fence = fence});
+    return Submit({.command_buffers = {&command_buffer_ref, 1}, .fence = fence});
 }
 
-void Rndr::Forge::DeviceQueue::WaitIdle() const
+Rndr::ErrorCode Rndr::Forge::DeviceQueue::WaitIdle() const
 {
-    const VkResult result = vkQueueWaitIdle(m_queue);
-    if (result != VK_SUCCESS)
-    {
-        throw VulkanException(result, "vkQueueWaitIdle");
-    }
+    RNDR_FORGE_VK_CHECK(vkQueueWaitIdle(m_queue), "vkQueueWaitIdle");
+    return ErrorCode::Success;
 }

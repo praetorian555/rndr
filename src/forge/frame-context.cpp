@@ -16,8 +16,7 @@ Rndr::Forge::FrameContext::FrameContext(const Device& device, SwapChain& swap_ch
     // Starting at the number of frames in flight is what replaces a fence per slot created signaled: the
     // first frames_in_flight frames wait for a value at or below it, so none of them waits for work that was
     // never submitted.
-    m_frame_timeline = Semaphore(
-        device, {.type = SemaphoreType::Timeline, .initial_value = static_cast<u64>(m_desc.frames_in_flight)});
+    m_frame_timeline = Semaphore(device, {.type = SemaphoreType::Timeline, .initial_value = static_cast<u64>(m_desc.frames_in_flight)});
     for (i32 frame = 0; frame < m_desc.frames_in_flight; ++frame)
     {
         m_texture_ready_semaphores.EmplaceBack(device);
@@ -90,7 +89,8 @@ void Rndr::Forge::FrameContext::Destroy()
     if (m_device.IsValid() && m_frame_timeline.IsValid())
     {
         // Frames may still be in flight, and every object below is one the device could still be reading.
-        m_device->WaitForAll();
+        // A wait that fails has already logged why, and there is nothing else teardown can do about it.
+        (void)m_device->WaitForAll();
     }
     m_command_buffers.Clear();
     m_render_finished_semaphores.Clear();
@@ -181,9 +181,12 @@ Rndr::Forge::SwapChainStatus Rndr::Forge::FrameContext::EndFrame()
     const SemaphoreSubmit signals[2] = {
         {.semaphore = render_finished},
         {.semaphore = m_frame_timeline, .value = m_frames_submitted + 1 + static_cast<u64>(m_desc.frames_in_flight)}};
-    m_graphics_queue->Submit({.command_buffers = {&command_buffer_ref, 1},
-                              .wait_semaphores = {&wait, 1},
-                              .signal_semaphores = {signals, 2}});
+    const ErrorCode submit_status = m_graphics_queue->Submit(
+        {.command_buffers = {&command_buffer_ref, 1}, .wait_semaphores = {&wait, 1}, .signal_semaphores = {signals, 2}});
+    if (submit_status != ErrorCode::Success)
+    {
+        throw Opal::Exception("Submitting the frame failed!");
+    }
 
     // Advanced before the present, so that a present that comes back out of date still leaves the next frame on
     // the following slot - the work of this one was submitted either way.

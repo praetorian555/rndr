@@ -2,9 +2,13 @@
 
 #include <cstdlib>
 
+#include <catch2/catch2.hpp>
+
+#include "opal/container/expected.h"
 #include "opal/container/string.h"
 #include "opal/logging.h"
 
+#include "rndr/error-codes.hpp"
 #include "rndr/forge/debug.hpp"
 #include "rndr/forge/graphics-context.hpp"
 #include "rndr/types.hpp"
@@ -45,8 +49,7 @@ namespace ForgeTest
 inline Rndr::Forge::GraphicsContextDesc TestContextDesc()
 {
     return {.collect_debug_messages = true,
-            .logged_message_types =
-                Rndr::Forge::DebugMessageTypeBits::Validation | Rndr::Forge::DebugMessageTypeBits::Performance};
+            .logged_message_types = Rndr::Forge::DebugMessageTypeBits::Validation | Rndr::Forge::DebugMessageTypeBits::Performance};
 }
 
 inline bool RegisterLogCategory()
@@ -91,7 +94,22 @@ inline Opal::StringUtf8 CollectValidationErrors(const Rndr::Forge::GraphicsConte
 inline Rndr::u32 CountValidationErrors(const Rndr::Forge::GraphicsContext& context)
 {
     using namespace Rndr;
-    return context.GetDebugMessageCount(Forge::DebugMessageSeverity::Error, Forge::DebugMessageTypeBits::Validation);
+    // Error and Validation are both real severities, so this only ever holds a count.
+    return context.GetDebugMessageCount(Forge::DebugMessageSeverity::Error, Forge::DebugMessageTypeBits::Validation).GetValue();
+}
+
+/**
+ * The value a Forge call reported, failing the case with the code when it reported one instead. Everything
+ * that is not itself about a failure goes through this, so an unexpected code names itself where it happened
+ * rather than becoming a crash on the line after.
+ */
+template <typename T>
+T Unwrap(Opal::Expected<T, Rndr::ErrorCode>&& result)
+{
+    const Rndr::u32 code = static_cast<Rndr::u32>(result.GetErrorOr(Rndr::ErrorCode::Success));
+    INFO("Forge reported error code " << code);
+    REQUIRE(result.HasValue());
+    return std::move(result).GetValue();
 }
 
 /**

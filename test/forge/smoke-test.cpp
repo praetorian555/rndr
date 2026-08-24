@@ -85,24 +85,49 @@ struct ForgeFixture
     Forge::Device device;
 
     /**
+     * What the machine said when this fixture asked for what it wanted, so the probes below can tell a
+     * machine that cannot do this from one that can. Every case using a fixture has already skipped on a
+     * machine that reported anything here.
+     *
      * @param features What the device is asked to turn on. The default is what every test but the ones about
-     *        a specific feature wants, and asking for one that this device lacks throws out of here.
+     *        a specific feature wants; asking for one this device lacks leaves the fixture empty.
      * @param queues Optional queue families to create alongside the graphics one. Asking for one this device
-     *        does not have throws out of here as well.
+     *        does not have leaves the fixture empty as well.
      */
+    ErrorCode status = ErrorCode::Success;
+
     explicit ForgeFixture(const Forge::DeviceFeatures& features = {}, const ForgeQueues& queues = {})
-        : context(ForgeTest::TestContextDesc())
     {
-        Opal::DynamicArray<Forge::PhysicalDevice> physical_devices = context.EnumeratePhysicalDevices();
-        device = Forge::Device(std::move(physical_devices[0]), context,
-                               {.features = features,
-                                .use_async_compute_queue = queues.async_compute,
-                                .use_dedicated_transfer_queue = queues.dedicated_transfer});
+        Opal::Expected<Forge::GraphicsContext, ErrorCode> context_result = Forge::GraphicsContext::Create(ForgeTest::TestContextDesc());
+        if (!context_result.HasValue())
+        {
+            status = context_result.GetError();
+            return;
+        }
+        context = std::move(context_result.GetValue());
+
+        Opal::Expected<Opal::DynamicArray<Forge::PhysicalDevice>, ErrorCode> physical_devices = context.EnumeratePhysicalDevices();
+        if (!physical_devices.HasValue())
+        {
+            status = physical_devices.GetError();
+            return;
+        }
+        Opal::Expected<Forge::Device, ErrorCode> device_result =
+            Forge::Device::Create(std::move(physical_devices.GetValue()[0]), context,
+                                  {.features = features,
+                                   .use_async_compute_queue = queues.async_compute,
+                                   .use_dedicated_transfer_queue = queues.dedicated_transfer});
+        if (!device_result.HasValue())
+        {
+            status = device_result.GetError();
+            return;
+        }
+        device = std::move(device_result.GetValue());
     }
 
     Forge::DeviceQueue& GetQueue(Forge::QueueFamily queue_family = Forge::QueueFamily::Graphics)
     {
-        return device.GetQueue(queue_family);
+        return ForgeTest::Unwrap(device.GetQueue(queue_family));
     }
 
     [[nodiscard]] Opal::StringUtf8 GetValidationErrors() const { return ForgeTest::CollectValidationErrors(context); }
@@ -121,43 +146,29 @@ struct ForgeFixture
 /**
  * Whether this machine has a Vulkan device at all, so a machine without one skips rather than fails.
  *
- * This rests on EnumeratePhysicalDevices throwing when it finds none. While it handed back an empty list,
- * the probe below reached `physical_devices[0]` on it and read off the end of the array - so the one machine
- * this function exists for is the one machine it did not work on.
+ * This rests on EnumeratePhysicalDevices reporting NoGraphicsDevice when it finds none. While it handed back
+ * an empty list, the probe below reached `physical_devices[0]` on it and read off the end of the array - so
+ * the one machine this function exists for is the one machine it did not work on.
  */
 bool IsForgeAvailable()
 {
     static const bool available = []
     {
-        try
-        {
-            const ForgeFixture probe;
-            return true;
-        }
-        catch (const Opal::Exception&)
-        {
-            return false;
-        }
+        const ForgeFixture probe;
+        return probe.status == ErrorCode::Success;
     }();
     return available;
 }
 
 /**
  * Whether this machine offers the optional queue families, since one family that does everything is a legal
- * device and Forge throws rather than falling back to the graphics queue when asked for a family it has not
+ * device and Forge reports rather than falling back to the graphics queue when asked for a family it has not
  * got. Tests about those families skip on such a machine the way the whole file skips on one with no device.
  */
 bool AreQueuesAvailable(const ForgeQueues& queues)
 {
-    try
-    {
-        const ForgeFixture probe({}, queues);
-        return true;
-    }
-    catch (const Opal::Exception&)
-    {
-        return false;
-    }
+    const ForgeFixture probe({}, queues);
+    return probe.status == ErrorCode::Success;
 }
 
 /**
@@ -170,8 +181,8 @@ bool IsSoftwareDevice()
 {
     static const bool software = []
     {
-        const Forge::GraphicsContext context(ForgeTest::TestContextDesc());
-        const Opal::DynamicArray<Forge::PhysicalDevice> devices = context.EnumeratePhysicalDevices();
+        const Forge::GraphicsContext context = ForgeTest::Unwrap(Forge::GraphicsContext::Create(ForgeTest::TestContextDesc()));
+        const Opal::DynamicArray<Forge::PhysicalDevice> devices = ForgeTest::Unwrap(context.EnumeratePhysicalDevices());
         return devices[0].GetProperties().deviceType == VK_PHYSICAL_DEVICE_TYPE_CPU;
     }();
     return software;
@@ -238,20 +249,20 @@ TEST_CASE("Forge context and device", "[forge]")
     {
         SKIP("No Vulkan device on this machine.");
     }
-    const Forge::GraphicsContext context(ForgeTest::TestContextDesc());
+    const Forge::GraphicsContext context = ForgeTest::Unwrap(Forge::GraphicsContext::Create(ForgeTest::TestContextDesc()));
     REQUIRE(context.IsValid());
 
-    // Never empty: a machine with no device throws out of here rather than handing back a list with nothing
-    // in it, which is what lets every caller in this file index the first element without checking. The
-    // machine that would have exercised the throw is the one that skips this whole case, so what is asserted
-    // here is the contract rather than the branch.
-    Opal::DynamicArray<Forge::PhysicalDevice> physical_devices = context.EnumeratePhysicalDevices();
+    // Never empty: a machine with no device reports NoGraphicsDevice rather than handing back a list with
+    // nothing in it, which is what lets every caller in this file index the first element without checking.
+    // The machine that would have exercised that code is the one that skips this whole case, so what is
+    // asserted here is the contract rather than the branch.
+    Opal::DynamicArray<Forge::PhysicalDevice> physical_devices = ForgeTest::Unwrap(context.EnumeratePhysicalDevices());
     REQUIRE_FALSE(physical_devices.IsEmpty());
 
-    Forge::Device device(std::move(physical_devices[0]), context, MakeHeadlessDeviceDesc());
+    Forge::Device device = ForgeTest::Unwrap(Forge::Device::Create(std::move(physical_devices[0]), context, MakeHeadlessDeviceDesc()));
     REQUIRE(device.IsValid());
-    REQUIRE(device.GetQueue(Forge::QueueFamily::Graphics).IsValid());
-    REQUIRE(context.GetDebugMessageCount(Forge::DebugMessageSeverity::Error, Forge::DebugMessageTypeBits::Validation) == 0);
+    REQUIRE(ForgeTest::Unwrap(device.GetQueue(Forge::QueueFamily::Graphics)).IsValid());
+    REQUIRE(context.GetDebugMessageCount(Forge::DebugMessageSeverity::Error, Forge::DebugMessageTypeBits::Validation).GetValue() == 0);
 }
 
 TEST_CASE("Forge context outlives a second one", "[forge]")
@@ -269,7 +280,7 @@ TEST_CASE("Forge context outlives a second one", "[forge]")
         REQUIRE(second.device.IsValid());
     }
     // Two calls through what the second context used to unload: one instance level, one device level.
-    const Opal::DynamicArray<Forge::PhysicalDevice> physical_devices = fixture.context.EnumeratePhysicalDevices();
+    const Opal::DynamicArray<Forge::PhysicalDevice> physical_devices = ForgeTest::Unwrap(fixture.context.EnumeratePhysicalDevices());
     REQUIRE_FALSE(physical_devices.IsEmpty());
     const Forge::Buffer buffer(fixture.device, {.size = 32, .usage = Forge::BufferUsageBits::TransferDestination});
     REQUIRE(buffer.IsValid());
@@ -692,15 +703,15 @@ TEST_CASE("Forge batched submit", "[forge]")
         const Forge::Fence fence(fixture.device, false);
         const Opal::Ref<const Forge::CommandBuffer> batch[2] = {Opal::Ref<const Forge::CommandBuffer>(first),
                                                                 Opal::Ref<const Forge::CommandBuffer>(second)};
-        fixture.GetQueue().Submit({.command_buffers = {batch, 2}, .fence = fence});
+        REQUIRE(fixture.GetQueue().Submit({.command_buffers = {batch, 2}, .fence = fence}) == ErrorCode::Success);
         fence.Wait();
     }
     SECTION("The same batch without a fence, waited on through the queue")
     {
         const Opal::Ref<const Forge::CommandBuffer> batch[2] = {Opal::Ref<const Forge::CommandBuffer>(first),
                                                                 Opal::Ref<const Forge::CommandBuffer>(second)};
-        fixture.GetQueue().Submit({.command_buffers = {batch, 2}});
-        fixture.GetQueue().WaitIdle();
+        REQUIRE(fixture.GetQueue().Submit({.command_buffers = {batch, 2}}) == ErrorCode::Success);
+        REQUIRE(fixture.GetQueue().WaitIdle() == ErrorCode::Success);
     }
     SECTION("One batch per half, the second waiting on a semaphore the first signals")
     {
@@ -710,8 +721,9 @@ TEST_CASE("Forge batched submit", "[forge]")
         const Opal::Ref<const Forge::CommandBuffer> second_batch[1] = {Opal::Ref<const Forge::CommandBuffer>(second)};
         const Forge::SemaphoreSubmit signal{.semaphore = semaphore, .stages = Forge::PipelineStageBits::Transfer};
         const Forge::SemaphoreSubmit wait{.semaphore = semaphore, .stages = Forge::PipelineStageBits::Transfer};
-        fixture.GetQueue().Submit({.command_buffers = {first_batch, 1}, .signal_semaphores = {&signal, 1}});
-        fixture.GetQueue().Submit({.command_buffers = {second_batch, 1}, .wait_semaphores = {&wait, 1}, .fence = fence});
+        REQUIRE(fixture.GetQueue().Submit({.command_buffers = {first_batch, 1}, .signal_semaphores = {&signal, 1}}) == ErrorCode::Success);
+        REQUIRE(fixture.GetQueue().Submit({.command_buffers = {second_batch, 1}, .wait_semaphores = {&wait, 1}, .fence = fence}) ==
+                ErrorCode::Success);
         fence.Wait();
     }
 
@@ -805,8 +817,9 @@ TEST_CASE("Forge timeline semaphores", "[forge]")
         const Forge::Fence fence(fixture.device, false);
         const Forge::SemaphoreSubmit signal{.semaphore = timeline, .stages = Forge::PipelineStageBits::Transfer, .value = 1};
         const Forge::SemaphoreSubmit wait{.semaphore = timeline, .stages = Forge::PipelineStageBits::Transfer, .value = 1};
-        fixture.GetQueue().Submit({.command_buffers = {first_batch, 1}, .signal_semaphores = {&signal, 1}});
-        fixture.GetQueue().Submit({.command_buffers = {second_batch, 1}, .wait_semaphores = {&wait, 1}, .fence = fence});
+        REQUIRE(fixture.GetQueue().Submit({.command_buffers = {first_batch, 1}, .signal_semaphores = {&signal, 1}}) == ErrorCode::Success);
+        REQUIRE(fixture.GetQueue().Submit({.command_buffers = {second_batch, 1}, .wait_semaphores = {&wait, 1}, .fence = fence}) ==
+                ErrorCode::Success);
         fence.Wait();
         require_whole_buffer_copied();
     }
@@ -815,8 +828,10 @@ TEST_CASE("Forge timeline semaphores", "[forge]")
         const Forge::Semaphore timeline(fixture.device, {.type = Forge::SemaphoreType::Timeline});
         const Forge::SemaphoreSubmit first_signal{.semaphore = timeline, .value = 1};
         const Forge::SemaphoreSubmit second_signal{.semaphore = timeline, .value = 2};
-        fixture.GetQueue().Submit({.command_buffers = {first_batch, 1}, .signal_semaphores = {&first_signal, 1}});
-        fixture.GetQueue().Submit({.command_buffers = {second_batch, 1}, .signal_semaphores = {&second_signal, 1}});
+        REQUIRE(fixture.GetQueue().Submit({.command_buffers = {first_batch, 1}, .signal_semaphores = {&first_signal, 1}}) ==
+                ErrorCode::Success);
+        REQUIRE(fixture.GetQueue().Submit({.command_buffers = {second_batch, 1}, .signal_semaphores = {&second_signal, 1}}) ==
+                ErrorCode::Success);
         timeline.Wait(2);
         REQUIRE(timeline.GetValue() == 2);
         require_whole_buffer_copied();
@@ -827,8 +842,10 @@ TEST_CASE("Forge timeline semaphores", "[forge]")
         const Forge::Semaphore second_timeline(fixture.device, {.type = Forge::SemaphoreType::Timeline});
         const Forge::SemaphoreSubmit first_signal{.semaphore = first_timeline, .value = 1};
         const Forge::SemaphoreSubmit second_signal{.semaphore = second_timeline, .value = 1};
-        fixture.GetQueue().Submit({.command_buffers = {first_batch, 1}, .signal_semaphores = {&first_signal, 1}});
-        fixture.GetQueue().Submit({.command_buffers = {second_batch, 1}, .signal_semaphores = {&second_signal, 1}});
+        REQUIRE(fixture.GetQueue().Submit({.command_buffers = {first_batch, 1}, .signal_semaphores = {&first_signal, 1}}) ==
+                ErrorCode::Success);
+        REQUIRE(fixture.GetQueue().Submit({.command_buffers = {second_batch, 1}, .signal_semaphores = {&second_signal, 1}}) ==
+                ErrorCode::Success);
         const Forge::SemaphoreWait waits[2] = {{.semaphore = first_timeline, .value = 1}, {.semaphore = second_timeline, .value = 1}};
         Forge::Semaphore::WaitForAll({waits, 2});
         REQUIRE(first_timeline.GetValue() == 1);
@@ -843,23 +860,23 @@ TEST_CASE("Forge timeline semaphores", "[forge]")
         REQUIRE_THROWS_AS(binary.Signal(1), Opal::Exception);
         REQUIRE_THROWS_AS(binary.GetValue(), Opal::Exception);
     }
-    SECTION("A value on a binary semaphore throws, since Vulkan would ignore it")
+    SECTION("A value on a binary semaphore is refused, since Vulkan would ignore it")
     {
         const Forge::Semaphore binary(fixture.device);
         const Forge::SemaphoreSubmit signal{.semaphore = binary, .value = 1};
-        REQUIRE_THROWS_AS(fixture.GetQueue().Submit({.command_buffers = {first_batch, 1}, .signal_semaphores = {&signal, 1}}),
-                          Opal::Exception);
+        REQUIRE(fixture.GetQueue().Submit({.command_buffers = {first_batch, 1}, .signal_semaphores = {&signal, 1}}) ==
+                ErrorCode::InvalidArgument);
     }
-    SECTION("A timeline signalled with zero throws, since no signal can reach it")
+    SECTION("A timeline signalled with zero is refused, since no signal can reach it")
     {
         const Forge::Semaphore timeline(fixture.device, {.type = Forge::SemaphoreType::Timeline});
         const Forge::SemaphoreSubmit signal{.semaphore = timeline, .value = 0};
-        REQUIRE_THROWS_AS(fixture.GetQueue().Submit({.command_buffers = {first_batch, 1}, .signal_semaphores = {&signal, 1}}),
-                          Opal::Exception);
+        REQUIRE(fixture.GetQueue().Submit({.command_buffers = {first_batch, 1}, .signal_semaphores = {&signal, 1}}) ==
+                ErrorCode::InvalidArgument);
         // A wait for zero is legal and trivially satisfied, so only the signal side is turned away.
         const Forge::SemaphoreSubmit wait{.semaphore = timeline, .value = 0};
-        fixture.GetQueue().Submit({.command_buffers = {first_batch, 1}, .wait_semaphores = {&wait, 1}});
-        fixture.GetQueue().WaitIdle();
+        REQUIRE(fixture.GetQueue().Submit({.command_buffers = {first_batch, 1}, .wait_semaphores = {&wait, 1}}) == ErrorCode::Success);
+        REQUIRE(fixture.GetQueue().WaitIdle() == ErrorCode::Success);
     }
     SECTION("A signal that does not raise the count throws")
     {
@@ -874,8 +891,9 @@ TEST_CASE("Forge timeline semaphores", "[forge]")
     {
         // A second logical device on the same physical one. Not a second ForgeFixture: its context would
         // call volkFinalize on the way out and unload Vulkan from under this one.
-        Opal::DynamicArray<Forge::PhysicalDevice> physical_devices = fixture.context.EnumeratePhysicalDevices();
-        const Forge::Device other(std::move(physical_devices[0]), fixture.context, MakeHeadlessDeviceDesc());
+        Opal::DynamicArray<Forge::PhysicalDevice> physical_devices = ForgeTest::Unwrap(fixture.context.EnumeratePhysicalDevices());
+        const Forge::Device other =
+            ForgeTest::Unwrap(Forge::Device::Create(std::move(physical_devices[0]), fixture.context, MakeHeadlessDeviceDesc()));
         const Forge::Semaphore here(fixture.device, {.type = Forge::SemaphoreType::Timeline, .initial_value = 1});
         const Forge::Semaphore there(other, {.type = Forge::SemaphoreType::Timeline, .initial_value = 1});
         const Forge::SemaphoreWait waits[2] = {{.semaphore = here, .value = 1}, {.semaphore = there, .value = 1}};
@@ -890,7 +908,7 @@ TEST_CASE("Forge timeline semaphores", "[forge]")
         REQUIRE_THROWS_AS(Forge::Semaphore::WaitForAll({empty_semaphore, 1}), Opal::Exception);
     }
 
-    fixture.GetQueue().WaitIdle();
+    REQUIRE(fixture.GetQueue().WaitIdle() == ErrorCode::Success);
     REQUIRE_NO_VALIDATION_ERROR(fixture);
 }
 
@@ -904,17 +922,17 @@ TEST_CASE("Forge submit rejects an empty object", "[forge]")
     const Opal::Ref<const Forge::CommandBuffer> empty_command_buffer{};
     const Forge::CommandBuffer valid(fixture.device, fixture.GetQueue());
 
-    SECTION("An empty command buffer throws")
+    SECTION("An empty command buffer is refused")
     {
         Forge::CommandBuffer empty;
         const Opal::Ref<const Forge::CommandBuffer> batch[1] = {Opal::Ref<const Forge::CommandBuffer>(empty)};
-        REQUIRE_THROWS_AS(fixture.GetQueue().Submit({.command_buffers = {batch, 1}}), Opal::Exception);
+        REQUIRE(fixture.GetQueue().Submit({.command_buffers = {batch, 1}}) == ErrorCode::InvalidArgument);
     }
-    SECTION("An empty semaphore throws")
+    SECTION("An empty semaphore is refused")
     {
         Forge::Semaphore empty;
         const Forge::SemaphoreSubmit wait{.semaphore = empty};
-        REQUIRE_THROWS_AS(fixture.GetQueue().Submit({.wait_semaphores = {&wait, 1}}), Opal::Exception);
+        REQUIRE(fixture.GetQueue().Submit({.wait_semaphores = {&wait, 1}}) == ErrorCode::InvalidArgument);
     }
     REQUIRE_NO_VALIDATION_ERROR(fixture);
 }
@@ -948,8 +966,8 @@ TEST_CASE("Forge waiting on several fences at once", "[forge]")
 
     const Opal::Ref<const Forge::CommandBuffer> first_batch[1] = {Opal::Ref<const Forge::CommandBuffer>(first)};
     const Opal::Ref<const Forge::CommandBuffer> second_batch[1] = {Opal::Ref<const Forge::CommandBuffer>(second)};
-    fixture.GetQueue().Submit({.command_buffers = {first_batch, 1}, .fence = fences[0]});
-    fixture.GetQueue().Submit({.command_buffers = {second_batch, 1}, .fence = fences[1]});
+    REQUIRE(fixture.GetQueue().Submit({.command_buffers = {first_batch, 1}, .fence = fences[0]}) == ErrorCode::Success);
+    REQUIRE(fixture.GetQueue().Submit({.command_buffers = {second_batch, 1}, .fence = fences[1]}) == ErrorCode::Success);
     Forge::Fence::WaitForAll(fences);
 
     Opal::DynamicArray<u8> read_back(k_size);
@@ -971,8 +989,9 @@ TEST_CASE("Forge waiting on several fences at once", "[forge]")
     SECTION("Fences from two devices in one wait throw")
     {
         // A second logical device on the same physical one, for the reason the timeline case above gives.
-        Opal::DynamicArray<Forge::PhysicalDevice> physical_devices = fixture.context.EnumeratePhysicalDevices();
-        const Forge::Device other(std::move(physical_devices[0]), fixture.context, MakeHeadlessDeviceDesc());
+        Opal::DynamicArray<Forge::PhysicalDevice> physical_devices = ForgeTest::Unwrap(fixture.context.EnumeratePhysicalDevices());
+        const Forge::Device other =
+            ForgeTest::Unwrap(Forge::Device::Create(std::move(physical_devices[0]), fixture.context, MakeHeadlessDeviceDesc()));
         Opal::DynamicArray<Forge::Fence> across_devices;
         across_devices.EmplaceBack(fixture.device, true);
         across_devices.EmplaceBack(other, true);
@@ -994,18 +1013,19 @@ TEST_CASE("Forge device features", "[forge]")
     {
         SKIP("No Vulkan device on this machine.");
     }
-    const Forge::GraphicsContext context(ForgeTest::TestContextDesc());
+    const Forge::GraphicsContext context = ForgeTest::Unwrap(Forge::GraphicsContext::Create(ForgeTest::TestContextDesc()));
 
-    // Builds a device on this machine's first physical device with the given features asked for.
+    // Builds a device on this machine's first physical device with the given features asked for. Hands back
+    // what Device::Create reported, since one case below is about a feature this machine may not have.
     auto make_device = [&context](const Forge::DeviceFeatures& features)
     {
-        Opal::DynamicArray<Forge::PhysicalDevice> physical_devices = context.EnumeratePhysicalDevices();
-        return Forge::Device(std::move(physical_devices[0]), context, MakeHeadlessDeviceDesc(features));
+        Opal::DynamicArray<Forge::PhysicalDevice> physical_devices = ForgeTest::Unwrap(context.EnumeratePhysicalDevices());
+        return Forge::Device::Create(std::move(physical_devices[0]), context, MakeHeadlessDeviceDesc(features));
     };
 
     SECTION("The defaults are what the device reports back")
     {
-        const Forge::Device device = make_device({});
+        const Forge::Device device = ForgeTest::Unwrap(make_device({}));
         REQUIRE(device.GetFeatures().buffer_device_address);
         REQUIRE(device.GetFeatures().descriptor_indexing);
         REQUIRE(device.GetFeatures().sampler_anisotropy);
@@ -1014,22 +1034,22 @@ TEST_CASE("Forge device features", "[forge]")
     }
     SECTION("Asking for mesh shaders succeeds exactly when this device has them")
     {
-        Opal::DynamicArray<Forge::PhysicalDevice> physical_devices = context.EnumeratePhysicalDevices();
+        Opal::DynamicArray<Forge::PhysicalDevice> physical_devices = ForgeTest::Unwrap(context.EnumeratePhysicalDevices());
         const bool has_extension = physical_devices[0].IsExtensionSupported(VK_EXT_MESH_SHADER_EXTENSION_NAME);
         INFO("VK_EXT_mesh_shader supported: " << has_extension);
         if (has_extension)
         {
-            const Forge::Device device = make_device({.mesh_shader = true, .task_shader = true});
+            const Forge::Device device = ForgeTest::Unwrap(make_device({.mesh_shader = true, .task_shader = true}));
             REQUIRE(device.IsExtensionEnabled(VK_EXT_MESH_SHADER_EXTENSION_NAME));
         }
         else
         {
-            REQUIRE_THROWS_AS(make_device({.mesh_shader = true}), Opal::Exception);
+            REQUIRE(make_device({.mesh_shader = true}).GetErrorOr(ErrorCode::Success) == ErrorCode::FeatureNotSupported);
         }
     }
     SECTION("A buffer wanting a device address needs the feature")
     {
-        const Forge::Device device = make_device({.buffer_device_address = false});
+        const Forge::Device device = ForgeTest::Unwrap(make_device({.buffer_device_address = false}));
         REQUIRE_THROWS_AS(Forge::Buffer(device, {.size = 64,
                                                  .usage = Forge::BufferUsageBits::StorageBuffer,
                                                  .use_device_address = true}),
@@ -1037,7 +1057,7 @@ TEST_CASE("Forge device features", "[forge]")
     }
     SECTION("An anisotropic sampler needs the feature")
     {
-        const Forge::Device device = make_device({.sampler_anisotropy = false});
+        const Forge::Device device = ForgeTest::Unwrap(make_device({.sampler_anisotropy = false}));
         REQUIRE_THROWS_AS(Forge::Sampler(device, {.max_anisotropy = 8.0f}), Opal::Exception);
         // One that does not ask for anisotropy is fine on the same device.
         const Forge::Sampler sampler(device, {.max_anisotropy = 1.0f});
@@ -1045,8 +1065,8 @@ TEST_CASE("Forge device features", "[forge]")
     }
     SECTION("More than one indirect command needs the feature")
     {
-        Forge::Device device = make_device({.multi_draw_indirect = false});
-        Forge::DeviceQueue& queue = device.GetQueue(Forge::QueueFamily::Graphics);
+        Forge::Device device = ForgeTest::Unwrap(make_device({.multi_draw_indirect = false}));
+        Forge::DeviceQueue& queue = ForgeTest::Unwrap(device.GetQueue(Forge::QueueFamily::Graphics));
         const Forge::Buffer commands(device, {.size = 2 * sizeof(Forge::DrawIndirectCommand),
                                               .usage = Forge::BufferUsageBits::IndirectBuffer});
         Forge::CommandBuffer command_buffer(device, queue);
@@ -1062,7 +1082,7 @@ TEST_CASE("Forge device features", "[forge]")
         report += Opal::StringUtf8("\n");
     }
     INFO(*report);
-    REQUIRE(context.GetDebugMessageCount(Forge::DebugMessageSeverity::Error, Forge::DebugMessageTypeBits::Validation) == 0);
+    REQUIRE(context.GetDebugMessageCount(Forge::DebugMessageSeverity::Error, Forge::DebugMessageTypeBits::Validation).GetValue() == 0);
 }
 
 TEST_CASE("Forge physical device selection", "[forge]")
@@ -1071,8 +1091,8 @@ TEST_CASE("Forge physical device selection", "[forge]")
     {
         SKIP("No Vulkan device on this machine.");
     }
-    const Forge::GraphicsContext context(ForgeTest::TestContextDesc());
-    Opal::DynamicArray<Forge::PhysicalDevice> devices = context.EnumeratePhysicalDevices();
+    const Forge::GraphicsContext context = ForgeTest::Unwrap(Forge::GraphicsContext::Create(ForgeTest::TestContextDesc()));
+    Opal::DynamicArray<Forge::PhysicalDevice> devices = ForgeTest::Unwrap(context.EnumeratePhysicalDevices());
     REQUIRE_FALSE(devices.IsEmpty());
 
     SECTION("A headless desc is met by some device on this machine")
@@ -1081,8 +1101,9 @@ TEST_CASE("Forge physical device selection", "[forge]")
         REQUIRE(best.HasValue());
         REQUIRE(best.GetValue() < static_cast<u32>(devices.GetSize()));
         // The one it picked has to actually work, which is the whole point of choosing rather than guessing.
-        const Forge::Device device(std::move(devices[static_cast<i32>(best.GetValue())]), context,
-                                   MakeHeadlessDeviceDesc());
+        const Forge::Device device =
+            ForgeTest::Unwrap(Forge::Device::Create(std::move(devices[static_cast<i32>(best.GetValue())]), context,
+                                                    MakeHeadlessDeviceDesc()));
         REQUIRE(device.IsValid());
     }
     SECTION("A requirement nothing can meet leaves the answer empty")
@@ -1093,15 +1114,17 @@ TEST_CASE("Forge physical device selection", "[forge]")
         desc.extensions.PushBack(nonsense_extension);
         REQUIRE_FALSE(Forge::FindPhysicalDevice(devices, desc).HasValue());
     }
-    SECTION("Selecting when nothing qualifies throws, naming the requirement")
+    SECTION("Selecting when nothing qualifies reports it, with the log naming the requirement")
     {
         Forge::DeviceDesc desc = MakeHeadlessDeviceDesc();
         desc.extensions.PushBack("VK_EXT_this_extension_does_not_exist");
-        REQUIRE_THROWS_AS(Forge::SelectPhysicalDevice(devices, desc), Opal::Exception);
+        Opal::Expected<Forge::PhysicalDevice, ErrorCode> chosen = Forge::SelectPhysicalDevice(devices, desc);
+        REQUIRE_FALSE(chosen.HasValue());
+        REQUIRE(chosen.GetError() == ErrorCode::FeatureNotSupported);
     }
     SECTION("Selecting moves the chosen device out of the list")
     {
-        Forge::PhysicalDevice chosen = Forge::SelectPhysicalDevice(devices, MakeHeadlessDeviceDesc());
+        Forge::PhysicalDevice chosen = ForgeTest::Unwrap(Forge::SelectPhysicalDevice(devices, MakeHeadlessDeviceDesc()));
         REQUIRE(chosen.IsValid());
         i32 valid_left = 0;
         for (const Forge::PhysicalDevice& device : devices)
@@ -1118,7 +1141,7 @@ TEST_CASE("Forge physical device selection", "[forge]")
         REQUIRE(Forge::FindPhysicalDevice(devices, desc).HasValue());
     }
 
-    REQUIRE(context.GetDebugMessageCount(Forge::DebugMessageSeverity::Error, Forge::DebugMessageTypeBits::Validation) == 0);
+    REQUIRE(context.GetDebugMessageCount(Forge::DebugMessageSeverity::Error, Forge::DebugMessageTypeBits::Validation).GetValue() == 0);
 }
 
 /** Writes into the second buffer of a bound array, so which descriptor was written is visible in the result. */
@@ -1139,8 +1162,8 @@ TEST_CASE("Forge bindless descriptor bindings", "[forge]")
     {
         SKIP("No Vulkan device on this machine.");
     }
-    const Forge::GraphicsContext context(ForgeTest::TestContextDesc());
-    Opal::DynamicArray<Forge::PhysicalDevice> physical_devices = context.EnumeratePhysicalDevices();
+    const Forge::GraphicsContext context = ForgeTest::Unwrap(Forge::GraphicsContext::Create(ForgeTest::TestContextDesc()));
+    Opal::DynamicArray<Forge::PhysicalDevice> physical_devices = ForgeTest::Unwrap(context.EnumeratePhysicalDevices());
 
     constexpr Forge::DeviceFeatures k_bindless_features{.partially_bound_descriptors = true,
                                                         .update_after_bind_descriptors = true,
@@ -1150,8 +1173,9 @@ TEST_CASE("Forge bindless descriptor bindings", "[forge]")
     {
         SKIP("This device does not support the descriptor indexing features bindless needs.");
     }
-    Forge::Device device(Forge::SelectPhysicalDevice(physical_devices, bindless_desc), context, bindless_desc);
-    Forge::DeviceQueue& queue = device.GetQueue(Forge::QueueFamily::Graphics);
+    Forge::Device device = ForgeTest::Unwrap(Forge::Device::Create(
+        ForgeTest::Unwrap(Forge::SelectPhysicalDevice(physical_devices, bindless_desc)), context, bindless_desc));
+    Forge::DeviceQueue& queue = ForgeTest::Unwrap(device.GetQueue(Forge::QueueFamily::Graphics));
 
     constexpr u32 k_max_descriptors = 4;
     constexpr u32 k_used_descriptors = 2;
@@ -1248,7 +1272,7 @@ TEST_CASE("Forge bindless descriptor bindings", "[forge]")
         report += Opal::StringUtf8("\n");
     }
     INFO(*report);
-    REQUIRE(context.GetDebugMessageCount(Forge::DebugMessageSeverity::Error, Forge::DebugMessageTypeBits::Validation) == 0);
+    REQUIRE(context.GetDebugMessageCount(Forge::DebugMessageSeverity::Error, Forge::DebugMessageTypeBits::Validation).GetValue() == 0);
 }
 
 constexpr const char* k_bindless_texture_source = R"(
@@ -1275,8 +1299,8 @@ TEST_CASE("Forge bindless texture array", "[forge]")
     {
         SKIP("No Vulkan device on this machine.");
     }
-    const Forge::GraphicsContext context(ForgeTest::TestContextDesc());
-    Opal::DynamicArray<Forge::PhysicalDevice> physical_devices = context.EnumeratePhysicalDevices();
+    const Forge::GraphicsContext context = ForgeTest::Unwrap(Forge::GraphicsContext::Create(ForgeTest::TestContextDesc()));
+    Opal::DynamicArray<Forge::PhysicalDevice> physical_devices = ForgeTest::Unwrap(context.EnumeratePhysicalDevices());
 
     constexpr Forge::DeviceFeatures k_bindless_features{.partially_bound_descriptors = true,
                                                         .update_after_bind_descriptors = true,
@@ -1286,8 +1310,9 @@ TEST_CASE("Forge bindless texture array", "[forge]")
     {
         SKIP("This device does not support the descriptor indexing features bindless needs.");
     }
-    Forge::Device device(Forge::SelectPhysicalDevice(physical_devices, bindless_desc), context, bindless_desc);
-    Forge::DeviceQueue& queue = device.GetQueue(Forge::QueueFamily::Graphics);
+    Forge::Device device = ForgeTest::Unwrap(Forge::Device::Create(
+        ForgeTest::Unwrap(Forge::SelectPhysicalDevice(physical_devices, bindless_desc)), context, bindless_desc));
+    Forge::DeviceQueue& queue = ForgeTest::Unwrap(device.GetQueue(Forge::QueueFamily::Graphics));
 
     constexpr u32 k_max_descriptors = 4;
     constexpr u32 k_used_descriptors = 3;
@@ -1424,7 +1449,7 @@ TEST_CASE("Forge bindless texture array", "[forge]")
         report += Opal::StringUtf8("\n");
     }
     INFO(*report);
-    REQUIRE(context.GetDebugMessageCount(Forge::DebugMessageSeverity::Error, Forge::DebugMessageTypeBits::Validation) == 0);
+    REQUIRE(context.GetDebugMessageCount(Forge::DebugMessageSeverity::Error, Forge::DebugMessageTypeBits::Validation).GetValue() == 0);
 }
 
 constexpr const char* k_bindless_constant_source = R"(
@@ -1451,8 +1476,8 @@ TEST_CASE("Forge bindless constant buffer array", "[forge]")
     {
         SKIP("No Vulkan device on this machine.");
     }
-    const Forge::GraphicsContext context(ForgeTest::TestContextDesc());
-    Opal::DynamicArray<Forge::PhysicalDevice> physical_devices = context.EnumeratePhysicalDevices();
+    const Forge::GraphicsContext context = ForgeTest::Unwrap(Forge::GraphicsContext::Create(ForgeTest::TestContextDesc()));
+    Opal::DynamicArray<Forge::PhysicalDevice> physical_devices = ForgeTest::Unwrap(context.EnumeratePhysicalDevices());
 
     constexpr Forge::DeviceFeatures k_bindless_features{.partially_bound_descriptors = true,
                                                         .update_after_bind_descriptors = true,
@@ -1466,8 +1491,9 @@ TEST_CASE("Forge bindless constant buffer array", "[forge]")
     {
         SKIP("A software driver reports the non-uniform indexing feature and then reads element zero anyway.");
     }
-    Forge::Device device(Forge::SelectPhysicalDevice(physical_devices, bindless_desc), context, bindless_desc);
-    Forge::DeviceQueue& queue = device.GetQueue(Forge::QueueFamily::Graphics);
+    Forge::Device device = ForgeTest::Unwrap(Forge::Device::Create(
+        ForgeTest::Unwrap(Forge::SelectPhysicalDevice(physical_devices, bindless_desc)), context, bindless_desc));
+    Forge::DeviceQueue& queue = ForgeTest::Unwrap(device.GetQueue(Forge::QueueFamily::Graphics));
 
     constexpr u32 k_max_descriptors = 2;
     constexpr i32 k_element_count = 256;
@@ -1542,7 +1568,7 @@ TEST_CASE("Forge bindless constant buffer array", "[forge]")
         report += Opal::StringUtf8("\n");
     }
     INFO(*report);
-    REQUIRE(context.GetDebugMessageCount(Forge::DebugMessageSeverity::Error, Forge::DebugMessageTypeBits::Validation) == 0);
+    REQUIRE(context.GetDebugMessageCount(Forge::DebugMessageSeverity::Error, Forge::DebugMessageTypeBits::Validation).GetValue() == 0);
 }
 
 TEST_CASE("Forge barrier vocabulary", "[forge]")
@@ -2547,8 +2573,8 @@ bool IsIndexTypeUint8Supported()
 {
     static const bool supported = []
     {
-        const Forge::GraphicsContext context(ForgeTest::TestContextDesc());
-        const Opal::DynamicArray<Forge::PhysicalDevice> devices = context.EnumeratePhysicalDevices();
+        const Forge::GraphicsContext context = ForgeTest::Unwrap(Forge::GraphicsContext::Create(ForgeTest::TestContextDesc()));
+        const Opal::DynamicArray<Forge::PhysicalDevice> devices = ForgeTest::Unwrap(context.EnumeratePhysicalDevices());
         return devices[0].IsExtensionSupported(VK_KHR_INDEX_TYPE_UINT8_EXTENSION_NAME) ||
                devices[0].IsExtensionSupported(VK_EXT_INDEX_TYPE_UINT8_EXTENSION_NAME);
     }();
@@ -2560,8 +2586,8 @@ VkPhysicalDeviceFeatures GetFirstPhysicalDeviceFeatures()
 {
     static const VkPhysicalDeviceFeatures features = []
     {
-        const Forge::GraphicsContext context(ForgeTest::TestContextDesc());
-        const Opal::DynamicArray<Forge::PhysicalDevice> devices = context.EnumeratePhysicalDevices();
+        const Forge::GraphicsContext context = ForgeTest::Unwrap(Forge::GraphicsContext::Create(ForgeTest::TestContextDesc()));
+        const Opal::DynamicArray<Forge::PhysicalDevice> devices = ForgeTest::Unwrap(context.EnumeratePhysicalDevices());
         return devices[0].GetFeatures();
     }();
     return features;
@@ -3965,12 +3991,12 @@ TEST_CASE("Forge empty state and moves of the context", "[forge]")
     // created last, so a case holding two contexts at once is where that stops being theoretical. Two of
     // them are live here for as long as the assignment below takes.
     CheckLifetimeContract(
-        "GraphicsContext", [] { return Forge::GraphicsContext(ForgeTest::TestContextDesc()); },
+        "GraphicsContext", [] { return ForgeTest::Unwrap(Forge::GraphicsContext::Create(ForgeTest::TestContextDesc())); },
         [](const Forge::GraphicsContext& context)
         {
             REQUIRE(context.GetInstance() != VK_NULL_HANDLE);
             // Enumerating is the cheapest call that goes through the instance the move had to carry.
-            REQUIRE(context.EnumeratePhysicalDevices().GetSize() > 0);
+            REQUIRE(ForgeTest::Unwrap(context.EnumeratePhysicalDevices()).GetSize() > 0);
         });
 }
 
@@ -3980,11 +4006,11 @@ TEST_CASE("Forge empty state and moves of the device stack", "[forge]")
     {
         SKIP("No Vulkan device on this machine.");
     }
-    const Forge::GraphicsContext context(ForgeTest::TestContextDesc());
+    const Forge::GraphicsContext context = ForgeTest::Unwrap(Forge::GraphicsContext::Create(ForgeTest::TestContextDesc()));
 
     auto make_physical_device = [&context]
     {
-        Opal::DynamicArray<Forge::PhysicalDevice> devices = context.EnumeratePhysicalDevices();
+        Opal::DynamicArray<Forge::PhysicalDevice> devices = ForgeTest::Unwrap(context.EnumeratePhysicalDevices());
         return std::move(devices[0]);
     };
     CheckLifetimeContract("PhysicalDevice", make_physical_device,
@@ -4001,7 +4027,7 @@ TEST_CASE("Forge empty state and moves of the device stack", "[forge]")
                           });
 
     auto make_device = [&context, &make_physical_device]
-    { return Forge::Device(make_physical_device(), context, MakeHeadlessDeviceDesc()); };
+    { return ForgeTest::Unwrap(Forge::Device::Create(make_physical_device(), context, MakeHeadlessDeviceDesc())); };
     CheckLifetimeContract("Device", make_device,
                           [](Forge::Device& device)
                           {
@@ -4013,23 +4039,24 @@ TEST_CASE("Forge empty state and moves of the device stack", "[forge]")
                               REQUIRE(device.GetPhysicalDevice().IsValid());
                               // Every queue holds a reference back to the device, which a move has to
                               // re-point, so reaching one through the moved device is the check for that.
-                              REQUIRE(device.GetQueue(Forge::QueueFamily::Graphics).IsValid());
+                              REQUIRE(ForgeTest::Unwrap(device.GetQueue(Forge::QueueFamily::Graphics)).IsValid());
                           });
 
     Forge::Device device = make_device();
-    const u32 graphics_family = device.GetQueue(Forge::QueueFamily::Graphics).GetQueueFamilyIndex();
+    const u32 graphics_family = ForgeTest::Unwrap(device.GetQueue(Forge::QueueFamily::Graphics)).GetQueueFamilyIndex();
     // A queue of its own rather than one from GetQueue: those belong to the device, and destroying one would
     // leave the device holding a queue with no command pool. See the note on DeviceQueue::Destroy.
-    CheckLifetimeContract("DeviceQueue", [&device, graphics_family] { return Forge::DeviceQueue(device, graphics_family); },
-                          [&device](Forge::DeviceQueue& queue)
-                          {
-                              REQUIRE(queue.GetNativeQueue() != VK_NULL_HANDLE);
-                              REQUIRE(queue.GetNativeCommandPool() != VK_NULL_HANDLE);
-                              // Submitting needs every member at once: the device, the queue, the family
-                              // index and the command pool the command buffer is allocated out of.
-                              Forge::ImmediateSubmit(device, queue, [](Forge::CommandBuffer&) {});
-                              queue.WaitIdle();
-                          });
+    CheckLifetimeContract(
+        "DeviceQueue", [&device, graphics_family] { return ForgeTest::Unwrap(Forge::DeviceQueue::Create(device, graphics_family)); },
+        [&device](Forge::DeviceQueue& queue)
+        {
+            REQUIRE(queue.GetNativeQueue() != VK_NULL_HANDLE);
+            REQUIRE(queue.GetNativeCommandPool() != VK_NULL_HANDLE);
+            // Submitting needs every member at once: the device, the queue, the family
+            // index and the command pool the command buffer is allocated out of.
+            Forge::ImmediateSubmit(device, queue, [](Forge::CommandBuffer&) {});
+            REQUIRE(queue.WaitIdle() == ErrorCode::Success);
+        });
 
     // The device goes before the check, because vkDestroyDevice is what names a queue's command pool that a
     // move assignment leaked. The context outlives it, so the message is still collected.
@@ -4041,7 +4068,7 @@ TEST_CASE("Forge empty state and moves of the device stack", "[forge]")
         report += Opal::StringUtf8("\n");
     }
     INFO(*report);
-    REQUIRE(context.GetDebugMessageCount(Forge::DebugMessageSeverity::Error, Forge::DebugMessageTypeBits::Validation) == 0);
+    REQUIRE(context.GetDebugMessageCount(Forge::DebugMessageSeverity::Error, Forge::DebugMessageTypeBits::Validation).GetValue() == 0);
 }
 
 TEST_CASE("Forge empty state and moves of the resources", "[forge]")
@@ -4253,7 +4280,7 @@ TEST_CASE("Forge empty state and moves of the command and synchronization object
                               command_buffer.Begin();
                               command_buffer.End();
                               const Forge::Fence fence(fixture.device, false);
-                              queue.Submit(command_buffer, fence);
+                              REQUIRE(queue.Submit(command_buffer, fence) == ErrorCode::Success);
                               fence.Wait();
                           });
 
@@ -4263,7 +4290,7 @@ TEST_CASE("Forge empty state and moves of the command and synchronization object
                               Forge::CommandBuffer command_buffer(fixture.device, queue);
                               command_buffer.Begin();
                               command_buffer.End();
-                              queue.Submit(command_buffer, fence);
+                              REQUIRE(queue.Submit(command_buffer, fence) == ErrorCode::Success);
                               fence.Wait();
                               // Signalled now, and Reset has to reach the device the move carried.
                               REQUIRE(fence.TryWait(0));
@@ -5059,16 +5086,16 @@ TEST_CASE("Forge barrier preset for presenting", "[forge]")
     // Present is a swap chain layout, so naming it needs the device to have the extension even though
     // nothing here presents. Asking for it without a surface is legal, and is what makes ToPresent
     // checkable in a file that never opens a window.
-    const Forge::GraphicsContext context(ForgeTest::TestContextDesc());
-    Opal::DynamicArray<Forge::PhysicalDevice> physical_devices = context.EnumeratePhysicalDevices();
+    const Forge::GraphicsContext context = ForgeTest::Unwrap(Forge::GraphicsContext::Create(ForgeTest::TestContextDesc()));
+    Opal::DynamicArray<Forge::PhysicalDevice> physical_devices = ForgeTest::Unwrap(context.EnumeratePhysicalDevices());
     if (!physical_devices[0].IsExtensionSupported(VK_KHR_SWAPCHAIN_EXTENSION_NAME))
     {
         SKIP("This device has no swap chain extension.");
     }
     Forge::DeviceDesc device_desc = MakeHeadlessDeviceDesc();
     device_desc.extensions.PushBack(VK_KHR_SWAPCHAIN_EXTENSION_NAME);
-    Forge::Device device(std::move(physical_devices[0]), context, device_desc);
-    Forge::DeviceQueue& queue = device.GetQueue(Forge::QueueFamily::Graphics);
+    Forge::Device device = ForgeTest::Unwrap(Forge::Device::Create(std::move(physical_devices[0]), context, device_desc));
+    Forge::DeviceQueue& queue = ForgeTest::Unwrap(device.GetQueue(Forge::QueueFamily::Graphics));
 
     constexpr i32 k_side = 4;
     Forge::Texture texture(device, {.format = PixelFormat::R8G8B8A8_UNORM,
@@ -5094,7 +5121,7 @@ TEST_CASE("Forge barrier preset for presenting", "[forge]")
         }
     }
     INFO(*report);
-    REQUIRE(context.GetDebugMessageCount(Forge::DebugMessageSeverity::Error, Forge::DebugMessageTypeBits::Validation) == 0);
+    REQUIRE(context.GetDebugMessageCount(Forge::DebugMessageSeverity::Error, Forge::DebugMessageTypeBits::Validation).GetValue() == 0);
 }
 
 TEST_CASE("Forge binding several descriptor sets at once", "[forge]")
@@ -7640,8 +7667,9 @@ TEST_CASE("Forge a buffer handed from one queue family to another", "[forge]")
     const Opal::Ref<const Forge::CommandBuffer> acquire_batch[1] = {Opal::Ref<const Forge::CommandBuffer>(acquire_commands)};
     const Forge::SemaphoreSubmit signal{.semaphore = handover, .stages = Forge::PipelineStageBits::ComputeShader};
     const Forge::SemaphoreSubmit wait{.semaphore = handover, .stages = Forge::PipelineStageBits::Transfer};
-    compute_queue.Submit({.command_buffers = {release_batch, 1}, .signal_semaphores = {&signal, 1}});
-    graphics_queue.Submit({.command_buffers = {acquire_batch, 1}, .wait_semaphores = {&wait, 1}, .fence = fence});
+    REQUIRE(compute_queue.Submit({.command_buffers = {release_batch, 1}, .signal_semaphores = {&signal, 1}}) == ErrorCode::Success);
+    REQUIRE(graphics_queue.Submit({.command_buffers = {acquire_batch, 1}, .wait_semaphores = {&wait, 1}, .fence = fence}) ==
+            ErrorCode::Success);
     fence.Wait();
 
     Opal::DynamicArray<u32> values(k_element_count);
@@ -9309,8 +9337,8 @@ TEST_CASE("Forge reading timestamp ticks without blocking", "[forge]")
  * Vulkan, and it was going unexercised.
  *
  * It used to answer index zero when nothing matched. That is a real memory type with real properties, so a
- * caller could not tell it from a match and would allocate from the wrong heap; it throws now, which is what
- * the error handling section of docs/forge.md asks of everything else.
+ * caller could not tell it from a match and would allocate from the wrong heap; it reports
+ * FeatureNotSupported now, which is what the error handling section of docs/forge.md asks of everything else.
  */
 TEST_CASE("Forge memory type selection", "[forge]")
 {
@@ -9335,7 +9363,7 @@ TEST_CASE("Forge memory type selection", "[forge]")
         for (const VkMemoryPropertyFlags wanted : k_wanted)
         {
             INFO("wanted properties " << wanted);
-            const u32 index = physical_device.FindMemoryTypeIndex(every_type, wanted);
+            const u32 index = ForgeTest::Unwrap(physical_device.FindMemoryTypeIndex(every_type, wanted));
             REQUIRE(index < memory.memoryTypeCount);
             REQUIRE((memory.memoryTypes[index].propertyFlags & wanted) == wanted);
         }
@@ -9345,37 +9373,38 @@ TEST_CASE("Forge memory type selection", "[forge]")
         // Asked for one type by name, it is the one that comes back - which is what the filter is for and
         // what an allocation driven by a VkMemoryRequirements would pass.
         const u32 wanted = memory.memoryTypes[0].propertyFlags;
-        REQUIRE(physical_device.FindMemoryTypeIndex(1u << 0, wanted) == 0);
+        REQUIRE(ForgeTest::Unwrap(physical_device.FindMemoryTypeIndex(1u << 0, wanted)) == 0);
         if (memory.memoryTypeCount > 1)
         {
             const u32 second_wanted = memory.memoryTypes[1].propertyFlags;
-            REQUIRE(physical_device.FindMemoryTypeIndex(1u << 1, second_wanted) == 1);
+            REQUIRE(ForgeTest::Unwrap(physical_device.FindMemoryTypeIndex(1u << 1, second_wanted)) == 1);
         }
     }
     SECTION("No property is asked for, so the first type the filter allows is the answer")
     {
-        REQUIRE(physical_device.FindMemoryTypeIndex(every_type, 0) == 0);
+        REQUIRE(ForgeTest::Unwrap(physical_device.FindMemoryTypeIndex(every_type, 0)) == 0);
         if (memory.memoryTypeCount > 1)
         {
             // The lowest set bit of the filter, not the lowest index of the device.
-            REQUIRE(physical_device.FindMemoryTypeIndex(every_type & ~1u, 0) == 1);
+            REQUIRE(ForgeTest::Unwrap(physical_device.FindMemoryTypeIndex(every_type & ~1u, 0)) == 1);
         }
     }
-    SECTION("Nothing matches, and it throws rather than naming a type that does not")
+    SECTION("Nothing matches, and it reports rather than naming a type that does not")
     {
         // No device has every property at once - DEVICE_LOCAL and the host visible bits coexist, but
         // LAZILY_ALLOCATED and PROTECTED do not sit with them - so this is an ask that cannot be met.
         constexpr VkMemoryPropertyFlags k_impossible = 0xFFFFFFFF;
-        REQUIRE_THROWS_AS(physical_device.FindMemoryTypeIndex(every_type, k_impossible), Opal::Exception);
+        constexpr ErrorCode k_none = ErrorCode::FeatureNotSupported;
+        REQUIRE(physical_device.FindMemoryTypeIndex(every_type, k_impossible).GetErrorOr(ErrorCode::Success) == k_none);
         // A filter that allows no type at all, which is the other way to match nothing: the loop never gets
         // as far as comparing properties.
-        REQUIRE_THROWS_AS(physical_device.FindMemoryTypeIndex(0, 0), Opal::Exception);
-        REQUIRE_THROWS_AS(physical_device.FindMemoryTypeIndex(0, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT), Opal::Exception);
+        REQUIRE(physical_device.FindMemoryTypeIndex(0, 0).GetErrorOr(ErrorCode::Success) == k_none);
+        REQUIRE(physical_device.FindMemoryTypeIndex(0, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT).GetErrorOr(ErrorCode::Success) == k_none);
         // And a filter naming only types that lack the property, which is the case a caller actually hits:
         // the answer index zero used to give was a type the filter had already ruled out.
-        const u32 host_visible = physical_device.FindMemoryTypeIndex(
-            every_type, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
-        REQUIRE_THROWS_AS(physical_device.FindMemoryTypeIndex(1u << host_visible, k_impossible), Opal::Exception);
+        const u32 host_visible = ForgeTest::Unwrap(physical_device.FindMemoryTypeIndex(
+            every_type, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT));
+        REQUIRE(physical_device.FindMemoryTypeIndex(1u << host_visible, k_impossible).GetErrorOr(ErrorCode::Success) == k_none);
     }
     REQUIRE_NO_VALIDATION_ERROR(fixture);
 }
