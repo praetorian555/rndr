@@ -16,6 +16,23 @@
 #include "rndr/canvas/context.hpp"
 #include "rndr/log.hpp"
 
+namespace
+{
+
+// Interim bridge while PbrRenderer still reports by throwing: unwraps a result into the exception
+// this renderer's callers already handle.
+template <typename T>
+T UnwrapOrThrow(Opal::Expected<T, Rndr::ErrorCode>&& result, const char* what)
+{
+    if (!result.HasValue())
+    {
+        throw Opal::Exception(what);
+    }
+    return std::move(result).GetValue();
+}
+
+}  // namespace
+
 // BatchKey ==================================================================
 
 bool Rndr::Canvas::PbrRenderer::BatchKey::operator==(const BatchKey& other) const
@@ -53,8 +70,12 @@ Rndr::Canvas::PbrRenderer::PbrRenderer(Opal::Ref<Context> context) : m_context(s
     RNDR_ASSERT(m_shader.IsValid(), "Failed to create PbrRenderer shader!");
 
     // 1x1 white dummy texture for unused texture slots.
-    m_dummy_texture =
-        Texture(TextureDesc{.width = 1, .height = 1}, Opal::AsBytes(Colors::k_white), "PBR Renderer - Dummy Texture");
+    auto dummy_result = Texture::Create(TextureDesc{.width = 1, .height = 1}, Opal::AsBytes(Colors::k_white),
+                                        "PBR Renderer - Dummy Texture");
+    if (dummy_result.HasValue())
+    {
+        m_dummy_texture = std::move(dummy_result).GetValue();
+    }
 }
 
 Rndr::Canvas::PbrRenderer::~PbrRenderer()
@@ -227,8 +248,9 @@ void Rndr::Canvas::PbrRenderer::AddDrawEntry(const Opal::StringUtf8& geometry_ke
         BatchData data;
         data.brush = Brush(BrushDesc{.depth_test = true, .depth_write = true}, "PBR Renderer - " + material.material_name.Clone());
         data.brush.SetShader(m_shader);
-        data.instance_buffer = Buffer(BufferUsage::Storage, k_max_instance_count * sizeof(InstanceData), 0, {},
-                                      "PBR Renderer - " + material.material_name.Clone() + " - Instance Buffer");
+        data.instance_buffer = UnwrapOrThrow(Buffer::Create(BufferUsage::Storage, k_max_instance_count * sizeof(InstanceData), 0, {},
+                                                            "PBR Renderer - " + material.material_name.Clone() + " - Instance Buffer"),
+                                             "Failed to create PBR instance buffer");
         BindTextures(data.brush, batch_key);
         m_batches.Insert(batch_key.Clone(), std::move(data));
         it = m_batches.Find(batch_key);
@@ -302,7 +324,7 @@ void Rndr::Canvas::PbrRenderer::Render(DrawList& draw_list)
         RNDR_ASSERT(mesh != nullptr, "Geometry not found in cache!");
 
         // Upload instance data to this batch's SSBO.
-        batch_data.instance_buffer.Update(Opal::AsBytes(batch_data.instances));
+        (void)batch_data.instance_buffer.Update(Opal::AsBytes(batch_data.instances));
         brush.SetBuffer("instances", batch_data.instance_buffer);
 
         draw_list.DrawInstanced(*mesh, brush, static_cast<u32>(batch_data.instances.GetSize()));
@@ -555,13 +577,13 @@ void LoadMaterialFromScene(const aiScene& ai_scene, Rndr::u32 material_index, co
     path = GetTexturePath(ai_material, aiTextureType_EMISSIVE, 0, parent_path);
     if (!path.IsEmpty())
     {
-        out_model.emissive_texture = Rndr::Canvas::Texture::FromFile(path, texture_desc, flip_vertically);
+        out_model.emissive_texture = UnwrapOrThrow(Rndr::Canvas::Texture::FromFile(path, texture_desc, flip_vertically), "Failed to load PBR texture");
     }
 
     path = GetTexturePath(ai_material, aiTextureType_DIFFUSE, 0, parent_path);
     if (!path.IsEmpty())
     {
-        out_model.albedo_texture = Rndr::Canvas::Texture::FromFile(path, texture_desc, flip_vertically);
+        out_model.albedo_texture = UnwrapOrThrow(Rndr::Canvas::Texture::FromFile(path, texture_desc, flip_vertically), "Failed to load PBR texture");
     }
 
     aiString mr_path;
@@ -575,13 +597,13 @@ void LoadMaterialFromScene(const aiScene& ai_scene, Rndr::u32 material_index, co
                              &mr_blend, &mr_op, mr_mode.GetData(), &mr_flags) == AI_SUCCESS)
     {
         Opal::StringUtf8 mr_full_path = Opal::Paths::NormalizePath(Opal::Paths::Combine(parent_path, mr_path.C_Str()).GetValue()).GetValue();
-        out_model.metallic_roughness_texture = Rndr::Canvas::Texture::FromFile(mr_full_path, texture_desc, flip_vertically);
+        out_model.metallic_roughness_texture = UnwrapOrThrow(Rndr::Canvas::Texture::FromFile(mr_full_path, texture_desc, flip_vertically), "Failed to load PBR texture");
     }
 
     path = GetTexturePath(ai_material, aiTextureType_LIGHTMAP, 0, parent_path);
     if (!path.IsEmpty())
     {
-        out_model.ambient_occlusion_texture = Rndr::Canvas::Texture::FromFile(path, texture_desc, flip_vertically);
+        out_model.ambient_occlusion_texture = UnwrapOrThrow(Rndr::Canvas::Texture::FromFile(path, texture_desc, flip_vertically), "Failed to load PBR texture");
     }
 
     path = GetTexturePath(ai_material, aiTextureType_NORMALS, 0, parent_path);
@@ -591,13 +613,13 @@ void LoadMaterialFromScene(const aiScene& ai_scene, Rndr::u32 material_index, co
     }
     if (!path.IsEmpty())
     {
-        out_model.normal_texture = Rndr::Canvas::Texture::FromFile(path, texture_desc, flip_vertically);
+        out_model.normal_texture = UnwrapOrThrow(Rndr::Canvas::Texture::FromFile(path, texture_desc, flip_vertically), "Failed to load PBR texture");
     }
 
     path = GetTexturePath(ai_material, aiTextureType_OPACITY, 0, parent_path);
     if (!path.IsEmpty())
     {
-        out_model.opacity_texture = Rndr::Canvas::Texture::FromFile(path, texture_desc, flip_vertically);
+        out_model.opacity_texture = UnwrapOrThrow(Rndr::Canvas::Texture::FromFile(path, texture_desc, flip_vertically), "Failed to load PBR texture");
         out_model.alpha_test = 0.5f;
     }
 

@@ -10,7 +10,6 @@
 #include "rndr/canvas/context.hpp"
 #include "rndr/canvas/draw-list.hpp"
 #include "rndr/canvas/timestamp-query.hpp"
-#include "rndr/exception.hpp"
 #include "rndr/generic-window.hpp"
 
 namespace
@@ -37,63 +36,64 @@ TEST_CASE("Canvas TimestampQuery", "[canvas][timestamp-query]")
         REQUIRE_FALSE(query.IsValid());
         REQUIRE_FALSE(query.IsRecorded());
         REQUIRE_FALSE(query.IsResultAvailable());
-        REQUIRE_THROWS_AS(query.Record(), Rndr::GraphicsAPIException);
-        REQUIRE_THROWS_AS(query.GetResult(), Rndr::GraphicsAPIException);
+        REQUIRE(query.Record() == Rndr::ErrorCode::InvalidArgument);
+        REQUIRE(query.GetResult().GetError() == Rndr::ErrorCode::InvalidArgument);
     }
 
     SECTION("Create query")
     {
-        Rndr::Canvas::TimestampQuery query("TestQuery");
+        auto query = CanvasTest::Unwrap(Rndr::Canvas::TimestampQuery::Create("TestQuery"));
         REQUIRE(query.IsValid());
         REQUIRE(query.GetNativeHandle() != 0);
         REQUIRE(query.GetName() == "TestQuery");
         REQUIRE_FALSE(query.IsRecorded());
     }
 
-    SECTION("Reading a query that was never recorded throws")
+    SECTION("Reading a query that was never recorded reports InvalidArgument")
     {
-        Rndr::Canvas::TimestampQuery query("TestQuery");
-        REQUIRE_THROWS_AS(query.GetResult(), Rndr::GraphicsAPIException);
+        auto query = CanvasTest::Unwrap(Rndr::Canvas::TimestampQuery::Create("TestQuery"));
+        REQUIRE(query.GetResult().GetError() == Rndr::ErrorCode::InvalidArgument);
 
         Rndr::u64 result = 0;
-        REQUIRE_FALSE(query.TryGetResult(result));
+        REQUIRE(query.TryGetResult(result).GetError() == Rndr::ErrorCode::InvalidArgument);
         REQUIRE(result == 0);
     }
 
     SECTION("Record and read a timestamp")
     {
-        Rndr::Canvas::TimestampQuery query("TestQuery");
-        query.Record();
+        auto query = CanvasTest::Unwrap(Rndr::Canvas::TimestampQuery::Create("TestQuery"));
+        REQUIRE(query.Record() == Rndr::ErrorCode::Success);
         REQUIRE(query.IsRecorded());
 
         glFinish();
         REQUIRE(query.IsResultAvailable());
-        REQUIRE(query.GetResult() != 0);
+        REQUIRE(CanvasTest::Unwrap(query.GetResult()) != 0);
 
         Rndr::u64 result = 0;
-        REQUIRE(query.TryGetResult(result));
+        REQUIRE(CanvasTest::Unwrap(query.TryGetResult(result)));
         REQUIRE(result != 0);
     }
 
     SECTION("Elapsed time between two timestamps")
     {
-        Rndr::Canvas::TimestampQuery start("Start");
-        Rndr::Canvas::TimestampQuery end("End");
+        auto start = CanvasTest::Unwrap(Rndr::Canvas::TimestampQuery::Create("Start"));
+        auto end = CanvasTest::Unwrap(Rndr::Canvas::TimestampQuery::Create("End"));
 
-        start.Record();
+        REQUIRE(start.Record() == Rndr::ErrorCode::Success);
         glFinish();
-        end.Record();
+        REQUIRE(end.Record() == Rndr::ErrorCode::Success);
         glFinish();
 
-        REQUIRE(end.GetResult() >= start.GetResult());
-        REQUIRE(Rndr::Canvas::GetElapsedNanoseconds(start, end) == end.GetResult() - start.GetResult());
-        REQUIRE(Rndr::Canvas::GetElapsedMilliseconds(end, start) == 0.0);
+        REQUIRE(CanvasTest::Unwrap(end.GetResult()) >= CanvasTest::Unwrap(start.GetResult()));
+        REQUIRE(CanvasTest::Unwrap(Rndr::Canvas::GetElapsedNanoseconds(start, end))
+                == CanvasTest::Unwrap(end.GetResult()) - CanvasTest::Unwrap(start.GetResult()));
+        REQUIRE(CanvasTest::Unwrap(Rndr::Canvas::GetElapsedMilliseconds(end, start)) == 0.0);
     }
 
     SECTION("Record through a draw list")
     {
-        Rndr::Canvas::TimestampQuery start("Start");
-        Rndr::Canvas::TimestampQuery end("End");
+        auto start = CanvasTest::Unwrap(Rndr::Canvas::TimestampQuery::Create("Start"));
+        auto end = CanvasTest::Unwrap(Rndr::Canvas::TimestampQuery::Create("End"));
 
         Rndr::Canvas::DrawList list;
         list.WriteTimestamp(start);
@@ -105,13 +105,13 @@ TEST_CASE("Canvas TimestampQuery", "[canvas][timestamp-query]")
         glFinish();
         REQUIRE(start.IsResultAvailable());
         REQUIRE(end.IsResultAvailable());
-        REQUIRE(Rndr::Canvas::GetElapsedMilliseconds(start, end) >= 0.0);
+        REQUIRE(CanvasTest::Unwrap(Rndr::Canvas::GetElapsedMilliseconds(start, end)) >= 0.0);
     }
 
     SECTION("Move transfers ownership")
     {
-        Rndr::Canvas::TimestampQuery query("TestQuery");
-        query.Record();
+        auto query = CanvasTest::Unwrap(Rndr::Canvas::TimestampQuery::Create("TestQuery"));
+        REQUIRE(query.Record() == Rndr::ErrorCode::Success);
         const Rndr::u32 handle = query.GetNativeHandle();
 
         Rndr::Canvas::TimestampQuery moved(std::move(query));
@@ -130,8 +130,8 @@ TEST_CASE("Canvas TimestampQuery", "[canvas][timestamp-query]")
 
     SECTION("Destroy invalidates the query")
     {
-        Rndr::Canvas::TimestampQuery query("TestQuery");
-        query.Record();
+        auto query = CanvasTest::Unwrap(Rndr::Canvas::TimestampQuery::Create("TestQuery"));
+        REQUIRE(query.Record() == Rndr::ErrorCode::Success);
         query.Destroy();
         REQUIRE_FALSE(query.IsValid());
         REQUIRE_FALSE(query.IsRecorded());

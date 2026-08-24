@@ -361,7 +361,7 @@ TEST_CASE("Canvas Brush", "[canvas][brush]")
         tex_desc.width = 2;
         tex_desc.height = 2;
         tex_desc.format = Rndr::Canvas::Format::RGBA8;
-        Rndr::Canvas::Texture tex(tex_desc);
+        Rndr::Canvas::Texture tex = CanvasTest::Unwrap(Rndr::Canvas::Texture::Create(tex_desc));
 
         brush.SetTexture("diffuse", tex);
 
@@ -378,8 +378,8 @@ TEST_CASE("Canvas Brush", "[canvas][brush]")
         tex_desc.width = 2;
         tex_desc.height = 2;
         tex_desc.format = Rndr::Canvas::Format::RGBA8;
-        Rndr::Canvas::Texture tex1(tex_desc);
-        Rndr::Canvas::Texture tex2(tex_desc);
+        Rndr::Canvas::Texture tex1 = CanvasTest::Unwrap(Rndr::Canvas::Texture::Create(tex_desc));
+        Rndr::Canvas::Texture tex2 = CanvasTest::Unwrap(Rndr::Canvas::Texture::Create(tex_desc));
 
         brush.SetTexture("diffuse", tex1);
         brush.SetTexture("diffuse", tex2);
@@ -391,7 +391,7 @@ TEST_CASE("Canvas Brush", "[canvas][brush]")
     SECTION("SetBuffer stores binding")
     {
         Rndr::Canvas::Brush brush;
-        Rndr::Canvas::Buffer buf(Rndr::Canvas::BufferUsage::Storage, 64);
+        Rndr::Canvas::Buffer buf = CanvasTest::Unwrap(Rndr::Canvas::Buffer::Create(Rndr::Canvas::BufferUsage::Storage, 64));
 
         brush.SetBuffer("data", buf);
 
@@ -412,7 +412,7 @@ TEST_CASE("Canvas Brush", "[canvas][brush]")
         tex_desc.width = 2;
         tex_desc.height = 2;
         tex_desc.format = Rndr::Canvas::Format::RGBA8;
-        Rndr::Canvas::Texture tex(tex_desc);
+        Rndr::Canvas::Texture tex = CanvasTest::Unwrap(Rndr::Canvas::Texture::Create(tex_desc));
         brush.SetTexture("diffuse", tex);
 
         Rndr::Canvas::Brush const moved(std::move(brush));

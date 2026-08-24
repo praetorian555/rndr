@@ -114,7 +114,14 @@ Rndr::Canvas::Brush Rndr::Canvas::Brush::Clone() const
     for (u64 i = 0; i < m_uniform_buffer_slots.GetSize(); ++i)
     {
         UniformBufferSlot slot;
-        slot.gpu_buffer = m_uniform_buffer_slots[i].gpu_buffer.Clone();
+        if (m_uniform_buffer_slots[i].gpu_buffer.IsValid())
+        {
+            auto gpu_buffer_result = m_uniform_buffer_slots[i].gpu_buffer.Clone();
+            if (gpu_buffer_result.HasValue())
+            {
+                slot.gpu_buffer = std::move(gpu_buffer_result).GetValue();
+            }
+        }
         slot.cpu_data.Resize(m_uniform_buffer_slots[i].cpu_data.GetSize());
         memcpy(slot.cpu_data.GetData(), m_uniform_buffer_slots[i].cpu_data.GetData(), m_uniform_buffer_slots[i].cpu_data.GetSize());
         slot.binding_index = m_uniform_buffer_slots[i].binding_index;
@@ -325,7 +332,12 @@ void Rndr::Canvas::Brush::CreateUniformBufferSlots()
         slot.binding_space = ubo_infos[i].binding_space;
         slot.cpu_data.Resize(static_cast<u64>(ubo_infos[i].total_size));
         memset(slot.cpu_data.GetData(), 0, slot.cpu_data.GetSize());
-        slot.gpu_buffer = Buffer(BufferUsage::Uniform, static_cast<u64>(ubo_infos[i].total_size), 0, {}, std::move(ubo_name));
+        auto gpu_buffer_result = Buffer::Create(BufferUsage::Uniform, static_cast<u64>(ubo_infos[i].total_size), 0, {}, std::move(ubo_name));
+        if (!gpu_buffer_result.HasValue())
+        {
+            throw GraphicsAPIException(0, "Failed to create uniform buffer!");
+        }
+        slot.gpu_buffer = std::move(gpu_buffer_result).GetValue();
         m_uniform_buffer_slots.PushBack(std::move(slot));
     }
 }
@@ -443,7 +455,11 @@ void Rndr::Canvas::Brush::UploadUniforms()
         UniformBufferSlot& slot = m_uniform_buffer_slots[i];
         if (slot.dirty && slot.gpu_buffer.IsValid())
         {
-            slot.gpu_buffer.Update(Opal::ArrayView<const u8>(slot.cpu_data.GetData(), slot.cpu_data.GetSize()));
+            const ErrorCode update_code = slot.gpu_buffer.Update(Opal::ArrayView<const u8>(slot.cpu_data.GetData(), slot.cpu_data.GetSize()));
+            if (update_code != ErrorCode::Success)
+            {
+                throw GraphicsAPIException(0, "Failed to update uniform buffer!");
+            }
             slot.dirty = false;
         }
     }

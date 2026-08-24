@@ -2,6 +2,8 @@
 
 #include "opal/math-base.h"
 
+#include "rndr/log.hpp"
+
 Rndr::i32 Rndr::Canvas::Bitmap::GetFormatPixelSize(Format format)
 {
     switch (format)
@@ -92,44 +94,49 @@ static bool IsFloatFormat(Rndr::Canvas::Format format)
     }
 }
 
-Rndr::Canvas::Bitmap::Bitmap(i32 width, i32 height, i32 depth, Format format, const Opal::ArrayView<const u8>& data)
-    : m_width(width), m_height(height), m_depth(depth), m_format(format)
+Opal::Expected<Rndr::Canvas::Bitmap, Rndr::ErrorCode> Rndr::Canvas::Bitmap::Create(i32 width, i32 height, i32 depth, Format format,
+                                                                                   const Opal::ArrayView<const u8>& data)
 {
+    using ResultType = Opal::Expected<Bitmap, ErrorCode>;
     if (width <= 0 || height <= 0 || depth <= 0 || !IsFormatSupported(format))
     {
-        m_width = 0;
-        m_height = 0;
-        m_depth = 0;
-        throw Opal::Exception("Invalid input argument when creating Canvas::Bitmap");
+        RNDR_LOG_ERROR("Canvas: Invalid input argument when creating Canvas::Bitmap");
+        return ResultType(ErrorCode::InvalidArgument);
     }
 
-    m_comp_count = GetFormatComponentCount(format);
-    m_pixel_size = GetFormatPixelSize(format);
+    Bitmap bitmap;
+    bitmap.m_width = width;
+    bitmap.m_height = height;
+    bitmap.m_depth = depth;
+    bitmap.m_format = format;
+    bitmap.m_comp_count = GetFormatComponentCount(format);
+    bitmap.m_pixel_size = GetFormatPixelSize(format);
 
-    const u64 buffer_size = GetTotalSize();
-    m_data.Resize(buffer_size);
+    const u64 buffer_size = bitmap.GetTotalSize();
+    bitmap.m_data.Resize(buffer_size);
     if (!data.IsEmpty())
     {
         const u64 copy_size = Opal::Min(data.GetSize(), buffer_size);
-        memcpy(m_data.GetData(), data.GetData(), copy_size);
+        memcpy(bitmap.m_data.GetData(), data.GetData(), copy_size);
     }
 
     if (IsUnsignedByteFormat(format))
     {
-        m_get_pixel_func = &Bitmap::GetPixelUnsignedByte;
-        m_set_pixel_func = &Bitmap::SetPixelUnsignedByte;
+        bitmap.m_get_pixel_func = &Bitmap::GetPixelUnsignedByte;
+        bitmap.m_set_pixel_func = &Bitmap::SetPixelUnsignedByte;
     }
     else if (IsFloatFormat(format))
     {
-        m_get_pixel_func = &Bitmap::GetPixelFloat;
-        m_set_pixel_func = &Bitmap::SetPixelFloat;
+        bitmap.m_get_pixel_func = &Bitmap::GetPixelFloat;
+        bitmap.m_set_pixel_func = &Bitmap::SetPixelFloat;
     }
     else
     {
         // Half-float formats: no CPU-side pixel access.
-        m_get_pixel_func = nullptr;
-        m_set_pixel_func = nullptr;
+        bitmap.m_get_pixel_func = nullptr;
+        bitmap.m_set_pixel_func = nullptr;
     }
+    return ResultType(std::move(bitmap));
 }
 
 Rndr::Vector4f Rndr::Canvas::Bitmap::GetPixel(i32 x, i32 y, i32 z) const

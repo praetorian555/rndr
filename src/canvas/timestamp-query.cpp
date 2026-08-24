@@ -2,25 +2,30 @@
 
 #include "glad/glad.h"
 
-#include "rndr/exception.hpp"
 #include "rndr/log.hpp"
 #include "rndr/trace.hpp"
 
-Rndr::Canvas::TimestampQuery::TimestampQuery(Opal::StringUtf8 name) : m_name(std::move(name))
+Opal::Expected<Rndr::Canvas::TimestampQuery, Rndr::ErrorCode> Rndr::Canvas::TimestampQuery::Create(Opal::StringUtf8 name)
 {
-    RNDR_CPU_EVENT_SCOPED("Canvas::TimestampQuery::TimestampQuery");
+    RNDR_CPU_EVENT_SCOPED("Canvas::TimestampQuery::Create");
+    using ResultType = Opal::Expected<TimestampQuery, ErrorCode>;
 
-    glCreateQueries(GL_TIMESTAMP, 1, &m_handle);
-    if (m_handle == 0)
+    TimestampQuery query;
+    query.m_name = std::move(name);
+
+    glCreateQueries(GL_TIMESTAMP, 1, &query.m_handle);
+    if (query.m_handle == 0)
     {
-        throw GraphicsAPIException(0, "Failed to create GL timestamp query!");
+        RNDR_LOG_ERROR("Canvas: Failed to create GL timestamp query");
+        return ResultType(ErrorCode::GraphicsAPIError);
     }
 
-    if (!m_name.IsEmpty())
+    if (!query.m_name.IsEmpty())
     {
-        glObjectLabel(GL_QUERY, m_handle, static_cast<GLsizei>(m_name.GetSize()), m_name.GetData());
-        RNDR_LOG_INFO("Created timestamp query '{}' with native id {}", *m_name, m_handle);
+        glObjectLabel(GL_QUERY, query.m_handle, static_cast<GLsizei>(query.m_name.GetSize()), query.m_name.GetData());
+        RNDR_LOG_INFO("Created timestamp query '{}' with native id {}", *query.m_name, query.m_handle);
     }
+    return ResultType(std::move(query));
 }
 
 Rndr::Canvas::TimestampQuery::~TimestampQuery()
@@ -59,15 +64,17 @@ void Rndr::Canvas::TimestampQuery::Destroy()
     }
 }
 
-void Rndr::Canvas::TimestampQuery::Record()
+Rndr::ErrorCode Rndr::Canvas::TimestampQuery::Record()
 {
     if (m_handle == 0)
     {
-        throw GraphicsAPIException(0, "Cannot record into an invalid timestamp query!");
+        RNDR_LOG_ERROR("Canvas: Cannot record into an invalid timestamp query");
+        return ErrorCode::InvalidArgument;
     }
 
     glQueryCounter(m_handle, GL_TIMESTAMP);
     m_recorded = true;
+    return ErrorCode::Success;
 }
 
 bool Rndr::Canvas::TimestampQuery::IsResultAvailable() const
@@ -82,17 +89,20 @@ bool Rndr::Canvas::TimestampQuery::IsResultAvailable() const
     return available == GL_TRUE;
 }
 
-Rndr::u64 Rndr::Canvas::TimestampQuery::GetResult() const
+Opal::Expected<Rndr::u64, Rndr::ErrorCode> Rndr::Canvas::TimestampQuery::GetResult() const
 {
     RNDR_CPU_EVENT_SCOPED("Canvas::TimestampQuery::GetResult");
+    using ResultType = Opal::Expected<u64, ErrorCode>;
 
     if (m_handle == 0)
     {
-        throw GraphicsAPIException(0, "Cannot read an invalid timestamp query!");
+        RNDR_LOG_ERROR("Canvas: Cannot read an invalid timestamp query");
+        return ResultType(ErrorCode::InvalidArgument);
     }
     if (!m_recorded)
     {
-        throw GraphicsAPIException(0, "Cannot read a timestamp query that was never recorded!");
+        RNDR_LOG_ERROR("Canvas: Cannot read a timestamp query that was never recorded");
+        return ResultType(ErrorCode::InvalidArgument);
     }
 
     // The query may still be in the command stream, in which case the driver has no reason to have
@@ -105,20 +115,26 @@ Rndr::u64 Rndr::Canvas::TimestampQuery::GetResult() const
 
     GLuint64 result = 0;
     glGetQueryObjectui64v(m_handle, GL_QUERY_RESULT, &result);
-    return static_cast<u64>(result);
+    return ResultType(static_cast<u64>(result));
 }
 
-bool Rndr::Canvas::TimestampQuery::TryGetResult(u64& out_result) const
+Opal::Expected<bool, Rndr::ErrorCode> Rndr::Canvas::TimestampQuery::TryGetResult(u64& out_result) const
 {
+    using ResultType = Opal::Expected<bool, ErrorCode>;
+    if (m_handle == 0 || !m_recorded)
+    {
+        RNDR_LOG_ERROR("Canvas: Cannot read an invalid or never recorded timestamp query");
+        return ResultType(ErrorCode::InvalidArgument);
+    }
     if (!IsResultAvailable())
     {
-        return false;
+        return ResultType(false);
     }
 
     GLuint64 result = 0;
     glGetQueryObjectui64v(m_handle, GL_QUERY_RESULT, &result);
     out_result = static_cast<u64>(result);
-    return true;
+    return ResultType(true);
 }
 
 bool Rndr::Canvas::TimestampQuery::IsRecorded() const
@@ -141,15 +157,32 @@ bool Rndr::Canvas::TimestampQuery::IsValid() const
     return m_handle != 0;
 }
 
-Rndr::u64 Rndr::Canvas::GetElapsedNanoseconds(const TimestampQuery& start, const TimestampQuery& end)
+Opal::Expected<Rndr::u64, Rndr::ErrorCode> Rndr::Canvas::GetElapsedNanoseconds(const TimestampQuery& start, const TimestampQuery& end)
 {
-    const u64 start_ns = start.GetResult();
-    const u64 end_ns = end.GetResult();
-    return end_ns > start_ns ? end_ns - start_ns : 0;
+    using ResultType = Opal::Expected<u64, ErrorCode>;
+    ResultType start_result = start.GetResult();
+    if (!start_result.HasValue())
+    {
+        return start_result;
+    }
+    ResultType end_result = end.GetResult();
+    if (!end_result.HasValue())
+    {
+        return end_result;
+    }
+    const u64 start_ns = start_result.GetValue();
+    const u64 end_ns = end_result.GetValue();
+    return ResultType(end_ns > start_ns ? end_ns - start_ns : 0);
 }
 
-Rndr::f64 Rndr::Canvas::GetElapsedMilliseconds(const TimestampQuery& start, const TimestampQuery& end)
+Opal::Expected<Rndr::f64, Rndr::ErrorCode> Rndr::Canvas::GetElapsedMilliseconds(const TimestampQuery& start, const TimestampQuery& end)
 {
+    using ResultType = Opal::Expected<f64, ErrorCode>;
+    const auto elapsed_result = GetElapsedNanoseconds(start, end);
+    if (!elapsed_result.HasValue())
+    {
+        return ResultType(elapsed_result.GetError());
+    }
     constexpr f64 k_nanoseconds_per_millisecond = 1'000'000.0;
-    return static_cast<f64>(GetElapsedNanoseconds(start, end)) / k_nanoseconds_per_millisecond;
+    return ResultType(static_cast<f64>(elapsed_result.GetValue()) / k_nanoseconds_per_millisecond);
 }

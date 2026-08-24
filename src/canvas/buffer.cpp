@@ -2,38 +2,40 @@
 
 #include "glad/glad.h"
 
-#include "rndr/exception.hpp"
+#include "rndr/canvas/gl-result.hpp"
 #include "rndr/log.hpp"
 #include "rndr/trace.hpp"
 
-Rndr::Canvas::Buffer::Buffer(BufferUsage usage, u64 size, u64 offset, const Opal::ArrayView<const u8>& init_data,
-                             Opal::StringUtf8 name)
-    : m_usage(usage), m_size(size), m_offset(offset), m_name(std::move(name))
+Opal::Expected<Rndr::Canvas::Buffer, Rndr::ErrorCode> Rndr::Canvas::Buffer::Create(BufferUsage usage, u64 size, u64 offset,
+                                                                                   const Opal::ArrayView<const u8>& init_data,
+                                                                                   Opal::StringUtf8 name)
 {
-    RNDR_CPU_EVENT_SCOPED("Canvas::Buffer::Buffer");
+    RNDR_CPU_EVENT_SCOPED("Canvas::Buffer::Create");
+    using ResultType = Opal::Expected<Buffer, ErrorCode>;
 
-    glCreateBuffers(1, &m_handle);
-    if (m_handle == 0)
+    Buffer buffer;
+    buffer.m_usage = usage;
+    buffer.m_size = size;
+    buffer.m_offset = offset;
+    buffer.m_name = std::move(name);
+
+    glCreateBuffers(1, &buffer.m_handle);
+    if (buffer.m_handle == 0)
     {
-        throw GraphicsAPIException(0, "Failed to create GL buffer!");
+        RNDR_LOG_ERROR("Canvas: Failed to create GL buffer");
+        return ResultType(ErrorCode::GraphicsAPIError);
     }
 
     const void* data = init_data.IsEmpty() ? nullptr : init_data.GetData();
-    glNamedBufferStorage(m_handle, static_cast<GLsizeiptr>(m_size), data, GL_DYNAMIC_STORAGE_BIT);
+    glNamedBufferStorage(buffer.m_handle, static_cast<GLsizeiptr>(size), data, GL_DYNAMIC_STORAGE_BIT);
+    RNDR_CANVAS_GL_CHECK_EXPECTED("glNamedBufferStorage", ResultType);
 
-    const GLenum err = glGetError();
-    if (err != GL_NO_ERROR)
+    if (!buffer.m_name.IsEmpty())
     {
-        glDeleteBuffers(1, &m_handle);
-        m_handle = 0;
-        throw GraphicsAPIException(err, "Failed to allocate GL buffer storage!");
+        glObjectLabel(GL_BUFFER, buffer.m_handle, static_cast<GLsizei>(buffer.m_name.GetSize()), buffer.m_name.GetData());
+        RNDR_LOG_INFO("Created buffer '{}' with native id {}", *buffer.m_name, buffer.m_handle);
     }
-
-    if (!m_name.IsEmpty())
-    {
-        glObjectLabel(GL_BUFFER, m_handle, static_cast<GLsizei>(m_name.GetSize()), m_name.GetData());
-        RNDR_LOG_INFO("Created buffer '{}' with native id {}", *m_name, m_handle);
-    }
+    return ResultType(std::move(buffer));
 }
 
 Rndr::Canvas::Buffer::~Buffer()
@@ -66,15 +68,22 @@ Rndr::Canvas::Buffer& Rndr::Canvas::Buffer::operator=(Buffer&& other) noexcept
     return *this;
 }
 
-Rndr::Canvas::Buffer Rndr::Canvas::Buffer::Clone(Opal::AllocatorBase* allocator) const
+Opal::Expected<Rndr::Canvas::Buffer, Rndr::ErrorCode> Rndr::Canvas::Buffer::Clone(Opal::AllocatorBase* allocator) const
 {
+    using ResultType = Opal::Expected<Buffer, ErrorCode>;
     if (!IsValid())
     {
-        return {};
+        RNDR_LOG_ERROR("Canvas: Cannot clone an invalid buffer");
+        return ResultType(ErrorCode::InvalidArgument);
     }
-    Buffer clone(m_usage, m_size, m_offset, {}, m_name.Clone(allocator));
-    glCopyNamedBufferSubData(m_handle, clone.m_handle, 0, 0, static_cast<GLsizeiptr>(m_size));
-    return clone;
+    ResultType clone_result = Create(m_usage, m_size, m_offset, {}, m_name.Clone(allocator));
+    if (!clone_result.HasValue())
+    {
+        return clone_result;
+    }
+    glCopyNamedBufferSubData(m_handle, clone_result.GetValue().m_handle, 0, 0, static_cast<GLsizeiptr>(m_size));
+    RNDR_CANVAS_GL_CHECK_EXPECTED("glCopyNamedBufferSubData", ResultType);
+    return clone_result;
 }
 
 void Rndr::Canvas::Buffer::Destroy()
@@ -88,20 +97,24 @@ void Rndr::Canvas::Buffer::Destroy()
     }
 }
 
-void Rndr::Canvas::Buffer::Update(const Opal::ArrayView<const u8>& data) const
+Rndr::ErrorCode Rndr::Canvas::Buffer::Update(const Opal::ArrayView<const u8>& data) const
 {
     RNDR_CPU_EVENT_SCOPED("Canvas::Buffer::Update");
 
     if (m_handle == 0)
     {
-        throw GraphicsAPIException(0, "Cannot update an invalid buffer!");
+        RNDR_LOG_ERROR("Canvas: Cannot update an invalid buffer");
+        return ErrorCode::InvalidArgument;
     }
     if (data.GetSize() > m_size)
     {
-        throw GraphicsAPIException(0, "Update size exceeds buffer size!");
+        RNDR_LOG_ERROR("Canvas: Update size exceeds buffer size");
+        return ErrorCode::OutOfBounds;
     }
 
     glNamedBufferSubData(m_handle, static_cast<GLintptr>(m_offset), static_cast<GLsizeiptr>(data.GetSize()), data.GetData());
+    RNDR_CANVAS_GL_CHECK("glNamedBufferSubData");
+    return ErrorCode::Success;
 }
 
 Rndr::Canvas::BufferUsage Rndr::Canvas::Buffer::GetUsage() const

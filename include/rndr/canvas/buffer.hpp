@@ -1,8 +1,10 @@
 #pragma once
 
 #include "opal/container/array-view.h"
+#include "opal/container/expected.h"
 #include "opal/container/string.h"
 
+#include "rndr/error-codes.hpp"
 #include "rndr/types.hpp"
 
 namespace Rndr
@@ -36,9 +38,11 @@ public:
      * @param offset Byte offset into the buffer for binding.
      * @param init_data Optional initial data to upload.
      * @param name Debug name for GPU debugging tools.
+     * @return The buffer, or the code the failing GL call maps to. The reason is logged at error level.
      */
-    explicit Buffer(BufferUsage usage, u64 size, u64 offset = 0, const Opal::ArrayView<const u8>& init_data = {},
-                    Opal::StringUtf8 name = {});
+    [[nodiscard]] static Opal::Expected<Buffer, ErrorCode> Create(BufferUsage usage, u64 size, u64 offset = 0,
+                                                                  const Opal::ArrayView<const u8>& init_data = {},
+                                                                  Opal::StringUtf8 name = {});
     ~Buffer();
 
     Buffer(const Buffer&) = delete;
@@ -46,14 +50,21 @@ public:
     Buffer(Buffer&& other) noexcept;
     Buffer& operator=(Buffer&& other) noexcept;
 
-    [[nodiscard]] Buffer Clone(Opal::AllocatorBase* allocator = nullptr) const;
+    /**
+     * Copy this buffer into a new one of the same usage, size and offset.
+     * @return The clone, ErrorCode::InvalidArgument for an invalid buffer, or the code the failing GL
+     *         call maps to.
+     */
+    [[nodiscard]] Opal::Expected<Buffer, ErrorCode> Clone(Opal::AllocatorBase* allocator = nullptr) const;
     void Destroy();
 
     /**
      * Upload data to the buffer.
      * @param data Data to upload.
+     * @return ErrorCode::Success, ErrorCode::InvalidArgument for an invalid buffer,
+     *         ErrorCode::OutOfBounds when the data does not fit, or the code the failing GL call maps to.
      */
-    void Update(const Opal::ArrayView<const u8>& data) const;
+    [[nodiscard]] ErrorCode Update(const Opal::ArrayView<const u8>& data) const;
 
     [[nodiscard]] BufferUsage GetUsage() const;
     [[nodiscard]] u64 GetSize() const;

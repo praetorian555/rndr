@@ -106,8 +106,14 @@ Rndr::Canvas::Mesh::Mesh(const VertexLayout& layout, Opal::ArrayView<const u8> v
 
     Opal::StringUtf8 vertex_buffer_name = m_debug_name + " - Vertex Buffer";
     Opal::StringUtf8 index_buffer_name = m_debug_name + " - Index Buffer";
-    m_vertex_buffer = Buffer(BufferUsage::Vertex, vertex_data.GetSize(), 0, vertex_data, std::move(vertex_buffer_name));
-    m_index_buffer = Buffer(BufferUsage::Index, index_data.GetSize(), 0, index_data, std::move(index_buffer_name));
+    auto vertex_buffer_result = Buffer::Create(BufferUsage::Vertex, vertex_data.GetSize(), 0, vertex_data, std::move(vertex_buffer_name));
+    auto index_buffer_result = Buffer::Create(BufferUsage::Index, index_data.GetSize(), 0, index_data, std::move(index_buffer_name));
+    if (!vertex_buffer_result.HasValue() || !index_buffer_result.HasValue())
+    {
+        throw GraphicsAPIException(0, "Failed to create mesh buffers!");
+    }
+    m_vertex_buffer = std::move(vertex_buffer_result).GetValue();
+    m_index_buffer = std::move(index_buffer_result).GetValue();
 
     // Store CPU-side copies for Clone().
     m_vertex_data.Resize(vertex_data.GetSize());
@@ -128,8 +134,15 @@ Rndr::Canvas::Mesh::Mesh(const VertexLayout& layout, i32 max_vertex_count, i32 m
     m_layout = layout.Clone();
     Opal::StringUtf8 vertex_buffer_name = m_debug_name + " - Vertex Buffer";
     Opal::StringUtf8 index_buffer_name = m_debug_name + " - Index Buffer";
-    m_vertex_buffer = Buffer(BufferUsage::Vertex, max_vertex_count * layout.GetStride(), 0, {}, std::move(vertex_buffer_name));
-    m_index_buffer = Buffer(BufferUsage::Index, max_index_count * sizeof(i32), 0, {}, std::move(index_buffer_name));
+    auto vertex_buffer_result =
+        Buffer::Create(BufferUsage::Vertex, max_vertex_count * layout.GetStride(), 0, {}, std::move(vertex_buffer_name));
+    auto index_buffer_result = Buffer::Create(BufferUsage::Index, max_index_count * sizeof(i32), 0, {}, std::move(index_buffer_name));
+    if (!vertex_buffer_result.HasValue() || !index_buffer_result.HasValue())
+    {
+        throw GraphicsAPIException(0, "Failed to create mesh buffers!");
+    }
+    m_vertex_buffer = std::move(vertex_buffer_result).GetValue();
+    m_index_buffer = std::move(index_buffer_result).GetValue();
 
     SetupVAO();
 }
@@ -218,8 +231,8 @@ void Rndr::Canvas::Mesh::Upload()
     if (m_dirty && (!m_vertex_data.IsEmpty() || !m_index_data.IsEmpty()))
     {
         m_dirty = false;
-        m_vertex_buffer.Update(m_vertex_data);
-        m_index_buffer.Update(m_index_data);
+        (void)m_vertex_buffer.Update(m_vertex_data);
+        (void)m_index_buffer.Update(m_index_data);
     }
 }
 

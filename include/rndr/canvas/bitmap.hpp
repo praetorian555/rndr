@@ -2,8 +2,10 @@
 
 #include "opal/container/array-view.h"
 #include "opal/container/dynamic-array.h"
+#include "opal/container/expected.h"
 
 #include "rndr/canvas/context.hpp"
+#include "rndr/error-codes.hpp"
 #include "rndr/math.hpp"
 
 namespace Rndr
@@ -27,8 +29,11 @@ public:
      * @param depth Depth (number of layers). Must be greater than 0. Default is 1.
      * @param format Pixel format. Must be a pixel format (not a vertex or depth format).
      * @param data Optional initial data. If not provided, the bitmap is zeroed.
+     * @return The bitmap, or ErrorCode::InvalidArgument for a non-positive dimension or a format bitmaps
+     *         cannot store. The reason is logged at error level.
      */
-    Bitmap(i32 width, i32 height, i32 depth, Format format, const Opal::ArrayView<const u8>& data = {});
+    [[nodiscard]] static Opal::Expected<Bitmap, ErrorCode> Create(i32 width, i32 height, i32 depth, Format format,
+                                                                  const Opal::ArrayView<const u8>& data = {});
 
     [[nodiscard]] bool IsValid() const { return m_width > 0 && m_height > 0 && m_depth > 0; }
 

@@ -1,5 +1,7 @@
 #include <catch2/catch2.hpp>
 
+#include "canvas-test-common.hpp"
+
 #include "opal/container/in-place-array.h"
 
 #include "rndr/canvas/bitmap.hpp"
@@ -8,7 +10,7 @@ TEST_CASE("Canvas Bitmap", "[canvas][bitmap]")
 {
     SECTION("Create with zeroed data")
     {
-        Rndr::Canvas::Bitmap bitmap(3, 4, 1, Rndr::Canvas::Format::RGBA8);
+        Rndr::Canvas::Bitmap bitmap = CanvasTest::Unwrap(Rndr::Canvas::Bitmap::Create(3, 4, 1, Rndr::Canvas::Format::RGBA8));
         REQUIRE(bitmap.IsValid());
         REQUIRE(bitmap.GetWidth() == 3);
         REQUIRE(bitmap.GetHeight() == 4);
@@ -33,7 +35,7 @@ TEST_CASE("Canvas Bitmap", "[canvas][bitmap]")
         {
             data[i] = static_cast<Rndr::u8>(i + 1);
         }
-        Rndr::Canvas::Bitmap bitmap(k_width, k_height, 1, Rndr::Canvas::Format::RGBA8, Opal::AsBytes(data));
+        Rndr::Canvas::Bitmap bitmap = CanvasTest::Unwrap(Rndr::Canvas::Bitmap::Create(k_width, k_height, 1, Rndr::Canvas::Format::RGBA8, Opal::AsBytes(data)));
         REQUIRE(bitmap.IsValid());
         REQUIRE(bitmap.GetData()[0] == 1);
         REQUIRE(bitmap.GetData()[k_size - 1] == k_size);
@@ -50,7 +52,7 @@ TEST_CASE("Canvas Bitmap", "[canvas][bitmap]")
         {
             data[i] = static_cast<Rndr::u8>(i + 1);
         }
-        Rndr::Canvas::Bitmap bitmap(k_width, k_height, 1, Rndr::Canvas::Format::RGBA8, Opal::AsBytes(data));
+        Rndr::Canvas::Bitmap bitmap = CanvasTest::Unwrap(Rndr::Canvas::Bitmap::Create(k_width, k_height, 1, Rndr::Canvas::Format::RGBA8, Opal::AsBytes(data)));
         REQUIRE(bitmap.IsValid());
         REQUIRE(bitmap.GetData()[0] == 1);
         REQUIRE(bitmap.GetData()[k_half - 1] == k_half);
@@ -66,7 +68,7 @@ TEST_CASE("Canvas Bitmap", "[canvas][bitmap]")
         {
             data[i] = static_cast<Rndr::u8>(i + 1);
         }
-        Rndr::Canvas::Bitmap bitmap(1, 1, 1, Rndr::Canvas::Format::RGBA8, Opal::AsBytes(data));
+        Rndr::Canvas::Bitmap bitmap = CanvasTest::Unwrap(Rndr::Canvas::Bitmap::Create(1, 1, 1, Rndr::Canvas::Format::RGBA8, Opal::AsBytes(data)));
         REQUIRE(bitmap.IsValid());
         REQUIRE(bitmap.GetTotalSize() == k_total);
         REQUIRE(bitmap.GetData()[0] == 1);
@@ -75,14 +77,14 @@ TEST_CASE("Canvas Bitmap", "[canvas][bitmap]")
 
     SECTION("Invalid creation throws")
     {
-        REQUIRE_THROWS(Rndr::Canvas::Bitmap(0, 1, 1, Rndr::Canvas::Format::RGBA8));
-        REQUIRE_THROWS(Rndr::Canvas::Bitmap(1, 0, 1, Rndr::Canvas::Format::RGBA8));
-        REQUIRE_THROWS(Rndr::Canvas::Bitmap(1, 1, 0, Rndr::Canvas::Format::RGBA8));
-        REQUIRE_THROWS(Rndr::Canvas::Bitmap(-1, 1, 1, Rndr::Canvas::Format::RGBA8));
-        REQUIRE_THROWS(Rndr::Canvas::Bitmap(1, -1, 1, Rndr::Canvas::Format::RGBA8));
-        REQUIRE_THROWS(Rndr::Canvas::Bitmap(1, 1, -1, Rndr::Canvas::Format::RGBA8));
-        REQUIRE_THROWS(Rndr::Canvas::Bitmap(1, 1, 1, Rndr::Canvas::Format::D24S8));
-        REQUIRE_THROWS(Rndr::Canvas::Bitmap(1, 1, 1, Rndr::Canvas::Format::Float1));
+        REQUIRE(Rndr::Canvas::Bitmap::Create(0, 1, 1, Rndr::Canvas::Format::RGBA8).GetError() == Rndr::ErrorCode::InvalidArgument);
+        REQUIRE(Rndr::Canvas::Bitmap::Create(1, 0, 1, Rndr::Canvas::Format::RGBA8).GetError() == Rndr::ErrorCode::InvalidArgument);
+        REQUIRE(Rndr::Canvas::Bitmap::Create(1, 1, 0, Rndr::Canvas::Format::RGBA8).GetError() == Rndr::ErrorCode::InvalidArgument);
+        REQUIRE(Rndr::Canvas::Bitmap::Create(-1, 1, 1, Rndr::Canvas::Format::RGBA8).GetError() == Rndr::ErrorCode::InvalidArgument);
+        REQUIRE(Rndr::Canvas::Bitmap::Create(1, -1, 1, Rndr::Canvas::Format::RGBA8).GetError() == Rndr::ErrorCode::InvalidArgument);
+        REQUIRE(Rndr::Canvas::Bitmap::Create(1, 1, -1, Rndr::Canvas::Format::RGBA8).GetError() == Rndr::ErrorCode::InvalidArgument);
+        REQUIRE(Rndr::Canvas::Bitmap::Create(1, 1, 1, Rndr::Canvas::Format::D24S8).GetError() == Rndr::ErrorCode::InvalidArgument);
+        REQUIRE(Rndr::Canvas::Bitmap::Create(1, 1, 1, Rndr::Canvas::Format::Float1).GetError() == Rndr::ErrorCode::InvalidArgument);
     }
 
     SECTION("Get and set pixel unsigned byte")
@@ -95,7 +97,7 @@ TEST_CASE("Canvas Bitmap", "[canvas][bitmap]")
         {
             data[i] = static_cast<Rndr::u8>(i * 16);
         }
-        Rndr::Canvas::Bitmap bitmap(k_width, k_height, 1, Rndr::Canvas::Format::RGBA8, Opal::AsBytes(data));
+        Rndr::Canvas::Bitmap bitmap = CanvasTest::Unwrap(Rndr::Canvas::Bitmap::Create(k_width, k_height, 1, Rndr::Canvas::Format::RGBA8, Opal::AsBytes(data)));
 
         // Read pixel (1, 1) which is the last pixel.
         // Its data is at offset 12: bytes 192, 208, 224, 240.
@@ -117,7 +119,7 @@ TEST_CASE("Canvas Bitmap", "[canvas][bitmap]")
 
     SECTION("Get and set pixel float")
     {
-        Rndr::Canvas::Bitmap bitmap(2, 1, 1, Rndr::Canvas::Format::RGBA32F);
+        Rndr::Canvas::Bitmap bitmap = CanvasTest::Unwrap(Rndr::Canvas::Bitmap::Create(2, 1, 1, Rndr::Canvas::Format::RGBA32F));
 
         const Rndr::Vector4f pixel{1.5f, 2.5f, 3.5f, 4.5f};
         bitmap.SetPixel(1, 0, 0, pixel);
@@ -138,7 +140,7 @@ TEST_CASE("Canvas Bitmap", "[canvas][bitmap]")
 
     SECTION("Single component format")
     {
-        Rndr::Canvas::Bitmap bitmap(2, 2, 1, Rndr::Canvas::Format::R8);
+        Rndr::Canvas::Bitmap bitmap = CanvasTest::Unwrap(Rndr::Canvas::Bitmap::Create(2, 2, 1, Rndr::Canvas::Format::R8));
         REQUIRE(bitmap.GetComponentCount() == 1);
         REQUIRE(bitmap.GetPixelSize() == 1);
         REQUIRE(bitmap.GetTotalSize() == 4);
@@ -150,7 +152,7 @@ TEST_CASE("Canvas Bitmap", "[canvas][bitmap]")
 
     SECTION("Two component format")
     {
-        Rndr::Canvas::Bitmap bitmap(2, 2, 1, Rndr::Canvas::Format::RG8);
+        Rndr::Canvas::Bitmap bitmap = CanvasTest::Unwrap(Rndr::Canvas::Bitmap::Create(2, 2, 1, Rndr::Canvas::Format::RG8));
         REQUIRE(bitmap.GetComponentCount() == 2);
         REQUIRE(bitmap.GetPixelSize() == 2);
         REQUIRE(bitmap.GetTotalSize() == 8);
@@ -169,7 +171,7 @@ TEST_CASE("Canvas Bitmap", "[canvas][bitmap]")
 
     SECTION("GetDataView")
     {
-        Rndr::Canvas::Bitmap bitmap(2, 2, 1, Rndr::Canvas::Format::RGBA8);
+        Rndr::Canvas::Bitmap bitmap = CanvasTest::Unwrap(Rndr::Canvas::Bitmap::Create(2, 2, 1, Rndr::Canvas::Format::RGBA8));
         auto view = bitmap.GetDataView();
         REQUIRE(view.GetSize() == 16);
         REQUIRE(view.GetData() == bitmap.GetData());
@@ -180,7 +182,7 @@ TEST_CASE("Canvas Bitmap", "[canvas][bitmap]")
         constexpr int k_width = 2;
         constexpr int k_height = 2;
         constexpr int k_depth = 3;
-        Rndr::Canvas::Bitmap bitmap(k_width, k_height, k_depth, Rndr::Canvas::Format::RGBA8);
+        Rndr::Canvas::Bitmap bitmap = CanvasTest::Unwrap(Rndr::Canvas::Bitmap::Create(k_width, k_height, k_depth, Rndr::Canvas::Format::RGBA8));
         REQUIRE(bitmap.GetDepth() == k_depth);
         REQUIRE(bitmap.GetLayerSize() == k_width * k_height * 4);
         REQUIRE(bitmap.GetTotalSize() == k_width * k_height * k_depth * 4);
@@ -203,7 +205,7 @@ TEST_CASE("Canvas Bitmap", "[canvas][bitmap]")
 
     SECTION("Depth with float format")
     {
-        Rndr::Canvas::Bitmap bitmap(1, 1, 2, Rndr::Canvas::Format::RGBA32F);
+        Rndr::Canvas::Bitmap bitmap = CanvasTest::Unwrap(Rndr::Canvas::Bitmap::Create(1, 1, 2, Rndr::Canvas::Format::RGBA32F));
         REQUIRE(bitmap.GetTotalSize() == 2 * 16);
 
         const Rndr::Vector4f layer0{1.0f, 2.0f, 3.0f, 4.0f};

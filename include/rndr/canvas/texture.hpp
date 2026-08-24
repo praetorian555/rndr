@@ -1,10 +1,12 @@
 #pragma once
 
 #include "opal/container/array-view.h"
+#include "opal/container/expected.h"
 #include "opal/container/dynamic-array.h"
 #include "opal/container/string.h"
 
 #include "rndr/canvas/format.hpp"
+#include "rndr/error-codes.hpp"
 
 namespace Rndr
 {
@@ -123,9 +125,13 @@ public:
      * @param desc Texture descriptor.
      * @param init_data Optional initial pixel data.
      * @param name Debug name for GPU debugging tools.
+     * @return The texture, ErrorCode::InvalidArgument for a desc that asks for what a texture cannot be -
+     *         non-positive dimensions, a Texture2DArray with no layers - or the code the failing GL call
+     *         maps to. The reason is logged at error level.
      */
-    explicit Texture(const TextureDesc& desc, const Opal::ArrayView<const u8>& init_data = {},
-                     const Opal::StringUtf8& name = {});
+    [[nodiscard]] static Opal::Expected<Texture, ErrorCode> Create(const TextureDesc& desc,
+                                                                   const Opal::ArrayView<const u8>& init_data = {},
+                                                                   const Opal::StringUtf8& name = {});
     ~Texture();
 
     Texture(const Texture&) = delete;
@@ -141,11 +147,13 @@ public:
      * @param desc Texture descriptor for sampling parameters. Width, height, and format fields are overridden.
      * @param flip_vertically If true, flip the image vertically. Only applies to stbi-loaded images.
      * @param debug_name Debug name for GPU debugging tools.
-     * @return A valid Texture.
-     * @throw Opal::Exception if the file does not exist or cannot be loaded.
+     * @return The texture, ErrorCode::FileNotFound when the path names nothing,
+     *         ErrorCode::UnsupportedFormat for a KTX format this backend does not map,
+     *         ErrorCode::CorruptData for a file no loader here could decode, or whatever creating the
+     *         texture reports. The reason is logged at error level.
      */
-    [[nodiscard]] static Texture FromFile(const Opal::StringUtf8& file_path, TextureDesc desc = {},
-                                          bool flip_vertically = false, Opal::StringUtf8 debug_name = {});
+    [[nodiscard]] static Opal::Expected<Texture, ErrorCode> FromFile(const Opal::StringUtf8& file_path, TextureDesc desc = {},
+                                                                     bool flip_vertically = false, Opal::StringUtf8 debug_name = {});
 
     /**
      * Create a cubemap texture from an equirectangular image file. The image is loaded, converted
@@ -155,22 +163,29 @@ public:
      * @param face_size Size of each cubemap face in pixels. If 0, defaults to half the image height.
      * @param desc Texture descriptor for sampling parameters. Width, height, format, and type fields are overridden.
      * @param debug_name Debug name for GPU debugging tools.
-     * @return A valid CubeMap Texture.
-     * @throw Opal::Exception if the file does not exist or cannot be loaded.
+     * @return The cubemap texture, ErrorCode::FileNotFound when the path names nothing,
+     *         ErrorCode::CorruptData for a file stbi could not decode, or whatever creating the texture
+     *         reports. The reason is logged at error level.
      */
-    [[nodiscard]] static Texture FromEquirectangular(const Opal::StringUtf8& file_path, i32 face_size = 0,
-                                                     TextureDesc desc = {}, Opal::StringUtf8 debug_name = {});
+    [[nodiscard]] static Opal::Expected<Texture, ErrorCode> FromEquirectangular(const Opal::StringUtf8& file_path, i32 face_size = 0,
+                                                                                TextureDesc desc = {}, Opal::StringUtf8 debug_name = {});
 
-    [[nodiscard]] Texture Clone() const;
+    /**
+     * Copy this texture into a new one with the same desc and sampler parameters. Only the base mip level
+     * is copied; when the texture uses mips the caller regenerates them on the clone.
+     * @return The clone, ErrorCode::InvalidArgument for an invalid texture, or the code the failing GL
+     *         call maps to.
+     */
+    [[nodiscard]] Opal::Expected<Texture, ErrorCode> Clone() const;
     void Destroy();
 
     /**
      * Upload pixel data to the entire base mip level of a single-sample Texture2D.
      * @param data Pixel data to upload. Must be exactly width * height * pixel_size bytes.
-     * @throw Opal::InvalidArgumentException if the texture is not a Texture2D or the data size is wrong.
-     * @throw GraphicsAPIException if the texture is invalid or multi-sample.
+     * @return ErrorCode::Success, ErrorCode::InvalidArgument when the texture is invalid, multi-sample,
+     *         not a Texture2D or the data size is wrong, or the code the failing GL call maps to.
      */
-    void Update(const Opal::ArrayView<const u8>& data) const;
+    [[nodiscard]] ErrorCode Update(const Opal::ArrayView<const u8>& data) const;
 
     /**
      * Upload pixel data to a rectangular sub-region of a single-sample Texture2D mip level.
@@ -180,11 +195,12 @@ public:
      * @param width Width of the region in texels.
      * @param height Height of the region in texels.
      * @param mip_level Target mip level. Defaults to 0.
-     * @throw Opal::InvalidArgumentException if the texture is not a Texture2D, the region or mip level is
-     *        out of bounds, or the data size does not match the region.
-     * @throw GraphicsAPIException if the texture is invalid or multi-sample.
+     * @return ErrorCode::Success, ErrorCode::InvalidArgument when the texture is invalid, multi-sample,
+     *         not a Texture2D or the data size does not match the region, ErrorCode::OutOfBounds when the
+     *         region or mip level does not fit, or the code the failing GL call maps to.
      */
-    void UpdateRegion(const Opal::ArrayView<const u8>& data, i32 x, i32 y, i32 width, i32 height, i32 mip_level = 0) const;
+    [[nodiscard]] ErrorCode UpdateRegion(const Opal::ArrayView<const u8>& data, i32 x, i32 y, i32 width, i32 height,
+                                         i32 mip_level = 0) const;
 
     /**
      * Upload pixel data to one full layer of a Texture2DArray or one face of a CubeMap, at a mip level.
@@ -192,11 +208,12 @@ public:
      *        mip dimensions are the texture dimensions halved per mip level (clamped to 1).
      * @param layer Array layer index for Texture2DArray, or face index [0, 5] for CubeMap.
      * @param mip_level Target mip level. Defaults to 0.
-     * @throw Opal::InvalidArgumentException if the texture is not a Texture2DArray or CubeMap, the layer or
-     *        mip level is out of bounds, or the data size does not match the layer.
-     * @throw GraphicsAPIException if the texture is invalid or multi-sample.
+     * @return ErrorCode::Success, ErrorCode::InvalidArgument when the texture is invalid, multi-sample,
+     *         not a Texture2DArray or CubeMap or the data size does not match the layer,
+     *         ErrorCode::OutOfBounds when the layer or mip level does not fit, or the code the failing GL
+     *         call maps to.
      */
-    void UpdateLayer(const Opal::ArrayView<const u8>& data, i32 layer, i32 mip_level = 0) const;
+    [[nodiscard]] ErrorCode UpdateLayer(const Opal::ArrayView<const u8>& data, i32 layer, i32 mip_level = 0) const;
 
     /**
      * Upload pixel data to a sub-region of one layer of a Texture2DArray, or of one face of a CubeMap, at a
@@ -210,22 +227,22 @@ public:
      * @param width Width of the target region, in texels.
      * @param height Height of the target region, in texels.
      * @param mip_level Target mip level. Defaults to 0.
-     * @throw Opal::InvalidArgumentException if the texture is not a Texture2DArray or CubeMap, the layer or mip
-     *        level is out of bounds, the region falls outside the mip dimensions, or the data size does not
-     *        match the region.
-     * @throw GraphicsAPIException if the texture is invalid or multi-sample.
+     * @return ErrorCode::Success, ErrorCode::InvalidArgument when the texture is invalid, multi-sample,
+     *         not a Texture2DArray or CubeMap or the data size does not match the region,
+     *         ErrorCode::OutOfBounds when the layer, mip level or region does not fit, or the code the
+     *         failing GL call maps to.
      */
-    void UpdateLayerRegion(const Opal::ArrayView<const u8>& data, i32 layer, i32 x, i32 y, i32 width, i32 height,
-                           i32 mip_level = 0) const;
+    [[nodiscard]] ErrorCode UpdateLayerRegion(const Opal::ArrayView<const u8>& data, i32 layer, i32 x, i32 y, i32 width, i32 height,
+                                              i32 mip_level = 0) const;
 
     /**
      * Read back the entire mip level of a single-sample Texture2D into CPU memory.
      * @param mip_level Mip level to read. Defaults to 0.
-     * @return Pixel data, mip_width * mip_height * pixel_size bytes.
-     * @throw Opal::InvalidArgumentException if the texture is not a Texture2D or the mip level is out of bounds.
-     * @throw GraphicsAPIException if the texture is invalid or multi-sample.
+     * @return Pixel data, mip_width * mip_height * pixel_size bytes; ErrorCode::InvalidArgument when the
+     *         texture is invalid, multi-sample or not a Texture2D; ErrorCode::OutOfBounds when the mip
+     *         level does not fit.
      */
-    [[nodiscard]] Opal::DynamicArray<u8> Read(i32 mip_level = 0) const;
+    [[nodiscard]] Opal::Expected<Opal::DynamicArray<u8>, ErrorCode> Read(i32 mip_level = 0) const;
 
     /**
      * Read back a rectangular sub-region of a single-sample Texture2D mip level into CPU memory.
@@ -234,23 +251,22 @@ public:
      * @param width Width of the region in texels.
      * @param height Height of the region in texels.
      * @param mip_level Mip level to read. Defaults to 0.
-     * @return Pixel data, width * height * pixel_size bytes.
-     * @throw Opal::InvalidArgumentException if the texture is not a Texture2D, or the region or mip level is
-     *        out of bounds.
-     * @throw GraphicsAPIException if the texture is invalid or multi-sample.
+     * @return Pixel data, width * height * pixel_size bytes; ErrorCode::InvalidArgument when the texture is
+     *         invalid, multi-sample or not a Texture2D; ErrorCode::OutOfBounds when the region or mip level
+     *         does not fit.
      */
-    [[nodiscard]] Opal::DynamicArray<u8> ReadRegion(i32 x, i32 y, i32 width, i32 height, i32 mip_level = 0) const;
+    [[nodiscard]] Opal::Expected<Opal::DynamicArray<u8>, ErrorCode> ReadRegion(i32 x, i32 y, i32 width, i32 height,
+                                                                               i32 mip_level = 0) const;
 
     /**
      * Read back one full layer of a Texture2DArray or one face of a CubeMap, at a mip level, into CPU memory.
      * @param layer Array layer index for Texture2DArray, or face index [0, 5] for CubeMap.
      * @param mip_level Mip level to read. Defaults to 0.
-     * @return Pixel data, mip_width * mip_height * pixel_size bytes.
-     * @throw Opal::InvalidArgumentException if the texture is not a Texture2DArray or CubeMap, or the layer or
-     *        mip level is out of bounds.
-     * @throw GraphicsAPIException if the texture is invalid or multi-sample.
+     * @return Pixel data, mip_width * mip_height * pixel_size bytes; ErrorCode::InvalidArgument when the
+     *         texture is invalid, multi-sample or not a Texture2DArray or CubeMap; ErrorCode::OutOfBounds
+     *         when the layer or mip level does not fit.
      */
-    [[nodiscard]] Opal::DynamicArray<u8> ReadLayer(i32 layer, i32 mip_level = 0) const;
+    [[nodiscard]] Opal::Expected<Opal::DynamicArray<u8>, ErrorCode> ReadLayer(i32 layer, i32 mip_level = 0) const;
 
     [[nodiscard]] bool IsValid() const;
     [[nodiscard]] const TextureDesc& GetDesc() const;

@@ -313,7 +313,7 @@ TEST_CASE("Canvas RenderTarget with external textures", "[canvas][render-target]
         Rndr::Canvas::TextureDesc tex_desc;
         tex_desc.width = 64;
         tex_desc.height = 64;
-        Rndr::Canvas::Texture color(tex_desc);
+        Rndr::Canvas::Texture color = CanvasTest::Unwrap(Rndr::Canvas::Texture::Create(tex_desc));
         REQUIRE(color.IsValid());
 
         Rndr::Canvas::RenderTargetDesc desc;
@@ -338,7 +338,7 @@ TEST_CASE("Canvas RenderTarget with external textures", "[canvas][render-target]
             depth_desc.width = 64;
             depth_desc.height = 64;
             depth_desc.format = fmt;
-            Rndr::Canvas::Texture depth(depth_desc);
+            Rndr::Canvas::Texture depth = CanvasTest::Unwrap(Rndr::Canvas::Texture::Create(depth_desc));
             REQUIRE(depth.IsValid());
 
             Rndr::Canvas::RenderTargetDesc desc;
@@ -357,13 +357,13 @@ TEST_CASE("Canvas RenderTarget with external textures", "[canvas][render-target]
         Rndr::Canvas::TextureDesc color_desc;
         color_desc.width = 32;
         color_desc.height = 32;
-        Rndr::Canvas::Texture color(color_desc);
+        Rndr::Canvas::Texture color = CanvasTest::Unwrap(Rndr::Canvas::Texture::Create(color_desc));
 
         Rndr::Canvas::TextureDesc depth_desc;
         depth_desc.width = 32;
         depth_desc.height = 32;
         depth_desc.format = Rndr::Canvas::Format::D24S8;
-        Rndr::Canvas::Texture depth(depth_desc);
+        Rndr::Canvas::Texture depth = CanvasTest::Unwrap(Rndr::Canvas::Texture::Create(depth_desc));
 
         Rndr::Canvas::RenderTargetDesc desc;
         desc.AddColor(color).SetDepthStencil(depth);
@@ -379,7 +379,7 @@ TEST_CASE("Canvas RenderTarget with external textures", "[canvas][render-target]
         Rndr::Canvas::TextureDesc tex_desc;
         tex_desc.width = 32;
         tex_desc.height = 32;
-        Rndr::Canvas::Texture color(tex_desc);
+        Rndr::Canvas::Texture color = CanvasTest::Unwrap(Rndr::Canvas::Texture::Create(tex_desc));
         const Rndr::u32 color_handle = color.GetNativeHandle();
 
         {
@@ -405,7 +405,7 @@ TEST_CASE("Canvas RenderTarget with external textures", "[canvas][render-target]
         Rndr::Canvas::TextureDesc tex_desc;
         tex_desc.width = 32;
         tex_desc.height = 32;
-        Rndr::Canvas::Texture color(tex_desc);
+        Rndr::Canvas::Texture color = CanvasTest::Unwrap(Rndr::Canvas::Texture::Create(tex_desc));
 
         Rndr::Canvas::RenderTargetDesc desc;
         desc.AddColor(color);
@@ -436,7 +436,7 @@ TEST_CASE("Canvas RenderTarget with external textures", "[canvas][render-target]
         depth_desc.width = 64;
         depth_desc.height = 64;
         depth_desc.format = Rndr::Canvas::Format::D32F;
-        Rndr::Canvas::Texture depth(depth_desc);
+        Rndr::Canvas::Texture depth = CanvasTest::Unwrap(Rndr::Canvas::Texture::Create(depth_desc));
 
         Rndr::Canvas::RenderTargetDesc desc;
         desc.SetDepthStencil(depth);
@@ -453,7 +453,7 @@ TEST_CASE("Canvas RenderTarget with external textures", "[canvas][render-target]
         tex_desc.width = 32;
         tex_desc.height = 32;
         tex_desc.type = Rndr::Canvas::TextureType::CubeMap;
-        Rndr::Canvas::Texture cube(tex_desc);
+        Rndr::Canvas::Texture cube = CanvasTest::Unwrap(Rndr::Canvas::Texture::Create(tex_desc));
         REQUIRE(cube.IsValid());
 
         for (Rndr::i32 face = 0; face < 6; ++face)
@@ -474,7 +474,7 @@ TEST_CASE("Canvas RenderTarget with external textures", "[canvas][render-target]
         tex_desc.height = 32;
         tex_desc.array_size = 4;
         tex_desc.type = Rndr::Canvas::TextureType::Texture2DArray;
-        Rndr::Canvas::Texture array_tex(tex_desc);
+        Rndr::Canvas::Texture array_tex = CanvasTest::Unwrap(Rndr::Canvas::Texture::Create(tex_desc));
         REQUIRE(array_tex.IsValid());
 
         Rndr::Canvas::RenderTargetDesc desc;
@@ -490,7 +490,7 @@ TEST_CASE("Canvas RenderTarget with external textures", "[canvas][render-target]
         tex_desc.width = 64;
         tex_desc.height = 64;
         tex_desc.use_mips = true;
-        Rndr::Canvas::Texture color(tex_desc);
+        Rndr::Canvas::Texture color = CanvasTest::Unwrap(Rndr::Canvas::Texture::Create(tex_desc));
         REQUIRE(color.GetMipLevelCount() > 2);
 
         Rndr::Canvas::RenderTargetDesc desc;
@@ -515,7 +515,7 @@ TEST_CASE("Canvas RenderTarget with external textures", "[canvas][render-target]
         Rndr::Canvas::TextureDesc tex_desc;
         tex_desc.width = 32;
         tex_desc.height = 32;
-        Rndr::Canvas::Texture color(tex_desc);
+        Rndr::Canvas::Texture color = CanvasTest::Unwrap(Rndr::Canvas::Texture::Create(tex_desc));
 
         Rndr::Canvas::RenderTargetDesc desc;
         desc.AddColor(color, 4);
@@ -529,7 +529,7 @@ TEST_CASE("Canvas RenderTarget with external textures", "[canvas][render-target]
         tex_desc.height = 32;
         tex_desc.array_size = 2;
         tex_desc.type = Rndr::Canvas::TextureType::Texture2DArray;
-        Rndr::Canvas::Texture array_tex(tex_desc);
+        Rndr::Canvas::Texture array_tex = CanvasTest::Unwrap(Rndr::Canvas::Texture::Create(tex_desc));
 
         Rndr::Canvas::RenderTargetDesc desc;
         desc.AddColor(array_tex, 0, 2);
@@ -541,7 +541,7 @@ TEST_CASE("Canvas RenderTarget with external textures", "[canvas][render-target]
         Rndr::Canvas::TextureDesc tex_desc;
         tex_desc.width = 32;
         tex_desc.height = 32;
-        Rndr::Canvas::Texture color(tex_desc);
+        Rndr::Canvas::Texture color = CanvasTest::Unwrap(Rndr::Canvas::Texture::Create(tex_desc));
 
         Rndr::Canvas::RenderTargetDesc desc;
         desc.AddColor(color, 0, 0);
@@ -554,7 +554,7 @@ TEST_CASE("Canvas RenderTarget with external textures", "[canvas][render-target]
         tex_desc.width = 32;
         tex_desc.height = 32;
         tex_desc.format = Rndr::Canvas::Format::D32F;
-        Rndr::Canvas::Texture depth(tex_desc);
+        Rndr::Canvas::Texture depth = CanvasTest::Unwrap(Rndr::Canvas::Texture::Create(tex_desc));
 
         Rndr::Canvas::RenderTargetDesc desc;
         desc.AddColor(depth);
@@ -566,7 +566,7 @@ TEST_CASE("Canvas RenderTarget with external textures", "[canvas][render-target]
         Rndr::Canvas::TextureDesc tex_desc;
         tex_desc.width = 32;
         tex_desc.height = 32;
-        Rndr::Canvas::Texture color(tex_desc);
+        Rndr::Canvas::Texture color = CanvasTest::Unwrap(Rndr::Canvas::Texture::Create(tex_desc));
 
         Rndr::Canvas::RenderTargetDesc desc;
         desc.AddColor(32, 32).SetDepthStencil(color);
@@ -578,7 +578,7 @@ TEST_CASE("Canvas RenderTarget with external textures", "[canvas][render-target]
         Rndr::Canvas::TextureDesc tex_desc;
         tex_desc.width = 32;
         tex_desc.height = 32;
-        Rndr::Canvas::Texture color(tex_desc);
+        Rndr::Canvas::Texture color = CanvasTest::Unwrap(Rndr::Canvas::Texture::Create(tex_desc));
 
         Rndr::Canvas::RenderTargetDesc desc;
         desc.AddColor(64, 64).AddColor(color);
@@ -590,7 +590,7 @@ TEST_CASE("Canvas RenderTarget with external textures", "[canvas][render-target]
         Rndr::Canvas::TextureDesc tex_desc;
         tex_desc.width = 32;
         tex_desc.height = 32;
-        Rndr::Canvas::Texture color(tex_desc);
+        Rndr::Canvas::Texture color = CanvasTest::Unwrap(Rndr::Canvas::Texture::Create(tex_desc));
 
         Rndr::Canvas::RenderTargetDesc desc;
         desc.AddColor(color).AddColor(32, 32);

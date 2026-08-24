@@ -154,7 +154,11 @@ Rndr::Canvas::RenderTarget::RenderTarget(const RenderTargetDesc& desc, const Opa
         {
             attachment.mip_level = 0;
             attachment.layer = -1;
-            attachment.owned = Texture(static_cast<const TextureDesc&>(attachment_desc));
+            auto owned_result = Texture::Create(static_cast<const TextureDesc&>(attachment_desc));
+            if (owned_result.HasValue())
+            {
+                attachment.owned = std::move(owned_result).GetValue();
+            }
             if (!attachment.owned.IsValid())
             {
                 Destroy();
@@ -179,7 +183,11 @@ Rndr::Canvas::RenderTarget::RenderTarget(const RenderTargetDesc& desc, const Opa
         {
             m_depth_stencil_attachment.mip_level = 0;
             m_depth_stencil_attachment.layer = -1;
-            m_depth_stencil_attachment.owned = Texture(static_cast<const TextureDesc&>(attachment_desc));
+            auto owned_result = Texture::Create(static_cast<const TextureDesc&>(attachment_desc));
+            if (owned_result.HasValue())
+            {
+                m_depth_stencil_attachment.owned = std::move(owned_result).GetValue();
+            }
             if (!m_depth_stencil_attachment.owned.IsValid())
             {
                 Destroy();
@@ -279,7 +287,11 @@ Rndr::Canvas::RenderTarget Rndr::Canvas::RenderTarget::Clone() const
         }
         else
         {
-            attachment.owned = source.owned.Clone();
+            auto owned_clone_result = source.owned.Clone();
+            if (owned_clone_result.HasValue())
+            {
+                attachment.owned = std::move(owned_clone_result).GetValue();
+            }
             if (!attachment.owned.IsValid())
             {
                 clone.Destroy();
@@ -301,7 +313,11 @@ Rndr::Canvas::RenderTarget Rndr::Canvas::RenderTarget::Clone() const
         }
         else
         {
-            clone.m_depth_stencil_attachment.owned = m_depth_stencil_attachment.owned.Clone();
+            auto depth_clone_result = m_depth_stencil_attachment.owned.Clone();
+            if (depth_clone_result.HasValue())
+            {
+                clone.m_depth_stencil_attachment.owned = std::move(depth_clone_result).GetValue();
+            }
             if (!clone.m_depth_stencil_attachment.owned.IsValid())
             {
                 clone.Destroy();

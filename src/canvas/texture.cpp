@@ -8,11 +8,12 @@
 
 #include "glad/glad.h"
 
-#include "opal/exceptions.h"
+#include "opal/container/optional.h"
 #include "opal/file-system.h"
 #include "opal/paths.h"
 
-#include "rndr/exception.hpp"
+#include "rndr/canvas/gl-result.hpp"
+#include "rndr/log.hpp"
 #include "rndr/trace.hpp"
 
 #include <algorithm>
@@ -184,130 +185,134 @@ void ApplySamplerParams(GLuint handle, const Rndr::Canvas::TextureDesc& desc, Rn
 
 }  // namespace
 
-Rndr::Canvas::Texture::Texture(const TextureDesc& desc, const Opal::ArrayView<const u8>& init_data, const Opal::StringUtf8& name)
-    : m_desc(desc), m_name(name.Clone())
+Opal::Expected<Rndr::Canvas::Texture, Rndr::ErrorCode> Rndr::Canvas::Texture::Create(const TextureDesc& desc,
+                                                                                     const Opal::ArrayView<const u8>& init_data,
+                                                                                     const Opal::StringUtf8& name)
 {
-    RNDR_CPU_EVENT_SCOPED("Canvas::Texture::Texture");
+    RNDR_CPU_EVENT_SCOPED("Canvas::Texture::Create");
+    using ResultType = Opal::Expected<Texture, ErrorCode>;
 
-    if (m_desc.width <= 0 || m_desc.height <= 0)
+    if (desc.width <= 0 || desc.height <= 0)
     {
-        throw Opal::InvalidArgumentException(__FUNCTION__, "Texture dimensions must be positive!");
+        RNDR_LOG_ERROR("Canvas: Texture dimensions must be positive");
+        return ResultType(ErrorCode::InvalidArgument);
     }
-    if (m_desc.type == TextureType::Texture2DArray && m_desc.array_size <= 0)
+    if (desc.type == TextureType::Texture2DArray && desc.array_size <= 0)
     {
-        throw Opal::InvalidArgumentException(__FUNCTION__, "Texture2DArray must have array_size > 0!");
-    }
-
-    m_max_mip_levels = m_desc.use_mips ? CalcMipLevels(m_desc.width, m_desc.height) : 1;
-
-    const bool multisample = m_desc.sample_count > 1;
-    const GLenum target = ToGLTarget(m_desc.type, multisample);
-
-    glCreateTextures(target, 1, &m_handle);
-    if (m_handle == 0)
-    {
-        throw GraphicsAPIException(0, "Failed to create GL texture!");
+        RNDR_LOG_ERROR("Canvas: Texture2DArray must have array_size > 0");
+        return ResultType(ErrorCode::InvalidArgument);
     }
 
-    const GLFormatInfo fmt = ToGLFormat(m_desc.format);
+    Texture texture;
+    texture.m_desc = desc;
+    texture.m_name = name.Clone();
+    texture.m_max_mip_levels = desc.use_mips ? CalcMipLevels(desc.width, desc.height) : 1;
+
+    const bool multisample = desc.sample_count > 1;
+    const GLenum target = ToGLTarget(desc.type, multisample);
+
+    glCreateTextures(target, 1, &texture.m_handle);
+    if (texture.m_handle == 0)
+    {
+        RNDR_LOG_ERROR("Canvas: Failed to create GL texture");
+        return ResultType(ErrorCode::GraphicsAPIError);
+    }
+
+    const GLFormatInfo fmt = ToGLFormat(desc.format);
 
     // Sampler params are only valid for single-sample textures.
     if (!multisample)
     {
-        ApplySamplerParams(m_handle, m_desc, m_max_mip_levels);
+        ApplySamplerParams(texture.m_handle, desc, texture.m_max_mip_levels);
     }
 
-    // Allocate storage.
-    if (m_desc.type == TextureType::Texture2D)
+    // Allocate storage. On failure beyond this point, texture's destructor releases the GL texture.
+    if (desc.type == TextureType::Texture2D)
     {
         if (multisample)
         {
-            glTextureStorage2DMultisample(m_handle, m_desc.sample_count, fmt.internal_format, m_desc.width, m_desc.height, GL_TRUE);
+            glTextureStorage2DMultisample(texture.m_handle, desc.sample_count, fmt.internal_format, desc.width, desc.height, GL_TRUE);
         }
         else
         {
-            glTextureStorage2D(m_handle, m_max_mip_levels, fmt.internal_format, m_desc.width, m_desc.height);
+            glTextureStorage2D(texture.m_handle, texture.m_max_mip_levels, fmt.internal_format, desc.width, desc.height);
         }
 
         glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
         if (!init_data.IsEmpty() && !multisample)
         {
-            glTextureSubImage2D(m_handle, 0, 0, 0, m_desc.width, m_desc.height, fmt.format, fmt.type, init_data.GetData());
+            glTextureSubImage2D(texture.m_handle, 0, 0, 0, desc.width, desc.height, fmt.format, fmt.type, init_data.GetData());
         }
     }
-    else if (m_desc.type == TextureType::Texture2DArray)
+    else if (desc.type == TextureType::Texture2DArray)
     {
         if (multisample)
         {
-            glTextureStorage3DMultisample(m_handle, m_desc.sample_count, fmt.internal_format, m_desc.width, m_desc.height,
-                                          m_desc.array_size, GL_TRUE);
+            glTextureStorage3DMultisample(texture.m_handle, desc.sample_count, fmt.internal_format, desc.width, desc.height,
+                                          desc.array_size, GL_TRUE);
         }
         else
         {
-            glTextureStorage3D(m_handle, m_max_mip_levels, fmt.internal_format, m_desc.width, m_desc.height, m_desc.array_size);
+            glTextureStorage3D(texture.m_handle, texture.m_max_mip_levels, fmt.internal_format, desc.width, desc.height,
+                               desc.array_size);
         }
 
         glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
         if (!init_data.IsEmpty() && !multisample)
         {
-            const i32 layer_size = m_desc.width * m_desc.height * fmt.pixel_size;
-            for (i32 i = 0; i < m_desc.array_size; i++)
+            const i32 layer_size = desc.width * desc.height * fmt.pixel_size;
+            for (i32 i = 0; i < desc.array_size; i++)
             {
                 const u8* data = init_data.GetData() + i * layer_size;
-                glTextureSubImage3D(m_handle, 0, 0, 0, i, m_desc.width, m_desc.height, 1, fmt.format, fmt.type, data);
+                glTextureSubImage3D(texture.m_handle, 0, 0, 0, i, desc.width, desc.height, 1, fmt.format, fmt.type, data);
             }
         }
     }
-    else if (m_desc.type == TextureType::CubeMap)
+    else if (desc.type == TextureType::CubeMap)
     {
         glEnable(GL_TEXTURE_CUBE_MAP_SEAMLESS);
 
         if (multisample)
         {
-            glTextureStorage2DMultisample(m_handle, m_desc.sample_count, fmt.internal_format, m_desc.width, m_desc.height, GL_TRUE);
+            glTextureStorage2DMultisample(texture.m_handle, desc.sample_count, fmt.internal_format, desc.width, desc.height, GL_TRUE);
         }
         else
         {
-            glTextureStorage2D(m_handle, m_max_mip_levels, fmt.internal_format, m_desc.width, m_desc.height);
+            glTextureStorage2D(texture.m_handle, texture.m_max_mip_levels, fmt.internal_format, desc.width, desc.height);
         }
 
         glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
         if (!init_data.IsEmpty() && !multisample)
         {
             constexpr i32 k_face_count = 6;
-            const i32 face_size = m_desc.width * m_desc.height * fmt.pixel_size;
+            const i32 face_size = desc.width * desc.height * fmt.pixel_size;
             for (i32 i = 0; i < k_face_count; i++)
             {
                 const u8* data = init_data.GetData() + i * face_size;
-                glTextureSubImage3D(m_handle, 0, 0, 0, i, m_desc.width, m_desc.height, 1, fmt.format, fmt.type, data);
+                glTextureSubImage3D(texture.m_handle, 0, 0, 0, i, desc.width, desc.height, 1, fmt.format, fmt.type, data);
             }
         }
     }
 
-    if (m_desc.use_mips && !multisample)
+    if (desc.use_mips && !multisample)
     {
-        glGenerateTextureMipmap(m_handle);
+        glGenerateTextureMipmap(texture.m_handle);
     }
 
-    const GLenum err = glGetError();
-    if (err != GL_NO_ERROR)
-    {
-        glDeleteTextures(1, &m_handle);
-        m_handle = 0;
-        throw GraphicsAPIException(err, "Failed to allocate GL texture!");
-    }
+    RNDR_CANVAS_GL_CHECK_EXPECTED("Canvas::Texture::Create", ResultType);
 
-    if (!m_name.IsEmpty())
+    if (!texture.m_name.IsEmpty())
     {
-        glObjectLabel(GL_TEXTURE, m_handle, static_cast<GLsizei>(m_name.GetSize()), m_name.GetData());
+        glObjectLabel(GL_TEXTURE, texture.m_handle, static_cast<GLsizei>(texture.m_name.GetSize()), texture.m_name.GetData());
     }
+    return ResultType(std::move(texture));
 }
 
 namespace
 {
 
 #if defined(RNDR_KTX)
-Rndr::Canvas::Format GlInternalFormatToCanvasFormat(ktx_uint32_t gl_format)
+Opal::Optional<Rndr::Canvas::Format> GlInternalFormatToCanvasFormat(ktx_uint32_t gl_format)
 {
     switch (gl_format)
     {
@@ -336,7 +341,7 @@ Rndr::Canvas::Format GlInternalFormatToCanvasFormat(ktx_uint32_t gl_format)
         case 0x8814:  // GL_RGBA32F
             return Rndr::Canvas::Format::RGBA32F;
         default:
-            throw Opal::Exception("Unsupported GL internal format in KTX file for Canvas::Texture!");
+            return Opal::NullOpt;
     }
 }
 #endif
@@ -356,14 +361,17 @@ void CubemapFaceDirection(Rndr::i32 face, float u, float v, float& out_x, float&
 
 }  // namespace
 
-Rndr::Canvas::Texture Rndr::Canvas::Texture::FromEquirectangular(const Opal::StringUtf8& file_path, i32 face_size, TextureDesc desc,
-                                                                  Opal::StringUtf8 debug_name)
+Opal::Expected<Rndr::Canvas::Texture, Rndr::ErrorCode> Rndr::Canvas::Texture::FromEquirectangular(const Opal::StringUtf8& file_path,
+                                                                                                  i32 face_size, TextureDesc desc,
+                                                                                                  Opal::StringUtf8 debug_name)
 {
     RNDR_CPU_EVENT_SCOPED("Canvas::Texture::FromEquirectangular");
+    using ResultType = Opal::Expected<Texture, ErrorCode>;
 
     if (!Opal::Exists(file_path))
     {
-        throw Opal::Exception("File does not exist!");
+        RNDR_LOG_ERROR("Canvas: Image file does not exist: {}", *file_path);
+        return ResultType(ErrorCode::FileNotFound);
     }
 
     if (debug_name.IsEmpty())
@@ -398,7 +406,8 @@ Rndr::Canvas::Texture Rndr::Canvas::Texture::FromEquirectangular(const Opal::Str
 
     if (eq_data == nullptr)
     {
-        throw Opal::Exception("Failed to load equirectangular image!");
+        RNDR_LOG_ERROR("Canvas: Failed to load equirectangular image {}: {}", *file_path, stbi_failure_reason());
+        return ResultType(ErrorCode::CorruptData);
     }
 
     if (face_size <= 0)
@@ -506,15 +515,18 @@ Rndr::Canvas::Texture Rndr::Canvas::Texture::FromEquirectangular(const Opal::Str
     desc.width = face_size;
     desc.height = face_size;
 
-    return Texture(desc, {cubemap_data.GetData(), total_bytes}, debug_name);
+    return Create(desc, {cubemap_data.GetData(), total_bytes}, debug_name);
 }
 
-Rndr::Canvas::Texture Rndr::Canvas::Texture::FromFile(const Opal::StringUtf8& file_path, TextureDesc desc, bool flip_vertically,
-                                                       Opal::StringUtf8 debug_name)
+Opal::Expected<Rndr::Canvas::Texture, Rndr::ErrorCode> Rndr::Canvas::Texture::FromFile(const Opal::StringUtf8& file_path,
+                                                                                       TextureDesc desc, bool flip_vertically,
+                                                                                       Opal::StringUtf8 debug_name)
 {
+    using ResultType = Opal::Expected<Texture, ErrorCode>;
     if (!Opal::Exists(file_path))
     {
-        throw Opal::Exception("File does not exist!");
+        RNDR_LOG_ERROR("Canvas: Image file does not exist: {}", *file_path);
+        return ResultType(ErrorCode::FileNotFound);
     }
 
     if (debug_name.IsEmpty())
@@ -531,10 +543,18 @@ Rndr::Canvas::Texture Rndr::Canvas::Texture::FromFile(const Opal::StringUtf8& fi
         const KTX_error_code result = ktxTexture1_CreateFromNamedFile(*file_path, KTX_TEXTURE_CREATE_LOAD_IMAGE_DATA_BIT, &ktx_texture);
         if (result != KTX_SUCCESS || ktx_texture == nullptr)
         {
-            throw Opal::Exception("Failed to load KTX texture!");
+            RNDR_LOG_ERROR("Canvas: Failed to load KTX texture from file: {}", *file_path);
+            return ResultType(ErrorCode::CorruptData);
         }
 
-        desc.format = GlInternalFormatToCanvasFormat(ktx_texture->glInternalformat);
+        const Opal::Optional<Format> ktx_format = GlInternalFormatToCanvasFormat(ktx_texture->glInternalformat);
+        if (!ktx_format.HasValue())
+        {
+            RNDR_LOG_ERROR("Canvas: Unsupported GL internal format in KTX file: {}", *file_path);
+            ktxTexture_Destroy(reinterpret_cast<ktxTexture*>(ktx_texture));
+            return ResultType(ErrorCode::UnsupportedFormat);
+        }
+        desc.format = ktx_format.GetValue();
         desc.width = static_cast<i32>(ktx_texture->baseWidth);
         desc.height = static_cast<i32>(ktx_texture->baseHeight);
 
@@ -549,9 +569,9 @@ Rndr::Canvas::Texture Rndr::Canvas::Texture::FromFile(const Opal::StringUtf8& fi
         const u8* data = ktxTexture_GetData(reinterpret_cast<ktxTexture*>(ktx_texture));
         const u64 data_size = ktxTexture_GetDataSize(reinterpret_cast<ktxTexture*>(ktx_texture));
 
-        Texture tex(desc, {data, data_size}, debug_name);
+        ResultType tex_result = Create(desc, {data, data_size}, debug_name);
         ktxTexture_Destroy(reinterpret_cast<ktxTexture*>(ktx_texture));
-        return tex;
+        return tex_result;
     }
 #endif
 
@@ -570,7 +590,8 @@ Rndr::Canvas::Texture Rndr::Canvas::Texture::FromFile(const Opal::StringUtf8& fi
         f32* data = stbi_loadf(*file_path, &width, &height, &channels_in_file, k_desired_channels);
         if (data == nullptr)
         {
-            throw Opal::Exception("Failed to load HDR image!");
+            RNDR_LOG_ERROR("Canvas: Failed to load HDR image {}: {}", *file_path, stbi_failure_reason());
+            return ResultType(ErrorCode::CorruptData);
         }
         pixel_data = reinterpret_cast<u8*>(data);
         desc.format = Format::RGBA32F;
@@ -581,7 +602,8 @@ Rndr::Canvas::Texture Rndr::Canvas::Texture::FromFile(const Opal::StringUtf8& fi
         u8* data = stbi_load(*file_path, &width, &height, &channels_in_file, k_desired_channels);
         if (data == nullptr)
         {
-            throw Opal::Exception("Failed to load image!");
+            RNDR_LOG_ERROR("Canvas: Failed to load image {}: {}", *file_path, stbi_failure_reason());
+            return ResultType(ErrorCode::CorruptData);
         }
         pixel_data = data;
         desc.format = Format::SRGBA8;
@@ -591,9 +613,9 @@ Rndr::Canvas::Texture Rndr::Canvas::Texture::FromFile(const Opal::StringUtf8& fi
     desc.width = width;
     desc.height = height;
 
-    Texture tex(desc, {pixel_data, data_size}, debug_name);
+    ResultType tex_result = Create(desc, {pixel_data, data_size}, debug_name);
     stbi_image_free(pixel_data);
-    return tex;
+    return tex_result;
 }
 
 Rndr::Canvas::Texture::~Texture()
@@ -625,11 +647,13 @@ Rndr::Canvas::Texture& Rndr::Canvas::Texture::operator=(Texture&& other) noexcep
     return *this;
 }
 
-Rndr::Canvas::Texture Rndr::Canvas::Texture::Clone() const
+Opal::Expected<Rndr::Canvas::Texture, Rndr::ErrorCode> Rndr::Canvas::Texture::Clone() const
 {
+    using ResultType = Opal::Expected<Texture, ErrorCode>;
     if (!IsValid())
     {
-        return {};
+        RNDR_LOG_ERROR("Canvas: Cannot clone an invalid texture");
+        return ResultType(ErrorCode::InvalidArgument);
     }
 
     Texture clone;
@@ -642,6 +666,11 @@ Rndr::Canvas::Texture Rndr::Canvas::Texture::Clone() const
     const GLFormatInfo fmt = ToGLFormat(m_desc.format);
 
     glCreateTextures(target, 1, &clone.m_handle);
+    if (clone.m_handle == 0)
+    {
+        RNDR_LOG_ERROR("Canvas: Failed to create GL texture for clone");
+        return ResultType(ErrorCode::GraphicsAPIError);
+    }
 
     if (!multisample)
     {
@@ -689,8 +718,9 @@ Rndr::Canvas::Texture Rndr::Canvas::Texture::Clone() const
     }
 
     glCopyImageSubData(m_handle, target, 0, 0, 0, 0, clone.m_handle, target, 0, 0, 0, 0, m_desc.width, m_desc.height, depth);
+    RNDR_CANVAS_GL_CHECK_EXPECTED("Canvas::Texture::Clone", ResultType);
 
-    return clone;
+    return ResultType(std::move(clone));
 }
 
 void Rndr::Canvas::Texture::Destroy()
@@ -707,16 +737,19 @@ void Rndr::Canvas::Texture::Destroy()
 namespace
 {
 
-void ValidateCpuAccess(Rndr::u32 handle, const Rndr::Canvas::TextureDesc& desc)
+Rndr::ErrorCode ValidateCpuAccess(Rndr::u32 handle, const Rndr::Canvas::TextureDesc& desc)
 {
     if (handle == 0)
     {
-        throw Rndr::GraphicsAPIException(0, "Cannot transfer pixel data for an invalid texture!");
+        RNDR_LOG_ERROR("Canvas: Cannot transfer pixel data for an invalid texture");
+        return Rndr::ErrorCode::InvalidArgument;
     }
     if (desc.sample_count > 1)
     {
-        throw Rndr::GraphicsAPIException(0, "Cannot transfer pixel data for a multi-sample texture!");
+        RNDR_LOG_ERROR("Canvas: Cannot transfer pixel data for a multi-sample texture");
+        return Rndr::ErrorCode::InvalidArgument;
     }
+    return Rndr::ErrorCode::Success;
 }
 
 Rndr::i32 MipDimension(Rndr::i32 base, Rndr::i32 mip_level)
@@ -727,50 +760,56 @@ Rndr::i32 MipDimension(Rndr::i32 base, Rndr::i32 mip_level)
 
 }  // namespace
 
-void Rndr::Canvas::Texture::Update(const Opal::ArrayView<const u8>& data) const
+Rndr::ErrorCode Rndr::Canvas::Texture::Update(const Opal::ArrayView<const u8>& data) const
 {
-    UpdateRegion(data, 0, 0, m_desc.width, m_desc.height, 0);
+    return UpdateRegion(data, 0, 0, m_desc.width, m_desc.height, 0);
 }
 
-void Rndr::Canvas::Texture::UpdateRegion(const Opal::ArrayView<const u8>& data, i32 x, i32 y, i32 width, i32 height,
-                                         i32 mip_level) const
+Rndr::ErrorCode Rndr::Canvas::Texture::UpdateRegion(const Opal::ArrayView<const u8>& data, i32 x, i32 y, i32 width, i32 height,
+                                                    i32 mip_level) const
 {
     RNDR_CPU_EVENT_SCOPED("Canvas::Texture::UpdateRegion");
 
-    ValidateCpuAccess(m_handle, m_desc);
+    RNDR_CANVAS_CHECK(ValidateCpuAccess(m_handle, m_desc));
 
     if (m_desc.type != TextureType::Texture2D)
     {
-        throw Opal::InvalidArgumentException(__FUNCTION__, "UpdateRegion is only supported for Texture2D!");
+        RNDR_LOG_ERROR("Canvas: UpdateRegion is only supported for Texture2D");
+        return ErrorCode::InvalidArgument;
     }
     if (mip_level < 0 || mip_level >= m_max_mip_levels)
     {
-        throw Opal::InvalidArgumentException(__FUNCTION__, "Mip level is out of range!");
+        RNDR_LOG_ERROR("Canvas: Mip level is out of range");
+        return ErrorCode::OutOfBounds;
     }
 
     const i32 mip_width = MipDimension(m_desc.width, mip_level);
     const i32 mip_height = MipDimension(m_desc.height, mip_level);
     if (x < 0 || y < 0 || width <= 0 || height <= 0 || x + width > mip_width || y + height > mip_height)
     {
-        throw Opal::InvalidArgumentException(__FUNCTION__, "Update region is out of bounds!");
+        RNDR_LOG_ERROR("Canvas: Update region is out of bounds");
+        return ErrorCode::OutOfBounds;
     }
 
     const GLFormatInfo fmt = ToGLFormat(m_desc.format);
     const u64 expected_size = static_cast<u64>(width) * height * fmt.pixel_size;
     if (data.GetSize() != expected_size)
     {
-        throw Opal::InvalidArgumentException(__FUNCTION__, "Update data size does not match the region!");
+        RNDR_LOG_ERROR("Canvas: Update data size does not match the region");
+        return ErrorCode::InvalidArgument;
     }
 
     glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
     glTextureSubImage2D(m_handle, mip_level, x, y, width, height, fmt.format, fmt.type, data.GetData());
+    RNDR_CANVAS_GL_CHECK("glTextureSubImage2D");
+    return ErrorCode::Success;
 }
 
-void Rndr::Canvas::Texture::UpdateLayer(const Opal::ArrayView<const u8>& data, i32 layer, i32 mip_level) const
+Rndr::ErrorCode Rndr::Canvas::Texture::UpdateLayer(const Opal::ArrayView<const u8>& data, i32 layer, i32 mip_level) const
 {
     RNDR_CPU_EVENT_SCOPED("Canvas::Texture::UpdateLayer");
 
-    ValidateCpuAccess(m_handle, m_desc);
+    RNDR_CANVAS_CHECK(ValidateCpuAccess(m_handle, m_desc));
 
     constexpr i32 k_cubemap_face_count = 6;
     i32 layer_count = 0;
@@ -784,16 +823,19 @@ void Rndr::Canvas::Texture::UpdateLayer(const Opal::ArrayView<const u8>& data, i
     }
     else
     {
-        throw Opal::InvalidArgumentException(__FUNCTION__, "UpdateLayer is only supported for Texture2DArray and CubeMap!");
+        RNDR_LOG_ERROR("Canvas: UpdateLayer is only supported for Texture2DArray and CubeMap");
+        return ErrorCode::InvalidArgument;
     }
 
     if (layer < 0 || layer >= layer_count)
     {
-        throw Opal::InvalidArgumentException(__FUNCTION__, "Layer is out of range!");
+        RNDR_LOG_ERROR("Canvas: Layer is out of range");
+        return ErrorCode::OutOfBounds;
     }
     if (mip_level < 0 || mip_level >= m_max_mip_levels)
     {
-        throw Opal::InvalidArgumentException(__FUNCTION__, "Mip level is out of range!");
+        RNDR_LOG_ERROR("Canvas: Mip level is out of range");
+        return ErrorCode::OutOfBounds;
     }
 
     const i32 mip_width = MipDimension(m_desc.width, mip_level);
@@ -803,19 +845,22 @@ void Rndr::Canvas::Texture::UpdateLayer(const Opal::ArrayView<const u8>& data, i
     const u64 expected_size = static_cast<u64>(mip_width) * mip_height * fmt.pixel_size;
     if (data.GetSize() != expected_size)
     {
-        throw Opal::InvalidArgumentException(__FUNCTION__, "Update data size does not match the layer!");
+        RNDR_LOG_ERROR("Canvas: Update data size does not match the layer");
+        return ErrorCode::InvalidArgument;
     }
 
     glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
     glTextureSubImage3D(m_handle, mip_level, 0, 0, layer, mip_width, mip_height, 1, fmt.format, fmt.type, data.GetData());
+    RNDR_CANVAS_GL_CHECK("glTextureSubImage3D");
+    return ErrorCode::Success;
 }
 
-void Rndr::Canvas::Texture::UpdateLayerRegion(const Opal::ArrayView<const u8>& data, i32 layer, i32 x, i32 y, i32 width, i32 height,
-                                              i32 mip_level) const
+Rndr::ErrorCode Rndr::Canvas::Texture::UpdateLayerRegion(const Opal::ArrayView<const u8>& data, i32 layer, i32 x, i32 y, i32 width,
+                                                         i32 height, i32 mip_level) const
 {
     RNDR_CPU_EVENT_SCOPED("Canvas::Texture::UpdateLayerRegion");
 
-    ValidateCpuAccess(m_handle, m_desc);
+    RNDR_CANVAS_CHECK(ValidateCpuAccess(m_handle, m_desc));
 
     constexpr i32 k_cubemap_face_count = 6;
     i32 layer_count = 0;
@@ -829,63 +874,75 @@ void Rndr::Canvas::Texture::UpdateLayerRegion(const Opal::ArrayView<const u8>& d
     }
     else
     {
-        throw Opal::InvalidArgumentException(__FUNCTION__, "UpdateLayerRegion is only supported for Texture2DArray and CubeMap!");
+        RNDR_LOG_ERROR("Canvas: UpdateLayerRegion is only supported for Texture2DArray and CubeMap");
+        return ErrorCode::InvalidArgument;
     }
 
     if (layer < 0 || layer >= layer_count)
     {
-        throw Opal::InvalidArgumentException(__FUNCTION__, "Layer is out of range!");
+        RNDR_LOG_ERROR("Canvas: Layer is out of range");
+        return ErrorCode::OutOfBounds;
     }
     if (mip_level < 0 || mip_level >= m_max_mip_levels)
     {
-        throw Opal::InvalidArgumentException(__FUNCTION__, "Mip level is out of range!");
+        RNDR_LOG_ERROR("Canvas: Mip level is out of range");
+        return ErrorCode::OutOfBounds;
     }
 
     const i32 mip_width = MipDimension(m_desc.width, mip_level);
     const i32 mip_height = MipDimension(m_desc.height, mip_level);
     if (x < 0 || y < 0 || width <= 0 || height <= 0 || x + width > mip_width || y + height > mip_height)
     {
-        throw Opal::InvalidArgumentException(__FUNCTION__, "Update region is out of bounds!");
+        RNDR_LOG_ERROR("Canvas: Update region is out of bounds");
+        return ErrorCode::OutOfBounds;
     }
 
     const GLFormatInfo fmt = ToGLFormat(m_desc.format);
     const u64 expected_size = static_cast<u64>(width) * height * fmt.pixel_size;
     if (data.GetSize() != expected_size)
     {
-        throw Opal::InvalidArgumentException(__FUNCTION__, "Update data size does not match the region!");
+        RNDR_LOG_ERROR("Canvas: Update data size does not match the region");
+        return ErrorCode::InvalidArgument;
     }
 
     glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
     glTextureSubImage3D(m_handle, mip_level, x, y, layer, width, height, 1, fmt.format, fmt.type, data.GetData());
+    RNDR_CANVAS_GL_CHECK("glTextureSubImage3D");
+    return ErrorCode::Success;
 }
 
-Opal::DynamicArray<Rndr::u8> Rndr::Canvas::Texture::Read(i32 mip_level) const
+Opal::Expected<Opal::DynamicArray<Rndr::u8>, Rndr::ErrorCode> Rndr::Canvas::Texture::Read(i32 mip_level) const
 {
     const i32 mip_width = MipDimension(m_desc.width, mip_level);
     const i32 mip_height = MipDimension(m_desc.height, mip_level);
     return ReadRegion(0, 0, mip_width, mip_height, mip_level);
 }
 
-Opal::DynamicArray<Rndr::u8> Rndr::Canvas::Texture::ReadRegion(i32 x, i32 y, i32 width, i32 height, i32 mip_level) const
+Opal::Expected<Opal::DynamicArray<Rndr::u8>, Rndr::ErrorCode> Rndr::Canvas::Texture::ReadRegion(i32 x, i32 y, i32 width, i32 height,
+                                                                                                i32 mip_level) const
 {
     RNDR_CPU_EVENT_SCOPED("Canvas::Texture::ReadRegion");
+    using ResultType = Opal::Expected<Opal::DynamicArray<u8>, ErrorCode>;
 
-    ValidateCpuAccess(m_handle, m_desc);
+    RNDR_CANVAS_CHECK_EXPECTED(ValidateCpuAccess(m_handle, m_desc), ResultType);
 
     if (m_desc.type != TextureType::Texture2D)
     {
-        throw Opal::InvalidArgumentException(__FUNCTION__, "ReadRegion is only supported for Texture2D!");
+        RNDR_LOG_ERROR("Canvas: ReadRegion is only supported for Texture2D");
+        return ResultType(ErrorCode::InvalidArgument);
     }
     if (mip_level < 0 || mip_level >= m_max_mip_levels)
     {
-        throw Opal::InvalidArgumentException(__FUNCTION__, "Mip level is out of range!");
+        RNDR_LOG_ERROR("Canvas: Mip level is out of range");
+        return ResultType(ErrorCode::OutOfBounds);
     }
 
     const i32 mip_width = MipDimension(m_desc.width, mip_level);
     const i32 mip_height = MipDimension(m_desc.height, mip_level);
     if (x < 0 || y < 0 || width <= 0 || height <= 0 || x + width > mip_width || y + height > mip_height)
     {
-        throw Opal::InvalidArgumentException(__FUNCTION__, "Read region is out of bounds!");
+        RNDR_LOG_ERROR("Canvas: Read region is out of bounds");
+        return ResultType(ErrorCode::OutOfBounds);
     }
 
     const GLFormatInfo fmt = ToGLFormat(m_desc.format);
@@ -897,15 +954,17 @@ Opal::DynamicArray<Rndr::u8> Rndr::Canvas::Texture::ReadRegion(i32 x, i32 y, i32
     glPixelStorei(GL_PACK_ALIGNMENT, 1);
     glGetTextureSubImage(m_handle, mip_level, x, y, 0, width, height, 1, fmt.format, fmt.type, static_cast<GLsizei>(size),
                          result.GetData());
+    RNDR_CANVAS_GL_CHECK_EXPECTED("glGetTextureSubImage", ResultType);
 
-    return result;
+    return ResultType(std::move(result));
 }
 
-Opal::DynamicArray<Rndr::u8> Rndr::Canvas::Texture::ReadLayer(i32 layer, i32 mip_level) const
+Opal::Expected<Opal::DynamicArray<Rndr::u8>, Rndr::ErrorCode> Rndr::Canvas::Texture::ReadLayer(i32 layer, i32 mip_level) const
 {
     RNDR_CPU_EVENT_SCOPED("Canvas::Texture::ReadLayer");
+    using ResultType = Opal::Expected<Opal::DynamicArray<u8>, ErrorCode>;
 
-    ValidateCpuAccess(m_handle, m_desc);
+    RNDR_CANVAS_CHECK_EXPECTED(ValidateCpuAccess(m_handle, m_desc), ResultType);
 
     constexpr i32 k_cubemap_face_count = 6;
     i32 layer_count = 0;
@@ -919,16 +978,19 @@ Opal::DynamicArray<Rndr::u8> Rndr::Canvas::Texture::ReadLayer(i32 layer, i32 mip
     }
     else
     {
-        throw Opal::InvalidArgumentException(__FUNCTION__, "ReadLayer is only supported for Texture2DArray and CubeMap!");
+        RNDR_LOG_ERROR("Canvas: ReadLayer is only supported for Texture2DArray and CubeMap");
+        return ResultType(ErrorCode::InvalidArgument);
     }
 
     if (layer < 0 || layer >= layer_count)
     {
-        throw Opal::InvalidArgumentException(__FUNCTION__, "Layer is out of range!");
+        RNDR_LOG_ERROR("Canvas: Layer is out of range");
+        return ResultType(ErrorCode::OutOfBounds);
     }
     if (mip_level < 0 || mip_level >= m_max_mip_levels)
     {
-        throw Opal::InvalidArgumentException(__FUNCTION__, "Mip level is out of range!");
+        RNDR_LOG_ERROR("Canvas: Mip level is out of range");
+        return ResultType(ErrorCode::OutOfBounds);
     }
 
     const i32 mip_width = MipDimension(m_desc.width, mip_level);
@@ -943,8 +1005,9 @@ Opal::DynamicArray<Rndr::u8> Rndr::Canvas::Texture::ReadLayer(i32 layer, i32 mip
     glPixelStorei(GL_PACK_ALIGNMENT, 1);
     glGetTextureSubImage(m_handle, mip_level, 0, 0, layer, mip_width, mip_height, 1, fmt.format, fmt.type,
                          static_cast<GLsizei>(size), result.GetData());
+    RNDR_CANVAS_GL_CHECK_EXPECTED("glGetTextureSubImage", ResultType);
 
-    return result;
+    return ResultType(std::move(result));
 }
 
 bool Rndr::Canvas::Texture::IsValid() const

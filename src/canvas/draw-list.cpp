@@ -332,7 +332,7 @@ void Rndr::Canvas::DrawList::Execute()
             },
             [](const Impl::WriteTimestampCommand& c)
             {
-                c.query->Record();
+                (void)c.query->Record();
             },
             [](const Impl::BeginEventCommand& c)
             {

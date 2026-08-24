@@ -81,7 +81,12 @@ void Rndr::Canvas::CubemapRenderer::SetCubemap(const Texture& cubemap)
 
 void Rndr::Canvas::CubemapRenderer::SetEquirectangular(const Opal::StringUtf8& file_path, i32 face_size, TextureDesc desc)
 {
-    m_owned_cubemap = Texture::FromEquirectangular(file_path, face_size, desc);
+    auto cubemap_result = Texture::FromEquirectangular(file_path, face_size, desc);
+    if (!cubemap_result.HasValue())
+    {
+        throw Opal::Exception("Failed to load equirectangular image!");
+    }
+    m_owned_cubemap = std::move(cubemap_result).GetValue();
     m_brush.SetTexture("cubemap", m_owned_cubemap);
 }
 

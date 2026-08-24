@@ -1,7 +1,9 @@
 #pragma once
 
+#include "opal/container/expected.h"
 #include "opal/container/string.h"
 
+#include "rndr/error-codes.hpp"
 #include "rndr/types.hpp"
 
 namespace Rndr
@@ -26,8 +28,8 @@ namespace Canvas
  *
  * Typical usage:
  * @code
- *   Canvas::TimestampQuery start("FrameStart");
- *   Canvas::TimestampQuery end("FrameEnd");
+ *   auto start = Canvas::TimestampQuery::Create("FrameStart").GetValue();
+ *   auto end = Canvas::TimestampQuery::Create("FrameEnd").GetValue();
  *
  *   list.WriteTimestamp(start);
  *   list.Draw(mesh, brush);
@@ -37,7 +39,7 @@ namespace Canvas
  *   // Next frame, once the GPU has caught up.
  *   if (end.IsResultAvailable())
  *   {
- *       const f64 gpu_ms = Canvas::GetElapsedMilliseconds(start, end);
+ *       const f64 gpu_ms = Canvas::GetElapsedMilliseconds(start, end).GetValue();
  *   }
  * @endcode
  */
@@ -49,9 +51,10 @@ public:
     /**
      * Create a GPU timestamp query.
      * @param name Debug name for GPU debugging tools.
-     * @throw Rndr::GraphicsAPIException if the query object could not be created.
+     * @return The query, or ErrorCode::GraphicsAPIError when the query object could not be created. The
+     *         reason is logged at error level.
      */
-    explicit TimestampQuery(Opal::StringUtf8 name);
+    [[nodiscard]] static Opal::Expected<TimestampQuery, ErrorCode> Create(Opal::StringUtf8 name = {});
 
     ~TimestampQuery();
 
@@ -65,9 +68,9 @@ public:
     /**
      * Record a timestamp at the current point in the command stream. Recording again overwrites the
      * previous result, so a query is reusable across frames.
-     * @throw Rndr::GraphicsAPIException if the query is invalid.
+     * @return ErrorCode::Success, or ErrorCode::InvalidArgument for an invalid query.
      */
-    void Record();
+    [[nodiscard]] ErrorCode Record();
 
     /**
      * @return True if the GPU has reached the recorded point and the result can be read without
@@ -77,19 +80,20 @@ public:
 
     /**
      * Read the recorded timestamp, blocking until the GPU has produced it.
-     * @return GPU timestamp in nanoseconds. The origin is implementation defined, so only
-     *         differences between timestamps are meaningful.
-     * @throw Rndr::GraphicsAPIException if the query is invalid or was never recorded.
+     * @return GPU timestamp in nanoseconds - the origin is implementation defined, so only differences
+     *         between timestamps are meaningful - or ErrorCode::InvalidArgument when the query is invalid
+     *         or was never recorded.
      */
-    [[nodiscard]] u64 GetResult() const;
+    [[nodiscard]] Opal::Expected<u64, ErrorCode> GetResult() const;
 
     /**
      * Read the recorded timestamp only if it is already available.
      * @param out_result Set to the GPU timestamp in nanoseconds when this returns true, untouched
      *                   otherwise.
-     * @return True if the result was read, false if it is not ready yet.
+     * @return True if the result was read, false if it is not ready yet, or ErrorCode::InvalidArgument
+     *         when the query is invalid or was never recorded.
      */
-    bool TryGetResult(u64& out_result) const;
+    [[nodiscard]] Opal::Expected<bool, ErrorCode> TryGetResult(u64& out_result) const;
 
     /** @return True if a timestamp was recorded into this query at least once. */
     [[nodiscard]] bool IsRecorded() const;
@@ -108,19 +112,19 @@ private:
  * Time between two recorded timestamps. Blocks until both results are available.
  * @param start Query recorded before the measured work.
  * @param end Query recorded after the measured work.
- * @return Elapsed nanoseconds, or 0 if @p end was recorded before @p start.
- * @throw Rndr::GraphicsAPIException if either query is invalid or was never recorded.
+ * @return Elapsed nanoseconds - 0 if @p end was recorded before @p start - or
+ *         ErrorCode::InvalidArgument when either query is invalid or was never recorded.
  */
-[[nodiscard]] u64 GetElapsedNanoseconds(const TimestampQuery& start, const TimestampQuery& end);
+[[nodiscard]] Opal::Expected<u64, ErrorCode> GetElapsedNanoseconds(const TimestampQuery& start, const TimestampQuery& end);
 
 /**
  * Time between two recorded timestamps. Blocks until both results are available.
  * @param start Query recorded before the measured work.
  * @param end Query recorded after the measured work.
- * @return Elapsed milliseconds, or 0 if @p end was recorded before @p start.
- * @throw Rndr::GraphicsAPIException if either query is invalid or was never recorded.
+ * @return Elapsed milliseconds - 0 if @p end was recorded before @p start - or
+ *         ErrorCode::InvalidArgument when either query is invalid or was never recorded.
  */
-[[nodiscard]] f64 GetElapsedMilliseconds(const TimestampQuery& start, const TimestampQuery& end);
+[[nodiscard]] Opal::Expected<f64, ErrorCode> GetElapsedMilliseconds(const TimestampQuery& start, const TimestampQuery& end);
 
 }  // namespace Canvas
 }  // namespace Rndr
