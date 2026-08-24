@@ -100,7 +100,7 @@ struct DescriptorSetLayoutDesc : Opal::ClonableBase<DescriptorSetLayoutDesc>
      *
      * Given them, every binding is checked against what those shaders declare in `set_index` - the kind, the
      * count, and the stages that read it - and each one is given the name the shader uses, which is what
-     * lets DescriptorSet::Update take a name. A binding either side declares and the other does not throws.
+     * lets DescriptorSet::Update take a name. A binding either side declares and the other does not is refused.
      * Only the shaders themselves are read, so they need not outlive the layout.
      */
     Opal::DynamicArray<Opal::Ref<const Shader>> shaders;
@@ -254,7 +254,7 @@ public:
     /**
      * Write one texture into a binding. The descriptor type comes from the layout the set was allocated from,
      * so it is not something a call site can disagree with the shader about.
-     * @param binding Index the layout declares. A binding the layout does not have throws.
+     * @param binding Index the layout declares. A binding the layout does not have is refused.
      * @param texture Texture to write. Its view is what the shader reads.
      * @param sampler Sampler to write beside it. Ignored by Vulkan when the binding has immutable samplers.
      * @param texture_layout Layout the texture will be in when the shader reads it.
@@ -266,7 +266,7 @@ public:
     /**
      * Write one buffer into a binding. The descriptor type - constant or storage - comes from the layout, as
      * above.
-     * @param binding Index the layout declares. A binding the layout does not have throws.
+     * @param binding Index the layout declares. A binding the layout does not have is refused.
      * @param buffer Buffer to write.
      * @param offset Byte offset the shader sees as the start of the range.
      * @param size Bytes visible from offset on. k_whole_buffer is the rest of the buffer.
@@ -278,7 +278,7 @@ public:
      * Write one texture into the binding the shader calls `name`, which is the same call as above with the
      * index looked up rather than typed. Reading as Update("albedo_texture", ...) is the point: a binding
      * index is a number that can be wrong in a way nothing reads back, and a name cannot.
-     * @param name What the shader calls the binding. A name it does not use throws, as does any name at all
+     * @param name What the shader calls the binding. A name it does not use is refused, as is any name at all
      *             when the layout was built without `shaders` and so carries none.
      */
     [[nodiscard]] ErrorCode Update(const Opal::StringUtf8& name, const Texture& texture, const Sampler& sampler,
@@ -316,7 +316,7 @@ private:
         Opal::StringUtf8 name;
     };
 
-    /** The binding of that index, throwing the way every other lookup here does when there is none. */
+    /** The binding of that index, reporting the way every other lookup here does when there is none. */
     [[nodiscard]] Opal::Expected<const BindingInfo&, ErrorCode> FindBinding(u32 binding) const;
 
     VkDevice m_device = VK_NULL_HANDLE;

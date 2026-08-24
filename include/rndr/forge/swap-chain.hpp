@@ -38,7 +38,7 @@ struct SwapChainDesc
     /**
      * Give the color textures TransferSource as well, so that a presented frame can be copied back and
      * looked at. Off by default, since a frame that only presents does not need it and the extra usage can
-     * cost the driver a compression path. A surface that does not offer the usage throws rather than
+     * cost the driver a compression path. A surface that does not offer the usage is refused rather than
      * dropping it, so a caller that asked to read the frame back is never quietly given a texture it cannot.
      */
     bool allow_readback = false;
@@ -179,7 +179,7 @@ public:
     /**
      * Present the acquired texture once the given semaphore is signaled. Which texture that is the swap chain
      * remembers from AcquireTexture, so nothing has to be threaded through the frame; presenting with none
-     * acquired throws. The texture is no longer acquired afterwards, whatever the outcome.
+     * acquired is refused. The texture is no longer acquired afterwards, whatever the outcome.
      *
      * Returns SwapChainStatus::OutOfDate when the swap chain stopped matching the surface, in which case it has
      * already been recreated and the caller has to refresh anything it cached about it.

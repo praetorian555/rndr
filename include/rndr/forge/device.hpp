@@ -72,7 +72,7 @@ struct DeviceFeatures
     /**
      * The MIRROR_CLAMP_TO_EDGE address mode, which ImageAddressMode::MirrorOnce asks for. Core since Vulkan
      * 1.2 but still a feature rather than something every device does, so a sampler naming that mode on a
-     * device created without this throws.
+     * device created without this is refused.
      */
     bool sampler_mirror_clamp_to_edge = false;
     /** BC compressed texture formats. */

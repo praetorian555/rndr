@@ -48,7 +48,7 @@ void SetDebugName(const Device& device, const FrameContext& frame_context, const
 
 /**
  * A debug label region that closes itself. Opens the region on construction and closes it on destruction, so
- * an early return or a thrown exception cannot leave a capture with a region that never ends.
+ * an early return cannot leave a capture with a region that never ends.
  *
  * It is not a recorded command, which is why it lives here rather than beside the CmdBeginDebugLabel it
  * wraps: it is the thing that keeps the matching CmdEndDebugLabel from being forgotten.

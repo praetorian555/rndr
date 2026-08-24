@@ -13,16 +13,20 @@ hold on to, what a frame looks like, how data gets to the device and back, and h
 Every type has a default constructor that produces an *empty* object: it holds no Vulkan handle, owns
 nothing, and its destructor does nothing. This exists so the types can live in containers and as members
 that are filled in later - `Opal::DynamicArray<Fence>`, the depth texture of a swap chain - not as a
-two-phase initialization step. There is no `Create()` to call afterwards; assign a constructed object over
-it instead.
+two-phase initialization step. There is no method to call on an empty object to fill it in; assign a created
+one over it instead.
+
+Everything else is built by a static `Create` that hands back `Opal::Expected<T, ErrorCode>`, so an object
+that exists is one that was created successfully. A constructor cannot report anything without throwing, and
+Forge does not throw - see the error handling section below.
 
 `IsValid()` reports whether an object holds a handle. Every type has it, and it always answers the same
 question: false for a default-constructed object, false after `Destroy()`, false for the source of a move,
 true otherwise.
 
-Calling anything else on an empty object is undefined - the accessors return null handles and the methods
-dereference references that are not there. `IsValid()` is the guard, not a Vulkan handle comparison at the
-call site.
+A method that reports answers `ErrorCode::InvalidArgument` on an empty object. The accessors do not: they
+return null handles and dereference references that are not there, so `IsValid()` is still the guard rather
+than a Vulkan handle comparison at the call site.
 
 `Destroy()` is idempotent and is what the destructor calls, so releasing early is always safe.
 
@@ -93,23 +97,24 @@ mapped pointer, so the mapping follows the object rather than staying with the c
 
 `SwapChain` owns its textures, and `Recreate()` replaces all of them. Anything cached about it - a view,
 the texture count, the extent - is stale afterwards. That is why acquire and present report
-`SwapChainStatus::OutOfDate` rather than throwing: it is a signal to drop what was cached, not a failure.
+`SwapChainStatus::OutOfDate` on the value side rather than as an error: it is a signal to drop what was
+cached, not a failure.
 Applications using `FrameContext` do not see this at all, since it re-reads what it needs each frame.
 
 The swap chain also remembers which texture it handed out. `AcquireTexture` records it,
 `GetCurrentColorTexture()` hands it back, and `Present` takes no index because the swap chain already knows
 which one it is - so an index never has to be threaded through a frame. `HasAcquiredTexture()` is true only
-between the two, and asking for the texture outside that pair throws rather than returning a stale one.
+between the two, and asking for the texture outside that pair reports rather than returning a stale one.
 
 A depth texture is optional: `SwapChainDesc::use_depth` is on by default, and a swap chain made without one
 has an empty depth texture. Ask `HasDepth()`, and leave `RenderingDesc::depth_attachment` absent when it
-answers false - an attachment that is present and names no texture throws, since absent is what "no depth"
-is spelled as.
+answers false - an attachment that is present and names no texture is refused, since absent is what "no
+depth" is spelled as.
 
 What was presented can be read back, but only when the swap chain was asked for it.
 `SwapChainDesc::allow_readback` adds `TransferSource` to the color textures, and it is off by default -
 a frame that only presents has no use for the usage, and it can cost the driver a compression path. A
-surface that does not offer it throws rather than handing back textures whose desc claims a usage their
+surface that does not offer it is refused rather than handing back textures whose desc claims a usage their
 images do not have. The windowed tests are what it exists for; copy the swap chain texture inside the
 frame that drew it rather than reading it after the present, which races the presentation engine.
 
@@ -122,25 +127,31 @@ and a texture-ready semaphore per frame in flight, a render-finished semaphore p
 order in which acquire, submit and present have to happen.
 
 ```cpp
-FrameContext frame_context(device, swap_chain, graphics_queue, present_queue, {.frames_in_flight = 2});
+auto frame_context_result = FrameContext::Create(device, swap_chain, graphics_queue, present_queue,
+                                                {.frames_in_flight = 2});
+...
+FrameContext frame_context = std::move(frame_context_result.GetValue());
 
 while (!window->IsClosed())
 {
     application->ProcessSystemEvents();
 
-    if (frame_context.BeginFrame() == SwapChainStatus::OutOfDate)
+    auto begin_status = frame_context.BeginFrame();
+    if (!begin_status.HasValue() || begin_status.GetValue() == SwapChainStatus::OutOfDate)
     {
         continue;  // the swap chain was rebuilt, nothing was recorded
     }
 
-    CommandBuffer& command_buffer = frame_context.GetCommandBuffer();
-    command_buffer.CmdTextureBarrier(TextureBarrier::ToColorAttachment(frame_context.GetColorTexture()));
-    command_buffer.CmdBeginRendering({.render_area_extent = frame_context.GetRenderSize(),
-                                      .color_attachments = {{.texture = frame_context.GetColorTexture(), ...}}});
+    CommandBuffer& command_buffer = frame_context.GetCommandBuffer().GetValue();
+    Texture& color_texture = frame_context.GetColorTexture().GetValue();
+    // The preset reads the layout off the texture, so what that reported rides through the command.
+    (void)command_buffer.CmdTextureBarrier(TextureBarrier::ToColorAttachment(color_texture));
+    (void)command_buffer.CmdBeginRendering({.render_area_extent = frame_context.GetRenderSize(),
+                                           .color_attachments = {{.texture = color_texture, ...}}});
     ...
-    command_buffer.CmdEndRendering();
+    (void)command_buffer.CmdEndRendering();
 
-    frame_context.EndFrame();
+    (void)frame_context.EndFrame();
 }
 ```
 
@@ -148,7 +159,11 @@ while (!window->IsClosed())
 buffer, so what comes back is already recording. `EndFrame` transitions the texture to `Present`, ends the
 command buffer, submits it against the right semaphores, and presents.
 
-Resizing and minimizing are ordinary outcomes rather than errors. `BeginFrame` returning `OutOfDate` means
+The `(void)` casts above are the frame loop being explicit: every recorded command reports, and a loop that
+means to render regardless says so rather than dropping the codes by accident. A loop that acts on them
+keeps the first one instead.
+
+Resizing and minimizing are ordinary outcomes rather than errors. `BeginFrame` answering `OutOfDate` means
 the swap chain has already been rebuilt, nothing was recorded, the fence of that slot was not reset and the
 frame index did not advance - there is nothing to undo, so the loop just continues. A window with no client
 area, as while minimized, has no swap chain at all; `swap_chain.IsValid()` says so, and an application that
@@ -171,10 +186,10 @@ the buffer works:
 
 - `HostAccess::SequentialWrite`, the default, is memory the host writes and never reads. `Buffer::Update`
   writes into it directly. Reading it back is possible in principle and slow enough to be a bug, so
-  `Buffer::Read` throws on such a buffer.
+  `Buffer::Read` refuses such a buffer with `ErrorCode::InvalidArgument`.
 - `HostAccess::Random` is cached memory. Both `Update` and `Read` work, which is what a readback wants.
 - `HostAccess::None` may land in memory the host cannot map at all, which is the fastest for the device.
-  `Update` and `Read` both throw, and the buffer is filled and read through the staging helpers instead.
+  `Update` and `Read` both refuse it, and the buffer is filled and read through the staging helpers instead.
 
 `UploadToBuffer`, `ReadBackBuffer` and `ReadBackTexture` in `rndr/forge/transfer.hpp` do the staging buffer,
 the copy, the submit and the wait. They block, which is what setup code wants and what a frame does not.
@@ -184,8 +199,8 @@ the device when it returns and a read sees what the device wrote. Fences carry t
 fence of a submit makes everything that submit wrote available to the host, so no extra barrier is needed
 before reading a buffer the device just filled.
 
-A texture is filled from a `Bitmap` by its constructor, which uploads every mip level the bitmap carries, or
-generates the whole chain from level zero when asked. `CommandBuffer::CmdGenerateMips` does the same for a
+A texture is filled from a `Bitmap` by the `Texture::Create` overload that takes one, which uploads every mip
+level the bitmap carries, or generates the whole chain from level zero when asked. `CommandBuffer::CmdGenerateMips` does the same for a
 texture that was filled some other way.
 
 ---
@@ -205,8 +220,9 @@ plain reference.
   one buys nothing, and `const` on the element type says the call does not write through it. When the range is
   of objects rather than values, the element type is `Opal::Ref<const T>`, since an array of references is not
   a thing - `CommandBuffer::CmdBindDescriptorSets` and `Pipeline::CreatePipelineLayout` both look like this.
-- A getter that hands back an object the callee owns returns `T&`, not `Opal::Ref<T>`. `Device::GetQueue`
-  throws when the device has no such queue, so there is no absent case for the return type to carry.
+- A getter that hands back an object the callee owns returns `T&`, not `Opal::Ref<T>`. Where the object may
+  be absent - `Device::GetQueue` on a device created without that family - it is
+  `Opal::Expected<T&, ErrorCode>`, which is Opal's own shape for a reference that may not be there.
 
 `Opal::Ref` is move-only, so taking one by value forces every call site to write `.Clone()` for a reference
 that is only read during the call. That is what this convention removes.
@@ -267,67 +283,88 @@ Anything else is a texture.
 
 ## Error handling
 
-Three rules, in the order they are applied.
+Nothing in Forge throws. Three rules, in the order they are applied.
 
-### Failures throw
+### Failures are return values
 
-Anything that went wrong throws. A `VkResult` that means the call failed becomes a `VulkanException`, which
-carries both the result and the name of the Vulkan function it came from. Misuse of the API - an unhandled
-enum value, an update that would run past the end of a buffer - becomes an `Opal::Exception`.
+Anything that went wrong comes back as a `Rndr::ErrorCode`, and the detail goes to the log at error level.
+A call that produces something hands back `Opal::Expected<T, ErrorCode>`; a call that produces nothing hands
+back the code itself, `ErrorCode::Success` when it worked. Both are `[[nodiscard]]`, so a code cannot be
+dropped by accident - `(void)` is how a caller says it means to.
 
-This holds for ordinary methods, not only for constructors. Constructors have no alternative, because Forge
-has no two-phase initialization and no half-built objects, but `Buffer::Update`, `CommandBuffer::Begin` and
-`DescriptorPool::Reset` throw for the same reason: there is no useful value to return when the call did not
-do what it says.
+A failing `VkResult` becomes the code `VkResultToErrorCode` maps it to, and the log line carries the result
+and the name of the Vulkan function it came from - so the code stays small enough to switch on while nothing
+about the failure is lost. Misuse of the API is reported the same way: `ErrorCode::InvalidArgument` for a
+value that names nothing or a desc that asks for what this device cannot do, `ErrorCode::OutOfBounds` for a
+range that does not fit.
 
-A constructor that throws releases whatever it had already created. The destructor does not run for an
-object whose constructor did not finish, so a type that creates two things - `Pipeline` its layout and then
-its pipeline, `Device` its queues and then its allocator - cleans up on the way out itself, either from the
-`catch (...)` around the part that can throw or beside the throw. The rule is worth knowing when adding a
-step to one of these: a new check placed after a `vkCreate*` call is a leak unless it is inside that
-cleanup.
+This is the same convention `src/audio/` uses and the one Opal's own containers use - `DynamicArray::Create`,
+`TryAt`, `Opal::FileSystem` - which is where it came from. Canvas still throws; do not carry either
+convention across.
 
-Exceptions cost nothing until one is thrown, and the checks that precede them are needed either way, so
-there is no reason to spell these as return values on the per-frame path.
+Creation goes through a static `Create` rather than a constructor, since a constructor has no way to report
+without throwing. `Create` builds into a local object and hands it back, so a step that gives up part way
+leaves through that object's destructor with everything already released. The rule is worth knowing when
+adding a step to one of these: a new check placed after a `vkCreate*` call needs nothing around it, as long
+as what the call produced went into the object being built.
 
-### Expected outcomes are return values
+Two things do not report. `SetDebugName` is best effort - a name that could not be set changes nothing a
+caller would act on - and the accessors on an empty object are undefined rather than checked, which is what
+`IsValid()` is the guard for.
+
+`ShaderCompiler` is the one exception to "nothing throws", and it is not a Forge type: it is shared with
+Canvas and reports by throwing. `Shader::FromSourceInMemory` catches at that boundary and turns it into
+`ErrorCode::ShaderCompilationError`, so nothing that escapes Forge is an exception.
+
+### Expected outcomes are values, not errors
 
 Not everything Vulkan reports as an error is one. A swap chain that no longer matches its surface is the
 normal consequence of the user resizing the window, so `SwapChain::AcquireTexture` and `SwapChain::Present`
-return a `SwapChainStatus` and the caller skips a frame. `VK_ERROR_OUT_OF_DATE_KHR` never leaves the swap
-chain as an exception.
+carry `SwapChainStatus::OutOfDate` on the *value* side of their `Expected` and the caller skips a frame.
+`VK_ERROR_OUT_OF_DATE_KHR` never leaves the swap chain as an error code.
+
+A timeout is the same shape. `Fence::TryWait` answers `Expected<bool, ErrorCode>`: false means the fence was
+not signalled in time, which is the one thing the timeout parameter exists for, and only a failed wait is an
+error.
 
 The same applies to queries whose answer may legitimately be "there is none". A device with no queue family
 matching a set of flags is not a broken device, so `PhysicalDevice::GetQueueFamilyIndex` returns an
-`Opal::Optional<u32>`. Inventing a `VkResult` to describe the absence would add no information the caller
-did not already have.
+`Opal::Optional<u32>`. Inventing a code to describe the absence would add no information the caller did not
+already have.
 
-Use `Opal::Optional` when the outcome is present-or-absent, and a dedicated status enum when there are more
-than two outcomes or when the caller has to react differently to each.
+Use `Opal::Optional` when the outcome is present-or-absent, a dedicated status enum when there are more than
+two outcomes or when the caller has to react differently to each, and an `ErrorCode` only for what actually
+went wrong.
 
 ### Never log and return a default
 
 A function that logs an error and returns an empty container hands back a value the caller cannot tell from
-a legitimately empty result. Failures throw, so the two stay distinguishable, and `RNDR_RETURN_ON_FAIL` is
-therefore not used in Forge.
+a legitimately empty result. An `Expected` keeps the two apart by construction, which is what makes
+`RNDR_RETURN_ON_FAIL` unnecessary here rather than forbidden: `RNDR_FORGE_CHECK` and
+`RNDR_FORGE_VK_CHECK` carry a code out of the call that reported it, and neither can be mistaken for a
+value.
 
 `EnumeratePhysicalDevices` is worth following through, because it lands on the other side of the previous
 rule. An empty list there would be a legitimate answer in the sense that nothing went wrong - the machine
 simply has no Vulkan capable device - but it is not an *outcome the caller can act on*. Every caller either
 indexes the first element or hands the list to `SelectPhysicalDevice`, so an empty one is a check every one
-of them has to remember and none of them did. It throws instead, with a message naming the absence, separate
-from the `VulkanException` that means the enumeration itself failed.
+of them has to remember and none of them did. It reports `ErrorCode::NoGraphicsDevice` instead, separate
+from the code that means the enumeration itself failed.
 
 The test that distinguishes the two rules is not "did something go wrong" but "is there more than one thing
 the caller might reasonably do next". A device with no queue family matching some flags leaves the caller a
 real choice - fall back to another family, or give up - so `GetQueueFamilyIndex` returns an `Opal::Optional`.
-A machine with no device at all leaves no choice, so it throws.
+A machine with no device at all leaves no choice, so it is an error code.
 
 ### What this means for callers
 
-An application that sets up a device and its resources should wrap that setup in one `try` block rather than
-checking each call. The frame loop below it needs no error handling beyond the `SwapChainStatus` it already
-has to react to.
+Setup is a chain of `Create` calls, each of which can report. An application that has nothing to fall back on
+writes one helper that unwraps or stops, and uses it throughout - `modern-vulkan` calls its two `Require` and
+`RequireOk`, and the tests have `ForgeTest::Unwrap`, which fails the case with the code. One helper beats a
+check per line, and the log already says which call failed and why.
+
+The frame loop needs no error handling beyond the `SwapChainStatus` it already has to react to. Every
+recorded command reports, and a loop that means to render regardless says so with `(void)`.
 
 ---
 
@@ -358,24 +395,28 @@ command_buffer.CmdTransition(texture, ImageLayout::ShaderReadOnly);      // the 
 command_buffer.CmdTextureBarrier(TextureBarrier::ToShaderRead(texture)); // the same, with the stages spelled out
 ```
 
-`GetCurrentLayout()` answers for the whole texture and throws when the levels disagree, which is what mip
+`GetCurrentLayout()` answers for the whole texture and reports when the levels disagree, which is what mip
 generation leaves behind halfway through; `GetCurrentLayout(mip_level, array_layer)` answers for one of
 them. The commands that need a layout without changing it - `CmdCopyTexture`, `CmdBlitTexture`,
 `CmdCopyBufferToTexture`, `CmdCopyTextureToBuffer`, `CmdGenerateMips`, `ReadBackTexture` - read it the same
-way, for exactly the levels their regions name, and throw when it is not one the role allows. That last
+way, for exactly the levels their regions name, and refuse it when it is not one the role allows. That last
 check is the one the old API could not make.
+
+A preset that has to read the layout can therefore fail, and hands back `Expected<TextureBarrier, ErrorCode>`
+where the long form given the old layout hands back the barrier itself. `CmdTextureBarrier` takes either, so
+both spellings read the same at a call site and what the read reported comes out of the command.
 
 `CmdBeginRendering` is the same thing at the other end of the frame. A `RenderingAttachmentDesc` names the
 texture it draws into rather than an image view, so the layout it is rendered in is read off that texture
 instead of being written out beside it - and the role decides which layouts are allowed: `ColorAttachment`
 or `General` for a colour attachment, `DepthStencilAttachment`, `DepthStencilReadOnly` or `General` for the
-depth and stencil ones. Anything else throws, `Undefined` included, which is a texture no barrier has moved
-into place yet. The layer rejects an undefined attachment layout too; what it cannot reject is a layout that
+depth and stencil ones. Anything else is refused, `Undefined` included, which is a texture no barrier has
+moved into place yet. The layer rejects an undefined attachment layout too; what it cannot reject is a layout that
 is legal and not the one the barriers actually left the texture in, and that is the case this removes.
 
 The clear value is the same idea one field over. `clear_value` is an
 `Opal::Variant<Vector4f, DepthStencilClearValue>` rather than the union `VkClearValue` is, so it remembers
-which kind was written and a colour clear on a depth attachment throws at `CmdBeginRendering` instead of
+which kind was written and a colour clear on a depth attachment is refused at `CmdBeginRendering` instead of
 clearing to whatever the first two floats of that vector mean as a depth and a stencil - the one attachment
 misuse the layer cannot catch either, since it is handed the same union. Only a `Clear` load operation reads
 it, so an attachment that loads or discards leaves the default alone whichever role it plays.
@@ -436,18 +477,18 @@ desc.specialization.PushBack({.name = "RED_LEVEL", .value = 200});
 Values are keyed by **name**, not by the numeric id Vulkan uses. That is the whole reason the names are
 resolved through reflection: the specification says a `constantID` matching no constant in the shader *"does
 not affect the behavior of the pipeline"* - so a mistyped number does nothing, in silence, and the pipeline
-renders with the default while the caller believes it does not. A name no stage of the pipeline declares
-throws instead.
+renders with the default while the caller believes it does not. A name no stage of the pipeline declares is
+refused instead.
 
 A constant left unnamed keeps the default the shader gave it. A value whose type does not match the declared
-one throws rather than being coerced, an integer into a float included. So does one name given a value twice,
+one is refused rather than coerced, an integer into a float included. So is one name given a value twice,
 which would become two map entries sharing a `constantID` - not allowed within one `VkSpecializationInfo`.
 
 `Shader::GetSpecializationConstants()` says what a module declares - name, id, type, default and the bytes it
 occupies - so what can be specialized is answerable without reading the shader source. A constant narrower
 than 32 bits is reported as `Int32` or `UInt32`, so a caller writes a plain integer for it; `byte_size` keeps
-the declared width, which is what the map entry has to carry, and a value too wide for it throws rather than
-being truncated.
+the declared width, which is what the map entry has to carry, and a value too wide for it is refused rather
+than truncated.
 
 These are applied at pipeline creation and do not change the SPIR-V, so nothing about them affects how a
 shader is compiled or cached.
@@ -502,7 +543,7 @@ descriptor_set.Update("albedo_texture", albedo_texture, albedo_sampler);
 
 Building a graphics pipeline always checks the vertex input and the push constant ranges against the
 shaders, however the desc was written. A layout checks its bindings only when it was given `shaders`.
-These throw:
+These are refused:
 
 - a location the vertex shader reads that no attribute feeds;
 - an attribute whose numeric class is not what the shader reads it as, an integer against a float. Component
@@ -512,7 +553,7 @@ These throw:
   indexes, or whose stages leave out a stage that reads it;
 - a binding the shaders read that the layout never declared.
 
-One thing deliberately does **not** throw: a vertex attribute at a location the shader declares nothing at,
+One thing is deliberately **not** refused: a vertex attribute at a location the shader declares nothing at,
 or a layout binding no shader reads. Both are tempting and both are impossible to get right. A shader input
 or a descriptor that nothing reads is optimised out of the SPIR-V, so reflection cannot tell a stale entry
 apart from one feeding a member this entry point happens to ignore - the sample binds a metallic roughness
@@ -560,7 +601,7 @@ only names the file and narrows the search - a collision costs a recompile, neve
 
 Everything that can go wrong with a blob means the same thing and takes the same path: no entry, compile it.
 A missing file, one that does not parse, one truncated by a half-finished write, one written by a different
-Slang. `Find` never throws and never reports an error.
+Slang. `Find` reports nothing at all.
 
 One thing to know before changing the compiler: the cache is exact because `LoadModule` passes no
 `searchPaths` to Slang, so the source string it is handed is the whole input. Adding search paths would let
@@ -611,8 +652,8 @@ cause.
 A name says what a resource is; a label says what a stretch of work is. `CommandBuffer::CmdBeginDebugLabel`
 and `CmdEndDebugLabel` bracket a region of the command stream, which a capture shows as one collapsible
 entry in place of the loose commands inside it, and `CmdInsertDebugLabel` marks a single point.
-`ScopedDebugLabel` from `rndr/forge/debug.hpp` is the pair as a scope, so an early return or a thrown
-exception cannot leave a region open:
+`ScopedDebugLabel` from `rndr/forge/debug.hpp` is the pair as a scope, so an early return cannot leave a
+region open:
 
 ```cpp
 {

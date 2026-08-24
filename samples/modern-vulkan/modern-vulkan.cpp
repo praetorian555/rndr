@@ -52,6 +52,10 @@ void Run();
 /**
  * Unwrap what a Forge call reported. Forge logs which call failed and why before it hands back a code, so a
  * sample that cannot get through its own setup only has to stop.
+ *
+ * Stopping is spelled as an exception because Rndr::Application and the window still report that way, so
+ * main already catches - one way out rather than two. An application with something to fall back on reads
+ * the code instead.
  */
 template <typename T>
 T Require(Opal::Expected<T, Rndr::ErrorCode>&& result)

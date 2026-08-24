@@ -58,7 +58,7 @@ enum class HostAccess : u8
     Random,
     /**
      * Not touched by the host at all, so the allocation is free to land in memory the host cannot map.
-     * Buffer::Update and ::Read throw on such a buffer; fill and read it with UploadToBuffer and
+     * Buffer::Update and ::Read refuse such a buffer; fill and read it with UploadToBuffer and
      * ReadBackBuffer from rndr/forge/transfer.hpp instead.
      */
     None
@@ -301,7 +301,7 @@ enum class ImageLayout
     Present = 1000001002,
 };
 
-/** The name of a layout, for the messages the layout tracking throws with. */
+/** The name of a layout, for the lines the layout tracking logs. */
 [[nodiscard]] inline const char* ImageLayoutToString(ImageLayout layout)
 {
     switch (layout)

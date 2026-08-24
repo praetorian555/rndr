@@ -245,7 +245,7 @@ struct TextureBarrier : Opal::ClonableBase<TextureBarrier>
      * access from what the texture is about to be used for.
      *
      * Every one comes in two forms. The short one takes the layout the texture is coming from off the texture
-     * itself, which is what Texture::GetCurrentLayout tracks and what almost every caller wants; it throws
+     * itself, which is what Texture::GetCurrentLayout tracks and what almost every caller wants; it reports
      * when the levels of the texture are not all in one layout, since there is then no honest answer. The long
      * one is told that layout, for the caller that knows better than the tracker - a barrier over part of a
      * texture, or a deliberate discard.

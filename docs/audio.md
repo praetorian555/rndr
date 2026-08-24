@@ -51,7 +51,9 @@ Nothing needs to be called every frame. The audio thread runs on its own; the ma
 Nothing in the audio API throws. Anything that can fail for a reason outside the caller's control - a file that is
 not there, a file that is not what its extension claims, a machine with no output device - returns
 `Opal::Expected<T, Rndr::ErrorCode>`, and the reason is logged at error level so the code does not have to carry
-the detail. The codes in use are `FileNotFound`, `UnsupportedFormat` (a real file of a kind no decoder here
+the detail. Forge reports the same way; see the error handling section of [docs/forge.md](forge.md).
+
+The codes in use here are `FileNotFound`, `UnsupportedFormat` (a real file of a kind no decoder here
 handles: six channels, a compressed WAV, an extension nobody reads), `CorruptData`, `NoAudioDevice`,
 `OutOfResources` (every clip slot is live), `InvalidArgument` and `PlatformError`.
 
@@ -60,10 +62,9 @@ bug in the calling code rather than a runtime condition, so it asserts in a debu
 one. And `Play` and the per-sound setters were never fallible in the reporting sense: `Play` hands back an invalid
 handle when it cannot start, and every setter on a handle that no longer names a live sound quietly does nothing.
 
-**This is not how the rest of the repository reports failures.** Canvas and Forge both throw, and `docs/forge.md`
-says Forge does so deliberately. Audio is the exception, on purpose, and is the first user of `Rndr::ErrorCode`.
-Do not take the surrounding subsystems as the pattern when working in `src/audio/`, or this one as the pattern when
-working anywhere else.
+**Canvas does not report failures this way.** It throws, and audio was the first user of `Rndr::ErrorCode` before
+Forge moved onto it. Do not take Canvas as the pattern when working in `src/audio/` or in `src/forge/`, or either of
+those as the pattern when working in Canvas.
 
 ### Clips
 

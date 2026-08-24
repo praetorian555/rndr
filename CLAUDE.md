@@ -19,14 +19,13 @@ Guessing at those produces code that compiles and is wrong.
 ## Read before editing
 
 - [docs/forge.md](docs/forge.md) — conventions that hold across all of `src/forge/`: the empty-state /
-  `IsValid()` contract, and the error strategy. Forge deliberately departs from the rest of the repo here:
-  failures throw rather than returning a status, and `RNDR_RETURN_ON_FAIL` is not used. Following the
-  surrounding code from another subsystem will produce the wrong pattern.
+  `IsValid()` contract, and the error strategy. Nothing in Forge throws. Objects are built by a static
+  `Create` returning `Opal::Expected<T, Rndr::ErrorCode>`, anything else fallible returns an `Expected` or an
+  `ErrorCode`, and the detail goes to the log. Canvas throws, so following the surrounding code from there
+  will produce the wrong pattern.
 
-- [docs/audio.md](docs/audio.md) — `src/audio/` reports failures the other way round: nothing there throws, and
-  anything fallible returns `Opal::Expected<T, Rndr::ErrorCode>` with the detail in the log. It is the only
-  subsystem that does, and the only user of `Rndr::ErrorCode`. Canvas and Forge throw; do not carry either
-  convention across.
+- [docs/audio.md](docs/audio.md) — `src/audio/` reports the same way and got there first. `Rndr::ErrorCode` is
+  shared between the two, so a code added for one is visible to the other.
 
 ## Building here
 

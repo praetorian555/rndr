@@ -92,7 +92,7 @@ struct RasterizerDesc
     /**
      * Clamp a fragment's depth to the near and far planes instead of clipping the geometry against them, so
      * a primitive that reaches past either plane is drawn flattened onto it rather than cut away. What a
-     * shadow caster behind the light wants. Needs DeviceFeatures::depth_clamp, and throws without it.
+     * shadow caster behind the light wants. Needs DeviceFeatures::depth_clamp, and is refused without it.
      */
     bool depth_clamp = false;
 
@@ -211,7 +211,7 @@ struct GraphicsPipelineDesc
 
     /**
      * Samples per pixel the attachments of this pipeline carry. Has to match what the attachments were
-     * created with, and a count this device does not support for both colour and depth throws rather than
+     * created with, and a count this device does not support for both colour and depth is refused rather than
      * being left to the validation layer.
      */
     SampleCount sample_count = SampleCount::Count1;
@@ -236,7 +236,7 @@ struct GraphicsPipelineDesc
 
     /**
      * Values for constants the shaders of this pipeline declare, by name. A constant left unnamed keeps the
-     * default the shader gave it, and a name no stage of this pipeline declares throws - Vulkan ignores a
+     * default the shader gave it, and a name no stage of this pipeline declares is refused - Vulkan ignores a
      * numeric id that matches nothing, which is exactly the mistake worth catching.
      *
      * Applied when the pipeline is built rather than baked into the SPIR-V, so two pipelines can share one
@@ -257,7 +257,7 @@ struct ComputePipelineDesc
 
     /**
      * Values for constants the shaders of this pipeline declare, by name. A constant left unnamed keeps the
-     * default the shader gave it, and a name no stage of this pipeline declares throws - Vulkan ignores a
+     * default the shader gave it, and a name no stage of this pipeline declares is refused - Vulkan ignores a
      * numeric id that matches nothing, which is exactly the mistake worth catching.
      *
      * Applied when the pipeline is built rather than baked into the SPIR-V, so two pipelines can share one
