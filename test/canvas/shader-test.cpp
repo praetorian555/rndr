@@ -1,5 +1,7 @@
 #include <catch2/catch2.hpp>
 
+#include "canvas-test-common.hpp"
+
 #include "glad/glad.h"
 
 #include "opal/container/array-view.h"
@@ -18,22 +20,13 @@
 namespace
 {
 
-Rndr::Canvas::Context CreateTestContext(Opal::ScopePtr<Rndr::Application>& app, Opal::Ref<Rndr::GenericWindow>& window)
-{
-    app = Rndr::Application::Create();
-    Rndr::GenericWindowDesc window_desc;
-    window_desc.start_visible = false;
-    window = app->CreateGenericWindow(window_desc);
-    return Rndr::Canvas::Context::CreateContext(window.Clone());
-}
-
 struct ShaderTestFixture
 {
     Opal::ScopePtr<Rndr::Application> app;
     Opal::Ref<Rndr::GenericWindow> window;
     Rndr::Canvas::Context context;
 
-    ShaderTestFixture() : context(CreateTestContext(app, window)) {}
+    ShaderTestFixture() : context(CanvasTest::CreateTestContext(app, window)) {}
 };
 
 const char* k_vertex_source = R"(

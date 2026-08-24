@@ -28,8 +28,9 @@ int main()
     auto window = app->CreateGenericWindow(window_desc);
     RNDR_ASSERT(window.IsValid(), "Failed to create a window!");
 
-    auto context = Canvas::Context::CreateContext(window.Clone());
-    RNDR_ASSERT(context.IsValid(), "Failed to create Canvas context!");
+    auto context_result = Canvas::Context::CreateContext(window.Clone());
+    RNDR_ASSERT(context_result.HasValue(), "Failed to create Canvas context!");
+    Canvas::Context context = std::move(context_result).GetValue();
 
     Opal::StringUtf8 font_path = Opal::Paths::Combine(RNDR_CORE_ASSETS_DIR, "OpenSans.ttf").GetValue();
     Rndr::ImGuiContext imgui_context(*app, window.Clone(), {.font_path = font_path.Clone()});

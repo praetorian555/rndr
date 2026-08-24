@@ -1,5 +1,7 @@
 #include <catch2/catch2.hpp>
 
+#include "canvas-test-common.hpp"
+
 #include "opal/container/scope-ptr.h"
 #include "opal/exceptions.h"
 
@@ -12,22 +14,13 @@
 namespace
 {
 
-Rndr::Canvas::Context CreateTestContext(Opal::ScopePtr<Rndr::Application>& app, Opal::Ref<Rndr::GenericWindow>& window)
-{
-    app = Rndr::Application::Create();
-    Rndr::GenericWindowDesc window_desc;
-    window_desc.start_visible = false;
-    window = app->CreateGenericWindow(window_desc);
-    return Rndr::Canvas::Context::CreateContext(window.Clone());
-}
-
 struct BufferTestFixture
 {
     Opal::ScopePtr<Rndr::Application> app;
     Opal::Ref<Rndr::GenericWindow> window;
     Rndr::Canvas::Context context;
 
-    BufferTestFixture() : context(CreateTestContext(app, window)) {}
+    BufferTestFixture() : context(CanvasTest::CreateTestContext(app, window)) {}
 };
 
 }  // namespace

@@ -5,7 +5,6 @@
 #include "opal/container/hash-set.h"
 
 #include "rndr/definitions.hpp"
-#include "rndr/exception.hpp"
 #include "rndr/generic-window.hpp"
 #include "rndr/log.hpp"
 #include "rndr/trace.hpp"
@@ -124,16 +123,18 @@ HGLRC CreateCoreProfileContext(HDC device_context, HGLRC share_context)
 
 /**
  * Acquire a device context for @p window and set a pixel format matching @p desc. On any failure the
- * device context is released before throwing, so the caller never has to clean up a partial result.
- * @return The window's device context with the pixel format applied.
+ * device context is released before reporting, so the caller never has to clean up a partial result.
+ * @return The window's device context with the pixel format applied, or the code the failing step maps to.
  */
-HDC AcquireWindowSurface(Rndr::GenericWindow& window, const Rndr::Canvas::ContextDesc& desc)
+Opal::Expected<HDC, Rndr::ErrorCode> AcquireWindowSurface(Rndr::GenericWindow& window, const Rndr::Canvas::ContextDesc& desc)
 {
+    using ResultType = Opal::Expected<HDC, Rndr::ErrorCode>;
     HWND window_handle = RNDR_TO_HWND(window.GetNativeHandle());
     HDC device_context = GetDC(window_handle);
     if (device_context == nullptr)
     {
-        throw Rndr::GraphicsAPIException(0, "Failed to get device context from window!");
+        RNDR_LOG_ERROR("Canvas: Failed to get device context from window");
+        return ResultType(Rndr::ErrorCode::GraphicsAPIError);
     }
 
     BYTE color_bits = 32;
@@ -158,16 +159,18 @@ HDC AcquireWindowSurface(Rndr::GenericWindow& window, const Rndr::Canvas::Contex
     if (pixel_format == 0)
     {
         ReleaseDC(window_handle, device_context);
-        throw Rndr::GraphicsAPIException(0, "Pixel format is not supported!");
+        RNDR_LOG_ERROR("Canvas: Pixel format is not supported");
+        return ResultType(Rndr::ErrorCode::GraphicsAPIError);
     }
 
     if (SetPixelFormat(device_context, pixel_format, &pixel_format_desc) == 0)
     {
         ReleaseDC(window_handle, device_context);
-        throw Rndr::GraphicsAPIException(0, "Failed to set pixel format!");
+        RNDR_LOG_ERROR("Canvas: Failed to set pixel format");
+        return ResultType(Rndr::ErrorCode::GraphicsAPIError);
     }
 
-    return device_context;
+    return ResultType(device_context);
 }
 
 /**
@@ -368,9 +371,11 @@ bool Rndr::Canvas::Context::IsValid() const
 bool Rndr::Canvas::Context::g_context_exists = false;
 Rndr::NativeDeviceContextHandle Rndr::Canvas::Context::g_primary_device_context = Rndr::k_invalid_device_context_handle;
 Rndr::NativeGraphicsContextHandle Rndr::Canvas::Context::g_primary_graphics_context = Rndr::k_invalid_graphics_context_handle;
-Rndr::Canvas::Context Rndr::Canvas::Context::CreateContext(Opal::Ref<GenericWindow> window, const ContextDesc& desc)
+Opal::Expected<Rndr::Canvas::Context, Rndr::ErrorCode> Rndr::Canvas::Context::CreateContext(Opal::Ref<GenericWindow> window,
+                                                                                            const ContextDesc& desc)
 {
     RNDR_CPU_EVENT_SCOPED("Canvas::Context::CreateContext");
+    using ResultType = Opal::Expected<Context, ErrorCode>;
 
 #if RNDR_WINDOWS
     // Case 1: a primary exists and no window was given -> a resource-only context that borrows the
@@ -380,25 +385,28 @@ Rndr::Canvas::Context Rndr::Canvas::Context::CreateContext(Opal::Ref<GenericWind
     {
         if (g_primary_graphics_context == k_invalid_graphics_context_handle || wglCreateContextAttribsARB == nullptr)
         {
-            throw GraphicsAPIException(0, "Cannot create a shared context; the primary context is not in a valid state!");
+            RNDR_LOG_ERROR("Canvas: Cannot create a shared context; the primary context is not in a valid state");
+            return ResultType(ErrorCode::GraphicsAPIError);
         }
 
         HGLRC shared_context = CreateCoreProfileContext(g_primary_device_context, g_primary_graphics_context);
         if (shared_context == nullptr)
         {
-            throw GraphicsAPIException(0, "Failed to create shared OpenGL context!");
+            RNDR_LOG_ERROR("Canvas: Failed to create shared OpenGL context");
+            return ResultType(ErrorCode::GraphicsAPIError);
         }
 
         Context ctx;
         ctx.m_owns_surface = false;
         ctx.m_device_context = g_primary_device_context;
         ctx.m_graphics_context = shared_context;
-        return ctx;
+        return ResultType(std::move(ctx));
     }
 
     if (!window.IsValid())
     {
-        throw Opal::InvalidArgumentException(__FUNCTION__, "Window handle is null!");
+        RNDR_LOG_ERROR("Canvas: Window handle is null");
+        return ResultType(ErrorCode::InvalidArgument);
     }
 
     // Case 2: a primary exists and a window was given -> a secondary per-window context. Owns its own
@@ -408,7 +416,8 @@ Rndr::Canvas::Context Rndr::Canvas::Context::CreateContext(Opal::Ref<GenericWind
     {
         if (g_primary_graphics_context == k_invalid_graphics_context_handle || wglCreateContextAttribsARB == nullptr)
         {
-            throw GraphicsAPIException(0, "Cannot create a window context; the primary context is not in a valid state!");
+            RNDR_LOG_ERROR("Canvas: Cannot create a window context; the primary context is not in a valid state");
+            return ResultType(ErrorCode::GraphicsAPIError);
         }
 
         Context ctx;
@@ -417,18 +426,25 @@ Rndr::Canvas::Context Rndr::Canvas::Context::CreateContext(Opal::Ref<GenericWind
         ctx.m_depth_stencil_format = desc.depth_stencil_format;
         ctx.m_window = std::move(window);
         // On failure beyond this point, ctx's destructor releases the device context / GL context.
-        ctx.m_device_context = AcquireWindowSurface(*ctx.m_window, desc);
+        auto surface_result = AcquireWindowSurface(*ctx.m_window, desc);
+        if (!surface_result.HasValue())
+        {
+            return ResultType(surface_result.GetError());
+        }
+        ctx.m_device_context = surface_result.GetValue();
 
         HGLRC gl_context = CreateCoreProfileContext(ctx.m_device_context, g_primary_graphics_context);
         if (gl_context == nullptr)
         {
-            throw GraphicsAPIException(0, "Failed to create window OpenGL context!");
+            RNDR_LOG_ERROR("Canvas: Failed to create window OpenGL context");
+            return ResultType(ErrorCode::GraphicsAPIError);
         }
         ctx.m_graphics_context = gl_context;
 
         if (wglMakeCurrent(ctx.m_device_context, gl_context) == 0)
         {
-            throw GraphicsAPIException(0, "Failed to make window context current!");
+            RNDR_LOG_ERROR("Canvas: Failed to make window context current");
+            return ResultType(ErrorCode::GraphicsAPIError);
         }
 
         RECT client_rect = {};
@@ -437,7 +453,7 @@ Rndr::Canvas::Context Rndr::Canvas::Context::CreateContext(Opal::Ref<GenericWind
         ctx.m_height = static_cast<i32>(client_rect.bottom - client_rect.top);
 
         ApplyContextGlState(desc);
-        return ctx;
+        return ResultType(std::move(ctx));
     }
 
     // Case 3: no primary yet -> create the primary context, bootstrapping the GL backend.
@@ -446,19 +462,26 @@ Rndr::Canvas::Context Rndr::Canvas::Context::CreateContext(Opal::Ref<GenericWind
     ctx.m_color_format = desc.color_format;
     ctx.m_depth_stencil_format = desc.depth_stencil_format;
     ctx.m_window = std::move(window);
-    ctx.m_device_context = AcquireWindowSurface(*ctx.m_window, desc);
+    auto surface_result = AcquireWindowSurface(*ctx.m_window, desc);
+    if (!surface_result.HasValue())
+    {
+        return ResultType(surface_result.GetError());
+    }
+    ctx.m_device_context = surface_result.GetValue();
 
     // Create a temporary context to bootstrap WGL extensions.
     HGLRC temp_context = wglCreateContext(ctx.m_device_context);
     if (temp_context == nullptr)
     {
-        throw GraphicsAPIException(0, "Failed to create temporary OpenGL context!");
+        RNDR_LOG_ERROR("Canvas: Failed to create temporary OpenGL context");
+        return ResultType(ErrorCode::GraphicsAPIError);
     }
 
     if (wglMakeCurrent(ctx.m_device_context, temp_context) == 0)
     {
         wglDeleteContext(temp_context);
-        throw GraphicsAPIException(0, "Failed to make temporary context current!");
+        RNDR_LOG_ERROR("Canvas: Failed to make temporary context current");
+        return ResultType(ErrorCode::GraphicsAPIError);
     }
 
     // Try to load WGL extensions and create a core profile context. This may fail on software
@@ -486,13 +509,15 @@ Rndr::Canvas::Context Rndr::Canvas::Context::CreateContext(Opal::Ref<GenericWind
     if (final_context == nullptr)
     {
         wglDeleteContext(temp_context);
-        throw GraphicsAPIException(0, "WGL ARB extensions not available!");
+        RNDR_LOG_ERROR("Canvas: WGL ARB extensions not available");
+        return ResultType(ErrorCode::FeatureNotSupported);
     }
 
     if (gladLoadGL() == 0)
     {
         wglDeleteContext(final_context);
-        throw GraphicsAPIException(0, "Failed to load OpenGL functions!");
+        RNDR_LOG_ERROR("Canvas: Failed to load OpenGL functions");
+        return ResultType(ErrorCode::GraphicsAPIError);
     }
 
     ctx.m_graphics_context = final_context;
@@ -516,10 +541,11 @@ Rndr::Canvas::Context Rndr::Canvas::Context::CreateContext(Opal::Ref<GenericWind
     g_primary_device_context = ctx.m_device_context;
     g_primary_graphics_context = ctx.m_graphics_context;
     RNDR_LOG_INFO("OpenGL {}.{} context initialized successfully.", major, minor);
-    return ctx;
+    return ResultType(std::move(ctx));
 #else
     RNDR_UNUSED(window);
     RNDR_UNUSED(desc);
-    throw GraphicsAPIException(0, "Platform not supported!");
+    RNDR_LOG_ERROR("Canvas: Platform not supported");
+    return ResultType(ErrorCode::PlatformError);
 #endif
 }

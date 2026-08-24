@@ -1,5 +1,7 @@
 #include <catch2/catch2.hpp>
 
+#include "canvas-test-common.hpp"
+
 #include "opal/container/scope-ptr.h"
 
 #include "rndr/application.hpp"
@@ -13,22 +15,13 @@
 namespace
 {
 
-Rndr::Canvas::Context CreateTestContext(Opal::ScopePtr<Rndr::Application>& app, Opal::Ref<Rndr::GenericWindow>& window)
-{
-    app = Rndr::Application::Create();
-    Rndr::GenericWindowDesc window_desc;
-    window_desc.start_visible = false;
-    window = app->CreateGenericWindow(window_desc);
-    return Rndr::Canvas::Context::CreateContext(window.Clone());
-}
-
 struct BrushTestFixture
 {
     Opal::ScopePtr<Rndr::Application> app;
     Opal::Ref<Rndr::GenericWindow> window;
     Rndr::Canvas::Context context;
 
-    BrushTestFixture() : context(CreateTestContext(app, window)) {}
+    BrushTestFixture() : context(CanvasTest::CreateTestContext(app, window)) {}
 };
 
 const char* k_simple_shader = R"(

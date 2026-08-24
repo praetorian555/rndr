@@ -1,8 +1,10 @@
 #pragma once
 
+#include "opal/container/expected.h"
 #include "opal/container/ref.h"
 
 #include "rndr/canvas/format.hpp"
+#include "rndr/error-codes.hpp"
 #include "rndr/platform/windows-forward-def.hpp"
 #include "rndr/types.hpp"
 
@@ -43,7 +45,7 @@ struct ContextDesc
  *
  * Typical usage:
  * @code
- *   auto context = Canvas::Context::CreateContext(window, desc);
+ *   auto context = Canvas::Context::CreateContext(window, desc).GetValue();
  *   // game loop
  *   list.SetRenderTarget(context);
  *   list.Draw(mesh, brush);
@@ -81,9 +83,9 @@ public:
      * binds the relevant window's context (MakeCurrent) before rendering or presenting that window.
      * @code
      *   // Main thread:
-     *   auto main_window = Canvas::Context::CreateContext(window_a, desc);   // primary
-     *   auto tool_window = Canvas::Context::CreateContext(window_b, desc);   // shares with primary
-     *   auto loader      = Canvas::Context::CreateContext();                 // resource-only
+     *   auto main_window = Canvas::Context::CreateContext(window_a, desc).GetValue();   // primary
+     *   auto tool_window = Canvas::Context::CreateContext(window_b, desc).GetValue();   // shares with primary
+     *   auto loader      = Canvas::Context::CreateContext().GetValue();                 // resource-only
      *
      *   // Per-window render: bind the window's context, draw into it, then present it.
      *   main_window.MakeCurrent();
@@ -101,11 +103,13 @@ public:
      * @param window Window to bind. Required for the primary and for per-window contexts; omit for a
      *               resource-only context.
      * @param desc Configuration for the context's surface. Ignored for a resource-only context.
-     * @return A valid Context.
-     * @throw Opal::InvalidArgumentException if no primary exists yet and @p window is null.
-     * @throw Rndr::GraphicsAPIException if the OpenGL backend or context creation fails.
+     * @return The context, ErrorCode::InvalidArgument when no primary exists yet and @p window is null,
+     *         ErrorCode::FeatureNotSupported when the WGL ARB extensions are missing, or
+     *         ErrorCode::GraphicsAPIError when the OpenGL backend or context creation fails. The reason
+     *         is logged at error level.
      */
-    [[nodiscard]] static Context CreateContext(Opal::Ref<GenericWindow> window = nullptr, const ContextDesc& desc = {});
+    [[nodiscard]] static Opal::Expected<Context, ErrorCode> CreateContext(Opal::Ref<GenericWindow> window = nullptr,
+                                                                          const ContextDesc& desc = {});
 
     ~Context();
 
