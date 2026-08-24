@@ -33,12 +33,12 @@ TEST_CASE("Canvas Context CreateContext with null window handle reports InvalidA
 
 TEST_CASE("Canvas Context CreateContext with valid window handle", "[canvas]")
 {
-    auto app = Rndr::Application::Create();
+    auto app = Rndr::Application::Create().GetValue();
     REQUIRE(app != nullptr);
 
     Rndr::GenericWindowDesc window_desc;
     window_desc.start_visible = false;
-    auto window = app->CreateGenericWindow(window_desc);
+    auto window = app->CreateGenericWindow(window_desc).GetValue();
 
     auto context = CanvasTest::Unwrap(Rndr::Canvas::Context::CreateContext(window.Clone()));
     REQUIRE(context.IsValid());
@@ -61,12 +61,12 @@ TEST_CASE("Canvas Context CreateContext can be called again after a null handle 
 
 TEST_CASE("Canvas Context with custom desc", "[canvas]")
 {
-    auto app = Rndr::Application::Create();
+    auto app = Rndr::Application::Create().GetValue();
     REQUIRE(app != nullptr);
 
     Rndr::GenericWindowDesc window_desc;
     window_desc.start_visible = false;
-    auto window = app->CreateGenericWindow(window_desc);
+    auto window = app->CreateGenericWindow(window_desc).GetValue();
 
     SECTION("Vsync disabled")
     {
@@ -104,12 +104,12 @@ TEST_CASE("Canvas Context CreateContext with no window and no primary reports In
 
 TEST_CASE("Canvas Context CreateContext creates shared contexts after the primary", "[canvas]")
 {
-    auto app = Rndr::Application::Create();
+    auto app = Rndr::Application::Create().GetValue();
     REQUIRE(app != nullptr);
 
     Rndr::GenericWindowDesc window_desc;
     window_desc.start_visible = false;
-    auto window = app->CreateGenericWindow(window_desc);
+    auto window = app->CreateGenericWindow(window_desc).GetValue();
 
     auto context = CanvasTest::Unwrap(Rndr::Canvas::Context::CreateContext(window.Clone()));
     REQUIRE(context.IsValid());
@@ -153,13 +153,13 @@ TEST_CASE("Canvas Context CreateContext creates shared contexts after the primar
 
 TEST_CASE("Canvas Context CreateContext supports multiple windows", "[canvas]")
 {
-    auto app = Rndr::Application::Create();
+    auto app = Rndr::Application::Create().GetValue();
     REQUIRE(app != nullptr);
 
     Rndr::GenericWindowDesc window_desc;
     window_desc.start_visible = false;
-    auto window_a = app->CreateGenericWindow(window_desc);
-    auto window_b = app->CreateGenericWindow(window_desc);
+    auto window_a = app->CreateGenericWindow(window_desc).GetValue();
+    auto window_b = app->CreateGenericWindow(window_desc).GetValue();
 
     auto primary = CanvasTest::Unwrap(Rndr::Canvas::Context::CreateContext(window_a.Clone()));
     REQUIRE(primary.IsValid());
@@ -204,12 +204,12 @@ TEST_CASE("Canvas Context CreateContext supports multiple windows", "[canvas]")
 
 TEST_CASE("Canvas Context presentation features", "[canvas]")
 {
-    auto app = Rndr::Application::Create();
+    auto app = Rndr::Application::Create().GetValue();
     REQUIRE(app != nullptr);
 
     Rndr::GenericWindowDesc window_desc;
     window_desc.start_visible = false;
-    auto window = app->CreateGenericWindow(window_desc);
+    auto window = app->CreateGenericWindow(window_desc).GetValue();
 
     auto context = CanvasTest::Unwrap(Rndr::Canvas::Context::CreateContext(window.Clone()));
     REQUIRE(context.IsValid());

@@ -1,10 +1,12 @@
 #pragma once
 
 #include "opal/container/dynamic-array.h"
+#include "opal/container/expected.h"
 #include "opal/container/ref.h"
 #include "opal/container/scope-ptr.h"
 #include "opal/delegate.h"
 
+#include "rndr/error-codes.hpp"
 #include "rndr/monitor-info.hpp"
 #include "rndr/system-message-handler.hpp"
 
@@ -38,13 +40,16 @@ public:
     using GamepadConnectionDelegate = Opal::MultiDelegate<void(u8 /*gamepad_index*/, bool /*is_connected*/)>;
     GamepadConnectionDelegate on_gamepad_connection_change;
 
-    static Opal::ScopePtr<Application> Create(const ApplicationDesc& desc = ApplicationDesc{});
+    /**
+     * Creates the one Application instance. Reports ErrorCode::InvalidArgument when one already exists.
+     */
+    [[nodiscard]] static Opal::Expected<Opal::ScopePtr<Application>, ErrorCode> Create(const ApplicationDesc& desc = ApplicationDesc{});
 
     static Application* Get();
     static Application& GetChecked();
     ~Application() override;
 
-    Opal::Ref<GenericWindow> CreateGenericWindow(const GenericWindowDesc& desc);
+    Opal::Expected<Opal::Ref<GenericWindow>, ErrorCode> CreateGenericWindow(const GenericWindowDesc& desc);
     void DestroyGenericWindow(Opal::Ref<GenericWindow> window);
 
     [[nodiscard]] class InputSystem& GetInputSystemChecked() const;

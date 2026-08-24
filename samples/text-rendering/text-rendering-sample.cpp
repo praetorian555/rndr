@@ -20,13 +20,15 @@ int main()
     using namespace Rndr;
 
     const ApplicationDesc app_desc{.enable_input_system = true};
-    auto app = Application::Create(app_desc);
-    RNDR_ASSERT(app.IsValid(), "Failed to create Rndr app!");
+    auto app_result = Application::Create(app_desc);
+    RNDR_ASSERT(app_result.HasValue(), "Failed to create Rndr app!");
+    Opal::ScopePtr<Application> app = std::move(app_result.GetValue());
     constexpr i32 k_width = 1920;
     constexpr i32 k_height = 1080;
     const Rndr::GenericWindowDesc window_desc{.width = k_width, .height = k_height, .name = "Text Rendering Sample"};
-    auto window = app->CreateGenericWindow(window_desc);
-    RNDR_ASSERT(window.IsValid(), "Failed to create a window!");
+    auto window_result = app->CreateGenericWindow(window_desc);
+    RNDR_ASSERT(window_result.HasValue(), "Failed to create a window!");
+    Opal::Ref<GenericWindow> window = std::move(window_result.GetValue());
 
     auto context_result = Canvas::Context::CreateContext(window.Clone());
     RNDR_ASSERT(context_result.HasValue(), "Failed to create Canvas context!");

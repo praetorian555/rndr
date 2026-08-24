@@ -21,15 +21,17 @@ namespace
 Rndr::Application* g_instance = nullptr;
 }  // namespace
 
-Opal::ScopePtr<Rndr::Application> Rndr::Application::Create(const ApplicationDesc& desc)
+Opal::Expected<Opal::ScopePtr<Rndr::Application>, Rndr::ErrorCode> Rndr::Application::Create(const ApplicationDesc& desc)
 {
+    using ResultType = Opal::Expected<Opal::ScopePtr<Application>, ErrorCode>;
     if (g_instance != nullptr)
     {
-        throw Opal::Exception("Rndr Application already created!");
+        RNDR_LOG_ERROR("Rndr Application already created, only one can be live at a time");
+        return ResultType(ErrorCode::InvalidArgument);
     }
     Opal::ScopePtr<Application> app = Opal::MakeScoped<Application>(nullptr, desc);
     g_instance = app.Get();
-    return app;
+    return ResultType(std::move(app));
 }
 
 Rndr::Application* Rndr::Application::Get()
@@ -68,7 +70,7 @@ Rndr::Application::~Application()
     g_instance = nullptr;
 }
 
-Opal::Ref<Rndr::GenericWindow> Rndr::Application::CreateGenericWindow(const GenericWindowDesc& desc)
+Opal::Expected<Opal::Ref<Rndr::GenericWindow>, Rndr::ErrorCode> Rndr::Application::CreateGenericWindow(const GenericWindowDesc& desc)
 {
     return m_platform_application->CreateGenericWindow(desc);
 }

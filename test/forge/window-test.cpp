@@ -63,7 +63,7 @@ struct ForgeWindowFixture
         // title bar or a sizing frame the client area is the whole window, so what is asked for here and in
         // Reshape is what the surface reports - and, unlike a caption window, it can be sized to nothing,
         // which is the state the recovery case needs.
-        : app(Application::Create({})),
+        : app(Application::Create({}).GetValue()),
           window(app->CreateGenericWindow({.width = width,
                                            .height = height,
                                            .name = "Forge window test",
@@ -71,7 +71,8 @@ struct ForgeWindowFixture
                                            .has_title_bar = false,
                                            .has_border = false,
                                            .show_in_taskbar = false,
-                                           .start_visible = false}))
+                                           .start_visible = false})
+                     .GetValue())
     {
         Opal::Expected<Forge::GraphicsContext, ErrorCode> context_result = Forge::GraphicsContext::Create(ForgeTest::TestContextDesc());
         if (!context_result.HasValue())

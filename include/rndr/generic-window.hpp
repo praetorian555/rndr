@@ -3,6 +3,7 @@
 #include "opal/container/string.h"
 #include "opal/delegate.h"
 
+#include "rndr/error-codes.hpp"
 #include "rndr/math.hpp"
 #include "rndr/types.hpp"
 
@@ -87,11 +88,12 @@ public:
 
     /**
      * Requests closing of the window. Should trigger Application::on_window_close as if the user pressed x in the UI.
+     * @return ErrorCode::WindowAlreadyClosed if the window is closed, ErrorCode::PlatformError if the OS refuses.
      */
-    virtual void RequestClose() = 0;
+    virtual ErrorCode RequestClose() = 0;
 
-    virtual void Reshape(i32 pos_x, i32 pos_y, i32 width, i32 height) = 0;
-    virtual void MoveTo(i32 pos_x, i32 pos_y) = 0;
+    virtual ErrorCode Reshape(i32 pos_x, i32 pos_y, i32 width, i32 height) = 0;
+    virtual ErrorCode MoveTo(i32 pos_x, i32 pos_y) = 0;
     virtual void BringToFront() = 0;
     virtual void Destroy() = 0;
     virtual void Minimize() = 0;
@@ -102,8 +104,8 @@ public:
     virtual void Hide() = 0;
     virtual void Focus() = 0;
     virtual void SetMode(GenericWindowMode mode) = 0;
-    virtual void SetOpacity(f32 opacity) = 0;
-    virtual void SetTitle(const Opal::StringUtf8& title) = 0;
+    virtual ErrorCode SetOpacity(f32 opacity) = 0;
+    virtual ErrorCode SetTitle(const Opal::StringUtf8& title) = 0;
 
     /**
      * Decoration and behaviour toggles. All of them can be used at any point after the window is created and

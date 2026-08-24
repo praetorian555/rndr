@@ -2,6 +2,10 @@
 
 // #include "glad/glad_wgl.h"
 
+#include "opal/container/expected.h"
+#include "opal/container/scope-ptr.h"
+
+#include "rndr/error-codes.hpp"
 #include "rndr/generic-window.hpp"
 #include "rndr/platform/windows-header.hpp"
 #include "rndr/types.hpp"
@@ -12,13 +16,19 @@ namespace Rndr
 class WindowsWindow : public GenericWindow
 {
 public:
-    WindowsWindow(const GenericWindowDesc& desc);
+    /**
+     * Creates the OS window described by desc.
+     * @return ErrorCode::InvalidArgument for a desc that makes no sense, ErrorCode::PlatformError when the OS
+     * refuses to create the window.
+     */
+    [[nodiscard]] static Opal::Expected<Opal::ScopePtr<GenericWindow>, ErrorCode> Create(const GenericWindowDesc& desc);
+
     ~WindowsWindow();
 
-    void RequestClose() override;
+    ErrorCode RequestClose() override;
 
-    void Reshape(i32 pos_x, i32 pos_y, i32 width, i32 height) override;
-    void MoveTo(i32 pos_x, i32 pos_y) override;
+    ErrorCode Reshape(i32 pos_x, i32 pos_y, i32 width, i32 height) override;
+    ErrorCode MoveTo(i32 pos_x, i32 pos_y) override;
     void BringToFront() override;
     void Destroy() override;
     void Minimize() override;
@@ -30,8 +40,8 @@ public:
     void Focus() override;
 
     void SetMode(GenericWindowMode mode) override;
-    void SetOpacity(f32 opacity) override;
-    void SetTitle(const Opal::StringUtf8& title) override;
+    ErrorCode SetOpacity(f32 opacity) override;
+    ErrorCode SetTitle(const Opal::StringUtf8& title) override;
 
     void SetResizable(bool resizable) override;
     void SetTitleBarVisible(bool visible) override;
@@ -61,6 +71,14 @@ public:
     [[nodiscard]] NativeWindowHandle GetNativeHandle() const override;
 
 private:
+    WindowsWindow(const GenericWindowDesc& desc);
+
+    template <typename T, typename... Args>
+    friend T* Opal::New(Opal::AllocatorBase* /*allocator*/, Args&&... /*args*/);
+
+    /** The Win32 half of Create: registers the class and creates the OS window. */
+    ErrorCode Initialize(const GenericWindowDesc& desc);
+
     /** Persistent decoration style of a windowed window. Does not include the initial state bits. */
     static i32 GetWindowedStyle(const GenericWindowDesc& desc);
     static i32 GetFullscreenStyle(const GenericWindowDesc& desc);

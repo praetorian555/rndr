@@ -29,12 +29,14 @@ int main()
     using namespace Rndr;
 
     const ApplicationDesc app_desc{.enable_input_system = true};
-    auto app = Application::Create(app_desc);
-    RNDR_ASSERT(app.IsValid(), "Failed to create Rndr app!");
+    auto app_result = Application::Create(app_desc);
+    RNDR_ASSERT(app_result.HasValue(), "Failed to create Rndr app!");
+    Opal::ScopePtr<Application> app = std::move(app_result.GetValue());
 
     const GenericWindowDesc window_desc{.name = "Window Sample"};
-    auto window = app->CreateGenericWindow(window_desc);
-    RNDR_ASSERT(window.IsValid(), "Failed to create a window!");
+    auto window_result = app->CreateGenericWindow(window_desc);
+    RNDR_ASSERT(window_result.HasValue(), "Failed to create a window!");
+    Opal::Ref<GenericWindow> window = std::move(window_result.GetValue());
     window->EnableHighPrecisionCursorMode(true);
 
     auto context_result = Canvas::Context::CreateContext(window.Clone());

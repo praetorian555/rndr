@@ -22,8 +22,10 @@ Rndr::PlatformApplication::~PlatformApplication()
     }
 }
 
-Opal::Ref<Rndr::GenericWindow> Rndr::PlatformApplication::CreateGenericWindow(const GenericWindowDesc& desc)
+Opal::Expected<Opal::Ref<Rndr::GenericWindow>, Rndr::ErrorCode> Rndr::PlatformApplication::CreateGenericWindow(
+    const GenericWindowDesc& desc)
 {
+    using ResultType = Opal::Expected<Opal::Ref<GenericWindow>, ErrorCode>;
     GenericWindowDesc resolved_desc = desc;
     if (resolved_desc.monitor_index >= 0)
     {
@@ -36,18 +38,19 @@ Opal::Ref<Rndr::GenericWindow> Rndr::PlatformApplication::CreateGenericWindow(co
         }
     }
 
-    Opal::ScopePtr<GenericWindow> window;
 #if RNDR_WINDOWS
-    window = Opal::MakeScoped<GenericWindow, WindowsWindow>(Opal::GetDefaultAllocator(), resolved_desc);
+    Opal::Expected<Opal::ScopePtr<GenericWindow>, ErrorCode> window_result = WindowsWindow::Create(resolved_desc);
 #else
 #error "Platform not supported!"
 #endif
-    m_focused_window = window.Get();
-    if (window != nullptr)
+    if (!window_result.HasValue())
     {
-        m_generic_windows.PushBack(std::move(window));
+        return ResultType(window_result.GetError());
     }
-    return m_focused_window.Get();
+    Opal::ScopePtr<GenericWindow> window = std::move(window_result).GetValue();
+    m_focused_window = window.Get();
+    m_generic_windows.PushBack(std::move(window));
+    return ResultType(m_focused_window.Clone());
 }
 
 void Rndr::PlatformApplication::DestroyGenericWindow(Opal::Ref<GenericWindow> window)

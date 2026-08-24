@@ -31,10 +31,10 @@ T Unwrap(Opal::Expected<T, Rndr::ErrorCode>&& result)
 /** An application, a hidden window and a Canvas context bound to it - what every Canvas test starts from. */
 inline Rndr::Canvas::Context CreateTestContext(Opal::ScopePtr<Rndr::Application>& app, Opal::Ref<Rndr::GenericWindow>& window)
 {
-    app = Rndr::Application::Create();
+    app = Unwrap(Rndr::Application::Create());
     Rndr::GenericWindowDesc window_desc;
     window_desc.start_visible = false;
-    window = app->CreateGenericWindow(window_desc);
+    window = Unwrap(app->CreateGenericWindow(window_desc));
     return Unwrap(Rndr::Canvas::Context::CreateContext(window.Clone()));
 }
 

@@ -1,25 +1,41 @@
 #include "rndr/platform/windows-window.hpp"
 
+#include "opal/allocator.h"
 #include "opal/container/in-place-array.h"
 #include "opal/container/string.h"
-#include "opal/exceptions.h"
 
 #include "rndr/platform/windows-application.hpp"
 #include "rndr/platform/windows-header.hpp"
 
 #include "rndr/log.hpp"
 
-Rndr::WindowsWindow::WindowsWindow(const GenericWindowDesc& desc) : GenericWindow(desc)
+Rndr::WindowsWindow::WindowsWindow(const GenericWindowDesc& desc) : GenericWindow(desc) {}
+
+Opal::Expected<Opal::ScopePtr<Rndr::GenericWindow>, Rndr::ErrorCode> Rndr::WindowsWindow::Create(const GenericWindowDesc& desc)
 {
+    using ResultType = Opal::Expected<Opal::ScopePtr<GenericWindow>, ErrorCode>;
     if (desc.width == 0 || desc.height == 0)
     {
-        throw Opal::Exception("Window width and height must be greater than 0.");
+        RNDR_LOG_ERROR("Window width and height must be greater than 0");
+        return ResultType(ErrorCode::InvalidArgument);
     }
     if (desc.start_minimized && desc.start_maximized)
     {
-        throw Opal::Exception("Window cannot be both minimized and maximized at the same time.");
+        RNDR_LOG_ERROR("Window cannot be both minimized and maximized at the same time");
+        return ResultType(ErrorCode::InvalidArgument);
     }
 
+    Opal::ScopePtr<GenericWindow> window = Opal::MakeScoped<GenericWindow, WindowsWindow>(Opal::GetDefaultAllocator(), desc);
+    const ErrorCode err = static_cast<WindowsWindow*>(window.Get())->Initialize(desc);
+    if (err != ErrorCode::Success)
+    {
+        return ResultType(err);
+    }
+    return ResultType(std::move(window));
+}
+
+Rndr::ErrorCode Rndr::WindowsWindow::Initialize(const GenericWindowDesc& desc)
+{
     // TODO(Marko): This will get the handle to the exe, should pass in the name of this dll if we
     // use dynamic linking
     HMODULE instance = GetModuleHandle(nullptr);
@@ -36,7 +52,8 @@ Rndr::WindowsWindow::WindowsWindow(const GenericWindowDesc& desc) : GenericWindo
         const ATOM atom = RegisterClass(&window_class);
         if (atom == 0)
         {
-            throw Opal::Exception("Failed to register window class!");
+            RNDR_LOG_ERROR("Failed to register window class");
+            return ErrorCode::PlatformError;
         }
     }
 
@@ -57,7 +74,8 @@ Rndr::WindowsWindow::WindowsWindow(const GenericWindowDesc& desc) : GenericWindo
                                         real_width, real_height, nullptr, nullptr, instance, this);
     if (window_handle == nullptr)
     {
-        throw Opal::Exception("CreateWindowEx failed!");
+        RNDR_LOG_ERROR("CreateWindowEx failed");
+        return ErrorCode::PlatformError;
     }
 
     m_native_window_handle = reinterpret_cast<NativeWindowHandle>(window_handle);
@@ -75,6 +93,7 @@ Rndr::WindowsWindow::WindowsWindow(const GenericWindowDesc& desc) : GenericWindo
     ::SetActiveWindow(window_handle);
 
     RNDR_LOG_INFO("Window created successfully!");
+    return ErrorCode::Success;
 }
 
 Rndr::WindowsWindow::~WindowsWindow()
@@ -82,24 +101,26 @@ Rndr::WindowsWindow::~WindowsWindow()
     WindowsWindow::Destroy();
 }
 
-void Rndr::WindowsWindow::RequestClose()
+Rndr::ErrorCode Rndr::WindowsWindow::RequestClose()
 {
     if (m_is_closed)
     {
-        return;
+        return ErrorCode::WindowAlreadyClosed;
     }
     const BOOL rtn = PostMessage(reinterpret_cast<HWND>(m_native_window_handle), WM_CLOSE, 0, 0);
     if (rtn == 0)
     {
-        throw Opal::Exception("PostMessage(WM_CLOSE) failed!");
+        RNDR_LOG_ERROR("PostMessage(WM_CLOSE) failed");
+        return ErrorCode::PlatformError;
     }
+    return ErrorCode::Success;
 }
 
-void Rndr::WindowsWindow::Reshape(i32 pos_x, i32 pos_y, i32 width, i32 height)
+Rndr::ErrorCode Rndr::WindowsWindow::Reshape(i32 pos_x, i32 pos_y, i32 width, i32 height)
 {
     if (m_is_closed)
     {
-        return;
+        return ErrorCode::WindowAlreadyClosed;
     }
     m_pos_x = pos_x;
     m_pos_y = pos_y;
@@ -108,23 +129,27 @@ void Rndr::WindowsWindow::Reshape(i32 pos_x, i32 pos_y, i32 width, i32 height)
     const BOOL rtn = MoveWindow(RNDR_TO_HWND(m_native_window_handle), pos_x, pos_y, width, height, TRUE);
     if (rtn == 0)
     {
-        throw Opal::Exception("MoveWindow failed!");
+        RNDR_LOG_ERROR("MoveWindow failed");
+        return ErrorCode::PlatformError;
     }
+    return ErrorCode::Success;
 }
 
-void Rndr::WindowsWindow::MoveTo(i32 pos_x, i32 pos_y)
+Rndr::ErrorCode Rndr::WindowsWindow::MoveTo(i32 pos_x, i32 pos_y)
 {
     if (m_is_closed)
     {
-        return;
+        return ErrorCode::WindowAlreadyClosed;
     }
     m_pos_x = pos_x;
     m_pos_y = pos_y;
     const BOOL rtn = MoveWindow(RNDR_TO_HWND(m_native_window_handle), pos_x, pos_y, m_width, m_height, TRUE);
     if (rtn == 0)
     {
-        throw Opal::Exception("MoveWindow failed!");
+        RNDR_LOG_ERROR("MoveWindow failed");
+        return ErrorCode::PlatformError;
     }
+    return ErrorCode::Success;
 }
 
 void Rndr::WindowsWindow::BringToFront()
@@ -453,11 +478,11 @@ void Rndr::WindowsWindow::SetAlwaysOnTop(bool always_on_top)
     ApplyStyle();
 }
 
-void Rndr::WindowsWindow::SetOpacity(f32 opacity)
+Rndr::ErrorCode Rndr::WindowsWindow::SetOpacity(f32 opacity)
 {
     if (m_is_closed)
     {
-        return;
+        return ErrorCode::WindowAlreadyClosed;
     }
     // SetLayeredWindowAttributes only works on layered windows, so turn this one into one if it is not already.
     const HWND hwnd = RNDR_TO_HWND(m_native_window_handle);
@@ -471,27 +496,32 @@ void Rndr::WindowsWindow::SetOpacity(f32 opacity)
     const BOOL rtn = SetLayeredWindowAttributes(RNDR_TO_HWND(m_native_window_handle), 0, alpha, LWA_ALPHA);
     if (rtn == 0)
     {
-        throw Opal::Exception("SetLayeredWindowAttributes failed!");
+        RNDR_LOG_ERROR("SetLayeredWindowAttributes failed");
+        return ErrorCode::PlatformError;
     }
+    return ErrorCode::Success;
 }
 
-void Rndr::WindowsWindow::SetTitle(const Opal::StringUtf8& title)
+Rndr::ErrorCode Rndr::WindowsWindow::SetTitle(const Opal::StringUtf8& title)
 {
     if (m_is_closed)
     {
-        return;
+        return ErrorCode::WindowAlreadyClosed;
     }
     Opal::StringWide win_string(4 * title.GetSize(), '\0');
     const Opal::ErrorCode err = Opal::Transcode(title, win_string);
     if (err != Opal::ErrorCode::Success)
     {
-        throw Opal::Exception("Failed to transcode title string!");
+        RNDR_LOG_ERROR("Failed to transcode title string");
+        return ErrorCode::InvalidArgument;
     }
     const BOOL rtn = SetWindowTextW(RNDR_TO_HWND(m_native_window_handle), win_string.GetData());
     if (rtn == 0)
     {
-        throw Opal::Exception("SetWindowTextW failed!");
+        RNDR_LOG_ERROR("SetWindowTextW failed");
+        return ErrorCode::PlatformError;
     }
+    return ErrorCode::Success;
 }
 
 bool Rndr::WindowsWindow::IsMaximized() const

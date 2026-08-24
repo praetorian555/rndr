@@ -96,8 +96,8 @@ void Run()
     /** How often the window title is rewritten. A figure that changes every frame cannot be read. */
     constexpr f64 k_title_update_period_seconds = 0.25;
 
-    auto rndr_app = Rndr::Application::Create({.enable_input_system = true});
-    auto window = rndr_app->CreateGenericWindow({});
+    auto rndr_app = Require(Rndr::Application::Create({.enable_input_system = true}));
+    auto window = Require(rndr_app->CreateGenericWindow({}));
     window->EnableHighPrecisionCursorMode(true);
     rndr_app->ShowCursor(false);
     window->SetCursorPositionMode(Rndr::CursorPositionMode::ResetToCenter);

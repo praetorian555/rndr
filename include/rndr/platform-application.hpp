@@ -1,8 +1,10 @@
 #pragma once
 
 #include "opal/container/dynamic-array.h"
+#include "opal/container/expected.h"
 #include "opal/container/scope-ptr.h"
 
+#include "rndr/error-codes.hpp"
 #include "rndr/generic-window.hpp"
 #include "rndr/math.hpp"
 #include "rndr/monitor-info.hpp"
@@ -30,7 +32,7 @@ public:
     PlatformApplication(struct SystemMessageHandler* message_handler) : m_message_handler(message_handler) {}
     virtual ~PlatformApplication();
 
-    Opal::Ref<GenericWindow> CreateGenericWindow(const GenericWindowDesc& desc);
+    Opal::Expected<Opal::Ref<GenericWindow>, ErrorCode> CreateGenericWindow(const GenericWindowDesc& desc);
     void DestroyGenericWindow(Opal::Ref<GenericWindow> window);
 
     /**
