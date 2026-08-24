@@ -53,6 +53,7 @@ endif()
 if (${RNDR_CANVAS})
     list(APPEND SOURCE_LIST
             "${PROJECT_SOURCE_DIR}/include/rndr/canvas/canvas.hpp"
+            "${PROJECT_SOURCE_DIR}/include/rndr/canvas/gl-result.hpp"
             "${PROJECT_SOURCE_DIR}/include/rndr/canvas/context.hpp"
             "${PROJECT_SOURCE_DIR}/include/rndr/canvas/shader.hpp"
             "${PROJECT_SOURCE_DIR}/include/rndr/canvas/render-target.hpp"
