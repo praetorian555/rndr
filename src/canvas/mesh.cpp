@@ -2,7 +2,8 @@
 
 #include "glad/glad.h"
 
-#include "rndr/exception.hpp"
+#include "rndr/canvas/gl-result.hpp"
+#include "rndr/log.hpp"
 #include "rndr/trace.hpp"
 
 namespace
@@ -70,81 +71,96 @@ bool IsIntegerFormat(Rndr::Canvas::Format format)
 
 }  // namespace
 
-Rndr::Canvas::Mesh::Mesh(const VertexLayout& layout, Opal::ArrayView<const u8> vertex_data, Opal::ArrayView<const u8> index_data,
-                         Opal::StringUtf8 debug_name)
-    : m_debug_name(std::move(debug_name))
+Opal::Expected<Rndr::Canvas::Mesh, Rndr::ErrorCode> Rndr::Canvas::Mesh::Create(const VertexLayout& layout,
+                                                                               Opal::ArrayView<const u8> vertex_data,
+                                                                               Opal::ArrayView<const u8> index_data,
+                                                                               Opal::StringUtf8 debug_name)
 {
-    RNDR_CPU_EVENT_SCOPED("Canvas::Mesh::Mesh");
+    RNDR_CPU_EVENT_SCOPED("Canvas::Mesh::Create");
+    using ResultType = Opal::Expected<Mesh, ErrorCode>;
 
     if (!layout.IsValid())
     {
-        throw Opal::InvalidArgumentException(__FUNCTION__, "Vertex layout is invalid!");
+        RNDR_LOG_ERROR("Canvas: Vertex layout is invalid");
+        return ResultType(ErrorCode::InvalidArgument);
     }
     if (vertex_data.IsEmpty())
     {
-        throw Opal::InvalidArgumentException(__FUNCTION__, "Vertex data is empty!");
+        RNDR_LOG_ERROR("Canvas: Vertex data is empty");
+        return ResultType(ErrorCode::InvalidArgument);
     }
     if (index_data.IsEmpty())
     {
-        throw Opal::InvalidArgumentException(__FUNCTION__, "Index data is empty!");
+        RNDR_LOG_ERROR("Canvas: Index data is empty");
+        return ResultType(ErrorCode::InvalidArgument);
     }
 
     const u32 stride = layout.GetStride();
     if (stride == 0 || vertex_data.GetSize() % stride != 0)
     {
-        throw Opal::InvalidArgumentException(__FUNCTION__, "Vertex data size is not a multiple of the layout stride!");
+        RNDR_LOG_ERROR("Canvas: Vertex data size is not a multiple of the layout stride");
+        return ResultType(ErrorCode::InvalidArgument);
     }
     if (index_data.GetSize() % sizeof(u32) != 0)
     {
-        throw Opal::InvalidArgumentException(__FUNCTION__, "Index data size is not a multiple of 4 bytes!");
+        RNDR_LOG_ERROR("Canvas: Index data size is not a multiple of 4 bytes");
+        return ResultType(ErrorCode::InvalidArgument);
     }
 
-    m_layout = layout.Clone();
+    Mesh mesh;
+    mesh.m_debug_name = std::move(debug_name);
+    mesh.m_layout = layout.Clone();
 
-    m_vertex_count = static_cast<u32>(vertex_data.GetSize() / stride);
-    m_index_count = static_cast<u32>(index_data.GetSize() / sizeof(u32));
+    mesh.m_vertex_count = static_cast<u32>(vertex_data.GetSize() / stride);
+    mesh.m_index_count = static_cast<u32>(index_data.GetSize() / sizeof(u32));
 
-    Opal::StringUtf8 vertex_buffer_name = m_debug_name + " - Vertex Buffer";
-    Opal::StringUtf8 index_buffer_name = m_debug_name + " - Index Buffer";
+    Opal::StringUtf8 vertex_buffer_name = mesh.m_debug_name + " - Vertex Buffer";
+    Opal::StringUtf8 index_buffer_name = mesh.m_debug_name + " - Index Buffer";
     auto vertex_buffer_result = Buffer::Create(BufferUsage::Vertex, vertex_data.GetSize(), 0, vertex_data, std::move(vertex_buffer_name));
+    RNDR_CANVAS_CHECK_EXPECTED(vertex_buffer_result.GetErrorOr(ErrorCode::Success), ResultType);
+    mesh.m_vertex_buffer = std::move(vertex_buffer_result).GetValue();
     auto index_buffer_result = Buffer::Create(BufferUsage::Index, index_data.GetSize(), 0, index_data, std::move(index_buffer_name));
-    if (!vertex_buffer_result.HasValue() || !index_buffer_result.HasValue())
-    {
-        throw GraphicsAPIException(0, "Failed to create mesh buffers!");
-    }
-    m_vertex_buffer = std::move(vertex_buffer_result).GetValue();
-    m_index_buffer = std::move(index_buffer_result).GetValue();
+    RNDR_CANVAS_CHECK_EXPECTED(index_buffer_result.GetErrorOr(ErrorCode::Success), ResultType);
+    mesh.m_index_buffer = std::move(index_buffer_result).GetValue();
 
     // Store CPU-side copies for Clone().
-    m_vertex_data.Resize(vertex_data.GetSize());
-    memcpy(m_vertex_data.GetData(), vertex_data.GetData(), vertex_data.GetSize());
-    m_index_data.Resize(index_data.GetSize());
-    memcpy(m_index_data.GetData(), index_data.GetData(), index_data.GetSize());
+    mesh.m_vertex_data.Resize(vertex_data.GetSize());
+    memcpy(mesh.m_vertex_data.GetData(), vertex_data.GetData(), vertex_data.GetSize());
+    mesh.m_index_data.Resize(index_data.GetSize());
+    memcpy(mesh.m_index_data.GetData(), index_data.GetData(), index_data.GetSize());
 
-    SetupVAO();
+    RNDR_CANVAS_CHECK_EXPECTED(mesh.SetupVAO(), ResultType);
+    return ResultType(std::move(mesh));
 }
 
-Rndr::Canvas::Mesh::Mesh(const VertexLayout& layout, i32 max_vertex_count, i32 max_index_count, Opal::StringUtf8 debug_name)
-    : m_debug_name(std::move(debug_name)), m_max_vertex_count(max_vertex_count), m_max_index_count(max_index_count)
+Opal::Expected<Rndr::Canvas::Mesh, Rndr::ErrorCode> Rndr::Canvas::Mesh::Create(const VertexLayout& layout, i32 max_vertex_count,
+                                                                               i32 max_index_count, Opal::StringUtf8 debug_name)
 {
+    using ResultType = Opal::Expected<Mesh, ErrorCode>;
+
     if (!layout.IsValid())
     {
-        throw Opal::InvalidArgumentException(__FUNCTION__, "Vertex layout is invalid!");
+        RNDR_LOG_ERROR("Canvas: Vertex layout is invalid");
+        return ResultType(ErrorCode::InvalidArgument);
     }
-    m_layout = layout.Clone();
-    Opal::StringUtf8 vertex_buffer_name = m_debug_name + " - Vertex Buffer";
-    Opal::StringUtf8 index_buffer_name = m_debug_name + " - Index Buffer";
+
+    Mesh mesh;
+    mesh.m_debug_name = std::move(debug_name);
+    mesh.m_max_vertex_count = max_vertex_count;
+    mesh.m_max_index_count = max_index_count;
+    mesh.m_layout = layout.Clone();
+    Opal::StringUtf8 vertex_buffer_name = mesh.m_debug_name + " - Vertex Buffer";
+    Opal::StringUtf8 index_buffer_name = mesh.m_debug_name + " - Index Buffer";
     auto vertex_buffer_result =
         Buffer::Create(BufferUsage::Vertex, max_vertex_count * layout.GetStride(), 0, {}, std::move(vertex_buffer_name));
+    RNDR_CANVAS_CHECK_EXPECTED(vertex_buffer_result.GetErrorOr(ErrorCode::Success), ResultType);
+    mesh.m_vertex_buffer = std::move(vertex_buffer_result).GetValue();
     auto index_buffer_result = Buffer::Create(BufferUsage::Index, max_index_count * sizeof(i32), 0, {}, std::move(index_buffer_name));
-    if (!vertex_buffer_result.HasValue() || !index_buffer_result.HasValue())
-    {
-        throw GraphicsAPIException(0, "Failed to create mesh buffers!");
-    }
-    m_vertex_buffer = std::move(vertex_buffer_result).GetValue();
-    m_index_buffer = std::move(index_buffer_result).GetValue();
+    RNDR_CANVAS_CHECK_EXPECTED(index_buffer_result.GetErrorOr(ErrorCode::Success), ResultType);
+    mesh.m_index_buffer = std::move(index_buffer_result).GetValue();
 
-    SetupVAO();
+    RNDR_CANVAS_CHECK_EXPECTED(mesh.SetupVAO(), ResultType);
+    return ResultType(std::move(mesh));
 }
 
 Rndr::Canvas::Mesh::~Mesh()
@@ -199,13 +215,14 @@ Rndr::Canvas::Mesh& Rndr::Canvas::Mesh::operator=(Mesh&& other) noexcept
     return *this;
 }
 
-Rndr::Canvas::Mesh Rndr::Canvas::Mesh::Clone() const
+Opal::Expected<Rndr::Canvas::Mesh, Rndr::ErrorCode> Rndr::Canvas::Mesh::Clone() const
 {
     if (!IsValid())
     {
-        return {};
+        RNDR_LOG_ERROR("Canvas: Cannot clone an invalid mesh");
+        return Opal::Expected<Mesh, ErrorCode>(ErrorCode::InvalidArgument);
     }
-    return Mesh(m_layout, m_vertex_data, m_index_data);
+    return Create(m_layout, m_vertex_data, m_index_data);
 }
 
 void Rndr::Canvas::Mesh::Destroy()
@@ -288,13 +305,14 @@ const Rndr::Canvas::VertexLayout& Rndr::Canvas::Mesh::GetVertexLayout() const
     return m_layout;
 }
 
-void Rndr::Canvas::Mesh::SetupVAO()
+Rndr::ErrorCode Rndr::Canvas::Mesh::SetupVAO()
 {
     // Create VAO.
     glCreateVertexArrays(1, &m_vao);
     if (m_vao == 0)
     {
-        throw GraphicsAPIException(0, "Failed to create GL vertex array!");
+        RNDR_LOG_ERROR("Canvas: Failed to create GL vertex array");
+        return ErrorCode::GraphicsAPIError;
     }
 
     // Bind VBO to VAO at binding point 0.
@@ -325,4 +343,5 @@ void Rndr::Canvas::Mesh::SetupVAO()
     }
     const Opal::StringUtf8 vao_debug_name = m_debug_name + " - Vertex Array";
     glObjectLabel(GL_VERTEX_ARRAY, m_vao, static_cast<GLsizei>(vao_debug_name.GetSize()), *vao_debug_name);
+    return ErrorCode::Success;
 }

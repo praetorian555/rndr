@@ -124,7 +124,7 @@ TEST_CASE("Canvas RenderTarget", "[canvas][render-target]")
         Rndr::Canvas::RenderTargetDesc desc;
         desc.AddColor(128, 128);
 
-        Rndr::Canvas::RenderTarget rt(desc);
+        Rndr::Canvas::RenderTarget rt = CanvasTest::Unwrap(Rndr::Canvas::RenderTarget::Create(desc));
         REQUIRE(rt.IsValid());
         REQUIRE(rt.GetWidth() == 128);
         REQUIRE(rt.GetHeight() == 128);
@@ -138,25 +138,25 @@ TEST_CASE("Canvas RenderTarget", "[canvas][render-target]")
         Rndr::Canvas::RenderTargetDesc desc;
         desc.AddColor(64, 64);
 
-        Rndr::Canvas::RenderTarget rt(desc, "TestRT");
+        Rndr::Canvas::RenderTarget rt = CanvasTest::Unwrap(Rndr::Canvas::RenderTarget::Create(desc, "TestRT"));
         REQUIRE(rt.IsValid());
         REQUIRE(rt.GetName() == "TestRT");
     }
 
-    SECTION("No color and no depth/stencil attachment throws")
+    SECTION("No color and no depth/stencil attachment reports InvalidArgument")
     {
         Rndr::Canvas::RenderTargetDesc desc;
-        REQUIRE_THROWS(Rndr::Canvas::RenderTarget(desc));
+        REQUIRE(Rndr::Canvas::RenderTarget::Create(desc).GetError() == Rndr::ErrorCode::InvalidArgument);
     }
 
-    SECTION("Too many color attachments throws")
+    SECTION("Too many color attachments reports InvalidArgument")
     {
         Rndr::Canvas::RenderTargetDesc desc;
         for (Rndr::i32 i = 0; i < Rndr::Canvas::k_max_color_attachments + 1; ++i)
         {
             desc.AddColor(32, 32);
         }
-        REQUIRE_THROWS(Rndr::Canvas::RenderTarget(desc));
+        REQUIRE(Rndr::Canvas::RenderTarget::Create(desc).GetError() == Rndr::ErrorCode::InvalidArgument);
     }
 
     SECTION("Multiple color attachments")
@@ -164,7 +164,7 @@ TEST_CASE("Canvas RenderTarget", "[canvas][render-target]")
         Rndr::Canvas::RenderTargetDesc desc;
         desc.AddColor(64, 64).AddColor(64, 64);
 
-        Rndr::Canvas::RenderTarget rt(desc);
+        Rndr::Canvas::RenderTarget rt = CanvasTest::Unwrap(Rndr::Canvas::RenderTarget::Create(desc));
         REQUIRE(rt.IsValid());
         REQUIRE(rt.GetColorAttachmentCount() == 2);
         REQUIRE(rt.GetColorAttachment(0).IsValid());
@@ -176,7 +176,7 @@ TEST_CASE("Canvas RenderTarget", "[canvas][render-target]")
         Rndr::Canvas::RenderTargetDesc desc;
         desc.AddColor(64, 64).SetDepthStencil(64, 64);
 
-        Rndr::Canvas::RenderTarget rt(desc);
+        Rndr::Canvas::RenderTarget rt = CanvasTest::Unwrap(Rndr::Canvas::RenderTarget::Create(desc));
         REQUIRE(rt.IsValid());
         REQUIRE(rt.GetDepthStencilAttachment().IsValid());
     }
@@ -186,7 +186,7 @@ TEST_CASE("Canvas RenderTarget", "[canvas][render-target]")
         Rndr::Canvas::RenderTargetDesc desc;
         desc.AddColor(64, 64).SetDepthStencil(64, 64, Rndr::Canvas::Format::D32F);
 
-        Rndr::Canvas::RenderTarget rt(desc);
+        Rndr::Canvas::RenderTarget rt = CanvasTest::Unwrap(Rndr::Canvas::RenderTarget::Create(desc));
         REQUIRE(rt.IsValid());
     }
 
@@ -195,7 +195,7 @@ TEST_CASE("Canvas RenderTarget", "[canvas][render-target]")
         Rndr::Canvas::RenderTargetDesc desc;
         desc.AddColor(32, 32);
 
-        Rndr::Canvas::RenderTarget rt(desc);
+        Rndr::Canvas::RenderTarget rt = CanvasTest::Unwrap(Rndr::Canvas::RenderTarget::Create(desc));
         REQUIRE(rt.IsValid());
         rt.Destroy();
         REQUIRE_FALSE(rt.IsValid());
@@ -206,7 +206,7 @@ TEST_CASE("Canvas RenderTarget", "[canvas][render-target]")
         Rndr::Canvas::RenderTargetDesc desc;
         desc.AddColor(64, 64);
 
-        Rndr::Canvas::RenderTarget rt(desc, "MoveRT");
+        Rndr::Canvas::RenderTarget rt = CanvasTest::Unwrap(Rndr::Canvas::RenderTarget::Create(desc, "MoveRT"));
         REQUIRE(rt.IsValid());
 
         Rndr::Canvas::RenderTarget moved(std::move(rt));
@@ -221,7 +221,7 @@ TEST_CASE("Canvas RenderTarget", "[canvas][render-target]")
         Rndr::Canvas::RenderTargetDesc desc;
         desc.AddColor(32, 32);
 
-        Rndr::Canvas::RenderTarget rt(desc);
+        Rndr::Canvas::RenderTarget rt = CanvasTest::Unwrap(Rndr::Canvas::RenderTarget::Create(desc));
         Rndr::Canvas::RenderTarget other;
 
         other = std::move(rt);
@@ -242,7 +242,7 @@ TEST_CASE("Canvas RenderTarget", "[canvas][render-target]")
             Rndr::Canvas::RenderTargetDesc desc;
             desc.AddColor(16, 16, fmt);
 
-            Rndr::Canvas::RenderTarget rt(desc);
+            Rndr::Canvas::RenderTarget rt = CanvasTest::Unwrap(Rndr::Canvas::RenderTarget::Create(desc));
             REQUIRE(rt.IsValid());
             REQUIRE(rt.GetColorAttachment(0).GetDesc().format == fmt);
         }
@@ -253,7 +253,7 @@ TEST_CASE("Canvas RenderTarget", "[canvas][render-target]")
         Rndr::Canvas::RenderTargetDesc desc;
         desc.AddColor(64, 64);
 
-        Rndr::Canvas::RenderTarget rt(desc);
+        Rndr::Canvas::RenderTarget rt = CanvasTest::Unwrap(Rndr::Canvas::RenderTarget::Create(desc));
         REQUIRE(rt.IsValid());
 
         const Rndr::Canvas::Texture& color = rt.GetColorAttachment(0);
@@ -268,10 +268,10 @@ TEST_CASE("Canvas RenderTarget", "[canvas][render-target]")
         Rndr::Canvas::RenderTargetDesc desc;
         desc.AddColor(64, 64);
 
-        Rndr::Canvas::RenderTarget rt(desc, "CloneSrc");
+        Rndr::Canvas::RenderTarget rt = CanvasTest::Unwrap(Rndr::Canvas::RenderTarget::Create(desc, "CloneSrc"));
         REQUIRE(rt.IsValid());
 
-        Rndr::Canvas::RenderTarget clone = rt.Clone();
+        Rndr::Canvas::RenderTarget clone = CanvasTest::Unwrap(rt.Clone());
         REQUIRE(clone.IsValid());
         REQUIRE(clone.GetWidth() == 64);
         REQUIRE(clone.GetHeight() == 64);
@@ -288,19 +288,18 @@ TEST_CASE("Canvas RenderTarget", "[canvas][render-target]")
         Rndr::Canvas::RenderTargetDesc desc;
         desc.AddColor(32, 32).SetDepthStencil(32, 32);
 
-        Rndr::Canvas::RenderTarget rt(desc);
+        Rndr::Canvas::RenderTarget rt = CanvasTest::Unwrap(Rndr::Canvas::RenderTarget::Create(desc));
         REQUIRE(rt.IsValid());
 
-        Rndr::Canvas::RenderTarget clone = rt.Clone();
+        Rndr::Canvas::RenderTarget clone = CanvasTest::Unwrap(rt.Clone());
         REQUIRE(clone.IsValid());
         REQUIRE(clone.GetDepthStencilAttachment().IsValid());
     }
 
-    SECTION("Clone of invalid render target returns invalid")
+    SECTION("Clone of invalid render target reports InvalidArgument")
     {
         Rndr::Canvas::RenderTarget rt;
-        Rndr::Canvas::RenderTarget clone = rt.Clone();
-        REQUIRE_FALSE(clone.IsValid());
+        REQUIRE(rt.Clone().GetError() == Rndr::ErrorCode::InvalidArgument);
     }
 }
 
@@ -319,7 +318,7 @@ TEST_CASE("Canvas RenderTarget with external textures", "[canvas][render-target]
         Rndr::Canvas::RenderTargetDesc desc;
         desc.AddColor(color);
 
-        Rndr::Canvas::RenderTarget rt(desc);
+        Rndr::Canvas::RenderTarget rt = CanvasTest::Unwrap(Rndr::Canvas::RenderTarget::Create(desc));
         REQUIRE(rt.IsValid());
         REQUIRE(rt.GetWidth() == 64);
         REQUIRE(rt.GetHeight() == 64);
@@ -344,7 +343,7 @@ TEST_CASE("Canvas RenderTarget with external textures", "[canvas][render-target]
             Rndr::Canvas::RenderTargetDesc desc;
             desc.AddColor(64, 64).SetDepthStencil(depth);
 
-            Rndr::Canvas::RenderTarget rt(desc);
+            Rndr::Canvas::RenderTarget rt = CanvasTest::Unwrap(Rndr::Canvas::RenderTarget::Create(desc));
             REQUIRE(rt.IsValid());
             REQUIRE(rt.IsDepthStencilExternal());
             REQUIRE_FALSE(rt.IsColorAttachmentExternal(0));
@@ -368,7 +367,7 @@ TEST_CASE("Canvas RenderTarget with external textures", "[canvas][render-target]
         Rndr::Canvas::RenderTargetDesc desc;
         desc.AddColor(color).SetDepthStencil(depth);
 
-        Rndr::Canvas::RenderTarget rt(desc);
+        Rndr::Canvas::RenderTarget rt = CanvasTest::Unwrap(Rndr::Canvas::RenderTarget::Create(desc));
         REQUIRE(rt.IsValid());
         REQUIRE(rt.IsColorAttachmentExternal(0));
         REQUIRE(rt.IsDepthStencilExternal());
@@ -385,7 +384,7 @@ TEST_CASE("Canvas RenderTarget with external textures", "[canvas][render-target]
         {
             Rndr::Canvas::RenderTargetDesc desc;
             desc.AddColor(color);
-            Rndr::Canvas::RenderTarget rt(desc);
+            Rndr::Canvas::RenderTarget rt = CanvasTest::Unwrap(Rndr::Canvas::RenderTarget::Create(desc));
             REQUIRE(rt.IsValid());
             rt.Destroy();
             REQUIRE_FALSE(rt.IsValid());
@@ -396,7 +395,7 @@ TEST_CASE("Canvas RenderTarget with external textures", "[canvas][render-target]
         // Still usable: reattach it to a new render target.
         Rndr::Canvas::RenderTargetDesc desc2;
         desc2.AddColor(color);
-        Rndr::Canvas::RenderTarget rt2(desc2);
+        Rndr::Canvas::RenderTarget rt2 = CanvasTest::Unwrap(Rndr::Canvas::RenderTarget::Create(desc2));
         REQUIRE(rt2.IsValid());
     }
 
@@ -410,7 +409,7 @@ TEST_CASE("Canvas RenderTarget with external textures", "[canvas][render-target]
         Rndr::Canvas::RenderTargetDesc desc;
         desc.AddColor(color);
 
-        Rndr::Canvas::RenderTarget rt(desc);
+        Rndr::Canvas::RenderTarget rt = CanvasTest::Unwrap(Rndr::Canvas::RenderTarget::Create(desc));
         Rndr::Canvas::RenderTarget moved(std::move(rt));
         REQUIRE(moved.IsValid());
         REQUIRE(moved.IsColorAttachmentExternal(0));
@@ -422,7 +421,7 @@ TEST_CASE("Canvas RenderTarget with external textures", "[canvas][render-target]
         Rndr::Canvas::RenderTargetDesc desc;
         desc.SetDepthStencil(128, 64, Rndr::Canvas::Format::D32F);
 
-        Rndr::Canvas::RenderTarget rt(desc, "ShadowMap");
+        Rndr::Canvas::RenderTarget rt = CanvasTest::Unwrap(Rndr::Canvas::RenderTarget::Create(desc, "ShadowMap"));
         REQUIRE(rt.IsValid());
         REQUIRE(rt.GetColorAttachmentCount() == 0);
         REQUIRE(rt.GetWidth() == 128);
@@ -441,7 +440,7 @@ TEST_CASE("Canvas RenderTarget with external textures", "[canvas][render-target]
         Rndr::Canvas::RenderTargetDesc desc;
         desc.SetDepthStencil(depth);
 
-        Rndr::Canvas::RenderTarget rt(desc);
+        Rndr::Canvas::RenderTarget rt = CanvasTest::Unwrap(Rndr::Canvas::RenderTarget::Create(desc));
         REQUIRE(rt.IsValid());
         REQUIRE(rt.GetColorAttachmentCount() == 0);
         REQUIRE(rt.IsDepthStencilExternal());
@@ -461,7 +460,7 @@ TEST_CASE("Canvas RenderTarget with external textures", "[canvas][render-target]
             Rndr::Canvas::RenderTargetDesc desc;
             desc.AddColor(cube, 0, face);
 
-            Rndr::Canvas::RenderTarget rt(desc);
+            Rndr::Canvas::RenderTarget rt = CanvasTest::Unwrap(Rndr::Canvas::RenderTarget::Create(desc));
             REQUIRE(rt.IsValid());
             REQUIRE(rt.GetWidth() == 32);
         }
@@ -480,7 +479,7 @@ TEST_CASE("Canvas RenderTarget with external textures", "[canvas][render-target]
         Rndr::Canvas::RenderTargetDesc desc;
         desc.AddColor(array_tex, 0, 3);
 
-        Rndr::Canvas::RenderTarget rt(desc);
+        Rndr::Canvas::RenderTarget rt = CanvasTest::Unwrap(Rndr::Canvas::RenderTarget::Create(desc));
         REQUIRE(rt.IsValid());
     }
 
@@ -496,21 +495,21 @@ TEST_CASE("Canvas RenderTarget with external textures", "[canvas][render-target]
         Rndr::Canvas::RenderTargetDesc desc;
         desc.AddColor(color, 2);
 
-        Rndr::Canvas::RenderTarget rt(desc);
+        Rndr::Canvas::RenderTarget rt = CanvasTest::Unwrap(Rndr::Canvas::RenderTarget::Create(desc));
         REQUIRE(rt.IsValid());
         REQUIRE(rt.GetWidth() == 16);
         REQUIRE(rt.GetHeight() == 16);
     }
 
-    SECTION("Invalid external texture throws")
+    SECTION("Invalid external texture reports InvalidArgument")
     {
         Rndr::Canvas::Texture empty;
         Rndr::Canvas::RenderTargetDesc desc;
         desc.AddColor(empty);
-        REQUIRE_THROWS(Rndr::Canvas::RenderTarget(desc));
+        REQUIRE(Rndr::Canvas::RenderTarget::Create(desc).GetError() == Rndr::ErrorCode::InvalidArgument);
     }
 
-    SECTION("Out of bounds mip level throws")
+    SECTION("Out of bounds mip level reports OutOfBounds")
     {
         Rndr::Canvas::TextureDesc tex_desc;
         tex_desc.width = 32;
@@ -519,10 +518,10 @@ TEST_CASE("Canvas RenderTarget with external textures", "[canvas][render-target]
 
         Rndr::Canvas::RenderTargetDesc desc;
         desc.AddColor(color, 4);
-        REQUIRE_THROWS(Rndr::Canvas::RenderTarget(desc));
+        REQUIRE(Rndr::Canvas::RenderTarget::Create(desc).GetError() == Rndr::ErrorCode::OutOfBounds);
     }
 
-    SECTION("Out of bounds layer throws")
+    SECTION("Out of bounds layer reports OutOfBounds")
     {
         Rndr::Canvas::TextureDesc tex_desc;
         tex_desc.width = 32;
@@ -533,10 +532,10 @@ TEST_CASE("Canvas RenderTarget with external textures", "[canvas][render-target]
 
         Rndr::Canvas::RenderTargetDesc desc;
         desc.AddColor(array_tex, 0, 2);
-        REQUIRE_THROWS(Rndr::Canvas::RenderTarget(desc));
+        REQUIRE(Rndr::Canvas::RenderTarget::Create(desc).GetError() == Rndr::ErrorCode::OutOfBounds);
     }
 
-    SECTION("Layer on a Texture2D throws")
+    SECTION("Layer on a Texture2D reports InvalidArgument")
     {
         Rndr::Canvas::TextureDesc tex_desc;
         tex_desc.width = 32;
@@ -545,10 +544,10 @@ TEST_CASE("Canvas RenderTarget with external textures", "[canvas][render-target]
 
         Rndr::Canvas::RenderTargetDesc desc;
         desc.AddColor(color, 0, 0);
-        REQUIRE_THROWS(Rndr::Canvas::RenderTarget(desc));
+        REQUIRE(Rndr::Canvas::RenderTarget::Create(desc).GetError() == Rndr::ErrorCode::InvalidArgument);
     }
 
-    SECTION("Depth format texture in a color slot throws")
+    SECTION("Depth format texture in a color slot reports InvalidArgument")
     {
         Rndr::Canvas::TextureDesc tex_desc;
         tex_desc.width = 32;
@@ -558,10 +557,10 @@ TEST_CASE("Canvas RenderTarget with external textures", "[canvas][render-target]
 
         Rndr::Canvas::RenderTargetDesc desc;
         desc.AddColor(depth);
-        REQUIRE_THROWS(Rndr::Canvas::RenderTarget(desc));
+        REQUIRE(Rndr::Canvas::RenderTarget::Create(desc).GetError() == Rndr::ErrorCode::InvalidArgument);
     }
 
-    SECTION("Color format texture in the depth slot throws")
+    SECTION("Color format texture in the depth slot reports InvalidArgument")
     {
         Rndr::Canvas::TextureDesc tex_desc;
         tex_desc.width = 32;
@@ -570,10 +569,10 @@ TEST_CASE("Canvas RenderTarget with external textures", "[canvas][render-target]
 
         Rndr::Canvas::RenderTargetDesc desc;
         desc.AddColor(32, 32).SetDepthStencil(color);
-        REQUIRE_THROWS(Rndr::Canvas::RenderTarget(desc));
+        REQUIRE(Rndr::Canvas::RenderTarget::Create(desc).GetError() == Rndr::ErrorCode::InvalidArgument);
     }
 
-    SECTION("Mismatched attachment sizes throw")
+    SECTION("Mismatched attachment sizes report InvalidArgument")
     {
         Rndr::Canvas::TextureDesc tex_desc;
         tex_desc.width = 32;
@@ -582,7 +581,7 @@ TEST_CASE("Canvas RenderTarget with external textures", "[canvas][render-target]
 
         Rndr::Canvas::RenderTargetDesc desc;
         desc.AddColor(64, 64).AddColor(color);
-        REQUIRE_THROWS(Rndr::Canvas::RenderTarget(desc));
+        REQUIRE(Rndr::Canvas::RenderTarget::Create(desc).GetError() == Rndr::ErrorCode::InvalidArgument);
     }
 
     SECTION("Clone keeps borrowing the external texture")
@@ -595,10 +594,10 @@ TEST_CASE("Canvas RenderTarget with external textures", "[canvas][render-target]
         Rndr::Canvas::RenderTargetDesc desc;
         desc.AddColor(color).AddColor(32, 32);
 
-        Rndr::Canvas::RenderTarget rt(desc);
+        Rndr::Canvas::RenderTarget rt = CanvasTest::Unwrap(Rndr::Canvas::RenderTarget::Create(desc));
         REQUIRE(rt.IsValid());
 
-        Rndr::Canvas::RenderTarget clone = rt.Clone();
+        Rndr::Canvas::RenderTarget clone = CanvasTest::Unwrap(rt.Clone());
         REQUIRE(clone.IsValid());
         REQUIRE(clone.GetNativeHandle() != rt.GetNativeHandle());
         // External attachment is shared, not copied.

@@ -131,7 +131,8 @@ void Rndr::Canvas::PbrRenderer::EnsureGeometry(const Opal::StringUtf8& key, cons
         return;
     }
     const VertexLayout vertex_layout = m_shader.GetVertexLayout().Clone();
-    Canvas::Mesh mesh(vertex_layout, vertex_data, index_data, key.Clone());
+    Canvas::Mesh mesh = UnwrapOrThrow(Mesh::Create(vertex_layout, vertex_data, index_data, key.Clone()),
+                                      "Failed to create PbrRenderer mesh");
     RNDR_ASSERT(mesh.IsValid(), "Failed to create PbrRenderer mesh!");
     m_geometry_cache.Insert(key.Clone(), std::move(mesh));
 }
@@ -672,7 +673,8 @@ Rndr::Canvas::PbrModel Rndr::Canvas::PbrRenderer::LoadModel(const Opal::StringUt
     Opal::DynamicArray<u8> index_data;
     ExtractMeshDataFromScene(*scene, vertex_data, index_data);
     const VertexLayout vertex_layout = m_shader.GetVertexLayout().Clone();
-    model.mesh = Mesh(vertex_layout, Opal::AsBytes(vertex_data), Opal::AsBytes(index_data), mesh_name.Clone());
+    model.mesh = UnwrapOrThrow(Mesh::Create(vertex_layout, Opal::AsBytes(vertex_data), Opal::AsBytes(index_data), mesh_name.Clone()),
+                               "Failed to create model mesh");
 
     if (scene->HasMeshes() && scene->mMeshes[0]->mMaterialIndex < scene->mNumMaterials)
     {

@@ -92,7 +92,11 @@ Rndr::Canvas::GridRenderer::GridRenderer(Opal::Ref<Context> context)
         {.pos = {-k_extent, 0,  k_extent}},
     };
     const u32 indices[6] = {2, 0, 3, 0, 2, 1};
-    m_mesh = Mesh(vertex_layout, Opal::AsBytes(k_vertices), Opal::AsBytes(indices), "GridRenderer Mesh");
+    auto mesh_result = Mesh::Create(vertex_layout, Opal::AsBytes(k_vertices), Opal::AsBytes(indices), "GridRenderer Mesh");
+    if (mesh_result.HasValue())
+    {
+        m_mesh = std::move(mesh_result).GetValue();
+    }
     RNDR_ASSERT(m_mesh.IsValid(), "Failed to create GridRenderer mesh!");
 
     m_brush = Brush(BrushDesc{.blend_mode = BlendMode::Alpha, .depth_test = true, .cull_mode = CullMode::None}, "Grid Renderer Brush");

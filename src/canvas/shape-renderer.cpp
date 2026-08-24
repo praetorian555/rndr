@@ -41,7 +41,11 @@ Rndr::Canvas::ShapeRenderer::ShapeRenderer(Opal::Ref<Context> context)
     RNDR_ASSERT(m_shader.IsValid(), "Failed to create ShapeRenderer shader!");
 
     const VertexLayout vertex_layout = m_shader.GetVertexLayout().Clone();
-    m_mesh = Mesh(vertex_layout, k_max_vertex_count, k_max_index_count, "ShapeRenderer Mesh");
+    auto mesh_result = Mesh::Create(vertex_layout, k_max_vertex_count, k_max_index_count, "ShapeRenderer Mesh");
+    if (mesh_result.HasValue())
+    {
+        m_mesh = std::move(mesh_result).GetValue();
+    }
     RNDR_ASSERT(m_mesh.IsValid(), "Failed to create ShapeRenderer mesh!");
 
     m_brush = Brush(BrushDesc{.cull_mode = CullMode::None});

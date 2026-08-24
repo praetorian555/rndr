@@ -1014,14 +1014,14 @@ TEST_CASE("Canvas Shader instance ID", "[canvas][shader]")
         const Rndr::u32 k_triangle_indices[] = {0, 1, 2};
         Rndr::Canvas::VertexLayout layout;
         layout.Add(Rndr::Canvas::Attrib::Position, Rndr::Canvas::Format::Float3);
-        Rndr::Canvas::Mesh mesh(
+        Rndr::Canvas::Mesh mesh = CanvasTest::Unwrap(Rndr::Canvas::Mesh::Create(
             layout, {reinterpret_cast<const Rndr::u8*>(k_fullscreen_triangle), sizeof(k_fullscreen_triangle)},
-            {reinterpret_cast<const Rndr::u8*>(k_triangle_indices), sizeof(k_triangle_indices)});
+            {reinterpret_cast<const Rndr::u8*>(k_triangle_indices), sizeof(k_triangle_indices)}));
 
         // Float target so the accumulated sum is stored without clamping to [0, 1].
         Rndr::Canvas::RenderTargetDesc rt_desc;
         rt_desc.AddColor(1, 1, Rndr::Canvas::Format::RGBA32F);
-        Rndr::Canvas::RenderTarget rt(rt_desc);
+        Rndr::Canvas::RenderTarget rt = CanvasTest::Unwrap(Rndr::Canvas::RenderTarget::Create(rt_desc));
         REQUIRE(rt.IsValid());
 
         Rndr::Canvas::DrawList list;

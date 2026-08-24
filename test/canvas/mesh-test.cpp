@@ -82,7 +82,7 @@ TEST_CASE("Canvas Mesh", "[canvas][mesh]")
         const auto* vraw = reinterpret_cast<const Rndr::u8*>(k_triangle_positions);
         const auto* iraw = reinterpret_cast<const Rndr::u8*>(k_triangle_indices);
 
-        Rndr::Canvas::Mesh const mesh(layout, {vraw, sizeof(k_triangle_positions)}, {iraw, sizeof(k_triangle_indices)});
+        Rndr::Canvas::Mesh const mesh = CanvasTest::Unwrap(Rndr::Canvas::Mesh::Create(layout, {vraw, sizeof(k_triangle_positions)}, {iraw, sizeof(k_triangle_indices)}));
         REQUIRE(mesh.IsValid());
         REQUIRE(mesh.GetNativeHandle() != 0);
         REQUIRE(mesh.GetVertexCount() == 3);
@@ -96,7 +96,7 @@ TEST_CASE("Canvas Mesh", "[canvas][mesh]")
         const auto* vraw = reinterpret_cast<const Rndr::u8*>(k_triangle_positions);
         const auto* iraw = reinterpret_cast<const Rndr::u8*>(k_triangle_indices);
 
-        Rndr::Canvas::Mesh const mesh(layout, {vraw, sizeof(k_triangle_positions)}, {iraw, sizeof(k_triangle_indices)});
+        Rndr::Canvas::Mesh const mesh = CanvasTest::Unwrap(Rndr::Canvas::Mesh::Create(layout, {vraw, sizeof(k_triangle_positions)}, {iraw, sizeof(k_triangle_indices)}));
         REQUIRE(mesh.IsValid());
         REQUIRE(mesh.GetVertexCount() == 3);
         REQUIRE(mesh.GetIndexCount() == 3);
@@ -109,7 +109,7 @@ TEST_CASE("Canvas Mesh", "[canvas][mesh]")
         const auto* vraw = reinterpret_cast<const Rndr::u8*>(k_quad_data);
         const auto* iraw = reinterpret_cast<const Rndr::u8*>(k_quad_indices);
 
-        Rndr::Canvas::Mesh const mesh(layout, {vraw, sizeof(k_quad_data)}, {iraw, sizeof(k_quad_indices)});
+        Rndr::Canvas::Mesh const mesh = CanvasTest::Unwrap(Rndr::Canvas::Mesh::Create(layout, {vraw, sizeof(k_quad_data)}, {iraw, sizeof(k_quad_indices)}));
         REQUIRE(mesh.IsValid());
         REQUIRE(mesh.GetVertexCount() == 4);
         REQUIRE(mesh.GetIndexCount() == 6);
@@ -117,43 +117,43 @@ TEST_CASE("Canvas Mesh", "[canvas][mesh]")
         REQUIRE(mesh.GetVertexLayout().GetStride() == 20);  // float3 + float2 = 12 + 8
     }
 
-    SECTION("Invalid layout throws")
+    SECTION("Invalid layout reports InvalidArgument")
     {
         Rndr::Canvas::VertexLayout layout;  // empty, invalid
         const auto* vraw = reinterpret_cast<const Rndr::u8*>(k_triangle_positions);
         const auto* iraw = reinterpret_cast<const Rndr::u8*>(k_triangle_indices);
-        REQUIRE_THROWS(Rndr::Canvas::Mesh(layout, {vraw, sizeof(k_triangle_positions)}, {iraw, sizeof(k_triangle_indices)}));
+        REQUIRE(Rndr::Canvas::Mesh::Create(layout, {vraw, sizeof(k_triangle_positions)}, {iraw, sizeof(k_triangle_indices)}).GetError() == Rndr::ErrorCode::InvalidArgument);
     }
 
-    SECTION("Empty vertex data throws")
+    SECTION("Empty vertex data reports InvalidArgument")
     {
         Rndr::Canvas::VertexLayout layout = MakePositionLayout();
         const auto* iraw = reinterpret_cast<const Rndr::u8*>(k_triangle_indices);
-        REQUIRE_THROWS(Rndr::Canvas::Mesh(layout, {}, {iraw, sizeof(k_triangle_indices)}));
+        REQUIRE(Rndr::Canvas::Mesh::Create(layout, {}, {iraw, sizeof(k_triangle_indices)}).GetError() == Rndr::ErrorCode::InvalidArgument);
     }
 
-    SECTION("Empty index data throws")
+    SECTION("Empty index data reports InvalidArgument")
     {
         Rndr::Canvas::VertexLayout layout = MakePositionLayout();
         const auto* vraw = reinterpret_cast<const Rndr::u8*>(k_triangle_positions);
-        REQUIRE_THROWS(Rndr::Canvas::Mesh(layout, {vraw, sizeof(k_triangle_positions)}, {}));
+        REQUIRE(Rndr::Canvas::Mesh::Create(layout, {vraw, sizeof(k_triangle_positions)}, {}).GetError() == Rndr::ErrorCode::InvalidArgument);
     }
 
-    SECTION("Vertex data not multiple of stride throws")
+    SECTION("Vertex data not multiple of stride reports InvalidArgument")
     {
         Rndr::Canvas::VertexLayout layout = MakePositionLayout();
         const auto* raw = reinterpret_cast<const Rndr::u8*>(k_triangle_positions);
         const auto* iraw = reinterpret_cast<const Rndr::u8*>(k_triangle_indices);
         // Pass data that's not a multiple of stride (12 bytes).
-        REQUIRE_THROWS(Rndr::Canvas::Mesh(layout, {raw, 10}, {iraw, sizeof(k_triangle_indices)}));
+        REQUIRE(Rndr::Canvas::Mesh::Create(layout, {raw, 10}, {iraw, sizeof(k_triangle_indices)}).GetError() == Rndr::ErrorCode::InvalidArgument);
     }
 
-    SECTION("Index data not multiple of 4 throws")
+    SECTION("Index data not multiple of 4 reports InvalidArgument")
     {
         Rndr::Canvas::VertexLayout layout = MakePositionLayout();
         const auto* vraw = reinterpret_cast<const Rndr::u8*>(k_triangle_positions);
         const auto* iraw = reinterpret_cast<const Rndr::u8*>(k_triangle_indices);
-        REQUIRE_THROWS(Rndr::Canvas::Mesh(layout, {vraw, sizeof(k_triangle_positions)}, {iraw, 5}));
+        REQUIRE(Rndr::Canvas::Mesh::Create(layout, {vraw, sizeof(k_triangle_positions)}, {iraw, 5}).GetError() == Rndr::ErrorCode::InvalidArgument);
     }
 
     SECTION("Destroy makes mesh invalid")
@@ -161,7 +161,7 @@ TEST_CASE("Canvas Mesh", "[canvas][mesh]")
         Rndr::Canvas::VertexLayout layout = MakePositionLayout();
         const auto* vraw = reinterpret_cast<const Rndr::u8*>(k_triangle_positions);
         const auto* iraw = reinterpret_cast<const Rndr::u8*>(k_triangle_indices);
-        Rndr::Canvas::Mesh mesh(layout, {vraw, sizeof(k_triangle_positions)}, {iraw, sizeof(k_triangle_indices)});
+        Rndr::Canvas::Mesh mesh = CanvasTest::Unwrap(Rndr::Canvas::Mesh::Create(layout, {vraw, sizeof(k_triangle_positions)}, {iraw, sizeof(k_triangle_indices)}));
         REQUIRE(mesh.IsValid());
         mesh.Destroy();
         REQUIRE_FALSE(mesh.IsValid());
@@ -174,7 +174,7 @@ TEST_CASE("Canvas Mesh", "[canvas][mesh]")
         Rndr::Canvas::VertexLayout layout = MakePositionLayout();
         const auto* vraw = reinterpret_cast<const Rndr::u8*>(k_triangle_positions);
         const auto* iraw = reinterpret_cast<const Rndr::u8*>(k_triangle_indices);
-        Rndr::Canvas::Mesh mesh(layout, {vraw, sizeof(k_triangle_positions)}, {iraw, sizeof(k_triangle_indices)});
+        Rndr::Canvas::Mesh mesh = CanvasTest::Unwrap(Rndr::Canvas::Mesh::Create(layout, {vraw, sizeof(k_triangle_positions)}, {iraw, sizeof(k_triangle_indices)}));
         const Rndr::u32 handle = mesh.GetNativeHandle();
 
         Rndr::Canvas::Mesh const moved(std::move(mesh));
@@ -189,7 +189,7 @@ TEST_CASE("Canvas Mesh", "[canvas][mesh]")
         Rndr::Canvas::VertexLayout layout = MakePositionLayout();
         const auto* vraw = reinterpret_cast<const Rndr::u8*>(k_triangle_positions);
         const auto* iraw = reinterpret_cast<const Rndr::u8*>(k_triangle_indices);
-        Rndr::Canvas::Mesh mesh(layout, {vraw, sizeof(k_triangle_positions)}, {iraw, sizeof(k_triangle_indices)});
+        Rndr::Canvas::Mesh mesh = CanvasTest::Unwrap(Rndr::Canvas::Mesh::Create(layout, {vraw, sizeof(k_triangle_positions)}, {iraw, sizeof(k_triangle_indices)}));
         Rndr::Canvas::Mesh other;
 
         other = std::move(mesh);
@@ -203,10 +203,10 @@ TEST_CASE("Canvas Mesh", "[canvas][mesh]")
         Rndr::Canvas::VertexLayout layout = MakePositionLayout();
         const auto* vraw = reinterpret_cast<const Rndr::u8*>(k_triangle_positions);
         const auto* iraw = reinterpret_cast<const Rndr::u8*>(k_triangle_indices);
-        Rndr::Canvas::Mesh const mesh(layout, {vraw, sizeof(k_triangle_positions)}, {iraw, sizeof(k_triangle_indices)});
+        Rndr::Canvas::Mesh const mesh = CanvasTest::Unwrap(Rndr::Canvas::Mesh::Create(layout, {vraw, sizeof(k_triangle_positions)}, {iraw, sizeof(k_triangle_indices)}));
         REQUIRE(mesh.IsValid());
 
-        Rndr::Canvas::Mesh const clone = mesh.Clone();
+        Rndr::Canvas::Mesh const clone = CanvasTest::Unwrap(mesh.Clone());
         REQUIRE(clone.IsValid());
         REQUIRE(clone.GetNativeHandle() != mesh.GetNativeHandle());
         REQUIRE(clone.GetVertexCount() == mesh.GetVertexCount());
@@ -214,10 +214,9 @@ TEST_CASE("Canvas Mesh", "[canvas][mesh]")
         REQUIRE(mesh.IsValid());
     }
 
-    SECTION("Clone of invalid mesh returns invalid")
+    SECTION("Clone of invalid mesh reports InvalidArgument")
     {
         Rndr::Canvas::Mesh const mesh;
-        Rndr::Canvas::Mesh const clone = mesh.Clone();
-        REQUIRE_FALSE(clone.IsValid());
+        REQUIRE(mesh.Clone().GetError() == Rndr::ErrorCode::InvalidArgument);
     }
 }

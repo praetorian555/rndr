@@ -131,8 +131,13 @@ public:
      * Create a render target. Requires an active Canvas context on the calling thread.
      * @param desc Render target descriptor.
      * @param name Debug name for GPU debugging tools.
+     * @return The render target, ErrorCode::InvalidArgument for a desc with no attachments, too many of
+     *         them, or an external attachment that does not fit its texture, ErrorCode::OutOfBounds for a
+     *         mip level or layer that does not exist, or ErrorCode::GraphicsAPIError when GL refuses the
+     *         framebuffer. The reason is logged at error level.
      */
-    explicit RenderTarget(const RenderTargetDesc& desc, const Opal::StringUtf8& name = {});
+    [[nodiscard]] static Opal::Expected<RenderTarget, ErrorCode> Create(const RenderTargetDesc& desc,
+                                                                        const Opal::StringUtf8& name = {});
     ~RenderTarget();
 
     RenderTarget(const RenderTarget&) = delete;
@@ -140,7 +145,12 @@ public:
     RenderTarget(RenderTarget&& other) noexcept;
     RenderTarget& operator=(RenderTarget&& other) noexcept;
 
-    [[nodiscard]] RenderTarget Clone() const;
+    /**
+     * Copy this render target into a new one. Owned attachments are cloned; external ones stay borrowed.
+     * @return The clone, ErrorCode::InvalidArgument for an invalid render target, or the code the failing
+     *         step maps to.
+     */
+    [[nodiscard]] Opal::Expected<RenderTarget, ErrorCode> Clone() const;
     void Destroy();
 
     [[nodiscard]] i32 GetColorAttachmentCount() const;
@@ -177,7 +187,7 @@ private:
     };
 
     /** Throw if the attached mip levels do not all have the same dimensions and sample count. */
-    void ValidateAttachmentSizes(const char* func_name) const;
+    [[nodiscard]] ErrorCode ValidateAttachmentSizes() const;
 
     Opal::DynamicArray<Attachment> m_color_attachments;
     Attachment m_depth_stencil_attachment;

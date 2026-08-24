@@ -55,7 +55,11 @@ Rndr::Canvas::CubemapRenderer::CubemapRenderer(Opal::Ref<Context> context)
         {.pos = {-1,  3}},
     };
     const u32 indices[3] = {0, 1, 2};
-    m_mesh = Mesh(vertex_layout, Opal::AsBytes(vertices), Opal::AsBytes(indices), "CubemapRenderer Mesh");
+    auto mesh_result = Mesh::Create(vertex_layout, Opal::AsBytes(vertices), Opal::AsBytes(indices), "CubemapRenderer Mesh");
+    if (mesh_result.HasValue())
+    {
+        m_mesh = std::move(mesh_result).GetValue();
+    }
     RNDR_ASSERT(m_mesh.IsValid(), "Failed to create CubemapRenderer mesh!");
 
     m_brush = Brush(BrushDesc{.depth_test = false, .depth_write = false, .cull_mode = CullMode::None});

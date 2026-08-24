@@ -2,9 +2,11 @@
 
 #include "opal/container/array-view.h"
 #include "opal/container/dynamic-array.h"
+#include "opal/container/expected.h"
 
 #include "rndr/canvas/buffer.hpp"
 #include "rndr/canvas/vertex-layout.hpp"
+#include "rndr/error-codes.hpp"
 
 namespace Rndr::Canvas
 {
@@ -24,11 +26,19 @@ public:
      * @param vertex_data Raw vertex data. Size must be a multiple of the layout stride.
      * @param index_data Raw index data (u32 indices). Can be empty for non-indexed geometry.
      * @param debug_name Debug name of the mesh.
+     * @return The mesh, ErrorCode::InvalidArgument for an invalid layout or data that does not match it,
+     *         or whatever creating the GPU buffers reports. The reason is logged at error level.
      */
-    explicit Mesh(const VertexLayout& layout, Opal::ArrayView<const u8> vertex_data, Opal::ArrayView<const u8> index_data,
-                  Opal::StringUtf8 debug_name = "");
+    [[nodiscard]] static Opal::Expected<Mesh, ErrorCode> Create(const VertexLayout& layout, Opal::ArrayView<const u8> vertex_data,
+                                                                Opal::ArrayView<const u8> index_data, Opal::StringUtf8 debug_name = "");
 
-    explicit Mesh(const VertexLayout& layout, i32 max_vertex_count, i32 max_index_count, Opal::StringUtf8 debug_name = "");
+    /**
+     * Create an empty mesh with room for the given number of vertices and indices, filled through Append.
+     * @return The mesh, ErrorCode::InvalidArgument for an invalid layout, or whatever creating the GPU
+     *         buffers reports.
+     */
+    [[nodiscard]] static Opal::Expected<Mesh, ErrorCode> Create(const VertexLayout& layout, i32 max_vertex_count, i32 max_index_count,
+                                                                Opal::StringUtf8 debug_name = "");
 
     ~Mesh();
 
@@ -37,7 +47,12 @@ public:
     Mesh(Mesh&& other) noexcept;
     Mesh& operator=(Mesh&& other) noexcept;
 
-    [[nodiscard]] Mesh Clone() const;
+    /**
+     * Copy this mesh into a new one from its CPU-side data.
+     * @return The clone, ErrorCode::InvalidArgument for an invalid mesh, or whatever creating the GPU
+     *         buffers reports.
+     */
+    [[nodiscard]] Opal::Expected<Mesh, ErrorCode> Clone() const;
     void Destroy();
 
     /**
@@ -65,7 +80,7 @@ public:
     [[nodiscard]] const VertexLayout& GetVertexLayout() const;
 
 private:
-    void SetupVAO();
+    [[nodiscard]] ErrorCode SetupVAO();
 
     Opal::StringUtf8 m_debug_name;
     u32 m_vao = 0;

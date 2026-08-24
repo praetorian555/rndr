@@ -2,7 +2,8 @@
 
 #include "glad/glad.h"
 
-#include "rndr/exception.hpp"
+#include "rndr/canvas/gl-result.hpp"
+#include "rndr/log.hpp"
 #include "rndr/trace.hpp"
 
 namespace
@@ -36,39 +37,46 @@ Rndr::i32 GetLayerCount(const Rndr::Canvas::TextureDesc& desc)
 
 /**
  * Check an attachment description that points at a caller-owned texture. Descriptions that create
- * their own texture need no checking here, the Texture constructor does it.
+ * their own texture need no checking here, Texture::Create does it.
  */
-void ValidateExternalAttachment(const Rndr::Canvas::RenderTargetAttachmentDesc& desc, bool is_depth, const char* func_name)
+Rndr::ErrorCode ValidateExternalAttachment(const Rndr::Canvas::RenderTargetAttachmentDesc& desc, bool is_depth)
 {
     const Rndr::Canvas::Texture& texture = desc.texture.Get();
     if (!texture.IsValid())
     {
-        throw Opal::InvalidArgumentException(func_name, "External attachment texture is not valid!");
+        RNDR_LOG_ERROR("Canvas: External attachment texture is not valid");
+        return Rndr::ErrorCode::InvalidArgument;
     }
     if (is_depth && !IsDepthFormat(texture.GetDesc().format))
     {
-        throw Opal::InvalidArgumentException(func_name, "Depth/stencil attachment needs a depth format texture!");
+        RNDR_LOG_ERROR("Canvas: Depth/stencil attachment needs a depth format texture");
+        return Rndr::ErrorCode::InvalidArgument;
     }
     if (!is_depth && IsDepthFormat(texture.GetDesc().format))
     {
-        throw Opal::InvalidArgumentException(func_name, "Color attachment can not use a depth format texture!");
+        RNDR_LOG_ERROR("Canvas: Color attachment can not use a depth format texture");
+        return Rndr::ErrorCode::InvalidArgument;
     }
     if (desc.mip_level < 0 || desc.mip_level >= texture.GetMipLevelCount())
     {
-        throw Opal::InvalidArgumentException(func_name, "Attachment mip level is out of bounds!");
+        RNDR_LOG_ERROR("Canvas: Attachment mip level is out of bounds");
+        return Rndr::ErrorCode::OutOfBounds;
     }
     if (desc.layer >= 0)
     {
         const Rndr::i32 layer_count = GetLayerCount(texture.GetDesc());
         if (layer_count == 0)
         {
-            throw Opal::InvalidArgumentException(func_name, "Attachment texture has no layers to select!");
+            RNDR_LOG_ERROR("Canvas: Attachment texture has no layers to select");
+            return Rndr::ErrorCode::InvalidArgument;
         }
         if (desc.layer >= layer_count)
         {
-            throw Opal::InvalidArgumentException(func_name, "Attachment layer is out of bounds!");
+            RNDR_LOG_ERROR("Canvas: Attachment layer is out of bounds");
+            return Rndr::ErrorCode::OutOfBounds;
         }
     }
+    return Rndr::ErrorCode::Success;
 }
 
 /** Attach the whole texture, or a single layer or cube map face of it, to an attachment point. */
@@ -108,36 +116,46 @@ void SetDrawBuffers(Rndr::u32 framebuffer, Rndr::i32 color_attachment_count)
 
 }  // namespace
 
-Rndr::Canvas::RenderTarget::RenderTarget(const RenderTargetDesc& desc, const Opal::StringUtf8& name)
-    : m_use_depth_stencil(desc.use_depth_stencil), m_name(name.Clone())
+Opal::Expected<Rndr::Canvas::RenderTarget, Rndr::ErrorCode> Rndr::Canvas::RenderTarget::Create(const RenderTargetDesc& desc,
+                                                                                               const Opal::StringUtf8& name)
 {
-    RNDR_CPU_EVENT_SCOPED("Canvas::RenderTarget::RenderTarget");
+    RNDR_CPU_EVENT_SCOPED("Canvas::RenderTarget::Create");
+    using ResultType = Opal::Expected<RenderTarget, ErrorCode>;
 
     if (desc.color_attachments.IsEmpty() && !desc.use_depth_stencil)
     {
-        throw Opal::InvalidArgumentException(__FUNCTION__, "A color or a depth/stencil attachment is required!");
+        RNDR_LOG_ERROR("Canvas: A color or a depth/stencil attachment is required");
+        return ResultType(ErrorCode::InvalidArgument);
     }
     if (desc.color_attachments.GetSize() > k_max_color_attachments)
     {
-        throw Opal::InvalidArgumentException(__FUNCTION__, "Too many color attachments!");
+        RNDR_LOG_ERROR("Canvas: Too many color attachments");
+        return ResultType(ErrorCode::InvalidArgument);
     }
 
     for (const RenderTargetAttachmentDesc& attachment_desc : desc.color_attachments)
     {
         if (attachment_desc.texture.IsValid())
         {
-            ValidateExternalAttachment(attachment_desc, false, __FUNCTION__);
+            RNDR_CANVAS_CHECK_EXPECTED(ValidateExternalAttachment(attachment_desc, false), ResultType);
         }
     }
-    if (m_use_depth_stencil && desc.depth_stencil_attachment.texture.IsValid())
+    if (desc.use_depth_stencil && desc.depth_stencil_attachment.texture.IsValid())
     {
-        ValidateExternalAttachment(desc.depth_stencil_attachment, true, __FUNCTION__);
+        RNDR_CANVAS_CHECK_EXPECTED(ValidateExternalAttachment(desc.depth_stencil_attachment, true), ResultType);
     }
 
-    glCreateFramebuffers(1, &m_handle);
-    if (m_handle == 0)
+    // On failure beyond this point, render_target's destructor releases the framebuffer and any
+    // attachments it created.
+    RenderTarget render_target;
+    render_target.m_use_depth_stencil = desc.use_depth_stencil;
+    render_target.m_name = name.Clone();
+
+    glCreateFramebuffers(1, &render_target.m_handle);
+    if (render_target.m_handle == 0)
     {
-        throw GraphicsAPIException(0, "Failed to create GL framebuffer!");
+        RNDR_LOG_ERROR("Canvas: Failed to create GL framebuffer");
+        return ResultType(ErrorCode::GraphicsAPIError);
     }
 
     for (i32 i = 0; i < static_cast<i32>(desc.color_attachments.GetSize()); ++i)
@@ -155,74 +173,54 @@ Rndr::Canvas::RenderTarget::RenderTarget(const RenderTargetDesc& desc, const Opa
             attachment.mip_level = 0;
             attachment.layer = -1;
             auto owned_result = Texture::Create(static_cast<const TextureDesc&>(attachment_desc));
-            if (owned_result.HasValue())
-            {
-                attachment.owned = std::move(owned_result).GetValue();
-            }
-            if (!attachment.owned.IsValid())
-            {
-                Destroy();
-                throw GraphicsAPIException(0, "Failed to create color attachment!");
-            }
+            RNDR_CANVAS_CHECK_EXPECTED(owned_result.GetErrorOr(ErrorCode::Success), ResultType);
+            attachment.owned = std::move(owned_result).GetValue();
         }
-        AttachTexture(m_handle, static_cast<GLenum>(GL_COLOR_ATTACHMENT0 + i), attachment.Get(), attachment.mip_level,
+        AttachTexture(render_target.m_handle, static_cast<GLenum>(GL_COLOR_ATTACHMENT0 + i), attachment.Get(), attachment.mip_level,
                       attachment.layer);
-        m_color_attachments.PushBack(std::move(attachment));
+        render_target.m_color_attachments.PushBack(std::move(attachment));
     }
 
-    if (m_use_depth_stencil)
+    if (desc.use_depth_stencil)
     {
         const RenderTargetAttachmentDesc& attachment_desc = desc.depth_stencil_attachment;
-        m_depth_stencil_attachment.mip_level = attachment_desc.mip_level;
-        m_depth_stencil_attachment.layer = attachment_desc.layer;
+        render_target.m_depth_stencil_attachment.mip_level = attachment_desc.mip_level;
+        render_target.m_depth_stencil_attachment.layer = attachment_desc.layer;
         if (attachment_desc.texture.IsValid())
         {
-            m_depth_stencil_attachment.external = attachment_desc.texture.GetPtr();
+            render_target.m_depth_stencil_attachment.external = attachment_desc.texture.GetPtr();
         }
         else
         {
-            m_depth_stencil_attachment.mip_level = 0;
-            m_depth_stencil_attachment.layer = -1;
+            render_target.m_depth_stencil_attachment.mip_level = 0;
+            render_target.m_depth_stencil_attachment.layer = -1;
             auto owned_result = Texture::Create(static_cast<const TextureDesc&>(attachment_desc));
-            if (owned_result.HasValue())
-            {
-                m_depth_stencil_attachment.owned = std::move(owned_result).GetValue();
-            }
-            if (!m_depth_stencil_attachment.owned.IsValid())
-            {
-                Destroy();
-                throw GraphicsAPIException(0, "Failed to create depth/stencil attachment!");
-            }
+            RNDR_CANVAS_CHECK_EXPECTED(owned_result.GetErrorOr(ErrorCode::Success), ResultType);
+            render_target.m_depth_stencil_attachment.owned = std::move(owned_result).GetValue();
         }
-        const Texture& depth_texture = m_depth_stencil_attachment.Get();
+        const Texture& depth_texture = render_target.m_depth_stencil_attachment.Get();
         const GLenum attachment_point =
             depth_texture.GetDesc().format == Format::D24S8 ? GL_DEPTH_STENCIL_ATTACHMENT : GL_DEPTH_ATTACHMENT;
-        AttachTexture(m_handle, attachment_point, depth_texture, m_depth_stencil_attachment.mip_level,
-                      m_depth_stencil_attachment.layer);
+        AttachTexture(render_target.m_handle, attachment_point, depth_texture, render_target.m_depth_stencil_attachment.mip_level,
+                      render_target.m_depth_stencil_attachment.layer);
     }
 
-    try
-    {
-        ValidateAttachmentSizes(__FUNCTION__);
-    }
-    catch (...)
-    {
-        Destroy();
-        throw;
-    }
-    SetDrawBuffers(m_handle, GetColorAttachmentCount());
+    RNDR_CANVAS_CHECK_EXPECTED(render_target.ValidateAttachmentSizes(), ResultType);
+    SetDrawBuffers(render_target.m_handle, render_target.GetColorAttachmentCount());
 
-    const GLenum status = glCheckNamedFramebufferStatus(m_handle, GL_FRAMEBUFFER);
+    const GLenum status = glCheckNamedFramebufferStatus(render_target.m_handle, GL_FRAMEBUFFER);
     if (status != GL_FRAMEBUFFER_COMPLETE)
     {
-        Destroy();
-        throw GraphicsAPIException(status, "Framebuffer is not complete!");
+        RNDR_LOG_ERROR("Canvas: Framebuffer is not complete: {}", status);
+        return ResultType(ErrorCode::GraphicsAPIError);
     }
 
-    if (!m_name.IsEmpty())
+    if (!render_target.m_name.IsEmpty())
     {
-        glObjectLabel(GL_FRAMEBUFFER, m_handle, static_cast<GLsizei>(m_name.GetSize()), m_name.GetData());
+        glObjectLabel(GL_FRAMEBUFFER, render_target.m_handle, static_cast<GLsizei>(render_target.m_name.GetSize()),
+                      render_target.m_name.GetData());
     }
+    return ResultType(std::move(render_target));
 }
 
 Rndr::Canvas::RenderTarget::~RenderTarget()
@@ -257,11 +255,13 @@ Rndr::Canvas::RenderTarget& Rndr::Canvas::RenderTarget::operator=(RenderTarget&&
     return *this;
 }
 
-Rndr::Canvas::RenderTarget Rndr::Canvas::RenderTarget::Clone() const
+Opal::Expected<Rndr::Canvas::RenderTarget, Rndr::ErrorCode> Rndr::Canvas::RenderTarget::Clone() const
 {
+    using ResultType = Opal::Expected<RenderTarget, ErrorCode>;
     if (!IsValid())
     {
-        return {};
+        RNDR_LOG_ERROR("Canvas: Cannot clone an invalid render target");
+        return ResultType(ErrorCode::InvalidArgument);
     }
 
     RenderTarget clone;
@@ -271,7 +271,8 @@ Rndr::Canvas::RenderTarget Rndr::Canvas::RenderTarget::Clone() const
     glCreateFramebuffers(1, &clone.m_handle);
     if (clone.m_handle == 0)
     {
-        return {};
+        RNDR_LOG_ERROR("Canvas: Failed to create GL framebuffer for clone");
+        return ResultType(ErrorCode::GraphicsAPIError);
     }
 
     for (i32 i = 0; i < static_cast<i32>(m_color_attachments.GetSize()); ++i)
@@ -288,15 +289,8 @@ Rndr::Canvas::RenderTarget Rndr::Canvas::RenderTarget::Clone() const
         else
         {
             auto owned_clone_result = source.owned.Clone();
-            if (owned_clone_result.HasValue())
-            {
-                attachment.owned = std::move(owned_clone_result).GetValue();
-            }
-            if (!attachment.owned.IsValid())
-            {
-                clone.Destroy();
-                return {};
-            }
+            RNDR_CANVAS_CHECK_EXPECTED(owned_clone_result.GetErrorOr(ErrorCode::Success), ResultType);
+            attachment.owned = std::move(owned_clone_result).GetValue();
         }
         AttachTexture(clone.m_handle, static_cast<GLenum>(GL_COLOR_ATTACHMENT0 + i), attachment.Get(), attachment.mip_level,
                       attachment.layer);
@@ -314,15 +308,8 @@ Rndr::Canvas::RenderTarget Rndr::Canvas::RenderTarget::Clone() const
         else
         {
             auto depth_clone_result = m_depth_stencil_attachment.owned.Clone();
-            if (depth_clone_result.HasValue())
-            {
-                clone.m_depth_stencil_attachment.owned = std::move(depth_clone_result).GetValue();
-            }
-            if (!clone.m_depth_stencil_attachment.owned.IsValid())
-            {
-                clone.Destroy();
-                return {};
-            }
+            RNDR_CANVAS_CHECK_EXPECTED(depth_clone_result.GetErrorOr(ErrorCode::Success), ResultType);
+            clone.m_depth_stencil_attachment.owned = std::move(depth_clone_result).GetValue();
         }
         const Texture& depth_texture = clone.m_depth_stencil_attachment.Get();
         const GLenum attachment_point =
@@ -338,7 +325,7 @@ Rndr::Canvas::RenderTarget Rndr::Canvas::RenderTarget::Clone() const
         glObjectLabel(GL_FRAMEBUFFER, clone.m_handle, static_cast<GLsizei>(clone.m_name.GetSize()), clone.m_name.GetData());
     }
 
-    return clone;
+    return ResultType(std::move(clone));
 }
 
 void Rndr::Canvas::RenderTarget::Destroy()
@@ -362,7 +349,7 @@ void Rndr::Canvas::RenderTarget::Destroy()
     m_use_depth_stencil = false;
 }
 
-void Rndr::Canvas::RenderTarget::ValidateAttachmentSizes(const char* func_name) const
+Rndr::ErrorCode Rndr::Canvas::RenderTarget::ValidateAttachmentSizes() const
 {
     i32 width = -1;
     i32 height = -1;
@@ -378,26 +365,30 @@ void Rndr::Canvas::RenderTarget::ValidateAttachmentSizes(const char* func_name) 
             width = attachment_width;
             height = attachment_height;
             sample_count = texture_desc.sample_count;
-            return;
+            return ErrorCode::Success;
         }
         if (attachment_width != width || attachment_height != height)
         {
-            throw Opal::InvalidArgumentException(func_name, "Attachments have different dimensions!");
+            RNDR_LOG_ERROR("Canvas: Attachments have different dimensions");
+            return ErrorCode::InvalidArgument;
         }
         if (texture_desc.sample_count != sample_count)
         {
-            throw Opal::InvalidArgumentException(func_name, "Attachments have different sample counts!");
+            RNDR_LOG_ERROR("Canvas: Attachments have different sample counts");
+            return ErrorCode::InvalidArgument;
         }
+        return ErrorCode::Success;
     };
 
     for (const Attachment& attachment : m_color_attachments)
     {
-        check(attachment);
+        RNDR_CANVAS_CHECK(check(attachment));
     }
     if (m_use_depth_stencil)
     {
-        check(m_depth_stencil_attachment);
+        RNDR_CANVAS_CHECK(check(m_depth_stencil_attachment));
     }
+    return ErrorCode::Success;
 }
 
 Rndr::i32 Rndr::Canvas::RenderTarget::GetColorAttachmentCount() const

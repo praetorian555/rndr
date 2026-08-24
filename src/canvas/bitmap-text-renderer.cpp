@@ -22,8 +22,12 @@ bool Rndr::Canvas::BitmapTextRenderer::Init(Opal::Ref<Context> context, const Bi
     RNDR_ASSERT(m_shader.IsValid(), "Shader could not be created!");
 
     const VertexLayout vertex_layout = m_shader.GetVertexLayout().Clone();
-    m_mesh = Mesh(vertex_layout, m_desc.max_char_render_count * k_char_vertex_count,
-                  m_desc.max_char_render_count * k_char_index_count, "Bitmap Text Renderer Mesh");
+    auto mesh_result = Mesh::Create(vertex_layout, m_desc.max_char_render_count * k_char_vertex_count,
+                                    m_desc.max_char_render_count * k_char_index_count, "Bitmap Text Renderer Mesh");
+    if (mesh_result.HasValue())
+    {
+        m_mesh = std::move(mesh_result).GetValue();
+    }
     RNDR_ASSERT(m_mesh.IsValid(), "Mesh could not be created!");
 
     m_brush = Brush(BrushDesc{});
