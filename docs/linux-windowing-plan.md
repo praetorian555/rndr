@@ -27,12 +27,15 @@ Decisions:
 |---|---|
 | 0 — portability groundwork | **Done** |
 | 1 — LinuxApplication + LinuxWindow | **Done** |
-| 2 — Forge surface | Not started, blocked on the Vulkan SDK question below |
-| 3 — build and verify in WSL2 | Partially done: `build/linux-debug` builds and all 92 test cases pass with Forge OFF |
+| 2 — Forge surface | **Done**: the XCB surface builds, and `[forge]`/`[forge-window]` run against a real device |
+| 3 — build and verify in WSL2 | Mostly done: five failures are open, see the next section |
 
-Verified on 2026-08-24: WSL2 Ubuntu 24.04, GCC 13, Ninja, ASan, configured
-`-DRNDR_FORGE=OFF -DRNDR_ASSIMP=ON -DRNDR_KTX=OFF`. `[init]` and `[input]` pass under WSLg, and the
-Windows `build/msvc-debug` still builds clean with all tests passing (219 passed, 1 skipped).
+Verified on 2026-08-24 in WSL2 Ubuntu 24.04 with GCC 13 and Ninja. With Forge off and ASan on, all 92
+test cases pass. With Forge on (`VULKAN_SDK` pointed at the Windows SDK, `RNDR_HARDENING=OFF`,
+`RNDR_TEST_REQUIRE_VULKAN=1`), `[forge]` reports 72 of 79 cases passing with 5 skipped, and
+`[forge-window]` 5 of 6. The device is Mesa's **llvmpipe** software rasterizer - there is no dozen
+(`dzn`) ICD on this box - so these runs prove correctness against the validation layer, not against a
+GPU.
 
 ## Phase 0 — portability groundwork (done)
 
@@ -110,21 +113,43 @@ places needed something the plan did not spell out:
 `SetCloseSupported(false)` is tracked and vetoed in the `WM_DELETE_WINDOW` handler (X11 cannot gray out
 a close button), and `Enable(false)` drops that window's input events in the pump.
 
-## Phase 2 — Forge surface (remaining)
+## Phase 2 — Forge surface (done)
 
-- `src/forge/graphics-context.cpp` `GetRequiredInstanceExtensions` — push
-  `VK_KHR_XCB_SURFACE_EXTENSION_NAME` under `RNDR_LINUX`, guarded like the win32 one
-  (`src/forge/graphics-context.cpp:468`).
-- `src/forge/swap-chain.cpp` `Surface::Create` (line 51) — `VkXcbSurfaceCreateInfoKHR{ connection =
-  window.GetNativeDisplayHandle(), window = window.GetNativeHandle() }` and `vkCreateXcbSurfaceKHR`
-  through the same `RNDR_FORGE_VK_CHECK_EXPECTED` macro.
+- `src/forge/graphics-context.cpp` `GetRequiredInstanceExtensions` pushes
+  `VK_KHR_XCB_SURFACE_EXTENSION_NAME` under `OPAL_PLATFORM_LINUX`, guarded like the win32 one.
+- `src/forge/swap-chain.cpp` `Surface::Create` fills a `VkXcbSurfaceCreateInfoKHR` from
+  `GetNativeDisplayHandle()` (the connection) and `GetNativeHandle()` (the window id) and calls
+  `vkCreateXcbSurfaceKHR` through the same `RNDR_FORGE_VK_CHECK_EXPECTED` macro.
 
-**Blocked on a build question**: `src/CMakeLists.txt` compiles SPIRV-Reflect out of
-`$ENV{VULKAN_SDK}/Source/SPIRV-Reflect`, and it puts `${VULKAN_SDK_PATH}/Include` on the public include
-path. The WSL box has apt's `libvulkan-dev` (headers in `/usr/include/vulkan`) and no SDK, so a
-Forge-on-Linux configure needs one of: install the LunarG SDK tarball in WSL and keep the current
-layout, or teach the build to fall back to system Vulkan headers plus a vendored/CPM SPIRV-Reflect.
-Decide this before writing any Phase 2 code - it decides whether `VULKAN_SDK` stays required.
+Forge met GCC for the first time here, which took a warning policy decision and one real bug fix:
+
+- `-Wmissing-field-initializers` and `-Wsign-compare` (843 and 63 reports) are switched off for
+  GCC/Clang in `cmake/compiler-warnings.cmake`. Both fire on idioms the codebase uses throughout -
+  partially initialized Vulkan structs and `i32` loop indices against a `u64` GetSize() - and MSVC
+  accepts both at /W4 /WX, so turning them into 900 edits would be churn rather than a fix.
+- The Vulkan SDK include directories are `SYSTEM` now, and `spirv_reflect.c` is compiled with `-w`:
+  VMA and SPIRV-Reflect are vendored SDK code, not ours to edit.
+- Real fix: `Rndr::u64` is `unsigned long long` while Linux `uint64_t` and `VkDeviceSize` are
+  `unsigned long`. Same width, different type, so a `u64*` does not convert - four call sites in
+  `synchronization.cpp` and `command-buffer.cpp` now hand Vulkan a variable of its own type. This is
+  a portability bug that Windows cannot see, since both types are `unsigned long long` there.
+
+**The SDK question is settled**: point `VULKAN_SDK` at the Windows install from inside WSL and the
+build needs no change. Everything Forge takes from the SDK is portable text - `Include/` (headers,
+including `vulkan_xcb.h`, plus the bundled volk and VMA) and `Source/SPIRV-Reflect/spirv_reflect.{h,c}`.
+Both compile under GCC straight off the `/mnt/c` mount, whose case-insensitivity covers the
+`Include`/`Source` capitalization. No Vulkan library is ever linked: `volk-implementation.cpp` means the
+loader is dlopened at run time, so the Windows import library is never wanted and apt's `libvulkan1`
+serves. Validation likewise comes from apt (`vulkan-validationlayers`); the SDK's layer DLLs are
+Windows binaries and are neither usable nor needed.
+
+    VULKAN_SDK=/mnt/c/VulkanSDK/<version> cmake -S . -B build/linux-debug -G Ninja \
+      -DCMAKE_BUILD_TYPE=Debug -DRNDR_FORGE=ON -DRNDR_FORGE_VALIDATION=ON -DRNDR_ASSIMP=ON -DRNDR_KTX=OFF
+
+Header/loader version skew is fine as long as `GraphicsContext` keeps asking for `VK_API_VERSION_1_3`
+(`src/forge/graphics-context.cpp:273`): SDK 1.4 headers against an apt 1.3 loader only declare entry
+points the code never calls. Reading headers across the `/mnt/c` 9p mount is slow, so copying
+`Include/` and `Source/SPIRV-Reflect/` into the WSL filesystem is a fair trade if compile times bite.
 
 ## Phase 3 — build and verify in WSL2 (partially done)
 
@@ -138,9 +163,7 @@ Done:
 
 Remaining:
 
-1. Reconfigure with `-DRNDR_FORGE=ON -DRNDR_FORGE_VALIDATION=ON` once the SDK question above is
-   settled, then run `[forge]` and `[forge-window]` with `RNDR_TEST_REQUIRE_VULKAN=1` so a missing
-   device fails loudly instead of skipping.
+1. The five open failures below.
 2. Run the `modern-vulkan` sample under WSLg: window appears, resizes, ESC closes, WASD+mouse fly camera
    works (exercises the ResetToCenter warp, motion deltas and key translation).
 3. Window behaviours that no test tag covers, driven manually since `window-sample` is Canvas-bound and
@@ -149,6 +172,71 @@ Remaining:
    key bindings or add a small Forge-free windowing sample.
 4. Multi-monitor `GetMonitors` sanity check on a real X11 session - WSLg reports a single monitor, so
    the RandR path is only lightly exercised so far.
+
+### Fixed along the way
+
+`LinuxWindow::Reshape` waits for the window manager to apply the new size before returning (polling the
+geometry, half a second at most, a warning if it expires). `xcb_configure_window` is a request rather
+than a change, while the Windows `MoveWindow` it has to match has already applied by the time it
+returns, so a caller that read the size straight back read the old one - which is exactly what the
+swap-chain resize test does. The same function now rejects a zero width or height with
+`InvalidArgument`, since X11 answers `BadValue` for a window without a client area.
+
+## Open failures
+
+### 1. A window with no client area has no X11 equivalent (`test/forge/window-test.cpp:655`, `:708`)
+
+    REQUIRE( fixture.GetClientSize().x == 0 )   // 128 == 0
+    REQUIRE_FALSE( swap_chain.IsValid() )       // !true
+
+`ForgeWindowFixture::ResizeWindow(0, 0)` is how the test asks for a window with nothing to present to,
+and on Windows that models a minimized window, whose client rectangle really is empty. X11 has no such
+window: a zero size is a protocol error, and unmapping the window does not make
+`vkGetPhysicalDeviceSurfaceCapabilitiesKHR` report a zero extent either, so the swap chain never sees
+the state the test is about.
+
+This one wants a decision rather than a fix, since it is shared test code and Windows passes today:
+either the case skips on X11, or the fixture expresses "no client area" as a minimize and the test
+stops demanding a zero extent from a driver that is free to keep reporting one.
+
+### 2. uint8 index type reaches a device that never enabled the extension (`test/forge/smoke-test.cpp:2854`)
+
+    Validation Error: [ VUID-vkCmdBindIndexBuffer-indexType-parameter ]
+    vkCmdBindIndexBuffer(): indexType (1000265000) does not fall within the begin..end range of the
+    core VkIndexType enumeration tokens and is not an extension added token.
+
+`CommandBuffer::CmdBindIndexBuffer` (`src/forge/command-buffer.cpp:1078`) does guard this: it refuses
+`IndexSize::uint8` when the device lacks `DeviceFeatures::index_type_uint8`, and the assertion that
+checks the refusal passes. The validation error is counted against the *other* context in that test
+(`halves`), so the suspicion is a device that reports and enables the feature without its extension
+being added at device creation. Start at how `index_type_uint8` is queried and enabled in
+`src/forge/device.cpp`. Invisible on Windows, where the GPU supports the extension natively.
+
+### 3. Blend factor ConstColor produces the wrong colour (`test/forge/smoke-test.cpp:8540`)
+
+    source factor ConstColor:       measured 0.6      0.0627451  0.121569  0.301961
+                                    expected 0.0815686 0.181176  0.200784  0.449412
+    destination factor ConstColor:  measured 0.227451 0.0705882  0.0313726 0.101961
+                                    expected 0.0307882 0.211965  0.0511803 0.149804
+
+Two cases out of the whole blend factor table; every other factor passes. Blend constants are written
+as static pipeline state from `PipelineDesc::blend_constants` (`src/forge/pipeline.cpp:874`). Either
+llvmpipe only honours them as dynamic state (`VK_DYNAMIC_STATE_BLEND_CONSTANTS` plus
+`vkCmdSetBlendConstants`), or Forge never gets them to the device at all. Whether this is a driver
+quirk or a Forge bug is exactly what needs establishing first - the numbers do not look like rounding.
+
+## Running the Forge tags on Linux
+
+Three environment traps, all of which cost time once already:
+
+- **Do not run the Forge tags from an ASan build.** llvmpipe renders into system memory and ASan's
+  redzones and quarantine multiply it, which took the WSL VM to its 15.5 GB ceiling and left the whole
+  distro unreachable. Configure with `-DRNDR_HARDENING=OFF`, matching CI, and peak resident memory is
+  about 166 MB.
+- **Do not cap the address space with `ulimit -v`.** Mesa reserves large virtual ranges up front and
+  blocks rather than failing when it cannot, which looks exactly like a hung test at 0% CPU.
+- **Do not write logs to `/tmp`.** The distro shuts itself down once the last process exits and `/tmp`
+  is tmpfs, so logs vanish between runs. Write them into the build directory instead.
 
 ## Out of scope (explicit, so nothing half-lands)
 
