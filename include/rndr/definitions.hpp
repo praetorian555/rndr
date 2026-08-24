@@ -20,6 +20,17 @@
 #define RNDR_ALIGN(Amount) __declspec(align(Amount))
 #define RNDR_FORCE_INLINE __forceinline
 #define RNDR_DEBUG_BREAK __debugbreak()
+#elif RNDR_LINUX
+#if defined(__clang__)
+#define RNDR_OPTIMIZE_OFF _Pragma("clang optimize off")
+#define RNDR_OPTIMIZE_ON _Pragma("clang optimize on")
+#else
+#define RNDR_OPTIMIZE_OFF _Pragma("GCC push_options") _Pragma("GCC optimize(\"O0\")")
+#define RNDR_OPTIMIZE_ON _Pragma("GCC pop_options")
+#endif
+#define RNDR_ALIGN(Amount) alignas(Amount)
+#define RNDR_FORCE_INLINE inline __attribute__((always_inline))
+#define RNDR_DEBUG_BREAK __builtin_trap()
 #else
 #error "Platfrom not supported!"
 #endif  // RNDR_WINDOWS
@@ -45,15 +56,17 @@
 
 #include "rndr/export.h"
 
+#if defined(RNDR_WINDOWS)
 // disable warnings on extern before template instantiation
 #pragma warning(disable : 4231)
 
-#if defined(RNDR_WINDOWS)
 #if rndr_EXPORTS
 #define RNDR_EXTERN_TEMPLATE
 #else
 #define RNDR_EXTERN_TEMPLATE extern
 #endif
+#else
+#define RNDR_EXTERN_TEMPLATE
 #endif
 
 #define RNDR_DECLARE_HANDLE(name) \

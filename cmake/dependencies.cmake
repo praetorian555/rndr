@@ -98,6 +98,18 @@ if (RNDR_KTX)
     message(STATUS "***** Setup Complete *****")
 endif ()
 
+# Setup X11 windowing stack ########################################################
+# Raw XCB plus libxkbcommon for keyboard translation - the Linux platform layer wraps
+# these directly, mirroring how the Windows layer wraps Win32. xcb-xkb is needed for
+# detectable auto-repeat, xcb-randr for monitors, xcb-xfixes for cursor hiding.
+if (UNIX)
+    message(STATUS "***** Setting up X11/XCB Dependency *****")
+    find_package(PkgConfig REQUIRED)
+    pkg_check_modules(RNDR_XCB REQUIRED IMPORTED_TARGET
+            xcb xcb-randr xcb-xfixes xcb-xkb xkbcommon xkbcommon-x11)
+    message(STATUS "***** Setup Complete *****")
+endif ()
+
 # Setup Slang #####################################################################
 # Pull in prebuilt Slang release binaries instead of building from source (the
 # from-source build is very heavy). CPM downloads and extracts the archive and we

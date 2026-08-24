@@ -29,6 +29,23 @@ function(rndr_setup_compiler_warnings target)
     # Warnings as errors
     list(APPEND MSVC_WARNINGS /WX)
 
+    set(GCC_CLANG_WARNINGS
+        -Wall
+        -Wextra
+        -Wpedantic
+        -Wshadow # variable declaration shadows one from a parent scope
+        -Wnon-virtual-dtor # class with virtual functions has a non-virtual destructor
+        -Woverloaded-virtual # overload (not override) of a virtual function
+        -Wnull-dereference # a null dereference is detected
+        -Wdouble-promotion # implicit float to double promotion
+        -Wimplicit-fallthrough # switch case falls through without an annotation
+    )
+
+    # Warnings as errors
+    list(APPEND GCC_CLANG_WARNINGS -Werror)
+
     target_compile_options(${target} INTERFACE "$<$<CXX_COMPILER_ID:MSVC>:${MSVC_WARNINGS}>")
+    target_compile_options(${target} INTERFACE
+        "$<$<OR:$<CXX_COMPILER_ID:GNU>,$<CXX_COMPILER_ID:Clang>>:${GCC_CLANG_WARNINGS}>")
 
 endfunction()

@@ -24,7 +24,6 @@ set(SOURCE_LIST
         "${PROJECT_SOURCE_DIR}/include/rndr/fly-camera.hpp"
         "${PROJECT_SOURCE_DIR}/include/rndr/trace.hpp"
         "${PROJECT_SOURCE_DIR}/include/rndr/projections.hpp"
-        "${PROJECT_SOURCE_DIR}/include/rndr/imgui-system.hpp"
         "${PROJECT_SOURCE_DIR}/include/rndr/return-macros.hpp"
         "${PROJECT_SOURCE_DIR}/include/rndr/pixel-format.hpp"
         "${PROJECT_SOURCE_DIR}/src/time.cpp"
@@ -38,8 +37,11 @@ set(SOURCE_LIST
         "${PROJECT_SOURCE_DIR}/src/projections.cpp"
         "${PROJECT_SOURCE_DIR}/src/application.cpp"
         "${PROJECT_SOURCE_DIR}/src/platform-application.cpp"
-        "${PROJECT_SOURCE_DIR}/src/imgui-system.cpp"
         "${PROJECT_SOURCE_DIR}/src/pixel-format.cpp"
+        # Canvas-namespaced but pure math with no GL dependency, and projection-camera.cpp
+        # (always built) calls it, so it cannot be gated on RNDR_CANVAS.
+        "${PROJECT_SOURCE_DIR}/include/rndr/canvas/projections.hpp"
+        "${PROJECT_SOURCE_DIR}/src/canvas/projections.cpp"
 )
 
 if (${RNDR_CANVAS} OR ${RNDR_FORGE})
@@ -66,7 +68,6 @@ if (${RNDR_CANVAS})
             "${PROJECT_SOURCE_DIR}/include/rndr/canvas/draw-list.hpp"
             "${PROJECT_SOURCE_DIR}/include/rndr/canvas/compute-list.hpp"
             "${PROJECT_SOURCE_DIR}/include/rndr/canvas/timestamp-query.hpp"
-            "${PROJECT_SOURCE_DIR}/include/rndr/canvas/projections.hpp"
             "${PROJECT_SOURCE_DIR}/include/rndr/canvas/bitmap.hpp"
             "${PROJECT_SOURCE_DIR}/include/rndr/canvas/renderers/shape-renderer.hpp"
             "${PROJECT_SOURCE_DIR}/include/rndr/canvas/renderers/bitmap-text-renderer.hpp"
@@ -83,7 +84,6 @@ if (${RNDR_CANVAS})
             "${PROJECT_SOURCE_DIR}/src/canvas/brush.cpp"
             "${PROJECT_SOURCE_DIR}/src/canvas/draw-list.cpp"
             "${PROJECT_SOURCE_DIR}/src/canvas/timestamp-query.cpp"
-            "${PROJECT_SOURCE_DIR}/src/canvas/projections.cpp"
             "${PROJECT_SOURCE_DIR}/src/canvas/bitmap.cpp"
             "${PROJECT_SOURCE_DIR}/src/canvas/shape-renderer.cpp"
             "${PROJECT_SOURCE_DIR}/src/canvas/bitmap-text-renderer.cpp"
@@ -92,12 +92,15 @@ if (${RNDR_CANVAS})
             "${PROJECT_SOURCE_DIR}/src/canvas/grid-renderer.cpp")
 endif ()
 
-list(APPEND SOURCE_LIST
-        "${PROJECT_SOURCE_DIR}/extern/glad/src/glad.c"
-        "${PROJECT_SOURCE_DIR}/extern/glad/src/glad_wgl.c"
-        "${PROJECT_SOURCE_DIR}/extern/glad/include/glad/glad.h"
-        "${PROJECT_SOURCE_DIR}/extern/glad/include/glad/glad_wgl.h"
-        "${PROJECT_SOURCE_DIR}/extern/glad/include/KHR/khrplatform.h")
+# glad is only reached from Canvas and the Win32 platform layer, both Windows-only.
+if (WIN32)
+    list(APPEND SOURCE_LIST
+            "${PROJECT_SOURCE_DIR}/extern/glad/src/glad.c"
+            "${PROJECT_SOURCE_DIR}/extern/glad/src/glad_wgl.c"
+            "${PROJECT_SOURCE_DIR}/extern/glad/include/glad/glad.h"
+            "${PROJECT_SOURCE_DIR}/extern/glad/include/glad/glad_wgl.h"
+            "${PROJECT_SOURCE_DIR}/extern/glad/include/KHR/khrplatform.h")
+endif ()
 
 list(APPEND SOURCE_LIST
         "${PROJECT_SOURCE_DIR}/extern/stb_image/include/stb_image/stb_image.h"
@@ -123,14 +126,27 @@ if (${RNDR_AUDIO})
             "${PROJECT_SOURCE_DIR}/src/platform/windows-audio-device.cpp")
 endif ()
 
-list(APPEND SOURCE_LIST
-        "${PROJECT_SOURCE_DIR}/include/rndr/platform/windows-application.hpp"
-        "${PROJECT_SOURCE_DIR}/include/rndr/platform/windows-gamepad.hpp"
-        "${PROJECT_SOURCE_DIR}/include/rndr/platform/windows-window.hpp"
-        "${PROJECT_SOURCE_DIR}/src/platform/windows-application.cpp"
-        "${PROJECT_SOURCE_DIR}/src/platform/windows-gamepad.cpp"
-        "${PROJECT_SOURCE_DIR}/src/platform/windows-window.cpp"
-)
+if (WIN32)
+    list(APPEND SOURCE_LIST
+            "${PROJECT_SOURCE_DIR}/include/rndr/platform/windows-application.hpp"
+            "${PROJECT_SOURCE_DIR}/include/rndr/platform/windows-gamepad.hpp"
+            "${PROJECT_SOURCE_DIR}/include/rndr/platform/windows-window.hpp"
+            "${PROJECT_SOURCE_DIR}/src/platform/windows-application.cpp"
+            "${PROJECT_SOURCE_DIR}/src/platform/windows-gamepad.cpp"
+            "${PROJECT_SOURCE_DIR}/src/platform/windows-window.cpp"
+            # imgui-system wraps the Win32 ImGui backend (imgui_impl_win32.h), so it is
+            # a Windows platform source until a Linux backend exists.
+            "${PROJECT_SOURCE_DIR}/include/rndr/imgui-system.hpp"
+            "${PROJECT_SOURCE_DIR}/src/imgui-system.cpp"
+    )
+elseif (UNIX)
+    list(APPEND SOURCE_LIST
+            "${PROJECT_SOURCE_DIR}/include/rndr/platform/linux-application.hpp"
+            "${PROJECT_SOURCE_DIR}/include/rndr/platform/linux-window.hpp"
+            "${PROJECT_SOURCE_DIR}/src/platform/linux-application.cpp"
+            "${PROJECT_SOURCE_DIR}/src/platform/linux-window.cpp"
+    )
+endif ()
 
 if (${RNDR_FORGE})
     list(APPEND SOURCE_LIST
@@ -187,8 +203,9 @@ target_include_directories(rndr PUBLIC $<BUILD_INTERFACE:${PROJECT_SOURCE_DIR}/i
 target_include_directories(rndr PRIVATE ${PROJECT_SOURCE_DIR}/src)
 # glad and stb_image are used only inside rndr's implementation (no public header includes
 # them), so they are wrapped in BUILD_INTERFACE and not shipped with the installed package.
-target_include_directories(rndr PUBLIC $<BUILD_INTERFACE:${PROJECT_SOURCE_DIR}/extern/glad/include>)
-target_include_directories(rndr PUBLIC $<BUILD_INTERFACE:${PROJECT_SOURCE_DIR}/extern/stb_image/include>)
+# SYSTEM keeps these vendored headers out of the -Werror surface on GCC/Clang.
+target_include_directories(rndr SYSTEM PUBLIC $<BUILD_INTERFACE:${PROJECT_SOURCE_DIR}/extern/glad/include>)
+target_include_directories(rndr SYSTEM PUBLIC $<BUILD_INTERFACE:${PROJECT_SOURCE_DIR}/extern/stb_image/include>)
 
 if (${RNDR_FORGE} OR ${RNDR_CANVAS})
     target_link_libraries(rndr PRIVATE slang)
@@ -216,9 +233,14 @@ if (${RNDR_AUDIO})
     target_link_libraries(rndr PRIVATE Ole32.lib Avrt.lib)
 endif ()
 
-# Xinput.lib resolves to XInput 1.4 in the Windows 10 SDK, which ships with every supported
-# Windows version, so there is no runtime redistributable to worry about.
-target_link_libraries(rndr PRIVATE User32.lib Shcore.lib Xinput.lib)
+if (WIN32)
+    # Xinput.lib resolves to XInput 1.4 in the Windows 10 SDK, which ships with every supported
+    # Windows version, so there is no runtime redistributable to worry about.
+    target_link_libraries(rndr PRIVATE User32.lib Shcore.lib Xinput.lib)
+elseif (UNIX)
+    # The X11/XCB stack found by pkg_check_modules in cmake/dependencies.cmake.
+    target_link_libraries(rndr PRIVATE PkgConfig::RNDR_XCB)
+endif ()
 target_link_libraries(rndr PUBLIC opal imgui)
 if (RNDR_ASSIMP)
     target_link_libraries(rndr PRIVATE assimp)
@@ -238,6 +260,8 @@ if (${RNDR_FORGE})
     target_compile_definitions(rndr PUBLIC RNDR_FORGE)
     if (WIN32)
         target_compile_definitions(rndr PUBLIC -DVK_USE_PLATFORM_WIN32_KHR -DVK_NO_PROTOTYPES)
+    elseif (UNIX)
+        target_compile_definitions(rndr PUBLIC -DVK_USE_PLATFORM_XCB_KHR -DVK_NO_PROTOTYPES)
     endif ()
     # Public, because whether the layer is there decides what a caller sees: without it the context reports
     # no debug messages at all, so a test that asserts on them asserts on nothing and cannot tell the two

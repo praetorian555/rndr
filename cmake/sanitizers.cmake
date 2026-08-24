@@ -1,10 +1,17 @@
 function(rndr_setup_sanitizers project_options)
-    target_compile_options(${project_options} INTERFACE /fsanitize=address /Zi /INCREMENTAL:NO)
-    target_compile_definitions(${project_options} INTERFACE _DISABLE_VECTOR_ANNOTATION _DISABLE_STRING_ANNOTATION)
-    # /INFERASANLIBS tells the linker to pull the ASan runtime import libs
-    # (clang_rt.asan_dynamic-*.lib) from the default-lib directives in the instrumented
-    # objects. Without it the link fails with unresolved __asan_* externals.
-    target_link_options(${project_options} INTERFACE /INFERASANLIBS /INCREMENTAL:NO)
+    if (MSVC)
+        target_compile_options(${project_options} INTERFACE /fsanitize=address /Zi /INCREMENTAL:NO)
+        target_compile_definitions(${project_options} INTERFACE _DISABLE_VECTOR_ANNOTATION _DISABLE_STRING_ANNOTATION)
+        # /INFERASANLIBS tells the linker to pull the ASan runtime import libs
+        # (clang_rt.asan_dynamic-*.lib) from the default-lib directives in the instrumented
+        # objects. Without it the link fails with unresolved __asan_* externals.
+        target_link_options(${project_options} INTERFACE /INFERASANLIBS /INCREMENTAL:NO)
+    else ()
+        # GCC/Clang link the ASan runtime themselves when the flag is passed at link time,
+        # so no equivalent of the MSVC DLL copy step is needed.
+        target_compile_options(${project_options} INTERFACE -fsanitize=address -g)
+        target_link_options(${project_options} INTERFACE -fsanitize=address)
+    endif ()
 endfunction()
 
 # Copies the dynamic AddressSanitizer runtime (clang_rt.asan_dynamic-x86_64.dll) next to the

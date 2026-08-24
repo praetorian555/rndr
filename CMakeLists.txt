@@ -24,6 +24,19 @@ option(RNDR_AUDIO "Enable the audio system: clips, a software mixer and a WASAPI
 # RNDR_SHARED_LIBS is the project-facing knob that drives it.
 set(BUILD_SHARED_LIBS ${RNDR_SHARED_LIBS})
 
+# Canvas is WGL-bound (src/canvas/context.cpp) and the audio device is WASAPI-bound, so neither
+# can build on Linux yet. Forge is the Linux rendering path.
+if (UNIX)
+    if (RNDR_CANVAS)
+        message(STATUS "RNDR_CANVAS is not supported on Linux, forcing it OFF")
+        set(RNDR_CANVAS OFF)
+    endif ()
+    if (RNDR_AUDIO)
+        message(STATUS "RNDR_AUDIO is not supported on Linux, forcing it OFF")
+        set(RNDR_AUDIO OFF)
+    endif ()
+endif ()
+
 message(STATUS "RNDR_FORGE ${RNDR_FORGE}")
 message(STATUS "RNDR_FORGE_VALIDATION ${RNDR_FORGE_VALIDATION}")
 message(STATUS "RNDR_CANVAS ${RNDR_CANVAS}")
@@ -105,9 +118,11 @@ if (${RNDR_BUILD_TESTS})
     add_executable(rndr-test ${RNDR_TEST_FILES})
     rndr_deploy_runtime(rndr-test)
     target_include_directories(rndr-test PRIVATE src)
-    target_include_directories(rndr-test PRIVATE extern/catch2/include)
-    target_include_directories(rndr-test PRIVATE extern/catch2/include/catch2)
-    target_include_directories(rndr-test PRIVATE extern/glad/include)
+    # SYSTEM keeps the vendored Catch2 (and glad) headers out of the -Werror surface; GCC and
+    # Clang do not report warnings whose location is a system header.
+    target_include_directories(rndr-test SYSTEM PRIVATE extern/catch2/include)
+    target_include_directories(rndr-test SYSTEM PRIVATE extern/catch2/include/catch2)
+    target_include_directories(rndr-test SYSTEM PRIVATE extern/glad/include)
     target_link_libraries(rndr-test rndr)
     target_link_libraries(rndr-test rndr_warnings)
     target_link_libraries(rndr-test rndr_options)
@@ -123,13 +138,16 @@ if (${RNDR_BUILD_SAMPLES})
     # @formatter:on
     target_link_libraries(shared PUBLIC rndr opal)
 
-    add_executable(window-sample samples/window/window-sample.cpp)
-    target_link_libraries(window-sample PUBLIC shared imgui)
-    rndr_deploy_runtime(window-sample)
+    # Both samples render through Canvas, which does not exist in a Linux build.
+    if (${RNDR_CANVAS})
+        add_executable(window-sample samples/window/window-sample.cpp)
+        target_link_libraries(window-sample PUBLIC shared imgui)
+        rndr_deploy_runtime(window-sample)
 
-    add_executable(text-rendering-sample samples/text-rendering/text-rendering-sample.cpp)
-    target_link_libraries(text-rendering-sample PUBLIC shared imgui)
-    rndr_deploy_runtime(text-rendering-sample)
+        add_executable(text-rendering-sample samples/text-rendering/text-rendering-sample.cpp)
+        target_link_libraries(text-rendering-sample PUBLIC shared imgui)
+        rndr_deploy_runtime(text-rendering-sample)
+    endif ()
 
     if (${RNDR_FORGE})
         add_executable(modern-vulkan samples/modern-vulkan/modern-vulkan.cpp)
