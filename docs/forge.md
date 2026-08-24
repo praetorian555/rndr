@@ -298,9 +298,8 @@ about the failure is lost. Misuse of the API is reported the same way: `ErrorCod
 value that names nothing or a desc that asks for what this device cannot do, `ErrorCode::OutOfBounds` for a
 range that does not fit.
 
-This is the same convention `src/audio/` uses and the one Opal's own containers use - `DynamicArray::Create`,
-`TryAt`, `Opal::FileSystem` - which is where it came from. Canvas still throws; do not carry either
-convention across.
+This is the same convention `src/audio/` and Canvas use, and the one Opal's own containers use -
+`DynamicArray::Create`, `TryAt`, `Opal::FileSystem` - which is where it came from.
 
 Creation goes through a static `Create` rather than a constructor, since a constructor has no way to report
 without throwing. `Create` builds into a local object and hands it back, so a step that gives up part way

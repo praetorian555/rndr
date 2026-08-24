@@ -62,9 +62,8 @@ bug in the calling code rather than a runtime condition, so it asserts in a debu
 one. And `Play` and the per-sound setters were never fallible in the reporting sense: `Play` hands back an invalid
 handle when it cannot start, and every setter on a handle that no longer names a live sound quietly does nothing.
 
-**Canvas does not report failures this way.** It throws, and audio was the first user of `Rndr::ErrorCode` before
-Forge moved onto it. Do not take Canvas as the pattern when working in `src/audio/` or in `src/forge/`, or either of
-those as the pattern when working in Canvas.
+Canvas reports the same way: audio was the first user of `Rndr::ErrorCode`, Forge moved onto it, and Canvas
+followed, so a code added for one subsystem is visible to the others.
 
 ### Clips
 

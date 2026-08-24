@@ -21,8 +21,8 @@ Guessing at those produces code that compiles and is wrong.
 - [docs/forge.md](docs/forge.md) — conventions that hold across all of `src/forge/`: the empty-state /
   `IsValid()` contract, and the error strategy. Nothing in Forge throws. Objects are built by a static
   `Create` returning `Opal::Expected<T, Rndr::ErrorCode>`, anything else fallible returns an `Expected` or an
-  `ErrorCode`, and the detail goes to the log. Canvas throws, so following the surrounding code from there
-  will produce the wrong pattern.
+  `ErrorCode`, and the detail goes to the log. Canvas reports the same way — see the error handling section
+  of [docs/canvas.md](docs/canvas.md).
 
 - [docs/audio.md](docs/audio.md) — `src/audio/` reports the same way and got there first. `Rndr::ErrorCode` is
   shared between the two, so a code added for one is visible to the other.

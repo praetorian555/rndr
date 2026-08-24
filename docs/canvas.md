@@ -4,6 +4,23 @@ The Canvas API is a high-level rendering abstraction over OpenGL. It provides GP
 
 All types live in the `Rndr::Canvas` namespace.
 
+## Error handling
+
+Nothing in Canvas throws. Objects are built by a static `Create` (or a `From*` factory) returning
+`Opal::Expected<T, Rndr::ErrorCode>`, anything else fallible returns an `Expected` or an `ErrorCode`, and
+the reason is logged at error level so the code does not have to carry the detail. Misuse of the API is
+`ErrorCode::InvalidArgument`; a region, layer or mip level that does not fit is `ErrorCode::OutOfBounds`; a
+failing GL call maps through `GlErrorToErrorCode` in `rndr/canvas/gl-result.hpp`, which also carries the
+`RNDR_CANVAS_CHECK` macros that propagate codes inside the implementation. Forge and audio report the same
+way - see the error handling sections of [docs/forge.md](forge.md) and [docs/audio.md](audio.md).
+
+`ShaderCompiler` is the one exception to "nothing throws": it is shared between the rendering APIs and
+reports by throwing. The shader factories catch at that boundary and turn it into
+`ErrorCode::ShaderCompilationError`, so nothing that escapes Canvas is an exception.
+
+The snippets below unwrap results with `.GetValue()` for brevity; real code checks `HasValue()` first, or
+fails the way `samples/window/window-sample.cpp` does.
+
 ## Core Concepts
 
 ### Context
@@ -19,7 +36,7 @@ desc.color_format = Canvas::Format::RGBA8;
 desc.depth_stencil_format = Canvas::Format::D24S8;
 desc.vsync_enabled = true;
 
-auto context = Canvas::Context::CreateContext(window, desc);
+auto context = Canvas::Context::CreateContext(window, desc).GetValue();
 
 // In the game loop:
 // ... record and execute draw commands ...
@@ -74,13 +91,13 @@ Shaders are cross-compiled from Slang source to GLSL and linked into an OpenGL p
 
 ```cpp
 // Single source file with both vertex and fragment entry points.
-auto shader = Canvas::Shader::FromSource("shaders/pbr.slang", "PBR");
+auto shader = Canvas::Shader::FromSource("shaders/pbr.slang", "PBR").GetValue();
 
 // Separate vertex and fragment files.
-auto shader = Canvas::Shader::FromSources("shaders/vert.slang", "shaders/frag.slang");
+auto shader = Canvas::Shader::FromSources("shaders/vert.slang", "shaders/frag.slang").GetValue();
 
 // From in-memory source strings.
-auto shader = Canvas::Shader::FromSourceInMemory(slang_source);
+auto shader = Canvas::Shader::FromSourceInMemory(slang_source).GetValue();
 
 // Query reflection data.
 const auto& params = shader.GetParameters();
@@ -162,10 +179,10 @@ layout.Add(Canvas::Attrib::Position, Canvas::Format::Float3);
 layout.Add(Canvas::Attrib::Normal, Canvas::Format::Float3);
 layout.Add(Canvas::Attrib::UV, Canvas::Format::Float2);
 
-Canvas::Mesh mesh(layout, vertex_bytes, index_bytes, "Cube");
+auto mesh = Canvas::Mesh::Create(layout, vertex_bytes, index_bytes, "Cube").GetValue();
 
 // Dynamic mesh (pre-allocate, then append per frame).
-Canvas::Mesh dynamic_mesh(layout, max_vertices, max_indices, "DynamicMesh");
+auto dynamic_mesh = Canvas::Mesh::Create(layout, max_vertices, max_indices, "DynamicMesh").GetValue();
 
 // Each frame:
 dynamic_mesh.Clear();
@@ -188,7 +205,7 @@ desc.wrap_u = Canvas::TextureWrap::Repeat;
 desc.wrap_v = Canvas::TextureWrap::Repeat;
 desc.use_mips = true;
 
-auto texture = Canvas::Texture::FromFile("textures/brick.png", desc, true, "Brick");
+auto texture = Canvas::Texture::FromFile("textures/brick.png", desc, true, "Brick").GetValue();
 
 // Create programmatically.
 Canvas::TextureDesc rt_desc;
@@ -196,7 +213,7 @@ rt_desc.width = 1024;
 rt_desc.height = 1024;
 rt_desc.format = Canvas::Format::RGBA16F;
 
-Canvas::Texture hdr_texture(rt_desc, {}, "HDR Buffer");
+auto hdr_texture = Canvas::Texture::Create(rt_desc, {}, "HDR Buffer").GetValue();
 
 // Upload new data (whole base-mip Texture2D).
 texture.Update(pixel_data);
@@ -211,8 +228,9 @@ cubemap.UpdateLayer(face_pixels, /*face*/ 3);
 ```
 
 All update methods require the data view to be exactly `width * height * pixel_size` bytes for the
-targeted region/layer, and throw `Opal::InvalidArgumentException` otherwise. `Update`/`UpdateRegion`
-are Texture2D-only; `UpdateLayer` is for `Texture2DArray` and `CubeMap`.
+targeted region/layer, and report `ErrorCode::InvalidArgument` otherwise; a region, layer or mip level
+that does not fit is `ErrorCode::OutOfBounds`. `Update`/`UpdateRegion` are Texture2D-only; `UpdateLayer`
+is for `Texture2DArray` and `CubeMap`.
 
 Textures can also be read back to the CPU. Each `Read*` method allocates and returns an
 `Opal::DynamicArray<u8>` sized to the requested region/layer:
@@ -237,7 +255,7 @@ Wrap modes: `Clamp`, `Border`, `Repeat`, `MirrorRepeat`, `MirrorOnce`.
 General-purpose GPU data buffer for vertex, index, uniform, or storage usage.
 
 ```cpp
-Canvas::Buffer ssbo(Canvas::BufferUsage::Storage, byte_size, 0, init_data, "InstanceSSBO");
+auto ssbo = Canvas::Buffer::Create(Canvas::BufferUsage::Storage, byte_size, 0, init_data, "InstanceSSBO").GetValue();
 
 // Upload new data.
 ssbo.Update(new_data);
@@ -253,7 +271,7 @@ auto rt_desc = Canvas::RenderTargetDesc()
     .AddColor(1024, 1024, Canvas::Format::RGBA8)
     .SetDepthStencil(1024, 1024);
 
-Canvas::RenderTarget target(rt_desc, "GBuffer");
+auto target = Canvas::RenderTarget::Create(rt_desc, "GBuffer").GetValue();
 
 // Use in a draw list.
 draw_list.SetRenderTarget(target);
@@ -279,13 +297,13 @@ Canvas::TextureDesc face_desc;
 face_desc.width = 512;
 face_desc.height = 512;
 face_desc.type = Canvas::TextureType::CubeMap;
-Canvas::Texture cubemap(face_desc);
+auto cubemap = Canvas::Texture::Create(face_desc).GetValue();
 
 for (Rndr::i32 face = 0; face < 6; ++face)
 {
     // Render into one face of a cubemap the caller owns.
     auto face_target = Canvas::RenderTargetDesc().AddColor(cubemap, 0, face);
-    Canvas::RenderTarget target(face_target, "CubeFace");
+    auto target = Canvas::RenderTarget::Create(face_target, "CubeFace").GetValue();
 
     draw_list.SetRenderTarget(target);
     // ... render the face ...
@@ -303,7 +321,7 @@ which is what a shadow map pass wants.
 
 ```cpp
 auto shadow_desc = Canvas::RenderTargetDesc().SetDepthStencil(2048, 2048, Canvas::Format::D32F);
-Canvas::RenderTarget shadow_map(shadow_desc, "ShadowMap");
+auto shadow_map = Canvas::RenderTarget::Create(shadow_desc, "ShadowMap").GetValue();
 
 draw_list.SetRenderTarget(shadow_map);
 draw_list.ClearDepthStencil();
@@ -331,7 +349,7 @@ Canvas::TextureDesc desc;
 desc.width = bitmap.GetWidth();
 desc.height = bitmap.GetHeight();
 desc.format = bitmap.GetFormat();
-Canvas::Texture tex(desc, bitmap.GetDataView());
+auto tex = Canvas::Texture::Create(desc, bitmap.GetDataView()).GetValue();
 ```
 
 Supported formats: `R8`, `RG8`, `RGB8`, `RGBA8`, `SRGB8`, `SRGBA8`, `R16F`, `RG16F`, `RGBA16F`, `R32F`, `RG32F`, `RGBA32F`.
@@ -388,8 +406,8 @@ compute_list.Execute();
 GPU timestamp query. Records the moment the GPU reaches a point in the command stream, so you can measure how long GPU work took rather than how long the CPU took to submit it. One query is one point in time -- measuring a range takes two.
 
 ```cpp
-Canvas::TimestampQuery start("FrameStart");
-Canvas::TimestampQuery end("FrameEnd");
+auto start = Canvas::TimestampQuery::Create("FrameStart").GetValue();
+auto end = Canvas::TimestampQuery::Create("FrameEnd").GetValue();
 
 draw_list.WriteTimestamp(start);
 draw_list.Draw(mesh, brush);
@@ -419,14 +437,14 @@ Canvas::DrawCommandBuffer<Canvas::DrawIndexedCommand> cmd_buffer(1024);
 
 ## Built-in Renderers
 
-All built-in renderers follow the same pattern: construct with a Context reference, call `BeginFrame()` to reset per-frame state, issue draw calls, then call `Render(draw_list)` to record commands into a DrawList.
+All built-in renderers follow the same pattern: build with a static `Create` taking a Context reference, call `BeginFrame()` to reset per-frame state, issue draw calls, then call `Render(draw_list)` to record commands into a DrawList.
 
 ### ShapeRenderer
 
 Immediate-mode 2D shape drawing. Coordinates are in screen space (pixels). All geometry is batched into a single mesh per frame.
 
 ```cpp
-Canvas::ShapeRenderer shapes(context);
+auto shapes = Canvas::ShapeRenderer::Create(context).GetValue();
 
 // Each frame:
 shapes.BeginFrame();
@@ -457,7 +475,7 @@ Available shapes:
 Physically-based 3D renderer with directional and point lights. Uses a single shader with a `material_flags` bitmask to select which textures to sample, avoiding shader permutations. Instances sharing the same geometry and texture set are batched into a single instanced draw call via an SSBO.
 
 ```cpp
-Canvas::PbrRenderer pbr(context);
+auto pbr = Canvas::PbrRenderer::Create(context).GetValue();
 
 // Each frame:
 pbr.BeginFrame();
@@ -483,7 +501,7 @@ pbr.DrawSphere(model_transform, material, 1.0f, 1.0f, 32, 32);
 pbr.DrawMesh("helmet", mesh_data, model_transform, material);
 
 // Load and draw a model file (.gltf, .obj, etc. via assimp).
-auto model = pbr.LoadModel("models/helmet.gltf");
+auto model = pbr.LoadModel("models/helmet.gltf").GetValue();
 pbr.DrawModel("helmet", model, model_transform);
 
 // Submit to draw list.
@@ -507,8 +525,7 @@ Canvas::BitmapTextRendererDesc text_desc;
 text_desc.font_file_path = "fonts/roboto.ttf";
 text_desc.font_size = 32.0f;
 
-Canvas::BitmapTextRenderer text;
-text.Init(context, text_desc);
+auto text = Canvas::BitmapTextRenderer::Create(context, text_desc).GetValue();
 
 // Each frame:
 text.BeginFrame();
@@ -524,7 +541,7 @@ text.UpdateFontSize(48.0f);
 Renders an infinite ground-plane grid with colored axis lines (X in red, Z in blue).
 
 ```cpp
-Canvas::GridRenderer grid(context);
+auto grid = Canvas::GridRenderer::Create(context).GetValue();
 
 // Each frame (no BeginFrame needed):
 grid.Render(draw_list, view_matrix, projection_matrix);
@@ -535,7 +552,7 @@ grid.Render(draw_list, view_matrix, projection_matrix);
 Renders a skybox from a cubemap texture using a full-screen triangle.
 
 ```cpp
-Canvas::CubemapRenderer skybox(context);
+auto skybox = Canvas::CubemapRenderer::Create(context).GetValue();
 skybox.SetCubemap(cubemap_texture);
 
 // Each frame:
@@ -554,12 +571,12 @@ A minimal render loop drawing a PBR cube with a grid and skybox:
 #include "rndr/canvas/projections.hpp"
 
 // Setup (once).
-auto context = Canvas::Context::CreateContext(window);
-Canvas::PbrRenderer pbr(&context);
-Canvas::GridRenderer grid(&context);
-Canvas::CubemapRenderer skybox(&context);
+auto context = Canvas::Context::CreateContext(window).GetValue();
+auto pbr = Canvas::PbrRenderer::Create(&context).GetValue();
+auto grid = Canvas::GridRenderer::Create(&context).GetValue();
+auto skybox = Canvas::CubemapRenderer::Create(&context).GetValue();
 
-auto cubemap = Canvas::Texture::FromFile("textures/skybox.ktx");
+auto cubemap = Canvas::Texture::FromFile("textures/skybox.ktx").GetValue();
 skybox.SetCubemap(cubemap);
 
 Canvas::PbrMaterialDesc material;
