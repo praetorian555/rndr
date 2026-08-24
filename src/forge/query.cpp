@@ -24,7 +24,7 @@ Opal::Expected<bool, Rndr::ErrorCode> ReadQueryResults(const Rndr::Forge::Device
 {
     using Result = Opal::Expected<bool, Rndr::ErrorCode>;
 
-    const VkQueryResultFlags flags = VK_QUERY_RESULT_64_BIT | (wait ? VK_QUERY_RESULT_WAIT_BIT : 0u);
+    const VkQueryResultFlags flags = VK_QUERY_RESULT_64_BIT | (wait ? static_cast<VkQueryResultFlags>(VK_QUERY_RESULT_WAIT_BIT) : 0u);
     const VkResult result =
         vkGetQueryPoolResults(device.GetNativeDevice(), query_pool, first_query, query_count,
                               static_cast<size_t>(query_count) * sizeof(Rndr::u64), out_ticks, sizeof(Rndr::u64), flags);

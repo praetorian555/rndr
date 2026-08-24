@@ -11,7 +11,7 @@ Opal::Expected<Rndr::Forge::Fence, Rndr::ErrorCode> Rndr::Forge::Fence::Create(c
     using Result = Opal::Expected<Fence, ErrorCode>;
 
     const VkFenceCreateInfo fence_create_info = {.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO,
-                                                 .flags = create_signaled ? VK_FENCE_CREATE_SIGNALED_BIT : 0u};
+                                                 .flags = create_signaled ? static_cast<VkFenceCreateFlags>(VK_FENCE_CREATE_SIGNALED_BIT) : 0u};
 
     Fence fence;
     fence.m_device = device;
@@ -463,8 +463,9 @@ Opal::Expected<bool, Rndr::ErrorCode> Rndr::Forge::Semaphore::TryWait(u64 value,
     {
         return Result(timeline_status);
     }
+    const uint64_t wait_value = value;
     const VkSemaphoreWaitInfo wait_info = {
-        .sType = VK_STRUCTURE_TYPE_SEMAPHORE_WAIT_INFO, .semaphoreCount = 1, .pSemaphores = &m_semaphore, .pValues = &value};
+        .sType = VK_STRUCTURE_TYPE_SEMAPHORE_WAIT_INFO, .semaphoreCount = 1, .pSemaphores = &m_semaphore, .pValues = &wait_value};
     const VkResult result = vkWaitSemaphores(m_device->GetNativeDevice(), &wait_info, timeout);
     // VK_TIMEOUT is a success code here as well, for the reason Fence::TryWait gives above.
     if (result == VK_TIMEOUT)
@@ -513,10 +514,10 @@ Opal::Expected<Rndr::u64, Rndr::ErrorCode> Rndr::Forge::Semaphore::GetValue() co
     {
         return Result(timeline_status);
     }
-    u64 value = 0;
+    uint64_t value = 0;
     RNDR_FORGE_VK_CHECK_EXPECTED(vkGetSemaphoreCounterValue(m_device->GetNativeDevice(), m_semaphore, &value), "vkGetSemaphoreCounterValue",
                                  Result);
-    return Result(value);
+    return Result(static_cast<u64>(value));
 }
 
 Rndr::ErrorCode Rndr::Forge::Semaphore::WaitForAll(Opal::ArrayView<const SemaphoreWait> waits)
@@ -536,7 +537,7 @@ Opal::Expected<bool, Rndr::ErrorCode> Rndr::Forge::Semaphore::TryWaitForAll(Opal
     // The default allocator rather than the scratch one, for the reason Fence::WaitForAll gives above.
     // vkWaitSemaphores wants the semaphores and their values as two parallel arrays.
     Opal::DynamicArray<VkSemaphore> native_semaphores(waits.GetSize());
-    Opal::DynamicArray<u64> values(waits.GetSize());
+    Opal::DynamicArray<uint64_t> values(waits.GetSize());
     for (i32 i = 0; i < waits.GetSize(); ++i)
     {
         const SemaphoreWait& wait = waits[i];

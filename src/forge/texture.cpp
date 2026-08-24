@@ -295,7 +295,7 @@ Rndr::ErrorCode Rndr::Forge::Texture::Init(const Device& device, const TextureDe
     RNDR_FORGE_TRANSLATE(sample_count, ToVkSampleCount(m_desc.sample_count), "TextureDesc::sample_count");
     const VkImageCreateInfo image_create_info = {
         .sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
-        .flags = wants_cube_view ? VK_IMAGE_CREATE_CUBE_COMPATIBLE_BIT : 0u,
+        .flags = wants_cube_view ? static_cast<VkImageCreateFlags>(VK_IMAGE_CREATE_CUBE_COMPATIBLE_BIT) : 0u,
         .imageType = image_type,
         .format = ToVkFormat(m_desc.format),
         .extent = {.width = m_desc.width, .height = m_desc.height, .depth = m_desc.depth},

@@ -1049,7 +1049,8 @@ Rndr::ErrorCode Rndr::Forge::CommandBuffer::CmdSetLineWidth(f32 width)
 Rndr::ErrorCode Rndr::Forge::CommandBuffer::CmdBindVertexBuffer(const Buffer& buffer, u32 binding, u64 offset)
 {
     const VkBuffer native_buffer = buffer.GetNativeBuffer();
-    vkCmdBindVertexBuffers(m_native_command_buffer, binding, 1, &native_buffer, &offset);
+    const VkDeviceSize native_offset = offset;
+    vkCmdBindVertexBuffers(m_native_command_buffer, binding, 1, &native_buffer, &native_offset);
     return ErrorCode::Success;
 }
 
