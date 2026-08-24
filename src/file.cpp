@@ -218,11 +218,14 @@ Rndr::PixelFormat VkFormatToPixelFormat(ktx_uint32_t vk_format)
 }  // namespace
 #endif
 
-Rndr::Bitmap Rndr::File::LoadImage(const Opal::StringUtf8& file_path, bool flip_vertically, bool generate_mips)
+Opal::Expected<Rndr::Bitmap, Rndr::ErrorCode> Rndr::File::LoadImage(const Opal::StringUtf8& file_path, bool flip_vertically,
+                                                                    bool generate_mips)
 {
+    using ResultType = Opal::Expected<Rndr::Bitmap, Rndr::ErrorCode>;
     if (!Opal::Exists(file_path))
     {
-        throw Opal::Exception("File does not exist!");
+        RNDR_LOG_ERROR("Image file does not exist: {}", *file_path);
+        return ResultType(ErrorCode::FileNotFound);
     }
 
     // Determine file extension.
@@ -235,7 +238,8 @@ Rndr::Bitmap Rndr::File::LoadImage(const Opal::StringUtf8& file_path, bool flip_
         const KTX_error_code result = ktxTexture_CreateFromNamedFile(*file_path, KTX_TEXTURE_CREATE_LOAD_IMAGE_DATA_BIT, &ktx_texture);
         if (result != KTX_SUCCESS || ktx_texture == nullptr)
         {
-            throw Opal::Exception("Failed to create ktx texture!");
+            RNDR_LOG_ERROR("Failed to create ktx texture from file: {}", *file_path);
+            return ResultType(ErrorCode::CorruptData);
         }
 
         const ktx_uint32_t vk_format = ktxTexture_GetVkFormat(ktx_texture);
@@ -247,15 +251,20 @@ Rndr::Bitmap Rndr::File::LoadImage(const Opal::StringUtf8& file_path, bool flip_
         u8* data = ktxTexture_GetData(ktx_texture);
         const u64 data_size = ktxTexture_GetDataSize(ktx_texture);
 
-        Bitmap bitmap(width, height, depth, pixel_format, mip_count, {data, data_size});
+        ResultType bitmap_result = Bitmap::Create(width, height, depth, pixel_format, mip_count, {data, data_size});
         ktxTexture_Destroy(ktx_texture);
+        if (!bitmap_result.HasValue())
+        {
+            return bitmap_result;
+        }
 
+        Bitmap bitmap = std::move(bitmap_result).GetValue();
         if (generate_mips && mip_count <= 1)
         {
             bitmap.GenerateMips();
         }
 
-        return bitmap;
+        return ResultType(std::move(bitmap));
     }
 #endif
 
@@ -275,7 +284,8 @@ Rndr::Bitmap Rndr::File::LoadImage(const Opal::StringUtf8& file_path, bool flip_
         f32* data = stbi_loadf(*file_path, &width, &height, &channels_in_file, k_desired_channels);
         if (data == nullptr)
         {
-            throw Opal::Exception("Failed to load HDR image");
+            RNDR_LOG_ERROR("Failed to load HDR image {}: {}", *file_path, stbi_failure_reason());
+            return ResultType(ErrorCode::CorruptData);
         }
         pixel_data = reinterpret_cast<u8*>(data);
         pixel_format = PixelFormat::R32G32B32A32_SFLOAT;
@@ -286,7 +296,8 @@ Rndr::Bitmap Rndr::File::LoadImage(const Opal::StringUtf8& file_path, bool flip_
         u16* data = reinterpret_cast<u16*>(stbi_load_16(*file_path, &width, &height, &channels_in_file, k_desired_channels));
         if (data == nullptr)
         {
-            throw Opal::Exception("Failed to load 16-bit image");
+            RNDR_LOG_ERROR("Failed to load 16-bit image {}: {}", *file_path, stbi_failure_reason());
+            return ResultType(ErrorCode::CorruptData);
         }
         pixel_data = reinterpret_cast<u8*>(data);
         pixel_format = PixelFormat::R16G16B16A16_UNORM;
@@ -297,21 +308,27 @@ Rndr::Bitmap Rndr::File::LoadImage(const Opal::StringUtf8& file_path, bool flip_
         u8* data = stbi_load(*file_path, &width, &height, &channels_in_file, k_desired_channels);
         if (data == nullptr)
         {
-            throw Opal::Exception("Failed to load image");
+            RNDR_LOG_ERROR("Failed to load image {}: {}", *file_path, stbi_failure_reason());
+            return ResultType(ErrorCode::CorruptData);
         }
         pixel_data = data;
         pixel_format = PixelFormat::R8G8B8A8_SRGB;
         data_size = static_cast<u64>(width) * height * k_desired_channels * sizeof(u8);
     }
 
-    Bitmap bitmap(width, height, 1, pixel_format, 1, {pixel_data, data_size});
+    ResultType bitmap_result = Bitmap::Create(width, height, 1, pixel_format, 1, {pixel_data, data_size});
     stbi_image_free(pixel_data);
+    if (!bitmap_result.HasValue())
+    {
+        return bitmap_result;
+    }
 
+    Bitmap bitmap = std::move(bitmap_result).GetValue();
     if (generate_mips)
     {
         bitmap.GenerateMips();
     }
 
-    return bitmap;
+    return ResultType(std::move(bitmap));
 }
 

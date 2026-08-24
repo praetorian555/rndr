@@ -1,5 +1,8 @@
 #pragma once
 
+#include "opal/container/expected.h"
+
+#include "rndr/error-codes.hpp"
 #include "rndr/graphics-types.hpp"
 #include "rndr/pixel-format.hpp"
 
@@ -27,8 +30,11 @@ public:
      * @param mip_count How many mip maps there are for this bitmap. Default is 1.
      * @param data Optional data to initialize the bitmap with. If not specified, the bitmap will be
      * initialized with zeros.
+     * @return The bitmap, or ErrorCode::InvalidArgument for a non-positive dimension, a mip count below 1
+     * or a pixel format pixels cannot be accessed in. The reason is logged at error level.
      */
-    Bitmap(i32 width, i32 height, i32 depth, PixelFormat pixel_format, i32 mip_count, const Opal::ArrayView<u8>& data = {});
+    [[nodiscard]] static Opal::Expected<Bitmap, ErrorCode> Create(i32 width, i32 height, i32 depth, PixelFormat pixel_format,
+                                                                  i32 mip_count = 1, const Opal::ArrayView<u8>& data = {});
 
     void GenerateMips();
 
@@ -57,19 +63,19 @@ public:
     [[nodiscard]] u64 GetPixelSize() const;
 
     /**
-     * Get size of row in bytes.
+     * Get size of row in bytes. The mip level must exist.
      * @return Returns size of row in bytes.
      */
     [[nodiscard]] u64 GetRowSize(i32 mip_level = 0) const;
 
     /**
-     * Get size of the bitmap in bytes but only of the first plane.
+     * Get size of the bitmap in bytes but only of the first plane. The mip level must exist.
      * @return Returns size in bytes.
      */
     [[nodiscard]] u64 GetSize2D(i32 mip_level = 0) const;
 
     /**
-     * Get size of the bitmap in bytes including depth.
+     * Get size of the bitmap in bytes including depth. The mip level must exist.
      * @return Returns size in bytes.
      */
     [[nodiscard]] u64 GetSize3D(i32 mip_level = 0) const;
@@ -81,7 +87,7 @@ public:
     [[nodiscard]] u64 GetTotalSize() const;
 
     /**
-     * Offset in the pixel array where the specified mip level starts.
+     * Offset in the pixel array where the specified mip level starts. The mip level must exist.
      * @param mip_level Mip level.
      * @return Offset in bytes.
      */

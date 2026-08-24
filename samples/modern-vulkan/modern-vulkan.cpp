@@ -165,8 +165,8 @@ void Run()
         Opal::Paths::Combine(RNDR_CORE_ASSETS_DIR, "sample-models", "Suzanne", "glTF", "Suzanne_BaseColor.png").GetValue();
     const Opal::StringUtf8 metallic_roughness_texture_path =
         Opal::Paths::Combine(RNDR_CORE_ASSETS_DIR, "sample-models", "Suzanne", "glTF", "Suzanne_MetallicRoughness.png").GetValue();
-    const Rndr::Bitmap albedo_bitmap = Rndr::File::LoadImage(albedo_texture_path, true, true);
-    const Rndr::Bitmap mr_bitmap = Rndr::File::LoadImage(metallic_roughness_texture_path, true, true);
+    const Rndr::Bitmap albedo_bitmap = Require(Rndr::File::LoadImage(albedo_texture_path, true, true));
+    const Rndr::Bitmap mr_bitmap = Require(Rndr::File::LoadImage(metallic_roughness_texture_path, true, true));
     const Rndr::Forge::Texture albedo_texture = Require(Rndr::Forge::Texture::Create(device, graphics_queue, albedo_bitmap));
     const Rndr::Forge::Texture mr_texture = Require(Rndr::Forge::Texture::Create(device, graphics_queue, mr_bitmap));
     const Rndr::Forge::Sampler albedo_sampler =

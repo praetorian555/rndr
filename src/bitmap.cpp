@@ -2,42 +2,48 @@
 
 #include "stb_image/stb_image_resize2.h"
 
-Rndr::Bitmap::Bitmap(i32 width, i32 height, i32 depth, PixelFormat pixel_format, i32 mip_count, const Opal::ArrayView<u8>& data)
-    : m_width(width), m_height(height), m_depth(depth), m_mip_count(mip_count), m_pixel_format(pixel_format)
+#include "rndr/log.hpp"
+
+Opal::Expected<Rndr::Bitmap, Rndr::ErrorCode> Rndr::Bitmap::Create(i32 width, i32 height, i32 depth, PixelFormat pixel_format,
+                                                                   i32 mip_count, const Opal::ArrayView<u8>& data)
 {
     if (width <= 0 || height <= 0 || depth <= 0 || mip_count < 1 || !IsPixelFormatSupported(pixel_format))
     {
-        throw Opal::Exception("Invalid input argument when creating bitmap");
+        RNDR_LOG_ERROR("Invalid input argument when creating bitmap");
+        return Opal::Expected<Bitmap, ErrorCode>(ErrorCode::InvalidArgument);
     }
 
-    m_comp_count = static_cast<i32>(Rndr::GetComponentCount(pixel_format));
-    const u64 buffer_size = GetTotalSize();
-    m_data.Resize(buffer_size);
+    Bitmap bitmap;
+    bitmap.m_width = width;
+    bitmap.m_height = height;
+    bitmap.m_depth = depth;
+    bitmap.m_mip_count = mip_count;
+    bitmap.m_pixel_format = pixel_format;
+    bitmap.m_comp_count = static_cast<i32>(Rndr::GetComponentCount(pixel_format));
+    const u64 buffer_size = bitmap.GetTotalSize();
+    bitmap.m_data.Resize(buffer_size);
     if (!data.IsEmpty())
     {
         const u64 copy_size = data.GetSize() < buffer_size ? data.GetSize() : buffer_size;
-        memcpy(m_data.GetData(), data.GetData(), copy_size);
+        memcpy(bitmap.m_data.GetData(), data.GetData(), copy_size);
     }
 
     if (IsLowPrecisionFormat(pixel_format))
     {
-        m_get_pixel_func = &Bitmap::GetPixelUnsignedByte;
-        m_set_pixel_func = &Bitmap::SetPixelUnsignedByte;
+        bitmap.m_get_pixel_func = &Bitmap::GetPixelUnsignedByte;
+        bitmap.m_set_pixel_func = &Bitmap::SetPixelUnsignedByte;
     }
     else if (IsMediumPrecisionFormat(pixel_format))
     {
-        m_get_pixel_func = &Bitmap::GetPixelUnsignedShort;
-        m_set_pixel_func = &Bitmap::SetPixelUnsignedShort;
-    }
-    else if (IsHighPrecisionFormat(pixel_format))
-    {
-        m_get_pixel_func = &Bitmap::GetPixelFloat;
-        m_set_pixel_func = &Bitmap::SetPixelFloat;
+        bitmap.m_get_pixel_func = &Bitmap::GetPixelUnsignedShort;
+        bitmap.m_set_pixel_func = &Bitmap::SetPixelUnsignedShort;
     }
     else
     {
-        RNDR_ASSERT(false, "Unsupported pixel format precision!");
+        bitmap.m_get_pixel_func = &Bitmap::GetPixelFloat;
+        bitmap.m_set_pixel_func = &Bitmap::SetPixelFloat;
     }
+    return Opal::Expected<Bitmap, ErrorCode>(std::move(bitmap));
 }
 
 void Rndr::Bitmap::GenerateMips()
@@ -108,20 +114,14 @@ Rndr::u64 Rndr::Bitmap::GetPixelSize() const
 
 Rndr::u64 Rndr::Bitmap::GetRowSize(i32 mip_level) const
 {
-    if (mip_level >= m_mip_count)
-    {
-        throw Opal::Exception("Requested mip level does not exist");
-    }
+    RNDR_ASSERT(mip_level < m_mip_count, "Requested mip level does not exist!");
     const i32 width = Opal::Max(1, m_width >> mip_level);
     return width * GetPixelSize();
 }
 
 Rndr::u64 Rndr::Bitmap::GetSize2D(i32 mip_level) const
 {
-    if (mip_level >= m_mip_count)
-    {
-        throw Opal::Exception("Requested mip level does not exist");
-    }
+    RNDR_ASSERT(mip_level < m_mip_count, "Requested mip level does not exist!");
     const i32 width = Opal::Max(1, m_width >> mip_level);
     const i32 height = Opal::Max(1, m_height >> mip_level);
     return width * height * GetPixelSize();
@@ -129,10 +129,7 @@ Rndr::u64 Rndr::Bitmap::GetSize2D(i32 mip_level) const
 
 Rndr::u64 Rndr::Bitmap::GetSize3D(i32 mip_level) const
 {
-    if (mip_level >= m_mip_count)
-    {
-        throw Opal::Exception("Requested mip level does not exist");
-    }
+    RNDR_ASSERT(mip_level < m_mip_count, "Requested mip level does not exist!");
     const i32 width = Opal::Max(1, m_width >> mip_level);
     const i32 height = Opal::Max(1, m_height >> mip_level);
     const i32 depth = Opal::Max(1, m_depth >> mip_level);
@@ -157,10 +154,7 @@ Rndr::u64 Rndr::Bitmap::GetTotalSize() const
 
 Rndr::u64 Rndr::Bitmap::GetMipLevelOffset(i32 mip_level) const
 {
-    if (mip_level >= m_mip_count)
-    {
-        throw Opal::Exception("Invalid mip level!");
-    }
+    RNDR_ASSERT(mip_level < m_mip_count, "Requested mip level does not exist!");
     if (mip_level == 0)
     {
         return 0;

@@ -73,8 +73,12 @@ void Rndr::Canvas::BitmapTextRenderer::UpdateFontAtlas()
     }
 
     // Useful for debugging to dump rasterized atlas
-    const Rndr::Bitmap bitmap(k_atlas_width, k_atlas_height, 1, Rndr::PixelFormat::R8_UNORM, 1, Opal::AsWritableBytes(m_atlas_data));
-    Rndr::File::SaveImage(bitmap, "atlas.png");
+    const auto bitmap_result =
+        Rndr::Bitmap::Create(k_atlas_width, k_atlas_height, 1, Rndr::PixelFormat::R8_UNORM, 1, Opal::AsWritableBytes(m_atlas_data));
+    if (bitmap_result.HasValue())
+    {
+        Rndr::File::SaveImage(bitmap_result.GetValue(), "atlas.png");
+    }
 
     const TextureDesc k_texture_desc{
         .width = k_atlas_width, .height = k_atlas_height, .type = TextureType::Texture2D, .format = Format::R8};

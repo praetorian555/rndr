@@ -99,16 +99,14 @@ bool SaveImage(const Bitmap& bitmap, const Opal::StringUtf8& file_path);
  * @param generate_mips If true, mip maps will be generated. For KTX files, mips are not generated
  * if they are already present in the file.
  *
- * @return Returns a valid Bitmap.
- * @throw Opal::Exception if file does not exist or if there was a problem loading the data.
+ * @return The bitmap, or ErrorCode::FileNotFound when the path names nothing, or ErrorCode::CorruptData for
+ * a file no loader here could decode. The reason is logged at error level.
  */
-[[nodiscard]] Bitmap LoadImage(const Opal::StringUtf8& file_path, bool flip_vertically, bool generate_mips);
+[[nodiscard]] Opal::Expected<Bitmap, ErrorCode> LoadImage(const Opal::StringUtf8& file_path, bool flip_vertically, bool generate_mips);
 
 #if RNDR_AUDIO
 /**
  * Load an audio clip from a file. The extension picks the decoder: .wav or .ogg (Vorbis). Mono and stereo only.
- *
- * Unlike the image loaders above, this reports failure by code rather than by throwing - see docs/audio.md.
  *
  * @param file_path Absolute or relative path to the audio file.
  * @return The clip, or ErrorCode::FileNotFound when the path names nothing, ErrorCode::UnsupportedFormat for an
