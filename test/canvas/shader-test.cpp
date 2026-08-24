@@ -636,11 +636,10 @@ TEST_CASE("Canvas Shader", "[canvas][shader]")
         REQUIRE(clone.GetNativeHandle() != shader.GetNativeHandle());
     }
 
-    SECTION("Clone of invalid shader returns invalid")
+    SECTION("Clone of invalid shader reports InvalidArgument")
     {
         Rndr::Canvas::Shader const shader;
-        Rndr::Canvas::Shader const clone = CanvasTest::Unwrap(shader.Clone());
-        REQUIRE_FALSE(clone.IsValid());
+        REQUIRE(shader.Clone().GetError() == Rndr::ErrorCode::InvalidArgument);
     }
 
     SECTION("Two shaders from same source have different handles")
