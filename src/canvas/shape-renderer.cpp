@@ -37,7 +37,11 @@ float4 FragmentMain(VertexOutput in)
 Rndr::Canvas::ShapeRenderer::ShapeRenderer(Opal::Ref<Context> context)
     : m_context(std::move(context))
 {
-    m_shader = Shader::FromSourceInMemory(k_shader_source, "Shape Renderer");
+    auto shader_result = Shader::FromSourceInMemory(k_shader_source, "Shape Renderer");
+    if (shader_result.HasValue())
+    {
+        m_shader = std::move(shader_result).GetValue();
+    }
     RNDR_ASSERT(m_shader.IsValid(), "Failed to create ShapeRenderer shader!");
 
     const VertexLayout vertex_layout = m_shader.GetVertexLayout().Clone();
@@ -49,7 +53,7 @@ Rndr::Canvas::ShapeRenderer::ShapeRenderer(Opal::Ref<Context> context)
     RNDR_ASSERT(m_mesh.IsValid(), "Failed to create ShapeRenderer mesh!");
 
     m_brush = Brush(BrushDesc{.cull_mode = CullMode::None});
-    m_brush.SetShader(m_shader);
+    (void)m_brush.SetShader(m_shader);
     RNDR_ASSERT(m_brush.IsValid(), "Failed to create ShapeRenderer brush!");
 }
 
@@ -75,7 +79,7 @@ void Rndr::Canvas::ShapeRenderer::Render(DrawList& draw_list)
     const f32 height = static_cast<f32>(m_context->GetHeight());
     const Matrix4x4f mvp = Orthographic(0, width, 0, height, -1.0f, 1.0f);
 
-    m_brush.SetUniform("mvp", mvp);
+    (void)m_brush.SetUniform("mvp", mvp);
 
     draw_list.Draw(m_mesh, m_brush);
 }

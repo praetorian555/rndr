@@ -66,7 +66,7 @@ Opal::u64 Opal::Hasher<Rndr::Canvas::PbrRenderer::BatchKey>::operator()(const Rn
 Rndr::Canvas::PbrRenderer::PbrRenderer(Opal::Ref<Context> context) : m_context(std::move(context))
 {
     const Opal::StringUtf8 shader_path = Opal::Paths::Combine(RNDR_CORE_ASSETS_DIR, "shaders", "canvas-pbr.slang").GetValue();
-    m_shader = Shader::FromSource(shader_path, "PBR Renderer");
+    m_shader = UnwrapOrThrow(Shader::FromSource(shader_path, "PBR Renderer"), "Failed to create PbrRenderer shader");
     RNDR_ASSERT(m_shader.IsValid(), "Failed to create PbrRenderer shader!");
 
     // 1x1 white dummy texture for unused texture slots.
@@ -248,7 +248,7 @@ void Rndr::Canvas::PbrRenderer::AddDrawEntry(const Opal::StringUtf8& geometry_ke
     {
         BatchData data;
         data.brush = Brush(BrushDesc{.depth_test = true, .depth_write = true}, "PBR Renderer - " + material.material_name.Clone());
-        data.brush.SetShader(m_shader);
+        (void)data.brush.SetShader(m_shader);
         data.instance_buffer = UnwrapOrThrow(Buffer::Create(BufferUsage::Storage, k_max_instance_count * sizeof(InstanceData), 0, {},
                                                             "PBR Renderer - " + material.material_name.Clone() + " - Instance Buffer"),
                                              "Failed to create PBR instance buffer");
@@ -288,29 +288,29 @@ void Rndr::Canvas::PbrRenderer::Render(DrawList& draw_list)
 
         Brush& brush = batch_data.brush;
 
-        brush.SetUniform("draw_flags", m_draw_flags);
+        (void)brush.SetUniform("draw_flags", m_draw_flags);
 
         // Set per-frame uniforms on this batch's brush.
-        brush.SetUniform("view_projection", m_view_projection);
-        brush.SetUniform("camera_position", m_camera_position);
+        (void)brush.SetUniform("view_projection", m_view_projection);
+        (void)brush.SetUniform("camera_position", m_camera_position);
 
         const u32 dir_count = Opal::Min(static_cast<u32>(m_directional_lights.GetSize()), k_max_light_count);
-        brush.SetUniform("directional_light_count", dir_count);
+        (void)brush.SetUniform("directional_light_count", dir_count);
         for (u32 i = 0; i < dir_count; ++i)
         {
             const Vector4f dir = {m_directional_lights[i].direction.x, m_directional_lights[i].direction.y,
                                   m_directional_lights[i].direction.z, 0.0f};
-            brush.SetUniform("directional_light_directions", static_cast<i32>(i), dir);
-            brush.SetUniform("directional_light_colors", static_cast<i32>(i), m_directional_lights[i].color);
+            (void)brush.SetUniform("directional_light_directions", static_cast<i32>(i), dir);
+            (void)brush.SetUniform("directional_light_colors", static_cast<i32>(i), m_directional_lights[i].color);
         }
 
         const u32 point_count = Opal::Min(static_cast<u32>(m_point_lights.GetSize()), k_max_light_count);
-        brush.SetUniform("point_light_count", point_count);
+        (void)brush.SetUniform("point_light_count", point_count);
         for (u32 i = 0; i < point_count; ++i)
         {
             const Vector4f pos = {m_point_lights[i].position.x, m_point_lights[i].position.y, m_point_lights[i].position.z, 0.0f};
-            brush.SetUniform("point_light_positions", static_cast<i32>(i), pos);
-            brush.SetUniform("point_light_colors", static_cast<i32>(i), m_point_lights[i].color);
+            (void)brush.SetUniform("point_light_positions", static_cast<i32>(i), pos);
+            (void)brush.SetUniform("point_light_colors", static_cast<i32>(i), m_point_lights[i].color);
         }
 
         Canvas::Mesh* mesh = nullptr;

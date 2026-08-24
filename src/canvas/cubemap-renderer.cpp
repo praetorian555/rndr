@@ -38,7 +38,11 @@ float4 FragmentMain(VertexOutput in)
 Rndr::Canvas::CubemapRenderer::CubemapRenderer(Opal::Ref<Context> context)
     : m_context(std::move(context))
 {
-    m_shader = Shader::FromSourceInMemory(k_shader_source, "Cube Map Renderer");
+    auto shader_result = Shader::FromSourceInMemory(k_shader_source, "Cube Map Renderer");
+    if (shader_result.HasValue())
+    {
+        m_shader = std::move(shader_result).GetValue();
+    }
     RNDR_ASSERT(m_shader.IsValid(), "Failed to create CubemapRenderer shader!");
 
     const VertexLayout vertex_layout = m_shader.GetVertexLayout().Clone();
@@ -63,7 +67,7 @@ Rndr::Canvas::CubemapRenderer::CubemapRenderer(Opal::Ref<Context> context)
     RNDR_ASSERT(m_mesh.IsValid(), "Failed to create CubemapRenderer mesh!");
 
     m_brush = Brush(BrushDesc{.depth_test = false, .depth_write = false, .cull_mode = CullMode::None});
-    m_brush.SetShader(m_shader);
+    (void)m_brush.SetShader(m_shader);
     RNDR_ASSERT(m_brush.IsValid(), "Failed to create CubemapRenderer brush!");
 }
 
@@ -96,6 +100,6 @@ void Rndr::Canvas::CubemapRenderer::SetEquirectangular(const Opal::StringUtf8& f
 
 void Rndr::Canvas::CubemapRenderer::Render(DrawList& draw_list, const Matrix4x4f& inverse_vp)
 {
-    m_brush.SetUniform("inverse_vp", inverse_vp);
+    (void)m_brush.SetUniform("inverse_vp", inverse_vp);
     draw_list.Draw(m_mesh, m_brush);
 }

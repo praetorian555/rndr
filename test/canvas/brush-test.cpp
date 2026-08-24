@@ -219,9 +219,9 @@ TEST_CASE("Canvas Brush", "[canvas][brush]")
 
     SECTION("Brush with shader is valid")
     {
-        Rndr::Canvas::Shader const shader = Rndr::Canvas::Shader::FromSourceInMemory(k_simple_shader);
+        Rndr::Canvas::Shader const shader = CanvasTest::Unwrap(Rndr::Canvas::Shader::FromSourceInMemory(k_simple_shader));
         Rndr::Canvas::Brush brush;
-        brush.SetShader(shader);
+        REQUIRE(brush.SetShader(shader) == Rndr::ErrorCode::Success);
         REQUIRE(brush.IsValid());
         REQUIRE(brush.GetShader() == &shader);
     }
@@ -279,20 +279,20 @@ TEST_CASE("Canvas Brush", "[canvas][brush]")
         brush.SetScissorTest(true);
         REQUIRE(brush.GetDesc().scissor_test == true);
 
-        brush.SetScissor(10, 20, 100, 200);
+        REQUIRE(brush.SetScissor(10, 20, 100, 200) == Rndr::ErrorCode::Success);
         REQUIRE(brush.GetDesc().scissor_x == 10);
         REQUIRE(brush.GetDesc().scissor_y == 20);
         REQUIRE(brush.GetDesc().scissor_width == 100);
         REQUIRE(brush.GetDesc().scissor_height == 200);
 
-        REQUIRE_THROWS(brush.SetScissor(0, 0, -1, 10));
+        REQUIRE(brush.SetScissor(0, 0, -1, 10) == Rndr::ErrorCode::InvalidArgument);
     }
 
     SECTION("SetUniform stores value by name")
     {
         Rndr::Canvas::Brush brush;
         const float value = 42.0f;
-        brush.SetUniform("brightness", value);
+        REQUIRE(brush.SetUniform("brightness", value) == Rndr::ErrorCode::Success);
 
         REQUIRE(brush.GetUniforms().GetSize() == 1);
         REQUIRE(brush.GetUniforms()[0].name == "brightness");
@@ -306,8 +306,8 @@ TEST_CASE("Canvas Brush", "[canvas][brush]")
     SECTION("SetUniform updates existing binding")
     {
         Rndr::Canvas::Brush brush;
-        brush.SetUniform("value", 1.0f);
-        brush.SetUniform("value", 2.0f);
+        REQUIRE(brush.SetUniform("value", 1.0f) == Rndr::ErrorCode::Success);
+        REQUIRE(brush.SetUniform("value", 2.0f) == Rndr::ErrorCode::Success);
 
         REQUIRE(brush.GetUniforms().GetSize() == 1);
 
@@ -329,7 +329,7 @@ TEST_CASE("Canvas Brush", "[canvas][brush]")
         mvp.data[15] = 1.0f;
 
         Rndr::Canvas::Brush brush;
-        brush.SetUniform("mvp", mvp);
+        REQUIRE(brush.SetUniform("mvp", mvp) == Rndr::ErrorCode::Success);
 
         REQUIRE(brush.GetUniforms().GetSize() == 1);
         REQUIRE(brush.GetUniforms()[0].data.GetSize() == sizeof(MVP));
@@ -343,9 +343,9 @@ TEST_CASE("Canvas Brush", "[canvas][brush]")
     SECTION("Multiple uniforms")
     {
         Rndr::Canvas::Brush brush;
-        brush.SetUniform("alpha", 0.5f);
-        brush.SetUniform("scale", 2.0f);
-        brush.SetUniform("offset", 10);
+        REQUIRE(brush.SetUniform("alpha", 0.5f) == Rndr::ErrorCode::Success);
+        REQUIRE(brush.SetUniform("scale", 2.0f) == Rndr::ErrorCode::Success);
+        REQUIRE(brush.SetUniform("offset", 10) == Rndr::ErrorCode::Success);
 
         REQUIRE(brush.GetUniforms().GetSize() == 3);
         REQUIRE(brush.GetUniforms()[0].name == "alpha");
@@ -402,11 +402,11 @@ TEST_CASE("Canvas Brush", "[canvas][brush]")
 
     SECTION("Move transfers bindings")
     {
-        Rndr::Canvas::Shader const shader = Rndr::Canvas::Shader::FromSourceInMemory(k_simple_shader);
+        Rndr::Canvas::Shader const shader = CanvasTest::Unwrap(Rndr::Canvas::Shader::FromSourceInMemory(k_simple_shader));
 
         Rndr::Canvas::Brush brush;
-        brush.SetShader(shader);
-        brush.SetUniform("alpha", 0.5f);
+        REQUIRE(brush.SetShader(shader) == Rndr::ErrorCode::Success);
+        REQUIRE(brush.SetUniform("alpha", 0.5f) == Rndr::ErrorCode::Success);
 
         Rndr::Canvas::TextureDesc tex_desc;
         tex_desc.width = 2;
@@ -426,13 +426,13 @@ TEST_CASE("Canvas Brush", "[canvas][brush]")
 
     SECTION("Clone preserves bindings")
     {
-        Rndr::Canvas::Shader const shader = Rndr::Canvas::Shader::FromSourceInMemory(k_simple_shader);
+        Rndr::Canvas::Shader const shader = CanvasTest::Unwrap(Rndr::Canvas::Shader::FromSourceInMemory(k_simple_shader));
 
         Rndr::Canvas::Brush brush;
-        brush.SetShader(shader);
-        brush.SetUniform("brightness", 0.8f);
+        REQUIRE(brush.SetShader(shader) == Rndr::ErrorCode::Success);
+        REQUIRE(brush.SetUniform("brightness", 0.8f) == Rndr::ErrorCode::Success);
 
-        Rndr::Canvas::Brush const clone = brush.Clone();
+        Rndr::Canvas::Brush const clone = CanvasTest::Unwrap(brush.Clone());
         REQUIRE(clone.IsValid());
         REQUIRE(clone.GetUniforms().GetSize() == 1);
         REQUIRE(clone.GetUniforms()[0].name == "brightness");
@@ -448,13 +448,13 @@ TEST_CASE("Canvas Brush", "[canvas][brush]")
 
     SECTION("Move constructor transfers desc")
     {
-        Rndr::Canvas::Shader const shader = Rndr::Canvas::Shader::FromSourceInMemory(k_simple_shader);
+        Rndr::Canvas::Shader const shader = CanvasTest::Unwrap(Rndr::Canvas::Shader::FromSourceInMemory(k_simple_shader));
 
         Rndr::Canvas::BrushDesc desc;
         desc.depth_test = true;
         desc.cull_mode = Rndr::Canvas::CullMode::None;
         Rndr::Canvas::Brush brush(desc);
-        brush.SetShader(shader);
+        REQUIRE(brush.SetShader(shader) == Rndr::ErrorCode::Success);
 
         Rndr::Canvas::Brush const moved(std::move(brush));
         REQUIRE(moved.IsValid());
@@ -465,10 +465,10 @@ TEST_CASE("Canvas Brush", "[canvas][brush]")
 
     SECTION("Move assignment transfers desc")
     {
-        Rndr::Canvas::Shader const shader = Rndr::Canvas::Shader::FromSourceInMemory(k_simple_shader);
+        Rndr::Canvas::Shader const shader = CanvasTest::Unwrap(Rndr::Canvas::Shader::FromSourceInMemory(k_simple_shader));
 
         Rndr::Canvas::Brush brush;
-        brush.SetShader(shader);
+        REQUIRE(brush.SetShader(shader) == Rndr::ErrorCode::Success);
         brush.SetDepthTest(true);
 
         Rndr::Canvas::Brush other;
@@ -480,15 +480,15 @@ TEST_CASE("Canvas Brush", "[canvas][brush]")
 
     SECTION("Clone preserves desc and shader")
     {
-        Rndr::Canvas::Shader const shader = Rndr::Canvas::Shader::FromSourceInMemory(k_simple_shader);
+        Rndr::Canvas::Shader const shader = CanvasTest::Unwrap(Rndr::Canvas::Shader::FromSourceInMemory(k_simple_shader));
 
         Rndr::Canvas::BrushDesc desc;
         desc.blend_mode = Rndr::Canvas::BlendMode::Multiply;
         desc.fill_mode = Rndr::Canvas::FillMode::Wireframe;
         Rndr::Canvas::Brush brush(desc);
-        brush.SetShader(shader);
+        REQUIRE(brush.SetShader(shader) == Rndr::ErrorCode::Success);
 
-        Rndr::Canvas::Brush const clone = brush.Clone();
+        Rndr::Canvas::Brush const clone = CanvasTest::Unwrap(brush.Clone());
         REQUIRE(clone.IsValid());
         REQUIRE(clone.GetDesc().blend_mode == Rndr::Canvas::BlendMode::Multiply);
         REQUIRE(clone.GetDesc().fill_mode == Rndr::Canvas::FillMode::Wireframe);
@@ -506,9 +506,9 @@ TEST_CASE("Canvas Brush", "[canvas][brush]")
 
     SECTION("SetShader creates UBO slots for ConstantBuffer")
     {
-        Rndr::Canvas::Shader const shader = Rndr::Canvas::Shader::FromSourceInMemory(k_uniform_shader);
+        Rndr::Canvas::Shader const shader = CanvasTest::Unwrap(Rndr::Canvas::Shader::FromSourceInMemory(k_uniform_shader));
         Rndr::Canvas::Brush brush;
-        brush.SetShader(shader);
+        REQUIRE(brush.SetShader(shader) == Rndr::ErrorCode::Success);
 
         REQUIRE(brush.GetUniformBufferSlots().GetSize() == 1);
         REQUIRE(brush.GetUniformBufferSlots()[0].gpu_buffer.IsValid());
@@ -517,9 +517,9 @@ TEST_CASE("Canvas Brush", "[canvas][brush]")
 
     SECTION("SetShader creates UBO slots for standalone uniforms")
     {
-        Rndr::Canvas::Shader const shader = Rndr::Canvas::Shader::FromSourceInMemory(k_standalone_uniform_shader);
+        Rndr::Canvas::Shader const shader = CanvasTest::Unwrap(Rndr::Canvas::Shader::FromSourceInMemory(k_standalone_uniform_shader));
         Rndr::Canvas::Brush brush;
-        brush.SetShader(shader);
+        REQUIRE(brush.SetShader(shader) == Rndr::ErrorCode::Success);
 
         REQUIRE(brush.GetUniformBufferSlots().GetSize() >= 1);
         REQUIRE(brush.GetUniformBufferSlots()[0].gpu_buffer.IsValid());
@@ -527,21 +527,21 @@ TEST_CASE("Canvas Brush", "[canvas][brush]")
 
     SECTION("SetShader with no uniforms creates no UBO slots")
     {
-        Rndr::Canvas::Shader const shader = Rndr::Canvas::Shader::FromSourceInMemory(k_simple_shader);
+        Rndr::Canvas::Shader const shader = CanvasTest::Unwrap(Rndr::Canvas::Shader::FromSourceInMemory(k_simple_shader));
         Rndr::Canvas::Brush brush;
-        brush.SetShader(shader);
+        REQUIRE(brush.SetShader(shader) == Rndr::ErrorCode::Success);
 
         REQUIRE(brush.GetUniformBufferSlots().IsEmpty());
     }
 
     SECTION("SetUniform writes to UBO slot when shader is set")
     {
-        Rndr::Canvas::Shader const shader = Rndr::Canvas::Shader::FromSourceInMemory(k_uniform_shader);
+        Rndr::Canvas::Shader const shader = CanvasTest::Unwrap(Rndr::Canvas::Shader::FromSourceInMemory(k_uniform_shader));
         Rndr::Canvas::Brush brush;
-        brush.SetShader(shader);
+        REQUIRE(brush.SetShader(shader) == Rndr::ErrorCode::Success);
 
         const float roughness = 0.75f;
-        brush.SetUniform("roughness", roughness);
+        REQUIRE(brush.SetUniform("roughness", roughness) == Rndr::ErrorCode::Success);
 
         REQUIRE(brush.GetUniformBufferSlots()[0].dirty == true);
         // Value went to UBO slot, not to m_uniforms.
@@ -550,12 +550,12 @@ TEST_CASE("Canvas Brush", "[canvas][brush]")
 
     SECTION("SetUniform for unknown param falls back to m_uniforms")
     {
-        Rndr::Canvas::Shader const shader = Rndr::Canvas::Shader::FromSourceInMemory(k_uniform_shader);
+        Rndr::Canvas::Shader const shader = CanvasTest::Unwrap(Rndr::Canvas::Shader::FromSourceInMemory(k_uniform_shader));
         Rndr::Canvas::Brush brush;
-        brush.SetShader(shader);
+        REQUIRE(brush.SetShader(shader) == Rndr::ErrorCode::Success);
 
         const float unknown = 1.0f;
-        brush.SetUniform("unknown_param", unknown);
+        REQUIRE(brush.SetUniform("unknown_param", unknown) == Rndr::ErrorCode::Success);
 
         REQUIRE(brush.GetUniforms().GetSize() == 1);
         REQUIRE(brush.GetUniforms()[0].name == "unknown_param");
@@ -563,23 +563,23 @@ TEST_CASE("Canvas Brush", "[canvas][brush]")
 
     SECTION("UploadUniforms clears dirty flag")
     {
-        Rndr::Canvas::Shader const shader = Rndr::Canvas::Shader::FromSourceInMemory(k_uniform_shader);
+        Rndr::Canvas::Shader const shader = CanvasTest::Unwrap(Rndr::Canvas::Shader::FromSourceInMemory(k_uniform_shader));
         Rndr::Canvas::Brush brush;
-        brush.SetShader(shader);
+        REQUIRE(brush.SetShader(shader) == Rndr::ErrorCode::Success);
 
         const float roughness = 0.75f;
-        brush.SetUniform("roughness", roughness);
+        REQUIRE(brush.SetUniform("roughness", roughness) == Rndr::ErrorCode::Success);
         REQUIRE(brush.GetUniformBufferSlots()[0].dirty == true);
 
-        brush.UploadUniforms();
+        REQUIRE(brush.UploadUniforms() == Rndr::ErrorCode::Success);
         REQUIRE(brush.GetUniformBufferSlots()[0].dirty == false);
     }
 
     SECTION("Move transfers UBO slots")
     {
-        Rndr::Canvas::Shader const shader = Rndr::Canvas::Shader::FromSourceInMemory(k_uniform_shader);
+        Rndr::Canvas::Shader const shader = CanvasTest::Unwrap(Rndr::Canvas::Shader::FromSourceInMemory(k_uniform_shader));
         Rndr::Canvas::Brush brush;
-        brush.SetShader(shader);
+        REQUIRE(brush.SetShader(shader) == Rndr::ErrorCode::Success);
 
         REQUIRE(brush.GetUniformBufferSlots().GetSize() == 1);
 
@@ -591,14 +591,14 @@ TEST_CASE("Canvas Brush", "[canvas][brush]")
 
     SECTION("Clone deep-copies UBO slots")
     {
-        Rndr::Canvas::Shader const shader = Rndr::Canvas::Shader::FromSourceInMemory(k_uniform_shader);
+        Rndr::Canvas::Shader const shader = CanvasTest::Unwrap(Rndr::Canvas::Shader::FromSourceInMemory(k_uniform_shader));
         Rndr::Canvas::Brush brush;
-        brush.SetShader(shader);
+        REQUIRE(brush.SetShader(shader) == Rndr::ErrorCode::Success);
 
         const float roughness = 0.5f;
-        brush.SetUniform("roughness", roughness);
+        REQUIRE(brush.SetUniform("roughness", roughness) == Rndr::ErrorCode::Success);
 
-        Rndr::Canvas::Brush const clone = brush.Clone();
+        Rndr::Canvas::Brush const clone = CanvasTest::Unwrap(brush.Clone());
         REQUIRE(clone.GetUniformBufferSlots().GetSize() == 1);
         REQUIRE(clone.GetUniformBufferSlots()[0].gpu_buffer.IsValid());
         REQUIRE(clone.GetUniformBufferSlots()[0].dirty == true);
@@ -610,16 +610,16 @@ TEST_CASE("Canvas Brush", "[canvas][brush]")
 
     SECTION("SetUniform with array index writes to UBO slot")
     {
-        Rndr::Canvas::Shader const shader = Rndr::Canvas::Shader::FromSourceInMemory(k_array_uniform_shader);
+        Rndr::Canvas::Shader const shader = CanvasTest::Unwrap(Rndr::Canvas::Shader::FromSourceInMemory(k_array_uniform_shader));
         Rndr::Canvas::Brush brush;
-        brush.SetShader(shader);
+        REQUIRE(brush.SetShader(shader) == Rndr::ErrorCode::Success);
 
         struct float4
         {
             float x, y, z, w;
         };
         const float4 dir = {0.0f, 1.0f, 0.0f, 0.0f};
-        brush.SetUniform("light_directions", static_cast<Rndr::i32>(0), dir);
+        REQUIRE(brush.SetUniform("light_directions", static_cast<Rndr::i32>(0), dir) == Rndr::ErrorCode::Success);
 
         // Value went to UBO slot, not to fallback m_uniforms.
         REQUIRE(brush.GetUniforms().IsEmpty());
@@ -642,9 +642,9 @@ TEST_CASE("Canvas Brush", "[canvas][brush]")
 
     SECTION("SetUniform with array index writes correct elements")
     {
-        Rndr::Canvas::Shader const shader = Rndr::Canvas::Shader::FromSourceInMemory(k_array_uniform_shader);
+        Rndr::Canvas::Shader const shader = CanvasTest::Unwrap(Rndr::Canvas::Shader::FromSourceInMemory(k_array_uniform_shader));
         Rndr::Canvas::Brush brush;
-        brush.SetShader(shader);
+        REQUIRE(brush.SetShader(shader) == Rndr::ErrorCode::Success);
 
         struct float4
         {
@@ -652,8 +652,8 @@ TEST_CASE("Canvas Brush", "[canvas][brush]")
         };
         const float4 col0 = {1.0f, 0.0f, 0.0f, 1.0f};
         const float4 col1 = {0.0f, 1.0f, 0.0f, 1.0f};
-        brush.SetUniform("light_colors", static_cast<Rndr::i32>(0), col0);
-        brush.SetUniform("light_colors", static_cast<Rndr::i32>(1), col1);
+        REQUIRE(brush.SetUniform("light_colors", static_cast<Rndr::i32>(0), col0) == Rndr::ErrorCode::Success);
+        REQUIRE(brush.SetUniform("light_colors", static_cast<Rndr::i32>(1), col1) == Rndr::ErrorCode::Success);
 
         // Both writes went to UBO, no fallback.
         REQUIRE(brush.GetUniforms().IsEmpty());
@@ -685,9 +685,9 @@ TEST_CASE("Canvas Brush", "[canvas][brush]")
 
     SECTION("SetUniform throws on data size exceeding parameter size")
     {
-        Rndr::Canvas::Shader const shader = Rndr::Canvas::Shader::FromSourceInMemory(k_uniform_shader);
+        Rndr::Canvas::Shader const shader = CanvasTest::Unwrap(Rndr::Canvas::Shader::FromSourceInMemory(k_uniform_shader));
         Rndr::Canvas::Brush brush;
-        brush.SetShader(shader);
+        REQUIRE(brush.SetShader(shader) == Rndr::ErrorCode::Success);
 
         // roughness is a float (4 bytes), try writing a float4 (16 bytes).
         struct float4
@@ -695,41 +695,41 @@ TEST_CASE("Canvas Brush", "[canvas][brush]")
             float x, y, z, w;
         };
         const float4 too_large = {1.0f, 2.0f, 3.0f, 4.0f};
-        REQUIRE_THROWS(brush.SetUniform("roughness", too_large));
+        REQUIRE(brush.SetUniform("roughness", too_large) == Rndr::ErrorCode::InvalidArgument);
     }
 
-    SECTION("SetUniform array throws without shader")
+    SECTION("SetUniform array reports InvalidArgument without shader")
     {
         Rndr::Canvas::Brush brush;
         const float value = 1.0f;
-        REQUIRE_THROWS(brush.SetUniform("light_colors", static_cast<Rndr::i32>(0), value));
+        REQUIRE(brush.SetUniform("light_colors", static_cast<Rndr::i32>(0), value) == Rndr::ErrorCode::InvalidArgument);
     }
 
-    SECTION("SetUniform array throws for unknown parameter")
+    SECTION("SetUniform array reports InvalidArgument for unknown parameter")
     {
-        Rndr::Canvas::Shader const shader = Rndr::Canvas::Shader::FromSourceInMemory(k_array_uniform_shader);
+        Rndr::Canvas::Shader const shader = CanvasTest::Unwrap(Rndr::Canvas::Shader::FromSourceInMemory(k_array_uniform_shader));
         Rndr::Canvas::Brush brush;
-        brush.SetShader(shader);
+        REQUIRE(brush.SetShader(shader) == Rndr::ErrorCode::Success);
 
         const float value = 1.0f;
-        REQUIRE_THROWS(brush.SetUniform("nonexistent", static_cast<Rndr::i32>(0), value));
+        REQUIRE(brush.SetUniform("nonexistent", static_cast<Rndr::i32>(0), value) == Rndr::ErrorCode::InvalidArgument);
     }
 
-    SECTION("SetUniform array throws for non-array parameter")
+    SECTION("SetUniform array reports InvalidArgument for non-array parameter")
     {
-        Rndr::Canvas::Shader const shader = Rndr::Canvas::Shader::FromSourceInMemory(k_array_uniform_shader);
+        Rndr::Canvas::Shader const shader = CanvasTest::Unwrap(Rndr::Canvas::Shader::FromSourceInMemory(k_array_uniform_shader));
         Rndr::Canvas::Brush brush;
-        brush.SetShader(shader);
+        REQUIRE(brush.SetShader(shader) == Rndr::ErrorCode::Success);
 
         const Rndr::u32 value = 1;
-        REQUIRE_THROWS(brush.SetUniform("light_count", static_cast<Rndr::i32>(0), value));
+        REQUIRE(brush.SetUniform("light_count", static_cast<Rndr::i32>(0), value) == Rndr::ErrorCode::InvalidArgument);
     }
 
-    SECTION("SetUniform array throws for out of bounds index")
+    SECTION("SetUniform array reports OutOfBounds for out of bounds index")
     {
-        Rndr::Canvas::Shader const shader = Rndr::Canvas::Shader::FromSourceInMemory(k_array_uniform_shader);
+        Rndr::Canvas::Shader const shader = CanvasTest::Unwrap(Rndr::Canvas::Shader::FromSourceInMemory(k_array_uniform_shader));
         Rndr::Canvas::Brush brush;
-        brush.SetShader(shader);
+        REQUIRE(brush.SetShader(shader) == Rndr::ErrorCode::Success);
 
         struct float4
         {
@@ -737,20 +737,20 @@ TEST_CASE("Canvas Brush", "[canvas][brush]")
         };
         const float4 value = {1.0f, 0.0f, 0.0f, 1.0f};
         // Array has 4 elements, index 4 is out of bounds.
-        REQUIRE_THROWS(brush.SetUniform("light_colors", static_cast<Rndr::i32>(4), value));
+        REQUIRE(brush.SetUniform("light_colors", static_cast<Rndr::i32>(4), value) == Rndr::ErrorCode::OutOfBounds);
     }
 
-    SECTION("SetUniform array throws for negative index")
+    SECTION("SetUniform array reports InvalidArgument for negative index")
     {
-        Rndr::Canvas::Shader const shader = Rndr::Canvas::Shader::FromSourceInMemory(k_array_uniform_shader);
+        Rndr::Canvas::Shader const shader = CanvasTest::Unwrap(Rndr::Canvas::Shader::FromSourceInMemory(k_array_uniform_shader));
         Rndr::Canvas::Brush brush;
-        brush.SetShader(shader);
+        REQUIRE(brush.SetShader(shader) == Rndr::ErrorCode::Success);
 
         struct float4
         {
             float x, y, z, w;
         };
         const float4 value = {1.0f, 0.0f, 0.0f, 1.0f};
-        REQUIRE_THROWS(brush.SetUniform("light_colors", static_cast<Rndr::i32>(-1), value));
+        REQUIRE(brush.SetUniform("light_colors", static_cast<Rndr::i32>(-1), value) == Rndr::ErrorCode::InvalidArgument);
     }
 }

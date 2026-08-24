@@ -1,6 +1,7 @@
 #pragma once
 
 #include "opal/container/dynamic-array.h"
+#include "opal/container/expected.h"
 #include "opal/container/string.h"
 
 #include "rndr/canvas/context.hpp"
@@ -37,36 +38,49 @@ public:
      * points.
      * @param path Path to the Slang source file.
      * @param debug_name Name used for debug.
-     * @return A valid Shader object. Empty by default.
+     * @return The shader, ErrorCode::FileNotFound when the path names nothing,
+     *         ErrorCode::InvalidArgument for an empty file, or whatever compiling the source reports.
+     *         The reason is logged at error level.
      */
-    [[nodiscard]] static Shader FromSource(const Opal::StringUtf8& path, Opal::StringUtf8 debug_name = "");
+    [[nodiscard]] static Opal::Expected<Shader, ErrorCode> FromSource(const Opal::StringUtf8& path, Opal::StringUtf8 debug_name = "");
 
     /**
      * Create a shader program from source code in memory containing both vertex and fragment entry
      * points.
      * @param source Slang shader source code.
      * @param debug_name Name used for debug. Empty by default.
-     * @return A valid Shader object.
+     * @return The shader, ErrorCode::InvalidArgument for empty source,
+     *         ErrorCode::ShaderCompilationError when the source does not compile or its entry points do
+     *         not line up, or ErrorCode::ShaderLinkingError when the GL program does not link. The
+     *         compiler's message goes to the log.
      */
-    [[nodiscard]] static Shader FromSourceInMemory(const Opal::StringUtf8& source, Opal::StringUtf8 debug_name = "");
+    [[nodiscard]] static Opal::Expected<Shader, ErrorCode> FromSourceInMemory(const Opal::StringUtf8& source,
+                                                                              Opal::StringUtf8 debug_name = "");
 
     /**
      * Create a shader program from two separate source files for vertex and fragment stages.
      * @param vertex_path Path to the vertex stage Slang source file.
      * @param fragment_path Path to the fragment stage Slang source file.
      * @param debug_name Name used for debug. Empty by default.
-     * @return A valid Shader object.
+     * @return The shader, ErrorCode::FileNotFound when either path names nothing,
+     *         ErrorCode::InvalidArgument for an empty file, or whatever compiling the sources reports.
      */
-    [[nodiscard]] static Shader FromSources(const Opal::StringUtf8& vertex_path, const Opal::StringUtf8& fragment_path, Opal::StringUtf8 debug_name = "");
+    [[nodiscard]] static Opal::Expected<Shader, ErrorCode> FromSources(const Opal::StringUtf8& vertex_path,
+                                                                       const Opal::StringUtf8& fragment_path,
+                                                                       Opal::StringUtf8 debug_name = "");
 
     /**
      * Create a shader program from two separate source strings for vertex and fragment stages.
      * @param vertex_source Slang source code for the vertex stage.
      * @param fragment_source Slang source code for the fragment stage.
      * @param debug_name Name used for debug. Empty by default.
-     * @return A valid Shader object.
+     * @return The shader, ErrorCode::InvalidArgument for empty source,
+     *         ErrorCode::ShaderCompilationError when a source does not compile or its entry points do not
+     *         line up, or ErrorCode::ShaderLinkingError when the GL program does not link.
      */
-    [[nodiscard]] static Shader FromSourcesInMemory(const Opal::StringUtf8& vertex_source, const Opal::StringUtf8& fragment_source, Opal::StringUtf8 debug_name = "");
+    [[nodiscard]] static Opal::Expected<Shader, ErrorCode> FromSourcesInMemory(const Opal::StringUtf8& vertex_source,
+                                                                               const Opal::StringUtf8& fragment_source,
+                                                                               Opal::StringUtf8 debug_name = "");
 
     Shader() = default;
     ~Shader();
@@ -76,8 +90,12 @@ public:
     Shader(Shader&& other) noexcept;
     Shader& operator=(Shader&& other) noexcept;
 
-    /** Create a deep copy by recompiling from the stored source. */
-    [[nodiscard]] Shader Clone() const;
+    /**
+     * Create a deep copy by recompiling from the stored source.
+     * @return The clone, ErrorCode::InvalidArgument for an invalid shader, or whatever recompiling
+     *         reports.
+     */
+    [[nodiscard]] Opal::Expected<Shader, ErrorCode> Clone() const;
 
     /** Release the GL program and clear all reflection data. */
     void Destroy();

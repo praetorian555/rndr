@@ -509,36 +509,37 @@ TEST_CASE("Canvas Shader", "[canvas][shader]")
 
     SECTION("Create shader from combined source")
     {
-        Rndr::Canvas::Shader const shader = Rndr::Canvas::Shader::FromSourceInMemory(k_combined_source);
+        Rndr::Canvas::Shader const shader = CanvasTest::Unwrap(Rndr::Canvas::Shader::FromSourceInMemory(k_combined_source));
         REQUIRE(shader.IsValid());
         REQUIRE(shader.GetNativeHandle() != 0);
     }
 
     SECTION("Create shader from separate sources")
     {
-        Rndr::Canvas::Shader const shader = Rndr::Canvas::Shader::FromSourcesInMemory(k_vertex_source, k_fragment_source);
+        Rndr::Canvas::Shader const shader = CanvasTest::Unwrap(Rndr::Canvas::Shader::FromSourcesInMemory(k_vertex_source, k_fragment_source));
         REQUIRE(shader.IsValid());
         REQUIRE(shader.GetNativeHandle() != 0);
     }
 
     SECTION("Empty source throws")
     {
-        REQUIRE_THROWS(Rndr::Canvas::Shader::FromSourceInMemory(""));
+        REQUIRE(Rndr::Canvas::Shader::FromSourceInMemory("").GetError() == Rndr::ErrorCode::InvalidArgument);
     }
 
     SECTION("Source with no vertex entry point throws")
     {
-        REQUIRE_THROWS(Rndr::Canvas::Shader::FromSourcesInMemory(k_fragment_source, k_fragment_source));
+        REQUIRE(Rndr::Canvas::Shader::FromSourcesInMemory(k_fragment_source, k_fragment_source).GetError()
+                == Rndr::ErrorCode::ShaderCompilationError);
     }
 
     SECTION("Source with no fragment entry point throws")
     {
-        REQUIRE_THROWS(Rndr::Canvas::Shader::FromSourceInMemory(k_vertex_only_source));
+        REQUIRE(Rndr::Canvas::Shader::FromSourceInMemory(k_vertex_only_source).GetError() == Rndr::ErrorCode::ShaderCompilationError);
     }
 
     SECTION("Source with multiple vertex entry points throws")
     {
-        REQUIRE_THROWS(Rndr::Canvas::Shader::FromSourceInMemory(k_two_vertex_source));
+        REQUIRE(Rndr::Canvas::Shader::FromSourceInMemory(k_two_vertex_source).GetError() == Rndr::ErrorCode::ShaderCompilationError);
     }
 
     SECTION("FromSource with file on disk")
@@ -554,7 +555,7 @@ TEST_CASE("Canvas Shader", "[canvas][shader]")
         fwrite(k_combined_source, 1, strlen(k_combined_source), tmp);
         fclose(tmp);
 
-        Rndr::Canvas::Shader const shader = Rndr::Canvas::Shader::FromSource(tmp_path);
+        Rndr::Canvas::Shader const shader = CanvasTest::Unwrap(Rndr::Canvas::Shader::FromSource(tmp_path));
         REQUIRE(shader.IsValid());
 
         remove(tmp_path);
@@ -580,7 +581,7 @@ TEST_CASE("Canvas Shader", "[canvas][shader]")
         fwrite(k_fragment_source, 1, strlen(k_fragment_source), fs_file);
         fclose(fs_file);
 
-        Rndr::Canvas::Shader const shader = Rndr::Canvas::Shader::FromSources(vs_path, fs_path);
+        Rndr::Canvas::Shader const shader = CanvasTest::Unwrap(Rndr::Canvas::Shader::FromSources(vs_path, fs_path));
         REQUIRE(shader.IsValid());
 
         remove(vs_path);
@@ -589,12 +590,12 @@ TEST_CASE("Canvas Shader", "[canvas][shader]")
 
     SECTION("FromSource with non-existent file throws")
     {
-        REQUIRE_THROWS(Rndr::Canvas::Shader::FromSource("non_existent_file.slang"));
+        REQUIRE(Rndr::Canvas::Shader::FromSource("non_existent_file.slang").GetError() == Rndr::ErrorCode::FileNotFound);
     }
 
     SECTION("Destroy makes shader invalid")
     {
-        Rndr::Canvas::Shader shader = Rndr::Canvas::Shader::FromSourceInMemory(k_combined_source);
+        Rndr::Canvas::Shader shader = CanvasTest::Unwrap(Rndr::Canvas::Shader::FromSourceInMemory(k_combined_source));
         REQUIRE(shader.IsValid());
         shader.Destroy();
         REQUIRE_FALSE(shader.IsValid());
@@ -602,7 +603,7 @@ TEST_CASE("Canvas Shader", "[canvas][shader]")
 
     SECTION("Move constructor")
     {
-        Rndr::Canvas::Shader shader = Rndr::Canvas::Shader::FromSourceInMemory(k_combined_source);
+        Rndr::Canvas::Shader shader = CanvasTest::Unwrap(Rndr::Canvas::Shader::FromSourceInMemory(k_combined_source));
         REQUIRE(shader.IsValid());
         const Rndr::u32 handle = shader.GetNativeHandle();
 
@@ -614,7 +615,7 @@ TEST_CASE("Canvas Shader", "[canvas][shader]")
 
     SECTION("Move assignment")
     {
-        Rndr::Canvas::Shader shader = Rndr::Canvas::Shader::FromSourceInMemory(k_combined_source);
+        Rndr::Canvas::Shader shader = CanvasTest::Unwrap(Rndr::Canvas::Shader::FromSourceInMemory(k_combined_source));
         Rndr::Canvas::Shader other;
 
         other = std::move(shader);
@@ -624,10 +625,10 @@ TEST_CASE("Canvas Shader", "[canvas][shader]")
 
     SECTION("Clone")
     {
-        Rndr::Canvas::Shader const shader = Rndr::Canvas::Shader::FromSourceInMemory(k_combined_source);
+        Rndr::Canvas::Shader const shader = CanvasTest::Unwrap(Rndr::Canvas::Shader::FromSourceInMemory(k_combined_source));
         REQUIRE(shader.IsValid());
 
-        Rndr::Canvas::Shader const clone = shader.Clone();
+        Rndr::Canvas::Shader const clone = CanvasTest::Unwrap(shader.Clone());
         REQUIRE(clone.IsValid());
         // Original still valid.
         REQUIRE(shader.IsValid());
@@ -638,14 +639,14 @@ TEST_CASE("Canvas Shader", "[canvas][shader]")
     SECTION("Clone of invalid shader returns invalid")
     {
         Rndr::Canvas::Shader const shader;
-        Rndr::Canvas::Shader const clone = shader.Clone();
+        Rndr::Canvas::Shader const clone = CanvasTest::Unwrap(shader.Clone());
         REQUIRE_FALSE(clone.IsValid());
     }
 
     SECTION("Two shaders from same source have different handles")
     {
-        Rndr::Canvas::Shader const a = Rndr::Canvas::Shader::FromSourceInMemory(k_combined_source);
-        Rndr::Canvas::Shader const b = Rndr::Canvas::Shader::FromSourceInMemory(k_combined_source);
+        Rndr::Canvas::Shader const a = CanvasTest::Unwrap(Rndr::Canvas::Shader::FromSourceInMemory(k_combined_source));
+        Rndr::Canvas::Shader const b = CanvasTest::Unwrap(Rndr::Canvas::Shader::FromSourceInMemory(k_combined_source));
         REQUIRE(a.IsValid());
         REQUIRE(b.IsValid());
         REQUIRE(a.GetNativeHandle() != b.GetNativeHandle());
@@ -653,7 +654,7 @@ TEST_CASE("Canvas Shader", "[canvas][shader]")
 
     SECTION("Vertex input parameters are in merged reflection")
     {
-        Rndr::Canvas::Shader const shader = Rndr::Canvas::Shader::FromSourceInMemory(k_combined_source);
+        Rndr::Canvas::Shader const shader = CanvasTest::Unwrap(Rndr::Canvas::Shader::FromSourceInMemory(k_combined_source));
         REQUIRE(shader.IsValid());
         REQUIRE_FALSE(shader.GetParameters().IsEmpty());
 
@@ -664,7 +665,7 @@ TEST_CASE("Canvas Shader", "[canvas][shader]")
 
     SECTION("Fragment resources are in merged reflection")
     {
-        Rndr::Canvas::Shader const shader = Rndr::Canvas::Shader::FromSourceInMemory(k_combined_with_params_source);
+        Rndr::Canvas::Shader const shader = CanvasTest::Unwrap(Rndr::Canvas::Shader::FromSourceInMemory(k_combined_with_params_source));
         REQUIRE(shader.IsValid());
 
         const Rndr::Canvas::ShaderParameter* texture = shader.FindParameter("diffuse_texture");
@@ -678,7 +679,7 @@ TEST_CASE("Canvas Shader", "[canvas][shader]")
 
     SECTION("Constant buffer fields are extracted in merged reflection")
     {
-        Rndr::Canvas::Shader const shader = Rndr::Canvas::Shader::FromSourceInMemory(k_combined_with_params_source);
+        Rndr::Canvas::Shader const shader = CanvasTest::Unwrap(Rndr::Canvas::Shader::FromSourceInMemory(k_combined_with_params_source));
         REQUIRE(shader.IsValid());
 
         const Rndr::Canvas::ShaderParameter* mat = shader.FindParameter("material");
@@ -700,7 +701,7 @@ TEST_CASE("Canvas Shader", "[canvas][shader]")
 
     SECTION("Standalone uniforms are extracted as individual parameters")
     {
-        Rndr::Canvas::Shader const shader = Rndr::Canvas::Shader::FromSourceInMemory(k_combined_with_standalone_uniforms);
+        Rndr::Canvas::Shader const shader = CanvasTest::Unwrap(Rndr::Canvas::Shader::FromSourceInMemory(k_combined_with_standalone_uniforms));
         REQUIRE(shader.IsValid());
 
         const Rndr::Canvas::ShaderParameter* mvp = shader.FindParameter("mvp");
@@ -714,7 +715,7 @@ TEST_CASE("Canvas Shader", "[canvas][shader]")
 
     SECTION("ParameterBlock fields are extracted")
     {
-        Rndr::Canvas::Shader const shader = Rndr::Canvas::Shader::FromSourceInMemory(k_parameter_block_source);
+        Rndr::Canvas::Shader const shader = CanvasTest::Unwrap(Rndr::Canvas::Shader::FromSourceInMemory(k_parameter_block_source));
         REQUIRE(shader.IsValid());
 
         const Rndr::Canvas::ShaderParameter* light = shader.FindParameter("light");
@@ -743,12 +744,13 @@ TEST_CASE("Canvas Shader", "[canvas][shader]")
 
     SECTION("Conflicting parameter types between stages throws")
     {
-        REQUIRE_THROWS(Rndr::Canvas::Shader::FromSourcesInMemory(k_vertex_conflict_source, k_fragment_conflict_source));
+        REQUIRE(Rndr::Canvas::Shader::FromSourcesInMemory(k_vertex_conflict_source, k_fragment_conflict_source).GetError()
+                == Rndr::ErrorCode::ShaderCompilationError);
     }
 
     SECTION("FindParameter returns nullptr for non-existent name")
     {
-        Rndr::Canvas::Shader const shader = Rndr::Canvas::Shader::FromSourceInMemory(k_combined_source);
+        Rndr::Canvas::Shader const shader = CanvasTest::Unwrap(Rndr::Canvas::Shader::FromSourceInMemory(k_combined_source));
         REQUIRE(shader.FindParameter("does_not_exist") == nullptr);
     }
 
@@ -761,7 +763,7 @@ TEST_CASE("Canvas Shader", "[canvas][shader]")
 
     SECTION("Destroy clears parameters")
     {
-        Rndr::Canvas::Shader shader = Rndr::Canvas::Shader::FromSourceInMemory(k_combined_with_params_source);
+        Rndr::Canvas::Shader shader = CanvasTest::Unwrap(Rndr::Canvas::Shader::FromSourceInMemory(k_combined_with_params_source));
         REQUIRE_FALSE(shader.GetParameters().IsEmpty());
         shader.Destroy();
         REQUIRE(shader.GetParameters().IsEmpty());
@@ -769,7 +771,7 @@ TEST_CASE("Canvas Shader", "[canvas][shader]")
 
     SECTION("Move transfers parameters")
     {
-        Rndr::Canvas::Shader shader = Rndr::Canvas::Shader::FromSourceInMemory(k_combined_with_params_source);
+        Rndr::Canvas::Shader shader = CanvasTest::Unwrap(Rndr::Canvas::Shader::FromSourceInMemory(k_combined_with_params_source));
         const auto param_count = shader.GetParameters().GetSize();
         REQUIRE(param_count > 0);
 
@@ -780,8 +782,8 @@ TEST_CASE("Canvas Shader", "[canvas][shader]")
 
     SECTION("Clone preserves parameters")
     {
-        Rndr::Canvas::Shader const shader = Rndr::Canvas::Shader::FromSourceInMemory(k_combined_with_params_source);
-        Rndr::Canvas::Shader const clone = shader.Clone();
+        Rndr::Canvas::Shader const shader = CanvasTest::Unwrap(Rndr::Canvas::Shader::FromSourceInMemory(k_combined_with_params_source));
+        Rndr::Canvas::Shader const clone = CanvasTest::Unwrap(shader.Clone());
         REQUIRE(clone.GetParameters().GetSize() == shader.GetParameters().GetSize());
         REQUIRE(clone.FindParameter("diffuse_texture") != nullptr);
         REQUIRE(clone.FindParameter("material") != nullptr);
@@ -789,14 +791,14 @@ TEST_CASE("Canvas Shader", "[canvas][shader]")
 
     SECTION("Create compute shader from single source")
     {
-        Rndr::Canvas::Shader const shader = Rndr::Canvas::Shader::FromSourceInMemory(k_compute_source);
+        Rndr::Canvas::Shader const shader = CanvasTest::Unwrap(Rndr::Canvas::Shader::FromSourceInMemory(k_compute_source));
         REQUIRE(shader.IsValid());
         REQUIRE(shader.GetNativeHandle() != 0);
     }
 
     SECTION("Compute shader reflection includes resources")
     {
-        Rndr::Canvas::Shader const shader = Rndr::Canvas::Shader::FromSourceInMemory(k_compute_source);
+        Rndr::Canvas::Shader const shader = CanvasTest::Unwrap(Rndr::Canvas::Shader::FromSourceInMemory(k_compute_source));
         REQUIRE(shader.IsValid());
 
         const Rndr::Canvas::ShaderParameter* buffer = shader.FindParameter("output_buffer");
@@ -815,10 +817,10 @@ TEST_CASE("Canvas Shader", "[canvas][shader]")
 
     SECTION("Compute shader clone")
     {
-        Rndr::Canvas::Shader const shader = Rndr::Canvas::Shader::FromSourceInMemory(k_compute_source);
+        Rndr::Canvas::Shader const shader = CanvasTest::Unwrap(Rndr::Canvas::Shader::FromSourceInMemory(k_compute_source));
         REQUIRE(shader.IsValid());
 
-        Rndr::Canvas::Shader const clone = shader.Clone();
+        Rndr::Canvas::Shader const clone = CanvasTest::Unwrap(shader.Clone());
         REQUIRE(clone.IsValid());
         REQUIRE(clone.GetNativeHandle() != shader.GetNativeHandle());
         REQUIRE(clone.FindParameter("output_buffer") != nullptr);
@@ -826,12 +828,13 @@ TEST_CASE("Canvas Shader", "[canvas][shader]")
 
     SECTION("Mixed compute and graphics entry points throws")
     {
-        REQUIRE_THROWS(Rndr::Canvas::Shader::FromSourceInMemory(k_mixed_compute_graphics_source));
+        REQUIRE(Rndr::Canvas::Shader::FromSourceInMemory(k_mixed_compute_graphics_source).GetError()
+                == Rndr::ErrorCode::ShaderCompilationError);
     }
 
     SECTION("GetVertexLayout from combined source with position only")
     {
-        Rndr::Canvas::Shader const shader = Rndr::Canvas::Shader::FromSourceInMemory(k_combined_source);
+        Rndr::Canvas::Shader const shader = CanvasTest::Unwrap(Rndr::Canvas::Shader::FromSourceInMemory(k_combined_source));
         REQUIRE(shader.IsValid());
 
         const Rndr::Canvas::VertexLayout& layout = shader.GetVertexLayout();
@@ -844,7 +847,7 @@ TEST_CASE("Canvas Shader", "[canvas][shader]")
 
     SECTION("GetVertexLayout from combined source with position and uv")
     {
-        Rndr::Canvas::Shader const shader = Rndr::Canvas::Shader::FromSourceInMemory(k_combined_with_params_source);
+        Rndr::Canvas::Shader const shader = CanvasTest::Unwrap(Rndr::Canvas::Shader::FromSourceInMemory(k_combined_with_params_source));
         REQUIRE(shader.IsValid());
 
         const Rndr::Canvas::VertexLayout& layout = shader.GetVertexLayout();
@@ -859,7 +862,7 @@ TEST_CASE("Canvas Shader", "[canvas][shader]")
 
     SECTION("GetVertexLayout from separate sources")
     {
-        Rndr::Canvas::Shader const shader = Rndr::Canvas::Shader::FromSourcesInMemory(k_vertex_source, k_fragment_source);
+        Rndr::Canvas::Shader const shader = CanvasTest::Unwrap(Rndr::Canvas::Shader::FromSourcesInMemory(k_vertex_source, k_fragment_source));
         REQUIRE(shader.IsValid());
 
         const Rndr::Canvas::VertexLayout& layout = shader.GetVertexLayout();
@@ -870,7 +873,7 @@ TEST_CASE("Canvas Shader", "[canvas][shader]")
 
     SECTION("Compute shader GetNumThreads")
     {
-        Rndr::Canvas::Shader const shader = Rndr::Canvas::Shader::FromSourceInMemory(k_compute_source);
+        Rndr::Canvas::Shader const shader = CanvasTest::Unwrap(Rndr::Canvas::Shader::FromSourceInMemory(k_compute_source));
         REQUIRE(shader.IsValid());
 
         const Rndr::Canvas::NumThreads& num_threads = shader.GetNumThreads();
@@ -881,7 +884,7 @@ TEST_CASE("Canvas Shader", "[canvas][shader]")
 
     SECTION("Graphics shader GetNumThreads is zero")
     {
-        Rndr::Canvas::Shader const shader = Rndr::Canvas::Shader::FromSourceInMemory(k_combined_source);
+        Rndr::Canvas::Shader const shader = CanvasTest::Unwrap(Rndr::Canvas::Shader::FromSourceInMemory(k_combined_source));
         REQUIRE(shader.IsValid());
 
         const Rndr::Canvas::NumThreads& num_threads = shader.GetNumThreads();
@@ -892,7 +895,7 @@ TEST_CASE("Canvas Shader", "[canvas][shader]")
 
     SECTION("GetVertexLayout is empty for compute shader")
     {
-        Rndr::Canvas::Shader const shader = Rndr::Canvas::Shader::FromSourceInMemory(k_compute_source);
+        Rndr::Canvas::Shader const shader = CanvasTest::Unwrap(Rndr::Canvas::Shader::FromSourceInMemory(k_compute_source));
         REQUIRE(shader.IsValid());
 
         const Rndr::Canvas::VertexLayout& layout = shader.GetVertexLayout();
@@ -909,7 +912,7 @@ TEST_CASE("Canvas Shader", "[canvas][shader]")
 
     SECTION("Move transfers vertex layout")
     {
-        Rndr::Canvas::Shader shader = Rndr::Canvas::Shader::FromSourceInMemory(k_combined_with_params_source);
+        Rndr::Canvas::Shader shader = CanvasTest::Unwrap(Rndr::Canvas::Shader::FromSourceInMemory(k_combined_with_params_source));
         REQUIRE(shader.GetVertexLayout().IsValid());
 
         Rndr::Canvas::Shader const moved(std::move(shader));
@@ -919,10 +922,10 @@ TEST_CASE("Canvas Shader", "[canvas][shader]")
 
     SECTION("Clone preserves vertex layout")
     {
-        Rndr::Canvas::Shader const shader = Rndr::Canvas::Shader::FromSourceInMemory(k_combined_with_params_source);
+        Rndr::Canvas::Shader const shader = CanvasTest::Unwrap(Rndr::Canvas::Shader::FromSourceInMemory(k_combined_with_params_source));
         REQUIRE(shader.GetVertexLayout().IsValid());
 
-        Rndr::Canvas::Shader const clone = shader.Clone();
+        Rndr::Canvas::Shader const clone = CanvasTest::Unwrap(shader.Clone());
         REQUIRE(clone.GetVertexLayout().IsValid());
         REQUIRE(clone.GetVertexLayout().GetAttributeCount() == shader.GetVertexLayout().GetAttributeCount());
         REQUIRE(clone.GetVertexLayout().GetStride() == shader.GetVertexLayout().GetStride());
@@ -930,7 +933,7 @@ TEST_CASE("Canvas Shader", "[canvas][shader]")
 
     SECTION("Destroy clears vertex layout")
     {
-        Rndr::Canvas::Shader shader = Rndr::Canvas::Shader::FromSourceInMemory(k_combined_with_params_source);
+        Rndr::Canvas::Shader shader = CanvasTest::Unwrap(Rndr::Canvas::Shader::FromSourceInMemory(k_combined_with_params_source));
         REQUIRE(shader.GetVertexLayout().IsValid());
         shader.Destroy();
         REQUIRE_FALSE(shader.GetVertexLayout().IsValid());
@@ -938,7 +941,7 @@ TEST_CASE("Canvas Shader", "[canvas][shader]")
 
     SECTION("Array uniform has element count and stride")
     {
-        Rndr::Canvas::Shader const shader = Rndr::Canvas::Shader::FromSourceInMemory(k_array_uniform_source);
+        Rndr::Canvas::Shader const shader = CanvasTest::Unwrap(Rndr::Canvas::Shader::FromSourceInMemory(k_array_uniform_source));
         REQUIRE(shader.IsValid());
 
         const Rndr::Canvas::ShaderParameter* dirs = shader.FindParameter("light_directions");
@@ -957,7 +960,7 @@ TEST_CASE("Canvas Shader", "[canvas][shader]")
 
     SECTION("Non-array uniform has zero element count and stride")
     {
-        Rndr::Canvas::Shader const shader = Rndr::Canvas::Shader::FromSourceInMemory(k_array_uniform_source);
+        Rndr::Canvas::Shader const shader = CanvasTest::Unwrap(Rndr::Canvas::Shader::FromSourceInMemory(k_array_uniform_source));
         REQUIRE(shader.IsValid());
 
         const Rndr::Canvas::ShaderParameter* count = shader.FindParameter("light_count");
@@ -977,14 +980,14 @@ TEST_CASE("Canvas Shader instance ID", "[canvas][shader]")
     // would throw / produce an invalid shader.
     SECTION("Shader using SV_VulkanInstanceID compiles and links")
     {
-        Rndr::Canvas::Shader const shader = Rndr::Canvas::Shader::FromSourceInMemory(k_instance_id_vulkan_source);
+        Rndr::Canvas::Shader const shader = CanvasTest::Unwrap(Rndr::Canvas::Shader::FromSourceInMemory(k_instance_id_vulkan_source));
         REQUIRE(shader.IsValid());
         REQUIRE(shader.GetNativeHandle() != 0);
     }
 
     SECTION("Shader using SV_InstanceID compiles and links")
     {
-        Rndr::Canvas::Shader const shader = Rndr::Canvas::Shader::FromSourceInMemory(k_instance_id_native_source);
+        Rndr::Canvas::Shader const shader = CanvasTest::Unwrap(Rndr::Canvas::Shader::FromSourceInMemory(k_instance_id_native_source));
         REQUIRE(shader.IsValid());
         REQUIRE(shader.GetNativeHandle() != 0);
     }
@@ -993,7 +996,7 @@ TEST_CASE("Canvas Shader instance ID", "[canvas][shader]")
     {
         constexpr Rndr::u32 k_instance_count = 8;
 
-        Rndr::Canvas::Shader const shader = Rndr::Canvas::Shader::FromSourceInMemory(k_instance_id_vulkan_source);
+        Rndr::Canvas::Shader const shader = CanvasTest::Unwrap(Rndr::Canvas::Shader::FromSourceInMemory(k_instance_id_vulkan_source));
         REQUIRE(shader.IsValid());
 
         Rndr::Canvas::Brush brush;
@@ -1001,7 +1004,7 @@ TEST_CASE("Canvas Shader instance ID", "[canvas][shader]")
         brush.SetDepthTest(false);
         // Additive blend (GL_ONE, GL_ONE) sums each instance's fragment output into the target.
         brush.SetBlendMode(Rndr::Canvas::BlendMode::Additive);
-        brush.SetShader(shader);
+        REQUIRE(brush.SetShader(shader) == Rndr::ErrorCode::Success);
 
         // Single fullscreen triangle; every instance covers the whole (1x1) target.
         // clang-format off

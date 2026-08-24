@@ -238,7 +238,7 @@ void Rndr::Canvas::DrawList::Execute()
             },
             [](const Impl::DrawMeshCommand& c)
             {
-                c.brush->Apply();
+                (void)c.brush->Apply();
                 c.mesh->Upload();
                 glBindVertexArray(c.mesh->GetNativeHandle());
                 if (c.mesh->HasIndices())
@@ -252,7 +252,7 @@ void Rndr::Canvas::DrawList::Execute()
             },
             [](const Impl::DrawMeshInstancedCommand& c)
             {
-                c.brush->Apply();
+                (void)c.brush->Apply();
                 c.mesh->Upload();
                 glBindVertexArray(c.mesh->GetNativeHandle());
                 if (c.mesh->HasIndices())
@@ -268,7 +268,7 @@ void Rndr::Canvas::DrawList::Execute()
             },
             [](const Impl::DispatchCommand& c)
             {
-                c.brush->Apply();
+                (void)c.brush->Apply();
                 glDispatchCompute(c.group_count_x, c.group_count_y, c.group_count_z);
                 glMemoryBarrier(GL_ALL_BARRIER_BITS);
             },

@@ -5,7 +5,8 @@
 
 #include "rndr/canvas/shader.hpp"
 #include "rndr/canvas/texture.hpp"
-#include "rndr/exception.hpp"
+#include "rndr/canvas/gl-result.hpp"
+#include "rndr/log.hpp"
 #include "rndr/trace.hpp"
 
 #include <algorithm>
@@ -80,8 +81,9 @@ Rndr::Canvas::Brush& Rndr::Canvas::Brush::operator=(Brush&& other) noexcept
     return *this;
 }
 
-Rndr::Canvas::Brush Rndr::Canvas::Brush::Clone() const
+Opal::Expected<Rndr::Canvas::Brush, Rndr::ErrorCode> Rndr::Canvas::Brush::Clone() const
 {
+    using ResultType = Opal::Expected<Brush, ErrorCode>;
     Brush clone(m_desc);
     clone.m_debug_name = m_debug_name.Clone();
     clone.m_shader = m_shader;
@@ -117,10 +119,8 @@ Rndr::Canvas::Brush Rndr::Canvas::Brush::Clone() const
         if (m_uniform_buffer_slots[i].gpu_buffer.IsValid())
         {
             auto gpu_buffer_result = m_uniform_buffer_slots[i].gpu_buffer.Clone();
-            if (gpu_buffer_result.HasValue())
-            {
-                slot.gpu_buffer = std::move(gpu_buffer_result).GetValue();
-            }
+            RNDR_CANVAS_CHECK_EXPECTED(gpu_buffer_result.GetErrorOr(ErrorCode::Success), ResultType);
+            slot.gpu_buffer = std::move(gpu_buffer_result).GetValue();
         }
         slot.cpu_data.Resize(m_uniform_buffer_slots[i].cpu_data.GetSize());
         memcpy(slot.cpu_data.GetData(), m_uniform_buffer_slots[i].cpu_data.GetData(), m_uniform_buffer_slots[i].cpu_data.GetSize());
@@ -130,13 +130,13 @@ Rndr::Canvas::Brush Rndr::Canvas::Brush::Clone() const
         clone.m_uniform_buffer_slots.PushBack(std::move(slot));
     }
 
-    return clone;
+    return ResultType(std::move(clone));
 }
 
-void Rndr::Canvas::Brush::SetShader(const Shader& shader)
+Rndr::ErrorCode Rndr::Canvas::Brush::SetShader(const Shader& shader)
 {
     m_shader = &shader;
-    CreateUniformBufferSlots();
+    return CreateUniformBufferSlots();
 }
 
 const Rndr::Canvas::Shader* Rndr::Canvas::Brush::GetShader() const
@@ -190,16 +190,18 @@ void Rndr::Canvas::Brush::SetScissorTest(bool enabled)
     m_desc.scissor_test = enabled;
 }
 
-void Rndr::Canvas::Brush::SetScissor(i32 x, i32 y, i32 width, i32 height)
+Rndr::ErrorCode Rndr::Canvas::Brush::SetScissor(i32 x, i32 y, i32 width, i32 height)
 {
     if (width < 0 || height < 0)
     {
-        throw Opal::InvalidArgumentException(__FUNCTION__, "Scissor width and height must be non-negative!");
+        RNDR_LOG_ERROR("Canvas: Scissor width and height must be non-negative");
+        return ErrorCode::InvalidArgument;
     }
     m_desc.scissor_x = x;
     m_desc.scissor_y = y;
     m_desc.scissor_width = width;
     m_desc.scissor_height = height;
+    return ErrorCode::Success;
 }
 
 const Rndr::Canvas::BrushDesc& Rndr::Canvas::Brush::GetDesc() const
@@ -266,13 +268,13 @@ bool Rndr::Canvas::Brush::IsValid() const
     return m_shader != nullptr;
 }
 
-void Rndr::Canvas::Brush::CreateUniformBufferSlots()
+Rndr::ErrorCode Rndr::Canvas::Brush::CreateUniformBufferSlots()
 {
     m_uniform_buffer_slots.Clear();
 
     if (m_shader == nullptr)
     {
-        return;
+        return ErrorCode::Success;
     }
 
     const Opal::DynamicArray<ShaderParameter>& params = m_shader->GetParameters();
@@ -333,24 +335,24 @@ void Rndr::Canvas::Brush::CreateUniformBufferSlots()
         slot.cpu_data.Resize(static_cast<u64>(ubo_infos[i].total_size));
         memset(slot.cpu_data.GetData(), 0, slot.cpu_data.GetSize());
         auto gpu_buffer_result = Buffer::Create(BufferUsage::Uniform, static_cast<u64>(ubo_infos[i].total_size), 0, {}, std::move(ubo_name));
-        if (!gpu_buffer_result.HasValue())
-        {
-            throw GraphicsAPIException(0, "Failed to create uniform buffer!");
-        }
+        RNDR_CANVAS_CHECK(gpu_buffer_result.GetErrorOr(ErrorCode::Success));
         slot.gpu_buffer = std::move(gpu_buffer_result).GetValue();
         m_uniform_buffer_slots.PushBack(std::move(slot));
     }
+    return ErrorCode::Success;
 }
 
-void Rndr::Canvas::Brush::SetUniformRaw(const char* name, const void* data, u64 size)
+Rndr::ErrorCode Rndr::Canvas::Brush::SetUniformRaw(const char* name, const void* data, u64 size)
 {
     if (name == nullptr)
     {
-        throw Opal::InvalidArgumentException(__FUNCTION__, "Uniform name is null!");
+        RNDR_LOG_ERROR("Canvas: Uniform name is null");
+        return ErrorCode::InvalidArgument;
     }
     if (data == nullptr || size == 0)
     {
-        throw Opal::InvalidArgumentException(__FUNCTION__, "Uniform data is null or size is 0!");
+        RNDR_LOG_ERROR("Canvas: Uniform data is null or size is 0");
+        return ErrorCode::InvalidArgument;
     }
 
     // If a shader is set, try to write into the appropriate UBO slot.
@@ -361,7 +363,8 @@ void Rndr::Canvas::Brush::SetUniformRaw(const char* name, const void* data, u64 
         {
             if (static_cast<i32>(size) > param->size)
             {
-                throw Opal::InvalidArgumentException(__FUNCTION__, "Uniform data size exceeds the parameter size!");
+                RNDR_LOG_ERROR("Canvas: Uniform data size exceeds the parameter size");
+                return ErrorCode::InvalidArgument;
             }
             for (u64 i = 0; i < m_uniform_buffer_slots.GetSize(); ++i)
             {
@@ -370,7 +373,7 @@ void Rndr::Canvas::Brush::SetUniformRaw(const char* name, const void* data, u64 
                 {
                     memcpy(slot.cpu_data.GetData() + param->offset, data, size);
                     slot.dirty = true;
-                    return;
+                    return ErrorCode::Success;
                 }
             }
         }
@@ -383,7 +386,7 @@ void Rndr::Canvas::Brush::SetUniformRaw(const char* name, const void* data, u64 
         {
             m_uniforms[i].data.Resize(size);
             memcpy(m_uniforms[i].data.GetData(), data, size);
-            return;
+            return ErrorCode::Success;
         }
     }
 
@@ -392,47 +395,57 @@ void Rndr::Canvas::Brush::SetUniformRaw(const char* name, const void* data, u64 
     binding.data.Resize(size);
     memcpy(binding.data.GetData(), data, size);
     m_uniforms.PushBack(std::move(binding));
+    return ErrorCode::Success;
 }
 
-void Rndr::Canvas::Brush::SetUniformRaw(const char* name, i32 index, const void* data, u64 size)
+Rndr::ErrorCode Rndr::Canvas::Brush::SetUniformRaw(const char* name, i32 index, const void* data, u64 size)
 {
     if (name == nullptr)
     {
-        throw Opal::InvalidArgumentException(__FUNCTION__, "Uniform name is null!");
+        RNDR_LOG_ERROR("Canvas: Uniform name is null");
+        return ErrorCode::InvalidArgument;
     }
     if (data == nullptr || size == 0)
     {
-        throw Opal::InvalidArgumentException(__FUNCTION__, "Uniform data is null or size is 0!");
+        RNDR_LOG_ERROR("Canvas: Uniform data is null or size is 0");
+        return ErrorCode::InvalidArgument;
     }
     if (m_shader == nullptr)
     {
-        throw Opal::InvalidArgumentException(__FUNCTION__, "Cannot set array uniform element without a shader!");
+        RNDR_LOG_ERROR("Canvas: Cannot set array uniform element without a shader");
+        return ErrorCode::InvalidArgument;
     }
     if (index < 0)
     {
-        throw Opal::InvalidArgumentException(__FUNCTION__, "Array index is negative!");
+        RNDR_LOG_ERROR("Canvas: Array index is negative");
+        return ErrorCode::InvalidArgument;
     }
 
     const ShaderParameter* param = m_shader->FindParameter(name);
     if (param == nullptr)
     {
-        throw Opal::InvalidArgumentException(__FUNCTION__, "Uniform parameter not found!");
+        RNDR_LOG_ERROR("Canvas: Uniform parameter '{}' not found", name);
+        return ErrorCode::InvalidArgument;
     }
     if (param->category != ParameterCategory::Uniform || param->size == 0)
     {
-        throw Opal::InvalidArgumentException(__FUNCTION__, "Parameter is not a uniform!");
+        RNDR_LOG_ERROR("Canvas: Parameter '{}' is not a uniform", name);
+        return ErrorCode::InvalidArgument;
     }
     if (param->array_element_count == 0)
     {
-        throw Opal::InvalidArgumentException(__FUNCTION__, "Parameter is not an array!");
+        RNDR_LOG_ERROR("Canvas: Parameter '{}' is not an array", name);
+        return ErrorCode::InvalidArgument;
     }
     if (index >= param->array_element_count)
     {
-        throw Opal::InvalidArgumentException(__FUNCTION__, "Array index is out of bounds!");
+        RNDR_LOG_ERROR("Canvas: Array index is out of bounds");
+        return ErrorCode::OutOfBounds;
     }
     if (static_cast<i32>(size) > param->array_stride)
     {
-        throw Opal::InvalidArgumentException(__FUNCTION__, "Uniform data size exceeds the array element size!");
+        RNDR_LOG_ERROR("Canvas: Uniform data size exceeds the array element size");
+        return ErrorCode::InvalidArgument;
     }
 
     const i32 element_offset = param->offset + index * param->array_stride;
@@ -443,26 +456,24 @@ void Rndr::Canvas::Brush::SetUniformRaw(const char* name, i32 index, const void*
         {
             memcpy(slot.cpu_data.GetData() + element_offset, data, size);
             slot.dirty = true;
-            return;
+            return ErrorCode::Success;
         }
     }
+    return ErrorCode::Success;
 }
 
-void Rndr::Canvas::Brush::UploadUniforms()
+Rndr::ErrorCode Rndr::Canvas::Brush::UploadUniforms()
 {
     for (u64 i = 0; i < m_uniform_buffer_slots.GetSize(); ++i)
     {
         UniformBufferSlot& slot = m_uniform_buffer_slots[i];
         if (slot.dirty && slot.gpu_buffer.IsValid())
         {
-            const ErrorCode update_code = slot.gpu_buffer.Update(Opal::ArrayView<const u8>(slot.cpu_data.GetData(), slot.cpu_data.GetSize()));
-            if (update_code != ErrorCode::Success)
-            {
-                throw GraphicsAPIException(0, "Failed to update uniform buffer!");
-            }
+            RNDR_CANVAS_CHECK(slot.gpu_buffer.Update(Opal::ArrayView<const u8>(slot.cpu_data.GetData(), slot.cpu_data.GetSize())));
             slot.dirty = false;
         }
     }
+    return ErrorCode::Success;
 }
 
 const Opal::DynamicArray<Rndr::Canvas::UniformBufferSlot>& Rndr::Canvas::Brush::GetUniformBufferSlots() const
@@ -470,13 +481,13 @@ const Opal::DynamicArray<Rndr::Canvas::UniformBufferSlot>& Rndr::Canvas::Brush::
     return m_uniform_buffer_slots;
 }
 
-void Rndr::Canvas::Brush::Apply()
+Rndr::ErrorCode Rndr::Canvas::Brush::Apply()
 {
     RNDR_CPU_EVENT_SCOPED("Canvas::Brush::Apply");
 
     if (m_shader == nullptr)
     {
-        return;
+        return ErrorCode::Success;
     }
 
     // 1. Bind shader program.
@@ -554,7 +565,7 @@ void Rndr::Canvas::Brush::Apply()
     }
 
     // 5. Upload dirty uniform buffers to the GPU.
-    UploadUniforms();
+    RNDR_CANVAS_CHECK(UploadUniforms());
 
     // 6. Bind UBOs to their binding points.
     for (u64 i = 0; i < m_uniform_buffer_slots.GetSize(); ++i)
@@ -595,4 +606,5 @@ void Rndr::Canvas::Brush::Apply()
             glBindBufferBase(GL_SHADER_STORAGE_BUFFER, static_cast<GLuint>(param->binding_index), bb.buffer->GetNativeHandle());
         }
     }
+    return ErrorCode::Success;
 }

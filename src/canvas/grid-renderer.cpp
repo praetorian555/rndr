@@ -74,7 +74,11 @@ float4 FragmentMain(VertexOutput in)
 Rndr::Canvas::GridRenderer::GridRenderer(Opal::Ref<Context> context)
     : m_context(std::move(context))
 {
-    m_shader = Shader::FromSourceInMemory(k_shader_source, "Grid Renderer Shader");
+    auto shader_result = Shader::FromSourceInMemory(k_shader_source, "Grid Renderer Shader");
+    if (shader_result.HasValue())
+    {
+        m_shader = std::move(shader_result).GetValue();
+    }
     RNDR_ASSERT(m_shader.IsValid(), "Failed to create GridRenderer shader!");
 
     const VertexLayout vertex_layout = m_shader.GetVertexLayout().Clone();
@@ -100,7 +104,7 @@ Rndr::Canvas::GridRenderer::GridRenderer(Opal::Ref<Context> context)
     RNDR_ASSERT(m_mesh.IsValid(), "Failed to create GridRenderer mesh!");
 
     m_brush = Brush(BrushDesc{.blend_mode = BlendMode::Alpha, .depth_test = true, .cull_mode = CullMode::None}, "Grid Renderer Brush");
-    m_brush.SetShader(m_shader);
+    (void)m_brush.SetShader(m_shader);
     RNDR_ASSERT(m_brush.IsValid(), "Failed to create GridRenderer brush!");
 }
 
@@ -118,8 +122,8 @@ void Rndr::Canvas::GridRenderer::Destroy()
 void Rndr::Canvas::GridRenderer::Render(DrawList& draw_list, const Matrix4x4f& view, const Matrix4x4f& projection)
 {
     draw_list.BeginEvent("GridRenderer::Render");
-    m_brush.SetUniform("view", view);
-    m_brush.SetUniform("projection", projection);
+    (void)m_brush.SetUniform("view", view);
+    (void)m_brush.SetUniform("projection", projection);
     draw_list.Draw(m_mesh, m_brush);
     draw_list.EndEvent("GridRenderer::Render");
 }

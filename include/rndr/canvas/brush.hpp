@@ -196,7 +196,11 @@ public:
     Brush(Brush&& other) noexcept;
     Brush& operator=(Brush&& other) noexcept;
 
-    [[nodiscard]] Brush Clone() const;
+/**
+     * Copy this brush, cloning its uniform staging data and GPU uniform buffers.
+     * @return The clone, or whatever cloning a uniform buffer reports.
+     */
+    [[nodiscard]] Opal::Expected<Brush, ErrorCode> Clone() const;
 
     /**
      * Set the shader program used for rendering. This also inspects the shader's reflection data
@@ -205,7 +209,11 @@ public:
      *
      * Requires an active OpenGL context (since it creates GPU buffers).
      */
-    void SetShader(const Shader& shader);
+/**
+     * Assign the shader and rebuild the uniform buffer slots its reflection describes.
+     * @return ErrorCode::Success, or whatever creating a uniform buffer reports.
+     */
+    [[nodiscard]] ErrorCode SetShader(const Shader& shader);
 
     /** @return Currently bound shader, or nullptr if none. */
     [[nodiscard]] const Shader* GetShader() const;
@@ -253,7 +261,8 @@ public:
      * @param width Width of the rectangle, in pixels. Must be non-negative.
      * @param height Height of the rectangle, in pixels. Must be non-negative.
      */
-    void SetScissor(i32 x, i32 y, i32 width, i32 height);
+/** @return ErrorCode::Success, or ErrorCode::InvalidArgument for a negative width or height. */
+    [[nodiscard]] ErrorCode SetScissor(i32 x, i32 y, i32 width, i32 height);
 
     /** @return Current pipeline state descriptor. */
     [[nodiscard]] const BrushDesc& GetDesc() const;
@@ -285,7 +294,7 @@ public:
      * @param value Value to set. Must be a trivially copyable type matching the shader declaration.
      */
     template<typename T>
-    void SetUniform(const char* name, const T& value);
+    [[nodiscard]] ErrorCode SetUniform(const char* name, const T& value);
 
     /**
      * Set a uniform array element by base name and index.
@@ -294,7 +303,7 @@ public:
      * @param value Value to set.
      */
     template<typename T>
-    void SetUniform(const char* name, i32 index, const T& value);
+    [[nodiscard]] ErrorCode SetUniform(const char* name, i32 index, const T& value);
 
     /** @return Fallback uniform bindings for values that did not match any shader parameter. */
     [[nodiscard]] const Opal::DynamicArray<UniformBinding>& GetUniforms() const;
@@ -306,7 +315,8 @@ public:
     [[nodiscard]] const Opal::DynamicArray<BufferBinding>& GetBuffers() const;
 
     /** Upload all dirty uniform buffers to the GPU. */
-    void UploadUniforms();
+/** @return ErrorCode::Success, or whatever updating a dirty uniform buffer reports. */
+    [[nodiscard]] ErrorCode UploadUniforms();
 
     /**
      * Apply all rendering state to the current OpenGL context. This is the method that translates
@@ -325,7 +335,8 @@ public:
      *
      * Requires a valid shader (IsValid() must be true) and an active OpenGL context.
      */
-    void Apply();
+/** @return ErrorCode::Success, or whatever uploading the dirty uniform buffers reports. */
+    [[nodiscard]] ErrorCode Apply();
 
     /** @return All uniform buffer slots created from shader reflection. */
     [[nodiscard]] const Opal::DynamicArray<UniformBufferSlot>& GetUniformBufferSlots() const;
@@ -338,16 +349,16 @@ public:
 
 private:
     /** Non-template core of SetUniform. Routes data to the matching UBO slot or fallback list. */
-    void SetUniformRaw(const char* name, const void* data, u64 size);
+    [[nodiscard]] ErrorCode SetUniformRaw(const char* name, const void* data, u64 size);
 
     /** Non-template core of SetUniform for array elements. */
-    void SetUniformRaw(const char* name, i32 index, const void* data, u64 size);
+    [[nodiscard]] ErrorCode SetUniformRaw(const char* name, i32 index, const void* data, u64 size);
 
     /**
      * Scan the current shader's parameters and create one UniformBufferSlot for each unique UBO
      * binding point that has uniform fields (size > 0). Called automatically by SetShader().
      */
-    void CreateUniformBufferSlots();
+    [[nodiscard]] ErrorCode CreateUniformBufferSlots();
     Opal::StringUtf8 m_debug_name;
     const Shader* m_shader = nullptr;
     BrushDesc m_desc;
@@ -358,17 +369,17 @@ private:
 };
 
 template<typename T>
-void Brush::SetUniform(const char* name, const T& value)
+Rndr::ErrorCode Brush::SetUniform(const char* name, const T& value)
 {
     static_assert(std::is_trivially_copyable_v<T>, "Uniform value must be trivially copyable!");
-    SetUniformRaw(name, &value, sizeof(T));
+    return SetUniformRaw(name, &value, sizeof(T));
 }
 
 template<typename T>
-void Brush::SetUniform(const char* name, i32 index, const T& value)
+Rndr::ErrorCode Brush::SetUniform(const char* name, i32 index, const T& value)
 {
     static_assert(std::is_trivially_copyable_v<T>, "Uniform value must be trivially copyable!");
-    SetUniformRaw(name, index, &value, sizeof(T));
+    return SetUniformRaw(name, index, &value, sizeof(T));
 }
 
 }  // namespace Canvas

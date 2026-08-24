@@ -18,7 +18,11 @@ bool Rndr::Canvas::BitmapTextRenderer::Init(Opal::Ref<Context> context, const Bi
     UpdateFontAtlas();
 
     const Opal::StringUtf8 shader_path = Opal::Paths::Combine(RNDR_CORE_ASSETS_DIR, "shaders", "bitmap-text-render.slang").GetValue();
-    m_shader = Shader::FromSource(shader_path, "Bitmap Text Renderer");
+    auto shader_result = Shader::FromSource(shader_path, "Bitmap Text Renderer");
+    if (shader_result.HasValue())
+    {
+        m_shader = std::move(shader_result).GetValue();
+    }
     RNDR_ASSERT(m_shader.IsValid(), "Shader could not be created!");
 
     const VertexLayout vertex_layout = m_shader.GetVertexLayout().Clone();
@@ -31,7 +35,7 @@ bool Rndr::Canvas::BitmapTextRenderer::Init(Opal::Ref<Context> context, const Bi
     RNDR_ASSERT(m_mesh.IsValid(), "Mesh could not be created!");
 
     m_brush = Brush(BrushDesc{});
-    m_brush.SetShader(m_shader);
+    (void)m_brush.SetShader(m_shader);
     m_brush.SetBlendMode(BlendMode::Alpha);
     RNDR_ASSERT(m_brush.IsValid(), "Failed to create a brush!");
 
@@ -195,7 +199,7 @@ void Rndr::Canvas::BitmapTextRenderer::Render(DrawList& draw_list)
     const f32 height = static_cast<f32>(m_context->GetHeight());
     const Matrix4x4f mvp = Orthographic(0, width, 0, height, -1.0f, 1.0f);
 
-    m_brush.SetUniform("mvp", mvp);
+    (void)m_brush.SetUniform("mvp", mvp);
     m_brush.SetTexture("glyph_atlas", m_glyph_atlas);
 
     draw_list.Draw(m_mesh, m_brush);

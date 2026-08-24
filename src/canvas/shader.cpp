@@ -2,8 +2,11 @@
 
 #include "glad/glad.h"
 
+#include "rndr/canvas/gl-result.hpp"
 #include "rndr/core/shader-compiler.hpp"
-#include "rndr/exception.hpp"
+#include "opal/exceptions.h"
+#include "opal/file-system.h"
+
 #include "rndr/file.hpp"
 #include "rndr/log.hpp"
 #include "rndr/trace.hpp"
@@ -94,8 +97,10 @@ Rndr::Canvas::Format FormatFromVertexInput(const Rndr::VertexInputAttribute& inp
     return Rndr::Canvas::Format::EnumCount;
 }
 
-Rndr::Canvas::VertexLayout BuildVertexLayout(const Opal::DynamicArray<Rndr::VertexInputAttribute>& vertex_inputs)
+Opal::Expected<Rndr::Canvas::VertexLayout, Rndr::ErrorCode> BuildVertexLayout(
+    const Opal::DynamicArray<Rndr::VertexInputAttribute>& vertex_inputs)
 {
+    using ResultType = Opal::Expected<Rndr::Canvas::VertexLayout, Rndr::ErrorCode>;
     Rndr::Canvas::VertexLayout vertex_layout;
 
     for (Rndr::u64 i = 0; i < vertex_inputs.GetSize(); ++i)
@@ -105,29 +110,30 @@ Rndr::Canvas::VertexLayout BuildVertexLayout(const Opal::DynamicArray<Rndr::Vert
         const Rndr::Canvas::Attrib attrib = AttribFromName(input.name.GetData());
         if (attrib == Rndr::Canvas::Attrib::EnumCount)
         {
-            Opal::StringUtf8 msg = Opal::StringUtf8("Cannot map vertex attribute '") + input.name + "' to a known Attrib semantic!";
-            throw Rndr::GraphicsAPIException(0, msg.GetData());
+            RNDR_LOG_ERROR("Canvas: Cannot map vertex attribute '{}' to a known Attrib semantic", *input.name);
+            return ResultType(Rndr::ErrorCode::ShaderCompilationError);
         }
 
         const Rndr::Canvas::Format format = FormatFromVertexInput(input);
         if (format == Rndr::Canvas::Format::EnumCount)
         {
-            Opal::StringUtf8 msg = Opal::StringUtf8("Unsupported vertex attribute format for '") + input.name + "'!";
-            throw Rndr::GraphicsAPIException(0, msg.GetData());
+            RNDR_LOG_ERROR("Canvas: Unsupported vertex attribute format for '{}'", *input.name);
+            return ResultType(Rndr::ErrorCode::ShaderCompilationError);
         }
 
         vertex_layout.Add(attrib, format);
     }
 
-    return vertex_layout;
+    return ResultType(std::move(vertex_layout));
 }
 
 // ---------------------------------------------------------------------------
 // OpenGL shader and program creation.
 // ---------------------------------------------------------------------------
 
-GLuint CreateShaderFromGlsl(GLenum stage, const void* glsl_data, size_t glsl_size)
+Opal::Expected<GLuint, Rndr::ErrorCode> CreateShaderFromGlsl(GLenum stage, const void* glsl_data, size_t glsl_size)
 {
+    using ResultType = Opal::Expected<GLuint, Rndr::ErrorCode>;
     // Slang's blob size may include a trailing null terminator; trim it so we pass GL the exact
     // source length and don't feed an embedded null into the compiler.
     const auto* source = static_cast<const GLchar*>(glsl_data);
@@ -140,7 +146,8 @@ GLuint CreateShaderFromGlsl(GLenum stage, const void* glsl_data, size_t glsl_siz
     const GLuint shader = glCreateShader(stage);
     if (shader == 0)
     {
-        throw Rndr::GraphicsAPIException(0, "Failed to create GL shader!");
+        RNDR_LOG_ERROR("Canvas: Failed to create GL shader");
+        return ResultType(Rndr::ErrorCode::GraphicsAPIError);
     }
 
     glShaderSource(shader, 1, &source, &length);
@@ -160,19 +167,21 @@ GLuint CreateShaderFromGlsl(GLenum stage, const void* glsl_data, size_t glsl_siz
         }
         glDeleteShader(shader);
 
-        Opal::StringUtf8 msg = Opal::StringUtf8("Failed to compile shader:\n") + log;
-        throw Rndr::GraphicsAPIException(0, msg.GetData());
+        RNDR_LOG_ERROR("Canvas: Failed to compile shader:\n{}", *log);
+        return ResultType(Rndr::ErrorCode::ShaderCompilationError);
     }
 
-    return shader;
+    return ResultType(shader);
 }
 
-GLuint LinkProgram(GLuint vertex_shader, GLuint fragment_shader)
+Opal::Expected<GLuint, Rndr::ErrorCode> LinkProgram(GLuint vertex_shader, GLuint fragment_shader)
 {
+    using ResultType = Opal::Expected<GLuint, Rndr::ErrorCode>;
     const GLuint program = glCreateProgram();
     if (program == 0)
     {
-        throw Rndr::GraphicsAPIException(0, "Failed to create GL program!");
+        RNDR_LOG_ERROR("Canvas: Failed to create GL program");
+        return ResultType(Rndr::ErrorCode::GraphicsAPIError);
     }
 
     glAttachShader(program, vertex_shader);
@@ -193,20 +202,21 @@ GLuint LinkProgram(GLuint vertex_shader, GLuint fragment_shader)
         }
         glDeleteProgram(program);
 
-        Opal::StringUtf8 msg = Opal::StringUtf8("Failed to link shader program:\n") + log;
-        RNDR_LOG_ERROR("{}", *msg);
-        throw Rndr::GraphicsAPIException(0, msg.GetData());
+        RNDR_LOG_ERROR("Canvas: Failed to link shader program:\n{}", *log);
+        return ResultType(Rndr::ErrorCode::ShaderLinkingError);
     }
 
-    return program;
+    return ResultType(program);
 }
 
-GLuint LinkProgram(GLuint shader)
+Opal::Expected<GLuint, Rndr::ErrorCode> LinkProgram(GLuint shader)
 {
+    using ResultType = Opal::Expected<GLuint, Rndr::ErrorCode>;
     const GLuint program = glCreateProgram();
     if (program == 0)
     {
-        throw Rndr::GraphicsAPIException(0, "Failed to create GL program!");
+        RNDR_LOG_ERROR("Canvas: Failed to create GL program");
+        return ResultType(Rndr::ErrorCode::GraphicsAPIError);
     }
 
     glAttachShader(program, shader);
@@ -226,11 +236,11 @@ GLuint LinkProgram(GLuint shader)
         }
         glDeleteProgram(program);
 
-        Opal::StringUtf8 msg = Opal::StringUtf8("Failed to link shader program:\n") + log;
-        throw Rndr::GraphicsAPIException(0, msg.GetData());
+        RNDR_LOG_ERROR("Canvas: Failed to link shader program:\n{}", *log);
+        return ResultType(Rndr::ErrorCode::ShaderLinkingError);
     }
 
-    return program;
+    return ResultType(program);
 }
 
 // ---------------------------------------------------------------------------
@@ -247,225 +257,298 @@ struct ShaderBuildResult
     Rndr::NumThreads num_threads;
 };
 
-ShaderBuildResult BuildFromSingleSource(const Opal::StringUtf8& source, Opal::StringUtf8 debug_name)
+Opal::Expected<ShaderBuildResult, Rndr::ErrorCode> BuildFromSingleSource(const Opal::StringUtf8& source, Opal::StringUtf8 debug_name)
 {
-    Rndr::ShaderCompiler compiler;
-    compiler.LoadModule(source, Rndr::ShaderOutputFormat::Glsl);
-    Opal::DynamicArray<Rndr::EntryPointInfo> entries = compiler.DiscoverEntryPoints();
+    using ResultType = Opal::Expected<ShaderBuildResult, Rndr::ErrorCode>;
 
-    // Count entry points by stage.
-    int vertex_count = 0;
-    int fragment_count = 0;
-    int compute_count = 0;
-    for (Rndr::u64 i = 0; i < entries.GetSize(); ++i)
+    // ShaderCompiler is shared between the rendering APIs and reports by throwing, which is the one thing
+    // that reaches Canvas from outside its own convention. Caught here so it stops at the boundary and
+    // comes out as a code like everything else; the message it carries is what the log line says.
+    bool is_compute = false;
+    Rndr::CompileResult cs_result;
+    Opal::StringUtf8 vs_entry;
+    Opal::StringUtf8 fs_entry;
+    Rndr::CompileResult vs_result;
+    Rndr::CompileResult fs_result;
+    Opal::DynamicArray<Rndr::ShaderParameter> merged;
+    try
     {
-        switch (entries[i].stage)
+        Rndr::ShaderCompiler compiler;
+        compiler.LoadModule(source, Rndr::ShaderOutputFormat::Glsl);
+        Opal::DynamicArray<Rndr::EntryPointInfo> entries = compiler.DiscoverEntryPoints();
+
+        // Count entry points by stage.
+        int vertex_count = 0;
+        int fragment_count = 0;
+        int compute_count = 0;
+        for (Rndr::u64 i = 0; i < entries.GetSize(); ++i)
         {
-            case Rndr::ShaderStage::Vertex:
-                ++vertex_count;
-                break;
-            case Rndr::ShaderStage::Fragment:
-                ++fragment_count;
-                break;
-            case Rndr::ShaderStage::Compute:
-                ++compute_count;
-                break;
-            default:
-                break;
+            switch (entries[i].stage)
+            {
+                case Rndr::ShaderStage::Vertex:
+                    ++vertex_count;
+                    break;
+                case Rndr::ShaderStage::Fragment:
+                    ++fragment_count;
+                    break;
+                case Rndr::ShaderStage::Compute:
+                    ++compute_count;
+                    break;
+                default:
+                    break;
+            }
+        }
+
+        if (compute_count > 0 && (vertex_count > 0 || fragment_count > 0))
+        {
+            RNDR_LOG_ERROR("Canvas: Shader source contains both compute and graphics entry points");
+            return ResultType(Rndr::ErrorCode::ShaderCompilationError);
+        }
+
+        is_compute = compute_count > 0;
+        if (is_compute)
+        {
+            const Opal::StringUtf8 cs_entry = Rndr::ShaderCompiler::FindSingleEntryPoint(entries, Rndr::ShaderStage::Compute, "compute");
+            cs_result = compiler.CompileEntryPoint(cs_entry);
+        }
+        else
+        {
+            vs_entry = Rndr::ShaderCompiler::FindSingleEntryPoint(entries, Rndr::ShaderStage::Vertex, "vertex");
+            fs_entry = Rndr::ShaderCompiler::FindSingleEntryPoint(entries, Rndr::ShaderStage::Fragment, "fragment");
+            vs_result = compiler.CompileEntryPoint(vs_entry);
+            fs_result = compiler.CompileEntryPoint(fs_entry);
+            merged = Rndr::ShaderCompiler::MergeParameters(vs_result.parameters, fs_result.parameters);
         }
     }
-
-    if (compute_count > 0 && (vertex_count > 0 || fragment_count > 0))
+    catch (const Opal::Exception& exception)
     {
-        throw Rndr::GraphicsAPIException(0, "Shader source contains both compute and graphics entry points!");
+        RNDR_LOG_ERROR("Canvas: compiling the shader failed: {}", *exception.What());
+        return ResultType(Rndr::ErrorCode::ShaderCompilationError);
     }
 
     // Compute path.
-    if (compute_count > 0)
+    if (is_compute)
     {
-        const Opal::StringUtf8 cs_entry = Rndr::ShaderCompiler::FindSingleEntryPoint(entries, Rndr::ShaderStage::Compute, "compute");
-        Rndr::CompileResult cs_result = compiler.CompileEntryPoint(cs_entry);
         if (cs_result.stage != Rndr::ShaderStage::Compute)
         {
-            throw Rndr::GraphicsAPIException(0, "Compute entry point does not have [shader(\"compute\")] annotation!");
+            RNDR_LOG_ERROR("Canvas: Compute entry point does not have [shader(\"compute\")] annotation");
+            return ResultType(Rndr::ErrorCode::ShaderCompilationError);
         }
 
-        const GLuint cs = CreateShaderFromGlsl(GL_COMPUTE_SHADER, cs_result.code.GetData(), cs_result.code.GetSize());
+        const auto cs_gl_result = CreateShaderFromGlsl(GL_COMPUTE_SHADER, cs_result.code.GetData(), cs_result.code.GetSize());
+        if (!cs_gl_result.HasValue())
+        {
+            return ResultType(cs_gl_result.GetError());
+        }
+        const GLuint cs = cs_gl_result.GetValue();
         const Opal::StringUtf8 shader_name = debug_name + " - Compute Shader";
         glObjectLabel(GL_SHADER, cs, static_cast<GLsizei>(shader_name.GetSize()), *shader_name);
-        GLuint program = 0;
-        try
-        {
-            program = LinkProgram(cs);
-            const Opal::StringUtf8 program_name = debug_name + " - Shader Program";
-            glObjectLabel(GL_PROGRAM, program, static_cast<GLsizei>(program_name.GetSize()), *program_name);
-        }
-        catch (...)
-        {
-            glDeleteShader(cs);
-            throw;
-        }
+
+        const auto program_result = LinkProgram(cs);
         glDeleteShader(cs);
+        if (!program_result.HasValue())
+        {
+            return ResultType(program_result.GetError());
+        }
+        const GLuint program = program_result.GetValue();
+        const Opal::StringUtf8 program_name = debug_name + " - Shader Program";
+        glObjectLabel(GL_PROGRAM, program, static_cast<GLsizei>(program_name.GetSize()), *program_name);
 
         ShaderBuildResult out;
         out.program = program;
         out.parameters = std::move(cs_result.parameters);
         out.num_threads = cs_result.num_threads;
-        return out;
+        return ResultType(std::move(out));
     }
 
     // Graphics path.
-    Opal::StringUtf8 vs_entry = Rndr::ShaderCompiler::FindSingleEntryPoint(entries, Rndr::ShaderStage::Vertex, "vertex");
-    Opal::StringUtf8 fs_entry = Rndr::ShaderCompiler::FindSingleEntryPoint(entries, Rndr::ShaderStage::Fragment, "fragment");
-
-    Rndr::CompileResult vs_result = compiler.CompileEntryPoint(vs_entry);
     if (vs_result.stage != Rndr::ShaderStage::Vertex)
     {
-        throw Rndr::GraphicsAPIException(0, "Vertex entry point does not have [shader(\"vertex\")] annotation!");
+        RNDR_LOG_ERROR("Canvas: Vertex entry point does not have [shader(\"vertex\")] annotation");
+        return ResultType(Rndr::ErrorCode::ShaderCompilationError);
     }
-
-    const Rndr::CompileResult fs_result = compiler.CompileEntryPoint(fs_entry);
     if (fs_result.stage != Rndr::ShaderStage::Fragment)
     {
-        throw Rndr::GraphicsAPIException(0, "Fragment entry point does not have [shader(\"fragment\")] annotation!");
+        RNDR_LOG_ERROR("Canvas: Fragment entry point does not have [shader(\"fragment\")] annotation");
+        return ResultType(Rndr::ErrorCode::ShaderCompilationError);
     }
 
-    Opal::DynamicArray<Rndr::ShaderParameter> merged = Rndr::ShaderCompiler::MergeParameters(vs_result.parameters, fs_result.parameters);
-
-    const GLuint vs = CreateShaderFromGlsl(GL_VERTEX_SHADER, vs_result.code.GetData(), vs_result.code.GetSize());
+    const auto vs_gl_result = CreateShaderFromGlsl(GL_VERTEX_SHADER, vs_result.code.GetData(), vs_result.code.GetSize());
+    if (!vs_gl_result.HasValue())
+    {
+        return ResultType(vs_gl_result.GetError());
+    }
+    const GLuint vs = vs_gl_result.GetValue();
     const Opal::StringUtf8 vertex_shader_name = debug_name + " - Vertex Shader";
     glObjectLabel(GL_SHADER, vs, static_cast<GLsizei>(vertex_shader_name.GetSize()), *vertex_shader_name);
-    GLuint fs = 0;
-    try
-    {
-        fs = CreateShaderFromGlsl(GL_FRAGMENT_SHADER, fs_result.code.GetData(), fs_result.code.GetSize());
-        const Opal::StringUtf8 fragment_shader_name = debug_name + " - Fragment Shader";
-        glObjectLabel(GL_SHADER, fs, static_cast<GLsizei>(fragment_shader_name.GetSize()), *fragment_shader_name);
-    }
-    catch (...)
-    {
-        glDeleteShader(vs);
-        throw;
-    }
 
-    GLuint program = 0;
-    try
-    {
-        program = LinkProgram(vs, fs);
-        const Opal::StringUtf8 program_name = debug_name + " - Shader Program";
-        glObjectLabel(GL_PROGRAM, program, static_cast<GLsizei>(program_name.GetSize()), *program_name);
-    }
-    catch (...)
+    const auto fs_gl_result = CreateShaderFromGlsl(GL_FRAGMENT_SHADER, fs_result.code.GetData(), fs_result.code.GetSize());
+    if (!fs_gl_result.HasValue())
     {
         glDeleteShader(vs);
-        glDeleteShader(fs);
-        throw;
+        return ResultType(fs_gl_result.GetError());
     }
+    const GLuint fs = fs_gl_result.GetValue();
+    const Opal::StringUtf8 fragment_shader_name = debug_name + " - Fragment Shader";
+    glObjectLabel(GL_SHADER, fs, static_cast<GLsizei>(fragment_shader_name.GetSize()), *fragment_shader_name);
+
+    const auto program_result = LinkProgram(vs, fs);
     glDeleteShader(vs);
     glDeleteShader(fs);
+    if (!program_result.HasValue())
+    {
+        return ResultType(program_result.GetError());
+    }
+    const GLuint program = program_result.GetValue();
+    const Opal::StringUtf8 program_name = debug_name + " - Shader Program";
+    glObjectLabel(GL_PROGRAM, program, static_cast<GLsizei>(program_name.GetSize()), *program_name);
+
+    auto layout_result = BuildVertexLayout(vs_result.vertex_inputs);
+    if (!layout_result.HasValue())
+    {
+        glDeleteProgram(program);
+        return ResultType(layout_result.GetError());
+    }
 
     ShaderBuildResult out;
     out.program = program;
     out.vertex_entry = std::move(vs_entry);
     out.fragment_entry = std::move(fs_entry);
     out.parameters = std::move(merged);
-    out.vertex_layout = BuildVertexLayout(vs_result.vertex_inputs);
-    return out;
+    out.vertex_layout = std::move(layout_result).GetValue();
+    return ResultType(std::move(out));
 }
 
-ShaderBuildResult BuildFromTwoSources(const Opal::StringUtf8& vertex_source, const Opal::StringUtf8& fragment_source,
-                                      Opal::StringUtf8 debug_name)
+Opal::Expected<ShaderBuildResult, Rndr::ErrorCode> BuildFromTwoSources(const Opal::StringUtf8& vertex_source,
+                                                                       const Opal::StringUtf8& fragment_source,
+                                                                       Opal::StringUtf8 debug_name)
 {
-    Rndr::ShaderCompiler vs_compiler;
-    vs_compiler.LoadModule(vertex_source, Rndr::ShaderOutputFormat::Glsl);
-    const Opal::DynamicArray<Rndr::EntryPointInfo> vs_entries = vs_compiler.DiscoverEntryPoints();
-    Opal::StringUtf8 vs_entry = Rndr::ShaderCompiler::FindSingleEntryPoint(vs_entries, Rndr::ShaderStage::Vertex, "vertex");
+    using ResultType = Opal::Expected<ShaderBuildResult, Rndr::ErrorCode>;
 
-    Rndr::ShaderCompiler fs_compiler;
-    fs_compiler.LoadModule(fragment_source, Rndr::ShaderOutputFormat::Glsl);
-    const Opal::DynamicArray<Rndr::EntryPointInfo> fs_entries = fs_compiler.DiscoverEntryPoints();
-    Opal::StringUtf8 fs_entry = Rndr::ShaderCompiler::FindSingleEntryPoint(fs_entries, Rndr::ShaderStage::Fragment, "fragment");
+    // The compiler boundary, same as BuildFromSingleSource: everything ShaderCompiler reports by
+    // throwing comes out of this block as ShaderCompilationError.
+    Opal::StringUtf8 vs_entry;
+    Opal::StringUtf8 fs_entry;
+    Rndr::CompileResult vs_result;
+    Rndr::CompileResult fs_result;
+    Opal::DynamicArray<Rndr::ShaderParameter> merged;
+    try
+    {
+        Rndr::ShaderCompiler vs_compiler;
+        vs_compiler.LoadModule(vertex_source, Rndr::ShaderOutputFormat::Glsl);
+        const Opal::DynamicArray<Rndr::EntryPointInfo> vs_entries = vs_compiler.DiscoverEntryPoints();
+        vs_entry = Rndr::ShaderCompiler::FindSingleEntryPoint(vs_entries, Rndr::ShaderStage::Vertex, "vertex");
 
-    Rndr::CompileResult vs_result = vs_compiler.CompileEntryPoint(vs_entry);
+        Rndr::ShaderCompiler fs_compiler;
+        fs_compiler.LoadModule(fragment_source, Rndr::ShaderOutputFormat::Glsl);
+        const Opal::DynamicArray<Rndr::EntryPointInfo> fs_entries = fs_compiler.DiscoverEntryPoints();
+        fs_entry = Rndr::ShaderCompiler::FindSingleEntryPoint(fs_entries, Rndr::ShaderStage::Fragment, "fragment");
+
+        vs_result = vs_compiler.CompileEntryPoint(vs_entry);
+        fs_result = fs_compiler.CompileEntryPoint(fs_entry);
+        merged = Rndr::ShaderCompiler::MergeParameters(vs_result.parameters, fs_result.parameters);
+    }
+    catch (const Opal::Exception& exception)
+    {
+        RNDR_LOG_ERROR("Canvas: compiling the shader failed: {}", *exception.What());
+        return ResultType(Rndr::ErrorCode::ShaderCompilationError);
+    }
+
     if (vs_result.stage != Rndr::ShaderStage::Vertex)
     {
-        throw Rndr::GraphicsAPIException(0, "Vertex entry point does not have [shader(\"vertex\")] annotation!");
+        RNDR_LOG_ERROR("Canvas: Vertex entry point does not have [shader(\"vertex\")] annotation");
+        return ResultType(Rndr::ErrorCode::ShaderCompilationError);
     }
-
-    const Rndr::CompileResult fs_result = fs_compiler.CompileEntryPoint(fs_entry);
     if (fs_result.stage != Rndr::ShaderStage::Fragment)
     {
-        throw Rndr::GraphicsAPIException(0, "Fragment entry point does not have [shader(\"fragment\")] annotation!");
+        RNDR_LOG_ERROR("Canvas: Fragment entry point does not have [shader(\"fragment\")] annotation");
+        return ResultType(Rndr::ErrorCode::ShaderCompilationError);
     }
 
-    Opal::DynamicArray<Rndr::ShaderParameter> merged = Rndr::ShaderCompiler::MergeParameters(vs_result.parameters, fs_result.parameters);
-
-    const GLuint vs = CreateShaderFromGlsl(GL_VERTEX_SHADER, vs_result.code.GetData(), vs_result.code.GetSize());
+    const auto vs_gl_result = CreateShaderFromGlsl(GL_VERTEX_SHADER, vs_result.code.GetData(), vs_result.code.GetSize());
+    if (!vs_gl_result.HasValue())
+    {
+        return ResultType(vs_gl_result.GetError());
+    }
+    const GLuint vs = vs_gl_result.GetValue();
     const Opal::StringUtf8 vertex_shader_name = debug_name + " - Vertex Shader";
     glObjectLabel(GL_SHADER, vs, static_cast<GLsizei>(vertex_shader_name.GetSize()), *vertex_shader_name);
-    GLuint fs = 0;
-    try
-    {
-        fs = CreateShaderFromGlsl(GL_FRAGMENT_SHADER, fs_result.code.GetData(), fs_result.code.GetSize());
-        const Opal::StringUtf8 fragment_shader_name = debug_name + " - Fragment Shader";
-        glObjectLabel(GL_SHADER, fs, static_cast<GLsizei>(fragment_shader_name.GetSize()), *fragment_shader_name);
-    }
-    catch (...)
-    {
-        glDeleteShader(vs);
-        throw;
-    }
 
-    GLuint program = 0;
-    try
-    {
-        program = LinkProgram(vs, fs);
-        const Opal::StringUtf8 program_name = debug_name + " - Shader Program";
-        glObjectLabel(GL_PROGRAM, program, static_cast<GLsizei>(program_name.GetSize()), *program_name);
-    }
-    catch (...)
+    const auto fs_gl_result = CreateShaderFromGlsl(GL_FRAGMENT_SHADER, fs_result.code.GetData(), fs_result.code.GetSize());
+    if (!fs_gl_result.HasValue())
     {
         glDeleteShader(vs);
-        glDeleteShader(fs);
-        throw;
+        return ResultType(fs_gl_result.GetError());
     }
+    const GLuint fs = fs_gl_result.GetValue();
+    const Opal::StringUtf8 fragment_shader_name = debug_name + " - Fragment Shader";
+    glObjectLabel(GL_SHADER, fs, static_cast<GLsizei>(fragment_shader_name.GetSize()), *fragment_shader_name);
+
+    const auto program_result = LinkProgram(vs, fs);
     glDeleteShader(vs);
     glDeleteShader(fs);
+    if (!program_result.HasValue())
+    {
+        return ResultType(program_result.GetError());
+    }
+    const GLuint program = program_result.GetValue();
+    const Opal::StringUtf8 program_name = debug_name + " - Shader Program";
+    glObjectLabel(GL_PROGRAM, program, static_cast<GLsizei>(program_name.GetSize()), *program_name);
+
+    auto layout_result = BuildVertexLayout(vs_result.vertex_inputs);
+    if (!layout_result.HasValue())
+    {
+        glDeleteProgram(program);
+        return ResultType(layout_result.GetError());
+    }
 
     ShaderBuildResult out;
     out.program = program;
     out.vertex_entry = std::move(vs_entry);
     out.fragment_entry = std::move(fs_entry);
     out.parameters = std::move(merged);
-    out.vertex_layout = BuildVertexLayout(vs_result.vertex_inputs);
-    return out;
+    out.vertex_layout = std::move(layout_result).GetValue();
+    return ResultType(std::move(out));
 }
 
 }  // namespace
 
-Rndr::Canvas::Shader Rndr::Canvas::Shader::FromSource(const Opal::StringUtf8& path, Opal::StringUtf8 debug_name)
+Opal::Expected<Rndr::Canvas::Shader, Rndr::ErrorCode> Rndr::Canvas::Shader::FromSource(const Opal::StringUtf8& path,
+                                                                                       Opal::StringUtf8 debug_name)
 {
     RNDR_CPU_EVENT_SCOPED("Canvas::Shader::FromSource");
+    using ResultType = Opal::Expected<Shader, ErrorCode>;
 
+    if (!Opal::Exists(path))
+    {
+        RNDR_LOG_ERROR("Canvas: Shader file does not exist: {}", *path);
+        return ResultType(ErrorCode::FileNotFound);
+    }
     const Opal::StringUtf8 source = File::ReadEntireTextFile(path);
     if (source.IsEmpty())
     {
-        throw Opal::InvalidArgumentException(__FUNCTION__, "Failed to read shader file or file is empty!");
+        RNDR_LOG_ERROR("Canvas: Failed to read shader file or file is empty: {}", *path);
+        return ResultType(ErrorCode::InvalidArgument);
     }
 
     return FromSourceInMemory(source, std::move(debug_name));
 }
 
-Rndr::Canvas::Shader Rndr::Canvas::Shader::FromSourceInMemory(const Opal::StringUtf8& source, Opal::StringUtf8 debug_name)
+Opal::Expected<Rndr::Canvas::Shader, Rndr::ErrorCode> Rndr::Canvas::Shader::FromSourceInMemory(const Opal::StringUtf8& source,
+                                                                                               Opal::StringUtf8 debug_name)
 {
     RNDR_CPU_EVENT_SCOPED("Canvas::Shader::FromSourceInMemory");
+    using ResultType = Opal::Expected<Shader, ErrorCode>;
 
     if (source.IsEmpty())
     {
-        throw Opal::InvalidArgumentException(__FUNCTION__, "Shader source is empty!");
+        RNDR_LOG_ERROR("Canvas: Shader source is empty");
+        return ResultType(ErrorCode::InvalidArgument);
     }
 
-    ShaderBuildResult build = BuildFromSingleSource(source, debug_name.Clone());
+    auto build_result = BuildFromSingleSource(source, debug_name.Clone());
+    RNDR_CANVAS_CHECK_EXPECTED(build_result.GetErrorOr(ErrorCode::Success), ResultType);
+    ShaderBuildResult build = std::move(build_result).GetValue();
 
     Shader shader;
     shader.m_program = build.program;
@@ -477,44 +560,59 @@ Rndr::Canvas::Shader Rndr::Canvas::Shader::FromSourceInMemory(const Opal::String
     shader.m_num_threads = build.num_threads;
     shader.m_debug_name = std::move(debug_name);
 
-    return shader;
+    return ResultType(std::move(shader));
 }
 
-Rndr::Canvas::Shader Rndr::Canvas::Shader::FromSources(const Opal::StringUtf8& vertex_path, const Opal::StringUtf8& fragment_path,
-                                                       Opal::StringUtf8 debug_name)
+Opal::Expected<Rndr::Canvas::Shader, Rndr::ErrorCode> Rndr::Canvas::Shader::FromSources(const Opal::StringUtf8& vertex_path,
+                                                                                        const Opal::StringUtf8& fragment_path,
+                                                                                        Opal::StringUtf8 debug_name)
 {
     RNDR_CPU_EVENT_SCOPED("Canvas::Shader::FromSources");
+    using ResultType = Opal::Expected<Shader, ErrorCode>;
 
+    if (!Opal::Exists(vertex_path) || !Opal::Exists(fragment_path))
+    {
+        RNDR_LOG_ERROR("Canvas: Shader file does not exist: {} or {}", *vertex_path, *fragment_path);
+        return ResultType(ErrorCode::FileNotFound);
+    }
     const Opal::StringUtf8 vs_source = File::ReadEntireTextFile(vertex_path);
     if (vs_source.IsEmpty())
     {
-        throw Opal::InvalidArgumentException(__FUNCTION__, "Failed to read vertex shader file or file is empty!");
+        RNDR_LOG_ERROR("Canvas: Failed to read vertex shader file or file is empty: {}", *vertex_path);
+        return ResultType(ErrorCode::InvalidArgument);
     }
 
     const Opal::StringUtf8 fs_source = File::ReadEntireTextFile(fragment_path);
     if (fs_source.IsEmpty())
     {
-        throw Opal::InvalidArgumentException(__FUNCTION__, "Failed to read fragment shader file or file is empty!");
+        RNDR_LOG_ERROR("Canvas: Failed to read fragment shader file or file is empty: {}", *fragment_path);
+        return ResultType(ErrorCode::InvalidArgument);
     }
 
     return FromSourcesInMemory(vs_source, fs_source, std::move(debug_name));
 }
 
-Rndr::Canvas::Shader Rndr::Canvas::Shader::FromSourcesInMemory(const Opal::StringUtf8& vertex_source,
-                                                               const Opal::StringUtf8& fragment_source, Opal::StringUtf8 debug_name)
+Opal::Expected<Rndr::Canvas::Shader, Rndr::ErrorCode> Rndr::Canvas::Shader::FromSourcesInMemory(const Opal::StringUtf8& vertex_source,
+                                                                                                const Opal::StringUtf8& fragment_source,
+                                                                                                Opal::StringUtf8 debug_name)
 {
     RNDR_CPU_EVENT_SCOPED("Canvas::Shader::FromSourcesInMemory");
+    using ResultType = Opal::Expected<Shader, ErrorCode>;
 
     if (vertex_source.IsEmpty())
     {
-        throw Opal::InvalidArgumentException(__FUNCTION__, "Vertex shader source is empty!");
+        RNDR_LOG_ERROR("Canvas: Vertex shader source is empty");
+        return ResultType(ErrorCode::InvalidArgument);
     }
     if (fragment_source.IsEmpty())
     {
-        throw Opal::InvalidArgumentException(__FUNCTION__, "Fragment shader source is empty!");
+        RNDR_LOG_ERROR("Canvas: Fragment shader source is empty");
+        return ResultType(ErrorCode::InvalidArgument);
     }
 
-    ShaderBuildResult build = BuildFromTwoSources(vertex_source, fragment_source, std::move(debug_name));
+    auto build_result = BuildFromTwoSources(vertex_source, fragment_source, std::move(debug_name));
+    RNDR_CANVAS_CHECK_EXPECTED(build_result.GetErrorOr(ErrorCode::Success), ResultType);
+    ShaderBuildResult build = std::move(build_result).GetValue();
 
     Shader shader;
     shader.m_program = build.program;
@@ -526,7 +624,7 @@ Rndr::Canvas::Shader Rndr::Canvas::Shader::FromSourcesInMemory(const Opal::Strin
     shader.m_vertex_layout = std::move(build.vertex_layout);
     shader.m_num_threads = build.num_threads;
 
-    return shader;
+    return ResultType(std::move(shader));
 }
 
 Rndr::Canvas::Shader::~Shader()
@@ -567,11 +665,12 @@ Rndr::Canvas::Shader& Rndr::Canvas::Shader::operator=(Shader&& other) noexcept
     return *this;
 }
 
-Rndr::Canvas::Shader Rndr::Canvas::Shader::Clone() const
+Opal::Expected<Rndr::Canvas::Shader, Rndr::ErrorCode> Rndr::Canvas::Shader::Clone() const
 {
     if (!IsValid())
     {
-        return {};
+        RNDR_LOG_ERROR("Canvas: Cannot clone an invalid shader");
+        return Opal::Expected<Shader, ErrorCode>(ErrorCode::InvalidArgument);
     }
 
     Opal::StringUtf8 clone_debug_name = m_debug_name.Clone() + " Clone";
