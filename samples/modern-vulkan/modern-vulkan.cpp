@@ -99,7 +99,7 @@ void Run()
     window->SetCursorPositionMode(Rndr::CursorPositionMode::ResetToCenter);
 
     Rndr::Forge::GraphicsContext graphics_context = Require(Rndr::Forge::GraphicsContext::Create({.collect_debug_messages = true}));
-    Rndr::Forge::Surface surface(graphics_context, *window);
+    Rndr::Forge::Surface surface = Require(Rndr::Forge::Surface::Create(graphics_context, *window));
 
     // Picks the best device that can do everything the desc asks for, rather than whichever one the driver
     // listed first, which on a laptop is as likely to be the integrated GPU as the discrete one.
@@ -110,7 +110,8 @@ void Run()
     Rndr::Forge::DeviceQueue& graphics_queue = Require(device.GetQueue(Rndr::Forge::QueueFamily::Graphics));
     Rndr::Forge::DeviceQueue& present_queue = Require(device.GetQueue(Rndr::Forge::QueueFamily::Present));
 
-    Rndr::Forge::SwapChain swap_chain(device, surface, {.use_depth = true, .depth_pixel_format = Rndr::PixelFormat::D32_SFLOAT});
+    Rndr::Forge::SwapChain swap_chain =
+        Require(Rndr::Forge::SwapChain::Create(device, surface, {.use_depth = true, .depth_pixel_format = Rndr::PixelFormat::D32_SFLOAT}));
 
     const Opal::StringUtf8 mesh_path =
         Opal::Paths::Combine(RNDR_CORE_ASSETS_DIR, "sample-models", "Suzanne", "glTF", "Suzanne.gltf").GetValue();
@@ -137,7 +138,8 @@ void Run()
 
     // Owns the frames in flight: a fence, a command buffer and the semaphores on both sides of the swap chain
     // for each, plus the order acquire, submit and present have to happen in.
-    Rndr::Forge::FrameContext frame_context(device, swap_chain, graphics_queue, present_queue, {.frames_in_flight = k_frames_in_flight});
+    Rndr::Forge::FrameContext frame_context = Require(
+        Rndr::Forge::FrameContext::Create(device, swap_chain, graphics_queue, present_queue, {.frames_in_flight = k_frames_in_flight}));
 
     // One pool per frame in flight, two timestamps each: one at the top of the frame and one at the bottom.
     // Per frame rather than shared, because the frame that reads a result must not be the frame writing it.
@@ -294,7 +296,7 @@ void Run()
         controller.Tick(delta_seconds);
 
         // Waits for this frame's slot, acquires a texture, and begins its command buffer.
-        if (frame_context.BeginFrame() == Rndr::Forge::SwapChainStatus::OutOfDate)
+        if (Require(frame_context.BeginFrame()) == Rndr::Forge::SwapChainStatus::OutOfDate)
         {
             if (!swap_chain.IsValid())
             {
@@ -332,7 +334,7 @@ void Run()
         }
         RequireOk(m_per_frame_buffers[frame_index].Update(Opal::AsBytes(shader_data)));
 
-        auto& command_buffer = frame_context.GetCommandBuffer();
+        auto& command_buffer = Require(frame_context.GetCommandBuffer());
 
         // A pool holds undefined values until it is reset, so the reset comes first every frame, and the two
         // timestamps around the frame's work measure the span between them: from the moment the device
@@ -344,7 +346,7 @@ void Run()
         // coming from: the swap chain texture is undefined again after every acquire, and the depth texture
         // remembers the attachment layout the previous frame left it in.
         Opal::InPlaceArray<Rndr::Forge::TextureBarrier, 2> barriers{
-            Require(Rndr::Forge::TextureBarrier::ToColorAttachment(frame_context.GetColorTexture())),
+            Require(Rndr::Forge::TextureBarrier::ToColorAttachment(Require(frame_context.GetColorTexture()))),
             Require(Rndr::Forge::TextureBarrier::ToDepthStencilAttachment(swap_chain.GetDepthTexture()))};
         RequireOk(command_buffer.CmdTextureBarriers(barriers));
 
@@ -352,7 +354,7 @@ void Run()
         // Do the actual draw calls
         const Rndr::Forge::RenderingDesc rendering_desc{
             .render_area_extent = render_size,
-            .color_attachments = {Rndr::Forge::RenderingAttachmentDesc{.texture = frame_context.GetColorTexture(),
+            .color_attachments = {Rndr::Forge::RenderingAttachmentDesc{.texture = Require(frame_context.GetColorTexture()),
                                                                        .load_operation = Rndr::Forge::AttachmentLoadOperation::Clear,
                                                                        .store_operation = Rndr::Forge::AttachmentStoreOperation::Store,
                                                                        .clear_value = Rndr::Vector4f{0.0f, 0.0f, 0.2f, 1.0f}}},
@@ -383,7 +385,7 @@ void Run()
         RequireOk(command_buffer.CmdWriteTimestamp(gpu_timer, 1, Rndr::Forge::PipelineStageBits::PipelineEnd));
 
         // Transitions the texture to Present, ends the command buffer, submits it and presents.
-        frame_context.EndFrame();
+        (void)Require(frame_context.EndFrame());
 
         auto end_time = Opal::GetSeconds();
         delta_seconds = static_cast<f32>(end_time - start_time);

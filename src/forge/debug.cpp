@@ -11,7 +11,7 @@
 #include "rndr/forge/swap-chain.hpp"
 #include "rndr/forge/synchronization.hpp"
 #include "rndr/forge/texture.hpp"
-#include "rndr/forge/vulkan-exception.hpp"
+#include "rndr/forge/vulkan-result.hpp"
 
 namespace
 {
@@ -34,7 +34,7 @@ void SetName(const Rndr::Forge::Device& device, VkObjectType object_type, Rndr::
     const VkResult result = vkSetDebugUtilsObjectNameEXT(device.GetNativeDevice(), &name_info);
     if (result != VK_SUCCESS)
     {
-        throw Rndr::Forge::VulkanException(result, "vkSetDebugUtilsObjectNameEXT");
+        RNDR_LOG_ERROR("Forge: {} failed: {}", "vkSetDebugUtilsObjectNameEXT", Rndr::Forge::VkResultToString(result));
     }
 }
 

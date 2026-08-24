@@ -3,13 +3,15 @@
 #include "volk/volk.h"
 
 #include "opal/container/dynamic-array.h"
+#include "opal/container/expected.h"
 
-#include "rndr/forge/texture.hpp"
+#include "rndr/error-codes.hpp"
+#include "rndr/forge/forward.hpp"
 #include "rndr/forge/graphics-context.hpp"
+#include "rndr/forge/texture.hpp"
+#include "rndr/forge/types.hpp"
 #include "rndr/pixel-format.hpp"
 #include "rndr/types.hpp"
-#include "rndr/forge/forward.hpp"
-#include "rndr/forge/types.hpp"
 
 namespace Rndr
 {
@@ -67,7 +69,13 @@ class Surface
 {
 public:
     Surface() = default;
-    explicit Surface(const GraphicsContext& context, const GenericWindow& window);
+
+    /**
+     * @param context Instance the surface belongs to. Has to outlive it.
+     * @param window Window to present to. Has to outlive it as well.
+     * @return The surface, or whatever the failing creation maps to.
+     */
+    [[nodiscard]] static Opal::Expected<Surface, ErrorCode> Create(const GraphicsContext& context, const GenericWindow& window);
     ~Surface();
     Surface(const Surface&) = delete;
     Surface& operator=(const Surface&) = delete;
@@ -78,7 +86,11 @@ public:
 
     [[nodiscard]] bool IsValid() const { return m_surface != VK_NULL_HANDLE; }
     [[nodiscard]] VkSurfaceKHR GetNativeSurface() const { return m_surface; }
-    [[nodiscard]] SwapChainSupportDetails GetSwapChainSupportDetails(const PhysicalDevice& device) const;
+    /**
+     * What this surface offers on that device: its capabilities, its formats and its present modes.
+     * @return The details, or whatever the failing query maps to.
+     */
+    [[nodiscard]] Opal::Expected<SwapChainSupportDetails, ErrorCode> GetSwapChainSupportDetails(const PhysicalDevice& device) const;
     [[nodiscard]] const GenericWindow& GetWindow() const { return *m_window; }
 
 private:
@@ -91,8 +103,17 @@ class SwapChain
 {
 public:
     SwapChain() = default;
-    SwapChain(const Device& device, const Surface& surface, const SwapChainDesc& desc = {});
     ~SwapChain();
+
+    /**
+     * @param device Device to create the swap chain on. Has to outlive it, as does the surface.
+     * @param desc Format, colour space, present mode and whether to carry a depth texture.
+     * @return The swap chain, ErrorCode::FeatureNotSupported when the surface does not offer what the desc
+     *         asks for, ErrorCode::InvalidArgument when the device has no graphics or present queue, or
+     *         whatever the failing creation maps to.
+     */
+    [[nodiscard]] static Opal::Expected<SwapChain, ErrorCode> Create(const Device& device, const Surface& surface,
+                                                                     const SwapChainDesc& desc = {});
     SwapChain(const SwapChain&) = delete;
     SwapChain& operator=(const SwapChain&) = delete;
     SwapChain(SwapChain&& other) noexcept;
@@ -105,8 +126,9 @@ public:
      *
      * When the window has no client area, as happens while it is minimized, the textures are released and no new swap
      * chain is created. The object stays usable and the next AcquireTexture tries again.
+     * @return ErrorCode::Success, or the first code the wait or the rebuild reported.
      */
-    void Recreate();
+    [[nodiscard]] ErrorCode Recreate();
 
     /** Release everything, including the references to the device and the surface. The object is empty afterwards. */
     void Destroy();
@@ -136,7 +158,7 @@ public:
      * must not reset its per-frame fence before this call returns Success, otherwise the next wait on that fence
      * never completes.
      */
-    AcquiredTexture AcquireTexture(const Semaphore& semaphore);
+    [[nodiscard]] Opal::Expected<AcquiredTexture, ErrorCode> AcquireTexture(const Semaphore& semaphore);
 
     /**
      * Whether a texture is acquired right now, which is true between an AcquireTexture that returned Success
@@ -151,8 +173,8 @@ public:
      * The acquired texture, which is the one to render into this frame. Throws when none is acquired, since
      * there is no texture to hand back rather than a wrong one.
      */
-    [[nodiscard]] const Texture& GetCurrentColorTexture() const;
-    [[nodiscard]] Texture& GetCurrentColorTexture();
+    [[nodiscard]] Opal::Expected<const Texture&, ErrorCode> GetCurrentColorTexture() const;
+    [[nodiscard]] Opal::Expected<Texture&, ErrorCode> GetCurrentColorTexture();
 
     /**
      * Present the acquired texture once the given semaphore is signaled. Which texture that is the swap chain
@@ -162,7 +184,7 @@ public:
      * Returns SwapChainStatus::OutOfDate when the swap chain stopped matching the surface, in which case it has
      * already been recreated and the caller has to refresh anything it cached about it.
      */
-    SwapChainStatus Present(DeviceQueue& queue, const Semaphore& semaphore);
+    [[nodiscard]] Opal::Expected<SwapChainStatus, ErrorCode> Present(DeviceQueue& queue, const Semaphore& semaphore);
 
 private:
     /** Destroy the color textures, their views and the depth texture, leaving the swap chain handle alone. */

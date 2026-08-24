@@ -3,16 +3,18 @@
 #include "volk/volk.h"
 
 #include "opal/container/dynamic-array.h"
+#include "opal/container/expected.h"
 #include "opal/container/ref.h"
 #include "opal/container/string.h"
 
+#include "rndr/error-codes.hpp"
 #include "rndr/forge/command-buffer.hpp"
+#include "rndr/forge/forward.hpp"
 #include "rndr/forge/swap-chain.hpp"
 #include "rndr/forge/synchronization.hpp"
+#include "rndr/forge/types.hpp"
 #include "rndr/math.hpp"
 #include "rndr/types.hpp"
-#include "rndr/forge/forward.hpp"
-#include "rndr/forge/types.hpp"
 
 namespace Rndr::Forge
 {
@@ -56,16 +58,20 @@ class FrameContext
 public:
     FrameContext() = default;
 
+    ~FrameContext();
+
     /**
      * @param device Device everything is created from.
      * @param swap_chain Swap chain to render into. Acquired from and presented to, so it is held by reference.
      * @param graphics_queue Queue the frame's command buffer is submitted to.
      * @param present_queue Queue the texture is presented on. The same object as the graphics queue on most devices.
+     * @param desc How many frames are in flight.
+     * @return The frame context, ErrorCode::InvalidArgument for fewer than one frame in flight, or whatever
+     *         the failing creation of a slot reported.
      */
-    FrameContext(const Device& device, SwapChain& swap_chain, DeviceQueue& graphics_queue, DeviceQueue& present_queue,
-                 const FrameContextDesc& desc = {});
-
-    ~FrameContext();
+    [[nodiscard]] static Opal::Expected<FrameContext, ErrorCode> Create(const Device& device, SwapChain& swap_chain,
+                                                                        DeviceQueue& graphics_queue, DeviceQueue& present_queue,
+                                                                        const FrameContextDesc& desc = {});
 
     FrameContext(const FrameContext&) = delete;
     FrameContext& operator=(const FrameContext&) = delete;
@@ -81,25 +87,28 @@ public:
     /**
      * Wait for the slot this frame reuses, acquire a texture, and begin its command buffer.
      * @return Success when the frame can be recorded, OutOfDate when the swap chain was rebuilt and this frame
-     *         has to be skipped - nothing was recorded and nothing has to be undone.
+     *         has to be skipped - nothing was recorded and nothing has to be undone - or the code the wait,
+     *         the acquire or the command buffer reported.
      */
-    SwapChainStatus BeginFrame();
+    [[nodiscard]] Opal::Expected<SwapChainStatus, ErrorCode> BeginFrame();
 
     /**
      * End the command buffer, submit it, and present the texture it rendered into. The transition to Present
      * is made from whatever layout the frame left the swap chain texture in, which the texture itself tracks.
-     * @return OutOfDate when the swap chain stopped matching the surface, in which case it has been rebuilt.
+     * @return OutOfDate when the swap chain stopped matching the surface, in which case it has been rebuilt,
+     *         or the code the recording, the submit or the present reported. ErrorCode::InvalidArgument when
+     *         there is no frame being recorded.
      */
-    SwapChainStatus EndFrame();
+    [[nodiscard]] Opal::Expected<SwapChainStatus, ErrorCode> EndFrame();
 
-    /** The command buffer of the frame in flight. Only between BeginFrame and EndFrame. */
-    [[nodiscard]] CommandBuffer& GetCommandBuffer();
+    /**
+     * The command buffer of the frame in flight.
+     * @return The command buffer, or ErrorCode::InvalidArgument outside a frame.
+     */
+    [[nodiscard]] Opal::Expected<CommandBuffer&, ErrorCode> GetCommandBuffer();
 
     /** Which of the frames in flight this is, for indexing anything the caller keeps one of per frame. */
-    [[nodiscard]] u32 GetFrameIndex() const
-    {
-        return static_cast<u32>(m_frames_submitted % static_cast<u64>(m_desc.frames_in_flight));
-    }
+    [[nodiscard]] u32 GetFrameIndex() const { return static_cast<u32>(m_frames_submitted % static_cast<u64>(m_desc.frames_in_flight)); }
 
     /**
      * Which swap chain texture this frame acquired. Only meaningful between BeginFrame and EndFrame; the swap
@@ -107,10 +116,13 @@ public:
      */
     [[nodiscard]] u32 GetTextureIndex() const { return m_swap_chain->GetCurrentTextureIndex(); }
 
-    /** The swap chain texture this frame renders into. */
-    [[nodiscard]] const Texture& GetColorTexture() const;
+    /**
+     * The swap chain texture this frame renders into.
+     * @return The texture, or ErrorCode::InvalidArgument outside a frame.
+     */
+    [[nodiscard]] Opal::Expected<const Texture&, ErrorCode> GetColorTexture() const;
     /** The same texture, mutable, since a barrier on it moves the layout it tracks. */
-    [[nodiscard]] Texture& GetColorTexture();
+    [[nodiscard]] Opal::Expected<Texture&, ErrorCode> GetColorTexture();
 
     /**
      * The size to render at, which is the size of the swap chain rather than of the window - the window can be
@@ -123,7 +135,7 @@ private:
     friend void SetDebugName(const Device& device, const FrameContext& frame_context, const Opal::StringUtf8& name);
 
     /** One semaphore per swap chain texture, rebuilt whenever the swap chain is. */
-    void MatchRenderSemaphoresToSwapChain();
+    [[nodiscard]] ErrorCode MatchRenderSemaphoresToSwapChain();
 
     FrameContextDesc m_desc;
     Opal::Ref<const Device> m_device;

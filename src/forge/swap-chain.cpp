@@ -11,59 +11,61 @@
 #include "rndr/forge/device.hpp"
 #include "rndr/forge/physical-device.hpp"
 #include "rndr/forge/synchronization.hpp"
-#include "rndr/forge/vulkan-exception.hpp"
+#include "rndr/forge/vulkan-result.hpp"
 #include "rndr/generic-window.hpp"
 #include "rndr/log.hpp"
 #include "rndr/pixel-format.hpp"
 
-static VkPresentModeKHR ToVkPresentMode(Rndr::Forge::PresentMode present_mode)
+static Opal::Optional<VkPresentModeKHR> ToVkPresentMode(Rndr::Forge::PresentMode present_mode)
 {
     switch (present_mode)
     {
         case Rndr::Forge::PresentMode::Immediate:
-            return VK_PRESENT_MODE_IMMEDIATE_KHR;
+            return Opal::Optional<VkPresentModeKHR>(VK_PRESENT_MODE_IMMEDIATE_KHR);
         case Rndr::Forge::PresentMode::Mailbox:
-            return VK_PRESENT_MODE_MAILBOX_KHR;
+            return Opal::Optional<VkPresentModeKHR>(VK_PRESENT_MODE_MAILBOX_KHR);
         case Rndr::Forge::PresentMode::Fifo:
-            return VK_PRESENT_MODE_FIFO_KHR;
+            return Opal::Optional<VkPresentModeKHR>(VK_PRESENT_MODE_FIFO_KHR);
         case Rndr::Forge::PresentMode::FifoRelaxed:
-            return VK_PRESENT_MODE_FIFO_RELAXED_KHR;
+            return Opal::Optional<VkPresentModeKHR>(VK_PRESENT_MODE_FIFO_RELAXED_KHR);
     }
-    throw Opal::Exception("Unknown present mode!");
+    return {};
 }
 
-static VkColorSpaceKHR ToVkColorSpace(Rndr::Forge::ColorSpace color_space)
+static Opal::Optional<VkColorSpaceKHR> ToVkColorSpace(Rndr::Forge::ColorSpace color_space)
 {
     switch (color_space)
     {
         case Rndr::Forge::ColorSpace::SrgbNonlinear:
-            return VK_COLOR_SPACE_SRGB_NONLINEAR_KHR;
+            return Opal::Optional<VkColorSpaceKHR>(VK_COLOR_SPACE_SRGB_NONLINEAR_KHR);
         case Rndr::Forge::ColorSpace::ExtendedSrgbLinear:
-            return VK_COLOR_SPACE_EXTENDED_SRGB_LINEAR_EXT;
+            return Opal::Optional<VkColorSpaceKHR>(VK_COLOR_SPACE_EXTENDED_SRGB_LINEAR_EXT);
         case Rndr::Forge::ColorSpace::Hdr10St2084:
-            return VK_COLOR_SPACE_HDR10_ST2084_EXT;
+            return Opal::Optional<VkColorSpaceKHR>(VK_COLOR_SPACE_HDR10_ST2084_EXT);
         case Rndr::Forge::ColorSpace::DisplayP3Nonlinear:
-            return VK_COLOR_SPACE_DISPLAY_P3_NONLINEAR_EXT;
+            return Opal::Optional<VkColorSpaceKHR>(VK_COLOR_SPACE_DISPLAY_P3_NONLINEAR_EXT);
     }
-    throw Opal::Exception("Unknown color space!");
+    return {};
 }
 
-Rndr::Forge::Surface::Surface(const GraphicsContext& context, const GenericWindow& window) : m_window(window)
+Opal::Expected<Rndr::Forge::Surface, Rndr::ErrorCode> Rndr::Forge::Surface::Create(const GraphicsContext& context,
+                                                                                   const GenericWindow& window)
 {
+    using Result = Opal::Expected<Surface, ErrorCode>;
+
 #if defined(OPAL_PLATFORM_WINDOWS)
+    Surface surface;
+    surface.m_window = window;
     VkWin32SurfaceCreateInfoKHR surface_create_info{};
     surface_create_info.sType = VK_STRUCTURE_TYPE_WIN32_SURFACE_CREATE_INFO_KHR;
-    surface_create_info.hwnd = reinterpret_cast<HWND>(m_window->GetNativeHandle());
+    surface_create_info.hwnd = reinterpret_cast<HWND>(window.GetNativeHandle());
     surface_create_info.hinstance = GetModuleHandle(nullptr);
-    const VkResult result = vkCreateWin32SurfaceKHR(context.GetInstance(), &surface_create_info, nullptr, &m_surface);
-    if (result != VK_SUCCESS)
-    {
-        throw VulkanException(result, "vkCreateWin32SurfaceKHR");
-    }
-    m_context = &context;
+    RNDR_FORGE_VK_CHECK_EXPECTED(vkCreateWin32SurfaceKHR(context.GetInstance(), &surface_create_info, nullptr, &surface.m_surface),
+                                 "vkCreateWin32SurfaceKHR", Result);
+    surface.m_context = &context;
+    return Result(std::move(surface));
 #else
 #error "Platform not supported!"
-    return false;
 #endif
 }
 
@@ -103,8 +105,11 @@ void Rndr::Forge::Surface::Destroy()
     m_context = nullptr;
 }
 
-Rndr::Forge::SwapChainSupportDetails Rndr::Forge::Surface::GetSwapChainSupportDetails(const PhysicalDevice& device) const
+Opal::Expected<Rndr::Forge::SwapChainSupportDetails, Rndr::ErrorCode> Rndr::Forge::Surface::GetSwapChainSupportDetails(
+    const PhysicalDevice& device) const
 {
+    using Result = Opal::Expected<SwapChainSupportDetails, ErrorCode>;
+
     SwapChainSupportDetails details;
 
     vkGetPhysicalDeviceSurfaceCapabilitiesKHR(device.GetNativePhysicalDevice(), m_surface, &details.capabilities);
@@ -122,31 +127,26 @@ Rndr::Forge::SwapChainSupportDetails Rndr::Forge::Surface::GetSwapChainSupportDe
     if (present_mode_count != 0)
     {
         details.present_modes.Resize(present_mode_count);
-        const VkResult result = vkGetPhysicalDeviceSurfacePresentModesKHR(device.GetNativePhysicalDevice(), m_surface, &present_mode_count,
-                                                                          details.present_modes.GetData());
-        if (result != VK_SUCCESS)
-        {
-            throw VulkanException(result, "vkGetPhysicalDeviceSurfacePresentModesKHR");
-        }
+        RNDR_FORGE_VK_CHECK_EXPECTED(vkGetPhysicalDeviceSurfacePresentModesKHR(device.GetNativePhysicalDevice(), m_surface,
+                                                                               &present_mode_count, details.present_modes.GetData()),
+                                     "vkGetPhysicalDeviceSurfacePresentModesKHR", Result);
     }
-    return details;
+    return Result(std::move(details));
 }
 
-Rndr::Forge::SwapChain::SwapChain(const Device& device, const Surface& surface, const SwapChainDesc& desc)
-    : m_desc(desc), m_device(device), m_surface(surface)
+Opal::Expected<Rndr::Forge::SwapChain, Rndr::ErrorCode> Rndr::Forge::SwapChain::Create(const Device& device, const Surface& surface,
+                                                                                       const SwapChainDesc& desc)
 {
+    using Result = Opal::Expected<SwapChain, ErrorCode>;
+
     // Recreate holds the swap chain and its textures the moment each is made, and a later step of it can
-    // still throw. The destructor does not run for an object whose constructor threw, so what it got that
-    // far is released here.
-    try
-    {
-        Recreate();
-    }
-    catch (...)
-    {
-        Destroy();
-        throw;
-    }
+    // still give up. Both belong to this local, so what it got that far is released by the destructor.
+    SwapChain swap_chain;
+    swap_chain.m_desc = desc;
+    swap_chain.m_device = device;
+    swap_chain.m_surface = surface;
+    RNDR_FORGE_CHECK_EXPECTED(swap_chain.Recreate(), Result);
+    return Result(std::move(swap_chain));
 }
 
 Rndr::Forge::SwapChain::~SwapChain()
@@ -237,36 +237,45 @@ void Rndr::Forge::SwapChain::Destroy()
     m_extent = {};
 }
 
-const Rndr::Forge::Texture& Rndr::Forge::SwapChain::GetCurrentColorTexture() const
+Opal::Expected<const Rndr::Forge::Texture&, Rndr::ErrorCode> Rndr::Forge::SwapChain::GetCurrentColorTexture() const
 {
+    using Result = Opal::Expected<const Texture&, ErrorCode>;
+
     if (!HasAcquiredTexture())
     {
-        throw Opal::Exception("There is no acquired texture - AcquireTexture has to come first!");
+        RNDR_LOG_ERROR("Forge: there is no acquired texture - AcquireTexture has to come first");
+        return Result(ErrorCode::InvalidArgument);
     }
-    return m_color_textures[static_cast<i32>(m_current_texture_index)];
+    return Result(m_color_textures[static_cast<i32>(m_current_texture_index)]);
 }
 
-Rndr::Forge::Texture& Rndr::Forge::SwapChain::GetCurrentColorTexture()
+Opal::Expected<Rndr::Forge::Texture&, Rndr::ErrorCode> Rndr::Forge::SwapChain::GetCurrentColorTexture()
 {
+    using Result = Opal::Expected<Texture&, ErrorCode>;
+
     if (!HasAcquiredTexture())
     {
-        throw Opal::Exception("There is no acquired texture - AcquireTexture has to come first!");
+        RNDR_LOG_ERROR("Forge: there is no acquired texture - AcquireTexture has to come first");
+        return Result(ErrorCode::InvalidArgument);
     }
-    return m_color_textures[static_cast<i32>(m_current_texture_index)];
+    return Result(m_color_textures[static_cast<i32>(m_current_texture_index)]);
 }
 
-Rndr::Forge::AcquiredTexture Rndr::Forge::SwapChain::AcquireTexture(const Semaphore& semaphore)
+Opal::Expected<Rndr::Forge::AcquiredTexture, Rndr::ErrorCode> Rndr::Forge::SwapChain::AcquireTexture(const Semaphore& semaphore)
 {
+    using Result = Opal::Expected<AcquiredTexture, ErrorCode>;
+
     // Above the early return below, so that a window with no client area does not hide the mistake.
     if (semaphore.IsTimeline())
     {
-        throw Opal::Exception("Acquiring a texture needs a binary semaphore - presentation cannot signal a timeline!");
+        RNDR_LOG_ERROR("Forge: acquiring a texture needs a binary semaphore - presentation cannot signal a timeline");
+        return Result(ErrorCode::InvalidArgument);
     }
     if (m_swap_chain == VK_NULL_HANDLE)
     {
         // No swap chain because the window had no client area the last time we tried. Try again for the next frame.
-        Recreate();
-        return {};
+        RNDR_FORGE_CHECK_EXPECTED(Recreate(), Result);
+        return Result(AcquiredTexture{});
     }
 
     u32 texture_index = k_invalid_texture_index;
@@ -274,14 +283,15 @@ Rndr::Forge::AcquiredTexture Rndr::Forge::SwapChain::AcquireTexture(const Semaph
                                                   VK_NULL_HANDLE, &texture_index);
     if (result == VK_ERROR_OUT_OF_DATE_KHR)
     {
-        Recreate();
-        return {};
+        RNDR_FORGE_CHECK_EXPECTED(Recreate(), Result);
+        return Result(AcquiredTexture{});
     }
     // A suboptimal swap chain still hands out a usable texture and signals the semaphore, so the frame is rendered with
     // it and the recreation happens after the matching present reports the same thing.
     if (result != VK_SUCCESS && result != VK_SUBOPTIMAL_KHR)
     {
-        throw VulkanException(result, "vkAcquireNextImageKHR");
+        RNDR_LOG_ERROR("Forge: {} failed: {}", "vkAcquireNextImageKHR", VkResultToString(result));
+        return Result(VkResultToErrorCode(result));
     }
     m_current_texture_index = texture_index;
     // The presentation engine is the one writer of a layout that Forge cannot observe, and the specification
@@ -289,18 +299,23 @@ Rndr::Forge::AcquiredTexture Rndr::Forge::SwapChain::AcquireTexture(const Semaph
     // transition out of, which is what a swap chain texture cleared at the top of every frame wants.
     // Undefined covers every subresource of a swap chain texture, so this range check cannot fail.
     (void)m_color_textures[static_cast<i32>(texture_index)].SetCurrentLayout({}, ImageLayout::Undefined);
-    return {SwapChainStatus::Success, texture_index};
+    return Result(AcquiredTexture{SwapChainStatus::Success, texture_index});
 }
 
-Rndr::Forge::SwapChainStatus Rndr::Forge::SwapChain::Present(DeviceQueue& queue, const Semaphore& semaphore)
+Opal::Expected<Rndr::Forge::SwapChainStatus, Rndr::ErrorCode> Rndr::Forge::SwapChain::Present(DeviceQueue& queue,
+                                                                                              const Semaphore& semaphore)
 {
+    using Result = Opal::Expected<SwapChainStatus, ErrorCode>;
+
     if (semaphore.IsTimeline())
     {
-        throw Opal::Exception("Presenting needs a binary semaphore - presentation cannot wait on a timeline!");
+        RNDR_LOG_ERROR("Forge: presenting needs a binary semaphore - presentation cannot wait on a timeline");
+        return Result(ErrorCode::InvalidArgument);
     }
     if (!HasAcquiredTexture())
     {
-        throw Opal::Exception("There is no acquired texture to present - AcquireTexture has to come first!");
+        RNDR_LOG_ERROR("Forge: there is no acquired texture to present - AcquireTexture has to come first");
+        return Result(ErrorCode::InvalidArgument);
     }
     // Cleared before the call rather than after: a present that comes back out of date recreates the swap
     // chain underneath us, and the index would then point into textures that no longer exist.
@@ -319,14 +334,15 @@ Rndr::Forge::SwapChainStatus Rndr::Forge::SwapChain::Present(DeviceQueue& queue,
     const VkResult result = vkQueuePresentKHR(queue.GetNativeQueue(), &present_info);
     if (result == VK_ERROR_OUT_OF_DATE_KHR || result == VK_SUBOPTIMAL_KHR)
     {
-        Recreate();
-        return SwapChainStatus::OutOfDate;
+        RNDR_FORGE_CHECK_EXPECTED(Recreate(), Result);
+        return Result(SwapChainStatus::OutOfDate);
     }
     if (result != VK_SUCCESS)
     {
-        throw VulkanException(result, "vkQueuePresentKHR");
+        RNDR_LOG_ERROR("Forge: {} failed: {}", "vkQueuePresentKHR", VkResultToString(result));
+        return Result(VkResultToErrorCode(result));
     }
-    return SwapChainStatus::Success;
+    return Result(SwapChainStatus::Success);
 }
 
 namespace
@@ -356,18 +372,21 @@ VkExtent2D SelectExtent(const VkSurfaceCapabilitiesKHR& capabilities, const Rndr
 }
 }  // namespace
 
-void Rndr::Forge::SwapChain::Recreate()
+Rndr::ErrorCode Rndr::Forge::SwapChain::Recreate()
 {
     // Frames that were submitted earlier can still be reading from the textures that are about to be released.
-    if (m_device->WaitForAll() != ErrorCode::Success)
-    {
-        throw Opal::Exception("Waiting for the device to go idle before recreating the swap chain failed!");
-    }
+    RNDR_FORGE_CHECK(m_device->WaitForAll());
     DestroyTextures();
 
-    const SwapChainSupportDetails swap_chain_support = m_surface->GetSwapChainSupportDetails(m_device->GetPhysicalDevice());
-    const VkColorSpaceKHR color_space = ToVkColorSpace(m_desc.color_space);
-    const VkPresentModeKHR present_mode = ToVkPresentMode(m_desc.present_mode);
+    Opal::Expected<SwapChainSupportDetails, ErrorCode> support_details =
+        m_surface->GetSwapChainSupportDetails(m_device->GetPhysicalDevice());
+    if (!support_details.HasValue())
+    {
+        return support_details.GetError();
+    }
+    const SwapChainSupportDetails& swap_chain_support = support_details.GetValue();
+    RNDR_FORGE_TRANSLATE(color_space, ToVkColorSpace(m_desc.color_space), "SwapChainDesc::color_space");
+    RNDR_FORGE_TRANSLATE(present_mode, ToVkPresentMode(m_desc.present_mode), "SwapChainDesc::present_mode");
     bool is_supported = false;
     for (auto available_format : swap_chain_support.formats)
     {
@@ -379,7 +398,8 @@ void Rndr::Forge::SwapChain::Recreate()
     }
     if (!is_supported)
     {
-        throw Opal::Exception("Swap chain format not supported!");
+        RNDR_LOG_ERROR("Forge: this surface does not offer the swap chain format and colour space the desc asks for");
+        return ErrorCode::FeatureNotSupported;
     }
 
     is_supported = false;
@@ -393,7 +413,8 @@ void Rndr::Forge::SwapChain::Recreate()
     }
     if (!is_supported)
     {
-        throw Opal::Exception("Swap chain present mode not supported!");
+        RNDR_LOG_ERROR("Forge: this surface does not offer the swap chain present mode the desc asks for");
+        return ErrorCode::FeatureNotSupported;
     }
 
     const VkExtent2D extent = SelectExtent(swap_chain_support.capabilities, m_surface->GetWindow());
@@ -403,7 +424,7 @@ void Rndr::Forge::SwapChain::Recreate()
         // AcquireTexture try again once the window is back.
         DestroySwapChain();
         m_extent = {};
-        return;
+        return ErrorCode::Success;
     }
     RNDR_LOG_INFO("Swap chain extent: ({}, {})", extent.width, extent.height);
 
@@ -423,16 +444,17 @@ void Rndr::Forge::SwapChain::Recreate()
     create_info.imageArrayLayers = 1;
     create_info.imageUsage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
     // A presented frame is only observable when it can be the source of a copy, and that is a usage the
-    // surface has to offer. Asked for and missing throws, rather than handing back textures whose desc says
-    // they can be read and whose images cannot.
+    // surface has to offer. Asked for and missing is refused, rather than handing back textures whose desc
+    // says they can be read and whose images cannot.
     TextureUsageBits color_texture_usage = TextureUsageBits::ColorAttachment;
     if (m_desc.allow_readback)
     {
         if ((swap_chain_support.capabilities.supportedUsageFlags & VK_IMAGE_USAGE_TRANSFER_SRC_BIT) == 0)
         {
-            throw Opal::Exception(
-                "This surface does not offer swap chain textures that can be copied from, so allow_readback "
-                "cannot be honoured!");
+            RNDR_LOG_ERROR(
+                "Forge: this surface does not offer swap chain textures that can be copied from, so allow_readback cannot be "
+                "honoured");
+            return ErrorCode::FeatureNotSupported;
         }
         create_info.imageUsage |= VK_IMAGE_USAGE_TRANSFER_SRC_BIT;
         color_texture_usage |= TextureUsageBits::TransferSource;
@@ -442,7 +464,8 @@ void Rndr::Forge::SwapChain::Recreate()
     Opal::Expected<const DeviceQueue&, ErrorCode> present_queue_result = m_device->GetQueue(QueueFamily::Present);
     if (!graphics_queue_result.HasValue() || !present_queue_result.HasValue())
     {
-        throw Opal::Exception("A swap chain needs a device created with both a graphics and a present queue!");
+        RNDR_LOG_ERROR("Forge: a swap chain needs a device created with both a graphics and a present queue");
+        return ErrorCode::InvalidArgument;
     }
     const DeviceQueue& graphics_queue = graphics_queue_result.GetValue();
     const DeviceQueue& present_queue = present_queue_result.GetValue();
@@ -479,7 +502,8 @@ void Rndr::Forge::SwapChain::Recreate()
     DestroySwapChain();
     if (result != VK_SUCCESS)
     {
-        throw VulkanException(result, "vkCreateSwapchainKHR");
+        RNDR_LOG_ERROR("Forge: {} failed: {}", "vkCreateSwapchainKHR", VkResultToString(result));
+        return VkResultToErrorCode(result);
     }
     m_swap_chain = new_swap_chain;
     m_extent = extent;
@@ -487,7 +511,8 @@ void Rndr::Forge::SwapChain::Recreate()
     result = vkGetSwapchainImagesKHR(m_device->GetNativeDevice(), m_swap_chain, &image_count, nullptr);
     if (result != VK_SUCCESS)
     {
-        throw VulkanException(result, "vkGetSwapchainImagesKHR");
+        RNDR_LOG_ERROR("Forge: {} failed: {}", "vkGetSwapchainImagesKHR", VkResultToString(result));
+        return VkResultToErrorCode(result);
     }
 
     Opal::DynamicArray<VkImage> images;
@@ -495,7 +520,8 @@ void Rndr::Forge::SwapChain::Recreate()
     result = vkGetSwapchainImagesKHR(m_device->GetNativeDevice(), m_swap_chain, &image_count, images.GetData());
     if (result != VK_SUCCESS)
     {
-        throw VulkanException(result, "vkGetSwapchainImagesKHR");
+        RNDR_LOG_ERROR("Forge: {} failed: {}", "vkGetSwapchainImagesKHR", VkResultToString(result));
+        return VkResultToErrorCode(result);
     }
     for (VkImage image : images)
     {
@@ -504,7 +530,7 @@ void Rndr::Forge::SwapChain::Recreate()
             TextureDesc{.format = m_desc.pixel_format, .width = extent.width, .height = extent.height, .usage = color_texture_usage});
         if (!texture.HasValue())
         {
-            throw Opal::Exception("A swap chain texture could not be wrapped!");
+            return texture.GetError();
         }
         m_color_textures.PushBack(std::move(texture.GetValue()));
     }
@@ -519,8 +545,9 @@ void Rndr::Forge::SwapChain::Recreate()
                                                                                       .view_type = TextureViewType::Texture2D});
         if (!depth_texture.HasValue())
         {
-            throw Opal::Exception("The swap chain depth texture could not be created!");
+            return depth_texture.GetError();
         }
         m_depth_texture = std::move(depth_texture.GetValue());
     }
+    return ErrorCode::Success;
 }

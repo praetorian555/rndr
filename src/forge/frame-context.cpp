@@ -1,40 +1,58 @@
 #include "rndr/forge/frame-context.hpp"
 
 #include "rndr/forge/device.hpp"
-#include "rndr/forge/vulkan-exception.hpp"
+#include "rndr/forge/vulkan-result.hpp"
+#include "rndr/log.hpp"
 
-Rndr::Forge::FrameContext::FrameContext(const Device& device, SwapChain& swap_chain, DeviceQueue& graphics_queue,
-                                        DeviceQueue& present_queue, const FrameContextDesc& desc)
-    : m_desc(desc), m_device(device), m_swap_chain(swap_chain), m_graphics_queue(graphics_queue), m_present_queue(present_queue)
+Opal::Expected<Rndr::Forge::FrameContext, Rndr::ErrorCode> Rndr::Forge::FrameContext::Create(const Device& device, SwapChain& swap_chain,
+                                                                                             DeviceQueue& graphics_queue,
+                                                                                             DeviceQueue& present_queue,
+                                                                                             const FrameContextDesc& desc)
 {
+    using Result = Opal::Expected<FrameContext, ErrorCode>;
+
     // Below one rather than zero: a negative count used to be survivable by accident, since the loop below
     // never ran and left every array empty, but the timeline is not built in that loop.
-    if (m_desc.frames_in_flight < 1)
+    if (desc.frames_in_flight < 1)
     {
-        throw Opal::Exception("A frame context needs at least one frame in flight!");
+        RNDR_LOG_ERROR("Forge: a frame context needs at least one frame in flight, not {}", desc.frames_in_flight);
+        return Result(ErrorCode::InvalidArgument);
     }
+
+    FrameContext frame_context;
+    frame_context.m_desc = desc;
+    frame_context.m_device = device;
+    frame_context.m_swap_chain = swap_chain;
+    frame_context.m_graphics_queue = graphics_queue;
+    frame_context.m_present_queue = present_queue;
+
     // Starting at the number of frames in flight is what replaces a fence per slot created signaled: the
     // first frames_in_flight frames wait for a value at or below it, so none of them waits for work that was
     // never submitted.
     Opal::Expected<Semaphore, ErrorCode> timeline =
-        Semaphore::Create(device, {.type = SemaphoreType::Timeline, .initial_value = static_cast<u64>(m_desc.frames_in_flight)});
+        Semaphore::Create(device, {.type = SemaphoreType::Timeline, .initial_value = static_cast<u64>(desc.frames_in_flight)});
     if (!timeline.HasValue())
     {
-        throw Opal::Exception("The frame timeline could not be created!");
+        return Result(timeline.GetError());
     }
-    m_frame_timeline = std::move(timeline.GetValue());
-    for (i32 frame = 0; frame < m_desc.frames_in_flight; ++frame)
+    frame_context.m_frame_timeline = std::move(timeline.GetValue());
+    for (i32 frame = 0; frame < desc.frames_in_flight; ++frame)
     {
         Opal::Expected<Semaphore, ErrorCode> texture_ready = Semaphore::Create(device);
-        Opal::Expected<CommandBuffer, ErrorCode> command_buffer = CommandBuffer::Create(device, graphics_queue);
-        if (!texture_ready.HasValue() || !command_buffer.HasValue())
+        if (!texture_ready.HasValue())
         {
-            throw Opal::Exception("A frame slot could not be created!");
+            return Result(texture_ready.GetError());
         }
-        m_texture_ready_semaphores.EmplaceBack(std::move(texture_ready.GetValue()));
-        m_command_buffers.EmplaceBack(std::move(command_buffer.GetValue()));
+        Opal::Expected<CommandBuffer, ErrorCode> command_buffer = CommandBuffer::Create(device, graphics_queue);
+        if (!command_buffer.HasValue())
+        {
+            return Result(command_buffer.GetError());
+        }
+        frame_context.m_texture_ready_semaphores.EmplaceBack(std::move(texture_ready.GetValue()));
+        frame_context.m_command_buffers.EmplaceBack(std::move(command_buffer.GetValue()));
     }
-    MatchRenderSemaphoresToSwapChain();
+    RNDR_FORGE_CHECK_EXPECTED(frame_context.MatchRenderSemaphoresToSwapChain(), Result);
+    return Result(std::move(frame_context));
 }
 
 Rndr::Forge::FrameContext::~FrameContext()
@@ -116,12 +134,12 @@ void Rndr::Forge::FrameContext::Destroy()
     m_is_frame_recording = false;
 }
 
-void Rndr::Forge::FrameContext::MatchRenderSemaphoresToSwapChain()
+Rndr::ErrorCode Rndr::Forge::FrameContext::MatchRenderSemaphoresToSwapChain()
 {
     const u32 texture_count = m_swap_chain->GetColorTextureCount();
     if (static_cast<u32>(m_render_finished_semaphores.GetSize()) == texture_count)
     {
-        return;
+        return ErrorCode::Success;
     }
     m_render_finished_semaphores.Clear();
     for (u32 texture = 0; texture < texture_count; ++texture)
@@ -129,77 +147,82 @@ void Rndr::Forge::FrameContext::MatchRenderSemaphoresToSwapChain()
         Opal::Expected<Semaphore, ErrorCode> render_finished = Semaphore::Create(*m_device);
         if (!render_finished.HasValue())
         {
-            throw Opal::Exception("A render finished semaphore could not be created!");
+            return render_finished.GetError();
         }
         m_render_finished_semaphores.EmplaceBack(std::move(render_finished.GetValue()));
     }
+    return ErrorCode::Success;
 }
 
-Rndr::Forge::SwapChainStatus Rndr::Forge::FrameContext::BeginFrame()
+Opal::Expected<Rndr::Forge::SwapChainStatus, Rndr::ErrorCode> Rndr::Forge::FrameContext::BeginFrame()
 {
+    using Result = Opal::Expected<SwapChainStatus, ErrorCode>;
+
     if (m_is_frame_recording)
     {
-        throw Opal::Exception("BeginFrame was called twice without an EndFrame in between!");
+        RNDR_LOG_ERROR("Forge: BeginFrame was called twice without an EndFrame in between");
+        return Result(ErrorCode::InvalidArgument);
     }
     // Frame k waits for k + 1, which is what frame k - frames_in_flight signalled - the frame whose slot,
     // command buffer and texture-ready semaphore this one is about to reuse. Nothing to reset afterwards, so
     // there is no ordering question about where the reset goes either.
-    if (m_frame_timeline.Wait(m_frames_submitted + 1) != ErrorCode::Success)
-    {
-        throw Opal::Exception("Waiting for the frame timeline failed!");
-    }
+    RNDR_FORGE_CHECK_EXPECTED(m_frame_timeline.Wait(m_frames_submitted + 1), Result);
 
     const u32 frame_index = GetFrameIndex();
-    const AcquiredTexture acquired_texture = m_swap_chain->AcquireTexture(m_texture_ready_semaphores[frame_index]);
-    if (acquired_texture.status == SwapChainStatus::OutOfDate)
+    Opal::Expected<AcquiredTexture, ErrorCode> acquired_texture = m_swap_chain->AcquireTexture(m_texture_ready_semaphores[frame_index]);
+    if (!acquired_texture.HasValue())
+    {
+        return Result(acquired_texture.GetError());
+    }
+    if (acquired_texture.GetValue().status == SwapChainStatus::OutOfDate)
     {
         // The swap chain was rebuilt, or the window has no client area and there is none. Nothing was submitted
         // for this frame, so the counter does not advance.
-        MatchRenderSemaphoresToSwapChain();
-        return SwapChainStatus::OutOfDate;
+        RNDR_FORGE_CHECK_EXPECTED(MatchRenderSemaphoresToSwapChain(), Result);
+        return Result(SwapChainStatus::OutOfDate);
     }
 
     const CommandBuffer& command_buffer = m_command_buffers[frame_index];
-    if (command_buffer.Reset() != ErrorCode::Success || command_buffer.Begin() != ErrorCode::Success)
-    {
-        throw Opal::Exception("The frame command buffer could not be reset and begun!");
-    }
+    RNDR_FORGE_CHECK_EXPECTED(command_buffer.Reset(), Result);
+    RNDR_FORGE_CHECK_EXPECTED(command_buffer.Begin(), Result);
     m_is_frame_recording = true;
-    return SwapChainStatus::Success;
+    return Result(SwapChainStatus::Success);
 }
 
-Rndr::Forge::SwapChainStatus Rndr::Forge::FrameContext::EndFrame()
+Opal::Expected<Rndr::Forge::SwapChainStatus, Rndr::ErrorCode> Rndr::Forge::FrameContext::EndFrame()
 {
+    using Result = Opal::Expected<SwapChainStatus, ErrorCode>;
+
     if (!m_is_frame_recording)
     {
-        throw Opal::Exception("EndFrame was called without a BeginFrame that succeeded!");
+        RNDR_LOG_ERROR("Forge: EndFrame was called without a BeginFrame that succeeded");
+        return Result(ErrorCode::InvalidArgument);
     }
     // The recording flag and the acquired texture are set together in BeginFrame, so this only fires when
     // something outside the frame context released the swap chain mid-frame. Above the texture is reached for
     // rather than below, since every use of it from here on reports that as a missing BeginFrame instead.
     if (!m_swap_chain->HasAcquiredTexture())
     {
-        throw Opal::Exception("The swap chain gave up its acquired texture in the middle of a frame!");
+        RNDR_LOG_ERROR("Forge: the swap chain gave up its acquired texture in the middle of a frame");
+        return Result(ErrorCode::InvalidArgument);
     }
     const u32 frame_index = GetFrameIndex();
     CommandBuffer& command_buffer = m_command_buffers[frame_index];
-    Texture& color_texture = GetColorTexture();
-    const Opal::Expected<ImageLayout, ErrorCode> color_layout = color_texture.GetCurrentLayout();
+    Opal::Expected<Texture&, ErrorCode> color_texture = GetColorTexture();
+    if (!color_texture.HasValue())
+    {
+        return Result(color_texture.GetError());
+    }
+    const Opal::Expected<ImageLayout, ErrorCode> color_layout = color_texture.GetValue().GetCurrentLayout();
     if (!color_layout.HasValue())
     {
-        throw Opal::Exception("The swap chain texture is not all in one layout at the end of a frame!");
+        return Result(color_layout.GetError());
     }
     if (color_layout.GetValue() != ImageLayout::Present)
     {
-        if (command_buffer.CmdTextureBarrier(TextureBarrier::ToPresent(color_texture)) != ErrorCode::Success)
-        {
-            throw Opal::Exception("The barrier into the present layout could not be recorded!");
-        }
+        RNDR_FORGE_CHECK_EXPECTED(command_buffer.CmdTextureBarrier(TextureBarrier::ToPresent(color_texture.GetValue())), Result);
     }
-    if (command_buffer.End() != ErrorCode::Success)
-    {
-        throw Opal::Exception("The frame command buffer could not be ended!");
-    }
+    RNDR_FORGE_CHECK_EXPECTED(command_buffer.End(), Result);
     m_is_frame_recording = false;
 
     const Semaphore& image_ready = m_texture_ready_semaphores[frame_index];
@@ -214,48 +237,61 @@ Rndr::Forge::SwapChainStatus Rndr::Forge::FrameContext::EndFrame()
     const SemaphoreSubmit signals[2] = {
         {.semaphore = render_finished},
         {.semaphore = m_frame_timeline, .value = m_frames_submitted + 1 + static_cast<u64>(m_desc.frames_in_flight)}};
-    const ErrorCode submit_status = m_graphics_queue->Submit(
-        {.command_buffers = {&command_buffer_ref, 1}, .wait_semaphores = {&wait, 1}, .signal_semaphores = {signals, 2}});
-    if (submit_status != ErrorCode::Success)
-    {
-        throw Opal::Exception("Submitting the frame failed!");
-    }
+    RNDR_FORGE_CHECK_EXPECTED(
+        m_graphics_queue->Submit(
+            {.command_buffers = {&command_buffer_ref, 1}, .wait_semaphores = {&wait, 1}, .signal_semaphores = {signals, 2}}),
+        Result);
 
     // Advanced before the present, so that a present that comes back out of date still leaves the next frame on
     // the following slot - the work of this one was submitted either way.
     ++m_frames_submitted;
 
-    const SwapChainStatus status = m_swap_chain->Present(*m_present_queue, render_finished);
-    if (status == SwapChainStatus::OutOfDate)
+    Opal::Expected<SwapChainStatus, ErrorCode> status = m_swap_chain->Present(*m_present_queue, render_finished);
+    if (!status.HasValue())
     {
-        MatchRenderSemaphoresToSwapChain();
+        return Result(status.GetError());
     }
-    return status;
+    if (status.GetValue() == SwapChainStatus::OutOfDate)
+    {
+        RNDR_FORGE_CHECK_EXPECTED(MatchRenderSemaphoresToSwapChain(), Result);
+    }
+    return Result(status.GetValue());
 }
 
-Rndr::Forge::CommandBuffer& Rndr::Forge::FrameContext::GetCommandBuffer()
+Opal::Expected<Rndr::Forge::CommandBuffer&, Rndr::ErrorCode> Rndr::Forge::FrameContext::GetCommandBuffer()
 {
+    using Result = Opal::Expected<CommandBuffer&, ErrorCode>;
+
     if (!m_is_frame_recording)
     {
-        throw Opal::Exception("There is no command buffer outside of a frame - call BeginFrame first!");
+        RNDR_LOG_ERROR("Forge: there is no command buffer outside of a frame - call BeginFrame first");
+        return Result(ErrorCode::InvalidArgument);
     }
-    return m_command_buffers[GetFrameIndex()];
+    return Result(m_command_buffers[GetFrameIndex()]);
 }
 
-const Rndr::Forge::Texture& Rndr::Forge::FrameContext::GetColorTexture() const
+Opal::Expected<const Rndr::Forge::Texture&, Rndr::ErrorCode> Rndr::Forge::FrameContext::GetColorTexture() const
 {
+    using Result = Opal::Expected<const Texture&, ErrorCode>;
+
     if (!m_swap_chain->HasAcquiredTexture())
     {
-        throw Opal::Exception("There is no acquired texture outside of a frame - call BeginFrame first!");
+        RNDR_LOG_ERROR("Forge: there is no acquired texture outside of a frame - call BeginFrame first");
+        return Result(ErrorCode::InvalidArgument);
     }
-    return m_swap_chain->GetCurrentColorTexture();
+    // The const overload of the swap chain's own accessor, since this one hands out a const reference.
+    const SwapChain& swap_chain = *m_swap_chain;
+    return swap_chain.GetCurrentColorTexture();
 }
 
-Rndr::Forge::Texture& Rndr::Forge::FrameContext::GetColorTexture()
+Opal::Expected<Rndr::Forge::Texture&, Rndr::ErrorCode> Rndr::Forge::FrameContext::GetColorTexture()
 {
+    using Result = Opal::Expected<Texture&, ErrorCode>;
+
     if (!m_swap_chain->HasAcquiredTexture())
     {
-        throw Opal::Exception("There is no acquired texture outside of a frame - call BeginFrame first!");
+        RNDR_LOG_ERROR("Forge: there is no acquired texture outside of a frame - call BeginFrame first");
+        return Result(ErrorCode::InvalidArgument);
     }
     return m_swap_chain->GetCurrentColorTexture();
 }

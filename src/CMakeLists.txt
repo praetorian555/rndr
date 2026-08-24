@@ -154,7 +154,6 @@ if (${RNDR_FORGE})
             "${PROJECT_SOURCE_DIR}/include/rndr/forge/shader.hpp"
             "${PROJECT_SOURCE_DIR}/include/rndr/forge/mesh.hpp"
             "${PROJECT_SOURCE_DIR}/include/rndr/forge/pipeline.hpp"
-            "${PROJECT_SOURCE_DIR}/include/rndr/forge/vulkan-exception.hpp"
             "${PROJECT_SOURCE_DIR}/include/rndr/forge/vulkan-result.hpp"
             "${PROJECT_SOURCE_DIR}/src/forge/graphics-context.cpp"
             "${PROJECT_SOURCE_DIR}/src/forge/device.cpp"

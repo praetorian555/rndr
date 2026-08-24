@@ -81,7 +81,13 @@ struct ForgeWindowFixture
         }
         context = std::move(context_result.GetValue());
 
-        surface = Forge::Surface(context, *window);
+        Opal::Expected<Forge::Surface, ErrorCode> surface_result = Forge::Surface::Create(context, *window);
+        if (!surface_result.HasValue())
+        {
+            status = surface_result.GetError();
+            return;
+        }
+        surface = std::move(surface_result.GetValue());
         // The graphics and the present family only: asking for the optional ones would make every case here
         // skip on a device whose single family does everything, the way the headless file explains.
         const Forge::DeviceDesc device_desc{.surface = surface, .use_async_compute_queue = false, .use_dedicated_transfer_queue = false};
@@ -120,7 +126,7 @@ struct ForgeWindowFixture
 
     [[nodiscard]] Forge::SwapChainSupportDetails GetSupportDetails() const
     {
-        return surface.GetSwapChainSupportDetails(device.GetPhysicalDevice());
+        return ForgeTest::Unwrap(surface.GetSwapChainSupportDetails(device.GetPhysicalDevice()));
     }
 
     /**
@@ -152,7 +158,7 @@ bool IsForgeWindowAvailable()
 {
     static const bool available = []
     {
-        // The window and the surface still report by throwing, so both ways of failing are caught here.
+        // Rndr::Application and the window still report by throwing, so both ways of failing are caught here.
         try
         {
             const ForgeWindowFixture probe;
@@ -365,7 +371,8 @@ TEST_CASE("Forge swap chain matches the window it was built over", "[forge-windo
 
     SECTION("The textures come out at the size of the client area, with a depth texture beside them")
     {
-        const Forge::SwapChain swap_chain(fixture.device, fixture.surface, {.pixel_format = k_swap_chain_format});
+        const Forge::SwapChain swap_chain =
+            ForgeTest::Unwrap(Forge::SwapChain::Create(fixture.device, fixture.surface, {.pixel_format = k_swap_chain_format}));
         REQUIRE(swap_chain.IsValid());
 
         const Vector2i client_size = fixture.GetClientSize();
@@ -390,31 +397,34 @@ TEST_CASE("Forge swap chain matches the window it was built over", "[forge-windo
     {
         // 4.5 from the other side: the sample reads HasDepth to decide whether to name a depth attachment,
         // and nothing checked that a swap chain without one answers false rather than handing out a texture.
-        const Forge::SwapChain swap_chain(fixture.device, fixture.surface, {.use_depth = false, .pixel_format = k_swap_chain_format});
+        const Forge::SwapChain swap_chain = ForgeTest::Unwrap(
+            Forge::SwapChain::Create(fixture.device, fixture.surface, {.use_depth = false, .pixel_format = k_swap_chain_format}));
         REQUIRE(swap_chain.IsValid());
         REQUIRE_FALSE(swap_chain.HasDepth());
         REQUIRE_FALSE(swap_chain.GetDepthTexture().IsValid());
     }
     SECTION("Nothing is acquired until AcquireTexture says so")
     {
-        Forge::SwapChain swap_chain(fixture.device, fixture.surface, {.pixel_format = k_swap_chain_format});
+        Forge::SwapChain swap_chain =
+            ForgeTest::Unwrap(Forge::SwapChain::Create(fixture.device, fixture.surface, {.pixel_format = k_swap_chain_format}));
         REQUIRE_FALSE(swap_chain.HasAcquiredTexture());
         REQUIRE(swap_chain.GetCurrentTextureIndex() == Forge::k_invalid_texture_index);
-        REQUIRE_THROWS_AS(swap_chain.GetCurrentColorTexture(), Opal::Exception);
+        REQUIRE_FALSE(swap_chain.GetCurrentColorTexture().HasValue());
 
         const Forge::Semaphore render_finished = ForgeTest::Unwrap(Forge::Semaphore::Create(fixture.device));
-        REQUIRE_THROWS_AS(swap_chain.Present(fixture.GetPresentQueue(), render_finished), Opal::Exception);
+        REQUIRE_FALSE(swap_chain.Present(fixture.GetPresentQueue(), render_finished).HasValue());
 
         // A timeline cannot take part in presentation either way round, and both calls say so rather than
         // handing the driver a semaphore it will reject.
         const Forge::Semaphore timeline =
             ForgeTest::Unwrap(Forge::Semaphore::Create(fixture.device, {.type = Forge::SemaphoreType::Timeline}));
-        REQUIRE_THROWS_AS(swap_chain.AcquireTexture(timeline), Opal::Exception);
-        REQUIRE_THROWS_AS(swap_chain.Present(fixture.GetPresentQueue(), timeline), Opal::Exception);
+        REQUIRE_FALSE(swap_chain.AcquireTexture(timeline).HasValue());
+        REQUIRE_FALSE(swap_chain.Present(fixture.GetPresentQueue(), timeline).HasValue());
     }
     SECTION("A moved swap chain leaves the source empty")
     {
-        Forge::SwapChain swap_chain(fixture.device, fixture.surface, {.pixel_format = k_swap_chain_format});
+        Forge::SwapChain swap_chain =
+            ForgeTest::Unwrap(Forge::SwapChain::Create(fixture.device, fixture.surface, {.pixel_format = k_swap_chain_format}));
         const u32 texture_count = swap_chain.GetColorTextureCount();
         Forge::SwapChain moved(std::move(swap_chain));
         REQUIRE(moved.IsValid());
@@ -442,7 +452,8 @@ TEST_CASE("Forge swap chain presents the frames that were rendered into it", "[f
 
     // The acquire, render, submit, present cycle written out, which is what FrameContext does for the caller
     // and what the case below drives through it instead.
-    Forge::SwapChain swap_chain(fixture.device, fixture.surface, {.pixel_format = k_swap_chain_format, .allow_readback = true});
+    Forge::SwapChain swap_chain = ForgeTest::Unwrap(
+        Forge::SwapChain::Create(fixture.device, fixture.surface, {.pixel_format = k_swap_chain_format, .allow_readback = true}));
     Forge::Texture readback = MakeReadbackTexture(fixture.device, swap_chain.GetExtent());
     Opal::DynamicArray<u8> pixels(static_cast<i32>(swap_chain.GetExtent().width * swap_chain.GetExtent().height * 4));
 
@@ -453,7 +464,7 @@ TEST_CASE("Forge swap chain presents the frames that were rendered into it", "[f
     {
         const Forge::Semaphore texture_ready = ForgeTest::Unwrap(Forge::Semaphore::Create(fixture.device));
         const Forge::Semaphore render_finished = ForgeTest::Unwrap(Forge::Semaphore::Create(fixture.device));
-        const Forge::AcquiredTexture acquired = swap_chain.AcquireTexture(texture_ready);
+        const Forge::AcquiredTexture acquired = ForgeTest::Unwrap(swap_chain.AcquireTexture(texture_ready));
         REQUIRE(acquired.status == Forge::SwapChainStatus::Success);
         REQUIRE(acquired.texture_index < swap_chain.GetColorTextureCount());
         REQUIRE(swap_chain.HasAcquiredTexture());
@@ -462,14 +473,14 @@ TEST_CASE("Forge swap chain presents the frames that were rendered into it", "[f
         const Vector4f color = GetFrameColor(frame);
         Forge::CommandBuffer command_buffer = ForgeTest::Unwrap(Forge::CommandBuffer::Create(fixture.device, fixture.GetGraphicsQueue()));
         REQUIRE(command_buffer.Begin() == ErrorCode::Success);
-        RecordClearFrame(command_buffer, swap_chain.GetCurrentColorTexture(), &readback, swap_chain.GetExtent(), color,
+        RecordClearFrame(command_buffer, ForgeTest::Unwrap(swap_chain.GetCurrentColorTexture()), &readback, swap_chain.GetExtent(), color,
                          &swap_chain.GetDepthTexture());
-        REQUIRE(command_buffer.CmdTextureBarrier(Forge::TextureBarrier::ToPresent(swap_chain.GetCurrentColorTexture())) ==
-                ErrorCode::Success);
+        REQUIRE(command_buffer.CmdTextureBarrier(
+                    Forge::TextureBarrier::ToPresent(ForgeTest::Unwrap(swap_chain.GetCurrentColorTexture()))) == ErrorCode::Success);
         REQUIRE(command_buffer.End() == ErrorCode::Success);
         SubmitAndWait(fixture, command_buffer, texture_ready, render_finished);
 
-        REQUIRE(swap_chain.Present(fixture.GetPresentQueue(), render_finished) == Forge::SwapChainStatus::Success);
+        REQUIRE(ForgeTest::Unwrap(swap_chain.Present(fixture.GetPresentQueue(), render_finished)) == Forge::SwapChainStatus::Success);
         REQUIRE_FALSE(swap_chain.HasAcquiredTexture());
 
         // The copy was part of the frame that was just waited for, so what it holds is the bytes the present
@@ -509,12 +520,12 @@ TEST_CASE("Forge frame context runs frames past the end of its timeline", "[forg
     const bool use_depth = GENERATE(true, false);
     INFO("frames_in_flight " << frames_in_flight << ", use_depth " << use_depth);
 
-    Forge::SwapChain swap_chain(fixture.device, fixture.surface,
-                                {.use_depth = use_depth, .pixel_format = k_swap_chain_format, .allow_readback = true});
+    Forge::SwapChain swap_chain = ForgeTest::Unwrap(Forge::SwapChain::Create(
+        fixture.device, fixture.surface, {.use_depth = use_depth, .pixel_format = k_swap_chain_format, .allow_readback = true}));
     REQUIRE(swap_chain.HasDepth() == use_depth);
 
-    Forge::FrameContext frame_context(fixture.device, swap_chain, fixture.GetGraphicsQueue(), fixture.GetPresentQueue(),
-                                      {.frames_in_flight = frames_in_flight});
+    Forge::FrameContext frame_context = ForgeTest::Unwrap(Forge::FrameContext::Create(
+        fixture.device, swap_chain, fixture.GetGraphicsQueue(), fixture.GetPresentQueue(), {.frames_in_flight = frames_in_flight}));
     REQUIRE(frame_context.IsValid());
     REQUIRE(frame_context.GetDesc().frames_in_flight == frames_in_flight);
 
@@ -528,7 +539,7 @@ TEST_CASE("Forge frame context runs frames past the end of its timeline", "[forg
     Vector4f last_color{};
     for (i32 frame = 0; frame < frame_count; ++frame)
     {
-        if (frame_context.BeginFrame() == Forge::SwapChainStatus::OutOfDate)
+        if (ForgeTest::Unwrap(frame_context.BeginFrame()) == Forge::SwapChainStatus::OutOfDate)
         {
             // Nothing was recorded and nothing was submitted, so the slot did not move on.
             continue;
@@ -539,9 +550,9 @@ TEST_CASE("Forge frame context runs frames past the end of its timeline", "[forg
         REQUIRE(frame_context.GetRenderSize().y == static_cast<i32>(swap_chain.GetExtent().height));
 
         last_color = GetFrameColor(frame);
-        RecordClearFrame(frame_context.GetCommandBuffer(), frame_context.GetColorTexture(), &readback, swap_chain.GetExtent(), last_color,
-                         use_depth ? &swap_chain.GetDepthTexture() : nullptr);
-        frame_context.EndFrame();
+        RecordClearFrame(ForgeTest::Unwrap(frame_context.GetCommandBuffer()), ForgeTest::Unwrap(frame_context.GetColorTexture()), &readback,
+                         swap_chain.GetExtent(), last_color, use_depth ? &swap_chain.GetDepthTexture() : nullptr);
+        ForgeTest::Unwrap(frame_context.EndFrame());
         ++submitted;
     }
     REQUIRE(submitted == frame_count);
@@ -570,7 +581,8 @@ TEST_CASE("Forge swap chain follows the window across a resize", "[forge-window]
         SKIP("This surface does not offer B8G8R8A8_SRGB with the sRGB non-linear colour space.");
     }
 
-    Forge::SwapChain swap_chain(fixture.device, fixture.surface, {.pixel_format = k_swap_chain_format});
+    Forge::SwapChain swap_chain =
+        ForgeTest::Unwrap(Forge::SwapChain::Create(fixture.device, fixture.surface, {.pixel_format = k_swap_chain_format}));
     const VkExtent2D first_extent = swap_chain.GetExtent();
     REQUIRE(first_extent.width > 0);
 
@@ -578,7 +590,7 @@ TEST_CASE("Forge swap chain follows the window across a resize", "[forge-window]
     const Vector2i resized_client = fixture.GetClientSize();
     REQUIRE(resized_client.x != static_cast<i32>(first_extent.width));
 
-    swap_chain.Recreate();
+    REQUIRE(swap_chain.Recreate() == ErrorCode::Success);
     REQUIRE(swap_chain.IsValid());
     REQUIRE(static_cast<i32>(swap_chain.GetExtent().width) == resized_client.x);
     REQUIRE(static_cast<i32>(swap_chain.GetExtent().height) == resized_client.y);
@@ -599,17 +611,17 @@ TEST_CASE("Forge swap chain follows the window across a resize", "[forge-window]
     {
         const Forge::Semaphore texture_ready = ForgeTest::Unwrap(Forge::Semaphore::Create(fixture.device));
         const Forge::Semaphore render_finished = ForgeTest::Unwrap(Forge::Semaphore::Create(fixture.device));
-        const Forge::AcquiredTexture acquired = swap_chain.AcquireTexture(texture_ready);
+        const Forge::AcquiredTexture acquired = ForgeTest::Unwrap(swap_chain.AcquireTexture(texture_ready));
         REQUIRE(acquired.status == Forge::SwapChainStatus::Success);
         Forge::CommandBuffer command_buffer = ForgeTest::Unwrap(Forge::CommandBuffer::Create(fixture.device, fixture.GetGraphicsQueue()));
         REQUIRE(command_buffer.Begin() == ErrorCode::Success);
-        RecordClearFrame(command_buffer, swap_chain.GetCurrentColorTexture(), nullptr, swap_chain.GetExtent(), GetFrameColor(0),
-                         &swap_chain.GetDepthTexture());
-        REQUIRE(command_buffer.CmdTextureBarrier(Forge::TextureBarrier::ToPresent(swap_chain.GetCurrentColorTexture())) ==
-                ErrorCode::Success);
+        RecordClearFrame(command_buffer, ForgeTest::Unwrap(swap_chain.GetCurrentColorTexture()), nullptr, swap_chain.GetExtent(),
+                         GetFrameColor(0), &swap_chain.GetDepthTexture());
+        REQUIRE(command_buffer.CmdTextureBarrier(
+                    Forge::TextureBarrier::ToPresent(ForgeTest::Unwrap(swap_chain.GetCurrentColorTexture()))) == ErrorCode::Success);
         REQUIRE(command_buffer.End() == ErrorCode::Success);
         SubmitAndWait(fixture, command_buffer, texture_ready, render_finished);
-        swap_chain.Present(fixture.GetPresentQueue(), render_finished);
+        ForgeTest::Unwrap(swap_chain.Present(fixture.GetPresentQueue(), render_finished));
         REQUIRE(fixture.device.WaitForAll() == ErrorCode::Success);
     }
 
@@ -634,12 +646,13 @@ TEST_CASE("Forge swap chain recovers from a window with no client area", "[forge
     // is concerned, and sizing one to nothing is the same thing without stealing focus to do it.
     SECTION("A swap chain over an empty client area is left empty and recovers on the next acquire")
     {
-        Forge::SwapChain swap_chain(fixture.device, fixture.surface, {.pixel_format = k_swap_chain_format});
+        Forge::SwapChain swap_chain =
+            ForgeTest::Unwrap(Forge::SwapChain::Create(fixture.device, fixture.surface, {.pixel_format = k_swap_chain_format}));
         REQUIRE(swap_chain.IsValid());
 
         fixture.ResizeWindow(0, 0);
         REQUIRE(fixture.GetClientSize().x == 0);
-        swap_chain.Recreate();
+        REQUIRE(swap_chain.Recreate() == ErrorCode::Success);
         REQUIRE_FALSE(swap_chain.IsValid());
         REQUIRE(swap_chain.GetExtent().width == 0);
         REQUIRE(swap_chain.GetExtent().height == 0);
@@ -648,7 +661,7 @@ TEST_CASE("Forge swap chain recovers from a window with no client area", "[forge
         // Acquiring while there is nothing to render into tries again and says the frame has to be skipped,
         // rather than throwing or handing out an index into textures that do not exist.
         const Forge::Semaphore texture_ready = ForgeTest::Unwrap(Forge::Semaphore::Create(fixture.device));
-        const Forge::AcquiredTexture while_empty = swap_chain.AcquireTexture(texture_ready);
+        const Forge::AcquiredTexture while_empty = ForgeTest::Unwrap(swap_chain.AcquireTexture(texture_ready));
         REQUIRE(while_empty.status == Forge::SwapChainStatus::OutOfDate);
         REQUIRE(while_empty.texture_index == Forge::k_invalid_texture_index);
         REQUIRE_FALSE(swap_chain.HasAcquiredTexture());
@@ -658,12 +671,12 @@ TEST_CASE("Forge swap chain recovers from a window with no client area", "[forge
 
         // The first acquire after the window is back rebuilds the swap chain and still skips its frame; the
         // one after it is the frame that runs.
-        const Forge::AcquiredTexture rebuilding = swap_chain.AcquireTexture(texture_ready);
+        const Forge::AcquiredTexture rebuilding = ForgeTest::Unwrap(swap_chain.AcquireTexture(texture_ready));
         REQUIRE(rebuilding.status == Forge::SwapChainStatus::OutOfDate);
         REQUIRE(swap_chain.IsValid());
         REQUIRE(static_cast<i32>(swap_chain.GetExtent().width) == fixture.GetClientSize().x);
 
-        const Forge::AcquiredTexture recovered = swap_chain.AcquireTexture(texture_ready);
+        const Forge::AcquiredTexture recovered = ForgeTest::Unwrap(swap_chain.AcquireTexture(texture_ready));
         REQUIRE(recovered.status == Forge::SwapChainStatus::Success);
         REQUIRE(recovered.texture_index < swap_chain.GetColorTextureCount());
 
@@ -672,15 +685,16 @@ TEST_CASE("Forge swap chain recovers from a window with no client area", "[forge
     }
     SECTION("A frame context over an empty client area skips its frames and picks up again")
     {
-        Forge::SwapChain swap_chain(fixture.device, fixture.surface, {.pixel_format = k_swap_chain_format});
-        Forge::FrameContext frame_context(fixture.device, swap_chain, fixture.GetGraphicsQueue(), fixture.GetPresentQueue(),
-                                          {.frames_in_flight = 2});
+        Forge::SwapChain swap_chain =
+            ForgeTest::Unwrap(Forge::SwapChain::Create(fixture.device, fixture.surface, {.pixel_format = k_swap_chain_format}));
+        Forge::FrameContext frame_context = ForgeTest::Unwrap(Forge::FrameContext::Create(
+            fixture.device, swap_chain, fixture.GetGraphicsQueue(), fixture.GetPresentQueue(), {.frames_in_flight = 2}));
 
         // One frame first, so the timeline has something behind it when the frames start being skipped.
-        REQUIRE(frame_context.BeginFrame() == Forge::SwapChainStatus::Success);
-        RecordClearFrame(frame_context.GetCommandBuffer(), frame_context.GetColorTexture(), nullptr, swap_chain.GetExtent(),
-                         GetFrameColor(0), &swap_chain.GetDepthTexture());
-        frame_context.EndFrame();
+        REQUIRE(ForgeTest::Unwrap(frame_context.BeginFrame()) == Forge::SwapChainStatus::Success);
+        RecordClearFrame(ForgeTest::Unwrap(frame_context.GetCommandBuffer()), ForgeTest::Unwrap(frame_context.GetColorTexture()), nullptr,
+                         swap_chain.GetExtent(), GetFrameColor(0), &swap_chain.GetDepthTexture());
+        ForgeTest::Unwrap(frame_context.EndFrame());
 
         // A window that lost its client area is something the application learns from the window system
         // rather than from the driver. Whether an acquire or a present volunteers OutOfDate for one is up to
@@ -689,7 +703,7 @@ TEST_CASE("Forge swap chain recovers from a window with no client area", "[forge
         // nothing to present to and releases the swap chain, and that is the state the rest of this case is
         // about.
         fixture.ResizeWindow(0, 0);
-        swap_chain.Recreate();
+        REQUIRE(swap_chain.Recreate() == ErrorCode::Success);
         REQUIRE_FALSE(swap_chain.IsValid());
 
         // From here every frame is skipped, and the slot a skipped frame would have used is still the next
@@ -697,19 +711,19 @@ TEST_CASE("Forge swap chain recovers from a window with no client area", "[forge
         const u32 frame_index_while_empty = frame_context.GetFrameIndex();
         for (i32 i = 0; i < 4; ++i)
         {
-            REQUIRE(frame_context.BeginFrame() == Forge::SwapChainStatus::OutOfDate);
+            REQUIRE(ForgeTest::Unwrap(frame_context.BeginFrame()) == Forge::SwapChainStatus::OutOfDate);
             REQUIRE(frame_context.GetFrameIndex() == frame_index_while_empty);
         }
 
         fixture.ResizeWindow(k_window_width, k_window_height);
         // The first acquire after the window is back rebuilds the swap chain and still skips its frame; the
         // one after it is the frame that runs.
-        REQUIRE(frame_context.BeginFrame() == Forge::SwapChainStatus::OutOfDate);
+        REQUIRE(ForgeTest::Unwrap(frame_context.BeginFrame()) == Forge::SwapChainStatus::OutOfDate);
         REQUIRE(swap_chain.IsValid());
-        REQUIRE(frame_context.BeginFrame() == Forge::SwapChainStatus::Success);
-        RecordClearFrame(frame_context.GetCommandBuffer(), frame_context.GetColorTexture(), nullptr, swap_chain.GetExtent(),
-                         GetFrameColor(1), &swap_chain.GetDepthTexture());
-        REQUIRE(frame_context.EndFrame() == Forge::SwapChainStatus::Success);
+        REQUIRE(ForgeTest::Unwrap(frame_context.BeginFrame()) == Forge::SwapChainStatus::Success);
+        RecordClearFrame(ForgeTest::Unwrap(frame_context.GetCommandBuffer()), ForgeTest::Unwrap(frame_context.GetColorTexture()), nullptr,
+                         swap_chain.GetExtent(), GetFrameColor(1), &swap_chain.GetDepthTexture());
+        REQUIRE(ForgeTest::Unwrap(frame_context.EndFrame()) == Forge::SwapChainStatus::Success);
 
         REQUIRE(fixture.device.WaitForAll() == ErrorCode::Success);
         frame_context.Destroy();
