@@ -14,6 +14,10 @@ enum class ErrorCode : u8
     OutOfMemory = static_cast<u8>(Opal::ErrorCode::OutOfMemory),
     InvalidArgument = static_cast<u8>(Opal::ErrorCode::InvalidArgument),
     GraphicsAPIError,
+    /** The graphics device was lost, or the surface it drew to went away. Nothing made from it is usable. */
+    DeviceLost,
+    /** No graphics device to render with: no Vulkan capable device on the machine. */
+    NoGraphicsDevice,
     ShaderCompilationError,
     ShaderLinkingError,
     WindowAlreadyClosed,
