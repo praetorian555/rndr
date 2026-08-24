@@ -28,15 +28,15 @@ Decisions:
 | 0 — portability groundwork | **Done** |
 | 1 — LinuxApplication + LinuxWindow | **Done** |
 | 2 — Forge surface | **Done**: the XCB surface builds, and `[forge]`/`[forge-window]` run against a real device |
-| 3 — build and verify in WSL2 | Mostly done: three failures are open, see the next section |
+| 3 — build and verify in WSL2 | Mostly done: one failure is open, see the next section |
 
 Verified on 2026-08-24 in WSL2 Ubuntu 24.04 with GCC 13 and Ninja. With Forge off and ASan on, all 92
 test cases pass. With Forge on (`VULKAN_SDK` pointed at the Windows SDK, `RNDR_HARDENING=OFF`,
-`RNDR_TEST_REQUIRE_VULKAN=1`), `[forge]` reports 72 of 79 cases passing with 5 skipped, and
-`[forge-window]` passes 5 of 6 with 1 skipped (the empty-client-area case, which X11 cannot express -
-see "Fixed along the way"). The device is Mesa's **llvmpipe** software rasterizer - there is no dozen
-(`dzn`) ICD on this box - so these runs prove correctness against the validation layer, not against a
-GPU.
+`RNDR_TEST_REQUIRE_VULKAN=1`), `[forge]` reports 73 of 79 cases passing with 5 skipped and 1 failing
+(blend ConstColor), and `[forge-window]` passes 5 of 6 with 1 skipped (the empty-client-area case,
+which X11 cannot express - see "Fixed along the way"). The device is Mesa's **llvmpipe** software
+rasterizer - there is no dozen (`dzn`) ICD on this box - so these runs prove correctness against
+the validation layer, not against a GPU.
 
 ## Phase 0 — portability groundwork (done)
 
@@ -164,7 +164,7 @@ Done:
 
 Remaining:
 
-1. The three open failures below (one validation count, two blend cases).
+1. The open failure below (two blend-factor cases in one test).
 2. Run the `modern-vulkan` sample under WSLg: window appears, resizes, ESC closes, WASD+mouse fly camera
    works (exercises the ResetToCenter warp, motion deltas and key translation).
 3. Window behaviours that no test tag covers, driven manually since `window-sample` is Canvas-bound and
@@ -197,22 +197,17 @@ minimize needs a window manager managing a mapped window, and the fixture's wind
 shown - so it belongs to the manual checks in item 3 above: verify rendering pauses while minimized and
 resumes on restore.
 
+The uint8 index-type validation error was never the missing-extension bug it looked like. Forge did
+enable the extension, but it preferred the VK_KHR_index_type_uint8 name where the device offers both,
+and the apt validation layer (1.3.275) predates that promotion, so it did not credit the KHR name with
+VK_INDEX_TYPE_UINT8 and reported every 8-bit bind as invalid. Mesa 25.2's llvmpipe advertises both
+names. `FindIndexTypeUint8Extension` now prefers the EXT name - same feature structure, same index
+type value, and every layer knows it - with KHR kept as the fallback for a driver that one day drops
+the EXT name. Invisible on Windows only because the newer validation layer there knows both names.
+
 ## Open failures
 
-### 1. uint8 index type reaches a device that never enabled the extension (`test/forge/smoke-test.cpp:2854`)
-
-    Validation Error: [ VUID-vkCmdBindIndexBuffer-indexType-parameter ]
-    vkCmdBindIndexBuffer(): indexType (1000265000) does not fall within the begin..end range of the
-    core VkIndexType enumeration tokens and is not an extension added token.
-
-`CommandBuffer::CmdBindIndexBuffer` (`src/forge/command-buffer.cpp:1078`) does guard this: it refuses
-`IndexSize::uint8` when the device lacks `DeviceFeatures::index_type_uint8`, and the assertion that
-checks the refusal passes. The validation error is counted against the *other* context in that test
-(`halves`), so the suspicion is a device that reports and enables the feature without its extension
-being added at device creation. Start at how `index_type_uint8` is queried and enabled in
-`src/forge/device.cpp`. Invisible on Windows, where the GPU supports the extension natively.
-
-### 2. Blend factor ConstColor produces the wrong colour (`test/forge/smoke-test.cpp:8540`)
+### 1. Blend factor ConstColor produces the wrong colour (`test/forge/smoke-test.cpp:8540`)
 
     source factor ConstColor:       measured 0.6      0.0627451  0.121569  0.301961
                                     expected 0.0815686 0.181176  0.200784  0.449412

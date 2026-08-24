@@ -181,18 +181,20 @@ constexpr VkQueueFlags k_dedicated_transfer_not_flags =
 
 /**
  * Which of the two names for the 8-bit index extension this device has, or null when it has neither. The KHR
- * one is the promotion of the EXT one and both carry the same feature structure, so preferring the newer name
- * and falling back to the older keeps a driver that predates the promotion usable.
+ * one is the promotion of the EXT one and both carry the same feature structure and index type value, so the
+ * choice changes nothing about what the device does. The EXT name goes first because a validation layer
+ * that predates the promotion does not credit the KHR name with VK_INDEX_TYPE_UINT8 and reports every
+ * 8-bit bind as invalid, while every driver new enough to offer the KHR name still offers the EXT one.
  */
 const char* FindIndexTypeUint8Extension(const Forge::PhysicalDevice& physical_device)
 {
-    if (physical_device.IsExtensionSupported(VK_KHR_INDEX_TYPE_UINT8_EXTENSION_NAME))
-    {
-        return VK_KHR_INDEX_TYPE_UINT8_EXTENSION_NAME;
-    }
     if (physical_device.IsExtensionSupported(VK_EXT_INDEX_TYPE_UINT8_EXTENSION_NAME))
     {
         return VK_EXT_INDEX_TYPE_UINT8_EXTENSION_NAME;
+    }
+    if (physical_device.IsExtensionSupported(VK_KHR_INDEX_TYPE_UINT8_EXTENSION_NAME))
+    {
+        return VK_KHR_INDEX_TYPE_UINT8_EXTENSION_NAME;
     }
     return nullptr;
 }
