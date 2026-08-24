@@ -3,6 +3,7 @@
 #if RNDR_LINUX
 
 #include <cstdlib>
+#include <ctime>
 
 #include "opal/allocator.h"
 #include "opal/container/string.h"
@@ -237,6 +238,14 @@ Rndr::ErrorCode Rndr::LinuxWindow::Reshape(i32 pos_x, i32 pos_y, i32 width, i32 
     {
         return ErrorCode::WindowAlreadyClosed;
     }
+    // X11 has no zero-sized window: xcb_create_window and xcb_configure_window both refuse one with
+    // BadValue. Windows allows it (that is what a minimized window reports), so this is a real
+    // difference in the contract rather than something to work around here.
+    if (width <= 0 || height <= 0)
+    {
+        RNDR_LOG_ERROR("A window cannot be resized to {}x{}, X11 has no window without a client area", width, height);
+        return ErrorCode::InvalidArgument;
+    }
     xcb_connection_t* connection = m_app->GetConnection();
     m_pos_x = pos_x;
     m_pos_y = pos_y;
@@ -256,7 +265,37 @@ Rndr::ErrorCode Rndr::LinuxWindow::Reshape(i32 pos_x, i32 pos_y, i32 width, i32 
         return ErrorCode::PlatformError;
     }
     xcb_flush(connection);
+    WaitForSize(width, height);
     return ErrorCode::Success;
+}
+
+void Rndr::LinuxWindow::WaitForSize(i32 width, i32 height) const
+{
+    // A configure request is a message to the window manager, so the window still has its old size when
+    // this returns, and a caller that reads the size back straight away reads the old one. Windows has no
+    // such gap - MoveWindow is applied by the time it returns - so wait for the new size here to keep the
+    // one contract on both platforms. The window manager is free to grant something else (or nothing) for
+    // a window it constrains, hence the timeout rather than a wait for the exact size.
+    constexpr i32 k_max_wait_ms = 500;
+    constexpr i32 k_poll_interval_ms = 2;
+    for (i32 waited_ms = 0; waited_ms < k_max_wait_ms; waited_ms += k_poll_interval_ms)
+    {
+        xcb_get_geometry_reply_t* reply =
+            xcb_get_geometry_reply(m_app->GetConnection(), xcb_get_geometry(m_app->GetConnection(), m_window), nullptr);
+        if (reply == nullptr)
+        {
+            return;
+        }
+        const bool has_new_size = reply->width == width && reply->height == height;
+        free(reply);
+        if (has_new_size)
+        {
+            return;
+        }
+        const timespec sleep_time = {.tv_sec = 0, .tv_nsec = k_poll_interval_ms * 1000 * 1000};
+        nanosleep(&sleep_time, nullptr);
+    }
+    RNDR_LOG_WARNING("The window manager did not apply the requested size of {}x{}", width, height);
 }
 
 Rndr::ErrorCode Rndr::LinuxWindow::MoveTo(i32 pos_x, i32 pos_y)

@@ -86,6 +86,9 @@ private:
     /** The XCB half of Create: creates the OS window and applies the desc. */
     ErrorCode Initialize(const GenericWindowDesc& desc);
 
+    /** Blocks until the window manager has applied the given size, or a short timeout expires. */
+    void WaitForSize(i32 width, i32 height) const;
+
     /** Writes the _MOTIF_WM_HINTS decorations and functions derived from m_desc. */
     void ApplyDecorations();
     /** Writes WM_NORMAL_HINTS: position hints, plus a min==max size lock while not resizable. */
