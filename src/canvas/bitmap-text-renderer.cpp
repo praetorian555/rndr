@@ -7,6 +7,42 @@
 #include "rndr/file.hpp"
 #include "rndr/log.hpp"
 
+Rndr::Canvas::BitmapTextRenderer::BitmapTextRenderer(BitmapTextRenderer&& other) noexcept
+    : m_context(std::move(other.m_context)),
+      m_shader(std::move(other.m_shader)),
+      m_brush(std::move(other.m_brush)),
+      m_mesh(std::move(other.m_mesh)),
+      m_glyph_atlas(std::move(other.m_glyph_atlas)),
+      m_desc(std::move(other.m_desc)),
+      m_font_contents(std::move(other.m_font_contents)),
+      m_font_info(other.m_font_info),
+      m_atlas_data(std::move(other.m_atlas_data)),
+      m_packed_chars(std::move(other.m_packed_chars)),
+      m_aligned_quads(std::move(other.m_aligned_quads))
+{
+    m_brush.RebindShader(m_shader);
+}
+
+Rndr::Canvas::BitmapTextRenderer& Rndr::Canvas::BitmapTextRenderer::operator=(BitmapTextRenderer&& other) noexcept
+{
+    if (this != &other)
+    {
+        m_context = std::move(other.m_context);
+        m_shader = std::move(other.m_shader);
+        m_brush = std::move(other.m_brush);
+        m_mesh = std::move(other.m_mesh);
+        m_glyph_atlas = std::move(other.m_glyph_atlas);
+        m_desc = std::move(other.m_desc);
+        m_font_contents = std::move(other.m_font_contents);
+        m_font_info = other.m_font_info;
+        m_atlas_data = std::move(other.m_atlas_data);
+        m_packed_chars = std::move(other.m_packed_chars);
+        m_aligned_quads = std::move(other.m_aligned_quads);
+        m_brush.RebindShader(m_shader);
+    }
+    return *this;
+}
+
 Opal::Expected<Rndr::Canvas::BitmapTextRenderer, Rndr::ErrorCode> Rndr::Canvas::BitmapTextRenderer::Create(
     Opal::Ref<Context> context, const BitmapTextRendererDesc& desc)
 {

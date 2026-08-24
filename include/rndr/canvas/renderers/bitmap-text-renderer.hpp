@@ -37,6 +37,13 @@ class BitmapTextRenderer
 public:
     BitmapTextRenderer() = default;
 
+    BitmapTextRenderer(const BitmapTextRenderer&) = delete;
+    BitmapTextRenderer& operator=(const BitmapTextRenderer&) = delete;
+    // Not defaulted: the brush points at the shader member, so a move has to re-point it.
+    BitmapTextRenderer(BitmapTextRenderer&& other) noexcept;
+    BitmapTextRenderer& operator=(BitmapTextRenderer&& other) noexcept;
+    ~BitmapTextRenderer() = default;
+
     /**
      * Create the renderer: rasterize the font atlas and build the shader, mesh and brush.
      * @param context Context to render with. Has to outlive the renderer.

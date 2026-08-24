@@ -55,6 +55,28 @@ Opal::Expected<Rndr::Canvas::ShapeRenderer, Rndr::ErrorCode> Rndr::Canvas::Shape
     return ResultType(std::move(renderer));
 }
 
+Rndr::Canvas::ShapeRenderer::ShapeRenderer(ShapeRenderer&& other) noexcept
+    : m_context(std::move(other.m_context)),
+      m_shader(std::move(other.m_shader)),
+      m_brush(std::move(other.m_brush)),
+      m_mesh(std::move(other.m_mesh))
+{
+    m_brush.RebindShader(m_shader);
+}
+
+Rndr::Canvas::ShapeRenderer& Rndr::Canvas::ShapeRenderer::operator=(ShapeRenderer&& other) noexcept
+{
+    if (this != &other)
+    {
+        m_context = std::move(other.m_context);
+        m_shader = std::move(other.m_shader);
+        m_brush = std::move(other.m_brush);
+        m_mesh = std::move(other.m_mesh);
+        m_brush.RebindShader(m_shader);
+    }
+    return *this;
+}
+
 Rndr::Canvas::ShapeRenderer::~ShapeRenderer()
 {
     Destroy();

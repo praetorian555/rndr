@@ -31,8 +31,9 @@ public:
 
     ShapeRenderer(const ShapeRenderer&) = delete;
     ShapeRenderer& operator=(const ShapeRenderer&) = delete;
-    ShapeRenderer(ShapeRenderer&&) noexcept = default;
-    ShapeRenderer& operator=(ShapeRenderer&&) noexcept = default;
+    // Not defaulted: the brush points at the shader member, so a move has to re-point it.
+    ShapeRenderer(ShapeRenderer&& other) noexcept;
+    ShapeRenderer& operator=(ShapeRenderer&& other) noexcept;
 
     void Destroy();
 

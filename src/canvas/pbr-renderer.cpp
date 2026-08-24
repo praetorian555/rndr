@@ -66,6 +66,50 @@ Opal::Expected<Rndr::Canvas::PbrRenderer, Rndr::ErrorCode> Rndr::Canvas::PbrRend
     return ResultType(std::move(renderer));
 }
 
+Rndr::Canvas::PbrRenderer::PbrRenderer(PbrRenderer&& other) noexcept
+    : m_context(std::move(other.m_context)),
+      m_shader(std::move(other.m_shader)),
+      m_dummy_texture(std::move(other.m_dummy_texture)),
+      m_draw_flags(other.m_draw_flags),
+      m_view_projection(other.m_view_projection),
+      m_camera_position(other.m_camera_position),
+      m_directional_lights(std::move(other.m_directional_lights)),
+      m_point_lights(std::move(other.m_point_lights)),
+      m_geometry_cache(std::move(other.m_geometry_cache)),
+      m_external_geometry(std::move(other.m_external_geometry)),
+      m_batches(std::move(other.m_batches))
+{
+    for (auto& batch : m_batches)
+    {
+        batch.value.brush.RebindShader(m_shader);
+        BindTextures(batch.value.brush, batch.key);
+    }
+}
+
+Rndr::Canvas::PbrRenderer& Rndr::Canvas::PbrRenderer::operator=(PbrRenderer&& other) noexcept
+{
+    if (this != &other)
+    {
+        m_context = std::move(other.m_context);
+        m_shader = std::move(other.m_shader);
+        m_dummy_texture = std::move(other.m_dummy_texture);
+        m_draw_flags = other.m_draw_flags;
+        m_view_projection = other.m_view_projection;
+        m_camera_position = other.m_camera_position;
+        m_directional_lights = std::move(other.m_directional_lights);
+        m_point_lights = std::move(other.m_point_lights);
+        m_geometry_cache = std::move(other.m_geometry_cache);
+        m_external_geometry = std::move(other.m_external_geometry);
+        m_batches = std::move(other.m_batches);
+        for (auto& batch : m_batches)
+        {
+            batch.value.brush.RebindShader(m_shader);
+            BindTextures(batch.value.brush, batch.key);
+        }
+    }
+    return *this;
+}
+
 Rndr::Canvas::PbrRenderer::~PbrRenderer()
 {
     Destroy();

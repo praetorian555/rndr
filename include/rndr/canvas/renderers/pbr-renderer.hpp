@@ -123,8 +123,10 @@ public:
 
     PbrRenderer(const PbrRenderer&) = delete;
     PbrRenderer& operator=(const PbrRenderer&) = delete;
-    PbrRenderer(PbrRenderer&&) noexcept = default;
-    PbrRenderer& operator=(PbrRenderer&&) noexcept = default;
+    // Not defaulted: every batch brush points at the shader and dummy texture members, so a move has to
+    // re-point them.
+    PbrRenderer(PbrRenderer&& other) noexcept;
+    PbrRenderer& operator=(PbrRenderer&& other) noexcept;
 
     void Destroy();
 

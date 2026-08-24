@@ -69,6 +69,38 @@ Opal::Expected<Rndr::Canvas::CubemapRenderer, Rndr::ErrorCode> Rndr::Canvas::Cub
     return ResultType(std::move(renderer));
 }
 
+Rndr::Canvas::CubemapRenderer::CubemapRenderer(CubemapRenderer&& other) noexcept
+    : m_context(std::move(other.m_context)),
+      m_shader(std::move(other.m_shader)),
+      m_brush(std::move(other.m_brush)),
+      m_mesh(std::move(other.m_mesh)),
+      m_owned_cubemap(std::move(other.m_owned_cubemap))
+{
+    m_brush.RebindShader(m_shader);
+    if (m_owned_cubemap.IsValid())
+    {
+        m_brush.SetTexture("cubemap", m_owned_cubemap);
+    }
+}
+
+Rndr::Canvas::CubemapRenderer& Rndr::Canvas::CubemapRenderer::operator=(CubemapRenderer&& other) noexcept
+{
+    if (this != &other)
+    {
+        m_context = std::move(other.m_context);
+        m_shader = std::move(other.m_shader);
+        m_brush = std::move(other.m_brush);
+        m_mesh = std::move(other.m_mesh);
+        m_owned_cubemap = std::move(other.m_owned_cubemap);
+        m_brush.RebindShader(m_shader);
+        if (m_owned_cubemap.IsValid())
+        {
+            m_brush.SetTexture("cubemap", m_owned_cubemap);
+        }
+    }
+    return *this;
+}
+
 Rndr::Canvas::CubemapRenderer::~CubemapRenderer()
 {
     Destroy();

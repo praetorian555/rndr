@@ -34,8 +34,9 @@ public:
 
     GridRenderer(const GridRenderer&) = delete;
     GridRenderer& operator=(const GridRenderer&) = delete;
-    GridRenderer(GridRenderer&&) noexcept = default;
-    GridRenderer& operator=(GridRenderer&&) noexcept = default;
+    // Not defaulted: the brush points at the shader member, so a move has to re-point it.
+    GridRenderer(GridRenderer&& other) noexcept;
+    GridRenderer& operator=(GridRenderer&& other) noexcept;
 
     void Destroy();
 

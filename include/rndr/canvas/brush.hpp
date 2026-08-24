@@ -215,6 +215,14 @@ public:
      */
     [[nodiscard]] ErrorCode SetShader(const Shader& shader);
 
+    /**
+     * Re-point the brush at a shader that moved to a new address. The uniform slots SetShader built stay
+     * valid, since they mirror the shader's reflection rather than its address; a shader with different
+     * parameters goes through SetShader instead. What the renderers' move operations use, since each owns
+     * both its brush and the shader member the brush points at.
+     */
+    void RebindShader(const Shader& shader) { m_shader = &shader; }
+
     /** @return Currently bound shader, or nullptr if none. */
     [[nodiscard]] const Shader* GetShader() const;
 

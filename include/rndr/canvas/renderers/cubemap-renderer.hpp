@@ -36,8 +36,10 @@ public:
 
     CubemapRenderer(const CubemapRenderer&) = delete;
     CubemapRenderer& operator=(const CubemapRenderer&) = delete;
-    CubemapRenderer(CubemapRenderer&&) noexcept = default;
-    CubemapRenderer& operator=(CubemapRenderer&&) noexcept = default;
+    // Not defaulted: the brush points at the shader member and at the owned cubemap, so a move has to
+    // re-point both.
+    CubemapRenderer(CubemapRenderer&& other) noexcept;
+    CubemapRenderer& operator=(CubemapRenderer&& other) noexcept;
 
     void Destroy();
 
