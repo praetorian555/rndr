@@ -6,10 +6,12 @@
 #include "opal/clonable-base.h"
 #include "opal/container/array-view.h"
 #include "opal/container/dynamic-array.h"
+#include "opal/container/expected.h"
 #include "opal/container/scope-ptr.h"
 #include "opal/container/string.h"
 #include "opal/enum-flags.h"
 
+#include "rndr/error-codes.hpp"
 #include "rndr/math.hpp"
 #include "rndr/system-message-handler.hpp"
 #include "rndr/types.hpp"
@@ -425,9 +427,10 @@ public:
     /**
      * Adds a new action and returns a builder for configuring it.
      * @param name Unique name for the action within this context.
-     * @return Builder for chaining callback and binding configuration.
+     * @return Builder for chaining callback and binding configuration, or ErrorCode::InvalidArgument when the
+     * context already contains an action with this name.
      */
-    InputActionBuilder AddAction(Opal::StringUtf8 name);
+    Opal::Expected<InputActionBuilder, ErrorCode> AddAction(Opal::StringUtf8 name);
 
     /**
      * Removes an action by name.
@@ -487,8 +490,9 @@ public:
     [[nodiscard]] InputContext& GetCurrentContext();
     [[nodiscard]] const InputContext& GetCurrentContext() const;
 
-    [[nodiscard]] InputContext& GetContextByName(const Opal::StringUtf8& name);
-    [[nodiscard]] const InputContext& GetContextByName(const Opal::StringUtf8& name) const;
+    /** Looks a context up by name, reporting ErrorCode::InvalidArgument when no context has it. */
+    [[nodiscard]] Opal::Expected<InputContext&, ErrorCode> GetContextByName(const Opal::StringUtf8& name);
+    [[nodiscard]] Opal::Expected<const InputContext&, ErrorCode> GetContextByName(const Opal::StringUtf8& name) const;
 
     /**
      * Pushes a context to the top of the stack.

@@ -38,20 +38,22 @@ menu_context.SetEnabled(false);  // Temporarily bypass this context.
 menu_context.SetEnabled(true);   // Re-enable it.
 ```
 
-Contexts can be retrieved by name from the `InputSystem`. This throws an `Opal::Exception` if no context with the given name exists.
+Contexts can be retrieved by name from the `InputSystem`. This reports `ErrorCode::InvalidArgument` if no
+context with the given name exists; the snippets below unwrap with `.GetValue()` for brevity, real code
+checks `HasValue()` first.
 
 ```cpp
-Rndr::InputContext& ctx = input_system.GetContextByName(Opal::StringUtf8("Menu"));
+Rndr::InputContext& ctx = input_system.GetContextByName(Opal::StringUtf8("Menu")).GetValue();
 ```
 
 ### InputAction
 
 A named action that groups one or more input bindings and routes them to a callback. Actions are created through a fluent builder API returned by `InputContext::AddAction()`.
 
-Action names must be unique within a context. Adding a duplicate name throws an `Opal::Exception`.
+Action names must be unique within a context. Adding a duplicate name reports `ErrorCode::InvalidArgument`.
 
 ```cpp
-context.AddAction("Jump")
+context.AddAction("Jump").GetValue()
     .OnButton([](Rndr::Trigger trigger, bool is_repeat)
     {
         // Handle jump.
@@ -79,7 +81,7 @@ Rndr::InputAction* action = context.GetAction("Jump");  // Returns nullptr if no
 Bind keyboard keys with a trigger (Pressed or Released). Multiple keys can be bound to the same action.
 
 ```cpp
-context.AddAction("MoveForward")
+context.AddAction("MoveForward").GetValue()
     .OnButton([](Rndr::Trigger trigger, bool is_repeat) { /* ... */ })
     .Bind(Rndr::Key::W, Rndr::Trigger::Pressed)
     .Bind(Rndr::Key::UpArrow, Rndr::Trigger::Pressed);
@@ -93,12 +95,12 @@ Modifiers (Ctrl, Shift, Alt) are specified as flags on the binding. The system t
 
 ```cpp
 // Single modifier.
-context.AddAction("SelectAll")
+context.AddAction("SelectAll").GetValue()
     .OnButton(callback)
     .Bind(Rndr::Key::A, Rndr::Trigger::Pressed, Rndr::Modifiers::Ctrl);
 
 // Combined modifiers.
-context.AddAction("SaveAs")
+context.AddAction("SaveAs").GetValue()
     .OnButton(callback)
     .Bind(Rndr::Key::S, Rndr::Trigger::Pressed, Rndr::Modifiers::Ctrl | Rndr::Modifiers::Shift);
 ```
@@ -110,7 +112,7 @@ A binding with `Modifiers::None` (the default) matches regardless of which modif
 Bind mouse button press/release events. The callback receives the button, trigger, and cursor position.
 
 ```cpp
-context.AddAction("Shoot")
+context.AddAction("Shoot").GetValue()
     .OnMouseButton([](Rndr::MouseButton button, Rndr::Trigger trigger, const Rndr::Vector2i& cursor_pos)
     {
         // Handle click.
@@ -129,7 +131,7 @@ Double-click events are treated as press events.
 Bind mouse axis movement. Each axis is dispatched individually. Zero-delta axes are not dispatched. Events are not coalesced; each raw mouse move is delivered separately.
 
 ```cpp
-context.AddAction("Look")
+context.AddAction("Look").GetValue()
     .OnMousePosition([](Rndr::MouseAxis axis, Rndr::f32 delta)
     {
         if (axis == Rndr::MouseAxis::X) { /* horizontal */ }
@@ -146,7 +148,7 @@ context.AddAction("Look")
 Bind mouse wheel scrolling.
 
 ```cpp
-context.AddAction("Zoom")
+context.AddAction("Zoom").GetValue()
     .OnMouseWheel([](Rndr::f32 delta_x, Rndr::f32 delta_y)
     {
         // delta_y is the vertical scroll amount.
@@ -161,7 +163,7 @@ context.AddAction("Zoom")
 Bind character/text input events. These are separate from key press events (pressing `A` generates both a key event and a character event; they are dispatched to different binding types).
 
 ```cpp
-context.AddAction("ChatInput")
+context.AddAction("ChatInput").GetValue()
     .OnText([](Rndr::uchar32 character)
     {
         // Handle typed character (supports Unicode).
@@ -176,7 +178,7 @@ context.AddAction("ChatInput")
 A hold binding fires a single callback after a key has been held down for a specified duration. It does not auto-repeat. Releasing the key before the duration cancels the hold. Re-pressing restarts the timer.
 
 ```cpp
-context.AddAction("Interact")
+context.AddAction("Interact").GetValue()
     .OnButton(callback)
     .BindHold(Rndr::Key::E, 0.5f);  // Fires after 0.5 seconds.
 ```
@@ -189,7 +191,7 @@ A sequence of keys that must be pressed in order within a timeout window between
 
 ```cpp
 Rndr::Key keys[] = {Rndr::Key::UpArrow, Rndr::Key::UpArrow, Rndr::Key::DownArrow};
-context.AddAction("SecretCode")
+context.AddAction("SecretCode").GetValue()
     .OnButton(callback)
     .BindCombo(keys, 0.3f);  // 0.3s max between each key.
 ```
@@ -205,7 +207,7 @@ A combo with `timeout_seconds == 0`. Currently uses the same sequential matching
 
 ```cpp
 Rndr::Key keys[] = {Rndr::Key::A, Rndr::Key::B};
-context.AddAction("SpecialMove")
+context.AddAction("SpecialMove").GetValue()
     .OnButton(callback)
     .BindCombo(keys, 0.0f);  // No timeout.
 ```
@@ -217,7 +219,7 @@ Up to four gamepads (`Rndr::k_max_gamepads`) are polled through XInput. Polling 
 
 ```cpp
 // Gamepad button.
-context.AddAction("Jump")
+context.AddAction("Jump").GetValue()
     .OnGamepadButton([](Rndr::GamepadButton button, Rndr::Trigger trigger, Rndr::u8 gamepad_index)
     {
         // Handle jump.
@@ -225,7 +227,7 @@ context.AddAction("Jump")
     .Bind(Rndr::GamepadButton::A, Rndr::Trigger::Pressed);
 
 // Gamepad axis.
-context.AddAction("MoveX")
+context.AddAction("MoveX").GetValue()
     .OnGamepadAxis([](Rndr::GamepadAxis axis, Rndr::f32 value, Rndr::u8 gamepad_index)
     {
         // value is dead-zone corrected and in [-1, 1].
@@ -254,11 +256,11 @@ every pad — a single-player game keeps working no matter which slot the pad co
 explicit index for local multiplayer.
 
 ```cpp
-context.AddAction("PlayerTwoJump")
+context.AddAction("PlayerTwoJump").GetValue()
     .OnGamepadButton(callback)
     .Bind(Rndr::GamepadButton::A, Rndr::Trigger::Pressed, /*gamepad_index=*/ 1);
 
-context.AddAction("PlayerTwoMove")
+context.AddAction("PlayerTwoMove").GetValue()
     .OnGamepadAxis(callback)
     .Bind(Rndr::GamepadAxis::LeftStickX, /*dead_zone=*/ -1.0f, /*gamepad_index=*/ 1);
 ```
@@ -286,7 +288,7 @@ zero for every axis still deflected, so nothing stays stuck on.
 An action can have callbacks of different types set simultaneously. The correct callback is invoked based on the event type.
 
 ```cpp
-context.AddAction("Interact")
+context.AddAction("Interact").GetValue()
     .OnButton([](Rndr::Trigger trigger, bool is_repeat)
     {
         // Fires on keyboard E press.
@@ -304,7 +306,7 @@ context.AddAction("Interact")
 Actions can optionally be scoped to a specific window. This is useful for multi-window applications or editor tools where different windows should handle different inputs.
 
 ```cpp
-context.AddAction("EditorClick")
+context.AddAction("EditorClick").GetValue()
     .OnMouseButton(callback)
     .Bind(Rndr::MouseButton::Left, Rndr::Trigger::Pressed)
     .ForWindow(editor_window);  // Only fires for events from this window.
@@ -321,7 +323,7 @@ The `InputSystem` has a default dead zone (0.2) for analog inputs. Individual ga
 input_system.SetDefaultDeadZone(0.15f);
 
 // Per-binding override.
-context.AddAction("MoveX")
+context.AddAction("MoveX").GetValue()
     .OnGamepadAxis(callback)
     .Bind(Rndr::GamepadAxis::LeftStickX, /*dead_zone=*/ 0.1f);
 ```

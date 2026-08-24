@@ -249,7 +249,7 @@ void Run()
 
     rndr_app->GetInputSystemChecked()
         .GetCurrentContext()
-        .AddAction("Exit")
+        .AddAction("Exit").GetValue()
         .Bind(Rndr::Key::Escape, Rndr::Trigger::Pressed)
         .OnButton([&window](Rndr::Trigger, bool) { window->RequestClose(); });
     const Rndr::FlyCameraDesc fly_camera_desc{.start_position = {0.0f, 1.0f, 10.0f},
@@ -261,7 +261,7 @@ void Run()
     bool fps_mode = true;
     rndr_app->GetInputSystemChecked()
         .GetCurrentContext()
-        .AddAction("FPS Mode")
+        .AddAction("FPS Mode").GetValue()
         .Bind(Rndr::Key::F1, Rndr::Trigger::Pressed)
         .OnButton(
             [&rndr_app, &window, &fps_mode, &controller](Rndr::Trigger, bool)

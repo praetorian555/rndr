@@ -110,9 +110,9 @@ int main()
     bool is_paused = false;
     Opal::RNG rng;
 
-    InputContext& input = app->GetInputSystemChecked().GetContextByName("Default");
-    input.AddAction("Quit").Bind(Key::Escape, Trigger::Pressed).OnButton([&window](Trigger, bool) { window->RequestClose(); });
-    input.AddAction("Blip")
+    InputContext& input = app->GetInputSystemChecked().GetContextByName("Default").GetValue();
+    input.AddAction("Quit").GetValue().Bind(Key::Escape, Trigger::Pressed).OnButton([&window](Trigger, bool) { window->RequestClose(); });
+    input.AddAction("Blip").GetValue()
         .Bind(Key::Space, Trigger::Pressed)
         .OnButton(
             [&](Trigger, bool is_repeated)
@@ -124,7 +124,7 @@ int main()
                     audio->Play(blip, {.pan = pan, .pitch = pitch, .bus = k_sfx_bus});
                 }
             });
-    input.AddAction("Ogg")
+    input.AddAction("Ogg").GetValue()
         .Bind(Key::O, Trigger::Pressed)
         .OnButton(
             [&](Trigger, bool is_repeated)
@@ -134,7 +134,7 @@ int main()
                     audio->Play(ogg, {.volume = 0.5f, .bus = k_music_bus});
                 }
             });
-    input.AddAction("Toggle loop")
+    input.AddAction("Toggle loop").GetValue()
         .Bind(Key::M, Trigger::Pressed)
         .OnButton(
             [&](Trigger, bool is_repeated)
@@ -152,7 +152,7 @@ int main()
                     chord_sound = audio->Play(chord, {.loop = true, .bus = k_music_bus});
                 }
             });
-    input.AddAction("Volume up")
+    input.AddAction("Volume up").GetValue()
         .Bind(Key::UpArrow, Trigger::Pressed)
         .OnButton(
             [&](Trigger, bool)
@@ -161,7 +161,7 @@ int main()
                 audio->SetMasterVolume(volume);
                 RNDR_LOG_INFO("Master volume {:.1f}", volume);
             });
-    input.AddAction("Volume down")
+    input.AddAction("Volume down").GetValue()
         .Bind(Key::DownArrow, Trigger::Pressed)
         .OnButton(
             [&](Trigger, bool)
@@ -170,7 +170,7 @@ int main()
                 audio->SetMasterVolume(volume);
                 RNDR_LOG_INFO("Master volume {:.1f}", volume);
             });
-    input.AddAction("Pause")
+    input.AddAction("Pause").GetValue()
         .Bind(Key::P, Trigger::Pressed)
         .OnButton(
             [&](Trigger, bool is_repeated)

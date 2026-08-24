@@ -9,7 +9,7 @@ ExampleController::ExampleController(Rndr::Application& app, Rndr::i32 screen_wi
       m_yaw_speed(yaw_speed),
       m_pitch_speed(pitch_speed)
 {
-    m_input_context.AddAction("MoveForward")
+    m_input_context.AddAction("MoveForward").GetValue()
         .OnButton([this](Rndr::Trigger trigger, bool)
         {
             if (trigger == Rndr::Trigger::Pressed)
@@ -24,7 +24,7 @@ ExampleController::ExampleController(Rndr::Application& app, Rndr::i32 screen_wi
         .Bind(Rndr::Key::W, Rndr::Trigger::Pressed)
         .Bind(Rndr::Key::W, Rndr::Trigger::Released);
 
-    m_input_context.AddAction("MoveBackward")
+    m_input_context.AddAction("MoveBackward").GetValue()
         .OnButton([this](Rndr::Trigger trigger, bool)
         {
             if (trigger == Rndr::Trigger::Pressed)
@@ -39,7 +39,7 @@ ExampleController::ExampleController(Rndr::Application& app, Rndr::i32 screen_wi
         .Bind(Rndr::Key::S, Rndr::Trigger::Pressed)
         .Bind(Rndr::Key::S, Rndr::Trigger::Released);
 
-    m_input_context.AddAction("MoveLeft")
+    m_input_context.AddAction("MoveLeft").GetValue()
         .OnButton([this](Rndr::Trigger trigger, bool)
         {
             if (trigger == Rndr::Trigger::Pressed)
@@ -54,7 +54,7 @@ ExampleController::ExampleController(Rndr::Application& app, Rndr::i32 screen_wi
         .Bind(Rndr::Key::A, Rndr::Trigger::Pressed)
         .Bind(Rndr::Key::A, Rndr::Trigger::Released);
 
-    m_input_context.AddAction("MoveRight")
+    m_input_context.AddAction("MoveRight").GetValue()
         .OnButton([this](Rndr::Trigger trigger, bool)
         {
             if (trigger == Rndr::Trigger::Pressed)
@@ -69,7 +69,7 @@ ExampleController::ExampleController(Rndr::Application& app, Rndr::i32 screen_wi
         .Bind(Rndr::Key::D, Rndr::Trigger::Pressed)
         .Bind(Rndr::Key::D, Rndr::Trigger::Released);
 
-    m_input_context.AddAction("LookAroundVert")
+    m_input_context.AddAction("LookAroundVert").GetValue()
         .OnButton([this](Rndr::Trigger trigger, bool)
         {
             if (trigger == Rndr::Trigger::Pressed)
@@ -84,7 +84,7 @@ ExampleController::ExampleController(Rndr::Application& app, Rndr::i32 screen_wi
         .Bind(Rndr::Key::UpArrow, Rndr::Trigger::Pressed)
         .Bind(Rndr::Key::UpArrow, Rndr::Trigger::Released);
 
-    m_input_context.AddAction("LookAroundVertDown")
+    m_input_context.AddAction("LookAroundVertDown").GetValue()
         .OnButton([this](Rndr::Trigger trigger, bool)
         {
             if (trigger == Rndr::Trigger::Pressed)
@@ -99,7 +99,7 @@ ExampleController::ExampleController(Rndr::Application& app, Rndr::i32 screen_wi
         .Bind(Rndr::Key::DownArrow, Rndr::Trigger::Pressed)
         .Bind(Rndr::Key::DownArrow, Rndr::Trigger::Released);
 
-    m_input_context.AddAction("LookAroundVertMouse")
+    m_input_context.AddAction("LookAroundVertMouse").GetValue()
         .OnMousePosition([this](Rndr::MouseAxis axis, Rndr::f32 delta)
         {
             if (axis == Rndr::MouseAxis::Y)
@@ -109,7 +109,7 @@ ExampleController::ExampleController(Rndr::Application& app, Rndr::i32 screen_wi
         })
         .Bind(Rndr::MouseAxis::Y);
 
-    m_input_context.AddAction("LookAroundHorzRight")
+    m_input_context.AddAction("LookAroundHorzRight").GetValue()
         .OnButton([this](Rndr::Trigger trigger, bool)
         {
             if (trigger == Rndr::Trigger::Pressed)
@@ -124,7 +124,7 @@ ExampleController::ExampleController(Rndr::Application& app, Rndr::i32 screen_wi
         .Bind(Rndr::Key::RightArrow, Rndr::Trigger::Pressed)
         .Bind(Rndr::Key::RightArrow, Rndr::Trigger::Released);
 
-    m_input_context.AddAction("LookAroundHorzLeft")
+    m_input_context.AddAction("LookAroundHorzLeft").GetValue()
         .OnButton([this](Rndr::Trigger trigger, bool)
         {
             if (trigger == Rndr::Trigger::Pressed)
@@ -139,7 +139,7 @@ ExampleController::ExampleController(Rndr::Application& app, Rndr::i32 screen_wi
         .Bind(Rndr::Key::LeftArrow, Rndr::Trigger::Pressed)
         .Bind(Rndr::Key::LeftArrow, Rndr::Trigger::Released);
 
-    m_input_context.AddAction("LookAroundHorzMouse")
+    m_input_context.AddAction("LookAroundHorzMouse").GetValue()
         .OnMousePosition([this](Rndr::MouseAxis axis, Rndr::f32 delta)
         {
             if (axis == Rndr::MouseAxis::X)

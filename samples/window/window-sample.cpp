@@ -98,8 +98,8 @@ int main()
         });
 
     app->GetInputSystemChecked()
-        .GetContextByName("Default")
-        .AddAction("Switch display mode")
+        .GetContextByName("Default").GetValue()
+        .AddAction("Switch display mode").GetValue()
         .Bind(Key::F2, Trigger::Pressed)
         .OnButton(
             [&window](Trigger, bool is_repeated)
@@ -113,8 +113,8 @@ int main()
             });
 
     app->GetInputSystemChecked()
-        .GetContextByName("Default")
-        .AddAction("Toggle movement controls")
+        .GetContextByName("Default").GetValue()
+        .AddAction("Toggle movement controls").GetValue()
         .Bind(Key::F1, Trigger::Pressed)
         .OnButton(
             [&app, &window, &controller](Trigger, bool is_repeated)
@@ -137,15 +137,15 @@ int main()
             });
 
     app->GetInputSystemChecked()
-        .GetContextByName("Default")
-        .AddAction("Exit")
+        .GetContextByName("Default").GetValue()
+        .AddAction("Exit").GetValue()
         .Bind(Key::Escape, Trigger::Pressed)
         .OnButton([&window](Trigger, bool) { window->RequestClose(); });
 
     u32 draw_flags = 0;
     app->GetInputSystemChecked()
-        .GetContextByName("Default")
-        .AddAction("Lighting Options")
+        .GetContextByName("Default").GetValue()
+        .AddAction("Lighting Options").GetValue()
         .Bind(Key::F3, Trigger::Pressed)
         .OnButton(
             [&draw_flags](Trigger, bool)
@@ -162,8 +162,8 @@ int main()
                                            { RNDR_LOG_INFO("Gamepad %d %s", gamepad_index, is_connected ? "connected" : "disconnected"); });
 
     app->GetInputSystemChecked()
-        .GetContextByName("Default")
-        .AddAction("Gamepad switch display mode")
+        .GetContextByName("Default").GetValue()
+        .AddAction("Gamepad switch display mode").GetValue()
         .Bind(GamepadButton::Start, Trigger::Pressed)
         .OnGamepadButton(
             [&window](GamepadButton, Trigger, u8)
@@ -174,14 +174,14 @@ int main()
             });
 
     app->GetInputSystemChecked()
-        .GetContextByName("Default")
-        .AddAction("Gamepad exit")
+        .GetContextByName("Default").GetValue()
+        .AddAction("Gamepad exit").GetValue()
         .Bind(GamepadButton::Back, Trigger::Pressed)
         .OnGamepadButton([&window](GamepadButton, Trigger, u8) { window->RequestClose(); });
 
     app->GetInputSystemChecked()
-        .GetContextByName("Default")
-        .AddAction("Gamepad left stick")
+        .GetContextByName("Default").GetValue()
+        .AddAction("Gamepad left stick").GetValue()
         .Bind(GamepadAxis::LeftStickX)
         .Bind(GamepadAxis::LeftStickY)
         .OnGamepadAxis(

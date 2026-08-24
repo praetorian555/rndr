@@ -1,6 +1,5 @@
 #include <catch2/catch2.hpp>
 
-#include "opal/exceptions.h"
 
 #include "rndr/input-system.hpp"
 
@@ -15,7 +14,7 @@ TEST_CASE("Input system keyboard binding", "[input]")
     bool callback_fired = false;
     Rndr::Trigger received_trigger = Rndr::Trigger::Released;
 
-    context.AddAction("Jump")
+    context.AddAction("Jump").GetValue()
         .OnButton([&](Rndr::Trigger trigger, bool /*is_repeat*/)
         {
             callback_fired = true;
@@ -44,7 +43,7 @@ TEST_CASE("Input system keyboard binding", "[input]")
     {
         context.RemoveAction("Jump");
 
-        context.AddAction("JumpRelease")
+        context.AddAction("JumpRelease").GetValue()
             .OnButton([&](Rndr::Trigger trigger, bool /*is_repeat*/)
             {
                 callback_fired = true;
@@ -62,7 +61,7 @@ TEST_CASE("Input system keyboard binding", "[input]")
     {
         context.RemoveAction("Jump");
 
-        context.AddAction("JumpRelease")
+        context.AddAction("JumpRelease").GetValue()
             .OnButton([&](Rndr::Trigger trigger, bool /*is_repeat*/)
             {
                 callback_fired = true;
@@ -85,7 +84,7 @@ TEST_CASE("Multiple keys bound to same action", "[input]")
 
     int callback_count = 0;
 
-    context.AddAction("MoveForward")
+    context.AddAction("MoveForward").GetValue()
         .OnButton([&](Rndr::Trigger /*trigger*/, bool /*is_repeat*/)
         {
             callback_count++;
@@ -126,7 +125,7 @@ TEST_CASE("Repeated key events pass is_repeat flag", "[input]")
 
     bool received_is_repeat = false;
 
-    context.AddAction("Jump")
+    context.AddAction("Jump").GetValue()
         .OnButton([&](Rndr::Trigger /*trigger*/, bool is_repeat)
         {
             received_is_repeat = is_repeat;
@@ -158,14 +157,14 @@ TEST_CASE("Same key with different triggers on separate actions", "[input]")
     bool press_fired = false;
     bool release_fired = false;
 
-    context.AddAction("JumpPress")
+    context.AddAction("JumpPress").GetValue()
         .OnButton([&](Rndr::Trigger /*trigger*/, bool /*is_repeat*/)
         {
             press_fired = true;
         })
         .Bind(Rndr::Key::Space, Rndr::Trigger::Pressed);
 
-    context.AddAction("JumpRelease")
+    context.AddAction("JumpRelease").GetValue()
         .OnButton([&](Rndr::Trigger /*trigger*/, bool /*is_repeat*/)
         {
             release_fired = true;
@@ -198,7 +197,7 @@ TEST_CASE("Modifier key: Ctrl+Key binding", "[input]")
 
     bool callback_fired = false;
 
-    context.AddAction("SelectAll")
+    context.AddAction("SelectAll").GetValue()
         .OnButton([&](Rndr::Trigger /*trigger*/, bool /*is_repeat*/)
         {
             callback_fired = true;
@@ -248,7 +247,7 @@ TEST_CASE("Modifier key: Shift+Key binding", "[input]")
 
     bool callback_fired = false;
 
-    context.AddAction("ShiftAction")
+    context.AddAction("ShiftAction").GetValue()
         .OnButton([&](Rndr::Trigger /*trigger*/, bool /*is_repeat*/)
         {
             callback_fired = true;
@@ -289,7 +288,7 @@ TEST_CASE("Modifier key: Alt+Key binding", "[input]")
 
     bool callback_fired = false;
 
-    context.AddAction("AltAction")
+    context.AddAction("AltAction").GetValue()
         .OnButton([&](Rndr::Trigger /*trigger*/, bool /*is_repeat*/)
         {
             callback_fired = true;
@@ -330,7 +329,7 @@ TEST_CASE("Combined modifiers: Ctrl+Shift+Key", "[input]")
 
     bool callback_fired = false;
 
-    context.AddAction("CtrlShiftA")
+    context.AddAction("CtrlShiftA").GetValue()
         .OnButton([&](Rndr::Trigger /*trigger*/, bool /*is_repeat*/)
         {
             callback_fired = true;
@@ -381,7 +380,7 @@ TEST_CASE("No-modifier binding fires regardless of held modifiers", "[input]")
 
     bool callback_fired = false;
 
-    context.AddAction("Jump")
+    context.AddAction("Jump").GetValue()
         .OnButton([&](Rndr::Trigger /*trigger*/, bool /*is_repeat*/)
         {
             callback_fired = true;
@@ -424,7 +423,7 @@ TEST_CASE("Releasing modifier clears modifier state", "[input]")
 
     int callback_count = 0;
 
-    context.AddAction("CtrlA")
+    context.AddAction("CtrlA").GetValue()
         .OnButton([&](Rndr::Trigger /*trigger*/, bool /*is_repeat*/)
         {
             callback_count++;
@@ -469,7 +468,7 @@ TEST_CASE("Input system mouse button binding", "[input]")
     Rndr::Trigger received_trigger = Rndr::Trigger::Released;
     Rndr::Vector2i received_position{};
 
-    context.AddAction("Shoot")
+    context.AddAction("Shoot").GetValue()
         .OnMouseButton([&](Rndr::MouseButton button, Rndr::Trigger trigger, const Rndr::Vector2i& pos)
         {
             callback_fired = true;
@@ -503,7 +502,7 @@ TEST_CASE("Input system mouse button binding", "[input]")
     {
         context.RemoveAction("Shoot");
 
-        context.AddAction("ShootRelease")
+        context.AddAction("ShootRelease").GetValue()
             .OnMouseButton([&](Rndr::MouseButton button, Rndr::Trigger trigger, const Rndr::Vector2i& pos)
             {
                 callback_fired = true;
@@ -537,7 +536,7 @@ TEST_CASE("Middle, X1, X2 mouse button bindings", "[input]")
 
     SECTION("Middle mouse button triggers callback")
     {
-        context.AddAction("MiddleClick")
+        context.AddAction("MiddleClick").GetValue()
             .OnMouseButton(callback)
             .Bind(Rndr::MouseButton::Middle, Rndr::Trigger::Pressed);
 
@@ -550,7 +549,7 @@ TEST_CASE("Middle, X1, X2 mouse button bindings", "[input]")
 
     SECTION("X1 mouse button triggers callback")
     {
-        context.AddAction("X1Click")
+        context.AddAction("X1Click").GetValue()
             .OnMouseButton(callback)
             .Bind(Rndr::MouseButton::X1, Rndr::Trigger::Pressed);
 
@@ -563,7 +562,7 @@ TEST_CASE("Middle, X1, X2 mouse button bindings", "[input]")
 
     SECTION("X2 mouse button triggers callback")
     {
-        context.AddAction("X2Click")
+        context.AddAction("X2Click").GetValue()
             .OnMouseButton(callback)
             .Bind(Rndr::MouseButton::X2, Rndr::Trigger::Pressed);
 
@@ -582,7 +581,7 @@ TEST_CASE("Mouse button cursor position passed correctly", "[input]")
 
     Rndr::Vector2i received_position{};
 
-    context.AddAction("Click")
+    context.AddAction("Click").GetValue()
         .OnMouseButton([&](Rndr::MouseButton /*button*/, Rndr::Trigger /*trigger*/, const Rndr::Vector2i& pos)
         {
             received_position = pos;
@@ -625,7 +624,7 @@ TEST_CASE("Double click is treated as press event", "[input]")
     bool callback_fired = false;
     Rndr::Trigger received_trigger = Rndr::Trigger::Released;
 
-    context.AddAction("Click")
+    context.AddAction("Click").GetValue()
         .OnMouseButton([&](Rndr::MouseButton /*button*/, Rndr::Trigger trigger, const Rndr::Vector2i& /*pos*/)
         {
             callback_fired = true;
@@ -649,7 +648,7 @@ TEST_CASE("Input system mouse move binding", "[input]")
     Rndr::f32 received_delta_y = 0.0f;
     int callback_count = 0;
 
-    context.AddAction("Look")
+    context.AddAction("Look").GetValue()
         .OnMousePosition([&](Rndr::MouseAxis axis, Rndr::f32 delta)
         {
             callback_count++;
@@ -694,7 +693,7 @@ TEST_CASE("Mouse move binding only X axis ignores Y", "[input]")
     int callback_count = 0;
     Rndr::MouseAxis received_axis{};
 
-    context.AddAction("LookX")
+    context.AddAction("LookX").GetValue()
         .OnMousePosition([&](Rndr::MouseAxis axis, Rndr::f32 /*delta*/)
         {
             callback_count++;
@@ -737,7 +736,7 @@ TEST_CASE("Mouse move binding only Y axis ignores X", "[input]")
     int callback_count = 0;
     Rndr::MouseAxis received_axis{};
 
-    context.AddAction("LookY")
+    context.AddAction("LookY").GetValue()
         .OnMousePosition([&](Rndr::MouseAxis axis, Rndr::f32 /*delta*/)
         {
             callback_count++;
@@ -780,7 +779,7 @@ TEST_CASE("Multiple mouse move events dispatched individually", "[input]")
     Rndr::f32 total_delta_x = 0.0f;
     int callback_count = 0;
 
-    context.AddAction("LookX")
+    context.AddAction("LookX").GetValue()
         .OnMousePosition([&](Rndr::MouseAxis axis, Rndr::f32 delta)
         {
             if (axis == Rndr::MouseAxis::X)
@@ -808,7 +807,7 @@ TEST_CASE("Input system mouse wheel binding", "[input]")
     bool callback_fired = false;
     Rndr::f32 received_delta_y = 0.0f;
 
-    context.AddAction("Zoom")
+    context.AddAction("Zoom").GetValue()
         .OnMouseWheel([&](Rndr::f32 /*delta_x*/, Rndr::f32 delta_y)
         {
             callback_fired = true;
@@ -843,7 +842,7 @@ TEST_CASE("Text input: character event triggers text callback", "[input]")
     Rndr::uchar32 received_char = 0;
     bool callback_fired = false;
 
-    context.AddAction("TextInput")
+    context.AddAction("TextInput").GetValue()
         .OnText([&](Rndr::uchar32 character)
         {
             callback_fired = true;
@@ -877,7 +876,7 @@ TEST_CASE("Text input: multiple characters each fire callback", "[input]")
 
     Opal::DynamicArray<Rndr::uchar32> received_chars;
 
-    context.AddAction("TextInput")
+    context.AddAction("TextInput").GetValue()
         .OnText([&](Rndr::uchar32 character)
         {
             received_chars.PushBack(character);
@@ -902,7 +901,7 @@ TEST_CASE("Text input: text binding does not fire on key events", "[input]")
 
     bool text_callback_fired = false;
 
-    context.AddAction("TextInput")
+    context.AddAction("TextInput").GetValue()
         .OnText([&](Rndr::uchar32 /*character*/)
         {
             text_callback_fired = true;
@@ -933,7 +932,7 @@ TEST_CASE("Text input: key binding does not fire on character events", "[input]"
 
     bool button_callback_fired = false;
 
-    context.AddAction("PressA")
+    context.AddAction("PressA").GetValue()
         .OnButton([&](Rndr::Trigger /*trigger*/, bool /*is_repeat*/)
         {
             button_callback_fired = true;
@@ -953,7 +952,7 @@ TEST_CASE("Hold binding fires after duration elapses", "[input]")
 
     int callback_count = 0;
 
-    context.AddAction("Interact")
+    context.AddAction("Interact").GetValue()
         .OnButton([&](Rndr::Trigger /*trigger*/, bool /*is_repeat*/)
         {
             callback_count++;
@@ -991,7 +990,7 @@ TEST_CASE("Hold binding fires exactly once", "[input]")
 
     int callback_count = 0;
 
-    context.AddAction("Interact")
+    context.AddAction("Interact").GetValue()
         .OnButton([&](Rndr::Trigger /*trigger*/, bool /*is_repeat*/)
         {
             callback_count++;
@@ -1017,7 +1016,7 @@ TEST_CASE("Hold binding: releasing key before duration cancels hold", "[input]")
 
     int callback_count = 0;
 
-    context.AddAction("Interact")
+    context.AddAction("Interact").GetValue()
         .OnButton([&](Rndr::Trigger /*trigger*/, bool /*is_repeat*/)
         {
             callback_count++;
@@ -1046,7 +1045,7 @@ TEST_CASE("Hold binding: release and re-press restarts timer", "[input]")
 
     int callback_count = 0;
 
-    context.AddAction("Interact")
+    context.AddAction("Interact").GetValue()
         .OnButton([&](Rndr::Trigger /*trigger*/, bool /*is_repeat*/)
         {
             callback_count++;
@@ -1083,7 +1082,7 @@ TEST_CASE("Hold binding: timer accumulates across multiple frames", "[input]")
 
     int callback_count = 0;
 
-    context.AddAction("Interact")
+    context.AddAction("Interact").GetValue()
         .OnButton([&](Rndr::Trigger /*trigger*/, bool /*is_repeat*/)
         {
             callback_count++;
@@ -1112,7 +1111,7 @@ TEST_CASE("Hold binding: small duration fires on next frame", "[input]")
 
     int callback_count = 0;
 
-    context.AddAction("QuickHold")
+    context.AddAction("QuickHold").GetValue()
         .OnButton([&](Rndr::Trigger /*trigger*/, bool /*is_repeat*/)
         {
             callback_count++;
@@ -1133,14 +1132,14 @@ TEST_CASE("Hold binding: multiple holds on different keys", "[input]")
     int short_hold_count = 0;
     int long_hold_count = 0;
 
-    context.AddAction("ShortHold")
+    context.AddAction("ShortHold").GetValue()
         .OnButton([&](Rndr::Trigger /*trigger*/, bool /*is_repeat*/)
         {
             short_hold_count++;
         })
         .BindHold(Rndr::Key::E, 0.2f);
 
-    context.AddAction("LongHold")
+    context.AddAction("LongHold").GetValue()
         .OnButton([&](Rndr::Trigger /*trigger*/, bool /*is_repeat*/)
         {
             long_hold_count++;
@@ -1174,7 +1173,7 @@ TEST_CASE("Hold binding: unbound key does not affect hold", "[input]")
 
     int callback_count = 0;
 
-    context.AddAction("Interact")
+    context.AddAction("Interact").GetValue()
         .OnButton([&](Rndr::Trigger /*trigger*/, bool /*is_repeat*/)
         {
             callback_count++;
@@ -1196,7 +1195,7 @@ TEST_CASE("Sequential combo: correct sequence triggers callback", "[input]")
     int callback_count = 0;
 
     Rndr::Key keys[] = {Rndr::Key::UpArrow, Rndr::Key::UpArrow, Rndr::Key::DownArrow};
-    context.AddAction("SecretCode")
+    context.AddAction("SecretCode").GetValue()
         .OnButton([&](Rndr::Trigger /*trigger*/, bool /*is_repeat*/)
         {
             callback_count++;
@@ -1221,7 +1220,7 @@ TEST_CASE("Sequential combo: wrong key resets combo", "[input]")
     int callback_count = 0;
 
     Rndr::Key keys[] = {Rndr::Key::A, Rndr::Key::B, Rndr::Key::C};
-    context.AddAction("Combo")
+    context.AddAction("Combo").GetValue()
         .OnButton([&](Rndr::Trigger /*trigger*/, bool /*is_repeat*/)
         {
             callback_count++;
@@ -1251,7 +1250,7 @@ TEST_CASE("Sequential combo: can be triggered again after completion", "[input]"
     int callback_count = 0;
 
     Rndr::Key keys[] = {Rndr::Key::A, Rndr::Key::B};
-    context.AddAction("Combo")
+    context.AddAction("Combo").GetValue()
         .OnButton([&](Rndr::Trigger /*trigger*/, bool /*is_repeat*/)
         {
             callback_count++;
@@ -1281,7 +1280,7 @@ TEST_CASE("Sequential combo: times out between steps", "[input]")
     int callback_count = 0;
 
     Rndr::Key keys[] = {Rndr::Key::A, Rndr::Key::B};
-    context.AddAction("Combo")
+    context.AddAction("Combo").GetValue()
         .OnButton([&](Rndr::Trigger /*trigger*/, bool /*is_repeat*/)
         {
             callback_count++;
@@ -1310,7 +1309,7 @@ TEST_CASE("Sequential combo: 2-key combo works", "[input]")
     int callback_count = 0;
 
     Rndr::Key keys[] = {Rndr::Key::W, Rndr::Key::S};
-    context.AddAction("Combo2")
+    context.AddAction("Combo2").GetValue()
         .OnButton([&](Rndr::Trigger /*trigger*/, bool /*is_repeat*/)
         {
             callback_count++;
@@ -1333,7 +1332,7 @@ TEST_CASE("Sequential combo: partial combo does not fire", "[input]")
     int callback_count = 0;
 
     Rndr::Key keys[] = {Rndr::Key::A, Rndr::Key::B, Rndr::Key::C};
-    context.AddAction("Combo")
+    context.AddAction("Combo").GetValue()
         .OnButton([&](Rndr::Trigger /*trigger*/, bool /*is_repeat*/)
         {
             callback_count++;
@@ -1357,7 +1356,7 @@ TEST_CASE("Sequential combo: timer resets between each step", "[input]")
     int callback_count = 0;
 
     Rndr::Key keys[] = {Rndr::Key::A, Rndr::Key::B, Rndr::Key::C};
-    context.AddAction("Combo")
+    context.AddAction("Combo").GetValue()
         .OnButton([&](Rndr::Trigger /*trigger*/, bool /*is_repeat*/)
         {
             callback_count++;
@@ -1383,7 +1382,7 @@ TEST_CASE("Sequential combo: release events do not advance combo", "[input]")
     int callback_count = 0;
 
     Rndr::Key keys[] = {Rndr::Key::A, Rndr::Key::B};
-    context.AddAction("Combo")
+    context.AddAction("Combo").GetValue()
         .OnButton([&](Rndr::Trigger /*trigger*/, bool /*is_repeat*/)
         {
             callback_count++;
@@ -1417,7 +1416,7 @@ TEST_CASE("Simultaneous combo: all keys pressed triggers callback", "[input]")
     int callback_count = 0;
 
     Rndr::Key keys[] = {Rndr::Key::A, Rndr::Key::B};
-    context.AddAction("SpecialMove")
+    context.AddAction("SpecialMove").GetValue()
         .OnButton([&](Rndr::Trigger /*trigger*/, bool /*is_repeat*/)
         {
             callback_count++;
@@ -1439,7 +1438,7 @@ TEST_CASE("Simultaneous combo: missing one key does not trigger", "[input]")
     int callback_count = 0;
 
     Rndr::Key keys[] = {Rndr::Key::A, Rndr::Key::B};
-    context.AddAction("SpecialMove")
+    context.AddAction("SpecialMove").GetValue()
         .OnButton([&](Rndr::Trigger /*trigger*/, bool /*is_repeat*/)
         {
             callback_count++;
@@ -1471,7 +1470,7 @@ TEST_CASE("Simultaneous combo: no timeout means no expiry", "[input]")
     int callback_count = 0;
 
     Rndr::Key keys[] = {Rndr::Key::A, Rndr::Key::B};
-    context.AddAction("SpecialMove")
+    context.AddAction("SpecialMove").GetValue()
         .OnButton([&](Rndr::Trigger /*trigger*/, bool /*is_repeat*/)
         {
             callback_count++;
@@ -1500,7 +1499,7 @@ TEST_CASE("Simultaneous combo: wrong key resets combo", "[input]")
     int callback_count = 0;
 
     Rndr::Key keys[] = {Rndr::Key::A, Rndr::Key::B};
-    context.AddAction("SpecialMove")
+    context.AddAction("SpecialMove").GetValue()
         .OnButton([&](Rndr::Trigger /*trigger*/, bool /*is_repeat*/)
         {
             callback_count++;
@@ -1528,7 +1527,7 @@ TEST_CASE("Simultaneous combo: can be retriggered", "[input]")
     int callback_count = 0;
 
     Rndr::Key keys[] = {Rndr::Key::A, Rndr::Key::B};
-    context.AddAction("SpecialMove")
+    context.AddAction("SpecialMove").GetValue()
         .OnButton([&](Rndr::Trigger /*trigger*/, bool /*is_repeat*/)
         {
             callback_count++;
@@ -1599,7 +1598,7 @@ TEST_CASE("Context stack: top context handles events first", "[input]")
     bool default_fired = false;
     bool top_fired = false;
 
-    default_ctx.AddAction("Jump")
+    default_ctx.AddAction("Jump").GetValue()
         .OnButton([&](Rndr::Trigger /*trigger*/, bool /*is_repeat*/)
         {
             default_fired = true;
@@ -1607,7 +1606,7 @@ TEST_CASE("Context stack: top context handles events first", "[input]")
         .Bind(Rndr::Key::Space, Rndr::Trigger::Pressed);
 
     Rndr::InputContext top_context(Opal::StringUtf8("Top"));
-    top_context.AddAction("Jump")
+    top_context.AddAction("Jump").GetValue()
         .OnButton([&](Rndr::Trigger /*trigger*/, bool /*is_repeat*/)
         {
             top_fired = true;
@@ -1631,7 +1630,7 @@ TEST_CASE("Context stack: consumed event does not propagate", "[input]")
     bool default_fired = false;
     bool top_fired = false;
 
-    default_ctx.AddAction("Jump")
+    default_ctx.AddAction("Jump").GetValue()
         .OnButton([&](Rndr::Trigger /*trigger*/, bool /*is_repeat*/)
         {
             default_fired = true;
@@ -1639,7 +1638,7 @@ TEST_CASE("Context stack: consumed event does not propagate", "[input]")
         .Bind(Rndr::Key::Space, Rndr::Trigger::Pressed);
 
     Rndr::InputContext top_context(Opal::StringUtf8("Top"));
-    top_context.AddAction("Jump")
+    top_context.AddAction("Jump").GetValue()
         .OnButton([&](Rndr::Trigger /*trigger*/, bool /*is_repeat*/)
         {
             top_fired = true;
@@ -1663,7 +1662,7 @@ TEST_CASE("Context stack: unconsumed event propagates to lower context", "[input
 
     bool default_fired = false;
 
-    default_ctx.AddAction("Jump")
+    default_ctx.AddAction("Jump").GetValue()
         .OnButton([&](Rndr::Trigger /*trigger*/, bool /*is_repeat*/)
         {
             default_fired = true;
@@ -1672,7 +1671,7 @@ TEST_CASE("Context stack: unconsumed event propagates to lower context", "[input
 
     // Top context has no binding for Space.
     Rndr::InputContext top_context(Opal::StringUtf8("Top"));
-    top_context.AddAction("Shoot")
+    top_context.AddAction("Shoot").GetValue()
         .OnButton([&](Rndr::Trigger /*trigger*/, bool /*is_repeat*/) {})
         .Bind(Rndr::Key::F, Rndr::Trigger::Pressed);
 
@@ -1693,7 +1692,7 @@ TEST_CASE("Context stack: disabled context is skipped", "[input]")
     bool default_fired = false;
     bool top_fired = false;
 
-    default_ctx.AddAction("Jump")
+    default_ctx.AddAction("Jump").GetValue()
         .OnButton([&](Rndr::Trigger /*trigger*/, bool /*is_repeat*/)
         {
             default_fired = true;
@@ -1701,7 +1700,7 @@ TEST_CASE("Context stack: disabled context is skipped", "[input]")
         .Bind(Rndr::Key::Space, Rndr::Trigger::Pressed);
 
     Rndr::InputContext top_context(Opal::StringUtf8("Top"));
-    top_context.AddAction("Jump")
+    top_context.AddAction("Jump").GetValue()
         .OnButton([&](Rndr::Trigger /*trigger*/, bool /*is_repeat*/)
         {
             top_fired = true;
@@ -1727,7 +1726,7 @@ TEST_CASE("Context stack: re-enabling context makes it process events", "[input]
     bool default_fired = false;
     bool top_fired = false;
 
-    default_ctx.AddAction("Jump")
+    default_ctx.AddAction("Jump").GetValue()
         .OnButton([&](Rndr::Trigger /*trigger*/, bool /*is_repeat*/)
         {
             default_fired = true;
@@ -1735,7 +1734,7 @@ TEST_CASE("Context stack: re-enabling context makes it process events", "[input]
         .Bind(Rndr::Key::Space, Rndr::Trigger::Pressed);
 
     Rndr::InputContext top_context(Opal::StringUtf8("Top"));
-    top_context.AddAction("Jump")
+    top_context.AddAction("Jump").GetValue()
         .OnButton([&](Rndr::Trigger /*trigger*/, bool /*is_repeat*/)
         {
             top_fired = true;
@@ -1769,7 +1768,7 @@ TEST_CASE("Context stack: multiple contexts stacked correctly", "[input]")
     bool a_fired = false;
     bool b_fired = false;
 
-    input_system.GetCurrentContext().AddAction("Jump")
+    input_system.GetCurrentContext().AddAction("Jump").GetValue()
         .OnButton([&](Rndr::Trigger /*trigger*/, bool /*is_repeat*/)
         {
             default_fired = true;
@@ -1777,7 +1776,7 @@ TEST_CASE("Context stack: multiple contexts stacked correctly", "[input]")
         .Bind(Rndr::Key::Space, Rndr::Trigger::Pressed);
 
     Rndr::InputContext context_a(Opal::StringUtf8("A"));
-    context_a.AddAction("Jump")
+    context_a.AddAction("Jump").GetValue()
         .OnButton([&](Rndr::Trigger /*trigger*/, bool /*is_repeat*/)
         {
             a_fired = true;
@@ -1785,7 +1784,7 @@ TEST_CASE("Context stack: multiple contexts stacked correctly", "[input]")
         .Bind(Rndr::Key::Space, Rndr::Trigger::Pressed);
 
     Rndr::InputContext context_b(Opal::StringUtf8("B"));
-    context_b.AddAction("Jump")
+    context_b.AddAction("Jump").GetValue()
         .OnButton([&](Rndr::Trigger /*trigger*/, bool /*is_repeat*/)
         {
             b_fired = true;
@@ -1842,19 +1841,21 @@ TEST_CASE("Context stack: GetContextByName returns matching context", "[input]")
 
     SECTION("Returns pushed context by name")
     {
-        Rndr::InputContext& found = input_system.GetContextByName(Opal::StringUtf8("Gameplay"));
+        Rndr::InputContext& found = input_system.GetContextByName(Opal::StringUtf8("Gameplay")).GetValue();
         REQUIRE(found.GetName() == Opal::StringUtf8("Gameplay"));
     }
 
     SECTION("Returns default context by name")
     {
-        Rndr::InputContext& found = input_system.GetContextByName(Opal::StringUtf8("Default"));
+        Rndr::InputContext& found = input_system.GetContextByName(Opal::StringUtf8("Default")).GetValue();
         REQUIRE(found.GetName() == Opal::StringUtf8("Default"));
     }
 
-    SECTION("Throws for non-existent name")
+    SECTION("Reports InvalidArgument for non-existent name")
     {
-        REQUIRE_THROWS_AS(input_system.GetContextByName(Opal::StringUtf8("NonExistent")), Opal::Exception);
+        auto found = input_system.GetContextByName(Opal::StringUtf8("NonExistent"));
+        REQUIRE_FALSE(found.HasValue());
+        REQUIRE(found.GetError() == Rndr::ErrorCode::InvalidArgument);
     }
 }
 
@@ -1865,27 +1866,25 @@ TEST_CASE("Action management: AddAction with unique name succeeds", "[input]")
     Rndr::InputSystem input_system;
     Rndr::InputContext& context = input_system.GetCurrentContext();
 
-    context.AddAction("Jump")
+    context.AddAction("Jump").GetValue()
         .OnButton([](Rndr::Trigger, bool) {})
         .Bind(Rndr::Key::Space, Rndr::Trigger::Pressed);
 
     REQUIRE(context.ContainsAction("Jump"));
 }
 
-TEST_CASE("Action management: AddAction with duplicate name throws", "[input]")
+TEST_CASE("Action management: AddAction with duplicate name reports InvalidArgument", "[input]")
 {
     Rndr::InputSystem input_system;
     Rndr::InputContext& context = input_system.GetCurrentContext();
 
-    context.AddAction("Jump")
+    context.AddAction("Jump").GetValue()
         .OnButton([](Rndr::Trigger, bool) {})
         .Bind(Rndr::Key::Space, Rndr::Trigger::Pressed);
 
-    REQUIRE_THROWS_AS(
-        context.AddAction("Jump")
-            .OnButton([](Rndr::Trigger, bool) {})
-            .Bind(Rndr::Key::Space, Rndr::Trigger::Pressed),
-        Opal::Exception);
+    auto duplicate = context.AddAction("Jump");
+    REQUIRE_FALSE(duplicate.HasValue());
+    REQUIRE(duplicate.GetError() == Rndr::ErrorCode::InvalidArgument);
 }
 
 TEST_CASE("Action management: RemoveAction removes the action", "[input]")
@@ -1893,7 +1892,7 @@ TEST_CASE("Action management: RemoveAction removes the action", "[input]")
     Rndr::InputSystem input_system;
     Rndr::InputContext& context = input_system.GetCurrentContext();
 
-    context.AddAction("Jump")
+    context.AddAction("Jump").GetValue()
         .OnButton([](Rndr::Trigger, bool) {})
         .Bind(Rndr::Key::Space, Rndr::Trigger::Pressed);
 
@@ -1920,7 +1919,7 @@ TEST_CASE("Action management: ContainsAction", "[input]")
 
     REQUIRE_FALSE(context.ContainsAction("Jump"));
 
-    context.AddAction("Jump")
+    context.AddAction("Jump").GetValue()
         .OnButton([](Rndr::Trigger, bool) {})
         .Bind(Rndr::Key::Space, Rndr::Trigger::Pressed);
 
@@ -1937,7 +1936,7 @@ TEST_CASE("Action management: GetAction returns pointer or nullptr", "[input]")
 
     REQUIRE(context.GetAction("Jump") == nullptr);
 
-    context.AddAction("Jump")
+    context.AddAction("Jump").GetValue()
         .OnButton([](Rndr::Trigger, bool) {})
         .Bind(Rndr::Key::Space, Rndr::Trigger::Pressed);
 
@@ -1958,7 +1957,7 @@ TEST_CASE("Window filter: action with filter only fires for matching window", "[
 
     bool callback_fired = false;
 
-    context.AddAction("Jump")
+    context.AddAction("Jump").GetValue()
         .OnButton([&](Rndr::Trigger, bool)
         {
             callback_fired = true;
@@ -1990,7 +1989,7 @@ TEST_CASE("Window filter: action with no filter fires for any window", "[input]"
 
     int callback_count = 0;
 
-    context.AddAction("Jump")
+    context.AddAction("Jump").GetValue()
         .OnButton([&](Rndr::Trigger, bool)
         {
             callback_count++;
@@ -2014,7 +2013,7 @@ TEST_CASE("Window filter: multiple actions with different window filters", "[inp
     bool window1_fired = false;
     bool window2_fired = false;
 
-    context.AddAction("JumpW1")
+    context.AddAction("JumpW1").GetValue()
         .OnButton([&](Rndr::Trigger, bool)
         {
             window1_fired = true;
@@ -2022,7 +2021,7 @@ TEST_CASE("Window filter: multiple actions with different window filters", "[inp
         .Bind(Rndr::Key::Space, Rndr::Trigger::Pressed)
         .ForWindow(&g_fake_window);
 
-    context.AddAction("JumpW2")
+    context.AddAction("JumpW2").GetValue()
         .OnButton([&](Rndr::Trigger, bool)
         {
             window2_fired = true;
@@ -2059,7 +2058,7 @@ TEST_CASE("Multiple callbacks: OnButton and OnMouseButton on same action", "[inp
     bool button_fired = false;
     bool mouse_button_fired = false;
 
-    context.AddAction("Interact")
+    context.AddAction("Interact").GetValue()
         .OnButton([&](Rndr::Trigger, bool)
         {
             button_fired = true;
@@ -2097,7 +2096,7 @@ TEST_CASE("Multiple callbacks: OnButton with key and hold bindings", "[input]")
 
     int callback_count = 0;
 
-    context.AddAction("Interact")
+    context.AddAction("Interact").GetValue()
         .OnButton([&](Rndr::Trigger, bool)
         {
             callback_count++;
@@ -2132,7 +2131,7 @@ TEST_CASE("Multiple callbacks: OnMousePosition and OnMouseWheel on same action",
     bool position_fired = false;
     bool wheel_fired = false;
 
-    context.AddAction("Camera")
+    context.AddAction("Camera").GetValue()
         .OnMousePosition([&](Rndr::MouseAxis, Rndr::f32)
         {
             position_fired = true;
@@ -2182,7 +2181,7 @@ TEST_CASE("Edge case: ProcessSystemEvents with no events", "[input]")
     Rndr::InputSystem input_system;
     Rndr::InputContext& context = input_system.GetCurrentContext();
 
-    context.AddAction("Jump")
+    context.AddAction("Jump").GetValue()
         .OnButton([](Rndr::Trigger, bool) {})
         .Bind(Rndr::Key::Space, Rndr::Trigger::Pressed);
 
@@ -2201,7 +2200,7 @@ TEST_CASE("Edge case: events handled by default context", "[input]")
 
     bool callback_fired = false;
 
-    context.AddAction("Jump")
+    context.AddAction("Jump").GetValue()
         .OnButton([&](Rndr::Trigger, bool)
         {
             callback_fired = true;
@@ -2223,14 +2222,14 @@ TEST_CASE("Edge case: removing action does not affect other actions", "[input]")
     bool jump_fired = false;
     bool shoot_fired = false;
 
-    context.AddAction("Jump")
+    context.AddAction("Jump").GetValue()
         .OnButton([&](Rndr::Trigger, bool)
         {
             jump_fired = true;
         })
         .Bind(Rndr::Key::Space, Rndr::Trigger::Pressed);
 
-    context.AddAction("Shoot")
+    context.AddAction("Shoot").GetValue()
         .OnButton([&](Rndr::Trigger, bool)
         {
             shoot_fired = true;
@@ -2253,7 +2252,7 @@ TEST_CASE("Edge case: large delta_seconds does not cause issues", "[input]")
 
     int callback_count = 0;
 
-    context.AddAction("Hold")
+    context.AddAction("Hold").GetValue()
         .OnButton([&](Rndr::Trigger, bool)
         {
             callback_count++;
@@ -2278,35 +2277,35 @@ TEST_CASE("Edge case: multiple event types in same frame", "[input]")
     bool wheel_fired = false;
     bool text_fired = false;
 
-    context.AddAction("Jump")
+    context.AddAction("Jump").GetValue()
         .OnButton([&](Rndr::Trigger, bool)
         {
             key_fired = true;
         })
         .Bind(Rndr::Key::Space, Rndr::Trigger::Pressed);
 
-    context.AddAction("Shoot")
+    context.AddAction("Shoot").GetValue()
         .OnMouseButton([&](Rndr::MouseButton, Rndr::Trigger, const Rndr::Vector2i&)
         {
             mouse_button_fired = true;
         })
         .Bind(Rndr::MouseButton::Left, Rndr::Trigger::Pressed);
 
-    context.AddAction("Look")
+    context.AddAction("Look").GetValue()
         .OnMousePosition([&](Rndr::MouseAxis, Rndr::f32)
         {
             mouse_move_fired = true;
         })
         .Bind(Rndr::MouseAxis::X);
 
-    context.AddAction("Zoom")
+    context.AddAction("Zoom").GetValue()
         .OnMouseWheel([&](Rndr::f32, Rndr::f32)
         {
             wheel_fired = true;
         })
         .Bind(Rndr::MouseAxis::WheelY);
 
-    context.AddAction("Chat")
+    context.AddAction("Chat").GetValue()
         .OnText([&](Rndr::uchar32)
         {
             text_fired = true;
@@ -2338,7 +2337,7 @@ TEST_CASE("Gamepad button binding", "[input]")
     Rndr::Trigger received_trigger = Rndr::Trigger::Released;
     Rndr::u8 received_index = 0xEE;
 
-    context.AddAction("Jump")
+    context.AddAction("Jump").GetValue()
         .OnGamepadButton([&](Rndr::GamepadButton button, Rndr::Trigger trigger, Rndr::u8 gamepad_index)
         {
             callback_fired = true;
@@ -2384,7 +2383,7 @@ TEST_CASE("Gamepad button: release binding fires on release", "[input]")
     Rndr::Trigger received_trigger = Rndr::Trigger::Pressed;
     int callback_count = 0;
 
-    context.AddAction("Release")
+    context.AddAction("Release").GetValue()
         .OnGamepadButton([&](Rndr::GamepadButton, Rndr::Trigger trigger, Rndr::u8)
         {
             callback_count++;
@@ -2408,7 +2407,7 @@ TEST_CASE("Gamepad button: binding to a specific index ignores other pads", "[in
     int callback_count = 0;
     Rndr::u8 received_index = 0xEE;
 
-    context.AddAction("PlayerTwoJump")
+    context.AddAction("PlayerTwoJump").GetValue()
         .OnGamepadButton([&](Rndr::GamepadButton, Rndr::Trigger, Rndr::u8 gamepad_index)
         {
             callback_count++;
@@ -2443,7 +2442,7 @@ TEST_CASE("Gamepad button: default binding matches any pad", "[input]")
     int callback_count = 0;
 
     // No gamepad index given, so the binding defaults to k_any_gamepad.
-    context.AddAction("Jump")
+    context.AddAction("Jump").GetValue()
         .OnGamepadButton([&](Rndr::GamepadButton, Rndr::Trigger, Rndr::u8)
         {
             callback_count++;
@@ -2469,7 +2468,7 @@ TEST_CASE("Gamepad axis: dead zone gates and rescales the value", "[input]")
     // Powers of two keep the rescale exact, so the expected value needs no epsilon.
     input_system.SetDefaultDeadZone(0.5f);
 
-    context.AddAction("MoveX")
+    context.AddAction("MoveX").GetValue()
         .OnGamepadAxis([&](Rndr::GamepadAxis axis, Rndr::f32 value, Rndr::u8)
         {
             callback_count++;
@@ -2538,7 +2537,7 @@ TEST_CASE("Gamepad axis: rescale with the default dead zone", "[input]")
 
     Rndr::f32 received_value = -99.0f;
 
-    context.AddAction("MoveX")
+    context.AddAction("MoveX").GetValue()
         .OnGamepadAxis([&](Rndr::GamepadAxis, Rndr::f32 value, Rndr::u8)
         {
             received_value = value;
@@ -2562,7 +2561,7 @@ TEST_CASE("Gamepad axis: per-binding dead zone overrides the system default", "[
     int callback_count = 0;
     Rndr::f32 received_value = -99.0f;
 
-    context.AddAction("Aim")
+    context.AddAction("Aim").GetValue()
         .OnGamepadAxis([&](Rndr::GamepadAxis, Rndr::f32 value, Rndr::u8)
         {
             callback_count++;
@@ -2587,7 +2586,7 @@ TEST_CASE("Gamepad axis: negative dead zone falls back to the system default", "
 
     int callback_count = 0;
 
-    context.AddAction("MoveY")
+    context.AddAction("MoveY").GetValue()
         .OnGamepadAxis([&](Rndr::GamepadAxis, Rndr::f32, Rndr::u8)
         {
             callback_count++;
@@ -2613,7 +2612,7 @@ TEST_CASE("Gamepad axis: returning to center reports zero exactly once", "[input
     int callback_count = 0;
     Rndr::f32 received_value = -99.0f;
 
-    context.AddAction("MoveX")
+    context.AddAction("MoveX").GetValue()
         .OnGamepadAxis([&](Rndr::GamepadAxis, Rndr::f32 value, Rndr::u8)
         {
             callback_count++;
@@ -2647,7 +2646,7 @@ TEST_CASE("Gamepad axis: binding to a specific index ignores other pads", "[inpu
 
     int callback_count = 0;
 
-    context.AddAction("PlayerTwoMove")
+    context.AddAction("PlayerTwoMove").GetValue()
         .OnGamepadAxis([&](Rndr::GamepadAxis, Rndr::f32, Rndr::u8)
         {
             callback_count++;
@@ -2671,14 +2670,14 @@ TEST_CASE("Gamepad trigger: bindable as both a button and an axis", "[input]")
     bool button_fired = false;
     Rndr::f32 axis_value = -99.0f;
 
-    context.AddAction("Shoot")
+    context.AddAction("Shoot").GetValue()
         .OnGamepadButton([&](Rndr::GamepadButton, Rndr::Trigger, Rndr::u8)
         {
             button_fired = true;
         })
         .Bind(Rndr::GamepadButton::RightTrigger, Rndr::Trigger::Pressed);
 
-    context.AddAction("ShootPressure")
+    context.AddAction("ShootPressure").GetValue()
         .OnGamepadAxis([&](Rndr::GamepadAxis, Rndr::f32 value, Rndr::u8)
         {
             axis_value = value;
@@ -2700,7 +2699,7 @@ TEST_CASE("Gamepad: context stack consumes and propagates", "[input]")
     Rndr::InputContext& default_context = input_system.GetCurrentContext();
 
     bool default_fired = false;
-    default_context.AddAction("Jump")
+    default_context.AddAction("Jump").GetValue()
         .OnGamepadButton([&](Rndr::GamepadButton, Rndr::Trigger, Rndr::u8)
         {
             default_fired = true;
@@ -2709,7 +2708,7 @@ TEST_CASE("Gamepad: context stack consumes and propagates", "[input]")
 
     Rndr::InputContext menu_context(Opal::StringUtf8("Menu"));
     bool menu_fired = false;
-    menu_context.AddAction("Confirm")
+    menu_context.AddAction("Confirm").GetValue()
         .OnGamepadButton([&](Rndr::GamepadButton, Rndr::Trigger, Rndr::u8)
         {
             menu_fired = true;
@@ -2758,7 +2757,7 @@ TEST_CASE("Gamepad: events ignore the window filter", "[input]")
     bool axis_fired = false;
 
     // Gamepad events carry no window, so a window filter has nothing to match against.
-    context.AddAction("Jump")
+    context.AddAction("Jump").GetValue()
         .OnGamepadButton([&](Rndr::GamepadButton, Rndr::Trigger, Rndr::u8)
         {
             button_fired = true;
@@ -2766,7 +2765,7 @@ TEST_CASE("Gamepad: events ignore the window filter", "[input]")
         .Bind(Rndr::GamepadButton::A, Rndr::Trigger::Pressed)
         .ForWindow(&g_fake_window);
 
-    context.AddAction("Move")
+    context.AddAction("Move").GetValue()
         .OnGamepadAxis([&](Rndr::GamepadAxis, Rndr::f32, Rndr::u8)
         {
             axis_fired = true;
@@ -2790,7 +2789,7 @@ TEST_CASE("Multiple callbacks: OnButton and OnGamepadButton on same action", "[i
     bool key_fired = false;
     bool gamepad_fired = false;
 
-    context.AddAction("Jump")
+    context.AddAction("Jump").GetValue()
         .OnButton([&](Rndr::Trigger, bool)
         {
             key_fired = true;

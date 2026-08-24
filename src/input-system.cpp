@@ -1,7 +1,6 @@
 #include <utility>
 
 #include "opal/container/ref.h"
-#include "opal/exceptions.h"
 
 #include "rndr/input-system.hpp"
 #include "rndr/log.hpp"
@@ -382,16 +381,18 @@ const Opal::StringUtf8& Rndr::InputContext::GetName() const
     return m_name;
 }
 
-Rndr::InputActionBuilder Rndr::InputContext::AddAction(Opal::StringUtf8 name)
+Opal::Expected<Rndr::InputActionBuilder, Rndr::ErrorCode> Rndr::InputContext::AddAction(Opal::StringUtf8 name)
 {
+    using ResultType = Opal::Expected<InputActionBuilder, ErrorCode>;
     if (ContainsAction(name))
     {
-        throw Opal::Exception("Duplicate action name");
+        RNDR_LOG_ERROR("Input context already contains an action named '{}'", name.GetData());
+        return ResultType(ErrorCode::InvalidArgument);
     }
     InputAction action;
     action.m_name = std::move(name);
     m_actions.PushBack(std::move(action));
-    return InputActionBuilder(m_actions.Back());
+    return ResultType(InputActionBuilder(m_actions.Back()));
 }
 
 bool Rndr::InputContext::RemoveAction(const Opal::StringUtf8& name)
@@ -483,28 +484,32 @@ const Rndr::InputContext& Rndr::InputSystem::GetCurrentContext() const
     return m_contexts.Back().Get();
 }
 
-Rndr::InputContext& Rndr::InputSystem::GetContextByName(const Opal::StringUtf8& name)
+Opal::Expected<Rndr::InputContext&, Rndr::ErrorCode> Rndr::InputSystem::GetContextByName(const Opal::StringUtf8& name)
 {
+    using ResultType = Opal::Expected<InputContext&, ErrorCode>;
     for (auto& context : m_contexts)
     {
         if (context->GetName() == name)
         {
-            return context;
+            return ResultType(*context);
         }
     }
-    throw Opal::Exception("Context by the given name does not exist!");
+    RNDR_LOG_ERROR("No input context named '{}'", name.GetData());
+    return ResultType(ErrorCode::InvalidArgument);
 }
 
-const Rndr::InputContext& Rndr::InputSystem::GetContextByName(const Opal::StringUtf8& name) const
+Opal::Expected<const Rndr::InputContext&, Rndr::ErrorCode> Rndr::InputSystem::GetContextByName(const Opal::StringUtf8& name) const
 {
+    using ResultType = Opal::Expected<const InputContext&, ErrorCode>;
     for (const auto& context : m_contexts)
     {
         if (context->GetName() == name)
         {
-            return context;
+            return ResultType(*context);
         }
     }
-    throw Opal::Exception("Context by the given name does not exist!");
+    RNDR_LOG_ERROR("No input context named '{}'", name.GetData());
+    return ResultType(ErrorCode::InvalidArgument);
 }
 
 void Rndr::InputSystem::PushContext(InputContext& context)
