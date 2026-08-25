@@ -1,8 +1,3 @@
-if (${RNDR_FORGE})
-    file(TO_CMAKE_PATH "$ENV{VULKAN_SDK}" VULKAN_SDK_PATH)
-    message(STATUS "VulkanSDK ${VULKAN_SDK_PATH}")
-endif ()
-
 # Platform independent source and header files
 set(SOURCE_LIST
         "${PROJECT_SOURCE_DIR}/include/rndr/application.hpp"
@@ -261,9 +256,13 @@ if (${RNDR_FORGE})
         set_source_files_properties(${spirv-reflect_SOURCE_DIR}/spirv_reflect.c
                 PROPERTIES COMPILE_OPTIONS "-w")
     endif ()
-    # Consumers of an installed FORGE-enabled rndr provide their own Vulkan SDK, so the SDK
-    # include path is build-only and not baked into the install interface.
-    target_include_directories(rndr SYSTEM PUBLIC $<BUILD_INTERFACE:${VULKAN_SDK_PATH}/Include>)
+    # VMA is only touched from src/, so it stays PRIVATE; the Vulkan headers and volk leak
+    # through the public Forge headers. Consumers of an installed FORGE-enabled rndr provide
+    # their own copies, so none of these paths are baked into the install interface.
+    target_include_directories(rndr SYSTEM PRIVATE ${vma_SOURCE_DIR}/include)
+    target_include_directories(rndr SYSTEM PUBLIC
+            $<BUILD_INTERFACE:${vulkan-headers_SOURCE_DIR}/include>
+            $<BUILD_INTERFACE:${volk_SOURCE_DIR}>)
     target_compile_definitions(rndr PUBLIC RNDR_FORGE)
     if (WIN32)
         target_compile_definitions(rndr PUBLIC -DVK_USE_PLATFORM_WIN32_KHR -DVK_NO_PROTOTYPES)

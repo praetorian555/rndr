@@ -1,6 +1,6 @@
 #include "rndr/forge/texture.hpp"
 
-#include <vma/vk_mem_alloc.h>
+#include "vk_mem_alloc.h"
 
 #include "rndr/forge/buffer.hpp"
 #include "rndr/forge/command-buffer.hpp"

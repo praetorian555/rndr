@@ -126,6 +126,37 @@ if (RNDR_FORGE)
     message(STATUS "***** Setup Complete *****")
 endif ()
 
+# Setup Vulkan headers, volk and VMA ###############################################
+# Everything Forge needs at compile time, fetched pinned instead of taken from the
+# installed SDK's Include/ directory - the build no longer depends on VULKAN_SDK or
+# its Windows-only layout. All header-only from rndr's point of view (the
+# implementations live in volk-implementation.cpp / vma-implementation.cpp), so all
+# three are DOWNLOAD_ONLY and wired up as include directories in src/CMakeLists.txt.
+if (RNDR_FORGE)
+    message(STATUS "***** Setting up Vulkan Headers/volk/VMA Dependencies *****")
+    cpmaddpackage(
+            NAME vulkan-headers
+            GIT_REPOSITORY https://github.com/KhronosGroup/Vulkan-Headers
+            GIT_TAG vulkan-sdk-1.4.335.0
+            DOWNLOAD_ONLY YES
+    )
+    cpmaddpackage(
+            NAME volk
+            GIT_REPOSITORY https://github.com/zeux/volk
+            GIT_TAG vulkan-sdk-1.4.335.0
+            DOWNLOAD_ONLY YES
+    )
+    # VMA is versioned independently of the SDK; v3.3.0 is the release the 1.4.335
+    # SDK bundles.
+    cpmaddpackage(
+            NAME vma
+            GIT_REPOSITORY https://github.com/GPUOpen-LibrariesAndSDKs/VulkanMemoryAllocator
+            GIT_TAG v3.3.0
+            DOWNLOAD_ONLY YES
+    )
+    message(STATUS "***** Setup Complete *****")
+endif ()
+
 # Setup Slang #####################################################################
 # Pull in prebuilt Slang release binaries instead of building from source (the
 # from-source build is very heavy). CPM downloads and extracts the archive and we

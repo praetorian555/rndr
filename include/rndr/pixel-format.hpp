@@ -1,7 +1,7 @@
 #pragma once
 
 #if RNDR_FORGE
-#include "volk/volk.h"
+#include "volk.h"
 #endif
 
 #include "rndr/types.hpp"

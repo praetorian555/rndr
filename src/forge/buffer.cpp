@@ -3,7 +3,7 @@
 #ifndef NOMINMAX
 #define NOMINMAX
 #endif
-#include "vma/vk_mem_alloc.h"
+#include "vk_mem_alloc.h"
 
 #include "rndr/forge/device.hpp"
 #include "rndr/forge/vulkan-result.hpp"

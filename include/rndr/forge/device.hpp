@@ -1,6 +1,6 @@
 #pragma once
 
-#include "volk/volk.h"
+#include "volk.h"
 
 #include "opal/container/array-view.h"
 #include "opal/container/dynamic-array.h"

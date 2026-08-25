@@ -1,6 +1,6 @@
 #pragma once
 
-#include "volk/volk.h"
+#include "volk.h"
 
 #include "opal/container/dynamic-array.h"
 #include "opal/container/expected.h"

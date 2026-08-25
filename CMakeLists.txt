@@ -72,10 +72,10 @@ endif ()
 include(cmake/dependencies.cmake)
 
 if (${RNDR_FORGE})
-    if (NOT IS_DIRECTORY $ENV{VULKAN_SDK})
-        message(WARNING "Vulkan SDK not detected!")
-    else ()
-        message(STATUS "Vulkan SDK found at: $ENV{VULKAN_SDK}")
+    # The SDK is not a build dependency (headers, volk, VMA and SPIRV-Reflect all come in via
+    # CPM), but on Windows it is still where the validation layers come from at runtime.
+    if (WIN32 AND ${RNDR_FORGE_VALIDATION} AND NOT IS_DIRECTORY $ENV{VULKAN_SDK})
+        message(WARNING "Vulkan SDK not detected - the validation layer will not be available at runtime!")
     endif ()
 elseif (${RNDR_FORGE_VALIDATION})
     message(WARNING "RNDR_FORGE_VALIDATION has no effect while RNDR_FORGE is OFF!")

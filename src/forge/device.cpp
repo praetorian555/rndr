@@ -1,7 +1,7 @@
 #include "rndr/forge/device.hpp"
 
 #define NOMINMAX
-#include "vma/vk_mem_alloc.h"
+#include "vk_mem_alloc.h"
 
 #include "opal/container/hash-set.h"
 
