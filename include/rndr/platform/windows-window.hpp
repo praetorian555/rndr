@@ -67,6 +67,7 @@ public:
 
     [[nodiscard]] Vector2i GetPosition() const override;
     [[nodiscard]] Vector2i GetSize() const override;
+    [[nodiscard]] Vector2i GetCursorClientPosition() const override;
     [[nodiscard]] GenericWindowMode GetMode() const override;
     [[nodiscard]] NativeWindowHandle GetNativeHandle() const override;
     [[nodiscard]] NativeDisplayHandle GetNativeDisplayHandle() const override;

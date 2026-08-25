@@ -170,6 +170,14 @@ public:
 
     [[nodiscard]] virtual Vector2i GetPosition() const = 0;
     [[nodiscard]] virtual Vector2i GetSize() const = 0;
+
+    /**
+     * Returns the current cursor position in this window's client-space coordinates, with the origin at
+     * the top-left corner of the client area. This is the same space the mouse events report their
+     * cursor position in. The result can be negative or larger than GetSize when the cursor is outside
+     * the window. Returns (0, 0) when the position cannot be queried.
+     */
+    [[nodiscard]] virtual Vector2i GetCursorClientPosition() const = 0;
     [[nodiscard]] virtual GenericWindowMode GetMode() const = 0;
     [[nodiscard]] virtual NativeWindowHandle GetNativeHandle() const = 0;
 

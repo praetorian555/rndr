@@ -727,6 +727,23 @@ Rndr::Vector2i Rndr::LinuxWindow::GetPosition() const
     return position;
 }
 
+Rndr::Vector2i Rndr::LinuxWindow::GetCursorClientPosition() const
+{
+    if (m_window == XCB_NONE)
+    {
+        return {};
+    }
+    xcb_connection_t* connection = m_app->GetConnection();
+    xcb_query_pointer_reply_t* reply = xcb_query_pointer_reply(connection, xcb_query_pointer(connection, m_window), nullptr);
+    if (reply == nullptr)
+    {
+        return {};
+    }
+    const Vector2i pos(reply->win_x, reply->win_y);
+    free(reply);
+    return pos;
+}
+
 Rndr::Vector2i Rndr::LinuxWindow::GetSize() const
 {
     if (m_window == XCB_NONE)

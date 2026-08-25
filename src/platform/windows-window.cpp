@@ -607,6 +607,16 @@ Rndr::Vector2i Rndr::WindowsWindow::GetPosition() const
     return {window_rect.left, window_rect.top};
 }
 
+Rndr::Vector2i Rndr::WindowsWindow::GetCursorClientPosition() const
+{
+    POINT cursor_pos;
+    if (::GetCursorPos(&cursor_pos) == 0 || ::ScreenToClient(RNDR_TO_HWND(m_native_window_handle), &cursor_pos) == 0)
+    {
+        return {};
+    }
+    return {cursor_pos.x, cursor_pos.y};
+}
+
 Rndr::Vector2i Rndr::WindowsWindow::GetSize() const
 {
     RECT window_rect = {};
