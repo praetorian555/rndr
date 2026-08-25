@@ -98,9 +98,6 @@ void Run()
 
     auto rndr_app = Require(Rndr::Application::Create({.enable_input_system = true}));
     auto window = Require(rndr_app->CreateGenericWindow({}));
-    window->EnableHighPrecisionCursorMode(true);
-    rndr_app->ShowCursor(false);
-    window->SetCursorPositionMode(Rndr::CursorPositionMode::ResetToCenter);
 
     Rndr::Forge::GraphicsContext graphics_context = Require(Rndr::Forge::GraphicsContext::Create({.collect_debug_messages = true}));
     Rndr::Forge::Surface surface = Require(Rndr::Forge::Surface::Create(graphics_context, *window));
@@ -247,8 +244,10 @@ void Run()
     const i32 window_width = window_size.x;
     const i32 window_height = window_size.y;
 
-    rndr_app->GetInputSystemChecked()
-        .GetCurrentContext()
+    // Grab the base context before the controller pushes its own on top of the stack: the F1
+    // toggle below has to stay reachable while the controller's context is disabled.
+    Rndr::InputContext& base_input_context = rndr_app->GetInputSystemChecked().GetCurrentContext();
+    base_input_context
         .AddAction("Exit").GetValue()
         .Bind(Rndr::Key::Escape, Rndr::Trigger::Pressed)
         .OnButton([&window](Rndr::Trigger, bool) { window->RequestClose(); });
@@ -256,11 +255,13 @@ void Run()
                                               .start_yaw_radians = 0,
                                               .projection_desc = {.near = 0.1f, .far = 32.0f, .complexity = Rndr::ApiComplexity::Advanced}};
     ExampleController controller(*rndr_app, window_width, window_height, fly_camera_desc, 10.0f, 0.005f, 0.005f);
-    controller.Enable(true);
+    controller.Enable(false);
 
-    bool fps_mode = true;
-    rndr_app->GetInputSystemChecked()
-        .GetCurrentContext()
+    bool fps_mode = false;
+    window->EnableHighPrecisionCursorMode(true);
+    rndr_app->ShowCursor(true);
+    window->SetCursorPositionMode(Rndr::CursorPositionMode::Normal);
+    base_input_context
         .AddAction("FPS Mode").GetValue()
         .Bind(Rndr::Key::F1, Rndr::Trigger::Pressed)
         .OnButton(
