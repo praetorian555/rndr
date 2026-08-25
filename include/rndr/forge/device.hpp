@@ -123,8 +123,8 @@ struct DeviceDesc : Opal::ClonableBase<DeviceDesc>
     DeviceFeatures features;
     Opal::DynamicArray<const char*> extensions;
     Opal::Ref<Surface> surface;
-    bool use_async_compute_queue = true;
-    bool use_dedicated_transfer_queue = true;
+    bool use_async_compute_queue = false;
+    bool use_dedicated_transfer_queue = false;
     bool use_decode_queue = false;
     bool use_encode_queue = false;
 
