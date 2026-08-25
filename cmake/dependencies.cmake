@@ -110,6 +110,22 @@ if (UNIX)
     message(STATUS "***** Setup Complete *****")
 endif ()
 
+# Setup SPIRV-Reflect ##############################################################
+# Two-file library compiled straight into rndr, so only the sources are fetched.
+# Pinned to the tag matching the Vulkan SDK release the project builds against, and
+# fetched from Khronos rather than taken from the SDK's Source/ directory - the
+# Linux SDK does not ship one.
+if (RNDR_FORGE)
+    message(STATUS "***** Setting up SPIRV-Reflect Dependency *****")
+    cpmaddpackage(
+            NAME spirv-reflect
+            GIT_REPOSITORY https://github.com/KhronosGroup/SPIRV-Reflect
+            GIT_TAG vulkan-sdk-1.4.335.0
+            DOWNLOAD_ONLY YES
+    )
+    message(STATUS "***** Setup Complete *****")
+endif ()
+
 # Setup Slang #####################################################################
 # Pull in prebuilt Slang release binaries instead of building from source (the
 # from-source build is very heavy). CPM downloads and extracts the archive and we

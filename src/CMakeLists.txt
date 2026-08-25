@@ -150,8 +150,8 @@ endif ()
 
 if (${RNDR_FORGE})
     list(APPEND SOURCE_LIST
-            "${VULKAN_SDK_PATH}/Source/SPIRV-Reflect/spirv_reflect.h"
-            "${VULKAN_SDK_PATH}/Source/SPIRV-Reflect/spirv_reflect.c")
+            "${spirv-reflect_SOURCE_DIR}/spirv_reflect.h"
+            "${spirv-reflect_SOURCE_DIR}/spirv_reflect.c")
     list(APPEND SOURCE_LIST
             "${PROJECT_SOURCE_DIR}/include/rndr/forge/forward.hpp"
             "${PROJECT_SOURCE_DIR}/include/rndr/forge/types.hpp"
@@ -254,11 +254,11 @@ endif ()
 
 if (${RNDR_FORGE})
     # SYSTEM on both: the SDK headers (VMA in particular) do not survive this project's warning
-    # level, and SPIRV-Reflect is vendored SDK source rather than ours, so it is compiled with
+    # level, and SPIRV-Reflect is Khronos source rather than ours, so it is compiled with
     # warnings off instead of being edited.
-    target_include_directories(rndr SYSTEM PRIVATE ${VULKAN_SDK_PATH}/Source/SPIRV-Reflect)
+    target_include_directories(rndr SYSTEM PRIVATE ${spirv-reflect_SOURCE_DIR})
     if (NOT MSVC)
-        set_source_files_properties(${VULKAN_SDK_PATH}/Source/SPIRV-Reflect/spirv_reflect.c
+        set_source_files_properties(${spirv-reflect_SOURCE_DIR}/spirv_reflect.c
                 PROPERTIES COMPILE_OPTIONS "-w")
     endif ()
     # Consumers of an installed FORGE-enabled rndr provide their own Vulkan SDK, so the SDK
