@@ -780,6 +780,33 @@ void Rndr::Forge::Device::Destroy()
     m_desc = {};
 }
 
+Opal::Expected<bool, Rndr::ErrorCode> Rndr::Forge::Device::CanPresentTo(const Surface& surface) const
+{
+    using Result = Opal::Expected<bool, ErrorCode>;
+
+    if (!IsValid())
+    {
+        RNDR_LOG_ERROR("Forge: CanPresentTo was called on an empty device");
+        return Result(ErrorCode::InvalidArgument);
+    }
+    if (!surface.IsValid())
+    {
+        RNDR_LOG_ERROR("Forge: CanPresentTo was given an empty surface");
+        return Result(ErrorCode::InvalidArgument);
+    }
+    // A device created without presentation has no family to ask about, which is a no rather than a failure.
+    const u32 present_family = m_queue_family_indices.present_family;
+    if (present_family == QueueFamilyIndices::k_invalid_index)
+    {
+        return Result(false);
+    }
+    VkBool32 present_supported = VK_FALSE;
+    RNDR_FORGE_VK_CHECK_EXPECTED(vkGetPhysicalDeviceSurfaceSupportKHR(GetNativePhysicalDevice(), present_family,
+                                                                      surface.GetNativeSurface(), &present_supported),
+                                 "vkGetPhysicalDeviceSurfaceSupportKHR", Result);
+    return Result(present_supported == VK_TRUE);
+}
+
 Opal::Expected<Rndr::Forge::DeviceQueue&, Rndr::ErrorCode> Rndr::Forge::Device::GetQueue(QueueFamily queue_family)
 {
     using Result = Opal::Expected<DeviceQueue&, ErrorCode>;

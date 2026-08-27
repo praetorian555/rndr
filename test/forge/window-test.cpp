@@ -323,6 +323,14 @@ TEST_CASE("Forge surface reports what a swap chain can be built from", "[forge-w
         REQUIRE(present_family.HasValue());
         REQUIRE(fixture.GetPresentQueue().GetQueueFamilyIndex() == present_family.GetValue());
     }
+    SECTION("The device answers whether its present queue can present to a surface")
+    {
+        REQUIRE(ForgeTest::Unwrap(fixture.device.CanPresentTo(fixture.surface)));
+
+        // A surface that was never created is a mistake rather than a no.
+        Forge::Surface empty;
+        REQUIRE(fixture.device.CanPresentTo(empty).GetErrorOr(ErrorCode::Success) == ErrorCode::InvalidArgument);
+    }
     SECTION("The support details name at least one format and the present mode every surface has")
     {
         const Forge::SwapChainSupportDetails details = fixture.GetSupportDetails();
@@ -781,6 +789,10 @@ TEST_CASE("Forge device created before any surface presents to one that arrives 
                                                                 .start_visible = false})
                                           .GetValue();
     Forge::Surface surface = ForgeTest::Unwrap(Forge::Surface::Create(context, *window));
+
+    // The device had no surface at creation. Asking it now checks the family that was picked without one
+    // against the surface it will actually present to, before any swap chain exists.
+    REQUIRE(ForgeTest::Unwrap(device.CanPresentTo(surface)));
 
     const Forge::SwapChainSupportDetails details = ForgeTest::Unwrap(surface.GetSwapChainSupportDetails(device.GetPhysicalDevice()));
     bool format_supported = false;

@@ -75,6 +75,16 @@ window's connection, so the graphics family stands in), and whether that family 
 covers a second window whose surface the device never saw. A surface in the desc answers the same
 question more precisely and wins when both are given.
 
+`Device::CanPresentTo` is that check on its own, for a surface that arrives after the device. It is
+the `vkGetPhysicalDeviceSurfaceSupportKHR` the swap chain runs anyway, so nothing has to call it -
+what it buys is the failure landing where the window is created rather than at the first swap chain,
+which is the difference between "this window cannot be presented to" and a swap chain that will not
+build. A device created without presentation answers false rather than failing.
+
+The device presents to no surface of its own, and there is nothing to switch between windows: a
+surface belongs to the `SwapChain` built over it, and one device drives as many swap chains as there
+are windows - a `Surface`, a `SwapChain` and a `FrameContext` each, all on the same queues.
+
 ### More than one context
 
 `GraphicsContext` is the one object that is not only its own. Forge dispatches through volk, which keeps a

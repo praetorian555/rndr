@@ -124,8 +124,9 @@ struct DeviceDesc : Opal::ClonableBase<DeviceDesc>
     Opal::DynamicArray<const char*> extensions;
     /**
      * Surface the present queue is picked against. The precise way to ask for presentation when a window
-     * already exists; a device created before any window asks with enable_presentation instead. Only read
-     * during creation - the device never touches it again, so it need not outlive the device.
+     * already exists; a device created before any window asks with enable_presentation instead, and checks a
+     * surface that arrives later with Device::CanPresentTo. Only read during creation - the device never
+     * touches it again, so it need not outlive the device.
      */
     Opal::Ref<Surface> surface;
     /**
@@ -320,6 +321,20 @@ public:
      * SetDebugName does anything. See GraphicsContext::AreDebugUtilsEnabled.
      */
     [[nodiscard]] bool AreDebugUtilsEnabled() const { return m_debug_utils_enabled; }
+
+    /**
+     * Whether this device's present queue family can present to the given surface - what every swap chain has
+     * to ask of the surface it is built over, asked on its own so that a device created before any window,
+     * with DeviceDesc::enable_presentation, can be checked against a surface the moment one exists.
+     *
+     * The device presents to no surface of its own: a window's surface belongs to the swap chain built over
+     * it, and a device drives as many of those at once as there are windows. This only answers the question.
+     *
+     * False, rather than an error, for a device created without presentation: that is an answer.
+     * @return The answer, ErrorCode::InvalidArgument for an empty device or an empty surface, or whatever the
+     *         failing query maps to.
+     */
+    [[nodiscard]] Opal::Expected<bool, ErrorCode> CanPresentTo(const Surface& surface) const;
 
     /**
      * Queue of the given family.
