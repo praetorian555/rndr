@@ -203,7 +203,7 @@ const char* FindIndexTypeUint8Extension(const Forge::PhysicalDevice& physical_de
 Opal::DynamicArray<const char*> CollectDeviceExtensions(const Forge::PhysicalDevice& physical_device, const Forge::DeviceDesc& desc)
 {
     Opal::DynamicArray<const char*> extensions(desc.extensions.Clone());
-    if (desc.surface.IsValid())
+    if (desc.surface.IsValid() || desc.enable_presentation)
     {
         extensions.PushBack(VK_KHR_SWAPCHAIN_EXTENSION_NAME);
     }
@@ -342,6 +342,10 @@ Opal::StringUtf8 FindUnmetRequirement(const Forge::PhysicalDevice& physical_devi
     if (desc.surface.IsValid() && !physical_device.GetPresentQueueFamilyIndex(desc.surface).HasValue())
     {
         return Opal::StringUtf8("cannot present to this surface");
+    }
+    if (!desc.surface.IsValid() && desc.enable_presentation && !physical_device.GetPresentQueueFamilyIndex().HasValue())
+    {
+        return Opal::StringUtf8("cannot present on this platform");
     }
     if (desc.use_async_compute_queue && !physical_device.GetQueueFamilyIndex(k_async_compute_flags, k_async_compute_not_flags).HasValue())
     {
@@ -592,6 +596,18 @@ Rndr::ErrorCode Rndr::Forge::Device::CollectQueueFamilies(Opal::DynamicArray<VkD
         if (!present_queue_family_index.HasValue())
         {
             RNDR_LOG_ERROR("Forge: a surface was given but this device cannot present to it");
+            return ErrorCode::FeatureNotSupported;
+        }
+        m_queue_family_indices.present_family = present_queue_family_index.GetValue();
+    }
+    else if (m_desc.enable_presentation)
+    {
+        // No surface to ask against, so the platform's surface-free query picks the family. Whether it can
+        // present to a particular surface is verified when a swap chain is created over one.
+        auto present_queue_family_index = m_physical_device.GetPresentQueueFamilyIndex();
+        if (!present_queue_family_index.HasValue())
+        {
+            RNDR_LOG_ERROR("Forge: presentation was asked for but no queue family of this device can present");
             return ErrorCode::FeatureNotSupported;
         }
         m_queue_family_indices.present_family = present_queue_family_index.GetValue();

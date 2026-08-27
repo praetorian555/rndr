@@ -122,14 +122,27 @@ struct DeviceDesc : Opal::ClonableBase<DeviceDesc>
 {
     DeviceFeatures features;
     Opal::DynamicArray<const char*> extensions;
+    /**
+     * Surface the present queue is picked against. The precise way to ask for presentation when a window
+     * already exists; a device created before any window asks with enable_presentation instead. Only read
+     * during creation - the device never touches it again, so it need not outlive the device.
+     */
     Opal::Ref<Surface> surface;
+    /**
+     * Ask for a present queue and the swap chain extension without naming a surface, so the device can be
+     * created before any window exists and swap chains built over surfaces that arrive later. The family is
+     * picked with the platform's surface-free query (see PhysicalDevice::GetPresentQueueFamilyIndex()); that
+     * it can present to a particular surface is verified when a swap chain is created over one. Ignored when
+     * `surface` is set, which answers the same question more precisely.
+     */
+    bool enable_presentation = false;
     bool use_async_compute_queue = false;
     bool use_dedicated_transfer_queue = false;
     bool use_decode_queue = false;
     bool use_encode_queue = false;
 
-    OPAL_CLONE_FIELDS(features, extensions, surface, use_async_compute_queue, use_dedicated_transfer_queue, use_decode_queue,
-                      use_encode_queue);
+    OPAL_CLONE_FIELDS(features, extensions, surface, enable_presentation, use_async_compute_queue, use_dedicated_transfer_queue,
+                      use_decode_queue, use_encode_queue);
 };
 
 struct QueueFamilyIndices

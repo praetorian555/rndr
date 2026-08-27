@@ -55,6 +55,18 @@ public:
     /** Find a queue family that can present to the given surface. Empty when this device cannot present to it. */
     [[nodiscard]] Opal::Optional<u32> GetPresentQueueFamilyIndex(const Surface& surface) const;
 
+    /**
+     * Find a queue family that can present on this platform, asked without a surface - which is what a
+     * device created before any window exists has to ask. On Windows this is
+     * vkGetPhysicalDeviceWin32PresentationSupportKHR, which answers per family with nothing but the
+     * physical device. On Linux the equivalent XCB query needs a connection and a visual, both of which
+     * only a window supplies, so the graphics-capable family is returned instead; whether it can present
+     * to a particular surface is verified when a swap chain is created over one.
+     *
+     * Empty when no family can present, which is an answer rather than a failure.
+     */
+    [[nodiscard]] Opal::Optional<u32> GetPresentQueueFamilyIndex() const;
+
     [[nodiscard]] bool IsExtensionSupported(const char* extension_name) const;
 
     /**

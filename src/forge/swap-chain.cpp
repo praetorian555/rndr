@@ -490,6 +490,19 @@ Rndr::ErrorCode Rndr::Forge::SwapChain::Recreate()
     const DeviceQueue& graphics_queue = graphics_queue_result.GetValue();
     const DeviceQueue& present_queue = present_queue_result.GetValue();
 
+    // A device created against a surface proved this at creation; one created with
+    // enable_presentation picked its family without a surface to ask, so the promise is checked
+    // here, against the surface actually being presented to.
+    VkBool32 present_supported = VK_FALSE;
+    RNDR_FORGE_VK_CHECK(vkGetPhysicalDeviceSurfaceSupportKHR(m_device->GetNativePhysicalDevice(), present_queue.GetQueueFamilyIndex(),
+                                                             m_surface->GetNativeSurface(), &present_supported),
+                        "vkGetPhysicalDeviceSurfaceSupportKHR");
+    if (present_supported != VK_TRUE)
+    {
+        RNDR_LOG_ERROR("Forge: the device's present queue family cannot present to this surface");
+        return ErrorCode::FeatureNotSupported;
+    }
+
     // Has to outlive the create info, since the create info only points to it.
     Opal::InPlaceArray<u32, 2> indices;
     if (&graphics_queue != &present_queue)

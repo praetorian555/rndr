@@ -743,3 +743,74 @@ TEST_CASE("Forge swap chain recovers from a window with no client area", "[forge
     }
     REQUIRE_NO_VALIDATION_ERROR_AT_TEARDOWN(fixture);
 }
+
+TEST_CASE("Forge device created before any surface presents to one that arrives later", "[forge-window]")
+{
+    if (!IsForgeWindowAvailable())
+    {
+        SKIP("No window system with a Vulkan device that can present to it on this machine.");
+    }
+
+    // Declared in the order they have to outlive each other: the frame context and swap chain
+    // (locals below) go first, then the surface, then the device, then the instance, and the
+    // application - which owns the window - last.
+    Opal::ScopePtr<Application> app = Application::Create({}).GetValue();
+    Forge::GraphicsContext context = ForgeTest::Unwrap(Forge::GraphicsContext::Create(ForgeTest::TestContextDesc()));
+
+    // The device first, before any window exists: enable_presentation stands in for the
+    // surface the present family would otherwise be picked against.
+    Forge::DeviceDesc device_desc;
+    device_desc.enable_presentation = true;
+    Opal::DynamicArray<Forge::PhysicalDevice> physical_devices = ForgeTest::Unwrap(context.EnumeratePhysicalDevices());
+    Opal::Expected<Forge::PhysicalDevice, ErrorCode> chosen = Forge::SelectPhysicalDevice(physical_devices, device_desc);
+    if (!chosen.HasValue())
+    {
+        SKIP("No device on this machine can promise presentation without a surface.");
+    }
+    Forge::Device device = ForgeTest::Unwrap(Forge::Device::Create(std::move(chosen.GetValue()), context, device_desc));
+    REQUIRE(device.GetQueue(Forge::QueueFamily::Present).HasValue());
+
+    // Only now the window, its surface, and a swap chain over it.
+    Opal::Ref<GenericWindow> window = app->CreateGenericWindow({.width = k_window_width,
+                                                                .height = k_window_height,
+                                                                .name = "Forge late-surface test",
+                                                                .resizable = false,
+                                                                .has_title_bar = false,
+                                                                .has_border = false,
+                                                                .show_in_taskbar = false,
+                                                                .start_visible = false})
+                                          .GetValue();
+    Forge::Surface surface = ForgeTest::Unwrap(Forge::Surface::Create(context, *window));
+
+    const Forge::SwapChainSupportDetails details = ForgeTest::Unwrap(surface.GetSwapChainSupportDetails(device.GetPhysicalDevice()));
+    bool format_supported = false;
+    for (const VkSurfaceFormatKHR& format : details.formats)
+    {
+        format_supported = format_supported || format.format == VK_FORMAT_B8G8R8A8_SRGB;
+    }
+    if (!format_supported)
+    {
+        SKIP("This surface does not offer B8G8R8A8_SRGB.");
+    }
+
+    {
+        Forge::SwapChain swap_chain =
+            ForgeTest::Unwrap(Forge::SwapChain::Create(device, surface, {.pixel_format = k_swap_chain_format}));
+        Forge::FrameContext frame_context = ForgeTest::Unwrap(
+            Forge::FrameContext::Create(device, swap_chain, ForgeTest::Unwrap(device.GetQueue(Forge::QueueFamily::Graphics)),
+                                        ForgeTest::Unwrap(device.GetQueue(Forge::QueueFamily::Present))));
+
+        // One full frame through the late surface proves the family picked without one presents.
+        REQUIRE(ForgeTest::Unwrap(frame_context.BeginFrame()) == Forge::SwapChainStatus::Success);
+        RecordClearFrame(ForgeTest::Unwrap(frame_context.GetCommandBuffer()), ForgeTest::Unwrap(frame_context.GetColorTexture()), nullptr,
+                         swap_chain.GetExtent(), GetFrameColor(0), &swap_chain.GetDepthTexture());
+        REQUIRE(ForgeTest::Unwrap(frame_context.EndFrame()) == Forge::SwapChainStatus::Success);
+
+        REQUIRE(device.WaitForAll() == ErrorCode::Success);
+        frame_context.Destroy();
+    }
+
+    const u32 validation_errors = ForgeTest::CountValidationErrors(context);
+    INFO(ForgeTest::CollectValidationErrors(context).GetData());
+    REQUIRE(validation_errors == 0);
+}

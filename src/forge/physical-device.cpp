@@ -122,6 +122,32 @@ Opal::Optional<Rndr::u32> Rndr::Forge::PhysicalDevice::GetPresentQueueFamilyInde
     return {};
 }
 
+Opal::Optional<Rndr::u32> Rndr::Forge::PhysicalDevice::GetPresentQueueFamilyIndex() const
+{
+#if defined(OPAL_PLATFORM_WINDOWS)
+    for (u32 i = 0; i < m_queue_family_properties.GetSize(); i++)
+    {
+        if (vkGetPhysicalDeviceWin32PresentationSupportKHR(m_physical_device, i) == VK_TRUE)
+        {
+            return Opal::Optional<u32>(i);
+        }
+    }
+    return {};
+#else
+    // The XCB query needs a connection and a visual, both of which only a window supplies. The
+    // graphics family presents on every desktop stack; a surface it cannot present to is caught
+    // when a swap chain is created over one.
+    for (u32 i = 0; i < m_queue_family_properties.GetSize(); i++)
+    {
+        if ((m_queue_family_properties[i].queueFlags & VK_QUEUE_GRAPHICS_BIT) != 0)
+        {
+            return Opal::Optional<u32>(i);
+        }
+    }
+    return {};
+#endif
+}
+
 bool Rndr::Forge::PhysicalDevice::IsExtensionSupported(const char* extension_name) const
 {
     for (const Opal::StringUtf8& supported_extension : m_supported_extensions)

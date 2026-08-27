@@ -58,6 +58,23 @@ The references that are easy to miss:
 - The samplers baked into a `DescriptorSetLayoutDesc::Binding` are held by reference and have to outlive the
   layout and every set allocated from it.
 
+### A device before any window
+
+Everything a swap chain needs is decided at device creation - the present queue's family and the
+swap chain extension - and the usual way to decide both is the surface in `DeviceDesc::surface`.
+That couples the device to a window: surface needs window, window needs the platform layer, so an
+application that wants its device first - an engine whose UI library will create the windows -
+cannot name one.
+
+`DeviceDesc::enable_presentation` breaks the coupling. It asks for the present queue and the
+extension without a surface: the family comes from the platform's surface-free query
+(`vkGetPhysicalDeviceWin32PresentationSupportKHR` on Windows; on Linux the XCB query needs a
+window's connection, so the graphics family stands in), and whether that family can present to a
+*particular* surface is verified when a swap chain is created over one - `SwapChain` checks
+`vkGetPhysicalDeviceSurfaceSupportKHR` against the device's present family either way, which also
+covers a second window whose surface the device never saw. A surface in the desc answers the same
+question more precisely and wins when both are given.
+
 ### More than one context
 
 `GraphicsContext` is the one object that is not only its own. Forge dispatches through volk, which keeps a
