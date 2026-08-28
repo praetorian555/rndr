@@ -14,9 +14,10 @@ failing GL call maps through `GlErrorToErrorCode` in `rndr/canvas/gl-result.hpp`
 `RNDR_CANVAS_CHECK` macros that propagate codes inside the implementation. Forge and audio report the same
 way - see the error handling sections of [docs/forge.md](forge.md) and [docs/audio.md](audio.md).
 
-`ShaderCompiler` is the one exception to "nothing throws": it is shared between the rendering APIs and
-reports by throwing. The shader factories catch at that boundary and turn it into
-`ErrorCode::ShaderCompilationError`, so nothing that escapes Canvas is an exception.
+`ShaderCompiler`, shared between the rendering APIs, reports the same way. The shader factories pass on the
+code it hands back rather than translating it, so a failure to find an entry point or to merge two stages'
+parameters arrives as `ErrorCode::ShaderCompilationError` the way it always did - see the error handling
+section of [docs/forge.md](forge.md) for what the build guarantees about exceptions.
 
 The snippets below unwrap results with `.GetValue()` for brevity; real code checks `HasValue()` first, or
 fails the way `samples/window/window-sample.cpp` does.

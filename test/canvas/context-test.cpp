@@ -3,18 +3,11 @@
 #include "canvas-test-common.hpp"
 
 #include "opal/allocator.h"
-#include "opal/exceptions.h"
 #include "opal/logging.h"
 
 #include "rndr/application.hpp"
 #include "rndr/canvas/context.hpp"
-#include "rndr/exception.hpp"
 #include "rndr/generic-window.hpp"
-
-CATCH_TRANSLATE_EXCEPTION(const Opal::Exception& e)
-{
-    return {*e.What()};
-}
 
 TEST_CASE("Canvas Format enum", "[canvas]")
 {

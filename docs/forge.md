@@ -338,9 +338,26 @@ Two things do not report. `SetDebugName` is best effort - a name that could not 
 caller would act on - and the accessors on an empty object are undefined rather than checked, which is what
 `IsValid()` is the guard for.
 
-`ShaderCompiler` is the one exception to "nothing throws", and it is not a Forge type: it is shared with
-Canvas and reports by throwing. `Shader::FromSourceInMemory` catches at that boundary and turns it into
-`ErrorCode::ShaderCompilationError`, so nothing that escapes Forge is an exception.
+`ShaderCompiler` used to be the exception to this, and is no longer: it reports an `ErrorCode` like
+everything else, and `Shader::FromSourceInMemory` passes on what it reported instead of catching. Its
+`LoadModule` answers a code, and `DiscoverEntryPoints`, `CompileEntryPoint`, `FindSingleEntryPoint` and
+`MergeParameters` answer an `Expected`.
+
+### Nothing throws, and the build says so
+
+"Nothing throws" is a claim about the whole program rather than about Forge's own code, because Forge calls
+Opal underneath and Opal's own rule lands on the same wall this one does: anything that can report does, and a
+constructor, which cannot, has only a throw left. A sized `Opal::DynamicArray` or a `StringUtf8` that outgrows
+its inline buffer therefore had one failure - running out of memory - that no `ErrorCode` described.
+
+Opal is configured here with `OPAL_EXCEPTIONS=OFF` (in `cmake/dependencies.cmake`), which replaces that throw
+with its contract violation handler: the failure prints and ends the program rather than unwinding. So there
+is no exception to catch anywhere in Rndr, `try` and `catch` do not appear in the library, and on MSVC the
+build carries `/EHs-c-` and `_HAS_EXCEPTIONS=0` through Opal's `PUBLIC` interface. An application that wants
+to unwind out of memory exhaustion instead wants that option back on.
+
+What this costs is that out of memory is fatal rather than reportable. It was never reportable here - the
+throw had no catch in Rndr either - so what changed is where it stops, not whether it does.
 
 ### Expected outcomes are values, not errors
 

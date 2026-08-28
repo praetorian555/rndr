@@ -12,6 +12,7 @@ if (NOT TARGET opal)
             "OPAL_BUILD_TESTS OFF"
             "OPAL_HARDENING ${RNDR_HARDENING}"
             "OPAL_SHARED_LIBS ${RNDR_SHARED_LIBS}"
+            "OPAL_EXCEPTIONS OFF"
     )
     message(STATUS "***** Setup Complete *****")
 endif ()

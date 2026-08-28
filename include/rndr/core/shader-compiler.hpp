@@ -1,8 +1,10 @@
 #pragma once
 
 #include "opal/container/dynamic-array.h"
+#include "opal/container/expected.h"
 #include "opal/container/string.h"
 
+#include "rndr/error-codes.hpp"
 #include "rndr/types.hpp"
 
 namespace Rndr
@@ -169,15 +171,19 @@ struct CompileResult
  * reflection data. This is the shared compilation layer used by both APIs; the desired output
  * format is selected when the module is loaded.
  *
+ * Nothing here throws. Every call that can fail reports a Rndr::ErrorCode and writes the detail - which Slang
+ * diagnostic, which entry point - to the log, the same way Forge, Canvas and the audio subsystem do. What a
+ * caller gets back is a code it can switch on rather than a message it has to parse.
+ *
  * Usage:
  * @code
  *   ShaderCompiler compiler;
- *   compiler.LoadModule(slang_source, ShaderOutputFormat::Glsl);
+ *   if (compiler.LoadModule(slang_source, ShaderOutputFormat::Glsl) != ErrorCode::Success) { ... }
  *   auto entries = compiler.DiscoverEntryPoints();
- *   auto vs_name = ShaderCompiler::FindSingleEntryPoint(entries, ShaderStage::Vertex, "vertex");
- *   auto result = compiler.CompileEntryPoint(vs_name);
- *   // result.code contains the compiled code (GLSL text here)
- *   // result.parameters contains reflection data
+ *   auto vs_name = ShaderCompiler::FindSingleEntryPoint(entries.GetValue(), ShaderStage::Vertex, "vertex");
+ *   auto result = compiler.CompileEntryPoint(vs_name.GetValue());
+ *   // result.GetValue().code contains the compiled code (GLSL text here)
+ *   // result.GetValue().parameters contains reflection data
  * @endcode
  */
 class ShaderCompiler
@@ -191,24 +197,45 @@ public:
     ShaderCompiler(ShaderCompiler&& other) noexcept;
     ShaderCompiler& operator=(ShaderCompiler&& other) noexcept;
 
-    /** Load a Slang module from source code in memory, targeting the given output format. */
-    void LoadModule(const Opal::StringUtf8& source, ShaderOutputFormat format = ShaderOutputFormat::SpirV);
+    /**
+     * Load a Slang module from source code in memory, targeting the given output format. Every other call on
+     * this object needs a module, so a failure here is the end of the sequence rather than something to
+     * continue past.
+     * @return ErrorCode::Success, ErrorCode::GraphicsAPIError when Slang itself could not be started, or
+     *         ErrorCode::ShaderCompilationError when the source did not compile - the Slang diagnostic is
+     *         logged.
+     */
+    [[nodiscard]] ErrorCode LoadModule(const Opal::StringUtf8& source, ShaderOutputFormat format = ShaderOutputFormat::SpirV);
 
-    /** Discover all annotated entry points in the loaded module. */
-    [[nodiscard]] Opal::DynamicArray<EntryPointInfo> DiscoverEntryPoints() const;
+    /**
+     * Discover all annotated entry points in the loaded module. An entry point Slang refuses to lay out is
+     * skipped rather than reported, so an empty array means the source declares none.
+     * @return The entry points, or ErrorCode::InvalidArgument when no module has been loaded.
+     */
+    [[nodiscard]] Opal::Expected<Opal::DynamicArray<EntryPointInfo>, ErrorCode> DiscoverEntryPoints() const;
 
-    /** Compile a specific entry point to the loaded output format and extract reflection data. */
-    [[nodiscard]] CompileResult CompileEntryPoint(const Opal::StringUtf8& entry_point) const;
+    /**
+     * Compile a specific entry point to the loaded output format and extract reflection data.
+     * @return The compiled code and its reflection, ErrorCode::InvalidArgument when no module has been
+     *         loaded, or ErrorCode::ShaderCompilationError when Slang refused the entry point.
+     */
+    [[nodiscard]] Opal::Expected<CompileResult, ErrorCode> CompileEntryPoint(const Opal::StringUtf8& entry_point) const;
 
-    /** Find exactly one entry point of the given stage. Throws if 0 or >1 found. */
-    [[nodiscard]] static Opal::StringUtf8 FindSingleEntryPoint(const Opal::DynamicArray<EntryPointInfo>& entries,
-                                                                ShaderStage target_stage, const char* stage_name);
+    /**
+     * Find exactly one entry point of the given stage.
+     * @return The name, or ErrorCode::ShaderCompilationError when the source declares none of that stage or
+     *         more than one - neither leaves a caller a choice about what to compile.
+     */
+    [[nodiscard]] static Opal::Expected<Opal::StringUtf8, ErrorCode> FindSingleEntryPoint(
+        const Opal::DynamicArray<EntryPointInfo>& entries, ShaderStage target_stage, const char* stage_name);
 
     /**
      * Merge parameters from two shader stages, resolving duplicates and checking for conflicts.
      * Skips VaryingOutput from stage_a and VaryingInput from stage_b (inter-stage varyings).
+     * @return The merged parameters, or ErrorCode::ShaderCompilationError when the two stages disagree about
+     *         what a name means or share a binding slot between different kinds of resource.
      */
-    [[nodiscard]] static Opal::DynamicArray<ShaderParameter> MergeParameters(
+    [[nodiscard]] static Opal::Expected<Opal::DynamicArray<ShaderParameter>, ErrorCode> MergeParameters(
         const Opal::DynamicArray<ShaderParameter>& stage_a_params,
         const Opal::DynamicArray<ShaderParameter>& stage_b_params);
 

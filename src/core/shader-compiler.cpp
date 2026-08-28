@@ -3,7 +3,6 @@
 #include "slang-com-ptr.h"
 #include "slang.h"
 
-#include "rndr/exception.hpp"
 #include "rndr/log.hpp"
 
 #include <cstring>
@@ -378,7 +377,7 @@ namespace
  * Released after main, along with every other static. If Slang's teardown ever turns out to mind that, the
  * fix is an explicit shutdown call rather than leaning harder on static destruction order.
  */
-slang::IGlobalSession& GetGlobalSession()
+slang::IGlobalSession* GetGlobalSession()
 {
     static Slang::ComPtr<slang::IGlobalSession> global_session = []
     {
@@ -386,11 +385,13 @@ slang::IGlobalSession& GetGlobalSession()
         const SlangResult result = slang::createGlobalSession(session.writeRef());
         if (SLANG_FAILED(result))
         {
-            throw Rndr::GraphicsAPIException(result, "Failed to create Slang global session!");
+            RNDR_LOG_ERROR("Failed to create Slang global session, result {}", static_cast<Rndr::i32>(result));
         }
         return session;
     }();
-    return *global_session;
+    // A failure is remembered rather than retried. Nothing that makes this fail - a Slang that will not load -
+    // gets better between two calls in one process, and retrying would pay the load cost again to find out.
+    return global_session.get();
 }
 }  // namespace
 
@@ -428,11 +429,16 @@ Rndr::ShaderCompiler& Rndr::ShaderCompiler::operator=(ShaderCompiler&& other) no
     return *this;
 }
 
-void Rndr::ShaderCompiler::LoadModule(const Opal::StringUtf8& source, ShaderOutputFormat format)
+Rndr::ErrorCode Rndr::ShaderCompiler::LoadModule(const Opal::StringUtf8& source, ShaderOutputFormat format)
 {
     m_impl->format = format;
 
-    slang::IGlobalSession& global_session = GetGlobalSession();
+    slang::IGlobalSession* global_session_ptr = GetGlobalSession();
+    if (global_session_ptr == nullptr)
+    {
+        return ErrorCode::GraphicsAPIError;
+    }
+    slang::IGlobalSession& global_session = *global_session_ptr;
 
     slang::TargetDesc target_desc = {};
     // Preserve original Slang entry-point names in the emitted SPIR-V instead of renaming them
@@ -467,7 +473,8 @@ void Rndr::ShaderCompiler::LoadModule(const Opal::StringUtf8& source, ShaderOutp
     const SlangResult result = global_session.createSession(session_desc, m_impl->session.writeRef());
     if (SLANG_FAILED(result))
     {
-        throw GraphicsAPIException(result, "Failed to create Slang session!");
+        RNDR_LOG_ERROR("Failed to create Slang session, result {}", static_cast<i32>(result));
+        return ErrorCode::GraphicsAPIError;
     }
 
     Slang::ComPtr<ISlangBlob> diagnostics;
@@ -481,12 +488,21 @@ void Rndr::ShaderCompiler::LoadModule(const Opal::StringUtf8& source, ShaderOutp
             msg = msg + "\n" + static_cast<const char*>(diagnostics->getBufferPointer());
         }
         RNDR_LOG_ERROR("{}", *msg);
-        throw GraphicsAPIException(0, *msg);
+        return ErrorCode::ShaderCompilationError;
     }
+    return ErrorCode::Success;
 }
 
-Opal::DynamicArray<Rndr::EntryPointInfo> Rndr::ShaderCompiler::DiscoverEntryPoints() const
+Opal::Expected<Opal::DynamicArray<Rndr::EntryPointInfo>, Rndr::ErrorCode> Rndr::ShaderCompiler::DiscoverEntryPoints() const
 {
+    using Result = Opal::Expected<Opal::DynamicArray<EntryPointInfo>, ErrorCode>;
+
+    if (m_impl == nullptr || m_impl->module == nullptr)
+    {
+        RNDR_LOG_ERROR("Discovering entry points needs a module; call LoadModule first");
+        return Result(ErrorCode::InvalidArgument);
+    }
+
     Opal::DynamicArray<EntryPointInfo> entries;
 
     const SlangInt32 count = m_impl->module->getDefinedEntryPointCount();
@@ -518,17 +534,25 @@ Opal::DynamicArray<Rndr::EntryPointInfo> Rndr::ShaderCompiler::DiscoverEntryPoin
         }
     }
 
-    return entries;
+    return Result(std::move(entries));
 }
 
-Rndr::CompileResult Rndr::ShaderCompiler::CompileEntryPoint(const Opal::StringUtf8& entry_point) const
+Opal::Expected<Rndr::CompileResult, Rndr::ErrorCode> Rndr::ShaderCompiler::CompileEntryPoint(const Opal::StringUtf8& entry_point) const
 {
+    using Result = Opal::Expected<CompileResult, ErrorCode>;
+
+    if (m_impl == nullptr || m_impl->module == nullptr)
+    {
+        RNDR_LOG_ERROR("Compiling an entry point needs a module; call LoadModule first");
+        return Result(ErrorCode::InvalidArgument);
+    }
+
     Slang::ComPtr<slang::IEntryPoint> ep;
     SlangResult result = m_impl->module->findEntryPointByName(*entry_point, ep.writeRef());
     if (SLANG_FAILED(result))
     {
-        Opal::StringUtf8 msg = Opal::StringUtf8("Failed to find entry point '") + entry_point + "'!";
-        throw GraphicsAPIException(result, msg.GetData());
+        RNDR_LOG_ERROR("Failed to find entry point '{}'!", *entry_point);
+        return Result(ErrorCode::ShaderCompilationError);
     }
 
     slang::IComponentType* components[] = {m_impl->module, ep};
@@ -542,7 +566,8 @@ Rndr::CompileResult Rndr::ShaderCompiler::CompileEntryPoint(const Opal::StringUt
         {
             msg = msg + "\n" + static_cast<const char*>(diagnostics->getBufferPointer());
         }
-        throw GraphicsAPIException(result, msg.GetData());
+        RNDR_LOG_ERROR("{}", *msg);
+        return Result(ErrorCode::ShaderCompilationError);
     }
 
     Slang::ComPtr<ISlangBlob> code_blob;
@@ -554,7 +579,8 @@ Rndr::CompileResult Rndr::ShaderCompiler::CompileEntryPoint(const Opal::StringUt
         {
             msg = msg + "\n" + static_cast<const char*>(diagnostics->getBufferPointer());
         }
-        throw GraphicsAPIException(result, msg.GetData());
+        RNDR_LOG_ERROR("{}", *msg);
+        return Result(ErrorCode::ShaderCompilationError);
     }
 
     CompileResult out;
@@ -596,12 +622,14 @@ Rndr::CompileResult Rndr::ShaderCompiler::CompileEntryPoint(const Opal::StringUt
         }
     }
 
-    return out;
+    return Result(std::move(out));
 }
 
-Opal::StringUtf8 Rndr::ShaderCompiler::FindSingleEntryPoint(const Opal::DynamicArray<EntryPointInfo>& entries,
-                                                              ShaderStage target_stage, const char* stage_name)
+Opal::Expected<Opal::StringUtf8, Rndr::ErrorCode> Rndr::ShaderCompiler::FindSingleEntryPoint(
+    const Opal::DynamicArray<EntryPointInfo>& entries, ShaderStage target_stage, const char* stage_name)
 {
+    using Result = Opal::Expected<Opal::StringUtf8, ErrorCode>;
+
     Opal::StringUtf8 found_name;
     int count = 0;
     for (u64 i = 0; i < entries.GetSize(); ++i)
@@ -615,21 +643,23 @@ Opal::StringUtf8 Rndr::ShaderCompiler::FindSingleEntryPoint(const Opal::DynamicA
 
     if (count == 0)
     {
-        Opal::StringUtf8 msg = Opal::StringUtf8("No ") + stage_name + " entry point found in shader source!";
-        throw GraphicsAPIException(0, msg.GetData());
+        RNDR_LOG_ERROR("No {} entry point found in shader source!", stage_name);
+        return Result(ErrorCode::ShaderCompilationError);
     }
     if (count > 1)
     {
-        Opal::StringUtf8 msg = Opal::StringUtf8("Multiple ") + stage_name + " entry points found, expected exactly 1!";
-        throw GraphicsAPIException(0, msg.GetData());
+        RNDR_LOG_ERROR("Multiple {} entry points found, expected exactly 1!", stage_name);
+        return Result(ErrorCode::ShaderCompilationError);
     }
 
-    return found_name;
+    return Result(std::move(found_name));
 }
 
-Opal::DynamicArray<Rndr::ShaderParameter> Rndr::ShaderCompiler::MergeParameters(
+Opal::Expected<Opal::DynamicArray<Rndr::ShaderParameter>, Rndr::ErrorCode> Rndr::ShaderCompiler::MergeParameters(
     const Opal::DynamicArray<ShaderParameter>& stage_a_params, const Opal::DynamicArray<ShaderParameter>& stage_b_params)
 {
+    using Result = Opal::Expected<Opal::DynamicArray<ShaderParameter>, ErrorCode>;
+
     Opal::DynamicArray<ShaderParameter> merged;
 
     // Include stage_a parameters, skip VaryingOutput (inter-stage).
@@ -659,9 +689,8 @@ Opal::DynamicArray<Rndr::ShaderParameter> Rndr::ShaderCompiler::MergeParameters(
             {
                 if (ep.category != fp.category)
                 {
-                    Opal::StringUtf8 msg =
-                        Opal::StringUtf8("Parameter '") + fp.name + "' has conflicting types in vertex and fragment stages!";
-                    throw GraphicsAPIException(0, msg.GetData());
+                    RNDR_LOG_ERROR("Parameter '{}' has conflicting types in vertex and fragment stages!", *fp.name);
+                    return Result(ErrorCode::ShaderCompilationError);
                 }
                 duplicate = true;
                 break;
@@ -678,8 +707,8 @@ Opal::DynamicArray<Rndr::ShaderParameter> Rndr::ShaderCompiler::MergeParameters(
                     if (IsTopLevelResource(ep) && ep.binding_index == fp.binding_index && ep.binding_space == fp.binding_space &&
                         ep.category != fp.category)
                     {
-                        throw GraphicsAPIException(
-                            0, "Binding slot conflict between shader stages! Same binding slot used for different types.");
+                        RNDR_LOG_ERROR("Binding slot conflict between shader stages! Same binding slot used for different types.");
+                        return Result(ErrorCode::ShaderCompilationError);
                     }
                 }
             }
@@ -687,5 +716,5 @@ Opal::DynamicArray<Rndr::ShaderParameter> Rndr::ShaderCompiler::MergeParameters(
         }
     }
 
-    return merged;
+    return Result(std::move(merged));
 }

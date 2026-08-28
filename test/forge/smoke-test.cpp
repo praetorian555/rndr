@@ -619,7 +619,7 @@ TEST_CASE("Forge device-only buffer", "[forge]")
     REQUIRE(Forge::ReadBackBuffer(fixture.device, fixture.GetQueue(), buffer, read_back) == ErrorCode::Success);
     REQUIRE(CountMismatches(written, read_back) == 0);
 
-    SECTION("Update and Read both throw on it")
+    SECTION("Update and Read both refuse it")
     {
         Opal::DynamicArray<u8> out(k_size);
         REQUIRE(buffer.Update(written) != ErrorCode::Success);
@@ -1018,7 +1018,7 @@ TEST_CASE("Forge waiting on several fences at once", "[forge]")
         const Forge::Fence never_signalled = ForgeTest::Unwrap(Forge::Fence::Create(fixture.device, false));
         REQUIRE_FALSE(ForgeTest::Unwrap(never_signalled.TryWait(k_short_timeout)));
     }
-    SECTION("Fences from two devices in one wait throw")
+    SECTION("Fences from two devices in one wait are refused")
     {
         // A second logical device on the same physical one, for the reason the timeline case above gives.
         Opal::DynamicArray<Forge::PhysicalDevice> physical_devices = ForgeTest::Unwrap(fixture.context.EnumeratePhysicalDevices());
@@ -1445,7 +1445,7 @@ TEST_CASE("Forge bindless texture array", "[forge]")
             REQUIRE(values[i] == expected);
         }
     }
-    SECTION("An array element past the end of the binding throws")
+    SECTION("An array element past the end of the binding is refused")
     {
         // Three of four allocated, so elements zero through two exist and element three does not, even though
         // the layout declares four. Vulkan writes such an element without reporting anything.
@@ -1453,7 +1453,8 @@ TEST_CASE("Forge bindless texture array", "[forge]")
         const Forge::Texture texture = make_texture(k_red_at_one);
         const Forge::Sampler sampler = ForgeTest::Unwrap(Forge::Sampler::Create(device, {.max_anisotropy = 1.0f}));
 
-        REQUIRE_NOTHROW(descriptor_set.Update(1, texture, sampler, Forge::ImageLayout::ShaderReadOnly, k_used_descriptors - 1));
+        REQUIRE(descriptor_set.Update(1, texture, sampler, Forge::ImageLayout::ShaderReadOnly, k_used_descriptors - 1) ==
+                ErrorCode::Success);
         REQUIRE(descriptor_set.Update(1, texture, sampler, Forge::ImageLayout::ShaderReadOnly, k_used_descriptors) != ErrorCode::Success);
         REQUIRE(descriptor_set.Update(1, texture, sampler, Forge::ImageLayout::ShaderReadOnly, k_max_descriptors) != ErrorCode::Success);
         // A binding of one descriptor has only element zero, variable count or not.
@@ -1461,7 +1462,7 @@ TEST_CASE("Forge bindless texture array", "[forge]")
             ForgeTest::Unwrap(Forge::Buffer::Create(device, {.size = 4, .usage = Forge::BufferUsageBits::StorageBuffer}));
         REQUIRE(descriptor_set.Update(0, output, 0, Forge::k_whole_buffer, 1) != ErrorCode::Success);
     }
-    SECTION("A variable count above the texture binding descriptor count throws")
+    SECTION("A variable count above the texture binding descriptor count is refused")
     {
         REQUIRE_FALSE(Forge::DescriptorSet::Create(pool, layout, k_max_descriptors + 1).HasValue());
     }
@@ -2344,7 +2345,7 @@ TEST_CASE("Forge rendering without a depth attachment", "[forge]")
     {
         // What the old convention expressed as "no depth". Now that absent says it, a present attachment
         // pointing at nothing is a filled-in desc somebody forgot to finish. The colour attachment is
-        // transitioned first so that the throw is the depth one and not the layout check on the colour.
+        // transitioned first so that the refusal is the depth one and not the layout check on the colour.
         Forge::CommandBuffer command_buffer = ForgeTest::Unwrap(Forge::CommandBuffer::Create(fixture.device, fixture.GetQueue()));
         REQUIRE(command_buffer.Begin() == ErrorCode::Success);
         REQUIRE(command_buffer.CmdTextureBarrier(Forge::TextureBarrier::ToColorAttachment(color)) == ErrorCode::Success);
@@ -3322,10 +3323,10 @@ void main_specialized(uint3 thread_id : SV_DispatchThreadID, uniform RWStructure
 )";
 
 /**
- * A constructor that throws leaves no object behind for a destructor to clean up, so anything it created
- * before the throw is the constructor's own to release. The pipeline layout is created first and the checks
- * that reject a description come after it, which made every rejected pipeline a leaked layout. Nothing
- * noticed: the layer only names an object that outlived its device, and that report arrives at
+ * A Create that gives up part way leaves no object behind for a destructor to clean up, so anything it
+ * built before the check that refused is its own to release. The pipeline layout is created first and the
+ * checks that reject a description come after it, which made every rejected pipeline a leaked layout.
+ * Nothing noticed: the layer only names an object that outlived its device, and that report arrives at
  * vkDestroyDevice, after the assertion at the end of a case has already passed.
  */
 TEST_CASE("Forge a pipeline that fails to build leaves nothing behind", "[forge]")
@@ -6585,7 +6586,7 @@ TEST_CASE("Forge stencil testing", "[forge]")
         Forge::CommandBuffer command_buffer = ForgeTest::Unwrap(Forge::CommandBuffer::Create(fixture.device, fixture.GetQueue()));
         Forge::Texture color = MakeColorTarget(fixture.device, k_side, k_color_format);
         REQUIRE(command_buffer.Begin() == ErrorCode::Success);
-        // Transitioned first so that the throw is the stencil one and not the layout check on the colour.
+        // Transitioned first so that the refusal is the stencil one and not the layout check on the colour.
         REQUIRE(command_buffer.CmdTextureBarrier(Forge::TextureBarrier::ToColorAttachment(color)) == ErrorCode::Success);
         const Forge::RenderingDesc rendering_desc{
             .render_area_extent = {k_side, k_side},
@@ -8919,15 +8920,10 @@ bool IsMirrorClampToEdgeAvailable()
 {
     static const bool available = []
     {
-        try
-        {
-            const ForgeFixture probe({.sampler_mirror_clamp_to_edge = true});
-            return true;
-        }
-        catch (const Opal::Exception&)
-        {
-            return false;
-        }
+        // The fixture reports through status rather than throwing, and a device asked for a feature it does
+        // not have is what leaves a code there.
+        const ForgeFixture probe({.sampler_mirror_clamp_to_edge = true});
+        return probe.status == ErrorCode::Success;
     }();
     return available;
 }
@@ -8945,7 +8941,7 @@ bool IsMirrorClampToEdgeAvailable()
  * MirrorRepeat and MirrorOnce agree everywhere until the second fold below it.
  *
  * Both of those switches used to fall through to a default that quietly answered Repeat and OpaqueBlack for a
- * value they did not know. They throw now, which is what the rest of Forge does and what keeps an enumerator
+ * value they did not know. They report now, which is what the rest of Forge does and what keeps an enumerator
  * added later from silently meaning something else.
  */
 TEST_CASE("Forge the sampler address modes and border colours", "[forge]")
@@ -9393,8 +9389,8 @@ Opal::StringUtf8 TestScratchPath(const char* file_name)
 Opal::DynamicArray<u8> CompileToSpirv(const char* source, const char* entry_point)
 {
     ShaderCompiler compiler;
-    compiler.LoadModule(Opal::StringUtf8(source), ShaderOutputFormat::SpirV);
-    CompileResult result = compiler.CompileEntryPoint(Opal::StringUtf8(entry_point));
+    REQUIRE(compiler.LoadModule(Opal::StringUtf8(source), ShaderOutputFormat::SpirV) == ErrorCode::Success);
+    CompileResult result = ForgeTest::Unwrap(compiler.CompileEntryPoint(Opal::StringUtf8(entry_point)));
     return std::move(result.code);
 }
 
@@ -9510,7 +9506,7 @@ TEST_CASE("Forge shaders built from SPIR-V rather than from source", "[forge]")
         REQUIRE(shader.GetShaderStage() == ShaderTypeBits::Compute);
         REQUIRE(shader.GetEntryPoint() == Opal::StringUtf8("main_compute"));
     }
-    SECTION("A file that is not there, and one whose contents are not SPIR-V, both throw")
+    SECTION("A file that is not there, and one whose contents are not SPIR-V, are both refused")
     {
         REQUIRE_FALSE(Forge::Shader::FromSpirvFile(fixture.device, TestScratchPath("no-such-file.spv"),
                                                        {.entry_point = "main_compute"}).HasValue());
@@ -9796,15 +9792,11 @@ f 1/1 2/2 3/3
 TEST_CASE("Forge loading a mesh from a file", "[forge]")
 {
     // RNDR_ASSIMP is private to the library, so this cannot be decided at compile time from out here. A build
-    // without it throws out of every call, which is what this asks about before asserting anything.
+    // without it refuses every call, which is what this asks about before asserting anything.
     const Opal::StringUtf8 complete_path = WriteScratchTextFile("triangle.obj", k_complete_obj);
     {
         Forge::Mesh probe;
-        try
-        {
-            REQUIRE(Forge::LoadMesh(complete_path, probe) == ErrorCode::Success);
-        }
-        catch (const Opal::Exception&)
+        if (Forge::LoadMesh(complete_path, probe) != ErrorCode::Success)
         {
             SKIP("This build has no assimp, so Forge::LoadMesh refuses every file.");
         }
@@ -9860,7 +9852,7 @@ TEST_CASE("Forge loading a mesh from a file", "[forge]")
         // LoadMesh asks for aiProcess_GenSmoothNormals, so a file with faces and no `vn` has normals by the
         // time the null check runs. aiProcess_GenUVCoords is not the counterpart it looks like - it converts
         // a mapping that is already there rather than inventing one - which is why the UV section above does
-        // throw where this one does not.
+        // refuse the mesh where this one does not.
         const Opal::StringUtf8 path = WriteScratchTextFile("no-normals.obj", k_obj_without_normals);
         Forge::Mesh mesh;
         REQUIRE(Forge::LoadMesh(path, mesh) == ErrorCode::Success);
@@ -9878,7 +9870,7 @@ TEST_CASE("Forge loading a mesh from a file", "[forge]")
         // What the section above does not reach, and the reason the null normal check is not dead code:
         // assimp generates normals from faces, so a mesh that has none arrives with none. Three ways to get
         // there - a point cloud, a line mesh, and a triangle so degenerate that aiProcess_FindDegenerates
-        // takes it away - and all three land on the same throw.
+        // takes it away - and all three land on the same refusal.
         const char* const names[] = {"points-only.obj", "lines-only.obj", "degenerate-face.obj"};
         const char* const contents[] = {k_obj_points_only, k_obj_lines_only, k_obj_degenerate_face};
         for (i32 i = 0; i < 3; ++i)
@@ -9952,15 +9944,8 @@ bool IsMeshShaderAvailable()
 {
     static const bool available = []
     {
-        try
-        {
-            const ForgeFixture probe({.mesh_shader = true});
-            return true;
-        }
-        catch (const Opal::Exception&)
-        {
-            return false;
-        }
+        const ForgeFixture probe({.mesh_shader = true});
+        return probe.status == ErrorCode::Success;
     }();
     return available;
 }

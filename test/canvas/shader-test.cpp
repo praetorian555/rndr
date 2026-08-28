@@ -976,7 +976,7 @@ TEST_CASE("Canvas Shader instance ID", "[canvas][shader]")
 
     // gl_InstanceIndex is a Vulkan-GLSL builtin that does not exist in desktop OpenGL GLSL. If the
     // post-process did not rewrite it to gl_InstanceID, GL would fail to compile the shader and these
-    // would throw / produce an invalid shader.
+    // would report a compilation error rather than hand back a usable one.
     SECTION("Shader using SV_VulkanInstanceID compiles and links")
     {
         Rndr::Canvas::Shader const shader = CanvasTest::Unwrap(Rndr::Canvas::Shader::FromSourceInMemory(k_instance_id_vulkan_source));

@@ -257,13 +257,28 @@ struct ShaderBuildResult
     Rndr::NumThreads num_threads;
 };
 
+/**
+ * Take the value of a compiler step, or leave the enclosing function with the code it reported. Every step of
+ * a build is one of these, and a helper per step would be five; what the caller needs to know beyond the code
+ * is already in the log line the step wrote. Expects a local ResultType, which both builders below declare.
+ */
+#define RNDR_CANVAS_TAKE(destination, expression)                 \
+    {                                                             \
+        auto step_result = (expression);                          \
+        if (!step_result.HasValue())                              \
+        {                                                         \
+            RNDR_LOG_ERROR("Canvas: compiling the shader failed"); \
+            return ResultType(step_result.GetError());            \
+        }                                                         \
+        (destination) = std::move(step_result.GetValue());        \
+    }
+
 Opal::Expected<ShaderBuildResult, Rndr::ErrorCode> BuildFromSingleSource(const Opal::StringUtf8& source, Opal::StringUtf8 debug_name)
 {
     using ResultType = Opal::Expected<ShaderBuildResult, Rndr::ErrorCode>;
 
-    // ShaderCompiler is shared between the rendering APIs and reports by throwing, which is the one thing
-    // that reaches Canvas from outside its own convention. Caught here so it stops at the boundary and
-    // comes out as a code like everything else; the message it carries is what the log line says.
+    // ShaderCompiler is shared between the rendering APIs and reports the same way Canvas does, so the codes
+    // below travel out as they are. What went wrong is already in the log by the time one arrives.
     bool is_compute = false;
     Rndr::CompileResult cs_result;
     Opal::StringUtf8 vs_entry;
@@ -271,11 +286,21 @@ Opal::Expected<ShaderBuildResult, Rndr::ErrorCode> BuildFromSingleSource(const O
     Rndr::CompileResult vs_result;
     Rndr::CompileResult fs_result;
     Opal::DynamicArray<Rndr::ShaderParameter> merged;
-    try
     {
         Rndr::ShaderCompiler compiler;
-        compiler.LoadModule(source, Rndr::ShaderOutputFormat::Glsl);
-        Opal::DynamicArray<Rndr::EntryPointInfo> entries = compiler.DiscoverEntryPoints();
+        const Rndr::ErrorCode load_status = compiler.LoadModule(source, Rndr::ShaderOutputFormat::Glsl);
+        if (load_status != Rndr::ErrorCode::Success)
+        {
+            RNDR_LOG_ERROR("Canvas: compiling the shader failed");
+            return ResultType(load_status);
+        }
+        auto entries_result = compiler.DiscoverEntryPoints();
+        if (!entries_result.HasValue())
+        {
+            RNDR_LOG_ERROR("Canvas: compiling the shader failed");
+            return ResultType(entries_result.GetError());
+        }
+        const Opal::DynamicArray<Rndr::EntryPointInfo>& entries = entries_result.GetValue();
 
         // Count entry points by stage.
         int vertex_count = 0;
@@ -308,22 +333,18 @@ Opal::Expected<ShaderBuildResult, Rndr::ErrorCode> BuildFromSingleSource(const O
         is_compute = compute_count > 0;
         if (is_compute)
         {
-            const Opal::StringUtf8 cs_entry = Rndr::ShaderCompiler::FindSingleEntryPoint(entries, Rndr::ShaderStage::Compute, "compute");
-            cs_result = compiler.CompileEntryPoint(cs_entry);
+            Opal::StringUtf8 cs_entry;
+            RNDR_CANVAS_TAKE(cs_entry, Rndr::ShaderCompiler::FindSingleEntryPoint(entries, Rndr::ShaderStage::Compute, "compute"))
+            RNDR_CANVAS_TAKE(cs_result, compiler.CompileEntryPoint(cs_entry))
         }
         else
         {
-            vs_entry = Rndr::ShaderCompiler::FindSingleEntryPoint(entries, Rndr::ShaderStage::Vertex, "vertex");
-            fs_entry = Rndr::ShaderCompiler::FindSingleEntryPoint(entries, Rndr::ShaderStage::Fragment, "fragment");
-            vs_result = compiler.CompileEntryPoint(vs_entry);
-            fs_result = compiler.CompileEntryPoint(fs_entry);
-            merged = Rndr::ShaderCompiler::MergeParameters(vs_result.parameters, fs_result.parameters);
+            RNDR_CANVAS_TAKE(vs_entry, Rndr::ShaderCompiler::FindSingleEntryPoint(entries, Rndr::ShaderStage::Vertex, "vertex"))
+            RNDR_CANVAS_TAKE(fs_entry, Rndr::ShaderCompiler::FindSingleEntryPoint(entries, Rndr::ShaderStage::Fragment, "fragment"))
+            RNDR_CANVAS_TAKE(vs_result, compiler.CompileEntryPoint(vs_entry))
+            RNDR_CANVAS_TAKE(fs_result, compiler.CompileEntryPoint(fs_entry))
+            RNDR_CANVAS_TAKE(merged, Rndr::ShaderCompiler::MergeParameters(vs_result.parameters, fs_result.parameters))
         }
-    }
-    catch (const Opal::Exception& exception)
-    {
-        RNDR_LOG_ERROR("Canvas: compiling the shader failed: {}", *exception.What());
-        return ResultType(Rndr::ErrorCode::ShaderCompilationError);
     }
 
     // Compute path.
@@ -425,33 +446,39 @@ Opal::Expected<ShaderBuildResult, Rndr::ErrorCode> BuildFromTwoSources(const Opa
 {
     using ResultType = Opal::Expected<ShaderBuildResult, Rndr::ErrorCode>;
 
-    // The compiler boundary, same as BuildFromSingleSource: everything ShaderCompiler reports by
-    // throwing comes out of this block as ShaderCompilationError.
+    // The compiler boundary, same as BuildFromSingleSource: whatever a step reports comes out of this block
+    // as the code it reported.
     Opal::StringUtf8 vs_entry;
     Opal::StringUtf8 fs_entry;
     Rndr::CompileResult vs_result;
     Rndr::CompileResult fs_result;
     Opal::DynamicArray<Rndr::ShaderParameter> merged;
-    try
     {
         Rndr::ShaderCompiler vs_compiler;
-        vs_compiler.LoadModule(vertex_source, Rndr::ShaderOutputFormat::Glsl);
-        const Opal::DynamicArray<Rndr::EntryPointInfo> vs_entries = vs_compiler.DiscoverEntryPoints();
-        vs_entry = Rndr::ShaderCompiler::FindSingleEntryPoint(vs_entries, Rndr::ShaderStage::Vertex, "vertex");
+        const Rndr::ErrorCode vs_load_status = vs_compiler.LoadModule(vertex_source, Rndr::ShaderOutputFormat::Glsl);
+        if (vs_load_status != Rndr::ErrorCode::Success)
+        {
+            RNDR_LOG_ERROR("Canvas: compiling the shader failed");
+            return ResultType(vs_load_status);
+        }
+        Opal::DynamicArray<Rndr::EntryPointInfo> vs_entries;
+        RNDR_CANVAS_TAKE(vs_entries, vs_compiler.DiscoverEntryPoints())
+        RNDR_CANVAS_TAKE(vs_entry, Rndr::ShaderCompiler::FindSingleEntryPoint(vs_entries, Rndr::ShaderStage::Vertex, "vertex"))
 
         Rndr::ShaderCompiler fs_compiler;
-        fs_compiler.LoadModule(fragment_source, Rndr::ShaderOutputFormat::Glsl);
-        const Opal::DynamicArray<Rndr::EntryPointInfo> fs_entries = fs_compiler.DiscoverEntryPoints();
-        fs_entry = Rndr::ShaderCompiler::FindSingleEntryPoint(fs_entries, Rndr::ShaderStage::Fragment, "fragment");
+        const Rndr::ErrorCode fs_load_status = fs_compiler.LoadModule(fragment_source, Rndr::ShaderOutputFormat::Glsl);
+        if (fs_load_status != Rndr::ErrorCode::Success)
+        {
+            RNDR_LOG_ERROR("Canvas: compiling the shader failed");
+            return ResultType(fs_load_status);
+        }
+        Opal::DynamicArray<Rndr::EntryPointInfo> fs_entries;
+        RNDR_CANVAS_TAKE(fs_entries, fs_compiler.DiscoverEntryPoints())
+        RNDR_CANVAS_TAKE(fs_entry, Rndr::ShaderCompiler::FindSingleEntryPoint(fs_entries, Rndr::ShaderStage::Fragment, "fragment"))
 
-        vs_result = vs_compiler.CompileEntryPoint(vs_entry);
-        fs_result = fs_compiler.CompileEntryPoint(fs_entry);
-        merged = Rndr::ShaderCompiler::MergeParameters(vs_result.parameters, fs_result.parameters);
-    }
-    catch (const Opal::Exception& exception)
-    {
-        RNDR_LOG_ERROR("Canvas: compiling the shader failed: {}", *exception.What());
-        return ResultType(Rndr::ErrorCode::ShaderCompilationError);
+        RNDR_CANVAS_TAKE(vs_result, vs_compiler.CompileEntryPoint(vs_entry))
+        RNDR_CANVAS_TAKE(fs_result, fs_compiler.CompileEntryPoint(fs_entry))
+        RNDR_CANVAS_TAKE(merged, Rndr::ShaderCompiler::MergeParameters(vs_result.parameters, fs_result.parameters))
     }
 
     if (vs_result.stage != Rndr::ShaderStage::Vertex)

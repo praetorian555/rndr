@@ -8,7 +8,6 @@
 #include "rndr/application.hpp"
 #include "rndr/canvas/context.hpp"
 #include "rndr/canvas/mesh.hpp"
-#include "rndr/exception.hpp"
 #include "rndr/generic-window.hpp"
 
 namespace

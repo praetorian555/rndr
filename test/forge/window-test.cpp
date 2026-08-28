@@ -162,16 +162,8 @@ bool IsForgeWindowAvailable()
 {
     static const bool available = []
     {
-        // Rndr::Application and the window still report by throwing, so both ways of failing are caught here.
-        try
-        {
-            const ForgeWindowFixture probe;
-            return probe.status == ErrorCode::Success;
-        }
-        catch (const Opal::Exception&)
-        {
-            return false;
-        }
+        const ForgeWindowFixture probe;
+        return probe.status == ErrorCode::Success;
     }();
     return available;
 }

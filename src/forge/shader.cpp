@@ -442,21 +442,24 @@ Opal::Expected<Rndr::Forge::Shader, Rndr::ErrorCode> Rndr::Forge::Shader::FromSo
         }
     }
 
-    // ShaderCompiler is shared with Canvas and reports by throwing, which is the one thing that reaches
-    // Forge from outside its own convention. Caught here so it stops at the boundary and comes out as a
-    // code like everything else; the message it carries is what the log line below says.
+    // ShaderCompiler is shared with Canvas and reports the same way everything else here does, so the codes
+    // below travel out as they are. What went wrong is already in the log by the time one arrives.
     Opal::DynamicArray<u8> code;
-    try
     {
         ShaderCompiler compiler;
-        compiler.LoadModule(source, ShaderOutputFormat::SpirV);
-        CompileResult result = compiler.CompileEntryPoint(desc.entry_point);
-        code = std::move(result.code);
-    }
-    catch (const Opal::Exception& exception)
-    {
-        RNDR_LOG_ERROR("Forge: compiling the shader failed: {}", *exception.What());
-        return Result(ErrorCode::ShaderCompilationError);
+        const ErrorCode load_status = compiler.LoadModule(source, ShaderOutputFormat::SpirV);
+        if (load_status != ErrorCode::Success)
+        {
+            RNDR_LOG_ERROR("Forge: compiling the shader failed");
+            return Result(load_status);
+        }
+        Opal::Expected<CompileResult, ErrorCode> result = compiler.CompileEntryPoint(desc.entry_point);
+        if (!result.HasValue())
+        {
+            RNDR_LOG_ERROR("Forge: compiling the shader failed");
+            return Result(result.GetError());
+        }
+        code = std::move(result.GetValue().code);
     }
     if (desc.cache != nullptr)
     {
