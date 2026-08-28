@@ -1275,23 +1275,32 @@ bool AreDebugLabelsUsable(const Rndr::Forge::Device& device)
            vkCmdInsertDebugUtilsLabelEXT != nullptr;
 }
 
-VkDebugUtilsLabelEXT ToVkLabel(const Opal::StringUtf8& name, const Rndr::Vector4f& color)
+VkDebugUtilsLabelEXT ToVkLabel(const char* name, const Rndr::Vector4f& color)
 {
-    return {.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_LABEL_EXT,
-            .pLabelName = reinterpret_cast<const char*>(name.GetData()),
-            .color = {color.x, color.y, color.z, color.w}};
+    return {.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_LABEL_EXT, .pLabelName = name, .color = {color.x, color.y, color.z, color.w}};
+}
+
+/** An empty string rather than a null pointer, which pLabelName is not allowed to be. */
+const char* ToLabelText(const Opal::StringUtf8& name)
+{
+    return name.IsEmpty() ? "" : reinterpret_cast<const char*>(name.GetData());
 }
 }  // namespace
 
-Rndr::ErrorCode Rndr::Forge::CommandBuffer::CmdBeginDebugLabel(const Opal::StringUtf8& name, const Vector4f& color)
+Rndr::ErrorCode Rndr::Forge::CommandBuffer::CmdBeginDebugLabel(const char* name, const Vector4f& color)
 {
     if (!AreDebugLabelsUsable(*m_device))
     {
         return ErrorCode::Success;
     }
-    const VkDebugUtilsLabelEXT label = ToVkLabel(name, color);
+    const VkDebugUtilsLabelEXT label = ToVkLabel(name != nullptr ? name : "", color);
     vkCmdBeginDebugUtilsLabelEXT(m_native_command_buffer, &label);
     return ErrorCode::Success;
+}
+
+Rndr::ErrorCode Rndr::Forge::CommandBuffer::CmdBeginDebugLabel(const Opal::StringUtf8& name, const Vector4f& color)
+{
+    return CmdBeginDebugLabel(ToLabelText(name), color);
 }
 
 Rndr::ErrorCode Rndr::Forge::CommandBuffer::CmdEndDebugLabel()
@@ -1304,15 +1313,20 @@ Rndr::ErrorCode Rndr::Forge::CommandBuffer::CmdEndDebugLabel()
     return ErrorCode::Success;
 }
 
-Rndr::ErrorCode Rndr::Forge::CommandBuffer::CmdInsertDebugLabel(const Opal::StringUtf8& name, const Vector4f& color)
+Rndr::ErrorCode Rndr::Forge::CommandBuffer::CmdInsertDebugLabel(const char* name, const Vector4f& color)
 {
     if (!AreDebugLabelsUsable(*m_device))
     {
         return ErrorCode::Success;
     }
-    const VkDebugUtilsLabelEXT label = ToVkLabel(name, color);
+    const VkDebugUtilsLabelEXT label = ToVkLabel(name != nullptr ? name : "", color);
     vkCmdInsertDebugUtilsLabelEXT(m_native_command_buffer, &label);
     return ErrorCode::Success;
+}
+
+Rndr::ErrorCode Rndr::Forge::CommandBuffer::CmdInsertDebugLabel(const Opal::StringUtf8& name, const Vector4f& color)
+{
+    return CmdInsertDebugLabel(ToLabelText(name), color);
 }
 
 Rndr::ErrorCode Rndr::Forge::CommandBuffer::CmdResetQueryPool(const TimestampQueryPool& query_pool, u32 first_query, u32 query_count)

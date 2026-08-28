@@ -113,10 +113,16 @@ void Rndr::Forge::SetDebugName(const Device& device, const TimestampQueryPool& q
     SetName(device, VK_OBJECT_TYPE_QUERY_POOL, ToHandle(query_pool.GetNativeQueryPool()), name);
 }
 
-Rndr::Forge::ScopedDebugLabel::ScopedDebugLabel(CommandBuffer& command_buffer, const Opal::StringUtf8& name, const Vector4f& color)
+Rndr::Forge::ScopedDebugLabel::ScopedDebugLabel(CommandBuffer& command_buffer, const char* name, const Vector4f& color)
     : m_command_buffer(&command_buffer)
 {
     // Best effort: a label that cannot be recorded is not something a scope guard has anything to do about.
+    (void)m_command_buffer->CmdBeginDebugLabel(name, color);
+}
+
+Rndr::Forge::ScopedDebugLabel::ScopedDebugLabel(CommandBuffer& command_buffer, const Opal::StringUtf8& name, const Vector4f& color)
+    : m_command_buffer(&command_buffer)
+{
     (void)m_command_buffer->CmdBeginDebugLabel(name, color);
 }
 

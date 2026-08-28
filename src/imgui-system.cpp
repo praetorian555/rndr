@@ -248,7 +248,7 @@ void Rndr::ImGuiContext::EndFrame()
     RNDR_ASSERT(false, "Platform not supported!");
 #endif
 
-    RNDR_GPU_EVENT_END("ImGui System");
+    RNDR_GPU_EVENT_END("ImGui Context");
 
     m_frame_started = false;
 }

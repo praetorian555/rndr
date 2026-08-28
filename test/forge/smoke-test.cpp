@@ -25,6 +25,7 @@
 #include "rndr/forge/shader.hpp"
 #include "rndr/forge/texture.hpp"
 #include "rndr/forge/transfer.hpp"
+#include "rndr/trace.hpp"
 #include "rndr/types.hpp"
 
 #include "forge-test-common.hpp"
@@ -1863,6 +1864,123 @@ TEST_CASE("Forge debug labels", "[forge]")
         }
         REQUIRE(command_buffer.End() == ErrorCode::Success);
         // Not submitted: work the layer rejected while it was recorded is undefined behaviour once it runs.
+    }
+    REQUIRE_NO_VALIDATION_ERROR(fixture);
+}
+
+TEST_CASE("Forge GPU event macros", "[forge]")
+{
+    if (!IsForgeAvailable())
+    {
+        SKIP("No Vulkan device on this machine.");
+    }
+    ForgeFixture fixture;
+    constexpr i32 k_size = 256;
+    const Opal::DynamicArray<u8> written = MakeBytes(k_size, 23);
+
+    const Forge::Buffer source = ForgeTest::Unwrap(
+        Forge::Buffer::Create(fixture.device, {.size = k_size, .usage = Forge::BufferUsageBits::TransferSource}, written));
+    const Forge::Buffer destination = ForgeTest::Unwrap(Forge::Buffer::Create(fixture.device, {.size = k_size,
+                                                     .usage = Forge::BufferUsageBits::TransferDestination,
+                                                     .host_access = Forge::HostAccess::Random}));
+
+    // The layer reports a command buffer ended with a region still open, so an unbalanced macro fails these
+    // through REQUIRE_NO_VALIDATION_ERROR rather than through the readback.
+    SECTION("The scoped macro brackets the work and the work still runs")
+    {
+        REQUIRE(Forge::ImmediateSubmit(fixture.device, fixture.GetQueue(),
+                                       [&](Forge::CommandBuffer& command_buffer)
+                                       {
+                                           RNDR_GPU_EVENT_SCOPED(command_buffer, "copy pass");
+                                           REQUIRE(command_buffer.CmdCopyBuffer(source, destination) == ErrorCode::Success);
+                                       }) == ErrorCode::Success);
+        Opal::DynamicArray<u8> read_back(k_size);
+        REQUIRE(destination.Read(read_back) == ErrorCode::Success);
+        REQUIRE(CountMismatches(written, read_back) == 0);
+    }
+    SECTION("The begin and end macros are the same region written out")
+    {
+        REQUIRE(Forge::ImmediateSubmit(fixture.device, fixture.GetQueue(),
+                                       [&](Forge::CommandBuffer& command_buffer)
+                                       {
+                                           RNDR_GPU_EVENT_BEGIN(command_buffer, "copy pass");
+                                           REQUIRE(command_buffer.CmdCopyBuffer(source, destination) == ErrorCode::Success);
+                                           RNDR_GPU_EVENT_END(command_buffer, "copy pass");
+                                       }) == ErrorCode::Success);
+        Opal::DynamicArray<u8> read_back(k_size);
+        REQUIRE(destination.Read(read_back) == ErrorCode::Success);
+        REQUIRE(CountMismatches(written, read_back) == 0);
+    }
+    SECTION("The end macro closes a region without being told the name")
+    {
+        REQUIRE(Forge::ImmediateSubmit(fixture.device, fixture.GetQueue(),
+                                       [&](Forge::CommandBuffer& command_buffer)
+                                       {
+                                           RNDR_GPU_EVENT_BEGIN(command_buffer, "copy pass");
+                                           REQUIRE(command_buffer.CmdCopyBuffer(source, destination) == ErrorCode::Success);
+                                           RNDR_GPU_EVENT_END(command_buffer);
+                                       }) == ErrorCode::Success);
+        Opal::DynamicArray<u8> read_back(k_size);
+        REQUIRE(destination.Read(read_back) == ErrorCode::Success);
+        REQUIRE(CountMismatches(written, read_back) == 0);
+    }
+    SECTION("Scoped regions nest")
+    {
+        REQUIRE(Forge::ImmediateSubmit(fixture.device, fixture.GetQueue(),
+                                       [&](Forge::CommandBuffer& command_buffer)
+                                       {
+                                           RNDR_GPU_EVENT_SCOPED(command_buffer, "frame");
+                                           {
+                                               RNDR_GPU_EVENT_SCOPED(command_buffer, "copy pass");
+                                               REQUIRE(command_buffer.CmdCopyBuffer(source, destination) == ErrorCode::Success);
+                                           }
+                                       }) == ErrorCode::Success);
+        Opal::DynamicArray<u8> read_back(k_size);
+        REQUIRE(destination.Read(read_back) == ErrorCode::Success);
+        REQUIRE(CountMismatches(written, read_back) == 0);
+    }
+    SECTION("A name longer than a small string still names the region")
+    {
+        // Past the 23 characters Opal keeps inline, which is the case the const char* overload exists for:
+        // nothing here should reach an allocation, and the name still has to arrive intact.
+        REQUIRE(Forge::ImmediateSubmit(
+                    fixture.device, fixture.GetQueue(),
+                    [&](Forge::CommandBuffer& command_buffer)
+                    {
+                        RNDR_GPU_EVENT_SCOPED(command_buffer, "a deferred shading pass with a name nobody would keep inline");
+                        REQUIRE(command_buffer.CmdCopyBuffer(source, destination) == ErrorCode::Success);
+                    }) == ErrorCode::Success);
+        Opal::DynamicArray<u8> read_back(k_size);
+        REQUIRE(destination.Read(read_back) == ErrorCode::Success);
+        REQUIRE(CountMismatches(written, read_back) == 0);
+    }
+    SECTION("A scope closes the region a refused command left open")
+    {
+        const Forge::Buffer no_transfer =
+            ForgeTest::Unwrap(Forge::Buffer::Create(fixture.device, {.size = k_size, .usage = Forge::BufferUsageBits::ConstantBuffer}));
+        Forge::CommandBuffer command_buffer = ForgeTest::Unwrap(Forge::CommandBuffer::Create(fixture.device, fixture.GetQueue()));
+        REQUIRE(command_buffer.Begin() == ErrorCode::Success);
+        {
+            RNDR_GPU_EVENT_SCOPED(command_buffer, "doomed pass");
+            REQUIRE(command_buffer.CmdCopyBuffer(no_transfer, destination) == ErrorCode::InvalidArgument);
+        }
+        REQUIRE(command_buffer.End() == ErrorCode::Success);
+        // Not submitted, as above: the layer rejected the copy while it was recorded.
+    }
+    SECTION("Both arities of one macro compile side by side")
+    {
+        // One macro spells both backends, and which one a call site means is decided by its arguments. That
+        // the single argument form still resolves is the half a change to these macros could break in
+        // silence, so it is compiled here - inside a lambda that is never called, since the Canvas path
+        // reaches for an OpenGL context this test does not have.
+        const auto canvas_form = []()
+        {
+            RNDR_GPU_EVENT_SCOPED("a Canvas region");
+            RNDR_GPU_EVENT_BEGIN("a Canvas region");
+            RNDR_GPU_EVENT_END("a Canvas region");
+        };
+        RNDR_UNUSED(canvas_form);
+        SUCCEED();
     }
     REQUIRE_NO_VALIDATION_ERROR(fixture);
 }

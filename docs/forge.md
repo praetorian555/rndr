@@ -697,6 +697,31 @@ it, which is enough to tell two passes apart at a glance.
 Like naming, labelling is a no-op in a build without the debug utils extension. All three commands ask the
 same question, so a build without it skips both halves of a region rather than one.
 
+Every one of these takes the name as a `const char*` or as an `Opal::StringUtf8`, and a label written into the
+source wants the first: Vulkan takes a `const char*` here, so it converts nothing, where a `StringUtf8` built
+from a literal at the call site is a copy and, past the 23 characters that fit inline, an allocation - both
+paid before the extension is even known to be there.
+
+#### The GPU event macros
+
+`RNDR_GPU_EVENT_SCOPED` and the `RNDR_GPU_EVENT_BEGIN` / `RNDR_GPU_EVENT_END` pair from `rndr/trace.hpp` are
+the same regions spelled so that Canvas and Forge code can both reach for them. They are the backend-agnostic
+name for the thing; `ScopedDebugLabel` is the Forge one, and the reason to keep using it directly is the
+colour, which OpenGL has no counterpart for and the macros therefore do not carry.
+
+Which backend a call means is decided by its arguments, since OpenGL pushes onto the context current on the
+thread while Vulkan has to be told which command buffer to record into:
+
+```cpp
+RNDR_GPU_EVENT_SCOPED("shadow pass");                  // Canvas
+RNDR_GPU_EVENT_SCOPED(command_buffer, "shadow pass");  // Forge
+```
+
+A build with both APIs has both forms, and nothing has to say which it means - the call site already knows,
+because the command buffer is either in scope or the concept does not exist there.
+
+These annotate; they do not measure. What the device spent is `TimestampQueryPool` below.
+
 ---
 
 ## GPU timing

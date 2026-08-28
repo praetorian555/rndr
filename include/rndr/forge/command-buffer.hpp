@@ -569,10 +569,17 @@ public:
      * same condition, so a build without it skips both halves of a region rather than one. A label is a
      * convenience, and refusing to attach one is never worth failing a frame over.
      *
-     * @param name Text shown in place of the region.
+     * The const char* overload is the one a label written into the source wants, and the one the
+     * RNDR_GPU_EVENT_* macros use. Vulkan takes a const char* here, so it converts nothing; a StringUtf8 built
+     * from a literal at the call site is a copy, and past the 23 characters that fit inline an allocation, both
+     * paid before the extension is even known to be there.
+     *
+     * @param name Text shown in place of the region. Copied by the driver during the call, so it does not have
+     *        to outlive it.
      * @param color What a capture tool tints the region with, RGBA in [0, 1]. Purely a hint: Vulkan gives it
      *        no meaning, the validation layer never reads it, and a tool is free to ignore it.
      */
+    [[nodiscard]] ErrorCode CmdBeginDebugLabel(const char* name, const Vector4f& color = {1.0f, 1.0f, 1.0f, 1.0f});
     [[nodiscard]] ErrorCode CmdBeginDebugLabel(const Opal::StringUtf8& name, const Vector4f& color = {1.0f, 1.0f, 1.0f, 1.0f});
 
     /** Close the region the last CmdBeginDebugLabel opened. Regions nest, and every one has to be closed. */
@@ -584,6 +591,7 @@ public:
      * @param name Text shown at the marker.
      * @param color What a capture tool tints the marker with, RGBA in [0, 1]. A hint, as above.
      */
+    [[nodiscard]] ErrorCode CmdInsertDebugLabel(const char* name, const Vector4f& color = {1.0f, 1.0f, 1.0f, 1.0f});
     [[nodiscard]] ErrorCode CmdInsertDebugLabel(const Opal::StringUtf8& name, const Vector4f& color = {1.0f, 1.0f, 1.0f, 1.0f});
 
     /**

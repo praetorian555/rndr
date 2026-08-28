@@ -65,6 +65,10 @@ void SetDebugName(const Device& device, const FrameContext& frame_context, const
 class ScopedDebugLabel
 {
 public:
+    // As on CmdBeginDebugLabel, the const char* overload is what a label written into the source wants: it
+    // reaches Vulkan without a copy, where a StringUtf8 built from a literal is one and, past what fits
+    // inline, an allocation as well.
+    ScopedDebugLabel(CommandBuffer& command_buffer, const char* name, const Vector4f& color = {1.0f, 1.0f, 1.0f, 1.0f});
     ScopedDebugLabel(CommandBuffer& command_buffer, const Opal::StringUtf8& name,
                      const Vector4f& color = {1.0f, 1.0f, 1.0f, 1.0f});
     ~ScopedDebugLabel();
