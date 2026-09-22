@@ -149,6 +149,7 @@ struct FeatureChain
         vk12.descriptorBindingStorageBufferUpdateAfterBind = features.update_after_bind_descriptors;
         vk12.descriptorBindingStorageImageUpdateAfterBind = features.update_after_bind_descriptors;
         vk12.descriptorBindingUniformBufferUpdateAfterBind = features.update_after_bind_descriptors;
+        vk12.descriptorBindingUpdateUnusedWhilePending = features.update_unused_while_pending_descriptors;
         vk12.shaderSampledImageArrayNonUniformIndexing = features.non_uniform_descriptor_indexing;
         vk12.shaderStorageBufferArrayNonUniformIndexing = features.non_uniform_descriptor_indexing;
         vk12.shaderStorageImageArrayNonUniformIndexing = features.non_uniform_descriptor_indexing;
@@ -275,6 +276,8 @@ const char* FindUnsupportedFeature(const Forge::PhysicalDevice& physical_device,
             "update_after_bind_descriptors (storage images)");
     require(requested.update_after_bind_descriptors, supported.vk12.descriptorBindingUniformBufferUpdateAfterBind,
             "update_after_bind_descriptors (constant buffers)");
+    require(requested.update_unused_while_pending_descriptors, supported.vk12.descriptorBindingUpdateUnusedWhilePending,
+            "update_unused_while_pending_descriptors");
     require(requested.non_uniform_descriptor_indexing, supported.vk12.shaderSampledImageArrayNonUniformIndexing,
             "non_uniform_descriptor_indexing (sampled images)");
     require(requested.non_uniform_descriptor_indexing, supported.vk12.shaderStorageBufferArrayNonUniformIndexing,

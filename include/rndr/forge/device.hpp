@@ -96,6 +96,11 @@ struct DeviceFeatures
     bool partially_bound_descriptors = false;
     /** DescriptorPoolDesc::use_update_after_bind. */
     bool update_after_bind_descriptors = false;
+    /**
+     * DescriptorBindingFlagBits::UpdateUnusedWhilePending, which lets a descriptor no recorded command reads
+     * be written while the set is bound to a command buffer that has not been submitted.
+     */
+    bool update_unused_while_pending_descriptors = false;
     /** Indexing descriptor arrays with a value that differs between invocations. */
     bool non_uniform_descriptor_indexing = false;
 

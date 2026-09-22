@@ -437,6 +437,13 @@ Opal::Expected<Rndr::Forge::DescriptorSetLayout, Rndr::ErrorCode> Rndr::Forge::D
             }
             has_update_after_bind = true;
         }
+        if (!!(source.flags & DescriptorBindingFlagBits::UpdateUnusedWhilePending) && !features.update_unused_while_pending_descriptors)
+        {
+            RNDR_LOG_ERROR(
+                "Forge: an update unused while pending binding needs the device created with "
+                "DeviceFeatures::update_unused_while_pending_descriptors");
+            return Result(ErrorCode::InvalidArgument);
+        }
         if (!!(source.flags & DescriptorBindingFlagBits::PartiallyBound) && !features.partially_bound_descriptors)
         {
             RNDR_LOG_ERROR("Forge: a partially bound binding needs the device created with DeviceFeatures::partially_bound_descriptors");
