@@ -785,6 +785,14 @@ Opal::Expected<Rndr::Forge::Pipeline, Rndr::ErrorCode> Rndr::Forge::Pipeline::Cr
         RNDR_LOG_ERROR("Forge: clamping depth needs the device created with DeviceFeatures::depth_clamp");
         return Result(ErrorCode::InvalidArgument);
     }
+    // The static half of what CmdSetDepthBias already refuses. A pipeline that leaves the bias dynamic is
+    // not checked here: the value in the desc is then ignored, and the command supplies one of its own.
+    if (desc.rasterizer.depth_bias_enabled && desc.rasterizer.depth_bias_clamp != 0.0f &&
+        !(desc.dynamic_state & DynamicStateBits::DepthBias) && !device.GetFeatures().depth_bias_clamp)
+    {
+        RNDR_LOG_ERROR("Forge: clamping the depth bias needs the device created with DeviceFeatures::depth_bias_clamp");
+        return Result(ErrorCode::InvalidArgument);
+    }
 
     RNDR_FORGE_TRANSLATE_EXPECTED(polygon_mode, ToVkPolygonMode(desc.rasterizer.fill_mode), "RasterizerDesc::fill_mode", Result);
     RNDR_FORGE_TRANSLATE_EXPECTED(cull_mode, ToVkCullMode(desc.rasterizer.cull_mode), "RasterizerDesc::cull_mode", Result);
