@@ -7357,6 +7357,161 @@ Forge::GraphicsPipelineDesc MakePushedColorPipelineDesc(const Forge::Shader& ver
 
 }  // namespace
 
+namespace
+{
+
+/**
+ * One push constant block read by both stages: the vertex stage shifts the geometry by the first half of it
+ * and the fragment stage colours it with the second. What comes back therefore says which half of the block
+ * arrived, and the two halves are pushed together or one at a time depending on the section.
+ */
+constexpr const char* k_two_stage_push_source = R"(
+struct StagePush
+{
+    float2 shift;
+    float2 padding;
+    float4 color;
+};
+[[vk::push_constant]] StagePush push;
+
+[shader("vertex")]
+float4 main_push_vertex(float3 position : POSITION) : SV_Position
+{
+    return float4(position.xy + push.shift, position.z, 1.0);
+}
+
+[shader("fragment")]
+float4 main_push_fragment() : SV_Target
+{
+    return push.color;
+}
+)";
+
+/** What that block holds, laid out the way the shader reads it. */
+struct StagePush
+{
+    Vector2f shift{0.0f, 0.0f};
+    Vector2f padding{0.0f, 0.0f};
+    Vector4f color = Vector4f{0.0f, 0.0f, 0.0f, 1.0f};
+};
+
+}  // namespace
+
+TEST_CASE("Forge push constants read by two stages", "[forge]")
+{
+    if (!IsForgeAvailable())
+    {
+        SKIP("No Vulkan device on this machine.");
+    }
+    ForgeFixture fixture;
+    constexpr i32 k_side = 4;
+    constexpr PixelFormat k_format = PixelFormat::R8G8B8A8_UNORM;
+    constexpr ShaderTypeBits k_both_stages = ShaderTypeBits::Vertex | ShaderTypeBits::Fragment;
+
+    const Forge::Shader vertex_shader = ForgeTest::Unwrap(Forge::Shader::FromSourceInMemory(
+        fixture.device, k_two_stage_push_source, {.entry_point = "main_push_vertex", .cache = GetShaderCache()}));
+    const Forge::Shader fragment_shader = ForgeTest::Unwrap(Forge::Shader::FromSourceInMemory(
+        fixture.device, k_two_stage_push_source, {.entry_point = "main_push_fragment", .cache = GetShaderCache()}));
+
+    // Built from reflection rather than written out: both stages declare the block, which is what makes the
+    // merge worth asking about.
+    const Opal::Ref<const Forge::Shader> shaders[] = {vertex_shader, fragment_shader};
+    const Opal::DynamicArray<Forge::PushConstantRange> ranges = Forge::PushConstantRangesFromShaders({shaders, 2});
+    REQUIRE(ranges.GetSize() == 1);
+    INFO("range offset " << ranges[0].offset << " size " << ranges[0].size);
+    REQUIRE(ranges[0].offset == 0);
+    REQUIRE(ranges[0].size == sizeof(StagePush));
+    REQUIRE(!!(ranges[0].shader_stages & ShaderTypeBits::Vertex));
+    REQUIRE(!!(ranges[0].shader_stages & ShaderTypeBits::Fragment));
+
+    Forge::GraphicsPipelineDesc pipeline_desc;
+    pipeline_desc.vertex_shader = vertex_shader;
+    pipeline_desc.fragment_shader = fragment_shader;
+    pipeline_desc.rasterizer.cull_mode = Face::None;
+    pipeline_desc.vertex_input.AddBinding(0, 3 * sizeof(f32), DataRepetition::PerVertex);
+    REQUIRE(pipeline_desc.vertex_input.AddAttribute(0, 0, PixelFormat::R32G32B32_SFLOAT, 0) == ErrorCode::Success);
+    pipeline_desc.push_constant_ranges.PushBack(ranges[0]);
+    pipeline_desc.color_blend_attachments.PushBack(Forge::ColorBlendDesc{});
+    pipeline_desc.color_attachment_formats.PushBack(k_format);
+    const Forge::Pipeline pipeline = ForgeTest::Unwrap(Forge::Pipeline::Create(fixture.device, pipeline_desc));
+
+    // The left half of the target, which the shift in the block moves to the right half when it is read.
+    const Forge::Buffer quad = MakeQuadBuffer(fixture.device, MakeLeftHalfQuad(0.0f));
+
+    /** Draw the quad once, pushing the block however the section says, and hand back the target. */
+    auto draw_pushing = [&](auto&& push_the_block)
+    {
+        Forge::Texture color = MakeColorTarget(fixture.device, k_side, k_format);
+        const ErrorCode submit_status = Forge::ImmediateSubmit(
+            fixture.device, fixture.GetQueue(),
+            [&](Forge::CommandBuffer& command_buffer)
+            {
+                REQUIRE(command_buffer.CmdTextureBarrier(Forge::TextureBarrier::ToColorAttachment(color)) == ErrorCode::Success);
+                const Forge::RenderingDesc rendering_desc{
+                    .render_area_extent = {k_side, k_side},
+                    .color_attachments = {Forge::RenderingAttachmentDesc{.texture = color,
+                                                                         .load_operation = Forge::AttachmentLoadOperation::Clear,
+                                                                         .store_operation = Forge::AttachmentStoreOperation::Store,
+                                                                         .clear_value = Vector4f{0.0f, 0.0f, 0.0f, 1.0f}}}};
+                REQUIRE(command_buffer.CmdBeginRendering(rendering_desc) == ErrorCode::Success);
+                REQUIRE(command_buffer.CmdSetViewport(Vector2f::Zero(), {k_side, k_side}) == ErrorCode::Success);
+                REQUIRE(command_buffer.CmdSetScissor(Vector2i::Zero(), {k_side, k_side}) == ErrorCode::Success);
+                REQUIRE(command_buffer.CmdBindPipeline(pipeline) == ErrorCode::Success);
+                push_the_block(command_buffer);
+                REQUIRE(command_buffer.CmdBindVertexBuffer(quad, 0) == ErrorCode::Success);
+                REQUIRE(command_buffer.CmdDraw(6) == ErrorCode::Success);
+                REQUIRE(command_buffer.CmdEndRendering() == ErrorCode::Success);
+            });
+        REQUIRE(submit_status == ErrorCode::Success);
+
+        Opal::DynamicArray<u8> pixels(k_side * k_side * 4);
+        REQUIRE(Forge::ReadBackTexture(fixture.device, fixture.GetQueue(), color, pixels, 0, Forge::ImageLayout::TransferSource) ==
+                ErrorCode::Success);
+        return pixels;
+    };
+
+    /** The four channels of one texel of that readback. */
+    auto texel_at = [&](const Opal::DynamicArray<u8>& pixels, i32 x, i32 y)
+    {
+        const i32 base = (y * k_side + x) * 4;
+        return Texel{static_cast<i32>(pixels[base]), static_cast<i32>(pixels[base + 1]), static_cast<i32>(pixels[base + 2]),
+                     static_cast<i32>(pixels[base + 3])};
+    };
+
+    SECTION("One push feeds the stage that reads each half of the block")
+    {
+        const StagePush block{.shift = {0.0f, 0.0f}, .color = ByteColor(0, 255, 0, 255)};
+        const Opal::DynamicArray<u8> pixels = draw_pushing(
+            [&](Forge::CommandBuffer& command_buffer)
+            { REQUIRE(command_buffer.CmdPushConstants(pipeline, k_both_stages, Opal::AsBytes(block)) == ErrorCode::Success); });
+        // The quad stayed where it was, in the colour the fragment stage read out of the same block.
+        REQUIRE(texel_at(pixels, 0, 0) == Texel{0, 255, 0, 255});
+        REQUIRE(texel_at(pixels, 1, 3) == Texel{0, 255, 0, 255});
+        REQUIRE(texel_at(pixels, 2, 0) == Texel{0, 0, 0, 255});
+        REQUIRE(texel_at(pixels, 3, 3) == Texel{0, 0, 0, 255});
+    }
+    SECTION("Each half of the block is written at the offset it sits at")
+    {
+        // Two calls instead of one, the second at a non-zero offset. The shift moves the quad to the right
+        // half, so a colour written at the wrong offset would land in the shift and move it somewhere else
+        // again - the two halves cannot be confused without the picture changing.
+        const Vector2f shift[2] = {{1.0f, 0.0f}, {0.0f, 0.0f}};
+        const Vector4f color = ByteColor(255, 0, 0, 255);
+        const Opal::DynamicArray<u8> pixels = draw_pushing(
+            [&](Forge::CommandBuffer& command_buffer)
+            {
+                REQUIRE(command_buffer.CmdPushConstants(pipeline, k_both_stages, Opal::AsBytes(shift), 0) == ErrorCode::Success);
+                REQUIRE(command_buffer.CmdPushConstants(pipeline, k_both_stages, Opal::AsBytes(color),
+                                                        static_cast<u32>(offsetof(StagePush, color))) == ErrorCode::Success);
+            });
+        REQUIRE(texel_at(pixels, 0, 0) == Texel{0, 0, 0, 255});
+        REQUIRE(texel_at(pixels, 1, 3) == Texel{0, 0, 0, 255});
+        REQUIRE(texel_at(pixels, 2, 0) == Texel{255, 0, 0, 255});
+        REQUIRE(texel_at(pixels, 3, 3) == Texel{255, 0, 0, 255});
+    }
+    REQUIRE_NO_VALIDATION_ERROR(fixture);
+}
+
 TEST_CASE("Forge attachment load and store operations", "[forge]")
 {
     if (!IsForgeAvailable())
