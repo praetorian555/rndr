@@ -175,6 +175,12 @@ enum class PrimitiveTopology
      */
     TriangleStrip,
 
+    /**
+     * A list of patches for the tessellation stages to subdivide, each of as many vertices as the pipeline
+     * says. Only a pipeline with those stages can draw one, and they can draw nothing else.
+     */
+    Patch,
+
     /** Represents number of elements in the enum. */
     EnumCount
 };
@@ -400,7 +406,10 @@ enum class ShaderTypeBits : u32
     Compute = 4,
     Task = 8,
     Mesh = 16,
-    AllGraphics = 32
+    AllGraphics = 32,
+    Geometry = 64,
+    TessellationControl = 128,
+    TessellationEvaluation = 256
 };
 OPAL_ENUM_CLASS_FLAGS(ShaderTypeBits);
 

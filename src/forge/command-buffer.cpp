@@ -1197,6 +1197,18 @@ static VkShaderStageFlags ToVkShaderStageFlags(Rndr::ShaderTypeBits stages)
     {
         flags |= VK_SHADER_STAGE_MESH_BIT_EXT;
     }
+    if (!!(stages & Rndr::ShaderTypeBits::Geometry))
+    {
+        flags |= VK_SHADER_STAGE_GEOMETRY_BIT;
+    }
+    if (!!(stages & Rndr::ShaderTypeBits::TessellationControl))
+    {
+        flags |= VK_SHADER_STAGE_TESSELLATION_CONTROL_BIT;
+    }
+    if (!!(stages & Rndr::ShaderTypeBits::TessellationEvaluation))
+    {
+        flags |= VK_SHADER_STAGE_TESSELLATION_EVALUATION_BIT;
+    }
     return flags;
 }
 

@@ -25,6 +25,12 @@ static Opal::Optional<VkShaderStageFlagBits> ToNativeShaderStage(SpvReflectShade
             return Opal::Optional<VkShaderStageFlagBits>(VK_SHADER_STAGE_TASK_BIT_EXT);
         case SPV_REFLECT_SHADER_STAGE_MESH_BIT_EXT:
             return Opal::Optional<VkShaderStageFlagBits>(VK_SHADER_STAGE_MESH_BIT_EXT);
+        case SPV_REFLECT_SHADER_STAGE_GEOMETRY_BIT:
+            return Opal::Optional<VkShaderStageFlagBits>(VK_SHADER_STAGE_GEOMETRY_BIT);
+        case SPV_REFLECT_SHADER_STAGE_TESSELLATION_CONTROL_BIT:
+            return Opal::Optional<VkShaderStageFlagBits>(VK_SHADER_STAGE_TESSELLATION_CONTROL_BIT);
+        case SPV_REFLECT_SHADER_STAGE_TESSELLATION_EVALUATION_BIT:
+            return Opal::Optional<VkShaderStageFlagBits>(VK_SHADER_STAGE_TESSELLATION_EVALUATION_BIT);
         default:
             return {};
     }
@@ -44,8 +50,38 @@ static Opal::Optional<Rndr::ShaderTypeBits> ToShaderTypeBits(SpvReflectShaderSta
             return Opal::Optional<Rndr::ShaderTypeBits>(Rndr::ShaderTypeBits::Task);
         case SPV_REFLECT_SHADER_STAGE_MESH_BIT_EXT:
             return Opal::Optional<Rndr::ShaderTypeBits>(Rndr::ShaderTypeBits::Mesh);
+        case SPV_REFLECT_SHADER_STAGE_GEOMETRY_BIT:
+            return Opal::Optional<Rndr::ShaderTypeBits>(Rndr::ShaderTypeBits::Geometry);
+        case SPV_REFLECT_SHADER_STAGE_TESSELLATION_CONTROL_BIT:
+            return Opal::Optional<Rndr::ShaderTypeBits>(Rndr::ShaderTypeBits::TessellationControl);
+        case SPV_REFLECT_SHADER_STAGE_TESSELLATION_EVALUATION_BIT:
+            return Opal::Optional<Rndr::ShaderTypeBits>(Rndr::ShaderTypeBits::TessellationEvaluation);
         default:
             return {};
+    }
+}
+
+/**
+ * The device feature a stage is behind, or null for one every device has. A module of such a stage declares
+ * the SPIR-V capability, and a capability the device did not enable is refused by the validation layer and
+ * undefined without one - so it is named here, at the shader, rather than at the pipeline that would have
+ * used it.
+ */
+static const char* MissingStageFeature(Rndr::ShaderTypeBits stage, const Rndr::Forge::DeviceFeatures& features)
+{
+    switch (stage)
+    {
+        case Rndr::ShaderTypeBits::Geometry:
+            return features.geometry_shader ? nullptr : "geometry_shader";
+        case Rndr::ShaderTypeBits::TessellationControl:
+        case Rndr::ShaderTypeBits::TessellationEvaluation:
+            return features.tessellation_shader ? nullptr : "tessellation_shader";
+        case Rndr::ShaderTypeBits::Mesh:
+            return features.mesh_shader ? nullptr : "mesh_shader";
+        case Rndr::ShaderTypeBits::Task:
+            return features.task_shader ? nullptr : "task_shader";
+        default:
+            return nullptr;
     }
 }
 
@@ -334,6 +370,11 @@ Opal::Expected<Rndr::Forge::Shader, Rndr::ErrorCode> Rndr::Forge::Shader::FromSp
     }
     shader.m_native_stage = native_stage.GetValue();
     shader.m_stage = stage.GetValue();
+    if (const char* missing_feature = MissingStageFeature(shader.m_stage, device.GetFeatures()); missing_feature != nullptr)
+    {
+        RNDR_LOG_ERROR("Forge: a shader of this stage needs the device created with DeviceFeatures::{}", missing_feature);
+        return Result(ErrorCode::InvalidArgument);
+    }
 
     // Read while the reflect module is already open, so nothing is reflected twice and no reflection state
     // outlives this constructor - the name below is copied, not pointed at.

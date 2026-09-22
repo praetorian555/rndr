@@ -57,7 +57,9 @@ struct DeviceFeatures
     bool depth_clamp = false;
     /** Clamp the depth bias, which RasterizerDesc::depth_bias_clamp asks for. */
     bool depth_bias_clamp = false;
+    /** A geometry stage between the vertex and the fragment one, which GraphicsPipelineDesc::geometry_shader names. */
     bool geometry_shader = false;
+    /** The two tessellation stages, and with them PrimitiveTopology::Patch. */
     bool tessellation_shader = false;
     /** Blend state per color attachment rather than one shared by all of them. */
     bool independent_blend = false;

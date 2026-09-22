@@ -24,6 +24,8 @@ static Opal::Optional<VkPrimitiveTopology> ToVkPrimitiveTopology(Rndr::Primitive
             return Opal::Optional<VkPrimitiveTopology>(VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST);
         case Rndr::PrimitiveTopology::TriangleStrip:
             return Opal::Optional<VkPrimitiveTopology>(VK_PRIMITIVE_TOPOLOGY_TRIANGLE_STRIP);
+        case Rndr::PrimitiveTopology::Patch:
+            return Opal::Optional<VkPrimitiveTopology>(VK_PRIMITIVE_TOPOLOGY_PATCH_LIST);
         default:
             return {};
     }
@@ -225,6 +227,18 @@ static VkShaderStageFlags ToVkShaderStageFlags(Rndr::ShaderTypeBits stages)
     if (!!(stages & Rndr::ShaderTypeBits::Mesh))
     {
         flags |= VK_SHADER_STAGE_MESH_BIT_EXT;
+    }
+    if (!!(stages & Rndr::ShaderTypeBits::Geometry))
+    {
+        flags |= VK_SHADER_STAGE_GEOMETRY_BIT;
+    }
+    if (!!(stages & Rndr::ShaderTypeBits::TessellationControl))
+    {
+        flags |= VK_SHADER_STAGE_TESSELLATION_CONTROL_BIT;
+    }
+    if (!!(stages & Rndr::ShaderTypeBits::TessellationEvaluation))
+    {
+        flags |= VK_SHADER_STAGE_TESSELLATION_EVALUATION_BIT;
     }
     return flags;
 }
@@ -668,6 +682,35 @@ Opal::Expected<Rndr::Forge::Pipeline, Rndr::ErrorCode> Rndr::Forge::Pipeline::Cr
         RNDR_LOG_ERROR("Forge: a task shader needs a mesh shader beside it");
         return Result(ErrorCode::InvalidArgument);
     }
+    // The optional stages of the vertex pipeline. Vulkan has no shape for a mesh pipeline with any of them,
+    // tessellation is two stages or none, and the Patch topology exists for those two stages alone - all of
+    // which the validation layer reports late and in Vulkan's words, so it is said here in the desc's.
+    const bool has_geometry = desc.geometry_shader != nullptr;
+    const bool has_tessellation_control = desc.tessellation_control_shader != nullptr;
+    const bool has_tessellation_evaluation = desc.tessellation_evaluation_shader != nullptr;
+    const bool has_tessellation = has_tessellation_control || has_tessellation_evaluation;
+    if (has_mesh && (has_geometry || has_tessellation))
+    {
+        RNDR_LOG_ERROR("Forge: a mesh pipeline has no geometry or tessellation stage");
+        return Result(ErrorCode::InvalidArgument);
+    }
+    if (has_tessellation_control != has_tessellation_evaluation)
+    {
+        RNDR_LOG_ERROR("Forge: tessellation needs both a control and an evaluation shader");
+        return Result(ErrorCode::InvalidArgument);
+    }
+    if (has_tessellation != (desc.topology == PrimitiveTopology::Patch))
+    {
+        RNDR_LOG_ERROR("Forge: the tessellation stages and PrimitiveTopology::Patch go together, and this desc has one without the other");
+        return Result(ErrorCode::InvalidArgument);
+    }
+    const u32 max_patch_size = device.GetPhysicalDevice().GetProperties().limits.maxTessellationPatchSize;
+    if (has_tessellation && (desc.patch_control_points == 0 || desc.patch_control_points > max_patch_size))
+    {
+        RNDR_LOG_ERROR("Forge: a patch of {} control points is outside what this device tessellates, which is 1 to {}",
+                       desc.patch_control_points, max_patch_size);
+        return Result(ErrorCode::InvalidArgument);
+    }
 
     // The stages this pipeline has, gathered before anything points into a list: pMapEntries and pData have to
     // stay put until vkCreateGraphicsPipelines returns, and a list still growing would move them. Same trap
@@ -676,6 +719,15 @@ Opal::Expected<Rndr::Forge::Pipeline, Rndr::ErrorCode> Rndr::Forge::Pipeline::Cr
     if (has_vertex)
     {
         stage_shaders.PushBack(Opal::Ref<const Shader>(*desc.vertex_shader));
+    }
+    if (has_tessellation)
+    {
+        stage_shaders.PushBack(Opal::Ref<const Shader>(*desc.tessellation_control_shader));
+        stage_shaders.PushBack(Opal::Ref<const Shader>(*desc.tessellation_evaluation_shader));
+    }
+    if (has_geometry)
+    {
+        stage_shaders.PushBack(Opal::Ref<const Shader>(*desc.geometry_shader));
     }
     if (has_task)
     {
@@ -764,6 +816,11 @@ Opal::Expected<Rndr::Forge::Pipeline, Rndr::ErrorCode> Rndr::Forge::Pipeline::Cr
     const VkPipelineInputAssemblyStateCreateInfo input_assembly_state{
         .sType = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO,
         .topology = topology,
+    };
+    // Only pointed at when the stages are there; a pipeline without them has to leave the pointer null.
+    const VkPipelineTessellationStateCreateInfo tessellation_state{
+        .sType = VK_STRUCTURE_TYPE_PIPELINE_TESSELLATION_STATE_CREATE_INFO,
+        .patchControlPoints = desc.patch_control_points,
     };
 
     const VkPipelineViewportStateCreateInfo viewport_state{
@@ -972,6 +1029,7 @@ Opal::Expected<Rndr::Forge::Pipeline, Rndr::ErrorCode> Rndr::Forge::Pipeline::Cr
         .pStages = shader_stages.GetData(),
         .pVertexInputState = &vertex_input_state,
         .pInputAssemblyState = &input_assembly_state,
+        .pTessellationState = has_tessellation ? &tessellation_state : nullptr,
         .pViewportState = &viewport_state,
         .pRasterizationState = &rasterization_state,
         .pMultisampleState = &multisample_state,

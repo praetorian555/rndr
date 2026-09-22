@@ -55,6 +55,18 @@ VkShaderStageFlags FromShaderTypeBits(Rndr::ShaderTypeBits shader_types)
     {
         flags |= VK_SHADER_STAGE_MESH_BIT_EXT;
     }
+    if (!!(shader_types & Rndr::ShaderTypeBits::Geometry))
+    {
+        flags |= VK_SHADER_STAGE_GEOMETRY_BIT;
+    }
+    if (!!(shader_types & Rndr::ShaderTypeBits::TessellationControl))
+    {
+        flags |= VK_SHADER_STAGE_TESSELLATION_CONTROL_BIT;
+    }
+    if (!!(shader_types & Rndr::ShaderTypeBits::TessellationEvaluation))
+    {
+        flags |= VK_SHADER_STAGE_TESSELLATION_EVALUATION_BIT;
+    }
     if (!!(shader_types & Rndr::ShaderTypeBits::AllGraphics))
     {
         flags |= VK_SHADER_STAGE_ALL_GRAPHICS;

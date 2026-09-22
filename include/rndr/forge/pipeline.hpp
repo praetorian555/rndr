@@ -202,6 +202,22 @@ struct GraphicsPipelineDesc
     Opal::Ref<const Shader> fragment_shader;
     Opal::Ref<const Shader> task_shader;
     Opal::Ref<const Shader> mesh_shader;
+    /**
+     * The optional stages of the vertex pipeline, each behind a device feature that Shader::Create has
+     * already checked. A mesh pipeline has none of them and a desc naming both is refused.
+     */
+    Opal::Ref<const Shader> geometry_shader;
+    /**
+     * Tessellation is both of these or neither, and comes with PrimitiveTopology::Patch: a desc with the
+     * stages and another topology, or the topology and no stages, is refused either way.
+     */
+    Opal::Ref<const Shader> tessellation_control_shader;
+    Opal::Ref<const Shader> tessellation_evaluation_shader;
+    /**
+     * Vertices in one patch, read only when the tessellation stages are present. Zero, or more than the
+     * device's maxTessellationPatchSize, is refused.
+     */
+    u32 patch_control_points = 3;
 
     Opal::DynamicArray<Opal::Ref<const DescriptorSetLayout>> descriptor_set_layouts;
     Opal::DynamicArray<PushConstantRange> push_constant_ranges;
