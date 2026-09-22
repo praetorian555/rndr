@@ -4062,6 +4062,61 @@ TEST_CASE("Forge multisampled draw resolved to one sample", "[forge]")
             }
         }
     }
+    SECTION("A resolve works at every sample count this device supports")
+    {
+        // No geometry: every sample of the source is cleared to the same value, so the average has to be
+        // that value exactly whatever the count is - which is what lets one section cover the sample counts
+        // ToVkSampleCount maps and the averaging section above does not reach.
+        constexpr Forge::SampleCount k_counts[] = {Forge::SampleCount::Count2,  Forge::SampleCount::Count4,  Forge::SampleCount::Count8,
+                                                   Forge::SampleCount::Count16, Forge::SampleCount::Count32, Forge::SampleCount::Count64};
+        constexpr VkSampleCountFlagBits k_native_counts[] = {VK_SAMPLE_COUNT_2_BIT,  VK_SAMPLE_COUNT_4_BIT,  VK_SAMPLE_COUNT_8_BIT,
+                                                             VK_SAMPLE_COUNT_16_BIT, VK_SAMPLE_COUNT_32_BIT, VK_SAMPLE_COUNT_64_BIT};
+        constexpr Vector4f k_clear{0.2f, 0.4f, 0.6f, 1.0f};
+        bool tried_one = false;
+        for (i32 i = 0; i < 6; ++i)
+        {
+            if ((limits.framebufferColorSampleCounts & k_native_counts[i]) == 0)
+            {
+                continue;
+            }
+            tried_one = true;
+            INFO("sample count " << static_cast<i32>(k_counts[i]));
+            Forge::Texture multi = make_texture(k_counts[i], k_attachment_usage, k_format);
+            Forge::Texture resolved_texture = make_texture(Forge::SampleCount::Count1, k_resolved_usage, k_format);
+            REQUIRE(Forge::ImmediateSubmit(
+                        fixture.device, fixture.GetQueue(),
+                        [&](Forge::CommandBuffer& command_buffer)
+                        {
+                            REQUIRE(command_buffer.CmdTextureBarrier(Forge::TextureBarrier::ToColorAttachment(multi)) ==
+                                    ErrorCode::Success);
+                            const Forge::RenderingDesc rendering_desc{
+                                .render_area_extent = {k_side, k_side},
+                                .color_attachments = {Forge::RenderingAttachmentDesc{
+                                    .texture = multi,
+                                    .load_operation = Forge::AttachmentLoadOperation::Clear,
+                                    .store_operation = Forge::AttachmentStoreOperation::Store,
+                                    .clear_value = k_clear}}};
+                            REQUIRE(command_buffer.CmdBeginRendering(rendering_desc) == ErrorCode::Success);
+                            REQUIRE(command_buffer.CmdEndRendering() == ErrorCode::Success);
+                            REQUIRE(command_buffer.CmdTextureBarrier(Forge::TextureBarrier::ToTransferSource(multi)) ==
+                                    ErrorCode::Success);
+                            REQUIRE(command_buffer.CmdTextureBarrier(Forge::TextureBarrier::ToTransferDestination(resolved_texture)) ==
+                                    ErrorCode::Success);
+                            const Forge::TextureCopyRegion whole{};
+                            REQUIRE(command_buffer.CmdResolveTexture(multi, resolved_texture, {&whole, 1}) == ErrorCode::Success);
+                        }) == ErrorCode::Success);
+
+            const Opal::DynamicArray<u8> pixels = ReadColorPixels(fixture, resolved_texture, k_side);
+            // Every sample was cleared to the same value, so the average is exact but for rounding.
+            REQUIRE(Opal::Abs(static_cast<i32>(pixels[0]) - 51) <= 1);
+            REQUIRE(Opal::Abs(static_cast<i32>(pixels[1]) - 102) <= 1);
+            REQUIRE(Opal::Abs(static_cast<i32>(pixels[2]) - 153) <= 1);
+        }
+        if (!tried_one)
+        {
+            SKIP("This device supports no sample count above one besides four.");
+        }
+    }
     SECTION("A resolve out of a texture with one sample is refused")
     {
         Forge::Texture single = make_texture(Forge::SampleCount::Count1, k_attachment_usage, k_format);
@@ -4416,6 +4471,19 @@ struct PartialInput {
 [shader("vertex")]
 float4 main_vertex(PartialInput input) : SV_Position {
     return float4(input.position, 0.0, 1.0);
+}
+)";
+
+/** A binding of a fixed size the shader declares and reflects, rather than the unbounded kind bindless uses. */
+constexpr const char* k_fixed_array_source = R"(
+[[vk::binding(0, 0)]] Sampler2D textures[4];
+[[vk::binding(1, 0)]] RWStructuredBuffer<float4> output;
+
+[shader("compute")]
+[numthreads(1, 1, 1)]
+void main_fixed_array()
+{
+    output[0] = textures[0].SampleLevel(float2(0.0, 0.0), 0.0);
 }
 )";
 
@@ -4782,6 +4850,33 @@ TEST_CASE("Forge descriptor bindings checked against the shader", "[forge]")
         REQUIRE(desc.AddBinding(0, Forge::DescriptorType::StorageBuffer, 1, ShaderTypeBits::Fragment) == ErrorCode::Success);
         REQUIRE(desc.AddBinding(1, Forge::DescriptorType::CombinedImageSampler, 1, ShaderTypeBits::Fragment) == ErrorCode::Success);
         REQUIRE_FALSE(Forge::DescriptorSetLayout::Create(fixture.device, desc).HasValue());
+    }
+    SECTION("A binding sized for fewer descriptors than the shader indexes is refused")
+    {
+        // A fixed array of four, not the unbounded kind bindless writes - the shader's declared size is
+        // what reflection reports back as descriptor_count, and a layout naming fewer of them is refused
+        // rather than left for the driver to read past the end of what it was given.
+        const Forge::Shader shader = ForgeTest::Unwrap(Forge::Shader::FromSourceInMemory(
+            fixture.device, k_fixed_array_source, {.entry_point = "main_fixed_array", .cache = GetShaderCache()}));
+        Forge::DescriptorSetLayoutDesc desc;
+        desc.shaders.PushBack(Opal::Ref<const Forge::Shader>(shader));
+        REQUIRE(desc.AddBinding(0, Forge::DescriptorType::CombinedImageSampler, 2, ShaderTypeBits::Compute) == ErrorCode::Success);
+        REQUIRE(desc.AddBinding(1, Forge::DescriptorType::StorageBuffer, 1, ShaderTypeBits::Compute) == ErrorCode::Success);
+        REQUIRE_FALSE(Forge::DescriptorSetLayout::Create(fixture.device, desc).HasValue());
+
+        // The same shader against a layout that names at least as many is accepted - four exactly, and more
+        // than four, which is what a bindless array sized past what one shader happens to index looks like.
+        Forge::DescriptorSetLayoutDesc exact_desc;
+        exact_desc.shaders.PushBack(Opal::Ref<const Forge::Shader>(shader));
+        REQUIRE(exact_desc.AddBinding(0, Forge::DescriptorType::CombinedImageSampler, 4, ShaderTypeBits::Compute) == ErrorCode::Success);
+        REQUIRE(exact_desc.AddBinding(1, Forge::DescriptorType::StorageBuffer, 1, ShaderTypeBits::Compute) == ErrorCode::Success);
+        REQUIRE(ForgeTest::Unwrap(Forge::DescriptorSetLayout::Create(fixture.device, exact_desc)).IsValid());
+
+        Forge::DescriptorSetLayoutDesc more_desc;
+        more_desc.shaders.PushBack(Opal::Ref<const Forge::Shader>(shader));
+        REQUIRE(more_desc.AddBinding(0, Forge::DescriptorType::CombinedImageSampler, 8, ShaderTypeBits::Compute) == ErrorCode::Success);
+        REQUIRE(more_desc.AddBinding(1, Forge::DescriptorType::StorageBuffer, 1, ShaderTypeBits::Compute) == ErrorCode::Success);
+        REQUIRE(ForgeTest::Unwrap(Forge::DescriptorSetLayout::Create(fixture.device, more_desc)).IsValid());
     }
     SECTION("A binding whose stages leave out the one that reads it is refused")
     {
@@ -8563,6 +8658,37 @@ u8 ReadStencilValue(ForgeFixture& fixture, Forge::Texture& depth_stencil)
 }
 
 /**
+ * The depth value the device ended up holding, read out of the depth aspect of a combined format rather
+ * than the whole-format read a plain D32_SFLOAT texture's tests use. D24_UNORM_S8_UINT copies its depth
+ * aspect as X8_D24_UNORM_PACK32 - the same four bytes a whole-format copy would read, with the 24 bit value
+ * in the low bits and the high byte unused - so unpacking it into [0, 1] is this function's own job.
+ */
+f32 ReadDepthValue(ForgeFixture& fixture, Forge::Texture& depth_stencil)
+{
+    constexpr i32 k_texel_count = k_table_side * k_table_side;
+    const Forge::Buffer staging = ForgeTest::Unwrap(Forge::Buffer::Create(fixture.device,
+                                {.size = k_texel_count * GetPixelSize(k_table_depth_stencil_format),
+                                 .usage = Forge::BufferUsageBits::TransferDestination,
+                                 .host_access = Forge::HostAccess::Random}));
+    const Forge::BufferTextureCopyRegion region{.texture_subresource = {.aspect_mask = Forge::ImageAspectBits::Depth},
+                                                .texture_extent = {k_table_side, k_table_side, 1}};
+    REQUIRE(Forge::ImmediateSubmit(
+                fixture.device, fixture.GetQueue(),
+                [&](Forge::CommandBuffer& command_buffer)
+                {
+                    REQUIRE(command_buffer.CmdTextureBarrier(Forge::TextureBarrier::ToTransferSource(depth_stencil)) == ErrorCode::Success);
+                    REQUIRE(command_buffer.CmdCopyTextureToBuffer(depth_stencil, staging, {&region, 1}) == ErrorCode::Success);
+                }) == ErrorCode::Success);
+    Opal::DynamicArray<u32> words(k_texel_count);
+    REQUIRE(staging.Read({reinterpret_cast<u8*>(words.GetData()), words.GetSize() * sizeof(u32)}) == ErrorCode::Success);
+    for (i32 i = 1; i < k_texel_count; ++i)
+    {
+        REQUIRE(words[i] == words[0]);
+    }
+    return static_cast<f32>(words[0] & 0x00FFFFFF) / 16777215.0f;
+}
+
+/**
  * A pipeline that covers the whole target, writes no colour, and applies `pass_operation` to the stencil
  * buffer wherever it draws. Comparator::Always, so nothing about the test decides whether the operation runs.
  */
@@ -9863,6 +9989,27 @@ TEST_CASE("Forge texture shapes past a flat two dimensional one", "[forge]")
         REQUIRE(sampled.x == Catch::Approx(0.0f).margin(0.01));
         REQUIRE(sampled.y == Catch::Approx(1.0f).margin(0.01));
     }
+    SECTION("A view over one array layer samples it as a flat texture of its own")
+    {
+        // Two layers with nothing in common, and a flat Texture2D view over the range that names the second
+        // one only. A view that ignored the range, or read the image's total layer count instead, would
+        // hand back the first layer's colour.
+        Forge::Texture layered = ForgeTest::Unwrap(
+            Forge::Texture::Create(fixture.device, {.format = k_format,
+                                                    .width = 1,
+                                                    .height = 1,
+                                                    .array_layer_count = 2,
+                                                    .usage = Forge::TextureUsageBits::Sampled |
+                                                             Forge::TextureUsageBits::TransferDestination,
+                                                    .subresource_range = {.first_array_layer = 1, .array_layer_count = 1}}));
+        const Opal::DynamicArray<u8> layers = MakeTwoTexelRow();
+        UploadMip(fixture.device, fixture.GetQueue(), layered, {layers.GetData(), layers.GetSize()}, 0);
+
+        const Vector4f sampled = sample_shape(k_combined_sample_source, "main_sample_combined", layered, {0.5f, 0.5f, 0.0f, 0.0f});
+        INFO("rgba " << sampled.x << " " << sampled.y);
+        REQUIRE(sampled.x == Catch::Approx(0.0f).margin(0.01));
+        REQUIRE(sampled.y == Catch::Approx(1.0f).margin(0.01));
+    }
     SECTION("A cube view over a layer count that is not a multiple of six is refused")
     {
         REQUIRE_FALSE(Forge::Texture::Create(fixture.device, {.format = k_format,
@@ -10847,6 +10994,69 @@ TEST_CASE("Forge a depth attachment that is read and not written", "[forge]")
         REQUIRE(command_buffer.CmdBeginRendering(rendering_desc) != ErrorCode::Success);
         REQUIRE(command_buffer.End() == ErrorCode::Success);
     }
+    REQUIRE_NO_VALIDATION_ERROR(fixture);
+}
+
+TEST_CASE("Forge reading the depth aspect of a combined depth-stencil format", "[forge]")
+{
+    if (!IsForgeAvailable())
+    {
+        SKIP("No Vulkan device on this machine.");
+    }
+    ForgeFixture fixture;
+    const Forge::Shader vertex_shader = ForgeTest::Unwrap(Forge::Shader::FromSourceInMemory(
+        fixture.device, k_pushed_color_source, {.entry_point = "main_color_vertex", .cache = GetShaderCache()}));
+    const Forge::Shader fragment_shader = ForgeTest::Unwrap(Forge::Shader::FromSourceInMemory(
+        fixture.device, k_pushed_color_source, {.entry_point = "main_color_fragment", .cache = GetShaderCache()}));
+
+    constexpr f32 k_depth = 0.5f;
+    const Forge::Buffer quad = MakeQuadBuffer(fixture.device, MakeFullTargetQuad(k_depth));
+    const Vector4f unused_color = ByteColor(0, 0, 0, 255);
+
+    Forge::GraphicsPipelineDesc pipeline_desc = MakePushedColorPipelineDesc(vertex_shader, fragment_shader, k_table_color_format);
+    pipeline_desc.depth_stencil.depth_test_enabled = true;
+    pipeline_desc.depth_stencil.depth_write_enabled = true;
+    pipeline_desc.depth_stencil.depth_comparator = Comparator::Always;
+    pipeline_desc.depth_attachment_format = k_table_depth_stencil_format;
+    const Forge::Pipeline pipeline = ForgeTest::Unwrap(Forge::Pipeline::Create(fixture.device, pipeline_desc));
+
+    Forge::Texture color = MakeColorTarget(fixture.device, k_table_side, k_table_color_format);
+    Forge::Texture depth_stencil = MakeStencilTarget(fixture.device);
+
+    // Only the depth attachment is named - the stencil aspect of this same texture is never touched by the
+    // pass, which is legal, and what makes the read below about the depth aspect specifically.
+    REQUIRE(Forge::ImmediateSubmit(
+                fixture.device, fixture.GetQueue(),
+                [&](Forge::CommandBuffer& command_buffer)
+                {
+                    REQUIRE(command_buffer.CmdTextureBarrier(Forge::TextureBarrier::ToColorAttachment(color)) == ErrorCode::Success);
+                    REQUIRE(command_buffer.CmdTextureBarrier(Forge::TextureBarrier::ToDepthStencilAttachment(depth_stencil)) ==
+                            ErrorCode::Success);
+                    const Forge::RenderingDesc rendering_desc{
+                        .render_area_extent = {k_table_side, k_table_side},
+                        .color_attachments = {Forge::RenderingAttachmentDesc{.texture = color,
+                                                                             .load_operation = Forge::AttachmentLoadOperation::Clear,
+                                                                             .store_operation = Forge::AttachmentStoreOperation::Store,
+                                                                             .clear_value = Vector4f{1.0f, 0.0f, 0.0f, 1.0f}}},
+                        .depth_attachment = Forge::RenderingAttachmentDesc{
+                            .texture = depth_stencil,
+                            .load_operation = Forge::AttachmentLoadOperation::Clear,
+                            .store_operation = Forge::AttachmentStoreOperation::Store,
+                            .clear_value = Forge::DepthStencilClearValue{1.0f, 0}}};
+                    REQUIRE(command_buffer.CmdBeginRendering(rendering_desc) == ErrorCode::Success);
+                    REQUIRE(command_buffer.CmdSetViewport(Vector2f::Zero(), {k_table_side, k_table_side}) == ErrorCode::Success);
+                    REQUIRE(command_buffer.CmdSetScissor(Vector2i::Zero(), {k_table_side, k_table_side}) == ErrorCode::Success);
+                    REQUIRE(command_buffer.CmdBindPipeline(pipeline) == ErrorCode::Success);
+                    REQUIRE(command_buffer.CmdBindVertexBuffer(quad, 0) == ErrorCode::Success);
+                    REQUIRE(command_buffer.CmdPushConstants(pipeline, ShaderTypeBits::Fragment, Opal::AsBytes(unused_color)) ==
+                            ErrorCode::Success);
+                    REQUIRE(command_buffer.CmdDraw(6) == ErrorCode::Success);
+                    REQUIRE(command_buffer.CmdEndRendering() == ErrorCode::Success);
+                }) == ErrorCode::Success);
+
+    const f32 depth = ReadDepthValue(fixture, depth_stencil);
+    INFO("depth " << depth);
+    REQUIRE(depth == Catch::Approx(k_depth).margin(0.001));
     REQUIRE_NO_VALIDATION_ERROR(fixture);
 }
 
