@@ -7032,6 +7032,152 @@ Forge::GraphicsPipelineDesc MakePushedColorPipelineDesc(const Forge::Shader& ver
 
 }  // namespace
 
+TEST_CASE("Forge attachment load and store operations", "[forge]")
+{
+    if (!IsForgeAvailable())
+    {
+        SKIP("No Vulkan device on this machine.");
+    }
+    ForgeFixture fixture;
+    constexpr i32 k_side = 4;
+    constexpr PixelFormat k_color_format = PixelFormat::R8G8B8A8_UNORM;
+
+    const Forge::Shader vertex_shader = ForgeTest::Unwrap(Forge::Shader::FromSourceInMemory(
+        fixture.device, k_pushed_color_source, {.entry_point = "main_color_vertex", .cache = GetShaderCache()}));
+    const Forge::Shader fragment_shader = ForgeTest::Unwrap(Forge::Shader::FromSourceInMemory(
+        fixture.device, k_pushed_color_source, {.entry_point = "main_color_fragment", .cache = GetShaderCache()}));
+    const Forge::Pipeline pipeline =
+        ForgeTest::Unwrap(Forge::Pipeline::Create(fixture.device, MakePushedColorPipelineDesc(vertex_shader, fragment_shader, k_color_format)));
+
+    const Forge::Buffer left_quad = MakeQuadBuffer(fixture.device, MakeLeftHalfQuad(0.0f));
+    const Forge::Buffer full_quad = MakeQuadBuffer(fixture.device, MakeFullTargetQuad(0.0f));
+    const Vector4f red = ByteColor(255, 0, 0, 255);
+    const Vector4f green = ByteColor(0, 255, 0, 255);
+
+    /** What one pass does: how it treats what is there, what it draws, and whether it keeps the result. */
+    struct Pass
+    {
+        Forge::AttachmentLoadOperation load_operation = Forge::AttachmentLoadOperation::Clear;
+        Forge::AttachmentStoreOperation store_operation = Forge::AttachmentStoreOperation::Store;
+        Vector4f clear_value = Vector4f{0.0f, 0.0f, 1.0f, 1.0f};
+        /** Null for a pass that only clears, which is what makes the load operation the only thing writing. */
+        const Forge::Buffer* quad = nullptr;
+        Vector4f draw_color = Vector4f{0.0f, 0.0f, 0.0f, 1.0f};
+    };
+
+    /** Run the two passes over one attachment, in order, and hand back what the second one left. */
+    auto render_two_passes = [&](const Pass& first, const Pass& second)
+    {
+        Forge::Texture color = MakeColorTarget(fixture.device, k_side, k_color_format);
+        auto record_pass = [&](Forge::CommandBuffer& command_buffer, const Pass& pass)
+        {
+            const Forge::RenderingDesc rendering_desc{
+                .render_area_extent = {k_side, k_side},
+                .color_attachments = {Forge::RenderingAttachmentDesc{.texture = color,
+                                                                     .load_operation = pass.load_operation,
+                                                                     .store_operation = pass.store_operation,
+                                                                     .clear_value = pass.clear_value}}};
+            REQUIRE(command_buffer.CmdBeginRendering(rendering_desc) == ErrorCode::Success);
+            if (pass.quad != nullptr)
+            {
+                REQUIRE(command_buffer.CmdSetViewport(Vector2f::Zero(), {k_side, k_side}) == ErrorCode::Success);
+                REQUIRE(command_buffer.CmdSetScissor(Vector2i::Zero(), {k_side, k_side}) == ErrorCode::Success);
+                REQUIRE(command_buffer.CmdBindPipeline(pipeline) == ErrorCode::Success);
+                REQUIRE(command_buffer.CmdBindVertexBuffer(*pass.quad, 0) == ErrorCode::Success);
+                REQUIRE(command_buffer.CmdPushConstants(pipeline, ShaderTypeBits::Fragment, Opal::AsBytes(pass.draw_color)) ==
+                        ErrorCode::Success);
+                REQUIRE(command_buffer.CmdDraw(6) == ErrorCode::Success);
+            }
+            REQUIRE(command_buffer.CmdEndRendering() == ErrorCode::Success);
+        };
+
+        REQUIRE(Forge::ImmediateSubmit(
+                    fixture.device, fixture.GetQueue(),
+                    [&](Forge::CommandBuffer& command_buffer)
+                    {
+                        REQUIRE(command_buffer.CmdTextureBarrier(Forge::TextureBarrier::ToColorAttachment(color)) == ErrorCode::Success);
+                        record_pass(command_buffer, first);
+                        // Between the two passes, since the second one reads and writes what the first wrote
+                        // and the layout it sits in is the same on both sides.
+                        REQUIRE(command_buffer.CmdTextureBarrier(Forge::TextureBarrier{
+                                    .stages_must_finish = Forge::PipelineStageBits::ColorAttachmentOutput,
+                                    .stages_must_finish_access = Forge::PipelineStageAccessBits::ColorAttachmentWrite,
+                                    .before_stages_start = Forge::PipelineStageBits::ColorAttachmentOutput,
+                                    .before_stages_start_access = Forge::PipelineStageAccessBits::ColorAttachmentRead |
+                                                                  Forge::PipelineStageAccessBits::ColorAttachmentWrite,
+                                    .old_layout = Forge::ImageLayout::ColorAttachment,
+                                    .new_layout = Forge::ImageLayout::ColorAttachment,
+                                    .texture = color}) == ErrorCode::Success);
+                        record_pass(command_buffer, second);
+                    }) == ErrorCode::Success);
+
+        Opal::DynamicArray<u8> pixels(k_side * k_side * 4);
+        REQUIRE(Forge::ReadBackTexture(fixture.device, fixture.GetQueue(), color, pixels, 0, Forge::ImageLayout::TransferSource) ==
+                ErrorCode::Success);
+        return pixels;
+    };
+
+    /** The four channels of one texel of that readback. */
+    auto texel_at = [&](const Opal::DynamicArray<u8>& pixels, i32 x, i32 y)
+    {
+        const i32 base = (y * k_side + x) * 4;
+        return Texel{static_cast<i32>(pixels[base]), static_cast<i32>(pixels[base + 1]), static_cast<i32>(pixels[base + 2]),
+                     static_cast<i32>(pixels[base + 3])};
+    };
+
+    SECTION("A pass that loads keeps what the one before it stored")
+    {
+        // The first pass clears the whole target to red and stores it; the second loads that and draws green
+        // over the left half only. The right half is the first pass's colour seen through the second one.
+        const Opal::DynamicArray<u8> pixels =
+            render_two_passes({.load_operation = Forge::AttachmentLoadOperation::Clear, .clear_value = red},
+                              {.load_operation = Forge::AttachmentLoadOperation::Load, .quad = &left_quad, .draw_color = green});
+        REQUIRE(texel_at(pixels, 0, 0) == Texel{0, 255, 0, 255});
+        REQUIRE(texel_at(pixels, 1, 2) == Texel{0, 255, 0, 255});
+        REQUIRE(texel_at(pixels, 2, 0) == Texel{255, 0, 0, 255});
+        REQUIRE(texel_at(pixels, 3, 3) == Texel{255, 0, 0, 255});
+    }
+    SECTION("A pass that loads nothing shows only what it drew")
+    {
+        // DontCare on the load: whatever the first pass left is gone, and the draw covers the whole target,
+        // so every texel is the second pass's colour and none of them is the first pass's red.
+        const Opal::DynamicArray<u8> pixels =
+            render_two_passes({.load_operation = Forge::AttachmentLoadOperation::Clear, .clear_value = red},
+                              {.load_operation = Forge::AttachmentLoadOperation::DontCare, .quad = &full_quad, .draw_color = green});
+        for (i32 y = 0; y < k_side; ++y)
+        {
+            for (i32 x = 0; x < k_side; ++x)
+            {
+                INFO("texel " << x << "," << y);
+                REQUIRE(texel_at(pixels, x, y) == Texel{0, 255, 0, 255});
+            }
+        }
+    }
+    SECTION("A pass whose result is not stored leaves the next one to write the attachment")
+    {
+        // What DontCare on the store leaves behind is undefined by definition, so nothing here asserts on it:
+        // what is checked is that the second pass, which clears and draws over the whole target, ends up with
+        // exactly what it wrote.
+        const Opal::DynamicArray<u8> pixels =
+            render_two_passes({.load_operation = Forge::AttachmentLoadOperation::Clear,
+                               .store_operation = Forge::AttachmentStoreOperation::DontCare,
+                               .clear_value = red},
+                              {.load_operation = Forge::AttachmentLoadOperation::Clear,
+                               .clear_value = Vector4f{0.0f, 0.0f, 1.0f, 1.0f},
+                               .quad = &full_quad,
+                               .draw_color = green});
+        for (i32 y = 0; y < k_side; ++y)
+        {
+            for (i32 x = 0; x < k_side; ++x)
+            {
+                INFO("texel " << x << "," << y);
+                REQUIRE(texel_at(pixels, x, y) == Texel{0, 255, 0, 255});
+            }
+        }
+    }
+    REQUIRE_NO_VALIDATION_ERROR(fixture);
+}
+
 TEST_CASE("Forge depth testing", "[forge]")
 {
     if (!IsForgeAvailable())
