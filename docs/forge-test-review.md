@@ -245,7 +245,17 @@ and wide specialization constants, task shaders and the other stages.
 
 **The Opus items are done** on 2026-09-22 - 1, 2, 4, 7, 8, 9, 10, 11, 12, 14, 15 and both halves of 13 -
 one commit per item, with the full `[forge]` and `[forge-window]` set green after each. Items 3 and 21 are
-Fable's and are untouched. The suite went from 89 cases and 15075 assertions to 108 and 17539.
+Fable's. The suite went from 89 cases and 15075 assertions to 108 and 17539.
+
+**Item 3 is done** on 2026-09-22, in two commits. `CommandBuffer::CmdResolveTexture` is new: it takes the
+copy region type over `vkCmdResolveImage`, reads the layouts off the two textures the way the copies do, and
+refuses a source with one sample, a destination with more than one, or two formats that differ. The case
+draws the left quarter of a two-by-two target at four samples, resolves it, and reads the left column back
+as the average of the clear and the draw - a value one sample per texel cannot produce. It leans on
+`standardSampleLocations` for the coverage of a half-covered texel and skips that section where the device
+places its samples elsewhere. The resolve that ends a dynamic rendering pass -
+`VkRenderingAttachmentInfo::resolveImageView` - is not wrapped and not tested; a depth resolve needs it.
+Item 21 is untouched. The suite now stands at 109 cases and 17620 assertions.
 
 Six of them changed Forge, each in its own `fix` or `feat` commit ahead of the test that found it:
 
