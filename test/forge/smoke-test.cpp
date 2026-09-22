@@ -56,7 +56,7 @@ Rndr::ShaderCache& GetShaderCache()
 }
 
 /**
- * Which of the optional queue families a fixture's device asks for. Both off by default: Device throws when
+ * Which of the optional queue families a fixture's device asks for. Both off by default: Device reports when
  * a family it was asked for is not there, so a fixture that asked for them unconditionally would make every
  * test in this file skip on a machine whose one family does everything - and the message would say there was
  * no Vulkan device.
@@ -69,7 +69,7 @@ struct ForgeQueues
 
 /**
  * A device desc that asks for nothing this file does not need. DeviceDesc turns the async compute and the
- * dedicated transfer queue on by default, and Device throws when a family it was asked for is not there - so
+ * dedicated transfer queue on by default, and Device reports when a family it was asked for is not there - so
  * a case that built a device without saying otherwise would fail outright on a machine whose one family does
  * everything, which is a legal Vulkan device and what a software driver offers. ForgeFixture takes a
  * ForgeQueues; every device built outside it goes through here.
@@ -320,11 +320,11 @@ TEST_CASE("Forge buffer update and read", "[forge]")
         REQUIRE(head[i] == 0);
     }
 
-    SECTION("A write that does not fit throws")
+    SECTION("A write that does not fit is refused")
     {
         REQUIRE(buffer.Update(written, k_size - 1) != ErrorCode::Success);
     }
-    SECTION("A read of write-combined memory throws")
+    SECTION("A read of write-combined memory is refused")
     {
         const Forge::Buffer write_only =
             ForgeTest::Unwrap(Forge::Buffer::Create(fixture.device, {.size = k_size, .usage = Forge::BufferUsageBits::TransferSource}));
@@ -517,7 +517,7 @@ TEST_CASE("Forge texture upload, mip generation and readback", "[forge]")
         }
     }
 
-    SECTION("Reading back into a view of the wrong size throws")
+    SECTION("Reading back into a view of the wrong size is refused")
     {
         Opal::DynamicArray<u8> too_small(4);
         REQUIRE(Forge::ReadBackTexture(fixture.device, fixture.GetQueue(), texture, too_small, 0,
@@ -625,7 +625,7 @@ TEST_CASE("Forge device-only buffer", "[forge]")
         REQUIRE(buffer.Update(written) != ErrorCode::Success);
         REQUIRE(buffer.Read(out) != ErrorCode::Success);
     }
-    SECTION("Initial data throws rather than leaking the allocation")
+    SECTION("Initial data is refused rather than leaking the allocation")
     {
         REQUIRE_FALSE(Forge::Buffer::Create(fixture.device,
                                         {.size = k_size,
@@ -819,7 +819,7 @@ TEST_CASE("Forge timeline semaphores", "[forge]")
         REQUIRE(timeline.Wait(1) == ErrorCode::Success);
         REQUIRE(ForgeTest::Unwrap(timeline.GetValue()) == 4);
     }
-    SECTION("A wait that runs out of time answers false rather than throwing")
+    SECTION("A wait that runs out of time answers false rather than failing")
     {
         // A millisecond, in the nanoseconds Vulkan counts timeouts in. Long enough that a machine under load
         // does not report a timeout for the value that was already reached, short enough not to stall the run.
@@ -904,7 +904,7 @@ TEST_CASE("Forge timeline semaphores", "[forge]")
         REQUIRE(fixture.GetQueue().Submit({.command_buffers = {first_batch, 1}, .wait_semaphores = {&wait, 1}}) == ErrorCode::Success);
         REQUIRE(fixture.GetQueue().WaitIdle() == ErrorCode::Success);
     }
-    SECTION("A signal that does not raise the count throws")
+    SECTION("A signal that does not raise the count is refused")
     {
         const Forge::Semaphore timeline =
             ForgeTest::Unwrap(Forge::Semaphore::Create(fixture.device, {.type = Forge::SemaphoreType::Timeline, .initial_value = 4}));
@@ -914,7 +914,7 @@ TEST_CASE("Forge timeline semaphores", "[forge]")
         REQUIRE(timeline.Signal(5) == ErrorCode::Success);
         REQUIRE(ForgeTest::Unwrap(timeline.GetValue()) == 5);
     }
-    SECTION("WaitForAll over two devices throws rather than naming one of them")
+    SECTION("WaitForAll over two devices is refused rather than naming one of them")
     {
         // A second logical device on the same physical one. Not a second ForgeFixture: its context would
         // call volkFinalize on the way out and unload Vulkan from under this one.
@@ -928,7 +928,7 @@ TEST_CASE("Forge timeline semaphores", "[forge]")
         const Forge::SemaphoreWait waits[2] = {{.semaphore = here, .value = 1}, {.semaphore = there, .value = 1}};
         REQUIRE(Forge::Semaphore::WaitForAll({waits, 2}) != ErrorCode::Success);
     }
-    SECTION("An empty entry in WaitForAll throws, either way it is empty")
+    SECTION("An empty entry in WaitForAll is refused, either way it is empty")
     {
         const Forge::Semaphore empty;
         const Forge::SemaphoreWait empty_reference[1] = {{}};
@@ -1008,7 +1008,7 @@ TEST_CASE("Forge waiting on several fences at once", "[forge]")
     REQUIRE(Forge::ReadBackBuffer(fixture.device, fixture.GetQueue(), second_destination, read_back) == ErrorCode::Success);
     REQUIRE(CountMismatches(written, read_back) == 0);
 
-    SECTION("A fence that is not signalled in time answers false rather than throwing")
+    SECTION("A fence that is not signalled in time answers false rather than failing")
     {
         constexpr u64 k_short_timeout = 1000 * 1000;
         // Both of the fences above have been waited on, so they are signalled and answer at once.
@@ -1029,7 +1029,7 @@ TEST_CASE("Forge waiting on several fences at once", "[forge]")
         across_devices.EmplaceBack(ForgeTest::Unwrap(Forge::Fence::Create(other, true)));
         REQUIRE(Forge::Fence::WaitForAll(across_devices) != ErrorCode::Success);
     }
-    SECTION("An empty fence in the list throws")
+    SECTION("An empty fence in the list is refused")
     {
         Opal::DynamicArray<Forge::Fence> with_empty;
         with_empty.EmplaceBack(ForgeTest::Unwrap(Forge::Fence::Create(fixture.device, true)));
@@ -1269,18 +1269,18 @@ TEST_CASE("Forge bindless descriptor bindings", "[forge]")
             REQUIRE(values[i] == static_cast<u32>(i) + 2000);
         }
     }
-    SECTION("A variable count above the binding's descriptor count throws")
+    SECTION("A variable count above the binding's descriptor count is refused")
     {
         REQUIRE_FALSE(Forge::DescriptorSet::Create(pool, layout, k_max_descriptors + 1).HasValue());
     }
-    SECTION("A variable count without a binding that allows it throws")
+    SECTION("A variable count without a binding that allows it is refused")
     {
         Forge::DescriptorSetLayoutDesc plain_desc;
         REQUIRE(plain_desc.AddBinding(0, Forge::DescriptorType::StorageBuffer, 1, ShaderTypeBits::Compute) == ErrorCode::Success);
         const Forge::DescriptorSetLayout plain_layout = ForgeTest::Unwrap(Forge::DescriptorSetLayout::Create(device, plain_desc));
         REQUIRE_FALSE(Forge::DescriptorSet::Create(pool, plain_layout, 1).HasValue());
     }
-    SECTION("A variable count on anything but the highest binding throws")
+    SECTION("A variable count on anything but the highest binding is refused")
     {
         Forge::DescriptorSetLayoutDesc bad_desc;
         REQUIRE(bad_desc.AddBinding(0, Forge::DescriptorType::StorageBuffer, 4, ShaderTypeBits::Compute, {},
@@ -1664,7 +1664,7 @@ TEST_CASE("Forge barrier vocabulary", "[forge]")
         REQUIRE(destination.Read(read_back) == ErrorCode::Success);
         REQUIRE(CountMismatches(written, read_back) == 0);
     }
-    SECTION("A barrier naming the mesh stage without the extension throws")
+    SECTION("A barrier naming the mesh stage without the extension is refused")
     {
         Forge::CommandBuffer command_buffer = ForgeTest::Unwrap(Forge::CommandBuffer::Create(fixture.device, fixture.GetQueue()));
         REQUIRE(command_buffer.Begin() == ErrorCode::Success);
@@ -1759,12 +1759,12 @@ TEST_CASE("Forge texture layout tracking", "[forge]")
         REQUIRE(command_buffer.CmdTransition(texture, Forge::ImageLayout::ShaderReadOnly) != ErrorCode::Success);
         REQUIRE(command_buffer.End() == ErrorCode::Success);
     }
-    SECTION("A subresource the texture does not have throws")
+    SECTION("A subresource the texture does not have is refused")
     {
         REQUIRE_FALSE(texture.GetCurrentLayout(k_mip_count).HasValue());
         REQUIRE_FALSE(texture.GetCurrentLayout(0, 1).HasValue());
     }
-    SECTION("A transfer out of a layout the role does not allow throws")
+    SECTION("A transfer out of a layout the role does not allow is refused")
     {
         if (!fixture.device.GetPhysicalDevice().SupportsBlit(PixelFormat::R8G8B8A8_UNORM, true) ||
             !fixture.device.GetPhysicalDevice().SupportsBlit(PixelFormat::R8G8B8A8_UNORM, false))
@@ -2103,11 +2103,11 @@ TEST_CASE("Forge timestamp queries", "[forge]")
         const Forge::TimestampQueryPool pool = ForgeTest::Unwrap(Forge::TimestampQueryPool::Create(fixture.device, {.query_count = 2}));
         REQUIRE(pool.Reset() != ErrorCode::Success);
     }
-    SECTION("A pool that asks for no queries throws")
+    SECTION("A pool that asks for no queries is refused")
     {
         REQUIRE_FALSE(Forge::TimestampQueryPool::Create(fixture.device, {.query_count = 0}).HasValue());
     }
-    SECTION("A query past the end of the pool throws")
+    SECTION("A query past the end of the pool is refused")
     {
         Forge::TimestampQueryPool pool = ForgeTest::Unwrap(Forge::TimestampQueryPool::Create(fixture.device, {.query_count = 2}));
         Forge::CommandBuffer command_buffer = ForgeTest::Unwrap(Forge::CommandBuffer::Create(fixture.device, fixture.GetQueue()));
@@ -2117,7 +2117,7 @@ TEST_CASE("Forge timestamp queries", "[forge]")
         REQUIRE(command_buffer.CmdResetQueryPool(pool, 1, 2) != ErrorCode::Success);
         REQUIRE(command_buffer.End() == ErrorCode::Success);
     }
-    SECTION("A timestamp naming more than one stage throws")
+    SECTION("A timestamp naming more than one stage is refused")
     {
         Forge::TimestampQueryPool pool = ForgeTest::Unwrap(Forge::TimestampQueryPool::Create(fixture.device, {.query_count = 2}));
         Forge::CommandBuffer command_buffer = ForgeTest::Unwrap(Forge::CommandBuffer::Create(fixture.device, fixture.GetQueue()));
@@ -2254,7 +2254,7 @@ TEST_CASE("Forge single resource descriptor updates", "[forge]")
         Forge::DescriptorSet set = ForgeTest::Unwrap(Forge::DescriptorSet::Create(pool, layout));
         REQUIRE(set.Update(2, texture, sampler) == ErrorCode::Success);
     }
-    SECTION("A range past the end of the buffer throws")
+    SECTION("A range past the end of the buffer is refused")
     {
         const Forge::Buffer small = ForgeTest::Unwrap(Forge::Buffer::Create(fixture.device,
                                   {.size = 256, .usage = Forge::BufferUsageBits::StorageBuffer}));
@@ -2281,7 +2281,7 @@ TEST_CASE("Forge single resource descriptor updates", "[forge]")
         REQUIRE_FALSE(set.IsValid());
         REQUIRE_FALSE(set.GetBindingDescriptorType(0).HasValue());
     }
-    SECTION("Writing a binding the layout does not have throws")
+    SECTION("Writing a binding the layout does not have is refused")
     {
         const Forge::Buffer buffer = ForgeTest::Unwrap(Forge::Buffer::Create(fixture.device,
                                    {.size = 256, .usage = Forge::BufferUsageBits::StorageBuffer}));
@@ -2341,7 +2341,7 @@ TEST_CASE("Forge rendering without a depth attachment", "[forge]")
             REQUIRE(static_cast<i32>(pixels[i + 3]) == 255);
         }
     }
-    SECTION("A depth attachment that names no texture throws")
+    SECTION("A depth attachment that names no texture is refused")
     {
         // What the old convention expressed as "no depth". Now that absent says it, a present attachment
         // pointing at nothing is a filled-in desc somebody forgot to finish. The colour attachment is
@@ -2356,7 +2356,7 @@ TEST_CASE("Forge rendering without a depth attachment", "[forge]")
         REQUIRE(command_buffer.CmdBeginRendering(rendering_desc) != ErrorCode::Success);
         REQUIRE(command_buffer.End() == ErrorCode::Success);
     }
-    SECTION("A colour clear value on a depth attachment throws")
+    SECTION("A colour clear value on a depth attachment is refused")
     {
         // The misuse a union could not catch and the validation layer cannot either, VkClearValue being the
         // same union: the depth attachment would have cleared to whatever the first two floats of the vector
@@ -2388,7 +2388,7 @@ TEST_CASE("Forge rendering without a depth attachment", "[forge]")
         REQUIRE(command_buffer.CmdEndRendering() == ErrorCode::Success);
         REQUIRE(command_buffer.End() == ErrorCode::Success);
     }
-    SECTION("A depth clear value on a colour attachment throws")
+    SECTION("A depth clear value on a colour attachment is refused")
     {
         Forge::CommandBuffer command_buffer = ForgeTest::Unwrap(Forge::CommandBuffer::Create(fixture.device, fixture.GetQueue()));
         REQUIRE(command_buffer.Begin() == ErrorCode::Success);
@@ -2400,7 +2400,7 @@ TEST_CASE("Forge rendering without a depth attachment", "[forge]")
         REQUIRE(command_buffer.CmdBeginRendering(rendering_desc) != ErrorCode::Success);
         REQUIRE(command_buffer.End() == ErrorCode::Success);
     }
-    SECTION("An attachment whose texture was never transitioned throws")
+    SECTION("An attachment whose texture was never transitioned is refused")
     {
         // The check the old API could not make: a colour attachment naming a texture no barrier has moved
         // out of Undefined. Vulkan rejects an undefined attachment layout, but a layout that is legal and
@@ -2414,7 +2414,7 @@ TEST_CASE("Forge rendering without a depth attachment", "[forge]")
         REQUIRE(command_buffer.CmdBeginRendering(rendering_desc) != ErrorCode::Success);
         REQUIRE(command_buffer.End() == ErrorCode::Success);
     }
-    SECTION("A colour attachment in a layout meant for something else throws")
+    SECTION("A colour attachment in a layout meant for something else is refused")
     {
         // TransferSource is a layout this texture legitimately reaches - ReadBackTexture leaves it there -
         // so this is the plausible-but-wrong case rather than the unconfigured one above.
@@ -2951,7 +2951,7 @@ TEST_CASE("Forge indexed draws", "[forge]")
         REQUIRE_HALF_COLOR(pixels, true, k_instance_one);
         REQUIRE_HALF_COLOR(pixels, false, k_untouched);
     }
-    SECTION("An 8-bit index buffer on a device without the feature throws")
+    SECTION("An 8-bit index buffer on a device without the feature is refused")
     {
         // The index type is a plain enum value in a core call, so nothing but this check stands between a
         // device that never enabled the extension and an index type it does not accept.
@@ -3234,7 +3234,7 @@ TEST_CASE("Forge pipeline sample count and dynamic state", "[forge]")
             REQUIRE(multisampled.IsValid());
         }
     }
-    SECTION("A sample count this device does not support throws")
+    SECTION("A sample count this device does not support is refused")
     {
         const VkPhysicalDeviceLimits& limits = fixture.device.GetPhysicalDevice().GetProperties().limits;
         const VkSampleCountFlags supported = limits.framebufferColorSampleCounts & limits.framebufferDepthSampleCounts;
@@ -3260,7 +3260,7 @@ TEST_CASE("Forge pipeline sample count and dynamic state", "[forge]")
         REQUIRE(command_buffer.CmdSetStencilReference(3) == ErrorCode::Success);
         REQUIRE(command_buffer.End() == ErrorCode::Success);
     }
-    SECTION("Dynamic state a feature gates throws without the feature")
+    SECTION("Dynamic state a feature gates is refused without the feature")
     {
         Forge::CommandBuffer command_buffer = ForgeTest::Unwrap(Forge::CommandBuffer::Create(fixture.device, fixture.GetQueue()));
         REQUIRE(command_buffer.Begin() == ErrorCode::Success);
@@ -3492,19 +3492,19 @@ TEST_CASE("Forge specialization constants", "[forge]")
         REQUIRE(static_cast<i32>(texel[0]) == 64);
         REQUIRE(static_cast<i32>(texel[2]) == 0);
     }
-    SECTION("A name no stage declares throws")
+    SECTION("A name no stage declares is refused")
     {
         // The case Vulkan ignores in silence when the value is keyed by number, which is why it is keyed
         // by name here.
         const Forge::SpecializationConstant wrong[] = {{.name = "RED_LEVELL", .value = 1}};
         REQUIRE_FALSE(draw_specialized({wrong, 1}).HasValue());
     }
-    SECTION("A value of the wrong type throws")
+    SECTION("A value of the wrong type is refused")
     {
         const Forge::SpecializationConstant wrong[] = {{.name = "RED_LEVEL", .value = 1.0f}};
         REQUIRE_FALSE(draw_specialized({wrong, 1}).HasValue());
     }
-    SECTION("One constant given a value twice throws")
+    SECTION("One constant given a value twice is refused")
     {
         // Two map entries with the same constantID, which the specification does not allow within one
         // VkSpecializationInfo - and which reads as nothing worse than a repeated name from out here.
@@ -3728,7 +3728,7 @@ TEST_CASE("Forge shader reflection", "[forge]")
         const Forge::Pipeline pipeline = ForgeTest::Unwrap(build_pipeline(derived, good_ranges));
         REQUIRE(pipeline.IsValid());
     }
-    SECTION("A location the shader reads that nothing feeds throws")
+    SECTION("A location the shader reads that nothing feeds is refused")
     {
         Forge::VertexInputDesc incomplete;
         incomplete.AddBinding(0, 28);
@@ -3754,7 +3754,7 @@ TEST_CASE("Forge shader reflection", "[forge]")
         REQUIRE(partial.GetInputs().GetSize() == 1);
         REQUIRE(partial.GetInputs()[0].location == 0);
     }
-    SECTION("An attribute of the wrong numeric class throws")
+    SECTION("An attribute of the wrong numeric class is refused")
     {
         // Location 2 is a uint2 in the shader; a float attribute of the same width is not the same thing.
         Forge::VertexInputDesc wrong_class;
@@ -3775,13 +3775,13 @@ TEST_CASE("Forge shader reflection", "[forge]")
         const Forge::Pipeline pipeline = ForgeTest::Unwrap(build_pipeline(normalised, good_ranges));
         REQUIRE(pipeline.IsValid());
     }
-    SECTION("A push constant range that stops short of what the shader reads throws")
+    SECTION("A push constant range that stops short of what the shader reads is refused")
     {
         const Forge::VertexInputDesc derived = ForgeTest::Unwrap(Forge::VertexInputDesc::FromShader(vertex_shader));
         const Forge::PushConstantRange too_small{.shader_stages = ShaderTypeBits::Vertex, .offset = 0, .size = 4};
         REQUIRE_FALSE(build_pipeline(derived, {&too_small, 1}).HasValue());
     }
-    SECTION("No push constant range at all, for a shader that reads one, throws")
+    SECTION("No push constant range at all, for a shader that reads one, is refused")
     {
         // The likeliest way to get this wrong, and the reason the check does not wait for a range to exist.
         const Forge::VertexInputDesc derived = ForgeTest::Unwrap(Forge::VertexInputDesc::FromShader(vertex_shader));
@@ -3822,21 +3822,21 @@ TEST_CASE("Forge descriptor bindings checked against the shader", "[forge]")
         // The caller's desc is untouched - the names went onto the layout's own copy.
         REQUIRE(desc.bindings[0].name.IsEmpty());
     }
-    SECTION("A binding declared as the wrong kind throws")
+    SECTION("A binding declared as the wrong kind is refused")
     {
         Forge::DescriptorSetLayoutDesc desc = make_desc();
         REQUIRE(desc.AddBinding(0, Forge::DescriptorType::StorageBuffer, 1, ShaderTypeBits::Fragment) == ErrorCode::Success);
         REQUIRE(desc.AddBinding(1, Forge::DescriptorType::CombinedImageSampler, 1, ShaderTypeBits::Fragment) == ErrorCode::Success);
         REQUIRE_FALSE(Forge::DescriptorSetLayout::Create(fixture.device, desc).HasValue());
     }
-    SECTION("A binding whose stages leave out the one that reads it throws")
+    SECTION("A binding whose stages leave out the one that reads it is refused")
     {
         Forge::DescriptorSetLayoutDesc desc = make_desc();
         REQUIRE(desc.AddBinding(0, Forge::DescriptorType::CombinedImageSampler, 1, ShaderTypeBits::Vertex) == ErrorCode::Success);
         REQUIRE(desc.AddBinding(1, Forge::DescriptorType::CombinedImageSampler, 1, ShaderTypeBits::Fragment) == ErrorCode::Success);
         REQUIRE_FALSE(Forge::DescriptorSetLayout::Create(fixture.device, desc).HasValue());
     }
-    SECTION("A binding the shaders read that the layout omits throws")
+    SECTION("A binding the shaders read that the layout omits is refused")
     {
         Forge::DescriptorSetLayoutDesc desc = make_desc();
         REQUIRE(desc.AddBinding(0, Forge::DescriptorType::CombinedImageSampler, 1, ShaderTypeBits::Fragment) == ErrorCode::Success);
@@ -4491,7 +4491,7 @@ TEST_CASE("Forge empty state and moves of the command and synchronization object
                           },
                           [](const Forge::Semaphore& semaphore)
                           {
-                              // The type is a member of its own, and every host side call throws on a binary
+                              // The type is a member of its own, and every host side call reports on a binary
                               // semaphore, so a move that dropped it would fail here rather than answer wrong.
                               REQUIRE(semaphore.IsTimeline());
                               REQUIRE(ForgeTest::Unwrap(semaphore.GetValue()) == 3);
@@ -5002,14 +5002,14 @@ TEST_CASE("Forge mip level sizes", "[forge]")
         const Forge::TextureDesc full{.format = PixelFormat::D32_SFLOAT, .width = 4, .height = 4};
         REQUIRE(ForgeTest::Unwrap(Forge::GetMipLevelSize(full, 0)) == 4 * 4 * 4);
     }
-    SECTION("A block compressed format throws rather than answering as if it were packed texels")
+    SECTION("A block compressed format is refused rather than answering as if it were packed texels")
     {
         // The size of a compressed level is a count of blocks, not of texels, and answering with the texel
         // arithmetic would hand a readback a buffer of the wrong size and no reason to notice.
         const Forge::TextureDesc desc{.format = PixelFormat::BC1_RGBA_UNORM_BLOCK, .width = 8, .height = 8, .mip_level_count = 2};
         REQUIRE_FALSE(Forge::GetMipLevelSize(desc, 0).HasValue());
     }
-    SECTION("A level the texture does not have throws")
+    SECTION("A level the texture does not have is refused")
     {
         const Forge::TextureDesc desc{.format = PixelFormat::R8G8B8A8_UNORM, .width = 8, .height = 8, .mip_level_count = 2};
         REQUIRE_FALSE(Forge::GetMipLevelSize(desc, 2).HasValue());
@@ -5231,7 +5231,7 @@ TEST_CASE("Forge barrier presets", "[forge]")
                                                 .height = k_side,
                                                 .usage = Forge::TextureUsageBits::TransferSource}));
         // DepthStencilReadOnly is a real layout with no preset behind it, which is the near miss worth
-        // checking: the dispatch throws rather than picking whichever preset is closest. General used to be
+        // checking: the dispatch reports rather than picking whichever preset is closest. General used to be
         // the example here and stopped being one when 3.18 gave it a preset of its own.
         REQUIRE_FALSE(
             Forge::TextureBarrier::To(texture, Forge::ImageLayout::Undefined, Forge::ImageLayout::DepthStencilReadOnly).HasValue());
@@ -5735,7 +5735,7 @@ TEST_CASE("Forge fill modes", "[forge]")
         REQUIRE(wireframe_covered > 0);
         REQUIRE(wireframe_covered < solid_covered);
     }
-    SECTION("A wireframe on a device without the feature throws")
+    SECTION("A wireframe on a device without the feature is refused")
     {
         // The polygon mode is a plain enum in the create info, so without this the device is handed a mode
         // it never agreed to and the validation layer is the only thing that notices.
@@ -6194,7 +6194,7 @@ TEST_CASE("Forge depth clamp", "[forge]")
         }
         REQUIRE(is_drawn(true));
     }
-    SECTION("Clamping on a device without the feature throws")
+    SECTION("Clamping on a device without the feature is refused")
     {
         ForgeFixture plain({.depth_clamp = false});
         const Forge::Shader plain_vertex = ForgeTest::Unwrap(Forge::Shader::FromSourceInMemory(
@@ -6581,7 +6581,7 @@ TEST_CASE("Forge stencil testing", "[forge]")
             REQUIRE(static_cast<i32>(pixels[i * 4 + 1]) == 255);
         }
     }
-    SECTION("A stencil attachment that names no texture throws")
+    SECTION("A stencil attachment that names no texture is refused")
     {
         Forge::CommandBuffer command_buffer = ForgeTest::Unwrap(Forge::CommandBuffer::Create(fixture.device, fixture.GetQueue()));
         Forge::Texture color = MakeColorTarget(fixture.device, k_side, k_color_format);
@@ -7579,7 +7579,7 @@ TEST_CASE("Forge texture shapes past a flat two dimensional one", "[forge]")
         INFO("+z red " << positive_z.x);
         REQUIRE(positive_z.x == Catch::Approx(5.0f * 36.0f / 255.0f).margin(0.01));
     }
-    SECTION("A cube view over a layer count that is not a multiple of six throws")
+    SECTION("A cube view over a layer count that is not a multiple of six is refused")
     {
         REQUIRE_FALSE(Forge::Texture::Create(fixture.device, {.format = k_format,
                                                           .width = 1,
@@ -8920,7 +8920,7 @@ bool IsMirrorClampToEdgeAvailable()
 {
     static const bool available = []
     {
-        // The fixture reports through status rather than throwing, and a device asked for a feature it does
+        // The fixture reports through status rather than asserting, and a device asked for a feature it does
         // not have is what leaves a code there.
         const ForgeFixture probe({.sampler_mirror_clamp_to_edge = true});
         return probe.status == ErrorCode::Success;
@@ -9113,7 +9113,7 @@ TEST_CASE("Forge the sampler address modes and border colours", "[forge]")
             }
         }
     }
-    SECTION("MirrorOnce without the feature throws rather than reaching the driver")
+    SECTION("MirrorOnce without the feature is refused rather than reaching the driver")
     {
         // MIRROR_CLAMP_TO_EDGE is core in Vulkan 1.2 but still a feature, and a sampler naming it on a device
         // that did not enable it is undefined. Forge refused nothing here until the mode had a test.
@@ -9476,7 +9476,7 @@ TEST_CASE("Forge shaders built from SPIR-V rather than from source", "[forge]")
             REQUIRE(values[i] == static_cast<u32>(i) + 1000);
         }
     }
-    SECTION("An entry point the module does not hold throws")
+    SECTION("An entry point the module does not hold is refused")
     {
         // Reflection finds no entry point of that name and there is nothing to take a stage from, so this
         // cannot be let through: the shader would be created with a zeroed stage and refused much later by a
@@ -9485,7 +9485,7 @@ TEST_CASE("Forge shaders built from SPIR-V rather than from source", "[forge]")
         // And the default entry point of "main", which Slang did not emit under that name here.
         REQUIRE_FALSE(Forge::Shader::FromSpirvInMemory(fixture.device, spirv_view).HasValue());
     }
-    SECTION("A blob that is not SPIR-V throws")
+    SECTION("A blob that is not SPIR-V is refused")
     {
         const Opal::DynamicArray<u8> junk = MakeBytes(256, 17);
         REQUIRE_FALSE(Forge::Shader::FromSpirvInMemory(fixture.device, {junk.GetData(), junk.GetSize()},
@@ -9522,7 +9522,7 @@ TEST_CASE("Forge shaders built from SPIR-V rather than from source", "[forge]")
         REQUIRE(Opal::WriteBytesToFile(empty_path, {}) == Opal::ErrorCode::Success);
         REQUIRE_FALSE(Forge::Shader::FromSpirvFile(fixture.device, empty_path, {.entry_point = "main_compute"}).HasValue());
     }
-    SECTION("A file with the right bytes and the wrong entry point throws")
+    SECTION("A file with the right bytes and the wrong entry point is refused")
     {
         const Opal::StringUtf8 path = TestScratchPath("from-spirv-file.spv");
         REQUIRE(Opal::WriteBytesToFile(path, spirv_view) == Opal::ErrorCode::Success);
@@ -9589,7 +9589,7 @@ TEST_CASE("Forge reading timestamp ticks without blocking", "[forge]")
         REQUIRE(ForgeTest::Unwrap(pool.TryGetResults({second.GetData(), 1}, 1)));
         REQUIRE(second[0] == tried[1]);
     }
-    SECTION("A range that does not fit in the pool throws before anything is read")
+    SECTION("A range that does not fit in the pool is refused before anything is read")
     {
         const Forge::TimestampQueryPool pool = ForgeTest::Unwrap(Forge::TimestampQueryPool::Create(fixture.device, {.query_count = 4}));
         Opal::InPlaceArray<u64, 8> ticks;
@@ -9613,7 +9613,7 @@ TEST_CASE("Forge reading timestamp ticks without blocking", "[forge]")
         REQUIRE(ForgeTest::Unwrap(pool.ResolveQueryRange(1, 2, "Reading")) == 2);
         REQUIRE(ForgeTest::Unwrap(pool.ResolveQueryRange(3, 1, "Reading")) == 1);
     }
-    SECTION("ResolveQueryRange throws on every range that does not fit")
+    SECTION("ResolveQueryRange refuses every range that does not fit")
     {
         const Forge::TimestampQueryPool pool = ForgeTest::Unwrap(Forge::TimestampQueryPool::Create(fixture.device, {.query_count = 4}));
         // First query at the end and past it.
@@ -9841,7 +9841,7 @@ TEST_CASE("Forge loading a mesh from a file", "[forge]")
             REQUIRE(index < mesh.vertex_count);
         }
     }
-    SECTION("A mesh with no texture coordinates throws")
+    SECTION("A mesh with no texture coordinates is refused")
     {
         const Opal::StringUtf8 path = WriteScratchTextFile("no-uvs.obj", k_obj_without_uvs);
         Forge::Mesh mesh;
@@ -9865,7 +9865,7 @@ TEST_CASE("Forge loading a mesh from a file", "[forge]")
             REQUIRE(Opal::Abs(normal_z) == Catch::Approx(1.0f).margin(0.01));
         }
     }
-    SECTION("A mesh with no face to generate normals from throws")
+    SECTION("A mesh with no face to generate normals from is refused")
     {
         // What the section above does not reach, and the reason the null normal check is not dead code:
         // assimp generates normals from faces, so a mesh that has none arrives with none. Three ways to get
@@ -9881,7 +9881,7 @@ TEST_CASE("Forge loading a mesh from a file", "[forge]")
             REQUIRE(Forge::LoadMesh(path, mesh) != ErrorCode::Success);
         }
     }
-    SECTION("A file assimp cannot read throws")
+    SECTION("A file assimp cannot read is refused")
     {
         // An extension assimp knows, holding something that is not a mesh.
         const Opal::StringUtf8 junk_path = WriteScratchTextFile("not-a-mesh.obj", "this file is not a mesh at all\n");
@@ -9895,7 +9895,7 @@ TEST_CASE("Forge loading a mesh from a file", "[forge]")
     SECTION("A mesh that failed to load leaves the one handed in as it was")
     {
         // LoadMesh writes into a mesh the caller owns, so what it does to that mesh on the way out of a
-        // failure is the caller's problem. It throws before touching anything, which is what lets a caller
+        // failure is the caller's problem. It reports before touching anything, which is what lets a caller
         // keep the mesh it already had.
         Forge::Mesh mesh;
         REQUIRE(Forge::LoadMesh(complete_path, mesh) == ErrorCode::Success);
@@ -9953,7 +9953,7 @@ bool IsMeshShaderAvailable()
 }  // namespace
 
 /**
- * CmdDrawMeshTasks, which until now had only ever been watched throwing. 3.3 wrote it and could not do more
+ * CmdDrawMeshTasks, which until now had only ever been watched being refused. 3.3 wrote it and could not do more
  * than that, since nothing enabled VK_EXT_mesh_shader; 3.6 enabled it and nothing came back to draw through
  * it. This is that draw.
  */
@@ -10030,7 +10030,7 @@ TEST_CASE("Forge a mesh shader draw", "[forge]")
                          });
         REQUIRE(CountCovered(pixels, k_side) == 0);
     }
-    SECTION("A pipeline with both a vertex and a mesh stage, or a task stage with neither, throws")
+    SECTION("A pipeline with both a vertex and a mesh stage, or a task stage with neither, is refused")
     {
         const Forge::Shader vertex_shader = ForgeTest::Unwrap(Forge::Shader::FromSourceInMemory(
             fixture.device, k_pushed_color_source, {.entry_point = "main_color_vertex", .cache = GetShaderCache()}));

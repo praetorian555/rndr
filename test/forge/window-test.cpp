@@ -668,7 +668,7 @@ TEST_CASE("Forge swap chain recovers from a window with no client area", "[forge
         REQUIRE(swap_chain.GetColorTextureCount() == 0);
 
         // Acquiring while there is nothing to render into tries again and says the frame has to be skipped,
-        // rather than throwing or handing out an index into textures that do not exist.
+        // rather than failing or handing out an index into textures that do not exist.
         const Forge::Semaphore texture_ready = ForgeTest::Unwrap(Forge::Semaphore::Create(fixture.device));
         const Forge::AcquiredTexture while_empty = ForgeTest::Unwrap(swap_chain.AcquireTexture(texture_ready));
         REQUIRE(while_empty.status == Forge::SwapChainStatus::OutOfDate);

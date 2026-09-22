@@ -292,8 +292,8 @@ struct TextureBarrier : Opal::ClonableBase<TextureBarrier>
 
     /**
      * The preset for a destination layout that is not known while writing the call - a function handed the
-     * layout to leave a texture in dispatches through this rather than spelling the switch out again. Throws
-     * for a layout that has no preset above.
+     * layout to leave a texture in dispatches through this rather than spelling the switch out again. Refuses
+     * a layout that has no preset above.
      *
      * This one has no short form, and deliberately: with both, dropping an argument from a three argument
      * call would leave a two argument one that compiles and means the opposite, since the layout in the

@@ -170,7 +170,7 @@ public:
     [[nodiscard]] u32 GetCurrentTextureIndex() const { return m_current_texture_index; }
 
     /**
-     * The acquired texture, which is the one to render into this frame. Throws when none is acquired, since
+     * The acquired texture, which is the one to render into this frame. Reports when none is acquired, since
      * there is no texture to hand back rather than a wrong one.
      */
     [[nodiscard]] Opal::Expected<const Texture&, ErrorCode> GetCurrentColorTexture() const;

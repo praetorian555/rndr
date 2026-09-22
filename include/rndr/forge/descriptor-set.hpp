@@ -290,12 +290,12 @@ public:
 
     /**
      * The index of the binding the shader calls `name`, which is what the two overloads above look up.
-     * Throws on a name no binding carries, and says so plainly when the layout carries no names at all.
+     * Refuses a name no binding carries, and says so plainly when the layout carries no names at all.
      */
     [[nodiscard]] Opal::Expected<u32, ErrorCode> GetBindingIndex(const Opal::StringUtf8& name) const;
 
     /**
-     * Descriptor type the layout declared for a binding. Throws when the layout has no such binding, which is
+     * Descriptor type the layout declared for a binding. Reports when the layout has no such binding, which is
      * what the Update overloads above call to fill in the type they do not take.
      */
     [[nodiscard]] Opal::Expected<DescriptorType, ErrorCode> GetBindingDescriptorType(u32 binding) const;
