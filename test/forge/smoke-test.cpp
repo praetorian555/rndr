@@ -3817,6 +3817,155 @@ TEST_CASE("Forge pipeline sample count and dynamic state", "[forge]")
 }
 
 /**
+ * Two triangles that cover the left quarter of the target, so the boundary runs through the middle of the
+ * left column of texels rather than along a texel edge. With the standard four-sample pattern that puts two
+ * samples of every texel in that column inside the geometry and two outside, and the resolve averages the
+ * two halves - a value neither the clear nor the draw wrote, which one sample per texel cannot produce.
+ */
+constexpr f32 k_left_quarter_vertices[] = {-1.0f, -1.0f, -0.5f, -1.0f, -1.0f, 1.0f, -0.5f, -1.0f, -0.5f, 1.0f, -1.0f, 1.0f};
+
+TEST_CASE("Forge multisampled draw resolved to one sample", "[forge]")
+{
+    if (!IsForgeAvailable())
+    {
+        SKIP("No Vulkan device on this machine.");
+    }
+    ForgeFixture fixture;
+    const VkPhysicalDeviceLimits& limits = fixture.device.GetPhysicalDevice().GetProperties().limits;
+    if ((limits.framebufferColorSampleCounts & VK_SAMPLE_COUNT_4_BIT) == 0)
+    {
+        SKIP("This device cannot render four samples per texel.");
+    }
+    constexpr PixelFormat k_format = PixelFormat::R8G8B8A8_UNORM;
+    constexpr i32 k_side = 2;
+
+    const Forge::Shader vertex_shader = ForgeTest::Unwrap(
+        Forge::Shader::FromSourceInMemory(fixture.device, k_fullscreen_source, {.entry_point = "main_vertex", .cache = GetShaderCache()}));
+    const Forge::Shader fragment_shader = ForgeTest::Unwrap(Forge::Shader::FromSourceInMemory(
+        fixture.device, k_fullscreen_source, {.entry_point = "main_fragment", .cache = GetShaderCache()}));
+    const Forge::Buffer vertices = ForgeTest::Unwrap(
+        Forge::Buffer::Create(fixture.device, {.size = sizeof(k_left_quarter_vertices), .usage = Forge::BufferUsageBits::VertexBuffer},
+                              Opal::AsBytes(k_left_quarter_vertices)));
+
+    Forge::GraphicsPipelineDesc pipeline_desc;
+    pipeline_desc.vertex_shader = vertex_shader;
+    pipeline_desc.fragment_shader = fragment_shader;
+    pipeline_desc.rasterizer.cull_mode = Face::None;
+    pipeline_desc.vertex_input.AddBinding(0, 2 * sizeof(f32), DataRepetition::PerVertex);
+    REQUIRE(pipeline_desc.vertex_input.AddAttribute(0, 0, PixelFormat::R32G32_SFLOAT, 0) == ErrorCode::Success);
+    pipeline_desc.color_blend_attachments.PushBack(Forge::ColorBlendDesc{});
+    pipeline_desc.color_attachment_formats.PushBack(k_format);
+    pipeline_desc.sample_count = Forge::SampleCount::Count4;
+    const Forge::Pipeline pipeline = ForgeTest::Unwrap(Forge::Pipeline::Create(fixture.device, pipeline_desc));
+
+    /** A texture of the size the case renders at, with the sample count and the usage a section wants. */
+    auto make_texture = [&](Forge::SampleCount sample_count, Forge::TextureUsageBits usage, PixelFormat format)
+    {
+        return ForgeTest::Unwrap(Forge::Texture::Create(
+            fixture.device, {.format = format, .width = k_side, .height = k_side, .sample_count = sample_count, .usage = usage}));
+    };
+    constexpr Forge::TextureUsageBits k_attachment_usage =
+        Forge::TextureUsageBits::ColorAttachment | Forge::TextureUsageBits::TransferSource;
+    constexpr Forge::TextureUsageBits k_resolved_usage =
+        Forge::TextureUsageBits::TransferDestination | Forge::TextureUsageBits::TransferSource;
+
+    Forge::Texture multisampled = make_texture(Forge::SampleCount::Count4, k_attachment_usage, k_format);
+    Forge::Texture resolved = make_texture(Forge::SampleCount::Count1, k_resolved_usage, k_format);
+
+    SECTION("A resolve averages the samples of every texel")
+    {
+        if (limits.standardSampleLocations == VK_FALSE)
+        {
+            SKIP("This device places its samples somewhere of its own, so the coverage of a half-covered texel is unknown.");
+        }
+        REQUIRE(Forge::ImmediateSubmit(
+                    fixture.device, fixture.GetQueue(),
+                    [&](Forge::CommandBuffer& command_buffer)
+                    {
+                        REQUIRE(command_buffer.CmdTextureBarrier(Forge::TextureBarrier::ToColorAttachment(multisampled)) ==
+                                ErrorCode::Success);
+                        const Forge::RenderingDesc rendering_desc{
+                            .render_area_extent = {k_side, k_side},
+                            .color_attachments = {Forge::RenderingAttachmentDesc{.texture = multisampled,
+                                                                                 .load_operation = Forge::AttachmentLoadOperation::Clear,
+                                                                                 .store_operation = Forge::AttachmentStoreOperation::Store,
+                                                                                 .clear_value = Vector4f{0.0f, 0.0f, 0.0f, 1.0f}}}};
+                        REQUIRE(command_buffer.CmdBeginRendering(rendering_desc) == ErrorCode::Success);
+                        REQUIRE(command_buffer.CmdSetViewport(Vector2f::Zero(), {k_side, k_side}) == ErrorCode::Success);
+                        REQUIRE(command_buffer.CmdSetScissor(Vector2i::Zero(), {k_side, k_side}) == ErrorCode::Success);
+                        REQUIRE(command_buffer.CmdBindPipeline(pipeline) == ErrorCode::Success);
+                        REQUIRE(command_buffer.CmdBindVertexBuffer(vertices, 0) == ErrorCode::Success);
+                        REQUIRE(command_buffer.CmdDraw(6) == ErrorCode::Success);
+                        REQUIRE(command_buffer.CmdEndRendering() == ErrorCode::Success);
+                        REQUIRE(command_buffer.CmdTextureBarrier(Forge::TextureBarrier::ToTransferSource(multisampled)) ==
+                                ErrorCode::Success);
+                        REQUIRE(command_buffer.CmdTextureBarrier(Forge::TextureBarrier::ToTransferDestination(resolved)) ==
+                                ErrorCode::Success);
+                        const Forge::TextureCopyRegion whole{};
+                        REQUIRE(command_buffer.CmdResolveTexture(multisampled, resolved, {&whole, 1}) == ErrorCode::Success);
+                    }) == ErrorCode::Success);
+
+        Opal::DynamicArray<u8> pixels(k_side * k_side * 4);
+        REQUIRE(Forge::ReadBackTexture(fixture.device, fixture.GetQueue(), resolved, pixels, 0, Forge::ImageLayout::TransferSource) ==
+                ErrorCode::Success);
+
+        // The draw writes green with alpha zero over a clear of black with alpha one, so a texel half inside the
+        // geometry averages to the middle in both channels and one outside keeps the clear. Half of 255 is not
+        // a whole number, and the format may round it either way.
+        for (i32 y = 0; y < k_side; ++y)
+        {
+            for (i32 x = 0; x < k_side; ++x)
+            {
+                const i32 offset = (y * k_side + x) * 4;
+                const Texel texel{pixels[offset], pixels[offset + 1], pixels[offset + 2], pixels[offset + 3]};
+                INFO("texel (" << x << ", " << y << ") rgba " << texel.r << " " << texel.g << " " << texel.b << " " << texel.a);
+                REQUIRE(texel.r == 0);
+                REQUIRE(texel.b == 0);
+                if (x == 0)
+                {
+                    REQUIRE(Opal::Abs(texel.g - 128) <= 1);
+                    REQUIRE(Opal::Abs(texel.a - 128) <= 1);
+                }
+                else
+                {
+                    REQUIRE(texel.g == 0);
+                    REQUIRE(texel.a == 255);
+                }
+            }
+        }
+    }
+    SECTION("A resolve out of a texture with one sample is refused")
+    {
+        Forge::Texture single = make_texture(Forge::SampleCount::Count1, k_attachment_usage, k_format);
+        Forge::CommandBuffer command_buffer = ForgeTest::Unwrap(Forge::CommandBuffer::Create(fixture.device, fixture.GetQueue()));
+        REQUIRE(command_buffer.Begin() == ErrorCode::Success);
+        const Forge::TextureCopyRegion whole{};
+        REQUIRE(command_buffer.CmdResolveTexture(single, resolved, {&whole, 1}) == ErrorCode::InvalidArgument);
+        REQUIRE(command_buffer.End() == ErrorCode::Success);
+    }
+    SECTION("A resolve into a multisampled texture is refused")
+    {
+        Forge::Texture other =
+            make_texture(Forge::SampleCount::Count4, k_attachment_usage | Forge::TextureUsageBits::TransferDestination, k_format);
+        Forge::CommandBuffer command_buffer = ForgeTest::Unwrap(Forge::CommandBuffer::Create(fixture.device, fixture.GetQueue()));
+        REQUIRE(command_buffer.Begin() == ErrorCode::Success);
+        const Forge::TextureCopyRegion whole{};
+        REQUIRE(command_buffer.CmdResolveTexture(multisampled, other, {&whole, 1}) == ErrorCode::InvalidArgument);
+        REQUIRE(command_buffer.End() == ErrorCode::Success);
+    }
+    SECTION("A resolve between two formats is refused")
+    {
+        Forge::Texture other = make_texture(Forge::SampleCount::Count1, k_resolved_usage, PixelFormat::B8G8R8A8_UNORM);
+        Forge::CommandBuffer command_buffer = ForgeTest::Unwrap(Forge::CommandBuffer::Create(fixture.device, fixture.GetQueue()));
+        REQUIRE(command_buffer.Begin() == ErrorCode::Success);
+        const Forge::TextureCopyRegion whole{};
+        REQUIRE(command_buffer.CmdResolveTexture(multisampled, other, {&whole, 1}) == ErrorCode::InvalidArgument);
+        REQUIRE(command_buffer.End() == ErrorCode::Success);
+    }
+    REQUIRE_NO_VALIDATION_ERROR(fixture);
+}
+
+/**
  * A fragment shader whose output is decided by two specialization constants, so what comes back says which
  * values the pipeline was built with. [SpecializationConstant] is the portable Slang spelling and lets the
  * compiler pick the ids; [vk::constant_id(N)] pins them, and both reflect the same way.
