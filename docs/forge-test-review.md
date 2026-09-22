@@ -219,6 +219,9 @@ and the compile-error codes, `CommandBuffer::Reset` and `Begin(false)`, the Fram
 error paths, `VkResultToErrorCode`, the buffer edges, the physical device helpers, the `SetDebugName` loop,
 the swap chain modes.
 
+**In progress**, one commit per item: 18 (`VkResultToErrorCode`), 20 (the physical device queue family
+helpers), and 5 (`Shader::FromSource`) are done. 6, 13, 16, 17, 19, 22, 23 remain.
+
 ### Bucket C: new shaders, Vulkan semantics, likely Forge changes
 
 **Opus 5, high effort; Fable for items 3 and 21.** Each needs a Slang shader written for it, a layout and
